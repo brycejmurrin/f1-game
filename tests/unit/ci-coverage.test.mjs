@@ -203,6 +203,17 @@ test("one CI run per branch head: push and pull_request share a group, manual ru
   // (a tick waits, a later tick replaces the waiting one), so lag is bounded
   // and no gate is ever killed a spec from green.
   assert.match(pagesWorkflow, /concurrency_key: pages-\$\{\{ github\.run_id \}\}/);
+  // The dedupe SAVES ~47 job-minutes and COSTS one `cancelled` row per push,
+  // which is the exact shape AGENTS.md rule 8 teaches a session to read as a
+  // starved-runner timeout. It cost a real triage on 2026-09-22 (run 4657
+  // cancelled by 4658 on one SHA), so both triage surfaces must name the
+  // signature — same head_sha, cancelled seconds in, sibling still running.
+  const repo = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
+  const agents = fs.readFileSync(path.join(repo, "AGENTS.md"), "utf8");
+  assert.match(agents, /a push and its PR event share a group[\s\S]{0,200}head_sha/,
+    "AGENTS.md rule 8 must except the designed push/PR dedupe, or the next session triages it as a timeout");
+  const triage = fs.readFileSync(path.join(repo, ".claude/agents/ci-red-triage.md"), "utf8");
+  assert.match(triage, /push\/PR dedupe/, "ci-red-triage must tell the dedupe from a superseded push");
   const pagesCi = pagesWorkflow.split("\n  ci:")[1].split("\n  publishable:")[0];
   assert.match(pagesCi, /group: pages-gate-\$\{\{ github\.ref \}\}/);
   assert.match(pagesCi, /cancel-in-progress: false/,

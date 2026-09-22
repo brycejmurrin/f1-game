@@ -69,7 +69,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_192 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_193 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -314,6 +314,7 @@ _192 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `scene-equipment.js` | `GarageEquipment` | tag | GarageEquipment: the pit equipment standing in the bay. |
 | `scene-live.js` | `GarageLive` | tag | GarageLive: the garage's LIVE atlas. |
 | `scene.js` | `GarageScene` | tag | GarageScene: the room the setup preview happens in. |
+| `setup-camera.js` | `SetupCamera` | tag | the GARAGE SETUP-PREVIEW CAMERA for js/game.js (#carsetup): the turntable/orbit rig, its presets, pan and zoom, the active-aero demo, the preview mesh cache… |
 | `pit-signs.js` | `PitSigns` | tag | PitSigns: each team's identity on the OUTSIDE of its pit garage. |
 | `setup-tune.js` | `SetupTune` | tag | the SETUP SHEET: the car's mechanical set-up — anti-roll bars, ride height / rake, brake bias — per team, persisted, folded into the parts contract… |
 | `setup-sheet.js` | `SetupUI` | tag | the GARAGE screen UI for js/game.js (#carsetup): everything about WHO you are and WHAT you drive. |
@@ -474,14 +475,20 @@ The mechanisms that keep a no-build, script-tag codebase coherent after the spli
   | candidate | lines | crossings | verdict |
   |---|---:|---:|---|
   | lighting profile store | ~94 | 0 new | taken — the whole surface was ALREADY on `G` for four other files |
-  | garage live preview | ~415 (notes/ARCHITECTURE-REVIEW.md's measurement) | ~15 new | **left** — `teamDecalState`, `drawAeroFlaps`, `drawCarDecals`, `carDecalNum`, `carPaintMat`, `partsVisualKey`, `resolveLivery`, `getTeamParts`, `teamIdx`, `MAT_REFLECT_X` … none of which `G` carries |
+  | garage live preview | ~415 (notes/ARCHITECTURE-REVIEW.md's measurement) | ~15 new | taken 2026-09-22 as `js/garage/setup-camera.js` — on the car-drawing seam below, not on fifteen new accessors |
 
   The garage preview is the bigger block and the more obvious target — its
-  natural partner `js/garage/setup-sheet.js` already exists — but taking it would
-  widen the façade by half again for one screen. That is precisely the review's
-  warning about `G` being a *migration* device used as an *architecture*: an
-  extraction that adds fifteen accessors has moved the coupling, not removed it.
-  Take it only together with a real car-drawing seam that `render()` shares.
+  natural partner `js/garage/setup-sheet.js` already exists — and taking it on
+  `G` alone would have widened the façade by half again for one screen:
+  `teamDecalState`, `drawAeroFlaps`, `drawCarDecals`, `carDecalNum`,
+  `carPaintMat`, `partsVisualKey`, `resolveLivery`, `MAT_REFLECT_X` … none of
+  which `G` carries. That is precisely the review's warning about `G` being a
+  *migration* device used as an *architecture*: an extraction that adds fifteen
+  accessors has moved the coupling, not removed it. So it went the way this
+  section said to take it — on the CAR-DRAWING SEAM `js/car/car-draw.js` and
+  `js/render/shared/shadow-pass.js` already use, `Module.create(G, deps)`, with
+  `G` unchanged at 265 members. `setupPreviewOn` itself stays in game.js:
+  `render()`'s gate is game.js's own.
 
   **Splitting the two megafunctions is NOT recommended.** `render()` and
   `updateCar()` are ~1,370 and ~1,130 lines (2026-08 measurement), and `updateCar`'s tyre model is one

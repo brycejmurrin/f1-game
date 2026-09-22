@@ -189,6 +189,12 @@ function loadDriver(ratings, opts = {}) {
   seedLog(ctx);
   seedHash32(ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "js/core/mat4.js" });
+  // REGULATIONS TOO, so era() is exercised rather than short-circuiting on
+  // `typeof Regulations === "undefined"` — without it every era assertion
+  // below passes VACUOUSLY, which is exactly how a wrong guard survives a
+  // suite. It reads Parts.CATALOG at call time and the stub supplies one.
+  vm.runInContext(readFileSync(join(ROOT, "js/career/regulations.js"), "utf8"), ctx,
+    { filename: "js/career/regulations.js" });
   vm.runInContext(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), ctx,
     { filename: "js/career/career.js" });
   return vm.runInContext("Career", ctx);
@@ -819,4 +825,103 @@ test("the kind is drawn from the seed and the year, so it cannot be rerolled", (
     "the same seed and year draw the same kind");
   const years = new Set([2026, 2027, 2028, 2029, 2030, 2031].map((y) => a.goalTypeFor(y)));
   assert.ok(years.size > 1, "and six seasons do not all promise the same thing");
+});
+
+// ── acceptOffer ─────────────────────────────────────────────────────────────
+// THIS FUNCTION HAD NO TESTS AT ALL, which is how it shipped signing a
+// different contract from the one on the button. Everything below exists
+// because a verification pass found that by reading, not by playing.
+
+test("SIGNING AN OFFER SIGNS WHAT THE BUTTON SHOWED — the kind never redraws", () => {
+  // rollover() draws the winter's offers BEFORE career.year++, and the goal
+  // kind is seeded on the year. acceptOffer() used to re-derive the kind at
+  // accept time, reading the incremented year: measured at 67% of seasons, the
+  // contract signed a different promise from the one displayed.
+  for (const seed of [1, 7, 13, 21, 34, 55, 89]) {
+    const Career = loadDriver();
+    Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed });
+    Career.engage(true);
+    const c = Career.data();
+    c.rep = 50;
+    c.deal.years = 1; c.deal.left = 1;          // expire it so the winter draws seats
+    Career.rollover();
+    const offers = c.offers || [];
+    if (!offers.length) continue;
+    const shown = { type: offers[0].goal.type, value: offers[0].goal.value };
+    const deal = Career.acceptOffer(0);
+    assert.equal(deal.goal.type, shown.type,
+      `seed ${seed}: signed a ${deal.goal.type} contract off a ${shown.type} button`);
+  }
+});
+
+test("accepting recomputes the TARGET, because a move re-seats you", () => {
+  const Career = loadDriver();
+  Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+  Career.engage(true);
+  const c = Career.data();
+  c.rep = 50; c.deal.years = 1; c.deal.left = 1;
+  Career.rollover();
+  if (!(c.offers || []).length) return;
+  const o = c.offers[0];
+  const deal = Career.acceptOffer(0);
+  // The value is derived through the offer's OWN kind, never through champPos.
+  const team = { id: deal.team, tier: 4 };
+  assert.equal(deal.goal.value, Career.GOAL_KINDS[deal.goal.type].value(team, Career.ambition()),
+    "the target is re-derived through the signed kind");
+  assert.equal(deal.ambition, Career.ambition(), "and the rung is the pending pick");
+});
+
+test("an offer carrying no goal at all still signs something resolvable", () => {
+  // Defensive: an offer from an older save shape must not produce a deal whose
+  // goal cannot be resolved, or rollover() would silently skip the season.
+  const Career = loadDriver();
+  Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+  Career.engage(true);
+  const c = Career.data();
+  c.rep = 50; c.deal.years = 1; c.deal.left = 1;
+  Career.rollover();
+  if (!(c.offers || []).length) return;
+  delete c.offers[0].goal;
+  const deal = Career.acceptOffer(0);
+  assert.ok(deal.goal && deal.goal.type, "a goal-less offer still yields a typed goal");
+  assert.equal(deal.goal.type, "champPos", "and it falls back to the kind every deal used to carry");
+});
+
+// ── THE ERA GUARD ───────────────────────────────────────────────────────────
+
+test("a LOADED but unplayed career reports NO era, because nothing is regulated", () => {
+  // The guard is inCareer(), not `career != null`, and the gap between them was
+  // a real desync: load() runs at boot whatever the flow, so a save parked in a
+  // restricted era reported that era from the main menu while the Grand Prix
+  // actually being played resolved unrestricted. Readout said "banned",
+  // resolution said "legal". An earlier pass fixed the null-vs-open-era half of
+  // this and left the guard one condition short.
+  const Career = loadDriver();
+  Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+  Career.engage(true);
+  const c = Career.data();
+  c.year = (c.year0 || 2026) + 5;                  // well past the opening era
+  assert.ok(Career.era(), "engaged and five seasons in: there IS an era");
+  assert.ok(Career.eraSeasonsLeft() > 0);
+
+  Career.engage(false);                             // leave career, save still loaded
+  assert.ok(Career.data(), "the save is still loaded");
+  assert.equal(Career.era(), null, "but nothing is regulated, so no era is reported");
+  assert.equal(Career.eraSeasonsLeft(), 0);
+});
+
+test("the era advances on seasons ELAPSED, which survives the archive cap", () => {
+  const Career = loadDriver();
+  Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+  Career.engage(true);
+  const c = Career.data();
+  const first = Career.era().id;
+  assert.equal(Career.seasonsElapsed(), 0, "a new career starts at season zero");
+  c.year = (c.year0 || 2026) + 4;
+  assert.equal(Career.seasonsElapsed(), 4);
+  assert.notEqual(Career.era().id, first, "four seasons on is a different ruleset");
+  // year0, not history.length: HISTORY_MAX caps the archive at 10, so a long
+  // career would otherwise stop advancing its era entirely.
+  c.year = (c.year0 || 2026) + 30;
+  assert.equal(Career.seasonsElapsed(), 30, "and thirty seasons still counts thirty");
 });

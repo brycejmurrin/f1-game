@@ -275,6 +275,30 @@ test("every agent and skill frontmatter key is one a host documents", () => {
   assert.deepEqual(bad, [], "a frontmatter key no host documents is silently ignored — fix the key or add it here with its source");
 });
 
+/* A forked skill runs in a subagent: `agent:` must name one that exists (a
+   file in .claude/agents/ or a host builtin), and `context: fork` must be set
+   alongside it — `agent:` without the fork is ignored, and a fork without an
+   agent runs as general-purpose by default, which is fine but must be said.
+   The three that fork are the ones whose OUTPUT is the problem (batch frames,
+   a UI matrix walk, a circuit survey): the parent gets the report, not the
+   dumps (2026-09-22). */
+const BUILTIN_AGENTS = new Set(["general-purpose", "Explore", "Plan"]);
+const FORKED_SKILLS = ["playwright-probe", "survey-ui-matrix", "survey-track"];
+test("every skill with agent: names an existing subagent or a builtin, and forks", () => {
+  const agents = new Set(fs.readdirSync(path.join(ROOT, ".claude/agents"))
+    .filter((n) => n.endsWith(".md") && n !== "README.md").map((n) => n.replace(/\.md$/, "")));
+  const forked = [];
+  for (const d of fs.readdirSync(SKILLS).filter((n) => fs.existsSync(path.join(SKILLS, n, "SKILL.md")))) {
+    const fm = /^---\n([\s\S]*?)\n---/.exec(fs.readFileSync(path.join(SKILLS, d, "SKILL.md"), "utf8"))[1];
+    const agent = /^agent:\s*(\S+)\s*$/m.exec(fm)?.[1];
+    const fork = /^context:\s*fork\s*$/m.test(fm);
+    if (agent) assert.ok(agents.has(agent) || BUILTIN_AGENTS.has(agent), `${d}: agent: ${agent} is neither .claude/agents/${agent}.md nor a builtin`);
+    if (agent) assert.ok(fork, `${d}: agent: without context: fork is ignored`);
+    if (fork) forked.push(d);
+  }
+  assert.deepEqual(forked.sort(), [...FORKED_SKILLS].sort(), "the forked set changed — update the list and its reason here");
+});
+
 test("the file-scoped skills declare paths:, so they load on file access and not only on prompt words", () => {
   for (const [skill, glob] of [["webgl-debug", "js/render/glx/**"], ["webgpu-debug", "js/render/webgpu/**"],
                                ["css-play", "css/**"], ["lighting-tuner", "js/lighting/**"]]) {

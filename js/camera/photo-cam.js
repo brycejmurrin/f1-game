@@ -188,8 +188,8 @@ function wirePhotoHold(id, on, off) {
   el.addEventListener("pointerup", release);
   el.addEventListener("pointercancel", release);
   /* No pointerleave: with the pointer captured it is a BOUNDARY event, fired
-     the moment setPointerCapture retargets (the trap holdSetupCtl in js/game.js
-     documents), so the button let go on the same press that took it. And a
+     the moment setPointerCapture retargets (the trap holdSetupCtl in
+     js/garage/setup-camera.js documents), so the button let go on the same press that took it. And a
      lostpointercapture is a teardown only when the button was taken away —
      WebKit keeps one capture slot, so a second finger on the other hold
      button steals it with this thumb still down (js/input/input.js
@@ -208,8 +208,8 @@ wirePhotoHold("pc-down", () => G.photoAlt = -1, () => G.photoAlt = 0);
    camera was being flung by the same touch that was steering it. And with no
    `pointercancel` handler the flag latched `true` forever the first time iOS
    claimed a touch for a system gesture, which it does routinely (edge swipe,
-   notification, gesture arbitration). js/game.js's garage orbit already guards
-   both ways; this is the same guard. */
+   notification, gesture arbitration). js/garage/setup-camera.js's garage orbit already
+   guards both ways; this is the same guard. */
 {
   const canvas = $("game");
   if (canvas) {

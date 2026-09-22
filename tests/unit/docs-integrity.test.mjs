@@ -377,10 +377,12 @@ test("the `N of M unit files` ladder figures match tooling-fast's list and the f
   // AGENTS.md §Verification 3, docs/notes/PREPUSH-GATE-LADDER.md and
   // docs/TESTING.md all quote the ladder as "208 of 278 unit files" — and all
   // three sat there while the list grew to 218 of 290 (2026-09-22). The
-  // phrasing is one integer pair that every added test file moves, so it is
-  // pinned to the two things it quotes: tools/ci/tooling-fast.mjs's generated
-  // list, and the unit files under tests/unit/ (.test.mjs and .test.cjs both;
-  // the ladder counts what the gate runs, and the gate runs both kinds).
+  // phrasing is one integer pair that every added test file moves. Since
+  // 2026-09-22 tools/gen/gen-ladder-figures.mjs WRITES the figures (from
+  // tests/groups.json); this stays as the independent cross-check, reading the
+  // OTHER generated copy — tools/ci/tooling-fast.mjs's list — and the unit
+  // files under tests/unit/ (.test.mjs and .test.cjs both; the ladder counts
+  // what the gate runs, and the gate runs both kinds).
   const { TOOLING_FAST_FILES } = await import("../../tools/ci/tooling-fast.mjs");
   const fast = TOOLING_FAST_FILES.filter((e) => !e.startsWith("//")).length;
   const disk = ls("tests/unit", /\.test\.(mjs|cjs)$/).length;
@@ -393,6 +395,31 @@ test("the `N of M unit files` ladder figures match tooling-fast's list and the f
     }
   }
   assert.ok(seen >= 3, `expected the ladder figure in all three docs, found ${seen}`);
+});
+
+test("the derived ladder figures (whole gate, 'the other N') match the gate's real union", async () => {
+  // The figures the pin above does not reach: "281 of 296" and "the remaining 15"
+  // were wrong the day they were written (test:sweeps-parts had joined the gate
+  // that morning) and "the other 70" drifted to 73 unnoticed. Computed the way
+  // prepush-gate-coverage.test.mjs measures the gate — without importing the
+  // generator, so a generator bug cannot agree with itself here.
+  const { TOOLING_FAST_FILES } = await import("../../tools/ci/tooling-fast.mjs");
+  const { gateNodeSuites } = await import("../../tools/ci/deploy.mjs");
+  const groups = JSON.parse(read("tests/groups.json"));
+  const fast = TOOLING_FAST_FILES.filter((e) => !e.startsWith("//"));
+  const gate = new Set(fast.map((f) => path.basename(f)));
+  for (const script of [...gateNodeSuites(), "test:sweeps-parts"]) {
+    for (const f of (groups.groups[script] || { files: [] }).files) if (f.startsWith("tests/unit/")) gate.add(path.basename(f));
+  }
+  const disk = ls("tests/unit", /\.test\.(mjs|cjs)$/).length;
+  const ladder = read("docs/notes/PREPUSH-GATE-LADDER.md");
+  const whole = ladder.match(/--gate-only`[^\n]*?(\d+) of (\d+)/);
+  assert.ok(whole, "the ladder doc no longer states the whole gate as N of M");
+  assert.equal(Number(whole[1]), gate.size, `the ladder doc says the whole gate runs ${whole[1]} unit files; the union of tooling-fast and the gate's node groups holds ${gate.size}`);
+  assert.equal(Number(whole[2]), disk);
+  const other = read("AGENTS.md").match(/The other (\d+) have taken deploys red/);
+  assert.ok(other, "AGENTS.md rule 3 no longer says how many files tooling-fast leaves out");
+  assert.equal(Number(other[1]), disk - fast.length, `AGENTS.md says tooling-fast leaves out ${other[1]}; ${disk} on disk minus ${fast.length} in the list is ${disk - fast.length}`);
 });
 
 test("README's retired-classics count matches the circuits flagged classic", () => {
