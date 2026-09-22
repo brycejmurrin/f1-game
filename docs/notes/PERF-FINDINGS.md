@@ -5355,8 +5355,25 @@ every car in view: a braking pack minted a material per 1/32 of heat, i.e. at
 every braking zone. Heat is now quantised to quarters at that site (five glow
 levels, five materials). With the codegen deferred those mints no longer cost a
 frame, which is why 213 is clean even before this fix; without the mint the
-codegen, its garbage and the pipelines leave the drive entirely. Census 214:
-_pending_.
+codegen, its garbage and the pipelines leave the drive entirely.
+
+### Census 214: the deploy gate
+
+Luma 47.7, 365 m driven at 23 m/s: **99 callbacks over 11.8 ms in 862 frames,
+worst 71.4 ms, no frame at or over 100 ms**; `mats: miss +4` and the `minted:`
+row shows exactly the four remaining brake-glow levels (the fifth was already
+cached) — the bounded set, minted once a session, as designed. WGX on the same
+road: worst 26.6 ms. Across the driven runs on this branch the three.js/WebGPU
+leg's worst callback went 648 → 187 → 82 → 71 ms and its frames of 100 ms or
+more 13 → 4 → 0 → 0; the row that started this note read 258–556 ms.
+
+| driven census | worst callback | frames ≥ 100 ms | minted on the road |
+|---|---|---|---|
+| 208 (first driven window) | 310 ms | 11 | — |
+| 209 / 210 (attribution) | 563 / 648 ms | 13 / 13 | — |
+| 212 (codegen deferred with pass state) | 187 ms | 4 | 20 |
+| 213 (five sites quantised) | 82 ms | 0 | 18 (brake rings) |
+| 214 (brake glow quantised) | **71 ms** | **0** | 4 (the fixed levels) |
 
 Also visible again: the warm at the lights took 18.8 s on this run (scene
 13.8 s) — the runner's variance is large (10.7–18.8 s across 208–213), and the
