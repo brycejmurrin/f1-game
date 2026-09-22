@@ -30,12 +30,13 @@ import {
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 
 function parseArgs(argv) {
-  const o = { track: "montreal", backend: "three", tlxWebgpu: false, seconds: 30, ls: [], json: null, quiet: false };
+  const o = { track: "montreal", backend: "three", tlxWebgpu: false, seconds: 30, settle: 6, ls: [], json: null, quiet: false };
   const skip = new Set();
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]; const next = () => argv[++i];
     if (a === "--backend") { o.backend = next(); skip.add(o.backend); }
     else if (a === "--seconds") { o.seconds = +next(); }
+    else if (a === "--settle") { o.settle = +next(); }
     else if (a === "--ls") { o.ls.push(next()); }
     else if (a === "--json") { o.json = next(); }
     else if (a === "--tlx-webgpu") o.tlxWebgpu = true;
@@ -336,9 +337,11 @@ async function main() {
     await page.evaluate((t) => window.__apex.race(t), opts.track);
     await page.waitForFunction((t) => window.__apex.info().track === t, opts.track, { polling: 100, timeout: 60000 });
     await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.1, 55, 0); window.__apex.setInput({ throttle: true }); });
-    // Let boot-time work (shader warm, first-frame uploads) finish: the
-    // OPENING stall is a different report from the PERIODIC one.
-    await sleep(6000);
+    // Let boot-time work AND the working set finish filling: a cache
+    // reaching its high-water mark is not a leak, and a baseline taken
+    // during the fill turns ordinary warm-up into a fake slope.
+    log(`settling ${opts.settle}s before the baseline`);
+    await sleep(opts.settle * 1000);
     await page.evaluate(() => window.__hitch.arm());
     await sleep(opts.seconds * 1000);
     const d = await page.evaluate(() => window.__hitch.dump());
