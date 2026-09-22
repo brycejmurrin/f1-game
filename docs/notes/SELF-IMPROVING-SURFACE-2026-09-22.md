@@ -157,15 +157,42 @@ repo's `stop-guard.sh` already does exactly that, once per run, with
 `touch .claude/allow-stop` as the escape hatch. **The forcing function is built
 and proven here; it is wired to one rule.**
 
-**Claude Code ships a memory system, on by default, and this project has never
-used it.** `~/.claude/projects/<project>/memory/` holds a `MEMORY.md` index plus
-one topic file per memory, each with a `type` of `user` | `feedback` | `project`
-| `reference`. Only the index's first 200 lines / 25 KB load at session start;
-topic files are read on demand. It is machine-local, never synced, and **not
-inherited by subagents** unless a subagent sets `memory: user|project|local`.
-Critically, **Claude never auto-writes `CLAUDE.md`** — auto memory is a separate
-store, which is the architecture the evidence in §1–§3 argues for. Checked on
-this box: no memory directory exists for this repo.
+**There are TWO memory stores, and only one of them can work here.**
+
+*Claude Code auto memory* lives at `~/.claude/projects/<project>/memory/` — a
+`MEMORY.md` index plus one topic file per memory, each typed `user` | `feedback`
+| `project` | `reference`. Only the index's first 200 lines / 25 KB load at
+session start; topic files are read on demand. Critically, **Claude never
+auto-writes `CLAUDE.md`** — this is a separate store, which is the architecture
+§1–§3 argues for. But it is **machine-local and never synced**, and sessions here
+run in a fresh cloud container that is reclaimed afterwards, so `~/.claude` is
+empty at every start. Checked on this box: no such directory exists, and in this
+environment **it structurally cannot persist**. Useful on a developer's laptop;
+inert for a fleet of remote sessions.
+
+*Subagent project memory* is the one that works, and **this repo already uses
+it.** A subagent declaring `memory: project` gets `.claude/agent-memory/<name>/`,
+which is **inside the repo and explicitly tracked** (`!.claude/agent-memory/` in
+`.gitignore`). `bloat-auditor` and `verify-agent` both declare it, and both were
+seeded with a schema by `8c381153b` on this same date:
+
+```
+bloat-auditor: `file:line — kind — why not`. Never re-propose a listed carve.
+verify-agent:  `<spec> — red at <SHA> — <reason>`. An entry older than the
+               merge-base is re-verified, not trusted.
+```
+
+That second line is an **expiry rule**, arrived at independently — the exact
+mechanism §3's literature says ERL lacks. So capture is not a greenfield here:
+it exists, it is narrow, it is review-gated by being tracked, and one of the two
+stores already knows not to trust its own stale entries. The gap is that nothing
+enforces either property — a future entry can omit the evidence and never expire.
+
+Note also that **first-class memory is per-subagent, not per-session**: there is
+no built-in store the main session writes that another session inherits, other
+than the repo itself. On a shared deploy branch with several sessions a day, the
+repo *is* the memory, which is why §7 keeps promotion pointed at tests and hooks
+rather than at a private pool.
 
 **Skills are the progressive-disclosure answer.** Only `description` (+
 `when_to_use`) is always in context; the body loads on invocation; references
