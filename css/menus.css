@@ -233,13 +233,6 @@
   transform: skewX(-30deg);
   box-shadow: 0 0 18px color-mix(in oklab, var(--red) 78%, transparent);
 }
-#subtitle {
-  color: color-mix(in srgb, var(--text) 78%, transparent);
-  margin: 10px 0 0;
-  font-size: clamp(var(--fs-micro), calc(1.15 * var(--vwz)), var(--fs-4));
-  letter-spacing: var(--ls-2);
-  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.7);
-}
 /* THREE TIERS, by how much of your evening the thing costs.
    HERO is the career — the 24-round game everything else feeds into. PLAY NOW is
    the four one-sitting modes, 2x2. SECONDARY is the rooms: half-height, two
@@ -531,7 +524,6 @@ body { --compact-at: 600px; --wide-at: 620px; }
    Doors and the disclaimer stay; only brand chrome shrinks. */
 :where(body[data-shape="tall"]) #title { font-size: clamp(30px, calc(8 * var(--vwz)), 72px); }
 :where(body[data-shape="tall"]) #title::after { margin: calc(var(--gap) * 0.5) 0 0; }
-:where(body[data-shape="tall"]) #subtitle { margin: calc(var(--gap) * 0.5) 0 0; }
 :where(body[data-shape="tall"]) #menu-meta { margin-top: calc(var(--gap) * 0.85); gap: calc(var(--gap) / 3); }
 /* THE PORTRAIT PHONE, measured on a 393x852 iPhone 2026-09-22: the wordmark
    painted 31px while each play door was a ~130px card (icon over label over
@@ -618,7 +610,6 @@ body { --compact-at: 600px; --wide-at: 620px; }
   gap: calc(var(--gap) * 0.35);
 }
 :where(body[data-shape="wide"][data-density="compact"]) #title { font-size: clamp(26px, calc(7.5 * var(--vwz)), 48px); }
-:where(body[data-shape="wide"][data-density="compact"]) #subtitle { margin: var(--gap) 0 0; font-size: var(--fs-micro); }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-meta { margin-top: calc(var(--gap) * 1.5); gap: calc(var(--gap) / 2); }
 :where(body[data-shape="wide"][data-density="compact"]) #audiostate { font-size: var(--fs-micro); }
 :where(body[data-shape="wide"][data-density="compact"]) #disclaimer { font-size: var(--fs-micro); }
@@ -692,7 +683,7 @@ body { --compact-at: 600px; --wide-at: 620px; }
   :where(body[data-density="compact"]) #menu-buttons .bigbtn {
     font-size: calc(var(--fs-4) * var(--ui-compact-text));
   }
-  :where(body[data-density="compact"]) :is(#subtitle, #audiostate, #disclaimer, #soundbtn) {
+  :where(body[data-density="compact"]) :is(#audiostate, #disclaimer, #soundbtn) {
     font-size: calc(var(--fs-micro) * var(--ui-compact-brand-text));
   }
   :where(body[data-density="compact"]) :is(.mb-sub, #menu-buttons .minibtn) {
