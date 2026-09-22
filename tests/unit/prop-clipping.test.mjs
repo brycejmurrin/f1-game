@@ -127,6 +127,10 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // cap left behind reads exactly like a regression you caused"). It cost this
 // session a full before/after audit to establish the reds were not its own
 // renderer change. A geometry edit owns its caps.
+// brands_hatch 43 -> 42 (2026-09-22): along()'s new seam tag stops an abutting
+// run from emitting its shared end node twice, and one of those duplicate
+// panels was also an interpenetrating pair here. No prop moved — one stopped
+// being emitted twice.
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "track", "clip-baseline.json"), "utf8"),
 );
