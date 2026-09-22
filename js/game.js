@@ -451,28 +451,34 @@ function restoreFreePlaySelection() {
   driverIdx = store.get("driver", 0);
   clampDriverIdx();
 }
-let difficulty = store.get("difficulty", "normal");
+// The fallback below decides nothing: store.get's _def() answers a key listed
+// in js/data/settings-defaults.js from that file, so the literal only mirrors
+// it (tests/unit/settings-defaults.test.mjs fails the build if they disagree).
+let difficulty = store.get("difficulty", "hard");
 // RELIABILITY — "off" | "low" | "real" (js/race/reliability.js), a standing
 // preference like difficulty. Ships OFF: this key is new for every existing
 // save, so OFF is the only default that does not silently start retiring cars
 // in a game somebody was already halfway through.
 let raceReliability = store.get("reliability", "off");
-// TYRE WEAR — "off" | "light" | "real" (js/physics/tyre-model.js). SHIPS LIGHT.
+// TYRE WEAR — "off" | "light" | "real" (js/physics/tyre-model.js). SHIPS REAL,
+// from js/data/settings-defaults.js like difficulty above — the literal here
+// only mirrors it.
 //
 // It shipped OFF, and off is not a quiet default here the way RELIABILITY's is:
 // it gates the ENTIRE pit feature — no lane, no box, no stop, no prompt, and the
 // AI never pits either — so a player who never opened SETTINGS had a pit lane
 // built into every circuit and no way to discover any of it existed.
 //
-// LIGHT rather than REAL: sets last roughly twice as long, so a stop is a choice
-// rather than a schedule. REAL is one click, OFF is still there, and a stored
-// preference beats this default, so nobody who already chose is overridden.
+// REAL is the full rate (a soft is spent near 37% of a race distance), so a stop
+// is part of the plan. LIGHT scales wear by 0.55 — sets last ~1.8x as long, and
+// a stop becomes a choice — and OFF is still there; a stored preference beats
+// this default, so nobody who already chose is overridden.
 //
 // OFF's other job was being a true no-op through the grip seam, which kept
 // tests/specs/physics-characterization.spec.js bit-identical. That is pinned
 // where it belongs now: tests/helpers/fixtures.js sets this key "off" for every
 // spec, so the baselines measure the DRIVING MODEL, not the current default.
-let raceTyreWear = store.get("tyreWear", "light");
+let raceTyreWear = store.get("tyreWear", "real");
 // ACTIVE AERO usage — "manual" (the driver's own switch, the default) or
 // "auto". Inside an activation zone X-mode has no cost or downside, so the
 // optimal play is unconditionally on — which is what the AI does in one line.
@@ -481,7 +487,7 @@ let raceTyreWear = store.get("tyreWear", "light");
 // AI's deal. Stays opt-in because pressing the button is the mechanic.
 let raceAeroMode = store.get("aeroMode", "manual");
 if (!Reliability.isLevel(raceReliability)) raceReliability = "off";
-if (!TyreModel.isLevel(raceTyreWear)) raceTyreWear = "light";
+if (!TyreModel.isLevel(raceTyreWear)) raceTyreWear = "real";
 let soundOn = store.get("sound", true);
 let musicEnabled = store.get("music", true);    // music on/off, independent of sound
 let manualMode = store.get("manual", false);   // manual gearbox preference (player shifts)
@@ -982,6 +988,7 @@ function setCautionEnabled(on) { return raceCtl.setEnabled(on); }
 function updateCaution(dt) { raceCtl.update(dt); }
 function applyCaution(d) { return raceCtl.apply(d); }
 function cautionInfo() { return raceCtl.info(); }
+function cautionLevel() { return raceCtl.level; }   // allocation-free, for per-tick readers
 function otEnabled() { return raceCtl.otEnabled(); }
 let camEye = [0, 6, -10], camTgt = [0, 0, 0], camFov = 62;
 let camAncX = null, camAncZ = 0;      // last frame's car anchor — camera damps in the CAR's frame (see render())
@@ -2747,7 +2754,8 @@ async function startRaceBody() {
   // Same early-return hazard as the completed-season arm above: this one only
   // self-heals because #quali is a <dialog> in the top layer, which draws over
   // the scrim. Lower it anyway rather than rely on that.
-  if (!isQuali() && gridFromQuali() && !quali.order(cars)) { loadingScreen.stop(); openQuali(); return false; }
+  // Awaited so startRace's latch spans the sheet's build; openQuali lands its own failure on the menu.
+  if (!isQuali() && gridFromQuali() && !quali.order(cars)) { loadingScreen.stop(); await openQuali(); return false; }
   gridUp(gridOrderFor(gridFromQuali() ? quali.order(cars) : SeasonCal.grid(cars, season)));
   rlap("gridUp");
   wxArc.startChangeable();
@@ -2780,6 +2788,7 @@ async function startRaceBody() {
   if (session === "race") { raceIndex++; armReliability(cars); }
   resultT = 0;
   camRoll = 0; camSlipSm = 0;
+  shake = 0; hitStop = 0;   // decay only in the race camera — a crash before the flag or a quit left them for the next grid
   // player can be null (roster/team resolution miss) — don't let startRace throw.
   sectorIdx = player ? sectorAt(player.s) : 0; sectorStartT = 0; sectorValid = true;
   // The SPLITS reset here, with the rest of the session — not in loadTrack.
@@ -2999,6 +3008,17 @@ function endRace(forcedOrder) {
   }
   if (isTimeTrial()) { buildTTResults(); els.results.hidden = false; return; }
   careerSettlement = null;   // whatever the last career round paid is not this race's news
+  // The only human RETIRED and the race ended early (RaceControl.finishDelay
+  // counts a retired human as done). Every AI whose reliability failure was
+  // already drawn would have met it before the flag, so it retires now rather
+  // than scoring from a mid-race snapshot. Solo only: a networked field is the
+  // host's classification.
+  if (!netPlay.active() && !cars.some((c) => c.human && c.finished)) {
+    for (const c of cars) {
+      if (c.human || c.finished || c.retired || c.dnfAt == null) continue;
+      c.retired = true; c.dnf = c.dnfWhy || "mechanical"; c.dnfAt = null;
+    }
+  }
   // classification: finished by time(+penalty), still running by progress, and
   // RETIREMENTS below both — ordered among themselves by how far they got, which
   // is the only thing that separates two cars that never saw the flag.
@@ -3355,7 +3375,7 @@ const G = {
   vTop: () => vTop(),
   aTop: () => aTop(),
   applyRaceSettings: () => applyRaceSettings(),   // const initialised below — defer
-  announce, applyCaution, camVantage, endRace, gridUp, gripMult, roadWetness, isErsDeploying, cautionInfo,
+  announce, applyCaution, camVantage, endRace, gridUp, gripMult, roadWetness, isErsDeploying, cautionInfo, cautionLevel,
   aeroDfMult, xVmaxGain, xDfLoss, drainFor, regenFor, otTimeFor, otCoolFor,
   setCautionEnabled, otEnabled,
   get netPlay() { return netPlay; },
@@ -3781,6 +3801,7 @@ else if (rotateBlockMql.addListener) rotateBlockMql.addListener(() => syncRotate
 
 function quitToMenu() {
   _ltBase = null; _ltFlash = 0;   // the lightning's saved race base is not the menu's
+  shake = 0; hitStop = 0;
   PerfGov.sentinelArm(false); if (netPlay.active()) netPlay.stop("local"); hideCamPicker();
   closeLightTuner(false);
   closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();
@@ -3951,6 +3972,7 @@ function update(dt) {
   // with the debris still there, and (finished never clears) raised the same
   // dead red every CAP_REARM_HOLD for the rest of the race. Ledger 2026-09-22.
   if (raceCtl.takeRestart()) {
+    raceCtl.clearHold();            // both branches below clear the surface this tick
     if (redFlagRestart()) return;   // re-gridded, lights re-armed
     IncidentSim.reset(); DebrisWorld.reset(); DebrisWorld.prime();
   }
@@ -5710,9 +5732,9 @@ function updateCar(c, dt, ranked) {
     } else {
       Tracks.sample(track, c.s, smp);            // yawVis below needs the tangent
     }
-  } else {
-    Tracks.sample(track, c.s, smp);              // yawVis below needs the tangent
   }
+  // (An AI's yaw leans from steer + curvature and never reads smp; the rescue
+  // and the world mirror below both re-sample at the advanced s.)
   c.brakeDemand = braking ? brakeLvl : 0; c.throttleDemand = onThrottle ? throttleLvl : 0; c.steerCommand = steer;
   c.steerVis = damp(c.steerVis, steer, 10, dt);
   // Visual nose yaw. The player uses its REAL heading relative to the track
@@ -5956,6 +5978,9 @@ function updateCar(c, dt, ranked) {
     const autoGas = autoThrottle() && (c.contactT || 0) === 0 && vStd(c.speed) < 3;
     const gasPressed = inp ? !!inp.throttle : (autoGas || Input.throttle());
     const stoppedOnTrack = gasPressed && c.speed < 3 && raceT > 2 && !(braking && ds < -0.01);
+    // Under a RED flag the whole field is HELD below that gate on purpose (the
+    // red cap is ~2 % of vTop): stopped is the instruction, not being stuck.
+    const redHeld = raceCtl.level >= 4;
     // Being OFF-TRACK is not the same as being stuck. The driving boundary sits
     // ~9 m beyond the road edge, so a driver can be metres into a wide run-off,
     // fully in control and steering back to the track — and the bare c.offroad
@@ -5990,7 +6015,9 @@ function updateCar(c, dt, ranked) {
     // (c.rescueLastT || 0) defaulted to 0 and blocked rescue for the first 4 s of
     // every race, so a car stuck from the start was never recovered.
     const rescueGrace = c.rescueLastT != null && raceT < c.rescueLastT + 4;
-    if (stuck && !rescueGrace) c.rescueT = (c.rescueT || 0) + dt;
+    // Held by the red and stuck for no OTHER reason: not stuck.
+    const redOnly = redHeld && stoppedOnTrack && !beached && !c.wrongWay && !((c.wallT || 0) > 0);
+    if (stuck && !redOnly && !rescueGrace) c.rescueT = (c.rescueT || 0) + dt;
     else c.rescueT = Math.max(0, (c.rescueT || 0) - dt * 1.5);
     if (c.rescueT > 3) { rescuePlayer(c); c.rescueT = 0; }
   } else if (!c.human && state === "race" && !c.finished) {
@@ -6012,10 +6039,13 @@ function updateCar(c, dt, ranked) {
     // car it was waiting for.
     const aiStuck = c.pitState !== "box" && ((c.offroad && c.offT > 0.5) ||
       (c.speed < 5 && raceT > 2 && !unstuckActive && !(queued && pits.inLane(c))));
+    // RED FLAG: the field is held under that low-speed gate on purpose — only a
+    // car genuinely beached in the run-off still counts as stuck (as the player's).
+    const aiRedHeld = raceCtl.level >= 4 && !(c.offroad && c.offT > 0.5);
     // Parked on purpose: a timer that crossed the line in the queue must not
     // fire the moment the stop begins (it did, 0.2 s into a Monaco stop).
     if (c.pitState === "box") c.rescueT = 0;
-    else if (aiStuck) c.rescueT = (c.rescueT || 0) + dt;
+    else if (aiStuck && !aiRedHeld) c.rescueT = (c.rescueT || 0) + dt;
     else c.rescueT = Math.max(0, (c.rescueT || 0) - dt * 1.5);
     if (c.rescueT > AiDrive.aiRescueDelay((c.contactT || 0) > 0)) {
       Tracks.sample(track, c.s, smp);
@@ -6137,12 +6167,16 @@ function onTTLap(lapTime) { records.finish(lapTime, ttLaps, quali.referencePole(
 function coast(c, dt) {
   // Same shape as the grass-drag floor (see updateCar): a bare Math.max(24, …)
   // RAISES a car that finished slower than 24 m/s, and 24 sits above vTop() below
-  // pace ~0.55. Pace-scale the floor, and never speed the car up. If already
-  // below the floor (finished crawling), keep scrubbing toward 0 — the old
-  // Math.min(speed, max(floor, …)) left cars stuck at their finish speed.
+  // pace ~0.55. Pace-scale the floor, and never speed the car up. A car that
+  // FINISHED below the floor (crawling) keeps scrubbing toward 0 — the old
+  // Math.min(speed, max(floor, …)) left cars stuck at their finish speed. A car
+  // that reached the floor HOLDS it (_coastHeld): scrubbing it on to 0 the next
+  // step parked every finisher ~v²/40 m past the line on one shared line, where
+  // the next car home rear-ended it at 14-29 m/s (bug hunt 2026-09-22).
   const floor = GRASS_V * 0.6 * Math.max(PACE, 0.05);
   const next = c.speed - 20 * dt;
-  c.speed = c.speed > floor ? Math.max(floor, next) : Math.max(0, next);
+  if (c.speed > floor) { c.speed = Math.max(floor, next); if (c.speed === floor) c._coastHeld = true; }
+  else c.speed = c._coastHeld ? floor : Math.max(0, next);
   // A car the flag found in the pit lane finishes its stop and coasts out
   // down the LANE at the limit (pits.update still runs for it): held in the
   // box, on the lane's line to the exit road's end. It used to cruise the
@@ -8349,7 +8383,18 @@ $("mb-settings").onclick = () => { if (soundOn) GameAudio.init(); openSettings()
 // The sheet opens BEFORE the session with the field already simulated, so the
 // player can see what they have to beat and choose whether to drive it or take
 // the simulated time. `q-done` flips the foot from DRIVE/SIMULATE to TO THE GRID.
-async function openQuali(fresh, netDone) {
+// Latched and caught like startRace, but never re-thrown: none of its callers
+// await it, so a rejection reached the global error overlay with the settings
+// screen already hidden and NO menu under it. The menu is where it lands.
+let _openQualiP = null;
+function openQuali(fresh, netDone) {
+  if (_openQualiP) return _openQualiP;
+  _openQualiP = openQualiBody(fresh, netDone)
+    .catch((e) => { Log.error("game", "openQuali failed", e); qualiSheet.close(); quitToMenu(); })
+    .finally(() => { _openQualiP = null; });
+  return _openQualiP;
+}
+async function openQualiBody(fresh, netDone) {
   await ensureScenery(trackIdx);
   session = "quali";
   // Reached from race settings this is already "menu"; reached from the results

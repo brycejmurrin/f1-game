@@ -14,8 +14,14 @@
     // Start/finish line. Snapped to the real one: v0 convention; T1 measured RIGHT, matches San Donato.
     // Was 0.05, which put the line inside a corner — a start line is
     // always on a straight. See docs/tracks/START-LINES.md.
+    // No sceneryStartFrac: the scenery is authored against this line (pit
+    // bays 0.945-0.999 on the pit lane 0.950-0.021, Arrabbiata 0.495, Bucine
+    // 0.880); the preserved 0.05 shifted it 0.133 and stood the paddock short
+    // of San Donato (DEFECT-LEDGER, "mugello").
     startFrac: 0.0000,
-    sceneryStartFrac: 0.05,
+    // The main grandstand (grandstandEx 0.005, left, 160 m) is the circuit's
+    // own; the generic 7-box pit-straight stand stood inside it.
+    ownPitStraight: true,
     name: "MUGELLO",
     gp: "Tuscan GP",
     country: "Italy",
@@ -26,7 +32,7 @@
     sceneryCoordinates: "racing",
     terrainOuter: 120,
     dressingExclusions: [
-      { kinds: ["foliage"], s0: 0.92, s1: 0.10 },
+      { kinds: ["foliage"], s0: 0.92, s1: 0.18 },  // pit straight through San Donato
       { kind: "foliage", s0: 0.36, s1: 0.46 },
     ],
     // Tuscan hill light: warm, golden, slightly hazy; cypress-dark greens.
@@ -54,7 +60,7 @@
       { s0: 0.860, s1: 0.900, hw: 6.4, ease: 0.012 },  // Bucine
     ],
     bankZones: [
-      { frac: 0.070, angleDeg: 4.0, widthM: 130 },   // San Donato
+      { frac: 0.150, angleDeg: 4.0, widthM: 130 },   // San Donato (T1 0.1447-0.16)
       { frac: 0.470, angleDeg: 5.0, widthM: 150 },   // Arrabbiata 1
       { frac: 0.520, angleDeg: 5.0, widthM: 140 },   // Arrabbiata 2
       { frac: 0.880, angleDeg: 4.5, widthM: 140 },   // Bucine

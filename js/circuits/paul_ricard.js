@@ -30,8 +30,8 @@
     terrainOuter: 130,
     dressingExclusions: [
       { kinds: ["foliage"], s0: 0.92, s1: 0.10 },  // pits
-      { kind: "foliage", s0: 0.20, s1: 0.44 },
-      { kind: "foliage", s0: 0.60, s1: 0.78 },
+      { kind: "foliage", s0: 0.20, s1: 0.50 },   // the plateau to the Mistral chicane (0.49-0.50)
+      { kind: "foliage", s0: 0.68, s1: 0.83 },   // Signes (0.713), Beausset, Bendor run-off
       { kind: "city", s0: 0, s1: 1 },
     ],
     // High Provençal plateau: hard white light, bleached limestone, dry scrub.
@@ -52,15 +52,23 @@
       { s: 0.66, halfM: 420, rise: -3.5 },
       { s: 0.88, halfM: 380, rise: 2.5 },
     ],
+    // hwZones are SOURCE fracs on a reversed def: resolve() maps them through
+    // TrackSpace.range(..., "source"), i.e. by control-point INDEX, and this
+    // trace's points are uneven (300 m legs on the straights, 3-8 m in the
+    // corners), so racing arc is not 1 - s and `ease` is index-wide too.
+    // Written as racing fracs, they narrowed the Mistral straight (0.61-0.67)
+    // and never the chicane. Each zone now spans exactly its corner's control
+    // points, with an ease under one index step (1/202), so the taper runs
+    // over the one short leg either side instead of a 300 m straight.
     hwZones: [
-      { s0: 0.415, s1: 0.455, hw: 6.8, ease: 0.014 },  // Mistral chicane
-      { s0: 0.700, s1: 0.745, hw: 6.6, ease: 0.012 },  // Le Beausset
-      { s0: 0.880, s1: 0.930, hw: 6.6, ease: 0.012 },  // Pont / Le Village
+      { s0: 0.5135, s1: 0.5580, hw: 6.8, ease: 0.003 },  // Mistral chicane (racing 0.490-0.511)
+      { s0: 0.2710, s1: 0.3405, hw: 6.6, ease: 0.003 },  // Le Beausset (racing 0.729-0.760)
+      { s0: 0.0135, s1: 0.0980, hw: 6.6, ease: 0.003 },  // Pont / Le Village / Tour (racing 0.883-0.927)
     ],
     bankZones: [
       { frac: 0.070, angleDeg: 3.0, widthM: 130 },   // Verrerie
-      { frac: 0.560, angleDeg: 4.0, widthM: 170 },   // Signes
-      { frac: 0.640, angleDeg: 3.5, widthM: 160 },   // Bosch curve
+      { frac: 0.713, angleDeg: 4.0, widthM: 170 },   // Signes (0.560 sat on the Mistral and was re-seated onto the chicane)
+      { frac: 0.745, angleDeg: 3.5, widthM: 160 },   // Le Beausset (was "Bosch curve" 0.640, re-seated here)
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──

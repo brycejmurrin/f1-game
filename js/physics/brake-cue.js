@@ -89,12 +89,12 @@ const BrakeCue = (function () {
       nextT -= dt;
       if (nextT > 0) return;
       nextT = PERIOD_LO + (PERIOD_HI - PERIOD_LO) * u;
-      if (G.soundOn && window.GameAudio && GameAudio.brakeCue) GameAudio.brakeCue(u);
+      if (G.soundOn && (typeof GameAudio !== "undefined") && GameAudio.brakeCue) GameAudio.brakeCue(u);
       // Both haptic channels go through Input so the HAPTICS slider reaches
       // them — a bare navigator.vibrate here would ignore a player who turned
       // haptics off and kept buzzing at every corner.
-      if (window.Input && Input.vibrate) Input.vibrate(8 + (u * 16) | 0);
-      if (window.Input && Input.rumble) Input.rumble(0.10 + u * 0.22, 45);
+      if ((typeof Input !== "undefined") && Input.vibrate) Input.vibrate(8 + (u * 16) | 0);
+      if ((typeof Input !== "undefined") && Input.rumble) Input.rumble(0.10 + u * 0.22, 45);
       if (window.Log && Log.enabled && Log.enabled("game", Log.DEBUG))
         Log.debug("game", "brake cue u=" + u.toFixed(2));
     }

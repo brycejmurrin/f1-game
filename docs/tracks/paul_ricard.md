@@ -16,7 +16,7 @@ Hard white Provençal light, bleached limestone, thin dry scrub. Enormous areas 
 ## 3. Elevation
 The flattest circuit in this set by some way — Le Castellet is a graded plateau. Vary ground-box tops by ≤1 unit.
 - s≈0.30: +3 m, barely perceptible.
-- s≈0.66: −3.5 m through the Bosch curve region.
+- s≈0.66: −3.5 m down the second half of the Mistral towards Signes.
 - s≈0.88: +2.5 m back to the pit straight.
 - Nothing else. Character here comes from width, paint and emptiness, not relief.
 
@@ -24,26 +24,28 @@ The flattest circuit in this set by some way — Le Castellet is a graded platea
 | s | Side | Distance | Box description |
 |------|------|----------|-----------------|
 | whole lap | both | near | **The painted run-off**: a continuous red band nearest the road, blue beyond it, laid as a run of flat aprons with white cross lane-lines so the blue does not read as a swimming pool |
-| 0.95–1.00 | L | near | **Pit slab**: single-storey, ~300 m, one uninterrupted flat roof on a comb of thin round columns, dark glazing band at head height, blue fascia lip. No stacked hospitality, no stepped silhouette |
-| 0.992 | L | near | Race control: a glazed box cantilevered clear of the roof line on one blank core — the only vertical on the straight |
-| 0.005 | R | near | Main grandstand, 150 m |
+| 0.95–1.00 | R | near | **Pit slab**: single-storey, ~300 m, one uninterrupted flat roof on a comb of thin round columns, dark glazing band at head height, blue fascia lip. No stacked hospitality, no stepped silhouette |
+| 0.992 | R | near | Race control: a glazed box cantilevered clear of the roof line on one blank core — the only vertical on the straight |
+| 0.005 | L | near | Main grandstand, 150 m, facing the pits |
+| 0.94–0.05 | R | mid | Paddock behind the garages: apron, hospitality slabs, motorhomes, TV compound |
 | 0.94–0.07 | R | near | Long white pit-lane hoarding wall — the one place colour shows against all that pale tarmac |
 | 0.07 | — | — | **Verrerie**, gently banked (3°) |
 | 0.20–0.44 | both | mid | Bare painted plateau — foliage suppressed entirely; sparse low pine only far back |
-| 0.40–0.47 | L | near | Braking boards into the **Mistral chicane** — the only reference points on a 1.8 km run with no trees and no buildings |
+| 0.46–0.49 | L | near | Braking boards into the **Mistral chicane** (0.490–0.502) — the only reference points on a 1.8 km run with no trees and no buildings |
 | 0.40–0.50 | L | far | **Aerodrome apron**: bare grey concrete slab (86×240) with a parallel taxiway stripe beyond it |
 | 0.40–0.45 | L | far | Three barrel-roofed **hangars** in a row, sliding-door bands facing the apron |
 | 0.465–0.51 | L | far | Three light aircraft parked nose-in at the same angle |
 | 0.545 | L | far | **Control tower**: squat glazed cab leaning outward on a white shaft, windsock on its own mast — the tallest thing for kilometres |
-| 0.56 | — | — | **Signes**, 4° banked, flat-out at the end of the Mistral |
+| 0.713 | — | — | **Signes**, 4° banked, flat-out at the end of the Mistral |
 | 0.68–0.76 | L | mid | Bare aluminium **bleachers** on a scaffold rake standing alone in the painted run-off — no shell, no roof, thin crowd |
 | 0.885 | L | far | Helipad: a painted circle on bare tarmac |
 | — | ring | far | The limestone massif of the Sainte-Baume beyond the plateau, pale and sparsely pined |
 
 ## 5. Track features
-- The Mistral straight (with its chicane at s≈0.415–0.455) and **Signes** at the end of it — the fastest sequence on the circuit.
-- Banking is minimal: Verrerie 3°, Signes 4°, Bosch 3.5°.
+- The Mistral straight (with its chicane at s≈0.490–0.502) and **Signes** (0.713) at the end of it — the fastest sequence on the circuit.
+- Banking is minimal: Verrerie 3°, Signes 4°, Le Beausset 3.5°.
 - Pinch points at the Mistral chicane, Le Beausset and the Pont/Le Village complex.
+- Sides are racing-direction: the pits and paddock are on the RIGHT of the main straight (the infield; the pit exit rejoins on the right), the main grandstand on the LEFT facing them.
 - Barriers sit a long way back, well beyond the painted apron — the run-off, not the wall, is what a driver sees.
 
 ## 6. Modelling notes
