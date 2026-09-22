@@ -63,7 +63,10 @@ const POISON = {
   "apex26.parts.mercedes": JSON.stringify({ wing: 3 }),
   "apex26.livery.ferrari": JSON.stringify("custom"),
   "apex26.setup.redbull": JSON.stringify({ arb: 2 }),
-  "apex26.customTeam": JSON.stringify({ name: "X" }),
+  // A REAL custom team, not `{ name: "X" }`. The round-trip tests below export
+  // this store and load it back, so a drivers-less stub here would be asserting
+  // that the shape which crashes boot survives a round trip.
+  "apex26.customTeam": JSON.stringify({ id: "custom", name: "X", drivers: [{ name: "You", code: "YOU", num: 99 }] }),
   "apex26.career.driver.0": JSON.stringify({ money: 1 }),
   "apex26.season": JSON.stringify([1, 2]),
   "apex26.ttlb.monza": JSON.stringify([80]),
@@ -208,7 +211,9 @@ const GARAGE = {
     { id: "custom_1", name: "Mine", c1: [0.8, 0, 0], c2: [1, 1, 1], stripe: [0, 0, 0] },
   ]),
   "apex26.setup.redbull": JSON.stringify({ arb: 2 }),
-  "apex26.customTeam": JSON.stringify({ name: "X" }),
+  // …and the same lesson for the custom team: `{ name: "X" }` has no `drivers`,
+  // which applyGarage now refuses, so it would round-trip to nothing.
+  "apex26.customTeam": JSON.stringify({ id: "custom", name: "X", drivers: [{ name: "You", code: "YOU", num: 99 }] }),
   "apex26.team": "4",
   "apex26.driver": "1",
 };
@@ -307,7 +312,7 @@ test("loading a garage file writes garage-shaped keys only", () => {
     garage: {
       "parts.mercedes": { wing: 3 },
       "livery.custom.ferrari": [1],
-      customTeam: { name: "X" },
+      customTeam: { id: "custom", name: "X", drivers: [{ code: "YOU" }] },
       "career.driver.0": { money: 99 },
       "spotify.token": "SECRET",
       "../escape": 1,
@@ -408,15 +413,60 @@ test("a garage value of the wrong shape is skipped, not written", () => {
 
 test("a sound garage file still loads whole", () => {
   // The filter must not start rejecting liveries the game would happily paint.
+  // NOTE the customTeam here. This fixture used to read `{ name: "X" }` and
+  // assert it applied — a team with no `drivers`, which is precisely the shape
+  // that took boot down (see the four-singles test below). The suite's own idea
+  // of "sound" contained the defect, which is most of why it survived.
   const b = boot();
   const liv = { id: "custom_9", name: "Mine", c1: [0.1, 0.2, 0.3], c2: [1, 1, 0],
                 noseStripe: [0, 0, 0], spineHeight: "dorsal", wingCarbon: "carbon" };
+  const team = { id: "custom", name: "X", drivers: [{ name: "You", code: "YOU", num: 99 }] };
   const r = b.loadGarage({
     format: "apex26-garage-v1",
     garage: { "livery.custom.mclaren": [liv], "livery.mclaren": "custom_9",
-              "parts.mclaren": { wing: 3 }, customTeam: { name: "X" } },
+              "parts.mclaren": { wing: 3 }, customTeam: team },
   });
   assert.equal(r.skipped, 0, "nothing sound is skipped");
   assert.equal(r.applied, 4);
   assert.deepEqual(JSON.parse(b.disk.get("apex26.livery.custom.mclaren")), [liv], "kept verbatim");
+  assert.deepEqual(JSON.parse(b.disk.get("apex26.customTeam")), team, "a real team is kept verbatim");
+});
+
+// THE FOUR SINGLES WERE THE ONE FAMILY THAT KEPT WHATEVER SHAPE IT ARRIVED IN.
+// The liveries above have been shape-checked since the file was written, under
+// a header saying a file is player input and the garage does not defend itself.
+// `team`, `driver`, `customTeam` and `customLogo` fell through to a bare
+// `return v` — and all four are read by code that defends itself no better:
+// `team` indexes Teams.LIST, and `customTeam` is pushed into it whole, where
+// SaveMigrate's seasonRoster() does `team.drivers.forEach(...)` at BOOT. So a
+// garage file — the feature's own "LOAD GARAGE FILE" button — could hand the
+// next start a TypeError before the menu painted. Same family as the
+// `DIFF[difficulty]` crash of the same day, one door further out.
+test("the four garage singles are shape-checked like the liveries", () => {
+  const b = boot();
+  const r = b.loadGarage({
+    format: "apex26-garage-v1",
+    garage: {
+      team: "abc",                 // indexes Teams.LIST — "abc" passes < 0 || >= len
+      driver: { oops: true },
+      customTeam: {},              // pushed into Teams.LIST; .drivers.forEach() at boot
+      customLogo: 7,
+    },
+  });
+  assert.equal(r.ok, true, "the file is still a file — bad VALUES are skipped, not the lot");
+  assert.equal(r.applied, 0);
+  assert.equal(r.skipped, 4);
+  for (const k of ["team", "driver", "customTeam", "customLogo"]) {
+    assert.equal(b.disk.has("apex26." + k), false, k + " must not be written");
+  }
+  // …and the sound spellings of the same four still write.
+  const b2 = boot();
+  const good = { id: "custom", name: "Mine", drivers: [{ name: "You", code: "YOU", num: 7 }] };
+  const r2 = b2.loadGarage({
+    format: "apex26-garage-v1",
+    garage: { team: 4, driver: 1, customTeam: good, customLogo: "data:image/png;base64,AA" },
+  });
+  assert.equal(r2.applied, 4, "a real garage file is untouched by the guard");
+  assert.equal(r2.skipped, 0);
+  assert.equal(JSON.parse(b2.disk.get("apex26.team")), 4);
 });
