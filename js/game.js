@@ -500,7 +500,7 @@ let raceTyreWear = store.get("tyreWear", "real");
 // AI's deal. Stays opt-in because pressing the button is the mechanic.
 let raceAeroMode = store.get("aeroMode", "manual");
 if (!Reliability.isLevel(raceReliability)) raceReliability = "off";
-if (!TyreModel.isLevel(raceTyreWear)) raceTyreWear = "light";
+if (!TyreModel.isLevel(raceTyreWear)) raceTyreWear = "real";
 let soundOn = store.get("sound", true);
 let musicEnabled = store.get("music", true);    // music on/off, independent of sound
 let manualMode = store.get("manual", false);   // manual gearbox preference (player shifts)

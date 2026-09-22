@@ -5,7 +5,10 @@ import { readFileSync } from 'node:fs';
 
 function fixture() {
   const nodes = new Map(['pm-coach-status', 'pm-coach-tip', 'pm-coach-summary', 'pm-drill-status', 'pm-lap-report'].map(id => [id, { textContent: '' }]));
-  const saved = new Map(), announcements = [];
+  // The coach SHIPS ON (js/data/settings-defaults.js; the real store answers from
+  // it). This fake store only knows the call-site fallback, so seed the player's
+  // OFF explicitly — these tests start from a coach the player has not enabled.
+  const saved = new Map([['drivingCoach', false]]), announcements = [];
   // Throttle held: the default car is driving, not coasting (a coasting tip is its own test).
   const c = { speed: 60, lapTime: 0, brakeDemand: 0, throttleDemand: 1 };
   // A 1000 m lap with curated apexes at 100 m, 500 m and 980 m — the last one
@@ -51,7 +54,7 @@ function fixture() {
 const braking = { brakeDemand: 1, throttleDemand: 1, axEstSm: -21.7, axFrac: .64, steerAngle: .1 };   // full brake, dry: the measured plateau
 const rear = { rearUtil: .97, frontUtil: .6, slipRear: .12 };
 
-test('coach defaults off, saves the choice, and paints understandable empty feedback', () => {
+test('a coach switched off paints as off, saves the toggle, and paints understandable empty feedback', () => {
   const { coach, saved, nodes, tick } = fixture();
   tick(2, braking); assert.equal(coach.feedback().total, 0);
   coach.paint(); assert.match(nodes.get('pm-coach-status').textContent, /Coach off/);
