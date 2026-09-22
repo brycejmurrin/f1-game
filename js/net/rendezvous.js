@@ -261,8 +261,6 @@ const NetRendezvous = (function () {
     }
     return httpPut(code, slot, payload, owner);
   };
-  const get = (code, slot) => httpGet(code, slot);
-
   function rvLog(action, res) {
     if (res && res.ok) Log.info("net", action + " ok");
     else if (res && (res.error === "cancelled")) Log.info("net", action + " cancelled");
@@ -303,7 +301,7 @@ const NetRendezvous = (function () {
     let transient = 0;
     for (;;) {
       if (token && token.cancelled) return ERR("cancelled", "");
-      const res = await get(code, slot);
+      const res = await httpGet(code, slot);
       if (res.ok && res.body && res.body.payload) return { ok: true, payload: res.body.payload };
       if (!res.ok && res.error !== "not_found") {
         if (!TRANSIENT.has(res.error) || ++transient >= WAIT_TRANSIENT_MAX) return res;
@@ -321,7 +319,7 @@ const NetRendezvous = (function () {
     configured, usingPrivateRelay, setUrl, baseUrl, swap, hostRoom,
     seal, open, sealPrivate, openPrivate,
     makeCode, normalise, valid,
-    put, get, waitFor,
+    put, get: httpGet, waitFor,
   };
 })();
 Object.freeze(NetRendezvous);

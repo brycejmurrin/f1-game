@@ -178,9 +178,14 @@
                 ARCADE_DARK, b);
             }
             // Ground-floor arcade openings — the shaded street level.
+            // 0.28, not 0.30: at exactly half the opening's own thickness the
+            // dark panel's outer face lands ON the facade plane, same-facing
+            // and 6.9 m2 of it — 65 coplanar pairs across madrid's venue
+            // blocks (2026-09-22). 2 cm proud reads as a recessed opening just
+            // the same and puts the fight past 300 m.
             for (let bay = -2; bay <= 2; bay++) {
               addBox(stage, vadd(vadd(vadd(a.c, a.t, bay * (d * 0.17)),
-                a.r, IN * (w * 0.5 - 0.3)), a.u, 2.0),
+                a.r, IN * (w * 0.5 - 0.28)), a.u, 2.0),
                 [0.6, 3.2, d * 0.09], ARCADE_DARK, b);
             }
             addBox(stage, vadd(a.c, a.u, bodyH + 0.3), [w, 0.6, d], trim, b);
@@ -646,12 +651,18 @@
       function ifemaStand(id, frac, side) {
         venueGroup(id, frac, side, 14, [18, 17, 30], false, (stage, a) => {
           const b = basis(a);
+          // Each tier is half a metre shorter than the one in front, and the
+          // spine wall longer than all of them. At one shared length every
+          // tier's END CAP sat on the same two planes, same-facing, overlapping
+          // wherever two tiers overlap in section — 15 coplanar pairs, the
+          // worst 13.3 m2 (2026-09-22). A stand that narrows as it rises is
+          // also what the real one does.
           for (let tier = 0; tier < 4; tier++) {
             const c = vadd(vadd(a.c, a.r, side * tier * 2.0), a.u, 1.8 + tier * 2.2);
-            addBox(stage, c, [12 - tier, 3.6, 27], tier % 2 ? CONCRETE : CROWD, b);
+            addBox(stage, c, [12 - tier, 3.6, 27 - tier * 0.5], tier % 2 ? CONCRETE : CROWD, b);
           }
           addBox(stage, vadd(vadd(a.c, a.r, side * 7.6), a.u, 6.2),
-            [0.8, 12.4, 27], STEEL, b);
+            [0.8, 12.4, 28.2], STEEL, b);
           addPrism(stage, vadd(vadd(a.c, a.r, side * 3.2), a.u, 13.0),
             [16, 2.6, 29], WHITE, b);
         });

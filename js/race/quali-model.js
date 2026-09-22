@@ -220,7 +220,7 @@ const Quali = (function () {
     function persistSeason(s) {
       try {
         if (typeof Career !== "undefined" && Career.inCareer && Career.inCareer()) Career.save();
-        else if (G.store) G.store.set("season", s);
+        else if (typeof SeasonCal !== "undefined") SeasonCal.save(s);
       } catch { /* persist is best-effort */ }
     }
 
@@ -237,6 +237,7 @@ const Quali = (function () {
       if (!classification.some((r) => r.human)) return;
       if (G.netPlay && G.netPlay.active && G.netPlay.active()) return;
       if (typeof Career !== "undefined" && Career.conflicted && Career.conflicted()) return;
+      if (typeof SeasonCal !== "undefined" && SeasonCal.conflicted && SeasonCal.conflicted()) return;
       s.qualiOrder = classification.map((r) => ({
         id: r.driverId, t: r.t, human: !!r.human,
       }));

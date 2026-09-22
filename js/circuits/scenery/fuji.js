@@ -79,9 +79,18 @@
       //    1.475 km of ONE dark-clad block: garages, then the control tower,
       //    closing the loop at pit exit. Built as abutting units so the eye
       //    reads a frontage, not a sequence of sheds.
-      const GAR_S = 0.962, GAR_LEN = 1330, GAR_STEP = 38;
-      run(GAR_S, GAR_LEN, GAR_STEP, (s, i) => {
-        const k = K(s), h = hash(i * 7.3);
+      // Bays step in WHOLE NODES, not metres: `run` rounds each bay's centre to
+      // the nearest ~4 m node, so metre-stepped 38 m bays landed 36-40 m apart
+      // and a 0.97-length box overlapped its neighbour on every short pitch —
+      // 18 same-facing coplanar facade pairs down the frontage (2026-09-22,
+      // coplanar-audit --why). A node-exact pitch leaves the 3 % gap real.
+      // Rounded UP (10 nodes, ~40 m): 33 bays still end where the 35 did, by
+      // Turn 1; a 9-node pitch needs a 36th bay the guard refuses there.
+      const GAR_S = 0.962, GAR_LEN = 1330;
+      const GAR_N = Math.ceil(38 * n / TOTAL), GAR_STEP = GAR_N * TOTAL / n;
+      const GAR_K = K(GAR_S) + (GAR_N >> 1);
+      for (let i = 0, cnt = Math.floor(GAR_LEN / GAR_STEP); i < cnt; i++) {
+        const k = (GAR_K + i * GAR_N) % n, h = hash(i * 7.3);
         // Garage box: w is the RADIAL depth, d the length down the road.
         building(k, 1, 12, 13, 8.4 + h * 0.5, GAR_STEP * 0.97,
           { wall: [CLAD, CLAD_L, CLAD_W][i % 3], window: GLASS, floor: 4.2, lit: false });
@@ -91,7 +100,7 @@
         if (i % 2 === 0)
           building(k, 1, 27, 11, 12.6, GAR_STEP * 1.9,
             { wall: i % 4 ? CLAD_L : CLAD_W, window: GLASS, floor: 4.0, lit: false });
-      });
+      }
       // Continuous fascia band along the garage roofline + the pit wall.
       run(GAR_S, GAR_LEN, 48, (s) => {
         prop(K(s), 1, 11.4, [1.1, 1.6, 47], CLAD);          // roof fascia

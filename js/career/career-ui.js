@@ -1314,8 +1314,7 @@ function create(G) {
     // Same two statements as game.js's own return-to-menu: resume() repairs a
     // career alias and sanitises the round, and the repair is persisted. Reading
     // the raw key handed the menu an unsanitised save.
-    G.season = SeasonCal.resume(G.store.get("season", null));
-    G.store.set("season", G.season);
+    G.season = SeasonCal.load();
     G.refreshCareerButton();
     { const mb = $("mb-standings"); if (mb) mb.hidden = !(SeasonCal.hasProgress(G.season) && G.season && G.season.round < SeasonCal.rounds()); }
     if (G.soundOn) GameAudio.uiSelect();

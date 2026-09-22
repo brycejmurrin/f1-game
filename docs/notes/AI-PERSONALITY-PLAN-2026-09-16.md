@@ -133,6 +133,20 @@ perturbing the first. No new draw from the seeded stream on the AI path.
 Every new per-car field must be either cleared on reset or listed as an
 episode transient.
 
+### Baseline, five seeds (2026-09-22)
+
+`node tools/check/ai-field.mjs --runs 5 --diff normal` (monza, 21 AI cars,
+240 s, wear off) reads **0.040 [0.02-0.06] mistakes per car per 100 s**,
+2 [1-3] total over 5040 racing car-seconds. That settles an open question:
+a single run taken earlier read 0.020 and was briefly read as a drop. It is
+the LOW END OF THE RANGE, not a regression — `--seed` does not vary anything
+on a single run (the seed is set and the field rebuilt only by `--runs`), so
+one sample here is reproducibility, never precision. Step 1's gate ("the
+counter non-zero, medians unchanged") holds: the model is live and its rate
+is where it was documented. No retune is owed.
+
+Read the median against this range, never a single number against 0.040.
+
 ## 7. Order, each with a gate
 
 Capture baselines first at five seeds. Then:

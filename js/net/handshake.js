@@ -21,11 +21,6 @@ const NetHandshake = (function () {
     return res;
   }
 
-  // Bound at call time: NetBytes loads first in LAZY_NET, but nothing here
-  // needs it at eval, so the order is not a hard edge.
-  const bytesToB64url = (bytes) => NetBytes.bytesToB64url(bytes);
-  const b64urlToBytes = (str) => NetBytes.b64urlToBytes(str);
-
   const enc = () => new TextEncoder();
   const dec = () => new TextDecoder();
 
@@ -81,13 +76,13 @@ const NetHandshake = (function () {
           const joined = new Uint8Array(2 + packed.length + rest.length);
           joined[0] = packed.length >> 8; joined[1] = packed.length & 0xff;
           joined.set(packed, 2); joined.set(rest, 2 + packed.length);
-          return MAGIC + ".s." + bytesToB64url(await deflateBytes(joined));
+          return MAGIC + ".s." + NetBytes.bytesToB64url(await deflateBytes(joined));
         }
       } catch (e) { /* any trouble at all: fall through to the whole-text path */ }
-      try { return MAGIC + ".z." + bytesToB64url(await deflate(JSON.stringify(payload))); }
+      try { return MAGIC + ".z." + NetBytes.bytesToB64url(await deflate(JSON.stringify(payload))); }
       catch (e) { /* fall through to plain */ }
     }
-    return MAGIC + ".p." + bytesToB64url(enc().encode(JSON.stringify(payload)));
+    return MAGIC + ".p." + NetBytes.bytesToB64url(enc().encode(JSON.stringify(payload)));
   }
   // The FORMAT half of decodeCode, synchronous and connection-free: is this
   // text shaped like one of our codes at all? The lobby asks this BEFORE it
@@ -114,7 +109,7 @@ const NetHandshake = (function () {
     if (!peek.ok) return peek;
     const { mode, body } = peek;
     try {
-      const bytes = b64urlToBytes(body);
+      const bytes = NetBytes.b64urlToBytes(body);
       if (mode === "s") {
         const raw = await inflateBytes(bytes);
         const n = (raw[0] << 8) | raw[1];

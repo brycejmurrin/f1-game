@@ -61,6 +61,21 @@ const BASELINE = {
   // predates it having a wall at all.
   monaco: 1.4, singapore: 1.3, baku: 1.3, jeddah: 1.1,
   albert_park: 0.7,
+  // mosport and zandvoort read the SAME object as jeddah above, and it is the
+  // PIT WALL'S TOP CAP: js/track/scenery/pits.js sweeps the profile
+  // [[-0.07,1.0],[0.32,1.0],[0.32,1.07],[-0.07,1.07]] in WALL_TOP
+  // [0.46,0.47,0.50], topping out at exactly 1.07 m. Not the garage row's wall
+  // (that stands 8.2-13.0 m out) but the ENTRY/EXIT wall at the tarmac edge:
+  // on zandvoort 6.81 m against a 7.0 m half-width. They went unbaselined only
+  // because this spec runs on no push — 1500 s against the gate's 180 s cap —
+  // so the red went unseen from the walled-exit pit redesign until 2026-09-22.
+  //
+  // This ladder reaches the wall at all because it scales by the half-width
+  // taken from the ROAD MESH above, 1.2-1.3x the engine's track.hw, so its
+  // outermost sample lands off the tarmac on the boundary a car stays inside.
+  // Scaling by track.hw would let all four of these go back to TOL; that is
+  // open in docs/notes/DEFECT-LEDGER.md.
+  mosport: 1.1, zandvoort: 1.1,
   // mont_tremblant: a forest crown leaning over the road, not an intrusion at
   // the edge — dark green [0.10,0.20,0.09] spanning y 9.96-12.46 with the road
   // at 7.33, so 4.74 m of clearance a car drives under. Same category as the

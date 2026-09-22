@@ -31,7 +31,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  checkParity, scanGameCtx, scanDts, emitShadow, ctxModuleFiles, deadMembers, findTsc, runTsc,
+  checkParity, checkElsParity, scanGameCtx, scanDts, scanGameEls, scanDtsEls,
+  collectUsage, emitShadow, ctxModuleFiles, deadMembers, findTsc, runTsc,
 } from "../../tools/check/check-gctx.mjs";
 
 /* Members game.js publishes that NOTHING reads — the other direction of drift, and
@@ -70,10 +71,40 @@ test("the writability of every member is transcribed, not guessed", () => {
 test("every module that receives the ctx is a declared GameModuleFactory", () => {
   const files = ctxModuleFiles();
   assert.ok(files.length > 15, `only ${files.length} ctx modules found — the create(ctx) scan broke`);
+  assert.ok(files.includes("js/race/race-settings.js"), "RaceSettings receives G and must stay under the usage check");
+  assert.ok(!files.includes("js/fx/skidmarks.js"), "SkidMarks is self-contained and must not pretend to consume G");
   // agentview-raster.js and net/session.js also spell their entry point create()
   // over a different argument; typing those bags as GameCtx would invent drift.
   assert.ok(!files.includes("js/agent/agentview-raster.js"), "AgentRaster takes a bespoke bag, not the ctx");
   assert.ok(!files.includes("js/net/session.js"), "NetSession.create takes {transport}, not the ctx");
+});
+
+test("nested GameEls drift is rejected by a negative fixture", () => {
+  const game = scanGameEls("const els = { overlay: null, tyreWear: null };", "fixture/game.js");
+  const dts = scanDtsEls("interface GameEls {\n  overlay: HTMLElement;\n}", "fixture/game-ctx.d.ts");
+  assert.deepEqual(checkElsParity(game, dts, "fixture/game.js", "fixture/game-ctx.d.ts"), [
+    'fixture/game.js:1: els id "tyreWear" is not declared in fixture/game-ctx.d.ts\'s GameEls',
+  ]);
+});
+
+test("module reads through direct, destructured and aliased G.els are emitted against GameEls", () => {
+  const source = `const Fixture = (function () {
+    function create(ctx) {
+      void ctx.els.directTypo;
+      const { destructuredTypo } = ctx.els;
+      const { els } = ctx;
+      const alias = els;
+      alias.aliasedTypo = null;
+      return destructuredTypo;
+    }
+    return { create };
+  })();`;
+  const nested = collectUsage("fixture/module.js", source).filter((h) => h.kind.startsWith("els"));
+  assert.deepEqual(nested.map((h) => [h.kind, h.names]), [
+    ["elsRead", ["directTypo"]],
+    ["elsDestructure", ["destructuredTypo"]],
+    ["elsWrite", ["aliasedTypo"]],
+  ]);
 });
 
 test("the usage extractor finds the G reference sites it is supposed to check", () => {

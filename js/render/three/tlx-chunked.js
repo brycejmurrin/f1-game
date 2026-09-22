@@ -240,6 +240,9 @@
     // Read per build, not once: the renderer's backend is known only after
     // its async init, and a build can precede it on a slow boot.
     const fmt24 = () => !!(ctx && ctx.isWebGPU && ctx.isWebGPU());
+    const releaseGeometry = (geo) => {
+      if (geo && ctx && ctx.releaseGeometry) ctx.releaseGeometry(geo);
+    };
 
     function attrOrZero(src, len, itemSize, kind) {
       return packAttr(THREE, src, len, itemSize, kind, fmt24());
@@ -443,14 +446,14 @@
       if (mesh.chunks) {
         for (let i = 0; i < mesh.chunks.length; i++) {
           const ch = mesh.chunks[i];
-          if (ch.geo) { ch.geo.dispose(); ch.geo = null; }
+          if (ch.geo) { releaseGeometry(ch.geo); ch.geo.dispose(); ch.geo = null; }
           if (ch.wrap) ch.wrap.geo = null;
         }
         mesh.chunks = null;
         mesh.geo = null;
         return;
       }
-      if (mesh.geo) { mesh.geo.dispose(); mesh.geo = null; }
+      if (mesh.geo) { releaseGeometry(mesh.geo); mesh.geo.dispose(); mesh.geo = null; }
     }
 
     try { Log.info("gfx", "TLX chunked init"); } catch (_) { /* harness */ }
