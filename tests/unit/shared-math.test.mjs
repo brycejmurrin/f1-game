@@ -37,6 +37,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const ctx = vm.createContext({});
 vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "js/core/mat4.js" });
 const M4 = vm.runInContext("M4", ctx);
+const V3 = vm.runInContext("V3", ctx);
 
 // ---------------------------------------------------------------------------
 // 1. semantics
@@ -175,4 +176,115 @@ test("the shared helpers are actually consumed — the migration is not decorati
   assert.ok(users.length >= 18,
     `only ${users.length} files bind a shared scalar helper — the aliases were removed, ` +
     "not the duplication: " + users.join(", "));
+});
+
+// ---------------------------------------------------------------------------
+// 3. THE MATRIX HALF
+//
+// WHY THIS ARRIVED LATE. The three scalars above had a sharp test from the day
+// they were extracted; the six matrix functions in the same file had NONE. A
+// mutation sweep on 2026-09-20 put it plainly: `mulTo`, `perspectiveTo`,
+// `lookAtTo`, `orthoTo` and `invertTo` were named by ZERO test files anywhere
+// in the repo — not "weakly covered", unreferenced. A sign flip in
+// perspectiveTo's depth row is invisible to every existing suite, and the only
+// thing that would ever have reported it is a person looking at the screen.
+//
+// These are PROPERTY tests, not pinned matrices. A pinned 16-float expectation
+// is a second implementation with the same bugs; an inverse that round-trips,
+// an identity that is neutral and a projection that puts the near plane where
+// it belongs are claims about what the maths MEANS, and they fail on the
+// mutations a transcription error actually produces.
+const near16 = (got, want, eps, msg) => {
+  for (let i = 0; i < 16; i++) {
+    assert.ok(Math.abs(got[i] - want[i]) <= eps,
+      `${msg}: element ${i} was ${got[i]}, expected ~${want[i]}`);
+  }
+};
+
+test("mulTo is associative-with-identity and composes in the documented order", () => {
+  const I = M4.ident(), out = M4.ident();
+  const a = Float32Array.from([2,0,0,0, 0,3,0,0, 0,0,4,0, 5,6,7,1]);
+  near16(M4.mulTo(out, a, I), a, 1e-6, "a x I must be a");
+  near16(M4.mulTo(M4.ident(), I, a), a, 1e-6, "I x a must be a");
+  // Column-major, so mulTo(out, a, b) applies b FIRST: scaling then translating
+  // is not translating then scaling, and swapping the arguments must show it.
+  const t = Float32Array.from([1,0,0,0, 0,1,0,0, 0,0,1,0, 1,0,0,1]);
+  const scaleThenMove = M4.mulTo(M4.ident(), a, t);
+  const moveThenScale = M4.mulTo(M4.ident(), t, a);
+  assert.notDeepEqual(Array.from(scaleThenMove), Array.from(moveThenScale),
+    "argument order must matter — if it does not, one operand is being ignored");
+  assert.equal(scaleThenMove[12], 7, "a x translate(1,0,0) moves by the SCALED x: 5 + 2*1");
+});
+
+test("invertTo round-trips a non-trivial transform, and is safe on a singular one", () => {
+  const m = M4.ident();
+  M4.lookAtTo(m, [12, 4, -3], [0, 1, 0], [0, 1, 0]);
+  const inv = M4.invertTo(M4.ident(), m);
+  near16(M4.mulTo(M4.ident(), m, inv), M4.ident(), 1e-4, "m x m^-1 must be identity");
+  // A zero matrix has no inverse. The function returns identity rather than
+  // NaNs on purpose — a frame drawn from the wrong camera beats a frame drawn
+  // from no camera, and NaNs propagate into every vertex downstream.
+  near16(M4.invertTo(M4.ident(), new Float32Array(16)), M4.ident(), 0,
+    "a singular matrix must fall back to identity, never NaN");
+});
+
+test("perspectiveTo puts the near plane at -1 and the far plane at +1", () => {
+  // The depth row is the half that a sign flip silently ruins: the picture
+  // still draws, and only the ordering is wrong. Project a point sitting ON
+  // each plane (OpenGL convention: the camera looks down -z) and divide by w.
+  const p = M4.perspectiveTo(M4.ident(), Math.PI / 3, 16 / 9, 0.5, 100);
+  const depthOf = (z) => {
+    const cz = p[10] * z + p[14], cw = p[11] * z;
+    return cz / cw;
+  };
+  assert.ok(Math.abs(depthOf(-0.5) - -1) < 1e-4, `near plane mapped to ${depthOf(-0.5)}, want -1`);
+  assert.ok(Math.abs(depthOf(-100) - 1) < 1e-4, `far plane mapped to ${depthOf(-100)}, want +1`);
+  assert.equal(p[11], -1, "the w row must carry -z for a perspective divide to happen at all");
+  assert.ok(p[0] < p[5], "a 16:9 aspect must squeeze x relative to y");
+});
+
+test("orthoTo maps the box corners onto the unit cube", () => {
+  const o = M4.orthoTo(M4.ident(), -2, 2, -1, 1, 0.5, 10);
+  const apply = (v) => [
+    o[0] * v[0] + o[12], o[5] * v[1] + o[13], o[10] * v[2] + o[14],
+  ];
+  const lo = apply([-2, -1, -0.5]), hi = apply([2, 1, -10]);
+  for (const [i, want] of [[0, -1], [1, -1], [2, -1]]) {
+    assert.ok(Math.abs(lo[i] - want) < 1e-6, `min corner axis ${i} -> ${lo[i]}, want ${want}`);
+  }
+  for (const [i, want] of [[0, 1], [1, 1], [2, 1]]) {
+    assert.ok(Math.abs(hi[i] - want) < 1e-6, `max corner axis ${i} -> ${hi[i]}, want ${want}`);
+  }
+});
+
+test("lookAtTo builds an orthonormal basis that puts the eye at the origin", () => {
+  const eye = [10, 5, 10], target = [0, 0, 0];
+  const v = M4.lookAtTo(M4.ident(), eye, target, [0, 1, 0]);
+  // The eye maps to the origin — that is what a view matrix IS.
+  const at = (p) => [
+    v[0]*p[0] + v[4]*p[1] + v[8]*p[2]  + v[12],
+    v[1]*p[0] + v[5]*p[1] + v[9]*p[2]  + v[13],
+    v[2]*p[0] + v[6]*p[1] + v[10]*p[2] + v[14],
+  ];
+  for (const c of at(eye)) assert.ok(Math.abs(c) < 1e-4, `eye did not map to the origin: ${at(eye)}`);
+  // ...and the target sits straight down -z, because the camera looks that way.
+  const t = at(target);
+  assert.ok(Math.abs(t[0]) < 1e-4 && Math.abs(t[1]) < 1e-4,
+    `target must be centred in view, got ${t}`);
+  assert.ok(t[2] < 0, `target must be in FRONT of the camera (-z), got ${t[2]}`);
+  // Orthonormal: each basis row is unit length. A lost normalise shows here.
+  for (const row of [[v[0], v[4], v[8]], [v[1], v[5], v[9]], [v[2], v[6], v[10]]]) {
+    assert.ok(Math.abs(Math.hypot(...row) - 1) < 1e-4, `basis row is not unit length: ${row}`);
+  }
+});
+
+test("V3.norm returns a unit vector and refuses to divide by zero", () => {
+  const u = V3.norm([3, 0, 4]);
+  assert.ok(Math.abs(Math.hypot(...u) - 1) < 1e-9, `not unit: ${u}`);
+  // Array.from: the vector is built inside the vm realm, so its prototype is
+  // not ours and strict deepEqual rejects it as "not reference-equal".
+  assert.deepEqual(Array.from(u, (n) => +n.toFixed(4)), [0.6, 0, 0.8]);
+  // The `|| 1` guard: a zero vector comes back zero rather than NaN.
+  assert.deepEqual(Array.from(V3.norm([0, 0, 0])), [0, 0, 0],
+    "a zero vector must not produce NaN");
 });

@@ -806,6 +806,11 @@ const PitLane = (function () {
       if (!c || !enabled()) return false;
       c.pitArmed = on == null ? !c.pitArmed : !!on;
       // The place the stop was called from: what it cost is said at the release.
+      // DISARMING DROPS IT, because the stop it was stamped for is off and the
+      // guard below refuses to re-stamp a positive value: without this, arm →
+      // cancel → arm again later summarised the second stop against the first
+      // one's grid position, no red flag needed.
+      if (!c.pitArmed) c.pitPos0 = 0;
       if (c.pitArmed && !(c.pitPos0 > 0)) c.pitPos0 = rankOf(c);
       return c.pitArmed;
     }
@@ -1584,6 +1589,33 @@ const PitLane = (function () {
       if (c.local) { for (const k in _said) delete _said[k]; _lastCue = null; }
     }
 
+    /** The IN-PROGRESS half of reset(), and nothing else.
+     *
+     *  A red flag is not a new race: pitStops, pitNext and the plan are the
+     *  car's STRATEGY and must survive it (game.js redFlagRestart says the same
+     *  of energy, tyreClass and phaseRoll). What must not survive is a stop
+     *  that was in flight when the flag flew — the arm, the commitment and the
+     *  lane state — because the restart teleports every car onto a grid box
+     *  that, on most circuits, sits INSIDE the pit window. inLane(c) then keeps
+     *  answering true, so game.js's vmax branch holds the car at the pit
+     *  limiter and laneDrive steers it onto the lane offset: the player leaves
+     *  a standing start unable to exceed ~20 m/s at full throttle until the arc
+     *  walks them out of the window, measured at ~750 ticks (12 s) on Monza.
+     *  The one place that used to clear these is update()'s left-the-window
+     *  branch, which by construction cannot fire while the car is inside it. */
+    function clearArm(c) {
+      if (!c) return;
+      c.pitArmed = false; c.pitState = "none"; c.pitT = 0;
+      c.pitCommitT = 0; c.pitAbortT = 0; c.pitCommitted = false; c.pitOutT = 0;
+      // ...and the three the SUMMARY is computed from. release() clears these,
+      // but only for a stop that COMPLETED; an attempt the flag interrupted
+      // left the rank it was called from and the work already done on the car,
+      // and arm() re-stamps pitPos0 only when it is not already positive — so
+      // the driver's next real stop announced a place-swing and a held time
+      // measured against the aborted one.
+      c.pitPos0 = 0; c.pitWorked = 0; c.pitWhy = "";
+    }
+
     function info(c) {
       const zz = z();
       if (!zz) return null;
@@ -1643,7 +1675,7 @@ const PitLane = (function () {
     }
 
     return { zoneOf: () => z(), limit, toBox, approachV, entryV, exitV, stopAnim, inLane, held, roadOf, inWindow: inWindowOf,
-             arm, update, reset, info, setNext, serviceCar, planFor, think,
+             arm, update, reset, clearArm, info, setNext, serviceCar, planFor, think,
              pickFor, ownedTyres, choices, selectNext, estimate, committing, commitFrac, toEntry, cue,
              worthStopping, canWork, addWork, workS: WORK_S, boxBusy,
              cueM: CUE_M, boxCueM: BOX_CUE_M, moveM: MOVE_M,

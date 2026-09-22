@@ -94,8 +94,47 @@
           stage._mat = 0;
         }, { required: true });
       };
-      pitBlock("estoril-pit-terrace-a", 0.960, 7);
-      pitBlock("estoril-pit-terrace-b", 0.996, 7);
+      // ── THE FRAC YOU WRITE IS NOT WHERE IT LANDS ──────────────────────────
+      // `sceneryStartFrac: 0.96` in the def gives `_sceneryShift` 0.85616, and
+      // EVERY emitter here — K(s) and the (s0, s1) range helpers alike — is
+      // remapped by it: engine_frac = wrap01(authored + 0.85616). Verified
+      // against `track.props.spans`, which reports emitted engine fracs:
+      // tyreWall(0.880,0.925) -> 0.7360,0.7810; fence(0.95,0.06) ->
+      // 0.8060,0.9160; guardrail(0.94,0.06) -> 0.7960,0.9160, all matching
+      // prediction to four decimals.
+      //
+      // The ids below were RENAMED 2026-09-22 to the feature each one actually
+      // lands on, because none of them matched: the "pit terraces" emit onto
+      // the Parabolica (T14), the "t1 gravel" and "esses stand" land in the pit
+      // complex and are SUPERSEDED — they never render at all — and the widest
+      // gravel apron dresses T13, not the Parabolica it was named for.
+      //
+      // THE PLACEMENT IS WRONG, NOT MERELY MISNAMED. A probe settles what the
+      // audits cannot see (`agent.mjs estoril scene --at <frac>`): at frac 0.82,
+      // the Parabolica, stand 14 structures, a gantry, a grandstand and FIVE
+      // MOTORHOMES — the paddock, on a fast corner — while frac 0.97, the pit
+      // straight, reads 11 trees and 22 pines. `float 0` and `clip 1` say
+      // nothing about this: props auto-ground wherever they are and a building
+      // in open air hits nothing. An earlier pass read that silence as "tuned
+      // in place" and corrected only the names; that was wrong.
+      //
+      // DO NOT fix it by dropping sceneryStartFrac. `_sceneryShift` is not a
+      // scenery offset — the ENGINE consumes it too, in four readers in
+      // js/track/tracks.js: `dress` in buildCenterline (bridges and
+      // elevations), `shiftS` in transformSceneryApi, the inverse `HKSHIFT`
+      // beside indexSolidAt, and the sceneryCoordinates guard in bakedModel.
+      // With the whole
+      // scenery callback stubbed out so no circuit prop emits at all, shift
+      // 0.85616 gives 0 severe clips and shift 0 gives a 4.00 m / 1261 m3
+      // engine-side collision at frac 0.000. Removing motorhome,
+      // broadcastCompound, grandstandEx, both pitBlocks or the pit stand does
+      // not touch it. The terrain moves with the same constant.
+      //
+      // The real fix needs the four consumers understood together —
+      // docs/notes/DEFECT-LEDGER.md carries the measurements and the probe A/B
+      // that is its acceptance test.
+      pitBlock("estoril-parabolica-terrace-a", 0.960, 7);
+      pitBlock("estoril-parabolica-terrace-b", 0.996, 7);
       {
         const a = anchor(K(0.978), 1, 22), b = [a.r, a.u, a.t];
         modelGroup("estoril-timing-tower", {
@@ -189,25 +228,25 @@
           stage._mat = 0;
         });
       };
-      scaffoldStand("estoril-stand-pit", K(0.005), -1, 13, 18, { rows: 5, awning: true });
-      scaffoldStand("estoril-stand-t1", K(0.078), -1, 22, 11, { rows: 4 });
-      scaffoldStand("estoril-stand-esses", K(0.140), 1, 20, 9, { rows: 4 });
-      scaffoldStand("estoril-stand-parabolica", K(0.900), 1, 18, 14, { rows: 5, awning: true });
+      scaffoldStand("estoril-stand-parabolica-exit", K(0.005), -1, 13, 18, { rows: 5, awning: true });
+      scaffoldStand("estoril-stand-main-straight", K(0.078), -1, 22, 11, { rows: 4 });
+      scaffoldStand("estoril-stand-pitlane-superseded", K(0.140), 1, 20, 9, { rows: 4 });
+      scaffoldStand("estoril-stand-t13", K(0.900), 1, 18, 14, { rows: 5, awning: true });
       grandstandEx(0.955, -1, 12, 78, null, null,
         { livery: "terracotta", roof: "none", endWalls: true, h: 8 });
 
       groundPatch(K(0.078), 1, 5, [30, 0.18, 40], GRAVEL,
-        { id: "estoril-t1-gravel", samples: 7 });
+        { id: "estoril-pit-entry-gravel-superseded", samples: 7 });
       tyreWall(0.062, 0.096, 1, 4, [0.86, 0.20, 0.18]);
       marshalPost(K(0.072), -1, 9);
 
       groundPatch(K(0.420), -1, 5, [26, 0.18, 34], GRAVEL,
-        { id: "estoril-esses-gravel", samples: 6 });
+        { id: "estoril-t5-gravel", samples: 6 });
       tyreWall(0.406, 0.436, -1, 4, [0.20, 0.40, 0.85]);
       marshalPost(K(0.424), 1, 9);
 
       groundPatch(K(0.780), 1, 5, [24, 0.18, 32], GRAVEL,
-        { id: "estoril-t12-gravel", samples: 6 });
+        { id: "estoril-t11-gravel", samples: 6 });
       marshalPost(K(0.775), -1, 9);
 
       // EST-M2: Parabolica owns both superlatives on the lap: the widest
@@ -216,8 +255,18 @@
       // on this curve six rows or a 0.855-0.940 span put adjacent treads
       // through each other (clip-audit: 3-5 severe spots against the
       // baseline's 1), so the bank keeps four rows over 0.865-0.935.
-      groundPatch(K(0.900), -1, 6, [48, 0.18, 104], GRAVEL,
-        { id: "estoril-parabolica-gravel", samples: 9 });
+      // gap 6 put the innermost of the 9 lateral boxes at 6.0-11.3 m against a
+      // 7 m road half-width, so preflight rejected the EMITTED footprint and
+      // dropped the whole apron (verify-track "suppressed 3", only 2 of them
+      // the intentional pit-complex pair). gap 10 clears the road edge by 3 m.
+      // ONE 104 m slab could not be placed at all: rejBox tests the EMITTED
+      // axis-aligned union, and a straight slab that long beside a R~122 m
+      // corner always swallows road, whatever its lateral offset (gap 6 and 10
+      // both rejected). Three shorter patches each take their own K(s) basis
+      // and follow the arc, which is what the apron actually is.
+      for (const [g, id] of [[0.884, "a"], [0.900, "b"], [0.916, "c"]])
+        groundPatch(K(g), -1, 10, [44, 0.18, 34], GRAVEL,
+          { id: "estoril-t13-gravel-" + id, samples: 9 });
       tyreWall(0.880, 0.925, -1, 5, [0.85, 0.78, 0.20]);
       spectatorHill(0.865, 0.935, 1, 32, { rows: 4, rise: 1.2, depth: 1.9, density: 0.68, step: 7 });
       marshalPost(K(0.895), 1, 10);

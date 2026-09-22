@@ -38,10 +38,13 @@ function load(options = {}) {
     },
     window: { addEventListener: (name, fn) => listeners.set(name, fn) },
     Log: { warn() {}, info() {} },
-    Teams: { POINTS: [25, 18, 15, 12, 10, 8, 6, 4, 2, 1], LIST: [team] },
+    // isReal mirrors js/data/teams.js; a beatRival goal walks the grid through it.
+    Teams: { POINTS: [25, 18, 15, 12, 10, 8, 6, 4, 2, 1], LIST: [team],
+             isReal: (t) => !!t && !t.custom && !t.legends },
     Tracks: { LIST: [{ id: "a" }], SEASON: [{ id: "a" }], seasonIndex: () => 0 },
     Parts: { getFactorySetup: () => ({}) },
-    DriverRatings: { get: () => ({ pace: 50, craft: 50, awareness: 50, consistency: 50, experience: 50 }) },
+    DriverRatings: { get: () => ({ pace: 50, craft: 50, awareness: 50, consistency: 50, experience: 50 }),
+                     overall: () => 50 },
   });
   vm.runInContext(readFileSync(join(ROOT, "js/core/hash32.js"), "utf8"), ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx);

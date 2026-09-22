@@ -593,6 +593,33 @@ test("an unknown since returns the full payload with a note, not an error", asyn
   contains(d.note, "full payload");
 });
 
+// A DELTA CANNOT EXPRESS A REMOVED KEY. deltaOf walks the keys of the NEW
+// payload, so a field the base carried and this one does not is never
+// mentioned, and applyDelta merges — so the reconstruction keeps it forever.
+// The reachable case is the one agentHelp() recommends: one "full" read for
+// session/physics/tunables, then ride "brief" with `since`. Nothing makes the
+// detail level match across a chain, so switching down used to pin those keys
+// at their last full-read values for the rest of the episode. A shrink now
+// takes the same full-payload escape hatch an unknown `since` takes.
+test("dropping to a smaller detail level across a since chain returns the full payload", async () => {
+  await load();
+  const full = g.apex.world({ detail: "full" });
+  truthy(full.tunables, "the full payload carries tunables");
+  g.apex.step(1 / 60, 2);
+  const d = g.apex.world({ detail: "brief", since: full.seq });
+  assert.equal(d.deltaBase, null, "a shrinking payload cannot be sent as a delta");
+  contains(d.note, "removed key");
+  assert.equal(d.tunables, undefined, "the dropped key must not be reconstructed as stale");
+});
+
+test("a same-detail chain is still a delta, not a full payload", async () => {
+  await load();
+  const a = g.apex.world({ detail: "drive" });
+  g.apex.step(1 / 60, 2);
+  const d = g.apex.world({ detail: "drive", since: a.seq });
+  assert.equal(d.deltaBase, a.seq, "the shrink guard must not break ordinary deltas");
+});
+
 // ── corner table ────────────────────────────────────────────────────────────
 
 test("Monaco's hairpin is resolved as a hairpin", async () => {

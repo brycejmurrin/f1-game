@@ -67,6 +67,87 @@ const UP_BACKOFF_MAX = 120000;
 // 60 s tab resume is one slow FRAME, not a spent cooldown.
 const COOL_STEP_MAX_MS = 100;
 let _upBackoff = UP_BACKOFF_MIN;   // wait before the next restore attempt after a refused climb
+// A CLIMB IS NOT PROVED BY SURVIVING ONE EVALUATION — IT IS PROVED BY SURVIVING
+// THE LOAD. `_pendingVerify` reverts a climb that was wrong within one
+// evaluation window; it cannot see a climb that the next heavy corner undoes
+// eight seconds later. Both are the same mistake — the headroom was A GAP IN
+// THE LOAD, not the device getting faster — but only the first one cost the
+// governor any patience, and `_upBackoff` was then reset by every climb that
+// merely passed its verify. So on a circuit with one heavy section per lap,
+// which is every circuit, the governor cut in the heavy part, climbed back
+// through the light part, and did the same again next lap, for the whole race.
+// Each end of that cycle reallocates every HDR/bloom/SSAO/god-ray target
+// (setRenderScale -> resize -> createTargets) — what this file's header already
+// calls "a visible hitch". Measured against this same tick() (a 26 ms section
+// for 8 s of a 35 s lap, 13 ms elsewhere): 30 reallocations in a 300 s race, a
+// median 8.1 s apart, clustering at 4.7 s, and the scale ends back at 1.0 —
+// every one of them bought nothing, which is the whole complaint. A cut that
+// lands while a climb is still on probation is therefore charged exactly like a
+// verify-refused climb, and patience is restored only by a climb that OUTLIVES
+// the window. The governor then settles on the scale that holds through the
+// heavy section instead of chasing the track layout around the lap.
+// One lap's worth of load variance: shorter, and the next lap's heavy section
+// still reads as a fresh, uncharged cut, which is the bug.
+const CLIMB_SURVIVE_MS = 30000;
+// A CUT IS EVIDENCE ABOUT THE SCALE IT CUT FROM, and nothing kept it.
+// `_scaleFutile` records that the scale LEVER bought nothing; no state recorded
+// that a particular scale VALUE did not hold. So one hold later the restore
+// ladder climbed straight back toward the resolution the governor had just
+// measured as too expensive, the next heavy section proved it too expensive
+// again, and the pair repeated for the whole race. Patience alone cannot fix
+// that — it only spaces the same wrong climb further apart. Keeping the
+// ceiling ends it: never climb to within one down-step of a scale that missed.
+// THE SENTINEL MUST NOT BE A VALUE THE MEASUREMENT CAN PRODUCE. This was
+// initialised to 1 and compared with `>= 1`, which made "nothing refused yet"
+// and "scale 1.0 missed the budget" the same state — and 1.0 is the scale a
+// cut most often comes FROM. So on the single most common shape, a device
+// that holds the budget at 0.9 and misses only at full resolution (this
+// file's own header example: "a phone on GRAPHICS: HIGH... sits right at that
+// edge"), the ceiling stayed 1, the ladder climbed straight back into the
+// resolution that had just missed, and the cap contributed nothing. Verified
+// against the unfixed code: byte-identical reallocation timestamps. Infinity
+// is unreachable by any cut or refused climb, so `> 1` now means exactly
+// "no measurement yet".
+let _scaleCap = Infinity;
+// The ceiling EXPIRES, or a device that was slower for one stretch — a weather
+// effect, a full field on lap one, a thermal excursion that passed — could
+// never have its resolution back. UNBROKEN headroom is the whole
+// discriminator, and it is the SAME question the survival window above asks
+// from the other side: a climb is believed once it has outlived a lap's load
+// variance, so a ceiling is forgotten once it has gone that long unchallenged.
+// One constant, both directions. It lifts the ceiling ALL THE WAY rather than
+// a step at a time — a genuine recovery should not buy its resolution back one
+// reallocation per minute — and a ceiling that was right is simply re-measured
+// by the one climb that follows, at the doubling patience every refusal earns.
+let _capProbeMs = CLIMB_SURVIVE_MS;
+// Re-measuring the same ceiling is itself a hitch, so the probe is never more
+// frequent than the backoff those refusals have already bought.
+function _armCapProbe() { _capProbeMs = Math.max(CLIMB_SURVIVE_MS, _upBackoff); }
+let _sinceUp = -1;   // ms since the last accepted up-step; -1 when none is on probation
+// The hold a cut earns. 10 s normally — enough for the EMA to settle before the
+// restore gate can reopen. When the cut UNDOES a climb still on probation the
+// two are one oscillation, not two independent readings, so it costs the same
+// doubling patience a refused climb does (10 s, 20 s, 40 s … 2 min).
+function _chargeCut() {
+  if (_sinceUp < 0) return 10000;
+  _sinceUp = -1;
+  _upBackoff = Math.min(_upBackoff * 2, UP_BACKOFF_MAX);
+  return _upBackoff;
+}
+// THE OTHER SIDE OF THE SAME LOOP, from PR #190. The state above damps the
+// RESTORE side — a climb must outlive the load, and a scale that missed is
+// remembered so the ladder stops walking back into it. This damps the DEGRADE
+// side: a repeat cut must be confirmed before it is paid for. They are
+// independent and both are kept; between them the cut and the climb each have
+// to mean something before a reallocation is spent on it.
+// Consecutive evaluations over the degrade threshold before the governor spends
+// a render-target reallocation. Two is one confirmation, ~0.75 s apart at 60 fps
+// (tick() evaluates every 45 frames) — long enough that a transient cannot move
+// the scale, short enough that real overload is still caught promptly.
+const DEGRADE_CONFIRM = 2;
+let _degradeArm = 0;
+// Scale changes the governor has spent since race start — the first is prompt.
+let _scaleMoves = 0;
 // The scale lever is INEFFECTIVE on this device right now — set when a
 // scale-down step was reverted for buying nothing, cleared once a tier has been
 // shed (the next rung may change that) or once headroom returns.
@@ -351,6 +432,14 @@ function _floorFromStrikes(n) { return n >= 2 ? 4 : (n >= 1 ? 2 : 0); }
 // re-allocs per app switch — and it made __apex.perf().open describe the last
 // un-hide instead of the race start. This only re-arms the sentinel.
 function sentinelResume() {
+  // A CLIMB CANNOT BE ON PROBATION ACROSS TIME NOBODY MEASURED. `_sinceUp`
+  // ages only inside tick(), which never runs while the tab is hidden, so a
+  // climb accepted before a ten-minute background stint came back reading as
+  // seconds old — and the first cut after the resume then charged it the full
+  // doubling penalty for load the climb was never tested against. That is the
+  // same reasoning that keeps this function from resetting the EMAs: a tab
+  // return is not evidence. Drop the probation instead of charging it.
+  _sinceUp = -1;
   if (!_gfx || !_gfx.isMobile) return;
   GameStore.store.rawSet(SENT_ACTIVE, "1");
 }
@@ -359,7 +448,13 @@ function sentinelArm(on) {
   // at `_live` — both averages restart from their shared 16.7 so the EMA can
   // outrun the floor once more. Desktop too (above the mobile-only guard):
   // the governor runs everywhere, only the sentinel is mobile.
-  if (on) { _frameEMA = _floorMs = 16.7; _slowRun = 0; _openN = 0; _openMax = 0; _openSlow = 0; } else _live = false;
+  // _scaleMoves resets with the race so every race gets one prompt cut; the
+  // confirmation gate then applies to the repeats within it. The ceiling and
+  // the probation reset with it for the same reason: a new race is a fresh
+  // device, and neither half may carry a verdict into it.
+  if (on) { _frameEMA = _floorMs = 16.7; _slowRun = 0; _openN = 0; _openMax = 0; _openSlow = 0;
+            _sinceUp = -1; _scaleCap = Infinity; _capProbeMs = CLIMB_SURVIVE_MS;
+            _scaleMoves = 0; _degradeArm = 0; } else _live = false;
   if (!_gfx || !_gfx.isMobile) return;
   if (on) GameStore.store.rawSet(SENT_ACTIVE, "1"); else GameStore.store.rawDel(SENT_ACTIVE);
 }
@@ -468,6 +563,20 @@ function tick(dtMs) {
   // Clamped at 0: the restore gate below tests `_downHold === 0`, and a ms
   // decrement overshoots where a frame count landed exactly.
   if (_downHold > 0) _downHold = Math.max(0, _downHold - stepMs);   // recovery hold runs down in wall time
+  // The survival clock runs on the same wall time as the holds, and for the
+  // same reason: a promise made in seconds must not run twice as fast on a
+  // 120 Hz display. Before the cooldown returns below, so a climb keeps ageing
+  // while the governor is not evaluating. Reaching the window means the climb
+  // was real — release the patience the refusals bought and stop watching it.
+  if (_sinceUp >= 0 && (_sinceUp += stepMs) >= CLIMB_SURVIVE_MS) { _sinceUp = -1; _upBackoff = UP_BACKOFF_MIN; }
+  // Headroom has to be UNBROKEN to age the ceiling: any frame back over the
+  // restore threshold restarts the two minutes, so a device that is merely
+  // between heavy sections never probes its way back up.
+  if (_scaleCap <= 1) {
+    if (_frameEMA < _floorMs + RESTORE_WITHIN) {
+      if ((_capProbeMs -= stepMs) <= 0) { _scaleCap = Infinity; _armCapProbe(); }
+    } else _armCapProbe();
+  }
   if (_govCoolMs > 0) { _govCoolMs = Math.max(0, _govCoolMs - stepMs); return; }
   if (_govCool > 0) { _govCool--; return; }   // a verify window: frames, so the EMA has its samples
   if (++_govT < 45) return;   // evaluate ~every 45 frames (an EMA settling span, not a clock)
@@ -496,6 +605,8 @@ function tick(dtMs) {
       }
       if (v.kind === "scale") {
         _gfx.setRenderScale(v.prev);
+        // The rung it just refused is a measured ceiling, not only a reason to wait.
+        if (v.up && v.next) { _scaleCap = Math.min(_scaleCap, v.next); _armCapProbe(); }
         // A DOWN step that bought nothing means this frame is not fill-bound,
         // so stepping the scale again would revert again. Fall through to the
         // feature ladder on the next evaluation instead of re-testing a lever
@@ -510,14 +621,43 @@ function tick(dtMs) {
       // ~10 s for the whole race — with the scale lever that is a full
       // render-target reallocation each time. Back off: each refused climb
       // doubles the wait before the next try (10 s, 20 s, 40 s, … 2 min).
-      if (v.up) { _downHold = _upBackoff; _upBackoff = Math.min(_upBackoff * 2, UP_BACKOFF_MAX); }
+      if (v.up) { _sinceUp = -1; _downHold = _upBackoff; _upBackoff = Math.min(_upBackoff * 2, UP_BACKOFF_MAX); }
       return;
     }
-    if (v.up) _upBackoff = UP_BACKOFF_MIN;   // a climb that held resets the backoff
+    // A climb that passed its verify is still ON PROBATION: the survival clock
+    // above, not this one evaluation, is what restores the backoff.
   }
 
   const degradeAt = _floorMs + DEGRADE_OVER, restoreAt = _floorMs + RESTORE_WITHIN;
   const cur = _gfx.getRenderScale ? _gfx.getRenderScale() : 1;
+  // ONE SPIKE IS NOT A TREND. Every scale change reallocates all HDR/bloom
+  // targets, and on TLX tlx-post.js disposes each texture and the depth texture
+  // before reallocating, so the node renderer rebuilds the post chain's bind
+  // groups too — a visible hitch either way. Acting on a single evaluation
+  // therefore spends a hitch on any load spike, and a race is made of them: a
+  // restart with the field bunched, rain arriving, a pile-up spawning debris.
+  //
+  // MEASURED against the real tick() over ten simulated minutes. Steady load
+  // never degrades at all, and neither does a smooth swing of up to 12 ms
+  // (_floorMs is derived, so it rises to meet sustained cost — the EMA came
+  // within 1.1 ms of the threshold and never crossed). But load that STEPS
+  // faster than the floor estimator adapts produced 35-83 reallocations per ten
+  // minutes, gaps of 1-5 s: exactly "a lag spike every few seconds". Requiring
+  // the condition twice took the same six cases from 424 reallocations to 126,
+  // and to ZERO wherever the step was 10 ms or less, while still degrading on
+  // genuinely sustained overload. A doubling backoff on held climbs was also
+  // measured and is noise (424 -> 383), so it is not here.
+  // THE FIRST CUT OF A RACE STAYS PROMPT. A device that is slow from lights-out
+  // is catchable only for about frames 10-95 — the EMA (alpha 0.1) outruns the
+  // derived floor (0.02 upward) for that long and then the floor catches up and
+  // a steady cost reads as an external cap for good. That window is barely two
+  // evaluations wide, so confirming inside it means never degrading such a
+  // device at all; perf-governor.test.mjs pins exactly that case, and it failed
+  // when this gate applied to every step. Confirmation is therefore only asked
+  // of REPEAT cuts, which is where the oscillation lives: one spike costs at
+  // most one reallocation per race instead of dozens.
+  if (_frameEMA <= degradeAt) _degradeArm = 0;
+  else if (_scaleMoves > 0 && ++_degradeArm < DEGRADE_CONFIRM) return;
   if (_frameEMA > degradeAt) {                 // meaningfully slower than THIS device's own floor: degrade PROMPTLY
     // With the scale PINNED (_autoRes false) the ladder is the only lever left,
     // so fall straight through to shedding instead of skipping the evaluation.
@@ -542,7 +682,10 @@ function tick(dtMs) {
     if (_autoRes && cur > 0.5 && !_scaleFutile) stepped = !!_gfx.setRenderScale(cur - 0.1);
     if (stepped) {
       _pendingVerify = { kind: "scale", prev: cur, ema: _frameEMA };
-      _govCool = 30; _downHold = 10000;
+      _scaleCap = cur; _armCapProbe();   // this resolution missed the budget
+      // _chargeCut() returns the plain 10 s hold unless this cut is undoing a
+      // climb still on probation, so it subsumes the constant it replaces.
+      _govCool = 30; _downHold = _chargeCut(); _scaleMoves++; _degradeArm = 0;
     } else if (!_tierHold && _perfTier < 4 && _perfTierFloor < 4 && !_tierFutile) {   // scale lever exhausted — shed a feature (a crash floor of 4 has already shed everything this ladder can)
       // Step from the EFFECTIVE tier, not from _perfTier alone. A rung at or
       // below the floor (crash sentinel, or the player's GRAPHICS preset) is
@@ -567,11 +710,13 @@ function tick(dtMs) {
       // Stepping still starts from the floor, so LOW takes one felt 0 -> 4 step
       // and every other preset behaves exactly as before.
       _pendingVerify = { kind: "tier", prev: _perfTier, shed: _autoShed, ema: _frameEMA };
-      _perfTier = Math.min(4, Math.max(_perfTier, _floorTier()) + 1); _autoShed++; _govCool = 90; _downHold = 10000;
+      _perfTier = Math.min(4, Math.max(_perfTier, _floorTier()) + 1); _autoShed++; _govCool = 90; _downHold = _chargeCut();
       // A shed rung changes what the frame is bound BY, so let the scale lever
       // prove itself again from the new baseline rather than staying latched
-      // off for the session on one old measurement.
+      // off for the session on one old measurement. The measured ceiling was
+      // taken against the OLD feature set and stops meaning anything here too.
       _scaleFutile = false;
+      _scaleCap = Infinity; _armCapProbe();
     }
   } else if (_frameEMA < restoreAt && _downHold === 0) {   // clear, SETTLED headroom (~10 s since the last cut): restore slowly
     _scaleFutile = false;   // headroom is back — nothing about the old verdict still applies
@@ -602,12 +747,32 @@ function tick(dtMs) {
     // recovery test in tests/unit/perf-governor.test.mjs asserts it lands on
     // exactly 1.)
     let stepped = false;
-    if (_autoRes && cur < 1) {
-      const next = (1 - cur) < 0.09 ? 1 : cur + 0.06;
+    // One down-step below the lowest scale MEASURED as missing: climbing into
+    // that gap only hands the next heavy section something to take back. The
+    // margin belongs to a measurement, never to the default — subtracting it
+    // from an untouched ceiling would pin every healthy device at 0.9.
+    const ceil = _scaleCap > 1 ? 1 : Math.max(0.5, _scaleCap - 0.1);
+    if (_autoRes && cur < ceil - 1e-9) {
+      // HALVE THE GAP, don't crawl it. A fixed +0.06 needs eight steps to get
+      // from the 0.5 floor back to full — eight target reallocations, eight
+      // hitches, to undo one cut — and the crawl was the only thing protecting
+      // the climb from overshooting, because nothing remembered a scale that
+      // had already missed. `_scaleCap` is that memory now, so a bigger step is
+      // the SAFER one: it converges on the ceiling in four, and a step that
+      // does overshoot is reverted by the same verify and lowers the ceiling
+      // onto the rung it refused, which a crawl never learned to do.
+      // SNAP FROM ONE DOWN-STEP OUT, not from 0.09. The threshold has to clear
+      // the width of a CUT (0.1) or the commonest climb there is — undoing a
+      // single cut, 0.9 back to 1.0 — costs two reallocations instead of one:
+      // 0.1 is not under 0.09, so it stepped to 0.96 and snapped from there.
+      // Every snap delta this admits is at least 0.03, still far outside
+      // setRenderScale's 0.02 dead zone.
+      const gap = ceil - cur;
+      const next = gap < 0.12 ? ceil : Math.min(ceil, cur + Math.max(0.06, gap / 2));
       stepped = !!_gfx.setRenderScale(next);
       if (stepped) {
-        _pendingVerify = { kind: "scale", prev: cur, ema: _frameEMA, up: true };
-        _govCoolMs = 4000;
+        _pendingVerify = { kind: "scale", prev: cur, next, ema: _frameEMA, up: true };
+        _govCoolMs = 4000; _sinceUp = 0;
       }
     }
     // Features come back only at full res under the same sustained headroom,
@@ -620,7 +785,7 @@ function tick(dtMs) {
       if (_perfTier > _floorTier()) {
         _perfTier--; if (_autoShed > 0) _autoShed--;
       } else { _perfTier = _perfTierFloor; _autoShed = 0; }
-      _govCoolMs = 4000;
+      _govCoolMs = 4000; _sinceUp = 0;
     }
   }
 }
@@ -677,6 +842,7 @@ return {
     const prev = _userTier;
     _userTier = t;
     _tierFutile = false;   // a new preset changes what a step means
+    _scaleCap = Infinity; _armCapProbe();   // ...and what the frame costs, so the measured ceiling expires with it
     // RAISING QUALITY MUST RELEASE WHAT THE OLD PRESET CAUSED. The degrade
     // branch steps from _floorTier(), which folds in _userTier, so a shed taken
     // while the player sat on MEDIUM wrote _perfTier = 3 — the governor adopted

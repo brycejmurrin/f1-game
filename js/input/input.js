@@ -1683,12 +1683,26 @@ const Input = (function () {
     const a = pad.vibrationActuator;
     const mag = clamp(intensity, 0, 1) * hapticScale;
     if (a && typeof a.playEffect === "function") {
+      // playEffect() returns a Promise, so this catch only ever saw a
+      // SYNCHRONOUS throw — and every failure the Gamepad spec defines is a
+      // rejection instead (w3c.github.io/gamepad/#dom-gamepadhapticactuator-playeffect):
+      // TypeError for bad params, NotSupportedError for an effect type the
+      // actuator cannot play, and — the one that fires in ordinary play —
+      // InvalidStateError whenever the document is not fully active or
+      // `visibilityState === "hidden"`. rumble() fires on every collision,
+      // kerb and gear shift, so a player who alt-tabs or whose phone locks
+      // mid-race lands a rejection in the split second a rumble is in flight,
+      // and index.html's unhandledrejection handler paints a full-screen
+      // overlay over the race on it. Preemption does NOT reject (the spec
+      // RESOLVES the older promise with "preempted"), so the arm below only
+      // ever swallows a real failure.
       try {
-        a.playEffect("dual-rumble", {
+        const p = a.playEffect("dual-rumble", {
           duration: Math.max(0, ms | 0),
           strongMagnitude: mag,
           weakMagnitude: mag * 0.7,
         });
+        if (p && p.catch) p.catch(() => {});
       } catch (e) { /* actuator busy or unsupported effect type */ }
       return;
     }
