@@ -192,7 +192,14 @@ try {
         // deeper than that, and the frame that names a fix sits above it.
         // A bounded sample (200) of full stacks is cheap; a window that
         // never reaches our code is worthless.
-        const raw = (new Error().stack || "").split("\n").slice(3);
+        // V8 captures 10 frames by default; three's render path from
+        // createRenderPipeline up to renderer.render() is longer than that, so
+        // run 200 read every WebGPU compile as "(none in window)" with the
+        // slice already removed — the window was the engine's, not ours.
+        const prevLimit = Error.stackTraceLimit;
+        Error.stackTraceLimit = 80;
+        let raw;
+        try { raw = (new Error().stack || "").split("\n").slice(3); } finally { Error.stackTraceLimit = prevLimit; }
         const fr = raw.map((l) => l.trim().replace(/^at\s+/, "").replace(/\?v=[a-z0-9]+/g, "").replace(/https?:\/\/[^\s)]*\//g, ""));
         const ours = fr.filter((l) => !/three\.webgpu|three\.core|three\.tsl/.test(l));
         sig = fr.slice(0, 2).join(" <- ") + "  ||OURS|| " + (ours.slice(0, 5).join(" <- ") || "(none in window)");
