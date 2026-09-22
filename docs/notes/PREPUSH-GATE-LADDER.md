@@ -21,7 +21,7 @@ CI's — running them in the deploy duplicated ten minutes. They are enumerated 
 `tests/unit/prepush-gate-coverage.test.mjs`'s `SWEEPS_ONLY` map.
 
 `tooling-fast` being a subset is deliberate: it is tuned for an edit loop, and
-the 70 files it leaves out cost about 7.5 minutes serial on this box
+the 73 files it leaves out cost about 7.5 minutes serial on this box
 (`game-vm-a` 137 s, `game-vm-b` 99 s, `node-slow` 85 s, `sweeps-parts` 54 s,
 `garage-unit` 47 s are 95 % of it). The problem was never the split. The problem
 was that nothing said the split existed, so "tooling-fast is green" got read as
