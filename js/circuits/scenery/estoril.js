@@ -119,8 +119,11 @@
       // in place" and corrected only the names; that was wrong.
       //
       // DO NOT fix it by dropping sceneryStartFrac. `_sceneryShift` is not a
-      // scenery offset — the ENGINE consumes it too (tracks.js:66 for bridges
-      // and elevations, :434, :1567's inverse HKSHIFT, :2193). With the whole
+      // scenery offset — the ENGINE consumes it too, in four readers in
+      // js/track/tracks.js: `dress` in buildCenterline (bridges and
+      // elevations), `shiftS` in transformSceneryApi, the inverse `HKSHIFT`
+      // beside indexSolidAt, and the sceneryCoordinates guard in bakedModel.
+      // With the whole
       // scenery callback stubbed out so no circuit prop emits at all, shift
       // 0.85616 gives 0 severe clips and shift 0 gives a 4.00 m / 1261 m3
       // engine-side collision at frac 0.000. Removing motorhome,

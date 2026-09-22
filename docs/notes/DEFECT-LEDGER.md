@@ -2313,9 +2313,11 @@ down the pit straight.** The swap is the right way round.
 ### Why dropping `sceneryStartFrac` is still not the fix
 
 It is not a scenery-authoring offset. `_sceneryShift` is consumed by the ENGINE
-as well — `js/track/tracks.js:66` (the `dress` shift buildCenterline applies to
-bridges and elevations), `:434`, `:1567` (an INVERSE `HKSHIFT`) and `:2193`.
-Dropping it moves terrain and engine geometry, not just props.
+as well, in four readers in `js/track/tracks.js`: `dress` in `buildCenterline`
+(the shift applied to bridges and elevations), `shiftS` in
+`transformSceneryApi`, the inverse `HKSHIFT` beside `indexSolidAt`, and the
+`sceneryCoordinates` guard in `bakedModel`. Dropping it moves terrain and
+engine geometry, not just props.
 
 Measured with the circuit's scenery callback stubbed out entirely, so no
 circuit prop is emitted at all:
@@ -2336,7 +2338,7 @@ they land on their features while the def's shift stays put for terrain and
 engine geometry — but that divorces the circuit's paddock from wherever the
 engine's pit structures sit, so it needs the engine consumer audited first; or
 (b) drop the shift AND fix the engine-side pit overlap it exposes. Either way
-the four `_sceneryShift` consumers above have to be understood together.
+the four `_sceneryShift` readers named above have to be understood together.
 
 The probe A/B is the acceptance test: the Parabolica should read as trees, the
 pit straight as structures.
