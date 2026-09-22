@@ -99,6 +99,41 @@ export const PATCHES = [
       },
     ],
   },
+  {
+    id: 7,
+    title: "lazy render pipelines compile SYNCHRONOUSLY on first draw — the mid-race hitch",
+    file: "build/three.webgpu.js",
+    why: "Pipelines.getForRender() calls the backend with promises === null on every path " +
+      "except Renderer.compileAsync(), and WebGPUPipelineUtils.createRenderPipeline() then " +
+      "calls device.createRenderPipeline — the blocking form — so the first draw of any " +
+      "(material, geometry layout, render context) the one-time warm never saw stalls the " +
+      "main thread for the compile. Measured on macos-latest Metal (gpu-census 198/199): " +
+      "25-26 synchronous compiles in the race window on the three.js/WebGPU leg against 1 on " +
+      "WGX, and the spike counts track them one for one — 10-16 frames of 258-556 ms " +
+      "against WGX's max of 11.5 ms. The warm accounts for the 23 async ones; the rest are " +
+      "programs it never built. Fix: always take the createRenderPipelineAsync branch, and " +
+      "have draw() skip an object whose pipeline has not landed yet — it draws a frame or two " +
+      "late instead of stalling every frame. The sync branch stays reachable behind " +
+      "globalThis.__apexSyncPipelines === true so the census can A/B it.",
+    upstream: "unfixed on dev as of r186: only compileAsync() passes a promises array (issue draft in docs/notes/UPSTREAM-THREE-ISSUES.md)",
+    edits: [
+      {
+        find: "\t\tif ( promises === null ) {\n\n\t\t\tpipelineData.pipeline = device.createRenderPipeline( _renderPipelineDescriptor );",
+        replace: "\t\tif ( promises === null && globalThis.__apexSyncPipelines === true ) {\n\n\t\t\tpipelineData.pipeline = device.createRenderPipeline( _renderPipelineDescriptor );",
+        count: 1,
+      },
+      {
+        find: "\t\t\tpromises.push( p );\n\n\t\t}\n\n\t}\n\n\t/**\n\t * Creates GPU render bundle encoder",
+        replace: "\t\t\tif ( promises !== null ) promises.push( p );\n\n\t\t}\n\n\t}\n\n\t/**\n\t * Creates GPU render bundle encoder",
+        count: 1,
+      },
+      {
+        find: "\t\tconst pipelineGPU = pipelineData.pipeline;\n\n\t\t// Skip if pipeline has error\n\t\tif ( pipelineData.error === true ) return;\n",
+        replace: "\t\tconst pipelineGPU = pipelineData.pipeline;\n\n\t\t// Skip if pipeline has error\n\t\tif ( pipelineData.error === true ) return;\n\n\t\t// Apex patch 7: the pipeline is still compiling asynchronously — draw this object next frame.\n\t\tif ( pipelineGPU === undefined ) return;\n",
+        count: 1,
+      },
+    ],
+  },
 ];
 
 /** Retired patches, kept so the canary can assert the UPSTREAM form is present. */

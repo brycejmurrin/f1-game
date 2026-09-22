@@ -1,26 +1,47 @@
 
-## 6. #34535 — `getDynamicCacheKey` mints an array per render object per frame
+## 7. Lazy render pipelines compile SYNCHRONOUSLY on first draw — the mid-race hitch
 
-`src/nodes/core/NodeUtils.js` exports `hash = ( ...params ) => cyrb53( params )`, so
-every call allocates a rest array. `RenderObject.getDynamicCacheKey()` calls it up to
-three times — once for an array camera, once for a shadow receiver, once for the
-context node's id and version — and `get needsUpdate()` calls
-`getDynamicCacheKey()` for EVERY render object on EVERY draw. The arrays hold two or
-three small integers, are read once by `cyrb53`, and are garbage the moment it
-returns; the count is (objects x frames).
+`Pipelines.getForRender( renderObject, promises = null )` reaches the backend with
+`promises === null` on every path except `Renderer.compileAsync()`, and
+`WebGPUPipelineUtils.createRenderPipeline()` then takes the blocking form:
 
-Measured on this project's three.js/WebGPU path before the patch, on the NATIVE
-present path (`apex26.wgxCapture=0` — the soft blit halves the rendered frames and so
-halves this number too): **255 KB per frame, 28.4 MB/s, a collection about once a
-second freeing a median 25.8 MB** (`tools/gfx/frame-hitch.mjs`, 150 s,
-`artifacts/hitch-native-tlxwgpu.json`). Upstream measured the same shape at 120,000
-arrays per second for 1,000 meshes at 120 fps.
+```js
+if ( promises === null ) {
+	pipelineData.pipeline = device.createRenderPipeline( _renderPipelineDescriptor );
+```
 
-The patch is upstream's: one module-scope scratch array, filled by index, hashed with
-`hashArray` — which is already in this bundle, and already used exactly this way by
-`Nodes.getCacheKey()` a few thousand lines further down. The key VALUE changes (a flat
-hash of five slots replaces three nested hashes); that is safe because this one method
-is the only producer and the only consumer, and it is the change upstream shipped.
+So the first draw of any (material, geometry layout, render context) combination the
+one-time warm never saw stalls the main thread for the whole compile. TLX warms once,
+during the lights (`js/game.js:2737` → `startProgramWarm` → `compileAsync( scene )`),
+and `present()` returns early while a warm is in flight, so nothing after the lights
+can be warmed without freezing the picture. The shadow casters are not even in
+`scene` — `tlx-shadow.js` keeps them in their own `castScene`.
 
-Fixed upstream by PR #34553 (issue #34535), milestone **r187** — RETIRE THIS PATCH ON
-THE r187 BUMP.
+**Measured** on `macos-latest` Metal, real present path (gpu-census 198 and 199):
+
+| leg | sync compiles in the race window | spikes | worst frame |
+|---|---|---|---|
+| three.js / WebGPU | **25-26** `createRenderPipeline` (+23 async, the warm) | 10-16 | 405-556 ms |
+| three.js / WebGL2 | 31-32 `linkProgram`, 224-269 blocking `getProgramParameter` | 31-65 | 6.1-7.5 s |
+| WGX | **1** | 1 | 11.5 ms |
+
+Compile count tracks spike count one for one across all three legs. The WebGL2 leg
+tagged half its links `async tlx.js:1796` — the warm — and the other half unnamed:
+half the programs a race needs are built after the lights.
+
+**The fix**, three exact-count edits: (1) the sync branch is gated behind
+`globalThis.__apexSyncPipelines === true`, so the lazy path takes
+`createRenderPipelineAsync` like `compileAsync` already does; (2) that branch's
+`promises.push( p )` is null-guarded, since the lazy path carries no array; (3)
+`WebGPUBackend.draw()` returns when `pipelineData.pipeline` is still `undefined`,
+right after the existing `error` skip and before any encoder state is touched — the
+object draws a frame or two late instead of `setPipeline( undefined )` throwing. TLX
+records no render bundles (a bundle recorded while a pipeline was missing would omit
+the object for good), which is the one place this guard would be wrong.
+
+The sync branch stays reachable for an A/B: `globalThis.__apexSyncPipelines = true`
+before boot restores r186's behaviour, and the census `work:` row counts the calls.
+
+Unfixed upstream as of r186: only `compileAsync()` passes a promises array. Draft
+issue in `docs/notes/UPSTREAM-THREE-ISSUES.md`. Retire when the default path goes
+async upstream.
