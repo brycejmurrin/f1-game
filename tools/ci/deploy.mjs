@@ -307,9 +307,30 @@ export function cureableConflicts(conflicted) {
   return { cureable, shellF, ratchetF, pkgF, toolsF };
 }
 
+/* THE UNION MAY NEED A DEPENDENCY THE BOX HAS NOT GOT. A merged lockfile is
+   a change to what the gate needs installed, and `node_modules` does not
+   follow a merge: on 2026-09-22 the train merged PR #172 (which added
+   monocart-coverage-reports), ran tooling-fast on the union and reported
+   coverage-merge.test.mjs red with "Cannot find package" — a gate verdict
+   about this box, not about the union. So after every merge that touched the
+   lockfile, install (browsers skipped; seconds when nothing changed) before
+   anything is measured. */
+export function installIfLockMoved(before) {
+  const changed = git(["diff", "--name-only", `${before}..HEAD`, "--", "package-lock.json", "package.json"]).out.trim();
+  if (!changed) return false;
+  log("the union changed package-lock.json — npm install before the gate measures it");
+  const r = spawnSync("npm", ["install", "--no-audit", "--no-fund"], {
+    cwd: ROOT, stdio: JSON_OUT ? ["ignore", "ignore", "inherit"] : "inherit",
+    env: { ...process.env, PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1" },
+  });
+  if (r.status !== 0) throw new Error(`npm install failed (exit ${r.status}) — the union needs a package this box could not install`);
+  return true;
+}
+
 export function mergeDeployTip() {
+  const before = git(["rev-parse", "HEAD"]).out.trim();
   const r = git(["merge", "--no-edit", `${REMOTE}/${DEPLOY_BRANCH}`]);
-  if (r.code === 0) return "merged";
+  if (r.code === 0) { installIfLockMoved(before); return "merged"; }
   const conflicted = git(["diff", "--name-only", "--diff-filter=U"]).out.split("\n").filter(Boolean);
   // The CUREABLE set: files this repo GENERATES, where a conflict is a stale
   // derived value rather than two intents to reconcile. Anything else is a
@@ -351,6 +372,7 @@ export function mergeDeployTip() {
     did.push("tools index regenerated");
   }
   must(git(["commit", "--no-edit", "-q"]), "merge commit");
+  installIfLockMoved(before);
   return `merged (${did.join("; ")})`;
 }
 

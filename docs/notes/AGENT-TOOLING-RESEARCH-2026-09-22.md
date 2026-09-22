@@ -736,6 +736,16 @@ The lesson is the one §3.3 predicted: `who-is-on-it` would have shown PR
 #172's branch active before this pass started, had it existed then. It
 exists now; run it first.
 
+**Two more measurements from the same deploy.** (1) The rerun's gate reported
+`coverage-merge.test.mjs` red with "Cannot find package": PR #172 had added a
+dev dependency and the train merged the lockfile without installing, so the
+verdict was about this box, not the union. `deploy.mjs` now installs after any
+merge that touches `package-lock.json` (`installIfLockMoved`). (2) The deploy
+branch itself was red at PR #172's merge, and `ci-red-triage`'s first live run
+named it in one pass: `docs-integrity` "N of M unit files", Structural guards,
+expected 223 got 218, new on that push, green on the base; `who-is-on-it`
+showed two branches already fixing it, so no third fix was written here.
+
 ### 6.1 Skill fold provenance (moved here from `.claude/skills/README.md`)
 
 44 skills until 2026-09, 26 after. The folded ones and the rows that absorbed
