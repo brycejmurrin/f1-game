@@ -31,7 +31,9 @@
       ambientGround: [0.34, 0.30, 0.20],
       fogColor:      [0.74, 0.74, 0.68],
       fogDensity:    0.0022,   // thin high-altitude air — long clear sightlines
-      grass:         [0.44, 0.42, 0.22],   // straw-gold highveld veld
+      // Winter Highveld veld: red leads green, keeping the ground straw-gold
+      // rather than drifting toward a lush European circuit palette.
+      grass:         [0.48, 0.43, 0.20],
       runoff:        [0.60, 0.46, 0.32],
       sunDir:        [0.30, 0.82, 0.24],
     },
