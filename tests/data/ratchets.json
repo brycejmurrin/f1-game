@@ -80,7 +80,7 @@
       "slack": 0
     },
     "twinDebt": {
-      "ceiling": 22,
+      "ceiling": 7,
       "slack": 0
     }
   }

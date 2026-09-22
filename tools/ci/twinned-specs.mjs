@@ -93,7 +93,15 @@ export const TWINNED = {
  *  of the spec, so the count check is trivially equal and drift is impossible
  *  by construction. Each entry earned its place by RUNNING green under the
  *  adapter on 2026-09-22 (tools/check/vm-portable.mjs says eligible; only a
- *  run says adapted). The value is why the spec is sound without a renderer. */
+ *  run says adapted). The value is why the spec is sound without a renderer.
+ *
+ *  A spec that imports `test` from @playwright/test cannot see the
+ *  APEX_VM_PAGE switch, and moving that import onto ../helpers/fixtures.js is
+ *  NOT a no-op for its browser copy: the fixtures pin `apex26.gfxBackend` to
+ *  GLX and tyre wear off. A bulk swap of 16 such specs failed
+ *  bahrain-foundation's scenery audit on CI (2026-09-22, run 35689898056) and
+ *  was reverted; move one only when its browser copy has been re-run green
+ *  under the fixtures, in the same change that adapts it. */
 export const ADAPTED = {
   "tests/specs/physics-fixes.spec.js":
     "pure __apex physics reads (wall scrub, lap-distance continuity); 2/2 under the adapter in 27 s vs 110 s of browser; mutant m-wall-scrub-flat proves it bites",

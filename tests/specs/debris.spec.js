@@ -4,7 +4,7 @@
 // (headless project — NOT a render spec): the side-world must be inert when
 // disabled (no rapier fetch, zero steps), spawn debris from a real wall hit,
 // respect the pool cap, and replay a seeded episode bit-for-bit.
-import { test, expect } from "../helpers/fixtures.js";
+import { test, expect } from "@playwright/test";
 import { BOOT_MS } from "../helpers/fixtures.js";
 
 // How long rapier's WASM takes to load and initialise. Its OWN number, and

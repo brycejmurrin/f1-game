@@ -537,7 +537,10 @@ own CI slice, in the Pages gate unconditionally); `partitionArgs` drops its
 browser copy locally and `select-specs` skips it on the blocking gate, exactly as
 for a hand-written twin. `BROWSER_ONLY` names the specs that are portable by
 every static measure and must stay in a browser anyway, with the reason, and
-the `twinDebt` ratchet counts what is left.
+the `twinDebt` ratchet counts what is left. A spec that imports `test` from
+`@playwright/test` is invisible to the switch, and moving that import onto the
+fixtures changes its browser run too (GLX, tyre wear off): do it only with a
+green re-run of the browser copy, in the change that adapts the spec.
 A ten-spec cohort put a third of its tests red for three reasons no static scan
 sees: in-page DOM driving against an inert DOM, `requestAnimationFrame` in an
 evaluate body (no renderer — `render()` throws on the first pump), and

@@ -1,5 +1,5 @@
 // @ts-check
-import { test, expect } from "../helpers/fixtures.js";
+import { test, expect } from "@playwright/test";
 import { BOOT_MS } from "../helpers/fixtures.js";
 
 test.describe("Monza track-owned foundation migration", () => {
