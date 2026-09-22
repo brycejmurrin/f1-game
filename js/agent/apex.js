@@ -1372,6 +1372,16 @@ const api = {
              target: c && c.deal ? c.deal.goal.value : null,
              rungs: Career.AMBITION.map((a) => a.key) };
   },
+  // Which regulation era the loaded career is in, and what it outlaws. The ban
+  // is derived from Parts.CATALOG, so `banned` counts real option ids rather
+  // than a hand-listed set that could rot.
+  careerEra() {
+    const e = Career.era();
+    if (!e) return null;
+    return { id: e.id, name: e.name, cats: e.cats.slice(),
+             left: Career.eraSeasonsLeft(), seasons: Career.seasonsElapsed(),
+             banned: [...Regulations.bannedIds(e.id)], cap: Career.budgetCap() };
+  },
   careerHire(what) {
     if (what === "renew") Career.renewHire(1);
     else if (typeof what === "string") Career.hireDriver(what, 1);

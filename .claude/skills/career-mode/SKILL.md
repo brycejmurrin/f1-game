@@ -42,6 +42,7 @@ Do **not** use this for:
 | Research facility | `Career.facilityDiscount()` — discount on **research cost only**; does NOT raise the fitted part budget cap |
 | Fitted budget cap | `Career.budget()` / `budgetLvl` — separate from facility; `Career.upgradeBudget()` lives on `Career` in `js/career/career.js` (the UI in `career-ui.js` only calls it) |
 | Sponsors | **MY TEAM only** — `sponsorAt()`/`sponsor()` return `null` whenever `career.flavour !== "myteam"`; a DRIVER career never has one, by design (a driver is paid a salary, an owner is paid by sponsors) |
+| Regulation eras | `Regulations.ERAS` — the dearest `BAN_TOP` options in three categories go illegal for `ERA_SEASONS`. Applied via `Parts.setLegality()` so the AI's FACTORY builds re-resolve too; `career.owned` is never touched. Only a career installs one, so GP/Season stay unregulated |
 | Season target | `deal.ambition` indexes `AMBITION` (0 modest / 1 expected / 2 ambitious). **Rung 1 is the pre-existing behaviour**, so an absent field resolves byte-identically. `career.amb` is the PENDING pick, `deal.ambition` what was signed — `rollover()` prices by the signed one |
 | Randomness | Use `Career.rnd(...parts)`; do not consume `simRnd` or `Math.random` |
 | Ratings | `DriverRatings` apply in all modes; career adds deltas on top |
@@ -60,6 +61,7 @@ Hooks:
 | `__apex.careerFacility(up?)` | Inspect/buy research facility level |
 | `__apex.careerHire(what?)` | Resolve MY TEAM second-seat decisions |
 | `__apex.careerAmbition(i?)` | Read/set the season-target rung. `pick` is pending, `signed` is what the CURRENT deal carries |
+| `__apex.careerEra()` | The regulation era: what is outlawed this cycle, and the cap under it. `null` outside a career |
 | `__apex.qualiSim(playerTime?)` | Simulate qualifying for the loaded track |
 | `__apex.retirements()` | Inspect staged reliability/DNF plan |
 | `__apex.ratings(code?)` | Driver ratings with career deltas folded in |
