@@ -322,10 +322,21 @@ test.describe("Apex 26 — steering", () => {
     // Slow enough that the car stays mid-track (away from the edges, where the
     // projection is non-linear and amplifies tiny float differences): the two
     // identical-config runs must then land in the same place.
-    const a = await run(page, { frac, speed: 16, steer: 0, ticks: 60 });
-    await setRaceLine(page, 0);
-    const b = await run(page, { frac, speed: 16, steer: 0, ticks: 60 });
-    expect(Math.abs((a.after.x - a.before.x) - (b.after.x - b.before.x))).toBeLessThan(0.5);
+    // FREEZE THE LIVE LOOP for the two runs. run() jumps, then steps in
+    // separate page.evaluate() calls, and between them the rAF loop kept
+    // advancing the car in real time — so the two "identical" runs differed by
+    // however many live frames landed in each gap, and this read 0.55-0.64 m on
+    // a loaded box after the file's earlier tests (2026-09-22; 3/3 green alone).
+    // step() drives update() directly, so frozen runs are fully deterministic.
+    await page.evaluate(() => window.__apex.freeze(true));
+    try {
+      const a = await run(page, { frac, speed: 16, steer: 0, ticks: 60 });
+      await setRaceLine(page, 0);
+      const b = await run(page, { frac, speed: 16, steer: 0, ticks: 60 });
+      expect(Math.abs((a.after.x - a.before.x) - (b.after.x - b.before.x))).toBeLessThan(0.5);
+    } finally {
+      await page.evaluate(() => window.__apex.freeze(false));
+    }
   });
 
   test("racing-line assist: PULL eases toward the line, PUSH sends it wider", async ({ page }) => {
