@@ -39,7 +39,7 @@ const DrivingCoach = (function () {
     ["backmarkers", "TRAFFIC"]]);
   function create(G) {
     const insights = RaceInsights.create(G);
-    let enabled = G.store.get("drivingCoach", false), elapsed = 0, quiet = 0;
+    let enabled = G.store.get("drivingCoach", true), elapsed = 0, quiet = 0;
     let trace = [], checkpoint = null, practice = false, drillMode = "free";
     // REWIND: a rolling window of the same capture a checkpoint takes.
     // 2 Hz, not 60: a rewind lands you on a corner approach, and the half

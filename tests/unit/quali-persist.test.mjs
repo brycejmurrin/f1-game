@@ -155,7 +155,10 @@ test("a driven simulate persists; an active netPlay session does not", () => {
 });
 
 test("openQuali restores via begin(); quit-to-menu keeps persist; friend-race uses fresh", () => {
-  assert.match(GAME, /async function openQuali\(fresh, netDone\)/);
+  assert.match(GAME, /async function openQualiBody\(fresh, netDone\)/);
+  // openQuali is the latched wrapper: nobody awaits it, so it must catch its own
+  // failure and land on the menu rather than raise the global error overlay.
+  assert.match(fnSource(GAME, "function openQuali(fresh, netDone)"), /\.catch\([^]*quitToMenu\(\)/);
   assert.match(GAME, /if \(fresh\) quali\.simulate\(0\); else quali\.begin\(\)/);
   assert.match(QUALI_NET, /openQuali\(true, done \|\| null\)/);   // fresh sim, and the gate handed in
   assert.match(GAME, /quali\.clear\(\);   \/\/ memory only/);
@@ -167,7 +170,7 @@ test("openQuali restores via begin(); quit-to-menu keeps persist; friend-race us
   // blanket ban failed that fix. It is half of what took pages.yml runs
   // 1888/1889 red on 2026-09-02 and stopped the live site updating. Ban it
   // where the bug lived; require the guard where it is legitimate.
-  assert.doesNotMatch(fnSource(GAME, "async function openQuali(fresh, netDone)"), /quali\.clear\(true\)/,
+  assert.doesNotMatch(fnSource(GAME, "async function openQualiBody(fresh, netDone)"), /quali\.clear\(true\)/,
     "openQuali must not wipe the persist — that is the bug this suite exists for");
   assert.doesNotMatch(fnSource(GAME, "function quitToMenu()"), /quali\.clear\(true\)/,
     "quit-to-menu keeps the persist so CONTINUE still has the driven grid");
@@ -191,7 +194,7 @@ test("openQuali restores via begin(); quit-to-menu keeps persist; friend-race us
   // suspends on its first await, so its own reset ran a microtask later and wiped
   // the callback. netPlay.start() is reachable only through that callback, so a
   // friend race with grid-by-qualifying silently ran two disconnected solo races.
-  assert.match(fnSource(GAME, "async function openQuali(fresh, netDone)"),
+  assert.match(fnSource(GAME, "async function openQualiBody(fresh, netDone)"),
     /qualiNet\.arm\(netDone\)/,
     "openQuali must arm the gate from its own argument, after its own reset");
   assert.doesNotMatch(fnSource(QUALI_NET, "function openQualiForNet(done)"), /qualiNetDone\s*=/,

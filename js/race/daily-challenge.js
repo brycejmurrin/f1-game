@@ -3,6 +3,7 @@ const DailyChallenge = (function () {
   "use strict";
 
   const KEY = "daily.v1";   // store adds the apex26. prefix
+  const HISTORY_DAYS = 60;
   // Weighted toward dry so most days are a clean lap; the rest are the game's
   // real conditions (game.js WEATHER chips). Time of day includes night, which
   // loadTrack lights per circuit.
@@ -96,6 +97,15 @@ const DailyChallenge = (function () {
       if (d.streak.last !== day) {
         d.streak.count = d.streak.last === prevDay(day) ? d.streak.count + 1 : 1;
         d.streak.last = day;
+      }
+      // The per-day history is write-only (every reader asks for today; the
+      // streak lives in d.streak), so it keeps a window rather than growing
+      // ~680 chars a day for ever.
+      const floor = new Date(day + "T00:00:00Z");
+      if (Number.isFinite(floor.getTime())) {
+        floor.setUTCDate(floor.getUTCDate() - HISTORY_DAYS);
+        const cut = floor.toISOString().slice(0, 10);
+        for (const k of Object.keys(d.days)) if (k < cut) delete d.days[k];
       }
       store.set(KEY, d);
       return e;
