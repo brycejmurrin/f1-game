@@ -2,7 +2,7 @@
 name: bloat-auditor
 description: Read-only agent-bloat / simplify auditor. Use when a file, skill, or subtree may be split, extracted, or stripped of dead/duplicate code or stale comments. Returns BLOAT rows; no edits, no Playwright. Parent applies one carve.
 model: haiku
-maxTurns: 15
+maxTurns: 40
 memory: project
 readonly: true
 is_background: true
