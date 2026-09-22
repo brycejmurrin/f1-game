@@ -2904,7 +2904,7 @@ actually lands (authored 0.965 + shift):
 | istanbul | 0.98 -> 0.925 | 0.890, **on T12** (0.8884) | gantry, 23 structures, grandstand, 3 motorhomes | pitEmit 7 -> pitSup 7 |
 | mugello | 0.05 -> 0.133 | 0.098, 0.047 short of T1 | gantry, 22 structures, 4 motorhomes | pitEmit 5 -> 1; pit-lane trees 275 -> 122 |
 | paul_ricard | 0.03 -> **0.923** | 0.888, **on T13** (0.8884) | gantry, 25 structures, 2 motorhomes | **FIXED**: frame AND side. Shift removed, and the pit straight mirrored (the paddock was authored on the LEFT, the complex and the real pits are on the RIGHT): pitEmit 5 -> pitSup 5. See § paul_ricard — FIXED at the end |
-| sepang | 0.95 -> 0.882 | 0.847, 0.038 short of T14 | gantry, 20 structures, 14 palms | pitEmit 6 -> pitSup 7; pit-lane trees 38 -> 18 |
+| sepang | 0.95 -> 0.882 | 0.847, 0.038 short of T14 | gantry, 20 structures, 14 palms | **FIXED**: pitEmit 6 -> pitSup 7; pit-lane trees 38 -> 18 ("sepang — FIXED", end of file) |
 
 Each needs its own PR: remove the value, then work the knock-ons as Portimão
 did (probe A/B, clip as a distribution, audits per emitter).
@@ -2938,6 +2938,67 @@ spa (flat), vegas (flat), zolder (forest either way).
 
 Every row here is a triage verdict, not a fix. Only the probe at the named
 feature decides, one circuit per PR.
+
+### sepang — FIXED (`sceneryStartFrac: 0.95` removed, shift 0.882 -> 0)
+
+Same defect as Estoril and Portimão. The scenery, elevations and bankZones are
+written against `startFrac: 0`: pit bays 0.955-0.999 and race control 0.010
+against a pit lane at engine 0.953-0.020, T1 gravel 0.060 (T1 apex 0.0712), T15
+gravel 0.885 (turns[13] 0.8852), the T1-T2 bank zone at 0.045. The shift moved
+all of it 0.118 of a lap back, so the paddock stood at the end of the back
+straight and the plantation ran down the pit straight.
+
+| `agent.mjs sepang scene --at` (40 nearest) | shipped | fixed |
+|---|---|---|
+| 0.987, mid pit lane | 23 palms, 13 structures, bush | 25 structures, gantry, 2 motorhomes, billboard, 6 palms |
+| 0.847, where the pit block landed | gantry, 20 structures, 14 palms, billboard | 29 palms, 7 structures, 2 bushes |
+| 0.0712, T1 | 27 palms, 6 structures, 4 bushes | 22 structures (gravel, tyre wall, stand), grandstand, marshal post, 10 palms |
+
+Node signature, before -> after: `sepang-pit-bay-1..5`, `sepang-race-control`
+and `sepang-canopy-paddock` went from EMITTED to "superseded by the pit
+complex". `sepang-klia-skyline` was "superseded by the pit complex" on the
+shipped build too, so it never rendered in either frame (see below). Pit-lane
+built/trees (130 m of the pit-lane midpoint) 28/38 -> 38/18.
+
+Knock-ons, measured one at a time, not absorbed:
+
+- **`ownPitStraight: true`.** The circuit's stepped main stand (along
+  0.958-0.020, left, 12-31 m) now covers k 0-24, where the engine's generic
+  7-box pit-straight stand ([6, 11, 16] at 14 m left) stands, so that box sat
+  inside the circuit's stand. The flag removes it, and with it the 4.00 m /
+  559 m3 generic-stand-vs-green-box clip at frac 0.000. What remains there
+  (2.29 m) is the engine's green-theme `every(140)` box (tracks.js `place`,
+  no exclusion hook) inside the circuit's stand: the engine-side frac-0.000
+  lead from the Portimão entry, left alone.
+- **Back ranks of the plantation reached the main stand.** The back straight
+  runs 93-130 m from the pit straight, and the 3 far ranks (to 71 m) on its
+  pit side met the stand and canopy (3 severe cone-x-box spots, 1.9-3.0 m, at
+  0.964-0.977). `farPalm` now skips an anchor within 44 m of the pit straight
+  (a positional guard over K(0.935..0.035), not a frac window).
+- **Three models "footprint rejected" at shift 0.** `sepang-shade-walk-t1`
+  52 -> 40 m and `sepang-shade-walk-t15` 46 -> 30 m (the first clear gaps of a
+  sweep; 60-80 m and 36-64 m also reject). `sepang-klia-skyline` rejected on
+  its authored infield side (+1) at every gap from 120 to 280 m (25 m from the
+  0.464 carriageway at 180); on the outside (-1) it clears at 150-220 m, 256 m
+  from any other road, so it moved side, same gap. It now renders for the
+  first time in either frame.
+- **Coplanar pair** between the stepped stand's last tier and
+  `sepang-shade-walk-1` at 0.020: the walk moved to 0.024.
+- **Bush vs the T15 light pole** (1.19 m): the jungle-scrub `openArea` starts
+  at 0.88 instead of 0.90, so no scrub grows in the T15 hairpin's run-off.
+
+Clip as a distribution (dressing as fixed, `sceneryStartFrac` swept; values
+snap to control points, so the shift is shown):
+
+| shift | 0 (fixed) | 0.076 | 0.098 | 0.132 | 0.231 | 0.302 | 0.356 | 0.480 | 0.567 | 0.654 | 0.707 | 0.882 (shipped) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| severe clips | 3 | 1 | 2 | 5 | 5 | 4 | 3 | 5 | 9 | 11 | 9 | 4 |
+
+Median 4.5. Every baseline came DOWN or held: **clip 4 -> 3, coplanar 7 -> 0,
+float 0 -> 0** (no row). The remaining three severe spots are the engine box
+at frac 0.000 above and two spectator-hill tread pairs (1.49/1.47 m, nature.js
+terrace rows on the inside of T11 at 0.653); the shipped build had a spot of
+the same class at 0.523. No test used sepang's broken frame as a fixture.
 
 ### paul_ricard — FIXED (`sceneryStartFrac: 0.03` removed, shift 0.923 -> 0; pit straight mirrored)
 
