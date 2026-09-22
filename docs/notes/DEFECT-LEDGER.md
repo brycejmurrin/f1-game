@@ -2924,7 +2924,7 @@ actually lands (authored 0.965 + shift):
 
 | circuit | value -> shift | pit block lands | probe there | shipped -> shift 0 |
 |---|---|---|---|---|
-| catalunya | 0.03 -> 0.138 | 0.103, 0.055 short of T1 | gantry, 21 structures, building, billboard | pitEmit 7 -> pitSup 7; pit-lane trees 12 -> 0 |
+| catalunya — **FIXED**, see "catalunya — FIXED" below | 0.03 -> 0.138 | 0.103, 0.055 short of T1 | gantry, 21 structures, building, billboard | pitEmit 7 -> pitSup 7; pit-lane trees 12 -> 0 |
 | istanbul | 0.98 -> 0.925 | 0.890, **on T12** (0.8884) | gantry, 23 structures, grandstand, 3 motorhomes | pitEmit 7 -> pitSup 7 |
 | mugello | 0.05 -> 0.133 | 0.098, 0.047 short of T1 | gantry, 22 structures, 4 motorhomes | pitEmit 5 -> 1; pit-lane trees 275 -> 122 |
 | paul_ricard | 0.03 -> **0.923** | 0.888, **on T13** (0.8884) | gantry, 25 structures, 2 motorhomes | **FIXED**: frame AND side. Shift removed, and the pit straight mirrored (the paddock was authored on the LEFT, the complex and the real pits are on the RIGHT): pitEmit 5 -> pitSup 5. See § paul_ricard — FIXED at the end |
@@ -3118,3 +3118,78 @@ No single shift fixes this: the offsets are +0.056 at the chicane and +0.148
 at Signes. That needs a dressing pass against `def.turns`. The `hwZones` are
 source-space and unaffected.
 
+### catalunya — FIXED (`sceneryStartFrac: 0.03` removed, shift 0.138 -> 0)
+
+The paddock and main straight are written against `startFrac: 0`: pit bays
+0.944-0.999 and race control 0.985 sit in `pitLaneSpan` (engine 0.945-0.024),
+the main stand is at 0.005 and the final-corner gravel at 0.930 (T14 apex
+0.9226). **Unlike Portimão, the file is not in one frame.** The first-half
+clusters (Repsol terrace 0.215, Seat chicane gravel 0.312, Campsa terrace 0.470)
+land on their corners only under the 0.138 shift (0.353 vs 0.3446, 0.450 vs
+0.432-0.442, 0.608 vs 0.6091), and the T1 cluster (gravel 0.065, terrace 0.090)
+misses Elf (0.1576) in both frames, sitting mid-straight at shift 0 and past
+T2 as shipped. So "delete the line" alone would have traded the pit fix for
+four undressed corners. The fix is the line removed plus a per-cluster
+re-author:
+
+- **Pit block, main straight, La Caixa, final sector.** These stay as
+  authored, now in the frame they were written in.
+- **Repsol, Seat, Campsa clusters** (terrace, sunTerrace, gravel, tyre wall,
+  spectator hill, flood mast, the "open infield bowl" exclusion in both the
+  def and `openInfield`). Authored += 0.138, so they keep their shipped engine
+  fracs.
+- **T1 cluster.** Moved onto Elf (gravel 0.145, tyre wall 0.130-0.165, terrace
+  0.160, catch fence 0.13-0.17) and onto its OUTSIDE: `Tracks.curvature` at
+  0.1576 is -0.030, a right-hander, and the run-off had been on the inside.
+  The orange stand stays inside at 0.145.
+- **Guardrails.** Re-spanned `[0.17,0.43] [0.47,0.66] [0.72,0.89]`, so the gaps
+  fall at the T1, Seat and La Caixa gravel traps and the pits again.
+- **Def tables** (`elevations`, `bankZones`). Re-authored to their shipped
+  ENGINE fracs, so terrain and banking do not move: max |Δpy| 0.33 m over 1163
+  nodes (4-decimal rounding), bank identical. Three of the four elevation
+  bumps already read right as shipped (the Renault climb 0.288, high ground
+  before Campsa 0.548, the dip into La Caixa 0.728).
+
+| `agent.mjs catalunya scene --at` | shipped | fixed |
+|---|---|---|
+| 0.9845, mid pit lane | 9 stone pines, 3 pines, 4 bushes, 5 structures | 19 structures, 2 gantries, grandstand, 2 motorhomes, building, 2 billboards |
+| 0.103, where the pit block landed | gantry, 21 structures, building, billboard | 12 pines/stone pines, 3 trees, 8 bushes, 9 structures |
+| 0.1576, T1 | 26 structures, gantry, motorhome, grandstand | 10 structures, grandstand, 2 marshal posts, 9 pines, 9 bushes |
+| 0.345 / 0.44 / 0.609 (Repsol / Seat / Campsa) | unchanged: same clusters at the same engine fracs | unchanged |
+
+Node A/B at the pit-lane midpoint: built 5 -> 27, trees 12 -> 0, the seven
+pit-block models EMITTED -> "superseded by the pit complex".
+
+Knock-ons, fixed rather than absorbed:
+
+- **`ownPitStraight: true`.** The engine's generic 7-box stand (k 0-24, left,
+  14 m) now stood inside the circuit's own 180 m `grandstandEx(0.005, -1)`,
+  the Monza/Portimão precedent. It also removed the engine-side 4.00 m /
+  1487 m3 box-vs-box clip at frac 0.000.
+- **The T1 terrace folded into itself** (two 3.8 / 3.1 m clips at frac 0.474,
+  33 m off the Seat hairpin) on the inside of T1-T2. It is on the outside now,
+  which is clean at 0.150-0.170.
+- **`sunTerrace` on a bend.** The final-sector terraces now sit on the curves
+  they were written for, and the helper's fixed-length units overlapped on
+  the inside (37 self-pairs, 3.5 m). Each row's unit is now scaled by its
+  chord ratio to the centreline, shrink-only, so straights and outsides are
+  unchanged.
+- **Broadcast compound vs a paddock motorhome** (2.18 m). Both are now in one
+  frame, and the motorhome loop keeps ±0.008 clear of K(0.912).
+
+Clip as a distribution (final dressing, `sceneryStartFrac` swept; values snap
+to control points, so the shift is shown):
+
+| shift | 0 (fixed) | 0.138 (old) | 0.168 | 0.214 | 0.265 | 0.357 | 0.435 | 0.516 | 0.570 | 0.730 | 0.766 | 0.805 | 0.881 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| severe clips | **9** | 15 | 17 | 12 | 11 | 10 | 12 | 11 | 23 | 9 | 10 | 11 | 23 |
+
+Baselines all come DOWN: **clip 22 -> 9, coplanar 1 -> 0, float 0 -> 0.** Nine
+is the low end of this dressing's 9-23 spread, which is what it measures at
+its own frame. No test used Catalunya's shifted frame as a fixture.
+
+**Left alone, recorded:** `hwZones` are source-space (no shift ever applied),
+and the "Seat / Wurth chicane" narrowing at 0.290-0.335 lies on the straight
+before Repsol, 0.1 short of Seat (0.432). The width is physics, not dressing,
+so it needs its own change. The Seat gravel is on the inside of a left-hander
+exactly as shipped.
