@@ -5140,13 +5140,43 @@ track, same window: 0-3 spikes, max 5-18 ms.
 |---|---|---|---|
 | synchronous `device.createRenderPipeline` on a cache miss | census 198-200: 25-26 sync compiles vs 1 on WGX, tracking spikes one for one; half the WebGL2 leg's links tagged `async tlx.js:1796` (the warm), half unnamed | **vendor patch 7**: the lazy path takes `createRenderPipelineAsync`, `draw()` skips until it lands | census 201: `createRenderPipeline` 26 → 1, spikes unchanged (23, worst 479 ms) — real, not the time |
 | synchronous TSL → WGSL codegen (`NodeBuilder.build`) on the render path | census 202 CPU profile: `build` 663 ms + ~1,010 ms of its traversal helpers, ~1.7 s, ~35 ms/program, a third of busy main-thread time | **vendor patch 8**: on a node-builder cache miss outside `compileAsync`, start `Nodes.getForRender( ro, true )` (three's own `buildAsync`) and skip the object until its state exists | census 203: spikes 23 → 7; worst frame still 506 ms |
-| ~470 `RenderObject`s created in one frame (bind group cloned + uniform buffer per object, ~1 ms each) when a chunk batch comes into view | census 203: the 506 ms callback sits exactly on the 39 → 507 buffer jump; the compile stacks account for every program (25 warm, 9 sun-shadow via `endPass`, 16 post via `runPass`, 1 scene) so nothing else is in that frame | **`NEW_MESH_BUDGET`** in `tlx.js`: `acquireMesh()` returns null past 24 new meshes a present, the draw retries next present — a burst spreads over ~20 presents at ≤ ~25 ms each | pending (census 204) |
+| ~470 `RenderObject`s created in one frame (bind group cloned + uniform buffer per object, ~1 ms each) when a chunk batch comes into view | census 203: the 506 ms callback sits exactly on the 39 → 507 buffer jump; the compile stacks account for every program (25 warm, 9 sun-shadow via `endPass`, 16 post via `runPass`, 1 scene) so nothing else is in that frame | **`NEW_MESH_BUDGET`** in `tlx.js`: `acquireMesh()` returns null past 24 new meshes a present, the draw retries next present — a burst spreads over ~20 presents at ≤ ~25 ms each | census 205: the burst spread (buffers 92 → 284 → 339 over 4 s instead of 507 at once; `createBindGroup` 1825 → 853), worst frame 506 → 389 ms, 18 spikes. Not done — see below |
 
 And a fourth that patch 8 created: the 16 post-chain programs the 3 s warm gate
 left unbuilt used to compile on the first visible present after the lights; with
 patch 8 a miss there is a SKIPPED full-screen quad, i.e. a blank post pass for the
 first frames of the race. `post.warm()` now runs regardless of the scene warm's
 elapsed time.
+
+### Census 204 and 205: a regression, and what is actually left
+
+The first cut of the mesh budget guarded the env-face present loop (the one
+carrying the "64px cube" comment) and left the main present's two
+`acquireMesh(...).renderOrder` calls unguarded with a cap that was never reset:
+after 24 new meshes the main present threw, `game.js` hit its frame-fault cap and
+stopped the loop. Census 204 showed it as a near-black leg with `presents=0` and no
+resource calls; `tlx-probes` on the same tree failed 11 of 17 with the TypeError.
+The dry-run had passed because its pins checked that the guarded form existed, not
+where. Corrected on the main present's own context, with a pin that no unguarded
+dereference survives anywhere; `tlx-probes` 17/17.
+
+Census 205 on the corrected tree then named what remains, and it is one thing:
+**warm coverage.** Every lazy program in the race window is one the warm never
+built — **scene ×12** (was 1: the cap starved `compileAsync(scene)`, which runs
+AFTER the draw loop on the first present and now saw 24 meshes instead of the
+grid's ~300), **post ×16** (the warm ran — ×16 tagged `tlx-post.js warm` — and the
+live `runPass` built the same sixteen again: a fresh `QuadMesh` per job never
+shared a cache key with the quad `present()` draws), **sun-shadow ×9** (`castScene`
+is its own Scene). `build` is still 720 ms in the window because those 37 are still
+generated on the main thread, chunked by patch 8 but chunked into 150-390 ms
+frames. WGX on the same run: 1 spike, 14 ms.
+
+The fix in flight: the cap is exempt until the first warm has completed (the
+lights are a frozen picture; minting everything there costs nothing visible), the
+post warm compiles the live `quad` with each job's material (a same-object hit
+whatever the key contains), and `tlx-shadow.js` exports `warm()` over `castScene`
+into `sunRT` plus the blocker, called after the post warm. If those 37 build during
+the lights, the race window has no codegen left in it.
 
 ### What the instruments had to become first
 
