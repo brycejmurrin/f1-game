@@ -29,10 +29,21 @@ let _gfx = null;
 // STANDARD-tier sit at scale 1 and never enter these branches, so their
 // (already smooth) behaviour is unchanged.
 let _frameEMA = 16.7;
-let _govT = 0;
-let _govCool = 0;
+// TWO CLOCKS. `_frameEMA` settles per FRAME (alpha 0.1 a frame), so the
+// windows that exist only to let it settle before a verdict — the 45-frame
+// evaluation cadence and the short post-step verify windows in `_govCool` —
+// stay frame-counted: they are the same number of samples at any refresh
+// rate. The waits this file PROMISES IN SECONDS — the recovery hold, the
+// refused-climb backoff, the restore and verify-fail cooldowns — were frame
+// counts too, and every comment translated them at 60 fps: a 120/144 Hz
+// display ran each ~2x faster than designed, weakening exactly the settling
+// guarantees described below on the devices most likely to run the game.
+// Those now run on `_govCoolMs` / `_downHold` in ms of the dtMs tick() gets.
+let _govT = 0;            // frames since the last evaluation
+let _govCool = 0;         // frames left in a post-step verify window
+let _govCoolMs = 0;       // ms left before the governor may act again (wall clock)
 let _autoRes = true;
-let _downHold = 0;
+let _downHold = 0;        // ms left on the recovery hold after a cut / refused climb
 // Consecutive frames over SPIKE_MS. Reset by any in-budget frame and by
 // sentinelArm(), so a fresh race never inherits a previous session's run.
 let _slowRun = 0;
@@ -49,9 +60,12 @@ let _slowRun = 0;
 // (menu-time changes are settled by the race-start reset in sentinelArm
 // anyway), and re-open the window at every race start.
 let _live = false;
-// frames: 10 s … 2 min
-const UP_BACKOFF_MIN = 600;
-const UP_BACKOFF_MAX = 7200;
+// ms: 10 s … 2 min
+const UP_BACKOFF_MIN = 10000;
+const UP_BACKOFF_MAX = 120000;
+// The most one frame may pay into a wall-clock counter: a 400 ms stall or a
+// 60 s tab resume is one slow FRAME, not a spent cooldown.
+const COOL_STEP_MAX_MS = 100;
 let _upBackoff = UP_BACKOFF_MIN;   // wait before the next restore attempt after a refused climb
 // The scale lever is INEFFECTIVE on this device right now — set when a
 // scale-down step was reverted for buying nothing, cleared once a tier has been
@@ -161,7 +175,7 @@ const RESTORE_WITHIN = 0.6;    // restore once the EMA is back within 0.6 of the
 // at all — so even a small margin still tells the two apart.
 let _pendingVerify = null;   // {kind:"scale"|"tier", prev, ema} for the last unverified step
 const VERIFY_MARGIN = 0.5;
-const VERIFY_COOL = 300;
+const VERIFY_COOL = 5000;   // ms: the wait after a step that made things worse
 
 // Feature-shedding tiers: the governor's SECOND stage.
 // Resolution scaling can't rescue costs that don't shrink with the render
@@ -450,9 +464,13 @@ function tick(dtMs) {
     _frameEMA += (s - _frameEMA) * 0.1;
     _floorMs += (s - _floorMs) * (s < _floorMs ? FLOOR_DOWN_A : FLOOR_UP_A);
   }
-  if (_downHold > 0) _downHold--;   // recovery hold ticks down every frame
-  if (_govCool > 0) { _govCool--; return; }
-  if (++_govT < 45) return;   // evaluate ~every 45 frames
+  const stepMs = Number.isFinite(dtMs) && dtMs > 0 ? Math.min(dtMs, COOL_STEP_MAX_MS) : 16.7;
+  // Clamped at 0: the restore gate below tests `_downHold === 0`, and a ms
+  // decrement overshoots where a frame count landed exactly.
+  if (_downHold > 0) _downHold = Math.max(0, _downHold - stepMs);   // recovery hold runs down in wall time
+  if (_govCoolMs > 0) { _govCoolMs = Math.max(0, _govCoolMs - stepMs); return; }
+  if (_govCool > 0) { _govCool--; return; }   // a verify window: frames, so the EMA has its samples
+  if (++_govT < 45) return;   // evaluate ~every 45 frames (an EMA settling span, not a clock)
   _govT = 0;
 
   // Verify the last step before taking a new one.
@@ -485,7 +503,7 @@ function tick(dtMs) {
         // opposite — there was no headroom — and implies nothing about fill.)
         if (!v.up) _scaleFutile = true;
       } else { _perfTier = v.prev; _autoShed = v.shed; if (!v.up) _tierFutile = true; }
-      _govCool = VERIFY_COOL;
+      _govCoolMs = VERIFY_COOL;
       // A failed UP step is the device saying "no headroom". Without a hold
       // the restore gate (EMA under the floor, _downHold 0) was true again
       // one cooldown later, so restore → verify-fail → revert cycled every
@@ -524,7 +542,7 @@ function tick(dtMs) {
     if (_autoRes && cur > 0.5 && !_scaleFutile) stepped = !!_gfx.setRenderScale(cur - 0.1);
     if (stepped) {
       _pendingVerify = { kind: "scale", prev: cur, ema: _frameEMA };
-      _govCool = 30; _downHold = 600;
+      _govCool = 30; _downHold = 10000;
     } else if (!_tierHold && _perfTier < 4 && _perfTierFloor < 4 && !_tierFutile) {   // scale lever exhausted — shed a feature (a crash floor of 4 has already shed everything this ladder can)
       // Step from the EFFECTIVE tier, not from _perfTier alone. A rung at or
       // below the floor (crash sentinel, or the player's GRAPHICS preset) is
@@ -549,7 +567,7 @@ function tick(dtMs) {
       // Stepping still starts from the floor, so LOW takes one felt 0 -> 4 step
       // and every other preset behaves exactly as before.
       _pendingVerify = { kind: "tier", prev: _perfTier, shed: _autoShed, ema: _frameEMA };
-      _perfTier = Math.min(4, Math.max(_perfTier, _floorTier()) + 1); _autoShed++; _govCool = 90; _downHold = 600;
+      _perfTier = Math.min(4, Math.max(_perfTier, _floorTier()) + 1); _autoShed++; _govCool = 90; _downHold = 10000;
       // A shed rung changes what the frame is bound BY, so let the scale lever
       // prove itself again from the new baseline rather than staying latched
       // off for the session on one old measurement.
@@ -589,7 +607,7 @@ function tick(dtMs) {
       stepped = !!_gfx.setRenderScale(next);
       if (stepped) {
         _pendingVerify = { kind: "scale", prev: cur, ema: _frameEMA, up: true };
-        _govCool = 240;
+        _govCoolMs = 4000;
       }
     }
     // Features come back only at full res under the same sustained headroom,
@@ -602,7 +620,7 @@ function tick(dtMs) {
       if (_perfTier > _floorTier()) {
         _perfTier--; if (_autoShed > 0) _autoShed--;
       } else { _perfTier = _perfTierFloor; _autoShed = 0; }
-      _govCool = 240;
+      _govCoolMs = 4000;
     }
   }
 }
@@ -680,7 +698,7 @@ return {
     // actually lives, in the degrade branch, which skips rungs the floor
     // already covers.
     if (_pendingVerify && _pendingVerify.kind === "tier") _pendingVerify = null;
-    if (_live) _govCool = Math.max(_govCool, VERIFY_COOL);   // see _live: never before the first race tick
+    if (_live) _govCoolMs = Math.max(_govCoolMs, VERIFY_COOL);   // see _live: never before the first race tick
   },
   strikes: () => _crashStrikes,
   // The lifetime, NOT build-keyed, kill count — see SENT_SEEN. `strikes` can be
@@ -722,7 +740,7 @@ return {
   setAutoRes: (on) => {
     _autoRes = !!on;
     if (_pendingVerify && _pendingVerify.kind === "scale") _pendingVerify = null;
-    if (_live) _govCool = Math.max(_govCool, VERIFY_COOL);   // see _live: never before the first race tick
+    if (_live) _govCoolMs = Math.max(_govCoolMs, VERIFY_COOL);   // see _live: never before the first race tick
   },
   // The ladder pin described at _tierHold. Same pending-verify hygiene as
   // setAutoRes, for the TIER kind: a provisional step must not be "reverted"
@@ -732,7 +750,7 @@ return {
   setTierHold: (on) => {
     _tierHold = !!on;
     if (_pendingVerify && _pendingVerify.kind === "tier") _pendingVerify = null;
-    if (_live) _govCool = Math.max(_govCool, VERIFY_COOL);
+    if (_live) _govCoolMs = Math.max(_govCoolMs, VERIFY_COOL);
   },
 };
 })();

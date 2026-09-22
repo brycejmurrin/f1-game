@@ -2,6 +2,10 @@
 const IncidentSim = (function () {
   "use strict";
 
+  // The loop's fixed step (js/physics/consts.js FIXED_DT); the literal is the
+  // fallback for a bare test VM that loads this file without PhysicsConsts.
+  const FIXED_DT = (typeof PhysicsConsts !== "undefined" && PhysicsConsts.FIXED_DT) || 1 / 60;
+
   let G = null;             // game.js ctx façade (live getters + trackFrom/worldFromTrack helpers)
 
   // flags (all DEFAULT ON, each its own disable flag)
@@ -260,7 +264,7 @@ const IncidentSim = (function () {
     let worldOk = false, gen = -1;
     try { worldOk = DebrisWorld.active() && DebrisWorld.rapierReady(); gen = DebrisWorld.worldGen(); }
     catch (e) { worldOk = false; }
-    const stepBound = 6 + 240 * (fin(dt) ? Math.abs(dt) : 1 / 60);
+    const stepBound = 6 + 240 * (fin(dt) ? Math.abs(dt) : FIXED_DT);
 
     for (const inc of _incidents.slice()) {
       if (!worldOk || gen !== inc.gen) {
@@ -332,12 +336,12 @@ const IncidentSim = (function () {
         const settling = pose.sleeping ||
           (vHoriz < SETTLE_V && Math.hypot(pose.wx || 0, pose.wy || 0, pose.wz || 0) < SETTLE_W);
         let st = (inc.settle.get(i) || 0);
-        st = settling ? st + (fin(dt) ? dt : 1 / 60) : 0;
+        st = settling ? st + (fin(dt) ? dt : FIXED_DT) : 0;
         inc.settle.set(i, st);
         const windowUp = (inc.elapsed || 0) >= WINDOW_MAX_S;
         if (st >= SETTLE_HOLD_S || windowUp) handbackCar(inc, i, false, pose);
       }
-      inc.elapsed = (inc.elapsed || 0) + (fin(dt) ? dt : 1 / 60);
+      inc.elapsed = (inc.elapsed || 0) + (fin(dt) ? dt : FIXED_DT);
     }
     _incidents = _incidents.filter((inc) => inc.cars.length);
   }

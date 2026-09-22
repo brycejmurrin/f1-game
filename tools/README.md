@@ -109,6 +109,7 @@ Author-time generation: the generated doc blocks, the shell, and the asset bakes
 | **gen/move-tree.mjs** | Tree mover: renames from a JSON old→new map, sweeps every citing path, records MOVED, regenerates the shell; `--plan`. | — |
 | **gen/settings-defaults.mjs** | Apply an exported SETTINGS file to the shipped defaults in `js/data/settings-defaults.js`; `--check` reports drift. | — |
 | **gen/synth-models.mjs** | Procedural AX26 model catalog for `assets.mjs bake-synthetic-models` — buildings, grandstands, industrial; no network. | asset-pack |
+| **gen/title-art.mjs** | Draws index.html's #title-car from js/car/car3d.js through the garage camera; --check fails on drift. | — |
 | **gen/track-stills.mjs** | One car-free in-game still per circuit into `assets/stills/<id>.webp` for the picker hero (`--only/--frac/--force`). | playwright-probe |
 
 ### `tools/shot/`
@@ -323,7 +324,7 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 | **track/clip-baseline.json** | `manifest.cjs`, `tests/unit/comment-citations.test.mjs`, `tests/unit/docs-integrity.test.mjs`, `tests/unit/prop-clipping.test.mjs`, `track/clip-audit.cjs` |
 | **track/coplanar-baseline.json** | `manifest.cjs`, `tests/unit/coplanar-faces.test.mjs`, `track/coplanar-audit.cjs` |
 | **track/float-baseline.json** | `manifest.cjs`, `tests/unit/scenery-grounding.test.mjs` |
-| **track/osm-circuits.json** | `gen/bake-elevation.mjs`, `manifest.cjs`, `track/stitch-osm-ring.mjs` |
+| **track/osm-circuits.json** | `gen/bake-elevation.mjs`, `manifest.cjs`, `tests/unit/circuit-def-fields.test.mjs`, `track/stitch-osm-ring.mjs` |
 
 ## Conventions
 

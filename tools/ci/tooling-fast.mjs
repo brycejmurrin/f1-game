@@ -340,6 +340,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/lighting-rebuild.test.mjs",
   "tests/unit/lighting-tuner-sweep.test.mjs",
   "tests/unit/perf-governor.test.mjs",
+  // skidmarks.js lays marks per SECOND of laying (was per frame): a VM run of
+  // the ring buffer at three refresh rates, ~0.1 s.
+  "tests/unit/skidmarks-cadence.test.mjs",
   "tests/unit/terrain-normals.test.mjs",
   "tests/unit/aero-zones-turns.test.mjs",
   "tests/unit/ui-improve-pass.test.mjs",
@@ -365,6 +368,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/fin-design.test.mjs",
   "tests/unit/photomode-hold.test.mjs",
   "tests/unit/title-menu-even.test.mjs",
+  "tests/unit/title-art.test.mjs",
   "tests/unit/change-driver-tools.test.mjs",
   "tests/unit/trim-comments.test.mjs",
   "tests/unit/metrics.test.mjs",

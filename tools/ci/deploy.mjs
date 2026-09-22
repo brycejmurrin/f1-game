@@ -326,6 +326,12 @@ export function mergeDeployTip() {
   if (shellF.length) {
     for (const f of shellF) must(git(["checkout", "--theirs", "--", f]), `checkout --theirs ${f}`);
     run("node", ["tools/gen/gen-shell.mjs"], "regenerate the union shell from the manifest");
+    // `--theirs` above threw away OUR index.html wholesale, so every generated
+    // block in it has to be rewritten, not just gen-shell's. title-art.mjs owns
+    // @gen-shell:title-art (the #title-car car art); without this line a shell
+    // conflict silently reverts the art to whatever the deploy tip carried,
+    // which looks exactly like nobody having changed it.
+    run("node", ["tools/gen/title-art.mjs"], "regenerate the title art into the union shell");
     must(git(["add", ...shellF]), "add");
     did.push("shell hashes re-applied");
   }

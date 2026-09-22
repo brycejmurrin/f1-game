@@ -186,3 +186,31 @@ test("the folded per-circuit data reaches the built def", () => {
     ctx.TrackDefs = saved;
   }
 });
+
+// ── elevation provenance for the OSM-imported circuits ─────────────────────
+// Every circuit recovered from OpenStreetMap (tools/track/osm-circuits.json) has
+// no authored `elevations`; its relief comes from the SRTM bake in
+// js/track/circuit-elevations.js — or it is flat ON PURPOSE. Korea is the flat
+// one: Yeongam is reclaimed tidal flat and the bake measured 0.00 m over the
+// lap, so its def takes the engine's `undulate: false` hatch (the only circuit
+// that does). Before 2026-09-22 it had neither, and buildCenterline laid a
+// 0.14 m procedural ripple under a scenery header that says "dead flat".
+// A new OSM import must land in one column or the other, never in neither.
+test("every OSM-imported circuit is either surveyed or explicitly flat", () => {
+  const vm = require("node:vm");
+  const Tracks = buildContext();
+  const at = (id) => Tracks.LIST.find((t) => t.id === id);
+  const osm = JSON.parse(fs.readFileSync(path.join(ROOT, "tools/track/osm-circuits.json"), "utf8"));
+  const ids = Object.keys(osm.circuits || osm);
+  assert.ok(ids.length >= 12, `osm-circuits.json lists ${ids.length} circuits`);
+  const elev = vm.runInNewContext(fs.readFileSync(path.join(ROOT, "js/track/circuit-elevations.js"), "utf8") + ";CircuitElevations", {});
+  const neither = ids.filter((id) => !(Array.isArray(elev[id]) && elev[id].length > 0) && at(id) && at(id).undulate !== false);
+  assert.deepEqual(neither, [], "an OSM circuit with no SRTM profile must declare undulate: false (or bake one)");
+  assert.equal(at("korea").undulate, false, "korea is the flat one, by measurement");
+  assert.ok(!elev.korea, "korea carries no profile — the bake declined it (0.00 m of relief)");
+  // Flat means flat: the built centreline must carry no ripple at all.
+  const built = Tracks.build(at("korea"));
+  let lo = Infinity, hi = -Infinity;
+  for (let i = 0; i < built.py.length; i++) { if (built.py[i] < lo) lo = built.py[i]; if (built.py[i] > hi) hi = built.py[i]; }
+  assert.ok(hi - lo < 1e-6, `korea's centreline relief must be 0, got ${(hi - lo).toFixed(4)} m`);
+});
