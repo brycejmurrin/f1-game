@@ -89,8 +89,19 @@
    ~28 % of the viewBox on screen, hugely magnified, which is exactly why the car
    is drawn left: the crop makes it loom instead of vanishing. */
 #title-car {
-  position: absolute; inset: 0;
-  width: 100%; height: 100%;
+  /* THE BOX CARRIES THE VIEWBOX'S OWN ASPECT, pinned to the foot of the frame.
+     That is what makes one layer work on every shape. Sized to the viewport
+     instead, the two fits pull opposite ways: slice (cover) fills a landscape
+     phone but blows a portrait tablet up to 1857px wide, while meet (fit)
+     tames portrait and shrinks that same phone from 844x543 to 607x390 — the
+     shape the game is actually PLAYED in. With the element itself at
+     1400/900, cover and fit are the SAME scale, so there is nothing left to
+     choose: the art is always exactly as wide as the screen and as tall as
+     its own proportions say, sitting on the bottom edge. */
+  position: absolute;
+  left: 0; right: 0; bottom: 0; top: auto;
+  width: 100%; height: auto;
+  aspect-ratio: 1400 / 900;
   zoom: normal;
   pointer-events: none;
   z-index: -1;
@@ -161,7 +172,12 @@
    clutter. It fades as the column closes in and leaves when there is no room
    left to compose into. */
 @media (max-width: 1000px) { #title-car { opacity: 0.4; } }
-@media (max-width: 700px)  { #title-car { display: none; } }
+/* PHONES KEEP IT TOO, now that meet has stopped the blow-up. This used to be
+   display:none because slice scaled the art by height on a narrow screen and
+   drove it straight through the button stack; under meet a 393x852 phone gets
+   a 393x253 band across the bottom 30%, which is a composition rather than a
+   collision. It goes quiet rather than absent. */
+@media (max-width: 700px)  { #title-car { opacity: 0.22; } }
 /* ASPECT, NOT WIDTH, IS WHAT BREAKS THIS LAYER, and the fix is on the <svg>:
    preserveAspectRatio MEET, not SLICE. Slice scales to COVER, so on a viewport
    narrower than the viewBox's 1400/900 (1.556) it scales by HEIGHT and runs off
