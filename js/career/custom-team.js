@@ -27,7 +27,24 @@ const CustomTeam = (function () {
 
     let czFinish = "gloss";
 
-    function loadCustomTeam() { return store.get("customTeam", DEFAULT_CUSTOM); }
+    // A STORED CUSTOM TEAM IS PLAYER INPUT. It rides in a garage file, which
+    // js/ui/settings-export.js reads off disk, and syncCustomTeam() pushes
+    // whatever comes back straight into Teams.LIST — where SaveMigrate's
+    // seasonRoster() does `team.drivers.forEach(...)` at boot. `{}` in that key
+    // was a TypeError before the menu painted. A wrong `id` is the quieter
+    // half: the splice that removes the previous custom entry matches on
+    // "custom", so every sync would push ANOTHER team onto the grid.
+    // Repair rather than discard — the player's name and colours are not the
+    // corrupt field, and losing them to a bad `drivers` array is its own bug.
+    function loadCustomTeam() {
+      const t = store.get("customTeam", DEFAULT_CUSTOM);
+      if (!t || typeof t !== "object" || Array.isArray(t)) return DEFAULT_CUSTOM;
+      const ok = Array.isArray(t.drivers) && t.drivers.length > 0
+        && t.drivers.every((d) => d && typeof d === "object");
+      if (ok && t.id === "custom") return t;
+      return Object.assign({}, DEFAULT_CUSTOM, t,
+        { id: "custom", drivers: ok ? t.drivers : DEFAULT_CUSTOM.drivers });
+    }
     function customTeamIndex() { return Teams.LIST.findIndex((t) => t.id === "custom"); }
 
     function syncCustomTeam() {
