@@ -564,32 +564,36 @@ test.describe("TLX — boot", () => {
     // that, three cloned the block per RENDER OBJECT (NodeBuilderState
     // .createBindings), so info.memory.uniformBuffers scaled with the draw
     // count. Two structural facts are asserted, neither of which needs a real
-    // GPU: the buffer count sits far below the draw count, and the render
-    // group's version advances across present() calls (a frozen version would
-    // mean the shared block is uploaded once and never again — a stuck sun).
+    // GPU: the shared arm holds several times FEWER uniform buffers than the
+    // per-object arm (apex26.tlxSharedUniforms=0, the same boot otherwise —
+    // 5-8x on every probe in PERF-FINDINGS 2y), and the render group's
+    // version advances across present() calls (a frozen version would mean
+    // the shared block uploaded once and never again — a stuck sun).
     const errors = [];
     page.on("console", (m) => { if (m.type() === "error" && !/favicon/i.test(m.text())) errors.push(m.text()); });
-    await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-    await page.evaluate(() => window.__apex.race("monza"));
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 60_000 });
-    await page.evaluate(() => window.__apex.park(0.1));
-    // Same budget as the track wait above: a SwiftShader frame here is seconds,
-    // and the first world frames also carry the material compiles (CI llvmpipe
-    // passes this in ~12 s; the in-container run needed ~40 s).
-    // `calls` (three's per-frame draw-call count), not `draws`: the retained
-    // drawList is emptied by present(), so between frames — which is the only
-    // time page.evaluate can run — it always reads 0.
-    await page.waitForFunction(() => { const m = GLX.__tlx.memState(); return m.calls > 50 && m.rUbo != null; }, null, { polling: 100, timeout: 60_000 });
-    const a = await page.evaluate(() => GLX.__tlx.memState());
-    await page.waitForFunction((v) => GLX.__tlx.memState().groupVer > v, a.groupVer, { polling: 100, timeout: 60_000 });
-    const b = await page.evaluate(() => GLX.__tlx.memState());
-    expect(a.sharedUniforms).toBe(true);
-    // Per-object clones put rUbo well above the per-frame draw-call count
-    // (7754 buffers against 1222 calls on the r185 control probe); shared, it
-    // sits below it (934 / 816 against 1160 / 1513, PERF-FINDINGS 2y).
-    expect(a.rUbo).toBeLessThan(Math.max(64, a.calls));
-    expect(b.groupVer).toBeGreaterThan(a.groupVer);
+    const sample = async () => {
+      await page.goto("/");
+      await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+      await page.evaluate(() => window.__apex.race("monza"));
+      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 60_000 });
+      await page.evaluate(() => window.__apex.park(0.1));
+      // World frames are live once three's per-frame draw-call count is (the
+      // retained drawList is emptied by present(), so it reads 0 between frames).
+      await page.waitForFunction(() => { const m = GLX.__tlx.memState(); return m.calls > 50 && m.rUbo != null; }, null, { polling: 100, timeout: 60_000 });
+      // Sample both arms the same number of presented frames later, so the
+      // lazily compiled program set behind the count is comparable.
+      const p0 = await page.evaluate(() => GLX.__tlx.memState().presents);
+      await page.waitForFunction((p) => GLX.__tlx.memState().presents >= p + 5, p0, { polling: 100, timeout: 60_000 });
+      return page.evaluate(() => GLX.__tlx.memState());
+    };
+    const on = await sample();
+    expect(on.sharedUniforms).toBe(true);
+    await page.waitForFunction((v) => GLX.__tlx.memState().groupVer > v, on.groupVer, { polling: 100, timeout: 60_000 });
+    // The control arm: the per-object layout, everything else identical.
+    await page.addInitScript(() => { try { localStorage.setItem("apex26.tlxSharedUniforms", "0"); } catch (_) {} });
+    const off = await sample();
+    expect(off.sharedUniforms).toBe(false);
+    expect(off.rUbo).toBeGreaterThan(on.rUbo * 3);
     expect(errors).toEqual([]);
   });
 

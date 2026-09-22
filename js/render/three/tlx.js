@@ -3824,6 +3824,7 @@ const TLX = (function () {
             try { const g = lit && lit.uniforms && lit.uniforms.sunDir && lit.uniforms.sunDir.groupNode; o.groupVer = g ? g.version : null; } catch (_) { o.groupVer = null; }
             o.sharedUniforms = !!(lit && lit.sharedUniforms);
             o.presentMs = +_presentMs.toFixed(3);
+            o.presents = _presentN;   // frames presented — a spec samples both flag arms at the same count
             try { const b = renderer && renderer.backend; if (b && b.data && b.data.size != null) o.backendData = b.data.size; } catch (_) { /* DataMap may be a WeakMap */ }
             return o;
           },
