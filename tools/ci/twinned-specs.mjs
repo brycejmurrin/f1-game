@@ -97,6 +97,18 @@ export const TWINNED = {
 export const ADAPTED = {
   "tests/specs/physics-fixes.spec.js":
     "pure __apex physics reads (wall scrub, lap-distance continuity); 2/2 under the adapter in 27 s vs 110 s of browser; mutant m-wall-scrub-flat proves it bites",
+  "tests/specs/logging.spec.js":
+    "js/core/log.js's ring and console thresholds through __apex.logs(); 6/6 in 6 s; m-log-ring-lags-console proves the ring-vs-console max() is watched",
+  "tests/specs/projection.spec.js":
+    "Tracks.project() round-trips and the +right lateral sign, pure geometry; 3/3 in 15 s; m-project-lat-sign proves a flipped sign is caught",
+  "tests/specs/race-control.spec.js":
+    "the caution layer's state through __apex.caution(); 3/3 in 12 s; m-caution-two-sectors (and m-caution-label-drift) prove the per-sector/label contract is watched",
+  "tests/specs/parts-livery-contrast.spec.js":
+    "livery ink/halo contrast and decal placement over car3d geometry, no raster; 8/8 in 7 s; m-wing-band-floats proves the wing band's seat is watched",
+  "tests/specs/agent-drive-bench.spec.js":
+    "agentview's corner facts and the bench policies against game-vm; 5/5 in 48 s; m-straight-exit-threshold proves the exitsOntoStraight derivation is watched",
+  "tests/specs/pit-lane.spec.js":
+    "the pit lane's limiter, box and lane geometry through __apex; 6/6 in 91 s; m-box-lat-swallows-line proves the box-vs-racing-line distinction is watched",
 };
 
 /** Portable by every static measure and deliberately NOT adapted: the
