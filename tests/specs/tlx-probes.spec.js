@@ -559,6 +559,31 @@ test.describe("TLX — boot", () => {
     expect(errors).toEqual([]);
   });
 
+  test("the lit frame block is ONE shared uniform buffer per program, not one per draw", async ({ page }) => {
+    // tsl-lit.js puts every frame-level uniform in three's renderGroup. Before
+    // that, three cloned the block per RENDER OBJECT (NodeBuilderState
+    // .createBindings), so info.memory.uniformBuffers scaled with the draw
+    // count. Two structural facts are asserted, neither of which needs a real
+    // GPU: the buffer count sits far below the draw count, and the render
+    // group's version advances across present() calls (a frozen version would
+    // mean the shared block is uploaded once and never again — a stuck sun).
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => window.__apex.race("monza"));
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 60_000 });
+    await page.evaluate(() => window.__apex.park(0.1));
+    await page.waitForFunction(() => { const m = GLX.__tlx.memState(); return m.draws > 50 && m.rUbo != null; }, null, { polling: 100, timeout: 20_000 });
+    const a = await page.evaluate(() => GLX.__tlx.memState());
+    await page.waitForFunction((v) => GLX.__tlx.memState().groupVer > v, a.groupVer, { polling: 100, timeout: 10_000 });
+    const b = await page.evaluate(() => GLX.__tlx.memState());
+    expect(a.sharedUniforms).toBe(true);
+    // Per-object clones would put rUbo at roughly draws x (1 + 5 lamp arrays);
+    // shared, it is a few dozen (one per program plus three's own).
+    expect(a.rUbo).toBeLessThan(Math.max(64, a.draws));
+    expect(b.groupVer).toBeGreaterThan(a.groupVer);
+    expect(errors).toEqual([]);
+  });
+
   test("menu is reachable and canvas is sized (no-track begin/present path)", async ({ page }) => {
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });

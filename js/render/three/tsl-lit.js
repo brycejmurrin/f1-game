@@ -70,7 +70,7 @@
     // read this one binding.
     const MAX_LIGHTS = (ctx && ctx.maxLights > 0) ? (ctx.maxLights | 0) : LightBudget.MAX;
     const {
-      Fn, If, Loop, Break, uniform, uniformArray, attribute, varying, texture, cubeTexture,
+      Fn, If, Loop, Break, uniform, uniformArray, renderGroup, attribute, varying, texture, cubeTexture,
       textureLoad, ivec2,
       float, int, vec2, vec3, vec4, mrt,
       positionWorld, positionGeometry, positionLocal, normalLocal, normalWorld,
@@ -135,8 +135,13 @@
     const PI = 3.14159265359;
 
     /* frame + tune uniforms
-     * One shared set across every material variant (uniform nodes are shared
-     * descriptors; tlx.js calls updateFrame(frame) once per begin()).
+     * One shared set of NODE descriptors across every material variant (tlx.js
+     * calls updateFrame(frame) once per begin()). The GPU side is a different
+     * matter: a TSL uniform() defaults to objectGroup, and three clones every
+     * non-shared bind group PER RENDER OBJECT (NodeBuilderState.createBindings),
+     * so until the setGroup(renderGroup) loop after this block every pooled mesh
+     * owned its own ~4 KB copy of these values, re-uploaded per object per pass
+     * (a full bufferData on the WebGL2 backend). See the loop below.
      * Defaults MUST mirror LightTune.TUNE_DEFS (js/lighting/knobs.js) exactly
      * like js/render/glx/glx.js — a missing tune object renders the shipped look. */
     const U = {
@@ -250,6 +255,22 @@
     U.lampCol = uniformArray(lampCol);
     U.lampDir = uniformArray(lampDir);
     U.lampGeo = uniformArray(lampGeo);
+    // SHARED FRAME BLOCK. Every member of U is written once per frame/pass
+    // (updateFrame, setLampGrid, setEnvStr, setMaterialMaps) and never per
+    // draw, so it belongs in three's render group: ONE uniform buffer per
+    // material program, updated once per renderer.render(), instead of one
+    // per render object updated per object per pass. A LOOP, not per-line
+    // edits: three's _getBindGroup shares a group only when EVERY binding in
+    // it carries the identical groupNode — and the group also holds three's
+    // own camera uniforms — so a single omitted member would silently demote
+    // camera + U back to per-object clones. renderGroup (once per render
+    // call), not frameGroup: TLX renders the shadow maps, the optional env
+    // faces and the scene in separate render() calls with updateFrame between
+    // them. apex26.tlxSharedUniforms=0 (ctx.sharedUniforms=false) restores the
+    // per-object layout for an A/B; UniformArrayNode → BufferNode → UniformNode,
+    // so the lamp arrays take setGroup too.
+    const SHARED_UNIFORMS = !(ctx && ctx.sharedUniforms === false);
+    if (SHARED_UNIFORMS) for (const k in U) U[k].setGroup(renderGroup);
 
     /** begin(frame) -> uniform values. Mirrors the semantics of glx.js begin():
      * ambient scaled CPU-side by tune.ambientMul; keyMul/fog/mist knobs applied
@@ -2039,7 +2060,7 @@
       if (i >= 0) _mats.splice(i, 1);
     }
 
-    return { makeMaterial, makeViz, releaseMaterial, uniforms: U, updateFrame, setEnvStr, setEnvCube, setLampGrid,
+    return { makeMaterial, makeViz, releaseMaterial, uniforms: U, sharedUniforms: SHARED_UNIFORMS, updateFrame, setEnvStr, setEnvCube, setLampGrid,
              setSsrMrt, setMaterialMaps, hasMaterialMaps: !!matAlbedoNode, MAX_LIGHTS };
   }
 

@@ -379,6 +379,25 @@ test("TLX hoists crack fwidth and MAT samples before the detail/live If (WGSL de
   assert.ok(aSamp > 0 && aAfter > aSamp, "MAT albedo sample must sit before the live/far If");
 });
 
+test("TLX frame uniforms share one render-group buffer (setGroup loop after the last U member)", () => {
+  // A TSL uniform() defaults to objectGroup and three clones non-shared bind
+  // groups per render object; the loop moves the whole frame block to
+  // renderGroup. It must sit AFTER the last U.* assignment (a member added
+  // below it would silently demote camera + U back to per-object clones), and
+  // the flag must default ON.
+  const lit = read("js/render/three/tsl-lit.js");
+  assert.match(lit, /\buniformArray, renderGroup, attribute\b/, "renderGroup is destructured from TSL");
+  const last = lit.lastIndexOf("U.lampGeo = uniformArray(lampGeo);");
+  const loop = lit.indexOf("if (SHARED_UNIFORMS) for (const k in U) U[k].setGroup(renderGroup);");
+  assert.ok(last > 0 && loop > last, "the setGroup loop follows the last U.* assignment");
+  assert.ok(lit.indexOf("U.", loop) > 0, "U is still used after the loop (sanity)");
+  assert.doesNotMatch(lit.slice(loop, loop + 400), /\bU\.[A-Za-z]+\s*=\s*uniform/, "no U member is assigned after the loop");
+  assert.match(lit, /const SHARED_UNIFORMS = !\(ctx && ctx\.sharedUniforms === false\)/, "shared is the default; only an explicit false opts out");
+  const tlx = read("js/render/three/tlx.js");
+  assert.match(tlx, /apex26\.tlxSharedUniforms/, "the A/B pin is read in tlx.js");
+  assert.match(tlx, /sharedUniforms:\s*_sharedUniforms/, "the pin reaches the lit factory ctx");
+});
+
 test("TLX decal cache evicts without Material.dispose (three #33952)", () => {
   const fx = read("js/render/three/tsl-fx.js");
   const start = fx.indexOf("if (decalCache.size >= DECAL_CACHE_CAP)");

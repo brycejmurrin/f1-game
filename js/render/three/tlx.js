@@ -90,6 +90,16 @@ const TLX = (function () {
       // during bootRenderer's await, and on the WebGPU -> WebGL2 fallback an
       // error arriving before the later declarations ran was a TDZ throw.
       let _presentN = 0, _healTried = false, _gpuErrFrames = 0, _gpuErrLastPresent = -1;
+      // JS milliseconds spent inside present()'s renderer.render() calls: the
+      // per-frame accumulator and its EMA (memState().presentMs). Software GL
+      // makes the number meaningless; on real hardware it is the CPU side of
+      // the shared-uniform change (per-object bind groups were paid here).
+      let _presentAcc = 0, _presentMs = 0;
+      const _renderTimed = (sc, cam) => {
+        const t0 = performance.now();
+        renderer.render(sc, cam);
+        _presentAcc += performance.now() - t0;
+      };
       // Headless is a fact about PRESENTATION, not about silicon: headless
       // Chromium on a real GPU IS hardware. It belongs to _softBlit (which
       // exists because a headless swapchain does not composite) and never
@@ -521,6 +531,13 @@ const TLX = (function () {
       // the defect is reproducible where it can be debugged.
       const _forceBatches = (function () {
         try { return localStorage.getItem("apex26.tlxForceBatches") === "1"; } catch (_) { return false; }
+      })();
+      // apex26.tlxSharedUniforms=0 — put tsl-lit's frame block back in three's
+      // per-object group for an A/B. Default ON: every frame-level uniform
+      // shares ONE buffer per program (tsl-lit.js SHARED_UNIFORMS) instead of a
+      // clone per pooled mesh re-uploaded per draw. Dev pin, not a RESET key.
+      const _sharedUniforms = (function () {
+        try { return localStorage.getItem("apex26.tlxSharedUniforms") !== "0"; } catch (_) { return true; }
       })();
       // apex26.tlxSkipBatches=1 — the OTHER direction, and the one a real
       // device needed. `skipBatches()` sheds the instanced scenery on a
@@ -1122,6 +1139,7 @@ const TLX = (function () {
           // draws nothing. Same _liteGpu gate as samples/outputType above.
           lit = TLXShaders.lit(THREE, TSL, { chunks, shadow: shadowSys, ssrTag: !!post,
             envCube: envRT ? envRT.texture : null, matMaps, lampGrid,
+            sharedUniforms: _sharedUniforms,
             maxLights: _liteGpu ? LightBudget.LITE : LightBudget.MAX });
         }
       } catch (e) {
@@ -3357,12 +3375,12 @@ const TLX = (function () {
             if (_softBlit) {
               const rt = _ensureBlitRT(W, H);
               renderer.setRenderTarget(rt);
-              renderer.render(scene, camera);
+              _renderTimed(scene, camera);
               _queueSoftBlit(rt);
               return;
             }
             renderer.setRenderTarget(null);
-            renderer.render(scene, camera);
+            _renderTimed(scene, camera);
           };
           const dropTo = (mode, mat) => {
             _drawMatMode = mode;
@@ -3430,7 +3448,7 @@ const TLX = (function () {
               try {
                 renderer.setRenderTarget(post.sceneTarget());
                 _gpuLastOperation = "render-scene";
-                renderer.render(scene, camera);
+                _renderTimed(scene, camera);
                 _gpuLastOperation = "render-post";
                 post.present(opts, _postF);
               } finally {
@@ -3464,6 +3482,7 @@ const TLX = (function () {
             catch (e) { persistFail(e); refuseTab(); }
           }
           _presentN++;
+          _presentMs += (_presentAcc - _presentMs) * 0.1; _presentAcc = 0;
           // AUTO SELF-HEAL: a WebGPU device that rejects work early is a
           // device that is drawing part of the scene, and nothing above can
           // see that — a rejected lit pipeline throws nothing on the JS side,
@@ -3755,8 +3774,10 @@ const TLX = (function () {
               gpuRecentErrors: _gpuRecentErrors.map(e => ({ ...e, lastResize: e.lastResize && { ...e.lastResize } })),
               presents: _presentN, healed: _healTried,
               // three refreshes every OBJECT-group uniform per draw (r185
-              // NodeManager), so the draw count is the CPU lever on a phone;
-              // reported here so the GOV `tlx` row can show it (`dc N`).
+              // NodeManager); tsl-lit's frame block left that group for
+              // renderGroup (SHARED_UNIFORMS), so what remains per draw is
+              // three's own object block. The draw count is still the CPU
+              // lever on a phone; reported so the GOV `tlx` row shows it (`dc N`).
               calls: (renderer && renderer.info && renderer.info.render) ? (renderer.info.render.drawCalls | 0) : null,
               arrayNearest: _arrayNearest,
               hasMaterialMaps: !!(lit && lit.hasMaterialMaps),
@@ -3784,10 +3805,25 @@ const TLX = (function () {
               const inf = renderer && renderer.info;
               if (inf) {
                 o.progs = (inf.programs && inf.programs.length) || 0;
-                if (inf.memory) { o.rGeo = inf.memory.geometries; o.rTex = inf.memory.textures; }
+                if (inf.memory) {
+                  o.rGeo = inf.memory.geometries; o.rTex = inf.memory.textures;
+                  // Uniform buffers three holds. With the frame block in
+                  // objectGroup this scaled with draws (one clone per pooled
+                  // mesh, plus one per lamp array); shared, it is one per
+                  // program. The structural before/after of tsl-lit's
+                  // SHARED_UNIFORMS — valid on a software adapter too.
+                  o.rUbo = inf.memory.uniformBuffers;
+                  o.rUboKB = inf.memory.uniformBuffersSize != null ? +(inf.memory.uniformBuffersSize / 1024).toFixed(1) : null;
+                }
                 if (inf.render) { o.calls = inf.render.calls; }
               }
             } catch (_) { /* three's info shape is version-dependent; absent is reported as absent */ }
+            // The render group's version must advance once per renderer.render():
+            // a frozen number means the shared frame block uploaded once and
+            // never again (a stuck sun). presentMs: JS EMA inside the render calls.
+            try { const g = lit && lit.uniforms && lit.uniforms.sunDir && lit.uniforms.sunDir.groupNode; o.groupVer = g ? g.version : null; } catch (_) { o.groupVer = null; }
+            o.sharedUniforms = !!(lit && lit.sharedUniforms);
+            o.presentMs = +_presentMs.toFixed(3);
             try { const b = renderer && renderer.backend; if (b && b.data && b.data.size != null) o.backendData = b.data.size; } catch (_) { /* DataMap may be a WeakMap */ }
             return o;
           },
