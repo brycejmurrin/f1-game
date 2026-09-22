@@ -49,7 +49,19 @@ async function propClearance(page) {
 
     for (let i = 0; i < count; i++) {
       const node = nodes[i];
-      for (const scale of [-0.75, -0.4, 0, 0.4, 0.75]) {
+      // THE LADDER REACHES THE EDGE AGAIN. Correcting halfWidth also SHRANK
+      // what this samples: at the pit exit the outermost sample fell from
+      // 6.60 m to 0.75 x 6.61 = 4.96 m, so the outer quarter of the racing
+      // surface stopped being checked at the very node the over-estimate had
+      // been reaching by accident. MEASURED sweep (day build, 2026-09-22): max
+      // prop intrusion is 0.00 m out to 0.9 hw, 1.07 m at 1.0 hw and 4.66 m at
+      // 1.25 hw. The 1.0 hit is this scan's own slack, not geometry — the
+      // triangle bbox below is grown by 0.3 m and pointInTriangle allows 2%
+      // barycentric overshoot, so a sample exactly on the white line still
+      // lands inside the pit wall's flush inner face. 0.9 is therefore the
+      // widest band that measures only the drivable surface, and it is ADDED
+      // to 0.75 rather than replacing it.
+      for (const scale of [-0.9, -0.75, -0.4, 0, 0.4, 0.75, 0.9]) {
         const lat = scale * halfWidth[i];
         const bank = Tracks.banking(bankTrack, node.frac != null ? node.frac * bankTrack.total : i / count * bankTrack.total, lat);
         const sample = {
@@ -245,7 +257,7 @@ test.describe("Zandvoort shared-foundation migration", () => {
 
     const clearance = await propClearance(page);
     // Prove the sampler measured something before trusting a clean result.
-    expect(clearance.samples).toBe(1200 * 5);
+    expect(clearance.samples).toBe(1200 * 7);
     expect(Number.isFinite(clearance.hwMin) && Number.isFinite(clearance.hwMax)).toBe(true);
     expect(clearance.hwMin).toBeGreaterThan(3);
     expect(clearance.hwMax).toBeLessThan(13);
