@@ -11,7 +11,7 @@ zero-dependency philosophy, this time in true 3D.
 ## The game
 
 Race the full **2026 grid** — 11 teams, 22 cars, real drivers and liveries —
-across the **24-round 2026 calendar** recreated as low-poly 3D tracks — plus 16
+across the **24-round 2026 calendar** recreated as low-poly 3D tracks — plus 28
 retired classics, 52 circuits in all: Bahrain, Monaco,
 Silverstone, Spa, Monza, Suzuka, Singapore, COTA, Interlagos, Las Vegas, the
 brand-new Madrid Madring (with its 24%-banked Monumental curve), Zandvoort in
