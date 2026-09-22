@@ -383,7 +383,20 @@ function garageValue(k, v) {
   if (k.indexOf("parts.") === 0 || k.indexOf("setup.") === 0) {
     return v && typeof v === "object" && !Array.isArray(v) ? v : undefined;
   }
-  return v;   // the four singles keep whatever shape they already had
+  // THE FOUR SINGLES USED TO KEEP WHATEVER SHAPE THEY ARRIVED IN. The liveries
+  // above are shape-checked because "A FILE IS PLAYER INPUT AND THE GARAGE DOES
+  // NOT DEFEND ITSELF" — and these four are read by code that defends itself no
+  // better: `team`/`driver` index Teams.LIST, and `customTeam` is pushed into it
+  // whole (js/career/custom-team.js). `{}` there was a boot-time TypeError.
+  // Rejecting one key still applies the rest of the file, which is the same
+  // bargain the custom-livery array already makes.
+  if (k === "customTeam") {
+    return v && typeof v === "object" && !Array.isArray(v)
+      && Array.isArray(v.drivers) && v.drivers.length > 0 ? v : undefined;
+  }
+  if (k === "customLogo") return typeof v === "string" ? v : undefined;
+  if (k === "team" || k === "driver") return Number.isInteger(v) && v >= 0 ? v : undefined;
+  return undefined;   // isGarageKey() admits nothing else — default deny
 }
 function applyGarage(file) {
   if (!file || file.format !== GARAGE_FORMAT) return { ok: false, reason: `not an ${GARAGE_FORMAT} file`, applied: 0, skipped: 0 };
