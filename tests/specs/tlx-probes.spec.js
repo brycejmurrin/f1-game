@@ -574,9 +574,12 @@ test.describe("TLX — boot", () => {
     await page.evaluate(() => window.__apex.race("monza"));
     await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 60_000 });
     await page.evaluate(() => window.__apex.park(0.1));
-    await page.waitForFunction(() => { const m = GLX.__tlx.memState(); return m.draws > 50 && m.rUbo != null; }, null, { polling: 100, timeout: 20_000 });
+    // Same budget as the track wait above: a SwiftShader frame here is seconds,
+    // and the first world frames also carry the material compiles (CI llvmpipe
+    // passes this in ~12 s; the in-container run needed ~40 s).
+    await page.waitForFunction(() => { const m = GLX.__tlx.memState(); return m.draws > 50 && m.rUbo != null; }, null, { polling: 100, timeout: 60_000 });
     const a = await page.evaluate(() => GLX.__tlx.memState());
-    await page.waitForFunction((v) => GLX.__tlx.memState().groupVer > v, a.groupVer, { polling: 100, timeout: 10_000 });
+    await page.waitForFunction((v) => GLX.__tlx.memState().groupVer > v, a.groupVer, { polling: 100, timeout: 60_000 });
     const b = await page.evaluate(() => GLX.__tlx.memState());
     expect(a.sharedUniforms).toBe(true);
     // Per-object clones would put rUbo at roughly draws x (1 + 5 lamp arrays);
