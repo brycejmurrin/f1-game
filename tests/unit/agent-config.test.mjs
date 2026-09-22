@@ -144,17 +144,73 @@ test("the Bash guard blocks every shape of the kill that orphans browsers", () =
     "killall chrome",
     "kill -9 $(pgrep -f chrome)",          // substitution: no literal pid
     "pgrep -f chrome | xargs kill -9",     // pipe: no literal pid
+    // 2026-09-22: the two bypasses a review reproduced — a shell -c wrapper
+    // and an absolute path — plus the wrapper-and-path combination.
+    'sh -c "pkill -f chrome"',
+    "bash -lc 'pkill -f chrome'",
+    "/usr/bin/pkill -f chrome",
+    "env /usr/bin/pkill -9 -f node",
+    "sh -c 'echo hi; pkill -f chrome'",
   ]) assert.equal(run(cmd).status, 2, `bash-guard must block: ${cmd}`);
   // …and stays out of the way of ordinary work, including a command that only
   // MENTIONS the words outside command position. The heredoc case is not
   // hypothetical: the pgrep rule went in unanchored and blocked the very
-  // commit that added it, because the message described what it blocks.
+  // commit that added it, because the message described what it blocks. The
+  // quoted `&&` case is the false positive the same review found: `&& pkill`
+  // inside a string read as command position.
   for (const cmd of [
     "git status",
     "ps -eo pid,comm",
     'echo "pkill -f chrome"',
+    "echo 'note: && pkill -f chrome is bad'",
+    "printf '%s' 'x; /usr/bin/pkill -f chrome'",
     "git commit -F - <<'MSG'\nthe guard now covers a pgrep -f list piped into xargs kill\nMSG",
   ]) assert.equal(run(cmd).status, 0, `bash-guard must allow: ${cmd}`);
+});
+
+test("the Bash guard refuses a browser run from inside a subagent, and only there", () => {
+  // AGENTS.md §Verification 10 was prose plus a body lint; every agent carries
+  // Bash. Hook input from a subagent names it (agent_id / agent_type, or a
+  // transcript under subagents/ — the shape this session's own transcripts
+  // have); the main session carries none of those and keeps every command.
+  const run = (command, sub) => spawnSync("bash", [path.join(ROOT, ".claude/hooks/bash-guard.sh")], {
+    input: JSON.stringify({
+      tool_name: "Bash", tool_input: { command },
+      ...(sub ? { transcript_path: "/root/.claude/projects/p/s/subagents/agent-abc.jsonl" } : {}),
+    }),
+    encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT },
+  });
+  const browser = [
+    "node tools/ci/test-bg.mjs smoke",
+    "npx playwright test tests/specs/autopilot.spec.js",
+    "npm test -- tests/specs/autopilot.spec.js",
+    "node tools/ci/verify-change.mjs --wait",
+    "node tools/ci/test-solo.mjs tests/specs/autopilot.spec.js",
+    "python3 tools/mcp/probe-mcp.py chrome-start",
+  ];
+  const nodeOnly = [
+    "node tools/ci/test-bg.mjs --status",
+    "node tools/ci/verify-change.mjs --fast --json",
+    "npm run test:tooling-fast",
+    "node --test tests/unit/ratchets.test.mjs",
+    "node tools/track/verify-track.cjs monza",
+  ];
+  for (const cmd of browser) assert.equal(run(cmd, true).status, 2, `a subagent must not run: ${cmd}`);
+  for (const cmd of nodeOnly) assert.equal(run(cmd, true).status, 0, `a subagent may run: ${cmd}`);
+  for (const cmd of browser) assert.equal(run(cmd, false).status, 0, `the main session may run: ${cmd}`);
+});
+
+test("the edit guard treats tests/data/ratchets.json as tool-written", () => {
+  // A ceiling moves through ratchets.mjs (--auto-raise in the commit hook,
+  // --update with a reason); a hand edit was unblocked until 2026-09-22.
+  const hook = path.join(ROOT, ".claude/hooks/protect-files.sh");
+  const run = (payload) => spawnSync("bash", [hook], {
+    input: JSON.stringify(payload), encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT },
+  });
+  const file = path.join(ROOT, "tests/data/ratchets.json");
+  assert.equal(run({ tool_name: "Edit", tool_input: { file_path: file, old_string: "a", new_string: "b" } }).status, 2);
+  assert.equal(run({ tool_name: "Write", tool_input: { file_path: file, content: "{}" } }).status, 2);
+  assert.equal(run({ tool_name: "Edit", tool_input: { file_path: path.join(ROOT, "docs/PHYSICS.md"), old_string: "a", new_string: "b" } }).status, 0);
 });
 
 test("the edit guard refuses a generated package.json block through Write as well as Edit", () => {

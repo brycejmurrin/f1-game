@@ -169,6 +169,14 @@ if (args.includes("--last-failed") && process.env.APEX_LAST_RUN_FILE) {
     console.error(`[playwright] --last-failed: could not stage ${process.env.APEX_LAST_RUN_FILE} (${e.message}); running everything named`);
   }
 }
+// A pass that needed a retry is a red, not a green (AGENTS.md §Verification 9,
+// 2026-09-22): `retries: 1` in CI turns an intermittent failure into a silent
+// pass, and the live reporter's "flaky" line is easy to skim past. Opt in with
+// APEX_FAIL_ON_FLAKY=1 and Playwright exits non-zero on any flaky test; the
+// gate flips it on once the known flakes are fixed or quarantined by name.
+if (process.env.APEX_FAIL_ON_FLAKY === "1" && !args.includes("--fail-on-flaky-tests")) {
+  args.push("--fail-on-flaky-tests");
+}
 const cli = join(ROOT, "node_modules", ".bin", "playwright");
 const child = spawn(cli, ["test", ...args], {
   cwd: ROOT,

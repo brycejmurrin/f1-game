@@ -18,7 +18,7 @@
       const EARTH = [0.62, 0.44, 0.28];
       const BRICK = [0.58, 0.36, 0.27], BRICK_D = [0.48, 0.29, 0.22];
       const IRON = [0.72, 0.71, 0.68], OXIDE = [0.56, 0.26, 0.18];
-      const DUMP = [0.76, 0.70, 0.48];          // cyanided reef sand
+      const DUMP = [0.78, 0.72, 0.52];          // pale cyanided reef sand
 
       // -side, matching the fleet idiom (albert_park:608, estoril:195,
       // interlagos:171, madrid, shanghai all write `const IN = -side`):
@@ -47,10 +47,10 @@
           addBox(out, vadd(vadd(a.c, a.u, ht * 0.68), a.r, dr * spread * 0.22),
             [spread * 0.44, 0.7, 0.22], [0.34, 0.26, 0.18], b);
         out._mat = MAT.FOLIAGE;
-        addBox(out, vadd(a.c, a.u, ht * 0.80), [spread, 0.9, spread],
+        // One broad, shallow umbrella: the crown must read horizontally,
+        // never as the stacked round canopy of a European parkland tree.
+        addBox(out, vadd(a.c, a.u, ht * 0.82), [spread, 0.65, spread * 0.48],
           h < 0.6 ? THORN : THORN_D, b);
-        addBox(out, vadd(a.c, a.u, ht * 0.94), [spread * 0.6, 0.7, spread * 0.6],
-          h < 0.6 ? THORN_D : THORN, b);
         out._mat = 0;
       });
       every(24, (k) => {
@@ -251,8 +251,11 @@
         const tx = cx + Math.cos(ang) * rr, tz = cz + Math.sin(ang) * rr;
         if (onTrack(tx, tz, baseR + 20)) continue;
         out._mat = MAT.SAND;
-        addFrustum(out, [tx, pyMin - 1, tz], baseR, topR, h, DUMP, 7, null);
-        addFrustum(out, [tx, pyMin - 1 + h, tz], topR, topR * 0.94, 1.2, [0.68, 0.63, 0.44], 7, null);
+        // Four planar batters and a thin square cap produce the characteristic
+        // engineered mine-dump mesa: straight sides and a dead-level skyline.
+        addFrustum(out, [tx, pyMin - 1, tz], baseR, topR, h, DUMP, 4, null);
+        addFrustum(out, [tx, pyMin - 1 + h, tz],
+          topR, topR, 0.6, [0.72, 0.67, 0.48], 4, null);
         out._mat = 0;
       }
       {

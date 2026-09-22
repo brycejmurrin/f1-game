@@ -10,16 +10,8 @@ session over one of them); most are not. Full map (three MCP
 servers, wrap table, never-wrap): [`docs/AGENT-SURFACE.md`](../../docs/AGENT-SURFACE.md).
 
 Descriptions say **when** to load the skill; bodies carry the workflow and
-`references/` carry the detail. 26 skills (44 until 2026-09). The folded ones
-are named in the rows that absorbed them: `bump-cache`, `deploy-merge`,
-`test-timeout-triage` → check-changes; `motion-capture`, `perf-profile`,
-`car-viewer`, `debug-cameras` → playwright-probe; `bake-lighting` →
-lighting-tuner; `scene-graph-instancing` → scenery-dress; `debug-state`,
-`debug-tracks` → agent-view; `game-feel` → tune-physics;
-`restructure-screens-css` → css-play; `cross-backend-parity` →
-`../../docs/ARCHITECTURE.md` §Cross-backend parity. `apex-env-setup`,
-`pixel-perfect`, `webapp-testing`, `webgpu-inspector` were deleted: env setup
-is AGENTS.md §Verification 1 + `tools/env/cloud-agent-install.sh`.
+`references/` carry the detail. 26 skills (44 until 2026-09; which folded into
+which: `docs/notes/AGENT-TOOLING-RESEARCH-2026-09-22.md` §4.2).
 
 **A merge is only correct when the hub's `description` absorbs the trigger
 words.** That is what a host auto-selects on, so a fold that leaves the
@@ -56,10 +48,10 @@ stayed separate in the 2026-09-03 pass.
 | **webgl-debug** | Blank/dark GLX canvas, shadow acne, bloom, HDR, shader/uniform bugs, GLX renderer artifacts. |
 | **webgpu-debug** | WGX black screen, NaN-white road, WGSL compile/validation failures, device lost, silent fallback to WebGL2. |
 
-Cache busting is the deploy's job: the committed shell reads `?v=dev` on
-every tag and `pages.yml` stamps content hashes while staging. Nothing to
-bump after a `js/`/`css/` edit; after a `tools/manifest.cjs` change run
-`node tools/gen/gen-shell.mjs` (check-changes `references/bump.md`).
+The committed shell reads `?v=dev` on every tag and the deploy stamps content
+hashes while staging: nothing to bump after a `js/`/`css/` edit; after a
+`tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs` (check-changes
+`references/bump.md`).
 
 **Routing that used to sit in the descriptions** (moved out 2026-09-16 — a
 description is loaded every turn; this table is not): hook catalogs →

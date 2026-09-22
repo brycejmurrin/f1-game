@@ -34,6 +34,16 @@ cd "$ROOT" || exit 0
 
 say() { printf '[post-edit] %s\n' "$*"; }
 
+# Any js/ file: does it still parse? (folded in from post-edit-check.sh,
+# 2026-09-22 — the two hooks landed in parallel sessions; this one's advisory
+# shape won, the syntax check came along.) Sub-second, so no debounce.
+case "$REL" in
+  js/*.js)
+    if ! OUT=$(node --check "$FILE" 2>&1); then
+      say "$REL does not parse:"; printf '%s\n' "$OUT" | head -n 8
+    fi ;;
+esac
+
 case "$REL" in
   tools/manifest.cjs)
     if node tools/gen/gen-shell.mjs --check >/dev/null 2>&1; then say "manifest.cjs: index.html / js/roster.js / tools/carview.html are in sync"

@@ -1,7 +1,8 @@
 ---
 name: deploy-research
 description: Public-web and post-deploy research — `curl` for the deployed artifact (it reaches github.io from this container and is the only way to read a `<meta>` tag), the host fetch/search tools for prose pages and search. Use proactively for live apex-sha / version.json / shipped JS markers, deploy lag checks, and external track or reference gathering that would flood the main context. Never Chrome DevTools, never Playwright, never the in-repo tinyfish wrapper.
-model: inherit
+model: haiku
+maxTurns: 10
 readonly: true
 is_background: true
 background: true
