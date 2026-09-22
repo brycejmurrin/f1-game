@@ -1452,7 +1452,7 @@ function ctxKey(ctx) {
   return `${ctx.track ? ctx.track.id : "-"}|${ctx.weather || "-"}|${ctx.tod || "-"}`
          + `|${ctx.wins | 0}|${ctx.night ? 1 : 0}`;
 }
-let lastTrace = -1e9;
+let lastTrace = -1e9, traceFail = 0;
 function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh) {
   if (!_gfx) return;
   rebuild(team, liv, boardInfo(team, getParts, driverIdx), ctx);
@@ -1499,13 +1499,21 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh) {
   }
   // The engineers' traces tick over every 1.5 s: repaint one region of the
   // live atlas and re-upload it (1 MB, a quarter of the dress).
-  if (liveTex && liveCanvas && now - lastTrace > 1500) {
+  // Three strikes, as the dress: the atlas stays up with its last traces. A
+  // freed handle is dropped, not drawn — GLX's deleteTexture leaves it truthy,
+  // so drawDecal would bind a dead texture (INVALID_OPERATION per decal).
+  if (liveTex && liveCanvas && traceFail < 3 && now - lastTrace > 1500) {
     lastTrace = now;
+    let freed = false;
     try {
       paintTrace(liveCanvas, liv, now);
-      if (_gfx.freeTexture) _gfx.freeTexture(liveTex);
+      if (_gfx.freeTexture) { _gfx.freeTexture(liveTex); freed = true; }
       liveTex = _gfx.createTexture(liveCanvas);
-    } catch (e) { lastTrace = 1e12; }
+    } catch (e) {
+      traceFail++;
+      if (freed) liveTex = null;
+      Log.warn("game", `GarageScene live trace failed: ${e && e.message}`);
+    }
   }
   if (liveTex) {
     if (liveMesh.floor) _gfx.drawDecal(liveMesh.floor, MAT_I, liveTex, FLOOR_DECAL_OPTS);
