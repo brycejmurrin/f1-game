@@ -172,6 +172,37 @@ test.describe("Apex 26 — steering", () => {
     const corners = await page.evaluate(() => window.__apex.corners());
     expect(corners.length).toBeGreaterThan(0);
 
+    // FROZEN MEASUREMENT — the whole jump / settle / step / probe sequence runs
+    // inside ONE page.evaluate, so no live rAF frame can land between the steps.
+    //
+    // The shared `run()` above spreads that sequence over four round-trips, and the
+    // game loop keeps driving the car in the gaps. MEASURED 2026-09-22, five repeats
+    // at frac 0.0676, the corner this test fails on:
+    //
+    //   live    roadFollow 0    [1.172, 1.172, 1.477, 1.477, 1.477]   22.5% spread
+    //   live    roadFollow 0.6  [0.967, 1.082, 0.796, 0.790, 0.790]   33.0% spread
+    //   frozen  roadFollow 0    [1.172 x5]                             0.0% spread
+    //   frozen  roadFollow 0.6  [0.790 x5]                             0.0% spread
+    //
+    // The live readings are BIMODAL, not scattered: one stray frame or none. The
+    // physics is deterministic to three decimals — only the measurement was not,
+    // and the worst live pairing gives 7.7% recovery where the best gives 46.5%.
+    // Frozen, it is 32.6% every time. PR #207 found the same mechanism under
+    // "racing-line assist off by default"; this is the same disease in this test.
+    //
+    // Only this test uses it. The shared `run()` is left alone: every other test in
+    // the file was measured with it, and re-basing them is not this fix's business.
+    const frozenRun = (frac, rf) => page.evaluate(({ f, v }) => {
+      window.__apex.setPhysics({ roadFollow: v });
+      window.__apex.jump(f, 13, 0);
+      window.__apex.setInput({ steer: 0, throttle: false, brake: false });
+      window.__apex.step(1 / 60, 3);
+      const before = window.__apex.probe();
+      window.__apex.step(1 / 60, 70);
+      window.__apex.clearInput();
+      return { before, after: window.__apex.probe() };
+    }, { f: frac, v: rf });
+
     // Sample several distinct corners across the lap.
     const sample = corners.filter((_, i) => i % 4 === 0).slice(0, 5);
     let checked = 0;
@@ -179,23 +210,47 @@ test.describe("Apex 26 — steering", () => {
       // Road-follow OFF = pure world-space: with no input the car holds a straight
       // heading and runs wide to the OUTSIDE (+sign(k)). This is the baseline the
       // DRIVING-HELP assist exists to counter.
-      await page.evaluate(() => window.__apex.setPhysics({ roadFollow: 0 }));
-      const off = await run(page, { frac, speed: 13, throttle: false, ticks: 70 });
+      const off = await frozenRun(frac, 0);
       if (Math.abs(off.before.k) < 0.012) continue;   // skip near-straight false peaks
       checked++;
       const dxOff = off.after.x - off.before.x;
       expect(Math.sign(dxOff)).toBe(Math.sign(off.before.k));   // off-model runs wide
       expect(Math.abs(dxOff)).toBeGreaterThan(0.6);             // a real slide, not a wobble
-      // Road-follow, once opted into, steers into the bend through the tyres,
-      // so the car takes a MEASURABLY different line than with the assist off. (We
-      // assert the assist is active and alters the corner rather than a fragile
-      // "stays nearer the line": with a real slip model, steering into a corner also
-      // develops body slip, so the lateral effect is more nuanced than the old
-      // kinematic model — that quality is covered by the on-device feel + the
-      // autopilot driving safely, not this unit check.)
-      await page.evaluate((rf) => window.__apex.setPhysics({ roadFollow: rf }), def);
-      const on = await run(page, { frac, speed: 13, throttle: false, ticks: 70 });
-      expect(Math.abs(on.after.x - off.after.x)).toBeGreaterThan(0.25);
+      // Road-follow, once opted into, steers into the bend through the tyres, so it
+      // EATS INTO the outward slide measured just above. That is the contract, and
+      // it is asserted as a fraction of that slide rather than as a fixed distance.
+      //
+      // WHY NOT A FIXED DISTANCE. This line used to read
+      // `expect(Math.abs(on.after.x - off.after.x)).toBeGreaterThan(0.25)`, and it
+      // was red on the deploy tip for days at a byte-identical 0.15284059935810101.
+      // Two things were wrong with it and neither was the game (2026-09-22, ladder
+      // probe at roadFollow 0.3 / 0.6 / 1.0, five sampled corners):
+      //
+      //   corner  k        off     rf0.6           rf1.0
+      //   0.0676  0.01490  1.172   0.967 (-17.5%)  0.625 (-46.7%)
+      //   0.1872  0.01618  0.992   0.388 (-60.9%)  0.111 (-88.8%)
+      //
+      //   1. The assist is working and monotonic in its gain — but HOW FAR it moves
+      //      the car is not a constant. Those two corners differ by 8% in curvature
+      //      and by 4x in absolute separation, so the `|k| > 0.012` gate above does
+      //      not select corners where any fixed metre value is reachable. The share
+      //      of the slide it recovers is the stable quantity; the metres are not.
+      //   2. `Math.abs(on - off)` never looked at the SIGN. A build whose assist
+      //      shoved the car further OUT of the bend passed it just as happily as one
+      //      that pulled the car in. The title says "changes the cornering line";
+      //      this now says which way, which is the half that was missing.
+      //
+      // The floor is 15% against a deterministic 32.6% on the weakest corner sampled
+      // (60.9% on the other): a floor is a floor, not a fit. If the assist is ignored entirely, `on` equals `off`, the recovery is
+      // 0% and both assertions fail — which is the mutant this test has to catch.
+      const on = await frozenRun(frac, def);
+      const dxOn = on.after.x - on.before.x;
+      expect(Math.sign(dxOn)).toBe(Math.sign(off.before.k));   // still runs wide, just less
+      const recovered = (Math.abs(dxOff) - Math.abs(dxOn)) / Math.abs(dxOff);
+      expect(recovered,
+        `roadFollow ${def} recovered ${(recovered * 100).toFixed(1)}% of the ${Math.abs(dxOff).toFixed(3)} m ` +
+        `slide at frac ${frac.toFixed(4)} (k ${off.before.k.toFixed(5)}); the assist is not reaching the tyres`
+      ).toBeGreaterThan(0.15);
     }
     await page.evaluate(() => window.__apex.setPhysics({ roadFollow: 0 }));
     expect(checked).toBeGreaterThan(0);
