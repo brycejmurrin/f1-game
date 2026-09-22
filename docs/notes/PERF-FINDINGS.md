@@ -28,6 +28,8 @@ thing**, which is how this project has lost the most time.
 | Is a frame GPU-bound? | `__apex.gpuTimer()` | **No** — returns `-1` under SwiftShader. Needs Chrome/Android on real hardware. |
 | Did a shader/fill change help? | frame timing | **No.** See §3. |
 | Does an element overlap another? | Playwright capture, **never** an MCP screenshot | see CHROME-DEVTOOLS-MCP.md trap 6 |
+| Does the renderer keep BUILDING things after warm-up? | `tools/gfx/frame-hitch.mjs <track> --backend three` | **Yes** — it counts `linkProgram`/`createRenderPipeline`/`createTexture` calls, and counts are exact on a software adapter even where the milliseconds are not. |
+| Does it lag every few seconds? | `__apex.perf().frameTimes` (p99 vs p50) on the device that has it | **No** — 16 rAF frames in 40 s here. The ring is valid; this box's frame CADENCE is not. |
 | Did a change move the FRAME RATE? | `gpu-census.yml` `fps` / `frames` / `tier` / `scale` | **No — ±54 % run to run on IDENTICAL code.** §2w. Two runs of the same commit gave 26.9 and 41.4. Never read it against a single before/after. |
 | Did a change move the LOOK? | `gpu-census.yml` `meanLuma` | **Yes** — 72.0 across three runs, two commits and two runners in §2w. The stable channel of the same instrument. |
 
@@ -4874,3 +4876,128 @@ night, clock pinned): all four legs `phase=done ok=true gpuErrors=0`, no FAILED
 section — WebGPU meanLuma 51.4, WebGL2 (Metal ANGLE) 51.1, GLX 45.7, WGX 58.9.
 That is the revert criteria clear on hardware for the decal block as well; the
 fps and JS-ms columns are single samples and are not read (§2w).
+
+## 2aa. "It lags every few seconds" was the governor chasing the track layout (2026-09-22)
+
+The report was about three.js/WebGPU. The cause is in `js/perf/governor.js` and
+is backend-wide; TLX shows it first because it is the backend that sits nearest
+the budget edge (§2t) and the one with the most render targets to rebuild.
+
+### The mechanism
+
+Every render-scale change reallocates the whole HDR/bloom/SSAO/god-ray target
+set — `setRenderScale -> resize -> createTargets`, ~12 targets on TLX plus
+`renderer.setSize()`. The governor's own header has called that "a visible
+hitch" since the oscillation fix that named it. What nothing checked is HOW
+OFTEN the governor was asking for one.
+
+A climb was verified by surviving **one evaluation** (`_pendingVerify`, ~4.75 s)
+and nothing else. `_upBackoff` — the doubling patience that a refused climb
+earns — was reset by every climb that merely passed that check. And a cut
+recorded that the scale LEVER had not helped (`_scaleFutile`) but never that a
+particular scale VALUE had missed, so one hold later the ladder climbed back
+toward the exact resolution just measured as too expensive, in eight +0.06
+steps, each one a reallocation.
+
+Put those together on a circuit with one heavy section per lap — which is every
+circuit — and the governor cuts in the heavy part, climbs back through the
+light part, and repeats next lap, forever.
+
+### Measured, against the real `tick()`
+
+A 26 ms section for 8 s of a 35 s lap, 13 ms elsewhere, both coupled to the
+scale; 300 s; reallocations counted at the `setRenderScale` contract, dead zone
+and all (`tests/unit/perf-governor.test.mjs`).
+
+| device | before | after |
+|---|---|---|
+| one heavy section per lap | **30 reallocations**, median gap **8.1 s**, clusters at **4.7 s**, ends at scale 1.00 | **2**, both inside the first 8 s, settles at 0.80 |
+| slow ONLY at full scale (0.9 holds, 1.0 misses) | **12**, seven of them in the opening minute (1.0, 11.3, 16.0, 21.1, 31.3, 36.4, 56.4 s) | **9**, three in the opening minute, then probes 30 s → 41 s → 81 s apart |
+| genuinely too slow throughout | 11, gaps 10.6 → 80.4 s | 9, gaps 30.5 → 80.7 s (the pre-existing backoff, unchanged) |
+| one 6 s transient, healthy after | 2, back to 1.00 | 2, back to 1.00 |
+| thermal ramp / healthy / marginal | 0 | 0 |
+
+Thirty hitches that ended at the scale they started from: the whole cycle was
+cost with no product. That is the player's "every few seconds", produced by the
+component whose job is to keep frames smooth.
+
+### The fix — three parts, all in `js/perf/governor.js`
+
+1. **A cut that undoes a climb still on probation is charged like a refused
+   climb.** `_pendingVerify` catches a climb that was wrong within one
+   evaluation; it cannot see one the next heavy corner takes back eight seconds
+   later. Same mistake — the headroom was a gap in the LOAD, not the device
+   getting faster — so it now costs the same doubling patience. Patience is
+   restored only by a climb that outlives `CLIMB_SURVIVE_MS`.
+2. **A cut remembers the scale that missed** (`_scaleCap`), and the ladder never
+   climbs to within one down-step of it. This is what actually ends the cycle:
+   patience alone only spaces the same wrong climb further apart.
+3. **The climb halves the gap instead of crawling it.** Eight +0.06 steps to
+   undo one cut was eight reallocations, and the crawl was the only thing
+   guarding against overshoot. `_scaleCap` is that guard now, so the bigger step
+   is the safer one: four steps, and one that overshoots is reverted by the same
+   verify and lowers the ceiling onto the rung it refused, which a crawl never
+   learned to do.
+
+The ceiling EXPIRES on unbroken headroom, or this would be the one-way door the
+`RESTORE_UNDER = 4.2` post-mortem in that file's header was written to close.
+UNBROKEN is the whole discriminator, and it is the same question part 1 asks
+from the other side, so it reuses the same constant: the quiet part of a lap is
+shorter than `CLIMB_SURVIVE_MS`; a device that actually recovered stays quiet.
+A 100 s stretch of flawless frames still restores full resolution.
+
+### Two hypotheses this round killed before writing code
+
+- **TLX's 64-entry material cache thrashing.** `materialFor`'s own comment says
+  "a 22-car race blows past 64 distinct keys easily", which would mean a new
+  `lit.makeMaterial()` — and on WebGPU a pipeline build — mid-race. Measured
+  with `tools/gfx/frame-hitch.mjs`: **1 `linkProgram` and 1 `compileShader`** in
+  25 s of racing after warm-up on montreal. It is not happening.
+- **The env probe.** Already opted out on TLX by default since 2026-09-10
+  (`_envOptOut`), and on completion it mutates `envCubeNode.value` and reuses a
+  stable `CubeRenderTarget` rather than replacing identities, so it does not
+  invalidate three's RenderObject cache the way three.js #33685 describes.
+
+### Round two: the first fix was a no-op on the commonest device
+
+An adversarial review of the first commit found that `_scaleCap` was
+initialised to 1 and tested with `>= 1`, so "nothing refused yet" and "scale
+1.0 missed the budget" were the same state — and 1.0 is where a first cut
+almost always comes FROM. On a device that holds the budget at 0.9 and misses
+only at full resolution — the shape this file's own header names, "a phone on
+GRAPHICS: HIGH ... sits right at that edge" — the cap was never established at
+all. The review proved it the only way that settles it: the fixed and unfixed
+governors produced **byte-identical reallocation timestamps** on that input.
+
+The sentinel is `Infinity` now, which no cut and no refused climb can produce,
+so `> 1` means exactly "no measurement yet". Two smaller things came with it:
+
+- `sentinelResume()` (a tab un-hide mid-race, not a race start) left `_sinceUp`
+  frozen, because it only ages inside `tick()` and a hidden tab ticks none. A
+  climb accepted before a ten-minute background stint came back reading as
+  seconds old, and the first cut after the resume charged it the full doubling
+  penalty for load it was never tested against. A tab return is not evidence —
+  the same reason this function already refuses to reset the EMAs — so the
+  probation is dropped rather than charged.
+- The snap threshold moved from 0.09 to 0.12, because it has to clear the width
+  of a CUT (0.1) or the commonest climb there is, undoing a single cut from 0.9
+  back to 1.0, costs two reallocations instead of one. Smallest snap delta the
+  wider band admits is 0.05, still far outside `setRenderScale`'s 0.02 dead
+  zone (brute-forced over every reachable scale and ceiling: 210 pairs, no
+  spin, nothing pinned short of its ceiling, floor → full still lands on
+  exactly 1.0 in four steps).
+
+The lesson is the one this register keeps relearning: **a test that passes on
+the unfixed code is not coverage.** The first commit shipped with two tests
+that both passed, and neither constructed the slow-only-at-full-scale shape;
+the pre-existing "a refused climb backs off" test lives in exactly that
+scenario and produced an identical event sequence either way. The third test
+now pins it, and it fails on the unfixed governor AND on the first commit.
+
+### The acceptance test stays: COUNT THE MOVES, not the frame time
+
+This container renders 16 rAF frames in 40 s, so no frame-cadence measurement
+here means anything (§2z made the same mistake in the other direction). What IS
+exact here is how many times the governor asks for a reallocation, which is a
+pure function of `tick()` and needs no GPU at all. Any future claim about this
+behaviour should be a move count over a simulated race, not a frame time.
