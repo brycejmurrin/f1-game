@@ -464,28 +464,34 @@ function restoreFreePlaySelection() {
   driverIdx = store.get("driver", 0);
   clampDriverIdx();
 }
-let difficulty = store.get("difficulty", "normal");
+// The fallback below decides nothing: store.get's _def() answers a key listed
+// in js/data/settings-defaults.js from that file, so the literal only mirrors
+// it (tests/unit/settings-defaults.test.mjs fails the build if they disagree).
+let difficulty = store.get("difficulty", "hard");
 // RELIABILITY — "off" | "low" | "real" (js/race/reliability.js), a standing
 // preference like difficulty. Ships OFF: this key is new for every existing
 // save, so OFF is the only default that does not silently start retiring cars
 // in a game somebody was already halfway through.
 let raceReliability = store.get("reliability", "off");
-// TYRE WEAR — "off" | "light" | "real" (js/physics/tyre-model.js). SHIPS LIGHT.
+// TYRE WEAR — "off" | "light" | "real" (js/physics/tyre-model.js). SHIPS REAL,
+// from js/data/settings-defaults.js like difficulty above — the literal here
+// only mirrors it.
 //
 // It shipped OFF, and off is not a quiet default here the way RELIABILITY's is:
 // it gates the ENTIRE pit feature — no lane, no box, no stop, no prompt, and the
 // AI never pits either — so a player who never opened SETTINGS had a pit lane
 // built into every circuit and no way to discover any of it existed.
 //
-// LIGHT rather than REAL: sets last roughly twice as long, so a stop is a choice
-// rather than a schedule. REAL is one click, OFF is still there, and a stored
-// preference beats this default, so nobody who already chose is overridden.
+// REAL is the full rate (a soft is spent near 37% of a race distance), so a stop
+// is part of the plan. LIGHT scales wear by 0.55 — sets last ~1.8x as long, and
+// a stop becomes a choice — and OFF is still there; a stored preference beats
+// this default, so nobody who already chose is overridden.
 //
 // OFF's other job was being a true no-op through the grip seam, which kept
 // tests/specs/physics-characterization.spec.js bit-identical. That is pinned
 // where it belongs now: tests/helpers/fixtures.js sets this key "off" for every
 // spec, so the baselines measure the DRIVING MODEL, not the current default.
-let raceTyreWear = store.get("tyreWear", "light");
+let raceTyreWear = store.get("tyreWear", "real");
 // ACTIVE AERO usage — "manual" (the driver's own switch, the default) or
 // "auto". Inside an activation zone X-mode has no cost or downside, so the
 // optimal play is unconditionally on — which is what the AI does in one line.

@@ -540,7 +540,7 @@ const TyreModel = (function () {
     // STRATEGY has to plan against. lifeLaps() is the nominal, level-free life,
     // and wear then accrues at LEVELS[level]/lifeLaps per lap, so a set survives
     // lifeLaps / LEVELS[level] laps. The planner used to ask lifeLaps() direct,
-    // which is only right at `real` (1.0); at the SHIPPED DEFAULT `light` (0.55)
+    // which is only right at `real` (1.0); at `light` (0.55, one click away)
     // a set lasts 1.82x longer and the AI pitted for tyres it had not used —
     // measured identical first stops (lap 7) and stop counts at light and real,
     // because the plan could not see the setting. At `off` nothing wears, so the
