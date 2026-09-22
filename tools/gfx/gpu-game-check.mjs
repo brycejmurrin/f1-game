@@ -186,7 +186,13 @@ try {
       _hStackBudget--;
       let sig = "?";
       try {
-        const raw = (new Error().stack || "").split("\n").slice(3, 18);
+        // THE WHOLE STACK for the OURS filter. Run 199 kept fifteen frames
+        // and every WebGPU compile came back "(none in window)": three's
+        // render path from _getRenderPipeline up to renderer.render() is
+        // deeper than that, and the frame that names a fix sits above it.
+        // A bounded sample (200) of full stacks is cheap; a window that
+        // never reaches our code is worthless.
+        const raw = (new Error().stack || "").split("\n").slice(3);
         const fr = raw.map((l) => l.trim().replace(/^at\s+/, "").replace(/\?v=[a-z0-9]+/g, "").replace(/https?:\/\/[^\s)]*\//g, ""));
         const ours = fr.filter((l) => !/three\.webgpu|three\.core|three\.tsl/.test(l));
         sig = fr.slice(0, 2).join(" <- ") + "  ||OURS|| " + (ours.slice(0, 5).join(" <- ") || "(none in window)");
