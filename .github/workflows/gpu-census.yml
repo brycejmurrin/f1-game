@@ -432,6 +432,12 @@ jobs:
                 const a = _mmB[0].mm, z = _mmB[_mmB.length - 1].mm;
                 const d = (k) => (a[k] != null && z[k] != null) ? `${k} ${a[k]}→${z[k]} (+${z[k] - a[k]})` : `${k} ?`;
                 rows.push(`${" ".repeat(8)}mats:  ${["progs", "mats", "pool", "miss", "evict"].map(d).join("  ")}`);
+                // The keys minted during the window: the recent misses of the
+                // last beat that the first beat had not seen (emissive, alpha,
+                // roughness, metalness, specular, detail, clearcoat, carPaint,
+                // sparkle, then the flags).
+                const _k0 = new Set(a.keys || []), _kNew = (z.keys || []).filter((k) => !_k0.has(k));
+                if (_kNew.length) rows.push(`${" ".repeat(8)}       minted: ${_kNew.slice(-8).join(" | ")}`);
               }
               const _ft = g.frameTail;
               if (_ft && _ft.p99 != null) {

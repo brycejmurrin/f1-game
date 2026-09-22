@@ -438,12 +438,14 @@ const CarDraw = (function () {
         _digT[12] = 0.048; _digT[13] = 0.001; _digT[14] = -0.0315;
         M4.mulTo(_digM, _rigB, _digT);
         _digM[4] *= en; _digM[5] *= en; _digM[6] *= en;
-        G.gfx.draw(getErsBar(), _digM, c.deploying ? (_rigFxA.alpha = 0.75 + 0.25 * Math.sin(G.raceT * 22), _rigFxA) : fx);
+        // Blinks, not pulses: alpha is in TLX's material key (1/32 steps), and a
+        // sine minted a material — a program — per step (gpu-census 212).
+        G.gfx.draw(getErsBar(), _digM, c.deploying ? (_rigFxA.alpha = Math.sin(G.raceT * 22) > 0 ? 1.0 : 0.5, _rigFxA) : fx);
       }
       // OVERTAKE lamp on the wheel: white when armed, pulsing purple while active
       // (the floating HUD OVERTAKE text is hidden in cockpit view).
       if (c.otT > 0) {
-        G.gfx.draw(getOtLamp(true), _rigB, (_rigFxA.alpha = 0.7 + 0.3 * Math.sin(G.raceT * 18), _rigFxA));
+        G.gfx.draw(getOtLamp(true), _rigB, (_rigFxA.alpha = Math.sin(G.raceT * 18) > 0 ? 1.0 : 0.4, _rigFxA));
       } else if (c.otArmed) {
         G.gfx.draw(getOtLamp(false), _rigB, fx);
       }

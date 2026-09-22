@@ -671,7 +671,7 @@ try {
             // re-mint a material and so a program). The container measured
             // this parked; the driven window is where it can move.
             mm: (() => { try { const t = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null; const m = t && t.memState ? t.memState() : null;
-              return m ? { progs: m.progs, mats: m.mats, pool: m.pool, hit: m.matHit, miss: m.matMiss, evict: m.matEvict } : null; } catch (_) { return null; } })(),
+              return m ? { progs: m.progs, mats: m.mats, pool: m.pool, hit: m.matHit, miss: m.matMiss, evict: m.matEvict, keys: m.matMissKeys || null } : null; } catch (_) { return null; } })(),
             // THE HITCH SIGNATURE. p99 against p50 over the last 2048 frames:
             // a healthy p50 beside a p99 several times larger IS a spike train,
             // and no settled average can show it. `open` carries the worst

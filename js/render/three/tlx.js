@@ -1223,6 +1223,7 @@ const TLX = (function () {
       // miss RATE is the number that predicts churn. Counting it costs two
       // increments.
       let _matHit = 0, _matMiss = 0, _matEvict = 0;
+      const _matMissLog = [];   // the first 64 miss keys, for memState().matMissKeys — census 212 counted 20 misses in a 20 s drive and could not name them
       function fallbackMat(instanced) {
         return _drawMatMode >= 2 ? rawUnlitMat : (instanced ? unlitInstancedMat : unlitMat);
       }
@@ -1289,6 +1290,7 @@ const TLX = (function () {
         let m = matCache.get(key);
         if (m) _matHit++; else {
           _matMiss++;
+          if (_matMissLog.length < 64) _matMissLog.push(key);
           if (matCache.size >= MAT_CACHE_CAP) {
             // Evict the oldest entry NOT used this frame. If every entry is in
             // use the cache simply runs over cap for the rest of the frame:
@@ -3970,6 +3972,7 @@ const TLX = (function () {
             try { const g = lit && lit.uniforms && lit.uniforms.sunDir && lit.uniforms.sunDir.groupNode; o.groupVer = g ? g.version : null; } catch (_) { o.groupVer = null; }
             o.sharedUniforms = !!(lit && lit.sharedUniforms);
             o.matHit = _matHit; o.matMiss = _matMiss; o.matEvict = _matEvict;
+            o.matMissKeys = _matMissLog.slice(-16);
             o.presentMs = +_presentMs.toFixed(3);
             // The warm timeline: how long the lights held on THIS GPU, by stage;
             // pending/done say whether a census beat is inside it (207 was, all 15).

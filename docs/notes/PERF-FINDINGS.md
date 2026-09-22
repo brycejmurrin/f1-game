@@ -5299,7 +5299,49 @@ every lit material built the wrong variant or threw, and a rejected build retrie
 in silence. Patch 8 now snapshots the requesting pass's render target, MRT, cube
 face and mip level, holds them for the synchronous part of the deferred build and
 restores them in a `finally`; a rejected build warns (`console.warn`, three times
-at most). Census 212: _pending_.
+at most).
+
+### Census 212: the picture back, the spikes down, and what mints them
+
+Luma 45.7, 314 m driven at 22.4 m/s. **Frames of 100 ms or more: 4** (209/210:
+13), **worst callback 187 ms** (648), 635 ms of spike callbacks (2.9–3.2 s). Inside
+the four: `(idle)` 36%, three `build` 23% (its chain now ends in `buildAsync ←
+getForRender`, the deferred build — see the join note below), the garbage collector
+12%; every wrapped GPU call together 11%, `getCurrentTexture` 1 ms — **the swapchain
+is cleared**.
+
+The new `mats:` row names the mechanism: **`mats 13→33 (+20)`, `miss +20`** — the
+renderer minted twenty materials in twenty seconds of driving, one a second, and a
+material is a program (three keys `nodeBuilderCache` on node identity, so a
+structurally identical graph in a new `NodeMaterial` is a new codegen and a new
+pipeline). The material key is the draw options — emissive and alpha quantised to
+1/32, then roughness, metalness, specular, detail, clearcoat, carPaint, sparkle and
+the flags — and five draw sites fed it a CONTINUOUS per-frame value:
+
+| site | value | variants |
+|---|---|---|
+| `game.js` rear lights | emissive `0.45 + 0.55 × ERS energy`, every car in view | up to 18 per car, one per 1/32 of battery |
+| `game.js` exhaust flame | alpha `(0.30 + 0.55 × flicker) × pop` | up to 28 per pop |
+| `car-mesh.js` aero bar | alpha `0.65 + 0.35 × sin(20t)` while the flap moves | up to 23 per transition |
+| `car-draw.js` cockpit ERS bar | alpha `0.75 + 0.25 × sin(22t)` while deploying | 17 |
+| `car-draw.js` cockpit OVERTAKE lamp | alpha `0.7 + 0.3 × sin(18t)` while active | 20 |
+
+Each is now a few fixed levels (five for the battery, quarters for the flame, two
+for each blink), pinned by `tests/unit/material-variants.test.mjs`, which also
+scans the draw modules for a sine or clamp multiplied straight into an alpha or
+emissive option. `memState().matMissKeys` keeps the first 64 miss keys and the
+census prints the keys minted inside the window. The design debt stays named:
+values a shader takes as a uniform should not be part of a material's identity.
+
+On the join note: a `buildAsync` chain inside a rAF callback is impossible for a
+task, and the 48-frame chains show the deferred path; the sampler's stack for a
+long synchronous segment may extend past the callback edge by a sample or two,
+but 146 ms is not that. It is more likely that some materials are still built on
+the render path: a `RenderObject` whose cache key changes (`needsUpdate` →
+dispose → recreate) after its async state landed, or a `compileAsync`-free path
+the guard does not cover. Census 213 measures the tree with no mid-race minting;
+if `build` stays inside the spikes with nothing minted, that path is next.
+Census 213: _pending_.
 
 Also measured for the first time: the lights hold **10.7 s** on this Metal runner
 (scene warm 7.0 s, post 2.9 s, casters 0.8 s). The scene warm mints every pooled

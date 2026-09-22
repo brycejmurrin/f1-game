@@ -320,6 +320,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // failure mode is a STALE key, which returns the wrong material and shows
   // up only on screen. Fuzzes the real lifted source over every field.
   "tests/unit/tlx-mat-key-memo.test.mjs",
+  // Draw options are a material key on TLX, and a continuous per-frame value
+  // mints a material (a program) per 1/32 step: pins the three sites gpu-census
+  // 212 caught (rear-light ERS brightness, flame alpha, aero-bar blink) to fixed levels.
+  "tests/unit/material-variants.test.mjs",
   // The coach's rewind clone replaced JSON.parse(JSON.stringify()); restore()
   // reads back what capture() wrote, so any drift from JSON semantics is a
   // rewind into a state the car was never in. Tested AGAINST the round trip.
