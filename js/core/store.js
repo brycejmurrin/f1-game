@@ -178,8 +178,10 @@ const GameStore = (function () {
   // localStorage wiped on its own (a devtools clear, a corrupt store) comes
   // back from the mirror. Restoration lands AFTER the first read when the first
   // read is synchronous at boot (Career.load()), so a restored key is announced
-  // through the same foreign-write notification a second tab's write gets —
-  // career.js re-reads its live slot on that — and every later boot is whole.
+  // through the same foreign-write notification a second tab's write gets,
+  // flagged `restored`, then once more as a `restoredBatch` naming every key —
+  // career.js reloads its slot and pointer together on that, and the title menu
+  // repaints — and every later boot is whole.
   const MIRROR_KEY = /^apex26\.(career|season)/;
   const MIRROR_DB = "apex26-store";
   const MIRROR_STORE = "kv";
@@ -386,6 +388,14 @@ const GameStore = (function () {
   }
 
   const TT_BOARD_MAX = 10;
+  // CLASSES are capped too. A context is a whole stringified car config (ghost.js
+  // config(), ~550 chars stored in every entry), and career progression mints a
+  // new one each round (tierV moves with tdev), so an uncapped board filled the
+  // quota with no player intent — and the failed write raised the permanent
+  // SESSION ONLY banner. Keep the class holding the circuit record (the select
+  // screen reads board[0].t as "best across setups": a plain LRU would silently
+  // regress it), the class being written, and the most recently driven rest.
+  const TT_CLASS_MAX = 6;
   function ttBoard(trackId, context) {
     const b = store.get("ttlb." + trackId, []);
     return Array.isArray(b) ? b.filter(e => e && Number.isFinite(e.t) && e.t > 0 && (context === undefined || (e.context || null) === context)) : [];
@@ -397,7 +407,15 @@ const GameStore = (function () {
     b.sort((a, z) => a.t - z.t);
     // Ten laps PER comparable class. Existing unversioned entries stay legacy.
     const counts = new Map();
-    const kept = b.filter(e => { const k = e.context || null; const n = (counts.get(k) || 0) + 1; counts.set(k, n); return n <= TT_BOARD_MAX; });
+    let kept = b.filter(e => { const k = e.context || null; const n = (counts.get(k) || 0) + 1; counts.set(k, n); return n <= TT_BOARD_MAX; });
+    const last = new Map();
+    for (const e of kept) { const k = e.context || null; last.set(k, Math.max(last.has(k) ? last.get(k) : -Infinity, Number(e.ts) || 0)); }
+    if (last.size > TT_CLASS_MAX) {
+      const keep = new Set([kept[0].context || null, entry.context || null]);
+      const rest = [...last.keys()].filter(k => !keep.has(k)).sort((a, z) => last.get(z) - last.get(a));
+      for (const k of rest.slice(0, TT_CLASS_MAX - keep.size)) keep.add(k);
+      kept = kept.filter(e => keep.has(e.context || null));
+    }
     store.set("ttlb." + trackId, kept);
     return kept;
   }

@@ -134,3 +134,51 @@ test("preview hulls are dropped when their mesh LRU slot is evicted", () => {
   assert.match(scene, /hullKey/);
   assert.match(scene, /previewHulls\.delete\(victim\.hullKey\)/);
 });
+
+// The engineers' traces re-upload the live atlas every 1.5 s: free the old
+// texture, create the new one. The catch around that used to set a module-level
+// latch 31 years out, log nothing, and keep the freed handle — so one throw from
+// createTexture froze the traces for the page load, stayed invisible to Log, and
+// on GLX (deleteTexture leaves the object truthy) drew a dead texture into up to
+// five decals a frame. Now: warn, drop a freed handle, three strikes.
+test("a failed trace upload warns and never draws the texture it freed", () => {
+  // Any 2D-context call returns the context itself; any numeric read is 0.
+  const c2d = new Proxy(function () {}, {
+    get: (_, k) => (k === Symbol.toPrimitive ? () => 0 : c2d),
+    set: () => true, apply: () => c2d,
+  });
+  let now = 0, failNext = false, nTex = 0;
+  const freed = new Set(), drawnFreed = [], warns = [];
+  const gfx = {
+    createMesh: () => ({}), createTexMesh: () => ({ tex: true }), freeMesh() {},
+    createTexture() { if (failNext) throw new Error("context lost"); return { tex: ++nTex }; },
+    freeTexture(t) { freed.add(t); },
+    draw() {}, drawGlow() {},
+    drawDecal(_m, _x, t) { if (freed.has(t)) drawnFreed.push(t); },
+  };
+  const ctx = vm.createContext({
+    console, Math, Object, Array, Number, String, JSON, Float32Array, Uint16Array,
+    Uint32Array, isFinite, parseFloat, parseInt, Date,
+    performance: { now: () => now },
+    document: { createElement: () => ({ width: 0, height: 0, getContext: () => c2d }) },
+    LiveryTex: {},
+    Log: { info() {}, warn: (_t, m) => warns.push(m), error() {}, debug() {}, enabled: () => false },
+  });
+  for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
+                   "js/garage/scene-live.js", "js/garage/scene.js"])
+    vm.runInContext(read(f), ctx, { filename: f });
+  const GarageScene = vm.runInContext("GarageScene", ctx);
+  GarageScene.init(gfx);
+
+  GarageScene.draw(TEAM, LIV, [0, 1.6, 0], null, 0);
+  assert.ok(nTex >= 1, "the live atlas was never created — the harness no longer reaches the trace path");
+  assert.equal(warns.filter((m) => /live trace/.test(m)).length, 0);
+
+  failNext = true;
+  now = 2000;
+  GarageScene.draw(TEAM, LIV, [0, 1.6, 0], null, 0);
+  assert.equal(warns.filter((m) => /live trace failed: context lost/.test(m)).length, 1,
+    `the failure must reach Log; warned: ${JSON.stringify(warns)}`);
+  assert.ok(freed.size >= 1, "the trace path never freed the old atlas");
+  assert.deepEqual(drawnFreed, [], "a decal drew a texture handle that had been freed");
+});

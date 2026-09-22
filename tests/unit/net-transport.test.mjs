@@ -621,6 +621,28 @@ test("a connectionState failure releases the RTCPeerConnection too", () => {
   } finally { h.done(); }
 });
 
+test("a close inside the disconnect grace window reclaims its timer", () => {
+  // The grace timer's callback is guarded, so this was never a wrong close —
+  // but shutdown() is the one teardown, and a live 5 s timer after it kept the
+  // whole endpoint closure reachable: the leak class this round closed.
+  const h = pcHarness();
+  const realSet = global.setTimeout, realClear = global.clearTimeout;
+  const live = new Set();
+  global.setTimeout = (fn, ms) => { const id = realSet(() => { live.delete(id); fn(); }, ms); live.add(id); return id; };
+  global.clearTimeout = (id) => { live.delete(id); realClear(id); };
+  try {
+    h.ep.pc.connectionState = "disconnected";
+    h.ep.pc.onconnectionstatechange();
+    assert.equal(live.size, 1, "the disconnect grace timer was not armed");
+    h.ep.close();
+    assert.equal(live.size, 0, "shutdown left the grace timer running");
+  } finally {
+    for (const id of live) realClear(id);
+    global.setTimeout = realSet; global.clearTimeout = realClear;
+    h.done();
+  }
+});
+
 test("rtc stamps message ARRIVAL and hands it to onMessage; loopback stays unstamped", () => {
   // The clock-sync PONG math reads the third argument: rtc supplies a
   // performance.now() arrival stamp recorded at inbox push (pump-time

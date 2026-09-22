@@ -56,7 +56,7 @@ function load(writeError = null) {
   seedSaveMigrate(ctx);
   vm.runInContext(SRC, ctx, { filename: "js/core/store.js" });
   const GameStore = vm.runInContext("GameStore", ctx);
-  return { store: GameStore.store, disk, onStorage: listeners.get("storage") || null };
+  return { store: GameStore.store, GameStore, disk, onStorage: listeners.get("storage") || null };
 }
 
 test("write reports session success separately from reload durability", () => {
@@ -399,3 +399,29 @@ test("without indexedDB the mirror is inert and the store is unchanged", async (
   assert.equal(store.mirror.pending, 0);
   assert.equal(await store.mirrorFlush(), false);
 });
+
+
+/* ── the time-trial board's CLASS cap ────────────────────────────────────────
+ * ttBoardAdd caps ten laps per comparable class; nothing capped the classes.
+ * A class key is a whole stringified car config (~550 chars, stored in every
+ * entry), and career progression mints a new one every round, so one circuit's
+ * board grew without bound until the quota refused the write and the SESSION
+ * ONLY banner went up for good. The trap: the select screen reads board[0].t as
+ * the circuit record, so eviction must never drop the class that holds it. */
+test("the time-trial board caps classes but keeps the record and the class in use", () => {
+  const { GameStore } = load();
+  // The record, set long ago in a class never driven again.
+  GameStore.ttBoardAdd("monza", { t: 80, ts: 1, context: "old-record" });
+  for (let i = 0; i < 20; i++) GameStore.ttBoardAdd("monza", { t: 90 + i, ts: 100 + i, context: "cfg" + i });
+  const b = GameStore.ttBoard("monza");
+  const classes = new Set(b.map((e) => e.context));
+  assert.equal(classes.size, 6, `class count is not capped: ${classes.size}`);
+  assert.equal(b[0].t, 80, "the circuit record was evicted");
+  assert.ok(classes.has("cfg19"), "the class just written was evicted");
+  assert.ok(classes.has("cfg15") && !classes.has("cfg14"), "the rest are not the most recently driven");
+  // A slow lap in a brand-new class is written even though it records nothing.
+  const after = GameStore.ttBoardAdd("monza", { t: 200, ts: 999, context: "fresh" });
+  assert.ok(after.some((e) => e.context === "fresh"), "the class in use lost its only lap");
+  assert.equal(after[0].t, 80);
+});
+
