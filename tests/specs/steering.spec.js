@@ -123,6 +123,18 @@ async function firstCorner(page, min = 0.02) {
   return { frac: corners[0], k: 0 };
 }
 
+// Park the whole AI field at rest half a lap from `frac`. jump() resets only
+// the player, so two "identical" runs otherwise meet the live field at
+// different places: a car passing within ~10 m moved the result, and contact
+// pushed the car wide by 0.9-1.5 m on CI (2026-09-22). Placing the field before
+// EACH run gives both runs the same empty corner (24/24 identical, probed).
+async function clearField(page, frac) {
+  await page.evaluate((f) => {
+    const n = window.__apex.carState().length;
+    for (let i = 0; i < n; i++) window.__apex.aiPlace(i, f + 0.5 + i * 0.004, 0, 0);   // false for the player
+  }, frac);
+}
+
 // A reasonably straight stretch: the lap fraction with the smallest |k|.
 async function findStraight(page) {
   return page.evaluate(() => {
@@ -336,8 +348,10 @@ test.describe("Apex 26 — steering", () => {
     // step() drives update() directly, so frozen runs are fully deterministic.
     await page.evaluate(() => window.__apex.freeze(true));
     try {
+      await clearField(page, frac);
       const a = await run(page, { frac, speed: 16, steer: 0, ticks: 60 });
       await setRaceLine(page, 0);
+      await clearField(page, frac);
       const b = await run(page, { frac, speed: 16, steer: 0, ticks: 60 });
       expect(Math.abs((a.after.x - a.before.x) - (b.after.x - b.before.x))).toBeLessThan(0.5);
     } finally {
