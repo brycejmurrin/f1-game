@@ -26,6 +26,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
+import { fakeIndexedDb } from "../helpers/fake-indexeddb.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = readFileSync(join(ROOT, "js/core/store.js"), "utf8");
@@ -178,41 +179,8 @@ test("a write this tab made still wins its own cache — no self-invalidation lo
 /* ── the durable mirror (IndexedDB) ──────────────────────────────────────────
  * Same module, second store: every apex26.career* / apex26.season* write is
  * also queued into an IndexedDB object store, and at boot a key localStorage
- * LACKS that the mirror holds comes back. The fake below is the smallest IDB
- * that answers open / transaction / put / delete / getAll with the async
- * callback shape the module drives; requests settle on a microtask and the
- * transaction's oncomplete on a macrotask, like the real thing. */
-function fakeIndexedDb(seed = []) {
-  const rows = new Map(seed);
-  const request = (result) => {
-    const r = { result, error: null, onsuccess: null, onerror: null };
-    queueMicrotask(() => { if (r.onsuccess) r.onsuccess(); });
-    return r;
-  };
-  const db = {
-    objectStoreNames: { contains: () => true },
-    close() {},
-    transaction(_name, _mode) {
-      const t = { error: null, oncomplete: null, onerror: null, onabort: null };
-      t.objectStore = () => ({
-        put(row) { rows.set(row.k, row.v); return request(row.k); },
-        delete(k) { rows.delete(k); return request(undefined); },
-        getAll() { return request(Array.from(rows, ([k, v]) => ({ k, v }))); },
-      });
-      setTimeout(() => { if (t.oncomplete) t.oncomplete(); }, 0);
-      return t;
-    },
-  };
-  return {
-    rows,
-    open() {
-      const r = { result: db, onupgradeneeded: null, onsuccess: null, onerror: null, onblocked: null };
-      queueMicrotask(() => { if (r.onupgradeneeded) r.onupgradeneeded(); if (r.onsuccess) r.onsuccess(); });
-      return r;
-    },
-  };
-}
-
+ * LACKS that the mirror holds comes back. The IDB is tests/helpers/
+ * fake-indexeddb.mjs (career-cross-tab.test.mjs drives it too). */
 function loadMirrored({ seed = [], disk = new Map(), writeError = null } = {}) {
   const idb = fakeIndexedDb(seed);
   const sandbox = {

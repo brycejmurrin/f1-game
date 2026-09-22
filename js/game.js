@@ -8851,6 +8851,8 @@ if (Tracks.LIST[trackIdx]) {
 Career.load();            // resolve + migrate the career save once at boot
 clampDriverIdx();         // MY TEAM gridDrivers() is 2 after load; team.drivers may still be 1
 refreshCareerButton();
+// The IndexedDB mirror restores AFTER that read; Career re-resolves on it, the title must repaint.
+if (store.mirror && store.mirror.ready) store.mirror.ready.then((n) => { if (n) refreshCareerButton(); });
 // `state` is closure-local, and js/ui/layers.js is what decides whether
 // Escape means PAUSE or BACK — hand it the answer rather than have it guess one
 // from the DOM. Same pair setPaused() gates on.

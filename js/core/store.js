@@ -178,8 +178,9 @@ const GameStore = (function () {
   // localStorage wiped on its own (a devtools clear, a corrupt store) comes
   // back from the mirror. Restoration lands AFTER the first read when the first
   // read is synchronous at boot (Career.load()), so a restored key is announced
-  // through the same foreign-write notification a second tab's write gets —
-  // career.js re-reads its live slot on that — and every later boot is whole.
+  // through the same foreign-write notification a second tab's write gets,
+  // flagged `restored` — career.js re-resolves its careerSlot pointer on that
+  // and game.js repaints the title on mirror.ready — and every later boot is whole.
   const MIRROR_KEY = /^apex26\.(career|season)/;
   const MIRROR_DB = "apex26-store";
   const MIRROR_STORE = "kv";
