@@ -45,7 +45,9 @@ test("specsOf ignores scripts that are not browser runs", () => {
 test("fit cuts at the budget and names every skipped spec", () => {
   // Real specs so declaredTests resolves; the budget is set artificially small
   // so the cut provably happens.
-  const specs = ["tests/specs/smoke.spec.js", "tests/specs/logging.spec.js"];
+  // boot-guard, not logging: logging is ADAPTED (tools/ci/twinned-specs.mjs),
+  // so fit() reports it as coveredByVmTwin before any budgeting happens.
+  const specs = ["tests/specs/smoke.spec.js", "tests/specs/boot-guard.spec.js"];
   const r = fit(specs, 5);
   assert.equal(r.selected.length + r.skipped.length + r.unreachable.length + r.coveredByFixedGates.length, 2,
     "every spec lands in selected, skipped, unreachable, or an independent fixed gate");
@@ -293,10 +295,14 @@ test("every race-fixture spec the gate has starved DECLARES a budget above it", 
   // Same RULE as hud-layout above, one row per victim: above whatever the gate's
   // cap is, and NAMED as over budget in the report. Add a spec here the day the
   // gate starves it — the declaration is the fix, this row keeps it fixed.
+  //
+  // projection.spec.js was the third row until 2026-09-22: it is ADAPTED now
+  // (runs under the vm-page adapter, 13 s), so fit() files it as
+  // coveredByVmTwin before budgeting and never as over budget. Its 300 s
+  // declaration still stands in the file for the day it leaves ADAPTED.
   for (const spec of [
     "tests/specs/physics-hotpath.spec.js",
     "tests/specs/map-hooks.spec.js",
-    "tests/specs/projection.spec.js",
   ]) {
     const own = maxDeclaredTimeout(spec);
     assert.ok(own > SELECTED_GATE.perTestTimeoutSec * 1000,
