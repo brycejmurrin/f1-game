@@ -229,8 +229,18 @@ class LiveReporter {
   key(test) {
     const parts = test.titlePath().filter(Boolean);
     const i = parts.findIndex((p) => /\.spec\.js$/.test(p));
+    // `location.file` is where test() was CALLED, not the spec that owns the
+    // test: Playwright reads it off the caller's stack frame. A spec that
+    // factors its cases into a helper (tests/helpers/track-helpers.js does
+    // exactly this) therefore keyed `spec` to the helper while `title` came
+    // from the spec — two halves of one key naming different files, which
+    // breaks the "junit's own shape" contract above AND makes such a test
+    // impossible to quarantine, since the quarantine holds spec paths. Prefer
+    // the spec from titlePath(); fall back to the call site when there is none.
+    const fromPath = i >= 0 ? parts[i] : "";
+    const fromFile = test.location?.file?.replace(/^.*\/(tests\/)/, "$1") || "";
     return {
-      spec: test.location?.file?.replace(/^.*\/(tests\/)/, "$1") || "",
+      spec: fromPath ? (fromFile.endsWith(fromPath) ? fromFile : `tests/${fromPath}`.replace(/^tests\/tests\//, "tests/")) : fromFile,
       title: (i >= 0 ? parts.slice(i + 1) : parts.slice(-1)).join(" › "),
     };
   }

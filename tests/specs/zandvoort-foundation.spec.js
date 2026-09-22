@@ -232,13 +232,18 @@ test.describe("Zandvoort shared-foundation migration", () => {
     expect(clearance.terrainMax,
       `terrain intrusions: ${JSON.stringify(clearance.terrainTop)}`).toBeLessThanOrEqual(0.18);
 
-    const night = await page.evaluate(() => {
-      window.__apex.race("zandvoort", "night", "dry");
-      return {
-        geometry: window.__apex.geometryDiagnostics(),
-        models: window.__apex.modelDiagnostics(),
-      };
-    });
+    // AWAIT THE NIGHT BUILD. This called __apex.race() un-awaited and read the
+    // diagnostics on the next line, so every assertion below measured the DAY
+    // build that was already loaded — the night manifest was never checked.
+    // Same defect, same circuit family: redbull-foundation.spec.js:17 records
+    // it reading a 5.252 m elevation swing for a 59.85 m circuit, which is
+    // Bahrain's number, because race() returns a thenable and not a finished
+    // build. loadZandvoort() has always done this correctly; use it.
+    await loadZandvoort(page, "night");
+    const night = await page.evaluate(() => ({
+      geometry: window.__apex.geometryDiagnostics(),
+      models: window.__apex.modelDiagnostics(),
+    }));
     expect(night.geometry.every((entry) => entry.ok)).toBe(true);
     const nightRequiredFailures = [
       ...night.models.suppressed,

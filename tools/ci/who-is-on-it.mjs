@@ -52,8 +52,23 @@ const git = (...args) => {
   return r.status === 0 ? r.stdout : "";
 };
 
-/** `claude/fix-autopilot` -> `fix-autopilot`; any other slash becomes `--`. */
-export const claimSlug = (branch) => branch.replace(/^claude\//, "").replace(/\//g, "--");
+/** The session this process belongs to, short and filename-safe. */
+export const sessionId = (env = process.env) =>
+  (env.CLAUDE_CODE_SESSION_ID || env.CLAUDE_SESSION_ID || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 12) || "nosession";
+
+/** `claude/fix-autopilot` + session -> `fix-autopilot-ab12cd34ef56`.
+ *
+ *  THE SESSION IS PART OF THE REF, not decoration. Keying on the branch alone
+ *  was worse than having no tool: AGENTS.md says other sessions develop
+ *  DIRECTLY on the deploy branch, so every one of them resolved to the single
+ *  ref `claude/claims/f1-game-project-26h3ng`, and pushClaim force-pushes — so
+ *  session B's claim silently erased session A's, and A's `--release` then
+ *  tombstoned B's live claim. A tool that exists to stop two sessions
+ *  colliding must not make them collide. The `--` slash folding had the same
+ *  shape on its own: `claude/a/b` and `claude/a--b` are different branches
+ *  that produced one ref. */
+export const claimSlug = (branch, session = sessionId()) =>
+  `${branch.replace(/^claude\//, "").replace(/\//g, "--")}-${session}`;
 
 /** for-each-ref lines for the claims branches -> claims with age. Pure: `now`
  *  is unix seconds. Line shape:
@@ -66,7 +81,13 @@ export function parseClaims(text, now = Math.floor(Date.now() / 1000)) {
     const ageMin = Math.max(0, Math.round((now - at) / 60));
     const slug = ref.replace(/^refs\/remotes\/origin\//, "").replace(/^refs\/heads\//, "").replace(CLAIMS_PREFIX, "");
     const msg = s.join("\t");
-    return { slug, who, text: msg, at, ageMin, stale: ageMin > STALE_MIN, released: msg.startsWith(RELEASED) };
+    // A TOMBSTONE is the message this tool writes for --release and nothing
+    // else. `startsWith("released")` read a perfectly live claim worded
+    // "released the c1Pileup lock, now on the autopilot red" as a release, so
+    // it vanished from the listing for every session including its own author.
+    // The text part is everything before the `  [branch; session …]` tag.
+    const body = msg.replace(/\s\s\[[^\]]*\]\s*$/, "");
+    return { slug, who, text: msg, at, ageMin, stale: ageMin > STALE_MIN, released: body === RELEASED };
   }).sort((a, b) => b.at - a.at);
 }
 
@@ -95,12 +116,15 @@ export function currentBranch() {
 }
 
 function pushClaim(text, branch) {
-  const session = (process.env.CLAUDE_CODE_SESSION_ID || process.env.CLAUDE_SESSION_ID || "").slice(0, 12);
+  const session = sessionId();
+  const slug = claimSlug(branch, session);
   const sha = claimCommit(text, branch, session);
-  const ref = `refs/heads/${CLAIMS_PREFIX}${claimSlug(branch)}`;
-  // `+` because every claim commit is parentless: the update is never a fast-forward.
+  const ref = `refs/heads/${CLAIMS_PREFIX}${slug}`;
+  // `+` because every claim commit is parentless: the update is never a
+  // fast-forward. It is safe ONLY because the ref carries the session id — a
+  // force-push to a branch-keyed ref clobbered other sessions' claims.
   const r = spawnSync("git", ["push", "--quiet", "origin", `+${sha}:${ref}`], { cwd: ROOT, encoding: "utf8", timeout: 60_000 });
-  if (r.status === 0) spawnSync("git", ["update-ref", `refs/remotes/origin/${CLAIMS_PREFIX}${claimSlug(branch)}`, sha], { cwd: ROOT });
+  if (r.status === 0) spawnSync("git", ["update-ref", `refs/remotes/origin/${CLAIMS_PREFIX}${slug}`, sha], { cwd: ROOT });
   return { ok: r.status === 0, ref, sha: sha.slice(0, 7), err: (r.stderr || "").trim().split("\n").filter((l) => !/^remote:|^To |^\s*$/.test(l)).join(" ") };
 }
 
@@ -169,7 +193,17 @@ export function main(argv = process.argv.slice(2)) {
   if (!live.length) console.log("(none)");
   for (const r of live) console.log(`${ago(Math.round((Date.now() / 1000 - r.t) / 60)).padStart(7)} ago  ${r.sha}  ${r.ref}${r.ref === DEPLOY ? "  [deploy]" : ""}  — ${r.author}: ${r.subject}`);
   console.log(`\n# claims (${CLAIMS_PREFIX}*; stale after ${STALE_MIN} min — informs, never blocks)`);
-  if (!active.length) console.log('(none — nobody has claimed anything; --claim "<text>" to say what you are on)');
+  // "No claims" and "could not look" are OPPOSITE answers and must never print
+  // the same. A failed fetch reads every list here off stale local refs, and
+  // this tool exists precisely so a session does not start fixing what someone
+  // else already claimed — so say the list is UNTRUSTWORTHY, not empty.
+  if (!fetched) console.log("  !! FETCH FAILED (or --no-fetch): every list below is stale local state.");
+  if (!fetched) console.log("     An empty claim list here means NOTHING WAS READ, not that nobody is on it.");
+  if (!active.length) {
+    console.log(fetched
+      ? '(none — nobody has claimed anything; --claim "<text>" to say what you are on)'
+      : "(no claims in stale local refs — re-run with the network up before trusting this)");
+  }
   const mine = claimSlug(branch);
   for (const c of active) console.log(`${ago(c.ageMin).padStart(7)} ago  ${c.stale ? "STALE " : "      "}${c.slug}${c.slug === mine ? "  [you]" : ""}  — ${c.who}: ${c.text}`);
   if (paths.length) {
