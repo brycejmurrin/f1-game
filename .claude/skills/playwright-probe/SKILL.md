@@ -1,9 +1,18 @@
 ---
 name: playwright-probe
+context: fork
+agent: general-purpose
 description: Use when the user asks for batch headless screenshots or evals of a track or car (shot.mjs, apex-eval.mjs, apex-capture.mjs), before/after frames, flicker/shimmer/z-fighting clips (motion-capture), game-loop CPU profiles / flame charts / GC spikes (profile-gameloop), the CAR STUDIO (livery, sponsors, number, wing/gearbox/brake geometry, reflections, isolated shots via carview.html), or camera modes (cockpit/chase/orbit/cinematic/roadside, camState/viewState, framing a corner, camera lag).
 ---
 
 # Headless Playwright probing (parallel)
+
+Runs FORKED (`context: fork`, `agent: general-purpose`): the batch output —
+frames, eval JSON, clip paths — stays out of the parent's context, and the
+report is what comes back. Write every capture under `artifacts/` and name the
+paths in the report; the parent reads the ones it needs. The subagent browser
+ban (AGENTS.md §Verification 10) still holds here: `shot.mjs`/`apex-eval.mjs`
+are fine, a Playwright *test* run is not — report it as not-run instead.
 
 ## Prerequisites
 
