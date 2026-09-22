@@ -231,25 +231,12 @@ function backendPreference() {
   }
 }
 function showGraphicsUnavailable() {
-  const panel = $("nogl");
-  if (els.hud) { els.hud.hidden = true; els.hud.inert = true; }
-  if (els.overlay) { els.overlay.hidden = true; els.overlay.inert = true; }
-  if (!panel) return;
-  panel.textContent = "";
-  const body = document.createElement("div");
-  const title = document.createElement("h2");
-  const detail = document.createElement("p");
-  const retry = document.createElement("button");
-  title.textContent = "Graphics unavailable";
-  detail.textContent = "Apex 26 could not start a compatible graphics renderer.";
-  retry.type = "button";
-  retry.textContent = "RETRY";
-  retry.onclick = () => { try { location.reload(); } catch (_) { /* embedded host */ } };
-  body.appendChild(title);
-  body.appendChild(detail);
-  body.appendChild(retry);
-  panel.appendChild(body);
-  panel.hidden = false;
+  RendererPicker.showUnavailable({
+    panel: $("nogl"), hud: els.hud, overlay: els.overlay,
+    helpDialog: els.howtoplay, helpClose: $("htp-close"),
+    dataDialog: els.datahub, dataClose: $("dh-close-btn"),
+    ensureDataHub, openDataHub: () => DataHub.open(),
+  });
 }
 let _claimSkipped = false;   // this boot consumed a claim-fail latch
 try {
@@ -572,8 +559,7 @@ function autoThrottle() { return autoThrottleOpt || (Input.touchControlsNeeded()
 // each thumb group lands in, so CSS does it (body.mirror-controls).
 let mirrorControls = store.get("mirrorControls", false);
 function applyMirrorControls() { document.body.classList.toggle("mirror-controls", mirrorControls); }
-let season = store.get("season", null);      // {round, pts:{driverId:n}, teamPts:{id:n}, driverCodes:{driverId:code}}
-function migrateSeasonPoints() { season = GameStore.migrateSeasonPoints(season); }
+let season = SeasonCal.load();      // standalone owner adds score maps, config snapshot and revision guard
 
 // ---------- physics constants ----------
 // The immutable numbers live in js/physics/consts.js (global PhysicsConsts)
@@ -896,6 +882,33 @@ function isRaining() { return raceWeather === "rain"; }
 // "Weather and tyres". No car => the slick column: the old value, untouched.
 function roadWetness() { return TyreModel.wetness(raceWeather, wxArc.arc); }
 function gripMult(c) { return TyreModel.weatherGrip(c ? (c.tread == null ? 2 : c.tread) : 0, roadWetness()); }
+
+// IncidentSim owns motion during a takeover, but the ordinary line-crossing
+// presentation still belongs here. Core lap/clock/finish state is advanced by
+// RaceControl.lineTransition for both callers; this hook handles only the local
+// side effects that cannot live in a physics module.
+function onIncidentLineCross(c, cross, newS) {
+  if (!c || !cross) return;
+  if (cross.direction < 0) {
+    if (cross.changed && c.isPlayer) {
+      sectorIdx = sectorAt(newS); sectorStartT = c.lapTime; sectorValid = false;
+      if (isTimeTrial()) Ghost.startLap();
+    }
+    return;
+  }
+  c._secT0 = 0;
+  if (c.isPlayer) { sectorIdx = 0; sectorStartT = 0; }
+  if (c.isPlayer && c.lap === lapsTarget && lapsTarget > 1) announce("FINAL LAP", 1.6, "race");
+  if (cross.flagged) {
+    // The lap is incident-invalid, so do not publish it as a timed lap. A
+    // finish stamp is still authoritative and must reach the other peer; null
+    // time/best keep the invalid lap out of timing comparisons.
+    if (c.local && netPlay.active()) {
+      netPlay.reportLap({ lap: c.lap, time: null, best: null, code: c.code, fin: raceT, invalid: true });
+    }
+    if (c.isPlayer) announce("FINISH!", 2, "race");
+  }
+}
 
 // DIRTY AIR. Before this model, the tow was strictly and only BENEFICIAL:
 // it gave +4.5 % of top speed and cost nothing at all. With a
@@ -1274,9 +1287,9 @@ function showAnnounce(msg, dur, kind) {
   // a radio that is not running.
   if (state === "race" || state === "count") GameAudio.radioSting(_annCh, announceT);
 }
-let skids = null;   // SkidMarks.create(G), assigned once G exists (below)
+let skids = null;   // SkidMarks.create(), assigned once G exists (below)
 // Tyre marks (the 120-entry ring buffer, its batched vertex build and the
-// per-mark fallback draw) live in js/fx/skidmarks.js — SkidMarks.create(G),
+// per-mark fallback draw) live in js/fx/skidmarks.js — SkidMarks.create(),
 // wired after the G façade as `skids`. Nothing outside that module reads its
 // state, which is what made it liftable.
 const PAINT_WET_NIGHT = { emissive: 0.20, roughness: 0.16, metalness: 0.12, specular: 0.85, clearcoat: 1.0, carPaint: 1.0 };  // car paint by condition: night adds emissive, wet lowers roughness
@@ -1711,6 +1724,20 @@ function modsFor(team, setup, tune) {
   };
 }
 
+// The garage resolves the tyre along with every other part. At runtime the
+// fitted set can change, so retain the build with that one row divided out and
+// let TyreModel.applyCompound put exactly one fitted row back in.
+function tyreBaseModsFor(team, setup, tune) {
+  const full = modsFor(team, setup, tune);
+  const tyre = Parts.resolveSetup(setup, team).options.tyres;
+  return {
+    speed: full.speed / (tyre.speed == null ? 1 : tyre.speed),
+    accel: full.accel / (tyre.accel == null ? 1 : tyre.accel),
+    cornering: full.cornering / (tyre.cornering == null ? 1 : tyre.cornering),
+    braking: full.braking / (tyre.braking == null ? 1 : tyre.braking),
+  };
+}
+
 // Assign a car's ROLE. Three flags, deliberately not one:
 //   human — driven by a person (local OR remote). Selects the full bicycle
 //           model, a world-space pose, the heavier collision mass, and an input
@@ -1783,8 +1810,16 @@ function recomputePlayerMods() {
   const team = player ? player.team : Teams.LIST[teamIdx];
   const standard = daily.isActive() && daily.current().class === "standard";
   const setup = standard ? Parts.getFactorySetup(team) : getTeamParts(team.id);
-  playerMods = modsFor(team, setup, standard ? undefined : SetupTune.mods(team.id));   // the local sheet, here and in makeCars only
-  if (player) { player.mods = playerMods; player.tread = Parts.tread(setup, team); player.brakeBias = standard ? SetupTune.BB_REF : SetupTune.brakeBias(team.id); player.rollBalance = standard ? 0 : SetupTune.balance(team.id); }
+  const tune = standard ? undefined : SetupTune.mods(team.id);
+  playerMods = modsFor(team, setup, tune);   // the local sheet, here and in makeCars only
+  if (player) {
+    player.tyreBaseMods = tyreBaseModsFor(team, setup, tune);
+    player.mods = playerMods;
+    tyres.applyCompound(player, player.tyre || tyres.optionRecord(Parts.resolveSetup(setup, team).options.tyres));
+    playerMods = player.mods;
+    player.brakeBias = standard ? SetupTune.BB_REF : SetupTune.brakeBias(team.id);
+    player.rollBalance = standard ? 0 : SetupTune.balance(team.id);
+  }
   // How much wing this car is carrying (0..1), which sets how much active aero
   // trades — see X_VMAX_GAIN_LO/HI. Cached here rather than resolved per physics
   // step: it only changes when the parts do.
@@ -1923,6 +1958,7 @@ function makeCars() {
         // Per-car performance multipliers (human cars only — see modsFor).
         // startRace()'s recomputePlayerMods() refreshes the local player's.
         mods: isP ? modsFor(team, getTeamParts(team.id), SetupTune.mods(team.id)) : null,
+        tyreBaseMods: isP ? tyreBaseModsFor(team, getTeamParts(team.id), SetupTune.mods(team.id)) : null,
         // AI runs the works wing/ERS (SIGNATURE equivalents already differ).
         // MY TEAM + hire share the saved build; everyone else uses factory.
         rollBalance: isP ? SetupTune.balance(team.id) : 0,
@@ -2149,7 +2185,7 @@ function gridUp(preOrder) {
     // (PitLane.think never executes a human's; the HUD and the engineer read it).
     c.pitPlan = tyres.on() ? pits.planFor(c.human ? 0.5 : (h >>> 24) / 256, !!c.human) : null;
     if (c.pitPlan && !c.human) c.tyreClass = c.pitPlan.start;
-    tyres.fit(c, c.tyreOpt ? tyres.optionRecord(c.tyreOpt) : tyres.classRecord(c.tyreClass));
+    tyres.fit(c, tyres.startRecord(c));
   });
   // Seed the PLAYER's world pose HERE rather than leaving it to the first
   // physics tick (the `c.px == null` init in update()). The chase rig has two
@@ -2626,13 +2662,17 @@ async function startRaceBody() {
   await ensureScenery(trackIdx);
   rlap("scenery");
   // Completed seasons are readable, never raceable (also guarded by award()).
-  if ((flow === "season" && !SeasonCal.canRace(season)) || (isCareer() && Career.conflicted())) {
+  const careerSaveConflict = isCareer() && Career.conflicted();
+  const seasonSaveConflict = flow === "season" && SeasonCal.conflicted();
+  if ((flow === "season" && !SeasonCal.canRace(season)) || careerSaveConflict || seasonSaveConflict) {
     // THE LOADING SCREEN IS STILL UP: only clearMenuScreens() (past this
     // return) and quitToMenu() lower it, so this arm left the menu behind a
     // z-36 pointer-events:auto scrim with an inert skip handler — reload only.
     loadingScreen.stop();
     state = "menu"; $("race-settings").hidden = true;
-    isCareer() && Career.conflicted() ? announce("SAVE CONFLICT — reload career", 3, "info") : (buildSelect(), els.select.hidden = false);
+    if (careerSaveConflict) announce("SAVE CONFLICT — reload career", 3, "info");
+    else if (seasonSaveConflict) announce("SAVE CONFLICT — reload season", 3, "info");
+    else { buildSelect(); els.select.hidden = false; }
     return false;
   }
   // Drop ownership of the previous race's car indexes before makeCars replaces them.
@@ -2983,7 +3023,7 @@ function endRace(forcedOrder) {
     // salary, the bonus, the brief and the wage bill all resolve here, and
     // buildResults() is where the economy is legible as it moves.
     if (isCareer()) { if (settles) careerSettlement = Career.settleRound(order, player); }
-    else store.set("season", season);   // the sprint's points AND its stage, one write
+    else SeasonCal.save(season);   // the sprint's points AND its stage, one guarded write
   }
   // A one-off GP's driven quali order stays persisted (quali-persist contract);
   // quali's qualiTrack stamp refuses it on a different circuit.
@@ -3336,6 +3376,7 @@ const G = {
   refreshLightTunePanel: (...a) => refreshLightTunePanel(...a),   // const initialised below — defer
   setCamMode: (...a) => setCamMode(...a),   // const from CamModes.create(G) below — defer
   rescuePlayer, setLightTune, snapGameCam,
+  onIncidentLineCross,
   // Live weather + time of day (js/race/weather-arc.js) — deferred, wxArc is created below.
   setWeatherLive: (w) => wxArc.setWeatherLive(w),
   setTimeOfDay: (tod) => wxArc.setTimeOfDay(tod),
@@ -3487,28 +3528,10 @@ qualiNet = QualiNet.create({
   },
 });
 // RACE SETTINGS sheet (js/race/race-settings.js).
-raceSettings = RaceSettings.create({
-  $, store, GameAudio, getSoundOn: () => soundOn, Tracks, SettingRow, DrivingLine,
-  GAME_LAPS, TT_LAPS, scheduleFlybyTrack,
-  isTimeTrial, isChampionship, SeasonCal, setCautionEnabled,
-  getTrackIdx: () => trackIdx,
-  getRaceLaps: () => raceLaps, setRaceLaps: (v) => { raceLaps = v; },
-  getRaceWeather: () => raceWeather, setRaceWeather: (v) => { raceWeather = v; },
-  getRaceTimeOfDay: () => raceTimeOfDay, setRaceTimeOfDay: (v) => { raceTimeOfDay = v; },
-  getRaceChangeable: () => wxArc.changeable, setRaceChangeable: (v) => { wxArc.changeable = v; },
-  setWxArcPlan: (v) => { wxArc.plan = v; },
-  getDifficulty: () => difficulty, setDifficulty: (v) => { difficulty = v; },
-  getRaceGrid: () => raceGrid, setRaceGrid: (v) => { raceGrid = v; },
-  getRaceReliability: () => raceReliability, setRaceReliability: (v) => { raceReliability = v; },
-  getRaceTyreWear: () => raceTyreWear, setRaceTyreWear: (v) => { G.raceTyreWear = v; },
-  getDuel: () => duelMode, setDuel: (v) => { duelMode = !!v; },
-  getDuelLegend: () => duelLegend, setDuelLegend: (v) => { duelLegend = v || ""; },
-  getPits: () => pits,   // the STRATEGY row: the reference plan and the pin (PitLane.planFor)
-  getRaceCtl: () => raceCtl,
-  gridFromQuali, getSeason: () => season, qualiResults: () => quali.results(),
-  openQuali, startRace, enableTilt, getSteerMode: () => steerMode,
-  getNetLobby: () => netLobby, getDaily: () => daily.current(), buildSelect, els, openGarage, buildStandings,
-  raceIntro,
+raceSettings = RaceSettings.create(G, {
+  GameAudio, Tracks, SettingRow, DrivingLine, SeasonCal,
+  qualiResults: () => quali.results(), openQuali, enableTilt,
+  getSteerMode: () => steerMode, buildStandings, raceIntro,
 });
 // PRE-RACE LOADING SCREEN (js/ui/loading-screen.js). It plays the cinematic
 // over the world scheduleFlybyTrack() already warmed, then holds a static card
@@ -3590,7 +3613,7 @@ function loadingInfo() {
 // ACTIVE AERO activation zones (js/physics/aero-zones.js) — pure circuit geometry.
 aeroZ = AeroZones.create(G);
 // Tyre marks (js/fx/skidmarks.js) — self-contained ring buffer + batched draw.
-skids = SkidMarks.create(G);
+skids = SkidMarks.create();
 DrivingLine.setMode(store.get("drivingLine", "full"));
 // What the ribbon builder needs from the engine: the centreline sampler and
 // the STATIC curvature LUT (a render-only read — docs/PHYSICS.md §curvature
@@ -3800,7 +3823,7 @@ function quitToMenu() {
   try { delete document.documentElement.dataset.team; } catch (_) { /* no DOM */ }
   // …and drop the career championship alias with it, so STANDINGS on the title
   // screen describes the standalone season again.
-  season = store.get("season", null);
+  season = SeasonCal.load();
   // Standings once an active season has scored. hasProgress(), not `round > 0`:
   // a sprint banks points while its round is still open (js/career/season-cal.js).
   const hasSeason = SeasonCal.hasProgress(season) && season.round < SeasonCal.rounds();
@@ -5829,21 +5852,18 @@ function updateCar(c, dt, ranked) {
   // road) and crossing again added a SECOND lap, and `c.finished` could fire a
   // full lap early. The backward branch below restores the symmetry `prog`
   // already had.
-  if (dLine > 0 && oldS > track.total * 0.5 && c.s < track.total * 0.5) {
-    c.lap++;
-    // Retained so the backward branch can put the clock back. Without it a
-    // re-crossing records the few tenths since the reset as a completed lap —
-    // not just a wrong readout: it beats `c.best` and becomes the stored ghost.
-    c._lapTimeAtLine = c.lapTime;
+  const lineCross = RaceControl.lineTransition(c, oldS, c.s, dLine, track.total,
+    lapsTarget, cars, raceT);
+  if (lineCross && lineCross.direction > 0) {
     // A takeover (R2/R3/C1) during this lap invalidates it EXPLICITLY: the car
     // was moved by Rapier, so it is not a timed lap — no personal best, no
     // stored ghost. The flag is set by IncidentSim and cleared here at the line.
     const lapValid = !c.incidentInvalidLap && !(c.isPlayer && coach.practiceActive());
     // The flag: the distance, or the leader already home (RaceControl.flagOut —
     // a lapped car is flagged at its next crossing, not after the full count).
-    const flagged = c.lap > lapsTarget || (c.lap > 1 && RaceControl.flagOut(cars));
+    const flagged = lineCross.flagged;
     if (c.lap > 1) {
-      const lapDone = c.lapTime;
+      const lapDone = lineCross.lapDone;
       if (lapValid) c.lastLap = lapDone;
       if (lapValid && lapDone < c.best) c.best = lapDone;
       if (c.isPlayer && soundOn) GameAudio.lap();
@@ -5860,23 +5880,16 @@ function updateCar(c, dt, ranked) {
       Ghost.startLap();
     }
     c.incidentInvalidLap = false;   // the new lap starts clean
-    c.lapTime = 0;
     c._secT0 = 0;   // …and the FIELD's S1 reference, or it measures across the reset
     if (c.isPlayer) { sectorIdx = 0; sectorStartT = 0; }
     // Never on a 1-lap session: that crossing is the START crossing, and a qualifying flying lap is not a final lap.
     if (c.isPlayer && c.lap === lapsTarget && lapsTarget > 1) announce("FINAL LAP", 1.6, "race");
-    if (flagged) {
-      c.finished = true;
-      c.finishT = raceT;
-      if (c.isPlayer) announce("FINISH!", 2, "race");
-    }
-  } else if (dLine < 0 && oldS < track.total * 0.5 && c.s > track.total * 0.5) {
+    if (flagged && c.isPlayer) announce("FINISH!", 2, "race");
+  } else if (lineCross && lineCross.direction < 0) {
     // Backward over the line: give the lap back and put the clock where it was,
     // so the next forward crossing re-times the SAME lap rather than a sliver.
     // (An AI car gets here only via a contact shove — dLine is the real move.)
-    if (c.lap > 0) {
-      c.lap--;
-      c.lapTime = c._lapTimeAtLine != null ? c._lapTimeAtLine : c.lapTime;
+    if (lineCross.changed) {
       // (A finished car cannot get here — updateCar early-outs it long before
       // the crossing logic — so no `c.finished` undo is needed.)
       if (c.isPlayer) { sectorIdx = sectorAt(c.s); sectorStartT = c.lapTime; sectorValid = false; }   // the next split is timed from a reversed entry — invalid, as at a sector line
@@ -8171,8 +8184,7 @@ window.addEventListener("hashchange", consumeGhostHash);
 $("mb-season").onclick = () => {
   setFlow("season"); session = "race";
   // Replace any career alias with the repaired standalone save; finished stays readable.
-  season = SeasonCal.resume(store.get("season", null));
-  store.set("season", season);
+  season = SeasonCal.load();
   // Finished championship: trackIndex(rounds()) is -1 — park the flyby on the
   // last raced circuit instead of crashing loadTrack.
   let ti = SeasonCal.trackIndex(season.round);
@@ -8547,7 +8559,8 @@ els.resNext.onclick = () => {
       // builder; "MAIN MENU" on the button is the sentinel that it is already up.
       if (els.resNext.textContent !== "MAIN MENU") { buildChampion(); return; }
       // Second click: go to menu, reset season
-      season = null; store.set("season", null);
+      const cleared = SeasonCal.clear();
+      season = cleared.ok ? null : SeasonCal.load();
       els.resultsTitle.style.color = "";
       quitToMenu();
       return;
@@ -8831,7 +8844,6 @@ window.addEventListener("pagehide", () => { PerfGov.sentinelArm(false); _disarmP
 customTeam.init();
 raceSettings.wireButtons();
 customTeam.syncCustomTeam();   // inject "MY TEAM" so saved selections and chips resolve
-migrateSeasonPoints();
 teamIdx = idxOr(teamIdx, Teams.LIST.length, 2);
 clampDriverIdx();
 // Clamp a legacy positional selection before migrating it to stable identity.

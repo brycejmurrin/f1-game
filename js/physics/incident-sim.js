@@ -359,16 +359,11 @@ const IncidentSim = (function () {
   // clock and can never be a PB/ghost; updateCar's own crossing clears it
   // once the player has driven a whole lap.
   function _lapCross(c, ds, newS, L) {
-    if (!(ds > 0) || !(c.s > L * 0.5 && newS < L * 0.5)) return;
-    c.lap++;
-    c._lapTimeAtLine = c.lapTime;
-    c.lapTime = 0;
-    if (c.isPlayer) { G.sectorIdx = 0; G.sectorStartT = 0; }
-    const target = G.lapsTarget;
-    if (fin(target) && target > 0 && c.lap > target) {
-      c.finished = true;
-      c.finishT = fin(G.raceT) ? G.raceT : 0;
-    }
+    const cross = RaceControl.lineTransition(c, c.s, newS, ds, L,
+      G.lapsTarget, G.cars, G.raceT);
+    if (!cross) return;
+    if (G.onIncidentLineCross) G.onIncidentLineCross(c, cross, newS);
+    else if (cross.direction > 0 && c.isPlayer) { G.sectorIdx = 0; G.sectorStartT = 0; }
   }
 
   function yawOf(pose) {
