@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import { DEPLOY_BRANCH, touchedCircuits, preflight, ratchetMetrics, ratchetOverruns, cureableConflicts,
   sweepSuites, touchesGeometry, targetedFor, notCovered, anyGeometry, proseOnly } from "../../tools/ci/deploy.mjs";
 import { DEPLOY_BRANCH as PICK_BRANCH } from "../../tools/ci/pick-tests.mjs";
-import { GEOMETRY_ERE, GEOMETRY_PATHS, namedPaths, fleetFiles, TARGETED, targetedSuites } from "../../tools/ci/geometry-paths.mjs";
+import { GEOMETRY_ERE, GEOMETRY_PATHS, namedPaths, fleetFiles, TARGETED, targetedSuites, PARTS_ERE, partsFiles } from "../../tools/ci/geometry-paths.mjs";
 import { createRequire } from "node:module";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -283,6 +283,52 @@ test("ci.yml READS the geometry pattern instead of keeping a second copy", () =>
   assert.deepEqual(inline, [],
     "a hand-written geometry alternation is back in ci.yml — the last time there were " +
     "two copies, one kept matching debris-world at its pre-rename path for a day");
+});
+
+test("the parts census derives its trigger, and every fail-safe branch RUNS it", () => {
+  /* sweeps-parts ran on every push, PR and train — 106 s of runner before any
+     path was examined, docs-only diffs included. It now has a filter, and a
+     filter is only as good as its fail-safe: the one thing it may never do is
+     guess "nothing changed" when it cannot tell. Each branch is pinned by the
+     string it prints, because that string is what a reader sees in the log. */
+  const yml = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
+  const job = yml.slice(yml.indexOf("\n  sweeps-parts:"), yml.indexOf("\n  sweeps:"));
+  assert.ok(job.includes("node tools/ci/geometry-paths.mjs --parts-ere"),
+    "the parts filter must DERIVE its pattern from parts-sweep.mjs's load list, not retype it");
+  assert.match(job, /fetch-depth: 0/, "the filter diffs against an arbitrary base; a depth-1 clone has no base");
+  // FAIL SAFE, never fail open: five ways to not know, five run_all calls.
+  for (const branch of [/not a push, a PR or a Pages call/, /no comparison base/,
+                        /unreachable \(force push\?\)/, /git diff failed/,
+                        /could not read the parts path pattern/, /printed an EMPTY parts pattern/]) {
+    assert.match(job, branch, `the parts filter lost a fail-safe branch: ${branch}`);
+  }
+  // A pull_request base, which the sweeps filter beside it went without for a
+  // year. Without this the `*)` arm catches PRs and the census runs on all of them.
+  assert.match(job, /pull_request\) BEFORE="\$\{PR_BASE:-\}" ;;/,
+    "a pull_request has a base; use it rather than fail-safing every PR into the census");
+  // STEP-LEVEL, never a job `if:` — poke-train has `needs: sweeps-parts` and
+  // pages.yml has `needs: ci`, and both read the AGGREGATE of the jobs that ran.
+  assert.ok(!/^    if: \$\{\{ inputs\.fast_tier_run == '' && /m.test(job),
+    "the census must stay a job that runs and skips a step, not a job that skips");
+  assert.match(job, /- if: steps\.filter\.outputs\.parts == 'true'\n\s+run: npm run test:sweeps-parts/,
+    "the expensive step is what the filter gates");
+});
+
+test("the parts pattern covers every module the sweep actually loads", () => {
+  // DERIVED, so the test's job is to prove the derivation is COMPLETE rather
+  // than to restate it: every file parts-sweep.mjs runs into its VM, plus the
+  // tool and the suite, must match; a path outside the census must not.
+  const re = new RegExp(PARTS_ERE());
+  for (const f of [...partsFiles(), "tools/car/parts-sweep.mjs",
+                   "tests/unit/parts-visual-distinctness.test.mjs"]) {
+    assert.ok(re.test(f), `the parts pattern misses ${f}, which the census reads`);
+    assert.ok(fs.existsSync(path.join(ROOT, f)), `${f} does not exist — the load list has drifted`);
+  }
+  for (const f of ["docs/README.md", "js/track/tracks.js", "js/circuits/monza.js", "tests/specs/smoke.spec.js"])
+    assert.ok(!re.test(f), `the parts pattern matches ${f}, which the census never reads`);
+  // ANTI-VACUITY on the parse: a partial read must THROW, not return a short
+  // list that quietly stops matching the modules it dropped.
+  assert.ok(partsFiles().length >= 4, `parsed only ${partsFiles().length} modules out of parts-sweep.mjs`);
 });
 
 /* A PULL REQUEST HAS A BASE, AND THE SWEEPS FILTER IGNORED IT (2026-09-22).
