@@ -4758,3 +4758,58 @@ unchanged tree: a second 2.9 makes force the trigger, a 47 makes it bimodal and
 force innocent. Then `force: "1"` plus `ls: apex26.envProbeOff=1` — if 2.9
 survives with the probe already never starting, the cube is exonerated for this
 mode and the cause is something else on the forced path.
+
+## 2y. TLX's frame block was one uniform buffer PER DRAW, not per program (2026-09-22)
+
+**The defect, in three's own terms.** Every uniform in `js/render/three/tsl-lit.js`'s
+frame block — the ~60 lighting/fog/shadow scalars, vectors and matrices, the four
+`uniformArray` lamp tables of `MAX_LIGHTS` rows, `matTexMix`, `matTexScale` — was created
+with `uniform()`'s default group, `objectGroup`. In three r185 that group is non-shared,
+and `NodeBuilderState.createBindings()` clones every non-shared bind group per RENDER
+OBJECT. TLX draws a few hundred pooled meshes a frame, so each carried its own copy of
+the block; the five `NodeUniformBuffer` arrays report `update() → true` every time, so
+they re-uploaded per object per pass — on the WebGL2 backend (every iOS browser and
+Safari, tlx.js's `isWebKit` rule) a full `gl.bufferData` each. The comment above the
+block called it "one shared set", which was true of the node descriptors and false of
+the GPU buffers; `tlx.js`'s own debug comment already said "three refreshes every
+OBJECT-group uniform per draw" and drew the wrong conclusion (reduce draws) from it.
+
+**The fix.** One loop after the last `U.*` assignment: `for (const k in U)
+U[k].setGroup(renderGroup)` (a loop, because `_getBindGroup` shares a group only when
+every binding in it has the same `groupNode`, and the group also holds three's camera
+uniforms — one stray member demotes the lot). `renderGroup`, not `frameGroup`: the
+shadow maps, the optional env faces and the scene are separate `renderer.render()` calls
+with `updateFrame` between them. `apex26.tlxSharedUniforms=0` restores the per-object
+layout for an A/B. Per-draw uniforms (`tsl-fx.js` `lineSpeed`, `glowStr`) stay where
+they were.
+
+**Instrument.** `memState()` now reports `rUbo`/`rUboKB` (three's
+`info.memory.uniformBuffers[Size]`), `groupVer` (the render group's version — must
+advance per render call, or the block froze after its first upload) and `presentMs` (JS
+EMA inside `present()`'s render calls). `gfx-probe` prints them as `tlxMem`, the census
+beats as `ubo`. Software adapters make the COUNTS valid and the milliseconds not
+(§0); the two software legs below are read for counts, errors and luma only.
+
+| leg (montreal, park cam) | shared | draw calls | uniform buffers | KB | groupVer | JS ms in render calls | gpuErrors | frame |
+|---|---|---|---|---|---|---|---|---|
+| SwiftShader WebGL2 (`--backend three`) | off | 1222 | **7754** | **5232** | 13665 | 119 | 0 | coverage classes identical |
+| SwiftShader WebGL2 | on | 1160 | **934** | **322** | 1158 | 75 | 0 | coverage classes identical |
+| Lavapipe WebGPU (`--tlx-webgpu --lavapipe`) | off | 1362 | **4160** | **1382** | 2411 | 0.17 | 0 | meanLuma 46.9 |
+| Lavapipe WebGPU | on | 1513 | **816** | **175** | 1511 | 0.31 | 0 | meanLuma 46.5 |
+| Lavapipe WebGPU `tlxForceHw=env` | on | 3239 | 816 | 175 | 3237 | 0.02 | 0 | meanLuma 46.6 |
+| Lavapipe WebGPU `tlxForceHw=shadow` | on | 1500 | 816 | 175 | 1498 | 0.14 | 0 | meanLuma 46.5 |
+
+8.3x fewer uniform buffers and 16x fewer uniform bytes on WebGL2; 5.1x and 7.9x on
+WebGPU; the forced env and shadow legs (multi-pass, `updateFrame` between passes) keep
+the same counts and the same frame, and `groupVer` advances on every leg. CI run 4570
+(llvmpipe) passed all 17 `tlx-probes.spec.js` tests with the change on, including the
+new one that asserts `rUbo < max(64, draws)` and a rising `groupVer`. The SwiftShader
+WebGL2 leg's 45-frame warm-up took 4 m 33 s shared against 5 m 21 s per-object — the
+one software timing worth quoting, because it is minutes, not milliseconds.
+
+**What this does not show.** Real-GPU frame time. The census request committed with
+this entry runs `macos-latest` on both arms (`ls: apex26.tlxSharedUniforms=0` is the
+control); read its `ubo` beats for the counts and treat `gms`/fps per §2w — never
+single-shot. The 48 MB iPhone TLX-vs-GLX memory gap (§2r) is a separate question; 5 MB
+of uniform buffers on a 1200-draw desktop frame is a bound on what this can have been
+worth there, not an answer.

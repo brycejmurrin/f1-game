@@ -1,10 +1,10 @@
 {
   "images": "macos-latest",
-  "track": "vegas",
+  "track": "montreal",
   "tod": "night",
   "clock": 2,
   "census_only": false,
   "force": "",
   "ls": "apex26.resMode=high",
-  "leg": "night-built-2026-09-16-bake-the-lamps-not-just-the-sky"
+  "leg": "tlx-shared-uniforms-ON-2026-09-22"
 }
