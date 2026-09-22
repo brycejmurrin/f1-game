@@ -2615,6 +2615,10 @@ async function startRaceBody() {
   rlap("scenery");
   // Completed seasons are readable, never raceable (also guarded by award()).
   if ((flow === "season" && !SeasonCal.canRace(season)) || (isCareer() && Career.conflicted())) {
+    // THE LOADING SCREEN IS STILL UP: only clearMenuScreens() (past this
+    // return) and quitToMenu() lower it, so this arm left the menu behind a
+    // z-36 pointer-events:auto scrim with an inert skip handler — reload only.
+    loadingScreen.stop();
     state = "menu"; $("race-settings").hidden = true;
     isCareer() && Career.conflicted() ? announce("SAVE CONFLICT — reload career", 3, "info") : (buildSelect(), els.select.hidden = false);
     return false;
@@ -2682,7 +2686,10 @@ async function startRaceBody() {
   } else {                     // isRaining() made the whole shipped tier (three
     Particles.rainShow(false); // sliders + rainSeed(drizzle)) unreachable.
   }
-  if (!isQuali() && gridFromQuali() && !quali.order(cars)) { openQuali(); return false; }
+  // Same early-return hazard as the completed-season arm above: this one only
+  // self-heals because #quali is a <dialog> in the top layer, which draws over
+  // the scrim. Lower it anyway rather than rely on that.
+  if (!isQuali() && gridFromQuali() && !quali.order(cars)) { loadingScreen.stop(); openQuali(); return false; }
   gridUp(gridOrderFor(gridFromQuali() ? quali.order(cars) : SeasonCal.grid(cars, season)));
   rlap("gridUp");
   startChangeable();
@@ -8908,7 +8915,11 @@ customTeam.init();
 raceSettings.wireButtons();
 customTeam.syncCustomTeam();   // inject "MY TEAM" so saved selections and chips resolve
 migrateSeasonPoints();
-if (teamIdx < 0 || teamIdx >= Teams.LIST.length) teamIdx = 2;
+// INTEGER CHECK, not `idx < 0 || idx >= len`: both of those are false for a
+// non-number, so a garage file carrying `team: "mclaren"` reached
+// Teams.LIST[teamIdx].id and threw at boot with no recovery. The negated form
+// below admits null/[]/"3" too, and Teams.LIST[null] is the same crash.
+if (!(Number.isInteger(teamIdx) && teamIdx >= 0 && teamIdx < Teams.LIST.length)) teamIdx = 2;
 clampDriverIdx();
 // Clamp a legacy positional selection before migrating it to stable identity.
 if (!(trackIdx >= 0 && trackIdx < Tracks.LIST.length)) trackIdx = 0;

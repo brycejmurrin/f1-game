@@ -383,7 +383,13 @@ function garageValue(k, v) {
   if (k.indexOf("parts.") === 0 || k.indexOf("setup.") === 0) {
     return v && typeof v === "object" && !Array.isArray(v) ? v : undefined;
   }
-  return v;   // the four singles keep whatever shape they already had
+  // `team` and `driver` are array INDICES, not free-form singles: a string or
+  // object here reaches js/game.js's boot clamp, which used a comparison form
+  // that a non-number slips through, and Teams.LIST[idx].id then throws with
+  // no recovery. Validated at the door as well as clamped at the far end —
+  // the same belt-and-braces cleanLivery() gets one branch above.
+  if (k === "team" || k === "driver") return Number.isInteger(v) && v >= 0 ? v : undefined;
+  return v;   // the remaining singles keep whatever shape they already had
 }
 function applyGarage(file) {
   if (!file || file.format !== GARAGE_FORMAT) return { ok: false, reason: `not an ${GARAGE_FORMAT} file`, applied: 0, skipped: 0 };
