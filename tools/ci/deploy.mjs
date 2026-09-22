@@ -9,12 +9,21 @@
 //                                       #   it — geometry-paths.mjs) → verify-track (touched
 //                                       #   circuits) → push
 //                                       #   HEAD to the deploy branch (retry ×3)
+//   node tools/ci/deploy.mjs --pr-on-race  # direct push, but after TWO fast-forward losses open a
+//                                       #   PR instead of a third ~50-min re-verify (busy branch)
 //   node tools/ci/deploy.mjs --pr          # same checks, then push the session branch and open /
 //                                       #   update a PR into the deploy branch (never pushes there)
 //   node tools/ci/deploy.mjs --gate-only   # run the DEPLOY GATE and stop: tooling-fast + ci.yml's
 //                                       #   node suites + verify-track. Pushes nothing, allows a
 //                                       #   dirty tree. THE pre-push check: test:tooling-fast is a
 //                                       #   subset and does not run 69 of the 277 unit files.
+//                                       #   Its union is commits + staged + unstaged + untracked
+//                                       #   (changedPaths), so an uncommitted circuit edit still
+//                                       #   gets the sweeps and its verify-track.
+//   node tools/ci/deploy.mjs --train       # print train health (last push ci, pages, and the
+//                                       #   NIGHTLY rota by JOB) and stop. Two curl calls, no
+//                                       #   preflight: the "is the branch already red, and did
+//                                       #   last night's rotating group find anything" check.
 //   node tools/ci/deploy.mjs --json        # machine verdict on stdout, log on stderr
 //
 // What it replaces: the prose protocol in the deploy-merge skill — fetch, look,
@@ -83,9 +92,29 @@ export function preflight() {
 // reads it pre-merge and the run reads it post-merge, where the two forms agree
 // because the tip is an ancestor by then. Same idiom `theirDiffstat` already
 // uses in the other direction.
+//
+// PLUS THE WORKING TREE (2026-09-22). `base...HEAD` sees commits only, but
+// --gate-only exists to gate an UNCOMMITTED edit (it waives preflight's dirty
+// refusal for exactly that), and every suite it runs reads the working tree.
+// Change detection read HEAD: a session that edited js/circuits/portimao.js and
+// its scenery, uncommitted, got "test:sweeps (nothing in this union can move
+// geometry)" and no verify-track at all, on a diff that moved three baselines.
+// So the union is committed + staged + unstaged + untracked-not-ignored. A real
+// deploy refuses a dirty tree, so for it the extra terms are empty.
+// null (never []) when any of the three git reads fails: callers fail SAFE.
+export function changedPaths(base, cwd) {
+  const o = cwd ? { cwd } : {};
+  const reads = [
+    git(["diff", "--name-only", `${base}...HEAD`], o),      // our commits
+    git(["diff", "--name-only", "HEAD"], o),                 // staged + unstaged
+    git(["ls-files", "--others", "--exclude-standard"], o),  // new, not ignored
+  ];
+  if (reads.some((r) => r.code !== 0)) return null;
+  return [...new Set(reads.flatMap((r) => r.out.split("\n")).filter(Boolean))];
+}
+
 export function touchedCircuits(base, cwd) {
-  const out = git(["diff", "--name-only", `${base}...HEAD`], cwd ? { cwd } : {}).out;
-  return [...new Set(out.split("\n")
+  return [...new Set((changedPaths(base, cwd) || [])
     .map((f) => /^js\/circuits\/(?:scenery\/)?([a-z_]+)\.js$/.exec(f))
     .filter(Boolean).map((m) => m[1]))];
 }
@@ -196,9 +225,9 @@ export function anyGeometry(files) {
 }
 
 export function touchesGeometry(base, cwd) {
-  const r = git(["diff", "--name-only", `${base}...HEAD`], cwd ? { cwd } : {});
-  if (r.code !== 0) return true;                        // unresolvable diff -> run them
-  return anyGeometry(r.out.split("\n").filter(Boolean));
+  const files = changedPaths(base, cwd);
+  if (!files) return true;                              // unresolvable diff -> run them
+  return anyGeometry(files);
 }
 
 /* THE TARGETED TIER (2026-09-22). Ten of the fourteen sweep suites measure the
@@ -212,9 +241,9 @@ export function touchesGeometry(base, cwd) {
  * union run, and a game.js-only union runs none. Asked only after
  * touchesGeometry() said no: an unresolvable diff already ran everything. */
 export function targetedFor(base, cwd) {
-  const r = git(["diff", "--name-only", `${base}...HEAD`], cwd ? { cwd } : {});
-  if (r.code !== 0) return [];
-  return targetedSuites(r.out.split("\n").filter(Boolean));
+  const files = changedPaths(base, cwd);
+  if (!files) return [];
+  return targetedSuites(files);
 }
 
 function runTargeted(suites, why) {
@@ -512,6 +541,16 @@ function pushWithRetry(oursProse = false) {
     const r = git(["push", REMOTE, `HEAD:${DEPLOY_BRANCH}`]);
     if (r.code === 0) return { attempts: attempt, swept };
     log(`push rejected (attempt ${attempt}): ${r.err.split("\n").pop()}`);
+    // A BUSY BRANCH CANNOT BE WON BY RE-VERIFYING. One full pass here is ~50
+    // min and on 2026-09-22 the deploy tip took a PR merge every ~30 min, so
+    // a direct push lost the fast-forward race three times in 2.5 h and the
+    // fourth pass had to be killed by hand. A PR runs the identical gate on
+    // GitHub with no race at all. With --pr-on-race the SECOND rejection
+    // (one re-verify already lost) switches to that path instead of a third.
+    if (attempt >= 2 && flag("--pr-on-race")) {
+      log("push rejected twice — the branch is busy; opening a PR instead of a third re-verify (--pr-on-race)");
+      return { attempts: attempt, swept, race: true };
+    }
     const before = git(["rev-parse", "HEAD"]).out.trim();
     must(git(["fetch", "--no-tags", REMOTE, DEPLOY_BRANCH]), "fetch");
     mergeDeployTip();
@@ -585,7 +624,12 @@ export function openPrRest(branch, token) {
   // deploy merges the base tip before it opens the PR, so HEAD is almost
   // always "Merge remote-tracking branch …", which is what PR #182 was called
   // until this line existed. `--no-merges` walks back to the work itself.
-  const head = git(["log", "-1", "--no-merges", "--format=%s%x00%b", `${DEPLOY_BRANCH}..HEAD`]).out
+  // ORIGIN/, not the local branch name: the session's local copy of the
+  // deploy branch is whatever it was when the session started, so a range
+  // from it spans every session's commits since — and PR #211 opened titled
+  // with another session's commit. The fetch above just refreshed origin/.
+  const head = git(["log", "-1", "--no-merges", "--format=%s%x00%b", `origin/${DEPLOY_BRANCH}..HEAD`]).out
+            || git(["log", "-1", "--no-merges", "--format=%s%x00%b", `${DEPLOY_BRANCH}..HEAD`]).out
             || git(["log", "-1", "--no-merges", "--format=%s%x00%b"]).out;
   const [title, body] = head.split("\0");
   const pr = ghApi(token, "POST", `${api}/pulls`, { title, body, head: branch, base: DEPLOY_BRANCH }).json;
@@ -657,12 +701,19 @@ export function gateOnly() {
   const verified = [];
   run("node", ["tools/ci/tooling-fast.mjs", GATE_JOBS], "guard suite"); verified.push("tooling-fast");
   for (const script of gateNodeSuites()) { run("npm", ["run", script], `Pages gate: ${script}`); verified.push(script); }
-  // ci.yml's "Parts option-resolution census" job runs test:sweeps-parts
-  // UNCONDITIONALLY on every push (no path filter), so a red in either of its
-  // two files takes the deploy red — and until 2026-09-22 nothing before a
-  // push ran them (tests/unit/prepush-gate-coverage.test.mjs listed both as
-  // SWEEPS_ONLY). ~40 s; the geometry sweeps stay conditional (touchesGeometry).
-  run("npm", ["run", "test:sweeps-parts"], "Pages gate: test:sweeps-parts (unconditional on CI)"); verified.push("test:sweeps-parts");
+  // ci.yml's "Parts option-resolution census" job runs test:sweeps-parts, so a
+  // red in either of its two files takes the deploy red — and until 2026-09-22
+  // nothing before a push ran them (tests/unit/prepush-gate-coverage.test.mjs
+  // listed both as SWEEPS_ONLY).
+  //
+  // UNCONDITIONAL HERE, CONDITIONAL THERE, on purpose. That job took a path
+  // filter on 2026-09-22 (geometry-paths.mjs PARTS_ERE), so CI now skips the
+  // census on a diff that cannot move the car. This gate does not: it costs
+  // ~40 s, it is the last check before a push to a branch several sessions
+  // build on, and running a cheap suite CI would skip is the safe direction —
+  // the reverse (skipping one CI runs) is what a pre-push gate may never do.
+  // The geometry sweeps stay conditional because they are 8-15 minutes, not 40 s.
+  run("npm", ["run", "test:sweeps-parts"], "Pages gate: test:sweeps-parts"); verified.push("test:sweeps-parts");
   // Against the deploy tip, same as a real deploy: the circuits OUR side
   // touched (three-dot), not every circuit that moved on the branch.
   let circuits = [];
@@ -724,6 +775,54 @@ function trainHealth() {
     const state = r.status === "completed" ? r.conclusion : r.status;
     log(`train ${label}: ${state} @ ${r.sha}${state === "failure" ? "  <- the deploy branch was ALREADY red before this push: " + r.url : ""}`);
   }
+  nightlyHealth();
+}
+
+/* THE NIGHTLY IS THE ONLY SCHEDULED COVERAGE THE PUSH GATE CANNOT GIVE, and
+   until this function existed nothing printed it. select-specs skips any spec
+   whose declared budget exceeds the gate's 180 s per-test cap, and
+   spec-staleness measures the result: 61 of 119 specs were never selected in the
+   last 30 days. tools/ci/nightly-group.mjs rotates ONE browser group a night to
+   reach them, so the nightly is where those specs report — and trainHealth's
+   per_page=1 above cannot show it, because the latest ci.yml run on this branch
+   is always a push.
+
+   READ THE JOBS, NOT THE ROLLUP. On 2026-09-22 the nightly ran group `input`,
+   and Smoke shard 1 genuinely FAILED: steering.spec.js "steering has authority
+   to fight the curvature drift", both attempts. The RUN came back `cancelled`,
+   because two other jobs were cancelled eight minutes later and `cancelled`
+   outranks `failure` in GitHub's rollup precedence — and AGENTS.md rule 8 tells
+   every session to read a `cancelled` as a timeout until proven otherwise. So
+   the one finding the rota existed to produce was filed, by the tooling, under
+   "the box was busy". It sat unread for the day. The job list is the only
+   honest source, so that is what this reads.
+
+   ADVISORY and silent on any API failure, exactly like trainHealth above: an
+   offline box still deploys, and a red nightly is never a reason to refuse a
+   push. */
+function nightlyHealth() {
+  const url = `https://api.github.com/repos/brycejmurrin/f1-game/actions/workflows/ci.yml/runs`
+    + `?branch=${encodeURIComponent(DEPLOY_BRANCH)}&event=schedule&per_page=1&exclude_pull_requests=true`;
+  const get = (u) => {
+    const r = spawnSync("curl", ["-sS", "--max-time", "10", "-H", "Accept: application/vnd.github+json", u], { encoding: "utf8" });
+    if (r.status !== 0) return null;
+    try { return JSON.parse(r.stdout); } catch { return null; }
+  };
+  const run = get(url)?.workflow_runs?.[0];
+  if (!run) { log("train nightly: unknown (no API answer)"); return; }
+  const when = (run.run_started_at || "").slice(0, 10);
+  const roll = run.status === "completed" ? run.conclusion : run.status;
+  if (roll === "success") { log(`train nightly: success @ ${when} (rotating group covered)`); return; }
+  // The rollup is not the verdict — name the jobs. A `cancelled` run with a
+  // FAILED job inside it is the shape that hid 2026-09-22's steering red.
+  const jobs = get(`https://api.github.com/repos/brycejmurrin/f1-game/actions/runs/${run.id}/jobs?per_page=30`)?.jobs;
+  if (!Array.isArray(jobs)) { log(`train nightly: ${roll} @ ${when} — ${run.html_url}`); return; }
+  const failed = jobs.filter((j) => j.conclusion === "failure").map((j) => j.name);
+  const stopped = jobs.filter((j) => j.conclusion === "cancelled").map((j) => j.name);
+  log(`train nightly: ${roll} @ ${when} — ${run.html_url}`);
+  if (failed.length) log(`  FAILED (a real test verdict, whatever the rollup says): ${failed.join(", ")}`);
+  if (stopped.length) log(`  cancelled (no verdict — these jobs report nothing): ${stopped.join(", ")}`);
+  if (!failed.length && !stopped.length) log("  no job failed or was cancelled — the rollup is the whole story");
 }
 
 export function main() {
@@ -753,6 +852,10 @@ export function main() {
     }
     return 0;
   }
+  // BEFORE preflight, deliberately. This is the one subcommand that must answer
+  // on a box too busy to deploy: "was the train already red" is exactly the
+  // question you ask while a browser run is pinning loadavg above the refusal.
+  if (flag("--train")) { trainHealth(); return 0; }
   const problems = preflight();
   if (problems.length) { for (const x of problems) log("REFUSED: " + x); return 3; }
   trainHealth();
@@ -764,7 +867,7 @@ export function main() {
   // never runs (run 1889, 2026-09-02). Run exactly what the gate runs, read
   // from ci.yml so the two lists cannot drift apart.
   for (const script of gateNodeSuites()) { run("npm", ["run", script], `Pages gate: ${script}`); verdict.verified.push(script); }
-  run("npm", ["run", "test:sweeps-parts"], "Pages gate: test:sweeps-parts (unconditional on CI)"); verdict.verified.push("test:sweeps-parts");
+  run("npm", ["run", "test:sweeps-parts"], "Pages gate: test:sweeps-parts"); verdict.verified.push("test:sweeps-parts");
   // Conditional, for the reason recorded above touchesGeometry(): ci.yml runs
   // the sweeps AFTER the push, so skipping them here buys 10 minutes with a
   // broken tip on a branch other sessions build on.
@@ -782,7 +885,11 @@ export function main() {
     if (oursProse) log("our side is prose only — a lost race re-verifies the cross-file guards, not the whole gate");
     const push = pushWithRetry(oursProse);
     verdict.pushAttempts = push.attempts;
-    verdict.pushed = true;
+    if (push.race) {
+      // The gate already passed on this union; the PR carries it to GitHub's
+      // copy of the same gate, where nothing can out-race it.
+      Object.assign(verdict, openPr(p.branch), { pushed: false, race: "opened a PR after two fast-forward losses (--pr-on-race)" });
+    } else verdict.pushed = true;
     // A retry can sweep a union main() never saw, so the verdict learns it here
     // rather than reporting the answer it computed before the re-merge.
     if (push.swept && !verdict.verified.includes("test:sweeps")) verdict.verified.push("test:sweeps");

@@ -153,6 +153,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ribbon flag to lineBrakeCue); this still asks that one key means one type.
   "tests/unit/store-key-types.test.mjs",
   "tests/unit/no-bare-console.test.mjs",
+  "tests/unit/lexical-window-guard.test.mjs",
   "tests/unit/light-store-cond-layer.test.mjs",
   "tests/unit/scenery-kits.test.mjs",
   "tests/unit/albert-park-foundation.test.mjs",
@@ -160,6 +161,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/image-grade-shaders.test.mjs",
   "tests/unit/chunked-index-ranges.test.mjs",
   "tests/unit/glx-occlusion.test.mjs",
+  "tests/unit/tlx-chunked-lifecycle.test.mjs",
   "tests/unit/glx-multidraw.test.mjs",
   "tests/unit/vertex-pack.test.mjs",
   "tests/unit/tex-census.test.mjs",
@@ -177,6 +179,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/data-api-status.test.mjs",
   "tests/unit/scenery-api-contract.test.mjs",
   "tests/unit/scenery-guards.test.mjs",
+  "tests/unit/track-build-vm-release.test.mjs",
+  "tests/unit/baked-model-road-guard.test.mjs",
   "tests/unit/floodmast-lamp-register.test.mjs",
   "tests/unit/cdmcp-measure.test.mjs",
   "tests/unit/tools-runnable.test.mjs",
@@ -272,6 +276,14 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // were painted opposite colours. Neither half is wrong alone, so only a test
   // comparing the PAIR can see it. Pure text, well under a second.
   "tests/unit/delta-sign-colour.test.mjs",
+  // ...and the fourth: the component inventory only ever guarded DEFINED-
+  // but-unapplied. This is the mirror — a class the markup wears that no rule
+  // matches, which reads as styled and is not. Pure source scan, ~0.3 s.
+  "tests/unit/class-usage.test.mjs",
+  // ...and the DIFF[difficulty] family, one door further out: three readers
+  // that took a stored index or object on trust. Executes the shipped source
+  // (idxOr, loadCustomTeam, DebrisWorld.reset), no browser. Well under a second.
+  "tests/unit/boot-input-shape.test.mjs",
   "tests/unit/gallery-capture-draws.test.mjs",
   "tests/unit/track-graph.test.mjs",
   "tests/unit/lighting-campaign.test.mjs",

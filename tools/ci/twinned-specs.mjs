@@ -139,6 +139,11 @@ export const BROWSER_ONLY = {
   "tests/specs/understeer-cue.spec.js": "portable by every static measure and 0/7 under the adapter (317 s) — the standing proof that eligibility is not fidelity (docs/TESTING.md §vmPage)",
   "tests/specs/audit.spec.js": "two evaluate bodies do not survive source serialisation into the VM (`Unexpected token ';'`): 8/10",
   "tests/specs/debris.spec.js": "loads rapier through a dynamic import, which node:vm has no import callback for (ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING): 1/5",
+  // Measured 2026-09-22, right after the 25-test file was split: the 9-test
+  // drag half became statically portable (the auto-throttle test that drives a
+  // real race moved to touch-pedals.spec.js) and immediately appeared in
+  // twinDebt. RUNNING it settles the question the static scan cannot.
+  "tests/specs/touch-steer.spec.js": "8/9 in 1.7 s, and the ninth is structural: the release ramp advances by min(0.1, elapsed) of WALL CLOCK, and waitForTimeout advances no clock in the VM, so `lifting off ramps back to centre` reads ~0.99 where a browser reads 0. Proved rather than guessed: raising the poll gap from 20 ms to 120 ms changes the browser ladder completely (0.53 -> 1.00 over the same ticks) and moves the VM reading 0.9835 -> 0.9874 — it is not polling too fast, time is not passing",
 };
 
 export const isTwinned = (file) => Object.hasOwn(TWINNED, file) || Object.hasOwn(ADAPTED, file);
@@ -207,12 +212,38 @@ export function gatedNodeFiles() {
   const at = ci.indexOf("- name: Pure-node unit suites");
   if (at < 0) throw new Error("ci.yml has no \"Pure-node unit suites\" step — this check derives the gated set from it");
   const rest = ci.slice(at);
-  const next = rest.indexOf("\n      - name:", 1);
-  const step = next < 0 ? rest : rest.slice(0, next);
+  // BOUNDED AT THE JOB, not merely at the next NAMED step (2026-09-22). A step
+  // with no `- name:` ends the slice nowhere, so this read past the end of the
+  // node-suites job and swallowed the next job's steps — `sweeps-parts`, whose
+  // one step was a bare `- run: npm run test:sweeps-parts`. Its file has read
+  // as GATED ever since, by a parser accident rather than by anything running
+  // it in that step, and the day that job's step got a name of its own the
+  // guard below went red on a file nothing about had changed.
+  //
+  // ci-coverage.mjs's header records the identical defect in the identical
+  // shape: an unbounded slice from one anchor reads whatever was appended after
+  // it. Both bounds are cheap; neither is optional.
+  const nextStep = rest.indexOf("\n      - ", 1);
+  const nextJob = rest.search(/\n  [a-z][\w-]*:\n/);
+  const end = Math.min(...[nextStep, nextJob].filter((i) => i >= 0));
+  const step = Number.isFinite(end) ? rest.slice(0, end) : rest;
   const files = new Set(groups.toolingFast.filter((e) => !e.startsWith("//")));
   for (const m of step.matchAll(/npm run (test:[a-z0-9-]+)/g))
     for (const f of groups.groups[m[1]]?.files || []) files.add(f);
   return files;
+}
+
+/** The node groups tools/ci/deploy.mjs runs in its own gate, UNCONDITIONALLY —
+ *  read out of its source, never listed here. This is the second half of the
+ *  answer to "what covers a file no CI fast-tier step runs": `test:sweeps` is
+ *  covered CONDITIONALLY (deploy.mjs runs it when the union can move geometry),
+ *  and a group like `test:sweeps-parts` is covered unconditionally. Both are
+ *  real cover; a guard that knows only about the first reads the second as a
+ *  hole. */
+export function deployGateGroups() {
+  const src = fs.readFileSync(path.join(ROOT, "tools/ci/deploy.mjs"), "utf8")
+    .replace(/^\s*\/\/.*$/gm, "");                 // comments never count as cover
+  return new Set([...src.matchAll(/run\("npm", \["run", "(test:[a-z0-9-]+)"\]/g)].map((m) => m[1]));
 }
 
 /** Node test files that belong to a topical group but that NOTHING runs before

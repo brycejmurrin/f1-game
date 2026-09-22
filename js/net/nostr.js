@@ -258,10 +258,11 @@ const NetNostr = (function () {
       // (sockets, module, payloads) long after the exchange settled.
       const timers = [];
       const later = (fn, ms) => timers.push(setTimeout(fn, ms));
+      let again = null;   // the reply's re-publish interval (heard, below)
       const finish = (r) => {
         if (done) return;
         done = true;
-        clearInterval(tick); clearInterval(repost);
+        clearInterval(tick); clearInterval(repost); clearInterval(again);
         for (const id of timers) clearTimeout(id);
         timers.length = 0;
         shut();
@@ -315,7 +316,7 @@ const NetNostr = (function () {
         // Publish it a few more times before leaving: a relay that dropped the
         // first copy must not cost the whole handshake, and this is cheap.
         let n = 0;
-        const again = setInterval(async () => {
+        again = setInterval(async () => {
           if (done || ++n > 3) { clearInterval(again); return; }
           await publish(out);
         }, 1200);

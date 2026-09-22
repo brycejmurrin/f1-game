@@ -9,7 +9,7 @@
       const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
         pine, tree, bush, ridge, building, grandstandEx, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
-        fence, guardrail, tyreWall, groundPatch, modelGroup, prop, runoffApron,
+        fence, guardrail, tyreWall, modelGroup, prop, runoffApron,
         cameraTower, sponsorHoarding, signBoard, terrainYAt,
         addBox, addCyl, addCone, addFrustum, addPrism } = api;
 
@@ -19,13 +19,25 @@
       const BLUE_D = [0.29, 0.34, 0.56], LINE = [0.90, 0.90, 0.88];
       const RED_D = [0.52, 0.23, 0.22];
       const ALU = [0.76, 0.78, 0.80], WHITE = [0.94, 0.94, 0.92];
+      // ONE side convention for the whole file: side 1 = LEFT of the racing
+      // line. transformSceneryApi negates `side` for anchor/place/bleacher & co
+      // on a reversed def but hands groundPatch its side RAW, so every patch
+      // here stood across the road from what it dresses: vineyard soil opposite
+      // its rows, the airfield runway and apron opposite the hangars, the
+      // helipad paint opposite its circle. Negating here puts them together.
+      const groundPatch = (k, side, ...rest) => api.groundPatch(k, -side, ...rest);
 
+      // Keyed to THIS centreline's corners (Verrerie 0.087 L, Mistral chicane
+      // 0.490 L / 0.502 R, Signes 0.713 R, Beausset 0.735-0.755 R, Village
+      // 0.887-0.907 L): the old 0.44/0.565/0.72 were written for an earlier
+      // trace and left Signes' run-off mid-Mistral. Side is the OUTSIDE of the
+      // corner (1 = left). 60 m at the chicane: longer crosses its second leg.
       for (const [id, s, side, w, l] of [
-        ["pr-runoff-verrerie", 0.070, 1, 82, 150],
-        ["pr-runoff-mistral", 0.440, -1, 70, 130],
-        ["pr-runoff-signes", 0.565, 1, 92, 170],
-        ["pr-runoff-beausset", 0.720, -1, 66, 120],
-        ["pr-runoff-village", 0.905, 1, 64, 120],
+        ["pr-runoff-verrerie", 0.070, -1, 82, 150],
+        ["pr-runoff-mistral", 0.490, -1, 70, 60],
+        ["pr-runoff-signes", 0.713, 1, 92, 170],
+        ["pr-runoff-beausset", 0.745, 1, 66, 120],
+        ["pr-runoff-village", 0.905, -1, 64, 120],
       ]) {
         // BLUE FIRST, RED BEYOND IT — the order is the whole point and it was
         // backwards. The Blue Zone is the FIRST run-off a car reaches: asphalt
@@ -74,7 +86,7 @@
       }
 
       const openRunoff = (s) =>
-        (s >= 0.92 || s <= 0.10) || (s >= 0.20 && s <= 0.44) || (s >= 0.60 && s <= 0.78);
+        (s >= 0.92 || s <= 0.10) || (s >= 0.20 && s <= 0.50) || (s >= 0.68 && s <= 0.83);
       every(30, (k) => {
         const s = k / n;
         if (openRunoff(s)) return;
@@ -95,8 +107,20 @@
         tree(k, h < 0.5 ? -1 : 1, 64 + h * 30, 7 + h * 4, [0.26, 0.36, 0.20]);
       });
 
+      // THE PIT STRAIGHT IS MIRRORED FROM WHAT SHIPPED. The paddock side is the
+      // RIGHT of the straight in the racing direction (the pit exit rejoins on
+      // the right; this is a clockwise lap, so the paddock is the infield), and
+      // it is where the engine's pit complex (TrackPit, `pit.side` default 1)
+      // builds lane, wall and garages. This file had the whole paddock on the
+      // left and the main stand, fence and boards on the right, so the stand
+      // stood in the complex and the hand-built bays faced it across the road.
+      // Here `side: -1` lands on the right and `side: 1` on the left (reversed
+      // def: transformSceneryApi negates side). The bays and race control now
+      // stand where the complex stands and are superseded by it, which is the
+      // intent: they are the fallback for a build without one.
+      // docs/notes/DEFECT-LEDGER.md § paul_ricard.
       for (const [i, s] of [0.950, 0.970, 0.990, 0.010].entries()) {
-        const a = anchor(K(s), 1, 20);
+        const a = anchor(K(s), -1, 20);
         const b = [a.r, a.u, a.t];
         modelGroup(`paul-ricard-pit-bay-${i + 1}`, {
           center: vadd(a.c, a.u, 6), size: [22, 12, 38], basis: b,
@@ -126,7 +150,7 @@
         }, { required: true });
       }
       {
-        const a = anchor(K(0.992), 1, 26);
+        const a = anchor(K(0.992), -1, 26);
         const b = [a.r, a.u, a.t];
         modelGroup("paul-ricard-race-control", {
           center: vadd(a.c, a.u, 10), size: [16, 22, 20], basis: b,
@@ -150,19 +174,20 @@
       // on is clear, and 4 m along a 5.8 km lap is invisible.
       gantry(0.004, 9, [0.15, 0.15, 0.18]);
       gantry(0.965, 8.5, [0.15, 0.15, 0.18]);
-      grandstandEx(0.005, -1, 12, 150, null, null,
+      grandstandEx(0.005, 1, 12, 150, null, null,
         { livery: "alu", tiers: 2, roof: "flat", suites: true, endWalls: true, pylons: true });
       for (let i = 0; i < 4; i++) {
-        building(K(0.918 + i * 0.013), 1, 40, 30, 9, 15,
+        building(K(0.944 + i * 0.013), -1, 40, 30, 9, 15,
           { kind: "slab", wall: [0.87, 0.87, 0.86], window: [0.30, 0.34, 0.42], floor: 4.5 });
       }
       every(46, (k) => {
         const s = k / n, h = hash(k * 71 + 31);
-        if (!(s > 0.90 || s < 0.05) || h < 0.52) return;
-        motorhome(k, 1, 58 + h * 10, 10, 4, 6, { wall: [0.66 + h * 0.24, 0.66, 0.68] });
+        // From 0.94: on the right, 0.90-0.94 is the inside of the Tour hairpin.
+        if (!(s > 0.94 || s < 0.05) || h < 0.52) return;
+        motorhome(k, -1, 58 + h * 10, 10, 4, 6, { wall: [0.66 + h * 0.24, 0.66, 0.68] });
       });
-      broadcastCompound(K(0.908), 1, 76, { vans: 3, dishes: 2, mastH: 9 });
-      for (const s of [0.975, 0.01, 0.03]) billboard(K(s), -1, 8, 12, 4.5, [0.20, 0.34, 0.70]);
+      broadcastCompound(K(0.908), -1, 76, { vans: 3, dishes: 2, mastH: 9 });
+      for (const s of [0.975, 0.01, 0.03]) billboard(K(s), 1, 8, 12, 4.5, [0.20, 0.34, 0.70]);
 
       const bleacher = (s0, s1, side, gap, opts) => {
         opts = opts || {};
@@ -183,11 +208,12 @@
             [0.62, 0.64, 0.68], b);
           for (let r = 0; r < rows; r++) {
             const back = r * depth, up = 0.5 + r * rise;
-            addBox(out, vadd(vadd(a.c, a.r, side * back), a.u, up),
+            const tier = addBox(out, vadd(vadd(a.c, a.r, side * back), a.u, up),
               [depth, rise + 0.14, seg], r & 1 ? ALU : [0.71, 0.73, 0.76], b);
             // Thin, scattered crowd — a Paul Ricard grandstand is rarely full.
+            // Never on a tier the road guard dropped: the figure floats (0.937).
             const h = hash(k * 13 + r * 7);
-            if (h < 0.70) continue;
+            if (h < 0.70 || tier === false) continue;
             out._mat = MAT.FABRIC;
             addBox(out, vadd(vadd(vadd(a.c, a.r, side * back),
               a.t, (h - 0.5) * seg * 0.8), a.u, up + 0.55),
@@ -198,21 +224,21 @@
         });
       };
       bleacher(0.055, 0.095, 1, 66, { rows: 8 });
-      bleacher(0.545, 0.590, 1, 72, { rows: 8 });
+      bleacher(0.690, 0.730, 1, 72, { rows: 8 });   // Signes (0.713), outside
       bleacher(0.890, 0.930, -1, 58, { rows: 7 });
       bleacher(0.700, 0.740, -1, 54, { rows: 6, step: 7 });
       bleacher(0.115, 0.150, -1, 52, { rows: 6, step: 8 });   // exit of the Verrerie esses
-      bleacher(0.470, 0.505, -1, 56, { rows: 6, step: 8 });   // opposite the Mistral chicane
+      bleacher(0.480, 0.515, -1, 56, { rows: 6, step: 8 });   // opposite the Mistral chicane
       spectatorHill(0.68, 0.76, 1, 60, { rows: 3, rise: 1.0, depth: 1.8, density: 0.34, step: 9 });
-      for (const s of [0.070, 0.560, 0.905]) marshalPost(K(s), -1, 12);
-      for (const s of [0.44, 0.72]) marshalPost(K(s), 1, 12);
+      for (const s of [0.070, 0.713, 0.905]) marshalPost(K(s), -1, 12);
+      for (const s of [0.496, 0.745]) marshalPost(K(s), 1, 12);
 
       for (const [s0, s1] of [[0.11, 0.19], [0.45, 0.59], [0.79, 0.87]]) {
         guardrail(s0, s1, -1, 12, [0.80, 0.81, 0.83]);
         guardrail(s0, s1,  1, 12, [0.80, 0.81, 0.83]);
       }
       guardrail(0.94, 0.06, 1, 5.0, [0.85, 0.85, 0.88]);
-      fence(0.95, 0.05, -1, 10, 4, [0.74, 0.76, 0.80]);
+      fence(0.95, 0.05, 1, 10, 4, [0.74, 0.76, 0.80]);
       for (const s of [0.15, 0.26, 0.34, 0.50, 0.64, 0.82]) {
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 14);
       }
@@ -361,10 +387,13 @@
         ["pr-turbine-9", 0.905, -1, 158, 50],
       ]) windTurbine(id, s, side, dist, h);
 
-      groundPatch(K(0.955), 1, 44, [76, 0.16, 200], [0.56, 0.56, 0.55],
+      // Paddock apron behind the complex (right, see the pit-straight note).
+      // Its lane lines are raw boxes, not guarded, so they are centred on the
+      // apron (44 + 76/2) rather than at 52, where they would cross the garages.
+      groundPatch(K(0.955), -1, 44, [76, 0.16, 200], [0.56, 0.56, 0.55],
         { id: "paul-ricard-paddock-apron", samples: 10 });
       for (let i = 0; i < 14; i++) {
-        const a = anchor(K(0.925 + i * 0.008), 1, 52);
+        const a = anchor(K(0.925 + i * 0.008), -1, 82);
         addBox(out, vadd(a.c, a.u, 0.22), [64, 0.09, 0.5], LINE, [a.r, a.u, a.t]);
       }
       groundPatch(K(0.885), 1, 92, [40, 0.16, 40], [0.50, 0.50, 0.50],
@@ -378,13 +407,13 @@
       for (const s of [0.965, 0.985, 0.015]) {
         prop(K(s), -1, 5, [1.6, 1.4, 60], [0.92, 0.92, 0.90]);
       }
-      for (let i = 0; i < 3; i++) signBoard(K(0.398 + i * 0.010), 1, 8, "braking", 3 - i);
+      for (let i = 0; i < 3; i++) signBoard(K(0.463 + i * 0.010), 1, 8, "braking", 3 - i);   // into the chicane
       signBoard(K(0.052), -1, 8, "corner", 1);
-      signBoard(K(0.560), -1, 9, "corner", 8);
+      signBoard(K(0.705), -1, 9, "corner", 8);
       sponsorHoarding(0.935, 0.070, -1, 3.6, { h: 1.25, step: 10 });
-      sponsorHoarding(0.400, 0.465, 1, 3.6, { h: 1.25, step: 11 });
+      sponsorHoarding(0.455, 0.520, 1, 3.6, { h: 1.25, step: 11 });
       cameraTower(K(0.030), -1, 26, { h: 17 });
-      cameraTower(K(0.565), 1, 84, { h: 20 });
+      cameraTower(K(0.713), 1, 84, { h: 20 });
       cameraTower(K(0.910), -1, 70, { h: 17 });
 
       {
@@ -392,7 +421,7 @@
         const LAV = [0.44, 0.38, 0.62], LAV_D = [0.36, 0.31, 0.54];
         const SOIL = [0.72, 0.66, 0.52];
         for (const [id, s, side, gap, rows, kind] of [
-          ["vine-north",  0.150, -1,  96, 18, 0],
+          ["vine-north",  0.150,  1,  96, 18, 0],   // left: on the right the Verrerie-hairpin loop leaves no room at any gap
           ["vine-east",   0.310,  1, 104, 16, 0],
           ["lav-south",   0.660, -1,  92, 16, 1],
           ["vine-west",   0.820,  1,  84, 14, 0],
@@ -414,8 +443,10 @@
           ["vine-beau2",    0.780, -1, 122, 14, 0],
         ]) {
           // Bare tilled ground under the parcel, so rows sit on soil not grass.
-          groundPatch(K(s), side, gap, [rows * 4.5, 0.15, 120], SOIL,
-            { id: `paul-ricard-${id}-soil`, samples: 8 });
+          // Centred on the rows (gap ± rows·2.1): from `gap` outward it only
+          // ever covered the outer half of the parcel.
+          groundPatch(K(s), side, gap - rows * 2.25, [rows * 4.5, 0.15, 120], SOIL,
+            { id: `paul-ricard-${id}-soil`, samples: 9 });   // 8 strips put a strip edge on a row face (12 and 18 rows)
           for (let r = 0; r < rows; r++) {
             const a = anchor(K(s), side, gap + (r - rows / 2) * 4.2);
             const b = [a.r, a.u, a.t];
@@ -443,7 +474,10 @@
             }
           }
         }
-        const a = anchor(K(0.235), -1, 90);
+        // 120, not 90: at 90 the hut stood on the far leg of the hairpin at
+        // 0.26 (1.4 m off its centreline, footprint rejected); 120 is the
+        // nearest gap that seats hut and wall both, 23 m clear of that road.
+        const a = anchor(K(0.235), -1, 120);
         const b = [a.r, a.u, a.t];
         const DRY = [0.72, 0.68, 0.58], DRY_D = [0.62, 0.58, 0.49];
         modelGroup("paul-ricard-cabanon", {

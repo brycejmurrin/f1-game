@@ -11,9 +11,9 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DEPLOY_BRANCH, touchedCircuits, preflight, ratchetMetrics, ratchetOverruns, cureableConflicts,
-  sweepSuites, touchesGeometry, targetedFor, notCovered, anyGeometry, proseOnly } from "../../tools/ci/deploy.mjs";
+  sweepSuites, touchesGeometry, targetedFor, notCovered, anyGeometry, proseOnly, changedPaths } from "../../tools/ci/deploy.mjs";
 import { DEPLOY_BRANCH as PICK_BRANCH } from "../../tools/ci/pick-tests.mjs";
-import { GEOMETRY_ERE, GEOMETRY_PATHS, namedPaths, fleetFiles, TARGETED, targetedSuites } from "../../tools/ci/geometry-paths.mjs";
+import { GEOMETRY_ERE, GEOMETRY_PATHS, namedPaths, fleetFiles, TARGETED, targetedSuites, PARTS_ERE, partsFiles } from "../../tools/ci/geometry-paths.mjs";
 import { createRequire } from "node:module";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -193,6 +193,42 @@ test("editing a sweep suite's OWN file routes the sweeps", () => {
   } finally { r.rm(); }
 });
 
+/* THE UNCOMMITTED EDIT. --gate-only waives the dirty-tree refusal because it is
+ * the check you run with the edit still in your working tree — and every suite
+ * it runs reads that tree. But change detection read `base...HEAD`, commits
+ * only: on 2026-09-22 an uncommitted Portimão def + scenery edit (three
+ * baselines moved) got "test:sweeps (nothing in this union can move geometry)"
+ * and no verify-track. Staged, unstaged and untracked-not-ignored all count. */
+test("the working tree is part of the union: unstaged, staged and untracked edits route the gate", () => {
+  const r = geomRepo();
+  try {
+    r.write("js/circuits/portimao.js", "// def\n");
+    r.write(".gitignore", "artifacts/\n");
+    r.g("add", "-A"); r.g("commit", "-qm", "def"); r.g("branch", "-qf", "base");
+    assert.equal(touchesGeometry("base", r.dir), false, "premise: a clean tree at base moves nothing");
+
+    r.write("artifacts/js/circuits/ignored.js", "// ignored\n");
+    assert.deepEqual(changedPaths("base", r.dir), [], "an ignored file is not a change");
+
+    r.write("js/circuits/portimao.js", "// unstaged edit\n");
+    assert.equal(touchesGeometry("base", r.dir), true, "an UNSTAGED circuit edit must run the sweeps");
+    assert.deepEqual(touchedCircuits("base", r.dir), ["portimao"], "…and verify-track for it");
+
+    r.g("add", "-A");
+    assert.equal(touchesGeometry("base", r.dir), true, "a STAGED circuit edit must run the sweeps");
+
+    r.g("reset", "-q", "--hard");
+    r.write("js/circuits/scenery/estoril.js", "// new file\n");
+    assert.deepEqual(touchedCircuits("base", r.dir), ["estoril"], "an UNTRACKED scenery file is a touched circuit");
+
+    r.g("clean", "-qfd", "js");
+    r.write("js/car/parts.js", "// car\n");
+    assert.equal(touchesGeometry("base", r.dir), false, "an untracked car file moves no circuit");
+    assert.deepEqual(targetedFor("base", r.dir), ["tests/unit/car-front-wing-width.test.mjs"],
+      "…but still routes the targeted sweep that reads it");
+  } finally { r.rm(); }
+});
+
 /* FAIL SAFE, NEVER FAIL OPEN. Without this, a filter that silently returned
  * false on any error would pass every test above and gate nothing. */
 test("an unresolvable diff runs the sweeps rather than skipping them", () => {
@@ -283,6 +319,88 @@ test("ci.yml READS the geometry pattern instead of keeping a second copy", () =>
   assert.deepEqual(inline, [],
     "a hand-written geometry alternation is back in ci.yml — the last time there were " +
     "two copies, one kept matching debris-world at its pre-rename path for a day");
+});
+
+test("the parts census derives its trigger, and every fail-safe branch RUNS it", () => {
+  /* sweeps-parts ran on every push, PR and train — 106 s of runner before any
+     path was examined, docs-only diffs included. It now has a filter, and a
+     filter is only as good as its fail-safe: the one thing it may never do is
+     guess "nothing changed" when it cannot tell. Each branch is pinned by the
+     string it prints, because that string is what a reader sees in the log. */
+  const yml = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
+  const job = yml.slice(yml.indexOf("\n  sweeps-parts:"), yml.indexOf("\n  sweeps:"));
+  assert.ok(job.includes("node tools/ci/geometry-paths.mjs --parts-ere"),
+    "the parts filter must DERIVE its pattern from parts-sweep.mjs's load list, not retype it");
+  assert.match(job, /fetch-depth: 0/, "the filter diffs against an arbitrary base; a depth-1 clone has no base");
+  // FAIL SAFE, never fail open: five ways to not know, five run_all calls.
+  for (const branch of [/not a push, a PR or a Pages call/, /no comparison base/,
+                        /unreachable \(force push\?\)/, /git diff failed/,
+                        /could not read the parts path pattern/, /printed an EMPTY parts pattern/]) {
+    assert.match(job, branch, `the parts filter lost a fail-safe branch: ${branch}`);
+  }
+  // A pull_request base, which the sweeps filter beside it went without for a
+  // year. Without this the `*)` arm catches PRs and the census runs on all of them.
+  assert.match(job, /pull_request\) BEFORE="\$\{PR_BASE:-\}" ;;/,
+    "a pull_request has a base; use it rather than fail-safing every PR into the census");
+  // STEP-LEVEL, never a job `if:` — poke-train has `needs: sweeps-parts` and
+  // pages.yml has `needs: ci`, and both read the AGGREGATE of the jobs that ran.
+  assert.ok(!/^    if: \$\{\{ inputs\.fast_tier_run == '' && /m.test(job),
+    "the census must stay a job that runs and skips a step, not a job that skips");
+  assert.match(job, /- if: steps\.filter\.outputs\.parts == 'true'\n\s+run: npm run test:sweeps-parts/,
+    "the expensive step is what the filter gates");
+});
+
+test("the parts pattern covers every module the sweep actually loads", () => {
+  // DERIVED, so the test's job is to prove the derivation is COMPLETE rather
+  // than to restate it: every file parts-sweep.mjs runs into its VM, plus the
+  // tool and the suite, must match; a path outside the census must not.
+  const re = new RegExp(PARTS_ERE());
+  for (const f of [...partsFiles(), "tools/car/parts-sweep.mjs",
+                   "tests/unit/parts-visual-distinctness.test.mjs"]) {
+    assert.ok(re.test(f), `the parts pattern misses ${f}, which the census reads`);
+    assert.ok(fs.existsSync(path.join(ROOT, f)), `${f} does not exist — the load list has drifted`);
+  }
+  for (const f of ["docs/README.md", "js/track/tracks.js", "js/circuits/monza.js", "tests/specs/smoke.spec.js"])
+    assert.ok(!re.test(f), `the parts pattern matches ${f}, which the census never reads`);
+  // ANTI-VACUITY on the parse: a partial read must THROW, not return a short
+  // list that quietly stops matching the modules it dropped.
+  assert.ok(partsFiles().length >= 4, `parsed only ${partsFiles().length} modules out of parts-sweep.mjs`);
+});
+
+/* A PULL REQUEST HAS A BASE, AND THE SWEEPS FILTER IGNORED IT (2026-09-22).
+ * The filter's event `case` listed `push` only, so every pull_request hit the
+ * fail-safe and ran the whole fleet BEFORE examining one path — ~8m30s of
+ * sweeps plus verify-track on a runner for a CSS-only or tools-only PR, on
+ * every push to the branch. renderer-filter had been diffing
+ * pull_request.base.sha all along, and its comment claimed this filter had no
+ * base to diff. Fail-safe is the rule here and is untouched: an empty,
+ * unreachable or undiffable base still runs everything. This test pins the two
+ * halves of the fix together, because either alone is a silent regression —
+ * the env without the case fail-safes anyway, the case without the env diffs
+ * against an empty BEFORE and fail-safes too. */
+test("the sweeps filter diffs a pull request against its own base", () => {
+  const yml = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
+  const step = yml.split("- name: Does this diff touch the geometry?")[1];
+  assert.ok(step, "ci.yml still has the sweeps geometry filter step");
+  const body = step.split("- name:")[0];
+
+  assert.match(body, /github\.event\.pull_request\.base\.sha/,
+    "the sweeps filter must read a pull request's base sha, not fall through to the fleet");
+  assert.ok(body.includes("push|pull_request) ;;"),
+    "…and must accept the pull_request event, or the env above is dead code");
+
+  // FAIL SAFE, STILL. Every one of these lines is what makes an unresolvable
+  // diff run everything; the fix must not have removed any of them.
+  for (const [re, why] of [
+    [/0{40}\) run_all "no before-sha/, "an empty base still runs the fleet"],
+    [/git cat-file -e "\$\{BEFORE\}\^\{commit\}".*\|\| run_all/, "an unreachable base still runs the fleet"],
+    [/CHANGED=\$\(git diff --name-only "\$BEFORE" "\$GITHUB_SHA"\) \|\| run_all/, "a failed diff still runs the fleet"],
+    [/\[ "\$CALLED" = "true" \] \|\| run_all/, "a Pages call is still checked before any event verdict"],
+  ]) assert.match(body, re, `the fail-safe is gone: ${why}`);
+
+  // The claim renderer-filter used to make about this filter must be gone with it.
+  assert.equal(/where the sweeps filter has none/.test(yml), false,
+    "renderer-filter's comment still says the sweeps filter has no PR base; it has one now");
 });
 
 /* THE RETRY'S "FULL GATE" WAS NOT THE GATE (2026-09-19).
@@ -461,4 +579,51 @@ test("--targeted prints the suites for a change list, and nothing for a game.js-
   assert.equal(notCovered(false, ["tests/unit/car-front-wing-width.test.mjs"])[1],
     "test:sweeps (nothing in this union can move geometry; the targeted sweeps that read it ran: car-front-wing-width.test.mjs)");
   assert.equal(notCovered(false)[1], "test:sweeps (nothing in this union can move geometry)");
+});
+
+/* THE NIGHTLY ROTA REPORTER. select-specs excludes any spec whose declared
+ * budget exceeds the gate's 180 s per-test cap, so 61 of 119 specs were never
+ * selected in the 30-day window spec-staleness measures; nightly-group.mjs
+ * rotates one browser group a night to reach them. That makes the nightly the
+ * ONLY scheduled verdict on those specs — and trainHealth's `per_page=1` on
+ * ci.yml can never show it, because the newest ci.yml run on the deploy branch
+ * is always a push.
+ *
+ * Both pins below exist because 2026-09-22 failed in exactly the way they
+ * forbid. That night's rota ran group `input`; Smoke shard 1 FAILED on
+ * steering.spec.js "steering has authority to fight the curvature drift", both
+ * attempts. The RUN reported `cancelled`, because two unrelated jobs were
+ * cancelled eight minutes later and `cancelled` outranks `failure` in GitHub's
+ * rollup precedence — and AGENTS.md rule 8 tells every session to read a
+ * `cancelled` as a timeout until proven otherwise. The rota's one finding was
+ * filed by the tooling as "the box was busy" and sat unread all day.
+ * So: query the SCHEDULE event, and believe the JOB list, not the rollup. */
+test("--train reports the nightly rota, and reads its jobs rather than the rollup", () => {
+  const src = fs.readFileSync(path.join(ROOT, "tools/ci/deploy.mjs"), "utf8");
+  const fn = src.slice(src.indexOf("function nightlyHealth("));
+  assert.ok(fn.startsWith("function nightlyHealth("), "deploy.mjs has no nightlyHealth()");
+
+  // A push run is not the nightly: without event=schedule this reports the same
+  // run trainHealth already printed, and the rota stays invisible.
+  assert.match(fn, /event=schedule/,
+    "nightlyHealth must select the SCHEDULE event — per_page=1 on ci.yml otherwise returns a push run");
+  // The rollup lied once and will again: `cancelled` hides a FAILED job inside it.
+  assert.match(fn, /\/jobs\?/,
+    "nightlyHealth must read the run's job list — the run-level conclusion is not the verdict");
+  assert.match(fn, /conclusion === "failure"/,
+    "nightlyHealth must name the jobs that actually FAILED, whatever the rollup says");
+});
+
+test("--train answers without preflight, and names all three signals", () => {
+  const r = spawnSync("node", ["tools/ci/deploy.mjs", "--train"], { cwd: ROOT, encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  const out = r.stdout + r.stderr;
+  // Network-independent: with no API answer each line still prints "unknown".
+  for (const label of ["train ci:", "train pages:", "train nightly:"]) {
+    assert.ok(out.includes(label), `--train printed no "${label}" line:\n${out}`);
+  }
+  // BEFORE preflight, deliberately — "was the train already red?" is the
+  // question you ask while a browser run is pinning loadavg above the refusal,
+  // and preflight() returns 3 there.
+  assert.ok(!/REFUSED:/.test(out), `--train must not run preflight:\n${out}`);
 });

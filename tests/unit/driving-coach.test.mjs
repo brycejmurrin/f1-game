@@ -4,8 +4,11 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 
 function fixture() {
-  const nodes = new Map(['pm-coach-status', 'pm-coach-tip', 'pm-coach-summary', 'pm-drill-status', 'pm-lap-report'].map(id => [id, { textContent: '' }]));
-  const saved = new Map(), announcements = [];
+  const nodes = new Map(['pm-coach-status', 'pm-coach-tip', 'pm-coach-summary', 'pm-drill-status', 'pm-lap-report', 'pm-practice-state'].map(id => [id, { textContent: '' }]));
+  // The coach SHIPS ON (js/data/settings-defaults.js; the real store answers from
+  // it). This fake store only knows the call-site fallback, so seed the player's
+  // OFF explicitly — these tests start from a coach the player has not enabled.
+  const saved = new Map([['drivingCoach', false]]), announcements = [];
   // Throttle held: the default car is driving, not coasting (a coasting tip is its own test).
   const c = { speed: 60, lapTime: 0, brakeDemand: 0, throttleDemand: 1 };
   // A 1000 m lap with curated apexes at 100 m, 500 m and 980 m — the last one
@@ -51,7 +54,7 @@ function fixture() {
 const braking = { brakeDemand: 1, throttleDemand: 1, axEstSm: -21.7, axFrac: .64, steerAngle: .1 };   // full brake, dry: the measured plateau
 const rear = { rearUtil: .97, frontUtil: .6, slipRear: .12 };
 
-test('coach defaults off, saves the choice, and paints understandable empty feedback', () => {
+test('a coach switched off paints as off, saves the toggle, and paints understandable empty feedback', () => {
   const { coach, saved, nodes, tick } = fixture();
   tick(2, braking); assert.equal(coach.feedback().total, 0);
   coach.paint(); assert.match(nodes.get('pm-coach-status').textContent, /Coach off/);
@@ -255,6 +258,20 @@ test('checkpoint messages name the practice goal, and the pause menu lists attem
   ins.attempts = () => []; ins.mastery = () => null; ins.summary = () => ({ lastDrill: null });
   coach.paint();
   assert.equal(nodes.get('pm-drill-status').textContent, 'Repeat any section at your own pace.');
+});
+
+test('practice guidance says retry and rewind restore the grid and race clock', () => {
+  const { coach, nodes } = fixture();
+  assert.equal(coach.mark(), true);
+  coach.paint();
+  const live = nodes.get('pm-practice-state').textContent;
+  assert.match(live, /restores the saved grid, race clock and practice goal/);
+  assert.match(live, /steps the grid and race clock back/);
+  assert.doesNotMatch(live, /your car only|not the others/);
+  const shell = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
+  assert.match(shell, /restores the saved grid, race clock and practice goal/);
+  assert.match(shell, /solo race or qualifying session can use checkpoints[\s\S]{0,160}ARM PRACTICE/);
+  assert.doesNotMatch(shell, /does not rewind the race clock|Checkpoints are unavailable in races|other cars keep the ground/);
 });
 
 test('brief transients and suspended frames cannot trigger a tip; sustained evidence can', () => {

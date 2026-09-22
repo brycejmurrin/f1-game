@@ -120,7 +120,11 @@ function syncHudCamClasses() {
   if (key !== _hudCamKey) {
     _hudCamKey = key;
     const body = document.body;
-    body.classList.toggle("hud-onboard", !!ONBOARD_IDS[modeId]);
+    // No hud-onboard class here. It shipped on 2026-09-04 with a rule that
+    // stripped the minimap and the gap strip in any onboard view; the SAME DAY
+    // the per-widget MAP/GAPS settings replaced that rule and the write was
+    // left behind, toggling a name nothing read for eighteen days. ONBOARD_IDS
+    // is still live — syncHudVisClasses() reads it for the MAP-AUTO default.
     body.classList.toggle("hud-bcam", !!BCAM_IDS[modeId]);
     body.classList.toggle("hud-prof-minimal", prof === "minimal");
     body.classList.toggle("hud-prof-broadcast", prof === "broadcast");

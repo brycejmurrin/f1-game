@@ -308,6 +308,7 @@ const Collide = (() => {
     // merged. The player is "heavier" (AiDrive.humanInvMass) so the AI can't shove them off.
     function _colResolvePair(a, b, last, rubScrub) {
       if (incidentSim.owns(a) || incidentSim.owns(b)) return;
+      if (a.finished && b.finished) return;   // coasting home: kinematic, and never racing each other
       const ct = pairContact(a, b);
       if (!ct) return;
       if (ct.oriented) { orientedResponse(a, b, ct, last); return; }
@@ -410,6 +411,7 @@ const Collide = (() => {
 
     function _colSepPair(a, b, SLOP) {
       if (incidentSim.owns(a) || incidentSim.owns(b)) return;
+      if (a.finished && b.finished) return;   // coasting home: kinematic, and never racing each other
       const ct = pairContact(a, b);
       if (!ct) return;
       if (ct.oriented) {

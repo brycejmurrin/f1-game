@@ -157,7 +157,7 @@ function loadCareerUi(careerOpts = {}) {
     GameStore: { seasonDriverId: (t, i) => t + ":" + i },
     // resume() repairs a career alias and sanitises the round; career-ui's
     // return-to-menu goes through it now, as game.js always did.
-    SeasonCal: { hasProgress: () => false, rounds: () => 24, resume: (s) => s },
+    SeasonCal: { hasProgress: () => false, rounds: () => 24, load: () => null },
     Reliability: { REASONS: ["engine"], TIER_RISK: [0.02, 0.06] },
     PhysicsConsts: { DIFF: { EASY: 1 } },
   });
@@ -309,7 +309,7 @@ function loadSeasonUi(trackIds = ["a", "b"]) {
       config: () => ({ trackIds: trackIds.slice(), quali: true, sprint: true, laps: 57, points: "modern", flPoint: false, drop: 0 }),
       PRESETS: [{ id: "full", label: "FULL" }], presetIds: () => ["a"], shuffled: (x) => x,
       LAP_OPTS: [3, 5, 10, 25, 57], SPRINT_POINTS: [8, 7, 6, 5, 4, 3, 2, 1], DROP_OPTS: [0, 2, 3],
-      hasProgress: () => false, rounds: () => 2, restart: () => ({}), setConfig() {}, trackIndex: () => 0,
+      hasProgress: () => false, rounds: () => 2, restart: () => ({}), setConfig() {}, save() {}, trackIndex: () => 0,
     },
     Tracks: { LIST: [{ id: "a", name: "A" }, { id: "b", name: "B" }, { id: "c", name: "C", country: "X" }] },
   });

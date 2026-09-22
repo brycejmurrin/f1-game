@@ -534,10 +534,22 @@ test("AGENTS.md's matTexMix default matches TUNE_DEFS", () => {
   // table — which sits after that boundary — kept saying "(ships at 0)" for as
   // long as the section above it said "Ships ON". Both were in the doc at
   // once. Scan the WHOLE file for a shipped-default claim about this knob.
-  for (const m of read("AGENTS.md").matchAll(/matTex[^\n]*?ships at ([\d.]+)/gi)) {
+  // THE NEEDLE MUST STILL MATCH. This scanned for "ships at <n>" and the doc
+  // now says "`matTexMix` def 1.0", so it found ZERO sites and asserted
+  // nothing — measured 2026-09-22, and it had been dead for as long as the
+  // wording has been current. A guard that silently stops matching is worse
+  // than no guard: it reports a claim is policed when nothing reads it.
+  // tools/check/twin-fidelity.mjs already applies this rule to its mutants
+  // ("a needle that no longer matches makes its mutant a silent no-op"); a
+  // doc scan earns the same floor.
+  let seen = 0;
+  for (const m of read("AGENTS.md").matchAll(/matTex\w*[^\n]*?(?:ships at|def)\s+`?([\d.]+)/gi)) {
+    seen++;
     assert.equal(Number(m[1]), Number(def[1]),
       `AGENTS.md says matTex ships at ${m[1]}; TUNE_DEFS has def: ${def[1]}`);
   }
+  assert.ok(seen >= 1,
+    "no shipped-default claim about matTex found in AGENTS.md — the wording moved and this guard is dead; re-point the regex rather than leaving it matching nothing");
 });
 
 test("AGENTS.md's layout names the module-roster truth it defers to", () => {

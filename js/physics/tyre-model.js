@@ -35,10 +35,15 @@ const TyreModel = (function () {
   // What the TYRE WEAR race setting means, as a scale on the wear rate. OFF is
   // a TRUE no-op: gripMul/tractionMul/fuelMul all return exactly 1, so
   // tests/specs/physics-characterization.spec.js stays bit-identical with it
-  // selected. It is NOT the shipped default any more — js/game.js ships
-  // `store.get("tyreWear", "light")`, and the source assertion at the foot of
-  // tests/unit/tyre-model.test.mjs exists to stop it going back to OFF, which
-  // would switch the whole pit lane off for every new player. The browser
+  // selected. It is NOT the shipped default any more — the default is "real",
+  // and it lives in js/data/settings-defaults.js, NOT at the call site:
+  // store.get's _def() makes SettingsDefaults outrank the fallback argument, so
+  // the `store.get("tyreWear", ...)` literal in js/game.js decides nothing.
+  // This comment claimed "light" for four days after the owner file moved to
+  // "real" — 1/0.55 = 1.82x the wear it documented — because the two landed 75
+  // minutes apart from parallel sessions on the shared deploy branch. The
+  // assertion at the foot of tests/unit/tyre-model.test.mjs does NOT guard this:
+  // it checks that the setter calls tyres.setLevel, not what ships. The browser
   // fixtures still pin OFF so a physics baseline measures the driving model
   // rather than this month's default, which is why no spec would notice.
   // A set's life is nominal / LEVELS[level] laps — see planLaps().
@@ -483,12 +488,19 @@ const TyreModel = (function () {
     soft:   { code: "S", life: 0.48, off: 0.004,  tread: 0, colour: [0.92, 0.12, 0.10] },
     medium: { code: "M", life: 0.74, off: 0,      tread: 0, colour: [0.96, 0.80, 0.10] },
     hard:   { code: "H", life: 1.05, off: -0.004, tread: 0, colour: [0.90, 0.90, 0.93] },
-    inter:  { code: "I", life: 1.00, off: -0.010, tread: 1, colour: [0.10, 0.72, 0.24] },
-    wet:    { code: "W", life: 1.10, off: -0.020, tread: 2, colour: [0.10, 0.40, 0.92] },
+    // A player who owns no weather tyre gets the class fallback. Its dry-stat
+    // cost must travel with it just as a catalog row's does; AI cars have no
+    // tyreBaseMods and continue to use `off` instead, so this is not counted
+    // twice on the field.
+    inter:  { code: "I", life: 1.00, off: -0.010, tread: 1, colour: [0.10, 0.72, 0.24],
+              mods: { speed: 0.92, accel: 0.93, cornering: 0.94, braking: 0.98 } },
+    wet:    { code: "W", life: 1.10, off: -0.020, tread: 2, colour: [0.10, 0.40, 0.92],
+              mods: { speed: 0.88, accel: 0.90, cornering: 0.90, braking: 0.94 } },
   };
   function classRecord(cls) {
     const t = AI_CLASS[cls] || AI_CLASS.medium;
-    return { id: cls, code: t.code, life: t.life, off: t.off, tread: t.tread || 0, colour: t.colour };
+    return { id: cls, code: t.code, life: t.life, off: t.off, tread: t.tread || 0, colour: t.colour,
+             mods: t.mods || null };
   }
   // Which tread the conditions ask for: slick / intermediate / full wet. The
   // same ladder js/physics/consts.js WET_GRIP is indexed by, so "the right tyre"
@@ -521,7 +533,38 @@ const TyreModel = (function () {
       id: opt.id, code: codeForLife(life, tread),
       life, off: 0, tread,
       colour: (opt.visual && opt.visual.band) || [0.9, 0.9, 0.93],
+      // Fitted performance, separate from the rest of the build. game.js stores
+      // a tyre-free base on a human car; applyCompound always rebuilds from it,
+      // so repeated stops cannot multiply a compound into itself.
+      mods: {
+        speed: opt.speed == null ? 1 : opt.speed,
+        accel: opt.accel == null ? 1 : opt.accel,
+        cornering: opt.cornering == null ? 1 : opt.cornering,
+        braking: opt.braking == null ? 1 : opt.braking,
+      },
     };
+  }
+
+  const STAT_KEYS = ["speed", "accel", "cornering", "braking"];
+  function applyCompound(c, record) {
+    if (!c) return null;
+    c.tyre = record || classRecord("medium");
+    // `null` is the competent-field sentinel: ordinary AI is assumed to have
+    // the right weather tyre. Player and MY TEAM cars carry an explicit tread,
+    // which a real stop must replace.
+    if (c.tread !== null) c.tread = c.tyre.tread || 0;
+    if (c.tyreBaseMods) {
+      const out = c.mods || (c.mods = {}), tm = c.tyre.mods || null;
+      for (const k of STAT_KEYS) out[k] = c.tyreBaseMods[k] * (tm && tm[k] != null ? tm[k] : 1);
+    }
+    return c.tyre;
+  }
+
+  // An AI strategy owns its starting compound when wear is enabled. In
+  // particular, a MY TEAM mate's saved garage tyre must not override the plan.
+  function startRecord(c) {
+    if (c && c.pitPlan && !c.human) return classRecord(c.pitPlan.start);
+    return c && c.tyreOpt ? optionRecord(c.tyreOpt) : classRecord(c && c.tyreClass);
   }
 
   // ── SESSION ───────────────────────────────────────────────────────────────
@@ -535,7 +578,7 @@ const TyreModel = (function () {
     // STRATEGY has to plan against. lifeLaps() is the nominal, level-free life,
     // and wear then accrues at LEVELS[level]/lifeLaps per lap, so a set survives
     // lifeLaps / LEVELS[level] laps. The planner used to ask lifeLaps() direct,
-    // which is only right at `real` (1.0); at the SHIPPED DEFAULT `light` (0.55)
+    // which is only right at `real` (1.0); at `light` (0.55, one click away)
     // a set lasts 1.82x longer and the AI pitted for tyres it had not used —
     // measured identical first stops (lap 7) and stop counts at light and real,
     // because the plan could not see the setting. At `off` nothing wears, so the
@@ -549,7 +592,7 @@ const TyreModel = (function () {
     // and a re-grid cannot disagree about what "fresh" means.
     function fit(c, record) {
       if (!c) return;
-      c.tyre = record || classRecord("medium");
+      applyCompound(c, record);
       c.tyreWear = 0;
       c.tyreWearF = 0; c.tyreWearR = 0;
       // A FRESH SET COMES OUT OF BLANKETS, not up to temperature. This one line
@@ -722,7 +765,7 @@ const TyreModel = (function () {
       stints, closeStints,
       lapsOn, spent, info, severity,
       level: () => level, setLevel, on, planLaps,
-      classRecord, optionRecord,
+      classRecord, optionRecord, applyCompound, startRecord,
     };
   }
 
@@ -733,7 +776,7 @@ const TyreModel = (function () {
     axleShare, longSigned, AXLE_LONG, AXLE_REST, BB_REF,
     T_AMBIENT, T_BLANKET, T_OPT_MID, T_OPT_SPAN, T_WINDOW, TEMP_FLOOR,
     GRAIN_GRIP, BLIST_GRIP, BLIST_OVER,
-    classRecord, optionRecord, AI_CLASS, codeForLife, treadFor, classForTread, wetness, weatherGrip,
+    classRecord, optionRecord, applyCompound, startRecord, AI_CLASS, codeForLife, treadFor, classForTread, wetness, weatherGrip,
     DROP_LIN, DROP_CLIFF, GRIP_FLOOR, LONG_SHARE, LIFE_MIN, LIFE_MAX, FUEL_LOAD,
     create,
   };

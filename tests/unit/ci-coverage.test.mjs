@@ -62,6 +62,38 @@ test("the ci.yml parse finds SOMETHING — anti-vacuity", () => {
   assert.equal(report.specsInFixedGates + report.specsOutsideFixedGates, report.specsOnDisk);
 });
 
+test("the fixed blocking floor: 2 specs, named, and it may not drift down", () => {
+  /* A REPORT WITH NO FLOOR IS A NUMBER NOBODY DEFENDS. ci-coverage.mjs was
+     written to describe the gate, not to constrain it, so "3 of 119 specs in
+     fixed gates" could have walked to 0 — one `if:` on the smoke job, one
+     deleted `run:` line — and the only thing that would have noticed is a
+     person reading a routine report line. The anti-vacuity test above catches
+     `> 0`, which the driving-model gate alone satisfies.
+
+     The floor is taken on the BLOCKING count, not on `specsInFixedGates`: the
+     third spec is menu-baseline, run by the golden-menu trial under
+     `continue-on-error: true`. It is real coverage to read and no coverage at
+     all to ship behind, and counting it made the fixed floor look 50 % larger
+     than it is.
+
+     RAISE THIS when a spec genuinely joins a fixed blocking gate. Lowering it
+     means the deploy gate got weaker, which is the event this exists to make
+     loud — not a number to edit until the test is quiet. */
+  const FIXED_BLOCKING_FLOOR = 2;
+  assert.ok(report.specsInBlockingFixedGates >= FIXED_BLOCKING_FLOOR,
+    `only ${report.specsInBlockingFixedGates} spec(s) run in a fixed BLOCKING gate, floor is ` +
+    `${FIXED_BLOCKING_FLOOR}. A fixed gate stopped gating: ${report.blocking.join(", ") || "(none)"}`);
+  // Named, so "still 2" cannot be satisfied by two different specs after one
+  // of these quietly left.
+  assert.deepEqual(report.blocking,
+    ["tests/specs/physics-characterization.spec.js", "tests/specs/smoke.spec.js"]);
+  // And the advisory one is still counted, still advisory, and still excluded.
+  assert.ok(report.executed.includes("tests/specs/menu-baseline.spec.js"));
+  assert.ok(!report.blocking.includes("tests/specs/menu-baseline.spec.js"),
+    "the golden-menu trial is continue-on-error; it may never count as a blocking gate");
+  assert.equal(report.specsInFixedGates - report.specsInBlockingFixedGates, 1);
+});
+
 test("smoke and the driving-model gate are both seen", () => {
   // These two are what the ci.yml header promises the gate covers. If either
   // stops being detected, the report is wrong in the reassuring direction.
@@ -100,6 +132,10 @@ test("it does not claim to cover what it cannot", () => {
 const selectJob = ciWorkflow.split("\n  select:")[1]?.split("\n  selected:")[0];
 const selectedJob = (ciWorkflow.split("\n  selected:")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
 const selectStep = fs.readFileSync(new URL("../../tools/ci/ci-select-specs-step.sh", import.meta.url), "utf8");
+// The ship filter became its own job on 2026-09-22 (it was the smoke matrix's
+// first step, so four shards paid for it). Bounded at the next job, like every
+// other slice here.
+const shipFilter = (ciWorkflow.split("\n  ship-filter:")[1] || "").split("\n  smoke:")[0];
 
 test("every path a ci.yml change filter names still exists", () => {
   // The job filters are `grep -qE` alternations over the changed-file list, and
@@ -450,17 +486,110 @@ test("cached browser jobs never enter apt through --with-deps", () => {
     assert.doesNotMatch(job.replace(/^\s*#.*$/gm, ""), /playwright install/, `${name} carries its own install step — use the action`);
   }
   // smoke's copy stays behind the ship filter: a run that ships nothing installs nothing.
-  assert.match(smoke, /if: steps\.shipfilter\.outputs\.ships != 'false'\n\s+uses: \.\/\.github\/actions\/playwright-chromium/);
+  assert.match(smoke, /if: needs\.ship-filter\.outputs\.ships != 'false'\n\s+uses: \.\/\.github\/actions\/playwright-chromium/);
 });
 
 test("ship filter chooses a successful active deployment, not merely the newest record", () => {
+  // IT IS ITS OWN JOB SINCE 2026-09-22 — it used to be the smoke matrix's first
+  // step, which meant four shards each did a full checkout and `npm ci` before
+  // asking, and each then made up to 21 API round-trips for the same string.
+  assert.match(shipFilter, /deployments\?environment=github-pages&per_page=20/);
+  assert.match(shipFilter, /d\.statuses_url/);
+  assert.match(shipFilter, /success\) LIVE="\$SHA"; break/);
+  assert.match(shipFilter, /inactive\|failure\|error\|queued\|pending\|in_progress/);
+  assert.match(shipFilter, /no successful active github-pages deployment found/);
+  assert.doesNotMatch(shipFilter, /j\[0\].*\.sha.*process\.stdout\.write/);
+});
+
+test("a GREEN run's junit survives — the timings CI already measures", () => {
+  /* tools/ci/spec-timings.mjs was written to build a rolling per-test duration
+     record and had nothing to merge: junit.xml was uploaded `if: failure()`
+     only, so a PASSING run — the run whose timings you actually want — threw
+     them away. 0 of 119 specs carry three samples, and select-budget.mjs bills
+     the whole tree from one 2026-08-07 mean, which is what excludes ~66 % of
+     the suite from the change-aware gate.
+
+     Pinned on all three browser jobs, because one of them reverting is enough
+     to make the record partial in a way nothing else would report. */
+  for (const [job, bound] of [["smoke", "\n  driving-model:"], ["driving-model", "\n  renderer-filter:"],
+                              ["selected", null]]) {
+    const body = bound
+      ? ciWorkflow.split(`\n  ${job}:`)[1].split(bound)[0]
+      : selectedJob;
+    assert.match(body, /- name: Spec timings \(junit/, `${job} no longer uploads its junit`);
+    assert.match(body, /name: spec-timings-junit-/, `${job}'s timings artifact must be findable by pattern`);
+    assert.match(body, /path: artifacts\/test-results-\*\/junit\.xml/, `${job} must upload junit, not the heavy trace bundle`);
+    assert.match(body, /if-no-files-found: ignore/, `${job} must not fail a run for having no timings`);
+    // The whole point: NOT failure()-only.
+    const step = body.split("- name: Spec timings (junit")[1].split("- name:")[0];
+    assert.match(step, /if: always\(\)/, `${job}'s timings upload is conditional on failure again`);
+  }
+});
+
+test("the timings merge is its own workflow, and never pushes to the deploy branch", () => {
+  /* IT CANNOT LIVE IN ci.yml. It needs `contents: write`, and pages.yml calls
+     ci.yml as a reusable workflow granting only `contents: read` — GitHub
+     validates every declared job's permissions at STARTUP, skipped jobs
+     included. Train #2241 died `startup_failure` on exactly that, and a
+     `contents: write` job in ci.yml would kill every train the same way. This
+     test is the thing standing between a future "just move it into CI" and a
+     dead release train. */
+  const timings = fs.readFileSync(new URL("../../.github/workflows/spec-timings.yml", import.meta.url), "utf8");
+  assert.match(timings, /^permissions:\n  contents: write\n  actions: read$/m,
+    "the merge workflow needs write for the side branch and read for the artifacts");
+  // ci.yml must NOT gain a write permission, or every Pages call fails at startup.
+  assert.doesNotMatch(ciWorkflow, /^\s+contents: write\s*$/m,
+    "a contents:write job in ci.yml fails startup validation on every pages.yml call (train #2241)");
+  // Same refusal import-models.yml carries: the deploy branch by name.
+  assert.match(timings, /claude\/f1-game-project-26h3ng\|""\|\*\[!a-z0-9\._\/-\]\*\)/,
+    "the push must refuse the deploy branch by name, as import-models.yml does");
+  assert.match(timings, /git push -f origin "\$TIMINGS_BRANCH"/);
+  // FORCE-PUSHED, so the namespace matters as much as the name: `claude/*` is
+  // where sessions branch, and a bot that force-pushes there lands on an open
+  // PR's head sooner or later. `bot/` is import-models.yml's convention.
+  assert.match(timings, /^  TIMINGS_BRANCH: bot\/[a-z0-9-]+$/m,
+    "the force-pushed branch must live under bot/, never in the claude/ namespace sessions use");
+  assert.doesNotMatch(timings, /git push[^\n]*claude\/f1-game-project-26h3ng/,
+    "the timings bot may never push to the branch that ships");
+  // The env bucket must match the stack that produced the numbers, not the
+  // runner doing the merge — mixing buckets is what spec-timings.mjs forbids.
+  assert.match(timings, /APEX_GL: llvmpipe/,
+    "the browser jobs run llvmpipe; merging under another bucket fakes a regression");
+  // And it must be serialised: two merges racing drop each other's samples.
+  assert.match(timings, /concurrency:\n  group: spec-timings/);
+});
+
+test("the ship filter is ONE job whose answer every smoke shard reads", () => {
+  /* MEASURED 2026-09-22: the four smoke shards each spent 3m32s-5m02s on
+     checkout + `npm ci` BEFORE the filter could say "do not run", and each then
+     walked the deployments API for the same live SHA. The filter is a job now,
+     `renderer-filter`'s shape, and smoke reads its output.
+
+     The two things that must stay true, and that a careless revert would break:
+     the filter job needs NO dependency install, and the smoke job still RUNS on
+     a diff that ships nothing — it skips its steps. A skipped smoke job is not a
+     passed one to pages.yml's `deploy: needs: ci` aggregate. */
+  assert.ok(shipFilter, "the ship-filter job is gone");
+  assert.doesNotMatch(shipFilter.replace(/^\s*#.*$/gm, ""), /setup-apex/,
+    "the filter needs git, curl and the runner's node — an npm ci here is the cost this move removed");
+  assert.match(shipFilter, /fetch-depth: 0/, "it diffs against an arbitrarily old live SHA");
+  assert.match(shipFilter, /ships: \$\{\{ steps\.shipfilter\.outputs\.ships \}\}/, "it must publish the answer");
   const smoke = ciWorkflow.split("\n  smoke:")[1].split("\n  driving-model:")[0];
-  assert.match(smoke, /deployments\?environment=github-pages&per_page=20/);
-  assert.match(smoke, /d\.statuses_url/);
-  assert.match(smoke, /success\) LIVE="\$SHA"; break/);
-  assert.match(smoke, /inactive\|failure\|error\|queued\|pending\|in_progress/);
-  assert.match(smoke, /no successful active github-pages deployment found/);
-  assert.doesNotMatch(smoke, /j\[0\].*\.sha.*process\.stdout\.write/);
+  assert.match(smoke, /^    needs: \[ship-filter\]$/m, "smoke must read the hoisted answer");
+  assert.doesNotMatch(smoke.replace(/^\s*#.*$/gm, ""), /deployments\?environment=github-pages/,
+    "the filter body is back inside the matrix — that is four copies of one question");
+  // EVERY step, checkout and setup-apex included, or the move buys nothing.
+  // Exempt: a `failure()` step, which by definition cannot run when every step
+  // before it was skipped, and which must stay reachable when one of them fails.
+  const steps = smoke.split(/\n      - /).slice(1);
+  const ungated = steps.filter((st) => !/needs\.ship-filter\.outputs\.ships != 'false'/.test(st)
+    && !/^\s*if: failure\(\)\s*$/m.test(st));
+  assert.deepEqual(ungated.map((st) => st.split("\n")[0].trim()), [],
+    "a smoke step runs even when nothing ships; the install steps are most of the cost");
+  // NOT a job-level `if:` on the filter's output: that would SKIP smoke, and a
+  // skipped job is not a passed one to the deploy aggregate.
+  assert.doesNotMatch(smoke, /^    if: .*needs\.ship-filter/m,
+    "smoke must run and skip its steps, never skip as a job");
 });
 
 test("the ship filter no longer polices the committed generation — the deploy stamps it", () => {
@@ -468,9 +597,8 @@ test("the ship filter no longer polices the committed generation — the deploy 
   // strictly newer committed build. pages.yml now stamps the generation from
   // the commit count at deploy time (deploy-stamp.test.mjs pins that), so the
   // committed number is a placeholder and a check on it would fail every push.
-  const smoke = ciWorkflow.split("\n  smoke:")[1].split("\n  driving-model:")[0];
-  assert.doesNotMatch(smoke, /bump-cache\.mjs --check --since/);
-  assert.match(smoke, /stamps the generation from the commit count/, "the replacement rule is written where the check stood");
+  assert.doesNotMatch(shipFilter, /bump-cache\.mjs --check --since/);
+  assert.match(shipFilter, /stamps the generation from the commit count/, "the replacement rule is written where the check stood");
 });
 
 // The smoke per-test cap READ from the workflow, not restated here. It was
@@ -499,7 +627,8 @@ test("smoke's command-line timeout is not tripled inside the spec", () => {
 test("the selected gate cannot rerun the fixed-budget smoke spec", () => {
   const smoke = ciWorkflow.split("\n  smoke:")[1].split("\n  driving-model:")[0];
   assert.match(smoke, new RegExp("test:smoke -- --timeout=" + SMOKE_TIMEOUT_MS));
-  assert.match(smoke, /tests\/specs\/smoke\.spec\.js/,
+  // The force-the-shards rule lives with the filter, which is its own job now.
+  assert.match(shipFilter, /tests\/specs\/smoke\.spec\.js/,
     "test-only smoke edits must force the fixed shards even though they do not ship");
   assert.match(selectedJob, new RegExp(`--timeout=${SELECTED_TIMEOUT_MS}`),
     `ci.yml's selected step must run the timeout select-specs.mjs models ` +
@@ -688,8 +817,8 @@ test("the push-gate smoke spec is sharded four ways on separate runners (unshard
   // and `tiny` remains the last-resort fallback so a picker failure cannot
   // leave GROUP empty.
   assert.match(smokeJob, /GROUP: \$\{\{ \(github\.event_name == 'workflow_dispatch' && inputs\.group\) \|\| steps\.rota\.outputs\.GROUP \|\| 'tiny' \}\}/);
-  assert.match(smokeJob, /- name: Pick tonight's rotating group\n\s+id: rota\n\s+if: github\.event_name == 'schedule'\n\s+run: node tools\/ci\/nightly-group\.mjs >> "\$GITHUB_OUTPUT"/,
-    "a scheduled run must pick its group from tools/ci/nightly-group.mjs");
+  assert.match(smokeJob, /- name: Pick tonight's rotating group\n\s+id: rota\n(?:\s+#.*\n)*\s+if: needs\.ship-filter\.outputs\.ships != 'false' && github\.event_name == 'schedule'\n\s+run: node tools\/ci\/nightly-group\.mjs >> "\$GITHUB_OUTPUT"/,
+    "a scheduled run must pick its group from tools/ci/nightly-group.mjs, and only when the checkout above ran");
   assert.match(smokeJob, /run: npm run "test:\$\{GROUP:-tiny\}" -- --timeout=\d+ --shard=\$\{\{ matrix\.shard \}\}\/4/);
   assert.match(ciWorkflow, /workflow_dispatch:\n    inputs:\n(?:.*\n)*?      group:\n/, "the dispatch declares the group input");
 });
@@ -752,7 +881,9 @@ test("docs-only pushes do not start CI (Actions minutes, 2026-09-02)", () => {
   assert.doesNotMatch(pushBlock, /branches-ignore/, "deploy-branch pushes must reach ci.yml for the fast tier");
   const fastTier = "!(github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && inputs.concurrency_key == '')";
   const smokeJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  smoke:\n"), ciWorkflow.indexOf("\n  driving-model:\n"));
-  const sweepsJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  sweeps:\n"), ciWorkflow.indexOf("\n  smoke:\n"));
+  // BOUNDED AT ship-filter, which sits between these two since 2026-09-22 —
+  // an unbounded slice to `smoke:` would read that job as part of the sweeps.
+  const sweepsJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  sweeps:\n"), ciWorkflow.indexOf("\n  ship-filter:\n"));
   for (const [name, job] of [["smoke", smokeJob], ["sweeps", sweepsJob]]) {
     assert.ok(job.includes(`    if: \${{ ${fastTier} }}`), `${name} must sit out the deploy branch's fast tier with the shared expression`);
   }
@@ -778,8 +909,28 @@ test("a green fast-tier run pokes the train; a red or called one never does", ()
   for (const j of ["guards", "node-suites", "sweeps-parts", "driving-model", "select"]) {
     assert.ok(cond.includes(`needs.${j}.result == 'success'`), `${j} must be green before the poke`);
   }
-  assert.ok(cond.includes("(needs.selected.result == 'success' || needs.selected.result == 'skipped')"),
-    "an empty plan skips `selected`, which is a pass");
+  /* A SKIPPED `selected` IS ONLY A PASS WHEN THE PLAN WAS HONESTLY EMPTY
+     (2026-09-22). `selected` is skipped whenever the plan has no shards, and
+     that happens two ways: nothing the diff touches has a spec, or everything
+     it touches was unaffordable. The second read as a pass, and it was the
+     renderer's whole story — all six test:gfx specs declare 240-540 s against
+     the gate's 180 s per-test cap, so a js/render diff emptied the plan and
+     poked the train with no backend booted by anything blocking.
+
+     `dropped` is what separates them, and tests/specs/render-boot.spec.js is
+     what keeps the tightening from becoming a permanent stall: a renderer diff
+     now has an affordable spec, so its plan is not empty in the first place. */
+  assert.ok(cond.includes("(needs.selected.result == 'success' || (needs.selected.result == 'skipped' && needs.select.outputs.dropped == '0'))"),
+    "a skipped `selected` may only pass the poke when NO routed spec was dropped");
+  // The output the condition reads has to exist, or the comparison is against
+  // an empty string and the gate silently never fires.
+  const selectJobBody = (ciWorkflow.split("\n  select:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
+  assert.match(selectJobBody, /^      dropped: \$\{\{ steps\.sel\.outputs\.dropped \}\}$/m,
+    "the select job must publish `dropped` or poke-train compares against nothing");
+  assert.match(selectStep, /dropped=\$\{dropped\}/,
+    "the step script must write `dropped` to $GITHUB_OUTPUT");
+  assert.match(selectStep, /overBudgetSpecs \|\| \[\]\)\.length \+ \(r\.unreachable/,
+    "`dropped` counts the over-budget and unreachable buckets, not just the squeezed-out ones");
   assert.match(poke, /permissions:\s*\n\s+actions: write/, "workflow_dispatch via the token needs actions:write");
   // A called workflow may not request more than its caller passes, and GitHub
   // checks that at STARTUP for every declared job, skipped or not: the first
@@ -832,18 +983,34 @@ test("ci.yml treats a Pages call as the gate it is, whatever the caller's event"
   // group instead of smoke. concurrency_key is the one signal a Pages call
   // always carries, and it must decide all four places.
   const smokeJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  smoke:\n"), ciWorkflow.indexOf("\n  driving-model:\n"));
-  const sweepsJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  sweeps:\n"), ciWorkflow.indexOf("\n  smoke:\n"));
+  const sweepsJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  sweeps:\n"), ciWorkflow.indexOf("\n  ship-filter:\n"));
   assert.match(smokeJob, /timeout-minutes: \$\{\{ \(inputs\.concurrency_key == '' && \(github\.event_name == 'workflow_dispatch' \|\| github\.event_name == 'schedule'\)\) && 120 \|\| 50 \}\}/,
     "a Pages call takes the smoke cap, never the wide run's 120");
-  assert.match(smokeJob, /- name: Smoke\n(?:\s+#.*\n)*\s+if: steps\.shipfilter\.outputs\.ships != 'false' && \(inputs\.concurrency_key != '' \|\| \(github\.event_name != 'schedule' && github\.event_name != 'workflow_dispatch'\)\)/,
+  assert.match(smokeJob, /- name: Smoke\n(?:\s+#.*\n)*\s+if: needs\.ship-filter\.outputs\.ships != 'false' && \(inputs\.concurrency_key != '' \|\| \(github\.event_name != 'schedule' && github\.event_name != 'workflow_dispatch'\)\)/,
     "a Pages call always runs smoke.spec.js");
-  assert.match(smokeJob, /- name: Boot group \(nightly\) \/ dispatched group\n\s+if: steps\.shipfilter\.outputs\.ships != 'false' && inputs\.concurrency_key == '' && \(github\.event_name == 'schedule' \|\| github\.event_name == 'workflow_dispatch'\)/,
+  assert.match(smokeJob, /- name: Boot group \(nightly\) \/ dispatched group\n\s+if: needs\.ship-filter\.outputs\.ships != 'false' && inputs\.concurrency_key == '' && \(github\.event_name == 'schedule' \|\| github\.event_name == 'workflow_dispatch'\)/,
     "a Pages call never runs the wide group");
-  for (const [name, job] of [["smoke ship filter", smokeJob], ["sweeps filter", sweepsJob]]) {
+  // The ship filter is its own job since 2026-09-22; read it there, not in smoke.
+  for (const [name, job] of [["ship filter", shipFilter], ["sweeps filter", sweepsJob]]) {
     assert.match(job, /CALLED: \$\{\{ inputs\.concurrency_key != '' \}\}/, `${name} must know it is a Pages call`);
-    assert.match(job, /\*\) \[ "\$CALLED" = "true" \] \|\| run_all "event is '\$EVENT', not a push or a Pages call" ;;/,
-      `${name} must accept a Pages call and still fail safe on every other non-push event`);
+    // The Pages-call branch is what this test is about, and it is identical in
+    // both filters: $CALLED is consulted BEFORE any verdict on the caller's
+    // event, so a train tick is never mistaken for the nightly.
+    assert.match(job, /\*\) \[ "\$CALLED" = "true" \] \|\| run_all "event is '\$EVENT', not a push/,
+      `${name} must accept a Pages call and still fail safe on the events it cannot resolve`);
   }
+  // Which events each filter can resolve is NOT identical, and the difference is
+  // the point. The smoke filter asks "does this commit ship?", which a pull
+  // request cannot answer, so it fail-safes on one. The sweeps filter asks
+  // "could this diff have moved a vertex?", and a pull request answers that
+  // perfectly well from its own base — it used to fail-safe anyway and ran the
+  // whole fleet on every PR (2026-09-22).
+  assert.match(sweepsJob, /case "\$EVENT" in\n\s+push\|pull_request\) ;;/,
+    "the sweeps filter resolves a pull request instead of running the fleet blind");
+  // Read from the ship-filter JOB, which is where that filter lives since
+  // 2026-09-22 — smokeJob no longer contains it.
+  assert.match(shipFilter, /case "\$EVENT" in\n\s+push\) ;;/,
+    "the ship filter still fail-safes a pull request: a PR head ships nothing to compare against");
   assert.match(selectJob, /EVENT: \$\{\{ inputs\.concurrency_key != '' && 'push' \|\| github\.event_name \}\}/);
   assert.match(selectJob, /PUSH_BEFORE: \$\{\{ inputs\.concurrency_key != '' && inputs\.before_sha \|\| github\.event\.before \}\}/,
     "on a Pages call the plan's base is the train's live commit");

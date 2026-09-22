@@ -24,10 +24,26 @@ const read = (f) => readFileSync(path.join(ROOT, f), "utf8");
 
 const FULL = "silverstone", CORRIDOR = "albert_park", LEFT = "bahrain", STREET = "monaco";
 const ctxOnce = (() => { let c = null; return () => (c || (c = buildContext())); })();
+
+/** Build a def and RELEASE the VM's primitive capture.
+ *
+ * track-build-vm records every primitive of every build, and each record holds
+ * a reference to the whole mesh buffer its emitter wrote into — not a copy of
+ * its own slice — so one shared context accumulates every circuit's full
+ * geometry with nothing able to reclaim it (the measurement is in that file's
+ * `trim` comment: 4157 MB vs 97 MB). This suite reads `t.pit` and `t.pitSigns`
+ * and never a primitive, so it keeps none of it. Measured on this tree: the
+ * fleet test below peaked at 5563 MB for the file, past the 4088 MB that has
+ * already OOM-killed a sweep's audit child (ci.yml's prop-clipping note). */
+function built(def) {
+  const t = ctxOnce().Tracks.build(def);
+  ctxOnce().trim(0);
+  return ctxOnce().release(t);
+}
 const buildOnce = (() => {
   const seen = new Map();
   return (id) => {
-    if (!seen.has(id)) { const T = ctxOnce().Tracks; seen.set(id, T.build(T.LIST.find((d) => d.id === id))); }
+    if (!seen.has(id)) { const T = ctxOnce().Tracks; seen.set(id, built(T.LIST.find((d) => d.id === id))); }
     return seen.get(id);
   };
 })();
@@ -194,7 +210,7 @@ test("the approach boards walk back past the circuit's own scenery instead of st
 
 test("a painted lane has no signs; a street complex signs its bays like any other", () => {
   const T = ctxOnce().Tracks;
-  const narrow = T.build(Object.assign({}, T.LIST.find((d) => d.id === STREET), { pit: { mode: "narrow" } }));
+  const narrow = built(Object.assign({}, T.LIST.find((d) => d.id === STREET), { pit: { mode: "narrow" } }));
   assert.equal(narrow.pitSigns, undefined, "no bays, no signs");
   assert.equal(buildOnce(STREET).pitSigns.cells.length, 12, "Monaco's STREET complex has twelve bays to sign");
 });
@@ -292,7 +308,7 @@ test("every circuit with a pit wall builds one", () => {
   const T = ctxOnce().Tracks;
   const missing = [];
   for (const def of T.LIST) {
-    const t = T.build(def);
+    const t = built(def);
     if (!t.pit || !t.pit.hasWall) continue;
     if (!t.pitBuilt || t.pitBuilt.wall !== true) missing.push(def.id);
   }

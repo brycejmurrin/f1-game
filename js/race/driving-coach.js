@@ -39,7 +39,7 @@ const DrivingCoach = (function () {
     ["backmarkers", "TRAFFIC"]]);
   function create(G) {
     const insights = RaceInsights.create(G);
-    let enabled = G.store.get("drivingCoach", false), elapsed = 0, quiet = 0;
+    let enabled = G.store.get("drivingCoach", true), elapsed = 0, quiet = 0;
     let trace = [], checkpoint = null, practice = false, drillMode = "free";
     // REWIND: a rolling window of the same capture a checkpoint takes.
     // 2 Hz, not 60: a rewind lands you on a corner approach, and the half
@@ -496,7 +496,7 @@ const DrivingCoach = (function () {
         ? (canArm()
           ? "This session is scored, so checkpoints and rewind are off. ARM PRACTICE makes it unscored and turns them on — it cannot be undone for this session."
           : "Checkpoints are available in a Time Trial, or in a race or qualifying session you have armed for practice. Daily challenges and multiplayer are scored against others, so they cannot be armed.")
-        : practice ? "Practice active: laps and ghosts will not be saved. TRY AGAIN, or the RECOVER key while driving, restores your saved car state and practice goal. REWIND 10s steps back without a checkpoint — your car only, not the others. Restart the session to set records again."
+        : practice ? "Practice active: laps and ghosts will not be saved. TRY AGAIN, or the RECOVER key while driving, restores the saved grid, race clock and practice goal. REWIND 10s steps the grid and race clock back without a checkpoint. Restart the session to set records again."
           : "Saving a starting point, or rewinding, makes this session unscored: laps and ghosts will not be saved. Restart the session to set records again.";
       const drillInfo = $("pm-drill-status"), summary = insights.summary();
       if (drillInfo) {

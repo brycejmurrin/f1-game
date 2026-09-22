@@ -352,7 +352,9 @@
           stage._mat = 0;
         });
       };
-      quinta("portimao-quinta-north", 0.24, -1, 88, 4);
+      // 60, not 88: at 88 m the farm stood on the 0.369 carriageway (7 m from
+      // its centreline) and the whole group was rejected; 60 clears it by 35 m.
+      quinta("portimao-quinta-north", 0.24, -1, 60, 4);
       quinta("portimao-quinta-south", 0.68, 1, 92, 3);
 
       {
@@ -414,8 +416,14 @@
       cameraTower(K(0.055), 1, 26, { h: 16 });
       cameraTower(K(0.500), -1, 28, { h: 18 });
       cameraTower(K(0.860), 1, 26, { h: 16 });
-      for (const [s0, s1] of [[0.1, 0.28], [0.44, 0.91]]) {
-        for (const side of [-1, 1])
-          forestEdge(s0, s1, side, 16, { density: 0.52, hMin: 9, hMax: 16, pineFrac: 0.78, col: PINE, col2: PINE_D });
+      // Two cuts. The inside of the T4 hairpin (left, 0.168-0.181): clearTreeDist
+      // pushes that stretch's trees ~40 m out, into the terrain hollow between the
+      // two carriageways, where they grounded up to 12 m in the air. And the two
+      // hillsideTerraces above (0.470-0.530 left, 0.835-0.890 right): the belt
+      // stood at the same 16 m gap and grew straight up through the terracing.
+      for (const [s0, s1, side] of [[0.1, 0.168, -1], [0.181, 0.28, -1], [0.1, 0.28, 1],
+                                    [0.44, 0.47, -1], [0.53, 0.91, -1],
+                                    [0.44, 0.835, 1], [0.89, 0.91, 1]]) {
+        forestEdge(s0, s1, side, 16, { density: 0.52, hMin: 9, hMax: 16, pineFrac: 0.78, col: PINE, col2: PINE_D });
       }
     };

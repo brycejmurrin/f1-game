@@ -720,6 +720,27 @@ const Tracks = (function () {
     const pitKeep = track.pit ? track.pit.keep : null, pitSide = track.pit ? track.pit.side : 0;
     const pitV = track.pit ? track.pit.v : null, pitVerge = track.pit ? track.pit.bands.verge : 0;
     const pitMax = (() => { let m = 0; if (pitKeep) for (let k = 0; k < n; k++) if (pitKeep[k] > m) m = pitKeep[k]; return m; })();
+    // The pit complex is ONE window of the lap, but its keep-out (pitMax,
+    // ~30 m) widened every guard query everywhere: onRoadHit + onTrack were the
+    // top self-time of a build. Pay the wide radius only where the query can
+    // reach a pit node at all — its circle, plus a grid cell's diagonal
+    // (node grid CELL = 10 m, so a returned node may sit ~14.2 m outside R),
+    // against the pit nodes' bounding box. Elsewhere no pit node can be a
+    // candidate, so the pit branch cannot fire and the road branch rejects
+    // beyond rad + hw anyway: the result is identical, measured byte-for-byte
+    // on all 52 circuits (bug hunt 2026-09-22; props phase ~20 % faster).
+    const pitBox = (() => {
+      if (!pitKeep || !(pitMax > 0)) return null;
+      let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+      for (let k = 0; k < n; k++) if (pitKeep[k] > 0) {
+        if (px[k] < x0) x0 = px[k]; if (px[k] > x1) x1 = px[k];
+        if (pz[k] < z0) z0 = pz[k]; if (pz[k] > z1) z1 = pz[k];
+      }
+      return x0 <= x1 ? { x0, x1, z0, z1 } : null;
+    })();
+    const PIT_GATE_PAD = 15;
+    const nearPit = (x, z, r) => !!pitBox && x + r + PIT_GATE_PAD >= pitBox.x0 && x - r - PIT_GATE_PAD <= pitBox.x1 &&
+      z + r + PIT_GATE_PAD >= pitBox.z0 && z - r - PIT_GATE_PAD <= pitBox.z1;
     // The complex's footprint at node k as a lateral RANGE on the pit side,
     // [beyond the verge, its far edge]: the verge itself stays placeable, so a
     // gantry leg or a marshal post can still stand between the track and the
@@ -745,7 +766,9 @@ const Tracks = (function () {
     // where the engine builds the complex, and dropping it is the intent.
     let _pitReject = false;
     const onRoadHit = (cx, cz, topY, rad, arx, arz, afx, afz, hx, hz, botY) => {
-      const mh = grid.maxHw + pitMax;
+      const mhFull = grid.maxHw + pitMax;
+      const rFull = (rad > 0 ? rad + mhFull : __M.hypot(hx + mhFull, hz + mhFull)) + 2;
+      const mh = nearPit(cx, cz, rFull) ? mhFull : grid.maxHw;
       // The complex keeps FOOTINGS out, not a crown: a RADIAL primitive (a
       // tree's canopy tier) whose underside is well above the road may reach
       // over the complex's edge, the way a crown reaches over a verge. Testing
@@ -962,7 +985,8 @@ const Tracks = (function () {
     }
     const onTrack = (x, z, margin, pitMargin) => {
       _pitReject = false;
-      const R = grid.maxHw + pitMax + margin + ds + 1;
+      const rFull = grid.maxHw + pitMax + margin + ds + 1;
+      const R = nearPit(x, z, rFull) ? rFull : grid.maxHw + margin + ds + 1;
       const _cn = grid.query(x, z, R, _trkCand, false);
       for (let _ci = 0; _ci < _cn; _ci++) {
         const i = _trkCand[_ci];
@@ -1998,7 +2022,12 @@ const Tracks = (function () {
         const side = hash(HK(k) * 31) < 0.5 ? -1 : 1;
         if (dressingExcluded("city", k, side)) return;
         const neon = cn(HK(k) * 5.5, side);
-        prop(k, side, 6, [1.0, 6, 1.0], [0.10, 0.10, 0.12]);
+        // The post stands INSIDE the panel's depth, not flush with it: both at
+        // gap 6 put their roadside faces on one plane (place()'s size-hashed
+        // jitter is ≤ 9 cm apart) — 22 same-facing coplanar pairs across seven
+        // street circuits (2026-09-22, coplanar-audit --why --raw). 0.3 m in
+        // from either panel face clears that jitter by 20 cm.
+        prop(k, side, 6.3, [0.6, 6, 0.6], [0.10, 0.10, 0.12]);
         prop(k, side, 6, [1.2, 3.4, 5], NIGHT ? neon : [neon[0] * 0.5 + 0.25, neon[1] * 0.5 + 0.25, neon[2] * 0.5 + 0.25]);
       });
     }
@@ -2033,6 +2062,22 @@ const Tracks = (function () {
     //
     // Never async: Assets prefetches every model at boot precisely so that prop
     // placement cannot vary with network timing (js/render/shared/assets.js modelSync).
+    // A baked mesh's axis-aligned extent in its own space, cached on the mesh:
+    // Assets hands back the same object for every stamp of an id, and the pack
+    // is 36 models, so this runs a few dozen times per build at most.
+    function meshBox(mesh) {
+      if (mesh.__aabb) return mesh.__aabb;
+      const p = mesh.pos;
+      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+      for (let i = 0; i < p.length; i += 3) {
+        if (p[i] < x0) x0 = p[i];         if (p[i] > x1) x1 = p[i];
+        if (p[i + 1] < y0) y0 = p[i + 1]; if (p[i + 1] > y1) y1 = p[i + 1];
+        if (p[i + 2] < z0) z0 = p[i + 2]; if (p[i + 2] > z1) z1 = p[i + 2];
+      }
+      return (mesh.__aabb = { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, cz: (z0 + z1) / 2,
+                              w: x1 - x0, h: y1 - y0, d: z1 - z0 });
+    }
+
     function bakedModel(id, k, side, dist, opts) {
       if (typeof Assets === "undefined" || !Assets.modelSync) return false;
       const mesh = Assets.modelSync(id);
@@ -2042,6 +2087,30 @@ const Tracks = (function () {
       if (!a || !isFinite(a.c[0]) || !isFinite(a.c[1]) || !isFinite(a.c[2])) return false;
       const yaw = o.rotY != null ? o.rotY
                 : Math.atan2(a.t[0], a.t[2]) + (side < 0 ? Math.PI / 2 : -Math.PI / 2);
+      // THE ONE PROP EMITTER WITH NO ROAD GUARD, until now. addBox, addCyl,
+      // addCone, addFrustum, addPrism and addPyramid all go through GUARDED,
+      // which rejects anything standing on the racing surface; addMesh never
+      // did, so a baked model could be stamped straight across the track, and
+      // one was. Monza's kenney_ind_building-d is anchored 60 m off node 17 at
+      // the Variante del Rettifilo, where the track turns ~90 degrees, so 60 m
+      // "outward" lands back ON the road two corners along: its window band,
+      // 2.22 x 0.20 m in baked colour [0.25,0.25,0.29], sat 0.75 m over the
+      // racing line (docs/notes/DEFECT-LEDGER.md).
+      //
+      // The box is the mesh's own extent, scaled and yawed exactly as addMesh
+      // transforms its vertices (geom.js: x' = x*cs + z*sn + X, z' = -x*sn +
+      // z*cs + Z), so the guard measures what ships. Callers write
+      // `if (!bakedModel(...)) building(...)` and that fallback is itself
+      // guarded, so a rejected stamp degrades to nothing, not to a raw box.
+      const bb = meshBox(mesh), sc = o.scale != null ? o.scale : 1;
+      const cs = __M.cos(yaw), sn = __M.sin(yaw);
+      const cx = bb.cx * sc, cz = bb.cz * sc;
+      const wc = [a.c[0] + cx * cs + cz * sn,
+                  a.c[1] + (o.lift || 0) + bb.cy * sc,
+                  a.c[2] - cx * sn + cz * cs];
+      const wsz = [(bb.w * __M.abs(cs) + bb.d * __M.abs(sn)) * sc, bb.h * sc,
+                   (bb.w * __M.abs(sn) + bb.d * __M.abs(cs)) * sc];
+      if (rejBox(wc, wsz)) { _culled++; return false; }
       return TrackGeom.addMesh(out, mesh, {
         x: a.c[0], y: a.c[1] + (o.lift || 0), z: a.c[2],
         rotY: yaw, scale: o.scale != null ? o.scale : 1,

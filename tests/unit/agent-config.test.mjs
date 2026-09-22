@@ -231,8 +231,23 @@ test("the edit guard refuses a generated package.json block through Write as wel
     "a Write that rewrites a test:* script must be blocked");
   assert.equal(run({ tool_name: "Edit", tool_input: { file_path: pkg, old_string: '"test:guards":', new_string: '"test:guards":' } }).status, 2,
     "the Edit path must still be blocked");
-  assert.equal(run({ tool_name: "Write", tool_input: { file_path: pkg, content: current } }).status, 0,
-    "a Write that leaves the generated block alone is not the guard's business");
+  // A LINKED WORKTREE has a second, wider rule in front of this one: the hook
+  // makes package.json (and index.html, manifest.cjs, sw.js) main-session-only,
+  // so an unchanged Write is refused there too — for a reason that has nothing
+  // to do with the generated block. Asserting status 0 flat made this test fail
+  // for every worktree agent on every diff (two hit it on 2026-09-22). Assert
+  // the DISTINCTION instead: outside a worktree the guard stays out of the way,
+  // inside one it says worktree, never "generated".
+  const untouched = run({ tool_name: "Write", tool_input: { file_path: pkg, content: current } });
+  const linkedWorktree = fs.statSync(path.join(ROOT, ".git")).isFile();
+  if (linkedWorktree) {
+    assert.equal(untouched.status, 2, "a worktree agent is refused package.json outright");
+    assert.match(`${untouched.stdout}${untouched.stderr}`, /worktree/i,
+      "and the refusal must be the worktree rule, not the generated-block one");
+  } else {
+    assert.equal(untouched.status, 0,
+      "a Write that leaves the generated block alone is not the guard's business");
+  }
 });
 
 test("the commit guard's docs-only fast path keeps its two exclusions", () => {
@@ -264,4 +279,77 @@ test("the Codex skill mirror is tracked symlinks and the repair script exists", 
   assert.ok(exists("tools/env/mirror-skills.sh"));
   assert.match(read("tools/env/mirror-skills.sh"), /\.agents\/skills/);
   assert.match(read("tools/env/mirror-skills.sh"), /ln -s/, "the repair makes symlinks, the tracked form");
+});
+
+// ── THE ALWAYS-ON SURFACE HAS A BUDGET ──────────────────────────────────────
+// Rationale and evidence: docs/notes/SELF-IMPROVING-SURFACE-2026-09-22.md.
+// Measured across 1,867 repos and 247,694 instruction lifetimes (arXiv
+// 2608.11095), agentic context files grow +226% over their lifetime at +4.9 net
+// instructions per commit, and the deletion hazard FALLS with instruction age
+// (-0.032/commit) because removing a rule means reconstructing why it was added.
+// Adding is free; removing is expensive; nothing pushes back. These two caps are
+// the push-back. They are deliberately close to today's numbers so the next line
+// costs a decision, not so that they never move — raise them WITH the reason, the
+// way tests/data/ratchets.json is raised.
+test("the always-on instruction surface stays inside its budget", () => {
+  // A rule-bearing line is one that tells a session what to do. Counted crudely
+  // but CONSISTENTLY: the absolute number matters less than the direction.
+  const RULE = /\b(never|always|must|do not|don't|use |run |prefer|keep |avoid|only |refuse|blocks?|stop |edit the|read |name |push |wait )/i;
+  const ruleLines = (text) => text.split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith("|---") && !l.startsWith("```") && RULE.test(l)).length;
+
+  const agents = ruleLines(read("AGENTS.md"));
+  // Reported ceiling for reliable instruction-following is ~150-200 TOTAL, and
+  // Claude Code's own system prompt already spends ~50 of them before this file
+  // is read. 75 leaves room for the skills, which add their own on invocation.
+  assert.ok(agents <= 75,
+    `AGENTS.md carries ~${agents} rule-bearing lines (budget 75) — promote one to a hook or a test, or delete it`);
+
+  // Skill DESCRIPTIONS are always loaded for routing, so they are part of the
+  // same budget even though the bodies are not (progressive disclosure).
+  const skills = fs.readdirSync(path.join(ROOT, ".claude/skills"), { withFileTypes: true })
+    .filter((d) => d.isDirectory() && exists(`.claude/skills/${d.name}/SKILL.md`));
+  let descWords = 0;
+  for (const d of skills) {
+    const { fm } = stripFrontmatter(read(`.claude/skills/${d.name}/SKILL.md`));
+    descWords += fm.split(/\s+/).filter(Boolean).length;
+  }
+  assert.ok(descWords <= 1600,
+    `${skills.length} skill descriptions cost ~${descWords} always-on words (budget 1600) — tighten one, or retire a skill`);
+});
+
+// ── A MEMORY STORE THAT CANNOT EXPIRE IS A RATCHET ──────────────────────────
+// .claude/agent-memory/<name>/ is the one memory store that survives here: it is
+// in the repo and tracked (!.claude/agent-memory/ in .gitignore), unlike Claude
+// Code's auto memory under ~/.claude, which a fresh cloud container wipes every
+// session. Because it is written by an agent and read by later agents, it is the
+// exact shape the literature warns about — arXiv 2607.24300 measured agents
+// scoring their own work at >=0.70 while 15 of 35 runs fell below a random
+// baseline. verify-agent's seed already answers this ("an entry older than the
+// merge-base is re-verified, not trusted"); this makes that property a rule
+// rather than a habit, for every store that gets added later.
+test("every agent-memory store declares its schema and how an entry expires", () => {
+  const dir = path.join(ROOT, ".claude/agent-memory");
+  if (!fs.existsSync(dir)) return;                    // no stores yet is fine
+  const stores = fs.readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory());
+  assert.ok(stores.length > 0, "an empty .claude/agent-memory/ should not be committed");
+  for (const s of stores) {
+    const rel = `.claude/agent-memory/${s.name}/MEMORY.md`;
+    assert.ok(exists(rel), `${s.name} has a memory dir but no MEMORY.md index`);
+    const text = read(rel);
+    // A schema: the store says what ONE entry looks like, so entries stay
+    // comparable and a later agent can tell a real record from a musing.
+    assert.ok(/`[^`]*—[^`]*`/.test(text),
+      `${rel} states no entry schema — a store without one accumulates prose`);
+    // An expiry/distrust rule: something that makes an old entry stop counting.
+    assert.ok(/re-verif|expire|stale|older than|no longer|re-check|recheck/i.test(text),
+      `${rel} names no way for an entry to stop being believed — that is the ratchet arXiv 2608.11095 measures`);
+    // The agent that owns it must actually declare the memory, or the file is
+    // decoration that nothing reads.
+    const agent = `.claude/agents/${s.name}.md`;
+    assert.ok(exists(agent), `${rel} has no owning subagent at ${agent}`);
+    assert.match(read(agent), /^memory:\s*(user|project|local)\s*$/m,
+      `${s.name} has a memory store but its frontmatter never declares memory:`);
+  }
 });
