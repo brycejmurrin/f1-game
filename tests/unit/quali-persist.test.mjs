@@ -171,9 +171,21 @@ test("openQuali restores via begin(); quit-to-menu keeps persist; friend-race us
     "openQuali must not wipe the persist — that is the bug this suite exists for");
   assert.doesNotMatch(fnSource(GAME, "function quitToMenu()"), /quali\.clear\(true\)/,
     "quit-to-menu keeps the persist so CONTINUE still has the driven grid");
+  // This used to be the whole guard, and it asserted NOTHING: `clear(true)`
+  // has no call site anywhere in js/ (measured 2026-09-22 — `clear(forget)`
+  // still takes the parameter, but every caller passes none). The behaviour
+  // did not regress, it MOVED: SeasonCal.award() deletes season.qualiOrder
+  // itself and game.js drops only the in-memory copy. So the lexical needle
+  // rotted while the invariant held, and a reader saw a guarded line that
+  // scanned an empty set. Keep the ban (it costs nothing if a clear(true)
+  // ever returns) but assert the invariant that is actually load-bearing.
   for (const line of GAME.matchAll(/^.*quali\.clear\(true\).*$/gm))
     assert.match(line[0], /!isChampionship\(\)/,
       "a clear(true) anywhere else is legitimate only for a one-off GP, and must say so");
+  assert.match(fs.readFileSync(path.join(ROOT, "js/career/season-cal.js"), "utf8"), /delete season\.qualiOrder/,
+    "award() must forget the weekend's order — without it qualiResults() stays truthy for the rest of the championship and every later grid comes off round 1's times (pages.yml 1888/1889, 2026-09-02)");
+  assert.match(GAME, /if \(settles\) quali\.clear\(\)/,
+    "the in-memory classification must go when the round scores, or it outlives the order award() deleted");
   // THE FRIEND-RACE GATE IS ARMED INSIDE openQuali, FROM ITS ARGUMENT. It used
   // to be armed by openQualiForNet AFTER calling it — but openQuali is async and
   // suspends on its first await, so its own reset ran a microtask later and wiped
