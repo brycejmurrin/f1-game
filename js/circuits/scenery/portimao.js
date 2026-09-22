@@ -146,7 +146,10 @@
       hillsideTerrace(0.280, 0.360, 1, 15, { rows: 6, rise: 1.4, depth: 2.7, density: 0.5, step: 8 });
       hillsideTerrace(0.620, 0.700, -1, 15, { rows: 6, rise: 1.4, depth: 2.7, density: 0.5, step: 8 });
 
-      for (const [i, s] of [0.942, 0.960, 0.978, 0.996].entries()) {
+      const PIT_BAY_FRACS = [0.942, 0.960, 0.978, 0.996];
+      const PIT_ROOF_SLICES = 6;
+      const PIT_ROOF_PHASE_STEPS = PIT_BAY_FRACS.length * PIT_ROOF_SLICES - 1;
+      for (const [i, s] of PIT_BAY_FRACS.entries()) {
         const a = anchor(K(s), 1, 20);
         const b = [a.r, a.u, a.t];
         modelGroup(`portimao-pit-bay-${i + 1}`, {
@@ -163,9 +166,12 @@
           addBox(stage, vadd(vadd(a.c, a.r, -3.0), a.u, 10.6), [0.4, 3.0, 36],
             [0.16, 0.26, 0.34], b);
           stage._mat = MAT.METAL;
-          for (let p = 0; p < 6; p++) {
-            const ph = (i * 6 + p) / 5.5;
-            const lift = 13.4 + Math.sin(ph * 1.15) * 1.7;
+          for (let p = 0; p < PIT_ROOF_SLICES; p++) {
+            // POR-M1: all four bays share one longitudinal phase, so the roof
+            // draws one continuous wave instead of restarting at every bay.
+            const globalSlice = i * PIT_ROOF_SLICES + p;
+            const phase = globalSlice / PIT_ROOF_PHASE_STEPS * Math.PI * 2;
+            const lift = 13.4 + Math.sin(phase) * 1.7;
             const off = (p - 2.5) * 6.6;
             addBox(stage, vadd(vadd(a.c, a.t, off), a.u, lift), [21, 0.5, 6.7],
               [0.94, 0.94, 0.92], b);
@@ -301,11 +307,20 @@
 
       {
         const board = [0.94, 0.94, 0.90];
-        for (const s of [0.19, 0.35, 0.55, 0.77, 0.92]) {
+        for (const [s, skyline] of [
+          [0.045, true], [0.20, true], [0.35, false],
+          [0.55, false], [0.77, false], [0.93, true],
+        ]) {
+          // POR-M3: T1, T3 and the final brow must leave a white silhouette
+          // above the hidden road; secondary markers retain their lower scale.
+          const skylineHeight = skyline ? 5.0 : 2.35;
+          const boardH = skyline ? 2.4 : 1.5;
+          const boardY = skylineHeight - boardH * 0.5;
+          const postH = skylineHeight - boardH + 0.3;
           for (let i = 0; i < 3; i++) {
             const a = anchor(K(s + i * 0.006), 1, 7.5);
-            addBox(out, vadd(a.c, a.u, 1.6), [0.18, 1.5, 2.0], board, [a.r, a.u, a.t]);
-            addCyl(out, a.c, 0.10, 1.1, [0.25, 0.25, 0.28], 5, [a.r, a.u, a.t]);
+            addBox(out, vadd(a.c, a.u, boardY), [0.18, boardH, 2.0], board, [a.r, a.u, a.t]);
+            addCyl(out, a.c, 0.10, postH, [0.25, 0.25, 0.28], 5, [a.r, a.u, a.t]);
           }
         }
       }
@@ -367,20 +382,25 @@
         });
       }
 
+      const APARTMENT_DROP = 1.15;
       for (let i = 0; i < 5; i++) {
         const a = anchor(K(0.905 + i * 0.012), 1, 54 + i * 9);
         const b = [a.r, a.u, a.t];
+        // POR-M2: increasing gap sets every terrace farther behind the
+        // paddock; this explicit cut into the slope lowers each successive
+        // roofline as well, instead of letting local terrain erase the cascade.
+        const base = vadd(a.c, a.u, -i * APARTMENT_DROP);
         modelGroup(`portimao-hillside-apartments-${i + 1}`, {
-          center: vadd(a.c, a.u, 5), size: [18, 12, 30], basis: b,
+          center: vadd(base, a.u, 5), size: [18, 12, 30], basis: b,
         }, (stage) => {
           stage._mat = MAT.CONCRETE;
-          addBox(stage, vadd(a.c, a.u, 3.6), [12, 7.2, 26], LIME, b);
-          addPrism(stage, vadd(a.c, a.u, 7.2), [12.6, 1.5, 26.6], TERRA, b);
+          addBox(stage, vadd(base, a.u, 3.6), [12, 7.2, 26], LIME, b);
+          addPrism(stage, vadd(base, a.u, 7.2), [12.6, 1.5, 26.6], TERRA, b);
           stage._mat = 0;
           // Continuous balcony slab facing back down the hill toward the track.
-          addBox(stage, vadd(vadd(a.c, a.r, -6.4), a.u, 4.4), [1.6, 0.25, 25],
+          addBox(stage, vadd(vadd(base, a.r, -6.4), a.u, 4.4), [1.6, 0.25, 25],
             [0.88, 0.86, 0.82], b);
-          addBox(stage, vadd(vadd(a.c, a.r, -7.1), a.u, 5.0), [0.15, 1.0, 25],
+          addBox(stage, vadd(vadd(base, a.r, -7.1), a.u, 5.0), [0.15, 1.0, 25],
             [0.80, 0.78, 0.74], b);
         });
       }

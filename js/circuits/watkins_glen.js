@@ -34,6 +34,9 @@
       grass:         [0.20, 0.42, 0.19],
       sunDir:        [0.46, 0.58, 0.36],
     },
+    // WAT-M3 identity lock: the -12 m Esses drop and +13 m Boot climb are
+    // authored circuit geometry. Scenery grading must follow them, never
+    // flatten or counter-grade these two elevation moves.
     elevations: [
       { s: 0.11, halfM: 320, rise: 9.0 },    // climb out of Turn 1
       { s: 0.30, halfM: 380, rise: -12.0 },  // down through the Esses
