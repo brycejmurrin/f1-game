@@ -178,6 +178,19 @@
    a 393x253 band across the bottom 30%, which is a composition rather than a
    collision. It goes quiet rather than absent. */
 @media (max-width: 700px)  { #title-car { opacity: 0.22; } }
+/* A PORTRAIT PHONE GETS THE CARS, NOT A STRIP. At 100% width the 1400/900 box
+   is 393x253 on a 393px phone — the pair drawn in the left 55% of the viewBox
+   lands 216px wide under the last row of rooms, at 0.22, which measured as
+   invisible on a real device. The cars occupy viewBox x 0..770, so at 180% of
+   the viewport the LEFT edge of the art puts exactly the two cars across the
+   phone (0.55 * 1.8 = 0.99 of the width) and the trails run off the right,
+   which #overlay's overflow-x:hidden already clips. right:auto so the width
+   is not over-constrained against the base rule's left:0; right:0. The doors
+   sit at the top of their row (the tall block below), so the lower third of
+   the screen is the cars' alone and the opacity can come up to landscape's. */
+@media (orientation: portrait) and (max-width: 699px) {
+  #title-car { width: 180%; right: auto; opacity: 0.42; }
+}
 /* ASPECT, NOT WIDTH, IS WHAT BREAKS THIS LAYER, and the fix is on the <svg>:
    preserveAspectRatio MEET, not SLICE. Slice scales to COVER, so on a viewport
    narrower than the viewBox's 1400/900 (1.556) it scales by HEIGHT and runs off
@@ -190,7 +203,7 @@
    (1280x800 loses 2.7%, an 860x560 window 1.3%). The layer adapts rather than
    leaving, which is why this is an opacity step and not display:none.
    Portrait still has the button stack down its middle, so the art yields. */
-@media (max-aspect-ratio: 13/10) { #title-car { opacity: 0.26; } }
+@media (max-aspect-ratio: 13/10) and (min-width: 700px) { #title-car { opacity: 0.26; } }
 /* Transparency is a preference, and this layer is the most transparent thing on
    the screen. prefers-reduced-transparency is not Baseline yet, so it is a
    progressive enhancement on a design that is already legible without it. */
@@ -504,6 +517,48 @@ body { --compact-at: 600px; --wide-at: 620px; }
 :where(body[data-shape="tall"]) #title::after { margin: calc(var(--gap) * 0.5) 0 0; }
 :where(body[data-shape="tall"]) #subtitle { margin: calc(var(--gap) * 0.5) 0 0; }
 :where(body[data-shape="tall"]) #menu-meta { margin-top: calc(var(--gap) * 0.85); gap: calc(var(--gap) / 3); }
+/* THE PORTRAIT PHONE, measured on a 393x852 iPhone 2026-09-22: the wordmark
+   painted 31px while each play door was a ~130px card (icon over label over
+   sub), the four rooms broke into DATA / HUB and HOW / TO / PLAY, and the whole
+   column ran 850..1600px so the title art was a strip nobody saw. Three
+   changes, all scoped to tall AND narrow so an upright iPad keeps the
+   large-portrait sizes in css/responsive.css:
+   - the wordmark takes 13vwz (51px on 393) — it is the only thing on the
+     screen that is allowed to be big;
+   - each play door is ONE line, icon beside label, sub gone: the four modes
+     cost two rows of ~48px instead of two rows of ~130px;
+   - the rooms are a forced 2x2 so every label fits on one line;
+   - the doors start at the TOP of the leftover row instead of centring in it,
+     so the space they no longer need collects at the bottom, where the cars
+     are. No px in any padding or gap: rawSpacing is ratcheted at zero slack. */
+@media (max-width: 699px) {
+  :where(body[data-shape="tall"]) #title { font-size: clamp(44px, calc(13 * var(--vwz)), 84px); }
+  /* Full width, not 78vwz: at 78% a 2x2 cell on a 393px phone is 145px and
+     RACE A FRIEND broke into two lines (measured after the first cut). The
+     column's own padding-inline already keeps the skewed tips off the edge. */
+  :where(body[data-shape="tall"]) #menu-hero,
+  :where(body[data-shape="tall"]) #menu-primary,
+  :where(body[data-shape="tall"]) #menu-secondary { width: 100%; }
+  :where(body[data-shape="tall"]) #menu-buttons { align-content: start; }
+  :where(body[data-shape="tall"]) #menu-hero .bigbtn { padding-block: calc(var(--gap) * 0.6); }
+  /* The disclaimer is the one line long enough to wrap on a 393px phone, and a
+     wrapped block in a centred column is centred as a BOX while its text stays
+     left-ragged — measured: line one flush left, "Formula 1" under it. */
+  :where(body[data-shape="tall"]) #disclaimer { text-align: center; }
+  :where(body[data-shape="tall"]) #menu-primary .bigbtn {
+    display: flex; flex-direction: row; align-items: center; justify-content: center;
+    gap: 0.45em;
+    padding: calc(var(--gap) * 0.8) calc(var(--gap) * 0.7) calc(var(--gap) * 0.8) calc(var(--gap) * 0.9);
+    font-size: var(--fs-3);
+    min-height: var(--tap);
+  }
+  :where(body[data-shape="tall"]) #menu-primary .bigbtn .btn-ico { margin: 0; }
+  :where(body[data-shape="tall"]) #menu-primary .mb-sub { display: none; }
+  :where(body[data-shape="tall"]) #menu-secondary {
+    --balance-basis: calc(50% - 0.5em);
+    --balance-min: calc(50% - 0.5em);
+  }
+}
 /* LANDSCAPE COMPACT: side-by-side brand + buttons.
    Uses body[data-shape="wide"] (zoom-corrected, set by SheetShape classifyBody)
    in place of @media (orientation: landscape). The two agree in result — the
@@ -511,7 +566,13 @@ body { --compact-at: 600px; --wide-at: 620px; }
    data-shape is combinable with data-density in one selector and is consistent
    with the sheet-level data-shape convention everywhere else. */
 :where(body[data-shape="wide"][data-density="compact"]) #overlay {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  /* The doors do not need half the screen. At 1fr 1fr the column measured
+     417px of a 932px phone (2026-09-22, iPhone 15 Pro Max) with every label
+     sitting in ~90px of slack, while the title art behind the brand column had
+     the other half to itself. min(46%, 400px) keeps RACE A FRIEND on one line
+     at --fs-micro once the door is a row flexbox (rule below); the brand
+     column and the cars take the rest. */
+  grid-template-columns: minmax(0, 1fr) min(46%, 400px);
   justify-content: safe center;
   align-content: safe center; justify-items: stretch;
   /* Token gap, not 32px: on 852×393 that literal was a dead third column
@@ -552,9 +613,21 @@ body { --compact-at: 600px; --wide-at: 620px; }
   gap: calc(var(--gap) * 0.45);
 }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-buttons .bigbtn {
-  width: 100%; padding: 6px 8px 6px 12px; font-size: var(--fs-3);
+  width: 100%; padding: 6px 8px 6px 12px; font-size: var(--fs-micro);
   min-height: max(32px, var(--tap-min));
 }
+:where(body[data-shape="wide"][data-density="compact"]) #menu-primary .bigbtn {
+  display: flex; flex-direction: row; align-items: center; justify-content: center;
+  gap: 0.4em;
+}
+/* Four rooms in the narrower column wrap 3 + 1 from the 5.5rem basis, which
+   stretches the leftover into a banner; a forced 2x2 costs one ~30px row
+   (274 -> ~305 on a 343px safe height) and matches portrait. */
+:where(body[data-shape="wide"][data-density="compact"]) #menu-secondary {
+  --balance-basis: calc(50% - 0.5em);
+  --balance-min: calc(50% - 0.5em);
+}
+:where(body[data-shape="wide"][data-density="compact"]) #menu-primary .bigbtn .btn-ico { margin: 0; flex: none; }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-secondary .minibtn {
   padding: 3px 6px 3px 10px; font-size: var(--fs-micro);
   min-height: max(26px, var(--tap-min));
