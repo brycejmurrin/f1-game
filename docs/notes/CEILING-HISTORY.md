@@ -3145,7 +3145,7 @@ about a different lap. Folding them into one sentence would have made both
 harder to read.
 
 
-## 2026-09-22 — `js/game.js` 9594 → 9599 (+1 code, +1 G member), `js/track/tracks.js` 2751 → 2755, `js/render/glx/glx.js` 2689 → 2714, `js/net/lobby.js` 1761 → 1783
+## 2026-09-22 — `js/game.js` 9594 → 9599 (+1 code, +1 G member), `js/track/tracks.js` 2751 → 2755, `js/render/glx/glx.js` 2689 → 2714, `js/net/lobby.js` 1761 → 1791
 
 The player-visible bug batch (`claude/bugs-desync-fps`). Every raise is under the
 40-line auto-absorb and almost all of it is the comment that stops the bug
@@ -3158,9 +3158,12 @@ AI restart/skill rolls hash on `(seed, round)`; neither was on the wire, so two
 peers retired different cars on different laps. `PHYS_DT` now reads
 `PhysicsConsts.FIXED_DT` (one number, was `1 / 60` in seven files).
 
-**`lobby.js` +22** — the `seed`/`round` fields on the settings payload, their
+**`lobby.js` +30** — the `seed`/`round` fields on the settings payload, their
 validators, and the paragraph explaining why the old "peers do not share a sim
-seed" comment fixed one consumer (the weather plan) and left three.
+seed" comment fixed one consumer (the weather plan) and left three; then +8
+for `NetHandshake.peekCode` in both answer steps — the code's SHAPE is checked
+before a transport is required, so junk pasted while join() still waits on the
+ICE prefetch is refused as junk (the answer-step spec raced that fetch).
 
 **`glx.js` +25** — the drawing-buffer ceiling: init() queries
 MAX_TEXTURE_SIZE / MAX_RENDERBUFFER_SIZE / MAX_VIEWPORT_DIMS once and resize()

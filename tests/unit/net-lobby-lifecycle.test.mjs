@@ -524,3 +524,24 @@ test("an invalid seed or round rejects the whole payload, as every other field d
     }
   } finally { h.lobby.cancel(); }
 });
+
+// ── a typo is refused as a typo, even before the transport exists ─────────────
+// join() awaits the ICE prefetch (up to ICE_WAIT_MS) before it creates the
+// transport, and the player can paste in that window. makeAnswer checked
+// `!transport` FIRST, so junk pasted early was answered with "That attempt has
+// ended" — the multiplayer-lobby spec's junk-code test raced the TURN fetch on
+// every slow network. The code's shape is now checked before the connection.
+test("makeAnswer and acceptAnswer refuse a malformed code before they need a transport", async () => {
+  const peekCode = (c) => (String(c).startsWith("APEX1.") ? { ok: true }
+    : { ok: false, error: "bad_code", message: "That does not look like an Apex invite code." });
+  const h = harness({ scanFactory: () => ({ stop() {}, start() {} }), handshake: { peekCode } });
+  try {
+    const a = await h.lobby.makeAnswer("not-a-real-code");
+    assert.equal(a.error, "bad_code", "no transport yet, but the shape is wrong: say so");
+    assert.match(a.message, /apex invite code/i);
+    const b = await h.lobby.acceptAnswer("not-a-real-code");
+    assert.equal(b.error, "bad_code");
+    const c = await h.lobby.makeAnswer("APEX1.p.e30");
+    assert.equal(c.error, "no_transport", "a well-shaped code with no connection is the transport's problem");
+  } finally { h.lobby.cancel(); }
+});

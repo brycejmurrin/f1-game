@@ -1082,6 +1082,12 @@ const NetLobby = (function () {
       const code = codeIn != null ? codeIn : (e.inviteIn ? e.inviteIn.value : "");
       if (codeIn != null && e.inviteIn) e.inviteIn.value = codeIn;
       if (!code.trim()) { say("Paste their invite code first.", true); return { ok: false, error: "empty" }; }
+      // Shape first, connection second: a typo is refused as a typo even while
+      // join() is still waiting on the ICE prefetch (the transport arrives up
+      // to ICE_WAIT_MS after the tap). The old order reported "That attempt
+      // has ended" for junk and raced every slow network.
+      const peek = NetHandshake.peekCode ? NetHandshake.peekCode(code) : { ok: true };
+      if (!peek.ok) { say(peek.message, true); return { ok: false, error: peek.error, message: peek.message }; }
       if (!transport) { say(noConnectionMsg(), true); return { ok: false, error: "no_transport" }; }
       const pending = transport;
       const pc = pending.pc;
@@ -1122,6 +1128,8 @@ const NetLobby = (function () {
       const code = codeIn != null ? codeIn : (e.answerIn ? e.answerIn.value : "");
       if (codeIn != null && e.answerIn) e.answerIn.value = codeIn;
       if (!code.trim()) { say("Paste their answer code first.", true); return { ok: false, error: "empty" }; }
+      const peek = NetHandshake.peekCode ? NetHandshake.peekCode(code) : { ok: true };   // shape before connection, as makeAnswer
+      if (!peek.ok) { say(peek.message, true); return { ok: false, error: peek.error, message: peek.message }; }
       if (!transport) { say(noConnectionMsg(), true); return { ok: false, error: "no_transport" }; }
       const pending = transport;
       const id = pendingId;
