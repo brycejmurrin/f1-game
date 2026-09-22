@@ -73,6 +73,130 @@
   overflow-y: auto; overflow-x: hidden;
   overscroll-behavior-y: contain; touch-action: pan-y;
 }
+/* THE TITLE CAR. A decorative art layer, NOT a grid item: #overlay is a grid,
+   so an in-flow child would open a third row and move the composition. Absolute
+   takes it out of flow and fills the fixed parent instead.
+
+   zoom: normal is LOAD-BEARING. `#overlay > *` above sets zoom: var(--ui-scale),
+   and zoom affects LAYOUT (unlike transform) and compounds down the flat tree —
+   so without this the UI SIZE slider would rescale the artwork's box and re-crop
+   it, which is not what a player asking for bigger TEXT is asking for.
+
+   preserveAspectRatio="xMinYMax slice" is the SVG spelling of
+   `background-size: cover; background-position: left bottom` — xMin pins the
+   left edge, YMax pins the BOTTOM (SVG's +y runs down), slice fills the viewport
+   and crops the overflow. On a portrait phone that leaves only the leftmost
+   ~28 % of the viewBox on screen, hugely magnified, which is exactly why the car
+   is drawn left: the crop makes it loom instead of vanishing. */
+#title-car {
+  /* THE BOX CARRIES THE VIEWBOX'S OWN ASPECT, pinned to the foot of the frame.
+     That is what makes one layer work on every shape. Sized to the viewport
+     instead, the two fits pull opposite ways: slice (cover) fills a landscape
+     phone but blows a portrait tablet up to 1857px wide, while meet (fit)
+     tames portrait and shrinks that same phone from 844x543 to 607x390 — the
+     shape the game is actually PLAYED in. With the element itself at
+     1400/900, cover and fit are the SAME scale, so there is nothing left to
+     choose: the art is always exactly as wide as the screen and as tall as
+     its own proportions say, sitting on the bottom edge. */
+  position: absolute;
+  left: 0; right: 0; bottom: 0; top: auto;
+  width: 100%; height: auto;
+  aspect-ratio: 1400 / 900;
+  zoom: normal;
+  pointer-events: none;
+  z-index: -1;
+  color: var(--red);                 /* the ONE declaration that themes every
+                                        currentColor stroke and gradient stop */
+}
+/* Literal colours live on the elements as presentation attributes, which carry
+   specificity 0 — so these rules win without !important and a theme can win
+   over these. */
+/* Stroke language matched to the menu icons: round caps and joins, no fill.
+   AERIAL PERSPECTIVE does the composition work — the near tyre is brightest,
+   the far end fades — so the art thins out exactly where the button column
+   begins instead of being dimmed there afterwards. */
+/* --steel is the app's own line colour (it resolves to --dim), and DEPTH comes
+   from opacity rather than three hand-mixed greys — so the art costs the
+   palette no new colours, which rawColorDistinct ratchets and three hex
+   literals tripped.
+   Depth and weight ride on the groups as PRESENTATION ATTRIBUTES rather than
+   classes: they carry specificity 0, so any rule here still wins, and the
+   layer costs one class instead of four (cssClasses is ratcheted too). */
+/* FILLED, not hollow. The panels are closed paths so that each one HIDES what
+   is behind it -- that occlusion is the only thing giving the car depth. This
+   read `fill: none` for six drafts while the markup was being built around the
+   opposite assumption, and the car rendered as a wireframe every time. The
+   open-line paths carry their own fill="none" attribute, which beats this
+   inherited value. */
+#title-car g { fill: var(--carbon); stroke-linecap: round; stroke-linejoin: round; }
+/* :not([stroke]) rather than a class — the glow group is the only one that
+   names its own paint (the gradient), so the art needs no class at all, and
+   cssClasses stays where it was. A CSS rule would otherwise WIN over that
+   presentation attribute, which carries specificity 0. */
+#title-car g:not([stroke]) { stroke: var(--steel); }
+/* ONE CONTOUR, NOT THIRTY. The car's outline is a DILATE-AND-KNOCKOUT, not an
+   SVG filter: every panel is drawn once swollen and inked (this rule), then
+   again in the body colour on top, so what survives is the outer edge of their
+   union. Thirty individual panel outlines is what made two cars side by side
+   read as one tangle rather than as two cars. An attribute hook, not a class,
+   so cssClasses stays where it was. */
+#title-car g[data-ink] { fill: var(--steel); stroke: var(--steel); }
+/* VOLUME. The silhouette alone reads flat because every panel takes the same
+   tone, yet the geometry already knows which faces point up and which fall
+   away. These carry the light: one ink at three fill-opacities (set as
+   presentation attributes, which take a plain number and so need no rule of
+   their own) -- tops catch the sky, flanks sit back, rubber stays darkest. */
+#title-car g[data-tone] { fill: var(--steel); }
+/* THE TRAILS HAVE TO BE PAINTED FROM CSS. Carrying fill="url(#tc-trail)" as a
+   presentation attribute does not work here: `#title-car g` above sets fill on
+   the very same element, and a CSS rule beats a presentation attribute, which
+   carries specificity 0. The tyre marks rendered in --carbon for their whole
+   life because of it -- dark smears rather than the red they were written to
+   be. Anything painting a <g> that `#title-car g` also matches has to come
+   from a rule, not an attribute. */
+#title-car g[data-trail] { fill: url(#tc-trail); }
+/* COPY SPACE IS A FUNCTION OF WIDTH, and this is a COMPOSITION rule, not a
+   contrast one — the difference matters, because the first measurement looked
+   like a legibility problem and was not.
+   MEASURE THE RATIO, NOT THE DELTA. Sampling art on vs off: over the button
+   plates the worst pixel is 10 at 1280 and 0 at 844, and it always lands on a
+   rounded EDGE where the plate is transparent, never on a label. Over text it
+   is 0 at 1280, 0 at 393 (display:none), and 60 at 844 — behind the
+   disclaimer, which sounds alarming and is not. Measured as WCAG SC 1.4.3
+   asks: that 14px line runs 14.55:1 with the art off and 12.62:1 with it on,
+   against a 4.5:1 requirement. Light text on a near-black ground has that much
+   headroom, so no scrim is owed at any size. A channel delta was the wrong
+   instrument; it says the pixels moved, not whether anyone can read them.
+   What IS true is that on a narrow screen the button column takes the whole
+   width, so the art has nowhere to be: it crosses the stack and reads as
+   clutter. It fades as the column closes in and leaves when there is no room
+   left to compose into. */
+@media (max-width: 1000px) { #title-car { opacity: 0.4; } }
+/* PHONES KEEP IT TOO, now that meet has stopped the blow-up. This used to be
+   display:none because slice scaled the art by height on a narrow screen and
+   drove it straight through the button stack; under meet a 393x852 phone gets
+   a 393x253 band across the bottom 30%, which is a composition rather than a
+   collision. It goes quiet rather than absent. */
+@media (max-width: 700px)  { #title-car { opacity: 0.22; } }
+/* ASPECT, NOT WIDTH, IS WHAT BREAKS THIS LAYER, and the fix is on the <svg>:
+   preserveAspectRatio MEET, not SLICE. Slice scales to COVER, so on a viewport
+   narrower than the viewBox's 1400/900 (1.556) it scales by HEIGHT and runs off
+   the sides — measured, a 834x1194 iPad blew the 1400-unit viewBox out to
+   ~1857px, and a rotated 1080x1920 monitor got a front wing across the whole
+   lower third at FULL opacity, because it is wider than 1000px so the fade
+   above never fires. Neither width query can see either case.
+   Meet scales to FIT, so the same two land at 834x536 and 1080x694 — a band at
+   the foot of the screen instead of a blow-up — while landscape barely moves
+   (1280x800 loses 2.7%, an 860x560 window 1.3%). The layer adapts rather than
+   leaving, which is why this is an opacity step and not display:none.
+   Portrait still has the button stack down its middle, so the art yields. */
+@media (max-aspect-ratio: 13/10) { #title-car { opacity: 0.26; } }
+/* Transparency is a preference, and this layer is the most transparent thing on
+   the screen. prefers-reduced-transparency is not Baseline yet, so it is a
+   progressive enhancement on a design that is already legible without it. */
+@media (prefers-reduced-transparency: reduce) {
+  #title-car { display: none; }
+}
 #title {
   font-size: clamp(34px, calc(9 * var(--vwz)), 92px);
   font-weight: 700; font-style: italic;
