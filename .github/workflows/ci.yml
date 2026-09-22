@@ -1435,6 +1435,10 @@ jobs:
     outputs:
       shards: ${{ steps.sel.outputs.shards }}
       any: ${{ steps.sel.outputs.any }}
+      # How many routed specs the plan could NOT run, and why the plan exists at
+      # all. poke-train needs both to tell an empty plan from an unaffordable one.
+      dropped: ${{ steps.sel.outputs.dropped }}
+      reason: ${{ steps.sel.outputs.reason }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1703,10 +1707,29 @@ jobs:
     timeout-minutes: 5
     needs: [guards, node-suites, sweeps-parts, driving-model, select, selected]
     # Fast tier only (a deploy-branch push, never a Pages call), and only when
-    # every fast-tier job passed — `selected` is skipped when the plan was
-    # empty, which counts as a pass. A red fast tier pokes nothing; the cron
+    # every fast-tier job passed. A red fast tier pokes nothing; the cron
     # backstop still gates the tip later and fails it visibly.
-    if: ${{ !cancelled() && github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && inputs.concurrency_key == '' && needs.guards.result == 'success' && needs.node-suites.result == 'success' && needs.sweeps-parts.result == 'success' && needs.driving-model.result == 'success' && needs.select.result == 'success' && (needs.selected.result == 'success' || needs.selected.result == 'skipped') }}
+    #
+    # A SKIPPED `selected` IS NOT ALWAYS A PASS (2026-09-22). It is skipped
+    # whenever the plan has no shards, and that happens two ways which are not
+    # alike:
+    #
+    #   * nothing this diff touches has a spec — a genuine pass, and the common
+    #     case for a docs or tooling change;
+    #   * every spec it DOES touch was unaffordable — dropped over budget, or
+    #     bigger than the whole 10-test cap.
+    #
+    # The second read as a pass, and it was the renderer's entire story: all six
+    # `test:gfx` specs declare 240-540 s against the gate's 180 s per-test cap,
+    # so a `js/render/` diff emptied the plan, skipped this job's dependency and
+    # poked the train with no backend having been booted by anything blocking.
+    # `dropped` separates them, and tests/specs/render-boot.spec.js is what makes
+    # the tightening safe rather than a permanent stall: a renderer diff now has
+    # an affordable spec to select, so the plan is no longer empty.
+    #
+    # Deliberately NOT gated on `reason`: an `infra` or `docs` plan can be
+    # honestly empty, and those are the diffs this branch takes all day.
+    if: ${{ !cancelled() && github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && inputs.concurrency_key == '' && needs.guards.result == 'success' && needs.node-suites.result == 'success' && needs.sweeps-parts.result == 'success' && needs.driving-model.result == 'success' && needs.select.result == 'success' && (needs.selected.result == 'success' || (needs.selected.result == 'skipped' && needs.select.outputs.dropped == '0')) }}
     permissions:
       actions: write
       contents: read

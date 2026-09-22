@@ -207,6 +207,33 @@ test("FAULTY-CHANGE RECALL: no real regression is dropped in silence", () => {
   assert.ok(rows.length >= 5, "the case history is the harness — do not let it shrink");
 });
 
+test("the renderer's blocking spec stays inside the gate it was written for", () => {
+  /* tests/specs/render-boot.spec.js exists BECAUSE js/render/ routed to nothing
+     that can fail a push: all six test:gfx specs declare 240-540 s against the
+     gate's 180 s per-test cap, so a renderer diff emptied the plan and skipped
+     the `selected` job entirely.
+
+     That makes its cheapness load-bearing, not incidental. One `test.slow()`,
+     one `test.setTimeout`, one `test.describe.configure({ timeout })` — the
+     three things maxDeclaredTimeout() walks for — puts it back over the cap and
+     silently restores the hole, with every other test in this file still green.
+     So the property is asserted directly, on the same function the gate uses. */
+  const SPEC = "tests/specs/render-boot.spec.js";
+  assert.ok(fs.existsSync(path.join(ROOT, SPEC)), `${SPEC} is gone; so is the renderer's only blocking gate`);
+  assert.equal(maxDeclaredTimeout(SPEC), 0,
+    `${SPEC} declares a timeout, which excludes it from the selected gate — that is the hole it was written to close`);
+  // …and it must actually fit: under the cap by declaration is not enough if it
+  // declares more tests than the whole capacity (touch-steer, 25 against 10).
+  const cut = fit([SPEC], 15, { rank: () => 3 });
+  assert.deepEqual(cut.selected.map((r) => r.file), [SPEC],
+    `${SPEC} did not fit the budgeted shard: ${JSON.stringify({ skipped: cut.skipped, unreachable: cut.unreachable, over: cut.overBudgetSpecs })}`);
+  // And it is reachable from a renderer diff at all — it has to be in the group
+  // js/render/ routes to, or being cheap buys nothing.
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+  assert.ok([...specsOf(["test:gfx"], pkg.scripts)].includes(SPEC),
+    `${SPEC} is not in test:gfx, which is the group js/render/ routes to`);
+});
+
 test("each missed case is attributed to the bucket that actually excluded it", () => {
   /* The footer of select-recall.mjs attributed all four misses to the
      deliberate `>=` per-test budget policy. That is right for three of them and
