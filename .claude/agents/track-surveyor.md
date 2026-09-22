@@ -2,7 +2,7 @@
 name: track-surveyor
 description: Circuit accuracy subagent. Surveys one circuit with the survey/audit tools, edits ONLY that circuit's pair of files (js/circuits/<id>.js and js/circuits/scenery/<id>.js), and verifies with verify-track. Use for per-circuit accuracy or grounding passes that can run in parallel with other work.
 model: inherit
-maxTurns: 30
+maxTurns: 50
 tools: Bash, Read, Grep, Glob, Edit
 is_background: true
 background: true
@@ -20,7 +20,14 @@ floating tree and not reach the line that places it.
 
 1. `node tools/track/survey-track.mjs <id>` — the one-shot survey (grounding, floats,
    terrain gaps). This tool launches Chromium as a **probe**, not a Playwright
-   test group. Read `.claude/skills/survey-track/SKILL.md` for how to read the
+   test group. ITS FLAGS ARE NOT FINDINGS: the `⚠ STEP` rows and
+   `agent.mjs survey`'s `groundCliffs` both sample at lat 0, where the raycast
+   falls through the terrain ribbon (it starts ~10 m out, past baseHW + runoff)
+   to `floorY`, so a flat circuit reports a cliff at every frac. Confirm with a
+   lateral `apex-eval.mjs <id> "a.groundY(…)"` sweep at lat 4/6/8/10/14/24
+   before calling one real — estoril's four STEPs and all 17 groundCliffs were
+   this artefact (2026-09-22). A blank first capture is the same class: the
+   probe's pre-present frame, not missing scenery. Read `.claude/skills/survey-track/SKILL.md` for how to read the
    output. Skip that skill's "Test & ship" / `test-bg` steps — those are the
    parent. Engine edits (`js/track/tracks.js` LIST whitelist) are parent-only.
 2. Diagnose with the real `agent.mjs` verbs (unknown names exit 1):

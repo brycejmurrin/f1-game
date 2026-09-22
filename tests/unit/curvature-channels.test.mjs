@@ -33,6 +33,13 @@ function walk(dir, out = []) {
 // aliasing scheme showing up here should be a conversation anyway.
 function readsCurvature(src) {
   if (/\bTracks\.curvature\s*\(/.test(src)) return true;
+  // An INJECTED api is the third form, and it escaped this guard until
+  // 2026-09-22: js/render/shared/driving-line.js reads `api.curvature(s)` and
+  // js/track/scenery/pits.js reads `ctx.curvature(box.s)`, neither destructured
+  // nor called on Tracks, so a bare-identifier alias test cannot see them. The
+  // driving line's `cue()` is audible to the PLAYER (game.js `GameAudio.brakeCue`),
+  // which is exactly the kind of consumer this table exists to classify.
+  if (/\b[A-Za-z_$][\w$]*\.curvature\s*\(/.test(src)) return true;
   const destructured = /(?:const|let|var)\s*\{[^}]*\bcurvature\b[^}]*\}\s*=/.test(src);
   return destructured && /(?<![.\w])curvature\s*\(/.test(src);
 }
