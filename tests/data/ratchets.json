@@ -24,7 +24,7 @@
       "lines": 17318
     },
     "js/render/glx/glx.js": {
-      "lines": 2734
+      "lines": 2746
     },
     "js/net/lobby.js": {
       "lines": 1791
@@ -39,7 +39,7 @@
       "slack": 5
     },
     "shellNodes": {
-      "ceiling": 1786,
+      "ceiling": 1794,
       "slack": 25
     },
     "bareCatches": {

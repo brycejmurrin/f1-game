@@ -315,10 +315,21 @@ export async function readSoftCanvasBytes(page, {
     const soft = document.getElementById("game-soft");
     const view = document.getElementById("view");
     const game = document.getElementById("game");
-    const g = (pv && view && view.width > 0) ? view
-      : (soft && soft.width > 0 && soft.height > 0) ? soft
-      : (view && view.width > 0) ? view
-      : (game && game.width > 0) ? game
+    // toDataURL ONLY READS A 2D CANVAS HONESTLY. A WebGL canvas without
+    // preserveDrawingBuffer has its buffer cleared once the frame is presented,
+    // so reading it back here returns the clear colour and whatever 2D backdrop
+    // sits under it — never the rendered frame. tools/car/render-car.mjs
+    // captured #view that way and produced a studio vignette with NO CAR, at
+    // every angle, while reporting success; the car was on screen the whole
+    // time. A canvas that refuses a 2d context is WebGL, so hand it back as
+    // null and let the caller fall through to CDP, which composites the real
+    // frame. #game-soft is the 2D blit target and reads back correctly.
+    const flat = (c) => { try { return !!(c && c.getContext("2d")); } catch (_) { return false; } };
+    const softLive = !!(soft && soft.width > 0 && soft.height > 0 && flat(soft));
+    const g = (pv && view && view.width > 0 && flat(view)) ? view
+      : softLive ? soft
+      : (view && view.width > 0 && flat(view)) ? view
+      : (game && game.width > 0 && flat(game)) ? game
       : null;
     if (!g || typeof g.toDataURL !== "function") return null;
     try {
