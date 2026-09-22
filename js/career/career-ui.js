@@ -749,13 +749,16 @@ function create(G) {
         // MY TEAM keeps the bare row it always had: rollover() resolves the goal
         // only for a driver career, because an owner has nobody to promise to.
         const promised = c.flavour !== "myteam";
-        objCard.append(row("Season goal", `P${c.deal.goal.value} in the championship`
+        // The LABEL comes from the goal's own kind — a contract can promise a
+        // championship position, a constructors' finish or beating the other
+        // side of the garage, and the hub must not assume the first.
+        objCard.append(row("Season goal", Career.goalLabel(c.deal.goal)
           + (promised ? ` · ${Career.AMBITION[Career.ambitionOf(c.deal)].name}` : "")));
         if (promised) {
-          const me = Career.driverStandings()
-            .find((r) => r.team === c.team && r.seat === c.seat);
-          if (me) objCard.append(row("Where you stand", `P${me.pos} — `
-            + (me.pos <= c.deal.goal.value ? "on target" : "short of it")));
+          const now = Career.goalNow(c.deal.goal);
+          const on = Career.goalOnTrack(c.deal.goal);
+          if (now) objCard.append(row("Where you stand",
+            now + (on == null ? "" : on ? " — on target" : " — short of it")));
         }
       }
       objCard.append(row("If you hit it", `+${Career.OBJ_BONUS} cr · +${Career.OBJ_REP} REP`));
@@ -1100,7 +1103,8 @@ function create(G) {
         el("span", "co-offer-tag", staying ? "STAY" : "MOVE"),
         el("span", "co-offer-terms",
           o.years + (o.years === 1 ? " season" : " seasons") + " · " +
-          o.salary + " cr / round · target P" + o.goal.value));
+          o.salary + " cr / round"),
+        el("span", "co-offer-terms", Career.goalLabel(o.goal)));
       b.onclick = () => {
         if (G.soundOn) GameAudio.uiSelect();
         Career.acceptOffer(i);
@@ -1129,7 +1133,8 @@ function create(G) {
       // sheet is read the player may already be choosing next year's promise.
       g.appendChild(row("You promised",
         Career.AMBITION[Career.ambitionOf({ ambition: c.goalResult.ambition })].name
-        + " · P" + c.goalResult.value + " or better"));
+        + " · " + (c.goalResult.label
+          || Career.goalLabel({ type: c.goalResult.type, value: c.goalResult.value }))));
       g.appendChild(row("You finished", "P" + c.goalResult.pos));
       g.appendChild(el("div", "cg-p", c.goalResult.met
         ? "Target met. Your reputation is up, and the paddock noticed."

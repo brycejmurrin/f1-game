@@ -27,7 +27,7 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { pick } from "./pick-tests.mjs";
 import { MEASURED, capacity, declaredTests } from "./select-budget.mjs";
-import { isTwinned, TWINNED } from "./twinned-specs.mjs";
+import { isTwinned, twinOf } from "./twinned-specs.mjs";
 import { referencesIn } from "../check/cross-file-paths.mjs";
 import * as espree from "espree";
 
@@ -172,7 +172,7 @@ export function fit(specs, budgetMin, { rank = () => 3 } = {}) {
     // it is on the fast gate, so a twin that stops covering fails there rather
     // than leaving the spec quietly unchecked in both places.
     if (isTwinned(file)) {
-      coveredByVmTwin.push({ file, tests, twin: TWINNED[file] });
+      coveredByVmTwin.push({ file, tests, twin: twinOf(file) });
       continue;
     }
     const own = maxDeclaredTimeout(file);

@@ -41,8 +41,8 @@ Session shape — eleven rules that control wall time and waiting:
    from the working tree, so a run in flight forbids source edits (the edit
    hook blocks them). `test:tooling-fast` is the edit-loop check.
 3. THE GATE IS A LADDER, EACH RUNG A SUBSET — green below never means green above:
-   `test:guards` (hook-enforced, every commit) ⊂ `test:tooling-fast` (208 of 278 unit files)
-   ⊂ `deploy.mjs --gate-only`, the only pre-push check that runs what the deploy runs (pushes nothing, dirty tree fine). The other 70 have taken deploys red three times — `docs/notes/PREPUSH-GATE-LADDER.md`. A commit whose every staged path is prose (`docs/`, `*.md`, skills, agents — no generated doc) runs only `docs-integrity`, and no ratchet raise.
+   `test:guards` (hook-enforced, every commit) ⊂ `test:tooling-fast` (223 of 296 unit files)
+   ⊂ `deploy.mjs --gate-only`, the only pre-push check that runs what the deploy runs (pushes nothing, dirty tree fine). The other 73 have taken deploys red three times — `docs/notes/PREPUSH-GATE-LADDER.md`. A commit whose every staged path is prose (`docs/`, `*.md`, skills, agents — no generated doc) runs only `docs-integrity`, and no ratchet raise.
 4. Never block the foreground on a test run: background it (log in `artifacts/`). Push once per VERIFIED BATCH: a push over a live run cancels it, and a killed job runs no `if: always()` step, so its failures are lost (9 of 59 sampled runs). Wait on it with `until [ -z "$(pgrep -f 'nam[e]')" ]; do sleep 15; done` and TEST THE ABSENT CASE — `[ ! -e /proc/$(pgrep …) ]` never exits and sat out a 30-minute budget (`docs/notes/TESTING-FIELD-NOTES.md` 2026-09-22); the verdict is still rule 5's, never the waiter's.
 5. ONE Playwright process, ONE browser group per batch, via `test-bg.mjs`.
    Anchor on `grep -E '= run (passed|failed|timedout|interrupted)'`, never a
@@ -100,8 +100,8 @@ what exists. Per-directory module tables: `docs/ARCHITECTURE.md`.
   (`glx/`) as the explicit WebGL2 pick and fallback; `shared/` is the
   backend-agnostic half. TLX and opt-in WGX (`webgpu/`) have no `<script>` tag
   and are injected by `js/game.js` from `ApexRoster.DEFERRED` for the resolved pick.
-- `js/track/` — `core/`, `scenery/`, `tracks.js`; only GENERIC tables live
-  here (the 112-member `scenery(api)` contract is test-frozen).
+- `js/track/` — `core/`, `scenery/`, `tracks.js`; only GENERIC tables live here (the
+  112-member `scenery(api)` contract is test-frozen). It and `js/circuits/` carry a nested `CLAUDE.md` (= `AGENTS.md`, a symlink).
 - `js/car/`, `js/data/`, `js/net/` (2-4 player WebRTC, no backend), `js/ui/`,
   `css/`. `index.html` is the shell — script tags and ALL static DOM; `sw.js`'s
   precache derives from it. `types/game-ctx.d.ts` is the `G` contract.
@@ -164,9 +164,9 @@ dead code / fat skill → `slim-bloat` and `bloat-auditor`.
 
 Hooks (`.claude/hooks/`): `session-start.sh` installs deps; `protect-files.sh`
 blocks generated-file edits and source edits during a live browser run;
-`bash-guard.sh` runs the guards before `git commit` and blocks `pkill -f` and
-PID kills of a test-bg run; `touch .claude/allow-protected` is the escape hatch
-for an assigned edit. Never duplicate skills or agents under `.cursor/`.
+`bash-guard.sh` runs the guards before `git commit` and blocks `pkill -f` and PID
+kills of a test-bg run; `post-edit.sh` (PostToolUse, advisory) says at once when an
+edit staled a generated file or broke a circuit build; `touch .claude/allow-protected` lifts the generated-file rule only. Never duplicate skills or agents under `.cursor/`.
 
 ## Cursor Cloud specific instructions
 `.cursor/environment.json` bootstraps every Cloud VM (`tools/env/cloud-agent-install.sh`,
