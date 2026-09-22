@@ -64,61 +64,44 @@ does not claim to. Eight of those 14 (donington, istanbul, jerez, korea,
 nurburgring, sepang, suzuka, vegas) are only visible at all once the pack is
 loaded, and none of them is baselined anywhere. OPEN.
 
-**2026-09-22 — an unidentified ~1.07 m object stands at the edge of the racing
-surface on at least four circuits, with three specs red. OPEN.** jeddah,
-mosport, zandvoort and singapore all read 1.07 m; only jeddah is baselined, so
-under `props-over-road.spec.js`'s own rule ("a track NOT in this map must read
-<= TOL") the other three are failures. Found by
-`tests/unit/props-over-road.test.mjs`, then confirmed by a browser run of the
-spec, which reported monza and nothing else — so with the node suite's 1.1
-baselines, mosport and zandvoort are confirmed at their measured values.
+**2026-09-22 — the ~1.07 m reading on four circuits IS the pit wall's top cap,
+and the specs sample past the tarmac to reach it. IDENTIFIED; the sampling is
+OPEN.** jeddah, mosport, zandvoort and singapore all read 1.07 m over the road.
+`js/track/scenery/pits.js:300` and `:319` sweep the pit wall's cap with the
+profile `[[-0.07,1.0],[0.32,1.0],[0.32,1.07],[-0.07,1.07]]` in `WALL_TOP`
+`[0.46,0.47,0.50]` — a 0.39 x 0.07 m section topping out at exactly 1.07. The
+offending piece measures 1.91 x 0.09 x 3.84 m at y 1.03-1.12 in that colour, so
+the identification is the geometry's own, not an inference.
 
-**It is NOT the pit wall. That identification, made here and on PRs #187 and
-#192 on 2026-09-22, was wrong and is retracted.** It rested on a colour match
-to the jeddah paragraph's documented offender, grey `[0.46,0.47,0.5]`. Two
-measurements disprove it — the wall is nowhere near the band these specs
-sample:
+**Two retractions, in order, because both were published.** The first
+identification said "the pit wall", which was right. I then retracted it on the
+grounds that the wall's inner edge stands 8.2-13.0 m out while the specs sample
+at 6.15-6.9 m — but that measured `track.hw + pit.off.fastIn`, the FAST LANE's
+inner edge at the garage row. This cap is the ENTRY/EXIT wall, whose lateral is
+`hw + profile[0] + shift(k)` and which runs right at the tarmac edge: on
+zandvoort it sits at 6.81 m against a 7.0 m half-width. So the retraction was
+wrong and the original name was right. The lesson is the one the first mistake
+should have taught: measure the object, not something that shares its colour.
 
-| circuit | engine `track.hw` (tarmac) | mesh half-width | sampled at 0.75 x mesh | pit wall's inner edge |
-|---|---|---|---|---|
-| zandvoort | 7.0 | 9.2 | 6.9 | 13.0 |
-| mosport | 6.5 | 8.7 | 6.52 | 12.5 |
-| jeddah | 6.0 | 8.2 | 6.15 | 8.2 |
-| singapore | 6.0 | 8.2 | 6.15 | 8.2 |
-| monza | 8.0 | 10.2 | 7.65 | 12.0 |
+**The real defect underneath is the sampling.** Both `props-over-road.spec.js`
+and the foundation specs scale their lateral ladder by a half-width derived
+from the ROAD MESH, which runs 1.2-1.3x the engine's `track.hw` because the
+mesh carries verge and run-off out to 13 m. Their outermost sample lands OFF
+the racing surface by construction, on whatever boundary structure lives there
+— here, the pit wall a car is meant to stay inside. Baselined at 1.1 in
+`props-over-road.spec.js` (jeddah, mosport, zandvoort, singapore),
+`props-over-road.test.mjs` and `zandvoort-foundation.spec.js`, all citing each
+other. Scaling by `track.hw` instead would let every one of those baselines go
+back to `TOL`, and is the fix worth making. OPEN.
 
-The wall's inner edge (`track.hw + pit.off.fastIn`) stands 8.2-13.0 m out; the
-specs sample at 6.15-6.9 m. Moving the wall outward would change all 52
-circuits' pit lanes and leave every one of these specs red. The jeddah
-paragraph's own identification is therefore suspect too.
-
-**What is measured about the real object.** On zandvoort it sits at lateral
--6.81 against an engine half-width of 7.0 — ON the tarmac, 0.19 m inside the
-edge — and stands 1.08 m proud of the road. And **no recorded primitive
-contains it**: zero of the 24,020 primitives `tools/lib/track-build-vm.cjs`
-captures for zandvoort have a bounding box containing that triangle, raw or
-`shipped()`-filtered. So it reaches `propsGeo` by a path the harness's emitter
-wrappers do not wrap. Until that capture gap is closed (see the entry above),
-no audit can name what builds it, which is why this entry says "unidentified"
-rather than guessing a second time.
-
-**It is red in a spec the gate DOES select.**
-`tests/specs/zandvoort-foundation.spec.js` › "has explicit coordinates, safe
-models, and clean road clearance" reports `Expected <= 0.2, Received 1.07`.
-Reproduce in 18.5 s with `npm test -- tests/specs/zandvoort-foundation.spec.js`.
-Foundation specs are rank 2 whenever a diff touches a helper they import, so
-they land in `oversize` and get a shard each: this one surfaces on ordinary
-PRs, unlike `props-over-road`, and it took PR #187 red without that branch
-touching a single shipped file.
-
-**Also worth settling with it: the band these specs sample is not the tarmac.**
-Both scale their lateral ladder by a half-width derived from the road MESH,
-which runs 1.2-1.3x the engine's `track.hw` because the mesh includes verge and
-run-off out to 13 m. So the outermost samples land off the racing surface by
-design, on whatever boundary structures live there. On zandvoort the object is
-on the tarmac and the sample is right to hit it; on other circuits the same
-ladder reaches well past it. Whoever takes this should settle the object, the
-three specs and the band together.
+**And it is why no primitive covers the geometry.** `sweep()` in `pits.js` is a
+local extrusion that builds its quads directly rather than through a
+`TrackGeom` emitter, so `tools/lib/track-build-vm.cjs`'s wrappers record
+nothing for it. Measured on zandvoort: 9,456 of 639,333 prop vertices (1.5 %)
+belong to no captured primitive even after `shipped()`'s remap, in 9 gaps, and
+the largest — 9,392 vertices, 1,174 eight-vertex pieces — is this sweep. No
+audit that reasons about primitives can attribute any of it. OPEN, and the same
+class as the asset-pack blindness above.
 
 **2026-09-22 — `DIFF[difficulty]` undefined took every physics tick down. FIXED.**
 `js/game.js` `updateCar()` read `DIFF[difficulty]` unguarded and dereferenced

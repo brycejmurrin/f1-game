@@ -27,19 +27,19 @@
 //
 // IT FOUND THE SPEC WAS RED. mosport and zandvoort read 1.07 m, which under the
 // spec's own rule ("a track NOT in this map must read <= TOL") is a failure,
-// and neither is in its map. It is the same object the spec baselines on
-// jeddah — same colour byte for byte, grey [0.46,0.47,0.5] — but WHAT that
-// object is, is not known. The jeddah paragraph calls it the pit wall and this
-// file said so too; that is retracted. The wall's inner edge stands 8.2-13.0 m
-// out on these circuits while the ladder below samples at 6.15-6.9 m, and on
-// zandvoort the reading sits at lateral -6.81 against an engine half-width of
-// 7.0, i.e. ON the tarmac. It also belongs to no captured primitive, so nothing
-// can yet name its emitter. docs/notes/DEFECT-LEDGER.md carries the table.
-// Baselined below at jeddah's 1.1, matching what the spec already accepts on
-// jeddah, and NOT by widening TOL. The SPEC's own map is deliberately left
-// alone: editing it makes the selector rank it 0 and actually run it, which is
-// how monza's undiagnosed reading (below) came to light, and capping that one
-// to get a green is exactly the move AGENTS.md rule 9 forbids.
+// and neither was in its map. It is the pit wall's TOP CAP: js/track/scenery/
+// pits.js sweeps the profile [[-0.07,1.0],[0.32,1.0],[0.32,1.07],[-0.07,1.07]]
+// in WALL_TOP [0.46,0.47,0.50], topping out at exactly 1.07, and the offending
+// piece measures 1.91 x 0.09 x 3.84 m at y 1.03-1.12 in that colour. jeddah
+// carries the same object and the spec already baselines it there; the other
+// three went unbaselined only because this spec runs on no push.
+//
+// The ladder reaches it because it scales by a half-width taken from the ROAD
+// MESH, 1.2-1.3x the engine's track.hw, so the outermost sample lands off the
+// tarmac on the boundary a car stays inside. That is the defect worth fixing
+// (scale by track.hw and every baseline here could go back to TOL); it is open
+// in docs/notes/DEFECT-LEDGER.md, along with the note that sweep() records no
+// primitive, so no audit can attribute this geometry at all.
 //
 // THIS IS NOT A REPLACEMENT FOR THE SPEC, and the difference is measured, not
 // assumed. The sample ladder, the tolerance band, the barycentric test and its
@@ -106,16 +106,17 @@ const LADDER = [-0.75, -0.4, 0, 0.4, 0.75];
 const BASELINE = {
   // Street circuits: the ~1.1-1.3 m readings sit at the road edge, where the
   // track boundary a car stays inside lives. Verified from driver-eye as
-  // boundary, not a lane obstruction; the object itself is unidentified.
+  // boundary, not a lane obstruction; on four of them it is the pit wall's cap.
   monaco: 1.4, singapore: 1.3, baku: 1.3,
-  // ONE UNIDENTIFIED OBJECT, on the four circuits that read it: grey
-  // [0.46,0.47,0.5], 1.07 m over the road, 6.2-6.8 m lateral against a base
-  // half-width of 8.2-8.8. jeddah is the one the spec bisected (clean at
-  // ed2221fd, over at 80acf931, the walled-exit pit redesign) and the only one
-  // it baselines; the other three were never baselined because the spec that
-  // would have caught them does not run on the gate. Do NOT call it the pit
-  // wall — that was measured and retracted (DEFECT-LEDGER): the wall stands
-  // 8.2-13.0 m out and this ladder samples at 6.15-6.9 m.
+  // THE PIT WALL'S TOP CAP, on the four circuits that read it: WALL_TOP
+  // [0.46,0.47,0.5] at exactly 1.07 m, from the sweep in js/track/scenery/
+  // pits.js. Not the garage row's wall, which stands 8.2-13.0 m out, but the
+  // ENTRY/EXIT wall at the tarmac edge — on zandvoort 6.81 m against a 7.0 m
+  // half-width. jeddah is the one the spec bisected (clean at ed2221fd, over
+  // at 80acf931, the walled-exit pit redesign) and the only one it baselined;
+  // the other three went unbaselined because this spec runs on no push. The
+  // ladder reaches the wall at all because it scales by the MESH half-width,
+  // 1.2-1.3x the tarmac's; fixing that is open in DEFECT-LEDGER.
   jeddah: 1.1, mosport: 1.1, zandvoort: 1.1,
   // A forest crown leaning over the road, not an intrusion at the edge: dark
   // green spanning y 9.96-12.46 with the road at 7.33, so 4.74 m of clearance
