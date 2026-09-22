@@ -119,6 +119,68 @@ export function analyse(t0, dur, { minSpikes = 4 } = {}) {
   };
 }
 
+// FORCED SYNCHRONOUS LAYOUT, and whether it is the stall.
+//
+// The one main-thread cost no renderer instrument can see. It is not a render
+// pass, not an allocation and not a draw call — it is the browser recomputing
+// layout because JavaScript asked for a measurement after dirtying the DOM,
+// and it lands inside the rAF callback with everything else.
+//
+// The named suspect is js/ui/hud.js's fitHud(): ~15-20 getBoundingClientRect
+// reads interleaved with ~9 setProperty writes on document.documentElement,
+// memoised on a key but forced through in full every `_fitWait = 30` ticks,
+// which at the 10 Hz HUD tick is every 3.0 SECONDS, on by default, in every
+// race. "Every few seconds" is the report, so the cadence wants checking
+// rather than assuming.
+export function analyseLayout(layoutMs, layoutN, t0, dur, threshMs) {
+  const n = layoutMs ? layoutMs.length : 0;
+  if (n < 30) return { note: "no layout series" };
+  // Never sampled must not read as never happened — the window.GLX rule.
+  if (!layoutN.some((x) => x > 0)) return { note: "no layout reads observed — the accessors were not wrappable in this context" };
+  const elapsedS = (t0[n - 1] - t0[0]) / 1000;
+  let total = 0, reads = 0;
+  const heavy = [];
+  // A frame whose layout reads cost more than a millisecond is a frame that
+  // paid for a recalc rather than reading a cached box. Below that it is the
+  // accessor call itself and says nothing.
+  for (let i = 0; i < n; i++) {
+    total += layoutMs[i]; reads += layoutN[i];
+    if (layoutMs[i] >= 1) heavy.push({ i, t: t0[i], ms: layoutMs[i], reads: layoutN[i] });
+  }
+  const gaps = [];
+  for (let i = 1; i < heavy.length; i++) gaps.push((heavy[i].t - heavy[i - 1].t) / 1000);
+  const gs = gaps.slice().sort((a, b) => a - b);
+  const gapMed = gs.length ? gs[Math.floor(gs.length / 2)] : 0;
+  const gapMean = gaps.length ? gaps.reduce((a, b) => a + b, 0) / gaps.length : 0;
+  const sd = gaps.length > 1
+    ? Math.sqrt(gaps.reduce((a, g) => a + (g - gapMean) ** 2, 0) / (gaps.length - 1)) : 0;
+  // THE SHARE THAT MATTERS: on the frames that actually stalled, how much of
+  // the stall was layout? A cadence that matches proves nothing on its own —
+  // plenty of things happen every three seconds — but layout owning most of a
+  // spike frame's cost is an attribution.
+  let spikeN = 0, spikeCost = 0, spikeLayout = 0;
+  for (let i = 0; i < n; i++) {
+    if (threshMs && dur[i] > threshMs) { spikeN++; spikeCost += dur[i]; spikeLayout += layoutMs[i]; }
+  }
+  const share = spikeCost > 0 ? spikeLayout / spikeCost : 0;
+  return {
+    frames: n, reads, readsPerFrame: +(reads / n).toFixed(1),
+    totalMs: +total.toFixed(1),
+    msPerSecond: elapsedS > 0 ? +(total / elapsedS).toFixed(2) : null,
+    heavyFrames: heavy.length,
+    heavyGapMedianS: +gapMed.toFixed(2),
+    heavyGapCV: gapMean > 0 ? +(sd / gapMean).toFixed(3) : 0,
+    worstMs: heavy.length ? +Math.max(...heavy.map((h) => h.ms)).toFixed(1) : 0,
+    spikeFrames: spikeN,
+    layoutShareOfSpikeCost: +share.toFixed(3),
+    verdict: !heavy.length
+      ? "no frame paid a recalc — layout is not a cost here"
+      : share >= 0.25
+        ? `LAYOUT IS ${(share * 100).toFixed(0)}% OF SPIKE COST: ${heavy.length} recalc frames every ~${gapMed.toFixed(1)}s (CV ${(gapMean > 0 ? sd / gapMean : 0).toFixed(2)}), worst ${Math.max(...heavy.map((h) => h.ms)).toFixed(0)}ms`
+        : `layout recalcs every ~${gapMed.toFixed(1)}s (CV ${(gapMean > 0 ? sd / gapMean : 0).toFixed(2)}) but only ${(share * 100).toFixed(0)}% of spike cost — matching cadence is not attribution`,
+  };
+}
+
 // WHICH passes the wide frames carry, not how many.
 //
 // analysePasses() found the shape: about once a second a frame issues up to
@@ -134,10 +196,24 @@ export function analysePassKinds(passSig, passes) {
   if (!passSig || passSig.length < 30) return { note: "no per-frame pass composition recorded" };
   const n = passSig.length;
   const counts = passes.slice(0, n);
-  const sorted = counts.slice().sort((a, b) => a - b);
+  // RENDERING FRAMES ONLY, on both arms. analysePasses already takes its
+  // median over frames that encoded something; this function did not, and the
+  // zero-pass callbacks then sat in the "normal" bucket and halved every
+  // normal average. That is what made a frame's ordinary bloom chain look like
+  // work the wide frames ADD: with ~50% of callbacks presenting nothing,
+  // normal read 0.95 of each bloom mip against a wide frame's 1.74, and the
+  // apparent doubling was the dilution, not the renderer. The only rows that
+  // survived it were the ones that are exactly zero on a normal frame — which
+  // is the signal, and which is why the verdict must not be read off the
+  // others.
+  const sorted = Array.from(counts).filter((v) => v > 0).sort((a, b) => a - b);
+  if (sorted.length < 20) return { note: "too few rendering frames to compare compositions" };
   const med = sorted[Math.floor(sorted.length / 2)];
   const normal = [], wide = [];
-  for (let i = 0; i < n; i++) (counts[i] > med ? wide : normal).push(passSig[i]);
+  for (let i = 0; i < n; i++) {
+    if (!(counts[i] > 0)) continue;
+    (counts[i] > med ? wide : normal).push(passSig[i]);
+  }
   if (!wide.length) return { medianPasses: med, note: "no frame exceeded the median — nothing periodic to name" };
   const tally = (frames) => {
     const m = new Map();
@@ -551,6 +627,8 @@ async function main() {
               // are attributing to it, or the drop lands one frame late and
               // the correlation reads as zero.
               try { heap[n] = performance.memory ? performance.memory.usedJSHeapSize / 1048576 : 0; } catch (_) { heap[n] = 0; }
+              layoutMs[n] = layCur; layoutN[n] = layCount > 32767 ? 32767 : layCount;
+              layCur = 0; layCount = 0;
               if (n < PASS_CAP) {
                 passPerFrame[n] = passCur > 32767 ? 32767 : passCur;
                 // Bounded: only the first 4,000 frames keep their composition,
@@ -715,6 +793,66 @@ async function main() {
         }
       } catch (_) { /* no WebGPU in this context: the pass series stays empty */ }
 
+      // FORCED SYNCHRONOUS LAYOUT, per frame. A reflow is main-thread time that
+      // no renderer instrument can see: it is not a pass, not an allocation and
+      // not a draw call, and it lands inside the rAF callback like everything
+      // else. js/ui/hud.js's fitHud() interleaves ~15-20 getBoundingClientRect
+      // reads with ~9 setProperty writes on document.documentElement, and a
+      // root-level style write invalidates layout for the whole document — so
+      // every read after a write is a fresh recalc rather than a cached one. It
+      // is memoised, but `_fitWait = 30` at the 10 Hz HUD tick forces the full
+      // pass every 3.0 s whatever happens, on by default, in every race.
+      //
+      // Timing the ACCESSORS is the measurement: a read that triggers no
+      // recalc returns in microseconds, one that does pays for the whole
+      // layout. Sum per frame and the expensive frames name themselves.
+      const layoutMs = new Float32Array(CAP);
+      const layoutN = new Int16Array(CAP);
+      let layCur = 0, layCount = 0;
+      try {
+        const EP = window.Element && window.Element.prototype;
+        const wrapRead = (proto, name) => {
+          const orig = proto && proto[name];
+          if (typeof orig !== "function") return;
+          proto[name] = function () {
+            if (!armed) return orig.apply(this, arguments);
+            const a = performance.now();
+            try { return orig.apply(this, arguments); }
+            finally { layCur += performance.now() - a; layCount++; }
+          };
+        };
+        wrapRead(EP, "getBoundingClientRect");
+        wrapRead(EP, "getClientRects");
+        // The other half of the same tax: reading a computed style after a
+        // style write flushes layout exactly as a rect read does.
+        const origGCS = window.getComputedStyle;
+        if (typeof origGCS === "function") {
+          window.getComputedStyle = function () {
+            if (!armed) return origGCS.apply(window, arguments);
+            const a = performance.now();
+            try { return origGCS.apply(window, arguments); }
+            finally { layCur += performance.now() - a; layCount++; }
+          };
+        }
+        // offsetWidth and friends are accessors on the prototype, so they need
+        // the descriptor rather than a plain assignment.
+        for (const [proto, prop] of [[EP, "clientWidth"], [EP, "clientHeight"],
+          [window.HTMLElement && window.HTMLElement.prototype, "offsetWidth"],
+          [window.HTMLElement && window.HTMLElement.prototype, "offsetHeight"]]) {
+          if (!proto) continue;
+          const d = Object.getOwnPropertyDescriptor(proto, prop);
+          if (!d || typeof d.get !== "function") continue;
+          const g = d.get;
+          Object.defineProperty(proto, prop, Object.assign({}, d, {
+            get() {
+              if (!armed) return g.call(this);
+              const a = performance.now();
+              try { return g.call(this); } finally { layCur += performance.now() - a; layCount++; }
+            },
+          }));
+        }
+      } catch (_) { /* a sealed prototype just means this column stays zero, and analyseLayout says so */ }
+
       const longtasks = [];
       try {
         new PerformanceObserver((l) => {
@@ -766,6 +904,8 @@ async function main() {
         dump: () => ({
           t0: Array.from(t0.subarray(0, n)), dur: Array.from(dur.subarray(0, n)), longtasks, gov,
           heap: Array.from(heap.subarray(0, n), (x) => +x.toFixed(3)),
+          layoutMs: Array.from(layoutMs.subarray(0, n), (x) => +x.toFixed(3)),
+          layoutN: Array.from(layoutN.subarray(0, n)),
           bucketMs: BUCKET_MS,
           work: kinds.map((k) => [k, Array.from(counts.get(k))]),
           mem0, mem1: snapMem(),
@@ -843,6 +983,7 @@ async function main() {
     out.backend = d.backend;
     out.passes = analysePasses(d.passes || [], d.t0 || [], d.dur || [], out.spikeThresholdMs);
     out.passKinds = analysePassKinds(d.passSig || [], d.passes || []);
+    out.layout = analyseLayout(d.layoutMs || [], d.layoutN || [], d.t0 || [], d.dur || [], out.spikeThresholdMs);
     out.heap = analyseHeap(d.heap || [], d.t0 || [], d.dur || [], out.spikeThresholdMs);
     out.alloc = allocProfile
       ? analyseAlloc(allocProfile, out.heap && out.heap.elapsedS, out.frames, 16384)
