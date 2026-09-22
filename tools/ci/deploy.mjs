@@ -536,7 +536,16 @@ function pushWithRetry(oursProse = false) {
    `auto_merge_enabled` event ever reached either timeline, and both were
    merged by hand. Auto-merge goes through the session's CCR REST route
    instead, and the result is VERIFIED by reading the PR back rather than
-   inferred from the absence of an error. */
+   inferred from the absence of an error.
+
+   AND THE ANSWER IS NO, on this repo: the first honest run (PR #186) got
+   "Pull request Branch does not have required protected branch rules".
+   `claude/f1-game-project-26h3ng` has no branch protection, so there is
+   nothing for auto-merge to wait on and GitHub refuses to arm it — which is
+   why no PR has ever auto-merged here, #178 included. Expect the "NOT armed"
+   note and merge the PR yourself once CI is green; that is the tool working,
+   not failing. Enabling it would mean adding required checks to the deploy
+   branch, which is a train-latency decision, not a tooling one. */
 const REPO = "brycejmurrin/f1-game";
 function ghApi(token, method, url, body) {
   const args = ["-sS", "--max-time", "30", "-K", "-", "-X", method, "-w", "\n%{http_code}",
