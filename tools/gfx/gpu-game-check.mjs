@@ -29,7 +29,7 @@ import { fileURLToPath } from "node:url";
 // reimplemented: it is unit-tested both ways in
 // tests/unit/frame-hitch-analyse.test.mjs, and a second copy of a periodicity
 // test is a second copy of its bugs.
-import { analyse } from "./frame-hitch.mjs";
+import { analyse, analysePasses, analysePassKinds } from "./frame-hitch.mjs";
 
 // fileURLToPath, NOT `new URL(..).pathname`. On Windows that pathname is
 // `/D:/a/f1-game/f1-game/` and resolve() prefixes the cwd's drive, giving a
@@ -149,20 +149,74 @@ try {
     // the first laps of warm-up are not counted as hitches.
     const _hCAP = 40000;
     const _hT = new Float64Array(_hCAP), _hD = new Float64Array(_hCAP);
-    let _hN = 0, _hArmed = false;
+    const _hP = new Int16Array(_hCAP);
+    let _hN = 0, _hArmed = false, _hPass = 0, _hSigCur = [];
+    const _hSig = [];
+    // THE PASS CENSUS, and the reason it belongs HERE rather than only in the
+    // container. tlx-shadow.js sizes its maps by `softwareGL`: SUN_SIZE is 512
+    // on a software adapter and 2048 on a real desktop, CAR_SIZE 256 against
+    // 1024. macos-latest reports softAdapter=false, so this job is the only
+    // place this project can see what the shadow rebuild actually costs at the
+    // size a player renders it — sixteen times the pixels the container
+    // measured. Resolution is the fingerprint; GPUTextureView carries no size,
+    // so tag the view as it is created from a texture that does.
+    try {
+      const TP = window.GPUTexture && window.GPUTexture.prototype;
+      if (TP && typeof TP.createView === "function") {
+        const origCV = TP.createView;
+        TP.createView = function () {
+          const v = origCV.apply(this, arguments);
+          try { v.__sig = this.width + "x" + this.height + "/" + this.format; } catch (_) { /* expando refused */ }
+          return v;
+        };
+      }
+      const CE = window.GPUCommandEncoder && window.GPUCommandEncoder.prototype;
+      if (CE && typeof CE.beginRenderPass === "function") {
+        const origBRP = CE.beginRenderPass;
+        CE.beginRenderPass = function (desc) {
+          if (_hArmed) {
+            _hPass++;
+            if (_hSigCur.length < 64) {
+              let sig = "";
+              try {
+                const ca = (desc && desc.colorAttachments) || [];
+                for (let i = 0; i < ca.length; i++) {
+                  const v = ca[i] && (ca[i].view || ca[i].resolveTarget);
+                  sig += (i ? "+" : "") + ((v && v.__sig) || "?");
+                }
+                if (!ca.length) sig = "depth-only";
+                if (desc && desc.depthStencilAttachment) sig += "|d";
+                const lo = ca.length && ca[0] ? ca[0].loadOp
+                  : (desc && desc.depthStencilAttachment && desc.depthStencilAttachment.depthLoadOp);
+                if (lo) sig += ":" + lo;
+              } catch (_) { sig = "?"; }
+              _hSigCur.push(sig);
+            }
+          }
+          return origBRP.apply(this, arguments);
+        };
+      }
+    } catch (_) { /* WebGL2 legs have no GPUCommandEncoder; the timing still runs */ }
     try {
       const _raf = window.requestAnimationFrame.bind(window);
       window.requestAnimationFrame = function (cb) {
         return _raf(function (ts) {
           const a = performance.now();
           try { return cb(ts); } finally {
-            if (_hArmed && _hN < _hCAP) { _hT[_hN] = a; _hD[_hN] = performance.now() - a; _hN++; }
+            if (_hArmed && _hN < _hCAP) {
+              _hT[_hN] = a; _hD[_hN] = performance.now() - a;
+              _hP[_hN] = _hPass > 32767 ? 32767 : _hPass;
+              if (_hN < 4000) _hSig.push(_hSigCur);
+              _hN++;
+            }
+            _hPass = 0; _hSigCur = [];
           }
         });
       };
       window.__gcHitch = {
-        arm() { _hArmed = true; _hN = 0; },
-        dump: () => ({ t0: Array.from(_hT.subarray(0, _hN)), dur: Array.from(_hD.subarray(0, _hN)) }),
+        arm() { _hArmed = true; _hN = 0; _hSig.length = 0; },
+        dump: () => ({ t0: Array.from(_hT.subarray(0, _hN)), dur: Array.from(_hD.subarray(0, _hN)),
+                       passes: Array.from(_hP.subarray(0, _hN)), passSig: _hSig }),
       };
     } catch (_) { /* a frozen rAF just means this leg reports no hitch series */ }
     try {
@@ -356,7 +410,12 @@ try {
   out.hitch = await bounded(async () => {
     const d = await page.evaluate(() => (window.__gcHitch ? window.__gcHitch.dump() : null));
     if (!d || !d.dur || d.dur.length < 30) return { note: "no rAF series — the recorder never armed, or the leg drew too few frames" };
-    return analyse(d.t0, d.dur);
+    const a = analyse(d.t0, d.dur);
+    // The pass census rides the same series: same frames, same window, so
+    // "wide frames cost Nx" compares like with like.
+    out.passes = analysePasses(d.passes || [], d.t0 || [], d.dur || [], a.spikeThresholdMs);
+    out.passKinds = analysePassKinds(d.passSig || [], d.passes || []);
+    return a;
   }, 30000, "hitch-series").catch((e) => ({ note: "hitch read failed: " + String((e && e.message) || e).slice(0, 80) }));
   checkpoint("settled");
 

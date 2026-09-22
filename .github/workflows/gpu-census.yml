@@ -428,6 +428,20 @@ jobs:
               } else if (_h && _h.note) {
                 rows.push(`${" ".repeat(8)}hitch: ${_h.note}`);
               }
+              // THE PASS CENSUS, which only this job can take at the size a
+              // player renders. tlx-shadow.js sizes its maps by softwareGL:
+              // SUN_SIZE is 512 on a software adapter against 2048 on a real
+              // desktop, CAR_SIZE 256 against 1024. macos-latest reports
+              // softAdapter=false, so the container measured a sun shadow
+              // rebuild at a sixteenth of its real pixel count and found it
+              // cost 1.3x a normal frame. Same statistic here, at full size.
+              const _p = g.passes, _pk = g.passKinds;
+              if (_p && _p.medianPasses != null) {
+                rows.push(`${" ".repeat(8)}pass:  median=${_p.medianPasses} max=${_p.maxPasses} wide=${_p.widerThanMedian}` +
+                  ` every ~${_p.gapMedianS}s (CV ${_p.gapCV})` +
+                  (_p.wideCostRatio != null ? `  cost ${_p.wideCostRatio}x normal (${_p.wideMeanMs} vs ${_p.normalMeanMs}ms) spikeEnrich ${_p.spikeEnrichmentOnWide}x` : ""));
+              }
+              if (_pk && _pk.verdict) rows.push(`${" ".repeat(8)}kinds: ${_pk.verdict}`);
               rows.push(`${" ".repeat(8)}gov:   tier=${gov.tier} autoTier=${gov.autoTier} userTier=${gov.userTier} ` +
                 `scale=${gov.scale} fps=${gov.fps} floorMs=${gov.floorMs} envFace=${env.face} frames=${(gov.open && gov.open.frames) != null ? gov.open.frames : "?"}`
                 // ...and the OTHER way this column lies. floorMs 16.6 is 1/60 s,
