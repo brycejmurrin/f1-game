@@ -5233,7 +5233,37 @@ pursuit on `probe()`, `setInput()` only — bound to the raw rAF so the hitch
 recorder does not count its callbacks), THEN arms the recorder, the CPU profile
 and `--beats` beats (the census passes 20). `memState().warm` reports the warm by
 stage, and the `race:` row prints the gate time, the warm stages and how far the
-car drove — or NOT REACHED, loudly. Census 208: _pending_.
+car drove — or NOT REACHED, loudly.
+
+### Census 208: the first driven window — the lag, reproduced on Metal
+
+`race: gate=10400ms warm scene=7035 post=2868 shadow=767 total=10670 ms | driven
+379f 327 m mean 23.7 m/s`. The car drove for twenty seconds on real Metal and the
+three.js/WebGPU leg produced **141 callbacks over 12.5 ms in 758 frames, worst
+310 ms** — eleven of them 130–310 ms, five of those inside 1.4 s (28.3–29.7 s of
+the run). That is "lags every few seconds", measured for the first time, on the
+window that can see it. Native WGX driving the same road: 20 callbacks over 11 ms,
+**worst 23.4 ms**. GLX (WebGL2) also spikes to 292 ms; three's WebGL2 control is
+worse still (worst 2.6 s at 15 fps, render scale 0.6) — the driven road is hard
+for every path but WGX, and TLX on WebGPU is the one the player runs.
+
+What the window says so far: ten programs were still built lazily during the
+drive (8 in the scene render, 2 in the caster pass — scenery kinds absent from
+the grid view, async under patch 8); `build` 934 ms, `(program)` 1214 ms, the
+garbage collector 536 ms, `submit` 265 ms, `writeBuffer` 214 ms, game.js
+`update`+`updateCar` 570 ms over the 21 s window; 778 `createBuffer` and 705
+`createBindGroup` calls. Totals over a window cannot say which of these sat
+inside the eleven spikes, so the harness now joins the CPU profile's samples to
+the rAF recorder's spike frames (`analyseSpikeCpu`, clock-pinned at
+`Profiler.start`, coverage printed) and keeps per-frame resource counts including
+`writeBuffer` KB and `submit` (`analyseSpikeWork`); the `spike:` rows rank self
+time inside the ≥ 100 ms frames and compare their resource calls with the rest.
+Census 209: _pending_.
+
+Also measured for the first time: the lights hold **10.7 s** on this Metal runner
+(scene warm 7.0 s, post 2.9 s, casters 0.8 s). The scene warm mints every pooled
+mesh of the grid view and compiles its programs; that is the cost the race no
+longer pays, but it is a wait a player sees, and it is now a number to shrink.
 
 ### What the instruments had to become first
 

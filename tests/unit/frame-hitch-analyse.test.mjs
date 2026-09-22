@@ -19,7 +19,7 @@
 // to contain the thing, and the right verdict about one built not to.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { analyse, analyseHeap, analyseAlloc, analyseCpu } from "../../tools/gfx/frame-hitch.mjs";
+import { analyse, analyseHeap, analyseAlloc, analyseCpu, analyseSpikeCpu, analyseSpikeWork } from "../../tools/gfx/frame-hitch.mjs";
 
 // A frame series: `spikeEvery` frames apart, `spikeMs` long, `baseMs` otherwise.
 function series(frames, baseMs, spikeEvery, spikeMs) {
@@ -237,4 +237,49 @@ test("analyseCpu ranks by exact self time and folds a function reached two ways"
 test("analyseCpu reports an absent profile as absent, never as an empty ranking", () => {
   assert.match(analyseCpu(null).note, /no CPU profile/);
   assert.match(analyseCpu({ nodes: [] }).note, /no CPU profile/);
+});
+
+test("analyseSpikeCpu attributes only the samples that fall inside spike frames, on the joined clock", () => {
+  // Profiler clock: startTime 5,000,000 us; one sample every 500 us. Page clock at
+  // Profiler.start: 1000 ms. So sample i sits at page 1000 + 0.5 * (i + 1) ms.
+  const nodes = [
+    { id: 1, callFrame: { functionName: "(root)", url: "" } },
+    { id: 2, callFrame: { functionName: "(garbage collector)", url: "" } },
+    { id: 3, callFrame: { functionName: "render", url: "http://127.0.0.1:1/probe-fixture.js?v=dev", lineNumber: 9 } },
+    { id: 4, callFrame: { functionName: "idle", url: "" } },
+  ];
+  const samples = [], timeDeltas = [];
+  for (let i = 0; i < 2000; i++) {           // 1000 ms of samples, page 1000.5 .. 2000
+    const page = 1000 + 0.5 * (i + 1);
+    samples.push(page >= 1200 && page < 1350 ? 2 : page >= 1350 && page < 1400 ? 3 : 4);
+    timeDeltas.push(500);
+  }
+  const profile = { startTime: 5000000, nodes, samples, timeDeltas };
+  // Frames: one 200 ms spike at page 1200-1400, normal frames elsewhere.
+  const t0 = [1100, 1200, 1500], dur = [16, 200, 16];
+  const a = analyseSpikeCpu(profile, t0, dur, 100, 1000);
+  assert.equal(a.spikes, 1); assert.equal(a.spikeMs, 200);
+  assert.ok(Math.abs(a.sampledMs - 200) <= 1, "every sample of the 200 ms frame is inside: " + a.sampledMs);
+  assert.ok(a.coverage >= 0.99 && a.coverage <= 1.01, "the clock join covers the spike: " + a.coverage);
+  assert.equal(a.rows[0].site, "(garbage collector) @ :?"); assert.ok(Math.abs(a.rows[0].ms - 150) <= 1);
+  assert.equal(a.rows[1].site, "render @ probe-fixture.js:10"); assert.ok(Math.abs(a.rows[1].ms - 50) <= 1);
+  assert.ok(!a.rows.some((r) => r.site.startsWith("idle")), "samples outside the spike are not attributed");
+  assert.match(a.verdict, /INSIDE THE 1 SPIKES: \(garbage collector\)/);
+  // A wrong join (page clock off by a second) reports a coverage of ~0, not a ranking.
+  const off = analyseSpikeCpu(profile, t0, dur, 100, 3000);
+  assert.equal(off.sampledMs, 0); assert.match(off.verdict, /clock join failed/);
+  assert.equal(analyseSpikeCpu(profile, t0, [16, 16, 16], 100, 1000).spikes, 0);
+  assert.match(analyseSpikeCpu(null, t0, dur, 100, 1000).note, /no CPU profile/);
+});
+
+test("analyseSpikeWork sums per-frame resource calls inside and outside the spike frames", () => {
+  const dur = [16, 200, 16, 150, 16];
+  const workFrames = [[0, { "gpu.createBuffer": 1 }], [1, { "gpu.createBuffer": 30, "gpu.writeBufferKB": 4096 }],
+                      [3, { "gpu.createBuffer": 10 }], [4, { "gpu.submit": 1 }]];
+  const w = analyseSpikeWork(workFrames, dur, 100);
+  assert.equal(w.frames, 2); assert.equal(w.restFrames, 3);
+  assert.equal(w.inSpike["gpu.createBuffer"], 40); assert.equal(w.inRest["gpu.createBuffer"], 1);
+  assert.equal(w.inSpike["gpu.writeBufferKB"], 4096); assert.equal(w.inRest["gpu.submit"], 1);
+  assert.match(w.summary, /createBuffer=40 \(20\.0\/f vs 0\.33\/f\)/);
+  assert.match(analyseSpikeWork(null, dur, 100).note, /no per-frame work/);
 });

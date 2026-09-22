@@ -29,7 +29,7 @@ import { fileURLToPath } from "node:url";
 // reimplemented: it is unit-tested both ways in
 // tests/unit/frame-hitch-analyse.test.mjs, and a second copy of a periodicity
 // test is a second copy of its bugs.
-import { analyse, analysePasses, analysePassKinds, analyseCpu } from "./frame-hitch.mjs";
+import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork } from "./frame-hitch.mjs";
 
 // fileURLToPath, NOT `new URL(..).pathname`. On Windows that pathname is
 // `/D:/a/f1-game/f1-game/` and resolve() prefixes the cwd's drive, giving a
@@ -195,9 +195,21 @@ try {
     // new program on both paths, and it is created right after the codegen
     // that census 202 named as the cost.
     const STACK_KINDS = { "gpu.createShaderModule": 1, "gpu.createRenderPipeline": 1, "gl.linkProgram": 1 };
+    // PER FRAME as well as per window: census 208 counted 778 createBuffer
+    // and 705 createBindGroup calls over a driven window beside eleven
+    // 130-310 ms callbacks, and a window total cannot say whether the spike
+    // frames made them. One record per callback that made any call.
+    let _hWorkCur = null;
+    const _hWorkFrames = [];
+    const _bumpWorkN = (k, n) => {
+      if (!_hArmed) return;
+      if (_hWorkCur === null) _hWorkCur = {};
+      _hWorkCur[k] = (_hWorkCur[k] || 0) + n;
+    };
     const _bumpWork = (k) => {
       if (!_hArmed) return;
       _hWork.set(k, (_hWork.get(k) || 0) + 1);
+      _bumpWorkN(k, 1);
       if (!STACK_KINDS[k] || _hStackBudget <= 0) return;
       _hStackBudget--;
       let sig = "?";
@@ -235,6 +247,22 @@ try {
       wrapCall(GD, "createShaderModule", "gpu.createShaderModule");
       wrapCall(GD, "createBindGroup", "gpu.createBindGroup");
       wrapCall(GD, "createBuffer", "gpu.createBuffer");
+      // The upload side: how many writes a frame makes and how many KB they
+      // carry (size is elements for a typed array, bytes for an ArrayBuffer).
+      const GQ = window.GPUQueue && window.GPUQueue.prototype;
+      if (GQ && typeof GQ.writeBuffer === "function") {
+        const origWB = GQ.writeBuffer;
+        GQ.writeBuffer = function (buffer, offset, data, dataOffset, size) {
+          _bumpWork("gpu.writeBuffer");
+          try {
+            const per = (data && data.BYTES_PER_ELEMENT) || 1;
+            const bytes = size != null ? size * per : ((data && data.byteLength) || 0) - ((dataOffset || 0) * per);
+            _bumpWorkN("gpu.writeBufferKB", Math.max(0, bytes) / 1024);
+          } catch (_) { /* the count stands without the size */ }
+          return origWB.apply(this, arguments);
+        };
+      }
+      wrapCall(GQ, "submit", "gpu.submit");
       const G2 = window.WebGL2RenderingContext && window.WebGL2RenderingContext.prototype;
       wrapCall(G2, "linkProgram", "gl.linkProgram");
       wrapCall(G2, "compileShader", "gl.compileShader");
@@ -360,17 +388,19 @@ try {
               _hT[_hN] = a; _hD[_hN] = performance.now() - a;
               _hP[_hN] = _hPass > 32767 ? 32767 : _hPass;
               if (_hN < 4000) _hSig.push(_hSigCur);
+              if (_hWorkCur !== null && _hWorkFrames.length < 4000) _hWorkFrames.push([_hN, _hWorkCur]);
               _hN++;
             }
-            _hPass = 0; _hSigCur = [];
+            _hPass = 0; _hSigCur = []; _hWorkCur = null;
           }
         });
       };
       window.__gcHitch = {
-        arm() { _hArmed = true; _hN = 0; _hSig.length = 0; _hWork.clear(); _hStacks.clear(); _hStackBudget = 200; },
+        arm() { _hArmed = true; _hN = 0; _hSig.length = 0; _hWork.clear(); _hStacks.clear(); _hStackBudget = 200; _hWorkFrames.length = 0; _hWorkCur = null; },
         dump: () => ({ t0: Array.from(_hT.subarray(0, _hN)), dur: Array.from(_hD.subarray(0, _hN)),
                        passes: Array.from(_hP.subarray(0, _hN)), passSig: _hSig,
                        work: [..._hWork.entries()].sort((a, b) => b[1] - a[1]),
+                       workFrames: _hWorkFrames,
                        stacks: [..._hStacks.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30) }),
       };
     } catch (_) { /* a frozen rAF just means this leg reports no hitch series */ }
@@ -557,12 +587,15 @@ try {
   // run HERE: the burst is scenery streaming into view as the car reaches new
   // track, and the container's car drives into the first wall, so its
   // profile is flat — 40% idle, no function above 2.3%.
-  let _cpu = null;
+  let _cpu = null, _cpuProfile = null, _cpuPageAtStart = null;
   try {
     _cpu = await page.context().newCDPSession(page);
     await _cpu.send("Profiler.enable");
     await _cpu.send("Profiler.setSamplingInterval", { interval: 500 });
     await _cpu.send("Profiler.start");
+    // The clock join for the spike attribution: the page clock as the profile
+    // began, within one CDP round trip (analyseSpikeCpu prints its coverage).
+    _cpuPageAtStart = await page.evaluate(() => performance.now());
   } catch (e) { out.cpuProfileError = String((e && e.message) || e).slice(0, 120); _cpu = null; }
   let missed = 0;
   for (let i = 0; i < beats; i++) {
@@ -617,7 +650,7 @@ try {
     await new Promise((r) => setTimeout(r, 1000));
   }
   if (_cpu) {
-    try { const { profile } = await _cpu.send("Profiler.stop"); out.cpu = analyseCpu(profile, 24); }
+    try { const { profile } = await _cpu.send("Profiler.stop"); _cpuProfile = profile; out.cpu = analyseCpu(profile, 24); }
     catch (e) { out.cpu = { note: "profile stop failed: " + String((e && e.message) || e).slice(0, 120) }; }
   } else {
     out.cpu = { note: "no CPU profile: " + (out.cpuProfileError || "CDP unavailable") };
@@ -646,6 +679,11 @@ try {
       : { note: "no resource calls observed — wrapping failed, or this leg creates none" };
     out.compileStacks = d.stacks || [];
     out.passKinds = analysePassKinds(d.passSig || [], d.passes || []);
+    // WHAT IS INSIDE THE SPIKES: the profile joined to the frames at or over
+    // 100 ms (the ones a player feels), and the resource calls those frames
+    // made against the rest.
+    out.spikeCpu = analyseSpikeCpu(_cpuProfile, d.t0, d.dur, 100, _cpuPageAtStart);
+    out.spikeWork = analyseSpikeWork(d.workFrames || [], d.dur, 100);
     return a;
   }, 30000, "hitch-series").catch((e) => ({ note: "hitch read failed: " + String((e && e.message) || e).slice(0, 80) }));
   checkpoint("settled");

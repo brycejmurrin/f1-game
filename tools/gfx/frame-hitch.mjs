@@ -172,6 +172,83 @@ export function analyseCpu(profile, topN = 28) {
     verdict: rows.length ? `TOP SELF TIME: ${rows[0].site} — ${(rows[0].share * 100).toFixed(0)}% of ${total.toFixed(0)} ms` : "empty profile" };
 }
 
+// WHAT IS INSIDE THE SPIKES. analyseCpu says where the CPU time of the whole
+// window went; census 208 (the first DRIVEN window on Metal) put `build` at
+// 934 ms, the garbage collector at 536 ms and writeBuffer at 214 ms over 21 s,
+// beside eleven rAF callbacks of 130-310 ms — and a window total cannot say
+// which of those sat inside the callbacks the player feels. This joins the
+// rAF recorder (t0/dur per callback, page clock) to the sampling profile
+// (startTime + timeDeltas, profiler clock) and ranks self time INSIDE the
+// frames at or over `thresholdMs`. `pageAtStart` is performance.now() read as
+// Profiler.start returned, which pins the two clocks to within one CDP round
+// trip — fine for frames of 100 ms. `coverage` is the check on that join:
+// sampled time inside the spikes over their wall time, ~1 when the clocks
+// agree and ~0 when they do not, in which case the ranking is noise.
+export function analyseSpikeCpu(profile, t0, dur, thresholdMs, pageAtStart, topN = 10) {
+  if (!profile || !profile.nodes || !profile.samples || !profile.timeDeltas) return { note: "no CPU profile" };
+  if (!Array.isArray(t0) || !t0.length || !Array.isArray(dur) || pageAtStart == null) return { note: "no rAF series or no clock join" };
+  const spikes = [];
+  for (let i = 0; i < t0.length; i++) if (dur[i] >= thresholdMs) spikes.push([t0[i], t0[i] + dur[i]]);
+  if (!spikes.length) return { spikes: 0, thresholdMs, note: `no frame at or over ${thresholdMs} ms` };
+  spikes.sort((a, b) => a[0] - b[0]);
+  const byId = new Map();
+  for (const n of profile.nodes) byId.set(n.id, n);
+  const self = new Map();
+  const samples = profile.samples, deltas = profile.timeDeltas;
+  let t = profile.startTime || 0, inside = 0, k = 0;
+  for (let i = 0; i < samples.length; i++) {
+    t += deltas[i] || 0;
+    const page = pageAtStart + (t - (profile.startTime || 0)) / 1000;
+    // Half-open [t0, t0 + dur): a sample on the closing edge is the next frame.
+    while (k < spikes.length && spikes[k][1] <= page) k++;
+    if (k >= spikes.length) break;
+    if (page < spikes[k][0]) continue;
+    const dt = (deltas[i] || 0) / 1000;
+    inside += dt;
+    self.set(samples[i], (self.get(samples[i]) || 0) + dt);
+  }
+  const bySite = new Map();
+  for (const [id, ms] of self) {
+    const f = (byId.get(id) || {}).callFrame || {};
+    const url = String(f.url || "").replace(/\?v=[a-z0-9]+/g, "").replace(/^https?:\/\/[^/]+\//, "");
+    const key = `${f.functionName || "(anonymous)"} @ ${url}:${f.lineNumber != null ? f.lineNumber + 1 : "?"}`;
+    bySite.set(key, (bySite.get(key) || 0) + ms);
+  }
+  const rows = [...bySite.entries()].sort((a, b) => b[1] - a[1]).slice(0, topN)
+    .map(([site, ms]) => ({ site, ms: +ms.toFixed(1), share: +(ms / Math.max(1e-9, inside)).toFixed(3) }));
+  const byFile = new Map();
+  for (const [site, ms] of bySite) {
+    const file = (site.split(" @ ")[1] || "").replace(/:\d+$/, "") || "(native)";
+    byFile.set(file, (byFile.get(file) || 0) + ms);
+  }
+  const files = [...byFile.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6)
+    .map(([file, ms]) => ({ file, ms: +ms.toFixed(1), share: +(ms / Math.max(1e-9, inside)).toFixed(3) }));
+  const spikeMs = spikes.reduce((a, sp) => a + (sp[1] - sp[0]), 0);
+  return { spikes: spikes.length, thresholdMs, spikeMs: +spikeMs.toFixed(1), sampledMs: +inside.toFixed(1),
+    coverage: +(inside / Math.max(1e-9, spikeMs)).toFixed(2), rows, files,
+    verdict: rows.length ? `INSIDE THE ${spikes.length} SPIKES: ${rows[0].site} — ${(rows[0].share * 100).toFixed(0)}% of ${inside.toFixed(0)} ms sampled` : "no samples inside the spikes — the clock join failed" };
+}
+
+// THE RESOURCE CALLS INSIDE THE SPIKES. The recorder keeps, per rAF callback,
+// the count of every wrapped call (createBuffer, createBindGroup, writeBuffer
+// and its KB, submit, the compiles); this sums them over the frames at or
+// over `thresholdMs` and over the rest, so "a spike frame creates 30 buffers
+// against 1 in a normal frame" is a number rather than a reading of totals.
+export function analyseSpikeWork(workFrames, dur, thresholdMs) {
+  if (!Array.isArray(workFrames) || !Array.isArray(dur)) return { note: "no per-frame work" };
+  const inSpike = {}, inRest = {};
+  let spikeFrames = 0, restFrames = 0;
+  for (let i = 0; i < dur.length; i++) { if (dur[i] >= thresholdMs) spikeFrames++; else restFrames++; }
+  for (const [idx, counts] of workFrames) {
+    const target = dur[idx] >= thresholdMs ? inSpike : inRest;
+    for (const k in counts) target[k] = (target[k] || 0) + counts[k];
+  }
+  const kinds = [...new Set([...Object.keys(inSpike), ...Object.keys(inRest)])].sort();
+  const per = (o, n, k) => (n ? (o[k] || 0) / n : 0);
+  const summary = kinds.map((k) => `${k.replace(/^gpu\.|^gl\./, "")}=${+(inSpike[k] || 0).toFixed(0)} (${per(inSpike, spikeFrames, k).toFixed(1)}/f vs ${per(inRest, restFrames, k).toFixed(2)}/f)`).join(" ");
+  return { frames: spikeFrames, restFrames, thresholdMs, inSpike, inRest, summary: summary || "none" };
+}
+
 // FORCED SYNCHRONOUS LAYOUT, and whether it is the stall.
 //
 // The one main-thread cost no renderer instrument can see. It is not a render

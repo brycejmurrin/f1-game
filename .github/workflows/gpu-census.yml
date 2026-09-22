@@ -494,6 +494,19 @@ jobs:
               for (const [sig, count] of _cs.slice(0, 12)) {
                 rows.push(`${" ".repeat(8)}stack: x${count}  ${String(sig).slice(0, 300)}`);
               }
+              // INSIDE THE SPIKES: the profile joined to the frames at or over
+              // 100 ms, and the resource calls those frames made against the
+              // rest. Census 208 named build, the garbage collector and
+              // writeBuffer across the whole window; this says which of them sat
+              // inside the callbacks a player feels.
+              const _sc = g.spikeCpu, _sw = g.spikeWork;
+              if (_sc && _sc.spikes != null && _sc.spikes > 0) {
+                rows.push(`${" ".repeat(8)}spike: ${_sc.spikes} frames >= ${_sc.thresholdMs} ms, ${_sc.spikeMs} ms of callbacks, ${_sc.sampledMs} ms sampled inside (join ${_sc.coverage}x)`);
+                for (const r of (_sc.rows || []).slice(0, 8)) rows.push(`${" ".repeat(8)}  ${String((r.share * 100).toFixed(1)).padStart(5)}%  ${String(r.ms).padStart(8)} ms  ${r.site}`);
+                if (_sw && _sw.frames != null) rows.push(`${" ".repeat(8)}       work inside vs rest: ${_sw.summary}`);
+              } else if (_sc && _sc.note) {
+                rows.push(`${" ".repeat(8)}spike: ${_sc.note}`);
+              }
               rows.push(`${" ".repeat(8)}gov:   tier=${gov.tier} autoTier=${gov.autoTier} userTier=${gov.userTier} ` +
                 `scale=${gov.scale} fps=${gov.fps} floorMs=${gov.floorMs} envFace=${env.face} frames=${(gov.open && gov.open.frames) != null ? gov.open.frames : "?"}`
                 // ...and the OTHER way this column lies. floorMs 16.6 is 1/60 s,
