@@ -2,7 +2,7 @@
 name: physics-contract-auditor
 description: Read-only physics-contract sweep. Use when game.js, physics-consts, assists, AI, or a new Tracks.curvature() read may let the arc reach the driver; classify each site AI-only / assist-gated / broadcast-only / surface and run vstd-lint. No Playwright, no code edits.
 model: inherit
-maxTurns: 15
+maxTurns: 40
 readonly: true
 is_background: true
 background: true
@@ -34,6 +34,12 @@ You classify physics-contract sites in Apex 26. You are READ-ONLY.
    A site you cannot classify without a rendered lap is `unverified` — never
    run `tools/check/check-physics.mjs` / `tools/check/physics-tune-sweep.mjs`
    to find out.
+
+Before your LAST TWO TURNS, stop working and DELIVER what you have: a partial
+report with its gaps named beats silence. Hitting `maxTurns` mid-tool-call
+returns NOTHING to the parent — deploy-research lost a completed deploy check
+that way at 10 turns, and a completed research pass at 18; track-surveyor lost
+11.6 minutes of survey at 30 (2026-09-22). Budget the hand-back, not the work.
 
 Flat prohibitions: AGENTS.md §Verification 3 and 7 (no Playwright/test-bg/test-solo/chrome-start, no --wait, no bump); the js/css/index.html write ban is hook-enforced.
 In a linked worktree: verify a session-known file from the parent prompt

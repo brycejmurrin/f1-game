@@ -2132,3 +2132,54 @@ Deferred with reasoning, none lost:
   that biases both sides. When a bug is traced to a hardcoded position, grep for
   the other hardcoded positions in the same file before closing it — two of the
   three here were fixed and the third was left, which is how it survived.
+
+## OPEN — estoril scenery emitters do not land where their names say (2026-09-22)
+
+Found while fixing the Parabolica's bank and gravel apron (PR #188). The
+apron fix is landed and correct; this is the larger thing underneath it, left
+open deliberately rather than half-moved.
+
+**Measured, not inferred.** `def._sceneryShift` is 0.85616 for estoril, and it
+applies UNIFORMLY to both scenery frac forms — verified against
+`track.props.spans`, which reports emitted engine fracs:
+
+| emitter (authored) | predicted engine | emitted span |
+|---|---|---|
+| `tyreWall(0.880, 0.925, -1)` | 0.7362, 0.7812 | **0.7360, 0.7810** |
+| `fence(0.95, 0.06, -1)` | 0.8062, 0.9162 | **0.8060, 0.9160** |
+| `guardrail(0.94, 0.06, 1)` | 0.7962, 0.9162 | **0.7960, 0.9160** |
+
+Four-decimal agreement, so the shift is not in doubt. What IS wrong is that the
+authored numbers do not put emitters on the features they are named for:
+
+- `estoril-t1-gravel`, authored `K(0.078)`, emits at engine **0.934** — inside
+  `pitLaneSpan` (sIn 3879.7 m, len 370 → engine 0.937-0.027), which is why it is
+  suppressed "superseded by the pit complex". T1's apex is engine 0.1162.
+- `estoril-stand-esses`, authored `K(0.140)`, emits at engine **0.996** — also
+  in the pit lane, likewise suppressed.
+- The Parabolica dressing cluster (gravel, tyre wall, spectator hill,
+  billboards, marshal post; authored 0.865-0.935) emits at engine
+  **0.721-0.791**. The Parabolica itself is engine 0.782-0.8635 (337 m of
+  sustained curvature, R 122 m at the centroid), so the cluster dresses T13 and
+  the approach and stops where the corner starts.
+
+**No single frame reconciles them.** Read as engine-frame, `t1-gravel` at 0.078
+is a sensible approach-to-T1 placement but the Parabolica cluster at 0.865-0.935
+lands past the corner on the straight. Read as pre-start-line-move authoring,
+T1 would be authored 0.260, which no emitter uses. So this is not one constant
+to correct; the file appears to mix frames per emitter.
+
+**Why nothing was moved.** The obvious correction — shift the Parabolica cluster
+by +0.0663 authored so it covers engine 0.782-0.8635 — drops it squarely on the
+pit complex, which occupies authored 0.94-0.06 (pit blocks 0.960/0.996, gantry
+0.968, grandstand 0.955, fence and guardrail wrapping through 0.06). A move made
+on the arithmetic alone would trade an undressed corner for props inside the
+pits.
+
+**What a real pass needs:** `track.props.spans` gives emitted engine fracs for
+the span-based kinds (tyreWall, guardrail, fence) directly, and
+`modelDiagnostics.suppressed/emitted` gives ids for the model kinds. Enumerate
+every emitter in `js/circuits/scenery/estoril.js` through those two, compare
+each against the feature its id names, and only then decide per emitter. The
+sweeps' three baselines (coplanar 5, float 0, clip 1 severe) are the guard that
+such a pass has not made things worse.
