@@ -221,8 +221,15 @@ async function main() {
         try {
           // Drop this wrapper's own frames, keep the next few — enough to name
           // the caller and its parent without storing whole stacks.
-          const raw = (new Error().stack || "").split("\n").slice(3, 7);
-          sig = raw.map((l) => l.trim().replace(/^at\s+/, "").replace(/\?v=[a-z0-9]+/g, "").replace(/https?:\/\/[^\s)]*\//g, "")).join(" <- ");
+          // Deep enough to walk THROUGH three's own frames and reach the
+          // Apex caller: three's binding path is 4-5 frames on its own, and
+          // the name that matters is ours, below it.
+          const raw = (new Error().stack || "").split("\n").slice(3, 16);
+          const fr = raw.map((l) => l.trim().replace(/^at\s+/, "").replace(/\?v=[a-z0-9]+/g, "").replace(/https?:\/\/[^\s)]*\//g, ""));
+          // three's minified frames are noise once we have one of them; the
+          // ANSWER is the first frames that live in our own files.
+          const ours = fr.filter((l) => !/three\.webgpu|three\.core|three\.tsl/.test(l));
+          sig = (fr.slice(0, 2).join(" <- ")) + "  ||OURS|| " + (ours.slice(0, 4).join(" <- ") || "(none in window)");
         } catch (_) { /* no stack: the count still stands */ }
         const key = kind + " :: " + sig;
         stacks.set(key, (stacks.get(key) || 0) + 1);
@@ -261,9 +268,16 @@ async function main() {
           if (performance.memory) o.heapMB = +(performance.memory.usedJSHeapSize / 1048576).toFixed(1);
         } catch (_) { /* Chrome-only; absent is reported as absent */ }
         try {
-          const t = window.GLX && GLX.__tlx;
+          // BARE identifier on purpose: js/render/glx/glx.js declares
+          // `const GLX = ...` at top level, so it is in the global lexical
+          // environment and NOT on window. Reading window.GLX returns
+          // undefined and every counter below silently goes missing — which
+          // reads as "flat" when the truth is "never sampled".
+          // eslint-disable-next-line no-undef
+          const t = (typeof GLX !== "undefined") && GLX && GLX.__tlx;
           if (t && t.memState) Object.assign(o, t.memState());
-        } catch (_) { /* backend not bound yet */ }
+          o.hasTlx = !!t;
+        } catch (_) { o.hasTlx = false; }
         return o;
       }
 
@@ -299,7 +313,8 @@ async function main() {
           mem0, mem1: snapMem(),
           stacks: [...stacks.entries()].sort((a, b) => b[1] - a[1]).slice(0, 25),
           backend: (() => {
-            try { const t = window.GLX && GLX.__tlx; return t && t.backendState ? t.backendState() : null; }
+            // eslint-disable-next-line no-undef
+            try { const t = (typeof GLX !== "undefined") && GLX && GLX.__tlx; return t && t.backendState ? t.backendState() : null; }
             catch (_) { return null; }
           })(),
         }),
