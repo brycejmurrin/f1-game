@@ -218,7 +218,11 @@ test("openQuali restores via begin(); quit-to-menu keeps persist; friend-race us
 test("friend-race BACK aborts to the lobby; a null quali grid does not P12-shuffle", () => {
   assert.match(GAME, /qualiNet\.hasArmed\(\) \? qualiNet\.resetOnBackWithAbort\(\)/);
   assert.match(QUALI_NET, /netLobby\.abortQuali\(\)/);
-  assert.match(GAME, /if \(!isQuali\(\) && gridFromQuali\(\) && !quali\.order\(cars\)\) \{ openQuali\(\); return false; \}/);
+  // The guard, not its exact punctuation: the line has since grown a
+  // loadingScreen.stop() before openQuali(), and an exact-line needle would
+  // fail a change that keeps the behaviour it is here to pin. What matters is
+  // that a null order routes to quali and BAILS OUT of the race start.
+  assert.match(GAME, /if \(!isQuali\(\) && gridFromQuali\(\) && !quali\.order\(cars\)\) \{[^}]*openQuali\(\);[^}]*return false;[^}]*\}/);
 });
 
 test("friend-race title quit cancels the lobby instead of aborting back into it", () => {
