@@ -2074,7 +2074,7 @@ test("a node-builder cache miss on the render path builds asynchronously and ski
     "the render-path cache-miss guard is missing or has lost a condition (PATCHES.md §8)");
   // Re-entry guard and the async build itself, with the same render object.
   assert.match(THREE_BUNDLE,
-    /(\w)\.apexBuilding=!0;const \w=\(\)=>\{\1\.apexBuilding=!1\};Promise\.resolve\(this\._nodes\.getForRender\(\w,!0\)\)\.then\(/,
+    /(\w)\.apexBuilding=!0;const \w=\(\)=>\{\1\.apexBuilding=!1\};\w+\(\)\.then\(\(\)=>this\._nodes\.getForRender\(\w,!0\)\)\.then\(/,
     "the yielding build is not started exactly once per pending object (PATCHES.md §8)");
   assert.equal((THREE_BUNDLE.match(/__apexSyncCodegen/g) || []).length, 1, "the opt-in global must appear exactly once");
   // And the guard sits BEFORE updateBefore — the call that triggers the build.

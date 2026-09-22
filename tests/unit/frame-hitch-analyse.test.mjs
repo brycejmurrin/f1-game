@@ -245,7 +245,9 @@ test("analyseSpikeCpu attributes only the samples that fall inside spike frames,
   const nodes = [
     { id: 1, callFrame: { functionName: "(root)", url: "" }, children: [2, 5, 4] },
     { id: 2, callFrame: { functionName: "(garbage collector)", url: "" } },
-    { id: 5, callFrame: { functionName: "tick", url: "http://127.0.0.1:1/probe-fixture.js?v=dev", lineNumber: 1 }, children: [3] },
+    { id: 5, callFrame: { functionName: "tick", url: "http://127.0.0.1:1/probe-fixture.js?v=dev", lineNumber: 1 }, children: [6] },
+    { id: 6, callFrame: { functionName: "build", url: "" }, children: [7] },
+    { id: 7, callFrame: { functionName: "build", url: "" }, children: [3] },
     { id: 3, callFrame: { functionName: "render", url: "http://127.0.0.1:1/probe-fixture.js?v=dev", lineNumber: 9 } },
     { id: 4, callFrame: { functionName: "idle", url: "" } },
   ];
@@ -264,7 +266,7 @@ test("analyseSpikeCpu attributes only the samples that fall inside spike frames,
   assert.ok(a.coverage >= 0.99 && a.coverage <= 1.01, "the clock join covers the spike: " + a.coverage);
   assert.equal(a.rows[0].site, "(garbage collector) @ :?"); assert.ok(Math.abs(a.rows[0].ms - 150) <= 1);
   assert.equal(a.rows[1].site, "render @ probe-fixture.js:10"); assert.ok(Math.abs(a.rows[1].ms - 50) <= 1);
-  assert.equal(a.rows[1].path, "tick", "the caller chain of the ranked site, root-most last, without (root)");
+  assert.equal(a.rows[1].path, "build×2 <- tick", "the caller chain, nearest first, repeats folded, without (root)");
   assert.ok(!a.rows.some((r) => r.site.startsWith("idle")), "samples outside the spike are not attributed");
   assert.match(a.verdict, /INSIDE THE 1 SPIKES: \(garbage collector\)/);
   // A wrong join (page clock off by a second) reports a coverage of ~0, not a ranking.
@@ -276,8 +278,8 @@ test("analyseSpikeCpu attributes only the samples that fall inside spike frames,
 
 test("analyseSpikeWork sums per-frame resource calls inside and outside the spike frames", () => {
   const dur = [16, 200, 16, 150, 16];
-  const workFrames = [[0, { "gpu.createBuffer": 1, "gpu.submitMs": 0.5 }], [1, { "gpu.createBuffer": 30, "gpu.writeBufferKB": 4096, "gpu.submitMs": 180.2, "gpu.writeBufferMs": 4 }],
-                      [3, { "gpu.createBuffer": 10, "gpu.submitMs": 120 }], [4, { "gpu.submit": 1 }]];
+  const workFrames = [[0, { "gpu.createBuffer": 1, "gpu.submitMs": 0.5, "gpu.wrappedMs": 0.5 }], [1, { "gpu.createBuffer": 30, "gpu.writeBufferKB": 4096, "gpu.submitMs": 180.2, "gpu.writeBufferMs": 4, "gpu.wrappedMs": 184.2 }],
+                      [3, { "gpu.createBuffer": 10, "gpu.submitMs": 120, "gpu.wrappedMs": 120 }], [4, { "gpu.submit": 1 }]];
   const w = analyseSpikeWork(workFrames, dur, 100);
   assert.equal(w.frames, 2); assert.equal(w.restFrames, 3);
   assert.equal(w.inSpike["gpu.createBuffer"], 40); assert.equal(w.inRest["gpu.createBuffer"], 1);
@@ -285,6 +287,9 @@ test("analyseSpikeWork sums per-frame resource calls inside and outside the spik
   assert.match(w.summary, /createBuffer=40 \(20\.0\/f vs 0\.33\/f\)/);
   assert.doesNotMatch(w.summary, /Ms/, "timed kinds leave the count summary");
   assert.match(w.timed, /^submit=300ms \(150\.1\/f vs 0\.17\/f\) writeBuffer=4ms/, "the blocking call reads first: " + w.timed);
+  assert.doesNotMatch(w.timed, /wrapped/, "the per-frame total is not a timed kind");
+  assert.deepEqual(w.wrappedMs, { spike: 304.2, rest: 0.5, spikeDur: 350, restDur: 48 });
+  assert.match(w.remainder, /^wrapped GPU calls 304 ms of 350 ms inside the spikes \(87%\) vs 1 of 48 ms outside \(1%\)/, w.remainder);
   assert.match(analyseSpikeWork(null, dur, 100).note, /no per-frame work/);
 });
 

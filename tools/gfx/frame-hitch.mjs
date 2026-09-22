@@ -228,15 +228,24 @@ export function analyseSpikeCpu(profile, t0, dur, thresholdMs, pageAtStart, topN
     const prev = siteBest.get(key);
     if (!prev || ms > prev.ms) siteBest.set(key, { id, ms });
   }
+  // Nearest caller first, root-most last; consecutive repeats fold into
+  // name×n (a node-graph build recurses build→build→build a dozen deep, and
+  // the caller that matters sits above the recursion), and a long chain
+  // keeps its root-most twelve entries.
   const pathOf = (id) => {
-    const out = []; let cur = parentOf.get(id), hops = 0;
-    while (cur != null && hops++ < 10) {
+    const names = []; let cur = parentOf.get(id), hops = 0;
+    while (cur != null && hops++ < 48) {
       const f = (byId.get(cur) || {}).callFrame || {};
       const name = f.functionName || "(anonymous)";
-      if (name !== "(root)") out.push(name);
+      if (name !== "(root)") names.push(name);
       cur = parentOf.get(cur);
     }
-    return out.join(" <- ");
+    const out = [];
+    for (const name of names) {
+      const last = out[out.length - 1];
+      if (last && last.name === name) last.n++; else out.push({ name, n: 1 });
+    }
+    return out.slice(-12).map((e) => (e.n > 1 ? `${e.name}×${e.n}` : e.name)).join(" <- ");
   };
   const rows = [...bySite.entries()].sort((a, b) => b[1] - a[1]).slice(0, topN)
     .map(([site, ms]) => ({ site, ms: +ms.toFixed(1), share: +(ms / Math.max(1e-9, inside)).toFixed(3),
@@ -275,9 +284,20 @@ export function analyseSpikeWork(workFrames, dur, thresholdMs) {
   // the spikes, so the blocking call reads first.
   const isMs = (k) => /Ms$/.test(k);
   const summary = kinds.filter((k) => !isMs(k)).map((k) => `${k.replace(/^gpu\.|^gl\./, "")}=${+(inSpike[k] || 0).toFixed(0)} (${per(inSpike, spikeFrames, k).toFixed(1)}/f vs ${per(inRest, restFrames, k).toFixed(2)}/f)`).join(" ");
-  const timed = kinds.filter(isMs).sort((a, b) => (inSpike[b] || 0) - (inSpike[a] || 0))
+  const timed = kinds.filter((k) => isMs(k) && k !== "gpu.wrappedMs").sort((a, b) => (inSpike[b] || 0) - (inSpike[a] || 0))
     .map((k) => `${k.replace(/^gpu\.|^gl\./, "").replace(/Ms$/, "")}=${(inSpike[k] || 0).toFixed(0)}ms (${per(inSpike, spikeFrames, k).toFixed(1)}/f vs ${per(inRest, restFrames, k).toFixed(2)}/f)`).join(" ");
-  return { frames: spikeFrames, restFrames, thresholdMs, inSpike, inRest, summary: summary || "none", timed: timed || "none" };
+  // THE REMAINDER: how much of the spike frames' wall time the wrapped calls
+  // account for at all. A low share says the wait is somewhere none of the
+  // wrappers reach — the answer to "which call blocks" is then "none of
+  // these", which is itself the finding.
+  let spikeDur = 0, restDur = 0;
+  for (let i = 0; i < dur.length; i++) { if (dur[i] >= thresholdMs) spikeDur += dur[i]; else restDur += dur[i]; }
+  const wrappedSpike = inSpike["gpu.wrappedMs"] || 0, wrappedRest = inRest["gpu.wrappedMs"] || 0;
+  const remainder = spikeFrames
+    ? `wrapped GPU calls ${wrappedSpike.toFixed(0)} ms of ${spikeDur.toFixed(0)} ms inside the spikes (${(100 * wrappedSpike / Math.max(1e-9, spikeDur)).toFixed(0)}%) vs ${wrappedRest.toFixed(0)} of ${restDur.toFixed(0)} ms outside (${(100 * wrappedRest / Math.max(1e-9, restDur)).toFixed(0)}%)`
+    : "no spike frames";
+  return { frames: spikeFrames, restFrames, thresholdMs, inSpike, inRest, summary: summary || "none", timed: timed || "none",
+    wrappedMs: { spike: +wrappedSpike.toFixed(1), rest: +wrappedRest.toFixed(1), spikeDur: +spikeDur.toFixed(1), restDur: +restDur.toFixed(1) }, remainder };
 }
 
 // WHICH PASSES THE SPIKE FRAMES RUN. The recorder fingerprints every render

@@ -27,8 +27,8 @@
   ],
   "files": {
     "three.webgpu.min.js": {
-      "sha256": "58df999045f34a6888aa2eb1e4d0e8966fdc57d5dda8394174c409b6bbf792da",
-      "bytes": 709885
+      "sha256": "88c9cabe68e6ed28a745e86c5d0cbc8b22baa27f57ac0487568e437ffa77c198",
+      "bytes": 709883
     },
     "three.core.min.js": {
       "sha256": "dae72ed2eea6703b95e6b57e26469ffa95733a9320675b4bfd1b5f5df1c12f8b",

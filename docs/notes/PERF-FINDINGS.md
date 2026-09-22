@@ -5258,7 +5258,36 @@ the rAF recorder's spike frames (`analyseSpikeCpu`, clock-pinned at
 `Profiler.start`, coverage printed) and keeps per-frame resource counts including
 `writeBuffer` KB and `submit` (`analyseSpikeWork`); the `spike:` rows rank self
 time inside the ≥ 100 ms frames and compare their resource calls with the rest.
-Census 209: _pending_.
+
+### Census 209 and 210: inside the spikes
+
+The join works (coverage 0.98× and 1.0×). Inside the thirteen callbacks of
+100 ms or more on the driven three.js/WebGPU leg (2.9–3.2 s of callbacks in 20 s):
+
+| inside the spike frames | 209 | 210 | reading |
+|---|---|---|---|
+| `(idle)` | 45% | 46% | the VM off the stack inside a synchronous callback — a native wait |
+| three `build` + `getChildren` under `setup` | 7% | 17% | synchronous TSL codegen, caller chain `_renderObjectDirect` → … → `setup` → `build×n` |
+| `(garbage collector)` | 3% | 9% | the codegen's garbage, mostly |
+| `submit` self | 12% | 1% | run-to-run noise |
+| wall time of every wrapped GPU call | — | < 90 ms total | createBuffer 38, writeBuffer 17, createCommandEncoder 16, submit 10: **none of them blocks** |
+| resource calls per spike frame vs rest | 8× createBuffer, 7× createBindGroup, 2× submits and writeBuffers | 15× createBuffer, 11× createBindGroup, 2× submits | spike frames are new-content frames |
+| the 2048² sun-shadow pass | — | not in the top pass rows | the re-cast is **not** what distinguishes a spike frame |
+
+Two conclusions and one open question. First, patch 8 left a third of the codegen
+in the frame: an async function runs synchronously to its first `await`, and
+`buildAsync()` runs `prebuild()` — the material's whole setup traversal — before
+its first `yieldToMain()`, so starting the build at the render call site still
+put the heaviest stage inside the rAF callback. Patch 8 now starts the build from
+a `yieldToMain()` task; nothing of the codegen runs in the frame. Second, the
+sun-shadow re-cast and the GPU calls are cleared: the calls the recorder wraps
+account for under 3% of the spike time. The open question is the idle half. The
+one WebGPU call the recorder did not time is the swapchain acquire,
+`getCurrentTexture()`, which on Metal blocks until the compositor frees a
+drawable — and WGX on this runner soft-presents (headless UA) and never calls it,
+which would be why it alone shows no spikes. Census 211 times it, prints how much
+of each spike frame the wrapped calls explain at all, and carries the amended
+patch 8. Census 211: _pending_.
 
 Also measured for the first time: the lights hold **10.7 s** on this Metal runner
 (scene warm 7.0 s, post 2.9 s, casters 0.8 s). The scene warm mints every pooled

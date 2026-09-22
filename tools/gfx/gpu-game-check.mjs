@@ -205,6 +205,9 @@ try {
       if (!_hArmed) return;
       if (_hWorkCur === null) _hWorkCur = {};
       _hWorkCur[k] = (_hWorkCur[k] || 0) + n;
+      // Every timed kind also feeds one per-frame total, so the analyser can
+      // print how much of a spike frame the wrapped calls explain at all.
+      if (k.endsWith("Ms") && k !== "gpu.wrappedMs") _hWorkCur["gpu.wrappedMs"] = (_hWorkCur["gpu.wrappedMs"] || 0) + n;
     };
     const _bumpWork = (k) => {
       if (!_hArmed) return;
@@ -282,6 +285,18 @@ try {
       wrapCall(GB, "unmap", "gpu.unmap");
       const GCE = window.GPUCommandEncoder && window.GPUCommandEncoder.prototype;
       wrapCall(GCE, "finish", "gpu.encoderFinish");
+      // THE SWAPCHAIN ACQUIRE. Census 210 timed every wrapped call inside the
+      // >= 100 ms frames at under 90 ms in total and still found 46% of their
+      // time with the VM idle: a native wait that is none of the above. On
+      // Metal getCurrentTexture() blocks until the compositor frees a
+      // drawable, and WGX on this runner soft-presents and never calls it.
+      const GCC = window.GPUCanvasContext && window.GPUCanvasContext.prototype;
+      wrapCall(GCC, "getCurrentTexture", "gpu.getCurrentTexture");
+      const GRP = window.GPURenderPassEncoder && window.GPURenderPassEncoder.prototype;
+      wrapCall(GRP, "end", "gpu.passEnd");
+      wrapCall(GD, "createBindGroupLayout", "gpu.createBindGroupLayout");
+      wrapCall(GD, "createPipelineLayout", "gpu.createPipelineLayout");
+      wrapCall(GD, "createSampler", "gpu.createSampler");
       const G2 = window.WebGL2RenderingContext && window.WebGL2RenderingContext.prototype;
       wrapCall(G2, "linkProgram", "gl.linkProgram");
       wrapCall(G2, "compileShader", "gl.compileShader");
@@ -292,7 +307,9 @@ try {
       if (TP && typeof TP.createView === "function") {
         const origCV = TP.createView;
         TP.createView = function () {
+          const _t0 = performance.now();
           const v = origCV.apply(this, arguments);
+          _bumpWorkN("gpu.createViewMs", performance.now() - _t0);
           try { v.__sig = this.width + "x" + this.height + "/" + this.format; } catch (_) { /* expando refused */ }
           return v;
         };
@@ -320,7 +337,8 @@ try {
               _hSigCur.push(sig);
             }
           }
-          return origBRP.apply(this, arguments);
+          const _t1 = performance.now();
+          try { return origBRP.apply(this, arguments); } finally { _bumpWorkN("gpu.beginRenderPassMs", performance.now() - _t1); }
         };
       }
     } catch (_) { /* WebGL2 legs have no GPUCommandEncoder; the timing still runs */ }

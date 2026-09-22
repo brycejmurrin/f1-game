@@ -151,12 +151,18 @@ export const PATCHES = [
       "So on a cache miss outside compileAsync, start the yielding build and return: the object is " +
       "skipped until its state exists, then takes the ordinary cached path. Never while a render " +
       "bundle is being recorded (a skipped object would be omitted from the bundle for good); the " +
-      "sync path stays reachable behind globalThis.__apexSyncCodegen === true for an A/B.",
+      "sync path stays reachable behind globalThis.__apexSyncCodegen === true for an A/B. " +
+      "The build STARTS from a yielded task, not at the call site: an async function runs " +
+      "synchronously to its first await, and buildAsync() runs prebuild() -- the material's " +
+      "whole setup traversal, the heaviest part -- before its first yieldToMain(). gpu-census " +
+      "210 (driven window, real Metal) put 17% of the time inside the >= 100 ms callbacks in " +
+      "build/getChildren under setup, reached from _renderObjectDirect. yieldToMain is " +
+      "imported into three.webgpu.js already.",
     upstream: "unfixed on dev as of r186: buildAsync() is reachable only through compileAsync() (issue draft in docs/notes/UPSTREAM-THREE-ISSUES.md 5)",
     edits: [
       {
         find: "\t\t\trenderObject.bundle = this._currentRenderBundle.bundleGroup;\n\n\t\t}\n\n\t\t//\n\n\t\tconst refreshType = this._nodes.needsRefresh( renderObject );\n",
-        replace: "\t\t\trenderObject.bundle = this._currentRenderBundle.bundleGroup;\n\n\t\t}\n\n\t\t// Apex patch 8: a node-builder cache MISS here would generate this object\'s WGSL synchronously\n\t\t// inside the frame. Build it yielding instead and draw the object once its state exists.\n\t\tif ( globalThis.__apexSyncCodegen !== true && this._compilationPromises === null && this._currentRenderBundle === null && renderObject._nodeBuilderState === null ) {\n\n\t\t\tif ( this._nodes.nodeBuilderCache.get( this._nodes.getForRenderCacheKey( renderObject ) ) === undefined ) {\n\n\t\t\t\tconst pending = this._nodes.get( renderObject );\n\n\t\t\t\tif ( pending.apexBuilding !== true ) {\n\n\t\t\t\t\tpending.apexBuilding = true;\n\t\t\t\t\tconst done = () => { pending.apexBuilding = false; };\n\t\t\t\t\tPromise.resolve( this._nodes.getForRender( renderObject, true ) ).then( done, done );\n\n\t\t\t\t}\n\n\t\t\t\treturn;\n\n\t\t\t}\n\n\t\t}\n\n\t\t//\n\n\t\tconst refreshType = this._nodes.needsRefresh( renderObject );\n",
+        replace: "\t\t\trenderObject.bundle = this._currentRenderBundle.bundleGroup;\n\n\t\t}\n\n\t\t// Apex patch 8: a node-builder cache MISS here would generate this object\'s WGSL synchronously\n\t\t// inside the frame. Build it yielding instead and draw the object once its state exists.\n\t\tif ( globalThis.__apexSyncCodegen !== true && this._compilationPromises === null && this._currentRenderBundle === null && renderObject._nodeBuilderState === null ) {\n\n\t\t\tif ( this._nodes.nodeBuilderCache.get( this._nodes.getForRenderCacheKey( renderObject ) ) === undefined ) {\n\n\t\t\t\tconst pending = this._nodes.get( renderObject );\n\n\t\t\t\tif ( pending.apexBuilding !== true ) {\n\n\t\t\t\t\tpending.apexBuilding = true;\n\t\t\t\t\tconst done = () => { pending.apexBuilding = false; };\n\t\t\t\t\tyieldToMain().then( () => this._nodes.getForRender( renderObject, true ) ).then( done, done );\n\n\t\t\t\t}\n\n\t\t\t\treturn;\n\n\t\t\t}\n\n\t\t}\n\n\t\t//\n\n\t\tconst refreshType = this._nodes.needsRefresh( renderObject );\n",
         count: 1,
       },
     ],

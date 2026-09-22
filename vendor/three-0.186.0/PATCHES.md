@@ -38,3 +38,11 @@ Visible cost: an object that needs a program the warm never built appears a few
 frames late instead of stalling the frame it appears in. Unfixed upstream as of r186;
 draft in `docs/notes/UPSTREAM-THREE-ISSUES.md` §5. Retire when the default path can
 build asynchronously upstream.
+
+Amended 2026-09-22 (gpu-census 210): the yielding build now STARTS from a
+`yieldToMain()` task rather than at the call site. An async function runs
+synchronously to its first `await`, and `buildAsync()` runs `prebuild()` — the
+material's whole setup traversal, the heaviest part of the codegen — before its
+first yield, so the first version still put `build`/`getChildren` under `setup`
+inside the rAF callback (17% of the time inside the ≥ 100 ms frames of a driven
+window on real Metal, caller chain `_renderObjectDirect` → … → `setup` → `build`).
