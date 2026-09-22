@@ -788,6 +788,7 @@ declare const RaceControl: GameModuleFactory;
 declare const DailyChallenge: GameModuleFactory;
 declare const TitleMenu: GameModuleFactory;
 declare const Onboard: GameModuleFactory;
+declare const SetupCamera: GameModuleFactory;
 declare const SetupUI: GameModuleFactory;
 declare const SkidMarks: GameModuleFactory;
 declare const RivalAudio: GameModuleFactory;

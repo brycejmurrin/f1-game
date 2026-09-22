@@ -548,7 +548,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `poolEnergy` | POOL ENERGY | 0 … 1.375 | 0.55 | — | ✓ | track-lights.js×3 |
 | `lampRadiusMul` | POOL RADIUS | 0.4 … 1.9 | 1 | — | ✓ | track-lights.js×3 |
 | `bleedMul` | VALLEY BLEED | 0 … 2.5 | 1 | — | ✓ | track-lights.js×3 |
-| `glareStr` | LENS GLARE | 0 … 0.3 | 0.12 | — | ✓ | game.js×4, scene.js |
+| `glareStr` | LENS GLARE | 0 … 0.3 | 0.12 | — | ✓ | game.js×3, scene.js, setup-camera.js |
 | `lampTemp` | LAMP TEMPERATURE | -3.3 … 8.3 | 0 | — | ✓ | game.js |
 | `lampFlicker` | LAMP FLICKER | 0 … 0.6 | 0.1 | — | ✓ | frame-lights.js |
 | `beamCone` | BEAM CONE WIDTH | 0.08 … 2.2 | 1 | — | ✓ | track-lights.js×3 |

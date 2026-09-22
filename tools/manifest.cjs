@@ -174,6 +174,7 @@ const FULL = [
   "js/garage/scene-equipment.js",
   "js/garage/scene-live.js",
   "js/garage/scene.js",
+  "js/garage/setup-camera.js",
   "js/garage/pit-signs.js",
   "js/physics/body-attitude.js",
   "js/fx/particles.js",
@@ -431,6 +432,10 @@ const HARD_EDGES = [
   ["js/garage/scene-prims.js", "js/garage/scene.js"],             // the bay destructures GaragePrims at eval
   ["js/garage/scene-equipment.js", "js/garage/scene.js"],         // ...GarageEquipment (the fan and screen anchors)
   ["js/garage/scene-live.js", "js/garage/scene.js"],              // ...and GarageLive (the atlas size and painters)
+  // The garage preview camera eases its flaps at the car's own X_OPEN_RATE /
+  // X_CLOSE_RATE, destructured off PhysicsConsts at EVAL time exactly as
+  // js/game.js destructures the rest of them.
+  ["js/physics/consts.js", "js/garage/setup-camera.js"],
   ["js/track/core/geom.js", "js/track/tracks.js"],               // tracks destructures TrackGeom at eval
   ["js/track/core/spline.js", "js/track/tracks.js"],             // tracks destructures TrackSpline at eval
   ["js/track/core/geom.js", "js/track/core/mesh.js"],                 // mesh destructures TrackGeom at eval

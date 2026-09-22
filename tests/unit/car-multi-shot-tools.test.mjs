@@ -249,7 +249,7 @@ test("every garage camera preset is one a PLAYER can reach", () => {
   // camera — and with absolute az/el/dist in garageFrame they are parameters
   // (garage-angles CAM_ALIAS). So: everything in SP_VIEWS has a button, and
   // the tool's named cameras are not in SP_VIEWS at all.
-  const game = code("js/game.js");
+  const game = code("js/garage/setup-camera.js");
   const block = /const SP_VIEWS = \{([\s\S]*?)\n\};/.exec(game);
   assert.ok(block, "SP_VIEWS must still be a named const");
   const presets = [...block[1].matchAll(/^\s{2}([A-Za-z]+):\s*\{/gm)].map((m) => m[1]);
@@ -379,8 +379,9 @@ test("garage-angles: stations, field→station picking, pairs, flat art, a free 
   assert.match(hook, /el: Math\.asin\(/, "an explicit eye becomes the orbit's own terms");
   const game = read("js/game.js");
   assert.match(game, /setSetupFree: \(on\)/, "the façade exposes the free range");
-  assert.match(game, /setupPreviewFree = false;   \/\/ a preset is the player's range again/, "a preset restores the player's clamps");
-  assert.match(game, /clamp\(setupPreviewEl \+ dEl, spElMin\(\), SP_EL_MAX\)/, "the nudge path clamps through the free-aware floor");
+  const cam = read("js/garage/setup-camera.js");
+  assert.match(cam, /setupPreviewFree = false;   \/\/ a preset is the player's range again/, "a preset restores the player's clamps");
+  assert.match(cam, /clamp\(setupPreviewEl \+ dEl, spElMin\(\), SP_EL_MAX\)/, "the nudge path clamps through the free-aware floor");
   assert.match(read("types/game-ctx.d.ts"), /setSetupFree: \(on: boolean\) => void/);
   const plan = (args) => JSON.parse(execFileSync("node",
     ["tools/shot/garage-angles.mjs", "--plan", "--team=ferrari", ...args], { cwd: ROOT, encoding: "utf8" }));

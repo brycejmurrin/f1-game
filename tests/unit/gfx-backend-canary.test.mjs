@@ -1831,8 +1831,8 @@ test("WGX remaps off-axis proj (garage lens shift) with Z01·P before V", () => 
 });
 
 test("setup preview passes explicit view for garage off-axis backends", () => {
-  const game = code("js/game.js");
-  assert.match(game, /viewProj:\s*_spVP,\s*view:\s*_spView/);
+  const cam = code("js/garage/setup-camera.js");
+  assert.match(cam, /viewProj:\s*_spVP,\s*view:\s*_spView/);
 });
 
 test("TLX WebGPU path never claims #game as WebGL2 after renderer.init()", () => {
