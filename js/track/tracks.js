@@ -720,6 +720,27 @@ const Tracks = (function () {
     const pitKeep = track.pit ? track.pit.keep : null, pitSide = track.pit ? track.pit.side : 0;
     const pitV = track.pit ? track.pit.v : null, pitVerge = track.pit ? track.pit.bands.verge : 0;
     const pitMax = (() => { let m = 0; if (pitKeep) for (let k = 0; k < n; k++) if (pitKeep[k] > m) m = pitKeep[k]; return m; })();
+    // The pit complex is ONE window of the lap, but its keep-out (pitMax,
+    // ~30 m) widened every guard query everywhere: onRoadHit + onTrack were the
+    // top self-time of a build. Pay the wide radius only where the query can
+    // reach a pit node at all — its circle, plus a grid cell's diagonal
+    // (node grid CELL = 10 m, so a returned node may sit ~14.2 m outside R),
+    // against the pit nodes' bounding box. Elsewhere no pit node can be a
+    // candidate, so the pit branch cannot fire and the road branch rejects
+    // beyond rad + hw anyway: the result is identical, measured byte-for-byte
+    // on all 52 circuits (bug hunt 2026-09-22; props phase ~20 % faster).
+    const pitBox = (() => {
+      if (!pitKeep || !(pitMax > 0)) return null;
+      let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+      for (let k = 0; k < n; k++) if (pitKeep[k] > 0) {
+        if (px[k] < x0) x0 = px[k]; if (px[k] > x1) x1 = px[k];
+        if (pz[k] < z0) z0 = pz[k]; if (pz[k] > z1) z1 = pz[k];
+      }
+      return x0 <= x1 ? { x0, x1, z0, z1 } : null;
+    })();
+    const PIT_GATE_PAD = 15;
+    const nearPit = (x, z, r) => !!pitBox && x + r + PIT_GATE_PAD >= pitBox.x0 && x - r - PIT_GATE_PAD <= pitBox.x1 &&
+      z + r + PIT_GATE_PAD >= pitBox.z0 && z - r - PIT_GATE_PAD <= pitBox.z1;
     // The complex's footprint at node k as a lateral RANGE on the pit side,
     // [beyond the verge, its far edge]: the verge itself stays placeable, so a
     // gantry leg or a marshal post can still stand between the track and the
@@ -745,7 +766,9 @@ const Tracks = (function () {
     // where the engine builds the complex, and dropping it is the intent.
     let _pitReject = false;
     const onRoadHit = (cx, cz, topY, rad, arx, arz, afx, afz, hx, hz, botY) => {
-      const mh = grid.maxHw + pitMax;
+      const mhFull = grid.maxHw + pitMax;
+      const rFull = (rad > 0 ? rad + mhFull : __M.hypot(hx + mhFull, hz + mhFull)) + 2;
+      const mh = nearPit(cx, cz, rFull) ? mhFull : grid.maxHw;
       // The complex keeps FOOTINGS out, not a crown: a RADIAL primitive (a
       // tree's canopy tier) whose underside is well above the road may reach
       // over the complex's edge, the way a crown reaches over a verge. Testing
@@ -962,7 +985,8 @@ const Tracks = (function () {
     }
     const onTrack = (x, z, margin, pitMargin) => {
       _pitReject = false;
-      const R = grid.maxHw + pitMax + margin + ds + 1;
+      const rFull = grid.maxHw + pitMax + margin + ds + 1;
+      const R = nearPit(x, z, rFull) ? rFull : grid.maxHw + margin + ds + 1;
       const _cn = grid.query(x, z, R, _trkCand, false);
       for (let _ci = 0; _ci < _cn; _ci++) {
         const i = _trkCand[_ci];
