@@ -2595,7 +2595,13 @@ function dropRaceWake() {
 // is aimed at a quarter of the problem.
 let _raceProfile = [];
 function raceProfile() { return _raceProfile; }
-async function startRace() {
+// DEFECT-LEDGER's un-awaited-startRace family: six fire-and-forget callers
+// (closeQualiToGrid, q-drive, pm-restart, the season/quali continue button,
+// RaceSettings' RACE! route, DailyChallenge.open) never awaited this, so a double-click or a second
+// trigger while a start was still in flight could re-enter it mid-build. The
+// startRace() wrapper below latches concurrent calls onto the one in-flight
+// promise instead of starting a second race build on top of the first.
+async function startRaceBody() {
   _raceProfile = []; let _rt = performance.now();
   const rlap = (n) => { const t = performance.now(); _raceProfile.push({ n, ms: +(t - _rt).toFixed(2) }); _rt = t; };
   await ensureScenery(trackIdx);
@@ -2748,6 +2754,12 @@ async function startRace() {
   if (soundOn && isRaining()) GameAudio.startRain();   // rain patter — a damp "wet" track is silent
   warmCarAssets();            // meshes + atlases HERE, not on the first countdown frame (see warmCarAssets)
   DebrisWorld.prime(); updateHud(true);   // prime: build the side-world HERE, not on the lights-out frame (see DebrisWorld.prime)
+}
+let _startRaceP = null;
+function startRace() {
+  if (_startRaceP) return _startRaceP;   // a concurrent caller shares the in-flight start
+  _startRaceP = startRaceBody().finally(() => { _startRaceP = null; });
+  return _startRaceP;
 }
 
 function showTouchControls(show) {
@@ -6881,6 +6893,15 @@ const _hazeOpts = { u: 0, v: 0, str: 0 };
 let _softEl = null;                    // #game-soft, the soft-present overlay canvas
 // The lens the last frame was built with — see where it is filled, below.
 const _lens = { near: 0, far: 0, fovY: 0, fog: null, cull: 0, cine: false };
+// Extracted: tick()'s fatal catch also arms it when render() throws before
+// reaching its own present() call below.
+function armBackendProbe() {
+  if (!_backendProved && _backendBound && !_probeArmed) {
+    try { const p = backendPreference();
+      if (p === "three" || p === "webgpu") { localStorage.setItem("apex26.gfxBackendProbe", p); _probeArmed = true; } }
+    catch (_) { /* no probe: a jetsam in the arming window will not auto-revert */ }
+  }
+}
 function render(dt) {
   if (headlessMode || (gfx.warming && gfx.warming())) return;
   // THE CANVAS SHOWS ONLY WHEN SOMETHING IS DRAWN ON IT (2026-09): a race, the
@@ -8334,13 +8355,7 @@ function render(dt) {
       }
     }
   }
-  // Re-arm around the first world present so a jetsam mid-frame still reverts.
-  // Title already disarmed after bind; this window is only the first flyby/race.
-  if (!_backendProved && _backendBound && !_probeArmed) {
-    try { const p = backendPreference();
-      if (p === "three" || p === "webgpu") { localStorage.setItem("apex26.gfxBackendProbe", p); _probeArmed = true; } }
-    catch (_) { /* no probe: a jetsam in the arming window will not auto-revert */ }
-  }
+  armBackendProbe();
   gfx.present(po);
   // Boot canary disarmed once the backend has presented a RUN of world frames,
   // not one. Until then the probe stays armed in storage and a load that dies
@@ -8393,6 +8408,9 @@ function tick(now) {
     if (!tick._reported && typeof window.__apexReportError === "function") {
       tick._reported = true; window.__apexReportError("tick", e);
     }
+    // Arm here too: a fatal render() may throw before its own present() call
+    // ever reaches armBackendProbe().
+    if (_backendBound && !_backendProved) armBackendProbe();
     throw e;
   }
 }

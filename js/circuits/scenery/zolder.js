@@ -39,7 +39,7 @@
         building, grandstandEx, spectatorHill,
         guardrail, fence, tyreWall, marshalPost, cameraTower,
         broadcastCompound, billboard, sponsorHoarding,
-        motorhome, groundPatch, ridge } = api;
+        motorhome, groundPatch, ridge, def } = api;
 
       const K = (s) => Math.round(s * n) % n;
 
@@ -313,7 +313,7 @@
       // chicanes, the Villeneuve memorial and the pine sections must not travel
       // with the line. The pit block and main stand belong AT the line, so
       // these two blocks alone are shifted.
-      const SL = 0.1562;                       // = 1 - def._sceneryShift
+      const SL = (1 - (def._sceneryShift || 0)) % 1;   // live: was a hand-copied snapshot
       const sl = (f) => (f + SL) % 1;
 
       // === 1. s 0.005 +1 14 — PIT LANE AND GARAGES =======================

@@ -44,7 +44,7 @@
         building, grandstandEx, spectatorHill, terrace,
         guardrail, fence, tyreWall, marshalPost, cameraTower, broadcastCompound,
         billboard, sponsorHoarding, gantry, motorhome, groundPatch,
-        place, ridge, circuitKit } = api;
+        place, ridge, circuitKit, def } = api;
 
       // ---------------------------------------------------------------------
       // 1. PALETTE + LOCAL HELPERS
@@ -164,7 +164,7 @@
       //    stays in the authoring frame on purpose.
       //    sl() wraps past 1 above f = 0.097, so keep every argument below it.
       // ---------------------------------------------------------------------
-      const SL = 0.9027;                       // = 1 - def._sceneryShift
+      const SL = (1 - (def._sceneryShift || 0)) % 1;   // live: was a hand-copied snapshot
       const sl = (f) => (f + SL) % 1;
       building(K(sl(0.968)), 1, 15, 14, 6.5, 108, { col: WALL, roof: ROOF });
       building(K(sl(0.032)), 1, 19, 12, 5.5, 34, { col: WALL_2, roof: ROOF });

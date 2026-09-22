@@ -204,13 +204,22 @@ test("the shared Playwright fixture pins native GLX coverage", () => {
 });
 
 test("first world present re-arms the canary so a jetsam mid-frame still reverts", () => {
+  // The arm used to be inlined right before gfx.present(po); it is now the
+  // extracted armBackendProbe() (also called from tick()'s fatal catch, so a
+  // pre-present crash still gets recorded — see the tick() test below), but
+  // the call site must still be the LAST thing before present() and the
+  // disarm-after-a-proved-run must still be the first thing after it.
   const game = code("js/game.js");
   const present = game.search(/gfx\.present\(\s*po\s*\)/);
-  const window = game.slice(present - 600, present + 400);
-  assert.match(window, /backendPreference\(\)/,
+  const before = game.slice(Math.max(0, present - 120), present);
+  const after = game.slice(present, present + 400);
+  assert.match(before, /armBackendProbe\(\)\s*;\s*$/,
+    "the last statement before gfx.present(po) must arm the canary");
+  assert.match(after, /removeItem\(\s*"apex26\.gfxBackendProbe"\s*\)/);
+  const helper = fnBody(game, "armBackendProbe");
+  assert.match(helper, /backendPreference\(\)/,
     "canary re-arm must resolve an unset preference to the default THREE pick");
-  assert.match(window, /setItem\(\s*"apex26\.gfxBackendProbe"/);
-  assert.match(window, /removeItem\(\s*"apex26\.gfxBackendProbe"\s*\)/);
+  assert.match(helper, /setItem\(\s*"apex26\.gfxBackendProbe"/);
 });
 
 test("RENDERER picker lives in renderer-picker.js, not game.js or gfx-quality.js", () => {
@@ -3075,7 +3084,9 @@ test("boot audit: scenery loads are memoised, car assets warm in startRace, deca
   assert.match(es, /_sceneryLoads\.delete\(def\.id\)/, "and clear it on settle so a dropped fetch retries");
   // warmCarAssets: the caches were lazy, so the first countdown frame built
   // every mesh and atlas; startRace now does it before the first render.
-  const sr = game.slice(game.indexOf("async function startRace("), game.indexOf("function showTouchControls("));
+  // startRace() itself is a re-entrancy-latch wrapper (start-race-latch
+  // .test.mjs) around startRaceBody(), which still carries this whole flow.
+  const sr = game.slice(game.indexOf("async function startRaceBody("), game.indexOf("function showTouchControls("));
   assert.match(sr, /warmCarAssets\(\);\s*[^\n]*\n\s*DebrisWorld\.prime\(\)/, "startRace warms car assets right before DebrisWorld.prime()");
   // The warm-up and the decal atlas cache live in the car-draw seam (js/car/car-draw.js).
   const cd = read("js/car/car-draw.js").replace(/^[ \t]*\/\/.*$/gm, "");
@@ -4463,4 +4474,29 @@ test("TLX bounds GPU error history and preserves resize context at receipt", () 
   assert.equal(_gpuRecentErrors[0].warmingAtReceipt, true);
   assert.equal(_gpuRecentErrors[0].presentAtReceipt, 12);
   assert.equal(_gpuErrFrames, 1, "receipt counters retain their existing semantics");
+});
+
+test("tick()'s fatal catch arms the boot-canary probe before rethrowing (a pre-present crash must not go unrecorded)", () => {
+  // render() used to arm the probe only right before its own gfx.present(po)
+  // call, at the very end of the function. If render() throws BEFORE
+  // reaching that line — a deterministic fault, not the transient kind
+  // LoopHealth.fault() absorbs — the probe was never written, so the
+  // next-boot strike logic (armed && !skipClaim, near backendPreference())
+  // never saw evidence of the crash. armBackendProbe() extracts the same
+  // body so tick()'s fatal branch can call it too, on the way out.
+  const game = code("js/game.js");
+  const helper = fnBody(game, "armBackendProbe");
+  assert.match(helper, /_backendProved/, "the extracted helper must keep the proved-backend short-circuit");
+  assert.match(helper, /_backendBound/, "the extracted helper must keep the bound-backend gate");
+  assert.match(helper, /_probeArmed\s*=\s*true/, "the extracted helper must still set the armed latch");
+  assert.match(helper, /try\s*\{[^]*catch\s*\([^)]*\)\s*\{/, "armBackendProbe must keep the original try/catch — a jetsam mid-arm must not throw");
+  const tickBody = fnBody(game, "tick");
+  assert.match(tickBody, /LoopHealth\.fault\(e\)/, "tick()'s catch must still run the bounded-tolerance check first");
+  const afterFault = tickBody.slice(tickBody.indexOf("LoopHealth.fault(e)"));
+  const armIdx = afterFault.indexOf("armBackendProbe(");
+  const throwIdx = afterFault.lastIndexOf("throw e");
+  assert.ok(armIdx >= 0, "tick()'s fatal branch must call armBackendProbe()");
+  assert.ok(throwIdx > armIdx, "armBackendProbe() must run BEFORE the rethrow, not after (a thrown error never returns to run it later)");
+  assert.match(afterFault.slice(armIdx - 60, armIdx), /_backendBound\s*&&\s*!_backendProved/,
+    "the fatal-branch call site must gate on the same latch state as the render() call site");
 });

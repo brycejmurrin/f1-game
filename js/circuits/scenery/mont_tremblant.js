@@ -43,7 +43,7 @@
       const { n, hash, every, anchor, onTrack, out,
         pine, tree, bush, forestEdge, building, grandstandEx, spectatorHill,
         guardrail, fence, tyreWall, marshalPost, cameraTower, billboard,
-        motorhome, groundPatch, ridge, mountain, terrainYAt, addBox } = api;
+        motorhome, groundPatch, ridge, mountain, terrainYAt, addBox, def } = api;
 
       // ---------------------------------------------------------------- 1.
       // PALETTE + HELPERS. Deep summer green; the presets do the season.
@@ -445,7 +445,7 @@
       // Namerow, the Esses and the ski-mountain framing must not travel with
       // the line. The paddock and the start-line stand belong AT the line, so
       // these two blocks alone are shifted.
-      const SL = 0.7166;                       // = 1 - def._sceneryShift
+      const SL = (1 - (def._sceneryShift || 0)) % 1;   // live: was a hand-copied snapshot
       const sl = (f) => (f + SL) % 1;
 
       // PADDOCK (row 0.005). Club scale: ONE long low garage/timing block, two

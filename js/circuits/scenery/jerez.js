@@ -47,7 +47,7 @@
         spectatorHill, terrace, guardrail, fence, tyreWall, marshalPost,
         cameraTower, broadcastCompound, billboard, sponsorHoarding, gantry,
         motorhome, groundPatch, runoffApron, place, ridge,
-        modelGroup, vadd, addBox, addCyl, addFrustum, MAT } = api;
+        modelGroup, vadd, addBox, addCyl, addFrustum, MAT, def } = api;
 
       // ---------------------------------------------------------------
       // 1. PALETTE + HELPERS  (§2 bleached, §6 sparse olive / pale concrete)
@@ -142,7 +142,7 @@
       // Dry Sack and the stadium section must not travel with the line. The
       // pit complex and its terracing belong AT the line, so these two blocks
       // alone are shifted; sl(f) is the authored frac that lands at the line.
-      const SL = 0.1264;                       // = 1 - def._sceneryShift
+      const SL = (1 - (def._sceneryShift || 0)) % 1;   // live: was a hand-copied snapshot
       const sl = (f) => (f + SL) % 1;
 
       // 2. MAIN START/FINISH TERRACING  (0.005, -1, 20)

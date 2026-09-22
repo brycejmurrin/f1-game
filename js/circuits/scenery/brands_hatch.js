@@ -40,7 +40,7 @@
         guardrail, fence, wall, tyreWall, marshalPost, cameraTower,
         broadcastCompound,
         billboard, signBoard, sponsorHoarding, gantry,
-        place, groundPatch, ridge, addBox } = api;
+        place, groundPatch, ridge, addBox, def } = api;
 
       const K = (s) => Math.round(s * n) % n;
       // Frame selector for the shared helpers below: block 1 and the far-lap
@@ -281,7 +281,7 @@
       // line. At THIS circuit the frontage, the pits and the Paddock Hill
       // structures are one complex around the line, so they move together;
       // block 1's open grass banking stays in the authoring frame.
-      const SL = 0.1635;                       // = 1 - def._sceneryShift
+      const SL = (1 - (def._sceneryShift || 0)) % 1;   // live: was a hand-copied snapshot
       const sl = (f) => (f + SL) % 1;
 
       // Main grandstand run down Brabham Straight.
