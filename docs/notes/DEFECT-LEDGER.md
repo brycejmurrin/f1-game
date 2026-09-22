@@ -11,6 +11,192 @@
 Verified against the current tree. Everything fixed has moved to the archived
 journal; this is what remains.
 
+**2026-09-22 — a `try`/`catch` cannot swallow a promise REJECTION, and this
+shell turns one into a full-screen overlay. FIXED at four sites.** `index.html`
+installs an `unhandledrejection` listener that paints `#__err_overlay` over the
+running game. Its `error` sibling already carries a benign-noise exemption
+(ResizeObserver); the rejection handler carries none. Four sites wrapped a
+promise-returning Web API in `try`/`catch` with a comment naming the exact
+failure they meant to absorb — and every one of those failures is spec'd as a
+REJECTION, so the catch was inert and the overlay was not:
+
+| site | API | when it rejects |
+|---|---|---|
+| `js/input/input.js` `rumble()` | `GamepadHapticActuator.playEffect` | `InvalidStateError` whenever `document.visibilityState === "hidden"` ([Gamepad spec](https://w3c.github.io/gamepad/#dom-gamepadhapticactuator-playeffect)) |
+| `js/audio/engine.js` `rebuildCtx()` | `AudioContext.close` | `InvalidStateError` on an already-closed context ([Web Audio spec](https://webaudio.github.io/web-audio-api/#dom-audiocontext-close); Chrome rejects, Firefox resolves) |
+| `js/audio/engine.js` hide path | `AudioContext.suspend` | same, on an already-closed context |
+| `js/audio/spotify.js` `BACKEND.start/stop` | SDK `resume`/`pause` | undocumented; guarded defensively |
+
+The `playEffect` one is the one that fires in ordinary play, and it is the
+worst kind: `rumble()` runs on every collision, kerb and gear shift, so a
+player who alt-tabs or whose phone locks while a rumble is in flight gets the
+overlay over a live race. The AudioContext pair is next, because `rebuildCtx()`
+is reached ONLY after a resume has already failed — i.e. with the context in
+exactly the state `close()` refuses. The same file's three `ctx.resume()` calls
+have always chained `.catch`, which is what makes these an omission rather than
+a policy.
+
+Fix: keep the `try`/`catch` (a bad receiver still throws synchronously) and add
+the rejection arm — `const p = x.foo(); if (p && p.catch) p.catch(() => {});`.
+Pinned by `tools/check/reject-lint.mjs` (a ZERO ratchet, not a frozen
+population) and `tests/unit/reject-lint.test.mjs`. The lint names only APIs
+whose promise-return is unambiguous, and disambiguates `close`/`play`/`pause`/
+`resume` by receiver, because a rule that cried wolf at thirty WebSocket and
+IndexedDB teardowns would be switched off inside a week.
+
+**2026-09-22 — a Begin with no `finally` latched the whole game into a 64-pixel
+cubemap. FIXED, with three more of its class.** `js/game.js`'s env-probe block
+called `gfx.envFaceBegin`, drew the world, and called `gfx.envFaceEnd` — with
+no `try`/`finally`. `envFaceBegin` raises GLX's `_envActive`, and `begin()`
+branches on it EVERY frame to choose between the real scene target and the 64²
+probe FBO; `envFaceEnd` is its only lowering, and `envProbeReset()` does not
+touch it. So a throw out of `drawWorldMeshes` or `drawSky` left the latch up
+for the life of the tab: the entire game rendered into a 64-pixel cubemap face
+while the visible canvas held its last good frame. `tick()`'s `LoopHealth`
+absorbs the transient fault and keeps going, so physics, AI and audio carried
+on underneath — the exact shape of an "it just froze mid-race" report with
+nothing in the console.
+
+Three siblings fixed with it, all the same class and all found by asking the
+same question of every bracket in the renderer:
+
+- `js/render/glx/glx.js` `present` — post.js disables `DEPTH_TEST` for the
+  fullscreen chain and re-enables it ~400 lines later, and nothing else
+  re-asserts that flag per frame (`begin()`/`resetDrawState()` only re-sync
+  `CULL_FACE`, `colorMask`, `polygonOffset`). A throw in between left depth
+  testing off for the rest of the tab, so every opaque draw composited in
+  submission order. Restored on the FAULT path only, so the happy path pays
+  nothing.
+- `js/render/glx/shadow.js` `shadowBegin` — a leftover `castCullVP` from the
+  car (±42 m) or lamp (cone) pass culls every prop, tree and barrier out of the
+  SUN's snap-cached map, because `chunked.js` and `gfx.shadowCullVP` both
+  resolve `castCullVP || lightVP`. The car/lamp Ends clear it on the normal
+  path and on their early returns; what they cannot cover is a throw between
+  Begin and End. Cleared where the sun pass declares its own frustum, which
+  makes it ordering-independent.
+
+**2026-09-22 — a stop in flight survived a red flag and held the player at the
+pit limiter through the restart. FIXED.** `redFlagRestart()` enumerates the
+racecraft scratch a re-grid must not carry (`contactT`, `wrongWay`, `offT`,
+`wallT`, `otT`, …) and deliberately keeps what is strategy — energy, tyreClass,
+phaseRoll. The pit fields were in neither list, and they are both:
+`pitStops`/`pitNext`/`pitPlan` are strategy and must survive, while
+`pitState`/`pitArmed`/`pitCommitted` are an in-progress stop and must not.
+
+The restart teleports every car onto a grid box, and on most circuits the grid
+sits INSIDE the pit window — so a car holding the lane when the flag flew came
+out of the standing start still reading `pits.inLane()`. game.js's `vmax`
+branch held it at the pit limiter and `laneDrive` steered it onto the lane
+offset. Measured on Monza before the fix: full throttle from lights-out and the
+car could not pass ~20 m/s for ~750 physics ticks — about twelve seconds —
+because `update()`'s "left the window" branch is the only other thing that
+clears the arm, and by construction it cannot fire from inside the window. For
+an AI car the same latch overrode its strategy: it circulated at pit-lane pace
+and then made an unplanned stop the next time it passed the window.
+
+Fix: a new `pits.clearArm(c)` — the in-progress half of `reset()` and nothing
+else — called from `redFlagRestart()`'s per-car loop. Pinned by
+`tests/unit/red-flag-pit-vm.test.mjs`, which fails on the old code in both
+directions (the fields, and the speed after the restart).
+
+**2026-09-22 — a red flag raised after any car had finished froze the field
+every 45 s for the rest of the race. FIXED.** The red procedure ends in exactly
+one restart request, and `raceCtl.takeRestart()` consumes it whether or not
+`redFlagRestart()` runs. `redFlagRestart()` declines outright once any car has
+finished — which is ordinary, not exotic: the leader takes the flag while a
+mid-pack incident is still unfolding. The clean-up (`IncidentSim.reset`,
+`DebrisWorld.reset`, `DebrisWorld.prime`) lived only INSIDE the re-grid, so
+that combination held the whole field at `vmax * 0.02` for `RED_STOP +
+RED_HOLD`, dropped silently back to green with the debris still on track, and —
+since `finished` never goes back to false — let the same uncleared picture
+raise the same dead red every `CAP_REARM_HOLD` for the rest of the race. Fix:
+the declined path now runs the clean-up, which ends the cycle at its cause.
+
+**2026-09-22 — a failed race start left the pre-race screen running forever.
+FIXED.** The already-recorded "`startRace()` rejection left a half-torn screen"
+fix routes a throw to `quitToMenu()`. `LoadingScreen.stop()` has exactly one
+call site in the tree — `clearMenuScreens()`, which `startRaceBody()` reaches
+near the END of its work — so a throw before that (the awaited
+`ensureScenery`) never stopped the flyby. It stayed `active()` for the session:
+its `window` pointerdown/keydown capture listeners were never removed, and both
+`menuBlank` and the per-car draw-loop break gate on `!loadingScreen.active()`,
+so the title screen went back to paying for all 22 parked cars — the cost a
+comment in `render()` says was already fixed once by another route. Fix:
+`quitToMenu()` stops it too; `stop()` is idempotent.
+
+**2026-09-22 — Dijon lost a grandstand livery, because a typo in def data is
+silent. FIXED. The same class in `furniture.tree` is OPEN, and the attempt to
+fix it is the more useful record.** The def files are data and the engine looks
+their strings up in tables; every lookup has a sensible fallback, so a word the
+engine does not know never throws, never logs, and passes `verify-track`.
+
+Dijon's `standSet: ["stone", …]` is not a `STAND_LIVERIES` key, so
+`grandstandEx`'s `lib[name] || null` fell through to its default shell — which
+is bit-identical to `"steel"`, making an authored three-way livery rotation a
+two-way one with double-weight grey. Fixed to `"sandstone"`; a livery is colour
+only, so it moves no geometry.
+
+`furniture.tree: "pine"` (anderstorp, fuji, mont_tremblant, okayama, zolder) is
+in neither `SPECIES` nor the two aliases beside it, so the dispatch falls
+through to `"broad"` and five conifer-belt circuits — Sweden, Japan ×2, Québec,
+the Ardennes — grow rounded broadleaf trees on the generic scatter pass. The
+correct species is `"fir"`, which the other Nordic and Alpine circuits use.
+
+**IT WAS CHANGED TO `"fir"`, AND REVERTED, AND THE REASON IS WORTH MORE THAN THE
+FIX WOULD HAVE BEEN.** `canopyR` (`js/track/scenery/nature.js`) returns roughly
+HALF the radius for `fir` that it does for `broad` — ~3.6 m vs ~6.6 m at h = 12
+— and the scatter keeps props clear by `dist + crown`. So correcting the species
+also halved the keep-out, and CI's per-circuit geometry sweep measured prop
+interpenetration growing on every one of the five:
+
+```
+anderstorp 31 → 34    fuji 24 → 26    okayama 58 → 59
+mont_tremblant 32 → 48                zolder 82 → 105
+```
+
+Registering `"pine"` in `SPECIES` instead is strictly worse: the emitter
+dispatch has no pine branch, so it would keep the broadleaf mesh and take the
+smaller clearance with it. The real fix is to check `canopyR("fir")` against
+`conifer()`'s actual mesh extent — the comment directly above `canopyR` records
+that same "GUARANTEED not to clip barriers" contract being found "~0.9 m
+optimistic" once before, for broadleaf — and that is its own change with its own
+sweep. Parked in `tests/unit/circuit-vocab.test.mjs`'s `KNOWN_UNHANDLED` with
+these numbers attached, so the guard still fails on a NEW typo and this one
+cannot be quietly forgotten.
+
+**The process lesson is the durable half.** `deploy.mjs --gate-only` passed this
+batch 21 suites green, and the regression was caught only by CI's per-circuit
+geometry sweeps — the 14 files `PREPUSH-GATE-LADDER.md` says the whole gate
+leaves out. A def edit that changes a SPECIES changes geometry, so it belongs
+behind `npm run test:sweeps` locally before a push, not behind the gate.
+
+**2026-09-22 — `world({since})` could not say a key had gone away. FIXED.**
+`js/agent/agentview.js`'s `deltaOf` walks `Object.keys(next)`, so a field the
+delta base carried and the new payload does not is never mentioned, and
+`applyDelta` merges — the reconstruction keeps the stale value forever. The
+reachable case is the one `agentHelp()` recommends: one `world({detail:"full"})`
+to learn session/physics/tunables/terminal, then ride
+`world({detail:"brief", since})` for the rest of the episode. Nothing requires
+the detail level to match across a `since` chain, so `terminal.done` and
+friends stayed pinned at whatever the full read said. Fix: a shrinking payload
+takes the escape hatch this API already documents — the whole payload with
+`deltaBase: null` and a note — rather than inventing a tombstone the wire
+format has no room for. Pinned in `tests/unit/agent-view-vm.test.mjs` (both
+that a shrink resyncs and that an ordinary same-detail chain is still a delta).
+
+**2026-09-22 — three smaller ones, fixed with the batch.**
+`js/render/three/tsl-lit.js`'s car and lamp PCF taps were hardcoded to the
+DESKTOP map size (`1/1024`, `1.5/512`) while `tlx-shadow.js` shrinks both maps
+to 256² under software GL and — unlike the mobile path, which nulls them —
+keeps the feature ENABLED, so the filter collapsed to a fraction of a texel and
+both shadows went hard and aliased while the sun's, which has always derived
+`U.shadowTexel` from `SHD.sunSize`, stayed soft. `js/camera/photo-cam.js` had
+no `window "blur"` release, so an alt-tab while holding W or the move stick
+left the free camera flying (js/input/input.js wires exactly that listener for
+exactly this reason). `js/career/career.js`'s `prizeFor(0)` returned
+`PRIZE[-1]`, i.e. `undefined`, which would make `career.money` NaN for the rest
+of a save — defensive, no caller reaches it today.
+
 **2026-09-22 — `DIFF[difficulty]` undefined took every physics tick down. FIXED.**
 `js/game.js` `updateCar()` read `DIFF[difficulty]` unguarded and dereferenced
 `dd.ai` on the first AI car; `js/race/quali-model.js` already fell back to

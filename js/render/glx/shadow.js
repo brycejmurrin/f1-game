@@ -205,6 +205,18 @@ const GLXShadow = (function () {
       // Depth must be writable to clear/render the shadow map. This pass runs
       // before begin(), so declare the state explicitly rather than assuming it.
       setDepthMask(true);
+      // The SUN pass owns the whole shadow box, so any castCullVP still up is a
+      // leftover from the car (±42 m) or lamp (cone) pass and must not survive
+      // into it — chunked.js and gfx.shadowCullVP both resolve
+      // `castCullVP || lightVP`, so a stale one culls every prop, tree and
+      // barrier outside that tiny box straight out of the sun's snap-cached
+      // map. carShadowEnd/lampShadowEnd already clear it on the normal path and
+      // on their early returns; what they cannot cover is a THROW out of a
+      // caster draw between Begin and End, which leaves it latched until the
+      // next successful car/lamp pass. Clearing it where the sun pass declares
+      // its own frustum makes that ordering-independent, the same defensive
+      // reassert drawDecal does for the blend func.
+      S.castCullVP = null;
       S.lightVP.set(lightVP);
       gl.bindFramebuffer(gl.FRAMEBUFFER, shadowMapFBO);
       gl.viewport(0, 0, SHADOW_SIZE, SHADOW_SIZE);
