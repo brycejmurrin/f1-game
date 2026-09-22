@@ -437,22 +437,64 @@ const GOAL_KINDS = {
       return me && mate ? me.pos < mate.pos : null;
     },
   },
+  beatRival: {
+    // THE RIVAL IS THE VALUE, not a field beside it. Every other site that
+    // rebuilds a goal — the offer refresh at setAmbition, acceptOffer — writes
+    // `{ type, value }` and nothing else, so a `goal.rival` alongside them would
+    // be dropped on signing. That is precisely the defect acceptOffer shipped
+    // with (it redrew the KIND the same way), and the cheapest way not to repeat
+    // it is to leave those sites nothing extra to forget: seasonDriverId is a
+    // string, so the seat id fits where champPos keeps a number.
+    value: (team, amb) => rivalSeatFor(team, amb),
+    met: (v, r) => r.rivalPos == null || r.pos < r.rivalPos,
+    // The code is passed in at rollover, where it must come from the PRE-rollover
+    // standings: rolloverDrivers() has already moved the grid by the time the
+    // goal resolves, so resolving the seat live would name whoever INHERITED it.
+    label: (v, code) => `Finish the season ahead of ${code || codeOfSeat(v) || "your rival"}`,
+    now: (c, v) => {
+      const me = myStandingRow(), riv = rivalStandingRow(v);
+      return me && riv ? `P${me.pos} to ${riv.code} P${riv.pos}` : null;
+    },
+    onTrack: (v) => {
+      const me = myStandingRow(), riv = rivalStandingRow(v);
+      return me && riv ? me.pos < riv.pos : null;
+    },
+  },
 };
-const GOAL_ORDER = ["champPos", "teamPos", "beatMate"];
+// The three kinds a contract could always be. beatRival is deliberately NOT in
+// here — see goalTypeFor for why that matters.
+const GOAL_BASE = ["champPos", "teamPos", "beatMate"];
+// Every declared kind, for the contract tests and anything enumerating them.
+const GOAL_ORDER = GOAL_BASE.concat(["beatRival"]);
 function goalKind(type) { return GOAL_KINDS[type] || GOAL_KINDS.champPos; }
 // Drawn from the career seed and the YEAR, so a career is not the same promise
 // five seasons running and a reload cannot reroll it.
+// A FOURTH KIND MUST NOT RE-PROMISE THE OTHER THREE. This was
+// `floor(roll * GOAL_ORDER.length)`, so adding a kind changed the DIVISOR and
+// every seed and year re-bucketed at once: careers promised a championship
+// position were quietly promised something else, and two career specs that read
+// `deal.goal.value` as a position bar went red because they were handed
+// beatMate's 0 instead. Appending to an array preserves its INDICES, not its
+// DRAWS — measured, after committing a comment that claimed otherwise.
+//
+// So beatRival takes its OWN independent roll and the original three keep
+// dividing by three. Three draws in four are byte-identical to what they were.
+const RIVAL_SHARE = 0.25;
 function goalTypeFor(year) {
-  const i = Math.floor(rnd(year, "goalkind") * GOAL_ORDER.length);
-  return GOAL_ORDER[clamp(i, 0, GOAL_ORDER.length - 1)];
+  if (rnd(year, "goalrival") < RIVAL_SHARE) return "beatRival";
+  const i = Math.floor(rnd(year, "goalkind") * GOAL_BASE.length);
+  return GOAL_BASE[clamp(i, 0, GOAL_BASE.length - 1)];
 }
 function goalFor(team, amb, year) {
   const type = goalTypeFor(year);
   return { type, value: goalKind(type).value(team, amb) };
 }
-function goalLabel(goal) {
+// `code` is only ever passed by rollover, which holds the PRE-rollover driver
+// for a beatRival goal; every other caller reads the live grid, where the seat
+// still holds the driver the season was raced against.
+function goalLabel(goal, code) {
   if (!goal) return "";
-  return goalKind(goal.type).label(goal.value);
+  return goalKind(goal.type).label(goal.value, code);
 }
 // Live standings helpers — the hub asks these every build, the resolution does not.
 function myStandingRow() {
@@ -464,11 +506,47 @@ function mateStandingRow() {
   return driverStandings()
     .find((r) => r.team === career.team && r.seat === (career.seat === 0 ? 1 : 0)) || null;
 }
+function rivalStandingRow(id) {
+  if (!career || !id) return null;
+  return driverStandings().find((r) => r.id === id) || null;
+}
+function codeOfSeat(id) {
+  if (!career || !id) return "";
+  const s = gridSeats().find((g) => g.id === id);
+  return s ? s.driver.code : "";
+}
+// WHO THE RIVAL IS. Ranked by the rating the grid already races on, so the
+// benchmark is a driver you are actually close to rather than a random seat:
+// a backmarker is no promise and the championship leader is not a contract, it
+// is a wish. Your own garage is excluded — that is beatMate's job, and a
+// contract that quietly duplicated it would read as two goals and settle as one.
+//
+// AMBITION MOVES THE RIVAL, not a threshold. champPos shifts its target position
+// by AMBITION.delta; here the same delta walks the ranked list, so ambitious
+// (-3) names someone three places quicker and modest (+3) someone three slower.
+// One lever, no second balance number invented for this kind.
+function rivalSeatFor(team, amb) {
+  if (!career) return "";
+  const pool = gridSeats().filter((s) => s.team.id !== career.team);
+  if (!pool.length) return "";
+  // overall(), not ratingOf(): ratingOf returns the five-axis OBJECT, so
+  // comparing two of them is NaN and the sort silently keeps grid order. This is
+  // the same rate() the silly-season market ranks with (career.js ~1168), so the
+  // rival you are measured against is quick by the grid's own yardstick.
+  const rate = (s) => DriverRatings.overall(ratingOf(s));
+  pool.sort((a, b) => rate(b) - rate(a));
+  const meSeat = gridSeats().find(isPlayerSeat);
+  const mine = meSeat ? rate(meSeat) : 0;
+  // Insertion point: how many of the pool are quicker than you.
+  const at = pool.filter((s) => rate(s) > mine).length;
+  const i = clamp(at + AMBITION[ambIdx(amb)].delta, 0, pool.length - 1);
+  return pool[i].id;
+}
 function myTeamStandingRow() {
   if (!career) return null;
   return teamStandings().find((r) => r.id === career.team) || null;
 }
-function goalNow(goal) { return goal ? goalKind(goal.type).now(career) : null; }
+function goalNow(goal) { return goal ? goalKind(goal.type).now(career, goal.value) : null; }
 function goalOnTrack(goal) { return goal ? goalKind(goal.type).onTrack(goal.value) : null; }
 function setAmbition(i) {
   if (!career || careerConflict) return ambition();
@@ -1319,8 +1397,15 @@ function rollover() {
     // garage, which `entry` has no reason to carry.
     const mateId = seasonDriverId(career.team, career.seat === 0 ? 1 : 0);
     const mateRow = dStand.find((r) => r.id === mateId);
+    // The rival is read from dStand for the same reason the mate is: these rows
+    // are the season that was just RACED. rolloverDrivers() has already shuffled
+    // the grid by the time this runs, so asking the live grid for the seat would
+    // measure — and name — whoever moved into it over the winter.
+    const rivalRow = career.deal.goal.type === "beatRival"
+      ? dStand.find((r) => r.id === career.deal.goal.value) : null;
     const res = { pos: entry.pos, cPos: entry.cPos, wins: entry.wins,
-                  podiums: entry.podiums, matePos: mateRow ? mateRow.pos : null };
+                  podiums: entry.podiums, matePos: mateRow ? mateRow.pos : null,
+                  rivalPos: rivalRow ? rivalRow.pos : null };
     const met = goalKind(career.deal.goal.type).met(career.deal.goal.value, res);
     // Priced by the promise that was SIGNED (deal.ambition), never by whatever
     // the picker happens to show now — career.amb is the pick for the NEXT deal.
@@ -1331,7 +1416,7 @@ function rollover() {
     // on an older save (the sheet skips the line), so no CAREER_V rung is owed.
     career.goalResult = { value: career.deal.goal.value, pos: entry.pos, met,
                           type: career.deal.goal.type,
-                          label: goalLabel(career.deal.goal),
+                          label: goalLabel(career.deal.goal, rivalRow && rivalRow.code),
                           ambition: ambitionOf(career.deal) };
   } else {
     career.goalResult = null;

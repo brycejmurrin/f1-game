@@ -67,4 +67,10 @@ floating tree and not reach the line that places it.
   starts STALE: first `git checkout -B <branch> <the session SHA>` and verify
   a session-known file — a stale base is the wrong circuit.
 
+Before your LAST TWO TURNS, stop working and DELIVER what you have: a partial
+report with its gaps named beats silence. Hitting `maxTurns` mid-tool-call
+returns NOTHING to the parent — deploy-research lost a completed deploy check
+that way at 10 turns, and a completed research pass at 18; track-surveyor lost
+11.6 minutes of survey at 30 (2026-09-22). Budget the hand-back, not the work.
+
 Flat prohibitions: AGENTS.md §Verification 3 and 7 (no Playwright/test-bg/test-solo/chrome-start, no --wait, no bump); the js/css/index.html write ban is hook-enforced.

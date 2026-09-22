@@ -134,6 +134,20 @@ function _chargeCut() {
   _upBackoff = Math.min(_upBackoff * 2, UP_BACKOFF_MAX);
   return _upBackoff;
 }
+// THE OTHER SIDE OF THE SAME LOOP, from PR #190. The state above damps the
+// RESTORE side — a climb must outlive the load, and a scale that missed is
+// remembered so the ladder stops walking back into it. This damps the DEGRADE
+// side: a repeat cut must be confirmed before it is paid for. They are
+// independent and both are kept; between them the cut and the climb each have
+// to mean something before a reallocation is spent on it.
+// Consecutive evaluations over the degrade threshold before the governor spends
+// a render-target reallocation. Two is one confirmation, ~0.75 s apart at 60 fps
+// (tick() evaluates every 45 frames) — long enough that a transient cannot move
+// the scale, short enough that real overload is still caught promptly.
+const DEGRADE_CONFIRM = 2;
+let _degradeArm = 0;
+// Scale changes the governor has spent since race start — the first is prompt.
+let _scaleMoves = 0;
 // The scale lever is INEFFECTIVE on this device right now — set when a
 // scale-down step was reverted for buying nothing, cleared once a tier has been
 // shed (the next rung may change that) or once headroom returns.
@@ -434,7 +448,13 @@ function sentinelArm(on) {
   // at `_live` — both averages restart from their shared 16.7 so the EMA can
   // outrun the floor once more. Desktop too (above the mobile-only guard):
   // the governor runs everywhere, only the sentinel is mobile.
-  if (on) { _frameEMA = _floorMs = 16.7; _slowRun = 0; _openN = 0; _openMax = 0; _openSlow = 0; _sinceUp = -1; _scaleCap = Infinity; _capProbeMs = CLIMB_SURVIVE_MS; } else _live = false;
+  // _scaleMoves resets with the race so every race gets one prompt cut; the
+  // confirmation gate then applies to the repeats within it. The ceiling and
+  // the probation reset with it for the same reason: a new race is a fresh
+  // device, and neither half may carry a verdict into it.
+  if (on) { _frameEMA = _floorMs = 16.7; _slowRun = 0; _openN = 0; _openMax = 0; _openSlow = 0;
+            _sinceUp = -1; _scaleCap = Infinity; _capProbeMs = CLIMB_SURVIVE_MS;
+            _scaleMoves = 0; _degradeArm = 0; } else _live = false;
   if (!_gfx || !_gfx.isMobile) return;
   if (on) GameStore.store.rawSet(SENT_ACTIVE, "1"); else GameStore.store.rawDel(SENT_ACTIVE);
 }
@@ -610,6 +630,34 @@ function tick(dtMs) {
 
   const degradeAt = _floorMs + DEGRADE_OVER, restoreAt = _floorMs + RESTORE_WITHIN;
   const cur = _gfx.getRenderScale ? _gfx.getRenderScale() : 1;
+  // ONE SPIKE IS NOT A TREND. Every scale change reallocates all HDR/bloom
+  // targets, and on TLX tlx-post.js disposes each texture and the depth texture
+  // before reallocating, so the node renderer rebuilds the post chain's bind
+  // groups too — a visible hitch either way. Acting on a single evaluation
+  // therefore spends a hitch on any load spike, and a race is made of them: a
+  // restart with the field bunched, rain arriving, a pile-up spawning debris.
+  //
+  // MEASURED against the real tick() over ten simulated minutes. Steady load
+  // never degrades at all, and neither does a smooth swing of up to 12 ms
+  // (_floorMs is derived, so it rises to meet sustained cost — the EMA came
+  // within 1.1 ms of the threshold and never crossed). But load that STEPS
+  // faster than the floor estimator adapts produced 35-83 reallocations per ten
+  // minutes, gaps of 1-5 s: exactly "a lag spike every few seconds". Requiring
+  // the condition twice took the same six cases from 424 reallocations to 126,
+  // and to ZERO wherever the step was 10 ms or less, while still degrading on
+  // genuinely sustained overload. A doubling backoff on held climbs was also
+  // measured and is noise (424 -> 383), so it is not here.
+  // THE FIRST CUT OF A RACE STAYS PROMPT. A device that is slow from lights-out
+  // is catchable only for about frames 10-95 — the EMA (alpha 0.1) outruns the
+  // derived floor (0.02 upward) for that long and then the floor catches up and
+  // a steady cost reads as an external cap for good. That window is barely two
+  // evaluations wide, so confirming inside it means never degrading such a
+  // device at all; perf-governor.test.mjs pins exactly that case, and it failed
+  // when this gate applied to every step. Confirmation is therefore only asked
+  // of REPEAT cuts, which is where the oscillation lives: one spike costs at
+  // most one reallocation per race instead of dozens.
+  if (_frameEMA <= degradeAt) _degradeArm = 0;
+  else if (_scaleMoves > 0 && ++_degradeArm < DEGRADE_CONFIRM) return;
   if (_frameEMA > degradeAt) {                 // meaningfully slower than THIS device's own floor: degrade PROMPTLY
     // With the scale PINNED (_autoRes false) the ladder is the only lever left,
     // so fall straight through to shedding instead of skipping the evaluation.
@@ -635,7 +683,9 @@ function tick(dtMs) {
     if (stepped) {
       _pendingVerify = { kind: "scale", prev: cur, ema: _frameEMA };
       _scaleCap = cur; _armCapProbe();   // this resolution missed the budget
-      _govCool = 30; _downHold = _chargeCut();
+      // _chargeCut() returns the plain 10 s hold unless this cut is undoing a
+      // climb still on probation, so it subsumes the constant it replaces.
+      _govCool = 30; _downHold = _chargeCut(); _scaleMoves++; _degradeArm = 0;
     } else if (!_tierHold && _perfTier < 4 && _perfTierFloor < 4 && !_tierFutile) {   // scale lever exhausted — shed a feature (a crash floor of 4 has already shed everything this ladder can)
       // Step from the EFFECTIVE tier, not from _perfTier alone. A rung at or
       // below the floor (crash sentinel, or the player's GRAPHICS preset) is

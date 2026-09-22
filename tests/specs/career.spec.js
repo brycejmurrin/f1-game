@@ -946,7 +946,14 @@ test.describe("Career — reputation", () => {
     await goRacing(page);
     const r = await page.evaluate(() => {
       const st = window.__apex.careerState();
-      return Object.assign({ rep0: st.rep, bar: st.deal.goal.value }, window.__apex.careerSim(1)[0]);
+      // THE BAR IS champPos's, NOT whatever kind the seed dealt. The formula
+      // below is about expectedFinish, and champPos is the only kind whose
+      // value encodes it (goalValueFor = expectedFinish + AMBITION.delta, and
+      // the default rung's delta is 0). Reading st.deal.goal.value handed this
+      // spec beatMate's 0 the day a fourth kind changed the draw.
+      const team = Teams.LIST.find((t) => t.id === st.team);
+      const bar = Career.GOAL_KINDS.champPos.value(team, Career.ambitionOf(st.deal));
+      return Object.assign({ rep0: st.rep, bar }, window.__apex.careerSim(1)[0]);
     });
     // The whole formula, restated: the result term is relative to the CAR (the
     // contract's own goal IS expectedFinish for this team), the brief term is
@@ -968,11 +975,18 @@ test.describe("Career — reputation", () => {
     // directly rather than trying to force two identical race results.
     await boot(page);
     const bars = await page.evaluate(() => {
-      window.__apex.career({ teamId: "haas", seat: 1, seed: 1 });
-      const haas = window.__apex.careerState().deal.goal.value;
+      // champPos's bar explicitly, for the same reason as the spec above: the
+      // tier mechanism lives in expectedFinish, and only champPos's value
+      // carries it. The drawn kind is a seeded lottery and irrelevant here.
+      const barFor = (id) => {
+        window.__apex.career({ teamId: id, seat: 1, seed: 1 });
+        const st = window.__apex.careerState();
+        const team = Teams.LIST.find((t) => t.id === id);
+        return Career.GOAL_KINDS.champPos.value(team, Career.ambitionOf(st.deal));
+      };
+      const haas = barFor("haas");
       window.__apex.careerReset();
-      window.__apex.career({ teamId: "mercedes", seat: 1, seed: 1 });
-      return { haas, merc: window.__apex.careerState().deal.goal.value };
+      return { haas, merc: barFor("mercedes") };
     });
     expect(bars.haas).toBeGreaterThan(bars.merc);
   });
