@@ -74,7 +74,18 @@ export function parseClaims(text, now = Math.floor(Date.now() / 1000)) {
 export function claimCommit(text, branch, session) {
   const tag = [branch, session ? `session ${session}` : ""].filter(Boolean).join("; ");
   const msg = tag ? `${text}  [${tag}]` : text;
-  const r = spawnSync("git", ["commit-tree", EMPTY_TREE, "-m", msg], { cwd: ROOT, encoding: "utf8" });
+  // A claim records WHO, so the configured identity is used whenever there is
+  // one. Where there is none — a CI runner, a fresh container before any
+  // `git config` — `commit-tree` dies with "Author identity unknown" (it took
+  // this file's own unit test red on CI run 4651), and a coordination tool
+  // that refuses to run on an unconfigured box is worse than one that signs
+  // the claim "unknown". So: fall back, never fail.
+  const env = { ...process.env };
+  if (!git("config", "user.email").trim()) {
+    env.GIT_AUTHOR_NAME = env.GIT_COMMITTER_NAME = "apex26 claim";
+    env.GIT_AUTHOR_EMAIL = env.GIT_COMMITTER_EMAIL = "claim@apex26.invalid";
+  }
+  const r = spawnSync("git", ["commit-tree", EMPTY_TREE, "-m", msg], { cwd: ROOT, encoding: "utf8", env });
   if (r.status !== 0) throw new Error("commit-tree failed: " + r.stderr);
   return r.stdout.trim();
 }

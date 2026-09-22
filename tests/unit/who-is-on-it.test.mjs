@@ -58,6 +58,25 @@ test("the slug drops the claude/ prefix and folds any other slash, so a claim is
   assert.equal(claimSlug("main"), "main");
 });
 
+test("a claim commit works with NO git identity configured — a CI runner must not throw", () => {
+  // CI run 4651 went red here: `git commit-tree` dies with "Author identity
+  // unknown" on a runner, and a coordination tool that cannot run on an
+  // unconfigured box is worse than one that signs the claim "unknown".
+  const saved = {};
+  for (const k of ["HOME", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM", "GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"]) {
+    saved[k] = process.env[k];
+    delete process.env[k];
+  }
+  process.env.GIT_CONFIG_GLOBAL = process.env.GIT_CONFIG_SYSTEM = "/dev/null";
+  try {
+    const sha = claimCommit("identity-free claim", "claude/unit");
+    assert.match(sha, /^[0-9a-f]{40}$/);
+    assert.match(execFileSync("git", ["cat-file", "-p", sha], { cwd: ROOT, encoding: "utf8" }), /identity-free claim/);
+  } finally {
+    for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+  }
+});
+
 test("a claim commit is the empty tree carrying the text, the branch and the session id", () => {
   const sha = claimCommit("unit-test claim", "claude/unit", "sess1234");
   assert.match(sha, /^[0-9a-f]{40}$/);
