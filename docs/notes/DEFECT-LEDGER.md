@@ -2715,7 +2715,7 @@ actually lands (authored 0.965 + shift):
 | circuit | value -> shift | pit block lands | probe there | shipped -> shift 0 |
 |---|---|---|---|---|
 | catalunya | 0.03 -> 0.138 | 0.103, 0.055 short of T1 | gantry, 21 structures, building, billboard | pitEmit 7 -> pitSup 7; pit-lane trees 12 -> 0 |
-| istanbul | 0.98 -> 0.925 | 0.890, **on T12** (0.8884) | gantry, 23 structures, grandstand, 3 motorhomes | pitEmit 7 -> pitSup 7 |
+| istanbul | 0.98 -> 0.925 | 0.890, **on T12** (0.8884) | gantry, 23 structures, grandstand, 3 motorhomes | **FIXED**: value removed; see `### istanbul — FIXED` at the end of this file |
 | mugello | 0.05 -> 0.133 | 0.098, 0.047 short of T1 | gantry, 22 structures, 4 motorhomes | pitEmit 5 -> 1; pit-lane trees 275 -> 122 |
 | paul_ricard | 0.03 -> **0.923** | 0.888, **on T13** (0.8884) | gantry, 25 structures, 2 motorhomes | pitEmit 5 both ways: the pit bays miss the lane in EITHER frame, so this is a frame AND a side/placement question |
 | sepang | 0.95 -> 0.882 | 0.847, 0.038 short of T14 | gantry, 20 structures, 14 palms | pitEmit 6 -> pitSup 7; pit-lane trees 38 -> 18 |
@@ -2752,3 +2752,52 @@ spa (flat), vegas (flat), zolder (forest either way).
 
 Every row here is a triage verdict, not a fix. Only the probe at the named
 feature decides, one circuit per PR.
+
+### istanbul — FIXED (`sceneryStartFrac: 0.98` removed, shift 0.925 -> 0)
+
+Same defect as Estoril and Portimão. Every emitter is keyed to `startFrac: 0`:
+T1 gravel 0.055 against the T1 apex 0.0569, the T8 amphitheatre 0.34-0.46
+against the T8 apexes 0.359-0.476, T13 gravel 0.905 against 0.9014, and pit bays
+0.948-0.990 against the pit lane 0.951-0.021. The 0.925 shift moved all of it
+back 0.075 of a lap.
+
+Probe (`agent.mjs istanbul scene --at <f> --radius 130 --limit 40`, kinds of
+the 40 nearest):
+
+| at | shipped | fixed |
+|---|---|---|
+| 0.986 mid pit lane | 13 structures, grandstand | 22 structures, 2 gantries, 3 motorhomes, grandstand, 2 billboards |
+| 0.890 T12 | gantry, 23 structures, grandstand, 3 motorhomes, building, billboard | 22 pines, 7 trees, 3 stone pines, 4 structures (T13 stand at 51 m) |
+| 0.057 T1 | 19 pines, 8 trees, 2 stone pines, 3 bushes | 16 structures, grandstand, marshal post |
+
+A/B (`scratch/ab.cjs` from the audit): pitEmit 7 -> pitSup 7, and the pit bays
+and race control now read "superseded by the pit complex".
+
+Knock-ons fixed:
+- `istanbul-stone-portal` was footprint-rejected. At 0.930 the lap folds back,
+  and at a 52 m gap the portal's 34 m face overhung the T13 carriageway (node
+  0.909). It is now 44 m, about 6 m clear of that road's edge (it emits at 50 m and
+  below).
+- The T13 tyre wall's last stack at 0.922, the T14 apex, stood on the road (a
+  `tyreWall=1` guard drop). The span now ends at 0.920.
+- `ownPitStraight: true`: the main stand (`grandstandEx` 0.005, -1, gap 11) is
+  the circuit's own pit-straight stand, and the generic 7-box stand (-1, gap 14)
+  stood inside it. This also removes the engine-side 4.00 m / 876 m3
+  box-vs-box clip at frac 0.000.
+
+Left alone: the rest of the clip total is the T8 amphitheatre's stepped terrace
+boxes overlapping each other on the curve (scenery lines 57/60), in either frame.
+In the shipped frame those terraces sat on T3-T4 (0.19-0.24), with forest
+growing through them.
+
+Clip across 13 `sceneryStartFrac` values (the shift snaps to control points):
+
+| value | 0.02 | 0.10 | 0.18 | 0.26 | 0.34 | 0.42 | 0.50 | 0.58 | 0.66 | 0.74 | 0.82 | 0.90 | 0.98 (shipped) | none |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| shift | 0.054 | 0.090 | 0.166 | 0.207 | 0.248 | 0.336 | 0.381 | 0.454 | 0.498 | 0.624 | 0.771 | 0.898 | 0.925 | 0 |
+| clip | 11 | 31 | 23 | 25 | 29 | 27 | 24 | 27 | 20 | 11 | 23 | 23 | 13 | **6** |
+
+Baselines all come down: clip 13 -> 6, coplanar 5 -> 0, float 0 -> 0.
+verify-track: suppressed 7 (all superseded by the pit complex), 0 guard drops
+(shipped: 2 `building` drops).
+
