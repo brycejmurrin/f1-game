@@ -646,6 +646,7 @@ interface GameCtx {
   readonly gripMult: (c?: any) => number;
   readonly isErsDeploying: (c: CarState) => boolean;
   readonly cautionInfo: () => CautionInfo;
+  readonly cautionLevel: () => number;
   readonly aeroDfMult: (c: CarState) => number;
   readonly xVmaxGain: (c: CarState) => number;
   readonly xDfLoss: (c: CarState) => number;

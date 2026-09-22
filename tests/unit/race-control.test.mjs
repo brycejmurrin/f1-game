@@ -409,6 +409,15 @@ test("the red procedure: stopping, held, then exactly ONE restart request and a 
   assert.equal(rc.info().level, 4, "…and a picture still there after the hold flies again");
 });
 
+test("clearHold(): once the surface is cleared at the restart, a NEW hazard is not masked by the re-arm hold", () => {
+  const rc = load({ active: () => true, hazards: () => hazards(16, 2) }).create(makeCtx());
+  run(rc, 15);
+  assert.equal(rc.takeRestart(), true);
+  rc.clearHold();   // game.js: the tick that consumes the restart clears DebrisWorld
+  run(rc, 5);
+  assert.equal(rc.info().level, 4, "a picture present after the clear flies at once — no 45 s blackout");
+});
+
 test("a networked race never goes red — it holds a SAFETY CAR instead — and reset() drops a pending restart", () => {
   const net = { active: () => true, ownsRaceControl: () => true, reportCaution() {} };
   const rc = load({ active: () => true, hazards: () => hazards(20, 3) }).create(makeCtx({ netPlay: net }));
