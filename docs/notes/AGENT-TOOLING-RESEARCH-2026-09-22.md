@@ -625,7 +625,7 @@ tree**, recorded here so they are not re-proposed.
 | `?v=dev` restatements in seven skill bodies → bare links; css-play and slim-bloat Chrome-MCP lines → links; skills README fold history → §4.2 here; the Cursor entry's restated browser rules → a pointer | yes | `skill-progressive.test.mjs` "skills README says … ?v=dev" (kept its one sentence) |
 | Agents: `model: haiku` on verify-agent, deploy-research, bloat-auditor; `maxTurns` on all; `memory: project` on verify-agent and bloat-auditor with seeded `MEMORY.md`; verify-agent's `DELTA:` token; bloat-auditor's 140-char row cap | yes | `skill-progressive.test.mjs` TIER table |
 | New subagent `ci-red-triage` (sonnet, read-only, the AGENTS.md status line) | yes | six-agent list in `skill-progressive.test.mjs` |
-| New hooks `post-edit-check.sh` (PostToolUse: `node --check`, `verify-track` for a circuit) and `stop-guard.sh` (Stop: one nudge per live run, `stop_hook_active` and `.claude/allow-stop` respected) | scripts yes; **registration pending** (below) | `agent-config.test.mjs` once registered |
+| New hooks `post-edit-check.sh` (PostToolUse: `node --check`, `verify-track` for a circuit) and `stop-guard.sh` (Stop: one nudge per live run, `stop_hook_active` and `.claude/allow-stop` respected) | yes, registered | `agent-config.test.mjs` "registers the hooks" |
 | `run-playwright.mjs`: `APEX_FAIL_ON_FLAKY=1` passes `--fail-on-flaky-tests` | yes, opt-in | — (flip it on the gate once the known flakes are named) |
 | `tools/ci/who-is-on-it.mjs`: recent pushes per branch, commits touching named paths | yes | `tools-runnable`, `tools/README.md` row |
 | `.gitignore`: `!.claude/agent-memory/` | yes | — |
@@ -639,14 +639,15 @@ description from the model entirely, so "night looks washed out" would stop
 routing; only the bake reference is destructive, and that stays a
 user-initiated step inside the body.
 
-**Pending a human.** The `.claude/settings.json` write was refused by the
-session's permission classifier as self-modification, as it was on 09-16. The
-file below is the whole file to paste: it keeps every existing entry, adds
+**Settings, landed on the second try.** The `.claude/settings.json` write
+was refused by the auto-mode permission classifier as self-modification, as
+it was on 09-16; with auto mode off it went through as an ordinary approval.
+The file below is what landed: every existing entry kept, plus
 `permissions.deny` (force-push, the deploy branch by name, `bump-cache
 --apply`, `assets.mjs bake`, `rotate-markings --write`), the wider read-only
-`allow` list, `worktree.baseRef: "head"`, and the two new hook rows. Until
-it lands, `post-edit-check.sh` and `stop-guard.sh` exist but never fire, and
-`AGENTS.md`'s hooks paragraph describes the registered state.
+`allow` list, `worktree.baseRef: "head"`, and the two new hook rows, so
+`post-edit-check.sh` and `stop-guard.sh` fire from the next session. Lesson
+for the next pass: a settings edit needs auto mode OFF, not a retry.
 
 ```json
 {
