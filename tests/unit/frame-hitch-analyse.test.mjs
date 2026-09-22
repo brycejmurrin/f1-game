@@ -19,7 +19,7 @@
 // to contain the thing, and the right verdict about one built not to.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { analyse, analyseHeap } from "../../tools/gfx/frame-hitch.mjs";
+import { analyse, analyseHeap, analyseAlloc } from "../../tools/gfx/frame-hitch.mjs";
 
 // A frame series: `spikeEvery` frames apart, `spikeMs` long, `baseMs` otherwise.
 function series(frames, baseMs, spikeEvery, spikeMs) {
@@ -101,4 +101,52 @@ test("analyseHeap reports an unsampled series as unsampled, never as flat", () =
   const h = analyseHeap(new Array(600).fill(0), s.t0, s.dur, 40);
   assert.ok(h.note && /no performance\.memory/.test(h.note), `got ${JSON.stringify(h)}`);
   assert.equal(h.allocMBps, undefined, "an unsampled series reports no rate at all");
+});
+
+// A CDP sampling-profile tree, the shape HeapProfiler.getSamplingProfile
+// returns: nodes carry a callFrame and a selfSize, and the bytes belong to the
+// frame that allocated them, not to its parents.
+function node(fn, url, line, selfSize, children) {
+  return { callFrame: { functionName: fn, url, lineNumber: line }, selfSize, children: children || [] };
+}
+
+test("analyseAlloc names the top allocator and folds one site reached two ways", () => {
+  // `materialFor` is reached from draw() and from drawChunked(); the profile
+  // therefore holds two nodes for it. They are ONE site — a report that split
+  // them would rank a single 60% allocator below a 25% one.
+  const profile = { head: node("(root)", "", 0, 0, [
+    node("present", "http://x/js/render/three/tlx.js?v=abc", 3400, 1024, [
+      node("draw", "http://x/js/render/three/tlx.js?v=abc", 3107, 2048, [
+        node("materialFor", "http://x/js/render/three/tlx.js?v=abc", 1224, 300 * 1024, []),
+      ]),
+      node("drawChunked", "http://x/js/render/three/tlx.js?v=abc", 3110, 2048, [
+        node("materialFor", "http://x/js/render/three/tlx.js?v=abc", 1224, 300 * 1024, []),
+      ]),
+      node("acquireMesh", "http://x/js/render/three/tlx.js?v=abc", 1859, 40 * 1024, []),
+    ]),
+  ]) };
+  const a = analyseAlloc(profile, 100, 6000);
+  assert.match(a.verdict, /TOP ALLOCATOR: materialFor/);
+  // Folded: 600 KB across two parents, not 300 KB ranked twice.
+  const top = a.sites[0];
+  assert.match(top.site, /^materialFor @ js\/render\/three\/tlx\.js:1225$/,
+    `site should be folded and cache-buster-free, got ${top.site}`);
+  assert.ok(top.share > 0.85, `materialFor should dominate, got ${top.share}`);
+  assert.equal(a.sites.filter((s) => /materialFor/.test(s.site)).length, 1, "one site, not two");
+});
+
+test("analyseAlloc refuses to name a winner when the profile is flat", () => {
+  // Eight sites at 12.5% each. The failure mode this guards is the one that
+  // matters: a ranked list always HAS a first row, and reporting it as "the
+  // allocator" when it holds an eighth of the bytes is how a round gets spent
+  // fixing 2% of a problem.
+  const kids = [];
+  for (let i = 0; i < 8; i++) kids.push(node(`f${i}`, `http://x/js/a${i}.js`, 10, 64 * 1024, []));
+  const a = analyseAlloc({ head: node("(root)", "", 0, 0, kids) }, 100, 6000);
+  assert.match(a.verdict, /no dominant site/);
+});
+
+test("analyseAlloc reports an absent profile as absent, never as zero", () => {
+  assert.match(analyseAlloc(null, 100, 6000).note, /no sampling profile/);
+  assert.match(analyseAlloc({ head: node("(root)", "", 0, 0, []) }, 100, 6000).note, /empty/);
 });

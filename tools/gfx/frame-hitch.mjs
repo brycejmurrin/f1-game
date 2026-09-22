@@ -16,6 +16,10 @@
 // gpu-census.yml on real hardware.
 //
 // Usage:
+// It also runs V8's sampling heap profiler across the same window and reports
+// allocation BY CALL STACK (out.alloc), because "255 KB per frame" without a
+// name is a licence to guess, and guessing cost this tool a round.
+//
 //   node tools/gfx/frame-hitch.mjs [track] [--backend three|webgpu|webgl2]
 //        [--tlx-webgpu] [--capture] [--seconds N] [--settle N] [--steer-hz N]
 //        [--ls k=v] [--json PATH] [--quiet]
@@ -101,6 +105,59 @@ export function analyse(t0, dur, { minSpikes = 4 } = {}) {
     verdict: periodic
       ? `PERIODIC hitch: ${spikes.length} spikes, every ~${gapMed.toFixed(1)} s (CV ${cv.toFixed(2)})`
       : spikes.length ? `${spikes.length} spikes, irregular (CV ${cv.toFixed(2)})` : "no spikes",
+  };
+}
+
+// WHERE THE GARBAGE COMES FROM, by call stack rather than by theory.
+//
+// analyseHeap() says HOW MUCH is allocated; it cannot say by whom, and this
+// register has a standing rule about that gap: 2o wrote down a hypothesis that
+// 2p killed with one grep. The first attempt here guessed getDynamicCacheKey
+// from a vendored-source read, backported upstream's fix, and measured the
+// result: 254.9 -> 249.7 KB/frame. A correct fix worth 2% of the problem, and a
+// whole round spent finding that out.
+//
+// V8's sampling heap profiler answers it directly. It samples allocations by
+// stack at a byte interval, so its tree carries a selfSize that IS bytes
+// allocated at that frame. Flatten it, fold the frames that only differ by
+// caller into one site, and the top of the list is the answer or there is no
+// answer on this box.
+export function analyseAlloc(profile, elapsedS, frames) {
+  if (!profile || !profile.head) return { note: "no sampling profile — CDP HeapProfiler unavailable" };
+  const bySite = new Map();
+  let total = 0;
+  (function walk(node) {
+    const f = node.callFrame || {};
+    const self = node.selfSize || 0;
+    total += self;
+    if (self > 0) {
+      // The URL carries a cache-buster and an origin; neither identifies a site
+      // and both make one site look like several across runs.
+      const url = String(f.url || "").replace(/\?v=[a-z0-9]+/g, "").replace(/^https?:\/\/[^/]+\//, "");
+      const key = `${f.functionName || "(anonymous)"} @ ${url}:${f.lineNumber != null ? f.lineNumber + 1 : "?"}`;
+      bySite.set(key, (bySite.get(key) || 0) + self);
+    }
+    for (const c of node.children || []) walk(c);
+  })(profile.head);
+  if (!total) return { note: "sampling profile is empty — nothing was allocated, or sampling never started" };
+  const sites = [...bySite.entries()].sort((a, b) => b[1] - a[1]).slice(0, 18)
+    .map(([site, bytes]) => ({
+      site,
+      mb: +(bytes / 1048576).toFixed(2),
+      share: +(bytes / total).toFixed(3),
+      perFrameKB: frames ? +((bytes / 1024) / frames).toFixed(2) : null,
+    }));
+  return {
+    totalMB: +(total / 1048576).toFixed(2),
+    mbPerSecond: elapsedS > 0 ? +((total / 1048576) / elapsedS).toFixed(2) : null,
+    perFrameKB: frames ? +((total / 1024) / frames).toFixed(1) : null,
+    sites,
+    // The verdict is a NAME, which is the whole point of this function. A flat
+    // profile whose biggest site is under a fifth of the total has no single
+    // answer in it and must not be reported as though it had one.
+    verdict: sites.length && sites[0].share >= 0.2
+      ? `TOP ALLOCATOR: ${sites[0].site} — ${(sites[0].share * 100).toFixed(0)}% of ${(total / 1048576).toFixed(1)} MB (${sites[0].perFrameKB} KB/frame)`
+      : `no dominant site: the largest is ${sites.length ? (sites[0].share * 100).toFixed(0) : 0}% of the total`,
   };
 }
 
@@ -539,8 +596,25 @@ async function main() {
     // during the fill turns ordinary warm-up into a fake slope.
     log(`settling ${opts.settle}s before the baseline`);
     await sleep(opts.settle * 1000);
+    // WHO ALLOCATES, sampled over exactly the window analyseHeap() measures.
+    // 16 KB interval: small enough that a 250 KB/frame site is sampled tens of
+    // times a second, large enough that the sampler itself is not the load.
+    // A failure here is NOT fatal — the rest of the run still answers "how
+    // much" — but it is reported as a note rather than as an empty profile,
+    // because "never sampled" must never read as "allocated nothing".
+    let cdp = null;
+    try {
+      cdp = await page.context().newCDPSession(page);
+      await cdp.send("HeapProfiler.enable");
+      await cdp.send("HeapProfiler.startSampling", { samplingInterval: 16384 });
+    } catch (e) { out.allocProfileError = String((e && e.message) || e).slice(0, 120); cdp = null; }
     await page.evaluate(() => window.__hitch.arm());
     await sleep(opts.seconds * 1000);
+    let allocProfile = null;
+    if (cdp) {
+      try { allocProfile = (await cdp.send("HeapProfiler.stopSampling")).profile; }
+      catch (e) { out.allocProfileError = String((e && e.message) || e).slice(0, 120); }
+    }
     const d = await page.evaluate(() => window.__hitch.dump());
     out.backendBound = await page.evaluate(() => { try { return window.__apex.info().gfx || null; } catch (_) { return null; } });
     Object.assign(out, analyse(d.t0, d.dur));
@@ -548,6 +622,9 @@ async function main() {
     out.backend = d.backend;
     out.passes = analysePasses(d.passes || [], d.t0 || []);
     out.heap = analyseHeap(d.heap || [], d.t0 || [], d.dur || [], out.spikeThresholdMs);
+    out.alloc = allocProfile
+      ? analyseAlloc(allocProfile, out.heap && out.heap.elapsedS, out.frames)
+      : { note: out.allocProfileError ? "sampling failed: " + out.allocProfileError : "no CDP session" };
     out.stacks = d.stacks;
     out.mem0 = d.mem0; out.mem1 = d.mem1;
     // The leak test: every numeric counter three tracks, as a DELTA over the
