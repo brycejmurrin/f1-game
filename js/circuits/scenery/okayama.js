@@ -74,7 +74,7 @@
         guardrail, fence, tyreWall, marshalPost, cameraTower, billboard,
         sponsorHoarding, place, ridge, motorhome, groundPatch } = api;
 
-      const K = (s) => ((Math.round(s * n) % n) + n) % n;
+      const { K } = api;            // the contract's frac -> node index (normalised, as this copy was)
 
       // 1. PALETTE — warm humid green. Broadleaf canopies are heavy and dark,
       //    bamboo clumps are the light yellow-green, earth is pale clay. The

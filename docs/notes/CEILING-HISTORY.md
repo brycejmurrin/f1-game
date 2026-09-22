@@ -3145,6 +3145,36 @@ about a different lap. Folding them into one sentence would have made both
 harder to read.
 
 
+## 2026-09-22 — `js/game.js` 9594 → 9599 (+1 code, +1 G member), `js/track/tracks.js` 2751 → 2755, `js/render/glx/glx.js` 2689 → 2714, `js/net/lobby.js` 1761 → 1791
+
+The player-visible bug batch (`claude/bugs-desync-fps`). Every raise is under the
+40-line auto-absorb and almost all of it is the comment that stops the bug
+coming back.
+
+**`game.js` +5, +1 G member** — `get/set raceRound`, the bare passthrough to the
+private `raceIndex` that VS FRIEND now publishes with the host's settings
+(`js/net/lobby.js` publishSettings). Reliability DNFs, the weather arc and the
+AI restart/skill rolls hash on `(seed, round)`; neither was on the wire, so two
+peers retired different cars on different laps. `PHYS_DT` now reads
+`PhysicsConsts.FIXED_DT` (one number, was `1 / 60` in seven files).
+
+**`lobby.js` +30** — the `seed`/`round` fields on the settings payload, their
+validators, and the paragraph explaining why the old "peers do not share a sim
+seed" comment fixed one consumer (the weather plan) and left three; then +8
+for `NetHandshake.peekCode` in both answer steps — the code's SHAPE is checked
+before a transport is required, so junk pasted while join() still waits on the
+ICE prefetch is refused as junk (the answer-step spec raced that fetch).
+
+**`glx.js` +25** — the drawing-buffer ceiling: init() queries
+MAX_TEXTURE_SIZE / MAX_RENDERBUFFER_SIZE / MAX_VIEWPORT_DIMS once and resize()
+clamps `presentW/H` UNIFORMLY before `rw/rh` are derived, because post.js
+allocates from the render size. WGX and TLX-on-WebGPU already did this; a 6K
+panel at DPR 2 asked GLX for a ~12000 px backing store.
+
+**`tracks.js` +4** — `api.K` normalised for negative fracs (JS `%` keeps the
+sign), which let the eleven circuit-local copies retire; the scenery files
+shrank but are not ratcheted.
+
 ## 2026-09-16 — `js/game.js` 8790 → 8803, `js/agent/apex.js` 2928 → 2936 (+4 code)
 
 Two unrelated changes, both of which had to live in `game.js` because that is

@@ -89,7 +89,14 @@ const NetHandshake = (function () {
     }
     return MAGIC + ".p." + bytesToB64url(enc().encode(JSON.stringify(payload)));
   }
-  async function decodeCode(code) {
+  // The FORMAT half of decodeCode, synchronous and connection-free: is this
+  // text shaped like one of our codes at all? The lobby asks this BEFORE it
+  // needs a transport, so a pasted "not-a-real-code" is refused as "not an
+  // Apex invite code" even while join() is still waiting on the TURN
+  // credential fetch — the transport check used to come first and reported
+  // "That attempt has ended" for a typo, and the answer-step spec raced the
+  // fetch on every slow network (the sandbox proxy fails it after ~2 s).
+  function peekCode(code) {
     const input = String(code || "");
     if (input.length > MAX_CODE_CHARS) return CORRUPT;
     const trimmed = input.trim().replace(/\s+/g, "");
@@ -100,6 +107,12 @@ const NetHandshake = (function () {
     }
     const [, mode, body] = parts;
     if (mode !== "s" && mode !== "z" && mode !== "p") return CORRUPT;
+    return { ok: true, mode, body };
+  }
+  async function decodeCode(code) {
+    const peek = peekCode(code);
+    if (!peek.ok) return peek;
+    const { mode, body } = peek;
     try {
       const bytes = b64urlToBytes(body);
       if (mode === "s") {
@@ -323,7 +336,7 @@ const NetHandshake = (function () {
 
   return {
     MAGIC,
-    encodeCode, decodeCode, normaliseSdp,
+    encodeCode, decodeCode, peekCode, normaliseSdp,
     localBuild, metaBuild, checkBuild, waitForIce,
     createInvite, acceptInvite, acceptAnswer,
     inviteUrl, inviteFromUrl, withoutInviteUrl, consumeInviteUrl,
