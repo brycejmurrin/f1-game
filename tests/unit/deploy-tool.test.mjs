@@ -285,6 +285,42 @@ test("ci.yml READS the geometry pattern instead of keeping a second copy", () =>
     "two copies, one kept matching debris-world at its pre-rename path for a day");
 });
 
+/* A PULL REQUEST HAS A BASE, AND THE SWEEPS FILTER IGNORED IT (2026-09-22).
+ * The filter's event `case` listed `push` only, so every pull_request hit the
+ * fail-safe and ran the whole fleet BEFORE examining one path — ~8m30s of
+ * sweeps plus verify-track on a runner for a CSS-only or tools-only PR, on
+ * every push to the branch. renderer-filter had been diffing
+ * pull_request.base.sha all along, and its comment claimed this filter had no
+ * base to diff. Fail-safe is the rule here and is untouched: an empty,
+ * unreachable or undiffable base still runs everything. This test pins the two
+ * halves of the fix together, because either alone is a silent regression —
+ * the env without the case fail-safes anyway, the case without the env diffs
+ * against an empty BEFORE and fail-safes too. */
+test("the sweeps filter diffs a pull request against its own base", () => {
+  const yml = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
+  const step = yml.split("- name: Does this diff touch the geometry?")[1];
+  assert.ok(step, "ci.yml still has the sweeps geometry filter step");
+  const body = step.split("- name:")[0];
+
+  assert.match(body, /github\.event\.pull_request\.base\.sha/,
+    "the sweeps filter must read a pull request's base sha, not fall through to the fleet");
+  assert.ok(body.includes("push|pull_request) ;;"),
+    "…and must accept the pull_request event, or the env above is dead code");
+
+  // FAIL SAFE, STILL. Every one of these lines is what makes an unresolvable
+  // diff run everything; the fix must not have removed any of them.
+  for (const [re, why] of [
+    [/0{40}\) run_all "no before-sha/, "an empty base still runs the fleet"],
+    [/git cat-file -e "\$\{BEFORE\}\^\{commit\}".*\|\| run_all/, "an unreachable base still runs the fleet"],
+    [/CHANGED=\$\(git diff --name-only "\$BEFORE" "\$GITHUB_SHA"\) \|\| run_all/, "a failed diff still runs the fleet"],
+    [/\[ "\$CALLED" = "true" \] \|\| run_all/, "a Pages call is still checked before any event verdict"],
+  ]) assert.match(body, re, `the fail-safe is gone: ${why}`);
+
+  // The claim renderer-filter used to make about this filter must be gone with it.
+  assert.equal(/where the sweeps filter has none/.test(yml), false,
+    "renderer-filter's comment still says the sweeps filter has no PR base; it has one now");
+});
+
 /* THE RETRY'S "FULL GATE" WAS NOT THE GATE (2026-09-19).
  * main() gates on tooling-fast + gateNodeSuites() + verify-track. The push
  * retry's shipped-code leg ran tooling-fast ALONE and logged "full gate" — so

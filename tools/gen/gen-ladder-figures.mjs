@@ -97,6 +97,10 @@ export const REWRITES = {
   "docs/TESTING.md": [
     { re: /(`npm run test:tooling-fast` \(structural, no browser; )(\d+) of (\d+)( unit files)/, value: (f) => [f.fast, f.disk] },
     { re: /(\| `tooling-fast` \| the structural half — )(\d+)( files,)/, value: (f) => f.fast },
+    // The sweeps row enumerated its suites by hand and had drifted four files
+    // behind package.json. The roster is gone (the script is the list); the
+    // count stays, generated.
+    { re: /(\| `sweeps` \| the full-fleet geometry audits \()(\d+)( files —)/, value: (f) => f.sweeps },
   ],
   [TARGET]: [
     { re: /(\bThe remaining )(\d+)( are the per-circuit geometry)/, value: (f) => f.gateLeft },

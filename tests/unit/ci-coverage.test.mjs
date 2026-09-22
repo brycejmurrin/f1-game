@@ -841,9 +841,22 @@ test("ci.yml treats a Pages call as the gate it is, whatever the caller's event"
     "a Pages call never runs the wide group");
   for (const [name, job] of [["smoke ship filter", smokeJob], ["sweeps filter", sweepsJob]]) {
     assert.match(job, /CALLED: \$\{\{ inputs\.concurrency_key != '' \}\}/, `${name} must know it is a Pages call`);
-    assert.match(job, /\*\) \[ "\$CALLED" = "true" \] \|\| run_all "event is '\$EVENT', not a push or a Pages call" ;;/,
-      `${name} must accept a Pages call and still fail safe on every other non-push event`);
+    // The Pages-call branch is what this test is about, and it is identical in
+    // both filters: $CALLED is consulted BEFORE any verdict on the caller's
+    // event, so a train tick is never mistaken for the nightly.
+    assert.match(job, /\*\) \[ "\$CALLED" = "true" \] \|\| run_all "event is '\$EVENT', not a push/,
+      `${name} must accept a Pages call and still fail safe on the events it cannot resolve`);
   }
+  // Which events each filter can resolve is NOT identical, and the difference is
+  // the point. The smoke filter asks "does this commit ship?", which a pull
+  // request cannot answer, so it fail-safes on one. The sweeps filter asks
+  // "could this diff have moved a vertex?", and a pull request answers that
+  // perfectly well from its own base — it used to fail-safe anyway and ran the
+  // whole fleet on every PR (2026-09-22).
+  assert.match(sweepsJob, /case "\$EVENT" in\n\s+push\|pull_request\) ;;/,
+    "the sweeps filter resolves a pull request instead of running the fleet blind");
+  assert.match(smokeJob, /case "\$EVENT" in\n\s+push\) ;;/,
+    "the smoke ship filter still fail-safes a pull request: a PR head ships nothing to compare against");
   assert.match(selectJob, /EVENT: \$\{\{ inputs\.concurrency_key != '' && 'push' \|\| github\.event_name \}\}/);
   assert.match(selectJob, /PUSH_BEFORE: \$\{\{ inputs\.concurrency_key != '' && inputs\.before_sha \|\| github\.event\.before \}\}/,
     "on a Pages call the plan's base is the train's live commit");
