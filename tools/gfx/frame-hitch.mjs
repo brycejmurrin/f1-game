@@ -95,6 +95,79 @@ export function analyse(t0, dur, { minSpikes = 4 } = {}) {
   };
 }
 
+// THE ALLOCATION QUESTION, which every earlier memory pass in this repo
+// skipped by construction. snapMem() forces a collection before reading, so
+// it answers "what is RETAINED" — and the answer was flat while the hitch
+// stayed. Retention and allocation are independent: a frame loop that mints
+// short-lived garbage retains nothing, and still buys a major GC on a period
+// set by how fast it fills the nursery. That is a spike train by another
+// name, and this is the function that tells them apart.
+//
+// The unforced per-frame heap series is a sawtooth: rising edges are
+// allocation, falling edges are collections. Two numbers come out of it —
+// the allocation RATE, and whether the falls land ON the spikes.
+export function analyseHeap(heap, t0, dur, threshMs) {
+  const n = heap.length;
+  if (n < 30) return { note: "too few frames" };
+  // performance.memory is absent outside Chrome and returns 0 where a policy
+  // blocks it; either way an all-zero series is "never sampled", not "flat".
+  if (!heap.some((x) => x > 0)) return { note: "no performance.memory — not Chrome, or blocked" };
+  const elapsedS = (t0[n - 1] - t0[0]) / 1000;
+  let up = 0;
+  const drops = [];
+  const sortedHeap = Array.from(heap).sort((a, b) => a - b);
+  const medHeap = sortedHeap[Math.floor(n / 2)];
+  // A drop worth calling a collection: the heap fell by more than 1% of its
+  // own size, floored at 0.25 MB so a small heap still registers. Below that
+  // is quantisation — Chrome buckets usedJSHeapSize to 100 KB unless
+  // --enable-precise-memory-info is on, and this tool passes it.
+  const DROP = Math.max(0.25, medHeap * 0.01);
+  for (let i = 1; i < n; i++) {
+    const d = heap[i] - heap[i - 1];
+    if (d > 0) up += d;
+    else if (d < -DROP) drops.push({ i, t: t0[i], mb: -d });
+  }
+  const gaps = [];
+  for (let i = 1; i < drops.length; i++) gaps.push((drops[i].t - drops[i - 1].t) / 1000);
+  const gs = gaps.slice().sort((a, b) => a - b);
+  const gapMed = gs.length ? gs[Math.floor(gs.length / 2)] : 0;
+  const gapMean = gaps.length ? gaps.reduce((a, b) => a + b, 0) / gaps.length : 0;
+  const sd = gaps.length > 1 ? Math.sqrt(gaps.reduce((a, g) => a + (g - gapMean) ** 2, 0) / (gaps.length - 1)) : 0;
+  // THE COINCIDENCE, and its NULL. "80% of spikes had a collection nearby" is
+  // not a finding if collections are so frequent that 80% of ANY frames do.
+  // The window is +/-1 frame, so the null is the share of frames within one
+  // frame of a drop, and the ratio of the two is the only readable number.
+  const isDrop = new Uint8Array(n);
+  for (const d of drops) isDrop[d.i] = 1;
+  const near = (i) => isDrop[i] || (i > 0 && isDrop[i - 1]) || (i + 1 < n && isDrop[i + 1]);
+  let spikes = 0, spikesNear = 0, allNear = 0;
+  for (let i = 0; i < n; i++) {
+    if (near(i)) allNear++;
+    if (dur[i] > threshMs) { spikes++; if (near(i)) spikesNear++; }
+  }
+  const baseRate = allNear / n;
+  const hitRate = spikes ? spikesNear / spikes : 0;
+  const enrich = baseRate > 0 ? hitRate / baseRate : null;
+  const allocMBps = elapsedS > 0 ? up / elapsedS : 0;
+  return {
+    frames: n, elapsedS: +elapsedS.toFixed(1),
+    heapMedMB: +medHeap.toFixed(1),
+    allocMBps: +allocMBps.toFixed(2),
+    allocPerFrameKB: +((up * 1024) / Math.max(1, n - 1)).toFixed(1),
+    collections: drops.length,
+    dropMedianMB: drops.length ? +drops.map((d) => d.mb).sort((a, b) => a - b)[drops.length >> 1].toFixed(2) : null,
+    gapMedianS: +gapMed.toFixed(2),
+    gapCV: gapMean > 0 ? +(sd / gapMean).toFixed(3) : 0,
+    spikes, spikesNearGC: spikesNear,
+    hitRate: +hitRate.toFixed(3), baseRate: +baseRate.toFixed(3),
+    enrichment: enrich == null ? null : +enrich.toFixed(2),
+    verdict: !spikes ? "no spikes to attribute"
+      : enrich != null && enrich >= 1.8 && spikesNear >= 3
+        ? `GC IS ON THE SPIKES: ${spikesNear}/${spikes} within one frame of a collection, ${enrich.toFixed(1)}x the base rate (alloc ${allocMBps.toFixed(1)} MB/s)`
+        : `GC is NOT the spike source: ${spikesNear}/${spikes} near a collection vs a ${(baseRate * 100).toFixed(0)}% base rate (alloc ${allocMBps.toFixed(1)} MB/s)`,
+  };
+}
+
 // Per-kind verdict over the bucketed work counts. The question is never
 // "how many" alone — it is whether the calls STOP after warm-up (a healthy
 // renderer compiles once) or keep arriving, and if they keep arriving,
@@ -188,7 +261,13 @@ async function main() {
   const args = ["--disable-background-timer-throttling", "--disable-renderer-backgrounding",
     "--disable-backgrounding-occluded-windows",
     // Exposes window.gc() so the heap sample can be forced to RETAINED bytes.
-    "--js-flags=--expose-gc"];
+    "--js-flags=--expose-gc",
+    // Without this, usedJSHeapSize is bucketed to 100 KB AND rate-limited to
+    // one update per 20 ms — at 60 fps that is a fresh reading every second
+    // frame at best, which turns a real sawtooth into a staircase and makes
+    // the drop detector read quantisation. analyseHeap's whole premise needs
+    // a per-frame-accurate number.
+    "--enable-precise-memory-info"];
   if (opts.backend === "webgpu" || opts.tlxWebgpu) args.push(...WEBGPU_CHROMIUM_ARGS);
   else args.push("--use-angle=swiftshader");
   const browser = await launchChromium({ args });
@@ -224,6 +303,15 @@ async function main() {
       // allocates inside the frame it is measuring.
       const CAP = 60000;
       const t0 = new Float64Array(CAP), dur = new Float64Array(CAP);
+      // THE SAWTOOTH. Everything this tool measured before was RETENTION —
+      // snapMem() forces a collection first, on purpose, so it reports what
+      // survives. Retention was flat (2.6 MB/min) and the hitch stayed, which
+      // does not clear allocation: a loop minting 40 MB/s of SHORT-LIVED
+      // garbage retains nothing and still buys a major GC every few seconds.
+      // So sample the heap UNFORCED, once per frame, and read the sawtooth:
+      // the rising edges are the allocation rate, the falling edges are the
+      // collections, and the question is whether the falls land on the spikes.
+      const heap = new Float32Array(CAP);
       let n = 0, armed = false;
       const raw = window.requestAnimationFrame.bind(window);
       window.requestAnimationFrame = function (cb) {
@@ -233,6 +321,11 @@ async function main() {
             const b = performance.now();
             if (armed && n < CAP) {
               t0[n] = a; dur[n] = b - a;
+              // AFTER the callback, not before: a collection triggered BY this
+              // frame's allocation has to be inside the window whose cost we
+              // are attributing to it, or the drop lands one frame late and
+              // the correlation reads as zero.
+              try { heap[n] = performance.memory ? performance.memory.usedJSHeapSize / 1048576 : 0; } catch (_) { heap[n] = 0; }
               if (n < PASS_CAP) passPerFrame[n] = passCur > 32767 ? 32767 : passCur;
               passCur = 0;
               n++;
@@ -368,6 +461,7 @@ async function main() {
         arm() {
           armed = true; n = 0; longtasks.length = 0; gov.length = 0;
           armAt = performance.now(); counts.clear(); kinds.length = 0;
+          heap.fill(0);
           // DRIFT, NOT A SNAPSHOT — docs/notes/PERF-FINDINGS.md 2o's own rule:
           // any TLX memory claim reporting a single heap number is measuring
           // the wrong thing. Baseline here, delta at dump.
@@ -376,6 +470,7 @@ async function main() {
         n: () => n,
         dump: () => ({
           t0: Array.from(t0.subarray(0, n)), dur: Array.from(dur.subarray(0, n)), longtasks, gov,
+          heap: Array.from(heap.subarray(0, n), (x) => +x.toFixed(3)),
           bucketMs: BUCKET_MS,
           work: kinds.map((k) => [k, Array.from(counts.get(k))]),
           mem0, mem1: snapMem(),
@@ -419,6 +514,7 @@ async function main() {
     out.work = analyseWork(d.work || [], d.bucketMs || 250, out.frames);
     out.backend = d.backend;
     out.passes = analysePasses(d.passes || [], d.t0 || []);
+    out.heap = analyseHeap(d.heap || [], d.t0 || [], d.dur || [], out.spikeThresholdMs);
     out.stacks = d.stacks;
     out.mem0 = d.mem0; out.mem1 = d.mem1;
     // The leak test: every numeric counter three tracks, as a DELTA over the

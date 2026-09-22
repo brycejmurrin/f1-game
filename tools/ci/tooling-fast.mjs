@@ -309,6 +309,13 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The WebGPU road-marking frame. Three circuits (~3 s); the full 40-circuit
   // sweep is `node tools/gfx/road-lut-census.mjs --all` (~34 s), run before a deploy
   "tests/unit/road-lut-frame.test.mjs",
+  // The hitch instrument's own arithmetic (tools/gfx/frame-hitch.mjs), on
+  // synthetic series with known answers. Three performance findings in a row
+  // were retracted here because an instrument was never checked against a
+  // case whose answer was known; analyseHeap is the one the GC hypothesis
+  // rests on, so it is checked both ways — it must NAME a GC-driven spike
+  // train and CLEAR one whose spikes sit elsewhere at the same alloc rate.
+  "tests/unit/frame-hitch-analyse.test.mjs",
   "tests/unit/webgpu-lifecycle.test.mjs",
   "tests/unit/wgsl-bindings.test.mjs",
   "tests/unit/renderer-soft-lifecycle.test.mjs",
