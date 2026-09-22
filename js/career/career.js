@@ -74,7 +74,7 @@ const driverRec = (d) => ({ name: d.name, code: d.code, num: d.num });
 
 let career = null;        // the loaded save, or null
 let engaged = false;
-function engage(on) { engaged = !!on; }
+function engage(on) { engaged = !!on; applyRegs(); }
 function inCareer() { return engaged && career != null; }
 
 // Career draws never touch simRnd(): consuming that stream here would make a
@@ -166,6 +166,7 @@ function load() {
   // function's job — otherwise a v0 save would migrate in memory on every boot
   // and never on disk, and the next build's ladder would start from v0 again.
   save();
+  applyRegs();
   return career;
 }
 function setLive() { store.set("careerSlot", `${slotFlavour}:${slotIdx}`); }
@@ -198,6 +199,7 @@ function clear() {
   career = null;
   store.set(liveSlotKey(), null);
   armRevision();
+  applyRegs();      // no career, no regulations
 }
 
 function slotInfo(c, f, i) {
@@ -244,13 +246,14 @@ function useSlot(flavour, i) {
   setLive();
   career = readSlot(f, n);
   armRevision();
+  applyRegs();      // a different save can be a different era
   return career;
 }
 function deleteSlot(flavour, i) {
   const f = flavourIn(flavour);
   const n = slotIn(i);
   store.set(slotKey(f, n), null);
-  if (f === slotFlavour && n === slotIdx) { career = null; armRevision(); }
+  if (f === slotFlavour && n === slotIdx) { career = null; armRevision(); applyRegs(); }
   return true;
 }
 
@@ -323,7 +326,9 @@ function start(opts) {
     const hired = FREE_AGENTS.find((a) => a.code === o.hire) || FREE_AGENTS[FREE_AGENTS.length - 3];
     career.roster = [rosterEntry(hired, 1)];
   }
+  career.year0 = YEAR0;
   career.amb = ambIdx(o.amb);
+  applyRegs();
   career.deal = newDeal(team, 1);
   Log.info("game", `Career.start flavour=${flavour} team=${teamId}`);
   return save();
@@ -485,23 +490,68 @@ function worksCost(teamId) {
   _worksCost.set(teamId, c);
   return c;
 }
+// ── REGULATION ERAS ────────────────────────────────────────────────────────
+// The second act for car development. js/career/regulations.js holds the table
+// and the reasoning; this is the wiring: which era a career is in, and pushing
+// it into Parts so EVERY resolution — the player's build and every AI factory
+// build alike — obeys the same ruleset.
+const YEAR0 = 2026;
+function seasonsElapsed() {
+  // Not history.length: HISTORY_MAX caps the archive at 10, so a long career
+  // would stop advancing its era. year0 is stamped at start(); an older save
+  // has none and every one of those started in 2026.
+  if (!career) return 0;
+  return Math.max(0, (career.year | 0) - ((career.year0 | 0) || YEAR0));
+}
+// NULL WITHOUT A CAREER, not the opening era. Describing a ruleset when there is
+// no career to rule reads as "a Grand Prix is under OPEN REGULATIONS", which is
+// a category error — nothing outside a career is regulated at all, which is why
+// applyRegs() installs no predicate there either.
+function era() {
+  if (!career || typeof Regulations === "undefined") return null;
+  return Regulations.eraFor(seasonsElapsed());
+}
+function eraSeasonsLeft() {
+  if (!career || typeof Regulations === "undefined") return 0;
+  return Regulations.seasonsLeft(seasonsElapsed());
+}
+// Installed on engage and after any change to the year or the loaded save;
+// CLEARED the moment a career is not the thing being played, so a Grand Prix
+// and a standalone Season are never regulated.
+function applyRegs() {
+  if (typeof Parts === "undefined" || !Parts.setLegality) return;
+  const e = inCareer() ? era() : null;
+  if (!e || !Regulations) { Parts.setLegality(null, ""); return; }
+  Parts.setLegality(Regulations.legalityFor(e.id), e.id);
+}
+
 // The ceiling every career budget obeys: the whole top shelf minus its dearest
 // single part, DERIVED from the catalog so repricing moves it. Without it a
 // front-running works car (~86% of the top shelf) at budgetLvl 1 could fit the
 // dearest option in every category (measured: 2035 * 1.15 = 2340 = the top
 // shelf, exactly) and the economy constrained nothing. Call-time read of Parts.
+// KEYED ON THE RULESET, not memoised once. An era bans the dearest options in
+// three categories, so a cap computed from the open catalog would let a player
+// fit a top shelf that no longer exists — and the memo would hold that wrong
+// number for the rest of the session.
 let _budgetCap = null;
+let _budgetCapKey = null;
 function budgetCap() {
-  if (_budgetCap == null) {
+  const e = inCareer() ? era() : null;
+  const key = e ? e.id : "";
+  if (_budgetCap == null || _budgetCapKey !== key) {
+    const legal = (o) => !e || typeof Regulations === "undefined"
+      || Regulations.isLegal(o.id, e.id);
     let all = 0;
     let top = 0;
     for (const cat of Parts.CATALOG) {
       let hi = 0;
-      for (const o of cat.options) hi = Math.max(hi, o.cost || 0);
+      for (const o of cat.options) if (legal(o)) hi = Math.max(hi, o.cost || 0);
       all += hi;
       top = Math.max(top, hi);
     }
     _budgetCap = all - top;
+    _budgetCapKey = key;
   }
   return _budgetCap;
 }
@@ -1166,6 +1216,10 @@ function rollover() {
   career.offers = career.deal && career.deal.left > 0 ? [] : makeOffers(mv);
 
   career.year++;
+  // A NEW YEAR CAN BE A NEW RULESET. Pushed here rather than left to the next
+  // engage(): rollover() runs while the career is still the thing being played,
+  // and budgetCap()/the garage read the era on the very next hub build.
+  applyRegs();
   // MUTATED IN PLACE, never reassigned: game.js aliases this exact object as its
   // `season` (openCareer does `season = c.season`), and a fresh object would
   // orphan that alias so the next race wrote its points into a dead one.
@@ -1212,6 +1266,13 @@ function state() {
     facilityDiscount: facilityDiscount(),
     owned: career.owned.length,
     deal: career.deal, obj: objective(),
+    // A COPY, not the table's own row: ERAS entries are shared and only the
+    // Regulations object itself is frozen.
+    era: (() => {
+      const e = era();
+      return e ? { id: e.id, name: e.name, blurb: e.blurb, cats: e.cats.slice(),
+                   left: eraSeasonsLeft(), banned: Regulations.bannedIds(e.id).size } : null;
+    })(),
     // The PENDING pick (what the next contract signs at). What the CURRENT deal
     // was signed at is deal.ambition, one line up — the two differ for a whole
     // season whenever the player moves the picker mid-term.
@@ -1244,6 +1305,7 @@ return {
   renewHire, hireDriver, hirePending, HIRE_MIN,
   salaryFor, newDeal, expectedFinish, tierFinish, driverOverride, devFor,
   AMBITION, ambition, ambitionOf, setAmbition, goalValueFor,
+  era, eraSeasonsLeft, seasonsElapsed, applyRegs,
   gridDrivers, wageBill, freeAgents, MYTEAM_WORKS,
   paceMult, teamStats,
   owned, isOwned, researchCost, research, budget, budgetUpgradeCost, upgradeBudget,

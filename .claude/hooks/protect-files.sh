@@ -103,8 +103,9 @@ def touches_generated_block(path):
     return False
 
 if rel in ("index.html", "sw.js") and touches_generated_block(file):
-    block(f"{rel}: the edit touches a @gen-shell block, which node tools/gen/gen-shell.mjs "
-          "writes from tools/manifest.cjs. Edit the manifest and regenerate.")
+    block(f"{rel}: the edit touches a @gen-shell block. gen-shell.mjs writes the script "
+          "tags from tools/manifest.cjs and title-art.mjs writes @gen-shell:title-art from "
+          "js/car/car3d.js. Edit the SOURCE and run `npm run gen`.")
 
 if rel == "package.json":
     # A whole-file Write carries no old_string to match, so the Edit branch's

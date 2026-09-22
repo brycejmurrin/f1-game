@@ -5,7 +5,8 @@
    Brief: docs/tracks/korea.md. Reclaimed land beside the Yeongam tidal flats;
    half permanent circuit, half never-finished marina. The identity is EMPTINESS
    — wide grey asphalt run-off, salt-bleached fill, blank unglazed apartment
-   shells on the infield, seawall and open water on the outfield. Dead flat: no
+   shells on the infield, seawall and open water on the outfield. Dead flat —
+   the def carries undulate:false (SRTM measures 0.00 m of relief) — so no
    relief is added anywhere. Deliberately NO tree line: bare fill reads correct.
 
    SIDE CONVENTION IS INVERTED: Korea runs ANTI-CLOCKWISE, so -1 is the INFIELD
@@ -53,7 +54,7 @@
         groundPatch, runoffApron, cityFront, waterBand, gantry, fence,
         place, prop, backdrop } = api;
 
-      const K = (s) => Math.round(s * n) % n;
+      const { K } = api;            // the contract's frac -> node index (normalised for negatives)
 
       // ---------------------------------------------------------------------
       // 1. PALETTE — flat coastal light, low contrast, nothing saturated.

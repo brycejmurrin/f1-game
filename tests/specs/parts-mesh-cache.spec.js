@@ -415,7 +415,16 @@ test.describe("Parts mesh caches — eviction bounds", () => {
     await page.waitForFunction(() => window.__apex.info().track === "monza", null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => {
       window.__apex.go();
-      window.__apex.jump(0.10, 35, 0);
+      // 0.04, NOT 0.10 — BRAKE ON THE STRAIGHT, not into a chicane. f = 0.10 is
+      // s ~ 579 m at monza and the Variante del Rettifilo begins around 600 m,
+      // so 90 steps of braking at 35 m/s with steer: 0 carried the car straight
+      // on into the turn-1 runoff: it finished 7.9 m off the centreline, and
+      // the four wheel centres were then measured against a surface this test
+      // never meant to sample. It read 0.0050274 against a 0.005 bound and
+      // looked like a 27-micron suspension defect; it was a car in the gravel.
+      // The main straight runs to ~600 m, so starting at 0.04 (~230 m) keeps
+      // the whole braking run on it.
+      window.__apex.jump(0.04, 35, 0);
       window.__apex.setInput({ throttle: false, brake: true, steer: 0 });
       window.__apex.step(1 / 60, 90);
       // FREEZE, so the probe samples and the road reading below describe the
@@ -439,7 +448,24 @@ test.describe("Parts mesh caches — eviction bounds", () => {
       // a raw-Y spread reads that slope as "a wheel left the road" (the 2026-08
       // 0.010-0.011 standing red). Project each wheel onto the centreline by
       // local search and subtract its own road height.
-      const roadUnder = (wx, wz) => {
+      // AND AT THE WHEEL'S OWN LATERAL OFFSET, on the BANKED tarmac — not on the
+      // centreline plane. That is the third time this measurement has read the
+      // road wrong, and the two notes below record the first two.
+      //
+      // groundY() returns roadY = smp.p[1], the centreline point's height, which
+      // does NOT vary with `lat` at all; the tarmac under an offset wheel is
+      // roadSurfaceY = roadY + bankDy. docs/DEBUG-HOOKS.md names this exact trap
+      // ("inside a bankZone the tarmac is not the centreline plane — Lesmo 1
+      // lifts the..."), and this braking run starts at f = 0.10 on monza, which
+      // is Lesmo. So the loop computed each wheel's `lat`, threw it away, and
+      // compared all four against a plane none of them sits on — turning the
+      // banking delta between the left and right pairs into fake ride-height
+      // spread. It read 0.0050274 against a 0.005 bound: a 27-micron overshoot
+      // that was never about the car.
+      //
+      // The bound is UNTOUCHED. Widening it is what AGENTS.md forbids, and it
+      // would have buried a real instrument bug under a rounder number.
+      const solveUnder = (wx, wz) => {
         let best = null;
         for (let df = -8; df <= 8; df += 0.25) {
           const f = ((f0 + df / total) % 1 + 1) % 1;
@@ -449,17 +475,38 @@ test.describe("Parts mesh caches — eviction bounds", () => {
           const dx = wx - g0.x, dz = wz - g0.z;
           const lat = dx * rx + dz * rz;
           const along = Math.hypot(dx - lat * rx, dz - lat * rz);
-          if (!best || along < best.along) best = { along, roadY: g0.roadY };
+          if (!best || along < best.along) best = { along, f, lat };
         }
-        return best.roadY;
+        return best;
+      };
+      const roadUnder = (wx, wz) => {
+        // Re-sample AT that lateral offset so banking is in the answer.
+        const b = solveUnder(wx, wz);
+        const at = window.__apex.groundY(b.f, b.lat);
+        return at.roadSurfaceY != null ? at.roadSurfaceY : at.roadY;
       };
       const wheels = window.__wheelGroundProbe.slice(-4);
       return {
         heights: wheels.map((c) => c[1] - roadUnder(c[0], c[2])),
         roadY: window.__apex.groundY(f0, st.x).roadY,
+        // The car's own lateral offset, because the failure this replaced was
+        // entirely about where the car ended up rather than how it sat.
+        player: { x: +st.x.toFixed(3), s: +st.s.toFixed(2) },
+        // A spread this test rejects is a few MILLIMETRES, so "0.0050 is not
+        // < 0.005" on its own cannot say which wheel moved or why. Carry the
+        // terms: world Y, the wheel's solved lateral offset and arc miss, and
+        // the centreline/banking split of the road beneath it.
+        detail: wheels.map((c) => {
+          const d = solveUnder(c[0], c[2]);
+          const at = window.__apex.groundY(d.f, d.lat);
+          return { y: +c[1].toFixed(5), lat: +d.lat.toFixed(3), along: +d.along.toFixed(4),
+                   roadY: at.roadY, bankDy: at.bankDy, surf: at.roadSurfaceY };
+        }),
       };
     });
-    expect(Math.max(...probe.heights) - Math.min(...probe.heights)).toBeLessThan(0.005);
+    expect(Math.max(...probe.heights) - Math.min(...probe.heights),
+      "car " + JSON.stringify(probe.player) + " · wheels above the tarmac under each: " + JSON.stringify(probe.detail))
+      .toBeLessThan(0.005);
     // AGAINST THE ROAD UNDER THE CAR, not against sea level. This compared the
     // WORLD y to a bare 0.34 — AXLES.wheelY (js/car/car3d.js:47), which is the
     // wheel centre height ABOVE THE ROAD — and so silently assumed monza's

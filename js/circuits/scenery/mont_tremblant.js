@@ -43,7 +43,7 @@
       const { n, hash, every, anchor, onTrack, out,
         pine, tree, bush, forestEdge, building, grandstandEx, spectatorHill,
         guardrail, fence, tyreWall, marshalPost, cameraTower, billboard,
-        motorhome, groundPatch, ridge, mountain, terrainYAt, addBox, def } = api;
+        motorhome, groundPatch, ridge, mountain, terrainYAt, addBox } = api;
 
       // ---------------------------------------------------------------- 1.
       // PALETTE + HELPERS. Deep summer green; the presets do the season.
@@ -71,7 +71,7 @@
       const VAN_A = [0.90, 0.90, 0.92];
       const VAN_B = [0.82, 0.84, 0.87];
 
-      const K = (s) => Math.round(s * n) % n;
+      const { K } = api;            // the contract's frac -> node index (normalised for negatives)
       const RAIL = 3.2;                   // armco gap: hard against the tarmac
       // Heading of the road at k, for world-space ridges/banks.
       const heading = (k, side, dist) => {
@@ -445,7 +445,11 @@
       // Namerow, the Esses and the ski-mountain framing must not travel with
       // the line. The paddock and the start-line stand belong AT the line, so
       // these two blocks alone are shifted.
-      const SL = (1 - (def._sceneryShift || 0)) % 1;   // live: was a hand-copied snapshot
+      // 1 - def._sceneryShift, baked by buildCenterline before scenery() runs, at
+      // the 4 dp the props were placed against (a literal 0.7166 until 2026-09-22:
+      // the unrounded value flips a few K() nodes at Brands Hatch, so the rounding
+      // keeps today's geometry while a retuned startFrac still moves the props).
+      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
       const sl = (f) => (f + SL) % 1;
 
       // PADDOCK (row 0.005). Club scale: ONE long low garage/timing block, two

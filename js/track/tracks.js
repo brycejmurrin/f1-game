@@ -2120,7 +2120,11 @@ const Tracks = (function () {
       // files each declared locally. The wrapped helpers (transformSceneryApi)
       // remap the node they are handed, so this stays raw — it is copied, never
       // wrapped, on shifted / reversed circuits.
-      const K = (s) => Math.round(s * n) % n;
+      // NORMALISED: JS `%` keeps the dividend's sign, so a frac just below 0
+      // (a prop placed `s - 0.002` behind a node near the start line) indexed
+      // a negative slot. Ten of the circuit-local copies this replaced carried
+      // the unnormalised form; Okayama's alone wrapped.
+      const K = (s) => ((Math.round(s * n) % n) + n) % n;
       // Lap centroid + the farthest node's distance from it, for horizon rings.
       // Computed once, lazily, in the exact order the 30 local copies summed
       // (sequential px[i] sum / n, then max hypot) so their rings stay

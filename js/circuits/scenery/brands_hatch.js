@@ -40,9 +40,9 @@
         guardrail, fence, wall, tyreWall, marshalPost, cameraTower,
         broadcastCompound,
         billboard, signBoard, sponsorHoarding, gantry,
-        place, groundPatch, ridge, addBox, def } = api;
+        place, groundPatch, ridge, addBox } = api;
 
-      const K = (s) => Math.round(s * n) % n;
+      const { K } = api;            // the contract's frac -> node index (normalised for negatives)
       // Frame selector for the shared helpers below: block 1 and the far-lap
       // landmarks author in the def's own frame (ID); the start-line complex
       // in blocks 2/3 passes sl() so it travels with the line.
@@ -281,7 +281,11 @@
       // line. At THIS circuit the frontage, the pits and the Paddock Hill
       // structures are one complex around the line, so they move together;
       // block 1's open grass banking stays in the authoring frame.
-      const SL = (1 - (def._sceneryShift || 0)) % 1;   // live: was a hand-copied snapshot
+      // 1 - def._sceneryShift, baked by buildCenterline before scenery() runs, at
+      // the 4 dp the props were placed against (a literal 0.1635 until 2026-09-22:
+      // the unrounded value flips a few K() nodes at Brands Hatch, so the rounding
+      // keeps today's geometry while a retuned startFrac still moves the props).
+      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
       const sl = (f) => (f + SL) % 1;
 
       // Main grandstand run down Brabham Straight.

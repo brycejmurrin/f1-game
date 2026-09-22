@@ -368,8 +368,8 @@ if (!gfx) {
         skipped = sessionStorage.getItem("apex26.gfxClaimFail") === "1"; } } catch (_) { /* blocked storage: no skip, no reload */ }
     }
     if (skipped) {
-      try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) {}
-      try { location.reload(); } catch (_) {}
+      try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* storage blocked (private mode): the probe just stays armed */ }
+      try { location.reload(); } catch (_) { /* a reload that throws leaves the page as it is; nothing to recover */ }
       return;
     }
     showGraphicsUnavailable(); return;
@@ -3060,6 +3060,11 @@ const G = {
   // that could draw from it documents that it deliberately must not.)
   get seed() { return simSeed(); }, set seed(v) { simSeed(v); },
   simSeed,
+  // The race counter the reliability and weather draws hash on. A BARE
+  // passthrough on purpose (unlike `seed`, whose setter rewinds the stream):
+  // in VS FRIEND the host publishes it pre-increment and both peers then
+  // increment in startRace, so the draws agree — js/net/lobby.js publishSettings.
+  get raceRound() { return raceIndex; }, set raceRound(v) { raceIndex = Math.max(0, v | 0); },
   get DRIFT() { return DRIFT; }, set DRIFT(v) { DRIFT = v; },
   get FRONT_GRIP() { return FRONT_GRIP; }, set FRONT_GRIP(v) { FRONT_GRIP = v; },
   // Cameras normalise speed against an injected vmax, so re-inject on every pace
@@ -7887,7 +7892,7 @@ function render(dt) {
     // smoke/sparks/kickup/spray. Camera-independent: none of these is a draw.
     if (c.isPlayer && state === "race") {
       const skid = c.skidIntensity || 0;
-      skids.stamp(tmpMat, (skid > 0.25 || c.offroad) && c.speed > 10);
+      skids.stamp(tmpMat, (skid > 0.25 || c.offroad) && c.speed > 10, dt);
     }
     // EXHAUST HEAT HAZE: remember the player tailpipe's world position + plume
     // strength for this frame (projected to screen UV just before present()).
@@ -8391,7 +8396,7 @@ let renderAlpha = 1;             // leftover-step fraction (0..1) for render int
 // sentinel live in js/perf/governor.js (PerfGov, initialised at boot with gfx).
 // render() gates features on PerfGov.tier(); tickBody feeds PerfGov.tick(ms).
 PerfGov.init(gfx);
-const PHYS_DT = 1 / 60;          // fixed physics step
+const PHYS_DT = PhysicsConsts.FIXED_DT;   // fixed physics step — js/physics/consts.js
 function tick(now) {
   try { tickBody(now); LoopHealth.clean(); requestAnimationFrame(tick); }
   catch (e) {
@@ -8503,7 +8508,7 @@ function tickBody(now) {
   }
   renderAlpha = clamp(physAcc / PHYS_DT, 0, 1);   // 0..1 leftover fraction for render interp
   render(Math.min(dt, 1 / 20));               // camera/visual damping at (clamped) frame dt
-  if (state === "race" || state === "count") updateHud(false);
+  if (state === "race" || state === "count") updateHud(false, _dtMs);
 }
 
 // ---------- car setup panel ----------
@@ -8940,7 +8945,7 @@ function holdSetupCtl(id, rates, step) {
     // Capture so a finger sliding off the chip still releases here. NOT
     // pointerleave for the release: setPointerCapture fires a boundary event as
     // it retargets, which would stop the motion on its very first frame.
-    try { el.setPointerCapture(e.pointerId); } catch (_) {}
+    try { el.setPointerCapture(e.pointerId); } catch (_) { /* capture can refuse (pointer already gone); the drag still runs on move events */ }
     // One discrete step up front, THEN the held rate. Without the step a quick
     // tap moved by whatever fraction of a frame it happened to span — i.e.
     // visibly nothing — so the buttons only worked if you knew to hold them.

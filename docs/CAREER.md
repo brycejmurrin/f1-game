@@ -655,6 +655,50 @@ does `season = c.season`, and that shared identity is the whole reason `buildRes
 fresh object orphans game.js's alias: the next race writes its points into a dead object
 while the standings still render the stale one, which looks entirely fine.
 
+### Regulation eras — the second act for car development
+
+**The defect, measured** (`docs/notes/CAREER-CEILING-FIX-2026-09-22.md`): an
+optimal capped build costs ~18,900–22,800 cr of research plus a 16,500 cr budget
+ladder against ~6,100–8,100 cr a season, so **the car is finished in 2.6–3.7
+seasons** — and a career is unbounded. At the cap six of eleven teams converge on
+materially the same build, so near the top the seat you hold stops changing your
+car and the contract ladder terminates with it.
+
+**An era is a legality filter, not a confiscation.** `Regulations.ERAS` names
+three catalog categories per era; the dearest `BAN_TOP` options in each go
+illegal for `ERA_SEASONS`. `career.owned` is never touched — a part you
+researched is *not legal this era*, and it comes back when the era lapses.
+
+| | |
+|---|---|
+| era length | `ERA_SEASONS` = 4 |
+| options taken per category | `BAN_TOP` = 2 |
+| first era | `open` — restricts nothing, so the first build is never interrupted |
+
+**Why it reaches the whole grid.** `Parts._resolve()` consults
+`isOptionAvailable()` for every category of every resolution and falls back to
+`DEFAULTS`, and `resolveSetup()` is the one path BOTH the player's career build
+and every AI factory build take. So one predicate regulates everybody. This is
+the whole point: AI cars never leave `getFactorySetup()`, so a rule that reached
+only the player would leave them worse than a grid that lost nothing — a
+punishment dressed as a reset.
+
+The predicate is installed at runtime by `Career.applyRegs()` rather than
+imported, because `js/car/parts.js` loads before `js/career/` — and because that
+keeps a Grand Prix and a standalone Season unregulated, since only a career ever
+sets one. It is re-pushed wherever the year or the loaded save can change
+(`engage`, `start`, `load`, `useSlot`, `deleteSlot`, `clear`, `rollover`).
+
+**Two caches key on the ruleset, or an era is a no-op.** `Parts.factoryCache`
+includes `legalityKey()` — without it every AI would keep racing its pre-era
+build, which is exactly the asymmetry above. `Career._budgetCap` is recomputed
+when the era changes and skips banned options, or the cap would license a top
+shelf nobody may fit.
+
+`seasonsElapsed()` is `career.year - career.year0`, **not** `history.length` —
+`HISTORY_MAX` caps the archive at 10, so a long career would stop advancing its
+era. `year0` is stamped at `start()`; a save without one started in 2026.
+
 ### The contract binds
 
 Two rules that were written down and never ran.

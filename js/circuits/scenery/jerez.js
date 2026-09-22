@@ -47,12 +47,12 @@
         spectatorHill, terrace, guardrail, fence, tyreWall, marshalPost,
         cameraTower, broadcastCompound, billboard, sponsorHoarding, gantry,
         motorhome, groundPatch, runoffApron, place, ridge,
-        modelGroup, vadd, addBox, addCyl, addFrustum, MAT, def } = api;
+        modelGroup, vadd, addBox, addCyl, addFrustum, MAT } = api;
 
       // ---------------------------------------------------------------
       // 1. PALETTE + HELPERS  (§2 bleached, §6 sparse olive / pale concrete)
       // ---------------------------------------------------------------
-      const K = (s) => Math.round(s * n) % n;
+      const { K } = api;            // the contract's frac -> node index (normalised for negatives)
 
       const OCHRE      = [0.74, 0.64, 0.45];   // bare pale earth
       const OCHRE_PALE = [0.82, 0.73, 0.55];   // sun-struck dust
@@ -142,7 +142,11 @@
       // Dry Sack and the stadium section must not travel with the line. The
       // pit complex and its terracing belong AT the line, so these two blocks
       // alone are shifted; sl(f) is the authored frac that lands at the line.
-      const SL = (1 - (def._sceneryShift || 0)) % 1;   // live: was a hand-copied snapshot
+      // 1 - def._sceneryShift, baked by buildCenterline before scenery() runs, at
+      // the 4 dp the props were placed against (a literal 0.1264 until 2026-09-22:
+      // the unrounded value flips a few K() nodes at Brands Hatch, so the rounding
+      // keeps today's geometry while a retuned startFrac still moves the props).
+      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
       const sl = (f) => (f + SL) % 1;
 
       // 2. MAIN START/FINISH TERRACING  (0.005, -1, 20)

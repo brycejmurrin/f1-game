@@ -39,9 +39,9 @@
         building, grandstandEx, spectatorHill,
         guardrail, fence, tyreWall, marshalPost, cameraTower,
         broadcastCompound, billboard, sponsorHoarding,
-        motorhome, groundPatch, ridge, def } = api;
+        motorhome, groundPatch, ridge } = api;
 
-      const K = (s) => Math.round(s * n) % n;
+      const { K } = api;            // the contract's frac -> node index (normalised for negatives)
 
       // --- palette -------------------------------------------------------
       // Scots pine: near-black green, barely any yellow in it.
@@ -313,7 +313,11 @@
       // chicanes, the Villeneuve memorial and the pine sections must not travel
       // with the line. The pit block and main stand belong AT the line, so
       // these two blocks alone are shifted.
-      const SL = (1 - (def._sceneryShift || 0)) % 1;   // live: was a hand-copied snapshot
+      // 1 - def._sceneryShift, baked by buildCenterline before scenery() runs, at
+      // the 4 dp the props were placed against (a literal 0.1562 until 2026-09-22:
+      // the unrounded value flips a few K() nodes at Brands Hatch, so the rounding
+      // keeps today's geometry while a retuned startFrac still moves the props).
+      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
       const sl = (f) => (f + SL) % 1;
 
       // === 1. s 0.005 +1 14 — PIT LANE AND GARAGES =======================
