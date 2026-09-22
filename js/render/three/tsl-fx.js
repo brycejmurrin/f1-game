@@ -5,9 +5,9 @@
 "use strict";
 
 (function () {
-  function fx(THREE, TSL) {
+  function fx(THREE, TSL, opts) {
     const {
-      Fn, uniform, attribute, texture, materialReference, mrt,
+      Fn, uniform, attribute, texture, materialReference, mrt, renderGroup,
       float, vec2, vec3, vec4,
       positionGeometry, cameraPosition, normalWorld,
       normalize, cross, dot, length, exp, max, min, mix, smoothstep, abs, floor,
@@ -201,6 +201,12 @@
       ambSky:   uniform(new THREE.Vector3(0.3, 0.32, 0.36)),  // ambientMul-scaled
       ambGround: uniform(new THREE.Vector3(0.2, 0.19, 0.18)),
     };
+    // Same fix as tsl-lit.js's SHARED_UNIFORMS, same pin (apex26.tlxSharedUniforms):
+    // a plain uniform() is objectGroup, so each of the ~22 decal render objects
+    // per frame (one drawDecal per car) carried its own copy of this frame block.
+    // renderGroup shares one buffer per program per render() call; the per-object
+    // texture binding stays per object, as matU does beside lit's shared U.
+    if (!(opts && opts.sharedUniforms === false)) for (const k in U) U[k].setGroup(renderGroup);
 
     const decalCache = new Map();      // "texture.id|glow" -> material
     const DECAL_CACHE_CAP = 24;

@@ -739,6 +739,13 @@ compound's advantage over a slick in the current conditions. That ratio is
 exactly 1.0 on slicks and 1.0 for everyone in the dry, so slick braking does not
 move — it only hands the wet compounds back the braking their tread earns.
 
+The AI carries the same ratio, in both its braking step and its planner's
+`brake` budget (`_aiBr.brake`). Until 2026-09-22 only the player's arm had it:
+an AI car's `tread: null` resolves to the right compound for cornering (above),
+so in the rain the field cornered on wets and braked on slicks, and a player on
+full wets out-braked it by the whole ratio (~27 % at full wet) while the
+corner-speed model showed no such gap. Dry pace is untouched by construction.
+
 ### Wear, and the stop
 
 > Until 2026-09-14 this section read "Two things this does NOT do", and the

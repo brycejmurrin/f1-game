@@ -276,6 +276,30 @@ test("a settings file of the wrong shape is refused whole, and a bad value skipp
   assert.equal(b.disk.get("apex26.volMusic"), "0.3", "and the rest of the file still applies");
 });
 
+test("a difficulty the ladder does not name is skipped, not stored", () => {
+  // typeOk() passes any string where the default is a string, so an imported
+  // file carrying `"difficulty": "medium"` reached the store and game.js's
+  // DIFF[difficulty] read undefined on the next race (every AI tick threw).
+  // The row's `oneOf` is the allowlist; game.js also falls back to normal.
+  const b = boot();
+  const r = b.loadSettings({ format: "apex26-settings-v1", settings: { driving: { difficulty: "medium" }, audio: { volMusic: 0.3 } } });
+  assert.equal(r.ok, true);
+  assert.equal(r.skipped, 1, "an unknown difficulty is skipped, not written");
+  assert.equal(b.disk.has("apex26.difficulty"), false);
+  assert.equal(b.disk.get("apex26.volMusic"), "0.3", "and the rest of the file still applies");
+  const r2 = b.loadSettings({ format: "apex26-settings-v1", settings: { driving: { difficulty: "easy" } } });
+  assert.equal(r2.skipped, 0);
+  assert.equal(b.disk.get("apex26.difficulty"), JSON.stringify("easy"), "a named level still round-trips");
+});
+
+test("the difficulty allowlist is exactly PhysicsConsts.DIFF's ladder", () => {
+  const row = boot().SettingsExport.SPEC.find((r) => r.k === "difficulty");
+  const src = fs.readFileSync(path.join(ROOT, "js/physics/consts.js"), "utf8");
+  const ctx = vm.createContext({ window: {} });
+  vm.runInContext(src, ctx, { filename: "js/physics/consts.js" });
+  assert.deepEqual(Array.from(row.oneOf), Object.keys(ctx.window.PhysicsConsts.DIFF), "SPEC's oneOf must name every DIFF level and nothing else");   // Array.from: vm arrays are another realm's Array
+});
+
 test("loading a garage file writes garage-shaped keys only", () => {
   const b = boot();
   const r = b.loadGarage({

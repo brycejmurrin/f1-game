@@ -341,12 +341,22 @@ jobs:
       # base the change lands on: every raise is a `::warning::` annotation on
       # the run (visible on the PR's checks tab), and a raise past the hook's
       # own 40-line absorb — only reachable with APEX_SKIP_GUARDS=1 — fails.
-      # The base is the PR's base sha on a pull_request event and the deploy
-      # branch otherwise (a Pages workflow_call is a push on that branch).
+      # The base is the PR's base sha on a pull_request event; on a push TO the
+      # deploy branch it is the push's `before` sha — the remote ref already IS
+      # the pushed tip there, so diffing against it compared every ceiling with
+      # itself (zero rows, 2026-09-22); the deploy branch otherwise (a Pages
+      # workflow_call is a dispatch on that branch, already gated by its push run).
+      # A `before` the clone cannot show (force-push, first push) falls back to
+      # the remote ref rather than failing the step.
       - name: Ratchet ceilings vs the base
         env:
-          RATCHET_BASE: ${{ github.event.pull_request.base.sha || 'origin/claude/f1-game-project-26h3ng' }}
-        run: node tools/check/ratchets.mjs --base "$RATCHET_BASE"
+          RATCHET_BASE: ${{ github.event.pull_request.base.sha || (github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && github.event.before) || 'origin/claude/f1-game-project-26h3ng' }}
+        run: |
+          base="$RATCHET_BASE"
+          case "$base" in 0000000000000000000000000000000000000000|"") base=origin/claude/f1-game-project-26h3ng ;; esac
+          git cat-file -e "$base^{commit}" 2>/dev/null || base=origin/claude/f1-game-project-26h3ng
+          echo "ratchet base: $base"
+          node tools/check/ratchets.mjs --base "$base"
       - name: Every test file belongs to a topical group
         run: npm run test:audit
       # WHAT DOES THIS GATE ACTUALLY EXECUTE? A report, never a gate.
