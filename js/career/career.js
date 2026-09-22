@@ -908,6 +908,13 @@ function objectiveMet(o, ctx) {
 }
 
 function prizeFor(pos) {
+  // A position off the bottom of the table pays nothing; it must not pay
+  // `undefined`. `pos` is `order.indexOf(player) + 1`, so a player missing from
+  // the order is 0 — and 0 <= PRIZE.length took the branch below into
+  // PRIZE[-1], which is undefined, which makes `career.money += prize + …` NaN
+  // for the rest of that save (Math.max(0, NaN) is NaN, so the clamp beneath it
+  // does not rescue the number either). Defensive: no caller reaches it today.
+  if (pos < 1) return 0;
   if (pos <= PRIZE.length) return PRIZE[pos - 1];
   return pos <= 15 ? PRIZE_MID : PRIZE_TAIL;
 }

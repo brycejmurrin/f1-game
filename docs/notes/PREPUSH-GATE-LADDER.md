@@ -12,8 +12,8 @@ subset of the next:
 | command | unit files it runs | leaves out | when |
 |---|---|---|---|
 | `npm run test:guards` | 19 (curated) | — | hook-enforced, every `git commit` |
-| `npm run test:tooling-fast` | 226 of 299 | 73 | the documented edit-loop check |
-| `node tools/ci/deploy.mjs --gate-only` | 285 of 299 | 14 (`test:sweeps`) | the whole gate; what a deploy runs |
+| `npm run test:tooling-fast` | 228 of 302 | 74 | the documented edit-loop check |
+| `node tools/ci/deploy.mjs --gate-only` | 288 of 302 | 14 (`test:sweeps`) | the whole gate; what a deploy runs |
 
 _Derived from `tests/groups.json`, `tests/unit/` and ci.yml's "Pure-node unit suites" step by `node tools/gen/gen-ladder-figures.mjs`; `--check` runs in `test:guards`._
 <!-- /GENERATED -->
@@ -25,7 +25,7 @@ CI's — running them in the deploy duplicated ten minutes. They are enumerated 
 `tests/unit/prepush-gate-coverage.test.mjs`'s `SWEEPS_ONLY` map.
 
 `tooling-fast` being a subset is deliberate: it is tuned for an edit loop, and
-the 73 files it leaves out cost about 7.5 minutes serial on this box
+the 74 files it leaves out cost about 7.5 minutes serial on this box
 (`game-vm-a` 137 s, `game-vm-b` 99 s, `node-slow` 85 s, `sweeps-parts` 54 s,
 `garage-unit` 47 s are 95 % of it). The problem was never the split. The problem
 was that nothing said the split existed, so "tooling-fast is green" got read as

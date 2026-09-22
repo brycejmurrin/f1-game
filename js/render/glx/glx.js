@@ -2622,7 +2622,18 @@ const GLX = (function () {
       // the frame when the opaque depth buffer is both complete and still
       // bound. A no-op unless apex26.occlusionCull is on (GLXChunked).
       if (CHK && CHK.occlusionPass) { try { CHK.occlusionPass(); } catch (e) { Log.warn("gfx", "occlusionPass: " + (e && e.message)); } }
-      const r = PST.present(opts);
+      // DEPTH_TEST IS THE ONE GL FLAG NOTHING RE-ASSERTS PER FRAME. post.js's
+      // present() disables it for the fullscreen chain (SSAO → god rays →
+      // bloom → composite → FXAA/SGSR) and re-enables it ~400 lines later; a
+      // throw anywhere between leaves it OFF for the rest of the tab, because
+      // begin() and resetDrawState() only ever re-sync CULL_FACE, colorMask
+      // and polygonOffset. Every opaque draw after that — track, cars,
+      // scenery — then composites in submission order, so the world goes
+      // see-through and z-fights with no error on screen. Restored on the
+      // FAULT path only, so the happy path pays nothing for the guard.
+      let r;
+      try { r = PST.present(opts); }
+      catch (e) { try { gl.enable(gl.DEPTH_TEST); } catch (_) { /* context lost: nothing to restore into */ } throw e; }
       if (_softPresentWaiters.length || _softCaptureDue) softBlit();
       if (_glDrainAlways || _drainLeft > 0) { _drainLeft--; drainGlErrors("present"); }
       return r;

@@ -594,7 +594,7 @@
                   .and(cs.y.greaterThan(0.0)).and(cs.y.lessThan(1.0))
                   .and(cs.z.lessThan(1.0)), () => {
                   const cz = cs.z.sub(biasTerm.mul(U.carBiasScale)).toVar();
-                  const ct = (1.0 / 1024.0) * 0.75;   // CAR_SHADOW_SIZE texel, tightened
+                  const ct = (1.0 / (SHD.carSize || 1024)) * 0.75;   // CAR_SHADOW_SIZE texel, tightened — off the REAL map (256² under software GL)
                   const ctap = (px, py) =>
                     texture(SHD.carTex, flipUV(cs.xy.add(vec2(px, py)))).compare(cz);
                   const csh = ctap(-ct, -ct).add(ctap(ct, -ct))
@@ -1543,7 +1543,7 @@
                       .and(lps.y.greaterThan(0.002)).and(lps.y.lessThan(0.998))
                       .and(lps.z.lessThan(1.0)), () => {
                       const lpz = lps.z.sub(float(0.0012).add(float(0.004).mul(NoLl.oneMinus()))).toVar();
-                      const lpt = 1.5 / 512.0;
+                      const lpt = 1.5 / (SHD.lampSize || 512);   // LAMP_SHADOW_SIZE texel off the REAL map (256² under software GL)
                       const ltap = (px, py) =>
                         texture(SHD.lampTex, flipUV(lps.xy.add(vec2(px, py)))).compare(lpz);
                       lampSh.assign(ltap(-lpt, -lpt).add(ltap(lpt, -lpt))

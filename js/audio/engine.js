@@ -563,7 +563,15 @@ const GameAudio = (function () {
     const wasEngine = engineOn;
     if (musicOn) stopMusic();
     engineOn = false;               // old nodes died with the old context
-    try { ctx.close(); } catch (e) { /* already closed */ }
+    // A TRY/CATCH CANNOT SWALLOW A REJECTION, and close() returns a Promise.
+    // The "already closed" this catch was written for is exactly the case the
+    // spec makes REJECT (InvalidStateError), not throw — and index.html's
+    // `unhandledrejection` handler paints a full-screen overlay over the race
+    // on any rejection that reaches it. Worse, this is the one path where it is
+    // LIKELY: rebuildCtx() is only ever reached after a resume already failed,
+    // i.e. with the context in exactly the state close() refuses. Same shape as
+    // the resume() sites below, which have always chained .catch.
+    try { const p = ctx.close(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* already closed */ }
     ctx = null;
     master = null;
     sfxBus = null;
@@ -623,7 +631,16 @@ const GameAudio = (function () {
       //
       // The stops above are still right: they are what makes the resume a clean
       // restart rather than a graph re-entering mid-note.
-      try { if (ctx && ctx.state === "running" && ctx.suspend) ctx.suspend(); } catch (_) { /* a context mid-teardown must not break the hide path */ }
+      // suspend() returns a Promise, so the catch below sees only a synchronous
+      // throw. The `state === "running"` read cannot close the race it looks
+      // like it closes — iOS interrupts or closes the context on lock, which is
+      // precisely when this branch runs — and a rejection here reaches
+      // index.html's unhandledrejection overlay. Swallow both forms.
+      try {
+        if (ctx && ctx.state === "running" && ctx.suspend) {
+          const p = ctx.suspend(); if (p && p.catch) p.catch(() => {});
+        }
+      } catch (_) { /* a context mid-teardown must not break the hide path */ }
     } else {
       resumeIfNeeded();
       if (resumeMusic) startMusic(lastTrackIdx); // restarts re-synced to the clock

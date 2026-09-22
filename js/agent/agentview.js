@@ -755,6 +755,38 @@ const AgentView = (function () {
       return sameEnough(prev, next) ? undefined : next;
     }
 
+    // A DELTA CANNOT SAY "THIS KEY IS GONE". deltaOf walks Object.keys(NEXT), so
+    // a field the previous payload carried and this one does not is simply not
+    // mentioned — and applyDelta merges, so the reconstruction (and every
+    // consumer replaying it) keeps the stale value forever. The reachable case
+    // is the one agentHelp() actually recommends: take one
+    // world({detail:"full"}) to learn session/physics/tunables/terminal, then
+    // ride world({detail:"brief", since}) for the rest of the episode. Nothing
+    // requires the detail level to match across a `since` chain, and "brief"
+    // carries none of those keys, so `terminal.done` and friends stayed pinned
+    // at whatever the full read said long after the race that produced them.
+    //
+    // Rather than invent a tombstone the wire format has no room for, a shrink
+    // takes the escape hatch this API already has and already documents: return
+    // the whole payload with deltaBase null. Same choice deltaOf's own array
+    // branch makes when the lengths differ.
+    //
+    // META is excluded because `note` and `deltaBase` are stamped onto the
+    // payload by that very branch, before it becomes lastPayload — counting
+    // them would make every full response shrink into the next one and pin the
+    // API to full payloads for good.
+    const DELTA_META = { note: 1, deltaBase: 1 };
+    function keysShrank(prev, next, top) {
+      if (!prev || typeof prev !== "object" || Array.isArray(prev)) return false;
+      if (!next || typeof next !== "object" || Array.isArray(next)) return true;
+      for (const k of Object.keys(prev)) {
+        if (top && DELTA_META[k]) continue;
+        if (!Object.prototype.hasOwnProperty.call(next, k)) return true;
+        if (keysShrank(prev[k], next[k], false)) return true;
+      }
+      return false;
+    }
+
     function applyDelta(base, d) {
       if (d === undefined) return base;
       if (d === null || typeof d !== "object" || Array.isArray(d)) return d;
@@ -917,9 +949,13 @@ const AgentView = (function () {
       }
 
       if (o.since != null) {
-        if (!lastPayload || o.since !== lastSeq) {
+        const shrank = !!lastPayload && keysShrank(lastPayload, payload, true);
+        if (!lastPayload || o.since !== lastSeq || shrank) {
           payload.deltaBase = null;
-          payload.note = "no delta available for seq " + o.since + " — full payload returned";
+          payload.note = shrank
+            ? "this payload drops keys the delta base carried (detail level changed?) — " +
+              "a delta cannot express a removed key, so the full payload is returned"
+            : "no delta available for seq " + o.since + " — full payload returned";
         } else {
           const d = deltaOf(lastPayload, payload) || {};
           lastPayload = applyDelta(lastPayload, d);
