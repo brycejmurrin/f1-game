@@ -647,8 +647,13 @@ const CarDraw = (function () {
           // shared mesh).
           _rq[_rqN] || (_rq[_rqN] = new Float32Array(16));
           _rq[_rqN].set(W);
-          _rqEmis[_rqN] = 0.30 + 0.70 * heat;
-          _rqAlpha[_rqN] = Math.min(1, 0.25 + heat * 0.9);
+          // FIVE glow levels, not a continuous heat: emissive and alpha are TLX's
+          // material KEY (1/32 steps), and a glow that followed the disc minted a
+          // material — a program — per step for every hot wheel in view, i.e. at
+          // every braking zone (gpu-census 213 minted: row).
+          const hq = Math.round(heat * 4) / 4;
+          _rqEmis[_rqN] = 0.30 + 0.70 * hq;
+          _rqAlpha[_rqN] = Math.min(1, 0.25 + hq * 0.9);
           _rqN++;
         }
       }

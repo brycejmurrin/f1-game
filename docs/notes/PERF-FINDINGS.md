@@ -5341,7 +5341,27 @@ the render path: a `RenderObject` whose cache key changes (`needsUpdate` →
 dispose → recreate) after its async state landed, or a `compileAsync`-free path
 the guard does not cover. Census 213 measures the tree with no mid-race minting;
 if `build` stays inside the spikes with nothing minted, that path is next.
-Census 213: _pending_.
+
+### Census 213: no frame over 100 ms in a driven window, picture intact
+
+Luma 47.8, 318 m driven at 21.8 m/s: **187 callbacks over 12.8 ms in 676 frames,
+worst 81.8 ms, no frame at or over 100 ms** — against 258–556 ms at the start
+of this note and 648 ms at the worst driven measurement (210). The `mats:` row
+still counted 18 misses, and the new `minted:` row named them: emissive
+0.75–0.97 and alpha 0.81–1.0 rising together in 1/32 steps on a `roughness 0.9 |
+na` bag — the **brake rings**, whose glow `car-draw.js` derives from disc heat
+(`emissive 0.30 + 0.70 × heat`, `alpha 0.25 + 0.9 × heat`) for every hot wheel of
+every car in view: a braking pack minted a material per 1/32 of heat, i.e. at
+every braking zone. Heat is now quantised to quarters at that site (five glow
+levels, five materials). With the codegen deferred those mints no longer cost a
+frame, which is why 213 is clean even before this fix; without the mint the
+codegen, its garbage and the pipelines leave the drive entirely. Census 214:
+_pending_.
+
+Also visible again: the warm at the lights took 18.8 s on this run (scene
+13.8 s) — the runner's variance is large (10.7–18.8 s across 208–213), and the
+scene compile is the whole of it. It is not the reported lag, and it is the next
+cost to take down (fewer materials at the grid means fewer programs to warm).
 
 Also measured for the first time: the lights hold **10.7 s** on this Metal runner
 (scene warm 7.0 s, post 2.9 s, casters 0.8 s). The scene warm mints every pooled

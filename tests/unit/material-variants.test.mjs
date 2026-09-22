@@ -34,6 +34,12 @@ test("the aero-bar blink is two fixed option bags, not a sine on alpha", () => {
   assert.doesNotMatch(mesh, /alpha: 0\.65 \+ 0\.35 \* Math\.sin/, "the sine alpha is back");
 });
 
+test("the brake-ring glow is five levels of disc heat, not a continuous emissive and alpha", () => {
+  const draw = read("js/car/car-draw.js");
+  assert.match(draw, /const hq = Math\.round\(heat \* 4\) \/ 4;\n\s+_rqEmis\[_rqN\] = 0\.30 \+ 0\.70 \* hq;\n\s+_rqAlpha\[_rqN\] = Math\.min\(1, 0\.25 \+ hq \* 0\.9\);/,
+    "the ring glow must derive both key fields from one quantised heat (gpu-census 213 minted a material per 1/32 of heat at every braking zone)");
+});
+
 test("no draw module multiplies a sine or a clamp straight into an alpha or emissive option", () => {
   for (const p of ["js/game.js", "js/car/car-mesh.js", "js/car/car-draw.js"]) {
     const src = read(p).replace(/\/\/[^\n]*/g, "");
