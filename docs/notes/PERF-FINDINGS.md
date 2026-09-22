@@ -5116,3 +5116,61 @@ rasteriser with a 3.6 ms p50 and 14% of frames over the spike threshold is a
 poor place to test a correlation, and the macOS runner is not a player's
 machine. The allocation is worth cutting on its own terms; the periodicity
 question is open.
+
+## 2ac. The hitch was three costs on the first draw of streamed content, and the container could see none of them (2026-09-22)
+
+§2aa shipped a governor fix and the player reported the hitch unchanged, so the hunt
+reopened on the configuration they run — RENDERER = THREE.JS, THREE PATH = WebGPU,
+TLX on three's WebGPURenderer, never WGX. Six leads died to measurement (§2ab and
+the table at the end); the answer took four census rounds on real Metal because the
+mechanism is scenery streaming into view as the car reaches new track, and the
+container's car drives full-throttle into the first wall and streams nothing. Every
+local profile of the same window was flat.
+
+### The window
+
+Census 197 and 201, macos-latest, real present path: the per-beat uniform-buffer
+count goes 39-90 → 507-558 in ONE second at race+18-23 s and climbs to ~750 while fps
+halves; 10-23 rAF callbacks of 258-556 ms land in it. WGX on the same runner, same
+track, same window: 0-3 spikes, max 5-18 ms.
+
+### Three costs, isolated one at a time
+
+| cost | how it was named | what moved it | result |
+|---|---|---|---|
+| synchronous `device.createRenderPipeline` on a cache miss | census 198-200: 25-26 sync compiles vs 1 on WGX, tracking spikes one for one; half the WebGL2 leg's links tagged `async tlx.js:1796` (the warm), half unnamed | **vendor patch 7**: the lazy path takes `createRenderPipelineAsync`, `draw()` skips until it lands | census 201: `createRenderPipeline` 26 → 1, spikes unchanged (23, worst 479 ms) — real, not the time |
+| synchronous TSL → WGSL codegen (`NodeBuilder.build`) on the render path | census 202 CPU profile: `build` 663 ms + ~1,010 ms of its traversal helpers, ~1.7 s, ~35 ms/program, a third of busy main-thread time | **vendor patch 8**: on a node-builder cache miss outside `compileAsync`, start `Nodes.getForRender( ro, true )` (three's own `buildAsync`) and skip the object until its state exists | census 203: spikes 23 → 7; worst frame still 506 ms |
+| ~470 `RenderObject`s created in one frame (bind group cloned + uniform buffer per object, ~1 ms each) when a chunk batch comes into view | census 203: the 506 ms callback sits exactly on the 39 → 507 buffer jump; the compile stacks account for every program (25 warm, 9 sun-shadow via `endPass`, 16 post via `runPass`, 1 scene) so nothing else is in that frame | **`NEW_MESH_BUDGET`** in `tlx.js`: `acquireMesh()` returns null past 24 new meshes a present, the draw retries next present — a burst spreads over ~20 presents at ≤ ~25 ms each | pending (census 204) |
+
+And a fourth that patch 8 created: the 16 post-chain programs the 3 s warm gate
+left unbuilt used to compile on the first visible present after the lights; with
+patch 8 a miss there is a SKIPPED full-screen quad, i.e. a blank post pass for the
+first frames of the race. `post.warm()` now runs regardless of the scene warm's
+elapsed time.
+
+### What the instruments had to become first
+
+§2ab: the census timed a headless readback rather than the player's present path;
+the heap sampler reports what SURVIVES, not what is allocated; the tail row could
+not see a period. Four of the six dead leads were only killable after those fixes.
+Added this round: the census CPU profile (`analyseCpu`, self time from
+`timeDeltas`), the compile-stack capture (on `createShaderModule`, one per program on
+both paths, with `Error.stackTraceLimit` raised — V8's default of 10 never reached a
+frame of ours), and the per-frame pass fingerprint by target resolution.
+
+### The dead leads
+
+| lead | killed by |
+|---|---|
+| JS allocation | `--ablate headless`: 26.5 → 13.7 MB/s with rendering off; half renderer, half game; no site above 15% |
+| `getDynamicCacheKey` rest arrays (#34535) | upstream's fix, measured 254.9 → 249.7 KB/frame — 2% (patch 6 stays) |
+| material eviction → pipeline compiles | zero `createRenderPipeline` in 150 s against 270 misses; three keys pipelines on material properties |
+| GC pauses | enrichment 1.65-1.73 every run — above chance, below the bar, the noise floor |
+| `fitHud` forced layout | 0.1 ms/s, zero frames paid a recalc, 0% of spike cost (the 10 Hz `getComputedStyle` above the memo was fixed anyway) |
+| sun shadow + PCSS blocker rebuild | real, periodic, +2 passes; 1.24-1.3× a normal frame |
+
+### Inherited reds, named
+
+`image-grade-visual` › blacks and `webgl-probes` › dynamic player shadow fail
+byte-identically at the merge-base `5618ee127`; neither is this branch's. The
+`INVALID_OPERATION` timeout passed alone (rule 8).
