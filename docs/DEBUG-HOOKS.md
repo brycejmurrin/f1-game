@@ -2547,7 +2547,7 @@ Reset all `meshToggle()` overrides, restoring every mesh to its default visibili
 state. Companion to `meshToggle()` — call this between tests so toggled meshes
 don't bleed into later screenshots.
 
-### `renderScale(v?) → {scale, fps, floorMs, auto, tier, autoTier, autoShed, userTier, tierFloor, crashStrikes}`
+### `renderScale(v?) → {scale, fps, floorMs, auto, tier, autoTier, autoShed, userTier, tierFloor, crashStrikes, open, frameTimes}`
 Adaptive-resolution control. No arg: report the current state. A number pins the
 3D render scale (clamped `0.5–1`) and disables the auto-governor — a big
 fill-rate win (softer 3D; the HUD stays crisp). `true` re-enables the
@@ -2574,10 +2574,19 @@ twice the derived budget. It exists because every average in the governor is
 built to forget exactly the frames a "laggy for the first few seconds, fine
 afterwards" report is about — `fpsEMA` has absorbed a 400 ms frame within a
 second. Read it right after the lag, on the device that has it.
+`frameTimes` is `open`'s counterpart for a hitch that keeps coming back:
+`{frames, p50, p95, p99, maxMs, physicsSteps, droppedSimS, windowFrames}` over
+the last 2048 frames, the ring `js/perf/governor.js` keeps so an occasional
+hitch does not vanish from diagnostics because the next second was smooth.
+`open` answers "the first few seconds are bad"; `frameTimes` answers "it lags
+every few seconds" — read `p99` against `p50`, not the fps, because an average
+that a 60 Hz panel pins at 16.7 ms cannot show a spike at all. A `p99` several
+times `p50` with a healthy `p50` IS the periodic-hitch signature.
 ```js
 __apex.renderScale();      // full governor snapshot
 __apex.renderScale(0.6);   // pin 60% 3D scale
 __apex.renderScale(true);  // hand back to the auto governor
+__apex.perf().frameTimes;  // p50/p95/p99/maxMs over the last 2048 frames
 ```
 
 ### `govHold(on?) → {tierHold, tier, autoTier, autoShed}`
