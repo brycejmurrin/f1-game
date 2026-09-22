@@ -95,16 +95,22 @@ const TRACK_MS = 45000;
     }, backend);
     console.error(`apex-eval: backend=${backend} track=${track}`);
     await page.goto(srv.url);
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 15000 });
+    await page.waitForFunction(() => window.__apex != null, null, { timeout: 15000, polling: 100 });
     await page.evaluate(SHAPE);
     await page.evaluate((t) => window.__apex.race(t), track);
     // TRACK_MS, not 15 s. A TLX build of monza on this container's SwiftShader
-    // measures 16.6 s (2026-09-21, idle box, both with and without
-    // `polling: 100` — rAF is not starved here, the budget was simply under
-    // the build). TLX became the DEFAULT backend on 2026-09-18, so from that
+    // measures 16.6 s (2026-09-21, idle box), so the old budget was simply
+    // under the build — and BOTH halves matter. The 16.6 s was the same with
+    // and without `polling: 100`, because a predicate that becomes true is
+    // observed on the next animation frame either way; but a predicate that
+    // NEVER becomes true is a different story, and tools/check/
+    // wait-polling-lint.mjs measured a declared 3 s bound running 109,665 ms
+    // under rAF starvation. A timeout that cannot fire is not a bound, so this
+    // takes the timer polling too: the budget below is the fix for the failure
+    // seen, the polling is what makes the budget mean anything. TLX became the DEFAULT backend on 2026-09-18, so from that
     // day this tool failed on its own default while every sibling kept
     // working: agent.mjs already budgets 20 s, shot.mjs 120 s, ssr-probe 120 s.
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: TRACK_MS });
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: TRACK_MS, polling: 100 });
     await sleep(1600); // mesh build
 
     const result = await page.evaluate(async ({ expr, raw }) => {
