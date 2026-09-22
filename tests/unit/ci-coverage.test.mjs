@@ -851,8 +851,28 @@ test("a green fast-tier run pokes the train; a red or called one never does", ()
   for (const j of ["guards", "node-suites", "sweeps-parts", "driving-model", "select"]) {
     assert.ok(cond.includes(`needs.${j}.result == 'success'`), `${j} must be green before the poke`);
   }
-  assert.ok(cond.includes("(needs.selected.result == 'success' || needs.selected.result == 'skipped')"),
-    "an empty plan skips `selected`, which is a pass");
+  /* A SKIPPED `selected` IS ONLY A PASS WHEN THE PLAN WAS HONESTLY EMPTY
+     (2026-09-22). `selected` is skipped whenever the plan has no shards, and
+     that happens two ways: nothing the diff touches has a spec, or everything
+     it touches was unaffordable. The second read as a pass, and it was the
+     renderer's whole story — all six test:gfx specs declare 240-540 s against
+     the gate's 180 s per-test cap, so a js/render diff emptied the plan and
+     poked the train with no backend booted by anything blocking.
+
+     `dropped` is what separates them, and tests/specs/render-boot.spec.js is
+     what keeps the tightening from becoming a permanent stall: a renderer diff
+     now has an affordable spec, so its plan is not empty in the first place. */
+  assert.ok(cond.includes("(needs.selected.result == 'success' || (needs.selected.result == 'skipped' && needs.select.outputs.dropped == '0'))"),
+    "a skipped `selected` may only pass the poke when NO routed spec was dropped");
+  // The output the condition reads has to exist, or the comparison is against
+  // an empty string and the gate silently never fires.
+  const selectJobBody = (ciWorkflow.split("\n  select:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
+  assert.match(selectJobBody, /^      dropped: \$\{\{ steps\.sel\.outputs\.dropped \}\}$/m,
+    "the select job must publish `dropped` or poke-train compares against nothing");
+  assert.match(selectStep, /dropped=\$\{dropped\}/,
+    "the step script must write `dropped` to $GITHUB_OUTPUT");
+  assert.match(selectStep, /overBudgetSpecs \|\| \[\]\)\.length \+ \(r\.unreachable/,
+    "`dropped` counts the over-budget and unreachable buckets, not just the squeezed-out ones");
   assert.match(poke, /permissions:\s*\n\s+actions: write/, "workflow_dispatch via the token needs actions:write");
   // A called workflow may not request more than its caller passes, and GitHub
   // checks that at STARTUP for every declared job, skipped or not: the first
