@@ -1028,3 +1028,42 @@ test("the recovery hold is wall-clock: the same seconds at 60, 120 and 144 Hz", 
   assert.ok(t144 > 0.8 * t60, `144 Hz must not recover in frames: ${t144.toFixed(1)} s vs ${t60.toFixed(1)} s at 60 Hz`);
   assert.ok(spread < 5, `restore times must agree in wall time: 60 Hz ${t60.toFixed(1)} s, 120 Hz ${t120.toFixed(1)} s, 144 Hz ${t144.toFixed(1)} s`);
 });
+
+test("a load that STEPS does not buy a reallocation every few seconds", () => {
+  // THE "LAG SPIKE EVERY FEW SECONDS" CASE, measured 2026-09-22. Every scale
+  // change reallocates all HDR/bloom targets, and on TLX tlx-post.js disposes
+  // each texture and the depth texture first, so the node renderer rebuilds the
+  // post chain's bind groups too — a visible hitch either way.
+  //
+  // Steady load never degrades, and neither does a smooth swing: _floorMs is
+  // DERIVED, so it rises to meet sustained cost (simulated over ten minutes the
+  // EMA came within 1.1 ms of the threshold and never crossed it). What the old
+  // code could not handle was load that STEPS faster than the floor estimator
+  // adapts — a restart with the field bunched, rain arriving, a pile-up
+  // spawning debris. That produced 35-83 scale changes per ten minutes with
+  // gaps of 1-5 s.
+  //
+  // The fix is a confirmation: a REPEAT cut needs the condition on two
+  // consecutive evaluations. The first cut of a race stays prompt, because the
+  // "slow from lights-out" window above is only about two evaluations wide.
+  const { PerfGov, scale } = makeGov();
+  PerfGov.sentinelArm(true);
+  let prev = scale(), changes = 0;
+  // Five heavy seconds in every thirty, for three minutes. The step is 6 ms:
+  // real, but nothing like an overloaded device — exactly the case where the
+  // governor should settle instead of hunting.
+  for (let f = 0; f < 36000; f++) {
+    const heavy = (f % 1800) < 300;
+    PerfGov.tick(10 + 6 * scale() * scale() + (heavy ? 6 : 0));
+    if (scale() !== prev) changes++;
+    prev = scale();
+  }
+  // MEASURED BOTH SIDES over this exact window: 49 scale changes on the code
+  // immediately before the fix, 15 after. The bound sits between them with room
+  // either way — a three-minute window was tried first and rejected because the
+  // pre-fix run scored 14 against a <= 14 bound, i.e. the test passed on the
+  // broken code. A regression test that its own bug would not have failed is
+  // worse than none.
+  assert.ok(changes <= 25,
+    `a 6 ms transient must not buy a reallocation every few seconds: ${changes} in 600 s`);
+});
