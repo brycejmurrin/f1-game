@@ -29,7 +29,7 @@ const ROOT = path.resolve(fileURLToPath(import.meta.url), "../../..");
 // the shared BOOT_MS / TRACK_MS budgets from tests/helpers/fixtures.js rather
 // than each carrying its own 8000/15000/20000 ms guess. That is the adoption
 // this ratchet is asking for, so the floor follows it up.
-export const FLOOR = 109;   // 2026-09-01: every spec with a boot wait imports BOOT_MS from fixtures (was 67). 2026-09-22: a bulk swap of 16 specs' `test` import onto fixtures.js was REVERTED — the fixtures pin GLX + tyre wear off, and bahrain-foundation's scenery audit failed on CI under them; the import is not a no-op (tools/ci/twinned-specs.mjs ADAPTED doc).
+export const FLOOR = 115;   // 2026-09-22: render-boot.spec.js imports fixtures, taking adoption 114 -> 115. The floor was ALREADY six behind at 109 — exactly at the 5-slack limit with 114/119 — so one new spec tipped it, and the raise is the backlog rather than this file's doing. Set to adoption, not to adoption-minus-slack: slack is room for the ratchet to notice drift, not a budget to spend up front. 2026-09-01: every spec with a boot wait imports BOOT_MS from fixtures (was 67). 2026-09-22: a bulk swap of 16 specs' `test` import onto fixtures.js was REVERTED — the fixtures pin GLX + tyre wear off, and bahrain-foundation's scenery audit failed on CI under them; the import is not a no-op (tools/ci/twinned-specs.mjs ADAPTED doc).
                             // 110 -> 109 on 2026-09-03: tlx-probes.spec.js was a CONSUMER and left with
                             // the WGX/TLX spike-out, so both sides of the ratio dropped by one. Adoption
                             // is unchanged at 100% of the specs that remain — nothing migrated off.

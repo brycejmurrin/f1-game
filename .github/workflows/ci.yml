@@ -1131,6 +1131,32 @@ jobs:
           APEX_WITH_TWINNED: 1
           GROUP: ${{ inputs.group || 'tiny' }}
         run: npm run "test:${GROUP:-tiny}" -- --timeout=900000 --shard=${{ matrix.shard }}/4
+      # THE TIMINGS OF A GREEN RUN ARE THE DATA, and they were being thrown away.
+      # Every per-test duration this job measures is written to junit.xml by
+      # playwright.config.js, and the only step that uploaded it ran
+      # `if: failure()` — so a PASSING run, which is the run whose timings you
+      # actually want, discarded them. tools/ci/spec-timings.mjs has existed to
+      # merge exactly this and had nothing to merge: 0 of 119 specs carry three
+      # samples, and select-budget.mjs still bills the whole tree from one
+      # 2026-08-07 measurement of one spec.
+      #
+      # Its own upload, not a widened failure one: junit.xml is a few KB, while
+      # the failure artifacts beside it are traces and screenshots worth tens of
+      # MB. `always()` so a timed-out or failed run still contributes the tests
+      # that did finish. `if-no-files-found: ignore` because a job whose steps
+      # were all skipped (the ship filter) legitimately produces none.
+      # `always()` AND the ship filter: always() is here to catch a run that
+      # timed out or failed partway, which still measured the tests that did
+      # finish. A ships-nothing diff is the other thing entirely — every step
+      # above was skipped, so there is no junit and nothing to say.
+      - name: Spec timings (junit — a green run's durations are the point)
+        if: always() && needs.ship-filter.outputs.ships != 'false'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: spec-timings-junit-smoke-${{ matrix.shard }}
+          path: artifacts/test-results-*/junit.xml
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Failure artifacts
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -1197,6 +1223,28 @@ jobs:
           APEX_WORKERS: 1
           APEX_FAIL_ON_FLAKY: 1
         run: npm test -- tests/specs/physics-characterization.spec.js --timeout=240000
+      # THE TIMINGS OF A GREEN RUN ARE THE DATA, and they were being thrown away.
+      # Every per-test duration this job measures is written to junit.xml by
+      # playwright.config.js, and the only step that uploaded it ran
+      # `if: failure()` — so a PASSING run, which is the run whose timings you
+      # actually want, discarded them. tools/ci/spec-timings.mjs has existed to
+      # merge exactly this and had nothing to merge: 0 of 119 specs carry three
+      # samples, and select-budget.mjs still bills the whole tree from one
+      # 2026-08-07 measurement of one spec.
+      #
+      # Its own upload, not a widened failure one: junit.xml is a few KB, while
+      # the failure artifacts beside it are traces and screenshots worth tens of
+      # MB. `always()` so a timed-out or failed run still contributes the tests
+      # that did finish. `if-no-files-found: ignore` because a job whose steps
+      # were all skipped (the ship filter) legitimately produces none.
+      - name: Spec timings (junit — a green run's durations are the point)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: spec-timings-junit-driving-model
+          path: artifacts/test-results-*/junit.xml
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Failure artifacts
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -1435,6 +1483,10 @@ jobs:
     outputs:
       shards: ${{ steps.sel.outputs.shards }}
       any: ${{ steps.sel.outputs.any }}
+      # How many routed specs the plan could NOT run, and why the plan exists at
+      # all. poke-train needs both to tell an empty plan from an unaffordable one.
+      dropped: ${{ steps.sel.outputs.dropped }}
+      reason: ${{ steps.sel.outputs.reason }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1593,6 +1645,28 @@ jobs:
         with:
           path: .selected-failed.txt
           key: selected-failed-${{ github.ref_name }}-${{ github.run_id }}
+      # THE TIMINGS OF A GREEN RUN ARE THE DATA, and they were being thrown away.
+      # Every per-test duration this job measures is written to junit.xml by
+      # playwright.config.js, and the only step that uploaded it ran
+      # `if: failure()` — so a PASSING run, which is the run whose timings you
+      # actually want, discarded them. tools/ci/spec-timings.mjs has existed to
+      # merge exactly this and had nothing to merge: 0 of 119 specs carry three
+      # samples, and select-budget.mjs still bills the whole tree from one
+      # 2026-08-07 measurement of one spec.
+      #
+      # Its own upload, not a widened failure one: junit.xml is a few KB, while
+      # the failure artifacts beside it are traces and screenshots worth tens of
+      # MB. `always()` so a timed-out or failed run still contributes the tests
+      # that did finish. `if-no-files-found: ignore` because a job whose steps
+      # were all skipped (the ship filter) legitimately produces none.
+      - name: Spec timings (junit — a green run's durations are the point)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: spec-timings-junit-selected-${{ matrix.name }}
+          path: artifacts/test-results-*/junit.xml
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Failure artifacts
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -1703,10 +1777,29 @@ jobs:
     timeout-minutes: 5
     needs: [guards, node-suites, sweeps-parts, driving-model, select, selected]
     # Fast tier only (a deploy-branch push, never a Pages call), and only when
-    # every fast-tier job passed — `selected` is skipped when the plan was
-    # empty, which counts as a pass. A red fast tier pokes nothing; the cron
+    # every fast-tier job passed. A red fast tier pokes nothing; the cron
     # backstop still gates the tip later and fails it visibly.
-    if: ${{ !cancelled() && github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && inputs.concurrency_key == '' && needs.guards.result == 'success' && needs.node-suites.result == 'success' && needs.sweeps-parts.result == 'success' && needs.driving-model.result == 'success' && needs.select.result == 'success' && (needs.selected.result == 'success' || needs.selected.result == 'skipped') }}
+    #
+    # A SKIPPED `selected` IS NOT ALWAYS A PASS (2026-09-22). It is skipped
+    # whenever the plan has no shards, and that happens two ways which are not
+    # alike:
+    #
+    #   * nothing this diff touches has a spec — a genuine pass, and the common
+    #     case for a docs or tooling change;
+    #   * every spec it DOES touch was unaffordable — dropped over budget, or
+    #     bigger than the whole 10-test cap.
+    #
+    # The second read as a pass, and it was the renderer's entire story: all six
+    # `test:gfx` specs declare 240-540 s against the gate's 180 s per-test cap,
+    # so a `js/render/` diff emptied the plan, skipped this job's dependency and
+    # poked the train with no backend having been booted by anything blocking.
+    # `dropped` separates them, and tests/specs/render-boot.spec.js is what makes
+    # the tightening safe rather than a permanent stall: a renderer diff now has
+    # an affordable spec to select, so the plan is no longer empty.
+    #
+    # Deliberately NOT gated on `reason`: an `infra` or `docs` plan can be
+    # honestly empty, and those are the diffs this branch takes all day.
+    if: ${{ !cancelled() && github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && inputs.concurrency_key == '' && needs.guards.result == 'success' && needs.node-suites.result == 'success' && needs.sweeps-parts.result == 'success' && needs.driving-model.result == 'success' && needs.select.result == 'success' && (needs.selected.result == 'success' || (needs.selected.result == 'skipped' && needs.select.outputs.dropped == '0')) }}
     permissions:
       actions: write
       contents: read

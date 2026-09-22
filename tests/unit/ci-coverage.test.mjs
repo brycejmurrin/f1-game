@@ -501,6 +501,64 @@ test("ship filter chooses a successful active deployment, not merely the newest 
   assert.doesNotMatch(shipFilter, /j\[0\].*\.sha.*process\.stdout\.write/);
 });
 
+test("a GREEN run's junit survives — the timings CI already measures", () => {
+  /* tools/ci/spec-timings.mjs was written to build a rolling per-test duration
+     record and had nothing to merge: junit.xml was uploaded `if: failure()`
+     only, so a PASSING run — the run whose timings you actually want — threw
+     them away. 0 of 119 specs carry three samples, and select-budget.mjs bills
+     the whole tree from one 2026-08-07 mean, which is what excludes ~66 % of
+     the suite from the change-aware gate.
+
+     Pinned on all three browser jobs, because one of them reverting is enough
+     to make the record partial in a way nothing else would report. */
+  for (const [job, bound] of [["smoke", "\n  driving-model:"], ["driving-model", "\n  renderer-filter:"],
+                              ["selected", null]]) {
+    const body = bound
+      ? ciWorkflow.split(`\n  ${job}:`)[1].split(bound)[0]
+      : selectedJob;
+    assert.match(body, /- name: Spec timings \(junit/, `${job} no longer uploads its junit`);
+    assert.match(body, /name: spec-timings-junit-/, `${job}'s timings artifact must be findable by pattern`);
+    assert.match(body, /path: artifacts\/test-results-\*\/junit\.xml/, `${job} must upload junit, not the heavy trace bundle`);
+    assert.match(body, /if-no-files-found: ignore/, `${job} must not fail a run for having no timings`);
+    // The whole point: NOT failure()-only.
+    const step = body.split("- name: Spec timings (junit")[1].split("- name:")[0];
+    assert.match(step, /if: always\(\)/, `${job}'s timings upload is conditional on failure again`);
+  }
+});
+
+test("the timings merge is its own workflow, and never pushes to the deploy branch", () => {
+  /* IT CANNOT LIVE IN ci.yml. It needs `contents: write`, and pages.yml calls
+     ci.yml as a reusable workflow granting only `contents: read` — GitHub
+     validates every declared job's permissions at STARTUP, skipped jobs
+     included. Train #2241 died `startup_failure` on exactly that, and a
+     `contents: write` job in ci.yml would kill every train the same way. This
+     test is the thing standing between a future "just move it into CI" and a
+     dead release train. */
+  const timings = fs.readFileSync(new URL("../../.github/workflows/spec-timings.yml", import.meta.url), "utf8");
+  assert.match(timings, /^permissions:\n  contents: write\n  actions: read$/m,
+    "the merge workflow needs write for the side branch and read for the artifacts");
+  // ci.yml must NOT gain a write permission, or every Pages call fails at startup.
+  assert.doesNotMatch(ciWorkflow, /^\s+contents: write\s*$/m,
+    "a contents:write job in ci.yml fails startup validation on every pages.yml call (train #2241)");
+  // Same refusal import-models.yml carries: the deploy branch by name.
+  assert.match(timings, /claude\/f1-game-project-26h3ng\|""\|\*\[!a-z0-9\._\/-\]\*\)/,
+    "the push must refuse the deploy branch by name, as import-models.yml does");
+  assert.match(timings, /git push -f origin "\$TIMINGS_BRANCH"/);
+  // FORCE-PUSHED, so the namespace matters as much as the name: `claude/*` is
+  // where sessions branch, and a bot that force-pushes there lands on an open
+  // PR's head sooner or later. `bot/` is import-models.yml's convention.
+  assert.match(timings, /^  TIMINGS_BRANCH: bot\/[a-z0-9-]+$/m,
+    "the force-pushed branch must live under bot/, never in the claude/ namespace sessions use");
+  assert.doesNotMatch(timings, /git push[^\n]*claude\/f1-game-project-26h3ng/,
+    "the timings bot may never push to the branch that ships");
+  // The env bucket must match the stack that produced the numbers, not the
+  // runner doing the merge — mixing buckets is what spec-timings.mjs forbids.
+  assert.match(timings, /APEX_GL: llvmpipe/,
+    "the browser jobs run llvmpipe; merging under another bucket fakes a regression");
+  // And it must be serialised: two merges racing drop each other's samples.
+  assert.match(timings, /concurrency:\n  group: spec-timings/);
+});
+
 test("the ship filter is ONE job whose answer every smoke shard reads", () => {
   /* MEASURED 2026-09-22: the four smoke shards each spent 3m32s-5m02s on
      checkout + `npm ci` BEFORE the filter could say "do not run", and each then
@@ -851,8 +909,28 @@ test("a green fast-tier run pokes the train; a red or called one never does", ()
   for (const j of ["guards", "node-suites", "sweeps-parts", "driving-model", "select"]) {
     assert.ok(cond.includes(`needs.${j}.result == 'success'`), `${j} must be green before the poke`);
   }
-  assert.ok(cond.includes("(needs.selected.result == 'success' || needs.selected.result == 'skipped')"),
-    "an empty plan skips `selected`, which is a pass");
+  /* A SKIPPED `selected` IS ONLY A PASS WHEN THE PLAN WAS HONESTLY EMPTY
+     (2026-09-22). `selected` is skipped whenever the plan has no shards, and
+     that happens two ways: nothing the diff touches has a spec, or everything
+     it touches was unaffordable. The second read as a pass, and it was the
+     renderer's whole story — all six test:gfx specs declare 240-540 s against
+     the gate's 180 s per-test cap, so a js/render diff emptied the plan and
+     poked the train with no backend booted by anything blocking.
+
+     `dropped` is what separates them, and tests/specs/render-boot.spec.js is
+     what keeps the tightening from becoming a permanent stall: a renderer diff
+     now has an affordable spec, so its plan is not empty in the first place. */
+  assert.ok(cond.includes("(needs.selected.result == 'success' || (needs.selected.result == 'skipped' && needs.select.outputs.dropped == '0'))"),
+    "a skipped `selected` may only pass the poke when NO routed spec was dropped");
+  // The output the condition reads has to exist, or the comparison is against
+  // an empty string and the gate silently never fires.
+  const selectJobBody = (ciWorkflow.split("\n  select:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
+  assert.match(selectJobBody, /^      dropped: \$\{\{ steps\.sel\.outputs\.dropped \}\}$/m,
+    "the select job must publish `dropped` or poke-train compares against nothing");
+  assert.match(selectStep, /dropped=\$\{dropped\}/,
+    "the step script must write `dropped` to $GITHUB_OUTPUT");
+  assert.match(selectStep, /overBudgetSpecs \|\| \[\]\)\.length \+ \(r\.unreachable/,
+    "`dropped` counts the over-budget and unreachable buckets, not just the squeezed-out ones");
   assert.match(poke, /permissions:\s*\n\s+actions: write/, "workflow_dispatch via the token needs actions:write");
   // A called workflow may not request more than its caller passes, and GitHub
   // checks that at STARTUP for every declared job, skipped or not: the first
