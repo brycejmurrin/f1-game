@@ -6040,10 +6040,10 @@ function updateCar(c, dt, ranked) {
     // question actually being asked.
     const autoGas = autoThrottle() && (c.contactT || 0) === 0 && vStd(c.speed) < 3;
     const gasPressed = inp ? !!inp.throttle : (autoGas || Input.throttle());
-    // Under a RED flag the whole field is HELD below this gate on purpose (the
+    const stoppedOnTrack = gasPressed && c.speed < 3 && raceT > 2 && !(braking && ds < -0.01);
+    // Under a RED flag the whole field is HELD below that gate on purpose (the
     // red cap is ~2 % of vTop): stopped is the instruction, not being stuck.
     const redHeld = raceCtl.level >= 4;
-    const stoppedOnTrack = gasPressed && c.speed < 3 && raceT > 2 && !(braking && ds < -0.01) && !redHeld;
     // Being OFF-TRACK is not the same as being stuck. The driving boundary sits
     // ~9 m beyond the road edge, so a driver can be metres into a wide run-off,
     // fully in control and steering back to the track — and the bare c.offroad
@@ -6078,7 +6078,9 @@ function updateCar(c, dt, ranked) {
     // (c.rescueLastT || 0) defaulted to 0 and blocked rescue for the first 4 s of
     // every race, so a car stuck from the start was never recovered.
     const rescueGrace = c.rescueLastT != null && raceT < c.rescueLastT + 4;
-    if (stuck && !rescueGrace) c.rescueT = (c.rescueT || 0) + dt;
+    // Held by the red and stuck for no OTHER reason: not stuck.
+    const redOnly = redHeld && stoppedOnTrack && !beached && !c.wrongWay && !((c.wallT || 0) > 0);
+    if (stuck && !redOnly && !rescueGrace) c.rescueT = (c.rescueT || 0) + dt;
     else c.rescueT = Math.max(0, (c.rescueT || 0) - dt * 1.5);
     if (c.rescueT > 3) { rescuePlayer(c); c.rescueT = 0; }
   } else if (!c.human && state === "race" && !c.finished) {
@@ -6099,12 +6101,14 @@ function updateCar(c, dt, ranked) {
     // held by a car, not stuck: rescuing it fired it at 8 m/s into the parked
     // car it was waiting for.
     const aiStuck = c.pitState !== "box" && ((c.offroad && c.offT > 0.5) ||
-      (c.speed < 5 && raceT > 2 && !unstuckActive && !(queued && pits.inLane(c)) &&
-       raceCtl.level < 4));   // red flag: held, not stuck (same rule as the player's)
+      (c.speed < 5 && raceT > 2 && !unstuckActive && !(queued && pits.inLane(c))));
+    // RED FLAG: the field is held under that low-speed gate on purpose — only a
+    // car genuinely beached in the run-off still counts as stuck (as the player's).
+    const aiRedHeld = raceCtl.level >= 4 && !(c.offroad && c.offT > 0.5);
     // Parked on purpose: a timer that crossed the line in the queue must not
     // fire the moment the stop begins (it did, 0.2 s into a Monaco stop).
     if (c.pitState === "box") c.rescueT = 0;
-    else if (aiStuck) c.rescueT = (c.rescueT || 0) + dt;
+    else if (aiStuck && !aiRedHeld) c.rescueT = (c.rescueT || 0) + dt;
     else c.rescueT = Math.max(0, (c.rescueT || 0) - dt * 1.5);
     if (c.rescueT > AiDrive.aiRescueDelay((c.contactT || 0) > 0)) {
       Tracks.sample(track, c.s, smp);
