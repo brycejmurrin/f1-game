@@ -38,20 +38,34 @@ const SHELL = path.join(ROOT, "index.html");
 // guard for free — the hook blocks any edit landing inside the pair.
 const OPEN = "    <!-- @gen-shell:title-art -->";
 const CLOSE = "    <!-- @gen-shell:/title-art -->";
+// The PORTRAIT drawing is a second block, not a second file: it is the same car
+// mesh through a second camera, so one generator owns both.
+const OPEN_TOP = "    <!-- @gen-shell:title-art-top -->";
+const CLOSE_TOP = "    <!-- @gen-shell:/title-art-top -->";
 
 // ---------------------------------------------------------------- camera
-const AZ = 0.663, EL = 0.055, DIST = 5.5, FOCAL = 1000;
-const TARGET = [0, 0.50, -1.40];
+// ONE CAMERA. The landscape drawing is the garage's own orbit. The portrait
+// half is not projected at all — see sceneTop, which traces a real render
+// instead, because this projector cannot draw a car pointed at its own lens.
+const CAM_SIDE = { az: 0.663, el: 0.055, dist: 5.5, target: [0, 0.50, -1.40] };
+const FOCAL = 1000;
 const sub = (a, b) => a.map((x, i) => x - b[i]);
 const dot = (a, b) => a.reduce((s, x, i) => s + x * b[i], 0);
 const cross = (a, b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
 const norm = (v) => { const m = Math.hypot(...v); return v.map((x) => x / m); };
-const EYE = [TARGET[0] + DIST*Math.sin(AZ)*Math.cos(EL),
-             TARGET[1] + DIST*Math.sin(EL),
-             TARGET[2] + DIST*Math.cos(AZ)*Math.cos(EL)];
-const FWD = norm(sub(TARGET, EYE));
-const RIGHT = norm(cross(FWD, [0, 1, 0]));
-const UPV = cross(RIGHT, FWD);
+let TARGET, EYE, FWD, RIGHT, UPV;
+/** Point the one projector at a scene. Everything downstream reads these, so a
+ *  whole drawing is re-aimed by calling this before building it. */
+function setCamera(c) {
+  TARGET = c.target;
+  EYE = [TARGET[0] + c.dist*Math.sin(c.az)*Math.cos(c.el),
+         TARGET[1] + c.dist*Math.sin(c.el),
+         TARGET[2] + c.dist*Math.cos(c.az)*Math.cos(c.el)];
+  FWD = norm(sub(TARGET, EYE));
+  RIGHT = norm(cross(FWD, [0, 1, 0]));
+  UPV = cross(RIGHT, FWD);
+}
+setCamera(CAM_SIDE);
 
 // Placement of THIS car, so one builder can put down two: metres rearward,
 // metres left, and a yaw about its own mid-wheelbase.
@@ -449,6 +463,86 @@ function scene() {
   ].join("\n");
 }
 
+/**
+ * THE PORTRAIT SCENE. Same two cars, same mesh, same builder — a different
+ * camera and a different formation, because the shapes are different problems.
+ *
+ * Landscape is a wide slot beside a button column, so the pair goes
+ * wheel-to-wheel and the drawing is 3.3 times wider than it is tall. Portrait
+ * is a tall slot under a button stack, and that same pair either shrinks to a
+ * strip or gets cropped to one car. From high and behind, the subject is the
+ * TRACK: two cars nose-up, one ahead and one drawing alongside, with four sets
+ * of marks running the full height of the frame between them.
+ *
+ * The formation is therefore longitudinal, not lateral: the leader sits 3.4 m
+ * up the road and half a metre left, the chaser is squared up behind and right,
+ * mid-overtake rather than side by side. Their marks converge toward the bottom
+ * of the frame, which is the one composition that uses a tall box honestly.
+ *
+ * Neither car is LITE here. From this height both are the same size on paper —
+ * there is no far car to knock back — and the tone that told the two apart in
+ * the side view has to come from the formation instead.
+ */
+/**
+ * THE PORTRAIT DRAWING IS TRACED, NOT PROJECTED — and the trace is the
+ * renderer's own pixels, not a hand-typed guess at them.
+ *
+ * tools/gen/title-art-trace.mjs takes a garage render of the car from behind
+ * and above, separates it from the pit box, follows the mask's borders into
+ * loops and writes them to title-art-trace.json in a 300x420 car-local box.
+ * That file's header says how to regenerate it and why this half cannot use
+ * the projector the landscape half uses. Everything below only PLACES those
+ * loops and paints them in the same layer stack as the projected car.
+ *
+ * The bands are the render's own luminance: `tyre` is rubber, `dark` the
+ * shadowed panels, `mid` the flanks, `lit` what catches the light. Painting
+ * them in that order rebuilds the render's volume without copying its colour.
+ */
+const TRACE = JSON.parse(fs.readFileSync(path.join(ROOT, "tools", "gen", "title-art-trace.json"), "utf8"));
+
+/** One traced car, as the same stack of groups the projected one paints with. */
+function topCar(dx, dy, phase, inkW) {
+  PHASE = phase;
+  const put = (loops) => loops.map((l) => poly(l.map(([x, y]) => [x + dx, y + dy]))).join(" ");
+  const solids = put(TRACE.outline);
+  const out = [];
+  out.push(g(`data-ink stroke-width="${inkW + 12}" stroke-opacity="0.22" fill-opacity="0"`, solids));
+  out.push(g(`data-ink stroke-width="${inkW}"`, solids));
+  out.push(g('stroke="none"', solids));
+  out.push(g('data-tone stroke="none" fill-opacity="0.13"', solids));
+  out.push(g('data-tone stroke="none" fill-opacity="0.07"', put(TRACE.tyre)));
+  out.push(g('data-tone stroke="none" fill-opacity="0.17"', put(TRACE.dark)));
+  out.push(g('data-tone stroke="none" fill-opacity="0.30"', put(TRACE.mid)));
+  out.push(g('data-tone stroke="none" fill-opacity="0.52"', put(TRACE.lit)));
+  return out;
+}
+
+/** A tyre mark leaving one rear tyre and running down out of frame. */
+function topMark(x, y0, w0, w1, len, lean) {
+  return poly([[x - w0, y0], [x + w0, y0],
+               [x + w1 + lean, y0 + len], [x - w1 + lean, y0 + len]]);
+}
+
+function sceneTop() {
+  // The landscape pair's formation seen from behind: one a nose ahead, both
+  // squared up, close enough that the frame holds them as a pair.
+  const A = [10, 96], B = [268, 6];
+  // Anchored on the traced rear tyres (x 45 and 255 of the 300-wide box, which
+  // ends at y 238), so the marks leave the rubber rather than floating under it.
+  // Anchored on the traced rear tyres — x 48 and 252 of the 300-wide box, whose
+  // 420 ends at the rear wing — so the marks leave the rubber, not the air.
+  const marks = [
+    topMark(A[0] + 48, A[1] + 404, 20, 34, 420, 18),
+    topMark(A[0] + 252, A[1] + 404, 20, 34, 420, 24),
+    topMark(B[0] + 48, B[1] + 404, 20, 34, 420, -16),
+    topMark(B[0] + 252, B[1] + 404, 20, 34, 420, -22),
+  ].join(" ");
+  PHASE = 0;
+  return [g('data-trail stroke="none"', marks),
+          ...topCar(A[0], A[1], 0, 9),
+          ...topCar(B[0], B[1], 1.7, 10)].join("\n");
+}
+
 // ================================================================== output
 // Where the built scene lands in the 1400x900 viewBox. Overridable from the
 // environment so a recomposition is a re-run rather than an edit: the pair has
@@ -456,6 +550,10 @@ function scene() {
 // right, and finding that took a dozen renders.
 const PLACE = process.env.TA_PLACE || "202 675";
 const SCALE = process.env.TA_SCALE || "0.99";
+// The portrait drawing has its own viewBox (900x1600) because it is a different
+// composition, not a crop of the first one.
+const PLACE_TOP = process.env.TA_TOP_PLACE || "156 974";
+const SCALE_TOP = process.env.TA_TOP_SCALE || "1.0";
 const argv = process.argv.slice(2);
 // #tc-frame is the per-SHAPE framing that css/menus.css puts on top of that one
 // placement: a phone in portrait wants the pair nudged off the left edge, a
@@ -463,21 +561,35 @@ const argv = process.argv.slice(2);
 // column. The transform has to live INSIDE the svg — an offset on #title-car
 // itself counts toward #overlay's scrollWidth and took `ui-scale > portrait`
 // red — and whatever it moves off the viewport, the svg viewport clips.
-const want = `${OPEN}\n    <g id="tc-frame">\n    <g transform="translate(${PLACE}) scale(${SCALE})">\n` +
-             `${scene()}\n    </g>\n    </g>\n${CLOSE}`;
-const shell = fs.readFileSync(SHELL, "utf8");
-const a = shell.indexOf(OPEN), b = shell.indexOf(CLOSE);
-if (a < 0 || b < 0) {
-  console.error(`title-art: ${OPEN.trim()} / ${CLOSE.trim()} markers missing from index.html`);
-  process.exit(1);
+const BLOCKS = [
+  { open: OPEN, close: CLOSE, frame: "tc-frame",
+    body: `    <g transform="translate(${PLACE}) scale(${SCALE})">\n${scene()}\n    </g>` },
+  { open: OPEN_TOP, close: CLOSE_TOP, frame: "tc-top-frame",
+    body: `    <g transform="translate(${PLACE_TOP}) scale(${SCALE_TOP})">\n${sceneTop()}\n    </g>` },
+];
+let shell = fs.readFileSync(SHELL, "utf8");
+let wrote = 0, drift = [];
+for (const blk of BLOCKS) {
+  const want = `${blk.open}\n    <g id="${blk.frame}">\n${blk.body}\n    </g>\n${blk.close}`;
+  const a = shell.indexOf(blk.open), b = shell.indexOf(blk.close);
+  if (a < 0 || b < 0) {
+    console.error(`title-art: ${blk.open.trim()} / ${blk.close.trim()} markers missing from index.html`);
+    process.exit(1);
+  }
+  const have = shell.slice(a, b + blk.close.length);
+  if (have === want) continue;
+  drift.push(blk.frame);
+  if (!argv.includes("--check")) {
+    shell = shell.slice(0, a) + want + shell.slice(b + blk.close.length);
+    wrote += want.length;
+  }
 }
-const have = shell.slice(a, b + CLOSE.length);
 if (argv.includes("--check")) {
-  if (have === want) { console.log("title-art: index.html is up to date"); process.exit(0); }
-  console.error("title-art: index.html #title-car has DRIFTED from tools/gen/title-art.mjs.\n" +
+  if (!drift.length) { console.log("title-art: index.html is up to date"); process.exit(0); }
+  console.error(`title-art: index.html has DRIFTED from tools/gen/title-art.mjs (${drift.join(", ")}).\n` +
                 "  Run `node tools/gen/title-art.mjs` (or `npm run gen`) and commit the result.");
   process.exit(1);
 }
-if (have === want) { console.log("title-art: index.html is up to date"); process.exit(0); }
-fs.writeFileSync(SHELL, shell.slice(0, a) + want + shell.slice(b + CLOSE.length));
-console.log(`title-art: wrote ${want.length} B into index.html`);
+if (!drift.length) { console.log("title-art: index.html is up to date"); process.exit(0); }
+fs.writeFileSync(SHELL, shell);
+console.log(`title-art: wrote ${wrote} B into index.html (${drift.join(", ")})`);
