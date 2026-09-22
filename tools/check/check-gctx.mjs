@@ -176,14 +176,14 @@ export function scanDts() {
 }
 
 /** Members of `const els = {…}` in js/game.js: name -> {line}. */
-export function scanGameEls() {
-  const ast = parseFile(GAME);
+export function scanGameEls(source = null, label = GAME) {
+  const ast = source == null ? parseFile(GAME) : parse(source);
   let obj = null;
   walk(ast, (n) => {
     if (n.type === "VariableDeclarator" && n.id.type === "Identifier" && n.id.name === "els"
         && n.init && n.init.type === "ObjectExpression" && !obj) obj = n.init;
   });
-  if (!obj) throw new Error(`${GAME}: no \`const els = { … }\` object literal found`);
+  if (!obj) throw new Error(`${label}: no \`const els = { … }\` object literal found`);
   const members = new Map();
   for (const p of obj.properties) {
     if (p.type !== "Property") continue;             // a spread would be a shell bug, not a member
@@ -199,10 +199,10 @@ export function scanGameEls() {
 const ELS_MEMBER_RE = /^([A-Za-z_$][A-Za-z0-9_$]*)\??:\s*[A-Za-z_$][\w.<>[\]|\s]*$/;
 
 /** Members of `interface GameEls {…}` in the .d.ts: name -> {line}. */
-export function scanDtsEls() {
-  const lines = read(DTS).split("\n");
+export function scanDtsEls(source = null, label = DTS) {
+  const lines = (source == null ? read(DTS) : source).split("\n");
   const start = lines.findIndex((l) => l.startsWith("interface GameEls {"));
-  if (start < 0) throw new Error(`${DTS}: no \`interface GameEls {\` at column 0`);
+  if (start < 0) throw new Error(`${label}: no \`interface GameEls {\` at column 0`);
   const members = new Map();
   const errors = [];
   let end = -1;
@@ -214,13 +214,27 @@ export function scanDtsEls() {
       const decl = part.trim();
       if (!decl) continue;
       const m = ELS_MEMBER_RE.exec(decl);
-      if (!m) { errors.push(`${DTS}:${i + 1}: not a \`name: Type\` member: ${decl.slice(0, 60)}`); continue; }
-      if (members.has(m[1])) errors.push(`${DTS}:${i + 1}: duplicate member "${m[1]}"`);
+      if (!m) { errors.push(`${label}:${i + 1}: not a \`name: Type\` member: ${decl.slice(0, 60)}`); continue; }
+      if (members.has(m[1])) errors.push(`${label}:${i + 1}: duplicate member "${m[1]}"`);
       members.set(m[1], { name: m[1], line: i + 1 });
     }
   }
-  if (end < 0) throw new Error(`${DTS}: \`interface GameEls {\` is never closed by a \`}\` at column 0`);
+  if (end < 0) throw new Error(`${label}: \`interface GameEls {\` is never closed by a \`}\` at column 0`);
   return { members, errors };
+}
+
+/** Compare the nested shell contract. Kept separate so a negative fixture can
+ * prove a missing nested id is rejected rather than merely exercising the
+ * current, matching files. */
+export function checkElsParity(realEls = scanGameEls(), dtsEls = scanDtsEls(), gameLabel = GAME, dtsLabel = DTS) {
+  const problems = [...dtsEls.errors];
+  for (const [name, m] of realEls.members) {
+    if (!dtsEls.members.has(name)) problems.push(`${gameLabel}:${m.line}: els id "${name}" is not declared in ${dtsLabel}'s GameEls`);
+  }
+  for (const [name, d] of dtsEls.members) {
+    if (!realEls.members.has(name)) problems.push(`${dtsLabel}:${d.line}: GameEls declares "${name}", which is not a member of \`const els\` at ${gameLabel}:${realEls.line}`);
+  }
+  return problems;
 }
 
 /** The `declare const X: GameModuleFactory;` roster. */
@@ -297,8 +311,8 @@ export function scanRealFactories() {
  * the `create()` parameter binding rather than matched by name.
  * Returns [{ kind: "read"|"write"|"destructure", names, line }].
  */
-export function collectUsage(rel) {
-  const ast = parseFile(rel);
+export function collectUsage(rel, source = null) {
+  const ast = source == null ? parseFile(rel) : parse(source);
   const parents = new Map();
   walk(ast, (n, p) => { if (p) parents.set(n, p); });
   const sm = escope.analyze(ast, { ecmaVersion: 2022, sourceType: "script" });
@@ -310,6 +324,11 @@ export function collectUsage(rel) {
   const ctxVars = [];
   const seen = new Set();
   const add = (v) => { if (v && !seen.has(v)) { seen.add(v); ctxVars.push(v); } };
+  const elsVars = [];
+  const elsSeen = new Set();
+  const addEls = (v) => { if (v && !elsSeen.has(v)) { elsSeen.add(v); elsVars.push(v); } };
+  const variableForDef = (id) => sm.scopes.flatMap((s) => s.variables)
+    .find((x) => x.defs.some((d) => d.name === id));
   walk(ast, (n) => {
     if ((n.type === "FunctionDeclaration" || n.type === "FunctionExpression" || n.type === "ArrowFunctionExpression")
         && n.id && n.id.name === "create" && n.params.length && n.params[0].type === "Identifier") {
@@ -337,20 +356,65 @@ export function collectUsage(rel) {
         const write = (gp && gp.type === "AssignmentExpression" && gp.left === p)
                    || (gp && gp.type === "UpdateExpression" && gp.argument === p);
         hits.push({ kind: write ? "write" : "read", names: [p.property.name], line: id.loc.start.line });
+        if (p.property.name === "els") {
+          if (gp && gp.type === "MemberExpression" && gp.object === p && !gp.computed
+              && gp.property.type === "Identifier") {
+            const ggp = parents.get(gp);
+            const nestedWrite = (ggp && ggp.type === "AssignmentExpression" && ggp.left === gp)
+              || (ggp && ggp.type === "UpdateExpression" && ggp.argument === gp);
+            hits.push({ kind: nestedWrite ? "elsWrite" : "elsRead", names: [gp.property.name], line: id.loc.start.line });
+          } else if (gp && gp.type === "VariableDeclarator" && gp.init === p) {
+            if (gp.id.type === "Identifier") addEls(variableForDef(gp.id));
+            else if (gp.id.type === "ObjectPattern") {
+              const names = gp.id.properties.filter((prop) => prop.type === "Property" && !prop.computed
+                && prop.key.type === "Identifier").map((prop) => prop.key.name);
+              if (names.length) hits.push({ kind: "elsDestructure", names, line: id.loc.start.line });
+            }
+          } else if (gp && gp.type === "AssignmentExpression" && gp.right === p && gp.left.type === "Identifier") {
+            addEls(resolved.get(gp.left));
+          }
+        }
       } else if (p.type === "VariableDeclarator" && p.init === id && p.id.type === "ObjectPattern") {
         const names = [];
         for (const prop of p.id.properties) {
           if (prop.type !== "Property" || prop.computed || prop.key.type !== "Identifier") continue;
           names.push(prop.key.name);
+          if (prop.key.name === "els" && prop.value.type === "Identifier") addEls(variableForDef(prop.value));
         }
         if (names.length) hits.push({ kind: "destructure", names, line: id.loc.start.line });
       } else if (p.type === "AssignmentExpression" && p.right === id && p.left.type === "Identifier") {
         add(resolved.get(p.left));            // `G = ctx` inside create()
       } else if (p.type === "VariableDeclarator" && p.init === id && p.id.type === "Identifier") {
-        add(sm.scopes.flatMap((s) => s.variables).find((x) => x.defs.some((d) => d.name === p.id)));
+        add(variableForDef(p.id));
       }
       // Anything else (the whole ctx passed on, `ctx[expr]`, …) carries no member
       // name and is not checkable here. `ctx[expr]` is extinct in js/ (Phase 0).
+    }
+  }
+  // Follow local aliases of `G.els`, including `const { els } = G`, so nested
+  // element names receive the same scope-accurate treatment as top-level G
+  // members. Dynamic `els[id]` remains intentionally unchecked.
+  for (let i = 0; i < elsVars.length; i++) {
+    const v = elsVars[i];
+    for (const ref of v.references) {
+      const id = ref.identifier;
+      const p = parents.get(id);
+      if (!p) continue;
+      if (p.type === "MemberExpression" && p.object === id && !p.computed && p.property.type === "Identifier") {
+        const gp = parents.get(p);
+        const write = (gp && gp.type === "AssignmentExpression" && gp.left === p)
+          || (gp && gp.type === "UpdateExpression" && gp.argument === p);
+        hits.push({ kind: write ? "elsWrite" : "elsRead", names: [p.property.name], line: id.loc.start.line });
+      } else if (p.type === "VariableDeclarator" && p.init === id) {
+        if (p.id.type === "Identifier") addEls(variableForDef(p.id));
+        else if (p.id.type === "ObjectPattern") {
+          const names = p.id.properties.filter((prop) => prop.type === "Property" && !prop.computed
+            && prop.key.type === "Identifier").map((prop) => prop.key.name);
+          if (names.length) hits.push({ kind: "elsDestructure", names, line: id.loc.start.line });
+        }
+      } else if (p.type === "AssignmentExpression" && p.right === id && p.left.type === "Identifier") {
+        addEls(resolved.get(p.left));
+      }
     }
   }
   return hits;
@@ -402,6 +466,9 @@ export function emitShadow() {
       const origin = `${rel}:${h.line}`;
       if (h.kind === "read") push(`  void G.${h.names[0]};`, origin);
       else if (h.kind === "write") push(`  G.${h.names[0]} = __never;`, origin);
+      else if (h.kind === "elsRead") push(`  void G.els.${h.names[0]};`, origin);
+      else if (h.kind === "elsWrite") push(`  G.els.${h.names[0]} = __never;`, origin);
+      else if (h.kind === "elsDestructure") push(`  { const { ${h.names.join(", ")} } = G.els; void [${h.names.join(", ")}]; }`, origin);
       else push(`  { const { ${h.names.join(", ")} } = G; void [${h.names.join(", ")}]; }`, origin);
     }
     push("}", null);
@@ -423,7 +490,10 @@ export function emitShadow() {
  */
 export function deadMembers() {
   const used = new Set();
-  for (const rel of ctxModuleFiles()) for (const h of collectUsage(rel)) for (const n of h.names) used.add(n);
+  for (const rel of ctxModuleFiles()) for (const h of collectUsage(rel)) {
+    if (h.kind.startsWith("els")) used.add("els");
+    else for (const n of h.names) used.add(n);
+  }
   const { members } = scanGameCtx();
   const dead = [...members.values()].filter((m) => !used.has(m.name));
   if (!dead.length) return dead;
@@ -498,15 +568,7 @@ export function checkParity() {
   // `els`), so eleven ids game.js resolves and hud.js/engineer.js read — the
   // tyre block, the pit cue, the announce trio — were simply absent from the
   // declared shell, and adding a twelfth would have been just as quiet.
-  const realEls = scanGameEls();
-  const dtsEls = scanDtsEls();
-  problems.push(...dtsEls.errors);
-  for (const [name, m] of realEls.members) {
-    if (!dtsEls.members.has(name)) problems.push(`${GAME}:${m.line}: els id "${name}" is not declared in ${DTS}'s GameEls`);
-  }
-  for (const [name, d] of dtsEls.members) {
-    if (!realEls.members.has(name)) problems.push(`${DTS}:${d.line}: GameEls declares "${name}", which is not a member of \`const els\` at ${GAME}:${realEls.line}`);
-  }
+  problems.push(...checkElsParity());
 
   const declared = scanDeclaredFactories();
   const realFac = scanRealFactories();

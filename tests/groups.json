@@ -119,6 +119,7 @@
     "tests/unit/image-grade-shaders.test.mjs",
     "tests/unit/chunked-index-ranges.test.mjs",
     "tests/unit/glx-occlusion.test.mjs",
+    "tests/unit/tlx-chunked-lifecycle.test.mjs",
     "tests/unit/glx-multidraw.test.mjs",
     "tests/unit/vertex-pack.test.mjs",
     "tests/unit/tex-census.test.mjs",
@@ -495,6 +496,8 @@
         "tests/specs/steering.spec.js",
         "tests/specs/gamepad.spec.js",
         "tests/specs/touch-steer.spec.js",
+        "tests/specs/touch-buttons.spec.js",
+        "tests/specs/touch-pedals.spec.js",
         "tests/specs/tilt-pipeline.spec.js",
         "tests/specs/steer-migration.spec.js",
         "tests/specs/camera.spec.js",
@@ -625,7 +628,8 @@
     "test:lifecycle-unit": {
       "kind": "node",
       "files": [
-        "tests/unit/async-lifecycle.test.mjs"
+        "tests/unit/async-lifecycle.test.mjs",
+        "tests/unit/tlx-chunked-lifecycle.test.mjs"
       ]
     },
     "test:state-unit": {

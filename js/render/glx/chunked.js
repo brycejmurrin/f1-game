@@ -184,6 +184,7 @@ const GLXChunked = (function () {
     const OCC_FS = "#version 300 es\nprecision lowp float;out vec4 o;void main(){o=vec4(1.0);}";
     let _occOn = false, _occProg = null, _occU = null, _occVao = null, _occFailed = false;
     let _occState = new WeakMap();        // mesh -> { flag, q, sent }
+    const _occQueries = new Set();        // iterable ownership for explicit GL cleanup
     let _occDrawn = [], _occFrame = 0;
     // `lagMax` / `lagSum` / `lagN` are HOW MANY PASSES a query takes to answer,
     // and they exist because run 133 reported queries=0 on its sampled pass —
@@ -250,6 +251,29 @@ const GLXChunked = (function () {
       if (!_occOn || !_occProg) return true;
       const st = _occState.get(mesh);
       return !st || st.flag[i] !== 0;
+    }
+    function _occReleaseMesh(mesh) {
+      if (!mesh) return;
+      for (let i = _occDrawn.length - 1; i >= 0; i--) {
+        if (_occDrawn[i] === mesh) _occDrawn.splice(i, 1);
+      }
+      const st = _occState.get(mesh);
+      if (!st) return;
+      for (let i = 0; i < st.q.length; i++) {
+        const q = st.q[i];
+        if (!q) continue;
+        try { gl.deleteQuery(q); } catch (_) { /* context loss owns the remainder */ }
+        _occQueries.delete(q);
+        st.q[i] = null;
+      }
+      _occState.delete(mesh);
+    }
+    function _occReset() {
+      for (const q of _occQueries) {
+        try { gl.deleteQuery(q); } catch (_) { /* context loss owns the remainder */ }
+      }
+      _occQueries.clear();
+      _occState = new WeakMap();
     }
 
     function createChunkedMesh(data, cellSize) {
@@ -673,7 +697,12 @@ const GLXChunked = (function () {
             tested++;
             if (st.flag[i] === 0) culled++;
             if (st.sent[i]) continue;                  // one query in flight per chunk
-            if (!st.q[i]) st.q[i] = gl.createQuery();
+            if (!st.q[i]) {
+              const q = gl.createQuery();
+              if (!q) { st.flag[i] = 1; continue; }
+              st.q[i] = q;
+              _occQueries.add(q);
+            }
             gl.uniform3f(_occU.mn, ch.min[0], ch.min[1], ch.min[2]);
             gl.uniform3f(_occU.mx, ch.max[0], ch.max[1], ch.max[2]);
             gl.beginQuery(gl.ANY_SAMPLES_PASSED_CONSERVATIVE, st.q[i]);
@@ -713,7 +742,7 @@ const GLXChunked = (function () {
       if (want !== _occOn) {
         _occOn = want;
         _occDrawn.length = 0;
-        _occState = new WeakMap();
+        _occReset();
         _lagSum = 0; _lagN = 0; _occStats.lagMax = 0; _occStats.lagAvg = 0;
         if (!want) { _occStats.on = false; _occStats.tested = _occStats.culled = _occStats.queries = 0; }
         Log.info("gfx", "GLX occlusion cull " + (want ? "ON" : "off"));
@@ -725,6 +754,7 @@ const GLXChunked = (function () {
 
     function freeChunkedMesh(mesh) {
       if (!mesh) return;
+      _occReleaseMesh(mesh);
       core.unbindVAOIf(mesh.vao);
       if (mesh.ib) gl.deleteBuffer(mesh.ib);
       if (mesh.vbo) gl.deleteBuffer(mesh.vbo);

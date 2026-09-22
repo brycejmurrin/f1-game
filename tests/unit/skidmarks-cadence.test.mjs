@@ -21,7 +21,7 @@ function make() {
   const ctx = vm.createContext({ Float32Array, Array, Math });
   seedLog(ctx);   // needs a contextified object
   const SkidMarks = vm.runInContext(SRC + ";SkidMarks", ctx);
-  return SkidMarks.create({});
+  return SkidMarks.create();
 }
 const IDENT = (() => { const m = new Float32Array(16); m[0] = m[5] = m[10] = m[15] = 1; return m; })();
 function count(skids) {

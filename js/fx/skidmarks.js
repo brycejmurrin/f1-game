@@ -1,4 +1,4 @@
-/* Apex 26 — SkidMarks: the tyre-mark ring buffer and its batched draw. SkidMarks.create(G) — needs nothing from G; it is called with it only to match the module c… */
+/* Apex 26 — SkidMarks: the tyre-mark ring buffer and its batched draw. */
 const SkidMarks = (function () {
   "use strict";
 
@@ -13,7 +13,7 @@ const SkidMarks = (function () {
   // rate·dt gated. The physics step is the natural unit — 5 steps at 60 Hz.
   const STAMP_EVERY_S = 5 / 60;
 
-  function create(_G) {
+  function create() {
     Log.info("game", "SkidMarks.create");
     const marks = Array.from({ length: MAX_SKID }, () => new Float32Array(16));
     let active = 0;               // how many marks are live (grows to MAX_SKID then stays)

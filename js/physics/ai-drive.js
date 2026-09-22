@@ -386,13 +386,18 @@ const AiDrive = (function () {
     const vLim = brakeTarget(ctx);
     const speed = ctx.speed || 0;
     const excess = speed - vLim;
+    // PACE is a ground-speed scale. Compare the overspeed on the standard
+    // scale, otherwise the same speedometer error receives a different pedal at
+    // every OVERALL SPEED setting (and at low pace may receive no brake at all).
+    const pace = Math.max(0.05, Number.isFinite(ctx.pace) ? ctx.pace : 1);
+    const excessStd = excess / pace;
     const d = (ctx.traits.consistency != null ? ctx.traits.consistency : 0.75) - 0.75;
     const soft = 1 - d * 0.8, full = 7 - d * 2;
     let brakeLvl = 0;
     let braking = false;
-    if (excess > soft) {
+    if (excessStd > soft) {
       braking = true;
-      brakeLvl = clamp((excess - soft) / (full - soft), 0.2, 1);
+      brakeLvl = clamp((excessStd - soft) / (full - soft), 0.2, 1);
     }
     _br.braking = braking;
     _br.brakeLvl = brakeLvl;

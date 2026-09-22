@@ -92,15 +92,18 @@ even when speed-limited; ERS deploy adds on top. Full brake is still the bigger
 bill (`BRAKE` 22 / 34 ≈ 0.65). Each axle's `sqrt(1 − axFrac²)` scales its own
 `mu`; `physState()` exposes `axEstSm`, `axFrac` (the larger axle) and
 `slipFactor` (the rear's, which the engine audio reads).
-**The surface scales the brake as well as the grip** (2026-09-16): `surfMu`
-scaled lateral grip off-track while the brake term carried no surface at all,
-so a tyre on grass retarded the car exactly as hard as one on tarmac. The brake
-now carries the same `lerp(1, OFF_GRIP, depth)`. **A known defect remains next
-to it**: the run-off SCRUB (`20 + offDepth·28` m/s², up to 4.6 g) dwarfs
-`BRAKE`, so 70 → 30 m/s measured 90.9 m on tarmac against 34.9 m on grass —
-running wide is still the quickest way to stop. Fixing that is a track-limits
-DETERRENCE decision (the `c.cuts` counter is the other half), not a physics
-tidy-up, so it is recorded here rather than changed.
+**Grass braking remains a measured design defect** (rechecked 2026-09-22).
+`axEstTarget` scales its braking estimate by `OFF_GRIP`, but the actual speed
+integration still applies the full `BRAKE`; the estimator and force therefore
+disagree. The larger effect is the run-off SCRUB (`20 + offDepth·28` m/s²): at
+Monza, 70 → 30 m/s measured 90.886 m on tarmac, 37.732 m in shallow grass and
+28.701 m in deep grass. A bounded trial that shared the surface multiplier and
+reduced scrub removed the stopping shortcut, but failed the sustained
+full-throttle grass deterrence (80 m/s still retained 67.267 m/s where the
+existing regression requires below 60). It was reverted. The follow-up must
+separate grass rolling resistance from surface-limited drive/brake forces,
+classify the surface before integration, and validate throttle/coast/brake with
+weak parts, tyre wear and every PACE setting before changing shipped behavior.
 
 **Brake bias** (the SETUP sheet,
 `js/garage/setup-tune.js`) splits that budget per axle UNDER BRAKING only:

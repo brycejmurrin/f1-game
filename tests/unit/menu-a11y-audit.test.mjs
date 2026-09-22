@@ -114,8 +114,8 @@ function bootMenuNav() {
   const layer = els[0];
   const sb = sandbox(dom, { UiLayers });
   vm.runInNewContext(src("js/ui/menu-nav.js"), sb, { filename: "js/ui/menu-nav.js" });
-  const key = (k) => {
-    const e = { key: k, altKey: false, ctrlKey: false, metaKey: false, defaultPrevented: false, stopped: false };
+  const key = (k, isTrusted = true) => {
+    const e = { key: k, isTrusted, altKey: false, ctrlKey: false, metaKey: false, defaultPrevented: false, stopped: false };
     e.preventDefault = () => { e.defaultPrevented = true; };
     e.stopPropagation = () => { e.stopped = true; };
     sb.MenuNav.onKeyDown(e);
@@ -153,6 +153,19 @@ test("MenuNav: D-pad Down leaves a focused search field; the caret keys stay wit
     assert.equal(e.defaultPrevented, false, `${k} keeps its native default in a text field`);
   }
   assert.equal(h.MenuNav.ownsArrows(search, "PageDown"), false, "the page keys page the pane, not the field");
+});
+
+test("MenuNav: trusted arrows edit a textarea, while a synthetic pad arrow can leave it", () => {
+  const h = bootMenuNav();
+  const box = h.add("vs-answer-in", { tag: "textarea", y: 10 });
+  h.add("vs-accept", { y: 60 });
+  box.focus();
+  const keyboard = h.key("ArrowDown", true);
+  assert.equal(h.focused(), "vs-answer-in", "a physical keyboard keeps multiline caret navigation");
+  assert.equal(keyboard.defaultPrevented, false, "the browser retains the trusted textarea default");
+  const pad = h.key("ArrowDown", false);
+  assert.equal(h.focused(), "vs-accept", "the untrusted gamepad arrow exits instead of becoming a dead press");
+  assert.equal(pad.defaultPrevented, true);
 });
 
 test("MenuNav: a range slider keeps Left/Right AND Home/End (ARIA slider ends); Up/Down leave", () => {

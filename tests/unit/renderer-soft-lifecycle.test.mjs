@@ -208,50 +208,77 @@ test("WGX soft present permits one staging read and drops pre-resize pixels", ()
   const resize = src.slice(src.indexOf("function resize()"), src.indexOf("function setRenderScale"));
   assert.match(resize, /if \(sizeChanged\) \{\s*_cssApplying = true;/);
   assert.match(resize, /_softDisplayEpoch\+\+/);
-  assert.match(src, /if \(!_cssApplying\) _cssDirty = true/);
+  assert.match(src, /CanvasCssSize\.create\(_layoutCanvas,[^]*?ignore:\s*\(\) => _cssApplying/,
+    "WGX suppresses its own backing-store resize signal through the shared cache");
   // Size split: present jitter uses pw/ph vs presentW/H; render jitter uses rw/rh vs width/height.
   assert.match(resize, /Math\.abs\(r?w - width\) <= 1 && Math\.abs\(r?h - height\) <= 1/);
 });
 
-test("WGX and TLX distrust the CSS-size cache after a viewport change", () => {
-  // The defect GLX was fixed for (docs/PERF-FINDINGS.md §2u) is in all three
-  // backends: cssDirty is edge-triggered and consumed unconditionally, so one
-  // read landing before the canvas box reflows latches the PREVIOUS viewport's
-  // size for the session. GLX's fix is guarded BEHAVIOURALLY on the WebGL2 mock
-  // (gfx-backend-canary.test.mjs); three.js cannot load in Node and WGX's
-  // _cssSize is not reachable from its mock device, so these two are pinned on
-  // shape — the settle window must key off window.innerWidth/innerHeight
-  // (viewport metrics, no reflow) and must reach the cache's guard.
-  for (const [file, dirtyVar, wVar] of [
-    ["js/render/webgpu/wgx.js", "_cssDirty", "_cssW"],
-    ["js/render/three/tlx.js", "cssDirty", "cssW"],
-  ]) {
-    const src = read(file);
-    assert.match(src, /window\.innerWidth \| 0, vh = window\.innerHeight \| 0/,
-      `${file}: the settle trigger must be a viewport read, not a layout read`);
-    assert.match(src, /cssRecheck = CSS_RECHECK_FRAMES/i,
-      `${file}: a viewport change must arm a FRAME countdown (a wall-clock window`
-      + ` expired before a starved loop ran a frame — artifacts/r16-accept.log)`);
-    assert.match(src, new RegExp(`if \\(${dirtyVar} \\|\\| ${wVar} <= 0 \\|\\| \\w+ <= 0 \\|\\| \\w*[cC]ssRecheck > 0\\)`),
-      `${file}: the countdown must actually reach the cache guard`);
-    assert.match(src, /[cC]ssRecheck > 0\) \w*[cC]ssRecheck--/,
-      `${file}: and it must be spent, or the cache stops being a cache`);
+test("all renderers share zero/reveal, orientation, and UI-scale CSS-size semantics", () => {
+  const listeners = new Map();
+  let observed = null, disconnected = false, observerCallback = null;
+  class RO {
+    constructor(fn) { observerCallback = fn; }
+    observe(el) { observed = el; }
+    disconnect() { disconnected = true; }
   }
-  // TLX registered its ResizeObserver INSIDE the addEventListener check, so an
-  // engine with one and not the other got no invalidation at all. GLX and WGX
-  // both register it independently; TLX now does too.
-  const tlx = read("js/render/three/tlx.js");
-  const listeners = tlx.indexOf('window.addEventListener("orientationchange", markCssDirty)');
-  // Anchor on the observer's own `if`, NOT on `new ResizeObserver(` — that
-  // token sits inside the if's and the try's braces, which would offset the
-  // depth by +2 and make the check say the opposite of what it means.
-  const obs = tlx.indexOf('if (typeof ResizeObserver === "function"', listeners);
-  assert.ok(listeners > 0 && obs > listeners, "TLX registers listeners, then the observer");
-  // Net brace depth between the two: nested would be >= 0, outside is negative
-  // (the window check's own `}` has been passed).
-  let depth = 0;
-  for (const ch of tlx.slice(listeners, obs)) { if (ch === "{") depth++; else if (ch === "}") depth--; }
-  assert.ok(depth < 0, `TLX ResizeObserver must sit OUTSIDE the addEventListener check (net brace depth ${depth})`);
+  const window = {
+    innerWidth: 800, innerHeight: 450,
+    addEventListener(type, fn) { listeners.set(type, fn); },
+    removeEventListener(type, fn) { if (listeners.get(type) === fn) listeners.delete(type); },
+  };
+  const ctx = vm.createContext({ window, ResizeObserver: RO, Number, Math });
+  vm.runInContext(read("js/render/shared/canvas-css-size.js"), ctx);
+  const CanvasCssSize = vm.runInContext("CanvasCssSize", ctx);
+  let w = 0, h = 0, reads = 0;
+  const canvas = {};
+  Object.defineProperties(canvas, {
+    clientWidth: { get() { reads++; return w; } },
+    clientHeight: { get() { reads++; return h; } },
+  });
+  const cache = CanvasCssSize.create(canvas, { settleFrames: 2 });
+  assert.equal(observed, canvas);
+  assert.deepEqual({ ...cache.read() }, { width: 0, height: 0 });
+  assert.deepEqual({ ...cache.read() }, { width: 0, height: 0 });
+  assert.equal(reads, 4, "zero is retried while the canvas is hidden");
+
+  w = 640; h = 360;
+  assert.deepEqual({ ...cache.read() }, { width: 640, height: 360 }, "reveal self-corrects without a signal");
+  const afterReveal = reads;
+  cache.read();
+  assert.equal(reads, afterReveal, "steady frames use the cache");
+
+  // UI SIZE affects overlays, not the game canvas. Without a box signal it
+  // must not force a layout read; if CSS does resize the canvas, RO is the seam.
+  window.uiScale = 1.3;
+  cache.read();
+  assert.equal(reads, afterReveal, "an unrelated UI-scale write does not invalidate the canvas");
+  w = 600; observerCallback(); cache.read();
+  assert.equal(cache.read().width, 600, "an observer-reported scale/layout change is consumed");
+
+  // Rotation can notify before layout. The viewport change opens a bounded
+  // settle window so the next frame sees the eventually-reflowed canvas.
+  window.innerWidth = 390; window.innerHeight = 844;
+  listeners.get("orientationchange")();
+  cache.read();
+  w = 390; h = 844;
+  assert.deepEqual({ ...cache.read() }, { width: 390, height: 844 });
+  const afterSettle = reads;
+  cache.read(); cache.read();
+  assert.equal(reads, afterSettle, "the orientation settle window is bounded");
+
+  cache.dispose();
+  assert.equal(disconnected, true);
+  assert.equal(listeners.size, 0);
+
+  for (const [file, frames] of [
+    ["js/render/glx/glx.js", 8],
+    ["js/render/webgpu/wgx.js", 30],
+    ["js/render/three/tlx.js", 30],
+  ]) {
+    assert.match(read(file), new RegExp(`CanvasCssSize\\.create\\([^]*?settleFrames:\\s*${frames}`),
+      `${file} delegates observation but keeps its measured settle budget`);
+  }
 });
 
 test("TLX picks its backend on what three will BIND, not on navigator.gpu existing", () => {
