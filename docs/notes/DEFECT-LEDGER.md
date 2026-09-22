@@ -2211,6 +2211,30 @@ off, which the physics reference makes a product defect, not a test one.
 
 ### 2026-09-22 — a test that steered off the circuit, and eleven nights between it and anyone noticing
 
+> **THE SPEC CHANGES BELOW WERE REVERTED OFF THE DEPLOY BRANCH THE SAME EVENING,
+> and the reason is the more useful record.** PR #206 merged with `road-follow`
+> still flaky. The Pages gate selects specs against the last PUBLISHED tree, not
+> against the parent commit — so an edited `steering.spec.js` stays in the
+> unpublished delta and is re-selected on EVERY Pages run until something
+> publishes. `road-follow` then failed the gate on `66c24cef0` and again on
+> `ed24bdfe7` (another session's commit), with `publishable`, `deploy` and
+> `verify-live` skipped behind it each time. The train was down for every session
+> on the branch, and it could not recover on its own: the file only leaves the
+> delta once a publish succeeds, and `road-follow` had passed 1 of 5 CI attempts.
+>
+> So the spec was restored to its last published state to unblock the branch. The
+> `curvature drift` sign fix and the `roadFollow 0.7 -> 0` restore go back on once
+> the isolation flake is fixed; the diagnosis below is what they should be
+> re-landed from. `deploy.mjs`'s `nightlyHealth()` and `--train` are unaffected
+> and stayed.
+>
+> THE LESSON, which cost a stuck train to learn: a merge is not the last gate. A
+> PR that is green because a flaky test happened to pass will be re-run by Pages
+> against a different base, and on a shared deploy branch the cost of losing that
+> coin flip is everyone's, not just the author's. "Green by luck" is not green,
+> and saying so in the merge message does not make merging it sound.
+
+
 `steering has authority to fight the curvature drift` held lock with
 `lockDir = Math.sign(k0)`. Under the measured convention `+k` is a LEFT turn, so
 `+sign(k)` is the **outside** of the corner — the test's own sibling
