@@ -351,6 +351,35 @@ test("no tool pins a Linux-only Chromium path as executablePath", () => {
   assert.deepEqual(pinned, []);
 });
 
+test("a tool waiting on the track build budgets longer than a build takes", () => {
+  // MEASURED 2026-09-21 on this container: a TLX build of monza reaches
+  // `info().track` in 16.6 s under SwiftShader — the same with and without
+  // `polling: 100`, so rAF is not starved and the budget is the whole story.
+  // TLX became the DEFAULT backend on 2026-09-18, and from that day the two
+  // tools still budgeting 15 s failed on their own default while every sibling
+  // kept working (agent.mjs 20 s, shot.mjs 120 s, ssr-probe 120 s). It reads as
+  // "the game will not boot", which is the most expensive way to be wrong.
+  const FLOOR_MS = 20000;
+  const short = [];
+  for (const f of FILES) {
+    if (![".mjs", ".cjs", ".js"].includes(f.ext)) continue;
+    const src = fs.readFileSync(f.abs, "utf8");
+    // The wait and its options can straddle a line break, so the window after
+    // the predicate is what carries the budget.
+    for (const m of src.matchAll(/info\(\)\.track\s*!=\s*null[\s\S]{0,160}?timeout:\s*([\d_]+)([\s\S]{0,120})/g)) {
+      const ms = Number(String(m[1]).replace(/_/g, ""));
+      // A CAUGHT wait is a probe, not a budget: tools/track/survey-track.mjs
+      // races up to three times and treats each timeout as "try again", which
+      // works because the second build no longer pays the one-off boot cost.
+      // Only a wait whose expiry is FATAL has to outlast a real build.
+      if (/\.catch\s*\(/.test(m[2])) continue;
+      if (ms < FLOOR_MS) short.push(`${f.rel}: ${ms} ms`);
+    }
+  }
+  assert.deepEqual(short, [],
+    `a track-build wait budgets less than ${FLOOR_MS} ms; a real build measured 16.6 s here`);
+});
+
 test("report-server: collects a POSTed bundle, and a hostile name cannot escape", async () => {
   // The one tool here that is a SERVER and takes a filename from the network,
   // so parse-only is not enough: the name arrives from the page, and the whole

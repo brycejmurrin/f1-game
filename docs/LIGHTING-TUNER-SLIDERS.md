@@ -548,7 +548,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `poolEnergy` | POOL ENERGY | 0 … 1.375 | 0.55 | — | ✓ | track-lights.js×3 |
 | `lampRadiusMul` | POOL RADIUS | 0.4 … 1.9 | 1 | — | ✓ | track-lights.js×3 |
 | `bleedMul` | VALLEY BLEED | 0 … 2.5 | 1 | — | ✓ | track-lights.js×3 |
-| `glareStr` | LENS GLARE | 0 … 0.3 | 0.12 | — | ✓ | game.js×3, scene.js, setup-camera.js |
+| `glareStr` | LENS GLARE | 0 … 0.3 | 0.12 | — | ✓ | game.js×3, scene.js |
 | `lampTemp` | LAMP TEMPERATURE | -3.3 … 8.3 | 0 | — | ✓ | game.js |
 | `lampFlicker` | LAMP FLICKER | 0 … 0.6 | 0.1 | — | ✓ | frame-lights.js |
 | `beamCone` | BEAM CONE WIDTH | 0.08 … 2.2 | 1 | — | ✓ | track-lights.js×3 |
@@ -669,7 +669,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `cityGlowReach` | CITY GLOW REACH | 0.04 … 2.44 | 1 | `uCityGlowReach` | ✓ | game.js×2, glx.js×2 |
 | `cloudDef` | CLOUD DEFINITION | 0 … 1.2 | 1 | `uCloudDef` |   | game.js×2, glx.js×2 |
 | `skyColorSat` | SKY COLOUR SATURATION | 0 … 2.5 | 1 | — | ✓ | atmosphere.js×2 |
-| `wetness` | WETNESS | -0.05 … 1 | -0.05 | — | ✓ | apex.js, game.js×12, glx.js×2 |
+| `wetness` | WETNESS | -0.05 … 1 | -0.05 | — | ✓ | apex.js, game.js×11, glx.js×2 |
 | `rainCount` | RAIN INTENSITY | 20 … 1000 | 360 | — | ✓ | particles.js×2 |
 | `rainStreak` | RAIN STREAK LEN | 0.04 … 2.44 | 1 | — | ✓ | particles.js |
 | `rainSpeed` | RAIN FALL SPEED | 0.04 … 2.44 | 1 | — | ✓ | particles.js×2 |
@@ -690,7 +690,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | id | slider | range | def | uniform | preset | consumed in |
 |---|---|---|---|---|---|---|
 | `exposureMul` | EXPOSURE | 0.1 … 2.35 | 1 | — | ✓ | game.js |
-| `contrast` | CONTRAST | 0.5 … 2.05 | 1.12 | `uContrast` | ✓ | scene.js×4, setup-sheet.js×3 |
+| `contrast` | CONTRAST | 0.5 … 2.05 | 1.12 | `uContrast` | ✓ | — |
 | `shadows` | SHADOWS | -0.55 … 0.55 | 0 | — | ✓ | post-common.js |
 | `midtones` | MIDTONES | -2 … 1.4 | 0 | — | ✓ | post-common.js |
 | `highlights` | HIGHLIGHTS | -1 … 1.5 | 0 | — | ✓ | post-common.js |
