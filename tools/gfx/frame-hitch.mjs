@@ -139,6 +139,33 @@ export function analyseWork(work, bucketMs, frames) {
   return out;
 }
 
+// Is the extra-work frame PERIODIC? A shadow rebuild makes a frame wider
+// than its neighbours, so classify frames by pass count and measure the
+// spacing between the wide ones — the same coefficient-of-variation test
+// analyse() uses for time spikes.
+export function analysePasses(passes, t0) {
+  const n = passes.length;
+  if (n < 50) return { frames: n, ok: false, reason: "too few frames" };
+  const sorted = Array.from(passes).sort((a, b) => a - b);
+  const med = sorted[Math.floor(n / 2)];
+  const wideAt = [];
+  for (let i = 0; i < n; i++) if (passes[i] > med) wideAt.push(t0[i] / 1000);
+  const gaps = wideAt.slice(1).map((x, i) => x - wideAt[i]);
+  const mean = gaps.length ? gaps.reduce((a, b) => a + b, 0) / gaps.length : 0;
+  const sd = gaps.length > 1
+    ? Math.sqrt(gaps.reduce((a, g) => a + (g - mean) ** 2, 0) / (gaps.length - 1)) : 0;
+  const gs = gaps.slice().sort((a, b) => a - b);
+  return {
+    frames: n, medianPasses: med,
+    maxPasses: sorted[n - 1],
+    widerThanMedian: wideAt.length,
+    widePerSecond: t0.length ? +(wideAt.length / ((t0[n - 1] - t0[0]) / 1000)).toFixed(2) : null,
+    gapMedianS: gs.length ? +gs[Math.floor(gs.length / 2)].toFixed(3) : null,
+    gapMeanS: +mean.toFixed(3),
+    gapCV: mean > 0 ? +(sd / mean).toFixed(3) : null,
+  };
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) await main();
 
 async function main() {
@@ -189,7 +216,12 @@ async function main() {
           const a = performance.now();
           try { return cb(ts); } finally {
             const b = performance.now();
-            if (armed && n < CAP) { t0[n] = a; dur[n] = b - a; n++; }
+            if (armed && n < CAP) {
+              t0[n] = a; dur[n] = b - a;
+              if (n < PASS_CAP) passPerFrame[n] = passCur > 32767 ? 32767 : passCur;
+              passCur = 0;
+              n++;
+            }
           }
         });
       };
@@ -289,6 +321,19 @@ async function main() {
         return o;
       }
 
+      // Per-frame render-pass count. The rAF wrapper stamps the boundary, so
+      // each entry is "passes encoded during frame i".
+      const PASS_CAP = 60000;
+      const passPerFrame = new Int16Array(PASS_CAP);
+      let passCur = 0;
+      try {
+        const CE = window.GPUCommandEncoder && window.GPUCommandEncoder.prototype;
+        if (CE && typeof CE.beginRenderPass === "function") {
+          const origBRP = CE.beginRenderPass;
+          CE.beginRenderPass = function () { if (armed) passCur++; return origBRP.apply(this, arguments); };
+        }
+      } catch (_) { /* no WebGPU in this context: the pass series stays empty */ }
+
       const longtasks = [];
       try {
         new PerformanceObserver((l) => {
@@ -320,6 +365,7 @@ async function main() {
           work: kinds.map((k) => [k, Array.from(counts.get(k))]),
           mem0, mem1: snapMem(),
           stacks: [...stacks.entries()].sort((a, b) => b[1] - a[1]).slice(0, 25),
+          passes: Array.from(passPerFrame.subarray(0, Math.min(n, PASS_CAP))),
           backend: (() => {
             // eslint-disable-next-line no-undef
             try { const t = (typeof GLX !== "undefined") && GLX && GLX.__tlx; return t && t.backendState ? t.backendState() : null; }
@@ -349,6 +395,7 @@ async function main() {
     Object.assign(out, analyse(d.t0, d.dur));
     out.work = analyseWork(d.work || [], d.bucketMs || 250, out.frames);
     out.backend = d.backend;
+    out.passes = analysePasses(d.passes || [], d.t0 || []);
     out.stacks = d.stacks;
     out.mem0 = d.mem0; out.mem1 = d.mem1;
     // The leak test: every numeric counter three tracks, as a DELTA over the
@@ -371,6 +418,7 @@ async function main() {
     log(`p50 ${out.p50} ms  p95 ${out.p95}  p99 ${out.p99}  max ${out.max}  frames ${out.frames}`);
     log(`backend ${JSON.stringify(out.backend)}`);
     log(`MEM DRIFT over the window: ${JSON.stringify(out.memDrift)}`);
+    log(`PASSES/frame: ${JSON.stringify(out.passes)}`);
     for (const [sig, n] of (out.stacks || []).slice(0, 12)) log(`  ${String(n).padStart(4)}x  ${sig}`);
     for (const w of out.work) {
       if (w.settled && w.total < 4000) continue;   // built once at warm-up: the healthy shape
