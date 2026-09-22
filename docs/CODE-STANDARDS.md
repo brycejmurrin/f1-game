@@ -34,7 +34,7 @@ Frozen surfaces (rename = a broken guard or a broken player save):
 | Physics numbers, the order of float operations, `dt` clamps | `physics-characterization`, `*-vm` tests |
 | Script load order, `HARD_EDGES`, eval-time destructures | `load-order.test.mjs` |
 | Generated files (`js/roster.js`, `index.html` `@gen-shell` blocks, …) | `protect-files.sh` |
-| A generated doc left stale by a manifest / groups / knobs edit; a circuit that no longer builds | `post-edit.sh` (PostToolUse, advisory: it tells you at the edit, the gate still enforces) |
+| A generated doc left stale by a manifest / groups / knobs / unit-file edit; a circuit that no longer builds | `post-edit.sh` (PostToolUse, advisory: it tells you at the edit, the gate still enforces) |
 | Any function a test reads by source (`fnSource(src, "function quitToMenu")`) | `grep -rn "<name>" tests/` |
 
 Anything in `.claude/skills/slim-bloat/references/do-not.md` stays as it is.
