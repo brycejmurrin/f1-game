@@ -617,6 +617,7 @@ const NetPlay = (function () {
       lastReason = null;
       armedPeers.clear();
       armDeadline = 0;
+      armedSentAt = -Infinity;
       named = null;
       holdUntil = 0;
       G.netNow = null;
@@ -645,6 +646,8 @@ const NetPlay = (function () {
     const HOLD_MAX_MS = ARM_WAIT_MS + 10000;
     let holdUntil = 0;                    // both roles: when we count down alone
     let armDeadline = 0;                  // host: when to stop waiting for ARMED
+    let armedSentAt = -Infinity;          // guest: when ARMED last went out (re-sent until START lands)
+    const ARMED_RESEND_MS = 1000;
     let named = null;                     // host: the START already sent ({at, hold}), for late ARMEDs
     const armedPeers = new Set();
     const allArmed = () => armedPeers.size >= Math.max(1, remotes.size);
@@ -761,6 +764,7 @@ const NetPlay = (function () {
       return true;
     }
 
+    const _pubOwn = { id: -1, car: null }, _pubOne = [_pubOwn];   // publish scratch: one entry per packet
     function tick(now) {
       if (!active || !sessions.size) return;
       G.netNow = now;
@@ -782,6 +786,16 @@ const NetPlay = (function () {
       session = sessions.values().next().value;
 
       if (armDeadline && now >= armDeadline) nameTheMoment();
+      // A guest whose circuit built FIRST sent its one ARMED while the host was
+      // still inside `await G.startRace()`: the host's LOBBY session pumped it,
+      // had no ARMED handler, and dropped it — a 20 s ARM_WAIT stall every
+      // time, and a split start once the guest's HOLD_MAX_MS ran out (bug hunt
+      // 2026-09-22). Say it again each second until the moment is named;
+      // armedPeers.add is idempotent and a late one just re-sends START.
+      if (role === "guest" && !G.netStart && now - armedSentAt >= ARMED_RESEND_MS) {
+        armedSentAt = now;
+        try { broadcast(EV.ARMED, {}); } catch (e) { /* a dead session must not stop the tick */ }
+      }
 
       let anyAlive = false;
       for (const s of sessions.values()) if (s.alive()) { anyAlive = true; break; }
@@ -797,10 +811,14 @@ const NetPlay = (function () {
       // Each guest still owns its own car outright and is never corrected.
       //
       // What is relayed is the last POSED state, not a re-simulation — we pass
-      // on what arrived. Guest-to-guest that costs roughly one publish interval
-      // of extra age on top of the interpolation delay, which the buffer
-      // already absorbs. That is the price of star over mesh, and it buys not
-      // opening N² connections through N NATs.
+      // on what arrived. That pose is interp.sample(now), i.e. delayMs OLD, so
+      // it is stamped with the time it was posed at (presentedAt), one packet
+      // per relayed car: stamped `now` in the host's own packet, a guest's
+      // predict() extrapolated from a pose ~100-180 ms older than its label and
+      // put the other guest 8-14 m behind where it was at 80 m/s (bug hunt
+      // 2026-09-22) — exactly the contact error predict() exists to remove.
+      // That is the price of star over mesh, and it buys not opening N²
+      // connections through N NATs.
       // Pose remotes FIRST. Host relay encodes r.car; if that write ran after
       // the snapshot, guests received last tick's parked pose (or the grid
       // spawn) while this tick's interp sample sat unused.
@@ -836,18 +854,23 @@ const NetPlay = (function () {
       }
       if (localCar && now - lastPublish >= PUBLISH_MS) {
         lastPublish = now;
-        const entries = [{ id: G.wireId(localCar), car: localCar }];
-        if (role === "host") {
-          for (const r of remotes.values()) {
-            const id = G.wireId(r.car);
-            if (id < 0) continue;
-            entries.push({ id, car: r.car });
-          }
-        }
-        const bytes = NetSnapshot.encodeSnapshot(Math.round(now), entries);
+        _pubOne[0] = _pubOwn; _pubOwn.id = G.wireId(localCar); _pubOwn.car = localCar;
+        const bytes = NetSnapshot.encodeSnapshot(Math.round(now), _pubOne);
         // Live map is safe here: sendState delivers nothing (Map iterators
         // tolerate a removal, and only pump() can run onClose).
         for (const s of sessions.values()) { try { s.sendState(bytes); } catch (e) { /* a dead session must not stop the others' publish */ } }
+        if (role === "host" && sessions.size > 1) {
+          for (const r of remotes.values()) {
+            const id = G.wireId(r.car), at = r.interp.presentedAt ? r.interp.presentedAt() : now;
+            if (id < 0 || !Number.isFinite(at)) continue;   // nothing posed yet: nothing to relay
+            _pubOwn.id = id; _pubOwn.car = r.car;
+            const relay = NetSnapshot.encodeSnapshot(Math.round(at), _pubOne);
+            for (const [sid, s] of sessions) {
+              if (remoteFor(sid) === id) continue;   // never back to the car's own driver
+              try { s.sendState(relay); } catch (e) { /* as above */ }
+            }
+          }
+        }
       }
     }
 

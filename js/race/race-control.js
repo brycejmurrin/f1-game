@@ -245,17 +245,21 @@ const RaceControl = (function () {
       publish();
     }
 
+    // The host's word, off the wire: every field is coerced, because info()
+    // runs sinceT.toFixed() for the HUD every frame and a single CAUTION with
+    // `sinceT: "x"` used to throw there until LoopHealth killed the loop.
+    const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
     function apply(d) {
-      if (!d) return false;
+      if (!d || typeof d !== "object") return false;
       const prev = caution.level;
-      caution.level = d.level | 0;
-      caution.sector = d.sector != null ? d.sector : -1;
-      caution.frac = d.frac || 0;
-      caution.cause = d.cause || "";
-      caution.total = d.total || 0;
-      if (Array.isArray(d.sectors)) caution.sectors = d.sectors.slice();
-      caution.sinceT = d.sinceT || 0;
-      caution.phase = typeof d.phase === "string" ? d.phase : "";
+      caution.level = Math.max(0, Math.min(4, d.level | 0));
+      caution.sector = Number.isInteger(d.sector) && d.sector >= -1 ? d.sector : -1;
+      caution.frac = num(d.frac);
+      caution.cause = typeof d.cause === "string" ? d.cause.slice(0, 64) : "";
+      caution.total = Math.max(0, num(d.total));
+      if (Array.isArray(d.sectors)) caution.sectors = d.sectors.slice(0, 3).map(num);
+      caution.sinceT = Math.max(0, num(d.sinceT));
+      caution.phase = typeof d.phase === "string" ? d.phase.slice(0, 16) : "";
       logFlag(prev, caution.level);
       return true;
     }

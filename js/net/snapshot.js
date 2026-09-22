@@ -263,6 +263,8 @@ const NetSnapshot = (function () {
       newest: () => (samples.length ? samples[samples.length - 1] : null),
       oldest: () => (samples.length ? samples[0] : null),
       timing: () => ({ delayMs, jitterMs: jitter, adaptive: !!opts.adaptive }),
+      // The time the last sample() posed — what a relay must stamp that pose with.
+      presentedAt: () => presentedAt,
       clear: () => { samples = []; delayMs = baseDelay; jitter = 0; lastArrival = null; lastTick = null; presentedAt = -Infinity; },
     };
   }

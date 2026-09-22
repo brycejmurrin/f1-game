@@ -161,7 +161,7 @@ serializes the agent behind SwiftShader several times over.
 
 | When | Run |
 |---|---|
-| in the edit loop | `npm run test:tooling-fast` (structural, no browser; 231 of 307 unit files — ~5 min one at a time, ~2 min via `node tools/ci/tooling-fast.mjs --jobs=3`, which is what `verify-change` runs on a quiet box; MEASURED 2026-09-16) |
+| in the edit loop | `npm run test:tooling-fast` (structural, no browser; 231 of 308 unit files — ~5 min one at a time, ~2 min via `node tools/ci/tooling-fast.mjs --jobs=3`, which is what `verify-change` runs on a quiet box; MEASURED 2026-09-16) |
 | track/scenery edit | `node tools/track/verify-track.cjs <id>` (2 s, headless) FIRST |
 | once, when the edits are done | `node tools/ci/test-bg.mjs tiny` — page loads, `__apex` responds; if red, nothing else is worth running — then the groups `pick-tests` named (capped at two) |
 | before pushing | + `npm run test:sweeps` if you touched the fleet build's inputs (`node tools/ci/geometry-paths.mjs --ere` prints them: `js/track/`, `js/circuits/`, `tools/track|lib`, the `TRACK_VM` modules); a lighting, car, debris-world or driving-line edit needs only the suite that reads it (`--targeted <list>` names it) — `deploy.mjs` and ci.yml's sweeps job make both calls for you |
@@ -1340,6 +1340,7 @@ what it covers.
 | `net-snapshot.test.mjs` | the 13 B/car wire format and the interpolation buffer, including the short-way wraps |
 | `net-session.test.mjs` | clock sync, routing and liveness over a fake wire |
 | `net-authority.test.mjs` | who may declare what: START/CAUTION/RESULT are the host's, over a stub-`G` NetPlay |
+| `net-start-arming.test.mjs` | over a real loopback wire: a guest whose circuit built FIRST re-sends ARMED until the host names the moment (the lobby dropped the one copy — a 20 s stall), and the interpolator reports the time it posed, which the host stamps on a relayed car |
 | `net-grid-separation.test.mjs` | `separateGrid()`'s one peer-independence rule (`js/net/netplay.js`). The scheme lays the humans into consecutive grid boxes with no extra message, which works only because its anchor is the same number on every machine — and `localCar.gridPos` is that only on the PACE grid, where `gridUp()` splices the local player to P12. A grid built from a pre-order (qualifying) takes no such step, so each peer would anchor the block at its own qualified slot and swap a different set of AI cars out of the way. Pins both halves: the pace grid is still re-laid (the collision this exists to fix), and a pre-ordered grid is left exactly as qualifying laid it. Found by survey 2026-09-18 |
 | `net-roster.test.mjs` | who is still in the race, over the same stub-`G` NetPlay: the host broadcasts `LEFT` for a closed session's wire id and the other guests hand that rival back (AI again, `dnfAt` cleared); a guest's `LEFT` is ignored; a local `stop()` says `BYE` before closing |
 | `net-rendezvous.test.mjs` | the room-code client against a real relay |
