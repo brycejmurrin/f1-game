@@ -151,29 +151,35 @@ test.describe("Apex 26 — steering", () => {
     // Sample several distinct corners across the lap.
     const sample = corners.filter((_, i) => i % 4 === 0).slice(0, 5);
     let checked = 0;
-    for (const frac of sample) {
-      // Road-follow OFF = pure world-space: with no input the car holds a straight
-      // heading and runs wide to the OUTSIDE (+sign(k)). This is the baseline the
-      // DRIVING-HELP assist exists to counter.
+    // The page is worker-scoped: a failed expect below used to skip the reset
+    // and leave roadFollow at 0.6 for every later test in the file, which then
+    // failed too ("off by default", the curvature-drift authority test).
+    try {
+      for (const frac of sample) {
+        // Road-follow OFF = pure world-space: with no input the car holds a straight
+        // heading and runs wide to the OUTSIDE (+sign(k)). This is the baseline the
+        // DRIVING-HELP assist exists to counter.
+        await page.evaluate(() => window.__apex.setPhysics({ roadFollow: 0 }));
+        const off = await run(page, { frac, speed: 13, throttle: false, ticks: 70 });
+        if (Math.abs(off.before.k) < 0.012) continue;   // skip near-straight false peaks
+        checked++;
+        const dxOff = off.after.x - off.before.x;
+        expect(Math.sign(dxOff)).toBe(Math.sign(off.before.k));   // off-model runs wide
+        expect(Math.abs(dxOff)).toBeGreaterThan(0.6);             // a real slide, not a wobble
+        // Road-follow, once opted into, steers into the bend through the tyres,
+        // so the car takes a MEASURABLY different line than with the assist off. (We
+        // assert the assist is active and alters the corner rather than a fragile
+        // "stays nearer the line": with a real slip model, steering into a corner also
+        // develops body slip, so the lateral effect is more nuanced than the old
+        // kinematic model — that quality is covered by the on-device feel + the
+        // autopilot driving safely, not this unit check.)
+        await page.evaluate((rf) => window.__apex.setPhysics({ roadFollow: rf }), def);
+        const on = await run(page, { frac, speed: 13, throttle: false, ticks: 70 });
+        expect(Math.abs(on.after.x - off.after.x)).toBeGreaterThan(0.25);
+      }
+    } finally {
       await page.evaluate(() => window.__apex.setPhysics({ roadFollow: 0 }));
-      const off = await run(page, { frac, speed: 13, throttle: false, ticks: 70 });
-      if (Math.abs(off.before.k) < 0.012) continue;   // skip near-straight false peaks
-      checked++;
-      const dxOff = off.after.x - off.before.x;
-      expect(Math.sign(dxOff)).toBe(Math.sign(off.before.k));   // off-model runs wide
-      expect(Math.abs(dxOff)).toBeGreaterThan(0.6);             // a real slide, not a wobble
-      // Road-follow, once opted into, steers into the bend through the tyres,
-      // so the car takes a MEASURABLY different line than with the assist off. (We
-      // assert the assist is active and alters the corner rather than a fragile
-      // "stays nearer the line": with a real slip model, steering into a corner also
-      // develops body slip, so the lateral effect is more nuanced than the old
-      // kinematic model — that quality is covered by the on-device feel + the
-      // autopilot driving safely, not this unit check.)
-      await page.evaluate((rf) => window.__apex.setPhysics({ roadFollow: rf }), def);
-      const on = await run(page, { frac, speed: 13, throttle: false, ticks: 70 });
-      expect(Math.abs(on.after.x - off.after.x)).toBeGreaterThan(0.25);
     }
-    await page.evaluate(() => window.__apex.setPhysics({ roadFollow: 0 }));
     expect(checked).toBeGreaterThan(0);
   });
 
