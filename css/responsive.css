@@ -15,7 +15,7 @@ body.desktop #pm-calib { display: none !important; }
 
 /* ---------- LARGE SCREENS (iPad, desktop) ---------- */
 /* The height half of this condition now comes from data-density, measured in the
-   units the content is actually laid out in (js/game/sheetshape.js). Orientation
+   units the content is actually laid out in (js/ui/sheet-shape.js). Orientation
    and width stay media queries: zoom does not distort either.
 
    `:where()` CARRIES ZERO SPECIFICITY, and that is the whole reason it is used
@@ -33,7 +33,7 @@ body.desktop #pm-calib { display: none !important; }
      that has height to spare. 78 svh follows the screen; the 720px floor keeps
      every landscape desktop exactly as it was, because 78 % of 800-937px is
      less than 720 anyway.
-     Measured, sheet height x the resulting `data-shape` (js/game/sheetshape.js):
+     Measured, sheet height x the resulting `data-shape` (js/ui/sheet-shape.js):
        1280x800   720 -> wide    (unchanged)
        1440x900   720 -> wide    (unchanged)
        1920x1080  842 -> wide    (0.83 ratio, still columns)
@@ -63,7 +63,7 @@ body.desktop #pm-calib { display: none !important; }
    pixels of black above and below, so that case keeps the stack and only grows
    — see the portrait block below. */
 /* The height half of this condition now comes from data-density, measured in the
-   units the content is actually laid out in (js/game/sheetshape.js). Orientation
+   units the content is actually laid out in (js/ui/sheet-shape.js). Orientation
    and width stay media queries: zoom does not distort either.
 
    `:where()` CARRIES ZERO SPECIFICITY, and that is the whole reason it is used

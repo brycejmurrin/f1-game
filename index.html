@@ -337,7 +337,7 @@
 <body><canvas id="game" aria-hidden="true"></canvas>
 <!-- BODY DENSITY, BEFORE THE BROWSER CAN PAINT ANYTHING.
      body[data-density] selects #overlay's one- vs two-column title grid
-     (css/menus.css, css/responsive.css). js/game/sheetshape.js owns this answer
+     (css/menus.css, css/responsive.css). js/ui/sheet-shape.js owns this answer
      and every later one; this is only the FIRST one, hoisted to a point with no
      network dependency.
      WHY INLINE, measured: an external <script> races the first paint and does
@@ -365,7 +365,7 @@
       // #overlay and move #menu-brand, a tall/compact viewport turned that
       // 157 ms gap into a single 0.61 layout shift. Same no-duplicated-
       // threshold rule as above: --tall-at is declared in css/tokens.css and
-      // js/game/sheetshape.js reads it too. First answer only — sheetshape
+      // js/ui/sheet-shape.js reads it too. First answer only — sheetshape
       // owns every later one, including the hysteresis this deliberately omits
       // (there is no previous shape to be sticky about).
       var tallAt = parseFloat(getComputedStyle(b)

@@ -176,7 +176,7 @@
    to the viewport and the art ran through the button stack; with the box at
    its own aspect a narrow screen gets a band at the foot instead, so it goes
    quiet rather than absent — and the tall phone below then makes it a crop. */
-@media (max-width: 700px)  { #title-car { opacity: 0.22; } }
+@media (max-width: 699px)  { #title-car { opacity: 0.22; } }   /* the phone rules end at 699, the iPad ones start at 700 */
 /* A PORTRAIT PHONE GETS THE CARS, NOT A STRIP. At 100% width the 1400/900 box
    is 393x253 on a 393px phone — the pair drawn in the left 55% of the viewBox
    lands 216px wide under the last row of rooms, at 0.22, which measured as
@@ -186,7 +186,7 @@
    doors sit at the top of their row (the tall block below), so the lower
    third of the screen is the cars' alone and the opacity can come up to
    landscape's.
-   Portrait is body[data-shape="tall"] (zoom-corrected, js/game/sheetshape.js),
+   Portrait is body[data-shape="tall"] (zoom-corrected, js/ui/sheet-shape.js),
    never an orientation media query — tests/unit/ui-improve-pass pins that. */
 @media (max-width: 699px) {
   /* A TALLER BOX, NOT A WIDER ONE. `width: 180%` failed ui-scale.spec on every
@@ -442,7 +442,7 @@
    and a grid distributes a spanning item's excess height across the rows it
    covers — which is what pushed the small print 230px below the title. */
 /* THE DOCUMENT-LEVEL SHORT THRESHOLD, declared beside the screen that reads it —
-   the same arrangement `--pair-at` has with #cs-inner. js/game/sheetshape.js resolves
+   the same arrangement `--pair-at` has with #cs-inner. js/ui/sheet-shape.js resolves
    `innerHeight / --ui-scale` against this and writes data-density onto body, which is
    how the screens OUTSIDE `.sheet` get an answer (#overlay's zoom sits on its children,
    so it has none of its own to divide by). 600 is what the two #overlay blocks already
@@ -452,7 +452,7 @@
 body { --compact-at: 600px; --wide-at: 620px; }
 
 /* The height half of this condition now comes from data-density, measured in the
-   units the content is actually laid out in (js/game/sheetshape.js). Orientation
+   units the content is actually laid out in (js/ui/sheet-shape.js). Orientation
    and width stay media queries: zoom does not distort either.
 
    `:where()` CARRIES ZERO SPECIFICITY, and that is the whole reason it is used
@@ -1277,7 +1277,7 @@ h3.sel-label {
    css/components.css. Only the two behavioural deltas are written here. */
 #season-setup { z-index: 26; }              /* over #select, which is 25 */
 /* --pair-at IS WHAT MAKES THE PANES SCROLL, and leaving it out is why they did
-   not. js/game/sheetshape.js reads this property to decide `data-pair`, and
+   not. js/ui/sheet-shape.js reads this property to decide `data-pair`, and
    with no value it deletes the attribute and returns — so .pane-pair never
    turned on, the two panes stacked at their FULL natural height, and .pane's
    own `overflow-y: auto` had nothing to scroll against because nothing ever
