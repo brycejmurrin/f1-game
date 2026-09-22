@@ -42,7 +42,7 @@ function loadQuali(opts = {}) {
     ],
     track: opts.track || { n: 80, total: 4000, def: { id: "monza" } },
     gripMult: () => 1,
-    simSeed: () => 1,
+    simSeed: () => (opts.seed == null ? 1 : opts.seed),
     vTop: () => 90,
     aTop: () => 12,
     LAT_MAX: 40,
@@ -74,7 +74,7 @@ function loadQuali(opts = {}) {
       save() { saved.career = true; },
       data: () => ({ seed: 1 }),
       round: () => 0,
-      hash: () => 0.5,
+      hash: opts.hash || (() => 0.5),
       devFor: () => 0,
     },
     Tracks: { curvature: () => 0.002 },
@@ -342,4 +342,23 @@ test("award-time clear: game.js drops the memory when the round scores", () => {
     "a scored round must drop the in-memory classification with the persist award() deletes");
   assert.match(CAREER_UI, /G\.qualiClear\(\);/,
     "career's hand-rolled return to the title must clear it too");
+});
+
+// ── the grid is a pure function of (seed, round) ────────────────────────────
+// In VS FRIEND each peer computes the whole classification itself — the AI
+// times come from simLap(seed, round, car) — so two peers agree on the grid
+// exactly when they hash on the same seed. The lobby now ships the host's seed
+// with its settings (js/net/lobby.js publishSettings); this pins the other
+// half of that contract: equal seeds give byte-identical rows, and the seed is
+// not decorative (a different one moves at least one AI time).
+test("equal seeds give identical AI qualifying rows; a different seed does not", () => {
+  // The harness stubs Career.hash to a constant; give it a real one so the seed
+  // reaches the draw (FNV-1a over the hash arguments, like js/core/hash32.js).
+  const hash = (...a) => { let h = 2166136261; for (const ch of a.join("|")) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } return (h % 100000) / 100000; };
+  const pick = (rows) => rows.map((r) => [r.driverId, r.pos, r.t]);
+  const a = pick(loadQuali({ seed: 4242, hash }).q.preview(null));
+  const b = pick(loadQuali({ seed: 4242, hash }).q.preview(null));
+  const c = pick(loadQuali({ seed: 4243, hash }).q.preview(null));
+  assert.deepEqual(a, b, "the same seed on two peers must classify the field identically");
+  assert.notDeepEqual(a, c, "a different seed must move at least one AI time");
 });

@@ -181,7 +181,7 @@ const ALLOWED = [
   // i.e. they separate "crawling" from "driving" at every pace.
   {
     file: "js/game.js", expr: "c.speed > 10",
-    code: "skids.stamp(tmpMat, (skid > 0.25 || c.offroad) && c.speed > 10);",
+    code: "skids.stamp(tmpMat, (skid > 0.25 || c.offroad) && c.speed > 10, dt);",
     // The justification did not change when the SkidMarks extraction rewrote this
     // line from an `if` into a stamp() argument — but the `code` match did, and the
     // lint correctly reported the site as unapproved until this text followed it.

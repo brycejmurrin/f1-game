@@ -68,7 +68,7 @@
       //    Two tree families on purpose — broadleaf maple/oak and dark
       //    blue-green spruce — because §6 forbids a pine monoculture.
       // ---------------------------------------------------------------------
-      const K = (s) => Math.round(s * n) % n;
+      const { K } = api;            // the contract's frac -> node index (normalised for negatives)
 
       const LEAF      = [0.24, 0.42, 0.18];   // mature broadleaf, full summer
       const LEAF_D    = [0.17, 0.31, 0.15];   // shaded depth of the wood

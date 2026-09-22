@@ -2271,8 +2271,9 @@ const WGX = (function () {
       // implementation — an Apple-silicon ADAPTER reports 16384, the DEVICE we
       // asked for does not. With dpr capped at 2 that starts clipping at 4097
       // CSS px: a 6K panel in a scaled HiDPI mode, or a window spanned across
-      // several 4K monitors. GLX and TLX do not clamp at all, so this was
-      // WGX-only. One scale factor keeps the picture correct, just smaller.
+      // several 4K monitors. GLX (MAX_TEXTURE_SIZE / MAX_RENDERBUFFER_SIZE)
+      // and TLX (its backend's limit) clamp the same way now. One scale factor
+      // keeps the picture correct, just smaller.
       if (pw > maxDim || ph > maxDim) {
         const k = Math.min(maxDim / pw, maxDim / ph);
         pw = Math.max(1, Math.floor(pw * k));

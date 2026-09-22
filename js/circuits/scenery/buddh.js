@@ -57,7 +57,7 @@
         billboard, sponsorHoarding, runoffApron,
         grandstandEx, scaffoldStand, spectatorHill } = api;
 
-      const K = (s) => Math.round(s * n) % n;
+      const { K } = api;            // the contract's frac -> node index (normalised for negatives)
       // Earthworks run along the road; the guard only cares about footprint,
       // so the chain helper keeps every slab small enough to survive.
       const bank = (s, side, dist, len, w, h, col) => {

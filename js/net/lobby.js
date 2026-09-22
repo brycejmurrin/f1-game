@@ -515,8 +515,18 @@ const NetLobby = (function () {
         laps: G.raceLaps, weather: G.raceWeather, tod: G.raceTimeOfDay,
         quali: !!G.raceQuali, grid: G.raceGrid,
         difficulty: G.difficulty,
-        // CHANGEABLE conditions are the host's plan, never a guest's own
-        // derivation (peers do not share a sim seed).
+        // The SIM seed and race counter every reproducible draw hashes on:
+        // reliability DNFs (armReliability), the weather arc, the AI
+        // restart/skill rolls and the AI qualifying times that set the grid.
+        // Without them each peer drew off its own local values — a tab that
+        // had run a Daily Challenge or a few solo races saw different cars
+        // retire on different laps, and a different grid, from its rival's.
+        // Older builds are refused at handshake (build_mismatch), so the fields
+        // are present whenever they matter; a guest handed a payload without
+        // them keeps its local values, exactly as before.
+        seed: G.seed, round: G.raceRound,
+        // CHANGEABLE conditions are still the host's PLAN, not a guest's own
+        // derivation: the arc is drawn once, here, and shipped as data.
         changeable: !!G.raceChangeable, wxArc: G.raceChangeable ? G.wxArcPlan : null,
       });
     }
@@ -575,6 +585,16 @@ const NetLobby = (function () {
         if (typeof d.difficulty !== "string" || !DIFFICULTY.has(d.difficulty)) return null;
         out.difficulty = d.difficulty;
       }
+      // simSeed() stores a uint32 and treats 0 as "unset" (game.js): accept
+      // exactly the values the setter would keep.
+      if (own(d, "seed")) {
+        if (!Number.isInteger(d.seed) || d.seed < 1 || d.seed > 0xFFFFFFFF) return null;
+        out.seed = d.seed;
+      }
+      if (own(d, "round")) {
+        if (!Number.isInteger(d.round) || d.round < 0 || d.round > 1e6) return null;
+        out.round = d.round;
+      }
       return out;
     }
 
@@ -593,6 +613,8 @@ const NetLobby = (function () {
       if (own(next, "weather")) G.raceWeather = next.weather;
       if (own(next, "tod")) G.raceTimeOfDay = next.tod;
       if (own(next, "difficulty")) G.difficulty = next.difficulty;
+      if (own(next, "seed")) G.seed = next.seed;           // rewinds the sim stream: pre-race only, by construction
+      if (own(next, "round")) G.raceRound = next.round;
       renderRoom();
       return true;
     }
