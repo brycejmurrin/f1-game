@@ -118,6 +118,7 @@ const ContactGeometry = (function () {
     out.closing = closing; out.magnitude = j;
     return out;
   }
-  return Object.freeze({ overlap, sweep, impulse, radius, INERTIA, FRICTION });
+  // `radius` is internal to overlap()/sweep(); nothing outside ever read it.
+  return Object.freeze({ overlap, sweep, impulse, INERTIA, FRICTION });
 })();
 Object.freeze(ContactGeometry);

@@ -1,6 +1,6 @@
 ---
 name: race-incidents-control
-description: "Use when debris, Rapier side-worlds, incident takeovers, car launches or pileups, cautions, VSC, safety car, overtake gating, reliability retirements, or race-control tests are being changed or debugged."
+description: "Use when debris, Rapier side-worlds, incident takeovers, car launches, the multi-car pile-up takeover (c1Pileup), cautions, VSC, safety car, overtake gating, reliability retirements, or race-control tests are being changed or debugged. AI that merely races badly and causes contact is ai-racecraft, not this skill."
 ---
 
 ## Overview

@@ -3,29 +3,88 @@
     "allow": [
       "Bash(npm run test:*)",
       "Bash(npm test *)",
+      "Bash(npm run gen)",
+      "Bash(npm run gen:*)",
+      "Bash(npm install *)",
+      "Bash(npm ci)",
+      "Bash(npx playwright install *)",
+      "Bash(npx serve *)",
       "Bash(node --test *)",
+      "Bash(node --check *)",
+      "Bash(node -e *)",
       "Bash(node tools/ci/verify-change.mjs *)",
       "Bash(node tools/ci/pick-tests.mjs *)",
       "Bash(node tools/ci/select-specs.mjs *)",
       "Bash(node tools/ci/test-bg.mjs *)",
+      "Bash(node tools/ci/test-solo.mjs *)",
+      "Bash(node tools/ci/tooling-fast.mjs *)",
+      "Bash(node tools/ci/twinned-specs.mjs *)",
       "Bash(node tools/ci/bump-cache.mjs *)",
+      "Bash(node tools/ci/deploy.mjs --plan*)",
+      "Bash(node tools/ci/deploy.mjs --gate-only*)",
+      "Bash(node tools/ci/sync-pr.mjs * --plan*)",
+      "Bash(node tools/ci/who-is-on-it.mjs *)",
       "Bash(node tools/track/verify-track.cjs *)",
       "Bash(node tools/track/graph-parity.cjs *)",
       "Bash(node tools/gen/gen-shell.mjs *)",
       "Bash(node tools/gen/gen-test-groups.mjs *)",
+      "Bash(node tools/gen/gen-*.mjs *)",
       "Bash(node tools/gen/assets.mjs verify)",
       "Bash(node tools/check/*)",
+      "Bash(node tools/shot/*)",
+      "Bash(node tools/ui/*)",
       "Bash(node tools/gfx/wgx-validate.mjs *)",
+      "Bash(node tools/gfx/gfx-probe.mjs *)",
       "Bash(bash tools/env/cloud-agent-install.sh)",
       "Bash(bash tools/env/mirror-skills.sh *)",
+      "Bash(tools/mcp/apex-tools-mcp.sh call *)",
       "Bash(git status *)",
       "Bash(git diff *)",
       "Bash(git log *)",
       "Bash(git branch *)",
       "Bash(git show *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git fetch *)",
+      "Bash(git checkout *)",
+      "Bash(git switch *)",
+      "Bash(git stash *)",
+      "Bash(git worktree *)",
+      "Bash(git merge *)",
+      "Bash(git rev-parse *)",
+      "Bash(git ls-files *)",
+      "Bash(git remote *)",
+      "Bash(git for-each-ref *)",
+      "Bash(grep *)",
+      "Bash(rg *)",
+      "Bash(cat *)",
+      "Bash(ls *)",
+      "Bash(wc *)",
+      "Bash(find *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(sed -n *)",
+      "Bash(awk *)",
+      "Bash(sort *)",
+      "Bash(jq *)",
+      "Bash(diff *)",
       "Bash(cat /proc/loadavg)",
-      "Bash(ps *)"
+      "Bash(ps *)",
+      "Bash(curl http://127.0.0.1*)",
+      "Bash(curl http://localhost*)"
+    ],
+    "deny": [
+      "Bash(git push --force*)",
+      "Bash(git push -f *)",
+      "Bash(git push * claude/f1-game-project-26h3ng*)",
+      "Bash(git push *:claude/f1-game-project-26h3ng*)",
+      "Bash(node tools/ci/bump-cache.mjs --apply*)",
+      "Bash(node tools/gen/assets.mjs bake*)",
+      "Bash(node tools/track/rotate-markings.cjs --write*)"
     ]
+  },
+  "worktree": {
+    "baseRef": "head"
   },
   "enabledMcpjsonServers": [
     "apex-tools",
@@ -61,6 +120,29 @@
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
             "timeout": 180
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/post-edit.sh\"",
+            "timeout": 90
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-guard.sh\"",
+            "timeout": 10
           }
         ]
       }

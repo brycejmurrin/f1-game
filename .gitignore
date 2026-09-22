@@ -7,6 +7,7 @@
 !.claude/hooks/
 !.claude/settings.json
 !.claude/rules/
+!.claude/agent-memory/
 
 # Node (both the real dir and the self-referential symlink worktree runs create)
 node_modules/

@@ -69,7 +69,14 @@ test("AI full-body meshes use deterministic factory presets instead of saved set
 
   const result = await page.evaluate(() => {
     const mismatches = [];
-    for (const team of Teams.LIST.filter((item) => !item.custom)) {
+    // NOT `legends` EITHER, and that is not a convenience. The `legends` entry
+    // is a TEMPLATE for the player's race-as-a-legend car, pushed into
+    // Teams.LIST by CustomTeam.syncLegendsTeam() — it is not a constructor and
+    // never fields an AI body on a normal grid, so there is no capture to match
+    // and it reported as a mismatch whose `actual` was simply undefined. The
+    // filter here predates that entry existing; parts-physics.spec.js has
+    // excluded it by the same predicate all along.
+    for (const team of Teams.LIST.filter((item) => !item.custom && !item.legends)) {
       const expected = Parts.getFactorySetup(team);
       const actual = window.__factoryMeshCaptures[Parts.factoryKey(team)];
       if (!actual || Parts.CATALOG.some((cat) => actual[cat.id] !== expected[cat.id])) {

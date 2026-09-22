@@ -1172,47 +1172,65 @@ function newTones(before) {
   return [...live].filter((n) => n.kind === "osc" && !before.has(n)).map((n) => Math.round(n.frequency.value));
 }
 
-test("a transmission opens with a courtesy tone, inside the voice band", async () => {
-  // THE BEEP BEFORE THE MESSAGE. This chain shipped without one, on a comment
-  // asserting F1 has no such convention — it does, it is called a courtesy
-  // tone, and it is the most recognisable thing about team radio. Generic by
-  // design: F1's own frequency is unpublished, and a distinctive broadcast
-  // signature is not something an unofficial game should reproduce.
-  const GameAudio = await sampleEngine();
-  endAll();
+test("the engineer's cue is a four-note figure, not a beep", () => {
+  /* MEASURING IT BADLY SAID "ONE NOTE". The CC0 recreation of the F1 beep was
+   * first FFT'd in its single loudest window, which reported a near-pure
+   * 786 Hz — and one window of a melody can only ever see one note of it. A
+   * spectrogram across the whole file shows four: 1055, 775, 1184, 991 Hz,
+   * about 100 ms each. That is the shape this asserts. */
+  const { GameAudio } = boot();
+  GameAudio.init();
+  GameAudio.startEngine();
   const before = oscSet();
-  assert.equal(GameAudio.radioSting("radio", 1.5), true);
+  assert.equal(GameAudio.radioSting("radio", 2), true);
   const hz = newTones(before);
-  assert.equal(hz.length, 1, "exactly one tone per transmission, not a melody: " + hz.join(","));
-  // Inside 300 Hz-3.4 kHz, the band the hiss is shaped to and the band every
-  // voice radio carries. A tone above it would be the one part of the frame the
-  // channel could not pass.
-  assert.ok(hz[0] > 300 && hz[0] < 3400, `${hz[0]} Hz is outside the voice band this frame lives in`);
-  // AND IN THE LOWER HALF OF IT, which the band check alone does not protect.
-  // This first shipped at 2400 Hz, taken from Quindar's 2525 Hz — a number that
-  // answers an IN-BAND SIGNALLING problem this tone does not have, and which
-  // lands right where the ear is most sensitive. The one CC0 recreation of the
-  // F1 beep measures a near-pure 786 Hz. The register is the finding; a tone
-  // back up at 2.4 kHz would read thin and piercing and pass the line above.
-  assert.ok(hz[0] < 1500, `${hz[0]} Hz is back up in the piercing register — see RADIO_CH in js/audio/engine.js`);
+  assert.equal(hz.length, 4, "a beep where a figure should be: " + hz.join(","));
+  const want = [1055, 775, 1184, 991];
+  for (let i = 0; i < want.length; i++)
+    assert.ok(Math.abs(hz[i] - want[i]) <= 22,
+      `note ${i + 1} is ${hz[i]} Hz, measured ${want[i]} Hz (FFT bin was 21.5 Hz)`);
+  // Down a fourth, up a fifth, down a minor third — the shape, independent of
+  // the exact tuning, so a deliberate transpose stays legal and a scramble does not.
+  const semis = hz.slice(1).map((v, i) => 12 * Math.log2(v / hz[i]));
+  assert.ok(semis[0] < -4 && semis[0] > -7, "first move is down a fourth-ish: " + semis[0].toFixed(1));
+  assert.ok(semis[1] > 6 && semis[1] < 9, "then up a fifth-ish: " + semis[1].toFixed(1));
+  assert.ok(semis[2] < -2 && semis[2] > -5, "then down a minor third-ish: " + semis[2].toFixed(1));
+  // Still inside the band the rest of the frame lives in, and out of the
+  // piercing register Quindar's 2525 Hz had put it in.
+  for (const f of hz) assert.ok(f > 300 && f < 1500, `${f} Hz is outside the register this figure sits in`);
 });
 
-test("the courtesy tone obeys the same gates as the rest of the frame", async () => {
-  const GameAudio = await sampleEngine();
-  endAll();
+test("the courtesy figure obeys the same gates as the rest of the frame", () => {
+  const { GameAudio } = boot();
+  GameAudio.init();
+  GameAudio.startEngine();
   let before = oscSet();
   assert.equal(GameAudio.radioSting("coach", 1.5), false);
   assert.equal(newTones(before).length, 0, "the coach is not on a radio, so there is nothing to key");
   GameAudio.setRadioFx(0);
   before = oscSet();
   GameAudio.radioSting("radio", 1.5);
-  assert.equal(newTones(before).length, 0, "off means off — the tone is part of the frame, not beside it");
+  assert.equal(newTones(before).length, 0, "off means off — the figure is part of the frame, not beside it");
   GameAudio.setRadioFx(1);
-  // Race control and the engineer are different sources and do not share a beep.
+  // Race control is a different source and gets its own, shorter cue: the
+  // broadcast does not put the team-radio sting over race control either, and
+  // two channels that open identically are one channel.
   before = oscSet();
   GameAudio.radioSting("control", 1.5);
-  const ctl = newTones(before)[0];
-  before = oscSet();
-  GameAudio.radioSting("radio", 1.5);
-  assert.notEqual(ctl, newTones(before)[0], "two channels, two tones");
+  const ctl = newTones(before);
+  assert.ok(ctl.length >= 1 && ctl.length < 4, "race control is shorter than the engineer's: " + ctl.join(","));
+  for (const f of ctl) assert.ok(f > 300 && f < 1500, `${f} Hz is outside the register`);
+});
+
+test("the hiss bed outlasts the figure, however short the card", () => {
+  // A short card is shorter than four notes. Scheduling the squelch tail off
+  // the card's life alone closed the mic while the cue was still playing —
+  // the tail is the END of a transmission the figure has only just opened.
+  const src = fs.readFileSync(path.join(ROOT, "js/audio/engine.js"), "utf8");
+  const fn = src.match(/function radioSting\([\s\S]*?\n  \}/);
+  assert.ok(fn, "could not find radioSting in js/audio/engine.js");
+  assert.match(fn[0], /const hold = Math\.max\(0\.25, tuneS \+ [\d.]+,/,
+    "hold must be floored by the figure's own length, not just the card's");
+  // ...and the figure has to be measured, not assumed: radioTune returns it.
+  assert.match(fn[0], /const tuneS = [\d.]+ \+ radioTune\(/);
 });

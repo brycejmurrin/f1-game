@@ -15,7 +15,7 @@ const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const MIME = {
   ".html": "text/html; charset=utf-8",
   ".js": "application/javascript; charset=utf-8",
-  // ES modules (vendor/rapier-0.19.3, vendor/three-0.185.1): Chromium enforces
+  // ES modules (vendor/rapier-0.19.3, vendor/three-0.186.0): Chromium enforces
   // a JavaScript MIME type for module scripts — octet-stream imports are
   // rejected outright, so .mjs must be mapped or dynamic import() fails.
   ".mjs": "text/javascript; charset=utf-8",
@@ -101,6 +101,10 @@ if (dropped.length && !args.includes("--list")) {
   // reproducing the very 0/0 it exists to forbid.
   const env = { ...process.env };
   delete env.NODE_TEST_CONTEXT;
+  // An ADAPTED spec's "twin" is the spec itself under tests/helpers/vm-page.js,
+  // which fixtures.js selects by this variable. Harmless to the hand twins:
+  // they load tools/lib/game-vm.cjs directly and never import fixtures.js.
+  if (dropped.some((d) => d.adapted)) env.APEX_VM_PAGE = "1";
   const r = spawnSync(process.execPath, ["--test", "--test-reporter=tap", ...twins],
     { cwd: ROOT, encoding: "utf8", env });
   process.stdout.write(r.stdout || "");
@@ -164,6 +168,14 @@ if (args.includes("--last-failed") && process.env.APEX_LAST_RUN_FILE) {
   } catch (e) {
     console.error(`[playwright] --last-failed: could not stage ${process.env.APEX_LAST_RUN_FILE} (${e.message}); running everything named`);
   }
+}
+// A pass that needed a retry is a red, not a green (AGENTS.md §Verification 9,
+// 2026-09-22): `retries: 1` in CI turns an intermittent failure into a silent
+// pass, and the live reporter's "flaky" line is easy to skim past. Opt in with
+// APEX_FAIL_ON_FLAKY=1 and Playwright exits non-zero on any flaky test; the
+// gate flips it on once the known flakes are fixed or quarantined by name.
+if (process.env.APEX_FAIL_ON_FLAKY === "1" && !args.includes("--fail-on-flaky-tests")) {
+  args.push("--fail-on-flaky-tests");
 }
 const cli = join(ROOT, "node_modules", ".bin", "playwright");
 const child = spawn(cli, ["test", ...args], {

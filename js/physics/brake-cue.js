@@ -4,6 +4,10 @@
 const BrakeCue = (function () {
   "use strict";
 
+  // The loop's fixed step (js/physics/consts.js FIXED_DT); the literal is the
+  // fallback for a bare test VM that loads this file without PhysicsConsts.
+  const FIXED_DT = (typeof PhysicsConsts !== "undefined" && PhysicsConsts.FIXED_DT) || 1 / 60;
+
   const LOOK_LO = 0.7, LOOK_HI = 2.3;   // seconds of lookahead at notch 2 / 10
   const URGENCY_GATE = 0.12;            // below this the corner is already made
   const PERIOD_LO = 0.55, PERIOD_HI = 0.09;
@@ -49,7 +53,7 @@ const BrakeCue = (function () {
     function tick() {
       if (!cfg.on || !G || G.paused || G.state !== "race") { nextT = 0; lastU = 0; lastMs = 0; return; }
       const now = (typeof performance !== "undefined" ? performance.now() : Date.now());
-      const dt = lastMs ? Math.min(0.1, (now - lastMs) / 1000) : 1 / 60;
+      const dt = lastMs ? Math.min(0.1, (now - lastMs) / 1000) : FIXED_DT;
       lastMs = now;
       const p = G.player, track = G.track;
       if (!p || !track || typeof Tracks === "undefined" || p.finished || p.retired) {

@@ -69,7 +69,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_191 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_192 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -149,6 +149,7 @@ _191 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `save-migrate.js` | `SaveMigrate` | tag | versioned save migration (SaveMigrate). |
+| `regulations.js` | `Regulations` | tag | career regulation eras. |
 | `career.js` | `Career` | tag | CAREER core: the `apex26.career.<flavour>.0..2` saves (three DRIVER slots and three MY TEAM slots, one live at a time), the credits economy, driver an… |
 | `season-cal.js` | `SeasonCal` | tag | the SEASON CALENDAR and the WEEKEND FORMAT: which circuits a standalone championship visits and in what order, whether the weekend qualifies, whether … |
 | `career-ui.js` | `CareerUI` | tag | the CAREER screen (#career). |
@@ -655,7 +656,7 @@ function. The 2026-08 parity pass (recipes in
 `THREE` at script-eval (three doesn't exist until `create()`), so there is no
 deferred-ordering problem — the handshake IS the existing `await Gfx.create` in
 game.js. Vendored three r185.1 lives OUTSIDE `js/` at top-level
-`vendor/three-0.185.1/` (the load-order test walks `js/**`; an un-versioned
+`vendor/three-0.186.0/` (the load-order test walks `js/**`; an un-versioned
 transitive `three.core` import would break the uniform-`?v=` rule otherwise);
 an inline `<script type="importmap">` in `index.html` maps the `three`/`three/*`
 specifiers to that dir (invisible to the load-order regex and the sw.js precache
@@ -1282,7 +1283,7 @@ would keep GLX’s dead closure).
 |---|---|---|---|
 | **GLX** | Explicit/fallback always-tagged WebGL2 | `js/render/glx/glx.js` + `glx/{shadow,post,chunked}.js` | GLSL strings in `js/render/shaders/` |
 | **WGX** | Opt-in WebGPU, hand-ported WGSL | `js/render/webgpu/wgx.js` | `spike/backends/webgpu/wgsl-{chunks,post,fx}.js` |
-| **TLX** | Default Three `WebGPURenderer` (`forceWebGL` when `tlxForceGL=1`, or on AUTO when `navigator.gpu` is absent / `tlxAutoGL` is set; WebKit (Safari/iOS) takes three WebGL2 on AUTO since 2026-09-03; THREE PATH: WEBGPU pins the lite WebGPU path) | `js/render/three/tlx.js` | TSL factories on `TLXShaders`; vendor `vendor/three-0.185.1/` |
+| **TLX** | Default Three `WebGPURenderer` (`forceWebGL` when `tlxForceGL=1`, or on AUTO when `navigator.gpu` is absent / `tlxAutoGL` is set; WebKit (Safari/iOS) takes three WebGL2 on AUTO since 2026-09-03; THREE PATH: WEBGPU pins the lite WebGPU path) | `js/render/three/tlx.js` | TSL factories on `TLXShaders`; vendor `vendor/three-0.186.0/` |
 
 **Shared always-on:** `js/render/gfx.js` (`create` only), `js/render/shared/gltf.js`,
 `js/render/shared/assets.js` (MAT `TEXTURE_2D_ARRAY`). Deferred lists live in

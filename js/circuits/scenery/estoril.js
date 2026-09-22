@@ -81,6 +81,14 @@
             const p = vadd(vadd(vadd(a.c, a.t, (i - bays / 2) * pitch), a.r, -6.4), a.u, 7.4);
             seat.cyl(stage, p, 0.15, 3.4, LIME, 6, b);
           }
+          // Each block carries its own pantile roof, anchored with the block.
+          // EST-M1 asked for ONE 208 m ridge over both blocks as a single mesh;
+          // the blocks are 7 bays (54.6 m) each and their centres 149 m apart
+          // (0.960 -> 0.996 of a 4140 m lap), so a single-basis ridge spans
+          // 94 m of open air between them and modelGroup rejects its footprint
+          // at every length down to 150 m (required -> the circuit fails to
+          // build). A roof over nothing is not a continuous ridge either; the
+          // per-block roofs stay until the terrace itself is made continuous.
           stage._mat = MAT.ROOF;
           seat.prism(stage, vadd(a.c, a.u, 10.8), [15.4, 2.1, len + 2], TILE, b);
           stage._mat = 0;
@@ -202,10 +210,16 @@
         { id: "estoril-t12-gravel", samples: 6 });
       marshalPost(K(0.775), -1, 9);
 
-      groundPatch(K(0.900), -1, 6, [40, 0.18, 90], GRAVEL,
+      // EST-M2: Parabolica owns both superlatives on the lap: the widest
+      // gravel apron and the most densely populated crowd bank. Density is
+      // the crowd (figures never clip); rows and span are terrace boxes, and
+      // on this curve six rows or a 0.855-0.940 span put adjacent treads
+      // through each other (clip-audit: 3-5 severe spots against the
+      // baseline's 1), so the bank keeps four rows over 0.865-0.935.
+      groundPatch(K(0.900), -1, 6, [48, 0.18, 104], GRAVEL,
         { id: "estoril-parabolica-gravel", samples: 9 });
       tyreWall(0.880, 0.925, -1, 5, [0.85, 0.78, 0.20]);
-      spectatorHill(0.865, 0.935, 1, 32, { rows: 4, rise: 1.2, depth: 1.9, density: 0.46, step: 8 });
+      spectatorHill(0.865, 0.935, 1, 32, { rows: 4, rise: 1.2, depth: 1.9, density: 0.68, step: 7 });
       marshalPost(K(0.895), 1, 10);
       for (const s of [0.875, 0.905]) billboard(K(s), -1, 14, 12, 4.5, [0.88, 0.20, 0.16]);
 

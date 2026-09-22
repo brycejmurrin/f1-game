@@ -163,7 +163,9 @@ const NetPlay = (function () {
     let localCar = null;
     const remotes = new Map();
     const remoteList = () => [...remotes.values()];
-    let lastPublish = -Infinity, lastStrategy = -Infinity, lastStrategyPhase = null;
+    let lastPublish = -Infinity, lastStrategy = -Infinity;
+    // The strategy phase, as three compared scalars rather than a joined key.
+    let lastPhaseA = null, lastPhaseB = null, lastPhaseC = null;
     let peerProfile = null;
     let lastReason = null;
     let lastSlotFallback = null;
@@ -610,7 +612,8 @@ const NetPlay = (function () {
       session = sessionList()[0] || null;
       separateGrid();
 
-      lastPublish = -Infinity; lastStrategy = -Infinity; lastStrategyPhase = null;
+      lastPublish = -Infinity; lastStrategy = -Infinity;
+      lastPhaseA = lastPhaseB = lastPhaseC = null;
       lastReason = null;
       armedPeers.clear();
       armDeadline = 0;
@@ -820,9 +823,15 @@ const NetPlay = (function () {
         }
       }
 
-      const strategyPhase = localCar && [localCar.tyreStints, localCar.pitState, localCar.pitArmed].join(":");
-      if (localCar && G.track && G.track.def && (now - lastStrategy >= 1000 || lastStrategyPhase !== strategyPhase)) {
-        lastStrategy = now; lastStrategyPhase = strategyPhase;
+      // THREE SCALARS, NOT AN ARRAY AND A JOIN. This ran every frame of every
+      // multiplayer race to build a string that is thrown away unchanged on all
+      // but a handful of them — two allocations a frame for a three-field
+      // comparison. The fields compare directly.
+      const phaseA = localCar && localCar.tyreStints, phaseB = localCar && localCar.pitState,
+            phaseC = localCar && localCar.pitArmed;
+      const phaseChanged = phaseA !== lastPhaseA || phaseB !== lastPhaseB || phaseC !== lastPhaseC;
+      if (localCar && G.track && G.track.def && (now - lastStrategy >= 1000 || phaseChanged)) {
+        lastStrategy = now; lastPhaseA = phaseA; lastPhaseB = phaseB; lastPhaseC = phaseC;
         broadcastStrategy(strategyState(localCar, G.wireId(localCar), G.track.def.id));
       }
       if (localCar && now - lastPublish >= PUBLISH_MS) {

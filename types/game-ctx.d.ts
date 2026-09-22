@@ -247,7 +247,7 @@ interface GameEls {
   flag: HTMLElement; minimap: HTMLElement;
   lights: HTMLElement; announce: HTMLElement;
   announceNum: HTMLElement; announceWho: HTMLElement; announceText: HTMLElement;
-  overlay: HTMLElement; subtitle: HTMLElement; audiostate: HTMLElement;
+  overlay: HTMLElement; audiostate: HTMLElement;
   lighting: HTMLElement; camtune: HTMLElement; flyby: HTMLElement;
   select: HTMLElement; selTitle: HTMLElement; selTeams: HTMLElement;
   selTracks: HTMLElement;
@@ -414,6 +414,10 @@ interface GameCtx {
   // ── Determinism: the sim RNG seed (setting it rewinds the stream) ──────────
   seed: number;
   readonly simSeed: (v?: number) => number;
+  /** The race counter the reliability and weather draws hash on. A bare
+   *  passthrough (no stream rewind): VS FRIEND publishes it with the host's
+   *  settings so both peers draw the same DNFs — js/net/lobby.js. */
+  raceRound: number;
 
   // ── Driving-model tunables (let-s in game.js; PACE re-inits the cameras) ───
   DRIFT: number;

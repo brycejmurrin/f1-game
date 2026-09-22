@@ -74,7 +74,7 @@ const driverRec = (d) => ({ name: d.name, code: d.code, num: d.num });
 
 let career = null;        // the loaded save, or null
 let engaged = false;
-function engage(on) { engaged = !!on; }
+function engage(on) { engaged = !!on; applyRegs(); }
 function inCareer() { return engaged && career != null; }
 
 // Career draws never touch simRnd(): consuming that stream here would make a
@@ -166,6 +166,7 @@ function load() {
   // function's job — otherwise a v0 save would migrate in memory on every boot
   // and never on disk, and the next build's ladder would start from v0 again.
   save();
+  applyRegs();
   return career;
 }
 function setLive() { store.set("careerSlot", `${slotFlavour}:${slotIdx}`); }
@@ -198,6 +199,7 @@ function clear() {
   career = null;
   store.set(liveSlotKey(), null);
   armRevision();
+  applyRegs();      // no career, no regulations
 }
 
 function slotInfo(c, f, i) {
@@ -244,13 +246,14 @@ function useSlot(flavour, i) {
   setLive();
   career = readSlot(f, n);
   armRevision();
+  applyRegs();      // a different save can be a different era
   return career;
 }
 function deleteSlot(flavour, i) {
   const f = flavourIn(flavour);
   const n = slotIn(i);
   store.set(slotKey(f, n), null);
-  if (f === slotFlavour && n === slotIdx) { career = null; armRevision(); }
+  if (f === slotFlavour && n === slotIdx) { career = null; armRevision(); applyRegs(); }
   return true;
 }
 
@@ -323,6 +326,9 @@ function start(opts) {
     const hired = FREE_AGENTS.find((a) => a.code === o.hire) || FREE_AGENTS[FREE_AGENTS.length - 3];
     career.roster = [rosterEntry(hired, 1)];
   }
+  career.year0 = YEAR0;
+  career.amb = ambIdx(o.amb);
+  applyRegs();
   career.deal = newDeal(team, 1);
   Log.info("game", `Career.start flavour=${flavour} team=${teamId}`);
   return save();
@@ -331,18 +337,158 @@ function start(opts) {
 function salaryFor(team, rep) {
   return Math.round(20 + rep * 1.2 + team.tier * 15);
 }
-const GOAL_REP = 5;
-const GOAL_MV = 12;
+// THE PROMISE YOU MAKE WHEN YOU SIGN. A contract's season goal used to be one
+// number the game chose for you — expectedFinish(team) — so the only lever on a
+// career that felt too easy or too hard was the AI difficulty race setting,
+// which is per-race and blunt. Ambition is the same dial taken from the other
+// end: you tell the team where you will finish, and the paddock prices it.
+//
+// THE MIDDLE RUNG IS WHAT EVERY CONTRACT ALREADY WAS — delta 0, rep 5, mv 12,
+// the old GOAL_REP/GOAL_MV exactly — so a deal signed before this existed
+// carries no `ambition`, reads as index 1 through ambIdx(), and resolves
+// byte-identically. That is why this table is ordered and indexed rather than
+// keyed, and why no CAREER_V rung is owed for the new field.
+//
+// PAID IN REPUTATION, NOT CREDITS, and deliberately. The settlement comment in
+// rollover() has always said a per-season cash bonus would go stale against
+// tools/car/career-economy.mjs and every figure in docs/CAREER.md. Reputation
+// and market value are the better currency anyway: they are what decides which
+// seats offerBar() opens next winter, so promising more buys a better car
+// sooner, and missing costs you rungs on the ladder the hub shows all season.
+const AMBITION = [
+  { key: "modest", name: "PLAY IT SAFE", delta: 3, rep: 3, mv: 6,
+    blurb: "A softer target. The paddock shrugs either way." },
+  { key: "expected", name: "WHAT THEY ASK", delta: 0, rep: 5, mv: 12,
+    blurb: "The finish this team expects from this car." },
+  { key: "ambitious", name: "PROMISE MORE", delta: -3, rep: 8, mv: 20,
+    blurb: "Beat the car. Worth more if you manage it, and costlier if you do not." },
+];
+const AMBITION_DEF = 1;
+function ambIdx(i) {
+  return Number.isInteger(i) && i >= 0 && i < AMBITION.length ? i : AMBITION_DEF;
+}
+function ambitionOf(deal) { return ambIdx(deal && deal.ambition); }
+// The PENDING pick — what the NEXT contract gets signed at. It lives on the
+// career rather than the deal so the choice survives a winter and the picker
+// opens where you left it; the deal stores what was actually signed, because
+// resolving a season against a promise you changed in March is not a promise.
+function ambition() { return career ? ambIdx(career.amb) : AMBITION_DEF; }
+function goalValueFor(team, amb) {
+  return clamp(expectedFinish(team) + AMBITION[ambIdx(amb)].delta, 1, 22);
+}
+
+// THE GOAL IS A KIND, NOT ONE RULE. A contract used to promise exactly one
+// thing — a championship position — so the ambition rungs above had a single
+// sentence to scale and five seasons at a team read identically. Each kind
+// derives its target from an expectation THAT ALREADY EXISTS, and the ambition
+// delta shifts it the same way it shifts champPos: no invented balance numbers.
+//
+// `met` takes (value, result) where result is assembled at rollover from the
+// season entry, so a kind can only ask about things the archive already knows.
+// `now` is the same question against the LIVE season, for the hub's progress
+// line — null when a kind cannot be read mid-season.
+//
+// CHAMPPOS IS FIRST AND IS THE FALLBACK. Every deal signed before this existed
+// carries `type: "champPos"`, and an unknown type resolves as champPos rather
+// than silently passing, so no save changes meaning.
+const GOAL_KINDS = {
+  champPos: {
+    value: (team, amb) => goalValueFor(team, amb),
+    met: (v, r) => r.pos <= v,
+    label: (v) => `Finish P${v} or better in the championship`,
+    now: (c) => { const r = myStandingRow(); return r ? `P${r.pos}` : null; },
+    onTrack: (v) => { const r = myStandingRow(); return r ? r.pos <= v : null; },
+  },
+  teamPos: {
+    // expectedConstructor() ranks every real team by tier; that IS the
+    // expectation rolloverTeams develops against, so the goal and the
+    // development model agree about what a team was supposed to do.
+    value: (team, amb) => clamp((expectedConstructor().get(team.id) || 11)
+                                + AMBITION[ambIdx(amb)].delta, 1, 11),
+    met: (v, r) => r.cPos <= v,
+    label: (v) => `Take the team to P${v} or better in the constructors'`,
+    now: () => { const r = myTeamStandingRow(); return r ? `P${r.pos}` : null; },
+    onTrack: (v) => { const r = myTeamStandingRow(); return r ? r.pos <= v : null; },
+  },
+  beatMate: {
+    // No value to derive: the benchmark is the other side of the garage, which
+    // is what most of the per-round briefs already measure against.
+    value: () => 0,
+    met: (v, r) => r.matePos == null || r.pos < r.matePos,
+    label: () => "Finish the season ahead of your team-mate",
+    now: () => {
+      const me = myStandingRow(), mate = mateStandingRow();
+      return me && mate ? `P${me.pos} to their P${mate.pos}` : null;
+    },
+    onTrack: () => {
+      const me = myStandingRow(), mate = mateStandingRow();
+      return me && mate ? me.pos < mate.pos : null;
+    },
+  },
+};
+const GOAL_ORDER = ["champPos", "teamPos", "beatMate"];
+function goalKind(type) { return GOAL_KINDS[type] || GOAL_KINDS.champPos; }
+// Drawn from the career seed and the YEAR, so a career is not the same promise
+// five seasons running and a reload cannot reroll it.
+function goalTypeFor(year) {
+  const i = Math.floor(rnd(year, "goalkind") * GOAL_ORDER.length);
+  return GOAL_ORDER[clamp(i, 0, GOAL_ORDER.length - 1)];
+}
+function goalFor(team, amb, year) {
+  const type = goalTypeFor(year);
+  return { type, value: goalKind(type).value(team, amb) };
+}
+function goalLabel(goal) {
+  if (!goal) return "";
+  return goalKind(goal.type).label(goal.value);
+}
+// Live standings helpers — the hub asks these every build, the resolution does not.
+function myStandingRow() {
+  if (!career) return null;
+  return driverStandings().find((r) => r.team === career.team && r.seat === career.seat) || null;
+}
+function mateStandingRow() {
+  if (!career) return null;
+  return driverStandings()
+    .find((r) => r.team === career.team && r.seat === (career.seat === 0 ? 1 : 0)) || null;
+}
+function myTeamStandingRow() {
+  if (!career) return null;
+  return teamStandings().find((r) => r.id === career.team) || null;
+}
+function goalNow(goal) { return goal ? goalKind(goal.type).now(career) : null; }
+function goalOnTrack(goal) { return goal ? goalKind(goal.type).onTrack(goal.value) : null; }
+function setAmbition(i) {
+  if (!career || careerConflict) return ambition();
+  career.amb = ambIdx(clamp(i | 0, 0, AMBITION.length - 1));
+  // RE-STAMP THE OFFERS ON THE TABLE. The sheet prints o.goal.value, and offers
+  // are drawn at rollover — before this pick exists. Leaving them alone would
+  // put one number on the button and sign the contract at another.
+  for (const o of career.offers || []) {
+    const t = teamOf(o.teamId);
+    // THE KIND IS PART OF THE OFFER, only the TARGET moves with the rung.
+    // Re-drawing it here changed a seat's promise out from under the player:
+    // rollover() draws the offers BEFORE `career.year++`, so a re-stamp that
+    // re-derived the kind read a different year than the draw did and turned a
+    // beatMate seat into a champPos one between looking and signing.
+    if (t && o.goal) o.goal = { type: o.goal.type,
+                                value: goalKind(o.goal.type).value(t, career.amb) };
+  }
+  save();
+  return career.amb;
+}
 
 function bonusPtFor(team) { return 8 + (4 - team.tier) * 4; }
 function newDeal(team, years) {
+  const amb = ambition();
   return {
     team: team.id,
     seat: career ? career.seat : 0,
     years, left: years,
     salary: salaryFor(team, career ? career.rep : 30),
     bonusPt: bonusPtFor(team),
-    goal: { type: "champPos", value: expectedFinish(team) },
+    ambition: amb,
+    goal: goalFor(team, amb, career ? career.year : 2026),
   };
 }
 function tierFinish(team) { return 2 + team.tier * 4; }
@@ -432,23 +578,68 @@ function worksCost(teamId) {
   _worksCost.set(teamId, c);
   return c;
 }
+// ── REGULATION ERAS ────────────────────────────────────────────────────────
+// The second act for car development. js/career/regulations.js holds the table
+// and the reasoning; this is the wiring: which era a career is in, and pushing
+// it into Parts so EVERY resolution — the player's build and every AI factory
+// build alike — obeys the same ruleset.
+const YEAR0 = 2026;
+function seasonsElapsed() {
+  // Not history.length: HISTORY_MAX caps the archive at 10, so a long career
+  // would stop advancing its era. year0 is stamped at start(); an older save
+  // has none and every one of those started in 2026.
+  if (!career) return 0;
+  return Math.max(0, (career.year | 0) - ((career.year0 | 0) || YEAR0));
+}
+// NULL WITHOUT A CAREER, not the opening era. Describing a ruleset when there is
+// no career to rule reads as "a Grand Prix is under OPEN REGULATIONS", which is
+// a category error — nothing outside a career is regulated at all, which is why
+// applyRegs() installs no predicate there either.
+function era() {
+  if (!career || typeof Regulations === "undefined") return null;
+  return Regulations.eraFor(seasonsElapsed());
+}
+function eraSeasonsLeft() {
+  if (!career || typeof Regulations === "undefined") return 0;
+  return Regulations.seasonsLeft(seasonsElapsed());
+}
+// Installed on engage and after any change to the year or the loaded save;
+// CLEARED the moment a career is not the thing being played, so a Grand Prix
+// and a standalone Season are never regulated.
+function applyRegs() {
+  if (typeof Parts === "undefined" || !Parts.setLegality) return;
+  const e = inCareer() ? era() : null;
+  if (!e || !Regulations) { Parts.setLegality(null, ""); return; }
+  Parts.setLegality(Regulations.legalityFor(e.id), e.id);
+}
+
 // The ceiling every career budget obeys: the whole top shelf minus its dearest
 // single part, DERIVED from the catalog so repricing moves it. Without it a
 // front-running works car (~86% of the top shelf) at budgetLvl 1 could fit the
 // dearest option in every category (measured: 2035 * 1.15 = 2340 = the top
 // shelf, exactly) and the economy constrained nothing. Call-time read of Parts.
+// KEYED ON THE RULESET, not memoised once. An era bans the dearest options in
+// three categories, so a cap computed from the open catalog would let a player
+// fit a top shelf that no longer exists — and the memo would hold that wrong
+// number for the rest of the session.
 let _budgetCap = null;
+let _budgetCapKey = null;
 function budgetCap() {
-  if (_budgetCap == null) {
+  const e = inCareer() ? era() : null;
+  const key = e ? e.id : "";
+  if (_budgetCap == null || _budgetCapKey !== key) {
+    const legal = (o) => !e || typeof Regulations === "undefined"
+      || Regulations.isLegal(o.id, e.id);
     let all = 0;
     let top = 0;
     for (const cat of Parts.CATALOG) {
       let hi = 0;
-      for (const o of cat.options) hi = Math.max(hi, o.cost || 0);
+      for (const o of cat.options) if (legal(o)) hi = Math.max(hi, o.cost || 0);
       all += hi;
       top = Math.max(top, hi);
     }
     _budgetCap = all - top;
+    _budgetCapKey = key;
   }
   return _budgetCap;
 }
@@ -989,7 +1180,7 @@ function offerFrom(team, years) {
   return {
     teamId: team.id, years,
     salary: salaryFor(team, career.rep),
-    goal: { type: "champPos", value: expectedFinish(team) },
+    goal: goalFor(team, ambition(), career.year),
   };
 }
 function makeOffers(mv) {
@@ -1028,11 +1219,17 @@ function acceptOffer(i) {
     career.owned = Object.values(factory);
     career.fitted = Object.assign({}, factory);
   }
+  // THE GOAL IS RECOMPUTED, not copied off the offer. setAmbition() re-stamps
+  // every offer it can reach, but a move also re-seats you (weakerSeat above),
+  // and expectedFinish() reads career.rep — so the only number that is certainly
+  // right is the one derived at the moment of signing.
+  const amb = ambition();
   career.deal = {
     team: team.id, seat: career.seat,
     years: o.years, left: o.years, salary: o.salary,
     bonusPt: bonusPtFor(team),
-    goal: o.goal,
+    ambition: amb,
+    goal: goalFor(team, amb, career.year),
   };
   career.offers = [];
   save();
@@ -1085,12 +1282,25 @@ function rollover() {
   // tools/car/career-economy.mjs does not model a per-season bonus and every
   // figure in docs/CAREER.md would go stale. MY TEAM has nobody to promise to.
   if (career.flavour !== "myteam" && career.deal && career.deal.goal) {
-    const met = entry.pos <= career.deal.goal.value;
-    career.rep = clamp(career.rep + (met ? GOAL_REP : -GOAL_REP), 0, 100);
-    if (!met) mv = Math.max(0, mv - GOAL_MV);
+    // ASSEMBLED FROM THE ARCHIVE, so a kind can only ask what the season entry
+    // already knows. matePos is the one extra: the other side of your own
+    // garage, which `entry` has no reason to carry.
+    const mateId = seasonDriverId(career.team, career.seat === 0 ? 1 : 0);
+    const mateRow = dStand.find((r) => r.id === mateId);
+    const res = { pos: entry.pos, cPos: entry.cPos, wins: entry.wins,
+                  podiums: entry.podiums, matePos: mateRow ? mateRow.pos : null };
+    const met = goalKind(career.deal.goal.type).met(career.deal.goal.value, res);
+    // Priced by the promise that was SIGNED (deal.ambition), never by whatever
+    // the picker happens to show now — career.amb is the pick for the NEXT deal.
+    const A = AMBITION[ambitionOf(career.deal)];
+    career.rep = clamp(career.rep + (met ? A.rep : -A.rep), 0, 100);
+    if (!met) mv = Math.max(0, mv - A.mv);
     // Transient, like career.moves: drawn once on the end-of-season sheet, absent
     // on an older save (the sheet skips the line), so no CAREER_V rung is owed.
-    career.goalResult = { value: career.deal.goal.value, pos: entry.pos, met };
+    career.goalResult = { value: career.deal.goal.value, pos: entry.pos, met,
+                          type: career.deal.goal.type,
+                          label: goalLabel(career.deal.goal),
+                          ambition: ambitionOf(career.deal) };
   } else {
     career.goalResult = null;
   }
@@ -1103,6 +1313,10 @@ function rollover() {
   career.offers = career.deal && career.deal.left > 0 ? [] : makeOffers(mv);
 
   career.year++;
+  // A NEW YEAR CAN BE A NEW RULESET. Pushed here rather than left to the next
+  // engage(): rollover() runs while the career is still the thing being played,
+  // and budgetCap()/the garage read the era on the very next hub build.
+  applyRegs();
   // MUTATED IN PLACE, never reassigned: game.js aliases this exact object as its
   // `season` (openCareer does `season = c.season`), and a fresh object would
   // orphan that alias so the next race wrote its points into a dead one.
@@ -1149,6 +1363,17 @@ function state() {
     facilityDiscount: facilityDiscount(),
     owned: career.owned.length,
     deal: career.deal, obj: objective(),
+    // A COPY, not the table's own row: ERAS entries are shared and only the
+    // Regulations object itself is frozen.
+    era: (() => {
+      const e = era();
+      return e ? { id: e.id, name: e.name, blurb: e.blurb, cats: e.cats.slice(),
+                   left: eraSeasonsLeft(), banned: Regulations.bannedIds(e.id).size } : null;
+    })(),
+    // The PENDING pick (what the next contract signs at). What the CURRENT deal
+    // was signed at is deal.ambition, one line up — the two differ for a whole
+    // season whenever the player moves the picker mid-term.
+    amb: ambition(),
     dnfs: career.results.filter((r) => r.dnf).length,
     // Season race-craft average, or null before the first race. Rounds saved
     // before craft existed have no `craft` key and are skipped rather than
@@ -1176,6 +1401,9 @@ return {
   upgradeFacility, SPONSOR_KINDS,
   renewHire, hireDriver, hirePending, HIRE_MIN,
   salaryFor, newDeal, expectedFinish, tierFinish, driverOverride, devFor,
+  AMBITION, ambition, ambitionOf, setAmbition, goalValueFor,
+  GOAL_KINDS, GOAL_ORDER, goalFor, goalLabel, goalNow, goalOnTrack, goalTypeFor,
+  era, eraSeasonsLeft, seasonsElapsed, applyRegs,
   gridDrivers, wageBill, freeAgents, MYTEAM_WORKS,
   paceMult, teamStats,
   owned, isOwned, researchCost, research, budget, budgetUpgradeCost, upgradeBudget,

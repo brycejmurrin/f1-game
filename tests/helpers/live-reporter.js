@@ -188,7 +188,10 @@ class LiveReporter {
     // LAST, and only under the flag: the verdict line above is what every
     // `grep -E '= run (passed|failed…)'` anchors on (AGENTS.md rule 5) and must
     // not move behind an await.
-    if (process.env.APEX_SPEC_TIMINGS === "1") return this.saveTimings();
+    const after = [];
+    if (process.env.APEX_SPEC_TIMINGS === "1") after.push(() => this.saveTimings());
+    if (process.env.APEX_JS_COVERAGE === "1") after.push(() => this.mergeCoverage());
+    if (after.length) return after.reduce((p, f) => p.then(f), Promise.resolve());
   }
 
   name(test) {
@@ -224,6 +227,23 @@ class LiveReporter {
    *
    *  APEX_SPEC_TIMINGS_FILE redirects the write, which is how a CI job merges
    *  into a scratch copy it then uploads, and how this is testable at all. */
+  /** APEX_JS_COVERAGE=1 only: fold the raw V8 lists tests/helpers/js-coverage.js
+   *  wrote this run (plus any NODE_V8_COVERAGE dump under artifacts/coverage-node)
+   *  into artifacts/coverage-report/. Same contract as saveTimings(): dynamic
+   *  import, off by default, every failure reported and swallowed. */
+  async mergeCoverage() {
+    const stamp = ts();
+    try {
+      const mod = await import("../../tools/ci/coverage-merge.mjs");
+      const r = await mod.mergeCoverage();
+      if (!r.ok) { this.write(`[${stamp}] = coverage: ${r.reason}`); return; }
+      this.write(`[${stamp}] = coverage: ${r.sources} sources, lines ${r.lines}% functions ${r.functions}% ` +
+        `branches ${r.branches}% -> ${r.outputDir.replace(/^.*\/(artifacts\/)/, "$1")}/index.html`);
+    } catch (e) {
+      this.write(`[${stamp}] = coverage: not merged (${(e && e.message) || e})`);
+    }
+  }
+
   async saveTimings() {
     const stamp = ts();
     try {

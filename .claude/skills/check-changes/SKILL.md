@@ -1,6 +1,6 @@
 ---
 name: check-changes
-description: Use when asked did I break anything, run the right tests, validate or pre-push check a change, pick tests for touched files, verify track edits, the shell/cache policy after a js/css edit (tags stay ?v=dev), merging with or pushing to the deploy branch, or triaging a Playwright timeout/hang (machine load vs real failure). verify-agent gives a read-only --fast verdict (--base: was it already red?).
+description: Use when asked did I break anything, run the right tests, validate or pre-push check a change, pick tests for touched files, verify track edits, the shell/cache policy after a js/css edit (tags stay ?v=dev), merging with or pushing to the deploy branch, or triaging a Playwright timeout/hang (machine load vs real failure). verify-agent gives a read-only --fast verdict (--base: was it already red?). A red GitHub Actions run (ci.yml / pages.yml) is ci-red-triage, not this skill.
 ---
 
 # Validate changes before committing/pushing

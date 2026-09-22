@@ -13,7 +13,7 @@ cache-first for immutable `?v=<sha256>` assets.
 `<link rel="stylesheet">` into the **essential** set (plus `./`,
 `index.html`, `version.json`). Cross-origin skipped. Other `<link>` tags →
 **optional**. Files the parser cannot see live in `sw.js`'s `optional` Set:
-**DEFERRED** backends (WGX/TLX + `vendor/three-0.185.1`), dynamic-import
+**DEFERRED** backends (WGX/TLX + `vendor/three-0.186.0`), dynamic-import
 vendors, self-hosted fonts.
 
 **Cache name.** `apex26-{build}` from `version.json`. `activate` deletes older
@@ -22,7 +22,7 @@ swallowed.
 
 **Fetch.** Navigation + `version.json` = network-first (3 s → cache).
 Everything else = cache-first. Always refresh **content hashes AND the
-shell generation** together (`node tools/gen/gen-shell.mjs --check` ([shell/cache](../check-changes/references/bump.md): `?v=dev`, no bump)). Never bump `version.json`
+shell generation** together (`node tools/gen/gen-shell.mjs --check` ([shell/cache](../check-changes/references/bump.md))). Never bump `version.json`
 during a Playwright run.
 
 ## When to Use

@@ -7,7 +7,7 @@
 (window.TrackScenery = window.TrackScenery || {})["jacarepagua"] =
   function (api) {
       const { K, lapBounds, out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack, px, pz,
-        tree, bush, ridge, mountain, spectatorHill,
+        bush, ridge, mountain, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         floodMast, cameraTower, sponsorHoarding, palm, terrace,
         fence, guardrail, tyreWall, groundPatch, modelGroup, waterSurface,
@@ -121,13 +121,9 @@
         if (h < 0.32) return;
         bush(k, h < 0.68 ? -1 : 1, 8 + h * 8, h < 0.6 ? RESTINGA : [0.28, 0.38, 0.20]);
       });
-      every(30, (k) => {
-        const s = k / n;
-        if (openArea(s)) return;
-        const h = hash(k * 31);
-        if (h < 0.52) return;
-        tree(k, h < 0.5 ? -1 : 1, 24 + h * 18, 11 + h * 5, PALM);
-      });
+      // JAC-M3: no tall inland planting. The restinga bushes above are the
+      // complete off-lagoon vegetation pass; coconut palms remain confined to
+      // the authored shoreline rank at 0.36–0.60.
 
       {
         const a = anchor(K(0.975), 1, 13);
@@ -264,11 +260,18 @@
         floodMast(K(s), side, gap, { h: 30, cool: false, arms: 2, light: false });
       }
       cameraTower(K(0.205), -1, 24, { h: 15 });
+      // JAC-M1: a readable Brazilian flag rank against Pedra Branca. Each flag
+      // has a thin mast and three physically layered fabric panels (green
+      // field, gold lozenge read, blue centre), avoiding coplanar colour cards.
       for (let i = 0; i < 8; i++) {
         const a = anchor(K(0.962 + i * 0.005), -1, 7);
         const b = [a.r, a.u, a.t];
         addCyl(out, a.c, 0.11, 9.5, [0.90, 0.90, 0.92], 6, b);
-        addBox(out, vadd(vadd(a.c, a.u, 8.0), a.t, 1.2), [0.14, 1.6, 2.6],
-          i % 2 ? [0.10, 0.44, 0.24] : [0.94, 0.86, 0.20], b);
+        out._mat = MAT.FABRIC;
+        const flag = vadd(vadd(a.c, a.u, 8.0), a.t, 1.35);
+        addBox(out, flag, [0.12, 1.7, 2.7], [0.10, 0.44, 0.24], b);
+        addBox(out, vadd(flag, a.r, 0.08), [0.08, 1.0, 1.55], [0.94, 0.86, 0.20], b);
+        addBox(out, vadd(flag, a.r, 0.14), [0.08, 0.46, 0.66], [0.10, 0.22, 0.52], b);
+        out._mat = 0;
       }
     };

@@ -214,5 +214,11 @@
       2.3633,
       2919.6416
     ]
-  ]
+  ],
+  "_blessed": {
+    "sha": "511e17f3e3a168acb58dd968f37400dbfc848a5b",
+    "reason": "provenance stamp added (Track B, B5): the scenario numbers are unchanged from the previous blessing; re-measured in Chromium at deploy tip 511e17f so the file carries _blessed",
+    "at": "2026-09-22T04:22:20.752Z",
+    "hash": "a1596fa5a2439ccd0cf1ea49de0b5b00e88412a575211b7609a62c047beb7c0a"
+  }
 }

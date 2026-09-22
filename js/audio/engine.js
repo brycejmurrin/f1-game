@@ -2239,8 +2239,12 @@ const GameAudio = (function () {
      construction, which is the safe direction for a table keyed by a string
      that arrives from js/game.js. */
   const RADIO_CH = Object.freeze({
-    control: { click: 0.05, hiss: 0.012, tail: 0,    hi: 4200,    tone: 1000, toneS: 0.15, toneAmp: 0.030 },
-    radio:   { click: 0.09, hiss: 0.030, tail: 0.13, hi: RADIO_HI, tone: 800,  toneS: 0.17, toneAmp: 0.038 },
+    // `tune` is [hz, seconds, level] per note, played back to back. See the
+    // COURTESY TONE block above for where the engineer's four notes come from.
+    control: { click: 0.05, hiss: 0.012, tail: 0,    hi: 4200,    toneAmp: 0.030,
+      tune: [[991, 0.10, 1], [1184, 0.12, 0.9]] },
+    radio:   { click: 0.09, hiss: 0.030, tail: 0.13, hi: RADIO_HI, toneAmp: 0.038,
+      tune: [[1055, 0.105, 0.75], [775, 0.09, 1], [1184, 0.09, 0.85], [991, 0.11, 0.95]] },
   });
   const RADIO_FX_MAX = 1.5;
   let radioFx = 1;        // the player's level; 0 is off
@@ -2280,32 +2284,53 @@ const GameAudio = (function () {
    * of their own — they are already inside the band the hiss is shaped to, so
    * filtering would add three nodes and change nothing you can hear.
    *
-   * THE REGISTER IS MEASURED, not guessed. The one CC0 recreation of the F1
-   * beep on Freesound (a synthesiser imitation, not a broadcast rip) FFTs to a
-   * near-pure 786 Hz, 22 dB clear of anything else — below 1 kHz, and well
-   * below where this code first put it. Its own description says "around
-   * 1-2 kHz", so even the author under-described it. Treat the REGISTER as the
-   * finding and not the number: 786 Hz is 2 Hz off G5, which means somebody
-   * played a note on a keyboard rather than matching a frequency. Hence a round
-   * 800 Hz for the engineer and 1000 Hz for race control, which keeps the two
-   * channels apart without either becoming a musical interval.
+   * IT IS FOUR NOTES, NOT ONE, AND MEASURING IT BADLY SAID OTHERWISE. The one
+   * CC0 recreation of the F1 beep on Freesound (a synthesiser imitation by its
+   * author's own description, never a broadcast rip) was first FFT'd in its
+   * single loudest window, which reported "a near-pure 786 Hz, 22 dB clear of
+   * anything else" — and that is what this table shipped as one tone. The
+   * method was the bug: one window of a melody can only ever see one note of
+   * it. A spectrogram across the whole file (2048-point frames, 512 hop) shows
+   * a four-note figure:
    *
-   * Still shorter than Quindar's 250 ms, because this fires on every card
-   * rather than once per transmission, and still quiet.
+   *     t≈232 ms  1055 Hz  ~105 ms      C6      +14 cents
+   *     t≈348 ms   775 Hz  ~ 90 ms      G5      -20 cents
+   *     t≈441 ms  1184 Hz  ~ 90 ms      D6      +14 cents
+   *     t≈534 ms   991 Hz  ~110 ms      B5      + 6 cents
+   *
+   * Down a fourth, up a fifth, down a minor third. Every note lands within a
+   * fifth of a semitone of equal temperament and the FFT bin is 21.5 Hz, so the
+   * note names are safe and somebody clearly played them on a keyboard. The
+   * MEASURED hz are what this table carries even so: the note names are the
+   * interpretation, the numbers are the evidence, and 14 cents is inaudible.
+   *
+   * RACE CONTROL KEEPS ITS OWN, SHORTER CUE — two notes from the same set. The
+   * broadcast does not put the team-radio sting over race control either, and
+   * two channels that open identically are one channel.
    */
-  function radioTone(hz, secs, peak, at) {
-    if (!(peak > 0) || !(hz > 0)) return;
-    const osc = ctx.createOscillator();
-    const g = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.value = hz;
-    // A softer attack than the click's 4 ms: a sine snapped on at full level
-    // clicks on its own, and two clicks is not what this is.
-    env(g, at, peak, 0.012, secs);
-    osc.connect(g).connect(sfxBus);
-    osc.start(at);
-    osc.stop(at + secs + 0.05);
-    osc.onended = () => { osc.disconnect(); g.disconnect(); };
+  /** The figure, one oscillator per note, scheduled back to back from `at`.
+   *  Returns the seconds it occupies, so the caller can hold the bed over it. */
+  function radioTune(seq, peak, at) {
+    if (!(peak > 0) || !Array.isArray(seq) || !seq.length) return 0;
+    let t = at;
+    for (const [hz, secs, lvl] of seq) {
+      if (!(hz > 0) || !(secs > 0)) continue;
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = hz;
+      // A softer attack than the click's 4 ms: a sine snapped on at full level
+      // clicks on its own, and five clicks is not what this is. The decay runs
+      // just past the note so consecutive notes overlap by a few milliseconds
+      // rather than leaving a gap the ear reads as a stutter.
+      env(g, t, peak * (lvl == null ? 1 : lvl), 0.012, secs);
+      osc.connect(g).connect(sfxBus);
+      osc.start(t);
+      osc.stop(t + secs + 0.04);
+      osc.onended = () => { osc.disconnect(); g.disconnect(); };
+      t += secs;
+    }
+    return t - at;
   }
 
   /** One band-limited noise transient — the key click and the squelch tail.
@@ -2350,13 +2375,17 @@ const GameAudio = (function () {
     radioStingStop();
     const ch = RADIO_CH[channel];
     if (!sfxOk() || !ch || radioFx <= 0) return false;
-    const hold = Math.max(0.25, Math.min(8, +seconds || 1.5));
     const t0 = now();
-    // KEY, THEN BEEP, THEN THE LINE — the order the ear expects: the mic opens
-    // (a click, which is a noise burst and not an oscillator), and the courtesy
-    // tone follows it a hair later rather than landing on top of it.
+    // KEY, THEN THE FIGURE, THEN THE LINE — the order the ear expects: the mic
+    // opens (a click, which is a noise burst and not an oscillator), and the
+    // courtesy figure follows a hair later rather than landing on top of it.
     radioBurst(ch.click * radioFx, 0.045, ch.hi, t0);
-    radioTone(ch.tone, ch.toneS, ch.toneAmp * radioFx, t0 + 0.03);
+    const tuneS = 0.03 + radioTune(ch.tune, ch.toneAmp * radioFx, t0 + 0.03);
+    // THE BED MUST OUTLAST THE FIGURE. `seconds` is the card's life, and a short
+    // card is shorter than four notes — scheduling the squelch tail off that
+    // alone closed the mic while the cue was still playing, which is backwards:
+    // the tail is the END of a transmission the figure has only just opened.
+    const hold = Math.max(0.25, tuneS + 0.12, Math.min(8, +seconds || 1.5));
     const src = ctx.createBufferSource();
     src.loop = true;
     src.buffer = noisePool();
@@ -2539,6 +2568,16 @@ const GameAudio = (function () {
     radioStingStop,
     setRadioFx,
     radioFxLevel: () => radioFx,
+    /** How long `channel`'s courtesy figure runs, in seconds, at the current
+     *  level — 0 when it would not play at all. The VOICE waits this out so the
+     *  words land after the cue instead of under it (js/audio/radio-voice.js
+     *  plan(), `lead`), and it is derived from the same table that plays it so
+     *  the two cannot drift. */
+    radioLeadS(channel) {
+      const ch = RADIO_CH[channel];
+      if (!ch || radioFx <= 0 || !Array.isArray(ch.tune)) return 0;
+      return 0.03 + ch.tune.reduce((a, n) => a + (n && n[1] > 0 ? n[1] : 0), 0);
+    },
     radioFxMax: () => RADIO_FX_MAX,
     radioChannels: () => Object.keys(RADIO_CH),
     setEnabled,

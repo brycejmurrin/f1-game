@@ -10,18 +10,18 @@ subset of the next:
 
 | command | unit files it runs | when |
 |---|---|---|
-| `npm run test:guards` | 14 (curated) | hook-enforced, every `git commit` |
-| `npm run test:tooling-fast` | 208 of 278 | the documented edit-loop check |
-| `node tools/ci/deploy.mjs --gate-only` | 263 of 278 | the whole gate; what a deploy runs |
+| `npm run test:guards` | 19 (curated) | hook-enforced, every `git commit` |
+| `npm run test:tooling-fast` | 223 of 296 | the documented edit-loop check |
+| `node tools/ci/deploy.mjs --gate-only` | 281 of 296 | the whole gate; what a deploy runs |
 
-The remaining 15 are the per-circuit geometry and parts sweeps. `ci.yml` gives
+The remaining 15 are the per-circuit geometry and parts sweeps (counts re-measured 2026-09-22; `tests/unit/docs-integrity.test.mjs` pins the `N of M unit files` phrasing). `ci.yml` gives
 those their own jobs rather than putting them in the "Pure-node unit suites"
 step the gate derives from, and deploy.mjs's header is explicit that sweeps are
 CI's — running them in the deploy duplicated ten minutes. They are enumerated in
 `tests/unit/prepush-gate-coverage.test.mjs`'s `SWEEPS_ONLY` map.
 
 `tooling-fast` being a subset is deliberate: it is tuned for an edit loop, and
-the 70 files it leaves out cost about 7.5 minutes serial on this box
+the 73 files it leaves out cost about 7.5 minutes serial on this box
 (`game-vm-a` 137 s, `game-vm-b` 99 s, `node-slow` 85 s, `sweeps-parts` 54 s,
 `garage-unit` 47 s are 95 % of it). The problem was never the split. The problem
 was that nothing said the split existed, so "tooling-fast is green" got read as

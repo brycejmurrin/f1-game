@@ -73,6 +73,155 @@
   overflow-y: auto; overflow-x: hidden;
   overscroll-behavior-y: contain; touch-action: pan-y;
 }
+/* THE TITLE CAR. A decorative art layer, NOT a grid item: #overlay is a grid,
+   so an in-flow child would open a third row and move the composition. Absolute
+   takes it out of flow and fills the fixed parent instead.
+
+   zoom: normal is LOAD-BEARING. `#overlay > *` above sets zoom: var(--ui-scale),
+   and zoom affects LAYOUT (unlike transform) and compounds down the flat tree —
+   so without this the UI SIZE slider would rescale the artwork's box and re-crop
+   it, which is not what a player asking for bigger TEXT is asking for.
+
+   preserveAspectRatio="xMinYMax slice" is the SVG spelling of
+   `background-size: cover; background-position: left bottom` — xMin pins the
+   left edge, YMax pins the BOTTOM (SVG's +y runs down), slice fills the viewport
+   and crops the overflow. On a portrait phone that leaves only the leftmost
+   ~28 % of the viewBox on screen, hugely magnified, which is exactly why the car
+   is drawn left: the crop makes it loom instead of vanishing (with the 1400/1620 box it is ~55 %). */
+#title-car {
+  /* THE BOX CARRIES THE VIEWBOX'S OWN ASPECT, pinned to the foot of the frame.
+     That is what makes one layer work on every shape. Sized to the viewport
+     instead, the two fits pull opposite ways: slice (cover) fills a landscape
+     phone but blows a portrait tablet up to 1857px wide, while meet (fit)
+     tames portrait and shrinks that same phone from 844x543 to 607x390 — the
+     shape the game is actually PLAYED in. With the element itself at
+     1400/900, cover and fit are the SAME scale, so there is nothing left to
+     choose: the art is always exactly as wide as the screen and as tall as
+     its own proportions say, sitting on the bottom edge. */
+  position: absolute;
+  left: 0; right: 0; bottom: 0; top: auto;
+  width: 100%; height: auto;
+  aspect-ratio: 1400 / 900;
+  zoom: normal;
+  pointer-events: none;
+  z-index: -1;
+  color: var(--red);                 /* the ONE declaration that themes every
+                                        currentColor stroke and gradient stop */
+}
+/* Literal colours live on the elements as presentation attributes, which carry
+   specificity 0 — so these rules win without !important and a theme can win
+   over these. */
+/* Stroke language matched to the menu icons: round caps and joins, no fill.
+   AERIAL PERSPECTIVE does the composition work — the near tyre is brightest,
+   the far end fades — so the art thins out exactly where the button column
+   begins instead of being dimmed there afterwards. */
+/* --steel is the app's own line colour (it resolves to --dim), and DEPTH comes
+   from opacity rather than three hand-mixed greys — so the art costs the
+   palette no new colours, which rawColorDistinct ratchets and three hex
+   literals tripped.
+   Depth and weight ride on the groups as PRESENTATION ATTRIBUTES rather than
+   classes: they carry specificity 0, so any rule here still wins, and the
+   layer costs one class instead of four (cssClasses is ratcheted too). */
+/* FILLED, not hollow. The panels are closed paths so that each one HIDES what
+   is behind it -- that occlusion is the only thing giving the car depth. This
+   read `fill: none` for six drafts while the markup was being built around the
+   opposite assumption, and the car rendered as a wireframe every time. The
+   open-line paths carry their own fill="none" attribute, which beats this
+   inherited value. */
+#title-car g { fill: var(--carbon); stroke-linecap: round; stroke-linejoin: round; }
+/* :not([stroke]) rather than a class — the glow group is the only one that
+   names its own paint (the gradient), so the art needs no class at all, and
+   cssClasses stays where it was. A CSS rule would otherwise WIN over that
+   presentation attribute, which carries specificity 0. */
+#title-car g:not([stroke]) { stroke: var(--steel); }
+/* ONE CONTOUR, NOT THIRTY. The car's outline is a DILATE-AND-KNOCKOUT, not an
+   SVG filter: every panel is drawn once swollen and inked (this rule), then
+   again in the body colour on top, so what survives is the outer edge of their
+   union. Thirty individual panel outlines is what made two cars side by side
+   read as one tangle rather than as two cars. An attribute hook, not a class,
+   so cssClasses stays where it was. */
+#title-car g[data-ink] { fill: var(--steel); stroke: var(--steel); }
+/* VOLUME. The silhouette alone reads flat because every panel takes the same
+   tone, yet the geometry already knows which faces point up and which fall
+   away. These carry the light: one ink at three fill-opacities (set as
+   presentation attributes, which take a plain number and so need no rule of
+   their own) -- tops catch the sky, flanks sit back, rubber stays darkest. */
+#title-car g[data-tone] { fill: var(--steel); }
+/* THE TRAILS HAVE TO BE PAINTED FROM CSS. Carrying fill="url(#tc-trail)" as a
+   presentation attribute does not work here: `#title-car g` above sets fill on
+   the very same element, and a CSS rule beats a presentation attribute, which
+   carries specificity 0. The tyre marks rendered in --carbon for their whole
+   life because of it -- dark smears rather than the red they were written to
+   be. Anything painting a <g> that `#title-car g` also matches has to come
+   from a rule, not an attribute. */
+#title-car g[data-trail] { fill: url(#tc-trail); }
+/* COPY SPACE IS A FUNCTION OF WIDTH, and this is a COMPOSITION rule, not a
+   contrast one — the difference matters, because the first measurement looked
+   like a legibility problem and was not.
+   MEASURE THE RATIO, NOT THE DELTA. Sampling art on vs off: over the button
+   plates the worst pixel is 10 at 1280 and 0 at 844, and it always lands on a
+   rounded EDGE where the plate is transparent, never on a label. Over text it
+   is 0 at 1280, 0 at 393 (display:none), and 60 at 844 — behind the
+   disclaimer, which sounds alarming and is not. Measured as WCAG SC 1.4.3
+   asks: that 14px line runs 14.55:1 with the art off and 12.62:1 with it on,
+   against a 4.5:1 requirement. Light text on a near-black ground has that much
+   headroom, so no scrim is owed at any size. A channel delta was the wrong
+   instrument; it says the pixels moved, not whether anyone can read them.
+   What IS true is that on a narrow screen the button column takes the whole
+   width, so the art has nowhere to be: it crosses the stack and reads as
+   clutter. It fades as the column closes in and leaves when there is no room
+   left to compose into. */
+@media (max-width: 1000px) { #title-car { opacity: 0.4; } }
+/* PHONES KEEP IT TOO. This used to be display:none when the element was sized
+   to the viewport and the art ran through the button stack; with the box at
+   its own aspect a narrow screen gets a band at the foot instead, so it goes
+   quiet rather than absent — and the tall phone below then makes it a crop. */
+@media (max-width: 699px)  { #title-car { opacity: 0.22; } }   /* the phone rules end at 699, the iPad ones start at 700 */
+/* A PORTRAIT PHONE GETS THE CARS, NOT A STRIP. At 100% width the 1400/900 box
+   is 393x253 on a 393px phone — the pair drawn in the left 55% of the viewBox
+   lands 216px wide under the last row of rooms, at 0.22, which measured as
+   invisible on a real device. The cars occupy viewBox x 0..770, so scaled 1.8x
+   from the bottom-left the pair spans exactly the phone (0.55 * 1.8 = 0.99 of
+   the width); HOW that scale is produced is the note on the rule itself. The
+   doors sit at the top of their row (the tall block below), so the lower
+   third of the screen is the cars' alone and the opacity can come up to
+   landscape's.
+   Portrait is body[data-shape="tall"] (zoom-corrected, js/ui/sheet-shape.js),
+   never an orientation media query — tests/unit/ui-improve-pass pins that. */
+@media (max-width: 699px) {
+  /* A TALLER BOX, NOT A WIDER ONE. `width: 180%` failed ui-scale.spec on every
+     portrait size with "#overlay scrolls sideways": an absolutely positioned
+     box wider than its scroll container still counts toward scrollWidth,
+     overflow-x:hidden only hides the bar, and overflow-x:clip cannot pair with
+     overflow-y:auto (it computes back to hidden). 1620/900 is 1.8x the meet
+     height, and with preserveAspectRatio="xMinYMax slice" on the <svg> the art
+     scales by HEIGHT to cover it, pins the bottom-left, and clips the trails
+     inside the SVG viewport, where no scrollWidth can see them. Everywhere
+     else the box is 1400/900, where slice and meet are the same scale. */
+  :where(body[data-shape="tall"]) #title-car { aspect-ratio: 1400 / 1620; opacity: 0.42; }
+}
+/* ASPECT, NOT WIDTH, IS WHAT BREAKS THIS LAYER, and the fix is the BOX: the
+   element carries aspect-ratio 1400/900 itself, so `slice` and `meet` compute
+   the same scale and the attribute only matters on the tall phone, where a
+   deliberately taller box + slice is the 1.8x crop (see the rule above).
+   Before the box had its own aspect, MEET was the fix and SLICE the bug: Slice scales to COVER, so on a viewport
+   narrower than the viewBox's 1400/900 (1.556) it scales by HEIGHT and runs off
+   the sides — measured, a 834x1194 iPad blew the 1400-unit viewBox out to
+   ~1857px, and a rotated 1080x1920 monitor got a front wing across the whole
+   lower third at FULL opacity, because it is wider than 1000px so the fade
+   above never fires. Neither width query can see either case.
+   Meet scales to FIT, so the same two land at 834x536 and 1080x694 — a band at
+   the foot of the screen instead of a blow-up — while landscape barely moves
+   (1280x800 loses 2.7%, an 860x560 window 1.3%). The layer adapts rather than
+   leaving, which is why this is an opacity step and not display:none.
+   Portrait still has the button stack down its middle, so the art yields. */
+@media (max-aspect-ratio: 13/10) and (min-width: 700px) { #title-car { opacity: 0.26; } }
+/* Transparency is a preference, and this layer is the most transparent thing on
+   the screen. prefers-reduced-transparency is not Baseline yet, so it is a
+   progressive enhancement on a design that is already legible without it. */
+@media (prefers-reduced-transparency: reduce) {
+  #title-car { display: none; }
+}
 #title {
   font-size: clamp(34px, calc(9 * var(--vwz)), 92px);
   font-weight: 700; font-style: italic;
@@ -93,13 +242,6 @@
   background: var(--red);
   transform: skewX(-30deg);
   box-shadow: 0 0 18px color-mix(in oklab, var(--red) 78%, transparent);
-}
-#subtitle {
-  color: color-mix(in srgb, var(--text) 78%, transparent);
-  margin: 10px 0 0;
-  font-size: clamp(var(--fs-micro), calc(1.15 * var(--vwz)), var(--fs-4));
-  letter-spacing: var(--ls-2);
-  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.7);
 }
 /* THREE TIERS, by how much of your evening the thing costs.
    HERO is the career — the 24-round game everything else feeds into. PLAY NOW is
@@ -199,6 +341,10 @@
    keeps the two 2-up columns on the same vertical tracks (measured 205 vs 203
    on 1280 before this). Color stays transparent on the red doors. */
 #menu-buttons :is(#menu-hero, #menu-primary) .bigbtn { border-color: transparent; }
+/* width: 100% is REDUNDANT in the cascade (#menu-buttons .bigbtn at (1,1,0)
+   already wins it on every branch) and KEPT on purpose: tests/unit/title-menu-even
+   pins this exact declaration as the contract that 2-up cells fill, and
+   asserts `width: auto` never appears here. A pin is worth more than a line. */
 #menu-buttons :is(#menu-primary, #menu-secondary).balanced-row > .bigbtn { width: 100%; min-width: 0; }
 /* Secondary: same skewed family, dialled down — smaller type, thinner box, and
    no red glow, so the eye still lands on the modes first. */
@@ -222,8 +368,7 @@
   gap: 0.35em;
   min-height: max(36px, var(--tap-min));
   padding: calc(var(--gap) * 0.65) calc(var(--gap) * 0.95) calc(var(--gap) * 0.65) calc(var(--gap) * 1.15);
-  font-size: var(--fs-micro);
-  letter-spacing: var(--ls-1);
+  /* type comes from .minibtn, which every room carries */
 }
 #menu-secondary .bigbtn .btn-ico { margin-right: 0; }
 /* Title rooms sit on grain + a live circuit, not on a sheet. The shared
@@ -242,7 +387,7 @@
    far enough not to read as a third title line. The step is a stated margin
    rather than whatever the audio line happened to reserve: #audiostate is empty
    until tilt is granted (or denied), and its `min-height: 16px` used to hold a
-   phantom band open between the subtitle and the disclaimer, which is what left
+   phantom band open between the wordmark and the disclaimer, which is what left
    the disclaimer floating in the middle of nothing on a desktop. */
 #menu-meta { margin-top: 16px; gap: 6px; }
 #audiostate { color: var(--dim); font-size: var(--fs-micro); }
@@ -250,8 +395,8 @@
 /* NO `align-self` HERE — the chip must follow #menu-meta's own alignment, which
    is `center` in portrait and `flex-start` in landscape. Pinning it to
    flex-start looked right in landscape and put it hard against the left edge of
-   a CENTRED composition in portrait, with the title, subtitle and disclaimer all
-   centred around it (measured 393x852: disclaimer left 25, subtitle left 52,
+   a CENTRED composition in portrait, with the title and disclaimer
+   centred around it (measured 393x852, when a subtitle still sat between them: disclaimer left 25, subtitle left 52,
    button left 25). `width: auto` is what actually stops it spanning the column;
    `min-height` puts it on the touch ladder, which .minibtn does not do on its
    own — it is padding-sized, and this measured 40 CSS px without it. */
@@ -264,7 +409,21 @@
 /* Brighter than bare --dim: the judges flagged the unofficial-fan-game line
    as below comfortable reading contrast over the bright sky. Token-mix only
    (no raw literal); still clearly quieter than body text. */
-#disclaimer { color: color-mix(in oklab, var(--text) 75%, var(--dim)); font-size: var(--fs-micro); margin: 0; }
+/* ON A PLATE, like #soundbtn beside it. The title art now runs under the brand
+   column on every phone shape (and the desktop), and a 14px line of small
+   print painted straight onto two cars' worth of strokes was the one thing
+   a real device found hard to read. Same --plate-opaque and hairline the
+   sound chip uses, so the two read as one row of chrome; padding in --gap
+   only (rawSpacing is at zero slack); width: fit-content so the plate hugs
+   the text whether the column centres or left-aligns it. */
+#disclaimer {
+  color: color-mix(in oklab, var(--text) 75%, var(--dim)); font-size: var(--fs-micro); margin: 0;
+  width: fit-content; max-width: 100%;
+  padding: calc(var(--gap) * 0.4) calc(var(--gap) * 0.8);
+  border-radius: var(--r-sm);
+  background: var(--plate-opaque);
+  border: 1px solid color-mix(in oklab, var(--steel) 42%, transparent);
+}
 /* Build number in the pause menu. Deliberately quiet — it is a diagnostic for
    "which version am I running", not a label anyone should read while racing. */
 .build-tag { color: var(--dim); font-size: var(--fs-micro); margin: 4px 0 0; text-align: center; }
@@ -281,13 +440,9 @@
    Nothing spans rows either: brand and buttons share row 1, small print takes
    row 2. The old layout ran the button column through all four branding rows,
    and a grid distributes a spanning item's excess height across the rows it
-   covers — which is what pushed the subtitle 230px below the title. */
-/* max-height 599, not 560: the large-screen composition in css/responsive.css
-   starts at min-height 600, and the 40px between the two used to fall through to
-   the PORTRAIT stack — so a short, wide desktop window (say 1000x580) got a
-   phone's vertical menu laid out sideways. The two branches now meet exactly. */
+   covers — which is what pushed the small print 230px below the title. */
 /* THE DOCUMENT-LEVEL SHORT THRESHOLD, declared beside the screen that reads it —
-   the same arrangement `--pair-at` has with #cs-inner. js/game/sheetshape.js resolves
+   the same arrangement `--pair-at` has with #cs-inner. js/ui/sheet-shape.js resolves
    `innerHeight / --ui-scale` against this and writes data-density onto body, which is
    how the screens OUTSIDE `.sheet` get an answer (#overlay's zoom sits on its children,
    so it has none of its own to divide by). 600 is what the two #overlay blocks already
@@ -297,7 +452,7 @@
 body { --compact-at: 600px; --wide-at: 620px; }
 
 /* The height half of this condition now comes from data-density, measured in the
-   units the content is actually laid out in (js/game/sheetshape.js). Orientation
+   units the content is actually laid out in (js/ui/sheet-shape.js). Orientation
    and width stay media queries: zoom does not distort either.
 
    `:where()` CARRIES ZERO SPECIFICITY, and that is the whole reason it is used
@@ -378,8 +533,49 @@ body { --compact-at: 600px; --wide-at: 620px; }
    Doors and the disclaimer stay; only brand chrome shrinks. */
 :where(body[data-shape="tall"]) #title { font-size: clamp(30px, calc(8 * var(--vwz)), 72px); }
 :where(body[data-shape="tall"]) #title::after { margin: calc(var(--gap) * 0.5) 0 0; }
-:where(body[data-shape="tall"]) #subtitle { margin: calc(var(--gap) * 0.5) 0 0; }
 :where(body[data-shape="tall"]) #menu-meta { margin-top: calc(var(--gap) * 0.85); gap: calc(var(--gap) / 3); }
+/* THE PORTRAIT PHONE, measured on a 393x852 iPhone 2026-09-22: the wordmark
+   painted 31px while each play door was a ~130px card (icon over label over
+   sub), the four rooms broke into DATA / HUB and HOW / TO / PLAY, and the whole
+   column ran 850..1600px so the title art was a strip nobody saw. Three
+   changes, all scoped to tall AND narrow so an upright iPad keeps the
+   large-portrait sizes in css/responsive.css:
+   - the wordmark takes 13vwz (51px on 393) — it is the only thing on the
+     screen that is allowed to be big;
+   - each play door is ONE line, icon beside label, sub gone: the four modes
+     cost two rows of ~48px instead of two rows of ~130px;
+   - the rooms are a forced 2x2 so every label fits on one line;
+   - the doors start at the TOP of the leftover row instead of centring in it,
+     so the space they no longer need collects at the bottom, where the cars
+     are. No px in any padding or gap: rawSpacing is ratcheted at zero slack. */
+@media (max-width: 699px) {
+  :where(body[data-shape="tall"]) #title { font-size: clamp(44px, calc(13 * var(--vwz)), 84px); }
+  /* Full width, not 78vwz: at 78% a 2x2 cell on a 393px phone is 145px and
+     RACE A FRIEND broke into two lines (measured after the first cut). The
+     column's own padding-inline already keeps the skewed tips off the edge. */
+  :where(body[data-shape="tall"]) #menu-hero,
+  :where(body[data-shape="tall"]) #menu-primary,
+  :where(body[data-shape="tall"]) #menu-secondary { width: 100%; }
+  :where(body[data-shape="tall"]) #menu-buttons { align-content: start; }
+  :where(body[data-shape="tall"]) #menu-hero .bigbtn { padding-block: calc(var(--gap) * 0.6); }
+  /* The disclaimer is the one line long enough to wrap on a 393px phone, and a
+     wrapped block in a centred column is centred as a BOX while its text stays
+     left-ragged — measured: line one flush left, "Formula 1" under it. */
+  :where(body[data-shape="tall"]) #disclaimer { text-align: center; }
+  :where(body[data-shape="tall"]) #menu-primary .bigbtn {
+    display: flex; align-items: center; justify-content: center;
+    gap: 0.45em;
+    padding: calc(var(--gap) * 0.8) calc(var(--gap) * 0.7) calc(var(--gap) * 0.8) calc(var(--gap) * 0.9);
+    font-size: var(--fs-3);
+    min-height: var(--tap);
+  }
+  :where(body[data-shape="tall"]) #menu-primary .bigbtn .btn-ico { margin: 0; }
+  :where(body[data-shape="tall"]) #menu-primary .mb-sub { display: none; }
+  :where(body[data-shape="tall"]) #menu-secondary {
+    --balance-basis: calc(50% - 0.5em);
+    --balance-min: calc(50% - 0.5em);
+  }
+}
 /* LANDSCAPE COMPACT: side-by-side brand + buttons.
    Uses body[data-shape="wide"] (zoom-corrected, set by SheetShape classifyBody)
    in place of @media (orientation: landscape). The two agree in result — the
@@ -387,13 +583,17 @@ body { --compact-at: 600px; --wide-at: 620px; }
    data-shape is combinable with data-density in one selector and is consistent
    with the sheet-level data-shape convention everywhere else. */
 :where(body[data-shape="wide"][data-density="compact"]) #overlay {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  /* The doors do not need half the screen. At 1fr 1fr the column measured
+     417px of a 932px phone (2026-09-22, iPhone 15 Pro Max) with every label
+     sitting in ~90px of slack, while the title art behind the brand column had
+     the other half to itself. min(46%, 400px) keeps RACE A FRIEND on one line
+     at the compact 17px once the door is a row flexbox (rule below); the
+     brand column and the cars take the rest. */
+  grid-template-columns: minmax(0, 1fr) min(46%, 400px);
   justify-content: safe center;
   align-content: safe center; justify-items: stretch;
-  /* Token gap, not 32px: on 852×393 that literal was a dead third column
-     between brand and doors. The 1fr tracks already split the safe box. */
-  column-gap: var(--gap);
-  gap: var(--gap);
+  /* No gap here: the compact #overlay rule above already sets the token gap
+     (a 32px literal used to open a dead third column on 852x393). */
 }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-brand { grid-column: 1; grid-row: 1; align-items: flex-start; }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-brand,
@@ -417,10 +617,7 @@ body { --compact-at: 600px; --wide-at: 620px; }
   gap: calc(var(--gap) * 0.35);
 }
 :where(body[data-shape="wide"][data-density="compact"]) #title { font-size: clamp(26px, calc(7.5 * var(--vwz)), 48px); }
-:where(body[data-shape="wide"][data-density="compact"]) #subtitle { margin: var(--gap) 0 0; font-size: var(--fs-micro); }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-meta { margin-top: calc(var(--gap) * 1.5); gap: calc(var(--gap) / 2); }
-:where(body[data-shape="wide"][data-density="compact"]) #audiostate { font-size: var(--fs-micro); }
-:where(body[data-shape="wide"][data-density="compact"]) #disclaimer { font-size: var(--fs-micro); }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-hero,
 :where(body[data-shape="wide"][data-density="compact"]) #menu-primary,
 :where(body[data-shape="wide"][data-density="compact"]) #menu-secondary { width: 100%; }
@@ -428,11 +625,27 @@ body { --compact-at: 600px; --wide-at: 620px; }
   gap: calc(var(--gap) * 0.45);
 }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-buttons .bigbtn {
-  width: 100%; padding: 6px 8px 6px 12px; font-size: var(--fs-3);
+  padding: 6px 8px 6px 12px;
+  /* No font-size here: the compact block below (`calc(var(--fs-4) *
+     var(--ui-compact-text))`) is later at equal specificity and wins, so a
+     value on this line is dead — the doors paint 17px, which the phone
+     screenshots were taken at. */
   min-height: max(32px, var(--tap-min));
 }
+:where(body[data-shape="wide"][data-density="compact"]) #menu-primary .bigbtn {
+  display: flex; align-items: center; justify-content: center;
+  gap: 0.4em;
+}
+/* Four rooms in the narrower column wrap 3 + 1 from the 5.5rem basis, which
+   stretches the leftover into a banner; a forced 2x2 costs one ~30px row
+   (274 -> ~305 on a 343px safe height) and matches portrait. */
+:where(body[data-shape="wide"][data-density="compact"]) #menu-secondary {
+  --balance-basis: calc(50% - 0.5em);
+  --balance-min: calc(50% - 0.5em);
+}
+:where(body[data-shape="wide"][data-density="compact"]) #menu-primary .bigbtn .btn-ico { margin: 0; flex: none; }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-secondary .minibtn {
-  padding: 3px 6px 3px 10px; font-size: var(--fs-micro);
+  padding: 3px 6px 3px 10px;   /* size comes from the compact :is() rule below */
   min-height: max(26px, var(--tap-min));
 }
 /* The static mode subs are the first thing to go when height is short — the
@@ -479,7 +692,7 @@ body { --compact-at: 600px; --wide-at: 620px; }
   :where(body[data-density="compact"]) #menu-buttons .bigbtn {
     font-size: calc(var(--fs-4) * var(--ui-compact-text));
   }
-  :where(body[data-density="compact"]) :is(#subtitle, #audiostate, #disclaimer, #soundbtn) {
+  :where(body[data-density="compact"]) :is(#audiostate, #disclaimer, #soundbtn) {
     font-size: calc(var(--fs-micro) * var(--ui-compact-brand-text));
   }
   :where(body[data-density="compact"]) :is(.mb-sub, #menu-buttons .minibtn) {
@@ -1064,7 +1277,7 @@ h3.sel-label {
    css/components.css. Only the two behavioural deltas are written here. */
 #season-setup { z-index: 26; }              /* over #select, which is 25 */
 /* --pair-at IS WHAT MAKES THE PANES SCROLL, and leaving it out is why they did
-   not. js/game/sheetshape.js reads this property to decide `data-pair`, and
+   not. js/ui/sheet-shape.js reads this property to decide `data-pair`, and
    with no value it deletes the attribute and returns — so .pane-pair never
    turned on, the two panes stacked at their FULL natural height, and .pane's
    own `overflow-y: auto` had nothing to scroll against because nothing ever

@@ -336,7 +336,18 @@ const Helmets = (function () {
                    [z.band(0.26, 0.40, mark), z.band(0.72, 0.84, trim)],
                    [z.chevron(0, 40, 0.20, 0.66, mark), z.band(0.70, 0.82, trim)],
                    [z.wedge(200, 340, mark), z.cap(0.18, trim)]][n % 4];
-    return { name: "#" + n, base, visor: C.black, zones, generated: true };
+    /* AN `alt`, LIKE EVERY HAND-AUTHORED DESIGN HAS. designFor() short-circuits
+       on `!d.alt` before it ever runs the near()/team-colour test, and this
+       returned none — so a GENERATED helmet never shifted off a car it matched.
+       MY TEAM with number 99 put a lime helmet in a lime car, which is the one
+       thing this module exists to prevent.
+
+       CHOSEN from the wheel, not computed: the comment below designFor records
+       what multiplying a base toward white or black did (Leclerc salmon and
+       Antonelli's tricolore became three greys). Six steps around a
+       twelve-entry wheel is the opposite hue, so it cannot equal `base`. */
+    const alt = WHEEL[(((n * 7) % WHEEL.length) + WHEEL.length + WHEEL.length / 2) % WHEEL.length];
+    return { name: "#" + n, base, alt, visor: C.black, zones, generated: true };
   }
 
   /* The design for a race number. `teamC` is the car's own primary paint. Six

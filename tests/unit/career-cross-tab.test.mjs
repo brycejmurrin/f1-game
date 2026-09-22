@@ -78,6 +78,21 @@ test("migrateCareer coerces a corrupt deal, budget level and results ledger", ()
   assert.equal(SaveMigrate.migrateCareer({ v: 1, team: 7 }).team, null);
 });
 
+test("year falls back to the first season for a missing, zero or junk value, and truncates a float", () => {
+  // `career.year | 0 || 2026`: seasonIndex() subtracts year0 from it, so a
+  // NaN here would make every era-dependent rule (regulations, legends,
+  // contract expiry) read as season 0 forever, silently.
+  const { SaveMigrate } = load();
+  const year = (v) => SaveMigrate.migrateCareer({ v: 1, year: v }).year;
+  assert.equal(year(undefined), 2026);
+  assert.equal(year(0), 2026);
+  assert.equal(year("abc"), 2026);
+  assert.equal(year(NaN), 2026);
+  assert.equal(year(2027.9), 2027, "a float year truncates rather than rounds");
+  assert.equal(year("2028"), 2028, "a numeric string is still a year");
+  assert.equal(year(2031), 2031);
+});
+
 test("remapPoints sanitises the per-round and finish records, not only pts", () => {
   // netPts() summed season.roundPts[id] raw — a string round score became
   // "25" + 0 concatenation and a NaN standing. roundMap/finishMap already

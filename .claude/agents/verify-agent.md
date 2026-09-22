@@ -1,7 +1,9 @@
 ---
 name: verify-agent
 description: Read-only verification subagent. Runs tools/ci/verify-change.mjs --fast against the current tree and reports the JSON verdict; with --base <ref> it also runs the same gate on an ephemeral worktree at that ref and answers "was this already red?". Use to verify a change without giving a subagent write access or a browser run of its own.
-model: inherit
+model: haiku
+maxTurns: 8
+memory: project
 readonly: true
 is_background: true
 background: true
@@ -38,11 +40,17 @@ When the parent passes `--base <ref>` (the session SHA, or
    "Cannot find module").
 3. In BOTH trees run only `node tools/ci/verify-change.mjs --fast --json`
    (plus `wgx-validate.mjs --static` when the plan names WGX).
-4. Return both JSON verdicts and a one-line delta: **same-red** /
-   **new-on-session** / **already-red-on-ref**. Leftover `batches` are
-   **notRun** in both.
+4. Return both JSON verdicts and the delta as one line of exactly this shape,
+   with one of the three tokens and nothing else after the colon:
+   `DELTA: same-red` / `DELTA: new-on-session` / `DELTA: already-red-on-ref`.
+   Leftover `batches` are **notRun** in both.
 5. `git worktree remove --force scratch/verify-base`. Never move
    `tools/*-baseline.json`; a baseline delta is a finding, not an edit.
+
+Project memory (`.claude/agent-memory/verify-agent/MEMORY.md`, tracked): one
+line per known-red spec — `<spec> — red at <SHA> — <reason>`. Read it before
+building a `--base` worktree; an entry older than the merge-base is re-verified,
+not trusted. Add a line when a `--base` run proves a red pre-existing.
 
 Unless `.claude/settings.json` sets `worktree.baseRef: "head"` (a subagent
 worktree then branches from the session HEAD), a worktree starts STALE: first

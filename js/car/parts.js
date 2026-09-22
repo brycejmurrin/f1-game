@@ -626,6 +626,24 @@ const Parts = (function () {
     };
   }
 
+  // THE REGULATION HOOK. A career era makes some options illegal for a few
+  // seasons (js/career/regulations.js). It is installed at runtime rather than
+  // imported because parts.js loads BEFORE js/career/ — and because that keeps
+  // the rule where it belongs: a Grand Prix or a standalone Season never sets
+  // one, so only a career is ever regulated.
+  //
+  // It is deliberately wired HERE and nowhere else. _resolve() consults this
+  // function for every category of every resolution and falls back to DEFAULTS,
+  // and resolveSetup() is the one path BOTH the player's career build and every
+  // AI factory build go through — so one predicate reaches the whole grid at
+  // once. A rule that only reached the player would be a tax, not a regulation.
+  let _legal = null;      // (opt) => boolean, or null for "everything is legal"
+  let _legalKey = "";     // identifies the ruleset, for the factory cache key
+  function setLegality(fn, key) {
+    _legal = typeof fn === "function" ? fn : null;
+    _legalKey = _legal ? String(key || "on") : "";
+  }
+  function legalityKey() { return _legalKey; }
   function isOptionAvailable(opt, team, owned) {
     const ctx = teamContext(team);
     const suppliers = opt.suppliers || (opt.supplier ? [opt.supplier] : null);
@@ -633,6 +651,7 @@ const Parts = (function () {
     if (suppliers && !suppliers.includes(ctx.engine)) return false;
     if (teams && !teams.includes(ctx.id)) return false;
     if (owned && !owned.has(opt.id)) return false;
+    if (_legal && !_legal(opt)) return false;
     return true;
   }
 
@@ -685,7 +704,10 @@ const Parts = (function () {
   const factoryCache = new Map();
   function factoryResolved(team) {
     const id = team && team.id || "";
-    const key = `${id}|${team && team.engine || ""}`;
+    // THE RULESET IS PART OF THE KEY. Without it an era would be a no-op on the
+    // AI side — every factory build would be served from a cache filled before
+    // the rules changed, and the player would be the only car obeying them.
+    const key = `${id}|${team && team.engine || ""}|${_legalKey}`;
     let resolved = factoryCache.get(key);
     if (!resolved) {
       // A TEAM MAY CARRY ITS OWN FACTORY SETUP. FACTORY_PRESETS is keyed by a
@@ -792,6 +814,7 @@ const Parts = (function () {
     resolveSetup, isOptionAvailable,
     getFactorySetup, factoryKey,
     getMods, getCost, getVisualTiers, statMult, displayStat, STAT_KEYS, aeroLoad, ersProfile, tread, RH_GAIN,
+    setLegality, legalityKey,
   };
 })();
 Object.freeze(Parts);

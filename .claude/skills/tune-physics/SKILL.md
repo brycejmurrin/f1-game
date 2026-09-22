@@ -1,6 +1,6 @@
 ---
 name: tune-physics
-description: Use when the user says the car understeers/oversteers, turn-in should be snappier/lazier, grip/trail braking/road-follow/pace feels wrong, compare/A-B physics settings, run a physics sweep, test ROAD_FOLLOW, or asks whether driving feel improved. Also GAME FEEL / juice — screen shake, hit-stop, weak kerb/wall/gear-shift/collision feedback, punchier camera/particles/audio polish that must NOT change driving physics. Device/gamepad/touch/tilt bugs → input-controls; AI racecraft → ai-racecraft.
+description: Use when the user says the car understeers/oversteers, turn-in should be snappier/lazier, grip/trail braking/road-follow/pace feels wrong, compare/A-B physics settings, run a physics sweep, test ROAD_FOLLOW, or asks whether driving feel improved. Also GAME FEEL / juice — screen shake, hit-stop, weak kerb/wall/gear-shift/collision feedback, punchier camera/particles/audio polish that must NOT change driving physics. Camera lag as a framing/state bug → playwright-probe; device/gamepad/touch/tilt bugs → input-controls; AI racecraft → ai-racecraft.
 ---
 
 # Tune the physics
@@ -50,7 +50,7 @@ node tools/ci/test-bg.mjs input        # steering + camera
 node tools/check/check-physics.mjs <grip|bank|roadfollow|steer>
 ```
 
-If you edited `js/game.js`, `node tools/gen/gen-shell.mjs --check` ([shell/cache](../check-changes/references/bump.md): `?v=dev`, no bump) before commit. Theory:
+If you edited `js/game.js`, `node tools/gen/gen-shell.mjs --check` ([shell/cache](../check-changes/references/bump.md)) before commit. Theory:
 `docs/PHYSICS.md`, `docs/research/steering-research.md`.
 
 ## Load on demand

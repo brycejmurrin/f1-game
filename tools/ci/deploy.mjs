@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 // deploy.mjs — the ONE deploy command (2026-09-01).
-// @doc the ONE deploy: fetch → merge → tooling-fast → the Pages gate's node suites → sweeps if the union moves geometry → verify-track → push the deploy branch (or --pr); pages.yml stamps it
+// @doc the ONE deploy: fetch → merge → tooling-fast → the Pages gate's node suites → sweeps if the union moves geometry (else only the targeted sweeps that read it) → verify-track → push the deploy branch (or --pr); pages.yml stamps it
 //
 //   node tools/ci/deploy.mjs --plan        # print the steps + the union diffstat, run nothing
 //   node tools/ci/deploy.mjs               # fetch → merge → tooling-fast → the Pages gate's node
 //                                       #   suites → test:sweeps (only if the union can move
-//                                       #   geometry) → verify-track (touched circuits) → push
+//                                       #   geometry; else just the targeted sweeps that read
+//                                       #   it — geometry-paths.mjs) → verify-track (touched
+//                                       #   circuits) → push
 //                                       #   HEAD to the deploy branch (retry ×3)
 //   node tools/ci/deploy.mjs --pr          # same checks, then push the session branch and open /
 //                                       #   update a PR into the deploy branch (never pushes there)
@@ -39,7 +41,7 @@ import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-import { GEOMETRY_PATHS } from "./geometry-paths.mjs";
+import { GEOMETRY_PATHS, targetedSuites } from "./geometry-paths.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
@@ -108,7 +110,9 @@ export function plan() {
       `tools/ci/tooling-fast.mjs ${GATE_JOBS} (the full node gate, two files at a time)`,
       "the Pages gate's node suites (ci.yml \"Pure-node unit suites\", read from the file)",
       touchesGeometry(tip) ? "test:sweeps (~10 min — this union can move geometry)"
-                           : "test:sweeps SKIPPED (nothing in this union can move geometry)",
+                           : (targetedFor(tip).length
+                               ? `targeted sweeps only — ${targetedFor(tip).map((s) => path.basename(s)).join(", ")} (the suites that read this union; no fleet rebuild)`
+                               : "test:sweeps SKIPPED (nothing in this union can move geometry or reach a targeted sweep)"),
       "verify-track for touched circuits",
       flag("--pr") ? "push the session branch and open/update a PR into the deploy branch"
                    : "git push origin HEAD:" + DEPLOY_BRANCH + " (fast-forward, retry ×3)",
@@ -197,14 +201,37 @@ export function touchesGeometry(base, cwd) {
   return anyGeometry(r.out.split("\n").filter(Boolean));
 }
 
+/* THE TARGETED TIER (2026-09-22). Ten of the fourteen sweep suites measure the
+ * fleet build; the other four (and two fleet-iterating ones with an extra
+ * input) read a specific source — js/lighting, js/car, debris-world, the
+ * driving-line pair — that is NOT part of the fleet build. The old trigger
+ * named js/game.js, js/car/ and debris-world as geometry, so a game.js edit
+ * (nearly every session) paid ten fleet rebuilds for suites that never read
+ * it. Now: the fleet runs when the fleet's inputs change (geometry-paths.mjs
+ * derives that from the manifest); otherwise ONLY the suites that read the
+ * union run, and a game.js-only union runs none. Asked only after
+ * touchesGeometry() said no: an unresolvable diff already ran everything. */
+export function targetedFor(base, cwd) {
+  const r = git(["diff", "--name-only", `${base}...HEAD`], cwd ? { cwd } : {});
+  if (r.code !== 0) return [];
+  return targetedSuites(r.out.split("\n").filter(Boolean));
+}
+
+function runTargeted(suites, why) {
+  const names = suites.map((s) => path.basename(s));
+  run("node", ["--test", "--test-concurrency=1", ...suites], `${why}: targeted sweeps (${names.join(", ")}) — no fleet rebuild`);
+  return names.map((n) => `sweeps:${n}`);
+}
+
 /* What this deploy did NOT measure. A green verdict that lists only what ran
  * is how both of 2026-09-18's breakages got past a gate: tooling-fast reported
  * 207/207 while knowing nothing about test:sweeps or test:lifecycle-unit. The
  * browser groups are never run here (SwiftShader: 10-40 min each) and a
  * non-geometry union skips the sweeps, so both are named rather than implied. */
-export function notCovered(ranSweeps) {
+export function notCovered(ranSweeps, targeted = []) {
   const out = ["browser smoke groups (ci.yml runs them after the push)"];
-  if (!ranSweeps) out.push("test:sweeps (nothing in this union can move geometry)");
+  if (!ranSweeps) out.push("test:sweeps (nothing in this union can move geometry" +
+    (targeted.length ? `; the targeted sweeps that read it ran: ${targeted.map((s) => path.basename(s)).join(", ")})` : ")"));
   return out;
 }
 
@@ -307,9 +334,30 @@ export function cureableConflicts(conflicted) {
   return { cureable, shellF, ratchetF, pkgF, toolsF };
 }
 
+/* THE UNION MAY NEED A DEPENDENCY THE BOX HAS NOT GOT. A merged lockfile is
+   a change to what the gate needs installed, and `node_modules` does not
+   follow a merge: on 2026-09-22 the train merged PR #172 (which added
+   monocart-coverage-reports), ran tooling-fast on the union and reported
+   coverage-merge.test.mjs red with "Cannot find package" — a gate verdict
+   about this box, not about the union. So after every merge that touched the
+   lockfile, install (browsers skipped; seconds when nothing changed) before
+   anything is measured. */
+export function installIfLockMoved(before) {
+  const changed = git(["diff", "--name-only", `${before}..HEAD`, "--", "package-lock.json", "package.json"]).out.trim();
+  if (!changed) return false;
+  log("the union changed package-lock.json — npm install before the gate measures it");
+  const r = spawnSync("npm", ["install", "--no-audit", "--no-fund"], {
+    cwd: ROOT, stdio: JSON_OUT ? ["ignore", "ignore", "inherit"] : "inherit",
+    env: { ...process.env, PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1" },
+  });
+  if (r.status !== 0) throw new Error(`npm install failed (exit ${r.status}) — the union needs a package this box could not install`);
+  return true;
+}
+
 export function mergeDeployTip() {
+  const before = git(["rev-parse", "HEAD"]).out.trim();
   const r = git(["merge", "--no-edit", `${REMOTE}/${DEPLOY_BRANCH}`]);
-  if (r.code === 0) return "merged";
+  if (r.code === 0) { installIfLockMoved(before); return "merged"; }
   const conflicted = git(["diff", "--name-only", "--diff-filter=U"]).out.split("\n").filter(Boolean);
   // The CUREABLE set: files this repo GENERATES, where a conflict is a stale
   // derived value rather than two intents to reconcile. Anything else is a
@@ -326,6 +374,12 @@ export function mergeDeployTip() {
   if (shellF.length) {
     for (const f of shellF) must(git(["checkout", "--theirs", "--", f]), `checkout --theirs ${f}`);
     run("node", ["tools/gen/gen-shell.mjs"], "regenerate the union shell from the manifest");
+    // `--theirs` above threw away OUR index.html wholesale, so every generated
+    // block in it has to be rewritten, not just gen-shell's. title-art.mjs owns
+    // @gen-shell:title-art (the #title-car car art); without this line a shell
+    // conflict silently reverts the art to whatever the deploy tip carried,
+    // which looks exactly like nobody having changed it.
+    run("node", ["tools/gen/title-art.mjs"], "regenerate the title art into the union shell");
     must(git(["add", ...shellF]), "add");
     did.push("shell hashes re-applied");
   }
@@ -345,6 +399,7 @@ export function mergeDeployTip() {
     did.push("tools index regenerated");
   }
   must(git(["commit", "--no-edit", "-q"]), "merge commit");
+  installIfLockMoved(before);
   return `merged (${did.join("; ")})`;
 }
 
@@ -444,6 +499,9 @@ function reverifyUnion(before, oursProse) {
   if (geom) {
     run("npm", ["run", "test:sweeps"], "re-verify: test:sweeps (the re-merged union can move geometry)");
     label += " + sweeps";
+  } else if (!oursProse) {
+    const tg = targetedSuites(changed);
+    if (tg.length) { runTargeted(tg, "re-verify"); label += ` + targeted sweeps (${tg.length})`; }
   }
   return { label, sweeps: geom };
 }
@@ -493,6 +551,12 @@ export function gateOnly() {
   const verified = [];
   run("node", ["tools/ci/tooling-fast.mjs", GATE_JOBS], "guard suite"); verified.push("tooling-fast");
   for (const script of gateNodeSuites()) { run("npm", ["run", script], `Pages gate: ${script}`); verified.push(script); }
+  // ci.yml's "Parts option-resolution census" job runs test:sweeps-parts
+  // UNCONDITIONALLY on every push (no path filter), so a red in either of its
+  // two files takes the deploy red — and until 2026-09-22 nothing before a
+  // push ran them (tests/unit/prepush-gate-coverage.test.mjs listed both as
+  // SWEEPS_ONLY). ~40 s; the geometry sweeps stay conditional (touchesGeometry).
+  run("npm", ["run", "test:sweeps-parts"], "Pages gate: test:sweeps-parts (unconditional on CI)"); verified.push("test:sweeps-parts");
   // Against the deploy tip, same as a real deploy: the circuits OUR side
   // touched (three-dot), not every circuit that moved on the branch.
   let circuits = [];
@@ -570,11 +634,14 @@ export function main() {
   // never runs (run 1889, 2026-09-02). Run exactly what the gate runs, read
   // from ci.yml so the two lists cannot drift apart.
   for (const script of gateNodeSuites()) { run("npm", ["run", script], `Pages gate: ${script}`); verdict.verified.push(script); }
+  run("npm", ["run", "test:sweeps-parts"], "Pages gate: test:sweeps-parts (unconditional on CI)"); verdict.verified.push("test:sweeps-parts");
   // Conditional, for the reason recorded above touchesGeometry(): ci.yml runs
   // the sweeps AFTER the push, so skipping them here buys 10 minutes with a
   // broken tip on a branch other sessions build on.
   let ranSweeps = touchesGeometry(p.tip);
   if (ranSweeps) { run("npm", ["run", "test:sweeps"], "Pages gate: test:sweeps (this union can move geometry)"); verdict.verified.push("test:sweeps"); }
+  let targeted = [];
+  if (!ranSweeps) { targeted = targetedFor(p.tip); if (targeted.length) verdict.verified.push(...runTargeted(targeted, "Pages gate")); }
   for (const id of touchedCircuits(p.tip)) { run("node", ["tools/track/verify-track.cjs", id], `verify-track ${id}`); verdict.verified.push(`verify-track:${id}`); }
   if (flag("--pr")) {
     Object.assign(verdict, openPr(p.branch));
@@ -591,7 +658,7 @@ export function main() {
     if (push.swept && !verdict.verified.includes("test:sweeps")) verdict.verified.push("test:sweeps");
     ranSweeps = ranSweeps || push.swept;
   }
-  verdict.notCovered = notCovered(ranSweeps);
+  verdict.notCovered = notCovered(ranSweeps, targeted);
   verdict.next = "the push's FAST ci.yml run is your verdict (minutes) and, when green, pokes pages.yml, which gates the tip, stamps the build (2000 + commit count) and verify-live confirms the CDN serves it — a commit is live once it is an ancestor of the live shell's apex-sha (deploy-research)";
   verdict.seconds = Math.round((Date.now() - t0) / 1000);
   if (JSON_OUT) console.log(JSON.stringify(verdict, null, 2));

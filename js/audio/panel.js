@@ -305,7 +305,12 @@ const AudioPanel = (() => {
       // Same words as the SOURCE row (ALL / DEFAULT / MY TRACKS / SPOTIFY):
       // the caption said "Built-in" for the value labelled DEFAULT.
       const SRC_LABEL = { all: "All music", builtin: "Default", user: "My tracks", spotify: "Spotify" };
-      const srcText = musicLive ? (SRC_LABEL[musicSrc] || "") : G.soundOn ? "" : "Master sound is off — MUSIC ON or SOUND EFFECTS ON turns it on";
+      // srcOn(), not the panel's own `musicSrc`: when Spotify drives the
+      // soundtrack the live source is spotify while this closure's copy still
+      // reads whatever local set was picked before, so NOW PLAYING said "All
+      // music" over a Spotify track. The SOURCE row beside it already paints
+      // from the live value — this line was the one that did not.
+      const srcText = musicLive ? (SRC_LABEL[srcOn()] || "") : G.soundOn ? "" : "Master sound is off — MUSIC ON or SOUND EFFECTS ON turns it on";
       // Two copies of the NOW PLAYING card: the MUSIC page's (as-*) and the
       // pause menu's (pm-*), which is only shown while music is live.
       for (const p of ["as", "pm"]) {

@@ -42,6 +42,7 @@
  */
 
 import { writeFileSync, readFileSync, existsSync } from "node:fs";
+import vm from "node:vm";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -323,7 +324,24 @@ async function bake(ids) {
 
 const requested = process.argv.slice(2);
 const ids = requested.length ? requested : Object.keys(MAP);
-const data = await bake(ids);
+const baked = await bake(ids);
+
+// js/track/, not js/ — this was missed in the js/ -> js/track/ reorganisation,
+// so the tool wrote to a path that its own next line then told you to script-tag
+// from js/track/, and following its instructions produced a 404. Everything else
+// (tools/manifest.cjs, js/track/tracks.js, this file's own header) already
+// agreed on js/track/.
+const outPath = join(ROOT, "js", "track", "circuit-elevations.js");
+// A PARTIAL bake merges into the shipped file. `bake-elevation.mjs korea` used
+// to rewrite the file with only what this run produced — and when SRTM had
+// nothing for that one id (reclaimed land), with NOTHING: eleven surveyed
+// profiles gone in one command. Only a full roster bake replaces the table.
+function readExisting() {
+  if (!existsSync(outPath)) return {};
+  try { return vm.runInNewContext(readFileSync(outPath, "utf8") + ";CircuitElevations", {}) || {}; }
+  catch (e) { console.log(`(existing ${outPath} unreadable: ${e.message}; starting empty)`); return {}; }
+}
+const data = requested.length ? { ...readExisting(), ...baked } : baked;
 
 const body = Object.entries(data)
   .map(([id, prof]) => `    ${id}: [${prof.join(", ")}],`)
@@ -338,12 +356,6 @@ ${body}
 };
 if (typeof window !== "undefined") window.CircuitElevations = CircuitElevations;
 `;
-// js/track/, not js/ — this was missed in the js/ -> js/track/ reorganisation,
-// so the tool wrote to a path that its own next line then told you to script-tag
-// from js/track/, and following its instructions produced a 404. Everything else
-// (tools/manifest.cjs, js/track/tracks.js, this file's own header) already
-// agreed on js/track/.
-const outPath = join(ROOT, "js", "track", "circuit-elevations.js");
 writeFileSync(outPath, file);
-console.log(`\nWrote ${outPath} (${Object.keys(data).length} circuits).`);
+console.log(`\nWrote ${outPath} (${Object.keys(data).length} circuits, ${Object.keys(baked).length} baked this run).`);
 console.log("Add <script src=\"js/track/circuit-elevations.js?v=NN\"></script> before js/track/tracks.js.");

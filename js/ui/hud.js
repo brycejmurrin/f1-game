@@ -10,7 +10,8 @@ Log.info("ui", "GameHud.create");
 
 const els = G.els;
 const mm = els.minimap.getContext("2d");
-let hudT = 0;
+let hudT = 0;                 // ms until the next throttled HUD tick
+const HUD_TICK_MS = 100;      // ~10 Hz in WALL time, whatever the display refresh
 let minimapBg = null;         // offscreen canvas with pre-rendered track shape
 let minimapBgKey = "";        // cssW|cssH|ratio it was rendered for — NOT the
                               // derived (W,H): 140css@2x and 280css@1x share a
@@ -37,7 +38,7 @@ function hClass(el, v) { if (!el) return; if (_hudCls.get(el) !== v) { _hudCls.s
 function hToggle(el, cls, on) { if (!el) return; let m = _hudTog.get(el); if (!m) { m = {}; _hudTog.set(el, m); } if (m[cls] !== on) { m[cls] = on; el.classList.toggle(cls, on); } }
 function hAttr(el, name, value) { if (!el) return; const v = String(value); if (el.getAttribute(name) !== v) el.setAttribute(name, v); }
 function replayGhost() { return GhostShare.hasGuest() ? GhostShare : Ghost; }
-let _lastRank = 0, _posFlashT = 0;   // POS box flash state (see the tick)
+let _lastRank = 0, _posFlashT = 0;   // POS box flash state, ms left (see the tick)
 // Team colours are static — compute once per team, the minimap's idiom.
 // Keyed on the store revision, exactly as _livResolveCache is (js/game.js):
 // a CUSTOM team's colours are editable in the garage, and an unkeyed memo on
@@ -657,7 +658,8 @@ function skinAccent(t) {
   root.style.setProperty("--accent-ink", ink);
 }
 
-function updateHud(force) {
+function updateHud(force, dtMs) {
+  if (!(Number.isFinite(dtMs) && dtMs > 0)) dtMs = 16.7;   // forced refreshes and the first frame: one nominal frame
   const player = G.player, cars = G.cars, timeTrial = G.timeTrial;
   if (!player) return;
   syncHudCamClasses();
@@ -667,19 +669,24 @@ function updateHud(force) {
     document.documentElement.dataset.team = _teamSkin;
     skinAccent(player.team);
   }
-  hudT -= 1;
+  // WALL-CLOCK throttle. This was a 6-FRAME countdown, which is 10 Hz only at
+  // 60 fps: a 120/144 Hz display ticked it 2x as often, so the gap EMA below
+  // (tuned "0.3 s at 10 Hz") chattered again and the flashes ran short, while
+  // a throttled 30 fps device dropped to 5 Hz. The forced refreshes pass no dt
+  // and are charged one nominal frame.
+  hudT -= dtMs;
   if (!force && hudT > 0) return;
-  hudT = 6; // ~10Hz at 60fps
+  hudT = HUD_TICK_MS;
   syncHudLayoutClasses();      // before fitHud: show/hide/park changes what gets measured
   fitHud();                    // below the throttle: this reads layout, per TICK not per frame
   // A retirement has no race position left to hold — `rank` is whatever it was
   // when the car stopped, and the field it was measured against no longer
   // contains it (see the ranked build in game.js).
   hText(els.pos, timeTrial ? "TT" : player.retired ? "DNF" : (player.rank || "-") + "/" + cars.length);
-  // Position change: acknowledge an overtake (either way) for ~6 ticks.
+  // Position change: acknowledge an overtake (either way) for ~0.6 s.
   const rank = timeTrial || player.retired ? 0 : (player.rank || 0);
-  if (rank && _lastRank && rank !== _lastRank) { els.pos.dataset.delta = rank < _lastRank ? "up" : "down"; _posFlashT = 6; }
-  else if (_posFlashT > 0 && --_posFlashT === 0) delete els.pos.dataset.delta;
+  if (rank && _lastRank && rank !== _lastRank) { els.pos.dataset.delta = rank < _lastRank ? "up" : "down"; _posFlashT = 600; }
+  else if (_posFlashT > 0 && (_posFlashT -= HUD_TICK_MS) <= 0) { _posFlashT = 0; delete els.pos.dataset.delta; }
   if (rank) _lastRank = rank;
   hText(els.lap, Math.min(player.lap || 1, G.lapsTarget) + "/" + G.lapsTarget);
   hText(els.time, G.fmtTime(player.lapTime));

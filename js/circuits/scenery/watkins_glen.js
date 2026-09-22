@@ -20,6 +20,10 @@
       const BARK = [0.35, 0.32, 0.30];          // grey maple bark
       const GRAVEL = [0.66, 0.61, 0.48];
       const TIMBER = [0.46, 0.36, 0.26], WEATHERED = [0.56, 0.54, 0.50];
+      const CAMP_TENT_OFFSETS = {
+        boot: [[-14, -9], [-11, 11], [-3, -15], [8, -12], [14, 4], [5, 14]],
+        climb: [[-12, -8], [-9, 13], [-2, -16], [7, -11], [13, 6], [4, 16]],
+      };
 
       const FALL = [MAPLE, SCARLET, AMBER, OAK];
       const maple = (k, side, dist, h, col) => {
@@ -36,6 +40,16 @@
         seat.cone(out, vadd(a.c, a.u, h * 0.76), h * 0.24, h * 0.30, col, 6, b);
         out._mat = 0;
       };
+      // WAT-M1: the shared foliage pass is intentionally excluded through the
+      // Esses. Replace it with a close, explicitly lobed maple rank; cheap
+      // generic hardwood and conifer silhouettes remain in the deeper woods.
+      for (let s = 0.24, i = 0; s <= 0.34 + 1e-9; s += 0.0075, i++) {
+        for (const side of [-1, 1]) {
+          const h = hash(i * 43 + side * 17 + 91);
+          maple(K(s), side, 13 + h * 4.5, 15 + h * 5,
+            (i + (side > 0 ? 1 : 0)) % 3 === 0 ? AMBER : SCARLET);
+        }
+      }
       const openArea = (s) => (s >= 0.93 || s <= 0.08) || (s >= 0.24 && s <= 0.34);
       every(20, (k) => {
         const s = k / n;
@@ -295,9 +309,11 @@
         }, (stage) => {
           const cols = [[0.72, 0.28, 0.22], [0.88, 0.86, 0.80], [0.24, 0.40, 0.28], [0.30, 0.36, 0.56]];
           stage._mat = MAT.FABRIC;
-          for (let i = 0; i < 7; i++) {
-            const ang = i / 7 * 6.2832, rr = 11 + hash(i * 23) * 4;
-            const p = vadd(vadd(a.c, a.r, Math.cos(ang) * rr), a.t, Math.sin(ang) * rr);
+          // WAT-M2: asymmetric pockets leave the fire clearing open and avoid
+          // a campsite ring that reads like an organised paddock.
+          for (let i = 0; i < CAMP_TENT_OFFSETS.boot.length; i++) {
+            const [dr, dt] = CAMP_TENT_OFFSETS.boot[i];
+            const p = vadd(vadd(a.c, a.r, dr), a.t, dt);
             seat.prism(stage, p, [4.4, 2.6, 5.4], cols[i % cols.length], b);
           }
           stage._mat = MAT.RUST;
@@ -348,20 +364,24 @@
       // A second camp, in a clearing on the climb out of the Boot.
       {
         const a = anchor(K(0.74), 1, 58), b = [a.r, a.u, a.t];
+        groundPatch(K(0.74), 1, 42, [36, 0.16, 54], [0.28, 0.25, 0.19],
+          { id: "glen-climb-clearing", samples: 6 });
         modelGroup("watkins-camp-climb", {
-          center: vadd(a.c, a.u, 3.4), size: [22, 9, 42], basis: b,
+          center: vadd(a.c, a.u, 3.4), size: [40, 9, 48], basis: b,
         }, (stage) => {
           const cols = [[0.72, 0.28, 0.22], [0.88, 0.86, 0.80], [0.24, 0.40, 0.28], [0.30, 0.36, 0.56]];
           stage._mat = MAT.FABRIC;
-          for (let i = 0; i < 6; i++) {
-            const row = i % 2, off = (Math.floor(i / 2) - 1) * 13;
-            const p = vadd(vadd(a.c, a.r, (row ? 1 : -1) * 5), a.t, off);
+          // WAT-M2: tents sit irregularly at the clearing's wooded edge,
+          // leaving its centre open instead of forming two parade rows.
+          for (let i = 0; i < CAMP_TENT_OFFSETS.climb.length; i++) {
+            const [dr, dt] = CAMP_TENT_OFFSETS.climb[i];
+            const p = vadd(vadd(a.c, a.r, dr), a.t, dt);
             seat.prism(stage, p, [5.0, 2.8, 6.0], cols[i % cols.length], b);
           }
           stage._mat = MAT.METAL;
           // Period travel trailers — rounded aluminium, ribbed along the body.
-          for (let i = 0; i < 2; i++) {
-            const p = vadd(vadd(a.c, a.r, 8), a.t, (i - 0.5) * 18);
+          for (const [dr, dt] of [[15, -13], [15, 12]]) {
+            const p = vadd(vadd(a.c, a.r, dr), a.t, dt);
             seat.box(stage, p, [2.8, 2.5, 7], [0.80, 0.80, 0.78], b);
             addFrustum(stage, vadd(p, a.u, 2.5), 1.4, 1.0, 0.6, [0.86, 0.86, 0.84], 6, b);
             addBox(stage, vadd(p, a.u, 1.4), [3.0, 0.2, 6.6], [0.62, 0.62, 0.60], b);
