@@ -2,7 +2,7 @@
 name: deploy-research
 description: Public-web and post-deploy research — `curl` for the deployed artifact (it reaches github.io from this container and is the only way to read a `<meta>` tag), the host fetch/search tools for prose pages and search. Use proactively for live apex-sha / version.json / shipped JS markers, deploy lag checks, and external track or reference gathering that would flood the main context. Never Chrome DevTools, never Playwright, never the in-repo tinyfish wrapper.
 model: haiku
-maxTurns: 18
+maxTurns: 30
 readonly: true
 is_background: true
 background: true
@@ -90,6 +90,12 @@ return a short summary with citations (URLs + live vs local build numbers).
 2. Live build vs deploy-tip (and local) `version.json` when relevant.
 3. Bullet evidence with URLs.
 4. Anything left unverified — name it, do not invent it.
+
+Before your LAST TWO TURNS, stop working and DELIVER what you have: a partial
+report with its gaps named beats silence. Hitting `maxTurns` mid-tool-call
+returns NOTHING to the parent — deploy-research lost a completed deploy check
+that way at 10 turns, and a completed research pass at 18; track-surveyor lost
+11.6 minutes of survey at 30 (2026-09-22). Budget the hand-back, not the work.
 
 Flat prohibitions: AGENTS.md §Verification 3 and 7 (no Playwright/test-bg/test-solo/chrome-start, no --wait, no bump); the js/css/index.html write ban is hook-enforced.
 If the task needs a live canvas or working-tree probe, stop and tell the

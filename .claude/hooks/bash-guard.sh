@@ -22,8 +22,28 @@ try:
     print((json.load(sys.stdin).get("tool_input") or {}).get("command") or "")
 except Exception:
     print("")
-')
-[ -z "$CMD" ] && exit 0
+' 2>/dev/null)
+# EXTRACTION FAILURE IS NOT AN EMPTY COMMAND (2026-09-22). Every rule in this
+# file sits below this line, so a missing python3, a renamed hook-input key or
+# an undecodable payload used to exit 0 SILENTLY: a git commit landed with no
+# guards run and a subagent could start a browser group, with nothing anywhere
+# saying the guard had not run. A hook that fails open must at least fail
+# LOUDLY, and where the raw payload still shows a rule's signature we block on
+# that rather than shrug.
+if [ -z "$CMD" ]; then
+  # A genuinely empty command is normal; a payload that plainly carries one is not.
+  if printf '%s' "$INPUT" | grep -q '"command"[[:space:]]*:[[:space:]]*"..'; then
+    echo "bash-guard: COULD NOT READ the command out of the hook payload (python3 missing, or the input shape changed)." >&2
+    echo "bash-guard: the kill/commit/subagent rules did NOT run. Fix the hook before trusting this session's guards." >&2
+    # Last-resort scan of the raw payload for the two rules that protect other
+    # processes; a false positive here is cheaper than an orphaned browser fleet.
+    if printf '%s' "$INPUT" | grep -qE '(pkill|killall)[[:space:]]+(-[A-Za-z]+[[:space:]]+)*(chrome|chromium|node|playwright)'; then
+      echo "bash-guard: BLOCKED — the raw payload matches the pkill/killall rule (AGENTS.md §Verification 7)." >&2
+      exit 2
+    fi
+  fi
+  exit 0
+fi
 # SCAN is the command as the kill rules below see it (2026-09-22). Two holes
 # and one false positive were reproduced in the raw text: `sh -c "pkill -f
 # chrome"` and `/usr/bin/pkill -f chrome` walked past a regex that matched only

@@ -525,12 +525,30 @@ function pushWithRetry(oursProse = false) {
 /* --pr without the gh CLI. The remote containers have GH_TOKEN/GITHUB_TOKEN and
    curl (through the agent proxy) but no gh, which left --pr printing a compare
    URL and the session merging by hand (PR #178, 2026-09-22). Same three steps
-   as the gh path — find an open PR for the head, create one from the HEAD
-   commit's subject/body, enable auto-merge — over the REST and GraphQL APIs.
-   The token travels as a curl config on stdin, never on the argv. */
+   as the gh path — find an open PR for the head, create one from the branch's
+   last real commit, enable auto-merge — over REST only.
+   The token travels as a curl config on stdin, never on the argv.
+
+   NOT GraphQL (2026-09-22, measured): `api.github.com/graphql` is refused from
+   Claude Code sessions, and the refusal is a plain `{"message": …}` with NO
+   `errors` array — so the first version of this function read it as success
+   and told two PRs (#182, #184) that auto-merge was armed when no
+   `auto_merge_enabled` event ever reached either timeline, and both were
+   merged by hand. Auto-merge goes through the session's CCR REST route
+   instead, and the result is VERIFIED by reading the PR back rather than
+   inferred from the absence of an error.
+
+   AND THE ANSWER IS NO, on this repo: the first honest run (PR #186) got
+   "Pull request Branch does not have required protected branch rules".
+   `claude/f1-game-project-26h3ng` has no branch protection, so there is
+   nothing for auto-merge to wait on and GitHub refuses to arm it — which is
+   why no PR has ever auto-merged here, #178 included. Expect the "NOT armed"
+   note and merge the PR yourself once CI is green; that is the tool working,
+   not failing. Enabling it would mean adding required checks to the deploy
+   branch, which is a train-latency decision, not a tooling one. */
 const REPO = "brycejmurrin/f1-game";
 function ghApi(token, method, url, body) {
-  const args = ["-sS", "--max-time", "30", "-K", "-", "-X", method,
+  const args = ["-sS", "--max-time", "30", "-K", "-", "-X", method, "-w", "\n%{http_code}",
     "-H", "Accept: application/vnd.github+json", "-H", "X-GitHub-Api-Version: 2022-11-28", url];
   // `-K -` reads a curl config from stdin: the auth header and the JSON body
   // both ride there (curl's quoted-value escapes are JSON's \" and \\).
@@ -540,14 +558,29 @@ function ghApi(token, method, url, body) {
   }
   const r = spawnSync("curl", args, { encoding: "utf8", input });
   if (r.status !== 0) throw new Error(`curl ${method} ${url}: ${(r.stderr || "").trim()}`);
-  try { return JSON.parse(r.stdout || "null"); }
-  catch { throw new Error(`${method} ${url}: not JSON: ${r.stdout.slice(0, 200)}`); }
+  // -w appended the status on its own last line; everything before it is body.
+  const out = (r.stdout || "").split("\n");
+  const status = Number(out.pop().trim());
+  const text = out.join("\n").trim();
+  let json = null;
+  if (text) { try { json = JSON.parse(text); } catch { json = null; } }
+  if (json === null && text) throw new Error(`${method} ${url}: not JSON (${status}): ${text.slice(0, 200)}`);
+  return { status, json, ok: status >= 200 && status < 300 };
 }
 export function openPrRest(branch, token) {
   const [owner] = REPO.split("/");
   const api = `https://api.github.com/repos/${REPO}`;
-  const open = ghApi(token, "GET", `${api}/pulls?state=open&head=${owner}:${encodeURIComponent(branch)}&base=${encodeURIComponent(DEPLOY_BRANCH)}&per_page=1`);
-  if (Array.isArray(open) && open[0]?.html_url) return { pr: open[0].html_url, note: "PR already open; the push updated it" };
+  // A non-2xx lookup is NOT "no PR is open": read as that, it goes on to
+  // create one and dies on GitHub's 422 instead of saying it could not look.
+  const list = ghApi(token, "GET", `${api}/pulls?state=open&head=${owner}:${encodeURIComponent(branch)}&base=${encodeURIComponent(DEPLOY_BRANCH)}&per_page=1`);
+  if (!list.ok) throw new Error(`PR lookup failed (HTTP ${list.status}): ${JSON.stringify(list.json).slice(0, 200)}`);
+  const open = list.json;
+  // The reuse path confirms auto-merge too: a second `--pr` on the same branch
+  // used to return no `autoMerge` key at all, so the verdict silently lost it.
+  if (Array.isArray(open) && open[0]?.html_url) {
+    const am = autoMerge(token, api, open[0].number);
+    return { pr: open[0].html_url, autoMerge: am.autoMerge, note: `PR already open; the push updated it. ${am.note}` };
+  }
   // The title comes from the branch's last REAL commit, not from HEAD: a
   // deploy merges the base tip before it opens the PR, so HEAD is almost
   // always "Merge remote-tracking branch …", which is what PR #182 was called
@@ -555,18 +588,33 @@ export function openPrRest(branch, token) {
   const head = git(["log", "-1", "--no-merges", "--format=%s%x00%b", `${DEPLOY_BRANCH}..HEAD`]).out
             || git(["log", "-1", "--no-merges", "--format=%s%x00%b"]).out;
   const [title, body] = head.split("\0");
-  const pr = ghApi(token, "POST", `${api}/pulls`, { title, body, head: branch, base: DEPLOY_BRANCH });
+  const pr = ghApi(token, "POST", `${api}/pulls`, { title, body, head: branch, base: DEPLOY_BRANCH }).json;
   if (!pr?.html_url) throw new Error("REST pr create failed: " + JSON.stringify(pr).slice(0, 300));
-  const gql = ghApi(token, "POST", "https://api.github.com/graphql", {
-    query: "mutation($id: ID!) { enablePullRequestAutoMerge(input: {pullRequestId: $id, mergeMethod: MERGE}) { clientMutationId } }",
-    variables: { id: pr.node_id },
-  });
-  const err = Array.isArray(gql?.errors) ? gql.errors.map((e) => e.message).join("; ") : "";
-  return {
-    pr: pr.html_url,
-    note: err ? `auto-merge NOT enabled (${err}) — enable it on the PR or merge by hand once green`
-              : "auto-merge (merge commit) enabled via the API; GitHub creates the merge so the PR is a real record",
-  };
+  return { pr: pr.html_url, ...autoMerge(token, api, pr.number) };
+}
+
+/** Arm auto-merge and CONFIRM it, because "no error" is not evidence: the
+ *  GraphQL refusal that fooled #182 and #184 was a 200-shaped message body.
+ *  `/pulls/{n}/ccr/auto_merge` is a route of the SESSION'S proxy, not of
+ *  api.github.com — against the real API it 404s, and this reports NOT armed.
+ *
+ *  NOTHING here may throw. The PR already exists by the time we are called, so
+ *  an exception would lose its URL and fail a deploy whose gate already
+ *  passed — and the proxy answers 403/405/407 with non-JSON bodies, which is
+ *  exactly when ghApi throws. Every failure degrades to "NOT armed", which is
+ *  the honest answer and the one the session can act on. */
+export function autoMerge(token, api, number) {
+  try {
+    const put = ghApi(token, "PUT", `${api}/pulls/${number}/ccr/auto_merge`, { merge_method: "merge" });
+    const back = ghApi(token, "GET", `${api}/pulls/${number}`).json;
+    if (back?.auto_merge) {
+      return { autoMerge: true, note: "auto-merge (merge commit) armed and CONFIRMED on the PR; GitHub creates the merge so the PR is a real record" };
+    }
+    const why = (put.json && (put.json.message || put.json.error)) || `HTTP ${put.status}`;
+    return { autoMerge: false, note: `auto-merge NOT armed (${String(why).slice(0, 160)}) — WATCH this PR and merge it yourself once CI is green` };
+  } catch (e) {
+    return { autoMerge: false, note: `auto-merge NOT armed (${String(e.message || e).slice(0, 160)}) — WATCH this PR and merge it yourself once CI is green` };
+  }
 }
 function openPr(branch) {
   must(git(["push", "-u", REMOTE, branch]), "push session branch");
@@ -581,8 +629,18 @@ function openPr(branch) {
   const created = spawnSync("gh", ["pr", "create", "--base", DEPLOY_BRANCH, "--head", branch, "--fill"], { cwd: ROOT, encoding: "utf8" });
   if (created.status !== 0) throw new Error("gh pr create failed: " + created.stderr);
   const url = created.stdout.trim().split("\n").pop();
-  spawnSync("gh", ["pr", "merge", "--auto", "--merge", url], { cwd: ROOT, encoding: "utf8" });
-  return { pr: url, note: "auto-merge (merge commit) enabled; GitHub creates the merge so the PR is a real record" };
+  // The SAME rule as the REST path above: arming is not evidence of armed.
+  // This line used to discard `gh pr merge --auto`'s status and return
+  // "enabled" unconditionally, so a box WITH gh got the identical lie the REST
+  // path was fixed for — and on this repo the call always fails, because the
+  // deploy branch has no protected branch rules. Read the PR back instead.
+  const armed = spawnSync("gh", ["pr", "merge", "--auto", "--merge", url], { cwd: ROOT, encoding: "utf8" });
+  const back = spawnSync("gh", ["pr", "view", url, "--json", "autoMergeRequest", "-q", ".autoMergeRequest"],
+    { cwd: ROOT, encoding: "utf8" });
+  const on = back.status === 0 && back.stdout.trim() && back.stdout.trim() !== "null";
+  if (on) return { pr: url, autoMerge: true, note: "auto-merge (merge commit) armed and CONFIRMED on the PR; GitHub creates the merge so the PR is a real record" };
+  const why = (armed.stderr || armed.stdout || "").trim().split("\n")[0] || `gh exit ${armed.status}`;
+  return { pr: url, autoMerge: false, note: `auto-merge NOT armed (${why.slice(0, 160)}) — WATCH this PR and merge it yourself once CI is green` };
 }
 
 /* THE GATE, WITHOUT THE DEPLOY. `npm run test:tooling-fast` is the documented
@@ -608,12 +666,36 @@ export function gateOnly() {
   // Against the deploy tip, same as a real deploy: the circuits OUR side
   // touched (three-dot), not every circuit that moved on the branch.
   let circuits = [];
+  let base = "";
+  const gaps = [];
   try {
     must(git(["fetch", "--no-tags", REMOTE, DEPLOY_BRANCH]), "fetch");
-    circuits = touchedCircuits(must(git(["rev-parse", `${REMOTE}/${DEPLOY_BRANCH}`]), "rev-parse"));
-  } catch (e) { log(`verify-track skipped: cannot reach ${REMOTE}/${DEPLOY_BRANCH} (${e.message})`); }
+    base = must(git(["rev-parse", `${REMOTE}/${DEPLOY_BRANCH}`]), "rev-parse");
+    circuits = touchedCircuits(base);
+  } catch (e) {
+    log(`verify-track skipped: cannot reach ${REMOTE}/${DEPLOY_BRANCH} (${e.message})`);
+    // A LOG LINE IS NOT A VERDICT. Without this, --json showed no
+    // verify-track entries and no marker, so "no circuit was touched" and
+    // "could not look" read identically to the reader of the JSON.
+    gaps.push(`verify-track and the geometry sweeps: could not reach ${REMOTE}/${DEPLOY_BRANCH} (${e.message}) — NOT a statement that nothing was touched`);
+  }
   for (const id of circuits) { run("node", ["tools/track/verify-track.cjs", id], `verify-track ${id}`); verified.push(`verify-track:${id}`); }
-  return { gate: "only", verified, pushed: false, seconds: Math.round((Date.now() - t0) / 1000) };
+  // PARITY WITH main() (2026-09-22). This function's own docstring calls it
+  // "exactly what main() runs before it pushes", and AGENTS.md rule 3 calls it
+  // the only pre-push check that runs what the deploy runs — but it never
+  // called touchesGeometry, so a geometry-moving change got exit 0 having
+  // skipped test:sweeps, the very leg whose absence broke Pages for hours on
+  // 2026-09-18, and returned no notCovered key for the reader to notice.
+  if (base) {
+    // Mirrors main()'s branch exactly: the full sweeps when the union can move
+    // geometry, otherwise the targeted suites that read it.
+    const ranSweeps = touchesGeometry(base);
+    if (ranSweeps) { run("npm", ["run", "test:sweeps"], "Pages gate: test:sweeps (this union can move geometry)"); verified.push("test:sweeps"); }
+    let targeted = [];
+    if (!ranSweeps) { targeted = targetedFor(base); if (targeted.length) verified.push(...runTargeted(targeted, "Pages gate")); }
+    gaps.push(...notCovered(ranSweeps, targeted));
+  }
+  return { gate: "only", verified, pushed: false, notCovered: gaps, seconds: Math.round((Date.now() - t0) / 1000) };
 }
 
 /* IS THE TRAIN ALREADY RED? A deploy inherits the branch it lands on, and a red
