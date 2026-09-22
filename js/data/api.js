@@ -43,6 +43,7 @@ const F1API = (function () {
   let lastNetAt = 0;                    // time of last actual fetch start
   let netGen = 0;                       // bumped by cancelAll(); a request born before it is stale
   const liveControllers = new Set();    // AbortControllers of fetches on the wire
+  const inFlight = new Map();           // generation + cache policy + URL -> shared request Promise
   const failWarnAt = Object.create(null); // endpoint name -> last Log.warn ms
   const FAIL_WARN_MS = 30 * 1000;
   let latestSessionKey = null;          // tracked from latestSession() responses
@@ -274,6 +275,14 @@ const F1API = (function () {
     // it would read as fresh for as long as the skew lasts, so refetch instead.
     const age = hit ? Date.now() - hit.t : 0;
     if (ttl > 0 && hit && age >= 0 && age < ttl) return Promise.resolve(hit.data);
+    // The queue paces network hits; it must not turn two callers for the same
+    // resource into two sequential hits. Cache policy is part of the key so a
+    // live delta request never inherits stale fallback from a cached request.
+    // Generation is part of it so work started after cancelAll() can never
+    // attach to the cancelled Promise from the closed hub.
+    const flightKey = myGen + "|" + (cache ? "cache|" : "network|") + url;
+    const shared = inFlight.get(flightKey);
+    if (shared) return shared;
 
     // Each attempt claims ONE queue slot (MIN_GAP pacing included) and releases
     // it before any backoff sleep, so other endpoints proceed while this one
@@ -328,6 +337,11 @@ const F1API = (function () {
         throw err;
       });
 
+    inFlight.set(flightKey, job);
+    const forget = function () {
+      if (inFlight.get(flightKey) === job) inFlight.delete(flightKey);
+    };
+    job.then(forget, forget);
     return job;
   }
 
@@ -759,6 +773,9 @@ const F1API = (function () {
   // queued behind 15 s timeouts and 60 s 429 backoffs nobody will ever render.
   function cancelAll() {
     netGen++;
+    // A reopen must create fresh work immediately, even while the aborted
+    // Promise is still unwinding through fetch/queue cleanup.
+    inFlight.clear();
     let aborted = 0;
     liveControllers.forEach(function (c) {
       try { c.abort(); aborted++; } catch (e) { /* already settled */ }

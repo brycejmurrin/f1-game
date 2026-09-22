@@ -1475,9 +1475,18 @@ const Input = (function () {
       const t = el.tagName;
       const ty = t === "INPUT" ? String(el.type || "text").toLowerCase() : "";
       if (t === "SELECT" && horizontal) {
-        const n = el.options ? el.options.length : 0;
-        const j = Math.max(0, Math.min(n - 1, el.selectedIndex + (dir === "right" ? 1 : -1)));
-        if (n && j !== el.selectedIndex) {
+        const opts = el.options || [];
+        const n = opts.length;
+        const d = dir === "right" ? 1 : -1;
+        let j = el.selectedIndex;
+        // Match the row chevrons: wrap and skip sentinels such as CUSTOM,
+        // which describe a slider-made state but are deliberately unpickable.
+        // Assigning selectedIndex directly does not honour `option.disabled`.
+        for (let seen = 0; seen < n; seen++) {
+          j = ((j + d) % n + n) % n;
+          if (!opts[j].disabled) break;
+        }
+        if (n && j !== el.selectedIndex && !opts[j].disabled) {
           el.selectedIndex = j;
           el.dispatchEvent(new Event("input", { bubbles: true }));
           el.dispatchEvent(new Event("change", { bubbles: true }));
