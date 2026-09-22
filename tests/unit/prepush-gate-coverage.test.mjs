@@ -41,16 +41,18 @@ const UNIT = path.join(ROOT, "tests/unit");
    Being on this list is not a free pass. Those CI jobs are CONDITIONAL, so a
    pin in one of these files can sit red for a while; if one starts breaking on
    source edits the way quali-persist did, move it into a gate group rather than
-   widening this list. */
+   widening this list.
+
+   test:sweeps-parts left this list on 2026-09-22: its CI job is UNCONDITIONAL
+   (no path filter), so deploy.mjs runs it before every push and --gate-only. */
 const SWEEPS_ONLY = new Map([
-  ["car-front-wing-width.test.mjs", "test:sweeps-parts — parts option census"],
+  ["car-front-wing-width.test.mjs", "test:sweeps — per-circuit geometry"],
   ["coplanar-faces.test.mjs", "test:sweeps — per-circuit geometry"],
   ["debris-hazard-hint.test.mjs", "test:sweeps — per-circuit geometry"],
   ["driving-line-opts.test.mjs", "test:sweeps — per-circuit geometry"],
   ["driving-line.test.mjs", "test:sweeps — per-circuit geometry"],
   ["grid-boxes.test.mjs", "test:sweeps — per-circuit geometry"],
   ["lamp-fixture-anchor.test.mjs", "test:sweeps — per-circuit geometry"],
-  ["parts-visual-distinctness.test.mjs", "test:sweeps-parts — parts option census"],
   ["pit-complex.test.mjs", "test:sweeps — per-circuit geometry"],
   ["pit-signs.test.mjs", "test:sweeps — per-circuit geometry"],
   ["prop-clipping.test.mjs", "test:sweeps — per-circuit geometry"],
@@ -66,7 +68,10 @@ const base = (f) => path.basename(f);
 function gateCoverage() {
   const groups = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/groups.json"), "utf8"));
   const covered = new Set(TOOLING_FAST_FILES.filter((e) => !e.startsWith("//")).map(base));
-  for (const script of gateNodeSuites()) {
+  // test:sweeps-parts is not in ci.yml's node step (it has its own unconditional
+  // job), but deploy.mjs runs it before every push and in --gate-only since
+  // 2026-09-22, so its files ARE gate-covered. Pinned below by source-slice.
+  for (const script of [...gateNodeSuites(), "test:sweeps-parts"]) {
     const def = groups.groups[script];
     assert.ok(def, `ci.yml's Pure-node unit suites names ${script}, tests/groups.json has no such group`);
     for (const f of def.files || []) covered.add(base(f));
@@ -108,4 +113,17 @@ test("the gate's node half is derived, not hard-coded", () => {
   const suites = gateNodeSuites();
   assert.ok(suites.length >= 8, `expected the Pages gate's node half, got ${suites.length} suite(s)`);
   for (const s of suites) assert.match(s, /^test:/, `${s} is not a test:* script`);
+});
+
+test("deploy.mjs runs test:sweeps-parts unconditionally, in the deploy and in --gate-only", () => {
+  // Its CI job has no path filter, so a red there takes every push red; the
+  // gate must therefore run it every time, not only when geometry moved.
+  const src = fs.readFileSync(path.join(ROOT, "tools/ci/deploy.mjs"), "utf8");
+  const gateOnly = src.slice(src.indexOf("export function gateOnly()"), src.indexOf("export function main()"));
+  const deploy = src.slice(src.indexOf("export function main()"));
+  for (const [name, body] of [["gateOnly", gateOnly], ["main", deploy]]) {
+    assert.match(body, /run\("npm", \["run", "test:sweeps-parts"\]/, `${name}() must run test:sweeps-parts`);
+    assert.doesNotMatch(body.slice(0, body.indexOf('"test:sweeps-parts"')), /touchesGeometry\(/,
+      `${name}(): test:sweeps-parts must not sit behind the geometry condition`);
+  }
 });

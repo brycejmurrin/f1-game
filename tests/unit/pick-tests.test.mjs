@@ -48,10 +48,11 @@ test("--since takes a REF, and does not read it as a path", () => {
   // itself — and `reason` was "unmatched", i.e. "nothing to run" for a diff
   // that certainly had files in it.
   //
-  // HEAD, not HEAD~1: CI's guards job checks out SHALLOW (`actions/checkout@v5`
-  // with no fetch-depth), where HEAD~1 does not exist and git fails with
-  // "ambiguous argument". HEAD resolves in every clone and pins the same
-  // property — the ref must not end up in the FILE list.
+  // HEAD, not HEAD~1: most CI jobs check out SHALLOW (`actions/checkout` with
+  // no fetch-depth; the guards job is deep since 2026-09-22 but this tool runs
+  // elsewhere too), where HEAD~1 does not exist and git fails with "ambiguous
+  // argument". HEAD resolves in every clone and pins the same property — the
+  // ref must not end up in the FILE list.
   const r = json("--since", "HEAD");
   assert.ok(!r.files.includes("HEAD"), "the ref leaked into the file list");
   const real = execFileSync("git", ["diff", "--name-only", "HEAD"],
