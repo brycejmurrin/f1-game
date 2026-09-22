@@ -231,7 +231,12 @@
 
       wall(0.965, 0.05, 1, 6, 1.1, WHITE);
       place(K(0.99), 1, 10, [5, 2.4, 12], CONC);
-      place(K(0.99), 1, 10, [5, 0.6, 12], RED);
+      // place() sinks every box 0.8 m, so the 0.6 m red band this was stood
+      // wholly underground, flush with the block's faces (a same-facing
+      // coplanar pair, 2026-09-22). Sized to show 0.6 m and stand proud of the
+      // block: 10 cm along the road, 20 cm across it, where place()'s size-
+      // hashed lateral jitter (≤ 9 cm) would otherwise eat the standoff.
+      place(K(0.99), 1, 10, [5.4, 1.4, 12.2], RED);
 
       broadcastCompound(K(0.975), 1, 30, { vans: 3, dishes: 2, mastH: 10 });
 
