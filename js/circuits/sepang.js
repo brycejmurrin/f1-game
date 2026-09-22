@@ -16,13 +16,20 @@
     // Was 0.95, which put the line inside a corner — a start line is
     // always on a straight. See docs/tracks/START-LINES.md.
     startFrac: 0.0000,
-    sceneryStartFrac: 0.95,
+    // No sceneryStartFrac: the scenery, elevations and bankZones are authored
+    // against startFrac 0 (pit bays 0.955-0.999, T1 gravel 0.060, T15 gravel
+    // 0.885). The 0.95 kept here after the line move shifted all of it 0.882
+    // and parked the paddock on the back straight. docs/notes/DEFECT-LEDGER.md.
     name: "SEPANG",
     gp: "Malaysian GP",
     country: "Malaysia",
     night: false,
     theme: "green",
     lengthKm: 5.5,
+    // The circuit's own stepped main stand (scenery, 0.958-0.020 left) is the
+    // pit-straight stand, so the engine's generic 7-box one would stand inside
+    // it. The Monza and Portimao precedent.
+    ownPitStraight: true,
     baseHW: 8,
     sceneryCoordinates: "racing",
     terrainOuter: 120,
