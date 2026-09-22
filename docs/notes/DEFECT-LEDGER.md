@@ -11,6 +11,15 @@
 Verified against the current tree. Everything fixed has moved to the archived
 journal; this is what remains.
 
+**2026-09-22 (bug hunt) — prop guards paid the pit keep-out everywhere.
+FIXED (perf).** `onRoadHit` / `onTrack` widened every query by `pitMax`
+(~30 m), which only exists in the pit window, and were the top self-time of a
+track build. The wide radius now applies only when the query circle (+ a
+node-grid cell diagonal, 15 m) reaches the pit nodes' bounding box; nowhere
+else can a pit node be a candidate. Measured: all 52 circuits byte-identical
+(every mesh/instance buffer, diagnostics, superseded record, props counts),
+props phase 36.3 s → 30.1 s summed over the fleet.
+
 **2026-09-22 (wave 4/5) — `DIFF[difficulty]` had three siblings, and a garage
 FILE could reach two of them. FIXED.** The 2026-09-22 crash was a persisted
 string used as a table key with nothing validating it. Hunting the SHAPE rather
