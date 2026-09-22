@@ -2926,7 +2926,7 @@ actually lands (authored 0.965 + shift):
 |---|---|---|---|---|
 | catalunya — **FIXED**, see "catalunya — FIXED" below | 0.03 -> 0.138 | 0.103, 0.055 short of T1 | gantry, 21 structures, building, billboard | pitEmit 7 -> pitSup 7; pit-lane trees 12 -> 0 |
 | istanbul | 0.98 -> 0.925 | 0.890, **on T12** (0.8884) | gantry, 23 structures, grandstand, 3 motorhomes | pitEmit 7 -> pitSup 7 |
-| mugello | 0.05 -> 0.133 | 0.098, 0.047 short of T1 | gantry, 22 structures, 4 motorhomes | pitEmit 5 -> 1; pit-lane trees 275 -> 122 |
+| mugello | 0.05 -> 0.133 | 0.098, 0.047 short of T1 | gantry, 22 structures, 4 motorhomes | **FIXED** (value removed; San Donato group also moved +0.08 to T1): see "mugello — FIXED" below |
 | paul_ricard | 0.03 -> **0.923** | 0.888, **on T13** (0.8884) | gantry, 25 structures, 2 motorhomes | **FIXED**: frame AND side. Shift removed, and the pit straight mirrored (the paddock was authored on the LEFT, the complex and the real pits are on the RIGHT): pitEmit 5 -> pitSup 5. See § paul_ricard — FIXED at the end |
 | sepang | 0.95 -> 0.882 | 0.847, 0.038 short of T14 | gantry, 20 structures, 14 palms | **FIXED**: pitEmit 6 -> pitSup 7; pit-lane trees 38 -> 18 ("sepang — FIXED", end of file) |
 
@@ -3193,3 +3193,81 @@ and the "Seat / Wurth chicane" narrowing at 0.290-0.335 lies on the straight
 before Repsol, 0.1 short of Seat (0.432). The width is physics, not dressing,
 so it needs its own change. The Seat gravel is on the inside of a left-hander
 exactly as shipped.
+
+### mugello — FIXED (`sceneryStartFrac: 0.05` removed, shift 0.133 -> 0; San Donato moved to T1)
+
+Same defect. The pit lane is engine 0.950-0.021 (garage row 0.991-0.016), and
+most of the scenery is written against that line: pit bays 0.945-0.999, race
+control 0.988, halls 0.925-0.964, Arrabbiata gravel 0.495 (curvature peaks
+0.46-0.53), Bucine terrazza 0.858-0.902 (Bucine 0.86-0.90), and the elevation
+comments ("rise onto the main straight" 0.92). The shift moved all of it 0.133
+of a lap forward, standing the paddock on the run to San Donato and Bucine's
+dressing on the main straight.
+
+| `agent.mjs mugello scene --at` (40 nearest) | shipped | fixed |
+|---|---|---|
+| 0.985, mid pit lane | 18 trees, 9 cypress, 12 pines, 1 structure | 10 structures, 4 props, billboard, 2 signs within 40 m; trees from 40-50 m left |
+| 0.098, where the pit block landed | gantry, 22 structures, 2 buildings, 4 motorhomes | 7 structures, 4 props, 3 trees |
+| 0.1447, T1 San Donato | grandstand, 25 structures (the Luco dressing at 0.18-0.23) | grandstand, 24 structures, 6 signs, 2 marshal posts |
+| 0.203, Luco | (above) | 21 trees/pines, 7 cypress |
+
+The trees still in radius at mid pit lane are not the pit straight's: every
+one of the 122 within 130 m is nearest the Biondetti carriageway (0.74-0.79),
+which runs ~75 m to the left. Shipped, 141 of 268 were nearest the pit
+straight itself (0.96-0.01); now none are.
+
+Node signature, before -> after: `mugello-pit-bay-1..4` go from EMITTED to
+"superseded by the pit complex". `mugello-race-control` still emits at shift 0,
+and legitimately: at 0.988 it is 3 m of lap short of the garage row, where the
+complex keeps out only 14.3 m, and its footprint is 21-35 m out. It is a tower
+behind the pit-entry end, not a building on a corner.
+
+**Not the frame: San Donato was authored 0.08 early in EVERY frame.** The whole
+San Donato group (gravel, tyre wall, terrazza bowl, grandstandEx, marshal post,
+camera tower, "corner 1" board, and the `bankZones` entry) sat at 0.048-0.098:
+at shift 0 that is mid main straight, 0.075 before T1 (curvature -6 at 0.14,
+-19 at 0.16). Shipped it was at 0.18-0.23, Luco and Poggio Secco. No start-line
+frame puts it on the corner while keeping the pit block and Bucine on theirs,
+so it was authored against an earlier centreline. It moved +0.08 (gravel to
+0.140 and not 0.150: at 0.145-0.150 its 52 m patch cut back across its own
+corner and was footprint-rejected), and `openArea`, the def's foliage
+exclusion, the T1 forest belt and the spectator hill were cut back to
+0.18 around it. The "Casanova-Savelli" group (0.29-0.334) now dresses
+Materassi/Borgo San Lorenzo (0.30/0.32), a real corner pair; the real
+Casanova-Savelli is 0.39-0.42. It stays, and the name is wrong, but it is not a
+paddock on a corner.
+
+Knock-on fixes, measured one at a time:
+
+- **`ownPitStraight: true`.** The circuit has its own 160 m main stand
+  (grandstandEx 0.005, left). The generic 7-box stand stood in it: a 4.00 m /
+  1245 m3 box-vs-box clip at frac 0.000. The Monza and Portimão precedent.
+- **Coplanar 0 -> 1 -> 0.** The red trim band fronting the main stand (gap 8,
+  2 m thick) put its back face in the 9 m fence. On the old corner the
+  curvature separated them. On the straight they coincide. Now at 7.6 m.
+- **Floating pine, frac 0.633.** An `every(34)` pine 3.5 m off the Palagio
+  carriageway. `pine()` clears the trunk and not the crown, so the road guard
+  dropped the lower tiers and left the top cone 22 m up. The loop now skips a
+  pine whose crown reaches the road.
+- **`mugello-casale` footprint rejected.** At 0.500 +1 the Bucine carriageway
+  runs 60-75 m out, and every gap from 50 to 135 m rejects. At 150 m its
+  centre is 30 m past that edge. Trees from the Bucine side then grew 6.8 m
+  into its tower (the engine's deferred foliage, and this file's own loops,
+  which `spotTaken` does not stop). `indexSolid` books the yard for the
+  former, and the loops skip it for the latter.
+- **`broadcastCompound` guard-dropped** at 0.916 +1 74 m, 6.5 m from the
+  Savelli carriageway (0.436). 68 m still drops. At 66 m it stands 10 m clear.
+
+Clip as a distribution (dressing as fixed, `sceneryStartFrac` swept):
+
+| shift | 0.065 | 0.133 (shipped) | 0.161 | 0.225 | 0.319 | 0.414 | 0.479 | 0.548 | 0.674 | 0.724 | 0.860 | 0.886 | 0.901 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| severe clips | 14 | 13 | 10 | 8 | 12 | 13 | 12 | 9 | 16 | 17 | 15 | 14 | 15 |
+
+Median 13; shift 0 measures **10**. Baselines: **clip 22 -> 10**, coplanar
+0 -> 0, float stays clean (no row). The 10 that remain are pre-existing
+self-overlaps (the Casanova terrazza's rows, the spectator hills' tiers, vine
+rows against roadside trunks). None of them is in the relocated San Donato
+group. `pit-complex.test.mjs`'s race-control keep/tail test uses mugello for
+the engine's ROW_TAIL, which does not depend on the scenery frame. It passes
+unchanged, so no fixture moved.
