@@ -431,7 +431,11 @@ async function main() {
         }, viewport: { width: 1100, height: 600 } },
         { name: "tt", fn: async (pg) => {
           await pg.evaluate(() => window.__apex.tt && window.__apex.tt("suzuka"));
-          await pg.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 15000 }); await sleep(1600);
+          // 45 s, not 15: a TLX build of monza measures 16.6 s on this
+          // container's SwiftShader (2026-09-21), and TLX is the default
+          // backend — the same budget that broke apex-eval.mjs. Timer polling
+          // with it, so the bound can actually fire (wait-polling-lint.mjs).
+          await pg.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 45000, polling: 100 }); await sleep(1600);
           await pg.evaluate(() => { window.__apex.go && window.__apex.go(); window.__apex.jump(0.25, 60, 0); window.__apex.hud(true); });
           await sleep(400); return [await shotPng(pg, dir, "mode-timetrial")];
         } },
