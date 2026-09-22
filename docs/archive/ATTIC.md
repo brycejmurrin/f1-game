@@ -54,12 +54,12 @@ the table" narrative, now `research/PERF-LEDGER-2026-08.md` in this directory.
 
 ## Tools surface cleanup (2026-09-10)
 
-Live plans stay in `tools/moves/` (`spike-backends.json` only). Applied Phase 2/4
-batch maps and closed gfx/orphan CLIs moved under `docs/archive/`:
+Live plans stay in `tools/moves/` (currently none). Applied Phase 2/4 batch
+maps, the reversed spike-backends map, and closed gfx/orphan CLIs live under `docs/archive/`:
 
 | Original path | Archive path | Why |
 |---|---|---|
-| `tools/moves/phase2.json` + `phase4-tools*.json` + `batches/` | `docs/archive/moves/` | Applied; `from` paths gone |
+| `tools/moves/*.json` | `docs/archive/moves/` | Applied; the reversed spike map is deliberately non-executable |
 | `tools/gfx/wgx-vid-repro.mjs` | `docs/archive/tools/gfx/` | Closed vertex_index repro |
 | `tools/gfx/wgpu-flag-test.mjs` | `docs/archive/tools/gfx/` | Flag matrix evidence already filed |
 | `tools/gfx/soft-present-bench.mjs` | `docs/archive/tools/gfx/` | Perf note ≠ player FPS |

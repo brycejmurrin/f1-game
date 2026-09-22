@@ -1,11 +1,13 @@
-# Spike-backends checklist (WGX/TLX out of the shipped tree)
+# Spike-backends checklist (historical WGX/TLX spike-out)
+
+> Re-attached: WGX and TLX are back in the shipped tree. The map is archived
+> under `docs/archive/moves/` with a non-executable `appliedMoves` key.
 
 Inventory for `docs/research/TREE-RESTRUCTURE-2026-09.md` §Phase 2 "WGX/TLX
-spike-out (owner's decision)". This is the exact list the Phase 2b move
-window executes. The whole-file move (50 files, 7.69 MB) is
-`tools/moves/spike-backends.json`, validated with
-`node tools/gen/move-tree.mjs tools/moves/spike-backends.json --plan` (0 errors,
-73 files rewritten, no leftover bare-name mentions). Everything below is the
+spike-out (owner's decision)". This was the exact list the Phase 2b move window executed. The historical
+whole-file map (50 files, 7.69 MB) is
+`docs/archive/moves/spike-backends.json`; its original dry run reported 0 errors,
+73 files rewritten, and no leftover bare-name mentions. Everything below is the
 **non-move** edits `move-tree.mjs` cannot make on its own — a manifest map, a
 generated block, a partial-file split, a rewritten assertion — each with
 file:line evidence read from the tree at 66b6618 (2026-09-03), plus the tests
@@ -33,24 +35,11 @@ red, and it missed `image-grade-shaders` (GLSL-vs-WGSL parity),
 `fixture-consumer-audit` (a consumer spec left, moving both sides of its
 ratio), `gen-arch-table`'s row floor, and the `apex-tools-mcp` wrap count.
 
-## Before you run it: revalidate the map
+## Original map validation
 
-`tools/moves/` is excluded from the mover's own path sweep, and that exclusion
-is right for an APPLIED plan — its `from` keys are historical literals, and a
-sweep that rewrote them turned a just-landed batch into old===new identity
-entries (2026-09-03). It is wrong for a PENDING one: this map's `from` keys are
-live paths, so any move that lands first leaves them dangling. Phase 4's tools
-move did exactly that to 11 of the 48 entries here.
-
-So `validate()` is the first thing to run, not the move:
-
-```sh
-node -e 'import("./tools/gen/move-tree.mjs").then(m=>console.log(m.validate(process.cwd(), m.loadMoves("tools/moves/spike-backends.json"))))'
-```
-
-An empty array means the map still describes the tree. A `missing:` line means
-a prior phase moved that file — retarget the key through that phase's own map
-before going further.
+Before the one-time move, `validate()` confirmed every source and target. The
+archived record is intentionally outside the live schema and cannot be passed
+back to `move-tree.mjs`.
 
 ## What the plan paragraph got wrong
 
@@ -84,7 +73,7 @@ before going further.
 
 ## Move map
 
-`tools/moves/spike-backends.json` — 50 files, 7.69 MB, targets under
+`docs/archive/moves/spike-backends.json` — 50 files, 7.69 MB, targets under
 `spike/backends/{webgpu,three,vendor,tools,tests,docs,skills}/`:
 
 | Bucket | Files | Bytes |
