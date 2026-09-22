@@ -1795,7 +1795,19 @@ const TLX = (function () {
             _gpuLastOperation = "compile-scene";
             await renderer.compileAsync(scene, camera);
             renderer.setMRT(null);
-            if (usePost && post.warm && performance.now() - _warmAt < 3000) {
+            // THE POST CHAIN IS WARMED UNCONDITIONALLY. The 3 s gate this used
+            // to sit behind was measured against the scene warm's own elapsed
+            // time, which on macos-latest Metal consumes it: gpu-census 203
+            // attributed 16 of the race window's 50 shader modules to
+            // tlx-post.js runPass — eight quad materials, two stages each —
+            // built on the first visible present after the lights instead of
+            // during them. With vendor patch 8 a cache miss on the render path
+            // no longer stalls, it SKIPS the object until its state lands, and
+            // a skipped full-screen quad is a post pass that draws nothing: a
+            // blank composite for the first frames of the race. post.warm()
+            // keeps its own deadline, so the lights hold at most a few seconds
+            // longer in the worst case, which is the trade this makes.
+            if (usePost && post.warm) {
               _gpuLastOperation = "compile-post"; await post.warm(opts, _postF);
             }
           } catch (e) {
@@ -1896,6 +1908,28 @@ const TLX = (function () {
       // draws being dropped). The per-material list is stamped with the
       // batch and its counter reset once per present, so wrapper identity
       // stays stable per (geo, mat, k) and three's cache stays bounded.
+      // NEW MESHES PER PRESENT. A pooled Mesh that does not exist yet is not a
+      // Mesh, it is a three RenderObject: the render that closes this batch
+      // builds its node state (a cache hit after the first of its kind, cheap)
+      // and then clones a bind group and allocates a uniform buffer FOR THAT
+      // OBJECT (PERF-FINDINGS 2t). Measured on macos-latest Metal (gpu-census
+      // 203): a streamed chunk batch coming into view put ~470 new render
+      // objects into ONE frame — the uniform-buffer count went 39 -> 507
+      // between beats — and that frame cost 506 ms, at ~1 ms per object, after
+      // patches 7 and 8 had already taken the compile and the codegen off the
+      // thread. Nothing else was left in it.
+      //
+      // So cap the new ones. Past the cap acquireMesh() returns null and the
+      // draw is skipped THIS present; the record is still in next present's
+      // draw list and gets its mesh then. 24 a present spreads that burst over
+      // ~20 presents, a third of a second of distant scenery filling in, for a
+      // worst case near 25 ms instead of 500. Cars are never affected in
+      // practice: their meshes are minted during the lights, before any
+      // streaming, and a car that appears later is a handful of draws. The
+      // env-face path keeps its own unbudgeted call — six 64 px faces are not
+      // where a burst lands.
+      const NEW_MESH_BUDGET = 24;
+      let _newMeshLeft = NEW_MESH_BUDGET, _newMeshDeferred = 0;
       function acquireMesh(geo, matrixArr, material) {
         const mat = material || fallbackMat();
         let byMat = meshByGeo.get(geo);
@@ -1906,6 +1940,8 @@ const TLX = (function () {
         const k = list.n++;
         let m = list[k];
         if (!m) {
+          if (_newMeshLeft <= 0) { list.n--; _newMeshDeferred++; return null; }
+          _newMeshLeft--;
           m = new THREE.Mesh(geo, mat);
           m.matrixAutoUpdate = false;
           m.matrixWorldAutoUpdate = false;
@@ -2799,6 +2835,7 @@ const TLX = (function () {
             return;
           }
           _poolBatch++;
+          _newMeshLeft = NEW_MESH_BUDGET; _newMeshDeferred = 0;
           for (let i = 0; i < drawList.length; i++) {
             const rec = drawList[i];
             if (rec.instanced) {
@@ -2813,10 +2850,11 @@ const TLX = (function () {
               if (softContent("chunked") || !chunkedSys) continue;
               const n = chunkedSys.cull(rec.chunked, faceVP, faceEye, faceCull);
               const vis = chunkedSys.visList;
-              for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat).renderOrder = i;
+              for (let j = 0; j < n; j++) { const pm = acquireMesh(vis[j].geo, rec.m, rec.mat); if (pm) pm.renderOrder = i; }
               continue;
             }
-            acquireMesh(rec.geo, rec.m, rec.mat).renderOrder = i;
+            const pm = acquireMesh(rec.geo, rec.m, rec.mat);
+            if (pm) pm.renderOrder = i;
           }
           for (let i = 0; i < meshPool.length; i++) { const pm = meshPool[i]; if (pm.__tlxBatch !== _poolBatch) pm.visible = false; }
           const prevSky = scene.backgroundNode;
