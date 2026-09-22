@@ -5,6 +5,8 @@
 #   tools/manifest.cjs            -> node tools/gen/gen-shell.mjs --check
 #   tests/groups.json             -> node tools/gen/gen-test-groups.mjs --check
 #   js/lighting/knobs.js          -> node tools/gen/gen-slider-doc.mjs --check
+#   tests/unit/*.test.{mjs,cjs},
+#   tests/groups.json             -> node tools/gen/gen-ladder-figures.mjs --check
 #   js/circuits/<id>.js,
 #   js/circuits/scenery/<id>.js   -> node tools/track/verify-track.cjs <id>
 #
@@ -50,7 +52,11 @@ case "$REL" in
     else say "manifest.cjs changed: the shell is now STALE — run \`node tools/gen/gen-shell.mjs\` (or npm run gen) before testing"; fi ;;
   tests/groups.json)
     if node tools/gen/gen-test-groups.mjs --check >/dev/null 2>&1; then say "groups.json: package.json scripts and the tooling-fast list are in sync"
-    else say "groups.json changed: package.json test:* scripts and tools/ci/tooling-fast.mjs are STALE — run \`node tools/gen/gen-test-groups.mjs\` (a NEW group needs its package.json key added first), then the docs/TESTING.md group row"; fi ;;
+    else say "groups.json changed: package.json test:* scripts and tools/ci/tooling-fast.mjs are STALE — run \`node tools/gen/gen-test-groups.mjs\` (a NEW group needs its package.json key added first), then the docs/TESTING.md group row"; fi
+    if ! node tools/gen/gen-ladder-figures.mjs --check >/dev/null 2>&1; then say "groups.json changed the gate ladder: the N-of-M figures in AGENTS.md / PREPUSH-GATE-LADDER.md / TESTING.md are STALE — run \`node tools/gen/gen-ladder-figures.mjs\` (npm run gen:docs)"; fi ;;
+  tests/unit/*.test.mjs|tests/unit/*.test.cjs)
+    if node tools/gen/gen-ladder-figures.mjs --check >/dev/null 2>&1; then say "$REL: the gate-ladder figures (AGENTS.md rule 3, PREPUSH-GATE-LADDER.md, TESTING.md) are in sync"
+    else say "$REL changed the unit-file count: the ladder figures are STALE — run \`node tools/gen/gen-ladder-figures.mjs\` (npm run gen:docs)"; fi ;;
   js/lighting/knobs.js)
     if node tools/gen/gen-slider-doc.mjs --check >/dev/null 2>&1; then say "knobs.js: docs/LIGHTING-TUNER-SLIDERS.md is in sync"
     else say "knobs.js changed: docs/LIGHTING-TUNER-SLIDERS.md is STALE — run \`node tools/gen/gen-slider-doc.mjs\` (npm run gen:docs)"; fi ;;
