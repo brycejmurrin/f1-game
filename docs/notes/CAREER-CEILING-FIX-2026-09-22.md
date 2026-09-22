@@ -2,8 +2,12 @@
 
 Follow-up to `CAREER-BRAINSTORM-2026-09-21.md` §3, which called this the one
 real defect in career mode but asserted it from reading the code. This measures
-it, and one of the measurements contradicts the brainstorm. Nothing here is
-built yet.
+it, and one of the measurements contradicts the brainstorm.
+
+**BUILT AND LIVE** — build 9673, `9ca781b68`. The design in §3 shipped as
+`Regulations` (see `docs/CAREER.md` §"Regulation eras"), and §5's open question
+was answered with this file's own recommendation: three categories, four-season
+eras. What changed on contact with the code is recorded in §6.
 
 ## 1. What I measured
 
@@ -160,6 +164,11 @@ only 40 lines, and the lockstep is IIFE + `tools/manifest.cjs` + `gen-shell`.
 
 One real question, and it is a product one:
 
+**ANSWERED, with this file's own recommendation** — `ERA_SEASONS = 4`,
+`BAN_TOP = 2` across three categories, and the opening era restricts nothing so
+the first build is never interrupted. Both numbers are one constant each in the
+`Regulations` module if they want re-tuning.
+
 **How hard should an era hit?** The modelled 3-of-12 categories costs a
 front-runner ~19 % of its car and hands two backmarkers a small gain. Softer (1–2
 categories) is a nudge; harder (5+) is a reset that will annoy a player who just
@@ -174,3 +183,25 @@ Two smaller ones, both answerable later:
 - Does the **convergence** defect (§1) deserve its own fix — a per-team
   `budgetCap` so the seat ladder keeps meaning something at the top — or does the
   era churn make it tolerable?
+
+## 6. What changed on contact with the code
+
+Three things the design did not predict, all found while building it:
+
+- **A ban takes the dearest TWO options per category, not the whole category.**
+  Falling all the way back to `DEFAULTS` guts a car; leaving the mid-shelf rungs
+  legal makes an era a re-optimisation rather than a demolition.
+- **The predicate is installed at RUNTIME** (`Parts.setLegality`), not imported.
+  `js/car/parts.js` loads before `js/career/`, so Parts cannot reference
+  Regulations — and the indirection earns its keep, because only a career ever
+  installs one, so a Grand Prix and a standalone Season stay unregulated.
+- **`Career.era()` must answer `null` outside a career.** It first returned the
+  opening era, which reads as "a Grand Prix is under OPEN REGULATIONS". Only
+  running it in a live career caught that; the VM tests did not cover it.
+
+Measured live over nine simulated seasons: seasons 0–3 open, the powertrain era
+lands at season 4 with the cap moving 2105 → 2070, the aero era at season 8, and
+three distinct AI grids across the run.
+
+Both §3 cache hazards were real and are keyed now, and the `factoryCache` one has
+a test that fails if it serves a pre-era car.
