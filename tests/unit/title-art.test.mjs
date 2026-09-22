@@ -49,9 +49,13 @@ test("the placed art lands inside its own viewBox", () => {
   // at once and can walk it out of frame without any single coordinate looking
   // wrong. The trails deliberately run off to the right, so this asks that the
   // bulk is in shot, not that every mark is.
-  const [, tx, ty, sc] = ART.match(/translate\((-?[\d.]+) (-?[\d.]+)\) scale\(([\d.]+)\)/);
+  // Scan from the END of the placed group's own tag, not from the block's first
+  // ">": #tc-frame wraps the placement now, so a first-">" slice swallowed
+  // "translate(202 675)" as if it were a point and read the car's feet at 1343.
+  const open = ART.match(/<g transform="translate\((-?[\d.]+) (-?[\d.]+)\) scale\(([\d.]+)\)">/);
+  const [, tx, ty, sc] = open;
   const [X, Y, S] = [Number(tx), Number(ty), Number(sc)];
-  const pts = [...ART.slice(ART.indexOf(">")).matchAll(/(-?\d+) (-?\d+)/g)]
+  const pts = [...ART.slice(open.index + open[0].length).matchAll(/(-?\d+) (-?\d+)/g)]
     .map((m) => [X + Number(m[1]) * S, Y + Number(m[2]) * S]);
   assert.ok(pts.length > 500, "the art lost almost all of its geometry");
   const inside = pts.filter(([x, y]) => x >= 0 && x <= 1400 && y >= 0 && y <= 900).length;

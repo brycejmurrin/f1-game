@@ -71,3 +71,31 @@ test("the live reporter reads the verdict from the policy module, not from a CLI
   const runner = fs.readFileSync(path.join(ROOT, "tools/ci/run-playwright.mjs"), "utf8");
   assert.ok(!/args\.push\("--fail-on-flaky-tests"\)/.test(runner), "the all-or-nothing Playwright flag must stay out of the argv");
 });
+
+test("the reporter keys a test on its SPEC, not on the file that declared it", async () => {
+  // Playwright reads test.location from the CALLER's stack frame, so a spec
+  // that factors its cases into a helper (tests/helpers/track-helpers.js does)
+  // reported spec: "tests/helpers/…" while title came from the spec — two
+  // halves of one key naming different files. The quarantine holds SPEC paths,
+  // so such a test was unquarantinable and would block forever under
+  // APEX_FAIL_ON_FLAKY=1. testDir is "./tests", so titlePath()'s file entry is
+  // the spec's path relative to it.
+  const { default: LiveReporter } = await import("../helpers/live-reporter.js");
+  const r = new LiveReporter();
+  const at = (titlePath, file) => r.key({ titlePath: () => titlePath, location: { file } });
+
+  const own = at(["chromium", "smoke.spec.js", "boots"], "/repo/tests/specs/smoke.spec.js");
+  assert.equal(own.spec, "tests/specs/smoke.spec.js");
+  assert.equal(own.title, "boots");
+
+  const viaHelper = at(["chromium", "manual/tracks-visual.spec.js", "monza", "renders"],
+                       "/repo/tests/helpers/track-helpers.js");
+  assert.equal(viaHelper.spec, "tests/manual/tracks-visual.spec.js",
+    "the SPEC owns the test, not the helper that declared it");
+  assert.equal(viaHelper.title, "monza › renders");
+
+  // No spec in the title path at all: fall back to the call site rather than
+  // invent one.
+  assert.equal(at(["chromium", "odd"], "/repo/tests/helpers/track-helpers.js").spec,
+    "tests/helpers/track-helpers.js");
+});

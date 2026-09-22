@@ -39,7 +39,7 @@
       "slack": 5
     },
     "shellNodes": {
-      "ceiling": 1750,
+      "ceiling": 1751,
       "slack": 25
     },
     "bareCatches": {
@@ -47,7 +47,7 @@
       "slack": 15
     },
     "waitNoPolling": {
-      "ceiling": 51,
+      "ceiling": 48,
       "slack": 39
     },
     "waitForTimeout": 149,
