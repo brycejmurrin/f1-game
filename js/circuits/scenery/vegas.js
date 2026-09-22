@@ -28,7 +28,10 @@
             addBox(stage, vadd(foot, a.u, (radius + 5) / 2),
               [1.4, radius + 5, 1.4], [0.22, 0.22, 0.25], [a.r, a.u, a.t]);
           }
-          const strut = (p0, p1, thick, col) => {
+          // `ax` offsets along the wheel axis — see the note on the shared
+          // ferrisWheel in js/track/scenery/structures.js: a flat wheel puts
+          // all 32 members on one plane and they fight along every joint.
+          const strut = (p0, p1, thick, col, ax) => {
             const d = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]];
             const len = Math.hypot(d[0], d[1], d[2]) || 1;
             const axis = [d[0] / len, d[1] / len, d[2] / len];
@@ -37,8 +40,9 @@
               a.r[2] * axis[0] - a.r[0] * axis[2],
               a.r[0] * axis[1] - a.r[1] * axis[0],
             ];
+            const o = ax || 0;
             addBox(stage,
-              [(p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2, (p0[2] + p1[2]) / 2],
+              [(p0[0] + p1[0]) / 2 + a.r[0] * o, (p0[1] + p1[1]) / 2 + a.r[1] * o, (p0[2] + p1[2]) / 2 + a.r[2] * o],
               [thick, len, thick], col, [a.r, axis, face]);
           };
           for (let i = 0; i < seg; i++) {
@@ -51,8 +55,8 @@
             const L = Math.hypot(d[0], d[1], d[2]) || 1;
             const root = [hub[0] + d[0] / L * HUB_R, hub[1] + d[1] / L * HUB_R,
                           hub[2] + d[2] / L * HUB_R];
-            strut(root, rim[i], 0.28, [0.34, 0.36, 0.42]);
-            strut(rim[i], rim[(i + 1) % seg], 0.38, [0.82, 0.90, 1.00]);
+            strut(root, rim[i], 0.28, [0.34, 0.36, 0.42], i % 2 ? 0.06 : -0.06);
+            strut(rim[i], rim[(i + 1) % seg], 0.38, [0.82, 0.90, 1.00], i % 2 ? -0.06 : 0.06);
             const cabCol = [CYAN, MAGENTA, GOLD, LIME][i % 4];
             addBox(stage, vadd(rim[i], a.u, -1.2), [2.4, 2.2, 2.4], cabCol, [a.r, a.u, a.t]);
           }

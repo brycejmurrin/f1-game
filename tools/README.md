@@ -290,6 +290,7 @@ Container bootstrap: browsers and the Cursor Cloud install.
 
 | Tool | Does |
 |---|---|
+| **check/class-usage.mjs** | Finds classes APPLIED by index.html or js/ that no css/ rule defines (the opposite of the dead-class check). |
 | **check/cross-file-paths.mjs** | Every relative reference between files resolves to a file that exists (espree extraction; built for the tests/ split). |
 | **check/evaluate-scope-lint.mjs** | A `page.evaluate()` callback may not close over Node — flags module-scope reads inside serialised callbacks. |
 | **check/offline-precache-check.cjs** | Does an installed PWA still work with the origin gone? The only check that sees a bare circuit after a missed precache. |

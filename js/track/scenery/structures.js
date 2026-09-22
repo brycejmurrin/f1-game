@@ -21,6 +21,42 @@ const SceneryStructures = (function () {
     // volume — on straights that's near-coincident z-fighting, on curves
     // (worst on tight hairpins) the boxes are rotated relative to each other so
     // the shared volume shows as visible interpenetration/clipping.
+    // A linear run already laid at the same side, gap and style does not need
+    // laying again: every node the second call visits emits a BYTE-IDENTICAL
+    // post and rail on top of the first one — coincident geometry, the purest
+    // z-fight there is, and twice the vertices for it. Measured on okayama
+    // (2026-09-22): a full-lap `guardrail(0, 1, side, 4)` followed by four
+    // sub-span armco calls at the same gap 4 produced 759 duplicated
+    // primitives and 504 coplanar pairs, the worst count in the fleet.
+    //
+    // CONTAINMENT, not equality: the redundant calls are sub-spans of a run
+    // that already covers them, so an equality test catches none of them. The
+    // key carries the style/colour, so a DIFFERENT rail over the same span is
+    // still emitted — only a genuine re-cover is dropped, and it says so once
+    // per circuit rather than silently.
+    const laid = new Map();   // key -> [[a, b], …] lap-fraction runs already emitted
+    let reLaidWarned = false;
+    const alreadyLaid = (kind, s0, s1, side, gap, style) => {
+      const key = `${kind}|${side}|${Math.round(gap * 10)}|${style || ""}`;
+      const runs = laid.get(key) || [];
+      // Compare on the unwrapped lap fraction; a full-lap run covers everything.
+      const a = s0 % 1, b = s1 % 1;
+      const full = Math.abs(s1 - s0) >= 0.999;
+      for (const [ra, rb] of runs) {
+        const rFull = Math.abs(rb - ra) >= 0.999;
+        if (rFull || (!full && a >= ra - 1e-6 && b <= rb + 1e-6)) {
+          if (!reLaidWarned) {
+            reLaidWarned = true;
+            Log.warn("scenery", `${def && def.id}: ${kind} re-laid over ${ra.toFixed(3)}..${rb.toFixed(3)} ` +
+              `at side=${side} gap=${gap} — the second run would be coincident geometry, skipped`);
+          }
+          return true;
+        }
+      }
+      runs.push([a, full ? a + 1 : b]);
+      laid.set(key, runs);
+      return false;
+    };
     const along = (s0, s1, stepM, fn) => {
       const k0 = ((Math.round(s0 * n) % n) + n) % n, k1 = ((Math.round(s1 * n) % n) + n) % n;
       const wrapped = ((k1 - k0) + n) % n;
@@ -37,6 +73,7 @@ const SceneryStructures = (function () {
     // Continuous solid wall (concrete / pit wall) at clearance `gap` beyond the edge.
     const wall = (s0, s1, side, gap, h, col, thick) => {
       const a = thick || 0.5;
+      if (alreadyLaid("wall", s0, s1, side, gap, `${a}|${h}|${(col || []).join(",")}`)) return;
       ctx.noteSpan("wall", s0, s1, side, gap, { h });
       recordBarrier(s0, s1, side, gap);
       along(s0, s1, 6, (k, spacing) => {
@@ -64,6 +101,7 @@ const SceneryStructures = (function () {
       // Until this existed, fences were the ONLY barrier class no guard could
       // see — and they are the obstacle in most surviving canopy intersections.
       const st = (opts && opts.style) || kitOf("fence", "mesh");
+      if (alreadyLaid("fence", s0, s1, side, gap, `${st}|${h}|${(col || []).join(",")}`)) return;
       ctx.noteSpan("fence", s0, s1, side, gap, { h });
       indexBarrier(s0, s1, side, gap);
       // MODEL KEYS ARE LOOP-INVARIANT — build them once, above the run. Every
@@ -126,6 +164,7 @@ const SceneryStructures = (function () {
     };
     const guardrail = (s0, s1, side, gap, col, opts) => {
       const st = (opts && opts.style) || kitOf("rail", "armco");
+      if (alreadyLaid("guardrail", s0, s1, side, gap, st + "|" + (col || []).join(","))) return;
       ctx.noteSpan("guardrail", s0, s1, side, gap);
       recordBarrier(s0, s1, side, gap);
       // Keys and tints hoisted for the reason written out over `fence` above.
@@ -184,6 +223,7 @@ const SceneryStructures = (function () {
     // emitter runs 142 times across 38 circuits.
     const tyreWall = (s0, s1, side, gap, capCol, opts) => {
       const st = (opts && opts.style) || kitOf("tyre", "stack");
+      if (alreadyLaid("tyreWall", s0, s1, side, gap, st + "|" + (capCol || []).join(","))) return;
       ctx.noteSpan("tyreWall", s0, s1, side, gap);
       recordBarrier(s0, s1, side, gap);
       // Keys and tints hoisted for the reason written out over `fence` above.
@@ -785,13 +825,21 @@ const SceneryStructures = (function () {
         const a = (i / seg) * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
         rim.push([hub[0] + tn[0] * ca * radius, hub[1] + sa * radius, hub[2] + tn[2] * ca * radius]);
       }
-      const strut = (p0, p1, thick, col) => {
+      // `ax` shifts the member along the wheel AXIS. Every spoke and every rim
+      // chord of a flat wheel otherwise sits on one plane, so all 32 members
+      // share two face planes: adjacent chords meet at the rim and fight along
+      // the joint, and the spokes fight wherever they cross near the hub
+      // (5 circuits, 60 coplanar pairs, 2026-09-22). Alternating the members
+      // ±6 cm is how a real wheel is built anyway — paired rims with the
+      // bracing between them — and puts any remaining pair past 700 m.
+      const strut = (p0, p1, thick, col, ax) => {
         const d = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]];
         const L = Math.hypot(d[0], d[1], d[2]) || 1;
         const up = [d[0] / L, d[1] / L, d[2] / L];
         let rr = norm(cross(up, tn)); if (!isFinite(rr[0])) rr = [1, 0, 0];
         const ff = norm(cross(up, rr));
-        addBox(out, [(p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2, (p0[2] + p1[2]) / 2],
+        const o = ax || 0;
+        addBox(out, [(p0[0] + p1[0]) / 2 + tn[0] * o, (p0[1] + p1[1]) / 2 + tn[1] * o, (p0[2] + p1[2]) / 2 + tn[2] * o],
                [thick, L, thick], col, [rr, up, ff]);
       };
       const HUB_R = 1.7;
@@ -800,8 +848,8 @@ const SceneryStructures = (function () {
         const L = Math.hypot(d[0], d[1], d[2]) || 1;
         const root = [hub[0] + d[0] / L * HUB_R, hub[1] + d[1] / L * HUB_R,
                       hub[2] + d[2] / L * HUB_R];
-        strut(root, rim[i], 0.28, wheelCol);                 // spoke
-        strut(rim[i], rim[(i + 1) % seg], 0.34, wheelCol);   // rim segment
+        strut(root, rim[i], 0.28, wheelCol, i % 2 ? 0.06 : -0.06);                // spoke
+        strut(rim[i], rim[(i + 1) % seg], 0.34, wheelCol, i % 2 ? -0.06 : 0.06);  // rim segment
       }
       for (let i = 0; i < seg; i++) {                        // cabins hung off the rim
         const cab = NIGHT
