@@ -171,12 +171,11 @@ if (args.includes("--last-failed") && process.env.APEX_LAST_RUN_FILE) {
 }
 // A pass that needed a retry is a red, not a green (AGENTS.md §Verification 9,
 // 2026-09-22): `retries: 1` in CI turns an intermittent failure into a silent
-// pass, and the live reporter's "flaky" line is easy to skim past. Opt in with
-// APEX_FAIL_ON_FLAKY=1 and Playwright exits non-zero on any flaky test; the
-// gate flips it on once the known flakes are fixed or quarantined by name.
-if (process.env.APEX_FAIL_ON_FLAKY === "1" && !args.includes("--fail-on-flaky-tests")) {
-  args.push("--fail-on-flaky-tests");
-}
+// pass. APEX_FAIL_ON_FLAKY=1 is honoured by tests/helpers/live-reporter.js, NOT
+// by Playwright's --fail-on-flaky-tests: that flag is all-or-nothing, while the
+// reporter spares the specs named in tests/data/flaky-quarantine.json (owned,
+// dated, reasoned) and turns the run red for any other retry-recovered pass.
+// Nothing to add to the argv here; ci.yml sets the variable on every browser job.
 const cli = join(ROOT, "node_modules", ".bin", "playwright");
 const child = spawn(cli, ["test", ...args], {
   cwd: ROOT,

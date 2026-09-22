@@ -960,6 +960,7 @@ jobs:
         if: steps.shipfilter.outputs.ships != 'false' && (inputs.concurrency_key != '' || (github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'))
         env:
           APEX_WORKERS: 1
+          APEX_FAIL_ON_FLAKY: 1
           # llvmpipe (the step above): ~10x on the rendering tests, measured.
           APEX_GL: llvmpipe
           LIBGL_ALWAYS_SOFTWARE: 1
@@ -990,6 +991,7 @@ jobs:
         if: steps.shipfilter.outputs.ships != 'false' && inputs.concurrency_key == '' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && inputs.gl != 'swiftshader'
         env:
           APEX_WORKERS: 1
+          APEX_FAIL_ON_FLAKY: 1
           GROUP: ${{ (github.event_name == 'workflow_dispatch' && inputs.group) || steps.rota.outputs.GROUP || 'tiny' }}
           # A dispatched group runs its browser copies of the VM-twinned specs
           # too (locally run-playwright skips them; this is where they still run).
@@ -1009,6 +1011,7 @@ jobs:
         if: steps.shipfilter.outputs.ships != 'false' && github.event_name == 'workflow_dispatch' && inputs.gl == 'swiftshader'
         env:
           APEX_WORKERS: 1
+          APEX_FAIL_ON_FLAKY: 1
           APEX_WITH_TWINNED: 1
           GROUP: ${{ inputs.group || 'tiny' }}
         run: npm run "test:${GROUP:-tiny}" -- --timeout=900000 --shard=${{ matrix.shard }}/4
@@ -1076,6 +1079,7 @@ jobs:
       - name: Characterization traces
         env:
           APEX_WORKERS: 1
+          APEX_FAIL_ON_FLAKY: 1
         run: npm test -- tests/specs/physics-characterization.spec.js --timeout=240000
       - name: Failure artifacts
         if: failure()
@@ -1254,6 +1258,7 @@ jobs:
         # worker costs ~8 min of wall time; a wedge costs the run.
         env:
           APEX_WORKERS: 1
+          APEX_FAIL_ON_FLAKY: 1
         run: npm run test:gfx -- --config=playwright.gpu.config.js --timeout=600000
       # ALWAYS, not failure(): a spec that fails its first attempt and passes
       # the retry leaves the job green and its report — the attached frames
@@ -1442,6 +1447,7 @@ jobs:
       - name: Run the selection (${{ matrix.name }}, ${{ matrix.tests }} tests)
         env:
           APEX_WORKERS: 1
+          APEX_FAIL_ON_FLAKY: 1
           # llvmpipe (the step above). Empty on `gl: swiftshader`, where the
           # step is skipped and playwright.config.js keeps the ANGLE default.
           # ...except a shard carrying menu-baseline: its six goldens are

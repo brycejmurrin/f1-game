@@ -3,7 +3,7 @@
     "Mutants for the twin-fidelity gate (tools/check/twin-fidelity.mjs).",
     "",
     "WHY. A VM twin is only worth trusting if it catches what the browser copy",
-    "catches. Equal test COUNTS prove nothing \u2014 tools/ci/twinned-specs.mjs's own",
+    "catches. Equal test COUNTS prove nothing — tools/ci/twinned-specs.mjs's own",
     "check is trivially satisfied by an adapted spec, because the twin IS the",
     "spec. So each row breaks one real mechanism and names WHICH tests must go",
     "red. The asymmetry is the whole point: a mutant that reddens every test",
@@ -22,7 +22,7 @@
       "file": "js/physics/ai-drive.js",
       "find": "return street ? 20 : 16;",
       "replace": "return street ? 0 : 0;",
-      "why": "Kills the steer-scaled wall scrub, so leaning gently on the barrier costs the same as burying the wheel in it \u2014 the flat stop the scrub test was written against.",
+      "why": "Kills the steer-scaled wall scrub, so leaning gently on the barrier costs the same as burying the wheel in it — the flat stop the scrub test was written against.",
       "spec": "tests/specs/physics-fixes.spec.js",
       "catchers": {
         "lap distance stays continuous driving wide through Monaco": false,
@@ -34,7 +34,7 @@
       "file": "js/core/log.js",
       "find": "const bufferAt = (ns) => Math.max(threshold(bufferNs, bufferDefault, ns), consoleAt(ns));",
       "replace": "const bufferAt = (ns) => threshold(bufferNs, bufferDefault, ns);",
-      "why": "Drops the max() that keeps the ring at or above the console level, so logLevel(\"scenery:debug\") prints debug lines the very next __apex.logs() cannot show \u2014 the empty-ring trap log.js records.",
+      "why": "Drops the max() that keeps the ring at or above the console level, so logLevel(\"scenery:debug\") prints debug lines the very next __apex.logs() cannot show — the empty-ring trap log.js records.",
       "spec": "tests/specs/logging.spec.js",
       "catchers": {
         "is live before any game module evaluates": false,
@@ -50,7 +50,7 @@
       "file": "js/track/core/spline.js",
       "find": "const lat = (wx - bestCx) * r0 + (wz - bestCz) * r2;",
       "replace": "const lat = -((wx - bestCx) * r0 + (wz - bestCz) * r2);",
-      "why": "Flips the sign of the lateral offset Tracks.project() recovers, so a car right of the centreline projects as left \u2014 the +right convention every agent-view and debris consumer relies on silently inverts.",
+      "why": "Flips the sign of the lateral offset Tracks.project() recovers, so a car right of the centreline projects as left — the +right convention every agent-view and debris consumer relies on silently inverts.",
       "spec": "tests/specs/projection.spec.js",
       "catchers": {
         "round-trips (s, lateral) all around the lap and across the width": true,
@@ -63,7 +63,7 @@
       "file": "js/race/race-control.js",
       "find": "return { level: 0, sector: -1, frac: 0, total: 0, sectors: [0, 0, 0], sinceT: 0, cause: \"\", phase: \"\" };",
       "replace": "return { level: 0, sector: -1, frac: 0, total: 0, sectors: [0, 0], sinceT: 0, cause: \"\", phase: \"\" };",
-      "why": "The blank caution state carries two sectors instead of three, so a machine reading the per-sector picture would fly green through the third sector \u2014 the per-sector contract the boot test pins.",
+      "why": "The blank caution state carries two sectors instead of three, so a machine reading the per-sector picture would fly green through the third sector — the per-sector contract the boot test pins.",
       "spec": "tests/specs/race-control.spec.js",
       "catchers": {
         "the layer boots at the shipped default and reports a coherent GREEN": true,
@@ -76,7 +76,7 @@
       "file": "js/race/race-control.js",
       "find": "const LABEL = [\"GREEN\", \"YELLOW\", \"VSC\", \"SAFETY CAR\", \"RED FLAG\"];",
       "replace": "const LABEL = [\"CLEAR\", \"YELLOW\", \"VSC\", \"SAFETY CAR\", \"RED FLAG\"];",
-      "why": "Renames the level-0 flag label, so caution() reports something other than GREEN while level is 0 \u2014 the label the HUD chips and agent consumers key on drifts from the state machine.",
+      "why": "Renames the level-0 flag label, so caution() reports something other than GREEN while level is 0 — the label the HUD chips and agent consumers key on drifts from the state machine.",
       "spec": "tests/specs/race-control.spec.js",
       "catchers": {
         "the layer boots at the shipped default and reports a coherent GREEN": true,
@@ -112,7 +112,7 @@
       "catchers": {
         "relational policy out-drives the blind baseline on monza": false,
         "relational policy out-drives the blind baseline on interlagos": false,
-        "no racing line is prescribed \u2014 apexOffsetM/moveToApexM are gone": false,
+        "no racing line is prescribed — apexOffsetM/moveToApexM are gone": false,
         "corners carry honest road facts: straightAfterM and exitsOntoStraight": true,
         "nextCorners previews the sequence, ordered by distance": false
       }
@@ -122,7 +122,7 @@
       "file": "js/race/pit-lane.js",
       "find": "const BOX_LAT = 1.0;",
       "replace": "const BOX_LAT = 20.0;",
-      "why": "Widens the lane tolerance until the racing line counts as the pit box, so a car that halts mid-road is serviced \u2014 the quiet reversal inLaneLat's floor comment warns a later circuit could cause.",
+      "why": "Widens the lane tolerance until the racing line counts as the pit box, so a car that halts mid-road is serviced — the quiet reversal inLaneLat's floor comment warns a later circuit could cause.",
       "spec": "tests/specs/pit-lane.spec.js",
       "catchers": {
         "the limiter fires only for a car that called a stop": false,
@@ -131,6 +131,44 @@
         "blowing through the box misses the stop": false,
         "with TYRE WEAR off there is no pit lane at all": false,
         "an AI car serving a stop drives the lane, not the racing line": false
+      }
+    },
+    {
+      "id": "m-tyre-cliff-flat",
+      "file": "js/physics/tyre-model.js",
+      "find": "const DROP_CLIFF = 0.25;",
+      "replace": "const DROP_CLIFF = 0.05;",
+      "why": "Flattens the past-life cliff to the in-life slope, so a set five laps over its life costs the same per lap as a fresh one — the strategy pressure the model exists to create disappears while every in-life number stays exactly right.",
+      "spec": "tests/unit/tyre-model.test.mjs",
+      "catchers": {
+        "grip falls linearly across the stint, then falls off a cliff": true,
+        "traction loses a smaller share of the same drop than cornering": false,
+        "worn fronts cost front grip and leave the rear alone — that is the point": false
+      }
+    },
+    {
+      "id": "m-tyre-long-share-full",
+      "file": "js/physics/tyre-model.js",
+      "find": "const LONG_SHARE = 0.45;",
+      "replace": "const LONG_SHARE = 1.0;",
+      "why": "Makes traction lose the whole lateral drop instead of a share of it, so a worn set reads as an engine failure rather than a handling change — the asymmetry the degradation model is built around goes flat.",
+      "spec": "tests/unit/tyre-model.test.mjs",
+      "catchers": {
+        "traction loses a smaller share of the same drop than cornering": true,
+        "grip falls linearly across the stint, then falls off a cliff": false
+      }
+    },
+    {
+      "id": "m-line-kon-blunt",
+      "file": "js/track/core/line.js",
+      "find": "const K_ON = 0.006;",
+      "replace": "const K_ON = 0.06;",
+      "why": "Raises the corner-detection threshold tenfold (R < 17 m instead of R < 170 m), so every real corner reads as a flat-out kink: the racing line, its apexes and the attack zones the AI and the agent view derive from it all vanish while a straight still reports no line.",
+      "spec": "tests/unit/track-line.test.mjs",
+      "catchers": {
+        "a straight has no line: weight 0 everywhere, offset 0": false,
+        "one left-hander: turn-in outside, apex inside, exit outside, all inside the road": true,
+        "a run shorter than the minimum, or below K_ON, is not a corner": false
       }
     }
   ],
@@ -152,28 +190,28 @@
         },
         "W = track.n": {
           "twin": "2/2 green",
-          "browser": "not measured \u2014 two browser columns already agreed"
+          "browser": "not measured — two browser columns already agreed"
         }
       },
-      "sowhat": "The test costs ~110 s of browser per run and guards less than it claims. Before it can gate anything, someone has to find driving that MAKES the projection ambiguous (roadFollow 0.7 may hold the car too near the line for a hairpin to be ambiguous at all) \u2014 and until then it should not be cited as projection coverage. Recorded rather than quietly deleted: docs/notes/DEFECT-LEDGER.md, 2026-09-16."
+      "sowhat": "The test costs ~110 s of browser per run and guards less than it claims. Before it can gate anything, someone has to find driving that MAKES the projection ambiguous (roadFollow 0.7 may hold the car too near the line for a hairpin to be ambiguous at all) — and until then it should not be cited as projection coverage. Recorded rather than quietly deleted: docs/notes/DEFECT-LEDGER.md, 2026-09-16."
     },
     {
       "id": "m-tilt-map-dead",
       "file": "js/input/input.js",
       "spec": "tests/specs/autopilot.spec.js",
       "test": "can drive safely via emulated tilt input",
-      "finding": "The tilt test's floor (distPct > 30, maxWall < 1, finite) cannot see a dead tilt pipeline. Two mutations of the tilt map leave it green: MAX_TILT = 36000 (a no-op \u2014 js/input/steer-tuning.js re-applies MAX_TILT through the 8..60-clamped setTiltSensitivity at boot) and tiltTarget()'s gain scaled by 1e-3 (the steer command never moves: jitter 0).",
+      "finding": "The tilt test's floor (distPct > 30, maxWall < 1, finite) cannot see a dead tilt pipeline. Two mutations of the tilt map leave it green: MAX_TILT = 36000 (a no-op — js/input/steer-tuning.js re-applies MAX_TILT through the 8..60-clamped setTiltSensitivity at boot) and tiltTarget()'s gain scaled by 1e-3 (the steer command never moves: jitter 0).",
       "measured": {
         "MAX_TILT = 36000": {
           "twin": "1/1 green (166 s)",
           "browser": "not measured"
         },
         "tiltTarget gain * 1e-3": {
-          "twin": "1/1 green (175 s); with the map dead the lap reports jitter 0, distPct 44.1, maxWall 0, finite true \u2014 the autopilot's wedge recovery keeps the throttle on and the car crawls 44 % of Monza in 150 s with 4378 of 9000 frames off-road (7.68 m over the edge); ROAD_FOLLOW defaults to 0, so no assist masks it",
+          "twin": "1/1 green (175 s); with the map dead the lap reports jitter 0, distPct 44.1, maxWall 0, finite true — the autopilot's wedge recovery keeps the throttle on and the car crawls 44 % of Monza in 150 s with 4378 of 9000 frames off-road (7.68 m over the edge); ROAD_FOLLOW defaults to 0, so no assist masks it",
           "browser": "not measured"
         }
       },
-      "sowhat": "autopilot.spec.js is portable and 3/3 green under the adapter (168 s) but stays on the browser gate: without a mutant that bites, listing it as ADAPTED would be the vacuous count check the fidelity gate exists to refuse. Before it can move, the test needs a floor a dead tilt map fails \u2014 e.g. steer-command variance, or off-road frames bounded \u2014 measured in a browser first. Recorded 2026-09-22."
+      "sowhat": "autopilot.spec.js is portable and 3/3 green under the adapter (168 s) but stays on the browser gate: without a mutant that bites, listing it as ADAPTED would be the vacuous count check the fidelity gate exists to refuse. Before it can move, the test needs a floor a dead tilt map fails — e.g. steer-command variance, or off-road frames bounded — measured in a browser first. Recorded 2026-09-22."
     }
   ]
 }

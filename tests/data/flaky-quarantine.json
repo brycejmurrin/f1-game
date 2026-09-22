@@ -1,0 +1,28 @@
+{
+  "_doc": [
+    "Flaky-test quarantine (AGENTS.md §Verification 9, 2026-09-22).",
+    "",
+    "A pass that needed a retry is a RED: `retries: 1` in CI turns an",
+    "intermittent failure into a silent green, and the reporter's `= FLAKY`",
+    "line is easy to skim past. Under APEX_FAIL_ON_FLAKY=1 (ci.yml sets it on",
+    "every browser job) tests/helpers/live-reporter.js fails the run when a test",
+    "passed only on retry — UNLESS its spec is listed here. A listed spec still",
+    "runs and its flakes are still printed; it just does not block, and it",
+    "carries an owner, a date and the reason, so the quarantine is a ledger and",
+    "not a hiding place. tests/unit/flaky-quarantine.test.mjs asserts every",
+    "entry names a spec that exists and carries all three fields.",
+    "",
+    "Playwright's own --fail-on-flaky-tests cannot do this: it is all-or-nothing.",
+    "",
+    "Leaving: delete the row in the same commit as the fix. Entering: the row",
+    "and the PR that names the flaky test, never a silent add."
+  ],
+  "quarantine": [
+    {
+      "spec": "tests/specs/wake-lock.spec.js",
+      "since": "2026-09-22",
+      "owner": "input-controls / the clickLive helper (docs/notes/AGENT-PROCESS-RESEARCH-2026-09-16.md §1, §2 B2)",
+      "why": "8 tests, 18.6 min per selected shard, failed 4 of 5 sampled CI runs on one test (09-16 note B2) — CI's dominant flake; the clickLive fix it motivated is still open."
+    }
+  ]
+}
