@@ -139,6 +139,20 @@ const readSlot = (f, i) => migrateCareer(store.get(slotKey(f, i), null));
 
 if (store.subscribe) store.subscribe((change) => {
   if (!change.foreign) return;
+  if (change.restoredBatch) {
+    const keys = Array.isArray(change.keys) ? change.keys : [];
+    if (!keys.some((k) => k === "careerSlot" || k.indexOf("career.") === 0)) return;
+    // Mirror restoration writes the whole batch before this notification. A
+    // non-default slot and its pointer can therefore be loaded coherently now;
+    // the per-key notifications above cannot do that because careerSlot is not
+    // itself the live save key. Never switch an engaged career underneath play.
+    if (engaged && career) {
+      if (keys.indexOf("careerSlot") !== -1 || keys.indexOf(liveSlotKey()) !== -1) careerConflict = true;
+      return;
+    }
+    load();
+    return;
+  }
   if (!change.clear && change.key !== liveSlotKey()) return;
   if (engaged && career) {
     careerConflict = true;

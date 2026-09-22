@@ -422,10 +422,14 @@ window.MenuNav = (function () {
   // Home/End stay with it (they jump the caret, and a range to min/max — the
   // ARIA slider pattern — which MenuNav used to take from a focused slider).
   const CARET_KEYS = { ArrowLeft: 1, ArrowRight: 1, Home: 1, End: 1 };
-  function ownsArrows(el, key) {
+  function ownsArrows(el, key, event) {
     if (!el) return false;
     const t = el.tagName;
-    if (t === "TEXTAREA") return true;
+    // A real keyboard edits a multiline field with every caret/page key. The
+    // pad, however, reaches us as an untrusted synthetic KeyboardEvent and has
+    // no native textarea default action, so letting the textarea "own" it
+    // strands controller focus there. Hand synthetic directions to MenuNav.
+    if (t === "TEXTAREA") return !(event && event.isTrusted === false);
     // A <select> is a ‹ value › row: Left/Right (and Home/End) change it, the
     // way the range slider below already works; Up/Down are the way to the
     // next row. Owning every arrow made each select row an island — from
@@ -502,7 +506,7 @@ window.MenuNav = (function () {
     const layer = activeLayer();
     if (!layer) return;
     const active = document.activeElement;
-    if (ownsArrows(active, key)) return;
+    if (ownsArrows(active, key, e)) return;
 
     const list = items(layer);
     if (!list.length) return;

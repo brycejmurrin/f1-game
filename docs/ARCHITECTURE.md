@@ -69,7 +69,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_194 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_195 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -103,6 +103,7 @@ _194 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 |---|---|---|---|
 | `light-budget.js` | `LightBudget` | tag | LightBudget: the ONE source for point-light slot counts. |
 | `post-common.js` | `PostCommon` | tag | PostCommon: backend-neutral post-chain helpers that were cloned verbatim into glx/post.js, wgx.js and tlx-post.js. |
+| `canvas-css-size.js` | `CanvasCssSize` | tag | one cached CSS-box reader for every renderer. |
 | `lamp-chunks.js` | `LampChunks` | tag | shared per-chunk lamp table bake (LampChunks). |
 | `frustum.js` | `Frustum` | tag | shared frustum cull math (Frustum). |
 | `vertex-pack.js` | `VertexPack` | tag | packed world vertex channels. |

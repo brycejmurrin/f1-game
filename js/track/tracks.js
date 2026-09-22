@@ -1998,7 +1998,12 @@ const Tracks = (function () {
         const side = hash(HK(k) * 31) < 0.5 ? -1 : 1;
         if (dressingExcluded("city", k, side)) return;
         const neon = cn(HK(k) * 5.5, side);
-        prop(k, side, 6, [1.0, 6, 1.0], [0.10, 0.10, 0.12]);
+        // The post stands INSIDE the panel's depth, not flush with it: both at
+        // gap 6 put their roadside faces on one plane (place()'s size-hashed
+        // jitter is ≤ 9 cm apart) — 22 same-facing coplanar pairs across seven
+        // street circuits (2026-09-22, coplanar-audit --why --raw). 0.3 m in
+        // from either panel face clears that jitter by 20 cm.
+        prop(k, side, 6.3, [0.6, 6, 0.6], [0.10, 0.10, 0.12]);
         prop(k, side, 6, [1.2, 3.4, 5], NIGHT ? neon : [neon[0] * 0.5 + 0.25, neon[1] * 0.5 + 0.25, neon[2] * 0.5 + 0.25]);
       });
     }

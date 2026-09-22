@@ -80,12 +80,25 @@ const SceneryStructures = (function () {
       // that now stays a single emission at its own node.
       const span = wrapped === 0 && Math.abs(s1 - s0) > 0.5 ? n - 1 : wrapped;
       const step = Math.max(1, Math.round(stepM / ds));
-      let seen = null;
+      let seen = null, i0 = 0;
       if (tag) {
         seen = walked.get(tag);
         if (!seen) walked.set(tag, seen = new Set());
+        // CONTINUE THE LATTICE. A fixed-step walk stops at the last multiple of
+        // `step` inside its span, so the next run under the same tag can start
+        // 1..step-1 nodes after the previous run's last panel — and panels are
+        // step*ds long and centred on their node, so the two overlap along most
+        // of their length with every outward face on one plane. Fuji's
+        // unit-by-unit terrace bank measured 36 same-facing pairs that way
+        // (2026-09-22, coplanar-audit --why --raw: one row, adjacent units,
+        // 4 m apart on 8 m treads). Picking up the earlier walk's phase makes
+        // the panels abut exactly; an isolated run has nothing behind it and
+        // walks exactly as before.
+        for (let d = 1; d < step; d++) {
+          if (seen.has((k0 - d + n) % n)) { i0 = step - d; break; }
+        }
       }
-      for (let i = 0; i <= span; i += step) {
+      for (let i = i0; i <= span; i += step) {
         const k = (k0 + i) % n;
         if (seen) {
           if (seen.has(k)) continue;

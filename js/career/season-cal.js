@@ -5,6 +5,7 @@ const SeasonCal = (function () {
 const { store } = GameStore;
 
 const CFG_KEY = "seasonCfg";           // store.get/set add the `apex26.` prefix
+const SAVE_KEY = "season";
 
 const SPRINT_POINTS = [8, 7, 6, 5, 4, 3, 2, 1];
 const CLASSIC_POINTS = [10, 6, 4, 3, 2, 1];   // 1991–2002 table
@@ -66,6 +67,11 @@ function normalize(raw) {
 
 let cfg = null;          // resolved lazily: Tracks.LIST is not ready at eval time
 let resolved = null;     // trackIds -> circuit defs, invalidated with cfg
+let activeCfg = null;    // frozen into the standalone save; setup edits cannot rewrite a season in progress
+let activeSeason = null;
+let seasonRevision = null;
+let seasonConflict = false;
+let lastSave = { ok: true, durable: true, reason: null };
 
 if (store.subscribe) store.subscribe((change) => {
   // FOREIGN WRITES ONLY — the guard career.js's store subscriber already
@@ -76,6 +82,16 @@ if (store.subscribe) store.subscribe((change) => {
   // restart(), before the save, and before the sheet could close.
   if (!change.foreign) return;
   if (change.clear || change.key === CFG_KEY) { cfg = null; resolved = null; }
+  if (change.clear || change.key === SAVE_KEY) {
+    if (flow === "season" && activeSeason) seasonConflict = true;
+    else {
+      activeSeason = null;
+      activeCfg = null;
+      seasonRevision = null;
+      seasonConflict = false;
+      resolved = null;
+    }
+  }
 });
 
 function config() {
@@ -90,6 +106,19 @@ function setConfig(next) {
   return cfg;
 }
 function resetConfig() { return setConfig(null); }
+
+function frozenConfig(raw) {
+  const out = normalize(raw);
+  out.trackIds = Object.freeze(out.trackIds);
+  return Object.freeze(out);
+}
+function rulesConfig() { return flow === "season" && activeCfg ? activeCfg : config(); }
+const currentRevision = () => store.keyRevision ? store.keyRevision(SAVE_KEY) : null;
+function armRevision(season) {
+  activeSeason = season;
+  seasonRevision = currentRevision();
+  seasonConflict = false;
+}
 
 // setFlow() in js/game.js is the only writer, alongside its Career.engage() call.
 let flow = "gp";
@@ -107,7 +136,7 @@ function list() {
   if (!calCustom()) return Tracks.SEASON;
   if (!resolved) {
     const byId = new Map(Tracks.LIST.map((t) => [t.id, t]));
-    resolved = config().trackIds.map((id) => byId.get(id)).filter(Boolean);
+    resolved = rulesConfig().trackIds.map((id) => byId.get(id)).filter(Boolean);
     if (!resolved.length) resolved = Tracks.SEASON.slice();
   }
   return resolved;
@@ -122,9 +151,20 @@ function trackIndex(round) {
 let lastScored = "race";
 let sprintOrder = null;   // driverIds, for a no-qualifying sprint weekend's grid
 
-function blank() { return { round: 0, pts: {}, teamPts: {}, driverCodes: {}, finishes: {}, roundPts: {} }; }
+function blank() {
+  const snap = frozenConfig(flow === "season" && activeCfg ? activeCfg : config());
+  if (flow === "season") activeCfg = snap;
+  return { round: 0, pts: {}, teamPts: {}, driverCodes: {}, finishes: {}, roundPts: {}, config: snap };
+}
 function resetWeekend() { lastScored = "race"; sprintOrder = null; }
-function restart() { resetWeekend(); return blank(); }
+function restart() {
+  activeCfg = frozenConfig(config());
+  resolved = null;
+  resetWeekend();
+  const season = blank();
+  activeSeason = season;
+  return season;
+}
 
 function scoreMap(raw) {
   const out = {};
@@ -157,10 +197,13 @@ function codeMap(raw) {
 // champion UI; blanking it wiped the table the moment the player re-opened SEASON.
 function resume(saved) {
   const s = saved && typeof saved === "object" ? saved : null;
-  const n = rounds();
+  activeCfg = frozenConfig(s && s.config ? s.config : config());
+  resolved = null;
+  const n = activeCfg.trackIds.length;
   if (!s || !Number.isInteger(s.round) || s.round < 0 || s.round > n) {
     return restart();
   }
+  s.config = activeCfg;
   s.pts = scoreMap(s.pts);
   s.teamPts = scoreMap(s.teamPts);
   s.driverCodes = codeMap(s.driverCodes);
@@ -175,6 +218,57 @@ function resume(saved) {
   }
   return s;
 }
+function load() {
+  const raw = store.get(SAVE_KEY, null);
+  const season = resume(raw);
+  armRevision(season);
+  // Existing saves were rewritten at boot by migrateSeasonPoints(). Keep that
+  // migration contract while adding the config snapshot and the stricter maps.
+  if (raw) save(season);
+  return season;
+}
+function save(season) {
+  if (!season || typeof season !== "object") {
+    lastSave = { ok: false, durable: false, reason: "invalid" };
+    return lastSave;
+  }
+  const now = currentRevision();
+  if (seasonConflict || (seasonRevision != null && now !== seasonRevision)) {
+    seasonConflict = true;
+    lastSave = { ok: false, durable: false, reason: "conflict" };
+    return lastSave;
+  }
+  activeCfg = frozenConfig(season.config || activeCfg || config());
+  season.config = activeCfg;
+  if (typeof store.write === "function") lastSave = store.write(SAVE_KEY, season);
+  else {
+    const durable = store.set(SAVE_KEY, season) !== false;
+    lastSave = { ok: true, durable, reason: durable ? null : (store.broken || "Error") };
+  }
+  armRevision(season);
+  return lastSave;
+}
+function clear() {
+  const now = currentRevision();
+  if (seasonConflict || (seasonRevision != null && now !== seasonRevision)) {
+    seasonConflict = true;
+    lastSave = { ok: false, durable: false, reason: "conflict" };
+    return lastSave;
+  }
+  if (typeof store.write === "function") lastSave = store.write(SAVE_KEY, null);
+  else {
+    const durable = store.set(SAVE_KEY, null) !== false;
+    lastSave = { ok: true, durable, reason: durable ? null : (store.broken || "Error") };
+  }
+  activeSeason = null;
+  activeCfg = null;
+  resolved = null;
+  seasonRevision = currentRevision();
+  seasonConflict = false;
+  return lastSave;
+}
+function conflicted() { return seasonConflict; }
+function saveStatus() { return Object.assign({}, lastSave); }
 function canRace(season) {
   return !!(season && Number.isInteger(season.round) && season.round >= 0 && season.round < rounds());
 }
@@ -182,14 +276,14 @@ function hasProgress(season) {
   return !!(season && (season.round > 0 || season.stage === "race"));
 }
 
-function sprintOn() { return fmtActive() && config().sprint; }
+function sprintOn() { return fmtActive() && rulesConfig().sprint; }
 function stage(season) {
   if (!sprintOn()) return "race";
   return season && season.stage === "race" ? "race" : "sprint";
 }
 function midWeekend(season) { return sprintOn() && !!season && season.stage === "race"; }
 
-function quali() { return !fmtActive() || config().quali; }
+function quali() { return !fmtActive() || rulesConfig().quali; }
 function qualiNext(season) { return quali() && !midWeekend(season); }
 
 // The distance THIS session runs. `fallback` is the player's #rs-laps choice and
@@ -202,13 +296,14 @@ function lapsFor(fallback, season) {
   return Math.max(SPRINT_MIN, Math.round(fallback * SPRINT_FRAC));
 }
 
-function formatLaps(fallback) { return fmtActive() ? config().laps : fallback; }
+function formatLaps(fallback) { return fmtActive() ? rulesConfig().laps : fallback; }
 
 function pointsTable() {
-  return fmtActive() && config().points === "classic" ? CLASSIC_POINTS : Teams.POINTS;
+  return fmtActive() && rulesConfig().points === "classic" ? CLASSIC_POINTS : Teams.POINTS;
 }
 
 function award(season, order, fastestId) {
+  if (fmtActive() && seasonConflict) return null;
   if (!canRace(season)) return null;
   const scoring = stage(season);
   const table = scoring === "sprint" ? SPRINT_POINTS : pointsTable();
@@ -216,7 +311,7 @@ function award(season, order, fastestId) {
   // to a driver classified inside the top ten. Season format only (fmtActive):
   // a career keeps the table it always paid. `lastFl` names this round's
   // recipient for the results sheet and is cleared on the next scoring.
-  const fl = scoring !== "sprint" && fmtActive() && config().flPoint && fastestId != null;
+  const fl = scoring !== "sprint" && fmtActive() && rulesConfig().flPoint && fastestId != null;
   delete season.lastFl;
   const rp = season.roundPts || (season.roundPts = {});
   order.forEach((c, i) => {
@@ -261,7 +356,7 @@ function scored() { return lastScored; }
 // in the dropped-score years. Gross for a save with no per-round record.
 function netPts(season, id) {
   const gross = (season && season.pts && season.pts[id]) || 0;
-  const drop = fmtActive() ? config().drop : 0;
+  const drop = fmtActive() ? rulesConfig().drop : 0;
   if (!drop || !season) return gross;   // rank() has always tolerated a null season; so must this
   const row = (season.roundPts && season.roundPts[id]) || [];
   const played = (season.round || 0) + (midWeekend(season) ? 1 : 0);
@@ -346,6 +441,7 @@ return {
   SPRINT_POINTS, CLASSIC_POINTS, DROP_OPTS, LAP_OPTS, PRESETS, DEFAULT_LAPS,
   config, setConfig, resetConfig, fresh, normalize,
   engage, list, rounds, track, trackIndex,
+  load, save, clear, conflicted, saveStatus,
   resume, blank, restart, resetWeekend, canRace, hasProgress,
   quali, qualiNext, stage, midWeekend, sprintOn, lapsFor, formatLaps, pointsTable,
   award, scored, rank, netPts, grid, drawRound,

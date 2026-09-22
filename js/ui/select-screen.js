@@ -44,7 +44,7 @@ const retrySave = () => {
   const results = [];
   if (typeof Career !== "undefined" && Career.data && Career.data()) results.push(Career.saveStatus());
   if (G.season && !(typeof Career !== "undefined" && Career.inCareer && Career.inCareer()))
-    results.push(store.write("season", G.season));
+    results.push(SeasonCal.save(G.season));
   // With no active championship, use a harmless probe so Settings-only users
   // can still verify that storage became available again.
   if (!results.length) results.push(store.write("saveProbe", { at: Date.now() }));

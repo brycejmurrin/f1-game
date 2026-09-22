@@ -120,6 +120,7 @@
     "tests/unit/image-grade-shaders.test.mjs",
     "tests/unit/chunked-index-ranges.test.mjs",
     "tests/unit/glx-occlusion.test.mjs",
+    "tests/unit/tlx-chunked-lifecycle.test.mjs",
     "tests/unit/glx-multidraw.test.mjs",
     "tests/unit/vertex-pack.test.mjs",
     "tests/unit/tex-census.test.mjs",
@@ -626,7 +627,8 @@
     "test:lifecycle-unit": {
       "kind": "node",
       "files": [
-        "tests/unit/async-lifecycle.test.mjs"
+        "tests/unit/async-lifecycle.test.mjs",
+        "tests/unit/tlx-chunked-lifecycle.test.mjs"
       ]
     },
     "test:state-unit": {

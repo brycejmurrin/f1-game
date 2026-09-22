@@ -18,9 +18,6 @@ const NetSdp = (function () {
 
   const line = (sdp, re) => { const m = sdp.match(re); return m ? m[1] : null; };
 
-  const hexToBytes = (hex) => NetBytes.hexToBytes(hex);
-  const bytesToHex = (b, sep) => NetBytes.bytesToHex(b, sep);
-
   function v4ToBytes(addr) {
     const p = addr.split(".");
     if (p.length !== 4) return null;
@@ -80,7 +77,7 @@ const NetSdp = (function () {
     if (mapped) addr = mapped[1];
 
     if (/\.local$/i.test(addr)) {
-      const uuid = hexToBytes(addr.replace(/\.local$/i, "").replace(/-/g, ""));
+      const uuid = NetBytes.hexToBytes(addr.replace(/\.local$/i, "").replace(/-/g, ""));
       if (!uuid || uuid.length !== 16) return null;
       return { kind: C_MDNS, addr: uuid, port };
     }
@@ -114,7 +111,7 @@ const NetSdp = (function () {
       + c.port + " typ " + type + rel + " generation 0";
   }
   function mdnsName(b) {
-    const h = bytesToHex(b, "").toLowerCase();
+    const h = NetBytes.bytesToHex(b, "").toLowerCase();
     return h.slice(0, 8) + "-" + h.slice(8, 12) + "-" + h.slice(12, 16) + "-"
       + h.slice(16, 20) + "-" + h.slice(20) + ".local";
   }
@@ -126,7 +123,7 @@ const NetSdp = (function () {
     const pwd = line(text, /^a=ice-pwd:(\S+)/mi);
     const setup = line(text, /^a=setup:(\S+)/mi) || "actpass";
     if (!fpHex || !ufrag || !pwd) return null;
-    const fp = hexToBytes(fpHex);
+    const fp = NetBytes.hexToBytes(fpHex);
     if (!fp || fp.length !== 32) return null;              // only sha-256 is packed
     const setupIdx = SETUPS.indexOf(setup);
     if (setupIdx < 0) return null;
@@ -212,15 +209,15 @@ const NetSdp = (function () {
     const setup = SETUPS[bytes[o++] & 0x03];
     const count = bytes[o++];
     if (bytes.length < o + 32) return null;
-    const fp = bytesToHex(bytes.slice(o, o + 32), ":"); o += 32;
+    const fp = NetBytes.bytesToHex(bytes.slice(o, o + 32), ":"); o += 32;
     if (o >= bytes.length) return null;
     const ufLen = bytes[o++];
     if (bytes.length < o + ufLen) return null;
-    const ufrag = ascii(bytes, o, ufLen); o += ufLen;
+    const ufrag = NetBytes.ascii(bytes, o, ufLen); o += ufLen;
     if (o >= bytes.length) return null;
     const pwLen = bytes[o++];
     if (bytes.length < o + pwLen) return null;
-    const pwd = ascii(bytes, o, pwLen); o += pwLen;
+    const pwd = NetBytes.ascii(bytes, o, pwLen); o += pwLen;
 
     const cands = [];
     for (let i = 0; i < count; i++) {
@@ -255,8 +252,6 @@ const NetSdp = (function () {
       "",
     ]).join("\r\n");
   }
-
-  const ascii = (bytes, off, len) => NetBytes.ascii(bytes, off, len);
 
   // Hand our own reconstruction to a throwaway RTCPeerConnection before any
   // human ever sees it. This is the difference between "shortening the SDP is

@@ -27,15 +27,24 @@
 // A second tap on the same noninteractive spot within 350 ms is cancelled.
 // Native controls keep every activation, including repeated taps on one button.
 // Another finger still down is driving (GAS+steer), not a double-tap.
-// iOS GestureEvents are the pinch-page path; the garage car viewer uses
-// TouchEvents, so cancelling gesture* does not steal that.
+// iOS GestureEvents are the pinch-page path. Cancel them only when they begin
+// on the driving surface; menus retain page pinch zoom. The garage car viewer
+// uses TouchEvents, so this does not steal its own gesture handling.
 (function () {
   var lastT = 0, lastX = 0, lastY = 0;
+  var driveGesture = false;
   var TAP_MS = 350, TAP_PX2 = 900;
   function kill(e) { e.preventDefault(); }
-  document.addEventListener("gesturestart", kill, { capture: true, passive: false });
-  document.addEventListener("gesturechange", kill, { capture: true, passive: false });
-  document.addEventListener("gestureend", kill, { capture: true, passive: false });
+  function killDriveGesture(e) {
+    if (e.type === "gesturestart") {
+      driveGesture = !!(e.target && e.target.closest && e.target.closest("#game,#hud"));
+    }
+    if (driveGesture) kill(e);
+    if (e.type === "gestureend") driveGesture = false;
+  }
+  document.addEventListener("gesturestart", killDriveGesture, { capture: true, passive: false });
+  document.addEventListener("gesturechange", killDriveGesture, { capture: true, passive: false });
+  document.addEventListener("gestureend", killDriveGesture, { capture: true, passive: false });
   document.addEventListener("dblclick", kill, { capture: true });
   document.addEventListener("touchend", function (e) {
     if (e.touches && e.touches.length) return;
@@ -644,7 +653,7 @@
           <div id="pm-keys-section">
             <h3 class="pm-group-h">KEYBOARD</h3>
             <div id="pm-keys"></div>
-            <p id="pm-keys-note" class="adv-help">Tap a key slot, then press the key you want. Esc cancels. A key already used by another action moves here.</p>
+            <p id="pm-keys-note" class="adv-help" role="status">Tap a key slot, then press the key you want. Esc cancels. A key already used by another action moves here.</p>
             <button id="pm-keys-reset" type="button">RESET KEYS</button>
           </div>
           <!-- CONTROLLER — the pad twin (Input.padBindings), same module. Hidden
@@ -652,7 +661,7 @@
           <div id="pm-pad-section" hidden>
             <h3 class="pm-group-h">CONTROLLER</h3>
             <div id="pm-pad"></div>
-            <p id="pm-pad-note" class="adv-help">Tap a slot, then press a button on the controller. Esc cancels. The stick and D&#8209;pad steer.</p>
+            <p id="pm-pad-note" class="adv-help" role="status">Tap a slot, then press a button on the controller. Esc cancels. The stick and D&#8209;pad steer.</p>
             <div id="pm-padbrand" class="set-row" role="group" aria-labelledby="pm-padbrand-label">
               <span class="tune-label" id="pm-padbrand-label">BUTTON NAMES</span>
               <div>
@@ -699,7 +708,7 @@
             <button id="pm-practice-set" type="button" aria-describedby="pm-practice-state">SAVE STARTING POINT</button>
             <button id="pm-practice-retry" type="button" aria-describedby="pm-practice-state" disabled>TRY AGAIN</button>
             <button id="pm-practice-rewind" type="button" aria-describedby="pm-practice-state" disabled>REWIND 10s</button>
-            <p id="pm-practice-state" class="adv-help">Practising makes this session unscored: laps and ghosts will not be saved. Restart the session to set records again. Rewind moves your car only — other cars keep the ground they covered.</p>
+            <p id="pm-practice-state" class="adv-help">Practising makes this session unscored: laps and ghosts will not be saved. Restart the session to set records again. Rewind restores the full grid and race clock.</p>
           </details>
           <details id="pm-pit-panel">
             <summary class="adv-more-btn">PIT STRATEGY</summary>
@@ -2514,8 +2523,8 @@
         <br><b>X-mode in corners:</b> the active aero was open while cornering hard. Close it before you turn in.
         <br><b>Track limits:</b> a warning was recorded for leaving the track. Four in a row cost five seconds.</dd>
       <dt>PRACTICE A SECTION</dt>
-      <dd>Start a solo <b>TIME TRIAL</b>. Drive to a useful starting point, open <b>SETTINGS &rarr; DRIVING</b>, expand <b>PRACTICE A SECTION</b>, choose a <b>PRACTICE GOAL</b>, then <b>SAVE STARTING POINT</b>. Resume and drive the section. <b>TRY AGAIN</b>, or your <b>RECOVER</b> key (<b>R</b> by default) while driving, restores the saved position, speed, car state and practice goal; it does not rewind the race clock.
-        <br><b>This makes the session unscored.</b> Laps and ghosts will not be saved after a starting point is set. Restart the session to set records again. Checkpoints are unavailable in races, daily challenges and multiplayer.</dd>
+      <dd>Start a solo <b>TIME TRIAL</b>. Drive to a useful starting point, open <b>SETTINGS &rarr; DRIVING</b>, expand <b>PRACTICE A SECTION</b>, choose a <b>PRACTICE GOAL</b>, then <b>SAVE STARTING POINT</b>. Resume and drive the section. <b>TRY AGAIN</b>, or your <b>RECOVER</b> key (<b>R</b> by default) while driving, restores the saved grid, race clock and practice goal.
+        <br><b>This makes the session unscored.</b> Laps and ghosts will not be saved after a starting point is set. Restart the session to set records again. A solo race or qualifying session can use checkpoints after you choose ARM PRACTICE; daily challenges and multiplayer cannot be armed.</dd>
       <dt>PRACTICE GOALS</dt>
       <dd><b>Free practice:</b> repeat any section. <b>Sector:</b> cross the next sector line cleanly. <b>Corner:</b> drive through the next corner; the result shows your time, minimum speed and exit speed. <b>Full lap:</b> cross the line to start timing, then complete a clean lap; practice laps are never saved, so this is how to time one. <b>Braking:</b> build speed before saving, then brake firmly and keep braking until the car stops; a tap followed by coasting does not count, and the result is your stopping distance, plus how many metres of it were spent below the hardest braking the car managed on that attempt. <b>Trail braking:</b> brake firmly, keep some brake on as the car turns in, then release it while the car is still turning. <b>Slalom:</b> make six direction changes while moving; the car must change direction, not just the stick. <b>Launch:</b> stop the car before saving, then launch to racing speed, timed from your first throttle. Each goal judges what the car did and shows the result on screen when it ends. Contact or leaving the track marks an attempt for retry; clean completions are saved separately from lap records, and the DRIVING page shows this session's attempts and your saved best.</dd>
       <dt>PIT STRATEGY</dt>
@@ -2822,6 +2831,7 @@
 <script defer crossorigin="anonymous" src="js/render/glx/shaders/glsl-post.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/light-budget.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/post-common.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/render/shared/canvas-css-size.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/glx/post.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/glx/shadow.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/lamp-chunks.js?v=dev"></script>
