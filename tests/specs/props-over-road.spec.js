@@ -12,6 +12,16 @@
 // across the whole lap. A triangle whose footprint covers tarmac AND whose
 // surface sits between TOL and CEIL metres above the racing line is an offender.
 // Purely geometric — no rendering, so it runs under SwiftShader in CI.
+//
+// THE BLOCKING COPY OF THIS AUDIT IS tests/unit/props-over-road.test.mjs,
+// which measures the same fleet in node in 90 s against this spec's 1500 s
+// budget. That budget is >= the change-aware gate's 180 s per-test cap, so
+// select-specs.mjs excludes this spec on every js/track and js/circuits diff
+// — the diffs it exists for — and leaves it to the nightly. The node suite is
+// in test:sweeps, which the Pages gate runs on those diffs, blocking. This
+// copy stays for now as the deeper run; retiring it is a follow-up, because
+// tools/ci/select-recall.mjs names it as the spec that caught a real
+// regression and that reproduction has to move with it.
 import { test, expect } from "@playwright/test";
 import { BOOT_MS } from "../helpers/fixtures.js";
 import { auditTracks } from "../helpers/track-helpers.js";
@@ -61,6 +71,19 @@ const BASELINE = {
   // predates it having a wall at all.
   monaco: 1.4, singapore: 1.3, baku: 1.3, jeddah: 1.1,
   albert_park: 0.7,
+  // mosport and zandvoort are the SAME pit wall as jeddah above, and were red
+  // here unreported until tests/unit/props-over-road.test.mjs measured the
+  // fleet in node (2026-09-22): both read 1.07, both grey [0.46,0.47,0.5],
+  // lateral +6.75 and -6.67 against base half-widths of 8.7 and 8.81 — the
+  // same object at the same height as jeddah's -6.35, identified by colour.
+  // This spec declares 1500 s, so the change-aware gate excludes it on every
+  // diff that could move a vertex and its only scheduled run is the nightly
+  // rota's test:circuits, one night in eleven; nobody reads the nightly, so a
+  // red it had been carrying since the walled-exit pit redesign went unseen.
+  // Not a tolerance nudged to get green, for the reason the jeddah paragraph
+  // above gives: these circuits GAINED the structure, and it is where a pit
+  // wall goes.
+  mosport: 1.1, zandvoort: 1.1,
   // mont_tremblant: a forest crown leaning over the road, not an intrusion at
   // the edge — dark green [0.10,0.20,0.09] spanning y 9.96-12.46 with the road
   // at 7.33, so 4.74 m of clearance a car drives under. Same category as the

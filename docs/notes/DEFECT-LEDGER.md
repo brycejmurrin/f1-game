@@ -11,6 +11,31 @@
 Verified against the current tree. Everything fixed has moved to the archived
 journal; this is what remains.
 
+**2026-09-22 — `props-over-road.spec.js` had been RED on mosport and zandvoort,
+and nobody could have known. FIXED (baselined), and the audit now blocks.**
+Both circuits read 1.07 m of prop over the racing surface with no `BASELINE`
+entry, which under that spec's own rule ("a track NOT in this map must read
+<= TOL") is a failure. The offender is the pit wall — the same object the spec
+bisected on jeddah, identified by the same colour `[0.46,0.47,0.5]` at the same
+1.07 m, lateral +6.75 and -6.67 against base half-widths of 8.7 and 8.81
+against jeddah's -6.35. jeddah's note records it arriving with the walled-exit
+pit redesign (`80acf931`); that redesign gave every circuit the wall, and the
+baseline map was written when only jeddah had it. So the red is as old as the
+redesign.
+
+Why it went unseen is the point, and it is the same mechanism as the
+`renderer-macos` and `steering.spec.js` entries below: the spec declares
+`test.setTimeout(1500000)`, which is >= the change-aware gate's 180 s per-test
+cap, so `select-specs.mjs` excludes it on every `js/track` and `js/circuits`
+diff — the only diffs that can cause this defect — and its sole schedule is the
+nightly rota's `test:circuits`, one night in eleven. Nobody reads the nightly.
+
+`tests/unit/props-over-road.test.mjs` is the fix for the mechanism: the same
+measurement in node, in `test:sweeps`, which the Pages gate runs on those diffs
+blocking, at 90 s against the spec's 1500 s budget. It is what found the red.
+`terrain-over-road.spec.js`'s fleet test is the same shape and still has no
+blocking copy.
+
 **2026-09-22 — `DIFF[difficulty]` undefined took every physics tick down. FIXED.**
 `js/game.js` `updateCar()` read `DIFF[difficulty]` unguarded and dereferenced
 `dd.ai` on the first AI car; `js/race/quali-model.js` already fell back to

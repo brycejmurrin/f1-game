@@ -765,6 +765,7 @@
         "tests/unit/grid-boxes.test.mjs",
         "tests/unit/pit-complex.test.mjs",
         "tests/unit/pit-signs.test.mjs",
+        "tests/unit/props-over-road.test.mjs",
         "tests/unit/driving-line.test.mjs",
         "tests/unit/driving-line-opts.test.mjs"
       ]

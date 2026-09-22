@@ -40,6 +40,14 @@ export const CASES = [
     catches: "tests/specs/terrain-over-road.spec.js",
   },
   {
+    // NOW ALSO COVERED OUTSIDE THE SELECTOR (2026-09-22). This case reads
+    // "MISSED but NAMED" because the catching spec declares 1500 s and the
+    // gate's per-test cap is 180 s — a real limit of the SELECTED gate, and
+    // still worth reading as one. It is no longer a hole in the deploy's
+    // coverage: tests/unit/props-over-road.test.mjs measures the same fleet in
+    // node, in test:sweeps, which the Pages gate runs on a js/track diff
+    // blocking. Recorded here so nobody reads this row as "this defect class
+    // can ship"; the row stays because the selector's own limit has not moved.
     name: "street-barrier chord-cut hung a panel over the racing line (c0bd0abe)",
     changed: ["js/track/tracks.js"],
     catches: "tests/specs/props-over-road.spec.js",
