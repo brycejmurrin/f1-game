@@ -532,6 +532,39 @@ test.describe("world() delta mode", () => {
     expect(d.ego).toBeTruthy();
     expect(d.note).toContain("full payload");
   });
+
+  // A DELTA CANNOT EXPRESS A REMOVED KEY. deltaOf walks the keys of the NEW
+  // payload, so a field the base carried and this one does not is never
+  // mentioned, and applyDelta merges — the reconstruction keeps it forever.
+  // The reachable case is the one agentHelp() recommends: one "full" read for
+  // session/physics/tunables, then ride "brief" with `since`. Nothing makes the
+  // detail level match across a chain, so switching down used to pin those keys
+  // at their last full-read values for the rest of the episode.
+  test("dropping to a smaller detail level across a since chain returns the full payload", async ({ page }) => {
+    await load(page);
+    const r = await page.evaluate(() => {
+      const full = window.__apex.world({ detail: "full" });
+      window.__apex.step(1 / 60, 2);
+      const d = window.__apex.world({ detail: "brief", since: full.seq });
+      return { hadTunables: !!full.tunables, deltaBase: d.deltaBase,
+               note: d.note || "", tunables: d.tunables };
+    });
+    expect(r.hadTunables).toBe(true);
+    expect(r.deltaBase).toBe(null);
+    expect(r.note).toContain("removed key");
+    expect(r.tunables).toBeUndefined();
+  });
+
+  test("a same-detail chain is still a delta, not a full payload", async ({ page }) => {
+    await load(page);
+    const r = await page.evaluate(() => {
+      const a = window.__apex.world({ detail: "drive" });
+      window.__apex.step(1 / 60, 2);
+      const d = window.__apex.world({ detail: "drive", since: a.seq });
+      return { base: a.seq, deltaBase: d.deltaBase };
+    });
+    expect(r.deltaBase).toBe(r.base);
+  });
 });
 
 // ── corner table ────────────────────────────────────────────────────────────

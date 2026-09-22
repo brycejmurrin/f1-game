@@ -250,13 +250,21 @@ function analyse(track, prims, opt) {
   return { pairs: hits.length, spots: list.length, hits, spotList: list, stats };
 }
 
-function run(env, id, opt) {
+// `sink`: a Map the caller fills with primKey -> captured stack. It MUST be
+// harvested here, inside run(), because trim() below truncates env.prims — the
+// --why pass read env.prims after every run() had already emptied it, so `at`
+// was always empty, every site resolved to "?" and the report named no emitter
+// at all (the counts were right, the attribution was dead). Measured on vegas
+// 2026-09-22: 184 pairs, all `?  X  ?`; with the sink, `strut@circuits/scenery/
+// vegas.js:40 < ferrisWheel`.
+function run(env, id, opt, sink) {
   const Tracks = env.Tracks;
   const def = Tracks.LIST.find((d) => d.id === id);
   if (!def) throw new Error(`no such track: ${id}`);
   const from = env.mark();
   const track = Tracks.build(def, {});
   const prims = shipped(env.prims.slice(from), env.liveBufs);
+  if (sink) for (const p of prims) if (p.stack) sink.set(primKey(p), p.stack);
   // See the comment on trim() in track-build-vm.cjs: without this, a shared
   // context accumulates every circuit's full mesh buffers for the life of the
   // sweep (measured 4157 MB -> 97 MB for the 40-circuit --all run).
@@ -319,9 +327,8 @@ function main() {
     const pairs = new Map();
     const rawHits = [];
     for (const id of ids) {
-      const r2 = run(env2, id, opt);
       const at = new Map();
-      for (const p of env2.prims) if (p.stack) at.set(primKey(p), p.stack);
+      const r2 = run(env2, id, opt, at);
       for (const h of r2.hits) {
         const sa = site(at.get(primKey(h.a))), sb = site(at.get(primKey(h.b)));
         const key = sa < sb ? `${sa}  X  ${sb}` : `${sb}  X  ${sa}`;

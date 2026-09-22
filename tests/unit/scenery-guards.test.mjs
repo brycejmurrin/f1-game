@@ -123,3 +123,53 @@ test("the backdrop guard RECORDS its drops — it was the one emitter that did n
   assert.equal(counts(Tracks, "redbull").backdrop || 0, 0,
     "redbull pre-checks its backdrops; a drop here means the circuit-side test drifted from backdrop()'s margin");
 });
+
+// --- Coincident-geometry guards (2026-09-22) ------------------------------
+//
+// Four shared emitters used to produce BYTE-IDENTICAL primitives — same
+// centre, same size, same basis — which is the one defect no depth buffer can
+// resolve: both faces write the same depth, so they flicker at every distance
+// and on every GPU. Each guard below is the fix, and each is a one-line thing
+// to delete by accident, so each is pinned here rather than only by the
+// coplanar baseline (which is a slow sweeps gate and only catches GROWTH).
+// Measured before/after across the fleet: 653 -> 541 coplanar spots.
+const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
+
+test("a linear run is not re-laid over a span it already covers", () => {
+  const src = read("js/track/scenery/structures.js");
+  assert.match(src, /const alreadyLaid = \(kind, s0, s1, side, gap, style\)/,
+    "structures.js must carry the containment guard for linear runs");
+  // Every span emitter must consult it: okayama laid a full-lap armco and then
+  // four more armco runs at the same gap, 759 coincident primitives.
+  for (const [fn, needle] of [
+    ["guardrail", /alreadyLaid\("guardrail", s0, s1, side, gap/],
+    ["wall", /alreadyLaid\("wall", s0, s1, side, gap/],
+    ["fence", /alreadyLaid\("fence", s0, s1, side, gap/],
+    ["tyreWall", /alreadyLaid\("tyreWall", s0, s1, side, gap/],
+  ]) assert.match(src, needle, `${fn}() must return early on a re-laid span`);
+});
+
+test("one tree per spot", () => {
+  const src = read("js/track/scenery/nature.js");
+  assert.match(src, /const spotTaken = \(x, z\)/, "nature.js must carry the planting guard");
+  assert.equal((src.match(/if \(spotTaken\(a\.c\[0\], a\.c\[2\]\)\) return;/g) || []).length, 2,
+    "both pine() and tree() must take the guard — two trees on one spot is one tree drawn twice");
+});
+
+test("a facade draws no rail on its bottom face", () => {
+  // The rail at i=0 sits exactly on the section's base, so on every stacked
+  // massing it lands in the plane of the rail on the section below.
+  assert.match(read("js/track/scenery/city.js"), /if \(!simple\) for \(let i = 2; i <= rowN; i \+= 2\)/,
+    "the facade rail loop must start at 2, not 0");
+});
+
+test("a ferris wheel staggers its members either side of the wheel plane", () => {
+  // A flat wheel puts all 32 members on one plane: every joint fights.
+  for (const p of ["js/track/scenery/structures.js", "js/circuits/scenery/vegas.js"])
+    assert.match(read(p), /i % 2 \? 0\.06 : -0\.06/, `${p} must alternate its strut axis offset`);
+});
+
+test("layered spectator banks cannot coincide", () => {
+  assert.match(read("js/track/scenery/nature.js"), /gap \+= \(\(Math\.abs\(opts\.h \|\| 0\) \* 7\.3\) % 1\) \* 0\.04;/,
+    "spectatorHill must nudge each call outward deterministically");
+});

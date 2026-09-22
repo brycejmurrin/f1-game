@@ -11,6 +11,249 @@
 Verified against the current tree. Everything fixed has moved to the archived
 journal; this is what remains.
 
+**2026-09-22 — a `try`/`catch` cannot swallow a promise REJECTION, and this
+shell turns one into a full-screen overlay. FIXED at four sites.** `index.html`
+installs an `unhandledrejection` listener that paints `#__err_overlay` over the
+running game. Its `error` sibling already carries a benign-noise exemption
+(ResizeObserver); the rejection handler carries none. Four sites wrapped a
+promise-returning Web API in `try`/`catch` with a comment naming the exact
+failure they meant to absorb — and every one of those failures is spec'd as a
+REJECTION, so the catch was inert and the overlay was not:
+
+| site | API | when it rejects |
+|---|---|---|
+| `js/input/input.js` `rumble()` | `GamepadHapticActuator.playEffect` | `InvalidStateError` whenever `document.visibilityState === "hidden"` ([Gamepad spec](https://w3c.github.io/gamepad/#dom-gamepadhapticactuator-playeffect)) |
+| `js/audio/engine.js` `rebuildCtx()` | `AudioContext.close` | `InvalidStateError` on an already-closed context ([Web Audio spec](https://webaudio.github.io/web-audio-api/#dom-audiocontext-close); Chrome rejects, Firefox resolves) |
+| `js/audio/engine.js` hide path | `AudioContext.suspend` | same, on an already-closed context |
+| `js/audio/spotify.js` `BACKEND.start/stop` | SDK `resume`/`pause` | undocumented; guarded defensively |
+
+The `playEffect` one is the one that fires in ordinary play, and it is the
+worst kind: `rumble()` runs on every collision, kerb and gear shift, so a
+player who alt-tabs or whose phone locks while a rumble is in flight gets the
+overlay over a live race. The AudioContext pair is next, because `rebuildCtx()`
+is reached ONLY after a resume has already failed — i.e. with the context in
+exactly the state `close()` refuses. The same file's three `ctx.resume()` calls
+have always chained `.catch`, which is what makes these an omission rather than
+a policy.
+
+Fix: keep the `try`/`catch` (a bad receiver still throws synchronously) and add
+the rejection arm — `const p = x.foo(); if (p && p.catch) p.catch(() => {});`.
+Pinned by `tools/check/reject-lint.mjs` (a ZERO ratchet, not a frozen
+population) and `tests/unit/reject-lint.test.mjs`. The lint names only APIs
+whose promise-return is unambiguous, and disambiguates `close`/`play`/`pause`/
+`resume` by receiver, because a rule that cried wolf at thirty WebSocket and
+IndexedDB teardowns would be switched off inside a week.
+
+**2026-09-22 — a Begin with no `finally` latched the whole game into a 64-pixel
+cubemap. FIXED, with three more of its class.** `js/game.js`'s env-probe block
+called `gfx.envFaceBegin`, drew the world, and called `gfx.envFaceEnd` — with
+no `try`/`finally`. `envFaceBegin` raises GLX's `_envActive`, and `begin()`
+branches on it EVERY frame to choose between the real scene target and the 64²
+probe FBO; `envFaceEnd` is its only lowering, and `envProbeReset()` does not
+touch it. So a throw out of `drawWorldMeshes` or `drawSky` left the latch up
+for the life of the tab: the entire game rendered into a 64-pixel cubemap face
+while the visible canvas held its last good frame. `tick()`'s `LoopHealth`
+absorbs the transient fault and keeps going, so physics, AI and audio carried
+on underneath — the exact shape of an "it just froze mid-race" report with
+nothing in the console.
+
+Three siblings fixed with it, all the same class and all found by asking the
+same question of every bracket in the renderer:
+
+- `js/render/glx/glx.js` `present` — post.js disables `DEPTH_TEST` for the
+  fullscreen chain and re-enables it ~400 lines later, and nothing else
+  re-asserts that flag per frame (`begin()`/`resetDrawState()` only re-sync
+  `CULL_FACE`, `colorMask`, `polygonOffset`). A throw in between left depth
+  testing off for the rest of the tab, so every opaque draw composited in
+  submission order. Restored on the FAULT path only, so the happy path pays
+  nothing.
+- `js/render/glx/shadow.js` `shadowBegin` — a leftover `castCullVP` from the
+  car (±42 m) or lamp (cone) pass culls every prop, tree and barrier out of the
+  SUN's snap-cached map, because `chunked.js` and `gfx.shadowCullVP` both
+  resolve `castCullVP || lightVP`. The car/lamp Ends clear it on the normal
+  path and on their early returns; what they cannot cover is a throw between
+  Begin and End. Cleared where the sun pass declares its own frustum, which
+  makes it ordering-independent.
+
+**2026-09-22 — a stop in flight survived a red flag and held the player at the
+pit limiter through the restart. FIXED.** `redFlagRestart()` enumerates the
+racecraft scratch a re-grid must not carry (`contactT`, `wrongWay`, `offT`,
+`wallT`, `otT`, …) and deliberately keeps what is strategy — energy, tyreClass,
+phaseRoll. The pit fields were in neither list, and they are both:
+`pitStops`/`pitNext`/`pitPlan` are strategy and must survive, while
+`pitState`/`pitArmed`/`pitCommitted` are an in-progress stop and must not.
+
+The restart teleports every car onto a grid box, and on most circuits the grid
+sits INSIDE the pit window — so a car holding the lane when the flag flew came
+out of the standing start still reading `pits.inLane()`. game.js's `vmax`
+branch held it at the pit limiter and `laneDrive` steered it onto the lane
+offset. Measured on Monza before the fix: full throttle from lights-out and the
+car could not pass ~20 m/s for ~750 physics ticks — about twelve seconds —
+because `update()`'s "left the window" branch is the only other thing that
+clears the arm, and by construction it cannot fire from inside the window. For
+an AI car the same latch overrode its strategy: it circulated at pit-lane pace
+and then made an unplanned stop the next time it passed the window.
+
+Fix: a new `pits.clearArm(c)` — the in-progress half of `reset()` and nothing
+else — called from `redFlagRestart()`'s per-car loop. Pinned by
+`tests/unit/red-flag-pit-vm.test.mjs`, which fails on the old code in both
+directions (the fields, and the speed after the restart).
+
+**2026-09-22 — a red flag raised after any car had finished froze the field
+every 45 s for the rest of the race. FIXED.** The red procedure ends in exactly
+one restart request, and `raceCtl.takeRestart()` consumes it whether or not
+`redFlagRestart()` runs. `redFlagRestart()` declines outright once any car has
+finished — which is ordinary, not exotic: the leader takes the flag while a
+mid-pack incident is still unfolding. The clean-up (`IncidentSim.reset`,
+`DebrisWorld.reset`, `DebrisWorld.prime`) lived only INSIDE the re-grid, so
+that combination held the whole field at `vmax * 0.02` for `RED_STOP +
+RED_HOLD`, dropped silently back to green with the debris still on track, and —
+since `finished` never goes back to false — let the same uncleared picture
+raise the same dead red every `CAP_REARM_HOLD` for the rest of the race. Fix:
+the declined path now runs the clean-up, which ends the cycle at its cause.
+
+**2026-09-22 — a failed race start left the pre-race screen running forever.
+FIXED.** The already-recorded "`startRace()` rejection left a half-torn screen"
+fix routes a throw to `quitToMenu()`. `LoadingScreen.stop()` has exactly one
+call site in the tree — `clearMenuScreens()`, which `startRaceBody()` reaches
+near the END of its work — so a throw before that (the awaited
+`ensureScenery`) never stopped the flyby. It stayed `active()` for the session:
+its `window` pointerdown/keydown capture listeners were never removed, and both
+`menuBlank` and the per-car draw-loop break gate on `!loadingScreen.active()`,
+so the title screen went back to paying for all 22 parked cars — the cost a
+comment in `render()` says was already fixed once by another route. Fix:
+`quitToMenu()` stops it too; `stop()` is idempotent.
+
+**2026-09-22 — Dijon lost a grandstand livery, because a typo in def data is
+silent. FIXED. The same class in `furniture.tree` is OPEN, and the attempt to
+fix it is the more useful record.** The def files are data and the engine looks
+their strings up in tables; every lookup has a sensible fallback, so a word the
+engine does not know never throws, never logs, and passes `verify-track`.
+
+Dijon's `standSet: ["stone", …]` is not a `STAND_LIVERIES` key, so
+`grandstandEx`'s `lib[name] || null` fell through to its default shell — which
+is bit-identical to `"steel"`, making an authored three-way livery rotation a
+two-way one with double-weight grey. Fixed to `"sandstone"`; a livery is colour
+only, so it moves no geometry.
+
+`furniture.tree: "pine"` (anderstorp, fuji, mont_tremblant, okayama, zolder) is
+in neither `SPECIES` nor the two aliases beside it, so the dispatch falls
+through to `"broad"` and five conifer-belt circuits — Sweden, Japan ×2, Québec,
+the Ardennes — grow rounded broadleaf trees on the generic scatter pass. The
+correct species is `"fir"`, which the other Nordic and Alpine circuits use.
+
+**IT WAS CHANGED TO `"fir"`, AND REVERTED, AND THE REASON IS WORTH MORE THAN THE
+FIX WOULD HAVE BEEN.** `canopyR` (`js/track/scenery/nature.js`) returns roughly
+HALF the radius for `fir` that it does for `broad` — ~3.6 m vs ~6.6 m at h = 12
+— and the scatter keeps props clear by `dist + crown`. So correcting the species
+also halved the keep-out, and CI's per-circuit geometry sweep measured prop
+interpenetration growing on every one of the five:
+
+```
+anderstorp 31 → 34    fuji 24 → 26    okayama 58 → 59
+mont_tremblant 32 → 48                zolder 82 → 105
+```
+
+Registering `"pine"` in `SPECIES` instead is strictly worse: the emitter
+dispatch has no pine branch, so it would keep the broadleaf mesh and take the
+smaller clearance with it. The real fix is to check `canopyR("fir")` against
+`conifer()`'s actual mesh extent — the comment directly above `canopyR` records
+that same "GUARANTEED not to clip barriers" contract being found "~0.9 m
+optimistic" once before, for broadleaf — and that is its own change with its own
+sweep. Parked in `tests/unit/circuit-vocab.test.mjs`'s `KNOWN_UNHANDLED` with
+these numbers attached, so the guard still fails on a NEW typo and this one
+cannot be quietly forgotten.
+
+**The process lesson is the durable half.** `deploy.mjs --gate-only` passed this
+batch 21 suites green, and the regression was caught only by CI's per-circuit
+geometry sweeps — the 14 files `PREPUSH-GATE-LADDER.md` says the whole gate
+leaves out. A def edit that changes a SPECIES changes geometry, so it belongs
+behind `npm run test:sweeps` locally before a push, not behind the gate.
+
+**2026-09-22 — `world({since})` could not say a key had gone away. FIXED.**
+`js/agent/agentview.js`'s `deltaOf` walks `Object.keys(next)`, so a field the
+delta base carried and the new payload does not is never mentioned, and
+`applyDelta` merges — the reconstruction keeps the stale value forever. The
+reachable case is the one `agentHelp()` recommends: one `world({detail:"full"})`
+to learn session/physics/tunables/terminal, then ride
+`world({detail:"brief", since})` for the rest of the episode. Nothing requires
+the detail level to match across a `since` chain, so `terminal.done` and
+friends stayed pinned at whatever the full read said. Fix: a shrinking payload
+takes the escape hatch this API already documents — the whole payload with
+`deltaBase: null` and a note — rather than inventing a tombstone the wire
+format has no room for. Pinned in `tests/unit/agent-view-vm.test.mjs` (both
+that a shrink resyncs and that an ordinary same-detail chain is still a delta).
+
+**2026-09-22 — three smaller ones, fixed with the batch.**
+`js/render/three/tsl-lit.js`'s car and lamp PCF taps were hardcoded to the
+DESKTOP map size (`1/1024`, `1.5/512`) while `tlx-shadow.js` shrinks both maps
+to 256² under software GL and — unlike the mobile path, which nulls them —
+keeps the feature ENABLED, so the filter collapsed to a fraction of a texel and
+both shadows went hard and aliased while the sun's, which has always derived
+`U.shadowTexel` from `SHD.sunSize`, stayed soft. `js/camera/photo-cam.js` had
+no `window "blur"` release, so an alt-tab while holding W or the move stick
+left the free camera flying (js/input/input.js wires exactly that listener for
+exactly this reason). `js/career/career.js`'s `prizeFor(0)` returned
+`PRIZE[-1]`, i.e. `undefined`, which would make `career.money` NaN for the rest
+of a save — defensive, no caller reaches it today.
+
+**2026-09-22 — the TELEMETRY tab coloured its compare delta backwards. FIXED.**
+`js/data/telemetry.js` computes the compare gauge's delta and the lane board's
+with the same expression and comments both the same way:
+
+```js
+const delta = timeAtDist(view.compare.cum, dP) - t;   // >0: compare is behind
+const dl    = timeAtDist(lane.cum, dRef)     - t;     // >0: this lane is behind the ref
+```
+
+so `dh-pos` is the SLOWER side on each. `css/data.css` had
+`.dh-laneboard-dl.dh-pos -> --slower` (right, and commented "behind the
+reference") and `.dh-gdelta.dh-pos -> --faster` (inverted), fifty lines apart —
+so comparing two drivers painted the TRAILING one green and the leader red.
+
+**Neither half is wrong alone**, which is the whole reason it survived: the JS
+sign is right, the CSS is valid, and each rule is individually plausible. Only
+the PAIRING is wrong. A screenshot would not have caught it either — a green
+number and a red number both look like a working widget unless you already know
+which car is ahead. So `tests/unit/delta-sign-colour.test.mjs` asserts the
+INVARIANT rather than the values: every delta class keyed on the ">0 = behind"
+convention must resolve `.dh-pos` to the same token, and it first checks that
+the source really does still use one convention, so the assertion cannot quietly
+start measuring nothing. It fails 2 of 3 on the old CSS.
+
+**2026-09-22 — four small UI/data findings, RECORDED not fixed.** Each is real
+and each is cosmetic or inert; none is worth a rider on a bug-fix batch, and a
+UI session with a browser should take them together:
+
+- `js/ui/hud.js:123` toggles `hud-onboard` on `document.body` on every camera
+  switch and **nothing reads it** — no CSS rule, no other JS (found independently
+  by two agents). The interesting half is why it exists: `ONBOARD_IDS` groups
+  `cockpit`, `hood` and `tcam`, but only `cockpit` gets HUD decluttering, via the
+  separate and narrower `cockpit-cam` class (`css/track-detail.css`). So the dead
+  toggle is a hint that HOOD and T-CAM are missing treatment COCKPIT has —
+  a design question, not a deletion.
+- `index.html:746,850,907` — Settings > Display's three collapsible sub-panels
+  carry `pm-hud-sub` / `pm-renderer-sub`, which have zero CSS anywhere. The
+  identical construct on the Music & Sound page uses `as-sec`, which
+  `css/tuner.css` gives a bottom margin, so the Display sections sit flush where
+  Sound's do not.
+- `js/data/live.js:312`, `js/data/telemetry.js:940,950` — `dh-class-rows`,
+  `dh-gdrscell`, `dh-gdeltacell` are applied and have no rules. Silent today
+  because their compound siblings carry the layout; `dh-gdrs2` DOES have a
+  modifier rule, which suggests these were meant to parallel it.
+- `index.html:399-400` — `#hud-gap-ahead`/`#hud-gap-behind` carry `hud-gap`
+  (singular), which nothing targets; all styling comes from `.hud-gaps > div`.
+  Harmless, but a naming trap: removing the class does nothing, and a future
+  `.hud-gap` rule would hit both children with no way to target one.
+
+The mechanical sweep behind these is worth repeating rather than the list:
+534 classes defined across `css/*.css` against 488 referenced from `index.html`
+and `js/**`, with the **applied-but-undefined direction unguarded** —
+`tests/unit/component-inventory.test.mjs` only checks the opposite one. 28
+`!important` uses were each checked and none fights a token; the 11 same-selector
+cross-file differences all sit in disjoint `@media (orientation:…)` blocks, i.e.
+the deliberate per-viewport re-tuning `COMPONENTS.md` documents.
+
 **2026-09-22 — `DIFF[difficulty]` undefined took every physics tick down. FIXED.**
 `js/game.js` `updateCar()` read `DIFF[difficulty]` unguarded and dereferenced
 `dd.ai` on the first AI car; `js/race/quali-model.js` already fell back to
@@ -1946,3 +2189,103 @@ Deferred with reasoning, none lost:
   that biases both sides. When a bug is traced to a hardcoded position, grep for
   the other hardcoded positions in the same file before closing it — two of the
   three here were fixed and the third was left, which is how it survived.
+
+## NAMES FIXED, GEOMETRY OPEN — estoril scenery emitters do not land where their names say (2026-09-22)
+
+Found while fixing the Parabolica's bank and gravel apron (PR #188). The
+apron fix is landed and correct; this is the larger thing underneath it, left
+open deliberately rather than half-moved.
+
+**Measured, not inferred.** `def._sceneryShift` is 0.85616 for estoril, and it
+applies UNIFORMLY to both scenery frac forms — verified against
+`track.props.spans`, which reports emitted engine fracs:
+
+| emitter (authored) | predicted engine | emitted span |
+|---|---|---|
+| `tyreWall(0.880, 0.925, -1)` | 0.7362, 0.7812 | **0.7360, 0.7810** |
+| `fence(0.95, 0.06, -1)` | 0.8062, 0.9162 | **0.8060, 0.9160** |
+| `guardrail(0.94, 0.06, 1)` | 0.7962, 0.9162 | **0.7960, 0.9160** |
+
+Four-decimal agreement, so the shift is not in doubt. What IS wrong is that the
+authored numbers do not put emitters on the features they are named for:
+
+- `estoril-t1-gravel`, authored `K(0.078)`, emits at engine **0.934** — inside
+  `pitLaneSpan` (sIn 3879.7 m, len 370 → engine 0.937-0.027), which is why it is
+  suppressed "superseded by the pit complex". T1's apex is engine 0.1162.
+- `estoril-stand-esses`, authored `K(0.140)`, emits at engine **0.996** — also
+  in the pit lane, likewise suppressed.
+- The Parabolica dressing cluster (gravel, tyre wall, spectator hill,
+  billboards, marshal post; authored 0.865-0.935) emits at engine
+  **0.721-0.791**. The Parabolica itself is engine 0.782-0.8635 (337 m of
+  sustained curvature, R 122 m at the centroid), so the cluster dresses T13 and
+  the approach and stops where the corner starts.
+
+**No single frame reconciles them.** Read as engine-frame, `t1-gravel` at 0.078
+is a sensible approach-to-T1 placement but the Parabolica cluster at 0.865-0.935
+lands past the corner on the straight. Read as pre-start-line-move authoring,
+T1 would be authored 0.260, which no emitter uses. So this is not one constant
+to correct; the file appears to mix frames per emitter.
+
+**Why nothing was moved.** The obvious correction — shift the Parabolica cluster
+by +0.0663 authored so it covers engine 0.782-0.8635 — drops it squarely on the
+pit complex, which occupies authored 0.94-0.06 (pit blocks 0.960/0.996, gantry
+0.968, grandstand 0.955, fence and guardrail wrapping through 0.06). A move made
+on the arithmetic alone would trade an undressed corner for props inside the
+pits.
+
+**What a real pass needs:** `track.props.spans` gives emitted engine fracs for
+the span-based kinds (tyreWall, guardrail, fence) directly, and
+`modelDiagnostics.suppressed/emitted` gives ids for the model kinds. Enumerate
+every emitter in `js/circuits/scenery/estoril.js` through those two, compare
+each against the feature its id names, and only then decide per emitter. The
+sweeps' three baselines (coplanar 5, float 0, clip 1 severe) are the guard that
+such a pass has not made things worse.
+
+### Resolution, same day: the names were corrected, the props were not
+
+The per-emitter enumeration this entry asked for was done. Under the shift, the
+result is worse than "some emitters are off" — **not one of the twelve lands on
+the feature its id names**, and two never render at all:
+
+| id (before) | authored | engine | actually lands on | renamed to |
+|---|---|---|---|---|
+| `pit-terrace-a` | 0.960 | 0.8162 | T14, 26 m, R 110 | `parabolica-terrace-a` |
+| `pit-terrace-b` | 0.996 | 0.8522 | T14, 123 m | `parabolica-terrace-b` |
+| `stand-pit` | 0.005 | 0.8612 | T14 exit, R 76 | `stand-parabolica-exit` |
+| `stand-t1` | 0.078 | 0.9342 | main straight | `stand-main-straight` |
+| `stand-esses` | 0.140 | 0.9962 | PIT LANE — **suppressed** | `stand-pitlane-superseded` |
+| `stand-parabolica` | 0.900 | 0.7562 | T13, 31 m | `stand-t13` |
+| `t1-gravel` | 0.078 | 0.9342 | pit complex — **suppressed** | `pit-entry-gravel-superseded` |
+| `esses-gravel` | 0.420 | 0.2762 | T5, 54 m | `t5-gravel` |
+| `t12-gravel` | 0.780 | 0.6362 | T11, 72 m | `t11-gravel` |
+| `parabolica-gravel-a/b/c` | 0.884-0.916 | 0.740-0.772 | T13 | `t13-gravel-a/b/c` |
+
+**The obvious correction was tried and measured, and it is not a one-line def
+edit.** Dropping `sceneryStartFrac` (shift -> 0) does fix the semantics
+exactly: the three pit emitters land inside `pitLaneSpan` to the metre and the
+terraces become "superseded by the pit complex", which is what a circuit's
+hand-placed pit block is FOR, while `t1-gravel` and `stand-esses` come alive at
+their own features. It also takes **coplanar 5 -> 0**. But it costs:
+
+- **float 0 -> 1** (one elevated cluster)
+- **clip 1 -> 3 severe**, including a **4.00 m / 1261 m3** collision at frac
+  0.000 that SURVIVES retiring the hand-placed pit grandstand — so at least one
+  more structure collides with the engine's pit complex underneath it
+- **`estoril-aldeia` footprint rejected** — the village lands on the road
+
+Best-fit analysis over the unambiguous emitters confirms no single constant
+rescues it: shift 0 scores 195 m mean name-to-feature error, 0.938 scores
+136 m, and the current 0.85616 scores **397 m** — worst of the three, yet the
+one the geometry was tuned against. The dressing was settled where it sits;
+`float 0` and `clip 1` at the current positions are the evidence.
+
+So the names were corrected in place (zero geometric change — 192483 verts and
+all three baselines identical before and after) and a banner at the top of
+`js/circuits/scenery/estoril.js` records the arithmetic and the measured cost
+of the move, so the next author neither places by name nor repeats the
+experiment blind.
+
+**Still open:** moving the dressing onto the features it names. That needs the
+pit-complex collisions resolved emitter by emitter and a rendered lap to judge
+it — a dressing pass, which is what this entry originally said and what the
+attempt confirmed.

@@ -666,12 +666,36 @@ export function gateOnly() {
   // Against the deploy tip, same as a real deploy: the circuits OUR side
   // touched (three-dot), not every circuit that moved on the branch.
   let circuits = [];
+  let base = "";
+  const gaps = [];
   try {
     must(git(["fetch", "--no-tags", REMOTE, DEPLOY_BRANCH]), "fetch");
-    circuits = touchedCircuits(must(git(["rev-parse", `${REMOTE}/${DEPLOY_BRANCH}`]), "rev-parse"));
-  } catch (e) { log(`verify-track skipped: cannot reach ${REMOTE}/${DEPLOY_BRANCH} (${e.message})`); }
+    base = must(git(["rev-parse", `${REMOTE}/${DEPLOY_BRANCH}`]), "rev-parse");
+    circuits = touchedCircuits(base);
+  } catch (e) {
+    log(`verify-track skipped: cannot reach ${REMOTE}/${DEPLOY_BRANCH} (${e.message})`);
+    // A LOG LINE IS NOT A VERDICT. Without this, --json showed no
+    // verify-track entries and no marker, so "no circuit was touched" and
+    // "could not look" read identically to the reader of the JSON.
+    gaps.push(`verify-track and the geometry sweeps: could not reach ${REMOTE}/${DEPLOY_BRANCH} (${e.message}) — NOT a statement that nothing was touched`);
+  }
   for (const id of circuits) { run("node", ["tools/track/verify-track.cjs", id], `verify-track ${id}`); verified.push(`verify-track:${id}`); }
-  return { gate: "only", verified, pushed: false, seconds: Math.round((Date.now() - t0) / 1000) };
+  // PARITY WITH main() (2026-09-22). This function's own docstring calls it
+  // "exactly what main() runs before it pushes", and AGENTS.md rule 3 calls it
+  // the only pre-push check that runs what the deploy runs — but it never
+  // called touchesGeometry, so a geometry-moving change got exit 0 having
+  // skipped test:sweeps, the very leg whose absence broke Pages for hours on
+  // 2026-09-18, and returned no notCovered key for the reader to notice.
+  if (base) {
+    // Mirrors main()'s branch exactly: the full sweeps when the union can move
+    // geometry, otherwise the targeted suites that read it.
+    const ranSweeps = touchesGeometry(base);
+    if (ranSweeps) { run("npm", ["run", "test:sweeps"], "Pages gate: test:sweeps (this union can move geometry)"); verified.push("test:sweeps"); }
+    let targeted = [];
+    if (!ranSweeps) { targeted = targetedFor(base); if (targeted.length) verified.push(...runTargeted(targeted, "Pages gate")); }
+    gaps.push(...notCovered(ranSweeps, targeted));
+  }
+  return { gate: "only", verified, pushed: false, notCovered: gaps, seconds: Math.round((Date.now() - t0) / 1000) };
 }
 
 /* IS THE TRAIN ALREADY RED? A deploy inherits the branch it lands on, and a red
