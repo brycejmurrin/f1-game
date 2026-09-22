@@ -1014,3 +1014,36 @@ test("ambition moves WHO the rival is, in the direction it moves every other kin
   assert.ok(Career.AMBITION[0].delta > Career.AMBITION[Career.AMBITION.length - 1].delta,
     "the ambition table still runs modest-high to ambitious-low");
 });
+
+test("ADDING A KIND MUST NOT RE-PROMISE THE OTHER THREE", () => {
+  // The regression this pins, measured on 2026-09-22: goalTypeFor was
+  // `floor(roll * GOAL_ORDER.length)`, so appending beatRival took the divisor
+  // 3 -> 4 and every seed and year drew a different kind. Two career specs that
+  // read deal.goal.value as a position bar were handed beatMate's 0 and went
+  // red, and an in-flight career would have been promised something other than
+  // what it was on course for. Appending preserves an array's INDICES, not its
+  // DRAWS.
+  //
+  // The property: whatever goalTypeFor returns for a year, it is one of the
+  // declared kinds, and the three originals are still drawn by dividing by
+  // THREE — so a roll that used to land on champPos still does.
+  const Career = loadDriver();
+  Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+  Career.engage(true);
+  const seen = new Set();
+  for (let year = 2026; year < 2126; year++) {
+    const t = Career.goalTypeFor(year);
+    assert.ok(Career.GOAL_ORDER.includes(t), `${t} is not a declared kind`);
+    seen.add(t);
+  }
+  assert.ok(seen.has("beatRival"), "beatRival must actually be drawn sometimes");
+  for (const base of ["champPos", "teamPos", "beatMate"])
+    assert.ok(seen.has(base), `${base} must still be drawn`);
+  // beatRival rides its own roll, so it cannot crowd the originals out: over a
+  // century of seasons the three originals must still be the clear majority.
+  let rivals = 0;
+  for (let year = 2026; year < 2126; year++)
+    if (Career.goalTypeFor(year) === "beatRival") rivals++;
+  assert.ok(rivals > 0 && rivals < 60,
+    `beatRival drawn ${rivals}/100 seasons — its own roll should be a minority share`);
+});

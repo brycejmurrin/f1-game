@@ -461,16 +461,29 @@ const GOAL_KINDS = {
     },
   },
 };
-// beatRival is LAST deliberately. goalTypeFor indexes this array, so appending
-// keeps every earlier index on the kind it already drew; inserting would have
-// re-dealt the promise for every seed and year at once.
-const GOAL_ORDER = ["champPos", "teamPos", "beatMate", "beatRival"];
+// The three kinds a contract could always be. beatRival is deliberately NOT in
+// here — see goalTypeFor for why that matters.
+const GOAL_BASE = ["champPos", "teamPos", "beatMate"];
+// Every declared kind, for the contract tests and anything enumerating them.
+const GOAL_ORDER = GOAL_BASE.concat(["beatRival"]);
 function goalKind(type) { return GOAL_KINDS[type] || GOAL_KINDS.champPos; }
 // Drawn from the career seed and the YEAR, so a career is not the same promise
 // five seasons running and a reload cannot reroll it.
+// A FOURTH KIND MUST NOT RE-PROMISE THE OTHER THREE. This was
+// `floor(roll * GOAL_ORDER.length)`, so adding a kind changed the DIVISOR and
+// every seed and year re-bucketed at once: careers promised a championship
+// position were quietly promised something else, and two career specs that read
+// `deal.goal.value` as a position bar went red because they were handed
+// beatMate's 0 instead. Appending to an array preserves its INDICES, not its
+// DRAWS — measured, after committing a comment that claimed otherwise.
+//
+// So beatRival takes its OWN independent roll and the original three keep
+// dividing by three. Three draws in four are byte-identical to what they were.
+const RIVAL_SHARE = 0.25;
 function goalTypeFor(year) {
-  const i = Math.floor(rnd(year, "goalkind") * GOAL_ORDER.length);
-  return GOAL_ORDER[clamp(i, 0, GOAL_ORDER.length - 1)];
+  if (rnd(year, "goalrival") < RIVAL_SHARE) return "beatRival";
+  const i = Math.floor(rnd(year, "goalkind") * GOAL_BASE.length);
+  return GOAL_BASE[clamp(i, 0, GOAL_BASE.length - 1)];
 }
 function goalFor(team, amb, year) {
   const type = goalTypeFor(year);
