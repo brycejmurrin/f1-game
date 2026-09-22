@@ -43,15 +43,22 @@ on:
 permissions:
   contents: write
 
+# One import per branch at a time, and never cancelled: this job PUSHES a bot
+# branch, and two runs racing on the same `commit_branch` would each try to
+# fast-forward over the other. A later dispatch queues behind the running one.
+concurrency:
+  group: import-models-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   import:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           ref: ${{ github.ref_name }}
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: "22"
 
@@ -99,7 +106,7 @@ jobs:
           node tools/gen/assets.mjs verify || echo "::warning::verify reported issues (often the budget — review the size report above)"
 
       - name: Upload baked models as an artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: apex-models
           path: |

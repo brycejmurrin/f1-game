@@ -81,7 +81,7 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/physics-tune-sweep.mjs** | How DRIVEABLE is each notch of each handling slider? Drives the real DOM slider, then a curvature-fed closed-loop lap. | tune-physics |
 | **check/player-dyn.mjs** | Player vehicle-dynamics bench (VM): braking, accel, skidpad, step steer, trail-brake, lift-off, power-on, flick. | tune-physics |
 | **check/quick-validate.mjs** | Fast refactor gate: boots the game once and probes the critical paths (globals, race, physics, lighting) in ~30-60 s. | check-changes |
-| **check/ratchets.mjs** | Size ratchets from `tests/data/ratchets.json`: `--check` (default), `--update` snaps every ceiling down, `--json`. | — |
+| **check/ratchets.mjs** | Size ratchets from `tests/data/ratchets.json`: `--check` (default), `--update` snaps ceilings down, `--json`, `--base… | — |
 | **check/scan-globals.mjs** | Derives the REAL global-reference graph of the IIFE build (espree/eslint-scope): assigns, eval-time reads, edges. | check-changes |
 | **check/shell-ids.mjs** | Every element id the JS looks up must exist: shell, runtime-created, or reported as dynamic. `--json`. | check-changes |
 | **check/tree-counts.mjs** | Counts behind the `tree` ratchets: CSS classes/spacing/colour, shell nodes, bare catches, waits, sleeps. `--offenders`. | — |
@@ -112,6 +112,7 @@ Author-time generation: the generated doc blocks, the shell, and the asset bakes
 | **gen/synth-models.mjs** | Procedural AX26 model catalog for `assets.mjs bake-synthetic-models` — buildings, grandstands, industrial; no network. | asset-pack |
 | **gen/title-art.mjs** | Draws index.html's #title-car from js/car/car3d.js through the garage camera; --check fails on drift. | — |
 | **gen/track-stills.mjs** | One car-free in-game still per circuit into `assets/stills/<id>.webp` for the picker hero (`--only/--frac/--force`). | playwright-probe |
+| **gen/vendor-three.mjs** | Vendors three.js: patches the readable npm build (vendor/three-patches), minifies with the pinned terser, writes… | check-changes |
 
 ### `tools/shot/`
 

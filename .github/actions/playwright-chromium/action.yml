@@ -1,0 +1,38 @@
+name: Playwright Chromium (cached)
+description: >-
+  Restore Playwright's Chromium from the lockfile-keyed cache and install it
+  only on a miss. CACHED across runs: the download is ~25 s on every browser
+  job, every run, for a binary pinned by the @playwright/test version in
+  package-lock.json, so the key is that lock file and a Playwright bump misses
+  the cache and refetches. A cold cache installs the browser and (on Linux) its
+  OS dependencies; on a hit the browser is already complete and the runner
+  image already satisfied the same dependency set for the cached run, so
+  --with-deps is never re-run — one stalled apt mirror once consumed a job's
+  full 30 minutes. Used by the five browser jobs in ci.yml with the same
+  cache-hit contract tests/unit/ci-coverage.test.mjs pins here.
+inputs:
+  browsers-path:
+    description: Playwright's browser directory on this runner OS
+    default: ~/.cache/ms-playwright
+  with-deps:
+    description: >-
+      Pass --with-deps (apt) on a cache miss. "false" on macOS, where there is
+      no apt and the full browser (not the headless shell) is wanted.
+    default: "true"
+outputs:
+  cache-hit:
+    description: "'true' when the browser came from the cache"
+    value: ${{ steps.pwcache.outputs.cache-hit }}
+runs:
+  using: composite
+  steps:
+    - name: Cache Chromium
+      id: pwcache
+      uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+      with:
+        path: ${{ inputs.browsers-path }}
+        key: pw-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+    - name: Install Chromium on cache miss
+      if: steps.pwcache.outputs.cache-hit != 'true'
+      shell: bash
+      run: npx playwright install ${{ inputs.with-deps == 'true' && '--with-deps' || '' }} chromium

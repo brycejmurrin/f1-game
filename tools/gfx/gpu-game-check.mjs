@@ -280,6 +280,12 @@ try {
             // -1 forever where EXT_disjoint_timer_query_webgl2 is absent. A
             // negative is NOT a GPU millisecond; the reader below drops them.
             gms: (() => { try { const q = A && A.gpuTimer && A.gpuTimer(); return q && q.ms > 0 ? +q.ms.toFixed(2) : null; } catch (_) { return null; } })(),
+            // TLX uniform-buffer census (tlx.js memState): how many uniform
+            // buffers three holds and how many KB — the shared frame block
+            // (apex26.tlxSharedUniforms) is a structural count change, so this
+            // is the one census number that does not need a quiet runner.
+            ubo: (() => { try { const t = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null; const m = t && t.memState ? t.memState() : null;
+              return m && m.rUbo != null ? { n: m.rUbo, kb: m.rUboKB, ver: m.groupVer, pms: m.presentMs, dr: m.draws } : null; } catch (_) { return null; } })(),
           };
         }),
         new Promise((_, rj) => setTimeout(() => rj(new Error("beat timeout")), 8000)),

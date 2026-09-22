@@ -106,12 +106,17 @@ test("every difficulty carries both dimensions, the ladder is monotonic, and no 
   for (const k of order) {
     assert.ok(DIFF[k].corner > 0 && DIFF[k].corner <= 1, `${k} corner ${DIFF[k].corner} is a real factor at or below the grip model`);
     assert.ok(DIFF[k].ai > 0, `${k} has a pace scale`);
+    assert.ok(DIFF[k].err > 0, `${k} has a mistake-rate scale`);
   }
   for (let i = 1; i < order.length; i++) {
     const lo = DIFF[order[i - 1]], hi = DIFF[order[i]];
     assert.ok(hi.ai > lo.ai, `${order[i]} is faster than ${order[i - 1]}`);
     assert.ok(hi.corner >= lo.corner, `${order[i]} corners at least as close to the limit as ${order[i - 1]}`);
+    // err runs the OTHER way: easier levels err MORE, so the ladder here is a
+    // ceiling-down walk (easy >= normal >= hard), not ascending like ai/corner.
+    assert.ok(lo.err >= hi.err, `${order[i - 1]} errs at least as often as ${order[i]}`);
   }
+  assert.equal(DIFF.hard.err, 1, "hard is the unscaled baseline rate");
   // The fastest team's TIER_V times the best driver's skill ceiling (1.0) times
   // the top pace scale must stay under the player's own 1.0, or a same-spec AI
   // out-drags the player on the straight — the one cheat players reliably catch.

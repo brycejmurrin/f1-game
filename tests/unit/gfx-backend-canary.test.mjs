@@ -25,6 +25,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
@@ -204,13 +205,22 @@ test("the shared Playwright fixture pins native GLX coverage", () => {
 });
 
 test("first world present re-arms the canary so a jetsam mid-frame still reverts", () => {
+  // The arm used to be inlined right before gfx.present(po); it is now the
+  // extracted armBackendProbe() (also called from tick()'s fatal catch, so a
+  // pre-present crash still gets recorded — see the tick() test below), but
+  // the call site must still be the LAST thing before present() and the
+  // disarm-after-a-proved-run must still be the first thing after it.
   const game = code("js/game.js");
   const present = game.search(/gfx\.present\(\s*po\s*\)/);
-  const window = game.slice(present - 600, present + 400);
-  assert.match(window, /backendPreference\(\)/,
+  const before = game.slice(Math.max(0, present - 120), present);
+  const after = game.slice(present, present + 400);
+  assert.match(before, /armBackendProbe\(\)\s*;\s*$/,
+    "the last statement before gfx.present(po) must arm the canary");
+  assert.match(after, /removeItem\(\s*"apex26\.gfxBackendProbe"\s*\)/);
+  const helper = fnBody(game, "armBackendProbe");
+  assert.match(helper, /backendPreference\(\)/,
     "canary re-arm must resolve an unset preference to the default THREE pick");
-  assert.match(window, /setItem\(\s*"apex26\.gfxBackendProbe"/);
-  assert.match(window, /removeItem\(\s*"apex26\.gfxBackendProbe"\s*\)/);
+  assert.match(helper, /setItem\(\s*"apex26\.gfxBackendProbe"/);
 });
 
 test("RENDERER picker lives in renderer-picker.js, not game.js or gfx-quality.js", () => {
@@ -377,6 +387,25 @@ test("TLX hoists crack fwidth and MAT samples before the detail/live If (WGSL de
   const aSamp = lit.indexOf("const t = matAlbedoNode.sample(uv)");
   const aAfter = lit.indexOf("If(live.and(far.greaterThan(0.001))", aSamp);
   assert.ok(aSamp > 0 && aAfter > aSamp, "MAT albedo sample must sit before the live/far If");
+});
+
+test("TLX frame uniforms share one render-group buffer (setGroup loop after the last U member)", () => {
+  // A TSL uniform() defaults to objectGroup and three clones non-shared bind
+  // groups per render object; the loop moves the whole frame block to
+  // renderGroup. It must sit AFTER the last U.* assignment (a member added
+  // below it would silently demote camera + U back to per-object clones), and
+  // the flag must default ON.
+  const lit = read("js/render/three/tsl-lit.js");
+  assert.match(lit, /\buniformArray, renderGroup, attribute\b/, "renderGroup is destructured from TSL");
+  const last = lit.lastIndexOf("U.lampGeo = uniformArray(lampGeo);");
+  const loop = lit.indexOf("if (SHARED_UNIFORMS) for (const k in U) U[k].setGroup(renderGroup);");
+  assert.ok(last > 0 && loop > last, "the setGroup loop follows the last U.* assignment");
+  assert.ok(lit.indexOf("U.", loop) > 0, "U is still used after the loop (sanity)");
+  assert.doesNotMatch(lit.slice(loop, loop + 400), /\bU\.[A-Za-z]+\s*=\s*uniform/, "no U member is assigned after the loop");
+  assert.match(lit, /const SHARED_UNIFORMS = !\(ctx && ctx\.sharedUniforms === false\)/, "shared is the default; only an explicit false opts out");
+  const tlx = read("js/render/three/tlx.js");
+  assert.match(tlx, /apex26\.tlxSharedUniforms/, "the A/B pin is read in tlx.js");
+  assert.match(tlx, /sharedUniforms:\s*_sharedUniforms/, "the pin reaches the lit factory ctx");
 });
 
 test("TLX decal cache evicts without Material.dispose (three #33952)", () => {
@@ -1847,11 +1876,13 @@ test("TLX WebGPU path never claims #game as WebGL2 after renderer.init()", () =>
 const TLX = read("js/render/three/tlx.js");
 const GLX = read("js/render/glx/glx.js");
 const TSL_LIT = read("js/render/three/tsl-lit.js");
-const THREE_BUNDLE = read("vendor/three-0.185.1/three.webgpu.min.js");
+const THREE_BUNDLE = read("vendor/three-0.186.0/three.webgpu.min.js");
 
-// ── The two LOCAL PATCHES carried on the vendored bundle (vendor/three-0.185.1/
-// PATCHES.md). A vendor re-drop that silently reverts either one must fail HERE,
-// not in production. Upstream has fixed neither as of 186dev (2026-08-27).
+// ── The LOCAL PATCHES carried on the vendored bundle (vendor/three-0.186.0/
+// PATCHES.md, applied to the readable build by tools/gen/vendor-three.mjs and
+// minified with the pinned terser). A vendor re-drop that silently reverts one
+// must fail HERE, not in production. The needles below are property names and
+// string literals — terser's local names change between runs of the tool.
 test("GLX's env probe cannot latch _envActive against a disabled/null framebuffer", () => {
   // The completeness check (2026-09-03) can disable the probe DURING the first
   // envFaceBegin, because the lazy envInit() runs after the _envDisabled gate.
@@ -1904,7 +1935,7 @@ test("the vendored three carries the swizzle patch — Chromium 141 rejects r185
   // first race frame, TLX refuses the tab and reloads. The patch omits the
   // member (identity swizzle carries no information). Re-apply per PATCHES.md.
   assert.doesNotMatch(THREE_BUNDLE, /this\.swizzle="rgba"/,
-    "pristine swizzle default is back — the vendor bundle was re-dropped without the patch (see vendor/three-0.185.1/PATCHES.md §1)");
+    "pristine swizzle default is back — the vendor bundle was re-dropped without the patch (see vendor/three-0.186.0/PATCHES.md §1)");
   assert.equal(THREE_BUNDLE.split('this.swizzle=void 0').length - 1, 2,
     "the swizzle patch must cover BOTH sites (constructor + reset())");
 });
@@ -1915,14 +1946,14 @@ test("the vendored three emits render-stage node variables at FUNCTION scope (We
   // way and the lit fragment carried 1,597 of them. The patch routes the
   // vertex/fragment stages through getVars(stage, false) and moves the block
   // inside main(). Dawn never checks the sum, so only this pin and a phone can.
-  assert.match(THREE_BUNDLE, /s\.vars=this\.getVars\(t,"compute"===t&&r\)/,
+  assert.match(THREE_BUNDLE, /getVars\((\w+),"compute"===\1&&\w+\)/,
     "render stages must take the function-scope getVars form (compute keeps allowGlobalVariables)");
-  assert.match(THREE_BUNDLE, /@vertex\\nfn main\( \$\{e\.attributes\} \) -> VaryingsStruct \{\\n\\n\\t\/\/ vars\\n\\t\$\{e\.vars\}/,
+  assert.match(THREE_BUNDLE, /@vertex\\nfn main\( \$\{(\w+)\.attributes\} \) -> VaryingsStruct \{\\n\\n\\t\/\/ vars\\n\\t\$\{\1\.vars\}/,
     "vertex template must declare the node variables inside main()");
-  assert.match(THREE_BUNDLE, /@fragment\\nfn main\( \$\{e\.varyings\} \) -> \$\{e\.returnType\} \{\\n\\n\\t\/\/ vars\\n\\t\$\{e\.vars\}/,
+  assert.match(THREE_BUNDLE, /@fragment\\nfn main\( \$\{(\w+)\.varyings\} \) -> \$\{\1\.returnType\} \{\\n\\n\\t\/\/ vars\\n\\t\$\{\1\.vars\}/,
     "fragment template must declare the node variables inside main()");
-  assert.doesNotMatch(THREE_BUNDLE, /\/\/ vars\\n\$\{e\.vars\}\\n\\n\/\/ codes\\n\$\{e\.codes\}\\n\\n@(vertex|fragment)/,
-    "a module-scope // vars block before @vertex/@fragment is the pristine r185 emission");
+  assert.doesNotMatch(THREE_BUNDLE, /\/\/ vars\\n\$\{(\w+)\.vars\}\\n\\n\/\/ codes\\n\$\{\1\.codes\}\\n\\n@(vertex|fragment)/,
+    "a module-scope // vars block before @vertex/@fragment is the pristine upstream emission");
   // The graph-side half: the shared noise helpers are layouted (real functions),
   // not inlined ~50× into the lit shader.
   const chunks = read("js/render/three/tsl-chunks.js");
@@ -1943,28 +1974,45 @@ test("the vendored three emits render-stage node variables at FUNCTION scope (We
       `${name} must carry a setLayout (the sky noise family is SEPARATE from tsl-chunks')`);
   }
 });
-test("the vendored three carries the #33952 bind-group leak backport (PR #33954)", () => {
+test("the vendored three has upstream's #33954 bind-group fix (patch 2 retired in r186)", () => {
   // _destroyBindings must delete the destroyed bind group from the shared
   // texture's bindGroups Set, or the Set grows unboundedly holding
-  // NodeSampledTexture refs — TLX's shared-texture-node pattern. The deferred
-  // material dispose() in tlx.js/tsl-fx.js is only leak-free WITH this patch.
-  // Drop the assertion (and the patch) on the first release containing #33954.
-  assert.match(THREE_BUNDLE, /bindGroups\.delete\(\w+\)\}\)\(this\.textures\.get\(\w+\.texture\)\)/,
-    "the #33952 backport is missing from the vendor bundle — evicted-material dispose() now leaks (see vendor/three-0.185.1/PATCHES.md §2)");
+  // NodeSampledTexture refs — TLX's shared-texture-node pattern. r185 carried
+  // this as a local backport; r186 ships it. A re-drop of an older release
+  // fails here.
+  assert.match(THREE_BUNDLE, /bindGroups\.delete\(/,
+    "the #33954 fix is missing from the vendor bundle — evicted-material dispose() now leaks (vendor/three-0.186.0/PATCHES.md §2)");
 });
-test("the vendored three carries the #34405 polygonOffset pipeline-key backport (PR #34406)", () => {
-  // r185's WebGPU backend keys a pipeline on blend/depth/stencil/side/formats
-  // but not on polygonOffset*, so TLX's bias-only material variants (tsl-fx
-  // road decals −4/−8, tsl-lit o.depthBias) shared one GPURenderPipeline and
-  // one of each pair drew with the other's bias. All THREE sites must carry
-  // the fields: the cache-key array, the needsRenderUpdate compare chain and
-  // its assignment block. Drop with the patch on the first release with #34406.
-  assert.match(THREE_BUNDLE, /r\.stencilWriteMask,r\.polygonOffset,r\.polygonOffsetFactor,r\.polygonOffsetUnits,r\.side,/,
-    "cache key lacks polygonOffset* (vendor/three-0.185.1/PATCHES.md §3)");
-  assert.match(THREE_BUNDLE, /t\.polygonOffset===s\.polygonOffset&&t\.polygonOffsetFactor===s\.polygonOffsetFactor&&t\.polygonOffsetUnits===s\.polygonOffsetUnits&&t\.side===s\.side/,
+test("the vendored three keys WebGPU pipelines on polygonOffset (patch 3 retired in r186, PR #34406)", () => {
+  // TLX's bias-only material variants (tsl-fx road decals −4/−8, tsl-lit
+  // o.depthBias) shared one GPURenderPipeline on r185 and one of each pair drew
+  // with the other's bias. Upstream carries the three fields in the cache key
+  // and in needsRenderUpdate's compare chain since r186.
+  assert.match(THREE_BUNDLE, /\.stencilWriteMask,(\w+)\.polygonOffset,\1\.polygonOffsetFactor,\1\.polygonOffsetUnits,\1\.side/,
+    "cache key lacks polygonOffset* (vendor/three-0.186.0/PATCHES.md §3)");
+  assert.match(THREE_BUNDLE, /\.polygonOffset===(\w+)\.polygonOffset&&\w+\.polygonOffsetFactor===\1\.polygonOffsetFactor&&\w+\.polygonOffsetUnits===\1\.polygonOffsetUnits/,
     "needsRenderUpdate does not compare polygonOffset* (PATCHES.md §3)");
-  assert.match(THREE_BUNDLE, /t\.polygonOffset=s\.polygonOffset,t\.polygonOffsetFactor=s\.polygonOffsetFactor,t\.polygonOffsetUnits=s\.polygonOffsetUnits,t\.side=s\.side/,
-    "needsRenderUpdate does not record polygonOffset* (PATCHES.md §3)");
+});
+test("the vendored three matches its MANIFEST.json — generated by tools/gen/vendor-three.mjs, never hand-edited", () => {
+  // The .min.js files are terser output of the PATCHED readable build; a hand
+  // edit or a re-drop that skipped the generator changes a hash. The pinned
+  // terser in package.json is the one the manifest names, so a regeneration on
+  // another box reproduces the same bytes.
+  const dir = "vendor/three-0.186.0";
+  const m = JSON.parse(read(`${dir}/MANIFEST.json`));
+  assert.equal(m.three, "0.186.0");
+  assert.deepEqual(m.patches, [1, 4, 5], "patch ids applied (2 and 3 retired in r186)");
+  const pkg = JSON.parse(read("package.json"));
+  assert.equal(pkg.devDependencies.terser, m.terser, "package.json must pin the terser the manifest was generated with");
+  for (const [file, rec] of Object.entries(m.files)) {
+    const h = createHash("sha256").update(fs.readFileSync(path.join(ROOT, dir, file))).digest("hex");
+    assert.equal(h, rec.sha256, `${dir}/${file} differs from MANIFEST.json — regenerate with node tools/gen/vendor-three.mjs 0.186.0`);
+  }
+  for (const name of ["three.webgpu.min.js", "three.core.min.js", "three.tsl.min.js", "LICENSE.txt", "addons/tsl/display/BloomNode.js"]) {
+    assert.ok(m.files[name], `${name} must be a manifest file`);
+  }
+  assert.match(THREE_BUNDLE, /from"\.\/three\.core\.min\.js"/, "the internal core import must point at the minified chunk, as upstream's min build did");
+  assert.match(THREE_BUNDLE.slice(0, 300), /@license/, "the MIT banner survives minification");
 });
 
 /** The object literal passed to `new THREE.WebGPURenderer({...})`, brace-matched
@@ -3056,7 +3104,9 @@ test("boot audit: scenery loads are memoised, car assets warm in startRace, deca
   assert.match(es, /_sceneryLoads\.delete\(def\.id\)/, "and clear it on settle so a dropped fetch retries");
   // warmCarAssets: the caches were lazy, so the first countdown frame built
   // every mesh and atlas; startRace now does it before the first render.
-  const sr = game.slice(game.indexOf("async function startRace("), game.indexOf("function showTouchControls("));
+  // startRace() itself is a re-entrancy-latch wrapper (start-race-latch
+  // .test.mjs) around startRaceBody(), which still carries this whole flow.
+  const sr = game.slice(game.indexOf("async function startRaceBody("), game.indexOf("function showTouchControls("));
   assert.match(sr, /warmCarAssets\(\);\s*[^\n]*\n\s*DebrisWorld\.prime\(\)/, "startRace warms car assets right before DebrisWorld.prime()");
   // The warm-up and the decal atlas cache live in the car-draw seam (js/car/car-draw.js).
   const cd = read("js/car/car-draw.js").replace(/^[ \t]*\/\/.*$/gm, "");
@@ -3798,7 +3848,7 @@ test("TLX binds on a phone by default, declines only on apex26.tlxMobile=0 with 
 // work — asserted against the VENDORED bundle so a version bump re-checks them
 // rather than letting the comment go stale.
 test("three still re-reads attribute.array after upload (why the release fix is impossible)", () => {
-  const three = read("vendor/three-0.185.1/three.webgpu.min.js");
+  const three = read("vendor/three-0.186.0/three.webgpu.min.js");
 
   // draw(): firstVertex *= index.array.BYTES_PER_ELEMENT, every indexed draw.
   assert.match(three, /\*=\s*\w+\.array\.BYTES_PER_ELEMENT/,
@@ -4121,7 +4171,7 @@ test("spatial upscale persists once through GameStore at the UI boundary", () =>
 
 // Execute the bundled API: mocks alone cannot catch a renamed/wrong owner API.
 test("TLX timing enables the bundled backend, not a shadow renderer property", async () => {
-  const THREE = await import("../../vendor/three-0.185.1/three.webgpu.min.js");
+  const THREE = await import("../../vendor/three-0.186.0/three.webgpu.min.js");
   const renderer = new THREE.WebGPURenderer({ canvas: { width: 1, height: 1, style: {} } });
   let _gpuTimerOn = false, _gpuMs = 12, _gpuTimerEpoch = 0;
   const _gpuSupported = () => true;
@@ -4135,7 +4185,7 @@ test("TLX timing enables the bundled backend, not a shadow renderer property", a
 });
 
 test("TLX cube readback selects all six faces of attachment zero", async () => {
-  const THREE = await import("../../vendor/three-0.185.1/three.webgpu.min.js");
+  const THREE = await import("../../vendor/three-0.186.0/three.webgpu.min.js");
   const renderer = new THREE.WebGPURenderer({ canvas: { width: 1, height: 1, style: {} } });
   const envRT = new THREE.CubeRenderTarget(1), ENV_SIZE = 1;
   let _envCubeRead = false, _envCube = null;
@@ -4293,9 +4343,10 @@ test("all track loaders release selector ownership before building, even on fail
 });
 
 test("three warm-up fallback yields tasks without waiting for display frames", async () => {
-  const core = read("vendor/three-0.185.1/three.core.min.js");
-  assert.match(core, /li as yieldToMain/);
-  const body = fnBody(core, "li");
+  const core = read("vendor/three-0.186.0/three.core.min.js");
+  const alias = core.match(/\b(\w+) as yieldToMain\b/);
+  assert.ok(alias, "three.core.min.js must export yieldToMain under a minified alias");
+  const body = fnBody(core, alias[1]);
   const queued = [], channels = [];
   let frames = 0, timers = 0;
   const raf = () => { frames++; throw new Error("must not wait for a frame"); };
@@ -4444,4 +4495,29 @@ test("TLX bounds GPU error history and preserves resize context at receipt", () 
   assert.equal(_gpuRecentErrors[0].warmingAtReceipt, true);
   assert.equal(_gpuRecentErrors[0].presentAtReceipt, 12);
   assert.equal(_gpuErrFrames, 1, "receipt counters retain their existing semantics");
+});
+
+test("tick()'s fatal catch arms the boot-canary probe before rethrowing (a pre-present crash must not go unrecorded)", () => {
+  // render() used to arm the probe only right before its own gfx.present(po)
+  // call, at the very end of the function. If render() throws BEFORE
+  // reaching that line — a deterministic fault, not the transient kind
+  // LoopHealth.fault() absorbs — the probe was never written, so the
+  // next-boot strike logic (armed && !skipClaim, near backendPreference())
+  // never saw evidence of the crash. armBackendProbe() extracts the same
+  // body so tick()'s fatal branch can call it too, on the way out.
+  const game = code("js/game.js");
+  const helper = fnBody(game, "armBackendProbe");
+  assert.match(helper, /_backendProved/, "the extracted helper must keep the proved-backend short-circuit");
+  assert.match(helper, /_backendBound/, "the extracted helper must keep the bound-backend gate");
+  assert.match(helper, /_probeArmed\s*=\s*true/, "the extracted helper must still set the armed latch");
+  assert.match(helper, /try\s*\{[^]*catch\s*\([^)]*\)\s*\{/, "armBackendProbe must keep the original try/catch — a jetsam mid-arm must not throw");
+  const tickBody = fnBody(game, "tick");
+  assert.match(tickBody, /LoopHealth\.fault\(e\)/, "tick()'s catch must still run the bounded-tolerance check first");
+  const afterFault = tickBody.slice(tickBody.indexOf("LoopHealth.fault(e)"));
+  const armIdx = afterFault.indexOf("armBackendProbe(");
+  const throwIdx = afterFault.lastIndexOf("throw e");
+  assert.ok(armIdx >= 0, "tick()'s fatal branch must call armBackendProbe()");
+  assert.ok(throwIdx > armIdx, "armBackendProbe() must run BEFORE the rethrow, not after (a thrown error never returns to run it later)");
+  assert.match(afterFault.slice(armIdx - 60, armIdx), /_backendBound\s*&&\s*!_backendProved/,
+    "the fatal-branch call site must gate on the same latch state as the render() call site");
 });
