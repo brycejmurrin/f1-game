@@ -326,11 +326,25 @@ try {
         _dLastS = p.s;
       };
       window.__gcDrive = {
-        start() { if (_dOn) return; _dOn = true; _dPrev = 0; _dRaf = _rawRaf(tick); },
+        start() {
+          if (_dOn) return;
+          // park(0.1) FREEZES the sim for a deterministic screenshot (apex.js
+          // park: G.frozen = true), so a driver over a parked car goes nowhere
+          // — the first local dry run ticked 14 frames for 0 m. Lift the
+          // freeze and release the field, then drive.
+          const A = window.__apex;
+          try { if (A && A.freeze) A.freeze(false); } catch (_) { /* pre-park */ }
+          try { if (A && A.go) A.go(); } catch (_) { /* no race yet */ }
+          _dOn = true; _dPrev = 0; _dRaf = _rawRaf(tick);
+        },
         stop() {
           _dOn = false;
           try { _rawCaf(_dRaf); } catch (_) { /* already fired */ }
-          try { if (window.__apex && window.__apex.clearInput) window.__apex.clearInput(); } catch (_) { /* input hook absent */ }
+          const A = window.__apex;
+          try { if (A && A.clearInput) A.clearInput(); } catch (_) { /* input hook absent */ }
+          // Put the car back where every later phase (feature A/B, shots)
+          // expects it: parked at 0.1, frozen — the state before the window.
+          try { if (A && A.park) A.park(0.1); } catch (_) { /* the A/B re-parks on its own */ }
         },
         stats: () => ({ frames: _dFrames, distM: Math.round(_dDist), meanSpeed: _dFrames ? +(_dSpeedSum / _dFrames).toFixed(1) : 0,
                         offRoadFrames: _dOff, error: _dErr }),
