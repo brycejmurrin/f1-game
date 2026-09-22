@@ -502,8 +502,11 @@ jobs:
               const _sc = g.spikeCpu, _sw = g.spikeWork;
               if (_sc && _sc.spikes != null && _sc.spikes > 0) {
                 rows.push(`${" ".repeat(8)}spike: ${_sc.spikes} frames >= ${_sc.thresholdMs} ms, ${_sc.spikeMs} ms of callbacks, ${_sc.sampledMs} ms sampled inside (join ${_sc.coverage}x)`);
-                for (const r of (_sc.rows || []).slice(0, 8)) rows.push(`${" ".repeat(8)}  ${String((r.share * 100).toFixed(1)).padStart(5)}%  ${String(r.ms).padStart(8)} ms  ${r.site}`);
+                for (const r of (_sc.rows || []).slice(0, 8)) rows.push(`${" ".repeat(8)}  ${String((r.share * 100).toFixed(1)).padStart(5)}%  ${String(r.ms).padStart(8)} ms  ${r.site}${r.path ? "  <- " + String(r.path).slice(0, 160) : ""}`);
                 if (_sw && _sw.frames != null) rows.push(`${" ".repeat(8)}       work inside vs rest: ${_sw.summary}`);
+                if (_sw && _sw.timed) rows.push(`${" ".repeat(8)}       wall time inside vs rest: ${_sw.timed}`);
+                const _sp = g.spikePasses;
+                if (_sp && _sp.summary) rows.push(`${" ".repeat(8)}       passes in spike frames vs rest: ${_sp.summary}`);
               } else if (_sc && _sc.note) {
                 rows.push(`${" ".repeat(8)}spike: ${_sc.note}`);
               }

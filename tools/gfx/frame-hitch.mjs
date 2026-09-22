@@ -214,8 +214,33 @@ export function analyseSpikeCpu(profile, t0, dur, thresholdMs, pageAtStart, topN
     const key = `${f.functionName || "(anonymous)"} @ ${url}:${f.lineNumber != null ? f.lineNumber + 1 : "?"}`;
     bySite.set(key, (bySite.get(key) || 0) + ms);
   }
+  // THE PATH, not just the name: `build` inside a callback is a synchronous
+  // codegen, and which caller asked for it (compileAsync, the render path, a
+  // pass node) is the fix. For each ranked site, the parent chain of the node
+  // that carried the most of its inside-spike time, root-most last.
+  const parentOf = new Map();
+  for (const n of profile.nodes) for (const c of (n.children || [])) parentOf.set(c, n.id);
+  const siteBest = new Map();
+  for (const [id, ms] of self) {
+    const f = (byId.get(id) || {}).callFrame || {};
+    const url = String(f.url || "").replace(/\?v=[a-z0-9]+/g, "").replace(/^https?:\/\/[^/]+\//, "");
+    const key = `${f.functionName || "(anonymous)"} @ ${url}:${f.lineNumber != null ? f.lineNumber + 1 : "?"}`;
+    const prev = siteBest.get(key);
+    if (!prev || ms > prev.ms) siteBest.set(key, { id, ms });
+  }
+  const pathOf = (id) => {
+    const out = []; let cur = parentOf.get(id), hops = 0;
+    while (cur != null && hops++ < 10) {
+      const f = (byId.get(cur) || {}).callFrame || {};
+      const name = f.functionName || "(anonymous)";
+      if (name !== "(root)") out.push(name);
+      cur = parentOf.get(cur);
+    }
+    return out.join(" <- ");
+  };
   const rows = [...bySite.entries()].sort((a, b) => b[1] - a[1]).slice(0, topN)
-    .map(([site, ms]) => ({ site, ms: +ms.toFixed(1), share: +(ms / Math.max(1e-9, inside)).toFixed(3) }));
+    .map(([site, ms]) => ({ site, ms: +ms.toFixed(1), share: +(ms / Math.max(1e-9, inside)).toFixed(3),
+      path: siteBest.has(site) ? pathOf(siteBest.get(site).id) : "" }));
   const byFile = new Map();
   for (const [site, ms] of bySite) {
     const file = (site.split(" @ ")[1] || "").replace(/:\d+$/, "") || "(native)";
@@ -245,8 +270,49 @@ export function analyseSpikeWork(workFrames, dur, thresholdMs) {
   }
   const kinds = [...new Set([...Object.keys(inSpike), ...Object.keys(inRest)])].sort();
   const per = (o, n, k) => (n ? (o[k] || 0) / n : 0);
-  const summary = kinds.map((k) => `${k.replace(/^gpu\.|^gl\./, "")}=${+(inSpike[k] || 0).toFixed(0)} (${per(inSpike, spikeFrames, k).toFixed(1)}/f vs ${per(inRest, restFrames, k).toFixed(2)}/f)`).join(" ");
-  return { frames: spikeFrames, restFrames, thresholdMs, inSpike, inRest, summary: summary || "none" };
+  // Two summaries: the counts (and KB) as before, and the WALL TIME of the
+  // wrapped calls per frame — the <kind>Ms keys — sorted by their time inside
+  // the spikes, so the blocking call reads first.
+  const isMs = (k) => /Ms$/.test(k);
+  const summary = kinds.filter((k) => !isMs(k)).map((k) => `${k.replace(/^gpu\.|^gl\./, "")}=${+(inSpike[k] || 0).toFixed(0)} (${per(inSpike, spikeFrames, k).toFixed(1)}/f vs ${per(inRest, restFrames, k).toFixed(2)}/f)`).join(" ");
+  const timed = kinds.filter(isMs).sort((a, b) => (inSpike[b] || 0) - (inSpike[a] || 0))
+    .map((k) => `${k.replace(/^gpu\.|^gl\./, "").replace(/Ms$/, "")}=${(inSpike[k] || 0).toFixed(0)}ms (${per(inSpike, spikeFrames, k).toFixed(1)}/f vs ${per(inRest, restFrames, k).toFixed(2)}/f)`).join(" ");
+  return { frames: spikeFrames, restFrames, thresholdMs, inSpike, inRest, summary: summary || "none", timed: timed || "none" };
+}
+
+// WHICH PASSES THE SPIKE FRAMES RUN. The recorder fingerprints every render
+// pass of every frame by target size, format and load op; analysePassKinds
+// compares the wide frames with the median. This compares the SPIKE frames
+// (at or over `thresholdMs`) with the rest: the mean count of each pass kind
+// in a spike frame against a normal one, ranked by the difference — so "the
+// 2048x2048 depth pass runs in 11 of 13 spike frames and 4% of the rest" is a
+// row, not a reading. That pass is the sun-shadow re-cast, which
+// shadow-pass.js runs whenever its box crosses a 20 m cell — every ~0.8 s at
+// census speed, which is the report's cadence.
+export function analyseSpikePassKinds(passSig, dur, thresholdMs, topN = 6) {
+  if (!Array.isArray(passSig) || !Array.isArray(dur) || !passSig.length) return { note: "no per-frame pass composition recorded" };
+  const n = Math.min(passSig.length, dur.length);
+  const spike = new Map(), rest = new Map(), spikeHas = new Map();
+  let spikeFrames = 0, restFrames = 0;
+  for (let i = 0; i < n; i++) {
+    const sigs = passSig[i] || [];
+    if (!sigs.length) continue;              // a frame that drew nothing says nothing about passes
+    const isSpike = dur[i] >= thresholdMs;
+    if (isSpike) spikeFrames++; else restFrames++;
+    const target = isSpike ? spike : rest, seen = new Set();
+    for (const sig of sigs) {
+      target.set(sig, (target.get(sig) || 0) + 1);
+      if (isSpike && !seen.has(sig)) { seen.add(sig); spikeHas.set(sig, (spikeHas.get(sig) || 0) + 1); }
+    }
+  }
+  if (!spikeFrames) return { spikeFrames: 0, restFrames, thresholdMs, note: `no rendering frame at or over ${thresholdMs} ms` };
+  const kinds = new Set([...spike.keys(), ...rest.keys()]);
+  const rows = [...kinds].map((sig) => {
+    const a = (spike.get(sig) || 0) / spikeFrames, b = restFrames ? (rest.get(sig) || 0) / restFrames : 0;
+    return { sig, spikePerFrame: +a.toFixed(2), restPerFrame: +b.toFixed(2), delta: +(a - b).toFixed(2), inSpikeFrames: spikeHas.get(sig) || 0 };
+  }).sort((x, y) => Math.abs(y.delta) - Math.abs(x.delta)).slice(0, topN);
+  const summary = rows.map((r) => `${r.sig}: ${r.inSpikeFrames}/${spikeFrames} spike frames, ${r.spikePerFrame}/f vs ${r.restPerFrame}/f`).join("; ");
+  return { spikeFrames, restFrames, thresholdMs, rows, summary };
 }
 
 // FORCED SYNCHRONOUS LAYOUT, and whether it is the stall.

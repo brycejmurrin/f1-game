@@ -29,7 +29,7 @@ import { fileURLToPath } from "node:url";
 // reimplemented: it is unit-tested both ways in
 // tests/unit/frame-hitch-analyse.test.mjs, and a second copy of a periodicity
 // test is a second copy of its bugs.
-import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork } from "./frame-hitch.mjs";
+import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds } from "./frame-hitch.mjs";
 
 // fileURLToPath, NOT `new URL(..).pathname`. On Windows that pathname is
 // `/D:/a/f1-game/f1-game/` and resolve() prefixes the cwd's drive, giving a
@@ -236,10 +236,19 @@ try {
       _hStacks.set(key, (_hStacks.get(key) || 0) + 1);
     };
     try {
+      // Count AND time: census 209 put 45% of the time inside the >= 100 ms
+      // callbacks at (idle) — the VM off the stack inside a synchronous
+      // callback, which is a native wait — beside 2x the submits and
+      // writeBuffers of a normal frame. The wall time of each wrapped call,
+      // summed per frame as <kind>Ms, names the call that waits.
       const wrapCall = (proto, name, kind) => {
         if (!proto || typeof proto[name] !== "function") return;
         const orig = proto[name];
-        proto[name] = function () { _bumpWork(kind); return orig.apply(this, arguments); };
+        proto[name] = function () {
+          _bumpWork(kind);
+          const t = performance.now();
+          try { return orig.apply(this, arguments); } finally { _bumpWorkN(kind + "Ms", performance.now() - t); }
+        };
       };
       const GD = window.GPUDevice && window.GPUDevice.prototype;
       wrapCall(GD, "createRenderPipeline", "gpu.createRenderPipeline");
@@ -259,10 +268,20 @@ try {
             const bytes = size != null ? size * per : ((data && data.byteLength) || 0) - ((dataOffset || 0) * per);
             _bumpWorkN("gpu.writeBufferKB", Math.max(0, bytes) / 1024);
           } catch (_) { /* the count stands without the size */ }
-          return origWB.apply(this, arguments);
+          const t = performance.now();
+          try { return origWB.apply(this, arguments); } finally { _bumpWorkN("gpu.writeBufferMs", performance.now() - t); }
         };
       }
       wrapCall(GQ, "submit", "gpu.submit");
+      wrapCall(GQ, "writeTexture", "gpu.writeTexture");
+      wrapCall(GQ, "copyExternalImageToTexture", "gpu.copyExternalImageToTexture");
+      wrapCall(GD, "createTexture", "gpu.createTexture");
+      wrapCall(GD, "createCommandEncoder", "gpu.createCommandEncoder");
+      const GB = window.GPUBuffer && window.GPUBuffer.prototype;
+      wrapCall(GB, "getMappedRange", "gpu.getMappedRange");
+      wrapCall(GB, "unmap", "gpu.unmap");
+      const GCE = window.GPUCommandEncoder && window.GPUCommandEncoder.prototype;
+      wrapCall(GCE, "finish", "gpu.encoderFinish");
       const G2 = window.WebGL2RenderingContext && window.WebGL2RenderingContext.prototype;
       wrapCall(G2, "linkProgram", "gl.linkProgram");
       wrapCall(G2, "compileShader", "gl.compileShader");
@@ -684,6 +703,7 @@ try {
     // made against the rest.
     out.spikeCpu = analyseSpikeCpu(_cpuProfile, d.t0, d.dur, 100, _cpuPageAtStart);
     out.spikeWork = analyseSpikeWork(d.workFrames || [], d.dur, 100);
+    out.spikePasses = analyseSpikePassKinds(d.passSig || [], d.dur, 100);
     return a;
   }, 30000, "hitch-series").catch((e) => ({ note: "hitch read failed: " + String((e && e.message) || e).slice(0, 80) }));
   checkpoint("settled");

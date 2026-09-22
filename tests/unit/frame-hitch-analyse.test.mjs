@@ -19,7 +19,7 @@
 // to contain the thing, and the right verdict about one built not to.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { analyse, analyseHeap, analyseAlloc, analyseCpu, analyseSpikeCpu, analyseSpikeWork } from "../../tools/gfx/frame-hitch.mjs";
+import { analyse, analyseHeap, analyseAlloc, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds } from "../../tools/gfx/frame-hitch.mjs";
 
 // A frame series: `spikeEvery` frames apart, `spikeMs` long, `baseMs` otherwise.
 function series(frames, baseMs, spikeEvery, spikeMs) {
@@ -243,8 +243,9 @@ test("analyseSpikeCpu attributes only the samples that fall inside spike frames,
   // Profiler clock: startTime 5,000,000 us; one sample every 500 us. Page clock at
   // Profiler.start: 1000 ms. So sample i sits at page 1000 + 0.5 * (i + 1) ms.
   const nodes = [
-    { id: 1, callFrame: { functionName: "(root)", url: "" } },
+    { id: 1, callFrame: { functionName: "(root)", url: "" }, children: [2, 5, 4] },
     { id: 2, callFrame: { functionName: "(garbage collector)", url: "" } },
+    { id: 5, callFrame: { functionName: "tick", url: "http://127.0.0.1:1/probe-fixture.js?v=dev", lineNumber: 1 }, children: [3] },
     { id: 3, callFrame: { functionName: "render", url: "http://127.0.0.1:1/probe-fixture.js?v=dev", lineNumber: 9 } },
     { id: 4, callFrame: { functionName: "idle", url: "" } },
   ];
@@ -263,6 +264,7 @@ test("analyseSpikeCpu attributes only the samples that fall inside spike frames,
   assert.ok(a.coverage >= 0.99 && a.coverage <= 1.01, "the clock join covers the spike: " + a.coverage);
   assert.equal(a.rows[0].site, "(garbage collector) @ :?"); assert.ok(Math.abs(a.rows[0].ms - 150) <= 1);
   assert.equal(a.rows[1].site, "render @ probe-fixture.js:10"); assert.ok(Math.abs(a.rows[1].ms - 50) <= 1);
+  assert.equal(a.rows[1].path, "tick", "the caller chain of the ranked site, root-most last, without (root)");
   assert.ok(!a.rows.some((r) => r.site.startsWith("idle")), "samples outside the spike are not attributed");
   assert.match(a.verdict, /INSIDE THE 1 SPIKES: \(garbage collector\)/);
   // A wrong join (page clock off by a second) reports a coverage of ~0, not a ranking.
@@ -274,12 +276,32 @@ test("analyseSpikeCpu attributes only the samples that fall inside spike frames,
 
 test("analyseSpikeWork sums per-frame resource calls inside and outside the spike frames", () => {
   const dur = [16, 200, 16, 150, 16];
-  const workFrames = [[0, { "gpu.createBuffer": 1 }], [1, { "gpu.createBuffer": 30, "gpu.writeBufferKB": 4096 }],
-                      [3, { "gpu.createBuffer": 10 }], [4, { "gpu.submit": 1 }]];
+  const workFrames = [[0, { "gpu.createBuffer": 1, "gpu.submitMs": 0.5 }], [1, { "gpu.createBuffer": 30, "gpu.writeBufferKB": 4096, "gpu.submitMs": 180.2, "gpu.writeBufferMs": 4 }],
+                      [3, { "gpu.createBuffer": 10, "gpu.submitMs": 120 }], [4, { "gpu.submit": 1 }]];
   const w = analyseSpikeWork(workFrames, dur, 100);
   assert.equal(w.frames, 2); assert.equal(w.restFrames, 3);
   assert.equal(w.inSpike["gpu.createBuffer"], 40); assert.equal(w.inRest["gpu.createBuffer"], 1);
   assert.equal(w.inSpike["gpu.writeBufferKB"], 4096); assert.equal(w.inRest["gpu.submit"], 1);
   assert.match(w.summary, /createBuffer=40 \(20\.0\/f vs 0\.33\/f\)/);
+  assert.doesNotMatch(w.summary, /Ms/, "timed kinds leave the count summary");
+  assert.match(w.timed, /^submit=300ms \(150\.1\/f vs 0\.17\/f\) writeBuffer=4ms/, "the blocking call reads first: " + w.timed);
   assert.match(analyseSpikeWork(null, dur, 100).note, /no per-frame work/);
+});
+
+test("analyseSpikePassKinds ranks the pass kinds that spike frames run and normal frames do not", () => {
+  const main = "1152x648/rgba16float:clear", shadow = "2048x2048/depth:clear", post = "1152x648/rgba8unorm:load";
+  const passSig = [], dur = [];
+  for (let i = 0; i < 40; i++) {
+    const isSpike = i % 10 === 0;                       // 4 spike frames, 36 normal
+    passSig.push(isSpike ? [main, shadow, post] : (i % 3 === 0 ? [main, post] : [main, post, post]));
+    dur.push(isSpike ? 180 : 16);
+  }
+  passSig.push([]); dur.push(16);                       // a frame that drew nothing is not counted
+  const k = analyseSpikePassKinds(passSig, dur, 100);
+  assert.equal(k.spikeFrames, 4); assert.equal(k.restFrames, 36);
+  assert.equal(k.rows[0].sig, shadow); assert.equal(k.rows[0].inSpikeFrames, 4);
+  assert.equal(k.rows[0].spikePerFrame, 1); assert.equal(k.rows[0].restPerFrame, 0);
+  assert.match(k.summary, /^2048x2048\/depth:clear: 4\/4 spike frames, 1\/f vs 0\/f/);
+  assert.match(analyseSpikePassKinds(passSig, dur.map(() => 16), 100).note, /no rendering frame/);
+  assert.match(analyseSpikePassKinds(null, dur, 100).note, /no per-frame pass/);
 });
