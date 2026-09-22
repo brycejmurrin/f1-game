@@ -785,6 +785,10 @@ declare const Photomode: GameModuleFactory;
 declare const Quali: GameModuleFactory;
 declare const QualiSheet: GameModuleFactory;
 declare const RaceControl: GameModuleFactory;
+// The VALUE side of the WeatherArc name — js/race/weather-arc.js's factory. The
+// `interface WeatherArc` above is the arc OBJECT it hands back on G.weatherArc;
+// TypeScript keeps the two in separate declaration spaces.
+declare const WeatherArc: GameModuleFactory;
 declare const DailyChallenge: GameModuleFactory;
 declare const TitleMenu: GameModuleFactory;
 declare const Onboard: GameModuleFactory;

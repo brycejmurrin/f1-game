@@ -186,6 +186,9 @@ test("the medal ladder is monotone and the reference pole slows with the pace sl
 });
 
 // ── CHANGEABLE (MIXED) conditions ─────────────────────────────────────────────
+// The chip is a RaceSettings row; the arc it arms lives in js/race/weather-arc.js
+// (WeatherArc.create(G, deps)), reached here only through G — raceChangeable,
+// wxArcPlan and weatherArc are the whole contract.
 
 test("a MIXED race arms a weather arc at the start and walks it; the plan is the seed's", async () => {
   g.G.timeTrial = false; g.G.seasonMode = false; g.G.raceGrid = "tier";

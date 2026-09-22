@@ -170,6 +170,36 @@ test("a ferris wheel staggers its members either side of the wheel plane", () =>
 });
 
 test("layered spectator banks cannot coincide", () => {
-  assert.match(read("js/track/scenery/nature.js"), /gap \+= \(\(Math\.abs\(opts\.h \|\| 0\) \* 7\.3\) % 1\) \* 0\.04;/,
-    "spectatorHill must nudge each call outward deterministically");
+  // The separation is a per-CALL slot, not a hash of opts.h. The hash looked
+  // stable and was a chaotic map: okayama's 6.0/2.8 clayCut pair landed 1.6 mm
+  // apart on it while its 6.5/3.0 pair landed 18 mm apart. Both axes must move
+  // — the gap alone leaves two identical ladders' END CAPS on one plane, which
+  // is where 400 of okayama's coplanar pairs lived (2026-09-22).
+  const src = read("js/track/scenery/nature.js");
+  assert.match(src, /const slot = hillSeq\+\+ % 5;/,
+    "spectatorHill must take a deterministic per-call slot");
+  assert.match(src, /gap \+= 0\.003 \+ slot \* 0\.01;/,
+    "the slot must nudge the bank OUTWARD across the road");
+  assert.match(src, /const sShift = 0\.007 \+ \(\(slot \* 2\) % 5\) \* 0\.01;/,
+    "and ALONG the road, on a different permutation of the same positions");
+});
+
+test("abutting runs do not emit their seam node twice", () => {
+  // along() is closed at both ends, so a wall painted as a chain of coloured
+  // blocks emits the shared node once per block — byte-identical panels, the
+  // purest z-fight. jeddah's six-block canyon measured 73 same-facing coplanar
+  // pairs that way (2026-09-22). The tag is the emitter's geometric identity;
+  // every along-based emitter in structures.js passes one, and concreteCanyon
+  // passes one that deliberately omits the stripe colour (the plain slab
+  // underneath is what duplicates).
+  const src = read("js/track/scenery/structures.js");
+  assert.match(src, /const along = \(s0, s1, stepM, fn, tag\) =>/,
+    "along must take a seam tag");
+  assert.match(src, /if \(seen\.has\(k\)\) continue;/,
+    "and skip a node it has already walked under that tag");
+  const tagged = src.match(/^ {6}\}, `[a-zA-Z]+\|/gm) || [];
+  assert.ok(tagged.length >= 9,
+    `every along-based emitter must pass a tag — found ${tagged.length}`);
+  assert.match(read("js/track/scenery/identity.js"), /\}, `canyon\|\$\{side\}\|\$\{gap\}/,
+    "concreteCanyon must pass a seam tag");
 });
