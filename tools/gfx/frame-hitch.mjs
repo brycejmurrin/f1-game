@@ -30,13 +30,18 @@ import {
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 
 function parseArgs(argv) {
-  const o = { track: "montreal", backend: "three", tlxWebgpu: false, seconds: 30, settle: 6, ls: [], json: null, quiet: false };
+  const o = { track: "montreal", backend: "three", tlxWebgpu: false, seconds: 30, settle: 6, steerHz: 0, ls: [], json: null, quiet: false };
   const skip = new Set();
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]; const next = () => argv[++i];
     if (a === "--backend") { o.backend = next(); skip.add(o.backend); }
     else if (a === "--seconds") { o.seconds = +next(); }
     else if (a === "--settle") { o.settle = +next(); }
+    // Sinusoidal steering. The sun-shadow anchor is camEye + 20 m along the
+    // car's HEADING, so the mechanism under test is heading CHANGE, not lap
+    // realism: an oscillating steer exercises it deterministically, and
+    // --steer-hz 0 is the straight-line control arm.
+    else if (a === "--steer-hz") { o.steerHz = +next(); }
     else if (a === "--ls") { o.ls.push(next()); }
     else if (a === "--json") { o.json = next(); }
     else if (a === "--tlx-webgpu") o.tlxWebgpu = true;
@@ -382,7 +387,17 @@ async function main() {
     });
     await page.evaluate((t) => window.__apex.race(t), opts.track);
     await page.waitForFunction((t) => window.__apex.info().track === t, opts.track, { polling: 100, timeout: 60000 });
-    await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.1, 55, 0); window.__apex.setInput({ throttle: true }); });
+    await page.evaluate((hz) => {
+      window.__apex.go(); window.__apex.jump(0.1, 55, 0);
+      if (!(hz > 0)) { window.__apex.setInput({ steer: 0, throttle: true, brake: false }); return; }
+      const t0 = performance.now();
+      const drive = () => {
+        const t = (performance.now() - t0) / 1000;
+        window.__apex.setInput({ steer: Math.sin(2 * Math.PI * hz * t) * 0.6, throttle: true, brake: false });
+        window.requestAnimationFrame(drive);
+      };
+      drive();
+    }, opts.steerHz);
     // Let boot-time work AND the working set finish filling: a cache
     // reaching its high-water mark is not a leak, and a baseline taken
     // during the fill turns ordinary warm-up into a fake slope.
