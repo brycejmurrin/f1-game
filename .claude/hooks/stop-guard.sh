@@ -26,7 +26,10 @@ except Exception:
     sys.exit(1)
 '; then exit 0; fi
 
-live=$(ps -eo args 2>/dev/null | grep -E 'playwright(\.js)?\s+test\b|run-playwright\.mjs' | grep -v grep | head -1)
+# `run-playwright.mjs --list` is spec SELECTION (deploy.mjs and select-specs
+# run it for a second); only a run that will drive a browser counts. The first
+# live firing (2026-09-22) was exactly that false positive, mid-deploy.
+live=$(ps -eo args 2>/dev/null | grep -E 'playwright(\.js)?\s+test\b|run-playwright\.mjs' | grep -Ev 'grep|--list' | head -1)
 [ -n "$live" ] || exit 0
 
 log=$(ls -t "$ROOT"/artifacts/logs/*.log 2>/dev/null | head -1)
