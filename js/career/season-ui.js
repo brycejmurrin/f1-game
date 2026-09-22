@@ -221,7 +221,7 @@ function create(G) {
       Log.info("ui", "SeasonUI.apply");
       SeasonCal.setConfig(draft);
       G.season = SeasonCal.restart();
-      G.store.set("season", G.season);
+      SeasonCal.save(G.season);
       G.trackIdx = SeasonCal.trackIndex(0);
       close();
       G.buildSelect();

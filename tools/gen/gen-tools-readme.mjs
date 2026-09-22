@@ -64,17 +64,29 @@ export function parseHeader(src) {
   return tags;
 }
 
+/** Executable test files that may consume tool data. */
+export function testReaderFiles(dir = path.join(ROOT, "tests"), rel = "tests") {
+  const out = [];
+  // Tests are not limited to top-level unit .mjs files: specs consume data too,
+  // and the unit tree has portable .cjs fixtures. Walk the whole executable
+  // test surface while excluding data files, which can only cite one another.
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const abs = path.join(dir, e.name), next = `${rel}/${e.name}`;
+    if (e.isDirectory()) out.push(...testReaderFiles(abs, next));
+    else if (/\.(?:js|mjs|cjs)$/.test(e.name)) out.push(next);
+  }
+  return out;
+}
+
 /** Which tools/tests name this data file — the derived "read by" column. */
-function readersOf(name, files) {
+export function readersOf(name, files) {
   const readers = new Set();
   for (const rel of files) {
     if (rel.endsWith(".json")) continue;
     if (fs.readFileSync(path.join(ROOT, "tools", rel), "utf8").includes(name)) readers.add(rel);
   }
-  const testsDir = path.join(ROOT, "tests/unit");
-  for (const f of fs.readdirSync(testsDir)) {
-    if (!f.endsWith(".mjs")) continue;
-    if (fs.readFileSync(path.join(testsDir, f), "utf8").includes(name)) readers.add(`tests/unit/${f}`);
+  for (const rel of testReaderFiles()) {
+    if (fs.readFileSync(path.join(ROOT, rel), "utf8").includes(name)) readers.add(rel);
   }
   return [...readers].sort();
 }
