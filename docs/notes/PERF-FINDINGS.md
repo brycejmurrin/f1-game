@@ -5287,7 +5287,19 @@ one WebGPU call the recorder did not time is the swapchain acquire,
 drawable — and WGX on this runner soft-presents (headless UA) and never calls it,
 which would be why it alone shows no spikes. Census 211 times it, prints how much
 of each spike frame the wrapped calls explain at all, and carries the amended
-patch 8. Census 211: _pending_.
+patch 8.
+
+Census 211 was a false positive of the 204 kind and the instrument caught it:
+the three.js/WebGPU leg printed a worst callback of 96.6 ms and no frame over
+100 ms — at **mean luma 3.2** (black) with presents costing 3–10 ms, while the
+WebGL2 control on the same bundle rendered at 52. Deferring the build to a task
+broke an assumption: `NodeMaterial.setup` reads the renderer's live render target
+and MRT as it builds, and between frames the target is null and the MRT unset, so
+every lit material built the wrong variant or threw, and a rejected build retried
+in silence. Patch 8 now snapshots the requesting pass's render target, MRT, cube
+face and mip level, holds them for the synchronous part of the deferred build and
+restores them in a `finally`; a rejected build warns (`console.warn`, three times
+at most). Census 212: _pending_.
 
 Also measured for the first time: the lights hold **10.7 s** on this Metal runner
 (scene warm 7.0 s, post 2.9 s, casters 0.8 s). The scene warm mints every pooled

@@ -46,3 +46,12 @@ material's whole setup traversal, the heaviest part of the codegen — before it
 first yield, so the first version still put `build`/`getChildren` under `setup`
 inside the rAF callback (17% of the time inside the ≥ 100 ms frames of a driven
 window on real Metal, caller chain `_renderObjectDirect` → … → `setup` → `build`).
+
+Amended again the same day (gpu-census 211): the deferred build holds the
+requesting pass's renderer state — render target, MRT, active cube face and mip
+level — for its synchronous part and puts the previous values back in a
+`finally`. The first deferral drew black on WebGPU (mean luma 3.2 against 52 on
+the WebGL2 control): between frames the render target is null and the MRT unset,
+and `NodeMaterial.setup` reads both as it builds, so every lit material built the
+wrong variant or threw. A rejected build now warns (`console.warn`, three times
+at most) instead of retrying in silence.

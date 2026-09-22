@@ -2074,13 +2074,17 @@ test("a node-builder cache miss on the render path builds asynchronously and ski
     "the render-path cache-miss guard is missing or has lost a condition (PATCHES.md §8)");
   // Re-entry guard and the async build itself, with the same render object.
   assert.match(THREE_BUNDLE,
-    /(\w)\.apexBuilding=!0;const \w=\(\)=>\{\1\.apexBuilding=!1\};\w+\(\)\.then\(\(\)=>this\._nodes\.getForRender\(\w,!0\)\)\.then\(/,
+    /(\w)\.apexBuilding=!0;const \w=\(\)=>\{\1\.apexBuilding=!1\},\w=this\._renderTarget,\w=this\._mrt,\w=this\._activeCubeFace,\w=this\._activeMipmapLevel,[\s\S]{0,260}?\w+\(\)\.then\(\(\)=>\{const \w=this\._renderTarget,\w=this\._mrt,[\s\S]{0,200}?try\{return this\._nodes\.getForRender\(\w,!0\)\}finally\{this\._renderTarget=\w,this\._mrt=\w,this\._activeCubeFace=\w,this\._activeMipmapLevel=\w\}\}\)\.then\(/,
     "the yielding build is not started exactly once per pending object (PATCHES.md §8)");
+  assert.match(THREE_BUNDLE, /console\.warn\("Apex patch 8: async node build failed",\w\)/,
+    "a deferred build that rejects must warn (census 211 drew black in silence) rather than retry quietly");
   assert.equal((THREE_BUNDLE.match(/__apexSyncCodegen/g) || []).length, 1, "the opt-in global must appear exactly once");
   // And the guard sits BEFORE updateBefore — the call that triggers the build.
   const at = THREE_BUNDLE.indexOf("__apexSyncCodegen");
   const upd = THREE_BUNDLE.indexOf("this._nodes.updateBefore(", at);
-  assert.ok(upd > at && upd - at < 900, "the guard must precede _nodes.updateBefore() in the same function (PATCHES.md §8)");
+  // 1400, not 900: the deferred build carries the pass state snapshot and its
+  // restore (the 2026-09-22 amendment), which sits between the two.
+  assert.ok(upd > at && upd - at < 1400, "the guard must precede _nodes.updateBefore() in the same function (PATCHES.md §8)");
 });
 test("TLX caps new pool meshes per present and warms the post chain regardless of the scene warm's clock", () => {
   // THE OBJECT BURST. A pooled Mesh that does not exist yet is a three
