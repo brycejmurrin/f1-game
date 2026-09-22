@@ -55,6 +55,23 @@ Baselined in the node suite at jeddah's 1.1 for jeddah's stated reason; the
 spec's own map is left alone, because editing that file is what makes the
 selector run it, and it would then fail on monza above.
 
+**It is also red in a spec the gate DOES select.**
+`tests/specs/zandvoort-foundation.spec.js` › "has explicit coordinates, safe
+models, and clean road clearance" reports `Expected <= 0.2, Received 1.07` —
+the same wall, the same figure. Reproduce in 18.5 s with
+`npm test -- tests/specs/zandvoort-foundation.spec.js`. Foundation specs are
+rank 2 whenever a diff touches a helper they import, so they land in `oversize`
+and get a shard each: this one surfaces on ordinary PRs, unlike
+`props-over-road`, and it took PR #187 red without that branch touching a
+single shipped file.
+
+So one object has three specs red, and the call it needs is a judgement, not a
+measurement: is a ~1 m pit wall standing beside the tarmac a road-clearance
+failure at all? `props-over-road.spec.js`'s jeddah paragraph argues it is not —
+"it is where pit walls are" — and baselines it. The same reasoning would
+baseline it in the foundation specs, or the wall's offset moves. Whoever takes
+it should settle all three together; the measurements are above.
+
 **2026-09-22 — `DIFF[difficulty]` undefined took every physics tick down. FIXED.**
 `js/game.js` `updateCar()` read `DIFF[difficulty]` unguarded and dereferenced
 `dd.ai` on the first AI car; `js/race/quali-model.js` already fell back to
