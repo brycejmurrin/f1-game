@@ -86,12 +86,50 @@ test("no open PR: create one, ARM auto-merge over the CCR route, and keep the to
   });
 });
 
-test("an open PR for the head is reused, and nothing is created", () => {
-  withFakeCurl({ list: '[{"html_url":"https://github.com/brycejmurrin/f1-game/pull/7"}]', create: "{}", arm: "{}", readback: "{}" }, (dir) => {
+test("an open PR for the head is reused, nothing is created, and auto-merge is still CONFIRMED", () => {
+  // The reuse path used to return no `autoMerge` key at all, so a second
+  // `--pr` on the same branch silently dropped the field from the verdict.
+  withFakeCurl({
+    list: '[{"html_url":"https://github.com/brycejmurrin/f1-game/pull/7","number":7}]',
+    create: "{}",
+    arm: '{"message":"Branch does not have required protected branch rules"}',
+    readback: '{"html_url":"https://github.com/brycejmurrin/f1-game/pull/7","auto_merge":null}',
+  }, (dir) => {
     const r = openPrRest("claude/unit-branch", "t");
     assert.equal(r.pr, "https://github.com/brycejmurrin/f1-game/pull/7");
     assert.match(r.note, /already open/);
-    assert.equal(calls(dir).length, 1);
+    assert.equal(r.autoMerge, false, "the reuse path must report the auto-merge state, not omit it");
+    assert.match(r.note, /NOT armed/);
+    const urls = calls(dir).map((c) => c.argv.at(-1));
+    assert.ok(!urls.some((u) => /\/pulls$/.test(u)), "nothing may be created when a PR is already open");
+  });
+});
+
+test("a NON-JSON failure after the PR exists degrades to NOT armed — it must never throw away the PR", () => {
+  // The proxy answers 403/405/407 with html bodies, which makes ghApi throw.
+  // Thrown out of openPrRest, that loses the URL of a PR that was already
+  // created and fails a deploy whose whole gate had passed.
+  withFakeCurl({
+    list: "[]",
+    create: '{"html_url":"https://github.com/brycejmurrin/f1-game/pull/9","number":9}',
+    arm: "<html>403 Forbidden</html>",
+    readback: "<html>403 Forbidden</html>",
+  }, () => {
+    const r = openPrRest("claude/unit-branch", "t");
+    assert.equal(r.pr, "https://github.com/brycejmurrin/f1-game/pull/9", "the PR URL survives");
+    assert.equal(r.autoMerge, false);
+    assert.match(r.note, /NOT armed/);
+  });
+});
+
+test("a non-2xx PR lookup is an ERROR, not an empty list", () => {
+  // Read as "no PR is open" it goes on to create one and dies on GitHub's 422,
+  // reporting a create failure instead of saying it could not look.
+  withFakeCurl({
+    list: '{"message":"Bad credentials"}', status: 401,
+    create: "{}", arm: "{}", readback: "{}",
+  }, () => {
+    assert.throws(() => openPrRest("claude/unit-branch", "t"), /PR lookup failed \(HTTP 401\)/);
   });
 });
 

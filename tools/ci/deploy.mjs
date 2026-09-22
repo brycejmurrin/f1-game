@@ -570,8 +570,17 @@ function ghApi(token, method, url, body) {
 export function openPrRest(branch, token) {
   const [owner] = REPO.split("/");
   const api = `https://api.github.com/repos/${REPO}`;
-  const open = ghApi(token, "GET", `${api}/pulls?state=open&head=${owner}:${encodeURIComponent(branch)}&base=${encodeURIComponent(DEPLOY_BRANCH)}&per_page=1`).json;
-  if (Array.isArray(open) && open[0]?.html_url) return { pr: open[0].html_url, note: "PR already open; the push updated it" };
+  // A non-2xx lookup is NOT "no PR is open": read as that, it goes on to
+  // create one and dies on GitHub's 422 instead of saying it could not look.
+  const list = ghApi(token, "GET", `${api}/pulls?state=open&head=${owner}:${encodeURIComponent(branch)}&base=${encodeURIComponent(DEPLOY_BRANCH)}&per_page=1`);
+  if (!list.ok) throw new Error(`PR lookup failed (HTTP ${list.status}): ${JSON.stringify(list.json).slice(0, 200)}`);
+  const open = list.json;
+  // The reuse path confirms auto-merge too: a second `--pr` on the same branch
+  // used to return no `autoMerge` key at all, so the verdict silently lost it.
+  if (Array.isArray(open) && open[0]?.html_url) {
+    const am = autoMerge(token, api, open[0].number);
+    return { pr: open[0].html_url, autoMerge: am.autoMerge, note: `PR already open; the push updated it. ${am.note}` };
+  }
   // The title comes from the branch's last REAL commit, not from HEAD: a
   // deploy merges the base tip before it opens the PR, so HEAD is almost
   // always "Merge remote-tracking branch …", which is what PR #182 was called
@@ -586,19 +595,26 @@ export function openPrRest(branch, token) {
 
 /** Arm auto-merge and CONFIRM it, because "no error" is not evidence: the
  *  GraphQL refusal that fooled #182 and #184 was a 200-shaped message body.
- *  The session's CCR route is the one that works here; a plain-REST caller
- *  (a runner with a real token) falls back to GitHub's own merge-queue API. */
+ *  `/pulls/{n}/ccr/auto_merge` is a route of the SESSION'S proxy, not of
+ *  api.github.com — against the real API it 404s, and this reports NOT armed.
+ *
+ *  NOTHING here may throw. The PR already exists by the time we are called, so
+ *  an exception would lose its URL and fail a deploy whose gate already
+ *  passed — and the proxy answers 403/405/407 with non-JSON bodies, which is
+ *  exactly when ghApi throws. Every failure degrades to "NOT armed", which is
+ *  the honest answer and the one the session can act on. */
 export function autoMerge(token, api, number) {
-  const put = ghApi(token, "PUT", `${api}/pulls/${number}/ccr/auto_merge`, { merge_method: "merge" });
-  const back = ghApi(token, "GET", `${api}/pulls/${number}`).json;
-  if (back?.auto_merge) {
-    return { autoMerge: true, note: "auto-merge (merge commit) armed and CONFIRMED on the PR; GitHub creates the merge so the PR is a real record" };
+  try {
+    const put = ghApi(token, "PUT", `${api}/pulls/${number}/ccr/auto_merge`, { merge_method: "merge" });
+    const back = ghApi(token, "GET", `${api}/pulls/${number}`).json;
+    if (back?.auto_merge) {
+      return { autoMerge: true, note: "auto-merge (merge commit) armed and CONFIRMED on the PR; GitHub creates the merge so the PR is a real record" };
+    }
+    const why = (put.json && (put.json.message || put.json.error)) || `HTTP ${put.status}`;
+    return { autoMerge: false, note: `auto-merge NOT armed (${String(why).slice(0, 160)}) — WATCH this PR and merge it yourself once CI is green` };
+  } catch (e) {
+    return { autoMerge: false, note: `auto-merge NOT armed (${String(e.message || e).slice(0, 160)}) — WATCH this PR and merge it yourself once CI is green` };
   }
-  const why = (put.json && (put.json.message || put.json.error)) || `HTTP ${put.status}`;
-  return {
-    autoMerge: false,
-    note: `auto-merge NOT armed (${String(why).slice(0, 160)}) — WATCH this PR and merge it yourself once CI is green`,
-  };
 }
 function openPr(branch) {
   must(git(["push", "-u", REMOTE, branch]), "push session branch");

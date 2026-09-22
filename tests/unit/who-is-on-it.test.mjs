@@ -11,10 +11,11 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseClaims, claimCommit, claimSlug, CLAIMS_PREFIX, RELEASED, STALE_MIN, EMPTY_TREE } from "../../tools/ci/who-is-on-it.mjs";
+import { parseClaims, claimCommit, claimSlug, sessionId, CLAIMS_PREFIX, RELEASED, STALE_MIN, EMPTY_TREE } from "../../tools/ci/who-is-on-it.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const NOW = 1_800_000_000;
+const DEPLOY_LIKE = "claude/f1-game-project-26h3ng";
 const line = (ageMin, slug, who, text) => `${NOW - ageMin * 60}\trefs/remotes/origin/${CLAIMS_PREFIX}${slug}\t${who}\t${text}`;
 
 test("a claim line becomes a claim with its slug, owner, text and age; newest first", () => {
@@ -53,12 +54,34 @@ test("an empty listing, a bare branch name and a tab inside the text all survive
   assert.ok(c.ageMin >= 0);
 });
 
-test("the slug drops the claude/ prefix and folds any other slash, so a claim is one flat branch", () => {
-  assert.equal(claimSlug("claude/fix-autopilot"), "fix-autopilot");
-  assert.equal(claimSlug("claude/a/b"), "a--b");
-  assert.equal(claimSlug("main"), "main");
+test("the slug carries the SESSION, so two sessions on one branch never share a ref", () => {
+  // Keying on the branch alone was worse than no tool at all: sessions develop
+  // directly on the deploy branch, so every one resolved to the same ref and
+  // the force-push made B's claim erase A's, while A's --release tombstoned B.
+  assert.equal(claimSlug("claude/fix-autopilot", "sessAAAA"), "fix-autopilot-sessAAAA");
+  assert.notEqual(claimSlug(DEPLOY_LIKE, "sessAAAA"), claimSlug(DEPLOY_LIKE, "sessBBBB"),
+    "two sessions on the SAME branch must get different refs");
+  // ...and the old slash-folding collision is gone for the same reason.
+  assert.notEqual(claimSlug("claude/a/b", "s1"), claimSlug("claude/a--b", "s2"));
+  assert.equal(claimSlug("main", "s1"), "main-s1");
+  // A box with no session id still gets a stable, filename-safe slug.
+  assert.equal(sessionId({}), "nosession");
+  assert.equal(sessionId({ CLAUDE_CODE_SESSION_ID: "abc-123/def!" }), "abc123def");
 });
 
+test("a live claim whose TEXT begins with the word released is not a tombstone", () => {
+  // `startsWith("released")` read this real claim as a release, so it vanished
+  // from the listing for every session, including the one that wrote it.
+  const [c] = parseClaims(line(1, "fix-a", "Claude",
+    "released the c1Pileup lock, now on the autopilot red  [claude/fix-a; session s1]"), NOW);
+  assert.equal(c.released, false, "a claim that merely MENTIONS releasing is still a live claim");
+  // The tombstone this tool writes is exactly the sentinel plus its tag.
+  const [t] = parseClaims(line(1, "fix-a", "Claude", `${RELEASED}  [claude/fix-a; session s1]`), NOW);
+  assert.equal(t.released, true);
+  // ...and an untagged tombstone (no session available) still counts.
+  const [u] = parseClaims(line(1, "fix-a", "Claude", RELEASED), NOW);
+  assert.equal(u.released, true);
+});
 test("a claim commit works with NO git identity configured — a CI runner must not throw", () => {
   // CI run 4651 went red here: `git commit-tree` dies with "Author identity
   // unknown" on a runner, and a coordination tool that cannot run on an
