@@ -665,6 +665,13 @@ try {
             // is the one census number that does not need a quiet runner.
             ubo: (() => { try { const t = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null; const m = t && t.memState ? t.memState() : null;
               return m && m.rUbo != null ? { n: m.rUbo, kb: m.rUboKB, ver: m.groupVer, pms: m.presentMs, dr: m.draws } : null; } catch (_) { return null; } })(),
+            // Programs and materials as the car drives: three's program count is
+            // the lazy-program tally of the window, and matMiss/matEvict say
+            // whether tlx.js is minting materials (MAT_CACHE_CAP evictions
+            // re-mint a material and so a program). The container measured
+            // this parked; the driven window is where it can move.
+            mm: (() => { try { const t = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null; const m = t && t.memState ? t.memState() : null;
+              return m ? { progs: m.progs, mats: m.mats, pool: m.pool, hit: m.matHit, miss: m.matMiss, evict: m.matEvict } : null; } catch (_) { return null; } })(),
             // THE HITCH SIGNATURE. p99 against p50 over the last 2048 frames:
             // a healthy p50 beside a p99 several times larger IS a spike train,
             // and no settled average can show it. `open` carries the worst

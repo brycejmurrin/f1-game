@@ -423,6 +423,16 @@ jobs:
               } else {
                 rows.push(`${" ".repeat(8)}race:  no race gate in this build — the window opened at arm(), car parked`);
               }
+              // Programs and materials over the window, first beat to last: a
+              // program count that climbs while driving is the lazy-program
+              // tally; a material miss or evict count that climbs is tlx.js
+              // minting materials on the road (MAT_CACHE_CAP).
+              const _mmB = (g.beats || []).filter((b) => b && b.mm);
+              if (_mmB.length >= 2) {
+                const a = _mmB[0].mm, z = _mmB[_mmB.length - 1].mm;
+                const d = (k) => (a[k] != null && z[k] != null) ? `${k} ${a[k]}→${z[k]} (+${z[k] - a[k]})` : `${k} ?`;
+                rows.push(`${" ".repeat(8)}mats:  ${["progs", "mats", "pool", "miss", "evict"].map(d).join("  ")}`);
+              }
               const _ft = g.frameTail;
               if (_ft && _ft.p99 != null) {
                 rows.push(`${" ".repeat(8)}tail:  p50=${_ft.p50} p95=${_ft.p95} p99=${_ft.p99} max=${_ft.max} p99/p50=${_ft.p99OverP50}x` +
