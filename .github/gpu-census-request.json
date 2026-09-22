@@ -5,6 +5,6 @@
   "clock": 12,
   "census_only": false,
   "force": "",
-  "ls": "apex26.gfxBackend=three apex26.tlxForceGL=0",
-  "leg": "hitch-frametail-tlx-webgpu-2026-09-22"
+  "ls": "apex26.gfxBackend=three apex26.tlxForceGL=0 apex26.wgxCapture=0",
+  "leg": "hitch-realpresent-tlx-webgpu-2026-09-22"
 }

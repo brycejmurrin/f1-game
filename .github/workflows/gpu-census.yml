@@ -377,6 +377,21 @@ jobs:
             // 46.9 vs 66.2 across the two three.js backends with none of this
             // recorded, and the gap is still an open lead for exactly that
             // reason (docs/PERF-FINDINGS.md 2t).
+              // THE TAIL, which fps cannot show. fps is an EMA and floorMs a
+              // derived budget: a frame costing 120 ms once every few seconds
+              // moves neither. p99 against p50 is the discriminator — a healthy
+              // p50 beside a p99 several times it IS a spike train, while both
+              // rising together is plain slowness. Printed here because the
+              // previous run put these numbers in the JSON artifact only, so
+              // reading the one line that answers the question meant
+              // downloading a 12 MB zip.
+              const _ft = gfx.frameTail;
+              if (_ft && _ft.p99 != null) {
+                rows.push(`${" ".repeat(8)}tail:  p50=${_ft.p50} p95=${_ft.p95} p99=${_ft.p99} max=${_ft.max} p99/p50=${_ft.p99OverP50}x` +
+                  `  (beats=${_ft.beats})`);
+              } else if (_ft && _ft.note) {
+                rows.push(`${" ".repeat(8)}tail:  ${_ft.note}`);
+              }
               rows.push(`${" ".repeat(8)}gov:   tier=${gov.tier} autoTier=${gov.autoTier} userTier=${gov.userTier} ` +
                 `scale=${gov.scale} fps=${gov.fps} floorMs=${gov.floorMs} envFace=${env.face} frames=${(gov.open && gov.open.frames) != null ? gov.open.frames : "?"}`
                 // ...and the OTHER way this column lies. floorMs 16.6 is 1/60 s,
