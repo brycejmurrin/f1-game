@@ -181,7 +181,7 @@
     "tests/unit/duel-row.test.mjs",
     "// The LEGENDS TEAM as a grid entry: its own id (not the custom slot), the",
     "// whole roster in `drivers` so the driver picker is the legend picker, and",
-    "// the one-seat rule — drivers.length is 12, so anything counting seats by",
+    "// the one-seat rule \u2014 drivers.length is 12, so anything counting seats by",
     "// it puts twelve legends on the grid.",
     "tests/unit/legends-team.test.mjs",
     "// \u2026and the PERIOD CAR reaching the garage SHEET, not just the team",
@@ -299,7 +299,7 @@
     "tests/unit/loading-card.test.mjs",
     "// Every AUTHORED activation-zone turn table resolves against the BUILT",
     "// centreline. One unresolvable pair discards a circuit's whole table and",
-    "// falls through to ZONE_COUNT — silently, which is how monza shipped a",
+    "// falls through to ZONE_COUNT \u2014 silently, which is how monza shipped a",
     "// table nobody read. Node-side via verify-track.cjs, so it is cheap.",
     "tests/unit/aero-zone-tables.test.mjs",
     "// The ORDERING that lights the flyby: raceIntro() applies the race settings",
@@ -593,7 +593,7 @@
         "tests/unit/net-snapshot.test.mjs",
         "tests/unit/net-session.test.mjs",
         "tests/unit/net-authority.test.mjs",
-    "tests/unit/net-grid-separation.test.mjs",
+        "tests/unit/net-grid-separation.test.mjs",
         "tests/unit/net-roster.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
         "tests/unit/net-stub-surface.test.mjs"
@@ -738,6 +738,7 @@
       "files": [
         "tests/unit/cockpit-pale-surfaces.test.mjs",
         "tests/unit/crest-marks.test.mjs",
+        "tests/unit/foundation-core-vm.test.mjs",
         "tests/unit/slider-effect.test.mjs"
       ]
     },

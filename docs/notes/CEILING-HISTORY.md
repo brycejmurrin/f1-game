@@ -11,6 +11,13 @@ The live numbers are in `ratchets.json`; nothing here is asserted.
 under Settings, removing duplicate pause controls and simplifying Help markup.
 The newer practice goals and session review remain. Shell slack is tightened to 25.
 
+2026-09-22 title framing: `shellNodes` 1750 → **1751**, one `<g id="tc-frame">`
+around the generated title art. The phone shapes need different framing of the
+same drawing — portrait off the left edge, landscape smaller and lower so the
+trail clears the button column — and a transform on `#title-car` itself counts
+toward `#overlay`'s scrollWidth, which is what took `ui-scale > portrait` red.
+One node inside the svg buys both, and the svg viewport clips what it moves out.
+
 2026-09-22 coverage ratchets (Track B): three new `tree` metrics, each a way a
 suite can look larger than it is. `zeroRefModules` = 0 (the census found one,
 `js/physics/body-attitude.js`; `tests/unit/body-attitude.test.mjs` closed it, and
