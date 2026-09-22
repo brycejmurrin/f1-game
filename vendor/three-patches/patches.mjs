@@ -68,6 +68,37 @@ export const PATCHES = [
       },
     ],
   },
+  {
+    id: 6,
+    title: "#34535 getDynamicCacheKey allocates an array PER RENDER OBJECT PER FRAME",
+    file: "build/three.webgpu.js",
+    why: "`hash$1` is `( ...params ) => cyrb53( params )`, so every call mints a rest array. " +
+      "RenderObject.getDynamicCacheKey() calls it up to three times, and `get needsUpdate()` " +
+      "calls getDynamicCacheKey() for EVERY render object on EVERY draw — so the array count " +
+      "is (objects x frames), and the arrays are pure garbage the moment cyrb53 returns. " +
+      "Measured here before the patch: 255 KB/frame of JS allocation on the three.js/WebGPU " +
+      "path, 28.4 MB/s, a collection about once a second freeing a median 25.8 MB " +
+      "(artifacts/hitch-native-tlxwgpu.json, tools/gfx/frame-hitch.mjs). Upstream measured the " +
+      "same shape at 120,000 arrays/s for 1,000 meshes at 120 fps. The fix is upstream\'s: one " +
+      "module-scope scratch array, filled by index and hashed with hashArray (already in this " +
+      "bundle, and already used this way by Nodes.getCacheKey a few thousand lines down). " +
+      "The key VALUE changes — a flat hash of five slots replaces three nested hashes — which " +
+      "is safe because every producer and every consumer of it is this one method, and " +
+      "upstream made exactly this change.",
+    upstream: "PR #34553 (issue #34535), milestone r187 — RETIRE THIS ON THE r187 BUMP",
+    edits: [
+      {
+        find: "class RenderObject {\n",
+        replace: "const _dynamicCacheKeyValues = [ 0, 0, 0, 0, 0 ];\n\nclass RenderObject {\n",
+        count: 1,
+      },
+      {
+        find: "\t\tif ( this.camera.isArrayCamera ) {\n\n\t\t\tcacheKey = hash$1( cacheKey, this.camera.cameras.length );\n\n\t\t}\n\n\t\tif ( this.object.receiveShadow ) {\n\n\t\t\tcacheKey = hash$1( cacheKey, 1 );\n\n\t\t}\n\n\t\tcacheKey = hash$1( cacheKey, this.renderer.contextNode.id, this.renderer.contextNode.version );\n\n\t\treturn cacheKey;\n",
+        replace: "\t\t_dynamicCacheKeyValues[ 0 ] = cacheKey;\n\t\t_dynamicCacheKeyValues[ 1 ] = this.camera.isArrayCamera ? this.camera.cameras.length : 0;\n\t\t_dynamicCacheKeyValues[ 2 ] = this.object.receiveShadow ? 1 : 0;\n\t\t_dynamicCacheKeyValues[ 3 ] = this.renderer.contextNode.id;\n\t\t_dynamicCacheKeyValues[ 4 ] = this.renderer.contextNode.version;\n\n\t\treturn hashArray( _dynamicCacheKeyValues );\n",
+        count: 1,
+      },
+    ],
+  },
 ];
 
 /** Retired patches, kept so the canary can assert the UPSTREAM form is present. */

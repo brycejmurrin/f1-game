@@ -17,7 +17,13 @@
 //
 // Usage:
 //   node tools/gfx/frame-hitch.mjs [track] [--backend three|webgpu|webgl2]
-//        [--tlx-webgpu] [--seconds N] [--ls k=v] [--json PATH] [--quiet]
+//        [--tlx-webgpu] [--capture] [--seconds N] [--settle N] [--steer-hz N]
+//        [--ls k=v] [--json PATH] [--quiet]
+//
+// --capture turns the soft blit back ON (it is OFF by default here, unlike
+// every other probe in tools/gfx): it is a readback that halves the rendered
+// frames and restarts the pipeline every 20 s, so it is measurable only as
+// itself. Pass it when pixels are the point, never for timing.
 //
 // Output: a human summary on stderr, one JSON object on stdout.
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -30,7 +36,7 @@ import {
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 
 function parseArgs(argv) {
-  const o = { track: "montreal", backend: "three", tlxWebgpu: false, seconds: 30, settle: 6, steerHz: 0, ls: [], json: null, quiet: false };
+  const o = { track: "montreal", backend: "three", tlxWebgpu: false, seconds: 30, settle: 6, steerHz: 0, ls: [], json: null, quiet: false, capture: false };
   const skip = new Set();
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]; const next = () => argv[++i];
@@ -45,6 +51,9 @@ function parseArgs(argv) {
     else if (a === "--ls") { o.ls.push(next()); }
     else if (a === "--json") { o.json = next(); }
     else if (a === "--tlx-webgpu") o.tlxWebgpu = true;
+    // THE SOFT BLIT, now opt-in. See the addInitScript below for why it was
+    // wrong as a default for a timing tool.
+    else if (a === "--capture") o.capture = true;
     else if (a === "--quiet") o.quiet = true;
     else if (!a.startsWith("--") && !skip.has(a)) o.track = a;
   }
@@ -278,20 +287,44 @@ async function main() {
     page.on("console", (m) => { if (m.type() === "error") consoleLines.push(m.text().slice(0, 300)); });
     page.on("pageerror", (e) => consoleLines.push("[pageerror] " + String(e).slice(0, 300)));
 
-    await page.addInitScript(([be, wantTlxGpu, extraLs]) => {
+    await page.addInitScript(([be, wantTlxGpu, extraLs, wantCapture]) => {
       try {
         localStorage.removeItem("apex26.gfxWgxFail");
         localStorage.removeItem("apex26.gfxBackendProbe");
+        // THE SOFT BLIT IS THE WRONG DEFAULT FOR A TIMING TOOL, and it was
+        // this one's default for both WebGPU paths. wgxCapture="1" makes
+        // tlx.js (and WGX) replace present() with a GPU readback plus
+        // putImageData, which exists so a headless screenshot has pixels in
+        // it. It changes the loop being measured in two ways that swamp the
+        // signal:
+        //   1. The read never completes on a software adapter, so the
+        //      back-pressure branch (tlx.js:3455) draws NOTHING while one is
+        //      in flight. Measured: 8,946 rendered frames out of 17,892 rAF
+        //      callbacks — half the samples are no-ops, and the p50 they set
+        //      is the cost of doing nothing.
+        //   2. SOFT_READ_STALE_MS is 20,000, so an abandoned read restarts
+        //      the pipeline every 20 s. That produced a bind-group and buffer
+        //      burst at 5.2 / 25.2 / 45.5 / 65.5 / 85.5 / 105.5 / 125.5 /
+        //      145.5 s — a period of exactly 20.0 s with zero variance, which
+        //      reads as a textbook periodic hitch and belongs entirely to the
+        //      instrument. softRead.abandoned was 9 across those 150 s.
+        // So default to NATIVE present ("0", which tlx.js short-circuits the
+        // blit on) and make the blit --capture, for when pixels are the
+        // point. A headless swapchain does not composite, so a --capture-less
+        // run has no meaningful screenshot: that is the trade, and for "when
+        // does the main thread stall" it is the right one, because the GPU
+        // work is still submitted and only the readback tax disappears.
+        const cap = wantCapture ? "1" : "0";
         if (be === "webgpu") {
           localStorage.setItem("apex26.gfxBackend", "webgpu");
           localStorage.setItem("apex26.gfxWgxAllowSoftware", "1");
-          sessionStorage.setItem("apex26.wgxCapture", "1");
+          sessionStorage.setItem("apex26.wgxCapture", cap);
         } else if (be === "webgl2") {
           localStorage.setItem("apex26.gfxBackend", "webgl2");
         } else {
           localStorage.setItem("apex26.gfxBackend", "three");
           localStorage.setItem("apex26.tlxForceGL", wantTlxGpu ? "0" : "1");
-          if (wantTlxGpu) sessionStorage.setItem("apex26.wgxCapture", "1");
+          if (wantTlxGpu) sessionStorage.setItem("apex26.wgxCapture", cap);
         }
         for (const kv of extraLs || []) {
           const i = kv.indexOf("="); if (i > 0) localStorage.setItem(kv.slice(0, i), kv.slice(i + 1));
@@ -483,7 +516,7 @@ async function main() {
           })(),
         }),
       };
-    }, [opts.backend, opts.tlxWebgpu, opts.ls]);
+    }, [opts.backend, opts.tlxWebgpu, opts.ls, opts.capture]);
 
     await page.goto(srv.url + "index.html", { waitUntil: "domcontentloaded", timeout: 90000 });
     await page.waitForFunction(() => window.__apex, null, { polling: 100, timeout: 90000 });

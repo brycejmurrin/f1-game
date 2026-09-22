@@ -411,6 +411,23 @@ jobs:
               } else if (_ft && _ft.note) {
                 rows.push(`${" ".repeat(8)}tail:  ${_ft.note}`);
               }
+              // THE PERIOD OF THE TAIL — the row that answers the actual
+              // report. Everything else here is a settled number: fps is an
+              // EMA, floorMs a derived budget, and the tail row above is built
+              // from per-beat percentiles, so its max-of-p95 collapses onto the
+              // single worst stall (run 195 printed p95 == p99 == max on all
+              // four legs). This one is analyse() over the wall cost of every
+              // rAF callback: how many frames cost far more than the typical
+              // frame OF THIS LEG, and whether they are EVENLY SPACED. A low
+              // CV over several spikes is a mechanism on a clock; a CV near 1
+              // is ordinary load.
+              const _h = g.hitch;
+              if (_h && _h.ok) {
+                rows.push(`${" ".repeat(8)}hitch: ${_h.spikes} spikes/${_h.frames}f over ${_h.spikeThresholdMs}ms` +
+                  `  every ~${_h.gapMedianS}s (CV ${_h.gapCV}) periodic=${_h.periodic}  max=${_h.max}ms`);
+              } else if (_h && _h.note) {
+                rows.push(`${" ".repeat(8)}hitch: ${_h.note}`);
+              }
               rows.push(`${" ".repeat(8)}gov:   tier=${gov.tier} autoTier=${gov.autoTier} userTier=${gov.userTier} ` +
                 `scale=${gov.scale} fps=${gov.fps} floorMs=${gov.floorMs} envFace=${env.face} frames=${(gov.open && gov.open.frames) != null ? gov.open.frames : "?"}`
                 // ...and the OTHER way this column lies. floorMs 16.6 is 1/60 s,

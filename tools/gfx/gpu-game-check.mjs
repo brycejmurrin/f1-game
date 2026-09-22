@@ -25,6 +25,11 @@ import http from "node:http";
 import { readFileSync, existsSync, writeFileSync } from "node:fs";
 import { join, extname, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+// The spike-train verdict, shared with tools/gfx/frame-hitch.mjs rather than
+// reimplemented: it is unit-tested both ways in
+// tests/unit/frame-hitch-analyse.test.mjs, and a second copy of a periodicity
+// test is a second copy of its bugs.
+import { analyse } from "./frame-hitch.mjs";
 
 // fileURLToPath, NOT `new URL(..).pathname`. On Windows that pathname is
 // `/D:/a/f1-game/f1-game/` and resolve() prefixes the cwd's drive, giving a
@@ -126,6 +131,40 @@ try {
   page.on("close", () => { out.pageClosed = true; });
   browser.on("disconnected", () => { out.browserGone = true; });
   await page.addInitScript(([be, p, ls]) => {
+    // THE SPIKE TRAIN, recorded on the machine that has a real GPU.
+    //
+    // Everything else this file measures is a SETTLED number: fps is an EMA,
+    // floorMs a derived budget, and PerfGov's own frameStats() is percentiles
+    // over a ring, so the summary can only aggregate per-beat percentiles and
+    // a max-of-p95 collapses onto the single worst stall (census 195 printed
+    // p95 == p99 == max on all four legs for exactly that reason). None of
+    // them can answer the actual report — "it hitches every few seconds" —
+    // which is a question about the PERIOD of the tail.
+    //
+    // So record every rAF callback's own wall cost, the way frame-hitch.mjs
+    // does in the container, and let analyse() find the spikes and ask whether
+    // they are evenly spaced. Installed before any page script so it wraps the
+    // game's own rAF chain, preallocated so the recorder never allocates
+    // inside the frame it is timing, and armed later so the track build and
+    // the first laps of warm-up are not counted as hitches.
+    const _hCAP = 40000;
+    const _hT = new Float64Array(_hCAP), _hD = new Float64Array(_hCAP);
+    let _hN = 0, _hArmed = false;
+    try {
+      const _raf = window.requestAnimationFrame.bind(window);
+      window.requestAnimationFrame = function (cb) {
+        return _raf(function (ts) {
+          const a = performance.now();
+          try { return cb(ts); } finally {
+            if (_hArmed && _hN < _hCAP) { _hT[_hN] = a; _hD[_hN] = performance.now() - a; _hN++; }
+          }
+        });
+      };
+      window.__gcHitch = {
+        arm() { _hArmed = true; _hN = 0; },
+        dump: () => ({ t0: Array.from(_hT.subarray(0, _hN)), dur: Array.from(_hD.subarray(0, _hN)) }),
+      };
+    } catch (_) { /* a frozen rAF just means this leg reports no hitch series */ }
     try {
       localStorage.setItem("apex26.gfxBackend", be);
       if (be === "three") localStorage.setItem("apex26.tlxForceGL", p === "webgl2" ? "1" : "0");
@@ -255,6 +294,10 @@ try {
   // it is refusing to call one slow beat a corpse, the same reason tlx.js
   // heals on HEAL_MIN_FRAMES = 2 rather than on a single transient.
   out.beats = [];
+  // Arm AFTER the track build and the boot ladder: an opening stall is a
+  // different report (out.raceProfile answers that one) and counting it here
+  // would put one 1.4 s frame in the spike list and call the run periodic.
+  try { await page.evaluate(() => window.__gcHitch && window.__gcHitch.arm()); } catch (_) { /* no recorder on this leg */ }
   let missed = 0;
   for (let i = 0; i < 15; i++) {
     if (out.crashed || out.browserGone) break;
@@ -307,6 +350,14 @@ try {
     }
     await new Promise((r) => setTimeout(r, 1000));
   }
+  // THE PERIOD OF THE TAIL, from the raw per-callback series rather than from
+  // aggregated per-beat percentiles. bounded() because a leg whose renderer
+  // crashed leaves every later evaluate hanging for ever.
+  out.hitch = await bounded(async () => {
+    const d = await page.evaluate(() => (window.__gcHitch ? window.__gcHitch.dump() : null));
+    if (!d || !d.dur || d.dur.length < 30) return { note: "no rAF series — the recorder never armed, or the leg drew too few frames" };
+    return analyse(d.t0, d.dur);
+  }, 30000, "hitch-series").catch((e) => ({ note: "hitch read failed: " + String((e && e.message) || e).slice(0, 80) }));
   checkpoint("settled");
 
   // THE RACE-ENTRY WINDOW: race() called -> the track is there. Everything the
