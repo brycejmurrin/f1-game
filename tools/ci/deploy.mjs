@@ -15,6 +15,9 @@
 //                                       #   node suites + verify-track. Pushes nothing, allows a
 //                                       #   dirty tree. THE pre-push check: test:tooling-fast is a
 //                                       #   subset and does not run 69 of the 277 unit files.
+//                                       #   Its union is commits + staged + unstaged + untracked
+//                                       #   (changedPaths), so an uncommitted circuit edit still
+//                                       #   gets the sweeps and its verify-track.
 //   node tools/ci/deploy.mjs --train       # print train health (last push ci, pages, and the
 //                                       #   NIGHTLY rota by JOB) and stop. Two curl calls, no
 //                                       #   preflight: the "is the branch already red, and did
@@ -87,9 +90,29 @@ export function preflight() {
 // reads it pre-merge and the run reads it post-merge, where the two forms agree
 // because the tip is an ancestor by then. Same idiom `theirDiffstat` already
 // uses in the other direction.
+//
+// PLUS THE WORKING TREE (2026-09-22). `base...HEAD` sees commits only, but
+// --gate-only exists to gate an UNCOMMITTED edit (it waives preflight's dirty
+// refusal for exactly that), and every suite it runs reads the working tree.
+// Change detection read HEAD: a session that edited js/circuits/portimao.js and
+// its scenery, uncommitted, got "test:sweeps (nothing in this union can move
+// geometry)" and no verify-track at all, on a diff that moved three baselines.
+// So the union is committed + staged + unstaged + untracked-not-ignored. A real
+// deploy refuses a dirty tree, so for it the extra terms are empty.
+// null (never []) when any of the three git reads fails: callers fail SAFE.
+export function changedPaths(base, cwd) {
+  const o = cwd ? { cwd } : {};
+  const reads = [
+    git(["diff", "--name-only", `${base}...HEAD`], o),      // our commits
+    git(["diff", "--name-only", "HEAD"], o),                 // staged + unstaged
+    git(["ls-files", "--others", "--exclude-standard"], o),  // new, not ignored
+  ];
+  if (reads.some((r) => r.code !== 0)) return null;
+  return [...new Set(reads.flatMap((r) => r.out.split("\n")).filter(Boolean))];
+}
+
 export function touchedCircuits(base, cwd) {
-  const out = git(["diff", "--name-only", `${base}...HEAD`], cwd ? { cwd } : {}).out;
-  return [...new Set(out.split("\n")
+  return [...new Set((changedPaths(base, cwd) || [])
     .map((f) => /^js\/circuits\/(?:scenery\/)?([a-z_]+)\.js$/.exec(f))
     .filter(Boolean).map((m) => m[1]))];
 }
@@ -200,9 +223,9 @@ export function anyGeometry(files) {
 }
 
 export function touchesGeometry(base, cwd) {
-  const r = git(["diff", "--name-only", `${base}...HEAD`], cwd ? { cwd } : {});
-  if (r.code !== 0) return true;                        // unresolvable diff -> run them
-  return anyGeometry(r.out.split("\n").filter(Boolean));
+  const files = changedPaths(base, cwd);
+  if (!files) return true;                              // unresolvable diff -> run them
+  return anyGeometry(files);
 }
 
 /* THE TARGETED TIER (2026-09-22). Ten of the fourteen sweep suites measure the
@@ -216,9 +239,9 @@ export function touchesGeometry(base, cwd) {
  * union run, and a game.js-only union runs none. Asked only after
  * touchesGeometry() said no: an unresolvable diff already ran everything. */
 export function targetedFor(base, cwd) {
-  const r = git(["diff", "--name-only", `${base}...HEAD`], cwd ? { cwd } : {});
-  if (r.code !== 0) return [];
-  return targetedSuites(r.out.split("\n").filter(Boolean));
+  const files = changedPaths(base, cwd);
+  if (!files) return [];
+  return targetedSuites(files);
 }
 
 function runTargeted(suites, why) {
@@ -661,12 +684,19 @@ export function gateOnly() {
   const verified = [];
   run("node", ["tools/ci/tooling-fast.mjs", GATE_JOBS], "guard suite"); verified.push("tooling-fast");
   for (const script of gateNodeSuites()) { run("npm", ["run", script], `Pages gate: ${script}`); verified.push(script); }
-  // ci.yml's "Parts option-resolution census" job runs test:sweeps-parts
-  // UNCONDITIONALLY on every push (no path filter), so a red in either of its
-  // two files takes the deploy red — and until 2026-09-22 nothing before a
-  // push ran them (tests/unit/prepush-gate-coverage.test.mjs listed both as
-  // SWEEPS_ONLY). ~40 s; the geometry sweeps stay conditional (touchesGeometry).
-  run("npm", ["run", "test:sweeps-parts"], "Pages gate: test:sweeps-parts (unconditional on CI)"); verified.push("test:sweeps-parts");
+  // ci.yml's "Parts option-resolution census" job runs test:sweeps-parts, so a
+  // red in either of its two files takes the deploy red — and until 2026-09-22
+  // nothing before a push ran them (tests/unit/prepush-gate-coverage.test.mjs
+  // listed both as SWEEPS_ONLY).
+  //
+  // UNCONDITIONAL HERE, CONDITIONAL THERE, on purpose. That job took a path
+  // filter on 2026-09-22 (geometry-paths.mjs PARTS_ERE), so CI now skips the
+  // census on a diff that cannot move the car. This gate does not: it costs
+  // ~40 s, it is the last check before a push to a branch several sessions
+  // build on, and running a cheap suite CI would skip is the safe direction —
+  // the reverse (skipping one CI runs) is what a pre-push gate may never do.
+  // The geometry sweeps stay conditional because they are 8-15 minutes, not 40 s.
+  run("npm", ["run", "test:sweeps-parts"], "Pages gate: test:sweeps-parts"); verified.push("test:sweeps-parts");
   // Against the deploy tip, same as a real deploy: the circuits OUR side
   // touched (three-dot), not every circuit that moved on the branch.
   let circuits = [];
@@ -820,7 +850,7 @@ export function main() {
   // never runs (run 1889, 2026-09-02). Run exactly what the gate runs, read
   // from ci.yml so the two lists cannot drift apart.
   for (const script of gateNodeSuites()) { run("npm", ["run", script], `Pages gate: ${script}`); verdict.verified.push(script); }
-  run("npm", ["run", "test:sweeps-parts"], "Pages gate: test:sweeps-parts (unconditional on CI)"); verdict.verified.push("test:sweeps-parts");
+  run("npm", ["run", "test:sweeps-parts"], "Pages gate: test:sweeps-parts"); verdict.verified.push("test:sweeps-parts");
   // Conditional, for the reason recorded above touchesGeometry(): ci.yml runs
   // the sweeps AFTER the push, so skipping them here buys 10 minutes with a
   // broken tip on a branch other sessions build on.

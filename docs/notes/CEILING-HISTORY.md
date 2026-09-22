@@ -11,7 +11,7 @@ The live numbers are in `ratchets.json`; nothing here is asserted.
 under Settings, removing duplicate pause controls and simplifying Help markup.
 The newer practice goals and session review remain. Shell slack is tightened to 25.
 
-2026-09-22 the portrait drawing: `shellNodes` 1751 → **1786**, a second SVG and
+2026-09-22 the portrait drawing: `shellNodes` 1751 → **1790**, a second SVG and
 the groups of a second picture. The title art is now TWO drawings: the
 landscape one is the car mesh through the garage orbit, the portrait one is the
 same pair from behind, driving up the frame with their marks trailing down it.

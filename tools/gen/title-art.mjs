@@ -72,6 +72,12 @@ setCamera(CAM_SIDE);
 let OFF = [0, 0, 0];
 let PHASE = 0;          // shifts the hand-wander so two passes miss each other
 let LITE = false;       // the distant car: no detail that cannot be seen
+// How far the tyre marks run back, and how far they wander sideways over that
+// run. Only the flank camera projects marks — it wants a LONG, drifting trail
+// that crosses open frame. The portrait half draws its own in frame space (see
+// trails): from behind, marks run TOWARD the lens, and 13 m of them crosses the
+// eye plane and folds into a diagonal smear over the whole drawing.
+const TRAIL = [13.0, -4.6];
 
 function world(u, v, h) {
   const [du, dv, yaw] = OFF;
@@ -98,6 +104,42 @@ function wob(x, y, amp = 4.4) {
           y + a*Math.cos(0.019*x + 0.4 + PHASE) + 0.6*Math.sin(0.09*y - PHASE)];
 }
 const fmt = (p) => `${Math.round(p[0])} ${Math.round(p[1])}`;
+/**
+ * A TRACED LOOP AS CURVES, NOT AS A POLYGON — potrace's smoothing stage, which
+ * is what turns a pixel-walked outline into something that reads as drawn.
+ *
+ * The rule: a Bezier's endpoints are the MIDPOINTS of two consecutive polygon
+ * edges, and its control points sit ON those edges, so the curve is tangent to
+ * the polygon where it meets it and the shape never drifts off the traced mask.
+ * Every vertex also gets a corner test: potrace's `alphamax` runs 0 (leave it a
+ * polygon) to 4/3 (suppress every corner), alpha is clamped to [0.55, 1], and
+ * control points land at 0.5 + 0.5*alpha along each edge. A vertex sharper than
+ * the threshold stays a CORNER — an F1 car is mostly hard edges, and rounding
+ * the endplates and the floor made it look like a bar of soap.
+ */
+function curve(pts, alphamax = 0.95) {
+  const n = pts.length;
+  if (n < 4) return poly(pts);
+  const P = pts.map((q) => wob(...q));
+  const mid = (a, b) => [(a[0]+b[0])/2, (a[1]+b[1])/2];
+  const lerp = (a, b, t) => [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t];
+  let d = "M" + fmt(mid(P[n-1], P[0]));
+  for (let i = 0; i < n; i++) {
+    const prev = P[(i+n-1)%n], cur = P[i], next = P[(i+1)%n];
+    const m0 = mid(prev, cur), m1 = mid(cur, next);
+    // The turn at this vertex, as the sine of the exterior angle: 0 straight,
+    // 1 a right angle. potrace derives alpha from the same quantity.
+    const u = [cur[0]-prev[0], cur[1]-prev[1]], v = [next[0]-cur[0], next[1]-cur[1]];
+    const lu = Math.hypot(...u) || 1, lv = Math.hypot(...v) || 1;
+    const turn = Math.abs(u[0]*v[1] - u[1]*v[0]) / (lu*lv);
+    const alpha = Math.min(1, Math.max(0.55, 1.34 * (1 - turn)));
+    if (1.34 * turn > alphamax) { d += " L" + fmt(cur) + " L" + fmt(m1); continue; }
+    const t = 0.5 + 0.5*alpha;
+    d += " C" + fmt(lerp(m0, cur, t)) + " " + fmt(lerp(m1, cur, t)) + " " + fmt(m1);
+  }
+  return d + " Z";
+}
+
 const poly = (pts) => "M" + pts.map((p) => fmt(wob(...p))).join(" L") + " Z";
 const line = (pts) => "M" + pts.map((p) => fmt(wob(...p))).join(" L");
 
@@ -111,6 +153,18 @@ let FACES = { nearTop: [], nearFlank: [], farTop: [], farFlank: [], wheel: [] };
 function resetFaces() {
   FACES = { nearTop: [], nearFlank: [], farTop: [], farFlank: [], wheel: [] };
   SOLID = { near: [], far: [] };
+  SHADE = [];
+}
+
+/** The faces bucketed into n tone steps by how much light each one takes, so a
+ *  drawing can be LIT from its own geometry instead of from a near/far guess. */
+function shadeBands(steps = 4) {
+  const out = Array.from({ length: steps }, () => []);
+  for (const f of SHADE) {
+    const k = Math.min(steps - 1, Math.max(0, Math.floor(f.lam * steps)));
+    out[k].push(f.d);
+  }
+  return out.map((g) => g.join(" "));
 }
 const side = (v) => (v <= 0 ? "near" : "far");
 function face(kind, v, d) {
@@ -119,7 +173,24 @@ function face(kind, v, d) {
   return d;
 }
 
-const quad = (a, b, c, d) => poly([P(...a), P(...b), P(...c), P(...d)]);
+// EVERY FACE REMEMBERS WHICH WAY IT POINTS, IN THE WORLD. The old drawing
+// sorted faces by which HALF of the car they sat on, which is a stand-in for
+// orientation that only holds for a camera off the flank: from behind, both
+// halves face the lens equally and the split paints the car as two slabs with
+// a seam. A real normal shades correctly from any camera, and it is free —
+// the quad already has three world points.
+let SHADE = [];                       // [{ d, lam }] lam = how much light it takes
+const LIGHT = norm([-0.35, 0.86, 0.38]);
+function quad(a, b, c, d) {
+  const A = world(...a), B = world(...b), C = world(...c);
+  const n = norm(cross(sub(B, A), sub(C, A)));
+  // Two-sided: the drawing has no back faces to cull, so a face pointing away
+  // is lit as if flipped rather than going black.
+  const lam = Math.abs(dot(n, LIGHT));
+  const path = poly([P(...a), P(...b), P(...c), P(...d)]);
+  SHADE.push({ d: path, lam });
+  return path;
+}
 
 function taper(a, b, faces = "rt") {
   const [L1, v1a, v1b, h1a, h1b] = a, [L2, v2a, v2b, h2a, h2b] = b, out = [];
@@ -356,10 +427,11 @@ function build() {
   // Ground marks, projected through the same camera so they converge the way
   // real tyre marks do, and CURVED so they cross open frame instead of hiding
   // behind the car they came from.
-  const TRACKS = [groundCurve(UR-0.3, 13.0, -RR, 0.26, -4.6),
-                groundCurve(UR-0.3, 13.0,  RR, 0.26, -4.6)].join(" ");
-  const SKIDS  = [groundCurve(UR+0.6, 11.0, -RR-0.50, 0.10, -4.0),
-                groundCurve(UR+0.2, 12.0,  RR+0.44, 0.09, -5.1)].join(" ");
+  const [TU, TD] = TRAIL;
+  const TRACKS = [groundCurve(UR-0.3, TU, -RR, 0.26, TD),
+                groundCurve(UR-0.3, TU,  RR, 0.26, TD)].join(" ");
+  const SKIDS  = [groundCurve(UR+0.6, TU-2.0, -RR-0.50, 0.10, TD*0.87),
+                groundCurve(UR+0.2, TU-1.0,  RR+0.44, 0.09, TD*1.11)].join(" ");
 
   // The lines that carry the car's shape, as loaded brush marks: nose ridge,
   // floor edge, pod shoulder, spine.
@@ -374,7 +446,7 @@ function build() {
   const solids = SOLID.near.concat(SOLID.far).join(" ");
   const detail = [HALO, W_FR.rim, W_RR.rim].join(" ");
   return {
-    solids, detail, brush: BRUSH,
+    solids, detail, brush: BRUSH, bands: shadeBands(4),
     near: SOLID.near.join(" "), far: SOLID.far.join(" "),
     tracks: LITE ? TRACKS : TRACKS + " " + SKIDS,
     wheels: FACES.wheel.join(" "),
@@ -464,86 +536,118 @@ function scene() {
 }
 
 /**
- * THE PORTRAIT SCENE. Same two cars, same mesh, same builder — a different
- * camera and a different formation, because the shapes are different problems.
+ * THE PORTRAIT SCENE IS A TRACE OF A REAL RENDER, NOT A PROJECTION.
  *
- * Landscape is a wide slot beside a button column, so the pair goes
- * wheel-to-wheel and the drawing is 3.3 times wider than it is tall. Portrait
- * is a tall slot under a button stack, and that same pair either shrinks to a
- * strip or gets cropped to one car. From high and behind, the subject is the
- * TRACK: two cars nose-up, one ahead and one drawing alongside, with four sets
- * of marks running the full height of the frame between them.
+ * The flank drawing is projected from a hand-built mesh in this file, and that
+ * works because a car in profile is a stack of boxes. From behind it is not:
+ * the shapes that carry the read are the rear wing's slot gaps, the diffuser
+ * strakes, the halo over the airbox and the tyre shoulders, and a projector
+ * that can draw those is a renderer. So the portrait half traces one instead.
  *
- * The formation is therefore longitudinal, not lateral: the leader sits 3.4 m
- * up the road and half a metre left, the chaser is squared up behind and right,
- * mid-overtake rather than side by side. Their marks converge toward the bottom
- * of the frame, which is the one composition that uses a tall box honestly.
+ * THE MATTE IS A DIFFERENCE, NOT A THRESHOLD. Earlier drafts traced a GARAGE
+ * photo and tried to split car from floor by brightness or saturation. That
+ * cannot work: the front wing, the rear wing and the diffuser are matte black
+ * and so is the pit box. A cut high enough to keep the wings swallowed the pit
+ * wall; a cut low enough to lose the garage lost the wings; hole filling could
+ * not rescue it because from behind you see UNDER the rear wing to the floor,
+ * so the bay is not an enclosed hole. Each fix traded one missing part for
+ * another, and the drawing kept arriving incomplete.
  *
- * Neither car is LITE here. From this height both are the same size on paper —
- * there is no far car to knock back — and the tone that told the two apart in
- * the side view has to come from the formation instead.
+ * tools/car/trace-car.mjs solves it by construction: tools/carview.html renders
+ * the car ALONE with no floor at all, then renders the identical camera with
+ * ?hidecar=1, and every pixel that differs is car. Black bodywork still differs
+ * from a dark backdrop, so nothing drops out, and there is no floor in either
+ * frame to exclude. Its output is baked to title-art-top-{a,b}.json and
+ * committed, so this generator needs no browser.
  */
-/**
- * THE PORTRAIT DRAWING IS TRACED, NOT PROJECTED — and the trace is the
- * renderer's own pixels, not a hand-typed guess at them.
- *
- * tools/gen/title-art-trace.mjs takes a garage render of the car from behind
- * and above, separates it from the pit box, follows the mask's borders into
- * loops and writes them to title-art-trace.json in a 300x420 car-local box.
- * That file's header says how to regenerate it and why this half cannot use
- * the projector the landscape half uses. Everything below only PLACES those
- * loops and paints them in the same layer stack as the projected car.
- *
- * The bands are the render's own luminance: `tyre` is rubber, `dark` the
- * shadowed panels, `mid` the flanks, `lit` what catches the light. Painting
- * them in that order rebuilds the render's volume without copying its colour.
- */
-const TRACE = JSON.parse(fs.readFileSync(path.join(ROOT, "tools", "gen", "title-art-trace.json"), "utf8"));
+// Two traces, not one flipped: the cars head 3 degrees apart (az -3 and +3), so
+// the pair is neither parallel nor a mirror — the same difference in heading the
+// flank drawing gives them, seen from behind.
+//   node tools/car/trace-car.mjs --az=-3 --el=30 --dist=11 --team=ferrari \\
+//     --mindetail=100000 --simplify=2.2 --box=600x800 --out=tools/gen/title-art-top-a.json
+//   (and --az=3 ... -top-b.json)
+const TRACE = Object.fromEntries(["a", "b"].map((k) =>
+  [k, JSON.parse(fs.readFileSync(path.join(ROOT, `tools/gen/title-art-top-${k}.json`), "utf8"))]));
+// Where the rear tyres meet the road, in the trace's own 600x800 box — the one
+// anchor the marks need. Measured off the trace once (the widest rows below
+// mid-box are the rear axle); re-measure if the camera moves.
+const REAR = { y: 645, half: 58, cx: [81, 519] };
 
-/** One traced car, as the same stack of groups the projected one paints with. */
-function topCar(dx, dy, phase, inkW) {
-  PHASE = phase;
-  const put = (loops) => loops.map((l) => poly(l.map(([x, y]) => [x + dx, y + dy]))).join(" ");
-  const solids = put(TRACE.outline);
-  // SIX GROUPS, NOT EIGHT. The projected car's swollen bleed pass and its
-  // ambient lift are both affordable at one drawing; at two they cost four
-  // shell nodes that put the ratchet raise past the commit hook's 40-node
-  // absorb. The bands below carry the lift instead, each a step higher than the
-  // projected car's, which measures the same on screen.
-  const out = [];
-  out.push(g(`data-ink stroke-width="${inkW}"`, solids));
-  out.push(g('stroke="none"', solids));
-  out.push(g('data-tone stroke="none" fill-opacity="0.16"', put(TRACE.tyre)));
-  out.push(g('data-tone stroke="none" fill-opacity="0.24"', put(TRACE.dark)));
-  out.push(g('data-tone stroke="none" fill-opacity="0.36"', put(TRACE.mid)));
-  out.push(g('data-tone stroke="none" fill-opacity="0.55"', put(TRACE.lit)));
-  return out;
+const loops = (cs) => cs.map((c) => "M" + c.map((p) => p.join(" ")).join(" L") + " Z").join(" ");
+
+/**
+ * One traced car, placed, in the FLANK drawing's language so the two halves of
+ * the title screen read as one hand: a steel ink contour, a low ambient fill
+ * that lifts the mass off the wash, then the tone steps — three luminance bands
+ * the tracer posterised from the lit render, stacked at rising opacity, each
+ * with a hairline so the panel edges read as drawn lines. No opaque knock-out:
+ * the flank car is translucent, and a solid grey cut-out beside it read as a
+ * different picture.
+ */
+function tracedCar(x, y, sc, which, lite = false) {
+  const T = TRACE[which];
+  const at = `translate(${x} ${y}) scale(${sc.toFixed(3)})`;
+  const t = lite ? 0.45 : 1;
+  const o = (v) => (v * t).toFixed(2);
+  const ink = (lite ? 4 : 6) / sc;           // constant weight ON SCREEN, so the
+  const hair = 1.6 / sc;                     // leader is not also thinner-lined
+  const OUT = loops(T.outline);
+  const TONE = [0.20, 0.32, 0.46];           // three luminance steps, darkest first
+  return [
+    `      <g transform="${at}">`,
+    `        <g data-ink stroke-width="${(ink + 8 / sc).toFixed(2)}" stroke-opacity="${o(0.18)}" fill-opacity="0"><path d="${OUT}"/></g>`,
+    `        <g data-ink stroke-width="${ink.toFixed(2)}" stroke-opacity="${o(0.95)}" fill-opacity="0"><path fill-rule="evenodd" d="${OUT}"/></g>`,
+    `        <g data-tone stroke="none" fill-opacity="${o(0.24)}"><path fill-rule="evenodd" d="${OUT}"/></g>`,
+    ...T.tone.map((step, i) =>
+      `        <g data-tone stroke-width="${hair.toFixed(2)}" stroke-opacity="${o(0.55)}" fill-opacity="${o(TONE[i] || 0.38)}">`
+      + `<path fill-rule="evenodd" d="${loops(step)}"/></g>`),
+    "      </g>",
+  ].join("\n");
 }
 
-/** A tyre mark leaving one rear tyre and running down out of frame. */
-function topMark(x, y0, w0, w1, len, lean) {
-  return poly([[x - w0, y0], [x + w0, y0],
-               [x + w1 + lean, y0 + len], [x - w1 + lean, y0 + len]]);
+/**
+ * The marks the pair left, in the FRAME's coordinates rather than a car's.
+ *
+ * These cannot be projected through this file's camera the way the flank ones
+ * are: from behind, the marks run TOWARD the lens, so a 13 m trail crosses the
+ * eye plane and folds into a diagonal smear across the whole drawing. Drawing
+ * them in the frame is also the honest construction — the trace fixed the cars'
+ * perspective, and the marks only have to agree with it.
+ */
+function trails(c, floor) {
+  const out = [];
+  for (let i = 0; i < 2; i++) {
+    const x0 = c.x + REAR.cx[i] * c.sc, y0 = c.y + REAR.y * c.sc;
+    const h0 = REAR.half * c.sc;
+    // Toward the lens the marks widen and swing outward, the way a pair of
+    // parallel lines does under perspective. The swing is off the FRAME's
+    // centre so both cars' marks fan the same way.
+    const k = (x0 - 450) / 450;
+    const x1 = x0 + k * 210, h1 = h0 * 1.85;
+    out.push(`M${Math.round(x0 - h0)} ${Math.round(y0)}`
+      + ` L${Math.round(x0 + h0)} ${Math.round(y0)}`
+      + ` L${Math.round(x1 + h1)} ${floor} L${Math.round(x1 - h1)} ${floor} Z`);
+  }
+  return out.join(" ");
 }
 
 function sceneTop() {
-  // The landscape pair's formation seen from behind: one a nose ahead, both
-  // squared up, close enough that the frame holds them as a pair.
-  const A = [10, 96], B = [268, 6];
-  // Anchored on the traced rear tyres (x 45 and 255 of the 300-wide box, which
-  // ends at y 238), so the marks leave the rubber rather than floating under it.
-  // Anchored on the traced rear tyres — x 48 and 252 of the 300-wide box, whose
-  // 420 ends at the rear wing — so the marks leave the rubber, not the air.
-  const marks = [
-    topMark(A[0] + 48, A[1] + 404, 20, 34, 420, 18),
-    topMark(A[0] + 252, A[1] + 404, 20, 34, 420, 24),
-    topMark(B[0] + 48, B[1] + 404, 20, 34, 420, -16),
-    topMark(B[0] + 252, B[1] + 404, 20, 34, 420, -22),
-  ].join(" ");
-  PHASE = 0;
-  return [g('data-trail stroke="none"', marks),
-          ...topCar(A[0], A[1], 0, 9),
-          ...topCar(B[0], B[1], 1.7, 10)].join("\n");
+  // The flank pair's formation read from behind: side by side with clear road
+  // between them, the leader on the left a nose ahead, the chaser on the right
+  // nearer the lens. Not overlapping, not parallel (the traces differ by six
+  // degrees of heading), and the same size to within perspective.
+  const cars = [
+    { x: 34, y: 490, sc: 0.66, which: "a", lite: true },
+    { x: 468, y: 610, sc: 0.70, which: "b", lite: false },
+  ];
+  // The LEADER's marks are older and further up the road, so they go down with
+  // the rest of it. One group each, not one for the pair: fill-opacity on a
+  // shared group would flatten the two together and the depth cue with them.
+  return [
+    ...cars.map((c) => `      <g data-trail stroke="none"${c.lite ? ' fill-opacity="0.55"' : ""}>`
+      + `<path d="${trails(c, 1600)}"/></g>`),
+    ...cars.map((c) => tracedCar(c.x, c.y, c.sc, c.which, c.lite)),
+  ].join("\n");
 }
 
 // ================================================================== output
@@ -555,8 +659,8 @@ const PLACE = process.env.TA_PLACE || "202 675";
 const SCALE = process.env.TA_SCALE || "0.99";
 // The portrait drawing has its own viewBox (900x1600) because it is a different
 // composition, not a crop of the first one.
-const PLACE_TOP = process.env.TA_TOP_PLACE || "156 974";
-const SCALE_TOP = process.env.TA_TOP_SCALE || "1.0";
+const PLACE_TOP = process.env.TA_TOP_PLACE || "0 0";
+const SCALE_TOP = process.env.TA_TOP_SCALE || "1";
 const argv = process.argv.slice(2);
 // #tc-frame is the per-SHAPE framing that css/menus.css puts on top of that one
 // placement: a phone in portrait wants the pair nudged off the left edge, a

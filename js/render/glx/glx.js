@@ -433,8 +433,17 @@ const GLX = (function () {
     // Same box as #game (tokens.css: fixed inset 0). Sit above the WebGL
     // canvas and below menu sheets (carsetup z-index 35) so CDP/page shots
     // see the blit while the garage UI still covers the right edge.
+    // HIDDEN UNTIL IT HAS SOMETHING TO SHOW. This canvas is opaque (alpha:false)
+    // and covers the viewport at z-index 1, and the blit below only runs when a
+    // capture is waiting — so on any page that never calls awaitSoftPresent /
+    // invalidateSoftPresent it is a BLACK LID over a renderer that is working
+    // perfectly. tools/carview.html read as "draws nothing" for exactly this
+    // reason. OPACITY, not visibility or display: several capture tools call
+    // locator("#game-soft").screenshot(), and Playwright's actionability check
+    // fails a visibility:hidden element but passes an opacity:0 one — so the
+    // box stays screenshot-able while it is still see-through.
     _displayCanvas.style.cssText = "position:fixed;inset:0;width:100%;height:100%;"
-      + "display:block;pointer-events:none;z-index:1;touch-action:none";
+      + "display:block;opacity:0;pointer-events:none;z-index:1;touch-action:none";
     if (canvas.parentNode) canvas.parentNode.insertBefore(_displayCanvas, canvas.nextSibling);
     else if (document.body) document.body.appendChild(_displayCanvas);
     _displayCtx = _displayCanvas.getContext("2d", { alpha: false });
@@ -497,6 +506,9 @@ const GLX = (function () {
     if (maxPx < 8) return;
     try {
       _displayCtx.putImageData(_softImg, 0, 0);
+      // First real frame: reveal the overlay. Before this it held nothing but
+      // opaque black, and showing that hid the live canvas underneath.
+      if (_displayCanvas.style.opacity !== "1") _displayCanvas.style.opacity = "1";
       _softCaptureDue = false;
       softBlitNotify();
     } catch (_) { /* 2D blit failed */ }

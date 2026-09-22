@@ -62,8 +62,23 @@ export const TRACKS = createRequire(import.meta.url)("../../tools/manifest.cjs")
 // `gap` is still the raw centreline reading, kept so existing specs do not
 // shift underneath themselves — new code should read `overRoad`.
 export function auditTracks() {
-  if (!process.env.TRACK) return TRACKS;
-  return process.env.TRACK.split(",").map((t) => t.trim()).filter(Boolean);
+  if (!process.env.TRACK) {
+    // The roster itself resolving empty would make every consumer pass
+    // vacuously, so it is an error here rather than a green run later.
+    if (!TRACKS.length) throw new Error("auditTracks: the circuit roster is EMPTY — every audit built on it would pass having measured nothing");
+    return TRACKS;
+  }
+  // `TRACK=","` or `TRACK=" "` filters to [] and used to be returned as-is:
+  // terrain-over-road and props-over-road both end on
+  // `expect(offenders).toEqual([])`, so an empty roster reported GREEN across
+  // the two broadest geometry gates in the suite, having examined zero
+  // circuits (2026-09-22). This is the same vacuity twin-fidelity.test.mjs
+  // guards itself against with "an empty matrix would pass vacuously".
+  const named = process.env.TRACK.split(",").map((t) => t.trim()).filter(Boolean);
+  if (!named.length) {
+    throw new Error(`auditTracks: TRACK=${JSON.stringify(process.env.TRACK)} names no circuit — refusing to report green on an empty audit`);
+  }
+  return named;
 }
 
 // 6 evenly spaced lap positions (~every 16.7%): 0, 17, 33, 50, 67, 83%. Enough
