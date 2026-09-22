@@ -577,14 +577,18 @@ test.describe("TLX — boot", () => {
     // Same budget as the track wait above: a SwiftShader frame here is seconds,
     // and the first world frames also carry the material compiles (CI llvmpipe
     // passes this in ~12 s; the in-container run needed ~40 s).
-    await page.waitForFunction(() => { const m = GLX.__tlx.memState(); return m.draws > 50 && m.rUbo != null; }, null, { polling: 100, timeout: 60_000 });
+    // `calls` (three's per-frame draw-call count), not `draws`: the retained
+    // drawList is emptied by present(), so between frames — which is the only
+    // time page.evaluate can run — it always reads 0.
+    await page.waitForFunction(() => { const m = GLX.__tlx.memState(); return m.calls > 50 && m.rUbo != null; }, null, { polling: 100, timeout: 60_000 });
     const a = await page.evaluate(() => GLX.__tlx.memState());
     await page.waitForFunction((v) => GLX.__tlx.memState().groupVer > v, a.groupVer, { polling: 100, timeout: 60_000 });
     const b = await page.evaluate(() => GLX.__tlx.memState());
     expect(a.sharedUniforms).toBe(true);
-    // Per-object clones would put rUbo at roughly draws x (1 + 5 lamp arrays);
-    // shared, it is a few dozen (one per program plus three's own).
-    expect(a.rUbo).toBeLessThan(Math.max(64, a.draws));
+    // Per-object clones put rUbo well above the per-frame draw-call count
+    // (7754 buffers against 1222 calls on the r185 control probe); shared, it
+    // sits below it (934 / 816 against 1160 / 1513, PERF-FINDINGS 2y).
+    expect(a.rUbo).toBeLessThan(Math.max(64, a.calls));
     expect(b.groupVer).toBeGreaterThan(a.groupVer);
     expect(errors).toEqual([]);
   });
