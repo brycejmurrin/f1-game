@@ -2289,3 +2289,56 @@ experiment blind.
 pit-complex collisions resolved emitter by emitter and a rendered lap to judge
 it — a dressing pass, which is what this entry originally said and what the
 attempt confirmed.
+
+### 2026-09-22, later: the probe overturns the "tuned in place" reading
+
+PR #193 concluded the dressing "was tuned where it sits" and corrected only the
+names. **That conclusion was wrong**, and the reasoning that produced it was
+wrong in an instructive way: `float 0` and `clip 1` were read as evidence the
+layout was settled. Those audits cannot see a paddock on the wrong corner —
+props auto-ground wherever they are, and a building in open air collides with
+nothing. Clean baselines were silence, not agreement.
+
+With the Chromium probe available, `agent.mjs estoril scene --at <frac>` says
+plainly what stands where:
+
+| location | shipped today | with `sceneryStartFrac` dropped |
+|---|---|---|
+| **frac 0.82 — the Parabolica** | 14 structures, gantry, grandstand, **5 motorhomes** | 28 pines, 3 trees, marshal post |
+| **frac 0.97 — the pit straight** | 11 trees, **22 pines** | 22 structures, 2 gantries, grandstand, 2 motorhomes |
+
+The shipped circuit has **the paddock parked on a fast corner and a pine forest
+down the pit straight.** The swap is the right way round.
+
+### Why dropping `sceneryStartFrac` is still not the fix
+
+It is not a scenery-authoring offset. `_sceneryShift` is consumed by the ENGINE
+as well, in four readers in `js/track/tracks.js`: `dress` in `buildCenterline`
+(the shift applied to bridges and elevations), `shiftS` in
+`transformSceneryApi`, the inverse `HKSHIFT` beside `indexSolidAt`, and the
+`sceneryCoordinates` guard in `bakedModel`. Dropping it moves terrain and
+engine geometry, not just props.
+
+Measured with the circuit's scenery callback stubbed out entirely, so no
+circuit prop is emitted at all:
+
+- shift 0.85616 (shipped): **0 severe clips**
+- shift 0: **1 severe clip — 4.00 m / 1261 m3 at frac 0.000**
+
+That collision is engine-side pit geometry overlapping itself once the shift is
+removed. No circuit emitter causes it: removing `motorhome`, `broadcastCompound`,
+`grandstandEx`, both `pitBlock` terraces and the pit `scaffoldStand` each leaves
+it unchanged. It also explains the float and the rejected `estoril-aldeia` — the
+elevation profile moves with the same constant.
+
+### What the fix actually requires
+
+Not a def edit. Either (a) re-author the twelve emitters' fracs by -0.85616 so
+they land on their features while the def's shift stays put for terrain and
+engine geometry — but that divorces the circuit's paddock from wherever the
+engine's pit structures sit, so it needs the engine consumer audited first; or
+(b) drop the shift AND fix the engine-side pit overlap it exposes. Either way
+the four `_sceneryShift` readers named above have to be understood together.
+
+The probe A/B is the acceptance test: the Parabolica should read as trees, the
+pit straight as structures.
