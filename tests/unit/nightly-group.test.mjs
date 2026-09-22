@@ -104,7 +104,10 @@ test("the rotation covers every one of its groups within one cycle", () => {
 });
 
 test("the pick is deterministic, and stable across a negative or huge day index", () => {
-  assert.equal(groupForDay(7), groupForDay(7));
+  // Was `groupForDay(7) === groupForDay(7)` — a pure index into ROTATION
+  // compared with itself, so it could not fail. Pinning the value instead also
+  // catches an off-by-one in the modulo, which the tautology never could.
+  assert.equal(groupForDay(7), ROTATION[7 % ROTATION.length]);
   assert.ok(ROTATION.includes(groupForDay(-1)), "a negative index must still land in range");
   assert.ok(ROTATION.includes(groupForDay(10 ** 9)));
 });
