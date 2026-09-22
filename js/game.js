@@ -3975,13 +3975,11 @@ function update(dt) {
       els.lights.hidden = true;
       for (const l of els.lights.children) l.classList.remove("on");
       netStart = null;              // consumed; never carry it into the next race
-      // LOWERED BEFORE THE THROWABLE WORK BELOW, read from a local afterwards.
-      // announce() and GameAudio.lightsOut() sit between here and the old clear
-      // site, and lightsOut() builds WebAudio nodes behind a guard that checks
-      // `ctx` exists but not `ctx.state` — so a context the browser closed under
-      // us (iOS lock: the case rebuildCtx exists for) threw and latched the flag.
-      // Stuck true, `if (!restartPending) raceT = 0` skips the reset on every
-      // later race and quali never launches another flying lap.
+      // LOWERED BEFORE THE THROWABLE WORK BELOW, read from a local afterwards:
+      // lightsOut() builds WebAudio nodes behind a guard that checks `ctx`
+      // exists but not `ctx.state`, so a context the browser closed under us
+      // threw and latched the flag — and stuck true it skips `raceT = 0` on
+      // every later race and suppresses quali flying laps. Ledger 2026-09-22.
       const wasRestart = restartPending;
       restartPending = false;
       announce("LIGHTS OUT!", 1.4, "race");
@@ -7260,11 +7258,9 @@ function render(dt) {
       frameSky.invViewProj = _envInv;
       // THE `finally` IS LOAD-BEARING: it prevents a frozen game, not a lost
       // reflection. envFaceBegin raises GLX's `_envActive`, begin() branches on
-      // it every frame, and envFaceEnd is its ONLY lowering (envProbeReset does
-      // not touch it) — so a throw below left the whole game rendering into a
-      // 64-pixel cubemap for the life of the tab while tick()'s LoopHealth kept
-      // physics and audio running under a canvas stuck on its last good frame.
-      // Ledger 2026-09-22.
+      // it every frame, and envFaceEnd is its ONLY lowering — so a throw below
+      // left the whole game rendering into a 64-pixel cubemap for the life of
+      // the tab, under a canvas stuck on its last good frame. Ledger 2026-09-22.
       // Same early-Z order as the main camera (opaque → sky). The 64² face
       // is ~200× smaller, but the sky still filled every pixel the world
       // then overwrote. Glow stays off on the probe (`false` below).
