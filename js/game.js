@@ -20,7 +20,7 @@ const els = {
   flag: $("hud-flag"), minimap: $("minimap"),
   lights: $("lights"), announce: $("announce"), announceNum: $("announce-num"),
   announceWho: $("announce-who"), announceText: $("announce-text"),
-  overlay: $("overlay"), subtitle: $("subtitle"), audiostate: $("audiostate"),
+  overlay: $("overlay"), audiostate: $("audiostate"),
   lighting: $("lighting"), camtune: $("camtune"), flyby: $("flyby"),
   select: $("select"), selTitle: $("select-title"), selTeams: $("sel-teams"),
   selTracks: $("sel-tracks"),
@@ -8915,12 +8915,6 @@ onPadLost: () => {
   announce("CONTROLLER DISCONNECTED — RECONNECT OR PRESS RESUME", 4, "coach");
   Log.info("input", "paused: last gamepad disconnected");
 } });
-// The subtitle is DERIVED on both paths. It used to be hardcoded "24 real
-// circuits" in index.html and rewritten on desktop only, from Tracks.LIST.length
-// — which counts the 16 retired classics too, so the same build claimed 24
-// circuits on a phone and 40 on a desktop. Both now read the championship
-// calendar (Tracks.SEASON), and the desktop, which has the room, names the
-// classics rather than silently folding them into the season count.
 /* body.desktop IS A LIVE ANSWER, NOT A BOOT-TIME ONE. It used to be set once,
    here, and never revisited — but `(pointer: coarse)` flips whenever an iPad is
    docked to or undocked from a keyboard, and showTouchControls() reads the LIVE
@@ -8937,11 +8931,6 @@ function syncPointerKind() {
 }
 syncPointerKind();
 Input.onPointerKindChange(syncPointerKind);
-{
-  const rounds = Tracks.SEASON.length, classics = Tracks.LIST.length - rounds;
-  els.subtitle.textContent = "2026 grid · " + rounds + " real circuits · "
-    + (Input.touchControlsNeeded() ? ({buttons:"tap arrows to steer",touch:"drag to steer"}[steerMode] || "tilt to steer") : classics + " classics");
-}
 Input.setSteerMode(steerMode);
 Input.setThrottleLatch(throttleLatchOpt);
 // DataHub.init(els.datahub) used to run here. It moved into ensureDataHub(),

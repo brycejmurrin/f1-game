@@ -24,6 +24,55 @@ except Exception:
     print("")
 ')
 [ -z "$CMD" ] && exit 0
+# SCAN is the command as the kill rules below see it (2026-09-22). Two holes
+# and one false positive were reproduced in the raw text: `sh -c "pkill -f
+# chrome"` and `/usr/bin/pkill -f chrome` walked past a regex that matched only
+# the bare word at command position, and `echo '… && pkill -f chrome …'` was
+# BLOCKED because `&& pkill` inside a quoted string still reads as command
+# position. So: heredoc bodies are dropped, every quoted string is blanked —
+# except the body of a shell `-c`, which is unwrapped so its contents ARE
+# scanned at command position. The commit rule keeps the raw text.
+SCAN=$(printf '%s' "$CMD" | python3 -c '
+import re,sys
+s=sys.stdin.read()
+out=[];term=None
+for ln in s.split("\n"):
+    if term is not None:
+        if ln.strip()==term: term=None
+        continue
+    m=re.search(r"<<-?\s*[\x27\"]?([A-Za-z_][A-Za-z0-9_]*)[\x27\"]?",ln)
+    if m: term=m.group(1)
+    out.append(ln)
+s="\n".join(out)
+res=[];i=0;n=len(s)
+while i<n:
+    c=s[i]
+    if c in "\x27\"":
+        j=i+1
+        while j<n and s[j]!=c:
+            if c=="\"" and s[j]=="\\": j+=1
+            j+=1
+        body=s[i+1:j]
+        if re.search(r"(^|\s)-l?c\s*$", s[:i]): res.append(" "+body+" ")
+        else: res.append(" ")
+        i=j+1
+    else:
+        res.append(c); i+=1
+sys.stdout.write("".join(res))
+')
+# A subagent never starts a browser run (AGENTS.md §Verification 10). Hook input
+# names the agent when the call comes from one (agent_id / agent_type, or a
+# transcript under subagents/); the main session carries none of those.
+SUBAGENT=$(printf '%s' "$INPUT" | python3 -c '
+import json,sys
+try:
+    d=json.load(sys.stdin)
+    print("1" if (d.get("agent_id") or d.get("agent_type") or "/subagents/" in str(d.get("transcript_path") or "")) else "")
+except Exception:
+    print("")
+')
+# Prefixes that carry the verb: wrappers, a shell -c, an absolute path.
+PRE='((sudo|env|exec|nice|nohup|command)[[:space:]]+)*((sh|bash|dash|zsh)[[:space:]]+-l?c[[:space:]]+)?((sudo|env|exec)[[:space:]]+)*(/[^[:space:]]*/)?'
 # THE TREE THE COMMIT LANDS IN, NOT THE SESSION'S. $CLAUDE_PROJECT_DIR names
 # the MAIN checkout, so a commit made from a LINKED WORKTREE read the main
 # tree's staged list, gated files the commit does not touch, and `--auto-raise`
@@ -42,9 +91,10 @@ ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 # the pattern used to require -f as the FIRST flag, so `pkill -9 -f node` and
 # `pkill -TERM -f chrome` — the two forms anyone reaches for when a plain pkill
 # "did not work" — walked straight past a guard whose whole point is that they
-# match the guard's own shell. `sudo`/`env` are hoisted for the same reason.
-if printf '%s' "$CMD" | grep -Eq '(^|[;&|(][[:space:]]*)((sudo|env)[[:space:]]+)*(pkill([[:space:]]+-[A-Za-z0-9]+)*[[:space:]]+(-[a-zA-Z]*f[a-zA-Z]*|--full)|killall)[[:space:]]' \
-   && printf '%s' "$CMD" | grep -Eiq 'chrom|playwright|node|test-bg|npm'; then
+# match the guard's own shell. `sudo`/`env` are hoisted for the same reason,
+# and since 2026-09-22 so are a shell `-c` and an absolute path ($PRE).
+if printf '%s' "$SCAN" | grep -Eq "(^|[;&|(][[:space:]]*)${PRE}(pkill([[:space:]]+-[A-Za-z0-9]+)*[[:space:]]+(-[a-zA-Z]*f[a-zA-Z]*|--full)|killall)[[:space:]]" \
+   && printf '%s' "$SCAN" | grep -Eiq 'chrom|playwright|node|test-bg|npm'; then
   echo "BLOCKED: pkill -f / killall matches your own shell (its command line contains the pattern) and orphans Playwright's browsers. Stop a run with 'node tools/ci/test-bg.mjs --stop'; kill orphan Chrome by PID from a listed set: ps -eo pid,comm | awk '\$2==\"chrome\"{print \$1}'" >&2
   exit 2
 fi
@@ -57,15 +107,15 @@ fi
 # QUOTES either form is prose, not an invocation. (This guard blocked its own
 # commit before the anchor went in.)
 PGREP_F='pgrep([[:space:]]+-[A-Za-z0-9]+)*[[:space:]]+(-[a-zA-Z]*f[a-zA-Z]*|--full)'
-if printf '%s' "$CMD" | grep -Eq "(^|[;&|(][[:space:]]*)(${PGREP_F}[^|]*\|[[:space:]]*xargs[^|]*kill|kill([[:space:]]+-[A-Za-z0-9]+)*[[:space:]]+\\\$\([[:space:]]*${PGREP_F})" \
-   && printf '%s' "$CMD" | grep -Eiq 'chrom|playwright|node|test-bg|npm'; then
+if printf '%s' "$SCAN" | grep -Eq "(^|[;&|(][[:space:]]*)${PRE}(${PGREP_F}[^|]*\|[[:space:]]*xargs[^|]*kill|kill([[:space:]]+-[A-Za-z0-9]+)*[[:space:]]+\\\$\([[:space:]]*${PGREP_F})" \
+   && printf '%s' "$SCAN" | grep -Eiq 'chrom|playwright|node|test-bg|npm'; then
   echo "BLOCKED: pgrep -f piped or substituted into kill orphans Playwright's browsers exactly as pkill -f does. Stop a run with 'node tools/ci/test-bg.mjs --stop'; kill orphan Chrome by PID from a listed set: ps -eo pid,comm | awk '\$2==\"chrome\"{print \$1}'" >&2
   exit 2
 fi
 
 # --- kill <pid> of a test-bg supervisor / runner --------------------------------
-if printf '%s' "$CMD" | grep -Eq '(^|[;&|(][[:space:]]*)kill([[:space:]]+-[A-Za-z0-9]+)*[[:space:]]+[0-9]'; then
-  for pid in $(printf '%s' "$CMD" | grep -Eo '(^|[[:space:]])[0-9]+' | tr -d ' '); do
+if printf '%s' "$SCAN" | grep -Eq "(^|[;&|(][[:space:]]*)${PRE}kill([[:space:]]+-[A-Za-z0-9]+)*[[:space:]]+[0-9]"; then
+  for pid in $(printf '%s' "$SCAN" | grep -Eo '(^|[[:space:]])[0-9]+' | tr -d ' '); do
     [ -r "/proc/$pid/cmdline" ] || continue
     line=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null)
     case "$line" in
@@ -74,6 +124,21 @@ if printf '%s' "$CMD" | grep -Eq '(^|[;&|(][[:space:]]*)kill([[:space:]]+-[A-Za-
         exit 2 ;;
     esac
   done
+fi
+
+# --- a subagent never starts a browser run --------------------------------------
+# AGENTS.md §Verification 10 was prose and a body lint; every agent carries
+# Bash, so nothing stopped a `test-bg.mjs` inside one until 2026-09-22. The
+# browser starters, at command position: test-bg (anything but --status),
+# test-solo, run-playwright, `playwright test`, `npm test`, verify-change
+# --wait, the chrome daemon. Node-only groups (`npm run test:tooling-fast`,
+# `node --test`) stay open — that is what verify-agent runs.
+if [ "$SUBAGENT" = "1" ]; then
+  BROWSER='(node[[:space:]]+)?(tools/ci/)?(test-bg\.mjs([[:space:]]+(?!--status)[^[:space:]]+)|test-solo\.mjs|run-playwright\.mjs|verify-change\.mjs[^;&|]*--wait)|(python3?[[:space:]]+)?(tools/mcp/)?probe-mcp\.py[[:space:]]+chrome-start|npx[[:space:]]+playwright[[:space:]]+test|playwright[[:space:]]+test([[:space:]]|$)|npm[[:space:]]+test([[:space:]]|$)'
+  if printf '%s' "$SCAN" | grep -Pq "(^|[;&|(][[:space:]]*)${PRE}(${BROWSER})"; then
+    echo "BLOCKED: a subagent never starts a browser run (AGENTS.md §Verification 10) — one group saturates this box and the parent owns the only Playwright process. Run the node-only checks (verify-change.mjs --fast, node --test, verify-track.cjs) and report the browser groups as NOT RUN; the parent starts them." >&2
+    exit 2
+  fi
 fi
 
 # --- guards before git commit ---------------------------------------------------
@@ -96,7 +161,7 @@ if printf '%s' "$CMD" | grep -Eq '(^|[;&|(][[:space:]]*)git([[:space:]]+-C[[:spa
   # read as "nothing to check").
   STAGED=$(cd "$ROOT" && git diff --cached --name-only 2>/dev/null)
   GENERATED_DOCS=$(cd "$ROOT" && node tools/gen/targets.mjs 2>/dev/null | tr '\n' ' ')
-  [ -n "$GENERATED_DOCS" ] || GENERATED_DOCS="tools/README.md docs/DEBUG-HOOKS.md docs/ARCHITECTURE.md docs/LIGHTING-TUNER-SLIDERS.md"
+  [ -n "$GENERATED_DOCS" ] || GENERATED_DOCS="tools/README.md docs/DEBUG-HOOKS.md docs/ARCHITECTURE.md docs/LIGHTING-TUNER-SLIDERS.md docs/notes/PREPUSH-GATE-LADDER.md"
   DOCS_ONLY=0
   if [ -n "$STAGED" ] && ! printf '%s' "$CMD" | grep -Eq -- '(^|[[:space:]])-[a-zA-Z]*a|--all'; then
     DOCS_ONLY=1
