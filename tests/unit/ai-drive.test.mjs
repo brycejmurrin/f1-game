@@ -163,6 +163,22 @@ test("brakeDecision soft-pedals small excess and full-pedals big excess", () => 
   assert.equal(hard.brakeLvl, 1);
 });
 
+test("brakeDecision gives the same pedal for the same pace-normalised overspeed", () => {
+  const samples = [
+    { d: 40, k: 0.02, bank: 0 },
+    { d: 80, k: 0.01, bank: 0 },
+  ];
+  const decisions = [1, 0.84, 0.5].map((pace) => {
+    const base = { traits: mid, samples, latMax: 22, brake: 22, grip: 1, pace, vmax: 72 };
+    const lim = A.brakeTarget(base);
+    return Object.assign({}, A.brakeDecision({ ...base, speed: lim + 2 * pace }));
+  });
+  for (const d of decisions) {
+    assert.equal(d.braking, true);
+    assert.equal(d.brakeLvl, decisions[0].brakeLvl);
+  }
+});
+
 test("craft late-brake raises the limit when attacking with room", () => {
   const samples = [{ d: 50, k: 0.018, bank: 0 }];
   const plain = A.brakeTarget({

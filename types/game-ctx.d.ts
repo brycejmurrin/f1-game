@@ -83,6 +83,14 @@ interface TeamDef {
 /** Per-car performance multipliers (human cars only) — modsFor(). */
 interface CarMods { speed: number; accel: number; cornering: number; braking: number; }
 
+/** Core result of RaceControl.lineTransition; callers own presentation effects. */
+interface LineTransition {
+  direction: -1 | 1;
+  changed: boolean;
+  lapDone: number | null;
+  flagged: boolean;
+}
+
 /** One grid car, as built by makeCars() in js/game.js. Fields listed are the
     ones the façade's own signatures depend on; the rest is physics/AI state. */
 interface CarState {
@@ -675,6 +683,7 @@ interface GameCtx {
   readonly refreshLightTunePanel: () => void;
   readonly setCamMode: (m: number) => void;
   readonly rescuePlayer: (c: CarState) => void;
+  readonly onIncidentLineCross: (c: CarState, cross: LineTransition, newS: number) => void;
   readonly setLightTune: (id: string, v: unknown) => void;
   readonly setWeatherLive: (w: Weather) => void;
   /** Live time-of-day (read with no arg, write with tod). Rebuilds track when day/night flips. */
@@ -794,7 +803,7 @@ declare const TitleMenu: GameModuleFactory;
 declare const Onboard: GameModuleFactory;
 declare const SetupCamera: GameModuleFactory;
 declare const SetupUI: GameModuleFactory;
-declare const SkidMarks: GameModuleFactory;
+declare const RaceSettings: GameModuleFactory;
 declare const RivalAudio: GameModuleFactory;
 declare const SteerTuning: GameModuleFactory;
 declare const TunerPanel: GameModuleFactory;

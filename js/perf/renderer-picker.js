@@ -208,6 +208,111 @@ function clearRendererStorage() {
   return removed;
 }
 
+// Boot can fail before game.js wires TopModal, HELP, or the lazy Data Hub.
+// Keep the terminal screen usable without relying on any of those late paths.
+function unavailableDiagnostics() {
+  let stored = null;
+  try { stored = localStorage.getItem("apex26.gfxBackend"); } catch (_) { stored = "storage-blocked"; }
+  const valid = stored === "webgl2" || stored === "three" || stored === "webgpu";
+  return JSON.stringify({
+    renderer: { stored, requested: valid ? stored : (stored == null ? defaultBackend() : "webgl2") },
+    browser: {
+      webgl2API: typeof WebGL2RenderingContext !== "undefined",
+      webgpuAPI: typeof navigator !== "undefined" && !!navigator.gpu,
+    },
+  }, null, 2);
+}
+async function copyUnavailableDiagnostics(text) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch (_) { /* permission denied: use the selection fallback */ }
+  try {
+    const out = document.createElement("textarea");
+    out.value = text;
+    out.setAttribute("readonly", "");
+    out.style.position = "fixed"; out.style.opacity = "0";
+    document.body.appendChild(out);
+    out.select();
+    const copied = document.execCommand("copy");
+    out.remove();
+    return copied !== false;
+  } catch (_) { return false; }
+}
+function closeUnavailableDialog(dialog) {
+  if (!dialog) return;
+  dialog.hidden = true;
+  if (dialog.open && typeof dialog.close === "function") {
+    try { dialog.close(); } catch (_) { /* already closed */ }
+  }
+}
+function openUnavailableDialog(dialog, closeButton, returnFocus) {
+  if (!dialog) return;
+  dialog.hidden = false;
+  if (!dialog.open && typeof dialog.showModal === "function") {
+    try { dialog.showModal(); } catch (_) { /* non-dialog harness / detached node */ }
+  }
+  if (!dialog.__apexGraphicsRecoveryWired) {
+    dialog.__apexGraphicsRecoveryWired = true;
+    if (dialog.addEventListener) dialog.addEventListener("cancel", (e) => {
+      if (e && e.preventDefault) e.preventDefault();
+      if (closeButton && closeButton.click) closeButton.click();
+      else closeUnavailableDialog(dialog);
+    });
+    if (closeButton && closeButton.addEventListener) closeButton.addEventListener("click", () => {
+      queueMicrotask(() => {
+        closeUnavailableDialog(dialog);
+        if (returnFocus && returnFocus.focus) returnFocus.focus();
+      });
+    });
+  }
+  queueMicrotask(() => { if (closeButton && closeButton.focus) closeButton.focus(); });
+}
+function showUnavailable(opts) {
+  const panel = opts && opts.panel;
+  if (opts && opts.hud) { opts.hud.hidden = true; opts.hud.inert = true; }
+  if (opts && opts.overlay) { opts.overlay.hidden = true; opts.overlay.inert = true; }
+  if (!panel) return;
+  panel.textContent = "";
+  const body = document.createElement("div");
+  const title = document.createElement("h2");
+  const detail = document.createElement("p");
+  const actions = document.createElement("div");
+  const status = document.createElement("p");
+  const buttons = ["RETRY", "USE WEBGL2", "COPY DIAGNOSTICS", "HELP", "DATA HUB"]
+    .map((label) => { const b = document.createElement("button"); b.type = "button"; b.textContent = label; return b; });
+  const [retry, webgl, diagnostics, help, data] = buttons;
+  body.setAttribute("data-gfx-recovery", ""); actions.setAttribute("data-gfx-recovery-actions", "");
+  status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite");
+  title.textContent = "Graphics unavailable";
+  detail.textContent = "Apex 26 could not start a compatible graphics renderer. You can retry, select the WebGL2 fallback, or use the game’s help and data tools.";
+  retry.onclick = () => { try { location.reload(); } catch (_) { /* embedded host */ } };
+  webgl.onclick = () => {
+    try { localStorage.setItem("apex26.gfxBackend", "webgl2"); localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* blocked storage */ }
+    try { sessionStorage.removeItem("apex26.gfxClaimFail"); sessionStorage.removeItem("apex26.gfxBound"); } catch (_) { /* blocked storage */ }
+    try { location.reload(); } catch (_) { /* embedded host */ }
+  };
+  diagnostics.onclick = async () => {
+    status.textContent = await copyUnavailableDiagnostics(unavailableDiagnostics())
+      ? "Renderer diagnostics copied." : "Could not copy diagnostics.";
+  };
+  help.onclick = () => openUnavailableDialog(opts.helpDialog, opts.helpClose, help);
+  data.onclick = async () => {
+    data.disabled = true; status.textContent = "Loading Data Hub…";
+    const ok = await opts.ensureDataHub();
+    data.disabled = false;
+    if (!ok) { status.textContent = "Data Hub could not be loaded."; return; }
+    opts.openDataHub();
+    openUnavailableDialog(opts.dataDialog, opts.dataClose, data);
+    status.textContent = "";
+  };
+  actions.append(...buttons); body.append(title, detail, actions, status); panel.appendChild(body);
+  panel.hidden = false;
+  retry.focus();
+}
+
 function applyBackend(next, rb) {
   if (!raceGuard(rb, "RENDERER: END THIS RACE & RELOAD?", () => paintRenderer(rb))) return false;
   Log.info("game", "RendererPicker.applyBackend " + next);
@@ -763,6 +868,7 @@ if (typeof document !== "undefined") {
 
 return { BACKENDS, init,
   nextBackend, prevBackend, applyBackend, backendLabel, readBackend, liveBackend, clearRendererStorage,
+  showUnavailable,
   RENDERER_LS_KEYS, RENDERER_SS_KEYS,
   THREE_PATHS, SHOT_MODES, readThreePath, applyThreePath, threePathLabel, liveThreeApi,
   ENV_PROBES, readEnvProbe, applyEnvProbe, envProbeLabel,

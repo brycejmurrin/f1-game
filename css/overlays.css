@@ -945,6 +945,26 @@ body[data-density="compact"] #campicker {
   display: flex; align-items: center; justify-content: center;
   background: var(--bg);
 }
+#nogl [data-gfx-recovery] {
+  width: min(92vw, 560px);
+  padding: clamp(calc(var(--pad) * 0.9), 5vw, calc(var(--pad) * 1.9));
+  text-align: center;
+}
+#nogl [data-gfx-recovery-actions] {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--gap);
+  margin-top: var(--pad);
+}
+#nogl [data-gfx-recovery-actions] button {
+  min-height: var(--tap);
+  padding: calc(var(--gap) * 0.8) var(--gap);
+  touch-action: manipulation;
+}
+#nogl [role="status"] { min-height: 1.4em; }
+@media (max-width: 480px) {
+  #nogl [data-gfx-recovery-actions] { grid-template-columns: 1fr; }
+}
 /* NOTE: the layer's closing brace used to be HERE, so everything below — the
    whole VS FRIEND lobby — was unlayered, and unlayered rules outrank every
    cascade layer in the project. See tests/unit/css-layers.test.mjs. */

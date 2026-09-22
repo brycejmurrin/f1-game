@@ -188,7 +188,7 @@ const DataTelemetry = (function () {
       clear(rightPane);
       rightPane.appendChild(spinner());
 
-      F1API.sessionDrivers(meta.sessionKey).catch(function () { return null; }).then(function (drivers) {
+      F1API.sessionDrivers(meta.sessionKey).then(function (drivers) {
         if (myDriverGen !== driverGen) return;
         // Session info → left pane
         const info = el("div", "dh-livecard");
@@ -298,6 +298,18 @@ const DataTelemetry = (function () {
         leftPane.appendChild(pickHead);
         leftPane.appendChild(pick);
         rightPane.appendChild(detail);
+      }, function () {
+        if (myDriverGen !== driverGen) return;
+        clear(rightPane);
+        const failure = el("div", "dh-error");
+        failure.setAttribute("role", "status");
+        failure.setAttribute("data-state", "failed");
+        failure.appendChild(el("div", "dh-error-msg", "Couldn't load telemetry drivers. Try again."));
+        const retry = el("button", "dh-retry", "RETRY");
+        retry.type = "button";
+        retry.addEventListener("click", function () { renderTelemetryBody(meta, leftPane, rightPane); });
+        failure.appendChild(retry);
+        rightPane.appendChild(failure);
       });
     }
 
@@ -310,8 +322,10 @@ const DataTelemetry = (function () {
         const ms = Date.parse(start);
         const end = isFinite(ms) ? new Date(ms + dur * 1000 + 1500).toISOString() : start;
         const jobs = [
-          F1API.carData(sessionKey, d.num, start, end).catch(function () { return []; }),
-          F1API.locationData(sessionKey, d.num, start, end).catch(function () { return []; })
+          // These two ARE the telemetry view. A rejected request is a failed
+          // load, while a fulfilled [] is a valid "not published" answer.
+          F1API.carData(sessionKey, d.num, start, end),
+          F1API.locationData(sessionKey, d.num, start, end)
         ];
         if (withExtras) {
           jobs.push(F1API.stints(sessionKey, d.num).catch(function () { return []; }));
@@ -481,7 +495,17 @@ const DataTelemetry = (function () {
           clear(detail);
           let msg = "Couldn't load telemetry.";
           if (err && err.message && err.message.indexOf("Live F1 session") !== -1) msg = err.message;
-          detail.appendChild(emptyMsg(msg));
+          const failure = el("div", "dh-error");
+          failure.setAttribute("role", "status");
+          failure.setAttribute("data-state", "failed");
+          failure.appendChild(el("div", "dh-error-msg", msg));
+          const retry = el("button", "dh-retry", "RETRY");
+          retry.type = "button";
+          retry.addEventListener("click", function () {
+            loadTelemetrySet(lanes, detail, syncChips, returnFocus);
+          });
+          failure.appendChild(retry);
+          detail.appendChild(failure);
           const backBtn = el("button", "dh-livebtn", "BACK");
           backBtn.dataset.block = "full";
           backBtn.addEventListener("click", function() { if (syncChips) syncChips(); });
