@@ -5,6 +5,10 @@
   {
     id: "jacarepagua",
     classic: true,
+    // JAC-M2: the projected [x,z] trace winds CW because +z is south. In
+    // east/north map coordinates that is the historic anticlockwise GP lap,
+    // so reverse:false is intentional (the same projection mirror documented
+    // by f1-track-accuracy.spec.js).
     reverse: false,
     startFrac: 0.0,
     name: "JACAREPAGUA",
@@ -17,8 +21,10 @@
     sceneryCoordinates: "racing",
     terrainOuter: 120,
     dressingExclusions: [
-      { kinds: ["foliage"], s0: 0.92, s1: 0.10 },
-      { kind: "foliage", s0: 0.36, s1: 0.50 },   // the lagoon frontage
+      // JAC-M3: shared foliage is tall by construction. Keep it off this
+      // exposed restinga plain; the scenery callback authors low scrub around
+      // the lap and the only tall planting, coconut palms, on the lagoon shore.
+      { kind: "foliage", s0: 0, s1: 1 },
     ],
     pal: {
       zenith:        [0.24, 0.48, 0.80],

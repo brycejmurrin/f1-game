@@ -1,6 +1,6 @@
 ---
 name: career-mode
-description: "Use when DRIVER CAREER, MY TEAM, career saves or slots, contracts, sponsors, R&D economy, career qualifying, reliability/DNFs, career hooks, or career tests are being changed or debugged."
+description: "Use when DRIVER CAREER, MY TEAM, career saves or slots, contracts, sponsors, R&D economy, career qualifying, reliability/DNFs, career hooks, or career tests are being changed or debugged — including the season, sprint and quali behaviour INSIDE a career save (career always races Tracks.SEASON). The standalone Season screen with no career save open is season-mode."
 ---
 
 ## Overview
