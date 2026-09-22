@@ -42,8 +42,8 @@ Session shape — eleven rules that control wall time and waiting:
    from the working tree, so a run in flight forbids source edits (the edit
    hook blocks them). `test:tooling-fast` is the edit-loop check.
 3. THE GATE IS A LADDER, EACH RUNG A SUBSET — green below never means green above:
-   `test:guards` (hook-enforced, every commit) ⊂ `test:tooling-fast` (223 of 296 unit files)
-   ⊂ `deploy.mjs --gate-only`, the only pre-push check that runs what the deploy runs (pushes nothing, dirty tree fine). The other 73 have taken deploys red three times — `docs/notes/PREPUSH-GATE-LADDER.md`. A commit whose every staged path is prose (`docs/`, `*.md`, skills, agents — no generated doc) runs only `docs-integrity`, and no ratchet raise.
+   `test:guards` (hook-enforced, every commit) ⊂ `test:tooling-fast` (226 of 300 unit files)
+   ⊂ `deploy.mjs --gate-only`, the only pre-push check that runs what the deploy runs (pushes nothing, dirty tree fine). The other 74 have taken deploys red three times — `docs/notes/PREPUSH-GATE-LADDER.md`. A commit whose every staged path is prose (`docs/`, `*.md`, skills, agents — no generated doc) runs only `docs-integrity`, and no ratchet raise.
 4. Never block the foreground on a test run: background it (log in `artifacts/`). Push once per VERIFIED BATCH: a push over a live run cancels it, and a killed job runs no `if: always()` step, so its failures are lost (9 of 59 sampled runs). Wait on it with `until [ -z "$(pgrep -f 'nam[e]')" ]; do sleep 15; done` and TEST THE ABSENT CASE — `[ ! -e /proc/$(pgrep …) ]` never exits and sat out a 30-minute budget (`docs/notes/TESTING-FIELD-NOTES.md` 2026-09-22); the verdict is still rule 5's, never the waiter's.
 5. ONE Playwright process, ONE browser group per batch, via `test-bg.mjs`
    (it refuses a second group above loadavg 3 — tool-enforced, not advice).
@@ -59,7 +59,9 @@ Session shape — eleven rules that control wall time and waiting:
 8. A timeout on a busy box measures the machine: check `/proc/loadavg` (< 3)
    and for a live `playwright test` first; re-run alone only when the verdict
    matters. On CI, `cancelled` with zero failures is a timeout until proven
-   otherwise.
+   otherwise — EXCEPT the designed one: a push and its PR event share a group
+   on purpose, so the PR run (merge commit) cancels the push run on the same
+   `head_sha` seconds in. A live sibling on that SHA means dedupe, not a red.
 9. Stopping is allowed: a pushed change that names its unverified groups
    beats an hour of SwiftShader. Never widen a tolerance to make a spec pass;
    a `waitForFunction` on a rendering page needs `{ polling: 100 }`
@@ -118,7 +120,7 @@ order live in `tools/manifest.cjs` — read that, not this file; per-directory t
 - `tests/data/ratchets.json` ratchets game.js and the other big modules at
   their current values — pay for every added line. The commit hook absorbs ≤ 40
   lines of growth (raises, stages, prints — the raise is in your diff); more blocks
-  until you extract or raise it with a reason (`ratchets.mjs --update`; also
+  until you extract or raise it with a reason (`tools/check/ratchets.mjs --update`; also
   lowers). The edit hook blocks a hand edit of the file.
 - localStorage keys are prefixed `apex26.`. Logging goes through `Log`
   (`js/core/log.js`), never bare `console.*`.
@@ -182,7 +184,7 @@ Work happens on a `claude/<topic>` branch. The deploy branch is
 `claude/f1-game-project-26h3ng`: never push there without review; only it ships
 (https://brycejmurrin.github.io/f1-game/). Other sessions develop directly on
 it, so a deploy is a merge of THEIR work — re-measure on the merged tree, never
-force-push; they also all see one red at once, so before fixing a red you did NOT cause, run `node tools/ci/who-is-on-it.mjs` (recent pushes per branch, who touched the failing paths) and list the host's live sessions when it can: a fix already pushed or a session already on it means stand down (`docs/notes/SHARED-BRANCH-COORDINATION.md` — three sessions fixed one bug on 2026-09-18, one revert). Catch a branch up with `node tools/ci/sync-pr.mjs <branch>`, never a hand
+force-push; they also all see one red at once, so before fixing a red you did NOT cause, run `node tools/ci/who-is-on-it.mjs` (recent pushes per branch, who touched the failing paths, live claims; `--claim "<text>"` before you start, `--release` after) and list the host's live sessions when it can: a fix already pushed, a claim, or a session already on it means stand down (`docs/notes/SHARED-BRANCH-COORDINATION.md` — three sessions fixed one bug on 2026-09-18, one revert). Catch a branch up with `node tools/ci/sync-pr.mjs <branch>`, never a hand
 merge (ratchets + generated files conflict; it cures both, but leaves you ON `sync-pr-<branch>` and pushes nothing without `--push` — recovery in check-changes). `node tools/ci/deploy.mjs` is the whole protocol (fetch → merge →
 `test:tooling-fast` → ci.yml's node suites → `verify-track` → push; it prints the branch's last ci/pages conclusions first, so an INHERITED red is visible before you blame your push; `--pr` opens a PR, `--plan` prints the union, `--gate-only` gates and stops); it cures GENERATED-file conflicts, stops on any
 other. Shipping is a RELEASE TRAIN: your push gets `ci.yml`'s FAST tier in

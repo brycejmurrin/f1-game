@@ -70,6 +70,16 @@ branch to announce a write to the shared branch, which races exactly as badly.
 The branch's speed is the thing this repo has optimised hardest for, and the
 answer to one collision is not to serialise every push.
 
+What it does ask for, since 2026-09-22, is a CLAIM that touches no working
+branch: `node tools/ci/who-is-on-it.mjs --claim "<what you are on>"` pushes one
+empty-tree commit to `claude/claims/<slug of your branch>`, every run of the
+tool lists the live claims with their age, and `--release` overwrites yours
+with a `released` tombstone. It is advisory — a stale claim (> 2 h) prints as
+stale and blocks nobody — and it costs one tiny push, not a commit on the
+deploy branch. A tombstone rather than a delete because the containers' git
+proxy refuses ref deletion over git and the API alike (measured); delete
+tombstoned claim branches by hand from a machine that may.
+
 If collisions recur after this, the structural option is the one worth paying
 for: a PR per session into the deploy branch with required checks, which removes
 the shared-red scenario entirely at the cost of train latency. One incident does

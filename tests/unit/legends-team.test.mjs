@@ -241,3 +241,42 @@ test("a legend's period car reaches the player's slot as well as a rival's", () 
     }
   }
 });
+
+/* ── The two championship tables, which nothing pinned ──────────────────────
+ *
+ * A mutation sweep on 2026-09-20 inverted TIER_V and corrupted POINTS, and the
+ * whole node tier stayed green. Both are read by name in several suites — the
+ * coherence test parses the FIRST element of TIER_V out of the source with a
+ * regex — but nothing asserted either table's SHAPE, and shape is the entire
+ * content of a ladder. Inverting TIER_V makes Mercedes and Ferrari the slowest
+ * cars on the grid; nothing would have said so until somebody raced.
+ */
+test("TIER_V is a strictly descending pace ladder, fastest first", () => {
+  const V = Teams.TIER_V;
+  assert.equal(V.length, 5, "five tiers, 0 fastest .. 4 slowest — the `tier` field indexes this");
+  for (let i = 1; i < V.length; i++) {
+    assert.ok(V[i] < V[i - 1],
+      `tier ${i} (${V[i]}) must be SLOWER than tier ${i - 1} (${V[i - 1]}) — an inverted ladder ` +
+      `reverses the competitive order of the entire grid`);
+  }
+  // The spread is calibrated, not arbitrary: ~1.05% across the field, against
+  // the [1.0 .. 0.942] ladder that put it 8.64% apart — five times any real
+  // season (docs/notes/AI-FIELD-RESEARCH.md). Guard the ORDER of magnitude so
+  // a re-tune stays inside the argument the comment in teams.js makes.
+  const spread = (V[0] - V[V.length - 1]) / V[0];
+  assert.ok(spread > 0.005 && spread < 0.03,
+    `field spread is ${(spread * 100).toFixed(2)}% — outside the 0.5-3% band the ladder is calibrated to`);
+  assert.ok(V.every((v) => v > 0.9 && v < 1.0), "every tier is a scale just under 1.0");
+});
+
+test("POINTS is the 2026 top-ten ladder, descending, with no fastest-lap point", () => {
+  const P = Teams.POINTS;
+  assert.deepEqual(Array.from(P), [25, 18, 15, 12, 10, 8, 6, 4, 2, 1],
+    "the scoring table decides every championship — it is a rule of the sport, not a tunable");
+  for (let i = 1; i < P.length; i++) {
+    assert.ok(P[i] < P[i - 1], `P${i + 1} must score less than P${i}`);
+  }
+  assert.equal(P.length, 10, "points to tenth place");
+  assert.ok(P[0] - P[1] > P[1] - P[2],
+    "the win must be worth a bigger step than second — that gap is why winning is the strategy");
+});

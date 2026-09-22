@@ -39,6 +39,26 @@ test("a concurrent second startRace() call shares the in-flight promise", async 
   await Promise.allSettled([p1, p2]);
 });
 
+test("a start that throws after the scenery await rejects, lands on the menu, and releases the latch", async () => {
+  // startRaceBody() does its DOM/state work after `await ensureScenery`;
+  // six callers never look at the promise, so a throw there used to leave the
+  // quali sheet closed, session "race" and no HUD under the error overlay.
+  // The wrapper's catch now routes through quitToMenu() and rethrows, so an
+  // awaited caller still sees the failure while the screen is coherent.
+  // DebrisWorld.reset() is the first call after the await (Tracks.build is
+  // skipped on a same-circuit restart, so it is not a usable throw site).
+  const { G, sandbox, apex } = g;
+  const orig = sandbox.DebrisWorld.reset;
+  sandbox.DebrisWorld.reset = () => { throw new Error("test: DebrisWorld.reset failed"); };
+  let rejected = null;
+  try { await G.startRace(); } catch (e) { rejected = e; } finally { sandbox.DebrisWorld.reset = orig; }
+  assert.ok(rejected && /DebrisWorld.reset failed/.test(String(rejected.message)), "the caller still sees the rejection");
+  assert.equal(apex.info().state, "menu", "a failed start lands on the menu, not a half-built race");
+  const p = G.startRace();
+  assert.ok(p && typeof p.then === "function", "the latch is released after a rejection");
+  await Promise.allSettled([p]);
+});
+
 test("the latch releases once the in-flight start settles", async () => {
   const G = g.G;
   const p1 = G.startRace();

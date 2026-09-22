@@ -387,14 +387,17 @@ test("the `N of M unit files` ladder figures match tooling-fast's list and the f
   const fast = TOOLING_FAST_FILES.filter((e) => !e.startsWith("//")).length;
   const disk = ls("tests/unit", /\.test\.(mjs|cjs)$/).length;
   let seen = 0;
-  for (const doc of ["AGENTS.md", "docs/notes/PREPUSH-GATE-LADDER.md", "docs/TESTING.md"]) {
+  // .claude/agents/verify-agent.md quotes the same pair to the parent on every
+  // run and drifted to 208 of 278 unnoticed (2026-09-22): the three prose docs
+  // were pinned, the agent surface was not.
+  for (const doc of ["AGENTS.md", "docs/notes/PREPUSH-GATE-LADDER.md", "docs/TESTING.md", ".claude/agents/verify-agent.md"]) {
     for (const m of read(doc).matchAll(/test:tooling-fast`?[^\n]*?(\d+) of (\d+)/g)) {
       seen++;
       assert.equal(Number(m[1]), fast, `${doc} says tooling-fast runs ${m[1]} unit files; the generated list holds ${fast}`);
       assert.equal(Number(m[2]), disk, `${doc} says there are ${m[2]} unit files; tests/unit holds ${disk}`);
     }
   }
-  assert.ok(seen >= 3, `expected the ladder figure in all three docs, found ${seen}`);
+  assert.ok(seen >= 4, `expected the ladder figure in all three docs and verify-agent.md, found ${seen}`);
 });
 
 test("the derived ladder figures (whole gate, 'the other N') match the gate's real union", async () => {

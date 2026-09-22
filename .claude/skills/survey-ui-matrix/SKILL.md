@@ -1,9 +1,18 @@
 ---
 name: survey-ui-matrix
+context: fork
+agent: general-purpose
 description: Use when reviewing the whole UI systematically across orientations, viewport shapes, UI/HUD scale and pointer type: enumerate every screen from source, measure each cell for clipping, truncation, tap targets and overflow, capture screenshots — to find layout defects before a restructure, prove a CSS change regressed no other shape, or check every menu on every device.
 ---
 
 # Surveying the whole UI across the whole matrix
+
+Runs FORKED (`context: fork`, `agent: general-purpose`): a matrix walk is
+dozens of `browser_*` snapshots, so the cells and their measurements stay in the
+fork and the parent gets the defect table (screen × shape × scale × pointer,
+one row per finding, screenshot paths under `artifacts/`). The fork edits
+nothing: fixes are the parent's, one cell at a time, via `css-play` or
+`ui-menu-a11y`.
 
 ## Prerequisites (always)
 
