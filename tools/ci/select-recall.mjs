@@ -116,7 +116,18 @@ export function recall(cases = CASES) {
       || (r.skipped || []).includes(c.catches) || (r.overBudget || []).includes(c.catches)
       || (r.unreachable || []).includes(c.catches);
     const inOversize = (r.oversize || []).includes(c.catches);
-    return { ...c, reason: r.reason, hit, named, oversize: inOversize,
+    // WHICH bucket named it, not merely THAT one did. The three misses are not
+    // one problem: an over-budget spec is excluded by a POLICY that a split or
+    // a faster spec would lift, while an unreachable one is arithmetically
+    // impossible for any budget — 25 tests against a 10-test cap. Lumping them
+    // under one verdict string is what let this file's own footer attribute
+    // all four misses to the `>=` policy, which was wrong for touch-steer.
+    const why = (r.overBudget || []).includes(c.catches) ? "over budget (declares >= the per-test cap)"
+      : (r.unreachable || []).includes(c.catches) ? "unreachable (more tests than the WHOLE cap)"
+      : (r.skipped || []).includes(c.catches) ? "skipped (did not fit today)"
+      : r.reason === "infra" ? "infra — the gates own it"
+      : null;
+    return { ...c, reason: r.reason, hit, named, oversize: inOversize, why,
              rank: r.selected.indexOf(c.catches), n: r.selected.length };
   });
 }
@@ -129,7 +140,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   for (const r of rows) {
     const verdict = r.hit ? `CAUGHT (rank ${r.rank + 1} of ${r.n})`
       : r.reason === "infra" ? "reported as infra — gates own it"
-      : r.named ? "MISSED but NAMED (skipped / unreachable / over budget)"
+      : r.named ? `MISSED but NAMED — ${r.why}`
       : "SILENTLY MISSED";
     console.log(`  ${r.hit ? "+" : r.named || r.reason === "infra" ? "~" : "x"} ${r.name}`);
     console.log(`      catches ${r.catches}  ->  ${verdict}`);
@@ -137,10 +148,21 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   /* A RATCHET, NOT A TARGET. Before 2026-09-20 this printed 0/5 and exited 0,
      and it was scoring a selector the gate does not run (replay() passed no
      rank, so every candidate looked "merely routed"). Fixed, it catches 1 of 5
-     outright; the other four are specs a PATH RULE routes, which declare >= the
-     gate's per-test budget and are excluded by the deliberate `>=` policy in
-     select-specs.mjs — a real limit of the selected gate, and one that should
-     be read rather than buried under a routine line.
+     outright.
+
+     THE OTHER FOUR ARE NOT ONE PROBLEM, and this footer said they were until
+     2026-09-22. Three (terrain-over-road 1500 s, props-over-road 1500 s,
+     audio-smoke 180 s) are specs a PATH RULE routes that declare >= the gate's
+     per-test budget, excluded by the deliberate `>=` policy in
+     select-specs.mjs. The fourth, touch-steer.spec.js, is excluded by
+     ARITHMETIC, not policy: it declares 25 tests against a 10-test cap, so it
+     lands in `unreachable` and no budget this gate could be given would admit
+     it — only splitting the file would. Attributing it to the `>=` policy
+     pointed the fix at the wrong knob, which is why the verdict line above now
+     names the bucket for each row rather than listing all three.
+
+     All four are real limits of the selected gate, and ones that should be
+     read rather than buried under a routine line.
 
      Raise this when the selector genuinely improves. Never lower it to make a
      red go away: below the floor means recall REGRESSED, which is the whole

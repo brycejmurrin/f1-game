@@ -173,6 +173,42 @@ function buildContext(opts) {
     // masked this one, because deleting either alone left the other holding
     // every buffer alive on its own.
     trim: (from) => { prims.length = from; liveBufs.clear(); },
+    // RELEASE A FINISHED BUILD'S VERTEX BUFFERS. The companion to trim():
+    // trim() drops the primitive records, this drops the finished GEOMETRY —
+    // which trim() cannot reach, because it hangs off the returned track, not
+    // off this context.
+    //
+    // A track carries its own upload buffers (`propsGeo`, `roadGeo`,
+    // `terrainGeo`, `glassGeo`, `waterGeo`) plus, in this harness, a `__cap`
+    // record per mesh holding the emitter's full pos/nrm/idx (capture(),
+    // above). Monza's propsGeo alone is 7.82 M slots, and a track measures
+    // ~96 MB all told, so a suite that keeps one build per circuit to avoid
+    // rebuilding keeps every circuit's whole geometry with it: 52 cached
+    // builds peaked at 6173 MB in tests/unit/pit-complex.test.mjs, half again
+    // over the 4088 MB that has already OOM-killed an audit child on CI.
+    // Dropped instead, the same 52 builds peak at 611 MB.
+    //
+    // Every object survives with its scalars and its nested objects — only
+    // ARRAY-valued own properties are emptied in place, so `track.propsGeo.uv
+    // === undefined`, `track.meshes.pitSigns === null` and a mesh's `verts`
+    // still read true, and `track.graph`, `track.pit`, `track.surface` and the
+    // centreline are untouched. So call it once nothing will read that build's
+    // BUFFERS, and read the buffers from a build you did not release.
+    release: (track) => {
+      const empty = (obj) => {
+        if (!obj || typeof obj !== "object") return;
+        for (const k of Object.keys(obj)) {
+          const v = obj[k];
+          if (Array.isArray(v)) obj[k] = [];
+          else if (v && ArrayBuffer.isView(v)) obj[k] = new v.constructor(0);
+        }
+      };
+      if (!track || typeof track !== "object") return track;
+      for (const k of Object.keys(track)) if (/Geo$/.test(k)) empty(track[k]);
+      const meshes = track.meshes || {};
+      for (const k of Object.keys(meshes)) if (meshes[k] && meshes[k].__cap) empty(meshes[k].__cap);
+      return track;
+    },
   };
 }
 

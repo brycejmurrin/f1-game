@@ -297,6 +297,12 @@ const CARVIEW = [
   "js/render/glx/shaders/glsl-fx.js",
   "js/render/glx/shaders/glsl-post.js",
   "js/render/shared/light-budget.js",   // LightBudget: the one light-slot budget (glx MAX_LIGHTS, lamp-chunks CAP read it at eval)
+  // LightKnobs is the TUNE_DEFS registry PostCommon.knob() reads its defaults
+  // from. Without it EVERY post knob resolves to undefined — contrast, vignette,
+  // the ACES curve, the lift/gamma/gain triples — and the studio rendered one
+  // enormous white radial bloom instead of a car, at every rig and every
+  // exposure. Pure data, no dependencies; loads before the post chain reading it.
+  "js/lighting/knobs.js",
   "js/render/shared/post-common.js",    // PostCommon: lens-dirt canvas, keepNearest, HDR-grade test, sun-screen, knob defaults — shared by the three post chains
   "js/render/glx/post.js",
   "js/render/glx/shadow.js",

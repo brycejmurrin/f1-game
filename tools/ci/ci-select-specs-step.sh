@@ -49,6 +49,17 @@ node -e '
   for (const s of (r.oversize || []))
     console.log(`OVERSIZE (affected by this change; its own shard): ${s.file} (${s.tests} tests)`);
   const shards = r.shards || [];
+  // DROPPED: routed specs this plan will NOT run — over budget, bigger than the
+  // whole cap, or squeezed out. `poke-train` reads it to tell two very different
+  // skips apart: a plan that is empty because the diff affects no spec, and a
+  // plan that is empty because every spec it affects was unaffordable. The
+  // second was counted as a pass, and it is exactly the renderer case — six gfx
+  // specs declaring 240-540 s against a 180 s cap, so a js/render diff emptied
+  // the plan and poked the train with nothing having booted a backend.
+  const dropped = (r.overBudgetSpecs || []).length + (r.unreachable || []).length
+    + (r.skipped || []).length;
+  console.log(`dropped ${dropped} routed spec(s) this plan cannot run`);
   require("fs").appendFileSync(process.env.GITHUB_OUTPUT,
-    `specs=${specs}\nshards=${JSON.stringify(shards)}\nany=${shards.length ? "true" : "false"}\n`);
+    `specs=${specs}\nshards=${JSON.stringify(shards)}\nany=${shards.length ? "true" : "false"}\n`
+    + `dropped=${dropped}\nreason=${r.reason}\n`);
 '
