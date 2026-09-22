@@ -211,6 +211,7 @@ const FULL = [
   "js/physics/aero-zones.js",
   "js/fx/skidmarks.js",
   "js/race/race-control.js",
+  "js/race/weather-arc.js",
   "js/camera/photo-cam.js",
   "js/lighting/tuner-panel.js",
   "js/camera/tuner-panel.js",
@@ -296,6 +297,12 @@ const CARVIEW = [
   "js/render/glx/shaders/glsl-fx.js",
   "js/render/glx/shaders/glsl-post.js",
   "js/render/shared/light-budget.js",   // LightBudget: the one light-slot budget (glx MAX_LIGHTS, lamp-chunks CAP read it at eval)
+  // LightKnobs is the TUNE_DEFS registry PostCommon.knob() reads its defaults
+  // from. Without it EVERY post knob resolves to undefined — contrast, vignette,
+  // the ACES curve, the lift/gamma/gain triples — and the studio rendered one
+  // enormous white radial bloom instead of a car, at every rig and every
+  // exposure. Pure data, no dependencies; loads before the post chain reading it.
+  "js/lighting/knobs.js",
   "js/render/shared/post-common.js",    // PostCommon: lens-dirt canvas, keepNearest, HDR-grade test, sun-screen, knob defaults — shared by the three post chains
   "js/render/glx/post.js",
   "js/render/glx/shadow.js",
@@ -482,6 +489,7 @@ const HARD_EDGES = [
   ["js/physics/aero-zones.js", "js/game.js"],      // game.js calls AeroZones.create(G) at eval time
   ["js/fx/skidmarks.js", "js/game.js"],      // game.js calls SkidMarks.create(G) at eval time
   ["js/race/race-control.js", "js/game.js"],   // game.js calls RaceControl.create(G) at eval time
+  ["js/race/weather-arc.js", "js/game.js"],    // game.js calls WeatherArc.create(G, deps) at eval time
   ["js/race/daily-challenge.js", "js/game.js"],   // game.js calls DailyChallenge.create(G) at eval time
   ["js/ui/title-menu.js", "js/game.js"],          // game.js calls TitleMenu.create(G) at eval time
   ["js/race/quali-net.js", "js/game.js"],         // game.js calls QualiNet.create(hooks) after quali wiring

@@ -86,13 +86,32 @@ const SceneryNature = (function () {
     // hit this by walking two treelines that overlap, or by an `every()` step
     // landing on a node a hand-placed tree already took (okayama 2026-09-22:
     // 243 coincident primitives after the barrier guard, all of them trees).
-    // 25 cm cells: finer than any real planting distance, coarse enough that a
-    // deliberate copse is untouched.
-    const planted = new Set();
+    // A RADIUS, not a cell: the 25 cm cell this used to be let two trunks 0.3-
+    // 0.7 m apart through (mont_tremblant, 2026-09-22: 15 same-facing coplanar
+    // trunk/cone pairs from overlapping forest ranks, --why --raw), and no two
+    // real trunks stand closer than TREE_GAP. Still far below any deliberate
+    // copse spacing.
+    const TREE_GAP = 1.0;
+    const planted = new Map();   // 1 m cell -> [[x, z], …]
+    // LAYERED-BANK SLOT. spectatorHill is called in layered pairs (a tall pale
+    // cut and a short red one over the same span at the same gap); the slot is
+    // what keeps the two apart. It counts CALLS, not heights: a hash of
+    // `opts.h` looks stable but is a chaotic map, and okayama's 6.0/2.8 pair
+    // landed 1.6 mm apart on one such hash while its 6.5/3.0 pair landed 18 mm
+    // apart — the separation has to be a property of the emitter, not luck.
+    // Call order inside a circuit file is deterministic and layered calls are
+    // always adjacent, so consecutive slots is exactly the guarantee needed.
+    let hillSeq = 0;
     const spotTaken = (x, z) => {
-      const key = `${Math.round(x * 4)}|${Math.round(z * 4)}`;
-      if (planted.has(key)) return true;
-      planted.add(key);
+      const cx = Math.floor(x / TREE_GAP), cz = Math.floor(z / TREE_GAP);
+      for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+        const cell = planted.get(`${cx + i}|${cz + j}`);
+        if (cell) for (const q of cell)
+          if (Math.hypot(q[0] - x, q[1] - z) < TREE_GAP) return true;
+      }
+      const key = `${cx}|${cz}`;
+      if (!planted.has(key)) planted.set(key, []);
+      planted.get(key).push([x, z]);
       return false;
     };
     const pine = (k, side, dist, h, col, opts) => {
@@ -702,7 +721,27 @@ const SceneryNature = (function () {
       // the DIFFERENCE between two layered calls, not each nudge: a 1 cm spread
       // put okayama's pair 5.4 mm apart, which fights from 165 m and sat right
       // on the gate. 4 cm outward at a 9 m clearance is invisible.
-      gap += ((Math.abs(opts.h || 0) * 7.3) % 1) * 0.04;
+      // Both axes have to move. `steps` and `h` do NOT reach the ladder
+      // (rows/rise/depth are the defaults for every caller), so two layered
+      // calls emit the SAME ladder: nudging only the gap leaves their treads'
+      // END caps — the ±t faces, depth x (rise+0.5) = 3.3 m2 each — on exactly
+      // the same planes, 400 coincident pairs on okayama's three clayCut()
+      // pairs alone (2026-09-22, coplanar-audit --why). The slot moves the
+      // frame OUTWARD (never toward the tarmac) and ALONG the road, on two
+      // different permutations of the same five positions, so consecutive
+      // calls are 10 mm apart across the gap and 20 mm apart along it. 10 mm
+      // of plane gap fights from 224 m, past the 150 m horizon the audit's
+      // depth model covers. The along-shift moves the tread and its crowd
+      // together, so a call's ladder still tiles exactly — the only seam is
+      // between two layers, where the whole point is that they differ.
+      // The 3 mm / 7 mm bases are not decoration: authored props sit at whole
+      // metres and half metres, so a ladder offset by an exact multiple of
+      // 10 mm can still land flush on one (monza gained a 12 m2 pair against a
+      // tracks.js place() prop at exactly that). An odd base breaks the tie
+      // with the authored grid without changing any separation BETWEEN slots.
+      const slot = hillSeq++ % 5;
+      gap += 0.003 + slot * 0.01;
+      const sShift = 0.007 + ((slot * 2) % 5) * 0.01;
       const rows = Math.max(2, Math.min(8, Math.round(opts.rows || 4)));
       const rise = opts.rise != null ? opts.rise : 1.15;      // per-row height gain
       const depth = opts.depth != null ? opts.depth : 2.0;    // per-row setback
@@ -723,11 +762,12 @@ const SceneryNature = (function () {
         // offset by translation, cannot self-intersect by construction.
         const a = anchor(k, side, gap);
         const b = [a.r, a.u, a.t];
+        const ac = vadd(a.c, a.t, sShift);   // layer nudge, along the road
         for (let r = 0; r < rows; r++) {
           const back = r * depth, up = r * rise;
           // Terrace tread: a wide flat step. Guarded — a bank creeping toward
           // the tarmac must be dropped, not left overhanging the road.
-          const tc = vadd(vadd(a.c, a.u, up + rise * 0.5), a.r, side * back);
+          const tc = vadd(vadd(ac, a.u, up + rise * 0.5), a.r, side * back);
           if (rejBox(tc, [depth, rise + 0.5, spacing], b)) continue;
           out._mat = MAT.CONCRETE;
           addBox(out, tc, [depth, rise + 0.5, spacing], r % 2 ? riser : grass, b);
@@ -738,7 +778,7 @@ const SceneryNature = (function () {
             if (h1 > dens) continue;
             const h2 = hash(k * 5.9 + r * 2.7 + i * 6.1 + side * 4.3);
             const off = ((i + 0.5) / perRow - 0.5) * spacing + (h2 - 0.5) * 0.5;
-            const c = vadd(vadd(vadd(a.c, a.t, off), a.u, up + rise + 0.55),
+            const c = vadd(vadd(vadd(ac, a.t, off), a.u, up + rise + 0.55),
                            a.r, side * (back + (h2 - 0.5) * depth * 0.5));
             const col = NIGHT
               ? (h2 > 0.95 ? [2.4, 2.2, 1.9] : [0.12, 0.13, 0.17])

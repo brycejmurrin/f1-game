@@ -15,7 +15,13 @@
     // Was 0.96, which put the line inside a corner — a start line is
     // always on a straight. See docs/tracks/START-LINES.md.
     startFrac: 0.0000,
-    sceneryStartFrac: 0.96,
+    // No sceneryStartFrac: the scenery is authored against THIS line (pit bays
+    // 0.942-0.996, T1 gravel 0.050, T5 gravel 0.300). Naming the old 0.96 start
+    // added a 0.846 shift that stood the paddock on T15 and planted a pine
+    // forest down the pit straight. docs/notes/DEFECT-LEDGER.md.
+    // The main grandstand (grandstandEx 0.005, left) is the circuit's own; the
+    // generic 7-box pit-straight stand stood inside it and z-fought.
+    ownPitStraight: true,
     name: "PORTIMAO",
     gp: "Portuguese GP",
     country: "Portugal",
