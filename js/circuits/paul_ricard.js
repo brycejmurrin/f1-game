@@ -13,8 +13,11 @@
     // Start/finish line. Snapped to the real one: v0 convention; T1 measured LEFT, matches the Verrerie left-right.
     // Was 0.03, which put the line inside a corner — a start line is
     // always on a straight. See docs/tracks/START-LINES.md.
+    // No sceneryStartFrac: the scenery is authored against THIS start (pit block
+    // 0.95-0.01 = pitLaneSpan, Verrerie bank 0.07 = T1). The 0.03 the start-line
+    // campaign kept was a shift of 0.923 on this reversed lap and stood the pit
+    // block on Le Village. docs/notes/DEFECT-LEDGER.md § paul_ricard.
     startFrac: 0.0000,
-    sceneryStartFrac: 0.03,
     name: "PAUL RICARD",
     gp: "French GP",
     country: "France",
@@ -23,6 +26,7 @@
     lengthKm: 5.8,
     baseHW: 8,
     sceneryCoordinates: "racing",
+    ownPitStraight: true,   // its own 150 m main stand (scenery grandstandEx 0.005); the generic 7-box stand stood inside it
     terrainOuter: 130,
     dressingExclusions: [
       { kinds: ["foliage"], s0: 0.92, s1: 0.10 },  // pits
