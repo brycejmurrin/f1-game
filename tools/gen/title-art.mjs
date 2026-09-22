@@ -505,15 +505,18 @@ function topCar(dx, dy, phase, inkW) {
   PHASE = phase;
   const put = (loops) => loops.map((l) => poly(l.map(([x, y]) => [x + dx, y + dy]))).join(" ");
   const solids = put(TRACE.outline);
+  // SIX GROUPS, NOT EIGHT. The projected car's swollen bleed pass and its
+  // ambient lift are both affordable at one drawing; at two they cost four
+  // shell nodes that put the ratchet raise past the commit hook's 40-node
+  // absorb. The bands below carry the lift instead, each a step higher than the
+  // projected car's, which measures the same on screen.
   const out = [];
-  out.push(g(`data-ink stroke-width="${inkW + 12}" stroke-opacity="0.22" fill-opacity="0"`, solids));
   out.push(g(`data-ink stroke-width="${inkW}"`, solids));
   out.push(g('stroke="none"', solids));
-  out.push(g('data-tone stroke="none" fill-opacity="0.13"', solids));
-  out.push(g('data-tone stroke="none" fill-opacity="0.07"', put(TRACE.tyre)));
-  out.push(g('data-tone stroke="none" fill-opacity="0.17"', put(TRACE.dark)));
-  out.push(g('data-tone stroke="none" fill-opacity="0.30"', put(TRACE.mid)));
-  out.push(g('data-tone stroke="none" fill-opacity="0.52"', put(TRACE.lit)));
+  out.push(g('data-tone stroke="none" fill-opacity="0.16"', put(TRACE.tyre)));
+  out.push(g('data-tone stroke="none" fill-opacity="0.24"', put(TRACE.dark)));
+  out.push(g('data-tone stroke="none" fill-opacity="0.36"', put(TRACE.mid)));
+  out.push(g('data-tone stroke="none" fill-opacity="0.55"', put(TRACE.lit)));
   return out;
 }
 
