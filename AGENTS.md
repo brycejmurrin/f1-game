@@ -189,12 +189,4 @@ once and publishes exactly that commit (dispatch = "deploy now"; ≤ ~25 min).
 "Live?" = ancestor of the live `apex-sha` (deploy-research; `docs/TESTING.md` §Release train).
 
 ### Watching CI and Pages
-Do not conflate PR CI (`ci.yml`, PR head), ship-push CI (`ci.yml`, deploy head), and Pages (`pages.yml`, workflow `295002043`).
-A green PR does not prove Pages will pass: Pages calls `ci.yml` with a `before_sha` (often the last live tip) and may select different specs.
-Poll by `head_sha`, ignore cancelled runs superseded on that SHA, and after merge watch both ship-push CI and Pages.
-On red, read failed-job logs for `Expected`, `Received`, `x FAIL`, `Timeout` and `timed out`.
-Name the exact test title, assertion and lane (`Selected specs`, sweeps, pure-node, smoke, or nested Pages `ci / …`), not just the wrapper.
-Diagnose first: `caution().enabled=false` is the listed `SettingsDefaults` default (and the race-control call-site fallback), not a reason to pin WebGL2 or raise `BOOT_MS`.
-A one-ULP Suzuka arc mismatch in sweeps needs an epsilon; `test:tooling-fast` green does not prove Pages suites or sweeps are green.
-Redeploy through `node tools/ci/deploy.mjs` or a Pages dispatch; claim live only after Pages and `version.json` confirm it.
-Report the SHA, run URL, green/red verdict, failing test/assertion when red, train, and next action.
+Do not conflate PR CI, ship-push CI, and Pages (`pages.yml` `295002043`). Poll by `head_sha`; a green PR does not prove Pages. On red, name the exact test, assertion and lane. Procedure and diagnosis notes: `docs/notes/` (SHARED-BRANCH-COORDINATION, deploy-research). Claim live only after Pages and `version.json` confirm.
