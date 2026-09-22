@@ -740,6 +740,11 @@ function create(G) {
           objCard.appendChild(b);
         }
       }
+      if (st.era) {
+        objCard.append(row("Regulations", st.era.cats.length
+          ? `${st.era.name} · ${st.era.left} ${st.era.left === 1 ? "season" : "seasons"} left`
+          : `${st.era.name} · ${st.era.left} to the first rule change`));
+      }
       if (c.deal) {
         // MY TEAM keeps the bare row it always had: rollover() resolves the goal
         // only for a driver career, because an owner has nobody to promise to.
@@ -1061,6 +1066,17 @@ function create(G) {
     body.appendChild(el("div", "cr-note",
       "Pick a seat for " + c.year + ". Moving team means starting the car over from " +
       "that team's works build — you do not take your parts with you."));
+
+    const stEra = Career.state() && Career.state().era;
+    if (stEra && stEra.cats.length) {
+      body.appendChild(head("REGULATIONS"));
+      const rg = el("div", "cr-card");
+      rg.appendChild(row(stEra.name, `${stEra.left} ${stEra.left === 1 ? "season" : "seasons"} left`));
+      rg.appendChild(el("div", "cg-p", stEra.blurb
+        + " Your researched parts are not gone — they are not legal this era, and"
+        + " they come back when it lapses."));
+      body.appendChild(rg);
+    }
 
     body.appendChild(head("YOUR PROMISE"));
     body.appendChild(el("div", "cr-note",
