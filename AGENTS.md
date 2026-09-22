@@ -32,7 +32,7 @@ faster when Mesa is installed (no `navigator.gpu`; `docs/notes/CI-RENDERING-PERF
 | one subsystem with its own spec | that spec — `npm test -- tests/specs/<file>.spec.js`; prefer single specs over their whole group |
 | `js/render/webgpu/` or `js/render/three/` | the path-scoped rule in `.claude/rules/` says what to run; software probes are not evidence about a player's GPU, so dispatch `gpu-census.yml` on `macos-latest` and read its Verdict step |
 | engine / physics / `js/game.js` | the groups `pick-tests` names, capped at two browser groups: run the two most specific, name the rest as not-run in the PR |
-| geometry pushed to the deploy branch, or a group this box cannot time | `npm run test:sweeps`; dispatch `ci.yml` with `group: <name>` (one per change) and read the four Smoke jobs. Docs-only pushes start no CI |
+| geometry pushed to the deploy branch, or a group this box cannot time | `npm run test:sweeps` when the diff reaches the FLEET build (`tools/ci/geometry-paths.mjs` derives that from `tools/manifest.cjs`'s `TRACK_VM`); a lighting, car, debris-world or driving-line edit needs only its TARGETED suite, which that module names (`--targeted`) and ci.yml and `deploy.mjs` both run for you. Dispatch `ci.yml` with `group: <name>` (one per change) and read the four Smoke jobs. Docs-only pushes start no CI |
 
 Session shape — eleven rules that control wall time and waiting:
 
@@ -72,7 +72,9 @@ Session shape — eleven rules that control wall time and waiting:
 11. Never hand-edit a generated file (the edit hook blocks it): `index.html`'s
     `@gen-shell` blocks, `version.json`, `package.json`'s test scripts
     (source `tests/groups.json`), `tools/README.md` (source: `@doc` headers),
-    `js/roster.js`, `tools/carview.html`. Edit the SOURCE, then `npm run gen` (`gen:check` names drift).
+    `js/roster.js`, `tools/carview.html`, and the ladder figures in rule 3 /
+    `docs/notes/PREPUSH-GATE-LADDER.md` / `docs/TESTING.md` (source: the same
+    `groups.json`, via `tools/gen/gen-ladder-figures.mjs`). Edit the SOURCE, then `npm run gen` (`gen:check` names drift).
 
 ## Seeing the game (cheapest first)
 1. `__apex` JSON hooks (`info/probe/physState/world/scene/field`) —
