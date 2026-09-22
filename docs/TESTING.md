@@ -527,9 +527,17 @@ semantics, not two. `fixtures.js` picks the backend off the env var; with it
 unset every spec collects and runs under Playwright exactly as before.
 
 Measured here: `physics-fixes` 2/2 in 22 s against the 110.1 s its own header
-records for the browser copy. **It is a pre-check that runs ALONGSIDE the
-browser gate, never instead of it** — no spec leaves a blocking gate until a
-twin-fidelity gate exists (`docs/plans/research-2026-09-16/testing.md` items 1-2).
+records for the browser copy. **A spec leaves the browser gate only through
+`ADAPTED`** in `tools/ci/twinned-specs.mjs`, and only with a fidelity mutant:
+since 2026-09-22 `twinned-specs.verify()` refuses an `ADAPTED` entry that no row
+of `tests/data/mutants.json` names with a test it reddens, because equal test
+counts are vacuous when the twin IS the spec. An adapted spec runs in
+`test:vm-page` (`tests/unit/adapted-specs.test.mjs`, one child per spec, on its
+own CI slice, in the Pages gate unconditionally); `partitionArgs` drops its
+browser copy locally and `select-specs` skips it on the blocking gate, exactly as
+for a hand-written twin. `BROWSER_ONLY` names the specs that are portable by
+every static measure and must stay in a browser anyway, with the reason, and
+the `twinDebt` ratchet counts what is left.
 A ten-spec cohort put a third of its tests red for three reasons no static scan
 sees: in-page DOM driving against an inert DOM, `requestAnimationFrame` in an
 evaluate body (no renderer — `render()` throws on the first pump), and

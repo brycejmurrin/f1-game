@@ -105,6 +105,20 @@ export const ADAPTED = {
 export const BROWSER_ONLY = {
   "tests/specs/smoke.spec.js": "the boot gate: it proves a real Chromium boots the shell, which is the one thing no VM can",
   "tests/specs/physics-characterization.spec.js": "tests/data/physics-baseline.json is a real-Chromium measurement; the VM twin asserts parity WITH it, so the browser copy is the reference",
+  // Measured 2026-09-22 by RUNNING every statically portable spec under the
+  // adapter (artifacts/logs/vmpage/*.log): these fail for a reason no static
+  // scan sees, and the reason is structural, not a flake.
+  "tests/specs/new-hooks.spec.js": "6 of 56 are first-load assertions (`lapHistory()` null before a track loads); createGame settles the boot circuit, so they can never hold in the VM",
+  "tests/specs/car-effects.spec.js": "every test reads the shell DOM inside evaluate (querySelector on a node the VM's document does not build): 0/9",
+  "tests/specs/multiplayer-npeer.spec.js": "reads the lobby DOM inside evaluate (querySelector → null): 0/4",
+  "tests/specs/multiplayer-roles.spec.js": "reads the lobby DOM inside evaluate (querySelector → null): 0/5",
+  "tests/specs/parts-ers.spec.js": "reads the setup screen's DOM inside evaluate (querySelector → null): 0/4",
+  "tests/specs/parts-factory-presets.spec.js": "reads the setup screen's DOM inside evaluate (querySelector → null): 0/1",
+  "tests/specs/parts-mesh-cache.spec.js": "waits on garage state the VM never reaches (three real 45 s waitForFunction timeouts) plus a DOM read: 1/5",
+  "tests/specs/tracks-walls.spec.js": "one circuit (catalunya) drives the frame loop, which throws with no renderer attached: 62/63 — the spec is a unit, not a set",
+  "tests/specs/understeer-cue.spec.js": "portable by every static measure and 0/7 under the adapter (317 s) — the standing proof that eligibility is not fidelity (docs/TESTING.md §vmPage)",
+  "tests/specs/audit.spec.js": "two evaluate bodies do not survive source serialisation into the VM (`Unexpected token ';'`): 8/10",
+  "tests/specs/debris.spec.js": "loads rapier through a dynamic import, which node:vm has no import callback for (ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING): 1/5",
 };
 
 export const isTwinned = (file) => Object.hasOwn(TWINNED, file) || Object.hasOwn(ADAPTED, file);
