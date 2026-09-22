@@ -178,7 +178,12 @@ try {
     // own files, below three's, so keep enough frames to walk through three.
     const _hStacks = new Map();
     let _hStackBudget = 200;
-    const STACK_KINDS = { "gpu.createRenderPipeline": 1, "gl.linkProgram": 1 };
+    // createShaderModule, not createRenderPipeline: patch 7 moved the lazy
+    // WebGPU path to createRenderPipelineAsync, so run 202 had nothing to
+    // attribute but the mipmap pipeline. A shader module is exactly one per
+    // new program on both paths, and it is created right after the codegen
+    // that census 202 named as the cost.
+    const STACK_KINDS = { "gpu.createShaderModule": 1, "gpu.createRenderPipeline": 1, "gl.linkProgram": 1 };
     const _bumpWork = (k) => {
       if (!_hArmed) return;
       _hWork.set(k, (_hWork.get(k) || 0) + 1);

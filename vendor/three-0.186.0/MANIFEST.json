@@ -22,12 +22,13 @@
     4,
     5,
     6,
-    7
+    7,
+    8
   ],
   "files": {
     "three.webgpu.min.js": {
-      "sha256": "1e1f65d496599de24a35fc2de7ccccb4629b7aa8c6a43f6a10548ed2ba62affc",
-      "bytes": 709505
+      "sha256": "58df999045f34a6888aa2eb1e4d0e8966fdc57d5dda8394174c409b6bbf792da",
+      "bytes": 709885
     },
     "three.core.min.js": {
       "sha256": "dae72ed2eea6703b95e6b57e26469ffa95733a9320675b4bfd1b5f5df1c12f8b",

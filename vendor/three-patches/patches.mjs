@@ -134,6 +134,33 @@ export const PATCHES = [
       },
     ],
   },
+  {
+    id: 8,
+    title: "TSL -> WGSL codegen runs synchronously inside render() on a node-builder cache miss — the mid-race hitch",
+    file: "build/three.webgpu.js",
+    why: "Renderer._renderObjectDirect() calls _nodes.updateBefore() before anything else, and " +
+      "that calls renderObject.getNodeBuilderState(), which on a cache miss runs NodeBuilder.build() " +
+      "— the whole TSL graph generated into WGSL — synchronously, inside the frame. gpu-census 202 on " +
+      "macos-latest Metal, the WebGPU leg, race window: `build` is the top non-idle function at 663 ms " +
+      "and its traversal helpers add ~1,010 ms — ~1.7 s of codegen, a third of all busy main-thread " +
+      "time, ~35 ms per program — clustering when streamed content brings several new programs into " +
+      "view on one frame (the 258-556 ms callbacks). Patch 7 moved the GPU compile off the thread and " +
+      "census 201 proved that was not where the time was. three already ships the yielding half: " +
+      "Nodes.getForRender( renderObject, true ) builds through NodeBuilder.buildAsync(), fills the " +
+      "cache on resolve, and _renderObjectDirect already gates backend.draw on _pipelines.isReady(). " +
+      "So on a cache miss outside compileAsync, start the yielding build and return: the object is " +
+      "skipped until its state exists, then takes the ordinary cached path. Never while a render " +
+      "bundle is being recorded (a skipped object would be omitted from the bundle for good); the " +
+      "sync path stays reachable behind globalThis.__apexSyncCodegen === true for an A/B.",
+    upstream: "unfixed on dev as of r186: buildAsync() is reachable only through compileAsync() (issue draft in docs/notes/UPSTREAM-THREE-ISSUES.md 5)",
+    edits: [
+      {
+        find: "\t\t\trenderObject.bundle = this._currentRenderBundle.bundleGroup;\n\n\t\t}\n\n\t\t//\n\n\t\tconst refreshType = this._nodes.needsRefresh( renderObject );\n",
+        replace: "\t\t\trenderObject.bundle = this._currentRenderBundle.bundleGroup;\n\n\t\t}\n\n\t\t// Apex patch 8: a node-builder cache MISS here would generate this object\'s WGSL synchronously\n\t\t// inside the frame. Build it yielding instead and draw the object once its state exists.\n\t\tif ( globalThis.__apexSyncCodegen !== true && this._compilationPromises === null && this._currentRenderBundle === null && renderObject._nodeBuilderState === null ) {\n\n\t\t\tif ( this._nodes.nodeBuilderCache.get( this._nodes.getForRenderCacheKey( renderObject ) ) === undefined ) {\n\n\t\t\t\tconst pending = this._nodes.get( renderObject );\n\n\t\t\t\tif ( pending.apexBuilding !== true ) {\n\n\t\t\t\t\tpending.apexBuilding = true;\n\t\t\t\t\tconst done = () => { pending.apexBuilding = false; };\n\t\t\t\t\tPromise.resolve( this._nodes.getForRender( renderObject, true ) ).then( done, done );\n\n\t\t\t\t}\n\n\t\t\t\treturn;\n\n\t\t\t}\n\n\t\t}\n\n\t\t//\n\n\t\tconst refreshType = this._nodes.needsRefresh( renderObject );\n",
+        count: 1,
+      },
+    ],
+  },
 ];
 
 /** Retired patches, kept so the canary can assert the UPSTREAM form is present. */

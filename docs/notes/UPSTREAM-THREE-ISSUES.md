@@ -207,3 +207,41 @@ resolves. This application records no bundles.
 
 Related: #34632 / PR #34506 made `compileAsync()` itself non-blocking (r184);
 this is the same request for the default path.
+
+## 5. Renderer: a node-builder cache miss during `render()` generates the object's WGSL synchronously inside the frame, although `NodeBuilder.buildAsync()` exists and is only reachable through `compileAsync()`
+
+**Title:** Renderer: build a missing NodeBuilderState asynchronously on the render path and skip the object until it lands
+
+**Description**
+
+`_renderObjectDirect()` calls `this._nodes.updateBefore( renderObject )` first, which
+calls `renderObject.getNodeBuilderState()`:
+
+```js
+getNodeBuilderState() {
+	return this._nodeBuilderState || ( this._nodeBuilderState = this._nodes.getForRender( this ) );
+}
+```
+
+and `Nodes.getForRender( renderObject, useAsync = false )` on a cache miss runs
+`nodeBuilder.build()` synchronously. The `useAsync` branch — `buildAsync()`, which
+yields between nodes — is reached only from `getForRenderAsync()`, i.e. from
+`compileAsync()`. An application that warms once with `compileAsync()` and then
+streams content therefore pays the full code generation of every new (material,
+geometry layout, render context) combination inside the frame that introduces it.
+
+**Evidence** (racing game, r186, macOS Metal, headless Chromium, CDP CPU profile over
+a ~30 s race window, 67% idle): `build` is the top non-idle function at 663 ms and its
+traversal helpers add ~1,010 ms — ~1.7 s of synchronous codegen at ~35 ms per program
+across 48 programs, clustering into 258–556 ms frames when several new programs come
+into view together. Making the pipeline creation async first (issue §4) left those
+frames unchanged, which is how the codegen was isolated.
+
+**Proposed fix** (carried locally as vendor patch 8): at the top of
+`_renderObjectDirect()`, when `_compilationPromises === null`, no render bundle is being
+recorded, and `nodeBuilderCache` has no entry for `getForRenderCacheKey( renderObject )`,
+call `this._nodes.getForRender( renderObject, true )` once (guarding re-entry with a
+flag on the object's node data) and return; the existing `_pipelines.isReady()` gate
+already skips the draw until a pipeline exists. The object appears a few frames late
+instead of stalling the frame. Render bundles need either to wait or to invalidate
+the bundle when a pending state resolves; this application records none.
