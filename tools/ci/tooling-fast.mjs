@@ -364,6 +364,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/fin-design.test.mjs",
   "tests/unit/photomode-hold.test.mjs",
   "tests/unit/title-menu-even.test.mjs",
+  "tests/unit/title-art.test.mjs",
   "tests/unit/change-driver-tools.test.mjs",
   "tests/unit/trim-comments.test.mjs",
   "tests/unit/metrics.test.mjs",
