@@ -1210,6 +1210,15 @@ const TLX = (function () {
       // Reported from an iPhone: garage correct, race identical to WebGL2 except
       // the car body was missing.
       let _matFrame = 0;
+      // CACHE HEALTH, not cache SIZE. `mats` reports how full the cache is and
+      // saturates at MAT_CACHE_CAP, so a cache that is merely full and one that
+      // is THRASHING — evicting a live variant and minting it again moments
+      // later — report the identical number. Every miss past the cap mints a
+      // fresh material identity, and a fresh identity mints new (geo, mat, k)
+      // pool triples and a new three RenderObject with its own bindings, so the
+      // miss RATE is the number that predicts churn. Counting it costs two
+      // increments.
+      let _matHit = 0, _matMiss = 0, _matEvict = 0;
       function fallbackMat(instanced) {
         return _drawMatMode >= 2 ? rawUnlitMat : (instanced ? unlitInstancedMat : unlitMat);
       }
@@ -1235,7 +1244,8 @@ const TLX = (function () {
           (chunked ? "|ch" : "") +
           (instanced ? "|in" : "");
         let m = matCache.get(key);
-        if (!m) {
+        if (m) _matHit++; else {
+          _matMiss++;
           if (matCache.size >= MAT_CACHE_CAP) {
             // Evict the oldest entry NOT used this frame. If every entry is in
             // use the cache simply runs over cap for the rest of the frame:
@@ -1255,6 +1265,7 @@ const TLX = (function () {
               matCache.delete(k);
               if (lit.releaseMaterial) lit.releaseMaterial(v);
               if (v) _matDispose.push(v);
+              _matEvict++;
               break;
             }
           }
@@ -3830,6 +3841,7 @@ const TLX = (function () {
             // never again (a stuck sun). presentMs: JS EMA inside the render calls.
             try { const g = lit && lit.uniforms && lit.uniforms.sunDir && lit.uniforms.sunDir.groupNode; o.groupVer = g ? g.version : null; } catch (_) { o.groupVer = null; }
             o.sharedUniforms = !!(lit && lit.sharedUniforms);
+            o.matHit = _matHit; o.matMiss = _matMiss; o.matEvict = _matEvict;
             o.presentMs = +_presentMs.toFixed(3);
             o.presents = _presentN;   // frames presented — a spec samples both flag arms at the same count
             // THIS WAS ALWAYS undefined. `renderer.backend.data` is a
