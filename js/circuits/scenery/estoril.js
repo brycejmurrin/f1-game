@@ -81,24 +81,21 @@
             const p = vadd(vadd(vadd(a.c, a.t, (i - bays / 2) * pitch), a.r, -6.4), a.u, 7.4);
             seat.cyl(stage, p, 0.15, 3.4, LIME, 6, b);
           }
+          // Each block carries its own pantile roof, anchored with the block.
+          // EST-M1 asked for ONE 208 m ridge over both blocks as a single mesh;
+          // the blocks are 7 bays (54.6 m) each and their centres 149 m apart
+          // (0.960 -> 0.996 of a 4140 m lap), so a single-basis ridge spans
+          // 94 m of open air between them and modelGroup rejects its footprint
+          // at every length down to 150 m (required -> the circuit fails to
+          // build). A roof over nothing is not a continuous ridge either; the
+          // per-block roofs stay until the terrace itself is made continuous.
+          stage._mat = MAT.ROOF;
+          seat.prism(stage, vadd(a.c, a.u, 10.8), [15.4, 2.1, len + 2], TILE, b);
           stage._mat = 0;
         }, { required: true });
       };
       pitBlock("estoril-pit-terrace-a", 0.960, 7);
       pitBlock("estoril-pit-terrace-b", 0.996, 7);
-      // EST-M1: both masonry blocks sit under ONE pantile ridge. Keeping this
-      // as a separate atomic mesh makes the continuity structural rather than
-      // two nearly-abutting, independently oriented roof prisms.
-      {
-        const a = anchor(K(0.978), 1, 18), b = [a.r, a.u, a.t];
-        modelGroup("estoril-pit-pantile-roof", {
-          center: vadd(a.c, a.u, 11.8), size: [18, 5, 212], basis: b,
-        }, (stage) => {
-          stage._mat = MAT.ROOF;
-          seat.prism(stage, vadd(a.c, a.u, 10.8), [15.4, 2.1, 208], TILE, b);
-          stage._mat = 0;
-        }, { required: true });
-      }
       {
         const a = anchor(K(0.978), 1, 22), b = [a.r, a.u, a.t];
         modelGroup("estoril-timing-tower", {
@@ -214,12 +211,15 @@
       marshalPost(K(0.775), -1, 9);
 
       // EST-M2: Parabolica owns both superlatives on the lap: the widest
-      // gravel apron and the longest, most densely populated crowd bank.
+      // gravel apron and the most densely populated crowd bank. Density is
+      // the crowd (figures never clip); rows and span are terrace boxes, and
+      // on this curve six rows or a 0.855-0.940 span put adjacent treads
+      // through each other (clip-audit: 3-5 severe spots against the
+      // baseline's 1), so the bank keeps four rows over 0.865-0.935.
       groundPatch(K(0.900), -1, 6, [48, 0.18, 104], GRAVEL,
         { id: "estoril-parabolica-gravel", samples: 9 });
       tyreWall(0.880, 0.925, -1, 5, [0.85, 0.78, 0.20]);
-      spectatorHill(0.855, 0.940, 1, 32,
-        { rows: 6, rise: 1.2, depth: 1.9, density: 0.68, step: 7 });
+      spectatorHill(0.865, 0.935, 1, 32, { rows: 4, rise: 1.2, depth: 1.9, density: 0.68, step: 7 });
       marshalPost(K(0.895), 1, 10);
       for (const s of [0.875, 0.905]) billboard(K(s), -1, 14, 12, 4.5, [0.88, 0.20, 0.16]);
 
