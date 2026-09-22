@@ -567,6 +567,8 @@ test.describe("TLX — boot", () => {
     // GPU: the buffer count sits far below the draw count, and the render
     // group's version advances across present() calls (a frozen version would
     // mean the shared block is uploaded once and never again — a stuck sun).
+    const errors = [];
+    page.on("console", (m) => { if (m.type() === "error" && !/favicon/i.test(m.text())) errors.push(m.text()); });
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => window.__apex.race("monza"));
