@@ -1,5 +1,7 @@
 ---
 name: survey-track
+context: fork
+agent: track-surveyor
 description: Use when the user asks to survey a track, make a circuit more accurate/realistic, compare Apex 26 to real-world reference, or do a picture-driven accuracy pass (gaps, terrain channels/steps, sunk water). Orchestrate first; scenery(api) prop edits after the survey flags them → scenery-dress. Geometry hooks only → agent-view.
 ---
 
@@ -7,6 +9,12 @@ description: Use when the user asks to survey a track, make a circuit more accur
 
 Orchestrator for taking one circuit from "roughly dressed" to "reads like the
 real place". Work one circuit at a time.
+
+Runs FORKED as the **track-surveyor** subagent (`context: fork`,
+`agent: track-surveyor`): the survey framings and probe output stay in the
+fork, its edits are confined to that circuit's pair of files, and it stops at
+`verify-track` — engine work and the fleet gate below are the PARENT's, after
+the fork returns.
 
 ```sh
 node tools/track/survey-track.mjs <id>            # screenshots + flagged ground probe
@@ -44,7 +52,7 @@ circuit's pair — def + scenery closure; no browser runs).
    **track-surveyor**).
 4. `verify-track.cjs <id>` — a THROW strands the game on the menu.
 5. `survey-track.mjs <id> after` — same framings; flags should clear.
-6. Per-circuit gate: `node tools/track/verify-track.cjs <id>`. Parent ship (optional fleet): `node tools/ci/test-bg.mjs circuits` + `node tools/gen/gen-shell.mjs --check` ([shell/cache](../check-changes/references/bump.md)). The
+6. Per-circuit gate: `node tools/track/verify-track.cjs <id>`. The fork stops here. Parent ship, after it returns (optional fleet; a browser run is blocked inside the fork): `node tools/ci/test-bg.mjs circuits` + `node tools/gen/gen-shell.mjs --check` ([shell/cache](../check-changes/references/bump.md)). The
    **track-surveyor** subagent stops at verify-track / coplanar / float-audit.
 
 Montreal already ships `flatTerrain: true` + `terrainOuter: 70` — survey
