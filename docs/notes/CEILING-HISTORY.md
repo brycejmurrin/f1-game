@@ -11,6 +11,16 @@ The live numbers are in `ratchets.json`; nothing here is asserted.
 under Settings, removing duplicate pause controls and simplifying Help markup.
 The newer practice goals and session review remain. Shell slack is tightened to 25.
 
+2026-09-22 coverage ratchets (Track B): three new `tree` metrics, each a way a
+suite can look larger than it is. `zeroRefModules` = 0 (the census found one,
+`js/physics/body-attitude.js`; `tests/unit/body-attitude.test.mjs` closed it, and
+the ceiling starts at zero so it stays closed). `implicitAsserts` = 40 (spec tests
+whose only assertion is a `waitForFunction`; a timeout there reads as a hang, not
+a wrong value — convert as touched). `twinDebt` = the portable browser specs
+still on the browser gate after the first `ADAPTED` batch; `BROWSER_ONLY` in
+`tools/ci/twinned-specs.mjs` names the ones that must stay (with the reason), so
+this can reach zero. All three `slack: 0`: lower them, never bank headroom.
+
 ## Why a ratchet (the original header)
 
 ```

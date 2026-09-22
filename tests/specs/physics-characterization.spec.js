@@ -23,12 +23,20 @@
 // THE BASELINE IS COMMITTED (tests/data/physics-baseline.json), so this is a LIVE
 // GATE. Regenerate it with:
 //
-//   APEX_UPDATE_BASELINE=1 npx playwright test physics-characterization
+//   APEX_UPDATE_BASELINE=1 APEX_BASELINE_REASON="why" npx playwright test physics-characterization
 //
 // Regenerating is how you SAY a physics change was intentional: the diff shows
 // exactly which numbers moved, which is the whole point. NEVER regenerate to
 // turn a red run green without reading that diff — that converts the one guard
 // on the driving model into a rubber stamp.
+//
+// PROVENANCE. A regenerated file also carries `_blessed: { sha, reason, at,
+// hash }` — the commit it was measured at, the reason given on the command
+// line (REQUIRED: an empty APEX_BASELINE_REASON refuses to write), the time,
+// and a sha256 of the scenario data. tests/unit/physics-baseline-provenance.test.mjs
+// checks all four on the fast gate, so a hand-edited number, or a regen with no
+// stated reason, cannot land as if it were a measurement. Neither this spec's
+// compare loop nor the VM twin reads the key: both iterate SCENARIOS by name.
 //
 // Verified non-vacuous: changing LAT_MAX from 22 to 27 fails "steady corner
 // load" by name. It runs in ~25 s because it builds ONE track and uses
@@ -101,7 +109,10 @@ test("the driving model produces the same numbers it did before", async ({ page,
   for (const k of Object.keys(got)) rounded[k] = got[k].map((row) => row.map(R));
 
   if (UPDATING) {
-    fs.writeFileSync(BASELINE, JSON.stringify(rounded, null, 2) + "\n");
+    const reason = (process.env.APEX_BASELINE_REASON || "").trim();
+    if (!reason) throw new Error("APEX_UPDATE_BASELINE=1 needs APEX_BASELINE_REASON=\"why the numbers moved\" — a baseline without a stated reason is a rubber stamp");
+    const { blessing } = await import("../helpers/baseline-blessing.mjs");
+    fs.writeFileSync(BASELINE, JSON.stringify({ ...rounded, _blessed: blessing(rounded, reason) }, null, 2) + "\n");
     test.info().annotations.push({ type: "baseline", description: `wrote ${BASELINE}` });
     return;
   }

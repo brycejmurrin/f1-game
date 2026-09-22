@@ -1,5 +1,5 @@
 // @ts-check
-import { test, expect } from "@playwright/test";
+import { test, expect } from "../helpers/fixtures.js";
 import { existsSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 import { galleryDir, galleryPath, galleryUrl } from "../helpers/output-paths.js";

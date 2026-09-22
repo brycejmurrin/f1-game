@@ -5,7 +5,7 @@
 // over a flat part of the track that passes near it). Method: capture each
 // circuit's meshes, then point-in-triangle test every face against asphalt
 // sample points across the whole lap — purely geometric, no rendering.
-import { test, expect } from "@playwright/test";
+import { test, expect } from "../helpers/fixtures.js";
 import { BOOT_MS } from "../helpers/fixtures.js";
 import { auditTracks } from "../helpers/track-helpers.js";
 

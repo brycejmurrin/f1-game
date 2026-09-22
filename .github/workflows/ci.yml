@@ -371,7 +371,11 @@ jobs:
         # 7.6 min with twelve siblings beside it on a runner); vm-b is every
         # other file (~2 min). tests/groups.json partitions of one list;
         # test:game-vm is still the full set for local use.
-        slice: [vm-a, vm-b, slow, fast]
+        # vm-page (2026-09-22): the browser specs that run AS THEMSELVES under
+        # tests/helpers/vm-page.js (tools/ci/twinned-specs.mjs ADAPTED), one
+        # child process per spec. Its own slice because a spec that builds a
+        # circuit costs seconds to minutes each and the `fast` slice is seconds.
+        slice: [vm-a, vm-b, slow, fast, vm-page]
     # MEASURED locally 2026-09-03, warm: net 12s, service-worker 4s, lifecycle
     # 0s, state 1s, agent-contract 0s, audio 0s, mcp 12s, node-slow 115s,
     # game-vm 161s = 305s total (+ garage-unit 39s, steering-unit 1s, 2026-09-10). Plus npm ci, which cost 3m32s and 5m02s on the
@@ -398,6 +402,9 @@ jobs:
               ;;
             vm-b)
               npm run test:game-vm-b
+              ;;
+            vm-page)
+              npm run test:vm-page
               ;;
             slow)
               # The three raster/spawn-heavy car files, out of the edit loop

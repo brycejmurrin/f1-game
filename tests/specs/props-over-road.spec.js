@@ -12,7 +12,7 @@
 // across the whole lap. A triangle whose footprint covers tarmac AND whose
 // surface sits between TOL and CEIL metres above the racing line is an offender.
 // Purely geometric — no rendering, so it runs under SwiftShader in CI.
-import { test, expect } from "@playwright/test";
+import { test, expect } from "../helpers/fixtures.js";
 import { BOOT_MS } from "../helpers/fixtures.js";
 import { auditTracks } from "../helpers/track-helpers.js";
 

@@ -1,5 +1,5 @@
 // @ts-check
-import { test, expect } from "@playwright/test";
+import { test, expect } from "../helpers/fixtures.js";
 import { BOOT_MS } from "../helpers/fixtures.js";
 
 test("Monaco owns safe terrain, models, water, overheads, and walls", async ({ page }) => {

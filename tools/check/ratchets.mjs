@@ -78,6 +78,17 @@ export const TREE_METRICS = {
   rawColor: async () => (await import("./tree-counts.mjs")).rawColor(),
   rawColorDistinct: async () => (await import("./tree-counts.mjs")).rawColorDistinct(),
   dynamicIdReads: async () => (await import("./shell-ids.mjs")).dynamicIdReads(),
+  // Coverage-shaped ratchets (2026-09-22). Each names a way a test suite can
+  // look larger than it is: a module no test names, a test that only WAITS
+  // (its condition is the assertion, and a timeout reads as a hang), and a
+  // browser spec that could run in the VM adapter but still spends
+  // SwiftShader minutes. All three are shrink-only.
+  zeroRefModules: async () => (await import("./tree-counts.mjs")).zeroRefModules(),
+  implicitAsserts: async () => {
+    const { audit } = await import("../ci/assert-audit.mjs");
+    return audit().flatMap((r) => r.tests).filter((t) => !t.skipped && t.verdict === "implicit").length;
+  },
+  twinDebt: async () => (await (await import("../ci/twinned-specs.mjs")).twinDebt()).length,
 };
 
 /** A ceiling entry is a bare number, or {ceiling, slack} when its guard is tighter. */

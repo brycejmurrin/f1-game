@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "../helpers/fixtures.js";
 
 // These tests build a real circuit, and until 2026-09-02 they did not.
 //
