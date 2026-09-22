@@ -11,8 +11,8 @@ subset of the next:
 | command | unit files it runs | when |
 |---|---|---|
 | `npm run test:guards` | 18 (curated) | hook-enforced, every `git commit` |
-| `npm run test:tooling-fast` | 218 of 290 | the documented edit-loop check |
-| `node tools/ci/deploy.mjs --gate-only` | 275 of 290 | the whole gate; what a deploy runs |
+| `npm run test:tooling-fast` | 223 of 296 | the documented edit-loop check |
+| `node tools/ci/deploy.mjs --gate-only` | 281 of 296 | the whole gate; what a deploy runs |
 
 The remaining 15 are the per-circuit geometry and parts sweeps (counts re-measured 2026-09-22; `tests/unit/docs-integrity.test.mjs` pins the `N of M unit files` phrasing). `ci.yml` gives
 those their own jobs rather than putting them in the "Pure-node unit suites"
