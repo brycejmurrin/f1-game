@@ -44,8 +44,15 @@ const SceneryCity = (function () {
         const gBase = vadd(mid, nVec, nSign * (nHalf + 0.05 + 0.04));
         const dim = (thin, hgt, wid) => { const a = [0, 0, 0]; a[nAxis] = thin; a[1] = hgt; a[wAxis] = wid; return a; };
         out._mat = MAT.METAL;
-        // perf: every other rail
-        if (!simple) for (let i = 0; i <= rowN; i += 2)
+        // perf: every other rail. i=0 SKIPPED: that rail sits exactly on the
+        // section's bottom face, so on every stacked massing (neonTower's
+        // `tiered` and `podium`, which abut with `yb += th`) it lands in the
+        // same plane as the rail on the top face of the section below —
+        // same-facing, gap 0, the whole rail area fighting at any distance
+        // (vegas 2026-09-22: 138 of 184 coplanar pairs, up to 16.3 m2 each).
+        // At ground level it is buried in the pavement, so nothing visible is
+        // lost; the TOP rail stays, which is the one that reads as a cornice.
+        if (!simple) for (let i = 2; i <= rowN; i += 2)
           ctx.instance(UNIT_BOX,
             { o: vadd(fBase, u, (i / rowN - 0.5) * sh), r: bb[0], u: bb[1], t: bb[2],
               s: dim(frameT, railH, faceW * 1.005), col: frameCol },
