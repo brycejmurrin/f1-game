@@ -810,7 +810,8 @@
         "tests/unit/twin-fidelity.test.mjs",
         "tests/unit/legends.test.mjs",
         "tests/unit/twinned-specs.test.mjs",
-        "tests/unit/ratchets.test.mjs"
+        "tests/unit/ratchets.test.mjs",
+        "tests/unit/no-bare-console.test.mjs"
       ]
     }
   }

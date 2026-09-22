@@ -1,6 +1,6 @@
 ---
 name: asset-pack
-description: Use when baking or verifying assets/pack, editing js/render/shared/assets.js or tools/gen/assets.mjs, debugging matTexMix/baked PBR blend, __apex.assets()/matTex(), MAT layer mismatches, or procedural-vs-textured tarmac look on GLX/TLX/WGX.
+description: Use when baked PBR materials in assets/pack are missing, wrong, garbled, or mismatched in colour or layer (MAT id) on GLX/TLX/WGX, when editing js/render/shared/assets.js or tools/gen/assets.mjs, or when tuning matTexMix / __apex.assets() / matTex() and the procedural-vs-textured tarmac look. A black screen or NaN-white surface with no material involved is webgl-debug / webgpu-debug.
 ---
 
 # Baked asset pack
@@ -26,7 +26,7 @@ device/feature miss, not "WGX has no pack."
 
 ## When NOT to Use
 
-- Cache-busting shell assets — the pack has **no `?v=`**; `node tools/gen/gen-shell.mjs --check` ([shell/cache](../check-changes/references/bump.md): `?v=dev`, no bump) is
+- Cache-busting shell assets — the pack has **no `?v=`**; `node tools/gen/gen-shell.mjs --check` ([shell/cache](../check-changes/references/bump.md)) is
   for `js/`/`css/`/`index.html` tags only.
 - Mid-test-run pack edits — SW is cache-first (same class as not bumping
   `version.json` mid-run).

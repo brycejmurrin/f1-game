@@ -1,6 +1,6 @@
 ---
 name: ui-menu-a11y
-description: "Use when menus, dialogs, Escape/back behavior, keyboard navigation, selected-state announcements, scroll affordances, UI scale, touch layout, or menu/HUD accessibility regressions are being changed or debugged. Single-screen bug only — full matrix → survey-ui-matrix. In-race driving input → input-controls."
+description: "Use when menus, dialogs, Escape/back behavior, keyboard navigation, selected-state announcements, scroll affordances, UI scale, touch layout, a cramped or clipped single screen, or menu/HUD accessibility regressions are being changed or debugged. Single-screen fit only — a DOM/class restructure or the token system is css-play; the full matrix → survey-ui-matrix. In-race driving input → input-controls."
 ---
 
 # Menu / HUD accessibility

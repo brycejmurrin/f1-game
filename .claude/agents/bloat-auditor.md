@@ -1,7 +1,9 @@
 ---
 name: bloat-auditor
 description: Read-only agent-bloat / simplify auditor. Use when a file, skill, or subtree may be split, extracted, or stripped of dead/duplicate code or stale comments. Returns BLOAT rows; no edits, no Playwright. Parent applies one carve.
-model: inherit
+model: haiku
+maxTurns: 15
+memory: project
 readonly: true
 is_background: true
 background: true
@@ -29,7 +31,8 @@ before proposing a delete or extract.
 BLOAT  kind:extract|split|dead|dup|comment|skill|doc  file:line  cost:<n>  why: "…"  carve: "…"  do-not: none|<rule>
 ```
 
-`cost` is estimated lines or tokens removed. `do-not` is the table row
+`why` and `carve` are each one clause under 140 characters — a row, not a
+paragraph. `cost` is estimated lines or tokens removed. `do-not` is the table row
 that forbids the carve, or `none`. If the scope is clean:
 
 ```
@@ -37,6 +40,10 @@ BLOAT none
 ```
 
 plus the three most likely future sites (file + why).
+
+Project memory (`.claude/agent-memory/bloat-auditor/MEMORY.md`, tracked): one
+line per finding the parent REJECTED — `file:line — kind — why not`. Read it
+first and never re-propose a listed carve; append when the parent says no.
 
 Cap: **eight** `BLOAT` rows. Prefer the highest `cost` with `do-not: none`.
 
