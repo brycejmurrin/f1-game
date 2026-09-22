@@ -53,13 +53,29 @@ export const touchEvt = (page, type, points) =>
 
 export const steer = (page) => page.evaluate(() => Input.steer());
 
-/** Advance a ramp the way the game does.
+/** One poll gap, chosen so the ramp advances by a FIXED amount per tick.
  *
- *  The ramps advance by rate x dt on each steer() call, and dt is CLAMPED to
- *  100 ms so one call after a long pause cannot jump the wheel across. The game
- *  polls steer() once per physics step, so a test that wants a ramp to finish
- *  has to do the same rather than sleeping once and reading. */
-export async function pump(page, ticks = 12, gapMs = 20) {
+ *  js/input/input.js computes `dt = min(0.1, elapsed)` on every steer() read.
+ *  Below 100 ms that min picks `elapsed`, so how far the wheel travels per tick
+ *  is whatever the evaluate round-trip happened to cost — and the round-trip is
+ *  a property of the machine, not of the game. Above 100 ms the min picks the
+ *  clamp and every tick is exactly 0.1 s no matter how slow the box is.
+ *
+ *  MEASURED 2026-09-22 (adaptive on, speed 72, ref 42), reads 1..8:
+ *      gap  20 ms  0.220 0.293 0.351 0.401 0.443 0.488 0.531 …   machine-dependent
+ *      gap 120 ms  0.404 0.561 0.679 0.779 0.865 0.943 1.000     identical at 200 ms
+ *  The 20 ms ladder is what put `at speed a tap is a correction` at 0.53 here and
+ *  0.758 on a CI runner against a `< 0.75` bound — the assertion was encoding the
+ *  box's speed. The bound did not move; the clock did. */
+export const RAMP_GAP_MS = 120;
+
+/** Advance a ramp the way the game does, by a KNOWN number of clamped steps.
+ *
+ *  The game polls steer() once per physics step, so a test that wants a ramp to
+ *  finish has to do the same rather than sleeping once and reading. Four ticks
+ *  is 0.4 s of ramp, which saturates every ±1 / 0 assertion in these specs (the
+ *  release ramp homes in ~125 ms) with room to spare. */
+export async function pump(page, ticks = 4, gapMs = RAMP_GAP_MS) {
   let v = 0;
   for (let i = 0; i < ticks; i++) {
     v = await steer(page);

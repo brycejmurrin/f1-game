@@ -113,7 +113,20 @@ test.describe("adaptive buttons are analog triggers for digital steer", () => {
       .dispatchEvent(new PointerEvent("pointerdown", { pointerId: 32, bubbles: true })));
     const later = await pump(page);
     expect(later).toBeGreaterThan(0.15);
-    expect(later).toBeLessThan(0.75);   // the same pump reaches 1 with adaptive off
+    expect(later).toBeLessThan(0.75);
+    // …and the half the old comment only claimed in prose: THE SAME PUMP, same
+    // speed, same machine, reaches full lock with adaptive off. Asserting it
+    // here is what makes the bound above mean "adaptive slowed the tap" rather
+    // than "0.75 happened to be above whatever this box measured".
+    await page.evaluate(() => {
+      Input.reset();
+      Input.setSteerMode("buttons");
+      Input.setAdaptiveButtons(false);
+      Input.setSpeedStd(72);
+    });
+    await page.evaluate(() => document.getElementById("btn-steer-right")
+      .dispatchEvent(new PointerEvent("pointerdown", { pointerId: 34, bubbles: true })));
+    expect(await pump(page)).toBe(1);
   });
 
   test("sliding opposite the steer direction eases like an analog trigger", async ({ page }) => {
