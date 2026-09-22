@@ -1,10 +1,10 @@
 {
   "images": "macos-latest",
   "track": "montreal",
-  "tod": "night",
-  "clock": 2,
+  "tod": "day",
+  "clock": 12,
   "census_only": false,
   "force": "",
-  "ls": "",
-  "leg": "tlx-decal-uniforms-shared-2026-09-22"
+  "ls": "apex26.gfxBackend=three apex26.tlxForceGL=0",
+  "leg": "hitch-frametail-tlx-webgpu-2026-09-22"
 }

@@ -286,6 +286,13 @@ try {
             // is the one census number that does not need a quiet runner.
             ubo: (() => { try { const t = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null; const m = t && t.memState ? t.memState() : null;
               return m && m.rUbo != null ? { n: m.rUbo, kb: m.rUboKB, ver: m.groupVer, pms: m.presentMs, dr: m.draws } : null; } catch (_) { return null; } })(),
+            // THE HITCH SIGNATURE. p99 against p50 over the last 2048 frames:
+            // a healthy p50 beside a p99 several times larger IS a spike train,
+            // and no settled average can show it. `open` carries the worst
+            // single frame of the race's first 600 for the opening-stall
+            // question, which is a different report.
+            ft: (() => { try { const q = g && g.frameTimes; return q ? { p50: +(+q.p50).toFixed(1), p95: +(+q.p95).toFixed(1), p99: +(+q.p99).toFixed(1), max: +(+q.maxMs).toFixed(1), n: q.frames } : null; } catch (_) { return null; } })(),
+            open: (() => { try { const o = g && g.open; return o ? { maxMs: +(+o.maxMs).toFixed(1), slow: o.slow, frames: o.frames } : null; } catch (_) { return null; } })(),
           };
         }),
         new Promise((_, rj) => setTimeout(() => rj(new Error("beat timeout")), 8000)),
@@ -353,6 +360,20 @@ try {
       top: p.slice().sort((a, b) => b.ms - a.ms).slice(0, 4).map((r) => `${r.n}=${r.ms}`), rows: p };
   }), 20000, "race-profile");
   // Median rather than mean: one stalled beat is not the frame cost.
+  // Worst tail across the run: the LAST beat's ring covers the most frames,
+  // and the max over beats catches a spike that a later quiet stretch would
+  // otherwise average away.
+  const _ft = out.beats.map((b) => b.ft).filter(Boolean);
+  out.frameTail = _ft.length
+    ? { p50: _ft[_ft.length - 1].p50,
+        p95: Math.max(..._ft.map((x) => x.p95)),
+        p99: Math.max(..._ft.map((x) => x.p99)),
+        max: Math.max(..._ft.map((x) => x.max)),
+        // The ratio is the call: a spike train has a healthy p50 and a p99
+        // several times it. Constant slowness moves both together.
+        p99OverP50: +(Math.max(..._ft.map((x) => x.p99)) / Math.max(0.1, _ft[_ft.length - 1].p50)).toFixed(1),
+        beats: _ft.length }
+    : { note: "no frameTimes — this build predates the ring on renderScale()" };
   const _g = out.beats.map((b) => b.gms).filter((x) => x != null).sort((a, b) => a - b);
   const _sc = out.beats.map((b) => b.sc).filter((x) => x != null);
   out.gpuFrame = _g.length
