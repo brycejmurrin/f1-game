@@ -46,6 +46,9 @@ function load() {
     },
     Teams: {
       POINTS: [25, 18, 15, 12, 10, 8, 6, 4, 2, 1],
+      // Mirrors js/data/teams.js. Needed since a contract goal can draw
+      // beatRival, which ranks the real grid through gridSeats().
+      isReal: (t) => !!t && !t.custom && !t.legends,
       LIST: [
         { id: "custom", tier: 2, custom: true, color: 0xff2222,
           drivers: [{ name: "You", code: "YOU", num: 99 }] },
@@ -55,6 +58,12 @@ function load() {
     },
     Parts: { getFactorySetup: () => ({}) },
     Tracks: { LIST: [] },
+    // Flat, so the rival pick is deterministic and the market stays parked.
+    DriverRatings: {
+      get: (code) => ({ code, pace: 80, craft: 75, awareness: 75, consistency: 75, experience: 50 }),
+      overall: () => 80,
+      AXES: ["pace", "craft", "awareness", "consistency", "experience"],
+    },
   });
   seedLog(ctx);
   seedHash32(ctx);
