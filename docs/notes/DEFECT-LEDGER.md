@@ -3021,15 +3021,57 @@ least 1 severe.
 | shift | 0 | .883 | .811 | .750 | .670 | .526 | .307 | .260 | .210 | .116 | .086 | .923 |
 | severe / minor | **0 / 11** | 0/5 | 2/6 | 1/10 | 0/4 | 1/10 | 0/6 | 0/9 | 3/11 | 2/15 | 3/8 | 0/6 |
 
-**Not fixed: the mid-lap dressing fits neither frame.** The corner-keyed
-scenery was authored for an older centreline, not the OSM trace:
-- Mistral chicane run-off at 0.44; the chicane is at 0.490-0.502.
-- Signes run-off, bleacher, bank and tower at 0.545-0.565; Signes is at 0.713,
-  so this lands mid-Mistral.
-- Bosch bank at 0.64, on the straight.
-- The 0.30 / 0.66 elevations.
+**Mid-lap dressing pass (follow-up, same branch).** The corner-keyed
+scenery was written for an older centreline and fit neither frame. Signes'
+run-off, stand, tower, marshal post and bank sat mid-Mistral (0.545-0.565);
+Signes is at 0.713. The pass also found two more frame bugs.
 
-No single shift fixes this: the offsets are +0.056 at the chicane and +0.148
-at Signes. That needs a dressing pass against `def.turns`. The `hwZones` are
-source-space and unaffected.
+1. **`hwZones` were in the wrong space.** On a reversed def, `resolve()`
+   reads them as SOURCE fracs by control-point INDEX, but they were written
+   as racing fracs. So the road narrowed on the Mistral straight
+   (0.61-0.67) and near T1 and the hairpin, and never at the chicane,
+   Beausset or Village. The points are uneven, so `1 - s` is not the
+   inverse. The values are now inverted numerically. Each zone spans exactly
+   its corner's control points, with `ease` under one index step. A wider
+   ease tapered a 300 m leg: the first try narrowed the pit straight up to
+   the line. Narrowing now: 0.486-0.517 (chicane), 0.727-0.764 (Beausset),
+   0.879-0.934 (Village/Tour).
+2. **`groundPatch` took its side RAW.** `transformSceneryApi` negates side
+   for the anchor group on a reversed def but not for `groundPatch`, so
+   every patch in the file stood across the road from what it dresses:
+   - all 20 vineyard soils were opposite their rows;
+   - the airfield apron, runway and taxiway were on the right, the
+     hangars, tower and planes on the left;
+   - the helipad paint was opposite its circle;
+   - this PR's paddock apron landed on the left.
 
+   The file now wraps `groundPatch` to negate side, so there is one
+   convention (1 = left). The corner run-off sides were re-set to each
+   corner's outside, from the measured curvature sign.
+
+Moved to this centreline: run-off patches (chicane 0.490 at 60 m, since a
+longer patch crossed the second leg; Signes 0.713; Beausset 0.745); banks
+(Signes 0.713; "Bosch" 0.640 is Le Beausset 0.745 — both had been re-seated,
+Signes onto the CHICANE); marshal posts, the corner board, the camera tower,
+the Signes stand (0.690-0.730), the chicane stand, the braking boards
+(0.463-0.483), the sponsor hoarding; foliage exclusions and `openRunoff`
+0.20-0.50 / 0.68-0.83.
+
+Knock-ons:
+- Vineyard soil is centred on its rows. It used to start at the parcel's
+  gap, so it only covered the outer half.
+- `vine-north` moved to the left: on the right, the Verrerie-hairpin loop
+  rejects it at every gap from 70 to 140.
+- Soil is laid in 9 strips, not 8. With 8, a strip edge fell exactly on a
+  lavender row face (12 and 18 rows), giving 7 coplanar pairs.
+
+| probe | before this pass | after |
+|---|---|---|
+| 0.496 chicane | 13 pines/trees, 4 boards | 5 trees (foliage cut), 6 boards, marshal posts both sides |
+| 0.713 Signes | 8 structures, 1 marshal post | 13 structures (stand, tower), corner board, marshal post |
+| 0.565 mid-Mistral (old "Signes") | marshal post, corner board, 13 structures | 8 structures, no corner furniture |
+
+Audits after the pass: clip 0 severe / 12 minor (inside the 4-15 band
+above); coplanar 4 (baseline 4); float clean. Suppressions: the 5
+superseded pit models only. `docs/tracks/paul_ricard.md` now has the
+paddock on the right, the stand on the left and the new corner fracs.
