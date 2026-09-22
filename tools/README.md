@@ -304,6 +304,7 @@ Container bootstrap: browsers and the Cursor Cloud install.
 | **ci/select-budget.mjs** | Can a change-aware CI job run what it selects? Bills each spec from `spec-timings.json`, else the 79.7 s constant. |
 | **ci/select-recall.mjs** | Would the selector have caught it? Replays `select-specs` against real past regressions and asserts recall. |
 | **ci/select-specs.mjs** | Per-SPEC change-aware selection for the blocking CI job: cuts at `select-budget` capacity and names every skip. |
+| **ci/spec-staleness.mjs** | Replays select-specs over recent history to rank tests/specs/*.spec.js by how long since CI last selected one. |
 | **ci/spec-timings.mjs** | Merges junit/reporter durations into `tests/data/spec-timings.json` (bounded, per env); `--check` flags 2x growth. |
 | **ci/test-bg.mjs** | Starts test groups in the BACKGROUND and hands back a log to tail; sequential by default (`--parallel`, `--wait`). |
 | **ci/test-coverage-audit.mjs** | Coverage guard (`npm run test:audit`): every spec / unit file must be reachable from a topical `test:<group>` script. |
@@ -324,7 +325,7 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 | **track/clip-baseline.json** | `manifest.cjs`, `tests/unit/comment-citations.test.mjs`, `tests/unit/docs-integrity.test.mjs`, `tests/unit/prop-clipping.test.mjs`, `track/clip-audit.cjs` |
 | **track/coplanar-baseline.json** | `manifest.cjs`, `tests/unit/coplanar-faces.test.mjs`, `track/coplanar-audit.cjs` |
 | **track/float-baseline.json** | `manifest.cjs`, `tests/unit/scenery-grounding.test.mjs` |
-| **track/osm-circuits.json** | `gen/bake-elevation.mjs`, `manifest.cjs`, `track/stitch-osm-ring.mjs` |
+| **track/osm-circuits.json** | `gen/bake-elevation.mjs`, `manifest.cjs`, `tests/unit/circuit-def-fields.test.mjs`, `track/stitch-osm-ring.mjs` |
 
 ## Conventions
 

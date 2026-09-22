@@ -2165,10 +2165,17 @@ const TLX = (function () {
         // spanned across several 4K monitors). Past it every target alloc and
         // the swapchain itself fail into a silent per-frame retry. CLAMP
         // UNIFORMLY — per-axis would change the aspect the projection is built
-        // on, not just the resolution. The WebGL2 backend's ceiling is higher
-        // and is left to the driver.
+        // on, not just the resolution. The WebGL2 backend asks its driver the
+        // same question (MAX_TEXTURE_SIZE / MAX_RENDERBUFFER_SIZE), as GLX does.
         const _gpuDev = (renderer.backend && renderer.backend.isWebGPUBackend && renderer.backend.device) || null;
-        const maxDim = _gpuDev ? ((_gpuDev.limits && _gpuDev.limits.maxTextureDimension2D) || 8192) : 0;
+        let maxDim = _gpuDev ? ((_gpuDev.limits && _gpuDev.limits.maxTextureDimension2D) || 8192) : 0;
+        if (!_gpuDev) {
+          const _gl = (renderer.backend && renderer.backend.gl) || null;
+          try {
+            const lim = _gl ? [_gl.getParameter(_gl.MAX_TEXTURE_SIZE) | 0, _gl.getParameter(_gl.MAX_RENDERBUFFER_SIZE) | 0].filter((v) => v >= 2048) : [];   // WebGL2 guarantees 2048; a stub answers less
+            maxDim = lim.length ? Math.min(...lim) : 0;
+          } catch (_) { maxDim = 0; }
+        }
         if (maxDim && (presentW > maxDim || presentH > maxDim)) {
           const k = Math.min(maxDim / presentW, maxDim / presentH);
           presentW = Math.max(1, Math.floor(presentW * k));

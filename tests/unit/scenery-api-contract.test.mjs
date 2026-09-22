@@ -122,3 +122,24 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
   assert.equal((landmarkSource("singapore").match(/\bcityFront\s*\(/g) || []).length, 5,
     "Must landmarks must not densify cityFront");
 });
+
+// ── K: the frac -> node index must be a valid index for EVERY frac ─────────────
+// JS `%` keeps the dividend's sign, so `Math.round(s * n) % n` handed a NEGATIVE
+// slot to any prop placed `s - 0.002` behind a node just past the start line.
+// Ten circuit-local copies carried that form (Okayama's alone wrapped) until
+// 2026-09-22, when the copies were retired for this member and it was
+// normalised. The whole lap and one turn either side must land in [0, n).
+test("api.K wraps negative and over-lap fracs into [0, n)", () => {
+  const Tracks = buildContext();
+  const withScenery = new Set(MANIFEST.LAZY_SCENERY.map((f) => f.split("/").pop().replace(/\.js$/, "")));
+  const def = Tracks.LIST.find((d) => !d.reverse && d.sceneryCoordinates !== "source" && withScenery.has(d.id));
+  let K = null, n = 0;
+  def.scenery = (api) => { K = api.K; n = api.n; };
+  Tracks.build(def);
+  assert.ok(K && n > 0, "the probe saw api.K and api.n");
+  for (const s of [-0.5, -0.002, -1e-9, 0, 0.5, 0.999999, 1, 1.002, 1.5]) {
+    const k = K(s);
+    assert.ok(Number.isInteger(k) && k >= 0 && k < n, `K(${s}) = ${k} must index [0, ${n})`);
+  }
+  assert.equal(K(-0.002), K(1 - 0.002), "a frac just behind the line is the node just behind the line");
+});

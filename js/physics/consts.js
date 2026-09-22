@@ -213,6 +213,12 @@ window.PhysicsConsts = {
 // rubber band fully wound on. Derived rather than written down so it tracks the
 // table above; game.js's band block caps a banded AI here so the difficulty dial
 // stays monotonic. Lives with DIFF because it is a property of DIFF.
+// The fixed physics step. game.js's accumulator (PHYS_DT) runs on it and the
+// modules that step alongside the loop (collide, incident-sim, debris-world,
+// brake-cue) fall back to it when handed no dt. ONE number: it was typed as
+// `1 / 60` in seven places, which would have drifted apart the day a
+// higher-rate mode changed the loop's step.
+window.PhysicsConsts.FIXED_DT = 1 / 60;
 window.PhysicsConsts.BAND_CEIL = (() => {
   const top = Object.values(window.PhysicsConsts.DIFF).reduce((a, d) => (d.ai > a.ai ? d : a));
   // …and never above the player's own scale. The ladder's top used to sit at

@@ -13,10 +13,12 @@ const LoopHealth = (() => {
   "use strict";
 
   // Consecutive throws tolerated before the loop stops: the transient shapes
-  // this exists for heal in one frame, and 8 is still an eighth of a second
+  // this exists for heal in one frame, and 8 is still a fraction of a second.
+  // These count FAULTS, not time — the same cap on any refresh rate by design.
   const RUN_CAP = 8;
   // Absolute ceiling: a run counter that any clean frame resets can never stop
-  // a fault that alternates clean/throw. 240 is four seconds of a half-broken loop
+  // a fault that alternates clean/throw. 240 is ~four seconds of a half-broken
+  // loop at 60 fps, less on a faster display; a count, not a clock.
   const TOTAL_CAP = 240;
   // Log the first few faults, then thin out: the record is for the ring buffer
   // __apex.logs() reads, not 60 identical console lines a second
