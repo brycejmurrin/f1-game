@@ -139,6 +139,11 @@ export const BROWSER_ONLY = {
   "tests/specs/understeer-cue.spec.js": "portable by every static measure and 0/7 under the adapter (317 s) — the standing proof that eligibility is not fidelity (docs/TESTING.md §vmPage)",
   "tests/specs/audit.spec.js": "two evaluate bodies do not survive source serialisation into the VM (`Unexpected token ';'`): 8/10",
   "tests/specs/debris.spec.js": "loads rapier through a dynamic import, which node:vm has no import callback for (ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING): 1/5",
+  // Measured 2026-09-22, right after the 25-test file was split: the 9-test
+  // drag half became statically portable (the auto-throttle test that drives a
+  // real race moved to touch-pedals.spec.js) and immediately appeared in
+  // twinDebt. RUNNING it settles the question the static scan cannot.
+  "tests/specs/touch-steer.spec.js": "8/9 in 1.7 s, and the ninth is structural: the release ramp is rate x dt off the wall clock, and pump()'s waitForTimeout does not advance the VM's, so `lifting off ramps back to centre` reads 0.98 where a browser reads 0 — three runs, same single failure",
 };
 
 export const isTwinned = (file) => Object.hasOwn(TWINNED, file) || Object.hasOwn(ADAPTED, file);
