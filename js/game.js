@@ -447,13 +447,21 @@ function setDriverIdxAt(v) {
   const t = Teams.LIST[teamIdx];
   if (t && t.legends && customTeam && customTeam.syncLegendsTeam) customTeam.syncLegendsTeam(v);
 }
+// A STORED INDEX IS PLAYER INPUT, AND `x >= 0 && x < len` IS NOT AN INDEX CHECK.
+// This file had it in both spellings and each leaks the opposite way: "abc"
+// fails `< 0 || >= len`, "" passes `>= 0 && < len`. Either way the value reached
+// Teams.LIST[…] as undefined and the first `team.id` threw — and `team`,
+// `driver` and `track` all ride in a GARAGE FILE (js/ui/settings-export.js).
+function idxOr(v, len, dflt) {
+  return (Number.isInteger(v) && v >= 0 && v < len) ? v : dflt;
+}
 function clampDriverIdx() {
-  if (!(driverIdx >= 0 && driverIdx < driverSeatCount(teamIdx))) driverIdx = 0;
+  driverIdx = idxOr(driverIdx, driverSeatCount(teamIdx), 0);
 }
 function restoreFreePlaySelection() {
-  trackIdx = storedTrackIndex(); teamIdx = store.get("team", 2); driverIdx = store.get("driver", 0);
-  if (!(trackIdx >= 0 && trackIdx < Tracks.LIST.length)) trackIdx = 0;
-  if (!(teamIdx >= 0 && teamIdx < Teams.LIST.length)) teamIdx = 2;
+  trackIdx = idxOr(storedTrackIndex(), Tracks.LIST.length, 0);
+  teamIdx = idxOr(store.get("team", 2), Teams.LIST.length, 2);
+  driverIdx = store.get("driver", 0);
   clampDriverIdx();
 }
 let difficulty = store.get("difficulty", "normal");
@@ -4810,6 +4818,13 @@ function updateCar(c, dt, ranked) {
     if (c.offT > 1.2) {
       c.offT = -2;   // grace before next count
       c.cuts++;
+      // A TIME TRIAL IS A LEADERBOARD, AND A LAP WITH A COUNTED CUT IS NOT A LAP.
+      // The +5s ladder below prices a cut against the race CLASSIFICATION; a
+      // time trial has none, so nothing priced one — measured 2026-09-22, a lap
+      // run off-track replaced a 42 s record with 5 s, ghost and all. Reuse the
+      // cut the engine already counted (1.2 s off, past the grace) and the latch
+      // the crossing already clears, not a second definition of either.
+      if (c.isPlayer && isTimeTrial()) c.incidentInvalidLap = true;
       // Penalty applies to EVERY car (it feeds race classification) so the AI
       // can't cut corners for free; only the player gets the on-screen cues.
       // THREE WARNINGS, ONE PENALTY, RESET — the real ladder. This used to add
@@ -4829,7 +4844,8 @@ function updateCar(c, dt, ranked) {
           if (soundOn) GameAudio.penalty();
         }
       } else if (c.isPlayer) {
-        announce("TRACK LIMITS " + c.cutWarn + "/4", 1.2, "penalty-warn");
+        // The n/4 count is the race ladder's; in a time trial the lap is simply gone.
+        announce(isTimeTrial() ? "LAP INVALIDATED" : "TRACK LIMITS " + c.cutWarn + "/4", 1.2, "penalty-warn");
         if (soundOn) GameAudio.offtrack();
       }
     }
@@ -8915,14 +8931,10 @@ customTeam.init();
 raceSettings.wireButtons();
 customTeam.syncCustomTeam();   // inject "MY TEAM" so saved selections and chips resolve
 migrateSeasonPoints();
-// INTEGER CHECK, not `idx < 0 || idx >= len`: both of those are false for a
-// non-number, so a garage file carrying `team: "mclaren"` reached
-// Teams.LIST[teamIdx].id and threw at boot with no recovery. The negated form
-// below admits null/[]/"3" too, and Teams.LIST[null] is the same crash.
-if (!(Number.isInteger(teamIdx) && teamIdx >= 0 && teamIdx < Teams.LIST.length)) teamIdx = 2;
+teamIdx = idxOr(teamIdx, Teams.LIST.length, 2);
 clampDriverIdx();
 // Clamp a legacy positional selection before migrating it to stable identity.
-if (!(trackIdx >= 0 && trackIdx < Tracks.LIST.length)) trackIdx = 0;
+trackIdx = idxOr(trackIdx, Tracks.LIST.length, 0);
 // Stable ID is authoritative; keep the legacy index for an older cached build.
 if (Tracks.LIST[trackIdx]) {
   store.set("trackId", Tracks.LIST[trackIdx].id); store.set("track", trackIdx);

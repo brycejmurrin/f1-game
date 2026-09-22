@@ -467,6 +467,15 @@ function registerFurniture(track) {
 
 function reset() {
   destroyWorld();
+  // RE-ARM THE LATCH A TRAPPED STEP LOWERED. step()'s catch sets _active false
+  // and tears the world down, which is right for THAT race. But nothing else
+  // ever raised it again: setEnabled() is the only other writer and game.js
+  // never calls it, so one transient rapier fault turned debris, marbles and
+  // the caution it feeds off for the rest of the browser session — through
+  // every restart, every new race, in silence. This is the same expression
+  // setEnabled() computes, so a player who turned debris OFF stays off and a
+  // load that genuinely failed (_loadState -1) stays down.
+  _active = _enabled && _loadState === 2;
   _tick = 0; _stepSkips = 0; _seq = 0; _spawnedTotal = 0; _lastImpact = null;
   _marbleSeq = 0; _furnBuilt = false; _lastForce = 0;
   _panelSeq = 0; _panelsBroken = 0;   // B2 counters (bodies torn down in destroyWorld)

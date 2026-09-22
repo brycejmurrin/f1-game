@@ -11,6 +11,138 @@
 Verified against the current tree. Everything fixed has moved to the archived
 journal; this is what remains.
 
+**2026-09-22 (wave 4/5) — `DIFF[difficulty]` had three siblings, and a garage
+FILE could reach two of them. FIXED.** The 2026-09-22 crash was a persisted
+string used as a table key with nothing validating it. Hunting the SHAPE rather
+than the symptom found the rest of the family:
+
+- **`idxOr`, js/game.js.** `x >= 0 && x < len` is not an index check, and this
+  file carried it in BOTH spellings — each leaking the opposite way. `"abc"`
+  fails `< 0 || >= len`, so the NEGATED form at boot passed it through; `""`
+  passes `>= 0 && < len`, so the POSITIVE form in `restoreFreePlaySelection()`
+  passed that. Either way `Teams.LIST[…]` is undefined and the first `team.id`
+  read (js/garage/setup-sheet.js, js/car/car-draw.js) throws. The second site
+  was found BY THE TEST: its first draft anchored on the shared substring and
+  matched the wrong line. Five hand-rolled clamps are now one helper, and the
+  guard asserts no sixth is written by hand.
+- **`loadCustomTeam`, js/career/custom-team.js.** `syncCustomTeam()` pushed
+  whatever sat under `apex26.customTeam` straight into `Teams.LIST`, and
+  `SaveMigrate.seasonRoster()` does `team.drivers.forEach(...)` over that list
+  at BOOT — so `{}` was a TypeError before the menu painted, on every start.
+  The `id` half is quieter and just as real: the splice that removes the
+  previous custom entry matches on `"custom"`, so a renamed team would have
+  every sync push ANOTHER car onto the grid. Now repaired, not discarded — a
+  bad roster is not a reason to lose the player's livery.
+- **`garageValue`, js/ui/settings-export.js.** The liveries have been
+  shape-checked since the file was written, under a header saying a file is
+  player input and the garage does not defend itself. The four SINGLES —
+  `team`, `driver`, `customTeam`, `customLogo` — fell through to a bare
+  `return v`. That is the door the two above come in through: the feature's own
+  LOAD GARAGE FILE button. Now shape-checked per key, and the trailing
+  `return v` is a `return undefined` (default deny).
+
+**The suite's own idea of a sound file contained the defect.** Three fixtures in
+`settings-export.test.mjs` used `customTeam: { name: "X" }` — no `drivers` — and
+one of them asserted it applied cleanly. That is most of why this survived: the
+round-trip test was pinning the crashing shape as correct. The same file already
+carried the lesson for liveries ("a fixture of bare numbers would round-trip to
+[] and prove nothing about the round trip") and it had not been carried across.
+
+**2026-09-22 — one trapped rapier step turned debris off for the whole SESSION.
+FIXED.** `DebrisWorld._active` is the single boolean game.js reads to decide
+whether debris, marbles, incident takeovers and the caution they feed exist at
+all. `step()`'s catch lowers it and tears the world down — right for that race.
+But `setEnabled()` was the only other writer and game.js never calls it: the
+only ways back were `__apex.debris(true)` or the player flipping the DEBRIS
+setting off and on. `reset()` — which exists precisely so nothing carries into
+the next race, and which every restart path calls — never touched the latch. So
+a single transient WASM fault took the surface down silently through every
+restart and every new race until the tab was reloaded. `reset()` now recomputes
+the same expression `setEnabled()` does, so DEBRIS OFF stays off and a load that
+genuinely failed stays down.
+
+**2026-09-22 — the fastest way onto the TIME TRIAL board was to leave the
+circuit. FIXED.** The crossing gates `c.best`, the TT board, `G.ttRecord` and the
+stored ghost on one latch, `incidentInvalidLap`, set by IncidentSim, the
+red-flag restart and the coach. Track limits were not on it — they had a ladder
+of their own: three warnings, then +5 s. That ladder prices a cut against the
+race CLASSIFICATION, and a time trial has no classification, so in TT nothing
+priced a cut at all. Measured in the VM harness: a lap driven off-track replaced
+a 42.15 s record with 5 s and took the stored ghost with it. A counted cut
+(game.js's own 1.2 s threshold, past the grace) now invalidates the lap in TIME
+TRIAL only, and the warning line reads LAP INVALIDATED there instead of the
+race ladder's n/4.
+
+RECORDED, NOT FIXED, from the same hunt:
+
+- **Race-mode `c.best` and the fastest-lap point still count a cut lap.** Real
+  F1 invalidates for track limits; this game prices them at +5 s instead, which
+  is a designed ladder and a balance decision, not an oversight. Changing it
+  moves classification and the career `clean` objective, so it wants a driven
+  lap and an owner, not a rider on a bug-fix batch.
+- **A pit-lane lap can set the fastest lap. REJECTED as a defect** — F1 counts
+  in-laps and out-laps for the fastest lap, and the pit lane is longer and
+  speed-limited, so it is not an exploit route.
+- **In a time trial the +5 s ladder still runs** alongside the invalidation
+  above, announcing a penalty in a mode with nothing to apply it to.
+- **Points and the fastest-lap bonus reach cars that never finished.**
+  `js/career/season-cal.js` excludes only `c.retired`, not `!c.finished`, and
+  `order` carries cars still running when the hard time cap ends a race
+  (`raceT > 360 * lapsTarget`). Rare, and reachable only through that cap.
+
+**2026-09-22 — three CONTROLLER buttons welded into one slab, and the guard
+that could not see it. FIXED.** `.pm-pad-tools` was applied in `index.html` from
+the day it shipped and defined in no stylesheet. With `.pm-group button
+{ margin: 0; width: 100% }` above it, CALIBRATE STICK / SET UP A WHEEL / RESET
+CONTROLLER measured 0.0 px apart at 844x390 where every other row in the panel
+had 4. The class now rides the `.pm-group` rules themselves rather than
+restating the numbers, so both densities stay in step.
+
+**The reason nothing caught it is the finding.**
+`tests/unit/component-inventory.test.mjs` guards DEFINED-but-unapplied — a rule
+in `css/` that nothing wears, which costs bytes and nothing else. The mirror
+direction was unguarded, and it is the expensive one: an element wearing a name
+no rule matches READS as styled. `tools/check/class-usage.mjs` now sweeps it,
+reading all four ways this tree applies a class (`class=`, `className`,
+`classList`, and `Dom.el(tag, cls)` — the busiest by far; a scan without it sees
+a third of the app) and skipping anything interpolated or concatenated rather
+than guessing at a half-name. It asserts an EXPLAINED set, not an empty one:
+17 names, of which 3 are queried by JS or by a spec locator and 14 carry their
+reason in `KNOWN` beside the selector that does the real work.
+
+**2026-09-22 — `hud-onboard`: a body class toggled on every camera switch that
+nothing had read for eighteen days. FIXED (deleted).** It shipped 2026-09-04
+with a rule stripping the minimap and the gap strip in any onboard view; the
+SAME DAY, the per-widget MAP/GAPS settings replaced that rule and the write was
+left behind. Its only guard was `assert.match(src, /hud-onboard/)` — a test that
+the string is still typed, which passes forever over a toggle nobody reads. That
+assertion is now the relation instead: every body class `js/ui/hud.js` toggles
+must be one some stylesheet keys a rule on, with `hud-met-full` the single
+exemption (AUTO is defined as the layout that hides nothing, so a rule for it
+would be the bug).
+
+**The design question it raised is answered NO.** `ONBOARD_IDS` groups cockpit,
+hood and tcam but only cockpit gets the `cockpit-cam` declutter, which looked
+like two cameras missing treatment. They are not: `js/game.js` gates the entire
+wheel/halo/mirror RIG on `id === "cockpit"`, and `js/car/car-draw.js`'s
+`drawCockpitRig` draws an in-world duplicate of every readout `cockpit-cam`
+hides — gear, shift lights, speed, ERS, overtake, aero. The declutter exists
+because cockpit renders those twice, not because onboard views should look
+sparse. Hood and tcam have no duplicate, so hiding them there would delete
+information with nothing replacing it. `ONBOARD_IDS` itself stays: it is live
+for the MAP-AUTO default.
+
+**2026-09-22 — the Display sub-panels are NOT missing a margin. REJECTED.** The
+earlier entry below reads `pm-hud-sub`/`pm-renderer-sub` having no CSS as
+Display sitting flush where Music & Sound does not. Measured the other way
+round: `.pm-group` is a flex column with `gap: 6px` (4 compact) and the Display
+folds carry `margin: 0` deliberately to sit in it, while `.as-sec` adds a margin
+ON TOP of the same gap — so Sound is the outlier, not Display. Those class names
+are family markers whose rules are ID-scoped on purpose ("so the class ratchet
+does not move", css/components.css), and one is pinned by
+`ui-improve-pass.test.mjs`. All four now carry that reason in `class-usage.mjs`'s
+`KNOWN` rather than sitting unexplained.
+
 **2026-09-22 — a `try`/`catch` cannot swallow a promise REJECTION, and this
 shell turns one into a full-screen overlay. FIXED at four sites.** `index.html`
 installs an `unhandledrejection` listener that paints `#__err_overlay` over the
@@ -2190,7 +2322,7 @@ Deferred with reasoning, none lost:
   the other hardcoded positions in the same file before closing it — two of the
   three here were fixed and the third was left, which is how it survived.
 
-## NAMES FIXED, GEOMETRY OPEN — estoril scenery emitters do not land where their names say (2026-09-22)
+## FIXED — estoril scenery emitters did not land where their names say (2026-09-22)
 
 Found while fixing the Parabolica's bank and gravel apron (PR #188). The
 apron fix is landed and correct; this is the larger thing underneath it, left
@@ -2342,3 +2474,48 @@ the four `_sceneryShift` readers named above have to be understood together.
 
 The probe A/B is the acceptance test: the Parabolica should read as trees, the
 pit straight as structures.
+
+### Closed the same day: the shift is gone and the acceptance test passes
+
+`sceneryStartFrac: 0.96` removed. The acceptance test this entry named —
+"the Parabolica should read as trees, the pit straight as structures" — now
+passes:
+
+| `agent.mjs estoril scene --at` | before | after |
+|---|---|---|
+| 0.82, the Parabolica | 14 structures, gantry, grandstand, 5 motorhomes | 28 pines, 3 trees, marshal post |
+| 0.97, the pit straight | 11 trees, 22 pines | 22 structures, 2 gantries, grandstand, 2 motorhomes |
+
+The two hand-placed pit terraces are now "superseded by the pit complex", which
+is what a circuit's own pit block is for, and `estoril-aldeia` emits again.
+
+**What unblocked it was measuring the clip count as a distribution rather than a
+property.** The earlier attempt treated the shipped `clip 1 severe` as evidence
+the layout was settled, so +2 read as damage. `place` has no prop-vs-prop check,
+so any shift re-rolls every procedural placement. Sampling six values:
+
+| `sceneryStartFrac` | severe clips |
+|---|---|
+| **0.96 (shipped)** | **1** |
+| 0.80 / 0.60 / 0.40 / 0.00 | 3 |
+| 0.20 | 4 |
+
+0.96 was the outlier. Three is this circuit's normal draw, so raising the clip
+baseline 1 -> 3 is a re-measurement, not a tolerance widened to pass a change.
+Coplanar went the other way and the baseline came DOWN, 5 -> 0: the z-fighting
+was the mis-seated dressing all along.
+
+Two real regressions were fixed rather than absorbed, both emitters finally
+landing where their `s = k / n` guards intended: `estoril-aldeia` moved
+K(0.30) -> K(0.26) (its footprint reached a parallel stretch of road), and the
+tree loop's inner lateral bound went 44 -> 48 m (one tree grounded 6.5 m up at
+frac 0.219).
+
+**Still true and still worth knowing:** `_sceneryShift` is read by the engine as
+well as the scenery — `dress` in `buildCenterline`, `shiftS` in
+`transformSceneryApi`, the inverse `HKSHIFT` beside `indexSolidAt`, and
+`bakedModel`'s `sceneryCoordinates` guard. Removing it for a circuit moves
+terrain and procedural dressing too, which is why this needed the probe A/B as
+its gate rather than the audits alone. Any other circuit carrying a
+`sceneryStartFrac` should be checked the same way, with the probe, before its
+value is trusted.

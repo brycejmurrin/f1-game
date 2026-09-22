@@ -15,7 +15,7 @@
     // Was 0.96, which put the line inside a corner — a start line is
     // always on a straight. See docs/tracks/START-LINES.md.
     startFrac: 0.0000,
-    sceneryStartFrac: 0.96,
+    // sceneryStartFrac removed 2026-09-22 — see the banner in js/circuits/scenery/estoril.js
     name: "ESTORIL",
     gp: "Portuguese GP",
     country: "Portugal",
