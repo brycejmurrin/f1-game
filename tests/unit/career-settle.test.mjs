@@ -718,13 +718,21 @@ test("changing the promise re-stamps the offers already on the table", () => {
   // the contract at another.
   const { Career, offers } = rollWith(99, 1);
   assert.ok(offers.length > 0, "a expired 1-year deal draws seats");
-  const before = offers.map((o) => o.goal.value);
+  const before = offers.map((o) => ({ type: o.goal.type, value: o.goal.value }));
   Career.setAmbition(2);
-  const after = Career.data().offers.map((o) => o.goal.value);
-  assert.deepEqual(after, before.map((v, i) =>
-    Career.goalValueFor({ id: Career.data().offers[i].teamId, tier: 4 }, 2)),
-    "every offer's target is re-derived at the new rung");
-  assert.ok(after.every((v, i) => v <= before[i]), "an ambitious rung never softens a target");
+  const after = Career.data().offers.map((o) => ({ type: o.goal.type, value: o.goal.value }));
+  // KIND-AWARE, because a contract no longer always promises a championship
+  // position: the re-stamp re-derives through the goal's OWN kind, and the kind
+  // itself is seeded on the year so it must not move when the rung does.
+  assert.deepEqual(after.map((g) => g.type), before.map((g) => g.type),
+    "the rung changes the target, never the kind");
+  for (const g of after) {
+    const team = { id: Career.data().offers[after.indexOf(g)].teamId, tier: 4 };
+    assert.equal(g.value, Career.GOAL_KINDS[g.type].value(team, 2),
+      `${g.type}'s target is re-derived at the new rung`);
+  }
+  assert.ok(after.every((g, i) => g.value <= before[i].value),
+    "an ambitious rung never softens a target");
 });
 
 test("ambIdx refuses a rung that is not one", () => {
@@ -737,4 +745,78 @@ test("ambIdx refuses a rung that is not one", () => {
       `a deal carrying ${JSON.stringify(bad)} reads as the default rung`);
   assert.equal(Career.setAmbition(99), Career.AMBITION.length - 1, "setAmbition clamps high");
   assert.equal(Career.setAmbition(-5), 0, "and low");
+});
+
+// ── GOAL KINDS ──────────────────────────────────────────────────────────────
+// A contract used to promise exactly one thing. Each kind derives its target
+// from an expectation that already existed, so none of this invents a balance
+// number — and champPos stays the fallback so no signed deal changes meaning.
+
+test("champPos is the fallback, so an unknown or missing kind cannot silently pass", () => {
+  const Career = loadDriver();
+  Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+  Career.engage(true);
+  const c = Career.data();
+  c.rep = 50;
+  // P1-or-better, which a flat empty season misses. An unknown type must
+  // resolve through champPos and MISS — not fall through to "met".
+  c.deal.goal = { type: "no-such-kind", value: 1 };
+  Career.rollover();
+  assert.equal(c.goalResult.met, false,
+    "an unrecognised goal kind resolves as champPos, not as satisfied");
+  assert.equal(c.rep, 45, "and it is priced exactly as champPos would be");
+});
+
+test("every declared kind derives a target and labels it", () => {
+  const Career = loadDriver();
+  Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+  Career.engage(true);
+  const team = { id: "haas", tier: 4 };
+  for (const type of Career.GOAL_ORDER) {
+    const kind = Career.GOAL_KINDS[type];
+    const v = kind.value(team, 1);
+    assert.ok(Number.isFinite(v), `${type} must derive a finite target`);
+    const label = Career.goalLabel({ type, value: v });
+    assert.ok(label && label.length > 4, `${type} must label itself`);
+  }
+});
+
+test("ambition shifts every kind that HAS a target, in the same direction", () => {
+  const Career = loadDriver();
+  Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+  Career.engage(true);
+  const team = { id: "haas", tier: 4 };
+  for (const type of ["champPos", "teamPos"]) {
+    const kind = Career.GOAL_KINDS[type];
+    const bold = kind.value(team, 2), asked = kind.value(team, 1), safe = kind.value(team, 0);
+    assert.ok(bold <= asked, `${type}: promising more never asks for less`);
+    assert.ok(safe >= asked, `${type}: promising less never asks for more`);
+  }
+  // beatMate is binary — there is nothing to scale, and that is deliberate.
+  assert.equal(Career.GOAL_KINDS.beatMate.value(team, 2), 0);
+});
+
+test("each kind resolves against the season it was written for", () => {
+  const Career = loadDriver();
+  const K = Career.GOAL_KINDS;
+  const season = { pos: 4, cPos: 6, wins: 1, podiums: 3, matePos: 9 };
+  assert.equal(K.champPos.met(4, season), true, "P4 meets a P4 target");
+  assert.equal(K.champPos.met(3, season), false, "and misses a P3 one");
+  assert.equal(K.teamPos.met(6, season), true, "the team's own position, not the driver's");
+  assert.equal(K.teamPos.met(5, season), false);
+  assert.equal(K.beatMate.met(0, season), true, "P4 is ahead of a team-mate's P9");
+  assert.equal(K.beatMate.met(0, { ...season, matePos: 2 }), false);
+  assert.equal(K.beatMate.met(0, { ...season, matePos: null }), true,
+    "no team-mate on the board is not a failure to beat one");
+});
+
+test("the kind is drawn from the seed and the year, so it cannot be rerolled", () => {
+  const a = loadDriver(); a.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+  a.engage(true);
+  const b = loadDriver(); b.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+  b.engage(true);
+  assert.equal(a.data().deal.goal.type, b.data().deal.goal.type,
+    "the same seed and year draw the same kind");
+  const years = new Set([2026, 2027, 2028, 2029, 2030, 2031].map((y) => a.goalTypeFor(y)));
+  assert.ok(years.size > 1, "and six seasons do not all promise the same thing");
 });
