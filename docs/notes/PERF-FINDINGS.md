@@ -3261,6 +3261,16 @@ records how the first attempt was VOID without those.
 
 ### The frame loop is clean EXCEPT the shadow path
 
+> Errata (2026-09-22): the closure this section reports as still live is
+> GONE. The shadow rebuild has since been extracted out of `render()` into
+> `js/render/shared/shadow-pass.js`, and the allocation went with it —
+> `sunPass`/`lampPass` now hold no arrow closure and no argument-position
+> array literal, and every scratch buffer (`_mLView`, `_shadowMats`,
+> `_shPlanes`) is a module-level Float32Array built once in `create()`.
+> Re-verified by a full re-audit of the hot path, which found nothing else
+> to add. The METHOD note below still stands and is why this was worth
+> re-reading: grep for `(` followed by `[`, and for `=>` inside the body.
+
 A hunt for per-frame allocation across `render()` (js/game.js, brace-matched
 6191-7916, 1,725 lines) and `updateCar()` (1,333 lines) found `updateCar` clean
 and `render` clean of the churn this ledger has spent rounds removing — no

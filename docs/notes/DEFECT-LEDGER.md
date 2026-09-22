@@ -197,6 +197,63 @@ exactly this reason). `js/career/career.js`'s `prizeFor(0)` returned
 `PRIZE[-1]`, i.e. `undefined`, which would make `career.money` NaN for the rest
 of a save — defensive, no caller reaches it today.
 
+**2026-09-22 — the TELEMETRY tab coloured its compare delta backwards. FIXED.**
+`js/data/telemetry.js` computes the compare gauge's delta and the lane board's
+with the same expression and comments both the same way:
+
+```js
+const delta = timeAtDist(view.compare.cum, dP) - t;   // >0: compare is behind
+const dl    = timeAtDist(lane.cum, dRef)     - t;     // >0: this lane is behind the ref
+```
+
+so `dh-pos` is the SLOWER side on each. `css/data.css` had
+`.dh-laneboard-dl.dh-pos -> --slower` (right, and commented "behind the
+reference") and `.dh-gdelta.dh-pos -> --faster` (inverted), fifty lines apart —
+so comparing two drivers painted the TRAILING one green and the leader red.
+
+**Neither half is wrong alone**, which is the whole reason it survived: the JS
+sign is right, the CSS is valid, and each rule is individually plausible. Only
+the PAIRING is wrong. A screenshot would not have caught it either — a green
+number and a red number both look like a working widget unless you already know
+which car is ahead. So `tests/unit/delta-sign-colour.test.mjs` asserts the
+INVARIANT rather than the values: every delta class keyed on the ">0 = behind"
+convention must resolve `.dh-pos` to the same token, and it first checks that
+the source really does still use one convention, so the assertion cannot quietly
+start measuring nothing. It fails 2 of 3 on the old CSS.
+
+**2026-09-22 — four small UI/data findings, RECORDED not fixed.** Each is real
+and each is cosmetic or inert; none is worth a rider on a bug-fix batch, and a
+UI session with a browser should take them together:
+
+- `js/ui/hud.js:123` toggles `hud-onboard` on `document.body` on every camera
+  switch and **nothing reads it** — no CSS rule, no other JS (found independently
+  by two agents). The interesting half is why it exists: `ONBOARD_IDS` groups
+  `cockpit`, `hood` and `tcam`, but only `cockpit` gets HUD decluttering, via the
+  separate and narrower `cockpit-cam` class (`css/track-detail.css`). So the dead
+  toggle is a hint that HOOD and T-CAM are missing treatment COCKPIT has —
+  a design question, not a deletion.
+- `index.html:746,850,907` — Settings > Display's three collapsible sub-panels
+  carry `pm-hud-sub` / `pm-renderer-sub`, which have zero CSS anywhere. The
+  identical construct on the Music & Sound page uses `as-sec`, which
+  `css/tuner.css` gives a bottom margin, so the Display sections sit flush where
+  Sound's do not.
+- `js/data/live.js:312`, `js/data/telemetry.js:940,950` — `dh-class-rows`,
+  `dh-gdrscell`, `dh-gdeltacell` are applied and have no rules. Silent today
+  because their compound siblings carry the layout; `dh-gdrs2` DOES have a
+  modifier rule, which suggests these were meant to parallel it.
+- `index.html:399-400` — `#hud-gap-ahead`/`#hud-gap-behind` carry `hud-gap`
+  (singular), which nothing targets; all styling comes from `.hud-gaps > div`.
+  Harmless, but a naming trap: removing the class does nothing, and a future
+  `.hud-gap` rule would hit both children with no way to target one.
+
+The mechanical sweep behind these is worth repeating rather than the list:
+534 classes defined across `css/*.css` against 488 referenced from `index.html`
+and `js/**`, with the **applied-but-undefined direction unguarded** —
+`tests/unit/component-inventory.test.mjs` only checks the opposite one. 28
+`!important` uses were each checked and none fights a token; the 11 same-selector
+cross-file differences all sit in disjoint `@media (orientation:…)` blocks, i.e.
+the deliberate per-viewport re-tuning `COMPONENTS.md` documents.
+
 **2026-09-22 — `DIFF[difficulty]` undefined took every physics tick down. FIXED.**
 `js/game.js` `updateCar()` read `DIFF[difficulty]` unguarded and dereferenced
 `dd.ai` on the first AI car; `js/race/quali-model.js` already fell back to
