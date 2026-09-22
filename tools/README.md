@@ -146,6 +146,7 @@ Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 |---|---|---|
 | **gfx/chunk-reach.cjs** | How much chunked scenery a pass reaches, counted headlessly: re-bins triangles into 72 m cells like `createChunkedMesh`. | — |
 | **gfx/chunk-share-census.mjs** | Do adjacent chunks share a lamp list? Per baked `LampChunks` table: empty chunks, adjacent-equal pairs, longest run. | webgl-debug / lighting-tuner |
+| **gfx/frame-hitch.mjs** | Measures per-rAF-callback main-thread cost and finds PERIODIC hitches (spike train + autocorrelation). | playwright-probe / webgpu-debug |
 | **gfx/gfx-probe.mjs** | WEBGPU + THREE screenshot probe with the right Chromium flags: `--backend`, `--tlx-webgpu`, `--lavapipe`, `--lite`. | webgpu-debug / mcp-probe |
 | **gfx/gltf-selftest.mjs** | Self-test for the `js/render/shared/gltf.js` GLB loader (Node ESM, no deps). | webgl-debug |
 | **gfx/glx-call-census.mjs** | What does ONE GLX frame cost in GL calls? Wraps the live WebGL2 context mid-race; per-frame draw/bind/upload averages. | webgl-debug |
