@@ -27,7 +27,7 @@
         return [r1, u2, t2];
       };
 
-      const openArea = (s) => (s >= 0.90 || s <= 0.10) || (s >= 0.30 && s <= 0.40);
+      const openArea = (s) => (s >= 0.88 || s <= 0.10) || (s >= 0.30 && s <= 0.40);
       // A plantation is a GRID: identical trees, identical spacing, identical
       // height, in ranks you can sight down. Every other circuit in the game
       // hash-scatters its trees precisely so they do NOT line up — here the
@@ -39,9 +39,17 @@
       // one a driver actually resolves — gets them; the ranks behind use a
       // stripped two-primitive palm whose silhouette (bare trunk, one dense
       // crown) is all that survives at 40 m anyway.
+      // The back straight runs 93-130 m from the pit straight, and the
+      // stepped main stand and canopy fill the gap between them out to 40 m
+      // from the pit straight's centreline: the back ranks stop short of it.
+      const PIT_STRAIGHT = [];
+      for (let s = 0.935; s < 1.035; s += 0.004) PIT_STRAIGHT.push(K(s % 1));
+      const nearPitStraight = (x, z, r) =>
+        PIT_STRAIGHT.some((k) => Math.hypot(px[k] - x, pz[k] - z) < r);
       function farPalm(k, side, dist, h, col) {
         const a = anchor(k, side, dist);
         if (onTrack(a.c[0], a.c[2], 3.5)) return;
+        if (nearPitStraight(a.c[0], a.c[2], 44)) return;
         const b = [a.r, a.u, a.t];
         out._mat = MAT.WOOD;
         addCyl(out, a.c, 0.30, h, [0.42, 0.35, 0.22], 4, b);
@@ -255,8 +263,10 @@
         }
       }
       {
+        // Outside the lap (-1): on the infield side (+1) it stood on the 0.464
+        // carriageway at every gap tried, 120-280 m, so it never emitted.
         const k = K(0.42);
-        const a = anchor(k, 1, 180);
+        const a = anchor(k, -1, 180);
         const b = [a.r, a.u, a.t];
         modelGroup("sepang-klia-skyline", {
           center: vadd(a.c, a.u, 26), size: [40, 56, 120], basis: b,
@@ -277,7 +287,9 @@
         addCyl(out, a.c, 0.24, 22, [0.24, 0.24, 0.26], 6, [a.r, a.u, a.t]);
         addBox(out, vadd(a.c, a.u, 22.4), [1.8, 0.7, 3.4], [0.96, 0.94, 0.84], [a.r, a.u, a.t]);
       }
-      for (const [i, s] of [[0, 0.020], [1, 0.035], [2, 0.050]]) {
+      // 0.024, not 0.020: at 0.020 the first walk stood coplanar with the end
+      // of the stepped main stand (along 0.958-0.020, left, out to 31 m).
+      for (const [i, s] of [[0, 0.024], [1, 0.035], [2, 0.050]]) {
         const a = anchor(K(s), -1, 30);
         const b = [a.r, a.u, a.t];
         modelGroup(`sepang-shade-walk-${i + 1}`, {
@@ -292,8 +304,9 @@
         });
       }
       for (const [id, s, side, gap] of [
-        ["t1", 0.072, 1, 52],
-        ["t15", 0.900, -1, 46],
+        // 40 / 30 m: at 52 / 46 the footprint reached the road (rejected).
+        ["t1", 0.072, 1, 40],
+        ["t15", 0.900, -1, 30],
       ]) {
         const a = anchor(K(s), side, gap);
         const b = [a.r, a.u, a.t];
