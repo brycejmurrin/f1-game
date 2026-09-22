@@ -28,6 +28,16 @@
 // being selected. The point is to make the distinction cheap to check, so the
 // list is ordered by risk and the tail is the place to look first.
 //
+// RUN THE RESULT AT --workers=1. Measured 2026-09-22: the first sweep of the 12
+// unreachable specs used --workers=4 on this 4-core box, Playwright spawned
+// more than that, SwiftShader made every one CPU-bound, and loadavg hit 22. It
+// reported 14 failures across three specs. Every one was the box: touch-steer,
+// parts-catalog and parts-setup-ids each pass 100% alone. Note especially that
+// two of the fourteen were ASSERTION failures, not timeouts — touch-steer
+// measures steering ramps over TIME, so contention shows up as a wrong number
+// rather than a slow one, and "it failed fast, so it is real" is exactly
+// backwards for that kind of test.
+//
 //   node tools/ci/spec-staleness.mjs                 # last 30 days
 //   node tools/ci/spec-staleness.mjs --days 60
 //   node tools/ci/spec-staleness.mjs --json
