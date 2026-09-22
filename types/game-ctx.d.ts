@@ -247,7 +247,7 @@ interface GameEls {
   flag: HTMLElement; minimap: HTMLElement;
   lights: HTMLElement; announce: HTMLElement;
   announceNum: HTMLElement; announceWho: HTMLElement; announceText: HTMLElement;
-  overlay: HTMLElement; subtitle: HTMLElement; audiostate: HTMLElement;
+  overlay: HTMLElement; audiostate: HTMLElement;
   lighting: HTMLElement; camtune: HTMLElement; flyby: HTMLElement;
   select: HTMLElement; selTitle: HTMLElement; selTeams: HTMLElement;
   selTracks: HTMLElement;

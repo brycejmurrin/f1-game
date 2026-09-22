@@ -2058,3 +2058,115 @@ spec file, so assertions about that feature filed under an unrelated name are th
 ones left behind.** Two selection-screen cases were sitting in a file named for
 button/touch steering. When a screen is reworked, grep the id across all of
 `tests/`, not just the spec that owns the screen.
+
+## 2026-09-22 — a watcher that can never fire looks exactly like a run that never finishes
+
+Waiting on `deploy.mjs --gate-only`, the watcher was armed as:
+
+```sh
+until [ ! -e /proc/$(pgrep -f 'deploy.mj[s]' | head -1) ]; do sleep 20; done
+```
+
+It burned its entire 30-minute budget and reported "expired with no events". The
+gate had in fact passed 14 minutes in.
+
+The defect is in the absent case, which is the ONLY case the loop exists to
+detect. When the process is gone `pgrep` prints nothing, `$(...)` expands to the
+empty string, and the test becomes `[ ! -e /proc/ ]` — `/proc` exists, so the
+condition is false forever. The loop is correct exactly while the thing it
+watches is alive and broken exactly when it is not. Reproduced directly:
+
+```
+$ P=$(pgrep -f 'nosuchproc_xyz[1]' | head -1); [ ! -e /proc/$P ] && echo exit || echo loop
+loop
+```
+
+The form that works tests the string, not a path built from it:
+
+```sh
+until [ -z "$(pgrep -f 'deploy.mj[s]')" ]; do sleep 15; done
+```
+
+Both edges checked before trusting it: empty pattern exits, live pattern waits.
+The `[s]` bracket keeps the waiter's own command line from matching its pattern
+(`deploy.mj` followed by `[` is not `deploy.mjs`); it does NOT stop the wrapping
+`/bin/bash -c` of the watched command from matching, which is harmless because
+the wrapper and its child die together.
+
+Two rules come out of this, both now in AGENTS.md §Verification 4:
+
+1. **Test the absent case.** A waiter is a predicate about something NOT being
+   there, and every bug in one hides on that side. "It didn't fire" and "it
+   isn't finished yet" are the same observation from outside.
+2. **The waiter is not the verdict.** The result was still read correctly here
+   only because it was taken from the run's own log line (§Verification 5), not
+   from the watcher. A vanished process says something exited, never that it
+   passed — and a waiter that silently cannot fire will otherwise stretch a
+   finished run into an apparently hung one for as long as its timeout allows.
+
+## 2026-09-22 — what the title-screen restructure's read-only hunts found, and what ui-scale.spec cannot see
+
+Three read-only subagent passes ran while the phone restructure's gate was in
+flight (`claude/title-car-art`, c0d02384e1..f1d581065b). The findings that
+are NOT fixed in that branch, kept here so the next person on the title
+screen does not re-derive them. The classifier is `js/ui/sheet-shape.js`
+(`classifyBody`, ~L365); several comments and three commit messages cite it under a
+`game/` directory it has never lived in.
+
+Pre-existing, unfixed, each with the code that proves it:
+
+1. **The UI-SIZE geometry cap is gated in raw px while density is
+   zoom-corrected.** `@media (max-width: 899px), (max-height: 699px)` wraps
+   the `zoom: var(--ui-compact-brand-scale)` / `--ui-compact-scale` cap
+   (css/menus.css ~L680), but `data-density="compact"` comes from
+   `innerHeight / --ui-scale < 600`. A 1440x900 window at >= 152 % is compact
+   with the cap block unmatched: the wide+compact phone composition fires and
+   `#overlay > * { zoom: var(--ui-scale) }` runs uncapped — the doubled
+   geometry the cap's own comment says it exists to prevent.
+2. **The wordmark is outside the brand-text multiplier.** The compact rule
+   `:is(#audiostate, #disclaimer, #soundbtn) { font-size: calc(var(--fs-micro)
+   * var(--ui-compact-brand-text)) }` omits `#title`, whose clamp then loses
+   every dependence on `--ui-scale` once the brand zoom is capped at 1.
+   Painted on 393x852: 51.1 px at 100 %, 57.2 at 130 %, 51.1 at 160 % — it
+   SHRINKS crossing the density threshold (s = 1.42). On 852x393 it is pinned
+   at the clamp cap (48 px) from 100 % up, so adding `#title` there changes
+   nothing; the tall phone is where it matters.
+3. **Hysteresis vs `@media (orientation:)` near square.** `classifyBody`
+   flips `data-shape` at ratio 1.05 / 0.95 with memory; the orientation query
+   flips at exactly 1.0. A fresh 800x820 load is `wide` yet `orientation:
+   portrait` — css/responsive.css's portrait block paints the portrait
+   widths while the tall `#overlay` grid does not: half of each composition.
+   The comment claiming the two "agree in result" holds only outside the band.
+4. **The 699 / 700 seam.** `@media (max-width: 700px)` (art opacity 0.22) and
+   `(min-width: 700px)` (the 13/10 aspect rule) both match at exactly 700;
+   the phone rules use `max-width: 699px` while `data-shape="tall"` continues,
+   so a 700 px-wide portrait window keeps the tall grid but loses the phone
+   art box and title rung. The 899 / 900 seam is clean (both raw px).
+5. **Frame one classifies at scale 1.** Both the inline pre-paint script
+   (index.html ~L356) and `classifyBody` read `--ui-scale` from computed
+   style, and game.js restores the stored value later; sheet-shape.js says so
+   itself ("corrected later by watchScale()"). A player at a stored 200 % on
+   1440x900 paints normal, then restructures to compact — a flash, and a
+   wrong golden for anything captured before the correction.
+6. `classifyBody` has no zero guard (`classify` does): innerWidth 0 gives
+   ratio Infinity and latches `tall`.
+7. `#soundbtn { min-height: var(--tap) }` paints 52 x brand-zoom: 39 px at
+   75 % (compact, zoom 0.75) and 26 px at 50 % — under the 44 px floor the
+   token's comment cites.
+8. `--wide-at: 620px` writes `data-width`, which no stylesheet reads. Dead.
+
+Why none of this is red: `tests/specs/ui-scale.spec.js` `fits()` walks only
+`button, input, select, a[href], [role=option], [role=tab]`, flags offscreen
+and clipped-without-a-scroller, and asserts `scrollWidth - clientWidth <= 1`
+— at two viewports (852x393, 393x852) and six scales (50/100/115/130/150/200).
+No font-size, no min-height, no composition identity, no 1280x800, no square,
+no 700 px, no 75 %, and the scale is set post-boot via `__apex.uiScale`, never
+restored from the store. It caught the one thing it is built to catch (the
+180 % art box adding to scrollWidth, fixed in f1d581065b) and by design can
+see none of the eight above.
+
+Also measured, for the record: the restructure's landscape doors paint at
+17 px, not the 14 px c0d02384e1 claimed — the compact block's `calc(var(--fs-4)
+* var(--ui-compact-text))` is later at equal specificity — and every phone
+screenshot in that commit was taken at 17 px. Fixed in f1d581065b by removing
+the dead declaration rather than keeping a value that never applied.
