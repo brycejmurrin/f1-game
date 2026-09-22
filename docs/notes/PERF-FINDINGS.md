@@ -5013,3 +5013,106 @@ here means anything (§2z made the same mistake in the other direction). What IS
 exact here is how many times the governor asks for a reallocation, which is a
 pure function of `tick()` and needs no GPU at all. Any future claim about this
 behaviour should be a move count over a simulated race, not a frame time.
+
+## 2ab. Three instruments were measuring something else (2026-09-22)
+
+§2aa shipped a real governor fix and the player reported the hitch unchanged,
+so the hunt reopened on three.js/WebGPU — the configuration they actually run
+(RENDERER = THREE.JS, THREE PATH = WebGPU, i.e. TLX on three's WebGPURenderer,
+never WGX). Four rounds later the code changes are small and the instrument
+changes are not, which is the finding.
+
+### 1. Every automated TLX/WebGPU timing this project has ever taken was of the soft blit
+
+`tlx.js` arms its soft blit — a GPU readback plus `putImageData` standing in for
+`present()` — whenever `!forceWebGL && (_softAdapter || _headless || cap==="1")`,
+and `_headless` is `/HeadlessChrome/i.test(ua) || navigator.webdriver`.
+Playwright sets `navigator.webdriver` behind any UA, so **every automated run
+there has ever been took that branch**, on hardware images too. Two consequences,
+both large:
+
+- The back-pressure branch (`tlx.js:3455`) draws NOTHING while a read is in
+  flight. Measured: **8,946 rendered frames out of 17,892 rAF callbacks** — half
+  the samples are no-ops, and the p50 they set is the cost of doing nothing.
+- `SOFT_READ_STALE_MS` is 20,000, so an abandoned read restarts the pipeline
+  every 20 s. That produced bind-group and buffer bursts at 5.2 / 25.2 / 45.5 /
+  65.5 / 85.5 / 105.5 / 125.5 / 145.5 s — **a period of exactly 20.0 s with zero
+  variance**, which reads as a textbook periodic hitch and is entirely the
+  instrument. `softRead.abandoned` was 9 across those 150 s.
+
+`_capPref !== "0"` is the escape hatch. `gpu-census.yml` now passes
+`--ls apex26.wgxCapture=0` on both TLX legs by construction, and
+`frame-hitch.mjs` defaults to native present with the blit behind `--capture`.
+§2t's 46.9-vs-66.2 luma gap was read off the blit column.
+
+### 2. The census had no control, and its tail row could not see a tail
+
+The workflow's `ls` input is documented "Extra localStorage for ALL game checks"
+and is applied AFTER the per-leg pin, so run 194's request — which set
+`apex26.tlxForceGL=0` to reach WebGPU — also forced the **WebGL2 control leg**
+onto WebGPU. Both TLX legs reported `api=webgpu`; that run's 22.2-vs-37.7 fps
+"gap" is run variance between two identically configured legs.
+
+Separately the tail row aggregated per-beat percentiles as `max(p95)`, which
+collapses onto whichever beat holds the worst stall: run 195 printed
+`p95 == p99 == max` on all four legs. The census now also runs `analyse()` over
+the wall cost of every rAF callback (`hitch:`), which can see a PERIOD.
+
+### 3. The sampling heap profiler reports what SURVIVES, not what is allocated
+
+This is the one worth carrying forward. `analyseHeap()` measured **255 KB/frame
+allocated, 28.4 MB/s, a collection about every second freeing a median 25.8 MB**
+on the real present path — the first allocation measurement here ever, because
+`snapMem()` forces a collection before reading and therefore reports RETENTION
+(retention was flat at 2.6 MB/min and the hitch stayed; flat retention does not
+clear GC). CDP `HeapProfiler` was added to name the site, and reported 0.5
+KB/frame and no dominant site — a 500x disagreement.
+
+`--selftest-kb` settled it by injecting a KNOWN 500 KB/frame of 56-byte objects:
+
+| instrument | moved by | verdict |
+|---|---|---|
+| `analyseHeap` sawtooth | +195 to +217 KB/frame of a known +500 | usable; under-reports (it sums positive deltas between per-frame samples, so anything allocated and collected between two samples is invisible) and cannot over-report |
+| CDP sampling profiler | +0.3 KB/frame; the injector ranked **1.2%**, below fourteen three.js internals | unusable for garbage |
+
+The tell is the sample COUNT: **395 samples in 90 s**, where a 16 KB interval
+against ~50 MB/s owes ~275,000. V8 holds each sampled object behind a weak
+handle and decrements the node when that object is collected, so the profile
+describes what is still ALIVE — 395 x 16 KB is ~6.5 MB, which is the window's
+retained growth. **Pure garbage is erased from it by definition.** A second
+bias rides on top: V8 samples an object of size s with probability
+`1-exp(-s/rate)`, ~1/293 for 56 bytes at a 16 KB rate against ~0.98 for 64 KB,
+so raw `selfSize` under-counts small-object sites by nearly three hundred times
+— exactly the shape of a per-draw cache key. `analyseAlloc()` now corrects that
+bias, says `means: RETAINED` on every result, and refuses to fall back to the
+tree when `samples` is absent.
+
+**Rule: short-lived garbage is attributed by ABLATION** — change one site,
+re-run, read `analyseHeap` — never by a sampling profile.
+
+### The two code changes, and what they were worth
+
+- **vendor patch 6** backports three.js PR #34553 (#34535): `hash` is
+  `( ...params ) => cyrb53( params )`, so `RenderObject.getDynamicCacheKey()`
+  minted a rest array per render object per draw via `get needsUpdate()`.
+  Correct, upstream's own fix, and measured at **254.9 -> 249.7 KB/frame**. Two
+  per cent. Upstream measured the same shape at 120,000 arrays/s for 1,000
+  meshes at 120 fps; this project draws ~217 objects, and that ratio is the
+  whole difference. Retire on the r187 bump.
+- **`materialFor` key memo** — `matCache.get(key)` needs the string before the
+  lookup, so ~15 intermediate strings were built on every call, hit or miss, at
+  150-400 draws a frame. Memoised on the opts object behind a field-by-field
+  compare (every caller mutates a long-lived scratch object in place).
+
+### What is NOT established
+
+That any of this is the reported hitch. GC-to-spike enrichment sits at
+**1.65-1.73 across every real-present run** — consistently above chance,
+consistently below the 1.8x bar `analyseHeap` needs to name it — and no leg of
+census 196 came back `periodic=true` on real Metal. What census 196 does show,
+on every leg, is a main-thread rAF cost p50 near zero against frame intervals
+of 30-70 ms: on that runner the main thread is not the bottleneck. A software
+rasteriser with a 3.6 ms p50 and 14% of frames over the spike threshold is a
+poor place to test a correlation, and the macOS runner is not a player's
+machine. The allocation is worth cutting on its own terms; the periodicity
+question is open.
