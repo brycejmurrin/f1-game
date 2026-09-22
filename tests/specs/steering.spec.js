@@ -69,18 +69,34 @@ async function startLiveRace(page) {
    with no clue which step was slow.
    Every test needs a LIVE race - the real sim, twenty cars built, the physics
    stepped - and under SwiftShader a single page.evaluate against it measures
-   20-28 s while the build alone takes 30-90 s. Measured on this container:
-   80-190 s per test, with the work genuinely progressing throughout (the one
-   test that fits inside 120 s returns a real assertion result, not a hang).
+   20-28 s while the build alone takes 30-90 s.
    playwright.config.js's own note asks that a case needing materially more
    than the shared budget declare it at its own site; this is that declaration.
    It does NOT paper over a hang: the actionability stall these tests used to
    suffer was a locator-click problem and is fixed in startLiveRace above, and
    actionTimeout stays 60 s, so a stuck locator still fails in a minute and
    names itself. Only genuinely slow WORK reaches this budget.
-   480 s because the heaviest case here - road-follow, which drives four full
-   cornering runs - measured 343.5 s; the rest land between 80 s and 210 s. */
-test.describe.configure({ timeout: 480_000 });
+
+   170 s, RE-MEASURED 2026-09-22, and the old number is why it matters. This
+   read 480 s, justified by "road-follow measured 343.5 s; the rest land between
+   80 s and 210 s" - figures taken before Mesa llvmpipe replaced SwiftShader on
+   the browser jobs (run 35062479811, 8-12x faster). Nothing here has needed
+   that budget since. Measured today, whole file, both environments:
+
+     CI, Mesa llvmpipe (the gate's own runner)   slowest test 26.2 s
+     this container, SwiftShader, 1 worker       slowest test 139.9 s
+                                                 (13 tests, 10 m 02 s wall;
+                                                  road-follow 68.0 s, not 343.5)
+
+   The cost of overstating it was NOT minutes, it was COVERAGE.
+   select-specs.mjs excludes any spec declaring >= SELECTED_GATE.perTestTimeoutSec
+   (180 s), so this file was skipped by the change-aware gate on EVERY push and
+   its only scheduled coverage was the nightly rota, which reaches `input` once
+   every eleven nights. A sign error in "steering has authority to fight the
+   curvature drift" therefore shipped and sat red for five days. 170 clears the
+   slowest measured case by 21% and is under the gate's cap, so this file is
+   selected again. Re-measure before raising it; raising it costs the gate. */
+test.describe.configure({ timeout: 170_000 });
 
 const probe = (page) => page.evaluate(() => window.__apex.probe());
 
@@ -222,14 +238,61 @@ test.describe("Apex 26 — steering", () => {
     // Isolate the DRIVER's authority from the DRIVING-HELP assist: with the
     // assist off, held lock must move the car clearly further in the steered
     // direction than coasting does — proving manual steering controls the line.
-    // (lockDir = +sign(k) was named "inward" when "+k = right-hand corner" was
-    // believed; under the measured convention it is the outside. The assertion
-    // never cared which side — it measures authority relative to coasting.)
+    //
+    // INWARD. -sign(k), because the test's own name is FIGHT the drift: coasting
+    // runs the car wide to the outside (+sign(k) — the sibling road-follow test
+    // above asserts exactly that), so authority is what pulls it back.
+    //
+    // THIS LINE READ +sign(k) FOR FIVE DAYS AND THE COMMENT ABSORBED THE BUG.
+    // When the curvature convention was re-measured (+k = LEFT turn, so +sign(k)
+    // is the OUTSIDE), the note here was rewritten to say "the assertion never
+    // cared which side" — and the code was left alone. It cares. Steering a
+    // no-assist car further toward the outside of a corner at 22 m/s for 75
+    // ticks drives it off the circuit, and the assertion then graded an
+    // excursion: the failing state carried x = -8.100000381469727 against
+    // hw 6.6, speed 0.0005 m/s and a climbing rescueT — byte-identical on this
+    // box and on CI, a car beached against a barrier. Being a property of where
+    // it stopped rather than of the physics, the number wandered: 0.227 (dev box
+    // 2026-09-18), 0.262 (dev box 2026-09-22), 1.738 (CI llvmpipe 2026-09-22),
+    // on a deterministic fixed-timestep sim.
+    //
+    // MEASURED both ways at this corner (bahrain, k0 -0.0204, hw 7.00), authority
+    // in metres and whether the car was still on the circuit at the end:
+    //     speed 13 / 45 ticks   out  0.764  on-road  |  in  0.801  on-road
+    //     speed 13 / 75 ticks   out  1.587  on-road  |  in  2.064  on-road
+    //     speed 22 / 45 ticks   out -2.823  on-road  |  in  4.069  on-road
+    //     speed 22 / 75 ticks   out -16.389 OFF-ROAD |  in  9.505  on-road
+    // Inward is monotonic and positive at every regime, which is what an
+    // authority measurement looks like; outward goes NEGATIVE and diverges.
+    //
+    // 45 TICKS, NOT 75, AND THE GUARD BELOW IS WHY. With the sign corrected and
+    // the on-road assertion added, the first verification run failed on the
+    // COASTING baseline: "coasting ended 7.68 m off the centreline against a
+    // 7.00 m half-width". Running wide IS the drift this test names, and 1.25 s
+    // of it at 22 m/s is enough to leave the circuit with no input at all — so
+    // at 75 ticks there was no on-road measurement to be had in either arm, and
+    // the old assertion had been differencing two excursions. 45 ticks (0.75 s)
+    // keeps the baseline at x ~ -3.2 inside hw 7.00 and reads 4.069 m of
+    // authority. The SPEED is unchanged (22 m/s) and the FLOOR is unchanged
+    // (2 m) — shortening a hold until the car is still on the road is what makes
+    // the number mean anything; widening the floor would be the tolerance change
+    // AGENTS.md rule 9 forbids.
     await page.evaluate(() => window.__apex.setPhysics({ roadFollow: 0 }));
-    const lockDir = Math.sign(k0);
-    const zero = await run(page, { frac, speed: 22, steer: 0, throttle: false, ticks: 75 });
-    const held = await run(page, { frac, speed: 22, steer: lockDir, throttle: false, ticks: 75 });
+    const lockDir = -Math.sign(k0);
+    const zero = await run(page, { frac, speed: 22, steer: 0, throttle: false, ticks: 45 });
+    const held = await run(page, { frac, speed: 22, steer: lockDir, throttle: false, ticks: 45 });
     await page.evaluate(() => window.__apex.setPhysics({ roadFollow: 0.7 }));
+
+    // ANTI-VACUITY, and the whole reason this test went unread for five days: the
+    // number below only means "steering authority" while the car is on the
+    // circuit. Assert it, so a future regime change cannot quietly go back to
+    // grading a car in the run-off.
+    for (const [what, r] of [["coasting", zero], ["held lock", held]]) {
+      expect(Math.abs(r.after.x),
+        `${what} ended ${Math.abs(r.after.x).toFixed(2)} m off the centreline against a ` +
+        `${r.after.hw.toFixed(2)} m half-width — it left the road, so this is not an authority measurement`
+      ).toBeLessThan(r.after.hw);
+    }
 
     const dxZero = zero.after.x - zero.before.x;
     const dxHeld = held.after.x - held.before.x;   // should be far more toward lockDir

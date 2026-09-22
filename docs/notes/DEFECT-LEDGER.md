@@ -1942,6 +1942,12 @@ knob write is a measurement of nothing.
 
 ### 2026-09-18 — two `steering.spec.js` ASSERTIONS are red, and the table above is stale about it
 
+> **RESOLVED 2026-09-22 — the sign was inverted and the comment absorbed the bug.
+> `symmetry` self-resolved (green on CI twice today); `curvature drift` was a
+> real defect in the TEST, fixed. The section below is the diagnosis as it stood
+> on 09-18 and is left intact; the resolution is the "2026-09-22 — a test that
+> steered off the circuit" entry further down.**
+
 The 2026-09-14 row reads `9 (steering.spec.js) | every one 103-142 s against a
 120 s test timeout | box, not code`. That population was fixed at source in
 `20e57ea174` (rAF-starved actionability, now DOM clicks). These two are not
@@ -1979,6 +1985,103 @@ so either its premise moved under it (as `OVERALL SPEED`'s hardcoded "straight"
 did above) or player steering authority is genuinely near zero with assists
 off, which the physics reference makes a product defect, not a test one.
 
+
+### 2026-09-22 — a test that steered off the circuit, and eleven nights between it and anyone noticing
+
+`steering has authority to fight the curvature drift` held lock with
+`lockDir = Math.sign(k0)`. Under the measured convention `+k` is a LEFT turn, so
+`+sign(k)` is the **outside** of the corner — the test's own sibling
+(`road-follow`) asserts exactly that, `expect(Math.sign(dxOff)).toBe(Math.sign(off.before.k))`
+for a car with no input running wide. So a test named *fight* the curvature drift
+was steering a no-assist car FURTHER toward the outside, at 22 m/s, for 75 ticks.
+It left the circuit inside the measurement.
+
+The failing state says so, and says it identically on two machines:
+`x = -8.100000381469727` against `hw 6.6`, `speed 0.0005 m/s`, `rescueT` climbing
+past 0.68 — `js/game.js:6047`'s beached-and-stuck arm. Being a property of where
+the car stopped rather than of the physics, the reported number wandered while
+the code did not: **0.227** (dev box 09-18), **0.262** (dev box 09-22), **1.738**
+(CI llvmpipe 09-22), on a deterministic fixed-timestep sim.
+
+**Measured both directions** at the corner the test picks (bahrain, k0 -0.0204,
+hw 7.00) — authority in metres, and whether the car was still on the circuit:
+
+| regime | outward `+sign(k)` | inward `-sign(k)` |
+|---|---|---|
+| 13 m/s, 45 ticks | 0.764 on-road | 0.801 on-road |
+| 13 m/s, 75 ticks | 1.587 on-road | 2.064 on-road |
+| 22 m/s, 45 ticks | **-2.823** on-road | 4.069 on-road |
+| 22 m/s, 75 ticks (the test's) | **-16.389 OFF-ROAD** | **9.505 on-road** |
+
+Inward is monotonic and positive at every regime. Outward goes negative and
+diverges.
+
+The fix is the sign **and** the hold length, and the second half was found by
+the guard rather than guessed at. With `lockDir` corrected and an on-road
+assertion added, the first verification run failed on the **coasting baseline**:
+`coasting ended 7.68 m off the centreline against a 7.00 m half-width`. Running
+wide IS the drift this test is named after, and 1.25 s of it at 22 m/s leaves
+the circuit with no input at all — so at 75 ticks there was no on-road
+measurement to be had in EITHER arm, and the old assertion had been differencing
+two excursions. At 45 ticks the baseline sits at x ~ -3.2 inside hw 7.00 and the
+inward reading is 4.069 m, twice the floor. **Speed unchanged (22 m/s), floor
+unchanged (2 m)** — shortening a hold until the car is still on the road is what
+makes the number mean anything; widening the 2 m floor would have been the
+tolerance change rule 9 forbids. The on-road guard stays, so this can never
+silently grade an excursion again. Verified: the test passes (113 s on this
+container), and the guard is proven live — it is what failed the first attempt.
+
+**How the comment absorbed the bug is the transferable part.** When the curvature
+convention was re-measured, the note at this line was rewritten to say
+"`lockDir = +sign(k)` was named 'inward' when '+k = right-hand corner' was
+believed; under the measured convention it is the outside. The assertion never
+cared which side." The prose was updated to describe the new meaning of the old
+code, and nobody re-derived whether the code still did what its NAME said. It
+did not. A convention change is a change to every site that reads the
+convention, not a documentation task.
+
+**Why it sat red for five days**, which is the larger defect: `steering.spec.js`
+declared `test.describe.configure({ timeout: 480_000 })`, and `select-specs.mjs`
+excludes any spec declaring `>= SELECTED_GATE.perTestTimeoutSec` (180 s). So the
+change-aware gate skipped it on EVERY push and its only scheduled coverage was
+the nightly rota — `input` once every eleven nights. That night was 2026-09-22.
+It ran, Smoke shard 1 FAILED on exactly this test, and the RUN reported
+`cancelled` (two unrelated jobs were cancelled eight minutes later; `cancelled`
+outranks `failure` in GitHub's rollup) — which AGENTS.md rule 8 tells every
+session to read as a timeout. The one finding the rota exists to produce was
+filed by the tooling as "the box was busy".
+
+Both halves are fixed. `deploy.mjs` grew `nightlyHealth()` and a `--train` flag
+that query the SCHEDULE event and report the JOB list rather than the rollup,
+so every deploy now prints what last night's rotating group actually found. And
+the 480 s declaration was re-measured: the figure predated Mesa llvmpipe
+replacing SwiftShader on the browser jobs, and nothing in the file has needed it
+since. Measured today — CI llvmpipe slowest test **26.2 s**; this container on
+SwiftShader, one worker, slowest **139.9 s** (13 tests, 10 m 02 s wall;
+road-follow 68.0 s, against the 343.5 s the header claimed). Now 170 s: clears
+the slowest case by 21 % and is under the gate's cap, so `select-specs` selects
+the file again (its own OVERSIZE shard, 13 tests).
+
+**STILL OPEN, named rather than guessed at.** `road-follow, when switched on, is
+active and changes the cornering line` fails on THIS container
+(`0.15284059935810101` against a `> 0.25` floor) and passes on CI twice today
+(32.0 s and 22.8 s). Same circuit both times (bahrain), so it is not a track
+difference. Its failing state is on the road (`x 1.08`, `rescueT 0`) but
+decelerated 13 -> 3.15 m/s over the 70 ticks it measures, which is the same class
+of fragility as the defect above — the regime outruns what the assertion is
+trying to read — just not yet over the line on CI. Not fixed here: widening 0.25
+would be exactly the tolerance change rule 9 forbids, and the real fix wants a
+measurement of the assist's effect against coast-down, which is its own pass.
+
+`symmetry: opposite inputs turn the heading by opposite, equal amounts` is
+**green**, twice on CI today (1.8 s and 1.3 s). It regressed inside a one-day
+window on 09-18 and has since been fixed by someone else's change; recorded so
+the next session does not bisect a resolved failure.
+
+15 other specs still declare over-cap budgets (props-over-road and
+terrain-over-road at 1500 s, image-grade-visual 480 s, lighting-ab and
+instanced-draw 420 s, …). Each is the same bet this one lost. 61 of 119 specs
+were never selected in the 30-day window `spec-staleness.mjs` measures.
 
 ## 8. Backlog
 
