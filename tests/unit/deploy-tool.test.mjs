@@ -462,3 +462,50 @@ test("--targeted prints the suites for a change list, and nothing for a game.js-
     "test:sweeps (nothing in this union can move geometry; the targeted sweeps that read it ran: car-front-wing-width.test.mjs)");
   assert.equal(notCovered(false)[1], "test:sweeps (nothing in this union can move geometry)");
 });
+
+/* THE NIGHTLY ROTA REPORTER. select-specs excludes any spec whose declared
+ * budget exceeds the gate's 180 s per-test cap, so 61 of 119 specs were never
+ * selected in the 30-day window spec-staleness measures; nightly-group.mjs
+ * rotates one browser group a night to reach them. That makes the nightly the
+ * ONLY scheduled verdict on those specs — and trainHealth's `per_page=1` on
+ * ci.yml can never show it, because the newest ci.yml run on the deploy branch
+ * is always a push.
+ *
+ * Both pins below exist because 2026-09-22 failed in exactly the way they
+ * forbid. That night's rota ran group `input`; Smoke shard 1 FAILED on
+ * steering.spec.js "steering has authority to fight the curvature drift", both
+ * attempts. The RUN reported `cancelled`, because two unrelated jobs were
+ * cancelled eight minutes later and `cancelled` outranks `failure` in GitHub's
+ * rollup precedence — and AGENTS.md rule 8 tells every session to read a
+ * `cancelled` as a timeout until proven otherwise. The rota's one finding was
+ * filed by the tooling as "the box was busy" and sat unread all day.
+ * So: query the SCHEDULE event, and believe the JOB list, not the rollup. */
+test("--train reports the nightly rota, and reads its jobs rather than the rollup", () => {
+  const src = fs.readFileSync(path.join(ROOT, "tools/ci/deploy.mjs"), "utf8");
+  const fn = src.slice(src.indexOf("function nightlyHealth("));
+  assert.ok(fn.startsWith("function nightlyHealth("), "deploy.mjs has no nightlyHealth()");
+
+  // A push run is not the nightly: without event=schedule this reports the same
+  // run trainHealth already printed, and the rota stays invisible.
+  assert.match(fn, /event=schedule/,
+    "nightlyHealth must select the SCHEDULE event — per_page=1 on ci.yml otherwise returns a push run");
+  // The rollup lied once and will again: `cancelled` hides a FAILED job inside it.
+  assert.match(fn, /\/jobs\?/,
+    "nightlyHealth must read the run's job list — the run-level conclusion is not the verdict");
+  assert.match(fn, /conclusion === "failure"/,
+    "nightlyHealth must name the jobs that actually FAILED, whatever the rollup says");
+});
+
+test("--train answers without preflight, and names all three signals", () => {
+  const r = spawnSync("node", ["tools/ci/deploy.mjs", "--train"], { cwd: ROOT, encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  const out = r.stdout + r.stderr;
+  // Network-independent: with no API answer each line still prints "unknown".
+  for (const label of ["train ci:", "train pages:", "train nightly:"]) {
+    assert.ok(out.includes(label), `--train printed no "${label}" line:\n${out}`);
+  }
+  // BEFORE preflight, deliberately — "was the train already red?" is the
+  // question you ask while a browser run is pinning loadavg above the refusal,
+  // and preflight() returns 3 there.
+  assert.ok(!/REFUSED:/.test(out), `--train must not run preflight:\n${out}`);
+});

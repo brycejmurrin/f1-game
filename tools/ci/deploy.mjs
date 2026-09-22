@@ -15,6 +15,10 @@
 //                                       #   node suites + verify-track. Pushes nothing, allows a
 //                                       #   dirty tree. THE pre-push check: test:tooling-fast is a
 //                                       #   subset and does not run 69 of the 277 unit files.
+//   node tools/ci/deploy.mjs --train       # print train health (last push ci, pages, and the
+//                                       #   NIGHTLY rota by JOB) and stop. Two curl calls, no
+//                                       #   preflight: the "is the branch already red, and did
+//                                       #   last night's rotating group find anything" check.
 //   node tools/ci/deploy.mjs --json        # machine verdict on stdout, log on stderr
 //
 // What it replaces: the prose protocol in the deploy-merge skill — fetch, look,
@@ -724,6 +728,54 @@ function trainHealth() {
     const state = r.status === "completed" ? r.conclusion : r.status;
     log(`train ${label}: ${state} @ ${r.sha}${state === "failure" ? "  <- the deploy branch was ALREADY red before this push: " + r.url : ""}`);
   }
+  nightlyHealth();
+}
+
+/* THE NIGHTLY IS THE ONLY SCHEDULED COVERAGE THE PUSH GATE CANNOT GIVE, and
+   until this function existed nothing printed it. select-specs skips any spec
+   whose declared budget exceeds the gate's 180 s per-test cap, and
+   spec-staleness measures the result: 61 of 119 specs were never selected in the
+   last 30 days. tools/ci/nightly-group.mjs rotates ONE browser group a night to
+   reach them, so the nightly is where those specs report — and trainHealth's
+   per_page=1 above cannot show it, because the latest ci.yml run on this branch
+   is always a push.
+
+   READ THE JOBS, NOT THE ROLLUP. On 2026-09-22 the nightly ran group `input`,
+   and Smoke shard 1 genuinely FAILED: steering.spec.js "steering has authority
+   to fight the curvature drift", both attempts. The RUN came back `cancelled`,
+   because two other jobs were cancelled eight minutes later and `cancelled`
+   outranks `failure` in GitHub's rollup precedence — and AGENTS.md rule 8 tells
+   every session to read a `cancelled` as a timeout until proven otherwise. So
+   the one finding the rota existed to produce was filed, by the tooling, under
+   "the box was busy". It sat unread for the day. The job list is the only
+   honest source, so that is what this reads.
+
+   ADVISORY and silent on any API failure, exactly like trainHealth above: an
+   offline box still deploys, and a red nightly is never a reason to refuse a
+   push. */
+function nightlyHealth() {
+  const url = `https://api.github.com/repos/brycejmurrin/f1-game/actions/workflows/ci.yml/runs`
+    + `?branch=${encodeURIComponent(DEPLOY_BRANCH)}&event=schedule&per_page=1&exclude_pull_requests=true`;
+  const get = (u) => {
+    const r = spawnSync("curl", ["-sS", "--max-time", "10", "-H", "Accept: application/vnd.github+json", u], { encoding: "utf8" });
+    if (r.status !== 0) return null;
+    try { return JSON.parse(r.stdout); } catch { return null; }
+  };
+  const run = get(url)?.workflow_runs?.[0];
+  if (!run) { log("train nightly: unknown (no API answer)"); return; }
+  const when = (run.run_started_at || "").slice(0, 10);
+  const roll = run.status === "completed" ? run.conclusion : run.status;
+  if (roll === "success") { log(`train nightly: success @ ${when} (rotating group covered)`); return; }
+  // The rollup is not the verdict — name the jobs. A `cancelled` run with a
+  // FAILED job inside it is the shape that hid 2026-09-22's steering red.
+  const jobs = get(`https://api.github.com/repos/brycejmurrin/f1-game/actions/runs/${run.id}/jobs?per_page=30`)?.jobs;
+  if (!Array.isArray(jobs)) { log(`train nightly: ${roll} @ ${when} — ${run.html_url}`); return; }
+  const failed = jobs.filter((j) => j.conclusion === "failure").map((j) => j.name);
+  const stopped = jobs.filter((j) => j.conclusion === "cancelled").map((j) => j.name);
+  log(`train nightly: ${roll} @ ${when} — ${run.html_url}`);
+  if (failed.length) log(`  FAILED (a real test verdict, whatever the rollup says): ${failed.join(", ")}`);
+  if (stopped.length) log(`  cancelled (no verdict — these jobs report nothing): ${stopped.join(", ")}`);
+  if (!failed.length && !stopped.length) log("  no job failed or was cancelled — the rollup is the whole story");
 }
 
 export function main() {
@@ -753,6 +805,10 @@ export function main() {
     }
     return 0;
   }
+  // BEFORE preflight, deliberately. This is the one subcommand that must answer
+  // on a box too busy to deploy: "was the train already red" is exactly the
+  // question you ask while a browser run is pinning loadavg above the refusal.
+  if (flag("--train")) { trainHealth(); return 0; }
   const problems = preflight();
   if (problems.length) { for (const x of problems) log("REFUSED: " + x); return 3; }
   trainHealth();
