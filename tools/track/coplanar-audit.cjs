@@ -144,23 +144,103 @@ function facesOf(p, pos, nrm) {
         if (u2 < a2) a2 = u2; if (u2 > b2) b2 = u2;
       }
       // A fan whose vertices do not share a plane is not a face.
-      if (dMax - dMin <= PLANAR_TOL)
+      if (dMax - dMin <= PLANAR_TOL) {
+        // The face's OWN points in the shared plane's axes, kept so the overlap
+        // below can be the real thing rather than a bounding rectangle — see
+        // overlapArea(). Extents stay for the cheap reject.
+        const pts = [];
+        for (let v = i; v < j; v += 3) {
+          const x = pos[v], y = pos[v + 1], z = pos[v + 2];
+          pts.push(e1[0] * x + e1[1] * y + e1[2] * z, e2[0] * x + e2[1] * y + e2[2] * z);
+        }
         out.push({ pi: p.__i, n: [ux, uy, uz], d: dSum / n,
                    mn: [mnx, mny, mnz], mx: [mxx, mxy, mxz],
-                   u1: [a1, b1], u2: [a2, b2] });
+                   u1: [a1, b1], u2: [a2, b2], pts });
+      }
     }
     i = j;
   }
   return out;
 }
 
+// Convex hull (monotone chain) of a face's in-plane points. Taken rather than
+// trusting emission order: a face group is whatever consecutive vertices shared
+// a normal, which is a quad ring for addBox but a fan for emit(), and a clip
+// against a mis-ordered ring silently returns nonsense. Computed once per face.
+function hullOf(f) {
+  if (f.hull) return f.hull;
+  const pts = [];
+  for (let i = 0; i < f.pts.length; i += 2) pts.push([f.pts[i], f.pts[i + 1]]);
+  pts.sort((p, q) => (p[0] - q[0]) || (p[1] - q[1]));
+  const cross = (o, p, q) => (p[0] - o[0]) * (q[1] - o[1]) - (p[1] - o[1]) * (q[0] - o[0]);
+  const half = (src) => {
+    const h = [];
+    for (const p of src) {
+      while (h.length >= 2 && cross(h[h.length - 2], h[h.length - 1], p) <= 0) h.pop();
+      h.push(p);
+    }
+    h.pop();
+    return h;
+  };
+  const lower = half(pts), upper = half(pts.slice().reverse());
+  return (f.hull = lower.concat(upper));
+}
+
+// Sutherland–Hodgman: clip a convex polygon by a convex polygon. Both are
+// hulls, so the result is their exact intersection.
+function clipPoly(subject, clip) {
+  let out = subject;
+  for (let i = 0; i < clip.length && out.length; i++) {
+    const a = clip[i], b = clip[(i + 1) % clip.length];
+    const side = (p) => (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]);
+    const input = out;
+    out = [];
+    for (let k = 0; k < input.length; k++) {
+      const cur = input[k], prv = input[(k + input.length - 1) % input.length];
+      const sc = side(cur), sp = side(prv);
+      if (sc >= 0) {
+        if (sp < 0) {
+          const t = sp / (sp - sc);
+          out.push([prv[0] + (cur[0] - prv[0]) * t, prv[1] + (cur[1] - prv[1]) * t]);
+        }
+        out.push(cur);
+      } else if (sp >= 0) {
+        const t = sp / (sp - sc);
+        out.push([prv[0] + (cur[0] - prv[0]) * t, prv[1] + (cur[1] - prv[1]) * t]);
+      }
+    }
+  }
+  return out;
+}
+
+const polyArea = (p) => {
+  let s = 0;
+  for (let i = 0; i < p.length; i++) {
+    const a = p[i], b = p[(i + 1) % p.length];
+    s += a[0] * b[1] - b[0] * a[1];
+  }
+  return Math.abs(s) / 2;
+};
+
 // Overlap area of two coplanar faces, measured in the shared plane's own axes.
-// Exact for the axis-aligned quads the emitters produce, and — unlike an AABB
-// product — independent of how the piece is rotated in the world.
+//
+// THE REAL OVERLAP, not the bounding rectangle. The extents kept by facesOf are
+// an AABB of the face IN THE PLANE, and a face rotated within its own plane —
+// a ferris-wheel spoke at 30 degrees, a diagonal brace, a canted facade panel —
+// has an in-plane AABB far larger than itself. Two such bars crossing near a
+// hub reported 1052 m2 of "overlap" for members 0.28 m thick (vegas,
+// 2026-09-22): the pair is real, the area was fiction, and a report sorted by
+// area put a lattice above a genuinely flush 16 m2 wall. The extents survive as
+// the cheap reject — if the rectangles miss, the hulls cannot meet — and the
+// exact figure is the intersection of the two convex hulls.
 function overlapArea(a, b) {
   const o1 = Math.min(a.u1[1], b.u1[1]) - Math.max(a.u1[0], b.u1[0]);
   const o2 = Math.min(a.u2[1], b.u2[1]) - Math.max(a.u2[0], b.u2[0]);
-  return o1 <= 0 || o2 <= 0 ? 0 : o1 * o2;
+  if (o1 <= 0 || o2 <= 0) return 0;
+  if (!a.pts || !b.pts) return o1 * o2;   // pre-hull caller (tests): old behaviour
+  const ha = hullOf(a), hb = hullOf(b);
+  if (ha.length < 3 || hb.length < 3) return 0;
+  return polyArea(clipPoly(ha, hb));
 }
 
 function analyse(track, prims, opt) {
