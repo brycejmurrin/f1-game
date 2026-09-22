@@ -316,6 +316,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // rests on, so it is checked both ways — it must NAME a GC-driven spike
   // train and CLEAR one whose spikes sit elsewhere at the same alloc rate.
   "tests/unit/frame-hitch-analyse.test.mjs",
+  // TLX's material cache key is memoised on the opts object; the memo's
+  // failure mode is a STALE key, which returns the wrong material and shows
+  // up only on screen. Fuzzes the real lifted source over every field.
+  "tests/unit/tlx-mat-key-memo.test.mjs",
   "tests/unit/webgpu-lifecycle.test.mjs",
   "tests/unit/wgsl-bindings.test.mjs",
   "tests/unit/renderer-soft-lifecycle.test.mjs",

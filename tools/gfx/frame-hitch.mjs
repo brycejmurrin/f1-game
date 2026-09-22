@@ -16,9 +16,11 @@
 // gpu-census.yml on real hardware.
 //
 // Usage:
-// It also runs V8's sampling heap profiler across the same window and reports
-// allocation BY CALL STACK (out.alloc), because "255 KB per frame" without a
-// name is a licence to guess, and guessing cost this tool a round.
+// It also runs V8's sampling heap profiler across the same window (out.alloc).
+// That answers WHAT SURVIVES by call stack, not what is allocated — V8 erases a
+// sampled object from the profile when it is collected, which --selftest-kb
+// proved by putting a known 500 KB/frame of garbage at 1.2% of the profile.
+// Garbage is attributed by ABLATION: change one site, re-run, read analyseHeap.
 //
 //   node tools/gfx/frame-hitch.mjs [track] [--backend three|webgpu|webgl2]
 //        [--tlx-webgpu] [--capture] [--seconds N] [--settle N] [--steer-hz N]
@@ -113,30 +115,36 @@ export function analyse(t0, dur, { minSpikes = 4 } = {}) {
   };
 }
 
-// WHERE THE GARBAGE COMES FROM, by call stack rather than by theory.
+// WHAT SURVIVES, by call stack — and NOT where the garbage comes from.
 //
-// analyseHeap() says HOW MUCH is allocated; it cannot say by whom, and this
-// register has a standing rule about that gap: 2o wrote down a hypothesis that
-// 2p killed with one grep. The first attempt here guessed getDynamicCacheKey
-// from a vendored-source read, backported upstream's fix, and measured the
-// result: 254.9 -> 249.7 KB/frame. A correct fix worth 2% of the problem.
+// This function was built to answer "who allocates the 255 KB a frame", and it
+// cannot. --selftest-kb proved it: a known 500 KB/frame of 56-byte objects
+// against a ~250 KB/frame baseline came out at 1.2% of the profile, below
+// fourteen three.js internals, and correcting the sampler's size bias moved it
+// to 1.1%. The tell is the sample COUNT — 395 samples in 90 s, where a 16 KB
+// interval against ~50 MB/s owes ~275,000.
 //
-// V8's sampling heap profiler can answer it, but NOT the way it reads. It
-// samples one allocation per `rate` bytes, so an object of size s is sampled
-// with probability 1 - exp(-s/rate): small objects are sampled far more rarely
-// PER BYTE than large ones, and a raw byte total is therefore biased hard
-// against the sites that mint many small objects — which is exactly the shape
-// a per-draw cache key or an options literal has.
+// The reason is structural, not a bug. V8's sampling heap profiler holds each
+// sampled object behind a weak handle and DECREMENTS the node when that object
+// is collected, so the profile it returns describes what is still ALIVE. Pure
+// garbage is erased from it by definition. 395 samples x 16 KB is ~6.5 MB,
+// which is the window's RETAINED growth, and that is the number this reports.
 //
-// Measured, not assumed. --selftest-kb 500 injected a known 500 KB/frame of
-// 56-byte objects against a ~250 KB/frame page baseline, so the injector had
-// to come out around two thirds of the profile. Reading the tree's selfSize
-// put it at 1.2%, below fourteen three.js internals. Dividing each sample by
-// its own inclusion probability puts it where it belongs, and that correction
-// is what this function now does — per SAMPLE, because `samples` carries each
-// sampled allocation's real size and the tree does not.
+// So this is a retention instrument. It is genuinely useful for that — a site
+// that climbs here is holding on to something — and it must never again be
+// read as an allocation ranking. Short-lived garbage needs an ablation
+// (change one site, re-measure analyseHeap) or an allocation-tracking heap
+// snapshot, which records a stack for every allocation and costs accordingly.
+//
+// The size correction below stays, because the same bias applies to what
+// survives: V8 samples an object of size s with probability 1-exp(-s/rate),
+// ~1/293 for 56 bytes at a 16 KB rate and ~0.98 for 64 KB, so raw bytes
+// under-count small-object sites by nearly three hundred times.
 export function analyseAlloc(profile, elapsedS, frames, rate) {
   if (!profile || !profile.head) return { note: "no sampling profile — CDP HeapProfiler unavailable" };
+  // Said on every result, because the name of this function is a trap and the
+  // last reader of it (this one) fell in.
+  const MEANS = "RETAINED bytes by site, not allocated — V8 drops a sampled object from the profile when it is collected (see --selftest-kb)";
   // The node tree, flattened to id -> site name. The URL carries a
   // cache-buster and an origin; neither identifies a site and both make one
   // site look like several across runs.
@@ -152,7 +160,8 @@ export function analyseAlloc(profile, elapsedS, frames, rate) {
 
   const samples = profile.samples || [];
   if (!samples.length) {
-    return { note: "sampling profile carries no samples — only the biased tree, which is not usable for attribution",
+    return { means: MEANS,
+      note: "sampling profile carries no samples — only the biased tree, which is not usable for attribution",
       biasedSelfMB: +(selfTotal / 1048576).toFixed(2) };
   }
   const R = rate > 0 ? rate : 16384;
@@ -179,6 +188,7 @@ export function analyseAlloc(profile, elapsedS, frames, rate) {
       perFrameKB: frames ? +((bytes / 1024) / frames).toFixed(2) : null,
     }));
   return {
+    means: MEANS,
     samples: samples.length,
     rate: R,
     totalMB: +(total / 1048576).toFixed(2),
@@ -192,8 +202,8 @@ export function analyseAlloc(profile, elapsedS, frames, rate) {
     // profile whose biggest site is under a fifth of the total has no single
     // answer in it and must not be reported as though it had one.
     verdict: sites.length && sites[0].share >= 0.2
-      ? `TOP ALLOCATOR: ${sites[0].site} — ${(sites[0].share * 100).toFixed(0)}% of ${(total / 1048576).toFixed(1)} MB (${sites[0].perFrameKB} KB/frame)`
-      : `no dominant site: the largest is ${sites.length ? (sites[0].share * 100).toFixed(0) : 0}% of the total`,
+      ? `TOP RETAINER: ${sites[0].site} — ${(sites[0].share * 100).toFixed(0)}% of ${(total / 1048576).toFixed(1)} MB retained`
+      : `no dominant retainer: the largest is ${sites.length ? (sites[0].share * 100).toFixed(0) : 0}% of the retained total`,
   };
 }
 

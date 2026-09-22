@@ -134,7 +134,7 @@ test("analyseAlloc corrects the sampler's bias against many small objects", () =
   ]);
   const profile = { head, samples: samplesOf(2, 56, 2000).concat(samplesOf(3, 65536, 40)) };
   const a = analyseAlloc(profile, 100, 6000, 16384);
-  assert.match(a.verdict, /TOP ALLOCATOR: mintsManySmall/,
+  assert.match(a.verdict, /TOP RETAINER: mintsManySmall/,
     `raw selfSize would have named mintsFewLarge; got ${a.verdict}`);
   assert.ok(a.sites[0].share > 0.85, `small-object site should dominate once corrected, got ${a.sites[0].share}`);
   // And the bias it corrected stays visible, so a reader can check the claim.
@@ -175,7 +175,7 @@ test("analyseAlloc refuses to name a winner when the profile is flat", () => {
     samples = samples.concat(samplesOf(10 + i, 64, 100));
   }
   const a = analyseAlloc({ head: node(1, "(root)", "", 0, 0, kids), samples }, 100, 6000, 16384);
-  assert.match(a.verdict, /no dominant site/);
+  assert.match(a.verdict, /no dominant retainer/);
 });
 
 test("analyseAlloc reports an absent or sample-less profile as unusable, never as zero", () => {
@@ -185,4 +185,18 @@ test("analyseAlloc reports an absent or sample-less profile as unusable, never a
   const t = analyseAlloc({ head: node(1, "(root)", "", 0, 0, [node(2, "f", "u", 1, 999, [])]) }, 100, 6000, 16384);
   assert.match(t.note, /no samples/);
   assert.equal(t.totalMB, undefined, "an unusable profile reports no total at all");
+});
+
+test("analyseAlloc says on every result that it measures RETENTION, not allocation", () => {
+  // The name is a trap and the last reader of it fell in: a 500 KB/frame
+  // injection of pure garbage came out at 1.2% of the profile, because V8
+  // holds each sampled object weakly and drops it from the profile when it is
+  // collected. Every shape of result therefore carries the caveat, including
+  // the degraded one — a note is exactly where a hurried reader looks.
+  const withSamples = analyseAlloc(
+    { head: node(1, "(root)", "", 0, 0, [node(2, "f", "u", 1, 0, [])]), samples: samplesOf(2, 64, 50) },
+    100, 6000, 16384);
+  assert.match(withSamples.means, /RETAINED/);
+  const noSamples = analyseAlloc({ head: node(1, "(root)", "", 0, 0, [node(2, "f", "u", 1, 9, [])]) }, 100, 6000, 16384);
+  assert.match(noSamples.means, /RETAINED/);
 });

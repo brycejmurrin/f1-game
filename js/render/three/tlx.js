@@ -1222,13 +1222,24 @@ const TLX = (function () {
       function fallbackMat(instanced) {
         return _drawMatMode >= 2 ? rawUnlitMat : (instanced ? unlitInstancedMat : unlitMat);
       }
-      function materialFor(opts, chunked, instanced) {
-        if (_drawMatMode || !lit) return fallbackMat(instanced);
-        if (vizMat) return vizMat;
-        if (!opts) return chunked ? defaultMatChunked : (instanced ? defaultMatInstanced : defaultMat);
-        const o = opts;
-        const key =
-          (o.emissive !== undefined ? Math.round(o.emissive * 32) / 32 : 0) + "," +
+      // THE KEY IS REBUILT PER DRAW, AND THE DRAWS ARE THE FRAME.
+      // matCache.get(key) needs the string to exist first, so this ran on
+      // every call whether it hit or missed — ~15 intermediate strings, at
+      // 150-400 draws a frame. Every caller passes a LONG-LIVED scratch object
+      // it mutates in place (_ringOpts, _rigFx, _wmRoadWetN and the rest), so
+      // the same object arrives frame after frame usually carrying the same
+      // values, and the string it produces is identical each time.
+      //
+      // So memoise the key ON the opts object behind a field-by-field compare:
+      // sixteen primitive comparisons, no allocation, and the string is built
+      // only when something actually changed. A WeakMap rather than a property
+      // so a caller's object is never mutated and a dead one is never held.
+      // The memo caches the KEY, never the material — matCache's eviction
+      // decides what a key resolves to, and a cached material would outlive an
+      // eviction and hand back a disposed one.
+      const _matKeyMemo = new WeakMap();
+      function buildMatKey(o, chunked, instanced) {
+        return (o.emissive !== undefined ? Math.round(o.emissive * 32) / 32 : 0) + "," +
           (o.alpha !== undefined ? Math.round(o.alpha * 32) / 32 : 1) + "," +
           (o.roughness !== undefined ? o.roughness : 0.7) + "," +
           (o.metalness !== undefined ? o.metalness : 0) + "," +
@@ -1243,6 +1254,34 @@ const TLX = (function () {
           (o.noDepthTest ? "|nd" : "") +
           (chunked ? "|ch" : "") +
           (instanced ? "|in" : "");
+      }
+      function matKeyFor(o, chunked, instanced) {
+        const db = o.depthBias, db0 = db ? db[0] : 0, db1 = db ? db[1] : 0;
+        let c = _matKeyMemo.get(o);
+        // A NaN field compares false against itself, so a caller feeding one
+        // degrades to rebuilding every frame — the behaviour before this memo,
+        // never a stale key.
+        if (c !== undefined && c.em === o.emissive && c.al === o.alpha && c.ro === o.roughness
+          && c.me === o.metalness && c.sp === o.specular && c.de === o.detail
+          && c.cc === o.clearcoat && c.cp === o.carPaint && c.sk === o.sparkle
+          && c.ds === !!o.doubleSided && c.na === !!o.noAlphaWrite && c.nd === !!o.noDepthTest
+          && c.hb === !!db && c.b0 === db0 && c.b1 === db1
+          && c.ch === !!chunked && c.in === !!instanced) return c.key;
+        if (c === undefined) { c = {}; _matKeyMemo.set(o, c); }
+        c.em = o.emissive; c.al = o.alpha; c.ro = o.roughness; c.me = o.metalness;
+        c.sp = o.specular; c.de = o.detail; c.cc = o.clearcoat; c.cp = o.carPaint;
+        c.sk = o.sparkle; c.ds = !!o.doubleSided; c.na = !!o.noAlphaWrite;
+        c.nd = !!o.noDepthTest; c.hb = !!db; c.b0 = db0; c.b1 = db1;
+        c.ch = !!chunked; c.in = !!instanced;
+        c.key = buildMatKey(o, chunked, instanced);
+        return c.key;
+      }
+      function materialFor(opts, chunked, instanced) {
+        if (_drawMatMode || !lit) return fallbackMat(instanced);
+        if (vizMat) return vizMat;
+        if (!opts) return chunked ? defaultMatChunked : (instanced ? defaultMatInstanced : defaultMat);
+        const o = opts;
+        const key = matKeyFor(o, chunked, instanced);
         let m = matCache.get(key);
         if (m) _matHit++; else {
           _matMiss++;
