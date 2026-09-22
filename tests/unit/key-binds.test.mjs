@@ -360,6 +360,29 @@ test("a phone hides both tables behind one hint until a key or a pad is seen", (
   assert.equal($("pm-pad-section").hidden, false, "gamepadconnected reveals CONTROLLER");
 });
 
+test("an armed slot left behind (BACK / CLOSE / RESUME) never captures the next key in the race", () => {
+  // Bug hunt 2026-09-22: nothing disarmed a slot when the page hid, so the
+  // first key pressed in the race was swallowed and rebound.
+  const { Input, kb, press, $ } = bootUi(true);
+  const host = $("pm-keys");
+  let hiddenPage = false;
+  host.closest = (sel) => (sel === "[hidden]" && hiddenPage ? {} : null);
+  const chip = (id, slot) => host.kids.flatMap((row) => row.kids || []).flatMap((c) => c.kids || [])
+    .find((b) => b.dataset && b.dataset.action === id && b.dataset.slot === String(slot));
+  chip("throttle", 0).onclick();                 // armed: waiting for a key
+  hiddenPage = true;                              // the player left the page without pressing one
+  press("ArrowLeft");
+  const map = Object.fromEntries(Input.keyBindings().map((a) => [a.id, a.codes]));
+  assert.equal(map.left[0], "ArrowLeft", "steer-left keeps its key");
+  assert.equal(map.throttle[0], "ArrowUp", "throttle was not rebound");
+  hiddenPage = false;
+  chip("throttle", 0).onclick();
+  kb.disarmAll();                                 // closeSettings()
+  press("KeyQ");
+  assert.equal(Object.fromEntries(Input.keyBindings().map((a) => [a.id, a.codes])).throttle[0], "ArrowUp",
+    "disarmAll leaves nothing listening");
+});
+
 test("a desktop shows both tables and never the hint", () => {
   const { $ } = bootUi(true);
   assert.equal($("pm-keys-section").hidden, false);

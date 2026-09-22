@@ -394,6 +394,20 @@ test("a stopped read does not wake up and carry on talking", () => {
   assert.equal(spoken(synth).length, first, "stop() must end the chain, not pause it");
 });
 
+test("a cancel from OUTSIDE the announcer ends its read instead of skipping to the next line", () => {
+  // Bug hunt 2026-09-22: RadioVoice's hide handler cancels the shared synth
+  // without bumping the announcer's generation, and the cancelled line's
+  // error advanced the chain — reading on into a hidden tab.
+  const { A, G, synth } = load();
+  const ann = A.create(G);
+  ann.preview({ track: { name: "MONZA", gp: "Italian GP", lengthKm: 5.793 }, laps: 53 });
+  const first = spoken(synth).length;
+  const u = synth.calls.filter((c) => c.m === "speak").at(-1).u;
+  u.onerror({ error: "interrupted" });
+  finishLine(synth);
+  assert.equal(spoken(synth).length, first, "an interrupted line ends the chain");
+});
+
 test("the announcer may use a network voice; the race radio may not", () => {
   /* The rule that made the announcer worse. A remote voice's lead-in is
    * unbounded, which is disqualifying for a line budgeted against a card — and

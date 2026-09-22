@@ -52,6 +52,10 @@ function gateNote(d, v) {
 // settings are captured on open and restored on DONE, so previewing never
 // changes the race you go back to.
 let _ltPrevTOD = null, _ltPrevWx = null;
+// The race's scripted weather ARC too: any WEATHER chip calls weather(), which
+// drops it, and restoring the weather alone left a MIXED race frozen at its
+// current stage — grip included (TyreModel.wetness reads the arc).
+let _ltPrevArc, _ltArcSaved = false;
 const LT_TODS = ["dawn", "day", "dusk", "night", "default"];
 const LT_WX = ["dry", "wet", "rain", "fog", "overcast"];
 function refreshLtPreviewActive() {
@@ -418,6 +422,7 @@ $("pm-lighting").onclick = () => {
   buildLightTunePanel();
   _ltPrevTOD = setTimeOfDay();   // capture the race's real conditions
   _ltPrevWx = weather();
+  _ltPrevArc = G.weatherArc; _ltArcSaved = true;
   refreshLtPreviewActive();
   $("lt-json").hidden = true;
   $("lighting").hidden = false;
@@ -435,6 +440,7 @@ function closeLightTuner(showPauseMenu) {
   // Restore the race's real time & weather (preview was transient).
   if (_ltPrevTOD != null && setTimeOfDay() !== _ltPrevTOD) setTimeOfDay(_ltPrevTOD);
   if (_ltPrevWx != null && weather() !== _ltPrevWx) weather(_ltPrevWx);
+  if (_ltArcSaved) { G.weatherArc = _ltPrevArc; _ltArcSaved = false; _ltPrevArc = undefined; }
   _ltPrevTOD = null; _ltPrevWx = null;
   $("lighting").hidden = true;
   document.body.classList.remove("lt-open");   // restore race HUD + touch controls

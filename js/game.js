@@ -2341,6 +2341,7 @@ function _loadTrackBody(idx, def) {
     // (A3). Cheap pure derivation from track.def.turns; stores the list even when
     // the side-world is disabled/loading so it's ready once rapier is live.
     DebrisWorld.registerFurniture(track);
+    const sameCircuit = builtTrackId === def.id;   // a day<->dark rebuild of the SAME circuit
     builtTrackId = def.id;
     builtTrackNight = sessionDark;
     builtGridSlots = wantSlots;
@@ -2348,14 +2349,21 @@ function _loadTrackBody(idx, def) {
     // Env probe still holds the previous circuit — fall back to the analytic
     // sky until a fresh 6-face cycle has captured the new one.
     if (gfx.envProbeReset) gfx.envProbeReset();
-    Ghost.setTrack(def.id);
+    // Only a NEW circuit re-keys the ghost. A tuner TIME preview flipping
+    // day<->dark rebuilds the same one, and re-keying there dropped the lap
+    // being recorded and filed later PBs under the context-less slot instead
+    // of the Time Trial session's own (bug hunt 2026-09-22).
+    if (!sameCircuit) Ghost.setTrack(def.id);
     hud.invalidateMap();        // force minimap redraw for new track
   }
   const pal = def.palette;
   frame = {
     viewProj: M4.ident(), eye: camEye,
     sunDir: V3.norm(pal.sunDir), sunColor: pal.sunColor,
-    ambientGround: pal.ambientGround, ambientSky: pal.ambientSky,
+    // COPIES: the lightning block writes these in place, and in the menu's
+    // flyby warm frames (before applyRaceSettings swaps them) that wrote the
+    // last race's ambient into def.palette — Tracks.LIST's, for the session.
+    ambientGround: pal.ambientGround.slice(), ambientSky: pal.ambientSky.slice(),
     fogColor: pal.fog, fogDensity: pal.fogDensity,
     skyZenith:  pal.zenith,
     skyHorizon: pal.horizon,
@@ -3732,6 +3740,7 @@ if (rotateBlockMql.addEventListener) rotateBlockMql.addEventListener("change", (
 else if (rotateBlockMql.addListener) rotateBlockMql.addListener(() => syncRotateBlocker(true));
 
 function quitToMenu() {
+  _ltBase = null; _ltFlash = 0;   // the lightning's saved race base is not the menu's
   PerfGov.sentinelArm(false); if (netPlay.active()) netPlay.stop("local"); hideCamPicker();
   closeLightTuner(false);
   closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();
@@ -8386,7 +8395,8 @@ function openSettings() {
   syncSettingsAvailability(); settingsNav.showCurrent();
   els.pmsettings.hidden = false; els.pausemenu.hidden = true;
 }
-function closeSettings() { els.pmsettings.hidden = true; $("pm-settings-index").hidden = true; if (paused) els.pausemenu.hidden = false; syncRotateBlocker(false); }   // index: openSettings()'s showCurrent() re-shows it unconditionally, so hiding it here is free
+let keyBinds = null;   // KeyBinds.create(G), below
+function closeSettings() { if (keyBinds) keyBinds.disarmAll(); els.pmsettings.hidden = true; $("pm-settings-index").hidden = true; if (paused) els.pausemenu.hidden = false; syncRotateBlocker(false); }   // index: openSettings()'s showCurrent() re-shows it unconditionally, so hiding it here is free
 $("pm-settings").onclick = openSettings;
 $("pm-settings-close").onclick = () => { if (settingsNav.back()) closeSettings(); };
 // The same settings screen from the TITLE menu, so steering, audio and the
@@ -8828,7 +8838,7 @@ if ($("pm-fullscreen")) {
 })();
 applyMirrorControls();
 $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
-KeyBinds.create(G);   // the KEYBOARD rows: rebindable driving keys (js/ui/key-binds.js)
+keyBinds = KeyBinds.create(G);   // the KEYBOARD rows: rebindable driving keys (js/ui/key-binds.js)
 SettingsExport.create(G);   // SETTINGS FILE: download preferences as JSON (js/ui/settings-export.js)
 
 // Steering-tuning sliders, presets + macro levels live in

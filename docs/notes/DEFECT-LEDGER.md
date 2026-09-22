@@ -11,6 +11,27 @@
 Verified against the current tree. Everything fixed has moved to the archived
 journal; this is what remains.
 
+**2026-09-22 (bug hunt) — UI, audio, lighting: seven defects. FIXED.**
+- An armed KEY-REBIND slot survived leaving settings (BACK/CLOSE/RESUME): the
+  first key in the race was swallowed and rebound (W could steal throttle's
+  own key), and an armed pad slot zeroed the pad until a press. Capture now
+  requires the slot on screen, `closeSettings` disarms everything, and focus
+  returns to the same chip after a rebind (`key-binds.test.mjs`).
+- The announcer read on into a HIDDEN TAB: RadioVoice's cancel of the shared
+  synth advanced its chain. It stops on `visibilitychange` and ends on an
+  interrupted/canceled error (`announcer.test.mjs`).
+- The loading flyby could not be skipped from a gamepad (24 s every race);
+  it polls pads for a fresh press, and key auto-repeat no longer skips it.
+- Menu lightning wrote the last race's ambient into `def.palette` (frame
+  held the palette's own arrays); `loadTrack` copies them and `quitToMenu`
+  clears the lightning base.
+- The LIGHTING TUNER's weather preview cancelled a MIXED race's weather arc
+  (grip included); the arc is saved and restored with the tuner. A day↔dark
+  TIME preview in Time Trial re-keyed the ghost to the context-less slot;
+  `Ghost.setTrack` now runs only for a new circuit.
+- Perf: the hidden minimap is not drawn; the lamp buffer is index-written
+  (`length = 0` + push freed its backing store every lit frame).
+
 **2026-09-22 (wave 4/5) — `DIFF[difficulty]` had three siblings, and a garage
 FILE could reach two of them. FIXED.** The 2026-09-22 crash was a persisted
 string used as a table key with nothing validating it. Hunting the SHAPE rather

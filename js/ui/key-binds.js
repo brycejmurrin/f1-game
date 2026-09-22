@@ -58,8 +58,14 @@ function create(G) {
     let armed = null;   // { id, slot, btn } while a slot waits for input
     const setNote = (t) => { if (note) note.textContent = t; };
     const save = () => store.set(dev.key, dev.get());
+    // An armed slot is only armed while the player can SEE it. Leaving by
+    // BACK, CLOSE or RESUME never disarmed it, so the first key pressed in the
+    // race was swallowed and rebound (W could steal throttle's own binding)
+    // and an armed pad slot zeroed the pad until a press (bug hunt 2026-09-22).
+    const onScreen = () => !(host.closest && host.closest("[hidden]"));
     // A captured key code or button index lands here.
     function accept(v) {
+      if (!onScreen()) { disarm(true); return; }
       const { id, slot } = armed;
       const r = dev.set(id, slot, v);
       if (!r.ok) {
@@ -82,6 +88,7 @@ function create(G) {
     // controller section takes only Escape from the keyboard (cancel).
     function onKey(e) {
       if (!armed || !e.isTrusted) return;
+      if (!onScreen()) { disarm(true); return; }   // not consumed: the key is the race's
       /* AN IME IS TYPING, NOT BINDING. While a composition is active the
          browser reports keyCode 229 and a `key` of "Process" instead of the
          real key, so a player with a CJK input method active captured garbage
@@ -136,6 +143,12 @@ function create(G) {
     // The rows follow the CONTROLS page's setting-row grammar (label left, the
     // control cluster right, one line at every UI SIZE): label, then two chips.
     function render() {
+      // Rebuilding drops the focused chip with it; put focus back on the SAME
+      // slot, or every rebind left keyboard/pad users at <body> (their place
+      // in a 12-row list lost after each one).
+      const had = document.activeElement && host.contains && host.contains(document.activeElement)
+        ? { id: document.activeElement.dataset && document.activeElement.dataset.action,
+            slot: document.activeElement.dataset && document.activeElement.dataset.slot } : null;
       host.textContent = "";
       for (const a of dev.list()) {
         const row = document.createElement("div");
@@ -149,6 +162,10 @@ function create(G) {
         cluster.append(slotButton(a, 0), slotButton(a, 1));
         row.append(lbl, cluster);
         host.appendChild(row);
+      }
+      if (had && had.id != null && host.querySelector) {
+        const back = host.querySelector(`[data-action="${had.id}"][data-slot="${had.slot}"]`);
+        if (back && back.focus) back.focus();
       }
       if (resetBtn) resetBtn.disabled = dev.isDefault();
       if (wrap && dev.show) wrap.hidden = !dev.show();
@@ -391,7 +408,10 @@ function create(G) {
   if (Input.setPadAxisMap) Input.setPadAxisMap(store.get("padAxes", null));
 
   if (keys || pad) Log.info("ui", "KeyBinds.create");
-  return { render() { for (const s of sections) s.render(); } };
+  return {
+    render() { for (const s of sections) s.render(); },
+    disarmAll() { for (const s of sections) s.disarm(true); },   // closeSettings: nothing stays armed into a race
+  };
 }
 
   return { create };
