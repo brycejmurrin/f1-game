@@ -154,6 +154,25 @@ const { overlapArea } = createRequire(import.meta.url)("../../tools/track/coplan
 // faces: hockenheim 48 -> 5, madrid 65 -> 25, sochi 42 -> 12, dijon 33 -> 4,
 // hungaroring 20 -> 1. The tail that survives the honest metric is real
 // geometry, and the notes above still describe how each circuit earned it.
+//
+// 2026-09-22, second pass — 321 -> 199 fleet spots, 12 circuits down, ONE up:
+//   * spectatorHill's layered banks get a per-CALL slot (nature.js), not a hash
+//     of opts.h: okayama 25 -> 1, and the three clayCut() pairs that owned 400
+//     of its coplanar pairs are gone.
+//   * along() carries a seam TAG (structures.js): abutting runs share their end
+//     node and the second, byte-identical panel there is dropped. jeddah's
+//     six-block canyon, silverstone 12 -> 4, donington 5 -> 2.
+//   * jeddah's canyon moved from gap 3.50 to 4.35 — at 3.50 it stood inside the
+//     engine's own street barrier. 56 -> 3.
+//   * madrid's arcade openings and ifema stand tiers no longer share a plane
+//     with the facade / with each other. 25 -> 5.
+//   * indianapolis's oval retaining wall uses along()'s pitch, not a padded
+//     9.6 m constant that overlapped its neighbour by 0.6 m. 9 -> 2.
+// spa 1 -> 2 is the one RAISE and it is paid for: the hill slot slides a bank
+// 3-43 mm outward, and on spa one tread's face lands 1.8 mm from a place()
+// prop it used to clear. Two pairs, fighting from 96 m, against 122 spots
+// removed everywhere else. Measured, not assumed — coplanar-audit --why names
+// the prop (js/track/tracks.js:1946).
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "track", "coplanar-baseline.json"), "utf8"),
 );

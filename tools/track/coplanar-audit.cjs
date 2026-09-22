@@ -441,7 +441,11 @@ function main() {
     for (const [k, e] of [...pairs].sort((a, b) => b[1].n - a[1].n).slice(0, 30))
       console.log(`  ${String(e.n).padStart(5)}  ${String(e.tracks.size).padStart(2)} trk` +
         `  maxArea ${e.maxArea.toFixed(1).padStart(7)} m2` +
-        `  minGap ${(e.minGap * 1000).toFixed(1).padStart(6)} mm   ${k}`);
+        `  minGap ${(e.minGap * 1000).toFixed(1).padStart(6)} mm   ${k}` +
+        // Which circuits, not just how many: a bucket spanning four tracks is
+        // only actionable once you know which four to open.
+        `\n         on: ${[...e.tracks].sort().slice(0, 8).join(" ")}` +
+        (e.tracks.size > 8 ? ` +${e.tracks.size - 8} more` : ""));
   }
 
   if (wantJson) console.log(JSON.stringify(out, null, 1));
