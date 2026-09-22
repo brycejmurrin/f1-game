@@ -158,7 +158,7 @@ const SPEC = [
   { k: "carWeight", lane: "json", group: "steering", def: (G) => (G && G.gfx && G.gfx.isMobile) ? 10 : 5, src: "js/input/steer-tuning.js (10 on a touch device, 5 on a pointer — see the comment there)" },
   { k: "adaptiveButtons", lane: "json", group: "steering", def: 5, src: "js/input/steer-tuning.js",
     subsystem: "the driving model: moves tests/data/physics-baseline.json" },
-  { k: "brakeCue", lane: "json", group: "steering", def: 4, src: "js/input/steer-tuning.js" },
+  { k: "brakeCue", lane: "json", group: "steering", def: 1, src: "js/input/steer-tuning.js" },
   { k: "drivingHelp", lane: "json", group: "steering", def: 1, src: "js/input/steer-tuning.js (1 = OFF)" },
   { k: "pace", lane: "json", group: "steering", def: 11, src: "js/input/steer-tuning.js PACE_DEF",
     subsystem: "GROUND-SPEED SCALE for every car: 1.06^(v-14), so notch 11 is 84% of reference and notch 7 is 67% — a 21% slower game" },

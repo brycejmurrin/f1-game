@@ -129,23 +129,41 @@
       const TERRA = [0.62, 0.33, 0.23], ROSSO = [0.80, 0.12, 0.10];
       const OLIVE = [0.44, 0.48, 0.34], VINE = [0.30, 0.40, 0.22];
 
-      const openArea = (s) => (s >= 0.92 || s <= 0.10) || (s >= 0.36 && s <= 0.46);
+      // The Arrabbiata casale (built below) stands 150 m out, past the Bucine
+      // carriageway, whose roadside trees grew 6.8 m into its tower
+      // (clip-audit). A modelGroup books no ground: indexSolid() keeps the
+      // engine's deferred foliage off the yard, and since tree()/pine() only
+      // space trees from trees, this file's own loops check it themselves.
+      indexSolid(0.500 - 30 / track.total, 0.500 + 30 / track.total, 1, 127, 46);
+      const casale = anchor(K(0.500), 1, 150).c;
+      const offCasale = (k, side, dist) => {
+        const a = anchor(k, side, dist);
+        return Math.hypot(a.c[0] - casale[0], a.c[2] - casale[2]) > 34;
+      };
+      // Open through San Donato (0.10-0.18): its bowl and stands stand there.
+      const openArea = (s) => (s >= 0.92 || s <= 0.18) || (s >= 0.36 && s <= 0.46);
       every(22, (k) => {
         const s = k / n;
         if (openArea(s)) return;
         const h = hash(k * 31);
         if (h < 0.24) return;
         const side = h < 0.5 ? -1 : 1;
-        tree(k, side, 11 + h * 9, 12 + h * 9, h < 0.45 ? LEAF_D : LEAF);
-        if (h > 0.55) pine(k, -side, 14 + h * 10, 15 + h * 10, PINE);
+        if (offCasale(k, side, 11 + h * 9)) tree(k, side, 11 + h * 9, 12 + h * 9, h < 0.45 ? LEAF_D : LEAF);
+        if (h > 0.55 && offCasale(k, -side, 14 + h * 10)) pine(k, -side, 14 + h * 10, 15 + h * 10, PINE);
       });
       every(34, (k) => {
         const s = k / n;
         if (openArea(s)) return;
         const h = hash(k * 53 + 9);
         if (h < 0.35) return;
-        tree(k, h < 0.5 ? -1 : 1, 30 + h * 18, 12 + h * 8, LEAF_D);
-        if (h > 0.72) pine(k, h > 0.86 ? -1 : 1, 44 + h * 22, 18 + h * 10, PINE_D);
+        if (offCasale(k, h < 0.5 ? -1 : 1, 30 + h * 18)) tree(k, h < 0.5 ? -1 : 1, 30 + h * 18, 12 + h * 8, LEAF_D);
+        if (h <= 0.72) return;
+        // pine() clears the TRUNK off the road, not the crown: at 0.633 one
+        // stood 3.5 m off the Palagio carriageway, the road guard dropped its
+        // lower tiers, and the top cone was left 22 m up (float-audit).
+        const ps = h > 0.86 ? -1 : 1, pd = 44 + h * 22, ph = 18 + h * 10;
+        const pa = anchor(k, ps, pd);
+        if (!onTrack(pa.c[0], pa.c[2], ph * 0.3) && offCasale(k, ps, pd)) pine(k, ps, pd, ph, PINE_D);
       });
       every(26, (k) => {
         const s = k / n;
@@ -248,7 +266,8 @@
         { livery: "crimson", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
       // Red trim band fronting the main stand — Ferrari's circuit, Ferrari's colour.
       {
-        const a = anchor(K(0.005), -1, 8);
+        // 7.6, not 8: at 8 its back face sat in the 9 m fence (coplanar-audit).
+        const a = anchor(K(0.005), -1, 7.6);
         addBox(out, vadd(a.c, a.u, 1.6), [2, 1.6, 150], [0.80, 0.14, 0.12], [a.r, a.u, a.t]);
       }
       for (let i = 0; i < 4; i++) {
@@ -260,7 +279,9 @@
         if (!(s > 0.90 || s < 0.05) || h < 0.52) return;
         motorhome(k, 1, 56 + h * 10, 10, 4, 6, { wall: [0.66 + h * 0.24, 0.66, 0.68] });
       });
-      broadcastCompound(K(0.916), 1, 74, { vans: 3, dishes: 2, mastH: 9 });
+      // 66, not 74: at 74 its footprint reached the Savelli carriageway (0.436),
+      // 6.5 m off; 68 still does. At 66 it stands 10 m clear.
+      broadcastCompound(K(0.916), 1, 66, { vans: 3, dishes: 2, mastH: 9 });
       for (const s of [0.975, 0.01, 0.03]) billboard(K(s), -1, 8, 12, 4.5, [0.86, 0.14, 0.12]);
 
       const terrazza = (s0, s1, side, gap, opts) => {
@@ -297,11 +318,14 @@
         });
       };
 
-      groundPatch(K(0.070), 1, 6, [38, 0.18, 52], GRAVEL,
+      // San Donato is T1, braking from 0.13 to the apex at 0.155. This group
+      // was authored 0.08 early (at 0.07, mid main straight) — against some
+      // earlier centreline, since no start-line frame puts it on the corner.
+      groundPatch(K(0.140), 1, 6, [38, 0.18, 52], GRAVEL,
         { id: "mugello-san-donato-gravel", samples: 8 });
-      tyreWall(0.055, 0.090, 1, 5, [0.86, 0.20, 0.18]);
-      terrazza(0.048, 0.098, -1, 18, { rows: 9 });          // San Donato bowl
-      marshalPost(K(0.075), -1, 10);
+      tyreWall(0.135, 0.170, 1, 5, [0.86, 0.20, 0.18]);
+      terrazza(0.128, 0.178, -1, 18, { rows: 9 });          // San Donato bowl
+      marshalPost(K(0.155), -1, 10);
 
       groundPatch(K(0.312), 1, 5, [26, 0.18, 34], GRAVEL,
         { id: "mugello-casanova-gravel", samples: 6 });
@@ -319,7 +343,7 @@
       terrazza(0.858, 0.902, 1, 18, { rows: 8 });           // Bucine, onto the straight
       marshalPost(K(0.875), 1, 9);
 
-      spectatorHill(0.16, 0.26, -1, 14, { rows: 3, rise: 1.1, depth: 1.8, density: 0.42, step: 9 });
+      spectatorHill(0.18, 0.26, -1, 14, { rows: 3, rise: 1.1, depth: 1.8, density: 0.42, step: 9 });
       spectatorHill(0.62, 0.72, 1, 14, { rows: 3, rise: 1.1, depth: 1.8, density: 0.42, step: 9 });
 
       for (const [s0, s1] of [[0.10, 0.28], [0.34, 0.46], [0.53, 0.61], [0.67, 0.85]]) {
@@ -352,7 +376,9 @@
       }
 
       {
-        const a = anchor(K(0.500), 1, 110);
+        // Past the Bucine carriageway, which runs 60-75 m out on this side:
+        // 50-135 m all put the footprint on it. At 150 its centre is 30 m clear of that edge.
+        const a = anchor(K(0.500), 1, 150);
         const b = [a.r, a.u, a.t];
         modelGroup("mugello-casale", {
           center: vadd(a.c, a.u, 9), size: [30, 24, 44], basis: b,
@@ -450,23 +476,23 @@
       }
 
       // Turn signage and broadcast towers.
-      signBoard(K(0.070), -1, 8, "corner", 1);
+      signBoard(K(0.150), -1, 8, "corner", 1);
       signBoard(K(0.312), -1, 8, "corner", 6);
       signBoard(K(0.495), 1, 8, "corner", 9);
       signBoard(K(0.880), 1, 8, "corner", 15);
       sponsorHoarding(0.930, 0.060, -1, 3.6, { h: 1.2, step: 10,
         palette: [ROSSO, [0.94, 0.92, 0.88], [0.10, 0.34, 0.20], [0.96, 0.76, 0.06]] });
       cameraTower(K(0.030), -1, 26, { h: 16 });
-      cameraTower(K(0.072), -1, 30, { h: 18 });
+      cameraTower(K(0.152), -1, 30, { h: 18 });
       cameraTower(K(0.500), 1, 30, { h: 18 });
       cameraTower(K(0.880), 1, 28, { h: 16 });
-      for (const [s0, s1] of [[0.12, 0.34], [0.48, 0.9]]) {
+      for (const [s0, s1] of [[0.18, 0.34], [0.48, 0.9]]) {
         for (const side of [-1, 1])
           forestEdge(s0, s1, side, 14, { density: 0.64, hMin: 11, hMax: 20, pineFrac: 0.45, col: PINE, col2: LEAF_D });
       }
       forestEdge(0.50, 0.68, 1, 30, { density: 0.22, hMin: 15, hMax: 24, pineFrac: 0.5, col: PINE_D, col2: LEAF_D });
 
-      grandstandEx(0.074, -1, 36, 88, null, null,
+      grandstandEx(0.154, -1, 36, 88, null, null,
         { livery: "crimson", tiers: 2, roof: "cantilever", suites: true,
           endWalls: true, pylons: true });
     };

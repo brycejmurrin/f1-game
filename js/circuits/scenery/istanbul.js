@@ -201,7 +201,7 @@
 
       groundPatch(K(0.905), -1, 5, [26, 0.18, 34], GRAVEL,
         { id: "istanbul-t13-gravel", samples: 6 });
-      tyreWall(0.888, 0.922, -1, 4, [0.85, 0.78, 0.20]);
+      tyreWall(0.888, 0.920, -1, 4, [0.85, 0.78, 0.20]);   // a stack at 0.922 (T14 apex) stood on the road
       grandstandEx(0.900, 1, 20, 76, null, null, { livery: "sandstone", endWalls: true });
       marshalPost(K(0.898), 1, 9);
 
@@ -254,7 +254,7 @@
         cameraTower(K(s), side, gap, { h: 16, col: [0.62, 0.58, 0.52] });
 
       {
-        const a = anchor(K(0.930), -1, 52);
+        const a = anchor(K(0.930), -1, 44);   // 52 overhung the T13 carriageway (0.912) inside the loop
         const b = [a.r, a.u, a.t];
         modelGroup("istanbul-stone-portal", {
           center: vadd(a.c, a.u, 9), size: [12, 22, 34], basis: b,

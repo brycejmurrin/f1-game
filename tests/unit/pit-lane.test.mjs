@@ -517,18 +517,23 @@ test("the exit road speaks: GO after the release, MERGE while a car is closing, 
   assert.equal(pits.cue(c).text, "GO GO GO");
   pits.update(c, pits.servedS + 0.1);
   assert.notEqual(pits.cue(c).phase, "served", "GO GO GO must not outlive the release");
-  const rival = { code: "VER", prog: c.prog - 60 * 2, speed: 60, pitState: "none" };   // 2 s back, closing
+  const L = G.track.total;
+  const rival = { code: "VER", prog: c.prog - 60 * 2, s: (c.s - 60 * 2 + L) % L, speed: 60, pitState: "none" };   // 2 s back, closing
   G.cars = [c, rival];
   assert.equal(pits.cue(c).phase, "merge");
   assert.match(pits.cue(c).text, /MERGE — VER/, "the closing car must be NAMED");
-  rival.prog = c.prog - 60 * 4;                                                       // 4 s back: not yet
+  rival.prog = c.prog - 60 * 4; rival.s = (c.s - 60 * 4 + L) % L;                     // 4 s back: not yet
   const out = pits.cue(c);
   assert.equal(out.phase, "out");
   assert.match(out.text, /^EXIT \d+m$/);
   assert.ok(out.dist > 0 && out.dist < zone.lenM, `the exit metres must be inside the lane: ${out.dist}`);
   assert.ok(out.frac >= 0 && out.frac <= 1, `the bar fill must be a fraction: ${out.frac}`);
-  rival.prog = c.prog - 60 * 2; rival.pitState = "lane";                               // a car in the lane is no threat
+  rival.prog = c.prog - 60 * 2; rival.s = (c.s - 60 * 2 + L) % L; rival.pitState = "lane";   // a car in the lane is no threat
   assert.equal(pits.cue(c).phase, "out");
+  // The leader about to LAP you is behind on the track but AHEAD in race
+  // distance: a prog test never named it (bug hunt 2026-09-22).
+  rival.pitState = "none"; rival.prog = c.prog + L - 60 * 2;
+  assert.equal(pits.cue(c).phase, "merge", "a lapping leader closing on the exit is named too");
 });
 
 test("the release says what the stop cost: the time held, the place you come out in, the places it cost", () => {

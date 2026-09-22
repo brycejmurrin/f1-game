@@ -232,3 +232,15 @@ test("direct relay dedupe and decrypt work stay hard bounded", async () => {
   assert.ok(quick.stats().seenChars <= NetNostr.MAX_SEEN_CHARS,
     "a handful of individually legal near-limit frames must not multiply retention");
 });
+
+test("finish() reclaims every timer the exchange armed, the reply re-publish included", () => {
+  // nostr.js promises that finish() leaves nothing scheduled (an orphaned timer
+  // retains the whole closure). The reply's re-publish interval was a local in
+  // heard() that finish() could not see; it self-terminated within ~1.2 s, but
+  // the invariant is the file's, so it is pinned here.
+  const fin = oursCode.slice(oursCode.indexOf("const finish = (r) =>"));
+  const body = fin.slice(0, fin.indexOf("};"));
+  for (const t of ["tick", "repost", "again"])
+    assert.match(body, new RegExp(`clearInterval\\(${t}\\)`), `finish() does not clear ${t}`);
+  assert.doesNotMatch(oursCode, /const again = setInterval/, "`again` must live where finish() can reach it");
+});
