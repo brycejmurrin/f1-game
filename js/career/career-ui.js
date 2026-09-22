@@ -991,7 +991,11 @@ function create(G) {
     }
 
     // Championship snapshot — only once there is something to show.
-    const entries = Object.entries(c.season.pts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    // Points, then countback (SeasonCal.rank) — the same order the standings
+    // sheet and Career.driverStandings() show; a points-only sort broke ties by
+    // insertion order and could name a different leader here.
+    const entries = Object.entries(c.season.pts).sort((a, b) =>
+      (typeof SeasonCal !== "undefined" && SeasonCal.rank) ? SeasonCal.rank(c.season, a[0], b[0]) : b[1] - a[1]).slice(0, 5);
     if (entries.length) {
       right.appendChild(head("CHAMPIONSHIP"));
       entries.forEach(([driverId, pts], i) => {

@@ -65,7 +65,7 @@ const GameStore = (function () {
       this.rev++;
       // Mirrored even when the disk write failed: a quota-refused career save
       // is exactly the write the durable copy exists for.
-      if (mirrorKey(key)) mirrorQueue(key, v === null || v === undefined ? null : JSON.stringify(v));
+      if (mirrorKey(key)) mirrorQueue(key, v === null || v === undefined ? null : JSON.stringify(v), durable);
       const result = { ok: true, durable, reason: durable ? null : (this.broken || "Error") };
       this._notify({ key: k, durable, reason: result.reason, local: true });
       return result;
@@ -188,8 +188,9 @@ const GameStore = (function () {
   const MIRROR_FLUSH_MS = 500;      // settleRound() writes the slot and the season back to back
   const mirror = { supported: false, restored: 0, flushed: 0, failed: 0, pending: 0, ready: null };
   let _mirrorDb = null;             // memoised open (a failure is never memoised)
-  let _mirrorPending = new Map();   // full key -> JSON string, or null for a delete
+  let _mirrorPending = new Map();   // full key -> { v: JSON string or null for a delete, lsOk }
   let _mirrorTimer = null;
+  let _restoreDone = false;         // flush waits for mirrorRestore: a boot re-save must not overwrite the row it restores
 
   function mirrorKey(key) { return MIRROR_KEY.test(key); }
 
@@ -224,9 +225,12 @@ const GameStore = (function () {
     return _mirrorDb;
   }
 
-  function mirrorQueue(key, json) {
+  // lsOk: did localStorage accept this same write? A row stored with lsOk
+  // false holds a value NEWER than the disk's copy (the quota refused it), so
+  // restore must prefer it even though the key is present on disk.
+  function mirrorQueue(key, json, lsOk) {
     if (typeof indexedDB === "undefined" || !indexedDB) return;
-    _mirrorPending.set(key, json);
+    _mirrorPending.set(key, { v: json, lsOk: lsOk !== false });
     mirror.pending = _mirrorPending.size;
     if (_mirrorTimer !== null) return;
     if (typeof setTimeout !== "function") { mirrorFlush(); return; }
@@ -237,6 +241,7 @@ const GameStore = (function () {
   // requests' success: a quota failure surfaces when the transaction commits.
   function mirrorFlush() {
     _mirrorTimer = null;
+    if (!_restoreDone && mirror.ready) { _mirrorTimer = -1; mirror.ready.then(mirrorFlush); return Promise.resolve(false); }
     const batch = _mirrorPending;
     _mirrorPending = new Map();
     mirror.pending = 0;
@@ -246,8 +251,8 @@ const GameStore = (function () {
       let t;
       try { t = db.transaction(MIRROR_STORE, "readwrite"); } catch (e) { res(false); return; }
       const os = t.objectStore(MIRROR_STORE);
-      for (const [k, v] of batch) {
-        if (v === null) os.delete(k); else os.put({ k, v });
+      for (const [k, e] of batch) {
+        if (e.v === null) os.delete(k); else os.put({ k, v: e.v, lsOk: e.lsOk });
       }
       t.oncomplete = () => { mirror.flushed += batch.size; res(true); };
       t.onerror = t.onabort = () => { res(false); };
@@ -261,9 +266,12 @@ const GameStore = (function () {
   }
 
   // Boot: fill in whatever localStorage lacks. A key the disk already holds is
-  // the newer truth (a save made before the mirror caught up) and is left alone.
+  // the newer truth (a save made before the mirror caught up) and is left alone
+  // — UNLESS the row says the disk REFUSED that write (lsOk false): then the
+  // disk holds the older value, and the boot's own re-save of it (Career.load)
+  // must neither win here nor overwrite the row when the queue flushes.
   function mirrorRestore() {
-    if (typeof indexedDB === "undefined" || !indexedDB || typeof localStorage === "undefined") return Promise.resolve(0);
+    if (typeof indexedDB === "undefined" || !indexedDB || typeof localStorage === "undefined") { _restoreDone = true; return Promise.resolve(0); }
     return mirrorOpen().then((db) => new Promise((res) => {
       if (!db) { res([]); return; }
       let r;
@@ -277,9 +285,25 @@ const GameStore = (function () {
         if (!row || typeof row.k !== "string" || typeof row.v !== "string" || !mirrorKey(row.k)) continue;
         let present = null;
         try { present = localStorage.getItem(row.k); } catch (e) { return 0; }   // storage unreadable: nothing to restore into
-        if (present !== null) continue;
-        try { localStorage.setItem(row.k, row.v); } catch (e) { continue; }       // still no room: the mirror keeps it for next time
-        store._cache.delete(row.k);
+        const newer = row.lsOk === false && present !== row.v;
+        if (present !== null && !newer) continue;
+        if (newer) {
+          // Drop the boot's re-save of the stale disk copy; a genuinely new
+          // write in the meantime (a different value) is kept and wins.
+          const p = _mirrorPending.get(row.k);
+          if (p && p.v === present) _mirrorPending.delete(row.k);
+        }
+        let landed = true;
+        try { localStorage.setItem(row.k, row.v); } catch (e) { landed = false; }
+        if (!landed) {
+          if (!newer) continue;             // still no room: the mirror keeps it for next time
+          // Still no room, but the session must run on the newer value, not the
+          // stale disk copy: serve it from the cache; the row stays lsOk:false.
+          try { store._cache.set(row.k, JSON.parse(row.v)); } catch (e) { continue; }
+        } else {
+          if (newer) mirrorQueue(row.k, row.v, true);   // the disk has it now
+          store._cache.delete(row.k);
+        }
         store._keyRev.set(row.k, (store._keyRev.get(row.k) || 0) + 1);
         restored.push(row.k);
       }
@@ -293,7 +317,7 @@ const GameStore = (function () {
     }).catch((e) => {
       Log.warn("game", "durable mirror restore failed: " + ((e && e.message) || e));
       return 0;
-    });
+    }).then((n) => { _restoreDone = true; return n; });
   }
 
   mirror.ready = mirrorRestore();

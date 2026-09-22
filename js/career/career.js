@@ -86,6 +86,15 @@ function hash(seed, ...parts) {
 function rnd(...parts) {
   return hash(career ? career.seed : 0, ...parts);
 }
+// The seed for draws keyed only by (seed, round, driver) — qualifying luck and
+// reliability. season.round resets at rollover and career.seed never changes,
+// so without the year every season replayed the same retirements at the same
+// rounds (bug hunt 2026-09-22). The first season (2026) keeps the bare seed.
+function seasonSeed() {
+  if (!career) return 0;
+  const k = (career.year | 0) - 2026;
+  return (k ? (career.seed ^ Math.imul(k, 0x9E3779B1)) : career.seed) >>> 0;
+}
 
 // SIX SAVES: three DRIVER slots and three MY TEAM slots, `apex26.career.<flavour>.<i>`
 // one key each, `apex26.careerSlot` naming the live one as "flavour:index".
@@ -660,12 +669,16 @@ function researchCost(opt) {
 // asks on every render.
 const _worksCost = new Map();
 function worksCost(teamId) {
-  if (_worksCost.has(teamId)) return _worksCost.get(teamId);
+  // Keyed on the ERA too: a works car's cost moves with the regulations
+  // (Ferrari 1830 open vs 1630 powertrain), exactly as budgetCap() below is.
+  const legal = Parts.legalityKey ? Parts.legalityKey() : "";
+  const key = teamId + "|" + legal;
+  if (_worksCost.has(key)) return _worksCost.get(key);
   const team = teamOf(teamId);
   const c = !team ? 0
     : team.custom ? MYTEAM_WORKS
     : Parts.getCost(Parts.getFactorySetup(team), team);
-  _worksCost.set(teamId, c);
+  _worksCost.set(key, c);
   return c;
 }
 // ── REGULATION ERAS ────────────────────────────────────────────────────────
@@ -829,8 +842,16 @@ function sponsorAt(round) {
     idx++;
   }
   if (!kind) return null;
-  const value = kind.value(team);
-  const rows = (career.results || []).filter((r) => r.r >= start && r.r < start + kind.window);
+  // The LAST window of a season is cut at the finale (rollover clears the
+  // books): it used to run past it in ~78 % of seasons and could never pay.
+  // A cut window asks — and pays — pro rata to the rounds it actually has.
+  const rounds = Tracks.SEASON ? Tracks.SEASON.length : 0;   // 0: no calendar known, leave the window whole
+  const window = rounds > 0 ? Math.max(1, Math.min(kind.window, rounds - start)) : kind.window;
+  const part = window / kind.window;
+  const full = kind.value(team);
+  const value = part < 1 && kind.type !== "clean" ? Math.max(1, Math.ceil(full * part)) : full;
+  const pay = part < 1 ? Math.round(kind.pay * part) : kind.pay;
+  const rows = (career.results || []).filter((r) => r.r >= start && r.r < start + window);
   let done = 0;
   for (const r of rows) {
     if (kind.type === "points") done += r.pts || 0;
@@ -838,13 +859,13 @@ function sponsorAt(round) {
     else if (kind.type === "double") done += r.double ? 1 : 0;
     else if (kind.type === "clean") done += (!r.dnf && r.clean) ? 1 : 0;
   }
-  const need = kind.type === "points" ? value : kind.type === "clean" ? kind.window : value;
+  const need = kind.type === "clean" ? window : value;
   return {
-    type: kind.type, value, window: kind.window, pay: kind.pay,
-    start, end: start + kind.window - 1, idx,
+    type: kind.type, value, window, pay,
+    start, end: start + window - 1, idx,
     done, need, met: done >= need,
-    roundsLeft: Math.max(0, start + kind.window - 1 - round),
-    label: sponsorLabel({ type: kind.type, value, window: kind.window }),
+    roundsLeft: Math.max(0, start + window - 1 - round),
+    label: sponsorLabel({ type: kind.type, value, window }),
   };
 }
 function sponsor() { return career ? sponsorAt(career.season.round) : null; }
@@ -1518,7 +1539,7 @@ return {
   PRIZE, RESEARCH_MULT, BUDGET_MULT, TDEV_MAX, TDEV_TO_PACE, START_MONEY,
   OBJ_BONUS, OBJ_REP, DEV_MAX, HISTORY_MAX, CRAFT_BASE, craftScore, seasonCraft,
   SLOTS, FLAVOURS, slot, slots, useSlot, deleteSlot, anySave, firstFree,
-  data, active, inCareer, conflicted, engage, load, save, saveStatus, clear, start, state, rnd, hash,
+  data, active, inCareer, conflicted, engage, load, save, saveStatus, clear, start, state, rnd, hash, seasonSeed,
   GRANT, freeMoney, grant,
   sponsor, sponsorAt, sponsorLabel, settleSponsor,
   FACILITY_MAX, FACILITY_DISCOUNT_MAX, facility, facilityCost, facilityDiscount,

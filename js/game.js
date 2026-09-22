@@ -2521,7 +2521,7 @@ function armReliability(field) {
   const team = player ? player.team : Teams.LIST[teamIdx];
   Reliability.arm(field, {
     level: raceReliability,
-    seed: Career.inCareer() && c ? c.seed : simSeed(),
+    seed: Career.inCareer() && c ? Career.seasonSeed() : simSeed(),   // per season, not per career
     // drawRound(), not season.round: arm() hashes (seed, round, driver) and the
     // two legs of a sprint weekend share a round, so both would retire the same
     // cars. Career and no-sprint seasons get season.round back unchanged.

@@ -531,7 +531,9 @@ const api = {
     G.store.set("team", i);
     G.store.set("driver", seat);
     try { document.documentElement.dataset.team = t.id; } catch (_) { /* no DOM */ }
-    if (typeof GarageScene !== "undefined" && GarageScene.dropPreviewMeshes) GarageScene.dropPreviewMeshes();
+    // Drop the preview meshes AND the key naming the one still held, or a no-op
+    // switch left setup-camera drawing a freed mesh (spMeshBust's two halves).
+    if (typeof GarageScene !== "undefined" && GarageScene.dropPreviewMeshes) { GarageScene.dropPreviewMeshes(); G._spMeshKey = ""; }
     G.buildSetup();
     G.tickUi();
     return { ok: true, switched: true, label, seat };
@@ -580,7 +582,7 @@ const api = {
     G.saveTeamParts(team.id, cur);
     // Garage open: drop the preview, rebuild the sheet. Closed (menu / a race): DONE's recompute, so the next frame re-keys the player body, cockpit and wheel meshes.
     if (!G.setupPreviewOn) G.recomputePlayerMods();
-    else { if (typeof GarageScene !== "undefined" && GarageScene.dropPreviewMeshes) GarageScene.dropPreviewMeshes(); G.buildSetup(); }
+    else { if (typeof GarageScene !== "undefined" && GarageScene.dropPreviewMeshes) { GarageScene.dropPreviewMeshes(); G._spMeshKey = ""; } G.buildSetup(); }
     return { ok: true, team: team.id, parts: cur, live: !G.setupPreviewOn };
   },
   // Debug: hide/show individual track meshes. e.g. meshToggle({props:true}) hides props.

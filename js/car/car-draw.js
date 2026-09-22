@@ -107,10 +107,13 @@ const CarDraw = (function () {
     // value that cannot change unless something was written to the store.
     const _teamMeshKeyCache = new Map();
     function teamMeshKey(team) {
+      // The era moves the factory build without a store write (Career.engage
+      // → applyRegs), so the memo is keyed on the ruleset as well as rev.
+      const rev = G.store.rev + "|" + Parts.legalityKey();
       const c = _teamMeshKeyCache.get(team.id);
-      if (c && c.rev === G.store.rev) return c.val;
+      if (c && c.rev === rev) return c.val;
       const val = team.id + ":" + G.getLiveryId(team.id) + ":" + Parts.factoryKey(team);
-      _teamMeshKeyCache.set(team.id, { val, rev: G.store.rev });
+      _teamMeshKeyCache.set(team.id, { val, rev });
       return val;
     }
     // Painted full meshes are KEYED PER DRIVER (helmet design is opts.num). Shadow
@@ -198,7 +201,8 @@ const CarDraw = (function () {
     const _aeroLevelCache = new Map();   // "player|factory:team.id" -> {val, rev}
     function teamDecalState(team, usePlayerSetup) {
       const key = (usePlayerSetup ? "player:" : "factory:") + team.id;
-      const rev = usePlayerSetup ? G.store.rev : -1;
+      // Factory: the ruleset (Parts.setLegality) is the only thing that moves it.
+      const rev = usePlayerSetup ? G.store.rev + "|" + Parts.legalityKey() : "L" + Parts.legalityKey();
       const c = _aeroLevelCache.get(key);
       if (c && c.rev === rev) return c;
       const setup = usePlayerSetup ? G.getTeamParts(team.id) : Parts.getFactorySetup(team);
