@@ -206,11 +206,32 @@ async function main() {
         const b = ((performance.now() - armAt) / BUCKET_MS) | 0;
         if (b >= 0 && b < BUCKETS) arr[b]++;
       }
+      // WHO IS ALLOCATING. A count says the renderer is minting resources; it
+      // does not say WHERE, and guessing cost this project a round before
+      // (PERF-FINDINGS 2o wrote down a hypothesis that 2p killed with one
+      // grep). Capture a bounded sample of call stacks per kind and aggregate
+      // by signature, so the answer is a function name, not a theory.
+      const stacks = new Map();
+      const STACK_KINDS = { "gpu.createBindGroup": 1, "gpu.createBuffer": 1, "gpu.createTexture": 1, "gpu.createRenderPipeline": 1 };
+      let stackBudget = 400;
+      function note(kind) {
+        if (!STACK_KINDS[kind] || stackBudget <= 0) return;
+        stackBudget--;
+        let sig = "?";
+        try {
+          // Drop this wrapper's own frames, keep the next few — enough to name
+          // the caller and its parent without storing whole stacks.
+          const raw = (new Error().stack || "").split("\n").slice(3, 7);
+          sig = raw.map((l) => l.trim().replace(/^at\s+/, "").replace(/\?v=[a-z0-9]+/g, "").replace(/https?:\/\/[^\s)]*\//g, "")).join(" <- ");
+        } catch (_) { /* no stack: the count still stands */ }
+        const key = kind + " :: " + sig;
+        stacks.set(key, (stacks.get(key) || 0) + 1);
+      }
       function wrap(proto, name, kind) {
         try {
           if (!proto || typeof proto[name] !== "function") return;
           const orig = proto[name];
-          proto[name] = function () { if (armed) bump(kind); return orig.apply(this, arguments); };
+          proto[name] = function () { if (armed) { bump(kind); note(kind); } return orig.apply(this, arguments); };
         } catch (_) { /* a frozen prototype just means this kind goes unmeasured */ }
       }
       try {
@@ -229,6 +250,22 @@ async function main() {
         wrap(GD, "createTexture", "gpu.createTexture");
         wrap(GD, "createBuffer", "gpu.createBuffer");
       } catch (_) { /* no WebGL2/WebGPU in this context: the rAF timing still runs */ }
+
+      // three's own counters plus the JS heap. Counts are EXACT on a software
+      // adapter even where the milliseconds are not, which is what makes this
+      // valid in a container with no GPU.
+      let mem0 = null;
+      function snapMem() {
+        const o = { heapMB: null };
+        try {
+          if (performance.memory) o.heapMB = +(performance.memory.usedJSHeapSize / 1048576).toFixed(1);
+        } catch (_) { /* Chrome-only; absent is reported as absent */ }
+        try {
+          const t = window.GLX && GLX.__tlx;
+          if (t && t.memState) Object.assign(o, t.memState());
+        } catch (_) { /* backend not bound yet */ }
+        return o;
+      }
 
       const longtasks = [];
       try {
@@ -249,14 +286,20 @@ async function main() {
         arm() {
           armed = true; n = 0; longtasks.length = 0; gov.length = 0;
           armAt = performance.now(); counts.clear(); kinds.length = 0;
+          // DRIFT, NOT A SNAPSHOT — docs/notes/PERF-FINDINGS.md 2o's own rule:
+          // any TLX memory claim reporting a single heap number is measuring
+          // the wrong thing. Baseline here, delta at dump.
+          mem0 = snapMem();
         },
         n: () => n,
         dump: () => ({
           t0: Array.from(t0.subarray(0, n)), dur: Array.from(dur.subarray(0, n)), longtasks, gov,
           bucketMs: BUCKET_MS,
           work: kinds.map((k) => [k, Array.from(counts.get(k))]),
-          mem: (() => {
-            try { return window.GLX && GLX.__tlx && GLX.__tlx.memState ? GLX.__tlx.memState() : null; }
+          mem0, mem1: snapMem(),
+          stacks: [...stacks.entries()].sort((a, b) => b[1] - a[1]).slice(0, 25),
+          backend: (() => {
+            try { const t = window.GLX && GLX.__tlx; return t && t.backendState ? t.backendState() : null; }
             catch (_) { return null; }
           })(),
         }),
@@ -280,13 +323,30 @@ async function main() {
     out.backendBound = await page.evaluate(() => { try { return window.__apex.info().gfx || null; } catch (_) { return null; } });
     Object.assign(out, analyse(d.t0, d.dur));
     out.work = analyseWork(d.work || [], d.bucketMs || 250, out.frames);
-    out.mem = d.mem;
+    out.backend = d.backend;
+    out.stacks = d.stacks;
+    out.mem0 = d.mem0; out.mem1 = d.mem1;
+    // The leak test: every numeric counter three tracks, as a DELTA over the
+    // measured window. A bounded working set saturates; a leak climbs.
+    out.memDrift = (() => {
+      const a = d.mem0 || {}, b = d.mem1 || {};
+      const o = {};
+      for (const k of Object.keys(b)) {
+        if (typeof b[k] === "number" && typeof a[k] === "number" && b[k] !== a[k]) {
+          o[k] = +(b[k] - a[k]).toFixed(2);
+        }
+      }
+      return o;
+    })();
     out.longtasks = d.longtasks.length;
     out.longtaskTop = d.longtasks.slice().sort((a, b) => b[1] - a[1]).slice(0, 10);
     out.gov = d.gov.filter((g, i, a) => i === 0 || g[1] !== a[i - 1][1] || g[2] !== a[i - 1][2]);
     out.consoleErrors = consoleLines.slice(0, 10);
     log(out.verdict);
     log(`p50 ${out.p50} ms  p95 ${out.p95}  p99 ${out.p99}  max ${out.max}  frames ${out.frames}`);
+    log(`backend ${JSON.stringify(out.backend)}`);
+    log(`MEM DRIFT over the window: ${JSON.stringify(out.memDrift)}`);
+    for (const [sig, n] of (out.stacks || []).slice(0, 12)) log(`  ${String(n).padStart(4)}x  ${sig}`);
     for (const w of out.work) {
       if (w.settled && w.total < 4000) continue;   // built once at warm-up: the healthy shape
       log(`WORK ${w.kind}: ${w.total} calls, ${w.perFrame}/frame, ${w.busyBuckets}/${w.buckets} buckets busy` +
