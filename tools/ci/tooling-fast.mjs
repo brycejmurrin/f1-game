@@ -153,6 +153,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ribbon flag to lineBrakeCue); this still asks that one key means one type.
   "tests/unit/store-key-types.test.mjs",
   "tests/unit/no-bare-console.test.mjs",
+  "tests/unit/lexical-window-guard.test.mjs",
   "tests/unit/light-store-cond-layer.test.mjs",
   "tests/unit/scenery-kits.test.mjs",
   "tests/unit/albert-park-foundation.test.mjs",

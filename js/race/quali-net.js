@@ -85,7 +85,7 @@ const QualiNet = (function () {
     function openQualiForNet(done) {
       // Armed INSIDE openQuali: it is async, so a qualiNetDone set out here was
       // wiped by its continuation and netPlay.start() was unreachable.
-      openQuali(true, done || null);
+      return openQuali(true, done || null);
     }
 
     function onPeerQualiLive(d) {

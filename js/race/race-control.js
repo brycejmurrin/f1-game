@@ -295,6 +295,14 @@ const RaceControl = (function () {
     // The one-shot restart request at the end of a red-flag procedure.
     function takeRestart() { const r = restartWanted; restartWanted = false; return r; }
 
+    // The re-arm hold exists for the SAME uncleared hazard picture. game.js
+    // clears the surface on the very tick it consumes the restart (both the
+    // re-grid and the declined path), so it drops the hold there: otherwise
+    // capHoldLevel 4 masked every lower level too, and — the countdown never
+    // ticking update() — all 45 s of it landed on the green running after the
+    // restart, where a lap-1 pile-up got no yellow, VSC or SC.
+    function clearHold() { capHoldT = 0; capHoldLevel = 0; }
+
     function otEnabled() {
       if (caution.level !== 0) return false;
       const leader = G.ranked[0];
@@ -313,7 +321,7 @@ const RaceControl = (function () {
     return {
       update, apply, reset, setEnabled, otEnabled, info,
       get level() { return caution.level; },
-      takeRestart,
+      takeRestart, clearHold,
       get enabled() { return enabled; },
     };
   }
