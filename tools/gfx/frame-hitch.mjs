@@ -167,7 +167,10 @@ export function analysePasses(passes, t0) {
   const gs = gaps.slice().sort((a, b) => a - b);
   return {
     frames: n, drewFrames: drew.length, medianPasses: med,
-    maxPasses: sorted[n - 1],
+    // sorted holds only the RENDERING frames now, so index it by its own
+    // length — `n` is the full callback count and ran off the end, which is
+    // why this reported null.
+    maxPasses: sorted[sorted.length - 1],
     widerThanMedian: wideAt.length,
     widePerSecond: t0.length ? +(wideAt.length / ((t0[n - 1] - t0[0]) / 1000)).toFixed(2) : null,
     // Per RENDERING frame, so the two arms compare even if their rAF counts differ.
