@@ -136,7 +136,7 @@ serializes the agent behind SwiftShader several times over.
 | in the edit loop | `npm run test:tooling-fast` (structural, no browser; 195 files — ~5 min one at a time, ~2 min via `node tools/ci/tooling-fast.mjs --jobs=3`, which is what `verify-change` runs on a quiet box; MEASURED 2026-09-16) |
 | track/scenery edit | `node tools/track/verify-track.cjs <id>` (2 s, headless) FIRST |
 | once, when the edits are done | `node tools/ci/test-bg.mjs tiny` — page loads, `__apex` responds; if red, nothing else is worth running — then the groups `pick-tests` named (capped at two) |
-| before pushing | + `npm run test:sweeps` if you touched geometry |
+| before pushing | + `npm run test:sweeps` if you touched the fleet build's inputs (`node tools/ci/geometry-paths.mjs --ere` prints them: `js/track/`, `js/circuits/`, `tools/track|lib`, the `TRACK_VM` modules); a lighting, car, debris-world or driving-line edit needs only the suite that reads it (`--targeted <list>` names it) — `deploy.mjs` and ci.yml's sweeps job make both calls for you |
 | single spec | `npm test -- tests/specs/<file>.spec.js` |
 | single unit suite | `node --test tests/unit/<file>.test.mjs` |
 
@@ -422,7 +422,7 @@ source while a run is in flight, or its later specs load mixed versions.
 ### Why the sweeps run serially
 
 `node --test` defaults to a concurrency of CPU-count, and every suite in
-`test:sweeps` rebuilds all 40 circuits and holds their meshes. Four of those at
+`test:sweeps` rebuilds all 52 circuits and holds their meshes. Four of those at
 once reached 5.4 GB RSS and the kernel OOM-killed the run — which surfaces as a
 `SIGKILL` with `exitCode: ~` and no assertion, i.e. it does not look like a test
 failure at all. `--test-concurrency=1` on `test:sweeps` is deliberate — and

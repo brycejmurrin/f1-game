@@ -11,9 +11,10 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DEPLOY_BRANCH, touchedCircuits, preflight, ratchetMetrics, ratchetOverruns, cureableConflicts,
-  sweepSuites, touchesGeometry, notCovered, anyGeometry, proseOnly } from "../../tools/ci/deploy.mjs";
+  sweepSuites, touchesGeometry, targetedFor, notCovered, anyGeometry, proseOnly } from "../../tools/ci/deploy.mjs";
 import { DEPLOY_BRANCH as PICK_BRANCH } from "../../tools/ci/pick-tests.mjs";
-import { GEOMETRY_ERE, GEOMETRY_PATHS, namedPaths } from "../../tools/ci/geometry-paths.mjs";
+import { GEOMETRY_ERE, GEOMETRY_PATHS, namedPaths, fleetFiles, TARGETED, targetedSuites } from "../../tools/ci/geometry-paths.mjs";
+import { createRequire } from "node:module";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -344,4 +345,120 @@ test("proseOnly is true for prose and false for anything that can interact", () 
 
   // An EMPTY delta is not prose: nothing to reason about means take the gate.
   assert.equal(proseOnly([]), false, "an empty or unresolvable diff must not buy the shortcut");
+});
+
+
+/* TWO TIERS (2026-09-22). Ten of the fourteen sweep suites rebuild every
+ * circuit; the trigger used to name js/game.js, js/car/ and debris-world as
+ * geometry "because four sweep suites load them", and no FLEET suite executes
+ * any of those — so nearly every session's game.js edit paid ten fleet
+ * rebuilds (Pages #2526: 67 files since live, one match, a 28-line game.js
+ * latch, 14 minutes of gate). The fleet pattern is now DERIVED from the
+ * manifest's TRACK_VM (what the build actually loads) and the cheap suites
+ * carry their own trigger. These pin both halves and the no-drift rule. */
+test("a game.js-only union routes NO sweep: not the fleet, and no targeted suite reads it", () => {
+  const r = geomRepo();
+  try {
+    r.write("js/game.js", "// the start-race latch\n"); r.g("add", "-A"); r.g("commit", "-qm", "game");
+    assert.equal(touchesGeometry("base", r.dir), false,
+      "no fleet suite executes js/game.js — its edit must not rebuild 52 circuits ten times");
+    assert.deepEqual(targetedFor("base", r.dir), [],
+      "and no sweep suite reads game.js either (grid-boxes measures the TRACK build's paint)");
+  } finally { r.rm(); }
+});
+
+test("the fleet trigger is the fleet build's own module list (the garage/scene gap)", () => {
+  const vm = createRequire(import.meta.url)(path.join(ROOT, "tools/manifest.cjs")).TRACK_VM;
+  const mods = vm.filter((e) => typeof e === "string" && !e.startsWith("@"));
+  assert.ok(mods.length > 20, "premise: TRACK_VM is the real load list");
+  for (const m of mods) {
+    assert.equal(GEOMETRY_PATHS.test(m), true,
+      `${m} is executed by every fleet build but the trigger does not watch it — a sweep that never runs`);
+  }
+  // The four the hand-written list missed for weeks: not under js/track/ but
+  // loaded by the pit complex's garage build.
+  assert.ok(fleetFiles().includes("js/garage/scene.js"), "js/garage/scene.js is a TRACK_VM module outside js/track/");
+  const r = geomRepo();
+  try {
+    r.write("js/garage/scene.js", "// a re-shaped garage bay\n"); r.g("add", "-A"); r.g("commit", "-qm", "garage");
+    assert.equal(touchesGeometry("base", r.dir), true,
+      "an edit to a TRACK_VM module re-shapes what the fleet builds: the fleet must run");
+  } finally { r.rm(); }
+  assert.equal(GEOMETRY_PATHS.test("tools/manifest.cjs"), true, "the manifest IS the load list: editing it changes every build");
+  // What was REMOVED, and must stay out: none of these is a fleet input.
+  for (const gone of ["js/game.js", "js/car/parts.js", "js/physics/debris-world.js"]) {
+    assert.equal(GEOMETRY_PATHS.test(gone), false, `${gone} is not a fleet input; it belongs to the targeted tier or to nothing`);
+  }
+});
+
+test("a targeted edit routes ONLY the suite that reads it, in test:sweeps order", () => {
+  assert.deepEqual(targetedSuites(["js/car/parts.js"]), ["tests/unit/car-front-wing-width.test.mjs"]);
+  assert.deepEqual(targetedSuites(["js/lighting/track-lights.js"]), ["tests/unit/lamp-fixture-anchor.test.mjs"]);
+  assert.deepEqual(targetedSuites(["js/physics/debris-world.js", "README.md"]), ["tests/unit/debris-hazard-hint.test.mjs"]);
+  assert.deepEqual(targetedSuites(["js/ui/driving-line-opts.js", "js/car/car3d.js"]),
+    ["tests/unit/car-front-wing-width.test.mjs", "tests/unit/driving-line-opts.test.mjs"],
+    "deduplicated and in package.json's test:sweeps order, so the runner's output reads like the group's");
+  const r = geomRepo();
+  try {
+    r.write("js/car/parts.js", "// a wider wing\n"); r.g("add", "-A"); r.g("commit", "-qm", "car");
+    assert.equal(touchesGeometry("base", r.dir), false, "a car edit cannot move a circuit");
+    assert.deepEqual(targetedFor("base", r.dir), ["tests/unit/car-front-wing-width.test.mjs"]);
+  } finally { r.rm(); }
+  const suites = sweepSuites();
+  for (const rule of TARGETED) {
+    for (const s of rule.suites) assert.ok(suites.includes(s), `${s} (a TARGETED rule) is not in package.json's test:sweeps — the fleet run would not include it`);
+    assert.ok(rule.why, `the rule for ${rule.ere} must say what its suite reads`);
+  }
+});
+
+/* THE NO-DRIFT RULE. A suite that starts reading a js/ or tools/ source no
+ * tier names is a sweep the trigger silently stops running — the exact class
+ * geometry-paths.mjs exists to close. Read from each suite's SOURCE (comments
+ * stripped: pit-signs and grid-boxes cite game.js in prose), every string
+ * path it loads must be a fleet input or named by a targeted rule that runs
+ * THIS suite. */
+test("every source a sweep suite reads is covered by a tier that runs that suite", () => {
+  const stripped = (src) => src.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
+  const reads = (src) => {
+    const out = new Set();
+    for (const m of src.matchAll(/["'`]((?:\.\.\/)*(?:js|tools)\/[\w./-]+\.(?:js|mjs|cjs))["'`]/g)) out.add(m[1].replace(/^(\.\.\/)+/, ""));
+    for (const m of src.matchAll(/["'](js|tools)["']((?:\s*,\s*["'][\w.-]+["'])+)/g)) {
+      out.add(m[1] + "/" + [...m[2].matchAll(/["']([\w.-]+)["']/g)].map((x) => x[1]).join("/"));
+    }
+    return [...out].filter((p) => /\.(js|mjs|cjs)$/.test(p));
+  };
+  let checked = 0;
+  for (const suite of sweepSuites()) {
+    const src = stripped(fs.readFileSync(path.join(ROOT, suite), "utf8"));
+    for (const dep of reads(src)) {
+      checked++;
+      const fleet = GEOMETRY_PATHS.test(dep);
+      const targeted = TARGETED.some((r) => new RegExp(r.ere).test(dep) && r.suites.includes(suite));
+      assert.ok(fleet || targeted,
+        `${suite} reads ${dep}, which neither the fleet trigger nor a TARGETED rule naming this suite covers — ` +
+        "an edit there would run no sweep");
+    }
+  }
+  assert.ok(checked >= 12, `premise: the scan found only ${checked} loads across the sweep suites — the extractor is blind`);
+});
+
+test("--targeted prints the suites for a change list, and nothing for a game.js-only one", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-targeted-"));
+  try {
+    const list = path.join(dir, "changed.txt");
+    fs.writeFileSync(list, "js/game.js\njs/physics/debris-world.js\nREADME.md\n");
+    const out = execFileSync(process.execPath, ["tools/ci/geometry-paths.mjs", "--targeted", list], { cwd: ROOT, encoding: "utf8" });
+    assert.equal(out, "tests/unit/debris-hazard-hint.test.mjs");
+    fs.writeFileSync(list, "js/game.js\n");
+    assert.equal(execFileSync(process.execPath, ["tools/ci/geometry-paths.mjs", "--targeted", list], { cwd: ROOT, encoding: "utf8" }), "",
+      "an empty print is ci.yml's 'no targeted sweep reads this diff'");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  const yml = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
+  assert.match(yml, /node tools\/ci\/geometry-paths\.mjs --targeted "\$CHANGED_FILE"/,
+    "ci.yml's sweeps filter must read the targeted table, not retype it");
+  assert.match(yml, /- name: Targeted sweeps \(the suites that read this diff, no fleet rebuild\)\n\s+if: steps\.filter\.outputs\.geometry != 'true' && steps\.filter\.outputs\.targeted != ''/,
+    "the targeted step runs exactly when the fleet does not and a suite was named");
+  assert.equal(notCovered(false, ["tests/unit/car-front-wing-width.test.mjs"])[1],
+    "test:sweeps (nothing in this union can move geometry; the targeted sweeps that read it ran: car-front-wing-width.test.mjs)");
+  assert.equal(notCovered(false)[1], "test:sweeps (nothing in this union can move geometry)");
 });
