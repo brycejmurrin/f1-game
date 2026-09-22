@@ -2705,7 +2705,8 @@ async function startRaceBody() {
   // Same early-return hazard as the completed-season arm above: this one only
   // self-heals because #quali is a <dialog> in the top layer, which draws over
   // the scrim. Lower it anyway rather than rely on that.
-  if (!isQuali() && gridFromQuali() && !quali.order(cars)) { loadingScreen.stop(); openQuali(); return false; }
+  // Awaited so startRace's latch spans the sheet's build; openQuali lands its own failure on the menu.
+  if (!isQuali() && gridFromQuali() && !quali.order(cars)) { loadingScreen.stop(); await openQuali(); return false; }
   gridUp(gridOrderFor(gridFromQuali() ? quali.order(cars) : SeasonCal.grid(cars, season)));
   rlap("gridUp");
   wxArc.startChangeable();
@@ -8333,7 +8334,18 @@ $("mb-settings").onclick = () => { if (soundOn) GameAudio.init(); openSettings()
 // The sheet opens BEFORE the session with the field already simulated, so the
 // player can see what they have to beat and choose whether to drive it or take
 // the simulated time. `q-done` flips the foot from DRIVE/SIMULATE to TO THE GRID.
-async function openQuali(fresh, netDone) {
+// Latched and caught like startRace, but never re-thrown: none of its callers
+// await it, so a rejection reached the global error overlay with the settings
+// screen already hidden and NO menu under it. The menu is where it lands.
+let _openQualiP = null;
+function openQuali(fresh, netDone) {
+  if (_openQualiP) return _openQualiP;
+  _openQualiP = openQualiBody(fresh, netDone)
+    .catch((e) => { Log.error("game", "openQuali failed", e); qualiSheet.close(); quitToMenu(); })
+    .finally(() => { _openQualiP = null; });
+  return _openQualiP;
+}
+async function openQualiBody(fresh, netDone) {
   await ensureScenery(trackIdx);
   session = "quali";
   // Reached from race settings this is already "menu"; reached from the results
