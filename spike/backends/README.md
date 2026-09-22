@@ -31,10 +31,10 @@ tool that MENTIONS WebGPU is not automatically a WebGPU-only tool.
 - `three/` — TLX: `tlx.js` (the backend) + `tlx-shadow.js` / `tlx-chunked.js`
   / `tlx-post.js` (passes) + `tsl-chunks.js` / `tsl-lit.js` / `tsl-sky.js` /
   `tsl-fx.js` / `tsl-post.js` (TSL shader-node factories).
-- `vendor/three-0.185.1/` — the vendored three.js island TLX imports at
+- `vendor/three-0.186.0/` — the vendored three.js island TLX imports at
   runtime (`three.webgpu.min.js` / `three.core.min.js` / `three.tsl.min.js` +
   the BloomNode addon). Carries two load-bearing patches — see
-  `vendor/three-0.185.1/PATCHES.md` — re-apply both on any future re-attach.
+  `vendor/three-0.186.0/PATCHES.md` — re-apply both on any future re-attach.
 - `tools/` — the WGX/TLX-only CLIs: `gfx-probe.mjs`, `road-lut-census.mjs`,
   `wgx-{capture,lavapipe-probe,shot,validate,vid-repro}.mjs`,
   `tlx-pack-check.cjs` (`wgpu-flag-test.mjs` was removed 2026-09-10 as unreferenced). (`gpu-census.mjs` and
@@ -75,7 +75,7 @@ the way the narrowed guards in step 7 below are recorded.
    optional precache set.
 3. Restore `index.html`'s `three*` importmap keys (Trystero's three keys
    never left — do not duplicate them).
-4. Restore `sw.js`'s hand-authored `vendor/three-0.185.1/*` OPTIONAL
+4. Restore `sw.js`'s hand-authored `vendor/three-0.186.0/*` OPTIONAL
    precache lines.
 5. Restore `js/game.js`'s `preloadThreeVendor()` (deleted — it pointed at
    vendor paths that left the shipped tree). The boot canary and the

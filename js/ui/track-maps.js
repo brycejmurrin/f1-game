@@ -149,7 +149,7 @@ const TrackMaps = (function () {
         assignCornerClasses(crns);
         const dir = circuitDirection(tr);
         const elevRange = elevationRange(tr);
-        const drsZones = detectDRS(tr);
+        const drsZones = activationZones(tr);
         const sectors = (def.sectors && def.sectors.length === 2) ? def.sectors.slice() : null;
         out = { pts: pts, py: tr.py, corners: crns, dir: dir, elevRange: elevRange, drsZones: drsZones, sectors: sectors };
       }
@@ -316,37 +316,34 @@ const TrackMaps = (function () {
 
   // Detect DRS-eligible zones: long runs of very low curvature (straights).
   // Returns array of { a, b } fractional indices into map pts (0..1).
-  function detectDRS(tr) {
-    const n = tr.n, total = tr.total;
-    const MIN_FRAC = 0.04;   // minimum 4% of lap = ~200m on a 5km circuit
-    const KV_THRESH = 0.003; // straighter than this qualifies
-    // sample curvature at each spline node
-    const kv = new Array(n);
-    for (let k = 0; k < n; k++) kv[k] = Math.abs(Tracks.curvature(tr, (k / n) * total));
-    // find runs of low curvature
-    const zones = [];
-    let runStart = -1;
-    for (let k = 0; k <= n; k++) {
-      const ki = k % n;
-      const straight = kv[ki] < KV_THRESH;
-      if (straight && runStart < 0) { runStart = k; }
-      else if (!straight && runStart >= 0) {
-        const frac = (k - runStart) / n;
-        if (frac >= MIN_FRAC) zones.push({ a: runStart / n, b: k / n });
-        runStart = -1;
-      }
+  /* THE ZONES THE RACE WILL ACTUALLY OPEN — asked of the module that decides
+     them, never re-derived here.
+
+     This was `detectDRS`, a second curvature scan with its own threshold
+     (0.003 vs X_ZONE_K), its own minimum length (4% of the lap vs X_ZONE_MIN)
+     and no knowledge of either override table js/physics/aero-zones.js keeps:
+     ZONE_COUNT (how many zones a circuit has) or AERO_ZONE_TURNS (which
+     straights they sit on). So the minimap, the circuit picker and the
+     track-detail modal drew zones the car would never open — Monaco is the
+     plainest case, where ZONE_COUNT says 0 and a curvature scan cannot know
+     that. A map that promises a zone the race does not have is worse than a
+     map with no zones drawn on it.
+
+     AeroZones is read at CALL time, not at eval: this module loads before it
+     (tools/manifest.cjs), and this runs when a map is first built, which is
+     long after both. Zones come back in arc metres; the map speaks fractions.
+
+     No fallback to a local scan. If the module is missing, the honest answer
+     is "no zones", not "different zones" — a fallback that disagrees is the
+     defect this replaced. */
+  function activationZones(tr) {
+    if (typeof AeroZones === "undefined" || !AeroZones.zonesFor) {
+      Log.warn("game", "track-maps: AeroZones unavailable — the map draws no activation zones");
+      return [];
     }
-    // A run still open after the k<=n loop means node 0 is itself straight — the
-    // start/finish line falls INSIDE a straight — so the corner-closing branch
-    // never fired for it. Left as-is, that trailing straight (the run-up to the
-    // line) is silently dropped from the picker/HUD, splitting a seam-crossing
-    // DRS zone in two. Close it at the seam (consumers iterate a→b by node index,
-    // so a wrapping a>b range would break them; two adjacent zones render fine).
-    if (runStart >= 0) {
-      const frac = (n - runStart) / n;
-      if (frac >= MIN_FRAC) zones.push({ a: runStart / n, b: 1 });
-    }
-    return zones;
+    const total = tr.total;
+    if (!total) return [];
+    return AeroZones.zonesFor(tr).map((z) => ({ a: z.start / total, b: Math.min(1, z.end / total) }));
   }
 
   // Local maxima of |curvature| above a threshold, merged when close together,

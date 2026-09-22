@@ -112,6 +112,24 @@ function careerStub(opts = {}) {
     budget: () => (opts.budget != null ? opts.budget : 1170),
     freeMoney: () => false,
     marketValue: () => 40, driverStandings: () => [], offerBar: (t) => 92 - t * 18,
+    // The season-target rungs. Mirrors js/career/career.js AMBITION — the setup
+    // form and the offers sheet both build their picker straight off it, so a
+    // stub without it throws where the real Career never would.
+    AMBITION: [{ key: "modest", name: "PLAY IT SAFE", delta: 3, rep: 3, mv: 6 },
+               { key: "expected", name: "WHAT THEY ASK", delta: 0, rep: 5, mv: 12 },
+               { key: "ambitious", name: "PROMISE MORE", delta: -3, rep: 8, mv: 20 }],
+    // A contract's goal is a KIND now, and the hub reads its label and its live
+    // progress rather than assuming a championship position. Mirrors
+    // js/career/career.js GOAL_KINDS closely enough for the hub to render.
+    goalLabel: (g) => (!g ? "" : g.type === "teamPos" ? `Take the team to P${g.value} or better in the constructors'`
+      : g.type === "beatMate" ? "Finish the season ahead of your team-mate"
+      : `Finish P${g.value} or better in the championship`),
+    goalNow: () => (opts.goalNow !== undefined ? opts.goalNow : "P7"),
+    goalOnTrack: () => (opts.goalOnTrack !== undefined ? opts.goalOnTrack : false),
+    ambition: () => (opts.amb != null ? opts.amb : 1),
+    ambitionOf: (d) => (d && Number.isInteger(d.ambition) ? d.ambition : 1),
+    setAmbition: (i) => { C.calls.push(["setAmbition", i]); return i; },
+    goalValueFor: (t, a) => 10 - a,
     roundsTotal: () => 24, prizeFor: () => 100, researchCost: () => 0,
   };
   return C;

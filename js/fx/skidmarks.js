@@ -7,14 +7,18 @@ const SkidMarks = (function () {
   // 6 verts (two tris) — matches the shadowVAO quad winding [0,1,2, 0,2,3].
   const _SKID_CORNERS = [-0.5, -0.5, -0.5, 0.5, 0.5, 0.5, -0.5, -0.5, 0.5, 0.5, 0.5, -0.5];
   const SKID_CULL = 170 * 170;
-  const STAMP_EVERY = 5;
+  // Seconds between stamps. This was 5 FRAMES: at the same speed a 144 Hz
+  // display packed marks 2.4x denser than 60 fps and a 30 fps device left
+  // dashes, while the particle emitters beside it in render() were already
+  // rate·dt gated. The physics step is the natural unit — 5 steps at 60 Hz.
+  const STAMP_EVERY_S = 5 / 60;
 
   function create(_G) {
     Log.info("game", "SkidMarks.create");
     const marks = Array.from({ length: MAX_SKID }, () => new Float32Array(16));
     let active = 0;               // how many marks are live (grows to MAX_SKID then stays)
     let idx = 0;
-    let frameT = 0;               // frame countdown between stamp placements
+    let stampT = 0;               // seconds until the next stamp may be laid
 
     const verts = new Float32Array(MAX_SKID * 6 * 5);
     let vertCount = 0;
@@ -44,13 +48,17 @@ const SkidMarks = (function () {
     // Clear the trail. Called from startRace() — marks are per-session, and a
     // second race on the same circuit must not inherit the first one's rubber.
     function reset() {
-      active = 0; idx = 0; frameT = 0; dirty = true;
+      active = 0; idx = 0; stampT = 0; dirty = true;
     }
 
-    function stamp(mat, laying) {
-      if (!laying) { frameT = 0; return; }
-      if (--frameT > 0) return;
-      frameT = STAMP_EVERY;
+    function stamp(mat, laying, dt) {
+      if (!laying) { stampT = 0; return; }
+      stampT -= dt > 0 ? dt : 1 / 60;   // no dt (an old caller) charges one nominal frame
+      if (stampT > 0) return;
+      // Carry the remainder, so a 30 Hz frame (33 ms) does not round the 83 ms
+      // period up to 100 ms — but never more than one period of debt, so a
+      // long frame after a stall does not lay a burst of catch-up marks.
+      stampT = Math.max(-STAMP_EVERY_S, stampT) + STAMP_EVERY_S;
       marks[idx].set(mat);
       idx = (idx + 1) % MAX_SKID;
       if (active < MAX_SKID) active++;

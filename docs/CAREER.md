@@ -655,22 +655,92 @@ does `season = c.season`, and that shared identity is the whole reason `buildRes
 fresh object orphans game.js's alias: the next race writes its points into a dead object
 while the standings still render the stale one, which looks entirely fine.
 
+### Regulation eras — the second act for car development
+
+**The defect, measured** (`docs/notes/CAREER-CEILING-FIX-2026-09-22.md`): an
+optimal capped build costs ~18,900–22,800 cr of research plus a 16,500 cr budget
+ladder against ~6,100–8,100 cr a season, so **the car is finished in 2.6–3.7
+seasons** — and a career is unbounded. At the cap six of eleven teams converge on
+materially the same build, so near the top the seat you hold stops changing your
+car and the contract ladder terminates with it.
+
+**An era is a legality filter, not a confiscation.** `Regulations.ERAS` names
+three catalog categories per era; the dearest `BAN_TOP` options in each go
+illegal for `ERA_SEASONS`. `career.owned` is never touched — a part you
+researched is *not legal this era*, and it comes back when the era lapses.
+
+| | |
+|---|---|
+| era length | `ERA_SEASONS` = 4 |
+| options taken per category | `BAN_TOP` = 2 |
+| first era | `open` — restricts nothing, so the first build is never interrupted |
+
+**Why it reaches the whole grid.** `Parts._resolve()` consults
+`isOptionAvailable()` for every category of every resolution and falls back to
+`DEFAULTS`, and `resolveSetup()` is the one path BOTH the player's career build
+and every AI factory build take. So one predicate regulates everybody. This is
+the whole point: AI cars never leave `getFactorySetup()`, so a rule that reached
+only the player would leave them worse than a grid that lost nothing — a
+punishment dressed as a reset.
+
+The predicate is installed at runtime by `Career.applyRegs()` rather than
+imported, because `js/car/parts.js` loads before `js/career/` — and because that
+keeps a Grand Prix and a standalone Season unregulated, since only a career ever
+sets one. It is re-pushed wherever the year or the loaded save can change
+(`engage`, `start`, `load`, `useSlot`, `deleteSlot`, `clear`, `rollover`).
+
+**Two caches key on the ruleset, or an era is a no-op.** `Parts.factoryCache`
+includes `legalityKey()` — without it every AI would keep racing its pre-era
+build, which is exactly the asymmetry above. `Career._budgetCap` is recomputed
+when the era changes and skips banned options, or the cap would license a top
+shelf nobody may fit.
+
+`seasonsElapsed()` is `career.year - career.year0`, **not** `history.length` —
+`HISTORY_MAX` caps the archive at 10, so a long career would stop advancing its
+era. `year0` is stamped at `start()`; a save without one started in 2026.
+
 ### The contract binds
 
 Two rules that were written down and never ran.
 
 **The season goal is resolved at the winter.** `deal.goal` — the championship
-position the team expects of you, derived from the car by `expectedFinish()` —
-was written by `newDeal()`, rendered on the hub and on the offer sheet, and read
-by nothing. Meeting it is worth `GOAL_REP` (+5); missing it costs the same, and
-also `GOAL_MV` (12) off the market value the winter's offers are drawn against.
-That is the demotion: `offerBar()` spaces the tiers 18 apart, so a missed goal
-costs most of a tier's worth of interest without needing a second rule to say so.
+position promised for the season — was written by `newDeal()`, rendered on the
+hub and on the offer sheet, and read by nothing. Meeting it moves reputation;
+missing it moves reputation the other way AND takes market value off the figure
+the winter's offers are drawn against. That is the demotion: `offerBar()` spaces
+the tiers 18 apart, so a missed goal costs most of a tier's worth of interest
+without needing a second rule to say so.
 
-**No money either way, deliberately.** `tools/car/career-economy.mjs` measures this
-economy against the catalog, and a once-a-season bonus it does not model would
-invalidate every figure in "The economy, measured" above. Reputation is the
-channel that already carries season-long form.
+**The target is a RUNG THE PLAYER PICKS, not a number the game chose.**
+`deal.ambition` indexes `AMBITION`, and the target is
+`expectedFinish(team) + AMBITION[i].delta`:
+
+| rung | `key` | target | met / missed | missed also costs |
+|---|---|---|---|---|
+| 0 | `modest` | 3 places softer | ±3 REP | −6 market value |
+| 1 | `expected` | `expectedFinish()` | ±5 REP | −12 market value |
+| 2 | `ambitious` | 3 places better | ±8 REP | −20 market value |
+
+**Rung 1 is what every contract used to be** — delta 0, the old `GOAL_REP` 5 and
+`GOAL_MV` 12 exactly — so a deal signed before the picker existed carries no
+`ambition`, reads as index 1 through `ambIdx()`, and resolves byte-identically.
+That is why the table is ordered and indexed rather than keyed, and why no
+`CAREER_V` rung is owed for the new field.
+
+Two fields, and they are not the same thing. `deal.ambition` is what was
+**signed** and is what `rollover()` prices the season by. `career.amb` is the
+**pending** pick — what the next contract signs at — so moving the picker in
+March cannot retroactively re-price the contract already running. `setAmbition()`
+re-stamps `goal.value` on every offer still on the table, because the sheet
+prints that number and offers are drawn at rollover, before the pick exists.
+
+**No money either way, deliberately** — and ambition does not change that.
+`tools/car/career-economy.mjs` measures this economy against the catalog, and a
+once-a-season bonus it does not model would invalidate every figure in "The
+economy, measured" above. Reputation is the channel that already carries
+season-long form, and it is the right one for the promise besides: reputation
+and market value are what decide which seats `offerBar()` opens next winter, so
+promising more buys a better car sooner and missing costs you the ladder.
 
 `career.goalResult` is transient, like `career.moves`, and the end-of-season
 sheet draws it — a rule the player never sees fire is barely better than one that

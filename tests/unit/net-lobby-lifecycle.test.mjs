@@ -484,3 +484,64 @@ test("openRoom resets READY only for a FRESH room, not on every connection", () 
   assert.doesNotMatch(body, /^\s*_ready\.clear\(\);\s*$/m,
     "no unconditional _ready.clear() may remain in openRoom");
 });
+
+// ── the sim seed and race round travel with the host's settings ─────────────
+// Every reproducible draw — reliability DNFs, the weather arc, the AI
+// restart/skill rolls, the AI qualifying times that set the grid — hashes on
+// (seed, round). Until 2026-09-22 neither was published, so a tab that had run
+// a Daily Challenge or a few solo races saw different cars retire on different
+// laps, and a different grid, from its rival's; only the human rival's car was
+// actually kept in sync. The lobby's own comment admitted "peers do not share a
+// sim seed" and fixed one consumer (the weather arc) by shipping the plan.
+test("the host publishes seed and round with its settings", () => {
+  assert.match(SOURCE, /seed: G\.seed, round: G\.raceRound,/);
+});
+
+test("a guest applies the host's seed and round, and keeps its own on a payload without them", async () => {
+  const { h, s } = await connectedGuest();
+  try {
+    h.G.seed = 1; h.G.raceRound = 0;
+    s.deliver("settings", { laps: 5, seed: 4242, round: 3 });
+    assert.equal(h.G.seed, 4242, "seed applied");
+    assert.equal(h.G.raceRound, 3, "round applied");
+    assert.equal(h.G.raceLaps, 5, "the rest of the payload still applies");
+    s.deliver("settings", { laps: 7 });
+    assert.equal(h.G.seed, 4242, "a payload without the fields leaves the guest's values alone");
+    assert.equal(h.G.raceRound, 3);
+    assert.equal(h.G.raceLaps, 7);
+  } finally { h.lobby.cancel(); }
+});
+
+test("an invalid seed or round rejects the whole payload, as every other field does", async () => {
+  const { h, s } = await connectedGuest();
+  try {
+    h.G.seed = 9; h.G.raceRound = 2; h.G.raceLaps = 3;
+    for (const bad of [{ seed: 0 }, { seed: 1.5 }, { seed: "7" }, { seed: 2 ** 32 }, { round: -1 }, { round: 0.5 }, { round: null }]) {
+      s.deliver("settings", Object.assign({ laps: 9 }, bad));
+      assert.equal(h.G.seed, 9, `${JSON.stringify(bad)} must not change the seed`);
+      assert.equal(h.G.raceRound, 2, `${JSON.stringify(bad)} must not change the round`);
+      assert.equal(h.G.raceLaps, 3, `${JSON.stringify(bad)} must reject the payload whole`);
+    }
+  } finally { h.lobby.cancel(); }
+});
+
+// ── a typo is refused as a typo, even before the transport exists ─────────────
+// join() awaits the ICE prefetch (up to ICE_WAIT_MS) before it creates the
+// transport, and the player can paste in that window. makeAnswer checked
+// `!transport` FIRST, so junk pasted early was answered with "That attempt has
+// ended" — the multiplayer-lobby spec's junk-code test raced the TURN fetch on
+// every slow network. The code's shape is now checked before the connection.
+test("makeAnswer and acceptAnswer refuse a malformed code before they need a transport", async () => {
+  const peekCode = (c) => (String(c).startsWith("APEX1.") ? { ok: true }
+    : { ok: false, error: "bad_code", message: "That does not look like an Apex invite code." });
+  const h = harness({ scanFactory: () => ({ stop() {}, start() {} }), handshake: { peekCode } });
+  try {
+    const a = await h.lobby.makeAnswer("not-a-real-code");
+    assert.equal(a.error, "bad_code", "no transport yet, but the shape is wrong: say so");
+    assert.match(a.message, /apex invite code/i);
+    const b = await h.lobby.acceptAnswer("not-a-real-code");
+    assert.equal(b.error, "bad_code");
+    const c = await h.lobby.makeAnswer("APEX1.p.e30");
+    assert.equal(c.error, "no_transport", "a well-shaped code with no connection is the transport's problem");
+  } finally { h.lobby.cancel(); }
+});

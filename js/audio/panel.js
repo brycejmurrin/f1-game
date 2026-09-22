@@ -305,7 +305,12 @@ const AudioPanel = (() => {
       // Same words as the SOURCE row (ALL / DEFAULT / MY TRACKS / SPOTIFY):
       // the caption said "Built-in" for the value labelled DEFAULT.
       const SRC_LABEL = { all: "All music", builtin: "Default", user: "My tracks", spotify: "Spotify" };
-      const srcText = musicLive ? (SRC_LABEL[musicSrc] || "") : G.soundOn ? "" : "Master sound is off — MUSIC ON or SOUND EFFECTS ON turns it on";
+      // srcOn(), not the panel's own `musicSrc`: when Spotify drives the
+      // soundtrack the live source is spotify while this closure's copy still
+      // reads whatever local set was picked before, so NOW PLAYING said "All
+      // music" over a Spotify track. The SOURCE row beside it already paints
+      // from the live value — this line was the one that did not.
+      const srcText = musicLive ? (SRC_LABEL[srcOn()] || "") : G.soundOn ? "" : "Master sound is off — MUSIC ON or SOUND EFFECTS ON turns it on";
       // Two copies of the NOW PLAYING card: the MUSIC page's (as-*) and the
       // pause menu's (pm-*), which is only shown while music is live.
       for (const p of ["as", "pm"]) {
@@ -379,7 +384,11 @@ const AudioPanel = (() => {
     function voiceRow(ch, label, blurb) {
       const wrap = document.createElement("div");
       wrap.className = "as-voice";
-      const list = (G.radio && G.radio.voiceList && G.radio.voiceList()) || [];
+      // PER CHANNEL: the announcer's list includes network voices, the three
+      // race channels' does not (RadioVoice.REMOTE_OK). Passing the channel is
+      // what stops this <select> offering the radio a voice it must not use —
+      // and what stops it hiding the good ones from the announcer.
+      const list = (G.radio && G.radio.voiceList && G.radio.voiceList(ch)) || [];
       const tune = (G.radio && G.radio.tuneFor && G.radio.tuneFor(ch)) || { pitch: 1, rate: 1, name: "" };
 
       const head = document.createElement("div");
@@ -479,7 +488,7 @@ const AudioPanel = (() => {
       const note = $("as-voices-note");
       if (note) {
         note.textContent = n
-          ? n + " system voices. A long message is sped up to fit its card, so RATE is a floor, not a promise."
+          ? n + " system voices. A long message is sped up to fit its card, so RATE is a floor, not a promise — and some browsers (Edge) ignore PITCH entirely, where RATE is the only thing separating the channels."
           : "This browser does not list its voices, so it picks one itself — PITCH and RATE are what separate the three channels here.";
       }
     }
@@ -494,7 +503,11 @@ const AudioPanel = (() => {
       if (!host || typeof host.appendChild !== "function" || !host.children) return;
       if (typeof RadioVoice === "undefined" || typeof document === "undefined"
           || typeof document.createElement !== "function") return;
-      const n = (G.radio && G.radio.voiceList && G.radio.voiceList().length) || 0;
+      // ITS OWN list, and therefore its own length: the announcer's includes
+      // network voices, so keying this off the radio's local-only count would
+      // leave the row stale exactly where the two differ most (Chrome and Edge,
+      // where the local count is often 0 and the real one is dozens).
+      const n = (G.radio && G.radio.voiceList && G.radio.voiceList(ANN_CHANNEL[0]).length) || 0;
       if (annRowFor === n && host.children.length > 1) return;
       annRowFor = n;
       while (host.children.length > 1) host.removeChild(host.lastChild);

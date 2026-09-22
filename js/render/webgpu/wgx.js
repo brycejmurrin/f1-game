@@ -822,7 +822,14 @@ const WGX = (function () {
       _wgxEscalate("runtime output black (GPU drew nothing)");
     }
     function _queueOutputProbe() {
+      // _outProbePending is cleared in _readOutputProbe BEFORE its mapAsync
+      // resolves, so the pending flag alone does not say "this buffer is free".
+      // Without the mapState test the next frame re-encoded a
+      // copyTextureToBuffer into a buffer that is still mapped — a validation
+      // error on every device that enforces it, on the probe whose whole job
+      // is deciding whether WGX surrenders to GLX.
       if (!_sceneProbeOn || _lost || _outProbePending || _outProbeN >= OUT_PROBE_MAX || _drawSlot < 1) return;
+      if (_outProbeBuf && _outProbeBuf.mapState !== "unmapped") return;
       if (!sceneTex || !encoder || typeof encoder.copyTextureToBuffer !== "function") return;
       try {
         if (!_outProbeBuf) {
@@ -2264,8 +2271,9 @@ const WGX = (function () {
       // implementation — an Apple-silicon ADAPTER reports 16384, the DEVICE we
       // asked for does not. With dpr capped at 2 that starts clipping at 4097
       // CSS px: a 6K panel in a scaled HiDPI mode, or a window spanned across
-      // several 4K monitors. GLX and TLX do not clamp at all, so this was
-      // WGX-only. One scale factor keeps the picture correct, just smaller.
+      // several 4K monitors. GLX (MAX_TEXTURE_SIZE / MAX_RENDERBUFFER_SIZE)
+      // and TLX (its backend's limit) clamp the same way now. One scale factor
+      // keeps the picture correct, just smaller.
       if (pw > maxDim || ph > maxDim) {
         const k = Math.min(maxDim / pw, maxDim / ph);
         pw = Math.max(1, Math.floor(pw * k));

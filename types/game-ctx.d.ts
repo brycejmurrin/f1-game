@@ -414,6 +414,10 @@ interface GameCtx {
   // ── Determinism: the sim RNG seed (setting it rewinds the stream) ──────────
   seed: number;
   readonly simSeed: (v?: number) => number;
+  /** The race counter the reliability and weather draws hash on. A bare
+   *  passthrough (no stream rewind): VS FRIEND publishes it with the host's
+   *  settings so both peers draw the same DNFs — js/net/lobby.js. */
+  raceRound: number;
 
   // ── Driving-model tunables (let-s in game.js; PACE re-inits the cameras) ───
   DRIFT: number;

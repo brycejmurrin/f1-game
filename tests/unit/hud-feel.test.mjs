@@ -38,6 +38,25 @@ const src = (p) => read(p).replace(/^const\b/gm, "var");
 
 const IDLE_RPM = 5000, MAX_RPM = 15000;
 
+// --text and --bg as the SHEET declares them, and WCAG contrast computed here
+// rather than imported — the point of the accent test below is that hud.js
+// picks the same winner an independent calculation does.
+const TOKEN = (() => {
+  const t = {};
+  for (const [, k, v] of read("css/tokens.css").matchAll(/^\s*(--(?:text|bg)):\s*([^;]+);/gm)) t[k] = v.trim();
+  return t;
+})();
+const lin = (u) => (u <= 0.04045 ? u / 12.92 : Math.pow((u + 0.055) / 1.055, 2.4));
+const lum = (c) => 0.2126 * lin(c[0]) + 0.7152 * lin(c[1]) + 0.0722 * lin(c[2]);
+const wcag = (a, b) => {
+  const la = lum(a), lb = lum(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+};
+const hex01 = (h) => {
+  const d = /^#([0-9a-f]{6})$/i.exec(String(h).trim())[1];
+  return [0, 2, 4].map((i) => parseInt(d.slice(i, i + 2), 16) / 255);
+};
+
 // A 2D context that accepts every call and every property write.
 function ctx2d() {
   const store = {};
@@ -65,6 +84,12 @@ function boot(opts = {}) {
     Ghost: { hasGhost: () => false, timeAt: () => null, at: () => null },
     GhostShare: { hasGuest: () => false, timeAt: () => null, at: () => null },
     TrackMaps: { drsZones: () => [] },
+    // The three globals the TEAM ACCENT path reads (skinAccent in hud.js). They
+    // are absent from the other tests' boot on purpose — without Teams the
+    // function must leave the cascade alone, which is what lets hud.js run in a
+    // node harness at all.
+    Teams: opts.teams || undefined,
+    getComputedStyle: opts.teams ? () => ({ getPropertyValue: (k) => TOKEN[k] || "" }) : undefined,
   };
   sb.window = sb;
   vm.runInNewContext(src("js/ui/hud.js"), sb, { filename: "js/ui/hud.js" });
@@ -382,4 +407,71 @@ test("sector flash, limits chip, and announce queue are wired in source", () => 
   assert.match(g, /hudLimits:\s*\$\("hud-limits"\)/);
   assert.match(read("css/hud.css"), /#hud-limits/);
   assert.match(read("css/hud.css"), /\.sec-row\.sec-flash/);
+});
+
+/* ── the radio card's number plate carries the PLAYER'S team ─────────────── */
+
+// css/tokens.css gives each of the eleven constructors a `:root[data-team="…"]`
+// row holding --accent and the --accent-ink measured against it. A selector
+// cannot match a team that does not exist until runtime, and two do not: MY
+// TEAM and LEGENDS are appended to Teams.LIST at boot, and MY TEAM's colours
+// are edited in the garage. So `data-team="custom"` matched no rule, --accent
+// stayed at whatever team was skinned last (or the shipped --red), and the
+// number plate — the one surface painted --accent — showed another
+// constructor's colour for a whole session while the car on screen was cyan.
+
+const REAL = { isReal: (t) => !!t && !t.custom && !t.legends };
+const accentOf = (dom) => dom.documentElement.style._decls;
+
+test("a team with no tokens.css row gets its OWN colour on the plate, not the last one skinned", () => {
+  const { player, G, dom, tick } = boot({ teams: REAL });
+  player.team = { id: "ferrari", color: [0.86, 0, 0] };
+  G.cssCol = (c) => "rgb(" + c.map((x) => Math.round(x * 255)).join(",") + ")";
+  tick();
+  assert.equal(accentOf(dom)["--accent"], undefined,
+    "a real constructor must leave the cascade alone — tokens.css already has its row, measured by hand");
+  assert.equal(dom.documentElement.dataset.team, "ferrari");
+
+  player.team = { id: "custom", custom: true, color: [0.13, 0.79, 0.85] };
+  G.store = { rev: 1 };
+  tick();
+  assert.equal(accentOf(dom)["--accent"], "rgb(33,201,217)",
+    "MY TEAM's plate is MY TEAM's colour — this is the bug: it used to inherit ferrari's row");
+});
+
+test("the plate's ink is whichever token stands further from the team colour", () => {
+  // The same rule nontext-contrast.test.mjs proves of every hand-written row,
+  // recomputed here so the code has to name the winner rather than prefer one.
+  const text = hex01(TOKEN["--text"]), bg = hex01(TOKEN["--bg"]);
+  const cases = [
+    [0.13, 0.79, 0.85],   // the shipped MY TEAM cyan — light ground, wants dark ink
+    [0.05, 0.08, 0.55],   // a navy a player could pick — dark ground, wants light ink
+    [0.97, 0.97, 0.98],   // near-white
+  ];
+  for (const color of cases) {
+    const { player, G, dom, tick } = boot({ teams: REAL });
+    G.cssCol = () => "rgb(0,0,0)";
+    G.store = { rev: 1 };
+    player.team = { id: "custom", custom: true, color };
+    tick();
+    const want = wcag(color, text) >= wcag(color, bg) ? "var(--text)" : "var(--bg)";
+    assert.equal(accentOf(dom)["--accent-ink"], want,
+      `on ${color}: --text measures ${wcag(color, text).toFixed(2)}:1 and --bg ${wcag(color, bg).toFixed(2)}:1`);
+  }
+});
+
+test("a garage colour edit re-skins the plate — the id has not changed", () => {
+  // teamCss memoises on G.store.rev for exactly this reason (a CUSTOM team's
+  // colours are editable mid-session); the skin write keyed on the team ID
+  // alone, so the plate kept the colour the team was created with.
+  const { player, G, dom, tick } = boot({ teams: REAL });
+  G.store = { rev: 1 };
+  G.cssCol = (c) => "rgb(" + c.map((x) => Math.round(x * 255)).join(",") + ")";
+  player.team = { id: "custom", custom: true, color: [0.13, 0.79, 0.85] };
+  tick();
+  assert.equal(accentOf(dom)["--accent"], "rgb(33,201,217)");
+  player.team.color = [0.9, 0.2, 0.1];
+  G.store.rev = 2;
+  tick();
+  assert.equal(accentOf(dom)["--accent"], "rgb(230,51,26)", "the repaint never reached the plate");
 });

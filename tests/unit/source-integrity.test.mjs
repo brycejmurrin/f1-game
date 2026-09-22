@@ -377,7 +377,12 @@ test("the audio block cannot deref a null player, and a lone throw no longer kil
     "a tolerated fault must re-schedule the frame");
   assert.match(src, /tickBody\(now\); LoopHealth\.clean\(\); requestAnimationFrame\(tick\);/,
     "a clean frame must pay the fault run back, or unrelated faults reach the cap");
-  assert.match(src, /tick\._reported = true; window\.__apexReportError\("tick", e\);[^]*?\n\s*\}\n\s*throw e;/,
+  // Between the report and the rethrow, the fatal branch also arms the boot
+  // canary (armBackendProbe(), gfx-backend-canary.test.mjs) when render()
+  // never reached its own arm-and-present — that call is allowed in the gap,
+  // but the report must still precede the rethrow with nothing else fatal
+  // skipped in between.
+  assert.match(src, /tick\._reported = true; window\.__apexReportError\("tick", e\);[^]*?\n\s*\}\n(?:\s*\/\/[^\n]*\n)*\s*(?:if \(_backendBound[^\n]*\n)?\s*throw e;/,
     "at the cap the loop must still report once and rethrow");
 });
 

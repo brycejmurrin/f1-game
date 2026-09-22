@@ -1491,9 +1491,23 @@ test.describe("Parts module — team signatures and factory presets", () => {
       // signature or a drifted default is still a failure here.
       const legendsTeam = Teams.LIST.find((t) => t.legends);
       const legendsSetup = legendsTeam ? Parts.getFactorySetup(legendsTeam) : null;
-      const legendsOffCatalog = legendsSetup
-        ? Parts.CATALOG.flatMap((cat) => (legendsSetup[cat.id] === Parts.DEFAULTS[cat.id]
-          ? [] : [`${cat.id}:${legendsSetup[cat.id]}`]))
+      // THE PERIOD BUILD IS THE CONTRACT NOW, not the catalog defaults.
+      // Legends.team() sets `factory: parts(l.id)` (js/data/legends.js) and says
+      // why in as many words: the period car is the team's factory build for the
+      // player's slot as well as a rival's, because picking Fangio in the garage
+      // used to hand you a 2026 chassis in Silver Arrow paint while DUELLING him
+      // produced the 1954 car. This assertion held the pre-feature rule and was
+      // never re-selected by the change-aware gate, so nothing said so.
+      //
+      // Still a real claim: the legends car must field EXACTLY the period build
+      // for the legend currently seated — not defaults, and not some other
+      // legend's machine.
+      const legendId = legendsTeam && legendsTeam.legend;
+      const period = (legendId && typeof Legends !== "undefined" && Legends.parts)
+        ? Legends.parts(legendId) : null;
+      const legendsOffPeriod = (legendsSetup && period)
+        ? Parts.CATALOG.flatMap((cat) => (legendsSetup[cat.id] === period[cat.id]
+          ? [] : [`${cat.id}:${legendsSetup[cat.id]}!=${period[cat.id]}`]))
         : [];
       for (const team of Teams.LIST.filter((t) => !t.custom && !t.legends)) {
         const setup = Parts.getFactorySetup(team);
@@ -1509,12 +1523,13 @@ test.describe("Parts module — team signatures and factory presets", () => {
           gaps.push(`${team.id}:${cat.id}:${setup[cat.id]}`);
         }
       }
-      return { gaps, factoryEngineTeams, legendsOffCatalog };
+      return { gaps, factoryEngineTeams, legendsOffPeriod, hasPeriod: !!period };
     });
     expect(result.gaps).toEqual([]);
-    // The Legends car is the baseline car in a legend's colours: every category
-    // at the catalog default, distinguished by livery and crest, never by parts.
-    expect(result.legendsOffCatalog).toEqual([]);
+    // The Legends car wears the machine of its era, not a 2026 chassis in period
+    // colours — and it wears the right one for the legend currently seated.
+    expect(result.hasPeriod, "Legends.parts() must answer for the seated legend").toBe(true);
+    expect(result.legendsOffPeriod).toEqual([]);
     // Cadillac is Ferrari-powered and must NOT be in this list — without its own
     // signature engine it would render the exact same power unit as Ferrari.
     expect(result.factoryEngineTeams.sort())

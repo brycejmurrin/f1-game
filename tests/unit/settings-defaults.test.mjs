@@ -142,3 +142,28 @@ test("every key the driving model owns is marked", () => {
   for (const k of ["preset", "steerRate", "tiltDeg", "adaptiveButtons", "pace"])
     assert.ok(review[k], `${k} is a steering default and must be marked \`subsystem:\` in settings-export.js`);
 });
+
+test("readSpec() parses EVERY SPEC row, whatever optional properties it carries", () => {
+  /* The row regex knew about `subsystem` and nothing else, so the two rows that
+     also carry a `changed:` predicate — controls.keys and controls.pad, whose
+     value is a whole key/pad binding map — matched nothing and were dropped:
+     84 rows parsed of 86 present. apply() then refused both exported sections
+     as "not in SPEC", so a player's rebound keys and pad never came back from
+     an import. Silent, because a dropped row looks identical to a row that was
+     never written.
+
+     Counted from the SOURCE, not from a pinned number: adding a row must not
+     need an edit here, but adding one the parser cannot see must fail. */
+  const src = fs.readFileSync(new URL("../../js/ui/settings-export.js", import.meta.url), "utf8");
+  const present = (src.match(/^\s*\{ k: "/gm) || []).length;
+  const rows = readSpec();
+  assert.equal(rows.length, present,
+    `readSpec() parsed ${rows.length} of ${present} SPEC rows — a row shape the regex cannot see`);
+  // The two that were actually lost, by name, so a regex rewrite cannot quietly
+  // drop them again while keeping the count right.
+  for (const k of ["keys", "pad"]) {
+    assert.ok(rows.some((r) => r.k === k), `SPEC row "${k}" (it carries a changed: predicate) is missing`);
+  }
+  // …and the optional property the regex DID know about still resolves.
+  assert.ok(rows.filter((r) => r.subsystem).length > 0, "subsystem rows stopped parsing");
+});

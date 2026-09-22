@@ -10,7 +10,8 @@ Log.info("ui", "GameHud.create");
 
 const els = G.els;
 const mm = els.minimap.getContext("2d");
-let hudT = 0;
+let hudT = 0;                 // ms until the next throttled HUD tick
+const HUD_TICK_MS = 100;      // ~10 Hz in WALL time, whatever the display refresh
 let minimapBg = null;         // offscreen canvas with pre-rendered track shape
 let minimapBgKey = "";        // cssW|cssH|ratio it was rendered for — NOT the
                               // derived (W,H): 140css@2x and 280css@1x share a
@@ -19,6 +20,7 @@ let _mmKey = null, _mmCssW = 140, _mmCssH = 140, _mmRatio = 1;  // measure cache
 let _mmPitP = null, _mmYou = "#aeea00";   // the "P"'s local px + map node, and the resolved --you; set with the bg
 let _flagShown = false;       // B1 caution-flag visibility cache (avoid layout thrash)
 let _teamSkin = null;         // last team id pushed to <html data-team> (skins the HUD accent)
+let _teamSkinRev = -1;        // …and the store rev it was written at (a CUSTOM team's colour is editable)
 let _redline = false;         // tach redline latch: on above 92% of MAX_RPM, off again below 89%
 // Where the tyre bar turns amber. 70% of the set's life is the point a stop
 // stops being hypothetical — F1 games teach "pit before 65-75% wear" and it is
@@ -36,7 +38,7 @@ function hClass(el, v) { if (!el) return; if (_hudCls.get(el) !== v) { _hudCls.s
 function hToggle(el, cls, on) { if (!el) return; let m = _hudTog.get(el); if (!m) { m = {}; _hudTog.set(el, m); } if (m[cls] !== on) { m[cls] = on; el.classList.toggle(cls, on); } }
 function hAttr(el, name, value) { if (!el) return; const v = String(value); if (el.getAttribute(name) !== v) el.setAttribute(name, v); }
 function replayGhost() { return GhostShare.hasGuest() ? GhostShare : Ghost; }
-let _lastRank = 0, _posFlashT = 0;   // POS box flash state (see the tick)
+let _lastRank = 0, _posFlashT = 0;   // POS box flash state, ms left (see the tick)
 // Team colours are static — compute once per team, the minimap's idiom.
 // Keyed on the store revision, exactly as _livResolveCache is (js/game.js):
 // a CUSTOM team's colours are editable in the garage, and an unkeyed memo on
@@ -591,27 +593,100 @@ function fitHud() {
   set("--hud-z-dock", capDock, btnScale);
 }
 
-function updateHud(force) {
+/* THE TEAM ACCENT for a team css/tokens.css has no row for.
+ *
+ * `:root[data-team="…"]` carries --accent and --accent-ink for the eleven
+ * constructors, and a selector cannot match a team that does not exist until
+ * runtime: MY TEAM and the LEGENDS entry are appended to Teams.LIST at boot
+ * (js/career/custom-team.js) and MY TEAM's colours are edited in the garage.
+ * So `data-team="custom"` matched nothing, --accent stayed at whatever team was
+ * skinned last — or the shipped --red — and the radio card's number plate, the
+ * one surface painted --accent, carried another constructor's colour for the
+ * whole session while the car on screen was the player's own.
+ *
+ * The rule is the sheet's, applied at runtime rather than duplicated: the plate
+ * is the TEAM's colour and the ink is whichever of --text and --bg stands
+ * FURTHER from it, which is exactly what nontext-contrast.test.mjs proves of
+ * every hand-written row. Both tokens are read off the live root, so
+ * re-pointing --text in the sheet moves this with it.
+ *
+ * Only for a team with no row. A real constructor gets its inline props CLEARED
+ * so the cascade hands it back to tokens.css, where the ink was chosen by hand
+ * and measured. */
+// WCAG relative luminance and contrast ratio, the four lines of it. js/car/
+// liverytex.js exports the same pair, and this is deliberately NOT that one: a
+// HUD that must reach into the livery TEXTURE builder to decide a text colour
+// is a dependency nobody would choose, and the tuner-slider doc generator reads
+// any `.contrast` member call as a consumer of the CONTRAST lighting slider, so
+// borrowing it also published three false rows in a generated table. Channels
+// are linearised first — the Rec.709 coefficients on gamma-encoded sRGB
+// overstate mid-tones badly (0.5 grey reads as 0.5 when it is really 0.21).
+const _lin = (u) => (u <= 0.04045 ? u / 12.92 : Math.pow((u + 0.055) / 1.055, 2.4));
+const _lum = (c) => 0.2126 * _lin(c[0]) + 0.7152 * _lin(c[1]) + 0.0722 * _lin(c[2]);
+const _wcag = (a, b) => {
+  const la = _lum(a), lb = _lum(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+};
+const _hexRgb = (v) => {
+  const h = String(v || "").trim();
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(h);
+  if (!m) return null;
+  const d = m[1].length === 3 ? m[1].replace(/./g, (c) => c + c) : m[1];
+  return [parseInt(d.slice(0, 2), 16) / 255, parseInt(d.slice(2, 4), 16) / 255, parseInt(d.slice(4, 6), 16) / 255];
+};
+function skinAccent(t) {
+  const root = document.documentElement;
+  // Teams.isReal is the same predicate the career grid filters on: false for
+  // exactly the two appended entries, and for the next one appended after them.
+  // UNKNOWABLE COUNTS AS REAL. Without Teams there is no way to tell an
+  // appended entry from a constructor, and the safe answer is to leave the
+  // cascade alone: tokens.css is right for every team it has a row for, and
+  // writing an inline accent on a guess would override a hand-measured one.
+  // (It is also what keeps this callable from the node HUD harnesses, which
+  // boot hud.js with neither Teams nor getComputedStyle.)
+  const canTell = typeof Teams !== "undefined" && Teams && typeof Teams.isReal === "function";
+  if (!t || !t.color || !canTell || Teams.isReal(t) || typeof getComputedStyle !== "function") {
+    root.style.removeProperty("--accent");
+    root.style.removeProperty("--accent-ink");
+    return;
+  }
+  const cs = getComputedStyle(root);
+  const text = _hexRgb(cs.getPropertyValue("--text")), bg = _hexRgb(cs.getPropertyValue("--bg"));
+  root.style.setProperty("--accent", G.cssCol(t.color));
+  if (!text || !bg) return;
+  const ink = _wcag(t.color, text) >= _wcag(t.color, bg) ? "var(--text)" : "var(--bg)";
+  root.style.setProperty("--accent-ink", ink);
+}
+
+function updateHud(force, dtMs) {
+  if (!(Number.isFinite(dtMs) && dtMs > 0)) dtMs = 16.7;   // forced refreshes and the first frame: one nominal frame
   const player = G.player, cars = G.cars, timeTrial = G.timeTrial;
   if (!player) return;
   syncHudCamClasses();
-  if (player.team && player.team.id !== _teamSkin) {
-    _teamSkin = player.team.id;
+  const skinRev = G.store ? G.store.rev : 0;
+  if (player.team && (player.team.id !== _teamSkin || skinRev !== _teamSkinRev)) {
+    _teamSkin = player.team.id; _teamSkinRev = skinRev;
     document.documentElement.dataset.team = _teamSkin;
+    skinAccent(player.team);
   }
-  hudT -= 1;
+  // WALL-CLOCK throttle. This was a 6-FRAME countdown, which is 10 Hz only at
+  // 60 fps: a 120/144 Hz display ticked it 2x as often, so the gap EMA below
+  // (tuned "0.3 s at 10 Hz") chattered again and the flashes ran short, while
+  // a throttled 30 fps device dropped to 5 Hz. The forced refreshes pass no dt
+  // and are charged one nominal frame.
+  hudT -= dtMs;
   if (!force && hudT > 0) return;
-  hudT = 6; // ~10Hz at 60fps
+  hudT = HUD_TICK_MS;
   syncHudLayoutClasses();      // before fitHud: show/hide/park changes what gets measured
   fitHud();                    // below the throttle: this reads layout, per TICK not per frame
   // A retirement has no race position left to hold — `rank` is whatever it was
   // when the car stopped, and the field it was measured against no longer
   // contains it (see the ranked build in game.js).
   hText(els.pos, timeTrial ? "TT" : player.retired ? "DNF" : (player.rank || "-") + "/" + cars.length);
-  // Position change: acknowledge an overtake (either way) for ~6 ticks.
+  // Position change: acknowledge an overtake (either way) for ~0.6 s.
   const rank = timeTrial || player.retired ? 0 : (player.rank || 0);
-  if (rank && _lastRank && rank !== _lastRank) { els.pos.dataset.delta = rank < _lastRank ? "up" : "down"; _posFlashT = 6; }
-  else if (_posFlashT > 0 && --_posFlashT === 0) delete els.pos.dataset.delta;
+  if (rank && _lastRank && rank !== _lastRank) { els.pos.dataset.delta = rank < _lastRank ? "up" : "down"; _posFlashT = 600; }
+  else if (_posFlashT > 0 && (_posFlashT -= HUD_TICK_MS) <= 0) { _posFlashT = 0; delete els.pos.dataset.delta; }
   if (rank) _lastRank = rank;
   hText(els.lap, Math.min(player.lap || 1, G.lapsTarget) + "/" + G.lapsTarget);
   hText(els.time, G.fmtTime(player.lapTime));

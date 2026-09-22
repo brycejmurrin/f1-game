@@ -69,7 +69,9 @@ test("raceIntro lights the scene before the loading screen runs", () => {
 test("startRace still re-applies after its rebuild", () => {
   // The call in raceIntro removes the WINDOW; it does not replace this one.
   // loadTrack() rebuilds the world, and the rebuilt world has to be lit too.
-  const body = bodyOf("async function startRace(");
+  // startRace() itself is now a thin re-entrancy-latch wrapper (see
+  // start-race-latch.test.mjs) around startRaceBody(), which carries this flow.
+  const body = bodyOf("async function startRaceBody(");
   const load = body.indexOf("loadTrack(trackIdx)");
   const apply = body.indexOf("applyRaceSettings()");
   assert.ok(load > 0 && apply > 0, "startRace must still loadTrack and applyRaceSettings");

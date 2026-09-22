@@ -543,7 +543,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(await page.evaluate(() => document.getElementById("campicker").hidden)).toBe(true);
 });
 
-test("race settings uses a searchable duel rival sheet", async ({ page }) => {
+test("race settings uses a duel rival sheet, whole roster, no search", async ({ page }) => {
   await waitReady(page);
   await page.locator("#mb-race").click();
   await page.locator("#sel-go").click();
@@ -553,11 +553,14 @@ test("race settings uses a searchable duel rival sheet", async ({ page }) => {
   await page.locator("#rs-fold-field-sum").click();
   await page.locator("#rs-duel-open").click();
   await expect(page.locator("#duel-picker")).toBeVisible();
+  // THE WHOLE ROSTER, ALWAYS. The search field is gone (2026-09-20): fourteen
+  // options is a list you read, not one you filter.
   await expect(page.locator("#duel-list .duel-option")).toHaveCount(14);
-  await page.locator("#duel-search").fill("senna");
-  await expect(page.locator("#duel-list .duel-option")).toHaveCount(1);
-  await expect(page.locator("#duel-list .duel-option")).toContainText("AYRTON SENNA");
-  await page.locator("#duel-list .duel-option").click();
+  await expect(page.locator("#duel-search")).toHaveCount(0);
+  // Opening focuses the CURRENT pick rather than a text field, so the keyboard
+  // starts where the player already is.
+  await expect(page.locator("#duel-list .duel-option.active")).toBeFocused();
+  await page.locator("#duel-list .duel-option", { hasText: "AYRTON SENNA" }).click();
   await expect(page.locator("#duel-picker")).toBeHidden();
   await expect(page.locator("#rs-duel-value")).toHaveText("AYRTON SENNA");
   await expect(page.locator("#rs-duel-open")).toHaveAttribute("aria-label", "Duel rival: AYRTON SENNA");

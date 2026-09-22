@@ -444,6 +444,15 @@ function start(groups, { force = false, parallel = false, lastFailed = false } =
     return { runs: mergeByPid(prior, runs), started: new Date().toISOString(), workers: WORKERS, mode };
   });
   if (prior.length) say(`still running from an earlier start: ${prior.map((r) => r.group).join(", ")}`);
+  // NOTHING SPAWNED IS A REAL OUTCOME, NOT A CRASH. spawnGroup() returns null
+  // when `--last-failed <group>` finds a previous run with zero failures, so
+  // after a green run this list is empty and runs[0].log threw a TypeError.
+  // verify-change.mjs reads a non-zero exit from this tool as `refused`, so a
+  // group that had simply nothing to re-run reported as a broken runner.
+  if (!runs.length) {
+    say(`nothing to run — every requested group had no previous failures to replay`);
+    return;
+  }
   say(`tail one:   tail -f ${path.relative(ROOT, runs[0].log)}`);
   say(`tail all:   tail -f ${runs.map((r) => path.relative(ROOT, r.log)).join(" ")}`);
   say(`check:      node tools/ci/test-bg.mjs --status`);

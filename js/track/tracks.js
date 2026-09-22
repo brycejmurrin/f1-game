@@ -363,17 +363,27 @@ const Tracks = (function () {
     const SIDE = (side) => def.reverse ? -side : side;
     const w = Object.assign({}, api);
     // (k, side, ...rest): index + side based
-    // bakedModel is here too: it replaces a wrapped procedural fallback at the
-    // same authored (k, side), so it must move (origin shift, reverse flip)
-    // exactly as the fallback does — unwrapped, the baked asset stood 2/3 of
-    // a lap away on every shifted circuit that ships one.
-    for (const name of ["place", "prop", "backdrop", "groundPlane", "anchor", "pine", "tree", "bakedModel",
+    for (const name of ["place", "prop", "backdrop", "groundPlane", "anchor", "pine", "tree",
                         "palm", "conifer", "building", "house", "motorhome", "tower", "billboard",
                         "marshalPost", "bush", "signBoard", "ferrisWheel", "floodMast", "runoffApron",
                         "cameraTower", "broadcastCompound", "waterSurface",
                         "cypress", "stonePine", "broadleafFall", "acacia", "plane"]) {
       const f = api[name]; if (f) w[name] = (k, side, ...r) => f(RK(k), SIDE(side), ...r);
     }
+    // (id, k, side, ...rest): the MODEL ID comes first. bakedModel must take the
+    // same origin shift and reverse flip as the procedural call it stands in for
+    // — unwrapped, the baked asset stood 2/3 of a lap away on every shifted
+    // circuit that ships one — but it cannot ride the (k, side) list above,
+    // because that list remaps argument 0, and argument 0 here is a string.
+    // Measured before this line existed: across the 15 call sites on vegas,
+    // monaco, spa, monza and silverstone, all 152 calls reached
+    // Assets.modelSync as NaN (or, on a source-space def, a node number
+    // coerced out of the id), so modelSync never matched a model, bakedModel
+    // always returned false, and the whole baked pack was dead on every
+    // circuit that asks for it — invisible because the `if (!bakedModel(…))`
+    // fallback quietly drew the procedural shape instead.
+    if (api.bakedModel)
+      w.bakedModel = (id, k, side, ...r) => api.bakedModel(id, RK(k), SIDE(side), ...r);
     // (s, side, ...rest): single fraction + side
     for (const name of ["grandstand", "grandstandEx"]) {
       const f = api[name]; if (f) w[name] = (s, side, ...r) => f(RS(s), SIDE(side), ...r);
@@ -2110,7 +2120,11 @@ const Tracks = (function () {
       // files each declared locally. The wrapped helpers (transformSceneryApi)
       // remap the node they are handed, so this stays raw — it is copied, never
       // wrapped, on shifted / reversed circuits.
-      const K = (s) => Math.round(s * n) % n;
+      // NORMALISED: JS `%` keeps the dividend's sign, so a frac just below 0
+      // (a prop placed `s - 0.002` behind a node near the start line) indexed
+      // a negative slot. Ten of the circuit-local copies this replaced carried
+      // the unnormalised form; Okayama's alone wrapped.
+      const K = (s) => ((Math.round(s * n) % n) + n) % n;
       // Lap centroid + the farthest node's distance from it, for horizon rings.
       // Computed once, lazily, in the exact order the 30 local copies summed
       // (sequential px[i] sum / n, then max hypot) so their rings stay

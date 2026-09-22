@@ -24,7 +24,10 @@ function globRegex(pattern) {
 export function auditCoverage(testFiles, scripts) {
   const covered = new Set();
   for (const [name, command] of Object.entries(scripts)) {
-    if (!name.startsWith("test:") || name === "test:headless" || name === "test:render") continue;
+    // test:render drives a whole Playwright PROJECT and names no spec.
+    // (test:headless was the same and was dropped 2026-09-10 — a name kept in a
+    // skip list after its script is gone is invisible rot: it can never match.)
+    if (!name.startsWith("test:") || name === "test:render") continue;
     // test:tooling-fast is `node tools/ci/tooling-fast.mjs` — the file list lives
     // on TOOLING_FAST_FILES, not as inline paths in package.json.
     if (name === "test:tooling-fast" || /tooling-fast\.mjs\b/.test(command)) {

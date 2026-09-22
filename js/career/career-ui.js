@@ -53,6 +53,7 @@ function create(G) {
       flavour: "driver",
       teamId: teams.length ? teams[0].id : "haas",
       seat: 1,                 // the junior seat by default — you are the newcomer
+      amb: 1,                  // WHAT THEY ASK — the target every contract used to carry
       name: "Your Name", code: "YOU", num: 99,
       hire: "NKM",
     };
@@ -328,6 +329,21 @@ function create(G) {
       + "parts with you. RENEWING keeps everything you built. Loyalty is not "
       + "punished.",
     ]));
+    out.push(guideSection("YOUR PROMISE", [
+      "When you sign, you say where you will finish. The middle option is the "
+      + "finish the team expects from that car; you can promise less and be "
+      + "judged gently, or promise more and be judged hard.",
+      "It pays in reputation, not money — which is the currency that decides "
+      + "which seats open next winter. Miss an ambitious promise and you fall "
+      + "further down the ladder than you would have from a modest one.",
+      "The promise is fixed for the life of the contract. Changing the picker "
+      + "sets what your NEXT deal is signed at.",
+    ].concat(Career.AMBITION.map((a) => [
+      a.name,
+      (a.delta === 0 ? "the expected finish"
+        : a.delta < 0 ? `${-a.delta} better` : `${a.delta} softer`)
+      + ` · \u00b1${a.rep} REP · −${a.mv} value if missed`,
+    ]))));
     out.push(guideSection("THE WINTER", [
       "Drivers develop. Young ones get quicker, veterans slip, and a season that "
       + "beat the car counts for more than a title in the best one.",
@@ -468,6 +484,33 @@ function create(G) {
   }
   function closeGuide() { $("career-guide").hidden = true; }
 
+  // ONE PICKER, TWO SCREENS — the new-career form and the offers sheet — because
+  // it is the same decision in both: what you promise the team you are about to
+  // sign for. Built from cr-seats/cr-seat, the control the seat picker and the
+  // hire market already use, so it costs no CSS class and no shell node. That is
+  // not thrift for its own sake: tree ratchets cssClasses (566) and shellNodes
+  // (1695) both sit EXACTLY on their ceiling, so a new class or a new static
+  // node fails the gate outright.
+  function ambitionPicker(cur, onPick) {
+    const wrap = el("div", "cr-seats");
+    Career.AMBITION.forEach((a, i) => {
+      const b = el("button", `cr-seat${i === cur ? " active" : ""}`);
+      b.setAttribute("aria-pressed", i === cur ? "true" : "false");
+      // Relative, never an absolute P-number: expectedFinish() reads the career's
+      // reputation, and on the setup form the career being configured does not
+      // exist yet. The offers sheet, where one certainly does, prints the real
+      // target on the button beside it.
+      b.append(el("span", "cr-seat-role", a.name),
+        el("span", "cr-seat-who",
+          (a.delta === 0 ? "the finish they expect"
+            : a.delta < 0 ? `${-a.delta} places better than expected`
+            : `${a.delta} places softer`) + ` · \u00b1${a.rep} REP`));
+      b.onclick = () => { onPick(i); if (G.soundOn) GameAudio.uiTick(); };
+      wrap.appendChild(b);
+    });
+    return wrap;
+  }
+
   function buildSetupPanes() {
     const left = $("cr-left"), right = $("cr-right");
     left.textContent = ""; right.textContent = "";
@@ -588,6 +631,13 @@ function create(G) {
         const mate = team.drivers[draft.seat === 0 ? 1 : 0];
         if (mate) right.appendChild(el("div", "cr-note",
           `Your team-mate will be ${mate.name}. Most of your race objectives are measured against them.`));
+
+        right.appendChild(head("YOUR PROMISE"));
+        right.appendChild(el("div", "cr-note",
+          "Tell them where you will finish this season. A bolder promise pays more "
+          + "reputation when you keep it and costs more when you miss — and reputation "
+          + "is what decides which seats will talk to you next winter."));
+        right.appendChild(ambitionPicker(draft.amb, (i) => { draft.amb = i; buildSetupPanes(); }));
       }
     }
 
@@ -690,7 +740,27 @@ function create(G) {
           objCard.appendChild(b);
         }
       }
-      if (c.deal) objCard.append(row("Season goal", `P${c.deal.goal.value} in the championship`));
+      if (st.era) {
+        objCard.append(row("Regulations", st.era.cats.length
+          ? `${st.era.name} · ${st.era.left} ${st.era.left === 1 ? "season" : "seasons"} left`
+          : `${st.era.name} · ${st.era.left} to the first rule change`));
+      }
+      if (c.deal) {
+        // MY TEAM keeps the bare row it always had: rollover() resolves the goal
+        // only for a driver career, because an owner has nobody to promise to.
+        const promised = c.flavour !== "myteam";
+        // The LABEL comes from the goal's own kind — a contract can promise a
+        // championship position, a constructors' finish or beating the other
+        // side of the garage, and the hub must not assume the first.
+        objCard.append(row("Season goal", Career.goalLabel(c.deal.goal)
+          + (promised ? ` · ${Career.AMBITION[Career.ambitionOf(c.deal)].name}` : "")));
+        if (promised) {
+          const now = Career.goalNow(c.deal.goal);
+          const on = Career.goalOnTrack(c.deal.goal);
+          if (now) objCard.append(row("Where you stand",
+            now + (on == null ? "" : on ? " — on target" : " — short of it")));
+        }
+      }
       objCard.append(row("If you hit it", `+${Career.OBJ_BONUS} cr · +${Career.OBJ_REP} REP`));
       left.appendChild(objCard);
     }
@@ -1000,6 +1070,27 @@ function create(G) {
       "Pick a seat for " + c.year + ". Moving team means starting the car over from " +
       "that team's works build — you do not take your parts with you."));
 
+    const stEra = Career.state() && Career.state().era;
+    if (stEra && stEra.cats.length) {
+      body.appendChild(head("REGULATIONS"));
+      const rg = el("div", "cr-card");
+      rg.appendChild(row(stEra.name, `${stEra.left} ${stEra.left === 1 ? "season" : "seasons"} left`));
+      rg.appendChild(el("div", "cg-p", stEra.blurb
+        + " Your researched parts are not gone — they are not legal this era, and"
+        + " they come back when it lapses."));
+      body.appendChild(rg);
+    }
+
+    body.appendChild(head("YOUR PROMISE"));
+    body.appendChild(el("div", "cr-note",
+      "The target applies to whichever seat you take, and the offers above move "
+      + "with it. It is priced in reputation, not money — keep it and the better "
+      + "seats open sooner, miss it and they close."));
+    body.appendChild(ambitionPicker(Career.ambition(), (i) => {
+      Career.setAmbition(i);   // re-stamps every offer's target, then we redraw
+      buildOffers();
+    }));
+
     (c.offers || []).forEach((o, i) => {
       const t = teamById(o.teamId);
       const staying = o.teamId === c.team;
@@ -1012,7 +1103,8 @@ function create(G) {
         el("span", "co-offer-tag", staying ? "STAY" : "MOVE"),
         el("span", "co-offer-terms",
           o.years + (o.years === 1 ? " season" : " seasons") + " · " +
-          o.salary + " cr / round · target P" + o.goal.value));
+          o.salary + " cr / round"),
+        el("span", "co-offer-terms", Career.goalLabel(o.goal)));
       b.onclick = () => {
         if (G.soundOn) GameAudio.uiSelect();
         Career.acceptOffer(i);
@@ -1037,7 +1129,12 @@ function create(G) {
     if (c.goalResult) {
       body.appendChild(head("YOUR CONTRACT"));
       const g = el("div", "cr-card");
-      g.appendChild(row("The team asked for", "P" + c.goalResult.value + " or better"));
+      // Named off goalResult.ambition, not off the live picker: by the time this
+      // sheet is read the player may already be choosing next year's promise.
+      g.appendChild(row("You promised",
+        Career.AMBITION[Career.ambitionOf({ ambition: c.goalResult.ambition })].name
+        + " · " + (c.goalResult.label
+          || Career.goalLabel({ type: c.goalResult.type, value: c.goalResult.value }))));
       g.appendChild(row("You finished", "P" + c.goalResult.pos));
       g.appendChild(el("div", "cg-p", c.goalResult.met
         ? "Target met. Your reputation is up, and the paddock noticed."

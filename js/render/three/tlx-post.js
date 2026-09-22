@@ -299,6 +299,12 @@
           aaRT.texture.name = "TLXPostAA";
         } else rtSetSize(aaRT, W, H);
       } else if (aaRT) {
+        // _lastPresentRT may still BE this target (present() stores `dest ||
+        // aaRT`), and presentedTarget() hands it to a capture. Disposing
+        // without clearing it left a screenshot after setSpatialUpscale(false)
+        // reading a destroyed render target; null it so the getter falls back
+        // to ldrRT, which is the honest answer once the AA target is gone.
+        if (_lastPresentRT === aaRT) _lastPresentRT = null;
         try { ownedRTs.delete(aaRT); aaRT.dispose(); } catch (_) { /* dying */ }
         aaRT = null;
       }

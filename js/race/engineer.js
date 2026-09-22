@@ -178,7 +178,12 @@ const RaceEngineer = (function () {
         if (o === c) continue;
         const now = o.pitStops || 0, prev = b.stops.has(o) ? b.stops.get(o) : now;
         if (now > prev && pit && pit.lossS != null && !armed) {
-          const gap = (c.prog - o.prog) / Math.max(1, o.speed || 1);
+          // DIVIDED BY OUR OWN PACE, not theirs. This fires on the tick a rival's
+          // pitStops increments — the tick that car is STOPPED in its box — so
+          // `o.speed` is ~0, the clamp made the divisor 1, and the "gap in
+          // seconds" was a gap in METRES compared against pit.lossS. The number
+          // that matters is how long WE take to cover the gap to them.
+          const gap = (c.prog - o.prog) / Math.max(1, c.speed || 1);
           if (gap > 0 && gap < pit.lossS + 2) rivalBoxed = o.code || "RIVAL";
         }
         b.stops.set(o, now);

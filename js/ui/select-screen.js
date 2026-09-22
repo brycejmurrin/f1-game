@@ -69,7 +69,13 @@ const exportRecovery = () => {
   const a = document.createElement("a");
   a.href = url; a.download = "apex26-recovery-" + Date.now() + ".json";
   document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
+  // 10 s, matching js/ui/settings-export.js and js/agent/apex.js. A 0 ms revoke
+  // races the browser's own fetch of the blob it was just handed: Safari and
+  // several Android browsers read the href asynchronously after click(), so the
+  // URL can be dead before the save starts. This is SAVE RECOVERY — the one
+  // export path a player whose localStorage has failed still has — so losing
+  // the download here loses the save.
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
   if (G.announce) G.announce("RECOVERY EXPORTED");
 };
 if ($("save-retry")) $("save-retry").onclick = retrySave;

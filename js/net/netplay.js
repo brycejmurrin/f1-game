@@ -163,7 +163,9 @@ const NetPlay = (function () {
     let localCar = null;
     const remotes = new Map();
     const remoteList = () => [...remotes.values()];
-    let lastPublish = -Infinity, lastStrategy = -Infinity, lastStrategyPhase = null;
+    let lastPublish = -Infinity, lastStrategy = -Infinity;
+    // The strategy phase, as three compared scalars rather than a joined key.
+    let lastPhaseA = null, lastPhaseB = null, lastPhaseC = null;
     let peerProfile = null;
     let lastReason = null;
     let lastSlotFallback = null;
@@ -369,14 +371,23 @@ const NetPlay = (function () {
         sessions.delete(id);
         const carFor = remoteFor(id);
         armedPeers.delete(id);
-        if (carFor != null && sessions.size && role === "host") {
-          handBackToAI(why, carFor);
+        /* A PEER WITH NO GRID SLOT MUST NOT END THE RACE FOR EVERYONE. The
+           `carFor != null` term used to gate this whole branch, so a session
+           that dropped before it was seated — a spectator, a joiner still
+           negotiating, a peer that left the lobby — fell through to the
+           `stop()` below and tore the session down for every remaining player.
+           Whether we keep running is a question about the HOST still having
+           peers; what we do about a car is a separate question inside it. */
+        if (sessions.size && role === "host") {
+          if (carFor != null) handBackToAI(why, carFor);
           // Star, not mesh: the other guests only ever learned this rival
           // existed through the host's relay, and the relay simply stops
           // naming a dropped wire id. Nothing told them it was gone, so their
           // slot stayed net-owned — updateCar never simulated it and the car
           // sat frozen on the track for the rest of the race. Say so.
-          broadcast(EV.LEFT, { wire: carFor, why: why || "peer_closed" });
+          if (carFor != null) broadcast(EV.LEFT, { wire: carFor, why: why || "peer_closed" });
+          // Still worth asking: a slotless peer leaving can be the one the
+          // arm deadline was waiting on.
           if (armDeadline && allArmed()) nameTheMoment();
         }
         // "peer_closed", never a bare stop(): stop() defaults an absent reason
@@ -601,7 +612,8 @@ const NetPlay = (function () {
       session = sessionList()[0] || null;
       separateGrid();
 
-      lastPublish = -Infinity; lastStrategy = -Infinity; lastStrategyPhase = null;
+      lastPublish = -Infinity; lastStrategy = -Infinity;
+      lastPhaseA = lastPhaseB = lastPhaseC = null;
       lastReason = null;
       armedPeers.clear();
       armDeadline = 0;
@@ -811,9 +823,15 @@ const NetPlay = (function () {
         }
       }
 
-      const strategyPhase = localCar && [localCar.tyreStints, localCar.pitState, localCar.pitArmed].join(":");
-      if (localCar && G.track && G.track.def && (now - lastStrategy >= 1000 || lastStrategyPhase !== strategyPhase)) {
-        lastStrategy = now; lastStrategyPhase = strategyPhase;
+      // THREE SCALARS, NOT AN ARRAY AND A JOIN. This ran every frame of every
+      // multiplayer race to build a string that is thrown away unchanged on all
+      // but a handful of them — two allocations a frame for a three-field
+      // comparison. The fields compare directly.
+      const phaseA = localCar && localCar.tyreStints, phaseB = localCar && localCar.pitState,
+            phaseC = localCar && localCar.pitArmed;
+      const phaseChanged = phaseA !== lastPhaseA || phaseB !== lastPhaseB || phaseC !== lastPhaseC;
+      if (localCar && G.track && G.track.def && (now - lastStrategy >= 1000 || phaseChanged)) {
+        lastStrategy = now; lastPhaseA = phaseA; lastPhaseB = phaseB; lastPhaseC = phaseC;
         broadcastStrategy(strategyState(localCar, G.wireId(localCar), G.track.def.id));
       }
       if (localCar && now - lastPublish >= PUBLISH_MS) {

@@ -17,6 +17,7 @@ import { failedSpecsFrom } from "../../tools/ci/junit-failed.mjs";
 import { recall } from "../../tools/ci/select-recall.mjs";
 import { MEASURED, capacity, declaredTests } from "../../tools/ci/select-budget.mjs";
 import fs from "node:fs";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -44,7 +45,9 @@ test("specsOf ignores scripts that are not browser runs", () => {
 test("fit cuts at the budget and names every skipped spec", () => {
   // Real specs so declaredTests resolves; the budget is set artificially small
   // so the cut provably happens.
-  const specs = ["tests/specs/smoke.spec.js", "tests/specs/logging.spec.js"];
+  // boot-guard, not logging: logging is ADAPTED (tools/ci/twinned-specs.mjs),
+  // so fit() reports it as coveredByVmTwin before any budgeting happens.
+  const specs = ["tests/specs/smoke.spec.js", "tests/specs/boot-guard.spec.js"];
   const r = fit(specs, 5);
   assert.equal(r.selected.length + r.skipped.length + r.unreachable.length + r.coveredByFixedGates.length, 2,
     "every spec lands in selected, skipped, unreachable, or an independent fixed gate");
@@ -116,6 +119,29 @@ test("TRACKED covers the paths that make a selection meaningless", () => {
   for (const f of ["js/game.js", "js/track/tracks.js", "tests/specs/smoke.spec.js",
                    "css/hud.css", "docs/TESTING.md"])
     assert.ok(!TRACKED.some((re) => re.test(f)), `${f} must NOT be tracked`);
+  // ...and the four tools that MOVED to tools/ci/, which is the drift this list
+  // actually suffered: the entry named them at the tools/ root, so each matched
+  // nothing and a selector edit stopped flagging itself as infra.
+  for (const f of ["tools/ci/pick-tests.mjs", "tools/ci/select-specs.mjs",
+                   "tools/ci/select-budget.mjs", "tools/ci/run-playwright.mjs"])
+    assert.ok(TRACKED.some((re) => re.test(f)), `${f} must be a tracked path`);
+});
+
+test("every TRACKED pattern matches a file that exists", () => {
+  // THE LINT THAT WOULD HAVE CAUGHT IT, and the reason pick-tests has no dead
+  // rules: tests/unit/pick-tests.test.mjs:120 has run exactly this check over
+  // RULES for months. TRACKED never had it, so four dead alternatives sat in
+  // one regex, silently, while the hand-listed examples above all passed —
+  // they only ever probed the members someone thought to name.
+  //
+  // A dead pattern here FAILS OPEN: it selects nothing, flags nothing, and
+  // every run still looks green. Checked against `git ls-files` because these
+  // patterns name workflows, tests/data and the shell, which no manifest lists.
+  const tracked = execFileSync("git", ["ls-files"], { cwd: ROOT, encoding: "utf8" })
+    .trim().split("\n");
+  const dead = TRACKED.filter((re) => !tracked.some((f) => re.test(f))).map(String);
+  assert.deepEqual(dead, [],
+    "a TRACKED pattern matches no file in the tree — re-point it at where the file went, or drop it");
 });
 
 test("the import graph finds specs a path RULE cannot — helper -> spec", () => {
@@ -269,10 +295,14 @@ test("every race-fixture spec the gate has starved DECLARES a budget above it", 
   // Same RULE as hud-layout above, one row per victim: above whatever the gate's
   // cap is, and NAMED as over budget in the report. Add a spec here the day the
   // gate starves it — the declaration is the fix, this row keeps it fixed.
+  //
+  // projection.spec.js was the third row until 2026-09-22: it is ADAPTED now
+  // (runs under the vm-page adapter, 13 s), so fit() files it as
+  // coveredByVmTwin before budgeting and never as over budget. Its 300 s
+  // declaration still stands in the file for the day it leaves ADAPTED.
   for (const spec of [
     "tests/specs/physics-hotpath.spec.js",
     "tests/specs/map-hooks.spec.js",
-    "tests/specs/projection.spec.js",
   ]) {
     const own = maxDeclaredTimeout(spec);
     assert.ok(own > SELECTED_GATE.perTestTimeoutSec * 1000,
@@ -426,4 +456,71 @@ test("DOCS_ONLY still mirrors ci.yml's paths-ignore", () => {
     assert.ok(ignored.includes(pat), `ci.yml no longer ignores ${pat} — re-derive DOCS_ONLY`);
   }
   assert.equal(DOCS_ONLY.length, 4, "a pattern was added or removed without updating this pin");
+});
+
+
+/* THE SELECTOR AIMED AT ITSELF — the three holes a 2026-09-20 survey found in
+ * the machinery whose whole job is deciding what the gate runs. */
+
+test("the TRACKED infra list names where the selector tools ACTUALLY live", () => {
+  // These four moved tools/ -> tools/ci/ and this list kept the old paths, so
+  // a change to the selection machinery matched no rule, selected ZERO browser
+  // specs, and printed no "SELECTION NARROWER THAN THE CHANGE" warning. A
+  // selector that goes silent precisely when it is the thing being edited is
+  // the failure TRACKED exists to prevent, turned on itself.
+  const hit = (p) => TRACKED.some((r) => r.test(p));
+  for (const f of ["tools/ci/select-specs.mjs", "tools/ci/pick-tests.mjs",
+                   "tools/ci/select-budget.mjs", "tools/ci/run-playwright.mjs"]) {
+    assert.ok(hit(f), `${f} is selection machinery and must be TRACKED`);
+    assert.ok(fs.existsSync(path.join(ROOT, f)), `${f} does not exist — re-point TRACKED, do not pin a ghost`);
+  }
+  assert.ok(hit("tools/manifest.cjs"), "manifest.cjs is still at tools/, not tools/ci/");
+});
+
+test("an over-budget spec the diff EDITS still runs; one merely routed still does not", () => {
+  /* 56 of 119 specs declare >= the gate's 180 s, and the over-budget test used
+     to `continue` BEFORE ranking — so 47% of the suite could not be selected by
+     any change, including a change that edits the spec itself. Four of the five
+     faults select-recall.mjs records as CAUGHT are in that 56, so the harness
+     was scoring a selector the gate does not run.
+
+     The `>=` rule is unchanged and still right: declaring the whole budget opts
+     a spec out of the BUDGETED shard. What it may not do is opt the spec out of
+     running when you just edited it — that case already has its own shard. */
+  const over = "tests/specs/career.spec.js";            // declares well over the gate
+  assert.ok(maxDeclaredTimeout(over) >= 180000, "pick a spec that is still over budget");
+
+  const edited = fit([over], 30, { rank: (f) => (f === over ? 0 : 3) });
+  assert.deepEqual(edited.oversize.map((s) => s.file), [over], "an EDITED over-budget spec runs in its own shard");
+  assert.equal(edited.overBudgetSpecs.length, 0);
+  assert.equal(edited.selected.length, 0, "…but never inside the budgeted shard");
+
+  const routed = fit([over], 30, { rank: () => 3 });
+  assert.deepEqual(routed.overBudgetSpecs.map((s) => s.file), [over], "a merely ROUTED one is still excluded");
+  assert.equal(routed.oversize.length, 0);
+
+  // And its shard is billed at the spec's OWN declared figure, not the gate's:
+  // deriving a 180 s cap for a spec that says it needs 300+ kills the job, and
+  // a killed job reads as "0 failures".
+  const shard = shards(edited).find((x) => x.name.startsWith("oversize-"));
+  assert.ok(shard, "the oversize spec gets a shard");
+  assert.ok(shard.timeout >= shardTimeoutMin(edited.oversize[0].tests),
+    "billed at least at the gate rate");
+});
+
+test("a spec this tool cannot READ is reported, never silently dropped", () => {
+  // It used to `continue` into no bucket at all, in a file whose entire
+  // contract is that nothing leaves the selection unaccounted for. Reachable
+  // by any missing or renamed path — found by handing fit() a spec that does
+  // not exist and watching it vanish from every list in the result.
+  // BUILT, not written as a literal: docs-integrity.test.mjs scans source for
+  // path-shaped tokens and fails on any that does not exist — correctly, and a
+  // deliberately-absent path is exactly the case it cannot tell from a typo.
+  const ghost = ["tests", "specs", "no-such-spec.spec.js"].join("/");
+  assert.ok(!fs.existsSync(path.join(ROOT, ghost)), "the point of this test is that it is absent");
+  const r = fit([ghost], 60, { rank: () => 3 });
+  assert.deepEqual(r.unreadable.map((s) => s.file), [ghost]);
+  for (const k of ["selected", "skipped", "unreachable", "oversize", "overBudgetSpecs"]) {
+    assert.equal((r[k] || []).length, 0, `${k} must not claim a spec that could not be read`);
+  }
 });

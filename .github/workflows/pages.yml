@@ -82,8 +82,9 @@ jobs:
       run: ${{ steps.v.outputs.run }}
       fast_run: ${{ steps.v.outputs.fast_run }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0        # the parents' trees and the live commit are the whole question
       - name: Refuse to run off the deploy branch
         run: |
@@ -190,8 +191,9 @@ jobs:
     outputs:
       deploy: ${{ steps.pub.outputs.publish }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0        # merge-base needs the history, not just the tip
       - name: Is this commit still worth publishing?
         id: pub
@@ -225,7 +227,7 @@ jobs:
       # GITHUB_SHA, checked out as-is: the commit the gate above tested is the
       # commit that gets staged, stamped and published. Nothing here re-reads
       # the branch tip.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # The generation is 2000 + the commit count (see "Stamp the shell
           # generation"); a depth-1 checkout would count 1.
@@ -237,11 +239,14 @@ jobs:
       - name: Confirm this commit may still be published (under the Pages lock)
         run: |
           SITE_URL="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/"
-          if [ "$(bash tools/ci/pages-publishable.sh "$GITHUB_SHA" "$SITE_URL")" != "true" ]; then
-            echo "::error::REFUSING DEPLOY: a newer build went live while this run waited for the Pages lock (or history diverged); $GITHUB_SHA is not published"
+          # --strict: under the lock an UNREADABLE live sha refuses, where the
+          # unlocked check above fails open. This is the last read before
+          # bytes go live, and "could not tell" must not publish (2026-09-22).
+          if [ "$(bash tools/ci/pages-publishable.sh "$GITHUB_SHA" "$SITE_URL" --strict)" != "true" ]; then
+            echo "::error::REFUSING DEPLOY: a newer build went live while this run waited for the Pages lock (or history diverged, or the live sha could not be read); $GITHUB_SHA is not published"
             exit 1
           fi
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       # Stage ONLY the runtime files. Uploading the repo root shipped a ~174 MB
       # artifact (142 MB of tests/ visual-regression snapshots + node_modules)
       # for a ~14 MB site — slow enough to hit the 10-minute Pages deployment
@@ -302,12 +307,12 @@ jobs:
       # multiple artifacts named "github-pages" in the run and deploy-pages@v4
       # aborted with "Multiple artifacts named github-pages were unexpectedly
       # found". A per-attempt name keeps every attempt's upload unique.
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: _site
           name: github-pages-${{ github.run_attempt }}
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
         with:
           artifact_name: github-pages-${{ github.run_attempt }}
   # The live check the container cannot do: this runner reaches github.io. A
@@ -319,6 +324,9 @@ jobs:
     if: ${{ !cancelled() && needs.deploy.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # issues: write for the failure step only; the poll needs nothing.
+    permissions:
+      issues: write
     steps:
       - name: Poll the live version.json
         env:
@@ -336,3 +344,24 @@ jobs:
           done
           echo "::error::live version.json never reached build $BUILD within 4 minutes"
           exit 1
+      # A BROKEN-BUT-LIVE BUILD MUST NOT BE SILENT (2026-09-22). deploy-pages
+      # succeeded, so the environment records a deployment and the CDN may be
+      # serving anything; a red job at the bottom of a run nobody is watching
+      # is how that goes unnoticed. One issue per failure, naming the commit,
+      # the stamped build and the run, so the next session finds it.
+      - name: Open an issue — the deploy succeeded but the live check failed
+        if: ${{ failure() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD: ${{ needs.deploy.outputs.build }}
+          PAGE_URL: ${{ needs.deploy.outputs.page_url }}
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "Live check failed after deploy: build $BUILD (${GITHUB_SHA:0:7})" \
+            --body "$(printf '%s\n' \
+              "Pages run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} deployed commit ${GITHUB_SHA} as build ${BUILD}, but ${PAGE_URL} never served that build within 4 minutes." \
+              "" \
+              "Either the CDN is lagging (re-run verify-live) or the published shell is broken. Check \`version.json\` and the \`apex-build\` meta on the live site before redeploying (AGENTS.md §Watching CI and Pages; deploy-research)." \
+              "" \
+              "Opened automatically by pages.yml verify-live.")" \
+            --label ci || echo "::warning::could not open the issue (label missing or token scope); the failure above still stands"

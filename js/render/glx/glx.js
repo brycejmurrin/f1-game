@@ -129,6 +129,7 @@ const GLX = (function () {
   let skyVAO = null;     // empty VAO (WebGL2 still needs one bound)
   let shadowVAO = null;
   let width = 0, height = 0, aspect = 1;
+  let maxDim = 0;        // the driver's drawing-buffer ceiling (init); 0 = unknown, no clamp
   // ── Live environment probe ──────────────────────────────────────────────────
   // A small cubemap rendered around the player car (one face per frame — full
   // refresh every 6 frames) that the car-paint clearcoat samples for REAL
@@ -597,6 +598,20 @@ const GLX = (function () {
         ? Math.min(4, gl.getParameter(_anisoExt.MAX_TEXTURE_MAX_ANISOTROPY_EXT) || 0) : 0;
     } catch (_) { _anisoExt = null; _anisoMax = 0; }
 
+    // The drawing-buffer ceiling. Every full-screen target (js/render/glx/post.js
+    // createTargets) is allocated from the render size resize() derives, so a
+    // 6K panel at DPR 2 — or a window spanned across several 4K monitors — used
+    // to request a ~12000 px backing store no driver guarantees. WGX and TLX
+    // clamp against their backend's limit; this is the WebGL2 equivalent.
+    // Queried once; only answers at or above WebGL2's guaranteed 2048 count (a
+    // stubbed context answers 16 for every parameter and must not clamp).
+    try {
+      const dims = gl.getParameter(gl.MAX_VIEWPORT_DIMS);
+      const lim = [gl.getParameter(gl.MAX_TEXTURE_SIZE) | 0, gl.getParameter(gl.MAX_RENDERBUFFER_SIZE) | 0,
+                   (dims && dims[0]) | 0, (dims && dims[1]) | 0].filter((v) => v >= 2048);   // WebGL2 guarantees 2048; a stub answers 16
+      maxDim = lim.length ? Math.min(...lim) : 0;
+    } catch (_) { maxDim = 0; }
+
     // WebGL context-loss recovery. Mobile tile GPUs can drop the context under
     // memory pressure (the per-frame env-probe cube adds load). Without a handler
     // the loss is permanent and later gl calls cascade into errors. preventDefault
@@ -1039,6 +1054,17 @@ const GLX = (function () {
     cssSize();
     presentW = Math.max(1, Math.round(cssW * dpr));
     presentH = Math.max(1, Math.round(cssH * dpr));
+    // CLAMP UNIFORMLY to the driver's ceiling (maxDim, queried in init): one
+    // factor for both axes keeps `aspect`, and every projection built on it,
+    // correct — just smaller. It sits BEFORE rw/rh on purpose: post.js
+    // createTargets() allocates from getSize() = the RENDER size, not from
+    // canvas.width, so a clamp on the canvas alone would leave every scene,
+    // bloom and SSAO target oversized.
+    if (maxDim > 0 && (presentW > maxDim || presentH > maxDim)) {
+      const k = Math.min(maxDim / presentW, maxDim / presentH);
+      presentW = Math.max(1, Math.floor(presentW * k));
+      presentH = Math.max(1, Math.floor(presentH * k));
+    }
     const rw = Math.max(1, Math.round(presentW * renderScale));
     const rh = Math.max(1, Math.round(presentH * renderScale));
     // Upscale path: canvas = present (full), scene FBOs = render (scaled).
@@ -1224,7 +1250,12 @@ const GLX = (function () {
     // unit 0 active, and unit 0 must stay bound to the shadow map (see
     // drawDecal) — a bare null unbind here left every later lit draw sampling
     // an empty unit as uShadowMap for one frame. Restore the invariant.
-    gl.bindTexture(gl.TEXTURE_2D, (SHD && SHD.enabled && SHD.mapTex) || null);
+    // …and when the shadow subsystem is absent, the 1x1 DEPTH dummy rather than
+    // `null`: three sampler2DShadow uniforms point at unit 0, and a null there
+    // leaves them sampling an INCOMPLETE unit, which is undefined behaviour on
+    // the drivers ensureShadowDummy() was written for. The dummy reads "lit".
+    if (!(SHD && SHD.enabled && SHD.mapTex)) ensureShadowDummy();
+    gl.bindTexture(gl.TEXTURE_2D, (SHD && SHD.enabled && SHD.mapTex) || shadowDummyTex);
     // Dimensions come off the source the upload just consumed — a canvas,
     // ImageBitmap or ImageData all carry width/height.
     return _texNote(tex, "content2D", src && src.width, src && src.height, 1);

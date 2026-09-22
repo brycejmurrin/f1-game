@@ -373,6 +373,41 @@ test("the test-suite counts in the agent docs and README.md match the files on d
   assert.ok(sawSpecCount, "neither CLAUDE.md nor README.md states a Playwright spec count any more");
 });
 
+test("the `N of M unit files` ladder figures match tooling-fast's list and the files on disk", async () => {
+  // AGENTS.md §Verification 3, docs/notes/PREPUSH-GATE-LADDER.md and
+  // docs/TESTING.md all quote the ladder as "208 of 278 unit files" — and all
+  // three sat there while the list grew to 218 of 290 (2026-09-22). The
+  // phrasing is one integer pair that every added test file moves, so it is
+  // pinned to the two things it quotes: tools/ci/tooling-fast.mjs's generated
+  // list, and the unit files under tests/unit/ (.test.mjs and .test.cjs both;
+  // the ladder counts what the gate runs, and the gate runs both kinds).
+  const { TOOLING_FAST_FILES } = await import("../../tools/ci/tooling-fast.mjs");
+  const fast = TOOLING_FAST_FILES.filter((e) => !e.startsWith("//")).length;
+  const disk = ls("tests/unit", /\.test\.(mjs|cjs)$/).length;
+  let seen = 0;
+  for (const doc of ["AGENTS.md", "docs/notes/PREPUSH-GATE-LADDER.md", "docs/TESTING.md"]) {
+    for (const m of read(doc).matchAll(/test:tooling-fast`?[^\n]*?(\d+) of (\d+)/g)) {
+      seen++;
+      assert.equal(Number(m[1]), fast, `${doc} says tooling-fast runs ${m[1]} unit files; the generated list holds ${fast}`);
+      assert.equal(Number(m[2]), disk, `${doc} says there are ${m[2]} unit files; tests/unit holds ${disk}`);
+    }
+  }
+  assert.ok(seen >= 3, `expected the ladder figure in all three docs, found ${seen}`);
+});
+
+test("README's retired-classics count matches the circuits flagged classic", () => {
+  // "plus 16 retired classics" sat in README.md while js/circuits/ carried 28
+  // `classic: true` defs (and the same README's layout section said 28).
+  const classics = ls("js/circuits", /\.js$/)
+    .filter((f) => /\bclassic:\s*true\b/.test(read(path.join("js/circuits", f)))).length;
+  assert.ok(classics > 0, "no circuit is flagged classic — the regex or the flag moved");
+  const claims = [...read("README.md").matchAll(/(\d+)\s*\n?retired classics?/g)].map((m) => Number(m[1]));
+  assert.ok(claims.length >= 1, "README.md no longer states a retired-classics count");
+  for (const n of claims) assert.equal(n, classics, `README.md claims ${n} retired classics; ${classics} circuits carry classic: true`);
+  for (const m of read("README.md").matchAll(/(\d+) retired\)/g))
+    assert.equal(Number(m[1]), classics, `README.md's layout line claims ${m[1]} retired; ${classics} carry classic: true`);
+});
+
 // The three counts below all drifted in the same way and for the same reason:
 // something ELSE changed (a circuit was added, four part categories were added,
 // a knob's default was flipped) and the prose that quoted it did not move.

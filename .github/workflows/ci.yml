@@ -29,13 +29,18 @@ name: CI
 #                                  it in PARALLEL with guards, so the gate got
 #                                  faster, not slower.
 #   sweeps   15 min, no browser  — the per-circuit geometry sweeps, and the one
-#                                  job that is CONDITIONAL: the steps are
-#                                  skipped unless the diff touches js/track/,
-#                                  js/circuits/, tools/ or a sweep suite, since
-#                                  nothing else can move circuit geometry. The
-#                                  job itself always runs and always reports.
-#                                  Separate because each suite rebuilds all 40
-#                                  circuits and they run --test-concurrency=1 on
+#                                  job that is CONDITIONAL: the fleet steps are
+#                                  skipped unless the diff touches what the
+#                                  fleet build executes (tools/ci/geometry-paths.mjs
+#                                  derives that from the manifest: js/track/,
+#                                  js/circuits/, tools/track|lib, the TRACK_VM
+#                                  modules) or a sweep suite; a lighting, car,
+#                                  debris-world or driving-line edit runs only
+#                                  the suite that reads it (the TARGETED tier,
+#                                  under a minute). The job itself always runs
+#                                  and always reports. Separate because each
+#                                  fleet suite rebuilds every circuit (52) and
+#                                  they run --test-concurrency=1 on
 #                                  purpose (four at once reached 5.4 GB and was
 #                                  OOM-killed, which presents as a SIGKILL with
 #                                  no assertion, i.e. NOT as a test failure).
@@ -309,8 +314,13 @@ jobs:
     # the ~5 min this line once claimed.
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The ratchet step below reads tests/data/ratchets.json at the BASE
+          # ref with `git show`; a depth-1 clone has no base to show.
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
           cache: npm
@@ -324,6 +334,19 @@ jobs:
       # START/PASS/FAIL lines; the npm script stays serial for a loaded dev box.
       - name: Structural guards
         run: node tools/ci/tooling-fast.mjs --jobs=3
+      # RATCHET RAISES, SAID OUT LOUD (2026-09-22). The commit hook absorbs a
+      # ceiling raise of up to 40 lines by rewriting tests/data/ratchets.json
+      # into the same commit, so a raise reaches CI as one changed number in a
+      # 45-file diff and nothing names it. This diffs the ceilings against the
+      # base the change lands on: every raise is a `::warning::` annotation on
+      # the run (visible on the PR's checks tab), and a raise past the hook's
+      # own 40-line absorb — only reachable with APEX_SKIP_GUARDS=1 — fails.
+      # The base is the PR's base sha on a pull_request event and the deploy
+      # branch otherwise (a Pages workflow_call is a push on that branch).
+      - name: Ratchet ceilings vs the base
+        env:
+          RATCHET_BASE: ${{ github.event.pull_request.base.sha || 'origin/claude/f1-game-project-26h3ng' }}
+        run: node tools/check/ratchets.mjs --base "$RATCHET_BASE"
       - name: Every test file belongs to a topical group
         run: npm run test:audit
       # WHAT DOES THIS GATE ACTUALLY EXECUTE? A report, never a gate.
@@ -371,7 +394,11 @@ jobs:
         # 7.6 min with twelve siblings beside it on a runner); vm-b is every
         # other file (~2 min). tests/groups.json partitions of one list;
         # test:game-vm is still the full set for local use.
-        slice: [vm-a, vm-b, slow, fast]
+        # vm-page (2026-09-22): the browser specs that run AS THEMSELVES under
+        # tests/helpers/vm-page.js (tools/ci/twinned-specs.mjs ADAPTED), one
+        # child process per spec. Its own slice because a spec that builds a
+        # circuit costs seconds to minutes each and the `fast` slice is seconds.
+        slice: [vm-a, vm-b, slow, fast, vm-page]
     # MEASURED locally 2026-09-03, warm: net 12s, service-worker 4s, lifecycle
     # 0s, state 1s, agent-contract 0s, audio 0s, mcp 12s, node-slow 115s,
     # game-vm 161s = 305s total (+ garage-unit 39s, steering-unit 1s, 2026-09-10). Plus npm ci, which cost 3m32s and 5m02s on the
@@ -379,12 +406,10 @@ jobs:
     # npm ci seen, the same 2x convention sweeps-parts uses below.
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: "22"
-          cache: npm
-      - run: npm ci
+          persist-credentials: false
+      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
       - name: Pure-node unit suites
         run: |
           # ONE SLICE PER RUNNER (matrix.slice). Every script stays on its own
@@ -398,6 +423,9 @@ jobs:
               ;;
             vm-b)
               npm run test:game-vm-b
+              ;;
+            vm-page)
+              npm run test:vm-page
               ;;
             slow)
               # The three raster/spawn-heavy car files, out of the edit loop
@@ -443,12 +471,10 @@ jobs:
     env:
       NODE_OPTIONS: --max-old-space-size=6144
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: "22"
-          cache: npm
-      - run: npm ci
+          persist-credentials: false
+      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
       - run: npm run test:sweeps-parts
 
   sweeps:
@@ -458,18 +484,20 @@ jobs:
     if: ${{ !(github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && inputs.concurrency_key == '') }}
     # 35, not 20. MEASURED, not estimated: `test:sweeps` takes 14m20s on a
     # 4-core dev box with the heap ceiling below, and this job then runs
-    # verify-track --all on top of it (~40 circuits at ~2 s each), so the local
-    # job is ~16 min. A shared runner is slower than that box, which puts the
-    # honest range at 20-30 min — i.e. the old cap was BELOW the work even
+    # verify-track --all on top of it (52 circuits, 42 s on a runner), so the
+    # local job is ~16 min. A shared runner is slower than that box, which puts
+    # the honest range at 20-30 min — i.e. the old cap was BELOW the work even
     # after the OOM was fixed, and would have kept failing for a second reason
-    # once the first was gone.
+    # once the first was gone. RE-MEASURED 2026-09-22 on Pages #2524: the fleet
+    # step took 8m29s on a runner.
     #
-    # The five suites are serial by construction (--test-concurrency=1) and
-    # each rebuilds all 40 circuits, so this is ~5 full fleet rebuilds:
-    # coplanar-faces 250 s, prop-clipping 210 s, then scenery-grounding,
-    # road-under-floor and the shared-foundation characterization. Nothing here
-    # is parallelisable without reintroducing the 5.4 GB peak that forced the
-    # serialisation.
+    # The suites are serial by construction (--test-concurrency=1) and ten of
+    # the fourteen rebuild every circuit, so this is ~10 full fleet rebuilds:
+    # coplanar-faces 94 s, pit-complex 83 s, scenery-grounding 76 s,
+    # prop-clipping 64 s, road-under-floor 57 s, the shared-foundation
+    # characterization 54 s, the three lamp sweeps ~45 s each (local, 705 s
+    # total). Nothing here is parallelisable without reintroducing the 5.4 GB
+    # peak that forced the serialisation.
     timeout-minutes: 35
     # THE HEAP CEILING IS NOT THE SAME HERE AS ON A DEVELOPER'S BOX, and that is
     # why this job failed for days while the identical command passed locally.
@@ -485,7 +513,7 @@ jobs:
     # prop-clipping.test.mjs spawns with execFileSync — that child was one of
     # the two casualties and a step-level flag would not have covered it.
     #
-    # This buys headroom; it does not make the suites frugal. Rebuilding 40
+    # This buys headroom; it does not make the suites frugal. Rebuilding 52
     # circuits in one process and peaking above 4 GB is its own defect (each
     # build's meshes stay reachable for the length of the loop), and the ceiling
     # is what makes that survivable rather than what fixes it.
@@ -495,14 +523,11 @@ jobs:
       # fetch-depth: 0 because the filter below diffs against the PREVIOUS head,
       # and a depth-1 clone does not contain it. It costs a few seconds against
       # the 15 minutes it decides whether to spend.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0
-      - uses: actions/setup-node@v5
-        with:
-          node-version: "22"
-          cache: npm
-      - run: npm ci
+      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
       # SKIP THE SWEEPS WHEN THE DIFF CANNOT HAVE MOVED THE GEOMETRY.
       #
       # This is a STEP-level condition, not a job-level `if:` with a `needs:`
@@ -581,14 +606,36 @@ jobs:
           if printf '%s\n' "$CHANGED" | grep -qE "$GEO_ERE" \
             || printf '%s\n' "$CHANGED" | grep -qxF -f "$SUITES_FILE"; then
             echo "geometry=true" >> "$GITHUB_OUTPUT"
-            echo "RUNNING SWEEPS: the diff touches track engine, circuit data, tools/track|lib or a sweep suite"
+            echo "RUNNING SWEEPS: the diff touches the fleet build's inputs (track engine, circuit data, tools/track|lib, a TRACK_VM module) or a sweep suite"
           else
+            # THE TARGETED TIER (2026-09-22). The suites of test:sweeps whose
+            # inputs are NOT the fleet build — lighting, car, debris-world, the
+            # driving-line pair — still run when THEIR source changed, alone:
+            # under a minute against ten fleet rebuilds. The table is
+            # geometry-paths.mjs TARGETED, read here, never retyped. Computed
+            # BEFORE geometry=false is written so a table that cannot be read
+            # fail-safes into the fleet (run_all writes geometry=true).
+            CHANGED_FILE="${RUNNER_TEMP:-.}/changed-files.txt"
+            printf '%s\n' "$CHANGED" > "$CHANGED_FILE"
+            TARGETED="$(node tools/ci/geometry-paths.mjs --targeted "$CHANGED_FILE")" \
+              || run_all "could not read the targeted sweep table out of tools/ci/geometry-paths.mjs"
             echo "geometry=false" >> "$GITHUB_OUTPUT"
-            echo "SKIPPING SWEEPS: nothing in this diff can move circuit geometry"
+            echo "targeted=$TARGETED" >> "$GITHUB_OUTPUT"
+            echo "SKIPPING THE FLEET SWEEPS: nothing in this diff can move circuit geometry"
+            if [ -n "$TARGETED" ]; then echo "RUNNING TARGETED SWEEPS: $TARGETED"
+            else echo "no targeted sweep reads this diff either"; fi
           fi
-      - name: Geometry sweeps (rebuilds all 40 circuits per suite)
+      - name: Geometry sweeps (rebuilds every circuit, per suite)
         if: steps.filter.outputs.geometry == 'true'
         run: npm run test:sweeps
+      # The cheap tier: only the suites that read this diff, from the same
+      # table deploy.mjs uses locally. Never runs alongside the fleet (the
+      # fleet already includes them).
+      - name: Targeted sweeps (the suites that read this diff, no fleet rebuild)
+        if: steps.filter.outputs.geometry != 'true' && steps.filter.outputs.targeted != ''
+        env:
+          TARGETED: ${{ steps.filter.outputs.targeted }}
+        run: node --test --test-concurrency=1 $TARGETED
       - name: Every circuit still builds headlessly
         if: steps.filter.outputs.geometry == 'true'
         run: node tools/track/verify-track.cjs --all
@@ -684,14 +731,11 @@ jobs:
       # fetch-depth: 0 — the filter below diffs against the SHA that is currently
       # live on Pages, which is arbitrarily far back. Same reason the sweeps job
       # takes the full history.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0
-      - uses: actions/setup-node@v5
-        with:
-          node-version: "22"
-          cache: npm
-      - run: npm ci
+      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
       # DOES THIS DIFF CHANGE ANYTHING THAT ACTUALLY SHIPS?
       #
       # pages.yml stages a fixed list of runtime paths into _site/. A commit that
@@ -814,46 +858,21 @@ jobs:
           echo "ships=false" >> "$GITHUB_OUTPUT"
           echo "SKIPPING SMOKE: nothing in this diff reaches _site/ — the deployed bytes are unchanged since $LIVE"
       # Chromium only — the suite never targets firefox/webkit, and installing
-      # all three triples the step for nothing.
-      #
-      # CACHED across runs: the download is ~25 s on every browser job, every run,
-      # for a binary pinned by the @playwright/test version in package-lock.json.
-      # Keyed on that lock file so a Playwright bump misses the cache and refetches.
-      - name: Cache Chromium
+      # all three triples the step for nothing. The cache-then-install-on-miss
+      # contract (apt only on a cold cache) lives in the composite action, once
+      # for the five browser jobs (2026-09-22); ci-coverage.test.mjs pins it there.
+      - name: Playwright Chromium (cached)
         if: steps.shipfilter.outputs.ships != 'false'
-        id: pwcache
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/ms-playwright
-          key: pw-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-      # A cold cache installs both the browser and its OS dependencies. On a cache
-      # hit the browser is already complete and ubuntu-latest already satisfied
-      # the same dependency set for the cached run; invoking --with-deps again
-      # needlessly enters apt. One stalled mirror consumed this job's full 30 min.
-      - name: Install Chromium on cache miss
-        if: steps.shipfilter.outputs.ships != 'false' && steps.pwcache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium
-      # MESA LLVMPIPE, NOT SWIFTSHADER, FOR THE SMOKE GATE (2026-09-16). MEASURED
-      # on the first dispatch (run 35062479811, all four shards green): corner
-      # approach 17.8 s against a 214 s SwiftShader median, grid start 21.4 s vs
-      # 138, jump() 9.7 s vs 171, DRIVING LINE 18.4 s vs 65 — every non-blank
-      # frame assertion held. Shard walls 1.1-1.6 min against 1.8-4.8 min on the
-      # SwiftShader push run of the same commit. llvmpipe is Mesa's software
-      # rasteriser reached through ANGLE's GL backend; it needs a display to
-      # bind through (Xvfb, started here and exported via DISPLAY so the pinned
-      # `npm run test:smoke` line below is unchanged) and the launch flags
-      # APEX_GL swaps in playwright.config.js. Dead in the dev container (no
-      # /dev/dri — docs/notes/CI-RENDERING-PERFORMANCE.md §llvmpipe), alive on
-      # GitHub's runners. The dispatched wide run is llvmpipe too since
-      # 2026-09-16; `gl: swiftshader` is the opt-OUT that skips this step and
-      # the env below, so a spec can still be measured on both.
+        uses: ./.github/actions/playwright-chromium
+      # MESA LLVMPIPE, NOT SWIFTSHADER, FOR THE SMOKE GATE (2026-09-16): the
+      # measurements and the why are on the composite action. Shard walls
+      # 1.1-1.6 min against 1.8-4.8 min on the SwiftShader push run of the same
+      # commit. The dispatched wide run is llvmpipe too since 2026-09-16;
+      # `gl: swiftshader` is the opt-OUT that skips this step and the env
+      # below, so a spec can still be measured on both.
       - name: Mesa llvmpipe + Xvfb
         if: steps.shipfilter.outputs.ships != 'false' && inputs.gl != 'swiftshader'
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends mesa-utils libgl1-mesa-dri libegl1 libgles2 xvfb
-          Xvfb :99 -screen 0 1280x800x24 >/dev/null 2>&1 &
-          echo "DISPLAY=:99" >> "$GITHUB_ENV"
+        uses: ./.github/actions/mesa-xvfb
       # test:smoke, NOT test:tiny. This step said `test:tiny` against a
       # 20-minute cap and a "~3 min" estimate, and the arithmetic never worked:
       # test:tiny is smoke + dev-tools + logging = 71 tests, CI pins
@@ -985,7 +1004,7 @@ jobs:
         run: npm run "test:${GROUP:-tiny}" -- --timeout=900000 --shard=${{ matrix.shard }}/4
       - name: Failure artifacts
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           # Shard-scoped name: same-named artifacts from parallel matrix jobs
           # collide on upload-artifact@v4 (it hard-fails on duplicates).
@@ -1008,21 +1027,12 @@ jobs:
     # cold install on a slow shared runner.
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: "22"
-          cache: npm
-      - run: npm ci
-      - name: Cache Chromium
-        id: pwcache
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/ms-playwright
-          key: pw-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-      - name: Install Chromium on cache miss
-        if: steps.pwcache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium
+          persist-credentials: false
+      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
+      - name: Playwright Chromium (cached)
+        uses: ./.github/actions/playwright-chromium
       # THE DRIVING MODEL'S OWN GATE, which nothing was running.
       #
       # tests/specs/physics-characterization.spec.js pins six-sample traces of four
@@ -1059,7 +1069,7 @@ jobs:
         run: npm test -- tests/specs/physics-characterization.spec.js --timeout=240000
       - name: Failure artifacts
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-artifacts-driving-model
           path: |
@@ -1114,8 +1124,9 @@ jobs:
     outputs:
       renderer: ${{ steps.filter.outputs.renderer }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0
       # Same shape as the sweeps filter, same rule: FAIL SAFE, NEVER FAIL OPEN.
       # Any path that cannot resolve a diff RUNS the job. A pull request has a
@@ -1179,28 +1190,22 @@ jobs:
     # Re-time on the first green run and replace this number and the header's.
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: "22"
-          cache: npm
-      - run: npm ci
+          persist-credentials: false
+      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
       # Same lockfile-keyed cache as smoke / driving-model, at macOS's browser
       # path (~/Library/Caches, not ~/.cache). The key already carries
       # runner.os, so it never collides with the Linux entries.
-      - name: Cache Chromium
-        id: pwcache
-        uses: actions/cache@v5
-        with:
-          path: ~/Library/Caches/ms-playwright
-          key: pw-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       # The FULL browser, the way gpu-census.yml installs it — not the headless
       # shell, which ships without navigator.gpu. `install chromium` fetches
       # both; playwright.gpu.config.js selects the full one. No `--with-deps`:
       # that is apt, and this is not Linux.
-      - name: Install Chromium on cache miss
-        if: steps.pwcache.outputs.cache-hit != 'true'
-        run: npx playwright install chromium
+      - name: Playwright Chromium (cached)
+        uses: ./.github/actions/playwright-chromium
+        with:
+          browsers-path: ~/Library/Caches/ms-playwright
+          with-deps: "false"
       # PROVE THE GPU BEFORE TRUSTING THE RUN. The whole point of this job is
       # the hardware adapter; if the image ever loses it (a runner-image
       # change, a Chromium that stops seeing Metal) the specs would silently
@@ -1246,7 +1251,7 @@ jobs:
       # 3495 (2026-09-10) was exactly that; the pictures are the whole point.
       - name: Run artifacts (report, traces, attached frames)
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-artifacts-renderer-macos
           path: |
@@ -1298,14 +1303,11 @@ jobs:
       shards: ${{ steps.sel.outputs.shards }}
       any: ${{ steps.sel.outputs.any }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0
-      - uses: actions/setup-node@v5
-        with:
-          node-version: "22"
-          cache: npm
-      - run: npm ci
+      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
       # PREVIOUSLY-FAILING SPECS, carried across runs. Fowler's TIA survey
       # records Microsoft's TIA and Google's Testar both re-running the last
       # run's failures unconditionally — a test that just failed is the single
@@ -1313,7 +1315,7 @@ jobs:
       # restore-keys makes a miss harmless: the file is simply absent and the
       # selector proceeds without it.
       - name: Restore last run's failing specs
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .selected-failed.txt
           key: selected-failed-${{ github.ref_name }}-${{ github.run_id }}
@@ -1387,24 +1389,15 @@ jobs:
     # contention. See tools/ci/select-specs.mjs SELECTED_GATE for the numbers.
     timeout-minutes: ${{ matrix.timeout }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: "22"
-          cache: npm
-      - run: npm ci
+          persist-credentials: false
+      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
       # The same lockfile-keyed cache smoke and driving-model restore in 2-5 s;
       # this job installed from scratch (17-33 s per shard, `--with-deps` entering
       # apt each time) until 2026-09-16.
-      - name: Cache Chromium
-        id: pwcache
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/ms-playwright
-          key: pw-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-      - name: Install Chromium on cache miss
-        if: steps.pwcache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium
+      - name: Playwright Chromium (cached)
+        uses: ./.github/actions/playwright-chromium
       # STOP AT THREE, don't grind to the cap. Pages #1967 selected 32 tests,
       # failed 6 of the first 7 at the per-test timeout, and kept going until
       # the job's cap killed it — so the run was CANCELLED, the whole cap was
@@ -1430,16 +1423,12 @@ jobs:
       # race-control 1-12 — all of it SwiftShader, while the smoke shards next
       # door had already moved to llvmpipe and measured 8-12x on exactly these
       # rendering tests (run 35062479811: corner approach 17.8 s vs 214, grid
-      # start 21.4 vs 138). Same step as smoke's, verbatim: apt, an Xvfb on :99
-      # for ANGLE's GL backend to bind through, DISPLAY exported so the pinned
+      # start 21.4 vs 138). Same action as smoke's: apt, an Xvfb on :99 for
+      # ANGLE's GL backend to bind through, DISPLAY exported so the pinned
       # `npm test --` line below is unchanged. `gl: swiftshader` opts out.
       - name: Mesa llvmpipe + Xvfb
         if: inputs.gl != 'swiftshader'
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends mesa-utils libgl1-mesa-dri libegl1 libgles2 xvfb
-          Xvfb :99 -screen 0 1280x800x24 >/dev/null 2>&1 &
-          echo "DISPLAY=:99" >> "$GITHUB_ENV"
+        uses: ./.github/actions/mesa-xvfb
       - name: Run the selection (${{ matrix.name }}, ${{ matrix.tests }} tests)
         env:
           APEX_WORKERS: 1
@@ -1466,13 +1455,13 @@ jobs:
         run: node tools/ci/junit-failed.mjs artifacts > .selected-failed.txt || true
       - name: Save failing specs
         if: always() && matrix.name == 'selected'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .selected-failed.txt
           key: selected-failed-${{ github.ref_name }}-${{ github.run_id }}
       - name: Failure artifacts
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-artifacts-selected-${{ matrix.name }}
           path: |
@@ -1530,21 +1519,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: "22"
-          cache: npm
-      - run: npm ci
-      - name: Cache Chromium
-        id: pwcache
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/ms-playwright
-          key: pw-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-      - name: Install Chromium on cache miss
-        if: steps.pwcache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium
+          persist-credentials: false
+      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
+      - name: Playwright Chromium (cached)
+        uses: ./.github/actions/playwright-chromium
       - name: Golden menus (test:baseline)
         id: goldens
         run: npm run test:baseline
@@ -1552,7 +1532,7 @@ jobs:
       # rendered, because "it passed here once" is the evidence step (b) needs.
       - name: The rendered goldens, and any diff
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: golden-menus-runner
           path: |
