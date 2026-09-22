@@ -40,7 +40,7 @@ import {
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 
 function parseArgs(argv) {
-  const o = { track: "montreal", backend: "three", tlxWebgpu: false, seconds: 30, settle: 6, steerHz: 0, ls: [], json: null, quiet: false, capture: false };
+  const o = { track: "montreal", backend: "three", tlxWebgpu: false, seconds: 30, settle: 6, steerHz: 0, ls: [], json: null, quiet: false, capture: false, selftestKb: 0 };
   const skip = new Set();
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]; const next = () => argv[++i];
@@ -58,6 +58,11 @@ function parseArgs(argv) {
     // THE SOFT BLIT, now opt-in. See the addInitScript below for why it was
     // wrong as a default for a timing tool.
     else if (a === "--capture") o.capture = true;
+    // CALIBRATION. Allocate a KNOWN number of KB per frame and see what each
+    // instrument says about it. Two of them disagreed by 500x on the real page
+    // (sawtooth 256 KB/frame, sampling profiler 0.5), and no amount of reading
+    // V8 source settles which one is wrong — a known input does.
+    else if (a === "--selftest-kb") { o.selftestKb = +next(); }
     else if (a === "--quiet") o.quiet = true;
     else if (!a.startsWith("--") && !skip.has(a)) o.track = a;
   }
@@ -338,13 +343,14 @@ async function main() {
   else args.push("--use-angle=swiftshader");
   const browser = await launchChromium({ args });
   const out = { backend: opts.backend, tlxWebgpu: opts.tlxWebgpu, track: opts.track, seconds: opts.seconds };
+  if (opts.selftestKb > 0) out.selftestKb = opts.selftestKb;
   try {
     const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
     const consoleLines = [];
     page.on("console", (m) => { if (m.type() === "error") consoleLines.push(m.text().slice(0, 300)); });
     page.on("pageerror", (e) => consoleLines.push("[pageerror] " + String(e).slice(0, 300)));
 
-    await page.addInitScript(([be, wantTlxGpu, extraLs, wantCapture]) => {
+    await page.addInitScript(([be, wantTlxGpu, extraLs, wantCapture, selftestKb]) => {
       try {
         localStorage.removeItem("apex26.gfxWgxFail");
         localStorage.removeItem("apex26.gfxBackendProbe");
@@ -547,7 +553,29 @@ async function main() {
           if (p) gov.push([+performance.now().toFixed(0), p.scale, p.tier, p.autoShed, p.fps]);
         } catch (_) { /* perf() needs a live race; before that there is nothing to sample */ }
       }, 200);
+      // THE CALIBRATION LOAD. Small short-lived objects, the shape a per-draw
+      // cache key or an options literal has — three fields plus a map pointer,
+      // ~56 bytes — dropped at the end of the tick so none of it is retained.
+      //
+      // Scheduled on the RAW rAF, never the wrapped one. A driver that
+      // schedules itself through the instrument BECOMES a frame: --steer-hz
+      // did exactly that, added ~3,600 non-rendering callbacks, dragged the
+      // pass median from 1 to 0 and reclassified every rendering frame as
+      // "wide" (the tell was `presents` unchanged at 3588 vs 3597). The bytes
+      // still land inside the window both memory instruments measure, which is
+      // the entire point; the frame statistics stay the page's own.
+      if (selftestKb > 0) {
+        const per = Math.max(1, Math.round((selftestKb * 1024) / 56));
+        const sink = [];
+        const _burn = function () {
+          for (let i = 0; i < per; i++) sink.push({ a: i, b: i + 1, c: i + 2 });
+          sink.length = 0;
+          raw(_burn);
+        };
+        raw(_burn);
+      }
       window.__hitch = {
+        selftestKb,
         arm() {
           armed = true; n = 0; longtasks.length = 0; gov.length = 0;
           armAt = performance.now(); counts.clear(); kinds.length = 0;
@@ -573,7 +601,7 @@ async function main() {
           })(),
         }),
       };
-    }, [opts.backend, opts.tlxWebgpu, opts.ls, opts.capture]);
+    }, [opts.backend, opts.tlxWebgpu, opts.ls, opts.capture, opts.selftestKb]);
 
     await page.goto(srv.url + "index.html", { waitUntil: "domcontentloaded", timeout: 90000 });
     await page.waitForFunction(() => window.__apex, null, { polling: 100, timeout: 90000 });
