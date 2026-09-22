@@ -52,9 +52,12 @@ dead, `present()` throws on the first race frame → TLX refuses the tab and rel
 Identity swizzle carries no information, so the member becomes `undefined`
 (`this.swizzle=void 0` after terser; the canary counts both sites).
 
-Still unfixed upstream as of r186: no feature gate
+Still unfixed upstream as of r186 and on `dev` (2026-09-22): no feature gate
 (`device.features.has('texture-component-swizzle')`) anywhere under
-`src/renderers/webgpu/`. The correct upstream fix is that gate — worth filing.
+`src/renderers/webgpu/`; the member's doc comment now says "requires the feature;
+ignored otherwise", which is not what Chromium 141 does. Chrome ships the feature
+as a DevTrial from 142. The correct upstream fix is that gate. No issue is filed;
+the draft is `docs/notes/UPSTREAM-THREE-ISSUES.md` §1 — put its URL here once posted.
 
 ## 2. #33952 bind-group leak — RETIRED in r186 (PR #33954)
 
@@ -100,7 +103,8 @@ checked 2026-09-03). A TSL graph that reads a `.toVar()` from inside a `setLayou
 function would break under this patch; none of ours does, and
 `js/render/three/tsl-chunks.js` keeps the layouted noise helpers pure. `varyings`,
 `output` and `instanceIndex` stay `var<private>` (a few dozen bytes). Still unfixed on
-`dev` as of r186; worth filing.
+`dev` (2026-09-22; the related TSL perf issue #34386 / PR #34531 does not touch the
+scoping). No issue is filed; the draft is `docs/notes/UPSTREAM-THREE-ISSUES.md` §2.
 
 ## 5. Warm-up yields tasks instead of display frames without scheduler.yield
 
@@ -115,4 +119,5 @@ Never a resolved Promise/microtask, which does not yield to input or rendering.
 
 The canary exercises the actual vendored function body: native method preservation,
 asynchronous/concurrent completion, both-port cleanup, absence of animation-frame
-waits, and the timer fallback. Unchanged upstream as of r186.
+waits, and the timer fallback. Unchanged upstream as of r186 and on `dev`
+(2026-09-22). No issue is filed; the draft is `docs/notes/UPSTREAM-THREE-ISSUES.md` §3.
