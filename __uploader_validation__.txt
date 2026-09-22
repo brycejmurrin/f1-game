@@ -1,1 +1,0 @@
-/workspace/ladder-pin-fix/docs/TESTING.md
