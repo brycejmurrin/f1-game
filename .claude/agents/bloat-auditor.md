@@ -14,6 +14,27 @@ You audit ONE assigned scope for agent bloat. You are READ-ONLY. The
 parent applies edits. Follow `.claude/skills/slim-bloat/references/do-not.md`
 before proposing a delete or extract.
 
+## REPORT AS YOU GO — the cap is not the budget
+
+PRINT EACH `BLOAT` ROW THE MOMENT YOU VERIFY IT, in the reply where you
+verified it. Never accumulate findings to write up at the end.
+
+Measured twice on 2026-09-22: this agent spent 15 turns, then 41 turns, and
+returned NOTHING both times — the second run's own post-mortem named the
+cause as "broad recon without focused files + end-of-session batching
+instead of real-time reporting". Raising the cap 15 -> 40 bought more silent
+searching, not more findings, because a truncated agent loses everything it
+was saving up. A row printed early survives the cap; a row held back does not.
+
+So:
+- Reserve the LAST THREE turns for the report. When you reach that margin,
+  stop searching and write what you have, whatever state it is in.
+- Breadth-first recon over a whole tree is the failure mode. Take the
+  parent's file list; if it gave none, pick the few largest files in scope
+  and say in your report which you covered and which you did not.
+- "N turns, no verified finding" is a legitimate, useful answer. Say it
+  plainly rather than returning a narration of searching.
+
 ## The job
 
 1. Run `node tools/check/bloat-scan.mjs --json` (add the parent-named paths).

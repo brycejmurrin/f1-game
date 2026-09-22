@@ -166,3 +166,29 @@ test("lineHints: apexShift moves the corner's apex later, apexInside bounds the 
   TL.bake(far);
   assert.ok(Math.abs(far.lineCorners[0].sApex - s0.sApex) < 1e-6, "a hint 900 m from any corner must not move it");
 });
+
+test("attack zones: corners that OVERLAP are fed by no straight at all", () => {
+  // `sorted` is ascending by s0, so a negative (c.s0 - prev.s1) means prev's
+  // exit window runs past this corner's entry — a chicane. The lap-wrap idiom
+  // `straight += L` belongs only to the seam pair at ci === 0; applied here it
+  // turned a small overlap into a near-lap-length straight and saturated the
+  // grade, so the AI read the exit of a chicane as the best passing place on
+  // the circuit. Measured on the real tree before the fix: 233 such pairs
+  // across 52 circuits, Monaco 15 of its 22 corners, and Madrid's saturated
+  // node count fell 350 -> 67 once it was corrected (2026-09-22).
+  //
+  // Two corners whose windows overlap: the second turns in while the first is
+  // still unwinding, which is what a chicane is.
+  const t = TL.bake(track(2000, 7, (s) => (s >= 1000 && s < 1080 ? 0.02 : s >= 1060 && s < 1140 ? -0.02 : 0)));
+  const cs = t.lineCorners.slice().sort((p, q) => p.s0 - q.s0);
+  assert.ok(cs.length >= 2, `need two corners to overlap, baked ${cs.length}`);
+  const [a, b] = cs;
+  assert.ok(b.s0 - a.s1 < 0, `this fixture must actually overlap: gap ${(b.s0 - a.s1).toFixed(1)} m`);
+  const qb = TL.attackAt(t, b.s0 - 60).q;
+  assert.equal(qb, 0,
+    `a corner whose entry overlaps the previous corner's exit has no straight feeding it, so its grade must be 0 — got ${qb}`);
+  // ...and the seam pair must still wrap: the FIRST corner is preceded by the
+  // last corner on the lap, where a negative gap is a legitimate wrap.
+  assert.ok(TL.attackAt(t, a.s0 - 60).q > 0,
+    "the lap-seam pair still measures its straight across the wrap");
+});
