@@ -216,8 +216,18 @@
       // on this curve six rows or a 0.855-0.940 span put adjacent treads
       // through each other (clip-audit: 3-5 severe spots against the
       // baseline's 1), so the bank keeps four rows over 0.865-0.935.
-      groundPatch(K(0.900), -1, 6, [48, 0.18, 104], GRAVEL,
-        { id: "estoril-parabolica-gravel", samples: 9 });
+      // gap 6 put the innermost of the 9 lateral boxes at 6.0-11.3 m against a
+      // 7 m road half-width, so preflight rejected the EMITTED footprint and
+      // dropped the whole apron (verify-track "suppressed 3", only 2 of them
+      // the intentional pit-complex pair). gap 10 clears the road edge by 3 m.
+      // ONE 104 m slab could not be placed at all: rejBox tests the EMITTED
+      // axis-aligned union, and a straight slab that long beside a R~122 m
+      // corner always swallows road, whatever its lateral offset (gap 6 and 10
+      // both rejected). Three shorter patches each take their own K(s) basis
+      // and follow the arc, which is what the apron actually is.
+      for (const [g, id] of [[0.884, "a"], [0.900, "b"], [0.916, "c"]])
+        groundPatch(K(g), -1, 10, [44, 0.18, 34], GRAVEL,
+          { id: "estoril-parabolica-gravel-" + id, samples: 9 });
       tyreWall(0.880, 0.925, -1, 5, [0.85, 0.78, 0.20]);
       spectatorHill(0.865, 0.935, 1, 32, { rows: 4, rise: 1.2, depth: 1.9, density: 0.68, step: 7 });
       marshalPost(K(0.895), 1, 10);
