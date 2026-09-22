@@ -92,13 +92,19 @@
           // right — docs/research/STREET-PIT-LANES-PLAN-2026-09.md §4.
           const a0 = side === -1 && b0 === 0.00 ? 0.0211 : b0;
           const a1 = side === -1 && b1 === 1.00 ? 0.9643 : b1;
-          canyon(a0, a1, side, 3.50, {
+          // 4.35, not 3.50: def.barrierGap is 3.4 and the engine's street
+          // barrier is 0.8 m thick, so a canyon at 3.50 stands INSIDE it —
+          // two walls in one volume, 73 same-facing coplanar pairs where the
+          // node-anchored slab and the chord-anchored panel cross (2026-09-22).
+          // Behind it, the pair reads as barrier + wall, which is what the
+          // circuit actually has.
+          canyon(a0, a1, side, 4.35, {
             h: (b0 < 0.5 ? 1.35 : 1.40) + (side > 0 ? 0.06 : 0.08),
             stripeCol: accent, stripeEvery: 5,
           });
         }
         // The T13 banked sector keeps its own wider, taller wall.
-        canyon(0.47, 0.53, side, 4.20, {
+        canyon(0.47, 0.53, side, 5.05, {
           h: 1.40 + (side > 0 ? 0.08 : 0.00),
           stripeCol: GOLD, stripeEvery: 2,
         });
