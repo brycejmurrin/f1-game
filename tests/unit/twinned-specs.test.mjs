@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { TWINNED, verify, gatedNodeFiles, ungatedNodeFiles, isTwinned } from "../../tools/ci/twinned-specs.mjs";
+import { TWINNED, verify, gatedNodeFiles, ungatedNodeFiles, deployGateGroups, isTwinned } from "../../tools/ci/twinned-specs.mjs";
 import { fit } from "../../tools/ci/select-specs.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -185,7 +185,7 @@ test("the ungated set is derived, and is the exact complement of the gated one",
   }
 });
 
-test("every ungated file is inside test:sweeps — the assumption deploy.mjs rests on", () => {
+test("every ungated file is covered by a group deploy.mjs actually runs", () => {
   // deploy.mjs gates the publish by running test:sweeps WHEN the union can move
   // geometry (f6d8de2). That is the right shape — conditional, and derived from
   // pick-tests' own rules — and it rests on one thing being true: that the
@@ -196,10 +196,60 @@ test("every ungated file is inside test:sweeps — the assumption deploy.mjs res
   // test:sweeps, and it runs in no gate before a publish AND is not picked up
   // by the conditional sweep — the same hole that blocked the release train on
   // 2026-09-18, in a place the fix for that does not reach. This names it.
+  //
+  // NOT "inside test:sweeps" ANY MORE (2026-09-22). That was the right question
+  // while test:sweeps was the only group deploy.mjs ran outside the fast tier.
+  // It also runs test:sweeps-parts, unconditionally — and the file in THAT
+  // group read as gated only because gatedNodeFiles() sliced past the end of
+  // the node-suites job and swallowed its bare `- run:` line. Fixing the slice
+  // made the file honest and this assertion wrong at the same moment, which is
+  // the useful shape of the bug: the guard was measuring a parser accident.
+  //
+  // So the question is the one it always meant: is the file in a group the
+  // deploy gate runs? Both groups are DERIVED from deploy.mjs's source, so
+  // deleting either call there fails this rather than quietly widening the hole.
   const groups = JSON.parse(fs.readFileSync(new URL("../../tests/groups.json", import.meta.url), "utf8"));
-  const sweeps = new Set((groups.groups["test:sweeps"] || {}).files || []);
-  const stranded = ungatedNodeFiles().filter((f) => !sweeps.has(f));
+  const covering = deployGateGroups();
+  assert.ok(covering.has("test:sweeps"),
+    "deploy.mjs no longer runs test:sweeps — the 2026-09-18 hole is back open");
+  const covered = new Set();
+  for (const g of covering) for (const f of (groups.groups[g] || {}).files || []) covered.add(f);
+  const stranded = ungatedNodeFiles().filter((f) => !covered.has(f));
   assert.deepEqual(stranded, [],
-    "these run in NO pre-publish gate and are not in test:sweeps either, so deploy.mjs's conditional sweep " +
-    "cannot cover them: " + stranded.join(", ") + " — put each in a gated group, or in test:sweeps");
+    "these run in NO pre-publish gate and are in no group deploy.mjs runs either, so nothing covers them " +
+    "before a publish: " + stranded.join(", ") + " — put each in a gated group, or in one deploy.mjs runs " +
+    `(today: ${[...covering].join(", ")})`);
+});
+
+test("the gated slice stops at its job — the bare-`run:` swallow", () => {
+  /* gatedNodeFiles() anchors on ci.yml's "Pure-node unit suites" step and used
+     to run to the next `- name:`. A step without a name does not end it, so the
+     slice ran past the END OF THE JOB and counted the next job's `npm run` as
+     part of this one. tests/unit/parts-visual-distinctness.test.mjs read as
+     gated for exactly that reason, and would have read as gated no matter what
+     the node-suites step actually ran.
+
+     Asserted on the OUTPUT, not the source: a file whose group appears only in
+     a LATER job must not be in the set. */
+  const gated = gatedNodeFiles();
+  const ci = fs.readFileSync(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8");
+  // The `node-suites` job, bounded at the next TOP-LEVEL job key.
+  const from = ci.indexOf("\n  node-suites:\n");
+  assert.ok(from >= 0, "ci.yml has no node-suites job");
+  const after = ci.slice(from + 1);
+  const to = after.search(/\n  [a-z][\w-]*:\n/);
+  const nodeJob = to >= 0 ? after.slice(0, to) : after;
+  for (const f of ["tests/unit/parts-visual-distinctness.test.mjs"]) {
+    assert.equal(gated.has(f), false,
+      `${f}'s group is not in the node-suites step, yet the gated set contains it — the slice is unbounded again`);
+    assert.ok(!nodeJob.includes("test:sweeps-parts"),
+      "sweeps-parts moved INTO node-suites; this guard's premise changed with it");
+  }
+  // …and the set is not merely empty: the step's own groups are still in it.
+  const groups = JSON.parse(fs.readFileSync(new URL("../../tests/groups.json", import.meta.url), "utf8"));
+  const inStep = [...nodeJob.matchAll(/npm run (test:[a-z0-9-]+)/g)].map((m) => m[1]);
+  assert.ok(inStep.length >= 3, `the node-suites job names only ${inStep.length} group(s) — has it been rewritten?`);
+  for (const g of inStep)
+    for (const f of (groups.groups[g] || {}).files || [])
+      assert.ok(gated.has(f), `${f} is run by ${g} in the node-suites job but is missing from the gated set`);
 });

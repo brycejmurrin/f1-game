@@ -86,6 +86,41 @@ export const GEOMETRY_ERE =
 
 export const GEOMETRY_PATHS = new RegExp(GEOMETRY_ERE);
 
+/** THE PARTS CENSUS IS NOT A FLEET SWEEP, and it had no trigger at all.
+ *  `sweeps-parts` (tests/unit/parts-visual-distinctness.test.mjs) builds the
+ *  CAR, never a circuit, and ran unconditionally on every push, PR and train —
+ *  71-106 s of runner for a docs edit. It reads exactly one thing:
+ *  tools/car/parts-sweep.mjs, which names the modules it loads into its VM on
+ *  one line.
+ *
+ *  DERIVED from that line, never retyped. The hand-written half of the sweeps
+ *  filter had already drifted once (scenery-grounding was missing from it), and
+ *  a list that must be edited in two places to stay true will drift again.
+ *  Throws rather than returning a short list: a trigger derived from a partial
+ *  parse is a filter that fails OPEN, which is the one thing these filters may
+ *  never do. ci.yml's step catches the throw and runs the census. */
+export function partsFiles() {
+  const src = fs.readFileSync(path.join(ROOT, "tools/car/parts-sweep.mjs"), "utf8");
+  // The `for (const f of [...])` list the sweep runs through vm.runInContext.
+  const block = src.match(/for \(const f of \[([\s\S]*?)\]\)/);
+  const mods = block ? [...block[1].matchAll(/"([^"]+\.js)"/g)].map((m) => m[1]) : [];
+  if (mods.length < 4) throw new Error(
+    `geometry-paths: parsed ${mods.length} module(s) out of tools/car/parts-sweep.mjs's load list — ` +
+    "refusing to derive a parts trigger from a partial parse");
+  return mods;
+}
+
+/** The census's own inputs: the modules it loads, the tool that loads them,
+ *  and the suite itself. js/car/ whole rather than the three files under it
+ *  that the list names today — a new part module is exactly the change this
+ *  census exists to measure, and it would otherwise be added without one. */
+export const PARTS_ERE = () => {
+  const mods = partsFiles();
+  const dirs = [...new Set(mods.map((m) => m.slice(0, m.lastIndexOf("/") + 1)))];
+  const files = ["tools/car/parts-sweep.mjs", "tests/unit/parts-visual-distinctness.test.mjs"];
+  return "^(" + [...dirs.map(ere), ...files.map((f) => ere(f) + "$")].join("|") + ")";
+};
+
 /** The suites of test:sweeps that do NOT measure the fleet build, keyed by
  *  the sources they read (verified by reading each suite: the `path.join`
  *  and import lines, not the comments). A rule's `ere` is ERE-and-JS like
@@ -180,12 +215,14 @@ function splitTop(s) {
 // (deploy.mjs --json writes a machine verdict to stdout) must not have this
 // printed into its output.
 //   node tools/ci/geometry-paths.mjs --ere               # the fleet pattern, for ci.yml's grep
+//   node tools/ci/geometry-paths.mjs --parts-ere         # the parts-census pattern, same shape
 //   node tools/ci/geometry-paths.mjs --targeted <file>   # changed paths, one per line -> the
 //                                                        #   targeted suites, space-separated
 //                                                        #   (empty output: none needed)
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const a = process.argv.slice(2);
   if (a[0] === "--ere") process.stdout.write(GEOMETRY_ERE);
+  else if (a[0] === "--parts-ere") process.stdout.write(PARTS_ERE());
   else if (a[0] === "--targeted") {
     if (!a[1]) { console.error("usage: geometry-paths.mjs --targeted <changed-files-list>"); process.exit(2); }
     const files = fs.readFileSync(a[1], "utf8").split("\n").map((l) => l.trim()).filter(Boolean);

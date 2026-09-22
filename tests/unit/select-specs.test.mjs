@@ -207,6 +207,32 @@ test("FAULTY-CHANGE RECALL: no real regression is dropped in silence", () => {
   assert.ok(rows.length >= 5, "the case history is the harness — do not let it shrink");
 });
 
+test("each missed case is attributed to the bucket that actually excluded it", () => {
+  /* The footer of select-recall.mjs attributed all four misses to the
+     deliberate `>=` per-test budget policy. That is right for three of them and
+     WRONG for touch-steer.spec.js, which declares 120 s — comfortably under the
+     180 s cap — and is excluded because it declares 25 tests against a 10-test
+     capacity. It lands in `unreachable`, not `overBudget`, and no budget this
+     gate could be handed would admit it; only splitting the file would.
+
+     A wrong attribution is worse than none: it points the fix at the knob that
+     cannot move the number. So the bucket is machine-checked here rather than
+     described in prose that drifts. */
+  const by = Object.fromEntries(recall().map((r) => [r.catches, r]));
+  const touch = by["tests/specs/touch-steer.spec.js"];
+  assert.ok(touch, "the touch-steer case left the history");
+  assert.equal(touch.hit, false);
+  assert.equal(touch.named, true);
+  assert.match(touch.why, /^unreachable/,
+    `touch-steer is excluded by test COUNT, not by the >= budget policy; got "${touch.why}"`);
+  // The three that ARE the `>=` policy, so a future change that makes them
+  // unreachable (or selectable) has to say so here.
+  for (const f of ["tests/specs/terrain-over-road.spec.js", "tests/specs/props-over-road.spec.js",
+                   "tests/specs/audio-smoke.spec.js"]) {
+    assert.match(by[f].why, /^over budget/, `${f} should be the >= per-test policy`);
+  }
+});
+
 test("the selected-gate settings match select-budget's recommendation", () => {
   // retries 0 halves the failure cost, and a per-test timeout under smoke's
   // 240 s halves it again. If either drifts back to smoke's gate settings, the
