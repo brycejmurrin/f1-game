@@ -486,7 +486,17 @@ const TrackLine = (function () {
     const sorted = cs.slice().sort((a, b) => a.s0 - b.s0);
     for (let ci = 0; ci < sorted.length; ci++) {
       const c = sorted[ci], prev = sorted[(ci - 1 + sorted.length) % sorted.length];
-      let straight = c.s0 - prev.s1; if (straight < 0) straight += L;
+      // `sorted` is ascending by s0, so a NEGATIVE gap means two different
+      // things depending on where we are. At ci === 0 the previous corner is
+      // the last one on the lap and the gap wraps the seam: += L is right.
+      // Anywhere else it means prev's exit window OVERLAPS this corner's
+      // entry — a chicane or an esses, fed by no straight at all — and += L
+      // turned that into a near-lap-length straight, so qc saturated and the
+      // AI graded the exit of a chicane as the best passing place on the
+      // circuit. Measured 2026-09-22: 233 such pairs across 52 circuits,
+      // Monaco 15 of 22 corners, a -60.8 m overlap read as 3234 m of straight
+      // on a 3295 m lap.
+      let straight = c.s0 - prev.s1; if (straight < 0) straight = ci === 0 ? straight + L : 0;
       if (sorted.length === 1) straight = L - (c.s1 - c.s0);
       const iMid = Math.floor(wrapS(L, c.s0 - ZONE_M / 2) / L * n) % n;
       const width = clamp((hw[iMid] - 4) / 2.5, 0, 1);
