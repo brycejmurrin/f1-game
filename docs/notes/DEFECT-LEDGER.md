@@ -11,6 +11,24 @@
 Verified against the current tree. Everything fixed has moved to the archived
 journal; this is what remains.
 
+**2026-09-22 (bug hunt, 12 hunters + 8 validators) — `window.X` guards on a
+top-level `const` are always false in a browser. FIXED.** A classic script's
+top-level `const BrakeCue = …` is a global LEXICAL binding, not a window
+property, so every `window.BrakeCue` / `window.GameAudio` / `window.Input`
+guard (14 sites: steer-tuning, brake-cue, select-screen, key-binds,
+race-settings) was false for every player. Dead in production: the pause
+menu's BRAKE CUE slider (`BrakeCue.create` never ran — its label still read
+"CUE n"), the menu select/tick sounds, `primeHaptics` at the start, and the
+HAPTICS row's hide on devices without haptics. Every node test saw the
+opposite because `tools/lib/game-vm.cjs` rewrites `^const` → `var`. Fixed
+with `typeof X !== "undefined"`; `tests/unit/lexical-window-guard.test.mjs`
+(in `test:guards`) now fails any `window|globalThis|self.Name` read of a
+lexical global nothing assigns onto window. PRODUCT DECISION taken with it:
+the brake cue's never-touched default is now notch 1 (OFF) — shipping the
+fix at the old notch-4 default would have switched the cue on for everyone
+and silenced the driving-line cue it outranks. Saved values and the
+RELAX/STANDARD/PRO presets are unchanged.
+
 **2026-09-22 (wave 4/5) — `DIFF[difficulty]` had three siblings, and a garage
 FILE could reach two of them. FIXED.** The 2026-09-22 crash was a persisted
 string used as a table key with nothing validating it. Hunting the SHAPE rather

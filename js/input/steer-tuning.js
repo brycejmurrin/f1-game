@@ -6,7 +6,7 @@ function create(G) {
 Log.info("input", "SteerTuning.create");
 // Stable helpers from the game.js closure.
 const { $, store, clamp } = G;
-if (window.BrakeCue && BrakeCue.create) BrakeCue.create(G);
+if ((typeof BrakeCue !== "undefined") && BrakeCue.create) BrakeCue.create(G);
 
 let hapRepaintWired = false;   // the gamepadconnected repaint is wired once
 const SLIDER_MIN = 1, SLIDER_MAX = 10;
@@ -551,9 +551,9 @@ function applySteerTuning() {
   // panel (it shared this key until the rename to lineBrakeCue) reached
   // setLevel, failed its `typeof v === "number"` guard, and left the slider
   // unrestored with nothing logged. A number is the only thing this ever meant.
-  const cueRaw = store.get("brakeCue", 4);
-  const cue = clamp(typeof cueRaw === "number" && isFinite(cueRaw) ? cueRaw : 4, SLIDER_MIN, SLIDER_MAX);
-  if (window.BrakeCue) BrakeCue.setLevel(cue);
+  const cueRaw = store.get("brakeCue", 1);
+  const cue = clamp(typeof cueRaw === "number" && isFinite(cueRaw) ? cueRaw : 1, SLIDER_MIN, SLIDER_MAX);
+  if ((typeof BrakeCue !== "undefined")) BrakeCue.setLevel(cue);
   $("pm-rate").value    = rate;    $("pm-rate-v").textContent    = rate;
   $("pm-expo").value    = expo;    $("pm-expo-v").textContent    = expo;
   $("pm-smooth").value  = smooth;  $("pm-smooth-v").textContent  = smooth;
@@ -562,7 +562,7 @@ function applySteerTuning() {
   $("pm-speedsteer").value = spdsteer; $("pm-speedsteer-v").textContent = spdsteer;
   if ($("pm-weight")) { $("pm-weight").value = weight; $("pm-weight-v").textContent = weight; }
   if ($("pm-adaptbtn")) { $("pm-adaptbtn").value = adapt; $("pm-adaptbtn-v").textContent = adaptLabel(adapt); }
-  if ($("pm-brakecue")) { $("pm-brakecue").value = cue; $("pm-brakecue-v").textContent = (window.BrakeCue && BrakeCue.labelOf) ? BrakeCue.labelOf(cue) : (cue <= 1 ? "OFF" : "CUE " + cue); }
+  if ($("pm-brakecue")) { $("pm-brakecue").value = cue; $("pm-brakecue-v").textContent = ((typeof BrakeCue !== "undefined") && BrakeCue.labelOf) ? BrakeCue.labelOf(cue) : (cue <= 1 ? "OFF" : "CUE " + cue); }
   $("pm-help").value    = help;    $("pm-help-v").textContent    = help;
   $("pm-pace").value    = pace;    $("pm-pace-v").textContent    = paceLabel(pace);
   $("pm-line").value    = line;    $("pm-line-v").textContent    = lineLabel(line);
@@ -580,7 +580,7 @@ function applySteerTuning() {
   // shipped in any WebKit. A pad with an actuator can arrive later, so this is
   // re-run rather than decided once (see the gamepadconnected repaint below).
   const hapItem = $("pm-haptics-item");
-  if (hapItem && window.Input && Input.hapticsSupported) {
+  if (hapItem && (typeof Input !== "undefined") && Input.hapticsSupported) {
     hapItem.hidden = !Input.hapticsSupported();
     if (!hapRepaintWired && typeof window.addEventListener === "function") {
       hapRepaintWired = true;
@@ -639,8 +639,8 @@ if ($("pm-adaptbtn")) $("pm-adaptbtn").oninput = (e) => {
 };
 if ($("pm-brakecue")) $("pm-brakecue").oninput = (e) => {
   const v = clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX); store.set("brakeCue", v);
-  if (window.BrakeCue) BrakeCue.setLevel(v);
-  $("pm-brakecue-v").textContent = (window.BrakeCue && BrakeCue.labelOf) ? BrakeCue.labelOf(v) : (v <= 1 ? "OFF" : "CUE " + v);
+  if ((typeof BrakeCue !== "undefined")) BrakeCue.setLevel(v);
+  $("pm-brakecue-v").textContent = ((typeof BrakeCue !== "undefined") && BrakeCue.labelOf) ? BrakeCue.labelOf(v) : (v <= 1 ? "OFF" : "CUE " + v);
   clearPreset();   // preset-owned (PRESET_STORE), same as every sibling slider
 };
 $("pm-help").oninput = (e) => {

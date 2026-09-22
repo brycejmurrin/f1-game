@@ -14,7 +14,7 @@ const KeyBinds = (function () {
 
 function create(G) {
   const { $, store } = G;
-  const tick = () => { if (G.soundOn && window.GameAudio) GameAudio.uiTick(); };
+  const tick = () => { if (G.soundOn && (typeof GameAudio !== "undefined")) GameAudio.uiTick(); };
   const sections = [];
 
   // The same activity report drives Help and first-run coaching prompts.

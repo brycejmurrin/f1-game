@@ -225,7 +225,7 @@ function buildTeamPicker() {
     b.onclick = () => {
       // Same as the circuit row: the decision this sheet exists for clicked
       // silently while the card that OPENED it did not.
-      if (G.soundOn && window.GameAudio) GameAudio.uiSelect();
+      if (G.soundOn && (typeof GameAudio !== "undefined")) GameAudio.uiSelect();
       // The old team's driver index means nothing here, so this used to reset
       // to seat 0 flat. In a friend race seat 0 may be the seat the other
       // player is in, which dropped you straight into a taken seat with a
@@ -280,7 +280,7 @@ function setTrackFilter(id, focus, keepDaily) {
   trackFilter = id;
   if (id !== "daily-open") store.set("trackFilter", id);
   if (!keepDaily && G.daily && G.daily.isActive()) G.daily.stop();
-  if (G.soundOn && window.GameAudio) GameAudio.uiSelect();
+  if (G.soundOn && (typeof GameAudio !== "undefined")) GameAudio.uiSelect();
   vt(() => {
     buildSelect(); tickUi();
     // THE BAR IS NOT INSIDE THE STRIP. mountToolbar puts it on the SHELF, as a
@@ -532,7 +532,7 @@ function buildSelect() {
       row.onclick = () => {
         // The headline choice of this screen was the one silent control on it
         // (the filter chips beside it click) — a soundless tap reads as a miss.
-        if (G.soundOn && window.GameAudio) GameAudio.uiSelect();
+        if (G.soundOn && (typeof GameAudio !== "undefined")) GameAudio.uiSelect();
         const armedDaily = G.daily && G.daily.current();
         if (armedDaily && armedDaily.trackId !== t.id) {
           G.daily.stop();
