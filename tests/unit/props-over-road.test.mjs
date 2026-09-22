@@ -22,32 +22,53 @@
 // budget, so `select-specs.mjs` EXCLUDED it on every js/track and js/circuits
 // diff — the exact diffs it exists for — and its only scheduled run was the
 // nightly rota's `test:circuits`, one night in eleven. A guard nobody runs is
-// not a guard, so it moved here, into `test:sweeps`, which the Pages gate runs
-// on every geometry diff, blocking.
+// not a guard, so the audit is ALSO here, in `test:sweeps`, which the Pages
+// gate runs on every geometry diff, blocking. The spec is untouched.
 //
-// THE PORT IS THE SAME MEASUREMENT, and that is checked rather than asserted:
-// the sample ladder, the tolerance band, the barycentric test and its 0.01
-// degeneracy floor are the spec's, and `nodeAt()`'s three-decimal rounding is
-// reproduced so the sample points are identical. On the two circuits where the
-// spec wrote down what it measured, this reads the same to the centimetre —
-// jeddah's "grey [0.46,0.47,0.5] at 1.07 m, lateral -6.35" and
-// mont_tremblant's "has read 4.74 since". Every other baselined circuit reads
-// at or under its cap. What changed is cost, not method: a uniform grid over
-// the centreline samples and over the sample points replaces two linear scans,
-// and the whole 52-circuit fleet takes 88 s here against the spec's 1500 s
-// budget, with byte-identical verdicts (checked circuit by circuit on the
-// baselined set before and after the indexing).
+// IT FOUND THE SPEC WAS RED. mosport and zandvoort read 1.07 m, which under the
+// spec's own rule ("a track NOT in this map must read <= TOL") is a failure,
+// and neither is in its map. The offender is the object the spec baselines on
+// jeddah, identified by the same colour byte for byte: the pit wall, ~0.35 m
+// off the tarmac edge on the pit straight. jeddah's note records it arriving
+// with "a shorter lane, a signed entry, A WALLED EXIT, furnished bays"; that
+// redesign gave every circuit the wall, and the map was written when only
+// jeddah had it, so the red is as old as the redesign. A browser run confirmed
+// both. Baselined below at jeddah's 1.1, for jeddah's stated reason, and NOT by
+// widening TOL. The SPEC's own map is deliberately left alone: editing it makes
+// the selector rank it 0 and actually run it, which is how monza's undiagnosed
+// reading (below) came to light, and capping that one to get a green is exactly
+// the move AGENTS.md rule 9 forbids.
 //
-// AND IT FOUND THE SPEC WAS RED. mosport and zandvoort read 1.07 m with no
-// baseline entry, which under the spec's own rule ("a track NOT in this map
-// must read <= TOL") means the browser spec has been failing on them
-// unnoticed — nobody reads the nightly. The offender is the same object the
-// spec baselines on jeddah, identified by the same colour byte for byte: the
-// pit wall, ~0.35 m off the tarmac edge on the pit straight. jeddah's note
-// records it arriving with "a shorter lane, a signed entry, A WALLED EXIT,
-// furnished bays"; that redesign gave every circuit the wall, and the baseline
-// map was written when only jeddah had it. So they are baselined here at the
-// same 1.1 as jeddah, for the same stated reason, and NOT by widening TOL.
+// THIS IS NOT A REPLACEMENT FOR THE SPEC, and the difference is measured, not
+// assumed. The sample ladder, the tolerance band, the barycentric test and its
+// 0.01 degeneracy floor are the spec's, and `nodeAt()`'s three-decimal rounding
+// is reproduced so the sample points are the spec's to the millimetre. On the
+// two circuits where the spec wrote down what it measured, this reads the same
+// to the centimetre: jeddah's "grey [0.46,0.47,0.5] at 1.07 m, lateral -6.35"
+// and mont_tremblant's "has read 4.74 since". It also reads mosport and
+// zandvoort at 1.07, which the spec never baselined, and a browser run
+// confirmed both — the same pit wall, unnoticed because the spec does not run.
+//
+// But the VM build is NOT the browser's geometry. On monza the browser reports
+// 0.75 m at frac 0.115 from a flat 2.2 x 0.2 m face at y 0.70, and the VM build
+// has NO prop vertex within 5 m of that point (the road and terrain are there;
+// props are not). Reproduced with `TRACK=monza` alone, in 22 s, so it is not
+// the spec's 52-circuit loop leaking geometry between circuits. The centreline
+// is identical (VM node 166 at y -0.052, the browser's sample at -0.05), so the
+// divergence is the buffer, not the sampling. Two further measurements say the
+// spec's own method is fragile: the half-width its ladder is scaled by reads
+// 7.47 m from the engine, 9.68 m from the VM's road mesh and ~6.37 m implied by
+// the browser, and its samples are ~4.8 m apart along the arc against a 0.2 m
+// wide object — so whether that object is found at all is which build you ask.
+// docs/notes/DEFECT-LEDGER.md carries both, open.
+//
+// So: this guard blocks on every geometry diff, where the spec blocks on none,
+// and it reproduces every reading the spec documents. It does not see props the
+// VM does not build, and it must not be described as making the spec redundant.
+// What changed against the spec is cost: one uniform grid over the centreline
+// samples and over the sample points replaces two linear scans, and the whole
+// 52-circuit fleet takes 88 s against the spec's 1500 s budget, verdicts
+// byte-identical circuit by circuit before and after the indexing.
 //
 // Run: node --test tests/unit/props-over-road.test.mjs
 

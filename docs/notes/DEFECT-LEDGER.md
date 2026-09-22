@@ -11,30 +11,49 @@
 Verified against the current tree. Everything fixed has moved to the archived
 journal; this is what remains.
 
-**2026-09-22 — `props-over-road.spec.js` had been RED on mosport and zandvoort,
-and nobody could have known. FIXED (baselined), and the audit now blocks.**
-Both circuits read 1.07 m of prop over the racing surface with no `BASELINE`
-entry, which under that spec's own rule ("a track NOT in this map must read
-<= TOL") is a failure. The offender is the pit wall — the same object the spec
-bisected on jeddah, identified by the same colour `[0.46,0.47,0.5]` at the same
-1.07 m, lateral +6.75 and -6.67 against base half-widths of 8.7 and 8.81
-against jeddah's -6.35. jeddah's note records it arriving with the walled-exit
-pit redesign (`80acf931`); that redesign gave every circuit the wall, and the
-baseline map was written when only jeddah had it. So the red is as old as the
-redesign.
+**2026-09-22 — monza carries a prop 0.75 m over the racing line. OPEN.**
+`props-over-road.spec.js` reports `monza PROP 0.75m over road (cap 0.2)` at frac
+0.115: a flat 2.2 x 0.2 m face at y 0.70 over a road at y -0.05, lateral -4.78,
+colour `[0.25,0.25,0.29]`. Reproduce in 22 s with
+`TRACK=monza npm test -- tests/specs/props-over-road.spec.js`. Undiagnosed, and
+deliberately NOT baselined: capping it would be the tolerance-widening AGENTS.md
+rule 9 forbids.
 
-Why it went unseen is the point, and it is the same mechanism as the
-`renderer-macos` and `steering.spec.js` entries below: the spec declares
-`test.setTimeout(1500000)`, which is >= the change-aware gate's 180 s per-test
+It surfaced by accident, which is the second half of the defect. That spec
+declares `test.setTimeout(1500000)`, over the change-aware gate's 180 s per-test
 cap, so `select-specs.mjs` excludes it on every `js/track` and `js/circuits`
-diff — the only diffs that can cause this defect — and its sole schedule is the
-nightly rota's `test:circuits`, one night in eleven. Nobody reads the nightly.
+diff and its only schedule is the nightly rota, one night in eleven. Editing the
+file for an unrelated reason made the selector rank it 0, which gave it a shard
+of its own and ran it — and it failed. Nobody reads the nightly.
 
-`tests/unit/props-over-road.test.mjs` is the fix for the mechanism: the same
-measurement in node, in `test:sweeps`, which the Pages gate runs on those diffs
-blocking, at 90 s against the spec's 1500 s budget. It is what found the red.
-`terrain-over-road.spec.js`'s fleet test is the same shape and still has no
-blocking copy.
+**The VM build is not the browser's geometry, and this is how we know.**
+`tests/unit/props-over-road.test.mjs` runs the same audit over
+`tools/lib/track-build-vm.cjs` and reads monza as 0.00, because the VM build has
+NO prop vertex within 5 m of that point — the road and terrain are there, the
+props are not (monza's `propsGeo` is 680,639 vertices, 4782 of them within 30 m,
+so its scenery is otherwise building). The centreline is identical, VM node 166
+at y -0.052 against the browser's sample at -0.05, so the divergence is the
+buffer and not the sampling. Every fleet sweep audits the VM's geometry, so
+whatever monza's browser-only object is, those sweeps cannot see it either.
+
+Two more measurements say the spec's own method is fragile. The half-width its
+lateral ladder is scaled by reads 7.47 m from the engine's own `track.hw`,
+9.68 m derived from the VM's road mesh, and ~6.37 m implied by the browser's
+reading — and its samples sit ~4.8 m apart along the arc against a 0.2 m wide
+object, so whether that object is sampled at all depends on which build you ask.
+
+**2026-09-22 — `props-over-road.spec.js` is RED on mosport and zandvoort. OPEN
+in the spec, guarded in node.** Both read 1.07 m with no `BASELINE` entry, which
+under that spec's rule is a failure. The offender is the object it baselines on
+jeddah, identified by the same colour byte for byte: the pit wall, ~0.35 m off
+the tarmac edge on the pit straight, lateral +6.75 and -6.67 against base
+half-widths of 8.7 and 8.81 against jeddah's -6.35. jeddah's note records it
+arriving with the walled-exit pit redesign; that redesign gave every circuit the
+wall and the map was written when only jeddah had it, so the red is as old as the
+redesign. Found by the node suite, then confirmed by a browser run of the spec.
+Baselined in the node suite at jeddah's 1.1 for jeddah's stated reason; the
+spec's own map is left alone, because editing that file is what makes the
+selector run it, and it would then fail on monza above.
 
 **2026-09-22 — `DIFF[difficulty]` undefined took every physics tick down. FIXED.**
 `js/game.js` `updateCar()` read `DIFF[difficulty]` unguarded and dereferenced
