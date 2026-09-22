@@ -1165,7 +1165,7 @@ const TLX = (function () {
       let fx = null;
       try {
         if (window.TLXShaders && TLXShaders.fx) {
-          fx = TLXShaders.fx(THREE, TSL, { chunks });
+          fx = TLXShaders.fx(THREE, TSL, { chunks, sharedUniforms: _sharedUniforms });
         }
       } catch (e) {
         try { Log.warn("gfx", "TLX: fx factory failed, FX paths off —", e); } catch (_) {}
