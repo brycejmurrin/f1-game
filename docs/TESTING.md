@@ -627,12 +627,14 @@ before either blaming or absolving the machine.
 ### A guard must run where CI runs it
 
 Three guards added in one day passed locally and could not execute in CI at all.
-They asserted real things; they just assumed this machine. The guards job checks
-out with plain `actions/checkout@v4` — **depth 1** — and `artifacts/` is
+They asserted real things; they just assumed this machine. The guards job checked
+out with plain `actions/checkout` — **depth 1** — until 2026-09-22 (it is
+`fetch-depth: 0` now, for the ratchet-vs-base step, but every OTHER job is still
+shallow and a guard must not assume the history is there), and `artifacts/` is
 **gitignored**, so in CI:
 
-- `HEAD~1` does not resolve, nor does any older sha (`git show <sha>:file` fails
-  outright, it does not return empty)
+- `HEAD~1` does not resolve on a shallow job, nor does any older sha (`git show
+  <sha>:file` fails outright, it does not return empty)
 - `artifacts/logs/` does not exist, so anything derived from run logs is
   legitimately empty rather than wrong
 
