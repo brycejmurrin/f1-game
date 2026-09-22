@@ -3975,6 +3975,15 @@ function update(dt) {
       els.lights.hidden = true;
       for (const l of els.lights.children) l.classList.remove("on");
       netStart = null;              // consumed; never carry it into the next race
+      // LOWERED BEFORE THE THROWABLE WORK BELOW, read from a local afterwards.
+      // announce() and GameAudio.lightsOut() sit between here and the old clear
+      // site, and lightsOut() builds WebAudio nodes behind a guard that checks
+      // `ctx` exists but not `ctx.state` — so a context the browser closed under
+      // us (iOS lock: the case rebuildCtx exists for) threw and latched the flag.
+      // Stuck true, `if (!restartPending) raceT = 0` skips the reset on every
+      // later race and quali never launches another flying lap.
+      const wasRestart = restartPending;
+      restartPending = false;
       announce("LIGHTS OUT!", 1.4, "race");
       if (soundOn) GameAudio.lightsOut();
       // ONE STANDING LAP, from the line. It used to launch at racing speed
@@ -3983,8 +3992,7 @@ function update(dt) {
       // That is fixed on the other side now — quali.js charges every modelled
       // lap the same standing start — so both begin from rest and stay on one
       // scale, and the session reads like the thing it is named after.
-      if (isQuali() && !restartPending) launchFlyingLap();
-      restartPending = false;
+      if (isQuali() && !wasRestart) launchFlyingLap();
     }
     return;
   }

@@ -739,8 +739,7 @@ const GameAudio = (function () {
     src.onended = () => { src.disconnect(); f.disconnect(); g.disconnect(); };
   }
 
-  function startEngine() {
-    if (!ctx || engineOn) return;
+  function startEngineBody() {
     flushDying();   // kill the fading previous graph before building another
 
     // shared lowpass + master gain for the engine core (samples or synth).
@@ -1080,7 +1079,27 @@ const GameAudio = (function () {
     pullT = 0;
     overrunT = 0;   // an AudioContext stamp: a rebuilt ctx restarts near 0, and a
                     // stale future value both silences the crackle and blocks its re-arm
+  }
+  // THE FLAG GATES ITS OWN TEARDOWN, so it cannot be the LAST thing the build
+  // sets. startEngine() creates and start()s ~ten nodes; stopEngine() opens with
+  // `if (!engineOn) return;`. A throw partway (createOscillator on a context the
+  // browser closed under us — the guard above checks `ctx` exists, not its
+  // state) left every node created so far connected and audible with the flag
+  // still false: stopEngine() no-opped against them forever, and the NEXT
+  // startEngine() saw false and built a second full set over the module-scope
+  // references, losing the only handle on the first. The drone compounded once
+  // per menu-race cycle. Arming first and tearing down on the way out makes a
+  // partial build cost silence instead of a permanent one.
+  function startEngine() {
+    if (!ctx || engineOn) return;
     engineOn = true;
+    try { startEngineBody(); }
+    // ...and the flag comes back down even if the teardown ITSELF throws on the
+    // half-built graph (stopEngine touches engGain/whineGain, either of which
+    // the throw may have pre-empted). Leaving it up would trade a compounding
+    // drone for permanent silence, because every later startEngine() would
+    // early-return on it; down, the next one is free to retry.
+    catch (e) { try { stopEngine(); } catch (_) { /* teardown of a half-graph */ } engineOn = false; throw e; }
   }
 
   function stopEngine() {

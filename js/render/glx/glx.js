@@ -1669,6 +1669,14 @@ const GLX = (function () {
     // Resync cached render state to GL defaults — depthMask must be on for the
     // depth buffer to clear, and blend off is the opaque-pass default.
     gl.disable(gl.BLEND); _blendOn = false;
+    // ...and the FUNC, not just the enable. drawGlow, the additive drawParticles
+    // branch and post.js's bloom mip chain each set blendFunc(ONE, ONE) and
+    // restore it after; nothing re-synced it per frame, so a throw inside any of
+    // those windows left every later alpha-blended draw — ghost car, blob
+    // shadows, skid marks, driving line — compositing additively until the next
+    // successful additive pass happened to put it back. One call a frame retires
+    // the whole class, and makes drawDecal's defensive reassert redundant.
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.depthMask(true); _depthWrite = true;
     // Same resync for the three states the setters above route. This is
     // what keeps a cached value from outliving the frame that set it — and it

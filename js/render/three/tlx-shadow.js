@@ -307,6 +307,15 @@
     // The seam members (game.js call order: Begin -> cast* -> End).
     function shadowBegin(lightVP) {
       if (!S.enabled) return;
+      // The SUN pass owns the whole shadow box, so a castCullVP still up is a
+      // leftover from the car or lamp pass — and tlx.js resolves
+      // `castCullVP || lightVP` for every chunked and instanced caster, so a
+      // stale one culls the sun's map to a ±42 m car box. The Ends clear it on
+      // the normal path and on their early returns (see the note at
+      // lampShadowEnd); what they cannot cover is a THROW out of a caster draw
+      // between Begin and End. Same one-line guard as GLX's shadow.js — this is
+      // the DEFAULT backend, so it needs it at least as much.
+      S.castCullVP = null;
       beginPass(sunRT, lightVP, S.lightVP);
     }
 

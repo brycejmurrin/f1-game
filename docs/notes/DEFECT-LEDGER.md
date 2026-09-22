@@ -124,22 +124,51 @@ so the title screen went back to paying for all 22 parked cars — the cost a
 comment in `render()` says was already fixed once by another route. Fix:
 `quitToMenu()` stops it too; `stop()` is idempotent.
 
-**2026-09-22 — five circuits grew the wrong trees and Dijon lost a grandstand
-livery, because a typo in def data is silent. FIXED.** The def files are data
-and the engine looks their strings up in tables; every lookup has a sensible
-fallback, so a word the engine does not know never throws, never logs, and
-passes `verify-track`. `furniture.tree: "pine"` is in neither `SPECIES` nor the
-two aliases beside it, so Anderstorp, Fuji, Mont Tremblant, Okayama and Zolder
-— Sweden, Japan ×2, Québec, the Ardennes — fell through to `"broad"` and grew
-rounded broadleaf trees on the generic scatter pass. The conifer spelling is
-`"fir"`, which the other Nordic and Alpine circuits already use. Separately,
+**2026-09-22 — Dijon lost a grandstand livery, because a typo in def data is
+silent. FIXED. The same class in `furniture.tree` is OPEN, and the attempt to
+fix it is the more useful record.** The def files are data and the engine looks
+their strings up in tables; every lookup has a sensible fallback, so a word the
+engine does not know never throws, never logs, and passes `verify-track`.
+
 Dijon's `standSet: ["stone", …]` is not a `STAND_LIVERIES` key, so
 `grandstandEx`'s `lib[name] || null` fell through to its default shell — which
 is bit-identical to `"steel"`, making an authored three-way livery rotation a
-two-way one with double-weight grey. Pinned by
-`tests/unit/circuit-vocab.test.mjs`, which reads the valid sets OUT of the
-engine rather than restating them, so adding a species does not turn the gate
-into a liar.
+two-way one with double-weight grey. Fixed to `"sandstone"`; a livery is colour
+only, so it moves no geometry.
+
+`furniture.tree: "pine"` (anderstorp, fuji, mont_tremblant, okayama, zolder) is
+in neither `SPECIES` nor the two aliases beside it, so the dispatch falls
+through to `"broad"` and five conifer-belt circuits — Sweden, Japan ×2, Québec,
+the Ardennes — grow rounded broadleaf trees on the generic scatter pass. The
+correct species is `"fir"`, which the other Nordic and Alpine circuits use.
+
+**IT WAS CHANGED TO `"fir"`, AND REVERTED, AND THE REASON IS WORTH MORE THAN THE
+FIX WOULD HAVE BEEN.** `canopyR` (`js/track/scenery/nature.js`) returns roughly
+HALF the radius for `fir` that it does for `broad` — ~3.6 m vs ~6.6 m at h = 12
+— and the scatter keeps props clear by `dist + crown`. So correcting the species
+also halved the keep-out, and CI's per-circuit geometry sweep measured prop
+interpenetration growing on every one of the five:
+
+```
+anderstorp 31 → 34    fuji 24 → 26    okayama 58 → 59
+mont_tremblant 32 → 48                zolder 82 → 105
+```
+
+Registering `"pine"` in `SPECIES` instead is strictly worse: the emitter
+dispatch has no pine branch, so it would keep the broadleaf mesh and take the
+smaller clearance with it. The real fix is to check `canopyR("fir")` against
+`conifer()`'s actual mesh extent — the comment directly above `canopyR` records
+that same "GUARANTEED not to clip barriers" contract being found "~0.9 m
+optimistic" once before, for broadleaf — and that is its own change with its own
+sweep. Parked in `tests/unit/circuit-vocab.test.mjs`'s `KNOWN_UNHANDLED` with
+these numbers attached, so the guard still fails on a NEW typo and this one
+cannot be quietly forgotten.
+
+**The process lesson is the durable half.** `deploy.mjs --gate-only` passed this
+batch 21 suites green, and the regression was caught only by CI's per-circuit
+geometry sweeps — the 14 files `PREPUSH-GATE-LADDER.md` says the whole gate
+leaves out. A def edit that changes a SPECIES changes geometry, so it belongs
+behind `npm run test:sweeps` locally before a push, not behind the gate.
 
 **2026-09-22 — `world({since})` could not say a key had gone away. FIXED.**
 `js/agent/agentview.js`'s `deltaOf` walks `Object.keys(next)`, so a field the

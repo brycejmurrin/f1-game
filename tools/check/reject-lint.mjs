@@ -89,8 +89,20 @@ export function lintSource(src, file = "<src>") {
 
   // A call is OWNED when its value goes somewhere: awaited, returned, assigned,
   // or chained (.then/.catch/.finally). Only a bare ExpressionStatement drops it.
+  // `x.foo()` as a bare statement is the shape, but it is not the only
+  // SPELLING of it: `x && x.foo()` and `x ? x.foo() : null` discard the value
+  // just as completely, and a guard that misses them does not hold the class at
+  // zero — it holds it until someone adds a null check. Walk into the discarded
+  // operands of a statement-level && / || / ?? / ternary / comma.
   const statements = new Set();
-  each(ast, (n) => { if (n.type === "ExpressionStatement") statements.add(n.expression); });
+  const discard = (e) => {
+    if (!e) return;
+    statements.add(e);
+    if (e.type === "LogicalExpression") { discard(e.right); return; }
+    if (e.type === "ConditionalExpression") { discard(e.consequent); discard(e.alternate); return; }
+    if (e.type === "SequenceExpression") { for (const x of e.expressions) discard(x); }
+  };
+  each(ast, (n) => { if (n.type === "ExpressionStatement") discard(n.expression); });
 
   const sites = [];
   each(ast, (n) => {

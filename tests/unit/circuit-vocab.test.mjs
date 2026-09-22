@@ -9,11 +9,10 @@
 //
 //   furniture.tree: "pine"   anderstorp, fuji, mont_tremblant, okayama, zolder
 //     `pine` is in neither SPECIES nor the two aliases beside it, so the
-//     dispatch in js/track/tracks.js fell through to "broad". Five conifer-belt
-//     circuits — Sweden, Japan ×2, Québec, the Ardennes — grew rounded
-//     broadleaf trees on the generic scatter pass. The conifer spelling is
-//     "fir"; the other five Nordic/Alpine circuits already used it, which is
-//     what makes this a typo rather than a choice.
+//     dispatch in js/track/tracks.js falls through to "broad". Five conifer-belt
+//     circuits — Sweden, Japan x2, Quebec, the Ardennes — grow rounded broadleaf
+//     trees on the generic scatter pass. PARKED, NOT FIXED: see KNOWN_UNHANDLED
+//     below, which carries the measurement that stopped it.
 //
 //   standSet: ["stone", …]   dijon
 //     `stone` is not a STAND_LIVERIES key, so grandstandEx's `lib[name] || null`
@@ -76,6 +75,32 @@ function literalKeys(src, name) {
   return keys;
 }
 
+// PARKED, WITH THE NUMBER THAT PARKED IT. An entry here is not "this is fine";
+// it is "correcting this costs more than it buys, and here is the evidence".
+// Same contract as circuit-def-fields.test.mjs's ENGINE_ONLY: every entry owes
+// a reason, and a word NOT listed here still fails the test.
+//
+// "pine" -> "fir" was tried on 2026-09-22 and REVERTED. It is the right species
+// (the five circuits are conifer belt, and `fir` is what the other Nordic and
+// Alpine circuits use), but canopyR (js/track/scenery/nature.js) returns roughly
+// HALF the radius for `fir` that it does for `broad` — ~3.6 m vs ~6.6 m at
+// h = 12 — and the scatter keeps props clear by `dist + crown`. So the correct
+// species also halved the keep-out, and CI's per-circuit geometry sweep measured
+// prop interpenetration growing on every one of the five:
+//
+//     anderstorp 31 -> 34    fuji 24 -> 26        okayama 58 -> 59
+//     mont_tremblant 32 -> 48                     zolder 82 -> 105
+//
+// Registering "pine" in SPECIES instead is strictly worse: the emitter dispatch
+// has no pine branch, so it would keep the broadleaf mesh and take the smaller
+// clearance with it. The real fix is to check canopyR("fir") against conifer()'s
+// actual mesh extent — the comment above canopyR records that same contract
+// being found "~0.9 m optimistic" once before, for broadleaf — and that is its
+// own change with its own sweep, not a rider on a bug-fix batch.
+const KNOWN_UNHANDLED = {
+  pine: 'renders as "broad"; "fir" is correct but halves canopyR\'s keep-out and grew prop interpenetration on all five circuits (2026-09-22 sweep)',
+};
+
 test("every furniture.tree names a species the scatter dispatch honours", () => {
   const src = read("js/track/tracks.js");
   // js/track/tracks.js: `SPECIES[fz.tree] ? fz.tree : fz.tree === "palm" ? "palm"
@@ -87,11 +112,21 @@ test("every furniture.tree names a species the scatter dispatch honours", () => 
   const bad = [];
   for (const d of Tracks._vmContext.TrackDefs) {
     const t = d.furniture && d.furniture.tree;
-    if (t != null && !valid.has(t)) bad.push(`${d.id}: tree "${t}"`);
+    if (t != null && !valid.has(t) && !KNOWN_UNHANDLED[t]) bad.push(`${d.id}: tree "${t}"`);
   }
   assert.deepEqual(bad, [],
     `unknown tree species — each renders as the "broad" fallback.\n  ` +
     `${bad.join("\n  ")}\nvalid: ${[...valid].sort().join(", ")}`);
+});
+
+// The parked list must stay HONEST in both directions: an entry the engine has
+// since learned is no longer a known gap, and leaving it here would hide the
+// next real typo of the same word.
+test("nothing in KNOWN_UNHANDLED is a species the engine now honours", () => {
+  const valid = literalKeys(read("js/track/tracks.js"), "SPECIES = ");
+  for (const alias of ["palm", "fir", "broad"]) valid.add(alias);
+  for (const k of Object.keys(KNOWN_UNHANDLED))
+    assert.ok(!valid.has(k), `"${k}" is handled now — drop it from KNOWN_UNHANDLED`);
 });
 
 test("every standSet entry names a real grandstand livery", () => {

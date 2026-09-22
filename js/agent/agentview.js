@@ -777,7 +777,14 @@ const AgentView = (function () {
     // API to full payloads for good.
     const DELTA_META = { note: 1, deltaBase: 1 };
     function keysShrank(prev, next, top) {
-      if (!prev || typeof prev !== "object" || Array.isArray(prev)) return false;
+      if (!prev || typeof prev !== "object") return false;
+      if (Array.isArray(prev)) {
+        // deltaOf replaces an array wholesale when the LENGTHS differ, so only
+        // the equal-length case can smuggle a shrunken element through.
+        if (!Array.isArray(next) || next.length !== prev.length) return false;
+        for (let i = 0; i < prev.length; i++) if (keysShrank(prev[i], next[i], false)) return true;
+        return false;
+      }
       if (!next || typeof next !== "object" || Array.isArray(next)) return true;
       for (const k of Object.keys(prev)) {
         if (top && DELTA_META[k]) continue;

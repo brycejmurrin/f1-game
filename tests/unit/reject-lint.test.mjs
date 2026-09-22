@@ -74,6 +74,25 @@ test("synchronous close()/resume() receivers are not flagged", () => {
   ]) assert.deepEqual(lintSource(src).sites, [], src);
 });
 
+// A GUARD THAT ONLY HOLDS UNTIL SOMEONE ADDS A NULL CHECK IS NOT HOLDING THE
+// CLASS AT ZERO. `ctx && ctx.close()` and `ctx ? ctx.close() : null` discard the
+// promise exactly as completely as the bare statement does, and both are the
+// obvious rewrite when a receiver turns out to be nullable.
+test("the guarded spellings of the same discard are flagged too", () => {
+  for (const src of [
+    `function f(ctx){ ctx && ctx.close(); }`,
+    `function f(ctx){ ctx ? ctx.close() : null; }`,
+    `function f(ctx){ ctx == null || ctx.close(); }`,
+    `function f(ctx){ a(), ctx.close(); }`,
+  ]) assert.equal(lintSource(src).sites.length, 1, src);
+});
+
+test("guarding the rejection still clears the guarded spellings", () => {
+  const { sites } = lintSource(
+    `function f(ctx){ ctx && (() => { const p = ctx.close(); if (p && p.catch) p.catch(() => {}); })(); }`);
+  assert.deepEqual(sites, []);
+});
+
 test("a parse failure is reported, never swallowed as clean", () => {
   const r = lintSource(`function f( {`);
   assert.ok(r.parseError, "a file the lint cannot parse must not read as zero sites");

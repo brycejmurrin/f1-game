@@ -806,6 +806,11 @@ const PitLane = (function () {
       if (!c || !enabled()) return false;
       c.pitArmed = on == null ? !c.pitArmed : !!on;
       // The place the stop was called from: what it cost is said at the release.
+      // DISARMING DROPS IT, because the stop it was stamped for is off and the
+      // guard below refuses to re-stamp a positive value: without this, arm →
+      // cancel → arm again later summarised the second stop against the first
+      // one's grid position, no red flag needed.
+      if (!c.pitArmed) c.pitPos0 = 0;
       if (c.pitArmed && !(c.pitPos0 > 0)) c.pitPos0 = rankOf(c);
       return c.pitArmed;
     }
@@ -1602,6 +1607,13 @@ const PitLane = (function () {
       if (!c) return;
       c.pitArmed = false; c.pitState = "none"; c.pitT = 0;
       c.pitCommitT = 0; c.pitAbortT = 0; c.pitCommitted = false; c.pitOutT = 0;
+      // ...and the three the SUMMARY is computed from. release() clears these,
+      // but only for a stop that COMPLETED; an attempt the flag interrupted
+      // left the rank it was called from and the work already done on the car,
+      // and arm() re-stamps pitPos0 only when it is not already positive — so
+      // the driver's next real stop announced a place-swing and a held time
+      // measured against the aborted one.
+      c.pitPos0 = 0; c.pitWorked = 0; c.pitWhy = "";
     }
 
     function info(c) {
