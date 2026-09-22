@@ -44,7 +44,16 @@ const UNIT = path.join(ROOT, "tests/unit");
    widening this list.
 
    test:sweeps-parts left this list on 2026-09-22: its CI job is UNCONDITIONAL
-   (no path filter), so deploy.mjs runs it before every push and --gate-only. */
+   (no path filter), so deploy.mjs runs it before every push and --gate-only.
+
+   props-over-road.test.mjs joined it the same day, and the conditionality
+   warning above is the reason it is a net gain rather than a new hole: the
+   audit it carries was in a browser spec declaring 1500 s, over the
+   change-aware gate's 180 s cap, so it ran on NO push and only one night in
+   eleven — and had been red on two circuits for as long as that. In
+   test:sweeps it runs on every js/track and js/circuits diff, blocking, which
+   is exactly the condition under which a prop can move. Conditional on the
+   diffs that can cause the defect beats unconditional on none of them. */
 const SWEEPS_ONLY = new Map([
   ["car-front-wing-width.test.mjs", "test:sweeps — per-circuit geometry"],
   ["coplanar-faces.test.mjs", "test:sweeps — per-circuit geometry"],
@@ -56,6 +65,7 @@ const SWEEPS_ONLY = new Map([
   ["pit-complex.test.mjs", "test:sweeps — per-circuit geometry"],
   ["pit-signs.test.mjs", "test:sweeps — per-circuit geometry"],
   ["prop-clipping.test.mjs", "test:sweeps — per-circuit geometry"],
+  ["props-over-road.test.mjs", "test:sweeps — per-circuit geometry"],
   ["road-under-floor.test.mjs", "test:sweeps — per-circuit geometry"],
   ["scenery-grounding.test.mjs", "test:sweeps — per-circuit geometry"],
   ["shared-track-foundation-characterization.test.cjs", "test:sweeps — per-circuit geometry"],

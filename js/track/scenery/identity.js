@@ -174,7 +174,11 @@ const SceneryIdentity = (function () {
         if (stripeCol && (stripeI++ % stripeEvery === 0)) {
           addBox(out, vadd(p.c, p.u, h * 0.55), [thick + 0.08, stripeH, spacing * 0.55], stripeCol, [p.r, p.u, p.t]);
         }
-      });
+        // The seam tag deliberately leaves stripeCol out: a colour-blocked run
+        // (jeddah's six Saudi blocks) differs between blocks ONLY in the accent,
+        // and it is the plain wall slab underneath that duplicates at the seam.
+        // Keyed on the accent, every seam would still emit twice.
+      }, `canyon|${side}|${gap}|${thick}|${h}|${col.join(",")}`);
     };
 
     const sailCanopy = (c, basis, opts) => {

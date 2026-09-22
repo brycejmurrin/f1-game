@@ -1190,7 +1190,15 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 .pm-groups > [role="region"][hidden] { display: none !important; }
 .pm-groups { min-width: 0; }
 .pm-groups > [role="region"] { min-width: 0; }
-.pm-group { display: flex; flex-direction: column; gap: 6px; }
+/* .pm-pad-tools rides here rather than carrying numbers of its own. It wraps
+   CONTROLLER's three tools (CALIBRATE STICK / SET UP A WHEEL / RESET), and a
+   panel gap separates the WRAPPER from its siblings, never the buttons inside
+   it — so with `.pm-group button { margin: 0; width: 100% }` below, the three
+   welded into one slab: measured 844x390, three 44px-tall, 717px-wide buttons
+   0.0px apart where every other row in the panel had 4. The class had been in
+   the markup since the day it shipped and defined nowhere, which is exactly
+   what tools/check/class-usage.mjs now looks for. */
+.pm-group, .pm-pad-tools { display: flex; flex-direction: column; gap: 6px; }
 .pm-group-h {
   /* Steel section chrome — red is reserved for the rule under the label. */
   color: var(--steel);
@@ -1878,7 +1886,7 @@ button:has(> [data-fold]) {
     box-shadow: none;
   }
 }
-.sheet[data-density="compact"] .pm-group { gap: 4px; }
+.sheet[data-density="compact"] :is(.pm-group, .pm-pad-tools) { gap: 4px; }
 .sheet[data-density="compact"] .pm-doors { gap: 4px; }
 #pmsettings-inner.sheet[data-density="compact"] .pm-doors button {
   white-space: normal;

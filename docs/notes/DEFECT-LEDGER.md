@@ -11,6 +11,229 @@
 Verified against the current tree. Everything fixed has moved to the archived
 journal; this is what remains.
 
+**2026-09-22 — a baked BUILDING was stamped across monza's racing line, because
+`bakedModel()` was the one prop emitter with no road guard. FIXED.**
+`props-over-road.spec.js` reported `monza PROP 0.75m over road (cap 0.2)` at
+frac 0.115: a flat 2.22 x 0.20 m face at y 0.70 over a road at y -0.05, lateral
+-4.78, colour `[0.25,0.25,0.29]`. Reproduce the old failure in 22 s with
+`TRACK=monza npm test -- tests/specs/props-over-road.spec.js`; it passes now.
+
+**What it was.** `assets/pack/models/kenney_ind_building-d.bin`, a
+10 x 18 x 15 m industrial building. `js/circuits/scenery/monza.js`'s `yards`
+table places it at `["kenney_ind_building-d", 0.012, -1, 60]` — 60 m off node
+17, which `_sceneryShift` resolves to node 142, the exit of the Variante del
+Rettifilo. **The track turns about 90 degrees there**, so 60 m "outward" from
+node 142 lands back ON the road at node ~165, two corners along. The building
+is also sunk 2.1 m (its anchor takes the terrain height 60 m out), which is why
+only one window band of it broke the surface. The colour is not a source
+constant at all: `0.255,0.255,0.286` is baked into the model's vertex colours,
+which is why grepping `js/` for it found nothing.
+
+**Why nothing stopped it.** `addBox`, `addCyl`, `addCone`, `addFrustum`,
+`addPrism` and `addPyramid` all go through `GUARDED` in `js/track/tracks.js`,
+which rejects a primitive whose footprint is on the tarmac. `addMesh` was not
+in that set and `bakedModel()` called it raw, so the one emitter that stamps
+whole buildings was the one with no guard. Fixed by giving it the same
+`rejBox` test, on the mesh's own extent scaled and yawed exactly as `addMesh`
+transforms its vertices. Callers write `if (!bakedModel(...)) building(...)`
+and that fallback is itself guarded, so a rejected stamp degrades to nothing.
+
+**Why no test caught it, which is the more general defect.** Two independent
+reasons, and both still hold for everything except monza:
+
+1. `props-over-road.spec.js` declares `test.setTimeout(1500000)`, over the
+   change-aware gate's 180 s per-test cap, so `select-specs.mjs` excludes it on
+   every `js/track` and `js/circuits` diff. Its only schedule is the nightly
+   rota, one night in eleven. It surfaced by accident, when an unrelated edit
+   to the file made the selector rank it 0 and give it a shard of its own.
+2. **Every node audit is blind to the whole asset pack.**
+   `js/render/shared/assets.js` is in the manifest's `FULL` list and not in
+   `TRACK_VM`, so `Assets` is undefined inside `tools/lib/track-build-vm.cjs`
+   and `bakedModel()` returns false at its first line. All 36 baked models are
+   invisible to `prop-clipping`, `scenery-grounding`, `coplanar-faces`,
+   `road-under-floor` and `props-over-road.test.mjs` alike. OPEN: teaching the
+   harness to supply `Assets` would close it, and
+   `tests/unit/baked-model-road-guard.test.mjs` shows the shape — it carries
+   its own pack loader because the harness has none.
+
+**Measured with the pack made visible**: 15 of 52 circuits read over the
+tolerance without the guard, 14 with it. Monza is the one the guard fixes. The
+other 14 are the overhang class — a model anchored legally off-track whose
+upper parts reach over it, which a footprint test cannot reject and this guard
+does not claim to. Eight of those 14 (donington, istanbul, jerez, korea,
+nurburgring, sepang, suzuka, vegas) are only visible at all once the pack is
+loaded, and none of them is baselined anywhere. OPEN.
+
+**2026-09-22 — the ~1.07 m reading on four circuits IS the pit wall's top cap,
+and the specs sample past the tarmac to reach it. IDENTIFIED; the sampling is
+OPEN.** jeddah, mosport, zandvoort and singapore all read 1.07 m over the road.
+`js/track/scenery/pits.js:300` and `:319` sweep the pit wall's cap with the
+profile `[[-0.07,1.0],[0.32,1.0],[0.32,1.07],[-0.07,1.07]]` in `WALL_TOP`
+`[0.46,0.47,0.50]` — a 0.39 x 0.07 m section topping out at exactly 1.07. The
+offending piece measures 1.91 x 0.09 x 3.84 m at y 1.03-1.12 in that colour, so
+the identification is the geometry's own, not an inference.
+
+**Two retractions, in order, because both were published.** The first
+identification said "the pit wall", which was right. I then retracted it on the
+grounds that the wall's inner edge stands 8.2-13.0 m out while the specs sample
+at 6.15-6.9 m — but that measured `track.hw + pit.off.fastIn`, the FAST LANE's
+inner edge at the garage row. This cap is the ENTRY/EXIT wall, whose lateral is
+`hw + profile[0] + shift(k)` and which runs right at the tarmac edge: on
+zandvoort it sits at 6.81 m against a 7.0 m half-width. So the retraction was
+wrong and the original name was right. The lesson is the one the first mistake
+should have taught: measure the object, not something that shares its colour.
+
+**The real defect underneath is the sampling.** Both `props-over-road.spec.js`
+and the foundation specs scale their lateral ladder by a half-width derived
+from the ROAD MESH, which runs 1.2-1.3x the engine's `track.hw` because the
+mesh carries verge and run-off out to 13 m. Their outermost sample lands OFF
+the racing surface by construction, on whatever boundary structure lives there
+— here, the pit wall a car is meant to stay inside. Baselined at 1.1 in
+`props-over-road.spec.js` (jeddah, mosport, zandvoort, singapore),
+`props-over-road.test.mjs` and `zandvoort-foundation.spec.js`, all citing each
+other. Scaling by `track.hw` instead would let every one of those baselines go
+back to `TOL`, and is the fix worth making. OPEN.
+
+**And it is why no primitive covers the geometry.** `sweep()` in `pits.js` is a
+local extrusion that builds its quads directly rather than through a
+`TrackGeom` emitter, so `tools/lib/track-build-vm.cjs`'s wrappers record
+nothing for it. Measured on zandvoort: 9,456 of 639,333 prop vertices (1.5 %)
+belong to no captured primitive even after `shipped()`'s remap, in 9 gaps, and
+the largest — 9,392 vertices, 1,174 eight-vertex pieces — is this sweep. No
+audit that reasons about primitives can attribute any of it. OPEN, and the same
+class as the asset-pack blindness above.
+**2026-09-22 (wave 4/5) — `DIFF[difficulty]` had three siblings, and a garage
+FILE could reach two of them. FIXED.** The 2026-09-22 crash was a persisted
+string used as a table key with nothing validating it. Hunting the SHAPE rather
+than the symptom found the rest of the family:
+
+- **`idxOr`, js/game.js.** `x >= 0 && x < len` is not an index check, and this
+  file carried it in BOTH spellings — each leaking the opposite way. `"abc"`
+  fails `< 0 || >= len`, so the NEGATED form at boot passed it through; `""`
+  passes `>= 0 && < len`, so the POSITIVE form in `restoreFreePlaySelection()`
+  passed that. Either way `Teams.LIST[…]` is undefined and the first `team.id`
+  read (js/garage/setup-sheet.js, js/car/car-draw.js) throws. The second site
+  was found BY THE TEST: its first draft anchored on the shared substring and
+  matched the wrong line. Five hand-rolled clamps are now one helper, and the
+  guard asserts no sixth is written by hand.
+- **`loadCustomTeam`, js/career/custom-team.js.** `syncCustomTeam()` pushed
+  whatever sat under `apex26.customTeam` straight into `Teams.LIST`, and
+  `SaveMigrate.seasonRoster()` does `team.drivers.forEach(...)` over that list
+  at BOOT — so `{}` was a TypeError before the menu painted, on every start.
+  The `id` half is quieter and just as real: the splice that removes the
+  previous custom entry matches on `"custom"`, so a renamed team would have
+  every sync push ANOTHER car onto the grid. Now repaired, not discarded — a
+  bad roster is not a reason to lose the player's livery.
+- **`garageValue`, js/ui/settings-export.js.** The liveries have been
+  shape-checked since the file was written, under a header saying a file is
+  player input and the garage does not defend itself. The four SINGLES —
+  `team`, `driver`, `customTeam`, `customLogo` — fell through to a bare
+  `return v`. That is the door the two above come in through: the feature's own
+  LOAD GARAGE FILE button. Now shape-checked per key, and the trailing
+  `return v` is a `return undefined` (default deny).
+
+**The suite's own idea of a sound file contained the defect.** Three fixtures in
+`settings-export.test.mjs` used `customTeam: { name: "X" }` — no `drivers` — and
+one of them asserted it applied cleanly. That is most of why this survived: the
+round-trip test was pinning the crashing shape as correct. The same file already
+carried the lesson for liveries ("a fixture of bare numbers would round-trip to
+[] and prove nothing about the round trip") and it had not been carried across.
+
+**2026-09-22 — one trapped rapier step turned debris off for the whole SESSION.
+FIXED.** `DebrisWorld._active` is the single boolean game.js reads to decide
+whether debris, marbles, incident takeovers and the caution they feed exist at
+all. `step()`'s catch lowers it and tears the world down — right for that race.
+But `setEnabled()` was the only other writer and game.js never calls it: the
+only ways back were `__apex.debris(true)` or the player flipping the DEBRIS
+setting off and on. `reset()` — which exists precisely so nothing carries into
+the next race, and which every restart path calls — never touched the latch. So
+a single transient WASM fault took the surface down silently through every
+restart and every new race until the tab was reloaded. `reset()` now recomputes
+the same expression `setEnabled()` does, so DEBRIS OFF stays off and a load that
+genuinely failed stays down.
+
+**2026-09-22 — the fastest way onto the TIME TRIAL board was to leave the
+circuit. FIXED.** The crossing gates `c.best`, the TT board, `G.ttRecord` and the
+stored ghost on one latch, `incidentInvalidLap`, set by IncidentSim, the
+red-flag restart and the coach. Track limits were not on it — they had a ladder
+of their own: three warnings, then +5 s. That ladder prices a cut against the
+race CLASSIFICATION, and a time trial has no classification, so in TT nothing
+priced a cut at all. Measured in the VM harness: a lap driven off-track replaced
+a 42.15 s record with 5 s and took the stored ghost with it. A counted cut
+(game.js's own 1.2 s threshold, past the grace) now invalidates the lap in TIME
+TRIAL only, and the warning line reads LAP INVALIDATED there instead of the
+race ladder's n/4.
+
+RECORDED, NOT FIXED, from the same hunt:
+
+- **Race-mode `c.best` and the fastest-lap point still count a cut lap.** Real
+  F1 invalidates for track limits; this game prices them at +5 s instead, which
+  is a designed ladder and a balance decision, not an oversight. Changing it
+  moves classification and the career `clean` objective, so it wants a driven
+  lap and an owner, not a rider on a bug-fix batch.
+- **A pit-lane lap can set the fastest lap. REJECTED as a defect** — F1 counts
+  in-laps and out-laps for the fastest lap, and the pit lane is longer and
+  speed-limited, so it is not an exploit route.
+- **In a time trial the +5 s ladder still runs** alongside the invalidation
+  above, announcing a penalty in a mode with nothing to apply it to.
+- **Points and the fastest-lap bonus reach cars that never finished.**
+  `js/career/season-cal.js` excludes only `c.retired`, not `!c.finished`, and
+  `order` carries cars still running when the hard time cap ends a race
+  (`raceT > 360 * lapsTarget`). Rare, and reachable only through that cap.
+
+**2026-09-22 — three CONTROLLER buttons welded into one slab, and the guard
+that could not see it. FIXED.** `.pm-pad-tools` was applied in `index.html` from
+the day it shipped and defined in no stylesheet. With `.pm-group button
+{ margin: 0; width: 100% }` above it, CALIBRATE STICK / SET UP A WHEEL / RESET
+CONTROLLER measured 0.0 px apart at 844x390 where every other row in the panel
+had 4. The class now rides the `.pm-group` rules themselves rather than
+restating the numbers, so both densities stay in step.
+
+**The reason nothing caught it is the finding.**
+`tests/unit/component-inventory.test.mjs` guards DEFINED-but-unapplied — a rule
+in `css/` that nothing wears, which costs bytes and nothing else. The mirror
+direction was unguarded, and it is the expensive one: an element wearing a name
+no rule matches READS as styled. `tools/check/class-usage.mjs` now sweeps it,
+reading all four ways this tree applies a class (`class=`, `className`,
+`classList`, and `Dom.el(tag, cls)` — the busiest by far; a scan without it sees
+a third of the app) and skipping anything interpolated or concatenated rather
+than guessing at a half-name. It asserts an EXPLAINED set, not an empty one:
+17 names, of which 3 are queried by JS or by a spec locator and 14 carry their
+reason in `KNOWN` beside the selector that does the real work.
+
+**2026-09-22 — `hud-onboard`: a body class toggled on every camera switch that
+nothing had read for eighteen days. FIXED (deleted).** It shipped 2026-09-04
+with a rule stripping the minimap and the gap strip in any onboard view; the
+SAME DAY, the per-widget MAP/GAPS settings replaced that rule and the write was
+left behind. Its only guard was `assert.match(src, /hud-onboard/)` — a test that
+the string is still typed, which passes forever over a toggle nobody reads. That
+assertion is now the relation instead: every body class `js/ui/hud.js` toggles
+must be one some stylesheet keys a rule on, with `hud-met-full` the single
+exemption (AUTO is defined as the layout that hides nothing, so a rule for it
+would be the bug).
+
+**The design question it raised is answered NO.** `ONBOARD_IDS` groups cockpit,
+hood and tcam but only cockpit gets the `cockpit-cam` declutter, which looked
+like two cameras missing treatment. They are not: `js/game.js` gates the entire
+wheel/halo/mirror RIG on `id === "cockpit"`, and `js/car/car-draw.js`'s
+`drawCockpitRig` draws an in-world duplicate of every readout `cockpit-cam`
+hides — gear, shift lights, speed, ERS, overtake, aero. The declutter exists
+because cockpit renders those twice, not because onboard views should look
+sparse. Hood and tcam have no duplicate, so hiding them there would delete
+information with nothing replacing it. `ONBOARD_IDS` itself stays: it is live
+for the MAP-AUTO default.
+
+**2026-09-22 — the Display sub-panels are NOT missing a margin. REJECTED.** The
+earlier entry below reads `pm-hud-sub`/`pm-renderer-sub` having no CSS as
+Display sitting flush where Music & Sound does not. Measured the other way
+round: `.pm-group` is a flex column with `gap: 6px` (4 compact) and the Display
+folds carry `margin: 0` deliberately to sit in it, while `.as-sec` adds a margin
+ON TOP of the same gap — so Sound is the outlier, not Display. Those class names
+are family markers whose rules are ID-scoped on purpose ("so the class ratchet
+does not move", css/components.css), and one is pinned by
+`ui-improve-pass.test.mjs`. All four now carry that reason in `class-usage.mjs`'s
+`KNOWN` rather than sitting unexplained.
+
 **2026-09-22 — a `try`/`catch` cannot swallow a promise REJECTION, and this
 shell turns one into a full-screen overlay. FIXED at four sites.** `index.html`
 installs an `unhandledrejection` listener that paints `#__err_overlay` over the
@@ -2293,7 +2516,7 @@ Deferred with reasoning, none lost:
   the other hardcoded positions in the same file before closing it — two of the
   three here were fixed and the third was left, which is how it survived.
 
-## NAMES FIXED, GEOMETRY OPEN — estoril scenery emitters do not land where their names say (2026-09-22)
+## FIXED — estoril scenery emitters did not land where their names say (2026-09-22)
 
 Found while fixing the Parabolica's bank and gravel apron (PR #188). The
 apron fix is landed and correct; this is the larger thing underneath it, left
@@ -2392,3 +2615,101 @@ experiment blind.
 pit-complex collisions resolved emitter by emitter and a rendered lap to judge
 it — a dressing pass, which is what this entry originally said and what the
 attempt confirmed.
+
+### 2026-09-22, later: the probe overturns the "tuned in place" reading
+
+PR #193 concluded the dressing "was tuned where it sits" and corrected only the
+names. **That conclusion was wrong**, and the reasoning that produced it was
+wrong in an instructive way: `float 0` and `clip 1` were read as evidence the
+layout was settled. Those audits cannot see a paddock on the wrong corner —
+props auto-ground wherever they are, and a building in open air collides with
+nothing. Clean baselines were silence, not agreement.
+
+With the Chromium probe available, `agent.mjs estoril scene --at <frac>` says
+plainly what stands where:
+
+| location | shipped today | with `sceneryStartFrac` dropped |
+|---|---|---|
+| **frac 0.82 — the Parabolica** | 14 structures, gantry, grandstand, **5 motorhomes** | 28 pines, 3 trees, marshal post |
+| **frac 0.97 — the pit straight** | 11 trees, **22 pines** | 22 structures, 2 gantries, grandstand, 2 motorhomes |
+
+The shipped circuit has **the paddock parked on a fast corner and a pine forest
+down the pit straight.** The swap is the right way round.
+
+### Why dropping `sceneryStartFrac` is still not the fix
+
+It is not a scenery-authoring offset. `_sceneryShift` is consumed by the ENGINE
+as well, in four readers in `js/track/tracks.js`: `dress` in `buildCenterline`
+(the shift applied to bridges and elevations), `shiftS` in
+`transformSceneryApi`, the inverse `HKSHIFT` beside `indexSolidAt`, and the
+`sceneryCoordinates` guard in `bakedModel`. Dropping it moves terrain and
+engine geometry, not just props.
+
+Measured with the circuit's scenery callback stubbed out entirely, so no
+circuit prop is emitted at all:
+
+- shift 0.85616 (shipped): **0 severe clips**
+- shift 0: **1 severe clip — 4.00 m / 1261 m3 at frac 0.000**
+
+That collision is engine-side pit geometry overlapping itself once the shift is
+removed. No circuit emitter causes it: removing `motorhome`, `broadcastCompound`,
+`grandstandEx`, both `pitBlock` terraces and the pit `scaffoldStand` each leaves
+it unchanged. It also explains the float and the rejected `estoril-aldeia` — the
+elevation profile moves with the same constant.
+
+### What the fix actually requires
+
+Not a def edit. Either (a) re-author the twelve emitters' fracs by -0.85616 so
+they land on their features while the def's shift stays put for terrain and
+engine geometry — but that divorces the circuit's paddock from wherever the
+engine's pit structures sit, so it needs the engine consumer audited first; or
+(b) drop the shift AND fix the engine-side pit overlap it exposes. Either way
+the four `_sceneryShift` readers named above have to be understood together.
+
+The probe A/B is the acceptance test: the Parabolica should read as trees, the
+pit straight as structures.
+
+### Closed the same day: the shift is gone and the acceptance test passes
+
+`sceneryStartFrac: 0.96` removed. The acceptance test this entry named —
+"the Parabolica should read as trees, the pit straight as structures" — now
+passes:
+
+| `agent.mjs estoril scene --at` | before | after |
+|---|---|---|
+| 0.82, the Parabolica | 14 structures, gantry, grandstand, 5 motorhomes | 28 pines, 3 trees, marshal post |
+| 0.97, the pit straight | 11 trees, 22 pines | 22 structures, 2 gantries, grandstand, 2 motorhomes |
+
+The two hand-placed pit terraces are now "superseded by the pit complex", which
+is what a circuit's own pit block is for, and `estoril-aldeia` emits again.
+
+**What unblocked it was measuring the clip count as a distribution rather than a
+property.** The earlier attempt treated the shipped `clip 1 severe` as evidence
+the layout was settled, so +2 read as damage. `place` has no prop-vs-prop check,
+so any shift re-rolls every procedural placement. Sampling six values:
+
+| `sceneryStartFrac` | severe clips |
+|---|---|
+| **0.96 (shipped)** | **1** |
+| 0.80 / 0.60 / 0.40 / 0.00 | 3 |
+| 0.20 | 4 |
+
+0.96 was the outlier. Three is this circuit's normal draw, so raising the clip
+baseline 1 -> 3 is a re-measurement, not a tolerance widened to pass a change.
+Coplanar went the other way and the baseline came DOWN, 5 -> 0: the z-fighting
+was the mis-seated dressing all along.
+
+Two real regressions were fixed rather than absorbed, both emitters finally
+landing where their `s = k / n` guards intended: `estoril-aldeia` moved
+K(0.30) -> K(0.26) (its footprint reached a parallel stretch of road), and the
+tree loop's inner lateral bound went 44 -> 48 m (one tree grounded 6.5 m up at
+frac 0.219).
+
+**Still true and still worth knowing:** `_sceneryShift` is read by the engine as
+well as the scenery — `dress` in `buildCenterline`, `shiftS` in
+`transformSceneryApi`, the inverse `HKSHIFT` beside `indexSolidAt`, and
+`bakedModel`'s `sceneryCoordinates` guard. Removing it for a circuit moves
+terrain and procedural dressing too, which is why this needed the probe A/B as
+its gate rather than the audits alone. Any other circuit carrying a
+`sceneryStartFrac` should be checked the same way, with the probe, before its
+value is trusted.

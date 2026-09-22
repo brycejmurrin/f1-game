@@ -40,6 +40,16 @@ export const CASES = [
     catches: "tests/specs/terrain-over-road.spec.js",
   },
   {
+    // PARTLY COVERED OUTSIDE THE SELECTOR (2026-09-22). This row reads "MISSED
+    // but NAMED" because the catching spec declares 1500 s against the gate's
+    // 180 s per-test cap — a real limit of the SELECTED gate, and still worth
+    // reading as one. tests/unit/props-over-road.test.mjs now runs the same
+    // audit in test:sweeps, which the Pages gate runs on a js/track diff
+    // blocking, so the class is guarded on the diffs that cause it. PARTLY,
+    // not wholly: that suite audits tools/lib/track-build-vm.cjs's build, and
+    // the browser builds at least one monza prop the VM does not (measured;
+    // docs/notes/DEFECT-LEDGER.md). So do not read this row as "this defect
+    // class can ship", and do not read it as fully covered either.
     name: "street-barrier chord-cut hung a panel over the racing line (c0bd0abe)",
     changed: ["js/track/tracks.js"],
     catches: "tests/specs/props-over-road.spec.js",
