@@ -21,6 +21,11 @@ before proposing a delete or extract.
 2. Read the assigned file(s). Look for: extractable cohesive blocks
    (low `G` crossings), fat `SKILL.md` that restates a catalog, dead
    symbols, duplicate helpers, stale comments, tree-split candidates.
+   A scope can be tight and still WRONG: cross-check every number, path
+   and tool name the file quotes against the thing it quotes, and file a
+   stale one as `kind:doc`. `.claude/agents/verify-agent.md` recited
+   `208 of 278` to every parent while AGENTS.md said 223 of 296, and a
+   size-only pass called that scope clean (2026-09-22).
 3. Optional: `node tools/check/extract-module.mjs <file> <start> <end>`
    (analyse only — no `--out` / `--g-out`). WebFetch / Context7-via-parent
    for official Agent Skills caps. Do **not** prove a dead `__apex` hook

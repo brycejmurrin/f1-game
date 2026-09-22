@@ -116,7 +116,7 @@ order live in `tools/manifest.cjs` — read that, not this file; per-directory t
 - `tests/data/ratchets.json` ratchets game.js and the other big modules at
   their current values — pay for every added line. The commit hook absorbs ≤ 40
   lines of growth (raises, stages, prints — the raise is in your diff); more blocks
-  until you extract or raise it with a reason (`ratchets.mjs --update`; also
+  until you extract or raise it with a reason (`tools/check/ratchets.mjs --update`; also
   lowers). The edit hook blocks a hand edit of the file.
 - localStorage keys are prefixed `apex26.`. Logging goes through `Log`
   (`js/core/log.js`), never bare `console.*`.
