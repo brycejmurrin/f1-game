@@ -22,12 +22,25 @@ const Announcer = (function () {
   // macOS/iOS, so on every other platform the name is worthless and the LANGUAGE
   // is what carries the character. Ordered, first match wins, and a player's
   // explicit pick in settings always outranks the whole list.
+  const GB = (v) => /^en[-_]?GB/i.test(v.lang || "");
   const PREFERRED = Object.freeze([
-    (v) => /^daniel\b/i.test(v.name) && /^en[-_]?GB/i.test(v.lang || ""),
+    // APPLE'S DOWNLOADABLE VARIANTS OF THE SAME VOICE. The compact "Daniel" is
+    // what ships; Enhanced and Premium are the same character at a quality the
+    // compact one cannot reach, and a player who has downloaded one should hear
+    // it rather than the version that happens to sort first.
+    (v) => /^daniel\b/i.test(v.name) && /\((enhanced|premium)\)/i.test(v.name),
+    // MICROSOFT'S NEURAL VOICES — the top quality tier of the curated
+    // cross-platform list (readium/speech), and en-GB male is Ryan or Thomas.
+    // "Online" is in the NAME, which is exactly why these were unreachable
+    // while this channel inherited the radio's localService filter.
+    (v) => /\b(ryan|thomas)\b/i.test(v.name) && /\(natural\)/i.test(v.name) && GB(v),
+    (v) => /\(natural\)/i.test(v.name) && GB(v) && !/\b(sonia|libby|maisie)\b/i.test(v.name),
+    (v) => /^google uk english male/i.test(v.name),   // Chrome's own, also remote
+    (v) => /^daniel\b/i.test(v.name) && GB(v),
     (v) => /^daniel\b/i.test(v.name),
     (v) => /^(arthur|oliver|george|malcolm)\b/i.test(v.name),   // other en-GB males across platforms
-    (v) => /^en[-_]?GB/i.test(v.lang || "") && !/female/i.test(v.name),
-    (v) => /^en[-_]?GB/i.test(v.lang || ""),
+    (v) => GB(v) && !/female/i.test(v.name),
+    (v) => GB(v),
     (v) => /^en/i.test(v.lang || ""),
   ]);
 
@@ -47,11 +60,23 @@ const Announcer = (function () {
   }
 
   // ── THE SCRIPT ───────────────────────────────────────────────────────────
-  // DERIVED, never a table of 52 blurbs. Every circuit gets a script the day it
-  // is added, nothing falls out of step with the def it describes, and each
-  // clause is a fact the build can produce — length, corners, laps, relief,
-  // whether the lights are on. A hand-written paragraph per circuit would read
-  // better on the six somebody bothered to write and be missing on the rest.
+  // TWO SOURCES, IN THEIR OWN LANES.
+  //
+  // DERIVED for anything a measurement gives: length, corners, laps, relief,
+  // whether the lights are on. Nothing falls out of step with the def it
+  // describes, and a circuit added tomorrow gets those clauses for free.
+  //
+  // AUTHORED for character (js/data/circuit-lore.js). No measurement yields
+  // "Eau Rouge" or "thin air at two thousand metres", and a welcome built from
+  // numbers alone says the same shape of thing about fifty-two circuits. The
+  // failure this file's first version feared — "written for the six somebody
+  // bothered and missing on the rest" — is answered by a test that asserts the
+  // lore keys ARE the circuit ids, both ways, rather than by going without.
+  //
+  // AND THE SESSION. The same paragraph was read before a wet qualifying hour,
+  // a duel with a legend and a dry Grand Prix; the only thing that moved was
+  // one line about the weather. Every clause below that can change with the
+  // session does.
 
   const ORDINAL_COUNTRY = /^(netherlands|united states|usa|uk|united kingdom|emirates|philippines)$/i;
 
@@ -102,10 +127,56 @@ const Announcer = (function () {
     return bits.join(" ");
   }
 
-  /** The finished lines. Pure: hand it a plain object, get an array of strings.
-   *  Array rather than one blob so a caller can drop the tail when the budget
-   *  is short, and so the test can assert on the parts it cares about. */
-  function script(info) {
+  /** The authored row for this circuit, or an empty one. Guarded on the global
+   *  because the node suites load this file without js/data/circuit-lore.js. */
+  function loreFor(id) {
+    try {
+      if (typeof CircuitLore !== "undefined" && CircuitLore && CircuitLore.forId) return CircuitLore.forId(id) || {};
+    } catch (_) { /* a partial load */ }
+    return {};
+  }
+
+  /** What the SESSION is, as the last thing said before the lights.
+   *
+   *  It is the last line on purpose: "Let's go racing" is the cue the player is
+   *  waiting for, and a welcome that ends on a fact about tarmac ends on the
+   *  wrong beat. Every branch here is a state js/game.js already tracks and
+   *  none of it reached this script before — the same paragraph was read for a
+   *  qualifying hour, a duel and a Grand Prix. */
+  function sessionLine(info, laps) {
+    const legend = String(info.duelLegend || "").trim();
+    if (info.duel) {
+      return legend
+        ? "A duel with " + broadcast(legend) + ". Just the two of you, and no one else on the road."
+        : "A duel. Just the two of you, and no one else on the road.";
+    }
+    if (info.session === "tt") return "Time trial. You against the clock, and nothing else counts.";
+    if (info.session === "quali") {
+      return info.practice
+        ? "Qualifying practice. Find the lap, and nothing here goes on the record."
+        : "Qualifying. One lap is all you get, and it sets the grid.";
+    }
+    if (info.practice) return "Practice. Nothing here goes on the record — use it.";
+    if (laps > 0) return laps + " laps. Let's go racing.";
+    return "Let's go racing.";
+  }
+
+  /** The conditions clause. `lore.wet` and `lore.night` are what make a wet Spa
+   *  and a dry Spa different reads; the generic lines are the floor under a
+   *  circuit whose row says nothing about either. */
+  function conditionsLine(weather, night, lore) {
+    const wx = String(weather || "dry");
+    if (wx === "rain") return lore.wet || "Heavy rain, and it is going to decide this one.";
+    if (wx === "wet") return lore.wet || "A wet track, and the racing line is the only dry part of it.";
+    if (wx === "fog") return "Fog across the circuit — you will not see the corner until you are in it.";
+    if (wx === "overcast") return "Grey overhead, cool track, and the tyres will take their time.";
+    if (night) return lore.night || "And we race under the lights.";
+    return "";
+  }
+
+  /** The finished lines, as {text, prio} rows — prio 0 must be spoken, higher
+   *  numbers are dropped first when the budget is short (see fit). */
+  function rows(info) {
     // A null info is a real call: js/game.js builds one from the picker's state,
     // and the flyby editor asks for the same object with no race set up at all.
     // It must still open with the welcome rather than throw into a boot path.
@@ -118,33 +189,88 @@ const Announcer = (function () {
     const laps = +(info && info.laps) || 0;
     const relief = +(info && info.relief) || 0;
     const night = !!t.night || info.tod === "night";
-    const lines = [];
+    const lore = loreFor(t.id);
+    const out = [];
+    const add = (text, prio) => { if (text) out.push({ text: text, prio: prio }); };
 
-    lines.push("Welcome to Apex 26.");
+    add("Welcome to Apex 26.", 0);
 
     // The venue. `gp` is the event, `name` the circuit — saying both is how a
     // broadcast opens, and either alone is what a placeholder sounds like.
-    if (name && gp) lines.push("This is " + name + ", home of the " + gp + ".");
-    else if (name) lines.push("This is " + name + (t.country ? ", " + inCountry(t.country) : "") + ".");
-    else if (gp) lines.push("This is the " + gp + ".");
+    if (name && gp) add("This is " + name + ", home of the " + gp + ".", 0);
+    else if (name) add("This is " + name + (t.country ? ", " + inCountry(t.country) : "") + ".", 0);
+    else if (gp) add("This is the " + gp + ".", 0);
 
-    if (t.classic) lines.push("A circuit from the archive, back on the calendar for this one.");
+    // The circuit's own line, and the corner it is known for. Ranked ABOVE the
+    // derived numbers: a listener who hears one sentence about Spa should hear
+    // the one about the Ardennes, not the one about 7.0 kilometres.
+    add(lore.line, 1);
+    add(t.classic ? "A circuit from the archive, back on the calendar for this one." : "", 4);
 
     const facts = [];
     if (km > 0) facts.push(km.toFixed(3) + " kilometres");
     if (turns > 0) facts.push(turns + " corners");
-    if (facts.length) lines.push(facts.join(", ") + ".");
+    if (facts.length) add(facts.join(", ") + ".", 3);
 
+    add(lore.corner, 2);
+
+    // The derived shape of the lap, unchanged: it is a different fact from the
+    // corner above (one is what the lap DOES, the other is a place), and where
+    // both are too much for the budget, fit() is what decides — not a rule here
+    // that would silently drop a clause on a fast machine too.
     const ch = character(km, turns, relief);
-    if (ch) lines.push(ch.charAt(0).toUpperCase() + ch.slice(1) + ".");
+    if (ch) add(ch.charAt(0).toUpperCase() + ch.slice(1) + ".", 3);
 
-    if (night) lines.push("And we race under the lights.");
-    else if (info && info.weather && info.weather !== "dry") lines.push("And the weather is against us.");
+    add(conditionsLine(info.weather, night, lore), 1);
+    add(sessionLine(info, laps), 0);
+    return out;
+  }
 
-    if (laps > 0) lines.push(laps + " laps. Let's go racing.");
-    else lines.push("Let's go racing.");
+  // Words a second at this channel's own rate, measured the way RadioVoice
+  // measures every line it budgets (WORDS_PER_S over the channel rate). SLOW on
+  // purpose in both places: over-estimating the read is what makes the fit
+  // conservative, and a script cut off mid-sentence is the failure here.
+  const WORDS_PER_S = 2.4;
+  function seconds(text, rate) {
+    return (text ? String(text).split(/\s+/).filter(Boolean).length : 0) / WORDS_PER_S / Math.max(0.1, rate || 1);
+  }
 
-    return lines;
+  /** Drop the least important lines until the read fits `budgetMs`.
+   *
+   *  THE BUDGET IS THE FLYBY (24 s), and the script now has more to say than
+   *  that. Measured at this channel's rate before the fit existed: Silverstone
+   *  15.4 s, Monaco 18.1 s, Spa at night 22.2 s, a classic circuit in the rain
+   *  26.3 s — already over, and every authored line adds to it. The loading
+   *  screen cuts the read where it stands, so without this the last thing a
+   *  player hears is a sentence stopping mid-word, and the "Let's go racing"
+   *  cue is the line most likely to be lost. Priority 0 is never dropped: the
+   *  welcome, the venue and the session survive any budget. */
+  function fit(list, budgetMs, rate) {
+    const kept = list.slice();
+    const budget = budgetMs > 0 ? budgetMs / 1000 : Infinity;
+    const total = () => kept.reduce((n, r) => n + seconds(r.text, rate), 0);
+    while (total() > budget) {
+      let worst = -1, worstAt = -1;
+      for (let i = 0; i < kept.length; i++) if (kept[i].prio > worst) { worst = kept[i].prio; worstAt = i; }
+      if (worst <= 0) break;            // only the must-keeps are left; speak them and let the screen cut
+      kept.splice(worstAt, 1);
+    }
+    return kept;
+  }
+
+  /** The finished lines. Pure: hand it a plain object, get an array of strings.
+   *  With a budget in ms, the tail is dropped by priority until the read fits;
+   *  without one, every line is returned (the flyby editor prints them all). */
+  function script(info, budgetMs, rate) {
+    let r = rate;
+    if (r == null) {
+      // The channel's own rate, which is what the read will actually be spoken
+      // at. Guarded like every other RadioVoice read in this file: a node suite
+      // may load announcer.js on its own.
+      try { r = (typeof RadioVoice !== "undefined" && RadioVoice.TONE && RadioVoice.TONE[CHANNEL].rate) || 1; }
+      catch (_) { r = 1; }
+    }
+    return fit(rows(info), budgetMs, r).map((x) => x.text);
   }
 
   /** A live instance's shape with every method a no-op — the same inert()
@@ -164,6 +290,11 @@ const Announcer = (function () {
       return inert();
     }
     let speaking = null;
+    /* THE CHAIN'S IDENTITY. The script is spoken one LINE per utterance (see
+     * speak), so a cancelled read has a queued onend that would otherwise wake
+     * up and carry on talking over whatever replaced it. Bumped by stop(), and
+     * captured by each chain, so exactly one chain is ever live. */
+    let generation = 0;
     // ON by default: this is the feature's whole point, and the player has a
     // row to turn it off. The radio defaults OFF because it interrupts a race;
     // this one talks over a screen whose entire job is to be waited through.
@@ -179,6 +310,7 @@ const Announcer = (function () {
     }
 
     function stop() {
+      generation++;            // before cancel(): a queued onend must already see itself as stale
       speaking = null;
       try { synth.cancel(); } catch (e) { /* nothing queued, or a synth mid-teardown */ }
     }
@@ -207,37 +339,69 @@ const Announcer = (function () {
       return Object.assign({}, info, { turns, relief });
     }
 
-    function scriptFor(info) { return script(factsFor(info)); }
+    /** The budget is the loading screen's own window, so the read is CUT TO FIT
+     *  rather than cut off: see fit(). */
+    function scriptFor(info, budgetMs) { return script(factsFor(info), budgetMs); }
 
     /** Speak `lines` now. `budgetMs` is the loading screen's own window, so the
      *  announcer is cut off by the same skip that ends the flyby rather than
      *  talking over the grid. */
+    /* ONE UTTERANCE PER LINE, chained — not one blob for the whole script.
+     *
+     * TWO REASONS, AND THE FIRST IS A BUG. Chrome Desktop silently fails an
+     * utterance past roughly fourteen seconds; it is the long-standing defect
+     * every "speech synthesis stops on long text" workaround exists for. MEASURED
+     * against the real scripts at this channel's own rate: Silverstone 15.4 s,
+     * Monaco 18.1 s, Spa at night 22.2 s, a classic circuit in the rain 26.3 s.
+     * Not one of them fits, so on Chrome the welcome was being cut off mid-read.
+     *
+     * The second is that it simply sounds better. Phrasing — where the pauses
+     * fall — is the main thing separating a read from a recital, and script()
+     * already returns one SENTENCE per entry (its own comment says the array is
+     * so a caller can drop the tail). The old join(" ") threw that structure
+     * away and asked the engine to re-derive it from punctuation.
+     */
     function speak(lines, budgetMs) {
       // MASTER SOUND gates this like everything else. speechSynthesis is not in
       // the WebAudio graph, so nothing else silences it — a player who turned
       // sound off and then heard a voice would have found a bug, not a feature.
       if (!G.soundOn) return false;
-      const text = Array.isArray(lines) ? lines.join(" ") : String(lines || "");
-      const said = RadioVoice.speakable ? RadioVoice.speakable(text) : text;
-      if (!said) return false;
+      const parts = (Array.isArray(lines) ? lines : [lines])
+        .map((l) => { const t = String(l == null ? "" : l); return RadioVoice.speakable ? RadioVoice.speakable(t) : t; })
+        .filter(Boolean);
+      if (!parts.length) return false;
       stop();
       const tune = (G.radio && G.radio.tuneFor && G.radio.tuneFor(CHANNEL)) || { pitch: 1, rate: 1, name: "" };
-      const list = (G.radio && G.radio.voiceList && G.radio.voiceList()) || [];
+      // The ANNOUNCER's list, which includes network voices — this channel has no
+      // card to miss, and the good voices are all remote (RadioVoice.REMOTE_OK).
+      const list = (G.radio && G.radio.voiceList && G.radio.voiceList(CHANNEL)) || [];
       const want = pickVoice(list, tune.name);
-      const u = new Utter(said);
       // voiceList() reports {name, lang}; the live SpeechSynthesisVoice has to
-      // come from the synth itself, matched by name.
+      // come from the synth itself, matched by name. Resolved ONCE for the whole
+      // script rather than per line.
+      let voice = null;
       if (want) {
-        try { u.voice = (synth.getVoices() || []).find((v) => v.name === want.name) || null; } catch (_) { /* mid-teardown */ }
+        try { voice = (synth.getVoices() || []).find((v) => v.name === want.name) || null; } catch (_) { /* mid-teardown */ }
       }
-      u.pitch = tune.pitch; u.rate = tune.rate; u.volume = volume();
-      u.onend = u.onerror = () => { speaking = null; };
-      try { synth.speak(u); } catch (e) { Log.info("audio", "Announcer speak failed"); return false; }
-      // Bugzilla 1522074, the same one radio-voice.js documents: a speak()
-      // straight after a cancel() is silently dropped, and resume() is the fix.
-      try { synth.resume(); } catch (e) { /* nothing was paused */ }
-      speaking = u;
-      if (budgetMs > 0) setTimeout(() => { if (speaking === u) stop(); }, budgetMs);
+      const vol = volume();
+      const gen = ++generation;
+      let i = 0;
+      const next = () => {
+        if (gen !== generation) return;              // a newer read, or stop(), owns the synth now
+        if (i >= parts.length) { speaking = null; return; }
+        const u = new Utter(parts[i++]);
+        u.voice = voice; u.pitch = tune.pitch; u.rate = tune.rate; u.volume = vol;
+        u.onend = u.onerror = () => { if (gen === generation) next(); };
+        speaking = u;
+        try { synth.speak(u); } catch (e) { Log.info("audio", "Announcer speak failed"); speaking = null; return; }
+        // Bugzilla 1522074, the same one radio-voice.js documents: a speak()
+        // straight after a cancel() is silently dropped, and resume() is the fix.
+        try { synth.resume(); } catch (e) { /* nothing was paused */ }
+      };
+      next();
+      // The loading screen's window still cuts the WHOLE read, not just the line
+      // in progress — the flyby ending is what ends the announcer.
+      if (budgetMs > 0) setTimeout(() => { if (gen === generation) stop(); }, budgetMs);
       return true;
     }
 
@@ -246,7 +410,7 @@ const Announcer = (function () {
        *  the caller can tell "off" from "spoke" without reading storage. */
       play(info, budgetMs) {
         if (!on) return false;
-        return speak(scriptFor(info), budgetMs);
+        return speak(scriptFor(info, budgetMs), budgetMs);
       },
       /** The editor's PLAY button: speaks regardless of the player's toggle,
        *  because pressing play in an authoring panel IS the consent. Master
@@ -265,6 +429,6 @@ const Announcer = (function () {
     };
   }
 
-  return { create, inert, script, pickVoice, CHANNEL, PREFERRED };
+  return { create, inert, script, rows, fit, seconds, pickVoice, CHANNEL, PREFERRED };
 })();
 Object.freeze(Announcer);

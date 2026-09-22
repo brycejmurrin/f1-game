@@ -1,6 +1,8 @@
 ---
 name: lighting-tuner
 description: Use when night looks washed out or like day, dawn sun is too high, floodlights/lamps are not firing, the day scene is flat, ambient/exposure/fog/lighting slider/lightTune/applyRaceSettings issues, validating lighting knobs via lightState, or baking a pasted window.LightPresets / LightEdits blob into js/lighting/presets.js. Bloom as a GPU/shader defect is webgl-debug.
+paths: ["js/lighting/**"]
+
 ---
 
 # Tune and validate scene lighting via __apex probes

@@ -154,17 +154,19 @@ test("Bahrain props stay clear of the racing surface", async ({ page }) => {
   expect(audit.ground.every((gap) => gap == null || gap <= 0.18)).toBe(true);
   expect(audit.geometry.every((entry) => entry.ok)).toBe(true);
   expect(audit.models.invalid).toEqual([]);
-  // A PIT SUPERSEDE IS BY DESIGN, AND IS STILL PINNED EXACTLY.
-  // js/track/scenery/pits.js builds the garages from track.pit, so a circuit's
-  // own hand-placed pit block is honoured as a no-op and reported with reason
-  // "superseded by the pit complex" (required is downgraded to false on that
-  // path, which is why a bare `.filter(e => e.required)` cannot see it either).
-  // Listing the ids rather than excusing the reason keeps the assertion sharp:
-  // the complex over-claiming and eating real scenery — it has reported a
-  // Monaco fountain 308 m from the nearest pit node — shows up here as a new
-  // id, not as a count that quietly grows.
-  expect(audit.models.suppressed.map((entry) => entry.id).sort())
-    .toEqual(["kit:bahrain:pit-operations"]);
+  // NOTHING SUPERSEDED, PINNED EXACTLY. js/track/scenery/pits.js builds the
+  // garages from track.pit, so a circuit's own hand-placed pit block is
+  // honoured as a no-op and reported with reason "superseded by the pit
+  // complex" (required is downgraded to false on that path, which is why a
+  // bare `.filter(e => e.required)` cannot see it either). Bahrain's
+  // `kit:bahrain:pit-operations` block was that case until #168 (192b6974)
+  // removed it with Silverstone's; this spec kept expecting the supersede and
+  // sat red on the deploy branch, unselected, until 2026-09-22. Listing the
+  // ids rather than excusing the reason keeps the assertion sharp: the
+  // complex over-claiming and eating real scenery — it has reported a Monaco
+  // fountain 308 m from the nearest pit node — shows up here as a new id, not
+  // as a count that quietly grows.
+  expect(audit.models.suppressed.map((entry) => entry.id).sort()).toEqual([]);
   expect(audit.models.unsafe).toEqual([]);
   // EXACT, not a subset — the point is that a required model silently vanishing
   // is caught, and a subset check cannot see that. The cost is that ADDING
@@ -190,9 +192,7 @@ test("Bahrain props stay clear of the racing surface", async ({ page }) => {
   });
   expect(night.geometry.every((entry) => entry.ok)).toBe(true);
   expect(night.models.invalid).toEqual([]);
-  // Same pit supersede on the night rebuild — the complex is not a daytime
-  // feature, so an empty list here would mean the rebuild lost it.
-  expect(night.models.suppressed.map((entry) => entry.id).sort())
-    .toEqual(["kit:bahrain:pit-operations"]);
+  // Same on the night rebuild: nothing superseded, nothing over-claimed.
+  expect(night.models.suppressed.map((entry) => entry.id).sort()).toEqual([]);
   expect(night.models.unsafe).toEqual([]);
 });

@@ -4007,7 +4007,7 @@ pair is a new RenderObject, and building its pipeline calls
 _getVertexFormat(e){const{itemSize:t,normalized:r}=e,s=e.array.constructor, ...
 ```
 
-— `vendor/three-0.185.1/three.webgpu.min.js`, no null guard.
+— the r185 vendored `three.webgpu.min.js` (now `vendor/three-0.186.0/`), no null guard.
 `createShaderVertexBuffers` reads `s.array.constructor` on the same object.
 So `null.constructor` throws, both rungs burn in one frame, and the ladder
 lands on `refuseTab()`.
@@ -4758,3 +4758,91 @@ unchanged tree: a second 2.9 makes force the trigger, a 47 makes it bimodal and
 force innocent. Then `force: "1"` plus `ls: apex26.envProbeOff=1` — if 2.9
 survives with the probe already never starting, the cube is exonerated for this
 mode and the cause is something else on the forced path.
+
+## 2y. TLX's frame block was one uniform buffer PER DRAW, not per program (2026-09-22)
+
+**The defect, in three's own terms.** Every uniform in `js/render/three/tsl-lit.js`'s
+frame block — the ~60 lighting/fog/shadow scalars, vectors and matrices, the four
+`uniformArray` lamp tables of `MAX_LIGHTS` rows, `matTexMix`, `matTexScale` — was created
+with `uniform()`'s default group, `objectGroup`. In three r185 that group is non-shared,
+and `NodeBuilderState.createBindings()` clones every non-shared bind group per RENDER
+OBJECT. TLX draws a few hundred pooled meshes a frame, so each carried its own copy of
+the block; the five `NodeUniformBuffer` arrays report `update() → true` every time, so
+they re-uploaded per object per pass — on the WebGL2 backend (every iOS browser and
+Safari, tlx.js's `isWebKit` rule) a full `gl.bufferData` each. The comment above the
+block called it "one shared set", which was true of the node descriptors and false of
+the GPU buffers; `tlx.js`'s own debug comment already said "three refreshes every
+OBJECT-group uniform per draw" and drew the wrong conclusion (reduce draws) from it.
+
+**The fix.** One loop after the last `U.*` assignment: `for (const k in U)
+U[k].setGroup(renderGroup)` (a loop, because `_getBindGroup` shares a group only when
+every binding in it has the same `groupNode`, and the group also holds three's camera
+uniforms — one stray member demotes the lot). `renderGroup`, not `frameGroup`: the
+shadow maps, the optional env faces and the scene are separate `renderer.render()` calls
+with `updateFrame` between them. `apex26.tlxSharedUniforms=0` restores the per-object
+layout for an A/B. Per-draw uniforms (`tsl-fx.js` `lineSpeed`, `glowStr`) stay where
+they were.
+
+**Instrument.** `memState()` now reports `rUbo`/`rUboKB` (three's
+`info.memory.uniformBuffers[Size]`), `groupVer` (the render group's version — must
+advance per render call, or the block froze after its first upload) and `presentMs` (JS
+EMA inside `present()`'s render calls). `gfx-probe` prints them as `tlxMem`, the census
+beats as `ubo`. Software adapters make the COUNTS valid and the milliseconds not
+(§0); the two software legs below are read for counts, errors and luma only.
+
+| leg (montreal, park cam) | shared | draw calls | uniform buffers | KB | groupVer | JS ms in render calls | gpuErrors | frame |
+|---|---|---|---|---|---|---|---|---|
+| SwiftShader WebGL2 (`--backend three`) | off | 1222 | **7754** | **5232** | 13665 | 119 | 0 | coverage classes identical |
+| SwiftShader WebGL2 | on | 1160 | **934** | **322** | 1158 | 75 | 0 | coverage classes identical |
+| Lavapipe WebGPU (`--tlx-webgpu --lavapipe`) | off | 1362 | **4160** | **1382** | 2411 | 0.17 | 0 | meanLuma 46.9 |
+| Lavapipe WebGPU | on | 1513 | **816** | **175** | 1511 | 0.31 | 0 | meanLuma 46.5 |
+| Lavapipe WebGPU `tlxForceHw=env` | on | 3239 | 816 | 175 | 3237 | 0.02 | 0 | meanLuma 46.6 |
+| Lavapipe WebGPU `tlxForceHw=shadow` | on | 1500 | 816 | 175 | 1498 | 0.14 | 0 | meanLuma 46.5 |
+
+8.3x fewer uniform buffers and 16x fewer uniform bytes on WebGL2; 5.1x and 7.9x on
+WebGPU; the forced env and shadow legs (multi-pass, `updateFrame` between passes) keep
+the same counts and the same frame, and `groupVer` advances on every leg. CI run 4570
+(llvmpipe) passed all 17 `tlx-probes.spec.js` tests with the change on, including the
+new one that asserts `rUbo < max(64, draws)` and a rising `groupVer`. The SwiftShader
+WebGL2 leg's 45-frame warm-up took 4 m 33 s shared against 5 m 21 s per-object — the
+one software timing worth quoting, because it is minutes, not milliseconds.
+
+**What this does not show.** Real-GPU frame time. The census request committed with
+this entry runs `macos-latest` on both arms (`ls: apex26.tlxSharedUniforms=0` is the
+control); read its `ubo` beats for the counts and treat `gms`/fps per §2w — never
+single-shot. The 48 MB iPhone TLX-vs-GLX memory gap (§2r) is a separate question; 5 MB
+of uniform buffers on a 1200-draw desktop frame is a bound on what this can have been
+worth there, not an answer.
+
+### 2y, the real GPU (macos-latest / Metal, census runs 170 = ON and 171 = control, 2026-09-22)
+
+Both runs green on the Verdict step, `gpuErrors=0` on all four backend legs of both.
+`ubo` is the census beat added for this entry (`gpu-game-check.mjs`), read from the LAST
+beat of the 600-frame race window; the first beats (track still building, 73 buffers) are
+the same on both arms, which is the control behaving as a control.
+
+| leg (montreal, night, clock 2, resMode high) | shared | uniform buffers | KB | JS ms in render calls (EMA) | meanLuma | fps median |
+|---|---|---|---|---|---|---|
+| three.js / WebGPU (Metal, headless soft-blit) | off | **3689** | **2416** | **7.14** | 3.3 † | 60 |
+| three.js / WebGPU | on | **661** | **166** | **0.46** | 44.6 | 54 |
+| three.js / WebGL2 (Metal ANGLE) | off | **3726** | **2494** | 8.52 | 50.4 | 36 |
+| three.js / WebGL2 | on | **812** | **266** | 9.94 | 51.5 | 33 |
+
+WebGPU: 5.6x fewer uniform buffers, 14.6x fewer uniform bytes, and the JS time inside
+`renderer.render()` fell from 7.1 ms to 0.5 ms a frame — that is the per-object
+`setBindGroup`/`writeBuffer` walk three.js issue #30560 describes, gone. WebGL2: 4.6x and
+9.4x on the counts; the JS EMA did not move outside noise on this single sample (the
+WebGL2 backend's per-object cost was the `bufferData` itself, which lands in the driver,
+not in JS — the counts are the evidence there). fps is reported, not read: §2w (54 %
+swing on identical code), and the WebGL2 control's governor line says "fps UNFED".
+
+† The control arm's headless-WebGPU frame read 3.3 mean luma with the occlusion A/B
+floor at 90 % of pixels differing between two identical states — the bimodal dark mode
+of that leg recorded on 2026-09-14 ("a 2.9 with the probe NEVER STARTED"), on the code
+path that shipped before this change. It is not the flag: the ON arm's leg read 44.6 on
+the same runner, and the in-container Lavapipe pair above read 46.5 / 46.9.
+
+**Verdict.** Shipped ON. Revert criteria (gpuErrors, luma divergence, frozen groupVer,
+< 5x buffer drop) all clear on software and on Metal. Next measurement that would add
+information: a HEADED Metal run (the census is headless and soft-blits on WebGPU), and a
+phone — the 48 MB TLX-vs-GLX gap (§2r) has a 2.4 MB bound from this, no more.

@@ -20,16 +20,6 @@ const RaceSettings = (function () {
     if (typeof Legends === "undefined" || !Legends.LIST) return DUEL_BASE.slice();
     return DUEL_BASE.concat(Legends.LIST.map((l) => [l.id, l.name.toUpperCase()]));
   }
-  function duelMatches(query) {
-    const q = String(query || "").trim().toLocaleLowerCase();
-    if (!q) return duelOpts();
-    return duelOpts().filter(([id, label]) => {
-      if (id === "off" || id === "on") return label.toLocaleLowerCase().includes(q);
-      const l = typeof Legends !== "undefined" && Legends.byId ? Legends.byId(id) : null;
-      return [label, id, l && l.code, l && l.years, l && l.teams].filter(Boolean)
-        .join(" ").toLocaleLowerCase().includes(q);
-    });
-  }
   const duelValue = (getDuel, getDuelLegend) =>
     !getDuel() ? "off" : ((getDuelLegend && getDuelLegend()) || "on");
   const RS_RELIAB = [["off", "OFF"], ["low", "LOW"], ["real", "REAL"]];
@@ -237,7 +227,6 @@ const RaceSettings = (function () {
       }
       $("rs-duel-open").onclick = openDuelPicker;
       $("duel-close").onclick = closeDuelPicker;
-      $("duel-search").oninput = () => buildDuelPicker($("duel-search").value);
     }
 
     function paintDuel() {
@@ -256,12 +245,11 @@ const RaceSettings = (function () {
       if (getSoundOn()) GameAudio.uiSelect();
     }
 
-    function buildDuelPicker(query) {
+    function buildDuelPicker() {
       const list = $("duel-list");
       if (typeof list.replaceChildren === "function") list.replaceChildren(); else list.innerHTML = "";
       const current = duelValue(getDuel, getDuelLegend);
-      const matches = duelMatches(query);
-      for (const [id, label] of matches) {
+      for (const [id, label] of duelOpts()) {
         const b = document.createElement("button");
         b.type = "button";
         b.className = "duel-option" + (id === current ? " active" : "");
@@ -284,15 +272,19 @@ const RaceSettings = (function () {
         b.onclick = () => chooseDuel(id);
         list.appendChild(b);
       }
-      $("duel-empty").hidden = matches.length > 0;
     }
 
     function openDuelPicker() {
-      const search = $("duel-search");
-      search.value = "";
-      buildDuelPicker("");
+      buildDuelPicker();
       $("duel-picker").hidden = false;
-      queueMicrotask(() => search.focus());
+      // FOCUS THE CURRENT PICK, which is what the search field used to take.
+      // Fourteen options is a list you read, not one you filter, and landing on
+      // the active row means the keyboard starts where the player already is.
+      queueMicrotask(() => {
+        const list = $("duel-list");
+        const target = list.querySelector(".duel-option.active") || list.firstElementChild;
+        if (target) target.focus();
+      });
       if (getSoundOn()) GameAudio.uiSelect();
     }
 
@@ -418,6 +410,6 @@ const RaceSettings = (function () {
   /* duelOpts/duelValue are EXPORTED, not private, so the DUEL row's rules can be
    * tested without a DOM: the inert VM DOM does not build SettingRow children,
    * so painting the row asserts nothing (tests/unit/duel-row.test.mjs). */
-  return { create, duelOpts, duelMatches, duelValue, presetValues };
+  return { create, duelOpts, duelValue, presetValues };
 })();
 Object.freeze(RaceSettings);

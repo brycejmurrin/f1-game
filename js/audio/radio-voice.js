@@ -57,6 +57,26 @@ const RadioVoice = (function () {
     radio: "BOX BOX, P3 on the exit",
     announcer: "Welcome to Apex 26. This is Silverstone, home of the British Grand Prix",
   });
+  /* WHICH CHANNELS MAY USE A NETWORK VOICE — a correctness rule, one way and a
+   * preference the other, so it is a table rather than a flag at the call site.
+   *
+   * A remote voice is synthesised over the network and its lead-in is UNBOUNDED.
+   * For the three race channels that settles it: a line budgeted against a card
+   * that is already fading cannot wait on a round trip, and arriving late is the
+   * one failure this module exists to prevent.
+   *
+   * The ANNOUNCER has no card. It reads a scripted paragraph over the loading
+   * flyby, on a still screen, cut off by its own budget — so the rule that
+   * justifies the filter simply does not apply to it, and applying it anyway was
+   * costing the thing the channel is FOR. Chrome's own voices are all remote,
+   * and every top-tier Microsoft voice is literally named "… Online (Natural)",
+   * so `localService` was not filtering out the risky voices; it was filtering
+   * out the good ones and leaving whatever low-quality local voice survived.
+   * On Chrome and Edge desktop that emptied the list outright, and the
+   * announcer's whole preference chain (js/audio/announcer.js PREFERRED) matched
+   * nothing at all. */
+  const REMOTE_OK = Object.freeze({ announcer: true });
+
   const PITCH_MIN = 0.5, PITCH_MAX = 1.6;
   const RATE_MIN = 0.6;
   const RATE_MAX = 1.35;
@@ -116,7 +136,7 @@ const RadioVoice = (function () {
    */
   function plan(o) {
     const kind = o.kind || "race";
-    const out = { speak: false, reason: "", text: "", speaker: "radio", rate: 1, pitch: 1, volume: o.volume == null ? 1 : o.volume, budgetMs: 0 };
+    const out = { speak: false, reason: "", text: "", speaker: "radio", rate: 1, pitch: 1, volume: o.volume == null ? 1 : o.volume, budgetMs: 0, leadMs: 0 };
     if (!o.enabled) { out.reason = "off"; return out; }
     if (!o.soundOn) { out.reason = "master-off"; return out; }
     if (!o.api) { out.reason = "no-api"; return out; }
@@ -128,7 +148,15 @@ const RadioVoice = (function () {
     const tone = toneFor(speaker, o.tune);
     const text = speakable(o.msg);
     if (!text) { out.reason = "empty"; return out; }
-    const budget = (o.life || 0) - LEAD_RESERVE_S;
+    // THE CUE COMES FIRST, SO IT COMES OUT OF THE BUDGET. The radio frame opens
+    // with a courtesy figure (js/audio/engine.js radioSting) and the words
+    // belong AFTER it, the way a broadcast plays it — not over the top of it,
+    // which is what happened while the two started together. `lead` is that
+    // figure's real length, handed in by the caller rather than duplicated
+    // here, and the line has the card MINUS it to fit in.
+    const lead = Math.max(0, Math.min(1, +o.lead || 0));
+    out.leadMs = lead * 1000;
+    const budget = (o.life || 0) - LEAD_RESERVE_S - lead;
     let rate = tone.rate;
     if (estimate(text, rate) > budget) rate = RATE_MAX;
     if (estimate(text, rate) > budget) { out.reason = "too-long"; out.text = text; return out; }
@@ -166,7 +194,12 @@ const RadioVoice = (function () {
     // the dead line's callback cleared the LIVE line's hard stop and un-ducked
     // the music underneath it. That lands on exactly the lines that preempt:
     // a penalty cutting off the coach is the case this module was built for.
-    let voices = null, deadline = null, last = null, current = null;
+    let voices = null, voicesAny = null, deadline = null, last = null, current = null;
+    // The speak waiting out the courtesy figure. A preempt during that window
+    // must cancel it, or the line it interrupted arrives on top of the line
+    // that interrupted it — the exact inversion `current` exists to prevent,
+    // one step earlier in the chain.
+    let pending = null;
     /* DID THE ENGINE ACTUALLY START? `asked` counts the speaks we HANDED to the
      * platform; `started` counts the ones it actually began (onstart).
      *
@@ -186,18 +219,20 @@ const RadioVoice = (function () {
     }
     // NEVER called from create(): boot must not wait on a voice list, and on
     // Chrome the first read is empty anyway.
-    function voicesFor() {
-      if (voices) return voices;
+    function voicesFor(remoteOk) {
+      const cached = remoteOk ? voicesAny : voices;
+      if (cached) return cached;
       let all = [];
       try { all = synth.getVoices() || []; } catch (e) { all = []; }   // a synth mid-teardown throws
       const lang = (typeof document !== "undefined" && document.documentElement.lang) || "en";
-      // localService ONLY. A remote voice is network-synthesised and its lead-in
-      // is unbounded — it would routinely land the line after the card has gone,
-      // which is the one thing this module exists to prevent. This is not a
-      // preference, it is the correctness rule.
-      voices = all.filter((v) => v && v.localService && String(v.lang || "").startsWith(lang.slice(0, 2)))
+      // ONE read of the platform, TWO lists: everything in this language, and
+      // the local-only subset. See REMOTE_OK above for which channel gets which
+      // — the local filter is the race radio's correctness rule and the
+      // announcer's handicap, so it is applied per channel and not here.
+      voicesAny = all.filter((v) => v && String(v.lang || "").startsWith(lang.slice(0, 2)))
         .sort((a, b) => String(a.name).localeCompare(String(b.name)));
-      return voices;
+      voices = voicesAny.filter((v) => v.localService);
+      return remoteOk ? voicesAny : voices;
     }
     // An EMPTY list is not a refusal. Safari returns nothing from getVoices()
     // and picks a system default itself, so voice = null is the Safari path and
@@ -211,7 +246,7 @@ const RadioVoice = (function () {
      * falls back here to the default spread, which is the same thing a fresh
      * save gets. A missing voice must never silence the channel. */
     function voiceFor(speaker) {
-      const v = voicesFor();
+      const v = voicesFor(!!REMOTE_OK[speaker]);
       if (!v.length) return null;                       // Safari: prosody carries it alone
       const want = tune[speaker] && tune[speaker].name;
       if (want) {
@@ -222,7 +257,9 @@ const RadioVoice = (function () {
       return v[i % v.length];
     }
     function clearDeadline() { if (deadline != null) { clearTimeout(deadline); deadline = null; } }
+    function clearPending() { if (pending != null) { clearTimeout(pending); pending = null; } }
     function stop() {
+      clearPending();
       clearDeadline();
       // Before cancel(): the callback it triggers must already see itself as
       // stale, whether the engine fires it synchronously or a turn later.
@@ -234,11 +271,17 @@ const RadioVoice = (function () {
       // transmission early for a player who never turned speech on.
       if (GameAudio && GameAudio.radioStingStop) GameAudio.radioStingStop();
     }
-    function say(msg, life, kind) {
-      const p = plan({ msg, life, kind, enabled, soundOn: !!G.soundOn, state: G.state, api: true, volume, tune });
-      last = { text: p.text, reason: p.reason || "spoke", rate: p.rate, budgetMs: p.budgetMs };
+    function say(msg, life, kind, lead) {
+      const p = plan({ msg, life, kind, lead, enabled, soundOn: !!G.soundOn, state: G.state, api: true, volume, tune });
+      last = { text: p.text, reason: p.reason || "spoke", rate: p.rate, budgetMs: p.budgetMs, leadMs: p.leadMs };
       if (!p.speak) return false;
       stop();
+      // AFTER THE CUE, NOT UNDER IT. Deferred rather than shortened: the words
+      // keep their own rate and simply start when the figure has finished.
+      if (p.leadMs > 0) { pending = setTimeout(() => { pending = null; speakPlanned(p); }, p.leadMs); return true; }
+      return speakPlanned(p);
+    }
+    function speakPlanned(p) {
       const u = new Utter(p.text);
       u.voice = voiceFor(p.speaker);
       u.rate = p.rate; u.pitch = p.pitch; u.volume = p.volume;
@@ -325,7 +368,7 @@ const RadioVoice = (function () {
       observe(pause, () => { if (!pause.hidden) stop(); });
       // iOS bricks the synthesiser until reload if it is backgrounded mid-line.
       document.addEventListener("visibilitychange", () => { if (document.hidden) stop(); });
-      try { synth.onvoiceschanged = () => { voices = null; }; } catch (e) { /* not every engine exposes it */ }
+      try { synth.onvoiceschanged = () => { voices = voicesAny = null; }; } catch (e) { /* not every engine exposes it */ }
     }
     Log.info("audio", "RadioVoice.create enabled=" + enabled);
     /* SPEAK A SAMPLE, from the settings panel, where no race is running.
@@ -339,9 +382,21 @@ const RadioVoice = (function () {
      *
      * The RATE you hear is the one you chose. In a race a long line is sped up
      * to RATE_MAX to fit its card and dropped if it still will not fit, so the
-     * preview is the floor of what you get, never the ceiling. */
+     * preview is the floor of what you get, never the ceiling.
+     *
+     * THE TEAM RADIO SWITCH DOES NOT GATE THIS, and it used to. That switch
+     * ships OFF — it decides whether the radio talks over a RACE — so three of
+     * the four TEST buttons on the settings sheet did nothing at all in the
+     * shipped state, while the copy beside them promises "TEST to hear it
+     * without starting a race". Nothing told the player why; the button simply
+     * had no effect, which reads as broken because it is. The announcer's own
+     * TEST has always worked this way, and its comment is the argument:
+     * pressing play in a settings panel IS the consent. `enabled` keeps the one
+     * meaning that matters — say() refuses on it, so a radio turned off stays
+     * silent for the whole race, which is what a player turning it off asked
+     * for. MASTER SOUND still gates this, because that switch means silence. */
     function preview(speaker, text) {
-      if (!enabled || !G.soundOn) return false;
+      if (!G.soundOn) return false;
       const sp = TONE[speaker] ? speaker : "radio";
       const t = toneFor(sp, tune);
       const words = speakable(text || SAMPLE[sp] || SAMPLE.radio);
@@ -358,7 +413,7 @@ const RadioVoice = (function () {
     return {
       say, stop, unlock, preview,
       /** The installed voices a channel may be given, as plain rows for a <select>. */
-      voiceList: () => voicesFor().map((v) => ({ name: v.name, lang: v.lang })),
+      voiceList: (speaker) => voicesFor(!!REMOTE_OK[speaker]).map((v) => ({ name: v.name, lang: v.lang })),
       /** The stored tune, or the shipped default for a channel with none. */
       tuneFor: (speaker) => Object.assign(toneFor(speaker, tune), { name: (tune[speaker] && tune[speaker].name) || "" }),
       /** Patch one channel. A null patch RESETS it — see the readTune note. */
@@ -372,11 +427,11 @@ const RadioVoice = (function () {
       setEnabled(b) { enabled = !!b; if (!enabled) stop(); },
       setVolume(v) { volume = Math.max(0, Math.min(1, +v || 0)); return volume; },
       available: () => true,
-      debug: () => ({ available: true, enabled, voices: voicesFor().length, last, asked, started }),
+      debug: () => ({ available: true, enabled, voices: voicesFor(false).length, voicesAny: voicesFor(true).length, last, asked, started }),
     };
   }
 
-  return { create, inert, plan, speakable, estimate, toneFor, SPEAKERS, TONE, SAMPLE,
+  return { create, inert, plan, speakable, estimate, toneFor, SPEAKERS, TONE, SAMPLE, REMOTE_OK,
            PITCH_MIN, PITCH_MAX, RATE_MIN, RATE_MAX, LEAD_RESERVE_S, WORDS_PER_S };
 })();
 Object.freeze(RadioVoice);

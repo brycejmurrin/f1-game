@@ -1,0 +1,47 @@
+{
+  "generatedBy": "tools/gen/vendor-three.mjs",
+  "three": "0.186.0",
+  "terser": "5.51.2",
+  "terserOptions": {
+    "module": true,
+    "format": {
+      "comments": "/@license/"
+    }
+  },
+  "tarball": {
+    "name": "three-0.186.0.tgz",
+    "sha256": "61eeff9d7616005c9a481c796f52287d81fbbbc0d55eaca5565322924252c1aa"
+  },
+  "pristine": {
+    "build/three.webgpu.js": "a78400fa1d359e81fcc12b84ed0a89a7fbecb4b8373e28ae8f9d2b11f6ea13bc",
+    "build/three.core.js": "9edde002b066a9a05676a6127f67735b62baf399bdea529f2f7e31657da769e6",
+    "build/three.tsl.js": "6e6b92d8ce467818944f73815a96abadc6392fb34de577d479a23810b6aeeed0"
+  },
+  "patches": [
+    1,
+    4,
+    5
+  ],
+  "files": {
+    "three.webgpu.min.js": {
+      "sha256": "c560fa520fe33b332404f3f2beafe6272daf214ee3767d45cab942f143c1b7d9",
+      "bytes": 709405
+    },
+    "three.core.min.js": {
+      "sha256": "dae72ed2eea6703b95e6b57e26469ffa95733a9320675b4bfd1b5f5df1c12f8b",
+      "bytes": 389329
+    },
+    "three.tsl.min.js": {
+      "sha256": "2c38aa6be480f22bfa858b38f43fd25f5891f002f3f44fd41a95f674f5bccdf0",
+      "bytes": 25647
+    },
+    "LICENSE.txt": {
+      "sha256": "8b378ebe60e2fe500158cb0ac71cb5e8b7d92953c2abcc63a0eb90499653b5bc",
+      "bytes": 1081
+    },
+    "addons/tsl/display/BloomNode.js": {
+      "sha256": "f28a279656a37cf44bc09e45fd2de5df93a17cffad77f6da0a5bcd979cfd6525",
+      "bytes": 17242
+    }
+  }
+}

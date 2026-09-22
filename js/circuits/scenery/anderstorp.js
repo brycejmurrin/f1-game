@@ -41,7 +41,7 @@
       // ---------------------------------------------------------------- 0.
       // Lap-position helper + the cool northern palette. Pine is dark and
       // desaturated; sand run-off is pale grey (wet concrete), never golden.
-      const K = (s) => Math.round(s * n) % n;
+      const { K } = api;            // the contract's frac -> node index (normalised for negatives)
       const pick = (h, arr) => arr[Math.min(arr.length - 1, Math.floor(h * arr.length))];
 
       const PINE      = [0.09, 0.20, 0.13];   // Scots pine canopy, deep + cold

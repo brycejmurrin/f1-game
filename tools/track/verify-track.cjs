@@ -146,7 +146,8 @@ function buildContext(rootOverride, opts) {
     const src = fs.readFileSync(path.join(root, relPath), "utf8");
     // Replace only `const` at the very start of a line (no indent = top-level).
     const patched = src.replace(/^const\b/gm, "var");
-    vm.runInContext(patched, ctx, { filename: relPath });
+    // Absolute filename so V8 coverage attributes the run to the source file.
+    vm.runInContext(patched, ctx, { filename: path.join(root, relPath) });
   }
 
   // The load list lives in tools/manifest.cjs (TRACK_VM) — the same source of

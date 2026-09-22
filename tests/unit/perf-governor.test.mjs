@@ -997,3 +997,34 @@ test("raw frame percentiles retain hitches and report discarded simulation time"
   assert.equal(s.physicsSteps,5);assert.equal(s.droppedSimS,.12);
   p.resetFrameStats();assert.equal(p.frameStats().frames,0);assert.equal(p.frameStats().droppedSimS,0);
 });
+
+test("the recovery hold is wall-clock: the same seconds at 60, 120 and 144 Hz", () => {
+  // The holds, backoff and cooldowns were FRAME counts translated into seconds
+  // at 60 fps: a 144 Hz display ran the 10 s recovery hold in ~4 s. A heavy
+  // opening (frames cost 30 ms whatever the panel can show — a slow device is
+  // slow) drives a cut; then clean frames at the panel's own rate must restore
+  // full scale after the SAME wall time. (A 30 Hz panel is not in this list on
+  // purpose: its clean 33 ms frames are indistinguishable from load, and the
+  // externally-capped test above pins that it is never degraded in the first
+  // place.)
+  const restoreAfterS = (hz) => {
+    const { PerfGov, scale } = makeGov();
+    feed(PerfGov, (i) => (i % 20 === 0 ? 10 : 30 * scale()), 700);   // ~20 s of load
+    assert.ok(scale() < 1, `${hz} Hz: the opening must cut something`);
+    const dt = 1000 / hz;
+    let frames = 0;
+    while (scale() < 1 && frames < 60 * hz) { PerfGov.tick(dt); frames++; }
+    assert.equal(scale(), 1, `${hz} Hz: clean frames must restore full scale`);
+    return frames * dt / 1000;
+  };
+  const t60 = restoreAfterS(60), t120 = restoreAfterS(120), t144 = restoreAfterS(144);
+  for (const [hz, t] of [[60, t60], [120, t120], [144, t144]])
+    assert.ok(t >= 10, `${hz} Hz restored after ${t.toFixed(1)} s — the 10 s hold must run its course`);
+  // What remains of the spread is the frame-counted part on purpose: the
+  // 45-frame evaluation cadence and the 30/90-frame verify windows are EMA
+  // settling spans (0.75 s / 1.5 s at 60 Hz, 0.3 s / 0.6 s at 144 Hz). The
+  // frame-counted holds this replaced put 144 Hz at ~0.4x of 60 Hz here.
+  const spread = Math.max(t60, t120, t144) - Math.min(t60, t120, t144);
+  assert.ok(t144 > 0.8 * t60, `144 Hz must not recover in frames: ${t144.toFixed(1)} s vs ${t60.toFixed(1)} s at 60 Hz`);
+  assert.ok(spread < 5, `restore times must agree in wall time: 60 Hz ${t60.toFixed(1)} s, 120 Hz ${t120.toFixed(1)} s, 144 Hz ${t144.toFixed(1)} s`);
+});

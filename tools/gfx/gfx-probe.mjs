@@ -538,6 +538,20 @@ async function runProbeAttempt(attemptNum) {
             return (m && m.mirror) || null;
           } catch { return null; }
         })(),
+        // Uniform-buffer census for the shared frame block (tlx.js memState):
+        // rUbo/rUboKB from three's info.memory, groupVer = the render group's
+        // version (must advance per renderer.render() or the frame block is
+        // frozen), presentMs = EMA of JS time inside the render calls. Counts
+        // are valid on a software adapter; the milliseconds are not.
+        tlxMem: (() => {
+          try {
+            const t = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null;
+            const m = t && t.memState ? t.memState() : null;
+            return m ? { draws: m.draws, calls: m.calls, rUbo: m.rUbo, rUboKB: m.rUboKB,
+                         groupVer: m.groupVer, presentMs: m.presentMs, shared: m.sharedUniforms,
+                         backendData: m.backendData } : null;
+          } catch { return null; }
+        })(),
         hasWGX: typeof WGX !== "undefined",
         hasTLX: typeof TLX !== "undefined",
         hasGpu: !!navigator.gpu,

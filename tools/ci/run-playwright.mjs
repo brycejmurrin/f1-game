@@ -15,7 +15,7 @@ const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const MIME = {
   ".html": "text/html; charset=utf-8",
   ".js": "application/javascript; charset=utf-8",
-  // ES modules (vendor/rapier-0.19.3, vendor/three-0.185.1): Chromium enforces
+  // ES modules (vendor/rapier-0.19.3, vendor/three-0.186.0): Chromium enforces
   // a JavaScript MIME type for module scripts — octet-stream imports are
   // rejected outright, so .mjs must be mapped or dynamic import() fails.
   ".mjs": "text/javascript; charset=utf-8",
@@ -101,6 +101,10 @@ if (dropped.length && !args.includes("--list")) {
   // reproducing the very 0/0 it exists to forbid.
   const env = { ...process.env };
   delete env.NODE_TEST_CONTEXT;
+  // An ADAPTED spec's "twin" is the spec itself under tests/helpers/vm-page.js,
+  // which fixtures.js selects by this variable. Harmless to the hand twins:
+  // they load tools/lib/game-vm.cjs directly and never import fixtures.js.
+  if (dropped.some((d) => d.adapted)) env.APEX_VM_PAGE = "1";
   const r = spawnSync(process.execPath, ["--test", "--test-reporter=tap", ...twins],
     { cwd: ROOT, encoding: "utf8", env });
   process.stdout.write(r.stdout || "");
@@ -133,6 +137,21 @@ if (dropped.length && !args.includes("--list")) {
   // the reporter's own is the group's, and two of them would let the parser's
   // last-match-wins rule report the twins' result as the group's.
   console.error(`[playwright] VM twin(s) passed (${passed}) — the browser half follows`);
+}
+
+/* --list AND NOTHING LEFT TO LIST. `--list` deliberately skips RUNNING the
+   twins above, but the twinned specs were still REMOVED from args — so for a
+   fully twinned group (collisions is 32/32) Playwright is handed a bare
+   `test --list` with no spec paths and lists the ENTIRE suite. The answer is
+   not "every spec in the repo"; it is "this group's specs are covered in node".
+   No in-repo consumer passes --list through here, so the cost is a wrong
+   answer at the CLI rather than a wrong gate — but a listing tool that reports
+   119 specs for a group of 32 is the kind of wrong answer the next reader
+   builds on. */
+if (nothingToRun && args.includes("--list")) {
+  for (const d of dropped) console.error(`[playwright] ${d.spec} → ${d.twin} (node)`);
+  console.error(`[playwright] --list: every spec in this group has a VM twin; nothing runs in a browser`);
+  process.exit(0);
 }
 
 const managed = process.env.APEX_PORT ? null : await startStaticServer();

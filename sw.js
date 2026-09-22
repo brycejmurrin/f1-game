@@ -68,9 +68,9 @@ async function precacheAssetLists() {
     // because it is reached through the importmap, not a <script> tag, so
     // the parser below cannot see it. OPTIONAL: an install must not fail
     // over a backend most sessions never select.
-    "vendor/three-0.185.1/three.webgpu.min.js",
-    "vendor/three-0.185.1/three.core.min.js",
-    "vendor/three-0.185.1/three.tsl.min.js",
+    "vendor/three-0.186.0/three.webgpu.min.js",
+    "vendor/three-0.186.0/three.core.min.js",
+    "vendor/three-0.186.0/three.tsl.min.js",
     // The QR reader (js/net/scan.js) injects this ON DEMAND the first time
     // someone scans an answer code, so the tag parser below never sees it.
     // OPTIONAL for the same reason as three.js: most sessions never scan, and

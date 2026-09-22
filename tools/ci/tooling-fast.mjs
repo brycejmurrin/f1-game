@@ -225,6 +225,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // the one-seat rule — drivers.length is 12, so anything counting seats by
   // it puts twelve legends on the grid.
   "tests/unit/legends-team.test.mjs",
+  // …and the PERIOD CAR reaching the garage SHEET, not just the team
+  // record. Twelve legends share one `legends` id, so the write policy is
+  // the behaviour: seed an empty sheet, reseed on a real switch, never on a
+  // boot or a same-seat re-sync (that would wipe a paid-for build).
+  "tests/unit/legend-parts-seed.test.mjs",
   "tests/unit/select-budget.test.mjs",
   "tests/unit/select-specs.test.mjs",
   // The duration HISTORY behind the budget: junit/live-reporter merge,
@@ -234,6 +239,18 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // rewritten by a tool, so drift shows up as a commit nobody meant to make.
   "tests/unit/spec-timings.test.mjs",
   "tests/unit/twinned-specs.test.mjs",
+  // coverage-merge is the only consumer of the raw V8 lists a flagged run
+  // writes (APEX_JS_COVERAGE=1 / NODE_V8_COVERAGE); a url shape that stops
+  // mapping reads as 0 %, not as an error, so its filters are pinned here. ~2 s.
+  "tests/unit/coverage-merge.test.mjs",
+  // The physics baseline's provenance stamp (_blessed): reason, data hash,
+  // blessing commit. One file read and one git call, well under a second, and
+  // it must fail where the baseline is edited, not on a nightly.
+  "tests/unit/physics-baseline-provenance.test.mjs",
+  // Pure-VM physics/career suites added 2026-09-22 (the coverage census's
+  // zero-reference module and the two thin spots): each under a second.
+  "tests/unit/body-attitude.test.mjs",
+  "tests/unit/save-migrate.test.mjs",
   "tests/unit/wait-polling.test.mjs",
   "tests/unit/gallery-capture-draws.test.mjs",
   "tests/unit/track-graph.test.mjs",
@@ -248,6 +265,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ratchets.test.mjs",
   "tests/unit/move-tree.test.mjs",
   "tests/unit/gfx-backend-canary.test.mjs",
+  "tests/unit/start-race-latch.test.mjs",
   "tests/unit/gfx-debug-overlay.test.mjs",
   "tests/unit/car-presentation-canary.test.mjs",
   "tests/unit/car-wing-foil.test.mjs",
@@ -294,6 +312,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ai-drive.test.mjs",
   "tests/unit/brake-cue.test.mjs",
   "tests/unit/factory-ai-setup.test.mjs",
+  "tests/unit/career-regulations.test.mjs",
   "tests/unit/career-settle.test.mjs",
   "tests/unit/career-legends.test.mjs",
   "tests/unit/career-seat-rollover.test.mjs",
@@ -311,6 +330,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // clamped out of localStorage before they reach a CSS custom property, where
   // a NaN is not an error but a silently dropped declaration.
   "tests/unit/loading-card.test.mjs",
+  // Every AUTHORED activation-zone turn table resolves against the BUILT
+  // centreline. One unresolvable pair discards a circuit's whole table and
+  // falls through to ZONE_COUNT — silently, which is how monza shipped a
+  // table nobody read. Node-side via verify-track.cjs, so it is cheap.
+  "tests/unit/aero-zone-tables.test.mjs",
   // The ORDERING that lights the flyby: raceIntro() applies the race settings
   // before the loading screen starts, so a dawn race stops showing a day sky.
   "tests/unit/flyby-lighting.test.mjs",
@@ -329,6 +353,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/lighting-rebuild.test.mjs",
   "tests/unit/lighting-tuner-sweep.test.mjs",
   "tests/unit/perf-governor.test.mjs",
+  // skidmarks.js lays marks per SECOND of laying (was per frame): a VM run of
+  // the ring buffer at three refresh rates, ~0.1 s.
+  "tests/unit/skidmarks-cadence.test.mjs",
   "tests/unit/terrain-normals.test.mjs",
   "tests/unit/aero-zones-turns.test.mjs",
   "tests/unit/ui-improve-pass.test.mjs",
@@ -354,6 +381,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/fin-design.test.mjs",
   "tests/unit/photomode-hold.test.mjs",
   "tests/unit/title-menu-even.test.mjs",
+  "tests/unit/title-art.test.mjs",
   "tests/unit/change-driver-tools.test.mjs",
   "tests/unit/trim-comments.test.mjs",
   "tests/unit/metrics.test.mjs",

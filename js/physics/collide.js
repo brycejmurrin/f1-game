@@ -7,8 +7,12 @@
 // (track/player/netPlay/PACE/wrapS/worldFromTrack) through G. The takeover
 // owner is IncidentSim's static owns()/notifyCar(). Physics-visible: every
 // number here is gated by tests/specs/physics-characterization.spec.js.
+
 const Collide = (() => {
   const clamp = M4.clamp;   // js/core/mat4.js (eval-time: HARD_EDGES mat4 -> collide)
+  // The loop's fixed step (js/physics/consts.js FIXED_DT); the literal is the
+  // fallback for a bare test VM that loads this file without PhysicsConsts.
+  const FIXED_DT = (typeof PhysicsConsts !== "undefined" && PhysicsConsts.FIXED_DT) || 1 / 60;
   const LCAR = 4.8, WCAR = 2.0;
   // Per-car half extents; LCAR/WCAR above are the COMBINED pair extents.
   const HL = LCAR / 2, WL = WCAR / 2;          // 2.4 long, 1.0 wide
@@ -341,8 +345,13 @@ const Collide = (() => {
           if (a.human || b.human) a.contactT = b.contactT = 0.22;
           if (AiDrive.sideYieldsA(dProg, a.x, b.x)) { if (last) a.speed = Math.max(0, a.speed - rubScrub); a.contactT = 0.22; }
           else { if (last) b.speed = Math.max(0, b.speed - rubScrub); b.contactT = 0.22; }
+          // INSIDE the guard, like everything else in this branch. It was the
+          // one statement outside it, so a settled side-by-side rub — two cars
+          // touching with no correction left to apply — re-fired audio, shake
+          // and hit-stop every frame and banked a career `hits` count of ~14 in
+          // five seconds of contact that the solver had already resolved.
+          if (last) collideFx(a, b, Math.abs(aSp - bSp) * 0.02 + 0.18);
         }
-        if (last) collideFx(a, b, Math.abs(aSp - bSp) * 0.02 + 0.18);
       } else {
         // rear-end: separate along the track and nudge speeds together (gentle,
         // so hitting a car ahead doesn't slam you to a stop — you bump and tuck in)
@@ -475,7 +484,7 @@ const Collide = (() => {
       // AI cars mirrored their world pose BEFORE this pass (updateCar's tail), so a
       // shove rendered one step late; snapshot so the clamp loop can re-mirror.
       for (const c of ranked) if (!c.human) { c._preColS = c.s; c._preColX = c.x; }
-      sweepContacts(ranked, dt || 1 / 60);
+      sweepContacts(ranked, dt || FIXED_DT);
       // PRE-STEP CLOSING SPEED, for the restitution reference only. aSp/bSp are
       // read LIVE, and _colResolvePair mutates .speed as it goes, so in a
       // concertina a car that was already bumped earlier in the same pass
@@ -490,7 +499,7 @@ const Collide = (() => {
       for (const c of ranked) c._preColSpd = c._nOk ? c._nSpd : c.speed;
       // Side-rub speed loss for this step, in m/s: a deceleration (AiDrive.rubDecel)
       // times the step, so the headless harness's arbitrary dt scrubs per second.
-      const rubScrub = AiDrive.rubDecel(!!track.street) * (dt || 1 / 60);
+      const rubScrub = AiDrive.rubDecel(!!track.street) * (dt || FIXED_DT);
       // Tiny fields: all-pairs is fine and avoids bucket rebuild cost. Larger
       // fields (MP / expanded AI) use arc buckets so pairContact stays O(n·k).
       const useBuckets = ranked.length > 12;
@@ -566,7 +575,9 @@ const Collide = (() => {
       }
     }
 
-    return { resolveCollisions, shiftLong, pairContact, sepShares };
+    // shiftLong and sepShares were on this API with no reader anywhere;
+    // both are still used INSIDE resolveCollisions, which is the contract.
+    return { resolveCollisions, pairContact };
   }
 
   return { create, LCAR, WCAR };

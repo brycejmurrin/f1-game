@@ -708,3 +708,20 @@ test("localBuild() reads the shell's apex-build meta before it fetches", async (
     assert.equal(fetched, 1);
   } finally { delete global.fetch; delete global.document; }
 });
+
+// ── peekCode: the format half of decodeCode, synchronous and connection-free ──
+// The lobby runs it BEFORE it needs a transport, so a typo is refused as a
+// typo while join() is still waiting on the ICE prefetch. It must agree with
+// decodeCode on every shape decodeCode rejects without decoding.
+test("peekCode refuses the shapes decodeCode refuses, synchronously, and accepts a real code", async () => {
+  assert.equal(NetHandshake.peekCode("not-a-real-code").error, "bad_code");
+  assert.match(NetHandshake.peekCode("not-a-real-code").message, /apex invite code/i);
+  assert.equal(NetHandshake.peekCode("").error, "bad_code");
+  assert.equal(NetHandshake.peekCode("APEX1.x.e30").error, "corrupt_code", "an unknown mode is corrupt, not foreign");
+  assert.equal(NetHandshake.peekCode("APEX1.z").error, "bad_code", "two parts is not our shape");
+  const ok = NetHandshake.peekCode("APEX1.p.e30");
+  assert.equal(ok.ok, true); assert.equal(ok.mode, "p"); assert.equal(ok.body, "e30");
+  for (const bad of ["not-a-real-code", "APEX1.x.e30", "APEX1.z"]) {
+    assert.equal((await NetHandshake.decodeCode(bad)).error, NetHandshake.peekCode(bad).error, `decodeCode and peekCode agree on ${bad}`);
+  }
+});

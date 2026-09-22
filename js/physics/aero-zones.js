@@ -111,7 +111,7 @@ const AERO_ZONE_TURNS = {
   hungaroring: [[1, 2], [4, 5], [10, 11], [14, 1]],
   imola: [[14, 15]],
   zandvoort: [[11, 12], [14, 1]],
-  monza: [[9, 10], [11, 1]],
+  monza: [[10, 11], [11, 1]],   // [9,10] bounded no straight, so the WHOLE table was dropped
   baku: [[2, 3], [20, 1]],
   singapore: [[8, 9], [14, 15], [15, 16], [19, 1]],
   cota: [[10, 11], [20, 1]],
@@ -139,54 +139,73 @@ function runForTurnPair(runs, turns, total, entry) {
   return matches[(occ || 1) - 1] || null;
 }
 
+/** THE ZONES A RACE ACTUALLY USES, as a pure function of a BUILT track.
+ *
+ *  Hoisted out of create()'s build() so there is exactly one answer to "where
+ *  are the activation zones". js/ui/track-maps.js ran its OWN curvature scan
+ *  (detectDRS: a different threshold, a different minimum length, and no
+ *  knowledge of ZONE_COUNT or AERO_ZONE_TURNS at all) and the minimap, the
+ *  circuit picker and the track-detail modal all drew THAT. The two disagreed
+ *  on nearly every circuit — most plainly at Monaco, where ZONE_COUNT says 0
+ *  and no curvature scan can know it, so the map promised six zones the car
+ *  would never open. A map that names a zone the race does not have is worse
+ *  than a map with none. */
+function zonesFor(track) {
+  if (!track || !track.total) return [];
+  const total = track.total, n = Math.max(8, Math.round(total / X_ZONE_STEP));
+  const straight = new Array(n);
+  for (let i = 0; i < n; i++) {
+    straight[i] = Math.abs(Tracks.curvature(track, (i + 0.5) * total / n)) <= X_ZONE_K;
+  }
+  if (straight.every((v) => v)) return [{ start: 0, end: total, len: total }];   // a full-lap oval
+  let i0 = 0;
+  while (i0 < n && straight[i0]) i0++;          // begin at a corner, so no run is cut
+  const runs = [];
+  let cur = null;
+  for (let k = 0; k < n; k++) {
+    const i = (i0 + k) % n;
+    if (straight[i]) {
+      if (!cur) cur = { start: i * total / n, len: 0 };
+      cur.len += total / n;
+    } else if (cur) { cur.end = cur.start + cur.len; runs.push(cur); cur = null; }
+  }
+  if (cur) { cur.end = cur.start + cur.len; runs.push(cur); }
+  const id = track.def && track.def.id;
+  const turnPairs = AERO_ZONE_TURNS[id];
+  if (turnPairs && track.def.turns && track.def.turns.length) {
+    const resolved = turnPairs
+      .map((entry) => runForTurnPair(runs, track.def.turns, total, entry))
+      .filter(Boolean);
+    if (resolved.length === turnPairs.length) return resolved.sort((a, b) => a.start - b.start);
+    /* ALL-OR-NOTHING, AND IT USED TO BE SILENT. One unresolvable pair discards
+       the whole hand-authored table and drops through to ZONE_COUNT's "N
+       longest straights" — which is a reasonable fallback and a terrible way to
+       discover that the table you wrote is not being read. Monza shipped
+       [[9,10],[11,1]] for as long as the table has existed; [9,10] bounds no
+       straight on the built centreline, so neither pair was ever used.
+       tests/unit/aero-zones-vm.test.mjs now fails on an unresolved pair; this
+       says it out loud at runtime too, for a circuit whose geometry moves under
+       a table nobody re-checks. */
+    Log.warn("game", `AeroZones: ${id} turn table unusable — ` +
+      `${resolved.length}/${turnPairs.length} pairs bound a straight; falling back to ZONE_COUNT`);
+  }
+  const want = ZONE_COUNT[id];
+  if (want != null) {
+    return runs.slice().sort((a, b) => b.len - a.len).slice(0, want)
+               .sort((a, b) => a.start - b.start);
+  }
+  return runs.filter((r) => r.len >= X_ZONE_MIN);
+}
+
+
 function create(G) {
   Log.info("game", "AeroZones.create");
   let zones = [];                               // [{start, end, len}] in arc metres
 
   function build() {
-    zones = [];
     const track = G.track;
     Log.info("game", "AeroZones.build track=" + ((track && track.def && track.def.id) || "?"));
-    if (!track || !track.total) return zones;
-    const total = track.total, n = Math.max(8, Math.round(total / X_ZONE_STEP));
-    const straight = new Array(n);
-    for (let i = 0; i < n; i++) {
-      straight[i] = Math.abs(Tracks.curvature(track, (i + 0.5) * total / n)) <= X_ZONE_K;
-    }
-    if (straight.every((v) => v)) {   // a full-lap oval: one zone, the whole lap
-      zones = [{ start: 0, end: total, len: total }];
-      return zones;
-    }
-    let i0 = 0;
-    while (i0 < n && straight[i0]) i0++;          // begin at a corner, so no run is cut
-    const runs = [];
-    let cur = null;
-    for (let k = 0; k < n; k++) {
-      const i = (i0 + k) % n;
-      if (straight[i]) {
-        if (!cur) cur = { start: i * total / n, len: 0 };
-        cur.len += total / n;
-      } else if (cur) { cur.end = cur.start + cur.len; runs.push(cur); cur = null; }
-    }
-    if (cur) { cur.end = cur.start + cur.len; runs.push(cur); }
-    const id = track.def && track.def.id;
-    const turnPairs = AERO_ZONE_TURNS[id];
-    if (turnPairs && track.def.turns && track.def.turns.length) {
-      const resolved = turnPairs
-        .map((entry) => runForTurnPair(runs, track.def.turns, total, entry))
-        .filter(Boolean);
-      if (resolved.length === turnPairs.length) {
-        zones = resolved.sort((a, b) => a.start - b.start);
-        return zones;
-      }
-    }
-    const want = ZONE_COUNT[id];
-    if (want != null) {
-      zones = runs.slice().sort((a, b) => b.len - a.len).slice(0, want)
-                  .sort((a, b) => a.start - b.start);
-      return zones;
-    }
-    for (const r of runs) if (r.len >= X_ZONE_MIN) zones.push(r);
+    zones = zonesFor(track);
     return zones;
   }
 
@@ -217,8 +236,9 @@ function create(G) {
 }
 
   return {
-    create, X_ZONE_K, X_ZONE_MIN, X_ZONE_VREF, X_STRAIGHT_T,
-    ZONE_COUNT, AERO_ZONE_TURNS, turnsBounding, runForTurnPair,
+    create, zonesFor, X_ZONE_K, X_ZONE_MIN, X_ZONE_VREF, X_STRAIGHT_T,
+    // turnsBounding is internal to runForTurnPair; it had no external reader.
+    ZONE_COUNT, AERO_ZONE_TURNS, runForTurnPair,
   };
 })();
 Object.freeze(AeroZones);

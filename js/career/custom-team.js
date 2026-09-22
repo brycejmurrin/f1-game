@@ -59,10 +59,44 @@ const CustomTeam = (function () {
       const t = Legends.team(Legends.LIST[want].id);
       if (!t) return;
       const i = legendsTeamIndex();
+      // WHICH legend the slot held a moment ago, read BEFORE the splice: it is
+      // what tells a genuine switch (Fangio -> Senna) apart from a re-sync of
+      // the same seat, and only a switch may touch the player's sheet.
+      const prev = i >= 0 && Teams.LIST[i] ? Teams.LIST[i].legend : null;
       if (i >= 0) Teams.LIST.splice(i, 1);
       Teams.LIST.push(t);
+      seedLegendParts(Legends.LIST[want].id, prev);
       invalidateDecalTextures("legends");
       invalidateCustomMeshCaches();
+    }
+
+    /* THE PERIOD CAR HAS TO REACH THE GARAGE SHEET, not just the team record.
+     * A team's `factory` build is what an AI car is rendered from, so a legend
+     * DUEL RIVAL already arrives in the right machine. The player's own seat
+     * reads `parts.legends` instead, and an empty sheet resolves to Parts
+     * DEFAULTS — stock engine, medium aero, standard suspension — so picking
+     * Fangio in the garage handed you a 2026 chassis in Silver Arrow paint
+     * while duelling him produced the 1954 car. Same legend, two machines,
+     * depending on which side of the grid you stood on.
+     *
+     * WHEN IT WRITES, and the reason each case is separate. Twelve legends
+     * share the one `legends` id, so there is one sheet between them:
+     *   - sheet EMPTY: seed it. Nothing of the player's is at stake.
+     *   - a real SWITCH (prev is a different legend): reseed. You asked for
+     *     Senna, you get the MP4/4, not Fangio's build wearing Senna's paint.
+     *   - anything else — boot, a re-sync, the same seat again — leave it, or
+     *     every reload would wipe a build the player spent credits on.
+     * The cost of the middle case is that tuning does not survive switching
+     * legend, which is the honest trade for one shared slot: the alternative
+     * is a sheet that silently belongs to whoever you picked first. */
+    function seedLegendParts(id, prev) {
+      if (!Legends.parts) return;
+      const period = Legends.parts(id);
+      if (!period) return;
+      const cur = store.get("parts.legends", null);
+      const empty = !cur || !Object.keys(cur).length;
+      if (!empty && (prev == null || prev === id)) return;
+      store.set("parts.legends", period);
     }
 
     // Which legend the team is fielding: driverIdx when Legends is the selected

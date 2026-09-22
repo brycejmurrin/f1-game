@@ -1,0 +1,22 @@
+name: Mesa llvmpipe + Xvfb
+description: >-
+  MESA LLVMPIPE, NOT SWIFTSHADER, for the browser gates (2026-09-16). MEASURED
+  on the first dispatch (run 35062479811, all four smoke shards green): corner
+  approach 17.8 s against a 214 s SwiftShader median, grid start 21.4 s vs
+  138, jump() 9.7 s vs 171, DRIVING LINE 18.4 s vs 65 — every non-blank frame
+  assertion held. llvmpipe is Mesa's software rasteriser reached through
+  ANGLE's GL backend; it needs a display to bind through (Xvfb, started here
+  and exported via DISPLAY so the pinned `npm run test:…` line in the calling
+  job is unchanged) and the launch flags APEX_GL swaps in playwright.config.js.
+  Dead in the dev container (no /dev/dri — docs/notes/CI-RENDERING-PERFORMANCE.md
+  §llvmpipe), alive on GitHub's runners. Callers keep the `gl: swiftshader`
+  opt-out on their own `if:`; this action has no opinion about it.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq --no-install-recommends mesa-utils libgl1-mesa-dri libegl1 libgles2 xvfb
+        Xvfb :99 -screen 0 1280x800x24 >/dev/null 2>&1 &
+        echo "DISPLAY=:99" >> "$GITHUB_ENV"

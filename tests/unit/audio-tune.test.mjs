@@ -1163,3 +1163,74 @@ test("a preempted transmission leaves nothing rendering", async () => {
   assert.equal(live.size, before,
     "twelve preempts left " + (live.size - before) + " nodes wired into sfxBus — a Gain still connected keeps rendering for ever");
 });
+
+/* The engine keeps its own oscillators running (gravel, whine, sub, limiter),
+ * so the courtesy tone has to be measured as a DELTA around the sting rather
+ * than as the contents of the graph. */
+const oscSet = () => new Set([...live].filter((n) => n.kind === "osc"));
+function newTones(before) {
+  return [...live].filter((n) => n.kind === "osc" && !before.has(n)).map((n) => Math.round(n.frequency.value));
+}
+
+test("the engineer's cue is a four-note figure, not a beep", () => {
+  /* MEASURING IT BADLY SAID "ONE NOTE". The CC0 recreation of the F1 beep was
+   * first FFT'd in its single loudest window, which reported a near-pure
+   * 786 Hz — and one window of a melody can only ever see one note of it. A
+   * spectrogram across the whole file shows four: 1055, 775, 1184, 991 Hz,
+   * about 100 ms each. That is the shape this asserts. */
+  const { GameAudio } = boot();
+  GameAudio.init();
+  GameAudio.startEngine();
+  const before = oscSet();
+  assert.equal(GameAudio.radioSting("radio", 2), true);
+  const hz = newTones(before);
+  assert.equal(hz.length, 4, "a beep where a figure should be: " + hz.join(","));
+  const want = [1055, 775, 1184, 991];
+  for (let i = 0; i < want.length; i++)
+    assert.ok(Math.abs(hz[i] - want[i]) <= 22,
+      `note ${i + 1} is ${hz[i]} Hz, measured ${want[i]} Hz (FFT bin was 21.5 Hz)`);
+  // Down a fourth, up a fifth, down a minor third — the shape, independent of
+  // the exact tuning, so a deliberate transpose stays legal and a scramble does not.
+  const semis = hz.slice(1).map((v, i) => 12 * Math.log2(v / hz[i]));
+  assert.ok(semis[0] < -4 && semis[0] > -7, "first move is down a fourth-ish: " + semis[0].toFixed(1));
+  assert.ok(semis[1] > 6 && semis[1] < 9, "then up a fifth-ish: " + semis[1].toFixed(1));
+  assert.ok(semis[2] < -2 && semis[2] > -5, "then down a minor third-ish: " + semis[2].toFixed(1));
+  // Still inside the band the rest of the frame lives in, and out of the
+  // piercing register Quindar's 2525 Hz had put it in.
+  for (const f of hz) assert.ok(f > 300 && f < 1500, `${f} Hz is outside the register this figure sits in`);
+});
+
+test("the courtesy figure obeys the same gates as the rest of the frame", () => {
+  const { GameAudio } = boot();
+  GameAudio.init();
+  GameAudio.startEngine();
+  let before = oscSet();
+  assert.equal(GameAudio.radioSting("coach", 1.5), false);
+  assert.equal(newTones(before).length, 0, "the coach is not on a radio, so there is nothing to key");
+  GameAudio.setRadioFx(0);
+  before = oscSet();
+  GameAudio.radioSting("radio", 1.5);
+  assert.equal(newTones(before).length, 0, "off means off — the figure is part of the frame, not beside it");
+  GameAudio.setRadioFx(1);
+  // Race control is a different source and gets its own, shorter cue: the
+  // broadcast does not put the team-radio sting over race control either, and
+  // two channels that open identically are one channel.
+  before = oscSet();
+  GameAudio.radioSting("control", 1.5);
+  const ctl = newTones(before);
+  assert.ok(ctl.length >= 1 && ctl.length < 4, "race control is shorter than the engineer's: " + ctl.join(","));
+  for (const f of ctl) assert.ok(f > 300 && f < 1500, `${f} Hz is outside the register`);
+});
+
+test("the hiss bed outlasts the figure, however short the card", () => {
+  // A short card is shorter than four notes. Scheduling the squelch tail off
+  // the card's life alone closed the mic while the cue was still playing —
+  // the tail is the END of a transmission the figure has only just opened.
+  const src = fs.readFileSync(path.join(ROOT, "js/audio/engine.js"), "utf8");
+  const fn = src.match(/function radioSting\([\s\S]*?\n  \}/);
+  assert.ok(fn, "could not find radioSting in js/audio/engine.js");
+  assert.match(fn[0], /const hold = Math\.max\(0\.25, tuneS \+ [\d.]+,/,
+    "hold must be floored by the figure's own length, not just the card's");
+  // ...and the figure has to be measured, not assumed: radioTune returns it.
+  assert.match(fn[0], /const tuneS = [\d.]+ \+ radioTune\(/);
+});

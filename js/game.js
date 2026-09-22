@@ -211,7 +211,7 @@ function wantAgentSurface() {
 // Warm the vendored three island for the default or a stored THREE pick, so TLX is not
 // waiting on a cold module fetch after the roster injects it.
 function preloadThreeVendor() {
-  for (const href of ["vendor/three-0.185.1/three.webgpu.min.js", "vendor/three-0.185.1/three.tsl.min.js"]) {
+  for (const href of ["vendor/three-0.186.0/three.webgpu.min.js", "vendor/three-0.186.0/three.tsl.min.js"]) {
     const el = document.createElement("link");
     el.rel = "modulepreload";
     el.href = href;
@@ -368,8 +368,8 @@ if (!gfx) {
         skipped = sessionStorage.getItem("apex26.gfxClaimFail") === "1"; } } catch (_) { /* blocked storage: no skip, no reload */ }
     }
     if (skipped) {
-      try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) {}
-      try { location.reload(); } catch (_) {}
+      try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* storage blocked (private mode): the probe just stays armed */ }
+      try { location.reload(); } catch (_) { /* a reload that throws leaves the page as it is; nothing to recover */ }
       return;
     }
     showGraphicsUnavailable(); return;
@@ -1105,6 +1105,10 @@ let _ltBase = null;           // { ambientSky, ambientGround, exposure } saved a
 let _ltFlash = 0;             // 0..1 current flash intensity (decays each frame)
 let _ltNextT = 0;             // seconds until the next lightning strike
 let _thunderT = -1;          // seconds until queued thunder fires (<0 = none)
+// …and the delay it was DRAWN with, which is what says how far away the strike
+// was. _thunderT itself is ~0 at the tick thunder fires — that is what firing
+// means — so deriving loudness from it gave every strike the same near-crack.
+let _thunderDelay = 0;
 // Cloud cover target for the current session: set once in applyRaceSettings()
 // and held constant so the sky doesn't shift mid-race (only the shader animates).
 let _cloudBase = 0.4;
@@ -1249,14 +1253,16 @@ function showAnnounce(msg, dur, kind) {
   // interrupts. There is no second priority table anywhere in the voice.
   // announceT — the card's ACTUAL life, not a second copy of the expression
   // above — is the utterance's whole budget.
-  radioVoice.say(msg, announceT, kind);
+  const _annCh = RadioVoice.SPEAKERS[kind] || "radio";
+  const _annLead = state === "race" || state === "count" ? GameAudio.radioLeadS(_annCh) : 0;
+  radioVoice.say(msg, announceT, kind, _annLead);
   // ...and the RADIO around it — click, hiss, squelch (engine.js radioSting).
   // On the CARD, not the utterance: the spoken radio ships off, and here it
   // inherits this function's ANN_PRI queue instead of needing a second one.
   // Gated on the session for the same reason plan() is: showAnnounce also draws
   // menu cards, and a squelch under "SAVE CONFLICT" on the title screen claims
   // a radio that is not running.
-  if (state === "race" || state === "count") GameAudio.radioSting(RadioVoice.SPEAKERS[kind] || "radio", announceT);
+  if (state === "race" || state === "count") GameAudio.radioSting(_annCh, announceT);
 }
 let skids = null;   // SkidMarks.create(G), assigned once G exists (below)
 // Tyre marks (the 120-entry ring buffer, its batched vertex build and the
@@ -1398,7 +1404,9 @@ function lerpS(prev, cur, a) {
 // the last two physics poses only (renderAlpha).
 // Writes world X/Z into _rp; the caller still samples the road for HEIGHT.
 const _rp = { x: 0, z: 0, world: false };
-function renderPosOf(c, cS, renderX) {
+// (c) only: `cS` and `renderX` were declared and never read — a signature
+// that invites a caller to compute two values for nothing.
+function renderPosOf(c) {
   if (c.px != null && c.rPrevPx !== undefined) {
     _rp.x = c.rPrevPx + (c.px - c.rPrevPx) * renderAlpha;
     _rp.z = c.rPrevPz + (c.pz - c.rPrevPz) * renderAlpha;
@@ -2201,7 +2209,8 @@ function cameraFollowsBank(mode) {
 // car loop runs later, after shadow maps are already consumed by the lit shader,
 // so the player matrix must be resolved here instead of reusing last frame's
 // pooled transform (which trails by speed × frame time on slower devices).
-function currentCarGroundMat(c, out, dt) {
+// No `dt`: it was declared and never read.
+function currentCarGroundMat(c, out) {
   // Player (s,x) already resolved once this frame for the camera — reuse it.
   let cS, cX;
   if (_plOk && c.isPlayer) { cS = _plCS; cX = _plCX; }
@@ -2221,7 +2230,7 @@ function currentCarGroundMat(c, out, dt) {
     S.r[0] = r[0]; S.r[1] = r[1]; S.r[2] = r[2]; S.hw = smp2.hw;
     _bankPlayer.dy = bankC ? bankC.dy : 0; _bankPlayer.roll = bankC ? bankC.roll : 0; _plBodyOk = true;
   }
-  const rp = renderPosOf(c, cS, renderX);   // player: exact world position
+  const rp = renderPosOf(c);   // player: exact world position
   tmpP[0] = rp.world ? rp.x : smp2.p[0] + smp2.r[0] * renderX;
   tmpP[1] = smp2.p[1] + (bankC ? bankC.dy : 0);   // road SURFACE height: legit
   tmpP[2] = rp.world ? rp.z : smp2.p[2] + smp2.r[2] * renderX;
@@ -2586,7 +2595,13 @@ function dropRaceWake() {
 // is aimed at a quarter of the problem.
 let _raceProfile = [];
 function raceProfile() { return _raceProfile; }
-async function startRace() {
+// DEFECT-LEDGER's un-awaited-startRace family: six fire-and-forget callers
+// (closeQualiToGrid, q-drive, pm-restart, the season/quali continue button,
+// RaceSettings' RACE! route, DailyChallenge.open) never awaited this, so a double-click or a second
+// trigger while a start was still in flight could re-enter it mid-build. The
+// startRace() wrapper below latches concurrent calls onto the one in-flight
+// promise instead of starting a second race build on top of the first.
+async function startRaceBody() {
   _raceProfile = []; let _rt = performance.now();
   const rlap = (n) => { const t = performance.now(); _raceProfile.push({ n, ms: +(t - _rt).toFixed(2) }); _rt = t; };
   await ensureScenery(trackIdx);
@@ -2740,6 +2755,12 @@ async function startRace() {
   warmCarAssets();            // meshes + atlases HERE, not on the first countdown frame (see warmCarAssets)
   DebrisWorld.prime(); updateHud(true);   // prime: build the side-world HERE, not on the lights-out frame (see DebrisWorld.prime)
 }
+let _startRaceP = null;
+function startRace() {
+  if (_startRaceP) return _startRaceP;   // a concurrent caller shares the in-flight start
+  _startRaceP = startRaceBody().finally(() => { _startRaceP = null; });
+  return _startRaceP;
+}
 
 function showTouchControls(show) {
   const t = show && Input.touchControlsNeeded();
@@ -2844,7 +2865,10 @@ function netOrder(order) {
   // the guest is waiting on.
   if (!Array.isArray(verdict) || !verdict.length) return order;   // never arrived
   const byId = new Map(cars.map((c) => [c.driverId, c]));
-  const sorted = verdict.map((e) => byId.get(e.d)).filter(Boolean);
+  // …and each ELEMENT, not only the container. The Array.isArray note above is
+  // about the payload's shape; `[null]` and `[{}]` both pass it and then throw
+  // on e.d — into the same error overlay, eating the same classification.
+  const sorted = verdict.filter((e) => e && e.d != null).map((e) => byId.get(e.d)).filter(Boolean);
   // Only adopt an order accounting for the WHOLE grid; a partial one would
   // silently drop cars off the results screen. An order we cannot fully resolve
   // now fails this the same way a truncated one always did.
@@ -3036,6 +3060,11 @@ const G = {
   // that could draw from it documents that it deliberately must not.)
   get seed() { return simSeed(); }, set seed(v) { simSeed(v); },
   simSeed,
+  // The race counter the reliability and weather draws hash on. A BARE
+  // passthrough on purpose (unlike `seed`, whose setter rewinds the stream):
+  // in VS FRIEND the host publishes it pre-increment and both peers then
+  // increment in startRace, so the draws agree — js/net/lobby.js publishSettings.
+  get raceRound() { return raceIndex; }, set raceRound(v) { raceIndex = Math.max(0, v | 0); },
   get DRIFT() { return DRIFT; }, set DRIFT(v) { DRIFT = v; },
   get FRONT_GRIP() { return FRONT_GRIP; }, set FRONT_GRIP(v) { FRONT_GRIP = v; },
   // Cameras normalise speed against an injected vmax, so re-inject on every pace
@@ -3507,6 +3536,10 @@ function loadingInfo() {
   return {
     track: Tracks.LIST[trackIdx], laps: raceLaps,
     weather: raceWeather, tod: raceTimeOfDay,
+    // WHAT SESSION THIS IS, for the announcer (js/audio/announcer.js). It read
+    // the same paragraph before a qualifying hour, a duel with a legend and a
+    // Grand Prix, because none of this reached it.
+    session, practice: isPractice(), duel: duelMode, duelLegend, flow,
     // Only fly over a world that is actually built. A missed pre-build (a
     // circuit switched a moment ago, scenery still downloading) would put a
     // black hold where the cinematic should be, which reads as a hang.
@@ -3691,6 +3724,12 @@ function quitToMenu() {
   els.hud.hidden = true; els.lights.hidden = true; els.pausebtn.hidden = true;
   if (els.btnCam) els.btnCam.hidden = true;
   els.pausemenu.hidden = true; els.results.hidden = true; els.announce.hidden = true; announceT = 0; _annPri = 0; _annFloor = 0; _annQueue.length = 0;   // the announce drain has no state gate: a queued race message re-showed itself over the title screen
+  // ...and the RADIO around that card. Its bed was stopped only by RadioVoice's
+  // #announce observer, which is the VOICE's teardown and does not exist at all
+  // on a browser with no speechSynthesis — so quitting mid-transmission left the
+  // hiss running over the title screen. The sting is GameAudio's, so it ends here
+  // with everything else rather than borrowing another module's lifetime.
+  GameAudio.radioStingStop();
   $("advanced").hidden = true; $("lighting").hidden = true; $("audioset").hidden = true;
   els.overlay.hidden = false;
   $("race-settings").hidden = true;
@@ -4834,7 +4873,7 @@ function updateCar(c, dt, ranked) {
       const zk = Math.round(c.s + _atk.toTurnIn);
       if (zk !== c.zoneKey) {
         c.zoneKey = zk;
-        if (!c.errT && !alongO && DriverRatings.hash32(simSeed() + ":" + c.gridPos + ":" + c.lap + ":" + zk) / 4294967296 < AiDrive.mistakeChance(aiT, c.pressT / 6)) { c.errT = AiDrive.mistakeTotal(); c.errCount = (c.errCount || 0) + 1; }
+        if (!c.errT && !alongO && DriverRatings.hash32(simSeed() + ":" + c.gridPos + ":" + c.lap + ":" + zk) / 4294967296 < AiDrive.mistakeChance(aiT, c.pressT / 6, dd.err)) { c.errT = AiDrive.mistakeTotal(); c.errCount = (c.errCount || 0) + 1; }
       }
     } else c.zoneKey = -1;
     c.wheelLock = AiDrive.mistakePhase(c.errT) === 1 && braking ? 1 : 0;   // the render freezes the fronts
@@ -4865,7 +4904,17 @@ function updateCar(c, dt, ranked) {
         c.passOf = null;
         if (!po.human && !po.retired) {
           po.passFailOf = c;
-          po.passFailT = Math.max(po.passFailT || 0, 2 * AiDrive.passCooldown(AiDrive.traits(po)));
+          /* traits() HANDS BACK A SHARED SCRATCH (ai-drive.js _traits), and the
+             `aiT` bound at the top of this car's update still aliases it — so
+             reading the PASSED car's ratings here overwrote this car's for the
+             rest of the tick, and every AiDrive.passCooldown(aiT) below then
+             cooled the overtaker on the overtaken driver's craft. The module's
+             own comment states the contract ("callers must read fields before
+             the next traits() call"); this was the one site that broke it.
+             Take po's number, then put c's ratings back. */
+          const poCool = 2 * AiDrive.passCooldown(AiDrive.traits(po));
+          if (!c.human) AiDrive.traits(c);
+          po.passFailT = Math.max(po.passFailT || 0, poCool);
           if (po.passOf === c) { po.passOf = null; po.passCool = po.passFailT; }
         }
       }
@@ -5791,9 +5840,13 @@ function updateCar(c, dt, ranked) {
           const prevSector = sectorIdx;
           const prevBest = sectorBests[prevSector];
           sectorLast[prevSector] = elapsed;
-          // Delta is measured against the PREVIOUS best, before this split updates it,
-          // so a new personal best shows the actual improvement (not 0.000).
-          const delta = elapsed - (prevBest < Infinity ? prevBest : elapsed);
+          // A `delta` against the previous best was computed here and never
+          // read by anything — the split it was meant to show was never wired
+          // up. Removed rather than left looking like live plumbing; the
+          // ordering note it carried still matters, so it stays: this compares
+          // against the PREVIOUS best, before the line below updates it, which
+          // is what would let a new personal best show a real improvement
+          // rather than 0.000 if that readout is ever built.
           if (elapsed < prevBest) sectorBests[prevSector] = elapsed;
           if (elapsed >= 2 && c.isPlayer) hud.flashSector(prevSector);
         }
@@ -6441,6 +6494,15 @@ function resetSetupCam() {
   setupPreviewEl = SP_EL_DEF;
   setupPreviewDist = SP_DIST_DEF;
   setupPreviewPan[0] = setupPreviewPan[1] = setupPreviewPan[2] = 0;
+  // …and the FRAMING, which az/el/dist do not carry. A WING or BRAKES preset
+  // aims the camera by moving the orbit point and the look-at (setSetupAim /
+  // garageFrame) and tightens minDist; resetting only the three angles left the
+  // turntable spinning about the wing with a close-up minimum, which is exactly
+  // the "reopened on somebody's last drag" state this reset exists to prevent.
+  setupPreviewOrbit = SP_ORBIT_DEF.slice();
+  setupPreviewTgt = SP_TGT_DEF.slice();
+  setupPreviewMinDist = 0;
+  setupPreviewFree = false;
   setSetupSpin(true);
 }
 // Rebuild-on-change only (not per-frame): keyed by team + resolved parts tiers,
@@ -6836,6 +6898,15 @@ const _hazeOpts = { u: 0, v: 0, str: 0 };
 let _softEl = null;                    // #game-soft, the soft-present overlay canvas
 // The lens the last frame was built with — see where it is filled, below.
 const _lens = { near: 0, far: 0, fovY: 0, fog: null, cull: 0, cine: false };
+// Extracted: tick()'s fatal catch also arms it when render() throws before
+// reaching its own present() call below.
+function armBackendProbe() {
+  if (!_backendProved && _backendBound && !_probeArmed) {
+    try { const p = backendPreference();
+      if (p === "three" || p === "webgpu") { localStorage.setItem("apex26.gfxBackendProbe", p); _probeArmed = true; } }
+    catch (_) { /* no probe: a jetsam in the arming window will not auto-revert */ }
+  }
+}
 function render(dt) {
   if (headlessMode || (gfx.warming && gfx.warming())) return;
   // THE CANVAS SHOWS ONLY WHEN SOMETHING IS DRAWN ON IT (2026-09): a race, the
@@ -6927,7 +6998,7 @@ function render(dt) {
     // reads as a held-then-jump stutter whose size scales with speed × dt —
     // "vibrates, worse the faster I go". renderPosOf/headInterp are the same
     // interpolation the car body and playerAnchor already use.
-    const rpCam = renderPosOf(player, pS, px);
+    const rpCam = renderPosOf(player);
     camAncNX = rpCam.world ? rpCam.x : null; camAncNZ = rpCam.world ? rpCam.z : 0;   // anchor for the car-frame camera damping below
     _vantExtra.bankDy = bankDy; _vantExtra.deploy = player.deploying;
     _vantExtra.slipLat = player.vLat || 0; _vantExtra.att = player;
@@ -7242,7 +7313,7 @@ function render(dt) {
   // pooled matrices from the preceding frame; only the player's high-speed,
   // chase-camera shadow makes that latency visible.
   const _hasLivePlayerShadow = !!(player && state !== "menu");
-  if (_hasLivePlayerShadow) currentCarGroundMat(player, shadowPass.livePlayerMat, dt);
+  if (_hasLivePlayerShadow) currentCarGroundMat(player, shadowPass.livePlayerMat);
 
   // Sun / car shadow maps: js/render/shared/shadow-pass.js (snap-cached static map,
   // per-frame car map). The live player matrix was resolved above.
@@ -7321,12 +7392,18 @@ function render(dt) {
       _ltNextT = (4 + Math.random() * 8) / LT.lightning;
       // Queue thunder to lag the flash (sound travels slower than light): a
       // near strike cracks ~0.3 s later, a distant one rumbles up to ~2 s later.
-      _thunderT = 0.3 + Math.random() * 1.7;
+      _thunderT = _thunderDelay = 0.3 + Math.random() * 1.7;
     }
     if (_thunderT >= 0) {
       _thunderT -= dt;
       if (_thunderT < 0 && typeof GameAudio !== "undefined" && GameAudio.thunder) {
-        GameAudio.thunder(clamp(1.0 - (_thunderT + dt) / 2.0, 0.15, 1.0));
+        // The DRAWN delay, not the countdown's remainder. `_thunderT + dt` is
+        // whatever was left before this frame's decrement — between 0 and one
+        // frame — so the old form was always ~1.0 - 0.008 and clamped to full
+        // volume: a 2 s distant rumble cracked exactly as loud as a 0.3 s
+        // overhead strike, and the lag the comment above describes was the only
+        // thing that ever varied.
+        GameAudio.thunder(clamp(1.0 - _thunderDelay / 2.0, 0.15, 1.0));
       }
     }
     if (_ltFlash > 0.001) {
@@ -7683,7 +7760,7 @@ function render(dt) {
     else { const pa = playerAnchor(c); cS = pa.cS; cX = pa.cX; }
     c.xVis = cX;   // dump/net field only — pose comes from interpolated px/pz
     const renderX = cX;
-    const rp = renderPosOf(c, cS, renderX);
+    const rp = renderPosOf(c);
     let bankC;
     if (c.isPlayer && _plBodyOk) {
       // Shadow already sampled/banked the player — restore (env probe may clobber smp2).
@@ -7815,7 +7892,7 @@ function render(dt) {
     // smoke/sparks/kickup/spray. Camera-independent: none of these is a draw.
     if (c.isPlayer && state === "race") {
       const skid = c.skidIntensity || 0;
-      skids.stamp(tmpMat, (skid > 0.25 || c.offroad) && c.speed > 10);
+      skids.stamp(tmpMat, (skid > 0.25 || c.offroad) && c.speed > 10, dt);
     }
     // EXHAUST HEAT HAZE: remember the player tailpipe's world position + plume
     // strength for this frame (projected to screen UV just before present()).
@@ -8283,13 +8360,7 @@ function render(dt) {
       }
     }
   }
-  // Re-arm around the first world present so a jetsam mid-frame still reverts.
-  // Title already disarmed after bind; this window is only the first flyby/race.
-  if (!_backendProved && _backendBound && !_probeArmed) {
-    try { const p = backendPreference();
-      if (p === "three" || p === "webgpu") { localStorage.setItem("apex26.gfxBackendProbe", p); _probeArmed = true; } }
-    catch (_) { /* no probe: a jetsam in the arming window will not auto-revert */ }
-  }
+  armBackendProbe();
   gfx.present(po);
   // Boot canary disarmed once the backend has presented a RUN of world frames,
   // not one. Until then the probe stays armed in storage and a load that dies
@@ -8325,7 +8396,7 @@ let renderAlpha = 1;             // leftover-step fraction (0..1) for render int
 // sentinel live in js/perf/governor.js (PerfGov, initialised at boot with gfx).
 // render() gates features on PerfGov.tier(); tickBody feeds PerfGov.tick(ms).
 PerfGov.init(gfx);
-const PHYS_DT = 1 / 60;          // fixed physics step
+const PHYS_DT = PhysicsConsts.FIXED_DT;   // fixed physics step — js/physics/consts.js
 function tick(now) {
   try { tickBody(now); LoopHealth.clean(); requestAnimationFrame(tick); }
   catch (e) {
@@ -8342,6 +8413,9 @@ function tick(now) {
     if (!tick._reported && typeof window.__apexReportError === "function") {
       tick._reported = true; window.__apexReportError("tick", e);
     }
+    // Arm here too: a fatal render() may throw before its own present() call
+    // ever reaches armBackendProbe().
+    if (_backendBound && !_backendProved) armBackendProbe();
     throw e;
   }
 }
@@ -8434,7 +8508,7 @@ function tickBody(now) {
   }
   renderAlpha = clamp(physAcc / PHYS_DT, 0, 1);   // 0..1 leftover fraction for render interp
   render(Math.min(dt, 1 / 20));               // camera/visual damping at (clamped) frame dt
-  if (state === "race" || state === "count") updateHud(false);
+  if (state === "race" || state === "count") updateHud(false, _dtMs);
 }
 
 // ---------- car setup panel ----------
@@ -8871,7 +8945,7 @@ function holdSetupCtl(id, rates, step) {
     // Capture so a finger sliding off the chip still releases here. NOT
     // pointerleave for the release: setPointerCapture fires a boundary event as
     // it retargets, which would stop the motion on its very first frame.
-    try { el.setPointerCapture(e.pointerId); } catch (_) {}
+    try { el.setPointerCapture(e.pointerId); } catch (_) { /* capture can refuse (pointer already gone); the drag still runs on move events */ }
     // One discrete step up front, THEN the held rate. Without the step a quick
     // tap moved by whatever fraction of a frame it happened to span — i.e.
     // visibly nothing — so the buttons only worked if you knew to hold them.
@@ -8961,10 +9035,10 @@ function openGarage(from) {
   // dragged to — nose-down, zoomed into a wheel — reads as broken rather than
   // as remembered. The turntable is the front door; the controls are there for
   // anyone who wants off it.
-  setupPreviewAz = 0.6;
-  setupPreviewEl = SP_EL_DEF;
-  setupPreviewDist = SP_DIST_DEF;
-  setSetupSpin(true);
+  // ONE reset, shared with #cs-view-reset. This used to inline three of the five
+  // fields, so the two doors to "fresh camera" disagreed and both missed the
+  // framing.
+  resetSetupCam();
   setSetupCamPanel(false);   // same reasoning: the front door is the turntable
   // vt at the CALL site: SetupUI.create runs before Menus.create at boot, so
   // the module cannot hold the helper itself. The build runs inside the
