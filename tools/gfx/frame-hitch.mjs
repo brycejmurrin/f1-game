@@ -119,31 +119,57 @@ export function analyse(t0, dur, { minSpikes = 4 } = {}) {
 // register has a standing rule about that gap: 2o wrote down a hypothesis that
 // 2p killed with one grep. The first attempt here guessed getDynamicCacheKey
 // from a vendored-source read, backported upstream's fix, and measured the
-// result: 254.9 -> 249.7 KB/frame. A correct fix worth 2% of the problem, and a
-// whole round spent finding that out.
+// result: 254.9 -> 249.7 KB/frame. A correct fix worth 2% of the problem.
 //
-// V8's sampling heap profiler answers it directly. It samples allocations by
-// stack at a byte interval, so its tree carries a selfSize that IS bytes
-// allocated at that frame. Flatten it, fold the frames that only differ by
-// caller into one site, and the top of the list is the answer or there is no
-// answer on this box.
-export function analyseAlloc(profile, elapsedS, frames) {
+// V8's sampling heap profiler can answer it, but NOT the way it reads. It
+// samples one allocation per `rate` bytes, so an object of size s is sampled
+// with probability 1 - exp(-s/rate): small objects are sampled far more rarely
+// PER BYTE than large ones, and a raw byte total is therefore biased hard
+// against the sites that mint many small objects — which is exactly the shape
+// a per-draw cache key or an options literal has.
+//
+// Measured, not assumed. --selftest-kb 500 injected a known 500 KB/frame of
+// 56-byte objects against a ~250 KB/frame page baseline, so the injector had
+// to come out around two thirds of the profile. Reading the tree's selfSize
+// put it at 1.2%, below fourteen three.js internals. Dividing each sample by
+// its own inclusion probability puts it where it belongs, and that correction
+// is what this function now does — per SAMPLE, because `samples` carries each
+// sampled allocation's real size and the tree does not.
+export function analyseAlloc(profile, elapsedS, frames, rate) {
   if (!profile || !profile.head) return { note: "no sampling profile — CDP HeapProfiler unavailable" };
-  const bySite = new Map();
-  let total = 0;
+  // The node tree, flattened to id -> site name. The URL carries a
+  // cache-buster and an origin; neither identifies a site and both make one
+  // site look like several across runs.
+  const nameById = new Map();
+  let selfTotal = 0;
   (function walk(node) {
     const f = node.callFrame || {};
-    const self = node.selfSize || 0;
-    total += self;
-    if (self > 0) {
-      // The URL carries a cache-buster and an origin; neither identifies a site
-      // and both make one site look like several across runs.
-      const url = String(f.url || "").replace(/\?v=[a-z0-9]+/g, "").replace(/^https?:\/\/[^/]+\//, "");
-      const key = `${f.functionName || "(anonymous)"} @ ${url}:${f.lineNumber != null ? f.lineNumber + 1 : "?"}`;
-      bySite.set(key, (bySite.get(key) || 0) + self);
-    }
+    const url = String(f.url || "").replace(/\?v=[a-z0-9]+/g, "").replace(/^https?:\/\/[^/]+\//, "");
+    nameById.set(node.id, `${f.functionName || "(anonymous)"} @ ${url}:${f.lineNumber != null ? f.lineNumber + 1 : "?"}`);
+    selfTotal += node.selfSize || 0;
     for (const c of node.children || []) walk(c);
   })(profile.head);
+
+  const samples = profile.samples || [];
+  if (!samples.length) {
+    return { note: "sampling profile carries no samples — only the biased tree, which is not usable for attribution",
+      biasedSelfMB: +(selfTotal / 1048576).toFixed(2) };
+  }
+  const R = rate > 0 ? rate : 16384;
+  const bySite = new Map();
+  let total = 0;
+  for (const s of samples) {
+    const size = s.size || 0;
+    if (size <= 0) continue;
+    // Horvitz-Thompson: each sampled allocation stands for 1/p of itself,
+    // where p is its own chance of having been sampled. For a 56-byte object
+    // at a 16 KB rate that is a factor of ~293; for a 64 KB object it is ~1.
+    const p = 1 - Math.exp(-size / R);
+    const bytes = p > 0 ? size / p : size;
+    total += bytes;
+    const k = nameById.get(s.nodeId) || `(unknown node ${s.nodeId})`;
+    bySite.set(k, (bySite.get(k) || 0) + bytes);
+  }
   if (!total) return { note: "sampling profile is empty — nothing was allocated, or sampling never started" };
   const sites = [...bySite.entries()].sort((a, b) => b[1] - a[1]).slice(0, 18)
     .map(([site, bytes]) => ({
@@ -153,7 +179,12 @@ export function analyseAlloc(profile, elapsedS, frames) {
       perFrameKB: frames ? +((bytes / 1024) / frames).toFixed(2) : null,
     }));
   return {
+    samples: samples.length,
+    rate: R,
     totalMB: +(total / 1048576).toFixed(2),
+    // Kept so a future reader can see the size of the bias rather than take
+    // this comment's word for it.
+    biasedSelfMB: +(selfTotal / 1048576).toFixed(2),
     mbPerSecond: elapsedS > 0 ? +((total / 1048576) / elapsedS).toFixed(2) : null,
     perFrameKB: frames ? +((total / 1024) / frames).toFixed(1) : null,
     sites,
@@ -651,7 +682,7 @@ async function main() {
     out.passes = analysePasses(d.passes || [], d.t0 || []);
     out.heap = analyseHeap(d.heap || [], d.t0 || [], d.dur || [], out.spikeThresholdMs);
     out.alloc = allocProfile
-      ? analyseAlloc(allocProfile, out.heap && out.heap.elapsedS, out.frames)
+      ? analyseAlloc(allocProfile, out.heap && out.heap.elapsedS, out.frames, 16384)
       : { note: out.allocProfileError ? "sampling failed: " + out.allocProfileError : "no CDP session" };
     out.stacks = d.stacks;
     out.mem0 = d.mem0; out.mem1 = d.mem1;

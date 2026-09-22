@@ -103,36 +103,64 @@ test("analyseHeap reports an unsampled series as unsampled, never as flat", () =
   assert.equal(h.allocMBps, undefined, "an unsampled series reports no rate at all");
 });
 
-// A CDP sampling-profile tree, the shape HeapProfiler.getSamplingProfile
-// returns: nodes carry a callFrame and a selfSize, and the bytes belong to the
-// frame that allocated them, not to its parents.
-function node(fn, url, line, selfSize, children) {
-  return { callFrame: { functionName: fn, url, lineNumber: line }, selfSize, children: children || [] };
+// A CDP sampling profile: a node tree plus a `samples` array, where each
+// sample is one sampled allocation carrying its REAL size and the id of the
+// node that made it.
+function node(id, fn, url, line, selfSize, children) {
+  return { id, callFrame: { functionName: fn, url, lineNumber: line }, selfSize, children: children || [] };
+}
+function samplesOf(nodeId, size, count) {
+  const out = [];
+  for (let i = 0; i < count; i++) out.push({ size, nodeId, ordinal: i });
+  return out;
 }
 
-test("analyseAlloc names the top allocator and folds one site reached two ways", () => {
+test("analyseAlloc corrects the sampler's bias against many small objects", () => {
+  // THE CALIBRATION, as a fixture. A run injected a known 500 KB/frame of
+  // 56-byte objects against a ~250 KB/frame page baseline, so the injector had
+  // to come out around two thirds of the profile. Reading the tree's selfSize
+  // put it at 1.2%, below fourteen three.js internals, because V8 samples one
+  // allocation per `rate` bytes: a 56-byte object is sampled with probability
+  // 1-exp(-56/16384) ~ 1/293, a 64 KB object with probability ~0.98. Raw bytes
+  // therefore under-count small-object sites by nearly three hundred times.
+  //
+  // Here: 2,000 samples of 56 bytes (112 KB raw) against 40 samples of 64 KB
+  // (2,560 KB raw). By raw bytes the big-object site wins 23:1. Corrected, the
+  // small-object site stands for 2000*56*293 ~ 32.8 MB and the other for
+  // 40*64K*1.02 ~ 2.6 MB, so it wins about 12:1 — which is the truth.
+  const head = node(1, "(root)", "", 0, 0, [
+    node(2, "mintsManySmall", "http://x/js/render/three/tlx.js?v=abc", 1224, 112 * 1024, []),
+    node(3, "mintsFewLarge", "http://x/js/render/three/tlx.js?v=abc", 2000, 2560 * 1024, []),
+  ]);
+  const profile = { head, samples: samplesOf(2, 56, 2000).concat(samplesOf(3, 65536, 40)) };
+  const a = analyseAlloc(profile, 100, 6000, 16384);
+  assert.match(a.verdict, /TOP ALLOCATOR: mintsManySmall/,
+    `raw selfSize would have named mintsFewLarge; got ${a.verdict}`);
+  assert.ok(a.sites[0].share > 0.85, `small-object site should dominate once corrected, got ${a.sites[0].share}`);
+  // And the bias it corrected stays visible, so a reader can check the claim.
+  assert.ok(a.biasedSelfMB < a.totalMB / 10, "the uncorrected total must be reported and must be far smaller");
+});
+
+test("analyseAlloc folds one site reached two ways into one row", () => {
   // `materialFor` is reached from draw() and from drawChunked(); the profile
   // therefore holds two nodes for it. They are ONE site — a report that split
   // them would rank a single 60% allocator below a 25% one.
-  const profile = { head: node("(root)", "", 0, 0, [
-    node("present", "http://x/js/render/three/tlx.js?v=abc", 3400, 1024, [
-      node("draw", "http://x/js/render/three/tlx.js?v=abc", 3107, 2048, [
-        node("materialFor", "http://x/js/render/three/tlx.js?v=abc", 1224, 300 * 1024, []),
-      ]),
-      node("drawChunked", "http://x/js/render/three/tlx.js?v=abc", 3110, 2048, [
-        node("materialFor", "http://x/js/render/three/tlx.js?v=abc", 1224, 300 * 1024, []),
-      ]),
-      node("acquireMesh", "http://x/js/render/three/tlx.js?v=abc", 1859, 40 * 1024, []),
+  const head = node(1, "(root)", "", 0, 0, [
+    node(2, "draw", "http://x/js/render/three/tlx.js?v=abc", 3107, 0, [
+      node(3, "materialFor", "http://x/js/render/three/tlx.js?v=abc", 1224, 0, []),
     ]),
-  ]) };
-  const a = analyseAlloc(profile, 100, 6000);
-  assert.match(a.verdict, /TOP ALLOCATOR: materialFor/);
-  // Folded: 600 KB across two parents, not 300 KB ranked twice.
+    node(4, "drawChunked", "http://x/js/render/three/tlx.js?v=abc", 3110, 0, [
+      node(5, "materialFor", "http://x/js/render/three/tlx.js?v=abc", 1224, 0, []),
+    ]),
+    node(6, "acquireMesh", "http://x/js/render/three/tlx.js?v=abc", 1859, 0, []),
+  ]);
+  const profile = { head, samples: samplesOf(3, 64, 500).concat(samplesOf(5, 64, 500), samplesOf(6, 64, 120)) };
+  const a = analyseAlloc(profile, 100, 6000, 16384);
   const top = a.sites[0];
   assert.match(top.site, /^materialFor @ js\/render\/three\/tlx\.js:1225$/,
     `site should be folded and cache-buster-free, got ${top.site}`);
-  assert.ok(top.share > 0.85, `materialFor should dominate, got ${top.share}`);
-  assert.equal(a.sites.filter((s) => /materialFor/.test(s.site)).length, 1, "one site, not two");
+  assert.equal(a.sites.filter((x) => /materialFor/.test(x.site)).length, 1, "one site, not two");
+  assert.ok(top.share > 0.85, `folded materialFor should dominate, got ${top.share}`);
 });
 
 test("analyseAlloc refuses to name a winner when the profile is flat", () => {
@@ -141,12 +169,20 @@ test("analyseAlloc refuses to name a winner when the profile is flat", () => {
   // allocator" when it holds an eighth of the bytes is how a round gets spent
   // fixing 2% of a problem.
   const kids = [];
-  for (let i = 0; i < 8; i++) kids.push(node(`f${i}`, `http://x/js/a${i}.js`, 10, 64 * 1024, []));
-  const a = analyseAlloc({ head: node("(root)", "", 0, 0, kids) }, 100, 6000);
+  let samples = [];
+  for (let i = 0; i < 8; i++) {
+    kids.push(node(10 + i, `f${i}`, `http://x/js/a${i}.js`, 10, 0, []));
+    samples = samples.concat(samplesOf(10 + i, 64, 100));
+  }
+  const a = analyseAlloc({ head: node(1, "(root)", "", 0, 0, kids), samples }, 100, 6000, 16384);
   assert.match(a.verdict, /no dominant site/);
 });
 
-test("analyseAlloc reports an absent profile as absent, never as zero", () => {
-  assert.match(analyseAlloc(null, 100, 6000).note, /no sampling profile/);
-  assert.match(analyseAlloc({ head: node("(root)", "", 0, 0, []) }, 100, 6000).note, /empty/);
+test("analyseAlloc reports an absent or sample-less profile as unusable, never as zero", () => {
+  assert.match(analyseAlloc(null, 100, 6000, 16384).note, /no sampling profile/);
+  // A tree with no samples is the biased view only. It must say so rather than
+  // quietly fall back to it — falling back is what produced the 1.2% reading.
+  const t = analyseAlloc({ head: node(1, "(root)", "", 0, 0, [node(2, "f", "u", 1, 999, [])]) }, 100, 6000, 16384);
+  assert.match(t.note, /no samples/);
+  assert.equal(t.totalMB, undefined, "an unusable profile reports no total at all");
 });
