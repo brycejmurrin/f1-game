@@ -2285,16 +2285,34 @@ road-follow 68.0 s, against the 343.5 s the header claimed). Now 170 s: clears
 the slowest case by 21 % and is under the gate's cap, so `select-specs` selects
 the file again (its own OVERSIZE shard, 13 tests).
 
-**STILL OPEN, named rather than guessed at.** `road-follow, when switched on, is
-active and changes the cornering line` fails on THIS container
-(`0.15284059935810101` against a `> 0.25` floor) and passes on CI twice today
-(32.0 s and 22.8 s). Same circuit both times (bahrain), so it is not a track
-difference. Its failing state is on the road (`x 1.08`, `rescueT 0`) but
-decelerated 13 -> 3.15 m/s over the 70 ticks it measures, which is the same class
-of fragility as the defect above — the regime outruns what the assertion is
-trying to read — just not yet over the line on CI. Not fixed here: widening 0.25
-would be exactly the tolerance change rule 9 forbids, and the real fix wants a
-measurement of the assist's effect against coast-down, which is its own pass.
+**QUARANTINED, by name and with its numbers: `road-follow, when switched on, is
+active and changes the cornering line`.** `0.15284059935810101` against a
+`> 0.25` floor, three times on this container; PASSED on CI twice earlier the
+same day (32.0 s and 22.8 s in the rota's `input` group) and then FAILED on CI in
+the selected gate on the very next run. Same circuit every time (bahrain), on a
+deterministic fixed-timestep sim — so it is marginal and FLIPS, which rule 9
+calls a red, not an environment difference.
+
+Its failing state is ON the road (`x 1.08`, `rescueT 0`) but decelerated
+13 -> 3.15 m/s over the 70 ticks it measures: the assist's effect on the line is
+being read from a car that has nearly stopped. Same class as the defect above —
+the regime outruns the assertion — landing near the floor instead of off the
+circuit.
+
+Not fixed, and the reason is worth recording rather than hiding. The assertion is
+universally quantified over five sampled corners, so it is only as strong as the
+weakest, and three probe runs to find WHICH corner and whether throttle or a
+shorter hold restores the margin each blew this file's own budget (190-201 s
+instrumented, against 170 s). Choosing a regime without that measurement is
+guessing; widening 0.25 is the move rule 9 forbids; and relaxing "every checked
+corner" to "at least one" weakens the claim rather than repairing it. `test.fixme`
+keeps it visible in the report as outstanding work instead of silently green.
+
+**The experiment that settles it**, for whoever picks this up: per sampled corner
+report `|on.after.x - off.after.x|`, `k` and both end speeds at (13 m/s, 70 ticks)
+against (13 m/s, 70 ticks, throttle on). If holding speed restores the margin the
+fix is the regime, not the floor. Give the probe its own `test.setTimeout` — the
+instrumented loop is about 3x the work.
 
 `symmetry: opposite inputs turn the heading by opposite, equal amounts` is
 **green**, twice on CI today (1.8 s and 1.3 s). It regressed inside a one-day
