@@ -2924,10 +2924,10 @@ actually lands (authored 0.965 + shift):
 
 | circuit | value -> shift | pit block lands | probe there | shipped -> shift 0 |
 |---|---|---|---|---|
-| catalunya | 0.03 -> 0.138 | 0.103, 0.055 short of T1 | gantry, 21 structures, building, billboard | pitEmit 7 -> pitSup 7; pit-lane trees 12 -> 0 |
+| catalunya — **FIXED**, see "catalunya — FIXED" below | 0.03 -> 0.138 | 0.103, 0.055 short of T1 | gantry, 21 structures, building, billboard | pitEmit 7 -> pitSup 7; pit-lane trees 12 -> 0 |
 | istanbul | 0.98 -> 0.925 | 0.890, **on T12** (0.8884) | gantry, 23 structures, grandstand, 3 motorhomes | **FIXED**: value removed; see `### istanbul — FIXED` at the end of this file |
-| mugello | 0.05 -> 0.133 | 0.098, 0.047 short of T1 | gantry, 22 structures, 4 motorhomes | pitEmit 5 -> 1; pit-lane trees 275 -> 122 |
-| paul_ricard | 0.03 -> **0.923** | 0.888, **on T13** (0.8884) | gantry, 25 structures, 2 motorhomes | pitEmit 5 both ways: the pit bays miss the lane in EITHER frame, so this is a frame AND a side/placement question |
+| mugello | 0.05 -> 0.133 | 0.098, 0.047 short of T1 | gantry, 22 structures, 4 motorhomes | **FIXED** (value removed; San Donato group also moved +0.08 to T1): see "mugello — FIXED" below |
+| paul_ricard | 0.03 -> **0.923** | 0.888, **on T13** (0.8884) | gantry, 25 structures, 2 motorhomes | **FIXED**: frame AND side. Shift removed, and the pit straight mirrored (the paddock was authored on the LEFT, the complex and the real pits are on the RIGHT): pitEmit 5 -> pitSup 5. See § paul_ricard — FIXED at the end |
 | sepang | 0.95 -> 0.882 | 0.847, 0.038 short of T14 | gantry, 20 structures, 14 palms | **FIXED**: pitEmit 6 -> pitSup 7; pit-lane trees 38 -> 18 ("sepang — FIXED", end of file) |
 
 Each needs its own PR: remove the value, then work the knock-ons as Portimão
@@ -3023,6 +3023,254 @@ float 0 -> 0** (no row). The remaining three severe spots are the engine box
 at frac 0.000 above and two spectator-hill tread pairs (1.49/1.47 m, nature.js
 terrace rows on the inside of T11 at 0.653); the shipped build had a spot of
 the same class at 0.523. No test used sepang's broken frame as a fixture.
+
+### paul_ricard — FIXED (`sceneryStartFrac: 0.03` removed, shift 0.923 -> 0; pit straight mirrored)
+
+**Why 0.03 became a 0.923 shift.** `buildCenterline` sets the shift to the arc
+fraction at control point `round(sceneryStartFrac * N)`, renumbered into the
+racing order. Paul Ricard is `reverse: true`, so that point is `N - round(0.03 N)`
+= source vertex 7. That is the Tour hairpin, 450 m BEFORE the line in the
+racing direction. On top of that, the OSM trace's vertex spacing is uneven
+(300 m legs on the straight, 3-8 m through the hairpin), so 3 % of the
+vertices is 7.7 % of the arc. The shift is the old start line's arc position,
+computed correctly. The scenery was simply never authored against that start.
+
+**Frame: the scenery is authored against `startFrac: 0`.** At shift 0:
+- the pit block (0.950-0.010) sits inside `pitLaneSpan` (0.955-0.019);
+- the Verrerie bank (0.070) is on T1 (0.087);
+- the `dressingExclusions` "pits" foliage cut (0.92-0.10) covers the pit
+  straight (0.925-0.087);
+- the 0.88 elevation lands on Le Village (0.887-0.925).
+
+Under the shift, every one of these was 0.077 early: the bank sat on the
+straight and the pit block on T13.
+
+**Why pitEmit stayed 5 at shift 0: the pit straight was mirrored.** Every
+emitter authored `side: 1` lands on the racing LEFT (a reversed def has its
+side negated by `transformSceneryApi`). The file put the whole paddock on the
+left: bays, race control, slabs, motorhomes, apron, TV compound. The main
+stand, debris fence and boards were on the right. The engine's pit complex
+takes `pit.side` 1 by default, which is the RIGHT. That is the infield of this
+clockwise lap, and it is where the real pits are: the pit exit rejoins on the
+right of the main straight (PlanetF1 / motorsport.com on the 2018-19 pit-exit
+changes). So at shift 0 the hand-built bays emitted on the left, facing the
+complex across the track, and the main stand (right, 12 m) stood inside the
+complex's footprint. `docs/tracks/paul_ricard.md` §4 carries the same mirror
+("pit slab L, main grandstand R") and needs the same flip. It is not in this
+PR's file scope.
+
+**Fix** (`js/circuits/paul_ricard.js`, `js/circuits/scenery/paul_ricard.js`):
+- Drop `sceneryStartFrac`.
+- Mirror the pit straight. Bays, race control, the 4 slabs, motorhomes, the
+  paddock apron and its lane lines, and the broadcast compound go to the right
+  (`side: -1`). The main stand, debris fence and 3 billboards go to the left
+  (`side: 1`). The guardrail stays left, in front of the stand. The pit-wall
+  props and sponsor hoarding were already right.
+- `ownPitStraight: true`: the circuit has its own 150 m main stand, and the
+  engine's generic 7-box stand stood inside it (on the left, 14 m). Prop cells
+  14357 -> 13919; clip minor spots 12 -> 11.
+
+| probe (`scene --radius 130`) | shipped (shift 0.923) | fixed |
+|---|---|---|
+| mid pit lane 0.987 | 14 structures, 3 props, 2 bushes, 1 signboard; no gantry, stand, building or motorhome | gantry x2, grandstand L, 2 buildings R, 3 motorhomes R, billboard L, 19 structures (complex R, stand L) |
+| 0.888, Le Village / T13 (where the block landed) | gantry, 25 structures, 2 motorhomes, building, billboard | 13 structures, 1 marshal post, 14 pines/trees + 4 bushes: a corner |
+| T1 0.087 (Verrerie) | 16 structures, 16 pines/trees | 11 structures, 3 pines/trees (the authored "pits" foliage cut, 0.92-0.10, now covers the Verrerie run-off as written) |
+
+Node A/B: built within 130 m of the mid pit lane 14 -> 26, pit-block
+suppressions 0 -> 5 ("superseded by the pit complex"), pitEmit 5 -> 0.
+
+**Knock-ons fixed:**
+- **Slabs and one motorhome on the Tour hairpin.** On the right, 0.918-0.931
+  and 0.90-0.94 reach the far leg of the hairpin (guard drops: building 2,
+  motorhome 1). The slabs now start at 0.944, and motorhomes stand from 0.94
+  on. Guard drops are back to the shipped `bush`/`runoffApron` set.
+- **Cabanon on the road.** At shift 0, `anchor(K(0.235), -1, 90)` lands 1.4 m
+  off the 0.26 leg of the hairpin complex (footprint rejected; shipped rejected
+  its drywall instead). Gap 90 -> 120 is the smallest in a 10 m sweep that
+  seats both. It is 23 m clear of that road.
+- **A floating spectator** (float-audit, 4.81 m, frac 0.937). The bleacher at
+  0.890-0.930 R had a tier dropped by the road guard, but the crowd figure on
+  that tier was still placed. The figure is now skipped when `addBox` returns
+  false for its tier. Trimming the stand's end (0.920-0.928) did not clear it.
+- `pr-runoff-village-blue` ("emitted footprint rejected" in the shipped
+  build) emits.
+
+**Baselines.** Coplanar 5 -> 4 (lowered). Clip severe stays 0: paul_ricard
+has no row, so the cap is 0. Float is clean (no row). Clip MINOR spots went
+6 -> 11. As a distribution, the 12 `sceneryStartFrac` values below read 4-15
+minor spots; 0 severe is the best draw, and 6 of the other 11 values have at
+least 1 severe.
+
+| value | none | 0.1 | 0.2 | 0.3 | 0.4 | 0.5 | 0.6 | 0.7 | 0.8 | 0.9 | 0.97 | 0.03 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| shift | 0 | .883 | .811 | .750 | .670 | .526 | .307 | .260 | .210 | .116 | .086 | .923 |
+| severe / minor | **0 / 11** | 0/5 | 2/6 | 1/10 | 0/4 | 1/10 | 0/6 | 0/9 | 3/11 | 2/15 | 3/8 | 0/6 |
+
+**Not fixed: the mid-lap dressing fits neither frame.** The corner-keyed
+scenery was authored for an older centreline, not the OSM trace:
+- Mistral chicane run-off at 0.44; the chicane is at 0.490-0.502.
+- Signes run-off, bleacher, bank and tower at 0.545-0.565; Signes is at 0.713,
+  so this lands mid-Mistral.
+- Bosch bank at 0.64, on the straight.
+- The 0.30 / 0.66 elevations.
+
+No single shift fixes this: the offsets are +0.056 at the chicane and +0.148
+at Signes. That needs a dressing pass against `def.turns`. The `hwZones` are
+source-space and unaffected.
+
+### catalunya — FIXED (`sceneryStartFrac: 0.03` removed, shift 0.138 -> 0)
+
+The paddock and main straight are written against `startFrac: 0`: pit bays
+0.944-0.999 and race control 0.985 sit in `pitLaneSpan` (engine 0.945-0.024),
+the main stand is at 0.005 and the final-corner gravel at 0.930 (T14 apex
+0.9226). **Unlike Portimão, the file is not in one frame.** The first-half
+clusters (Repsol terrace 0.215, Seat chicane gravel 0.312, Campsa terrace 0.470)
+land on their corners only under the 0.138 shift (0.353 vs 0.3446, 0.450 vs
+0.432-0.442, 0.608 vs 0.6091), and the T1 cluster (gravel 0.065, terrace 0.090)
+misses Elf (0.1576) in both frames, sitting mid-straight at shift 0 and past
+T2 as shipped. So "delete the line" alone would have traded the pit fix for
+four undressed corners. The fix is the line removed plus a per-cluster
+re-author:
+
+- **Pit block, main straight, La Caixa, final sector.** These stay as
+  authored, now in the frame they were written in.
+- **Repsol, Seat, Campsa clusters** (terrace, sunTerrace, gravel, tyre wall,
+  spectator hill, flood mast, the "open infield bowl" exclusion in both the
+  def and `openInfield`). Authored += 0.138, so they keep their shipped engine
+  fracs.
+- **T1 cluster.** Moved onto Elf (gravel 0.145, tyre wall 0.130-0.165, terrace
+  0.160, catch fence 0.13-0.17) and onto its OUTSIDE: `Tracks.curvature` at
+  0.1576 is -0.030, a right-hander, and the run-off had been on the inside.
+  The orange stand stays inside at 0.145.
+- **Guardrails.** Re-spanned `[0.17,0.43] [0.47,0.66] [0.72,0.89]`, so the gaps
+  fall at the T1, Seat and La Caixa gravel traps and the pits again.
+- **Def tables** (`elevations`, `bankZones`). Re-authored to their shipped
+  ENGINE fracs, so terrain and banking do not move: max |Δpy| 0.33 m over 1163
+  nodes (4-decimal rounding), bank identical. Three of the four elevation
+  bumps already read right as shipped (the Renault climb 0.288, high ground
+  before Campsa 0.548, the dip into La Caixa 0.728).
+
+| `agent.mjs catalunya scene --at` | shipped | fixed |
+|---|---|---|
+| 0.9845, mid pit lane | 9 stone pines, 3 pines, 4 bushes, 5 structures | 19 structures, 2 gantries, grandstand, 2 motorhomes, building, 2 billboards |
+| 0.103, where the pit block landed | gantry, 21 structures, building, billboard | 12 pines/stone pines, 3 trees, 8 bushes, 9 structures |
+| 0.1576, T1 | 26 structures, gantry, motorhome, grandstand | 10 structures, grandstand, 2 marshal posts, 9 pines, 9 bushes |
+| 0.345 / 0.44 / 0.609 (Repsol / Seat / Campsa) | unchanged: same clusters at the same engine fracs | unchanged |
+
+Node A/B at the pit-lane midpoint: built 5 -> 27, trees 12 -> 0, the seven
+pit-block models EMITTED -> "superseded by the pit complex".
+
+Knock-ons, fixed rather than absorbed:
+
+- **`ownPitStraight: true`.** The engine's generic 7-box stand (k 0-24, left,
+  14 m) now stood inside the circuit's own 180 m `grandstandEx(0.005, -1)`,
+  the Monza/Portimão precedent. It also removed the engine-side 4.00 m /
+  1487 m3 box-vs-box clip at frac 0.000.
+- **The T1 terrace folded into itself** (two 3.8 / 3.1 m clips at frac 0.474,
+  33 m off the Seat hairpin) on the inside of T1-T2. It is on the outside now,
+  which is clean at 0.150-0.170.
+- **`sunTerrace` on a bend.** The final-sector terraces now sit on the curves
+  they were written for, and the helper's fixed-length units overlapped on
+  the inside (37 self-pairs, 3.5 m). Each row's unit is now scaled by its
+  chord ratio to the centreline, shrink-only, so straights and outsides are
+  unchanged.
+- **Broadcast compound vs a paddock motorhome** (2.18 m). Both are now in one
+  frame, and the motorhome loop keeps ±0.008 clear of K(0.912).
+
+Clip as a distribution (final dressing, `sceneryStartFrac` swept; values snap
+to control points, so the shift is shown):
+
+| shift | 0 (fixed) | 0.138 (old) | 0.168 | 0.214 | 0.265 | 0.357 | 0.435 | 0.516 | 0.570 | 0.730 | 0.766 | 0.805 | 0.881 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| severe clips | **9** | 15 | 17 | 12 | 11 | 10 | 12 | 11 | 23 | 9 | 10 | 11 | 23 |
+
+Baselines all come DOWN: **clip 22 -> 9, coplanar 1 -> 0, float 0 -> 0.** Nine
+is the low end of this dressing's 9-23 spread, which is what it measures at
+its own frame. No test used Catalunya's shifted frame as a fixture.
+
+**Left alone, recorded:** `hwZones` are source-space (no shift ever applied),
+and the "Seat / Wurth chicane" narrowing at 0.290-0.335 lies on the straight
+before Repsol, 0.1 short of Seat (0.432). The width is physics, not dressing,
+so it needs its own change. The Seat gravel is on the inside of a left-hander
+exactly as shipped.
+
+### mugello — FIXED (`sceneryStartFrac: 0.05` removed, shift 0.133 -> 0; San Donato moved to T1)
+
+Same defect. The pit lane is engine 0.950-0.021 (garage row 0.991-0.016), and
+most of the scenery is written against that line: pit bays 0.945-0.999, race
+control 0.988, halls 0.925-0.964, Arrabbiata gravel 0.495 (curvature peaks
+0.46-0.53), Bucine terrazza 0.858-0.902 (Bucine 0.86-0.90), and the elevation
+comments ("rise onto the main straight" 0.92). The shift moved all of it 0.133
+of a lap forward, standing the paddock on the run to San Donato and Bucine's
+dressing on the main straight.
+
+| `agent.mjs mugello scene --at` (40 nearest) | shipped | fixed |
+|---|---|---|
+| 0.985, mid pit lane | 18 trees, 9 cypress, 12 pines, 1 structure | 10 structures, 4 props, billboard, 2 signs within 40 m; trees from 40-50 m left |
+| 0.098, where the pit block landed | gantry, 22 structures, 2 buildings, 4 motorhomes | 7 structures, 4 props, 3 trees |
+| 0.1447, T1 San Donato | grandstand, 25 structures (the Luco dressing at 0.18-0.23) | grandstand, 24 structures, 6 signs, 2 marshal posts |
+| 0.203, Luco | (above) | 21 trees/pines, 7 cypress |
+
+The trees still in radius at mid pit lane are not the pit straight's: every
+one of the 122 within 130 m is nearest the Biondetti carriageway (0.74-0.79),
+which runs ~75 m to the left. Shipped, 141 of 268 were nearest the pit
+straight itself (0.96-0.01); now none are.
+
+Node signature, before -> after: `mugello-pit-bay-1..4` go from EMITTED to
+"superseded by the pit complex". `mugello-race-control` still emits at shift 0,
+and legitimately: at 0.988 it is 3 m of lap short of the garage row, where the
+complex keeps out only 14.3 m, and its footprint is 21-35 m out. It is a tower
+behind the pit-entry end, not a building on a corner.
+
+**Not the frame: San Donato was authored 0.08 early in EVERY frame.** The whole
+San Donato group (gravel, tyre wall, terrazza bowl, grandstandEx, marshal post,
+camera tower, "corner 1" board, and the `bankZones` entry) sat at 0.048-0.098:
+at shift 0 that is mid main straight, 0.075 before T1 (curvature -6 at 0.14,
+-19 at 0.16). Shipped it was at 0.18-0.23, Luco and Poggio Secco. No start-line
+frame puts it on the corner while keeping the pit block and Bucine on theirs,
+so it was authored against an earlier centreline. It moved +0.08 (gravel to
+0.140 and not 0.150: at 0.145-0.150 its 52 m patch cut back across its own
+corner and was footprint-rejected), and `openArea`, the def's foliage
+exclusion, the T1 forest belt and the spectator hill were cut back to
+0.18 around it. The "Casanova-Savelli" group (0.29-0.334) now dresses
+Materassi/Borgo San Lorenzo (0.30/0.32), a real corner pair; the real
+Casanova-Savelli is 0.39-0.42. It stays, and the name is wrong, but it is not a
+paddock on a corner.
+
+Knock-on fixes, measured one at a time:
+
+- **`ownPitStraight: true`.** The circuit has its own 160 m main stand
+  (grandstandEx 0.005, left). The generic 7-box stand stood in it: a 4.00 m /
+  1245 m3 box-vs-box clip at frac 0.000. The Monza and Portimão precedent.
+- **Coplanar 0 -> 1 -> 0.** The red trim band fronting the main stand (gap 8,
+  2 m thick) put its back face in the 9 m fence. On the old corner the
+  curvature separated them. On the straight they coincide. Now at 7.6 m.
+- **Floating pine, frac 0.633.** An `every(34)` pine 3.5 m off the Palagio
+  carriageway. `pine()` clears the trunk and not the crown, so the road guard
+  dropped the lower tiers and left the top cone 22 m up. The loop now skips a
+  pine whose crown reaches the road.
+- **`mugello-casale` footprint rejected.** At 0.500 +1 the Bucine carriageway
+  runs 60-75 m out, and every gap from 50 to 135 m rejects. At 150 m its
+  centre is 30 m past that edge. Trees from the Bucine side then grew 6.8 m
+  into its tower (the engine's deferred foliage, and this file's own loops,
+  which `spotTaken` does not stop). `indexSolid` books the yard for the
+  former, and the loops skip it for the latter.
+- **`broadcastCompound` guard-dropped** at 0.916 +1 74 m, 6.5 m from the
+  Savelli carriageway (0.436). 68 m still drops. At 66 m it stands 10 m clear.
+
+Clip as a distribution (dressing as fixed, `sceneryStartFrac` swept):
+
+| shift | 0.065 | 0.133 (shipped) | 0.161 | 0.225 | 0.319 | 0.414 | 0.479 | 0.548 | 0.674 | 0.724 | 0.860 | 0.886 | 0.901 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| severe clips | 14 | 13 | 10 | 8 | 12 | 13 | 12 | 9 | 16 | 17 | 15 | 14 | 15 |
+
+Median 13; shift 0 measures **10**. Baselines: **clip 22 -> 10**, coplanar
+0 -> 0, float stays clean (no row). The 10 that remain are pre-existing
+self-overlaps (the Casanova terrazza's rows, the spectator hills' tiers, vine
+rows against roadside trunks). None of them is in the relocated San Donato
+group. `pit-complex.test.mjs`'s race-control keep/tail test uses mugello for
+the engine's ROW_TAIL, which does not depend on the scenery frame. It passes
+unchanged, so no fixture moved.
 
 ### istanbul — FIXED (`sceneryStartFrac: 0.98` removed, shift 0.925 -> 0)
 
