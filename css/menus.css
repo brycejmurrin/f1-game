@@ -87,7 +87,7 @@
    left edge, YMax pins the BOTTOM (SVG's +y runs down), slice fills the viewport
    and crops the overflow. On a portrait phone that leaves only the leftmost
    ~28 % of the viewBox on screen, hugely magnified, which is exactly why the car
-   is drawn left: the crop makes it loom instead of vanishing. */
+   is drawn left: the crop makes it loom instead of vanishing (with the 1400/1620 box it is ~55 %). */
 #title-car {
   /* THE BOX CARRIES THE VIEWBOX'S OWN ASPECT, pinned to the foot of the frame.
      That is what makes one layer work on every shape. Sized to the viewport
@@ -172,22 +172,20 @@
    clutter. It fades as the column closes in and leaves when there is no room
    left to compose into. */
 @media (max-width: 1000px) { #title-car { opacity: 0.4; } }
-/* PHONES KEEP IT TOO, now that meet has stopped the blow-up. This used to be
-   display:none because slice scaled the art by height on a narrow screen and
-   drove it straight through the button stack; under meet a 393x852 phone gets
-   a 393x253 band across the bottom 30%, which is a composition rather than a
-   collision. It goes quiet rather than absent. */
+/* PHONES KEEP IT TOO. This used to be display:none when the element was sized
+   to the viewport and the art ran through the button stack; with the box at
+   its own aspect a narrow screen gets a band at the foot instead, so it goes
+   quiet rather than absent — and the tall phone below then makes it a crop. */
 @media (max-width: 700px)  { #title-car { opacity: 0.22; } }
 /* A PORTRAIT PHONE GETS THE CARS, NOT A STRIP. At 100% width the 1400/900 box
    is 393x253 on a 393px phone — the pair drawn in the left 55% of the viewBox
    lands 216px wide under the last row of rooms, at 0.22, which measured as
-   invisible on a real device. The cars occupy viewBox x 0..770, so at 180% of
-   the viewport the LEFT edge of the art puts exactly the two cars across the
-   phone (0.55 * 1.8 = 0.99 of the width) and the trails run off the right,
-   which #overlay's overflow-x:hidden already clips. right:auto so the width
-   is not over-constrained against the base rule's left:0; right:0. The doors
-   sit at the top of their row (the tall block below), so the lower third of
-   the screen is the cars' alone and the opacity can come up to landscape's.
+   invisible on a real device. The cars occupy viewBox x 0..770, so scaled 1.8x
+   from the bottom-left the pair spans exactly the phone (0.55 * 1.8 = 0.99 of
+   the width); HOW that scale is produced is the note on the rule itself. The
+   doors sit at the top of their row (the tall block below), so the lower
+   third of the screen is the cars' alone and the opacity can come up to
+   landscape's.
    Portrait is body[data-shape="tall"] (zoom-corrected, js/game/sheetshape.js),
    never an orientation media query — tests/unit/ui-improve-pass pins that. */
 @media (max-width: 699px) {
@@ -343,6 +341,10 @@
    keeps the two 2-up columns on the same vertical tracks (measured 205 vs 203
    on 1280 before this). Color stays transparent on the red doors. */
 #menu-buttons :is(#menu-hero, #menu-primary) .bigbtn { border-color: transparent; }
+/* width: 100% is REDUNDANT in the cascade (#menu-buttons .bigbtn at (1,1,0)
+   already wins it on every branch) and KEPT on purpose: tests/unit/title-menu-even
+   pins this exact declaration as the contract that 2-up cells fill, and
+   asserts `width: auto` never appears here. A pin is worth more than a line. */
 #menu-buttons :is(#menu-primary, #menu-secondary).balanced-row > .bigbtn { width: 100%; min-width: 0; }
 /* Secondary: same skewed family, dialled down — smaller type, thinner box, and
    no red glow, so the eye still lands on the modes first. */
@@ -366,8 +368,7 @@
   gap: 0.35em;
   min-height: max(36px, var(--tap-min));
   padding: calc(var(--gap) * 0.65) calc(var(--gap) * 0.95) calc(var(--gap) * 0.65) calc(var(--gap) * 1.15);
-  font-size: var(--fs-micro);
-  letter-spacing: var(--ls-1);
+  /* type comes from .minibtn, which every room carries */
 }
 #menu-secondary .bigbtn .btn-ico { margin-right: 0; }
 /* Title rooms sit on grain + a live circuit, not on a sheet. The shared
@@ -440,10 +441,6 @@
    row 2. The old layout ran the button column through all four branding rows,
    and a grid distributes a spanning item's excess height across the rows it
    covers — which is what pushed the small print 230px below the title. */
-/* max-height 599, not 560: the large-screen composition in css/responsive.css
-   starts at min-height 600, and the 40px between the two used to fall through to
-   the PORTRAIT stack — so a short, wide desktop window (say 1000x580) got a
-   phone's vertical menu laid out sideways. The two branches now meet exactly. */
 /* THE DOCUMENT-LEVEL SHORT THRESHOLD, declared beside the screen that reads it —
    the same arrangement `--pair-at` has with #cs-inner. js/game/sheetshape.js resolves
    `innerHeight / --ui-scale` against this and writes data-density onto body, which is
@@ -566,7 +563,7 @@ body { --compact-at: 600px; --wide-at: 620px; }
      left-ragged — measured: line one flush left, "Formula 1" under it. */
   :where(body[data-shape="tall"]) #disclaimer { text-align: center; }
   :where(body[data-shape="tall"]) #menu-primary .bigbtn {
-    display: flex; flex-direction: row; align-items: center; justify-content: center;
+    display: flex; align-items: center; justify-content: center;
     gap: 0.45em;
     padding: calc(var(--gap) * 0.8) calc(var(--gap) * 0.7) calc(var(--gap) * 0.8) calc(var(--gap) * 0.9);
     font-size: var(--fs-3);
@@ -595,10 +592,8 @@ body { --compact-at: 600px; --wide-at: 620px; }
   grid-template-columns: minmax(0, 1fr) min(46%, 400px);
   justify-content: safe center;
   align-content: safe center; justify-items: stretch;
-  /* Token gap, not 32px: on 852×393 that literal was a dead third column
-     between brand and doors. The 1fr tracks already split the safe box. */
-  column-gap: var(--gap);
-  gap: var(--gap);
+  /* No gap here: the compact #overlay rule above already sets the token gap
+     (a 32px literal used to open a dead third column on 852x393). */
 }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-brand { grid-column: 1; grid-row: 1; align-items: flex-start; }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-brand,
@@ -623,8 +618,6 @@ body { --compact-at: 600px; --wide-at: 620px; }
 }
 :where(body[data-shape="wide"][data-density="compact"]) #title { font-size: clamp(26px, calc(7.5 * var(--vwz)), 48px); }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-meta { margin-top: calc(var(--gap) * 1.5); gap: calc(var(--gap) / 2); }
-:where(body[data-shape="wide"][data-density="compact"]) #audiostate { font-size: var(--fs-micro); }
-:where(body[data-shape="wide"][data-density="compact"]) #disclaimer { font-size: var(--fs-micro); }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-hero,
 :where(body[data-shape="wide"][data-density="compact"]) #menu-primary,
 :where(body[data-shape="wide"][data-density="compact"]) #menu-secondary { width: 100%; }
@@ -632,7 +625,7 @@ body { --compact-at: 600px; --wide-at: 620px; }
   gap: calc(var(--gap) * 0.45);
 }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-buttons .bigbtn {
-  width: 100%; padding: 6px 8px 6px 12px;
+  padding: 6px 8px 6px 12px;
   /* No font-size here: the compact block below (`calc(var(--fs-4) *
      var(--ui-compact-text))`) is later at equal specificity and wins, so a
      value on this line is dead — the doors paint 17px, which the phone
@@ -640,7 +633,7 @@ body { --compact-at: 600px; --wide-at: 620px; }
   min-height: max(32px, var(--tap-min));
 }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-primary .bigbtn {
-  display: flex; flex-direction: row; align-items: center; justify-content: center;
+  display: flex; align-items: center; justify-content: center;
   gap: 0.4em;
 }
 /* Four rooms in the narrower column wrap 3 + 1 from the 5.5rem basis, which
@@ -652,7 +645,7 @@ body { --compact-at: 600px; --wide-at: 620px; }
 }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-primary .bigbtn .btn-ico { margin: 0; flex: none; }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-secondary .minibtn {
-  padding: 3px 6px 3px 10px; font-size: var(--fs-micro);
+  padding: 3px 6px 3px 10px;   /* size comes from the compact :is() rule below */
   min-height: max(26px, var(--tap-min));
 }
 /* The static mode subs are the first thing to go when height is short — the
