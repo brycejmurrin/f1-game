@@ -763,7 +763,10 @@ window.SpotifyMusic = (function () {
         return;
       }
       // Something is already loaded on this device — just un-pause it.
-      if (track) { try { player.resume(); } catch (e) { /* a broken SDK call must not take the transport down */ } return; }
+      // resume()/pause() are Promise-returning SDK calls, so the catch sees
+      // only a synchronous throw; a rejected one reaches index.html's
+      // unhandledrejection overlay. Same reasoning as GameAudio's ctx.close().
+      if (track) { try { const p = player.resume(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* a broken SDK call must not take the transport down */ } return; }
       // Otherwise there is nothing to resume, so play what the player picked.
       playChosen();
     },
@@ -772,7 +775,7 @@ window.SpotifyMusic = (function () {
         if (BACKEND.active()) api("/me/player/pause" + remoteQuery(), { method: "PUT" }).then(pollNowPlaying);
         return;
       }
-      if (player) { try { player.pause(); } catch (e) { /* a broken SDK call must not take the transport down */ } }
+      if (player) { try { const p = player.pause(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* a broken SDK call must not take the transport down */ } }
     },
     skip() {
       if (!BACKEND.active()) return null;
