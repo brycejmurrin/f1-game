@@ -244,8 +244,19 @@ jobs:
         run: |
           FORCE="${CENSUS_FORCE}"
           LS=""; for kv in ${CENSUS_LS}; do LS="$LS --ls $kv"; done
+          # wgxCapture=0 IS THE POINT OF THIS LEG. tlx.js arms its soft blit
+          # (GPU readback + putImageData every frame) whenever
+          # `!forceWebGL && (_softAdapter || _headless || cap==="1")`, and
+          # `_headless` is `navigator.webdriver` — true in EVERY automated run.
+          # So until 2026-09-22 this leg timed the headless readback and never
+          # once the swapchain present a player gets, on any image, including
+          # the hardware ones. Every fps/frames/luma number this column has
+          # ever produced for WebGPU was that blit (PERF-FINDINGS 2t read a
+          # 46.9-vs-66.2 gap straight off it). "0" = NATIVE keeps three's
+          # swapchain; the `path:` row below prints softBlit so a regression
+          # here is visible rather than silently re-measured.
           node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} \
-            --backend three --path webgpu \
+            --backend three --path webgpu --ls apex26.wgxCapture=0 \
             ${FORCE:+--ls apex26.tlxForceHw=$FORCE} $LS \
             --json "game-webgpu-${{ matrix.image }}.json" \
             --shot "game-webgpu-${{ matrix.image }}.png"
@@ -258,8 +269,12 @@ jobs:
         run: |
           FORCE="${CENSUS_FORCE}"
           LS=""; for kv in ${CENSUS_LS}; do LS="$LS --ls $kv"; done
+          # Same pin as the WebGPU leg, and a no-op here: forceWebGL
+          # short-circuits _softBlit. Written anyway so the two TLX legs differ
+          # in exactly ONE variable — the three path — which is the only thing
+          # that makes this a control.
           node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} \
-            --backend three --path webgl2 \
+            --backend three --path webgl2 --ls apex26.wgxCapture=0 \
             ${FORCE:+--ls apex26.tlxForceHw=$FORCE} $LS \
             --json "game-webgl2-${{ matrix.image }}.json" \
             --shot "game-webgl2-${{ matrix.image }}.png"
@@ -385,7 +400,11 @@ jobs:
               // previous run put these numbers in the JSON artifact only, so
               // reading the one line that answers the question meant
               // downloading a 12 MB zip.
-              const _ft = gfx.frameTail;
+              // TOP LEVEL, not under gfx: gpu-game-check writes out.frameTail
+              // beside out.gfx, and the first wiring read gfx.frameTail — so
+              // the row silently never printed on run 35748268014, the one run
+              // that finally had the real present path to measure.
+              const _ft = g.frameTail;
               if (_ft && _ft.p99 != null) {
                 rows.push(`${" ".repeat(8)}tail:  p50=${_ft.p50} p95=${_ft.p95} p99=${_ft.p99} max=${_ft.max} p99/p50=${_ft.p99OverP50}x` +
                   `  (beats=${_ft.beats})`);
