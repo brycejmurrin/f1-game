@@ -52,7 +52,7 @@
         if (openArea(s)) return;
         const h = hash(k * 67 + 19);
         if (h < 0.58) return;
-        tree(k, h < 0.5 ? -1 : 1, 44 + h * 24, 8 + h * 4, [0.29, 0.34, 0.20]);
+        tree(k, h < 0.5 ? -1 : 1, 48 + h * 20, 8 + h * 4, [0.29, 0.34, 0.20]);
       });
 
       // 2. PIT COMPLEX — one long masonry terrace under one continuous
@@ -94,45 +94,36 @@
           stage._mat = 0;
         }, { required: true });
       };
-      // ── THE FRAC YOU WRITE IS NOT WHERE IT LANDS ──────────────────────────
-      // `sceneryStartFrac: 0.96` in the def gives `_sceneryShift` 0.85616, and
-      // EVERY emitter here — K(s) and the (s0, s1) range helpers alike — is
-      // remapped by it: engine_frac = wrap01(authored + 0.85616). Verified
-      // against `track.props.spans`, which reports emitted engine fracs:
-      // tyreWall(0.880,0.925) -> 0.7360,0.7810; fence(0.95,0.06) ->
-      // 0.8060,0.9160; guardrail(0.94,0.06) -> 0.7960,0.9160, all matching
-      // prediction to four decimals.
+      // ── SCENERY FRACS ARE ENGINE FRACS HERE ───────────────────────────────
+      // `sceneryStartFrac: 0.96` was removed 2026-09-22. It asserted an origin
+      // this file was never authored against: it gave `_sceneryShift` 0.85616,
+      // and under it the paddock stood on the PARABOLICA while the pit straight
+      // was a pine forest — `agent.mjs estoril scene --at 0.82` read 14
+      // structures, a gantry, a grandstand and five motorhomes on a fast corner,
+      // and `--at 0.97` read 11 trees and 22 pines. Both now read the right way
+      // round (28 pines on the corner, 22 structures on the straight), and the
+      // two hand-placed pit terraces are superseded by the engine's pit complex,
+      // which is what a circuit's own pit block is for.
       //
-      // The ids below were RENAMED 2026-09-22 to the feature each one actually
-      // lands on, because none of them matched: the "pit terraces" emit onto
-      // the Parabolica (T14), the "t1 gravel" and "esses stand" land in the pit
-      // complex and are SUPERSEDED — they never render at all — and the widest
-      // gravel apron dresses T13, not the Parabolica it was named for.
+      // So a frac here means what it says: engine frac, same space as
+      // `def.turns`. `K(s)` and the (s0, s1) range helpers now agree with the
+      // `s = k / n` guards inside `every()` callbacks, which always tested
+      // engine fracs — that mismatch is why the motorhome row and the tree loop
+      // landed a corner away from the ground their guards had chosen.
       //
-      // THE PLACEMENT IS WRONG, NOT MERELY MISNAMED. A probe settles what the
-      // audits cannot see (`agent.mjs estoril scene --at <frac>`): at frac 0.82,
-      // the Parabolica, stand 14 structures, a gantry, a grandstand and FIVE
-      // MOTORHOMES — the paddock, on a fast corner — while frac 0.97, the pit
-      // straight, reads 11 trees and 22 pines. `float 0` and `clip 1` say
-      // nothing about this: props auto-ground wherever they are and a building
-      // in open air hits nothing. An earlier pass read that silence as "tuned
-      // in place" and corrected only the names; that was wrong.
+      // Two fixes came with it, both caused by emitters finally landing where
+      // their guards intended: `estoril-aldeia` moved K(0.30) -> K(0.26) (its
+      // footprint reached a parallel stretch of road and was rejected whole),
+      // and the tree loop's inner lateral bound went 44 -> 48 m (one tree
+      // grounded 6.5 m in the air at frac 0.219).
       //
-      // DO NOT fix it by dropping sceneryStartFrac. `_sceneryShift` is not a
-      // scenery offset — the ENGINE consumes it too, in four readers in
-      // js/track/tracks.js: `dress` in buildCenterline (bridges and
-      // elevations), `shiftS` in transformSceneryApi, the inverse `HKSHIFT`
-      // beside indexSolidAt, and the sceneryCoordinates guard in bakedModel.
-      // With the whole
-      // scenery callback stubbed out so no circuit prop emits at all, shift
-      // 0.85616 gives 0 severe clips and shift 0 gives a 4.00 m / 1261 m3
-      // engine-side collision at frac 0.000. Removing motorhome,
-      // broadcastCompound, grandstandEx, both pitBlocks or the pit stand does
-      // not touch it. The terrain moves with the same constant.
-      //
-      // The real fix needs the four consumers understood together —
-      // docs/notes/DEFECT-LEDGER.md carries the measurements and the probe A/B
-      // that is its acceptance test.
+      // Baselines moved because the placement did, in both directions:
+      // coplanar 5 -> 0 (the z-fighting was the mis-seated dressing) and clip
+      // 1 -> 3 severe. The clip number is not a regression this change caused —
+      // `place` has no prop-vs-prop check, so ANY shift re-rolls every
+      // procedural placement. Measured across six values of sceneryStartFrac,
+      // 0.96 was the outlier at 1 severe; 0.80, 0.60, 0.40 and 0.00 all give 3
+      // and 0.20 gives 4. Three is this circuit's normal draw.
       pitBlock("estoril-parabolica-terrace-a", 0.960, 7);
       pitBlock("estoril-parabolica-terrace-b", 0.996, 7);
       {
@@ -330,7 +321,7 @@
       }
 
       {
-        const a = anchor(K(0.30), -1, 96), b = [a.r, a.u, a.t];
+        const a = anchor(K(0.26), -1, 96), b = [a.r, a.u, a.t];
         modelGroup("estoril-aldeia", {
           center: vadd(a.c, a.u, 11), size: [32, 26, 64], basis: b,
         }, (stage) => {

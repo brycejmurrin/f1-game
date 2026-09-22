@@ -2190,7 +2190,7 @@ Deferred with reasoning, none lost:
   the other hardcoded positions in the same file before closing it — two of the
   three here were fixed and the third was left, which is how it survived.
 
-## NAMES FIXED, GEOMETRY OPEN — estoril scenery emitters do not land where their names say (2026-09-22)
+## FIXED — estoril scenery emitters did not land where their names say (2026-09-22)
 
 Found while fixing the Parabolica's bank and gravel apron (PR #188). The
 apron fix is landed and correct; this is the larger thing underneath it, left
@@ -2342,3 +2342,48 @@ the four `_sceneryShift` readers named above have to be understood together.
 
 The probe A/B is the acceptance test: the Parabolica should read as trees, the
 pit straight as structures.
+
+### Closed the same day: the shift is gone and the acceptance test passes
+
+`sceneryStartFrac: 0.96` removed. The acceptance test this entry named —
+"the Parabolica should read as trees, the pit straight as structures" — now
+passes:
+
+| `agent.mjs estoril scene --at` | before | after |
+|---|---|---|
+| 0.82, the Parabolica | 14 structures, gantry, grandstand, 5 motorhomes | 28 pines, 3 trees, marshal post |
+| 0.97, the pit straight | 11 trees, 22 pines | 22 structures, 2 gantries, grandstand, 2 motorhomes |
+
+The two hand-placed pit terraces are now "superseded by the pit complex", which
+is what a circuit's own pit block is for, and `estoril-aldeia` emits again.
+
+**What unblocked it was measuring the clip count as a distribution rather than a
+property.** The earlier attempt treated the shipped `clip 1 severe` as evidence
+the layout was settled, so +2 read as damage. `place` has no prop-vs-prop check,
+so any shift re-rolls every procedural placement. Sampling six values:
+
+| `sceneryStartFrac` | severe clips |
+|---|---|
+| **0.96 (shipped)** | **1** |
+| 0.80 / 0.60 / 0.40 / 0.00 | 3 |
+| 0.20 | 4 |
+
+0.96 was the outlier. Three is this circuit's normal draw, so raising the clip
+baseline 1 -> 3 is a re-measurement, not a tolerance widened to pass a change.
+Coplanar went the other way and the baseline came DOWN, 5 -> 0: the z-fighting
+was the mis-seated dressing all along.
+
+Two real regressions were fixed rather than absorbed, both emitters finally
+landing where their `s = k / n` guards intended: `estoril-aldeia` moved
+K(0.30) -> K(0.26) (its footprint reached a parallel stretch of road), and the
+tree loop's inner lateral bound went 44 -> 48 m (one tree grounded 6.5 m up at
+frac 0.219).
+
+**Still true and still worth knowing:** `_sceneryShift` is read by the engine as
+well as the scenery — `dress` in `buildCenterline`, `shiftS` in
+`transformSceneryApi`, the inverse `HKSHIFT` beside `indexSolidAt`, and
+`bakedModel`'s `sceneryCoordinates` guard. Removing it for a circuit moves
+terrain and procedural dressing too, which is why this needed the probe A/B as
+its gate rather than the audits alone. Any other circuit carrying a
+`sceneryStartFrac` should be checked the same way, with the probe, before its
+value is trusted.
