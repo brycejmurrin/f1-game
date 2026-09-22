@@ -540,8 +540,8 @@ test("the survey forwarders are gone — layout-audit --survey is the entry poin
 });
 
 // ── the AI instruments' --wear flag ─────────────────────────────────────────
-// tools/lib/game-vm.cjs seeds `tyreWear: "off"`, but js/game.js's shipped
-// default is `store.get("tyreWear", "light")`. Nothing said so, and the
+// tools/lib/game-vm.cjs seeds `tyreWear: "off"`, but the shipped default
+// (js/data/settings-defaults.js) is "real". Nothing said so, and the
 // consequence was that AiDrive.stintPlan / pitNow / compoundFor / degCost and
 // pits.think were INERT in all four AI instruments: every strategy number they
 // ever printed was a no-wear number, silently. `--wear off|light|real` is the
@@ -582,11 +582,15 @@ test("--wear defaults to off, and a bad level is refused rather than defaulted",
   }
 });
 
-test("the game's shipped tyreWear default is still 'light' (so off must be opt-in, not inherited)", () => {
-  // The premise of the flag. If game.js ever ships "off" as the default, the
-  // instruments and the product agree by accident and this comment is wrong —
-  // and if it ships something else, the LEVELS list above needs revisiting.
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
-  assert.match(game, /store\.get\("tyreWear",\s*"light"\)/,
-    "js/game.js no longer defaults tyreWear to \"light\" — re-read tools/lib/cli-args.mjs wearArg");
+test("the game's shipped tyreWear default is not 'off' (so off must be opt-in, not inherited)", () => {
+  // The premise of the flag. If the game ever ships "off" as the default, the
+  // instruments and the product agree by accident and this comment is wrong.
+  // Read the OWNER file: store.get's _def() answers tyreWear from
+  // js/data/settings-defaults.js, so game.js's call-site literal decides
+  // nothing (this test used to pin that literal, "light", while "real" shipped).
+  const src = fs.readFileSync(path.join(ROOT, "js/data/settings-defaults.js"), "utf8");
+  const m = src.match(/"tyreWear":\s*"(\w+)"/);
+  assert.ok(m, "js/data/settings-defaults.js no longer lists tyreWear — re-read tools/lib/cli-args.mjs wearArg");
+  assert.ok(["light", "real"].includes(m[1]),
+    `shipped tyreWear is ${m[1]} — re-read tools/lib/cli-args.mjs wearArg`);
 });

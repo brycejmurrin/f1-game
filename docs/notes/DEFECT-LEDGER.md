@@ -37,6 +37,24 @@ game-vm before its fix. FIXED.** (`tests/unit/race-flow-fixes-vm.test.mjs`,
   MERGE cue uses the wrapped track gap (it never named a lapping leader), and
   per-AI-per-tick `cautionInfo()` objects / an unused `Tracks.sample` are gone.
 
+**2026-09-22 (bug hunt, 12 hunters + 8 validators) — `window.X` guards on a
+top-level `const` are always false in a browser. FIXED.** A classic script's
+top-level `const BrakeCue = …` is a global LEXICAL binding, not a window
+property, so every `window.BrakeCue` / `window.GameAudio` / `window.Input`
+guard (14 sites: steer-tuning, brake-cue, select-screen, key-binds,
+race-settings) was false for every player. Dead in production: the pause
+menu's BRAKE CUE slider (`BrakeCue.create` never ran — its label still read
+"CUE n"), the menu select/tick sounds, `primeHaptics` at the start, and the
+HAPTICS row's hide on devices without haptics. Every node test saw the
+opposite because `tools/lib/game-vm.cjs` rewrites `^const` → `var`. Fixed
+with `typeof X !== "undefined"`; `tests/unit/lexical-window-guard.test.mjs`
+(in `test:guards`) now fails any `window|globalThis|self.Name` read of a
+lexical global nothing assigns onto window. PRODUCT DECISION taken with it:
+the brake cue's never-touched default is now notch 1 (OFF) — shipping the
+fix at the old notch-4 default would have switched the cue on for everyone
+and silenced the driving-line cue it outranks. Saved values and the
+RELAX/STANDARD/PRO presets are unchanged.
+
 **2026-09-22 — a baked BUILDING was stamped across monza's racing line, because
 `bakedModel()` was the one prop emitter with no road guard. FIXED.**
 `props-over-road.spec.js` reported `monza PROP 0.75m over road (cap 0.2)` at
@@ -2191,6 +2209,12 @@ knob write is a measurement of nothing.
 
 ### 2026-09-18 — two `steering.spec.js` ASSERTIONS are red, and the table above is stale about it
 
+> **RESOLVED 2026-09-22 — the sign was inverted and the comment absorbed the bug.
+> `symmetry` self-resolved (green on CI twice today); `curvature drift` was a
+> real defect in the TEST, fixed. The section below is the diagnosis as it stood
+> on 09-18 and is left intact; the resolution is the "2026-09-22 — a test that
+> steered off the circuit" entry further down.**
+
 The 2026-09-14 row reads `9 (steering.spec.js) | every one 103-142 s against a
 120 s test timeout | box, not code`. That population was fixed at source in
 `20e57ea174` (rAF-starved actionability, now DOM clicks). These two are not
@@ -2228,6 +2252,226 @@ so either its premise moved under it (as `OVERALL SPEED`'s hardcoded "straight"
 did above) or player steering authority is genuinely near zero with assists
 off, which the physics reference makes a product defect, not a test one.
 
+
+### 2026-09-22 — a test that steered off the circuit, and eleven nights between it and anyone noticing
+
+> **THE SPEC CHANGES BELOW WERE REVERTED OFF THE DEPLOY BRANCH THE SAME EVENING,
+> and the reason is the more useful record.** PR #206 merged with `road-follow`
+> still flaky. The Pages gate selects specs against the last PUBLISHED tree, not
+> against the parent commit — so an edited `steering.spec.js` stays in the
+> unpublished delta and is re-selected on EVERY Pages run until something
+> publishes. `road-follow` then failed the gate on `66c24cef0` and again on
+> `ed24bdfe7` (another session's commit), with `publishable`, `deploy` and
+> `verify-live` skipped behind it each time. The train was down for every session
+> on the branch, and it could not recover on its own: the file only leaves the
+> delta once a publish succeeds, and `road-follow` had passed 1 of 5 CI attempts.
+>
+> So the spec was restored to its last published state to unblock the branch. The
+> `curvature drift` sign fix and the `roadFollow 0.7 -> 0` restore go back on once
+> the isolation flake is fixed; the diagnosis below is what they should be
+> re-landed from. `deploy.mjs`'s `nightlyHealth()` and `--train` are unaffected
+> and stayed.
+>
+> THE LESSON, which cost a stuck train to learn: a merge is not the last gate. A
+> PR that is green because a flaky test happened to pass will be re-run by Pages
+> against a different base, and on a shared deploy branch the cost of losing that
+> coin flip is everyone's, not just the author's. "Green by luck" is not green,
+> and saying so in the merge message does not make merging it sound.
+>
+> **Two more isolation defects to re-land with them** (found on PR #207's CI,
+> 2026-09-22; the edits were withdrawn from that PR for the same train reason):
+> 1. `road-follow` resets `roadFollow` to 0 only AFTER its loop, so a failed
+>    expect leaves the assist at 0.6 on the worker-scoped page for every later
+>    test (PR #207 run 35782782159: `racing-line assist off by default` 0.92 m
+>    and `curvature drift` failed behind it). Fix: the reset in a `finally`.
+> 2. `racing-line assist off by default` compares two identical runs, but
+>    `jump()` resets only the player: the live field reaches the first corner
+>    between them (0.92 m, a pass, then 1.52 m on one commit). Probed on
+>    bahrain: a car within ~10 m moves the result; with every AI car
+>    `aiPlace(i, frac + 0.5 + i * 0.004, 0, 0)`d before EACH run, 24/24 runs
+>    were identical, and the file then passed that test and PULL/PUSH on CI
+>    (run 35789365205). `curvature drift` runs unfrozen in the same corner and
+>    ended in the wall (x -8.1, speed 0.96 → 1.81 < 2): it wants the same
+>    freeze + field clear.
+
+
+`steering has authority to fight the curvature drift` held lock with
+`lockDir = Math.sign(k0)`. Under the measured convention `+k` is a LEFT turn, so
+`+sign(k)` is the **outside** of the corner — the test's own sibling
+(`road-follow`) asserts exactly that, `expect(Math.sign(dxOff)).toBe(Math.sign(off.before.k))`
+for a car with no input running wide. So a test named *fight* the curvature drift
+was steering a no-assist car FURTHER toward the outside, at 22 m/s, for 75 ticks.
+It left the circuit inside the measurement.
+
+The failing state says so, and says it identically on two machines:
+`x = -8.100000381469727` against `hw 6.6`, `speed 0.0005 m/s`, `rescueT` climbing
+past 0.68 — `js/game.js:6047`'s beached-and-stuck arm. Being a property of where
+the car stopped rather than of the physics, the reported number wandered while
+the code did not: **0.227** (dev box 09-18), **0.262** (dev box 09-22), **1.738**
+(CI llvmpipe 09-22), on a deterministic fixed-timestep sim.
+
+**Measured both directions** at the corner the test picks (bahrain, k0 -0.0204,
+hw 7.00) — authority in metres, and whether the car was still on the circuit:
+
+| regime | outward `+sign(k)` | inward `-sign(k)` |
+|---|---|---|
+| 13 m/s, 45 ticks | 0.764 on-road | 0.801 on-road |
+| 13 m/s, 75 ticks | 1.587 on-road | 2.064 on-road |
+| 22 m/s, 45 ticks | **-2.823** on-road | 4.069 on-road |
+| 22 m/s, 75 ticks (the test's) | **-16.389 OFF-ROAD** | **9.505 on-road** |
+
+Inward is monotonic and positive at every regime. Outward goes negative and
+diverges.
+
+The fix is the sign **and** the hold length, and the second half was found by
+the guard rather than guessed at. With `lockDir` corrected and an on-road
+assertion added, the first verification run failed on the **coasting baseline**:
+`coasting ended 7.68 m off the centreline against a 7.00 m half-width`. Running
+wide IS the drift this test is named after, and 1.25 s of it at 22 m/s leaves
+the circuit with no input at all — so at 75 ticks there was no on-road
+measurement to be had in EITHER arm, and the old assertion had been differencing
+two excursions. At 45 ticks the baseline sits at x ~ -3.2 inside hw 7.00 and the
+inward reading is 4.069 m, twice the floor. **Speed unchanged (22 m/s), floor
+unchanged (2 m)** — shortening a hold until the car is still on the road is what
+makes the number mean anything; widening the 2 m floor would have been the
+tolerance change rule 9 forbids. The on-road guard stays, so this can never
+silently grade an excursion again. Verified: the test passes (113 s on this
+container), and the guard is proven live — it is what failed the first attempt.
+
+**How the comment absorbed the bug is the transferable part.** When the curvature
+convention was re-measured, the note at this line was rewritten to say
+"`lockDir = +sign(k)` was named 'inward' when '+k = right-hand corner' was
+believed; under the measured convention it is the outside. The assertion never
+cared which side." The prose was updated to describe the new meaning of the old
+code, and nobody re-derived whether the code still did what its NAME said. It
+did not. A convention change is a change to every site that reads the
+convention, not a documentation task.
+
+**Why it sat red for five days**, which is the larger defect: `steering.spec.js`
+declared `test.describe.configure({ timeout: 480_000 })`, and `select-specs.mjs`
+excludes any spec declaring `>= SELECTED_GATE.perTestTimeoutSec` (180 s). So the
+change-aware gate skipped it on EVERY push and its only scheduled coverage was
+the nightly rota — `input` once every eleven nights. That night was 2026-09-22.
+It ran, Smoke shard 1 FAILED on exactly this test, and the RUN reported
+`cancelled` (two unrelated jobs were cancelled eight minutes later; `cancelled`
+outranks `failure` in GitHub's rollup) — which AGENTS.md rule 8 tells every
+session to read as a timeout. The one finding the rota exists to produce was
+filed by the tooling as "the box was busy".
+
+Both halves are fixed. `deploy.mjs` grew `nightlyHealth()` and a `--train` flag
+that query the SCHEDULE event and report the JOB list rather than the rollup,
+so every deploy now prints what last night's rotating group actually found. And
+the 480 s declaration was re-measured: the figure predated Mesa llvmpipe
+replacing SwiftShader on the browser jobs, and nothing in the file has needed it
+since. Measured today — CI llvmpipe slowest test **26.2 s**; this container on
+SwiftShader, one worker, slowest **139.9 s** (13 tests, 10 m 02 s wall;
+road-follow 68.0 s, against the 343.5 s the header claimed). Now 170 s: clears
+the slowest case by 21 % and is under the gate's cap, so `select-specs` selects
+the file again (its own OVERSIZE shard, 13 tests).
+
+**STILL OPEN, with two fixes refuted by measurement and the re-time held back
+behind it.** `road-follow, when switched on, is active and changes the cornering
+line` fails deterministically on this container at `0.15284059935810101` against
+a `> 0.25` floor, and intermittently on CI — green twice on 2026-09-22 (32.0 s
+and 22.8 s in the rota's `input` group), red on the very next run in the selected
+gate. Same circuit every time (bahrain), deterministic fixed-timestep sim.
+
+It was briefly QUARANTINED here and that was wrong on both counts: quarantining a
+test to get a PR green is forbidden outright, and the quarantine note contained
+the fix for the probe runs that had failed — "give the probe its own
+`test.setTimeout`" — which had never been tried. One line; with
+`test.setTimeout(900_000)` the sweep ran first time.
+
+What the sweep measured, per sampled corner, `|on.x - off.x|` against the floor:
+
+| frac | k | coast | throttle held | end speed |
+|---|---|---|---|---|
+| 0.0290 | 0.0092 | 0.3194 | 1.5084 | 3.81 -> 18.48 |
+| 0.0676 | 0.0149 | 0.5645 | 1.5634 | 3.95 -> 18.20 |
+| 0.1872 | 0.0162 | 0.5435 | 1.1058 | 4.71 -> 18.32 |
+| 0.3618 | 0.0065 | 0.1676 | 0.8677 | 5.68 -> 17.99 |
+| 0.4064 | -0.0102 | 0.1994 | 0.8896 | 5.79 -> 18.32 |
+
+**Fix 1, holding throttle, was refuted by the full-file run.** It lifts the
+weakest corner from 0.1676 to 0.8677, but at ~18 m/s the car ends ~2 km
+downrange: the test went to 199.3 s against its own budget AND `racing-line
+assist: PULL eases toward the line, PUSH sends it wider` broke two tests later
+(8.066 against `< -0.2`) through the shared page. A regime change that leaks into
+its neighbours is not a fix — and only the FULL-FILE run caught it; a single-test
+run would have shipped it.
+
+**Fix 2, raising the corner filter 0.012 -> 0.014, was refuted by the number
+itself.** The reasoning was that the assist's effect scales with curvature and
+crosses the floor near that threshold, so a corner drifting across it decides the
+verdict. Plausible, and wrong: with 0.014 the test failed with the
+BYTE-IDENTICAL 0.15284059935810101. The failing corner therefore has |k| >= 0.014
+and is not in the table above at all.
+
+**Which is the real finding: the probe never reproduced the bug.** Instrumenting
+the loop removes the `continue`, so both arms run at every corner — and that
+changes the shared page's state, hence which corners the real test then samples.
+The measurement above describes a different corner set from the one that fails.
+Any fix derived from it is guesswork, which is exactly what the two attempts
+were.
+
+**A REAL ISOLATION LEAK WAS FOUND AND FIXED HERE, and it is NOT what makes
+road-follow fail.** Both halves matter.
+
+The quarantine commit's own CI run is what exposed it. On `e66f1e406`, where
+`road-follow` was `test.fixme`'d and did not run at all, the `oversize-steering`
+shard STILL failed — on a different test, `racing-line assist: PULL eases toward
+the line, PUSH sends it wider` (run 35769571096, 13/13 done, 1 failed). Locally
+the same pattern appeared whenever `road-follow`'s behaviour was perturbed:
+
+| what road-follow did | racing-line assist |
+|---|---|
+| ran as-is (failing at 0.1528) | passes |
+| skipped entirely (`test.fixme`) | FAILS on CI |
+| ran with throttle held (car ~2 km downrange) | FAILS, 8.066 |
+| ran checking fewer corners (filter 0.014) | FAILS, 5.773 |
+
+The cause was a one-line bug in `steering has authority to fight the curvature
+drift`: it restored `roadFollow` to **0.7** when the shipped default is **0** —
+which "by default nothing steers the car" two tests earlier pins explicitly.
+`sharedTest` keeps ONE page per worker, so that wrong restore left the
+DRIVING-HELP assist switched on for every later test landing on the same worker,
+and which tests those are moves with the shard's worker assignment. A
+deterministic suite whose result changes between runs, from one wrong constant.
+`road-follow` restored to 0 correctly; this was the only site that did not.
+
+Fixed, and verified: with the restore corrected the full file goes from two
+failures to one — `racing-line assist` passes and only `road-follow` remains.
+
+**But road-follow itself is unchanged by it**, still failing at the same
+`0.15284059935810101`. So the leak was a genuine second defect that the
+investigation surfaced, not the explanation for the first. Two things were wrong;
+one is fixed.
+
+**The experiment that is actually owed:** reproduce WITHOUT changing the loop's
+control flow. Leave the `continue` in place, add only a write of `frac`, `k`,
+`dxOff` and the diff for the corners the test itself checks, and give the test
+its own `test.setTimeout`. Then the failing corner is named and its regime can be
+judged. The deeper suspect is `sharedTest` page reuse: the car's `s` carries
+across tests, `k` is read at the car's exact `s`, and every change made here
+perturbed a later test — which is a test-isolation defect, not a physics one.
+
+**Consequence for the gate: the 480 s -> 170 s re-time is HELD BACK.** It is one
+line and it is ready, and it is what closes the eleven-night blind spot that let
+the curvature-drift sign error live. But it puts this file into the BLOCKING
+gate, and landing it while `road-follow` fails would turn every push touching
+`js/input/` red for every session on the shared branch. The measurement behind
+the re-time stands (CI llvmpipe slowest 26.2 s, this container 139.9 s, against a
+declared 480 s); the blocker is the test.
+
+`symmetry: opposite inputs turn the heading by opposite, equal amounts` is
+**green**, twice on CI today (1.8 s and 1.3 s). It regressed inside a one-day
+window on 09-18 and has since been fixed by someone else's change; recorded so
+the next session does not bisect a resolved failure.
+
+15 other specs still declare over-cap budgets (props-over-road and
+terrain-over-road at 1500 s, image-grade-visual 480 s, lighting-ab and
+instanced-draw 420 s, …). Each is the same bet this one lost. 61 of 119 specs
+were never selected in the 30-day window `spec-staleness.mjs` measures.
 
 ## 8. Backlog
 
@@ -2740,11 +2984,11 @@ actually lands (authored 0.965 + shift):
 
 | circuit | value -> shift | pit block lands | probe there | shipped -> shift 0 |
 |---|---|---|---|---|
-| catalunya | 0.03 -> 0.138 | 0.103, 0.055 short of T1 | gantry, 21 structures, building, billboard | pitEmit 7 -> pitSup 7; pit-lane trees 12 -> 0 |
-| istanbul | 0.98 -> 0.925 | 0.890, **on T12** (0.8884) | gantry, 23 structures, grandstand, 3 motorhomes | pitEmit 7 -> pitSup 7 |
-| mugello | 0.05 -> 0.133 | 0.098, 0.047 short of T1 | gantry, 22 structures, 4 motorhomes | pitEmit 5 -> 1; pit-lane trees 275 -> 122 |
-| paul_ricard | 0.03 -> **0.923** | 0.888, **on T13** (0.8884) | gantry, 25 structures, 2 motorhomes | pitEmit 5 both ways: the pit bays miss the lane in EITHER frame, so this is a frame AND a side/placement question |
-| sepang | 0.95 -> 0.882 | 0.847, 0.038 short of T14 | gantry, 20 structures, 14 palms | pitEmit 6 -> pitSup 7; pit-lane trees 38 -> 18 |
+| catalunya — **FIXED**, see "catalunya — FIXED" below | 0.03 -> 0.138 | 0.103, 0.055 short of T1 | gantry, 21 structures, building, billboard | pitEmit 7 -> pitSup 7; pit-lane trees 12 -> 0 |
+| istanbul | 0.98 -> 0.925 | 0.890, **on T12** (0.8884) | gantry, 23 structures, grandstand, 3 motorhomes | **FIXED**: value removed; see `### istanbul — FIXED` at the end of this file |
+| mugello | 0.05 -> 0.133 | 0.098, 0.047 short of T1 | gantry, 22 structures, 4 motorhomes | **FIXED** (value removed; San Donato group also moved +0.08 to T1): see "mugello — FIXED" below |
+| paul_ricard | 0.03 -> **0.923** | 0.888, **on T13** (0.8884) | gantry, 25 structures, 2 motorhomes | **FIXED**: frame AND side. Shift removed, and the pit straight mirrored (the paddock was authored on the LEFT, the complex and the real pits are on the RIGHT): pitEmit 5 -> pitSup 5. See § paul_ricard — FIXED at the end |
+| sepang | 0.95 -> 0.882 | 0.847, 0.038 short of T14 | gantry, 20 structures, 14 palms | **FIXED**: pitEmit 6 -> pitSup 7; pit-lane trees 38 -> 18 ("sepang — FIXED", end of file) |
 
 Each needs its own PR: remove the value, then work the knock-ons as Portimão
 did (probe A/B, clip as a distribution, audits per emitter).
@@ -2778,3 +3022,360 @@ spa (flat), vegas (flat), zolder (forest either way).
 
 Every row here is a triage verdict, not a fix. Only the probe at the named
 feature decides, one circuit per PR.
+
+### sepang — FIXED (`sceneryStartFrac: 0.95` removed, shift 0.882 -> 0)
+
+Same defect as Estoril and Portimão. The scenery, elevations and bankZones are
+written against `startFrac: 0`: pit bays 0.955-0.999 and race control 0.010
+against a pit lane at engine 0.953-0.020, T1 gravel 0.060 (T1 apex 0.0712), T15
+gravel 0.885 (turns[13] 0.8852), the T1-T2 bank zone at 0.045. The shift moved
+all of it 0.118 of a lap back, so the paddock stood at the end of the back
+straight and the plantation ran down the pit straight.
+
+| `agent.mjs sepang scene --at` (40 nearest) | shipped | fixed |
+|---|---|---|
+| 0.987, mid pit lane | 23 palms, 13 structures, bush | 25 structures, gantry, 2 motorhomes, billboard, 6 palms |
+| 0.847, where the pit block landed | gantry, 20 structures, 14 palms, billboard | 29 palms, 7 structures, 2 bushes |
+| 0.0712, T1 | 27 palms, 6 structures, 4 bushes | 22 structures (gravel, tyre wall, stand), grandstand, marshal post, 10 palms |
+
+Node signature, before -> after: `sepang-pit-bay-1..5`, `sepang-race-control`
+and `sepang-canopy-paddock` went from EMITTED to "superseded by the pit
+complex". `sepang-klia-skyline` was "superseded by the pit complex" on the
+shipped build too, so it never rendered in either frame (see below). Pit-lane
+built/trees (130 m of the pit-lane midpoint) 28/38 -> 38/18.
+
+Knock-ons, measured one at a time, not absorbed:
+
+- **`ownPitStraight: true`.** The circuit's stepped main stand (along
+  0.958-0.020, left, 12-31 m) now covers k 0-24, where the engine's generic
+  7-box pit-straight stand ([6, 11, 16] at 14 m left) stands, so that box sat
+  inside the circuit's stand. The flag removes it, and with it the 4.00 m /
+  559 m3 generic-stand-vs-green-box clip at frac 0.000. What remains there
+  (2.29 m) is the engine's green-theme `every(140)` box (tracks.js `place`,
+  no exclusion hook) inside the circuit's stand: the engine-side frac-0.000
+  lead from the Portimão entry, left alone.
+- **Back ranks of the plantation reached the main stand.** The back straight
+  runs 93-130 m from the pit straight, and the 3 far ranks (to 71 m) on its
+  pit side met the stand and canopy (3 severe cone-x-box spots, 1.9-3.0 m, at
+  0.964-0.977). `farPalm` now skips an anchor within 44 m of the pit straight
+  (a positional guard over K(0.935..0.035), not a frac window).
+- **Three models "footprint rejected" at shift 0.** `sepang-shade-walk-t1`
+  52 -> 40 m and `sepang-shade-walk-t15` 46 -> 30 m (the first clear gaps of a
+  sweep; 60-80 m and 36-64 m also reject). `sepang-klia-skyline` rejected on
+  its authored infield side (+1) at every gap from 120 to 280 m (25 m from the
+  0.464 carriageway at 180); on the outside (-1) it clears at 150-220 m, 256 m
+  from any other road, so it moved side, same gap. It now renders for the
+  first time in either frame.
+- **Coplanar pair** between the stepped stand's last tier and
+  `sepang-shade-walk-1` at 0.020: the walk moved to 0.024.
+- **Bush vs the T15 light pole** (1.19 m): the jungle-scrub `openArea` starts
+  at 0.88 instead of 0.90, so no scrub grows in the T15 hairpin's run-off.
+
+Clip as a distribution (dressing as fixed, `sceneryStartFrac` swept; values
+snap to control points, so the shift is shown):
+
+| shift | 0 (fixed) | 0.076 | 0.098 | 0.132 | 0.231 | 0.302 | 0.356 | 0.480 | 0.567 | 0.654 | 0.707 | 0.882 (shipped) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| severe clips | 3 | 1 | 2 | 5 | 5 | 4 | 3 | 5 | 9 | 11 | 9 | 4 |
+
+Median 4.5. Every baseline came DOWN or held: **clip 4 -> 3, coplanar 7 -> 0,
+float 0 -> 0** (no row). The remaining three severe spots are the engine box
+at frac 0.000 above and two spectator-hill tread pairs (1.49/1.47 m, nature.js
+terrace rows on the inside of T11 at 0.653); the shipped build had a spot of
+the same class at 0.523. No test used sepang's broken frame as a fixture.
+
+### paul_ricard — FIXED (`sceneryStartFrac: 0.03` removed, shift 0.923 -> 0; pit straight mirrored)
+
+**Why 0.03 became a 0.923 shift.** `buildCenterline` sets the shift to the arc
+fraction at control point `round(sceneryStartFrac * N)`, renumbered into the
+racing order. Paul Ricard is `reverse: true`, so that point is `N - round(0.03 N)`
+= source vertex 7. That is the Tour hairpin, 450 m BEFORE the line in the
+racing direction. On top of that, the OSM trace's vertex spacing is uneven
+(300 m legs on the straight, 3-8 m through the hairpin), so 3 % of the
+vertices is 7.7 % of the arc. The shift is the old start line's arc position,
+computed correctly. The scenery was simply never authored against that start.
+
+**Frame: the scenery is authored against `startFrac: 0`.** At shift 0:
+- the pit block (0.950-0.010) sits inside `pitLaneSpan` (0.955-0.019);
+- the Verrerie bank (0.070) is on T1 (0.087);
+- the `dressingExclusions` "pits" foliage cut (0.92-0.10) covers the pit
+  straight (0.925-0.087);
+- the 0.88 elevation lands on Le Village (0.887-0.925).
+
+Under the shift, every one of these was 0.077 early: the bank sat on the
+straight and the pit block on T13.
+
+**Why pitEmit stayed 5 at shift 0: the pit straight was mirrored.** Every
+emitter authored `side: 1` lands on the racing LEFT (a reversed def has its
+side negated by `transformSceneryApi`). The file put the whole paddock on the
+left: bays, race control, slabs, motorhomes, apron, TV compound. The main
+stand, debris fence and boards were on the right. The engine's pit complex
+takes `pit.side` 1 by default, which is the RIGHT. That is the infield of this
+clockwise lap, and it is where the real pits are: the pit exit rejoins on the
+right of the main straight (PlanetF1 / motorsport.com on the 2018-19 pit-exit
+changes). So at shift 0 the hand-built bays emitted on the left, facing the
+complex across the track, and the main stand (right, 12 m) stood inside the
+complex's footprint. `docs/tracks/paul_ricard.md` §4 carries the same mirror
+("pit slab L, main grandstand R") and needs the same flip. It is not in this
+PR's file scope.
+
+**Fix** (`js/circuits/paul_ricard.js`, `js/circuits/scenery/paul_ricard.js`):
+- Drop `sceneryStartFrac`.
+- Mirror the pit straight. Bays, race control, the 4 slabs, motorhomes, the
+  paddock apron and its lane lines, and the broadcast compound go to the right
+  (`side: -1`). The main stand, debris fence and 3 billboards go to the left
+  (`side: 1`). The guardrail stays left, in front of the stand. The pit-wall
+  props and sponsor hoarding were already right.
+- `ownPitStraight: true`: the circuit has its own 150 m main stand, and the
+  engine's generic 7-box stand stood inside it (on the left, 14 m). Prop cells
+  14357 -> 13919; clip minor spots 12 -> 11.
+
+| probe (`scene --radius 130`) | shipped (shift 0.923) | fixed |
+|---|---|---|
+| mid pit lane 0.987 | 14 structures, 3 props, 2 bushes, 1 signboard; no gantry, stand, building or motorhome | gantry x2, grandstand L, 2 buildings R, 3 motorhomes R, billboard L, 19 structures (complex R, stand L) |
+| 0.888, Le Village / T13 (where the block landed) | gantry, 25 structures, 2 motorhomes, building, billboard | 13 structures, 1 marshal post, 14 pines/trees + 4 bushes: a corner |
+| T1 0.087 (Verrerie) | 16 structures, 16 pines/trees | 11 structures, 3 pines/trees (the authored "pits" foliage cut, 0.92-0.10, now covers the Verrerie run-off as written) |
+
+Node A/B: built within 130 m of the mid pit lane 14 -> 26, pit-block
+suppressions 0 -> 5 ("superseded by the pit complex"), pitEmit 5 -> 0.
+
+**Knock-ons fixed:**
+- **Slabs and one motorhome on the Tour hairpin.** On the right, 0.918-0.931
+  and 0.90-0.94 reach the far leg of the hairpin (guard drops: building 2,
+  motorhome 1). The slabs now start at 0.944, and motorhomes stand from 0.94
+  on. Guard drops are back to the shipped `bush`/`runoffApron` set.
+- **Cabanon on the road.** At shift 0, `anchor(K(0.235), -1, 90)` lands 1.4 m
+  off the 0.26 leg of the hairpin complex (footprint rejected; shipped rejected
+  its drywall instead). Gap 90 -> 120 is the smallest in a 10 m sweep that
+  seats both. It is 23 m clear of that road.
+- **A floating spectator** (float-audit, 4.81 m, frac 0.937). The bleacher at
+  0.890-0.930 R had a tier dropped by the road guard, but the crowd figure on
+  that tier was still placed. The figure is now skipped when `addBox` returns
+  false for its tier. Trimming the stand's end (0.920-0.928) did not clear it.
+- `pr-runoff-village-blue` ("emitted footprint rejected" in the shipped
+  build) emits.
+
+**Baselines.** Coplanar 5 -> 4 (lowered). Clip severe stays 0: paul_ricard
+has no row, so the cap is 0. Float is clean (no row). Clip MINOR spots went
+6 -> 11. As a distribution, the 12 `sceneryStartFrac` values below read 4-15
+minor spots; 0 severe is the best draw, and 6 of the other 11 values have at
+least 1 severe.
+
+| value | none | 0.1 | 0.2 | 0.3 | 0.4 | 0.5 | 0.6 | 0.7 | 0.8 | 0.9 | 0.97 | 0.03 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| shift | 0 | .883 | .811 | .750 | .670 | .526 | .307 | .260 | .210 | .116 | .086 | .923 |
+| severe / minor | **0 / 11** | 0/5 | 2/6 | 1/10 | 0/4 | 1/10 | 0/6 | 0/9 | 3/11 | 2/15 | 3/8 | 0/6 |
+
+**Not fixed: the mid-lap dressing fits neither frame.** The corner-keyed
+scenery was authored for an older centreline, not the OSM trace:
+- Mistral chicane run-off at 0.44; the chicane is at 0.490-0.502.
+- Signes run-off, bleacher, bank and tower at 0.545-0.565; Signes is at 0.713,
+  so this lands mid-Mistral.
+- Bosch bank at 0.64, on the straight.
+- The 0.30 / 0.66 elevations.
+
+No single shift fixes this: the offsets are +0.056 at the chicane and +0.148
+at Signes. That needs a dressing pass against `def.turns`. The `hwZones` are
+source-space and unaffected.
+
+### catalunya — FIXED (`sceneryStartFrac: 0.03` removed, shift 0.138 -> 0)
+
+The paddock and main straight are written against `startFrac: 0`: pit bays
+0.944-0.999 and race control 0.985 sit in `pitLaneSpan` (engine 0.945-0.024),
+the main stand is at 0.005 and the final-corner gravel at 0.930 (T14 apex
+0.9226). **Unlike Portimão, the file is not in one frame.** The first-half
+clusters (Repsol terrace 0.215, Seat chicane gravel 0.312, Campsa terrace 0.470)
+land on their corners only under the 0.138 shift (0.353 vs 0.3446, 0.450 vs
+0.432-0.442, 0.608 vs 0.6091), and the T1 cluster (gravel 0.065, terrace 0.090)
+misses Elf (0.1576) in both frames, sitting mid-straight at shift 0 and past
+T2 as shipped. So "delete the line" alone would have traded the pit fix for
+four undressed corners. The fix is the line removed plus a per-cluster
+re-author:
+
+- **Pit block, main straight, La Caixa, final sector.** These stay as
+  authored, now in the frame they were written in.
+- **Repsol, Seat, Campsa clusters** (terrace, sunTerrace, gravel, tyre wall,
+  spectator hill, flood mast, the "open infield bowl" exclusion in both the
+  def and `openInfield`). Authored += 0.138, so they keep their shipped engine
+  fracs.
+- **T1 cluster.** Moved onto Elf (gravel 0.145, tyre wall 0.130-0.165, terrace
+  0.160, catch fence 0.13-0.17) and onto its OUTSIDE: `Tracks.curvature` at
+  0.1576 is -0.030, a right-hander, and the run-off had been on the inside.
+  The orange stand stays inside at 0.145.
+- **Guardrails.** Re-spanned `[0.17,0.43] [0.47,0.66] [0.72,0.89]`, so the gaps
+  fall at the T1, Seat and La Caixa gravel traps and the pits again.
+- **Def tables** (`elevations`, `bankZones`). Re-authored to their shipped
+  ENGINE fracs, so terrain and banking do not move: max |Δpy| 0.33 m over 1163
+  nodes (4-decimal rounding), bank identical. Three of the four elevation
+  bumps already read right as shipped (the Renault climb 0.288, high ground
+  before Campsa 0.548, the dip into La Caixa 0.728).
+
+| `agent.mjs catalunya scene --at` | shipped | fixed |
+|---|---|---|
+| 0.9845, mid pit lane | 9 stone pines, 3 pines, 4 bushes, 5 structures | 19 structures, 2 gantries, grandstand, 2 motorhomes, building, 2 billboards |
+| 0.103, where the pit block landed | gantry, 21 structures, building, billboard | 12 pines/stone pines, 3 trees, 8 bushes, 9 structures |
+| 0.1576, T1 | 26 structures, gantry, motorhome, grandstand | 10 structures, grandstand, 2 marshal posts, 9 pines, 9 bushes |
+| 0.345 / 0.44 / 0.609 (Repsol / Seat / Campsa) | unchanged: same clusters at the same engine fracs | unchanged |
+
+Node A/B at the pit-lane midpoint: built 5 -> 27, trees 12 -> 0, the seven
+pit-block models EMITTED -> "superseded by the pit complex".
+
+Knock-ons, fixed rather than absorbed:
+
+- **`ownPitStraight: true`.** The engine's generic 7-box stand (k 0-24, left,
+  14 m) now stood inside the circuit's own 180 m `grandstandEx(0.005, -1)`,
+  the Monza/Portimão precedent. It also removed the engine-side 4.00 m /
+  1487 m3 box-vs-box clip at frac 0.000.
+- **The T1 terrace folded into itself** (two 3.8 / 3.1 m clips at frac 0.474,
+  33 m off the Seat hairpin) on the inside of T1-T2. It is on the outside now,
+  which is clean at 0.150-0.170.
+- **`sunTerrace` on a bend.** The final-sector terraces now sit on the curves
+  they were written for, and the helper's fixed-length units overlapped on
+  the inside (37 self-pairs, 3.5 m). Each row's unit is now scaled by its
+  chord ratio to the centreline, shrink-only, so straights and outsides are
+  unchanged.
+- **Broadcast compound vs a paddock motorhome** (2.18 m). Both are now in one
+  frame, and the motorhome loop keeps ±0.008 clear of K(0.912).
+
+Clip as a distribution (final dressing, `sceneryStartFrac` swept; values snap
+to control points, so the shift is shown):
+
+| shift | 0 (fixed) | 0.138 (old) | 0.168 | 0.214 | 0.265 | 0.357 | 0.435 | 0.516 | 0.570 | 0.730 | 0.766 | 0.805 | 0.881 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| severe clips | **9** | 15 | 17 | 12 | 11 | 10 | 12 | 11 | 23 | 9 | 10 | 11 | 23 |
+
+Baselines all come DOWN: **clip 22 -> 9, coplanar 1 -> 0, float 0 -> 0.** Nine
+is the low end of this dressing's 9-23 spread, which is what it measures at
+its own frame. No test used Catalunya's shifted frame as a fixture.
+
+**Left alone, recorded:** `hwZones` are source-space (no shift ever applied),
+and the "Seat / Wurth chicane" narrowing at 0.290-0.335 lies on the straight
+before Repsol, 0.1 short of Seat (0.432). The width is physics, not dressing,
+so it needs its own change. The Seat gravel is on the inside of a left-hander
+exactly as shipped.
+
+### mugello — FIXED (`sceneryStartFrac: 0.05` removed, shift 0.133 -> 0; San Donato moved to T1)
+
+Same defect. The pit lane is engine 0.950-0.021 (garage row 0.991-0.016), and
+most of the scenery is written against that line: pit bays 0.945-0.999, race
+control 0.988, halls 0.925-0.964, Arrabbiata gravel 0.495 (curvature peaks
+0.46-0.53), Bucine terrazza 0.858-0.902 (Bucine 0.86-0.90), and the elevation
+comments ("rise onto the main straight" 0.92). The shift moved all of it 0.133
+of a lap forward, standing the paddock on the run to San Donato and Bucine's
+dressing on the main straight.
+
+| `agent.mjs mugello scene --at` (40 nearest) | shipped | fixed |
+|---|---|---|
+| 0.985, mid pit lane | 18 trees, 9 cypress, 12 pines, 1 structure | 10 structures, 4 props, billboard, 2 signs within 40 m; trees from 40-50 m left |
+| 0.098, where the pit block landed | gantry, 22 structures, 2 buildings, 4 motorhomes | 7 structures, 4 props, 3 trees |
+| 0.1447, T1 San Donato | grandstand, 25 structures (the Luco dressing at 0.18-0.23) | grandstand, 24 structures, 6 signs, 2 marshal posts |
+| 0.203, Luco | (above) | 21 trees/pines, 7 cypress |
+
+The trees still in radius at mid pit lane are not the pit straight's: every
+one of the 122 within 130 m is nearest the Biondetti carriageway (0.74-0.79),
+which runs ~75 m to the left. Shipped, 141 of 268 were nearest the pit
+straight itself (0.96-0.01); now none are.
+
+Node signature, before -> after: `mugello-pit-bay-1..4` go from EMITTED to
+"superseded by the pit complex". `mugello-race-control` still emits at shift 0,
+and legitimately: at 0.988 it is 3 m of lap short of the garage row, where the
+complex keeps out only 14.3 m, and its footprint is 21-35 m out. It is a tower
+behind the pit-entry end, not a building on a corner.
+
+**Not the frame: San Donato was authored 0.08 early in EVERY frame.** The whole
+San Donato group (gravel, tyre wall, terrazza bowl, grandstandEx, marshal post,
+camera tower, "corner 1" board, and the `bankZones` entry) sat at 0.048-0.098:
+at shift 0 that is mid main straight, 0.075 before T1 (curvature -6 at 0.14,
+-19 at 0.16). Shipped it was at 0.18-0.23, Luco and Poggio Secco. No start-line
+frame puts it on the corner while keeping the pit block and Bucine on theirs,
+so it was authored against an earlier centreline. It moved +0.08 (gravel to
+0.140 and not 0.150: at 0.145-0.150 its 52 m patch cut back across its own
+corner and was footprint-rejected), and `openArea`, the def's foliage
+exclusion, the T1 forest belt and the spectator hill were cut back to
+0.18 around it. The "Casanova-Savelli" group (0.29-0.334) now dresses
+Materassi/Borgo San Lorenzo (0.30/0.32), a real corner pair; the real
+Casanova-Savelli is 0.39-0.42. It stays, and the name is wrong, but it is not a
+paddock on a corner.
+
+Knock-on fixes, measured one at a time:
+
+- **`ownPitStraight: true`.** The circuit has its own 160 m main stand
+  (grandstandEx 0.005, left). The generic 7-box stand stood in it: a 4.00 m /
+  1245 m3 box-vs-box clip at frac 0.000. The Monza and Portimão precedent.
+- **Coplanar 0 -> 1 -> 0.** The red trim band fronting the main stand (gap 8,
+  2 m thick) put its back face in the 9 m fence. On the old corner the
+  curvature separated them. On the straight they coincide. Now at 7.6 m.
+- **Floating pine, frac 0.633.** An `every(34)` pine 3.5 m off the Palagio
+  carriageway. `pine()` clears the trunk and not the crown, so the road guard
+  dropped the lower tiers and left the top cone 22 m up. The loop now skips a
+  pine whose crown reaches the road.
+- **`mugello-casale` footprint rejected.** At 0.500 +1 the Bucine carriageway
+  runs 60-75 m out, and every gap from 50 to 135 m rejects. At 150 m its
+  centre is 30 m past that edge. Trees from the Bucine side then grew 6.8 m
+  into its tower (the engine's deferred foliage, and this file's own loops,
+  which `spotTaken` does not stop). `indexSolid` books the yard for the
+  former, and the loops skip it for the latter.
+- **`broadcastCompound` guard-dropped** at 0.916 +1 74 m, 6.5 m from the
+  Savelli carriageway (0.436). 68 m still drops. At 66 m it stands 10 m clear.
+
+Clip as a distribution (dressing as fixed, `sceneryStartFrac` swept):
+
+| shift | 0.065 | 0.133 (shipped) | 0.161 | 0.225 | 0.319 | 0.414 | 0.479 | 0.548 | 0.674 | 0.724 | 0.860 | 0.886 | 0.901 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| severe clips | 14 | 13 | 10 | 8 | 12 | 13 | 12 | 9 | 16 | 17 | 15 | 14 | 15 |
+
+Median 13; shift 0 measures **10**. Baselines: **clip 22 -> 10**, coplanar
+0 -> 0, float stays clean (no row). The 10 that remain are pre-existing
+self-overlaps (the Casanova terrazza's rows, the spectator hills' tiers, vine
+rows against roadside trunks). None of them is in the relocated San Donato
+group. `pit-complex.test.mjs`'s race-control keep/tail test uses mugello for
+the engine's ROW_TAIL, which does not depend on the scenery frame. It passes
+unchanged, so no fixture moved.
+
+### istanbul — FIXED (`sceneryStartFrac: 0.98` removed, shift 0.925 -> 0)
+
+Same defect as Estoril and Portimão. Every emitter is keyed to `startFrac: 0`:
+T1 gravel 0.055 against the T1 apex 0.0569, the T8 amphitheatre 0.34-0.46
+against the T8 apexes 0.359-0.476, T13 gravel 0.905 against 0.9014, and pit bays
+0.948-0.990 against the pit lane 0.951-0.021. The 0.925 shift moved all of it
+back 0.075 of a lap.
+
+Probe (`agent.mjs istanbul scene --at <f> --radius 130 --limit 40`, kinds of
+the 40 nearest):
+
+| at | shipped | fixed |
+|---|---|---|
+| 0.986 mid pit lane | 13 structures, grandstand | 22 structures, 2 gantries, 3 motorhomes, grandstand, 2 billboards |
+| 0.890 T12 | gantry, 23 structures, grandstand, 3 motorhomes, building, billboard | 22 pines, 7 trees, 3 stone pines, 4 structures (T13 stand at 51 m) |
+| 0.057 T1 | 19 pines, 8 trees, 2 stone pines, 3 bushes | 16 structures, grandstand, marshal post |
+
+A/B (`scratch/ab.cjs` from the audit): pitEmit 7 -> pitSup 7, and the pit bays
+and race control now read "superseded by the pit complex".
+
+Knock-ons fixed:
+- `istanbul-stone-portal` was footprint-rejected. At 0.930 the lap folds back,
+  and at a 52 m gap the portal's 34 m face overhung the T13 carriageway (node
+  0.909). It is now 44 m, about 6 m clear of that road's edge (it emits at 50 m and
+  below).
+- The T13 tyre wall's last stack at 0.922, the T14 apex, stood on the road (a
+  `tyreWall=1` guard drop). The span now ends at 0.920.
+- `ownPitStraight: true`: the main stand (`grandstandEx` 0.005, -1, gap 11) is
+  the circuit's own pit-straight stand, and the generic 7-box stand (-1, gap 14)
+  stood inside it. This also removes the engine-side 4.00 m / 876 m3
+  box-vs-box clip at frac 0.000.
+
+Left alone: the rest of the clip total is the T8 amphitheatre's stepped terrace
+boxes overlapping each other on the curve (scenery lines 57/60), in either frame.
+In the shipped frame those terraces sat on T3-T4 (0.19-0.24), with forest
+growing through them.
+
+Clip across 13 `sceneryStartFrac` values (the shift snaps to control points):
+
+| value | 0.02 | 0.10 | 0.18 | 0.26 | 0.34 | 0.42 | 0.50 | 0.58 | 0.66 | 0.74 | 0.82 | 0.90 | 0.98 (shipped) | none |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| shift | 0.054 | 0.090 | 0.166 | 0.207 | 0.248 | 0.336 | 0.381 | 0.454 | 0.498 | 0.624 | 0.771 | 0.898 | 0.925 | 0 |
+| clip | 11 | 31 | 23 | 25 | 29 | 27 | 24 | 27 | 20 | 11 | 23 | 23 | 13 | **6** |
+
+Baselines all come down: clip 13 -> 6, coplanar 5 -> 0, float 0 -> 0.
+verify-track: suppressed 7 (all superseded by the pit complex), 0 guard drops
+(shipped: 2 `building` drops).

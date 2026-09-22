@@ -22,12 +22,20 @@
       function sunTerrace(s0, s1, side, gap, rows, step) {
         const SEATS = [[0.86, 0.85, 0.83], [0.72, 0.30, 0.24], [0.90, 0.78, 0.30]];
         let i = 0;
+        // One node's chord at lateral d: on the inside of a bend the rows are
+        // shorter than the centreline, so a fixed-length unit overlaps the next
+        // one (the final-corner terraces folded 3.5 m into each other).
+        const chord = (k, d) => {
+          const p = anchor(k, side, d).c, q = anchor((k + 1) % n, side, d).c;
+          return Math.hypot(q[0] - p[0], q[2] - p[2]);
+        };
         along(s0, s1, step || 9, (k, spacing) => {
-          const seg = spacing * 0.96;
+          const c0 = chord(k, 0);
           for (let t = 0; t < rows; t++) {
             const a = anchor(k, side, gap + t * 3.6);
             const b = [a.r, a.u, a.t];
             const h = 1.8 + t * 2.2;
+            const seg = spacing * 0.96 * Math.min(1, chord(k, gap + t * 3.6) / c0);
             addBox(out, vadd(a.c, a.u, h * 0.5), [3.5, h, seg], t & 1 ? BONE : WHITE, b);
             addBox(out, vadd(a.c, a.u, h + 0.65), [2.7, 1.3, seg], SEATS[(i + t) % 3], b);
           }
@@ -35,7 +43,12 @@
         });
       }
 
-      const openInfield = (s) => (s >= 0.92 || s <= 0.12) || (s >= 0.42 && s <= 0.52);
+      // Fracs are the def's engine frame (no sceneryStartFrac): pit lane 0.945-0.024,
+      // T1 0.158, Repsol 0.345, Seat 0.432-0.442, Campsa 0.609, La Caixa 0.727.
+      // The Repsol, Seat and Campsa clusters were tuned under the old 0.138 shift
+      // and keep those engine fracs; T1's sat 0.09 short of the corner in either
+      // frame and was moved onto it. docs/notes/DEFECT-LEDGER.md, "catalunya".
+      const openInfield = (s) => (s >= 0.92 || s <= 0.12) || (s >= 0.558 && s <= 0.658);
       every(30, (k) => {
         const s = k / n;
         if (openInfield(s)) return;
@@ -126,16 +139,17 @@
       }
       every(46, (k) => {
         const s = k / n, h = hash(k * 71 + 31);
-        if (!(s > 0.90 || s < 0.05) || h < 0.52) return;
+        // Clear of the broadcast compound at K(0.912), 76 m out.
+        if (!(s > 0.90 || s < 0.05) || h < 0.52 || Math.abs(s - 0.912) < 0.008) return;
         motorhome(k, 1, 58 + h * 10, 10, 4, 6, { wall: [0.64 + h * 0.26, 0.64, 0.66] });
       });
       broadcastCompound(K(0.912), 1, 76, { vans: 3, dishes: 2, mastH: 9 });
       for (const s of [0.975, 0.01, 0.03]) billboard(K(s), -1, 8, 12, 4.5, [0.90, 0.20, 0.16]);
 
-      grandstandEx(0.065, 1, 20, 96, null, null,
+      grandstandEx(0.145, 1, 20, 96, null, null,
         { livery: "orange", tiers: 2, roof: "cantilever", endWalls: true });
-      sunTerrace(0.222, 0.262, -1, 19, 5);
-      sunTerrace(0.492, 0.522, 1, 21, 5);
+      sunTerrace(0.360, 0.400, -1, 19, 5);
+      sunTerrace(0.630, 0.660, 1, 21, 5);
       sunTerrace(0.674, 0.708, -1, 19, 6);
       sunTerrace(0.826, 0.868, -1, 19, 6);
       sunTerrace(0.876, 0.912,  1, 18, 5);
@@ -145,18 +159,19 @@
         sailCanopy(a.c, [a.r, a.u, a.t],
           { rad: 15, rx: 9, rz: 17, h: 15, col: [0.94, 0.92, 0.86], ribs: 6, thick: 0.4 });
       }
-      spectatorHill(0.30, 0.36, 1, 15, { rows: 3, rise: 1.0, depth: 1.8, density: 0.40, step: 9 });
+      spectatorHill(0.438, 0.498, 1, 15, { rows: 3, rise: 1.0, depth: 1.8, density: 0.40, step: 9 });
 
       // Gravel + tyre walls at the heavy-braking corners.
-      groundPatch(K(0.065), 1, 6, [40, 0.18, 54], GRAVEL,
+      // Elf is a right-hander: run-off, tyres and catch fence on its outside (-1).
+      groundPatch(K(0.145), -1, 6, [40, 0.18, 54], GRAVEL,
         { id: "catalunya-t1-gravel", samples: 8 });
-      tyreWall(0.050, 0.085, 1, 5, [0.86, 0.20, 0.18]);
-      marshalPost(K(0.070), -1, 10);
+      tyreWall(0.130, 0.165, -1, 5, [0.86, 0.20, 0.18]);
+      marshalPost(K(0.150), 1, 10);
 
-      groundPatch(K(0.312), -1, 5, [24, 0.18, 32], GRAVEL,
+      groundPatch(K(0.450), -1, 5, [24, 0.18, 32], GRAVEL,
         { id: "catalunya-chicane-gravel", samples: 6 });
-      tyreWall(0.298, 0.328, -1, 4, [0.20, 0.40, 0.85]);
-      marshalPost(K(0.315), 1, 9);
+      tyreWall(0.436, 0.466, -1, 4, [0.20, 0.40, 0.85]);
+      marshalPost(K(0.453), 1, 9);
 
       groundPatch(K(0.685), 1, 5, [28, 0.18, 36], GRAVEL,
         { id: "catalunya-lacaixa-gravel", samples: 6 });
@@ -167,13 +182,13 @@
         { id: "catalunya-final-gravel", samples: 6 });
       marshalPost(K(0.925), 1, 9);
 
-      for (const [s0, s1] of [[0.10, 0.28], [0.34, 0.48], [0.53, 0.65], [0.72, 0.89]]) {
+      for (const [s0, s1] of [[0.17, 0.43], [0.47, 0.66], [0.72, 0.89]]) {
         guardrail(s0, s1, -1, 7, [0.80, 0.81, 0.83]);
         guardrail(s0, s1,  1, 7, [0.80, 0.81, 0.83]);
       }
       guardrail(0.94, 0.06, 1, 4.0, [0.85, 0.85, 0.88]);
       fence(0.95, 0.08, -1, 9, 4, [0.74, 0.76, 0.80]);
-      fence(0.05, 0.09, 1, 9, 4, [0.74, 0.76, 0.80]);
+      fence(0.13, 0.17, -1, 9, 4, [0.74, 0.76, 0.80]);
       fence(0.67, 0.71, -1, 9, 4, [0.74, 0.76, 0.80]);
       for (const s of [0.16, 0.22, 0.40, 0.46, 0.56, 0.78, 0.86]) {
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
@@ -195,8 +210,8 @@
       }
 
       for (const [s, side, gap] of [
-        [0.030, -1, 24], [0.075, 1, 34], [0.245, -1, 30],
-        [0.505, 1, 34], [0.700, -1, 36], [0.935, 1, 34],
+        [0.030, -1, 24], [0.155, 1, 34], [0.383, -1, 30],
+        [0.643, 1, 34], [0.700, -1, 36], [0.935, 1, 34],
       ]) floodMast(K(s), side, gap, { h: 40, cool: true, pool: false, arms: 3, light: false });
 
       for (const [i, s, gap] of [[0, 0.030, 46], [1, 0.045, 34], [2, 0.060, 46]]) {
@@ -243,8 +258,8 @@
       }
 
       for (const [id, s, side, gap, offs] of [
-        ["t1", 0.090, 1, 62], ["repsol", 0.215, -1, 58],
-        ["campsa", 0.470, 1, 62],
+        ["t1", 0.160, -1, 62], ["repsol", 0.353, -1, 58],
+        ["campsa", 0.608, 1, 62],
         ["lacaixa", 0.645, -1, 58, [0, 1, 2, 3, 4]],
       ]) {
         const js = offs || [-2, -1, 0, 1, 2];

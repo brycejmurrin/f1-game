@@ -438,9 +438,11 @@ const NetTransport = (function () {
       return INBOX_BYTE_CAP + 1;             // unknown payload shape: fail closed
     }
 
+    let discTimer = null;   // the disconnect grace window below; shutdown reclaims it
     function shutdown(reason) {
       if (ep.status === "closed") return;
       ep.status = "closed";
+      if (discTimer) { clearTimeout(discTimer); discTimer = null; }
       inbox.length = 0;
       queuedState = queuedEvents = queuedBytes = 0;
       for (const k of CHANNELS) { try { chans[k] && chans[k].close(); } catch (e) { /* already closing */ } }
@@ -526,7 +528,6 @@ const NetTransport = (function () {
     // race for that peer. Give it a grace window instead — the session's own
     // heartbeat timeout still catches a real loss that never recovers.
     const DISCONNECT_GRACE_MS = 5000;
-    let discTimer = null;
     pc.onconnectionstatechange = () => {
       const s = pc.connectionState;
       if (Log.enabled("net", Log.DEBUG)) Log.debug("net", "pc state -> " + s);

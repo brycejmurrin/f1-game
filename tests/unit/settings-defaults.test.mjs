@@ -71,15 +71,36 @@ test("cautions ship off and SPEC documents every authoritative default", () => {
   assert.equal(spec.get("caution")?.subsystem, null, "caution is a sticky preference, not an unexportable subsystem");
 });
 
-test("audio call-site fallbacks agree with the shipped defaults", () => {
-  const src = fs.readFileSync(new URL("../../js/audio/panel.js", import.meta.url), "utf8");
+// A call-site fallback for a listed key decides NOTHING — store.get's _def()
+// answers from SettingsDefaults first — so a literal that disagrees is prose
+// that lies to the next reader. It shipped: js/game.js said tyreWear "light"
+// (and a comment built on it) while the owner file shipped "real", 1.82x the
+// wear, and difficulty/drivingCoach had drifted the same way. Every js/ file,
+// every literal fallback (string, number, boolean, null); an expression
+// fallback is not a claim about the default and is skipped.
+test("every literal call-site fallback agrees with the shipped default", () => {
   const { SettingsDefaults } = load();
-  for (const key of ["volMusic", "volSfx"]) {
-    const fallback = src.match(new RegExp(`store\\.get\\("${key}",\\s*([\\d.]+)\\)`));
-    assert.ok(fallback, `${key}: audio panel fallback is missing`);
-    assert.equal(Number(fallback[1]), SettingsDefaults.get(key),
-      `${key}: call-site fallback drifted from SettingsDefaults`);
+  const root = new URL("../../js/", import.meta.url);
+  const files = fs.readdirSync(root, { recursive: true }).filter((f) => f.endsWith(".js"));
+  const re = /\bstore\.get\(\s*"([^"]+)"\s*,\s*("(?:[^"\\]|\\.)*"|-?\d+(?:\.\d+)?|true|false|null)\s*\)/g;
+  const seen = new Set(), drift = [];
+  for (const f of files) {
+    const src = fs.readFileSync(new URL(f, root), "utf8");
+    for (const m of src.matchAll(re)) {
+      if (!SettingsDefaults.has(m[1])) continue;
+      seen.add(m[1]);
+      const want = SettingsDefaults.get(m[1]), got = JSON.parse(m[2]);
+      if (got !== want) {
+        const line = src.slice(0, m.index).split("\n").length;
+        drift.push(`js/${f}:${line} ${m[1]}: fallback ${m[2]}, ships ${JSON.stringify(want)}`);
+      }
+    }
   }
+  // The absent case: a regex that stopped matching would pass on nothing.
+  for (const k of ["difficulty", "tyreWear", "drivingCoach", "volMusic", "volSfx"]) {
+    assert.ok(seen.has(k), `${k}: no literal store.get fallback found — did the scan stop matching?`);
+  }
+  assert.deepEqual(drift, [], "call-site fallbacks drifted from js/data/settings-defaults.js");
 });
 
 test("a stored value still beats the shipped default", () => {

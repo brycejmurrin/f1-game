@@ -57,3 +57,30 @@ test("the friend-race gate survives openQuali's await, and TO THE GRID runs the 
   assert.equal(called, 1,
     "TO THE GRID must run the lobby's finishStart — netPlay.start() has no other caller");
 });
+
+// openQuali is async and none of its four callers await it, so a throw inside
+// it was an unhandled rejection: the global error overlay, over a settings
+// screen that race-settings had already hidden — no menu under it. It now
+// catches its own failure and lands on the menu, like startRace does.
+test("a failed openQuali lands on the menu instead of rejecting into the void", async () => {
+  const doc = g.sandbox.document;
+  const sheet = doc.getElementById("quali");
+  const rejBefore = g.record.rejections.length;
+  const remove = sheet.classList.remove;
+  let thrown = 0;
+  // openQuali's first DOM touch after the build; quitToMenu makes the same call,
+  // so throw only once — the recovery path must run clean.
+  sheet.classList.remove = function (...a) {
+    if (!thrown++) throw new Error("injected openQuali failure");
+    return remove.apply(this, a);
+  };
+  try {
+    const p = g.G.openQualiForNet(() => {});
+    await flush();
+    await p;
+  } finally { sheet.classList.remove = remove; }
+  assert.equal(thrown >= 1, true, "the injected failure never fired — the test no longer reaches openQuali's body");
+  await flush();
+  assert.deepEqual(g.record.rejections.slice(rejBefore), [], "openQuali's failure escaped as an unhandled rejection");
+  assert.equal(sheet.hidden, true, "the qualifying sheet was left up over the menu");
+});

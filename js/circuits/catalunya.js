@@ -13,7 +13,11 @@
     // 120 m) — it was on the wrong PART of the lap, not in a corner.
     // See docs/tracks/START-LINES.md.
     startFrac: 0.0000,
-    sceneryStartFrac: 0.03,
+    // No sceneryStartFrac. The 0.03 kept here after the line move made a 0.138
+    // shift that stood the pit block 0.055 short of T1 and put pines down the
+    // pit lane: the paddock and main straight are authored against THIS line.
+    // The tables below that were tuned against the old shift carry their shipped
+    // engine fracs verbatim. docs/notes/DEFECT-LEDGER.md, "catalunya".
     name: "CATALUNYA",
     gp: "Spanish GP",
     country: "Spain",
@@ -22,10 +26,13 @@
     lengthKm: 4.7,
     baseHW: 7.5,
     sceneryCoordinates: "racing",
+    // The main stand is the scenery's own grandstandEx(0.005, -1, 180 m); the
+    // engine's generic 7-box pit-straight stand would stand inside it (Monza).
+    ownPitStraight: true,
     terrainOuter: 115,
     dressingExclusions: [
       { kinds: ["foliage"], s0: 0.92, s1: 0.12 },  // pits + main straight
-      { kind: "foliage", s0: 0.42, s1: 0.52 },              // the open infield bowl
+      { kind: "foliage", s0: 0.558, s1: 0.658 },            // the open infield bowl at Campsa
     ],
     // Dry Catalan light: hard sun, bleached scrub, dusty ochre runoff.
     pal: {
@@ -41,10 +48,10 @@
       sunDir:        [0.40, 0.70, 0.28],
     },
     elevations: [
-      { s: 0.18, halfM: 380, rise: 7.0 },    // climb through Renault/Repsol
-      { s: 0.44, halfM: 420, rise: 11.0 },   // high ground before Campsa
-      { s: 0.62, halfM: 400, rise: -9.0 },   // Campsa drop toward La Caixa
-      { s: 0.86, halfM: 360, rise: -6.0 },   // run down to the final chicane
+      { s: 0.2876, halfM: 380, rise: 7.0 },    // climb through Renault/Repsol
+      { s: 0.5476, halfM: 420, rise: 11.0 },   // high ground before Campsa
+      { s: 0.7276, halfM: 400, rise: -9.0 },   // Campsa drop into La Caixa
+      { s: 0.9676, halfM: 360, rise: -6.0 },   // dip along the pit straight
     ],
     hwZones: [
       { s0: 0.290, s1: 0.335, hw: 6.4, ease: 0.012 },  // Seat / Wurth chicane
@@ -52,10 +59,10 @@
       { s0: 0.905, s1: 0.955, hw: 6.5, ease: 0.012 },  // final chicane complex
     ],
     bankZones: [
-      { frac: 0.060, angleDeg: 3.5, widthM: 120 },   // Elf (T1)
-      { frac: 0.235, angleDeg: 4.0, widthM: 130 },   // Repsol
-      { frac: 0.500, angleDeg: 4.5, widthM: 150 },   // Campsa
-      { frac: 0.800, angleDeg: 3.0, widthM: 120 },   // Europcar
+      { frac: 0.1976, angleDeg: 3.5, widthM: 120 },   // Elf (T1)
+      { frac: 0.3726, angleDeg: 4.0, widthM: 130 },   // Repsol
+      { frac: 0.6376, angleDeg: 4.5, widthM: 150 },   // Campsa
+      { frac: 0.9376, angleDeg: 3.0, widthM: 120 },   // Europcar
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──

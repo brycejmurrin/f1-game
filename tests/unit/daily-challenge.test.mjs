@@ -104,6 +104,21 @@ test("record() keeps the day's best and counts a streak of consecutive UTC days"
   assert.equal(d.data().days["2026-09-04"].best, 70, "earlier days are kept");
 });
 
+test("record() keeps a 60-day window of history; the streak is untouched", () => {
+  // The per-day history is write-only (every reader asks for today), so it must
+  // not grow ~680 chars a day for ever.
+  const { d } = load();
+  d.open("2026-01-01"); d.record(90);
+  d.open("2026-03-01"); d.record(90);    // 59 days later: still inside the window
+  assert.ok(d.data().days["2026-01-01"], "a day inside the window was dropped");
+  d.open("2026-03-03"); d.record(90);    // 61 days after the first
+  const days = Object.keys(d.data().days).sort();
+  assert.deepEqual(days, ["2026-03-01", "2026-03-03"]);
+  assert.deepEqual(host(d.data().streak), { count: 1, last: "2026-03-03" });
+  d.open("2026-03-04"); d.record(90);
+  assert.deepEqual(host(d.data().streak), { count: 2, last: "2026-03-04" });
+});
+
 test("the share line names the day, circuit, best, medal and streak", () => {
   const { d } = load();
   d.open("2026-09-03"); d.record(81.345); d.record(81.1);
