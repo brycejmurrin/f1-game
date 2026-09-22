@@ -11,6 +11,32 @@
 Verified against the current tree. Everything fixed has moved to the archived
 journal; this is what remains.
 
+**2026-09-22 (bug hunt) — race flow: five defects, each reproduced in the
+game-vm before its fix. FIXED.** (`tests/unit/race-flow-fixes-vm.test.mjs`,
+`race-control.test.mjs`, `pit-lane.test.mjs`.)
+- RED FLAG kicked the whole field: the red cap holds cars under the
+  stuck-rescue gates, so every AI was "rescued" 1.2 → 11.8 m/s each
+  aiRescueDelay and a player on the throttle was teleported (41 kicks, 3
+  rescues in one 14 s procedure, re-ordering the restart grid by prog). The
+  low-speed clauses now stand down while `raceCtl.level >= 4`.
+- FINISHERS stopped dead ~v²/40 m past the line on one shared line:
+  `coast()` held its floor for ONE step, then scrubbed to 0, and the next car
+  home rear-ended it at 14-29 m/s. The floor now holds (`_coastHeld`), and
+  two finished cars are never a collision pair.
+- After a red-flag restart the 45 s re-arm hold masked EVERY caution level,
+  all of it on green running (the countdown never ticks it). game.js clears
+  the surface on the tick it takes the restart, so it now calls
+  `raceCtl.clearHold()` there.
+- `IncidentSim._lapCross` missed the chequered flag for a lapped car and had
+  no backward branch (a car thrown back over the line gained a lap). Found
+  here, but fixed on the deploy branch first (PR #215,
+  `RaceControl.lineTransition`); this batch takes that fix.
+- The only human RETIRING ended the race 2.2 s later (by design) but scored
+  AI whose failure was already drawn from the mid-race snapshot; those
+  retire now. Plus: camera `shake`/`hitStop` reset per race, the pit-exit
+  MERGE cue uses the wrapped track gap (it never named a lapping leader), and
+  per-AI-per-tick `cautionInfo()` objects / an unused `Tracks.sample` are gone.
+
 **2026-09-22 (bug hunt) — prop guards paid the pit keep-out everywhere.
 FIXED (perf).** `onRoadHit` / `onTrack` widened every query by `pitMax`
 (~30 m), which only exists in the pit window, and were the top self-time of a

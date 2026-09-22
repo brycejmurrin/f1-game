@@ -501,15 +501,17 @@ const PitLane = (function () {
     function estimate(c) {
       const zz = z();
       if (!zz) return null;
-      const flag = G.cautionInfo ? G.cautionInfo().level : 0;
+      const flag = cautionLevel();
       if (flag >= 4) return null;
       // The road the car would be on instead: slowed by the flag, never above
       // the pit straight's own speed. Same loss formula, slower road — which is
       // exactly why a stop under a caution is cheap.
       const roadFrac = Math.min(STRAIGHT_V, flag === 3 ? 0.45 : flag === 2 ? 0.6 : 1);
       const loss = lossAt(roadFrac);
-      const behind = (G.cars || []).filter(o => o !== c && !o.retired && !o.finished && o.prog < c.prog)
-        .sort((a, b) => b.prog - a.prog)[0];
+      let behind = null;   // the nearest car behind in race distance — one pass, no per-tick filter/sort
+      for (const o of G.cars || []) {
+        if (o !== c && !o.retired && !o.finished && o.prog < c.prog && (!behind || o.prog > behind.prog)) behind = o;
+      }
       const gapS = behind ? (c.prog - behind.prog) / Math.max(1, behind.speed || G.vTop() * roadFrac) : null;
       return { lossS: loss, gapS, marginS: gapS == null ? null : gapS - loss, caution: flag >= 2, estimated: true };
     }
@@ -579,15 +581,28 @@ const PitLane = (function () {
       _said[k] = true;
       if (G.announce) G.announce(msg, 2.2, "race");
     }
+    // The flag level without raceCtl.info()'s per-call object (think() asks
+    // per AI per tick). cautionInfo stays the fallback for a ctx without it.
+    function cautionLevel() {
+      if (G.cautionLevel) return G.cautionLevel();
+      return G.cautionInfo ? G.cautionInfo().level : 0;
+    }
     /** The nearest car behind on the racing surface that is on this car
      *  inside MERGE_S at its own speed — the one a merging car has to see. */
     function closingCar(c) {
       const cars = G.cars || [];
+      const L = G.track && G.track.total;
+      if (!(L > 0)) return null;
       let best = null, bestGap = MERGE_S;
       for (let i = 0; i < cars.length; i++) {
         const o = cars[i];
-        if (o === c || o.retired || o.finished || inLane(o) || !(o.prog < c.prog)) continue;
-        const gap = (c.prog - o.prog) / Math.max(1, o.speed || 0);
+        if (o === c || o.retired || o.finished || inLane(o)) continue;
+        // Behind ON THE TRACK, not in race distance: the leader arriving to
+        // lap you has MORE prog, and a lapped car right behind has far less —
+        // a prog test skipped the one and filtered out the other.
+        const behind = ((c.s - o.s) % L + L) % L;
+        if (!(behind > 0 && behind < L * 0.5)) continue;
+        const gap = behind / Math.max(1, o.speed || 0);
         if (gap < bestGap) { bestGap = gap; best = o; }
       }
       return best;
@@ -1535,11 +1550,10 @@ const PitLane = (function () {
       // dry->rain arc did not have.
       const wantTread = TyreModel.treadFor(G.raceWeather, G.roadWetness && G.roadWetness());
       const wrongTread = !!c.tyre && (c.tyre.tread || 0) !== wantTread;
-      const caution = G.cautionInfo ? G.cautionInfo() : null;
       const why = AiDrive.pitNow({
         stopsLeft,
         lapsToStop: nextAt == null ? 99 : nextAt - (c.lap || 0),
-        cautionLevel: caution ? caution.level : 0,
+        cautionLevel: cautionLevel(),   // per AI per tick: the allocation-free read
         wear: G.tyres.spent(c),
         wrongTread,
         // …so the worn rule can ask whether the stop has laps left to pay for
