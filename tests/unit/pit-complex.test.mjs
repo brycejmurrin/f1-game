@@ -487,13 +487,15 @@ test("race control stands past the last bay, inside the row's keep-out, on a ben
 });
 
 test("a RAW landform yields to the complex chord by chord, and says so", () => {
-  // Portimão's pit-straight cutting (groundedSegments, 9 m wide, 5.5 m tall,
-  // 20 m out) ran straight through the garages: RAW emitters never pass the
-  // footprint guard. They now ask `inPit` per chord and record the drop as
-  // superseded, not as a guard suppression.
-  const t = buildOnce("portimao");
+  // RAW emitters never pass the footprint guard, so a landform laid through the
+  // garages used to stand in them. They now ask `inPit` per chord and record the
+  // drop as superseded, not as a guard suppression. The fixture was Portimão's
+  // T3 cutting, which only reached the pits under its bogus sceneryStartFrac
+  // (DEFECT-LEDGER, "sceneryStartFrac audit"); Hungaroring's hand-placed pit
+  // wall runs down the lane itself, 21 chords each, with or without its shift.
+  const t = buildOnce("hungaroring");
   const d = t.modelDiagnostics;
-  const cut = d.suppressed.filter((e) => /^portimao-cut-/.test(e.id));
+  const cut = d.suppressed.filter((e) => /^hungaroring-pit-wall/.test(e.id));
   assert.ok(cut.length >= 1, "a cut is recorded");
   for (const e of cut) {
     assert.equal(e.required, false);

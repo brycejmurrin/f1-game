@@ -2519,3 +2519,145 @@ terrain and procedural dressing too, which is why this needed the probe A/B as
 its gate rather than the audits alone. Any other circuit carrying a
 `sceneryStartFrac` should be checked the same way, with the probe, before its
 value is trusted.
+
+## `sceneryStartFrac` audit — the other 29 circuits (2026-09-22)
+
+Estoril's value was wrong and nothing had checked the 29 other circuits that
+carry one. The start-line campaign (`docs/tracks/START-LINES.md`) moved many
+lines to the real straight and preserved the OLD origin as `sceneryStartFrac`,
+on the assumption that the scenery was authored against it. For a circuit whose
+scenery was actually written against `startFrac: 0`, that preserved origin is a
+bogus shift. The acceptance test is the probe
+(`node tools/shot/agent.mjs <id> scene --at <frac> --radius 130 --limit 40`),
+not the audits. float/clip/coplanar are blind to a paddock on a corner.
+
+### portimao — FIXED (`sceneryStartFrac: 0.96` removed, shift 0.8462 -> 0)
+
+Same defect as Estoril, same value. The pit lane is engine 0.944-0.024, and the
+scenery's own numbers are written against that line: pit bays 0.942-0.996,
+race control 0.992, T1 gravel 0.050, T5 gravel 0.300 (T5 apex 0.3012), braking
+boards 0.012-0.030 ahead of T1 at 0.0757. Under the shift, all of it moved
+0.154 of a lap back:
+
+| `agent.mjs portimao scene --at` | shipped | fixed |
+|---|---|---|
+| 0.985, mid pit lane | 24 pines, 9 trees, 2 stone pines, 5 structures | 14 structures, 2 gantries, grandstand, 2 motorhomes, building, 2 billboards |
+| 0.85, T15 (last corner) | grandstand, 3 motorhomes, gantry, 14 structures | 18 pines, 5 trees, 3 stone pines |
+| 0.0757, T1 | 25 pines, 6 structures | 18 structures (T1 terracing), marshal post |
+
+Node signature, before -> after: the four `portimao-pit-bay-*` and
+`portimao-race-control` went from EMITTED (onto T15) to "superseded by the pit
+complex", which is what a hand-placed pit block is for; `portimao-t5-gravel`
+went from "footprint rejected" to emitted; `portimao-cut-t3` went from
+"superseded by the pit complex" to emitted. Elevations moved with it: the
+"drop into Turn 1" (s 0.045) and the "climb back to the pit straight" (s 0.93)
+had been landing 0.154 early.
+
+Knock-on fixes, measured one at a time, not absorbed:
+
+- **`ownPitStraight: true`.** The engine's generic 7-box pit-straight stand
+  (tracks.js, k 0-24, left) now sat inside the circuit's own
+  `grandstandEx(0.005, -1, …)`: coplanar 1 -> 2, both spots at frac
+  0.002/0.0085, 17-18 m left. It is the Monza precedent. The flag also removed a
+  4.00 m / 1222 m3 box-vs-box clip at frac 0.000. **That spot is not
+  Portimão's:** the same 4.00 m frac-0.000 box pair appears on about a dozen
+  unshifted circuits (albert_park, buddh, buenos_aires, dijon, estoril, fuji,
+  interlagos, korea, kyalami, magny_cours, …). Disabling every hand-placed
+  emitter near the line left it in place, so it is engine-side. It is a lead
+  worth its own entry.
+- **Floating tree, frac 0.171.** A forestEdge tree inside the T4 hairpin (left),
+  pushed ~40 m out by `clearTreeDist` into the terrain hollow between the two
+  carriageways, grounded 1-12 m up. The belt now skips 0.168-0.181 on that
+  side (bisected: narrower windows leave it floating).
+- **`portimao-quinta-north` footprint rejected.** At 88 m it stood 7 m from
+  the 0.369 carriageway's centreline. It is at 60 m now, 35 m clear (130 m is
+  equally clear; 76-120 m all reject).
+- **The forest belt grew through both hillside terraces** (0.470-0.530 left,
+  0.835-0.890 right, both at the belt's 16 m gap). The belt skips them now. This
+  was already true in the authored frame; the shift had only moved it.
+
+Clip as a distribution (dressing as fixed, `sceneryStartFrac` swept; values
+snap to control points, so the shift is shown):
+
+| shift | 0.046 | 0.069 | 0.075 | 0.077 | 0.119 | 0.337 | 0.521 | 0.680 | 0.816 | 0.846 (shipped) | 0.853 | 0.882 | 0.961 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| severe clips | 59 | 51 | 50 | 50 | 57 | 46 | 62 | 51 | 55 | 54 | 47 | 55 | 52 |
+
+Median 52. Shift 0 before the terrace carve measured 58, near the top of that
+spread; the terrace-vs-forest carve took it to **51**. Every baseline came DOWN:
+**clip 54 -> 51, coplanar 1 -> 0, float 1 -> 0.** None went up.
+The acceptance test passes: `pit-complex.test.mjs`'s "a RAW landform yields to
+the complex" used `portimao-cut-t3` as its fixture. That emitter only reached the
+garages under the bogus shift and now dresses T3, so the fixture moved to
+Hungaroring's hand-placed pit wall. That wall yields 21 chords whether or not
+Hungaroring keeps its shift.
+
+### The other 28 — triage, no changes made
+
+Two measurements per circuit. (1) The probe at the middle of `pitLaneSpan`, on
+the shipped tree. (2) A pure-node A/B over `track.props.list`, counting BUILT
+props (structure/grandstand/motorhome/building/gantry/billboard/tower) against
+TREES within 130 m of the pit-lane midpoint, plus the hand-placed pit block's
+fate (`pitEmit` = `*-pit-bay-*`/`*-race-control` emitted, `pitSup` = models
+superseded by the pit complex). It runs twice: as shipped, and with
+`sceneryStartFrac` deleted. Calibrated on the two known cases first:
+
+| control | shipped: built / trees / pitEmit | shift 0: built / trees / pitEmit |
+|---|---|---|
+| estoril (0.96) | 6 / **134** / 0 | 33 / 0 / 0 |
+| portimao (0.96) | 10 / **115** / 5 | 24 / 28 / 0 |
+
+"Shift 0" is a real candidate only where `startFrac` is 0 (or within 0.02 of
+it). Where the line itself moved (brands_hatch, donington, jerez, monaco,
+mont_tremblant, silverstone, vegas, zolder), dropping the value is not the
+alternative, and those rows are signal only. To reproduce: `buildContext()` from
+`tools/track/verify-track.cjs`, `build(def)` once as shipped and once after
+`delete def.sceneryStartFrac`, then count `track.props.list` by kind within
+130 m of node `round(mid * n)`, where mid is the centre of `Tracks.pitLaneSpan`.
+Use a fresh `buildContext()` per mode, as this audit did.
+
+**CONFIRMED — same defect, the paddock is on a corner.** The hand-placed pit block
+(pit bays + race control, authored ~0.94-0.99 against `startFrac: 0`) emits
+under the shift and is superseded by the pit complex without it. Probed where it
+actually lands (authored 0.965 + shift):
+
+| circuit | value -> shift | pit block lands | probe there | shipped -> shift 0 |
+|---|---|---|---|---|
+| catalunya | 0.03 -> 0.138 | 0.103, 0.055 short of T1 | gantry, 21 structures, building, billboard | pitEmit 7 -> pitSup 7; pit-lane trees 12 -> 0 |
+| istanbul | 0.98 -> 0.925 | 0.890, **on T12** (0.8884) | gantry, 23 structures, grandstand, 3 motorhomes | pitEmit 7 -> pitSup 7 |
+| mugello | 0.05 -> 0.133 | 0.098, 0.047 short of T1 | gantry, 22 structures, 4 motorhomes | pitEmit 5 -> 1; pit-lane trees 275 -> 122 |
+| paul_ricard | 0.03 -> **0.923** | 0.888, **on T13** (0.8884) | gantry, 25 structures, 2 motorhomes | pitEmit 5 both ways: the pit bays miss the lane in EITHER frame, so this is a frame AND a side/placement question |
+| sepang | 0.95 -> 0.882 | 0.847, 0.038 short of T14 | gantry, 20 structures, 14 palms | pitEmit 6 -> pitSup 7; pit-lane trees 38 -> 18 |
+
+Each needs its own PR: remove the value, then work the knock-ons as Portimão
+did (probe A/B, clip as a distribution, audits per emitter).
+
+**LIKELY — the pit straight reads as woodland in the shipped build and clears
+without the shift, but there is no hand-placed pit block to confirm the frame.**
+Probe before touching any of them:
+
+| circuit | value -> shift | pit-lane trees, shipped -> shift 0 | other tells |
+|---|---|---|---|
+| montreal | 0.915 -> 0.860 (`startFrac` 0.0198) | 84 -> 0 | pitSup 3 -> 7 (`park-lawn-l-*` and `kit:montreal:pit-building` already superseded) |
+| mexico | 0.635 -> 0.724 | 133 -> 42 | pitSup 0 -> 3 |
+| redbull | 0.1875 -> 0.295 | 105 -> 30 | probe at pit mid: 21 pines, 6 trees, 10 structures |
+| cota | 0.515 -> 0.416 | 69 -> 14 | probe: 14 acacia, 14 trees, 8 pines at pit mid |
+| suzuka | 0.6125 -> 0.620 (`startFrac` 0.9942) | 158 -> 100 | probe: 16 pines, 20 trees, 1 structure at pit mid |
+| indianapolis | 0.05 -> 0.158 | 28 -> 0 | pitSup 0 -> 2; probe: 23 trees at pit mid |
+| miami | 0.2325 -> 0.201 | 53 -> 15 | |
+| monza | 0.0125 -> 0.087 | 57 -> 32 | pitSup 0 -> 1; `ownPitStraight` already set |
+| albert_park | 0.0925 -> 0.102 | 102 -> 77 | parkland; probe at pit mid: 40 trees |
+| silverstone | 0.64 -> 0.150 (`startFrac` 0.5224) | 127 -> 31 | line moved, so "shift 0" is not the alternative; needs the old frame worked out |
+
+**READS CORRECTLY, OR SHIFT 0 IS NO BETTER — leave alone.** abudhabi (4/6 vs
+17/21, both sparse), brands_hatch (probe: gantry, grandstand, 8 buildings, 8
+structures), donington (probe: 9 structures, 2 motorhomes; A/B flat),
+hungaroring (shift 0 is worse: built 23 -> 10), imola (A/B flat, trees 70 vs 85),
+jerez (shipped better: built 81 vs 61; probe: 4 motorhomes, 29 props),
+monaco (flat), mont_tremblant (forest either way, 392 vs 279), qatar (built 7 vs
+26, but 41 footprint rejections both ways: its own problem, not the frame),
+shanghai (flat), singapore (flat; mirror + shift circuit, see its KOLD legend),
+spa (flat), vegas (flat), zolder (forest either way).
+
+Every row here is a triage verdict, not a fix. Only the probe at the named
+feature decides, one circuit per PR.
