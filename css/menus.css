@@ -191,10 +191,22 @@
    Portrait is body[data-shape="tall"] (zoom-corrected, js/game/sheetshape.js),
    never an orientation media query — tests/unit/ui-improve-pass pins that. */
 @media (max-width: 699px) {
-  :where(body[data-shape="tall"]) #title-car { width: 180%; right: auto; opacity: 0.42; }
+  /* A TALLER BOX, NOT A WIDER ONE. `width: 180%` failed ui-scale.spec on every
+     portrait size with "#overlay scrolls sideways": an absolutely positioned
+     box wider than its scroll container still counts toward scrollWidth,
+     overflow-x:hidden only hides the bar, and overflow-x:clip cannot pair with
+     overflow-y:auto (it computes back to hidden). 1620/900 is 1.8x the meet
+     height, and with preserveAspectRatio="xMinYMax slice" on the <svg> the art
+     scales by HEIGHT to cover it, pins the bottom-left, and clips the trails
+     inside the SVG viewport, where no scrollWidth can see them. Everywhere
+     else the box is 1400/900, where slice and meet are the same scale. */
+  :where(body[data-shape="tall"]) #title-car { aspect-ratio: 1400 / 1620; opacity: 0.42; }
 }
-/* ASPECT, NOT WIDTH, IS WHAT BREAKS THIS LAYER, and the fix is on the <svg>:
-   preserveAspectRatio MEET, not SLICE. Slice scales to COVER, so on a viewport
+/* ASPECT, NOT WIDTH, IS WHAT BREAKS THIS LAYER, and the fix is the BOX: the
+   element carries aspect-ratio 1400/900 itself, so `slice` and `meet` compute
+   the same scale and the attribute only matters on the tall phone, where a
+   deliberately taller box + slice is the 1.8x crop (see the rule above).
+   Before the box had its own aspect, MEET was the fix and SLICE the bug: Slice scales to COVER, so on a viewport
    narrower than the viewBox's 1400/900 (1.556) it scales by HEIGHT and runs off
    the sides — measured, a 834x1194 iPad blew the 1400-unit viewBox out to
    ~1857px, and a rotated 1080x1920 monitor got a front wing across the whole
@@ -374,7 +386,7 @@
    far enough not to read as a third title line. The step is a stated margin
    rather than whatever the audio line happened to reserve: #audiostate is empty
    until tilt is granted (or denied), and its `min-height: 16px` used to hold a
-   phantom band open between the subtitle and the disclaimer, which is what left
+   phantom band open between the wordmark and the disclaimer, which is what left
    the disclaimer floating in the middle of nothing on a desktop. */
 #menu-meta { margin-top: 16px; gap: 6px; }
 #audiostate { color: var(--dim); font-size: var(--fs-micro); }
@@ -382,8 +394,8 @@
 /* NO `align-self` HERE — the chip must follow #menu-meta's own alignment, which
    is `center` in portrait and `flex-start` in landscape. Pinning it to
    flex-start looked right in landscape and put it hard against the left edge of
-   a CENTRED composition in portrait, with the title, subtitle and disclaimer all
-   centred around it (measured 393x852: disclaimer left 25, subtitle left 52,
+   a CENTRED composition in portrait, with the title and disclaimer
+   centred around it (measured 393x852, when a subtitle still sat between them: disclaimer left 25, subtitle left 52,
    button left 25). `width: auto` is what actually stops it spanning the column;
    `min-height` puts it on the touch ladder, which .minibtn does not do on its
    own — it is padding-sized, and this measured 40 CSS px without it. */
@@ -427,7 +439,7 @@
    Nothing spans rows either: brand and buttons share row 1, small print takes
    row 2. The old layout ran the button column through all four branding rows,
    and a grid distributes a spanning item's excess height across the rows it
-   covers — which is what pushed the subtitle 230px below the title. */
+   covers — which is what pushed the small print 230px below the title. */
 /* max-height 599, not 560: the large-screen composition in css/responsive.css
    starts at min-height 600, and the 40px between the two used to fall through to
    the PORTRAIT stack — so a short, wide desktop window (say 1000x580) got a
@@ -578,8 +590,8 @@ body { --compact-at: 600px; --wide-at: 620px; }
      417px of a 932px phone (2026-09-22, iPhone 15 Pro Max) with every label
      sitting in ~90px of slack, while the title art behind the brand column had
      the other half to itself. min(46%, 400px) keeps RACE A FRIEND on one line
-     at --fs-micro once the door is a row flexbox (rule below); the brand
-     column and the cars take the rest. */
+     at the compact 17px once the door is a row flexbox (rule below); the
+     brand column and the cars take the rest. */
   grid-template-columns: minmax(0, 1fr) min(46%, 400px);
   justify-content: safe center;
   align-content: safe center; justify-items: stretch;
@@ -620,7 +632,11 @@ body { --compact-at: 600px; --wide-at: 620px; }
   gap: calc(var(--gap) * 0.45);
 }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-buttons .bigbtn {
-  width: 100%; padding: 6px 8px 6px 12px; font-size: var(--fs-micro);
+  width: 100%; padding: 6px 8px 6px 12px;
+  /* No font-size here: the compact block below (`calc(var(--fs-4) *
+     var(--ui-compact-text))`) is later at equal specificity and wins, so a
+     value on this line is dead — the doors paint 17px, which the phone
+     screenshots were taken at. */
   min-height: max(32px, var(--tap-min));
 }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-primary .bigbtn {
