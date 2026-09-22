@@ -59,7 +59,9 @@ Session shape — eleven rules that control wall time and waiting:
 8. A timeout on a busy box measures the machine: check `/proc/loadavg` (< 3)
    and for a live `playwright test` first; re-run alone only when the verdict
    matters. On CI, `cancelled` with zero failures is a timeout until proven
-   otherwise.
+   otherwise — EXCEPT the designed one: a push and its PR event share a group
+   on purpose, so the PR run (merge commit) cancels the push run on the same
+   `head_sha` seconds in. A live sibling on that SHA means dedupe, not a red.
 9. Stopping is allowed: a pushed change that names its unverified groups
    beats an hour of SwiftShader. Never widen a tolerance to make a spec pass;
    a `waitForFunction` on a rendering page needs `{ polling: 100 }`

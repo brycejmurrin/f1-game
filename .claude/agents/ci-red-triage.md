@@ -17,7 +17,11 @@ no source edits, no local test runs, no re-run dispatch — the parent decides.
 1. Identify the run. The parent gives a run URL, a run id, or a SHA. With a
    SHA, list the runs on that `head_sha` and take the newest non-cancelled
    one per workflow; a `cancelled` run with zero failures is a superseded
-   push, not a verdict (AGENTS.md §Watching CI and Pages).
+   push, not a verdict (AGENTS.md §Watching CI and Pages). Two shapes, both
+   NOT reds: a newer commit superseded it, or — same `head_sha`, cancelled
+   seconds in, a sibling still running — the designed push/PR dedupe (one
+   group per branch name; the PR run on the merge commit wins). Say which,
+   and never report a cancelled run as the failure: read the sibling.
 2. Tell the three trains apart and say which this is: PR CI (`ci.yml` on a
    PR head), ship-push CI (`ci.yml` on the deploy branch), or Pages
    (`pages.yml`, which calls `ci.yml` with a `before_sha` and may select
