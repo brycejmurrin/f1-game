@@ -455,6 +455,13 @@ jobs:
               } else if (_w && _w.note) {
                 rows.push(`${" ".repeat(8)}work:  ${_w.note}`);
               }
+              // The compile stacks, one row per signature: which draw asked
+              // for a program the warm never built. The OURS half is the part
+              // that names a fix; the frames from three only say it compiled.
+              const _cs = g.compileStacks || [];
+              for (const [sig, count] of _cs.slice(0, 12)) {
+                rows.push(`${" ".repeat(8)}stack: x${count}  ${String(sig).slice(0, 300)}`);
+              }
               rows.push(`${" ".repeat(8)}gov:   tier=${gov.tier} autoTier=${gov.autoTier} userTier=${gov.userTier} ` +
                 `scale=${gov.scale} fps=${gov.fps} floorMs=${gov.floorMs} envFace=${env.face} frames=${(gov.open && gov.open.frames) != null ? gov.open.frames : "?"}`
                 // ...and the OTHER way this column lies. floorMs 16.6 is 1/60 s,

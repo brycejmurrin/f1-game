@@ -169,7 +169,31 @@ try {
     // beats cannot tell them apart. Count the calls: they are exact even
     // where milliseconds are not.
     const _hWork = new Map();
-    const _bumpWork = (k) => { if (_hArmed) _hWork.set(k, (_hWork.get(k) || 0) + 1); };
+    // WHO COMPILES. Run 198 counted 25 synchronous createRenderPipeline calls
+    // in the race window on the TLX/WebGPU leg against 1 on WGX, and the
+    // spike counts track them one for one. A count says the renderer is
+    // compiling mid-race; it does not say which draw asked for a program the
+    // warm never built. Capture a bounded sample of stacks per compile and
+    // aggregate by signature — the answer wanted is a function name in our
+    // own files, below three's, so keep enough frames to walk through three.
+    const _hStacks = new Map();
+    let _hStackBudget = 200;
+    const STACK_KINDS = { "gpu.createRenderPipeline": 1, "gl.linkProgram": 1 };
+    const _bumpWork = (k) => {
+      if (!_hArmed) return;
+      _hWork.set(k, (_hWork.get(k) || 0) + 1);
+      if (!STACK_KINDS[k] || _hStackBudget <= 0) return;
+      _hStackBudget--;
+      let sig = "?";
+      try {
+        const raw = (new Error().stack || "").split("\n").slice(3, 18);
+        const fr = raw.map((l) => l.trim().replace(/^at\s+/, "").replace(/\?v=[a-z0-9]+/g, "").replace(/https?:\/\/[^\s)]*\//g, ""));
+        const ours = fr.filter((l) => !/three\.webgpu|three\.core|three\.tsl/.test(l));
+        sig = fr.slice(0, 2).join(" <- ") + "  ||OURS|| " + (ours.slice(0, 5).join(" <- ") || "(none in window)");
+      } catch (_) { /* no stack: the count still stands */ }
+      const key = k + " :: " + sig;
+      _hStacks.set(key, (_hStacks.get(key) || 0) + 1);
+    };
     try {
       const wrapCall = (proto, name, kind) => {
         if (!proto || typeof proto[name] !== "function") return;
@@ -241,10 +265,11 @@ try {
         });
       };
       window.__gcHitch = {
-        arm() { _hArmed = true; _hN = 0; _hSig.length = 0; _hWork.clear(); },
+        arm() { _hArmed = true; _hN = 0; _hSig.length = 0; _hWork.clear(); _hStacks.clear(); _hStackBudget = 200; },
         dump: () => ({ t0: Array.from(_hT.subarray(0, _hN)), dur: Array.from(_hD.subarray(0, _hN)),
                        passes: Array.from(_hP.subarray(0, _hN)), passSig: _hSig,
-                       work: [..._hWork.entries()].sort((a, b) => b[1] - a[1]) }),
+                       work: [..._hWork.entries()].sort((a, b) => b[1] - a[1]),
+                       stacks: [..._hStacks.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30) }),
       };
     } catch (_) { /* a frozen rAF just means this leg reports no hitch series */ }
     try {
@@ -446,6 +471,7 @@ try {
     // proved that nothing compiled.
     out.gpuWork = (d.work && d.work.length) ? Object.fromEntries(d.work)
       : { note: "no resource calls observed — wrapping failed, or this leg creates none" };
+    out.compileStacks = d.stacks || [];
     out.passKinds = analysePassKinds(d.passSig || [], d.passes || []);
     return a;
   }, 30000, "hitch-series").catch((e) => ({ note: "hitch read failed: " + String((e && e.message) || e).slice(0, 80) }));
