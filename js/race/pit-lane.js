@@ -1493,7 +1493,7 @@ const PitLane = (function () {
       const fittedLife = Number.isFinite(c.tyre.life) ? c.tyre.life : TyreModel.AI_CLASS[cls].life;
       const firstLife = Math.max(1, G.tyres.planLaps(fittedLife, G.lapsTarget) * (1 - G.tyres.spent(c)));
       const stops = plan.pin != null ? Math.max(0, plan.pin - done) : null;
-      const rel = AiDrive.stintPlan({ laps: lapsLeft, lifeLaps, pitLossLaps: plan.pitLossLaps || 0.18, roll: 0.5,
+      const rel = AiDrive.stintPlan({ laps: lapsLeft, lifeLaps, pitLossLaps: plan.pitLossLaps || AiDrive.STRAT.PIT_LOSS_FALLBACK, roll: 0.5,
                                       start: cls, firstLife, stops });
       if (!rel) return false;
       const newNext = rel.stops > 0 ? lap - 1 + rel.lapsAt[0] : null;

@@ -660,17 +660,43 @@ while the standings still render the stale one, which looks entirely fine.
 Two rules that were written down and never ran.
 
 **The season goal is resolved at the winter.** `deal.goal` — the championship
-position the team expects of you, derived from the car by `expectedFinish()` —
-was written by `newDeal()`, rendered on the hub and on the offer sheet, and read
-by nothing. Meeting it is worth `GOAL_REP` (+5); missing it costs the same, and
-also `GOAL_MV` (12) off the market value the winter's offers are drawn against.
-That is the demotion: `offerBar()` spaces the tiers 18 apart, so a missed goal
-costs most of a tier's worth of interest without needing a second rule to say so.
+position promised for the season — was written by `newDeal()`, rendered on the
+hub and on the offer sheet, and read by nothing. Meeting it moves reputation;
+missing it moves reputation the other way AND takes market value off the figure
+the winter's offers are drawn against. That is the demotion: `offerBar()` spaces
+the tiers 18 apart, so a missed goal costs most of a tier's worth of interest
+without needing a second rule to say so.
 
-**No money either way, deliberately.** `tools/car/career-economy.mjs` measures this
-economy against the catalog, and a once-a-season bonus it does not model would
-invalidate every figure in "The economy, measured" above. Reputation is the
-channel that already carries season-long form.
+**The target is a RUNG THE PLAYER PICKS, not a number the game chose.**
+`deal.ambition` indexes `AMBITION`, and the target is
+`expectedFinish(team) + AMBITION[i].delta`:
+
+| rung | `key` | target | met / missed | missed also costs |
+|---|---|---|---|---|
+| 0 | `modest` | 3 places softer | ±3 REP | −6 market value |
+| 1 | `expected` | `expectedFinish()` | ±5 REP | −12 market value |
+| 2 | `ambitious` | 3 places better | ±8 REP | −20 market value |
+
+**Rung 1 is what every contract used to be** — delta 0, the old `GOAL_REP` 5 and
+`GOAL_MV` 12 exactly — so a deal signed before the picker existed carries no
+`ambition`, reads as index 1 through `ambIdx()`, and resolves byte-identically.
+That is why the table is ordered and indexed rather than keyed, and why no
+`CAREER_V` rung is owed for the new field.
+
+Two fields, and they are not the same thing. `deal.ambition` is what was
+**signed** and is what `rollover()` prices the season by. `career.amb` is the
+**pending** pick — what the next contract signs at — so moving the picker in
+March cannot retroactively re-price the contract already running. `setAmbition()`
+re-stamps `goal.value` on every offer still on the table, because the sheet
+prints that number and offers are drawn at rollover, before the pick exists.
+
+**No money either way, deliberately** — and ambition does not change that.
+`tools/car/career-economy.mjs` measures this economy against the catalog, and a
+once-a-season bonus it does not model would invalidate every figure in "The
+economy, measured" above. Reputation is the channel that already carries
+season-long form, and it is the right one for the promise besides: reputation
+and market value are what decide which seats `offerBar()` opens next winter, so
+promising more buys a better car sooner and missing costs you the ladder.
 
 `career.goalResult` is transient, like `career.moves`, and the end-of-season
 sheet draws it — a rule the player never sees fire is barely better than one that

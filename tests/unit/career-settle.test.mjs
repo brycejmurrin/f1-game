@@ -196,7 +196,7 @@ function loadDriver(ratings, opts = {}) {
 
 // Start a driver career signed to Haas, force a known season goal, and roll the
 // year over — returning what the winter decided about the contract.
-function rollWith(goalValue, dealYears) {
+function rollWith(goalValue, dealYears, amb) {
   const Career = loadDriver();
   Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
   Career.engage(true);
@@ -204,8 +204,12 @@ function rollWith(goalValue, dealYears) {
   career.rep = 50;                                    // mid-scale, clear of the 0/100 clamp
   career.deal.goal = { type: "champPos", value: goalValue };
   if (dealYears != null) { career.deal.years = dealYears; career.deal.left = dealYears; }
+  // undefined leaves whatever start() signed (index 1); null strips the key to
+  // stand in for a save written before ambition existed; a number pins the rung.
+  if (amb === null) delete career.deal.ambition;
+  else if (amb !== undefined) career.deal.ambition = amb;
   const out = Career.rollover();
-  return { career, out, goalResult: career.goalResult, offers: career.offers, deal: career.deal };
+  return { Career, career, out, goalResult: career.goalResult, offers: career.offers, deal: career.deal };
 }
 
 test("the season goal is RESOLVED at the winter: met lifts reputation", () => {
@@ -648,4 +652,89 @@ test("the choices are drawn from the seed, so reloading cannot reroll them", () 
   const seen = new Set();
   for (let r = 0; r < 6; r++) seen.add(a.objectiveChoices(r)[0].type);
   assert.ok(seen.size > 1, "the dealt brief must still vary between rounds");
+});
+
+// ── THE PROMISE (deal.ambition) ─────────────────────────────────────────────
+// The season goal used to be one number the game chose. It is now a rung the
+// player picks when signing, and the middle rung has to be the old behaviour
+// EXACTLY or every career in existence silently re-prices itself.
+
+test("a deal with NO ambition resolves on the old numbers — +5 / -5 REP", () => {
+  // The back-compat proof, and the reason the table is indexed with 1 in the
+  // middle: a save written before the picker existed carries no `ambition`.
+  const met = rollWith(99, null, null);
+  assert.equal(met.career.rep, 55, "an ambition-less deal met is worth the old +5");
+  const missed = rollWith(1, null, null);
+  assert.equal(missed.career.rep, 45, "an ambition-less deal missed costs the old -5");
+});
+
+test("promising more pays more, and costs more when missed", () => {
+  const Career = loadDriver();
+  const A = Career.AMBITION;
+  assert.equal(A.length, 3, "three rungs");
+  assert.ok(A[2].rep > A[1].rep && A[1].rep > A[0].rep, "reward climbs with ambition");
+  assert.ok(A[2].mv > A[1].mv && A[1].mv > A[0].mv, "so does what missing costs");
+
+  assert.equal(rollWith(99, null, 2).career.rep, 50 + A[2].rep, "ambitious, met");
+  assert.equal(rollWith(1, null, 2).career.rep, 50 - A[2].rep, "ambitious, missed");
+  assert.equal(rollWith(99, null, 0).career.rep, 50 + A[0].rep, "modest, met");
+  assert.equal(rollWith(1, null, 0).career.rep, 50 - A[0].rep, "modest, missed");
+});
+
+test("the TARGET itself moves with the promise", () => {
+  const Career = loadDriver();
+  Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+  Career.engage(true);
+  const haas = Career.data().team;
+  const team = { id: haas, tier: 4 };
+  const bold = Career.goalValueFor(team, 2);
+  const asked = Career.goalValueFor(team, 1);
+  const safe = Career.goalValueFor(team, 0);
+  assert.ok(bold < asked, "promising more asks for a better finish");
+  assert.ok(safe > asked, "promising less asks for a worse one");
+  assert.equal(asked, Career.expectedFinish(team), "the middle rung IS expectedFinish");
+});
+
+test("a season is priced by the promise SIGNED, not by the picker's current rung", () => {
+  // The picker sets what the NEXT deal signs at. A player who changes it in
+  // March must not retroactively re-price the contract they are running.
+  const Career = loadDriver();
+  Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+  Career.engage(true);
+  const career = Career.data();
+  career.rep = 50;
+  career.deal.goal = { type: "champPos", value: 99 };
+  career.deal.ambition = 2;                 // signed ambitious
+  Career.setAmbition(0);                    // then thought better of it
+  Career.rollover();
+  assert.equal(career.rep, 50 + Career.AMBITION[2].rep,
+    "the signed rung prices the season, not the pending pick");
+  assert.equal(career.goalResult.ambition, 2, "and the sheet reads back what was promised");
+});
+
+test("changing the promise re-stamps the offers already on the table", () => {
+  // The sheet prints o.goal.value and the offers are drawn at rollover, before
+  // the pick exists. A stale target would put one number on the button and sign
+  // the contract at another.
+  const { Career, offers } = rollWith(99, 1);
+  assert.ok(offers.length > 0, "a expired 1-year deal draws seats");
+  const before = offers.map((o) => o.goal.value);
+  Career.setAmbition(2);
+  const after = Career.data().offers.map((o) => o.goal.value);
+  assert.deepEqual(after, before.map((v, i) =>
+    Career.goalValueFor({ id: Career.data().offers[i].teamId, tier: 4 }, 2)),
+    "every offer's target is re-derived at the new rung");
+  assert.ok(after.every((v, i) => v <= before[i]), "an ambitious rung never softens a target");
+});
+
+test("ambIdx refuses a rung that is not one", () => {
+  const Career = loadDriver();
+  Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+  Career.engage(true);
+  const def = Career.AMBITION[Career.ambitionOf({})];
+  for (const bad of [undefined, null, -1, 3, 99, 1.5, "2", NaN, {}])
+    assert.equal(Career.AMBITION[Career.ambitionOf({ ambition: bad })], def,
+      `a deal carrying ${JSON.stringify(bad)} reads as the default rung`);
+  assert.equal(Career.setAmbition(99), Career.AMBITION.length - 1, "setAmbition clamps high");
+  assert.equal(Career.setAmbition(-5), 0, "and low");
 });

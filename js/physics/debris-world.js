@@ -195,8 +195,11 @@ function create(ctx) {
   // build 900. Turning this off never moved that number; the two changes only
   // happened to land together.
   //
-  // The escape hatch stays one call wide: apex26.debris = "0", or
-  // __apex.debris(false).
+  // Both directions stay one call wide: apex26.debris = "1" (or
+  // __apex.debris(true)) to opt IN, "0" / __apex.debris(false) to opt back out.
+  // This comment used to say only the "0" half, which was left over from the
+  // build-893 era when this shipped ON; ab1a334b7 made "0" the SettingsDefaults
+  // value and the opt-IN is now the interesting direction.
   const opt = GameStore.store.raw("debris");
   // Group B disable flags — default ON, read once at boot (any value but "0" is on).
   try { _breakBarriers = (localStorage.getItem("apex26.breakBarriers") || "1") !== "0"; } catch (e) { /* storage blocked — default ON */ }
@@ -206,7 +209,8 @@ function create(ctx) {
   // side-world nothing needs before a race is primed. It now waits for the
   // first idle slice (Safari has no requestIdleCallback: a plain timer there);
   // prime() starts it at once if a race arrives first, and step() builds the
-  // world lazily when the load lands after prime. Set "0" to disable.
+  // world lazily when the load lands after prime. Nothing below runs at all
+  // unless the player has opted in — the shipped default is "0".
   if (opt === "1") {
     _enabled = true;
     const kick = () => { if (_enabled) _load(); };

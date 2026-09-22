@@ -2568,6 +2568,16 @@ const GameAudio = (function () {
     radioStingStop,
     setRadioFx,
     radioFxLevel: () => radioFx,
+    /** How long `channel`'s courtesy figure runs, in seconds, at the current
+     *  level — 0 when it would not play at all. The VOICE waits this out so the
+     *  words land after the cue instead of under it (js/audio/radio-voice.js
+     *  plan(), `lead`), and it is derived from the same table that plays it so
+     *  the two cannot drift. */
+    radioLeadS(channel) {
+      const ch = RADIO_CH[channel];
+      if (!ch || radioFx <= 0 || !Array.isArray(ch.tune)) return 0;
+      return 0.03 + ch.tune.reduce((a, n) => a + (n && n[1] > 0 ? n[1] : 0), 0);
+    },
     radioFxMax: () => RADIO_FX_MAX,
     radioChannels: () => Object.keys(RADIO_CH),
     setEnabled,
