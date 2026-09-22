@@ -28,12 +28,29 @@ const FULL = "silverstone", CORRIDOR = "albert_park", STREET = "monaco", LEFT = 
 
 const ctxOnce = (() => { let c = null; return () => (c || (c = buildContext())); })();
 const tracksOnce = () => ctxOnce().Tracks;
+/** Build a def and RELEASE the VM's primitive capture.
+ *
+ * track-build-vm records every primitive of every build, and each record holds
+ * a reference to the whole mesh buffer its emitter wrote into — not a copy of
+ * its own slice — so one shared context accumulates every circuit's full
+ * geometry with nothing able to reclaim it (the measurement is in that file's
+ * `trim` comment: 4157 MB vs 97 MB). Every test here reads the track's own
+ * fields; the ONE that wants primitives ("a tree is one object") takes its own
+ * build and slices from a mark, so nothing needs the capture to outlive a
+ * build. Measured on this tree before this call: the fleet loops peaked at
+ * 6173 MB for the file, half again over the 4088 MB that has already
+ * OOM-killed a sweep's audit child (ci.yml's prop-clipping note). */
+function built(def) {
+  const t = tracksOnce().build(def);
+  ctxOnce().trim(0);
+  return ctxOnce().release(t);
+}
 const buildOnce = (() => {
   const seen = new Map();
   return (id) => {
     if (!seen.has(id)) {
       const T = tracksOnce();
-      seen.set(id, T.build(T.LIST.find((d) => d.id === id)));
+      seen.set(id, built(T.LIST.find((d) => d.id === id)));
     }
     return seen.get(id);
   };
@@ -43,7 +60,7 @@ const wrap = (v, L) => ((v % L) + L) % L;
 // is paint on the road, kept as a def's explicit choice and the model-less path.
 const narrowOnce = (() => { let t = null; return () => {
   const T = tracksOnce();
-  return t || (t = T.build(Object.assign({}, T.LIST.find((d) => d.id === STREET), { pit: { mode: "narrow" } })));
+  return t || (t = built(Object.assign({}, T.LIST.find((d) => d.id === STREET), { pit: { mode: "narrow" } })));
 }; })();
 const keptNodes = (t) => { let n = 0; for (let k = 0; k < t.n; k++) n += t.pit.keep[k] > 0 ? 1 : 0; return n; };
 
@@ -118,7 +135,7 @@ test("a street complex owns its side: no engine street barrier on the lane, the 
   assert.equal(j.row.placed.length, 0, "…and none placed");
   // The GUARD decides, not the def's `bays: false`: the same def without the key gets none either.
   const def = T.LIST.find((d) => d.id === "jeddah");
-  assert.equal(T.build(Object.assign({}, def, { pit: { mode: "street", side: -1 } })).pit.hasBays, false, "the pitch guard alone withholds the bays");
+  assert.equal(built(Object.assign({}, def, { pit: { mode: "street", side: -1 } })).pit.hasBays, false, "the pitch guard alone withholds the bays");
 });
 
 test("the bands are the regulation's: >= 12 m wall-to-garage, a <= 3.5 m fast lane, a >= 1 m corridor", () => {
@@ -487,13 +504,15 @@ test("race control stands past the last bay, inside the row's keep-out, on a ben
 });
 
 test("a RAW landform yields to the complex chord by chord, and says so", () => {
-  // Portimão's pit-straight cutting (groundedSegments, 9 m wide, 5.5 m tall,
-  // 20 m out) ran straight through the garages: RAW emitters never pass the
-  // footprint guard. They now ask `inPit` per chord and record the drop as
-  // superseded, not as a guard suppression.
-  const t = buildOnce("portimao");
+  // RAW emitters never pass the footprint guard, so a landform laid through the
+  // garages used to stand in them. They now ask `inPit` per chord and record the
+  // drop as superseded, not as a guard suppression. The fixture was Portimão's
+  // T3 cutting, which only reached the pits under its bogus sceneryStartFrac
+  // (DEFECT-LEDGER, "sceneryStartFrac audit"); Hungaroring's hand-placed pit
+  // wall runs down the lane itself, 21 chords each, with or without its shift.
+  const t = buildOnce("hungaroring");
   const d = t.modelDiagnostics;
-  const cut = d.suppressed.filter((e) => /^portimao-cut-/.test(e.id));
+  const cut = d.suppressed.filter((e) => /^hungaroring-pit-wall/.test(e.id));
   assert.ok(cut.length >= 1, "a cut is recorded");
   for (const e of cut) {
     assert.equal(e.required, false);
@@ -519,7 +538,8 @@ test("a tree is one object: a crown that would reach the complex takes its trunk
   // so far — so take only what THIS build emits.
   const first = env.prims.length;
   const T = env.Tracks, t = T.build(T.LIST.find((d) => d.id === "monza"));
-  const prims = env.prims.slice(first);
+  const prims = env.prims.slice(first);          // NOT built(): this one wants the capture
+  env.trim(first);                               // …and is the only reader of it
   const p = t.pit, L = t.total, n = t.n, ds = L / n;
   const x = 536.5, z = -217.5;
   const there = prims.filter((q) => q.minX - 3 <= x && q.maxX + 3 >= x && q.minZ - 3 <= z && q.maxZ + 3 >= z && q.maxY - q.minY > 3);
@@ -595,7 +615,7 @@ test("a LEGENDS entry beside custom seats no thirteenth bay, and the row does no
   const legends = { id: "legends", legends: true, name: "LEGENDS", short: "LGD", color: [0.7, 0.6, 0.2] };
   try {
     env.sandbox.Teams = { LIST: eleven.concat([custom, legends]), DEFAULT_CUSTOM: custom };
-    const t = T.build(def);
+    const t = built(def);
     const teams = t.pit.row.boxes.map((b) => b.team);
     assert.ok(!teams.includes("legends"), `LEGENDS must get no bay of its own (${teams.join(",")})`);
     assert.equal(teams.length, 12, `twelve bays, not ${teams.length} (${teams.join(",")})`);

@@ -112,7 +112,6 @@ Author-time generation: the generated doc blocks, the shell, and the asset bakes
 | **gen/settings-defaults.mjs** | Apply an exported SETTINGS file to the shipped defaults in `js/data/settings-defaults.js`; `--check` reports drift. | — |
 | **gen/synth-models.mjs** | Procedural AX26 model catalog for `assets.mjs bake-synthetic-models` — buildings, grandstands, industrial; no network. | asset-pack |
 | **gen/targets.mjs** | Prints the GENERATED doc paths (`TARGET` of every gen-*.mjs doc generator), one per line; the hooks derive their block… | — |
-| **gen/title-art-trace.mjs** | Traces a garage render into tools/gen/title-art-trace.json for title-art.mjs's portrait drawing. | — |
 | **gen/title-art.mjs** | Draws index.html's #title-car from js/car/car3d.js through the garage camera; --check fails on drift. | — |
 | **gen/track-stills.mjs** | One car-free in-game still per circuit into `assets/stills/<id>.webp` for the picker hero (`--only/--frac/--force`). | playwright-probe |
 | **gen/vendor-three.mjs** | Vendors three.js: patches the readable npm build (vendor/three-patches), minifies with the pinned terser, writes… | check-changes |
@@ -206,6 +205,7 @@ The car and the garage: option sweeps, livery and crest rendering, career econom
 | **car/parts-sweep.mjs** | How much does each catalog option change the car? Builds all options offline via `node:vm` against the right baseline. | garage-parts-livery |
 | **car/render-car.mjs** | Headless batch renderer for `carview.html` — orbit presets, `--team=all` walks the grid, contact sheet; needs :3456. | playwright-probe |
 | **car/spine-station.mjs** | Measures + rasterises where every spine design lands on the cover flank, and the crown's own mark — offline, no browser. | garage-parts-livery |
+| **car/trace-car.mjs** | Trace the ISOLATED car into SVG: carview beauty + empty-stage plate -> exact matte -> contours + interior edges. | garage-parts-livery |
 | **car/trace-logo.mjs** | Author-time: regenerates `js/car/crest-paths.js` from a team logo bitmap in git history (k-means inks, contour walk). | playwright-probe |
 
 ### `tools/ui/`
@@ -328,7 +328,8 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 
 | File | Read by |
 |---|---|
-| **gen/title-art-trace.json** | `gen/title-art-trace.mjs`, `gen/title-art.mjs` |
+| **gen/title-art-top-a.json** | `gen/title-art.mjs` |
+| **gen/title-art-top-b.json** | — |
 | **mcp/apex-tools-mcp.json** | `manifest.cjs`, `tests/unit/agent-surface.test.mjs`, `tests/unit/apex-tools-mcp.test.mjs` |
 | **track/clip-baseline.json** | `manifest.cjs`, `tests/unit/comment-citations.test.mjs`, `tests/unit/docs-integrity.test.mjs`, `tests/unit/prop-clipping.test.mjs`, `track/clip-audit.cjs` |
 | **track/coplanar-baseline.json** | `manifest.cjs`, `tests/unit/coplanar-faces.test.mjs`, `track/coplanar-audit.cjs` |

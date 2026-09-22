@@ -2665,6 +2665,10 @@ async function startRaceBody() {
   const careerSaveConflict = isCareer() && Career.conflicted();
   const seasonSaveConflict = flow === "season" && SeasonCal.conflicted();
   if ((flow === "season" && !SeasonCal.canRace(season)) || careerSaveConflict || seasonSaveConflict) {
+    // THE LOADING SCREEN IS STILL UP: only clearMenuScreens() (past this
+    // return) and quitToMenu() lower it, so this arm left the menu behind a
+    // z-36 pointer-events:auto scrim with an inert skip handler — reload only.
+    loadingScreen.stop();
     state = "menu"; $("race-settings").hidden = true;
     if (careerSaveConflict) announce("SAVE CONFLICT — reload career", 3, "info");
     else if (seasonSaveConflict) announce("SAVE CONFLICT — reload season", 3, "info");
@@ -2732,7 +2736,10 @@ async function startRaceBody() {
   } else {                     // isRaining() made the whole shipped tier (three
     Particles.rainShow(false); // sliders + rainSeed(drizzle)) unreachable.
   }
-  if (!isQuali() && gridFromQuali() && !quali.order(cars)) { openQuali(); return false; }
+  // Same early-return hazard as the completed-season arm above: this one only
+  // self-heals because #quali is a <dialog> in the top layer, which draws over
+  // the scrim. Lower it anyway rather than rely on that.
+  if (!isQuali() && gridFromQuali() && !quali.order(cars)) { loadingScreen.stop(); openQuali(); return false; }
   gridUp(gridOrderFor(gridFromQuali() ? quali.order(cars) : SeasonCal.grid(cars, season)));
   rlap("gridUp");
   wxArc.startChangeable();

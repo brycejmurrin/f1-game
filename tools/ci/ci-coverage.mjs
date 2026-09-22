@@ -62,6 +62,10 @@ const jobs = [];
       runsOn: body.match(/^    runs-on:\s*(.+)$/m)?.[1]?.trim() || "",
       ifLine: body.match(/^    if:\s*(.+)$/m)?.[1]?.trim() || "",
       needs: (body.match(/^    needs:\s*(.+)$/m)?.[1] || "").replace(/[[\]]/g, "").split(/,\s*/).map((s) => s.trim()).filter(Boolean),
+      // A job that cannot fail the run is coverage you can READ, never coverage
+      // that GATES. The golden-menu trial is exactly that, and counting it with
+      // the two blocking gates overstated the fixed floor by half.
+      advisory: /^    continue-on-error:\s*true\s*$/m.test(body),
     });
   });
   const excluded = new Set();
@@ -74,23 +78,30 @@ const jobs = [];
 const jobOf = (index) => jobs.find((j) => index >= jobsAt + j.start && index < jobsAt + j.end);
 
 const executed = new Set();
+// The BLOCKING subset of `executed`: the same specs minus any run by a job
+// that carries `continue-on-error: true`. The floor in
+// tests/unit/ci-coverage.test.mjs is taken on THIS number, because a trial job
+// going red changes nothing about whether the site ships.
+const blocking = new Set();
 const viaGroup = [];
 for (const m of ci.matchAll(/run:\s*npm run (test:[\w-]+)/g)) {
   const specs = groupSpecs(m[1]);
   if (specs === null) continue;
   const job = jobOf(m.index);
-  const entry = { group: m[1], specs, job: job?.name || null, deployGate: job ? job.deployGate : true };
+  const entry = { group: m[1], specs, job: job?.name || null, deployGate: job ? job.deployGate : true,
+                  advisory: job ? job.advisory : false };
   viaGroup.push(entry);
-  if (entry.deployGate) specs.forEach((s) => executed.add(s));
+  if (entry.deployGate) specs.forEach((s) => { executed.add(s); if (!entry.advisory) blocking.add(s); });
 }
 const viaPath = [];
 for (const m of ci.matchAll(/run:\s*(?:npm test --|npx playwright test)\s+([^\n]+)/g)) {
   const specs = m[1].split(/\s+/).flatMap(expand);
   if (!specs.length) continue;
   const job = jobOf(m.index);
-  const entry = { where: m[1].trim().slice(0, 60), specs, job: job?.name || null, deployGate: job ? job.deployGate : true };
+  const entry = { where: m[1].trim().slice(0, 60), specs, job: job?.name || null, deployGate: job ? job.deployGate : true,
+                  advisory: job ? job.advisory : false };
   viaPath.push(entry);
-  if (entry.deployGate) specs.forEach((s) => executed.add(s));
+  if (entry.deployGate) specs.forEach((s) => { executed.add(s); if (!entry.advisory) blocking.add(s); });
 }
 
 // The renderer job: the one browser job on a hardware adapter, and the one
@@ -150,8 +161,10 @@ const selectionGate = {
 const report = {
   specsOnDisk: ALL_SPECS.length,
   specsInFixedGates: executed.size,
+  specsInBlockingFixedGates: blocking.size,
   specsOutsideFixedGates: outsideFixedGates.length,
   executed: [...executed].sort(),
+  blocking: [...blocking].sort(),
   outsideFixedGates,
   selectionGate,
   rendererGate,
@@ -165,6 +178,8 @@ if (process.argv.includes("--json")) {
   console.log(`Deploy CI's fixed browser gates execute ${report.specsInFixedGates} of ` +
     `${report.specsOnDisk} Playwright specs ` +
     `(${((report.specsInFixedGates / report.specsOnDisk) * 100).toFixed(1)} %).`);
+  console.log(`${report.specsInBlockingFixedGates} of those ${report.specsInFixedGates} can fail the run; ` +
+    `the rest are advisory (continue-on-error).`);
   console.log(`${report.specsOutsideFixedGates} specs are outside those fixed gates.\n`);
   for (const g of viaGroup) if (g.specs.length && g.deployGate) console.log(`  ${g.group} (${g.job}): ${g.specs.join(", ")}`);
   for (const p of viaPath) if (p.deployGate) console.log(`  by path (${p.job}): ${p.specs.join(", ")}`);

@@ -34,7 +34,7 @@ import { loadGroups, filesOnly } from "./gen-test-groups.mjs";
 import { gateNodeSuites } from "../ci/deploy.mjs";
 
 export const TARGET = "docs/notes/PREPUSH-GATE-LADDER.md";
-export const SECONDARY = ["AGENTS.md", "docs/TESTING.md", ".claude/agents/verify-agent.md"];
+export const SECONDARY = ["AGENTS.md", "docs/TESTING.md", ".claude/agents/verify-agent.md", "README.md"];
 export const BLOCK = "ladder";
 
 const UNIT = /\.test\.(mjs|cjs)$/;
@@ -58,8 +58,13 @@ export function figures(groups = loadGroups()) {
   for (const f of gate) if (!onDisk.has(f)) throw new Error(`the gate names ${f}, which is not under tests/unit/`);
   const guards = ((groups.groups || {})["test:guards"] || {}).files;
   const sweeps = ((groups.groups || {})["test:sweeps"] || {}).files;
+  // ROOT PLAYWRIGHT SPECS. Hand-written in two docs and drifted three times in
+  // one day (119 while the tree held 120), each time caught by a guard AFTER
+  // the edit rather than prevented. It is a directory listing; generate it.
+  const specs = fs.readdirSync(path.join(ROOT, "tests/specs")).filter((f) => /\.spec\.js$/.test(f)).length;
   const f = { guards: guards ? guards.length : 0, fast: fastFiles.length, disk: disk.length, gate: gate.size,
-              sweeps: sweeps ? sweeps.length : 0 };
+              sweeps: sweeps ? sweeps.length : 0, specs };
+  if (!f.specs) throw new Error("tests/specs holds no .spec.js files — refusing to write a zero into the docs");
   if (!f.guards) throw new Error("tests/groups.json has no test:guards files");
   if (!f.fast) throw new Error("tests/groups.json toolingFast lists no files");
   if (f.fast > f.gate || f.gate > f.disk) throw new Error(`ladder is not a ladder: fast ${f.fast}, gate ${f.gate}, disk ${f.disk}`);
@@ -97,6 +102,18 @@ export const REWRITES = {
   "docs/TESTING.md": [
     { re: /(`npm run test:tooling-fast` \(structural, no browser; )(\d+) of (\d+)( unit files)/, value: (f) => [f.fast, f.disk] },
     { re: /(\| `tooling-fast` \| the structural half — )(\d+)( files,)/, value: (f) => f.fast },
+    // The sweeps row enumerated its suites by hand and had drifted four files
+    // behind package.json. The roster is gone (the script is the list); the
+    // count stays, generated.
+    { re: /(\| `sweeps` \| the full-fleet geometry audits \()(\d+)( files —)/, value: (f) => f.sweeps },
+    // NOT anchored with `^`: rewrite() rebuilds each rule as `new RegExp(source,
+    // "g")` and drops the `m` flag with it, so `^` would mean start-of-FILE and
+    // match nothing. Anchor on the blank line above the sentence instead.
+    { re: /(\n\n)(\d+)( root Playwright spec files)/, value: (f) => f.specs },
+  ],
+  // README.md quotes the spec count to newcomers; it drifted with the others.
+  "README.md": [
+    { re: /(suite\*\* — )(\d+)( Playwright specs)/, value: (f) => f.specs },
   ],
   [TARGET]: [
     { re: /(\bThe remaining )(\d+)( are the per-circuit geometry)/, value: (f) => f.gateLeft },
