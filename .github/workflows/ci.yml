@@ -553,9 +553,21 @@ jobs:
       - name: Does this diff touch the geometry?
         id: filter
         env:
-          # Prefer the caller's before_sha on a Pages workflow_call; fall back to
-          # the push event's before on direct branch pushes.
-          BEFORE: ${{ inputs.before_sha != '' && inputs.before_sha || github.event.before }}
+          # Prefer the caller's before_sha on a Pages workflow_call; then a pull
+          # request's own base; then the push event's before on direct pushes.
+          #
+          # THE PR BASE WAS MISSING HERE UNTIL 2026-09-22, and the `case` below
+          # fail-safed every pull_request into the full fleet before a single
+          # path was examined — a CSS-only or tools-only PR paid ~8m30s of
+          # sweeps plus verify-track on a runner, every push to it. The filter
+          # 500 lines down (renderer-filter) diffs `pull_request.base.sha` for
+          # exactly this reason, and its comment asserted this filter "has
+          # none": it always had one. Fail-safe is preserved, not weakened —
+          # an unresolvable or unreachable base still runs everything.
+          BEFORE: >-
+            ${{ inputs.before_sha != '' && inputs.before_sha
+                || (github.event_name == 'pull_request' && github.event.pull_request.base.sha
+                    || github.event.before) }}
           EVENT: ${{ github.event_name }}
           # A Pages call (the train) always carries a concurrency_key; its
           # before_sha is the LIVE commit, the exact base to diff against.
@@ -567,11 +579,14 @@ jobs:
           # (`schedule` for a train tick, `workflow_dispatch` for "deploy now"):
           # in a called workflow github.event_name and github.event are the
           # caller's, never `workflow_call`. So a push passes, a Pages call
-          # passes on its before_sha, and everything else (nightly, direct
-          # dispatch, pull_request) fail-safes into RUNNING.
+          # passes on its before_sha, a pull request passes on its base, and
+          # everything else (nightly, direct dispatch) fail-safes into RUNNING.
+          #
+          # A Pages call's event_name is the CALLER's, so `pull_request` here
+          # can only mean a real PR — and $CALLED is checked first regardless.
           case "$EVENT" in
-            push) ;;
-            *) [ "$CALLED" = "true" ] || run_all "event is '$EVENT', not a push or a Pages call" ;;
+            push|pull_request) ;;
+            *) [ "$CALLED" = "true" ] || run_all "event is '$EVENT', not a push, a pull request or a Pages call" ;;
           esac
           case "${BEFORE:-}" in
             ""|0000000000000000000000000000000000000000) run_all "no before-sha (new branch, first push, or caller omitted input)" ;;
@@ -1129,10 +1144,12 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
       # Same shape as the sweeps filter, same rule: FAIL SAFE, NEVER FAIL OPEN.
-      # Any path that cannot resolve a diff RUNS the job. A pull request has a
-      # real base (pull_request.base.sha) where the sweeps filter has none, so
-      # it is diffed rather than fail-safed — otherwise every PR would pay for
-      # a macOS runner.
+      # Any path that cannot resolve a diff RUNS the job. A pull request is
+      # diffed against its own base (pull_request.base.sha) rather than
+      # fail-safed, or every PR would pay for a macOS runner. This comment used
+      # to claim the sweeps filter had no such base to diff; it always had one,
+      # and on the strength of that claim the sweeps filter went on
+      # fail-safing every PR into the full fleet until 2026-09-22.
       - name: Does this diff touch the renderer?
         id: filter
         env:
