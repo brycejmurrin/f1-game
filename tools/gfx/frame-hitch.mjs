@@ -151,8 +151,13 @@ export function analyseWork(work, bucketMs, frames) {
 export function analysePasses(passes, t0) {
   const n = passes.length;
   if (n < 50) return { frames: n, ok: false, reason: "too few frames" };
-  const sorted = Array.from(passes).sort((a, b) => a - b);
-  const med = sorted[Math.floor(n / 2)];
+  // Only frames that ENCODED something are frames for this purpose. Including
+  // zero-pass callbacks lets the count of non-rendering rAF users move the
+  // median and silently redefine "wide".
+  const drew = Array.from(passes).filter((v) => v > 0);
+  if (drew.length < 20) return { frames: n, drewFrames: drew.length, ok: false, reason: "too few rendering frames" };
+  const sorted = drew.slice().sort((a, b) => a - b);
+  const med = sorted[Math.floor(sorted.length / 2)];
   const wideAt = [];
   for (let i = 0; i < n; i++) if (passes[i] > med) wideAt.push(t0[i] / 1000);
   const gaps = wideAt.slice(1).map((x, i) => x - wideAt[i]);
@@ -161,10 +166,12 @@ export function analysePasses(passes, t0) {
     ? Math.sqrt(gaps.reduce((a, g) => a + (g - mean) ** 2, 0) / (gaps.length - 1)) : 0;
   const gs = gaps.slice().sort((a, b) => a - b);
   return {
-    frames: n, medianPasses: med,
+    frames: n, drewFrames: drew.length, medianPasses: med,
     maxPasses: sorted[n - 1],
     widerThanMedian: wideAt.length,
     widePerSecond: t0.length ? +(wideAt.length / ((t0[n - 1] - t0[0]) / 1000)).toFixed(2) : null,
+    // Per RENDERING frame, so the two arms compare even if their rAF counts differ.
+    widePerDrewFrame: drew.length ? +(wideAt.length / drew.length).toFixed(4) : null,
     gapMedianS: gs.length ? +gs[Math.floor(gs.length / 2)].toFixed(3) : null,
     gapMeanS: +mean.toFixed(3),
     gapCV: mean > 0 ? +(sd / mean).toFixed(3) : null,
@@ -391,12 +398,10 @@ async function main() {
       window.__apex.go(); window.__apex.jump(0.1, 55, 0);
       if (!(hz > 0)) { window.__apex.setInput({ steer: 0, throttle: true, brake: false }); return; }
       const t0 = performance.now();
-      const drive = () => {
+      setInterval(() => {
         const t = (performance.now() - t0) / 1000;
         window.__apex.setInput({ steer: Math.sin(2 * Math.PI * hz * t) * 0.6, throttle: true, brake: false });
-        window.requestAnimationFrame(drive);
-      };
-      drive();
+      }, 16);
     }, opts.steerHz);
     // Let boot-time work AND the working set finish filling: a cache
     // reaching its high-water mark is not a leak, and a baseline taken
