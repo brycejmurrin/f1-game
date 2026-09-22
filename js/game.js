@@ -2758,7 +2758,8 @@ async function startRaceBody() {
 let _startRaceP = null;
 function startRace() {
   if (_startRaceP) return _startRaceP;   // a concurrent caller shares the in-flight start
-  _startRaceP = startRaceBody().finally(() => { _startRaceP = null; });
+  // A throw after the scenery await (six callers never look at the promise) used to leave the quali sheet closed, session "race" and no HUD under the error overlay; the menu is the one coherent place to land.
+  _startRaceP = startRaceBody().catch((e) => { Log.error("game", "startRace failed", e); quitToMenu(); throw e; }).finally(() => { _startRaceP = null; });
   return _startRaceP;
 }
 
@@ -4136,7 +4137,7 @@ function updateCar(c, dt, ranked) {
   const slopeSin = smp.t[1] || 0;   // road pitch at the car (+uphill / -downhill)
   const k = Tracks.curvature(track, c.s);
   c.kCur = k;   // cache for the render loop's body-lean (avoids a 2nd curvature calc/car/frame)
-  const dd = DIFF[difficulty];
+  const dd = DIFF[difficulty] || DIFF.normal;   // an imported settings file can carry any string; quali-model.js falls back the same way
   // This car's own performance multipliers. Every site below that used to read
   // the module-level `playerMods` reads this instead — see modsFor. AI cars
   // never reach the branches that use it; the neutral fallback only guards a
@@ -4482,7 +4483,7 @@ function updateCar(c, dt, ranked) {
       AiDrive.pushLook(d, onLine ? TrackLine.pathK(track, ss) : kk, Math.abs(Tracks.bankAngle(track, ss)));
     }
     _aiBr.traits = aiT; _aiBr.samples = AiDrive.endLook(); _aiBr.latMax = LAT_MAX; _aiBr.diffCorner = Math.min(1, dd.corner * (1 + (c._bandNow || 0)));   // the band lifts corner authority too, never past 1.0: a banded car drives like a better driver, not a faster car
-    _aiBr.aeroLoad = c.aeroLoad; _aiBr.brake = BRAKE * tyres.tractionMul(c); _aiBr.pace = PACE; _aiBr.vmax = VMAX;
+    _aiBr.aeroLoad = c.aeroLoad; _aiBr.brake = BRAKE * tyres.tractionMul(c) * (gripMult(c) / gripMult()); _aiBr.pace = PACE; _aiBr.vmax = VMAX;   // the tread's braking credit (docs/PHYSICS.md §Braking): the planner must stop as the executor below does, or it corners on wets and brakes on slicks
     _aiBr.grip = gripMult(c) * tyres.gripMul(c) * dirtyAirMul(c.wake || 0, c.speed);   // the wake costs the AI its corner too
     _aiBr.speed = c.speed; _aiBr.blocker = !!blocker; _aiBr.blockerGap = blockerGap;
     _aiBr.blockerSpeed = blocker ? blocker.speed : 0;
@@ -4648,8 +4649,9 @@ function updateCar(c, dt, ranked) {
     : true;
   if (braking) {
     if (c.speed > 0) {
-      // Tread pays braking back in the wet — the ratio is exactly 1 on slicks and in the dry (docs/PHYSICS.md).
-      c.speed = Math.max(0, c.speed - BRAKE * tyres.tractionMul(c) * (c.human ? mods.braking * brakeLvl * (gripMult(c) / gripMult()) : brakeLvl) * dt);
+      // Tread pays braking back in the wet — the ratio is exactly 1 on slicks and in the dry (docs/PHYSICS.md). The AI earns it too: its
+      // `tread: null` resolves to the right compound for cornering, and until 2026-09-22 it braked as if on slicks in the rain.
+      c.speed = Math.max(0, c.speed - BRAKE * tyres.tractionMul(c) * (c.human ? mods.braking * brakeLvl : brakeLvl) * (gripMult(c) / gripMult()) * dt);
     } else if (c.human && state === "race") {
       // Stopped and still braking: crawl backwards so the player can ease off a
       // wall or re-aim after a spin. Capped slow; throttle drives forward again.
@@ -5261,7 +5263,7 @@ function updateCar(c, dt, ranked) {
     // this the friction ellipse would shave cornering grip (and add rear weight
     // transfer) for an acceleration that isn't actually happening.
     // The SURFACE brakes you too — surfMu below scaled LATERAL grip alone, so a tyre on grass retarded the car as hard as one on tarmac. Same lerp, same depth.
-    const axEstTarget = braking ? -BRAKE * tyres.tractionMul(c) * brakeLvl * (c.onKerb ? 1 : lerp(1, OFF_GRIP, clamp((Math.abs(c.x) - hw) / 1.5, 0, 1))) * (c.human ? (mods.braking || 1) * (gripMult(c) / gripMult()) : 1)
+    const axEstTarget = braking ? -BRAKE * tyres.tractionMul(c) * brakeLvl * (c.onKerb ? 1 : lerp(1, OFF_GRIP, clamp((Math.abs(c.x) - hw) / 1.5, 0, 1))) * (c.human ? (mods.braking || 1) : 1) * (gripMult(c) / gripMult())
       : (onThrottle
           ? ACCEL * PACE * perfMul * (c.human ? mods.accel * throttleLvl : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy
           : -COAST_DRAG);
