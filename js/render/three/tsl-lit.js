@@ -1835,6 +1835,18 @@
      * between classic material instances). Three graphs total: chunked reads
      * no `trk` attribute, and instanced multiplies canonical vertex colour by
      * its placement tint (see buildFragment header). */
+    // EMISSIVE AND ALPHA ARE PER-DRAW, NOT PER-MATERIAL. A lamp that pulses
+    // or follows the battery sends a new value every frame; while these read
+    // material.userData, every new value had to be a new MATERIAL, and on TLX
+    // a new material is a new program (gpu-census 212: 20 minted in 20 s of
+    // driving). tlx.js acquireMesh() writes the draw's values onto the pooled
+    // mesh's userData, and this uniform reads them per render object (the
+    // same OBJECT update materialReference rides), falling back to the
+    // material's own value for meshes the pool never touched.
+    const perObject = (k) => uniform(0).onObjectUpdate(({ object, material }) => {
+      const v = object && object.userData[k];
+      return v !== undefined ? v : (material ? material.userData[k] : undefined);
+    });
     const _sharedGraph = [null, null, null]; // [plain, chunked, instanced]
     const _mats = [];
     let _sharedPos = null;
@@ -1843,8 +1855,8 @@
       let g = _sharedGraph[idx];
       if (!g) {
         const matU = {
-          emissive:  materialReference("userData.tlxEmissive", "float"),
-          alpha:     materialReference("userData.tlxAlpha", "float"),
+          emissive:  perObject("tlxEmissive"),
+          alpha:     perObject("tlxAlpha"),
           roughness: materialReference("userData.tlxRoughness", "float"),
           metalness: materialReference("userData.tlxMetalness", "float"),
           specular:  materialReference("userData.tlxSpecular", "float"),
