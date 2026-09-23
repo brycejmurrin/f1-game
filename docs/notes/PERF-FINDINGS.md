@@ -5061,6 +5061,15 @@ check, same six jump points on both trees: **identical sun-pass triangles and
 draws at every point** (e.g. 69,961 tris / 63 draws); lavapipe TLX/WebGPU probe
 with `tlxForceHw=shadow,batches` and without: `gpuErrors` 0, luma 55 / 47.5.
 
+Real GPU (census 222, macos-latest, day montreal, parked window): gpuErrors 0 on
+all four legs, no compile stack ending in `sunPass` (census 216 had six).
+Attempt 1's three.js/WebGPU luma read 3.7; its own overlay said `frame(soft):
+nothing blitted yet (not the same as black)` right after a governor resize, and
+the leg's mid-run A/B shots showed the full scene — the headless readback, not
+the picture. The re-run on the same commit read luma 46.5 (reverted-tree
+baseline, census 221: 45.1). The parked window cannot time a driven lap; #228's
+driven instrument left with its revert.
+
 ### Not done here
 
 - The LIT instanced batches have the same one-program-per-object property; the
