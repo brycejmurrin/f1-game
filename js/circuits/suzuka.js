@@ -11,7 +11,13 @@
     // 120 m) — it was on the wrong PART of the lap, not in a corner.
     // See docs/tracks/START-LINES.md.
     startFrac: 0.9942,
-    sceneryStartFrac: 0.6125,
+    // No `sceneryStartFrac` (was 0.6125, _sceneryShift 0.6198). The dressing
+    // is authored against THIS line — pit block 0.975-0.995, Esses fences
+    // 0.10-0.24, Spoon 0.55-0.66, 130R 0.80-0.90, Casio 0.92-0.98 — and the
+    // shift had slid all of it 0.62 of a lap (pit complex onto 200R, forest on
+    // the pit straight). Removing it leaves `elevations`/`bridges` where they
+    // were (max |dy| 1.0 m); `bankZones` were re-keyed by +0.6198 so the banks
+    // stay exactly where they shipped. docs/notes/DEFECT-LEDGER.md §suzuka.
     sceneryCoordinates: "racing",
     name: "SUZUKA",
     gp: "Japanese GP",
@@ -38,12 +44,9 @@
     // flies over and the Degner road passes beneath — and the game had 0.437 at
     // y 13.5 with 0.845 at y 5.0, so the lower road was 8.5 m ABOVE the upper.
     //
-    // The cause: the crossover DECK is scenery, so it takes _sceneryShift and
-    // lands at racing 0.846 (authored 0.226) — right. `bridges` and
-    // `elevations` do NOT take that shift; they land at the fraction written
-    // here. So the deck sat over the back straight while the lift went to the
-    // other road entirely. The old comment here described 0.226/0.817 as the
-    // crossing, which is the SCENERY frame's version of it, not the racing one.
+    // The cause was a frame mix-up between the scenery deck and this lift.
+    // With no `sceneryStartFrac` there is one frame: the lift is at 0.845
+    // (upper road) and the scenery deck at 0.437 (lower road), both racing.
     //
     // The lift is a BRIDGE and not an elevation on purpose: tracks.js raises the
     // road for `bridges` and leaves ground level alone, which is what a flyover
@@ -64,13 +67,17 @@
       { s0: 0.8710, s1: 0.9671, hw: 6.1, ease: 0.012 },  // arc 0.300-0.348 the Esses
     ],
     bankZones: [
-      { frac: 0.0622, angleDeg: 4.0, widthM: 260 },   // T1/T2
-      { frac: 0.3306, angleDeg: 3.5, widthM: 220 },   // Dunlop / Degner approach
-      { frac: 0.5194, angleDeg: 3.5, widthM: 150 },
-      { frac: 0.6549, angleDeg: 3.5, widthM: 170 },
-      { frac: 0.8015, angleDeg: 4.0, widthM: 80 },    // Spoon
-      { frac: 0.8562, angleDeg: 7.0, widthM: 100 },   // 130R
-      { frac: 0.9281, angleDeg: 4.0, widthM: 240 },   // final corner
+      // Racing-frame fracs, each on a curated apex (turns[i]). Re-keyed +0.6198
+      // when the scenery shift went, so the banked road did not move. The old
+      // labels (T1/T2, Spoon, 130R, final corner) named where the UNSHIFTED
+      // numbers pointed, not where the banks actually shipped.
+      { frac: 0.6820, angleDeg: 4.0, widthM: 260 },   // Spoon exit (turns[14])
+      { frac: 0.9504, angleDeg: 3.5, widthM: 220 },   // Casio exit / final corner (turns[17])
+      { frac: 0.1392, angleDeg: 3.5, widthM: 150 },   // T2 (turns[1])
+      { frac: 0.2747, angleDeg: 3.5, widthM: 170 },   // Esses (turns[5])
+      { frac: 0.4213, angleDeg: 4.0, widthM: 80 },    // Degner-to-hairpin (turns[9])
+      { frac: 0.4760, angleDeg: 7.0, widthM: 100 },   // hairpin (turns[10])
+      { frac: 0.5479, angleDeg: 4.0, widthM: 240 },   // 200R (turns[12])
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
