@@ -52,7 +52,9 @@
       }
 
       {
-        const a = anchor(K(0.005), -1, 30);
+        // Behind the pit complex, which keeps hw + 30 m here: at gap 30 the
+        // 26 m-deep pagoda stood in the garages and was superseded.
+        const a = anchor(K(0.005), -1, 46);
         const b = [a.r, a.u, a.t];
         modelGroup("indy-pagoda", {
           center: vadd(a.c, a.u, 26), size: [26, 58, 30], basis: b,
@@ -86,7 +88,10 @@
           // Poured base the shaft grows out of.
           addBox(stage, vadd(a.c, a.u, 1.1), [7.6, 2.2, 9.0], [0.78, 0.78, 0.76], b);
           addBox(stage, vadd(a.c, a.u, 2.5), [8.4, 0.6, 9.8], [0.86, 0.86, 0.84], b);
-          addFrustum(stage, vadd(a.c, a.u, 17), 4.3, 3.2, 29, PANEL, 4, b);
+          // addFrustum's centre is its BASE: the shaft stands on the plinth
+          // (2.8 m) and meets the cap at 31.8 m. Given its mid-height (17 m)
+          // it ran 17-46 m, through the cap, over digits hung on nothing.
+          addFrustum(stage, vadd(a.c, a.u, 2.8), 4.3, 3.2, 29, PANEL, 4, b);
           // Number panels down the track-facing face. Three columns, nine rows.
           const proud = 0.06;
           for (let r = 0; r < ORDER.length; r++) {
@@ -107,8 +112,10 @@
           }
           // Cap and beacon.
           addBox(stage, vadd(a.c, a.u, 31.8), [5.2, 0.9, 6.0], [0.80, 0.80, 0.82], b);
-          addCyl(stage, vadd(a.c, a.u, 34.0), 0.28, 3.6, [0.86, 0.86, 0.88], 6, b);
-          addCyl(stage, vadd(a.c, a.u, 36.2), 0.42, 0.7, AMBER, 8, b);
+          // addCyl is base-anchored too: the mast stands on the cap's top
+          // (32.25 m), the beacon on the mast.
+          addCyl(stage, vadd(a.c, a.u, 32.25), 0.28, 3.6, [0.86, 0.86, 0.88], 6, b);
+          addCyl(stage, vadd(a.c, a.u, 35.85), 0.42, 0.7, AMBER, 8, b);
         }, { required: true });
       }
 

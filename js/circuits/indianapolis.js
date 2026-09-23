@@ -14,7 +14,12 @@
     // Was 0.05, which put the line inside a corner — a start line is
     // always on a straight. See docs/tracks/START-LINES.md.
     startFrac: 0.0000,
-    sceneryStartFrac: 0.05,
+    // No sceneryStartFrac: the scenery is authored against THIS line (yard of
+    // bricks at K(0.0), pagoda 0.005, pit stalls 0.955, Gasoline Alley
+    // 0.906-0.946, oval stands 0.86-0.20 through the banked turn). Naming the
+    // old 0.05 start added a 0.158 shift that stood the paddock, the start
+    // gantry and the bricks on T1-T2 and planted trees down the pit straight.
+    // docs/notes/DEFECT-LEDGER.md.
     name: "INDIANAPOLIS",
     gp: "United States GP",
     country: "USA",
