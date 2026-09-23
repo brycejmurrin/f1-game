@@ -5078,3 +5078,36 @@ driven instrument left with its revert.
 - The rebuild's own GPU cost (2048² + blocker every ~20 m) is unchanged; census
   216 put it at 1.38× a normal frame. Spreading it across frames needs a double
   buffer and real hardware to judge.
+
+## 2ae. The LIT instanced batches had the same one-program-per-object property (2026-09-23)
+
+§2ad's mechanism is not specific to shadows: `createInstancedBatch` sized every
+lit `InstancedMesh` at its instance count, so any batch at or under three's
+uniform-buffer limit (1024 on WebGPU) carried a shader naming its own node and
+was its own program. The race-start warm compiles only what the grid can see;
+a batch first met on the lap compiled on the main thread.
+
+The fix is the same lever, shared: `TLXShaders.uboInstCap(renderer, n)` (in
+`tlx-shadow.js`, used by both the shadow casters and `createInstancedBatch`)
+allocates past the limit; `tlxInstCap`, the draw count and every upload range
+stay at the real count, so the pad is never drawn or uploaded after creation.
+
+Scratch churn probe, whole frames (scene + shadows), 12 jumps round montreal,
+TLX/WebGL2 on SwiftShader, same tree with and without the change:
+
+| mid-lap | before | after |
+|---|---|---|
+| programs compiled | 12 | **0** |
+| node builds (codegen) | 26 | 26 |
+
+What is left is codegen: three still keys an instanced node build on the
+object's uuid, so each batch builds its node graph once on first sight — no
+pipeline, no program, but not free. Lavapipe TLX/WebGPU probe with
+`tlxForceHw=batches,shadow`, both trees: `gpuErrors` 0, luma 55.1 both,
+identical coverage (tree 57%), 2.5% edge-jitter diff (the run-to-run floor).
+
+The census gets #228's driven window back (tools only: `gpu-game-check.mjs`,
+`frame-hitch.mjs`, the workflow's rows and `frame-hitch-analyse.test.mjs`; no
+game code), and its luma read now waits up to 10 s for the soft blit to paint
+and prints `blit=painted|blank-after-10s` — censuses 222/223 read 3.4-3.7 on an
+unpainted canvas after a resize, which is not the same as a black frame.

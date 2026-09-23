@@ -1356,7 +1356,14 @@ const TLX = (function () {
         }
         const geo = buildGeometry(data);
         const n = (matrices.length / 16) | 0;
-        const imesh = new THREE.InstancedMesh(geo, unlitMat, n);
+        // Allocated PAST three's uniform-buffer limit (tlx-shadow.js
+        // uboInstCap): at or under it, three names the instance block after
+        // the node, so every batch is its own program and each one first seen
+        // mid-lap compiled on the main thread (the probe counted 44 instanced
+        // programs in five jumps). Padded, the batches share their material's
+        // program. tlxInstCap stays n: count and uploads never touch the pad.
+        const cap = (window.TLXShaders && TLXShaders.uboInstCap) ? TLXShaders.uboInstCap(renderer, n) : n;
+        const imesh = new THREE.InstancedMesh(geo, unlitMat, cap);
         imesh.matrixAutoUpdate = false;
         imesh.frustumCulled = false;
         imesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
