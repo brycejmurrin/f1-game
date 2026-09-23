@@ -9,7 +9,12 @@
     // Was 0.5150, which put the line inside a corner — a start line is
     // always on a straight. See docs/tracks/START-LINES.md.
     startFrac: 0.0000,
-    sceneryStartFrac: 0.5150,
+    // No sceneryStartFrac: the dressing (scenery/cota.js) is written against
+    // THIS line (main stand K(0), T1 stands 0.07-0.13, tower 0.78). The old
+    // 0.5150 origin shifted all of it 0.416 of a lap (paddock onto T10).
+    // elevations/bankZones below were re-keyed out of that old frame so the
+    // road surface is unchanged (banks bit-identical, heights within the
+    // 0.2 m ripple, whose phase keyed off the shift) (DEFECT-LEDGER "cota — FIXED").
     name: "COTA",
     gp: "United States GP",
     country: "USA",
@@ -25,18 +30,18 @@
     ],
     pal: { zenith: [0.28, 0.54, 0.82], horizon: [0.74, 0.68, 0.52], grass: [0.36, 0.44, 0.20], runoff: [0.58, 0.38, 0.24], ambientSky: [0.50, 0.58, 0.66], ambientGround: [0.30, 0.30, 0.26], sunDir: [0.5345224838248488, 0.5550810408950353, 0.6373152691757812], sun: [1.0, 0.88, 0.62], sunColor: [1.0, 0.85, 0.55] },
     elevations: [
-      { s: 0.6233, halfM: 420, rise: 18 },
-      { s: 0.0350, halfM: 280, rise: 3 },
-      { s: 0.3550, halfM: 240, rise: 2.5 },
+      { s: 0.52426, halfM: 420, rise: 18 },   // was 0.6233 in the old 0.515 frame (-0.09904)
+      { s: 0.93596, halfM: 280, rise: 3 },    // was 0.0350
+      { s: 0.25596, halfM: 240, rise: 2.5 },  // was 0.3550
     ],
     bankZones: [
-      { frac: 0.0000, angleDeg: 5.0, widthM: 100 },   // uphill T1
-      { frac: 0.3670, angleDeg: 4.0, widthM: 160 },
-      { frac: 0.3852, angleDeg: 4.0, widthM: 170 },
-      { frac: 0.5022, angleDeg: 3.0, widthM: 80 },
-      { frac: 0.7035, angleDeg: 3.5, widthM: 160 },
-      { frac: 0.8161, angleDeg: 4.5, widthM: 200 },   // the long multi-apex sweep
-      { frac: 0.8430, angleDeg: 4.0, widthM: 120 },
+      { frac: 0.41596, angleDeg: 5.0, widthM: 100 },  // T10; all re-keyed +0.41596 (was 0.0000)
+      { frac: 0.78296, angleDeg: 4.0, widthM: 160 },
+      { frac: 0.80116, angleDeg: 4.0, widthM: 170 },
+      { frac: 0.91816, angleDeg: 3.0, widthM: 80 },
+      { frac: 0.11946, angleDeg: 3.5, widthM: 160 },
+      { frac: 0.23206, angleDeg: 4.5, widthM: 200 },   // the T3-T6 esses
+      { frac: 0.25896, angleDeg: 4.0, widthM: 120 },
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──

@@ -142,7 +142,9 @@
         addPrism(out, vadd(a1L.c, a1L.u, 3), [28, 8, 72], [0.58, 0.36, 0.26], [a1L.r, a1L.u, a1L.t]);
         // extra red-soil apron on the climb apex (outside) — sells the Big Red bank
         const a1R = anchor(K(0.085), 1, 22);
-        addPrism(out, vadd(a1R.c, a1R.u, 2.5), [16, 7, 48], redSoil, [a1R.r, a1R.u, a1R.t]);
+        // Sunk 2 m further (same 6 m crest): the T1 hill falls away under its
+        // outer edge, which the 0.416 scenery shift hid (float-audit 2.06 m).
+        addPrism(out, vadd(a1R.c, a1R.u, 0.5), [16, 11, 48], redSoil, [a1R.r, a1R.u, a1R.t]);
       }
 
       const ke = K(0.18);
@@ -437,7 +439,7 @@
       cotaGantry(0.50, "cota-drs-gantry", 7.0);
 
       // Ground-conforming runoff at COTA's two defining braking zones.
-      groundPatch(K(0.108), 1, 1.2, [18, 0.16, 76], redSoil,
+      groundPatch(K(0.075), 1, 1.2, [18, 0.16, 76], redSoil,
                   { id: "cota-t1-runoff", samples: 6 });
       groundPatch(K(0.63), 1, 1.2, [24, 0.16, 96], [0.48, 0.49, 0.51],
                   { id: "cota-t12-runoff", samples: 8 });
