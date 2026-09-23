@@ -183,7 +183,8 @@ test("a write this tab made still wins its own cache — no self-invalidation lo
  * callback shape the module drives; requests settle on a microtask and the
  * transaction's oncomplete on a macrotask, like the real thing. */
 function fakeIndexedDb(seed = []) {
-  const rows = new Map(seed);
+  const rows = new Map(seed.map(([k, v]) => [k, v]));
+  const lsOk = new Map(seed.filter((e) => e.length > 2).map(([k, , ok]) => [k, ok]));   // [k, v, lsOk]
   let writeFailures = 0;
   let writeHolds = 0;
   let writeTransactions = 0;
@@ -203,9 +204,9 @@ function fakeIndexedDb(seed = []) {
       const writes = [];
       const t = { error: null, oncomplete: null, onerror: null, onabort: null };
       t.objectStore = () => ({
-        put(row) { writes.push(() => rows.set(row.k, row.v)); return request(row.k); },
-        delete(k) { writes.push(() => rows.delete(k)); return request(undefined); },
-        getAll() { return request(Array.from(rows, ([k, v]) => ({ k, v }))); },
+        put(row) { writes.push(() => { rows.set(row.k, row.v); lsOk.set(row.k, row.lsOk); }); return request(row.k); },
+        delete(k) { writes.push(() => { rows.delete(k); lsOk.delete(k); }); return request(undefined); },
+        getAll() { return request(Array.from(rows, ([k, v]) => ({ k, v, lsOk: lsOk.get(k) }))); },
       });
       const settle = () => {
         if (fail) { if (t.onabort) t.onabort(); }
@@ -222,7 +223,7 @@ function fakeIndexedDb(seed = []) {
     },
   };
   return {
-    rows,
+    rows, lsOk,
     failNextWrite() { writeFailures++; },
     holdNextWrite() { writeHolds++; },
     releaseNextWrite() { const settle = heldWrites.shift(); if (settle) settle(); },
@@ -368,6 +369,26 @@ test("overlapping mirror flushes serialize so an older value cannot commit last"
   assert.equal(idb.writeTransactions, 2);
   assert.equal(JSON.parse(idb.rows.get("apex26.season")).round, 2,
     "transaction completion order cannot roll the durable mirror back");
+});
+
+test("a quota-refused save to an EXISTING slot wins at the next boot, over the stale disk copy and its re-save", async () => {
+  // Bug hunt 2026-09-22: the slot existed (V1 on disk), the quota refused V2,
+  // so the mirror held V2 with the disk still on V1. Boot read V1, Career.load()
+  // re-saved it, and the flush overwrote V2 in the mirror — the one case the
+  // mirror exists for, lost.
+  const disk = new Map([["apex26.career.driver.0", JSON.stringify({ money: 1 })]]);
+  const { store, idb } = loadMirrored({
+    disk,
+    seed: [["apex26.career.driver.0", JSON.stringify({ money: 2 }), false]],
+  });
+  assert.equal(store.get("career.driver.0").money, 1, "the synchronous boot read sees the stale disk copy");
+  store.set("career.driver.0", store.get("career.driver.0"));   // Career.load() persists what it read
+  await store.mirror.ready;
+  assert.equal(store.get("career.driver.0").money, 2, "the refused (newer) save is restored");
+  assert.equal(JSON.parse(disk.get("apex26.career.driver.0")).money, 2, "…onto the disk, now that it fits");
+  await store.mirrorFlush();
+  assert.equal(JSON.parse(idb.rows.get("apex26.career.driver.0")).money, 2, "the boot re-save did not overwrite the mirror");
+  assert.equal(idb.lsOk.get("apex26.career.driver.0"), true, "and the row now agrees with the disk");
 });
 
 test("without indexedDB the mirror is inert and the store is unchanged", async () => {

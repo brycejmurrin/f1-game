@@ -28,6 +28,30 @@ loopback wire. FIXED.** (`net-start-arming.test.mjs`,
 - A hostile host's CAUTION with `sinceT: "x"` made info() throw every frame;
   `RaceControl.apply` now coerces every field.
 
+**2026-09-22 (bug hunt) — career & saves: seven defects. FIXED.**
+- DURABLE MIRROR lost the one case it exists for: a quota-refused save to an
+  EXISTING key left the old value on disk, boot read it, `Career.load()`
+  re-saved it, and the flush overwrote the newer mirrored copy. Rows now carry
+  `lsOk`; restore prefers a refused (newer) row over the disk copy and drops
+  the boot's stale re-save, and the flush waits for the restore
+  (`store-cross-tab.test.mjs`, fails on the base).
+- Reliability and qualifying luck hashed (seed, round, driver) — no year — so
+  every season replayed the same retirements. `Career.seasonSeed()` mixes the
+  year in (the 2026 season is unchanged).
+- The last MY TEAM sponsor window ran past the finale in ~78 % of seasons and
+  could never pay; it is now cut at the finale and asks/pays pro rata.
+- `worksCost` and the AI car's factory decal/flap state (and the
+  `teamMeshKey` memo) were cached without the regulation era; all are keyed on
+  `Parts.legalityKey()` now.
+- The hub's CHAMPIONSHIP top 5 ignored countback (now `SeasonCal.rank`);
+  `migrateCareer` no longer downgrades a newer save's version; the garage bay
+  cache keys include the sponsor pack and the career footer fields; the
+  `__apex` garage hooks bust the preview key with the meshes.
+- GHOST SHARE: a lap over ~80-90 s overflowed the 14 KiB link, and the
+  DOWNLOAD offered instead could be imported nowhere. The link's copy is now
+  thinned until it fits (the file keeps every sample), and `decode` accepts
+  the file's JSON text (ready for an import control; none added here).
+
 **2026-09-22 (bug hunt) — race flow: five defects, each reproduced in the
 game-vm before its fix. FIXED.** (`tests/unit/race-flow-fixes-vm.test.mjs`,
 `race-control.test.mjs`, `pit-lane.test.mjs`.)
@@ -3448,3 +3472,68 @@ Clip across 13 `sceneryStartFrac` values (the shift snaps to control points):
 Baselines all come down: clip 13 -> 6, coplanar 5 -> 0, float 0 -> 0.
 verify-track: suppressed 7 (all superseded by the pit complex), 0 guard drops
 (shipped: 2 `building` drops).
+
+### Follow-up: the banks moved with the shift, and the lap harness was not deterministic (2026-09-22)
+
+The mugello review (#224) caught what every one of these PRs left undeclared:
+`bankZones` are read through `_sceneryShift` (`mesh.js` `bankingProfile`), so
+removing the shift moved the road's banking too, which is the surface the car
+drives on. Measured from `track.bankP` on the tree before any of these fixes
+(`4629201`) and on the deploy tip after #225:
+
+- Every banked section sits in a corner in both trees: mean radius 42-178 m,
+  and 81-100% of each bank rises on the outside of the turn. No straight is
+  banked. `bankingProfile`'s own re-seat (a zone landing on a straight moves to
+  the nearest unclaimed apex) had kept the shifted banks on corners, just the
+  wrong ones.
+- catalunya is identical before and after (its zones are turn-anchored). The
+  other five moved corner to corner, lift in the same 0.8-1.8 m range. One
+  28 m wrong-way sliver on istanbul's old layout (0% outside) is gone.
+
+**The drive check first said sepang got worse, and that was the harness.**
+`autopilot.spec.js`'s `runLap` started each lap with `jump(0, 30, 0)`. A
+teleport keeps every per-car transient the pre-lap frames built up
+(slipstream `towing`/`wake`, drivetrain, smoothing), and how many frames ran
+before the lap is wall-clock. The same sepang lap on the same tree measured
+197 or 517 ticks off the road, and 1.1 m or 7.9 m worst excursion, run to run.
+The 7.9 m was a power-oversteer spin at the 31 m right-hander at 0.4437: on
+the laps that arrived 2 m/s faster, the on/off throttle floored it mid-corner.
+Starting the lap with `reset(0, 30, 0, 1)`, the deterministic episode reset,
+made three runs byte-identical, and the spin is gone. The harness now does
+that.
+
+Deterministic laps, before -> after (`reset`-based):
+
+| circuit | progress | off-road ticks | worst excursion |
+|---|---|---|---|
+| portimao | 98% -> 99.7% | 945 -> 776 | 5.9 -> 1.1 m |
+| sepang | 90.5% -> 89.5% | 175 -> 306 | 1.08 -> 1.1 m |
+| paul_ricard | 92.6% -> 92.6% | 343 -> 352 | 1.1 -> 1.1 m |
+| catalunya | 136.8 s -> 136.8 s (done) | 431 -> 450 | 2.9 -> 7.46 m |
+| mugello | 144.7 s -> 144.7 s (done) | 197 -> 193 | 2.9 -> 3.9 m |
+| istanbul | 90.2% -> 91.7% | 1272 -> 946 | 5.9 -> 5.9 m |
+
+No barrier contact and no non-finite state anywhere. catalunya's 7.46 m is the
+autopilot running wide at T1 (0.1605) in BOTH trees, same episode and
+duration, only deeper, because the run into T1 now carries the elevation its
+own comments describe ("dip along the pit straight" at 0.9676). That is the
+autopilot's limit, not a circuit defect.
+
+Also found on the way: sepang's elevation entries now land where
+`docs/tracks/sepang.md` §3 puts them (the 4.5 m climb at s≈0.46). Before the
+fix, the shift had them 0.118 early, so the road ran downhill where the brief
+says it climbs.
+
+**paul_ricard's mid-lap dressing pass (`60e4905`) reached the deploy branch
+without a PR**, pushed by its worker after #220 had merged. It was reviewed
+after the fact, and it stays:
+- **Scope:** Paul Ricard's two files plus docs; no engine code, no baseline.
+- **hwZones:** the zones now narrow the chicane, Beausset and Village/Tour,
+  and the Mistral straight is back to 8 m. They are source fracs on a
+  reversed def, as `TrackSpace.range(..., "source")` confirms.
+- **groundPatch:** the side wrapper puts each vineyard soil patch about 2 m
+  from its rows, where it was 213-377 m across the road.
+- **Audits:** they fit the baselines.
+- **Open:** the Verrerie esses (0.096-0.153) and the 0.226-0.263 complex lost
+  an accidental narrowing and now run at 8 m. Whether they should get a
+  deliberate zone is not decided.

@@ -107,10 +107,13 @@ const CarDraw = (function () {
     // value that cannot change unless something was written to the store.
     const _teamMeshKeyCache = new Map();
     function teamMeshKey(team) {
+      // The era moves the factory build without a store write (Career.engage
+      // → applyRegs), so the memo is keyed on the ruleset as well as rev.
+      const rev = G.store.rev + "|" + Parts.legalityKey();
       const c = _teamMeshKeyCache.get(team.id);
-      if (c && c.rev === G.store.rev) return c.val;
+      if (c && c.rev === rev) return c.val;
       const val = team.id + ":" + G.getLiveryId(team.id) + ":" + Parts.factoryKey(team);
-      _teamMeshKeyCache.set(team.id, { val, rev: G.store.rev });
+      _teamMeshKeyCache.set(team.id, { val, rev });
       return val;
     }
     // Painted full meshes are KEYED PER DRIVER (helmet design is opts.num). Shadow
@@ -198,7 +201,8 @@ const CarDraw = (function () {
     const _aeroLevelCache = new Map();   // "player|factory:team.id" -> {val, rev}
     function teamDecalState(team, usePlayerSetup) {
       const key = (usePlayerSetup ? "player:" : "factory:") + team.id;
-      const rev = usePlayerSetup ? G.store.rev : -1;
+      // Factory: the ruleset (Parts.setLegality) is the only thing that moves it.
+      const rev = usePlayerSetup ? G.store.rev + "|" + Parts.legalityKey() : "L" + Parts.legalityKey();
       const c = _aeroLevelCache.get(key);
       if (c && c.rev === rev) return c;
       const setup = usePlayerSetup ? G.getTeamParts(team.id) : Parts.getFactorySetup(team);
@@ -438,12 +442,14 @@ const CarDraw = (function () {
         _digT[12] = 0.048; _digT[13] = 0.001; _digT[14] = -0.0315;
         M4.mulTo(_digM, _rigB, _digT);
         _digM[4] *= en; _digM[5] *= en; _digM[6] *= en;
-        G.gfx.draw(getErsBar(), _digM, c.deploying ? (_rigFxA.alpha = 0.75 + 0.25 * Math.sin(G.raceT * 22), _rigFxA) : fx);
+        // Blinks, not pulses: alpha is in TLX's material key (1/32 steps), and a
+        // sine minted a material — a program — per step (gpu-census 212).
+        G.gfx.draw(getErsBar(), _digM, c.deploying ? (_rigFxA.alpha = Math.sin(G.raceT * 22) > 0 ? 1.0 : 0.5, _rigFxA) : fx);
       }
       // OVERTAKE lamp on the wheel: white when armed, pulsing purple while active
       // (the floating HUD OVERTAKE text is hidden in cockpit view).
       if (c.otT > 0) {
-        G.gfx.draw(getOtLamp(true), _rigB, (_rigFxA.alpha = 0.7 + 0.3 * Math.sin(G.raceT * 18), _rigFxA));
+        G.gfx.draw(getOtLamp(true), _rigB, (_rigFxA.alpha = Math.sin(G.raceT * 18) > 0 ? 1.0 : 0.4, _rigFxA));
       } else if (c.otArmed) {
         G.gfx.draw(getOtLamp(false), _rigB, fx);
       }
@@ -645,8 +651,13 @@ const CarDraw = (function () {
           // shared mesh).
           _rq[_rqN] || (_rq[_rqN] = new Float32Array(16));
           _rq[_rqN].set(W);
-          _rqEmis[_rqN] = 0.30 + 0.70 * heat;
-          _rqAlpha[_rqN] = Math.min(1, 0.25 + heat * 0.9);
+          // FIVE glow levels, not a continuous heat: emissive and alpha are TLX's
+          // material KEY (1/32 steps), and a glow that followed the disc minted a
+          // material — a program — per step for every hot wheel in view, i.e. at
+          // every braking zone (gpu-census 213 minted: row).
+          const hq = Math.round(heat * 4) / 4;
+          _rqEmis[_rqN] = 0.30 + 0.70 * hq;
+          _rqAlpha[_rqN] = Math.min(1, 0.25 + hq * 0.9);
           _rqN++;
         }
       }

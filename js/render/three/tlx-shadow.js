@@ -392,6 +392,18 @@
 
     return {
       S,
+      // WARM THE CASTER PROGRAMS DURING THE LIGHTS. castScene is its own Scene,
+      // so tlx.js's compileAsync(scene) never sees it; the first sun pass of a
+      // race built 9 programs on the main thread (gpu-census 203/205). Called
+      // from startProgramWarm after the scene and post warms, when castScene
+      // already holds the grid's casters (sunPass runs before present()).
+      async warm() {
+        const prev = renderer.getRenderTarget();
+        try {
+          if (sunRT) { renderer.setRenderTarget(sunRT); await renderer.compileAsync(castScene, shadowCam); }
+          if (blockerQuad && blockerRT) { renderer.setRenderTarget(blockerRT); await renderer.compileAsync(blockerQuad, blockerQuad.camera); }
+        } finally { try { renderer.setRenderTarget(prev); } catch (_) { /* already unbound */ } }
+      },
       carShadowKeep, lampShadowKeep,
       sunSize: SUN_SIZE,
       // EXPORTED FOR THE SAME REASON sunSize IS: tsl-lit's PCF taps are offsets

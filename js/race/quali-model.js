@@ -198,7 +198,7 @@ const Quali = (function () {
       // races the session had already run, which the career-isolation grid test
       // (correctly) forbids. Career keeps its own round.
       const round = inCareer ? Career.round() : (G.seasonMode ? G.seasonRound : 0);
-      const seed = inCareer ? Career.data().seed : G.simSeed();
+      const seed = inCareer ? Career.seasonSeed() : G.simSeed();   // the year too — see Career.seasonSeed
       const real = drivenMap(driven);
 
       const rows = G.cars.map((c) => ({

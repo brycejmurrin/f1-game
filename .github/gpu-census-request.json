@@ -1,10 +1,10 @@
 {
   "images": "macos-latest",
   "track": "montreal",
-  "tod": "night",
-  "clock": 2,
+  "tod": "day",
+  "clock": 12,
   "census_only": false,
   "force": "",
   "ls": "",
-  "leg": "tlx-decal-uniforms-shared-2026-09-22"
+  "leg": "merged-with-deploy-tip-2026-09-22"
 }

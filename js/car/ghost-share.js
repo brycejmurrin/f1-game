@@ -106,19 +106,39 @@ const GhostShare = (function () {
     catch (_) { return null; }
   }
 
+  // Every other sample, ends kept: the same thinning Ghost's store trim uses.
+  function thinned(g) {
+    const n = g.t.length, count = Math.max(MIN_SAMPLES, Math.ceil(n / 2));
+    if (count >= n) return null;
+    const idx = Array.from({ length: count }, (_, i) => Math.round(i * (n - 1) / (count - 1)));
+    return { time: g.time, meta: g.meta, t: idx.map((i) => g.t[i]), s: idx.map((i) => g.s[i]), x: idx.map((i) => g.x[i]) };
+  }
+  const MAX_THIN = 4;   // down to 1/16 of the samples before giving up on a link
   async function encode(ghost, opts) {
-    const file = fileExport(ghost, opts);
+    const file = fileExport(ghost, opts);   // the DOWNLOAD keeps the full trace
     if (!file.ok) return file;
-    const plain = enc().encode(file.text);
-    let mode = "p", bytes = plain;
-    if (canCompress()) {
-      try { bytes = await deflate(plain); mode = "z"; }
-      catch (_) { bytes = plain; mode = "p"; }
+    // A long lap at the recorded rate overflowed the 14 KiB link (~80-90 s of
+    // lap), so Spa-length circuits could never share one. Thin the LINK's copy
+    // until it fits; the replay interpolates between samples either way.
+    let g = ghost;
+    for (let pass = 0; pass <= MAX_THIN; pass++) {
+      const text = pass === 0 ? file.text : fileExport(g, opts).text;
+      const plain = enc().encode(text);
+      let mode = "p", bytes = plain;
+      if (canCompress()) {
+        try { bytes = await deflate(plain); mode = "z"; }
+        catch (_) { bytes = plain; mode = "p"; }
+      }
+      const body = bytesToB64url(bytes);
+      if (body.length <= MAX_FRAGMENT_CHARS) {
+        const code = MAGIC + "." + mode + "." + body;
+        return { ok: true, code, url: shareUrl(code), bytes: bytes.byteLength, file, thinned: pass };
+      }
+      const next = thinned(g);
+      if (!next) break;
+      g = next;
     }
-    const body = bytesToB64url(bytes);
-    if (body.length > MAX_FRAGMENT_CHARS) return { ok: false, reason: "too-large", file };
-    const code = MAGIC + "." + mode + "." + body;
-    return { ok: true, code, url: shareUrl(code), bytes: bytes.byteLength, file };
+    return { ok: false, reason: "too-large", file };
   }
 
   function codeFrom(value) {
@@ -137,6 +157,13 @@ const GhostShare = (function () {
   }
 
   async function decode(value) {
+    // The DOWNLOAD's own text (a pasted .apexghost.json) is a ghost too: before
+    // this, the file the too-large path offered could be imported nowhere.
+    const raw = String(value || "").trim();
+    if (raw.startsWith("{")) {
+      if (raw.length > MAX_DECODED_BYTES) return CORRUPT;
+      try { return fromBody(JSON.parse(raw)); } catch (_) { return CORRUPT; }
+    }
     const code = codeFrom(value);
     if (!code || code.length > MAX_CODE_CHARS) return CORRUPT;
     const parts = code.split(".");
@@ -146,19 +173,21 @@ const GhostShare = (function () {
       if (parts[1] === "p" && packed.byteLength > MAX_DECODED_BYTES) return CORRUPT;
       if (parts[1] === "z" && !canCompress()) return CORRUPT;
       const bytes = parts[1] === "z" ? await inflate(packed) : packed;
-      const body = JSON.parse(dec().decode(bytes));
-      if (!body || body.v !== 1 || body.kind !== "ghost" || !validGhost(body) ||
-          typeof body.track !== "string" || !body.track) return CORRUPT;
-      if (!knownTrack(body.track)) return { ok: false, reason: "unknown-track" };
-      return {
-        ok: true,
-        ghost: { time: body.time, t: body.t, s: body.s, x: body.x, meta: body.meta || undefined },
-        track: body.track,
-        context: typeof body.context === "string" ? body.context : null,
-        day: typeof body.day === "string" ? body.day : null,
-        meta: body.meta && typeof body.meta === "object" ? body.meta : null,
-      };
+      return fromBody(JSON.parse(dec().decode(bytes)));
     } catch (_) { return CORRUPT; }
+  }
+  function fromBody(body) {
+    if (!body || body.v !== 1 || body.kind !== "ghost" || !validGhost(body) ||
+        typeof body.track !== "string" || !body.track) return CORRUPT;
+    if (!knownTrack(body.track)) return { ok: false, reason: "unknown-track" };
+    return {
+      ok: true,
+      ghost: { time: body.time, t: body.t, s: body.s, x: body.x, meta: body.meta || undefined },
+      track: body.track,
+      context: typeof body.context === "string" ? body.context : null,
+      day: typeof body.day === "string" ? body.day : null,
+      meta: body.meta && typeof body.meta === "object" ? body.meta : null,
+    };
   }
 
   function installGuest(decoded) {

@@ -240,8 +240,19 @@ jobs:
         run: |
           FORCE="${CENSUS_FORCE}"
           LS=""; for kv in ${CENSUS_LS}; do LS="$LS --ls $kv"; done
+          # wgxCapture=0 IS THE POINT OF THIS LEG. tlx.js arms its soft blit
+          # (GPU readback + putImageData every frame) whenever
+          # `!forceWebGL && (_softAdapter || _headless || cap==="1")`, and
+          # `_headless` is `navigator.webdriver` — true in EVERY automated run.
+          # So until 2026-09-22 this leg timed the headless readback and never
+          # once the swapchain present a player gets, on any image, including
+          # the hardware ones. Every fps/frames/luma number this column has
+          # ever produced for WebGPU was that blit (PERF-FINDINGS 2t read a
+          # 46.9-vs-66.2 gap straight off it). "0" = NATIVE keeps three's
+          # swapchain; the `path:` row below prints softBlit so a regression
+          # here is visible rather than silently re-measured.
           node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} \
-            --backend three --path webgpu \
+            --backend three --path webgpu --ls apex26.wgxCapture=0 --beats 20 \
             ${FORCE:+--ls apex26.tlxForceHw=$FORCE} $LS \
             --json "game-webgpu-${{ matrix.image }}.json" \
             --shot "game-webgpu-${{ matrix.image }}.png"
@@ -254,8 +265,12 @@ jobs:
         run: |
           FORCE="${CENSUS_FORCE}"
           LS=""; for kv in ${CENSUS_LS}; do LS="$LS --ls $kv"; done
+          # Same pin as the WebGPU leg, and a no-op here: forceWebGL
+          # short-circuits _softBlit. Written anyway so the two TLX legs differ
+          # in exactly ONE variable — the three path — which is the only thing
+          # that makes this a control.
           node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} \
-            --backend three --path webgl2 \
+            --backend three --path webgl2 --ls apex26.wgxCapture=0 --beats 20 \
             ${FORCE:+--ls apex26.tlxForceHw=$FORCE} $LS \
             --json "game-webgl2-${{ matrix.image }}.json" \
             --shot "game-webgl2-${{ matrix.image }}.png"
@@ -273,7 +288,7 @@ jobs:
         run: |
           LS=""; for kv in ${CENSUS_LS}; do LS="$LS --ls $kv"; done
           node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} \
-            --backend webgl2 $LS \
+            --beats 20 --backend webgl2 $LS \
             --json "game-glx-${{ matrix.image }}.json" \
             --shot "game-glx-${{ matrix.image }}.png"
 
@@ -293,7 +308,7 @@ jobs:
         run: |
           LS=""; for kv in ${CENSUS_LS}; do LS="$LS --ls $kv"; done
           node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} \
-            --backend webgpu $LS \
+            --beats 20 --backend webgpu $LS \
             --json "game-wgx-${{ matrix.image }}.json" \
             --shot "game-wgx-${{ matrix.image }}.png"
 
@@ -373,6 +388,141 @@ jobs:
             // 46.9 vs 66.2 across the two three.js backends with none of this
             // recorded, and the gap is still an open lead for exactly that
             // reason (docs/PERF-FINDINGS.md 2t).
+              // THE TAIL, which fps cannot show. fps is an EMA and floorMs a
+              // derived budget: a frame costing 120 ms once every few seconds
+              // moves neither. p99 against p50 is the discriminator — a healthy
+              // p50 beside a p99 several times it IS a spike train, while both
+              // rising together is plain slowness. Printed here because the
+              // previous run put these numbers in the JSON artifact only, so
+              // reading the one line that answers the question meant
+              // downloading a 12 MB zip.
+              // TOP LEVEL, not under gfx: gpu-game-check writes out.frameTail
+              // beside out.gfx, and the first wiring read gfx.frameTail — so
+              // the row silently never printed on run 35748268014, the one run
+              // that finally had the real present path to measure.
+              // THE WINDOW ITSELF. Census 207 reported 0 spikes on the three.js /
+              // WebGPU leg and every one of its fifteen beats sat inside the
+              // program warm (presentMs 0, governor ring n=1): the pre-race phase
+              // takes 10-15 s on this runner and the old window opened at arm()
+              // with the car parked. The gate now waits for the race and the
+              // driver moves the car; this row says whether that happened, how
+              // long the lights held by warm stage, and how far the car went.
+              const _rc = g.race;
+              if (_rc && _rc.reached === false) {
+                rows.push(`${" ".repeat(8)}race:  NOT REACHED in ${_rc.gateMs} ms — every row below timed the LIGHTS, not the race` +
+                  (_rc.warm ? `  (warm: scene=${_rc.warm.scene} post=${_rc.warm.post} shadow=${_rc.warm.shadow} total=${_rc.warm.total} ms, pending=${_rc.warm.pending})` : ""));
+              } else if (_rc) {
+                const _w = _rc.warm, _d = _rc.driven;
+                rows.push(`${" ".repeat(8)}race:  gate=${_rc.gateMs}ms beats=${_rc.beats}` +
+                  (_w ? `  warm scene=${_w.scene} post=${_w.post} shadow=${_w.shadow} total=${_w.total} ms attempts=${_w.attempts} failed=${_w.failed}` : "  warm: none (no TLX warm on this leg)") +
+                  (_d ? `  | driven ${_d.frames}f ${_d.distM} m mean ${_d.meanSpeed} m/s offRoad=${_d.offRoadFrames}f${_d.error ? " driverError=" + _d.error : ""}` : _rc.drive ? `  | driver ${_rc.driver || "not started"}` : "  | PARKED (--no-drive)"));
+              } else {
+                rows.push(`${" ".repeat(8)}race:  no race gate in this build — the window opened at arm(), car parked`);
+              }
+              // Programs and materials over the window, first beat to last: a
+              // program count that climbs while driving is the lazy-program
+              // tally; a material miss or evict count that climbs is tlx.js
+              // minting materials on the road (MAT_CACHE_CAP).
+              const _mmB = (g.beats || []).filter((b) => b && b.mm);
+              if (_mmB.length >= 2) {
+                const a = _mmB[0].mm, z = _mmB[_mmB.length - 1].mm;
+                const d = (k) => (a[k] != null && z[k] != null) ? `${k} ${a[k]}→${z[k]} (+${z[k] - a[k]})` : `${k} ?`;
+                rows.push(`${" ".repeat(8)}mats:  ${["progs", "mats", "pool", "miss", "evict"].map(d).join("  ")}`);
+                // The keys minted during the window: the recent misses of the
+                // last beat that the first beat had not seen (emissive, alpha,
+                // roughness, metalness, specular, detail, clearcoat, carPaint,
+                // sparkle, then the flags).
+                const _k0 = new Set(a.keys || []), _kNew = (z.keys || []).filter((k) => !_k0.has(k));
+                if (_kNew.length) rows.push(`${" ".repeat(8)}       minted: ${_kNew.slice(-8).join(" | ")}`);
+              }
+              const _ft = g.frameTail;
+              if (_ft && _ft.p99 != null) {
+                rows.push(`${" ".repeat(8)}tail:  p50=${_ft.p50} p95=${_ft.p95} p99=${_ft.p99} max=${_ft.max} p99/p50=${_ft.p99OverP50}x` +
+                  `  (beats=${_ft.beats})`);
+              } else if (_ft && _ft.note) {
+                rows.push(`${" ".repeat(8)}tail:  ${_ft.note}`);
+              }
+              // THE PERIOD OF THE TAIL — the row that answers the actual
+              // report. Everything else here is a settled number: fps is an
+              // EMA, floorMs a derived budget, and the tail row above is built
+              // from per-beat percentiles, so its max-of-p95 collapses onto the
+              // single worst stall (run 195 printed p95 == p99 == max on all
+              // four legs). This one is analyse() over the wall cost of every
+              // rAF callback: how many frames cost far more than the typical
+              // frame OF THIS LEG, and whether they are EVENLY SPACED. A low
+              // CV over several spikes is a mechanism on a clock; a CV near 1
+              // is ordinary load.
+              const _h = g.hitch;
+              if (_h && _h.ok) {
+                rows.push(`${" ".repeat(8)}hitch: ${_h.spikes} spikes/${_h.frames}f over ${_h.spikeThresholdMs}ms` +
+                  `  every ~${_h.gapMedianS}s (CV ${_h.gapCV}) periodic=${_h.periodic}  max=${_h.max}ms`);
+              } else if (_h && _h.note) {
+                rows.push(`${" ".repeat(8)}hitch: ${_h.note}`);
+              }
+              // THE PASS CENSUS, which only this job can take at the size a
+              // player renders. tlx-shadow.js sizes its maps by softwareGL:
+              // SUN_SIZE is 512 on a software adapter against 2048 on a real
+              // desktop, CAR_SIZE 256 against 1024. macos-latest reports
+              // softAdapter=false, so the container measured a sun shadow
+              // rebuild at a sixteenth of its real pixel count and found it
+              // cost 1.3x a normal frame. Same statistic here, at full size.
+              const _p = g.passes, _pk = g.passKinds;
+              if (_p && _p.medianPasses != null) {
+                rows.push(`${" ".repeat(8)}pass:  median=${_p.medianPasses} max=${_p.maxPasses} wide=${_p.widerThanMedian}` +
+                  ` every ~${_p.gapMedianS}s (CV ${_p.gapCV})` +
+                  (_p.wideCostRatio != null ? `  cost ${_p.wideCostRatio}x normal (${_p.wideMeanMs} vs ${_p.normalMeanMs}ms) spikeEnrich ${_p.spikeEnrichmentOnWide}x` : ""));
+              }
+              if (_pk && _pk.verdict) rows.push(`${" ".repeat(8)}kinds: ${_pk.verdict}`);
+              // PIPELINE COMPILES, which decide what the race-start burst
+              // actually IS. Run 197 watched the uniform buffer count go
+              // 90 -> 558 in one second as the race started and fps halve,
+              // with 258/346/441/556 ms frames in that window. A new uniform
+              // buffer is a new RenderObject either way; only a compile count
+              // separates "allocate faster" from "warm the programs".
+              const _w = g.gpuWork;
+              if (_w && !_w.note) {
+                const keys = Object.keys(_w).sort((a, b) => _w[b] - _w[a]).slice(0, 6);
+                rows.push(`${" ".repeat(8)}work:  ${keys.map((k) => `${k}=${_w[k]}`).join(" ")}`);
+              } else if (_w && _w.note) {
+                rows.push(`${" ".repeat(8)}work:  ${_w.note}`);
+              }
+              // The compile stacks, one row per signature: which draw asked
+              // for a program the warm never built. The OURS half is the part
+              // that names a fix; the frames from three only say it compiled.
+              // WHERE THE CPU TIME GOES, by function, over the race window.
+              // Self time from timeDeltas, folded by (function, file:line)
+              // and by file. Property names survive minification, so the
+              // rows from three name themselves.
+              const _cpu = g.cpu;
+              if (_cpu && !_cpu.note) {
+                rows.push(`${" ".repeat(8)}cpu:   ${_cpu.totalMs} ms sampled — ${(_cpu.files || []).slice(0, 4).map((f) => `${f.file}=${(f.share * 100).toFixed(0)}%`).join(" ")}`);
+                for (const r of (_cpu.rows || []).slice(0, 14)) {
+                  rows.push(`${" ".repeat(8)}  ${String((r.share * 100).toFixed(1)).padStart(5)}%  ${String(r.ms).padStart(8)} ms  ${r.site}`);
+                }
+              } else if (_cpu && _cpu.note) {
+                rows.push(`${" ".repeat(8)}cpu:   ${_cpu.note}`);
+              }
+              const _cs = g.compileStacks || [];
+              for (const [sig, count] of _cs.slice(0, 12)) {
+                rows.push(`${" ".repeat(8)}stack: x${count}  ${String(sig).slice(0, 300)}`);
+              }
+              // INSIDE THE SPIKES: the profile joined to the frames at or over
+              // 100 ms, and the resource calls those frames made against the
+              // rest. Census 208 named build, the garbage collector and
+              // writeBuffer across the whole window; this says which of them sat
+              // inside the callbacks a player feels.
+              const _sc = g.spikeCpu, _sw = g.spikeWork;
+              if (_sc && _sc.spikes != null && _sc.spikes > 0) {
+                rows.push(`${" ".repeat(8)}spike: ${_sc.spikes} frames >= ${_sc.thresholdMs} ms, ${_sc.spikeMs} ms of callbacks, ${_sc.sampledMs} ms sampled inside (join ${_sc.coverage}x)`);
+                for (const r of (_sc.rows || []).slice(0, 8)) rows.push(`${" ".repeat(8)}  ${String((r.share * 100).toFixed(1)).padStart(5)}%  ${String(r.ms).padStart(8)} ms  ${r.site}${r.path ? "  <- " + String(r.path).slice(0, 160) : ""}`);
+                if (_sw && _sw.frames != null) rows.push(`${" ".repeat(8)}       work inside vs rest: ${_sw.summary}`);
+                if (_sw && _sw.timed) rows.push(`${" ".repeat(8)}       wall time inside vs rest: ${_sw.timed}`);
+                if (_sw && _sw.remainder) rows.push(`${" ".repeat(8)}       ${_sw.remainder}`);
+                const _sp = g.spikePasses;
+                if (_sp && _sp.summary) rows.push(`${" ".repeat(8)}       passes in spike frames vs rest: ${_sp.summary}`);
+              } else if (_sc && _sc.note) {
+                rows.push(`${" ".repeat(8)}spike: ${_sc.note}`);
+              }
               rows.push(`${" ".repeat(8)}gov:   tier=${gov.tier} autoTier=${gov.autoTier} userTier=${gov.userTier} ` +
                 `scale=${gov.scale} fps=${gov.fps} floorMs=${gov.floorMs} envFace=${env.face} frames=${(gov.open && gov.open.frames) != null ? gov.open.frames : "?"}`
                 // ...and the OTHER way this column lies. floorMs 16.6 is 1/60 s,
