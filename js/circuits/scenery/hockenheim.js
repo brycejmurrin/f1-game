@@ -49,8 +49,12 @@
           });
         }
       }
-      for (const [s0, s1] of [[0.075, 0.305], [0.505, 0.765]]) {
-        for (const side of [-1, 1]) {
+      // The 42 m belt is split at 0.615-0.620: on the +1 side it reaches back
+      // to within 13 m of the frac-0.324 leg, where the road cull kept only
+      // the top two crown tiers of one pine — 23 m in the air (float-audit).
+      for (const [s0, s1, sides] of [[0.075, 0.305, [-1, 1]], [0.505, 0.765, [-1]],
+                                     [0.505, 0.615, [1]], [0.620, 0.765, [1]]]) {
+        for (const side of sides) {
           forestEdge(s0, s1, side, 42, {
             density: 0.2, hMin: 26, hMax: 42, pineFrac: 0.96,
             col: PINE_D, col2: PINE_D,
@@ -63,7 +67,10 @@
         const h = hash(k * 31);
         if (h < 0.10) return;
         const side = h < 0.5 ? -1 : 1;
-        pine(k, side, 9 + h * 7, 17 + h * 13, h < 0.35 ? PINE_D : PINE);
+        // Not the first pine at 0.465-0.480: its anchor is the Spitzkehre's
+        // inside, 10.8 m off the frac-0.456 leg, and the road cull stripped
+        // its trunk and lower tiers, leaving a crown 18 m up (float-audit).
+        if (!(s > 0.465 && s < 0.48)) pine(k, side, 9 + h * 7, 17 + h * 13, h < 0.35 ? PINE_D : PINE);
         if (h > 0.28) pine(k, -side, 10 + h * 8, 15 + h * 12, PINE);
       });
       every(30, (k) => {
