@@ -11,6 +11,23 @@
 Verified against the current tree. Everything fixed has moved to the archived
 journal; this is what remains.
 
+**2026-09-22 (bug hunt) — multiplayer: four defects, reproduced over a real
+loopback wire. FIXED.** (`net-start-arming.test.mjs`,
+`net-lobby-lifecycle.test.mjs`, `race-control.test.mjs`.)
+- A guest whose circuit built FIRST sent its one ARMED while the host was
+  still in `await G.startRace()`; the host's lobby session pumped it, had no
+  handler, and dropped it — a 20 s ARM_WAIT stall (measured 19-20 s vs 25 ms),
+  and a split start once the guest's HOLD_MAX_MS ran out. The guest now
+  re-sends ARMED each second until START lands. Normal 2-player rooms.
+- A guest that LEFT the lobby stayed in every other guest's roster (only the
+  host saw the close): their quali gate waited forever and the start seated a
+  frozen net-owned car. The host now relays a lobby-phase LEFT {from}.
+- The host stamped relayed guest poses `now` although they were posed
+  delayMs earlier, so guest-to-guest predict() ran 8-14 m behind at 80 m/s.
+  Each relayed car goes in its own packet stamped with `presentedAt`.
+- A hostile host's CAUTION with `sinceT: "x"` made info() throw every frame;
+  `RaceControl.apply` now coerces every field.
+
 **2026-09-22 (bug hunt) — career & saves: seven defects. FIXED.**
 - DURABLE MIRROR lost the one case it exists for: a quota-refused save to an
   EXISTING key left the old value on disk, boot read it, `Career.load()`

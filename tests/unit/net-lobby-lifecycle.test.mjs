@@ -347,6 +347,20 @@ test("a guest keeps its seat against a LATER guest relayed onto it", async () =>
   } finally { h.lobby.cancel(); }
 });
 
+test("a guest drops another guest the host says has LEFT the lobby", async () => {
+  // Bug hunt 2026-09-22: only the host saw a guest's connection close, and it
+  // told nobody — the others kept the leaver in their roster, so their quali
+  // gate waited forever and the start seated a car no packet would move.
+  const { h, s } = await connectedGuest();
+  try {
+    s.deliver("hello", { team: "beta", driver: 0, rank: 1 });
+    s.deliver("hello", { from: "g2", rank: 2, team: "beta", driver: 1 });
+    assert.ok(h.lobby.roomState().peers.some((p) => p.from === "g2"), "the relayed guest is in the roster");
+    s.deliver("left", { from: "g2" });
+    assert.equal(h.lobby.roomState().peers.some((p) => p.from === "g2"), false, "…and gone once the host says so");
+  } finally { h.lobby.cancel(); }
+});
+
 test("a guest yields its seat to the host and to an EARLIER guest", async () => {
   const { h, s, hellos } = await connectedGuest();
   try {

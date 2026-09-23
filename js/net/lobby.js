@@ -182,6 +182,15 @@ const NetLobby = (function () {
             : "Connection closed.", true);
         } else {
           say("A player left. The rest of you are still in.");
+          // Guests learned of each other only through this host's relay, so
+          // only the host can tell them one is gone: their roster kept the
+          // leaver forever — the quali gate waited on a lap that never came,
+          // and the start seated a net-owned car no packet would ever move.
+          if (role === "host") {
+            for (const sess of sessions.values()) {
+              try { sess.sendEvent(NetPlay.EV.LEFT, { from: id }); } catch (e) { /* a dead session is its own close */ }
+            }
+          }
         }
         renderRoom(); if (G.refreshQualiGate) G.refreshQualiGate();
       });
@@ -437,6 +446,15 @@ const NetLobby = (function () {
         renderRoom();
       });
       made.onEvent(NetPlay.EV.GO, () => { if (role === "guest") beginRace(); });
+      // Lobby-phase LEFT (the race phase's carries `wire`, handled by NetPlay):
+      // the host saying another guest's connection closed. Only the host may
+      // say it, and only about a relayed profile — never this connection's own.
+      made.onEvent(NetPlay.EV.LEFT, (d) => {
+        if (role !== "guest" || !d || d.from == null || d.from === id) return;
+        _peers.delete(d.from); _ready.delete(d.from);
+        clashDrop(d.from);
+        renderRoom(); if (G.refreshQualiGate) G.refreshQualiGate();
+      });
       // The sender-binding NetPlay's bindSession applies (sendersOwnDriver
       // there) has to hold HERE too, or it guards the wrong phase: qualifying
       // runs while the LOBBY still holds the connection, and a QUALI is an
