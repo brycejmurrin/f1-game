@@ -3784,3 +3784,66 @@ belts. clip and coplanar unchanged on both. **Engine leads, OPEN:** `building()`
 keeps roof plant when the cap is refused; `forestEdge`'s `clearTreeDist`
 checks only the tree's own node, so a tree near ANOTHER leg keeps its crown
 when the guard takes its trunk.
+
+### mexico — FIXED (`sceneryStartFrac: 0.635` removed, shift 0.724 -> 0)
+
+Paddock and garages K(0.00-0.05), start/finish gantry 0.00, Foro Sol exclusions
+0.70-0.89: all against `startFrac: 0`. The shift stood the paddock on the back
+of the lap (pit mid 100 trees + 25 pines -> 28 trees, gantry, building; Foro
+Sol 136 trees -> 14). The def's own tables were written in the SHIFTED frame:
+bankZones +0.72364 land all six on apexes (the "Peraltada" labels were wrong),
+elevations (s - 0.635) + 0.72364. Bank lift identical; road height within
+0.18 m (ripple phase). Paddock mirrored to `pit.side` +1 (the paul_ricard
+precedent), `ownPitStraight`, the file's own garage units and pit building
+dropped (the complex superseded them), pit-side hedge trimmed off the complex
+(its top block floated 1.02 m), cityFront and backdrops kept off the T4 leg
+(guard drops 30 -> 4). **clip 89 -> 50, coplanar 1 -> 1, float 1 -> 1.**
+tightFrac 0.587 -> 0.595.
+
+### Deliberately airborne: madrid and mexico keep a float baseline of 1-2
+
+Both clusters are airliners on approach (madrid: Barajas, 90 m up, 640 m off
+the circuit; mexico: `anchor(K(0.20), 1, 820)`, +210 m). They are scenery
+doing what it says, not a grounding defect, so the float baseline keeps them
+(madrid 2, mexico 1). OPEN: float-audit has no way to say "airborne on purpose",
+so these two entries read like defects to the next reader. A flag on the
+emitter that the audit honours would let both baselines go to 0.
+
+### Floating clusters, the other eight — FIXED (2026-09-23)
+
+Three causes, and every one of them is an engine behaviour a circuit tripped:
+
+- **A crown left behind by the per-primitive road cull.** hockenheim (2: a
+  forestEdge pine 13 m from another leg, and a hairpin verge pine), spa (2: a
+  Bus Stop pine whose tiers 1-3 hung once `onRoadHit` took tier 0; `pine()`'s
+  own guard radius, h * 0.225, is narrower than its lowest tier, ~0.26 h),
+  imola (1: a canopy backdrop's dome at dist 48, moved to 60). Fixed by
+  splitting belt windows or gating on a crown-clearance check.
+- **Roof plant left at cap height when the cap is refused.** anderstorp (1,
+  shed moved 36 -> 34 m), donington (1, gap 30 -> 26), korea (1, a 60 m block
+  whose 30 m cap radius reached the road, split into two 30 m halves). fuji's
+  six were the same. The engine lead is `building()` in city.js keeping the
+  plant box when its cap frustum is rejected.
+- **Supports short of the deck.** watkins_glen (1): the footbridge's timber
+  bents stood on a verge ~0.4 m below the road datum, cut at deck height, so
+  the span floated; they now run 1 m into the deck.
+
+All eight: float -> 0, clip and coplanar unchanged or down (donington 25 -> 24).
+
+### structures.js `alreadyLaid` — FIXED: a run ending on the seam read as ending at 0
+
+`s1 % 1` turned montreal's `[0.59, 1.0]` wall into `[0.59, 0]`, "contained" in
+its `[0.0, 0.05]` run, so it was skipped along with its collision barrier:
+wallStats tightFrac 1.000 -> 0.645 once the shift that kept these numbers off
+the seam was removed (tracks-walls.spec "Montreal full-lap walls"). A run
+ending on a whole lap now ends at 1. Fleet A/B: montreal is the only circuit
+whose tightFrac the fix changes.
+
+### physics-baseline re-blessed for monza's frame (2026-09-23)
+
+monza is the characterization track. Its corrected frame moves road height
+<= 0.14 m (ripple phase) and moves its scenery-placed walls: at arc
+1640-1680 m the barrier stands at 16.2 m, not 13.1 m, so "steady corner load"
+step 4 no longer stops on it (39.07 -> 44.44 m/s). With monza's files reverted
+to the base the vm cross-check passed 5/5 on the same tree, so no physics code
+moved. Any later frame fix on monza re-blesses the same way.
