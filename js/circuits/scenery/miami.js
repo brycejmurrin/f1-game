@@ -410,7 +410,7 @@
       // Fewer larger yacht silhouettes (6 boats, not ~50)
       for (let i = 0; i < 6; i++) {
         const k = K(0.275 + i * 0.018);
-        const a = anchor(k, 1, 18 + (i % 3) * 14);
+        const a = anchor(k, 1, 46 + (i % 3) * 11);   // beyond the promenade palms and the 26/36 m berth rank (was 18 + 14i: clipped both)
         const c = vadd(a.c, a.t, (i % 2 ? 8 : -8));
         const len = 22 + hash(i * 4) * 16;          // 22–38 m hulls
         const trim = (i % 3 === 0) ? TEAL : ((i % 3 === 1) ? CORAL : PINK);
