@@ -3520,3 +3520,48 @@ after the fact, and it stays:
 - **Open:** the Verrerie esses (0.096-0.153) and the 0.226-0.263 complex lost
   an accidental narrowing and now run at 8 m. Whether they should get a
   deliberate zone is not decided.
+
+### paul_ricard — hwZones decision (Verrerie esses and the Camp complex stay at 8 m)
+
+The open question from the `60e4905` review: should the Verrerie esses (racing
+0.096-0.153) and the 0.226-0.263 complex get a deliberate road-narrowing
+`hwZones` entry, now that the accidental one is gone? **No. They stay at the
+base 8 m half-width. No code changed.**
+
+**The real circuit widened both.** The 2017 refurbishment for the 2018 French
+GP rebuilt four corners. La Verrerie (T1) "will become tighter but with the
+entry widened to help ensure clean starts", and two more corners were widened
+"to increase corner speeds and to offer better overtaking opportunities"
+([dailysportscar, 2017-12-09](https://www.dailysportscar.com/2017/12/09/paul-ricard-resurfaced.html)).
+Secondary summaries name those two as the Virage du Camp at the western end and
+the Virage du Pont onto the pit straight. In this trace the Camp is the tightest
+corner of the 0.206-0.261 complex. Narrowing either section would invert what
+the circuit did. No published per-corner width was found; the circuit's own
+track page gives none.
+
+**The house convention narrows real pinch points, not every corner.** In
+catalunya, magny_cours and paul_ricard's own existing zones, the zones sit on hairpins
+and chicanes. suzuka narrows its Esses because the real Esses are narrow.
+silverstone carries no zones at all, so Maggotts-Becketts runs full width.
+`docs/tracks/paul_ricard.md` §5 has always named exactly three pinch points:
+the Mistral chicane, Le Beausset and Pont/Le Village. Those are the three zones
+the def carries.
+
+**Measured on the built track** (`T.build(def)`, 1452 nodes, `t.hw`/`t.curv`,
+racing fracs):
+
+| section | racing | min radius | `t.hw` |
+|---|---|---|---|
+| Verrerie esses (L 0.0937, L 0.0957, R 0.1102) | 0.08-0.155 | 40 m | 8.00 throughout |
+| Hotel / Camp complex (R 0.2066, L 0.2245, **R 0.2424 Camp**, R 0.2610) | 0.20-0.27 | 15 m | 8.00 throughout |
+| Mistral chicane (zone) | 0.486-0.517 | 26 m | 6.80-8.00 |
+| Le Beausset (zone) | 0.727-0.764 | 41 m | 6.60-8.00 |
+| Village / Tour (zone) | 0.879-0.934 | 13 m | 6.60-7.98 |
+
+The 15 m Camp is as tight as Le Village (13 m). Radius alone would call for a
+zone there. The refurbishment evidence outweighs it: the Camp was one of the
+corners widened.
+
+**Not run:** no autopilot lap A/B and no clip/coplanar/float audits. The
+geometry did not change, so there is nothing to compare.
+
