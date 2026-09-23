@@ -313,9 +313,8 @@ test("lamp-chunk sliders name their backend support honestly", () => {
   //                   which can do neither, one material meaning one uniform
   //                   set — reads the same LampChunks bake out of textures and
   //                   resolves per FRAGMENT from world position.
-  //   roadChunkLamps  all three too. GLX/WGX chunk the road ribbon; TLX keeps
-  //                   it one mesh and flags the road draw (surfaceId 16) so
-  //                   the plain variant runs the same per-fragment grid lookup.
+  //   roadChunkLamps  still WebGL2 + WebGPU. The road is one mesh on TLX
+  //                   either way; nothing chunks it there yet.
   //
   // This test USED to assert "three.js" appeared in both as the unsupported
   // backend, on the premise that TLX could never have per-chunk lamps. That
@@ -324,10 +323,10 @@ test("lamp-chunk sliders name their backend support honestly", () => {
   const byId = new Map(defs().map((d) => [d.id, d]));
   const road = byId.get("roadChunkLamps");
   assert.ok(road, "roadChunkLamps missing from TUNE_DEFS");
-  assert.match(road.help || "", /All three backends/,
-    "roadChunkLamps now ships on TLX too — the help must not still call it a gap");
+  assert.match(road.help || "", /WebGL2 and WebGPU only/,
+    "roadChunkLamps is still the two-backend one — say so");
   assert.match(road.help || "", /three\.js/,
-    "roadChunkLamps help must name how three.js does it (one mesh, per-fragment grid)");
+    "roadChunkLamps help must keep naming the backend that does NOT have it");
 
   const pc = byId.get("perChunkLights");
   assert.ok(pc, "perChunkLights missing from TUNE_DEFS");

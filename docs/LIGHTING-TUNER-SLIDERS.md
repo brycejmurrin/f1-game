@@ -444,9 +444,8 @@ reload, and why RESET is per-condition rather than global.
 - **three backends** — every `u:` knob is named on GLX, WGX, and TLX
   (`tests/unit/light-grid.test.mjs`). CPU knobs bake into `frame.*` /
   `frameSky.*` / `present()` opts in `js/game.js` and reach all three.
-  `perChunkLights` and `roadChunkLamps` reach all three: TLX resolves
-  both per fragment from the baked lamp grid (the road stays one mesh
-  there). Honest gaps (help text already says so): `pcssPen` on three.js phones /
+  Honest gaps (help text already says so): `perChunkLights` and
+  `roadChunkLamps` are WebGL2-only. `pcssPen` on three.js phones /
   software WebGL2, and on a desktop PCSS-off fallback, scales the
   fixed Poisson radius (not distance-based PCSS). Screen sun-shafts
   and bloom width/threshold/knee need the bloom chain (shed at perf

@@ -637,12 +637,10 @@ body { --compact-at: 600px; --wide-at: 620px; }
     opacity: 0.9;
   }
   /* Framed for a band the full width of the phone: the pair (placed at viewBox
-     x -67..787, y 582..815 by the generator) is scaled 1.2x about the origin so
-     it spans x ~20..1045, centred on the frame's middle (y ~310..590). It was
-     1.69x, edge to edge, and on a real iPhone that hid the red tyre trails
-     entirely (2026-09-23); the ~350 units left on the right are where the
-     trails run out from under the cars, as they do in landscape. */
-  :where(body[data-shape="tall"]) #tc-frame { transform: translate(100px, -388px) scale(1.2); }
+     x -67..787, y 582..815 by the generator) is scaled 1.69x about the origin so
+     it spans x ~-20..1420 — the front wing just bleeding off the left edge, as
+     it does in landscape — centred on the frame's middle (y ~255..645). */
+  :where(body[data-shape="tall"]) #tc-frame { transform: translate(93px, -728px) scale(1.686); }
 }
 /* A SHORT PHONE (iPhone SE class, 667 tall) has about a door's height left
    under the rooms, and the full-width pair is ~105px tall there, so it would
