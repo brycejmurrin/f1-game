@@ -1214,14 +1214,18 @@ const TLX = (function () {
       function fallbackMat(instanced) {
         return _drawMatMode >= 2 ? rawUnlitMat : (instanced ? unlitInstancedMat : unlitMat);
       }
+      const drawEm = (o) => (o && o.emissive !== undefined ? o.emissive : 0);
+      const drawAl = (o) => (o && o.alpha !== undefined ? o.alpha : 1);
       function materialFor(opts, chunked, instanced) {
         if (_drawMatMode || !lit) return fallbackMat(instanced);
         if (vizMat) return vizMat;
         if (!opts) return chunked ? defaultMatChunked : (instanced ? defaultMatInstanced : defaultMat);
         const o = opts;
+        // emissive and alpha are NOT in the key: they are per-draw uniforms
+        // (tsl-lit.js perObject, written by acquireMesh). Only alpha < 1 is,
+        // because it picks the blend state and the render list.
         const key =
-          (o.emissive !== undefined ? Math.round(o.emissive * 32) / 32 : 0) + "," +
-          (o.alpha !== undefined ? Math.round(o.alpha * 32) / 32 : 1) + "," +
+          (o.alpha !== undefined && o.alpha < 1 ? "t," : "o,") +
           (o.roughness !== undefined ? o.roughness : 0.7) + "," +
           (o.metalness !== undefined ? o.metalness : 0) + "," +
           (o.specular !== undefined ? o.specular : 0.5) + "," +
@@ -1442,7 +1446,7 @@ const TLX = (function () {
         if (!batch || !batch.imesh || !batch.instances) return;
         const n = batch.visible === undefined ? batch.instances : batch.visible;
         if (n <= 0) return;
-        drawList.push({ instanced: batch, mat: materialFor(opts, false, true) });
+        drawList.push({ instanced: batch, mat: materialFor(opts, false, true), em: drawEm(opts), al: drawAl(opts) });
       }
 
       function freeInstancedBatch(batch) {
@@ -1471,6 +1475,8 @@ const TLX = (function () {
         if (!(n > 0) || !b.imesh) return;
         b.imesh.count = n;
         b.imesh.material = rec.mat || unlitMat;
+        b.imesh.userData.tlxEmissive = rec.em;
+        b.imesh.userData.tlxAlpha = rec.al;
         b.imesh.renderOrder = order;
         b.imesh.visible = true;
         _instAlive.add(b.imesh);
@@ -1870,7 +1876,7 @@ const TLX = (function () {
       // draws being dropped). The per-material list is stamped with the
       // batch and its counter reset once per present, so wrapper identity
       // stays stable per (geo, mat, k) and three's cache stays bounded.
-      function acquireMesh(geo, matrixArr, material) {
+      function acquireMesh(geo, matrixArr, material, rec) {
         const mat = material || fallbackMat();
         let byMat = meshByGeo.get(geo);
         if (!byMat) { byMat = new Map(); meshByGeo.set(geo, byMat); }
@@ -1892,6 +1898,11 @@ const TLX = (function () {
         // cache key stable instead of minting a new one.
         m.geometry = geo;
         m.material = mat;
+        // Per-draw emissive/alpha (tsl-lit.js perObject). Written every
+        // acquire: (geo, mat, k) is reused by whichever draw lands on k.
+        const ud = m.userData;
+        ud.tlxEmissive = rec && rec.em !== undefined ? rec.em : undefined;
+        ud.tlxAlpha = rec && rec.al !== undefined ? rec.al : undefined;
         geo.__tlxDrawnBatch = _poolBatch;   // uploaded by the render that closes THIS batch
         m.__tlxBatch = _poolBatch;
         m.__tlxSeen = (typeof performance !== "undefined" ? performance.now() : Date.now());
@@ -2751,10 +2762,10 @@ const TLX = (function () {
               if (softContent("chunked") || !chunkedSys) continue;
               const n = chunkedSys.cull(rec.chunked, faceVP, faceEye, faceCull);
               const vis = chunkedSys.visList;
-              for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat).renderOrder = i;
+              for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat, rec).renderOrder = i;
               continue;
             }
-            acquireMesh(rec.geo, rec.m, rec.mat).renderOrder = i;
+            acquireMesh(rec.geo, rec.m, rec.mat, rec).renderOrder = i;
           }
           for (let i = 0; i < meshPool.length; i++) { const pm = meshPool[i]; if (pm.__tlxBatch !== _poolBatch) pm.visible = false; }
           const prevSky = scene.backgroundNode;
@@ -3083,14 +3094,14 @@ const TLX = (function () {
           pinSkyMaterial();
         },
         draw(mesh, model, opts) {
-          if (mesh && mesh.geo) drawList.push({ geo: mesh.geo, m: poolModelMat(model), mat: materialFor(opts, false) });
+          if (mesh && mesh.geo) drawList.push({ geo: mesh.geo, m: poolModelMat(model), mat: materialFor(opts, false), em: drawEm(opts), al: drawAl(opts) });
         },
         drawChunked(mesh, model, opts) {
           if (!mesh) return;
           if (mesh.chunks && chunkedSys) {
-            drawList.push({ geo: null, chunked: mesh, m: poolModelMat(model), mat: materialFor(opts, true) });
+            drawList.push({ geo: null, chunked: mesh, m: poolModelMat(model), mat: materialFor(opts, true), em: drawEm(opts), al: drawAl(opts) });
           } else if (mesh.geo) {
-            drawList.push({ geo: mesh.geo, m: poolModelMat(model), mat: materialFor(opts, true) });
+            drawList.push({ geo: mesh.geo, m: poolModelMat(model), mat: materialFor(opts, true), em: drawEm(opts), al: drawAl(opts) });
           }
         },
         // M6 FX paths — each appends a draw-list record; blend/offset/mask
@@ -3300,7 +3311,7 @@ const TLX = (function () {
               // one's grid and only the last survived.
               const n = chunkedSys.cull(rec.chunked, _frameVP, frameEye, frameCullDist);
               const vis = chunkedSys.visList;
-              for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat).renderOrder = i;
+              for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat, rec).renderOrder = i;
               _chunkFrame.total += rec.chunked.chunks.length;
               _chunkFrame.visible += n;
               // Hold the release until the env probe has LATCHED.
@@ -3341,7 +3352,7 @@ const TLX = (function () {
                 _mirrorRelease.push(rec.chunked);
               continue;
             }
-            acquireMesh(rec.geo, rec.m, rec.mat).renderOrder = i;
+            acquireMesh(rec.geo, rec.m, rec.mat, rec).renderOrder = i;
           }
           for (let i = 0; i < meshPool.length; i++) { const pm = meshPool[i]; if (pm.__tlxBatch !== _poolBatch) pm.visible = false; }
           // Hide InstancedMeshes that were not drawn this frame (still in scene).
