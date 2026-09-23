@@ -8,7 +8,7 @@
       "topLets": 150
     },
     "js/agent/apex.js": {
-      "lines": 3164,
+      "lines": 3166,
       "codeLines": 2236
     },
     "js/agent/agentview.js": {
@@ -27,7 +27,7 @@
       "lines": 2672
     },
     "js/net/lobby.js": {
-      "lines": 1791
+      "lines": 1809
     },
     "tools/ci/pick-tests.mjs": {
       "blanketOnlyRoutes": 1

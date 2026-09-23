@@ -1360,7 +1360,8 @@ function rebuild(team, liv, info, ctx) {
   const kc = (c) => (c ? rgb(c, [0, 0, 0]).map((v) => v.toFixed(3)).join(",") : "-");
   const livKey = `${kc(liv && liv.c1)}/${kc(liv && (liv.accent || liv.stripe || liv.c2))}`
                  + `/${kc(liv && liv.c2)}/${kc(liv && liv.logo)}`
-                 + `/${kc(liv && liv.logo2)}/${kc(liv && liv.logo3)}`;
+                 + `/${kc(liv && liv.logo2)}/${kc(liv && liv.logo3)}`
+                 + `/${(liv && liv.sponsors) || "-"}`;   // the bay banners paint the sponsor pack (scene-live.js)
   const gKey = `${team && team.id}|${livKey}`
                + `|${logoGen}|${drv[0] && drv[0].num}-${drv[1] && drv[1].num}`
                + `|${ctxKey(ctx)}`;
@@ -1449,8 +1450,14 @@ const MAT_I = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
 // draws without a career and without a track selection.
 function ctxKey(ctx) {
   if (!ctx) return "-";
+  // Every field scene-live's painters read: the career footer (round, last
+  // result) and the sponsor banner too, or entering a career on the same
+  // circuit kept "NEXT RACE" and the free-play footer.
+  const last = ctx.last;
   return `${ctx.track ? ctx.track.id : "-"}|${ctx.weather || "-"}|${ctx.tod || "-"}`
-         + `|${ctx.wins | 0}|${ctx.night ? 1 : 0}`;
+         + `|${ctx.wins | 0}|${ctx.night ? 1 : 0}|${ctx.career ? 1 : 0}|${ctx.round | 0}`
+         + `|${last ? (last.dnf || "") + ":" + (last.p | 0) + ":" + (last.pts | 0) : "-"}`
+         + `|${ctx.sponsor && ctx.sponsor.label || "-"}`;
 }
 let lastTrace = -1e9, traceFail = 0;
 function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh) {
