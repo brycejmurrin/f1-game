@@ -413,8 +413,11 @@
               { stages: h1 > 0.55 ? 2 : 1, spread: 0.85 + h1 * 0.3 });
       }
 
-      const cotaGantry = (s, id, clearance) => {
-        const k = K(s), supportGap = 4.5, supportWidth = 0.8, thick = 0.9;
+      // supportGap 2 on the start line, as Bahrain's: the legs stand on the
+      // pit-wall strip. At 4.5 the right leg lands inside the pit complex,
+      // which supersedes it, since the pit lane runs beside the start straight.
+      const cotaGantry = (s, id, clearance, supportGap = 4.5) => {
+        const k = K(s), supportWidth = 0.8, thick = 0.9;
         const ok = overheadSpan({
           id, frac: s, clearance, thickness: thick, depth: 1.4,
           supportGap, supportWidth,
@@ -435,7 +438,7 @@
           }, { required: true });
         }
       };
-      cotaGantry(0.00, "cota-start-gantry", 7.5);
+      cotaGantry(0.00, "cota-start-gantry", 7.5, 2);
       cotaGantry(0.50, "cota-drs-gantry", 7.0);
 
       // Ground-conforming runoff at COTA's two defining braking zones.
