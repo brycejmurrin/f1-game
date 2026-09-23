@@ -1911,6 +1911,7 @@ const TLX = (function () {
         const ud = m.userData;
         ud.tlxEmissive = rec && rec.em !== undefined ? rec.em : undefined;
         ud.tlxAlpha = rec && rec.al !== undefined ? rec.al : undefined;
+        ud.tlxLgRoad = rec && rec.lg ? 1 : 0;   // PER-CHUNK ROAD: the road draw only
         geo.__tlxDrawnBatch = _poolBatch;   // uploaded by the render that closes THIS batch
         m.__tlxBatch = _poolBatch;
         m.__tlxSeen = (typeof performance !== "undefined" ? performance.now() : Date.now());
@@ -3063,6 +3064,8 @@ const TLX = (function () {
           // here is the feature being OFF rather than data going missing.
           frameAllLights = (frame && frame.allLights) || null;
           framePerChunk = +(frame && frame.perChunkLights) || 0;
+          if (lit && lit.uniforms && lit.uniforms.lgRoad)
+            lit.uniforms.lgRoad.value = (framePerChunk > 0 && +(frame && frame.roadChunkLamps) > 0) ? 1.0 : 0.0;
           _postF.proj = (frame && frame.proj) || null;
           // GL convention on BOTH backends: tsl-post reconstructs with d*2-1, and
           // the depth texture stores 0.5*z_gl+0.5 under WebGPU's Z01 remap too.
@@ -3102,7 +3105,8 @@ const TLX = (function () {
           pinSkyMaterial();
         },
         draw(mesh, model, opts) {
-          if (mesh && mesh.geo) drawList.push({ geo: mesh.geo, m: poolModelMat(model), mat: materialFor(opts, false), em: drawEm(opts), al: drawAl(opts) });
+          if (mesh && mesh.geo) drawList.push({ geo: mesh.geo, m: poolModelMat(model), mat: materialFor(opts, false), em: drawEm(opts), al: drawAl(opts),
+            lg: opts && opts.surfaceId === 16 ? 1 : 0 });
         },
         drawChunked(mesh, model, opts) {
           if (!mesh) return;
