@@ -182,7 +182,7 @@ loaded, and none of them is baselined anywhere. OPEN.
 
 **2026-09-22 — the ~1.07 m reading on four circuits IS the pit wall's top cap,
 and the specs sample past the tarmac to reach it. IDENTIFIED; the sampling is
-OPEN.** jeddah, mosport, zandvoort and singapore all read 1.07 m over the road.
+FIXED (2026-09-23, below).** jeddah, mosport, zandvoort and singapore all read 1.07 m over the road.
 `js/track/scenery/pits.js:300` and `:319` sweep the pit wall's cap with the
 profile `[[-0.07,1.0],[0.32,1.0],[0.32,1.07],[-0.07,1.07]]` in `WALL_TOP`
 `[0.46,0.47,0.50]` — a 0.39 x 0.07 m section topping out at exactly 1.07. The
@@ -208,7 +208,15 @@ the racing surface by construction, on whatever boundary structure lives there
 `props-over-road.spec.js` (jeddah, mosport, zandvoort, singapore),
 `props-over-road.test.mjs` and `zandvoort-foundation.spec.js`, all citing each
 other. Scaling by `track.hw` instead would let every one of those baselines go
-back to `TOL`, and is the fix worth making. OPEN.
+back to `TOL`, and is the fix worth making. FIXED 2026-09-23: both
+`props-over-road.spec.js` and `props-over-road.test.mjs` scale the ladder by
+`track.hw` (the spec reads it from `__apex.nodeAt().hw`, added for this), out to
+0.9 hw, zandvoort-foundation's measured last clean rung. Node port, all 52
+circuits: every reading 0.00 except mont_tremblant's deliberate crown, which the
+0.9 rung meets at 4.97 (cap 5.0). monaco, singapore, baku, jeddah, mosport,
+zandvoort and albert_park dropped out of both maps; miami stays in the spec's
+because its reading is browser-only. The anti-vacuity anchor that was jeddah's
+wall cap is now a planted 1.0 m slab over shanghai's centreline.
 
 **And it is why no primitive covers the geometry.** `sweep()` in `pits.js` is a
 local extrusion that builds its quads directly rather than through a

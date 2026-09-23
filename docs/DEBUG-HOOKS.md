@@ -1478,9 +1478,10 @@ Lap-fractions of **curvature-peak** apexes (local maxima of `|curvature|`). Hand
 for parking at sharp bends. This is **not** the curated FIA turn list — that lives
 on `info().turns` / `track.def.turns`, authored in `js/circuits/<id>.js`.
 
-### `nodeAt(frac, opts?) → {k, frac, x, y, z, tx, tz, rx, rz} | null`
+### `nodeAt(frac, opts?) → {k, frac, x, y, z, tx, tz, rx, rz, hw} | null`
 World position and orientation of the track node closest to lap-fraction `frac`
-(0–1). Returns `null` if no track is loaded.
+(0–1), and the engine's tarmac half-width `hw` there (`track.hw[k]`, not the
+wider road mesh). Returns `null` if no track is loaded.
 
 **Pass `{ scenery: true }` when the fraction came from a circuit's
 `scenery(api)` callback.** A scenery frac is not a racing frac:

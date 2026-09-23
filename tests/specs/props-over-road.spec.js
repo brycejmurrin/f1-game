@@ -46,36 +46,13 @@ const BASELINE = {
   // their actual terrain. Keep the resulting overlaps visible until the
   // circuit-specific migration pass removes or repositions them.
   miami: 4.2, miami_note: "beach-club parasol canopy ~7.5m overhead — car clears",
-  // street circuits: ~1.1–1.3 m readings are the edge BARRIER wall/furniture at the
-  // road edge (the track boundary the car stays inside), now sitting on the real
-  // terrain ribbon added for these tracks — verified via driver-eye as the wall,
-  // not a lane obstruction. Migrated Vegas and Hungaroring are clean.
-  // jeddah 0.7 -> 1.1. NOT a tolerance nudged to get green: the circuit GAINED
-  // a structure. It read clean at ed2221fd and broke at 80acf931, "feat(pit):
-  // a shorter lane, a signed entry, A WALLED EXIT, furnished bays" — bisected
-  // with TRACK=jeddah on this spec. The offender is grey [0.46,0.47,0.5] at
-  // 1.07 m, lateral -6.35 against baseHW 6, at frac 0.02: the pit wall, 0.35 m
-  // off the tarmac edge on the pit straight, which is where pit walls are. It
-  // is the same object the paragraph above baselines at 1.3-1.4 on the other
-  // three street circuits, and jeddah reads LOWER than all of them. The 0.7
-  // predates it having a wall at all.
-  monaco: 1.4, singapore: 1.3, baku: 1.3, jeddah: 1.1,
-  albert_park: 0.7,
-  // mosport and zandvoort read the SAME object as jeddah above, and it is the
-  // PIT WALL'S TOP CAP: js/track/scenery/pits.js sweeps the profile
-  // [[-0.07,1.0],[0.32,1.0],[0.32,1.07],[-0.07,1.07]] in WALL_TOP
-  // [0.46,0.47,0.50], topping out at exactly 1.07 m. Not the garage row's wall
-  // (that stands 8.2-13.0 m out) but the ENTRY/EXIT wall at the tarmac edge:
-  // on zandvoort 6.81 m against a 7.0 m half-width. They went unbaselined only
-  // because this spec runs on no push — 1500 s against the gate's 180 s cap —
-  // so the red went unseen from the walled-exit pit redesign until 2026-09-22.
-  //
-  // This ladder reaches the wall at all because it scales by the half-width
-  // taken from the ROAD MESH above, 1.2-1.3x the engine's track.hw, so its
-  // outermost sample lands off the tarmac on the boundary a car stays inside.
-  // Scaling by track.hw would let all four of these go back to TOL; that is
-  // open in docs/notes/DEFECT-LEDGER.md.
-  mosport: 1.1, zandvoort: 1.1,
+  // The street circuits (monaco, singapore, baku), jeddah, mosport and
+  // zandvoort, and albert_park, were baselined at 0.7-1.4 m for the edge
+  // barrier / the pit wall's 1.07 m top cap at the tarmac edge. They read it
+  // only because the ladder was scaled by the ROAD MESH's half-width, 1.2-1.3x
+  // the engine's track.hw, so the outer rung sampled past the tarmac. Scaled
+  // by track.hw (out to 0.9 of it) all of them read 0.00 in the node port
+  // (tests/unit/props-over-road.test.mjs, 2026-09-23) and are held to TOL.
   // mont_tremblant: a forest crown leaning over the road, not an intrusion at
   // the edge — dark green [0.10,0.20,0.09] spanning y 9.96-12.46 with the road
   // at 7.33, so 4.74 m of clearance a car drives under. Same category as the
@@ -86,12 +63,14 @@ const BASELINE = {
   // edge, the way a crown reaches over a verge"). This circuit's whole
   // identity is a forest tunnel — it builds an explicit ceiling over the
   // cutting with overRoad() at 9.5-16 m, which clears CEIL and is exempt; this
-  // one crown sits 0.26 m under it.
+  // one crown sits just under it.
   //
   // Never a regression: mont_tremblant did not exist before 06833f3d ("add 11
   // circuits recovered from OpenStreetMap"), so it has never passed this spec.
-  // It was dressed from its brief in e4524517 and has read 4.74 since.
-  mont_tremblant: 4.9,
+  // It was dressed from its brief in e4524517 and read 4.74 at the old
+  // mesh-scaled 0.75 rung; the node port reads the same crown at 4.97 on the
+  // track.hw-scaled 0.9 rung.
+  mont_tremblant: 5.0,
   mont_tremblant_note: "forest crown over the cutting ~4.7m up — car clears",
 };
 const ALLOW = new Set(); // fully-exempt circuits (none — everything is capped)
@@ -119,16 +98,15 @@ test("no prop geometry on/above the racing line (all circuits)", async ({ page }
       const M = 1200;
       const px = new Float64Array(M), pz = new Float64Array(M), py = new Float64Array(M),
             rx = new Float64Array(M), rz = new Float64Array(M), hw = new Float64Array(M);
-      for (let i = 0; i < M; i++) { const nd = __apex.nodeAt(i / M); px[i] = nd.x; pz[i] = nd.z; py[i] = nd.y; rx[i] = nd.rx; rz[i] = nd.rz; }
+      for (let i = 0; i < M; i++) { const nd = __apex.nodeAt(i / M); px[i] = nd.x; pz[i] = nd.z; py[i] = nd.y; rx[i] = nd.rx; rz[i] = nd.rz; hw[i] = nd.hw; }
       const near = (x, z) => { let bd = 1e9, bk = 0; for (let k = 0; k < M; k++) { const dx = x - px[k], dz = z - pz[k], d = dx * dx + dz * dz; if (d < bd) { bd = d; bk = k; } } return bk; };
       const sized = ["road", "terrain"].map((i) => ({ i, len: caps[i]?.pos?.length / 3 || 0 })).filter((c) => c.len > 1000);
       for (const c of sized) { const p = caps[c.i].pos; let mx = 0; const st = 3 * Math.max(1, Math.floor(p.length / 3 / 2500)); for (let v = 0; v < p.length; v += st) { const k = near(p[v], p[v + 2]); const lat = Math.abs((p[v] - px[k]) * rx[k] + (p[v + 2] - pz[k]) * rz[k]); if (lat < 25) mx = Math.max(mx, lat); } c.maxLat = mx; }
       const road = sized.find((c) => c.i === "road");
       if (!road) return { err: "no road mesh" };
-      const rp = caps.road.pos;
-      for (let v = 0; v < rp.length; v += 3) { const k = near(rp[v], rp[v + 2]); const lat = Math.abs((rp[v] - px[k]) * rx[k] + (rp[v + 2] - pz[k]) * rz[k]); if (lat < 13 && lat > hw[k]) hw[k] = lat; }
-      for (let k = 0; k < M; k++) if (hw[k] < 3) hw[k] = 6;
-      const tps = []; for (let i = 0; i < M; i++) for (const s of [-0.75, -0.4, 0, 0.4, 0.75]) tps.push({ x: px[i] + rx[i] * s * hw[i], z: pz[i] + rz[i] * s * hw[i], y: py[i], frac: i / M });
+      // track.hw, not the road mesh: the mesh carries verge and run-off (1.2-1.3x
+      // the tarmac), so a mesh-scaled rung sampled the pit wall at the edge.
+      const tps = []; for (let i = 0; i < M; i++) for (const s of [-0.9, -0.45, 0, 0.45, 0.9]) tps.push({ x: px[i] + rx[i] * s * hw[i], z: pz[i] + rz[i] * s * hw[i], y: py[i], frac: i / M });
       const pit = (X, Z, ax, az, bx, bz, cx, cz) => { const v0x = cx - ax, v0z = cz - az, v1x = bx - ax, v1z = bz - az, v2x = X - ax, v2z = Z - az; const d00 = v0x * v0x + v0z * v0z, d01 = v0x * v1x + v0z * v1z, d11 = v1x * v1x + v1z * v1z, d20 = v2x * v0x + v2z * v0z, d21 = v2x * v1x + v2z * v1z; const dn = d00 * d11 - d01 * d01; if (Math.abs(dn) < 0.01) return null; /* dn = 4*area^2 of the XZ projection: near-vertical faces of long diagonal boxes project to slivers that pass a 1e-9 guard and report u=v=0 "inside" with the box-top height at ANY distance (measured: two 15m-clear grandstands read as 4.65m over road); 0.01 = 5x5cm projected area */ const u = (d11 * d20 - d01 * d21) / dn, vv = (d00 * d21 - d01 * d20) / dn; return (u >= -0.02 && vv >= -0.02 && u + vv <= 1.02) ? { u, vv } : null; };
       const merged = {}; let max = 0, worst = null;
       for (const name of ["props", "glass"]) {
