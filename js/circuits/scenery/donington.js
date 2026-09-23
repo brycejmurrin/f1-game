@@ -473,7 +473,9 @@
       // --- pit-exit end wall and its service yard on the inside, concourse
       //     units and a back treeline behind the outside stand.
       safeBox(K(0.970), 1, 17, [3.0, 3.4, 12], CONCRETE);        // pit-exit wall
-      building(K(0.978), 1, 30, 10, 4.6, 18, { col: BRICK, roof: ROOF_R });
+      // gap 26 (was 30): at 30 the roof cap frustum was refused and the plant
+      // housing hung 5.6 m over the ground (the baselined float cluster).
+      building(K(0.978), 1, 26, 10, 4.6, 18, { col: BRICK, roof: ROOF_R });
       groundPatch(K(0.968), 1, 38, [22, 0.16, 54], TARMACISH);
       hut(K(0.9437), 1, 20, CREAM);
       for (let i = 0; i < 4; i++)
