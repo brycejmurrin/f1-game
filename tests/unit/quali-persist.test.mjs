@@ -73,6 +73,7 @@ function loadQuali(opts = {}) {
       conflicted: () => !!opts.conflicted,
       save() { saved.career = true; },
       data: () => ({ seed: 1 }),
+      seasonSeed: () => 1,
       round: () => 0,
       hash: opts.hash || (() => 0.5),
       devFor: () => 0,

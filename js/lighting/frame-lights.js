@@ -312,13 +312,17 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   if (count + LightBudget.TAIL_RESERVE <= CAP) {
     _rankSrc = null;   // dense path doesn't use the ranked cache
     // Copy + scale rgb (time-of-day scale × flicker); geometry params pass through.
-    out.length = 0;
+    // Written by INDEX and trimmed once: `out.length = 0` frees a V8 array's
+    // backing store, so `= 0` + push() regrew this buffer every lit frame —
+    // the pooling above never pooled (node: 360 minor GCs vs 2 per 20k frames).
+    let j = 0;
     for (let i = 0; i < src.length; i += 15) {
       const f = fl(i);
-      out.push(src[i], src[i+1], src[i+2],
-        src[i+3] * sr * f[0], src[i+4] * sg * f[1], src[i+5] * sb * f[2], src[i+6],
-        src[i+7], src[i+8], src[i+9], src[i+10], src[i+11], src[i+12], src[i+13], src[i+14]);
+      out[j++] = src[i]; out[j++] = src[i+1]; out[j++] = src[i+2];
+      out[j++] = src[i+3] * sr * f[0]; out[j++] = src[i+4] * sg * f[1]; out[j++] = src[i+5] * sb * f[2]; out[j++] = src[i+6];
+      for (let k = 7; k < 15; k++) out[j++] = src[i+k];
     }
+    out.length = j;
     frame.lights = out;
     if (frame.perChunkLights > 0) _fillAllLights(frame, src, sr, sg, sb, fl);
     return;
@@ -470,7 +474,7 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   }
   const _cullBand = gRef * fade;
   const _guardBand = dEdge * 0.08;
-  out.length = 0;
+  let j = 0;   // index writes + one trim, as in the dense path above
   for (let i = 0; i < heap.length; i++) {
     const e = heap[i], o = e.o;
     const cullF = truncated
@@ -478,14 +482,15 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
                  Math.max(0, Math.min(1, (dEdge - e.d) / _guardBand)))
       : 1;
     const f = fl(o);
-    out.push(src[o], src[o+1], src[o+2],
-      src[o+3] * sr * f[0] * cullF, src[o+4] * sg * f[1] * cullF, src[o+5] * sb * f[2] * cullF,
-      src[o+6], src[o+7], src[o+8], src[o+9], src[o+10], src[o+11], src[o+12], src[o+13],
-      // glareW fades with the cull too: drawGlow normalises the lamp colour, so a
-      // colour-only fade barely dims the halo — it blinked off at ~full brightness
-      // when the lamp left the set.
-      src[o+14] * cullF);
+    out[j++] = src[o]; out[j++] = src[o+1]; out[j++] = src[o+2];
+    out[j++] = src[o+3] * sr * f[0] * cullF; out[j++] = src[o+4] * sg * f[1] * cullF; out[j++] = src[o+5] * sb * f[2] * cullF;
+    for (let k = 6; k < 14; k++) out[j++] = src[o+k];
+    // glareW fades with the cull too: drawGlow normalises the lamp colour, so a
+    // colour-only fade barely dims the halo — it blinked off at ~full brightness
+    // when the lamp left the set.
+    out[j++] = src[o+14] * cullF;
   }
+  out.length = j;
   frame.lights = out;
   if (frame.perChunkLights > 0) _fillAllLights(frame, src, sr, sg, sb, fl);
 }

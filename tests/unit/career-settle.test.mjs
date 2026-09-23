@@ -24,7 +24,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 // `const Career` lands in the context's global LEXICAL scope, not on the global
 // object — read it back by evaluating its name (same shape as race-control).
-function load() {
+function load(seasonLen) {
   const stored = new Map();
   const ctx = vm.createContext({
     Math, JSON, Object, Array, String, Number, Date, isNaN, isFinite, console,
@@ -50,7 +50,7 @@ function load() {
       ],
     },
     Parts: { getFactorySetup: () => ({}) },
-    Tracks: { LIST: [] },
+    Tracks: seasonLen ? { LIST: [], SEASON: new Array(seasonLen).fill({}) } : { LIST: [] },
   });
   // js/core/mat4.js first — the shared scalar helpers (M4.clamp) career.js binds at eval.
   seedLog(ctx);
@@ -1046,4 +1046,21 @@ test("ADDING A KIND MUST NOT RE-PROMISE THE OTHER THREE", () => {
     if (Career.goalTypeFor(year) === "beatRival") rivals++;
   assert.ok(rivals > 0 && rivals < 60,
     `beatRival drawn ${rivals}/100 seasons — its own roll should be a minority share`);
+});
+
+test("the LAST sponsor window of a season ends at the finale, and asks pro rata", () => {
+  // Bug hunt 2026-09-22: windows of 4-6 rounds tiled from round 0 with no clamp,
+  // settleSponsor() pays only once raced >= end, and rollover() clears the books
+  // — so in ~78 % of seasons the final brief could never pay.
+  for (const len of [22, 23, 24, 25]) {
+    for (let seed = 1; seed <= 40; seed++) {
+      const Career = load(len);
+      Career.start({ flavour: "myteam", teamId: "custom", seed });
+      Career.engage(true);
+      const sp = Career.sponsorAt(len - 1);
+      assert.ok(sp, "the finale has a sponsor window");
+      assert.ok(sp.end <= len - 1, `len ${len} seed ${seed}: window ends at ${sp.end}, past the finale ${len - 1}`);
+      assert.ok(sp.need <= sp.window * 25, "a cut window never asks more than it can score");
+    }
+  }
 });

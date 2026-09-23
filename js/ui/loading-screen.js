@@ -221,7 +221,32 @@ const LoadingScreen = (function () {
 
     /** A skip goes straight to the race. There is no second half to advance to
      *  any more, and the build behind it is already warm. */
-    function onSkip() { if (phase) fire(); }
+    // A keydown AUTO-REPEAT is not a new press: holding Enter a beat long on
+    // RACE! used to skip the flyby on the first repeat.
+    function onSkip(e) { if (e && e.type === "keydown" && e.repeat) return; if (phase) fire(); }
+    /* THE PAD SKIPS TOO. No UI layer is open during the flyby, so the gamepad
+     * walker sends no synthetic keydown and a controller-only player (TV, a
+     * handheld) waited the full FLY_MS before every race. Poll the pads while
+     * the screen is up: a button counts only as a fresh press, so one still
+     * held from the menu has to come up first. */
+    let padTimer = 0;
+    const padHeld = new Set();
+    function padButtons(fn) {
+      let pads = [];
+      try { pads = (typeof navigator !== "undefined" && navigator.getGamepads && navigator.getGamepads()) || []; } catch (_) { pads = []; }
+      for (const p of pads) {
+        if (!p || !p.buttons) continue;
+        for (let i = 0; i < p.buttons.length; i++) fn(p.index + ":" + i, !!(p.buttons[i] && p.buttons[i].pressed));
+      }
+    }
+    function pollPad() {
+      let fresh = false;
+      padButtons((k, down) => {
+        if (!down) padHeld.delete(k);
+        else if (!padHeld.has(k)) { padHeld.add(k); fresh = true; }
+      });
+      if (fresh) onSkip();
+    }
 
     /** Show the screen and run `go` once the card is up. `info.hasWorld` false
      *  (no pre-built track to fly over) skips the flyby: an empty black hold
@@ -236,6 +261,9 @@ const LoadingScreen = (function () {
       r.hidden = false;
       addEventListener("pointerdown", onSkip, true);
       addEventListener("keydown", onSkip, true);
+      padHeld.clear();
+      padButtons((k, down) => { if (down) padHeld.add(k); });   // held from the menu: not a skip
+      if (typeof setInterval === "function") padTimer = setInterval(pollPad, 100);
       flyT0 = Date.now();
       // "run" is the flyby WITH the card up; "card" is the no-world fallback.
       // Both show the card, so the stylesheet reveals it for either.
@@ -269,6 +297,7 @@ const LoadingScreen = (function () {
       if (a) { try { a.stop(); } catch (_) { /* a synth mid-teardown */ } }
       removeEventListener("pointerdown", onSkip, true);
       removeEventListener("keydown", onSkip, true);
+      if (padTimer) { clearInterval(padTimer); padTimer = 0; }
       const r = root();
       if (r) { r.hidden = true; r.dataset.phase = ""; }
     }

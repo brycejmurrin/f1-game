@@ -437,6 +437,25 @@ test("the red procedure: stopping, held, then exactly ONE restart request and a 
   assert.equal(rc.info().level, 4, "…and a picture still there after the hold flies again");
 });
 
+test("apply(): a hostile or malformed CAUTION from the host is coerced, and info() never throws", () => {
+  // Bug hunt 2026-09-22: `sinceT: "x"` was stored as-is, and info()'s
+  // sinceT.toFixed() then threw for the HUD every frame.
+  const rc = load({ active: () => true, hazards: () => hazards(0, 0) }).create(makeCtx());
+  for (const d of [{ level: 2, sinceT: "x" }, { level: 2, sinceT: {} }, { level: "3", sinceT: 1e400, sectors: ["a", 2, null, 9] },
+                   { level: 99, sector: "2", frac: NaN, total: -5, cause: { x: 1 } }, "junk", null]) {
+    rc.apply(d);
+    const i = rc.info();
+    assert.ok(Number.isFinite(i.sinceT) && i.sinceT >= 0, JSON.stringify(d));
+    assert.ok(i.level >= 0 && i.level <= 4);
+    assert.ok(Number.isFinite(i.frac) && i.total >= 0 && typeof i.cause === "string");
+    assert.ok(i.sectors.length <= 3 && i.sectors.every(Number.isFinite));
+  }
+  rc.apply({ level: 2, sinceT: 3.5, cause: "VSC", sector: 1, sectors: [1, 2, 3] });
+  assert.equal(rc.info().level, 2);
+  assert.equal(rc.info().sinceT, 3.5);
+  assert.equal(rc.info().sector, 1);
+});
+
 test("clearHold(): once the surface is cleared at the restart, a NEW hazard is not masked by the re-arm hold", () => {
   const rc = load({ active: () => true, hazards: () => hazards(16, 2) }).create(makeCtx());
   run(rc, 15);

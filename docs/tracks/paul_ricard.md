@@ -45,6 +45,11 @@ The flattest circuit in this set by some way — Le Castellet is a graded platea
 - The Mistral straight (with its chicane at s≈0.490–0.502) and **Signes** (0.713) at the end of it — the fastest sequence on the circuit.
 - Banking is minimal: Verrerie 3°, Signes 4°, Le Beausset 3.5°.
 - Pinch points at the Mistral chicane, Le Beausset and the Pont/Le Village complex.
+- Width: the base half-width (8 m) everywhere else, deliberately. The 2017 refurbishment
+  for the F1 return tightened La Verrerie but WIDENED its entry for clean starts, and widened
+  the Camp hairpin (racing 0.2424, R 15 m) as well. So the Verrerie esses (0.087-0.110) and
+  the 0.206-0.261 complex are NOT pinch points, and carry no `hwZones` entry. Decision and
+  evidence: docs/notes/DEFECT-LEDGER.md § paul_ricard — hwZones decision.
 - Sides are racing-direction: the pits and paddock are on the RIGHT of the main straight (the infield; the pit exit rejoins on the right), the main grandstand on the LEFT facing them.
 - Barriers sit a long way back, well beyond the painted apron — the run-off, not the wall, is what a driver sees.
 
