@@ -441,6 +441,26 @@
       return true;
     }
 
+    /* Refresh ONLY the lamp colours of an installed grid (texel 1 of each lamp).
+     * The bake above is once per track, but colour is the one lane that moves:
+     * the switch-on warm-up, the twilight ramp, flicker and LAMP LEVEL all
+     * rewrite allLights rgb in place (frame-lights.js, signalled by
+     * allLightsGen). Without this the grid kept whatever colour the lamps had
+     * on the bake frame — mid warm-up at race start — so every per-chunk
+     * surface (and, since PER-CHUNK ROAD, the road) stayed dim for the whole
+     * race. WGX re-uploads on the same signal. */
+    function setLampGridColors(L) {
+      if (!LGRID || !(U.lgOn.value > 0.5) || !L) return false;
+      const nLamps = Math.min((L.length / 15) | 0, LGRID.LAMPS);
+      const lt = LGRID.lampTex.image.data;
+      for (let i = 0; i < nLamps; i++) {
+        const o = i * 15, r = i * 16 + 4;
+        lt[r] = L[o + 3]; lt[r + 1] = L[o + 4]; lt[r + 2] = L[o + 5];
+      }
+      LGRID.lampTex.needsUpdate = true;
+      return true;
+    }
+
     /* BRDF leaves (js/render/glx/shaders/glsl-lit.js) — plain node composition, inlined */
     const D_GGX = (NoH, a) => {
       const a2 = a.mul(a);
@@ -2084,7 +2104,7 @@
       if (i >= 0) _mats.splice(i, 1);
     }
 
-    return { makeMaterial, makeViz, releaseMaterial, uniforms: U, sharedUniforms: SHARED_UNIFORMS, updateFrame, setEnvStr, setEnvCube, setLampGrid,
+    return { makeMaterial, makeViz, releaseMaterial, uniforms: U, sharedUniforms: SHARED_UNIFORMS, updateFrame, setEnvStr, setEnvCube, setLampGrid, setLampGridColors,
              setSsrMrt, setMaterialMaps, hasMaterialMaps: !!matAlbedoNode, MAX_LIGHTS };
   }
 
