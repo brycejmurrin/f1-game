@@ -9,7 +9,6 @@
     // Was 0.0925, which put the line inside a corner — a start line is
     // always on a straight. See docs/tracks/START-LINES.md.
     startFrac: 0.0000,
-    sceneryStartFrac: 0.0925,
     name: "ALBERT PARK",
     gp: "Australian GP",
     country: "Australia",
@@ -25,6 +24,9 @@
     baseHW: 7,
     // S/F walls sit ~1.7 m off the road; 4.5 m of local setback is enough
     // for a 2.4 m lane + verge without opening the rest of the lap.
+    // Brabham (hero main stand) is the circuit own pit-straight stand, so the
+    // engine generic 7-box fallback would sit inside it (Portimao/Monza precedent).
+    ownPitStraight: true,
     pit: { side: 1 },   // the pit complex (TrackPit): lake side of the main straight
     sceneryCoordinates: "racing",
     flatTerrain: true,
@@ -34,14 +36,19 @@
     ],
     pal: { zenith: [0.22, 0.44, 0.82], horizon: [0.76, 0.79, 0.82], grass: [0.28, 0.50, 0.24], runoff: [0.48, 0.42, 0.32], fogDensity: 0.0012, sunDir: [0.6666666666666667, 0.6666666666666667, 0.33333333333333337], sun: [1, 0.95, 0.8], sunColor: [1, 0.93, 0.78] },
     bankZones: [
-      { frac: 0.1125, angleDeg: 3.0, widthM: 90 },    // T1
-      { frac: 0.1810, angleDeg: 3.0, widthM: 90 },    // T3
-      { frac: 0.3186, angleDeg: 2.5, widthM: 200 },   // the long lakeside right
-      { frac: 0.5300, angleDeg: 3.5, widthM: 130 },   // fast left past the lake
-      { frac: 0.7331, angleDeg: 3.0, widthM: 110 },   // T10
-      { frac: 0.9741, angleDeg: 3.0, widthM: 90 },    // last corner
+      // Racing-lap fracs, re-keyed +0.10212 (arc) when the bogus
+      // sceneryStartFrac 0.0925 was removed, so every bank stays on the corner
+      // it sat on; five of six land on a curated apex.
+      { frac: 0.0762, angleDeg: 3.0, widthM: 90 },    // T1
+      { frac: 0.2146, angleDeg: 3.0, widthM: 90 },    // T3
+      { frac: 0.2831, angleDeg: 3.0, widthM: 90 },    // T5
+      { frac: 0.4207, angleDeg: 2.5, widthM: 200 },   // the long lakeside right
+      { frac: 0.6321, angleDeg: 3.5, widthM: 130 },   // T9, fast left past the lake
+      { frac: 0.8352, angleDeg: 3.0, widthM: 110 },   // T12
     ],
-    elevations: [{ s: 0.2125, halfM: 340, rise: 0.6 }, { s: 0.6425, halfM: 300, rise: -0.4 }],
+    // Arc fracs of the racing lap (were 0.2125/0.6425 through the removed
+    // 0.0925 authoring origin; + shift 0.10212 - 0.0925 keeps the road put).
+    elevations: [{ s: 0.22212, halfM: 340, rise: 0.6 }, { s: 0.65212, halfM: 300, rise: -0.4 }],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
     // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
