@@ -114,7 +114,11 @@
       guardrail(0.000, 0.040, -1, 5.5, RAIL);          // pit wall, start->exit
       guardrail(0.962, 1.000, -1, 5.5, RAIL);
       building(K(0.005), -1, 12, 20, 9.5, 190, { wall: PALE });
-      building(K(0.055), -1, 12, 16, 7.0, 60, { wall: PALE });
+      // Pit-exit block, split in two 30 m halves: one 60 m block's flat cap
+      // (radius = half its length) reached the road, was culled whole, and
+      // left its roof plant hanging 8 m up (float-audit, 2026-09-23).
+      building(K(0.0524), -1, 12, 16, 7.0, 30, { wall: PALE });
+      building(K(0.0577), -1, 12, 16, 7.0, 30, { wall: PALE });
       groundPatch(K(0.010), -1, 44, [56, 0.30, 230], LOT);   // paddock apron
       for (let i = 0; i < 6; i++) motorhome(K(0.968 + i * 0.011), -1, 40, 9, 4.2, 16);
       building(K(0.020), -1, 68, 18, 6.0, 74, { wall: STEEL });  // team units, 2nd rank
