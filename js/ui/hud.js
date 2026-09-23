@@ -991,7 +991,10 @@ function updateHud(force, dtMs) {
 function drawMinimap() {
   const player = G.player, cars = G.cars, track = G.track, timeTrial = G.timeTrial;
   if (!player || !track || !track.map) return;
-  if (document.body.classList.contains("hud-hidden")) return;
+  // hud-hide-map is display:none (cockpit/onboard cams, MINIMAL, map OFF): a
+  // map nobody can see was sized, cached, blitted and dotted every HUD tick.
+  // The next visible draw re-measures (syncHudVisClasses clears _fitKey).
+  if (document.body.classList.contains("hud-hidden") || document.body.classList.contains("hud-hide-map")) return;
   // Logical space = the element's LOCAL CSS box (clientWidth is pre-zoom px,
   // the same convention sheetshape.js relies on). Bitmap = local x effective
   // zoom x DPR so one drawn pixel is one physical pixel — mirroring the menu

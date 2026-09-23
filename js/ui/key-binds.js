@@ -71,8 +71,14 @@ function create(G) {
       if (!dev.keys) Input.padCapture(null);
       return out;
     }
+    // An armed slot is only armed while the player can SEE it. Leaving by
+    // BACK, CLOSE or RESUME never disarmed it, so the first key pressed in the
+    // race was swallowed and rebound (W could steal throttle's own binding)
+    // and an armed pad slot zeroed the pad until a press (bug hunt 2026-09-22).
+    const onScreen = () => !(host.closest && host.closest("[hidden]"));
     // A captured key code or button index lands here.
     function accept(v) {
+      if (!onScreen()) { disarm(true, false); return; }
       const { id, slot } = armed;
       const r = dev.set(id, slot, v);
       if (!r.ok) {
@@ -95,6 +101,7 @@ function create(G) {
     // controller section takes only Escape from the keyboard (cancel).
     function onKey(e) {
       if (!armed || !e.isTrusted) return;
+      if (!onScreen()) { disarm(true, false); return; }   // not consumed: the key is the race's
       /* AN IME IS TYPING, NOT BINDING. While a composition is active the
          browser reports keyCode 229 and a `key` of "Process" instead of the
          real key, so a player with a CJK input method active captured garbage
@@ -405,7 +412,10 @@ function create(G) {
   if (Input.setPadAxisMap) Input.setPadAxisMap(store.get("padAxes", null));
 
   if (keys || pad) Log.info("ui", "KeyBinds.create");
-  return { render() { for (const s of sections) s.render(); } };
+  return {
+    render() { for (const s of sections) s.render(); },
+    disarmAll() { for (const s of sections) s.disarm(true, false); },   // closeSettings: nothing stays armed into a race
+  };
 }
 
   return { create };

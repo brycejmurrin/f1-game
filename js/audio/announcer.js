@@ -314,6 +314,11 @@ const Announcer = (function () {
       speaking = null;
       try { synth.cancel(); } catch (e) { /* nothing queued, or a synth mid-teardown */ }
     }
+    // Hidden tab: stop the read ourselves. Speaking into a background tab is
+    // what RadioVoice's own notes say bricks the iOS synthesiser until reload.
+    if (typeof document !== "undefined" && document.addEventListener) {
+      document.addEventListener("visibilitychange", () => { if (document.hidden) stop(); });
+    }
 
     /** The facts a script needs that only the BUILT track knows. Guarded hard:
      *  an announcer that throws must not stop a race from starting. */
@@ -391,7 +396,17 @@ const Announcer = (function () {
         if (i >= parts.length) { speaking = null; return; }
         const u = new Utter(parts[i++]);
         u.voice = voice; u.pitch = tune.pitch; u.rate = tune.rate; u.volume = vol;
-        u.onend = u.onerror = () => { if (gen === generation) next(); };
+        u.onend = () => { if (gen === generation) next(); };
+        // A cancel from OUTSIDE (RadioVoice's hide handler shares the one
+        // speechSynthesis) arrives as an interrupted/canceled error and does
+        // not bump `generation` — advancing on it read the NEXT line into a
+        // hidden tab. That ends the chain; any other error skips the line.
+        u.onerror = (e) => {
+          if (gen !== generation) return;
+          const why = e && e.error;
+          if (why === "interrupted" || why === "canceled") { speaking = null; generation++; return; }
+          next();
+        };
         speaking = u;
         try { synth.speak(u); } catch (e) { Log.info("audio", "Announcer speak failed"); speaking = null; return; }
         // Bugzilla 1522074, the same one radio-voice.js documents: a speak()
