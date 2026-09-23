@@ -104,19 +104,46 @@ test("a ghost for an unknown circuit is refused", async () => {
   );
 });
 
-test("fragment sharing softly refuses codes over 14 KiB while retaining a file export", async () => {
+const trace = (n, time) => ({
+  time,
+  t: Array.from({ length: n }, (_, i) => i * time / n),
+  s: Array.from({ length: n }, (_, i) => i * 3.7),
+  x: Array.from({ length: n }, (_, i) => (i % 101) / 100),
+});
+
+test("a long lap still shares: the LINK's copy is thinned to fit, the file keeps every sample", async () => {
+  // Bug hunt 2026-09-22: a Spa-length lap overflowed the 14 KiB fragment, and
+  // the download it offered instead could be imported nowhere.
   const { GhostShare } = harness({ plain: true });
-  const huge = {
-    time: 130,
-    t: Array.from({ length: 3500 }, (_, i) => i / 20),
-    s: Array.from({ length: 3500 }, (_, i) => i * 3.7),
-    x: Array.from({ length: 3500 }, (_, i) => (i % 101) / 100),
-  };
-  const encoded = await GhostShare.encode(huge, { track: "monza" });
+  const long = trace(3500, 130);
+  const encoded = await GhostShare.encode(long, { track: "monza" });
+  assert.equal(encoded.ok, true, "a 130 s lap gets a link");
+  assert.ok(encoded.thinned > 0, "…by thinning the link's copy");
+  assert.ok(encoded.code.length - 8 <= 14 * 1024);
+  assert.equal(JSON.parse(encoded.file.text).t.length, 3500, "the download is the full trace");
+  const back = await GhostShare.decode(encoded.url);
+  assert.equal(back.ok, true);
+  assert.ok(back.ghost.t.length < 3500 && back.ghost.t.length >= 8);
+  assert.equal(back.ghost.t[back.ghost.t.length - 1], long.t[3499], "the thinned trace keeps its last sample");
+});
+
+test("fragment sharing softly refuses what no thinning fits, while retaining a file export", async () => {
+  const { GhostShare } = harness({ plain: true });
+  const encoded = await GhostShare.encode(trace(80000, 130), { track: "monza" });
   assert.equal(encoded.ok, false);
   assert.equal(encoded.reason, "too-large");
   assert.match(encoded.file.name, /\.apexghost\.json$/);
   assert.equal(JSON.parse(encoded.file.text).track, "monza");
+});
+
+test("the downloaded file's own JSON text decodes as a ghost", async () => {
+  const { GhostShare } = harness({ plain: true });
+  const file = GhostShare.fileExport(trace(40, 90), { track: "monza" });
+  const back = await GhostShare.decode(file.text);
+  assert.equal(back.ok, true);
+  assert.equal(back.track, "monza");
+  assert.equal(back.ghost.t.length, 40);
+  assert.equal((await GhostShare.decode("{not json")).ok, false);
 });
 
 test("guest install, replay interpolation, and clear stay in memory", () => {

@@ -107,7 +107,9 @@ const SaveMigrate = (function () {
     if (!career || typeof career !== "object") return null;
     let v = career.v | 0;
     while (v < CAREER_V && CAREER_MIGRATIONS[v]) { CAREER_MIGRATIONS[v](career); v++; }
-    career.v = CAREER_V;
+    // Never DOWNGRADE: a save from a newer build (a stale cached shell opening
+    // it) keeps its version, so that build's ladder is not re-run on it.
+    career.v = Math.max(v, CAREER_V);
     career.flavour = career.flavour === "myteam" ? "myteam" : "driver";
     career.year = career.year | 0 || 2026;
     career.money = Number(career.money) || 0;

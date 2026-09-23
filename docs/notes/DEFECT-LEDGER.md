@@ -11,6 +11,30 @@
 Verified against the current tree. Everything fixed has moved to the archived
 journal; this is what remains.
 
+**2026-09-22 (bug hunt) — career & saves: seven defects. FIXED.**
+- DURABLE MIRROR lost the one case it exists for: a quota-refused save to an
+  EXISTING key left the old value on disk, boot read it, `Career.load()`
+  re-saved it, and the flush overwrote the newer mirrored copy. Rows now carry
+  `lsOk`; restore prefers a refused (newer) row over the disk copy and drops
+  the boot's stale re-save, and the flush waits for the restore
+  (`store-cross-tab.test.mjs`, fails on the base).
+- Reliability and qualifying luck hashed (seed, round, driver) — no year — so
+  every season replayed the same retirements. `Career.seasonSeed()` mixes the
+  year in (the 2026 season is unchanged).
+- The last MY TEAM sponsor window ran past the finale in ~78 % of seasons and
+  could never pay; it is now cut at the finale and asks/pays pro rata.
+- `worksCost` and the AI car's factory decal/flap state (and the
+  `teamMeshKey` memo) were cached without the regulation era; all are keyed on
+  `Parts.legalityKey()` now.
+- The hub's CHAMPIONSHIP top 5 ignored countback (now `SeasonCal.rank`);
+  `migrateCareer` no longer downgrades a newer save's version; the garage bay
+  cache keys include the sponsor pack and the career footer fields; the
+  `__apex` garage hooks bust the preview key with the meshes.
+- GHOST SHARE: a lap over ~80-90 s overflowed the 14 KiB link, and the
+  DOWNLOAD offered instead could be imported nowhere. The link's copy is now
+  thinned until it fits (the file keeps every sample), and `decode` accepts
+  the file's JSON text (ready for an import control; none added here).
+
 **2026-09-22 (bug hunt) — race flow: five defects, each reproduced in the
 game-vm before its fix. FIXED.** (`tests/unit/race-flow-fixes-vm.test.mjs`,
 `race-control.test.mjs`, `pit-lane.test.mjs`.)
