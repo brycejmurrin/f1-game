@@ -10,7 +10,16 @@
   // casters here and TLX's lit instanced batches, which have the same
   // one-program-per-object property. Cached per renderer.
   const _uboCap = new WeakMap();
+  // A/B and escape hatch: apex26.tlxInstPad=0 allocates at the real count
+  // (the per-object programs come back). Census 224 lost the WebGL context on
+  // three's WebGL2 control leg with the pad in; this is how one commit is
+  // measured both ways on the same runner.
+  let _padOff = null;
   function uboInstCap(renderer, n) {
+    if (_padOff === null) {
+      try { _padOff = localStorage.getItem("apex26.tlxInstPad") === "0"; } catch (_) { _padOff = false; }
+    }
+    if (_padOff) return n | 0;
     let cap = _uboCap.get(renderer);
     if (!cap) {
       let lim = 65536;   // WebGPU's default maxUniformBufferBindingSize (TLX requests no limits)
