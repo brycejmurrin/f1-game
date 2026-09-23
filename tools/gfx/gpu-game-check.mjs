@@ -570,7 +570,17 @@ try {
       const m = t && t.memState ? t.memState() : null;
       const w = m && m.warm ? m.warm : null;
       const warming = !!(t && t.warming && t.warming());
-      const warmDone = !w || w.done === true;
+      // A tree whose memState() has no warm timeline (the pre-#228 TLX) still
+      // warms: warming() goes true a present after race start. With no
+      // timeline, require the warm SEEN and ended, or 5 s of race with none —
+      // census 224 passed this gate at +46 ms and timed the warm's twelve
+      // compiles as race hitches.
+      const g = window.__raceGate || (window.__raceGate = { t0: 0, saw: false });
+      if (i && i.state === "race" && !g.t0) g.t0 = performance.now();
+      if (warming) g.saw = true;
+      const tlxNoTimeline = !!(t && t.warming) && !w;
+      const warmDone = w ? w.done === true
+        : (!tlxNoTimeline || g.saw || (g.t0 && performance.now() - g.t0 > 5000));
       return !!(i && i.state === "race" && !warming && warmDone);
     }, null, { polling: 100, timeout: Number(flag("--race-timeout", 90000)) });
     out.race.reached = true;
