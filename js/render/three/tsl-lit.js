@@ -229,6 +229,11 @@
       lgCell:         uniform(72.0),
       lgIdxW:         uniform(256.0),
       lgOn:           uniform(0.0),
+      // PER-CHUNK ROAD (frame.roadChunkLamps). The road is ONE plain mesh on
+      // TLX, but the grid lookup below reads only world position, so the plain
+      // variant can take it too: gated here by the knob and per draw by
+      // tlxLgRoad (tlx.js sets it on the surfaceId-16 road draw only).
+      lgRoad:         uniform(0.0),
     };
     // Lamp arrays: the flat stride-15 frame.lights record split by consumer,
     // exactly like js/render/glx/glx.js / the spike. geo = (rad, cosInner, cosOuter,
@@ -1458,8 +1463,13 @@
          *
          * `lgOn` is a UNIFORM, not a compile flag, so the knob and an empty bake
          * both switch this at runtime without minting a second node graph. */
-        const PC = (LGRID && chunked) ? (() => {
-          const on = U.lgOn.greaterThan(0.5);
+        // The plain variant (road, walls, cars) compiles the lookup too, but
+        // switches it on only for a draw tlx.js flagged as the road and only
+        // while PER-CHUNK ROAD is on — every other plain draw keeps the global
+        // set. Instanced batches never take it.
+        const PC = (LGRID && !instanced) ? (() => {
+          const on = chunked ? U.lgOn.greaterThan(0.5)
+            : U.lgOn.greaterThan(0.5).and(U.lgRoad.greaterThan(0.5)).and(matU.lgRoad.greaterThan(0.5));
           const cx = floor(wp.x.div(U.lgCell)).add(1024.0).sub(U.lgOrigin.x);
           const cz = floor(wp.z.div(U.lgCell)).add(1024.0).sub(U.lgOrigin.y);
           const inside = on.and(cx.greaterThanEqual(0.0)).and(cx.lessThan(U.lgSize.x))
@@ -1857,6 +1867,7 @@
         const matU = {
           emissive:  perObject("tlxEmissive"),
           alpha:     perObject("tlxAlpha"),
+          lgRoad:    perObject("tlxLgRoad"),
           roughness: materialReference("userData.tlxRoughness", "float"),
           metalness: materialReference("userData.tlxMetalness", "float"),
           specular:  materialReference("userData.tlxSpecular", "float"),
@@ -1895,6 +1906,7 @@
       const ud = m.userData;
       ud.tlxEmissive  = val(o.emissive, 0);
       ud.tlxAlpha     = alpha;
+      ud.tlxLgRoad    = 0;
       ud.tlxRoughness = val(o.roughness, 0.7);
       ud.tlxMetalness = val(o.metalness, 0.0);
       ud.tlxSpecular  = val(o.specular, 0.5);
