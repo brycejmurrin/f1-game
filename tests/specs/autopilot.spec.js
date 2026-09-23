@@ -85,7 +85,11 @@ function runLap(page, settings, opts = {}) {
     const rng = () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = (t + Math.imul(t ^ t >>> 7, 61 | t)) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
     if (settings) A.setPhysics(settings);
     if (tilt) A.tiltSim.reset();
-    A.jump(0.0, 30, 0); A.aim(0);
+    // reset(), not jump(): jump() is a teleport and leaves every per-car transient
+    // the pre-lap frames built up (slipstream, drivetrain, smoothing), and the
+    // number of those frames is wall-clock. The same Sepang lap measured 1.1 m
+    // or 7.9 m off the road run to run on it; reset() replays byte-identically.
+    A.reset(0.0, 30, 0, 1); A.aim(0);
     A.rivals([]);                 // clear the AI field — a clean solo benchmark lap
     const total = A.info().total;
     const start = A.physState().prog;
