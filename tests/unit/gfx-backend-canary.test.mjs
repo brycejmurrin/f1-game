@@ -2129,6 +2129,153 @@ test("the vendored three keys WebGPU pipelines on polygonOffset (patch 3 retired
   assert.match(THREE_BUNDLE, /\.polygonOffset===(\w+)\.polygonOffset&&\w+\.polygonOffsetFactor===\1\.polygonOffsetFactor&&\w+\.polygonOffsetUnits===\1\.polygonOffsetUnits/,
     "needsRenderUpdate does not compare polygonOffset* (PATCHES.md §3)");
 });
+test("getDynamicCacheKey fills a scratch array instead of minting one per draw (PATCHES.md §6)", () => {
+  // three.js r186 ships `hash$1 = ( ...params ) => cyrb53( params )`, and
+  // RenderObject.getDynamicCacheKey() calls it up to three times. `get
+  // needsUpdate()` calls getDynamicCacheKey() for EVERY render object on EVERY
+  // draw, so the rest arrays are minted at (objects x frames) and are garbage
+  // the instant cyrb53 returns. Measured on the three.js/WebGPU path before the
+  // patch: 255 KB/frame, 28.4 MB/s, a collection roughly once a second freeing
+  // a median 25.8 MB. Upstream fixed it in r187 (PR #34553) by filling one
+  // module-scope array by index and hashing it with hashArray.
+  //
+  // Pinned on PROPERTY NAMES and a backreference for the scratch array's local
+  // name — terser renames the local between runs of the generator, so naming it
+  // would make this test fail on a re-vendor that changed nothing.
+  assert.match(THREE_BUNDLE,
+    /getDynamicCacheKey\(\)\{[^}]*?(\w+)\[0\]=\w+,\1\[1\]=this\.camera\.isArrayCamera\?this\.camera\.cameras\.length:0,\1\[2\]=this\.object\.receiveShadow\?1:0,\1\[3\]=this\.renderer\.contextNode\.id,\1\[4\]=this\.renderer\.contextNode\.version,\w+\(\1\)/,
+    "getDynamicCacheKey no longer fills a scratch array (vendor/three-0.186.0/PATCHES.md §6)");
+  // And the form it replaced must be GONE, or a half-applied patch would pass
+  // the check above while still allocating on the shadow-receiving path.
+  assert.doesNotMatch(THREE_BUNDLE, /getDynamicCacheKey\(\)\{[^}]*?this\.object\.receiveShadow&&/,
+    "the nested per-call hash survives in getDynamicCacheKey (PATCHES.md §6)");
+});
+test("lazy render pipelines compile asynchronously, and draw() waits for them (PATCHES.md §7)", () => {
+  // THE MID-RACE HITCH. Pipelines.getForRender() reaches the backend with
+  // promises === null on every path except Renderer.compileAsync(), and the
+  // WebGPU backend then calls device.createRenderPipeline — the blocking
+  // form — so the first draw of any (material, geometry layout, render
+  // context) the one-time warm never saw stalls the main thread for the
+  // compile. gpu-census 198/199 on Metal: 25-26 synchronous compiles in the
+  // race window on the three.js/WebGPU leg against 1 on WGX, and 10-16
+  // frames of 258-556 ms against WGX's 11.5 ms max, tracking one for one.
+  //
+  // Three shapes, each pinned on property names, string literals and
+  // backreferences — never terser's local names.
+  // 1. The sync branch is gated behind an opt-in global, so the census can
+  //    still A/B the old behaviour and so a re-vendor that dropped the patch
+  //    fails here rather than shipping the stall back.
+  assert.match(THREE_BUNDLE, /null===(\w)&&!0===globalThis\.__apexSyncPipelines\)\w+\.pipeline=\w+\.createRenderPipeline\(/,
+    "the synchronous createRenderPipeline branch is not gated behind globalThis.__apexSyncPipelines (PATCHES.md §7)");
+  assert.equal((THREE_BUNDLE.match(/__apexSyncPipelines/g) || []).length, 1, "the opt-in global must appear exactly once");
+  // 2. The async branch no longer assumes a promises array to push into —
+  //    the lazy path has none, and pushing into null is the crash that
+  //    would replace the stall.
+  assert.match(THREE_BUNDLE, /createRenderPipelineAsync\([^)]*\)[\s\S]{0,1500}?null!==(\w)&&\1\.push\(\w\)/,
+    "the async branch still does an unguarded promises.push (PATCHES.md §7)");
+  // 3. draw() skips an object whose pipeline has not landed, right after the
+  //    existing error skip and before any encoder state is touched — so it
+  //    draws a frame or two late instead of setPipeline(undefined) throwing.
+  assert.match(THREE_BUNDLE,
+    /draw\(\w,\w\)\{const\{object:\w,context:\w,pipeline:(\w)\}=\w,\w=this\.get\(\w\),(\w)=this\.get\(\1\),(\w)=\2\.pipeline;if\(!0===\2\.error\)return;if\(void 0===\3\)return;/,
+    "draw() does not skip an object whose pipeline is still compiling (PATCHES.md §7)");
+});
+test("a node-builder cache miss on the render path builds asynchronously and skips the object (PATCHES.md §8)", () => {
+  // THE MID-RACE HITCH, second half. _renderObjectDirect() calls
+  // _nodes.updateBefore() first, which calls getNodeBuilderState(), which on
+  // a cache miss runs NodeBuilder.build() — the whole TSL graph generated into
+  // WGSL — synchronously inside the frame. gpu-census 202 on Metal: `build`
+  // 663 ms plus ~1,010 ms of its traversal helpers over one race window, ~35
+  // ms per program, clustering into the 258-556 ms callbacks. three ships
+  // buildAsync() behind Nodes.getForRender( renderObject, true ) and already
+  // gates backend.draw on _pipelines.isReady(); the patch uses both.
+  //
+  // Pinned on property names, string literals and backreferences — never
+  // terser's local names. The five conditions must all be present: the opt-in
+  // global, outside compileAsync, outside a render bundle, the memo still
+  // null (it is initialised to null, not undefined — a test for undefined
+  // would never fire), and a real cache miss.
+  assert.match(THREE_BUNDLE,
+    /!0!==globalThis\.__apexSyncCodegen&&null===this\._compilationPromises&&null===this\._currentRenderBundle&&null===(\w)\._nodeBuilderState&&void 0===this\._nodes\.nodeBuilderCache\.get\(this\._nodes\.getForRenderCacheKey\(\1\)\)/,
+    "the render-path cache-miss guard is missing or has lost a condition (PATCHES.md §8)");
+  // Re-entry guard and the async build itself, with the same render object.
+  assert.match(THREE_BUNDLE,
+    /(\w)\.apexBuilding=!0;const \w=\(\)=>\{\1\.apexBuilding=!1\},\w=this\._renderTarget,\w=this\._mrt,\w=this\._activeCubeFace,\w=this\._activeMipmapLevel,[\s\S]{0,260}?\w+\(\)\.then\(\(\)=>\{const \w=this\._renderTarget,\w=this\._mrt,[\s\S]{0,200}?try\{return this\._nodes\.getForRender\(\w,!0\)\}finally\{this\._renderTarget=\w,this\._mrt=\w,this\._activeCubeFace=\w,this\._activeMipmapLevel=\w\}\}\)\.then\(/,
+    "the yielding build is not started exactly once per pending object (PATCHES.md §8)");
+  assert.match(THREE_BUNDLE, /console\.warn\("Apex patch 8: async node build failed",\w\)/,
+    "a deferred build that rejects must warn (census 211 drew black in silence) rather than retry quietly");
+  assert.equal((THREE_BUNDLE.match(/__apexSyncCodegen/g) || []).length, 1, "the opt-in global must appear exactly once");
+  // And the guard sits BEFORE updateBefore — the call that triggers the build.
+  const at = THREE_BUNDLE.indexOf("__apexSyncCodegen");
+  const upd = THREE_BUNDLE.indexOf("this._nodes.updateBefore(", at);
+  // 1400, not 900: the deferred build carries the pass state snapshot and its
+  // restore (the 2026-09-22 amendment), which sits between the two.
+  assert.ok(upd > at && upd - at < 1400, "the guard must precede _nodes.updateBefore() in the same function (PATCHES.md §8)");
+});
+test("TLX caps new pool meshes per present and warms the post chain regardless of the scene warm's clock", () => {
+  // THE OBJECT BURST. A pooled Mesh that does not exist yet is a three
+  // RenderObject the closing render has to build — a bind group cloned and a
+  // uniform buffer allocated per object. gpu-census 203 on Metal put ~470 of
+  // them into ONE frame as a streamed chunk batch came into view (uniform
+  // buffers 39 -> 507 between beats) and that frame cost 506 ms, after
+  // patches 7 and 8 had taken the compile and the codegen off the thread.
+  // acquireMesh() therefore returns null past a per-present cap and both
+  // present-path call sites must tolerate it; the env-face path keeps its
+  // unbudgeted call on purpose (six 64 px faces are not where a burst lands).
+  assert.match(TLX, /const NEW_MESH_BUDGET = (\d+);/, "NEW_MESH_BUDGET is gone");
+  const budget = +TLX.match(/const NEW_MESH_BUDGET = (\d+);/)[1];
+  assert.ok(budget >= 8 && budget <= 64, `NEW_MESH_BUDGET ${budget} is outside the 8..64 band the measurement justifies (~1 ms per object)`);
+  assert.match(TLX, /if \(_newMeshLeft <= 0\) \{ list\.n--; _newMeshDeferred\+\+; return null; \}/,
+    "acquireMesh no longer returns null past the cap (and must un-count the slot it did not fill)");
+  assert.match(TLX, /_newMeshLeft = _warmDone \? NEW_MESH_BUDGET : Infinity; _newMeshDeferred = 0;\n\s+for \(let i = 0; i < drawList\.length; i\+\+\) \{/,
+    "the budget is not reset (exempt until the first warm) at the top of the present draw loop");
+  // AT THE MAIN PRESENT, not merely somewhere. The first cut of this pin
+  // matched the guarded form wherever it sat, and it sat in the env-face loop
+  // (the one with the "64px cube" comment) while the main present kept the
+  // unguarded call and dereferenced null on its 25th new mesh — a frame-fault
+  // cap and a stopped game loop on Metal (gpu-census 204). _chunkFrame.total
+  // and the meshPool hide loop belong to the main present only.
+  assert.match(TLX, /const pm = acquireMesh\(vis\[j\]\.geo, rec\.m, rec\.mat\); if \(pm\) pm\.renderOrder = i; \}\n\s+_chunkFrame\.total \+= rec\.chunked\.chunks\.length;/,
+    "the MAIN present's chunked call does not tolerate a null from acquireMesh");
+  assert.match(TLX, /const pm = acquireMesh\(rec\.geo, rec\.m, rec\.mat\);\n\s+if \(pm\) pm\.renderOrder = i;\n\s+\}\n\s+for \(let i = 0; i < meshPool\.length; i\+\+\) \{ const pm = meshPool\[i\]; if \(pm\.__tlxBatch !== _poolBatch\) pm\.visible = false; \}/,
+    "the MAIN present's plain call does not tolerate a null from acquireMesh");
+  assert.match(TLX, /_newMeshLeft = _warmDone \? NEW_MESH_BUDGET : Infinity; _newMeshDeferred = 0;\n\s+for \(let i = 0; i < drawList\.length; i\+\+\) \{\n\s+const rec = drawList\[i\];\n\s+if \(rec\.instanced\) \{\n\s+_showInstanced\(rec, i\);\n\s+continue;\n\s+\}\n\s+if \(rec\.chunked\) \{\n\s+\/\/ PER-CHUNK LAMPS/,
+    "the budget is not reset (exempt until the first warm) at the top of the MAIN present draw loop");
+  // And no unguarded dereference of acquireMesh's result survives anywhere.
+  assert.doesNotMatch(TLX, /acquireMesh\([^)]*\)\.renderOrder/, "an unguarded acquireMesh(...).renderOrder survives");
+  // THE POST WARM. The 3 s gate was measured against the scene warm's own
+  // elapsed time and lost: census 203 attributed 16 of 50 shader modules to
+  // tlx-post.js runPass, built on the first visible present. With patch 8 a
+  // miss there is a SKIPPED full-screen quad — a blank post pass — so the
+  // gate must be gone and the call must remain.
+  assert.doesNotMatch(TLX, /post\.warm && performance\.now\(\) - _warmAt < 3000/, "the 3 s gate on post.warm is back");
+  assert.match(TLX, /if \(usePost && post\.warm\) \{\n\s+_gpuLastOperation = "compile-post"; await post\.warm\(opts, _postF\);/,
+    "post.warm is no longer called from startProgramWarm");
+});
+test("the program warm covers the scene, the post chain AND the casters, and the mesh cap waits for it", () => {
+  // WARM COVERAGE, which gpu-census 205 showed was the whole of what remained:
+  // every lazy program in the race window was one the warm never built —
+  // scene x12 (the cap starved compileAsync(scene) on the first present),
+  // post x16 (a fresh QuadMesh per job never shared a cache key with the quad
+  // present() draws), sun-shadow x9 (castScene is its own Scene). Three pins.
+  const POST = fs.readFileSync(path.join(ROOT, "js/render/three/tlx-post.js"), "utf8");
+  const SHADOW = fs.readFileSync(path.join(ROOT, "js/render/three/tlx-shadow.js"), "utf8");
+  // 1. The cap is exempt until the first warm has completed, at BOTH loops.
+  assert.equal((TLX.match(/_newMeshLeft = _warmDone \? NEW_MESH_BUDGET : Infinity; _newMeshDeferred = 0;/g) || []).length, 2,
+    "the mesh cap must be exempt until _warmDone at both present loops");
+  assert.match(TLX, /\.finally\(\(\) => \{ _warmPending = null; _warmDone = true; \}\)/, "_warmDone is never set");
+  assert.doesNotMatch(TLX, /_newMeshLeft = NEW_MESH_BUDGET; _newMeshDeferred = 0;/, "an unexempted cap reset survives");
+  // 2. The post warm compiles the live quad, never a snapshot.
+  assert.match(POST, /quad\.material = job\.mat;\n\s+await renderer\.compileAsync\(quad, quad\.camera\);/,
+    "post.warm must compile the live quad with the job's material");
+  assert.doesNotMatch(POST, /new THREE\.QuadMesh\(job\.mat\)/, "the per-job snapshot QuadMesh is back");
+  // 3. The casters are warmed: tlx-shadow exports warm() over castScene into
+  //    sunRT (and the blocker), and startProgramWarm calls it after the post warm.
+  assert.match(SHADOW, /async warm\(\) \{[\s\S]{0,400}renderer\.setRenderTarget\(sunRT\); await renderer\.compileAsync\(castScene, shadowCam\);/,
+    "tlx-shadow warm() must compile castScene into sunRT");
+  assert.match(TLX, /await post\.warm\(opts, _postF\);\n\s+\}[\s\S]{0,900}if \(shadowSys && shadowSys\.warm\) \{ _gpuLastOperation = "compile-shadow"; await shadowSys\.warm\(\); \}/,
+    "startProgramWarm must call shadowSys.warm() after the post warm");
+});
 test("the vendored three matches its MANIFEST.json — generated by tools/gen/vendor-three.mjs, never hand-edited", () => {
   // The .min.js files are terser output of the PATCHED readable build; a hand
   // edit or a re-drop that skipped the generator changes a hash. The pinned
@@ -2137,7 +2284,7 @@ test("the vendored three matches its MANIFEST.json — generated by tools/gen/ve
   const dir = "vendor/three-0.186.0";
   const m = JSON.parse(read(`${dir}/MANIFEST.json`));
   assert.equal(m.three, "0.186.0");
-  assert.deepEqual(m.patches, [1, 4, 5], "patch ids applied (2 and 3 retired in r186)");
+  assert.deepEqual(m.patches, [1, 4, 5, 6, 7, 8], "patch ids applied (2 and 3 retired in r186)");
   const pkg = JSON.parse(read("package.json"));
   assert.equal(pkg.devDependencies.terser, m.terser, "package.json must pin the terser the manifest was generated with");
   for (const [file, rec] of Object.entries(m.files)) {
@@ -4359,10 +4506,26 @@ test("TLX registry pruning preserves live refs and is independent of mirror rele
 });
 
 test("TLX warm holds renderer state across awaits and restores it on rejection", async () => {
-  let _warmRequested = true, _warmPending = null, _warmAttempts = 0, _warmAt = 0;
+  let _warmRequested = true, _warmPending = null, _warmAttempts = 0, _warmAt = 0, _warmDone = false;
+  // Fix C: the warm's finally sets _warmDone and the try calls the caster warm.
+  // Fix D: the ORDER is the contract — the post chain compiles under the scene
+  // MRT (present() runs post.present() before restoring it, and three keys the
+  // render context, hence the program cache, on the MRT node's id), the MRT is
+  // nulled only after it, and the casters compile under null (sunPass runs before
+  // present(), with the MRT restored).
+  let shadowCalls = 0, postCalls = 0;
+  // The stage timeline memState().warm reports (census 207 spent its window
+  // inside the warm with no row saying so): the sandbox owns the record.
+  const _warmStages = { at: 0, scene: null, post: null, shadow: null, total: null, attempts: 0, failed: 0 };
+  const shadowSys = { warm: async () => {
+    shadowCalls++; await Promise.resolve();
+    assert.equal(postCalls, 1, "the caster warm runs after the post warm");
+    assert.equal(mrt, null, "the caster warm runs with the MRT nulled");
+    assert.equal(target, "HDR");
+  } };
   let _gpuLastOperation = "boot";
   const _postF = { proj: [] }, vizMat = null, scene = {}, camera = {};
-  let target = "canvas", mrt = "previous", tag = false, postCalls = 0, rejectMain;
+  let target = "canvas", mrt = "previous", tag = false, rejectMain;
   const renderer = {
     getRenderTarget: () => target, getMRT: () => mrt,
     setRenderTarget: v => { target = v; }, setMRT: v => { mrt = v; },
@@ -4373,11 +4536,21 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
     },
   };
   const post = { enabled: () => true, sceneTarget: () => "HDR", warm: async () => {
-    postCalls++; await Promise.resolve(); assert.equal(mrt, null); assert.equal(target, "HDR");
+    postCalls++; await Promise.resolve();
+    assert.equal(shadowCalls, 0, "the post warm runs before the caster warm");
+    assert.equal(mrt, "tag", "the post warm runs under the scene MRT, the variant present() draws");
+    assert.equal(target, "HDR");
   } };
   const lit = { setSsrMrt: v => { tag = v; } }, fx = null;
   const pinSkyMaterial = () => {}, _ssrMrtNode = () => "tag", softOutRT = () => null, Log = { warn() {} };
   const body = fnBody(code("js/render/three/tlx.js"), "startProgramWarm");
+  // Source pins for the same order: exactly one setMRT(null), between the post
+  // warm and the caster warm, and the caster warm still guarded on the module.
+  const iPost = body.indexOf("await post.warm(opts, _postF)"), iNull = body.indexOf("renderer.setMRT(null)"),
+    iShadow = body.indexOf("shadowSys.warm()");
+  assert.ok(iPost > 0 && iNull > iPost && iShadow > iNull, "setMRT(null) must sit between the post warm and the caster warm");
+  assert.equal(body.indexOf("renderer.setMRT(null)", iNull + 1), -1, "startProgramWarm nulls the MRT exactly once");
+  assert.match(body, /if \(shadowSys && shadowSys\.warm\)/, "the caster warm is skipped when the module offers none");
   const warm = eval("(function(opts){" + body + "})");
   warm({}); await Promise.resolve();
   assert.equal(target, "HDR"); assert.equal(mrt, "tag"); assert.equal(postCalls, 0);
@@ -4385,21 +4558,30 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
   assert.equal(target, "canvas"); assert.equal(mrt, "previous"); assert.equal(tag, false);
   assert.equal(_warmRequested, true); assert.equal(_warmPending, null);
   warm({}); await _warmPending;
-  assert.equal(_warmRequested, false); assert.equal(postCalls, 1);
+  assert.equal(_warmRequested, false); assert.equal(postCalls, 1); assert.equal(shadowCalls, 1);
   assert.equal(target, "canvas"); assert.equal(mrt, "previous"); assert.equal(tag, false);
+  // Two attempts, one failed; every stage of the successful one is a number.
+  assert.equal(_warmStages.attempts, 2); assert.equal(_warmStages.failed, 1);
+  for (const k of ["scene", "post", "shadow", "total"]) assert.ok(Number.isFinite(_warmStages[k]) && _warmStages[k] >= 0, k + " stage timed");
+  assert.ok(_warmStages.at > 0, "warm start stamped");
 });
 
 test("TLX post warm compiles serially and holds each target across awaits", async () => {
   let compileJobs = null, target = "scene", mrt = "tag", active = 0, calls = 0;
   const _last = { pass: "live" }; let _lastPresentRT = "liveRT", _vizDest = "viz";
   const THREE = { QuadMesh: class { constructor(mat) { this.material = mat; this.camera = {}; } } };
+  // Fix C: warm() compiles the module's own `quad` with each job's material rather
+  // than a snapshot per job, so the sandbox owns one — the pairing assertion below
+  // (target === q.material) is unchanged and now checks the live object.
+  const quad = new THREE.QuadMesh(null);
   const renderer = {
     getRenderTarget: () => target, getMRT: () => mrt,
     setRenderTarget: v => { target = v; }, setMRT: v => { mrt = v; },
     compileAsync: async q => {
       assert.equal(++active, 1); calls++;
       await Promise.resolve();
-      assert.equal(target, q.material); assert.equal(mrt, null);
+      assert.equal(target, q.material);
+      assert.equal(mrt, "tag", "the post warm compiles under whatever MRT the caller set — never nulls it");
       active--;
       if (q.material === "blur") throw new Error("compile failed");
     },
@@ -4409,6 +4591,10 @@ test("TLX post warm compiles serially and holds each target across awaits", asyn
     _last.pass = "warm"; _lastPresentRT = "warmRT"; _vizDest = null;
   };
   const body = fnBody(code("js/render/three/tlx-post.js"), "warm");
+  // Fix D: three keys the render context (and so the program cache) on the MRT
+  // node's id, and present() runs the post chain under the scene MRT; a warm
+  // that nulled it built sixteen programs the race never drew (gpu-census 206).
+  assert.doesNotMatch(body, /setMRT\(\s*null\s*\)/, "post.warm must not null the MRT — it compiles the variant present() draws");
   const warm = eval("(async function(opts, frame){" + body + "})");
   await assert.rejects(warm({}, {}), /compile failed/);
   assert.equal(calls, 2); assert.equal(compileJobs, null);

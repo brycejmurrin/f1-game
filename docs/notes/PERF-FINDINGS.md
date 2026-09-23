@@ -4877,7 +4877,19 @@ section — WebGPU meanLuma 51.4, WebGL2 (Metal ANGLE) 51.1, GLX 45.7, WGX 58.9.
 That is the revert criteria clear on hardware for the decal block as well; the
 fps and JS-ms columns are single samples and are not read (§2w).
 
-## 2aa. "It lags every few seconds" was the governor chasing the track layout (2026-09-22)
+## 2aa. The governor was chasing the track layout — but that was NOT the reported hitch (2026-09-22)
+
+> **CORRECTED THE SAME DAY.** This section was first written as *"it lags every
+> few seconds" WAS the governor chasing the track layout*, and that claim is
+> withdrawn. The governor defect below is real, the fix is real, and it shipped
+> and was verified live (`apex-sha 49c3206f0`, `governor.js?v=262de1b1e1a0`,
+> build 9866). The player then reported the hitch **unchanged**. So the move
+> count was a true measurement of a true bug and a FALSE answer to the
+> question asked, and nothing in the evidence below ever said otherwise: a
+> reallocation count is not a frame time, and §2aa's own closing rule says this
+> container cannot turn one into the other. Reading "35-83 reallocations per ten
+> minutes, gaps of 1-5 s" as "therefore this is the reported hitch" was the
+> step that had no evidence under it. The hunt continues in §2ab.
 
 The report was about three.js/WebGPU. The cause is in `js/perf/governor.js` and
 is backend-wide; TLX shows it first because it is the backend that sits nearest
@@ -5001,3 +5013,401 @@ here means anything (§2z made the same mistake in the other direction). What IS
 exact here is how many times the governor asks for a reallocation, which is a
 pure function of `tick()` and needs no GPU at all. Any future claim about this
 behaviour should be a move count over a simulated race, not a frame time.
+
+## 2ab. Three instruments were measuring something else (2026-09-22)
+
+§2aa shipped a real governor fix and the player reported the hitch unchanged,
+so the hunt reopened on three.js/WebGPU — the configuration they actually run
+(RENDERER = THREE.JS, THREE PATH = WebGPU, i.e. TLX on three's WebGPURenderer,
+never WGX). Four rounds later the code changes are small and the instrument
+changes are not, which is the finding.
+
+### 1. Every automated TLX/WebGPU timing this project has ever taken was of the soft blit
+
+`tlx.js` arms its soft blit — a GPU readback plus `putImageData` standing in for
+`present()` — whenever `!forceWebGL && (_softAdapter || _headless || cap==="1")`,
+and `_headless` is `/HeadlessChrome/i.test(ua) || navigator.webdriver`.
+Playwright sets `navigator.webdriver` behind any UA, so **every automated run
+there has ever been took that branch**, on hardware images too. Two consequences,
+both large:
+
+- The back-pressure branch (`tlx.js:3455`) draws NOTHING while a read is in
+  flight. Measured: **8,946 rendered frames out of 17,892 rAF callbacks** — half
+  the samples are no-ops, and the p50 they set is the cost of doing nothing.
+- `SOFT_READ_STALE_MS` is 20,000, so an abandoned read restarts the pipeline
+  every 20 s. That produced bind-group and buffer bursts at 5.2 / 25.2 / 45.5 /
+  65.5 / 85.5 / 105.5 / 125.5 / 145.5 s — **a period of exactly 20.0 s with zero
+  variance**, which reads as a textbook periodic hitch and is entirely the
+  instrument. `softRead.abandoned` was 9 across those 150 s.
+
+`_capPref !== "0"` is the escape hatch. `gpu-census.yml` now passes
+`--ls apex26.wgxCapture=0` on both TLX legs by construction, and
+`frame-hitch.mjs` defaults to native present with the blit behind `--capture`.
+§2t's 46.9-vs-66.2 luma gap was read off the blit column.
+
+### 2. The census had no control, and its tail row could not see a tail
+
+The workflow's `ls` input is documented "Extra localStorage for ALL game checks"
+and is applied AFTER the per-leg pin, so run 194's request — which set
+`apex26.tlxForceGL=0` to reach WebGPU — also forced the **WebGL2 control leg**
+onto WebGPU. Both TLX legs reported `api=webgpu`; that run's 22.2-vs-37.7 fps
+"gap" is run variance between two identically configured legs.
+
+Separately the tail row aggregated per-beat percentiles as `max(p95)`, which
+collapses onto whichever beat holds the worst stall: run 195 printed
+`p95 == p99 == max` on all four legs. The census now also runs `analyse()` over
+the wall cost of every rAF callback (`hitch:`), which can see a PERIOD.
+
+### 3. The sampling heap profiler reports what SURVIVES, not what is allocated
+
+This is the one worth carrying forward. `analyseHeap()` measured **255 KB/frame
+allocated, 28.4 MB/s, a collection about every second freeing a median 25.8 MB**
+on the real present path — the first allocation measurement here ever, because
+`snapMem()` forces a collection before reading and therefore reports RETENTION
+(retention was flat at 2.6 MB/min and the hitch stayed; flat retention does not
+clear GC). CDP `HeapProfiler` was added to name the site, and reported 0.5
+KB/frame and no dominant site — a 500x disagreement.
+
+`--selftest-kb` settled it by injecting a KNOWN 500 KB/frame of 56-byte objects:
+
+| instrument | moved by | verdict |
+|---|---|---|
+| `analyseHeap` sawtooth | +195 to +217 KB/frame of a known +500 | usable; under-reports (it sums positive deltas between per-frame samples, so anything allocated and collected between two samples is invisible) and cannot over-report |
+| CDP sampling profiler | +0.3 KB/frame; the injector ranked **1.2%**, below fourteen three.js internals | unusable for garbage |
+
+The tell is the sample COUNT: **395 samples in 90 s**, where a 16 KB interval
+against ~50 MB/s owes ~275,000. V8 holds each sampled object behind a weak
+handle and decrements the node when that object is collected, so the profile
+describes what is still ALIVE — 395 x 16 KB is ~6.5 MB, which is the window's
+retained growth. **Pure garbage is erased from it by definition.** A second
+bias rides on top: V8 samples an object of size s with probability
+`1-exp(-s/rate)`, ~1/293 for 56 bytes at a 16 KB rate against ~0.98 for 64 KB,
+so raw `selfSize` under-counts small-object sites by nearly three hundred times
+— exactly the shape of a per-draw cache key. `analyseAlloc()` now corrects that
+bias, says `means: RETAINED` on every result, and refuses to fall back to the
+tree when `samples` is absent.
+
+**Rule: short-lived garbage is attributed by ABLATION** — change one site,
+re-run, read `analyseHeap` — never by a sampling profile.
+
+### The two code changes, and what they were worth
+
+- **vendor patch 6** backports three.js PR #34553 (#34535): `hash` is
+  `( ...params ) => cyrb53( params )`, so `RenderObject.getDynamicCacheKey()`
+  minted a rest array per render object per draw via `get needsUpdate()`.
+  Correct, upstream's own fix, and measured at **254.9 -> 249.7 KB/frame**. Two
+  per cent. Upstream measured the same shape at 120,000 arrays/s for 1,000
+  meshes at 120 fps; this project draws ~217 objects, and that ratio is the
+  whole difference. Retire on the r187 bump.
+- **`materialFor` key memo** — `matCache.get(key)` needs the string before the
+  lookup, so ~15 intermediate strings were built on every call, hit or miss, at
+  150-400 draws a frame. Memoised on the opts object behind a field-by-field
+  compare (every caller mutates a long-lived scratch object in place).
+
+### What is NOT established
+
+That any of this is the reported hitch. GC-to-spike enrichment sits at
+**1.65-1.73 across every real-present run** — consistently above chance,
+consistently below the 1.8x bar `analyseHeap` needs to name it — and no leg of
+census 196 came back `periodic=true` on real Metal. What census 196 does show,
+on every leg, is a main-thread rAF cost p50 near zero against frame intervals
+of 30-70 ms: on that runner the main thread is not the bottleneck. A software
+rasteriser with a 3.6 ms p50 and 14% of frames over the spike threshold is a
+poor place to test a correlation, and the macOS runner is not a player's
+machine. The allocation is worth cutting on its own terms; the periodicity
+question is open.
+
+## 2ac. The hitch was three costs on the first draw of streamed content, and the container could see none of them (2026-09-22)
+
+§2aa shipped a governor fix and the player reported the hitch unchanged, so the hunt
+reopened on the configuration they run — RENDERER = THREE.JS, THREE PATH = WebGPU,
+TLX on three's WebGPURenderer, never WGX. Six leads died to measurement (§2ab and
+the table at the end); the answer took four census rounds on real Metal because the
+mechanism is scenery streaming into view as the car reaches new track, and the
+container's car drives full-throttle into the first wall and streams nothing. Every
+local profile of the same window was flat.
+
+### The window
+
+Census 197 and 201, macos-latest, real present path: the per-beat uniform-buffer
+count goes 39-90 → 507-558 in ONE second at race+18-23 s and climbs to ~750 while fps
+halves; 10-23 rAF callbacks of 258-556 ms land in it. WGX on the same runner, same
+track, same window: 0-3 spikes, max 5-18 ms.
+
+### Three costs, isolated one at a time
+
+| cost | how it was named | what moved it | result |
+|---|---|---|---|
+| synchronous `device.createRenderPipeline` on a cache miss | census 198-200: 25-26 sync compiles vs 1 on WGX, tracking spikes one for one; half the WebGL2 leg's links tagged `async tlx.js:1796` (the warm), half unnamed | **vendor patch 7**: the lazy path takes `createRenderPipelineAsync`, `draw()` skips until it lands | census 201: `createRenderPipeline` 26 → 1, spikes unchanged (23, worst 479 ms) — real, not the time |
+| synchronous TSL → WGSL codegen (`NodeBuilder.build`) on the render path | census 202 CPU profile: `build` 663 ms + ~1,010 ms of its traversal helpers, ~1.7 s, ~35 ms/program, a third of busy main-thread time | **vendor patch 8**: on a node-builder cache miss outside `compileAsync`, start `Nodes.getForRender( ro, true )` (three's own `buildAsync`) and skip the object until its state exists | census 203: spikes 23 → 7; worst frame still 506 ms |
+| ~470 `RenderObject`s created in one frame (bind group cloned + uniform buffer per object, ~1 ms each) when a chunk batch comes into view | census 203: the 506 ms callback sits exactly on the 39 → 507 buffer jump; the compile stacks account for every program (25 warm, 9 sun-shadow via `endPass`, 16 post via `runPass`, 1 scene) so nothing else is in that frame | **`NEW_MESH_BUDGET`** in `tlx.js`: `acquireMesh()` returns null past 24 new meshes a present, the draw retries next present — a burst spreads over ~20 presents at ≤ ~25 ms each | census 205: the burst spread (buffers 92 → 284 → 339 over 4 s instead of 507 at once; `createBindGroup` 1825 → 853), worst frame 506 → 389 ms, 18 spikes. Not done — see below |
+
+And a fourth that patch 8 created: the 16 post-chain programs the 3 s warm gate
+left unbuilt used to compile on the first visible present after the lights; with
+patch 8 a miss there is a SKIPPED full-screen quad, i.e. a blank post pass for the
+first frames of the race. `post.warm()` now runs regardless of the scene warm's
+elapsed time.
+
+### Census 204 and 205: a regression, and what is actually left
+
+The first cut of the mesh budget guarded the env-face present loop (the one
+carrying the "64px cube" comment) and left the main present's two
+`acquireMesh(...).renderOrder` calls unguarded with a cap that was never reset:
+after 24 new meshes the main present threw, `game.js` hit its frame-fault cap and
+stopped the loop. Census 204 showed it as a near-black leg with `presents=0` and no
+resource calls; `tlx-probes` on the same tree failed 11 of 17 with the TypeError.
+The dry-run had passed because its pins checked that the guarded form existed, not
+where. Corrected on the main present's own context, with a pin that no unguarded
+dereference survives anywhere; `tlx-probes` 17/17.
+
+Census 205 on the corrected tree then named what remains, and it is one thing:
+**warm coverage.** Every lazy program in the race window is one the warm never
+built — **scene ×12** (was 1: the cap starved `compileAsync(scene)`, which runs
+AFTER the draw loop on the first present and now saw 24 meshes instead of the
+grid's ~300), **post ×16** (the warm ran — ×16 tagged `tlx-post.js warm` — and the
+live `runPass` built the same sixteen again: a fresh `QuadMesh` per job never
+shared a cache key with the quad `present()` draws), **sun-shadow ×9** (`castScene`
+is its own Scene). `build` is still 720 ms in the window because those 37 are still
+generated on the main thread, chunked by patch 8 but chunked into 150-390 ms
+frames. WGX on the same run: 1 spike, 14 ms.
+
+The fix: the cap is exempt until the first warm has completed (the lights are a
+frozen picture; minting everything there costs nothing visible), the post warm
+compiles the live `quad` with each job's material (a same-object hit whatever the
+key contains), and `tlx-shadow.js` exports `warm()` over `castScene` into `sunRT`
+plus the blocker, called after the post warm.
+
+### Census 206: two of three warms land, and the post miss is the render context
+
+Census 206 on that tree: **scene ×0 and sun-shadow ×0 lazy** — ×23 shader modules
+tagged the scene warm, ×13 + ×2 the caster warm, and nothing in the race window
+asked for either again. **Post ×16 still lazy**, and ×16 ALSO tagged the post
+warm: the warm compiled the live quad with the live materials and the race built
+the same sixteen again anyway. 9 spikes / 538 frames, worst 308 ms; `build` still
+671 ms in the window — sixteen programs at ~35 ms plus the helpers. WGX on the
+same run: 1 spike, 25 ms.
+
+So the miss was never the object or the material. It is the **render context**.
+`present()` sets the ssrTag MRT node for the scene pass and runs `post.present()`
+BEFORE restoring it, so every live post quad draws with that node set. three keys
+its `RenderContext` on the render target's attachment state plus the MRT node's id
+(`RenderContexts.get`), and folds `context.id` into every render object's material
+cache key — a different MRT is a different context is a different program key, and
+`NodeMaterial.setup` really does emit a different fragment output for it. The warm
+nulled the MRT before `post.warm()`, and `post.warm()` nulled it again: sixteen
+programs built for a context the race never uses.
+
+Fix D is an ordering change. `startProgramWarm` holds the scene MRT through the
+post warm, nulls it after, and warms the casters under null (`sunPass` runs before
+`present()`, with the MRT restored); `post.warm()` no longer touches the MRT at
+all and compiles under whatever its caller set. The two sandboxed warm tests
+encoded the old assumption (MRT null during the post warm); they now assert the
+order and pin it in the source — exactly one `setMRT(null)` in `startProgramWarm`,
+between the two warms, none in `post.warm`.
+
+### Census 207: the leg never reached the race — and neither had the others
+
+Census 207 on fix D printed the best three.js/WebGPU row this branch has seen —
+**0 spikes / 750 frames, worst callback 6.7 ms**, every one of the 53 shader
+modules tagged by a warm (23 scene, 14 post, 15 casters, 1 mipmap), no lazy
+program at all — and it is a non-result. The beats say why: `memState.presentMs`
+0 and `groupVer` 0 on all fifteen, the governor ring at n=1 the whole window
+(`game.js tickBody` returns while `gfx.warming()`, so the ring holds the one tick
+before the warm), and the uniform-buffer count climbing 2 → 596 — the warm's own
+bindings. The window closed at s=26.3 with the warm still pending. Nothing raced.
+
+Tabulating the same beats across 200–207 (`s : uniform buffers : groupVer`)
+shows the pre-race phase — race entry, `park(0.1)`, the warm — taking 10–15 s on
+`macos-latest`, against a 15-beat window that opens at `arm()` **with the car
+parked**: the race began at beat 12 (206), 11 (205), 13 (203), 15 (200) or never
+(207). Every hitch row this note has quoted from the census was the lights plus
+0–5 s of a parked race; the 39 → 507 uniform-buffer "burst" is the scene warm's
+object loop, not streaming. The lazy-program stacks were still real (they are
+tagged by the live `render()` frame), and patches 7/8 apply to any lazy compile
+wherever it lands, but "the car reaching new track" was never in the window.
+
+The instrument is now what the report needs: `gpu-game-check.mjs` waits for
+`state === "race"` with no warm pending (bounded), starts a rAF autopilot lifted
+from `tests/specs/autopilot.spec.js` (braking envelope over `scan()`, pure
+pursuit on `probe()`, `setInput()` only — bound to the raw rAF so the hitch
+recorder does not count its callbacks), THEN arms the recorder, the CPU profile
+and `--beats` beats (the census passes 20). `memState().warm` reports the warm by
+stage, and the `race:` row prints the gate time, the warm stages and how far the
+car drove — or NOT REACHED, loudly.
+
+### Census 208: the first driven window — the lag, reproduced on Metal
+
+`race: gate=10400ms warm scene=7035 post=2868 shadow=767 total=10670 ms | driven
+379f 327 m mean 23.7 m/s`. The car drove for twenty seconds on real Metal and the
+three.js/WebGPU leg produced **141 callbacks over 12.5 ms in 758 frames, worst
+310 ms** — eleven of them 130–310 ms, five of those inside 1.4 s (28.3–29.7 s of
+the run). That is "lags every few seconds", measured for the first time, on the
+window that can see it. Native WGX driving the same road: 20 callbacks over 11 ms,
+**worst 23.4 ms**. GLX (WebGL2) also spikes to 292 ms; three's WebGL2 control is
+worse still (worst 2.6 s at 15 fps, render scale 0.6) — the driven road is hard
+for every path but WGX, and TLX on WebGPU is the one the player runs.
+
+What the window says so far: ten programs were still built lazily during the
+drive (8 in the scene render, 2 in the caster pass — scenery kinds absent from
+the grid view, async under patch 8); `build` 934 ms, `(program)` 1214 ms, the
+garbage collector 536 ms, `submit` 265 ms, `writeBuffer` 214 ms, game.js
+`update`+`updateCar` 570 ms over the 21 s window; 778 `createBuffer` and 705
+`createBindGroup` calls. Totals over a window cannot say which of these sat
+inside the eleven spikes, so the harness now joins the CPU profile's samples to
+the rAF recorder's spike frames (`analyseSpikeCpu`, clock-pinned at
+`Profiler.start`, coverage printed) and keeps per-frame resource counts including
+`writeBuffer` KB and `submit` (`analyseSpikeWork`); the `spike:` rows rank self
+time inside the ≥ 100 ms frames and compare their resource calls with the rest.
+
+### Census 209 and 210: inside the spikes
+
+The join works (coverage 0.98× and 1.0×). Inside the thirteen callbacks of
+100 ms or more on the driven three.js/WebGPU leg (2.9–3.2 s of callbacks in 20 s):
+
+| inside the spike frames | 209 | 210 | reading |
+|---|---|---|---|
+| `(idle)` | 45% | 46% | the VM off the stack inside a synchronous callback — a native wait |
+| three `build` + `getChildren` under `setup` | 7% | 17% | synchronous TSL codegen, caller chain `_renderObjectDirect` → … → `setup` → `build×n` |
+| `(garbage collector)` | 3% | 9% | the codegen's garbage, mostly |
+| `submit` self | 12% | 1% | run-to-run noise |
+| wall time of every wrapped GPU call | — | < 90 ms total | createBuffer 38, writeBuffer 17, createCommandEncoder 16, submit 10: **none of them blocks** |
+| resource calls per spike frame vs rest | 8× createBuffer, 7× createBindGroup, 2× submits and writeBuffers | 15× createBuffer, 11× createBindGroup, 2× submits | spike frames are new-content frames |
+| the 2048² sun-shadow pass | — | not in the top pass rows | the re-cast is **not** what distinguishes a spike frame |
+
+Two conclusions and one open question. First, patch 8 left a third of the codegen
+in the frame: an async function runs synchronously to its first `await`, and
+`buildAsync()` runs `prebuild()` — the material's whole setup traversal — before
+its first `yieldToMain()`, so starting the build at the render call site still
+put the heaviest stage inside the rAF callback. Patch 8 now starts the build from
+a `yieldToMain()` task; nothing of the codegen runs in the frame. Second, the
+sun-shadow re-cast and the GPU calls are cleared: the calls the recorder wraps
+account for under 3% of the spike time. The open question is the idle half. The
+one WebGPU call the recorder did not time is the swapchain acquire,
+`getCurrentTexture()`, which on Metal blocks until the compositor frees a
+drawable — and WGX on this runner soft-presents (headless UA) and never calls it,
+which would be why it alone shows no spikes. Census 211 times it, prints how much
+of each spike frame the wrapped calls explain at all, and carries the amended
+patch 8.
+
+Census 211 was a false positive of the 204 kind and the instrument caught it:
+the three.js/WebGPU leg printed a worst callback of 96.6 ms and no frame over
+100 ms — at **mean luma 3.2** (black) with presents costing 3–10 ms, while the
+WebGL2 control on the same bundle rendered at 52. Deferring the build to a task
+broke an assumption: `NodeMaterial.setup` reads the renderer's live render target
+and MRT as it builds, and between frames the target is null and the MRT unset, so
+every lit material built the wrong variant or threw, and a rejected build retried
+in silence. Patch 8 now snapshots the requesting pass's render target, MRT, cube
+face and mip level, holds them for the synchronous part of the deferred build and
+restores them in a `finally`; a rejected build warns (`console.warn`, three times
+at most).
+
+### Census 212: the picture back, the spikes down, and what mints them
+
+Luma 45.7, 314 m driven at 22.4 m/s. **Frames of 100 ms or more: 4** (209/210:
+13), **worst callback 187 ms** (648), 635 ms of spike callbacks (2.9–3.2 s). Inside
+the four: `(idle)` 36%, three `build` 23% (its chain now ends in `buildAsync ←
+getForRender`, the deferred build — see the join note below), the garbage collector
+12%; every wrapped GPU call together 11%, `getCurrentTexture` 1 ms — **the swapchain
+is cleared**.
+
+The new `mats:` row names the mechanism: **`mats 13→33 (+20)`, `miss +20`** — the
+renderer minted twenty materials in twenty seconds of driving, one a second, and a
+material is a program (three keys `nodeBuilderCache` on node identity, so a
+structurally identical graph in a new `NodeMaterial` is a new codegen and a new
+pipeline). The material key is the draw options — emissive and alpha quantised to
+1/32, then roughness, metalness, specular, detail, clearcoat, carPaint, sparkle and
+the flags — and five draw sites fed it a CONTINUOUS per-frame value:
+
+| site | value | variants |
+|---|---|---|
+| `game.js` rear lights | emissive `0.45 + 0.55 × ERS energy`, every car in view | up to 18 per car, one per 1/32 of battery |
+| `game.js` exhaust flame | alpha `(0.30 + 0.55 × flicker) × pop` | up to 28 per pop |
+| `car-mesh.js` aero bar | alpha `0.65 + 0.35 × sin(20t)` while the flap moves | up to 23 per transition |
+| `car-draw.js` cockpit ERS bar | alpha `0.75 + 0.25 × sin(22t)` while deploying | 17 |
+| `car-draw.js` cockpit OVERTAKE lamp | alpha `0.7 + 0.3 × sin(18t)` while active | 20 |
+
+Each is now a few fixed levels (five for the battery, quarters for the flame, two
+for each blink), pinned by `tests/unit/material-variants.test.mjs`, which also
+scans the draw modules for a sine or clamp multiplied straight into an alpha or
+emissive option. `memState().matMissKeys` keeps the first 64 miss keys and the
+census prints the keys minted inside the window. The design debt stays named:
+values a shader takes as a uniform should not be part of a material's identity.
+
+On the join note: a `buildAsync` chain inside a rAF callback is impossible for a
+task, and the 48-frame chains show the deferred path; the sampler's stack for a
+long synchronous segment may extend past the callback edge by a sample or two,
+but 146 ms is not that. It is more likely that some materials are still built on
+the render path: a `RenderObject` whose cache key changes (`needsUpdate` →
+dispose → recreate) after its async state landed, or a `compileAsync`-free path
+the guard does not cover. Census 213 measures the tree with no mid-race minting;
+if `build` stays inside the spikes with nothing minted, that path is next.
+
+### Census 213: no frame over 100 ms in a driven window, picture intact
+
+Luma 47.8, 318 m driven at 21.8 m/s: **187 callbacks over 12.8 ms in 676 frames,
+worst 81.8 ms, no frame at or over 100 ms** — against 258–556 ms at the start
+of this note and 648 ms at the worst driven measurement (210). The `mats:` row
+still counted 18 misses, and the new `minted:` row named them: emissive
+0.75–0.97 and alpha 0.81–1.0 rising together in 1/32 steps on a `roughness 0.9 |
+na` bag — the **brake rings**, whose glow `car-draw.js` derives from disc heat
+(`emissive 0.30 + 0.70 × heat`, `alpha 0.25 + 0.9 × heat`) for every hot wheel of
+every car in view: a braking pack minted a material per 1/32 of heat, i.e. at
+every braking zone. Heat is now quantised to quarters at that site (five glow
+levels, five materials). With the codegen deferred those mints no longer cost a
+frame, which is why 213 is clean even before this fix; without the mint the
+codegen, its garbage and the pipelines leave the drive entirely.
+
+### Census 214: the deploy gate
+
+Luma 47.7, 365 m driven at 23 m/s: **99 callbacks over 11.8 ms in 862 frames,
+worst 71.4 ms, no frame at or over 100 ms**; `mats: miss +4` and the `minted:`
+row shows exactly the four remaining brake-glow levels (the fifth was already
+cached) — the bounded set, minted once a session, as designed. WGX on the same
+road: worst 26.6 ms. Across the driven runs on this branch the three.js/WebGPU
+leg's worst callback went 648 → 187 → 82 → 71 ms and its frames of 100 ms or
+more 13 → 4 → 0 → 0; the row that started this note read 258–556 ms.
+
+| driven census | worst callback | frames ≥ 100 ms | minted on the road |
+|---|---|---|---|
+| 208 (first driven window) | 310 ms | 11 | — |
+| 209 / 210 (attribution) | 563 / 648 ms | 13 / 13 | — |
+| 212 (codegen deferred with pass state) | 187 ms | 4 | 20 |
+| 213 (five sites quantised) | 82 ms | 0 | 18 (brake rings) |
+| 214 (brake glow quantised) | **71 ms** | **0** | 4 (the fixed levels) |
+
+Also visible again: the warm at the lights took 18.8 s on this run (scene
+13.8 s) — the runner's variance is large (10.7–18.8 s across 208–213), and the
+scene compile is the whole of it. It is not the reported lag, and it is the next
+cost to take down (fewer materials at the grid means fewer programs to warm).
+
+Also measured for the first time: the lights hold **10.7 s** on this Metal runner
+(scene warm 7.0 s, post 2.9 s, casters 0.8 s). The scene warm mints every pooled
+mesh of the grid view and compiles its programs; that is the cost the race no
+longer pays, but it is a wait a player sees, and it is now a number to shrink.
+
+### What the instruments had to become first
+
+§2ab: the census timed a headless readback rather than the player's present path;
+the heap sampler reports what SURVIVES, not what is allocated; the tail row could
+not see a period. Four of the six dead leads were only killable after those fixes.
+Added this round: the census CPU profile (`analyseCpu`, self time from
+`timeDeltas`), the compile-stack capture (on `createShaderModule`, one per program on
+both paths, with `Error.stackTraceLimit` raised — V8's default of 10 never reached a
+frame of ours), and the per-frame pass fingerprint by target resolution.
+
+### The dead leads
+
+| lead | killed by |
+|---|---|
+| JS allocation | `--ablate headless`: 26.5 → 13.7 MB/s with rendering off; half renderer, half game; no site above 15% |
+| `getDynamicCacheKey` rest arrays (#34535) | upstream's fix, measured 254.9 → 249.7 KB/frame — 2% (patch 6 stays) |
+| material eviction → pipeline compiles | zero `createRenderPipeline` in 150 s against 270 misses; three keys pipelines on material properties |
+| GC pauses | enrichment 1.65-1.73 every run — above chance, below the bar, the noise floor |
+| `fitHud` forced layout | 0.1 ms/s, zero frames paid a recalc, 0% of spike cost (the 10 Hz `getComputedStyle` above the memo was fixed anyway) |
+| sun shadow + PCSS blocker rebuild | real, periodic, +2 passes; 1.24-1.3× a normal frame |
+
+### Inherited reds, named
+
+`image-grade-visual` › blacks and `webgl-probes` › dynamic player shadow fail
+byte-identically at the merge-base `5618ee127`; neither is this branch's. The
+`INVALID_OPERATION` timeout passed alone (rule 8).

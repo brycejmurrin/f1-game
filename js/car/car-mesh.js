@@ -691,6 +691,8 @@ function getAeroBar(fill) {
 const _axT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
 const _axM = new Float32Array(16);
 const _AX_FX = { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true };
+const _AX_FX_BLINK_HI = { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 1.0 };
+const _AX_FX_BLINK_LO = { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 0.65 };
 function drawWheelExtras(mat, c, t) {
   const ax = Math.max(0, Math.min(1, c.aeroX || 0));
   const open = ax > 0.05;
@@ -700,8 +702,10 @@ function drawWheelExtras(mat, c, t) {
   M4.mulTo(_axM, mat, _axT);
   _gfx.draw(getAeroBar(false), _axM, _AX_FX);
   _axM[0] *= ax; _axM[1] *= ax; _axM[2] *= ax;
+  // A square-wave blink, two alphas, not a sine: alpha is in TLX's material
+  // key, and the sine minted up to 23 materials (programs) per flap transition.
   _gfx.draw(getAeroBar(true), _axM, ax < 0.999
-    ? { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 0.65 + 0.35 * Math.sin(t * 20) }
+    ? (Math.sin(t * 20) > 0 ? _AX_FX_BLINK_HI : _AX_FX_BLINK_LO)
     : _AX_FX);
 }
 // The pre-race grid strobe, in one place: game.js draws from it and

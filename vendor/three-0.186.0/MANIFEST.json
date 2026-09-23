@@ -20,12 +20,15 @@
   "patches": [
     1,
     4,
-    5
+    5,
+    6,
+    7,
+    8
   ],
   "files": {
     "three.webgpu.min.js": {
-      "sha256": "c560fa520fe33b332404f3f2beafe6272daf214ee3767d45cab942f143c1b7d9",
-      "bytes": 709405
+      "sha256": "9a90cffa24a41a53f58c2eb01f972052a62ad8359007b6788d3a59177a48a0f7",
+      "bytes": 710416
     },
     "three.core.min.js": {
       "sha256": "dae72ed2eea6703b95e6b57e26469ffa95733a9320675b4bfd1b5f5df1c12f8b",
