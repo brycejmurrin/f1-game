@@ -5111,3 +5111,23 @@ The census gets #228's driven window back (tools only: `gpu-game-check.mjs`,
 game code), and its luma read now waits up to 10 s for the soft blit to paint
 and prints `blit=painted|blank-after-10s` — censuses 222/223 read 3.4-3.7 on an
 unpainted canvas after a resize, which is not the same as a black frame.
+
+### Real Metal, driven, the pad A/B (censuses 227/228, 231/232)
+
+Same code both ways, `apex26.tlxInstPad=0` the only difference (the escape
+hatch this round added), three.js/WebGPU leg, driven montreal:
+
+| round 2 (warm-aware gate) | pad OFF (231) | pad ON (232) |
+|---|---|---|
+| shader modules / pipelines compiled in the window (`stack:` total) | 71 | **40** |
+| frames >= 100 ms | 11 | 11 |
+| worst callback | 422 ms | 469 ms |
+| gpuErrors / luma | 0 / 44.7 | 0 / 47.0 |
+
+The pad takes 44% of the mid-race compiles; the long frames are dominated by
+what it does not touch — the post chain's lazy programs and synchronous
+pipelines #228 had made async before its revert. Census 224 lost the WebGL
+context on three's WebGL2 control leg once (pad ON); the pad-ON rerun (228)
+and round 2 did not, pad OFF never did (0/2), and that leg's driven window
+carries 5.4-5.7 s callbacks either way — the likelier trigger. Not cleared
+outright; `tlxInstPad=0` is the player-side off switch if it ever recurs.
