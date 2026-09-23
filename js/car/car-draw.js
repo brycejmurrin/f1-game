@@ -438,14 +438,12 @@ const CarDraw = (function () {
         _digT[12] = 0.048; _digT[13] = 0.001; _digT[14] = -0.0315;
         M4.mulTo(_digM, _rigB, _digT);
         _digM[4] *= en; _digM[5] *= en; _digM[6] *= en;
-        // Blinks, not pulses: alpha is in TLX's material key (1/32 steps), and a
-        // sine minted a material — a program — per step (gpu-census 212).
-        G.gfx.draw(getErsBar(), _digM, c.deploying ? (_rigFxA.alpha = Math.sin(G.raceT * 22) > 0 ? 1.0 : 0.5, _rigFxA) : fx);
+        G.gfx.draw(getErsBar(), _digM, c.deploying ? (_rigFxA.alpha = 0.75 + 0.25 * Math.sin(G.raceT * 22), _rigFxA) : fx);
       }
       // OVERTAKE lamp on the wheel: white when armed, pulsing purple while active
       // (the floating HUD OVERTAKE text is hidden in cockpit view).
       if (c.otT > 0) {
-        G.gfx.draw(getOtLamp(true), _rigB, (_rigFxA.alpha = Math.sin(G.raceT * 18) > 0 ? 1.0 : 0.4, _rigFxA));
+        G.gfx.draw(getOtLamp(true), _rigB, (_rigFxA.alpha = 0.7 + 0.3 * Math.sin(G.raceT * 18), _rigFxA));
       } else if (c.otArmed) {
         G.gfx.draw(getOtLamp(false), _rigB, fx);
       }
@@ -647,13 +645,8 @@ const CarDraw = (function () {
           // shared mesh).
           _rq[_rqN] || (_rq[_rqN] = new Float32Array(16));
           _rq[_rqN].set(W);
-          // FIVE glow levels, not a continuous heat: emissive and alpha are TLX's
-          // material KEY (1/32 steps), and a glow that followed the disc minted a
-          // material — a program — per step for every hot wheel in view, i.e. at
-          // every braking zone (gpu-census 213 minted: row).
-          const hq = Math.round(heat * 4) / 4;
-          _rqEmis[_rqN] = 0.30 + 0.70 * hq;
-          _rqAlpha[_rqN] = Math.min(1, 0.25 + hq * 0.9);
+          _rqEmis[_rqN] = 0.30 + 0.70 * heat;
+          _rqAlpha[_rqN] = Math.min(1, 0.25 + heat * 0.9);
           _rqN++;
         }
       }

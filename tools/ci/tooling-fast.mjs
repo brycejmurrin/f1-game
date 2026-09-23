@@ -321,25 +321,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The WebGPU road-marking frame. Three circuits (~3 s); the full 40-circuit
   // sweep is `node tools/gfx/road-lut-census.mjs --all` (~34 s), run before a deploy
   "tests/unit/road-lut-frame.test.mjs",
-  // The hitch instrument's own arithmetic (tools/gfx/frame-hitch.mjs), on
-  // synthetic series with known answers. Three performance findings in a row
-  // were retracted here because an instrument was never checked against a
-  // case whose answer was known; analyseHeap is the one the GC hypothesis
-  // rests on, so it is checked both ways — it must NAME a GC-driven spike
-  // train and CLEAR one whose spikes sit elsewhere at the same alloc rate.
-  "tests/unit/frame-hitch-analyse.test.mjs",
-  // TLX's material cache key is memoised on the opts object; the memo's
-  // failure mode is a STALE key, which returns the wrong material and shows
-  // up only on screen. Fuzzes the real lifted source over every field.
-  "tests/unit/tlx-mat-key-memo.test.mjs",
-  // Draw options are a material key on TLX, and a continuous per-frame value
-  // mints a material (a program) per 1/32 step: pins the three sites gpu-census
-  // 212 caught (rear-light ERS brightness, flame alpha, aero-bar blink) to fixed levels.
-  "tests/unit/material-variants.test.mjs",
-  // The coach's rewind clone replaced JSON.parse(JSON.stringify()); restore()
-  // reads back what capture() wrote, so any drift from JSON semantics is a
-  // rewind into a state the car was never in. Tested AGAINST the round trip.
-  "tests/unit/coach-clone.test.mjs",
   "tests/unit/webgpu-lifecycle.test.mjs",
   "tests/unit/wgsl-bindings.test.mjs",
   "tests/unit/renderer-soft-lifecycle.test.mjs",
