@@ -10,7 +10,11 @@
     // 120 m) — it was on the wrong PART of the lap, not in a corner.
     // See docs/tracks/START-LINES.md.
     startFrac: 0.0000,
-    sceneryStartFrac: 0.6350,
+    // No sceneryStartFrac: the dressing is authored against startFrac 0 (pit
+    // garages 0.005-0.05, S/F gantry 0.00, Peraltada terrace 0.892-0.952). The
+    // preserved 0.635 origin (shift 0.724) had put the paddock and gantry on the
+    // straight before Foro Sol and the stadium bowl on the T4-T6 hairpins.
+    // docs/notes/DEFECT-LEDGER.md "mexico — FIXED".
     name: "MEXICO CITY",
     gp: "Mexican GP",
     country: "Mexico",
@@ -20,19 +24,27 @@
     baseHW: 8,
     sceneryCoordinates: "racing",
     terrainOuter: 120,
+    // The main stand (boundedStand 0.972-0.026, left, 16/34 m) is this circuit's
+    // own pit-straight stand; the engine's generic 7-box stand (left, 14 m)
+    // would stand inside it.
+    ownPitStraight: true,
     dressingExclusions: [
       { kind: "city", s0: 0.02, s1: 0.14 },
       { kind: "city", s0: 0.60, s1: 0.94 },
       { kinds: ["foliage", "lighting"], s0: 0.70, s1: 0.89 },
     ],
     pal: { zenith: [0.56, 0.72, 0.92], horizon: [0.68, 0.72, 0.78], grass: [0.34, 0.52, 0.26], runoff: [0.52, 0.38, 0.24], fog: [0.70, 0.74, 0.80], fogDensity: 0.0022, sunDir: [0.24111167647565865, 0.8639835073711102, 0.44203807353870755], sun: [1, 0.98, 0.88], sunColor: [1, 0.96, 0.86] },
+    // Racing-lap arc fractions. These (and the elevations below) were re-keyed
+    // by the old sceneryStartFrac 0.635 shift (arc 0.72364) when it was removed,
+    // so the road and its banks sit exactly where they did; the banks land on
+    // the curated apexes above. The old labels ("Peraltada" etc.) were wrong.
     bankZones: [
-      { frac: 0.1866, angleDeg: 3.5, widthM: 200 },   // the long right after the esses
-      { frac: 0.7808, angleDeg: 3.0, widthM: 80 },
-      { frac: 0.8834, angleDeg: 3.0, widthM: 90 },    // Foro Sol stadium section
-      { frac: 0.9039, angleDeg: 3.0, widthM: 100 },
-      { frac: 0.9692, angleDeg: 6.0, widthM: 120 },   // Peraltada
-      { frac: 0.0075, angleDeg: 5.0, widthM: 140 },   // Peraltada exit onto the straight
+      { frac: 0.9102, angleDeg: 3.5, widthM: 200 },   // T15 (was 0.1866 + shift 0.7236)
+      { frac: 0.5044, angleDeg: 3.0, widthM: 80 },    // T6
+      { frac: 0.6070, angleDeg: 3.0, widthM: 90 },    // T8
+      { frac: 0.6275, angleDeg: 3.0, widthM: 100 },   // T9
+      { frac: 0.6928, angleDeg: 6.0, widthM: 120 },   // T11
+      { frac: 0.7311, angleDeg: 5.0, widthM: 140 },   // T11-T12 link
     ],
     // Source-coordinate undulations. Hermanos Rodríguez sits on a drained lakebed
     // and is gentle, but not flat: it climbs through the esses, crests before the
@@ -47,10 +59,12 @@
     // sat red on. The geometry is unchanged and correct; only the claim was
     // wrong. Re-measure if these three rows change, rather than adjusting the
     // sentence to taste.
+    // Racing-lap ARC fractions (no sceneryStartFrac, so no fmap): old source
+    // s 0.855/0.245/0.520 -> (s - 0.635) + 0.72364.
     elevations: [
-      { s: 0.855, halfM: 420, rise: 5.0 },
-      { s: 0.245, halfM: 380, rise: 3.0 },
-      { s: 0.520, halfM: 280, rise: -1.6 },
+      { s: 0.94364, halfM: 420, rise: 5.0 },
+      { s: 0.33364, halfM: 380, rise: 3.0 },
+      { s: 0.60864, halfM: 280, rise: -1.6 },
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
