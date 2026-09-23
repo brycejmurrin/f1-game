@@ -82,12 +82,13 @@
    so without this the UI SIZE slider would rescale the artwork's box and re-crop
    it, which is not what a player asking for bigger TEXT is asking for.
 
-   preserveAspectRatio="xMinYMax slice" is the SVG spelling of
-   `background-size: cover; background-position: left bottom` — xMin pins the
-   left edge, YMax pins the BOTTOM (SVG's +y runs down), slice fills the viewport
-   and crops the overflow. On a portrait phone that leaves only the leftmost
-   ~28 % of the viewBox on screen, hugely magnified, which is exactly why the car
-   is drawn left: the crop makes it loom instead of vanishing (with the 1400/1620 box it is ~55 %). */
+   preserveAspectRatio="xMidYMid slice" is the SVG spelling of
+   `background-size: cover; background-position: center` — slice fills the box
+   and crops the overflow evenly.
+   Wherever the box carries the viewBox's own aspect (below) the alignment is
+   moot; it only bites on the portrait phone, whose band is capped shorter than
+   that aspect and frames the pair on the middle, so the crop takes sky and
+   ground, never car. */
 #title-car {
   /* THE BOX CARRIES THE VIEWBOX'S OWN ASPECT, pinned to the foot of the frame.
      That is what makes one layer work on every shape. Sized to the viewport
@@ -201,31 +202,6 @@
    its own aspect a narrow screen gets a band at the foot instead, so it goes
    quiet rather than absent — and the tall phone below then makes it a crop. */
 @media (max-width: 699px)  { #title-car { opacity: 0.22; } }   /* the phone rules end at 699, the iPad ones start at 700 */
-/* A PORTRAIT PHONE GETS THE CARS, NOT A STRIP. At 100% width the 1400/900 box
-   is 393x253 on a 393px phone — the pair drawn in the left 55% of the viewBox
-   lands 216px wide under the last row of rooms, at 0.22, which measured as
-   invisible on a real device. The cars occupy viewBox x 0..770, so scaled 1.3x
-   from the bottom-left the pair spans ~70% of the phone and the trail's first
-   run is still in the crop; HOW that scale is produced is the note on the rule
-   itself, and the +70-unit nudge under it is the left margin. The
-   doors sit at the top of their row (the tall block below), so the lower
-   third of the screen is the cars' alone and the opacity can come up to
-   landscape's.
-   Portrait is body[data-shape="tall"] (zoom-corrected, js/ui/sheet-shape.js),
-   never an orientation media query — tests/unit/ui-improve-pass pins that. */
-@media (max-width: 699px) {
-  /* A TALLER BOX, NOT A WIDER ONE. `width: 180%` failed ui-scale.spec on every
-     portrait size with "#overlay scrolls sideways": an absolutely positioned
-     box wider than its scroll container still counts toward scrollWidth,
-     overflow-x:hidden only hides the bar, and overflow-x:clip cannot pair with
-     overflow-y:auto (it computes back to hidden). 1170/900 is 1.3x the meet
-     height. THAT WHOLE APPROACH IS RETIRED on a portrait phone: the box now
-     carries a drawing composed for it (#title-car-top, 900/1600), so there is
-     no crop to tune. What is left here is its weight. 0.9 is the value the
-     landscape drawing also carries, measured, so neither shape reads darker
-     than the other. */
-  :where(body[data-shape="tall"]) #title-car-top { opacity: 0.9; }
-}
 /* #tc-frame frames the ONE placement tools/gen/title-art.mjs writes. A CSS
    transform on an SVG element defaults to transform-origin 50% 50% of the
    view-box, which would scale the art about (700,450) and move it as a side
@@ -233,8 +209,8 @@
 #tc-frame { transform-box: view-box; transform-origin: 0 0; }
 /* ASPECT, NOT WIDTH, IS WHAT BREAKS THIS LAYER, and the fix is the BOX: the
    element carries aspect-ratio 1400/900 itself, so `slice` and `meet` compute
-   the same scale and the attribute only matters on the tall phone, where a
-   deliberately taller box + slice is the 1.8x crop (see the rule above).
+   the same scale and the attribute only matters on the portrait phone, whose box is
+   capped shorter than that aspect (the tall phone block below).
    Before the box had its own aspect, MEET was the fix and SLICE the bug: Slice scales to COVER, so on a viewport
    narrower than the viewBox's 1400/900 (1.556) it scales by HEIGHT and runs off
    the sides — measured, a 834x1194 iPad blew the 1400-unit viewBox out to
@@ -569,69 +545,118 @@ body { --compact-at: 600px; --wide-at: 620px; }
    at the foot. The rule is one door-gutter of air between them, not two. */
 :where(body[data-shape="tall"]) #title::after { margin: calc(var(--gap) * 0.28) 0 0; }
 :where(body[data-shape="tall"]) #menu-meta { margin-top: calc(var(--gap) * 0.42); gap: calc(var(--gap) / 4); }
-:where(body[data-shape="tall"]) #overlay { padding-block-start: calc(var(--gap) * 0.5); }
-/* THE PORTRAIT PHONE, measured on a 393x852 iPhone 2026-09-22: the wordmark
-   painted 31px while each play door was a ~130px card (icon over label over
-   sub), the four rooms broke into DATA / HUB and HOW / TO / PLAY, and the whole
-   column ran 850..1600px so the title art was a strip nobody saw. Three
-   changes, all scoped to tall AND narrow so an upright iPad keeps the
-   large-portrait sizes in css/responsive.css:
-   - the wordmark takes 13vwz (51px on 393) — it is the only thing on the
-     screen that is allowed to be big;
-   - each play door is ONE line, icon beside label, sub gone: the four modes
-     cost two rows of ~48px instead of two rows of ~130px;
-   - the rooms are a forced 2x2 so every label fits on one line;
-   - the doors start at the TOP of the leftover row instead of centring in it,
-     so the space they no longer need collects at the bottom, where the cars
-     are. No px in any padding or gap: rawSpacing is ratcheted at zero slack. */
+/* var(--sat) FIRST: this used to be a bare half-gap, which replaced #overlay's
+   --safe-t and put the wordmark under the status bar and the Dynamic Island on
+   every notched phone (measured on an iPhone, 2026-09-23: "APEX 26" painted
+   over the clock). */
+:where(body[data-shape="tall"]) #overlay { padding-block-start: calc(var(--sat) + var(--gap) * 0.5); }
+/* THE PORTRAIT PHONE IS THREE BANDS: brand, doors, cars. Redesigned
+   2026-09-23 from an iPhone report against the previous pass: the wordmark sat
+   under the status bar (the safe-area fix is on the tall #overlay rule above),
+   the doors had grown to fill the screen, and the 900/1600 portrait drawing was
+   a full-height layer the whole button column sat on top of, so the cars were
+   never actually seen. The landscape phone is the composition players like —
+   compact doors beside a side-on pair of cars in the clear — so portrait now
+   says the same thing stacked:
+   - row 1, the brand, clear of the notch;
+   - row 2, the doors at their landscape sizes: one-line play doors, a 2x2 of
+     rooms, the column only as tall as its content (minmax(0, auto) — grid
+     grows it before the fr row, and it scrolls if the phone is too short);
+   - row 3, whatever height is left, holds the SIDE-ON drawing (#title-car) as
+     an in-flow grid item instead of an absolute layer, so nothing covers it.
+   Scoped to tall AND narrow so an upright iPad keeps the large-portrait sizes
+   in css/responsive.css and its own drawing. No px in any padding or gap:
+   rawSpacing is ratcheted at zero slack. */
 @media (max-width: 699px) {
-  :where(body[data-shape="tall"]) #title { font-size: clamp(44px, calc(13 * var(--vwz)), 84px); }
-  /* Full width, not 78vwz: at 78% a 2x2 cell on a 393px phone is 145px and
-     RACE A FRIEND broke into two lines (measured after the first cut). The
-     column's own padding-inline already keeps the skewed tips off the edge. */
-  :where(body[data-shape="tall"]) #menu-hero,
-  :where(body[data-shape="tall"]) #menu-primary,
-  :where(body[data-shape="tall"]) #menu-secondary { width: 100%; }
-  :where(body[data-shape="tall"]) #menu-buttons { align-content: start; }
-  :where(body[data-shape="tall"]) #menu-hero .bigbtn { padding-block: calc(var(--gap) * 0.6); }
-  /* THE DOORS TAKE BACK THE SLACK THEY LEFT. Starting them at the top of the
-     leftover row was right, but on a 430x932 phone the three groups measured
-     379px inside a 690px row: 311px of nothing between the last room and the
-     cars. So the row-gap and the door padding grow to spend about half of it,
-     which reads as a fuller stack rather than a gappy one — align-content:
-     space-between spends ALL of it and pushed the rooms onto the cars
-     (measured, same phone).
-     Two guards, because the slack is not universal. data-density compact is
-     the phone already short for its own UI SIZE — at 200% a 393x852 phone is
-     426 zoom-corrected — and min-height keeps the small phones out: measured,
-     a 375x667 went from a 2px internal scroll to 183px with this growth on,
-     while 393x852 and 430x932 stay at zero.
-     No px in any value here: rawSpacing is ratcheted at zero slack. */
+  :where(body[data-shape="tall"]) #overlay {
+    grid-template-rows: auto minmax(0, auto) minmax(0, 1fr);
+    row-gap: calc(var(--gap) * 1.2);
+  }
+  :where(body[data-shape="tall"]) #title { font-size: clamp(40px, calc(12 * var(--vwz)), 72px); }
+  :where(body[data-shape="tall"]) #title::after { margin-top: calc(var(--gap) * 0.45); }
+  :where(body[data-shape="tall"]) #menu-meta { margin-top: calc(var(--gap) * 0.7); gap: calc(var(--gap) * 0.4); }
   /* The disclaimer is the one line long enough to wrap on a 393px phone, and a
      wrapped block in a centred column is centred as a BOX while its text stays
      left-ragged — measured: line one flush left, "Formula 1" under it. */
-  :where(body[data-shape="tall"]) #disclaimer { text-align: center; }
+  :where(body[data-shape="tall"]) #disclaimer { text-align: center; font-size: var(--fs-micro); }
+  :where(body[data-shape="tall"]) #soundbtn { font-size: var(--fs-micro); min-height: calc(var(--tap) * 0.8); }
+  :where(body[data-shape="tall"]) #disclaimer { padding-block: calc(var(--gap) * 0.25); }
+  /* Full width, not 78vwz: at 78% a 2x2 cell on a 393px phone is 145px and
+     RACE A FRIEND broke into two lines. The column's own padding-inline keeps
+     the skewed tips off the edge. */
+  :where(body[data-shape="tall"]) #menu-hero,
+  :where(body[data-shape="tall"]) #menu-primary,
+  :where(body[data-shape="tall"]) #menu-secondary { width: 100%; }
+  :where(body[data-shape="tall"]) #menu-buttons {
+    height: auto;
+    align-self: start;
+    align-content: start;
+    gap: calc(var(--gap) * 0.6);
+  }
+  :where(body[data-shape="tall"]) :is(#menu-primary, #menu-secondary) { gap: calc(var(--gap) * 0.5); }
+  :where(body[data-shape="tall"]) #menu-hero .bigbtn { padding-block: calc(var(--gap) * 0.55); font-size: var(--fs-4); }
+  :where(body[data-shape="tall"]) #menu-retention .bigbtn { min-height: calc(var(--tap) * 0.85); padding-block: calc(var(--gap) * 0.3); }
+  /* Each play door is ONE line, icon beside label, sub gone: the four modes
+     cost two rows of one tap target each. */
   :where(body[data-shape="tall"]) #menu-primary .bigbtn {
     display: flex; align-items: center; justify-content: center;
     gap: 0.45em;
-    padding: calc(var(--gap) * 0.8) calc(var(--gap) * 0.7) calc(var(--gap) * 0.8) calc(var(--gap) * 0.9);
+    padding: calc(var(--gap) * 0.5) calc(var(--gap) * 0.6) calc(var(--gap) * 0.5) calc(var(--gap) * 0.8);
     font-size: var(--fs-3);
-    min-height: var(--tap);
+    min-height: calc(var(--tap) * 0.9);
   }
   :where(body[data-shape="tall"]) #menu-primary .bigbtn .btn-ico { margin: 0; }
   :where(body[data-shape="tall"]) #menu-primary .mb-sub { display: none; }
+  /* The rooms: a forced 2x2, a step lower than the play doors. */
   :where(body[data-shape="tall"]) #menu-secondary {
     --balance-basis: calc(50% - 0.5em);
     --balance-min: calc(50% - 0.5em);
   }
+  :where(body[data-shape="tall"]) #menu-secondary .bigbtn {
+    padding-block: calc(var(--gap) * 0.3);
+    min-height: calc(var(--tap) * 0.85);
+  }
+
+  /* THE CARS, IN THE CLEAR. The side-on drawing, not the tall one: a portrait
+     phone's leftover band is wider than it is high, which is the shape the
+     side view was drawn for. In flow in row 3: full width at the box's own
+     1400/900 aspect, capped at the band's height and centred in it. A short
+     band clips the box, so `slice` still scales by WIDTH (the pair runs edge
+     to edge) and, with the pair framed on the viewBox's middle below, what the
+     xMidYMid crop takes is the empty sky and ground either side of it.
+     Everything on the element is layout, so zoom stays normal (see #title-car). */
+  :where(body[data-shape="tall"]) #title-car-top { display: none; }
+  :where(body[data-shape="tall"]) #title-car {
+    display: block;
+    position: relative;
+    grid-row: 3;
+    align-self: center;
+    width: 100%;
+    height: auto;
+    max-height: 100%;
+    opacity: 0.9;
+  }
+  /* Framed for a band the full width of the phone: the pair (placed at viewBox
+     x -67..787, y 582..815 by the generator) is scaled 1.2x about the origin so
+     it spans x ~20..1045, centred on the frame's middle (y ~310..590). It was
+     1.69x, edge to edge, and on a real iPhone that hid the red tyre trails
+     entirely (2026-09-23); the ~350 units left on the right are where the
+     trails run out from under the cars, as they do in landscape. */
+  :where(body[data-shape="tall"]) #tc-frame { transform: translate(100px, -388px) scale(1.2); }
 }
-/* The growth itself, behind both guards (the reasoning is on the row-gap note
-   in the block above). A phone shorter than 780px keeps the tight stack. */
-@media (max-width: 699px) and (min-height: 780px) {
-  :where(body[data-shape="tall"]:not([data-density="compact"])) #menu-buttons { row-gap: calc(var(--gap) * 2.2); }
-  :where(body[data-shape="tall"]:not([data-density="compact"])) #menu-hero .bigbtn { padding-block: calc(var(--gap) * 1.1); }
-  :where(body[data-shape="tall"]:not([data-density="compact"])) #menu-primary .bigbtn { padding-block: calc(var(--gap) * 1.2); }
-  :where(body[data-shape="tall"]:not([data-density="compact"])) #menu-secondary .bigbtn { padding-block: calc(var(--gap) * 1.0); }
+/* A SHORT PHONE (iPhone SE class, 667 tall) has about a door's height left
+   under the rooms, and the full-width pair is ~105px tall there, so it would
+   be cropped through the wheels. Smaller and centred instead (x ~230..1170,
+   y ~322..578 of the viewBox), and the three bands close up a little. */
+@media (max-width: 699px) and (max-height: 740px) {
+  :where(body[data-shape="tall"]) #overlay { row-gap: calc(var(--gap) * 0.8); }
+  :where(body[data-shape="tall"]) #title { font-size: clamp(36px, calc(10.5 * var(--vwz)), 72px); }
+  :where(body[data-shape="tall"]) #menu-meta { margin-top: calc(var(--gap) * 0.5); }
+  :where(body[data-shape="tall"]) #tc-frame { transform: translate(304px, -318px) scale(1.1); }
+}
+/* Re-stated after the display:block above, which would otherwise out-order it. */
+@media (max-width: 699px) and (prefers-reduced-transparency: reduce) {
+  :where(body[data-shape="tall"]) #title-car { display: none; }
 }
 /* LANDSCAPE COMPACT: side-by-side brand + buttons.
    Uses body[data-shape="wide"] (zoom-corrected, set by SheetShape classifyBody)
