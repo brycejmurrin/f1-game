@@ -3171,8 +3171,15 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   assert.match(sh, /const parkedGeo = new THREE\.BufferGeometry\(\)/, "one shared empty geometry for parked wrappers");
   assert.match(sh, /for \(let i = used; i < pool\.length; i\+\+\) \{ pool\[i\]\.visible = false; pool\[i\]\.geometry = parkedGeo; \}/,
     "endPass must release the discrete casters' geometry, not only hide them");
-  assert.match(sh, /iPool\[i\]\.visible = false; iPool\[i\]\.geometry = parkedGeo;/,
-    "and the instanced casters' geometry");
+  // Instanced casters are keyed one per batch (a slot pool recompiled programs
+  // mid-race); freeing the batch must release its caster and geometry.
+  assert.match(sh, /const iByBatch = new Map\(\)/, "instanced casters are keyed per batch, not a slot pool");
+  assert.doesNotMatch(sh, /iPool/, "no instanced slot pool");
+  assert.match(sh, /function freeInstanced\(batch\) \{[\s\S]*?iByBatch\.delete\(batch\);[\s\S]*?castScene\.remove\(m\);[\s\S]*?m\.dispose\(\)/,
+    "freeInstanced drops the batch's caster from the cast scene and disposes it");
+  const tlxSrc = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(tlxSrc, /function freeInstancedBatch\(batch\) \{\s*if \(!batch\) return;\s*if \(shadowSys && shadowSys\.freeInstanced\) shadowSys\.freeInstanced\(batch\);/,
+    "and TLX frees it with the batch");
   // GLX: drawShadow/drawMark/drawSkidBatch built a fresh [-4,-8] per call —
   // one array per skid mark per frame.
   const glx = read("js/render/glx/glx.js").replace(/^[ \t]*\/\/.*$/gm, "");

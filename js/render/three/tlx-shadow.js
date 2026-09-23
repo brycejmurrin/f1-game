@@ -189,11 +189,45 @@
       used++;
     }
 
-    // Instanced casters (TrackGraph.batches → createInstancedBatch). Separate
-    // pool from discrete Meshes: InstancedMesh.count must match the culled
-    // visible set, and instanceMatrix is already packed on the batch handle.
-    const iPool = [];
-    let iUsed = 0;
+    // Instanced casters (TrackGraph.batches → createInstancedBatch): ONE
+    // InstancedMesh per batch, made the first time the batch is cast and kept
+    // until freeInstanced() — never a slot pool. The slot pool this replaces
+    // handed slot i whichever batch the cull put i-th, and swapped in a bigger
+    // InstancedMesh whenever a larger batch landed there. Disposing the old one
+    // released its pipeline, three deletes a program whose use count reaches 0,
+    // and three keys an instanced node build on the object's uuid — so the next
+    // caster needing that shader rebuilt and recompiled it on the main thread,
+    // inside the sun rebuild. Measured on TLX/WebGL2 (scratch churn probe, 16
+    // rebuilds around montreal): 29 fresh casters, still minting at 84% of the
+    // lap, and every rebuild that minted one it had to compile took 2.4–3.9 s
+    // against 2–6 ms for the rest. Keyed, each batch mints once per session.
+    //
+    // AND SIZED PAST THE UNIFORM-BUFFER LIMIT, which is what makes the programs
+    // shared. Keying alone halved the builds but not the compiles: three puts a
+    // small InstancedMesh's matrices in a uniform block whose NAME is the node's
+    // id and whose array length is the count (`uniform NodeBuffer_1585 { mat4
+    // buffer1585[7]; }`), so every caster's shader text is unique and each one
+    // is its own program — 12 programs for 13 casters on the same probe. Past
+    // `16 * 4 * count > getUniformBufferLimit()` three switches to instance-rate
+    // vertex attributes and the text no longer names the object, so every prop
+    // caster shares one depth program. Cost: 64 B per padded instance, ~64 KB a
+    // batch on WebGPU's default 64 KiB limit, and only for batches that have
+    // ever entered a shadow box. `count` still limits the draw to the culled set.
+    const iByBatch = new Map();   // batch -> InstancedMesh (sized past the UBO limit)
+    const iCast = [];             // this pass's casts, hidden again at the next Begin
+    let _uboInstCap = 0;          // smallest capacity three draws from attributes
+    function sharedInstCap(n) {
+      if (!_uboInstCap) {
+        let lim = 65536;   // WebGPU's default maxUniformBufferBindingSize (TLX requests no limits)
+        try {
+          const caps = renderer.backend && renderer.backend.capabilities;
+          const l = caps && caps.getUniformBufferLimit ? caps.getUniformBufferLimit() : 0;
+          if (l > 0) lim = l;
+        } catch (_) { /* no capabilities: keep the WebGPU default */ }
+        _uboInstCap = Math.floor(lim / 64) + 1;
+      }
+      return Math.max(n, _uboInstCap);
+    }
     // Scratch for setMatrixAt — never allocate per cast (was per-instance GC).
     const _castMat = new THREE.Matrix4();
     function castInstanced(batch, count) {
@@ -201,30 +235,26 @@
       const culled = count !== undefined;
       const n = culled ? Math.min(count | 0, batch.instances | 0) : (batch.instances | 0);
       if (!(n > 0)) return;
-      let m = iPool[iUsed];
-      if (!m || (m.userData.tlxInstCap || 0) < batch.instances) {
+      let m = iByBatch.get(batch);
+      if (!m || m.geometry !== batch.geo) {
         if (m) { castScene.remove(m); try { m.dispose(); } catch (_) { /* */ } }
-        m = new THREE.InstancedMesh(batch.geo, depthMat, batch.instances);
+        m = new THREE.InstancedMesh(batch.geo, depthMat, sharedInstCap(batch.instances | 0));
         m.matrixAutoUpdate = false;
         m.frustumCulled = false;
         m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-        m.userData.tlxInstCap = batch.instances;
         // Do not set instanceColor. The lit batch already carries an
         // InstancedBufferAttribute `color` on the shared geometry; a second
         // instance-rate colour slot is what Dawn rejected at slot 5
         // (mcp-probe 2026-08-18). Depth only needs instanceMatrix.
-        iPool[iUsed] = m;
+        iByBatch.set(batch, m);
         castScene.add(m);
       }
-      m.geometry = batch.geo;
-      m.material = depthMat;
       const dst = m.instanceMatrix.array;
       const src = culled && batch.packMatrices ? batch.packMatrices : batch.srcMatrices;
       if (src && src.length >= n * 16) {
         for (let i = 0, o = 0; i < n; i++, o += 16) {
           for (let k = 0; k < 16; k++) dst[o + k] = src[o + k];
         }
-        m.instanceMatrix.needsUpdate = true;
       } else if (batch.imesh && batch.imesh.instanceMatrix) {
         // imesh may be camera-repacked — only safe when visible === instances.
         const isrc = batch.imesh.instanceMatrix.array;
@@ -233,7 +263,6 @@
         for (let i = 0, o = 0; i < copyN; i++, o += 16) {
           for (let k = 0; k < 16; k++) dst[o + k] = isrc[o + k];
         }
-        m.instanceMatrix.needsUpdate = true;
       } else if (batch.packMatrices) {
         const psrc = batch.packMatrices;
         for (let i = 0; i < n; i++) {
@@ -241,11 +270,30 @@
           m.setMatrixAt(i, _castMat);
         }
       }
+      // Upload only the rows written: the padding above the UBO limit is never
+      // drawn, so a full 64 KB write per batch per rebuild would be pure cost.
+      // (The setMatrixAt branch never flagged its upload at all before this.)
+      const im = m.instanceMatrix;
+      im.clearUpdateRanges();
+      im.addUpdateRange(0, n * 16);
+      im.needsUpdate = true;
       m.count = n;
       m.matrix.identity();
       m.matrixWorld.identity();
       m.visible = true;
-      iUsed++;
+      iCast.push(m);
+    }
+
+    // The batch is gone (track switch): its caster goes with it, so a hidden
+    // mesh never pins a freed geometry alive (the parkedGeo rule, per batch).
+    function freeInstanced(batch) {
+      const m = batch && iByBatch.get(batch);
+      if (!m) return;
+      iByBatch.delete(batch);
+      const ix = iCast.indexOf(m);
+      if (ix >= 0) iCast.splice(ix, 1);
+      castScene.remove(m);
+      try { m.dispose(); } catch (_) { /* */ }
     }
 
     function beginPass(rt, lightVP, dst) {
@@ -254,7 +302,9 @@
       shadowCam.projectionMatrixInverse.copy(shadowCam.projectionMatrix).invert();
       target = rt;
       used = 0;
-      iUsed = 0;
+      // Only this pass's instanced casts may draw: hide the previous pass's.
+      for (let i = 0; i < iCast.length; i++) iCast[i].visible = false;
+      iCast.length = 0;
       S.depthPassOn = true;
     }
 
@@ -263,7 +313,6 @@
       if (!target) return;
       const wasSun = target === sunRT;
       for (let i = used; i < pool.length; i++) { pool[i].visible = false; pool[i].geometry = parkedGeo; }
-      for (let i = iUsed; i < iPool.length; i++) if (iPool[i]) { iPool[i].visible = false; iPool[i].geometry = parkedGeo; }
       const prev = renderer.getRenderTarget();
       try {
         renderer.setRenderTarget(target);
@@ -415,6 +464,7 @@
       shadowBegin,
       castShadow: cast,
       castInstanced,
+      freeInstanced,
       castShadowChunked: cast,
       shadowEnd: endPass,
       carShadowEnd,

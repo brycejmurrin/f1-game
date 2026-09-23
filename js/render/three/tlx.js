@@ -1447,6 +1447,7 @@ const TLX = (function () {
 
       function freeInstancedBatch(batch) {
         if (!batch) return;
+        if (shadowSys && shadowSys.freeInstanced) shadowSys.freeInstanced(batch);   // its keyed shadow caster
         if (batch.imesh) {
           const ix = _instRegistry.indexOf(batch.imesh);
           if (ix >= 0) _instRegistry.splice(ix, 1);

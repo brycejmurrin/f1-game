@@ -5001,3 +5001,71 @@ here means anything (§2z made the same mistake in the other direction). What IS
 exact here is how many times the governor asks for a reallocation, which is a
 pure function of `tick()` and needs no GPU at all. Any future claim about this
 behaviour should be a move count over a simulated race, not a frame time.
+
+## 2ad. The sun-shadow rebuild recompiled prop-shadow programs all lap (2026-09-23)
+
+The report after #228's revert: "sun shadow and other shadows are causing lag" on
+three.js/WebGPU. Census 216 (real Metal, #228's driven window) had already
+pointed here and it had been filed as a dead lead: the rebuild frames (+ the
+2048² sun pass + the 512² blocker) arrived every ~0.95 s at 1.38× a normal
+frame with **1.85× spike enrichment**, and six `createShaderModule` stacks ended
+in `endPass ← shadowEnd ← sunPass` mid-race — after the caster warm.
+
+### The mechanism, in two layers
+
+`tlx-shadow.js` cast instanced props through a SLOT pool: slot i took whichever
+batch the light cull put i-th, and was replaced by a bigger `InstancedMesh`
+whenever a larger batch landed in it. Two things in three turn that into
+compiles on the main thread:
+
+1. **A small `InstancedMesh`'s shader text is unique to the object.** Under
+   `16·4·count ≤ getUniformBufferLimit()` (64 KiB on WebGPU — TLX requests no
+   limits — so ≤ 1024 instances) three puts the matrices in a uniform block
+   named after the node id with the count as the array length:
+   `uniform NodeBuffer_1585 { mat4 buffer1585[7]; }`. So every caster object is
+   its own program, whatever its size (44 instanced vertex programs after five
+   jumps). Above the limit it reads instance-rate attributes and the text no
+   longer names the object.
+2. **Disposing a replaced caster releases its program** (use count 0), so the
+   slot churn did not just build new programs — it deleted and rebuilt them,
+   every lap.
+
+Scratch probe (`--use-angle=swiftshader`, TLX's WebGL2 path — three's
+RenderObjects/Nodes core is backend-agnostic, and census 216's WebGL2 control
+leg showed the same `linkProgram ← sunPass` stack), montreal, the car jumped to
+16 points round the lap so each jump forces one sun rebuild:
+
+| | slot pool (HEAD) | keyed per batch | keyed + sized past the UBO limit |
+|---|---|---|---|
+| node builds in sun passes | 29 | 13 | 13 |
+| programs created (net) | −5 (released and rebuilt) | +12 | **0** |
+| rebuilds ≥ 1 s | 5 (2.6–4.0 s) | 6 (2.3–3.7 s) | **0** |
+| worst rebuild | 4,039 ms | 3,668 ms | **18 ms** |
+| sun-pass time, 16 rebuilds | 17,240 ms | 18,394 ms | **87 ms** |
+
+SwiftShader seconds are not Metal milliseconds; the counts are exact on any
+backend, and a program compile is the ~35–40 ms class census 210 measured on
+Metal. Keying alone was not enough — it stopped the release but each batch
+still owned a unique program — which is why the second column is not a fix.
+
+### The fix
+
+One shadow `InstancedMesh` per batch (made on first cast, freed with the batch
+through `freeInstanced` ← `freeInstancedBatch`), allocated at
+`max(instances, floor(limit / 64) + 1)` so every prop caster takes the attribute
+path and shares ONE depth program. `count` still draws only the culled set, and
+an update range limits each upload to the rows written (the padding is never
+drawn). Cost: ~64 KB per batch that has ever entered a shadow box — 13 on a
+montreal lap, ~0.8 MB CPU plus the same on the GPU. Picture
+check, same six jump points on both trees: **identical sun-pass triangles and
+draws at every point** (e.g. 69,961 tris / 63 draws); lavapipe TLX/WebGPU probe
+with `tlxForceHw=shadow,batches` and without: `gpuErrors` 0, luma 55 / 47.5.
+
+### Not done here
+
+- The LIT instanced batches have the same one-program-per-object property; the
+  race-start `compileAsync` warm covers the grid's, so a batch first drawn
+  mid-race still compiles once. Same lever (attribute path) if a census names it.
+- The rebuild's own GPU cost (2048² + blocker every ~20 m) is unchanged; census
+  216 put it at 1.38× a normal frame. Spreading it across frames needs a double
+  buffer and real hardware to judge.
