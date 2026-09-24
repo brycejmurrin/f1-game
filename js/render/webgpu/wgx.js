@@ -1940,11 +1940,23 @@ const WGX = (function () {
       // pass overwrite it exactly as they do on GLX.
       const decal = !!(opts && (opts.decal || opts.noDepthTest || opts.depthCompare === "always"));
       const samples = _passSamples | 0 || 1;
-      // GLX polygonOffset(factor, units) → WebGPU depthBias / depthBiasSlopeScale.
-      // Start-line decals pass [-1, -2]; without this they shimmer at range.
+      // opts.depthBias is GL-style [factor, units] (gfx.js contract; GLX passes
+      // it straight to gl.polygonOffset(factor, units), TLX to
+      // polygonOffsetFactor/Units). The two APIs spell the SAME offset:
+      //   GL:     o = factor * DZ       + units      * r
+      //   WebGPU: o = SlopeScale * maxSlope + depthBias * r
+      // so factor -> depthBiasSlopeScale (a float) and units -> depthBias (an
+      // integer: GPUDepthBias is an [EnforceRange] long). Both `r`s are the
+      // format's minimum resolvable difference (2^-24 for a 24-bit unorm
+      // depth24plus; exponent-relative when the adapter backs depth24plus with
+      // depth32float, e.g. Metal — exactly what GL does on that hardware), so
+      // the units carry over 1:1 with no rescale. three's own WebGPU backend
+      // maps polygonOffsetUnits/Factor the same way. These were once swapped
+      // (factor as the constant), giving every biased WGX draw the other mix.
+      // tests/unit/webgpu-lifecycle.test.mjs ("GL depthBias ...") pins it.
       const db = (opts && opts.depthBias && opts.depthBias.length >= 2) ? opts.depthBias : null;
-      const dbC = db ? Math.round(db[0]) : 0;
-      const dbS = db ? Math.round(db[1]) : 0;
+      const dbC = db ? Math.round(db[1]) : 0;   // GL units  -> depthBias (constant, integer)
+      const dbS = db ? +db[0] || 0 : 0;         // GL factor -> depthBiasSlopeScale (float)
       // NESTED key: dbC -> dbS -> packed flags. A single packed int truncated
       // the bias with |0 and gave (bias + 32) an 8-bit lane, so any |bias| >= 32
       // wrapped into its neighbour's lane and two biases could share one
@@ -3866,6 +3878,10 @@ const WGX = (function () {
       noAlphaWrite: false, decal: false, depthCompare: undefined,
       noDepthTest: false,
     };
+    // GL-order [factor, units] like every other depthBias (see _litPipeline).
+    // WGX-only divergence: GLX/TLX draw the road at its game.js [-8, -16] and
+    // the floor at [4, 8]; WGX drops the road bias (surfaceId 16 below) and
+    // pushes the buried floor a little further back instead.
     const _BIAS_BURY = [5, 10], _BIAS_DETAIL = [3, 6];
     function _litOpts(opts) {
       const o = opts || {};

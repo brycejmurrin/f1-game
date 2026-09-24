@@ -883,6 +883,58 @@ test("depth-testing pipelines never use compare 'always' (skyLate erased the wor
   }
 });
 
+test("GL depthBias [factor, units] maps to WebGPU slope scale / constant, not swapped", async () => {
+  // gfx.js's contract is GL polygonOffset order: depthBias = [factor, units].
+  //   GL:     offset = factor * DZ + units * r
+  //   WebGPU: offset = depthBiasSlopeScale * maxSlope + depthBias * r
+  // so factor -> depthBiasSlopeScale and units -> depthBias (integer), 1:1 —
+  // the same mapping three's WebGPU backend uses for TLX's polygonOffset. WGX
+  // once wrote factor into depthBias and units into the slope scale, so the
+  // floor [4, 8], buried terrain, start line [-12, -24] and fx decals all drew
+  // with the wrong constant/slope mix. Asymmetric pairs make a swap visible.
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  gfx.resize();
+  assert.equal(gfx.begin({}), true);
+  const mesh = gfx.createMesh({
+    pos: [0, 0, 0, 1, 0, 0, 0, 0, 1], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0],
+    col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2],
+  });
+  const model = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  const biased = () => h.pipelineDescs.filter((d) => d && d.depthStencil &&
+    d.depthStencil.depthBias !== undefined && d.depthStencil.depthBias !== 0);
+  const cases = [
+    { bias: [-12, -24], constant: -24, slope: -12 },   // game.js _startBias
+    { bias: [3, 7], constant: 7, slope: 3 },
+    { bias: [-1.5, -2], constant: -2, slope: -1.5 },    // slope scale is a float: kept exact
+  ];
+  for (const c of cases) {
+    const before = biased().length;
+    gfx.draw(mesh, model, { depthBias: c.bias });
+    const made = biased().slice(before);
+    assert.equal(made.length, 1, "depthBias " + JSON.stringify(c.bias) + " builds one biased pipeline");
+    const ds = made[0].depthStencil;
+    assert.equal(ds.depthBias, c.constant, "GL units -> WebGPU depthBias (constant term)");
+    assert.ok(Number.isInteger(ds.depthBias), "GPUDepthBias is an integer");
+    assert.equal(ds.depthBiasSlopeScale, c.slope, "GL factor -> WebGPU depthBiasSlopeScale");
+    assert.equal(ds.depthBiasClamp, 0);
+  }
+  // buryRibbon (the floor/terrain) goes through WGX's _BIAS_BURY [5, 10]:
+  // units 10 is the constant, factor 5 the slope.
+  const before = biased().length;
+  gfx.draw(mesh, model, { buryRibbon: true, depthBias: [4, 8] });
+  const bury = biased().slice(before);
+  assert.equal(bury.length, 1);
+  assert.equal(bury[0].depthStencil.depthBias, 10);
+  assert.equal(bury[0].depthStencil.depthBiasSlopeScale, 5);
+  // The road (surfaceId 16) deliberately draws unbiased on WGX.
+  const n = h.pipelineDescs.length;
+  gfx.draw(mesh, model, { surfaceId: 16, depthBias: [-8, -16], doubleSided: true });
+  for (const d of h.pipelineDescs.slice(n)) {
+    assert.ok(!d.depthStencil || !d.depthStencil.depthBias, "road pipeline carries no depth bias");
+  }
+});
+
 test("WGX source keeps the proven parity fixes", () => {
   assert.match(WGX_SOURCE, /_lampShadowArmed = false/);
   assert.match(WGX_SOURCE, /mapState === "unmapped"/);
@@ -964,7 +1016,7 @@ test("WGX full parity batch is wired", () => {
   assert.match(POST_SOURCE, /shaftDecay/);
   assert.match(POST_SOURCE, /carReflect = U\.upVS\.w/);
   assert.match(WGX_SOURCE, /maxAnisotropy: 4/);
-  assert.match(WGX_SOURCE, /depthStencil\.depthBias = dbC/);
+  assert.match(WGX_SOURCE, /depthStencil\.depthBias = dbC/);   // dbC = GL units (see the depthBias mapping test)
   assert.match(WGX_SOURCE, /_carBoxScale/);
   assert.match(WGX_SOURCE, /binding: 7, resource: next\.depthSampleView/);
   assert.match(WGX_SOURCE, /sunShaftDecay/);
