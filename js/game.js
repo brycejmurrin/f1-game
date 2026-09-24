@@ -3705,6 +3705,7 @@ function drivingLineApi(trk) {
   return _dlApi;
 }
 const rivalAudio = RivalAudio.create(G);   // the field around you, for GameAudio.setRivals
+const carSfx = CarSfx.create(G);           // tyre scrub, lock-up, surface, pit limiter and wheel guns
 // Photo mode (js/camera/photo-cam.js).
 const { updatePhotoCam, enterPhotoMode, exitPhotoMode } = Photomode.create(G);
 // LIGHTING TUNER panel UI (js/lighting/tuner-panel.js).
@@ -4112,6 +4113,7 @@ function update(dt) {
     // The field around you: panned, distance-rolled and Doppler-shifted. Before
     // this there was no opponent audio at all, so a car alongside was silent.
     GameAudio.setRivals(rivalAudio.collect(player));
+    carSfx.update(player);
   }
 }
 

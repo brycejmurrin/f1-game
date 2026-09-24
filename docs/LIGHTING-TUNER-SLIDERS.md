@@ -545,7 +545,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 |---|---|---|---|---|---|---|
 | `lampLevel` | LAMP LEVEL | 0 … 0.687 | 0.26 | — | ✓ | game.js×3 |
 | `lampDensity` | LAMP DENSITY | 0.1 … 2.35 | 1 | — |   | track-lights.js×2, tracks.js×3 |
-| `floodDay` | DAYTIME LAMPS | 0 … 4.5 | 0 | — |   | game.js×3 |
+| `floodDay` | DAYTIME LAMPS | 0 … 4.5 | 0 | — |   | game.js×3, atmosphere.js×2 |
 | `poolEnergy` | POOL ENERGY | 0 … 1.375 | 0.55 | — | ✓ | track-lights.js×3 |
 | `lampRadiusMul` | POOL RADIUS | 0.4 … 1.9 | 1 | — | ✓ | track-lights.js×3 |
 | `bleedMul` | VALLEY BLEED | 0 … 2.5 | 1 | — | ✓ | track-lights.js×3 |

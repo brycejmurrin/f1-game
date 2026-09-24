@@ -268,6 +268,19 @@ test("a saved controller map round-trips; garbage in it falls back per action", 
   assert.deepEqual(plain(m.aero), [13, null]);
 });
 
+test("an action the save predates keeps its default only where the player has not used that key", () => {
+  // RADIO (d-pad down / T) arrived after these maps were saved: its default
+  // must not double up on a key the player had put on another action.
+  const pad = boot().Input.setPadMap({ shiftDown: [13, 4] });
+  assert.deepEqual(plain(pad.shiftDown), [13, 4]);
+  assert.deepEqual(plain(pad.radio), [null, null], "d-pad down stays shift-down alone");
+  assert.deepEqual(plain(pad.pause), [9, null], "an untouched default survives");
+  const keys = boot().Input.setKeyMap({ shiftUp: ["KeyT", null] });
+  assert.deepEqual(plain(keys.shiftUp), ["KeyT", null]);
+  assert.deepEqual(plain(keys.radio), [null, null], "T stays shift-up alone");
+  assert.deepEqual(plain(keys.pause), ["KeyP", null]);
+});
+
 test("button names follow the connected pad's family", () => {
   const { Input, sb, fire } = boot();
   assert.equal(Input.padLabel(0), "A");

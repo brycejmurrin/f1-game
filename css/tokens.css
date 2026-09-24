@@ -143,6 +143,7 @@
      the swatches out keeps the author colour where removing it destroys the
      information, which is exactly the carve-out the spec provides. */
   .cs-liv-swatch, .tm-colour, .sel-chip .swatch, .res-swatch, .dh-swatch,
+  .pm-accent-chip, .pm-accent-preview-hud,
   input[type="color"] { forced-color-adjust: none; }
   /* The race-control flag is the same carve-out: yellow vs VSC vs SC is
      encoded in the badge's background colour (css/hud.css), and with it

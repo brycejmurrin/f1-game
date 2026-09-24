@@ -4833,6 +4833,9 @@ test("lamp static map: car-only rebuilds copy the static props depth and draw th
   assert.match(sh, /if \(floatDepth\) depthTexture\.type = THREE\.FloatType;/);
   assert.match(sh, /const lampRT = isMobile \? null : makeDepthTarget\(LAMP_SIZE, "TLXLampShadow", false, lampStaticOn\);/);
   assert.match(sh, /const lampStaticRT = lampStaticOn \? makeDepthTarget\(LAMP_SIZE, "TLXLampStatic", false, true\) : null;/);
+  // AUTO is WebGPU only: three's WebGL copy does five synchronous gl.getParameter
+  // reads per call (census 289: 2 s of WebGL2 spike frames inside lampCarsBegin).
+  assert.match(sh, /let lampStaticOn = isWebGPU;/, "the depth copy must not default on for three's WebGL2 backend");
   // The car-only pass: copy first, then draw onto the copied depth with the clear off,
   // and autoClear restored in a finally so a throwing caster cannot leave it off.
   const cars = fnBody(sh, "lampCarsBegin");
@@ -4859,6 +4862,22 @@ test("godray: lamp beams alone take one blur pair, sun shafts keep two, on TLX a
     assert.match(src, /for \(let bp = 0; bp < grPairs; bp\+\+\)/, name + ": the blur loop runs grPairs");
     assert.match(src, /_grLite = localStorage\.getItem\("apex26\.grLite"\) !== "0"/, name + ": the shared knob");
   }
+});
+
+test("godray: WGX takes the same one-pair lamp-only blur as TLX/GLX", () => {
+  const src = code("js/render/webgpu/wgx.js");
+  assert.match(src, /1 \/ halfW, 1 \/ halfH, \(!sunGR && _grLite\) \? 1 : 2\)/, "wgx: one pair only without sun shafts");
+  assert.match(src, /_grLite = localStorage\.getItem\("apex26\.grLite"\) !== "0"/, "wgx: the shared knob");
+});
+
+test("lamp shadow cache keys on the lamp's VP inputs, not its position alone", () => {
+  // POOL RADIUS / BEAM CONE rebuild the set with the same positions: a key on
+  // x,y,z kept (or car-only-copied) a map drawn under the old far plane / fov.
+  const sp = code("js/render/shared/shadow-pass.js");
+  assert.match(sp, /rad === _lampShR && L\[o \+ 11\] === _lampShC/, "radius + cone in the same-lamp key");
+  assert.match(sp, /L\[o \+ 7\] === _lampShDx && L\[o \+ 8\] === _lampShDy && L\[o \+ 9\] === _lampShDz/, "aim in the key");
+  const sh = code("js/render/three/tlx-shadow.js");
+  assert.match(sh, /if \(Math\.fround\(lightVP\[i\]\) !== _lampStaticVP\[i\]\) return false;/, "L1 copy only under the static map's own VP");
 });
 
 test("TLX draw records are pooled, one fixed shape, reset through resetRecs (TLX-PERF-PLAN R1)", () => {
