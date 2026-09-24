@@ -31,9 +31,10 @@ const POSE_FIELDS = {
 };
 const FIELD = {
   off: { label: "ARC OFFSET", min: -400, max: 400, step: 1, unit: " m", def: 0 },
-  x: { label: "LATERAL", min: -60, max: 60, step: 0.5, unit: " m", def: 0 },
+  // + is RIGHT of the road, except at a corner, where + is its OUTSIDE (flyby-seq.js)
+  x: { label: "LATERAL (+ OUTSIDE AT A CORNER)", min: -60, max: 60, step: 0.5, unit: " m", def: 0 },
   y: { label: "HEIGHT", min: -5, max: 200, step: 0.05, unit: " m", def: 5 },
-  bear: { label: "BEARING", min: -3.15, max: 3.15, step: 0.01, unit: " rad", def: 0 },
+  bear: { label: "BEARING (0 = TRACK SIDE)", min: -3.15, max: 3.15, step: 0.01, unit: " rad", def: 0 },
   distR: { label: "DISTANCE (LAP RADII)", min: 0, max: 3, step: 0.01, unit: "", def: 1.2 },
   yR: { label: "HEIGHT (LAP RADII)", min: 0, max: 1.5, step: 0.01, unit: "", def: 0.4 },
   distK: { label: "DISTANCE (LANDMARK SIZES)", min: 0, max: 6, step: 0.05, unit: "", def: 1.8 },

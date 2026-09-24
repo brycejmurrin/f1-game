@@ -44,3 +44,28 @@ test("a full track build requires an upload-capable renderer", () => {
   assert.ok(Tracks.buildCenterline(def).n > 0,
     "centerline-only callers retain the explicit CPU-only entry point");
 });
+
+test("an odd-node street barrier closes at node zero without covering the first panel twice", () => {
+  const track = Tracks.build(Tracks.LIST.find((d) => d.id === "singapore"));
+  assert.equal(track.n % 2, 1, "the Singapore loop exercises an incomplete final two-node stride");
+  const panels = track.graph.nodes.filter((nd) => nd.meta?.kind === "streetBarrier" && nd.meta.side === 1);
+  const at = (k) => panels.filter((nd) => nd.meta.k === k);
+  const last = at(track.n - 1), first = at(0);
+  assert.equal(last.length, 1, "the final one-node span is emitted");
+  assert.equal(first.length, 1, "the first complete two-node span is emitted once");
+  const edge = (k) => {
+    const offset = track.hw[k] + track.def.barrierGap;
+    return [track.px[k] + track.rx[k] * offset,
+            track.py[k] + Tracks._vmContext.TrackMesh.bankOffsetAt(track, k, offset),
+            track.pz[k] + track.rz[k] * offset];
+  };
+  const len = (a, b) => Math.hypot(...edge(a).map((v, i) => v - edge(b)[i]));
+  const midpoint = (a, b) => edge(a).map((v, i) => (v + edge(b)[i]) / 2);
+  for (const [panel, a, b] of [[last[0], track.n - 1, 0], [first[0], 0, 2]]) {
+    const center = midpoint(a, b);
+    assert.ok(Math.hypot(panel.o[0] - center[0], panel.o[2] - center[2]) < 1e-5,
+      `panel ${a} ends at node ${b} rather than skipping across the lap seam`);
+    assert.ok(Math.abs(panel.s[2] - len(a, b) - 0.05) < 1e-5,
+      `panel ${a} length follows exactly its intended closing chord`);
+  }
+});
