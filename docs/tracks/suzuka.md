@@ -9,7 +9,11 @@ Suzuka Circuit sits in Suzuka, Mie Prefecture, central Japan, on a 145-hectare l
 A clear-to-hazy spring/autumn sky, soft and slightly milky toward the horizon. Rolling **green hills** dominate the backdrop in layered tones — near `[0.25, 0.55, 0.25]`, distant haze-greyed `[0.45, 0.6, 0.5]`. Scatter **cherry-blossom accents** `[0.95, 0.75, 0.82]` against the green for seasonal pop. Low morning **fog** can pool in the esses valley — a soft white-grey `[0.85, 0.88, 0.9]` haze band near the ground. Kerbs flash red/white; grass is vivid managed green.
 
 ## 3. Elevation
-Suzuka constantly **undulates**. From the start/finish the track climbs through the Esses (s≈0.10–0.22), keeps climbing to Degner, then **drops** sharply through Degner and into the underpass. The **figure-8 crossover** is here: the back loop dips **under** the main straight near **s≈0.37**, then later the racing line climbs the **crossover bridge over** the straight approaching 130R near **s≈0.82**. Spoon sits low (s≈0.62), with a long climb back up to 130R.
+Real Suzuka undulation from the SRTM bake in `js/track/circuit-elevations.js`
+(~40 m peak-to-trough). Continuous climb through the Esses / Degner, drop
+into the underpass, Spoon low, climb toward 130R — not two isolated cosine
+bumps with flat plateaus. The **figure-8 flyover** stays a `bridges` lift
+(terrain does not follow) near s≈0.82.
 
 ## 4. Landmarks & surroundings by lap position
 

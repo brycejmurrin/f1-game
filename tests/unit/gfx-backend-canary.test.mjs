@@ -4779,6 +4779,7 @@ test("selector preparation rejects stale requests, reuses the world, and waits f
   const clearTimeout = id => timers.delete(id);
   const gfx = { warming: () => compiling }, Log = { warn() {} };
   const prepareMenuCarAssets = async () => {};
+  const menuLampBake = async () => {};   // the lamp prebake is LampBake.prebake's (lamp-bake.test.mjs)
   // The idle gate and the upload slice are module-level policy (tested below);
   // here the player is idle and a slice is immediate.
   const menuIdle = async (current) => current(), menuSlice = async () => {};

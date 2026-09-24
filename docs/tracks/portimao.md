@@ -15,13 +15,11 @@ Dry, bright, faintly dusty. Whitewash and terracotta against red earth and thin 
 - Kerbs red `[0.80, 0.14, 0.14]` / white `[0.92, 0.92, 0.90]`
 
 ## 3. Elevation
-The defining feature, and the biggest authored deltas of any circuit in this batch. Roughly 40 m of range.
-- s≈0.045: **14 m drop** — the pit straight plunges into Turn 1.
-- s≈0.20: **11 m climb** to the Turn 3 crest.
-- s≈0.36: **13 m plunge** through the middle sector.
-- s≈0.56: 10 m back up the hill.
-- s≈0.78: 9 m drop toward the final complex.
-- s≈0.93: **12 m climb** back onto the pit straight on the ridge.
+The defining feature — real Algarve hills from the SRTM bake in
+`js/track/circuit-elevations.js` (~24 m continuous range). Keep the
+rollercoaster character (blind brows into T1, the middle-sector plunge, the
+climb back onto the pit-straight ridge); the bake removes knife-edge grade
+jolts from the old sparse cosine bumps, not the hills themselves.
 
 ## 4. Landmarks & surroundings by lap position
 | s | Side | Distance | Box description |

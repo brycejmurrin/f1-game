@@ -29,11 +29,10 @@
       { kinds: ["foliage"], s0: 0.72, s1: 0.86, side: 1 }, // tower/amphitheater
     ],
     pal: { zenith: [0.28, 0.54, 0.82], horizon: [0.74, 0.68, 0.52], grass: [0.36, 0.44, 0.20], runoff: [0.58, 0.38, 0.24], ambientSky: [0.50, 0.58, 0.66], ambientGround: [0.30, 0.30, 0.26], sunDir: [0.5345224838248488, 0.5550810408950353, 0.6373152691757812], sun: [1.0, 0.88, 0.62], sunColor: [1.0, 0.85, 0.55] },
-    elevations: [
-      { s: 0.52426, halfM: 420, rise: 18 },   // was 0.6233 in the old 0.515 frame (-0.09904)
-      { s: 0.93596, halfM: 280, rise: 3 },    // was 0.0350
-      { s: 0.25596, halfM: 240, rise: 2.5 },  // was 0.3550
-    ],
+    // Elevation from SRTM bake in js/track/circuit-elevations.js
+    // (`node tools/gen/bake-elevation.mjs cota`). Three authored cosine bumps
+    // left ~70% of the lap dead-flat — stair-step Hill Country. T1 climb and
+    // rolling Esses come from the continuous SRTM profile now.
     bankZones: [
       { frac: 0.41596, angleDeg: 5.0, widthM: 100 },  // T10; all re-keyed +0.41596 (was 0.0000)
       { frac: 0.78296, angleDeg: 4.0, widthM: 160 },
