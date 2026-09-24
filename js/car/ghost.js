@@ -249,6 +249,7 @@ const Ghost = (function () {
     pending.set(id, snap);
     loadStore()[id] = snap;   // immediately visible if another class is selected before idle
     const write = () => {
+      _flushes.delete(write);
       if (pending.get(id) !== snap) return;   // cleared or superseded before the deferred write
       try {
         const store = loadStore();
@@ -260,9 +261,34 @@ const Ghost = (function () {
         else Log.warn("car", `ghost save ${id} is session-only`);
       } catch { Log.warn("car", "ghost save fail"); }
     };
-    if (typeof requestIdleCallback === "function") requestIdleCallback(write, { timeout: 2000 });
+    if (typeof requestIdleCallback === "function") {
+      // A LONG idle slot only: the write (trim + 2-3 stringifies of a store of up
+      // to 512 KB + setItem) is one 5-30 ms job on a phone. With a 2 s timeout it
+      // ran mid-race — a frame's idle tail is < 16 ms, so it overran into the next
+      // frame. A 25 ms slot comes with pause, menus or results; pagehide flushes.
+      const idle = (dl) => {
+        if (pending.get(id) !== snap) return;
+        if (dl && typeof dl.timeRemaining === "function" && dl.timeRemaining() < 25) { requestIdleCallback(idle); return; }
+        write();
+      };
+      requestIdleCallback(idle);
+      armFlush(write);
+    }
     else if (typeof setTimeout === "function") setTimeout(write, 0);
     else write();   // bare VM harness: no scheduler, write now
+  }
+  // Leaving the page with a record still pending: write it now (synchronous
+  // localStorage is allowed in pagehide), or the new ghost dies with the tab.
+  const _flushes = new Set();
+  let _flushArmed = false;
+  function armFlush(fn) {
+    _flushes.add(fn);
+    if (_flushArmed || typeof addEventListener !== "function") return;
+    _flushArmed = true;
+    addEventListener("pagehide", () => {
+      const fns = Array.from(_flushes); _flushes.clear();
+      for (const f of fns) { try { f(); } catch (_) { /* best effort on the way out */ } }
+    });
   }
 
   // `meta` (optional, a plain object — medal, pole, pace, weather) is stored

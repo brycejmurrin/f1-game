@@ -47,6 +47,11 @@ function createHarness(opts = {}) {
     console,
   };
   if (opts.deferWrites) sandbox.setTimeout = (fn) => { timers.push(fn); return timers.length; };
+  const idles = [], listeners = {};
+  if (opts.idle) {
+    sandbox.requestIdleCallback = (fn) => { idles.push(fn); return idles.length; };
+    sandbox.addEventListener = (type, fn) => { (listeners[type] = listeners[type] || []).push(fn); };
+  }
   const ctx = vm.createContext(sandbox);
   seedLog(ctx);
   seedSaveMigrate(ctx);
@@ -59,6 +64,10 @@ function createHarness(opts = {}) {
     store: mockLocalStorage,
     flushMicrotasks: () => { while (microtasks.length) microtasks.shift()(); },
     flushTimers: () => { while (timers.length) timers.shift()(); },
+    runIdle: (ms) => { const q = idles.splice(0); for (const f of q) f({ timeRemaining: () => ms, didTimeout: false }); },
+    idleQueued: () => idles.length,
+    fire: (type) => { for (const f of listeners[type] || []) f(); },
+    disk: store,
   };
 }
 
@@ -373,4 +382,35 @@ test("clearing one ghost cancels its pending PB before a foreign merge", () => {
   const saved = JSON.parse(store.getItem("apex26.ghost.v1"));
   assert.equal(saved.monza, undefined, "the cleared pending PB is not merged back");
   assert.equal(saved.spa.time, 60);
+});
+
+function recordLap(Ghost, time) {
+  Ghost.startLap();
+  for (let i = 0; i < 10; i++) Ghost.record(i * 0.1, i * 20, i * 0.2);
+  return Ghost.finishLap(time);
+}
+const ghostOnDisk = (h) => { for (const k of h.disk.keys()) if (/ghost/i.test(k)) return true; return false; };
+
+test("a new record is written in a LONG idle slot only, never a short mid-race one", () => {
+  const h = createHarness({ idle: true });
+  h.Ghost.setTrack("monza");
+  assert.equal(recordLap(h.Ghost, 1.0), true);
+  assert.equal(h.Ghost.bestTime(), 1.0, "visible at once, before the write");
+  assert.equal(ghostOnDisk(h), false);
+  h.runIdle(8);                                  // a frame's idle tail: too short
+  assert.equal(ghostOnDisk(h), false, "no 5-30 ms store write inside an 8 ms slot");
+  assert.equal(h.idleQueued(), 1, "re-queued for a longer slot");
+  h.runIdle(40);                                 // pause / menu / results
+  assert.equal(ghostOnDisk(h), true);
+  assert.equal(h.idleQueued(), 0);
+});
+
+test("a record still pending when the page goes away is flushed on pagehide", () => {
+  const h = createHarness({ idle: true });
+  h.Ghost.setTrack("monza");
+  recordLap(h.Ghost, 1.0);
+  h.runIdle(8);
+  assert.equal(ghostOnDisk(h), false);
+  h.fire("pagehide");
+  assert.equal(ghostOnDisk(h), true, "the new ghost must not die with the tab");
 });

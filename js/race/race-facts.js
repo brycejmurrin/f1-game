@@ -88,24 +88,31 @@ const RaceFacts = (function () {
       const s = st.get(c);
       return c.finished && s && s.finProg != null ? s.finProg : (c.prog || 0);
     };
+    // PER PHYSICS STEP (race-radio ticks this every step): the ranking fills
+    // the one `order` array in place with a hoisted comparator, pair / battle
+    // keys are integers and the per-tick Sets are reused — this ran ~70
+    // allocations a step (strings, arrays, Sets) before.
+    const _seen = new Set(), _live = new Set();
+    const pairKey = (x, y) => x * 1048576 + y;   // ids are small ints; exact below 2^53
+    const byRace = (a, b) => {
+      // TWO FLAGGED CARS go by laps, then by who took the flag first — never
+      // by distance: each froze wherever its last timestep left it past the
+      // line, up to ~1.4 m at 85 m/s, and a car flagged 20 s behind the winner
+      // could rank ahead of it and be told it won.
+      if (a.finished && b.finished) {
+        return ((b.lap || 0) - (a.lap || 0)) || ((st.get(a).finT || 0) - (st.get(b).finT || 0));
+      }
+      const d = distOf(b) - distOf(a);
+      if (Math.abs(d) > 1) return d;
+      if (a.finished !== b.finished) return a.finished ? -1 : 1;
+      if (a.finished) return (st.get(a).finT || 0) - (st.get(b).finT || 0);
+      return d;
+    };
     function rank(list) {
-      const out = [];
-      for (const c of list) if (!c.retired) out.push(c);
-      out.sort((a, b) => {
-        // TWO FLAGGED CARS go by laps, then by who took the flag first — never
-        // by distance: each froze wherever its last timestep left it past the
-        // line, up to ~1.4 m at 85 m/s, and a car flagged 20 s behind the winner
-        // could rank ahead of it and be told it won.
-        if (a.finished && b.finished) {
-          return ((b.lap || 0) - (a.lap || 0)) || ((st.get(a).finT || 0) - (st.get(b).finT || 0));
-        }
-        const d = distOf(b) - distOf(a);
-        if (Math.abs(d) > 1) return d;
-        if (a.finished !== b.finished) return a.finished ? -1 : 1;
-        if (a.finished) return (st.get(a).finT || 0) - (st.get(b).finT || 0);
-        return d;
-      });
-      return out;
+      order.length = 0;
+      for (const c of list) if (!c.retired) order.push(c);
+      order.sort(byRace);
+      return order;
     }
 
     function observe(G, dt) {
@@ -174,12 +181,12 @@ const RaceFacts = (function () {
       // Pairs not looked at this tick are forgotten: a car that fell three
       // places inside the hold left a stale "who is ahead", which fired as a
       // pass — a lead change twenty seconds late — when the two met again.
-      const seen = new Set();
+      const seen = _seen; seen.clear();
       for (let i = 0; i < order.length; i++) {
         for (let j = i + 1; j <= i + PAIR_SPAN && j < order.length; j++) {
           const a = order[i], b = order[j];
           const ia = bag(a).id, ib = bag(b).id;
-          const key = ia < ib ? ia + "|" + ib : ib + "|" + ia;
+          const key = ia < ib ? pairKey(ia, ib) : pairKey(ib, ia);
           seen.add(key);
           let r = pairs.get(key);
           if (!r) { pairs.set(key, { ahead: a, pend: 0 }); continue; }
@@ -195,7 +202,7 @@ const RaceFacts = (function () {
         }
       }
 
-      for (const k of Array.from(pairs.keys())) if (!seen.has(k)) pairs.delete(k);
+      for (const k of pairs.keys()) if (!seen.has(k)) pairs.delete(k);   // deleting while iterating a Map is defined
 
       // ── the player's position, with the same hold ───────────────────────
       const raw = order.indexOf(p) + 1;
@@ -207,8 +214,8 @@ const RaceFacts = (function () {
       } else { pendPos = 0; pendT = 0; }
 
       // ── flags and contact ───────────────────────────────────────────────
-      const ci = G.cautionInfo ? G.cautionInfo() : null;
-      const lvl = ci ? ci.level | 0 : 0;
+      const lvl = G.cautionLevel ? G.cautionLevel() | 0
+        : (G.cautionInfo ? (G.cautionInfo() || { level: 0 }).level | 0 : 0);
       // A lap under the safety car or VSC is not pace either: every gap closes.
       if (lvl !== caution) { ev.push({ type: "caution", level: lvl, prev: caution }); caution = lvl; hist.clear(); }
       const hits = p.hits | 0;
@@ -241,19 +248,19 @@ const RaceFacts = (function () {
       }
 
       // ── battles anywhere on the road ────────────────────────────────────
-      const live = new Set();
+      const live = _live; live.clear();
       for (let i = 0; i + 1 < order.length; i++) {
         const a = order[i], b = order[i + 1];
         if (a.finished || b.finished || inPits(a) || inPits(b)) continue;
         const g = gap(a, b);
         if (g == null || g > BATTLE_GAP) continue;
-        const key = bag(a).id + ">" + bag(b).id;
+        const key = pairKey(bag(a).id, bag(b).id);   // ordered: a is ahead
         live.add(key);
         let bt = battles.get(key);
         if (!bt) battles.set(key, bt = { since: t, a, b, pos: i + 1 });
         bt.gap = g; bt.pos = i + 1;
       }
-      for (const k of Array.from(battles.keys())) if (!live.has(k)) battles.delete(k);
+      for (const k of battles.keys()) if (!live.has(k)) battles.delete(k);
 
       const leader = order[0] || null, second = order[1] || null;
       const laps = G.lapsTarget || 0;
