@@ -1221,7 +1221,7 @@ let announcer = Announcer.inert();   // js/audio/announcer.js — the pre-race w
 // is a report. It ranks with the pit-lane messages it belongs to rather than
 // under them — before this it was "info", so the confirmation that you HAD
 // entered the pits outranked the call telling you to.
-const ANN_PRI = { coach: 1, practice: 2, info: 2, warning: 3, "penalty-warn": 3, box: 4, race: 4, "penalty-hit": 5 };
+const ANN_PRI = { comm: 1, coach: 1, practice: 2, info: 2, warning: 3, "penalty-warn": 3, box: 4, race: 4, "penalty-hit": 5 };
 // THE FLOOR. Every card gets ANN_MIN_S on screen, whatever its caller asked for
 // and whatever arrives next. Callers passed durations from 1.4 s up, and 1.4 s
 // is not a message — it is a flash you notice after it has gone. The floor is
@@ -1256,6 +1256,7 @@ let _annPri = 0, _annFloor = 0, _annQueue = [];
 function radioWho(kind) {
   if (kind === "penalty-hit" || kind === "penalty-warn" || kind === "warning") return "RACE CONTROL";
   if (kind === "coach" || kind === "practice") return "COACH";
+  if (kind === "comm") return "COMMENTARY";   // js/race/race-radio.js — the broadcaster, not the pit wall
   const p = player;
   const who = p && p.name ? String(p.name).split(" ").pop().toUpperCase() : (p && p.code) || "";
   return (who ? who + " · " : "") + "RADIO";
@@ -1267,6 +1268,7 @@ function showAnnounce(msg, dur, kind) {
   els.announceText.textContent = msg;
   els.announceWho.textContent = radioWho(kind);
   els.announceNum.textContent = radioNum();   // "" collapses the plate to the old 3px stripe
+  if (kind === "comm") els.announceNum.textContent = "";   // the broadcaster is not talking to the player's car
   els.announce.className = "";
   if (kind && kind !== "race") els.announce.dataset.kind = kind;
   else delete els.announce.dataset.kind;
@@ -3109,6 +3111,7 @@ const G = {
   get coach() { return coach; },
   get radio() { return radioVoice; },   // js/audio/radio-voice.js — AudioPanel drives its toggle and volume
   get announcer() { return announcer; },   // js/audio/announcer.js — AudioPanel drives its switch and voice
+  get raceRadio() { return raceRadio; },   // js/race/race-radio.js — AudioPanel drives chatter + commentary
   recordControls: () => ({ autoThrottle: autoThrottle(), gearsManual: gearsManual(), steerMode, aero: raceAeroMode }),
   get ttRecord() { return ttRecord; }, set ttRecord(v) { ttRecord = v; },
   get timeTrial() { return isTimeTrial(); },
@@ -3478,6 +3481,7 @@ radioVoice = RadioVoice.create(G);
 announcer = Announcer.create(G);
 const records = SessionRecords.create(G);
 const coach = DrivingCoach.create(G);
+const raceRadio = RaceRadio.create(G);    // the engineer's race awareness + TV commentary (js/race/race-radio.js)
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
 titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js/ui/title-menu.js)
 const onboard = Onboard.create(G);        // first-run coach marks (js/ui/onboard.js)
@@ -4017,7 +4021,7 @@ function update(dt) {
 
   // B1 — debris caution: consume hazards() and drive the local-yellow / VSC / SC
   // flag state (READ-ONLY; never slows or moves a car). Self-guarding + throttled.
-  updateCaution(dt); coach.update(dt);
+  updateCaution(dt); coach.update(dt); raceRadio.update(dt);
 
   // Race-control owns the finish policy as well as neutralisation rules. In a
   // human race an AI/other player crossing first must NOT start a 3.5 s result

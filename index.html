@@ -1196,6 +1196,20 @@
             <button id="as-radio-next" type="button" data-step="1" aria-label="Next team radio">&rsaquo;</button>
           </div>
         </div>
+        <!-- ENGINEER CHATTER (js/race/race-radio.js): how much the engineer says
+             about the RACE — places, gaps, laps to go, flags, the result — on the
+             card, spoken or not. Not gated on TEAM RADIO above: that switch is
+             the VOICE, this is what gets said. Flags and the result go out at
+             every level but OFF. -->
+        <div id="as-chat" class="set-row" role="group" aria-labelledby="as-chat-label">
+          <span class="tune-label" id="as-chat-label">ENGINEER</span>
+          <div>
+            <button id="as-chat-prev" type="button" data-step="-1" aria-label="Previous engineer chatter">&lsaquo;</button>
+            <select id="as-chat-sel" aria-labelledby="as-chat-label" aria-describedby="as-chat-note"></select>
+            <button id="as-chat-next" type="button" data-step="1" aria-label="Next engineer chatter">&rsaquo;</button>
+          </div>
+        </div>
+        <p id="as-chat-note" class="as-note"></p>
         <label class="tune-row"><span class="tune-label">VOICE VOLUME <b id="as-rvol-v">8</b></span>
           <input id="as-rvol" type="range" min="0" max="10" step="1" value="8" aria-label="Radio voice volume"></label>
         <!-- RADIO FX — the key click, the hiss under the line and the squelch
@@ -1240,6 +1254,19 @@
             <button id="as-ann-prev" type="button" data-step="-1" aria-label="Previous announcer setting">&lsaquo;</button>
             <select id="as-ann-sel" aria-labelledby="as-ann-label" aria-describedby="as-ann-note"></select>
             <button id="as-ann-next" type="button" data-step="1" aria-label="Next announcer setting">&rsaquo;</button>
+          </div>
+        </div>
+        <!-- RACE COMMENTARY (js/race/race-radio.js): the same broadcaster calls
+             the race — passes, battles, retirements, the flag. TV CAMERAS (the
+             default) keeps it to the moments you are watching: a TV camera, the
+             broadcast HUD, or after your own flag. Spoken in the voice below
+             when ANNOUNCER is on; written on the radio card either way. -->
+        <div id="as-comm" class="set-row" role="group" aria-labelledby="as-comm-label">
+          <span class="tune-label" id="as-comm-label">COMMENTARY</span>
+          <div>
+            <button id="as-comm-prev" type="button" data-step="-1" aria-label="Previous commentary setting">&lsaquo;</button>
+            <select id="as-comm-sel" aria-labelledby="as-comm-label" aria-describedby="as-ann-note"></select>
+            <button id="as-comm-next" type="button" data-step="1" aria-label="Next commentary setting">&rsaquo;</button>
           </div>
         </div>
         <!-- One voice row, built by js/audio/panel.js from the same builder the
@@ -2978,6 +3005,9 @@
 <script defer crossorigin="anonymous" src="js/physics/ai-drive.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/ai-corridor.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/engineer.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/radio-lines.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/race-facts.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/race-radio.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/offsets.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/flyby-seq.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/flyby-panel.js?v=dev"></script>
