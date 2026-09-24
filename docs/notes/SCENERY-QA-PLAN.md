@@ -84,18 +84,39 @@ centreline; all 52 circuits).
   coplanar count fell 4 -> 2 (the soffits' side faces were coincident too). Not
   yet done: the motion-capture before/after, and the `soffitColor` engine option.
 
-### B. Remaining z-fighting — PENDING investigation 2
+### B. Remaining z-fighting — MEASURED; first fixes DONE
 
-To measure: the coplanar-audit residual by visibility distance; instanced
-geometry (walls, fences, lamps, trees) and whether the audit reads instance
-buffers; decals, markings and ground patches against the road/terrain buffers;
-the pits.js sweep; pairs between the audit's gap cut-off and the depth buffer's
-resolvable separation.
+Measured with a triangle-level audit over every shipped mesh (road, terrain,
+glass, water, startline, props incl. instances, pack injected;
+`scratch/zfight/tri-audit.cjs`). Counts are an upper bound (a ranking, not
+visible-glitch counts). Instancing is NOT a blind spot (the VM records every
+instance through the wrapped emitters).
 
-Deliverable: fixes per class, and the gap threshold re-derived from the depth
-buffer at the distance each pair is seen from, not a fixed millimetre count.
+DONE in this batch: start line / grid boxes / pit paint depth bias (1); pit
+canopy shell and city mullion tops (part of 3); neonTower self-intersection;
+asset pack visible (5).
 
-### C. The asset pack and the "overhang class" — MEASURED
+OPEN, next campaign, ranked:
+2. Props flush on terrain (terrain has no bias): 2,811 pairs / 1,063 spots / 48
+   circuits; ground slabs at buildProps `tracks.js:983` (> 220 m, hidden by
+   MAX_DIM), `tracks.js:1298` modelGroup, pit model `pits.js:516`. Fix: seat
+   ground slabs >= 2 cm off terrain or give them a decal bias; audit: road and
+   terrain triangles as pseudo-primitives.
+3. Remaining up-facing tops (TV/elevated cameras): city sections
+   `city.js:189 x 241` residue, neonTower `city.js:417/522`, grandstand
+   plank/riser `structures.js:632 x 633`, korea `tracks.js:1298`.
+4. The audit's window: FIGHT_MAX 150 m drops 4.5-20 mm pairs that fight within
+   300 m (24-bit depth, near 0.3 cockpit / 0.9 chase). At `--fight 320`: 631
+   spots vs 111 (zandvoort alone 1,837 pairs at 10-11 mm). Fix: FIGHT_MAX =
+   NEAR_TRACK and a ~20 mm MIN_SEP for layered faces — a baseline campaign.
+6. Road ribbon folding over itself on corner insides (verge strips of adjacent
+   nodes, different colours, one bias): 1,734 spots, worst shanghai, catalunya,
+   anderstorp. Fix in mesh.js buildRoad; check in verify-track.
+7. pits.js `sweep()` geometry, unrecorded: 180 spots / 45 circuits; route it
+   through TrackGeom.emit.
+8. Overlapping water slabs (waterBand `tracks.js:1251/1275`): 114 spots, 5 circuits.
+
+### C. The asset pack and the "overhang class" — DONE (pack visible; suzuka pillar fixed)
 
 Harness: `scratch/overhang/` (injects `Assets` into the VM; `preload.cjs` does it
 for any audit CLI).
@@ -127,7 +148,7 @@ for any audit CLI).
   Audit: flag any shipped primitive whose XZ footprint covers a road sample and
   whose y-span overlaps [road + TOL, road + CEIL].
 
-### D. Open track items — MEASURED (proposals tested on a scratch copy)
+### D. Open track items — DONE (monza, redbull, silverstone, cota, frac-0 shed; redbull and suzuka pit sides from references)
 
 Corner fracs from curvature peaks (smoothed over 40 m; +k = left).
 
