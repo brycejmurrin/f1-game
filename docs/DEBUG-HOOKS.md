@@ -460,12 +460,20 @@ __apex.previewCam("drift", 0.21, 65);   // how DRIFT frames the corner at 21%
 __apex.previewCam("heli", 0.5);          // HELI's broadcast angle at half-distance
 ```
 
-### `flybyCam(u, shots?) → {u, shot, index, cut, eye, target, fov, inside} | false`
+### `flybyCam(u, shots?) → {u, shot, index, cut, eye, target, fov, lift, onRoad, lat, inside} | false`
 Park the camera at progress `u` (0..1) through the PRE-RACE FLYBY's shot
 sequence (`js/camera/flyby-seq.js`) and report where it went. `inside` is the
 scenery record the eye landed in, or `null` — the flyby's whole reason for
 existing as a shot list is that the old rig had no such answer and flew through
-buildings. Pass `shots` to preview an EDITED sequence without reloading.
+buildings. Pass `shots` to preview an EDITED sequence without reloading; without
+it the hook solves the list a race would fly (the same one `flybyShots()` reports).
+
+`onRoad` is true for a shot whose both eye poses run low down the road
+(`FlybySeq.onRoadPose`): the solver skips clearance for those, and the unit test
+exempts them from containment — the props registry's boxes are axis-aligned, so
+an angled grandstand's box crosses the straight (Bahrain) and `inside` there is
+not a defect. What is checked instead is `lat`, the eye's metres off the
+centreline (the test fails beyond 12). `lift` is how far clearance raised the eye.
 
 The live flyby runs on the loading screen's phase timer and lasts seconds, which
 no capture tool can aim at; this drives the same solver deterministically, via
