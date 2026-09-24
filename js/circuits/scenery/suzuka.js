@@ -203,19 +203,20 @@
         addBox(out, vadd(lp2.c, lp2.u, 8.4), [1.4, 0.4, 0.9], lampWarm, lb2);
       }
 
+      const RC_GAP = 38, BC_GAP = 46, HOSP_GAP = 58;
       if (circuitKit) {
-        circuitKit.pitBuilding({
-          id: "kit:suzuka:pit-building", frac: 0.985, side: 1, gap: 9,
-          size: [14, 9, 60], garages: 15, required: true,
-        });
+        // The pits are on -1 (def `pit.side`); the engine's pit complex builds
+        // the garages there, so the file's own kit pit building (always a no-op
+        // under the complex) is dropped. Race control and the paddock stand
+        // BEHIND the garages on the pit side, opposite the main grandstand.
         circuitKit.raceControl({ style: "tapered",
-          id: "kit:suzuka:race-control", frac: 0.995, side: 1, gap: 22,
+          id: "kit:suzuka:race-control", frac: 0.995, side: -1, gap: RC_GAP,
           size: [9, 30, 9], required: true,
         });
       }
       {
         const rk = Math.round(n * 0.995) % n;
-        const rc = anchor(rk, 1, 22), rb = [rc.r, rc.u, rc.t];
+        const rc = anchor(rk, -1, RC_GAP), rb = [rc.r, rc.u, rc.t];
         const faceC = vadd(rc.c, rc.u, 24);
         modelGroup("kit:suzuka:race-control-clock", {
           center: faceC, size: [1.2, 6.6, 6.6], basis: rb,
@@ -227,10 +228,10 @@
           addBox(stage, vadd(faceC, rc.r, 0.32), [0.14, 2.3, 0.14], navy, rb);          // minute hand
         }, { required: true });
       }
-      broadcastCompound(Math.round(n * 0.992) % n, 1, 32, { vans: 3, dishes: 2, mastH: 9 });
+      broadcastCompound(Math.round(n * 0.992) % n, -1, BC_GAP, { vans: 3, dishes: 2, mastH: 9 });
       if (circuitKit) {
         circuitKit.hospitality({
-          id: "kit:suzuka:paddock-hospitality", frac: 0.975, side: 1, gap: 58,
+          id: "kit:suzuka:paddock-hospitality", frac: 0.975, side: -1, gap: HOSP_GAP,
           size: [18, 9, 34], modules: 5, required: true,
         });
         circuitKit.marshalShelter({
@@ -488,10 +489,10 @@
         }, { required: true });
       }
 
-      // ── Honda orange accent on main grandstand (start/finish left side) ───────
+      // ── Honda orange accent on main grandstand (start/finish right side, opposite the pits) ───────
       {
         const hk = Math.round(n * 0.00) % n;
-        const ah = anchor(hk, -1, 22);
+        const ah = anchor(hk, 1, 22.4);
         const bh = [ah.r, ah.u, ah.t];
         modelGroup("suzuka-main-stand-crown", {
           center: vadd(ah.c, ah.u, 17.5), size: [3.2, 5.0, 44], basis: bh,
@@ -516,8 +517,8 @@
         addBox(out, vadd(lp4.c, lp4.u, 9.4), [1.6, 0.4, 1.0], lampWarm, lb4);
       });
 
-      stand(0.00, -1, 15, 52, { livery: "navy", tiers: 2, roof: "cantilever",
-        suites: true, endWalls: true, pylons: true }); // Main grandstand — clear of the curved pit approach; navy base under the Honda crown accent
+      stand(0.00,  1, 15, 52, { livery: "navy", tiers: 2, roof: "cantilever",
+        suites: true, endWalls: true, pylons: true }); // Main grandstand V1/V2 — right, opposite the pits (-1); navy base under the Honda crown accent
       stand(0.15,  1, 15, 28, { livery: "steel", roof: "truss" });         // Esses — compact bank on the rising outside
       stand(0.28, -1, 9, 28,  { livery: "orange", roof: "flat" });      // Degner entry
       stand(0.45,  1, 9, 38,  { livery: "navy", tiers: 2, endWalls: true }); // Hairpin
