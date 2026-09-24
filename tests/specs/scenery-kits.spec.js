@@ -23,7 +23,7 @@ test.describe.configure({ timeout: 300000 });
 // The boot split (456af0f3) moved every shipped closure out of the def and into
 // a lazy registry: js/circuits/scenery/<id>.js does
 // `(window.TrackScenery = window.TrackScenery || {})["<id>"] = fn`, fetched by
-// game.js for the one circuit being built, and tracks.js:1818 resolves
+// game.js for the one circuit being built, and build-props.js:1844 resolves
 // `def.scenery || window.TrackScenery[def.id]`. These tests used to wrap
 // TrackDefs.push and skip any def whose `.scenery` was not ALREADY a function —
 // which, after the split, is every def. The wrapper silently never installed,

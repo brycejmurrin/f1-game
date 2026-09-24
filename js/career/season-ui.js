@@ -223,9 +223,17 @@ function create(G) {
   $("ss-apply").onclick = () => {
     const apply = () => {
       Log.info("ui", "SeasonUI.apply");
-      SeasonCal.setConfig(draft);
-      G.season = SeasonCal.restart();
-      SeasonCal.save(G.season);
+      const result = SeasonCal.applyConfig(draft);
+      if (!result.ok) {
+        const note = $("ss-note");
+        if (note) {
+          note.setAttribute("role", "status");
+          note.textContent = "Season changed in another tab. Reopen setup to review the latest save.";
+        }
+        return;
+      }
+      G.season = result.season;
+      if (!result.durable && G.announce) G.announce("SEASON IS SESSION ONLY — STORAGE IS FULL", 4, "race");
       G.trackIdx = SeasonCal.trackIndex(0);
       close();
       G.buildSelect();

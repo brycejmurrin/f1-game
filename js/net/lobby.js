@@ -511,7 +511,14 @@ const NetLobby = (function () {
       // binding is this phase's. Qualifying runs while the LOBBY still holds
       // the connection, so they have to be registered on this side too or
       // they only work after the race has already started — which is never.
-      NetPlay.bindQuali(made, sendersOwnDriver, G);
+      NetPlay.bindQuali(made, sendersOwnDriver, G, (type, lap) => {
+        if (role !== "host") return;
+        // Guests have no direct links to each other. Relay only a validated,
+        // sender-bound lap, and never echo it to its owner.
+        for (const [other, sess] of sessions) {
+          if (other !== id) try { sess.sendEvent(type, lap); } catch (e) { /* departing peer */ }
+        }
+      });
       made.sendEvent(NetPlay.EV.HELLO, Object.assign(localProfile(), role === "host" ? { rank: joinRank(id) } : null));
       if (role === "host") publishSettings();
       openRoom();
@@ -997,8 +1004,10 @@ const NetLobby = (function () {
       dropPending();         // and the half-built invite transport it minted
     }
 
+    let friendQualifying = false;
     function beginRace() {
       if (G.raceQuali && G.openQualiForNet) {
+        friendQualifying = true;
         say("Qualifying…");
         sealRoom();
         if (G.setNetRoom) G.setNetRoom(false);
@@ -1006,6 +1015,7 @@ const NetLobby = (function () {
           G.flow = "gp";
           G.openQualiForNet(finishStart);   // calls back when TO THE GRID is pressed
         } catch (e) {
+          friendQualifying = false;
           say("Could not start qualifying: " + (e && e.message), true);
           return;
         }
@@ -1037,7 +1047,8 @@ const NetLobby = (function () {
         // car objects that makeCars() then replaced, so owns() never matched
         // and the rival's slot ran as AI while our own pose parked on the
         // old grid.
-        await G.startRace();
+        const outcome = await G.startRace();
+        if (outcome && outcome.kind === "canceled") { close(); return; }
         if (!sessions.size) { clearInterval(pumpTimer); pumpTimer = null; close(); return; }
       } catch (e) {
         say("Could not start the race: " + (e && e.message), true);
@@ -1050,6 +1061,7 @@ const NetLobby = (function () {
         peerMods: modsFromProfile(firstPeer()),
         peers: [..._peers.entries()].map(([id, p]) => ({ id, profile: p, mods: modsFromProfile(p) })),
       });
+      friendQualifying = false;
       clearInterval(pumpTimer);          // the game loop pumps it from here on
       pumpTimer = null;
       session = null;                    // owned by NetPlay now
@@ -1675,6 +1687,7 @@ const NetLobby = (function () {
     // Just put the waiting room back on screen and mark netRoom so garage /
     // race-settings return here instead of starting a solo GP.
     function abortQuali() {
+      friendQualifying = false;
       if (G.setNetRoom) G.setNetRoom(true);
       const e = els();
       if (e.screen) e.screen.hidden = false;
@@ -1698,6 +1711,7 @@ const NetLobby = (function () {
     // Abandoning the lobby must tear the half-built connection down, or a
     // stale RTCPeerConnection sits there gathering candidates forever.
     function cancel() {
+      friendQualifying = false;
       stopScan();
       stopCodeWait();
       codeReopen = null;
@@ -1805,6 +1819,7 @@ const NetLobby = (function () {
       inviteAnother,
       peerSeats,
       reportQuali, reportQualiLive,
+      qualifying: () => friendQualifying,
       roomState: () => ({
         open: !!(els().roomStep && !els().roomStep.hidden),
         role, selfReady, peerReady: peersReady(), peer: firstPeer(),

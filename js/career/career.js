@@ -219,10 +219,17 @@ function saveStatus() { save(); return Object.assign({}, lastSave); }
 // Wipes the LIVE slot only. The other five are untouched — deleting one career
 // must never be a way to lose the others.
 function clear() {
+  const now = currentRevision();
+  if (careerConflict || (careerRevision != null && now !== careerRevision)) {
+    careerConflict = true;
+    lastSave = { ok: false, durable: false, reason: "conflict" };
+    return lastSave;
+  }
   career = null;
-  store.set(liveSlotKey(), null);
+  lastSave = writeResult(liveSlotKey(), null);
   armRevision();
   applyRegs();      // no career, no regulations
+  return lastSave;
 }
 
 function slotInfo(c, f, i) {
@@ -272,13 +279,24 @@ function useSlot(flavour, i) {
   applyRegs();      // a different save can be a different era
   return career;
 }
-function deleteSlot(flavour, i) {
+function deleteSlot(flavour, i, expectedRevision) {
   const f = flavourIn(flavour);
   const n = slotIn(i);
-  store.set(slotKey(f, n), null);
+  const key = slotKey(f, n);
+  // The slot card can outlive a foreign write. Its observed revision must
+  // still be current when the second DELETE tap commits.
+  if ((f === slotFlavour && n === slotIdx && (careerConflict ||
+       (careerRevision != null && currentRevision() !== careerRevision))) ||
+      (expectedRevision != null && expectedRevision !== store.keyRevision(key))) {
+    lastSave = { ok: false, durable: false, reason: "conflict" };
+    if (f === slotFlavour && n === slotIdx) careerConflict = true;
+    return Object.assign({}, lastSave);
+  }
+  lastSave = writeResult(key, null);
   if (f === slotFlavour && n === slotIdx) { career = null; armRevision(); applyRegs(); }
-  return true;
+  return Object.assign({}, lastSave);
 }
+function slotRevision(flavour, i) { return store.keyRevision(slotKey(flavourIn(flavour), slotIn(i))); }
 
 function rosterEntry(agent, left) {
   return { name: agent.name, code: agent.code, num: agent.num,
@@ -1105,6 +1123,41 @@ function settleRound(order, player) {
            unsaved: !persisted.durable };
 }
 
+// The season object is also game.js's live `season` alias. Score a detached
+// copy, check the revision again, then keep that alias while settling. A
+// rejected save restores the whole career in place (including economy/sponsors)
+// so a foreign write cannot leave phantom points or prize money in this tab.
+function scoreRound(order, player, fastestId) {
+  if (!inCareer() || !player || careerConflict ||
+      (careerRevision != null && currentRevision() !== careerRevision)) {
+    careerConflict = true;
+    lastSave = { ok: false, durable: false, reason: "conflict" };
+    return null;
+  }
+  if (career.results.some((row) => row.r === career.season.round)) return null;
+  const original = JSON.parse(JSON.stringify(career));
+  const seasonRef = career.season;
+  const staged = JSON.parse(JSON.stringify(seasonRef));
+  if (SeasonCal.award(staged, order, fastestId) !== "race") return null;
+  if (careerConflict || (careerRevision != null && currentRevision() !== careerRevision)) {
+    careerConflict = true;
+    lastSave = { ok: false, durable: false, reason: "conflict" };
+    return null;
+  }
+  function replace(target, source) {
+    for (const key of Object.keys(target)) if (!Object.prototype.hasOwnProperty.call(source, key)) delete target[key];
+    Object.assign(target, source);
+  }
+  replace(seasonRef, staged);
+  const result = settleRound(order, player);
+  if (result && result.save && result.save.ok) return result;
+  replace(career, original);
+  replace(seasonRef, original.season);
+  career.season = seasonRef;
+  if (careerRevision != null && currentRevision() !== careerRevision) careerConflict = true;
+  return null;
+}
+
 function gridSeats() {
   const out = [];
   for (const team of Teams.LIST) {
@@ -1557,7 +1610,7 @@ function state() {
 return {
   PRIZE, RESEARCH_MULT, BUDGET_MULT, TDEV_MAX, TDEV_TO_PACE, START_MONEY,
   OBJ_BONUS, OBJ_REP, DEV_MAX, HISTORY_MAX, CRAFT_BASE, craftScore, seasonCraft,
-  SLOTS, FLAVOURS, slot, slots, useSlot, deleteSlot, anySave, firstFree,
+  SLOTS, FLAVOURS, slot, slots, useSlot, deleteSlot, slotRevision, anySave, firstFree,
   data, active, inCareer, conflicted, engage, load, save, saveStatus, clear, start, state, rnd, hash, seasonSeed,
   GRANT, freeMoney, grant,
   sponsor, sponsorAt, sponsorLabel, settleSponsor,
@@ -1571,7 +1624,7 @@ return {
   gridDrivers, wageBill, freeAgents, MYTEAM_WORKS,
   paceMult, teamStats,
   owned, isOwned, researchCost, research, budget, budgetUpgradeCost, upgradeBudget,
-  objective, objectiveFor, objectiveLabel, prizeFor, settleRound, worksCost, budgetCap,
+  objective, objectiveFor, objectiveLabel, prizeFor, settleRound, scoreRound, worksCost, budgetCap,
   OBJ_CHOICES, objectiveChoices, objectivePick, chooseObjective, objectiveLocked,
   driverStandings, teamStandings, rollover, offers, acceptOffer, marketValue, offerBar,
   round, roundsTotal, seasonDone, trackIndex,
