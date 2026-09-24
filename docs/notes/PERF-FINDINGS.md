@@ -5214,7 +5214,8 @@ draw: vendor patches 7 and 8 and `NEW_MESH_BUDGET` stay out.
   `blockerRT`; called last in `startProgramWarm`, after the MRT is nulled.
 - Post warm keeps the live ssrTag MRT and compiles the LIVE `quad`; ungated
   (was: skipped once the scene warm passed 3 s).
-- `apex26.tlxWarmPlus=0` restores the 3 s post gate and skips the caster warm.
+- `apex26.tlxWarmPlus` gates the ungated post warm and the caster warm — ON when first
+  pushed, OPT-IN (`=1`) after the A/B below.
 - `tsl-fx.js` builds the ssrTag MRT node once.
 - Vendor patch 6 (`getDynamicCacheKey` scratch array, upstream r187), regenerated
   with `tools/gen/vendor-three.mjs`; canary pins it.
@@ -5261,3 +5262,24 @@ What is left on WebGPU is 4 modules + 4 pipelines from `present` → `_renderTim
 the scene pass (plan step 2's reveal-all warm). The cost: the post warm now runs on
 Metal (it never did — the 7 s scene warm always consumed the 3 s gate), so the lights
 hold ~2.2 s longer on WebGPU, ~1.8 s on WebGL2.
+
+### The A/B: the longer warm is not what helped (census 244, `tlxWarmPlus=0`)
+
+| three.js/WebGPU leg | 243 warm ON | 244 warm OFF |
+|---|---|---|
+| compiles in the window | 8 (4 modules + 4 pipelines, scene `present`) | 8 (the same stacks) |
+| post (`runPass`) compiles | 0 | 0 |
+| frames >= 100 ms | 5 (706 ms) | 2 (350 ms) |
+| warm stages | scene 7033, post 2203, shadow 5 | scene 6984, post 0, shadow 0 |
+| gpuErrors / luma | 0 / 49.3 | 0 / 48.7 |
+
+WebGL2 control with it off: 2 compiles, 4 frames >= 100 ms, luma 68.1. With the post
+warm skipped the race still compiled NO post program, so the 20 post compiles in
+census 240 were not a missing warm: they were the ssrTag MRT node minted every
+present (`tsl-fx.js`, now built once) keying a fresh render context — the same
+§2p mechanism. The caster warm measured 5 ms and the scene warm alone takes ~7 s, so
+neither the ungated post warm nor the caster warm bought anything the census can see,
+and together they held the lights ~2.2 s longer. `tlxWarmPlus` is therefore OPT-IN
+(`=1`); the default is the census-244 configuration. Hitch counts between single
+driven windows are noisy (§2w), so "5 vs 2" is not a finding; "same compiles,
+shorter lights" is.

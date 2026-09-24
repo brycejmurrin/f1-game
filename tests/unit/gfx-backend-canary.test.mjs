@@ -4396,7 +4396,7 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
   // nulled only after it, and the casters compile under null (sunPass runs before
   // present(), with the MRT restored).
   let shadowCalls = 0, postCalls = 0;
-  const _warmPlus = true;   // apex26.tlxWarmPlus unset: the full warm
+  const _warmPlus = true;   // apex26.tlxWarmPlus=1: the full warm (opt-in)
   // The stage timeline memState().warm reports (census 207 spent its window
   // inside the warm with no row saying so): the sandbox owns the record.
   const _warmStages = { at: 0, scene: null, post: null, shadow: null, total: null, attempts: 0, failed: 0 };
@@ -4433,8 +4433,8 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
     iShadow = body.indexOf("shadowSys.warm()");
   assert.ok(iPost > 0 && iNull > iPost && iShadow > iNull, "setMRT(null) must sit between the post warm and the caster warm");
   assert.equal(body.indexOf("renderer.setMRT(null)", iNull + 1), -1, "startProgramWarm nulls the MRT exactly once");
-  assert.match(body, /if \(_warmPlus && shadowSys && shadowSys\.warm\)/, "the caster warm is skipped when the module offers none or apex26.tlxWarmPlus=0");
-  assert.match(body, /post\.warm && \(_warmPlus \|\| performance\.now\(\) - _warmAt < 3000\)/, "tlxWarmPlus=0 restores the post warm's 3 s gate");
+  assert.match(body, /if \(_warmPlus && shadowSys && shadowSys\.warm\)/, "the caster warm is skipped when the module offers none or apex26.tlxWarmPlus is not 1");
+  assert.match(body, /post\.warm && \(_warmPlus \|\| performance\.now\(\) - _warmAt < 3000\)/, "without tlxWarmPlus=1 the post warm keeps its 3 s gate");
   const warm = eval("(function(opts){" + body + "})");
   warm({}); await Promise.resolve();
   assert.equal(target, "HDR"); assert.equal(mrt, "tag"); assert.equal(postCalls, 0);

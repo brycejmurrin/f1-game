@@ -1799,8 +1799,12 @@ const TLX = (function () {
       // exports, imports and resets with the rest of DISPLAY.
       let _envOptOut = true;
       try { _envOptOut = GameStore.store.raw("apex26.tlxEnvProbe") !== "1"; } catch (_) { /* no store: stay opted out */ }
-      let _warmPlus = true;
-      try { _warmPlus = localStorage.getItem("apex26.tlxWarmPlus") !== "0"; } catch (_) { /* no storage: warm everything */ }
+      // OPT-IN since the real-Metal A/B (PERF-FINDINGS §2ag, censuses 243/244):
+      // with it off the race compiled the same 8 scene programs and no post
+      // program, because the post recompiles were ssrTag-node churn (tsl-fx.js),
+      // not a missing warm; with it on the lights held ~2.2 s longer for nothing.
+      let _warmPlus = false;
+      try { _warmPlus = localStorage.getItem("apex26.tlxWarmPlus") === "1"; } catch (_) { /* no storage: the default warm */ }
       function startProgramWarm(opts) {
         _warmRequested = false;
         if (typeof renderer.compileAsync !== "function") return;
@@ -1840,8 +1844,8 @@ const TLX = (function () {
             // the first visible present after the lights instead of during them.
             // post.warm() keeps its own deadline, so the lights hold at most a
             // few seconds longer in the worst case, which is the trade this
-            // makes. apex26.tlxWarmPlus=0 restores the gate and skips the caster
-            // warm below — the A/B handle and the player-side off switch.
+            // makes — so it is OPT-IN (apex26.tlxWarmPlus=1, see _warmPlus), as is
+            // the caster warm below; by default the 3 s gate stands.
             if (usePost && post.warm && (_warmPlus || performance.now() - _warmAt < 3000)) {
               _gpuLastOperation = "compile-post"; await post.warm(opts, _postF);
             }
