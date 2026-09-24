@@ -589,10 +589,17 @@ const SceneryNature = (function () {
       }
       ctx.note("grandstand", [px[k] + r[0] * oInner, groundYAt(k, gap) + 6, pz[k] + r[2] * oInner],
                [10, 12, len], { k, side });
-      // Back shell — center at gap+7.5 beyond road edge
-      const oShell = side * (hw[k] + gap + 7.5);
-      const cShell = [px[k] + r[0] * oShell, groundYAt(k, gap + 7.5) + shellH / 2 - 0.8, pz[k] + r[2] * oShell];
-      addBox(out, cShell, [10, shellH, len], shell || [0.40, 0.41, 0.46], [r, u, t]);
+      // Back shell — BEHIND the rake, gap+6 .. gap+12.5 beyond the road edge.
+      // The crowd bank below runs from gap+1.5 back 4.2 m (+ half a 1.3 m
+      // riser): its last row's back edge is at gap+5.93. The shell used to be
+      // 10 m deep from gap+2.5, so it swallowed four of the five seating rows
+      // — the stand read as a wall with one row of heads in front, and 10 %
+      // of all prop triangles were crowd nobody could see (P2,
+      // docs/notes/SCENERY-QA-PLAN.md). Same back face, same footprint.
+      const SHELL_IN = 6, SHELL_OUT = 12.5, shellD = SHELL_OUT - SHELL_IN, shellMid = (SHELL_IN + SHELL_OUT) / 2;
+      const oShell = side * (hw[k] + gap + shellMid);
+      const cShell = [px[k] + r[0] * oShell, groundYAt(k, gap + shellMid) + shellH / 2 - 0.8, pz[k] + r[2] * oShell];
+      addBox(out, cShell, [shellD, shellH, len], shell || [0.40, 0.41, 0.46], [r, u, t]);
       const riserTint = crowd ? [crowd[0] * 0.4, crowd[1] * 0.4, crowd[2] * 0.4] : null;
       crowdBank(k, side, gap + 1.5, len - 2, 7, 4.2, riserTint);
       const tierLift = [];
