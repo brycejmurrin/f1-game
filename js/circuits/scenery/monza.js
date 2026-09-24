@@ -708,17 +708,16 @@
       }
 
       // Dense Curva Grande pine corridor — wave-3 densify (research: dark-green wall).
-      every(10, (k) => {
+      // Distances start at 22 m so crowns do not share faces with Rank A's
+      // 10–16 m stonePines (coplanar-audit: one new spot from that overlap).
+      every(12, (k) => {
         const s = k / n;
         if (s < 0.08 || s > 0.18) return;
         const h = hash(k * 19 + 11);
-        stonePine(k, -1, 9 + h * 2.5, 15 + h * 7, h < 0.4 ? PINE_D : PINE, { spread: 0.72 });
-        stonePine(k,  1, 9 + h * 3.0, 14 + h * 7, h < 0.5 ? PINE : PINE_D, { spread: 0.70 });
-        if (h > 0.30) pine(k, -1, 18 + h * 4, 20 + h * 12, PINE_D);
-        if (h > 0.40) pine(k,  1, 19 + h * 4, 19 + h * 11, PINE);
-        // Inner verge saplings — keep the corridor hugging the racing line.
-        if (h > 0.55) bush(k, -1, 6.5 + h * 1.5, [0.12, 0.32, 0.14]);
-        if (h > 0.60) bush(k,  1, 6.5 + h * 1.5, [0.14, 0.34, 0.16]);
+        pine(k, -1, 22 + h * 5, 20 + h * 12, PINE_D);
+        pine(k,  1, 23 + h * 5, 19 + h * 11, PINE);
+        if (h > 0.45) pine(k, -1, 30 + h * 4, 18 + h * 10, PINE_D);
+        if (h > 0.55) pine(k,  1, 31 + h * 4, 17 + h * 9, PINE);
       });
 
       // Lesmo woodland hug — tight tree boxes outside both right-handers.
@@ -726,9 +725,9 @@
         const s = k / n;
         if (s < 0.35 || s > 0.46) return;
         const h = hash(k * 23 + 5);
-        if (h < 0.25) return;
-        stonePine(k, -1, 10 + h * 3, 13 + h * 6, PINE_D, { spread: 0.68 });
-        if (h > 0.45) pine(k, -1, 16 + h * 4, 16 + h * 8, PINE);
+        if (h < 0.35) return;
+        pine(k, -1, 18 + h * 5, 16 + h * 8, PINE_D);
+        if (h > 0.55) pine(k, -1, 26 + h * 4, 14 + h * 7, PINE);
       });
 
       spectatorHill(0.08, 0.18, -1, 13, { rows: 3, rise: 1.0, depth: 1.8, density: 0.40, step: 9 });
