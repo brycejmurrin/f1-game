@@ -204,6 +204,27 @@ test("the shared Playwright fixture pins native GLX coverage", () => {
   assert.match(install, /localStorage\.setItem\(\s*"apex26\.gfxBackend"\s*,\s*"webgl2"\s*\)/);
 });
 
+// The pin above only reaches specs that import `test` from fixtures.js. Four
+// gfx specs used to import raw @playwright/test and silently measured TLX on
+// Metal after the three default (RENDERER-MACOS-RED-2026-09.md). Keep them on
+// the fixtures path — tlx-probes is the TLX product gate and pins "three"
+// itself.
+test("gfx specs that name GLX import Playwright test from fixtures", () => {
+  for (const rel of [
+    "tests/specs/webgl-probes.spec.js",
+    "tests/specs/image-grade-visual.spec.js",
+    "tests/specs/lighting-ab.spec.js",
+    "tests/specs/lighting-tuner-grade.spec.js",
+    "tests/specs/instanced-draw.spec.js",
+  ]) {
+    const src = code(rel);
+    assert.match(src, /from\s+["']\.\.\/helpers\/fixtures\.js["']/,
+      rel + " must import test from fixtures (webgl2 pin)");
+    assert.doesNotMatch(src, /from\s+["']@playwright\/test["']/,
+      rel + " must not import raw @playwright/test (skips the webgl2 pin)");
+  }
+});
+
 test("first world present re-arms the canary so a jetsam mid-frame still reverts", () => {
   // The arm used to be inlined right before gfx.present(po); it is now the
   // extracted armBackendProbe() (also called from tick()'s fatal catch, so a
