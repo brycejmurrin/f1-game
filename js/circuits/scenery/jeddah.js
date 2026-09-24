@@ -10,7 +10,7 @@
         addBox, addCyl, addCone, addFrustum, addPrism, addPyramid, anchor, vadd, building, tower, billboard,
         grandstand, grandstandEx, scaffoldStand, gantry, marshalPost, guardrail, tyreWall, wall, palm,
         cityFront, modelGroup, waterSurface, waterBand, onTrack, hash, every, circuitKit,
-        lampPost } = api;
+        lampPost, seat } = api;
 
       // ── Night Corniche palette ─────────────────────────────────────────────
       const SEA     = [0.02, 0.04, 0.08];   // deep black-mirror water
@@ -289,53 +289,61 @@
 
       // ── JEDDAH SKYLINE — Blue Sail + twin gold + antenna cluster ──────────
       // Night-photo heroes: the cyan "sail" wedge with helipad lip, and a pair
-      // of warm-gold window towers. These replace anonymous dark slabs as the
-      // inland skyline cue that reads as Jeddah from the Corniche.
+      // of warm-gold window towers. Base-anchored via seat.box (addBox is
+      // centre-anchored — mid-height LED strips were reading as floaters).
       {
         const a = anchor(K(0.275), -1, 72), b = [a.r, a.u, a.t];
         if (!onTrack(a.c[0], a.c[2], 28)) {
           const H = 128;
+          const box = (seat && seat.box) ? seat.box.bind(seat) : null;
+          const put = (stage, c, sz, col) => {
+            if (box) box(stage, c, sz, col, b);
+            else addBox(stage, vadd(c, a.u, sz[1] * 0.5), sz, col, b);
+          };
           modelGroup("jeddah-blue-sail", {
             center: vadd(a.c, a.u, H * 0.5), size: [22, H + 10, 48], basis: b,
           }, (stage) => {
             const SAIL = [0.18, 0.55, 1.15];
             const SAIL_HI = [0.42, 0.82, 1.25];
-            // Wedge / sail: structural core + track-facing cyan LED face.
             stage._mat = MAT.METAL;
-            addBox(stage, a.c, [8, H, 36], [0.14, 0.16, 0.22], b);
+            put(stage, a.c, [8, H, 36], [0.14, 0.16, 0.22]);
             stage._mat = MAT.GLASS;
-            // Track-facing face is toward −r (back toward the road from inland).
-            addBox(stage, vadd(a.c, a.r, -4.2), [1.2, H * 0.92, 34], SAIL, b);
-            addBox(stage, vadd(a.c, a.r, -5.0), [0.6, H * 0.88, 28], SAIL_HI, b);
-            for (let i = 0; i < 14; i++) {
-              const y = 8 + i * (H * 0.85 / 14);
-              addBox(stage, vadd(vadd(a.c, a.r, -5.4), a.u, y),
-                [0.35, 1.4, 30], (i % 2) ? SAIL_HI : SAIL, b);
+            // Continuous sail face (not mid-air LED strips — those float-audit).
+            put(stage, vadd(a.c, a.r, -4.2), [1.2, H * 0.92, 34], SAIL);
+            put(stage, vadd(a.c, a.r, -5.0), [0.6, H * 0.88, 28], SAIL_HI);
+            // Vertical LED fins proud of the face — grounded with the shaft.
+            for (const z of [-12, -4, 4, 12]) {
+              put(stage, vadd(vadd(a.c, a.r, -5.5), a.t, z),
+                [0.4, H * 0.85, 1.2], (z < 0) ? SAIL_HI : SAIL);
             }
             stage._mat = 0;
-            // Flat protruding helipad / observation lip at the crown.
-            addBox(stage, vadd(a.c, a.u, H + 1.0), [18, 2.2, 22], [0.72, 0.74, 0.78], b);
-            addBox(stage, vadd(a.c, a.u, H + 2.4), [14, 0.6, 16], LED, b);
+            // Helipad lip sitting ON the shaft top (base at H, not floating).
+            put(stage, vadd(a.c, a.u, H), [18, 2.2, 22], [0.72, 0.74, 0.78]);
+            put(stage, vadd(a.c, a.u, H + 2.2), [14, 0.6, 16], LED);
           }, { required: true });
         }
       }
       {
         const a = anchor(K(0.295), -1, 95), b = [a.r, a.u, a.t];
         if (!onTrack(a.c[0], a.c[2], 30)) {
+          const box = (seat && seat.box) ? seat.box.bind(seat) : null;
+          const put = (stage, c, sz, col) => {
+            if (box) box(stage, c, sz, col, b);
+            else addBox(stage, vadd(c, a.u, sz[1] * 0.5), sz, col, b);
+          };
           modelGroup("jeddah-golden-twins", {
             center: vadd(a.c, a.u, 70), size: [48, 148, 28], basis: b,
           }, (stage) => {
             const GOLDW = [1.05, 0.88, 0.42];
             for (const lat of [-12, 12]) {
               const base = vadd(a.c, a.t, lat);
-              addBox(stage, base, [16, 132, 18], [0.22, 0.20, 0.18], b);
+              put(stage, base, [16, 132, 18], [0.22, 0.20, 0.18]);
               stage._mat = MAT.GLASS;
-              addBox(stage, vadd(base, a.u, 12), [16.6, 108, 18.6], GOLDW, b);
+              put(stage, vadd(base, a.u, 8), [16.6, 116, 18.6], GOLDW);
               stage._mat = 0;
-              addBox(stage, vadd(base, a.u, 134), [17, 4, 19], [0.55, 0.48, 0.28], b);
+              put(stage, vadd(base, a.u, 132), [17, 4, 19], [0.55, 0.48, 0.28]);
             }
-            // Deep central notch between the twins.
-            addBox(stage, vadd(a.c, a.u, 40), [6, 80, 10], [0.10, 0.10, 0.12], b);
+            put(stage, vadd(a.c, a.u, 8), [6, 116, 10], [0.10, 0.10, 0.12]);
           }, { required: true });
         }
       }
@@ -352,15 +360,20 @@
       {
         const a = anchor(K(0.055), -1, 38), b = [a.r, a.u, a.t];
         if (!onTrack(a.c[0], a.c[2], 16)) {
+          const box = (seat && seat.box) ? seat.box.bind(seat) : null;
+          const put = (stage, c, sz, col) => {
+            if (box) box(stage, c, sz, col, b);
+            else addBox(stage, vadd(c, a.u, sz[1] * 0.5), sz, col, b);
+          };
           modelGroup("jeddah-golden-tower-hotel", {
             center: vadd(a.c, a.u, 28), size: [18, 58, 22], basis: b,
           }, (stage) => {
-            addBox(stage, a.c, [14, 52, 18], [0.28, 0.26, 0.22], b);
+            put(stage, a.c, [14, 52, 18], [0.28, 0.26, 0.22]);
             stage._mat = MAT.GLASS;
-            addBox(stage, vadd(a.c, a.u, 6), [14.5, 42, 18.5], WINGOLD, b);
+            put(stage, vadd(a.c, a.u, 4), [14.5, 44, 18.5], WINGOLD);
             stage._mat = 0;
-            addBox(stage, vadd(a.c, a.u, 54), [15, 3.5, 19], GOLD, b);
-            addBox(stage, vadd(a.c, a.u, 56.5), [8, 1.2, 10], LED, b);
+            put(stage, vadd(a.c, a.u, 52), [15, 3.5, 19], GOLD);
+            put(stage, vadd(a.c, a.u, 55.5), [8, 1.2, 10], LED);
           }, { required: true });
         }
       }

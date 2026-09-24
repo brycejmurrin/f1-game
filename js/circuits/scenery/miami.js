@@ -601,26 +601,24 @@
           const col = (i % 2) ? [0.08, 0.62, 0.28] : [0.10, 0.42, 0.78];
           addBox(out, vadd(vadd(a.c, a.t, along2), a.u, 4.5),
             [0.25, 7.5, 2.8], col, b);
-          addBox(out, vadd(vadd(a.c, a.t, along2), a.u, 4.5),
-            [0.32, 1.4, 2.2], WHITE, b);
+          // Logo patch proud of the banner face — not coplanar with it.
+          addBox(out, vadd(vadd(vadd(a.c, a.t, along2), a.r, -side * 0.22), a.u, 5.2),
+            [0.18, 1.4, 2.2], WHITE, b);
         }
       }
 
-      // MIA word-mark cue on the marina hospitality fascia.
+      // MIA word-mark cue — three solid letter slabs (no overlapping outlines).
       {
         const a = anchor(K(0.30), 1, 22), b = [a.r, a.u, a.t];
         if (!onTrack(a.c[0], a.c[2], 8)) {
           modelGroup("miami-mia-sign", {
-            center: vadd(a.c, a.u, 6), size: [2, 10, 18], basis: b,
+            center: vadd(a.c, a.u, 6), size: [2.4, 10, 18], basis: b,
           }, (stage) => {
-            addBox(stage, vadd(a.c, a.u, 5.5), [0.6, 8, 16], [0.08, 0.08, 0.10], b);
-            // Triple-outline MIA glyph as three stacked outline bars per letter slot.
+            addBox(stage, vadd(a.c, a.u, 5.5), [0.5, 8, 16], [0.08, 0.08, 0.10], b);
             for (let ch = 0; ch < 3; ch++) {
-              const z = (ch - 1) * 4.8;
-              for (const inset of [0, 0.55, 1.1]) {
-                addBox(stage, vadd(vadd(a.c, a.t, z), a.u, 5.5 + inset * 0.1),
-                  [0.35, 6.5 - inset * 1.2, 3.6 - inset * 0.6], WHITE, b);
-              }
+              const z = (ch - 1) * 5.0;
+              addBox(stage, vadd(vadd(a.c, a.t, z), a.u, 5.5),
+                [0.55, 6.2, 3.2], WHITE, b);
             }
           }, { required: true });
         }
