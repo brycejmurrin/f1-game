@@ -605,24 +605,12 @@
       try {
         compileJobs = jobs;
         try { present(opts, frame); } finally { compileJobs = null; }
-        // The caller's MRT is the LIVE one: present() runs the post chain with
-        // the scene pass's ssrTag MRT node still set, so compiling these quads
-        // under a null MRT built sixteen programs the race never used
-        // (gpu-census 206). Whatever startProgramWarm has set is what runPass
-        // will see; do not touch it here.
+        renderer.setMRT(null);
         const deadline = performance.now() + 3000;
         for (const job of jobs) {
           renderer.setRenderTarget(job.target);
-          // THE LIVE QUAD, not a snapshot. The warm used to compile a fresh
-          // QuadMesh per job, and on macos-latest Metal the race then built the
-          // same 16 post programs AGAIN through runPass (gpu-census 205: x16
-          // tagged warm, x16 tagged runPass, the same eight sites) — a fresh
-          // object does not share a render-object cache key with the one
-          // present() draws. Compiling `quad` itself with the job's material is
-          // exactly what runPass does, so the hit is guaranteed whatever the key
-          // contains.
-          quad.material = job.mat;
-          await renderer.compileAsync(quad, quad.camera);
+          const snapshot = new THREE.QuadMesh(job.mat);
+          await renderer.compileAsync(snapshot, snapshot.camera);
           if (performance.now() >= deadline) break;
         }
       } finally {

@@ -7668,10 +7668,8 @@ function render(dt) {
       const lGate = preGrid ? 200 : 40;
       if (c.isPlayer || ldx * ldx + ldy * ldy + ldz * ldz < lGate * lGate) {
         // Wet, grid and ERS-code lights stay full-bright — a status light must
-        // not dim with battery. Otherwise 0.45 (flat) -> 1.0 (full) in FIVE steps:
-        // emissive is TLX's material KEY (1/32 steps), and a brightness that followed
-        // the battery minted a material — a program — per step (gpu-census 212: 20 in 20 s).
-        drawRearLights(tmpMat, (wet || preGrid || ersCode === 1) ? 1.0 : (0.45 + 0.55 * (Math.round(clamp(c.energy || 0, 0, 1) * 4) / 4)));
+        // not dim with battery. Otherwise 0.45 (flat) -> 1.0 (full).
+        drawRearLights(tmpMat, (wet || preGrid || ersCode === 1) ? 1.0 : (0.45 + 0.55 * clamp(c.energy || 0, 0, 1)));
       }
     }
     // 2026 amber mirror lamps: under 20 km/h or stopped — the pit lane, the grid,
@@ -7707,8 +7705,7 @@ function render(dt) {
       W[12] += W[4] * 0.40 - W[8] * 2.63;
       W[13] += W[5] * 0.40 - W[9] * 2.63;
       W[14] += W[6] * 0.40 - W[10] * 2.63;
-      // Quarter steps: alpha is in the material key (see drawRearLights above); ceil keeps a lit pop visible.
-      _flameOpts.alpha = Math.ceil((0.30 + 0.55 * fl) * c.exhaustPop * 4) / 4;
+      _flameOpts.alpha = (0.30 + 0.55 * fl) * c.exhaustPop;
       gfx.draw(getExhaustFlame(c.fuelVisual && c.fuelVisual.fxFlame), W, _flameOpts);
     }
   }

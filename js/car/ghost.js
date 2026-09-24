@@ -64,15 +64,8 @@ const Ghost = (function () {
     accessClock = Math.max(accessClock + 1, Date.now());
     g._used = accessClock;
   }
-  // ONE encoder, not one per call. trimStore() asks for a byte length after
-  // every eviction, so a fresh TextEncoder per question allocated one per
-  // iteration on top of encoding the whole store again.
-  let _enc = null;
   function byteLength(json) {
-    if (typeof TextEncoder === "function") {
-      if (!_enc) _enc = new TextEncoder();
-      return _enc.encode(json).byteLength;
-    }
+    if (typeof TextEncoder === "function") return new TextEncoder().encode(json).byteLength;
     // Ghost payloads are numeric arrays plus ASCII ids in normal play. Twice
     // UTF-16 length is a conservative fallback where TextEncoder is absent.
     return json.length * 2;
@@ -101,24 +94,11 @@ const Ghost = (function () {
       const bt = Number.isFinite(store[b] && store[b]._used) ? store[b]._used : 0;
       return at - bt;
     });
-    // O(n) rather than O(n^2). Re-serialising the WHOLE store after each
-    // eviction meant encoding up to MAX_STORE_BYTES (512 KB) once per entry
-    // dropped, on a path that already runs on the lap-line frame's idle
-    // callback. A JSON object's length is its entries plus their separators,
-    // so an entry's own contribution is exactly computable and can simply be
-    // subtracted; the loop then costs one stringify per entry it measures
-    // instead of one per entry it drops, and the exact length is recomputed
-    // once at the end so nothing downstream reads an estimate.
-    let size = byteLength(json);
-    while (oldest.length > 1 && size > MAX_STORE_BYTES) {
-      const id = oldest.shift();
-      // `"id":<value>,` — the comma is present for every entry but the last,
-      // and one over-count per eviction only makes the estimate conservative.
-      size -= byteLength(JSON.stringify(id) + ":" + JSON.stringify(store[id]) + ",");
-      delete store[id];
+    while (oldest.length > 1 && byteLength(json) > MAX_STORE_BYTES) {
+      delete store[oldest.shift()];
       changed = true;
+      json = JSON.stringify(store);
     }
-    json = JSON.stringify(store);
     const last = oldest[0];
     while (last && byteLength(json) > MAX_STORE_BYTES && thinTrace(store[last])) {
       changed = true;
