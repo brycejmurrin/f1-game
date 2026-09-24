@@ -101,7 +101,7 @@ const SceneryNature = (function () {
     // apart — the separation has to be a property of the emitter, not luck.
     // Call order inside a circuit file is deterministic and layered calls are
     // always adjacent, so consecutive slots is exactly the guarantee needed.
-    let hillSeq = 0;
+    let hillSeq = 0, standSeq = 0;
     const spotTaken = (x, z) => {
       const cx = Math.floor(x / TREE_GAP), cz = Math.floor(z / TREE_GAP);
       for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
@@ -589,44 +589,107 @@ const SceneryNature = (function () {
       }
       ctx.note("grandstand", [px[k] + r[0] * oInner, groundYAt(k, gap) + 6, pz[k] + r[2] * oInner],
                [10, 12, len], { k, side });
-      // Back shell — BEHIND the rake, gap+6 .. gap+12.5 beyond the road edge.
-      // The crowd bank below runs from gap+1.5 back 4.2 m (+ half a 1.3 m
-      // riser): its last row's back edge is at gap+5.93. The shell used to be
-      // 10 m deep from gap+2.5, so it swallowed four of the five seating rows
-      // — the stand read as a wall with one row of heads in front, and 10 %
-      // of all prop triangles were crowd nobody could see (P2,
+      // Per-call MIN_SEP slot, as spectatorHill's hillSeq: circuits lay stands
+      // end to end (fuji's run() of 150 m walls) and over each other, and on a
+      // curve two shells' faces landed 1.3 mm apart. Geometry only, and only
+      // OUTWARD — the barrier, solid index and on-track test above keep `gap`.
+      // Alternate 0 / MIN_SEP: consecutive stands differ by MIN_SEP and every
+      // other stand is where it was. Measured 2026-09-24 against the 4-slot
+      // TrackGeom.SEP_SLOTS nudge: fleet coplanar spots 259 vs 263 (a 3.5-16.5
+      // cm shift lands shells on city facades — mexico +10 pairs).
+      gap += (standSeq++ & 1) * TrackGeom.MIN_SEP;
+      // Back shell + upper tiers. The crowd bank below runs from gap+1.5 back
+      // 4.2 m (+ half a 1.3 m riser): its last row's back edge is at gap+5.93,
+      // so the single-tier shell sits BEHIND it, gap+6 .. gap+12.5 (it used to
+      // be 10 m deep from gap+2.5 and swallowed four of five rows — P2,
       // docs/notes/SCENERY-QA-PLAN.md). Same back face, same footprint.
-      const SHELL_IN = 6, SHELL_OUT = 12.5, shellD = SHELL_OUT - SHELL_IN, shellMid = (SHELL_IN + SHELL_OUT) / 2;
-      const oShell = side * (hw[k] + gap + shellMid);
-      const cShell = [px[k] + r[0] * oShell, groundYAt(k, gap + shellMid) + shellH / 2 - 0.8, pz[k] + r[2] * oShell];
-      addBox(out, cShell, [shellD, shellH, len], shell || [0.40, 0.41, 0.46], [r, u, t]);
+      //
+      // A MULTI-TIER stand stacks each upper rake 4.6 m further back and 7.6 m
+      // up, which puts tier 1 (gap+5.87 .. gap+10.53, from lift-0.05 up)
+      // straight over that shell: a full-height shell (top ~11.2 m, 16.7 m on
+      // fuji's 17.5 m walls) swallowed the upper tier's lower rows, and the
+      // 5.2 m concourse band (gap+3.5 .. 8.7, 5.8-7.6 m up) enclosed the ground
+      // tier's top two rows (2026-09-24, measured as enclosed FABRIC triangles
+      // fleet-wide). So the shell is STEPPED: under each built upper rake it is
+      // a section capped just below that rake's lowest riser, and only behind
+      // the last rake does it run to full height. The concourse band is a
+      // fascia stripe on the section's face, MIN_SEP clear of the rake in front
+      // of it and of the section behind it. Footprint and indexSolid are
+      // unchanged; no crowd row of the stand is inside any of these boxes.
+      const SHELL_IN = 6, SHELL_OUT = 12.5, SEP = TrackGeom.MIN_SEP;
+      const BANK_AT = 1.5, BANK_RISE = 7, BANK_DEPTH = 4.2, TIER_BACK = 4.6, TIER_LIFT = 7.6;
+      const bankRows = Math.max(3, Math.round(BANK_RISE / 1.4));   // crowdBank's own row count
+      // Back face of tier i's rake (last riser: row centre + half its 1.3 m
+      // depth), and a rake's floor above its anchor (row 0's riser bottom).
+      const rakeBack = (i) => BANK_AT + TIER_BACK * i + BANK_DEPTH * (bankRows - 0.5) / bankRows + 0.65;
+      const rakeFloor = (lift) => lift + BANK_RISE * 0.5 / bankRows - 0.75;
+      const shellCol = shell || [0.40, 0.41, 0.46];
+      const dotU = (p) => p[0] * u[0] + p[1] * u[1] + p[2] * u[2];
+      // One shell section from lateral a..b (metres past the road edge): full
+      // height, or capped at the u-coordinate capU just below a rake.
+      const shellSection = (a, b, capU) => {
+        if (b - a < 0.3) return null;
+        const mid = (a + b) / 2, o = side * (hw[k] + gap + mid);
+        const base = [px[k] + r[0] * o, groundYAt(k, gap + mid) - 0.8, pz[k] + r[2] * o];
+        if (capU == null) {
+          const c = [base[0], base[1] + shellH / 2, base[2]];
+          addBox(out, c, [b - a, shellH, len], shellCol, [r, u, t]);
+          return { top: c[1] + shellH / 2 };
+        }
+        const h = Math.min(shellH, capU - dotU(base));
+        if (h < 1) return null;
+        const c = vadd(base, u, h / 2);
+        addBox(out, c, [b - a, h, len], shellCol, [r, u, t]);
+        return { top: c[1] + h / 2 };
+      };
       const riserTint = crowd ? [crowd[0] * 0.4, crowd[1] * 0.4, crowd[2] * 0.4] : null;
-      crowdBank(k, side, gap + 1.5, len - 2, 7, 4.2, riserTint);
+      crowdBank(k, side, gap + BANK_AT, len - 2, BANK_RISE, BANK_DEPTH, riserTint);
       const tierLift = [];
+      let prevBack = rakeBack(0), shellFront = SHELL_IN;
       for (let ti = 1; ti < tiers; ti++) {
-        const lift = 7.6 * ti, back = 4.6 * ti, tl = len - 2 - ti * 4;
+        const lift = TIER_LIFT * ti, back = TIER_BACK * ti, tl = len - 2 - ti * 4;
         if (tl < 8) break;
-        const ca = anchor(k, side, gap + 1.5 + back);
+        const ca = anchor(k, side, gap + BANK_AT + back);
         const cb = [ca.r, ca.u, ca.t];
-        // concourse band under the deck — hides the gap between the rakes
-        const bandC = vadd(ca.c, ca.u, lift - 0.9);
-        if (!rejBox(bandC, [5.2, 1.8, tl], cb)) {
-          addBox(out, bandC, [5.2, 1.8, tl], fasciaCol, cb);
-          crowdBank(k, side, gap + 1.5 + back, tl, 7, 4.2, riserTint, lift);
+        // Concourse fascia stripe under the deck: 0.5 m deep, its face SEP
+        // behind the rake in front, its top 5 cm under the section's.
+        const capU = dotU(ca.c) + rakeFloor(lift) - 0.1;
+        const bandA = prevBack + SEP, bandO = side * (hw[k] + gap + bandA + 0.25);
+        const bandBase = [px[k] + r[0] * bandO, 0, pz[k] + r[2] * bandO];
+        const bandC = vadd(bandBase, u, capU - 0.05 - 0.9 - dotU(bandBase));
+        if (!rejBox(bandC, [0.5, 1.8, tl], cb)) {
+          addBox(out, bandC, [0.5, 1.8, tl], fasciaCol, cb);
+          crowdBank(k, side, gap + BANK_AT + back, tl, BANK_RISE, BANK_DEPTH, riserTint, lift);
+          // The shell under this rake, capped below its floor, 1.5 SEP behind
+          // the stripe's face so the two front faces never share a plane.
+          shellSection(Math.max(shellFront, bandA + 1.5 * SEP), Math.min(SHELL_OUT, rakeBack(ti)), capU);
+          prevBack = rakeBack(ti);
+          shellFront = prevBack + 2.5 * SEP;
           // Only a tier that actually BUILT raises the roof — a culled tier
           // used to lift the slab a full rake above the surviving stand.
           tierLift.push(lift);
         }
       }
+      // Full height behind the last rake (the whole shell of a one-tier stand).
+      const fullShell = shellSection(shellFront, SHELL_OUT, null);
       const topLift = tierLift.length ? tierLift[tierLift.length - 1] : 0;
       // Roof slab cantilevered over the crowd, lifted on the up axis
       const a = anchor(k, side, gap + 5);
       const roofY = 13 + topLift;
       const roofC = vadd(a.c, a.u, roofY);
       const roofW = roofKind === "truss" ? 12 : (roofKind === "flat" ? 10 : 12);
+      // The rear fascia's lateral span (see below) and how far the slab must
+      // reach back to sit on it: a three-tier stand's last rake ends at
+      // gap+15.13, past a 12 m slab's back edge (gap+11), so a fascia behind
+      // it would leave the slab floating (indianapolis). The slab grows back
+      // to cover it; one- and two-tier cantilevers are unchanged (<= 1.5 cm).
+      let f0 = 5 + roofW / 2 - 4.08, f1 = f0 + 4;
+      if (tierLift.length) { f0 = Math.max(f0, shellFront + SEP); f1 = Math.max(f1, f0 + 0.3); }
+      const roofExt = Math.max(0, f1 + 0.08 - (5 + roofW / 2));
+      const slabC = vadd(roofC, a.r, side * roofExt / 2);
       if (roofKind !== "none") {
         if (roofKind === "truss") {
-          addBox(out, roofC, [12, 0.35, len + 2], roofCol, [a.r, a.u, a.t]);
+          addBox(out, slabC, [12 + roofExt, 0.35, len + 2], roofCol, [a.r, a.u, a.t]);
           const bays = Math.max(2, Math.min(14, Math.round(len / 9)));
           for (let i = 0; i < bays; i++) {
             const off = ((i + 0.5) / bays - 0.5) * len;
@@ -635,7 +698,7 @@ const SceneryNature = (function () {
         } else {
           // "flat" sits tight over the shell; "cantilever" (default) overhangs.
           const rw = roofKind === "flat" ? 10 : 12;
-          addBox(out, roofC, [rw, 0.8, len + 2], roofCol, [a.r, a.u, a.t]);
+          addBox(out, slabC, [rw + roofExt, 0.8, len + 2], roofCol, [a.r, a.u, a.t]);
         }
         // Support columns under the roof's outer (trackside) edge.
         //
@@ -697,12 +760,18 @@ const SceneryNature = (function () {
       // ACTUAL world-space tops instead of a constant. Placed at the roof's
       // outer edge (over the shell, behind the crowd) so it never occludes the
       // under-roof night strip, and is itself hidden by the roof from trackside.
+      // On a multi-tier stand the fascia starts behind the LAST rake (one SEP
+      // behind the full-height shell's face) — at the roof's edge it stood
+      // over the upper tier and enclosed its rows. At least 0.3 m deep; the
+      // slab above was widened to reach it (f0/f1, roofExt). Past the shell's
+      // back face (three tiers) it stands on the ground.
       if (roofKind !== "none") {
-        const shellTop = cShell[1] + shellH / 2, roofUnder = roofC[1] - 0.4;
+        const fm = (f0 + f1) / 2, oF = side * (hw[k] + gap + fm);
+        const shellTop = fullShell && f1 <= SHELL_OUT ? fullShell.top : groundYAt(k, gap + fm) - 0.8;
+        const roofUnder = roofC[1] - 0.4;
         if (roofUnder > shellTop - 0.1) {
-          const oF = side * (hw[k] + gap + 5 + roofW / 2 - 0.08 - 2);
           addBox(out, [px[k] + r[0] * oF, (shellTop + roofUnder) / 2, pz[k] + r[2] * oF],
-                 [4, roofUnder - shellTop + 0.2, len], fasciaCol, [r, u, t]);
+                 [f1 - f0, roofUnder - shellTop + 0.2, len], fasciaCol, [r, u, t]);
         }
       }
       if (NIGHT && roofKind !== "none")

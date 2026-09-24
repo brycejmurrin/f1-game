@@ -1618,11 +1618,19 @@ const Tracks = (function () {
       }
       return null;
     };
+    let placeSeq = 0;
     const place = (k, side, dist, sz, col) => {
       const r = [track.rx[k], track.ry[k], track.rz[k]];
       const t = [track.tx[k], track.ty[k], track.tz[k]];
       const u = upOf(track, k);
-      const jitter = hash(k * 7.7 + sz[0] * 3.1 + sz[1] * 5.3 + sz[2] * 1.9) * 0.09;
+      // A per-call SLOT, not a hash: a continuous random jitter landed two
+      // placed props a millimetre or two apart (spa, jerez), which fights at
+      // any range. TrackGeom.SEP_SLOTS, like groundPatch's patchSeq and
+      // spectatorHill's hillSeq: consecutive props — the ones that stand at
+      // the same spot (a box and its sign band) — are >= MIN_SEP apart across
+      // the road, and no slot sits within MIN_SEP of a 0.1 m authored plane.
+      // Collision and the solid index still read the authored `dist`.
+      const jitter = TrackGeom.SEP_SLOTS[placeSeq++ % 4];
       const o = side * (hw[k] + dist + jitter);
       const cx = px[k] + r[0] * o, cz = pz[k] + r[2] * o;
       // skip if this prop would overlap a parallel stretch of track
@@ -2105,8 +2113,14 @@ const Tracks = (function () {
     const crowd = NIGHT ? [0.45, 0.28, 0.3] : [0.78, 0.42, 0.32];
     for (let i = 0; i < (def.ownPitStraight ? 0 : 7); i++) {
       const k = (i * 4) % n;
+      // The bank sits wholly IN FRONT of the shell: from gap 8 its last riser
+      // ran to gap+12.43, 1.4 m into the shell (inner face at 11 + the place()
+      // slot), which buried that row and left its front face millimetres off
+      // the shell's. From 6.55 its back edge is 10.98, clear of the nearest
+      // slot (11.035); of 6.3 / 6.55 this one also keeps the riser faces off
+      // the generic catch fences (15 -> 0 pairs on estoril/jacarepagua/magny).
       place(k, -1, 14, [6, 11, 16], [0.5, 0.5, 0.56]);     // grandstand shell
-      crowdBank(k, -1, 8, 16, 7, 4.2,                        // speckled tiered crowd
+      crowdBank(k, -1, 6.55, 16, 7, 4.2,                     // speckled tiered crowd
                 [crowd[0] * 0.4, crowd[1] * 0.4, crowd[2] * 0.4]);
     }
 
