@@ -15,7 +15,7 @@ const WHEEL_STEP = 1.15;                           // one wheel notch of speed
 const SLIDER_MAX = 1000;
 const FOV_MIN = 20, FOV_MAX = 110;                 // photo mode's #pc-fov range
 
-const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const clamp = M4.clamp;   // js/core/mat4.js — the shared one
 const fin = (v) => typeof v === "number" && isFinite(v);
 
 /** The SPEED slider is logarithmic: 0 -> 5 m/s, 1000 -> 200 m/s. A linear
