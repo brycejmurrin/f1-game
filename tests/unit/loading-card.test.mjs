@@ -185,3 +185,145 @@ test("the card paints ABOVE the letterbox, so the bottom bar never covers it", (
   // overlaps the bottom bar, which is why the stacking order matters at all.
   assert.equal(CARD.y.def, 0);
 });
+
+/* ── THE HABITUAL SKIPPER ──────────────────────────────────────────────────
+ * Three flybys skipped in a row and the next one is SHORT_FLY_MS. Checked on
+ * the pure pair first, then through a real create() with stub DOM, a stub
+ * store and fake timers — which is where "the announcer gets the shorter
+ * budget" and "the shots follow" (progress() over the run's own length) live. */
+
+test("the streak: a skip extends it, a watched flyby clears it, hostile input is no streak", () => {
+  const { flyMsFor, nextSkips, FLY_MS, SHORT_FLY_MS, SKIP_STREAK } = LS;
+  assert.equal(FLY_MS, 24000);
+  assert.equal(SHORT_FLY_MS, 12000);
+  assert.equal(SKIP_STREAK, 3);
+  for (const n of [0, 1, 2, null, undefined, "x", NaN, -5, {}]) assert.equal(flyMsFor(n), FLY_MS, String(n));
+  for (const n of [3, 4, 99, "3"]) assert.equal(flyMsFor(n), SHORT_FLY_MS, String(n));
+  assert.equal(nextSkips(0, true), 1);
+  assert.equal(nextSkips(2, true), 3);
+  assert.equal(nextSkips(7, false), 0, "one flyby watched to the end resets the streak");
+  for (const n of [null, undefined, "junk", NaN, -2, {}]) assert.equal(nextSkips(n, true), 1, String(n));
+  assert.equal(nextSkips(99, true), 99, "capped");
+  assert.equal(nextSkips(2.7, true), 3);
+});
+
+/** A LoadingScreen instance over stubs: every $() id is a do-nothing element,
+ *  timers and Date are fake, the store is a Map, and the announcer records the
+ *  budget it was handed. */
+function harness(stored = {}, storeOverride = null) {
+  let now = 5000, seq = 0;
+  const q = [], listeners = {}, saved = new Map(Object.entries(stored));
+  const plays = [];
+  const elem = () => ({
+    dataset: {}, style: { props: {}, setProperty(k, v) { this.props[k] = v; } },
+    hidden: true, innerHTML: "", textContent: "",
+    replaceChildren() {}, appendChild() {}, append() {},
+  });
+  const els = {};
+  const sb = {
+    Math, JSON, Object, Array, Number, String, Set, isFinite, console,
+    Date: { now: () => now },
+    setTimeout(fn, ms) { const id = ++seq; q.push({ id, at: now + (ms || 0), fn }); return id; },
+    clearTimeout(id) { const k = q.findIndex((t) => t.id === id); if (k >= 0) q.splice(k, 1); },
+    addEventListener(type, fn) { (listeners[type] = listeners[type] || new Set()).add(fn); },
+    removeEventListener(type, fn) { if (listeners[type]) listeners[type].delete(fn); },
+    document: { createElement: () => elem() },
+    Log: { warn() {}, info() {} },
+  };
+  sb.window = sb;
+  vm.runInNewContext(read("js/ui/loading-screen.js").replace(/^const\b/gm, "var"), sb,
+    { filename: "js/ui/loading-screen.js" });
+  const races = [];
+  const screen = sb.LoadingScreen.create({
+    $: (id) => (els[id] = els[id] || elem()),
+    Tracks: {}, TrackMaps: { corners: () => [] }, Flags: { svg: () => "" },
+    store: storeOverride || { get: (k, d) => (saved.has(k) ? saved.get(k) : d), set: (k, v) => saved.set(k, v) },
+    announcer: () => ({ play: (info, budget) => { plays.push(budget); return true; }, stop() {} }),
+  });
+  const info = { track: { id: "monza", name: "MONZA", country: "Italy" }, laps: 5, hasWorld: true };
+  return {
+    screen, saved, plays, races, els,
+    run: (over = {}) => screen.run(Object.assign({}, info, over), () => races.push(now)),
+    skip: () => { for (const fn of listeners.keydown || []) fn({ type: "keydown", repeat: false }); },
+    tick(ms) {
+      const end = now + ms;
+      for (;;) {
+        q.sort((a, b) => a.at - b.at || a.id - b.id);
+        if (!q.length || q[0].at > end) break;
+        const t = q.shift(); now = t.at; t.fn();
+      }
+      now = end;
+    },
+  };
+}
+
+test("three skips in a row shorten the next flyby — and its announcer budget — to 12 s", () => {
+  const h = harness();
+  for (let k = 0; k < 3; k++) {
+    h.run();
+    assert.equal(h.plays.at(-1), LS.FLY_MS, `flyby ${k + 1} is still the full cut`);
+    h.tick(2000);
+    h.skip();
+    assert.equal(h.saved.get("flySkips"), k + 1);
+    h.screen.stop();
+  }
+  h.run();
+  assert.equal(h.plays.at(-1), LS.SHORT_FLY_MS, "the announcer is fitted to the SHORT budget");
+  assert.equal(h.els.loading.style.props["--ld-fly"], "12000ms", "the letterbox is timed to it too");
+  // The shots follow: progress() is a fraction of THIS run's length.
+  h.tick(6000);
+  assert.ok(Math.abs(h.screen.progress() - 0.5) < 1e-9, `progress ${h.screen.progress()} at 6 s of 12`);
+  // …and the race starts when the short flyby ends, not at 24 s.
+  h.tick(6000);
+  assert.equal(h.races.length, 4, "every run handed over to the race");
+});
+
+test("a flyby that plays out resets the streak, and the full cut comes back", () => {
+  const h = harness({ flySkips: 5 });
+  h.run();
+  assert.equal(h.plays.at(-1), LS.SHORT_FLY_MS);
+  h.tick(LS.SHORT_FLY_MS);
+  assert.equal(h.saved.get("flySkips"), 0, "watched to the end: the streak is over");
+  h.screen.stop();
+  h.run();
+  assert.equal(h.plays.at(-1), LS.FLY_MS);
+  assert.equal(h.els.loading.style.props["--ld-fly"], "24000ms");
+});
+
+test("only a FLYBY counts: the no-world card and a stop() before the end leave the streak alone", () => {
+  const h = harness({ flySkips: 2 });
+  h.run({ hasWorld: false });
+  h.skip();
+  assert.equal(h.saved.get("flySkips"), 2, "skipping the 700 ms card is not a vote on the flyby");
+  h.run({ hasWorld: false });
+  h.tick(LS.CARD_MS);
+  assert.equal(h.saved.get("flySkips"), 2, "…and neither is letting it run");
+  h.run();
+  h.screen.stop();
+  h.tick(LS.FLY_MS);
+  assert.equal(h.saved.get("flySkips"), 2, "a run cancelled from outside is neither a skip nor a watch");
+});
+
+test("a store that throws never stops the flyby", () => {
+  const boom = () => { throw new Error("storage refused"); };
+  const h = harness({}, { get: boom, set: boom });
+  h.run();
+  assert.equal(h.plays.at(-1), LS.FLY_MS, "an unreadable streak is no streak");
+  h.skip();
+  assert.equal(h.races.length, 1, "the skip still reaches the race when the write throws");
+  h.screen.stop();
+  h.run();
+  h.tick(LS.FLY_MS);
+  assert.equal(h.races.length, 2, "…and so does a flyby that plays out");
+});
+
+test("the skip hint is a run-phase pseudo-element that waits ~3 s — no new shell node", () => {
+  const css = read("css/overlays.css");
+  const rule = css.match(/#loading\[data-phase="run"\] #ld-card::after\s*\{([^}]*)\}/);
+  assert.ok(rule, "the hint rule is keyed on the run phase");
+  assert.match(rule[1], /content:\s*"[^"]*RACE[^"]*"/i);
+  assert.match(rule[1], /opacity:\s*0\b/, "hidden until its fade");
+  assert.match(rule[1], /animation:[^;]*\b3s\b/, "fades in after ~3 s");
+  assert.ok(!/data-phase="(card|hold)"\] #ld-card::after/.test(css), "no hint on the card fallback or the editor's hold");
+  assert.ok(!/id="ld-(skip|hint)"/.test(read("index.html")), "the hint must not be a DOM node — shellNodes is at its ceiling");
+});

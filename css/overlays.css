@@ -1329,6 +1329,34 @@ body[data-density="compact"] #campicker {
 #loading[data-phase="run"] #ld-card,
 #loading[data-phase="card"] #ld-card,
 #loading[data-phase="hold"] #ld-card { opacity: 1; transform: none; }
+/* THE SKIP HINT. The flyby has always been skippable and nothing said so. A
+   pseudo-element, not a node: the shell is at its node ceiling, and the hint
+   is decoration of the card, not content of its own. Pinned just above the
+   card's top-right corner, so it follows the player's authored placement, and
+   faded in after ~3 s: long enough that it does not compete with the card
+   arriving, soon enough that a player who wants to skip learns how. Run phase
+   only — the no-world card is gone in 700 ms and the editor's hold is not
+   skippable. Under reduced motion the tokens.css backstop makes the fade
+   instant; the delay stays, so the hint still waits its turn. */
+#loading[data-phase="run"] #ld-card::after {
+  content: "PRESS ANY KEY TO RACE";
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.5 * var(--gap));
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: var(--ls-4);
+  color: var(--text);
+  text-shadow: 0 1px 3px var(--scrim-heavy);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  animation: ld-hint 0.6s ease-out 3s both;
+}
+@media (hover: none) and (pointer: coarse) {
+  #loading[data-phase="run"] #ld-card::after { content: "TAP TO RACE"; }
+}
+@keyframes ld-hint { to { opacity: 0.85; } }
 /* HOLD is the flyby editor's live preview of the card, shown under the docked
    panel while its size and position sliders move. It is not a loading screen:
    the scrim would hide the scene the card is being framed against, and the
