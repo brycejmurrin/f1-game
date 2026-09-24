@@ -297,6 +297,15 @@ Scripts and raw output: `scratch/roadfold/`, `scratch/terrainz/`, `scratch/guard
   cluster floor erased it (measured on synthetic frames, flicker-metric.test.mjs);
   and 1-2 cm shifts real edges by ~1 px, 1 mm by <= 0.1 px. Ceilings are 1/10
   of each target's screen area, set from geometry; ratchet from the job's JSON.
+  **Positive control FAILED (2026-09-24), CI job removed.** On a worktree at
+  `3b711e3f0^` (pre-fix madrid soffits) the gate PASSES madrid-overpass-soffit
+  with 0 flipped pixels, same as HEAD. The captured frame shows why: the
+  underside renders PURE BLACK on the software backend, so both fighting faces
+  have the same luma and no threshold can see the fight. A luma metric cannot
+  gate dark undersides. Next: a debug render that colours by primitive/face id
+  (fight = id flips, lighting-independent), then re-run the control. The script
+  and the metric (with its unit test) stay as tooling; no CI job until the
+  control goes red on the pre-fix tree.
 - **G3 — `overheadSpan({ soffit })`.** Plate bottom AT `clearance`, deck raised
   by `inset`, plate thickness > inset (buried), span/depth scaled < 1 so its end
   faces never meet the deck's. Migrates madrid's two hand-rolled soffits (and
