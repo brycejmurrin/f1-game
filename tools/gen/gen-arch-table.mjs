@@ -22,6 +22,10 @@
  *   node tools/gen/gen-arch-table.mjs            # write the block
  *   node tools/gen/gen-arch-table.mjs --check    # exit 1 when committed ≠ generated
  *   node tools/gen/gen-arch-table.mjs --rows     # print the rows as JSON (debug)
+ *
+ * A merge that adds a rostered file after ARCHITECTURE was last regenerated
+ * leaves the committed row count stale (207 vs 208 on ship tip 2edb33cdb);
+ * regenerate here — do not hand-edit the count line.
  */
 import fs from "node:fs";
 import path from "node:path";
