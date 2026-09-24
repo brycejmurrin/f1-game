@@ -314,15 +314,42 @@ fuji 29 %, interlagos 27 %).
 
 ## 3. Order of work (next campaign)
 
-1. **Guards first:** G1 (cheap, catches a class that shipped) and G3 (small, removes madrid's last
-   coplanar pair).
-2. **R1** (pure waste removal, no visual change), with the verify-track check;
-   then R3 per circuit.
-3. **T1-T2** (terrain bias + slab removal), verified live and on gpu-census.
-4. **T4** pits MIN_SEP, then the 300 m rebaseline and ratchet.
-5. **P1** index strip, and **P2** after a rendered look check, then P3.
-6. **G2** flicker gate as a non-blocking CI job, calibrated on the fixed sites.
-7. T3, R2, P4 as capacity allows.
+Batch 1 — DONE (branch claude/tracks-needing-work-0ifyg3): G1, G3, R1, R2,
+T1, T2, T4 (fight window 300 m, fleet 584 -> 287), P1 (-2.33 M props tris,
+-12.5 %), P2 (crowd rows out of the stand shell). Found on the way and fixed:
+
+- **Surveyed elevation read by point index** (tracks.js realPoints): the 11
+  OSM circuits' profiles were up to 0.29 lap out of place (fuji 15 m, dijon
+  13 m, mosport 11 m). Now read by arc fraction at every 4 m node
+  (surveyHeights); 0.2-0.6 m of the survey everywhere. Densifying the path
+  instead rotated the laps 49-277 m (startFrac is index algebra) — reverted.
+- **Verge trench on descents** (mesh.js channel carve read the road's own run
+  as a lower road): spa 2417 -> 287 deep verge samples, fleet-wide.
+- **groundPatch tops at groundY** — overlapping patches shared a plane; per-call
+  MIN_SEP slots.
+
+Batch 2 — order:
+
+1. **V1 run-off shelf** (NEW, highest visible value). The terrain starts 0.30 m
+   under the verge edge (surface.js `base - 0.3 - dist*0.018`) behind a vertical
+   skirt, and cars off the tarmac ride the ROAD PLANE (game.js, render-only),
+   so a car in the gravel hovers 0.35 m at 2 m out, 0.6 m at 12 m, 0.85 m at
+   20 m. Shelf: meet the verge at -0.05, flat to ~hw+12, ease into the old
+   fall-off by ~hw+30; skirt stays for real embankments. Physics untouched.
+   Checks: banked low sides (zandvoort, indianapolis) keep terrain under the
+   verge; fleet rebaseline; renders of monza/spa/zandvoort with a parked car
+   in the run-off.
+2. **R3 centreline kinks** — the 19 fold-warning circuits (verify-track list);
+   worst heading flips zolder 28°, mont_tremblant 13°, buddh 12°, donington 12°.
+   Per circuit, data-only path fixes; each keeps its turns/start within 1 m.
+3. **T4 rest** — crowdBand vs grandstandEx (fuji 7.5 mm, 27 pairs), bleacher
+   concourse band enclosing the lower rows (P2 multi-tier), tracks.js place()
+   jitter.
+4. **P1 speed** — strip costs ~300 ms/circuit (vegas 790 ms): test each box's
+   corners once, cheaper box recognition; target < 200 ms.
+5. **P3** vertex compaction + a per-circuit props-triangle ratchet.
+6. **G2** flicker gate as a non-blocking CI job, calibrated on fixed sites.
+7. **P4** detail LOD (multi-draw + fade), T3 groundPatch tessellation.
 
 ## 3a. Order of work (first campaign, done)
 
