@@ -36,7 +36,8 @@ function gateNote(d, v) {
   try { latched = localStorage.getItem("apex26.perChunkOff") === "1"; } catch (_) { /* no storage: fall through to the tier check */ }
   if (latched) return " · held after a display reset — set to 0 and back on to retry";
   const tier = (typeof PerfGov !== "undefined" && PerfGov.autoShed) ? PerfGov.autoShed() : 0;
-  if (tier >= 1) return " · held off — this device is missing frames and the governor has shed a tier; it returns on its own when frames recover";
+  if (tier >= 2) return " · held off — this device is missing frames and the governor has shed two tiers; it returns on its own when frames recover";
+  if (tier >= 1 && d.id === "perChunkLights" && v > 0.3) return " · capped at 0.3 while the governor has shed a tier (this device is missing frames)";
   // PER-CHUNK ROAD is a rider on PER-CHUNK LAMPS and does nothing on its own.
   if (d.id === "roadChunkLamps") {
     const pcl = (typeof LT !== "undefined" && +LT.perChunkLights) || 0;

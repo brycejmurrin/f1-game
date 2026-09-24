@@ -18,8 +18,17 @@ const _clampNum = (v, a, b) => (v < a ? a : v > b ? b : v);
 const _tlSmp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
 const _tlSel = [];
 const _tlPool = [];
+// TAIL-LIGHT EMIT 0 (the default): tail-lights are paint, not lights. Their
+// records go to a GLOW-ONLY copy of the frame set (frame.glowLights) so the lens
+// halo still draws, while frame.lights — the list the lit shaders loop — keeps
+// every slot for track lamps. The red spill on the road is a decal
+// (CarMesh.drawTailGlow). Reused buffer: this runs every lit frame.
+const _tlGlowBuf = [];
+function tailLightsEmit() { return +LT.tailLightEmit > 0; }
 function appendCarTailLights(frame, track, cars, player, mobileTier) {
   const L = frame.lights;
+  frame.glowLights = L;
+  const emit = tailLightsEmit();
   // PER-CHUNK LAMPS needs to know which records here are the DYNAMIC ones, and
   // it cannot be derived by measuring frame.lights before/after: when the set is
   // already at cap this function TRIMS the farthest static lamps before pushing,
@@ -53,6 +62,15 @@ function appendCarTailLights(frame, track, cars, player, mobileTier) {
   _tlSel.sort(_byDistAsc);   // hoisted comparator, shared with setFrameLights
   const nT = Math.min(_tlSel.length, 5);
   if (nT <= 0) return;
+  // Paint mode: no slot is taken, nothing is evicted — the records land in the
+  // glow-only copy, after the lamps, exactly where the emit path puts them.
+  let T = L;
+  if (!emit) {
+    T = _tlGlowBuf;
+    for (let i = 0; i < L.length; i++) T[i] = L[i];
+    T.length = L.length;
+    frame.glowLights = T;
+  }
   // Reserve up to nT slots for the nearest cars' tail-lights. On a dense night
   // grid the floodlights alone can fill the frame's light budget, so appending
   // overflowed and the shader dropped the tail-lights. Evict that many of the
@@ -87,7 +105,7 @@ function appendCarTailLights(frame, track, cars, player, mobileTier) {
   // reached the shader at all.
   const SLOTS = tierShed(Math.min(mobileTier ? LightBudget.MOBILE : LightBudget.MAX, LightBudget.slots()));
   const room = SLOTS - ((L.length / 15) | 0);
-  if (room < nT && L.length >= nT * 15) L.length -= (nT - room) * 15;
+  if (emit && room < nT && L.length >= nT * 15) L.length -= (nT - room) * 15;
   // TAIL-LIGHT FADE: ease the glow out over the last `tailFade` m before the range
   // cutoff so a car doesn't pop in/out abruptly as it drifts past the limit. 0 =
   // hard cutoff (as-shipped), so the fade term is 1 for every selected car.
@@ -105,13 +123,14 @@ function appendCarTailLights(frame, track, cars, player, mobileTier) {
     const bAmt = _clampNum(c.brakeHeat || 0, 0, 1) * LT.brakeGlowMul;
     const fadeF = tlFade > 0 ? _clampNum((tlRange - sel.d) / tlFade, 0, 1) : 1;
     const tlm = LT.tailLightMul * (1 + bAmt * 1.6) * fadeF;
-    L.push(
+    T.push(
       _tlSmp.p[0] + _tlSmp.r[0] * c.x - tx * 2.4,
       _tlSmp.p[1] + 0.55,
       _tlSmp.p[2] + _tlSmp.r[2] * c.x - tz * 2.4,
       4.5 * tlm, 0.14 * tlm, 0.10 * tlm,
       8 * (1 + bAmt * 0.45), dx, dy, dz, 0.5, -0.2, 0.12, 0.25, 0.4);
   }
+  if (!emit) return;   // paint mode: tailStart/tailCount stay the empty range set above
   // The nT tail-lights are the LAST nT records — after any trim above.
   frame.tailCount = nT;
   frame.tailStart = ((L.length / 15) | 0) - nT;
@@ -206,7 +225,7 @@ function lampCap(carCount, mobileTier) {
   // appendCarTailLights evicts against SLOTS, so a cap above it would only
   // be trimmed again there.
   let cap = Math.min(
-    carCount > 1 ? Math.round(LT.lampCull != null ? LT.lampCull : 40) : LightBudget.MAX,
+    carCount > 1 && tailLightsEmit() ? Math.round(LT.lampCull != null ? LT.lampCull : 40) : LightBudget.MAX,
     mobileTier ? LightBudget.MOBILE : LightBudget.MAX,
     LightBudget.slots());
   // Shed the nearest-lamp budget under PerfGov load before the fragment loop
