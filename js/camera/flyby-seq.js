@@ -56,7 +56,12 @@ const FlybySeq = (function () {
      "player" }` is the car the race is about to start from, not a stranger. */
   const PLAYER_SLOT_DEFAULT = 11;
   let _playerSlot = PLAYER_SLOT_DEFAULT;
-  function setPlayerSlot(k) { _playerSlot = (k >= 0 && k === (k | 0)) ? k : PLAYER_SLOT_DEFAULT; }
+  let _slotKnown = true;
+  /** `null` = the race's grid cannot be known before it forms (a random grid):
+   *  slotKnown() goes false and vary() leaves the grid-mine shot out. */
+  function setPlayerSlot(k) { _slotKnown = k !== null; _playerSlot = (k >= 0 && k === (k | 0)) ? k : PLAYER_SLOT_DEFAULT; }
+  function slotKnown() { return _slotKnown; }
+  const usesSlot = (shot) => [shot.eye[0], shot.eye[1], shot.look[0], shot.look[1]].some((p) => p && p.at === "slot");
   function slotIndex(pose) { return pose.n === "player" || pose.n === undefined ? _playerSlot : Math.max(0, pose.n | 0); }
   /** gridSlot()'s stagger (js/track/core/mesh.js): even slots left, odd right,
    *  min(0.4 hw, 3) m off the centreline — pinned against mesh.js by the test. */
@@ -116,10 +121,53 @@ const FlybySeq = (function () {
 
   /** The record containing this point, or null. Boxes are centre + size, and the
    *  margin inflates them so the eye clears a facade rather than grazing it. */
+  /* A GRID INDEX over a box list, so a clearance test touches the few boxes
+     near a point instead of every one. The planner tests every sample of every
+     candidate eye against every solid and every tall tree; Monza's turn-first
+     (~1,500 trees) took 1.35 s to plan and Suzuka's up to 3.4 s — a freeze at
+     the cut, on every load now that vary() builds new shots. Candidates come
+     back in LIST ORDER, which both tests depend on (first hit; sequential
+     lifts), so a plan is identical to the full scan. */
+  const GRID_CELL = 32;
+  function boxGrid(list) {
+    const cells = new Map();
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i];
+      const x0 = Math.floor((r.x - r.w / 2) / GRID_CELL), x1 = Math.floor((r.x + r.w / 2) / GRID_CELL);
+      const z0 = Math.floor((r.z - r.d / 2) / GRID_CELL), z1 = Math.floor((r.z + r.d / 2) / GRID_CELL);
+      for (let ix = x0; ix <= x1; ix++) for (let iz = z0; iz <= z1; iz++) {
+        const k = ix * 100003 + iz;
+        let a = cells.get(k);
+        if (!a) cells.set(k, a = []);
+        a.push(i);
+      }
+    }
+    return cells;
+  }
+  const _near = [];
+  function nearBoxes(cells, x, z, m) {
+    _near.length = 0;
+    const x0 = Math.floor((x - m) / GRID_CELL), x1 = Math.floor((x + m) / GRID_CELL);
+    const z0 = Math.floor((z - m) / GRID_CELL), z1 = Math.floor((z + m) / GRID_CELL);
+    let many = 0;
+    for (let ix = x0; ix <= x1; ix++) for (let iz = z0; iz <= z1; iz++) {
+      const a = cells.get(ix * 100003 + iz);
+      if (a) { many++; for (let j = 0; j < a.length; j++) _near.push(a[j]); }
+    }
+    if (many > 1) {
+      _near.sort((a, b) => a - b);
+      let w = 0;
+      for (let j = 0; j < _near.length; j++) if (!j || _near[j] !== _near[j - 1]) _near[w++] = _near[j];
+      _near.length = w;
+    }
+    return _near;
+  }
+
   function insideProp(track, p, margin) {
     const b = blockers(track), m = margin || 0;
-    for (let i = 0; i < b.length; i++) {
-      const r = b[i];
+    const near = nearBoxes(track._fbSolidGrid || (track._fbSolidGrid = boxGrid(b)), p[0], p[2], m);
+    for (let n = 0; n < near.length; n++) {
+      const r = b[near[n]];
       if (Math.abs(p[0] - r.x) < r.w / 2 + m &&
           Math.abs(p[2] - r.z) < r.d / 2 + m &&
           p[1] > r.y - r.h / 2 - m && p[1] < r.y + r.h / 2 + m) return r;
@@ -383,9 +431,17 @@ const FlybySeq = (function () {
     // By PLACE, not index: the measured list can hold one corner twice (Monza's
     // T1 and T2 are both s = 592, the two halves of the Rettifilo).
     const taken = (k) => used.some((j) => { const d = Math.abs(cs[j].f - cs[k].f) * total; return Math.min(d, total - d) < SAME_M; });
+    // A corner the author NUMBERED is theirs: it is never moved (the editor's
+    // CORNER field must film what it says), but it is claimed first, so the
+    // roles steer around it.
+    const numbered = (n) => typeof n !== "string";
+    for (let i = 0; i < list.length; i++) {
+      const role = shotCorner(list[i]);
+      if (role !== null && cs.length && numbered(role)) used.push(Math.min(cornerIndex(track, cs, role), cs.length - 1));
+    }
     out = list.map((shot) => {
       const role = shotCorner(shot);
-      if (role === null || !cs.length) return shot;
+      if (role === null || !cs.length || numbered(role)) return shot;
       let k = Math.min(cornerIndex(track, cs, role), cs.length - 1);
       if (taken(k)) {
         const alt = roleRank(track, cs, role, k).filter((j) => !taken(j));
@@ -966,6 +1022,16 @@ const FlybySeq = (function () {
    *
    *  Beyond 1 the sequence holds on its last frame rather than looping: the
    *  screen is skippable, so a player who waits should not see it restart. */
+  /** Plan every shot of `shots` now (solve() caches a plan per shot on first
+   *  use) so the flyby never plans mid-sequence: vary() builds new shots each
+   *  load, and a cold corner plan is a visible stall at the cut. */
+  function warm(track, shots) {
+    const list = (shots && shots.length) ? shots : DEFAULT;
+    let total = 0, acc = 0;
+    for (let i = 0; i < list.length; i++) total += list[i].dur || 0;
+    for (let i = 0; i < list.length && total > 0; i++) { solve(track, (acc + (list[i].dur || 0) / 2) / total, list); acc += list[i].dur || 0; }
+    reset();
+  }
   function solve(track, u, shots) {
     const list = bindCorners(track, (shots && shots.length) ? shots : DEFAULT);
     let total = 0;
@@ -1049,8 +1115,9 @@ const FlybySeq = (function () {
   }
   function clearTrees(track, eye) {
     const b = treeBlockers(track);
-    for (let i = 0; i < b.length; i++) {
-      const r = b[i];
+    const near = nearBoxes(track._fbTreeGrid || (track._fbTreeGrid = boxGrid(b)), eye[0], eye[2], 0);
+    for (let n = 0; n < near.length; n++) {
+      const r = b[near[n]];
       if (Math.abs(eye[0] - r.x) < r.w / 2 && Math.abs(eye[2] - r.z) < r.d / 2 &&
           eye[1] > r.y - r.h / 2 && eye[1] < r.y + r.h / 2 + TREE_M) eye[1] = r.y + r.h / 2 + TREE_M;
     }
@@ -1346,7 +1413,8 @@ const FlybySeq = (function () {
      the handoff to the race. Pure and seeded (never the sim RNG): the same
      seed is the same flyby, which is what the test holds it to. */
   const VARY_ROLES = ["first", "lore", "slowest", "fastest", "mid", "late"];
-  function vary(list, seed) {
+  function vary(list, seed, slotOk) {
+    if (slotOk === false) list = list.filter((shot) => !usesSlot(shot));   // durations renormalise in solve()
     let h = (seed >>> 0) || 1;
     const rnd = () => { h ^= h << 13; h >>>= 0; h ^= h >>> 17; h ^= h << 5; h >>>= 0; return h / 4294967296; };
     const used = {}, swapLm = rnd() < 0.35;   // decided ONCE: swapping one landmark shot alone films the same landmark twice
@@ -1360,7 +1428,7 @@ const FlybySeq = (function () {
         const free = VARY_ROLES.filter((r) => !used[r]);
         const n = free.length ? free[Math.floor(rnd() * free.length)] : o.eye[0].n;
         used[n] = true;
-        [o.eye, o.look].forEach((a) => a.forEach((p) => { p.n = n; }));
+        [o.eye, o.look].forEach((a) => a.forEach((p) => { if (p.at === "corner") p.n = n; }));
       } else if (rnd() < 0.4) { o.eye.reverse(); o.look.reverse(); o.fov.reverse(); }
       return o;
     });
@@ -1374,7 +1442,7 @@ const FlybySeq = (function () {
     solve, reset, clearEye, floorEye, groundAt, insideProp, blockers, isSolid, onRoadPose,
     landmarks, bounds, landmarkScore, lmBase, landmarkFallback, planShot, treeBlockers,
     anchorS, posePoint, cornerS, cornerSide, cornerTurn, lmFace,
-    poseFromWorld, shotFromView, nearestCorner, vary, setPlayerSlot, slotIndex, bindCorners,
+    poseFromWorld, shotFromView, nearestCorner, vary, setPlayerSlot, slotIndex, slotKnown, bindCorners, warm,
     DEFAULT, EASE,
     POLE_BACK, GRID_SPACING, GRID_ROWS, MIN_FILL, MIN_H, FAR, FOG, NEAR, FENCE, REF_S, PAN_MAX,
   };
