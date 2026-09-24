@@ -5283,3 +5283,42 @@ and together they held the lights ~2.2 s longer. `tlxWarmPlus` is therefore OPT-
 (`=1`); the default is the census-244 configuration. Hitch counts between single
 driven windows are noisy (§2w), so "5 vs 2" is not a finding; "same compiles,
 shorter lights" is.
+
+## 2ah. The plan, revised after step 1 (2026-09-24)
+
+Supersedes §2af's steps 2-5. Step 1 is done (§2ag): on real Metal the race window
+went 44 → 8 compiles, and the post chain's 20 were ssrTag-node churn, not a missing
+warm. What that changes, and what reading the code since showed:
+
+- **The 8 left are all the scene pass** (`present` → `_renderTimed`: 4 modules + 4
+  pipelines), plus one material minted mid-race (census 243 `minted:
+  t,0.9,0,0,0,0,0,1|na` — a transparent, no-alpha-write FX key). A blind
+  "reveal everything" warm is the wrong first move; name the objects first.
+- **`BatchedMesh` is wrong for chunks.** `tlx-chunked.js` `build()` gives every chunk
+  of a record the SAME four vertex attributes (`aPos/aNrm/aCol/aMat`); a chunk is
+  only its own index range. `BatchedMesh.addGeometry` copies vertices per geometry,
+  so it would duplicate the shared buffer once per chunk (the city is ~5 M verts).
+- **Chunks cost twice.** The 36-49 `chunk@512x512` draws in the SwiftShader probe
+  are the SUN pass (`SUN_SIZE` is 512 on software GL, 2048 on a desktop), so every
+  chunk draw saved is saved again on each snap rebuild.
+- `readbackTextureLayers` (`tlx.js:2219`, 223 ms in census 240's profile) is the
+  asset-pack decode — a sync `readPixels` per layer, once at load. Not a race hitch.
+
+### Steps
+
+| # | what | how it is measured | off switch |
+|---|---|---|---|
+| 2a | **Name the 8.** `scratch/compile-attrib-probe.mjs` wraps `Pipelines.getForRender` and logs object / geometry kind / material / target for every sync compile after the warm, on Lavapipe WebGPU and three's WebGL2 | the probe's `lapByWhat` table | — (tooling) |
+| 2b | **Warm exactly those**: per cause — a material minted mid-race → pre-mint its key during the lights; a hidden instanced batch → `visible` for one `compileAsync`; a pass/target not warmed → compile under that target | census `stack:` total → ~0, lights no longer than today | `apex26.tlxWarmMore=0` |
+| 3a | **Chunk census.** Chunks per record, tris per chunk, visible chunks per frame in main and sun passes, three tracks | a probe table in this file | — |
+| 3b | **Bigger cells** — TLX-side override of the 72 m `cellSize` (144 m = ~4x fewer chunks, coarser cull). Cheapest possible A/B | census driven window: CPU frame time, frames ≥ 100 ms, GPU ms (`gpuTimer`) | `apex26.tlxChunkCell=72` |
+| 3c | **Only if 3b's GPU cost is too high: ordered index ranges** — lay each record's index buffer out in track order and draw the visible stretch as 1-3 `drawRange` spans per record, not one mesh per chunk | same | `apex26.tlxChunkRuns=0` |
+| 4 | **Per-pass GPU timestamps** (sun / car / lamp shadow, scene, post) so a CSM or render-bundle decision is made on numbers | `gpuTimer` rows in the census | — |
+| 5 | Async pipelines/codegen (#228 patches 7/8) — **only if 2b leaves hitches, and never with skip-draw semantics** (a fallback material while compiling, never a hole) | census | per patch |
+
+Ordering: 2a and 3a are measurement only and can run together. 2b before 3b so the
+compile noise is gone before judging frame time. Each step is its own commit,
+census A/B'd with its switch, deployed on the user's word.
+
+Dropped: `BatchedMesh` for chunks (above), occlusion queries, GPU-driven indirect
+draws, render bundles before chunks stop toggling visibility per frame.
