@@ -1075,10 +1075,10 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "narrow SELECT stacks the still over the numbers");
   assert.equal(decl(css("css/menus.css"), "#sel-still", "object-fit"), "cover");
   assert.match(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display', "grid-template-areas"),
-    /"uih uih"[\s\S]*"uis uis"[\s\S]*"hudopts hudopts"[\s\S]*"metrics metrics"[\s\S]*"renopts renopts"/,
-    "DISPLAY is UI SIZE heading + slider, then HUD, METRICS, and RENDERER");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-uiscale-h', "grid-area"), "uih");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-uiscale)', "grid-area"), "uis");
+    /"hudopts hudopts"[\s\S]*"metrics metrics"[\s\S]*"renopts renopts"/,
+    "DISPLAY is HUD, METRICS, and RENDERER (UI SIZE moved to APPEARANCE)");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-appearance #pm-uiscale-h', "grid-area"), "uih");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-appearance .tune-row:has(#pm-uiscale)', "grid-area"), "uis");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-details', "grid-area"), "hudopts",
     "HUD fold is its own row, not under a reprint HUD heading");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv', "grid-area"), "renopts");
@@ -1202,8 +1202,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "closed FEEL summary carries the live steer step");
   assert.match(code("js/audio/panel.js"), /\["k", "MUSIC"\]/,
     "closed MUSIC summary carries ON and source");
-  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-panel-display > .pm-group-h", "margin-top"), "calc(var(--gap) * 0.5)",
-    "COCKPIT is a section break after the renderer row");
+  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-panel-display > .pm-group-h, #pmsettings-inner #pm-panel-appearance > .pm-group-h#pm-uiscale-h", "margin-top"), "calc(var(--gap) * 0.5)",
+    "COCKPIT under DISPLAY and UI SIZE under APPEARANCE share section spacing");
   assert.match(code("js/camera/cockpit-opts.js"), /pm-display-adv/,
     "COCKPIT inserts after the RENDERER fold so player switches stay off the backend list");
   assert.ok(!code("js/perf/metrics-overlay.js").includes("@media (max-height:"),
@@ -1218,7 +1218,9 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "WEBGL2 fallback is a value chip, not OFF — red would lie");
   assert.match(read("index.html"), /id="pm-uiscale-h"/,
     "UI SIZE is a real COCKPIT-style heading, not a tuner caption");
-  assert.equal(decl(css("css/components.css"), "#pm-panel-display > .pm-group-h", "display"), "flex",
+  assert.match(read("index.html"), /id="pm-panel-appearance"[\s\S]*id="pm-uiscale-h"/,
+    "UI SIZE lives under APPEARANCE with the other chrome knobs");
+  assert.equal(decl(css("css/components.css"), "#pm-panel-appearance > .pm-group-h#pm-uiscale-h", "display"), "flex",
     "UI SIZE heading shares the row with the live %");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="k"]', "color"), "var(--steel)",
     "fold names stay heading steel");

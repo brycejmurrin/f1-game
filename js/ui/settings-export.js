@@ -76,13 +76,14 @@ const SPEC = [
   // the `(pointer: coarse)` block of css/tokens.css owns the touch numbers so a
   // phone is right on its FIRST paint, and js/ui/scale.js mirrors them. null is
   // the honest default to report — a stored number is the change.
-  { k: "uiScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%, or 109% on touch)" },
+  { k: "uiScale", lane: "json", group: "appearance", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%, or 109% on touch); Settings › APPEARANCE" },
   { k: "hudScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%; touch defaults 100 hud / 109 ui, scale.js scaleDefault)" },
   { k: "hudBtnScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = follows hudScale)" },
   { k: "hudBtnOpacity", lane: "json", group: "display", def: null, src: "js/ui/scale.js (null = 100%)" },
   { k: "motion", lane: "json", group: "appearance", def: null, src: "js/ui/title-fx.js (null = follows the OS prefers-reduced-motion)", oneOf: ["on", "reduce"] },
   { k: "titleIntro", lane: "json", group: "appearance", def: "full", src: "js/ui/title-fx.js TITLE INTRO (full | quick | off)", oneOf: ["full", "quick", "off"] },
   { k: "menuWash", lane: "json", group: "appearance", def: "full", src: "js/ui/title-fx.js MENU WASH (full | soft | off)", oneOf: ["full", "soft", "off"] },
+  { k: "menuLayout", lane: "json", group: "appearance", def: "auto", src: "js/ui/title-fx.js MENU LAYOUT (auto | stack | compact)", oneOf: ["auto", "stack", "compact"] },
   { k: "titleArt", lane: "json", group: "appearance", def: "on", src: "js/ui/title-fx.js TITLE ART (on | soft | off)", oneOf: ["on", "soft", "off"] },
   { k: "resMode", lane: "json", group: "display", def: (G) => (G && G.gfx && G.gfx.isMobile) ? "low" : "auto", src: "js/ui/scale.js (LOW on a touch device)" },
   { k: "spatialUpscale", lane: "raw", group: "display", def: "0", src: "js/ui/scale.js + GLX/WGX/TLX SGSR (UPSCALING-2026-09 §6–7; OFF by default)" },

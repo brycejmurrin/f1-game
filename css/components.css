@@ -1730,12 +1730,11 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pmsettings-inner[data-shape="wide"] .pm-group :is(.set-row, .adv-help, #pm-steer-item, #pm-gfx-status) { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display > details { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] .pm-group :is(#pm-keys-section, #pm-pad-section) { grid-column: 1 / -1; }
-/* DISPLAY: UI SIZE, then HUD / METRICS / RENDERER each on their own row.
-   Named areas so an open fold cannot steal the hole. */
+/* DISPLAY: HUD / METRICS / RENDERER each on their own row.
+   Named areas so an open fold cannot steal the hole. UI SIZE moved to
+   APPEARANCE (js/ui/scale.js still owns the slider). */
 #pmsettings-inner[data-shape="wide"] #pm-panel-display {
   grid-template-areas:
-    "uih uih"
-    "uis uis"
     "hudopts hudopts"
     "metrics metrics"
     "renopts renopts"
@@ -1762,12 +1761,20 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   margin: 0;
   min-width: 0;
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-uiscale-h { grid-area: uih; }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-uiscale) { grid-area: uis; }
-/* DISPLAY sliders are settings rows, not tuner rows: steel label, text
+/* APPEARANCE: UI SIZE heading + slider, then the rest of the chrome rows. */
+#pmsettings-inner[data-shape="wide"] #pm-panel-appearance {
+  grid-template-areas:
+    "uih uih"
+    "uis uis";
+  grid-auto-flow: dense;
+}
+#pmsettings-inner[data-shape="wide"] #pm-panel-appearance #pm-uiscale-h { grid-area: uih; }
+#pmsettings-inner[data-shape="wide"] #pm-panel-appearance .tune-row:has(#pm-uiscale) { grid-area: uis; }
+/* DISPLAY / APPEARANCE sliders are settings rows, not tuner rows: steel label, text
    value (tuner red is the loud bit), no extra tap-height padding around
    a track that is already --slider. */
-#pm-panel-display .tune-row {
+#pm-panel-display .tune-row,
+#pm-panel-appearance .tune-row:has(#pm-uiscale) {
   min-height: 0;
   gap: 0;
 }
@@ -1779,15 +1786,15 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   color: var(--text);
   font-size: var(--fs-micro);
 }
-/* UI SIZE heading: same .pm-group-h as COCKPIT. The % sits on the right
-   in heading steel (not tuner red). Hidden .tune-label keeps the slider
-   row labeled. The range itself inherits the shared red accent. */
-#pm-panel-display > .pm-group-h {
+/* UI SIZE heading (now under APPEARANCE): same .pm-group-h as COCKPIT. The %
+   sits on the right in heading steel (not tuner red). The range itself inherits
+   the shared red accent. */
+#pm-panel-appearance > .pm-group-h#pm-uiscale-h {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
 }
-#pm-panel-display > .pm-group-h b {
+#pm-panel-appearance > .pm-group-h#pm-uiscale-h b {
   color: inherit;
   font-style: italic;
   font-weight: 700;
@@ -1967,7 +1974,8 @@ button:has(> [data-fold]) {
   color: color-mix(in oklab, var(--steel) 55%, transparent);
   font-weight: 400;
 }
-#pmsettings-inner #pm-panel-display > .pm-group-h {
+#pmsettings-inner #pm-panel-display > .pm-group-h,
+#pmsettings-inner #pm-panel-appearance > .pm-group-h#pm-uiscale-h {
   margin-top: calc(var(--gap) * 0.5);
   padding-top: calc(var(--gap) / 3);
 }

@@ -418,6 +418,27 @@
   --balance-basis: 5.5rem;
   --balance-min: 5.5rem;
 }
+/* MENU LAYOUT player setting (js/ui/title-fx.js → html[data-menu-layout]).
+   AUTO leaves the shipped 2×2 play grid + wrapping rooms alone. STACK forces
+   one full-width column for play doors and rooms. COMPACT tightens gaps and
+   door padding so a short landscape phone keeps more of the stack in view. */
+:root[data-menu-layout="stack"] #menu-primary {
+  --balance-basis: 100%;
+  --balance-min: 100%;
+}
+:root[data-menu-layout="stack"] #menu-secondary {
+  --balance-basis: 100%;
+  --balance-min: 100%;
+}
+:root[data-menu-layout="compact"] #menu-buttons { gap: calc(var(--gap) * 0.55); }
+:root[data-menu-layout="compact"] #menu-hero { gap: calc(var(--gap) * 0.35); }
+:root[data-menu-layout="compact"] #menu-primary,
+:root[data-menu-layout="compact"] #menu-secondary { gap: calc(var(--gap) * 0.4); }
+:root[data-menu-layout="compact"] #menu-hero .bigbtn { padding-block: 9px; }
+:root[data-menu-layout="compact"] #menu-primary .bigbtn { padding-block: 8px; }
+:root[data-menu-layout="compact"] #menu-secondary .bigbtn { padding-block: 6px; }
+:root[data-menu-layout="compact"] #menu-retention { gap: calc(var(--gap) * 0.4); }
+:root[data-menu-layout="compact"] #menu-retention .bigbtn { padding-block: calc(var(--gap) * 0.4); }
 /* The hero is the one button on the screen with two lines of text, so it centres
    its own stack rather than inheriting the single-line baseline the others use. */
 #menu-hero .bigbtn { padding-block: 13px; }

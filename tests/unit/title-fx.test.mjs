@@ -56,7 +56,7 @@ function load({ stored = {}, osReduce = false, readyState = "complete", vibrate 
   overlay.setAttribute("data-intro", "");
   overlay.hidden = overlayHidden;
   // Static Appearance rows (shell declares them).
-  for (const id of ["pm-motion", "pm-titleintro", "pm-menuwash", "pm-titleart", "pm-replay-intro"]) {
+  for (const id of ["pm-motion", "pm-titleintro", "pm-menuwash", "pm-menulayout", "pm-titleart", "pm-replay-intro"]) {
     ids.set(id, el(id));
   }
   ids.set("overlay", overlay);
@@ -121,27 +121,36 @@ function load({ stored = {}, osReduce = false, readyState = "complete", vibrate 
   };
 }
 
-test("shell declares MENU ANIMATIONS, TITLE INTRO, MENU WASH, TITLE ART and REPLAY INTRO", () => {
+test("shell declares MENU ANIMATIONS, TITLE INTRO, MENU WASH, MENU LAYOUT, TITLE ART and REPLAY INTRO", () => {
   assert.ok(SHELL.includes('id="pm-panel-appearance"'));
   assert.ok(SHELL.includes('id="pm-motion"'));
   assert.ok(SHELL.includes('id="pm-titleintro"'));
   assert.ok(SHELL.includes('id="pm-menuwash"'));
+  assert.ok(SHELL.includes('id="pm-menulayout"'));
   assert.ok(SHELL.includes('id="pm-titleart"'));
   assert.ok(SHELL.includes('id="pm-replay-intro"'));
+  assert.ok(SHELL.includes('id="pm-uiscale"'));
   assert.ok(SHELL.includes("apex26.titleIntro"));
   assert.ok(SHELL.includes("apex26.menuWash"));
+  assert.ok(SHELL.includes("apex26.menuLayout"));
   assert.ok(SHELL.includes("apex26.titleArt"));
+  // UI SIZE moved under APPEARANCE (not DISPLAY).
+  const app = SHELL.slice(SHELL.indexOf('id="pm-panel-appearance"'), SHELL.indexOf('id="advanced"'));
+  assert.ok(app.includes('id="pm-uiscale"'));
+  assert.ok(!SHELL.slice(SHELL.indexOf('id="pm-panel-display"'), SHELL.indexOf('id="pm-panel-appearance"')).includes('id="pm-uiscale"'));
 });
 
-test("defaults: motion ON, intro FULL, wash FULL, title art ON (no data-*)", () => {
+test("defaults: motion ON, intro FULL, wash FULL, layout AUTO, title art ON (no data-*)", () => {
   const { html, M } = load({ readyState: "loading" });
   assert.equal(M.mode(), "on");
   assert.equal(M.introMode(), "full");
   assert.equal(M.washMode(), "full");
+  assert.equal(M.layoutMode(), "auto");
   assert.equal(M.artMode(), "on");
   assert.equal(html.dataset.motion, undefined);
   assert.equal(html.dataset.titleIntro, undefined);
   assert.equal(html.dataset.menuWash, undefined);
+  assert.equal(html.dataset.menuLayout, undefined);
   assert.equal(html.dataset.titleArt, undefined);
 });
 
@@ -176,6 +185,15 @@ test("MENU WASH soft/off stamp data-menu-wash; garbage falls to full", () => {
   assert.equal(load({ stored: { menuWash: "neon" } }).M.washMode(), "full");
 });
 
+test("MENU LAYOUT stack/compact stamp data-menu-layout; garbage falls to auto", () => {
+  const stack = load({ stored: { menuLayout: "stack" } });
+  assert.equal(stack.M.layoutMode(), "stack");
+  assert.equal(stack.html.dataset.menuLayout, "stack");
+  const compact = load({ stored: { menuLayout: "compact" } });
+  assert.equal(compact.html.dataset.menuLayout, "compact");
+  assert.equal(load({ stored: { menuLayout: "masonry" } }).M.layoutMode(), "auto");
+});
+
 test("TITLE ART soft/off stamp data-title-art; garbage falls to on", () => {
   const soft = load({ stored: { titleArt: "soft" } });
   assert.equal(soft.M.artMode(), "soft");
@@ -185,10 +203,10 @@ test("TITLE ART soft/off stamp data-title-art; garbage falls to on", () => {
   assert.equal(load({ stored: { titleArt: "neon" } }).M.artMode(), "on");
 });
 
-test("Appearance rows wire and round-trip motion + intro + wash + titleArt", () => {
+test("Appearance rows wire and round-trip motion + intro + wash + layout + titleArt", () => {
   const { wired, written, html, ids, M } = load();
   assert.deepEqual(wired.map((w) => w.id).sort(), [
-    "pm-menuwash", "pm-motion", "pm-titleart", "pm-titleintro",
+    "pm-menulayout", "pm-menuwash", "pm-motion", "pm-titleart", "pm-titleintro",
   ]);
   ids.get("pm-motion")._spec.write("reduce");
   assert.equal(written.motion, "reduce");
@@ -199,6 +217,9 @@ test("Appearance rows wire and round-trip motion + intro + wash + titleArt", () 
   ids.get("pm-menuwash")._spec.write("soft");
   assert.equal(written.menuWash, "soft");
   assert.equal(html.dataset.menuWash, "soft");
+  ids.get("pm-menulayout")._spec.write("stack");
+  assert.equal(written.menuLayout, "stack");
+  assert.equal(html.dataset.menuLayout, "stack");
   ids.get("pm-titleart")._spec.write("soft");
   assert.equal(written.titleArt, "soft");
   assert.equal(html.dataset.titleArt, "soft");
@@ -210,6 +231,8 @@ test("Appearance rows wire and round-trip motion + intro + wash + titleArt", () 
   assert.equal(html.dataset.titleIntro, undefined);
   M.setWash("full");
   assert.equal(html.dataset.menuWash, undefined);
+  M.setLayout("auto");
+  assert.equal(html.dataset.menuLayout, undefined);
   M.set("on");
   assert.equal(html.dataset.motion, undefined);
 });
@@ -218,7 +241,7 @@ test("wiring waits for DOMContentLoaded while deferred scripts still run", () =>
   const { wired, document } = load({ readyState: "interactive" });
   assert.equal(wired.length, 0, "SettingRow loads after this file — never wire at eval here");
   document._handlers.DOMContentLoaded();
-  assert.equal(wired.length, 4);
+  assert.equal(wired.length, 5);
 });
 
 test("REPLAY INTRO button calls replay()", () => {
@@ -313,7 +336,7 @@ test("a title .bigbtn click taps through Input.vibrate, anything else does not",
   assert.doesNotThrow(() => noInput.overlay._handlers.click({ isTrusted: true, target: { closest: () => ({}) } }));
 });
 
-test("CSS keys off data-motion / data-title-intro / data-menu-wash / data-title-art; export lists all four", () => {
+test("CSS keys off data-motion / data-title-intro / data-menu-wash / data-menu-layout / data-title-art; export lists them", () => {
   assert.match(CSS, /:root\[data-motion="reduce"\] :is\(#overlay, \.screen\) \*/);
   assert.match(CSS, /#overlay\[data-paused\]/);
   assert.match(MENUS, /:root\[data-title-art="soft"\] #title-car/);
@@ -328,9 +351,13 @@ test("CSS keys off data-motion / data-title-intro / data-menu-wash / data-title-
   assert.match(MENUS, /data-title-intro="quick"/);
   assert.match(MENUS, /:not\(\[data-title-intro="off"\]\)/);
   assert.match(COMP, /:not\(\[data-title-intro="off"\]\)/);
+  assert.match(MENUS, /:root\[data-menu-layout="stack"\] #menu-primary/);
+  assert.match(MENUS, /:root\[data-menu-layout="compact"\] #menu-buttons/);
   assert.match(EXPORT, /k:\s*"motion"[\s\S]*?group:\s*"appearance"/);
   assert.match(EXPORT, /k:\s*"titleIntro"[\s\S]*?group:\s*"appearance"/);
   assert.match(EXPORT, /k:\s*"menuWash"[\s\S]*?group:\s*"appearance"/);
+  assert.match(EXPORT, /k:\s*"menuLayout"[\s\S]*?group:\s*"appearance"/);
   assert.match(EXPORT, /k:\s*"titleArt"[\s\S]*?group:\s*"appearance"/);
+  assert.match(EXPORT, /k:\s*"uiScale"[\s\S]*?group:\s*"appearance"/);
   assert.match(MANIFEST, /\["js\/core\/store\.js", "js\/ui\/title-fx\.js"\]/);
 });

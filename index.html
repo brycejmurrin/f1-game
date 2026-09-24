@@ -359,18 +359,20 @@
      menus.css stays the one place they are declared. -->
 <script>
   (function () {
-    // html[data-motion] / data-title-intro / data-menu-wash / data-title-art,
-    // FIRST answer only: the title intro, wash and #title-car paint on the
-    // first frame, and js/ui/title-fx.js (which owns every later answer)
-    // evaluates too late to stop them.
+    // html[data-motion] / data-title-intro / data-menu-wash / data-menu-layout /
+    // data-title-art, FIRST answer only: the title intro, wash, door layout and
+    // #title-car paint on the first frame, and js/ui/title-fx.js (which owns
+    // every later answer) evaluates too late to stop them.
     // Motion: OS reduced-motion wins, then apex26.motion ("on" | "reduce").
     // Intro: apex26.titleIntro ("full" | "quick" | "off"); unset = full.
     // Wash: apex26.menuWash ("full" | "soft" | "off"); unset = full.
+    // Layout: apex26.menuLayout ("auto" | "stack" | "compact"); unset = auto.
     // Title art: apex26.titleArt ("on" | "soft" | "off"); unset = on.
-    var mv = null, ti = null, mw = null, ta = null;
+    var mv = null, ti = null, mw = null, ml = null, ta = null;
     try { mv = JSON.parse(localStorage.getItem("apex26.motion")); } catch (e) { /* unset */ }
     try { ti = JSON.parse(localStorage.getItem("apex26.titleIntro")); } catch (e) { /* unset */ }
     try { mw = JSON.parse(localStorage.getItem("apex26.menuWash")); } catch (e) { /* unset */ }
+    try { ml = JSON.parse(localStorage.getItem("apex26.menuLayout")); } catch (e) { /* unset */ }
     try { ta = JSON.parse(localStorage.getItem("apex26.titleArt")); } catch (e) { /* unset */ }
     try {
       if (mv === "reduce" || (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches))
@@ -381,6 +383,9 @@
     } catch (e) { /* TitleFx answers at eval */ }
     try {
       if (mw === "soft" || mw === "off") document.documentElement.dataset.menuWash = mw;
+    } catch (e) { /* TitleFx answers at eval */ }
+    try {
+      if (ml === "stack" || ml === "compact") document.documentElement.dataset.menuLayout = ml;
     } catch (e) { /* TitleFx answers at eval */ }
     try {
       if (ta === "soft" || ta === "off") document.documentElement.dataset.titleArt = ta;
@@ -599,8 +604,8 @@
       <nav id="pm-settings-index" class="pm-doors" aria-label="Settings">
         <button id="pm-open-controls" type="button">CONTROLS&hellip;<small>Input, pedals &amp; bindings</small></button>
         <button id="pm-open-driving" type="button">DRIVING&hellip;<small>Coach, practice &amp; strategy</small></button>
-        <button id="pm-open-display" type="button">DISPLAY&hellip;<small>UI, HUD &amp; graphics</small></button>
-        <button id="pm-open-appearance" type="button">APPEARANCE&hellip;<small>Theme, menu &amp; HUD colours</small></button>
+        <button id="pm-open-display" type="button">DISPLAY&hellip;<small>HUD &amp; graphics</small></button>
+        <button id="pm-open-appearance" type="button">APPEARANCE&hellip;<small>Size, theme, menu layout &amp; colours</small></button>
         <button id="pm-advanced">STEERING &amp; ASSISTS&hellip;<small>Presets, response &amp; aids</small></button>
         <button id="pm-audio">MUSIC &amp; SOUND&hellip;<small>Playback, effects &amp; volume</small></button>
       </nav>
@@ -770,16 +775,6 @@
         <section id="pm-panel-display" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>
           <h3 class="pm-group-h">DISPLAY</h3>
-          <!-- step 0.5 — layout tiers (`--pair-at` / `--compact-at` via
-               SheetShape) sit INSIDE this range, so a notch can flip arrangement
-               not just size. MEASURED garage portrait: two columns at 80%,
-               stacked at 100%; compact head engages between 105 and 110. Step 5
-               overshot those edges; step 1 still jumped past a threshold while
-               dragging on a short phone track. Half-percent keeps the hunt tight.
-               applyScale() clamps to SCALE_MIN/MAX and snaps to 0.5. -->
-          <h3 class="pm-group-h" id="pm-uiscale-h">UI SIZE <b id="pm-uiscale-v">100%</b><button type="button" id="pm-uiscale-r" class="tune-revert" hidden>reset</button></h3>
-          <label class="tune-row">
-            <input id="pm-uiscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="Interface size"></label>
           <details id="pm-hud-details" class="pm-hud-sub">
             <summary class="adv-more-btn" id="pm-hud-details-sum">HUD · ON · STANDARD</summary>
             <div role="group" aria-label="HUD layout">
@@ -955,7 +950,27 @@
         <section id="pm-panel-appearance" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>
           <h3 class="pm-group-h">APPEARANCE</h3>
-          <p class="adv-help">Theme, accents, title motion, wash and the background drawing. Selection rings stay on the menu accent; team identity can stay on the HUD.</p>
+          <p class="adv-help">Interface size, theme, title-menu layout and colours. Selection rings stay on the menu accent; team identity can stay on the HUD. Race HUD size stays under DISPLAY.</p>
+          <!-- step 0.5 — layout tiers (`--pair-at` / `--compact-at` via
+               SheetShape) sit INSIDE this range, so a notch can flip arrangement
+               not just size. MEASURED garage portrait: two columns at 80%,
+               stacked at 100%; compact head engages between 105 and 110. Step 5
+               overshot those edges; step 1 still jumped past a threshold while
+               dragging on a short phone track. Half-percent keeps the hunt tight.
+               applyScale() clamps to SCALE_MIN/MAX and snaps to 0.5. -->
+          <h3 class="pm-group-h" id="pm-uiscale-h">UI SIZE <b id="pm-uiscale-v">100%</b><button type="button" id="pm-uiscale-r" class="tune-revert" hidden>reset</button></h3>
+          <label class="tune-row">
+            <input id="pm-uiscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="Interface size"></label>
+          <p class="adv-help">Menus and sheets. Race HUD size and touch-button size stay under DISPLAY › HUD.</p>
+          <div id="pm-menulayout" class="set-row" role="group" aria-labelledby="pm-menulayout-label">
+            <span class="tune-label" id="pm-menulayout-label">MENU LAYOUT</span>
+            <div>
+              <button id="pm-menulayout-prev" type="button" data-step="-1" aria-label="Previous menu layout" aria-hidden="true" tabindex="-1">&lsaquo;</button>
+              <select id="pm-menulayout-sel" aria-labelledby="pm-menulayout-label" aria-describedby="pm-menulayout-help"></select>
+              <button id="pm-menulayout-next" type="button" data-step="1" aria-label="Next menu layout" aria-hidden="true" tabindex="-1">&rsaquo;</button>
+            </div>
+          </div>
+          <p class="adv-help" id="pm-menulayout-help">How the title-menu doors are arranged. AUTO is the shipped 2×2 play grid; STACK is one column of full-width doors; COMPACT tightens gaps for short screens.</p>
           <div id="pm-appearance-preview" class="pm-accent-preview" aria-hidden="true">
             <button type="button" class="bigbtn pm-accent-preview-btn" tabindex="-1">PRIMARY</button>
             <span class="pm-accent-preview-hud"><b>42</b></span>
@@ -2575,7 +2590,7 @@
             <p><b>TILT:</b> roll the phone to steer; use GAS and BRAKE. It calibrates at the lights. If motion permission is denied, the game switches to BUTTONS.</p>
             <p><b>BUTTONS:</b> hold an on-screen arrow and slide back to ease steering. Pedals sit opposite the arrows.</p>
             <p><b>TOUCH:</b> drag from where your finger lands on the track. Gas is automatic; use BRAKE to slow down. A tap alone does not steer.</p>
-            <p>CONTROLS also has pedal layout and handedness. DISPLAY lets you size the interface, HUD and touch buttons separately.</p>
+            <p>CONTROLS also has pedal layout and handedness. APPEARANCE sizes the interface; DISPLAY sizes the HUD and touch buttons separately.</p>
           </details>
         </div>
       </section>
@@ -2638,7 +2653,9 @@
         <dt>STEERING &amp; ASSISTS</dt>
         <dd>Choose response presets, driving aids and the racing line here. ADAPTIVE BUTTONS changes keys and on-screen arrows at speed; it does not alter the analog stick. BRAKE CUE is an audio hint. Expand ADVANCED for detailed steering adjustments.</dd>
         <dt>DISPLAY</dt>
-        <dd>Adjust UI, HUD and button sizes separately. HUD settings control layout, map and visibility; the eye icon restores a hidden HUD. During a race, ADVANCED VISUALS opens the lighting and camera tuners with a live preview.</dd>
+        <dd>HUD layout, map and visibility; size the race HUD and touch buttons separately. The eye icon restores a hidden HUD. During a race, ADVANCED VISUALS opens the lighting and camera tuners with a live preview.</dd>
+        <dt>APPEARANCE</dt>
+        <dd>Interface size, theme, title-menu layout, wash and accents. Selection rings stay on the menu accent.</dd>
         <dt>MUSIC &amp; SOUND</dt>
         <dd>Choose music and effects, their volumes and playback controls in SETTINGS › MUSIC &amp; SOUND.</dd>
         <dt id="htp-modes">RACE</dt>

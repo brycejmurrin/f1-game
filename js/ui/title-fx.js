@@ -1,5 +1,5 @@
-/* Apex 26 — TitleFx: title-screen motion, wash and the background drawing, as
-   player settings under SETTINGS › APPEARANCE.
+/* Apex 26 — TitleFx: title-screen motion, wash, door layout and the background
+   drawing, as player settings under SETTINGS › APPEARANCE.
 
    MENU ANIMATIONS: ON / REDUCED. An OS that asks for reduced motion always
    wins, and is followed live; otherwise the stored choice answers, and unset
@@ -14,13 +14,16 @@
    MENU WASH: FULL / SOFT / OFF. The red radial on #overlay plus its grain.
    Lands on <html data-menu-wash>. Unset is FULL (the shipped look).
 
+   MENU LAYOUT: AUTO / STACK / COMPACT. How the title-menu doors are arranged.
+   Lands on <html data-menu-layout>. Unset is AUTO (shipped 2×2 play grid).
+
    TITLE ART: ON / SOFT / OFF. Controls the #title-car line drawing behind the
    title menu via <html data-title-art>. Unset is ON (the shipped look).
 
-   Five small jobs on #overlay (the title screen):
-     * motion / intro / wash / title-art attributes (index.html's inline boot
-       sets the FIRST answers before first paint; this file owns every later
-       one);
+   Six small jobs on #overlay (the title screen):
+     * motion / intro / wash / layout / title-art attributes (index.html's
+       inline boot sets the FIRST answers before first paint; this file owns
+       every later one);
      * the intro, ONCE: CSS keys off #overlay[data-intro]. The shell ships the
        attribute; this file takes it off after introHoldMs() once the overlay
        is first visible. REDUCED and INTRO OFF take it off at once. replay()
@@ -37,10 +40,12 @@ const TitleFx = (function () {
   const KEY = "motion";              // apex26.motion — json: "on" | "reduce" | unset
   const KEY_INTRO = "titleIntro";    // apex26.titleIntro — json: "full" | "quick" | "off" | unset
   const KEY_WASH = "menuWash";       // apex26.menuWash — json: "full" | "soft" | "off" | unset
+  const KEY_LAYOUT = "menuLayout";   // apex26.menuLayout — json: "auto" | "stack" | "compact" | unset
   const KEY_ART = "titleArt";        // apex26.titleArt — json: "on" | "soft" | "off" | unset
   const MOTION = [["on", "ON"], ["reduce", "REDUCED"]];
   const INTROS = [["full", "FULL"], ["quick", "QUICK"], ["off", "OFF"]];
   const WASHES = [["full", "FULL"], ["soft", "SOFT"], ["off", "OFF"]];
+  const LAYOUTS = [["auto", "AUTO"], ["stack", "STACK"], ["compact", "COMPACT"]];
   const ARTS = [["on", "ON"], ["soft", "SOFT"], ["off", "OFF"]];
   // Hold windows: FULL covers the CSS timeline (~2.5 s); QUICK matches the
   // halved --intro-* / --dur-* tokens under data-title-intro="quick".
@@ -70,6 +75,11 @@ const TitleFx = (function () {
     const v = store.get(KEY_WASH, null);
     if (v === "soft" || v === "off") return v;
     return "full";
+  }
+  function layoutMode() {
+    const v = store.get(KEY_LAYOUT, null);
+    if (v === "stack" || v === "compact") return v;
+    return "auto";
   }
   function artMode() {
     const v = store.get(KEY_ART, null);
@@ -105,6 +115,12 @@ const TitleFx = (function () {
     if (w === "full") delete root.dataset.menuWash;
     else root.dataset.menuWash = w;
   }
+  function applyLayout() {
+    if (!root || !root.dataset) return;
+    const L = layoutMode();
+    if (L === "auto") delete root.dataset.menuLayout;
+    else root.dataset.menuLayout = L;
+  }
   function applyArt() {
     if (!root || !root.dataset) return;
     const a = artMode();
@@ -115,6 +131,7 @@ const TitleFx = (function () {
     applyMotion();
     applyIntro();
     applyWash();
+    applyLayout();
     applyArt();
   }
 
@@ -137,6 +154,13 @@ const TitleFx = (function () {
     applyWash();
     if (typeof SettingRow !== "undefined" && SettingRow.paint) SettingRow.paint("pm-menuwash", washMode());
     return washMode();
+  }
+  function setLayout(v) {
+    const next = (v === "stack" || v === "compact") ? v : "auto";
+    store.set(KEY_LAYOUT, next);
+    applyLayout();
+    if (typeof SettingRow !== "undefined" && SettingRow.paint) SettingRow.paint("pm-menulayout", layoutMode());
+    return layoutMode();
   }
   function setArt(v) {
     const next = (v === "soft" || v === "off") ? v : "on";
@@ -206,8 +230,8 @@ const TitleFx = (function () {
     wireRows();
   }
 
-  // Static shell rows under SETTINGS › APPEARANCE (moved off DISPLAY › UI SIZE
-  // so motion + title art sit with the other visual chrome).
+  // Static shell rows under SETTINGS › APPEARANCE (UI SIZE lives there too —
+  // js/ui/scale.js wires the slider; this file owns the SettingRows).
   function wireRows() {
     if (typeof SettingRow === "undefined") return;
     if (byId("pm-motion")) {
@@ -229,6 +253,13 @@ const TitleFx = (function () {
         values: WASHES,
         read: washMode,
         write: (v) => setWash(v),
+      });
+    }
+    if (byId("pm-menulayout")) {
+      SettingRow.wire("pm-menulayout", {
+        values: LAYOUTS,
+        read: layoutMode,
+        write: (v) => setLayout(v),
       });
     }
     if (byId("pm-titleart")) {
@@ -257,10 +288,12 @@ const TitleFx = (function () {
   }
 
   return {
-    KEY, KEY_INTRO, KEY_WASH, KEY_ART, MOTION, INTROS, WASHES, ARTS, INTRO_MS,
-    mode, introMode, washMode, artMode, introHoldMs,
-    set, setIntro, setWash, setArt,
-    apply, applyMotion, applyIntro, applyWash, applyArt, replay, initUI, wireRows,
+    KEY, KEY_INTRO, KEY_WASH, KEY_LAYOUT, KEY_ART,
+    MOTION, INTROS, WASHES, LAYOUTS, ARTS, INTRO_MS,
+    mode, introMode, washMode, layoutMode, artMode, introHoldMs,
+    set, setIntro, setWash, setLayout, setArt,
+    apply, applyMotion, applyIntro, applyWash, applyLayout, applyArt,
+    replay, initUI, wireRows,
   };
 })();
 Object.freeze(TitleFx);
