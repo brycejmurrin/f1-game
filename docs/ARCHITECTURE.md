@@ -69,7 +69,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_196 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_197 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -197,6 +197,7 @@ _196 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `spline.js` | `TrackSpline` | tag | TrackSpline: pure centreline / spline math for the tracks engine. centerline() integrates an authored segment list into closed control points, cr() is… |
 | `line.js` | `TrackLine` | tag | TrackLine: the baked RACING LINE, a lateral offset per centreline node, computed once at track build beside track.curv. |
 | `mesh.js` | `TrackMesh` | tag | TrackMesh: the kerb/banking band + the road/terrain/floor mesh builders for the tracks engine. upOf() is the shared per-node up-basis, hash() the dete… |
+| `hidden-faces.js` | `TrackHiddenFaces` | tag | build-time strip of prop triangles no camera can see (enclosed in an opaque box, buried under terrain, down-facing on the ground). |
 
 **`js/track/scenery/`**
 

@@ -294,6 +294,11 @@ const Tracks = (function () {
       track.propsGeo = propsGeo;
       propsGeo._keepPositions = propsGeo._keepFullGeometry = keepGeometry;
       lap("propsSeal", "geo");
+      // Index-only strip of never-visible triangles (js/track/core/hidden-faces.js);
+      // vertices untouched, so the audits' primitive ranges stay valid.
+      propsGeo._hidden = TrackHiddenFaces.strip(propsGeo,
+        { groundY: (x, z) => terrainY(track, x, z), terrain: track.terrainGeo });
+      lap("propsHidden", "geo");
       // THE DISCRIMINATOR (apex26.propsUnchunked, diagnostic only, default off).
       //
       // The census measured GPU time invariant to pixel count, which rules out
