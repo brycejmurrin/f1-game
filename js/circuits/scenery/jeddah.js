@@ -10,7 +10,7 @@
         addBox, addCyl, addCone, addFrustum, addPrism, addPyramid, anchor, vadd, building, tower, billboard,
         grandstand, grandstandEx, scaffoldStand, gantry, marshalPost, guardrail, tyreWall, wall, palm,
         cityFront, modelGroup, waterSurface, waterBand, onTrack, hash, every, circuitKit,
-        lampPost } = api;
+        lampPost, seat } = api;
 
       // ── Night Corniche palette ─────────────────────────────────────────────
       const SEA     = [0.02, 0.04, 0.08];   // deep black-mirror water
@@ -52,13 +52,20 @@
       const ledHead = (k, side, dist, col, lamp) => {
         const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 2)) return;
+        // Y-fork Corniche lamp: dark pole + twin cool heads + thin red LED strip
+        // (night-photo identity — not a single sodium blob).
         addCyl(out, a.c, 0.10, 7.5, DARKPOLE, 4, b);
-        const head = vadd(vadd(a.c, a.u, 7.4), a.r, -side * 1.3);
-        addBox(out, vadd(head, a.r, side * 0.65), [1.5, 0.14, 0.16], DARKPOLE, b);
-        addBox(out, head, [0.62, 0.34, 0.55], col || LED, b);
-        // Register AFTER the on-track reject above, so a suppressed pole never
-        // leaves an orphan light behind it.
+        const yoke = vadd(a.c, a.u, 7.2);
+        addBox(out, yoke, [0.18, 0.18, 1.8], DARKPOLE, b);
+        for (const fork of [-0.85, 0.85]) {
+          const head = vadd(vadd(yoke, a.t, fork), a.r, -side * 0.9);
+          addBox(out, head, [0.55, 0.28, 0.55], col || LED, b);
+        }
+        // Red vertical accent strip facing the path.
+        addBox(out, vadd(vadd(a.c, a.u, 3.8), a.r, -side * 0.14),
+          [0.08, 5.2, 0.08], [1.05, 0.12, 0.18], b);
         if (lamp && typeof lampPost === "function") {
+          const head = vadd(vadd(yoke, a.t, 0), a.r, -side * 0.9);
           lampPost({ pos: head, k, side, kind: "led" });
         }
       };
@@ -129,20 +136,28 @@
       }
 
       const PALMFROND = [0.12, 0.44, 0.19];
+      const palmLit = (k, side, dist, h, frond) => {
+        palm(k, side, dist, h, frond);
+        // Warm fairy-light wrap on the lower trunk (Corniche night dressing).
+        const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+        if (onTrack(a.c[0], a.c[2], 3)) return;
+        addCyl(out, vadd(a.c, a.u, 0.4), 0.38, Math.min(h * 0.55, 5.5),
+          [1.05, 0.92, 0.55], 6, b);
+      };
       for (let i = 0; i < 8; i++) {
-        palm(K(0.42 + i * 0.04), 1, 18 + hash(i * 5) * 4, 6 + hash(i * 3) * 3, PALMFROND);
+        palmLit(K(0.42 + i * 0.04), 1, 18 + hash(i * 5) * 4, 6 + hash(i * 3) * 3, PALMFROND);
       }
       for (let i = 0; i < 8; i++) {
-        palm(K(i / 8 + 0.01), -1, 22 + hash(i * 7) * 5, 7 + hash(i * 11) * 3, [0.08, 0.36, 0.14]);
+        palmLit(K(i / 8 + 0.01), -1, 22 + hash(i * 7) * 5, 7 + hash(i * 11) * 3, [0.08, 0.36, 0.14]);
       }
       for (let i = 0; i < 9; i++) {
-        palm(K(0.545 + i * 0.012), 1, 13 + (i % 2) * 3,
+        palmLit(K(0.545 + i * 0.012), 1, 13 + (i % 2) * 3,
           6.5 + hash(i * 17 + 4) * 2.5, (i % 3) ? PALMFROND : [0.16, 0.50, 0.22]);
       }
       for (let i = 0; i < 16; i++) {
         const s = 0.655 + i * 0.0138;
-        palm(K(s), -1, 11.5, 8.4 + (i % 2) * 0.5, PALMFROND);
-        if (i % 3 === 0) palm(K(s + 0.007), -1, 17.5, 7.6, [0.09, 0.38, 0.16]);
+        palmLit(K(s), -1, 11.5, 8.4 + (i % 2) * 0.5, PALMFROND);
+        if (i % 3 === 0) palmLit(K(s + 0.007), -1, 17.5, 7.6, [0.09, 0.38, 0.16]);
       }
 
       // ── Marshal posts ─────────────────────────────────────────────────────
@@ -272,7 +287,66 @@
         step: 55, floor: 5,
       });
 
-      // ── JEDDAH SKYLINE — 3 landmark towers at s 0.27–0.31 L ──────────────
+      // ── JEDDAH SKYLINE — Blue Sail + twin gold + antenna cluster ──────────
+      // Night-photo heroes: the cyan "sail" wedge with helipad lip, and a pair
+      // of warm-gold window towers. Base-anchored via seat.box (addBox is
+      // centre-anchored — mid-height LED strips were reading as floaters).
+      {
+        const a = anchor(K(0.275), -1, 72), b = [a.r, a.u, a.t];
+        if (!onTrack(a.c[0], a.c[2], 28)) {
+          const H = 128;
+          const box = (seat && seat.box) ? seat.box.bind(seat) : null;
+          const put = (stage, c, sz, col) => {
+            if (box) box(stage, c, sz, col, b);
+            else addBox(stage, vadd(c, a.u, sz[1] * 0.5), sz, col, b);
+          };
+          modelGroup("jeddah-blue-sail", {
+            center: vadd(a.c, a.u, H * 0.5), size: [22, H + 10, 48], basis: b,
+          }, (stage) => {
+            const SAIL = [0.18, 0.55, 1.15];
+            const SAIL_HI = [0.42, 0.82, 1.25];
+            stage._mat = MAT.METAL;
+            put(stage, a.c, [8, H, 36], [0.14, 0.16, 0.22]);
+            stage._mat = MAT.GLASS;
+            // Continuous sail face (not mid-air LED strips — those float-audit).
+            put(stage, vadd(a.c, a.r, -4.2), [1.2, H * 0.92, 34], SAIL);
+            put(stage, vadd(a.c, a.r, -5.0), [0.6, H * 0.88, 28], SAIL_HI);
+            // Vertical LED fins proud of the face — grounded with the shaft.
+            for (const z of [-12, -4, 4, 12]) {
+              put(stage, vadd(vadd(a.c, a.r, -5.5), a.t, z),
+                [0.4, H * 0.85, 1.2], (z < 0) ? SAIL_HI : SAIL);
+            }
+            stage._mat = 0;
+            // Helipad lip sitting ON the shaft top (base at H, not floating).
+            put(stage, vadd(a.c, a.u, H), [18, 2.2, 22], [0.72, 0.74, 0.78]);
+            put(stage, vadd(a.c, a.u, H + 2.2), [14, 0.6, 16], LED);
+          }, { required: true });
+        }
+      }
+      {
+        const a = anchor(K(0.295), -1, 95), b = [a.r, a.u, a.t];
+        if (!onTrack(a.c[0], a.c[2], 30)) {
+          const box = (seat && seat.box) ? seat.box.bind(seat) : null;
+          const put = (stage, c, sz, col) => {
+            if (box) box(stage, c, sz, col, b);
+            else addBox(stage, vadd(c, a.u, sz[1] * 0.5), sz, col, b);
+          };
+          modelGroup("jeddah-golden-twins", {
+            center: vadd(a.c, a.u, 70), size: [48, 148, 28], basis: b,
+          }, (stage) => {
+            const GOLDW = [1.05, 0.88, 0.42];
+            for (const lat of [-12, 12]) {
+              const base = vadd(a.c, a.t, lat);
+              put(stage, base, [16, 132, 18], [0.22, 0.20, 0.18]);
+              stage._mat = MAT.GLASS;
+              put(stage, vadd(base, a.u, 8), [16.6, 116, 18.6], GOLDW);
+              stage._mat = 0;
+              put(stage, vadd(base, a.u, 132), [17, 4, 19], [0.55, 0.48, 0.28]);
+            }
+            put(stage, vadd(a.c, a.u, 8), [6, 116, 10], [0.10, 0.10, 0.12]);
+          }, { required: true });
+        }
+      }
       building(K(0.27), -1, 55, 28, 115, 26, { kind: "spire", wall: [0.22, 0.22, 0.27], window: WINWARM,  lit: true, floor: 8 });
       building(K(0.30), -1, 88, 24, 172, 22, { kind: "antenna", wall: [0.18, 0.19, 0.24], window: WINCOOL,  lit: true, floor: 8 });
       tower(K(0.285), -1, 140, 18, 160, { col: [0.16, 0.17, 0.22], seg: 4, cap: true, capCol: LED, mast: 12 });
@@ -281,6 +355,28 @@
         palette: WALL_INL, lit: true, windowCol: WINCOOL,
         step: 68, floor: 5,
       });
+
+      // Golden Tower hotel cue near T1 — warm-lit mid-rise facing the canyon.
+      {
+        const a = anchor(K(0.055), -1, 38), b = [a.r, a.u, a.t];
+        if (!onTrack(a.c[0], a.c[2], 16)) {
+          const box = (seat && seat.box) ? seat.box.bind(seat) : null;
+          const put = (stage, c, sz, col) => {
+            if (box) box(stage, c, sz, col, b);
+            else addBox(stage, vadd(c, a.u, sz[1] * 0.5), sz, col, b);
+          };
+          modelGroup("jeddah-golden-tower-hotel", {
+            center: vadd(a.c, a.u, 28), size: [18, 58, 22], basis: b,
+          }, (stage) => {
+            put(stage, a.c, [14, 52, 18], [0.28, 0.26, 0.22]);
+            stage._mat = MAT.GLASS;
+            put(stage, vadd(a.c, a.u, 4), [14.5, 44, 18.5], WINGOLD);
+            stage._mat = 0;
+            put(stage, vadd(a.c, a.u, 52), [15, 3.5, 19], GOLD);
+            put(stage, vadd(a.c, a.u, 55.5), [8, 1.2, 10], LED);
+          }, { required: true });
+        }
+      }
 
       // ── MARINA — 6 yachts at s 0.42–0.48 R ───────────────────────────────
       for (let i = 0; i < 6; i++) {
@@ -298,6 +394,21 @@
         if (!onTrack(a.c[0], a.c[2], 16)) {
           addBox(out, vadd(a.c, a.u, 3), [26, 6, 11], [0.25, 0.26, 0.29], b);
           addBox(out, vadd(a.c, a.u, 4.5), [26.3, 1.0, 11.3], WINWARM, b);
+        }
+      }
+      // Corniche promenade paint — pastel geometric strip between palms (night photo).
+      {
+        const PROMO = [
+          [0.30, 0.62, 0.68], [0.22, 0.55, 0.58], [0.86, 0.55, 0.32],
+          [0.90, 0.62, 0.70], [0.92, 0.82, 0.28], [0.55, 0.78, 0.82],
+        ];
+        for (let i = 0; i < 14; i++) {
+          const sf = 0.58 + i * 0.011;
+          const a = anchor(K(sf), 1, 9.5), b = [a.r, a.u, a.t];
+          if (onTrack(a.c[0], a.c[2], 4)) continue;
+          addBox(out, vadd(a.c, a.u, 0.10), [2.8, 0.12, 7.5], PROMO[i % PROMO.length], b);
+          addBox(out, vadd(vadd(a.c, a.r, -1.6), a.u, 0.11), [0.25, 0.10, 7.5], [0.92, 0.92, 0.94], b);
+          addBox(out, vadd(vadd(a.c, a.r, 1.6), a.u, 0.11), [0.25, 0.10, 7.5], [0.92, 0.92, 0.94], b);
         }
       }
 

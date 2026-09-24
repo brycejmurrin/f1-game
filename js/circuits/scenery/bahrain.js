@@ -120,12 +120,20 @@
       const floodMast = (k, side, gap, h) => {
         const mastH = (h != null ? h : 36 + hash(k * 13) * 6); // 36–42 m when jittered
         if (typeof apiFloodMast === "function") {
-          apiFloodMast(k, side, gap, { h: mastH, cool: true, pool: true });
+          // Dual-arm cool-white bank — Sakhir's signature night silhouette.
+          apiFloodMast(k, side, gap, { h: mastH, cool: true, pool: true, arms: 2 });
           return;
         }
         const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
+        if (onTrack(a.c[0], a.c[2], 5)) return;
         addCyl(out, a.c, 0.45, mastH, STEEL, 6, b);
-        addBox(out, vadd(a.c, a.u, mastH), [5.4, 1.6, 2.2], FLOOD, b);
+        const top = vadd(a.c, a.u, mastH);
+        for (const armOff of [-1.8, 1.8]) {
+          const arm = vadd(vadd(top, a.t, armOff), a.r, -side * 1.6);
+          addBox(out, arm, [3.4, 0.35, 0.55], STEEL, b);
+          addBox(out, vadd(arm, a.r, -side * 1.3), [1.6, 0.55, 1.1], FLOOD, b);
+        }
+        addBox(out, top, [1.2, 0.9, 4.4], [0.22, 0.22, 0.26], b);
         addBox(out, vadd(a.c, a.u, 0.12), [8.0, 0.22, 8.0], POOL, b);
       };
 
@@ -177,30 +185,55 @@
       building(K(0.01), -1, 2, 10, 9, 40,
         { kind: "hall", wall: [0.86, 0.85, 0.80], window: WIN_COOL, lit: true, floor: 3 });
 
+      // ── Sakhir Tower — wave-2 hero over T1 braking (flat cap, no sail) ────
+      // Research + aerial: multi-layered cylindrical shaft at the inside of T1,
+      // wrapped full-height in bright LED video bands. Flat capped roof — the
+      // cone/sail silhouette is wrong. required modelGroup so a silent onTrack
+      // drop becomes a thrown build (wave-1 Monaco pattern).
       (function sakhirTower() {
         const kT = K(0.055);
         const a = anchor(kT, -1, 50), b = [a.r, a.u, a.t];
+        if (onTrack(a.c[0], a.c[2], 18)) return;
         const BASE = a.c;
-        const TOWER_H = 40;   // ~10 storeys
-        const TOWER_R = 6.6;
-        // Core shaft: the structural mass behind the LED skin.
-        addCyl(out, BASE, TOWER_R * 0.92, TOWER_H, TOWER_CYL, 12, b);
-        if (typeof ledFacadeBands === "function") {
-          ledFacadeBands(BASE, TOWER_H, {
-            r: TOWER_R, bands: 10, seg: 12, basis: b,
-            cols: [TOWER_LED, [1.05, 0.85, 1.15], BEACON_COOL, [1.30, 0.98, 0.35]],
-          });
-        } else {
-          for (let i = 0; i < 8; i++) {
-            addFrustum(out, vadd(BASE, b[1], 4 + (i / 7) * (TOWER_H - 8)), TOWER_R + 1.3, TOWER_R + 0.9, 1.1, TOWER_LED, 12, b);
+        const TOWER_H = 42;   // ~10–11 storeys
+        const TOWER_R = 7.2;
+        modelGroup("bahrain-sakhir-tower", {
+          center: vadd(BASE, b[1], TOWER_H * 0.5),
+          size: [TOWER_R * 2.6, TOWER_H + 6, TOWER_R * 2.6],
+          basis: b,
+        }, (stage) => {
+          // Stepped podium rings (aerial: multi-layered circular mass).
+          stage._mat = MAT.STONE;
+          addCyl(stage, BASE, TOWER_R * 1.55, 3.2, STAND_CREAM, 12, b);
+          addCyl(stage, vadd(BASE, b[1], 3.0), TOWER_R * 1.25, 2.4, PIT_CREAM, 12, b);
+          // Core shaft behind the LED skin.
+          addCyl(stage, vadd(BASE, b[1], 5.0), TOWER_R * 0.92, TOWER_H - 5.0, TOWER_CYL, 12, b);
+          stage._mat = 0;
+          if (typeof ledFacadeBands === "function") {
+            ledFacadeBands(vadd(BASE, b[1], 5.0), TOWER_H - 5.0, {
+              r: TOWER_R, bands: 12, seg: 12, basis: b,
+              cols: [TOWER_LED, [1.05, 0.85, 1.15], BEACON_COOL, [1.30, 0.98, 0.35],
+                     [0.55, 0.92, 1.20], TOWER_LED],
+            });
+          } else {
+            for (let i = 0; i < 10; i++) {
+              addFrustum(stage, vadd(BASE, b[1], 6 + (i / 9) * (TOWER_H - 10)),
+                TOWER_R + 1.2, TOWER_R + 0.85, 1.05,
+                [TOWER_LED, BEACON_COOL, [1.30, 0.98, 0.35]][i % 3], 12, b);
+            }
           }
-        }
-        addBox(out, vadd(BASE, b[1], TOWER_H + 0.4), [TOWER_R + 0.8, 0.8, TOWER_R + 0.8], STAND_CREAM, b);
-        addCyl(out, vadd(BASE, b[1], TOWER_H + 0.8), 0.4, 6.0, STEEL, 5, b);
-        addCone(out, vadd(BASE, b[1], TOWER_H + 0.8), 3.4, 4.5, BEACON_WARM, 8, b);
-        addBox(out, vadd(BASE, b[1], TOWER_H + 5.3), [2.6, 1.1, 2.6], BEACON_COOL, b);
-        // Light pool at tower base
-        addBox(out, vadd(BASE, b[1], 0.15), [16.0, 0.30, 16.0], POOL, b);
+          // Flat capped roof — no sail / cone canopy.
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(BASE, b[1], TOWER_H + 0.35),
+            [TOWER_R * 1.7, 0.7, TOWER_R * 1.7], STAND_CREAM, b);
+          addBox(stage, vadd(BASE, b[1], TOWER_H + 0.95),
+            [TOWER_R * 1.35, 0.55, TOWER_R * 1.35], PIT_CREAM, b);
+          // Slim aircraft beacon only (not a sail mass).
+          addCyl(stage, vadd(BASE, b[1], TOWER_H + 1.3), 0.35, 4.2, STEEL, 5, b);
+          addBox(stage, vadd(BASE, b[1], TOWER_H + 5.4), [1.8, 0.7, 1.8], BEACON_WARM, b);
+          stage._mat = 0;
+          addBox(stage, vadd(BASE, b[1], 0.15), [18.0, 0.30, 18.0], POOL, b);
+        }, { required: true });
       })();
 
       cityFront(0.97, 0.05, -1, 30, {
@@ -230,12 +263,38 @@
       marshalPost(K(0.06), 1, 22);
 
       const UNI_LIVERY = ["steel", "alu"];
+      // University Grandstand — research: three stacked grey slabs (~16 m).
+      // One atomic stacked mass so it reads as the University stand, not three
+      // unrelated boxes along the arc.
+      {
+        const a = anchor(K(0.18), 1, 28), b = [a.r, a.u, a.t];
+        if (!onTrack(a.c[0], a.c[2], 22)) {
+          modelGroup("bahrain-university-grandstand", {
+            center: vadd(a.c, a.u, 10), size: [22, 22, 56], basis: b,
+          }, (stage) => {
+            const slabs = [
+              [0.0,  18, 5.0, 48, STAND_CREAM],
+              [5.2,  16, 5.0, 42, [0.78, 0.76, 0.72]],
+              [10.4, 14, 5.0, 36, [0.72, 0.70, 0.66]],
+            ];
+            for (const [y0, w, h, len, col] of slabs) {
+              addBox(stage, vadd(a.c, a.u, y0 + h * 0.5), [w, h, len], col, b);
+              addBox(stage, vadd(vadd(a.c, a.r, -w * 0.42), a.u, y0 + h * 0.55),
+                [1.2, h * 0.72, len * 0.92], SEAT_BLUE, b);
+            }
+            // Flat roof slab over the top tier.
+            addBox(stage, vadd(a.c, a.u, 16.2), [15.5, 0.7, 38], PIT_CREAM, b);
+          }, { required: true });
+        }
+      }
       for (const [i, ds, dGap, seLen, seatC] of [
         [0, -0.040, 26, 44, SEAT_BLUE],
         [1, -0.010, 24, 38, SEAT],
         [2,  0.025, 24, 42, SEAT_BLUE],
         [3,  0.060, 28, 38, SEAT],
       ]) {
+        // Skip the centre bay — the stacked University mass owns 0.18.
+        if (Math.abs(ds) < 0.005) continue;
         if (i % 2 === 0) {
           grandstandEx(0.18 + ds, 1, dGap, seLen, STAND_CREAM, seatC, { endWalls: true });
         } else {
@@ -479,6 +538,41 @@
             cnt++;
             if (cnt > 6) break;
           }
+        }
+      }
+
+      // ── Sakhir identity runoff paint (aerial: blue triangles + final "Bahrain") ─
+      // Mid-sector: bright blue / light-blue geometric strips in the infield
+      // runoff (satellite signature). Final corner: red/pink apron bands.
+      {
+        const BLUE_A = [0.12, 0.42, 0.78];
+        const BLUE_B = [0.35, 0.68, 0.92];
+        const PINK_A = [0.82, 0.28, 0.42];
+        const PINK_B = [0.92, 0.55, 0.62];
+        for (let i = 0; i < 7; i++) {
+          const sf = 0.48 + i * 0.012;
+          const a = anchor(K(sf), -1, 14 + (i % 2) * 3), b = [a.r, a.u, a.t];
+          if (onTrack(a.c[0], a.c[2], 8)) continue;
+          addBox(out, vadd(a.c, a.u, 0.14), [6.5, 0.18, 8.0],
+            (i % 2) ? BLUE_A : BLUE_B, b);
+          // Triangular cue: tapered second slab offset laterally.
+          addBox(out, vadd(vadd(a.c, a.r, 2.2), a.u, 0.16),
+            [3.2 - i * 0.15, 0.16, 5.5], (i % 2) ? BLUE_B : BLUE_A, b);
+        }
+        for (let i = 0; i < 6; i++) {
+          const sf = 0.905 + i * 0.008;
+          const a = anchor(K(sf), 1, 12 + (i % 2) * 2), b = [a.r, a.u, a.t];
+          if (onTrack(a.c[0], a.c[2], 7)) continue;
+          addBox(out, vadd(a.c, a.u, 0.14), [7.0, 0.18, 9.0],
+            (i % 2) ? PINK_A : PINK_B, b);
+        }
+        // Green runoff strip along the main-straight outside (photo: vivid turf).
+        for (let i = 0; i < 8; i++) {
+          const sf = 0.985 + i * 0.004;
+          const a = anchor(K(sf % 1), 1, 9.5), b = [a.r, a.u, a.t];
+          if (onTrack(a.c[0], a.c[2], 5)) continue;
+          addBox(out, vadd(a.c, a.u, 0.12), [3.2, 0.16, 10],
+            [0.12, 0.55, 0.22], b);
         }
       }
 

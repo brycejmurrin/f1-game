@@ -224,6 +224,10 @@
         }
       }
 
+      // ── Hard Rock Stadium — coral/teal rim bowl (wave-2 crowd denser) ─────
+      // Not a required modelGroup: the 132×100 m ellipse at gap 155 reaches the
+      // pit-straight edge, so a whole-bowl footprint test rejects every build.
+      // Individual prims still go through rejBox; the silhouette is the hero.
       {
         const a = anchor(K(0.0), 1, 155);
         const r = a.r, u = a.u, t = a.t;
@@ -243,29 +247,26 @@
           const tan = [-rad2[2], 0, rad2[0]];
           const h = 48 + (i % 3) * 5;
           const segW = 19;
-          // lower raked seating
           addBox(out, vadd(vadd(c, u, h * 0.5),  rad2,  6), [12, h + 2, segW], GREYWHITE, [rad2, u, tan]);
-          // upper shell tier
           addBox(out, vadd(vadd(c, u, h + 10),   rad2,  9), [11, 18, segW + 1], WHITE,     [rad2, u, tan]);
           addBox(out, vadd(vadd(c, u, h + 20.9), rad2,  9), [12, 4.2, segW + 2],
             (i % 2) ? CORAL : TEAL, [rad2, u, tan]);
-          // outer aqua accent stripe (Dolphins cue on the bowl shell)
           if (i % 2 === 0)
             addBox(out, vadd(vadd(c, u, h + 18), rad2, 10.5), [2.2, 2.4, segW],
               AQUA, [rad2, u, tan]);
-          // crowd colour detail — lit so the stadium bowl reads at dusk
           if (i % 2 === 0)
             addBox(out, vadd(vadd(c, u, h * 0.6), rad2, 0), [1.5, h * 0.65, segW - 2],
               PASTELS[(i * 3) % PASTELS.length], [rad2, u, tan]);
           if (i % 3 === 1)
             addBox(out, vadd(vadd(c, u, h * 0.45), rad2, 2), [0.8, h * 0.5, segW - 3],
               PASTELS[(i * 5 + 2) % PASTELS.length], [rad2, u, tan]);
-          // Interior concourse lighting strips
+          if (i % 5 === 2)
+            addBox(out, vadd(vadd(c, u, h * 0.72), rad2, -1.5), [1.1, h * 0.35, segW - 5],
+              PASTELS[(i * 7 + 1) % PASTELS.length], [rad2, u, tan]);
           if (i % 4 === 0)
             addBox(out, vadd(vadd(c, u, h * 0.25), rad2, -1), [1.0, h * 0.3, segW - 4],
               [WIN_AMBER[0] * 0.75, WIN_AMBER[1] * 0.6, WIN_AMBER[2] * 0.2], [rad2, u, tan]);
         }
-        // 6 floodlight masts — taller shafts so the bowl reads from farther out
         for (let i = 0; i < 6; i++) {
           const ang = (i + 0.5) / 6 * 6.2832;
           const ex = Math.cos(ang) * RA, ez = Math.sin(ang) * RB;
@@ -275,12 +276,10 @@
           addCyl(out, vadd(c, u, 70), 5.0, 1.4, FLOOD_WH, 8, [r, u, t]);
           addBox(out, vadd(c, u, 0.05), [20, 0.2, 20], [0.96, 0.96, 0.88], [r, u, t]);
         }
-        // Massive curved roof cap
         addFrustum(out, vadd(stadiumBase, u, 56), 118, 74, 18,
           [0.82, 0.84, 0.86], 48, [r, u, t]);
         addFrustum(out, vadd(stadiumBase, u, 55), 120, 76, 0.8,
           [0.55, 0.55, 0.57], 48, [r, u, t]);
-        // Concourse hospitality ring
         for (let i = 0; i < 8; i++) {
           const ang = i / 8 * 6.2832;
           const ex = Math.cos(ang) * (RA - 22), ez = Math.sin(ang) * (RB - 22);
@@ -570,6 +569,58 @@
           const depth = 16 + hash(i * 17) * 8;
           const len = 28 + hash(i * 23) * 16;
           runoffApron(K(s), side, gap, [depth, 0.32, len], AQUA);
+        }
+      }
+
+      // ── Miami signature striped runoff — teal / lime / white (photo cue) ──
+      // The Autodrome's widest identity mark under the car: three alternating
+      // horizontal stripes on flat runoff pads at the heavy brake zones.
+      {
+        const LIME = [0.55, 0.92, 0.22];
+        const stripeSites = [
+          [0.07, 1, 5.5], [0.155, 1, 5.0], [0.51, 1, 5.5], [0.655, -1, 5.0], [0.95, 1, 5.0],
+        ];
+        for (let si = 0; si < stripeSites.length; si++) {
+          const [s, side, gap] = stripeSites[si];
+          const a = anchor(K(s), side, gap + 6), b = [a.r, a.u, a.t];
+          if (onTrack(a.c[0], a.c[2], 10)) continue;
+          const cols = [TEAL, LIME, WHITE];
+          for (let band = 0; band < 6; band++) {
+            addBox(out, vadd(vadd(a.c, a.r, band * 1.9), a.u, 0.14),
+              [1.7, 0.16, 22 + (si % 2) * 6], cols[band % 3], b);
+          }
+        }
+      }
+
+      // Vertical green/blue fence banners (trackside brand panels).
+      for (const [sf, side] of [[0.14, 1], [0.17, -1], [0.48, 1], [0.66, -1], [0.93, 1]]) {
+        const a = anchor(K(sf), side, 4.2), b = [a.r, a.u, a.t];
+        if (onTrack(a.c[0], a.c[2], 3)) continue;
+        for (let i = 0; i < 4; i++) {
+          const along2 = (i - 1.5) * 4.5;
+          const col = (i % 2) ? [0.08, 0.62, 0.28] : [0.10, 0.42, 0.78];
+          addBox(out, vadd(vadd(a.c, a.t, along2), a.u, 4.5),
+            [0.25, 7.5, 2.8], col, b);
+          // Logo patch proud of the banner face — not coplanar with it.
+          addBox(out, vadd(vadd(vadd(a.c, a.t, along2), a.r, -side * 0.22), a.u, 5.2),
+            [0.18, 1.4, 2.2], WHITE, b);
+        }
+      }
+
+      // MIA word-mark cue — three solid letter slabs (no overlapping outlines).
+      {
+        const a = anchor(K(0.30), 1, 22), b = [a.r, a.u, a.t];
+        if (!onTrack(a.c[0], a.c[2], 8)) {
+          modelGroup("miami-mia-sign", {
+            center: vadd(a.c, a.u, 6), size: [2.4, 10, 18], basis: b,
+          }, (stage) => {
+            addBox(stage, vadd(a.c, a.u, 5.5), [0.5, 8, 16], [0.08, 0.08, 0.10], b);
+            for (let ch = 0; ch < 3; ch++) {
+              const z = (ch - 1) * 5.0;
+              addBox(stage, vadd(vadd(a.c, a.t, z), a.u, 5.5),
+                [0.55, 6.2, 3.2], WHITE, b);
+            }
+          }, { required: true });
         }
       }
 
