@@ -44,18 +44,18 @@ Session shape — eleven rules that control wall time and waiting:
 3. THE GATE IS A LADDER, EACH RUNG A SUBSET — green below never means green above:
    `test:guards` (hook-enforced, every commit) ⊂ `test:tooling-fast` (239 of 318 unit files)
    ⊂ `deploy.mjs --gate-only`, the only pre-push check that runs what the deploy runs (pushes nothing, dirty tree fine). The other 79 have taken deploys red three times — `docs/notes/PREPUSH-GATE-LADDER.md`. A commit whose every staged path is prose (`docs/`, `*.md`, skills, agents — no generated doc) runs only `docs-integrity`, and no ratchet raise.
-4. Never block the foreground on a test run: background it (log in `artifacts/`). Push once per VERIFIED BATCH: a push over a live run cancels it, and a killed job runs no `if: always()` step, so its failures are lost (9 of 59 sampled runs). Wait on it with `until [ -z "$(pgrep -f 'nam[e]')" ]; do sleep 15; done` and TEST THE ABSENT CASE — `[ ! -e /proc/$(pgrep …) ]` never exits and sat out a 30-minute budget (`docs/notes/TESTING-FIELD-NOTES.md` 2026-09-22); the verdict is still rule 5's, never the waiter's.
+4. Never block the foreground on a test run: background it (log in `artifacts/`). Push once per VERIFIED BATCH: a push over a live run cancels it, and a killed job runs no `if: always()` step, so its failures are lost (9 of 59 sampled runs). The waiter is ONE background task (Bash `run_in_background`, one notification when it exits): `node tools/ci/test-bg.mjs --wait --timeout 45` (exit 1 = a red, 124 = still running), or a command that exits on its own run the same way (`deploy.mjs --gate-only > artifacts/logs/gate.log 2>&1`). A `Monitor` expires at 30 min — early warning only (`tail -f <log> | grep --line-buffered -E '^= |Error:'`), never the sole watch. Never wait on the process table: `pgrep -f` matches its own shell, and `[ ! -e /proc/$(pgrep …) ]` never exits (`docs/notes/TESTING-FIELD-NOTES.md` 2026-09-22); the verdict is still rule 5's, never the waiter's.
 5. ONE Playwright process, ONE browser group per batch, via `test-bg.mjs`
-   (it refuses a second group above loadavg 3 — tool-enforced, not advice).
-   Anchor on `grep -E '= run (passed|failed|timedout|interrupted)'`, never a
+   (it refuses ANY start at loadavg ≥ 3, and a second concurrent group — tool-enforced).
+   Anchor on `grep -E '^= (run (passed|failed|timedout|interrupted)|bg exit)'`, never a
    looser pattern, the process table, or `| tail` on a live log.
 6. Stop a run with `node tools/ci/test-bg.mjs --stop`, never by PID (the Bash
    hook blocks it): a bare `kill` orphans every Chromium the run opened.
    `--stop --sweep` recovers a run whose supervisor is already dead.
 7. Reap what you launched: before a browser run, a deploy or a timing
-   judgement, `ps -eo pid,pcpu,etimes,args --sort=-pcpu | head`; kill a
-   long-elapsed Chrome of yours by a listed PID, never `pkill -f` (it matches
-   your own shell; blocked). The MCP servers at 0 % are the harness's.
+   judgement, `ps -eo pid,pcpu,args --sort=-pcpu | head` (`etimes` does not track
+   wall clock here); kill a busy Chrome of yours by a listed PID, never `pkill -f`
+   (it matches your own shell; blocked). The MCP servers at 0 % are the harness's.
 8. A timeout on a busy box measures the machine: check `/proc/loadavg` (< 3)
    and for a live `playwright test` first; re-run alone only when the verdict
    matters. On CI, `cancelled` with zero failures is a timeout until proven
@@ -117,6 +117,8 @@ order live in `tools/manifest.cjs` — read that, not this file; per-directory t
   `tools/manifest.cjs` entry (+ HARD_EDGES pair if eval-time destructured) +
   `node tools/gen/gen-shell.mjs`.
 - Circuit edits go in `js/circuits/<id>.js`; engine changes in `js/track/`.
+- A new test file needs a `tests/groups.json` group, a `docs/TESTING.md` §5 row and
+  `npm run gen` — the commit's `test:guards` fails otherwise (checklist: `docs/TESTING.md` §2).
 - `tests/data/ratchets.json` ratchets game.js and the other big modules at
   their current values — pay for every added line. The commit hook absorbs ≤ 40
   lines of growth (raises, stages, prints — the raise is in your diff); more blocks
@@ -171,8 +173,10 @@ browser run; `bash-guard.sh` runs the guards before `git commit`, blocks
 `pkill -f` and PID kills of a test-bg run, and blocks a browser run inside a
 subagent; `post-edit.sh` (PostToolUse, advisory) says at once when a `js/` edit does not
 parse, staled a generated file or broke a circuit build; `stop-guard.sh` nudges once when a
-turn would end over a live run. `touch .claude/allow-protected` lifts the generated-file rule
-only. Never duplicate skills or agents under `.cursor/`.
+turn would end over a live run (`live-run.py` is the one "live in this checkout?" test);
+`memory-sync.sh` carries auto memory across cloud containers (`docs/notes/AGENT-MEMORY.md`).
+`touch .claude/allow-protected` lifts every edit rule except the live-run one. Never
+duplicate skills or agents under `.cursor/`.
 
 ## Cursor Cloud specific instructions
 `.cursor/environment.json` bootstraps every Cloud VM (`mcpServerAllowlist` = `.mcp.json`'s

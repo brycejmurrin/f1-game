@@ -38,11 +38,11 @@ suites in the background, inspect logs asynchronously, and continue productive
 tasks without waiting.
 
 ```sh
-node tools/ci/test-bg.mjs smoke api collision   # SEQUENTIAL: one group, then the next
-node tools/ci/test-bg.mjs --parallel smoke api  # old concurrent start (core-capped)
-tail -f artifacts/logs/smoke.log             # watch one
+node tools/ci/test-bg.mjs smoke                 # start ONE group (a second waits: see `next:`)
+node tools/ci/test-bg.mjs --parallel smoke aero # old concurrent start (core-capped)
+tail -f artifacts/logs/smoke.log             # watch one (never `| tail` a live log)
 node tools/ci/test-bg.mjs --status              # what is running / how it ended
-node tools/ci/test-bg.mjs --wait                # block until all groups finish
+node tools/ci/test-bg.mjs --wait --timeout 45   # THE waiter: block until all groups finish
 node tools/ci/test-bg.mjs --stop                # kill everything still running
 ```
 
@@ -60,8 +60,9 @@ cores; load reached 16.8 and the batch produced **five failures, four of which
 were bare 120 s timeouts** (138 s, 148 s, 153 s, 163 s) with a single genuine
 assertion failure among them. Four fabricated failures per real one is not a
 sweet spot — and each one reads like a product bug until you check the clock.
-`test-bg.mjs`'s cap ALLOWS two groups; that is a ceiling, not a recommendation.
-Scale the group count to the cores you actually have.
+`test-bg.mjs`'s default cap is ONE group; `--parallel` lifts it to
+`floor(CORES/WORKERS)`, a ceiling, not a recommendation. Scale the group count to
+the cores you actually have.
 
 To block on the result instead, `node tools/ci/test-bg.mjs --wait <groups>`
 chains them and exits with the verdict (the old `test-shards.sh` under
@@ -317,6 +318,27 @@ figures ("N of M unit files" in AGENTS.md rule 3, `docs/notes/PREPUSH-GATE-LADDE
 and this file) are generated from the same source by `node tools/gen/gen-ladder-figures.mjs`,
 so adding a unit file means `npm run gen:docs`, not three hand edits.
 
+**Adding a test file — the checklist.** A new `tests/specs/*.spec.js` or
+`tests/unit/*.test.{mjs,cjs}` is registered in four places, and `test:guards`
+(the commit hook) fails until all of them hold — group membership moved into it on
+2026-09-24 (`test-coverage-audit`, `prepush-gate-coverage`); before that a test
+nothing ran could be committed and fail only at tooling-fast or the deploy gate.
+`.claude/hooks/post-edit.sh` names whichever are missing the moment the file is written.
+
+1. **A group in `tests/groups.json`**, then `node tools/gen/gen-test-groups.mjs`.
+   A spec joins exactly ONE topical browser group (unless a glob such as
+   `physics-*` already covers it); a unit file joins `toolingFast` or a node group
+   ci.yml's "Pure-node unit suites" step runs. This is what makes CI, `pick-tests`,
+   `select-specs` and the nightly rota see it — none of them has a per-file list.
+2. **A row in the §5 coverage table** below: what it covers.
+3. **`npm run gen:docs`** — the spec count and the ladder figures are generated.
+4. **A spec only:** add it to `RENDER_SPECS` in `playwright.config.js` if it is
+   GL-heavy, and declare `test.setTimeout` above 180 s if it boots a race, so the
+   selected CI gate excludes it by name instead of timing out on a slow runner.
+
+A new GROUP is the same plus its `package.json` key, a §2 row here, and a
+`tools/ci/nightly-group.mjs` ROTATION / EXCLUDED / UNSCHEDULED entry.
+
 In that file's `toolingFast` list an entry beginning `//` is a note emitted
 verbatim into the generated block: the reasons a given file earns a place in
 the edit loop live beside the file they explain, and regenerating must never
@@ -375,7 +397,7 @@ tools directly.)
 
 | Group | What it runs |
 |---|---|
-| `guards` | the 20 CROSS-FILE guards in ~11 s — every one asserts a relationship BETWEEN files (or, for `no-bare-console` and `lexical-window-guard`, a rule across all of `js/`) (a registry against the tree, a generated file against its source, a ceiling against what it measures), and `global-registry` parses every manifest file so a syntax error cannot reach a commit. Run it BEFORE EVERY COMMIT (AGENTS.md rule 3): four failures in one session — a suite registered in none of its registries, `tools/README.md` and `package.json` hand-edited when both are generated, and a missing comma that would have broken the game's boot — were all inside this group and all found instead by a ~10-minute deploy. `deploy.mjs` reads the same group for its post-rejection re-verify, so the two cannot drift apart. |
+| `guards` | the 22 CROSS-FILE guards in ~11 s — every one asserts a relationship BETWEEN files (or, for `no-bare-console` and `lexical-window-guard`, a rule across all of `js/`; `test-coverage-audit` and `prepush-gate-coverage` put every test file in a group the gate runs) (a registry against the tree, a generated file against its source, a ceiling against what it measures), and `global-registry` parses every manifest file so a syntax error cannot reach a commit. Run it BEFORE EVERY COMMIT (AGENTS.md rule 3): four failures in one session — a suite registered in none of its registries, `tools/README.md` and `package.json` hand-edited when both are generated, and a missing comma that would have broken the game's boot — were all inside this group and all found instead by a ~10-minute deploy. `deploy.mjs` reads the same group for its post-rejection re-verify, so the two cannot drift apart. |
 | `tooling-fast` | the structural half — 239 files, ~5 min one at a time (317 s measured 2026-09-16), ~2 min at `--jobs=3` — via `tools/ci/tooling-fast.mjs` (`--test-concurrency=1` inside each file; `--jobs=N` files at once) with START/PASS/FAIL + `not ok` names on stdout and `artifacts/logs/tooling-fast-suite.log`. Load order, docs integrity, test groups, api contracts, css layer discipline, graph, validators. The full-fleet sweeps dominate `tooling`; this is everything else, for the edit loop |
 | `tooling` | every Node contract suite — chains `test:tooling-fast` then `test:sweeps` (the sweeps run `--test-concurrency=1`, see below) |
 | `game-vm` | the Node VM game harness (`game-vm.test.mjs`), the friend-race quali handoff (`quali-handoff-vm`), physics parity (`physics-characterization-vm`) and the thirteen `*-vm.test.mjs` TWINS of the JSON-only browser specs — `headless-api`, `obs-act-edge`, `longitudinal`, `world-physics`, `drift`, `active-aero`, `aero-zones`, `offtrack`, `elevation-tracks`, `collisions`, `collisions-deep`, `collision-ai-fixes`, `new-hooks` — same assertions and thresholds, one boot per file, ~1 s a circuit build. ~3 min for the set (elevation-tracks builds 40 circuits and is the bulk of it, ~3 min through the worker pool; the rest are 2–30 s each), plus `game-vm-pool` — the pool's own parity suite; in CI's node suites, which the Pages gate runs unconditionally. **Twelve of those browser specs no longer run on the blocking gate** — `tools/ci/twinned-specs.mjs` lists the pairs and holds the drift check that keeps the substitution honest (equal declared test counts, and the twin's group must still be gated, derived from ci.yml). They still run in their own group on the nightly. `new-hooks` is NOT among them: its Madrid foundation test is deliberately unported |

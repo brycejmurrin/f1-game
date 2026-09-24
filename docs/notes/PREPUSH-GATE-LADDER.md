@@ -11,7 +11,7 @@ subset of the next:
 <!-- GENERATED: ladder -->
 | command | unit files it runs | leaves out | when |
 |---|---|---|---|
-| `npm run test:guards` | 20 (curated) | — | hook-enforced, every `git commit` |
+| `npm run test:guards` | 22 (curated) | — | hook-enforced, every `git commit` |
 | `npm run test:tooling-fast` | 239 of 318 | 79 | the documented edit-loop check |
 | `node tools/ci/deploy.mjs --gate-only` | 303 of 318 | 15 | the whole gate; what a deploy runs |
 

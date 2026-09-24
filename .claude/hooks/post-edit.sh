@@ -46,6 +46,29 @@ case "$REL" in
     fi ;;
 esac
 
+# A NEW TEST FILE IS THREE REGISTRATIONS, not one (2026-09-24 audit): a group in
+# tests/groups.json (else nothing runs it — test-coverage-audit /
+# prepush-gate-coverage, now in test:guards), a row in the docs/TESTING.md §5
+# coverage table, and the regenerated counts. Say which are missing at the edit,
+# not three failures at the commit.
+case "$REL" in
+  tests/specs/*.spec.js|tests/unit/*.test.mjs|tests/unit/*.test.cjs)
+    BASE=$(basename "$REL"); MISSING=()
+    if ! node tools/ci/test-coverage-audit.mjs >/dev/null 2>&1 \
+       && node tools/ci/test-coverage-audit.mjs 2>&1 | grep -qF "$BASE"; then
+      MISSING+=("add it to a group in tests/groups.json (a spec: one topical browser group; a unit file: toolingFast or a ci.yml node group), then \`node tools/gen/gen-test-groups.mjs\`")
+    fi
+    grep -qF "$BASE" docs/TESTING.md 2>/dev/null || MISSING+=("give it a row in the docs/TESTING.md §5 coverage table (what it covers)")
+    case "$REL" in tests/specs/*)   # a unit file's count is the ladder branch below
+      node tools/gen/gen-ladder-figures.mjs --check >/dev/null 2>&1 || MISSING+=("run \`npm run gen:docs\` (the spec counts are generated)")
+      grep -q "setTimeout" "$REL" 2>/dev/null || MISSING+=("if it boots a race, declare \`test.setTimeout\` above 180 s so the selected CI gate excludes it by name (select-specs.mjs)") ;;
+    esac
+    if [ ${#MISSING[@]} -gt 0 ]; then
+      say "$BASE is not fully registered — test:guards fails the commit until it is:"
+      for m in "${MISSING[@]}"; do printf '  - %s\n' "$m"; done
+    fi ;;
+esac
+
 case "$REL" in
   tools/manifest.cjs)
     if node tools/gen/gen-shell.mjs --check >/dev/null 2>&1; then say "manifest.cjs: index.html / js/roster.js / tools/carview.html are in sync"

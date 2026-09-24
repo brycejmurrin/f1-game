@@ -871,7 +871,9 @@
         "tests/unit/twinned-specs.test.mjs",
         "tests/unit/ratchets.test.mjs",
         "tests/unit/no-bare-console.test.mjs",
-        "tests/unit/lexical-window-guard.test.mjs"
+        "tests/unit/lexical-window-guard.test.mjs",
+        "tests/unit/test-coverage-audit.test.mjs",
+        "tests/unit/prepush-gate-coverage.test.mjs"
       ]
     }
   }
