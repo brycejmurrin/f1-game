@@ -128,7 +128,7 @@ for (const [trackId, themeName] of [
   test(`${trackId} emits validated ${themeName} kit facilities`, async ({ page }) => {
     await page.addInitScript(installSceneryHook, { id: trackId, replace: false });
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex?.race);
+    await page.waitForFunction(() => window.__apex?.race, null, { polling: 100 });
     await page.evaluate(([id]) => {
       window.__resolvedSceneryTheme = null;
       window.__apex.headless(true);

@@ -3786,14 +3786,19 @@ function arrToHex(a) { const f = (v) => ("0" + Math.round(Math.max(0, Math.min(1
 // the action. Returns true when the action ran. Disarm is the caller's rebuild
 // or any other click path replacing the node.
 function armConfirm(btn, armedText, action) {
+  // An aria-label outranks the text, so a labelled button (the livery ✕) was
+  // announced unchanged when armed; the armed state goes into the name too.
+  const name = btn.getAttribute("aria-label");
   if (!btn.dataset.armed) {
     btn.dataset.armed = "1";
     btn.textContent = armedText;
     btn.classList.add("armed");
+    if (name) { btn.dataset.name = name; btn.setAttribute("aria-label", "Confirm: " + name + ". Press again"); }
     return false;
   }
   delete btn.dataset.armed;
   btn.classList.remove("armed");
+  if (btn.dataset.name) { btn.setAttribute("aria-label", btn.dataset.name); delete btn.dataset.name; }
   action();
   return true;
 }
@@ -8349,8 +8354,8 @@ function openCareer() {
     driverIdx = c.seat;
     recomputePlayerMods();
   }
-  careerUi.openHub();
-  els.overlay.hidden = true;
+  // vt: the same crossfade RACE / SEASON / GARAGE already take off the title.
+  vt(() => { careerUi.openHub(); els.overlay.hidden = true; });
   if (soundOn) GameAudio.uiSelect();
   scheduleFlybyTrack(true);   // the hub's next round, pre-built behind it
 }
@@ -8358,8 +8363,7 @@ function openCareer() {
 // career flow: nothing has been chosen yet, so a save's rules must not be live —
 // the picker's own handler calls openCareer() once a slot is taken.
 function openCareerSlots() {
-  careerUi.openSlots();
-  els.overlay.hidden = true;
+  vt(() => { careerUi.openSlots(); els.overlay.hidden = true; });
   if (soundOn) GameAudio.uiSelect();
 }
 function refreshCareerButton() {
@@ -8525,6 +8529,8 @@ $("q-sim").onclick = () => {
   $("quali").classList.add("q-done");
   qualiSheet.build(quali.rows());
   qualiNet.refreshQualiGate();
+  // .q-done hides SIMULATE itself, which held focus; the next step is the grid.
+  if (!$("q-go").disabled) $("q-go").focus();
 };
 $("q-go").onclick = () => {
   // Guarded as well as disabled: the button is the only way out of this sheet,
@@ -8685,7 +8691,7 @@ $("cs-done").onclick = () => {
   // away if you change your mind.
   if (garageReturn === "select") { raceSettings.openRaceSettings("select"); return; }
   buildSelect();
-  els.overlay.hidden = false;   // only the title screen's GARAGE button gets here
+  vt(() => { els.overlay.hidden = false; });   // only the title screen's GARAGE button gets here
 };
 $("cs-unlimited").onclick = () => {
   unlimitedBudget = !unlimitedBudget;
@@ -8901,7 +8907,10 @@ if ($("pm-fullscreen")) {
   el.hidden = false;
   const x = $("ios-install-x");
   if (x) x.onclick = dismiss;
-  // It is a suggestion, not a gate: the first race dismisses it too.
+  // It is a suggestion, not a gate: the first title-menu choice dismisses it,
+  // or it sat over the next screen's BACK/DONE and the HUD's speed readout.
+  const ov = $("overlay");
+  if (ov) ov.addEventListener("click", (e) => { if (e.target.closest && e.target.closest(".bigbtn")) dismiss(); });
   setTimeout(dismiss, 15000);
 })();
 applyMirrorControls();

@@ -297,6 +297,9 @@ const CustomTeam = (function () {
         if (isCarsetupVisible()) buildSetup();
         if (getSoundOn()) GameAudio.uiSelect();
       };
+      // UPLOAD is a real button: a <label for> cannot take focus, so keyboard
+      // and pad players had no way to reach the (hidden) file input at all.
+      $("cz-logo-up").onclick = () => $("cz-logofile").click();
       $("cz-logofile").addEventListener("change", (e) => {
         const f = e.target.files && e.target.files[0];
         if (!f) return;

@@ -106,8 +106,10 @@ function create(G) {
       const id = `${s.flavour}:${s.i}`;
       const armed = armedDelete === id;
       const del = el("button", `cr-slot-del${armed ? " armed" : ""}`, armed ? "DELETE?" : "DELETE");
-      del.setAttribute("aria-label",
-        `Delete the ${s.flavour === "myteam" ? "team" : "career"} in slot ${s.i + 1}`);
+      const what = `the ${s.flavour === "myteam" ? "team" : "career"} in slot ${s.i + 1}`;
+      // Armed, the NAME says so too: the visible DELETE? never reached a
+      // screen reader, and the second press deleted a save with no warning.
+      del.setAttribute("aria-label", armed ? `Confirm: delete ${what}. Press again to delete` : `Delete ${what}`);
       del.onclick = (ev) => {
         ev.stopPropagation();
         if (G.soundOn) GameAudio.uiTick();
@@ -511,7 +513,8 @@ function create(G) {
     return wrap;
   }
 
-  function buildSetupPanes() {
+  function buildSetupPanes() { keep(buildSetupPanesNow); }
+  function buildSetupPanesNow() {
     const left = $("cr-left"), right = $("cr-right");
     left.textContent = ""; right.textContent = "";
 
@@ -1265,11 +1268,18 @@ function create(G) {
     return (d > 0 ? "+" : "") + d + " (" + (d > 0 ? "gaining" : "slipping") + ")";
   }
 
+  // Every tile, budget step, re-sign and DELETE? arm rebuilds #cr-left/#cr-right
+  // and destroys the focused button; with no focus() anywhere in this file a
+  // keyboard or pad player was left on <body>. keepFocus (js/ui/modal.js) puts
+  // it back on the same slot.
+  const keep = (fn) => (window.TopModal && TopModal.keepFocus ? TopModal.keepFocus($("career"), fn) : fn());
   function build() {
-    if (picking) { draft = null; buildSlotPanes(); }
-    else if (Career.active()) { draft = null; buildHubPanes(); }
-    else if (draft) buildSetupPanes();
-    else buildSlotPanes();
+    keep(() => {
+      if (picking) { draft = null; buildSlotPanes(); }
+      else if (Career.active()) { draft = null; buildHubPanes(); }
+      else if (draft) buildSetupPanes();
+      else buildSlotPanes();
+    });
     // The foot button must say where it GOES: from the slot picker over an
     // active career it returns to the HUB, and a button labelled MAIN MENU
     // that lands you back in the career was the one lying label in the app.

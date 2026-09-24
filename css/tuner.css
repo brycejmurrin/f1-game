@@ -669,6 +669,15 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] :is(#lt-rows, #ct-rows) {
     min-height: 0;
   }
+  /* The corner previews are three jump buttons, not a second menu: at UI SIZE
+     150% on a 734x343 phone the balanced row wrapped them into two ~70px lines
+     and #ct-rows was left 15px — every slider hidden behind MONZA / SPA /
+     MONACO (survey-ui-matrix, 2026-09-24). One equal row at the tap floor. */
+  #camtune-inner[data-density="compact"] #ct-previews { --balance-basis: 0px; --balance-min: 0px; flex-wrap: nowrap; }
+  #camtune-inner[data-density="compact"] #ct-previews > button {
+    min-width: 0; min-height: var(--tap-min); padding: 0 4px;
+    font-size: var(--fs-micro); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-head,
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] #ct-head { margin-bottom: 2px; }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-head h2,

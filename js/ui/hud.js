@@ -609,8 +609,67 @@ function fitHud() {
   }
   const dockRW = hitsRight && !limLeft ? dockR.width / chromeZ : 0;
   root.style.setProperty("--dock-r-w", (dockRW > 0 ? dockRW + 8 : 0).toFixed(1) + "px");
-  const dockH = Math.max(tall(_dockL), tall(_dockR));
-  const capDock = dockH ? (window.innerHeight - 3 * FIT_AIR) / dockH : Infinity;
+  // THE DOCK CAP IS ASKED OF FIXED LAYOUTS, NOT OF THE ONE ON SCREEN. A dock is
+  // a wrap-reverse row, so its height depends on the zoom: at HUD 150% on a
+  // 734x343 phone BUTTONS mode's right dock (pedals + BOOST/OT/AERO) wrapped
+  // into two rows, 530px tall, BRAKE at y=-218. Capping by that rendered height
+  // shrank the zoom until the row UNwrapped, the next measure found the short
+  // row and lifted the cap, and it wrapped again — and between the 3 s
+  // same-key re-measures BRAKE sat off the top of the screen (survey-ui-matrix,
+  // 2026-09-24). Same shape as the gap strip's rungs above, same cure: judge
+  // each layout by sizes the zoom cannot change. ROW = every group side by
+  // side (needs the width AND the tallest group's height); STACK = every group
+  // on its own line (needs only height). The cap is whichever allows more.
+  const hudDockEl = _dockL ? _dockL.parentNode : null;
+  const groups = (d) => {
+    if (!d) return { h: 0, w: 0, stack: 0 };
+    const z = d.currentCSSZoom || 1;
+    let h = 0, w = 0, stack = 0, n = 0;
+    for (const g of d.children) {
+      const r = g.getBoundingClientRect();
+      if (!r.width) continue;
+      h = Math.max(h, r.height / z); w += r.width / z; stack += r.height / z; n++;
+    }
+    const cs = getComputedStyle(d);
+    const gx = parseFloat(cs.columnGap) || 0, gy = parseFloat(cs.rowGap) || 0;
+    return { h, w: w + Math.max(0, n - 1) * gx, stack: stack + Math.max(0, n - 1) * gy };
+  };
+  const gL = groups(_dockL), gR = groups(_dockR);
+  const dockH = Math.max(gL.h, gR.h);
+  let capDock = Infinity;
+  if (dockH) {
+    // Room is measured from the bar's REAL bottom edge, which the safe-area
+    // inset lifts: budgeting from the viewport's foot put BOOST 1px off the
+    // top on the Safari landscape shape (a 21px inset). Two FIT_AIRs of sky.
+    const barR = hudDockEl ? hudDockEl.getBoundingClientRect() : null;
+    const floorY = (barR && barR.height ? barR.bottom : window.innerHeight - FIT_AIR) - FIT_AIR;
+    // …and each dock's CEILING is the top CONTROL it would climb into, not the
+    // screen edge: at HUD 150% BOOST sat on PAUSE and COCKPIT in landscape.
+    // Controls only — counting the S1-S3 readout as well shrank a landscape
+    // phone's pedals to 44px, under the touch floor, to keep three small
+    // numbers clear; a readout is the thing to lose. Only chrome that overlaps
+    // the dock SIDEWAYS counts.
+    const ceil = (dock, list) => {
+      const d = dock ? dock.getBoundingClientRect() : null;
+      let y = FIT_AIR;
+      if (!d || !d.width) return y;
+      for (const r of list) {
+        if (r && r.width && r.height && r.left < d.right && r.right > d.left) y = Math.max(y, r.bottom + FIT_AIR);
+      }
+      return y;
+    };
+    const rectOf = (el) => (el && !el.hidden ? el.getBoundingClientRect() : null);
+    const roomL = floorY - ceil(_dockL, [mmR, gapsR]);
+    const roomR = floorY - ceil(_dockR, [rectOf(els.pausebtn), rectOf(els.btnCam)]);
+    const zBot = Math.min(scale, capBot);
+    const barW = barR ? barR.width : window.innerWidth;
+    const barGap = hudDockEl ? parseFloat(getComputedStyle(hudDockEl).columnGap) || 0 : 0;
+    const roomW = barW - (bottom ? bottom * zBot : 0) - 2 * barGap - 2 * FIT_AIR;
+    const capRow = Math.min(gL.h ? roomL / gL.h : Infinity, gR.h ? roomR / gR.h : Infinity,
+      gL.w + gR.w ? roomW / (gL.w + gR.w) : Infinity);
+    const capStack = Math.min(gL.stack ? roomL / gL.stack : Infinity, gR.stack ? roomR / gR.stack : Infinity);
+    capDock = Math.max(capRow, capStack);
+  }
   // An empty dock on a TOUCH body is "not populated yet", not "no dock" —
   // showTouchControls lands a tick or two after the race starts, and latching
   // the key here left the cap unwritten for the whole 3 s same-key backoff
