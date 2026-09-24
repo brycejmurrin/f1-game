@@ -173,6 +173,10 @@ const { overlapArea } = createRequire(import.meta.url)("../../tools/track/coplan
 // prop it used to clear. Two pairs, fighting from 96 m, against 122 spots
 // removed everywhere else. Measured, not assumed — coplanar-audit --why names
 // the prop (js/track/tracks.js:1946).
+// 2026-09-24: FIGHT_MAX 150 -> 300 m re-baselined every circuit at the wider
+// window (584 spots measured at 300 m before TrackGeom.MIN_SEP, 289 after). At
+// the old 150 m window no circuit grew (106 -> 99); every raise here is a pair
+// the wider window now SEES, not a new fight.
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "track", "coplanar-baseline.json"), "utf8"),
 );
