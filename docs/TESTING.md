@@ -1326,6 +1326,7 @@ what it covers.
 | `telemetry-trace.test.mjs` | GPS-trace sanity and the playback dot's motion |
 | `meeting-picker-labels.test.mjs` | OpenF1 meeting picker labels stay unique when `meeting_name` collides — circuit suffix, then YYYY-MM-DD |
 | `data-api-status.test.mjs` | a `"null"` error body still throws with `.status` attached, so a 401/403 lockout can never serve stale cache |
+| `data-lazy-loader.test.mjs` | a failed deferred data script blocks its dependent hub, then retry reuses the siblings already evaluated without redeclaring them |
 | `audio-smoke.spec.js` | the WebAudio engine/sfx initialise and respond, objectively |
 | `music-library.spec.js` | the bring-your-own-music library and the Spotify backend |
 | `spotify-refresh.test.mjs` | Spotify refresh single-flight, retry preservation, rotated-token ownership, and terminal revocation |
