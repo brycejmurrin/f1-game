@@ -30,6 +30,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { seedStore } from "../helpers/seed-store.mjs";   // gfx-quality.js persists through GameStore.store's raw lane
+import { seedClipboard } from "../helpers/seed-clipboard.mjs";
 import { bootGlx } from "../helpers/glx-mock.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -1703,6 +1704,7 @@ test("terminal graphics recovery works before the late menu wiring", async () =>
     },
     DataHub: { open() { dataOpens++; dataDialog.hidden = false; } },
   });
+  seedClipboard(ctx);
   vm.runInContext(read("js/perf/renderer-picker.js"), ctx, { filename: "js/perf/renderer-picker.js" });
   ctx.RendererPicker = vm.runInContext("RendererPicker", ctx);
   vm.runInContext(src.slice(from, to) + "\nglobalThis.__showGraphicsUnavailable = showGraphicsUnavailable;", ctx);

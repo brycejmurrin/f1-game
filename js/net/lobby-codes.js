@@ -154,3 +154,4 @@ const LobbyCodes = (function () {
 
   return { codeFrom, paintQr, canShare, create };
 })();
+Object.freeze(LobbyCodes);
