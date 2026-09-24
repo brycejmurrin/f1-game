@@ -25,13 +25,11 @@
 #overlay > * { zoom: var(--ui-scale); }
 /* Title arrives once. The wordmark reuses sheet-in (css/components.css), the
    motion every modal sheet shares — one-shot, never a loop (the sheen rule in
-   css/components.css documents why). hidden on #overlay restarts it when the
-   player comes back from a room. The doors no longer ride sheet-in as ONE
-   block: each button enters on its own in the title intro below, and a
-   parent slide under a child stagger is the same motion twice. */
-@media (prefers-reduced-motion: no-preference) {
-  :root:not([data-motion="reduce"]) #menu-brand { animation: sheet-in 0.32s cubic-bezier(0.2, 0.7, 0.3, 1); }
-}
+   css/components.css documents why) — inside the title intro below, so it
+   plays on the first show only, not every time the player comes back from a
+   room. The doors do not ride sheet-in as ONE block: each button enters on
+   its own there, and a parent slide under a child stagger is the same motion
+   twice. */
 #overlay {
   position: fixed; inset: 0;
   z-index: 20;
@@ -109,6 +107,8 @@
   z-index: -1;
   color: var(--red);                 /* the ONE declaration that themes every
                                         currentColor stroke and gradient stop */
+  contain: paint;                    /* the svg clips its art already; this lets
+                                        the intro's per-frame repaints stop at its box */
 }
 /* THE PORTRAIT DRAWING IS A SECOND PICTURE, NOT A SECOND CROP. It sits in the
    same slot on the same terms — bottom-anchored, behind everything, its own
@@ -128,6 +128,7 @@
   pointer-events: none;
   z-index: -1;
   color: var(--red);
+  contain: paint;
   display: none;
 }
 :where(body[data-shape="tall"]) #title-car { display: none; }
@@ -235,42 +236,55 @@
 /* THE TITLE INTRO — one pass, over by ~2.5 s, never a loop (WCAG 2.2.2 wants a
    pause control past 5 s; a loop would also repaint the SVG every frame on an
    iPhone, whose SVG has no compositing). CSS only: tools/gen/title-art.mjs
-   stamps every art group with data-stage (WHAT it does) and --i (WHEN), and
-   every stroked path with pathLength="1", so a dash of 1 is the whole line.
-     0.10 s  outlines draw on (ink, then detail), 60 ms apart
+   stamps every art group with data-stage (WHAT it does) and --i (WHEN).
+     0.10 s  outlines wipe on left to right (ink, then detail), 60 ms apart
      0.20 s  buttons grow in, CAREER first, 50 ms apart, landed by ~1.0 s
      0.66 s  panels fade in, 40 % into the draw, so no panel pops in before
              the outline that bounds it; the ink fill follows the panels, or
              the dilated silhouette would flash in as a solid blob
      1.50 s  the tyre marks sweep out behind the cars and catch the light once
-   Every animation fills BACKWARDS only: the start state holds through the
-   delay, and when it ends the element drops back to its own declared style —
-   no dash, no clip — so the resting title is the same pixels as without the
-   intro. Both gates, because the in-game Motion setting can only add
-   reduction; the Playwright suite runs reduced, and sees no motion at all.
-   Paint cost is transform/opacity/clip-path/stroke-dashoffset only: no
-   filter, no shadow, and no will-change — an SVG child gets no layer from it. */
+   A WIPE on the group, not a dash draw on the path: each ink path is dozens
+   of subpaths (54 M in the landscape contour), the dash pattern restarts at
+   every one, and a dash "draw" made every outline pop at once.
+   ONLY ON FIRST SHOW: every rule keys on #overlay[data-intro], which
+   js/ui/title-fx.js sets once, the first time the title is visible, and
+   removes after ~2.8 s — coming back from a room is the resting title, not a
+   second show. Every animation fills BACKWARDS only: the start state holds
+   through the delay, and when it ends the element drops back to its own
+   declared style — no clip, no fill-opacity override — so the resting title
+   is the same pixels as without the intro. Both gates, because the in-game
+   Motion setting can only add reduction; the Playwright suite runs reduced,
+   and sees no motion at all. Paint cost is transform/opacity/fill-opacity/
+   clip-path only: no filter, no shadow, and no will-change — an SVG child
+   gets no layer from it. Fills fade by fill-opacity, not group opacity, so no
+   group is flattened into an offscreen buffer to fade it. */
 @media (prefers-reduced-motion: no-preference) {
-  :root:not([data-motion="reduce"]) :is(#title-car, #title-car-top) g:is([data-stage="ink"], [data-stage="detail"]) > path[pathLength] {
-    animation: tc-draw var(--dur-draw) var(--ease-out) backwards;
+  :root:not([data-motion="reduce"]) #overlay[data-intro] #menu-brand { animation: sheet-in 0.32s cubic-bezier(0.2, 0.7, 0.3, 1); }
+  :root:not([data-motion="reduce"]) #overlay[data-intro] :is(#title-car, #title-car-top) g[data-stage="ink"] {
+    animation: tc-wipe var(--dur-draw) var(--ease-out) backwards, tc-fill var(--dur-4) var(--ease-out) backwards;
+    animation-delay: calc(100ms + var(--i, 0) * 60ms), calc(400ms + var(--dur-draw) * 0.4);
+  }
+  /* detail sits late in the --i order and its lines are short */
+  :root:not([data-motion="reduce"]) #overlay[data-intro] :is(#title-car, #title-car-top) g[data-stage="detail"] {
+    animation: tc-wipe calc(var(--dur-draw) / 2) var(--ease-out) backwards;
     animation-delay: calc(100ms + var(--i, 0) * 60ms);
   }
-  /* detail sits late in the --i order (16, 17) and its lines are short */
-  :root:not([data-motion="reduce"]) :is(#title-car, #title-car-top) g[data-stage="detail"] > path[pathLength] { animation-duration: calc(var(--dur-draw) / 2); }
-  :root:not([data-motion="reduce"]) :is(#title-car, #title-car-top) g[data-stage="ink"] {
+  /* the tall tablet's cars sit at the foot of a frame their marks run DOWN,
+     so its outlines wipe the same way */
+  :root:not([data-motion="reduce"]) #overlay[data-intro] #title-car-top g[data-stage="ink"] { animation-name: tc-wipe-down, tc-fill; }
+  :root:not([data-motion="reduce"]) #overlay[data-intro] #title-car-top g[data-stage="detail"] { animation-name: tc-wipe-down; }
+  :root:not([data-motion="reduce"]) #overlay[data-intro] :is(#title-car, #title-car-top) g:is([data-stage="body"], [data-stage="tone"], [data-stage="brush"]) {
     animation: tc-fill var(--dur-4) var(--ease-out) backwards;
-    animation-delay: calc(400ms + var(--dur-draw) * 0.4);
-  }
-  :root:not([data-motion="reduce"]) :is(#title-car, #title-car-top) g:is([data-stage="body"], [data-stage="tone"], [data-stage="brush"]) {
-    animation: tc-fade var(--dur-4) var(--ease-out) backwards;
     animation-delay: calc(100ms + var(--dur-draw) * 0.4 + var(--i, 0) * 40ms);
   }
-  :root:not([data-motion="reduce"]) :is(#title-car, #title-car-top) g[data-stage="trail"] {
+  /* the tall tablet's tone steps carry a hairline stroke too */
+  :root:not([data-motion="reduce"]) #overlay[data-intro] :is(#title-car, #title-car-top) g[data-stage="tone"]:not([stroke="none"]) { animation-name: tc-fill-line; }
+  :root:not([data-motion="reduce"]) #overlay[data-intro] :is(#title-car, #title-car-top) g[data-stage="trail"] {
     animation: tc-trail 900ms var(--ease-out) backwards;
     animation-delay: calc(100ms + var(--dur-draw));
   }
   /* the tall-tablet marks run DOWN the frame from the cars */
-  :root:not([data-motion="reduce"]) #title-car-top g[data-stage="trail"] { animation-name: tc-trail-down; }
+  :root:not([data-motion="reduce"]) #overlay[data-intro] #title-car-top g[data-stage="trail"] { animation-name: tc-trail-down; }
   /* The doors grow into place rather than rise: #menu-buttons is a SCROLLER
      on phones, and a row shifted down 8px is 8px of scroll extent.
      js/ui/scroll-fade.js measures the column the moment #overlay is shown —
@@ -279,31 +293,38 @@
      no extent, and the spring's 6% overshoot on 0.94 stays under its 2px
      slack. `scale`, not `transform`: it composes with the shared :active
      skew + scale instead of fighting it. */
-  :root:not([data-motion="reduce"]) #menu-buttons .bigbtn {
+  :root:not([data-motion="reduce"]) #overlay[data-intro] #menu-buttons .bigbtn {
     animation: tc-btn-in var(--dur-3) var(--ease-spring) backwards;
     animation-delay: calc(200ms + var(--n, 0) * 50ms);
   }
-  :root:not([data-motion="reduce"]) #menu-retention > .bigbtn { --n: 1; }
-  :root:not([data-motion="reduce"]) #menu-primary > :nth-child(1) { --n: 2; }
-  :root:not([data-motion="reduce"]) #menu-primary > :nth-child(2) { --n: 3; }
-  :root:not([data-motion="reduce"]) #menu-primary > :nth-child(3) { --n: 4; }
-  :root:not([data-motion="reduce"]) #menu-primary > :nth-child(4) { --n: 5; }
-  :root:not([data-motion="reduce"]) #menu-secondary > * { --n: 6; }
-  :root:not([data-motion="reduce"]) #menu-secondary > :nth-child(n+3) { --n: 7; }
-  :root:not([data-motion="reduce"]) #menu-secondary > :nth-child(n+4) { --n: 8; }
-  :root:not([data-motion="reduce"]) #menu-secondary > :nth-child(n+5) { --n: 9; }
+  /* A door focused mid-intro (keyboard, or a gamepad's first press) is never
+     held invisible by the delay. */
+  :root:not([data-motion="reduce"]) #overlay[data-intro] #menu-buttons .bigbtn:focus-visible { animation: none; }
+  :root:not([data-motion="reduce"]) #overlay[data-intro] #menu-retention > .bigbtn { --n: 1; }
+  :root:not([data-motion="reduce"]) #overlay[data-intro] #menu-primary > :nth-child(1) { --n: 2; }
+  :root:not([data-motion="reduce"]) #overlay[data-intro] #menu-primary > :nth-child(2) { --n: 3; }
+  :root:not([data-motion="reduce"]) #overlay[data-intro] #menu-primary > :nth-child(3) { --n: 4; }
+  :root:not([data-motion="reduce"]) #overlay[data-intro] #menu-primary > :nth-child(4) { --n: 5; }
+  :root:not([data-motion="reduce"]) #overlay[data-intro] #menu-secondary > * { --n: 6; }
+  :root:not([data-motion="reduce"]) #overlay[data-intro] #menu-secondary > :nth-child(n+3) { --n: 7; }
+  :root:not([data-motion="reduce"]) #overlay[data-intro] #menu-secondary > :nth-child(n+4) { --n: 8; }
+  :root:not([data-motion="reduce"]) #overlay[data-intro] #menu-secondary > :nth-child(n+5) { --n: 9; }
 }
-/* A dash of 1 and a gap of 2 on a pathLength of 1: at offset 1.02 the only
-   dash sits wholly before the start, so not even a round cap shows. */
-@keyframes tc-draw {
-  from { stroke-dasharray: 1 2; stroke-dashoffset: 1.02; }
-  to   { stroke-dasharray: 1 2; stroke-dashoffset: 0; }
+/* inset() on an SVG group measures its own stroke box. The end keyframes
+   restate the open clip because an inset() cannot interpolate to `none`. */
+@keyframes tc-wipe {
+  from { clip-path: inset(0 100% 0 0); }
+  to   { clip-path: inset(0 0 0 0); }
 }
+@keyframes tc-wipe-down {
+  from { clip-path: inset(0 0 100% 0); }
+  to   { clip-path: inset(0 0 0 0); }
+}
+/* `from` only: each group returns to its own declared fill-opacity. */
 @keyframes tc-fill { from { fill-opacity: 0; } }
-@keyframes tc-fade { from { opacity: 0; } }
+@keyframes tc-fill-line { from { fill-opacity: 0; stroke-opacity: 0; } }
 /* Revealed at half strength, then the light catches: the marks come up to
-   full as the sweep finishes. The end keyframe restates the open clip because
-   an inset() cannot interpolate to `none`. */
+   full as the sweep finishes. */
 @keyframes tc-trail {
   0%   { clip-path: inset(0 100% 0 0); opacity: 0.45; }
   65%  { clip-path: inset(0 0 0 0); opacity: 0.45; }
@@ -419,6 +440,9 @@
    changes height after boot. One line, always: the returning-player string is
    the long one and must not wrap. See docs/PERF-FINDINGS.md 4a. */
 #mb-career-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+/* On the red hero the 72% mix measured under 4.5:1 against the gradient's
+   light end; full ink passes. The dark plates keep the dim sub line. */
+#overlay #mb-career .mb-sub { color: var(--text); }
 /* The 2x2 modes stack label over sub. No span for the label itself: a bare
    text node is already an anonymous flex item, so only the stack needs a box. */
 #menu-primary .bigbtn > span { display: inline-flex; flex-direction: column; align-items: center; gap: calc(var(--gap) / 6); }

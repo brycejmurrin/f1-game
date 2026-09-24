@@ -484,12 +484,12 @@ function build() {
  * Wrappers that only place things (#tc-frame, the placement group, tracedCar's
  * per-car transform group) hold no path and carry no stage.
  *
- * pathLength="1" goes on every path that is STROKED (the ink, detail and
- * hairline tone passes), so CSS can run stroke-dasharray: 1 and animate
- * stroke-dashoffset 1 -> 0 without knowing any path's length. It only rescales
- * dash and marker distances, and nothing here dashes, so it is inert when
- * static. Fill-only paths (body, stroke="none" tone, brush, trail) do NOT get
- * it: a fill has no dash to scale, so it would be bytes that change nothing.
+ * NO pathLength, deliberately. A dash draw-on (pathLength="1", dasharray 1,
+ * dashoffset 1 -> 0) was tried and does not trace: an ink path is one <path>
+ * of many subpaths (54 M in the landscape contour), and the dash pattern
+ * restarts at every M, so every outline popped at once. The outlines reveal
+ * with a clip-path wipe on the GROUP instead (css/menus.css), which needs no
+ * per-path length at all.
  */
 const STAGES = ["ink", "body", "tone", "detail", "brush", "trail"];
 const SLOT = "@@I@@";
@@ -502,13 +502,10 @@ function stageOf(attrs, fill) {
   if (/stroke="none"/.test(attrs)) return "body";
   throw new Error(`title-art: no reveal stage for <g ${attrs}>`);
 }
-/** One art group. `pathAttrs` precede d= on the path; pathLength="1" is added
- *  exactly when the group paints a stroke. The --i slot is filled later by
- *  numberStages, once the whole drawing's group list is known. */
+/** One art group. `pathAttrs` precede d= on the path. The --i slot is filled
+ *  later by numberStages, once the whole drawing's group list is known. */
 function artGroup(indent, attrs, d, pathAttrs = "", fill = true) {
-  const stroked = !/stroke="none"/.test(attrs);
-  const pa = pathAttrs + (stroked ? 'pathLength="1" ' : "");
-  return `${indent}<g ${attrs} data-stage="${stageOf(attrs, fill)}" style="--i:${SLOT}"><path ${pa}d="${d}"/></g>`;
+  return `${indent}<g ${attrs} data-stage="${stageOf(attrs, fill)}" style="--i:${SLOT}"><path ${pathAttrs}d="${d}"/></g>`;
 }
 /** Fill every --i slot in one drawing: stage-major, paint order within a stage. */
 function numberStages(text) {

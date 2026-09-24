@@ -102,9 +102,17 @@
   *, *::before, *::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
 }
+/* The same cancel for the in-game MENU ANIMATIONS: REDUCED setting
+   (html[data-motion="reduce"], js/ui/title-fx.js). js/ui/select-screen.js
+   skips startViewTransition under it too, so this only catches a transition
+   some other caller starts. */
+:root[data-motion="reduce"]::view-transition-group(*),
+:root[data-motion="reduce"]::view-transition-old(*),
+:root[data-motion="reduce"]::view-transition-new(*) { animation: none !important; }
 
 /* Windows High Contrast / forced-colors: gradients and translucent panel edges
    flatten to system colours, so the red-border "selected" cue and panel outlines
@@ -677,9 +685,11 @@
      line or ring drawing itself). A step either reads as instant or as travel —
      values in between just look undecided. --ease-out is for anything ARRIVING
      (fast start, long soft landing — it answers the input at once). Only tokens
-     something reads live here (tests/unit/css-tokens.test.mjs): a --dur-2 and an
-     --ease-in-out, and a twelve-step OKLCH red ramp, were drafted with these and
-     cut until a rule needs them. */
+     something reads live here (tests/unit/css-tokens.test.mjs): a --dur-2, an
+     --ease-in-out, a --motion multiplier and a twelve-step OKLCH red ramp were
+     drafted with these and cut until a rule needs them. Reduced motion is not
+     a token: it is html[data-motion="reduce"] (js/ui/title-fx.js) and the
+     prefers-reduced-motion backstop above, both in !important rules. */
   --dur-1: 120ms;
   --dur-3: 320ms;
   --dur-4: 600ms;
@@ -689,12 +699,6 @@
      ease-out is the same arrival without the bounce. The real curve is in the
      @supports block below. */
   --ease-spring: var(--ease-out);
-  /* A multiplier, not a switch: write `calc(var(--dur-3) * var(--motion))`
-     and reduced motion becomes 0ms with the end state intact, which no
-     `animation: none` can promise for a `both`-filled entrance. 0 under the
-     OS preference and under html[data-motion="reduce"] (the in-game setting),
-     below. */
-  --motion: 1;
 }
 
 /* THE SPRING, as linear(): 25 evenly spaced samples of a damped spring
@@ -713,14 +717,6 @@
       1.003, 1, 0.998, 0.997, 0.996, 0.997, 1);
   }
 }
-
-/* --motion: 0 — the OS asks, or the player does (js sets data-motion on
-   <html> from the setting). Both, not either-or: the setting can only ADD
-   reduction; nothing here re-enables motion the OS has asked to drop. */
-@media (prefers-reduced-motion: reduce) {
-  :root { --motion: 0; }
-}
-:root[data-motion="reduce"] { --motion: 0; }
 
 /* THE TOUCH LADDER. The tokens above are a FLOOR (44px is the smallest box
    Apple's HIG and WCAG 2.5.5 accept) and a phone was being handed the floor —
