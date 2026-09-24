@@ -491,7 +491,9 @@ test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", ()
   // begin() strikes out…", "clean sessions heal the ladder") — not repeated
   // here as source text.
   assert.match(wgx, /_allocFail\(\s*"createMesh"/, "lazy mesh creation on the render path degrades to inert, not a throw");
-  assert.match(wgx, /_allocFail\(\s*"createChunkedMesh"/);
+  // createChunkedMesh moved to wgx-chunked.js (GLX-seam peel); it still routes
+  // through core.allocFail so a failed upload stays inert, not a throw.
+  assert.match(code("js/render/webgpu/wgx-chunked.js"), /allocFail\(\s*"createChunkedMesh"/);
   // A hand re-pick of WEBGPU resets the ladder so the player can retry full:
   // BEHAVIOUR through the picker.
   const a = bootPicker({
@@ -1369,12 +1371,14 @@ test("TLX shadow cull packs CPU-side without uploading the lit InstancedMesh", (
 
 test("WGX phone post targets use the slim GLX-equivalent formats", () => {
   const wgx = read("js/render/webgpu/wgx.js");
+  const post = read("js/render/webgpu/wgx-post.js");
   assert.match(wgx, /SSAO_FORMAT\s*=\s*"r8unorm"/);
   assert.match(wgx, /POST_HDR_FORMAT\s*=\s*"rg11b10ufloat"/);
-  // Blur pipelines use an explicit dynamic-offset layout (not fsPipe) so H/V
-  // passes do not share one writeBuffer slot before submit.
-  assert.match(wgx, /pBlurHDR\s*=\s*blurPipe\(POST_HDR_FORMAT\)/);
-  assert.match(wgx, /pBlur\s*=\s*blurPipe\(SSAO_FORMAT\)/);
+  // Blur pipelines live in wgx-post.js after the GLX-seam peel; they use an
+  // explicit dynamic-offset layout (not fsPipe) so H/V passes do not share one
+  // writeBuffer slot before submit.
+  assert.match(post, /pBlurHDR\s*=\s*blurPipe\((?:core\.)?POST_HDR_FORMAT\)/);
+  assert.match(post, /pBlur\s*=\s*blurPipe\((?:core\.)?SSAO_FORMAT\)/);
 });
 
 test("TLX present() records gfxBound when a fallback still paints", () => {
@@ -2804,7 +2808,7 @@ test("instanced cull cache only hits the transform pack resident in the GPU buff
     }
   }
   const glShadow = read("js/render/glx/shadow.js");
-  const wgx = read("js/render/webgpu/wgx.js");
+  const wgxSh = read("js/render/webgpu/wgx-shadow.js");
   assert.match(glShadow, /bufferSubData\([^]*?batch\._cullPlanes\s*=\s*null/,
     "GLX full-set shadow restore must invalidate the resident cull pack");
   // WGX (bug hunt 2026-09-02): the shadow pass packs into the batch's OWN
@@ -2812,13 +2816,15 @@ test("instanced cull cache only hits the transform pack resident in the GPU buff
   // writing instBuf here WAS the bug: the shadow encoder rides the frame
   // submit while the camera cull's writeBuffer is queue-ordered before it, so
   // every shadow pass drew the camera's pack. Pin the separation.
-  const wgxCast = wgx.slice(wgx.indexOf("function castShadowInstanced("), wgx.indexOf("function castShadowInstanced(") + 2200);
+  // castShadowInstanced lives in wgx-shadow.js after the GLX-seam peel.
+  const wgxCast = wgxSh.slice(wgxSh.indexOf("function castShadowInstanced("), wgxSh.indexOf("function castShadowInstanced(") + 2200);
   assert.doesNotMatch(wgxCast, /writeBuffer\(batch\.instBuf/,
     "WGX castShadowInstanced must never write instBuf (frame-order bug)");
   assert.match(wgxCast, /writeBuffer\(batch\.shadowInstBuf/,
     "WGX full-set cast packs into the batch's own shadow instance buffer");
-  assert.match(wgxCast, /_setVB1\(shadowPass, vb \|\| batch\.instBuf \|\| identInstanceBuf\)/,
+  assert.match(wgxCast, /(?:_setVB1|core\.setVB1)\(shadowPass, vb \|\| batch\.instBuf \|\| (?:core\.)?identInstanceBuf\)/,
     "the shadow draw binds the shadow buffer when it has one");
+  const wgx = read("js/render/webgpu/wgx.js");
   const wgxCull = wgx.slice(wgx.indexOf("function cullInstances(batch, planes, opts)"), wgx.indexOf("function cullInstances(batch, planes, opts)") + 4200);
   assert.match(wgxCull, /const shadow = !!\(opts && opts\.upload === false\);/,
     "cullInstances must recognise the shadow cull (upload:false)");
@@ -2843,7 +2849,7 @@ test("instanced cull cache only hits the transform pack resident in the GPU buff
   // _shadowEncoderBegin must therefore submit ANY pending encoder, not only one
   // whose model ring is nearly full — that ring threshold is a memory concern
   // and says nothing about which light packed the instance buffer.
-  const beginFn = fnBody(code("js/render/webgpu/wgx.js"), "_shadowEncoderBegin");
+  const beginFn = fnBody(code("js/render/webgpu/wgx-shadow.js"), "_shadowEncoderBegin");
   assert.match(beginFn, /if\s*\(\s*_pendingShadowEnc\s*\)\s*\{[^]*?queue\.submit/,
     "each shadow pass must submit the previous one — an unconditional submit, not a ring-threshold one");
   assert.doesNotMatch(beginFn, /_pendingShadowEnc\s*&&\s*_shadowSlot\s*>/,
@@ -2856,7 +2862,7 @@ test("instanced cull cache only hits the transform pack resident in the GPU buff
 test("all three backends take a shadow KEEP, and game.js says which skips are cadence", () => {
   for (const [file, fn] of [
     ["js/render/glx/shadow.js", "carShadowKeep"],
-    ["js/render/webgpu/wgx.js", "carShadowKeep"],
+    ["js/render/webgpu/wgx-shadow.js", "carShadowKeep"],
     ["js/render/three/tlx-shadow.js", "carShadowKeep"],
   ]) {
     const src = code(file);
@@ -2900,7 +2906,7 @@ test("all three backends take a shadow KEEP, and game.js says which skips are ca
   // so they share one bound rather than each computing their own.
   assert.equal((gsrc.match(/const _lsR = rad \+ 8/g) || []).length, 1,
     "the content key and the cast loop must share one radius bound, not compute two");
-  for (const file of ["js/render/glx/shadow.js", "js/render/webgpu/wgx.js",
+  for (const file of ["js/render/glx/shadow.js", "js/render/webgpu/wgx-shadow.js",
                       "js/render/three/tlx-shadow.js"]) {
     assert.ok(code(file).includes("lampShadowKeep"), `${file} must expose lampShadowKeep`);
   }
@@ -2917,12 +2923,11 @@ test("all three backends take a shadow KEEP, and game.js says which skips are ca
 // The flag the shader reads must be observable, or a strobe is invisible.
 test("shadow state reports the frame-live armed flag, not just a lifetime count", () => {
   // BOUND EACH WINDOW AT THE SIBLING. carShadowState and lampShadowState are
-  // adjacent one-liners — 211 stripped bytes apart in wgx.js, 269 in glx.js — so
-  // a flat 300-char window let the car assertion pass on the LAMP accessor's
-  // armed field, and deleting `armed: SHD.carArmed` stayed green on two of the
-  // three backends. This is the same defect the arms pin above documents,
-  // repeated in the same diff that documented it.
-  for (const file of ["js/render/glx/glx.js", "js/render/webgpu/wgx.js", "js/render/three/tlx.js"]) {
+  // adjacent one-liners in the owning module — GLX/TLX keep them in the main
+  // backend file; WGX peels them into wgx-shadow.js. A flat 300-char window
+  // let the car assertion pass on the LAMP accessor's armed field, and deleting
+  // `armed: …` stayed green on two of the three backends.
+  for (const file of ["js/render/glx/glx.js", "js/render/webgpu/wgx-shadow.js", "js/render/three/tlx.js"]) {
     const src = code(file);
     for (const [which, sib] of [["carShadowState", "lampShadowState"],
                                 ["lampShadowState", "carShadowState"]]) {
@@ -2934,6 +2939,10 @@ test("shadow state reports the frame-live armed flag, not just a lifetime count"
         `${file}: ${which} must expose armed — arms stays true straight through a strobe`);
     }
   }
+  // WGX still re-exports the accessors from wgx.js so game.js / surface parity
+  // keep calling through the backend façade.
+  assert.match(code("js/render/webgpu/wgx.js"), /carShadowState\s*=\s*\(\)\s*=>\s*SHD\.carShadowState/);
+  assert.match(code("js/render/webgpu/wgx.js"), /lampShadowState\s*=\s*\(\)\s*=>\s*SHD\.lampShadowState/);
 });
 
 // A hidden or closing tab is not a crash, and the canary must not read one as one.
@@ -4335,11 +4344,13 @@ test("UPSCALE SettingRow + TLX spatial API markers", () => {
   // Dawn/Naga reserves `std` — the shared SGSR port must use edgeStd (validate caught this).
   assert.match(wgsl, /fn weightY\([^)]*edgeStd/, "SGSR WGSL weightY must not use reserved std");
   const wgx = read("js/render/webgpu/wgx.js");
+  const wgxPost = read("js/render/webgpu/wgx-post.js");
   assert.match(wgx, /setSpatialUpscale/, "WGX must export setSpatialUpscale");
   assert.match(wgx, /wantSpatialUpscale/, "WGX must gate size split");
   assert.match(wgx, /!!pSGSR/, "WGX wantSpatialUpscale must require linked SGSR pipeline");
-  assert.match(wgx, /SGSR_GATHER/, "WGX must try the gather pipeline first");
-  assert.match(wgx, /spatialUpscaleGather/, "gather escape pin apex26.spatialUpscaleGather=0");
+  // SGSR pipeline link + gather escape live in wgx-post.js after the peel.
+  assert.match(wgxPost, /SGSR_GATHER/, "WGX must try the gather pipeline first");
+  assert.match(wgxPost, /spatialUpscaleGather/, "gather escape pin apex26.spatialUpscaleGather=0");
   assert.match(wgx, /getSpatialUpscaleGather/, "WGX must export gather active state");
 });
 

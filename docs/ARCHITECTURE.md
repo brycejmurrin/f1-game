@@ -77,7 +77,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_204 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_208 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -114,6 +114,7 @@ _204 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `canvas-css-size.js` | `CanvasCssSize` | tag | one cached CSS-box reader for every renderer. |
 | `lamp-chunks.js` | `LampChunks` | tag | shared per-chunk lamp table bake (LampChunks). |
 | `frustum.js` | `Frustum` | tag | shared frustum cull math (Frustum). |
+| `inst-cells.js` | `InstCells` | tag | InstCells: shared cell-set key cache for GLX + WGX cullInstances. |
 | `vertex-pack.js` | `VertexPack` | tag | packed world vertex channels. |
 | `gltf.js` | `GLTF` | tag | Binary glTF (.glb) loader. |
 | `assets.js` | `Assets` | tag | Assets: the baked asset pack loader. |
@@ -376,6 +377,9 @@ _204 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `wgsl-chunks.js` | `WGSLChunks` | DEFERRED:webgpu | WGSL shader chunks (WGSLChunks). |
 | `wgsl-post.js` | `WGSLPost` | DEFERRED:webgpu | WGSL post-processing shaders (WGSLPost). |
 | `wgsl-fx.js` | `WGSLFx` | DEFERRED:webgpu | WGSL foreground-FX shaders (WGSLFx). |
+| `wgx-shadow.js` | `WGXShadow` | DEFERRED:webgpu | WGX shadow subsystem (split out of js/render/webgpu/wgx.js). |
+| `wgx-chunked.js` | `WGXChunked` | DEFERRED:webgpu | WGX chunked-mesh subsystem (split out of js/render/webgpu/wgx.js). |
+| `wgx-post.js` | `WGXPost` | DEFERRED:webgpu | WGX post-processing subsystem (split out of js/render/webgpu/wgx.js). |
 | `wgx.js` | `WGX` | DEFERRED:webgpu | WebGPU renderer backend (WGX). |
 
 **`js/render/three/`**
