@@ -2089,3 +2089,4 @@ const TrackBuildProps = (function () {
 
   return { build };
 })();
+Object.freeze(TrackBuildProps);
