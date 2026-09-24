@@ -1332,44 +1332,56 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
+  align-items: center;
   gap: calc(var(--gap) * 0.5);
   margin: calc(var(--gap) * -0.25) 0 calc(var(--gap) * 0.35);
 }
-#pm-panel-appearance .pm-accent-chip {
+/* Beat `.pm-group button { width:100%; height:var(--tap) }` — chips are
+   colour samples, not full-row actions (same carve-out as `.as-tbtn`). */
+#pmsettings-inner #pm-panel-appearance .pm-accent-chip {
+  flex: 0 0 auto;
   width: max(var(--chip-h), calc(var(--tap-min) * 0.72));
   height: max(var(--chip-h), calc(var(--tap-min) * 0.72));
+  min-width: 0;
+  min-height: 0;
   padding: 0;
   border-radius: var(--r-sm);
   border: 1px solid var(--plate-line);
   background: var(--chip, var(--red));
   cursor: pointer;
-  flex: 0 0 auto;
+  font-size: 0;
+  line-height: 0;
+  white-space: nowrap;
+  overflow: hidden;
 }
-#pm-panel-appearance .pm-accent-chip[aria-selected="true"] {
+#pmsettings-inner #pm-panel-appearance .pm-accent-chip[aria-selected="true"] {
   border-color: var(--text);
   box-shadow: var(--edge);
 }
-#pm-panel-appearance .pm-accent-chip-custom {
+#pmsettings-inner #pm-panel-appearance .pm-accent-chip-custom {
   /* Token-only rainbow so CUSTOM reads as "picker" without raw palette literals. */
   background: conic-gradient(from 0.25turn, var(--red), var(--accent), var(--red));
 }
 #pm-panel-appearance .pm-accent-custom > div {
   display: flex; align-items: center; justify-content: flex-end; gap: calc(var(--gap) * 0.5);
 }
-#pm-panel-appearance input[type="color"] {
+#pmsettings-inner #pm-panel-appearance input[type="color"] {
   flex: 0 0 auto;
   width: max(var(--tap-min), calc(var(--chip-h) * 1.35));
   height: var(--chip-h);
+  min-height: var(--chip-h);
   padding: 0;
   border-radius: var(--r-sm);
   border: 1px solid var(--plate-line);
   background: none;
   cursor: pointer;
 }
-#pm-panel-appearance .pm-accent-hextext {
-  width: 7.2ch;
+#pmsettings-inner #pm-panel-appearance .pm-accent-hextext {
+  width: 9.5ch;
+  min-width: 9.5ch;
   height: var(--chip-h);
-  padding: 0 calc(var(--gap) * 0.6);
+  min-height: var(--chip-h);
+  padding: 0 calc(var(--gap) * 0.5);
   border-radius: var(--r-sm);
   border: 1px solid var(--plate-line);
   background: var(--plate);
