@@ -456,8 +456,68 @@ function build() {
 }
 
 // ============================================================== the layers
-const g = (attrs, d, fill = true) =>
-  `      <g ${attrs}><path ${fill ? "" : 'fill="none" '}d="${d}"/></g>`;
+/**
+ * REVEAL HOOKS. Every art group — a <g> that holds a <path> directly — carries
+ * `data-stage` (WHAT it is, so an animator can pick a stage) and `style="--i:N"`
+ * (WHEN it draws on, so one rule can stagger by calc(var(--i) * step)). Neither
+ * changes a pixel when no animation CSS applies: the custom property is inert,
+ * and data-stage matches no existing rule. Existing attributes keep their order
+ * and the new ones go LAST, so `<g data-trail` and every `g[data-ink]` /
+ * `g:not([stroke])` selector still read the same tag.
+ *
+ * THE STAGES, and the groups each one names:
+ *   ink    g[data-ink] with a stroke — the dilated outline passes: carLayers'
+ *          bleed (inkW + 12, landscape near car only), the main contour (inkW)
+ *          and the accent (4 px); tracedCar's halo and contour. The draw-on.
+ *   body   the plain `stroke="none"` fill in --carbon — carLayers' knock-out
+ *          and its near-half re-knock-out (occlude). No data-* hook of its own.
+ *   tone   g[data-tone] — carLayers' ambient, far-face, tyre, flank and top
+ *          passes; tracedCar's ambient fill and its posterised tone steps
+ *          (which carry a hairline stroke).
+ *   detail the fill="none" stroked lines — halo and near-side wheel rims.
+ *   brush  g[data-ink][stroke="none"] — the filled loaded-brush marks.
+ *   trail  g[data-trail] — the tyre marks, filled from #tc-trail(-v).
+ *
+ * --i IS STAGE-MAJOR, per drawing: every ink group of both cars first (in paint
+ * order), then every body, tone, detail and brush group, and the trails LAST,
+ * whatever their paint position. So the two cars outline together, then fill.
+ * Wrappers that only place things (#tc-frame, the placement group, tracedCar's
+ * per-car transform group) hold no path and carry no stage.
+ *
+ * NO pathLength, deliberately. A dash draw-on (pathLength="1", dasharray 1,
+ * dashoffset 1 -> 0) was tried and does not trace: an ink path is one <path>
+ * of many subpaths (54 M in the landscape contour), and the dash pattern
+ * restarts at every M, so every outline popped at once. The outlines reveal
+ * with a clip-path wipe on the GROUP instead (css/menus.css), which needs no
+ * per-path length at all.
+ */
+const STAGES = ["ink", "body", "tone", "detail", "brush", "trail"];
+const SLOT = "@@I@@";
+/** Which stage a group is, read off the same attributes the CSS keys on. */
+function stageOf(attrs, fill) {
+  if (/\bdata-trail\b/.test(attrs)) return "trail";
+  if (/\bdata-tone\b/.test(attrs)) return "tone";
+  if (/\bdata-ink\b/.test(attrs)) return /stroke="none"/.test(attrs) ? "brush" : "ink";
+  if (!fill) return "detail";
+  if (/stroke="none"/.test(attrs)) return "body";
+  throw new Error(`title-art: no reveal stage for <g ${attrs}>`);
+}
+/** One art group. `pathAttrs` precede d= on the path. The --i slot is filled
+ *  later by numberStages, once the whole drawing's group list is known. */
+function artGroup(indent, attrs, d, pathAttrs = "", fill = true) {
+  return `${indent}<g ${attrs} data-stage="${stageOf(attrs, fill)}" style="--i:${SLOT}"><path ${pathAttrs}d="${d}"/></g>`;
+}
+/** Fill every --i slot in one drawing: stage-major, paint order within a stage. */
+function numberStages(text) {
+  const stages = [...text.matchAll(/data-stage="(\w+)" style="--i:@@I@@"/g)].map((m) => m[1]);
+  const idx = [];
+  stages.map((s, k) => [STAGES.indexOf(s), k])
+    .sort((a, b) => a[0] - b[0] || a[1] - b[1])
+    .forEach(([, k], n) => { idx[k] = n; });
+  let k = 0;
+  return text.replace(/@@I@@/g, () => String(idx[k++]));
+}
+const g = (attrs, d, fill = true) => artGroup("      ", attrs, d, fill ? "" : 'fill="none" ', fill);
 
 /**
  * One car, as the stack of groups that paints it.
@@ -527,12 +587,12 @@ function carLayers(off, inkW, detW, opts = {}) {
 // spokes, suspension or brush marks, and drawing them would cost ratcheted
 // shell nodes to add clutter at exactly the scale that can least afford it.
 function scene() {
-  return [
+  return numberStages([
     ...carLayers([1.90, 0.98, 0.028], 7, 3,
                  { lite: true, topA: 0.17, flankA: 0.07, tyreA: 0.04, baseA: 0.09,
                    paint: false, occlude: false }),
     ...carLayers([2.20, -1.32, 0.030], 10, 4),
-  ].join("\n");
+  ].join("\n"));
 }
 
 /**
@@ -593,14 +653,15 @@ function tracedCar(x, y, sc, which, lite = false) {
   const hair = 1.6 / sc;                     // leader is not also thinner-lined
   const OUT = loops(T.outline);
   const TONE = [0.20, 0.32, 0.46];           // three luminance steps, darkest first
+  const EO = 'fill-rule="evenodd" ', IN = "        ";
   return [
     `      <g transform="${at}">`,
-    `        <g data-ink stroke-width="${(ink + 8 / sc).toFixed(2)}" stroke-opacity="${o(0.18)}" fill-opacity="0"><path d="${OUT}"/></g>`,
-    `        <g data-ink stroke-width="${ink.toFixed(2)}" stroke-opacity="${o(0.95)}" fill-opacity="0"><path fill-rule="evenodd" d="${OUT}"/></g>`,
-    `        <g data-tone stroke="none" fill-opacity="${o(0.24)}"><path fill-rule="evenodd" d="${OUT}"/></g>`,
-    ...T.tone.map((step, i) =>
-      `        <g data-tone stroke-width="${hair.toFixed(2)}" stroke-opacity="${o(0.55)}" fill-opacity="${o(TONE[i] || 0.38)}">`
-      + `<path fill-rule="evenodd" d="${loops(step)}"/></g>`),
+    artGroup(IN, `data-ink stroke-width="${(ink + 8 / sc).toFixed(2)}" stroke-opacity="${o(0.18)}" fill-opacity="0"`, OUT),
+    artGroup(IN, `data-ink stroke-width="${ink.toFixed(2)}" stroke-opacity="${o(0.95)}" fill-opacity="0"`, OUT, EO),
+    artGroup(IN, `data-tone stroke="none" fill-opacity="${o(0.24)}"`, OUT, EO),
+    ...T.tone.map((step, i) => artGroup(IN,
+      `data-tone stroke-width="${hair.toFixed(2)}" stroke-opacity="${o(0.55)}" fill-opacity="${o(TONE[i] || 0.38)}"`,
+      loops(step), EO)),
     "      </g>",
   ].join("\n");
 }
@@ -643,11 +704,11 @@ function sceneTop() {
   // The LEADER's marks are older and further up the road, so they go down with
   // the rest of it. One group each, not one for the pair: fill-opacity on a
   // shared group would flatten the two together and the depth cue with them.
-  return [
-    ...cars.map((c) => `      <g data-trail stroke="none"${c.lite ? ' fill-opacity="0.55"' : ""}>`
-      + `<path d="${trails(c, 1600)}"/></g>`),
+  return numberStages([
+    ...cars.map((c) => artGroup("      ", `data-trail stroke="none"${c.lite ? ' fill-opacity="0.55"' : ""}`,
+      trails(c, 1600))),
     ...cars.map((c) => tracedCar(c.x, c.y, c.sc, c.which, c.lite)),
-  ].join("\n");
+  ].join("\n"));
 }
 
 // ================================================================== output

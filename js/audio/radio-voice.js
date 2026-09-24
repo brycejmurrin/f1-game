@@ -16,6 +16,10 @@ const RadioVoice = (function () {
     warning: "control", "penalty-warn": "control", "penalty-hit": "control",
     coach: "coach", practice: "coach",
     info: "radio", box: "radio", race: "radio",
+    // IN-RACE COMMENTARY (js/race/race-radio.js) speaks in the ANNOUNCER's
+    // voice and obeys the ANNOUNCER's switch, not TEAM RADIO's (see say()): it
+    // is the same broadcaster who opened the show over the flyby.
+    comm: "announcer",
   });
   // Prosody per channel: flat and official, calm and explanatory, quick and
   // clipped. On iOS every English voice sounds the same (the platform returns
@@ -272,7 +276,8 @@ const RadioVoice = (function () {
       if (GameAudio && GameAudio.radioStingStop) GameAudio.radioStingStop();
     }
     function say(msg, life, kind, lead) {
-      const p = plan({ msg, life, kind, lead, enabled, soundOn: !!G.soundOn, state: G.state, api: true, volume, tune });
+      const on = kind === "comm" ? !!(G.announcer && G.announcer.enabled && G.announcer.enabled()) : enabled;
+      const p = plan({ msg, life, kind, lead, enabled: on, soundOn: !!G.soundOn, state: G.state, api: true, volume, tune });
       last = { text: p.text, reason: p.reason || "spoke", rate: p.rate, budgetMs: p.budgetMs, leadMs: p.leadMs };
       if (!p.speak) return false;
       stop();

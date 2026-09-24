@@ -414,6 +414,11 @@ interface GameCtx {
    * the loading screen calls play()/stop() and the flyby editor preview().
    */
   readonly announcer: { play(info: Record<string, unknown>, budgetMs: number): boolean; preview(info: Record<string, unknown>): boolean; sample(): boolean; scriptFor(info: Record<string, unknown>): string[]; stop(): void; enabled(): boolean; setEnabled(b: boolean): void; available(): boolean };
+  /**
+   * The RACE RADIO — js/race/race-radio.js: the engineer's race calls and the
+   * in-race commentary. AudioPanel drives its two settings (chatter, commentary).
+   */
+  readonly raceRadio: { update(dt: number): void; request(): string; reset(): void; setChat(v: string): string; setComm(v: string): string; chat(): string; comm(): string; debug(): Record<string, unknown> };
   /** What the loading card describes — the flyby editor previews the same object. */
   readonly loadingInfo: () => Record<string, unknown>;
   /** js/ui/loading-screen.js, so the flyby editor can hold the card up and move it. */
@@ -782,6 +787,7 @@ declare const BrakeCue: GameModuleFactory;
 declare const TyreModel: GameModuleFactory;
 declare const PitLane: GameModuleFactory;
 declare const RaceEngineer: GameModuleFactory;
+declare const RaceRadio: GameModuleFactory;
 declare const CamModes: GameModuleFactory;
 declare const CamTunerPanel: GameModuleFactory;
 declare const FlybyPanel: GameModuleFactory;
