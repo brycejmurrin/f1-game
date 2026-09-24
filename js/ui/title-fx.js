@@ -137,8 +137,16 @@ const TitleFx = (function () {
   function applyBoard() {
     if (!root || !root.dataset) return;
     const b = boardMode();
-    if (b === "auto") delete root.dataset.titleBoard;
-    else root.dataset.titleBoard = b;
+    const body = (typeof document !== "undefined") ? document.body : null;
+    if (b === "auto") {
+      delete root.dataset.titleBoard;
+      if (body && body.dataset) delete body.dataset.titleBoard;
+    } else {
+      // html for menus.css (:root[data-title-board]); body for responsive.css
+      // overlays rules that must start with the density GUARD.
+      root.dataset.titleBoard = b;
+      if (body && body.dataset) body.dataset.titleBoard = b;
+    }
   }
   function applyArt() {
     if (!root || !root.dataset) return;

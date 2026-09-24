@@ -117,21 +117,22 @@ body.desktop #pm-calib { display: none !important; }
      dropped near the title rather than a caption belonging to it. */
   :where(body:not([data-density="compact"])) #audiostate,
   :where(body:not([data-density="compact"])) #disclaimer { font-size: clamp(11px, calc(0.8 * var(--vwz)), 14px); }
-  /* TITLE BOARD MIRROR / CENTER on the desktop landscape pair (menus.css covers
-     compact-wide). Same attribute the phone reads — no second storage key. */
-  :root[data-title-board="mirror"] :where(body:not([data-density="compact"])) #menu-brand {
+  /* TITLE BOARD on the desktop landscape pair. TitleFx mirrors the attribute
+     onto <body> so these can start with the density GUARD (css-media-disjoint)
+     while living in the overlays layer that beats menus.css. */
+  :where(body:not([data-density="compact"]))[data-title-board="mirror"] #menu-brand {
     grid-column: 2;
     align-items: flex-end;
   }
-  :root[data-title-board="mirror"] :where(body:not([data-density="compact"])) #menu-buttons {
+  :where(body:not([data-density="compact"]))[data-title-board="mirror"] #menu-buttons {
     grid-column: 1;
   }
-  :root[data-title-board="mirror"] :where(body:not([data-density="compact"])) #overlay {
+  :where(body:not([data-density="compact"]))[data-title-board="mirror"] #overlay {
     background:
       radial-gradient(74% 82% at 62% 50% in oklab, color-mix(in oklab, var(--red) var(--menu-wash-pct, 22%), transparent), transparent 64%),
       rgba(6,6,10,0.36);
   }
-  :root[data-title-board="center"] :where(body:not([data-density="compact"])) #overlay {
+  :where(body:not([data-density="compact"]))[data-title-board="center"] #overlay {
     grid-template-columns: minmax(0, 1fr);
     justify-items: center;
     column-gap: 0;
@@ -139,13 +140,13 @@ body.desktop #pm-calib { display: none !important; }
       radial-gradient(115% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) var(--menu-wash-pct, 28%), transparent), transparent 58%),
       rgba(6,6,10,0.36);
   }
-  :root[data-title-board="center"] :where(body:not([data-density="compact"])) #menu-brand {
+  :where(body:not([data-density="compact"]))[data-title-board="center"] #menu-brand {
     grid-column: 1;
     grid-row: 1;
     align-items: center;
     width: min(calc(32 * var(--vwz)), 100%);
   }
-  :root[data-title-board="center"] :where(body:not([data-density="compact"])) #menu-buttons {
+  :where(body:not([data-density="compact"]))[data-title-board="center"] #menu-buttons {
     grid-column: 1;
     grid-row: 2;
     width: min(calc(32 * var(--vwz)), 100%);

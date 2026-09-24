@@ -383,8 +383,8 @@ test("CSS keys off data-motion / data-title-intro / data-menu-wash / data-menu-l
   assert.match(MENUS, /:root\[data-title-board="mirror"\]/);
   assert.match(MENUS, /:root\[data-title-board="center"\]/);
   assert.match(MENUS, /transform:\s*scaleX\(-1\)/);
-  assert.match(CSS, /:root\[data-title-board="mirror"\]/);
-  assert.match(CSS, /:root\[data-title-board="center"\]/);
+  assert.match(CSS, /\[data-title-board="mirror"\] #menu-brand/);
+  assert.match(CSS, /\[data-title-board="center"\] #overlay/);
   assert.match(EXPORT, /k:\s*"motion"[\s\S]*?group:\s*"appearance"/);
   assert.match(EXPORT, /k:\s*"titleIntro"[\s\S]*?group:\s*"appearance"/);
   assert.match(EXPORT, /k:\s*"menuWash"[\s\S]*?group:\s*"appearance"/);

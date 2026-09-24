@@ -391,7 +391,10 @@
       if (ml === "stack" || ml === "compact") document.documentElement.dataset.menuLayout = ml;
     } catch (e) { /* TitleFx answers at eval */ }
     try {
-      if (tb === "mirror" || tb === "center") document.documentElement.dataset.titleBoard = tb;
+      if (tb === "mirror" || tb === "center") {
+        document.documentElement.dataset.titleBoard = tb;
+        if (document.body) document.body.dataset.titleBoard = tb;
+      }
     } catch (e) { /* TitleFx answers at eval */ }
     try {
       if (ta === "soft" || ta === "off") document.documentElement.dataset.titleArt = ta;

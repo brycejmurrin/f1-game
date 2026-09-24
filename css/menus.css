@@ -470,14 +470,14 @@
   grid-column: 1;
   grid-row: 1;
   align-items: center;
-  width: min(calc(42 * var(--vwz)), 420px, 100%);
+  width: min(calc(36 * var(--vwz)), 420px, 100%);
   max-width: 100%;
 }
 :root[data-title-board="center"] :where(body[data-shape="wide"]) #menu-buttons {
   grid-column: 1;
   grid-row: 2;
   align-self: start;
-  width: min(calc(42 * var(--vwz)), 420px, 100%);
+  width: min(calc(36 * var(--vwz)), 420px, 100%);
   max-width: 100%;
   justify-items: stretch;
 }
