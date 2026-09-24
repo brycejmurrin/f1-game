@@ -92,18 +92,22 @@ even when speed-limited; ERS deploy adds on top. Full brake is still the bigger
 bill (`BRAKE` 22 / 34 ≈ 0.65). Each axle's `sqrt(1 − axFrac²)` scales its own
 `mu`; `physState()` exposes `axEstSm`, `axFrac` (the larger axle) and
 `slipFactor` (the rear's, which the engine audio reads).
-**Grass braking remains a measured design defect** (rechecked 2026-09-22).
-`axEstTarget` scales its braking estimate by `OFF_GRIP`, but the actual speed
-integration still applies the full `BRAKE`; the estimator and force therefore
-disagree. The larger effect is the run-off SCRUB (`20 + offDepth·28` m/s²): at
-Monza, 70 → 30 m/s measured 90.886 m on tarmac, 37.732 m in shallow grass and
-28.701 m in deep grass. A bounded trial that shared the surface multiplier and
-reduced scrub removed the stopping shortcut, but failed the sustained
-full-throttle grass deterrence (80 m/s still retained 67.267 m/s where the
-existing regression requires below 60). It was reverted. The follow-up must
-separate grass rolling resistance from surface-limited drive/brake forces,
-classify the surface before integration, and validate throttle/coast/brake with
-weak parts, tyre wear and every PACE setting before changing shipped behavior.
+**Grass longitudinal forces** classify road, kerb and the separate pit ribbon
+before integration. Grass limits drive and brake traction by the same surface
+multiplier used for lateral grip. Passive rolling resistance is a separate
+force: `min((1 - surfaceMu) * 24, roadBrake * .75)`, applied only above the
+pace-scaled crawl speed and never adding speed. Pedal braking uses the lesser
+of surface grip and the remaining `.95 * roadBrake` budget after this drag.
+The drag cap leaves pedal authority below crawl speed, and the combined budget
+keeps full braking below tarmac even with weak parts or worn tyres, while
+full-throttle excursions still bleed speed. The axle estimate uses
+the same surface-limited pedal force. The old `20 + offDepth*28` scrub plus full
+road braking made grass a stopping shortcut (70→30 m/s at Monza: 90.886 m road
+versus 37.732/28.701 m shallow/deep grass). That model is replaced, not its
+regression thresholds weakened. `player-dynamics-vm` compares actual braking at
+all 19 pace notches, two brake strengths and fresh/worn tyres; `offtrack-vm`
+retains the 80→below-60 m/s full-throttle excursion requirement. This remains a
+bounded game surface model rather than a soil simulation.
 
 **Brake bias** (the SETUP sheet,
 `js/garage/setup-tune.js`) splits that budget per axle UNDER BRAKING only:

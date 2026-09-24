@@ -1,17 +1,30 @@
 /* AI-only reachable passing lanes. Read-only traffic inputs, no randomness. */
 "use strict";
 const AiCorridor = (function () {
-  // Continuous slab intersection catches traffic between the endpoints too.
-  function crosses(s, x, vs, vx, seconds) {
+  // Restrict to the lateral overlap interval, then find the exact extrema
+  // of longitudinal displacement under bounded observed acceleration. This
+  // catches a rival accelerating into the lane without padding every gap.
+  function crosses(s, x, vs, vx, seconds, accel = 0) {
     let enter = 0, leave = seconds;
-    for (let axis = 0; axis < 2; axis++) {
-      const p = axis ? x : s, v = axis ? vx : vs, half = axis ? 2.2 : 5.2;
-      if (Math.abs(v) < 1e-8) { if (Math.abs(p) >= half) return false; continue; }
-      const a = (-half - p) / v, b = (half - p) / v;
+    if (Math.abs(vx) < 1e-8) { if (Math.abs(x) >= 2.2) return false; }
+    else {
+      const a = (-2.2 - x) / vx, b = (2.2 - x) / vx;
       enter = Math.max(enter, Math.min(a, b)); leave = Math.min(leave, Math.max(a, b));
-      if (enter >= leave) return false;
     }
-    return enter < leave;
+    if (enter >= leave) return false;
+    const first = s + vs * enter + .5 * accel * enter * enter;
+    const last = s + vs * leave + .5 * accel * leave * leave;
+    let lo = Math.min(first, last), hi = Math.max(first, last);
+    if (Math.abs(accel) > 1e-8) {
+      const turn = -vs / accel;
+      if (turn > enter && turn < leave) { const p = s + vs * turn + .5 * accel * turn * turn; lo = Math.min(lo, p); hi = Math.max(hi, p); }
+    }
+    return lo < 5.2 && hi > -5.2;
+  }
+  // Sanity-limit collision impulses, not normal BRAKE-scale deceleration.
+  // Bound each car independently: our braking can close a following rival.
+  function acceleration(car) {
+    return Number.isFinite(car.corridorAccel) ? Math.max(-40, Math.min(20, car.corridorAccel)) : 0;
   }
   function candidate(ctx, car, blocker, cars, total, clear, side, out) {
     const room = side > 0 ? Math.min(ctx.roomR, ctx.roadR) : Math.min(ctx.roomL, ctx.roadL);
@@ -26,9 +39,11 @@ const AiCorridor = (function () {
       const raw = other.prog - car.prog;
       const gap = ((raw + total / 2) % total + total) % total - total / 2;
       const closing = other.speed - car.speed;
-      // Current lane hold is the prediction, not knowledge of a rival's input.
-      if (crosses(gap, other.x - car.x, closing, -lateral / seconds, seconds)
-        || crosses(gap + closing * seconds, other.x - out.target, closing, 0, .5)) {
+      // Observed motion only: no privileged knowledge of another driver's input.
+      const accel = acceleration(other) - acceleration(car);
+      if (crosses(gap, other.x - car.x, closing, -lateral / seconds, seconds, accel)
+        || crosses(gap + closing * seconds + .5 * accel * seconds * seconds,
+          other.x - out.target, closing + accel * seconds, 0, .5, accel)) {
         out.reason = other === blocker ? "cannot clear the blocker in time" : "traffic in the passing lane"; return;
       }
     }
