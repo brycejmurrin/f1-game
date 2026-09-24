@@ -785,6 +785,7 @@ function closeFlyby(showPauseMenu) {
   if (typeof __apex !== "undefined" && __apex && __apex.view) {
     try { __apex.view("chase"); } catch (_) { /* no track built — nothing parked */ }
   }
+  G.snapGameCam();   // at the car, not a swoop back from the last previewed frame (no-op without a player)
   if (showPauseMenu && G.paused) {
     els.pmsettings.hidden = false;   // back to the settings menu
     const displayPage = $("pm-panel-display");
