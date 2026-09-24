@@ -556,8 +556,11 @@ const SceneryPits = (function () {
         }
         const cr = atF(f, sd * (h + garage + B.depth / 2), B.h + 0.05 + 0.175 + lift, k);
         rawBox(out, cr, [B.depth + 0.5, 0.35, segAt(kap, sd * (h + garage + B.depth / 2))], ROOF, bs);
-        const cb = atF(f, sd * (h + garage + B.depth + 0.2) + bump, (B.h + 0.4) / 2 + lift, k);
-        rawBox(out, cb, [0.3, B.h + 0.4, segAt(kap, sd * (h + garage + B.depth + 0.2))], SHELL, bs);
+        // 2 cm under the roof line, like the end caps below: at B.h + 0.4 the
+        // shell's top shared the canopy roof's top plane and fought from any
+        // camera above the pit row (40 circuits, up-facing, 0 mm).
+        const cb = atF(f, sd * (h + garage + B.depth + 0.2) + bump, (B.h + 0.38) / 2 + lift, k);
+        rawBox(out, cb, [0.3, B.h + 0.38, segAt(kap, sd * (h + garage + B.depth + 0.2))], SHELL, bs);
         const ch = atF(f, sd * (h + garage + B.depth / 2 + 0.6), B.h + 0.4 + 1.7 + lift, k);
         rawBox(out, ch, [B.depth - 1.0, 3.4, segAt(kap, sd * (h + garage + B.depth / 2 + 0.6))], GLASS, bs);
         const ct = atF(f, sd * (h + garage + B.depth / 2 + 0.6), B.h + 0.4 + 3.4 + 0.2 + lift, k);
