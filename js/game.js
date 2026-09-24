@@ -1123,6 +1123,7 @@ let duelMode = false;
 // The SETTING sticks (like difficulty), but a duel is a one-off practice race:
 // never a championship round, a time trial (Daily included) or a quali lap.
 const duelOn = () => duelMode && !isChampionship() && !isTimeTrial() && !isQuali();
+const duelSetting = () => duelMode;   // sticky race SETTING for session keys; gated use goes through duelOn()
 // WHICH legend the duel rival is, or "" for the ordinary fastest-car duel. A
 // race SETTING like duelMode itself, so it survives a restart the same way.
 let duelLegend = "";
@@ -2047,7 +2048,13 @@ function redFlagRestart() {
     // lap was classified finished 14 m after the lights. Same lap/prog
     // relation as gridUp (lap 0 ↔ prog just under 0).
     const progWas = c.prog;
-    if (c.lap > 0) c.lap--;
+    if (c.lap > 0) {
+      // Fuel follows laps actually driven, not the scoring lap we replay from
+      // the grid. A restart cannot put burned fuel back in the tank.
+      c.fuelLap = Math.max(c.fuelLap || 0, c.lap + (c.fuelRestartLaps || 0));
+      c.fuelRestartLaps = (c.fuelRestartLaps || 0) + 1;
+      c.lap--;
+    }
     c.prog = c.lap * L - (L - c.s);
     c._progGift = (c._progGift || 0) + (c.prog - progWas);
     c.head = 0; c.yawVis = 0; c.rPrevHead = 0; c.rPrevYawVis = 0;
@@ -2132,7 +2139,7 @@ function gridUp(preOrder) {
       c.rPrevS = c.s; c.rPrevX = c.x;
     }
     c.head = 0; c.yawVis = 0;   // straight ahead on the grid (heading model)
-    c.speed = 0; c.accSm = 0; c.prog = -(14 + i * 8); c.lap = 0; c.energy = 1; c._progGift = 0;   // a car on the grid is pulling nothing — apex.js reset() has the full list and why
+    c.speed = 0; c.accSm = 0; c.prog = -(14 + i * 8); c.lap = 0; c.fuelLap = 0; c.fuelRestartLaps = 0; c.energy = 1; c._progGift = 0;   // a car on the grid is pulling nothing — apex.js reset() has the full list and why
     c.otT = 0; c.otCool = 0; c.lapTime = 0; c.best = Infinity; c.totalT = 0;
     c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
     c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.penalty = 0; c.offT = 0; c.hits = 0; c.hitSev = 0; c.wallHits = 0; c.errCount = 0;   // mistakes THIS race — the instrument's denominator, cleared only by a NEW race
@@ -2689,7 +2696,6 @@ function raceProfile() { return _raceProfile; }
 async function startRaceBody() {
   _raceProfile = []; let _rt = performance.now();
   const rlap = (n) => { const t = performance.now(); _raceProfile.push({ n, ms: +(t - _rt).toFixed(2) }); _rt = t; };
-  await ensureScenery(trackIdx);
   rlap("scenery");
   // Completed seasons are readable, never raceable (also guarded by award()).
   const careerSaveConflict = isCareer() && Career.conflicted();
@@ -2851,12 +2857,29 @@ async function startRaceBody() {
   warmCarAssets();            // meshes + atlases HERE, not on the first countdown frame (see warmCarAssets)
   DebrisWorld.prime(); updateHud(true);   // prime: build the side-world HERE, not on the lights-out frame (see DebrisWorld.prime)
 }
-let _startRaceP = null;
+const sessionEntry = SessionEntry.create();
+const _seasonEntryIds = new WeakMap();
+let _nextSeasonEntryId = 0;
+function entrySettings() {
+  if (season && !_seasonEntryIds.has(season)) _seasonEntryIds.set(season, ++_nextSeasonEntryId);
+  return JSON.stringify([trackIdx, flow, session, raceWeather, raceTimeOfDay, raceLaps,
+    teamIdx, driverIdx, difficulty, raceGrid, duelSetting(), duelLegend, raceTyreWear,
+    raceReliability, raceAeroMode, simSeed(), raceIndex,
+    wxArc.changeable, wxArc.plan && [wxArc.plan.to, wxArc.plan.dur],
+    netPlay.active(), raceSettings && raceSettings.netRoom,
+    season ? _seasonEntryIds.get(season) : null, season && season.round,
+    season && season.stage, SeasonCal.quali()]);
+}
 function startRace() {
-  if (_startRaceP) return _startRaceP;   // a concurrent caller shares the in-flight start
-  // A throw after the scenery await (six callers never look at the promise) used to leave the quali sheet closed, session "race" and no HUD under the error overlay; the menu is the one coherent place to land.
-  _startRaceP = startRaceBody().catch((e) => { Log.error("game", "startRace failed", e); quitToMenu(); throw e; }).finally(() => { _startRaceP = null; });
-  return _startRaceP;
+  const key = entrySettings(), idx = trackIdx;
+  const request = sessionEntry.begin("race", key, () => ensureScenery(idx),
+    () => startRaceBody(), () => key === entrySettings(),
+    (e) => { if (e) Log.error("game", "startRace failed", e); quitToMenu(); });
+  // Menu buttons fire and forget. Observe rejection on a separate branch so
+  // those callers do not raise an unhandledrejection overlay; an awaiting agent
+  // still receives the original rejecting promise and its original error.
+  request.catch(() => {});
+  return request;
 }
 
 function showTouchControls(show) {
@@ -2965,11 +2988,18 @@ function netOrder(order) {
   // …and each ELEMENT, not only the container. The Array.isArray note above is
   // about the payload's shape; `[null]` and `[{}]` both pass it and then throw
   // on e.d — into the same error overlay, eating the same classification.
-  const sorted = verdict.filter((e) => e && e.d != null).map((e) => byId.get(e.d)).filter(Boolean);
-  // Only adopt an order accounting for the WHOLE grid; a partial one would
-  // silently drop cars off the results screen. An order we cannot fully resolve
-  // now fails this the same way a truncated one always did.
-  if (sorted.length !== cars.length) return order;
+  // Validate the complete bijection and timing fields BEFORE changing any car.
+  // A duplicated id previously passed the length check and drew the same car
+  // twice, omitting another; a malformed late row could partially mutate times.
+  if (verdict.length !== byId.size) return order;
+  const seen = new Set();
+  for (const e of verdict) {
+    if (!e || !byId.has(e.d) || seen.has(e.d) ||
+        (e.t != null && (!Number.isFinite(e.t) || e.t < 0)) ||
+        (e.p != null && (!Number.isFinite(e.p) || e.p < 0))) return order;
+    seen.add(e.d);
+  }
+  const sorted = verdict.map((e) => byId.get(e.d));
   verdict.forEach((e) => {
     const c = byId.get(e.d);
     if (!c) return;
@@ -3045,27 +3075,26 @@ function endRace(forcedOrder) {
   const order = netOrder(forcedOrder || fin.concat(run, out));
   order.forEach((c, i) => { c.finPos = i + 1; });
   if (isChampionship()) {
-    // POINTS, and whether the WEEKEND is over — js/career/season-cal.js owns both:
-    // a season may sprint before the Grand Prix, and only the second of those two
-    // scoring sessions closes the round. A career never sprints, so award() there
-    // is the old block verbatim.
+    // A standalone season may sprint before the Grand Prix. A career scores
+    // through its save owner, which checks the active slot revision before the
+    // aliased championship is changed and settles its economy in the same call.
     // The fastest lap among the CLASSIFIED finishers — award() pays the
     // 2019–2024 point only when the season format asks for it.
     let fastest = null, fastestT = Infinity;
     for (const c of fin) if (c.best < fastestT) { fastestT = c.best; fastest = c.driverId; }
-    const settles = SeasonCal.award(season, order, fastest) === "race";
+    const careerScoring = isCareer();
+    const scored = careerScoring
+      ? Career.scoreRound(order, player, fastest)
+      : SeasonCal.award(season, order, fastest);
+    const settles = careerScoring ? !!scored : scored === "race";
     // award() deletes season.qualiOrder when the round scores; the IN-MEMORY
     // classification is that same weekend and goes with it. Left behind, it kept
     // qualiResults() truthy for the rest of the championship, so rs-go never
     // offered the sheet again and every later grid came off round 1's times.
     if (settles) quali.clear();
-    // In career `season` IS career.season (same object, same shape — which is what
-    // lets buildResults/buildStandings/the HUD work in career untouched), so it
-    // persists through the career save or this would overwrite the standalone
-    // SEASON save with career's standings. KEEP the settlement: prize money,
-    // salary, the bonus, the brief and the wage bill all resolve here, and
-    // buildResults() is where the economy is legible as it moves.
-    if (isCareer()) { if (settles) careerSettlement = Career.settleRound(order, player); }
+    // The career owner persists points and settlement together; the standalone
+    // season saves its sprint stage or completed round here.
+    if (careerScoring) careerSettlement = scored;
     else SeasonCal.save(season);   // the sprint's points AND its stage, one guarded write
   }
   // A one-off GP's driven quali order stays persisted (quali-persist contract);
@@ -3763,7 +3792,7 @@ let netLobby = {
   // correct: there is no #vsfriend handler to bind until the real lobby lands,
   // and ensureNet() calls the real wire() before it hands over.
   wire: () => {}, open: () => {}, close: () => {}, cancel: () => {},
-  abortQuali: () => {}, roomChanged: () => {}, setReady: () => {},
+  abortQuali: () => {}, qualifying: () => false, roomChanged: () => {}, setReady: () => {},
   peerSeats: () => [], roomState: () => ({ open: false, role: null, peers: [] }),
   status: () => ({ role: null, connected: false }),
   reportQuali: () => {}, reportQualiLive: () => {},
@@ -3845,6 +3874,8 @@ if (rotateBlockMql.addEventListener) rotateBlockMql.addEventListener("change", (
 else if (rotateBlockMql.addListener) rotateBlockMql.addListener(() => syncRotateBlocker(true));
 
 function quitToMenu() {
+  sessionEntry.cancel();
+  qualiSheet.close();
   _ltBase = null; _ltFlash = 0;   // the lightning's saved race base is not the menu's
   shake = 0; hitStop = 0;
   PerfGov.sentinelArm(false); if (netPlay.active()) netPlay.stop("local"); hideCamPicker();
@@ -8483,16 +8514,14 @@ $("mb-settings").onclick = () => { if (soundOn) GameAudio.init(); openSettings()
 // Latched and caught like startRace, but never re-thrown: none of its callers
 // await it, so a rejection reached the global error overlay with the settings
 // screen already hidden and NO menu under it. The menu is where it lands.
-let _openQualiP = null;
 function openQuali(fresh, netDone) {
-  if (_openQualiP) return _openQualiP;
-  _openQualiP = openQualiBody(fresh, netDone)
-    .catch((e) => { Log.error("game", "openQuali failed", e); qualiSheet.close(); quitToMenu(); })
-    .finally(() => { _openQualiP = null; });
-  return _openQualiP;
+  const key = entrySettings() + "|" + !!fresh, idx = trackIdx;
+  return sessionEntry.begin("quali", key, () => ensureScenery(idx),
+    () => openQualiBody(fresh, netDone), () => key === entrySettings() + "|" + !!fresh,
+    (e) => { if (e) Log.error("game", "openQuali failed", e); qualiSheet.close(); quitToMenu(); })
+    .catch(() => {}); // menu callers fire and forget; recovery above already landed the failure
 }
-async function openQualiBody(fresh, netDone) {
-  await ensureScenery(trackIdx);
+function openQualiBody(fresh, netDone) {
   session = "quali";
   // Reached from race settings this is already "menu"; reached from the results
   // screen it would still say "results". No race is running while the sheet is

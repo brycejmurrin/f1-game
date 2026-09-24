@@ -218,9 +218,9 @@ test("props fuse uses sealed typed accumulators", () => {
 });
 
 test("already-landed leftovers stay in the product path", () => {
-  const tracks = read("js/track/tracks.js");
-  assert.match(tracks, /\bMASS_CELL\s*=\s*\d+/, "the mass grid keeps a cell size");
-  assert.match(tracks, /\bmassGridInsert\b/, "masses are inserted into the grid, not scanned linearly");
+  const props = read("js/track/scenery/build-props.js");
+  assert.match(props, /\bMASS_CELL\s*=\s*\d+/, "the mass grid keeps a cell size");
+  assert.match(props, /\bmassGridInsert\b/, "masses are inserted into the grid, not scanned linearly");
   const geom = shader("js/track/core/geom.js");
   assert.match(geom, /\(i\s*\+\s*1\)\s*\/\s*seg\s*\*\s*6\.2832/, "ring tables close with (i+1)/seg, never with an integer %seg wrap");
   // Angle wrap via %seg moves the last edge (6.2832 ≠ 2π). Integer %seg on
