@@ -3405,7 +3405,8 @@ const TLX = (function () {
             } else {
               // `first` stands in for chunk-array identity; a track reload also
               // replaces frameAllLights, which _lgSrc already catches.
-              const key = knob + "|" + total + "|" + nrec + "|" + cell;
+              // + the lamp bake gen: its LIVE-ONLY lane is packed into the lamp texture.
+              const key = knob + "|" + total + "|" + nrec + "|" + cell + "|" + (typeof LampBake !== "undefined" ? LampBake.gen() : 0);
               if (_lgKey !== key || _lgSrc !== AL || _lgChunks !== first) {
                 let note;
                 try {
