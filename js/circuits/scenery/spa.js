@@ -433,20 +433,10 @@
       // engine back-row stagger; pineFrac high keeps the belt conifer-dominant
       // (residual tree() → furniture.tree fir).
       const PINE_D = [0.07, 0.24, 0.11], PINE_M = [0.10, 0.30, 0.14], PINE_L = [0.13, 0.34, 0.15];
-      // Eau Rouge / Raidillon (~0.05–0.12): forest walls BOTH sides. R leaves a
-      // gap ~0.072–0.098 for the Gold 3 stands + jumbotron.
-      forestEdge(0.045, 0.120, -1, 28, { density: 0.78, hMin: 14, hMax: 26,
-        col: PINE_D, col2: PINE_M, pineFrac: 0.96 });
-      forestEdge(0.045, 0.120, -1, 48, { density: 0.72, hMin: 16, hMax: 28,
-        col: PINE_M, col2: PINE_L, pineFrac: 0.95 });
-      forestEdge(0.050, 0.072,  1, 34, { density: 0.76, hMin: 15, hMax: 26,
-        col: PINE_D, col2: PINE_M, pineFrac: 0.95 });
-      forestEdge(0.050, 0.072,  1, 54, { density: 0.70, hMin: 16, hMax: 28,
-        col: PINE_M, col2: PINE_L, pineFrac: 0.94 });
-      forestEdge(0.098, 0.130,  1, 34, { density: 0.76, hMin: 15, hMax: 26,
-        col: PINE_D, col2: PINE_M, pineFrac: 0.95 });
-      forestEdge(0.098, 0.130,  1, 54, { density: 0.70, hMin: 16, hMax: 28,
-        col: PINE_M, col2: PINE_L, pineFrac: 0.94 });
+      // Eau Rouge / Raidillon climb is too steep for forestEdge: crowns plant at
+      // trackside height and hang over the valley (float-audit 11–25 m gaps at
+      // frac≈0.05). Gold-3 stands + jumbotron already own that amphitheatre;
+      // fir walls resume past Les Combes (0.18+) and Blanchimont below.
       // La Source outer verge (beyond the pit grandstands).
       forestEdge(0.00, 0.04, 1, 44, { density: 0.70, hMin: 11, hMax: 20,
         col: PINE_M, col2: PINE_L, pineFrac: 0.90 });

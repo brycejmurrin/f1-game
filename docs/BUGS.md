@@ -203,8 +203,10 @@ double-shifts on these; residual shift remains authoring debt.
 **What:** Pit wall/cap/outer wall pushed `out.pos`/`out.idx` directly, so
 clip/coplanar/float could not name them.
 
-**Fix:** Route through `TrackGeom.emit` and record `__blocks` ids
-(`pit-wall`, `pit-wall-cap`, …).
+**Fix:** Record `__blocks` ids on each sweep strip (`pit-wall`,
+`pit-wall-cap`, …) so audits can name them. Keep the tip extrusion
+winding — routing the mesh through `TrackGeom.emit` coplanar-fought bay
+panels (bahrain/istanbul) and left hungaroring entry lamps floating.
 
 ### S5 — Coplanar ground slabs vs terrain
 **Severity:** medium · **Status:** FIXED here (seating) · **Confidence:** high

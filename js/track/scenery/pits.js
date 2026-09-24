@@ -241,41 +241,44 @@ const SceneryPits = (function () {
       // `shift(k)`, when given, slides the whole profile laterally per node.
       const sweep = (ks, profile, col, mat, shift, blockId) => {
         if (ks.length < 2) return;
+        const vert0 = out.pos.length / 3;
         const m = profile.length;
         const latOf = (k, q) => sd * (hw[k] + q[0] + (shift ? shift(k) : 0));
-        const emit = TrackGeom.emit;
-        const vert0 = out.pos.length / 3;
-        out._mat = mat;
         for (let i = 0; i + 1 < ks.length; i++) {
           const k = ks[i], k2 = ks[i + 1];
           for (let e = 0; e < m; e++) {
             const a = profile[e], c = profile[(e + 1) % m];
             const A = at(k, latOf(k, a), a[1]), B = at(k, latOf(k, c), c[1]);
             const C = at(k2, latOf(k2, a), a[1]), D = at(k2, latOf(k2, c), c[1]);
-            // Interior ref just inside the extrusion so emit() orients outward.
-            const ref = [
-              (A[0] + B[0] + C[0] + D[0]) / 4 - sd * rx[k] * 0.05,
-              (A[1] + B[1] + C[1] + D[1]) / 4,
-              (A[2] + B[2] + C[2] + D[2]) / 4 - sd * rz[k] * 0.05,
-            ];
-            // Winding: sd>0 uses A,C,B / B,C,D path via emit's ref; pass perimeter.
-            if (sd > 0) emit(out, [A, C, D, B], col, ref);
-            else emit(out, [A, B, D, C], col, ref);
+            // Outward normal of this face of the extrusion: (along) x (around),
+            // flipped by the side so the strip faces out on either side.
+            const ax = C[0] - A[0], ay = C[1] - A[1], az = C[2] - A[2];
+            const bx = B[0] - A[0], by = B[1] - A[1], bz = B[2] - A[2];
+            let nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx;
+            const len = Math.hypot(nx, ny, nz) || 1; nx /= len; ny /= len; nz /= len;
+            if (sd < 0) { nx = -nx; ny = -ny; nz = -nz; }
+            const base = out.pos.length / 3;
+            for (const P of [A, B, C, D]) { out.pos.push(P[0], P[1], P[2]); out.nrm.push(nx, ny, nz); out.col.push(col[0], col[1], col[2]); }
+            pushMat(4, mat);
+            if (sd > 0) out.idx.push(base, base + 2, base + 1, base + 1, base + 2, base + 3);
+            else out.idx.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
           }
         }
+        // End caps, so the strip is closed where it starts and stops.
         for (const [k, flip] of [[ks[0], sd < 0], [ks[ks.length - 1], sd > 0]]) {
+          const base = out.pos.length / 3;
           const u = upOf(track, k), t = [tx[k], ty[k], tz[k]];
-          const cap = [];
-          for (const q of profile) cap.push(at(k, latOf(k, q), q[1]));
-          const ref = [
-            (cap[0][0] + cap[Math.floor(m / 2)][0]) / 2 + (flip ? t[0] : -t[0]),
-            (cap[0][1] + cap[Math.floor(m / 2)][1]) / 2 + (flip ? t[1] : -t[1]),
-            (cap[0][2] + cap[Math.floor(m / 2)][2]) / 2 + (flip ? t[2] : -t[2]),
-          ];
-          emit(out, flip ? cap.slice().reverse() : cap, col, ref);
+          const nrm = flip ? t : [-t[0], -t[1], -t[2]];
+          for (const q of profile) { const P = at(k, latOf(k, q), q[1]); out.pos.push(P[0], P[1], P[2]); out.nrm.push(nrm[0], nrm[1], nrm[2]); out.col.push(col[0], col[1], col[2]); }
+          pushMat(m, mat);
+          for (let e = 1; e + 1 < m; e++) {
+            if (flip) out.idx.push(base, base + e + 1, base + e); else out.idx.push(base, base + e, base + e + 1);
+          }
           void u;
         }
-        out._mat = 0;
+        // S4: tag the strip so clip/coplanar/float can name pit-wall / etc.
+        // Keep tip winding (TrackGeom.emit here coplanar-fought bay panels and
+        // left hungaroring entry lamps floating over an unmatched platform).
         const count = out.pos.length / 3 - vert0;
         if (count > 0) {
           (out.__blocks || (out.__blocks = []))
