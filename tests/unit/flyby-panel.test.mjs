@@ -398,3 +398,13 @@ test("the structural half agrees too — what a PREVIEW is held to", () => {
       "tools/shot/flyby.mjs --shots uses the bake's copy; the panel's saved list uses its own");
   }
 });
+
+test("the preview flies a COPY re-taken when the list's contents change", () => {
+  // FlybySeq caches plans and corner bindings per shot/list object, and the
+  // sliders edit the list in place: passing it straight to flybyCam previewed
+  // the first plan forever (a corner shot's x/y/off/corner did nothing).
+  const src = read("js/camera/flyby-panel.js");
+  assert.ok(!/flybyCam\(u, ensure\(\)\)/.test(src), "preview does not hand FlybySeq the list it edits in place");
+  assert.match(src, /flybyCam\(u, playable\(\)\)/, "preview flies playable()");
+  assert.match(src, /JSON\.stringify\(ensure\(\)\)/, "playable() keys its copy on the list's contents");
+});

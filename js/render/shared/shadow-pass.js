@@ -373,6 +373,14 @@ const ShadowPass = (function () {
     }
 
     // Nearest-floodlight spot shadow map (night only).
+    // One lamp caster folded into the car key: position at 0.25 m (x, y, z) and
+    // heading at 1/8 rad, all from the column-major world matrix the cast uses.
+    function _lampCasterKey(k, m) {
+      k = (k * 31 + Math.round(m[12] * 4)) | 0;
+      k = (k * 31 + Math.round(m[13] * 4)) | 0;
+      k = (k * 31 + Math.round(m[14] * 4)) | 0;
+      return (k * 31 + Math.round(Math.atan2(m[8], m[10]) * 8)) | 0;
+    }
     function lampPass(frame, _frameNo, _hasLivePlayerShadow) {
       // Night only: ONE lamp — the nearest/strongest to the camera — gets a real
       // per-frame 512² depth map (perspective, looking down its beam) so the car
@@ -454,16 +462,17 @@ const ShadowPass = (function () {
             const _pm = _livePlayerShadowMat;
             const _pdx = _pm[12] - _lx, _pdy = _pm[13] - _ly, _pdz = _pm[14] - _lz;
             const _playerIn = _hasLivePlayerShadow && (_pdx * _pdx + _pdy * _pdy + _pdz * _pdz) <= _lsR2;
-            let _carKey = 0;
-            if (_playerIn && G.player && G.player.px != null) {   // px/pz are scalars, not a vec
-              _carKey = ((Math.round(G.player.px * 4) * 31 + Math.round(G.player.pz * 4)) * 31 + 1) | 0;
-            }
+            // Every caster is keyed from the SAME matrix the cast draws with, on
+            // position (0.25 m, incl. height) AND heading (1/8 rad): keyed on
+            // physics px/pz alone, a car spinning or pitching in place kept its old
+            // silhouette, and the interpolated player transform trailed the key.
+            let _carKey = _playerIn ? _lampCasterKey(1, _pm) : 0;
             for (let i = 0; i < _shadowCount; i++) {
               const _cm = _shadowMats[i];
               if (_shadowCars[i] === G.player) continue;
               const _cdx = _cm[12] - _lx, _cdy = _cm[13] - _ly, _cdz = _cm[14] - _lz;
               if (_cdx * _cdx + _cdy * _cdy + _cdz * _cdz > _lsR2) continue;
-              _carKey = ((_carKey * 31 + Math.round(_cm[12] * 4)) * 31 + Math.round(_cm[14] * 4)) | 0;
+              _carKey = _lampCasterKey(_carKey, _cm);
             }
             // The player is cast into this map whenever it is within reach, so while
             // driving under a lamp the car half of the key changes every frame and a pure content key would
