@@ -9,6 +9,9 @@
 ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
 cd "$ROOT" || exit 0
 [ -f package.json ] || exit 0
+# Every documented log path (test-bg, the waiter, `> artifacts/logs/gate.log`)
+# assumes this exists; a fresh clone has no artifacts/ at all (2026-09-24).
+mkdir -p artifacts/logs
 [ "${APEX_SKIP_SESSION_INSTALL:-}" = "1" ] && exit 0
 
 status=()

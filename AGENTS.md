@@ -8,15 +8,19 @@ in `docs/` (start at `docs/README.md`); workflows live in `.claude/skills/`; rul
 that must hold every time are hooks in `.claude/hooks/`; renderer rules load with
 their files from `.claude/rules/`. `CLAUDE.md` imports this; Cursor and Codex read it.
 
-## Key commands
+## The loop — every change, in order
 ```sh
-npx serve -l 3456 .                 # run locally (or: python3 -m http.server 3456)
-npm run test:tooling-fast           # edit-loop check (~2 min, --jobs=3) — a SUBSET; whole gate: deploy.mjs --gate-only
-node tools/ci/verify-change.mjs     # ONE command: fast gate + batched groups (--wait/--plan/--fast)
-node tools/track/verify-track.cjs <id>    # 2 s headless build check for track edits
-node tools/ci/pick-tests.mjs        # which test GROUPS does this change need? (select-specs.mjs: per-SPEC)
-node tools/ci/test-bg.mjs <groups>  # run browser groups in the background
+npx serve -l 3456 .                   # run locally (or: python3 -m http.server 3456)
+node tools/ci/pick-tests.mjs          # 1. which GROUPS does this change need? (the table below; select-specs.mjs: per-SPEC)
+#                                       2. make ALL edits, then verify ONCE (rule 2); a new test file = a tests/groups.json group + a TESTING.md §5 row + `npm run gen`
+npm run test:tooling-fast             # 3. edit-loop check, a SUBSET (rule 3); verify-change.mjs --fast adds verify-track + the batch plan
+node tools/ci/test-bg.mjs <group>     # 4. ONE browser group, in the background → artifacts/logs/<group>.log (rule 5)
+node tools/ci/test-bg.mjs --wait --timeout 45   # 5. the waiter, as ONE background task (rule 4); the verdict is the log's `= run …` line
+node tools/ci/deploy.mjs --gate-only  # 6. before a push: the only check that runs what the deploy runs
+git commit && git push -u origin claude/<topic>   # 7. commit runs test:guards; push once per VERIFIED batch, naming what did not run
 ```
+Then watch CI (§Watching CI and Pages). Memory: auto memory is ON and synced to `.claude/memory/` — it holds
+preferences and corrections; a measured lesson goes to `docs/notes/`, a rule to a hook or test.
 
 ## Verification — scale it to the change
 One browser GROUP costs 10–40 minutes of serialized SwiftShader here, so
@@ -117,8 +121,6 @@ order live in `tools/manifest.cjs` — read that, not this file; per-directory t
   `tools/manifest.cjs` entry (+ HARD_EDGES pair if eval-time destructured) +
   `node tools/gen/gen-shell.mjs`.
 - Circuit edits go in `js/circuits/<id>.js`; engine changes in `js/track/`.
-- A new test file needs a `tests/groups.json` group, a `docs/TESTING.md` §5 row and
-  `npm run gen` — the commit's `test:guards` fails otherwise (checklist: `docs/TESTING.md` §2).
 - `tests/data/ratchets.json` ratchets game.js and the other big modules at
   their current values — pay for every added line. The commit hook absorbs ≤ 40
   lines of growth (raises, stages, prints — the raise is in your diff); more blocks
@@ -166,17 +168,8 @@ pre-push or deploy → `check-changes` (spawns `verify-agent`; `--base <ref>` is
 the "was it already red?" check); live `version.json` → `deploy-research`;
 dead code / fat skill → `slim-bloat` and `bloat-auditor`.
 
-Hooks (`.claude/hooks/`, wired by `.claude/settings.json`): `session-start.sh`
-installs deps and prints the orientation line (also after a compaction);
-`protect-files.sh` blocks generated-file edits and source edits during a live
-browser run; `bash-guard.sh` runs the guards before `git commit`, blocks
-`pkill -f` and PID kills of a test-bg run, and blocks a browser run inside a
-subagent; `post-edit.sh` (PostToolUse, advisory) says at once when a `js/` edit does not
-parse, staled a generated file or broke a circuit build; `stop-guard.sh` nudges once when a
-turn would end over a live run (`live-run.py` is the one "live in this checkout?" test);
-`memory-sync.sh` carries auto memory across cloud containers (`docs/notes/AGENT-MEMORY.md`).
-`touch .claude/allow-protected` lifts every edit rule except the live-run one. Never
-duplicate skills or agents under `.cursor/`.
+Hooks (`.claude/hooks/`, wired by `.claude/settings.json`): `session-start.sh` installs deps and prints the orientation line (also after a compaction); `protect-files.sh` blocks generated-file edits and source edits during a live browser run; `bash-guard.sh` runs the guards before `git commit`, blocks `pkill -f` and PID kills of a test-bg run, and blocks a browser run inside a subagent; `post-edit.sh` (PostToolUse, advisory) says at once when a `js/` edit does not parse, staled a generated file or broke a circuit build;
+`stop-guard.sh` nudges once when a turn would end over a live run (`live-run.py` is the one "live in this checkout?" test); `memory-sync.sh` carries auto memory across cloud containers (`docs/notes/AGENT-MEMORY.md`). `touch .claude/allow-protected` lifts every edit rule except the live-run one. Never duplicate skills or agents under `.cursor/`.
 
 ## Cursor Cloud specific instructions
 `.cursor/environment.json` bootstraps every Cloud VM (`mcpServerAllowlist` = `.mcp.json`'s
