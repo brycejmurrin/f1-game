@@ -10,7 +10,7 @@ const FlybyPanel = (function () {
 // and lifts an eye out of a building, so a slider that can reach silly numbers
 // only costs the author a bad frame, never a crash.
 const EASES = ["linear", "in", "out", "inOut"];
-const AT_KINDS = ["start", "pole", "grid", "corner", "centre", "landmark"];
+const AT_KINDS = ["start", "pole", "grid", "slot", "corner", "centre", "landmark"];
 const SLOTS = [
   { key: "eye0", arr: "eye", i: 0, label: "EYE FROM" },
   { key: "eye1", arr: "eye", i: 1, label: "EYE TO" },
@@ -25,6 +25,7 @@ const POSE_FIELDS = {
   start: ["off", "x", "y"],
   pole: ["off", "x", "y"],
   grid: ["off", "x", "y"],
+  slot: ["off", "x", "y"],
   corner: ["off", "x", "y"],
   centre: ["bear", "distR", "yR", "y"],
   landmark: ["bear", "distK", "yK", "y"],
@@ -44,7 +45,7 @@ const FIELD_IDS = Object.keys(FIELD);
 // `rank` is a landmark index and `n` a corner, and neither is a continuous
 // quantity — both are pickers, and both live outside FIELD for that reason.
 const RANKS = [0, 1, 2, 3, 4, 5];
-const CORNER_NS = ["first", "mid", "late", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18"];
+const CORNER_NS = ["first", "mid", "late", "slowest", "fastest", "lore", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18"];
 
 // max 1: a NORMALISED one-shot list is a single shot of dur 1, and a cap below
 // it left that slider pinned at the end and the value unreachable.
@@ -74,6 +75,7 @@ function switchPoseAt(pose, at) {
   if (AT_KINDS.indexOf(at) === -1) return clone(pose);
   const next = { at: at };
   if (at === "corner") next.n = (pose && pose.n !== undefined) ? pose.n : "first";
+  if (at === "slot") next.n = "player";
   if (at === "landmark") next.rank = (pose && typeof pose.rank === "number") ? pose.rank : 0;
   for (const f of POSE_FIELDS[at]) {
     const carried = (pose && typeof pose[f] === "number") ? pose[f] : undefined;
