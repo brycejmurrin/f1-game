@@ -1266,6 +1266,7 @@ const Tracks = (function () {
       const span = Math.abs(s1 - s0) >= 1 - 1e-9 ? n - 1 : ((k1 - k0) + n) % n;
       return waterEmit(waterRaster(k0, k0 + span, side, gap0, gap1, c), c, col, opts);
     };
+    let patchSeq = 0;
     const groundPatch = (k, side, gap, sz, col, opts) => {
       opts = opts || {};
       if (!finiteVec(sz, 3, true)) {
@@ -1274,6 +1275,11 @@ const Tracks = (function () {
       }
       const r = [track.rx[k], track.ry[k], track.rz[k]], u = upOf(track, k);
       const t = [track.tx[k], track.ty[k], track.tz[k]], pieces = Math.max(2, Math.round(opts.samples || 4));
+      // Every patch's top sat AT groundY, so overlapping patches (zolder's dusk
+      // sand over its apron) shared one plane, as did a plinth flush with the
+      // ground. A per-call slot lifts each 1-5 MIN_SEP: five calls in a row
+      // never share a plane.
+      const lift = (1 + patchSeq++ % 5) * TrackGeom.MIN_SEP;
       const midDist = gap + sz[0] / 2;
       const mid = [px[k] + r[0] * side * (hw[k] + midDist), groundYAt(k, midDist), pz[k] + r[2] * side * (hw[k] + midDist)];
       const emitted = modelGroup(opts.id || `ground-patch-${k}`, {
@@ -1284,7 +1290,7 @@ const Tracks = (function () {
           const dist = gap + partW * (i + 0.5);
           const c = [
             px[k] + r[0] * side * (hw[k] + dist),
-            groundYAt(k, dist) - sz[1] / 2,
+            groundYAt(k, dist) - sz[1] / 2 + lift,
             pz[k] + r[2] * side * (hw[k] + dist),
           ];
           RAW.addBox(stage, c, [partW, sz[1], sz[2]], col, [r, u, t]);
@@ -2546,9 +2552,16 @@ const Tracks = (function () {
   function realPoints(id, path, baseHW) {
     if (!path || !path.pts || !path.pts.length) throw new Error("Tracks: circuit \"" + id +
       "\" has no `path` — js/circuits/" + id + ".js must carry `path: { len, pts }` (tools/track/import-circuit-path.mjs emits it)");
-    const N = path.pts.length;
     const real = hasRealElevation(id);
-    let pts = path.pts.map((p, i) => [p[0], real ? elevationAt(id, i / N) : 0, p[1], baseHW, 0]);
+    // The elevation tables are 64 samples by ARC fraction; reading them at the
+    // point INDEX put fuji's 33 m profile 0.29 lap out of place (its 1.29 km
+    // straight is one segment). Long segments are split so a straight carries
+    // its own profile, which also evens the spacing the spline overshoots on.
+    const src = real ? densify(path.pts, 50) : path.pts;
+    const N = src.length;
+    const arc = new Float64Array(N + 1);
+    for (let i = 1; i <= N; i++) { const a = src[i - 1], b = src[i % N]; arc[i] = arc[i - 1] + __M.hypot(b[0] - a[0], b[1] - a[1]); }
+    let pts = src.map((p, i) => [p[0], real ? elevationAt(id, arc[i] / arc[N]) : 0, p[1], baseHW, 0]);
     for (let it = 0; it < 2; it++) {
       const sx = pts.map((p) => p[0]), sz = pts.map((p) => p[2]);
       const L = 0.25;
@@ -2560,9 +2573,18 @@ const Tracks = (function () {
     }
     if (real) {
       const eEnd = pts[N - 1][1] - pts[0][1];
-      for (let i = 0; i < N; i++) pts[i][1] -= eEnd * (i / (N - 1));
+      for (let i = 0; i < N; i++) pts[i][1] -= eEnd * (arc[i] / arc[N - 1]);
     }
     return pts;
+  }
+  function densify(P, seg) {
+    const out = [];
+    for (let i = 0; i < P.length; i++) {
+      const a = P[i], b = P[(i + 1) % P.length], m = __M.floor(__M.hypot(b[0] - a[0], b[1] - a[1]) / seg);
+      out.push(a);
+      for (let j = 1; j < m; j++) out.push([a[0] + (b[0] - a[0]) * j / m, a[1] + (b[1] - a[1]) * j / m]);
+    }
+    return out;
   }
 
   function applyHwZones(pts, zones, baseHW) {
