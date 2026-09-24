@@ -26,6 +26,8 @@ const GLXPost = (function () {
     let godrayProg = null, godrayU = null, godrayFBO = null, godrayTex = null;
     let godrayBlurFBO = null, godrayBlurTex = null;
     let godrayW = 0, godrayH = 0;
+    let _grLite = true;   // see the godray blur loop in present()
+    try { _grLite = localStorage.getItem("apex26.grLite") !== "0"; } catch (_) { /* no storage: on */ }
     let ssaoW = 0, ssaoH = 0;   // SSAO runs at half res (upscaled in composite)
     let fxaaProg = null, fxaaU = null, ldrFBO = null, ldrTex = null;   // FXAA pass + its LDR input
     // Spatial upscale (SGSR1): FXAA writes here at render size when upscaling
@@ -673,7 +675,11 @@ const GLXPost = (function () {
         // Double separable blur (H+V twice): the march + shadow slices otherwise
         // leave thin stripe artifacts that read as "random tiny rays" — two passes
         // turn the shafts into wide, soft volumes.
-        for (let bp = 0; bp < 2; bp++) {
+        // Lamp beams alone (no sun shafts) take ONE pair: the stripes the second
+        // pair removes come from the sun march's shadow slices, which a lamp cone
+        // does not have. apex26.grLite=0 restores two (same knob as TLX).
+        const grPairs = (!sunGR && _grLite) ? 1 : 2;
+        for (let bp = 0; bp < grPairs; bp++) {
           bindOverwrite(godrayBlurFBO);
           gl.bindTexture(gl.TEXTURE_2D, godrayTex);
           gl.uniform2f(blurU.uDir, (1 + bp) / godrayW, 0);

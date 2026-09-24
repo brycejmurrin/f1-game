@@ -177,6 +177,19 @@ function capRadius2(buf, count, CAP) {
 }
 let _lampWarmT0 = -1e9;        // wall-clock (s) when the floods last switched ON (warmup ramp origin)
 let _lampLastT = -1e9;         // last frame we copied lights — a gap means the floods were off
+// A gap while the tab was HIDDEN (rAF stops) is not a switch-on: no re-warmup.
+let _lampHid = false;
+if (typeof document !== "undefined" && document.addEventListener)
+  document.addEventListener("visibilitychange", () => { if (document.hidden) _lampHid = true; });
+// Per-lamp hash cache, keyed by the stable source offset (the sin-hash was
+// ~40 % of setFrameLights with flicker on). -1 = not yet computed.
+let _hshC = new Float32Array(0);
+function _hshOf(o) {
+  if (o >= _hshC.length) { const nc = new Float32Array(Math.max(o + 1, _hshC.length * 2, 1024)).fill(-1); nc.set(_hshC); _hshC = nc; }
+  let h = _hshC[o];
+  if (h < 0) { const x = Math.sin((o + 13) * 91.17) * 43758.5453; h = _hshC[o] = x - Math.floor(x); }
+  return h;
+}
 const _flScr = [1, 1, 1];      // per-lamp rgb factor scratch (flicker × breathe × warmup tint)
 const _flSteady = [1, 1, 1];   // identity when flicker+warmup would leave intensity unchanged
 // Flicker/warmup factors — closed over by hoisted `_flLive` so setFrameLights
@@ -185,8 +198,7 @@ let _flFlick = 0, _flWarmK = 1, _flTNow = 0;
 function _flSteadyFn() { return _flSteady; }
 function _flLive(o) {
   const flick = _flFlick, tNow = _flTNow, warmK = _flWarmK;
-  const x = Math.sin((o + 13) * 91.17) * 43758.5453;
-  const hsh = x - Math.floor(x);
+  const hsh = _hshOf(o);
   const amp = hsh > 0.90 ? flick : flick * 0.2;
   let f = 1 + amp * Math.sin(tNow * (6 + hsh * 9) + hsh * 40)
             + flick * 0.15 * Math.sin(tNow * (0.35 + hsh * 0.5) + hsh * 20);
@@ -348,7 +360,8 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   // lamp on its own stagger. A >1 s gap since the last copy means the floods
   // were off, so this frame is a fresh switch-on. Per-frame copy only — the
   // baked track records are never touched.
-  if (tNow - _lampLastT > 1.0) { _lampWarmT0 = tNow; _rankSrc = null; }
+  if (tNow - _lampLastT > 1.0) { if (!_lampHid) _lampWarmT0 = tNow; _rankSrc = null; }
+  _lampHid = false;
   _lampLastT = tNow;
   // Skip sin/hash work when intensity would be unchanged: flicker knob at 0 and
   // warmup fully settled (or warmup knob 0 = instant). Max warmDur is 8×knob.

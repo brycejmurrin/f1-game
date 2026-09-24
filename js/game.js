@@ -2385,6 +2385,7 @@ function _loadTrackBody(idx, def) {
     // resident at once. loadTrack is synchronous, so nothing can observe the
     // null between here and the assignment below.
     track = null;
+    if (typeof LampBake !== "undefined") LampBake.reset();   // its cache holds the old track + atlas too
     // Pass the active backend so tracks.js builds its meshes through the façade
     // (opts.gfx) instead of reaching the GLX global directly. On the explicit
     // or fallback WebGL2 path gfx===GLX; on TLX/WGX it is that backend
@@ -7179,7 +7180,7 @@ function render(dt) {
     // Paint-mode tails only: emitting tails ride the live loop, whose diffuse
     // (lampSh - bakeW) would erase their unbaked pool on the road.
     if (LT.lampBake > 0 && gfx.hasLampBake && !(LT.tailLightEmit > 0)) {
-      frame.lampBake = LampBake.forTrack(track, track._lights, LT.lampNearClamp);
+      frame.lampBake = LampBake.forTrack(track, track._lights, LT.lampNearClamp, undefined, false, LampBake.budget(gfx));
       frame.lampBakeScale = _floodRGB;
     }
     // PER-CHUNK LAMPS (experimental): hand the renderer the FULL baked lamp list

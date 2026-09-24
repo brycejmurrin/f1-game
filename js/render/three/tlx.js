@@ -1329,6 +1329,28 @@ const TLX = (function () {
       }
 
       const drawList = [];          // {geo, matrix, material} in submission order
+      // POOLED DRAW RECORDS (TLX-PERF-PLAN R1). Every producer used to push a
+      // fresh object literal — ~150-400 a frame, in 4-5 shapes, so V8 saw them
+      // polymorphic — and none outlives the frame (every consumer reads a record
+      // synchronously; _mirrorRelease keeps the chunked MESH, not the record).
+      // One fixed shape, every field written on every push: em/al stay
+      // undefined for FX records (acquireMesh tests `!== undefined`).
+      const _recPool = [];
+      let _recUsed = 0;
+      function pushRec(geo, m, mat, em, al, lg, chunked, instanced) {
+        let r = _recPool[_recUsed];
+        if (!r) r = _recPool[_recUsed] = { geo: null, m: null, mat: null, em: undefined, al: undefined, lg: 0, chunked: null, instanced: null };
+        _recUsed++;
+        r.geo = geo; r.m = m; r.mat = mat; r.em = em; r.al = al; r.lg = lg; r.chunked = chunked; r.instanced = instanced;
+        drawList.push(r);
+      }
+      // Every drawList reset goes through here: drop the records' references, so a
+      // pooled slot never pins an evicted material or a freed geometry.
+      function resetRecs() {
+        for (let i = 0; i < _recUsed; i++) { const r = _recPool[i]; r.geo = null; r.m = null; r.mat = null; r.chunked = null; r.instanced = null; }
+        _recUsed = 0;
+        drawList.length = 0;
+      }
       // Model matrices are COPIED into this per-frame pool at draw() time.
       // game.js reuses scratch Float32Arrays across draws (_wheelWorld is
       // written four times per car per frame), and drawList is only flushed at
@@ -1509,7 +1531,7 @@ const TLX = (function () {
         if (!batch || !batch.imesh || !batch.instances) return;
         const n = batch.visible === undefined ? batch.instances : batch.visible;
         if (n <= 0) return;
-        drawList.push({ instanced: batch, mat: materialFor(opts, false, true), em: drawEm(opts), al: drawAl(opts) });
+        pushRec(null, null, materialFor(opts, false, true), drawEm(opts), drawAl(opts), 0, null, batch);
       }
 
       function freeInstancedBatch(batch) {
@@ -1586,6 +1608,7 @@ const TLX = (function () {
         if (!_ssrMrt) _ssrMrt = TSL.mrt({ output: TSL.output, ssrTag: TSL.float(1) });
         return _ssrMrt;
       }
+      let _poolNow = typeof performance !== "undefined" ? performance.now() : Date.now();   // latched once per present (acquireMesh stamps __tlxSeen with it)
       const meshPool = [];          // every wrapper ever made — the sweep walks this
       const meshByGeo = new Map();  // geometry -> Map(material -> Mesh)
       // Batch stamp: bumped wherever a batch begins. A mesh not stamped with
@@ -2106,7 +2129,7 @@ const TLX = (function () {
         ud.tlxLgRoad = rec && rec.lg ? 1 : 0;   // PER-CHUNK ROAD: the road draw only
         geo.__tlxDrawnBatch = _poolBatch;   // uploaded by the render that closes THIS batch
         m.__tlxBatch = _poolBatch;
-        m.__tlxSeen = (typeof performance !== "undefined" ? performance.now() : Date.now());
+        m.__tlxSeen = _poolNow;   // one clock read per present (prunePool needs ~20 s resolution)
         // scene.matrixWorldAutoUpdate is false (see create() above), so three
         // will NEVER promote m.matrix → matrixWorld. The renderer uploads
         // matrixWorld as the model matrix: writing only `.matrix` left every
@@ -2362,6 +2385,12 @@ const TLX = (function () {
 
       // CSS-box observation is shared; TLX still owns renderer.setSize(),
       // backend limits and post-target allocation.
+      // apex26.tlxMirrorSweep (see the static-sweep gates in present()): read
+      // once here, not with a localStorage call on every present.
+      let _mirrorSweepOptIn = false;
+      try { _mirrorSweepOptIn = localStorage.getItem("apex26.tlxMirrorSweep") === "1"; } catch (_) { /* no storage: off */ }
+      // The WebGL2 driver's texture ceiling is a device constant: ask once.
+      let _glMaxDim = -1;
       const cssSizeCache = CanvasCssSize.create(_layoutCanvas, { settleFrames: 30 });
       function resize() {
         // Window/settings callbacks also reach here while the frame loop waits
@@ -2388,11 +2417,14 @@ const TLX = (function () {
         const _gpuDev = (renderer.backend && renderer.backend.isWebGPUBackend && renderer.backend.device) || null;
         let maxDim = _gpuDev ? ((_gpuDev.limits && _gpuDev.limits.maxTextureDimension2D) || 8192) : 0;
         if (!_gpuDev) {
-          const _gl = (renderer.backend && renderer.backend.gl) || null;
-          try {
-            const lim = _gl ? [_gl.getParameter(_gl.MAX_TEXTURE_SIZE) | 0, _gl.getParameter(_gl.MAX_RENDERBUFFER_SIZE) | 0].filter((v) => v >= 2048) : [];   // WebGL2 guarantees 2048; a stub answers less
-            maxDim = lim.length ? Math.min(...lim) : 0;
-          } catch (_) { maxDim = 0; }
+          if (_glMaxDim < 0) {   // begin() calls resize() every frame; the limit never changes
+            const _gl = (renderer.backend && renderer.backend.gl) || null;
+            try {
+              const lim = _gl ? [_gl.getParameter(_gl.MAX_TEXTURE_SIZE) | 0, _gl.getParameter(_gl.MAX_RENDERBUFFER_SIZE) | 0].filter((v) => v >= 2048) : [];   // WebGL2 guarantees 2048; a stub answers less
+              _glMaxDim = lim.length ? Math.min(...lim) : 0;
+            } catch (_) { _glMaxDim = 0; }
+          }
+          maxDim = _glMaxDim;
         }
         if (maxDim && (presentW > maxDim || presentH > maxDim)) {
           const k = Math.min(maxDim / presentW, maxDim / presentH);
@@ -2843,6 +2875,12 @@ const TLX = (function () {
         carShadowEnd() { if (shadowSys) shadowSys.carShadowEnd(); },
         lampShadowBegin(vp, idx) { if (shadowSys) shadowSys.lampShadowBegin(vp, idx); },
         lampShadowEnd() { if (shadowSys) shadowSys.lampShadowEnd(); },
+        // TLX-PERF-PLAN L1 (tlx-shadow.js LAMP STATIC MAP): the static-props half
+        // on a lamp change, and the car-only rebuild served from its depth copy.
+        // Absent on GLX/WGX, so shadow-pass.js keeps the full pass there.
+        lampStaticBegin(vp) { return !!(shadowSys && shadowSys.lampStaticOn && shadowSys.lampStaticBegin(vp)); },
+        lampStaticEnd() { if (shadowSys) shadowSys.lampStaticEnd(); },
+        lampCarsBegin(vp, idx) { return !!(shadowSys && shadowSys.lampStaticOn && shadowSys.lampCarsBegin(vp, idx)); },
         // Active light VP for instanced shadow cull (GLX shadowCullVP).
         get shadowCullVP() {
           if (!shadowSys) return null;
@@ -2945,7 +2983,7 @@ const TLX = (function () {
               renderer.clear();
             } catch (_) { /* a probe face must never strand the frame */ }
             renderer.setRenderTarget(softOutRT());
-            drawList.length = 0;
+            resetRecs();
             _dMatUsed = 0;
             _poolBatch++;
             _envActive = false;
@@ -3023,7 +3061,7 @@ const TLX = (function () {
             // still beats the black dummy. Nothing ready yet -> stay on dummy.
             lit.setEnvCube((faceOk || envReady) || !envDummy ? envRT.texture : envDummy.texture);
           }
-          drawList.length = 0;   // the main pass re-issues its own draws
+          resetRecs();   // the main pass re-issues its own draws
           _dMatUsed = 0;
           _poolBatch++;
           _envActive = false;
@@ -3291,7 +3329,7 @@ const TLX = (function () {
           _fxFrame.shadows = 0; _fxFrame.marks = 0; _fxFrame.skidVerts = 0;
           _fxFrame.glow = 0; _fxFrame.particles = 0; _fxFrame.decals = 0; _fxFrame.lineVerts = 0;
           scene.backgroundNode = null;
-          drawList.length = 0;
+          resetRecs();
           _dMatUsed = 0;
           return true;
         },
@@ -3308,15 +3346,15 @@ const TLX = (function () {
           pinSkyMaterial();
         },
         draw(mesh, model, opts) {
-          if (mesh && mesh.geo) drawList.push({ geo: mesh.geo, m: poolModelMat(model), mat: materialFor(opts, false), em: drawEm(opts), al: drawAl(opts),
-            lg: opts && opts.surfaceId === 16 ? 1 : 0 });
+          if (mesh && mesh.geo) pushRec(mesh.geo, poolModelMat(model), materialFor(opts, false), drawEm(opts), drawAl(opts),
+            opts && opts.surfaceId === 16 ? 1 : 0, null, null);
         },
         drawChunked(mesh, model, opts) {
           if (!mesh) return;
           if (mesh.chunks && chunkedSys) {
-            drawList.push({ geo: null, chunked: mesh, m: poolModelMat(model), mat: materialFor(opts, true), em: drawEm(opts), al: drawAl(opts) });
+            pushRec(null, poolModelMat(model), materialFor(opts, true), drawEm(opts), drawAl(opts), 0, mesh, null);
           } else if (mesh.geo) {
-            drawList.push({ geo: mesh.geo, m: poolModelMat(model), mat: materialFor(opts, true), em: drawEm(opts), al: drawAl(opts) });
+            pushRec(mesh.geo, poolModelMat(model), materialFor(opts, true), drawEm(opts), drawAl(opts), 0, null, null);
           }
         },
         // M6 FX paths — each appends a draw-list record; blend/offset/mask
@@ -3327,12 +3365,12 @@ const TLX = (function () {
         // shared geometry, untouched by the scale).
         drawShadow(modelMat, w, l) {
           if (!fx || !modelMat) return;
-          drawList.push({ geo: getFxQuad(), m: fxMatFor(modelMat, w, l), mat: fx.shadowMat });
+          pushRec(getFxQuad(), fxMatFor(modelMat, w, l), fx.shadowMat, undefined, undefined, 0, null, null);
           _fxFrame.shadows++;
         },
         drawMark(modelMat, w, l) {
           if (!fx || !modelMat) return;
-          drawList.push({ geo: getFxQuad(), m: fxMatFor(modelMat, w, l), mat: fx.markMat });
+          pushRec(getFxQuad(), fxMatFor(modelMat, w, l), fx.markMat, undefined, undefined, 0, null, null);
           _fxFrame.marks++;
         },
         drawSkidBatch(verts, vertCount, dirty) {
@@ -3343,7 +3381,7 @@ const TLX = (function () {
             uploadStream(skidStream, vertCount * 5);
           }
           skidStream.geo.setDrawRange(0, vertCount);
-          drawList.push({ geo: skidStream.geo, m: null, mat: fx.skidMat });
+          pushRec(skidStream.geo, null, fx.skidMat, undefined, undefined, 0, null, null);
           _fxFrame.skidVerts = vertCount;
           return true;
         },
@@ -3367,7 +3405,7 @@ const TLX = (function () {
           fx.lineStr.value = 1.6;           // emissive strength: a constant, no producer sends one
           fx.linePalette.value = opts && opts.palette ? 1 : 0;
           fx.lineOpacity.value = (opts && opts.opacity) || 1;
-          drawList.push({ geo: lineStream.geo, m: null, mat: fx.lineMat });
+          pushRec(lineStream.geo, null, fx.lineMat, undefined, undefined, 0, null, null);
           _fxFrame.lineVerts = vertCount;
           return true;
         },
@@ -3405,7 +3443,7 @@ const TLX = (function () {
           fx.glowStr.value = str;
           uploadStream(glowStream, p);
           glowStream.geo.setDrawRange(0, nDraw * 6);
-          drawList.push({ geo: glowStream.geo, m: null, mat: fx.glowMat });
+          pushRec(glowStream.geo, null, fx.glowMat, undefined, undefined, 0, null, null);
           _fxFrame.glow = nDraw;
         },
         // Transient FX particle batch: glx.js drawParticles — `data` is the
@@ -3420,18 +3458,19 @@ const TLX = (function () {
           slot.ib.array.set(data.subarray(0, floatCount));
           uploadStream(slot, floatCount);
           slot.geo.setDrawRange(0, verts);
-          drawList.push({ geo: slot.geo, m: null, mat: fx.particleMats[additive ? 1 : 0] });
+          pushRec(slot.geo, null, fx.particleMats[additive ? 1 : 0], undefined, undefined, 0, null, null);
           _fxFrame.particles += verts / 6;
         },
         drawDecal(mesh, modelMat, tex, opts) {
           if (!fx || !mesh || !mesh.geo || !tex || !tex.tex || !modelMat) return;
-          drawList.push({ geo: mesh.geo, m: fxMatFor(modelMat, 1, 1),
-                          mat: fx.decalMaterialFor(tex.tex, (opts && opts.glow) || 0) });
+          pushRec(mesh.geo, fxMatFor(modelMat, 1, 1),
+                  fx.decalMaterialFor(tex.tex, (opts && opts.glow) || 0), undefined, undefined, 0, null, null);
           _fxFrame.decals++;
         },
         present(opts) {
           _poolBatch++;
-          prunePool(typeof performance !== "undefined" ? performance.now() : Date.now());
+          _poolNow = typeof performance !== "undefined" ? performance.now() : Date.now();
+          prunePool(_poolNow);
           // renderOrder = submission index: three sorts opaque and transparent
           // lists by renderOrder first, so caller order (the GLX contract)
           // survives its z-sort in BOTH lists. Opaques still render before
@@ -3771,9 +3810,7 @@ const TLX = (function () {
           // comment or commit message claiming it is live is describing gate 2
           // alone. Turning it back on means deleting gate 1 deliberately, with
           // the bounds fix in place, and re-measuring; it is not a cleanup.
-          const _sweepOptIn = (function () {
-            try { return localStorage.getItem("apex26.tlxMirrorSweep") === "1"; } catch (_) { return false; }
-          })();
+          const _sweepOptIn = _mirrorSweepOptIn;   // read once at create: an A/B knob set before load
           pruneGeoRegistry(_now);
           _mirrorStat.drains++;
           _mirrorStat.gate = (envReady ? "R" : "-") + (_envGaveUp ? "G" : "-")
@@ -3792,7 +3829,7 @@ const TLX = (function () {
           _fxLast.shadows = _fxFrame.shadows; _fxLast.marks = _fxFrame.marks;
           _fxLast.skidVerts = _fxFrame.skidVerts; _fxLast.glow = _fxFrame.glow;
           _fxLast.particles = _fxFrame.particles; _fxLast.decals = _fxFrame.decals;
-          drawList.length = 0;
+          resetRecs();
           _dMatUsed = 0;
           // Armed shadow flags clear AFTER the main render (GLX clears them
           // in the post-chain present; game.js re-arms every frame it runs

@@ -213,6 +213,24 @@ wet, **stop**: the 0.35 s ramp is enough.
 
 Option 1 first. Take option 2 only with a measured, visible win.
 
+## Bug hunt, 2026-09-24 (after #281)
+
+Three read-only hunters: a fleet sweep over 52 circuits at 300k/600k, renderer integration, and runtime/perf.
+
+| finding | fix |
+|---|---|
+| A sliced rebake's first step (whole-track road splat + live-only scan) took 155–267 ms, and one lamp step took 10–42 ms (terrain queries), against `SLICE_MS` 3 | `splatRoad` is a generator (yields every 8 segments); the cell search, the live-only scan (per 32 lamps) and the lamp loop (per tile) yield. A unit test bounds one slice to one slot of terrain queries: the old code did 16 138 |
+| A restart on the same circuit with new weather rebuilt `_lights` but took the debounced path: the race drew the OLD bake for 300 ms plus 2–4 s of slices | the atmosphere pre-bake passes `sync=true` |
+| `LampBake` held the previous track and its atlas (4.8 / 9.6 MB) through `loadTrack`'s `track = null` build peak | `LampBake.reset()` at `track = null` |
+| A hidden tab (rAF stopped > 1 s) replayed the lamp warm-up (70 %, sodium tint, 4–8 s) | a gap across a `visibilitychange` hide does not restart the warm-up |
+| The road splat stepped along the centreline, so the outer verge on tight turns left NO_GROUND holes (fuji, korea, indianapolis, spa, bahrain, sochi, istanbul) | step count from the outer edge's sweep; hairpin unit test |
+| `atlasGrid` minimised area, so prime tile counts made strips up to 3502×340, over WebGL2's guaranteed 2048 | minimise the longest side, then area: every fleet atlas ≤ 1088×1088; unit test pins ≤ 2048 |
+| Flicker re-hashed every lamp twice a frame (150–180 µs on Monza) | per-offset hash cache |
+
+Checked, not bugs: atlas UV/gutter maths in all three backends (float32 replay, no seams), half-float slot origins (even, < 4096), GLX texture units 12/13, budget cache-key churn, live-only after regen, free-after-120-frames, device loss (page reload), wet-floor flapping, `liveOnlyAt` cost (~0.05 ms/frame).
+
+Open, not fixed: daytime floods (`floodDay`) are not pre-baked (first frame bakes sync, 0.7–1.9 s); tiles holding only NO_GROUND (≈45 % of Vegas/Madrid atlas texels) could be dropped for finer cells; the Monaco tunnel portal lamps bake through the vault (the live loop does the same); GLX never checks `MAX_TEXTURE_SIZE` (moot now the atlas is ≤ 1088); WGX `_syncLampBake` destroys the old atlas even if `_rebuildFrameBG` bails (latent).
+
 ## How to verify a lamp change
 
 1. `node --test tests/unit/lamp-bake.test.mjs` pins the bake to the shader term.

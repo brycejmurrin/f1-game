@@ -60,6 +60,7 @@ anything in here.
 | Note | What it records |
 |---|---|
 | [notes/PERF-FINDINGS.md](notes/PERF-FINDINGS.md) | **Start at §0: which instrument answers which perf question, and the three that lie on this box.** Then the four-way audit: what was measured, taken, reverted, and the recorded negative results. Its real content is which KINDS of finding survived measurement. |
+| [notes/TLX-PERF-PLAN.md](notes/TLX-PERF-PLAN.md) | The working plan for the three.js backend's remaining per-frame costs (night lamp shadow, godray chain, draw records, post materials): steps, status, switches and checks. Results land in PERF-FINDINGS. |
 | [notes/AGENT-MEMORY.md](notes/AGENT-MEMORY.md) | The three memory stores (instructions, subagent memory, auto memory), why auto memory was off in cloud sessions, and how `memory-sync.sh` makes it persist. |
 | [notes/TESTING-FIELD-NOTES.md](notes/TESTING-FIELD-NOTES.md) | The operational field notes carved out of `TESTING.md`: boot walls on this box, the two-worker factor, the instruments that lie here, the real-GPU runs. Cited from `AGENTS.md` as "TESTING field notes". |
 | [notes/UPSTREAM-THREE-ISSUES.md](notes/UPSTREAM-THREE-ISSUES.md) | Draft issue bodies for the three local three.js patches (swizzle gate, WGSL `var<private>` scope, `yieldToMain` fallback) — none is filed upstream as of 2026-09-22; post, then put the URLs in `vendor/three-0.186.0/PATCHES.md` and `patches.mjs`. |

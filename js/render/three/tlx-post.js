@@ -184,6 +184,8 @@
     // Lazily-created blocks (per-block bail: nothing until the gate opens).
     let ssaoRT = null, ssaoBlurRT = null, aoW = 1, aoH = 1;
     let godrayRT = null, godrayBlurRT = null, grW = 1, grH = 1;
+    let _grLite = true;   // G1 — see the godray blur loop in present()
+    try { _grLite = localStorage.getItem("apex26.grLite") !== "0"; } catch (_) { /* no storage: on */ }
     const BLOOM_DIV = 2, BLOOM_LEVELS_MAX = 5;
     let bloomLv = null;    // [{rt,w,h}] x5, sized by layoutBloom
     let nLv = 0;
@@ -424,7 +426,12 @@
         U.hgFloor.value = gk("godrayFloor");      // GOD-RAY HAZE knob
         runPass(P.godray.mat, godrayRT);
         // Double separable blur (H+V twice) — soft wide volumes, no stripes.
-        for (let bp = 0; bp < 2; bp++) {
+        // TLX-PERF-PLAN G1: lamp beams alone (no sun shafts) take ONE blur pair.
+        // The second pair exists for the sun march's shadow-slice stripes; a lamp
+        // cone has no such slices. -2 half-res passes per night frame.
+        // apex26.grLite=0 restores two pairs (same knob as GLX).
+        const grPairs = (!sunGR && _grLite) ? 1 : 2;
+        for (let bp = 0; bp < grPairs; bp++) {
           P.blurGR.tex.value = godrayRT.texture;
           P.blurGR.U.dir.value.set((1 + bp) / grW, 0);
           runPass(P.blurGR.mat, godrayBlurRT);
