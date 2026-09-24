@@ -283,6 +283,20 @@ test("the atlas stays near-square: no side over WebGL2's guaranteed 2048, slot o
   assert.equal((LB.TILE + 2) % 2, 0, "SLOT even: slot origins are even integers < 4096, exact in half float");
 });
 
+test("sync=false never blocks: a first bake mid-race is sliced and returns null until it lands", () => {
+  const LB = load({ Tracks: { terrainY: () => 0 } });
+  const trk = {}, lights = [];
+  for (let i = 0; i < 60; i++) lights.push(...LAMP_A.map((v, k) => k === 0 ? i * 9 : k === 2 ? (i % 12) * 40 : v));
+  assert.equal(LB.forTrack(trk, lights, 4.0, 0, false), null, "no bake in hand: nothing drawn baked yet");
+  let b = null, n = 0;
+  while (!b && n++ < 20000) b = LB.forTrack(trk, lights, 4.0, 0, false);
+  assert.ok(b, "the sliced first bake lands");
+  assert.deepEqual(Array.from(b.data), Array.from(LB.bake(lights, () => 0, 4.0).data), "sliced == synchronous");
+  assert.equal(LB.forTrack(trk, lights, 4.0, 0, false), b, "then cached");
+  LB.reset();
+  assert.ok(LB.forTrack(trk, lights, 4.0, 0, true), "sync=true bakes at once");
+});
+
 test("reset drops the cached bake and track, so the next forTrack bakes afresh", () => {
   const LB = load({ Tracks: { terrainY: () => 0 } });
   const trk = {}, set = [...LAMP_A];

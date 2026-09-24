@@ -429,6 +429,24 @@ const LampBake = (function () {
     const budget = maxTexels > 0 ? maxTexels : MAX_TEXELS;
     const cur = _src === lights && _clamp === nearClamp && _budget === budget;
     if (cur) { _job = null; return _bake; }
+    // sync === false NEVER blocks: with no bake of this track in hand (daytime
+    // floods switched on, the bake knob turned up mid-race) the FIRST bake is
+    // sliced too and nothing draws baked until it lands — the live loop lights
+    // the nearest lamps meanwhile. true bakes now; omitted bakes now only when
+    // there is nothing to draw and no job for this track.
+    if (!(_trk === track && _bake) && sync !== true && (sync === false || (_job && _jobTrk === track))) {
+      if (!_job || _jobSrc !== lights || _jobClamp !== nearClamp || _jobTrk !== track || _jobBudget !== budget) {
+        _job = bakeSteps(lights, _groundFn(track), nearClamp, roadOf(track), budget);
+        _jobSrc = lights; _jobClamp = nearClamp; _jobTrk = track; _jobBudget = budget;
+      }
+      const end = _now() + SLICE_MS;
+      let r;
+      do { r = _job.next(); } while (!r.done && _now() < end);
+      if (!r.done) return null;
+      _job = null;
+      _install(r.value, track, lights, nearClamp, budget);
+      return _bake;
+    }
     // Same track, bake in hand: a new light set (a rebuild:true lamp knob) or a
     // new clamp keeps the old bake until the input has held still, then rebakes
     // in slices — a whole bake is 0.3-2 s of main thread.

@@ -128,9 +128,10 @@
     // copies that depth into lampRT and draws only the cars on top. lampRT stays
     // the sampled map, so no shader, sampler or backend-parity change.
     // AUTO = WebGPU only: three's WebGL copyTextureToTexture reads five UNPACK_*
-    // states with gl.getParameter per copy, each a synchronous GPU-process round
-    // trip in Chrome — census 289 (real Metal, WebGL2 leg) spent 2 s of its spike
-    // frames there. apex26.tlxLampStatic=0 is the old full rebuild, =1 forces on.
+    // states with gl.getParameter (cached after the first copy); in Chrome that
+    // first read is a synchronous GPU-process round trip, and census 289 (real
+    // Metal, WebGL2 leg) spent 2 s of spike frames in it behind the queued shader
+    // links. apex26.tlxLampStatic=0 is the old full rebuild, =1 forces on.
     let lampStaticOn = isWebGPU;
     try {
       const v = localStorage.getItem("apex26.tlxLampStatic");
@@ -492,6 +493,9 @@
     // pass instead. The copy happens here, before the cars draw.
     function lampCarsBegin(lightVP, lightIdx) {
       if (!S.lampEnabled || !lampStaticRT || !lampStaticOn || !_lampStaticValid || !_lampRendered) return false;
+      // The static props were drawn under _lampStaticVP: any other VP (a radius /
+      // cone knob rebuilt the set in place) needs the full pass + static refresh.
+      for (let i = 0; i < 16; i++) if (Math.fround(lightVP[i]) !== _lampStaticVP[i]) return false;
       try {
         renderer.copyTextureToTexture(lampStaticRT.depthTexture, lampRT.depthTexture);
       } catch (e) {

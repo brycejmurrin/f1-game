@@ -55,17 +55,22 @@
         // Y-fork Corniche lamp: dark pole + twin cool heads + thin red LED strip
         // (night-photo identity — not a single sodium blob).
         addCyl(out, a.c, 0.10, 7.5, DARKPOLE, 4, b);
-        const yoke = vadd(a.c, a.u, 7.2);
-        addBox(out, yoke, [0.18, 0.18, 1.8], DARKPOLE, b);
+        // Arm runs LATERALLY from the pole to the yoke (0.9 m out toward the
+        // road); the yoke then spans along-track under both heads. Before, the
+        // yoke sat on the pole axis and the heads 0.9 m out with nothing
+        // joining them — ~540 heads floating 0.45 m off it (2026-09-24 audit).
+        const yoke = vadd(vadd(a.c, a.u, 7.2), a.r, -side * 0.9);
+        addBox(out, vadd(vadd(a.c, a.u, 7.2), a.r, -side * 0.45), [1.0, 0.16, 0.16], DARKPOLE, b);
+        addBox(out, vadd(yoke, a.u, 0.02), [0.18, 0.18, 1.8], DARKPOLE, b);
         for (const fork of [-0.85, 0.85]) {
-          const head = vadd(vadd(yoke, a.t, fork), a.r, -side * 0.9);
+          const head = vadd(yoke, a.t, fork);
           addBox(out, head, [0.55, 0.28, 0.55], col || LED, b);
         }
         // Red vertical accent strip facing the path.
         addBox(out, vadd(vadd(a.c, a.u, 3.8), a.r, -side * 0.14),
           [0.08, 5.2, 0.08], [1.05, 0.12, 0.18], b);
         if (lamp && typeof lampPost === "function") {
-          const head = vadd(vadd(yoke, a.t, 0), a.r, -side * 0.9);
+          const head = yoke;   // same point as before: 7.2 m up, 0.9 m toward the road
           lampPost({ pos: head, k, side, kind: "led" });
         }
       };
@@ -140,7 +145,9 @@
         palm(k, side, dist, h, frond);
         // Warm fairy-light wrap on the lower trunk (Corniche night dressing).
         const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
-        if (onTrack(a.c[0], a.c[2], 3)) return;
+        // 4, matching palm()'s own guard: at 3 a palm dropped at 3-4 m left
+        // its lit wrap standing alone.
+        if (onTrack(a.c[0], a.c[2], 4)) return;
         addCyl(out, vadd(a.c, a.u, 0.4), 0.38, Math.min(h * 0.55, 5.5),
           [1.05, 0.92, 0.55], 6, b);
       };
@@ -396,6 +403,18 @@
           addBox(out, vadd(a.c, a.u, 4.5), [26.3, 1.0, 11.3], WINWARM, b);
         }
       }
+      // Thin ground slab on side +1 at `dist`, `w` wide: top sits `lift` above
+      // the HIGHEST terrain under its lateral footprint, base 5 cm below the
+      // lowest, so a crossfall never buries one edge or floats the other.
+      const slabOnGround = (k, dist, w, len, col, lift) => {
+        const a = anchor(k, 1, dist), b = [a.r, a.u, a.t];
+        const hs = [-w / 2, 0, w / 2].map((o) => {
+          const s = anchor(k, 1, dist + o).c;
+          return (s[0] - a.c[0]) * a.u[0] + (s[1] - a.c[1]) * a.u[1] + (s[2] - a.c[2]) * a.u[2];
+        });
+        const top = Math.max(...hs) + 0.3 + lift, bot = Math.min(...hs) + 0.3 - 0.05;
+        addBox(out, vadd(a.c, a.u, (top + bot) / 2), [w, top - bot, len], col, b);
+      };
       // Corniche promenade paint — pastel geometric strip between palms (night photo).
       {
         const PROMO = [
@@ -404,11 +423,16 @@
         ];
         for (let i = 0; i < 14; i++) {
           const sf = 0.58 + i * 0.011;
-          const a = anchor(K(sf), 1, 9.5), b = [a.r, a.u, a.t];
+          const a = anchor(K(sf), 1, 9.5);
           if (onTrack(a.c[0], a.c[2], 4)) continue;
-          addBox(out, vadd(a.c, a.u, 0.10), [2.8, 0.12, 7.5], PROMO[i % PROMO.length], b);
-          addBox(out, vadd(vadd(a.c, a.r, -1.6), a.u, 0.11), [0.25, 0.10, 7.5], [0.92, 0.92, 0.94], b);
-          addBox(out, vadd(vadd(a.c, a.r, 1.6), a.u, 0.11), [0.25, 0.10, 7.5], [0.92, 0.92, 0.94], b);
+          // anchor() returns ground - 0.3 (a single-point embed for tall
+          // props), and the terrain here falls ~0.13 m per metre across the
+          // strip, so a thin paint slab placed "at" the anchor sat 0.13-0.22 m
+          // UNDER the terrain (2026-09-24 audit). Each slab now spans its own
+          // footprint: top = highest terrain sample + lift, base = lowest - 5 cm.
+          slabOnGround(K(sf), 9.5, 2.8, 7.5, PROMO[i % PROMO.length], 0.04);
+          slabOnGround(K(sf), 9.5 - 1.6, 0.25, 7.5, [0.92, 0.92, 0.94], 0.04);
+          slabOnGround(K(sf), 9.5 + 1.6, 0.25, 7.5, [0.92, 0.92, 0.94], 0.04);
         }
       }
 

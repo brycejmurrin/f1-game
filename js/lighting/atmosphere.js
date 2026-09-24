@@ -45,13 +45,19 @@ function applyRaceSettings() {
   // Pre-build the lamp set at race start so the first dark-session frame is
   // never unlit (the render path rebuilds it if empty as a fallback). Floodlights
   // are used on ANY track at night/dusk/dawn, so build whenever the scene is dark.
-  const floodActive = isFloodActiveSession();
-  if (floodActive && G.track && (!G.track._lights || !G.track._lights.length)) G.track._lights = buildTrackLights(G.track);
+  // DAYTIME LAMPS (LT.floodDay > 0, resolved by applyLightTune above) light the
+  // same set by day: the render loop gates on exactly (floodActive || floodDay).
+  const floodLit = isFloodActiveSession() || LT.floodDay > 0;
+  if (floodLit && G.track && (!G.track._lights || !G.track._lights.length)) G.track._lights = buildTrackLights(G.track);
   // ...and bake its ground pools now, not on the first lit frame (a hitch there).
-  // SYNC: a restart on the same circuit with new weather keeps the track but
-  // rebuilds _lights; the debounced path would draw the OLD bake into the race.
-  if (floodActive && G.track && G.gfx && G.gfx.hasLampBake && LT.lampBake > 0 && !(LT.tailLightEmit > 0))
-    LampBake.forTrack(G.track, G.track._lights, LT.lampNearClamp, undefined, true, LampBake.budget(G.gfx));
+  // Pre-race this bakes SYNC under the loading screen (a same-circuit restart with
+  // new weather keeps the track but rebuilds _lights: the debounced path would
+  // draw the OLD bake into the race). Mid-race (setWeatherLive swaps the preset
+  // profile, whose rebuild knobs null _lights) it must never block: false keeps
+  // the drawing bake while the new one is sliced over frames.
+  const midRace = G.state === "race" || G.state === "count";
+  if (floodLit && G.track && G.gfx && G.gfx.hasLampBake && LT.lampBake > 0 && !(LT.tailLightEmit > 0))
+    LampBake.forTrack(G.track, G.track._lights, LT.lampNearClamp, undefined, !midRace, LampBake.budget(G.gfx));
   if (G.raceTimeOfDay !== "default") {
     const night = G.raceTimeOfDay === "night";
     G.frameSky.stars = night ? 1 : 0;

@@ -48,6 +48,7 @@ const ShadowPass = (function () {
     // to the LAMP's frustum, so the static half of this map is a pure function of
     // which lamp it is. What actually varies is the lamp and the CARS cast into it.
     let _lampShX = null, _lampShY = null, _lampShZ = null;   // the lamp, by world position (static fixture => exact match)
+    let _lampShR = null, _lampShC = null, _lampShDx = null, _lampShDy = null, _lampShDz = null;   // ...and its VP inputs (radius, cone, aim)
     let _lampShCarKey = 0;   // quantised positions of the cars in the map
     const _shadowCtr = [0, 0, 0];   // unsnapped shadow anchor (glides) — the shader fades by distance from this
 
@@ -123,7 +124,7 @@ const ShadowPass = (function () {
     function reset() {
       _shadowSnapX = _shadowSnapZ = _shadowBox = null;
       _shadowSunX = _shadowSunY = _shadowSunZ = null;
-      _lampShX = _lampShY = _lampShZ = null; _lampShCarKey = 0;
+      _lampShX = _lampShY = _lampShZ = null; _lampShR = _lampShC = _lampShDx = _lampShDy = _lampShDz = null; _lampShCarKey = 0;
     }
     // The render loop: count reset before the car loop, one push per drawn car
     // (blob shadow this frame; sun / lamp caster next frame), flush after.
@@ -429,7 +430,11 @@ const ShadowPass = (function () {
             // Lamp fixtures are STATIC and their coordinates are copied, not
             // recomputed, so exact equality is the identity test — no epsilon, and
             // no way for two distinct lamps to collide on it.
-            const _sameLamp = _lx === _lampShX && _ly === _lampShY && _lz === _lampShZ;
+            // Position alone is not the map's VP: POOL RADIUS / BEAM CONE knobs
+            // rebuild the set with the same positions but a new far plane / fov.
+            const _sameLamp = _lx === _lampShX && _ly === _lampShY && _lz === _lampShZ &&
+              rad === _lampShR && L[o + 11] === _lampShC &&
+              L[o + 7] === _lampShDx && L[o + 8] === _lampShDy && L[o + 9] === _lampShDz;
             // Same bound the cast loop below uses, hoisted so the key is computed
             // from exactly the set that gets rasterised — a key over a different set
             // than the content is how this class of cache goes wrong.
@@ -483,6 +488,7 @@ const ShadowPass = (function () {
               if (G.gfx.lampShadowKeep) G.gfx.lampShadowKeep(flBest);
             } else {
             _lampShX = _lx; _lampShY = _ly; _lampShZ = _lz; _lampShCarKey = _carKey;
+            _lampShR = rad; _lampShC = L[o + 11]; _lampShDx = L[o + 7]; _lampShDy = L[o + 8]; _lampShDz = L[o + 9];
             const fov = Math.min(2.6, 2 * Math.acos(M4.clamp(L[o + 11], -0.999, 0.999)) * 1.1 + 0.15);
             const up = Math.abs(L[o + 8]) > 0.95 ? _upX : _upY;
             _flEye[0] = L[o]; _flEye[1] = L[o + 1]; _flEye[2] = L[o + 2];
