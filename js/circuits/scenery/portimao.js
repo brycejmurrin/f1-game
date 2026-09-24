@@ -11,7 +11,7 @@
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup, runoffApron,
         cameraTower, sponsorHoarding, signBoard, groundedSegments, bankedKerbStrip,
-        addBox, addCyl, addCone, addPrism, addFrustum, forestEdge } = api;
+        addBox, addCyl, addCone, addPrism, addFrustum, forestEdge, terrainYAt } = api;
 
       {
         const CORK_LEAF  = [0.24, 0.34, 0.19];
@@ -135,13 +135,27 @@
               h < 0.2 ? [0.86, 0.30, 0.24] : h < 0.38 ? [0.92, 0.90, 0.86] : [0.24, 0.36, 0.62], b);
           }
           out._mat = 0;
-          const topBack = 1.2 + rows * depth, topUp = 1.6 + rows * rise;
-          addPrism(out, vadd(vadd(a.c, a.r, side * (topBack + 2.4)), a.u, topUp),
-            [6, 3.4, seg], EARTH_D, b);
+          // Escarpment prism seats on terrain, not road+terrace stack: after the
+          // SRTM bake the mid-sector "hillside" often falls away laterally, and a
+          // prism stacked 10 m above the road floated ~10 m over the valley floor.
+          const topBack = 1.2 + rows * depth;
+          const lat = side * (topBack + 2.4);
+          const wx = a.c[0] + a.r[0] * lat;
+          const wz = a.c[2] + a.r[2] * lat;
+          const gy = terrainYAt(wx, wz);
+          if (gy == null) return;
+          const roadTop = a.c[1] + 1.6 + rows * rise;
+          // Skip when terrain is far below the terrace top — would read as a
+          // floating red wedge rather than a cut face behind the seats.
+          if (roadTop - gy > 4.5) return;
+          addPrism(out, [wx, gy, wz], [6, 3.4, seg], EARTH_D, b);
         });
       };
       hillsideTerrace(0.035, 0.095, 1, 16, { rows: 8, density: 0.6 });   // Turn 1 amphitheatre
-      hillsideTerrace(0.470, 0.530, -1, 18, { rows: 6 });
+      // Split around ~0.51: SRTM drops the parallel lower shelf under the left
+      // hillside and the full 0.47–0.53 run floated its escarpment there.
+      hillsideTerrace(0.470, 0.500, -1, 18, { rows: 6 });
+      hillsideTerrace(0.518, 0.530, -1, 18, { rows: 6 });
       hillsideTerrace(0.835, 0.890, 1, 16, { rows: 7 });
       hillsideTerrace(0.280, 0.360, 1, 15, { rows: 6, rise: 1.4, depth: 2.7, density: 0.5, step: 8 });
       hillsideTerrace(0.620, 0.700, -1, 15, { rows: 6, rise: 1.4, depth: 2.7, density: 0.5, step: 8 });
