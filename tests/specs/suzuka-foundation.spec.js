@@ -32,11 +32,11 @@ test("Suzuka keeps its elevation, crossover, and track-owned models aligned", as
         hasAuthoredElevations: Array.isArray(built.elevations) && built.elevations.length > 0,
         bridges: built.bridges.map(({ s, halfM, rise }) => ({ s, halfM, rise })),
       },
-      // SRTM undulation through the Esses / Degner; figure-8 flyover stays a
-      // BRIDGE lift at racing 0.845 (terrain does not follow).
+      // SRTM undulation: Degner basin near 0.15, climb through the Esses to
+      // ~0.30; figure-8 flyover stays a BRIDGE lift at racing 0.845.
       relief: {
-        esses: at(0.240) - (at(0.130) + at(0.350)) / 2,
-        degner: at(0.070) - (at(0.010) + at(0.130)) / 2,
+        essesClimb: at(0.30) - at(0.15),
+        degnerBasin: at(0.15) - (at(0.05) + at(0.25)) / 2,
         crossover: at(0.845) - (at(0.810) + at(0.880)) / 2,
       },
       ground,
@@ -55,8 +55,8 @@ test("Suzuka keeps its elevation, crossover, and track-owned models aligned", as
   // (s + 0.0058).
   expect(audit.built.bridges[0].s).toBeCloseTo(0.8508, 6);
 
-  expect(audit.relief.esses).toBeGreaterThan(4);
-  expect(audit.relief.degner).toBeLessThan(-2);
+  expect(audit.relief.essesClimb).toBeGreaterThan(18);
+  expect(audit.relief.degnerBasin).toBeLessThan(-8);
   expect(audit.relief.crossover).toBeGreaterThan(2);
   for (const probe of audit.ground) {
     expect(probe.gap === null || probe.gap <= 0.18,
