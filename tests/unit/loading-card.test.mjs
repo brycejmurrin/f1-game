@@ -590,7 +590,9 @@ test("FlybySeq.shotAt names the shot solve() cuts to, without planning it", () =
   assert.equal(F.shotAt(0.87).id, "grid-front");
   assert.equal(F.shotAt(0.885).id, "grid-mine");
   assert.equal(F.shotAt(NaN).id, F.DEFAULT[0].id, "hostile progress is the start");
+  F.setPlayerSlot(null, 22);   // a random grid: your slot is not known yet
   assert.equal(F.shotAt(0.99, F.withoutSlot(F.DEFAULT)).id, "grid-front", "a random grid's list ends on grid-front");
+  F.setPlayerSlot(11, 22);
   // solve() takes its cut from shotAt, so the two cannot drift.
   assert.match(read("js/camera/flyby-seq.js"), /const on = shotAt\(u, list\)/);
 });
