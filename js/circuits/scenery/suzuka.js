@@ -85,7 +85,7 @@
           addBox(stage, vadd(vadd(g.c, g.r, -5.5), g.u, 8.5 / 2), [1.2, 8.5, 1.4], [0.92, 0.92, 0.94], gb);
           addBox(stage, vadd(vadd(g.c, g.r,  5.5), g.u, 8.5 / 2), [1.2, 8.5, 1.4], [0.92, 0.92, 0.94], gb);
           addBox(stage, vadd(g.c, g.u, 8.2), [13.2, 1.5, 2.2], neonRed, gb);
-          addBox(stage, vadd(g.c, g.u, 9.5), [9.0, 0.55, 2.5], [0.96, 0.96, 0.94], gb);
+          addBox(stage, vadd(g.c, g.u, 9.22), [9.0, 0.55, 2.5], [0.96, 0.96, 0.94], gb);
         }, { required: true });
       }
 
@@ -200,7 +200,7 @@
                     pz[lk2] + track.rz[lk2] * (-1) * (hw[lk2] + ldist2), 3)) continue;
         const lp2 = anchor(lk2, -1, ldist2), lb2 = [lp2.r, lp2.u, lp2.t];
         addCyl(out, lp2.c, 0.12, 8, steel, 5, lb2);
-        addBox(out, vadd(lp2.c, lp2.u, 8.4), [1.4, 0.4, 0.9], lampWarm, lb2);
+        addBox(out, vadd(lp2.c, lp2.u, 8.18), [1.4, 0.4, 0.9], lampWarm, lb2);
       }
 
       const RC_GAP = 38, BC_GAP = 46, HOSP_GAP = 58;
@@ -298,7 +298,7 @@
         const lk3 = Math.round(n * (0.97 + i * 0.007)) % n;
         const lp3 = anchor(lk3, 1, 8), lb3 = [lp3.r, lp3.u, lp3.t];
         addCyl(out, lp3.c, 0.12, 9, steel, 5, lb3);
-        addBox(out, vadd(lp3.c, lp3.u, 9.4), [1.4, 0.4, 0.9], lampWarm, lb3);
+        addBox(out, vadd(lp3.c, lp3.u, 9.18), [1.4, 0.4, 0.9], lampWarm, lb3);
       }
 
       // Pit-straight sponsor billboards (left side)
@@ -317,8 +317,8 @@
           modelGroup(`${id}-${side < 0 ? "left" : "right"}-tower`, {
             center: towerC, size: [2.2, deckH, 2.8], basis: b,
           }, (stage) => {
-            addBox(stage, towerC, [2.2, deckH, 2.8], concrete, b);
-            addBox(stage, vadd(a.c, a.u, deckH + 0.6), [3.2, 1.2, 3.4], steel, b);
+            addBox(stage, vadd(a.c, a.u, deckH / 2 - 0.03), [2.2, deckH + 0.06, 2.8], concrete, b);  // foot 6 cm under the span support's
+            addBox(stage, vadd(a.c, a.u, deckH + 0.65), [3.2, 1.2, 3.4], steel, b);
           }, { required: true });
         }
       };
@@ -539,11 +539,11 @@
           center: pc, size: [2.2, 5.3, 25], basis: pb,
         }, (stage) => {
           stage._mat = MAT.CONCRETE;
-          addBox(stage, pc, [1.7, 5.3, 24], XOVER_DK, pb);
+          addBox(stage, vadd(pa.c, pa.u, 2.62), [1.7, 5.24, 24], XOVER_DK, pb);
           stage._mat = MAT.METAL;
-          addBox(stage, vadd(vadd(pa.c, pa.r, 0.88), pa.u, 2.65),
-                 [0.18, 5.3, 24.4], [0.12, 0.16, 0.22], pb);
-          addBox(stage, vadd(pa.c, pa.u, 5.12),
+          addBox(stage, vadd(vadd(pa.c, pa.r, 0.88), pa.u, 2.61),
+                 [0.18, 5.32, 24.4], [0.12, 0.16, 0.22], pb);
+          addBox(stage, vadd(pa.c, pa.u, 5.12),   // tops under it: body 5.24, plate 5.27, cap 5.30
                  [2.0, 0.36, 24.4], [0.08, 0.11, 0.15], pb);
         }, { required: true });
       }
@@ -586,7 +586,7 @@
                     pz[k] + track.rz[k] * side * (hw[k] + ldist), 2)) return;
         const lp4 = anchor(k, side, ldist), lb4 = [lp4.r, lp4.u, lp4.t];
         addCyl(out, lp4.c, 0.13, 9, steel, 5, lb4);
-        addBox(out, vadd(lp4.c, lp4.u, 9.4), [1.6, 0.4, 1.0], lampWarm, lb4);
+        addBox(out, vadd(lp4.c, lp4.u, 9.18), [1.6, 0.4, 1.0], lampWarm, lb4);
       });
 
       stand(0.00,  1, 15, 52, { livery: "navy", tiers: 2, roof: "cantilever",
@@ -739,7 +739,7 @@
               const lc = vadd(vadd(a.c, a.t, t), a.r, 1.4);
               addCyl(stage, lc, 0.24, 1.1, [0.70, 0.69, 0.64], 6, b);
               addBox(stage, vadd(lc, a.u, 1.5), [0.62, 0.62, 0.62], [0.76, 0.75, 0.70], b);
-              addPyramid(stage, vadd(lc, a.u, 2.1), [1.0, 0.5, 1.0], [0.66, 0.65, 0.60], b);
+              addPyramid(stage, vadd(lc, a.u, 1.8), [1.0, 0.5, 1.0], [0.66, 0.65, 0.60], b);
             }
             stage._mat = MAT.WOOD;
             const hc = vadd(vadd(a.c, a.r, 12.5), a.u, 2.6);

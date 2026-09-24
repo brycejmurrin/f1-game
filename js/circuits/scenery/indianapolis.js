@@ -211,7 +211,7 @@
         crowd: [[0.30, 0.42, 0.66], [0.86, 0.86, 0.84], [0.72, 0.20, 0.18]],
       });
       scaffoldStand(0.512, 0.528, 1, 22, {
-        rows: 6, step: 9, density: 0.40,
+        rows: 6, step: 9, density: 0.40, legEvery: 1,   // every bay on its own legs: bays do not touch
         bench: [[0.30, 0.42, 0.66], [0.82, 0.80, 0.76]],
         crowd: [[0.86, 0.86, 0.84], [0.30, 0.42, 0.66], [0.72, 0.20, 0.18]],
       });

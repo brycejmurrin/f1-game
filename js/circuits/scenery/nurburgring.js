@@ -72,9 +72,11 @@
       // it is ~40 m lower, so crowns that used to sit just over a shallow dip
       // now float 20+ m (float-audit: cones reported at nearest-road frac
       // 0.31 / lat 12 m, planted from this belt near 0.45). Widen the skip
-      // across the parallel zone. Restart on the belt's odd-node grid.
+      // across the parallel zone. Restart on the belt's odd-node grid. 0.5500, not
+      // 0.5515: node 0.5516 planted a pine 56 m out over the 0.17 leg's verge,
+      // 18 m in the air once the SRTM smoothing (#287) lowered that verge.
       const deep = (s0, s1, side) => (side > 0 && s0 === 0.215
-        ? [[0.215, 0.430], [0.480, 0.5515], [0.5631, s1]] : [[s0, s1]]);
+        ? [[0.215, 0.430], [0.480, 0.5500], [0.5631, s1]] : [[s0, s1]]);
       for (const [a0, a1] of [[0.215, 0.605], [0.650, 0.925]]) {
         for (const side of [-1, 1]) for (const [s0, s1] of deep(a0, a1, side)) {
           forestEdge(s0, s1, side, 41, {
@@ -365,7 +367,7 @@
 
       // General-admission grass banks cut into the treeline on the back section.
       spectatorHill(0.36, 0.46, 1, 14, { rows: 3, rise: 1.0, depth: 1.8, density: 0.38, step: 9 });
-      spectatorHill(0.70, 0.78, -1, 14, { rows: 3, rise: 1.0, depth: 1.8, density: 0.38, step: 9 });
+      spectatorHill(0.70, 0.762, -1, 14, { rows: 3, rise: 1.0, depth: 1.8, density: 0.38, step: 9 });  // ends before the Schumacher-S scaffold stand (0.766, same side)
 
       {
         const ang = 1.15 * 6.2832 % 6.2832;
