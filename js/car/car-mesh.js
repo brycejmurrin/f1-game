@@ -769,8 +769,8 @@ function _tailGlowRes() {
     cv.width = cv.height = 64;
     const g = cv.getContext("2d");
     const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
-    gr.addColorStop(0, "rgba(255,34,22,0.62)");
-    gr.addColorStop(0.45, "rgba(255,26,18,0.30)");
+    gr.addColorStop(0, "rgba(255,34,22,0.38)");
+    gr.addColorStop(0.4, "rgba(255,26,18,0.15)");
     gr.addColorStop(1, "rgba(255,20,14,0)");
     g.fillStyle = gr;
     g.fillRect(0, 0, 64, 64);
@@ -795,10 +795,12 @@ function drawTailGlow(groundMat, amt) {
   if (!(amt > 0) || !_tailGlowRes()) return;
   const W = _tgW, k = Math.min(1.8, Math.sqrt(amt));
   const hw = 1.25 * k, hl = 2.6 * k;   // half-width / half-length, metres
-  // Centre 3.6 m behind the car origin, 6 cm up so the road cannot z-fight it.
+  // Centred where the old point light's pool landed (the light sat 2.4 m back,
+  // aimed down-rear): ~1.5 m past the rear wing, 6 cm up so the road cannot
+  // z-fight it. The front half tucks under the car's own rear.
   for (let i = 0; i < 3; i++) {
     W[i] = groundMat[i] * hw; W[4 + i] = groundMat[4 + i]; W[8 + i] = groundMat[8 + i] * hl;
-    W[12 + i] = groundMat[12 + i] + groundMat[4 + i] * 0.06 - groundMat[8 + i] * (2.6 + hl);
+    W[12 + i] = groundMat[12 + i] + groundMat[4 + i] * 0.06 - groundMat[8 + i] * (2.4 + hl * 0.55);
   }
   W[3] = W[7] = W[11] = 0; W[15] = 1;
   _gfx.drawDecal(_tgMesh, W, _tgTex, _TG_OPTS);
