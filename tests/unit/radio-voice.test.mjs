@@ -126,7 +126,11 @@ test("every ANN_PRI kind resolves to a speaker, and the map agrees with radioWho
     const inControl = new RegExp(`"${k}"[^)]*\\)\\s*return "RACE CONTROL"`).test(who)
       || new RegExp(`return "RACE CONTROL"`).test(who) && who.split("RACE CONTROL")[0].includes(`"${k}"`);
     const inCoach = who.split("COACH")[0].includes(`"${k}"`) && !who.split("RACE CONTROL")[0].includes(`"${k}"`);
-    if (inControl) assert.equal(speaker, "control", `${k} is race control in radioWho but ${speaker} here`);
+    // The broadcaster (js/race/race-radio.js) has its own WHO line and speaks
+    // in the announcer's voice rather than on any of the three pit channels.
+    const inComm = new RegExp(`"${k}"\\)\\s*return "COMMENTARY"`).test(who);
+    if (inComm) assert.equal(speaker, "announcer", `${k} is the commentator in radioWho but ${speaker} here`);
+    else if (inControl) assert.equal(speaker, "control", `${k} is race control in radioWho but ${speaker} here`);
     else if (inCoach) assert.equal(speaker, "coach", `${k} is the coach in radioWho but ${speaker} here`);
     else assert.equal(speaker, "radio", `${k} is the driver's channel in radioWho but ${speaker} here`);
   }
@@ -606,7 +610,9 @@ test("every channel the radio partitions into is a considered decision in the en
   assert.ok(table, "could not find RADIO_CH in js/audio/engine.js");
   const voiced = new Set([...table[1].matchAll(/^\s*(\w[\w-]*):/gm)].map((m) => m[1]));
   // `coach` is the deliberate omission: the driving coach is not on a radio.
-  const SILENT = new Set(["coach"]);
+  // `announcer` too: in-race commentary (kind "comm") is the TV booth, not a
+  // radio transmission, so it gets no click, hiss or squelch.
+  const SILENT = new Set(["coach", "announcer"]);
   for (const ch of new Set(Object.values(RV.SPEAKERS)))
     assert.ok(voiced.has(ch) || SILENT.has(ch),
       `channel "${ch}" has no entry in RADIO_CH and is not in this test's silent set — decide which`);

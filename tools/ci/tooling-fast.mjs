@@ -75,6 +75,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // graining and blistering say different things (one heals, one does not),
   // the axle call names an end of the car, and it does not nag. ~0.1 s.
   "tests/unit/engineer.test.mjs",
+  // ...and the race radio: every phrasebook line fits its card when spoken,
+  // pools deal like a deck, gaps come from the timing loop, a pass must hold,
+  // lines wait for the straight and die when stale, commentary only while
+  // the player is watching. ~0.1 s.
+  "tests/unit/race-radio.test.mjs",
   "tests/unit/team-livery.test.mjs",
   // 10 s of pure geometry: builds all 297 catalog options and hashes each
   // mesh, so a part that stops changing the car is caught where the catalog
