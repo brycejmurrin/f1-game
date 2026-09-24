@@ -1294,19 +1294,91 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pm-panel-driving :is(#pm-incident-log, #pm-ai-decisions) { padding-inline-start: 1.5em; }
 
 /* APPEARANCE — same setting-row chrome as the rest of SETTINGS; colour wells
-   match MY TEAM / garage (floored chip height, plate-line border). */
+   match MY TEAM / garage (floored chip height, plate-line border). Live
+   preview + preset swatches sit above/beside the selects so dual accents are
+   obvious without leaving the sheet. */
+#pm-panel-appearance .pm-accent-preview {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--gap) * 0.75);
+  margin: 0 0 calc(var(--gap) * 0.75);
+  padding: calc(var(--gap) * 0.65) calc(var(--gap) * 0.75);
+  border-radius: var(--r-md);
+  background: var(--plate);
+  border: 1px solid var(--plate-line);
+}
+#pm-panel-appearance .pm-accent-preview-btn {
+  flex: 1 1 auto;
+  min-width: 0;
+  pointer-events: none;
+}
+#pm-panel-appearance .pm-accent-preview-hud {
+  flex: 0 0 auto;
+  min-width: calc(var(--chip-h) * 1.6);
+  height: var(--chip-h);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 calc(var(--gap) * 0.75);
+  border-radius: var(--r-sm);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 800;
+  font-style: italic;
+  letter-spacing: var(--ls-2);
+  border: 1px solid color-mix(in oklab, var(--accent-ink) 28%, transparent);
+}
+#pm-panel-appearance .pm-accent-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: calc(var(--gap) * 0.5);
+  margin: calc(var(--gap) * -0.25) 0 calc(var(--gap) * 0.35);
+}
+#pm-panel-appearance .pm-accent-chip {
+  width: max(var(--chip-h), calc(var(--tap-min) * 0.72));
+  height: max(var(--chip-h), calc(var(--tap-min) * 0.72));
+  padding: 0;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--plate-line);
+  background: var(--chip, var(--red));
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+#pm-panel-appearance .pm-accent-chip[aria-selected="true"] {
+  border-color: var(--text);
+  box-shadow: var(--edge);
+}
+#pm-panel-appearance .pm-accent-chip-custom {
+  /* Token-only rainbow so CUSTOM reads as "picker" without raw palette literals. */
+  background: conic-gradient(from 0.25turn, var(--red), var(--accent), var(--red));
+}
 #pm-panel-appearance .pm-accent-custom > div {
   display: flex; align-items: center; justify-content: flex-end; gap: calc(var(--gap) * 0.5);
 }
 #pm-panel-appearance input[type="color"] {
   flex: 0 0 auto;
-  width: max(52px, var(--tap-min));
+  width: max(var(--tap-min), calc(var(--chip-h) * 1.35));
   height: var(--chip-h);
   padding: 0;
   border-radius: var(--r-sm);
   border: 1px solid var(--plate-line);
   background: none;
   cursor: pointer;
+}
+#pm-panel-appearance .pm-accent-hextext {
+  width: 7.2ch;
+  height: var(--chip-h);
+  padding: 0 calc(var(--gap) * 0.6);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--plate-line);
+  background: var(--plate);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  letter-spacing: var(--ls-5);
+  text-transform: uppercase;
 }
 
 /* Every Settings page, not only STEERING / MUSIC: HUD SIZE and BUTTON SIZE
