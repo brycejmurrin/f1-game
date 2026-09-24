@@ -834,6 +834,7 @@
         "tests/unit/road-under-floor.test.mjs",
         "tests/unit/coplanar-faces.test.mjs",
         "tests/unit/props-tri-ratchet.test.mjs",
+        "tests/unit/scenery-ground-audit.test.mjs",
         "tests/unit/debris-hazard-hint.test.mjs",
         "tests/unit/spline-project-height.test.mjs",
         "tests/unit/shared-track-foundation-characterization.test.cjs",

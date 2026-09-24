@@ -69,6 +69,7 @@ const SWEEPS_ONLY = new Map([
   ["props-over-road.test.mjs", "test:sweeps — per-circuit geometry"],
   ["road-under-floor.test.mjs", "test:sweeps — per-circuit geometry"],
   ["scenery-grounding.test.mjs", "test:sweeps — per-circuit geometry"],
+  ["scenery-ground-audit.test.mjs", "test:sweeps — per-circuit geometry"],
   ["shared-track-foundation-characterization.test.cjs", "test:sweeps — per-circuit geometry"],
   ["spline-project-height.test.mjs", "test:sweeps — per-circuit geometry"],
 ]);

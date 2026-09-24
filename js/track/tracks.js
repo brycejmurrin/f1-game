@@ -1619,6 +1619,7 @@ const Tracks = (function () {
       return null;
     };
     let placeSeq = 0;
+    const THIN_PROP_H = 0.85;   // 0.8 m base sink + 5 cm: a shorter prop's top sits at or under the ground
     const place = (k, side, dist, sz, col) => {
       const r = [track.rx[k], track.ry[k], track.rz[k]];
       const t = [track.tx[k], track.ty[k], track.tz[k]];
@@ -1642,8 +1643,11 @@ const Tracks = (function () {
       const c = [cx, (gy !== null ? gy : groundYAt(k, dist)) + sz[1] / 2 - 0.8, cz];
       if (addBox(out, c, sz, col, [r, u, t]) === false) return;   // on-track: dropped, no phantom barrier
       note("prop", c, sz, { k, side });
-      // solid box → the car must stop before its inner face (sz[0] across, sz[2] long)
-      blockAt(k, side, dist - sz[0] / 2, sz[2] / 2);
+      // solid box → the car must stop before its inner face (sz[0] across, sz[2] long).
+      // Not a box shorter than the 0.8 m sink + 5 cm: its top is at or under the
+      // ground, so it is a buried kerb flash / paint decal — a wall there was an
+      // INVISIBLE wall 0.4-2 m past the road edge on 12 circuits (2026-09-24 audit).
+      if (sz[1] >= THIN_PROP_H) blockAt(k, side, dist - sz[0] / 2, sz[2] / 2);
       // …and the scenery engine must know a solid body physically stands here,
       // which blockAt does NOT say — it only moves the driving limit. Without
       // this, roadside foliage happily grows straight through every placed prop.
