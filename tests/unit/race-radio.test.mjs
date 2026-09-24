@@ -109,6 +109,7 @@ function race(opts = {}) {
     lapsTarget: opts.laps || 20, timeTrial: false, practice: false, camMode: opts.cam || 0, hudProfile: "standard",
     LAT_MAX: 30, vTop: () => 80, raceRound: 0, announceBusy: false,
     cautionInfo: () => ({ level: G._caution || 0 }),
+    cautionLevel: () => G._caution || 0,
     store: { get: (k, d) => (store.has(k) ? store.get(k) : d), set: (k, v) => store.set(k, v) },
     announce: (msg, dur, kind) => { said.push({ t: +G.raceT.toFixed(2), msg, kind }); return true; },
   };
@@ -134,7 +135,7 @@ function race(opts = {}) {
 test("the timing-loop gap is the time between two cars at the same line, not prog/speed", () => {
   const f = RF.create();
   const a = car("AAA", 1000, 80), b = car("BBB", 920, 80);
-  const G = { state: "race", raceT: 0, cars: [a, b], player: b, track: { total: LAP }, cautionInfo: () => ({ level: 0 }) };
+  const G = { state: "race", raceT: 0, cars: [a, b], player: b, track: { total: LAP }, cautionInfo: () => ({ level: 0 }), cautionLevel: () => 0 };
   let out;
   for (let i = 0; i < 600; i++) {
     G.raceT += 1 / 60;
@@ -149,7 +150,7 @@ test("the timing-loop gap is the time between two cars at the same line, not pro
 test("a pass counts only once the new order has HELD", () => {
   const f = RF.create();
   const a = car("AAA", 1000, 60), b = car("BBB", 999, 60), p = car("PLY", 500, 60, { isPlayer: true });
-  const G = { state: "race", raceT: 0, cars: [a, b, p], player: p, track: { total: LAP }, cautionInfo: () => ({ level: 0 }) };
+  const G = { state: "race", raceT: 0, cars: [a, b, p], player: p, track: { total: LAP }, cautionInfo: () => ({ level: 0 }), cautionLevel: () => 0 };
   const passes = [];
   const tick = () => { G.raceT += 0.1; for (const c of G.cars) c.prog += c.speed * 0.1; passes.push(...f.observe(G, 0.1).ev.filter((e) => e.type === "pass")); };
   for (let i = 0; i < 40; i++) tick();
@@ -166,7 +167,7 @@ test("a pass counts only once the new order has HELD", () => {
 test("a car in the pit lane is not overtaken — that is a pit stop", () => {
   const f = RF.create();
   const a = car("AAA", 1000, 60), b = car("BBB", 950, 60), p = car("PLY", 500, 60, { isPlayer: true });
-  const G = { state: "race", raceT: 0, cars: [a, b, p], player: p, track: { total: LAP }, cautionInfo: () => ({ level: 0 }) };
+  const G = { state: "race", raceT: 0, cars: [a, b, p], player: p, track: { total: LAP }, cautionInfo: () => ({ level: 0 }), cautionLevel: () => 0 };
   const evs = [];
   const tick = () => { G.raceT += 0.1; for (const c of G.cars) c.prog += c.speed * 0.1; evs.push(...f.observe(G, 0.1).ev); };
   for (let i = 0; i < 40; i++) tick();
@@ -368,7 +369,7 @@ function sim(cars, laps = 20) {
   let lvl = 0;
   const G = { state: "race", raceT: 0, cars, player: cars.find((c) => c.isPlayer), track: { total: SIM_L }, lapsTarget: laps,
     timeTrial: false, practice: false, camMode: 0, hudProfile: "standard", LAT_MAX: 30, vTop: () => 80, raceRound: 0,
-    announceBusy: false, cautionInfo: () => ({ level: lvl }), store: null,
+    announceBusy: false, cautionInfo: () => ({ level: lvl }), cautionLevel: () => lvl, store: null,
     announce: (msg, dur, kind) => { said.push({ t: G.raceT, msg, kind }); return true; } };
   const radio = RR.create(G, { seed: 3 });
   const flagOut = () => G.cars.some((c) => c.finished && !c.retired);

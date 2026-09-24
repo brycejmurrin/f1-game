@@ -2725,6 +2725,12 @@ async function startRaceBody() {
   // shards, marbles and knocked-over cones — visible on the grid, and
   // RaceControl can fly a caution for debris nobody produced this race.
   DebrisWorld.reset();
+  // …and the broadcast layer: queued cards ("RETIREMENT", "BOX BOX") and the
+  // results commentary were cleared only by quitToMenu, so RESTART and NEXT
+  // RACE played the last race's over this one's countdown.
+  announceT = 0; _annPri = 0; _annFloor = 0; _annQueue.length = 0; els.announce.hidden = true;
+  if (announcer.stop) announcer.stop();
+  if (hud.resetRace) hud.resetRace();
   rlap("resets");
   loadTrack(trackIdx);
   rlap("loadTrack");
@@ -2853,7 +2859,9 @@ async function startRaceBody() {
   // mashed on the title (navOpen() false) would fire at lights-out.
   Input.clearEdges();
   if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.setVenue(track.def); GameAudio.startEngine(); GameAudio.startMusic(trackIdx); }
-  if (soundOn && isRaining()) GameAudio.startRain();   // rain patter — a damp "wet" track is silent
+  // rain patter — a damp "wet" track is silent — and it must STOP too: a
+  // restart after a changeable race had arced into rain kept playing it dry.
+  if (soundOn) { if (isRaining()) GameAudio.startRain(); else GameAudio.stopRain(); }
   warmCarAssets();            // meshes + atlases HERE, not on the first countdown frame (see warmCarAssets)
   DebrisWorld.prime(); updateHud(true);   // prime: build the side-world HERE, not on the lights-out frame (see DebrisWorld.prime)
 }
@@ -3817,14 +3825,19 @@ function arrToHex(a) { const f = (v) => ("0" + Math.round(Math.max(0, Math.min(1
 // the action. Returns true when the action ran. Disarm is the caller's rebuild
 // or any other click path replacing the node.
 function armConfirm(btn, armedText, action) {
+  // An aria-label outranks the text, so a labelled button (the livery ✕) was
+  // announced unchanged when armed; the armed state goes into the name too.
+  const name = btn.getAttribute("aria-label");
   if (!btn.dataset.armed) {
     btn.dataset.armed = "1";
     btn.textContent = armedText;
     btn.classList.add("armed");
+    if (name) { btn.dataset.name = name; btn.setAttribute("aria-label", "Confirm: " + name + ". Press again"); }
     return false;
   }
   delete btn.dataset.armed;
   btn.classList.remove("armed");
+  if (btn.dataset.name) { btn.setAttribute("aria-label", btn.dataset.name); delete btn.dataset.name; }
   action();
   return true;
 }
@@ -3865,6 +3878,11 @@ function syncRotateBlocker(moveFocus) {
   // outside itself: the OPEN CONTROLS roundtrip landed on RESUME instead of
   // back on the blocker's button. `paused` survives; the card returns the
   // moment the blocker leaves (rotate to landscape mid-pause and it is there).
+  // A live race does not run on behind the blocker: turning the phone upright
+  // mid-race used to leave the field (and TOUCH's auto-throttle) racing on.
+  // rotateBlockMql as well as the box: a DOM with no stylesheet (the node
+  // game-vm harness) reads every display as shown, and would pause every race.
+  if (active && rotateBlockMql.matches && !paused && (state === "race" || state === "count") && !netPlay.active()) setPaused(true);
   if (paused) els.pausemenu.hidden = active;
   if (active && moveFocus) requestAnimationFrame(() => {
     const first = $("rotate-controls"); if (first && getComputedStyle(box).display !== "none") first.focus();
@@ -3877,6 +3895,7 @@ function quitToMenu() {
   sessionEntry.cancel();
   qualiSheet.close();
   _ltBase = null; _ltFlash = 0;   // the lightning's saved race base is not the menu's
+  if (announcer.stop) announcer.stop();   // the results commentary ran on over the title for up to 16 s
   shake = 0; hitStop = 0;
   PerfGov.sentinelArm(false); if (netPlay.active()) netPlay.stop("local"); hideCamPicker();
   closeLightTuner(false);
@@ -8382,8 +8401,8 @@ function openCareer() {
     driverIdx = c.seat;
     recomputePlayerMods();
   }
-  careerUi.openHub();
-  els.overlay.hidden = true;
+  // vt: the same crossfade RACE / SEASON / GARAGE already take off the title.
+  vt(() => { careerUi.openHub(); els.overlay.hidden = true; });
   if (soundOn) GameAudio.uiSelect();
   scheduleFlybyTrack(true);   // the hub's next round, pre-built behind it
 }
@@ -8391,8 +8410,7 @@ function openCareer() {
 // career flow: nothing has been chosen yet, so a save's rules must not be live —
 // the picker's own handler calls openCareer() once a slot is taken.
 function openCareerSlots() {
-  careerUi.openSlots();
-  els.overlay.hidden = true;
+  vt(() => { careerUi.openSlots(); els.overlay.hidden = true; });
   if (soundOn) GameAudio.uiSelect();
 }
 function refreshCareerButton() {
@@ -8556,6 +8574,8 @@ $("q-sim").onclick = () => {
   $("quali").classList.add("q-done");
   qualiSheet.build(quali.rows());
   qualiNet.refreshQualiGate();
+  // .q-done hides SIMULATE itself, which held focus; the next step is the grid.
+  if (!$("q-go").disabled) $("q-go").focus();
 };
 $("q-go").onclick = () => {
   // Guarded as well as disabled: the button is the only way out of this sheet,
@@ -8598,7 +8618,9 @@ $("q-back").onclick = () => {
   qualiSheet.close();
   quali.clear();          // nothing was run; the next visit draws its own sheet
   session = "race";
-  qualiNet.hasArmed() ? qualiNet.resetOnBackWithAbort() : ($("race-settings").hidden = false);
+  // Rebuilt on the way back (laps/weather kept): after NEXT ROUND it still
+  // held the previous circuit's lap chips and FULL value.
+  qualiNet.hasArmed() ? qualiNet.resetOnBackWithAbort() : (raceSettings.buildRaceSettings(), $("race-settings").hidden = false);
 };
 
 // MY TEAM customize dialog — js/career/custom-team.js (CustomTeam.create above).
@@ -8716,7 +8738,7 @@ $("cs-done").onclick = () => {
   // away if you change your mind.
   if (garageReturn === "select") { raceSettings.openRaceSettings("select"); return; }
   buildSelect();
-  els.overlay.hidden = false;   // only the title screen's GARAGE button gets here
+  vt(() => { els.overlay.hidden = false; });   // only the title screen's GARAGE button gets here
 };
 $("cs-unlimited").onclick = () => {
   unlimitedBudget = !unlimitedBudget;
@@ -8765,6 +8787,11 @@ els.resNext.onclick = () => {
 
 function setPaused(p) {
   if (state !== "race" && state !== "count") return; hideCamPicker();
+  // THE PIT GARAGE HOLDS THE PAUSE. openPitWork freezes the race behind
+  // #carsetup; a Start/P press or RESUME on a pause card stacked over it
+  // (hidden tab) used to run the race UNDER the garage, the box timer expired,
+  // and DONE then charged nothing. Its own DONE/BACK are the only way out.
+  if (!p && garageReturn === "pit" && !$("carsetup").hidden) { els.pausemenu.hidden = true; return; }
   paused = p;
   if (!p) {
     closeLightTuner(false); closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();
@@ -8932,7 +8959,10 @@ if ($("pm-fullscreen")) {
   el.hidden = false;
   const x = $("ios-install-x");
   if (x) x.onclick = dismiss;
-  // It is a suggestion, not a gate: the first race dismisses it too.
+  // It is a suggestion, not a gate: the first title-menu choice dismisses it,
+  // or it sat over the next screen's BACK/DONE and the HUD's speed readout.
+  const ov = $("overlay");
+  if (ov) ov.addEventListener("click", (e) => { if (e.target.closest && e.target.closest(".bigbtn")) dismiss(); });
   setTimeout(dismiss, 15000);
 })();
 applyMirrorControls();
@@ -9032,6 +9062,12 @@ window.addEventListener("pagehide", () => { PerfGov.sentinelArm(false); _disarmP
 customTeam.init();
 raceSettings.wireButtons();
 customTeam.syncCustomTeam();   // inject "MY TEAM" so saved selections and chips resolve
+// LEGACY CODE-KEYED POINTS -> STABLE DRIVER IDS, here and not in SeasonCal.load
+// (which runs at eval, before MY TEAM is in Teams.LIST, so "YOU" matched no
+// roster entry). 6091fb859 dropped this call with the move to SeasonCal.load,
+// whose comment still promised it; from then on an old save's points stayed
+// under the display code and a custom-code edit split the player in two.
+if (season && store.get("season", null)) { season = GameStore.migrateSeasonPoints(season); SeasonCal.save(season); }
 teamIdx = idxOr(teamIdx, Teams.LIST.length, 2);
 clampDriverIdx();
 // Clamp a legacy positional selection before migrating it to stable identity.
