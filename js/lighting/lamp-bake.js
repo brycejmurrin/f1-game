@@ -150,3 +150,4 @@ const LampBake = (function () {
 
   return { bake, forTrack, toHalf, MAX_TEXELS };
 })();
+Object.freeze(LampBake);
