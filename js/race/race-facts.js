@@ -77,21 +77,31 @@ const RaceFacts = (function () {
       return ta != null && tb != null ? Math.max(0, tb - ta) : null;
     }
 
-    // Finished cars first, in finishing order (their prog froze at the line and
-    // the field would otherwise "pass" them), then the running field by prog.
+    // By distance, with a finished car held at the prog it took the flag with
+    // (it stops there, and the field would otherwise "pass" it). NOT c.finPos:
+    // that stays 0 until endRace builds the results, so it cannot order anything
+    // mid-race. Equal distance — the lead lap all flagged — goes by flag time.
+    // A lapped car flagged at its next crossing froze a lap short, so it stays
+    // below the lead-lap cars still running to the line.
+    const distOf = (c) => {
+      const s = st.get(c);
+      return c.finished && s && s.finProg != null ? s.finProg : (c.prog || 0);
+    };
     function rank(list) {
       const out = [];
       for (const c of list) if (!c.retired) out.push(c);
       out.sort((a, b) => {
+        const d = distOf(b) - distOf(a);
+        if (Math.abs(d) > 1) return d;
         if (a.finished !== b.finished) return a.finished ? -1 : 1;
-        if (a.finished) return (a.finPos || 0) - (b.finPos || 0);
-        return (b.prog || 0) - (a.prog || 0);
+        if (a.finished) return (st.get(a).finT || 0) - (st.get(b).finT || 0);
+        return d;
       });
       return out;
     }
 
     function observe(G, dt) {
-      const ev = [];
+      const ev = [], finishers = [];
       const p = G.player;
       if (!p || !G.cars || !G.track) return { f: null, ev };
       if (G.cars !== cars) { reset(); cars = G.cars; }
@@ -106,7 +116,13 @@ const RaceFacts = (function () {
         // FIRST SIGHT stamps nothing: the lines behind a car were crossed before
         // anyone was watching, and stamping them "now" would invent gaps.
         if (s.fresh) { s.fresh = false; s.cp = i; }
-        if (i < s.cp) s.cp = i;                     // shoved backwards: give the checkpoints back
+        if (i < s.cp) {                             // shoved backwards: give the checkpoints back
+          s.cp = i;
+          // …and the player's gap history with them. A red-flag restart puts the
+          // field back on the grid, bunched; comparing those gaps with the
+          // pre-flag ones logged at the same checkpoints read as "6.5 quicker".
+          if (c === p) hist.clear();
+        }
         while (s.cp < i) {
           s.cp++;
           if (s.cp >= 0) { const k = s.cp % RING; s.times[k] = t; s.idx[k] = s.cp; }
@@ -129,11 +145,14 @@ const RaceFacts = (function () {
         }
         if ((c.lap || 0) > s.lap && c === p) ev.push({ type: "playerLap", lap: c.lap });
         s.lap = c.lap || 0; s.lastLap = c.lastLap || 0;
-        if (c.finished && !s.finished) ev.push({ type: "finish", car: c, pos: c.finPos || 0 });
+        if (c.finished && !s.finished) { s.finProg = c.prog || 0; s.finT = t; finishers.push(c); }
         s.finished = !!c.finished;
       }
 
       order = rank(cars);
+      // The finish position is the flagged car's place in the ranking — after
+      // ranking, so a car that just took the flag is placed by it.
+      for (const c of finishers) ev.push({ type: "finish", car: c, pos: order.indexOf(c) + 1 });
       if (!started && G.state === "race" && t > 0) {
         started = true;
         grid = new Map(order.map((c, i) => [c, i + 1]));

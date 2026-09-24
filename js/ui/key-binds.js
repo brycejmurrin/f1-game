@@ -262,7 +262,7 @@ function create(G) {
       ["Steer", ["left", "right"]], ["Gas", ["throttle"]], ["Brake", ["brake"]],
       ["Boost", ["boost"], "tap to toggle"], ["Overtake", ["overtake"]], ["Active aero", ["aero"]],
       ["Camera", ["camera"], "cycles"], ["Shift up", ["shiftUp"]], ["Shift down", ["shiftDown"], "when GEARS: MANUAL"],
-      ["Look back", ["lookBack"], "hold"], ["Recover", ["recover"]], ["Pause", ["pause"]],
+      ["Look back", ["lookBack"], "hold"], ["Recover", ["recover"]], ["Radio check", ["radio"], "gaps from the engineer"], ["Pause", ["pause"]],
     ],
   });
   pad = section({
@@ -279,7 +279,7 @@ function create(G) {
       ["Steer", "left stick / D‑pad"], ["Gas", ["throttle"]], ["Brake", ["brake"], "(triggers are analog)"],
       ["Boost", ["boost"], "toggle"], ["Overtake", ["overtake"]], ["Active aero", ["aero"]],
       ["Camera", ["camera"], "cycles"], ["Shift up", ["shiftUp"]], ["Shift down", ["shiftDown"]],
-      ["Look back", ["lookBack"], "hold"], ["Recover", ["recover"]], ["Pause", ["pause"]],
+      ["Look back", ["lookBack"], "hold"], ["Recover", ["recover"]], ["Radio check", ["radio"], "gaps from the engineer"], ["Pause", ["pause"]],
     ],
   });
   // A pad that appears mid-session (gamepadconnected fires on its first press)

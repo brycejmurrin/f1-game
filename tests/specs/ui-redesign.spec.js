@@ -341,7 +341,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   // one it pins, so the two files cannot drift apart.
   expect(settings.doorIds).toEqual([
     "pm-open-controls", "pm-open-driving", "pm-open-display",
-    "pm-advanced", "pm-audio",
+    "pm-open-appearance", "pm-advanced", "pm-audio",
   ]);
   expect(settings.allPainted).toBe(true);
   expect(settings.overflowX).toBeLessThanOrEqual(1);

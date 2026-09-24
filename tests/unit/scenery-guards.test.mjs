@@ -176,11 +176,11 @@ test("layered spectator banks cannot coincide", () => {
   // — the gap alone leaves two identical ladders' END CAPS on one plane, which
   // is where 400 of okayama's coplanar pairs lived (2026-09-22).
   const src = read("js/track/scenery/nature.js");
-  assert.match(src, /const slot = hillSeq\+\+ % 5;/,
+  assert.match(src, /const slot = hillSeq\+\+ % 5, SEP = TrackGeom\.MIN_SEP;/,
     "spectatorHill must take a deterministic per-call slot");
-  assert.match(src, /gap \+= 0\.003 \+ slot \* 0\.01;/,
+  assert.match(src, /gap \+= 0\.017 \+ slot \* SEP;/,
     "the slot must nudge the bank OUTWARD across the road");
-  assert.match(src, /const sShift = 0\.007 \+ \(\(slot \* 2\) % 5\) \* 0\.01;/,
+  assert.match(src, /const sShift = 0\.007 \+ \(\(slot \* 2\) % 5\) \* SEP;/,
     "and ALONG the road, on a different permutation of the same positions");
 });
 

@@ -312,7 +312,7 @@ const AudioPanel = (() => {
         cnote.textContent = c === "off" ? "The engineer only talks tyres and pit stops."
           : c === "key" ? "Flags, places won and lost, the last lap and the result — nothing else."
           : c === "chatty" ? "Everything: gaps every lap, pace, battery, who is closing and how fast."
-          : "Places, gaps when a fight is on, laps to go, flags and the result. T asks for a radio check.";
+          : "Places, gaps when a fight is on, laps to go, flags and the result. RADIO CHECK (see Controls) asks for the gaps.";
       }
       const anote = $("as-ann-note");
       if (anote) anote.textContent = !annReady ? "This browser has no speech voices, so the loading card stays written."

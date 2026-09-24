@@ -51,9 +51,13 @@ test("Suzuka keeps its elevation, crossover, and track-owned models aligned", as
     { s: 0.24, halfM: 620, rise: 26 },
   ]);
   expect(audit.raw.bridges).toEqual([{ s: 0.845, halfM: 160, rise: 10 }]);
-  expect(audit.built.elevations[0].s).toBeCloseTo(0.45, 6);
-  expect(audit.built.elevations[1].s).toBeCloseTo(0.6275, 6);
-  expect(audit.built.bridges[0].s).toBeCloseTo(0.2325, 6);
+  // Built fracs are the source fracs mapped through startFrac 0.9942 alone
+  // (s + 0.0058). They read 0.45 / 0.6275 / 0.2325 while the bogus
+  // sceneryStartFrac 0.6125 added its shift on top; it was removed on
+  // 2026-09-23 (DEFECT-LEDGER "suzuka — FIXED") and the road did not move.
+  expect(audit.built.elevations[0].s).toBeCloseTo(0.0683, 6);
+  expect(audit.built.elevations[1].s).toBeCloseTo(0.2458, 6);
+  expect(audit.built.bridges[0].s).toBeCloseTo(0.8508, 6);
 
   expect(audit.relief.esses).toBeGreaterThan(4);
   expect(audit.relief.degner).toBeLessThan(-2);

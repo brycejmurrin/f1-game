@@ -209,15 +209,16 @@ winding — routing the mesh through `TrackGeom.emit` coplanar-fought bay
 panels (bahrain/istanbul) and left hungaroring entry lamps floating.
 
 ### S5 — Coplanar ground slabs vs terrain
-**Severity:** medium · **Status:** FIXED here (seating) · **Confidence:** high
+**Severity:** medium · **Status:** FIXED (ship tip + here) · **Confidence:** high
 
 **Where:** `js/track/tracks.js` universal ground / `groundPatch` / water sheet
 
 **What:** Large ground slabs and patch tops sat on the terrain plane.
 
-**Fix:** Seat patch tops 2 cm below terrain estimate; water sheet 2 cm deeper;
-universal floor nudged similarly. Did **not** explode `FIGHT_MAX` (no baseline
-campaign).
+**Fix:** Ship tip removed the universal floor slab (`buildFloor` already fills
+≥1400 m) and gave `groundPatch` a per-call `MIN_SEP` lift. Here: water sheet
+seated 2 cm deeper and `waterOccupied` skips stacked bands (S7). Did **not**
+explode `FIGHT_MAX` (no baseline campaign).
 
 ### S6 — Props-over-road blind to band-spanning solids
 **Severity:** medium · **Status:** FIXED here · **Confidence:** high

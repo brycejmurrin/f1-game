@@ -60,8 +60,17 @@ function meshHash(mesh) {
   feed(mesh.pos); feed(mesh.col); feed(mesh.mat);
   return (x >>> 0).toString(16) + ":" + (mesh.pos ? mesh.pos.length : 0);
 }
-const buildFor = (setup, team) => meshHash(M.Car3D.build(team.color, team.color2,
-  { teamId: team.id, num: 4, parts: M.Parts.getVisualTiers(setup, team) }));
+// MEMOIZED: both tests below walk every catalog option on the same team and
+// base, so they asked Car3D.build for the same ~300 cars twice (2 x 28 s,
+// measured 2026-09-24). Each test still builds whatever it needs on its own
+// when run alone; together the second one reads the first one's hashes.
+const built = new Map();
+const buildFor = (setup, team) => {
+  const key = team.id + "|" + JSON.stringify(setup);
+  if (!built.has(key)) built.set(key, meshHash(M.Car3D.build(team.color, team.color2,
+    { teamId: team.id, num: 4, parts: M.Parts.getVisualTiers(setup, team) })));
+  return built.get(key);
+};
 
 test("every catalog option builds a car distinct from every other in its category", () => {
   const base = { ...M.Parts.DEFAULTS };

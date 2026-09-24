@@ -63,6 +63,7 @@ const Tracks = (function () {
       hw[k] = lerp(dhw[di], dhw[di + 1], f);
       bank[k] = lerp(dbank[di], dbank[di + 1], f);
     }
+    if (def.path && def.id && hasRealElevation(def.id)) surveyHeights(def, px, py, pz, n);
     const dress = def._sceneryShift || 0;
     const bridges = def.bridges;
     if (bridges) for (const b of bridges) {
@@ -294,6 +295,11 @@ const Tracks = (function () {
       track.propsGeo = propsGeo;
       propsGeo._keepPositions = propsGeo._keepFullGeometry = keepGeometry;
       lap("propsSeal", "geo");
+      // Index-only strip of never-visible triangles (js/track/core/hidden-faces.js);
+      // vertices untouched, so the audits' primitive ranges stay valid.
+      propsGeo._hidden = TrackHiddenFaces.strip(propsGeo,
+        { groundY: (x, z) => terrainY(track, x, z), terrain: track.terrainGeo });
+      lap("propsHidden", "geo");
       // THE DISCRIMINATOR (apex26.propsUnchunked, diagnostic only, default off).
       //
       // The census measured GPU time invariant to pixel count, which rules out
@@ -978,25 +984,10 @@ const Tracks = (function () {
     const groundYAt = (k, dist, side) => {
       return surface.heightAt(k, dist, side);
     };
-    // Universal ground floor: one big flat slab at the lap's low point, sized to
-    // reach well past the farthest scenery. The terrain ribbon only extends ~120 m
-    // from the road, so without this, distant hills/skylines would sit over open
-    // sky (reading as "floating"). Tucked just under the ribbon's far edge so it
-    // only shows through the gap beyond it. Coloured from the circuit's ground.
-    // WGX: skip — this fused props box is the brown chase void (hard lamp
-    // triangles on two 1600 m faces). Distant fill is the floor mesh instead.
-    if (!(G && typeof G.roadLutReady === "function")) {
-      let gx = 0, gz = 0;
-      for (let i = 0; i < n; i++) { gx += px[i]; gz += pz[i]; }
-      gx /= n; gz /= n;
-      let grad = 0;
-      for (let i = 0; i < n; i++) grad = Math.max(grad, Math.hypot(px[i] - gx, pz[i] - gz));
-      const gc = pal.grass || [0.2, 0.38, 0.18];
-      // Seat 2 cm below the previous top so the universal fill does not
-      // coplanar-fight the terrain ribbon (docs/BUGS.md S5).
-      addBox(out, [gx, pyMin - 5.02, gz], [grad * 2 + 1600, 4, grad * 2 + 1600],
-             [gc[0] * 0.9, gc[1] * 0.9, gc[2] * 0.9]);
-    }
+    // The universal ground slab that stood here (a 1600 m addBox under the lap's
+    // low point) is gone: buildFloor's mesh already reaches >= 1400 m past the
+    // track on every backend, WGX had dropped the slab for its lamp artefacts,
+    // and its top fought the terrain on 34 circuits (439 pairs).
     const onTrack = (x, z, margin, pitMargin) => {
       _pitReject = false;
       const rFull = grid.maxHw + pitMax + margin + ds + 1;
@@ -1290,6 +1281,7 @@ const Tracks = (function () {
       const span = Math.abs(s1 - s0) >= 1 - 1e-9 ? n - 1 : ((k1 - k0) + n) % n;
       return waterEmit(waterRaster(k0, k0 + span, side, gap0, gap1, c), c, col, opts);
     };
+    let patchSeq = 0;
     const groundPatch = (k, side, gap, sz, col, opts) => {
       opts = opts || {};
       if (!finiteVec(sz, 3, true)) {
@@ -1298,6 +1290,11 @@ const Tracks = (function () {
       }
       const r = [track.rx[k], track.ry[k], track.rz[k]], u = upOf(track, k);
       const t = [track.tx[k], track.ty[k], track.tz[k]], pieces = Math.max(2, Math.round(opts.samples || 4));
+      // Every patch's top sat AT groundY, so overlapping patches (zolder's dusk
+      // sand over its apron) shared one plane, as did a plinth flush with the
+      // ground. A per-call slot lifts each 1-5 MIN_SEP: five calls in a row
+      // never share a plane.
+      const lift = (1 + patchSeq++ % 5) * TrackGeom.MIN_SEP;
       const midDist = gap + sz[0] / 2;
       const mid = [px[k] + r[0] * side * (hw[k] + midDist), groundYAt(k, midDist), pz[k] + r[2] * side * (hw[k] + midDist)];
       const emitted = modelGroup(opts.id || `ground-patch-${k}`, {
@@ -1308,7 +1305,7 @@ const Tracks = (function () {
           const dist = gap + partW * (i + 0.5);
             const c = [
             px[k] + r[0] * side * (hw[k] + dist),
-            groundYAt(k, dist) - sz[1] / 2 - 0.02,   // 2 cm below terrain estimate (S5)
+            groundYAt(k, dist) - sz[1] / 2 + lift,
             pz[k] + r[2] * side * (hw[k] + dist),
           ];
           RAW.addBox(stage, c, [partW, sz[1], sz[2]], col, [r, u, t]);
@@ -2566,13 +2563,52 @@ const Tracks = (function () {
     return (typeof CircuitElevations !== "undefined") && !!(CircuitElevations[id] && CircuitElevations[id].length);
   }
 
+  // The survey at every 4 m node, not just at the control points: a control
+  // point can only carry its own height, and splining between them drew a
+  // straight line across a dip under dijon's 399 m first segment (9.7 m off).
+  // Each node is projected onto the source trace (a window walking forward, so
+  // a hairpin's other leg is never picked) and reads the table at that ARC
+  // fraction, which is independent of startFrac / reverse. The table is
+  // periodic, so the lap closes without a drift correction.
+  function surveyHeights(def, px, py, pz, n) {
+    const P = def.path.pts, N = P.length, arc = new Float64Array(N + 1);
+    for (let i = 1; i <= N; i++) arc[i] = arc[i - 1] + __M.hypot(P[i % N][0] - P[i - 1][0], P[i % N][1] - P[i - 1][1]);
+    const near = (x, z, i) => {
+      const a = P[i], b = P[(i + 1) % N], ex = b[0] - a[0], ez = b[1] - a[1], l2 = ex * ex + ez * ez || 1;
+      const t = __M.max(0, __M.min(1, ((x - a[0]) * ex + (z - a[1]) * ez) / l2));
+      const qx = a[0] + ex * t - x, qz = a[1] + ez * t - z;
+      return [qx * qx + qz * qz, arc[i] + t * (arc[i + 1] - arc[i])];
+    };
+    let seg = 0, bd = Infinity;
+    for (let i = 0; i < N; i++) { const d = near(px[0], pz[0], i)[0]; if (d < bd) { bd = d; seg = i; } }
+    const dir = def.reverse ? -1 : 1, y0 = elevationAt(def.id, near(px[0], pz[0], seg)[1] / arc[N]);
+    const base = py[0];
+    for (let k = 0; k < n; k++) {
+      let best = null, bi = seg;
+      for (let o = -2; o <= 8; o++) {
+        const i = (((seg + dir * o) % N) + N) % N, r = near(px[k], pz[k], i);
+        if (!best || r[0] < best[0]) { best = r; bi = i; }
+      }
+      seg = bi;
+      py[k] = base + elevationAt(def.id, best[1] / arc[N]) - y0;
+    }
+  }
+
   // def.path (the OSM trace) is the ONLY centreline: no path is a build error.
   function realPoints(id, path, baseHW) {
     if (!path || !path.pts || !path.pts.length) throw new Error("Tracks: circuit \"" + id +
       "\" has no `path` — js/circuits/" + id + ".js must carry `path: { len, pts }` (tools/track/import-circuit-path.mjs emits it)");
-    const N = path.pts.length;
     const real = hasRealElevation(id);
-    let pts = path.pts.map((p, i) => [p[0], real ? elevationAt(id, i / N) : 0, p[1], baseHW, 0]);
+    // The elevation tables are 64 samples by ARC fraction; reading them at the
+    // point INDEX put fuji's 33 m profile 0.29 lap out of place (its 1.29 km
+    // straight is one segment). Do NOT add points to carry a straight's own
+    // profile: startFrac / sceneryStartFrac are INDEX fractions, and a denser
+    // path rotated fuji's whole lap 217 m under its scenery (tried 2026-09-24).
+    const src = path.pts;
+    const N = src.length;
+    const arc = new Float64Array(N + 1);
+    for (let i = 1; i <= N; i++) { const a = src[i - 1], b = src[i % N]; arc[i] = arc[i - 1] + __M.hypot(b[0] - a[0], b[1] - a[1]); }
+    let pts = src.map((p, i) => [p[0], real ? elevationAt(id, arc[i] / arc[N]) : 0, p[1], baseHW, 0]);
     for (let it = 0; it < 2; it++) {
       const sx = pts.map((p) => p[0]), sz = pts.map((p) => p[2]);
       const L = 0.25;
@@ -2584,7 +2620,7 @@ const Tracks = (function () {
     }
     if (real) {
       const eEnd = pts[N - 1][1] - pts[0][1];
-      for (let i = 0; i < N; i++) pts[i][1] -= eEnd * (i / (N - 1));
+      for (let i = 0; i < N; i++) pts[i][1] -= eEnd * (arc[i] / arc[N - 1]);
     }
     return pts;
   }
