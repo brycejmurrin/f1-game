@@ -263,4 +263,48 @@ body.rotate-help-open #rotate-device { display: none !important; }
   #rotate-race, #rotate-controls, #rotate-exit { width: min(100%, 22rem); }
 }
 
+/* ---------- TITLE SCREEN MOTION (js/ui/title-fx.js) ---------- */
+/* MENU ANIMATIONS: REDUCED, or an unset preference on an OS that asks for
+   reduced motion, puts data-motion="reduce" on <html>. Same shape as the
+   prefers-reduced-motion backstop in css/tokens.css — instant and
+   non-repeating rather than `none`, so a one-shot reveal still lands on its
+   end state — but keyed on the player's choice, and scoped to the title
+   screen. !important for the backstop's reason: it has to beat every
+   per-element animation shorthand without matching their specificity. */
+:root[data-motion="reduce"] #overlay *,
+:root[data-motion="reduce"] #overlay *::before,
+:root[data-motion="reduce"] #overlay *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+/* A hidden tab stops spending frames on a menu nobody can see. */
+#overlay[data-paused] *,
+#overlay[data-paused] *::before,
+#overlay[data-paused] *::after { animation-play-state: paused !important; }
+
+/* ---------- TITLE BUTTONS UNDER FORCED COLORS / MORE CONTRAST ---------- */
+/* css/tokens.css restates selection and panel edges for forced-colors; this
+   is the title screen's half. .bigbtn draws itself with a gradient fill and
+   `border: none`, and forced colors computes that gradient to nothing, so a
+   title door became bare text floating on Canvas. A system-colour border gives
+   it back its edge. The focus ring stays an OUTLINE — never outline:none plus
+   a box-shadow, which forced colors strips — recoloured to Highlight and drawn
+   inset (the base :focus-visible reason: #overlay clips an outset ring). */
+@media (forced-colors: active) {
+  #overlay .bigbtn { border: 2px solid ButtonText; }
+  #overlay .bigbtn:focus-visible {
+    outline: 3px solid Highlight;
+    outline-offset: -5px;
+  }
+  #disclaimer { border-color: CanvasText; }
+}
+/* prefers-contrast: more — css/components.css already makes the sheets opaque;
+   here the title doors get a full-strength edge and the disclaimer drops its
+   75% text mix, the one run of small print on the screen. Tokens only. */
+@media (prefers-contrast: more) {
+  #overlay .bigbtn { border: 2px solid var(--text); }
+  #disclaimer { color: var(--text); border-color: var(--text); }
+}
+
 } /* @layer overlays */

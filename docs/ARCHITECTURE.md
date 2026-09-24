@@ -69,7 +69,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_196 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_197 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -162,6 +162,7 @@ _196 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `dom.js` | `Dom` | tag | Dom: the three DOM/format helpers every DOM-built screen shares (el / paintFold / fmtLap). |
+| `title-fx.js` | `TitleFx` | tag | TitleFx: the title screen's motion, as a player setting. |
 | `track-maps.js` | `TrackMaps` | tag | TrackMaps: offline 2D circuit outlines for the track picker. |
 | `flags.js` | `Flags` | tag | national flags as inline SVG, for the circuit picker's flag strip and the hero caption beside a circuit's name. |
 | `select-screen.js` | `Menus` | tag | the select-screen UI for js/game.js: the circuit picker as a flag strip over a hero (the in-game still of the chosen circuit with its lap outline drawn on top… |
