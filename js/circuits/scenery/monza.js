@@ -707,31 +707,37 @@
         }
       }
 
-      // Dense Curva Grande pine corridor — wave-3 densify (research: dark-green wall).
-      // Distances start at 22 m so crowns do not share faces with Rank A's
-      // 10–16 m stonePines (coplanar-audit: one new spot from that overlap).
-      every(12, (k) => {
+      every(14, (k) => {
         const s = k / n;
         if (s < 0.08 || s > 0.18) return;
         const h = hash(k * 19 + 11);
-        pine(k, -1, 22 + h * 5, 20 + h * 12, PINE_D);
-        pine(k,  1, 23 + h * 5, 19 + h * 11, PINE);
-        if (h > 0.45) pine(k, -1, 30 + h * 4, 18 + h * 10, PINE_D);
-        if (h > 0.55) pine(k,  1, 31 + h * 4, 17 + h * 9, PINE);
-      });
-
-      // Lesmo woodland hug — tight tree boxes outside both right-handers.
-      every(16, (k) => {
-        const s = k / n;
-        if (s < 0.35 || s > 0.46) return;
-        const h = hash(k * 23 + 5);
-        if (h < 0.35) return;
-        pine(k, -1, 18 + h * 5, 16 + h * 8, PINE_D);
-        if (h > 0.55) pine(k, -1, 26 + h * 4, 14 + h * 7, PINE);
+        stonePine(k, -1, 10 + h * 3, 14 + h * 6, h < 0.4 ? PINE_D : PINE, { spread: 0.72 });
+        stonePine(k,  1, 10 + h * 3.5, 13 + h * 6, h < 0.5 ? PINE : PINE_D, { spread: 0.70 });
+        if (h > 0.40) pine(k, -1, 20 + h * 4, 18 + h * 10, PINE_D);
+        if (h > 0.50) pine(k,  1, 21 + h * 4, 17 + h * 9, PINE);
       });
 
       spectatorHill(0.08, 0.18, -1, 13, { rows: 3, rise: 1.0, depth: 1.8, density: 0.40, step: 9 });
       spectatorHill(0.43, 0.54,  1, 13, { rows: 3, rise: 1.0, depth: 1.8, density: 0.40, step: 9 });
+      // Wave-3 Curva Grande far ring — denser corridor without near-band clips.
+      // A mid-gap densify at 22–35 m stacked into Rank A / spectator crowns and
+      // raised prop-clip from 17→29 severe spots. Keep identity as a SECOND
+      // ring at 42–55 m (sparse) plus a Lesmo far outer hug.
+      every(20, (k) => {
+        const s = k / n;
+        if (s < 0.08 || s > 0.18) return;
+        const h = hash(k * 19 + 11);
+        if (h < 0.35) return;
+        pine(k, -1, 42 + h * 10, 18 + h * 10, PINE_D);
+        if (h > 0.55) pine(k,  1, 44 + h * 10, 17 + h * 9, PINE);
+      });
+      every(22, (k) => {
+        const s = k / n;
+        if (s < 0.35 || s > 0.46) return;
+        const h = hash(k * 23 + 5);
+        if (h < 0.45) return;
+        pine(k, -1, 36 + h * 8, 15 + h * 7, PINE_D);
+      });
 
       every(42, (k) => {
         const s = k / n;
