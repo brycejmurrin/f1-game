@@ -63,20 +63,23 @@ const NetLobby = (function () {
       // fires from 4 Hz polls and 1 Hz relay ticks during every connect.
       const e = document.getElementById("vs-status");
       if (!e) return;
-      if (busy) e.setAttribute("aria-busy", "true");
-      else e.removeAttribute("aria-busy");
+      if (typeof e.setAttribute === "function") {
+        if (busy) e.setAttribute("aria-busy", "true");
+        else e.removeAttribute("aria-busy");
+      }
       if (e.textContent !== statusText) e.textContent = statusText;
       e.classList.toggle("vs-error", !!isError);
     }
 
     // Focus follows the step: hiding the section that held the pressed button
     // (HOST A RACE -> #vs-hosting, …) left a keyboard or pad player on <body>.
+    const has = (box, el) => !!(box && el && typeof box.contains === "function" && box.contains(el));
     const focusInto = (host) => {
       const a = document.activeElement;
       const lobby = document.getElementById("vsfriend");
-      if (!host || host.hidden || (a && a !== document.body && lobby && !lobby.contains(a))) return;
-      if (a && host.contains(a)) return;
-      const t = window.TopModal && TopModal.landing ? TopModal.landing(host) : null;
+      if (!host || host.hidden || (a && a !== document.body && lobby && !has(lobby, a))) return;
+      if (has(host, a)) return;
+      const t = typeof TopModal !== "undefined" && TopModal.landing ? TopModal.landing(host) : null;
       if (t) { try { t.focus({ preventScroll: true }); } catch (_) { t.focus(); } }
     };
     function show(step) {
@@ -1218,7 +1221,7 @@ const NetLobby = (function () {
       scanner = null;
       if (active) active.stop();
       const e = els();
-      const hadFocus = e.scan && e.scan.contains(document.activeElement);
+      const hadFocus = has(e.scan, document.activeElement);
       if (e.scan) e.scan.hidden = true;
       if (hadFocus) focusInto(shownStep(e));
     }

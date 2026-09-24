@@ -8594,8 +8594,7 @@ $("q-back").onclick = () => {
   session = "race";
   // Rebuilt on the way back (laps/weather kept): after NEXT ROUND it still
   // held the previous circuit's lap chips and FULL value.
-  if (qualiNet.hasArmed()) qualiNet.resetOnBackWithAbort();
-  else { raceSettings.buildRaceSettings(); $("race-settings").hidden = false; }
+  qualiNet.hasArmed() ? qualiNet.resetOnBackWithAbort() : (raceSettings.buildRaceSettings(), $("race-settings").hidden = false);
 };
 
 // MY TEAM customize dialog — js/career/custom-team.js (CustomTeam.create above).
