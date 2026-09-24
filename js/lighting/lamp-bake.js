@@ -48,6 +48,11 @@ const LampBake = (function () {
   // bake/truth 2.49x -> 2.10x, 1.39x -> 1.31x, 1.30x -> 1.27x. 600 k buys
   // 1.15-1.27 m cells (worst 1.50x / 1.16x / 1.15x) at the old 9.6 MB.
   const MAX_TEXELS = 300000;
+  // Desktop spends the old full-bbox memory on resolution instead: 600 k atlas
+  // texels per layer (~9.3 MB, 1.15-1.27 m cells, worst 1.50x / 1.16x / 1.15x
+  // on Monza / Vegas / Singapore). Phones keep the 300 k default (~4.7 MB).
+  const DESKTOP_TEXELS = 600000;
+  function budget(gfx) { return gfx && (gfx.mobileTier || gfx.isMobile) ? MAX_TEXELS : DESKTOP_TEXELS; }
   const MIN_CELL = 1.0;        // metres per texel at best
   const TILE = 32, SLOT = TILE + 2;
   // Atlas slot grid limits: 4096 texels a side (phones) for the w x 2h texture.
@@ -473,6 +478,6 @@ const LampBake = (function () {
   // LIVE-ONLY lane (TLX's per-chunk lamp texture) key on it.
   function gen() { return _bake ? _bake.gen | 0 : 0; }
 
-  return { bake, forTrack, shadowCol, liveOnlyAt, gen, toHalf, MAX_TEXELS, TILE, NO_GROUND, LO_HEIGHT, LO_COS };
+  return { bake, forTrack, shadowCol, liveOnlyAt, gen, budget, toHalf, MAX_TEXELS, DESKTOP_TEXELS, TILE, NO_GROUND, LO_HEIGHT, LO_COS };
 })();
 Object.freeze(LampBake);

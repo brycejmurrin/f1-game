@@ -7179,7 +7179,7 @@ function render(dt) {
     // Paint-mode tails only: emitting tails ride the live loop, whose diffuse
     // (lampSh - bakeW) would erase their unbaked pool on the road.
     if (LT.lampBake > 0 && gfx.hasLampBake && !(LT.tailLightEmit > 0)) {
-      frame.lampBake = LampBake.forTrack(track, track._lights, LT.lampNearClamp);
+      frame.lampBake = LampBake.forTrack(track, track._lights, LT.lampNearClamp, undefined, false, LampBake.budget(gfx));
       frame.lampBakeScale = _floodRGB;
     }
     // PER-CHUNK LAMPS (experimental): hand the renderer the FULL baked lamp list

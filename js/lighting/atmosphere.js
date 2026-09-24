@@ -49,7 +49,7 @@ function applyRaceSettings() {
   if (floodActive && G.track && (!G.track._lights || !G.track._lights.length)) G.track._lights = buildTrackLights(G.track);
   // ...and bake its ground pools now, not on the first lit frame (a hitch there).
   if (floodActive && G.track && G.gfx && G.gfx.hasLampBake && LT.lampBake > 0 && !(LT.tailLightEmit > 0))
-    LampBake.forTrack(G.track, G.track._lights, LT.lampNearClamp);
+    LampBake.forTrack(G.track, G.track._lights, LT.lampNearClamp, undefined, false, LampBake.budget(G.gfx));
   if (G.raceTimeOfDay !== "default") {
     const night = G.raceTimeOfDay === "night";
     G.frameSky.stars = night ? 1 : 0;
