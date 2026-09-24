@@ -686,8 +686,12 @@ const TrackBuildProps = (function () {
         hw: hw[k],
       };
     };
-    const models = TrackModels.create({
-      out, water: waterBuf, diagnostics, n,
+    // Mutable opts so recordBarrier can be wired once defined below (T3 drape
+    // collision). Same object identity TrackModels.create closes over.
+    const modelsOpts = {
+      out, water: waterBuf, diagnostics, n, track, px, pz, hw,
+      rails: surface.rails, upOf, emitFace: emit,
+      terrainY: (x, z) => Tracks.terrainY(track, x, z),
       // true = clear; false = on the road; "pit" = inside the pit complex, which
       // modelGroup records as superseded rather than as a required failure.
       preflight: (bounds) => (!rejBox(bounds.center, bounds.size, bounds.basis) ? true : (_pitReject ? "pit" : false)),
@@ -728,7 +732,8 @@ const TrackBuildProps = (function () {
         const o = side * (hw[i] + dist);
         return [px[i] + r[0] * o, y, pz[i] + r[2] * o];
       },
-    });
+    };
+    const models = TrackModels.create(modelsOpts);
     let sceneryTheme = null, landmarkKit = null, circuitKit = null;
     try {
       if (typeof SceneryThemes !== "undefined" && SceneryThemes &&
@@ -930,78 +935,9 @@ const TrackBuildProps = (function () {
       const span = Math.abs(s1 - s0) >= 1 - 1e-9 ? n - 1 : ((k1 - k0) + n) % n;
       return waterEmit(waterRaster(k0, k0 + span, side, gap0, gap1, c), c, col, opts);
     };
-    // groundPatch(): a flat ground feature (sand, apron, car park) DRAPED over the
-    // drawn terrain (T3, docs/notes/SCENERY-QA-PLAN.md §2b). It was N boxes flat
-    // along the track for up to 96 m at the closed-form groundYAt, so on a slope
-    // or a curve the tops floated over / sank under the mesh. Now a grid whose
-    // vertices read Tracks.terrainY (not terrainYAt, which skips > 30 m
-    // triangles and read a buried one at fuji): columns break at the ribbon's
-    // own rails (linear between them), rows every ~4 m (the node pitch), a
-    // sz[1] skirt on the rim. Same footprint, colour, id, declared-box guard,
-    // lift slot and diagnostics; the EMITTED guard is per cell, since
-    // modelGroup's one box round a drape that climbs 5 m put its highest top
-    // over every lower road in the footprint (52 patches suppressed).
-    let patchSeq = 0;
-    const groundPatch = (k, side, gap, sz, col, opts) => {
-      opts = opts || {};
-      if (!finiteVec(sz, 3, true)) {
-        diagnostics.invalid.push({ id: opts.id || "ground-patch", reason: "invalid ground-patch dimensions", size: sz });
-        return false;
-      }
-      const r = [track.rx[k], track.ry[k], track.rz[k]], u = upOf(track, k);
-      const t = [track.tx[k], track.ty[k], track.tz[k]], pieces = Math.max(2, Math.round(opts.samples || 4));
-      // Every patch's top sat AT groundY, so overlapping patches (zolder's dusk
-      // sand over its apron) shared one plane, as did a plinth flush with the
-      // ground. A per-call slot lifts each 1-5 MIN_SEP: five calls in a row
-      // never share a plane.
-      const lift = (1 + patchSeq++ % 5) * TrackGeom.MIN_SEP;
-      const midDist = gap + sz[0] / 2;
-      const mid = [px[k] + r[0] * side * (hw[k] + midDist), groundYAt(k, midDist), pz[k] + r[2] * side * (hw[k] + midDist)];
-      const id = opts.id || `ground-patch-${k}`, required = !!opts.required;
-      const suppress = (em) => (diagnostics.suppressed.push({ id, required: _pitReject ? false : required,
-        reason: _pitReject ? (em ? "emitted footprint " : "") + "superseded by the pit complex" : (em ? "emitted " : "") + "footprint rejected" }), false);
-      if (rejBox(mid, sz, [r, u, t])) return suppress(false);
-      const cuts = [gap];                  // edges + inner rails, widest halved to `samples`
-      for (const d of surface.rails) if (d > gap + 0.25 && d < gap + sz[0] - 0.25) cuts.push(d);
-      cuts.push(gap + sz[0]);
-      while (cuts.length - 1 < pieces) {
-        let w = 0;
-        for (let i = 1; i < cuts.length; i++) if (cuts[i] - cuts[i - 1] > cuts[w + 1] - cuts[w]) w = i - 1;
-        cuts.splice(w + 1, 0, (cuts[w] + cuts[w + 1]) / 2);
-      }
-      const cols = cuts.length - 1, rows = Math.min(16, Math.max(1, Math.ceil(sz[2] / 4)));
-      const top = [], bot = [], at = (i, j) => j * (cols + 1) + i;
-      for (let j = 0; j <= rows; j++) for (let i = 0; i <= cols; i++) {
-        const o = side * (hw[k] + cuts[i]), f = (j / rows - 0.5) * sz[2];
-        const x = px[k] + r[0] * o + t[0] * f, z = pz[k] + r[2] * o + t[2] * f;
-        const g = Tracks.terrainY(track, x, z), y = (g != null ? g : groundYAt(k, cuts[i])) + lift;
-        top.push([x, y, z]); bot.push([x, y - sz[1], z]);
-      }
-      const cellB = [norm([r[0], 0, r[2]]), UPV, norm([t[0], 0, t[2]])], keep = new Uint8Array(cols * rows);
-      const quad = (i, j) => [top[at(i, j)], top[at(i + 1, j)], top[at(i + 1, j + 1)], top[at(i, j + 1)]];
-      let kept = 0;
-      for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
-        const q = quad(i, j), hi = Math.max(...q.map((v) => v[1])), lo = Math.min(...q.map((v) => v[1])) - sz[1];
-        const c = [(q[0][0] + q[2][0]) / 2, (lo + hi) / 2, (q[0][2] + q[2][2]) / 2];
-        if (!rejBox(c, [cuts[i + 1] - cuts[i], hi - lo, sz[2] / rows], cellB)) { keep[j * cols + i] = 1; kept++; }
-      }
-      if (!kept) return suppress(true);
-      const v0 = out.pos.length / 3, mat0 = out._mat, below = [mid[0], mid[1] - 1e4, mid[2]];
-      out._mat = 0;                        // what a modelGroup stage carried
-      for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) if (keep[j * cols + i]) emit(out, quad(i, j), col, below);
-      const skirt = (a, b, cell) => { if (keep[cell]) emit(out, [top[a], top[b], bot[b], bot[a]], col, mid); };
-      for (let i = 0; i < cols; i++) skirt(at(i, 0), at(i + 1, 0), i);
-      for (let j = 0; j < rows; j++) skirt(at(cols, j), at(cols, j + 1), j * cols + cols - 1);
-      for (let i = cols; i > 0; i--) skirt(at(i, rows), at(i - 1, rows), (rows - 1) * cols + i - 1);
-      for (let j = rows; j > 0; j--) skirt(at(0, j), at(0, j - 1), (j - 1) * cols);
-      out._mat = mat0;
-      diagnostics.emitted.push({ id, required, vertices: out.pos.length / 3 - v0, kind: opts.kind || "model" });
-      if (opts.collision) {
-        const halfFrac = (sz[2] / 2) / track.total;
-        recordBarrier(k / n - halfFrac, k / n + halfFrac, side, gap);
-      }
-      return true;
-    };
+    // T3 draped groundPatch lives in TrackModels (models.js); thin wrapper here.
+    const groundPatch = (k, side, gap, sz, col, opts) =>
+      models.groundPatch(Object.assign({ k, side, gap, size: sz, color: col }, opts || {}));
     const groundedSegments = (spec) => models.groundedSegments(spec);
     const barSegs = [];
     const SEG = 5;                      // stride of one barSegs record
@@ -1061,6 +997,7 @@ const TrackBuildProps = (function () {
       }
     };
     const recordBarrier = (s0, s1, side, gap) => scanBarrier(s0, s1, side, gap, true);
+    modelsOpts.recordBarrier = recordBarrier;
     const indexBarrier = (s0, s1, side, gap) => scanBarrier(s0, s1, side, gap, false);
     // Register a SOLID model's footprint (not just a face) so foliage and other
     // placement guards can see it. `s0→s1` on `side`, its inner face `gap`
