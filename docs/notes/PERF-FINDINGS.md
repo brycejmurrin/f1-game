@@ -5204,3 +5204,38 @@ driven montreal against the previous step, each behind an `apex26.` off-switch):
 Not planned: occlusion queries (open track, results a frame late), GPU-driven
 indirect draws (a rewrite for instance counts we do not have), render bundles
 before step 3 (our culler toggles visibility every frame, which re-records them).
+
+## 2ag. Plan step 1: #228's safe half re-landed (2026-09-24)
+
+§2af step 1. Taken from #228 (reverse of e837853), minus everything that skips a
+draw: vendor patches 7 and 8 and `NEW_MESH_BUDGET` stay out.
+
+- `tlx-shadow.js` `warm()` — castScene under `sunRT`, the PCSS blocker under
+  `blockerRT`; called last in `startProgramWarm`, after the MRT is nulled.
+- Post warm keeps the live ssrTag MRT and compiles the LIVE `quad`; ungated
+  (was: skipped once the scene warm passed 3 s).
+- `apex26.tlxWarmPlus=0` restores the 3 s post gate and skips the caster warm.
+- `tsl-fx.js` builds the ssrTag MRT node once.
+- Vendor patch 6 (`getDynamicCacheKey` scratch array, upstream r187), regenerated
+  with `tools/gen/vendor-three.mjs`; canary pins it.
+- The material-key memo, rebased on today's key (emissive/alpha are per-draw
+  uniforms now, so only `alpha < 1` enters the compare); `memState()` gets
+  `matHit/matMiss/matEvict/matMissKeys`, the `warm` stage timeline, `geoKinds`.
+- NOT taken: #228's quantisation of rear-light / flame / aero-blink / brake-glow
+  values — it existed because emissive and alpha were in the key; they no longer
+  are, so it would only change the look.
+- Also re-landed (not render): coach `jsonClone`, ghost `TextEncoder` reuse +
+  O(n) trim, HUD computed-style reads behind a layout-free key.
+
+Evidence on this box (Lavapipe, three.js/**WebGPU** path, `api: webgpu`):
+
+| check | this tree | deploy tip | `tlxWarmPlus=0` |
+|---|---|---|---|
+| race warm stages (ms) | scene 5645, post 518-583, shadow 7-8, failed 0 | — | post 0, shadow 0 |
+| race frame, montreal jump(0.3), mean luma | 57.7 | 57.7 | — |
+| race frame after 8 s drive, luma | 76.3 | — | 76.3 |
+| garage (openGarage + settle), luma / dark px | 43.0 / 8.6 % | 44.3 / 7.7 % (turntable) | — |
+| gfx-probe plain / `tlxForceHw=shadow` | PASS, gpuErrors 0, luma 65.3 / 65.3 | | |
+
+`test:tooling-fast` 238/238. Real-Metal A/B: gpu-census on this push (warm on),
+then `ls: apex26.tlxWarmPlus=0`.

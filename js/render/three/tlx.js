@@ -84,7 +84,11 @@ const TLX = (function () {
       let _gpuErrors = 0, _gpuFirstError = null;
       const _gpuRecentErrors = [];
       let _gpuLastResize = null, _gpuLastOperation = "boot";
-      let _warmRequested = false, _warmPending = null, _warmAttempts = 0, _warmAt = 0;
+      let _warmRequested = false, _warmPending = null, _warmAttempts = 0, _warmAt = 0, _warmDone = false;
+      // The warm's stage timeline, read by memState().warm: the lights hold for
+      // exactly this long on a player's GPU, and the census beats sample it —
+      // gpu-census 207 spent its whole window inside the warm and no row said so.
+      const _warmStages = { at: 0, scene: null, post: null, shadow: null, total: null, attempts: 0, failed: 0 };
       const GPU_ERR_LOG_CAP = 8;
       // Heal-gate counters live HERE, not by the gate: the error hooks install
       // during bootRenderer's await, and on the WebGPU -> WebGL2 fallback an
@@ -1211,21 +1215,41 @@ const TLX = (function () {
       // Reported from an iPhone: garage correct, race identical to WebGL2 except
       // the car body was missing.
       let _matFrame = 0;
+      // CACHE HEALTH, not cache SIZE. `mats` reports how full the cache is and
+      // saturates at MAT_CACHE_CAP, so a cache that is merely full and one that
+      // is THRASHING — evicting a live variant and minting it again moments
+      // later — report the identical number. Every miss past the cap mints a
+      // fresh material identity, and a fresh identity mints new (geo, mat, k)
+      // pool triples and a new three RenderObject with its own bindings, so the
+      // miss RATE is the number that predicts churn. Counting it costs two
+      // increments.
+      let _matHit = 0, _matMiss = 0, _matEvict = 0;
+      const _matMissLog = [];   // the first 64 miss keys, for memState().matMissKeys — census 212 counted 20 misses in a 20 s drive and could not name them
       function fallbackMat(instanced) {
         return _drawMatMode >= 2 ? rawUnlitMat : (instanced ? unlitInstancedMat : unlitMat);
       }
       const drawEm = (o) => (o && o.emissive !== undefined ? o.emissive : 0);
       const drawAl = (o) => (o && o.alpha !== undefined ? o.alpha : 1);
-      function materialFor(opts, chunked, instanced) {
-        if (_drawMatMode || !lit) return fallbackMat(instanced);
-        if (vizMat) return vizMat;
-        if (!opts) return chunked ? defaultMatChunked : (instanced ? defaultMatInstanced : defaultMat);
-        const o = opts;
+      // THE KEY IS REBUILT PER DRAW, AND THE DRAWS ARE THE FRAME.
+      // matCache.get(key) needs the string to exist first, so building it ran
+      // on every call whether it hit or missed — ~15 intermediate strings, at
+      // 150-400 draws a frame. Every caller passes a LONG-LIVED scratch object
+      // it mutates in place (_ringOpts, _rigFx, _wmRoadWetN and the rest), so
+      // the same object arrives frame after frame usually carrying the same
+      // values, and the string it produces is identical each time.
+      //
+      // So memoise the key ON the opts object behind a field-by-field compare:
+      // primitive comparisons, no allocation, and the string is built only when
+      // something in the key changed. A WeakMap rather than a property so a
+      // caller's object is never mutated and a dead one is never held. The memo
+      // caches the KEY, never the material — matCache's eviction decides what a
+      // key resolves to, and a cached material would outlive an eviction.
+      const _matKeyMemo = new WeakMap();
+      function buildMatKey(o, chunked, instanced) {
         // emissive and alpha are NOT in the key: they are per-draw uniforms
         // (tsl-lit.js perObject, written by acquireMesh). Only alpha < 1 is,
         // because it picks the blend state and the render list.
-        const key =
-          (o.alpha !== undefined && o.alpha < 1 ? "t," : "o,") +
+        return (o.alpha !== undefined && o.alpha < 1 ? "t," : "o,") +
           (o.roughness !== undefined ? o.roughness : 0.7) + "," +
           (o.metalness !== undefined ? o.metalness : 0) + "," +
           (o.specular !== undefined ? o.specular : 0.5) + "," +
@@ -1239,8 +1263,39 @@ const TLX = (function () {
           (o.noDepthTest ? "|nd" : "") +
           (chunked ? "|ch" : "") +
           (instanced ? "|in" : "");
+      }
+      function matKeyFor(o, chunked, instanced) {
+        const db = o.depthBias, db0 = db ? db[0] : 0, db1 = db ? db[1] : 0;
+        let c = _matKeyMemo.get(o);
+        // A NaN field compares false against itself, so a caller feeding one
+        // degrades to rebuilding every frame — the behaviour before this memo,
+        // never a stale key.
+        const tr = o.alpha !== undefined && o.alpha < 1;
+        if (c !== undefined && c.tr === tr && c.ro === o.roughness
+          && c.me === o.metalness && c.sp === o.specular && c.de === o.detail
+          && c.cc === o.clearcoat && c.cp === o.carPaint && c.sk === o.sparkle
+          && c.ds === !!o.doubleSided && c.na === !!o.noAlphaWrite && c.nd === !!o.noDepthTest
+          && c.hb === !!db && c.b0 === db0 && c.b1 === db1
+          && c.ch === !!chunked && c.in === !!instanced) return c.key;
+        if (c === undefined) { c = {}; _matKeyMemo.set(o, c); }
+        c.tr = tr; c.ro = o.roughness; c.me = o.metalness;
+        c.sp = o.specular; c.de = o.detail; c.cc = o.clearcoat; c.cp = o.carPaint;
+        c.sk = o.sparkle; c.ds = !!o.doubleSided; c.na = !!o.noAlphaWrite;
+        c.nd = !!o.noDepthTest; c.hb = !!db; c.b0 = db0; c.b1 = db1;
+        c.ch = !!chunked; c.in = !!instanced;
+        c.key = buildMatKey(o, chunked, instanced);
+        return c.key;
+      }
+      function materialFor(opts, chunked, instanced) {
+        if (_drawMatMode || !lit) return fallbackMat(instanced);
+        if (vizMat) return vizMat;
+        if (!opts) return chunked ? defaultMatChunked : (instanced ? defaultMatInstanced : defaultMat);
+        const o = opts;
+        const key = matKeyFor(o, chunked, instanced);
         let m = matCache.get(key);
-        if (!m) {
+        if (m) _matHit++; else {
+          _matMiss++;
+          if (_matMissLog.length < 64) _matMissLog.push(key);
           if (matCache.size >= MAT_CACHE_CAP) {
             // Evict the oldest entry NOT used this frame. If every entry is in
             // use the cache simply runs over cap for the rest of the frame:
@@ -1260,6 +1315,7 @@ const TLX = (function () {
               matCache.delete(k);
               if (lit.releaseMaterial) lit.releaseMaterial(v);
               if (v) _matDispose.push(v);
+              _matEvict++;
               break;
             }
           }
@@ -1743,10 +1799,13 @@ const TLX = (function () {
       // exports, imports and resets with the rest of DISPLAY.
       let _envOptOut = true;
       try { _envOptOut = GameStore.store.raw("apex26.tlxEnvProbe") !== "1"; } catch (_) { /* no store: stay opted out */ }
+      let _warmPlus = true;
+      try { _warmPlus = localStorage.getItem("apex26.tlxWarmPlus") !== "0"; } catch (_) { /* no storage: warm everything */ }
       function startProgramWarm(opts) {
         _warmRequested = false;
         if (typeof renderer.compileAsync !== "function") return;
         _warmAt = performance.now(); _warmAttempts++;
+        _warmStages.at = Math.round(_warmAt); _warmStages.attempts = _warmAttempts;
         const target = renderer.getRenderTarget(), mrt = renderer.getMRT();
         const usePost = !!(post && post.enabled() && _postF.proj && !vizMat);
         // r185 reads renderer target/MRT again AFTER awaits while building nodes.
@@ -1758,21 +1817,56 @@ const TLX = (function () {
             if (fx && fx.setSsrMrt) fx.setSsrMrt(usePost);
             renderer.setMRT(usePost ? _ssrMrtNode() : null);
             renderer.setRenderTarget(usePost ? post.sceneTarget() : softOutRT());
+            let _tStage = performance.now();
             _gpuLastOperation = "compile-scene";
             await renderer.compileAsync(scene, camera);
-            renderer.setMRT(null);
-            if (usePost && post.warm && performance.now() - _warmAt < 3000) {
+            _warmStages.scene = Math.round(performance.now() - _tStage); _tStage = performance.now();
+            // MRT STAYS SET THROUGH THE POST WARM. present() sets the ssrTag MRT
+            // node for the scene pass and calls post.present() BEFORE restoring
+            // it, so every live post quad compiles with that node in its render
+            // context — a different fragment-output struct, a different program.
+            // This warm used to null the MRT here, and post.warm() nulled it
+            // again, so the sixteen post programs it built were the no-MRT
+            // variants and the race rebuilt all sixteen on its first visible
+            // present (gpu-census 206: 56 warm-tagged modules, and x2 lazy at
+            // each of the eight runPass sites regardless). The casters render
+            // BEFORE present(), with the MRT restored to null, so their warm
+            // runs after the null below.
+            // THE POST CHAIN IS WARMED UNGATED. The 3 s gate this used to sit
+            // behind was measured against the scene warm's own elapsed time,
+            // which on macos-latest Metal consumes it: gpu-census 203 attributed
+            // 16 of the race window's 50 shader modules to tlx-post.js runPass —
+            // eight quad materials, two stages each — compiled synchronously on
+            // the first visible present after the lights instead of during them.
+            // post.warm() keeps its own deadline, so the lights hold at most a
+            // few seconds longer in the worst case, which is the trade this
+            // makes. apex26.tlxWarmPlus=0 restores the gate and skips the caster
+            // warm below — the A/B handle and the player-side off switch.
+            if (usePost && post.warm && (_warmPlus || performance.now() - _warmAt < 3000)) {
               _gpuLastOperation = "compile-post"; await post.warm(opts, _postF);
             }
+            _warmStages.post = Math.round(performance.now() - _tStage); _tStage = performance.now();
+            renderer.setMRT(null);
+            // The casters live in their own Scene (tlx-shadow.js castScene), so
+            // compileAsync(scene) never sees them and the first sun pass of the
+            // race built 9 programs — 7 for the caster render, 2 for the PCSS
+            // blocker — on the main thread (gpu-census 203/205 stacks, via
+            // endPass). sunPass runs before present() on the same frame, so by
+            // now castScene holds the grid's casters and the warm compiles the
+            // real ones.
+            if (_warmPlus && shadowSys && shadowSys.warm) { _gpuLastOperation = "compile-shadow"; await shadowSys.warm(); }
+            _warmStages.shadow = Math.round(performance.now() - _tStage);
           } catch (e) {
+            _warmStages.failed++;
             _warmRequested = _warmAttempts < 2;
             try { Log.warn("gfx", "TLX program warm failed", String(e)); } catch (_) { /* logging is optional */ }
           } finally {
+            _warmStages.total = Math.round(performance.now() - _warmAt);
             if (lit && lit.setSsrMrt) lit.setSsrMrt(false);
             if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
             renderer.setMRT(mrt); renderer.setRenderTarget(target);
           }
-        })().finally(() => { _warmPending = null; });
+        })().finally(() => { _warmPending = null; _warmDone = true; });
       }
       const ENV_PROBE_TRIES = 3;
       const ENV_FAIL_CAP = 24;   // 4 probes x 6 faces
@@ -3848,9 +3942,42 @@ const TLX = (function () {
             // never again (a stuck sun). presentMs: JS EMA inside the render calls.
             try { const g = lit && lit.uniforms && lit.uniforms.sunDir && lit.uniforms.sunDir.groupNode; o.groupVer = g ? g.version : null; } catch (_) { o.groupVer = null; }
             o.sharedUniforms = !!(lit && lit.sharedUniforms);
+            o.matHit = _matHit; o.matMiss = _matMiss; o.matEvict = _matEvict;
+            o.matMissKeys = _matMissLog.slice(-16);
             o.presentMs = +_presentMs.toFixed(3);
+            // The warm timeline: how long the lights held on THIS GPU, by stage;
+            // pending/done say whether a census beat is inside it (207 was, all 15).
+            o.warm = { at: _warmStages.at, scene: _warmStages.scene, post: _warmStages.post, shadow: _warmStages.shadow,
+                       total: _warmStages.total, attempts: _warmStages.attempts, failed: _warmStages.failed,
+                       pending: !!_warmPending, done: _warmDone };
             o.presents = _presentN;   // frames presented — a spec samples both flag arms at the same count
-            try { const b = renderer && renderer.backend; if (b && b.data && b.data.size != null) o.backendData = b.data.size; } catch (_) { /* DataMap may be a WeakMap */ }
+            // THIS WAS ALWAYS undefined. `renderer.backend.data` is a
+            // WeakMap, which has no `.size`, so the guard never passed and the
+            // one counter closest to real device-side retention silently
+            // reported nothing — an instrument that measures nothing is worse
+            // than none, because its absence reads as "flat". Report what the
+            // shape actually offers, and say which shape it was.
+            try {
+              const b = renderer && renderer.backend;
+              const dm = b && b.data;
+              if (dm) {
+                o.backendData = (typeof dm.size === "number") ? dm.size : null;
+                o.backendDataKind = (typeof dm.size === "number") ? "Map" : (dm instanceof WeakMap ? "WeakMap" : typeof dm);
+              }
+            } catch (_) { o.backendData = null; }
+            // Live geometries by kind: names WHICH producer is growing.
+            try {
+              const kinds = {};
+              let live = 0;
+              for (const ref of _geoReg) {
+                const g = ref && ref.deref();
+                if (!g) continue;
+                live++;
+                const k = g.__tlxKind || "?";
+                kinds[k] = (kinds[k] || 0) + 1;
+              }
+              o.geoLive = live; o.geoKinds = kinds; o.geoRegLen = _geoReg.length;
+            } catch (_) { /* no WeakRef: the census degrades, nothing leaks */ }
             return o;
           },
           async shader(idx = 0) {
