@@ -3854,7 +3854,9 @@ function syncRotateBlocker(moveFocus) {
   // moment the blocker leaves (rotate to landscape mid-pause and it is there).
   // A live race does not run on behind the blocker: turning the phone upright
   // mid-race used to leave the field (and TOUCH's auto-throttle) racing on.
-  if (active && !paused && (state === "race" || state === "count") && !netPlay.active()) setPaused(true);
+  // rotateBlockMql as well as the box: a DOM with no stylesheet (the node
+  // game-vm harness) reads every display as shown, and would pause every race.
+  if (active && rotateBlockMql.matches && !paused && (state === "race" || state === "count") && !netPlay.active()) setPaused(true);
   if (paused) els.pausemenu.hidden = active;
   if (active && moveFocus) requestAnimationFrame(() => {
     const first = $("rotate-controls"); if (first && getComputedStyle(box).display !== "none") first.focus();
