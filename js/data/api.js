@@ -177,7 +177,12 @@ const F1API = (function () {
     return last.replace(/\.json$/i, "").slice(0, 32);
   }
 
-  function fetchTimed(url) {
+  // `handle(res)` runs INSIDE the timed window. Reading the body used to happen
+  // after the race settled, with the timer cleared and the controller dropped:
+  // a body that stalled mid-transfer (a big OpenF1 telemetry payload on a
+  // flaky phone link) left res.json() pending forever, and every later request
+  // queued behind it — the whole Data Hub spun until reload (2026-09-24).
+  function fetchTimed(url, handle) {
     const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
     if (controller) liveControllers.add(controller);
     let timer = null;
@@ -190,6 +195,7 @@ const F1API = (function () {
     let network;
     try { network = fetch(url, controller ? { signal: controller.signal } : undefined); }
     catch (e) { network = Promise.reject(e); }
+    if (handle) network = network.then(handle);
     // Promise.race is intentional even with AbortController: a broken fetch
     // implementation that ignores abort must still release the global queue.
     return Promise.race([network, timeout]).finally(function () {
@@ -204,7 +210,7 @@ const F1API = (function () {
   // (2 × 10-20 s backoff + 3 × 15 s timeouts on the shared chain).
   function fetchOnce(url) {
     lastNetAt = Date.now();
-    return fetchTimed(url).then(function (res) {
+    return fetchTimed(url, function (res) {
       if (!res.ok) {
         // Retry-After is NOT a CORS-safelisted response header, so on a
         // cross-origin 429 `hdr` is null unless the API lists it in

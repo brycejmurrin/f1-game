@@ -1920,6 +1920,31 @@ test("runtime uncaptured GPU errors escalate to GLX at the log cap", async () =>
   assert.equal(reloads, 1);
 });
 
+test("GPU errors spread across a session are not a flood", async () => {
+  // 2026-09-24: the counters were lifetime totals, so eight one-off errors in
+  // three frames HOURS apart reloaded the tab a rung down. Quiet frames reset
+  // the run; a real flood (errors every frame) still escalates.
+  const storage = new Map([["apex26.gfxWgxLevel", "2"]]);
+  const session = new Map();
+  let reloads = 0;
+  const h = makeGpuHarness({ storage, session, onReload: () => { reloads += 1; } });
+  const gfx = await h.create();
+  gfx.resize();
+  const quiet = (n) => { for (let i = 0; i < n; i++) { gfx.begin({}); gfx.present({}); } };
+  for (let k = 0; k < 6; k++) {
+    for (let i = 0; i < 3; i++) h.device.onuncapturederror({ error: { message: "sporadic " + k } });
+    quiet(5);
+  }
+  assert.equal(h.WGX.gpuErrors() >= 18, true, "every error is still counted for WGX.gpuErrors()");
+  assert.equal(session.get("apex26.gfxClaimFail"), undefined, "sporadic errors separated by quiet frames never surrender");
+  assert.equal(reloads, 0);
+  for (let f = 0; f < 3; f++) {
+    for (let i = 0; i < 3; i++) h.device.onuncapturederror({ error: { message: "flood " + f } });
+    quiet(1);
+  }
+  assert.equal(session.get("apex26.gfxClaimFail"), "1", "a flood across consecutive frames still escalates");
+});
+
 test("pipelines that share a shader module never use layout:'auto'", async () => {
   // Two `layout:"auto"` pipelines are NEVER bind-group compatible, even when
   // byte-identical — and a pair built from ONE module exists precisely to be

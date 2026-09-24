@@ -81,10 +81,15 @@ window.AriaState = (function () {
     }
   }
 
+  // The text is ESCAPED before it is wrapped: paintOnOff writes the result back
+  // through innerHTML, and a button's text is not always ours — the garage
+  // DRIVER chips print a custom team's driver names, which an imported garage
+  // file sets, so `ON <img onerror=…>` was stored XSS (2026-09-24).
+  const HTML_ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
   function wrapOnOff(text) {
     const t = String(text || "").replace(/\s+/g, " ").trim();
     if (!/\b(ON|OFF)\b/.test(t)) return null;
-    return t.replace(/\b(ON|OFF)\b/g, (w) => `<span data-fold="${w.toLowerCase()}">${w}</span>`)
+    return t.replace(/[&<>"']/g, (c) => HTML_ESC[c]).replace(/\b(ON|OFF)\b/g, (w) => `<span data-fold="${w.toLowerCase()}">${w}</span>`)
       .replace(/:\s+<span/g, ":\u00a0<span")
       .replace(/·\s+<span/g, "·\u00a0<span");
   }
