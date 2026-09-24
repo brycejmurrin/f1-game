@@ -192,8 +192,18 @@
     // caster scene + pooled mesh wrappers (the tlx.js draw-list pattern)
     const castScene = new THREE.Scene();
     castScene.matrixWorldAutoUpdate = false;
-    const pool = [];
-    let used = 0;
+    // ONE SLOT POOL PER TARGET (sun, car, each lamp), not one shared pool. With
+    // one pool, slot i held the sun pass's chunk k, then the car pass's car
+    // part, then the lamp pass's — at night the car and lamp passes alternate
+    // every frame, so every used slot changed .geometry every pass and three
+    // re-ran setGeometry on its RenderObject (attribute rescan, pipeline
+    // recheck) each time; each short car pass also parked the whole pool the
+    // last sun rebuild had grown. Per target, a slot keeps its caster from one
+    // pass of that kind to the next, a pass hides only what the previous pass
+    // showed, and parks only the slots it stopped using.
+    const pools = new Map();   // target -> { pool, used, prevUsed }
+    let cur = null, shown = null;
+    let pool = [], used = 0;   // the open pass's pool (aliases cur)
     let target = null;    // the pass's render target while open
     // Parked wrappers (index >= used after a pass) point at this instead of
     // their last caster: a hidden Mesh still REFERENCES its geometry, so after
@@ -319,7 +329,19 @@
       shadowCam.projectionMatrix.fromArray(lightVP);
       shadowCam.projectionMatrixInverse.copy(shadowCam.projectionMatrix).invert();
       target = rt;
-      used = 0;
+      cur = pools.get(rt);
+      if (!cur) { cur = { pool: [], used: 0, prevUsed: 0 }; pools.set(rt, cur); }
+      // Another target's casters are still visible from its pass: hide them,
+      // and park them (the parkedGeo rule — a target that never runs again,
+      // e.g. a lamp slot after a track switch, must not pin old geometry).
+      // Parking is free on the next pass: three compares a mesh's geometry
+      // against the one its RenderObject last RENDERED with, and a parked,
+      // hidden slot never renders, so cast() restoring the same caster is no
+      // setGeometry at all.
+      if (shown && shown !== cur) {
+        for (let i = 0; i < shown.prevUsed; i++) { shown.pool[i].visible = false; shown.pool[i].geometry = parkedGeo; }
+      }
+      pool = cur.pool; used = 0;
       // Only this pass's instanced casts may draw: hide the previous pass's.
       for (let i = 0; i < iCast.length; i++) iCast[i].visible = false;
       iCast.length = 0;
@@ -330,7 +352,10 @@
       S.depthPassOn = false;
       if (!target) return;
       const wasSun = target === sunRT;
-      for (let i = used; i < pool.length; i++) { pool[i].visible = false; pool[i].geometry = parkedGeo; }
+      // Park only what this target used last time and not now; slots past
+      // prevUsed were parked when they went out of use.
+      for (let i = used; i < cur.prevUsed; i++) { pool[i].visible = false; pool[i].geometry = parkedGeo; }
+      cur.prevUsed = used; cur.used = used; shown = cur;
       const prev = renderer.getRenderTarget();
       try {
         renderer.setRenderTarget(target);

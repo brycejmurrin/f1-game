@@ -3191,8 +3191,14 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   // shadow-pool slot the new track did not refill kept an old chunk alive.
   const sh = read("js/render/three/tlx-shadow.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(sh, /const parkedGeo = new THREE\.BufferGeometry\(\)/, "one shared empty geometry for parked wrappers");
-  assert.match(sh, /for \(let i = used; i < pool\.length; i\+\+\) \{ pool\[i\]\.visible = false; pool\[i\]\.geometry = parkedGeo; \}/,
+  // One pool per target since 2026-09-24 (PERF-FINDINGS §2ak): endPass parks
+  // the slots this target stopped using, and beginPass parks the slots the
+  // previous target's pass showed — both release geometry, not only hide.
+  assert.match(sh, /for \(let i = used; i < cur\.prevUsed; i\+\+\) \{ pool\[i\]\.visible = false; pool\[i\]\.geometry = parkedGeo; \}/,
     "endPass must release the discrete casters' geometry, not only hide them");
+  assert.match(sh, /for \(let i = 0; i < shown\.prevUsed; i\+\+\) \{ shown\.pool\[i\]\.visible = false; shown\.pool\[i\]\.geometry = parkedGeo; \}/,
+    "a pass parks the other target's shown casters, so a target that never runs again pins nothing");
+  assert.match(sh, /const pools = new Map\(\);/, "one caster pool per shadow target");
   // Instanced casters are keyed one per batch (a slot pool recompiled programs
   // mid-race); freeing the batch must release its caster and geometry.
   assert.match(sh, /const iByBatch = new Map\(\)/, "instanced casters are keyed per batch, not a slot pool");
@@ -4510,6 +4516,7 @@ test("TLX defers resize during compilation and applies the latest requested size
   let cssW = 1136, cssH = 524, presentW = 1704, presentH = 786, W = 852, H = 393;
   let renderScale = 0.5, _softReadEpoch = 0, _softReadQueued = null;
   let _gpuLastResize = null, _gpuLastOperation = "compile-scene";
+  let _glMaxDim = -1;   // resize()'s once-per-device WebGL2 texture ceiling
   const DPR_CAP = 1.5;
   const window = { innerWidth: 1100, innerHeight: 500, devicePixelRatio: 3 };
   const _layoutCanvas = { clientWidth: 1100, clientHeight: 500 }, _displayCanvas = null;

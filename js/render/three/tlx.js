@@ -1586,6 +1586,7 @@ const TLX = (function () {
         if (!_ssrMrt) _ssrMrt = TSL.mrt({ output: TSL.output, ssrTag: TSL.float(1) });
         return _ssrMrt;
       }
+      let _poolNow = typeof performance !== "undefined" ? performance.now() : Date.now();   // latched once per present (acquireMesh stamps __tlxSeen with it)
       const meshPool = [];          // every wrapper ever made — the sweep walks this
       const meshByGeo = new Map();  // geometry -> Map(material -> Mesh)
       // Batch stamp: bumped wherever a batch begins. A mesh not stamped with
@@ -2106,7 +2107,7 @@ const TLX = (function () {
         ud.tlxLgRoad = rec && rec.lg ? 1 : 0;   // PER-CHUNK ROAD: the road draw only
         geo.__tlxDrawnBatch = _poolBatch;   // uploaded by the render that closes THIS batch
         m.__tlxBatch = _poolBatch;
-        m.__tlxSeen = (typeof performance !== "undefined" ? performance.now() : Date.now());
+        m.__tlxSeen = _poolNow;   // one clock read per present (prunePool needs ~20 s resolution)
         // scene.matrixWorldAutoUpdate is false (see create() above), so three
         // will NEVER promote m.matrix → matrixWorld. The renderer uploads
         // matrixWorld as the model matrix: writing only `.matrix` left every
@@ -2362,6 +2363,12 @@ const TLX = (function () {
 
       // CSS-box observation is shared; TLX still owns renderer.setSize(),
       // backend limits and post-target allocation.
+      // apex26.tlxMirrorSweep (see the static-sweep gates in present()): read
+      // once here, not with a localStorage call on every present.
+      let _mirrorSweepOptIn = false;
+      try { _mirrorSweepOptIn = localStorage.getItem("apex26.tlxMirrorSweep") === "1"; } catch (_) { /* no storage: off */ }
+      // The WebGL2 driver's texture ceiling is a device constant: ask once.
+      let _glMaxDim = -1;
       const cssSizeCache = CanvasCssSize.create(_layoutCanvas, { settleFrames: 30 });
       function resize() {
         // Window/settings callbacks also reach here while the frame loop waits
@@ -2388,11 +2395,14 @@ const TLX = (function () {
         const _gpuDev = (renderer.backend && renderer.backend.isWebGPUBackend && renderer.backend.device) || null;
         let maxDim = _gpuDev ? ((_gpuDev.limits && _gpuDev.limits.maxTextureDimension2D) || 8192) : 0;
         if (!_gpuDev) {
-          const _gl = (renderer.backend && renderer.backend.gl) || null;
-          try {
-            const lim = _gl ? [_gl.getParameter(_gl.MAX_TEXTURE_SIZE) | 0, _gl.getParameter(_gl.MAX_RENDERBUFFER_SIZE) | 0].filter((v) => v >= 2048) : [];   // WebGL2 guarantees 2048; a stub answers less
-            maxDim = lim.length ? Math.min(...lim) : 0;
-          } catch (_) { maxDim = 0; }
+          if (_glMaxDim < 0) {   // begin() calls resize() every frame; the limit never changes
+            const _gl = (renderer.backend && renderer.backend.gl) || null;
+            try {
+              const lim = _gl ? [_gl.getParameter(_gl.MAX_TEXTURE_SIZE) | 0, _gl.getParameter(_gl.MAX_RENDERBUFFER_SIZE) | 0].filter((v) => v >= 2048) : [];   // WebGL2 guarantees 2048; a stub answers less
+              _glMaxDim = lim.length ? Math.min(...lim) : 0;
+            } catch (_) { _glMaxDim = 0; }
+          }
+          maxDim = _glMaxDim;
         }
         if (maxDim && (presentW > maxDim || presentH > maxDim)) {
           const k = Math.min(maxDim / presentW, maxDim / presentH);
@@ -3423,7 +3433,8 @@ const TLX = (function () {
         },
         present(opts) {
           _poolBatch++;
-          prunePool(typeof performance !== "undefined" ? performance.now() : Date.now());
+          _poolNow = typeof performance !== "undefined" ? performance.now() : Date.now();
+          prunePool(_poolNow);
           // renderOrder = submission index: three sorts opaque and transparent
           // lists by renderOrder first, so caller order (the GLX contract)
           // survives its z-sort in BOTH lists. Opaques still render before
@@ -3763,9 +3774,7 @@ const TLX = (function () {
           // comment or commit message claiming it is live is describing gate 2
           // alone. Turning it back on means deleting gate 1 deliberately, with
           // the bounds fix in place, and re-measuring; it is not a cleanup.
-          const _sweepOptIn = (function () {
-            try { return localStorage.getItem("apex26.tlxMirrorSweep") === "1"; } catch (_) { return false; }
-          })();
+          const _sweepOptIn = _mirrorSweepOptIn;   // read once at create: an A/B knob set before load
           pruneGeoRegistry(_now);
           _mirrorStat.drains++;
           _mirrorStat.gate = (envReady ? "R" : "-") + (_envGaveUp ? "G" : "-")
