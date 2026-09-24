@@ -370,7 +370,14 @@ const RadioVoice = (function () {
       const observe = (el, on) => {
         if (el && typeof MutationObserver === "function") new MutationObserver(on).observe(el, { attributes: true, attributeFilter: ["hidden"] });
       };
-      observe(card, () => { if (card.hidden) stop(); });
+      // Only if THIS channel is speaking: synth.cancel() is global, and the card
+      // expiring a few seconds into the results screen would otherwise cut the
+      // announcer's wrap-up (js/audio/announcer.js wrapUp) mid-sentence.
+      observe(card, () => {
+        if (!card.hidden) return;
+        if (current || pending != null) stop();
+        else if (GameAudio && GameAudio.radioStingStop) GameAudio.radioStingStop();   // the hiss bed still goes with the card
+      });
       // The paused gate in tickBody returns BEFORE announceT is decremented, so
       // a card frozen by a pause never ages out. Without this, Escape mid-line
       // leaves the voice talking over a stopped game.
