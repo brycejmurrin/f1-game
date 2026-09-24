@@ -557,6 +557,18 @@ test("the timings merge is its own workflow, and never pushes to the deploy bran
     "the browser jobs run llvmpipe; merging under another bucket fakes a regression");
   // And it must be serialised: two merges racing drop each other's samples.
   assert.match(timings, /concurrency:\n  group: spec-timings/);
+  // IT MUST ACCUMULATE (2026-09-24). Merging into the deploy tip's copy and
+  // force-pushing over the side branch dropped every earlier run's samples: 43
+  // runs left 1 sample per spec on 5 specs, so no spec ever reached
+  // select-budget's MIN_SAMPLES and the gate stayed on a 2026-08 constant.
+  const start = timings.indexOf("Start from the accumulated record");
+  assert.ok(start > 0 && start < timings.indexOf("Merge into tests/data/spec-timings.json"),
+    "the side branch's record must be restored BEFORE the new junit is merged into it");
+  assert.match(timings, /git fetch -q origin "\$TIMINGS_BRANCH"/);
+  // The train's gate runs ci.yml as a reusable workflow, so its junit lands in
+  // the PAGES run; a workflow_run on "CI" alone never sees those samples.
+  assert.match(timings, /workflows: \["CI", "Deploy to GitHub Pages"\]/,
+    "the Pages train's gate is the one full smoke run on the tip — collect it too");
 });
 
 test("the ship filter is ONE job whose answer every smoke shard reads", () => {
