@@ -39,6 +39,7 @@ window.CamModes = (function () {
         G.camCutT = (CAM_MODES[G.camMode] || CAM_MODES[0]).cut || 0.35;
         Log.info("game", `CamModes.setCamMode ${CAM_MODES[prev].id} -> ${CAM_MODES[G.camMode].id}`);
       }
+      GameAudio.setCameraMix(CAM_MODES[G.camMode].id);   // onboard / chase / TV mix
       refreshCamBtn();   // the CAM button label is the only mode indicator (no big announce)
       // The CAMERA TUNER edits whichever mode you are looking through, so every
       // mode change re-points its sliders. Reached through the global, not a
