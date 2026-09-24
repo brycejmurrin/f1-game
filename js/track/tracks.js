@@ -2,6 +2,10 @@
 const Tracks = (function () {
   "use strict";
   let keepGeometry = false;
+  // Props vertex compaction after the hidden-face strip (hidden-faces.js
+  // compact). The node audit harness turns it OFF: its primitive ranges [s,e)
+  // index the raw emission buffer (tools/lib/track-build-vm.cjs).
+  let compactProps = true;
 
   const WORLD_UP = [0, 1, 0];
 
@@ -295,10 +299,12 @@ const Tracks = (function () {
       track.propsGeo = propsGeo;
       propsGeo._keepPositions = propsGeo._keepFullGeometry = keepGeometry;
       lap("propsSeal", "geo");
-      // Index-only strip of never-visible triangles (js/track/core/hidden-faces.js);
-      // vertices untouched, so the audits' primitive ranges stay valid.
+      // Index-only strip of never-visible triangles (js/track/core/hidden-faces.js).
       propsGeo._hidden = TrackHiddenFaces.strip(propsGeo,
         { groundY: (x, z) => terrainY(track, x, z), terrain: track.terrainGeo });
+      // ...then drop the vertices only stripped triangles used (28 B each in
+      // the VBO). This one DOES move vertex ranges — see compactProps.
+      if (compactProps) propsGeo._compact = TrackHiddenFaces.compact(propsGeo);
       lap("propsHidden", "geo");
       // THE DISCRIMINATOR (apex26.propsUnchunked, diagnostic only, default off).
       //
@@ -2880,10 +2886,12 @@ const Tracks = (function () {
     return best === null || y > best ? y : best;
   }
 
+  function setCompactProps(value) { compactProps = !!value; return compactProps; }
+
   function setKeepGeometry(value) {
     keepGeometry = !!value;
     return keepGeometry;
   }
 
-  return { LIST, SEASON, seasonIndex, build, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, terrainY, setKeepGeometry, pitWindow, pitLaneAt, pitLaneSpan, inPitLane };
+  return { LIST, SEASON, seasonIndex, build, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, terrainY, setKeepGeometry, setCompactProps, pitWindow, pitLaneAt, pitLaneSpan, inPitLane };
 })();

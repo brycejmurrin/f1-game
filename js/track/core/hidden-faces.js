@@ -1,4 +1,4 @@
-/* Apex 26 — build-time strip of prop triangles no camera can see (enclosed in an opaque box, buried under terrain, down-facing on the ground). Index buffer only; vertices untouched. */
+/* Apex 26 — build-time strip of prop triangles no camera can see (enclosed in an opaque box, buried under terrain, down-facing on the ground), then compaction of the vertices no kept triangle references. */
 // TrackHiddenFaces.strip(geo, groundY) rewrites geo.idx WITHOUT the triangles
 // that no camera can ever see, and leaves pos/nrm/col/mat exactly as they were,
 // so every audit that reads a primitive's vertex range [s, e) (coplanar, clip,
@@ -18,6 +18,12 @@
 //             no more than 10 cm above the terrain directly beneath them — the
 //             eye would have to be under the face to see it.
 // FLAG triangles are never stripped (their vertices move at draw time).
+//
+// compact(geo) is the SECOND, separate step: it drops every vertex no index
+// references any more (a stripped box's faces), order-preserving, and remaps
+// idx and the harness's `__blocks` bookkeeping. It DOES move vertex ranges, so
+// the node audit harness (tools/lib/track-build-vm.cjs, float-audit.cjs) turns
+// it off with Tracks.setCompactProps(false) and keeps auditing raw ranges.
 const TrackHiddenFaces = (function () {
   "use strict";
 
@@ -283,5 +289,62 @@ const TrackHiddenFaces = (function () {
     return stats;
   }
 
-  return Object.freeze({ strip });
+  // Per-vertex columns a props buffer can carry, with their stride. A column
+  // whose length is not V * stride is not per-vertex here and is left alone
+  // (the chunker ignores a mis-sized `mat` / `trk` the same way).
+  const STRIDE = [["pos", 3], ["nrm", 3], ["col", 3], ["trk", 3], ["uv", 2], ["mat", 1]];
+
+  // compact(geo) -> { vertsBefore, vertsAfter, ms }. Rewrites the per-vertex
+  // columns WITHOUT the vertices no triangle references, keeping the survivors
+  // in their original order, and remaps idx onto them. Every kept triangle
+  // references exactly the same positions (and normals, colours, materials) as
+  // before — tests/unit/props-tri-ratchet.test.mjs checks the multiset.
+  function compact(geo) {
+    const t0 = now();
+    const stats = { vertsBefore: 0, vertsAfter: 0, ms: 0 };
+    if (!geo || !geo.pos || !geo.idx) return stats;
+    const pos = arr(geo.pos), idx = arr(geo.idx);
+    const V = (pos.length / 3) | 0, N = idx.length;
+    stats.vertsBefore = stats.vertsAfter = V;
+    const used = new Uint8Array(V);
+    for (let i = 0; i < N; i++) {
+      const v = idx[i];
+      if (!(v >= 0 && v < V)) return stats;          // malformed: leave it for validateGeometry to name
+      used[v] = 1;
+    }
+    // before[v] = kept vertices ahead of v; before[V] = kept total
+    const before = new Int32Array(V + 1);
+    for (let v = 0; v < V; v++) before[v + 1] = before[v] + used[v];
+    const n = before[V];
+    if (n === V) { stats.ms = now() - t0; return stats; }
+    for (const [key, k] of STRIDE) {
+      const a = arr(geo[key]);
+      if (!a || a.length !== V * k) continue;
+      const out = Array.isArray(a) ? new Array(n * k) : new a.constructor(n * k);
+      let w = 0;
+      for (let v = 0; v < V; v++) {
+        if (!used[v]) continue;
+        const o = v * k;
+        for (let j = 0; j < k; j++) out[w++] = a[o + j];
+      }
+      geo[key] = out;
+    }
+    const ni = Array.isArray(idx) ? new Array(N) : new idx.constructor(N);
+    for (let i = 0; i < N; i++) ni[i] = before[idx[i]];
+    geo.idx = ni;
+    // appendBuffer's provenance blocks: a block's surviving vertices stay
+    // contiguous (order-preserving), so its new range is a prefix-count shift.
+    if (Array.isArray(geo.__blocks)) {
+      geo.__blocks = geo.__blocks.map((b) => {
+        const s = b.base < 0 ? 0 : b.base > V ? V : b.base;
+        const e = b.base + b.count > V ? V : b.base + b.count;
+        return Object.assign({}, b, { base: before[s], count: e > s ? before[e] - before[s] : 0 });
+      });
+    }
+    stats.vertsAfter = n;
+    stats.ms = now() - t0;
+    return stats;
+  }
+
+  return Object.freeze({ strip, compact });
 })();

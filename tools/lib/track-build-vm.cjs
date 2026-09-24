@@ -145,6 +145,12 @@ function buildContext(opts) {
   runFile(TRACKS_ENTRY);
 
   if (!ctx.Tracks || !ctx.Tracks.LIST) throw new Error("Tracks.LIST missing");
+  // EVERY `prims` record's [s,e) indexes the RAW props emission buffer, and the
+  // build's vertex compaction (TrackHiddenFaces.compact, after the hidden-face
+  // strip) would shift those ranges under the audits. So this harness builds
+  // UNCOMPACTED unless a caller asks (`compact: true`); the triangles drawn are
+  // identical either way — only unreferenced vertices differ.
+  ctx.Tracks.setCompactProps(opts.compact === true);
   return {
     Tracks: ctx.Tracks, TrackSurface: ctx.TrackSurface, TrackGeom: ctx.TrackGeom,
     TrackPit: ctx.TrackPit, GarageScene: ctx.GarageScene,
