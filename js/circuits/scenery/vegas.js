@@ -388,18 +388,19 @@
       building(K(0.28), -1, 30, 34, 46, 30, { kind: "notch", wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
 
       {
-        const a = anchor(K(0.30), -1, 145);
-        const rad = 66;
+        // MSG Sphere — dominant single-hue cyan LED orb (few frustum bands).
+        const a = anchor(K(0.30), -1, 132);
+        const rad = 88;
         const baseY = a.c[1];
-        // Single cool cyan-blue LED wash (reads as one orb at race speed)
-        const SPHERE = [0.18, 0.55, 1.00];
-        const SPHERE_HI = [0.55, 0.85, 1.00];
+        const SPHERE = [0.16, 0.72, 0.98];
+        const SPHERE_HI = [0.42, 0.92, 1.00];
         modelGroup("vegas-sphere", {
           center: [a.c[0], baseY + rad, a.c[2]],
-          size: [rad * 2.05, rad * 2.05, rad * 2.05],
+          size: [rad * 2.08, rad * 2.08, rad * 2.08],
         }, (stage) => {
-          addFrustum(stage, [a.c[0], baseY, a.c[2]], rad * 0.32, rad * 0.28, rad * 0.18,
-            [0.25, 0.25, 0.28], 16, null);
+          // Pedestal foot on grade (addFrustum treats c as base).
+          seat.frustum(stage, [a.c[0], baseY, a.c[2]], rad * 0.34, rad * 0.28, rad * 0.16,
+            [0.22, 0.24, 0.28], 16, null);
           const bands = 5;
           for (let i = 0; i < bands; i++) {
             const t0 = i / bands, t1 = (i + 1) / bands;
@@ -411,16 +412,24 @@
             addFrustum(stage, [a.c[0], yB, a.c[2]], Math.max(rB, 2), Math.max(rT, 2),
               Math.max(hB, 1), tint, 24, null);
           }
-          addCyl(stage, [a.c[0], baseY + rad * 0.5, a.c[2]], rad * 0.90, 6.0, SPHERE_HI, 28, null);
+          addCyl(stage, [a.c[0], baseY + rad * 0.5, a.c[2]], rad * 0.92, 7.0, SPHERE_HI, 28, null);
         }, { required: true });
+        // Cyan / lime runoff stripe near the Sphere.
+        groundPatch(K(0.292), -1, 4.5, [10, 0.16, 42], [0.12, 0.55, 0.62],
+          { id: "vegas-sphere-runoff-cyan", samples: 5 });
+        groundPatch(K(0.318), -1, 5.0, [9, 0.15, 36], [0.18, 0.62, 0.32],
+          { id: "vegas-sphere-runoff-lime", samples: 5 });
+        place(K(0.305), -1, 8, [6, 0.22, 28], [0.15, 0.70, 0.75]);
+        place(K(0.325), -1, 9, [5, 0.18, 22], [0.25, 0.75, 0.35]);
       }
 
       backdrop(K(0.45), 1, 240, [180, 30, 120], DARKROCK);
 
-      building(K(0.49), -1, 20, 42, 98, 40, { kind: "pyramid", wall: [0.64, 0.60, 0.52], window: [1.0, 0.85, 0.35], floor: 8 });
-      building(K(0.505), -1, 46, 32, 75, 32, { kind: "spire", wall: [0.62, 0.58, 0.50], window: [0.98, 0.80, 0.30], floor: 8 });
-      tower(K(0.492), -1, 70, 18, 60, { col: [0.58, 0.54, 0.46], seg: 6, cap: true, capCol: [1.0, 0.82, 0.20], mast: true });
-      place(K(0.49), -1, 9, [28, 1.8, 8], [1.0, 0.85, 0.25]); // golden uplighting
+      // Venetian / Palazzo — warm-cream tower cluster + campanile (NOT Luxor pyramid).
+      building(K(0.49), -1, 24, 38, 92, 36, { kind: "twin", wall: [0.72, 0.66, 0.54], window: [1.0, 0.85, 0.35], floor: 9, lit: true });
+      building(K(0.505), -1, 48, 30, 70, 30, { kind: "tiered", wall: [0.68, 0.62, 0.50], window: [0.98, 0.80, 0.30], floor: 8, lit: true });
+      tower(K(0.492), -1, 72, 16, 62, { col: [0.62, 0.48, 0.36], seg: 6, cap: true, capCol: [1.0, 0.82, 0.20], mast: true });
+      place(K(0.49), -1, 9, [28, 1.8, 8], [1.0, 0.85, 0.25]);
 
       ferrisWheel(K(0.55), -1, 85, 65);
       billboard(K(0.56), -1, 18, 16, 10, CYAN);
@@ -428,28 +437,70 @@
       place(K(0.55), -1, 10, [24, 0.7, 24], [0.15, 0.45, 0.65]);
       place(K(0.55), -1, 10, [20, 0.5, 20], [0.10, 0.30, 0.50]);
 
-      building(K(0.62), 1, 22, 62, 75, 46, { kind: "drum", wall: [0.68, 0.64, 0.56], window: [1.0, 0.85, 0.40], floor: 8 });
-      place(K(0.62), 1, 12, [44, 2.4, 8], [1.0, 0.88, 0.30]);
-      place(K(0.62), 1, 9, [50, 1.2, 10], [0.95, 0.75, 0.15]);
+      // Caesars Palace — wide ivory box, gold up-lights.
+      {
+        const a = anchor(K(0.62), 1, 44);
+        const b = [a.r, a.u, a.t];
+        const IVORY = [0.78, 0.74, 0.64];
+        const IVORY_D = [0.62, 0.58, 0.48];
+        const GOLD_UP = [1.0, 0.82, 0.38];
+        modelGroup("vegas-caesars", {
+          center: vadd(a.c, a.u, 40),
+          size: [48, 86, 72],
+          basis: b,
+        }, (stage) => {
+          seat.box(stage, a.c, [42, 18, 64], IVORY, b);
+          seat.box(stage, vadd(a.c, a.u, 18), [38, 52, 58], IVORY_D, b);
+          stage._mat = MAT.GLASS;
+          addBox(stage, vadd(a.c, a.u, 42), [39.5, 40, 59.5], GOLD_UP, b);
+          stage._mat = 0;
+          seat.box(stage, vadd(a.c, a.u, 70), [34, 10, 50], IVORY, b);
+          addBox(stage, vadd(a.c, a.u, 78), [28, 3.5, 44], GOLD_UP, b);
+          for (const off of [-24, 0, 24])
+            seat.cyl(stage, vadd(vadd(a.c, a.t, off), a.r, -18), 1.1, 16, IVORY, 8, b);
+        }, { required: true });
+        place(K(0.62), 1, 12, [44, 2.4, 8], [1.0, 0.88, 0.30]);
+        place(K(0.62), 1, 9, [50, 1.2, 10], [0.95, 0.75, 0.15]);
+      }
 
-      building(K(0.68), 1, 40, 60, 55, 62, { wall: [0.58, 0.55, 0.50], window: [1.0, 0.85, 0.40], floor: 7 });
-      place(K(0.68), 1, 52, [95, 2.0, 12], [1.0, 0.75, 0.20]);   // dist cleared past sz[0]/2 — was silently suppressed
-      // Jets spread and height-varied across the full frontage (was 8 jets in a
-      // tight 20 m cluster) — a real Bellagio show has jets of very different
-      // reach, not a uniform picket line.
+      // Bellagio + fountain lake — long elegant box + blue reflective pool.
+      {
+        const a = anchor(K(0.68), 1, 38);
+        const b = [a.r, a.u, a.t];
+        const BEL = [0.52, 0.48, 0.44];
+        const BEL_WIN = [1.0, 0.88, 0.42];
+        modelGroup("vegas-bellagio", {
+          center: vadd(a.c, a.u, 36),
+          size: [48, 78, 120],
+          basis: b,
+        }, (stage) => {
+          seat.box(stage, a.c, [40, 14, 108], BEL, b);
+          seat.box(stage, vadd(a.c, a.u, 14), [36, 52, 100], BEL, b);
+          stage._mat = MAT.GLASS;
+          addBox(stage, vadd(a.c, a.u, 38), [37.2, 42, 101], BEL_WIN, b);
+          stage._mat = 0;
+          seat.box(stage, vadd(a.c, a.u, 66), [32, 8, 88], [0.42, 0.40, 0.38], b);
+          addBox(stage, vadd(a.c, a.u, 72), [20, 2.5, 60], [1.0, 0.78, 0.28], b);
+        }, { required: true });
+        place(K(0.68), 1, 52, [95, 2.0, 12], [1.0, 0.75, 0.20]);
+      }
       const bellagioJets = 18;
       const jetCols = [CYAN, [0.15, 0.50, 1.00], LED, [0.30, 0.85, 1.00], BLUE, MAGENTA, [0.20, 0.90, 0.95], ROSE];
       for (let i = 0; i < bellagioJets; i++) {
         const s = 0.663 + (i / (bellagioJets - 1)) * 0.046;
         const a = anchor(K(s), 1, 26 + hash(i * 4.7) * 10);
-        const jetH = 8 + hash(i * 9.3 + 2) * 16;   // 8-24 m: varied reach, not one height
+        const jetH = 8 + hash(i * 9.3 + 2) * 16;
         addBox(out, vadd(a.c, a.u, jetH / 2), [0.8, jetH, 0.8], jetCols[i % jetCols.length], [a.r, a.u, a.t]);
       }
-      waterSurface(K(0.672), 1, 20, [110, 1.2, 150], [0.05, 0.10, 0.18],
+      waterSurface(K(0.672), 1, 18, [118, 1.4, 160], [0.04, 0.18, 0.32],
         { id: "vegas-bellagio-lake-east", required: true });
-      waterSurface(K(0.702), 1, 20, [105, 1.2, 135], [0.05, 0.10, 0.18],
+      waterSurface(K(0.702), 1, 18, [110, 1.4, 145], [0.04, 0.16, 0.30],
         { id: "vegas-bellagio-lake-west" });
+      groundPatch(K(0.685), 1, 14, [22, 0.14, 96], [0.08, 0.28, 0.48],
+        { id: "vegas-bellagio-pool-strip", samples: 6 });
+      place(K(0.690), 1, 16, [18, 0.35, 70], [0.12, 0.42, 0.72]);
 
+      // Paris / Eiffel + Montgolfier balloon.
       tower(K(0.74), -1, 68, 22, 130, { col: [0.55, 0.48, 0.35], seg: 4, cap: true, capCol: [1.0, 0.85, 0.4], mast: true });
       place(K(0.74), -1, 20, [10, 1.6, 10], [1.0, 0.80, 0.25]);
       place(K(0.74), -1, 22, [14, 0.7, 14], [0.95, 0.75, 0.20]);
@@ -457,14 +508,12 @@
       {
         const a = anchor(K(0.748), -1, 26), b = [a.r, a.u, a.t];
         const RED   = [0.72, 0.12, 0.14], RED_D = [0.56, 0.09, 0.11];
-        const GOLD  = [0.94, 0.74, 0.24], BLUE = [0.16, 0.22, 0.52];
+        const GOLD  = [0.94, 0.74, 0.24], BLUE_RIB = [0.16, 0.22, 0.52];
         modelGroup("vegas-paris-balloon", {
           center: vadd(a.c, a.u, 21), size: [26, 44, 26], basis: b,
         }, (stage) => {
-          // Marquee plinth the balloon stands on — the sign face itself.
-          addBox(stage, vadd(a.c, a.u, 3.0), [12, 6, 16], [0.20, 0.18, 0.22], b);
+          seat.box(stage, a.c, [12, 6, 16], [0.20, 0.18, 0.22], b);
           addBox(stage, vadd(vadd(a.c, a.r, -6.2), a.u, 3.4), [0.5, 4.2, 13], GOLD, b);
-          // Envelope: widest a third of the way up, then closing to the crown.
           const bc = vadd(a.c, a.u, 7.5);
           const bands = [
             [0.0,  5.0,  8.6, 5.5, RED],
@@ -475,22 +524,21 @@
             [25.6,  5.4,  1.8, 3.0, GOLD],
           ];
           for (const [y, r0, r1, h, col] of bands) {
-            addFrustum(stage, vadd(bc, a.u, y), r0, r1, h, col, 16, b);
+            seat.frustum(stage, vadd(bc, a.u, y), r0, r1, h, col, 16, b);
           }
           for (let i = 0; i < 8; i++) {
             const ang = (i / 8) * Math.PI * 2;
             const rr = 11.3;
             addBox(stage, vadd(vadd(vadd(bc, a.r, Math.cos(ang) * rr),
                                      a.t, Math.sin(ang) * rr), a.u, 13.0),
-                   [0.5, 11.0, 0.5], BLUE, b);
+                   [0.5, 11.0, 0.5], BLUE_RIB, b);
           }
-          // Basket slung under the envelope on its rigging.
-          const gc = vadd(a.c, a.u, 6.6);
-          addBox(stage, gc, [4.6, 3.2, 4.6], [0.46, 0.30, 0.16], b);
-          addBox(stage, vadd(gc, a.u, 1.8), [5.0, 0.4, 5.0], GOLD, b);
+          const gc = vadd(a.c, a.u, 5.0);
+          seat.box(stage, gc, [4.6, 3.2, 4.6], [0.46, 0.30, 0.16], b);
+          addBox(stage, vadd(gc, a.u, 3.4), [5.0, 0.4, 5.0], GOLD, b);
           stage._mat = MAT.METAL;
           for (const [dx, dz] of [[-2.0, -2.0], [2.0, -2.0], [-2.0, 2.0], [2.0, 2.0]]) {
-            addCyl(stage, vadd(vadd(vadd(gc, a.r, dx), a.t, dz), a.u, 1.8),
+            seat.cyl(stage, vadd(vadd(vadd(gc, a.r, dx), a.t, dz), a.u, 3.2),
                    0.07, 2.6, [0.62, 0.55, 0.34], 4, b);
           }
           stage._mat = 0;
