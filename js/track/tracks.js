@@ -63,6 +63,7 @@ const Tracks = (function () {
       hw[k] = lerp(dhw[di], dhw[di + 1], f);
       bank[k] = lerp(dbank[di], dbank[di + 1], f);
     }
+    if (def.path && def.id && hasRealElevation(def.id)) surveyHeights(def, px, py, pz, n);
     const dress = def._sceneryShift || 0;
     const bridges = def.bridges;
     if (bridges) for (const b of bridges) {
@@ -2548,6 +2549,37 @@ const Tracks = (function () {
     return (typeof CircuitElevations !== "undefined") && !!(CircuitElevations[id] && CircuitElevations[id].length);
   }
 
+  // The survey at every 4 m node, not just at the control points: a control
+  // point can only carry its own height, and splining between them drew a
+  // straight line across a dip under dijon's 399 m first segment (9.7 m off).
+  // Each node is projected onto the source trace (a window walking forward, so
+  // a hairpin's other leg is never picked) and reads the table at that ARC
+  // fraction, which is independent of startFrac / reverse. The table is
+  // periodic, so the lap closes without a drift correction.
+  function surveyHeights(def, px, py, pz, n) {
+    const P = def.path.pts, N = P.length, arc = new Float64Array(N + 1);
+    for (let i = 1; i <= N; i++) arc[i] = arc[i - 1] + __M.hypot(P[i % N][0] - P[i - 1][0], P[i % N][1] - P[i - 1][1]);
+    const near = (x, z, i) => {
+      const a = P[i], b = P[(i + 1) % N], ex = b[0] - a[0], ez = b[1] - a[1], l2 = ex * ex + ez * ez || 1;
+      const t = __M.max(0, __M.min(1, ((x - a[0]) * ex + (z - a[1]) * ez) / l2));
+      const qx = a[0] + ex * t - x, qz = a[1] + ez * t - z;
+      return [qx * qx + qz * qz, arc[i] + t * (arc[i + 1] - arc[i])];
+    };
+    let seg = 0, bd = Infinity;
+    for (let i = 0; i < N; i++) { const d = near(px[0], pz[0], i)[0]; if (d < bd) { bd = d; seg = i; } }
+    const dir = def.reverse ? -1 : 1, y0 = elevationAt(def.id, near(px[0], pz[0], seg)[1] / arc[N]);
+    const base = py[0];
+    for (let k = 0; k < n; k++) {
+      let best = null, bi = seg;
+      for (let o = -2; o <= 8; o++) {
+        const i = (((seg + dir * o) % N) + N) % N, r = near(px[k], pz[k], i);
+        if (!best || r[0] < best[0]) { best = r; bi = i; }
+      }
+      seg = bi;
+      py[k] = base + elevationAt(def.id, best[1] / arc[N]) - y0;
+    }
+  }
+
   // def.path (the OSM trace) is the ONLY centreline: no path is a build error.
   function realPoints(id, path, baseHW) {
     if (!path || !path.pts || !path.pts.length) throw new Error("Tracks: circuit \"" + id +
@@ -2555,9 +2587,10 @@ const Tracks = (function () {
     const real = hasRealElevation(id);
     // The elevation tables are 64 samples by ARC fraction; reading them at the
     // point INDEX put fuji's 33 m profile 0.29 lap out of place (its 1.29 km
-    // straight is one segment). Long segments are split so a straight carries
-    // its own profile, which also evens the spacing the spline overshoots on.
-    const src = real ? densify(path.pts, 50) : path.pts;
+    // straight is one segment). Do NOT add points to carry a straight's own
+    // profile: startFrac / sceneryStartFrac are INDEX fractions, and a denser
+    // path rotated fuji's whole lap 217 m under its scenery (tried 2026-09-24).
+    const src = path.pts;
     const N = src.length;
     const arc = new Float64Array(N + 1);
     for (let i = 1; i <= N; i++) { const a = src[i - 1], b = src[i % N]; arc[i] = arc[i - 1] + __M.hypot(b[0] - a[0], b[1] - a[1]); }
@@ -2576,15 +2609,6 @@ const Tracks = (function () {
       for (let i = 0; i < N; i++) pts[i][1] -= eEnd * (arc[i] / arc[N - 1]);
     }
     return pts;
-  }
-  function densify(P, seg) {
-    const out = [];
-    for (let i = 0; i < P.length; i++) {
-      const a = P[i], b = P[(i + 1) % P.length], m = __M.floor(__M.hypot(b[0] - a[0], b[1] - a[1]) / seg);
-      out.push(a);
-      for (let j = 1; j < m; j++) out.push([a[0] + (b[0] - a[0]) * j / m, a[1] + (b[1] - a[1]) * j / m]);
-    }
-    return out;
   }
 
   function applyHwZones(pts, zones, baseHW) {
