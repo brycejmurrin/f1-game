@@ -287,10 +287,16 @@ const CustomTeam = (function () {
         ct.livery = czLivFromDialog();
         store.set("customTeam", ct);
         syncCustomTeam();
-        setTeamIdx(customTeamIndex());
-        setDriverIdx(0);
-        store.set("team", getTeamIdx());
-        store.set("driver", 0);
+        // Inside a career the CONTRACT picks the car: saving the design must
+        // not swap a driver career's seat for MY TEAM (the contracted car
+        // became an AI and the points went to custom:0). A MY TEAM career
+        // already races this team, so it loses nothing.
+        if (!(typeof Career !== "undefined" && Career.inCareer && Career.inCareer())) {
+          setTeamIdx(customTeamIndex());
+          setDriverIdx(0);
+          store.set("team", getTeamIdx());
+          store.set("driver", 0);
+        }
         getEls().customize.hidden = true;
         czClearPreview();
         buildSelect();

@@ -2739,6 +2739,12 @@ async function startRaceBody() {
   // shards, marbles and knocked-over cones — visible on the grid, and
   // RaceControl can fly a caution for debris nobody produced this race.
   DebrisWorld.reset();
+  // …and the broadcast layer: queued cards ("RETIREMENT", "BOX BOX") and the
+  // results commentary were cleared only by quitToMenu, so RESTART and NEXT
+  // RACE played the last race's over this one's countdown.
+  announceT = 0; _annPri = 0; _annFloor = 0; _annQueue.length = 0; els.announce.hidden = true;
+  if (announcer.stop) announcer.stop();
+  if (hud.resetRace) hud.resetRace();
   rlap("resets");
   loadTrack(trackIdx);
   rlap("loadTrack");
@@ -2756,7 +2762,12 @@ async function startRaceBody() {
     qualiField = cars;
     cars = [player];
     lapsTarget = 1;
-  } else if (duelMode) {
+  } else if (duelMode && !isChampionship() && !isTimeTrial()) {
+    // DUEL IS A ONE-OFF FORMAT. The flag is a sticky setting, and the sheet only
+    // HIDES its row in a championship or TT — so a duel chosen once trimmed the
+    // next season or career round to two cars and paid a full points table
+    // (and a TT or daily ran with a rival on track). Honoured only where the
+    // row is offered.
     // ONE RIVAL, BUMPED — the same trim Quali and Time Trial do on either side
     // of this branch. js/race/duel.js owns what the format means.
     const rival = Duel.pick(cars);
@@ -2867,7 +2878,9 @@ async function startRaceBody() {
   // mashed on the title (navOpen() false) would fire at lights-out.
   Input.clearEdges();
   if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.setVenue(track.def); GameAudio.startEngine(); GameAudio.startMusic(trackIdx); }
-  if (soundOn && isRaining()) GameAudio.startRain();   // rain patter — a damp "wet" track is silent
+  // rain patter — a damp "wet" track is silent — and it must STOP too: a
+  // restart after a changeable race had arced into rain kept playing it dry.
+  if (soundOn) { if (isRaining()) GameAudio.startRain(); else GameAudio.stopRain(); }
   warmCarAssets();            // meshes + atlases HERE, not on the first countdown frame (see warmCarAssets)
   DebrisWorld.prime(); updateHud(true);   // prime: build the side-world HERE, not on the lights-out frame (see DebrisWorld.prime)
 }
@@ -3839,6 +3852,9 @@ function syncRotateBlocker(moveFocus) {
   // outside itself: the OPEN CONTROLS roundtrip landed on RESUME instead of
   // back on the blocker's button. `paused` survives; the card returns the
   // moment the blocker leaves (rotate to landscape mid-pause and it is there).
+  // A live race does not run on behind the blocker: turning the phone upright
+  // mid-race used to leave the field (and TOUCH's auto-throttle) racing on.
+  if (active && !paused && (state === "race" || state === "count") && !netPlay.active()) setPaused(true);
   if (paused) els.pausemenu.hidden = active;
   if (active && moveFocus) requestAnimationFrame(() => {
     const first = $("rotate-controls"); if (first && getComputedStyle(box).display !== "none") first.focus();
@@ -3849,6 +3865,7 @@ else if (rotateBlockMql.addListener) rotateBlockMql.addListener(() => syncRotate
 
 function quitToMenu() {
   _ltBase = null; _ltFlash = 0;   // the lightning's saved race base is not the menu's
+  if (announcer.stop) announcer.stop();   // the results commentary ran on over the title for up to 16 s
   shake = 0; hitStop = 0;
   PerfGov.sentinelArm(false); if (netPlay.active()) netPlay.stop("local"); hideCamPicker();
   closeLightTuner(false);
@@ -8573,7 +8590,10 @@ $("q-back").onclick = () => {
   qualiSheet.close();
   quali.clear();          // nothing was run; the next visit draws its own sheet
   session = "race";
-  qualiNet.hasArmed() ? qualiNet.resetOnBackWithAbort() : ($("race-settings").hidden = false);
+  // Rebuilt on the way back (laps/weather kept): after NEXT ROUND it still
+  // held the previous circuit's lap chips and FULL value.
+  if (qualiNet.hasArmed()) qualiNet.resetOnBackWithAbort();
+  else { raceSettings.buildRaceSettings(); $("race-settings").hidden = false; }
 };
 
 // MY TEAM customize dialog — js/career/custom-team.js (CustomTeam.create above).
@@ -8740,6 +8760,11 @@ els.resNext.onclick = () => {
 
 function setPaused(p) {
   if (state !== "race" && state !== "count") return; hideCamPicker();
+  // THE PIT GARAGE HOLDS THE PAUSE. openPitWork freezes the race behind
+  // #carsetup; a Start/P press or RESUME on a pause card stacked over it
+  // (hidden tab) used to run the race UNDER the garage, the box timer expired,
+  // and DONE then charged nothing. Its own DONE/BACK are the only way out.
+  if (!p && garageReturn === "pit" && !$("carsetup").hidden) { els.pausemenu.hidden = true; return; }
   paused = p;
   if (!p) {
     closeLightTuner(false); closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();

@@ -189,8 +189,9 @@ const RaceFacts = (function () {
       } else { pendPos = 0; pendT = 0; }
 
       // ── flags and contact ───────────────────────────────────────────────
-      const ci = G.cautionInfo ? G.cautionInfo() : null;
-      const lvl = ci ? ci.level | 0 : 0;
+      // cautionLevel(), not cautionInfo(): this runs every physics step, and
+      // info() builds an 11-field object (with a toFixed string) to read one int.
+      const lvl = G.cautionLevel ? G.cautionLevel() | 0 : 0;
       if (lvl !== caution) { ev.push({ type: "caution", level: lvl, prev: caution }); caution = lvl; }
       const hits = p.hits | 0;
       // hitSev is the race's WORST impact, not this one's, so "rose" is the

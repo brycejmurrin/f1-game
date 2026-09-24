@@ -1072,10 +1072,16 @@ function create(G) {
     // scroll saw three recap cards and a deferral, and no sign a choice existed.
     // THE YEAR / YOUR CONTRACT / THE DRIVER MARKET are context FOR the choice,
     // so they still belong on this screen — underneath it.
-    body.appendChild(head("ON THE TABLE"));
-    body.appendChild(el("div", "cr-note",
-      "Pick a seat for " + c.year + ". Moving team means starting the car over from " +
-      "that team's works build — you do not take your parts with you."));
+    // No offers (MY TEAM, or a driver mid-contract — rollover() leaves the list
+    // empty for both) means no seat to pick: the sheet is a recap, not a table
+    // with nothing on it under "Pick a seat for …".
+    const hasOffers = !!(c.offers && c.offers.length);
+    if (hasOffers) {
+      body.appendChild(head("ON THE TABLE"));
+      body.appendChild(el("div", "cr-note",
+        "Pick a seat for " + c.year + ". Moving team means starting the car over from " +
+        "that team's works build — you do not take your parts with you."));
+    }
 
     const stEra = Career.state() && Career.state().era;
     if (stEra && stEra.cats.length) {
@@ -1088,15 +1094,17 @@ function create(G) {
       body.appendChild(rg);
     }
 
-    body.appendChild(head("YOUR PROMISE"));
-    body.appendChild(el("div", "cr-note",
-      "The target applies to whichever seat you take, and the offers above move "
-      + "with it. It is priced in reputation, not money — keep it and the better "
-      + "seats open sooner, miss it and they close."));
-    body.appendChild(ambitionPicker(Career.ambition(), (i) => {
-      Career.setAmbition(i);   // re-stamps every offer's target, then we redraw
-      buildOffers();
-    }));
+    if (c.flavour !== "myteam") {   // an owner is not promising anyone a result for a seat
+      body.appendChild(head("YOUR PROMISE"));
+      body.appendChild(el("div", "cr-note",
+        "The target applies to whichever seat you take, and the offers above move "
+        + "with it. It is priced in reputation, not money — keep it and the better "
+        + "seats open sooner, miss it and they close."));
+      body.appendChild(ambitionPicker(Career.ambition(), (i) => {
+        Career.setAmbition(i);   // re-stamps every offer's target, then we redraw
+        buildOffers();
+      }));
+    }
 
     (c.offers || []).forEach((o, i) => {
       const t = teamById(o.teamId);
@@ -1316,7 +1324,11 @@ function create(G) {
   }
 
   $("cr-back").onclick = () => {
-    if (picking && Career.active()) { picking = false; armedDelete = ""; build(); return; }
+    // Back to the hub through openCareer(), not a bare rebuild: if the live
+    // career was just DELETED, Career.load() re-homed to another save, and
+    // G.season / trackIdx / teamIdx still pointed at the deleted one — the
+    // next GO RACING raced it and settled against the wrong round.
+    if (picking && Career.active()) { picking = false; armedDelete = ""; G.openCareer(); return; }
     if (draft && draftFrom && !Career.active()) { Career.useSlot(draftFrom.flavour, draftFrom.i); draftFrom = null; }
     // (build() retitles this button per state — see buildSlotPanes/buildHubPanes.)
     close();

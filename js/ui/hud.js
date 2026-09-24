@@ -1275,7 +1275,10 @@ function mmPitMark(ctx, x, y, r, fill) {
 // loadTrack() calls this so the outline re-renders for the new circuit.
 function invalidateMap() { minimapBg = null; }
 
-return { updateHud, invalidateMap, flashSector };
+// Per-race HUD memory: the POS box compared its first ranked tick of a new race
+// against the LAST race's finishing position and flashed "down" at lights-out.
+function resetRace() { _lastRank = 0; _posFlashT = 0; if (els.pos) delete els.pos.dataset.delta; }
+return { updateHud, invalidateMap, flashSector, resetRace };
 }
 
 return { create };
