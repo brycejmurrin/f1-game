@@ -50,6 +50,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | Tool | Does | Paired skill |
 |---|---|---|
 | **ci/bump-cache.mjs** | Deploy-time content hashing of a STAGED shell (`--apply --at N --root _site`); `--check` in the repo asserts `?v=dev`. | check-changes |
+| **ci/ci-watch.mjs** | Watches every workflow run for a SHA (default HEAD) and prints one `[ci-watch]` line per job as it finishes — a red… | steward |
 | **ci/deploy.mjs** | the ONE deploy: fetch → merge → tooling-fast → the Pages gate's node suites → sweeps if the union moves geometry (else… | — |
 | **ci/geometry-paths.mjs** | Single source for "which sweeps does this diff need?" — the fleet trigger (derived from the track VM's own module… | — |
 | **ci/nightly-group.mjs** | Pick the browser GROUP tonight's scheduled ci.yml run should cover. | — |

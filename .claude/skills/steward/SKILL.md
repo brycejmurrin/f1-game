@@ -93,7 +93,9 @@ hand-edit `tests/data/ratchets.json`.
 
 ## 7. "Live" is an ancestry test, not a build number
 
-A green PR does not prove Pages. Poll by `head_sha`; `pages.yml` gates the tip
+A green PR does not prove Pages. Poll by `head_sha` — `node tools/ci/ci-watch.mjs
+--sha <sha> [--pages]` under a `Monitor` is the poller (one event per job, a red's
+failing step and annotations inline; AGENTS.md rule 12); `pages.yml` gates the tip
 once and publishes exactly that commit (dispatch = "deploy now", ≤ ~25 min).
 **Live means your commit is an ANCESTOR of the live `apex-sha`** — ask
 `deploy-research` for it. Do not conflate PR CI, ship-push CI and Pages, and
