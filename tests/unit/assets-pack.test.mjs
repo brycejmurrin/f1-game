@@ -56,13 +56,46 @@ test("asset loader shares an in-flight manifest across boot consumers", async ()
   assert.equal(requests, 1, "settled manifest stays cached");
 });
 
-test("asset loader shares manifest failures and retains the no-pack cache", async () => {
+test("asset loader shares an in-flight manifest failure and retries a later request", async () => {
   let requests = 0;
-  const assets = assetLoader({ async fetch() { requests++; throw Error("offline"); } });
+  const assets = assetLoader({ async fetch() {
+    requests++;
+    if (requests === 1) throw Error("offline");
+    return { ok: true, json: async () => ({ models: {} }) };
+  } });
   const results = await Promise.all([assets.manifest(), assets.manifest()]);
   assert.deepEqual(results, [false, false]);
-  assert.equal(await assets.manifest(), false);
-  assert.equal(requests, 1);
+  assert.deepEqual(await assets.manifest(), { models: {} });
+  assert.equal(requests, 2, "a transient manifest failure cannot poison this tab");
+  await assets.manifest();
+  assert.equal(requests, 2, "a successful manifest remains cached");
+});
+
+test("material and model loads recover after a temporarily unavailable pack", async () => {
+  let online = false, manifestGets = 0, modelGets = 0;
+  const assets = assetLoader({
+    async fetch(url) {
+      if (url.endsWith("manifest.json")) {
+        manifestGets++;
+        return online ? { ok: true, json: async () => ({
+          models: { sign: { file: "sign.ax26" } },
+          materials: { size: 2, albedo: "a.png", layers: [{ mat: 1, scale: 1 }] },
+        }) } : { ok: false };
+      }
+      if (url.endsWith("sign.ax26")) { modelGets++; return { ok: false }; }
+      return { ok: true, blob: async () => ({ size: 1 }) };
+    },
+    async createImageBitmap() { return { close() {} }; },
+  });
+  assets.init({ createTextureArray: () => ({}), setMaterialMaps() {} });
+  assert.equal(await assets.model("sign"), null);
+  assert.equal(await assets.load(), false);
+  online = true;
+  assert.equal(await assets.load(), true, "a previously failed material load retries");
+  assert.ok(manifestGets >= 2);
+  assert.equal(await assets.model("sign"), null);
+  assert.equal(await assets.model("sign"), null);
+  assert.equal(modelGets, 2, "a failed model fetch does not permanently cache a miss");
 });
 
 for (const failFallback of [true, false]) {
