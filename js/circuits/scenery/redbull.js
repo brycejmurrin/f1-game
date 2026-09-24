@@ -303,15 +303,18 @@
           frameCol: [0.70, 0.71, 0.75], plankCol: [0.78, 0.79, 0.82],
           crowd: RB_HILL_CROWD, density: 0.58 });
 
-      for (const [s, side, gap] of [
-        [0.985, -1, 24], [0.005, -1, 24], [0.04, -1, 17], [0.07, -1, 14],
+      // [s, side, gap, y]: y is the strip's height, just under the stand's roof
+      // (h - 0.4). The two 11 m stands (0.04, 0.07) carried the 13 m stands'
+      // 12.6, which left 0.04's strip hanging 12 m over the ground (float-audit).
+      for (const [s, side, gap, y = 12.6] of [
+        [0.985, -1, 24], [0.005, -1, 24], [0.04, -1, 17, 10.6], [0.07, -1, 14, 10.6],
         [0.467, -1, 13], [0.487, -1, 13], [0.507, -1, 13],
         [0.70, 1, 13], [0.72, -1, 13], [0.76, -1, 13], [0.88, 1, 13], [0.92, 1, 13], [0.95, 1, 13],
       ]) {
         const k = Math.round(n * s) % n;
         const a = anchor(k, side, gap);
         // Slim bright strip just below the roof edge — warm amber/white.
-        addBox(out, vadd(a.c, a.u, 12.6), [0.22, 0.16, 28], [1.0, 0.92, 0.70], [a.r, a.u, a.t]);
+        addBox(out, vadd(a.c, a.u, y), [0.22, 0.16, 28], [1.0, 0.92, 0.70], [a.r, a.u, a.t]);
       }
 
       every(36, (k) => {
