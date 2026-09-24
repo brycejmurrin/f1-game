@@ -258,8 +258,10 @@ test("career scoring commits points and settlement together on an unchanged slot
   Career.load(); Career.engage(true); SeasonCal.engage("career");
   const c = Career.data();
   c.season.round = 0;
+  // Classified finishers only (BUGS.md B4 / SeasonCal.award) — a still-running
+  // car must not take table points. Mark finished so the P1 fixture earns 25.
   const player = { driverId: "haas:0", code: "YOU", team: { id: "haas" }, retired: false,
-    cuts: 0, penalty: 0, gridPos: 1 };
+    finished: true, cuts: 0, penalty: 0, gridPos: 1 };
   const result = Career.scoreRound([player], player);
   assert.ok(result && result.save.ok);
   assert.equal(c.season.round, 1);
