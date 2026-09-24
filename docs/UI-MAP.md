@@ -69,6 +69,7 @@ Settings opens at an index, then pushes one page at a time:
 | Controls | `#pm-open-controls` | `#pm-panel-controls` | CONTROLS |
 | Driving | `#pm-open-driving` | `#pm-panel-driving` | DRIVING |
 | Display | `#pm-open-display` | `#pm-panel-display` | DISPLAY |
+| Appearance | `#pm-open-appearance` | `#pm-panel-appearance` | APPEARANCE |
 | Steering & Assists | `#pm-advanced` | `#advanced` | STEERING & ASSISTS |
 | Music & Sound | `#pm-audio` | `#audioset` | MUSIC & SOUND |
 
@@ -351,7 +352,7 @@ screen/region roots are `#lighting`, `#camtune`, `#flyby`, `#photo-controls`,
 |---|---|
 | `#overlay` | `#menu-brand`, `#menu-buttons`, `#menu-hero`, `#menu-primary`, `#menu-secondary`; title actions `#mb-career`, `#mb-race`, `#mb-tt`, `#mb-vs`, `#mb-season`, `#mb-data`, `#mb-garage`, `#mb-settings`, `#mb-help` |
 | `#pmsettings` | `#pmsettings-inner`, `#dlg-settings`, `#pm-settings-body`, `#pm-settings-index` |
-| Settings pages | `#pm-panel-controls`, `#pm-panel-driving`, `#pm-panel-display`, `#pm-display-adv`, `#advanced`, `#audioset` |
+| Settings pages | `#pm-panel-controls`, `#pm-panel-driving`, `#pm-panel-display`, `#pm-panel-appearance`, `#pm-display-adv`, `#advanced`, `#audioset` |
 | `#howtoplay` | `#howtoplay-inner`, `#htp-contents`, `#htp-controls`, `#htp-racing`, `#htp-pits`, `#htp-driving`, `#htp-setup`, `#htp-modes`, `#htp-friends`, `#htp-close` |
 | `#spotifypanel` | `#spotifypanel-inner` |
 
