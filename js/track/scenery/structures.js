@@ -548,8 +548,18 @@ const SceneryStructures = (function () {
     // track (which is -side along r) rather than into the seating behind it.
     const CROWD_FALLBACK = [[0.86, 0.30, 0.24], [0.92, 0.90, 0.86],
                             [0.24, 0.36, 0.62], [0.72, 0.63, 0.30]];
+    // Per-call MIN_SEP slot (as nature.js's hillSeq): a band crossing another
+    // stand — fuji's terrace bays run through grandstandEx shells and rakes —
+    // landed 7-13 mm off their faces, a fight from ~190 m. Each band moves
+    // OUTWARD and ALONG by TrackGeom.SEP_SLOTS on two permutations, so
+    // consecutive bands differ by >= MIN_SEP on both axes and neither side
+    // faces nor end caps sit near the authored grid. <= 16.5 cm stays on its
+    // own tread (the next row's riser is further back than that).
+    let bandSeq = 0;
     const crowdBand = (c, b, side, thick, h, len, pal, dens, seed) => {
       if (len <= 0.5) return;
+      const slot = bandSeq++ % 4, SL = TrackGeom.SEP_SLOTS;
+      c = vadd(vadd(c, b[0], side * SL[slot]), b[2], SL[(slot * 3 + 1) % 4]);
       const cols = (pal && pal.length) ? pal : (CROWD_DAY && CROWD_DAY.length ? CROWD_DAY : CROWD_FALLBACK);
       const pick = (t) => NIGHT
         ? (t > 0.945 ? [2.5, 2.3, 1.9] : t > 0.55 ? [0.10, 0.11, 0.14] : [0.15, 0.16, 0.20])

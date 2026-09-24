@@ -185,6 +185,14 @@ const { overlapArea } = createRequire(import.meta.url)("../../tools/track/coplan
 // 2026-09-24: SRTM bake for interlagos/suzuka/redbull/hungaroring/cota —
 // hungaroring 3 -> 5, redbull 10 -> 11 (ground moved under existing props;
 // floaters fixed separately; coplanar spots are residual same-facing pairs).
+// Batch 2 (same day): stepped multi-tier shells + MIN_SEP slots for place(),
+// crowdBand and stands, draped groundPatch, the run-off shelf and the R3
+// centreline fixes: fleet 286 -> 245 (fuji 21 -> 10, watkins_glen 4 -> 0,
+// madrid 11 -> 7). Seven circuits rose by 1-3, each a slot or a moved road
+// landing a prop by chance on an unrelated face (baku, donington, indianapolis,
+// istanbul, jerez, nurburgring, portimao) — a fixed slot moves coincidences,
+// it cannot remove them.
+// Both re-measured together on the merged tree.
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "track", "coplanar-baseline.json"), "utf8"),
 );
