@@ -141,3 +141,13 @@ test("an empty or impossible field is quiet, not a crash", () => {
   const noS = load().create({ track: { total: LAP }, cars: [me, car({ s: null })] });
   assert.deepEqual([...noS.collect(me)], [], "a car with no arc position is skipped");
 });
+
+test("each rival carries its own power unit's voice, and it follows the car through a re-sort", () => {
+  const me = car({ s: 500 });
+  const ferrari = car({ s: 530, team: { engine: "Ferrari" } });
+  const audi = car({ s: 510, team: { engine: "Audi" } });
+  const privateer = car({ s: 520 });
+  const got = make([me, ferrari, audi, privateer]).collect(me);
+  assert.deepEqual(got.map((r) => [r.arc, r.voice]), [[10, "Audi"], [20, ""], [30, "Ferrari"]],
+    "nearest first, each slot keeping ITS car's engine (engine.js falls back to default for \"\")");
+});
