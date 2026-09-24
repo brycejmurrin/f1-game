@@ -46,7 +46,9 @@
         const k = K(s);
         for (let i = -2; i <= 2; i++) {
           const kk = (k + i + n) % n;
-          place(kk, side, gap, [0.4, 1.1, 6], fiesta[(kk + (i & 1)) % 4]);
+          // Adjacent nodes are ~4 m apart; six-metre pieces overlapped, and
+          // the repaired closing chord put two flush banner faces together.
+          place(kk, side, gap, [0.4, 1.1, 3.8], fiesta[(kk + (i & 1)) % 4]);
         }
       };
 

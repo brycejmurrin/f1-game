@@ -31,6 +31,25 @@ const LoadingScreen = (function () {
   // With nothing to fly over, just long enough for the card's fade to land
   // before the build takes the main thread.
   const CARD_MS = 700;
+  /* THE HABITUAL SKIPPER. A player who has skipped the last SKIP_STREAK flybys
+   * in a row has told us what they think of 24 s; they get SHORT_FLY_MS instead.
+   * The shots are fractions of the budget and the announcer is fitted to it, so
+   * both follow without a second sequence. One flyby left to play out resets
+   * the streak — the long cut comes back for anyone who watched it again.
+   * Stored as `apex26.flySkips` through the game's store. */
+  const SHORT_FLY_MS = 12000;
+  const SKIP_STREAK = 3;
+  /** The flyby's budget for a stored streak. Pure; hostile input is no streak. */
+  function flyMsFor(skips) {
+    const n = Number.isFinite(+skips) ? +skips : 0;
+    return n >= SKIP_STREAK ? SHORT_FLY_MS : FLY_MS;
+  }
+  /** The streak after one flyby: a skip extends it, a flyby watched to the end
+   *  clears it. Capped so a stored number never grows without bound. */
+  function nextSkips(skips, skipped) {
+    const n = Number.isFinite(+skips) && +skips > 0 ? Math.floor(+skips) : 0;
+    return skipped ? Math.min(n + 1, 99) : 0;
+  }
 
   /* ── THE CARD'S OWN GEOMETRY ────────────────────────────────────────────
    * The card is a lower third over a moving camera, and where a lower third
@@ -103,7 +122,18 @@ const LoadingScreen = (function () {
       return a && typeof a.play === "function" ? a : null;
     };
 
-    let timer = 0, phase = "", build = null, el = null, flyT0 = 0;
+    let timer = 0, phase = "", build = null, el = null, flyT0 = 0, flyMs = FLY_MS;
+
+    function readSkips() {
+      try { return store && store.get ? store.get("flySkips", 0) : 0; } catch (_) { return 0; }
+    }
+    /** Record how the flyby ended. Only a FLYBY counts — the no-world card is
+     *  700 ms and nobody is choosing anything by letting it run. */
+    function noteFlyby(skipped) {
+      if (phase !== "run") return;
+      try { if (store && store.set) store.set("flySkips", nextSkips(readSkips(), skipped)); }
+      catch (_) { /* storage refused: the streak just does not build */ }
+    }
 
     // The map's slot in the card, in CSS px. fitCanvas keeps the circuit's own
     // aspect inside it, so a wide circuit gets the width and a tall one the height.
@@ -223,7 +253,7 @@ const LoadingScreen = (function () {
      *  any more, and the build behind it is already warm. */
     // A keydown AUTO-REPEAT is not a new press: holding Enter a beat long on
     // RACE! used to skip the flyby on the first repeat.
-    function onSkip(e) { if (e && e.type === "keydown" && e.repeat) return; if (phase) fire(); }
+    function onSkip(e) { if (e && e.type === "keydown" && e.repeat) return; if (phase) { noteFlyby(true); fire(); } }
     /* THE PAD SKIPS TOO. No UI layer is open during the flyby, so the gamepad
      * walker sends no synthetic keydown and a controller-only player (TV, a
      * handheld) waited the full FLY_MS before every race. Poll the pads while
@@ -274,8 +304,12 @@ const LoadingScreen = (function () {
       // "run" is the flyby WITH the card up; "card" is the no-world fallback.
       // Both show the card, so the stylesheet reveals it for either.
       setPhase(info.hasWorld && !reduced ? "run" : "card");
-      const life = info.hasWorld && !reduced ? FLY_MS : CARD_MS;
-      timer = setTimeout(fire, life);
+      const life = info.hasWorld && !reduced ? flyMsFor(readSkips()) : CARD_MS;
+      flyMs = info.hasWorld && !reduced ? life : FLY_MS;
+      // The letterbox (css/overlays.css) opens on the flyby's last beat, so it
+      // needs the budget this run actually has, not the 24 s it usually is.
+      if (r.style && typeof r.style.setProperty === "function") r.style.setProperty("--ld-fly", life + "ms");
+      timer = setTimeout(() => { noteFlyby(false); fire(); }, life);
       /* THE ANNOUNCER (js/audio/announcer.js) reads the card aloud, and it is
        * given THIS SCREEN'S budget so the skip that ends the flyby ends the
        * voice too. Without that a skipped 24 s welcome keeps talking over the
@@ -342,11 +376,12 @@ const LoadingScreen = (function () {
       resetCard() { geom = clampCard(null); return setCardGeom({}); },
       /** How far through the FLYBY the screen is, 0..1. The shot sequencer is
        *  driven by this rather than by the wall clock, so the sequence keeps its
-       *  shape when FLY_MS is retuned, and a phase skipped by a keypress does not
+       *  shape when FLY_MS is retuned (or shortened for a habitual skipper),
+       *  and a phase skipped by a keypress does not
        *  leave the camera mid-move. 1 once the card is up, 0 when nothing runs. */
       progress() {
         if (phase !== "run" || !flyT0) return 0;
-        return Math.max(0, Math.min(1, (Date.now() - flyT0) / FLY_MS));
+        return Math.max(0, Math.min(1, (Date.now() - flyT0) / flyMs));
       },
       /** True while the screen owns the canvas — game.js keeps the world
        *  drawn for exactly this window and blanks every other menu. */
@@ -355,6 +390,6 @@ const LoadingScreen = (function () {
     };
   }
 
-  return { create, FLY_MS, CARD_MS, CARD, CARD_KEYS, clampCard, cardPristine, cardVars };
+  return { create, FLY_MS, SHORT_FLY_MS, SKIP_STREAK, flyMsFor, nextSkips, CARD_MS, CARD, CARD_KEYS, clampCard, cardPristine, cardVars };
 })();
 Object.freeze(LoadingScreen);
