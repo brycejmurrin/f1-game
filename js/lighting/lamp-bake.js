@@ -28,7 +28,11 @@
 
    Record layout (track-lights.js): [0..2] pos, [3..5] rgb, [6] radius,
    [7..9] aim dir, [10] cos inner, [11] cos outer, [12] spill floor, [13] vol,
-   [14] glare. */
+   [14] glare.
+
+   LIVE-ONLY lamps (a lens < LO_HEIGHT over its surface, or cosOuter > LO_COS)
+   are left out of the bake; the packers flag them per slot (liveOnlyAt) and the
+   shaders skip the step-aside for them, so the live loop draws them whole. */
 "use strict";
 const LampBake = (function () {
   // Default texel budget PER LAYER: ~4.8 MB at RGBA16F, x2 layers = ~9.6 MB; the
@@ -60,6 +64,8 @@ const LampBake = (function () {
     return t * t * (3 - 2 * t);
   }
 
+  const LO_HEIGHT = 3.0;         // live-only: lens less than this many metres over its baked surface
+  const LO_COS = 0.9;           // live-only: cosOuter above this (a cone narrower than ~25 deg)
   const NO_GROUND = -60000;     // alpha sentinel: no surface known -> shaders skip the bake
   // Metres splatted past the road half-width: buildRoad's outer verge column sits
   // at hw + 2.2, and the shader's bilinear tap reaches one more cell, so the splat
@@ -151,9 +157,29 @@ const LampBake = (function () {
     if (road) splatRoad(road, mnx, mnz, cell, w, h, hgt);
     const tried = new Uint8Array(w * h);             // terrain already queried for this texel
     const nc = nearClamp > 0 ? nearClamp : 4.0;
+    // LIVE-ONLY lamps: a pool that changes within one texel (a lens < LO_HEIGHT
+    // over the surface below it, or a cone tighter than LO_COS) is smeared by
+    // bilinear filtering up to ~5x too bright, so it stays on the live loop.
+    const liveOnly = new Uint8Array(n), loPos = [];
+    for (let i = 0; i < n; i++) {
+      const o = i * 15, lx = lights[o], lz = lights[o + 2];
+      let lo = lights[o + 11] > LO_COS;
+      const ii = Math.floor((lx - mnx) / cell), jj = Math.floor((lz - mnz) / cell);
+      if (!lo && ii >= 0 && jj >= 0 && ii < w && jj < h) {
+        const k = jj * w + ii;
+        if (hgt[k] !== hgt[k] && !tried[k]) {
+          tried[k] = 1;
+          const g = groundY ? groundY(mnx + (ii + 0.5) * cell, mnz + (jj + 0.5) * cell) : null;
+          if (g != null && isFinite(g)) hgt[k] = g;
+        }
+        lo = lights[o + 1] - hgt[k] < LO_HEIGHT;   // NaN (no surface) -> false
+      }
+      if (lo) { liveOnly[i] = 1; loPos.push(lx, lights[o + 1], lz); }
+    }
     yield;
     for (let i = 0; i < n; i++) {
       if (i) yield;
+      if (liveOnly[i]) continue;
       const o = i * 15;
       const lx = lights[o], ly = lights[o + 1], lz = lights[o + 2];
       const cr = lights[o + 3], cg = lights[o + 4], cb = lights[o + 5];
@@ -212,7 +238,7 @@ const LampBake = (function () {
       data[B + b] = toHalf(accB[a]); data[B + b + 1] = toHalf(accB[a + 1]); data[B + b + 2] = toHalf(accB[a + 2]); data[B + b + 3] = y;
     }
     const ms = Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - t0);
-    return { w, h, x0: mnx, z0: mnz, cell, data, lamps: n, ms };
+    return { w, h, x0: mnx, z0: mnz, cell, data, lamps: n, ms, liveOnly, loPos };
   }
 
   // One cached bake per (light-set identity, near clamp, texel budget). The track light set is
@@ -306,6 +332,25 @@ const LampBake = (function () {
     return out;
   }
 
-  return { bake, forTrack, shadowCol, toHalf, MAX_TEXELS, NO_GROUND };
+  // 1 when the record at L[o..o+2] is a LIVE-ONLY lamp of the drawing bake (not
+  // in the bake: the shaders give it no step-aside), else 0. The packers call it
+  // per lamp slot, so the common case (no live-only lamp) is one length test;
+  // otherwise it scans the handful of live-only positions (records are copied
+  // verbatim, as shadowCol relies on). Tail lights and rigs never match.
+  function liveOnlyAt(L, o) {
+    const p = _bake && _bake.loPos;
+    if (!p || !p.length || !L) return 0;
+    const x = L[o];
+    for (let i = 0; i < p.length; i += 3) {
+      if (p[i] === x && p[i + 1] === L[o + 1] && p[i + 2] === L[o + 2]) return 1;
+    }
+    return 0;
+  }
+
+  // The drawing bake's generation (0 = none): packers that cache the
+  // LIVE-ONLY lane (TLX's per-chunk lamp texture) key on it.
+  function gen() { return _bake ? _bake.gen | 0 : 0; }
+
+  return { bake, forTrack, shadowCol, liveOnlyAt, gen, toHalf, MAX_TEXELS, NO_GROUND, LO_HEIGHT, LO_COS };
 })();
 Object.freeze(LampBake);

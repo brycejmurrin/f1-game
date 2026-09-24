@@ -219,3 +219,29 @@ test("TLX setLampBake frees its light map on the off path (GLX _bakeOffN parity)
   assert.match(off[1], /_bakeSrc = null/, "the source resets so a return re-uploads");
   assert.match(off[1], /\.dispose\(\)/, "the DataTexture is disposed");
 });
+
+test("live-only lamps (lens < 3 m over its surface, or cosOuter > 0.9) stay out of the bake", () => {
+  const LB = load({ Tracks: { terrainY: () => 0 } });
+  const LOW = LAMP_A.map((v, k) => k === 0 ? 60 : k === 1 ? 2 : v);                 // lens 2 m up
+  const TIGHT = LAMP_A.map((v, k) => k === 0 ? -60 : k === 10 ? 0.98 : k === 11 ? 0.95 : v);
+  const sum = (b) => { let s = 0; for (let k = 0; k < b.data.length; k++) s += halfToFloat(b.data[k] & 0x7fff) * ((k & 3) === 3 ? 0 : 1); return s; };
+  const base = LB.bake([...LAMP_A], () => 0, 4.0);
+  const mixed = LB.bake([...LAMP_A, ...LOW, ...TIGHT], () => 0, 4.0);
+  assert.deepEqual(Array.from(mixed.liveOnly), [0, 1, 1], "the low and the tight lamp are live-only");
+  // Same light over the normal lamp's texels: the extent grows, so compare sums.
+  assert.ok(Math.abs(sum(mixed) - sum(base)) / sum(base) < 5e-3, `live-only lamps add nothing (${sum(mixed)} vs ${sum(base)})`);
+  const alone = LB.bake([...LOW, ...TIGHT], () => 0, 4.0);
+  assert.equal(sum(alone), 0, "a bake of live-only lamps is dark");
+  // A lamp 2 m over a 4 m road is low even though it sits 6 m over the terrain.
+  const n = 50, px = new Float32Array(n), py = new Float32Array(n).fill(4), pz = new Float32Array(n);
+  for (let k = 0; k < n; k++) pz[k] = -100 + k * 4;
+  const road = { n, total: 200, px, py, pz, rx: new Float32Array(n).fill(1), rz: new Float32Array(n), hw: new Float32Array(n).fill(6), lift: null };
+  const onRoad = LAMP_A.map((v, k) => k === 1 ? 6 : v);
+  assert.deepEqual(Array.from(LB.bake([...onRoad], () => 0, 4.0, road).liveOnly), [1], "height is over the ROAD surface");
+  assert.deepEqual(Array.from(LB.bake([...onRoad], () => 0, 4.0).liveOnly), [0], "6 m over bare terrain is baked");
+  // liveOnlyAt: by position in any verbatim copy; tail lights never match.
+  LB.forTrack({}, [...LAMP_A, ...LOW, ...TIGHT], 4.0);
+  const frame = [...TIGHT, ...LAMP_A, ...LOW, 1, 2, 3, 1, 0, 0, 5, 0, -1, 0, 0.9, 0.5, 0, 0, 0];
+  assert.deepEqual([0, 1, 2, 3].map((s) => LB.liveOnlyAt(frame, s * 15)), [1, 0, 1, 0]);
+  assert.ok(LB.gen() > 0, "gen names the drawing bake");
+});

@@ -246,9 +246,11 @@
     // Lamp arrays: the flat stride-15 frame.lights record split by consumer,
     // exactly like js/render/glx/glx.js / the spike. geo = (rad, cosInner, cosOuter,
     // bleed). volW/glareW are godray/glow-pass fields — not consumed here.
+    // dir.w = LIVE-ONLY (LampBake.liveOnlyAt: a lamp left out of the bake, so
+    // it gets no step-aside); a vec3 array pads to vec4 anyway, so it is free.
     const lampPos = Array.from({ length: MAX_LIGHTS }, () => new THREE.Vector3());
     const lampCol = Array.from({ length: MAX_LIGHTS }, () => new THREE.Vector3());
-    const lampDir = Array.from({ length: MAX_LIGHTS }, () => new THREE.Vector3(0, -1, 0));
+    const lampDir = Array.from({ length: MAX_LIGHTS }, () => new THREE.Vector4(0, -1, 0, 0));
     const lampGeo = Array.from({ length: MAX_LIGHTS }, () => new THREE.Vector4(1, 0.8, 0.5, 0));
     U.lampPos = uniformArray(lampPos);
     // BAKED MATERIALS (TUNE_DEFS matTexMix, shipped 1.0 — the pack ships ON)
@@ -385,11 +387,12 @@
       const L = frame.lights;
       const nL = L ? Math.min(MAX_LIGHTS, (L.length / 15) | 0) : 0;
       U.numLights.value = nL;
+      const hasLB = typeof LampBake !== "undefined";
       for (let i = 0; i < nL; i++) {
         const o = i * 15;
         lampPos[i].set(L[o], L[o + 1], L[o + 2]);
         lampCol[i].set(L[o + 3], L[o + 4], L[o + 5]);
-        lampDir[i].set(L[o + 7], L[o + 8], L[o + 9]);
+        lampDir[i].set(L[o + 7], L[o + 8], L[o + 9], hasLB ? LampBake.liveOnlyAt(L, o) : 0);
         lampGeo[i].set(L[o + 6], L[o + 10], L[o + 11], L[o + 12]);
       }
     }
@@ -425,7 +428,8 @@
         const o = i * 15, r = i * 16;            // 4 texels x RGBA
         lt[r]      = L[o];     lt[r + 1]  = L[o + 1]; lt[r + 2]  = L[o + 2]; lt[r + 3]  = L[o + 6];
         lt[r + 4]  = L[o + 3]; lt[r + 5]  = L[o + 4]; lt[r + 6]  = L[o + 5]; lt[r + 7]  = 0;
-        lt[r + 8]  = L[o + 7]; lt[r + 9]  = L[o + 8]; lt[r + 10] = L[o + 9]; lt[r + 11] = 0;
+        lt[r + 8]  = L[o + 7]; lt[r + 9]  = L[o + 8]; lt[r + 10] = L[o + 9];
+        lt[r + 11] = typeof LampBake !== "undefined" ? LampBake.liveOnlyAt(L, o) : 0;   // LIVE-ONLY
         lt[r + 12] = L[o + 6]; lt[r + 13] = L[o + 10]; lt[r + 14] = L[o + 11]; lt[r + 15] = L[o + 12];
       }
       const it = LGRID.idxTex.image.data;
@@ -1596,8 +1600,11 @@
                         : ((i) => U.lampPos.element(i));
         const LCol = PC ? ((i, r) => select(PC.use, _fetch(r, 1).xyz, U.lampCol.element(i)))
                         : ((i) => U.lampCol.element(i));
-        const LDir = PC ? ((i, r) => select(PC.use, _fetch(r, 2).xyz, U.lampDir.element(i)))
-                        : ((i) => U.lampDir.element(i));
+        const LDir = PC ? ((i, r) => select(PC.use, _fetch(r, 2).xyz, U.lampDir.element(i).xyz))
+                        : ((i) => U.lampDir.element(i).xyz);
+        // LIVE-ONLY (dir.w): the bake leaves this lamp out, so no step-aside.
+        const LLo = PC ? ((i, r) => select(PC.use, _fetch(r, 2).w, U.lampDir.element(i).w))
+                       : ((i) => U.lampDir.element(i).w);
         // The loop still runs to MAX_LIGHTS — a TSL Loop bound must be a
         // compile-time constant — and breaks on whichever count applies.
         const lampN = PC ? select(PC.use, PC.n, U.numLights) : U.numLights;
@@ -1665,15 +1672,16 @@
               // On a baked fragment the live term steps aside (1 - bakeW) and the
               // shadow-mapped lamp carves its shadow out of the pool in the pool's
               // own steady colour (bakeShCol; 1 - lampSh is 0 for every other lamp).
-              color.addAssign(albedo.mul(LCol(i, row).mul(lampSh.mul(bakeW.oneMinus()))
-                .sub(vec3(U.bakeShCol).mul(lampSh.oneMinus().mul(bakeW))))
+              const bakeWl = bakeW.mul(LLo(i, row).oneMinus()).toVar();
+              color.addAssign(albedo.mul(LCol(i, row).mul(lampSh.mul(bakeWl.oneMinus()))
+                .sub(vec3(U.bakeShCol).mul(lampSh.oneMinus().mul(bakeWl))))
                 .mul(att.mul(spotD)).mul(NoLl)
                 .mul(metalness.oneMinus()).mul(wetSheen.mul(0.85).oneMinus()));
               // bounce fill (uBounceK, def 0.04 — js/render/glx/shaders/glsl-lit.js)
               If(U.bounceK.greaterThan(0.0), () => {
                 color.addAssign(albedo.mul(LCol(i, row))
                   .mul(att.mul(U.bounceK).mul(NoLl.mul(0.45).add(0.55)))
-                  .mul(metalness.oneMinus()).mul(bakeW.oneMinus()));
+                  .mul(metalness.oneMinus()).mul(bakeWl.oneMinus()));
               });
               // GGX + clearcoat lamp speculars, NoLl-gated (js/render/glx/shaders/glsl-lit.js)
               If(NoLl.greaterThan(0.0), () => {
@@ -2120,7 +2128,7 @@
               const win = clamp(dn.mul(dn).mul(dn).mul(dn).oneMinus(), 0.0, 1.0);
               const distC = max(dist, U.lampNearClamp);
               const att = win.mul(win).div(distC.mul(distC).add(1.0));
-              const beam = smoothstep(geo.z, geo.y, dot(Ld.negate(), U.lampDir.element(i)));
+              const beam = smoothstep(geo.z, geo.y, dot(Ld.negate(), U.lampDir.element(i).xyz));
               const NoLl = max(dot(normalize(N), Ld), 0.0);
               sum.addAssign(U.lampCol.element(i).mul(att.mul(mix(geo.w, float(1.0), beam))).mul(NoLl).mul(0.25));
             });
