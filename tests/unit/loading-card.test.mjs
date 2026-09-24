@@ -409,7 +409,7 @@ test("grid colours: a black car is lifted to be visible, junk falls back to the 
 function gridHarness({ grid = field(22, 11), speaking = () => false, radioOn = true, stored = {} } = {}) {
   let now = 5000, seq = 0;
   const q = [], listeners = {}, saved = new Map(Object.entries(stored));
-  const said = [], stops = [], stings = [], ops = [];
+  const said = [], stops = [], stings = [], ops = [], plays = [];
   const elem = () => ({
     dataset: {}, style: { props: {}, setProperty(k, v) { this.props[k] = v; } },
     hidden: true, innerHTML: "", textContent: "", width: 420, height: 300, clientWidth: 0, attrs: {},
@@ -440,12 +440,13 @@ function gridHarness({ grid = field(22, 11), speaking = () => false, radioOn = t
     Tracks: {}, Flags: { svg: () => "" },
     TrackMaps: { corners: () => [], fitCanvas: () => ({ w: 210, h: 150 }), draw: () => ops.push("map") },
     store: { get: (k, d) => (saved.has(k) ? saved.get(k) : d), set: (k, v) => saved.set(k, v) },
-    announcer: () => ({ play: () => true, stop() {}, speaking }),
-    radio: () => ({ sayPreRace: (text, life, lead) => { said.push({ text, life, lead }); return radioOn; }, stop: () => stops.push(now) }),
+    announcer: () => ({ play: (inf, life) => { plays.push(life); return true; }, stop() {}, speaking }),
+    radio: () => ({ sayPreRace: (text, life, lead) => { said.push({ text, life, lead }); return radioOn; }, stop: () => stops.push(now),
+      debug: () => ({ enabled: radioOn }) }),
   });
   const info = { track: { id: "monza", name: "MONZA", country: "Italy" }, laps: 5, hasWorld: true, shots: sb.FlybySeq.DEFAULT, grid };
   const h = {
-    screen, said, stops, stings, ops, els,
+    screen, said, stops, stings, ops, els, plays,
     run: (over = {}) => { h.t0 = now; screen.run(Object.assign({}, info, over), () => {}); },
     skip: () => { for (const fn of listeners.keydown || []) fn({ type: "keydown", repeat: false }); },
     view: () => els["ld-map"].dataset.view,
@@ -604,4 +605,17 @@ test("game.js hands the card its field in grid order, the flyby's shots, and the
   const li = game.slice(at, at + 2500);
   assert.match(li, /shots: flybyShots/);
   assert.match(li, /isPlayer: c === player && FlybySeq\.slotKnown\(\)/, "an unknown slot (random grid) must flag no player");
+});
+
+test("with the radio check coming, the announcer's read is budgeted to end before the grid-mine shot", () => {
+  const on = gridHarness({ radioOn: true });
+  on.run();
+  const off = gridHarness({ radioOn: false });
+  off.run();
+  const full = off.plays[0];
+  assert.ok(full > 0, "the announcer gets the whole flyby when no check will run");
+  // grid-mine starts at 0.88 of the shipped sequence: the read must be done by then,
+  // or its landing hold keeps speaking() true until the check has no time left.
+  assert.ok(on.plays[0] <= full * 0.88, `announcer budget ${on.plays[0]} of ${full}`);
+  assert.ok(on.plays[0] >= full * 0.8, "and it still gets nearly all of it");
 });

@@ -10,14 +10,15 @@
 //    variant server — weather live-apply (regression for the bug where
 //    weather() changed nothing but wetness), glowing fog, the night light
 //    budget, the PCSS rig, and the TOD exposure table.
-import { test, expect } from "@playwright/test";
+// fixtures' test (not @playwright/test) so apex26.gfxBackend=webgl2 is pinned
+// — shared CI coverage is native GLX; TLX product coverage lives in tlx-probes.
+import { test, expect, BOOT_MS, TRACK_MS } from "../helpers/fixtures.js";
 import { pageScreenshot } from "../helpers/soft-capture.js";
 // BUDGETS, FROM A MEASUREMENT. Every wait below was under the worst case this
 // class of box actually posts: measured idle (loadavg 0.00, three cold boots,
 // scratch/perf/boot-budget.mjs) the page needs up to 24.6 s to publish __apex
 // and 16.9 s to build a track, and this file was asking for 15 s and 25 s. See
 // the BOOT_MS note in tests/helpers/fixtures.js — these are the same numbers.
-import { BOOT_MS, TRACK_MS } from "../helpers/fixtures.js";
 import { readFileSync } from "node:fs";
 import { KNOBS, FREEZE_FLICKER, FREEZE_FLICKER_FILE } from "../../tools/lighting/ab-lighting.mjs";
 import { fileURLToPath } from "node:url";
