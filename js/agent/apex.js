@@ -372,10 +372,18 @@ const api = {
   // sequence is driven by a phase timer that lasts a few seconds, which is not
   // something a capture tool can aim at, so this drives the same solver
   // deterministically through dbgCam (the override photo mode uses).
-  // Pass `shots` to preview an EDITED sequence without reloading.
+  // Pass `shots` to preview an EDITED sequence without reloading; without it,
+  // the sequence a race would fly (the saved edit, else DEFAULT — flybyShots()).
+  // `onRoad`: the shot runs down the road, so solve() skips clearance and the
+  // unit test exempts it from containment (axis-aligned boxes of angled
+  // grandstands cross the straight) — `inside` is then no defect; `lat` is the
+  // test's own check. `lift`: metres the clearance raised the eye.
   flybyCam(u, shots) {
     if (!G.track || typeof FlybySeq === "undefined") return false;
-    const v = FlybySeq.solve(G.track, +u || 0, shots);
+    const list = (shots && shots.length) ? shots : (G.flybyShots || FlybySeq.DEFAULT);
+    const v = FlybySeq.solve(G.track, +u || 0, list);
+    const sh = list[v.index], onRoad = !!(sh && sh.eye && FlybySeq.onRoadPose(sh.eye[0]) && FlybySeq.onRoadPose(sh.eye[1]));
+    const pr = onRoad ? Tracks.project(G.track, v.eye[0], v.eye[2], null, v.eye[1]) : null;
     // FlybySeq.FAR/FOG, not photo mode's own numbers: this preview IS the
     // editor's picture, and it has to be rendered the way the loading screen
     // renders the same shot or the editor lies about the haze (it did).
@@ -392,7 +400,8 @@ const api = {
     return {
       u: +(+u || 0).toFixed(4), shot: v.id, index: v.index, cut: v.cut,
       eye: v.eye.map((n) => +n.toFixed(2)), target: v.tgt.map((n) => +n.toFixed(2)),
-      fov: +v.fov.toFixed(1),
+      fov: +v.fov.toFixed(1), lift: +(v.lift || 0).toFixed(2),
+      onRoad, lat: pr ? +pr.lat.toFixed(2) : null,
       inside: hit ? { kind: hit.kind, size: [hit.w, hit.h, hit.d] } : null,
     };
   },
@@ -884,6 +893,8 @@ const api = {
     return { speed: +(G.player.speed || 0).toFixed(2), vLat: +(G.player.vLat || 0).toFixed(2) };
   },
 
+  // the FREE CAMERA panel: none = state, {eye,target,fov,roll,lens,speed} = place, {snap:"car"|"corner",n} = snap, false = exit
+  freeCam(opts) { return typeof FreeCam !== "undefined" ? FreeCam.cmd(opts) : false; },
   view(opts) {
     if (!G.track) return false;
     if (opts === "chase" || (opts && opts.mode === "chase")) { G.dbgCam = null; return { mode: "chase" }; }

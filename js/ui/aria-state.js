@@ -28,7 +28,7 @@ window.AriaState = (function () {
   const ON = ["active", "on"];
   // Roots to watch: everything that is a menu, plus the two DOM-built overlays.
   const ROOTS = "#overlay,#select,#career,#career-offers,#career-history,#career-guide,#teampicker,#carsetup,#howtoplay," +
-    "#pmsettings,#pausemenu,#lighting,#camtune,#flyby,#results,#quali,#standings,#duel-picker," +
+    "#pmsettings,#pausemenu,#lighting,#camtune,#flyby,#freecam,#results,#quali,#standings,#duel-picker," +
     // #spotifypanel's SHUFFLE/REPEAT are the same `.active`-class opt-row shape as
     // the Spotify mode toggles on the MUSIC page (#audioset, inside #pmsettings).
     // #vsfriend / #season-setup are already in UiLayers; they were the two

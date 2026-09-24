@@ -1941,7 +1941,8 @@ const GLX = (function () {
       L4[i4] = src[o]; L4[i4 + 1] = src[o + 1]; L4[i4 + 2] = src[o + 2]; L4[i4 + 3] = src[o + 6];
       L4[i4 + 4] = src[o + 3]; L4[i4 + 5] = src[o + 4]; L4[i4 + 6] = src[o + 5]; L4[i4 + 7] = src[o + 12];
       L4[i4 + 8] = src[o + 7]; L4[i4 + 9] = src[o + 8]; L4[i4 + 10] = src[o + 9]; L4[i4 + 11] = src[o + 10];
-      L4[i4 + 12] = src[o + 11]; L4[i4 + 13] = 0; L4[i4 + 14] = 0; L4[i4 + 15] = 0;
+      L4[i4 + 12] = src[o + 11]; L4[i4 + 14] = 0; L4[i4 + 15] = 0;   // lane 13 = LIVE-ONLY (not in the lamp bake):
+      L4[i4 + 13] = fromTail || typeof LampBake === "undefined" ? 0 : LampBake.liveOnlyAt(src, o);
     }
     gl.uniform4fv(litU["uLight[0]"], L4, 0, nL * 16);
   }

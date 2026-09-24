@@ -5399,3 +5399,54 @@ Unit tests pin the merge (every triangle once, lamp cells unchanged, default on)
 Not measured here: CPU frame time — this box's frame clock is SwiftShader/Lavapipe,
 not a player's. That is the census's job (next push: step 2b + 3b; then
 `ls: apex26.tlxChunkMerge=1` as the A/B).
+
+## 2aj. Census 245, the brake-ring variant, and three's WebGL2 post links (2026-09-24)
+
+**Census 245 (69ad4ce, steps 2b + 3b, real Metal, driven montreal):** three.js/WebGPU
+`stack:` total **1** (from 8 at 243 and 44 at 240), frames >= 100 ms 2, gpuErrors 0,
+luma 51.8; GLX / WGX unchanged. The one left was a single scene-pass pipeline, and
+`minted: t,0.9,0,0,0,0,0,1|na` named its material. The WebGL2 control leg showed 8
+lazy post-chain links (`runPass`) and a 4.25 s callback — the leg's scene warm took
+6.4 s, past the post warm's 3 s gate.
+
+**The brake-ring variant.** `car-draw.js` `_ringOpts` (roughness 0.9, specular 0,
+noAlphaWrite) is queued only once a disc is hot, so its first draw is the first
+braking zone at alpha ~0.3 — the TRANSPARENT key the grid never draws (the cockpit
+ERS / overtake / aero-flap pulses share it). Three things had to be right before a
+braking lap compiled nothing (`scratch/compile-attrib-probe.mjs`, now braking from
+70 m/s at 12 spots, logging each new pipeline key):
+1. mint the variant (`mintLateLit`) BEFORE `lit.setSsrMrt(usePost)`: minted after it,
+   the material had no MRT node and the warm built a no-MRT program the race never
+   uses (1.2 s on Lavapipe) while the lap still built the MRT pipeline;
+2. compile it on every distinct lit-mesh vertex layout (`_geoReg`, instanced batch
+   geometry excluded), because the pipeline keys on the layout;
+3. compile each layout at BOTH winding signs — three keys a pipeline on
+   `matrixWorld.determinantAffine() < 0`, the car draws one side's parts mirrored,
+   and that was the single field (27) the lap's key differed in.
+
+**Three's WebGL2 backend links synchronously on the render path** (web research
+subagent, r186 source): `compileAsync` links with `KHR_parallel_shader_compile` and
+polls `COMPLETION_STATUS`, but a normal render calls `getProgramParameter(LINK_STATUS)`,
+which blocks for the whole ANGLE→Metal compile. So `apex26.tlxWarmPlus` is now AUTO:
+on for three's WebGL2 backend (ungated post warm + caster warm), off on WebGPU where
+census 244 showed the post chain does not compile lazily; `=1`/`=0` force it.
+
+| probe (braking lap, montreal) | lap sync compiles | race-load sync | warm stages (ms) |
+|---|---|---|---|
+| Lavapipe WebGPU, `tlxWarmFx=0` | 9 (skid, 2 particle, ring) | 14 | scene 6028 |
+| Lavapipe WebGPU, this tree | **0** | 14 | scene 7053, fx+late 1755 (Lavapipe pipeline compile is CPU; real GPU in the census) |
+| SwiftShader three/WebGL2, this tree | **0** | **2** (was 10) | scene 5982, fx 27, post 204, shadow 2 |
+
+Luma: WebGPU race 57.7 (57.7), garage 45.1 (43.0-44.7 turntable range), gpuErrors 0.
+
+**Backlog from the per-frame code hunt** (subagent, read-only, unmeasured — each needs
+its own A/B): env probe re-renders a face every 4th frame forever even with the eye
+still, and leaves stale instanced meshes visible in faces; sun / car / lamp shadow
+passes share one caster pool, so slot geometry churns every pass; the night lamp-shadow
+rebuild re-packs and re-uploads every prop caster when only cars moved; one object per
+draw record (~150-400/frame); `resize()` queries GL limits every `begin()`;
+`performance.now()` per `acquireMesh`; per-frame lamp-grid state/key allocation;
+soft-blit readback allocates a full frame (census/soft path only); the godray chain
+(march + 4 half-res blurs) runs every frame; post ping-pong swaps textures on shared
+materials ~14x/frame. Upstream candidates (research subagent): #34506
+(`compileAsync` render-state fix, dev), #34637/#34531 (codegen size/time, r187).
