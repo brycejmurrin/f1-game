@@ -475,7 +475,7 @@ test("corners by character: slowest / fastest / lore resolve to filmable corners
     if (slow < 0 || fast < 0 || lore < 0) out.push(`${id}: a role missed every corner (${slow} ${fast} ${lore})`);
     else {
       if (!track._fbFilmable[slow] || !track._fbFilmable[fast] || !track._fbFilmable[lore]) out.push(`${id}: a role landed on an unfilmable corner`);
-      if (!(cs[slow].v <= cs[fast].v)) out.push(`${id}: slowest ${cs[slow].v} is faster than fastest ${cs[fast].v}`);
+      if (!(cs[slow].r <= cs[fast].r)) out.push(`${id}: slowest (r ${cs[slow].r}) is wider than fastest (r ${cs[fast].r})`);
     }
     return out;
   });
@@ -537,4 +537,23 @@ test("no racing line in a flyby frame", () => {
   assert.ok(call, "game.js still draws the driving line");
   assert.match(call, /!cine\b/, "the driving line is gated off in cinematic frames: " + call.trim());
   assert.match(call, /state !== "menu"/, "and off under the loading-screen flyby");
+});
+
+test("one corner, one shot: no flyby films the same corner twice", async () => {
+  // Roles resolve independently, and did collide: Monza's first and fastest
+  // were both T1, and 14 of 52 circuits filmed one corner twice (a third of
+  // varied loads). bindCorners() moves a clash to that role's next choice.
+  const bad = await withFleet(["monza", "bahrain", "mont_tremblant", "qatar", "jeddah", "nurburgring"], (id, track, g) => {
+    const F = g.sandbox.FlybySeq, out = [];
+    for (let seed = -1; seed < 12; seed++) {
+      const list = F.bindCorners(track, seed < 0 ? F.DEFAULT : F.vary(F.DEFAULT, seed));
+      const s = list.filter((sh) => sh.eye[0].at === "corner").map((sh) => F.cornerS(track, sh.eye[0].n));
+      for (let i = 0; i < s.length; i++) for (let j = i + 1; j < s.length; j++) {
+        const d = Math.abs(s[i] - s[j]), gap = Math.min(d, track.total - d);
+        if (gap < 120) out.push(`${id} ${seed < 0 ? "DEFAULT" : "seed " + seed}: corner shots ${i} and ${j} are ${gap.toFixed(0)} m apart`);
+      }
+    }
+    return out;
+  });
+  assert.deepEqual(bad, [], bad.join("\n"));
 });
