@@ -48,6 +48,9 @@ const RaceControl = (function () {
     if (ds > 0 && oldS > total * 0.5 && newS < total * 0.5) {
       const lapDone = c.lapTime || 0;
       c.lap = (c.lap || 0) + 1;
+      // A red-flag restart rewinds the classification lap but burns another
+      // physical lap. Backward line crossings do not refund fuel either.
+      c.fuelLap = Math.max(c.fuelLap || 0, c.lap + (c.fuelRestartLaps || 0));
       c._lapTimeAtLine = lapDone;
       c.lapTime = 0;
       const target = Number(lapsTarget);
