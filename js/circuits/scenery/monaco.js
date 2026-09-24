@@ -479,12 +479,15 @@
             const side = sd < 0 ? "l" : "r";
             overheadSpan({
               id: `monaco-tunnel-haunch-${side}-${k}`, frac: k / n, rawFrac: true, clearance: 6.05,
-              thickness: 1.75, depth: dz * 1.02, span: cw * 0.28, offset: sd * cw * 0.26,
+              // Tops step down 7.80 / 7.77 / 7.76 (roof / haunch / springing):
+              // at 1.75 and 2.25 all three topped out at exactly 7.80 and the
+              // roof fought from any camera above it (124 pairs, --overhead).
+              thickness: 1.72, depth: dz * 1.02, span: cw * 0.28, offset: sd * cw * 0.26,
               color: VAULT2, supports: false, required: true,
             });
             overheadSpan({
               id: `monaco-tunnel-springing-${side}-${k}`, frac: k / n, rawFrac: true, clearance: 5.55,
-              thickness: 2.25, depth: dz * 1.10, span: cw * 0.32, offset: sd * cw * 0.44,
+              thickness: 2.21, depth: dz * 1.10, span: cw * 0.32, offset: sd * cw * 0.44,
               color: VAULT, supports: false, required: true,
             });
             overheadSpan({

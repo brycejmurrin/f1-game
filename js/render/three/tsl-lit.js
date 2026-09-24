@@ -229,6 +229,12 @@
       lgCell:         uniform(72.0),
       lgIdxW:         uniform(256.0),
       lgOn:           uniform(0.0),
+      // BAKED LAMP POOLS (js/lighting/lamp-bake.js via setLampBake): the ground
+      // light map's world extent, the per-frame lamp colour scale, and the switch.
+      bakeOn:         uniform(0.0),
+      bakeOrigin:     uniform(new THREE.Vector2(0, 0)),
+      bakeSize:       uniform(new THREE.Vector2(1, 1)),
+      bakeScale:      uniform(new THREE.Vector3(0, 0, 0)),
       // PER-CHUNK ROAD (frame.roadChunkLamps). The road is ONE plain mesh on
       // TLX, but the grid lookup below reads only world position, so the plain
       // variant can take it too: gated here by the knob and per draw by
@@ -294,6 +300,7 @@
       const s3 = (u, a, m) => { if (a) u.value.set(a[0] * (m || 1), a[1] * (m || 1), a[2] * (m || 1)); };
       s3(U.sunDir, frame.sunDir);
       s3(U.sunColor, frame.sunColor);
+      setLampBake(frame.lampBake, frame.lampBakeScale);
       const ambM = k("ambientMul", 1);
       s3(U.ambSky, frame.ambientSky || [0.3, 0.32, 0.36], ambM);
       s3(U.ambGround, frame.ambientGround || [0.2, 0.19, 0.18], ambM);
@@ -820,6 +827,34 @@
      *
      * lampTex is 4 texels per lamp on x: (pos,rad) (col,-) (dir,-) (geo). */
     const LGRID = (ctx.lampGrid && ctx.lampGrid.lampTex) ? ctx.lampGrid : null;
+    /* BAKED LAMP POOLS. One RGBA16F light map per track (LampBake.forTrack),
+     * swapped into this ONE texture node — the node, not the texture, is what
+     * the graph holds, so a new track never mints a program. A 1x1 black
+     * placeholder until the first bake; bakeOn gates the term either way. */
+    const _bakeBlank = new THREE.DataTexture(new Uint16Array(4), 1, 1, THREE.RGBAFormat, THREE.HalfFloatType);
+    _bakeBlank.needsUpdate = true;
+    const BAKE_NODE = texture(_bakeBlank);
+    let _bakeSrc = null;
+    function setLampBake(b, scale) {
+      if (!b || !scale) { U.bakeOn.value = 0.0; return false; }
+      if (b !== _bakeSrc) {
+        const t = new THREE.DataTexture(b.data, b.w, b.h, THREE.RGBAFormat, THREE.HalfFloatType);
+        t.minFilter = t.magFilter = THREE.LinearFilter;
+        t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+        t.generateMipmaps = false;
+        t.colorSpace = THREE.NoColorSpace;
+        t.needsUpdate = true;
+        const old = BAKE_NODE.value;
+        BAKE_NODE.value = t;
+        if (old && old !== _bakeBlank) { try { old.dispose(); } catch (_) { /* already gone */ } }
+        _bakeSrc = b;
+        U.bakeOrigin.value.set(b.x0, b.z0);
+        U.bakeSize.value.set(b.w * b.cell, b.h * b.cell);
+      }
+      U.bakeScale.value.set(scale[0], scale[1], scale[2]);
+      U.bakeOn.value = 1.0;
+      return true;
+    }
     const matAlbedoNode = MAT_MAPS && MAT_MAPS.albedo ? texture(MAT_MAPS.albedo) : null;
     const matNormalNode = MAT_MAPS && MAT_MAPS.normal ? texture(MAT_MAPS.normal) : null;
 
@@ -1471,6 +1506,20 @@
         // unshadowed (they are indirect).
         const lampFogAcc = vec3(0.0).toVar();
 
+        // BAKED LAMP POOLS: an upward-facing fragment takes every lamp's diffuse
+        // pool from the light map (all lamps, no nearest-N cut, so nothing pops
+        // on), and each live lamp below scales its diffuse by (lampSh - bakeW) so
+        // no lamp counts twice and the one shadow-mapped floodlight still carves
+        // its shadow out of the baked pool. Sampled at level 0, unconditionally:
+        // no implicit derivative inside control flow (the WGSL uniformity rule).
+        const bUv = wp.xz.sub(U.bakeOrigin).div(U.bakeSize).toVar();
+        const bIn = bUv.x.greaterThan(0.0).and(bUv.x.lessThan(1.0))
+          .and(bUv.y.greaterThan(0.0)).and(bUv.y.lessThan(1.0));
+        const bE = BAKE_NODE.sample(bUv).level(0).rgb.mul(U.bakeScale).toVar();
+        const bakeW = select(U.bakeOn.greaterThan(0.5).and(bIn), smoothstep(0.55, 0.85, N.y), float(0.0)).toVar();
+        color.addAssign(albedo.mul(bE).mul(bakeW)
+          .mul(metalness.oneMinus()).mul(wetSheen.mul(0.85).oneMinus()));
+
         /* PER-CHUNK LAMP SOURCE. Off (LGRID null, or lgOn 0) every accessor
          * below is the plain uniform-array read this loop has always done.
          *
@@ -1584,7 +1633,7 @@
               }
               // diffuse pool — fades as the road wets (reflection takes over)
               color.addAssign(albedo.mul(LCol(i, row))
-                .mul(att.mul(spotD).mul(lampSh)).mul(NoLl)
+                .mul(att.mul(spotD).mul(lampSh.sub(bakeW))).mul(NoLl)
                 .mul(metalness.oneMinus()).mul(wetSheen.mul(0.85).oneMinus()));
               // bounce fill (uBounceK, def 0.04 — js/render/glx/shaders/glsl-lit.js)
               If(U.bounceK.greaterThan(0.0), () => {
@@ -2104,7 +2153,7 @@
       if (i >= 0) _mats.splice(i, 1);
     }
 
-    return { makeMaterial, makeViz, releaseMaterial, uniforms: U, sharedUniforms: SHARED_UNIFORMS, updateFrame, setEnvStr, setEnvCube, setLampGrid, setLampGridColors,
+    return { makeMaterial, makeViz, releaseMaterial, uniforms: U, sharedUniforms: SHARED_UNIFORMS, updateFrame, setEnvStr, setEnvCube, setLampGrid, setLampGridColors, setLampBake,
              setSsrMrt, setMaterialMaps, hasMaterialMaps: !!matAlbedoNode, MAX_LIGHTS };
   }
 

@@ -70,6 +70,10 @@ function buildContext(opts) {
                time: () => {}, timeEnd: () => {} },
   };
   sandbox.window = sandbox;
+  // The baked asset pack, as a browser build has it. Without `Assets`,
+  // bakedModel() returns false at its first line and every audit on this
+  // harness was blind to all 36 models; `assets: false` restores that.
+  if (opts.assets !== false) sandbox.Assets = require("./pack-assets.cjs").packAssets();
   const ctx = vm.createContext(sandbox);
 
   function runFile(relPath) {

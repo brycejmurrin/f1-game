@@ -6082,6 +6082,7 @@ const WGX = (function () {
 
       chunkedTrackCoords: true,
       hasPerChunkLights: true,       // consumes the LampChunks bake (trackLightSBO/chunkIdxSBO)
+      hasLampBake: undefined,        // BAKED LAMP POOLS not ported yet: game.js never builds frame.lampBake here
       createMesh,
       createTexMesh,                 // textured decals
       createChunkedMesh,
