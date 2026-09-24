@@ -16,6 +16,7 @@ problem and what is still left.
 | #243 | **BAKED LAMP POOLS**: every lamp's diffuse pool on up-facing ground, baked once per track into an RGBA16F world-XZ map (TLX + GLX) | `js/lighting/lamp-bake.js` |
 | #246 | Bug-hunt fixes (four read-only reviewers): <br>• road-height bake with height in alpha and a height fade in the shader <br>• symmetric, verge-wide road splat <br>• steady-colour shadow carve <br>• colour clamp <br>• pre-bake at race start; debounced, time-sliced rebakes <br>• 0.35 s entry ramp for lamps joining the set <br>• steady, distance-faded tail-glow decal | as listed |
 | #247 | **a**: LAMP BOUNCE baked as a second texture layer. **c**: baked pools ported to WGX (WebGPU) | `lamp-bake.js`, all three lit shaders, `wgx.js` |
+| #257 | **e**: live-only flag for low or tight fixtures. **g**: TLX/WGX free the bake, and the texel budget is exact. **b**: wet phone per-chunk floor | `lamp-bake.js`, all three backends and shaders, `game.js` |
 | #250 | **d**: governor steps. The lamp cap slides after a 1.5 s held tier, and halos fade. **f**: the tail-glow decal is pitched to the road. **g** (part): GLX frees the bake when it is off. **h**: comment fix | `frame-lights.js`, `car-mesh.js`, `glx.js`, `game.js` |
 
 Measured (real-track harness, `buildRoad` vertices, Monza / Vegas / Singapore):
@@ -23,27 +24,30 @@ road samples that lose the bake at the edges went from thousands to 0. Interior
 error has a p95 under 2–9 % (worst on Vegas). The gpu-census on macos-latest,
 Singapore at night, passed for all four renderers on #246 and again on #247
 (run 35955024485: WGX `ok=true gpuErrors=0`, drove 439 m; GLX `gpuErrors=0`).
-#247 is live (`apex-sha` de4faf2fc). #250 merged as 3b2548d4c; its Pages deploy is in flight.
+**All live** (checked 2026-09-24 06:00: `apex-sha` 6fb5af007; #240's 84be106 and the
+#246, #247, #250 and #257 merges are all ancestors of it; `liveOnlyAt`, `glowFade` and
+`bakeSteps` are present in the served JS).
 
 ## Next steps
 
-**Done:** a, c (#247); d, f, h and GLX freeing for g (#250). **Remaining, in order:**
+**Shipped:** a, b (the phone half; desktop measured as fine), c, d, e, f, h, and most of g.
+**Open, all small or optional:**
 
-1. **e: per-lamp "live-only" flag** (below). Supersampling was measured and rejected.
-   - Tried a 3×3 box average near each lamp's foot. Monza k1380 went 29.7 → 27.0
-     against a true 6.1. Vegas and Singapore got worse (16.1 → 21.1, 41.2 → 44.8).
-   - The overshoot is the bilinear tap spreading a sharp cone edge across
-     neighbouring texels, not point sampling inside a texel.
-2. **g: mobile bake size.** Measure the parity error at `MAX_TEXELS` 300 k
-   (cell ×1.41) with the harness. Ship it on `gfx.isMobile` only if the interior
-   p95 stays under 10 %. TLX and WGX should also free the bake when it is off, as
-   GLX now does.
-3. **b: wet nights.** Measure first (see below).
-4. **Verify #250 on hardware.** gpu-census `macos-latest` on the live tip, with a
-   forced governor tier:
-   - `ls: apex26.perfTier=2`, or the `__apex` governor hook
-   - confirm lamps and halos step smoothly
-   - confirm the decal sits on the road through Singapore's elevation changes
+1. **Mobile bake memory.**
+   - A uniform half budget was rejected: Vegas p95 went 7.3 → 14.4 %.
+   - The real lever is the layout. The bake covers the lamps' bounding box, and on a
+     street circuit that box is mostly empty.
+   - A tiled or sparse layout (only the tiles within `radius` of a lamp, packed into an
+     atlas with an indirection table) would keep a 1.5 m cell at a fraction of the
+     texels.
+   - It is worth doing only if phone memory becomes a measured problem. ~9.6 MB today.
+2. **Cone-edge residue** after e.
+   - Worst is Monza k1442 at 2.64× of a dim value (tl 1.0 vs peak 34), and Vegas at 1.44×.
+   - Small in absolute terms; not a hotspot.
+   - Fix only if seen: bake at 1.5× resolution along the road corridor.
+3. **Hardware spot-check of the wet phone floor.** Run gpu-census with a phone-tier
+   override on a wet night (`ls: apex26.forceMobileTier=1`, `tod=night`), and check that
+   per-chunk lamps turn on with wetness.
 
 ### Execution (2026-09-24, after #250)
 
