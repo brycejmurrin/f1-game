@@ -224,12 +224,12 @@
         }
       });
 
-      groundPatch(K(0.04), 1, 5, [24, 0.18, 34], GRAVEL,
+      groundPatch(K(0.099), 1, 5, [24, 0.18, 34], GRAVEL,
         { id: "monza-rettifilo-gravel", samples: 6 });
-      tyreWall(0.03, 0.055, 1, 4, [0.88, 0.20, 0.18]);
-      grandstandEx(0.05, -1, 12, 76, null, null,
+      tyreWall(0.089, 0.114, 1, 4, [0.88, 0.20, 0.18]);
+      grandstandEx(0.109, -1, 12, 76, null, null,
         { livery: "crimson", roof: "truss", endWalls: true, pylons: true, h: 11 });
-      marshalPost(K(0.045), 1, 10);
+      marshalPost(K(0.104), 1, 10);
 
       // Variante della Roggia (s~0.30) — shaded chicane, gravel both sides, fog detail.
       groundPatch(K(0.30), -1, 6, [22, 0.18, 28], GRAVEL,
@@ -259,42 +259,43 @@
       marshalPost(K(0.31), -1, 9);
       waterBand(0.283, 0.317, -1, 32, 36, 4, [0.30, 0.35, 0.23], { id: "monza-roggia-ditch", required: true });
 
-      // Lesmo 1 & 2 (s~0.45–0.52) — tight woodland curves, gravel + tyre.
-      groundPatch(K(0.46), 1, 5, [18, 0.18, 26], GRAVEL,
+      // Lesmo 1 & 2 (apexes s 0.3705 / 0.4321, both right) — gravel + tyre on the outside.
+      groundPatch(K(0.3705), -1, 5, [18, 0.18, 26], GRAVEL,
         { id: "monza-lesmo-one-gravel", samples: 5 });
-      groundPatch(K(0.51), 1, 5, [18, 0.18, 24], GRAVEL,
+      groundPatch(K(0.4321), -1, 5, [18, 0.18, 24], GRAVEL,
         { id: "monza-lesmo-two-gravel", samples: 5 });
-      tyreWall(0.45, 0.47, 1, 4, [0.85, 0.78, 0.20]);
-      marshalPost(K(0.48), 1, 9);
+      tyreWall(0.36, 0.38, -1, 4, [0.85, 0.78, 0.20]);
+      marshalPost(K(0.40), 1, 9);
 
-      // Variante Ascari (s~0.78) — triple chicane, gravel run-offs, grandstand.
-      groundPatch(K(0.78), -1, 6, [28, 0.18, 40], GRAVEL,
+      // Variante Ascari (apexes s 0.618/0.633/0.650, L-R-L) — triple chicane, gravel run-offs, grandstand.
+      groundPatch(K(0.633), -1, 6, [28, 0.18, 40], GRAVEL,
         { id: "monza-ascari-gravel-left", samples: 7 });
-      groundPatch(K(0.795), 1, 6, [24, 0.18, 32], GRAVEL,
+      groundPatch(K(0.648), 1, 6, [24, 0.18, 32], GRAVEL,
         { id: "monza-ascari-gravel-right", samples: 6 });
-      tyreWall(0.77, 0.80, -1, 4, [0.88, 0.20, 0.18]);
-      grandstandEx(0.78, -1, 14, 80, null, null,
+      tyreWall(0.623, 0.653, -1, 4, [0.88, 0.20, 0.18]);
+      grandstandEx(0.633, -1, 14, 80, null, null,
         { livery: "steel", tiers: 2, roof: "truss", pylons: true, endWalls: true, h: 12 });
-      marshalPost(K(0.785), 1, 9);
+      marshalPost(K(0.638), 1, 9);
 
-      // Parabolica / Curva Alboreto (s~0.88–0.93) — wide outer gravel, big arc stand.
-      groundPatch(K(0.90), -1, 8, [50, 0.18, 110], GRAVEL,
+      // Parabolica / Curva Alboreto (apex s 0.824, right) — wide outer gravel, big arc stand.
+      groundPatch(K(0.819), -1, 8, [50, 0.18, 110], GRAVEL,
         { id: "monza-parabolica-gravel", samples: 10 });
-      grandstandEx(0.905, 1, 14, 96, null, null,
+      grandstandEx(0.824, -1, 14, 96, null, null,
         { livery: "crimson", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
-      tyreWall(0.885, 0.92, -1, 6, [0.88, 0.20, 0.18]);
-      marshalPost(K(0.91), 1, 11);
+      tyreWall(0.804, 0.839, -1, 6, [0.88, 0.20, 0.18]);
+      marshalPost(K(0.829), 1, 11);
       // Sponsor hoardings around the Parabolica outside.
-      for (const s of [0.87, 0.89, 0.91]) billboard(K(s), -1, 12, 13, 5, [0.90, 0.86, 0.30]);
+      for (const s of [0.789, 0.809, 0.829]) billboard(K(s), -1, 12, 13, 5, [0.90, 0.86, 0.30]);
 
       // Catch fences behind the major spectator zones.
-      fence(0.03, 0.06, 1, 7, 4, [0.74, 0.76, 0.80]);
+      fence(0.089, 0.119, 1, 7, 4, [0.74, 0.76, 0.80]);
       fence(0.295, 0.32, 1, 8, 4, [0.74, 0.76, 0.80]);
-      fence(0.77, 0.80, -1, 9, 4, [0.74, 0.76, 0.80]);
-      fence(0.89, 0.93, 1, 9, 4, [0.74, 0.76, 0.80]);
+      fence(0.623, 0.653, -1, 9, 4, [0.74, 0.76, 0.80]);
+      fence(0.809, 0.849, 1, 9, 4, [0.74, 0.76, 0.80]);
 
       for (const [s0, s1] of [
-        [0.07, 0.28], [0.32, 0.44], [0.53, 0.76], [0.81, 0.88],
+        [0.125, 0.28], [0.32, 0.355], [0.385, 0.42], [0.445, 0.61],
+        [0.665, 0.795], [0.86, 0.93],
       ]) {
         guardrail(s0, s1, -1, 7, [0.80, 0.81, 0.83]);
         guardrail(s0, s1,  1, 7, [0.80, 0.81, 0.83]);
@@ -441,12 +442,12 @@
         }
       }
 
-      grandstandEx(0.875, 1, 14, 80, null, null,
+      grandstandEx(0.794, 1, 14, 80, null, null,
         { livery: "concrete", roof: "truss", pylons: true, endWalls: true, h: 11 });
-      grandstandEx(0.935, 1, 14, 80, null, null,
+      grandstandEx(0.854, 1, 14, 80, null, null,
         { livery: "steel", roof: "flat", endWalls: true, h: 9 });
       // Support plinths underneath stands — placed at groundYAt so they don't float.
-      for (const s of [0.875, 0.935]) {
+      for (const s of [0.794, 0.854]) {
         const kp = K(s);
         const ap = anchor(kp, 1, 20);
         // Plinth sits on the ground (ap.c is ground level), extends 1.2 m up.
@@ -455,7 +456,7 @@
       // ── Lit window bands on Parabolica stands ──
       {
         const winPar = [0.98, 0.88, 0.52];
-        for (const s of [0.875, 0.905, 0.935]) {
+        for (const s of [0.794, 0.824, 0.854]) {
           const ap = anchor(K(s), 1, 21.5);
           addBox(out, vadd(ap.c, ap.u, 10.0), [0.22, 1.3, 94], winPar, [ap.r, ap.u, ap.t]);
         }
@@ -496,11 +497,11 @@
       }
 
       for (const [s, side, gap] of [
-        [0.04,  1, 9],   // Rettifilo exit right
+        [0.099, 1, 9],   // Rettifilo exit right
         [0.30, -1, 8],   // Roggia left
-        [0.48,  1, 9],   // Lesmo right
-        [0.78,  1, 9],   // Ascari right
-        [0.91,  1, 12],  // Parabolica right
+        [0.40,  1, 9],   // Lesmo right
+        [0.633, 1, 9],   // Ascari right
+        [0.829, 1, 12],  // Parabolica right
       ]) {
         const k = K(s);
         const ap = anchor(k, side, gap);
@@ -539,11 +540,11 @@
           step: 11,
         });
       };
-      tifosiBowl(0.905, 1, 26, 92, 4, "crimson");   // Parabolica outer — largest crowd
+      tifosiBowl(0.824, -1, 60, 92, 4, "crimson");   // Parabolica outer — largest crowd
       tifosiBowl(0.02, 1, 40, 84, 4, "steel");      // facing the pit straight
       tifosiBowl(0.955, -1, 30, 78, 4, "concrete"); // behind Tribuna Centrale
       tifosiBowl(0.11, 1, 24, 64, 3, "crimson");    // Curva Grande sweep
-      tifosiBowl(0.78, -1, 30, 70, 3, "steel");     // Ascari outer
+      tifosiBowl(0.633, -1, 30, 70, 3, "steel");     // Ascari outer
 
       (function museum() {
         const a = anchor(K(0.0), 1, 40);
@@ -622,12 +623,12 @@
       {
         const kerbR = [0.88, 0.16, 0.12], kerbW = [0.94, 0.94, 0.92];
         const strips = [
-          [0.025, 0.055,  1],   // Variante del Rettifilo — right
-          [0.028, 0.052, -1],   // Rettifilo — left
+          [0.084, 0.114,  1],   // Variante del Rettifilo — right
+          [0.087, 0.111, -1],   // Rettifilo — left
           [0.285, 0.320, -1],   // Variante della Roggia — left
           [0.290, 0.315,  1],   // Roggia — right
-          [0.765, 0.805, -1],   // Variante Ascari — left
-          [0.770, 0.800,  1],   // Ascari — right
+          [0.618, 0.658, -1],   // Variante Ascari — left
+          [0.623, 0.653,  1],   // Ascari — right
         ];
         for (const [s0, s1, side] of strips) {
           let i = 0;

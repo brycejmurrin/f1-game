@@ -483,7 +483,10 @@
       overheadSpan({
         id: "madrid-motorway-overpass-soffit",
         frac: 0.085,
-        clearance: 6.2,
+        // 5 cm UNDER the deck's own underside, top buried in the deck: at the
+        // deck's 6.2 both bottoms shared one plane (0.0 mm, 216 m2) and fought
+        // overhead as a car drove beneath (coplanar-audit --overhead).
+        clearance: 6.15,
         thickness: 0.22,
         depth: 10.4,
         supportGap: 2.4,
@@ -519,7 +522,7 @@
       overheadSpan({
         id: "madrid-ifema-access-bridge-soffit",
         frac: 0.885,
-        clearance: 6.4,
+        clearance: 6.35,   // 5 cm under the bridge's underside, as the overpass soffit
         thickness: 0.22,
         depth: 9.4,
         supportGap: 2.8,

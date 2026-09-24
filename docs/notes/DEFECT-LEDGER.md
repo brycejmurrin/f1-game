@@ -3847,3 +3847,42 @@ monza is the characterization track. Its corrected frame moves road height
 step 4 no longer stops on it (39.07 -> 44.44 m/s). With monza's files reverted
 to the base the vm cross-check passed 5/5 on the same tree, so no physics code
 moved. Any later frame fix on monza re-blesses the same way.
+
+## Scenery QA batch (2026-09-24) — see docs/notes/SCENERY-QA-PLAN.md
+
+- **Overhead z-fighting — FIXED.** coplanar-audit skipped every |n.y| >= 0.5
+  face, so no underside or roof was checked. madrid's two bridge soffits sat at
+  their decks' own clearance (0.0 mm, 216 / 203 m2: the flicker seen driving
+  under them); monaco's tunnel roof layers all topped out at 7.80 m (124 pairs);
+  miami's pier shafts shared their caps' top plane. `--overhead` mode added and
+  gated at zero fleet-wide (one named 0.4 m2 madrid lamp-arm exception).
+- **Start line / grid boxes / pit paint — FIXED.** `_startBias` [-1, -2] was
+  weaker than the road's [-8, -16], so the paint sat behind the asphalt beyond
+  ~5 m on every circuit. Now [-12, -24]; grid-boxes.test.mjs pins it.
+- **suzuka crossover pillar in the lower road — FIXED.** A RAW (unguarded)
+  pillar stood 4 m inside the lower carriageway; pillars whose footprint is
+  onTrack are skipped. OPEN: an audit for solids spanning the whole
+  props-over-road band (they have no qualifying face).
+- **The 4.00 m frac-0 box pair on 29 circuits — FIXED** (green shed vs the
+  generic pit-straight stand).
+- **neonTower notch/arch self-intersection — FIXED.** Twin towers / portal legs
+  were sized across w but offset along d with the full d each (cota 6.65 m);
+  towers also claim their widest section in the mass index.
+- **Pit canopy shell / city mullion tops — FIXED** (tops shared the roof plane;
+  40 and 19 circuits).
+- **Asset pack visible to node audits — DONE** (`tools/lib/pack-assets.cjs`).
+  The ledger's "14 of 52 overhang class with the pack" was a method artifact:
+  the same 14 read with the pack off; under props-over-road's method 1 of 52
+  reads over TOL either way (mont_tremblant's crown).
+- **Corner groups — FIXED:** monza (Rettifilo, Lesmo, Ascari, Parabolica),
+  redbull (Remus, Schlossgold) onto curvature-peak apexes; silverstone `turns`
+  replaced with the 18 peaks and its pit-wall barrier kept inside the pit window.
+- **Pit sides, from references — FIXED:** redbull's pits are on +1 with The Wing
+  (formula1.com, Red Bull), so its main stands moved to -1 and The Wing/paddock
+  behind the garages on +1; suzuka's pits are on -1 (grandstand guides), so its
+  main stand moved to +1 and race control/hospitality behind the -1 garages —
+  which also un-reds suzuka-foundation.spec (its crown was superseded).
+- Baselines: clip lowered on 24 circuits, coplanar on 3; nothing went up.
+- OPEN, next campaign (plan workstream B): props flush on terrain, the coplanar
+  FIGHT_MAX 150 -> 300 m window (~520 spots), the road ribbon folding on corner
+  insides, pits.js sweep() unrecorded, overlapping water slabs.

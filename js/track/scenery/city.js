@@ -231,16 +231,18 @@ const SceneryCity = (function () {
         for (let c = 1; c <= nm; c++) {
           const off = -sd / 2 + (c / (nm + 1)) * sd;
           ctx.instance(UNIT_BOX,
-            { o: vadd(vadd(mBase, p.u, yBase + sh / 2), p.t, off), r: p.r, u: p.u, t: p.t,
-              s: [frameT, sh, 0.5], col: dayMull },
+            // Mullions stop 4 cm under the roof line: at full height their tops
+            // shared the wall mass's top plane (19 circuits, up-facing, 0 mm).
+            { o: vadd(vadd(mBase, p.u, yBase + (sh - 0.04) / 2), p.t, off), r: p.r, u: p.u, t: p.t,
+              s: [frameT, sh - 0.04, 0.5], col: dayMull },
             unitBox, { kind: "facadeMullion", k, side });
         }
         const nmR = sw > 14 ? (sw > 22 ? 3 : 2) : 1;
         for (let c = 1; c <= nmR; c++) {
           const off = -sw / 2 + (c / (nmR + 1)) * sw;
           ctx.instance(UNIT_BOX,
-            { o: vadd(vadd(p.c, p.u, yBase + sh / 2), p.r, off), r: p.r, u: p.u, t: p.t,
-              s: [0.5, sh, sd * 1.02], col: dayMull },
+            { o: vadd(vadd(p.c, p.u, yBase + (sh - 0.04) / 2), p.r, off), r: p.r, u: p.u, t: p.t,
+              s: [0.5, sh - 0.04, sd * 1.02], col: dayMull },
             unitBox, { kind: "facadeMullion", k, side });
         }
         out._mat = 0; glassBuf._mat = 0;
@@ -377,8 +379,13 @@ const SceneryCity = (function () {
       // a corner they place units on top of one another. Dropping the geometry
       // must not drop the driving boundary (see building()): the ground is
       // occupied by whichever mass got here first, so still stop the car.
-      if (massBlocked(a.c, w, d, b, 0.82)) { blockAt(k, side, dist - reach / 2, reach / 2); return; }
-      massAdd(a.c, w, d, b);
+      // Claim the WIDEST section's footprint, not the nominal w x d: a podium's
+      // base is 1.35x, a jenga stack's offset boxes reach 0.61 d either side.
+      // Registered at w x d, a neighbour saw a smaller mass than was built and
+      // stood inside it (cota frac 0.049: two towers' sections, 6.65 m deep).
+      const fw = kind === "podium" ? 1.35 : 1, fd = kind === "podium" ? 1.35 : kind === "jenga" ? 1.22 : 1;
+      if (massBlocked(a.c, w * fw, d * fd, b, 0.82)) { blockAt(k, side, dist - reach / 2, reach / 2); return; }
+      massAdd(a.c, w * fw, d * fd, b);
       const bodyCol = NIGHT ? (tone && tone.n || [0.14, 0.14, 0.17]) : (tone && tone.d || [0.40, 0.41, 0.44]);
       const cap = NIGHT ? [0.09, 0.09, 0.12] : [0.31, 0.32, 0.35];
       const na = neonAmt == null ? (theme === "street_night" ? 1 : 0) : neonAmt;  // 0=general … 1=neon
@@ -495,9 +502,13 @@ const SceneryCity = (function () {
         seat.prism(out, vadd(a.c, a.u, bh), [w, h * 0.18, d], cap, b);                                       // gable roof, seated on the body
         if (neonOn) addBox(out, vadd(a.c, a.u, bh + h * 0.18), [w * 1.02, 0.5, d * 1.02], neon, b);          // eave neon
       } else if (kind === "notch") {                             // twin slabs split by a vertical slot
-        const podH = h * 0.22, off = w * 0.30;
+        // Split ALONG THE STREET (b[2], extent d), the axis sec()'s `to` offsets
+        // on: the towers were sized across w but offset along d with the full
+        // d each, so on cota (w 16, d 22) they stood 9.6 m apart while 22 m
+        // long, one through the other (clip-audit 6.65 m, frac 0.049).
+        const podH = h * 0.22, off = d * 0.30;
         if (sec(0, w, podH, d, k * 3.1 + side) === false) return;   // body rejected -> drop its dependents // shared podium base
-        for (const o2 of [-off, off]) sec(podH, w * 0.42, h - podH, d, k * 4.3 + side + o2, o2, o2 > 0 ? side * 0.07 : 0);             // two towers
+        for (const o2 of [-off, off]) sec(podH, w, h - podH, d * 0.42, k * 4.3 + side + o2, o2, o2 > 0 ? side * 0.07 : 0);             // two towers
         addBox(out, vadd(a.c, a.u, h + 0.5), [w * 0.92, 1.0, d * 0.9], cap, b);
       } else if (kind === "fin") {                               // slab with proud vertical fins on the face
         if (sec(0, w, h, d, k * 3.7 + side * 1.9) === false) return;   // body rejected -> drop its dependents
@@ -524,8 +535,10 @@ const SceneryCity = (function () {
         else dayGridAt(cen2, w * 0.5, h, d);
         addBox(out, vadd(a.c, a.u, h + 0.5), [w * 0.6, 1.0, d * 0.6], cap, b);
       } else if (kind === "arch") {                              // portal / gateway — two legs + spanning lintel
-        const legW = w * 0.26, gp = w * 0.46, legH = h * 0.78, off = gp / 2 + legW / 2;
-        for (const o3 of [-off, off]) sec(0, legW, legH, d, k * 3.3 + side + o3 * 7, o3, o3 > 0 ? side * 0.07 : 0);   // legs
+        // Legs split along the street (d), as notch's towers: sized across w and
+        // offset along d with the full d each, they overlapped whenever d > 0.72 w.
+        const legW = d * 0.26, gp = d * 0.46, legH = h * 0.78, off = gp / 2 + legW / 2;
+        for (const o3 of [-off, off]) sec(0, w, legH, legW, k * 3.3 + side + o3 * 7, o3, o3 > 0 ? side * 0.07 : 0);   // legs
         sec(legH, w, h - legH, d, k * 5.9 + side);                                          // lintel
         addBox(out, vadd(a.c, a.u, h + 0.5), [w * 0.96, 1.0, d * 0.9], cap, b);
       } else if (kind === "ziggurat") {                          // stepped terrace (many small steps)

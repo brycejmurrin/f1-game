@@ -106,7 +106,7 @@ const AERO_ZONE_TURNS = {
   montreal: [[8, 9], [11, 12], [13, 14], [14, 1]],
   catalunya: [[2, 3], [4, 5], [8, 9], [14, 1]],
   redbull: [[1, 2], [2, 3], [8, 9], [10, 1]],
-  silverstone: [[5, 6], [10, 11], [15, 16], [18, 1]],
+  silverstone: [[5, 6], [8, 9], [14, 15], [18, 1]],   // re-derived when `turns` became the 18 curvature peaks (2026-09-24)
   spa: [[1, 2], [3, 4], [9, 10], [11, 12], [20, 1]],
   hungaroring: [[1, 2], [4, 5], [10, 11], [14, 1]],
   imola: [[14, 15]],
