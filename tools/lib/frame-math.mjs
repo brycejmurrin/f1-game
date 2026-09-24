@@ -385,7 +385,7 @@ export function frameStats(frame, nearM = 30) {
 /** Rule-based flags + a provisional 0..100 score. Thresholds are named here so
  *  an agent can read why a frame was flagged. */
 export const THRESH = {
-  subjectMinPct: 2, subjectMaxPct: 55, subjectHiddenPct: 50, steepPitchDeg: 25, tooCloseM: 15, nearObsThirdPct: 25, nearObsFramePct: 12,
+  subjectMinPct: 2, lapMinPct: 0.5, subjectMaxPct: 55, subjectHiddenPct: 50, steepPitchDeg: 25, tooCloseM: 15, nearObsThirdPct: 25, nearObsFramePct: 12,
   skyMaxPct: 65, groundMaxPct: 70, panMaxDps: 25, parallaxMaxDps: 30,
 };
 export function judge(r) {
@@ -396,7 +396,12 @@ export function judge(r) {
   const s = r.subject;
   if (s) {
     const subjCover = s.coverPct;
-    if (subjCover < T.subjectMinPct) f.push(`SUBJECT_SMALL(${subjCover.toFixed(1)}%)`);
+    // The WHOLE-LAP subject is a road ribbon seen from hundreds of metres: no
+    // establishing shot on any circuit covers 8 % of the frame with tarmac (the
+    // fleet max was 6.7 %) while the lap spans ~65 % of it, so the corner
+    // threshold docked every wide frame ~20 points for being what it is.
+    const minCov = s.kind === "lap" ? T.lapMinPct : T.subjectMinPct;
+    if (subjCover < minCov) f.push(`SUBJECT_SMALL(${subjCover.toFixed(1)}%)`);
     if (subjCover > T.subjectMaxPct) f.push(`SUBJECT_FILLS_FRAME(${subjCover.toFixed(0)}%)`);
     if (s.inFramePct < 50 && s.kind !== "lap") f.push(`SUBJECT_OFF_FRAME(${s.inFramePct.toFixed(0)}% in)`);
     if (s.visiblePct != null && s.visiblePct < 100 - T.subjectHiddenPct) {
@@ -426,7 +431,7 @@ export function judge(r) {
   if (r.eye.belowGround) score -= 60;
   if (r.horizon && r.horizon.geomRowFrac < 0 && r.eye.pitchDeg < -T.steepPitchDeg) score -= 25;
   if (s) {
-    score -= Math.max(0, T.subjectMinPct * 4 - s.coverPct) * 4;
+    score -= Math.max(0, (s.kind === "lap" ? T.lapMinPct : T.subjectMinPct) * 4 - s.coverPct) * 4;
     score -= Math.max(0, s.coverPct - T.subjectMaxPct) * 0.8;
     if (s.visiblePct != null) score -= (100 - s.visiblePct) * 0.4;
     if (s.thirdsDist != null) score -= Math.max(0, Math.min(s.thirdsDist, s.centreDist != null ? s.centreDist : 1) - 0.12) * 40;
