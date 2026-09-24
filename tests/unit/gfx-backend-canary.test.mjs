@@ -2097,6 +2097,17 @@ test("getDynamicCacheKey fills a scratch array instead of minting one per draw (
     "the nested per-call hash survives in getDynamicCacheKey (PATCHES.md §6)");
 });
 
+test("lit material scalars ride two packed per-object vec4s, not seven materialReference nodes", () => {
+  // Seven materialReference nodes = seven updateReference + property-path walks
+  // per render object per pass (census 289: updateReference 4.6-5.6 % of the
+  // three.js/WebGL2 leg). makeMaterial packs them once; the shared graph reads two.
+  const lit = code("js/render/three/tsl-lit.js");
+  assert.doesNotMatch(lit, /materialReference\("userData\.tlx/, "a per-material scalar went back to a materialReference node");
+  assert.match(lit, /ud\.tlxPackA = new THREE\.Vector4\(ud\.tlxRoughness, ud\.tlxMetalness, ud\.tlxSpecular, ud\.tlxDetail\);/);
+  assert.match(lit, /ud\.tlxPackB = new THREE\.Vector4\(ud\.tlxClearcoat, ud\.tlxCarPaint, ud\.tlxSparkle, 0\);/);
+  assert.match(lit, /const pA = perMaterialVec\("tlxPackA", _PACK_A_DEF\);/);
+});
+
 test("TextureNode.update rebuilds the UV matrix only for a node that samples through it (PATCHES.md §9)", () => {
   // r186 called texture.updateMatrix() (setUvTransform) from every per-object
   // TextureNode.update() whenever matrixAutoUpdate was on, even with no matrix
