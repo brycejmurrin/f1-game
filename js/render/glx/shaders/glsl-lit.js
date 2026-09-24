@@ -209,6 +209,13 @@ uniform float uCarBiasScale;
 // beam). Only the light-loop slot uLampShadowIdx pays the 4-tap PCF — every
 // other lamp skips the branch, so the whole feature costs one lamp's shadow.
 uniform highp sampler2DShadow uLampShadowMap;
+// BAKED LAMP POOLS (js/lighting/lamp-bake.js): every lamp's diffuse pool on an
+// upward-facing surface, RGBA16F over the lamps' XZ extent, scaled per frame.
+uniform highp sampler2D uLampBake;
+uniform float uBakeOn;
+uniform vec2 uBakeOrigin;
+uniform vec2 uBakeSize;
+uniform vec3 uBakeScale;
 uniform mat4 uLampShadowVP;
 uniform float uLampShadowOn;
 uniform int uLampShadowIdx;
@@ -1239,6 +1246,15 @@ void main() {
   // car-paint sparkle — replacing all the old hand-tuned lobe/glint hacks.
   // No per-light shadows (cost); the cone shapes the light instead.
   vec3 lampFog = vec3(0.0);
+  // BAKED LAMP POOLS: an upward-facing fragment takes EVERY lamp's diffuse pool
+  // from the light map (no nearest-N cut, so nothing pops on as you approach);
+  // each live lamp below scales its diffuse by (lampSh - bakeW) so no lamp is
+  // counted twice and the shadow-mapped floodlight still carves its shadow.
+  vec2 bUv = (vWorldPos.xz - uBakeOrigin) / uBakeSize;
+  vec3 bE = textureLod(uLampBake, bUv, 0.0).rgb * uBakeScale;
+  float bakeW = (uBakeOn > 0.5 && all(greaterThan(bUv, vec2(0.0))) && all(lessThan(bUv, vec2(1.0))))
+    ? smoothstep(0.55, 0.85, N.y) : 0.0;
+  color += albedo * bE * bakeW * (1.0 - metalness) * (1.0 - wetSheen * 0.85);
   for (int i = 0; i < MAX_LIGHTS; i++) {
     if (i >= uNumLights) break;
     int li = i * 4;
@@ -1327,7 +1343,7 @@ void main() {
     }
     // Diffuse pool — fades as the road wets so a wet surface shows the lamp's
     // REFLECTION (SSR + the GGX lobe below), not a painted matte circle.
-    color += albedo * lb.xyz * (att * spotD * lampSh) * NoLl * (1.0 - metalness) * (1.0 - wetSheen * 0.85);
+    color += albedo * lb.xyz * (att * spotD * (lampSh - bakeW)) * NoLl * (1.0 - metalness) * (1.0 - wetSheen * 0.85);
     // Bounce fill: pool light bounced off the road washes nearby surfaces
     // (walls, kerbs, car flanks) with the lamp tint even outside the beam -
     // a near-free stand-in for local ambient probes. Soft NoL floor so

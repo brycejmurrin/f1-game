@@ -7064,6 +7064,7 @@ function render(dt) {
     const _ltg = 1 - Math.abs(_lt) * 0.02;
     const _ltb = 1 - Math.max(0, -_lt) * 0.30 + Math.max(0, _lt) * 0.20;
     frame.glowLights = null;   // appendCarTailLights sets it; stale otherwise (TAIL-LIGHT EMIT 0)
+    frame.lampBake = null;     // BAKED LAMP POOLS: set below for the night flood set only
     if (_floodActive) {
       const _sy = frame.sunDir ? frame.sunDir[1] : -1;
       // Floor the twilight ramp at 0.30: the dusk sunDir sits slightly higher than
@@ -7110,6 +7111,12 @@ function render(dt) {
       : (_pcShed >= 1 ? Math.min(0.3, +LT.perChunkLights || 0) : (+LT.perChunkLights || 0));
     frame.roadChunkLamps = (frame.perChunkLights > 0 && LT.roadChunkLamps) ? 1 : 0;
     setFrameLights(camEye, _floodRGB, _lightFwd);
+    // BAKED LAMP POOLS (js/lighting/lamp-bake.js): the whole track set's ground
+    // pools at base colour, scaled per frame by the same _floodRGB the live set gets.
+    if (LT.lampBake > 0 && gfx.hasLampBake) {
+      frame.lampBake = LampBake.forTrack(track, track._lights, LT.lampNearClamp);
+      frame.lampBakeScale = _floodRGB;
+    }
     // PER-CHUNK LAMPS (experimental): hand the renderer the FULL baked lamp list
     // alongside the globally-culled frame.lights, so GLXChunked can bind each
     // chunk its own nearest-24 instead of every chunk sharing this one set.

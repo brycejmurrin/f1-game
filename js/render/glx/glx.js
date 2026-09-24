@@ -105,6 +105,10 @@ const GLX = (function () {
   let _anisoExt = null, _anisoMax = 0;   // EXT_texture_filter_anisotropic (capped 4×)
   let _gpuQActive = null;   // query open between begin() and present() this frame
   let litProg = null, litU = null;
+  // BAKED LAMP POOLS (js/lighting/lamp-bake.js): the ground light map on unit 12.
+  // uLampBake must ALWAYS point at 12 with something bound there — left at its
+  // default unit 0 it would alias the sampler2DShadow sun map, a draw-time error.
+  let _bakeTex = null, _bakeDummy = null, _bakeSrc = null;
   // Identity model matrix for instanced draws: the transform lives in the
   // per-instance columns, so uModel is unused on that path.
   const IDENT4 = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
@@ -242,6 +246,38 @@ const GLX = (function () {
   const AMB_SKY_DEF = [0.3, 0.32, 0.36], AMB_GROUND_DEF = [0.2, 0.19, 0.18];
 
   function _clearUf(o) { for (const k in o) delete o[k]; }
+  function _halfTex(w, h, data) {
+    const t = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, data);
+    for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR],
+      [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+    return t;
+  }
+  // Called from begin() with the lit program bound. Uploads a new bake once
+  // (identity-keyed, like LampBake itself), binds unit 12 every frame.
+  function bindLampBake(frame) {
+    const lb = frame.lampBake, sc = frame.lampBakeScale;
+    gl.activeTexture(gl.TEXTURE12);
+    if (lb && sc && lb.data) {
+      if (lb !== _bakeSrc) {
+        if (_bakeTex) gl.deleteTexture(_bakeTex);
+        _bakeTex = _halfTex(lb.w, lb.h, lb.data);
+        _bakeSrc = lb;
+      } else gl.bindTexture(gl.TEXTURE_2D, _bakeTex);
+      uf1(litU.uBakeOn, _litUf, "bakeOn", 1);
+      gl.uniform2f(litU.uBakeOrigin, lb.x0, lb.z0);
+      gl.uniform2f(litU.uBakeSize, lb.w * lb.cell, lb.h * lb.cell);
+      uf3(litU.uBakeScale, _litUf, "bakeScale", sc);
+    } else {
+      if (!_bakeDummy) _bakeDummy = _halfTex(1, 1, new Uint16Array(4));
+      else gl.bindTexture(gl.TEXTURE_2D, _bakeDummy);
+      uf1(litU.uBakeOn, _litUf, "bakeOn", 0);
+    }
+    gl.activeTexture(gl.TEXTURE0);
+    ufI(litU.uLampBake, _litUf, "u.lampBake", 12);
+  }
   function uf1(loc, cache, key, v) {
     if (!loc) return;
     if (cache[key] !== v) { gl.uniform1f(loc, v); cache[key] = v; }
@@ -856,6 +892,7 @@ const GLX = (function () {
       "uCarSunGlint", "uCarSparkle", "uFogSunCore",
       "uLampNearClamp", "uWindowSunFlash", "uSkyRimGlow", "uAmbContactDark", "uLampWallSpill",
       "uMatAlbedoTex", "uMatNormalTex", "uMatTexMix", "uMatTexScale[0]",
+      "uLampBake", "uBakeOn", "uBakeOrigin", "uBakeSize", "uBakeScale",
       "uNumLights", "uLight[0]"]);
     skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon", "uCityGlow", "uStarBright", "uCloudSpeed", "uSkyGrad", "uStarDensity", "uDaySkyBlue", "uMieScatter", "uCloudSilver", "uCoronaAureole", "uSunDiscSize", "uStarSize", "uStarTwinkle", "uMoonDiscSize", "uMoonHalo", "uSunCorona", "uSunSquash", "uCityGlowReach", "uCloudDef", "uLightning"]);
     shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
@@ -1630,6 +1667,7 @@ const GLX = (function () {
     // (the cube itself is bound there every frame below). This used to be a
     // uniform1i on every begin() — up to eight a game frame.
     if (!_envUnitSet) { gl.uniform1i(litU.uEnvCube, 6); _envUnitSet = true; }
+    bindLampBake(frame);
     gl.uniformMatrix4fv(litU.uViewProj, false, frame.viewProj);
     uf3(litU.uEye, _litUf, "eye", frame.eye);
     uf3(litU.uSunDir, _litUf, "sunDir", frame.sunDir);
@@ -2540,6 +2578,7 @@ const GLX = (function () {
     // backend string match: absent on TLX (shared node-material uniforms —
     // per-chunk sets would mint a program per chunk, the pinProgram lesson).
     hasPerChunkLights: true,
+    hasLampBake: true,   // BAKED LAMP POOLS: bindLampBake() in begin()
     createChunkedMesh: (data, cellSize) => CHK.createChunkedMesh(data, cellSize),
     freeMesh,
     freeChunkedMesh: (mesh) => CHK.freeChunkedMesh(mesh),

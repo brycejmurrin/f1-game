@@ -225,7 +225,10 @@ function lampCap(carCount, mobileTier) {
   // appendCarTailLights evicts against SLOTS, so a cap above it would only
   // be trimmed again there.
   let cap = Math.min(
-    carCount > 1 && tailLightsEmit() ? Math.round(LT.lampCull != null ? LT.lampCull : 40) : LightBudget.MAX,
+    // LAMP COUNT applies with traffic in BOTH tail-light modes: it is a player
+    // slider (and a per-fragment cost), not only the tail-light reserve. Paint
+    // mode's gain is that no lamp is EVICTED for a tail-light (appendCarTailLights).
+    carCount > 1 ? Math.round(LT.lampCull != null ? LT.lampCull : 40) : LightBudget.MAX,
     mobileTier ? LightBudget.MOBILE : LightBudget.MAX,
     LightBudget.slots());
   // Shed the nearest-lamp budget under PerfGov load before the fragment loop
