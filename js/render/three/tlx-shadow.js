@@ -85,6 +85,8 @@
       lampArmed: false,          // set by lampShadowBegin, cleared each present()
       lampIdx: -1,               // frame.lights record index of the mapped lamp
       lampArms: 0,
+      lampStaticBuilds: 0,       // L1: static-props map renders (≈ lamp changes)
+      lampCarOnly: 0,            // L1: car-only rebuilds served from the copy
     };
 
     /** Depth target: color attachment unused (colorWrite off on the caster
@@ -92,8 +94,11 @@
      * pipeline pays the same) + a compare-mode DepthTexture the lit pass
      * samples. LinearFilter + LessEqualCompare = guaranteed hardware 2x2 PCF
      * per tap on ES 3.0, exactly GLX's setup (js/render/glx/shadow.js). */
-    function makeDepthTarget(size, name, hdrColor) {
+    function makeDepthTarget(size, name, hdrColor, floatDepth) {
       const depthTexture = new THREE.DepthTexture(size, size);
+      // depth32float: the one depth format WebGPU can copyTextureToTexture
+      // (depth24plus cannot); WebGL blits depth between identical formats.
+      if (floatDepth) depthTexture.type = THREE.FloatType;
       depthTexture.name = name;
       depthTexture.compareFunction = THREE.LessEqualCompare;
       depthTexture.minFilter = THREE.LinearFilter;
@@ -116,7 +121,20 @@
     const colorPcss = !isWebGPU && !isMobile && !softwareGL && !!TSL.depth;
     const sunRT = makeDepthTarget(SUN_SIZE, "TLXSunShadow", colorPcss);
     const carRT = isMobile ? null : makeDepthTarget(CAR_SIZE, "TLXCarShadow");
-    const lampRT = isMobile ? null : makeDepthTarget(LAMP_SIZE, "TLXLampShadow");
+    // LAMP STATIC MAP (TLX-PERF-PLAN L1). Nearly every night lamp rebuild is
+    // car-only — the player moved 0.25 m under the same lamp — yet each one
+    // re-culled, re-packed, re-uploaded and redrew every static prop. The props
+    // now render into lampStaticRT when the LAMP changes; a car-only rebuild
+    // copies that depth into lampRT and draws only the cars on top. lampRT stays
+    // the sampled map, so no shader, sampler or backend-parity change.
+    // apex26.tlxLampStatic=0 is the old full rebuild.
+    let lampStaticOn = true;
+    try { lampStaticOn = localStorage.getItem("apex26.tlxLampStatic") !== "0"; } catch (_) { /* no storage: on */ }
+    if (isMobile || typeof renderer.copyTextureToTexture !== "function") lampStaticOn = false;
+    const lampRT = isMobile ? null : makeDepthTarget(LAMP_SIZE, "TLXLampShadow", false, lampStaticOn);
+    const lampStaticRT = lampStaticOn ? makeDepthTarget(LAMP_SIZE, "TLXLampStatic", false, true) : null;
+    const _lampStaticVP = new Float32Array(16);
+    let _lampStaticValid = false, _lampRendered = false;
     S.enabled = !!sunRT;
     S.carEnabled = !!carRT;
     S.lampEnabled = !!lampRT;
@@ -205,6 +223,7 @@
     let cur = null, shown = null;
     let pool = [], used = 0;   // the open pass's pool (aliases cur)
     let target = null;    // the pass's render target while open
+    let _passKeepsDepth = false;   // L1: the open pass draws onto copied depth (no clear)
     // Parked wrappers (index >= used after a pass) point at this instead of
     // their last caster: a hidden Mesh still REFERENCES its geometry, so after
     // a track switch the old track's chunk geometries stayed alive in every
@@ -357,15 +376,21 @@
       for (let i = used; i < cur.prevUsed; i++) { pool[i].visible = false; pool[i].geometry = parkedGeo; }
       cur.prevUsed = used; cur.used = used; shown = cur;
       const prev = renderer.getRenderTarget();
+      const keepDepth = _passKeepsDepth, autoClear0 = renderer.autoClear;
+      _passKeepsDepth = false;
       try {
         renderer.setRenderTarget(target);
-        renderer.render(castScene, shadowCam);   // autoClear: depth cleared per pass, like GLX's clear(DEPTH_BUFFER_BIT)
+        // autoClear: depth cleared per pass, like GLX's clear(DEPTH_BUFFER_BIT) —
+        // except a car-only lamp pass, which draws onto the copied static depth.
+        if (keepDepth) renderer.autoClear = false;
+        renderer.render(castScene, shadowCam);
+        if (target === lampRT) _lampRendered = true;
       } catch (e) {
         // Depth TSL compile must not escape into tick() (full-screen overlay).
         try { Log.warn("gfx", "TLX: shadow pass failed —", e); } catch (_) { /* Log absent */ }
         S.enabled = false;
         S.depthPassOn = false;
-      }
+      } finally { renderer.autoClear = autoClear0; }
       // Blocker refresh rides the SUN pass only (GLX shadowEnd): the snap
       // cache means once per ~10 m of travel, never per frame. Own guard —
       // a blocker compile/render failure drops to the fixed-R look without
@@ -439,6 +464,39 @@
     function lampShadowEnd() {
       S.castCullVP = null;
       endPass();
+    }
+
+    // L1: the static half. Called on a LAMP change, after the full pass.
+    function lampStaticBegin(lightVP) {
+      if (!lampStaticRT || !lampStaticOn) return false;
+      _lampStaticValid = false;
+      beginPass(lampStaticRT, lightVP, _lampStaticVP);
+      S.castCullVP = _lampStaticVP;   // props cull to the lamp cone, as in the full pass
+      return true;
+    }
+    function lampStaticEnd() {
+      S.castCullVP = null;
+      const ok = S.enabled;
+      endPass();
+      _lampStaticValid = ok && S.enabled;
+      if (_lampStaticValid) S.lampStaticBuilds++;
+    }
+    // L1: a car-only rebuild. false = no valid static map (or lampRT never
+    // rendered, so its GPU texture may not exist yet) — the caller runs the full
+    // pass instead. The copy happens here, before the cars draw.
+    function lampCarsBegin(lightVP, lightIdx) {
+      if (!S.lampEnabled || !lampStaticRT || !lampStaticOn || !_lampStaticValid || !_lampRendered) return false;
+      try {
+        renderer.copyTextureToTexture(lampStaticRT.depthTexture, lampRT.depthTexture);
+      } catch (e) {
+        try { Log.warn("gfx", "TLX: lamp static depth copy failed — full lamp passes from now on", e); } catch (_) { /* Log absent */ }
+        _lampStaticValid = false; lampStaticOn = false;
+        return false;
+      }
+      lampShadowBegin(lightVP, lightIdx);
+      _passKeepsDepth = true;
+      S.lampCarOnly++;
+      return true;
     }
 
     function carShadowEnd() {
@@ -526,6 +584,8 @@
       lampShadowEnd,
       carShadowBegin,
       lampShadowBegin,
+      lampStaticBegin, lampStaticEnd, lampCarsBegin,
+      get lampStaticOn() { return !!(lampStaticRT && lampStaticOn); },
       clearArmed,
     };
   }

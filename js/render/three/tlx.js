@@ -2845,6 +2845,12 @@ const TLX = (function () {
         carShadowEnd() { if (shadowSys) shadowSys.carShadowEnd(); },
         lampShadowBegin(vp, idx) { if (shadowSys) shadowSys.lampShadowBegin(vp, idx); },
         lampShadowEnd() { if (shadowSys) shadowSys.lampShadowEnd(); },
+        // TLX-PERF-PLAN L1 (tlx-shadow.js LAMP STATIC MAP): the static-props half
+        // on a lamp change, and the car-only rebuild served from its depth copy.
+        // Absent on GLX/WGX, so shadow-pass.js keeps the full pass there.
+        lampStaticBegin(vp) { return !!(shadowSys && shadowSys.lampStaticOn && shadowSys.lampStaticBegin(vp)); },
+        lampStaticEnd() { if (shadowSys) shadowSys.lampStaticEnd(); },
+        lampCarsBegin(vp, idx) { return !!(shadowSys && shadowSys.lampStaticOn && shadowSys.lampCarsBegin(vp, idx)); },
         // Active light VP for instanced shadow cull (GLX shadowCullVP).
         get shadowCullVP() {
           if (!shadowSys) return null;

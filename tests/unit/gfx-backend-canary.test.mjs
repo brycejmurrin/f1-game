@@ -4785,3 +4785,40 @@ test("TLX FX: double-sided FX draw in ONE pass and their programs warm on the st
   assert.match(tlx, /const _LATE_LIT = \[\{ roughness: 0\.9, specular: 0, noAlphaWrite: true, alpha: 0\.5 \}\]/,
     "the brake-ring transparent variant (census 245 minted t,0.9,0,0,0,0,0,1|na) is pre-minted during the lights");
 });
+
+test("lamp shadow: the player takes the AI cars' lamp-radius bound in BOTH the key and the cast (TLX-PERF-PLAN L0)", () => {
+  // Hashed and cast unconditionally, the player changed the key every 0.25 m, so a
+  // night drive rebuilt the whole static prop set 30-60 times a second even far
+  // outside the lamp's reach. The key must cover exactly the set the pass draws.
+  const sp = code("js/render/shared/shadow-pass.js");
+  const lamp = fnBody(sp, "lampPass");
+  assert.match(lamp, /const _playerIn = _hasLivePlayerShadow && \(_pdx \* _pdx \+ _pdy \* _pdy \+ _pdz \* _pdz\) <= _lsR2;/,
+    "the player is tested against the same _lsR2 as the AI casters");
+  assert.match(lamp, /if \(_playerIn && G\.player && G\.player\.px != null\) \{/, "the key hashes the player only when it is cast");
+  assert.match(lamp, /if \(_playerIn\) G\.gfx\.castShadow\(deps\.teamMesh\(G\.player\.team, G\.player, true\), _livePlayerShadowMat\);/,
+    "the cast draws the player only when it is within reach");
+  assert.doesNotMatch(lamp, /if \(_hasLivePlayerShadow\) G\.gfx\.castShadow/, "no unconditional player cast left in the lamp pass");
+});
+
+test("lamp static map: car-only rebuilds copy the static props depth and draw the cars alone (TLX-PERF-PLAN L1)", () => {
+  const sh = code("js/render/three/tlx-shadow.js");
+  // WebGPU cannot copyTextureToTexture a depth24plus texture: both lamp targets
+  // carry depth32float when the static map is on.
+  assert.match(sh, /if \(floatDepth\) depthTexture\.type = THREE\.FloatType;/);
+  assert.match(sh, /const lampRT = isMobile \? null : makeDepthTarget\(LAMP_SIZE, "TLXLampShadow", false, lampStaticOn\);/);
+  assert.match(sh, /const lampStaticRT = lampStaticOn \? makeDepthTarget\(LAMP_SIZE, "TLXLampStatic", false, true\) : null;/);
+  // The car-only pass: copy first, then draw onto the copied depth with the clear off,
+  // and autoClear restored in a finally so a throwing caster cannot leave it off.
+  const cars = fnBody(sh, "lampCarsBegin");
+  assert.match(cars, /renderer\.copyTextureToTexture\(lampStaticRT\.depthTexture, lampRT\.depthTexture\)/);
+  assert.match(cars, /!_lampStaticValid \|\| !_lampRendered\) return false;/, "no copy before a valid static map AND a rendered lampRT");
+  const end = fnBody(sh, "endPass");
+  assert.match(end, /if \(keepDepth\) renderer\.autoClear = false;/);
+  assert.match(end, /finally \{ renderer\.autoClear = autoClear0; \}/);
+  // shadow-pass: cars-only on a car-only change, the full pass otherwise, and the
+  // static map refreshed after every full pass (a lamp change or the first).
+  const lamp = fnBody(code("js/render/shared/shadow-pass.js"), "lampPass");
+  assert.match(lamp, /const _carsOnlyPass = _carOnly && G\.gfx\.lampCarsBegin && G\.gfx\.lampCarsBegin\(_mFlVP, flBest\);/);
+  assert.match(lamp, /if \(!_carsOnlyPass\) G\.gfx\.lampShadowBegin\(_mFlVP, flBest\);/);
+  assert.match(lamp, /if \(!_carsOnlyPass && G\.gfx\.lampStaticBegin && G\.gfx\.lampStaticBegin\(_mFlVP\)\) \{/);
+});
