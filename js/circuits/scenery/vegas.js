@@ -7,7 +7,7 @@
 (window.TrackScenery = window.TrackScenery || {})["vegas"] =
   function (api) {
       const { K, lapBounds, out, MAT, seat, track, upOf, n, px, py, pz, hw, pyMin, place, prop, backdrop, addBox, addCyl,
-        addFrustum, addPyramid, groundPlane, anchor, vadd, onTrack, building, tower, billboard,
+        addFrustum, groundPlane, groundPatch, along, anchor, vadd, onTrack, building, tower, billboard,
         grandstand, grandstandEx, marshalPost, gantry, palm, fence, wall, guardrail, tyreWall, hash, addCone, addPrism,
         cityFront, modelGroup, overheadSpan, waterSurface, circuitKit, broadcastCompound, cameraTower,
         bakedModel } = api;
@@ -23,8 +23,8 @@
           const rim = [];
           const seg = 16;
           stage._mat = MAT.METAL;
-          for (const along of [-4, 4]) {
-            const foot = vadd(a.c, a.t, along);
+          for (const axOff of [-4, 4]) {
+            const foot = vadd(a.c, a.t, axOff);
             addBox(stage, vadd(foot, a.u, (radius + 5) / 2),
               [1.4, radius + 5, 1.4], [0.22, 0.22, 0.25], [a.r, a.u, a.t]);
           }
@@ -160,6 +160,21 @@
       guardrail(0.45, 0.49, -1, 1.0, [0.80, 0.80, 0.84]);          // T8-T9 onto the Strip
       tyreWall(0.305, 0.345, -1, 1.2, MAGENTA);                     // Sphere chicane apex
       tyreWall(0.955, 0.985, 1, 1.2, CYAN);                        // Harmon chicane apex
+      // Temporary street-circuit TecPro stacks (night GP kit).
+      tyreWall(0.27, 0.30, -1, 1.5, CYAN, { style: "tecpro" });
+      tyreWall(0.34, 0.38, 1, 1.5, LIME, { style: "tecpro" });
+      tyreWall(0.48, 0.52, -1, 1.4, GOLD, { style: "tecpro" });
+      tyreWall(0.60, 0.64, 1, 1.4, GOLD, { style: "tecpro" });
+      tyreWall(0.72, 0.76, -1, 1.4, MAGENTA, { style: "tecpro" });
+      tyreWall(0.84, 0.88, 1, 1.4, CYAN, { style: "tecpro" });
+      along(0.50, 0.58, 18, (k) => {
+        const a = anchor(k, 1, 2.2), b = [a.r, a.u, a.t];
+        seat.box(out, a.c, [0.55, 0.85, 3.2], [0.72, 0.72, 0.76], b);
+      });
+      along(0.64, 0.70, 18, (k) => {
+        const a = anchor(k, -1, 2.2), b = [a.r, a.u, a.t];
+        seat.box(out, a.c, [0.55, 0.85, 3.2], [0.72, 0.72, 0.76], b);
+      });
       // The -1 (pit side) fence and hoarding stop at the pit complex's
       // window (.1210-.1923) and resume after it: the 2.4 m hoarding's 0.35 m
       // thickness straddled the keep-out's 2.5 m edge and stood in the
@@ -527,9 +542,15 @@
         cityFront(s0, s1,  1, 19, { minH: 40, maxH: 85, depth: 20, step: 26,
           palette: casinoPalR, lit: true, windowCol: CYAN });
 
-        // Tall signature casino towers punched along the canyon (prominent landmarks)
+        // Tall signature casino towers — skip landmark fracs so Strip order reads.
+        // Corridor southbound: Venetian L → High Roller L → Caesars R → Bellagio R → Paris L.
         for (let j = 0; j < 8; j++) {
           const s = s0 + (j + 0.5) / 8 * span, side = (j % 2) ? -1 : 1;
+          if (s > 0.47 && s < 0.52) continue; // Venetian
+          if (s > 0.53 && s < 0.57) continue; // High Roller
+          if (s > 0.60 && s < 0.64) continue; // Caesars
+          if (s > 0.66 && s < 0.71) continue; // Bellagio
+          if (s > 0.72 && s < 0.76) continue; // Paris
           const windowCol = [WARM, CYAN, MAGENTA, GOLD, VIOLET][j % 5];
           building(K(s), side, 17, 28, 120 + hash(j * 17) * 65, 36,
             { wall: [0.22, 0.20, 0.22], window: windowCol, floor: 16, lit: true });
