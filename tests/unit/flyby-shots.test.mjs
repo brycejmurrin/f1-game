@@ -313,3 +313,134 @@ test("the clearance lift is PLANNED: no pop inside a shot, and corners step in b
     assert.deepEqual(bad, [], `${id}: ` + bad.join("; "));
   }
 });
+
+// ---- the fleet audit (tools/lib/flyby-audit.cjs) ---------------------------
+//
+// One game VM, re-raced per circuit (~1 s each). The circuits are the ones the
+// 2026-09-24 fleet audit named: an open, a street and a night circuit, then
+// every one that failed a rule below before it was fixed — Sochi's crane and
+// kink, Las Vegas's and Madrid's landmark overshoot, Jeddah's and Magny-Cours's
+// bent grids, Red Bull Ring's valley tower, Mont-Tremblant's pine wood and
+// kink, Kyalami's single landmark, Buenos Aires's gantry.
+const FLEET = ["monza", "monaco", "bahrain", "sochi", "vegas", "madrid", "jeddah",
+  "redbull", "mont_tremblant", "magny_cours", "kyalami", "buenos_aires"];
+const { auditTrack } = require(path.join(ROOT, "tools/lib/flyby-audit.cjs"));
+
+async function withFleet(ids, fn) {
+  const g = await createGame({ track: ids[0] });
+  try {
+    const out = [];
+    for (const id of ids) {
+      await g.race(id, "day", "dry");
+      out.push(...(await fn(id, g.G.track, g)));
+    }
+    return out;
+  } finally { g.close(); }
+}
+
+test("fleet: no pop, no crane, no eye underground, grid sightline on the road, no whip pan", async () => {
+  const bad = await withFleet(FLEET, (id, track, g) => {
+    const out = [];
+    for (const r of auditTrack(g.sandbox, track, { samples: 400 })) {
+      // 4 m between two of 400 samples (60 ms) is a visible pop.
+      if (r.jump > 4) out.push(`${id} ${r.id}: eye jumps ${r.jump.toFixed(1)} m in one step at u=${r.jumpU.toFixed(3)}`);
+      // A planned lift is a raised camera; 25 m is a crane over a roof.
+      if (r.lift >= 25) out.push(`${id} ${r.id}: lifted ${r.lift.toFixed(1)} m at u=${r.liftU.toFixed(3)}`);
+      if (r.under > 0) out.push(`${id} ${r.id}: eye ${r.under.toFixed(1)} m underground at u=${r.underU.toFixed(3)}`);
+      // The grid shots' sightline: within 2 m of the road edge (a verge, not the infield).
+      if (r.gridOff > 2) out.push(`${id} ${r.id}: sightline ${r.gridOff.toFixed(1)} m past the road edge at u=${r.gridU.toFixed(3)}`);
+      // 45 deg/s at FLY_MS 24 s: faster reads as the camera being yanked.
+      if (r.pan > 45) out.push(`${id} ${r.id}: pans ${r.pan.toFixed(0)} deg/s at u=${r.panU.toFixed(3)}`);
+      if (r.inside) out.push(`${id} ${r.id}: eye inside a solid prop on ${r.inside} samples`);
+    }
+    return out;
+  });
+  assert.deepEqual(bad, [], "flyby fleet audit:\n  " + bad.join("\n  "));
+});
+
+test("the pan budget's clock is the loading screen's", () => {
+  const src = fs.readFileSync(path.join(ROOT, "js/ui/loading-screen.js"), "utf8");
+  const m = /const FLY_MS = (\d+);/.exec(src);
+  assert.ok(m, "FLY_MS not found in js/ui/loading-screen.js");
+  const seq = fs.readFileSync(path.join(ROOT, "js/camera/flyby-seq.js"), "utf8");
+  const r = /REF_S = (\d+(?:\.\d+)?)/.exec(seq);
+  assert.ok(r, "REF_S not found in js/camera/flyby-seq.js");
+  assert.equal(+r[1] * 1000, +m[1], "FlybySeq.REF_S must equal FLY_MS / 1000, or the pan budget is in the wrong seconds");
+});
+
+test("a centre pose of distR 0 / yR 0 is the centroid, not the clamp", async () => {
+  await withTrack("monza", (track, g) => {
+    const F = g.sandbox.FlybySeq, b = F.bounds(track);
+    const p = F.posePoint(track, { at: "centre", distR: 0, yR: 0 }, [0, 0, 0]);
+    assert.ok(Math.hypot(p[0] - b.x, p[2] - b.z) < 1e-6, "distR 0 must be the centroid in plan");
+    assert.ok(Math.abs(p[1] - b.y) < 1e-6, "yR 0 must be the centroid's height");
+    // ... while a camera's pose still lives inside the helicopter clamps.
+    const e = F.posePoint(track, { at: "centre", distR: 0.01, yR: 0.01 }, [0, 0, 0]);
+    assert.ok(Math.abs(Math.hypot(e[0] - b.x, e[2] - b.z) - 200) < 1e-6, "a tiny distR clamps to 200 m out");
+    assert.ok(Math.abs(e[1] - b.y - 55) < 1e-6, "a tiny yR clamps to 55 m up");
+    return null;
+  });
+});
+
+test("landmarks: no gantries, nothing on the road, heights above ground; missing ranks become centre shots", async () => {
+  const bad = await withFleet(["buenos_aires", "hockenheim", "kyalami", "monza"], (id, track, g) => {
+    const F = g.sandbox.FlybySeq, Tracks = g.sandbox.Tracks, out = [];
+    const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 10 };
+    const lm = F.landmarks(track);
+    for (const r of lm) {
+      if (r.kind === "gantry") out.push(`${id}: a gantry is a landmark`);
+      const pr = Tracks.project(track, r.x, r.z);
+      Tracks.sample(track, pr.s, smp);
+      if (Math.abs(pr.lat) - smp.hw < 5) out.push(`${id}: ${r.kind} ${(Math.abs(pr.lat) - smp.hw).toFixed(1)} m from the road edge`);
+      const base = F.lmBase(track, r);
+      if (base < r.y - r.h / 2 - 1e-6 || base > r.y + r.h / 2) out.push(`${id}: ${r.kind} base ${base} outside its hull`);
+    }
+    // A landmark shot whose rank this circuit lacks is a whole-circuit shot,
+    // never the previous landmark again (Kyalami has one).
+    for (const shot of F.DEFAULT) {
+      const ranks = shot.eye.concat(shot.look).filter((p) => p.at === "landmark").map((p) => p.rank || 0);
+      if (!ranks.length) continue;
+      const fb = F.landmarkFallback(track, shot);
+      const need = Math.max(...ranks) >= lm.length;
+      if (need !== (fb !== shot)) out.push(`${id}: ${shot.id} fallback ${fb !== shot} with ${lm.length} landmarks`);
+      if (need && !(fb.eye[0].at === "centre" && fb.look[0].at === "centre")) out.push(`${id}: ${shot.id} fell back to ${fb.eye[0].at}`);
+    }
+    // One pose, no landmarks at all: an eye stays an eye and a look a look —
+    // the old start+20 m look sat 8 m straight over its own eye.
+    const bare = Object.create(track);
+    bare._fbLandmarks = [];
+    const eye = F.posePoint(bare, { at: "landmark", rank: 0, distK: 1.7, yK: 0, y: 12 }, [0, 0, 0]);
+    const look = F.posePoint(bare, { at: "landmark", rank: 0, distK: 0, yK: 0.2 }, [0, 0, 0]);
+    const flat = Math.hypot(look[0] - eye[0], look[2] - eye[2]);
+    if (!(flat > Math.abs(look[1] - eye[1]))) out.push(`${id}: no-landmark fallback looks ${flat.toFixed(1)} m across, ${(look[1] - eye[1]).toFixed(1)} m up`);
+    return out;
+  });
+  assert.deepEqual(bad, [], bad.join("\n"));
+});
+
+test("a corner ROLE lands on a real corner, not a kink or a chicane flick", async () => {
+  // The five the fleet audit found, each measured on its old role corner:
+  // mont_tremblant first 0 deg, sochi first 20, jeddah late 17, buenos_aires
+  // mid 21, montreal late 42 of 75 swept (a chicane).
+  const cases = { mont_tremblant: "first", sochi: "first", jeddah: "late", buenos_aires: "mid", montreal: "late" };
+  const bad = await withFleet(Object.keys(cases), (id, track, g) => {
+    const F = g.sandbox.FlybySeq, out = [];
+    for (const role of ["first", "mid", "late"]) {
+      const t = F.cornerTurn(track, F.cornerS(track, role));
+      const deg = (a) => (a * 180 / Math.PI).toFixed(0);
+      if (t.net < 35 * Math.PI / 180) out.push(`${id} ${role}: turns ${deg(t.net)} deg net`);
+      else if (t.swept > 1.5 * t.net && t.net < 45 * Math.PI / 180) out.push(`${id} ${role}: a chicane, ${deg(t.net)} of ${deg(t.swept)} deg`);
+    }
+    return out;
+  });
+  assert.deepEqual(bad, [], bad.join("\n"));
+});
+
+test("a planned eye is not inside a tree canopy (Monza turn-first, the frame report's find)", async () => {
+  await withTrack("monza", (track, g) => {
+    const rows = auditTrack(g.sandbox, track, { samples: 400 });
+    const trees = rows.filter((r) => r.tree > 0).map((r) => `${r.id} on ${r.tree} samples from u=${r.treeU.toFixed(3)}`);
+    assert.deepEqual(trees, [], "eye inside a tree: " + trees.join("; "));
+    return null;
+  });
+});

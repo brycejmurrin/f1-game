@@ -69,7 +69,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_196 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_201 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -162,6 +162,7 @@ _196 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `dom.js` | `Dom` | tag | Dom: the three DOM/format helpers every DOM-built screen shares (el / paintFold / fmtLap). |
+| `title-fx.js` | `TitleFx` | tag | TitleFx: the title screen's motion, as a player setting. |
 | `track-maps.js` | `TrackMaps` | tag | TrackMaps: offline 2D circuit outlines for the track picker. |
 | `flags.js` | `Flags` | tag | national flags as inline SVG, for the circuit picker's flag strip and the hero caption beside a circuit's name. |
 | `select-screen.js` | `Menus` | tag | the select-screen UI for js/game.js: the circuit picker as a flag strip over a hero (the in-game still of the chosen circuit with its lap outline drawn on top… |
@@ -231,6 +232,9 @@ _196 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `duel.js` | `Duel` | tag | DUEL: a practice race against ONE rival with his rating lifted. |
 | `reliability.js` | `Reliability` | tag | RELIABILITY: whether a car reaches the flag at all. |
 | `engineer.js` | `RaceEngineer` | tag | RACE ENGINEER: the voice that makes the tyre model legible. |
+| `radio-lines.js` | `RadioLines` | tag | RADIO LINES: the phrasebook the race engineer and the TV commentator speak from (js/race/race-radio.js decides WHEN; this decides the WORDS). |
+| `race-facts.js` | `RaceFacts` | tag | RACE FACTS: what is happening in the race, as numbers and events a radio can talk about (js/race/race-radio.js is the only reader). |
+| `race-radio.js` | `RaceRadio` | tag | RACE RADIO: the race engineer's situational awareness and the TV commentator, on the one radio card (js/game.js announce()). |
 | `race-control.js` | `RaceControl` | tag | RACE CONTROL (RaceControl.create(G)) The flag state: green / local yellow / VSC / safety car, and the one rule that reads off it (whether OVERTAKE is … |
 | `weather-arc.js` | `WeatherArc` | tag | LIVE WEATHER + the DYNAMIC WEATHER ARC (WeatherArc.create(G, deps)): the one path a session's weather changes through, and the optional per-race progression… |
 | `quali-model.js` | `Quali` | tag | QUALIFYING: one flying lap, and the simulated times it is measured against. |
@@ -336,6 +340,7 @@ _196 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `offsets.js` | `CamTune` | tag | PER-CAMERA-MODE framing offsets (the CAMERA TUNER's data layer): the knob registry (CAM_TUNE_DEFS), the per-mode override store (localStorage apex26.c… |
 | `flyby-seq.js` | `FlybySeq` | tag | FLYBY SHOT SEQUENCER: the pre-race loading screen's camera. |
 | `flyby-panel.js` | `FlybyPanel` | tag | the FLYBY SHOT EDITOR pause-menu panel: pick a shot from the pre-race sequence (js/camera/flyby-seq.js), scrub the whole run, edit every pose field live… |
+| `free-cam.js` | `FreeCam` | tag | the FREE CAMERA pause-menu panel (#freecam): photo mode's fly-cam (js/camera/photo-cam.js) as a first-class tool, with a speed dial, roll, FOV, snaps to the… |
 | `photo-cam.js` | `Photomode` | tag | photo mode for js/game.js: the free-fly camera (WASD/mouse/touch sticks, drag-to-look), enter/exit plumbing (render-scale bump, HUD hide, panel tuck) and its… |
 | `tuner-panel.js` | `CamTunerPanel` | tag | the CAMERA TUNER pause-menu panel: a chip per player camera mode plus a slider per knob from CamTune.defs(), so each of the 13 cameras carries its own… |
 | `cockpit-opts.js` | `CockpitOpts` | tag | CockpitOpts: player-facing options for the first-person view. |

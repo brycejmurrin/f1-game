@@ -47,6 +47,7 @@ window.UiLayers = (function () {
     { id: "lighting" },
     { id: "camtune" },
     { id: "flyby" },
+    { id: "freecam" },
     { id: "photo-controls" },
     { id: "datahub" },
   ];

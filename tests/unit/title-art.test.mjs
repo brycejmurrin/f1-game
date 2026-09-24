@@ -131,3 +131,41 @@ test("the box carries the viewBox's own aspect", () => {
   assert.ok(/#title-car\s*\{[^}]*aspect-ratio:\s*1400\s*\/\s*900/.test(CSS),
     "#title-car lost `aspect-ratio: 1400 / 900` and will size itself off its parent");
 });
+
+test("every art group carries its reveal stage and order", () => {
+  // The draw-on animation keys on these: data-stage picks WHAT animates,
+  // --i staggers WHEN. An art group (one holding a <path> directly) without
+  // them simply pops in un-animated, which no static check would ever notice.
+  const STAGES = new Set(["ink", "body", "tone", "detail", "brush", "trail"]);
+  for (const [name, block] of DRAWINGS) {
+    const groups = [...block.matchAll(/<g ([^>]*)><path /g)].map((m) => m[1]);
+    assert.ok(groups.length > 5, `${name} lost its art groups`);
+    const order = [];
+    for (const attrs of groups) {
+      const stage = attrs.match(/data-stage="(\w+)"/);
+      const i = attrs.match(/style="--i:(\d+)"/);
+      assert.ok(stage && STAGES.has(stage[1]), `${name}: <g ${attrs.slice(0, 60)}> has no known data-stage`);
+      assert.ok(i, `${name}: <g ${attrs.slice(0, 60)}> has no --i`);
+      order.push([stage[1], Number(i[1])]);
+      // The stage must agree with the hook the CSS paints it by.
+      if (/data-trail/.test(attrs)) assert.equal(stage[1], "trail");
+      if (/data-tone/.test(attrs)) assert.equal(stage[1], "tone");
+      if (/data-ink/.test(attrs)) assert.equal(stage[1], /stroke="none"/.test(attrs) ? "brush" : "ink");
+    }
+    // --i is a permutation of 0..n-1, and the trails draw on LAST.
+    const idx = order.map(([, i]) => i).sort((a, b) => a - b);
+    assert.deepEqual(idx, idx.map((_, k) => k), `${name}: --i is not 0..${idx.length - 1} without gaps`);
+    const trails = order.filter(([s]) => s === "trail").map(([, i]) => i);
+    const rest = order.filter(([s]) => s !== "trail").map(([, i]) => i);
+    assert.ok(trails.length && Math.min(...trails) > Math.max(...rest), `${name}: the trails do not reveal last`);
+  }
+});
+
+test("no path carries pathLength", () => {
+  // The outlines reveal with a clip-path wipe on their GROUP (css/menus.css).
+  // A dash draw-on was tried and cannot trace these paths: each is many
+  // subpaths, and the dash pattern restarts at every M, so they all popped.
+  for (const [name, block] of DRAWINGS) {
+    assert.doesNotMatch(block, /pathLength/, `${name}: pathLength is back — the draw is a group wipe, not a dash`);
+  }
+});

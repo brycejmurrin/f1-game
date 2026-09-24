@@ -75,6 +75,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // graining and blistering say different things (one heals, one does not),
   // the axle call names an end of the car, and it does not nag. ~0.1 s.
   "tests/unit/engineer.test.mjs",
+  // ...and the race radio: every phrasebook line fits its card when spoken,
+  // pools deal like a deck, gaps come from the timing loop, a pass must hold,
+  // lines wait for the straight and die when stale, commentary only while
+  // the player is watching. ~0.1 s.
+  "tests/unit/race-radio.test.mjs",
   "tests/unit/team-livery.test.mjs",
   // 10 s of pure geometry: builds all 297 catalog options and hashes each
   // mesh, so a part that stops changing the car is caught where the catalog
@@ -367,10 +372,19 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/debris-step-skip.test.mjs",
   "tests/unit/camera-ride.test.mjs",
   "tests/unit/flyby-shots.test.mjs",
+  "tests/unit/flyby-pose-inverse.test.mjs",
+  "tests/unit/free-cam.test.mjs",
   // The FLYBY SHOT EDITOR's list algebra and the bake validator that stands
   // between a pasted blob and the shipped DEFAULT. Pure data, ~0.1 s, and it
   // belongs in the edit loop because tools/gen/bake-flyby.mjs is a FULL REPLACE.
   "tests/unit/flyby-panel.test.mjs",
+  // The FRAMING REPORT's math (tools/lib/frame-math.mjs): projection handedness,
+  // ray-vs-box, occlusion, horizon, motion and the flags an agent acts on without
+  // a picture. Hand-built worlds, no game VM, ~0.1 s.
+  "tests/unit/frame-math.test.mjs",
+  // The FRAMING REPORT fleet diff (tools/lib/frame-fleet.mjs): frame identity across
+  // a shot-list edit, flag-name comparison, worst-frame summary. Pure, ~0.1 s.
+  "tests/unit/frame-fleet.test.mjs",
   // The LOADING CARD's geometry: the three numbers the flyby editor authors,
   // clamped out of localStorage before they reach a CSS custom property, where
   // a NaN is not an error but a silently dropped declaration.

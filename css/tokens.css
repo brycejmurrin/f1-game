@@ -105,6 +105,13 @@
     scroll-behavior: auto !important;
   }
 }
+/* The same cancel for the in-game MENU ANIMATIONS: REDUCED setting
+   (html[data-motion="reduce"], js/ui/title-fx.js). js/ui/select-screen.js
+   skips startViewTransition under it too, so this only catches a transition
+   some other caller starts. */
+:root[data-motion="reduce"]::view-transition-group(*),
+:root[data-motion="reduce"]::view-transition-old(*),
+:root[data-motion="reduce"]::view-transition-new(*) { animation: none !important; }
 
 /* Windows High Contrast / forced-colors: gradients and translucent panel edges
    flatten to system colours, so the red-border "selected" cue and panel outlines
@@ -671,6 +678,43 @@
      the bands into grain the eye reads as texture. feTurbulence in a data URI
      keeps it to one tiled 160px tile and no network request. */
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+
+  /* MOTION. Steps, not a continuum: 1 = press/hover feedback, 3 = a panel or
+     sheet entering, 4 = a screen-sized move; --dur-draw is the slow one-shot (a
+     line or ring drawing itself). A step either reads as instant or as travel —
+     values in between just look undecided. --ease-out is for anything ARRIVING
+     (fast start, long soft landing — it answers the input at once). Only tokens
+     something reads live here (tests/unit/css-tokens.test.mjs): a --dur-2, an
+     --ease-in-out, a --motion multiplier and a twelve-step OKLCH red ramp were
+     drafted with these and cut until a rule needs them. Reduced motion is not
+     a token: it is html[data-motion="reduce"] (js/ui/title-fx.js) and the
+     prefers-reduced-motion backstop above, both in !important rules. */
+  --dur-1: 120ms;
+  --dur-3: 320ms;
+  --dur-4: 600ms;
+  --dur-draw: 1400ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  /* The fallback: without linear() a spring cannot be written in CSS, and
+     ease-out is the same arrival without the bounce. The real curve is in the
+     @supports block below. */
+  --ease-spring: var(--ease-out);
+}
+
+/* THE SPRING, as linear(): 25 evenly spaced samples of a damped spring
+     x(t) = 1 - e^(-zeta*w*t) * (cos(wd*t) + (zeta*w/wd) * sin(wd*t)),
+     wd = w * sqrt(1 - zeta^2),  w = 9.3,  zeta = 0.667,  t in [0, 1].
+   zeta comes from the overshoot: e^(-zeta*pi/sqrt(1-zeta^2)) = 0.06 is a 6%
+   peak (at t ~ 0.45), enough to read as physical, not enough to look loose.
+   w puts the envelope at 0.3% by t = 1, so pinning the last stop to exactly 1
+   is an invisible step, not a snap. Values rounded to 3 dp. Regenerate from
+   the formula, never hand-nudge a stop. Duration is the caller's (--dur-3 or
+   --dur-4 — at --dur-1 a bounce is noise). */
+@supports (animation-timing-function: linear(0, 1)) {
+  :root {
+    --ease-spring: linear(0, 0.063, 0.209, 0.388, 0.565, 0.721, 0.847, 0.939,
+      1.001, 1.038, 1.056, 1.06, 1.055, 1.046, 1.035, 1.025, 1.016, 1.008,
+      1.003, 1, 0.998, 0.997, 0.996, 0.997, 1);
+  }
 }
 
 /* THE TOUCH LADDER. The tokens above are a FLOOR (44px is the smallest box
