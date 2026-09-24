@@ -3788,7 +3788,7 @@ let netLobby = {
   // correct: there is no #vsfriend handler to bind until the real lobby lands,
   // and ensureNet() calls the real wire() before it hands over.
   wire: () => {}, open: () => {}, close: () => {}, cancel: () => {},
-  abortQuali: () => {}, roomChanged: () => {}, setReady: () => {},
+  abortQuali: () => {}, qualifying: () => false, roomChanged: () => {}, setReady: () => {},
   peerSeats: () => [], roomState: () => ({ open: false, role: null, peers: [] }),
   status: () => ({ role: null, connected: false }),
   reportQuali: () => {}, reportQualiLive: () => {},
