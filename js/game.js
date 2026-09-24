@@ -67,12 +67,17 @@ let _backendBound = false;
 // The rosters below are ApexRoster (js/roster.js), GENERATED from
 // tools/manifest.cjs by tools/gen/gen-shell.mjs — one truth, no hand mirror.
 // The two DEFERRED renderer groups, in documented toposort order:
-// loadBackendScripts starts a file once its BACKEND_EDGES predecessors have
-// evaluated. A load error RESOLVES — a missing global is already the fallback.
+// loadBackendScripts starts a file once its edges' predecessors have evaluated.
+// Renderer/optional groups keep their graceful fallback; data's eval-time
+// dependencies request strict loading so a failed predecessor never executes
+// hub.js and poisons its top-level lexical binding for the entire page.
 const BACKEND_FILES = ApexRoster.DEFERRED;
 const BACKEND_EDGES = ApexRoster.DEFERRED_EDGES;
-function loadBackendScripts(files, edges) {
-  const pending = new Set(files), done = new Set(), inflight = new Set();
+function loadBackendScripts(files, edges, opts) {
+  const strict = !!(opts && opts.strict);
+  const loaded = opts && opts.loaded;
+  const pending = new Set(files.filter((f) => !loaded || !loaded.has(f)));
+  const done = new Set(loaded || []), inflight = new Set();
   const preds = new Map(files.map((f) => [f, []]));
   for (const [a, b] of (edges || BACKEND_EDGES)) {
     if (preds.has(a) && preds.has(b)) preds.get(b).push(a);
@@ -87,18 +92,31 @@ function loadBackendScripts(files, edges) {
     // global IS the fallback), so a reload would throw away a working
     // degradation path — and loop, since the one-shot guard already cleared.
     if (el.dataset) el.dataset.apexLazy = "1";   // guarded: a stubbed element has none
-    el.onload = el.onerror = () => resolve();
+    el.onload = () => {
+      let ready = true;
+      try { if (opts && opts.ready) ready = !!opts.ready(src); }
+      catch (e) { ready = false; }
+      resolve(ready);
+    };
+    el.onerror = () => { if (el.remove) el.remove(); resolve(false); };
     document.head.appendChild(el);
   });
   return new Promise((finish) => {
+    let failed = false;
     const pump = () => {
-      if (!pending.size && !inflight.size) { finish(); return; }
+      if (failed && strict) { if (!inflight.size) finish(false); return; }
+      if (!pending.size && !inflight.size) { finish(!failed); return; }
       for (const src of files) {
         if (!pending.has(src)) continue;
         if (!preds.get(src).every((p) => done.has(p))) continue;
         pending.delete(src);
         inflight.add(src);
-        inject(src).then(() => { inflight.delete(src); done.add(src); pump(); });
+        inject(src).then((ok) => {
+          inflight.delete(src);
+          if (ok) { done.add(src); if (loaded) loaded.add(src); }
+          else { failed = true; if (!strict) done.add(src); }
+          pump();
+        });
       }
     };
     pump();
@@ -147,18 +165,36 @@ const DATA_FILES = ApexRoster.LAZY_DATA;
 // hub.js calls Data*.create() at EVAL time, so every tab module lands first —
 // the manifest derives "everything, then the hub" and the roster carries it.
 const DATA_EDGES = ApexRoster.LAZY_DATA_EDGES;
+// Keep successfully evaluated script-level consts across a failed attempt:
+// reinjecting one on retry throws "Identifier has already been declared".
+const dataScriptsLoaded = new Set();
+const DATA_READY = {
+  "js/data/api.js": () => typeof F1API !== "undefined",
+  "js/data/telemetry.js": () => typeof DataTelemetry !== "undefined",
+  "js/data/export.js": () => typeof DataExport !== "undefined",
+  "js/data/schedule.js": () => typeof DataSchedule !== "undefined",
+  "js/data/standings.js": () => typeof DataStandings !== "undefined",
+  "js/data/results.js": () => typeof DataResults !== "undefined",
+  "js/data/live.js": () => typeof DataLive !== "undefined",
+  "js/data/hub.js": () => typeof DataHub !== "undefined",
+};
 // Memoised on the PROMISE, not on a boolean: two fast taps on DATA must not
 // inject the bundle twice, and the second tap has to await the first load
 // rather than call DataHub.open() while hub.js is still in flight.
 let dataHubLoad = null;
 function ensureDataHub() {
   if (dataHubLoad) return dataHubLoad;
-  dataHubLoad = loadBackendScripts(DATA_FILES, DATA_EDGES).then(() => {
+  dataHubLoad = loadBackendScripts(DATA_FILES, DATA_EDGES, {
+    strict: true, loaded: dataScriptsLoaded,
+    ready: (src) => DATA_READY[src] && DATA_READY[src](),
+  }).then((complete) => {
     // Bare global, not window.DataHub: hub.js is a script-level `const`, a
-    // lexical binding that is never a window property. inject() resolves even
-    // on error, so this is the ONLY place a miss is visible; null the memo so
-    // a later tap retries instead of latching the failure for the session.
-    if (typeof DataHub === "undefined") {
+    // lexical binding that is never a window property. Null the memo on an
+    // incomplete group so a later tap retries instead of latching failure.
+    // A failed sibling must not even START hub.js. The binding can be in its
+    // temporal dead zone after a script exception, so do not probe it on an
+    // incomplete load (even typeof throws in that case).
+    if (!complete) {
       Log.warn("data", "the data hub bundle did not load — DATA stays closed");
       dataHubLoad = null;
       return false;
@@ -1084,6 +1120,9 @@ const isPractice = () => practiceMode || isTimeTrial();
 // and Quali already do to `cars` after makeCars(); the rival's stats come from
 // the deltas argument DriverRatings.get() already takes for career development.
 let duelMode = false;
+// The SETTING sticks (like difficulty), but a duel is a one-off practice race:
+// never a championship round, a time trial (Daily included) or a quali lap.
+const duelOn = () => duelMode && !isChampionship() && !isTimeTrial() && !isQuali();
 // WHICH legend the duel rival is, or "" for the ordinary fastest-car duel. A
 // race SETTING like duelMode itself, so it survives a restart the same way.
 let duelLegend = "";
@@ -2021,14 +2060,17 @@ function makeCars() {
 // sorts on ONE simRnd() per car — the same draw gridUp() would have spent, so
 // the stream position after the grid is identical whichever rule ran
 // (makeCars' stream contract).
+function gridRule() {
+  const rule0 = isTimeTrial() ? "tier" : (isChampionship() && SeasonCal.quali()) ? "quali" : raceGrid;
+  return (rule0 === "random" && netPlay.active()) ? "tier" : rule0;
+}
 function gridOrderFor(base) {
   // RANDOM CANNOT BE DECIDED LOCALLY IN A ROOM. netplay's grid is
   // negotiation-free precisely because gridUp() runs identically on every peer
   // (js/net/netplay.js separateGrid) — but no seed crosses the wire, so each
   // peer would roll its own order and lay the humans into different boxes.
   // Fall back to the pace order every peer already agrees on.
-  const rule0 = isTimeTrial() ? "tier" : (isChampionship() && SeasonCal.quali()) ? "quali" : raceGrid;
-  const rule = (rule0 === "random" && netPlay.active()) ? "tier" : rule0;
+  const rule = gridRule();
   if (rule === "rev10" && base && base.length === cars.length) {
     return base.slice(0, 10).reverse().concat(base.slice(10));
   }
@@ -2465,6 +2507,10 @@ function reloadFlybyShots() {
 // Keep one prepared track, never a cache of whole circuits. A generation
 // prevents late scenery downloads (including A -> B -> A) from committing.
 const _menuGate = { warm: 0, generation: 0, ready: "", track: null };
+// The menu finished building THIS selection (circuit, time, weather): only then is
+// `track` the world the loading screen may fly, light and grid. A fast tap to RACE!
+// before the idle build ran left the OLD circuit in `track`.
+const menuWorld = () => !!track && _menuGate.track === track && _menuGate.ready === [trackIdx, raceTimeOfDay, raceWeather].join("|");
 let flybyBuildTimer = 0;
 const MENU_IDLE_MS = 1200;
 let _menuInputAt = 0;
@@ -2481,6 +2527,11 @@ async function menuIdle(current) {
     await new Promise((r) => setTimeout(r, wait));
     if (!current()) return false;
   }
+}
+// Dark sessions: bake the lamp pools in 8 ms slices now, so RACE!'s sync bake hits the cache (lamp-bake.js prebake).
+async function menuLampBake(current) {
+  const step = current() && _atmo.prebakeLamps();
+  while (step && current() && !step(8)) await new Promise((r) => setTimeout(r, 8));
 }
 function scheduleFlybyTrack(settle) {
   clearTimeout(flybyBuildTimer);
@@ -2505,7 +2556,7 @@ function scheduleFlybyTrack(settle) {
       // car's meshes and livery upload 32 ms apart; a warm frame drawn first
       // minted and uploaded all ~22 atlases in one 3-4 s task.
       if (_menuGate.ready === key && _menuGate.track === track) {
-        await prepareMenuCarAssets(current); if (await menuIdle(current)) _menuGate.warm = 2; return;
+        await prepareMenuCarAssets(current); await menuLampBake(current); if (await menuIdle(current)) _menuGate.warm = 2; return;
       }
       // The build holds the main thread for 1-3 s: never start it while the
       // player is still working the picker or RACE SETTINGS (a TIME OF DAY step
@@ -2518,6 +2569,7 @@ function scheduleFlybyTrack(settle) {
       if (current() && track.meshes && track.meshes.pitSignTex && typeof gfx.uploadTexture === "function")
         gfx.uploadTexture(track.meshes.pitSignTex);
       await prepareMenuCarAssets(current);
+      await menuLampBake(current);
       if (await menuIdle(current)) _menuGate.warm = 2;
     } catch (e) { if (current()) Log.warn("gfx", "track preparation failed", e); }
   };
@@ -2762,12 +2814,7 @@ async function startRaceBody() {
     qualiField = cars;
     cars = [player];
     lapsTarget = 1;
-  } else if (duelMode && !isChampionship() && !isTimeTrial()) {
-    // DUEL IS A ONE-OFF FORMAT. The flag is a sticky setting, and the sheet only
-    // HIDES its row in a championship or TT — so a duel chosen once trimmed the
-    // next season or career round to two cars and paid a full points table
-    // (and a TT or daily ran with a rival on track). Honoured only where the
-    // row is offered.
+  } else if (duelOn()) {
     // ONE RIVAL, BUMPED — the same trim Quali and Time Trial do on either side
     // of this branch. js/race/duel.js owns what the format means.
     const rival = Duel.pick(cars);
@@ -3538,7 +3585,7 @@ const { buildResults, buildTTResults, buildStandings, buildChampion } = GameResu
 const hud = GameHud.create(G);
 const updateHud = hud.updateHud;
 // Session atmosphere: applyRaceSettings + per-track bias (js/lighting/atmosphere.js).
-const applyRaceSettings = Atmosphere.create(G).applyRaceSettings;
+const _atmo = Atmosphere.create(G), applyRaceSettings = _atmo.applyRaceSettings;
 // CAR SETUP panel UI (js/garage/setup-sheet.js).
 const { buildSetup, openSetup } = SetupUI.create(G);
 // Select-screen UI (js/ui/select-screen.js).
@@ -3637,11 +3684,11 @@ function menuGridCars() {
   const rng = _simRngState;
   try {
     makeCars();
-    const order = cars.slice(), pi = order.findIndex((c) => c.isPlayer);   // seat the player where the race grid will (P12), for the flyby's grid-mine shot
-    if (pi >= 0) order.splice(Math.min(11, order.length - 1), 0, order.splice(pi, 1)[0]);
-    FlybySeq.setPlayerSlot(order.findIndex((c) => c.isPlayer));
-    for (let i = 0; i < order.length; i++) {
-      const c = order[i], slot = TrackMesh.gridSlot(track, i);
+    const order = flybyGridOrder();
+    cars = order || cars;
+    FlybySeq.setPlayerSlot(order ? order.indexOf(player) : null);   // null: not knowable yet, so no grid-mine shot
+    for (let i = 0; i < cars.length; i++) {
+      const c = cars[i], slot = TrackMesh.gridSlot(track, i);
       c.s = wrapS(slot.s); c.x = slot.x; c.xVis = c.x;
       const w = worldFromTrack(c.s, c.x, smp);
       c.px = w.x; c.pz = w.z;
@@ -3656,8 +3703,28 @@ function menuGridCars() {
   _simRngState = rng;
 }
 
+/** THE GRID THE RACE WILL FORM, seated before it exists so the flyby's
+ *  grid-mine shot frames YOUR car: startRace's trims (quali/time trial: you
+ *  alone; duel: you and the rival the race grids ahead of you) and the race grid's
+ *  pre-orders (qualifying, sprint, rev10, revchamp) — else the pace order with
+ *  you at P12. Null for a RANDOM grid: its draw belongs to the race. Any simRnd()
+ *  spent here is rolled back by menuGridCars. */
+function flybyGridOrder() {
+  if (!player) return null;
+  if (isQuali() || isTimeTrial()) return [player];
+  if (duelOn()) { const r = Duel.pick(cars); cars = r ? [player, r] : [player]; }   // startRace's trim; the pair is then gridded like any field
+  const base = gridFromQuali() ? quali.order(cars) : SeasonCal.grid(cars, season);
+  if (gridRule() === "random" && !base) return null;
+  const pre = gridOrderFor(base);
+  if (pre && pre.length === cars.length) return pre.slice();
+  const o = cars.filter((c) => c !== player);
+  o.splice(Math.min(11, o.length), 0, player);
+  return o;
+}
+
 function raceIntro(go) {
-  menuGridCars();
+  const world = menuWorld();
+  if (world) menuGridCars();
   // LIGHT THE FLYBY WITH WHAT THE MENU CHOSE, BEFORE IT STARTS. run() fires `go`
   // (startRace) "once the card is up", and startRace only reaches
   // applyRaceSettings() after loadTrack() and makeCars() — so the whole cinematic
@@ -3666,11 +3733,13 @@ function raceIntro(go) {
   // rebuilds geometry and resolves no lighting at all. applyRaceSettings() is
   // idempotent by construction (every lighting-slider tick re-runs it), so this
   // costs one pass and startRace still re-applies after its rebuild.
-  if (track) applyRaceSettings();
+  if (world) applyRaceSettings();
   // And fly the shots the EDITOR saved, for the same reason: a list edited in
   // the pause menu is only read here, so every run picks up the latest one.
   reloadFlybyShots();
-  if (!flybyShots) flybyShots = FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0);   // a different flyby each load (never the sim RNG); an editor-saved list plays as authored
+  if (!flybyShots) flybyShots = FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0, FlybySeq.slotKnown());   // a different flyby each load (never the sim RNG); an editor-saved list plays as authored
+  if (flybyShots && !FlybySeq.slotKnown()) flybyShots = FlybySeq.withoutSlot(flybyShots);   // a random grid: nobody knows your slot yet
+  if (world) FlybySeq.warm(track, flybyShots);   // plan the opening shots now, the rest in slices before their cuts
   loadingScreen.run(loadingInfo(), go);
 }
 /** WHAT THE LOADING SCREEN DESCRIBES: the circuit about to be raced, this
@@ -3686,11 +3755,11 @@ function loadingInfo() {
     // WHAT SESSION THIS IS, for the announcer (js/audio/announcer.js). It read
     // the same paragraph before a qualifying hour, a duel with a legend and a
     // Grand Prix, because none of this reached it.
-    session, practice: isPractice(), duel: duelMode, duelLegend, flow,
+    session, practice: isPractice(), duel: duelOn(), duelLegend, flow,
     // Only fly over a world that is actually built. A missed pre-build (a
     // circuit switched a moment ago, scenery still downloading) would put a
     // black hold where the cinematic should be, which reads as a hang.
-    hasWorld: !!track && _menuGate.track === track,
+    hasWorld: menuWorld(),
   };
 }
 // ACTIVE AERO activation zones (js/physics/aero-zones.js) — pure circuit geometry.
@@ -4706,8 +4775,8 @@ function updateCar(c, dt, ranked) {
     const up = c.local ? Input.consumeShiftUp() : !!inp.shiftUp,
           down = c.local ? Input.consumeShiftDown() : !!inp.shiftDown;
     if (gearsManual()) {
-      if (up && c.gear < GEARS && c.shiftT <= 0) { c.gear++; c.shiftT = 0.1; if (soundOn) GameAudio.shift(true); }
-      if (down && c.gear > 1 && c.shiftT <= 0) { c.gear--; c.shiftT = 0.1; if (soundOn) GameAudio.shift(false); }
+      if (up && c.gear < GEARS && c.shiftT <= 0) { c.gear++; c.shiftT = 0.1; if (soundOn && c.local) GameAudio.shift(true); }
+      if (down && c.gear > 1 && c.shiftT <= 0) { c.gear--; c.shiftT = 0.1; if (soundOn && c.local) GameAudio.shift(false); }
       const hi = gearHi(c.gear), lo = gearLo(c.gear);
       const frac = (c.speed - lo) / Math.max(hi - lo, 1);
       if (c.speed >= hi) { gearMult = 0.08; accelCeil = Math.min(accelCeil, hi + 1.5); }  // limiter: upshift to go faster
@@ -4801,7 +4870,7 @@ function updateCar(c, dt, ranked) {
   const gearSpeed = Math.max(0, c.speed);   // gearbox readout ignores reverse crawl
   if (c.human && !gearsManual()) {
     const ng = naturalGear(gearSpeed);
-    if (ng !== c.gear && state === "race" && soundOn) GameAudio.shift(ng > c.gear);
+    if (ng !== c.gear && state === "race" && soundOn && c.local) GameAudio.shift(ng > c.gear);   // your gearbox, not a VS FRIEND rival's
     c.gear = ng;
   } else if (!c.human) c.gear = naturalGear(gearSpeed);
   c.rpm = rpmFor(c.gear, gearSpeed);

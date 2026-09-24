@@ -489,6 +489,9 @@ const Input = (function () {
         });
         keyMap[a.id] = slots;
       }
+      // An action the save predates (new since it was written) keeps its
+      // default — unless the player already put that key on something else.
+      for (const a of KEY_ACTIONS) if (!Array.isArray(saved[a.id])) keyMap[a.id] = keyMap[a.id].map((c) => (c && seen[c] ? null : c));
       rebuildKeyIndex();
     }
     return getKeyMap();
@@ -605,6 +608,7 @@ const Input = (function () {
           return b;
         });
       }
+      for (const a of PAD_ACTIONS) if (!Array.isArray(saved[a.id])) padMap[a.id] = padMap[a.id].map((b) => (b != null && seen[b] ? null : b));
     }
     return getPadMap();
   }

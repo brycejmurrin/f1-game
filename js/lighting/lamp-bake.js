@@ -420,7 +420,7 @@ const LampBake = (function () {
   // Forget the cached bake and any job (loadTrack): they hold the previous
   // track object and its atlas, which must not stay resident through the build.
   function reset() {
-    _job = null; _jobSrc = null; _jobTrk = null; _src = null; _bake = null; _trk = null;
+    _pre = null; _job = null; _jobSrc = null; _jobTrk = null; _src = null; _bake = null; _trk = null;
     _pendSrc = null; _pend = NaN; _clamp = NaN; _budget = 0; _shK = -1;
   }
   // `maxTexels` (optional) caps atlas texels per layer; omitted or 0 = MAX_TEXELS.
@@ -429,6 +429,24 @@ const LampBake = (function () {
     const budget = maxTexels > 0 ? maxTexels : MAX_TEXELS;
     const cur = _src === lights && _clamp === nearClamp && _budget === budget;
     if (cur) { _job = null; return _bake; }
+    // sync === false NEVER blocks: with no bake of this track in hand (daytime
+    // floods switched on, the bake knob turned up mid-race) the FIRST bake is
+    // sliced too and nothing draws baked until it lands — the live loop lights
+    // the nearest lamps meanwhile. true bakes now; omitted bakes now only when
+    // there is nothing to draw and no job for this track.
+    if (!(_trk === track && _bake) && sync !== true && (sync === false || (_job && _jobTrk === track))) {
+      if (!_job || _jobSrc !== lights || _jobClamp !== nearClamp || _jobTrk !== track || _jobBudget !== budget) {
+        _job = bakeSteps(lights, _groundFn(track), nearClamp, roadOf(track), budget);
+        _jobSrc = lights; _jobClamp = nearClamp; _jobTrk = track; _jobBudget = budget;
+      }
+      const end = _now() + SLICE_MS;
+      let r;
+      do { r = _job.next(); } while (!r.done && _now() < end);
+      if (!r.done) return null;
+      _job = null;
+      _install(r.value, track, lights, nearClamp, budget);
+      return _bake;
+    }
     // Same track, bake in hand: a new light set (a rebuild:true lamp knob) or a
     // new clamp keeps the old bake until the input has held still, then rebakes
     // in slices — a whole bake is 0.3-2 s of main thread.
@@ -449,8 +467,43 @@ const LampBake = (function () {
       return _bake;
     }
     _job = null;
-    _install(bake(lights, _groundFn(track), nearClamp, roadOf(track), budget), track, lights, nearClamp, budget);
+    // A MENU PRE-BAKE of exactly these inputs finishes here instead of
+    // restarting: the steps are deterministic, so its tail yields the same texels.
+    let it = _preMatch(track, lights, nearClamp, budget) ? _pre.it : null, r;
+    _pre = null;
+    if (it) { do r = it.next(); while (!r.done); }
+    _install(it ? r.value : bake(lights, _groundFn(track), nearClamp, roadOf(track), budget), track, lights, nearClamp, budget);
     return _bake;
+  }
+
+  // MENU PRE-BAKE. The first dark-session bake is 1.5-3.3 s (desktop) and ran
+  // synchronously on the RACE! tap (atmosphere.js). prebake() starts the SAME
+  // bakeSteps job for the menu-built track and hands back step(ms): run up to
+  // `ms` (default SLICE_MS) of it, true once it has installed — or once it is
+  // moot (superseded by another prebake, a reset(), or a sync forTrack that
+  // drained it). The later forTrack with the same (lights, clamp, budget) is then
+  // a cache hit; tapped mid-way, forTrack drains the remainder.
+  let _pre = null;
+  function _preMatch(track, lights, nearClamp, budget) {
+    return !!_pre && _pre.track === track && _pre.lights === lights && _pre.clamp === nearClamp && _pre.budget === budget;
+  }
+  function prebake(track, lights, nearClamp, maxTexels) {
+    if (!lights || !lights.length) return null;
+    const budget = maxTexels > 0 ? maxTexels : MAX_TEXELS;
+    if (_src === lights && _clamp === nearClamp && _budget === budget) return () => true;
+    if (!_preMatch(track, lights, nearClamp, budget))
+      _pre = { it: bakeSteps(lights, _groundFn(track), nearClamp, roadOf(track), budget), track, lights, clamp: nearClamp, budget };
+    const job = _pre;
+    return function step(ms) {
+      if (_pre !== job) return true;
+      const end = _now() + (ms > 0 ? ms : SLICE_MS);
+      let r;
+      do { r = job.it.next(); } while (!r.done && _now() < end);
+      if (!r.done) return false;
+      _pre = null;
+      _install(r.value, track, lights, nearClamp, budget);
+      return true;
+    };
   }
 
   // The shadow-mapped lamp's BAKED colour. On a baked fragment the live loop
@@ -496,6 +549,6 @@ const LampBake = (function () {
   // LIVE-ONLY lane (TLX's per-chunk lamp texture) key on it.
   function gen() { return _bake ? _bake.gen | 0 : 0; }
 
-  return { bake, forTrack, reset, shadowCol, liveOnlyAt, gen, budget, toHalf, MAX_TEXELS, DESKTOP_TEXELS, TILE, NO_GROUND, LO_HEIGHT, LO_COS };
+  return { bake, forTrack, prebake, reset, shadowCol, liveOnlyAt, gen, budget, toHalf, MAX_TEXELS, DESKTOP_TEXELS, TILE, NO_GROUND, LO_HEIGHT, LO_COS };
 })();
 Object.freeze(LampBake);

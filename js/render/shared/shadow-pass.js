@@ -48,6 +48,7 @@ const ShadowPass = (function () {
     // to the LAMP's frustum, so the static half of this map is a pure function of
     // which lamp it is. What actually varies is the lamp and the CARS cast into it.
     let _lampShX = null, _lampShY = null, _lampShZ = null;   // the lamp, by world position (static fixture => exact match)
+    let _lampShR = null, _lampShC = null, _lampShDx = null, _lampShDy = null, _lampShDz = null;   // ...and its VP inputs (radius, cone, aim)
     let _lampShCarKey = 0;   // quantised positions of the cars in the map
     const _shadowCtr = [0, 0, 0];   // unsnapped shadow anchor (glides) — the shader fades by distance from this
 
@@ -123,7 +124,7 @@ const ShadowPass = (function () {
     function reset() {
       _shadowSnapX = _shadowSnapZ = _shadowBox = null;
       _shadowSunX = _shadowSunY = _shadowSunZ = null;
-      _lampShX = _lampShY = _lampShZ = null; _lampShCarKey = 0;
+      _lampShX = _lampShY = _lampShZ = null; _lampShR = _lampShC = _lampShDx = _lampShDy = _lampShDz = null; _lampShCarKey = 0;
     }
     // The render loop: count reset before the car loop, one push per drawn car
     // (blob shadow this frame; sun / lamp caster next frame), flush after.
@@ -372,6 +373,14 @@ const ShadowPass = (function () {
     }
 
     // Nearest-floodlight spot shadow map (night only).
+    // One lamp caster folded into the car key: position at 0.25 m (x, y, z) and
+    // heading at 1/8 rad, all from the column-major world matrix the cast uses.
+    function _lampCasterKey(k, m) {
+      k = (k * 31 + Math.round(m[12] * 4)) | 0;
+      k = (k * 31 + Math.round(m[13] * 4)) | 0;
+      k = (k * 31 + Math.round(m[14] * 4)) | 0;
+      return (k * 31 + Math.round(Math.atan2(m[8], m[10]) * 8)) | 0;
+    }
     function lampPass(frame, _frameNo, _hasLivePlayerShadow) {
       // Night only: ONE lamp — the nearest/strongest to the camera — gets a real
       // per-frame 512² depth map (perspective, looking down its beam) so the car
@@ -429,7 +438,11 @@ const ShadowPass = (function () {
             // Lamp fixtures are STATIC and their coordinates are copied, not
             // recomputed, so exact equality is the identity test — no epsilon, and
             // no way for two distinct lamps to collide on it.
-            const _sameLamp = _lx === _lampShX && _ly === _lampShY && _lz === _lampShZ;
+            // Position alone is not the map's VP: POOL RADIUS / BEAM CONE knobs
+            // rebuild the set with the same positions but a new far plane / fov.
+            const _sameLamp = _lx === _lampShX && _ly === _lampShY && _lz === _lampShZ &&
+              rad === _lampShR && L[o + 11] === _lampShC &&
+              L[o + 7] === _lampShDx && L[o + 8] === _lampShDy && L[o + 9] === _lampShDz;
             // Same bound the cast loop below uses, hoisted so the key is computed
             // from exactly the set that gets rasterised — a key over a different set
             // than the content is how this class of cache goes wrong.
@@ -449,16 +462,17 @@ const ShadowPass = (function () {
             const _pm = _livePlayerShadowMat;
             const _pdx = _pm[12] - _lx, _pdy = _pm[13] - _ly, _pdz = _pm[14] - _lz;
             const _playerIn = _hasLivePlayerShadow && (_pdx * _pdx + _pdy * _pdy + _pdz * _pdz) <= _lsR2;
-            let _carKey = 0;
-            if (_playerIn && G.player && G.player.px != null) {   // px/pz are scalars, not a vec
-              _carKey = ((Math.round(G.player.px * 4) * 31 + Math.round(G.player.pz * 4)) * 31 + 1) | 0;
-            }
+            // Every caster is keyed from the SAME matrix the cast draws with, on
+            // position (0.25 m, incl. height) AND heading (1/8 rad): keyed on
+            // physics px/pz alone, a car spinning or pitching in place kept its old
+            // silhouette, and the interpolated player transform trailed the key.
+            let _carKey = _playerIn ? _lampCasterKey(1, _pm) : 0;
             for (let i = 0; i < _shadowCount; i++) {
               const _cm = _shadowMats[i];
               if (_shadowCars[i] === G.player) continue;
               const _cdx = _cm[12] - _lx, _cdy = _cm[13] - _ly, _cdz = _cm[14] - _lz;
               if (_cdx * _cdx + _cdy * _cdy + _cdz * _cdz > _lsR2) continue;
-              _carKey = ((_carKey * 31 + Math.round(_cm[12] * 4)) * 31 + Math.round(_cm[14] * 4)) | 0;
+              _carKey = _lampCasterKey(_carKey, _cm);
             }
             // The player is cast into this map whenever it is within reach, so while
             // driving under a lamp the car half of the key changes every frame and a pure content key would
@@ -483,6 +497,7 @@ const ShadowPass = (function () {
               if (G.gfx.lampShadowKeep) G.gfx.lampShadowKeep(flBest);
             } else {
             _lampShX = _lx; _lampShY = _ly; _lampShZ = _lz; _lampShCarKey = _carKey;
+            _lampShR = rad; _lampShC = L[o + 11]; _lampShDx = L[o + 7]; _lampShDy = L[o + 8]; _lampShDz = L[o + 9];
             const fov = Math.min(2.6, 2 * Math.acos(M4.clamp(L[o + 11], -0.999, 0.999)) * 1.1 + 0.15);
             const up = Math.abs(L[o + 8]) > 0.95 ? _upX : _upY;
             _flEye[0] = L[o]; _flEye[1] = L[o + 1]; _flEye[2] = L[o + 2];

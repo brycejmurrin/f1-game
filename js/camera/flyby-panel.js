@@ -334,10 +334,21 @@ function apiReady() {
   return typeof __apex !== "undefined" && !!__apex && !!__apex.flybyCam;
 }
 
+/** The list the PREVIEW flies: a copy, re-taken whenever the edited list's
+ *  CONTENTS change. FlybySeq caches plans and corner bindings per shot/list
+ *  object, and the sliders edit this panel's list in place — so passing it
+ *  directly previewed the first plan forever (a corner shot's x/y/off/corner
+ *  did nothing after the first frame). A scrub with no edit reuses the copy. */
+let playKey = "", playList = null;
+function playable() {
+  const key = JSON.stringify(ensure());
+  if (key !== playKey || !playList) { playKey = key; playList = clone(ensure()); }
+  return playList;
+}
 function preview() {
   if (!apiReady()) { askApi(); status(null, "preview unavailable — loading the dev API…"); return; }
   let r = null;
-  try { r = __apex.flybyCam(u, ensure()); } catch (e) { status(null, "preview failed: " + (e && e.message)); return; }
+  try { r = __apex.flybyCam(u, playable()); } catch (e) { status(null, "preview failed: " + (e && e.message)); return; }
   if (!r) { status(null, "no track built yet — start a race, then pause"); return; }
   if (r.index !== sel) { sel = r.index; refreshChips(); refreshRows(); }
   status(r, "");
@@ -774,6 +785,7 @@ function closeFlyby(showPauseMenu) {
   if (typeof __apex !== "undefined" && __apex && __apex.view) {
     try { __apex.view("chase"); } catch (_) { /* no track built — nothing parked */ }
   }
+  G.snapGameCam();   // at the car, not a swoop back from the last previewed frame (no-op without a player)
   if (showPauseMenu && G.paused) {
     els.pmsettings.hidden = false;   // back to the settings menu
     const displayPage = $("pm-panel-display");

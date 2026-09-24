@@ -404,8 +404,14 @@
           { id: "vegas-sphere-runoff-cyan", samples: 5 });
         groundPatch(K(0.318), -1, 5.0, [9, 0.15, 36], [0.18, 0.62, 0.32],
           { id: "vegas-sphere-runoff-lime", samples: 5 });
-        place(K(0.305), -1, 8, [6, 0.22, 28], [0.15, 0.70, 0.75]);
-        place(K(0.325), -1, 9, [5, 0.18, 22], [0.25, 0.75, 0.35]);
+        // Painted decals, not solids: place() seats a box at ground + h/2 - 0.8,
+        // so these 0.22/0.18 m slabs sat wholly underground while still
+        // moving the driving limit in to 5-6.5 m. Same footprint (inner edge
+        // = old centre dist - width/2), now grounded and non-colliding.
+        groundPatch(K(0.305), -1, 5, [6, 0.22, 28], [0.15, 0.70, 0.75],
+          { id: "vegas-sphere-runoff-cyan-inner", samples: 3 });
+        groundPatch(K(0.325), -1, 6.5, [5, 0.18, 22], [0.25, 0.75, 0.35],
+          { id: "vegas-sphere-runoff-lime-inner", samples: 3 });
       }
 
       backdrop(K(0.45), 1, 240, [180, 30, 120], DARKROCK);
@@ -483,7 +489,9 @@
         { id: "vegas-bellagio-lake-west" });
       groundPatch(K(0.685), 1, 14, [22, 0.14, 96], [0.08, 0.28, 0.48],
         { id: "vegas-bellagio-pool-strip", samples: 6 });
-      place(K(0.690), 1, 16, [18, 0.35, 70], [0.12, 0.42, 0.72]);
+      // Pool apron decal (was a 0.35 m place(), buried 0.3 m below ground).
+      groundPatch(K(0.690), 1, 7, [18, 0.35, 70], [0.12, 0.42, 0.72],
+        { id: "vegas-bellagio-pool-apron", samples: 4 });
 
       // Paris / Eiffel + Montgolfier balloon.
       tower(K(0.74), -1, 68, 22, 130, { col: [0.55, 0.48, 0.35], seg: 4, cap: true, capCol: [1.0, 0.85, 0.4], mast: true });

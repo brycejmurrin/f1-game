@@ -478,3 +478,17 @@ test("the display-reset latch clears from EITHER chunk slider, as the tuner prom
   assert.match(isChunk[0], /roadChunkLamps/,
     "if the note no longer offers the retry on PER-CHUNK ROAD, narrow the clear to match");
 });
+
+test("a buried thin prop (kerb flash, paint decal) sets no driving limit — no invisible walls at the kerb", () => {
+  // place() sinks every box 0.8 m, so one shorter than THIN_PROP_H is at or
+  // under the ground; its blockAt used to stop cars 0.4-2 m past the road edge
+  // on 12 circuits (albert_park's kerb flashes held the limit at hw + 0.53 m).
+  const src = fs.readFileSync(path.join(ROOT, "js/track/tracks.js"), "utf8");
+  assert.match(src, /if \(sz\[1\] >= THIN_PROP_H\) blockAt\(k, side, dist - sz\[0\] \/ 2, sz\[2\] \/ 2\);/);
+  const env = buildContext();
+  const def = env.Tracks.LIST.find((entry) => entry.id === "albert_park");
+  const track = env.Tracks.build(def, { night: false });
+  let minOver = Infinity;
+  for (let k = 0; k < track.n; k++) minOver = Math.min(minOver, track.barL[k] - track.hw[k], track.barR[k] - track.hw[k]);
+  assert.ok(minOver > 1.0, `a driving limit sits ${minOver.toFixed(2)} m past the road edge`);
+});

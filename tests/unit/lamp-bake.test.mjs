@@ -283,6 +283,60 @@ test("the atlas stays near-square: no side over WebGL2's guaranteed 2048, slot o
   assert.equal((LB.TILE + 2) % 2, 0, "SLOT even: slot origins are even integers < 4096, exact in half float");
 });
 
+test("sync=false never blocks: a first bake mid-race is sliced and returns null until it lands", () => {
+  const LB = load({ Tracks: { terrainY: () => 0 } });
+  const trk = {}, lights = [];
+  for (let i = 0; i < 60; i++) lights.push(...LAMP_A.map((v, k) => k === 0 ? i * 9 : k === 2 ? (i % 12) * 40 : v));
+  assert.equal(LB.forTrack(trk, lights, 4.0, 0, false), null, "no bake in hand: nothing drawn baked yet");
+  let b = null, n = 0;
+  while (!b && n++ < 20000) b = LB.forTrack(trk, lights, 4.0, 0, false);
+  assert.ok(b, "the sliced first bake lands");
+  assert.deepEqual(Array.from(b.data), Array.from(LB.bake(lights, () => 0, 4.0).data), "sliced == synchronous");
+  assert.equal(LB.forTrack(trk, lights, 4.0, 0, false), b, "then cached");
+  LB.reset();
+  assert.ok(LB.forTrack(trk, lights, 4.0, 0, true), "sync=true bakes at once");
+});
+
+test("menu prebake: sliced first bake, then the sync forTrack on the tap is a cache hit with the same texels", () => {
+  // atmosphere.js prebakeLamps drives this from the menu (scheduleFlybyTrack);
+  // the RACE! tap's sync forTrack must then cost nothing and draw the same bake.
+  const mk = () => load({ Tracks: { terrainY: (x, z) => 0.01 * x - 0.02 * z }, performance });
+  const trk = {}, lights = [];
+  for (let i = 0; i < 60; i++) lights.push(...LAMP_A.map((v, k) => k === 0 ? i * 9 : k === 2 ? (i % 12) * 40 : v));
+  const ref = mk().forTrack(trk, lights, 4.0, 0, true, 300000);
+  const LB = mk();
+  const step = LB.prebake(trk, lights, 4.0, 300000);
+  let n = 0;
+  while (!step(0.01) && n++ < 50000);
+  assert.ok(n > 3, "the prebake runs in several slices");
+  assert.equal(LB.gen(), 1, "installed when it lands");
+  const tap = LB.forTrack(trk, lights, 4.0, 0, true, 300000);
+  assert.equal(LB.gen(), 1, "the tap is a cache hit, not a rebake");
+  assert.deepEqual(Array.from(tap.data), Array.from(ref.data), "prebake texels == sync texels");
+  assert.deepEqual(Array.from(tap.indir), Array.from(ref.indir), "same indirection");
+  assert.equal(LB.prebake(trk, lights, 4.0, 300000)(), true, "already baked: a prebake is a no-op");
+
+  // Tapped mid-way: the sync forTrack drains the started job (same texels) and
+  // the menu's step is moot from then on.
+  const LB2 = mk(), step2 = LB2.prebake(trk, lights, 4.0, 300000);
+  for (let i = 0; i < 5; i++) step2(0.01);
+  const half = LB2.forTrack(trk, lights, 4.0, 0, true, 300000);
+  assert.deepEqual(Array.from(half.data), Array.from(ref.data), "drained prebake == sync texels");
+  assert.equal(step2(), true, "a drained prebake's step reports done");
+  assert.equal(LB2.gen(), 1, "and installs nothing more");
+
+  // Superseded (loadTrack's reset, or another input set): the old step goes inert.
+  const LB3 = mk(), step3 = LB3.prebake(trk, lights, 4.0, 300000);
+  step3(0.01);
+  LB3.reset();
+  assert.equal(step3(), true, "reset makes the step a no-op...");
+  assert.equal(LB3.gen(), 0, "...that installs nothing");
+  const other = lights.slice(), step4 = LB3.prebake(trk, other, 4.0, 300000);
+  assert.equal(LB3.prebake(trk, lights, 6.0, 300000)(0.01), false, "a new key starts its own job");
+  assert.equal(step4(), true, "and the superseded one is moot");
+  assert.equal(LB3.prebake(null, null, 4.0), null, "no lamps -> nothing to prebake");
+});
+
 test("reset drops the cached bake and track, so the next forTrack bakes afresh", () => {
   const LB = load({ Tracks: { terrainY: () => 0 } });
   const trk = {}, set = [...LAMP_A];

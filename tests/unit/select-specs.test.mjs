@@ -589,3 +589,31 @@ test("a spec this tool cannot READ is reported, never silently dropped", () => {
     assert.equal((r[k] || []).length, 0, `${k} must not claim a spec that could not be read`);
   }
 });
+
+test("fit bills each spec at its MEASURED rate, and an unmeasured selection cuts where it always did", () => {
+  // 2026-09-24: the cut counted TESTS against a cap derived from one 79.7 s
+  // mean, so the per-spec medians select-budget reports (3+ CI samples) never
+  // moved a selection — ~12 % of routed specs ran. Synthetic histories pin it.
+  // Budgeted specs only: none twinned, fixed-gate or over the per-test gate.
+  const specs = ["tests/specs/output-paths.spec.js", "tests/specs/telemetry-compare.spec.js",
+                 "tests/specs/assets-api.spec.js"];
+  const empty = { specs: {} };
+  const flat = fit(specs, 15, { db: empty });
+  assert.ok(flat.testsSelected <= flat.testsFit, "no history: the old test-count boundary holds");
+  const cheap = { specs: Object.fromEntries(specs.map((f) => [f,
+    { s: [1, 2, 3].map((i) => [`2026-09-2${i}T00:00:00Z`, "llvmpipe", 5 * declaredTests(f), declaredTests(f)]) }])) };
+  const measured = fit(specs, 15, { db: cheap });
+  assert.equal(measured.selected.length, specs.length, "every spec at 5 s a test fits a 15-minute budget");
+  assert.ok(measured.selected.length > flat.selected.length, "the measured rate must change the cut, or it is decoration");
+  assert.ok(measured.secSelected <= measured.secFit, `${measured.secSelected} s billed into ${measured.secFit} s`);
+  // Two samples are not a median: below MIN_SAMPLES the constant stands.
+  const thin = { specs: Object.fromEntries(Object.entries(cheap.specs).map(([f, v]) => [f, { s: v.s.slice(0, 2) }])) };
+  assert.deepEqual(fit(specs, 15, { db: thin }).selected.map((s) => s.file), flat.selected.map((s) => s.file));
+  // A local sample never sets a CI budget.
+  const local = { specs: Object.fromEntries(Object.entries(cheap.specs).map(([f, v]) => [f, { s: v.s.map((x) => [x[0], "local", x[2], x[3]]) }])) };
+  assert.deepEqual(fit(specs, 15, { db: local }).selected.map((s) => s.file), flat.selected.map((s) => s.file));
+  // More tests than the fallback cap counts may now share the shard; its
+  // runner cap must still clear every one of them timing out.
+  const plan = shards({ ...measured, oversize: [] });
+  assert.equal(plan[0].timeout, shardTimeoutMin(Math.max(measured.testsFit, measured.testsSelected)));
+});

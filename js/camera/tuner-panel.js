@@ -30,14 +30,15 @@ const CT_PREVIEWS = {
 };
 function previewCorner(key) {
   const p = CT_PREVIEWS[key];
-  if (!p || !G.player) return;
+  // The jump is the dev API's, which the shipped page does not load (__apex is
+  // null there, and `typeof null` is "object"): without it the old code swapped
+  // the circuit under a live race and then threw. openCamTuner hides the row.
+  if (!p || !G.player || !window.__apex) return;
   const idx = Tracks.LIST.findIndex((t) => t.id === p.id);
   if (idx < 0) return;
   if (G.trackIdx !== idx) G.loadTrack(idx);
-  if (typeof __apex !== "undefined") {
-    __apex.jump(p.frac, p.speed);
-    __apex.snapCam();
-  }
+  __apex.jump(p.frac, p.speed);
+  __apex.snapCam();
   applyLive();
 }
 function selectCamMode(index, focus) {
@@ -141,6 +142,7 @@ function openCamTuner() {
   Log.info("game", "CamTunerPanel.open");
   buildCamTunePanel();
   $("camtune").hidden = false;
+  { const row = $("ct-previews"); if (row) row.hidden = !window.__apex; }   // dev-API jumps only
   $("ct-json").hidden = true;
   document.body.classList.add("lt-open");   // hide race HUD + touch controls underneath
   els.pmsettings.hidden = true;             // unobstructed live preview (opened from settings)

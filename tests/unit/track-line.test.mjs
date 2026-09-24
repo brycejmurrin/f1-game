@@ -192,3 +192,37 @@ test("attack zones: corners that OVERLAP are fed by no straight at all", () => {
   assert.ok(TL.attackAt(t, a.s0 - 60).q > 0,
     "the lap-seam pair still measures its straight across the wrap");
 });
+
+test("memo: a rebuild of the same inputs is byte-identical, unshared, and any input change misses", () => {
+  // bake() memoises the two most recent input sets (a rebuild of the SAME
+  // circuit — the TIME chip, a field-size change — re-baked an identical LUT).
+  const OUT = ["line", "lineW", "lineIn", "lineOut", "lineK", "attackQ", "toTurnIn"];
+  const bytes = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
+  const same = (p, q) => OUT.every((f) => bytes(p[f]).equals(bytes(q[f]))) &&
+    JSON.stringify(p.lineCorners) === JSON.stringify(q.lineCorners);
+  const kA = (s) => (s >= 1000 && s < 1080 ? 0.02 : s >= 1500 && s < 1540 ? -0.03 : 0);
+  const kB = cornerAt(400, 90, -0.015);
+  const a1 = TL.bake(track(2100, 6.5, kA));
+  const b1 = TL.bake(track(2100, 6.5, kB));
+  const a2 = TL.bake(track(2100, 6.5, kA));   // a different circuit in between: still a hit
+  assert.ok(same(a1, a2), "the rebuild's LUT differs from the first bake");
+  assert.ok(!same(a1, b1), "two different circuits baked the same LUT — the memo aliased them");
+  for (const f of OUT) assert.notEqual(a1[f], a2[f], `${f} is shared between two tracks`);
+  assert.notEqual(a1.lineCorners[0], a2.lineCorners[0], "lineCorners entries are shared between two tracks");
+  a1.line.fill(99); a1.lineCorners[0].sApex = -1;
+  assert.ok(same(a2, TL.bake(track(2100, 6.5, kA))), "mutating one track's LUT leaked into the memo");
+  // ...and it IS a hit: a fresh bake of a new input set relaxes the whole lap
+  // (ms); a hit copies seven arrays (µs). Best-of-3 against a 5× margin.
+  const kC = cornerAt(700, 70, 0.018);
+  let t0 = performance.now(); TL.bake(track(2100, 6.5, kC)); const miss = performance.now() - t0;
+  let hitMs = Infinity;
+  for (let r = 0; r < 3; r++) { t0 = performance.now(); TL.bake(track(2100, 6.5, kC)); hitMs = Math.min(hitMs, performance.now() - t0); }
+  assert.ok(hitMs * 5 < miss, `rebuild ${hitMs.toFixed(2)} ms vs first bake ${miss.toFixed(2)} ms — the memo did not hit`);
+  // Every input is in the key: one node of hw, one of curv, a hint.
+  const hw1 = track(2100, 6.5, kA); hw1.hw[260] = 6.4;
+  assert.ok(!same(a2, TL.bake(hw1)), "a changed hw node hit the memo");
+  const k1 = track(2100, 6.5, kA); k1.curv[255] *= 1.01;
+  assert.ok(!same(a2, TL.bake(k1)), "a changed curv node hit the memo");
+  const h1 = track(2100, 6.5, kA); h1.def = { id: "syn", turns: [1040 / 2100], lineHints: [{ turn: 1, apexShift: 16 }] };
+  assert.ok(!same(a2, TL.bake(h1)), "a changed lineHints hit the memo");
+});

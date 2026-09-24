@@ -675,7 +675,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
      MONACO (survey-ui-matrix, 2026-09-24). One equal row at the tap floor. */
   #camtune-inner[data-density="compact"] #ct-previews { --balance-basis: 0px; --balance-min: 0px; flex-wrap: nowrap; }
   #camtune-inner[data-density="compact"] #ct-previews > button {
-    min-width: 0; min-height: var(--tap-min); padding: 0 4px;
+    min-width: 0; min-height: var(--tap-min); padding: 0 calc(var(--gap) * 0.25);
     font-size: var(--fs-micro); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-head,
