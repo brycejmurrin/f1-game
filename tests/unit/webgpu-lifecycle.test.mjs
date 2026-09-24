@@ -919,10 +919,18 @@ test("GL depthBias [factor, units] maps to WebGPU slope scale / constant, not sw
     assert.equal(ds.depthBiasSlopeScale, c.slope, "GL factor -> WebGPU depthBiasSlopeScale");
     assert.equal(ds.depthBiasClamp, 0);
   }
-  // buryRibbon (the floor/terrain) goes through WGX's _BIAS_BURY [5, 10]:
-  // units 10 is the constant, factor 5 the slope.
-  const before = biased().length;
-  gfx.draw(mesh, model, { buryRibbon: true, depthBias: [4, 8] });
+  // buryRibbon (the floor/terrain) takes its caller's explicit bias — game.js
+  // gives terrain [2, 10] and the floor [4, 16] so the two never tie (at a
+  // shared _BIAS_BURY they fought) — and falls back to WGX's _BIAS_BURY
+  // [5, 10] without one: units 10 the constant, factor 5 the slope.
+  let before = biased().length;
+  gfx.draw(mesh, model, { buryRibbon: true, depthBias: [4, 16] });
+  const own = biased().slice(before);
+  assert.equal(own.length, 1);
+  assert.equal(own[0].depthStencil.depthBias, 16);
+  assert.equal(own[0].depthStencil.depthBiasSlopeScale, 4);
+  before = biased().length;
+  gfx.draw(mesh, model, { buryRibbon: true });
   const bury = biased().slice(before);
   assert.equal(bury.length, 1);
   assert.equal(bury[0].depthStencil.depthBias, 10);
@@ -1183,7 +1191,7 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(WGX_SOURCE, /o\.surfaceId === 16/);
   assert.match(WGX_SOURCE, /dbl = true;/);   // road forces doubleSided in _litOpts (pooled bag)
   assert.match(WGX_SOURCE, /dbl = true;\s*\n\s*bias = null;/);   // road: doubleSided, NO bias (pooled _litOpts)
-  assert.match(WGX_SOURCE, /o\.buryRibbon\) bias = _BIAS_BURY/);   // bury keeps its [5,10] push-back (pooled _litOpts)
+  assert.match(WGX_SOURCE, /o\.buryRibbon\) bias = o\.depthBias \|\| _BIAS_BURY/);   // bury keeps a push-back; an explicit bias (terrain/floor) wins (pooled _litOpts)
   assert.match(WGX_SOURCE, /_BIAS_BURY = \[5, 10\]/);
   assert.match(WGX_SOURCE, /Raw RGB\. Packing MAT into col\.x/);
   assert.match(WGX_SOURCE, /const GW = 32, GH = 32, SLOT = 16/);

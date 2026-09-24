@@ -133,3 +133,34 @@ test("trim(from) drops the primitive records and the live-buffer set", () => {
   assert.equal(ctx.prims.length, mark, "trim truncates to the mark");
   assert.equal(ctx.liveBufs.size, 0, "trim clears the live-buffer set");
 });
+
+// P1 (docs/notes/SCENERY-QA-PLAN.md §2b): the build strips never-visible prop
+// triangles from the INDEX buffer only (js/track/core/hidden-faces.js). Pinned
+// per circuit at the measured share, deterministic across rebuilds, vertex
+// buffer untouched, every surviving index in range. Measured 2026-09-24,
+// re-measured after P2 moved the grandstand shell out from behind the crowd
+// (fewer rows are enclosed, so fewer are stripped), and again after the verge
+// carve fix raised the terrain beside descents (buried counts moved).
+const STRIP = {
+  monaco: { before: 312780, after: 270310 },
+  monza: { before: 341148, after: 300843 },
+};
+for (const [id, want] of Object.entries(STRIP)) {
+  test(`${id}: props index strip is at the measured share and deterministic`, () => {
+    const a = build(id);
+    const s = a.propsGeo._hidden;
+    const V = a.propsGeo.pos.length / 3;
+    const idxA = Array.from(a.propsGeo.idx);
+    assert.equal(s.trisBefore, want.before, "props emission moved: re-measure STRIP");
+    assert.equal(s.trisAfter, want.after,
+      `stripped ${s.trisBefore - s.trisAfter} (enclosed ${s.enclosed}, buried ${s.buried}, bottom ${s.bottom})`);
+    assert.equal(idxA.length, s.trisAfter * 3);
+    assert.equal(s.enclosed + s.buried + s.bottom, s.trisBefore - s.trisAfter);
+    assert.ok(idxA.every((i) => i >= 0 && i < V), "surviving indices in range");
+    ctxOnce().release(a);
+    const b = build(id);
+    assert.equal(b.propsGeo.pos.length / 3, V, "vertex buffer untouched");
+    assert.deepEqual(Array.from(b.propsGeo.idx), idxA, "deterministic across rebuilds");
+    ctxOnce().release(b);
+  });
+}

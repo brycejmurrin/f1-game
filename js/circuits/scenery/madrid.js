@@ -478,24 +478,11 @@
         supportWidth: 1.2,
         color: CONCRETE,
         required: true,
-              supports: false,
-      });
-      overheadSpan({
-        id: "madrid-motorway-overpass-soffit",
-        frac: 0.085,
-        // 5 cm UNDER the deck's own underside, top buried in the deck: at the
-        // deck's 6.2 both bottoms shared one plane (0.0 mm, 216 m2) and fought
-        // overhead as a car drove beneath (coplanar-audit --overhead).
-        clearance: 6.15,
-        thickness: 0.22,
-        depth: 10.4,
-        supportGap: 2.4,
-        supportWidth: 1.2,
-        // The soffit is the underside of the overpass directly above, at the
-        // same frac — it is one bridge drawn in two layers, so it must not
-        // raise a second set of legs on top of that bridge's own.
         supports: false,
-        color: TUNNEL_DARK,
+        // Dark underside plate: overheadSpan puts its bottom at `clearance`,
+        // raises the deck 5 cm and buries the plate's top in it (was a second,
+        // hand-rolled span whose bottom shared the deck's plane — 216 m2).
+        soffit: { color: TUNNEL_DARK },
       });
       overheadSpan({
         id: "madrid-start-gantry",
@@ -517,18 +504,8 @@
         supportGap: 2.8,
         supportWidth: 0.9,
         color: GLASS,
-              supports: false,
-      });
-      overheadSpan({
-        id: "madrid-ifema-access-bridge-soffit",
-        frac: 0.885,
-        clearance: 6.35,   // 5 cm under the bridge's underside, as the overpass soffit
-        thickness: 0.22,
-        depth: 9.4,
-        supportGap: 2.8,
-        supportWidth: 0.9,
-        color: TUNNEL_DARK,
-              supports: false,
+        supports: false,
+        soffit: { color: TUNNEL_DARK },
       });
       for (const side of [-1, 1]) {
         venueGroup(`madrid-overpass-pier-${side}`, 0.085, side, 2.6,

@@ -3915,7 +3915,9 @@ const WGX = (function () {
       const o = opts || {};
       let bias = o.depthBias !== undefined ? o.depthBias : null;
       let dbl = !!o.doubleSided;
-      if (o.buryRibbon) bias = _BIAS_BURY;
+      // An explicit bias wins (terrain [2, 10], floor [4, 16] from game.js): at
+      // _BIAS_BURY for both, floor and terrain tied and fought.
+      if (o.buryRibbon) bias = o.depthBias || _BIAS_BURY;
       else if (!o.depthBias && !o.surfaceId && (o.detail || 0) > 0.2) bias = _BIAS_DETAIL;
       if (o.surfaceId === 16) {
         // Winding is already swapped in _expandPull; doubleSided lets the
