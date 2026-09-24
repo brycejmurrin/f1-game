@@ -454,3 +454,19 @@ test("lap times round before they split: 119.97 s is 2:00.0", () => {
   assert.equal(RL.timeText(119.97), "2:00.0");
   assert.equal(RL.timeText(92.44), "1:32.4");
 });
+
+test("two cars swapping the lead again and again get one lead-change call per 30 s, not one per swap", () => {
+  const A = simCar("AAA", 2000, 60), B = simCar("BBB", 1990, 60);
+  const r = sim([A, B, simCar("PLY", 1000, 60, { isPlayer: true })], 30);
+  r.radio.setComm("on");
+  r.step(12);
+  const t0 = r.G.raceT;
+  for (let k = 0; k < 12; k++) {                // a swap every 5 s for a minute
+    const [lead, other] = A.prog > B.prog ? [A, B] : [B, A];
+    other.prog = lead.prog + 6;
+    r.step(5);
+  }
+  const leads = r.lines(t0).filter((m) => /LEAD|FRONT/.test(m));
+  assert.ok(leads.length <= 3, `lead calls in 60 s: ${leads.length} — ${leads.join(" | ")}`);
+  assert.ok(leads.length >= 1, "a lead change is still called");
+});
