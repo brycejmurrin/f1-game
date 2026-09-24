@@ -4720,9 +4720,12 @@ function updateCar(c, dt, ranked) {
   c.offroad = Math.abs(c.x) > hw && !c.onKerb && !c.inPitLane;
   const surfaceMu = c.offroad ? lerp(1, OFF_GRIP, clamp((Math.abs(c.x) - hw) / 1.5, 0, 1)) : 1;
   const roadBrake = BRAKE * tyres.tractionMul(c) * (c.human ? mods.braking : 1) * (gripMult(c) / gripMult());
-  // Passive rolling resistance is separate from pedal force, bounded below
-  // the grip lost to the surface even with weak brakes or worn/wet tyres.
-  const grassDrag = (1 - surfaceMu) * Math.min(20, roadBrake * .95);
+  // Rolling resistance and pedal braking share a budget below tarmac braking.
+  // Reserve drag first so a throttle-on excursion still slows; the remaining
+  // pedal force grows continuously with demand, even with weak or worn brakes.
+  const grassDrag = Math.min((1 - surfaceMu) * 24, roadBrake * .75);
+  const surfaceBrake = c.offroad
+    ? Math.min(roadBrake * surfaceMu, Math.max(0, roadBrake * .95 - grassDrag)) : roadBrake;
   const longitudinalSpeed = c.speed;
 
   // --- integrate speed ---
@@ -4738,7 +4741,7 @@ function updateCar(c, dt, ranked) {
     if (c.speed > 0) {
       // Tread pays braking back in the wet — the ratio is exactly 1 on slicks and in the dry (docs/PHYSICS.md). The AI earns it too: its
       // `tread: null` resolves to the right compound for cornering, and until 2026-09-22 it braked as if on slicks in the rain.
-      c.speed = Math.max(0, c.speed - roadBrake * brakeLvl * surfaceMu * dt);
+      c.speed = Math.max(0, c.speed - surfaceBrake * brakeLvl * dt);
     } else if (c.human && state === "race") {
       // Stopped and still braking: crawl backwards so the player can ease off a
       // wall or re-aim after a spin. Capped slow; throttle drives forward again.
@@ -5335,7 +5338,7 @@ function updateCar(c, dt, ranked) {
     // this the friction ellipse would shave cornering grip (and add rear weight
     // transfer) for an acceleration that isn't actually happening.
     // The SURFACE brakes you too — surfMu below scaled LATERAL grip alone, so a tyre on grass retarded the car as hard as one on tarmac. Same lerp, same depth.
-    const axEstTarget = braking ? -roadBrake * brakeLvl * surfaceMu
+    const axEstTarget = braking ? -surfaceBrake * brakeLvl
       : (onThrottle
           ? (ACCEL * PACE * perfMul * (c.human ? mods.accel * throttleLvl : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy) * surfaceMu
           : -COAST_DRAG);

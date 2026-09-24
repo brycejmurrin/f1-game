@@ -93,12 +93,14 @@ bill (`BRAKE` 22 / 34 ≈ 0.65). Each axle's `sqrt(1 − axFrac²)` scales its o
 `mu`; `physState()` exposes `axEstSm`, `axFrac` (the larger axle) and
 `slipFactor` (the rear's, which the engine audio reads).
 **Grass longitudinal forces** classify road, kerb and the separate pit ribbon
-before integration. Grass scales both drive and brake traction by the same
-surface multiplier used for lateral grip. Passive rolling resistance is a
-separate force: `(1 - surfaceMu) * min(20, roadBrake * .95)`, applied only above
-the pace-scaled crawl speed and never adding speed. The bound makes the total
-full-brake deceleration lower than road braking even with weak parts or worn
-tyres, while full-throttle excursions still bleed speed. The axle estimate uses
+before integration. Grass limits drive and brake traction by the same surface
+multiplier used for lateral grip. Passive rolling resistance is a separate
+force: `min((1 - surfaceMu) * 24, roadBrake * .75)`, applied only above the
+pace-scaled crawl speed and never adding speed. Pedal braking uses the lesser
+of surface grip and the remaining `.95 * roadBrake` budget after this drag.
+The drag cap leaves pedal authority below crawl speed, and the combined budget
+keeps full braking below tarmac even with weak parts or worn tyres, while
+full-throttle excursions still bleed speed. The axle estimate uses
 the same surface-limited pedal force. The old `20 + offDepth*28` scrub plus full
 road braking made grass a stopping shortcut (70→30 m/s at Monza: 90.886 m road
 versus 37.732/28.701 m shallow/deep grass). That model is replaced, not its

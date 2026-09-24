@@ -125,3 +125,34 @@ test("grass never becomes a braking shortcut across pace, worn tyres and weak br
     }
   } finally { P.mods = originalMods; g.apex.clearInput(); g.apex.setPhysics(physicsBefore); }
 });
+
+test("grass braking stays monotonic and can stop below the drag floor with worn weak brakes", async () => {
+  await g.race("monza", "day", "dry");
+  const P = g.G.player, originalMods = P.mods;
+  const physicsBefore = { ...g.apex.tuning() };
+  g.apex.setPhysics({ pace: 1 });
+  P.mods = { ...originalMods, braking: .5 };
+  for (const c of g.G.cars) if (c !== P) { c.retired = true; c.x = 80; }
+  g.G.tyres.setLevel("real");
+  const pinWear = () => Object.assign(P, { tyreWear: .9, tyreWearF: .9, tyreWearR: .9,
+    offT: 0, rescueT: 0, wallT: 0, vLat: 0, yawRateCur: 0 });
+  try {
+    let previous = Infinity;
+    for (const brakeLevel of [0, .15, .5, 1]) {
+      g.apex.jump(0, 40, -14); pinWear();
+      g.apex.setInput({ brake: true, brakeLevel, throttle: false, steer: 0 });
+      g.step(1, 1 / 60);
+      assert.ok(P.offroad, "fixture must be grass");
+      assert.ok(P.speed <= previous, "more pedal must never reduce deceleration");
+      previous = P.speed;
+    }
+    g.apex.jump(0, 5, -14);
+    const pin = { px: P.px, pz: P.pz, s: P.s, x: P.x, head: P.head };
+    g.apex.setInput({ brake: true, brakeLevel: 1, throttle: false, steer: 0 });
+    let ticks = 0;
+    while (P.speed > 0 && ticks++ < 2000) {
+      Object.assign(P, pin); pinWear(); g.step(1, 1 / 60);
+    }
+    assert.equal(P.speed, 0, "pedal force must remain below the passive-drag floor");
+  } finally { P.mods = originalMods; g.apex.clearInput(); g.apex.setPhysics(physicsBefore); }
+});
