@@ -44,9 +44,11 @@ const FIELD_IDS = Object.keys(FIELD);
 // `rank` is a landmark index and `n` a corner, and neither is a continuous
 // quantity — both are pickers, and both live outside FIELD for that reason.
 const RANKS = [0, 1, 2, 3, 4, 5];
-const CORNER_NS = ["first", "mid", "late", "1", "2", "3", "4", "5", "6", "8", "10", "12", "14", "16", "18"];
+const CORNER_NS = ["first", "mid", "late", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18"];
 
-const DUR = { min: 0.01, max: 0.6, step: 0.005, unit: "" };
+// max 1: a NORMALISED one-shot list is a single shot of dur 1, and a cap below
+// it left that slider pinned at the end and the value unreachable.
+const DUR = { min: 0.01, max: 1, step: 0.005, unit: "" };
 const FOV = { min: 15, max: 90, step: 0.5, unit: "°" };
 
 // ---- pure list operations -------------------------------------------------
@@ -59,6 +61,11 @@ function clone(v) { return JSON.parse(JSON.stringify(v)); }
 
 /** The fields this pose's anchor reads, in row order. */
 function poseFields(pose) { return POSE_FIELDS[pose && pose.at] || POSE_FIELDS.start; }
+/** A field's label for this anchor. On `centre` and `landmark` the height is
+ *  yR / yK; `y` there is metres ADDED to it, and "HEIGHT" read as the height. */
+function fieldLabel(at, f) {
+  return (f === "y" && (at === "centre" || at === "landmark")) ? "HEIGHT OFFSET" : FIELD[f].label;
+}
 
 /** Re-anchor a pose, KEEPING whatever the new anchor can still use. Switching
  *  `corner` -> `centre` has no sensible arc offset to carry, but a height does,
@@ -221,8 +228,8 @@ function fromSaved(saved) {
 }
 
 const ops = {
-  EASES, AT_KINDS, POSE_FIELDS, FIELD, SLOTS, CORNER_NS, RANKS, SHOTS_VERSION,
-  clone, poseFields, switchPoseAt, uniqueId, blankShot, savedForm, fromSaved,
+  EASES, AT_KINDS, POSE_FIELDS, FIELD, SLOTS, CORNER_NS, RANKS, SHOTS_VERSION, DUR,
+  clone, poseFields, fieldLabel, switchPoseAt, uniqueId, blankShot, savedForm, fromSaved,
   addShot, duplicateShot, deleteShot, moveShot, normaliseDurs, shotErrors, validateShots, toBlob,
 };
 
@@ -360,6 +367,14 @@ function status(r, note) {
 }
 
 // ---- rows -----------------------------------------------------------------
+
+/** Rename a numberRow in place: the label's text node and the input's aria-label. */
+function relabel(id, label) {
+  const row = $("fb-row-" + id), inp = $("fb-in-" + id);
+  const span = row && row.querySelector(".tune-label");
+  if (span && span.firstChild && span.firstChild.nodeType === 3) span.firstChild.nodeValue = label + " ";
+  if (inp) inp.setAttribute("aria-label", label);
+}
 
 function numberRow(host, id, label, d, onInput) {
   const item = document.createElement("div");
@@ -674,6 +689,7 @@ function refreshRows() {
     for (const f of FIELD_IDS) {
       const on = fields.indexOf(f) !== -1;
       show(slot.key + "-" + f, on);
+      if (on && f === "y") relabel(slot.key + "-y", slot.label + " " + fieldLabel(p.at, "y"));
       if (on) setNum(slot.key + "-" + f, FIELD[f], typeof p[f] === "number" ? p[f] : FIELD[f].def);
     }
   }

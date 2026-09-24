@@ -54,6 +54,15 @@ function goodList() {
 
 /* ── the list algebra ─────────────────────────────────────────────────────── */
 
+test("the pickers reach every corner, a normalised one-shot list, and name the height offset", () => {
+  for (let n = 1; n <= 18; n++) assert.ok(FP.CORNER_NS.includes(String(n)), `corner ${n} is pickable`);
+  const one = FP.normaliseDurs([goodList()[0]]);
+  assert.ok(one[0].dur <= FP.DUR.max, `a normalised single shot (dur ${one[0].dur}) fits the slider (max ${FP.DUR.max})`);
+  assert.equal(FP.fieldLabel("centre", "y"), "HEIGHT OFFSET");
+  assert.equal(FP.fieldLabel("landmark", "y"), "HEIGHT OFFSET");
+  assert.equal(FP.fieldLabel("corner", "y"), FP.FIELD.y.label);
+});
+
 test("the module freezes and exports its pure operations", () => {
   assert.ok(Object.isFrozen(FP), "FlybyPanel is frozen");
   for (const fn of ["create", "addShot", "duplicateShot", "deleteShot", "moveShot",
