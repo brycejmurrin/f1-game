@@ -66,6 +66,32 @@ Code: `js/race/race-radio.js` (rules + scheduler), `js/race/race-facts.js`
 - **Read-only on the sim.** No car field is written and no sim RNG is drawn,
   which also keeps the lap-curvature rule in `docs/PHYSICS.md` intact.
 
+## The track announcer (follow-up)
+
+`js/audio/announcer.js` read the same paragraph on every visit to a circuit.
+Three changes:
+
+- **Race storylines** are pure rows over `info.story`, which `storyFor()`
+  gathers from G with every read guarded:
+  - the seat and teammate;
+  - the championship (the round, the leader, your position and gap, "the final
+    round");
+  - the career target;
+  - a changeable-weather forecast ("Rain is on the way, in about 5 minutes");
+  - your time-trial best here.
+
+  Every row is priority 1–3, so a short budget drops the story before it drops
+  the welcome, the venue or the lights cue.
+- **The sprint** now states the sprint distance (`SeasonCal.lapsFor`), not the
+  full race's lap count. The venue line also rotates between three phrasings,
+  seeded by the race counter.
+- **The wrap-up** (`wrapUp`, called from `endRace` after the results are
+  built) reads the winner, the margin, your finish against your grid slot, and
+  the fastest lap.
+  - RadioVoice's card-hidden observer now cancels speech only if the radio
+    itself is speaking. The card expiring would otherwise cut the wrap-up
+    mid-sentence.
+
 ## Next steps (not built)
 
 - Pre-race announcer storylines: grid position, the polesitter, standings in

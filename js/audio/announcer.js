@@ -157,6 +157,9 @@ const Announcer = (function () {
         : "Qualifying. One lap is all you get, and it sets the grid.";
     }
     if (info.practice) return "Practice. Nothing here goes on the record — use it.";
+    // A SPRINT runs SeasonCal.lapsFor(raceLaps), not raceLaps: before this the
+    // announcer promised the full Grand Prix distance over a sprint grid.
+    if (info.sprint) return (laps > 0 ? "The sprint. " + laps + " laps, " : "The sprint, ") + "flat out from the start. Let's go racing.";
     if (laps > 0) return laps + " laps. Let's go racing.";
     return "Let's go racing.";
   }
@@ -197,7 +200,13 @@ const Announcer = (function () {
 
     // The venue. `gp` is the event, `name` the circuit — saying both is how a
     // broadcast opens, and either alone is what a placeholder sounds like.
-    if (name && gp) add("This is " + name + ", home of the " + gp + ".", 0);
+    // THE VENUE, VARIED. The same circuit visited twice read the same opening
+    // twice; `info.variant` (the race counter) rotates the phrasing so a return
+    // visit sounds like a new broadcast. Every variant still opens "This is",
+    // which is the clause a squeezed budget keeps.
+    const V = (+info.variant | 0) % 3;
+    if (name && gp) add(V === 1 ? "This is the " + gp + ", at " + name + "."
+      : V === 2 ? "This is " + name + ", and the " + gp + "." : "This is " + name + ", home of the " + gp + ".", 0);
     else if (name) add("This is " + name + (t.country ? ", " + inCountry(t.country) : "") + ".", 0);
     else if (gp) add("This is the " + gp + ".", 0);
 
@@ -222,7 +231,93 @@ const Announcer = (function () {
     if (ch) add(ch.charAt(0).toUpperCase() + ch.slice(1) + ".", 3);
 
     add(conditionsLine(info.weather, night, lore), 1);
+    for (const r of storyRows(info.story, info)) add(r.text, r.prio);
     add(sessionLine(info, laps), 0);
+    return out;
+  }
+
+  // ── THE STORY ────────────────────────────────────────────────────────────
+  // What makes THIS race different from the last one here: who you drive for,
+  // where the championship stands, what the team wants, what the sky will do.
+  // All of it arrives as plain data on `info.story` (create() gathers it from
+  // G; the tests hand it in), every field optional, and every row is priority
+  // 1-3 — the must-keep set (welcome, venue, session) is untouched, and a short
+  // budget drops the story before it drops the circuit's own line.
+  const WET_TO = { rain: "Rain", wet: "Rain" };
+  function surnameOf(n) { const s = String(n || "").trim().split(/\s+/).pop(); return s || ""; }
+  function ordinal(n) {
+    const v = n % 100;
+    return n + (v >= 11 && v <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" }[n % 10] || "th"));
+  }
+  function storyRows(st, info) {
+    const out = [];
+    if (!st || typeof st !== "object") return out;
+    const add = (text, prio) => { if (text) out.push({ text, prio }); };
+    // The seat. "Lando Norris for McLaren, with Oscar Piastri alongside."
+    if (st.driver && st.team) {
+      add(st.mate ? st.driver + " for " + st.team + ", with " + surnameOf(st.mate) + " in the sister car."
+        : st.driver + " at the wheel for " + st.team + ".", 3);
+    }
+    // The championship, once there is one to talk about (a round scored).
+    const c = st.champ;
+    if (c && c.rounds > 1 && c.round >= 1 && c.leader) {
+      const roundTxt = c.round + 1 >= c.rounds ? "The final round" : "Round " + (c.round + 1) + " of " + c.rounds;
+      if (c.youPos === 1) {
+        add(roundTxt + ", and you lead the championship" + (c.gap > 0 ? " by " + c.gap + (c.gap === 1 ? " point." : " points.") : "."), 1);
+      } else if (c.youPos > 1) {
+        add(roundTxt + ". " + surnameOf(c.leader) + " leads the championship; you are " + ordinal(c.youPos)
+          + (c.gap > 0 ? ", " + c.gap + (c.gap === 1 ? " point" : " points") + " back." : "."), 1);
+      } else {
+        add(roundTxt + ", and " + surnameOf(c.leader) + " leads the championship.", 2);
+      }
+      if (c.round + 1 >= c.rounds && c.youPos > 1 && c.gap > 0 && c.gap <= 25) add("It all comes down to this.", 2);
+    }
+    // What the team wants this season, in their words.
+    if (st.goal) add("The target this season: " + String(st.goal).charAt(0).toLowerCase() + String(st.goal).slice(1) + ".", 3);
+    // The sky. Only when the conditions are changeable, and only a real change.
+    const f = st.forecast;
+    if (f && f.to && f.to !== info.weather) {
+      const mins = Math.max(1, Math.round((+f.inS || 0) / 60));
+      const what = WET_TO[f.to] ? "Rain is on the way" : f.to === "dry" ? "The track should dry out"
+        : f.to === "overcast" ? "Cloud is rolling in" : f.to === "fog" ? "Fog is forecast" : "";
+      if (what) add(what + ", in about " + mins + (mins === 1 ? " minute." : " minutes."), 1);
+    }
+    // A time trial's own benchmark.
+    if (st.best) add("Your best here is a " + st.best + ". Beat it.", 2);
+    return out;
+  }
+
+  // ── THE WRAP-UP ──────────────────────────────────────────────────────────
+  // Read over the results screen: the winner, the margin, your race against
+  // your grid slot, the fastest lap. Pure over a plain summary, like rows().
+  function secs(s) { return s < 10 ? s.toFixed(1) : String(Math.round(s)); }
+  function lapTime(s) {
+    if (!(s > 0) || !Number.isFinite(s)) return "";
+    const m = Math.floor(s / 60), r = s - m * 60;
+    return m > 0 ? m + " " + (r < 10 ? "oh " : "") + r.toFixed(1) : r.toFixed(1);
+  }
+  function wrapRows(sum) {
+    const out = [];
+    if (!sum || !sum.winner) return out;
+    const add = (t) => { if (t) out.push(t); };
+    const event = broadcast(sum.event) || "the race";
+    const w = sum.winner, you = sum.you;
+    if (you && you.pos === 1) {
+      add("And you win " + event + (sum.margin > 0 ? ", " + secs(sum.margin) + " seconds clear." : "!"));
+    } else {
+      add(w.name + " wins " + event + (sum.margin > 0 && sum.second ? ", " + secs(sum.margin) + " seconds ahead of " + surnameOf(sum.second) + "." : "."));
+    }
+    if (you && you.pos > 1) {
+      const d = you.grid > 0 ? you.grid - you.pos : 0;
+      const tail = d >= 3 ? ", up " + d + " places from " + ordinal(you.grid) + " on the grid."
+        : d <= -3 ? ", down from " + ordinal(you.grid) + " on the grid." : ".";
+      add((you.pos <= 3 && sum.n > 3 ? "A podium for you, " + ordinal(you.pos) : "You finish " + ordinal(you.pos)) + tail);
+    } else if (you && you.dnf) {
+      add("A retirement for you today. There is always the next one.");
+    }
+    if (sum.fastest && sum.fastest.name && sum.fastest.time > 0) {
+      add("Fastest lap to " + (sum.fastest.you ? "you" : surnameOf(sum.fastest.name)) + ", a " + lapTime(sum.fastest.time) + ".");
+    }
     return out;
   }
 
@@ -277,7 +372,7 @@ const Announcer = (function () {
    *  contract RadioVoice uses, so a caller never branches on availability. */
   function inert() {
     return Object.freeze({
-      play: () => false, stop: () => {}, preview: () => false, sample: () => false,
+      play: () => false, stop: () => {}, preview: () => false, sample: () => false, wrapUp: () => false,
       scriptFor: () => [], enabled: () => false, setEnabled: () => {}, available: () => false,
     });
   }
@@ -341,7 +436,79 @@ const Announcer = (function () {
           if (Number.isFinite(lo) && Number.isFinite(hi)) relief = hi - lo;
         }
       } catch (_) { relief = 0; }
-      return Object.assign({}, info, { turns, relief });
+      const out = Object.assign({}, info, { turns, relief });
+      try { Object.assign(out, storyFor(out)); } catch (e) { Log.info("audio", "Announcer story skipped"); }
+      return out;
+    }
+
+    /** Everything the story rows read, gathered from G — every read guarded,
+     *  because an announcer that throws must not stop a race from starting. */
+    function storyFor(info) {
+      const extra = { variant: +G.raceRound || 0 };
+      const p = G.player, cars = G.cars || [];
+      const race = !info.duel && info.session !== "tt" && info.session !== "quali" && !info.practice;
+      const st = {};
+      if (p && p.team && race) {
+        st.driver = p.name || "";
+        st.team = p.team.name || "";
+        const mate = cars.find((c) => c !== p && c.team === p.team);
+        if (mate) st.mate = mate.name || "";
+      }
+      const season = G.seasonMode && G.season;
+      if (season && race && typeof SeasonCal !== "undefined") {
+        // THE SPRINT, and its real distance.
+        if (SeasonCal.stage && SeasonCal.stage(season) === "sprint") {
+          extra.sprint = true;
+          if (SeasonCal.lapsFor && info.laps > 0) extra.laps = SeasonCal.lapsFor(info.laps, season);
+        }
+        const ids = new Set(Object.keys(season.pts || {}));
+        for (const c of cars) if (c.driverId) ids.add(c.driverId);
+        const order = Array.from(ids).sort((a, b) => SeasonCal.rank(season, a, b));
+        const nameOf = (id) => { const c = cars.find((x) => x.driverId === id); return (c && c.name) || (season.driverCodes && season.driverCodes[id]) || ""; };
+        const pts = (id) => (SeasonCal.netPts ? SeasonCal.netPts(season, id) : (season.pts[id] || 0));
+        const youAt = p && p.driverId ? order.indexOf(p.driverId) : -1;
+        const rounds = (typeof Career !== "undefined" && G.flow === "career" && Career.roundsTotal) ? Career.roundsTotal() : SeasonCal.rounds();
+        if (order.length) {
+          // The gap is to the leader, or — when you ARE the leader — your lead.
+          const gap = youAt < 0 ? 0 : youAt === 0 ? (order[1] ? pts(order[0]) - pts(order[1]) : 0)
+            : pts(order[0]) - pts(p.driverId);
+          st.champ = { round: season.round || 0, rounds, leader: nameOf(order[0]), youPos: youAt >= 0 ? youAt + 1 : 0, gap };
+        }
+      }
+      const car = G.career;
+      if (car && car.deal && car.deal.goal && race && typeof Career !== "undefined" && Career.goalLabel) {
+        const g = car.deal.goal;
+        const rival = g.type === "beatRival" ? cars.find((c) => c.driverId === g.value) : null;
+        st.goal = Career.goalLabel(g, rival ? surnameOf(rival.name) : undefined);
+      }
+      const plan = G.raceChangeable && G.wxArcPlan;
+      if (plan && plan.to && race) st.forecast = { to: plan.to, inS: plan.dur };
+      if (info.session === "tt" && typeof GameStore !== "undefined" && GameStore.ttBoard && info.track) {
+        const b = GameStore.ttBoard(info.track.id);
+        if (b && b[0] && b[0].t > 0) st.best = lapTime(b[0].t);
+      }
+      extra.story = st;
+      return extra;
+    }
+
+    /** The results screen's read: winner, margin, your race, fastest lap. */
+    function wrapUp(order, info) {
+      if (!on || !Array.isArray(order) || !order.length) return false;
+      const t = (info && info.track) || {};
+      const w = order[0], s2 = order[1];
+      const you = order.find((c) => c.isPlayer);
+      let fast = null;
+      for (const c of order) if (c.best > 0 && Number.isFinite(c.best) && (!fast || c.best < fast.best)) fast = c;
+      const sum = {
+        event: t.gp ? "the " + t.gp : "", n: order.length,
+        winner: { name: w.name || w.code || "" },
+        second: s2 && !s2.retired ? s2.name : "",
+        margin: s2 && !s2.retired && s2.finishT > 0 && w.finishT > 0 && (s2.lap | 0) >= (w.lap | 0) ? s2.finishT - w.finishT : 0,
+        you: you ? { pos: you.retired ? 0 : (you.finPos || order.indexOf(you) + 1), grid: you.gridPos || 0, dnf: !!you.retired } : null,
+        fastest: fast ? { name: fast.name || "", time: fast.best, you: !!fast.isPlayer } : null,
+      };
+      const lines = wrapRows(sum);
+      return lines.length ? speak(lines, 16000, false) : false;
     }
 
     /** The budget is the loading screen's own window, so the read is CUT TO FIT
@@ -460,6 +627,7 @@ const Announcer = (function () {
        *  this channel is on when that one is off. */
       sample() { return speak([(RadioVoice.SAMPLE && RadioVoice.SAMPLE[CHANNEL]) || "Welcome to Apex 26."], 0); },
       scriptFor,
+      wrapUp,
       stop,
       enabled: () => on,
       setEnabled(b) { on = !!b; try { G.store.set("announcer", on); } catch (_) { /* storage refused */ } if (!on) stop(); },
@@ -467,6 +635,6 @@ const Announcer = (function () {
     };
   }
 
-  return { create, inert, script, rows, fit, seconds, pickVoice, CHANNEL, PREFERRED };
+  return { create, inert, script, rows, fit, seconds, pickVoice, storyRows, wrapRows, CHANNEL, PREFERRED };
 })();
 Object.freeze(Announcer);
