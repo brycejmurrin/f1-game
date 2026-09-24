@@ -172,18 +172,21 @@ const AppearanceOpts = (function () {
     theme = oneOf(v, THEMES, "dark");
     store.set(K_THEME, theme);
     applyAll();
+    if (typeof SettingRow !== "undefined") SettingRow.paint("pm-uitheme", theme);
     return theme;
   }
   function setMenuAccent(v) {
     menuAccent = oneOf(v, ACCENTS, "brand");
     store.set(K_MENU, menuAccent);
     applyAll();
+    if (typeof SettingRow !== "undefined") SettingRow.paint("pm-menuaccent", menuAccent);
     return menuAccent;
   }
   function setHudAccent(v) {
     hudAccent = oneOf(v, ACCENTS, "team");
     store.set(K_HUD, hudAccent);
     applyAll();
+    if (typeof SettingRow !== "undefined") SettingRow.paint("pm-hudaccent", hudAccent);
     return hudAccent;
   }
   function setMenuHex(v) {
@@ -192,6 +195,7 @@ const AppearanceOpts = (function () {
     if (menuAccent !== "custom") menuAccent = "custom";
     store.set(K_MENU, menuAccent);
     applyAll();
+    if (typeof SettingRow !== "undefined") SettingRow.paint("pm-menuaccent", menuAccent);
     return menuHex;
   }
   function setHudHex(v) {
@@ -200,6 +204,7 @@ const AppearanceOpts = (function () {
     if (hudAccent !== "custom") hudAccent = "custom";
     store.set(K_HUD, hudAccent);
     applyAll();
+    if (typeof SettingRow !== "undefined") SettingRow.paint("pm-hudaccent", hudAccent);
     return hudHex;
   }
 
