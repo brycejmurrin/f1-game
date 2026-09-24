@@ -31,7 +31,7 @@
    [14] glare. */
 "use strict";
 const LampBake = (function () {
-  const MAX_TEXELS = 600000;   // ~4.8 MB at RGBA16F; the cell grows to stay under it
+  const MAX_TEXELS = 600000;   // per layer: ~4.8 MB at RGBA16F, x2 layers; the cell grows to stay under it
   const MIN_CELL = 1.0;        // metres per texel at best
 
   // float32 -> IEEE half, round-to-nearest (enough for irradiance).
@@ -107,7 +107,9 @@ const LampBake = (function () {
    *  supplies the road surface, which wins over `groundY`. A texel with no known
    *  surface gets no light and the NO_GROUND alpha. Returns null for an empty
    *  set, otherwise
-   *    { w, h, x0, z0, cell, data: Uint16Array(w*h*4) RGBA16F (alpha = surface Y), lamps, ms }
+   *    { w, h, x0, z0, cell, data: Uint16Array(w*2h*4) RGBA16F, lamps, ms }
+   *  data is two w x h layers stacked: rows [0, h) the diffuse pool, rows [h, 2h)
+   *  the bounce fill per unit BOUNCE; alpha = surface Y in both.
    *  where texel (i, j) covers world x0 + (i + 0.5) * cell, z0 + (j + 0.5) * cell. */
   function bake(lights, groundY, nearClamp, road) {
     const it = bakeSteps(lights, groundY, nearClamp, road);
@@ -133,6 +135,7 @@ const LampBake = (function () {
     const cell = Math.max(MIN_CELL, Math.sqrt(area / MAX_TEXELS));
     const w = Math.max(1, Math.ceil((mxx - mnx) / cell)), h = Math.max(1, Math.ceil((mxz - mnz) / cell));
     const acc = new Float32Array(w * h * 3);
+    const accB = new Float32Array(w * h * 3);        // LAMP BOUNCE: att * (0.55 + 0.45 N.L), no cone
     const hgt = new Float32Array(w * h).fill(NaN);   // surface height: road splat, then terrain lazily
     if (road) splatRoad(road, mnx, mnz, cell, w, h, hgt);
     const tried = new Uint8Array(w * h);             // terrain already queried for this texel
@@ -168,12 +171,16 @@ const LampBake = (function () {
           const dist = Math.sqrt(d2);
           const inv = 1 / Math.max(dist, 1e-3);
           const NoL = LY * inv;                    // N = +Y
-          if (!(NoL > 0)) continue;
           const dn = dist / rad, dn2 = dn * dn;
           const win = Math.min(1, Math.max(0, 1 - dn2 * dn2));
           const distC = Math.max(dist, nc);
           const att = (win * win) / (distC * distC + 1);
           if (att < 1e-6) continue;
+          // Bounce fill lights every normal (soft N.L floor, no cone): the
+          // shaders' bounce term per unit BOUNCE, which they scale by uBounceK.
+          const eb = att * (0.55 + 0.45 * Math.max(0, NoL)), ab = k * 3;
+          accB[ab] += cr * eb; accB[ab + 1] += cg * eb; accB[ab + 2] += cb * eb;
+          if (!(NoL > 0)) continue;
           const cd = -(LX * dx0 + LY * dy0 + LZ * dz0) * inv;
           const beam = smoothstep(cOut, cIn, cd);
           const spotD = bleed + (1 - bleed) * beam;
@@ -183,12 +190,15 @@ const LampBake = (function () {
         }
       }
     }
-    const data = new Uint16Array(w * h * 4);
-    const none = toHalf(NO_GROUND);
+    // Two layers stacked in one texture (w x 2h): rows [0, h) the diffuse pool,
+    // rows [h, 2h) the bounce fill; both carry the surface height in alpha.
+    const data = new Uint16Array(w * h * 8);
+    const none = toHalf(NO_GROUND), B = w * h * 4;
     for (let k = 0, a = 0, b = 0; k < w * h; k++, a += 3, b += 4) {
       if ((k & 32767) === 32767) yield;
-      data[b] = toHalf(acc[a]); data[b + 1] = toHalf(acc[a + 1]); data[b + 2] = toHalf(acc[a + 2]);
-      data[b + 3] = hgt[k] === hgt[k] ? toHalf(hgt[k]) : none;
+      const y = hgt[k] === hgt[k] ? toHalf(hgt[k]) : none;
+      data[b] = toHalf(acc[a]); data[b + 1] = toHalf(acc[a + 1]); data[b + 2] = toHalf(acc[a + 2]); data[b + 3] = y;
+      data[B + b] = toHalf(accB[a]); data[B + b + 1] = toHalf(accB[a + 1]); data[B + b + 2] = toHalf(accB[a + 2]); data[B + b + 3] = y;
     }
     const ms = Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - t0);
     return { w, h, x0: mnx, z0: mnz, cell, data, lamps: n, ms };

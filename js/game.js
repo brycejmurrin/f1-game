@@ -7069,7 +7069,7 @@ function render(dt) {
     const _ltg = 1 - Math.abs(_lt) * 0.02;
     const _ltb = 1 - Math.max(0, -_lt) * 0.30 + Math.max(0, _lt) * 0.20;
     frame.glowLights = null;   // appendCarTailLights sets it; stale otherwise (TAIL-LIGHT EMIT 0)
-    frame.lampBake = null;     // BAKED LAMP POOLS: set below for the night flood set only
+    frame.lampBake = null;     // BAKED LAMP POOLS: set below whenever the flood set is lit (night or day floods)
     if (_floodActive) {
       const _sy = frame.sunDir ? frame.sunDir[1] : -1;
       // Floor the twilight ramp at 0.30: the dusk sunDir sits slightly higher than
@@ -7702,7 +7702,7 @@ function render(dt) {
       const tgR = LT.tailRange != null ? LT.tailRange : 160;
       const tgd = Math.hypot(tmpP[0] - camEye[0], tmpP[2] - camEye[2]);
       const tgF = c.isPlayer ? 1 : clamp((tgR - tgd) / (tgR * 0.4), 0, 1);
-      if (tgF > 0) CarMesh.drawTailGlow(_groundMat, tgF * LT.tailLightMul * (1 + clamp(c.brakeHeat || 0, 0, 1) * LT.brakeGlowMul * 1.6));
+      if (tgF > 0) CarMesh.drawTailGlow(_groundMat, tgF * LT.tailLightMul * (1 + clamp(c.brakeHeat || 0, 0, 1) * LT.brakeGlowMul * 1.6), track, c.s);
     }
     // 2026 amber mirror lamps: under 20 km/h or stopped — the pit lane, the grid,
     // a spin. Same 40 m rival gate as the rear lights; the player always draws.
@@ -7791,7 +7791,8 @@ function render(dt) {
   }
 
   // Rapier debris shards (render-only side-world; poses stepped in update()).
-  if (frame.lights && !_studioRig && PerfGov.tier() < 3) gfx.drawGlow(frame.glowLights || frame.lights, LT.glareStr);   // AFTER the cars: depth-tested, no depth write — before them a halo in front of a body was overwritten
+  const _glowF = FrameLights.glowFade();   // held-tier fade, not a tier-3 cut (frame-lights.js)
+  if (frame.lights && !_studioRig && _glowF > 0) gfx.drawGlow(frame.glowLights || frame.lights, LT.glareStr * _glowF);   // AFTER the cars: depth-tested, no depth write — before them a halo in front of a body was overwritten
   if (DebrisWorld.active()) DebrisWorld.draw();
 
   // Transient FX particles (tyre smoke / sparks / kickup / spray): advanced

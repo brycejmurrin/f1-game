@@ -108,7 +108,7 @@ const GLX = (function () {
   // BAKED LAMP POOLS (js/lighting/lamp-bake.js): the ground light map on unit 12.
   // uLampBake must ALWAYS point at 12 with something bound there — left at its
   // default unit 0 it would alias the sampler2DShadow sun map, a draw-time error.
-  let _bakeTex = null, _bakeDummy = null, _bakeSrc = null;
+  let _bakeTex = null, _bakeDummy = null, _bakeSrc = null, _bakeOffN = 0;
   // Identity model matrix for instanced draws: the transform lives in the
   // per-instance columns, so uModel is unused on that path.
   const IDENT4 = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
@@ -262,16 +262,20 @@ const GLX = (function () {
     const lb = frame.lampBake, sc = frame.lampBakeScale;
     gl.activeTexture(gl.TEXTURE12);
     if (lb && sc && lb.data) {
+      _bakeOffN = 0;
       if (lb !== _bakeSrc) {
         if (_bakeTex) gl.deleteTexture(_bakeTex);
-        _bakeTex = _halfTex(lb.w, lb.h, lb.data);
+        _bakeTex = _halfTex(lb.w, lb.h * 2, lb.data);   // diffuse + bounce layers
         _bakeSrc = lb;
       } else gl.bindTexture(gl.TEXTURE_2D, _bakeTex);
       uf1(litU.uBakeOn, _litUf, "bakeOn", 1);
       gl.uniform2f(litU.uBakeOrigin, lb.x0, lb.z0);
       gl.uniform2f(litU.uBakeSize, lb.w * lb.cell, lb.h * lb.cell);
       uf3(litU.uBakeScale, _litUf, "bakeScale", sc);
+      uf1(litU.uBakeH, _litUf, "bakeH", lb.h);
     } else {
+      // Bake off for ~2 s (120 frames): free the light map (up to ~9.6 MB).
+      if (_bakeTex && ++_bakeOffN > 120) { gl.deleteTexture(_bakeTex); _bakeTex = null; _bakeSrc = null; }
       if (!_bakeDummy) _bakeDummy = _halfTex(1, 1, new Uint16Array(4));
       else gl.bindTexture(gl.TEXTURE_2D, _bakeDummy);
       uf1(litU.uBakeOn, _litUf, "bakeOn", 0);
@@ -745,7 +749,7 @@ const GLX = (function () {
     // floor does not, and until now the only symptom was init() returning
     // false with a 100 KB shader dumped to the console. Say the two numbers
     // side by side so a "no WebGL" report on a phone names its cause.
-    const LIT_FS_ROWS = 284;
+    const LIT_FS_ROWS = 285;
     try {
       const rows = gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS) | 0;
       if (rows && rows < LIT_FS_ROWS) {
@@ -893,7 +897,7 @@ const GLX = (function () {
       "uCarSunGlint", "uCarSparkle", "uFogSunCore",
       "uLampNearClamp", "uWindowSunFlash", "uSkyRimGlow", "uAmbContactDark", "uLampWallSpill",
       "uMatAlbedoTex", "uMatNormalTex", "uMatTexMix", "uMatTexScale[0]",
-      "uLampBake", "uBakeOn", "uBakeOrigin", "uBakeSize", "uBakeScale", "uBakeShCol",
+      "uLampBake", "uBakeOn", "uBakeOrigin", "uBakeSize", "uBakeScale", "uBakeShCol", "uBakeH",
       "uNumLights", "uLight[0]"]);
     skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon", "uCityGlow", "uStarBright", "uCloudSpeed", "uSkyGrad", "uStarDensity", "uDaySkyBlue", "uMieScatter", "uCloudSilver", "uCoronaAureole", "uSunDiscSize", "uStarSize", "uStarTwinkle", "uMoonDiscSize", "uMoonHalo", "uSunCorona", "uSunSquash", "uCityGlowReach", "uCloudDef", "uLightning"]);
     shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
