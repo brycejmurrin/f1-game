@@ -42,34 +42,36 @@ const GRADE_MAX = {
   gainR: 1.5, gainG: 1.5, gainB: 1.5,
 };
 
-async function waitForTune(page, values) {
-  await page.waitForFunction((expected) => {
-    const tune = window.__apex?.lightTune?.();
-    if (!tune) return false;
-    // Wait for what the STORE will actually resolve to, not the raw ask.
-    // js/lighting/profiles.js clamps every write to the knob's declared
-    // [min, max], so a test driving past a bound waits forever on a value that
-    // can never appear — the helper just sits here for the whole 15 s and the
-    // rest of the serial block skips. That is exactly what happened when BLACKS
-    // was re-cut from ±1.5 to ±0.6 (it goes non-monotonic above +0.635) while
-    // this file still asked for ±1. Clamping the expectation the same way the
-    // store does keeps a test aimed at "the extreme" whatever the registry says
-    // that is today, instead of at a number somebody typed once.
-    // BARE `LightTune`: lighting.js declares it as a top-level `const` in a
-    // CLASSIC script, which is script-scoped and NOT a property of window.
-    const defs = (typeof LightTune !== "undefined" && LightTune.TUNE_DEFS) || [];
-    return Object.entries(expected).every(([id, value]) => {
+// lightTune()/setLightTune write a sync in-memory store (js/lighting/profiles.js
+// LT + clamp). There is nothing async to wait for — and page.waitForFunction
+// polling that store races the GLX soft-present main thread after a capture
+// (setLightTune → invalidateSoftPresent arms a sync readPixels blit; under
+// SwiftShader that can starve CDP polls past 15 s while LT already matches).
+// CI 36066863753: capturePair setTune timed out; tonal tests (no post-capture
+// setTune) passed; Metal (no soft-present stall) passed. Fixtures' webgl2 pin
+// moved this spec onto that GLX path; the WGX InstCells peel did not.
+// Verify the clamped store in the SAME evaluate as the write — keep assertion
+// bounds; do not raise settle timeouts.
+async function setTune(page, values) {
+  const check = await page.evaluate((next) => {
+    window.__apex.lightTune(next);
+    const tune = window.__apex.lightTune();
+    // Same clamp as profiles.js / the old waitForTune helper. LightTune is a
+    // classic-script global lexical (visible here; not window.LightTune).
+    const defs = LightTune.TUNE_DEFS;
+    const mismatches = [];
+    for (const [id, value] of Object.entries(next)) {
       const d = defs.find((x) => x.id === id);
       const want = d ? Math.min(d.max, Math.max(d.min, value)) : value;
-      return Math.abs(tune[id] - want) < 0.0001;
-    });
-  }, values, { timeout: 15_000, polling: 100 });
-  await page.waitForTimeout(250);
-}
-
-async function setTune(page, values) {
-  await page.evaluate((next) => window.__apex.lightTune(next), values);
-  await waitForTune(page, values);
+      const got = tune[id];
+      if (!(Math.abs(got - want) < 0.0001)) mismatches.push({ id, want, got });
+    }
+    return { mismatches, soft: (typeof GLX !== "undefined" && GLX.softPresentState)
+      ? GLX.softPresentState() : null };
+  }, values);
+  if (check.mismatches.length) {
+    throw new Error(`setTune store mismatch: ${JSON.stringify(check)}`);
+  }
 }
 
 async function boot(page, {
