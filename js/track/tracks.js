@@ -1809,9 +1809,13 @@ const Tracks = (function () {
       const pitOwned = (k, side) => pitKeep && side === pitSide && pitKeep[k] > 0;
       for (const side of [-1, 1]) {
         for (let k = 0; k < n; k += STEP) {
-          const kn = (k + STEP) % n, km = (k + 1) % n;
+          // On odd-node loops, the final stride has only one node left.
+          // Wrapping k+2 to node 1 overlaps the first panel (0→2) by a
+          // whole node; terminate this last span at the lap origin instead.
+          const kn = k + STEP >= n ? 0 : k + STEP, km = (k + 1) % n;
           if (pitOwned(k, side) || pitOwned(kn, side)) continue;
           const col = NIGHT ? bt.night : btSeq[Math.floor(k / (STEP * 3)) % 3];
+          if (km === kn) { panel(k, kn, col, side); continue; }
           // Every panel is the same 0.4 x 1.1 m cross-section; only its length
           // and livery colour vary. One model per colour (three by day, one at
           // night) covers a whole street lap, with length on the node scale.

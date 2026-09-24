@@ -17,15 +17,24 @@
  *   { at: "landmark", rank, bear, distK, yK }              this circuit's own
  *
  *   off     metres of arc from the anchor, signed along the racing direction
- *   x       lateral metres, + is right of the centreline
+ *   x       lateral metres, + is right of the centreline — EXCEPT at a corner,
+ *           where + is the OUTSIDE of that corner, whichever way it turns
  *   y       metres above the road surface at that point
  *   n       a corner by number, or by ROLE: "first" | "mid" | "late"
- *   bear    radians around the anchor
+ *   bear    radians around the anchor, 0 = FACING THE TRACK: for `centre` the
+ *           side the start line is on, for `landmark` the side its nearest
+ *           stretch of track is on
  *   distR/yR   multiples of the LAP's radius — one establishing shot fits any circuit
  *   distK/yK   multiples of the LANDMARK's own size — one shot fits a tower or a stand
  *
  * That is what makes one shot list mean the same thing on every circuit: "rise
  * up the middle of the grid" is the same instruction at Monza and at Monaco.
+ * It is also why bearings and corner sides are RELATIVE. A world bearing names
+ * a different picture at every circuit — the same `bear: 0.55` looked down on
+ * Monza's towers against bare grass, with no sky and no track in frame — and a
+ * fixed lateral sign put corner shots on the INSIDE at some circuits, peering
+ * through trunks and lamp posts (Monaco's hairpin from its apex). "From the
+ * track side" and "from the outside of the turn" port; a number does not.
  *
  * CLEARANCE. Every built circuit carries a registry of its scenery as
  * world-space boxes (`track.props`), which is how a camera can finally be told
@@ -144,8 +153,13 @@ const FlybySeq = (function () {
      both tall and mostly solid (Monaco's whole skyline arrives this way). */
   const LM_WEIGHT = { tower: 3, building: 1.6, gantry: 1.2, grandstand: 1.3, motorhome: 1, structure: 0.9 };
   const LM_MIN_H = 8;             // shorter than this reads as trackside furniture
-  const LM_APART = 80;            // metres — two boxes of one grandstand are one landmark
+  // metres — two boxes of one grandstand are one landmark, and so is a CLUSTER:
+  // at 80 m Monza's three towers (84 m apart) were ranks 0 and 1, so the second
+  // landmark shot was the first one again from a little closer.
+  const LM_APART = 300;
   const LM_KEEP = 6;
+  const LM_SPAN = 0.45;           // how much of a landmark's footprint counts as its framing size
+  const LM_MIN_SIZE = 40;         // metres — nothing is framed as if it were smaller
   const LM_NEAR = 220;            // metres from the centreline — beyond this it is scenery, not a landmark
 
   function landmarkScore(r) {
@@ -218,7 +232,11 @@ const FlybySeq = (function () {
     for (let i = 0; i < N; i++) rad = Math.max(rad, Math.hypot(pts[i][0] - cx, pts[i][2] - cz));
     // Keep the samples: landmark selection needs "how far is this from the
     // track", and 96 points is a good enough centreline for a proximity test.
-    track._fbBounds = { x: cx, y: cy, z: cz, rad: rad, pts: pts };
+    // FACE: the bearing from the centroid to the start line (pts[0] is s = 0),
+    // which is what a `centre` bearing of 0 means — the establishing shot then
+    // has the main straight, the grid and the pits in its foreground.
+    const face = Math.atan2(pts[0][2] - cz, pts[0][0] - cx);
+    track._fbBounds = { x: cx, y: cy, z: cz, rad: rad, pts: pts, face: face };
     return track._fbBounds;
   }
 
@@ -267,6 +285,75 @@ const FlybySeq = (function () {
 
   const _smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 10 };
 
+  /** The bearing from a landmark to its nearest stretch of track — what a
+   *  landmark `bear` of 0 means. Shot from that side, the circuit sits between
+   *  the camera and the landmark, so the frame says "this tower, at THIS
+   *  track" instead of framing a tower against whatever is behind it. Cached
+   *  on the track, keyed by the record, and never written onto the record: the
+   *  props registry is shared with everything else that reads scenery. */
+  function lmFace(track, r) {
+    const cache = track._fbLmFace || (track._fbLmFace = new Map());
+    if (cache.has(r)) return cache.get(r);
+    const pts = bounds(track).pts;
+    let best = Infinity, bx = r.x, bz = r.z;
+    for (let j = 0; j < pts.length; j++) {
+      const d = Math.hypot(r.x - pts[j][0], r.z - pts[j][2]);
+      if (d < best) { best = d; bx = pts[j][0]; bz = pts[j][2]; }
+    }
+    const a = Math.atan2(bz - r.z, bx - r.x);
+    cache.set(r, a);
+    return a;
+  }
+
+  /** +1 when a corner turns LEFT (its outside is the road's +right), -1 when it
+   *  turns right. The heading change is SUMMED in short steps across the apex:
+   *  one comparison either side reads a hairpin backwards, because Monaco's
+   *  Loews turns more than 180 degrees inside 60 m. A camera placement, the
+   *  broadcast column — never a force on any car. */
+  const _cA = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 10 };
+  const _cB = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 10 };
+  function cornerSide(track, n) {
+    const cache = track._fbCornerSide || (track._fbCornerSide = {});
+    const key = String(n === undefined ? 1 : n);
+    if (cache[key] !== undefined) return cache[key];
+    const s = cornerS(track, n === undefined ? 1 : n);
+    // Each step: the next heading against this step's right vector, i.e. the
+    // sine of the turn over 4 m. Swinging toward +right is a right-hander.
+    let turnRight = 0;
+    Tracks.sample(track, wrapS(track, s - 24), _cA);
+    for (let i = -5; i <= 6; i++) {
+      Tracks.sample(track, wrapS(track, s + i * 4), _cB);
+      turnRight += _cB.t[0] * _cA.r[0] + _cB.t[2] * _cA.r[2];
+      for (let j = 0; j < 3; j++) { _cA.t[j] = _cB.t[j]; _cA.r[j] = _cB.r[j]; }
+    }
+    cache[key] = turnRight > 0 ? -1 : 1;
+    return cache[key];
+  }
+
+  /* A TRACKSIDE CAMERA STANDS AT THE FENCE. On a street circuit the outside of
+     a corner is a building a few metres past the barrier, so a lateral offset
+     that frames an open circuit well lands the eye inside a block — lifted
+     30 m over Monaco's Ste Devote — or out over another stretch of road across
+     a hairpin, staring down at tarmac. Capping |x| just beyond this side's
+     barrier keeps the shot on the fence line. STREET circuits only: past an
+     open circuit's barrier is run-off and trees, and Monza's chicane barriers
+     sit 8 m out — capping there pulled good shots onto the kerbs. */
+  const FENCE = 1.5;              // metres beyond the barrier line
+
+  /** A track pose's lateral offset in the road's +right frame, capped at the
+   *  fence at arc `s`. Capped per ENDPOINT, never along a move: barrier
+   *  distances step between nodes, and a per-frame cap would print that step
+   *  onto the camera path. */
+  function poseX(track, pose, s) {
+    let x = pose.x || 0;
+    if (pose.at === "corner" && x) x *= cornerSide(track, pose.n);
+    if (x && track.def && track.def.street && Tracks.wallAt) {
+      const w = Tracks.wallAt(track, s, x > 0 ? 1 : -1);
+      if (w > 0 && Math.abs(x) > w + FENCE) x = (x > 0 ? 1 : -1) * (w + FENCE);
+    }
+    return x;
+  }
+
   /** A pose to a world point: arc → centreline, then lateral along the road's
    *  right vector, then height above the surface. */
   function posePoint(track, pose, out) {
@@ -281,7 +368,7 @@ const FlybySeq = (function () {
       // shot actually lives in.
       const d = Math.max(200, Math.min(850, (pose.distR === undefined ? 1.4 : pose.distR) * b.rad));
       const h = Math.max(55, Math.min(190, (pose.yR === undefined ? 0.5 : pose.yR) * b.rad));
-      const a = pose.bear || 0;
+      const a = b.face + (pose.bear || 0);
       out[0] = b.x + Math.cos(a) * d;
       out[1] = b.y + h + (pose.y || 0);
       out[2] = b.z + Math.sin(a) * d;
@@ -294,16 +381,23 @@ const FlybySeq = (function () {
       const lm = landmarks(track);
       if (!lm.length) return posePoint(track, { at: "start", off: pose.off || 0, x: pose.x, y: pose.y || 20 }, out);
       const r = lm[Math.min(pose.rank || 0, lm.length - 1)];
-      const size = Math.max(r.w, r.d, r.h);
+      // HEIGHT FIRST, footprint at a discount. The longest side made a 162 m x
+      // 21 m grandstand "162 m big", so Monza's was framed from ~290 m as a
+      // sliver behind the trees; a tower's height is still its size. And a
+      // floor, because a shot's `y` is in metres: Bahrain's 15 m pavilion,
+      // framed from 1.6 of its own size, put a 12 m-high eye 29 m away looking
+      // down at the roof.
+      const size = Math.max(LM_MIN_SIZE, r.h, LM_SPAN * Math.max(r.w, r.d));
       const d = (pose.distK === undefined ? 0 : pose.distK) * size;
-      const a = pose.bear || 0;
+      const a = lmFace(track, r) + (pose.bear || 0);
       out[0] = r.x + Math.cos(a) * d;
       out[1] = r.y + (pose.yK === undefined ? 0 : pose.yK) * r.h + (pose.y || 0);
       out[2] = r.z + Math.sin(a) * d;
       return out;
     }
-    Tracks.sample(track, anchorS(track, pose), _smp);
-    const x = pose.x || 0;
+    const s = anchorS(track, pose);
+    Tracks.sample(track, s, _smp);
+    const x = poseX(track, pose, s);
     out[0] = _smp.p[0] + _smp.r[0] * x;
     out[1] = _smp.p[1] + (pose.y || 0);
     out[2] = _smp.p[2] + _smp.r[2] * x;
@@ -337,12 +431,13 @@ const FlybySeq = (function () {
   function lerpPose(track, a, b, u, out) {
     if (trackAnchored(a) && trackAnchored(b)) {
       const total = track.total || 1;
-      const sa = anchorS(track, a);
-      let d = anchorS(track, b) - sa;
+      const sa = anchorS(track, a), sb = anchorS(track, b);
+      let d = sb - sa;
       while (d > total / 2) d -= total;          // go the short way round the lap
       while (d < -total / 2) d += total;
+      const xa = poseX(track, a, sa), xb = poseX(track, b, sb);
       Tracks.sample(track, wrapS(track, sa + d * u), _smp);
-      const x = (a.x || 0) + ((b.x || 0) - (a.x || 0)) * u;
+      const x = xa + (xb - xa) * u;
       out[0] = _smp.p[0] + _smp.r[0] * x;
       out[1] = _smp.p[1] + (a.y || 0) + ((b.y || 0) - (a.y || 0)) * u;
       out[2] = _smp.p[2] + _smp.r[2] * x;
@@ -359,86 +454,114 @@ const FlybySeq = (function () {
 
   // ---- the shipped sequence ------------------------------------------------
 
-  /* EIGHT SHOTS, ONE EIGHTH OF THE BUDGET EACH — 3 s a shot at FLY_MS 24 s.
-     Durations stay fractions so retuning the budget rebalances all eight rather
-     than truncating the last.
+  /* NINE SHOTS OVER FLY_MS (24 s), ~2.4-3.1 s each. Durations stay fractions
+     so retuning the budget rebalances all of them rather than truncating the
+     last.
 
      PANS ARE SLOW AND SHORT. The first cut swung 0.45 rad in 1.2 s and read as a
-     camera being yanked; the same 0.2 rad over 3 s reads as a crane. Every shot
-     below travels less than it used to and takes more than twice as long doing
-     it, which is the whole of "clean it up".
+     camera being yanked; the same 0.2 rad over 3 s reads as a crane.
 
-     AND TIGHTER. Field of view is 10-14 degrees narrower than the first cut, and
-     the distances are pulled in: a wide lens at the far end of a big circuit
-     turns scenery into texture. */
+     EVERY SHOT HAS A SUBJECT, and the bearings/sides are the relative ones the
+     header describes, so the subject is the same thing on every circuit:
+       wide        the start straight in the foreground, the lap behind it
+       wide2       the far side of the lap, lower and closer
+       landmark1/2 this circuit's own buildings, from the TRACK side, low,
+                   looking UP so they stand against the sky with the circuit
+                   in front of them (it used to look DOWN at them from above
+                   their centre — towers against grass, no horizon, no track)
+       turn-*      from the OUTSIDE of the turn, raised like a trackside stand
+       grid-crane  up behind the back row: the whole field, long lens
+       grid        up the aisle between the columns, ending among the front
+                   rows with the start gantry ahead */
   const DEFAULT = [
     // ---- establish: where are we -------------------------------------------
     {
-      id: "wide", dur: 0.125, ease: "inOut",
-      eye: [{ at: "centre", bear: -0.70, distR: 1.15, yR: 0.42 },
-            { at: "centre", bear: -0.52, distR: 1.05, yR: 0.38 }],
+      id: "wide", dur: 0.12, ease: "inOut",
+      eye: [{ at: "centre", bear: -0.30, distR: 1.10, yR: 0.36 },
+            { at: "centre", bear: -0.12, distR: 1.00, yR: 0.32 }],
       look: [{ at: "centre", distR: 0, yR: 0 }, { at: "centre", distR: 0, yR: 0 }],
-      fov: [34, 36],
+      fov: [36, 38],
     },
     {
-      id: "wide2", dur: 0.125, ease: "inOut",
-      eye: [{ at: "centre", bear: 2.25, distR: 1.0, yR: 0.34 },
-            { at: "centre", bear: 2.45, distR: 0.9, yR: 0.28 }],
-      look: [{ at: "centre", distR: 0, yR: 0 }, { at: "centre", distR: 0.05, yR: 0 }],
-      fov: [34, 38],
+      id: "wide2", dur: 0.10, ease: "inOut",
+      eye: [{ at: "centre", bear: 2.35, distR: 0.80, yR: 0.30 },
+            { at: "centre", bear: 2.55, distR: 0.70, yR: 0.25 }],
+      look: [{ at: "centre", distR: 0, yR: 0 }, { at: "centre", distR: 0, yR: 0 }],
+      fov: [36, 39],
     },
     // ---- this circuit in particular ----------------------------------------
     {
-      id: "landmark1", dur: 0.125, ease: "inOut",
-      eye: [{ at: "landmark", rank: 0, bear: 0.55, distK: 1.9, yK: 0.45 },
-            { at: "landmark", rank: 0, bear: 0.90, distK: 1.6, yK: 0.55 }],
-      look: [{ at: "landmark", rank: 0, distK: 0, yK: 0 }, { at: "landmark", rank: 0, distK: 0, yK: 0.1 }],
-      fov: [36, 39],
+      id: "landmark1", dur: 0.11, ease: "inOut",
+      eye: [{ at: "landmark", rank: 0, bear: -0.28, distK: 1.7, yK: -0.15, y: 12 },
+            { at: "landmark", rank: 0, bear: -0.08, distK: 1.5, yK: -0.1, y: 12 }],
+      look: [{ at: "landmark", rank: 0, distK: 0, yK: 0.2 }, { at: "landmark", rank: 0, distK: 0, yK: 0.25 }],
+      fov: [38, 40],
     },
     {
-      id: "landmark2", dur: 0.125, ease: "inOut",
-      eye: [{ at: "landmark", rank: 1, bear: 3.25, distK: 1.9, yK: 0.4 },
-            { at: "landmark", rank: 1, bear: 2.95, distK: 1.6, yK: 0.32 }],
-      look: [{ at: "landmark", rank: 1, distK: 0, yK: 0 }, { at: "landmark", rank: 1, distK: 0, yK: 0 }],
-      fov: [36, 40],
+      id: "landmark2", dur: 0.10, ease: "inOut",
+      eye: [{ at: "landmark", rank: 1, bear: 0.30, distK: 1.8, yK: -0.1, y: 12 },
+            { at: "landmark", rank: 1, bear: 0.10, distK: 1.6, yK: -0.05, y: 12 }],
+      look: [{ at: "landmark", rank: 1, distK: 0, yK: 0.15 }, { at: "landmark", rank: 1, distK: 0, yK: 0.2 }],
+      fov: [38, 41],
     },
     // ---- the corners you will actually drive --------------------------------
     {
-      id: "turn-first", dur: 0.125, ease: "inOut",
-      eye: [{ at: "corner", n: "first", off: -55, x: 11, y: 6.5 },
-            { at: "corner", n: "first", off: 15, x: 12, y: 5.5 }],
-      look: [{ at: "corner", n: "first", off: -5, x: 0, y: 0.8 },
-             { at: "corner", n: "first", off: 35, x: 0, y: 0.8 }],
+      id: "turn-first", dur: 0.11, ease: "inOut",
+      eye: [{ at: "corner", n: "first", off: -60, x: 16, y: 9 },
+            { at: "corner", n: "first", off: 0, x: 18, y: 8 }],
+      look: [{ at: "corner", n: "first", off: -12, x: 0, y: 0.6 },
+             { at: "corner", n: "first", off: 30, x: 0, y: 0.6 }],
       fov: [38, 42],
     },
     {
-      id: "turn-mid", dur: 0.125, ease: "inOut",
-      eye: [{ at: "corner", n: "mid", off: -45, x: -12, y: 7.5 },
-            { at: "corner", n: "mid", off: 20, x: -10, y: 5 }],
-      look: [{ at: "corner", n: "mid", off: 0, x: 0, y: 0.8 },
-             { at: "corner", n: "mid", off: 40, x: 0, y: 0.8 }],
+      id: "turn-mid", dur: 0.10, ease: "inOut",
+      eye: [{ at: "corner", n: "mid", off: -45, x: 15, y: 8 },
+            { at: "corner", n: "mid", off: 5, x: 17, y: 7 }],
+      // Aimed THROUGH the corner: at a hairpin the apex is right under a
+      // fence-line camera, and aiming at it filmed a kerb from above.
+      look: [{ at: "corner", n: "mid", off: 15, x: 0, y: 0.6 },
+             { at: "corner", n: "mid", off: 55, x: 0, y: 0.6 }],
       fov: [38, 42],
     },
     {
-      id: "turn-late", dur: 0.125, ease: "inOut",
-      eye: [{ at: "corner", n: "late", off: -40, x: 9, y: 4 },
-            { at: "corner", n: "late", off: 25, x: 7, y: 3 }],
-      look: [{ at: "corner", n: "late", off: 8, x: 0, y: 0.8 },
-             { at: "corner", n: "late", off: 45, x: 0, y: 0.8 }],
-      fov: [40, 44],
+      id: "turn-late", dur: 0.10, ease: "inOut",
+      eye: [{ at: "corner", n: "late", off: -35, x: 13, y: 6 },
+            { at: "corner", n: "late", off: 20, x: 14, y: 5 }],
+      look: [{ at: "corner", n: "late", off: 5, x: 0, y: 0.6 },
+             { at: "corner", n: "late", off: 45, x: 0, y: 0.6 }],
+      fov: [40, 43],
     },
     // ---- and then the grid you start from ------------------------------------
+    // BOTH GRID SHOTS LOOK FORWARD, deliberately. Seen from ahead of pole the
+    // road's depth bias (js/game.js _wmRoad*, [-8, -16]) lifts the tarmac over
+    // the cars standing on it at that grazing angle, and the whole field
+    // vanishes; from behind it renders. Reframe here only if that is fixed.
     {
-      id: "grid", dur: 0.125, ease: "inOut",
-      // VERY LOW, UP THE MIDDLE, and no rise at the end: the shot is the field
-      // you are about to start behind, seen from the height of a front wing.
-      // x: 0 is the centreline, which on a grid is the empty aisle between the
-      // two staggered columns — the camera threads it. The cars are placed for
-      // this shot by menuGridCars() in js/game.js; without them it is an aisle
-      // of empty tarmac, which is the one shot here that needs its subject.
-      eye: [{ at: "grid", off: -45, x: 0, y: 0.85 }, { at: "start", off: -6, x: 0, y: 1.15 }],
-      look: [{ at: "grid", off: 25, x: 0, y: 0.7 }, { at: "start", off: 55, x: 0, y: 0.9 }],
-      fov: [34, 40],
+      id: "grid-crane", dur: 0.12, ease: "inOut",
+      // A slow crane up behind the back row, long lens: the whole field stacked
+      // up towards the lights.
+      // On the aisle's line and tight behind the last row: from 6 m left and
+      // 38 m back, Bahrain's crane stood by the final bend and filmed its
+      // trackside hoarding across two thirds of the frame.
+      eye: [{ at: "grid", off: -16, x: -1, y: 2.2 }, { at: "grid", off: -8, x: 0, y: 5.8 }],
+      // Aimed at MID-GRID, not at pole: a grid that runs out of the final bend
+      // (Bahrain's) puts pole round the corner, and the sightline to it crossed
+      // the grandstand on the inside of the curve.
+      look: [{ at: "grid", off: 45, x: 0, y: 0.8 }, { at: "grid", off: 85, x: 0, y: 0.8 }],
+      fov: [30, 32],
+    },
+    {
+      id: "grid", dur: 0.14, ease: "inOut",
+      // LOW, UP THE MIDDLE: x: 0 is the centreline, which on a grid is the empty
+      // aisle between the two staggered columns — the camera threads it with a
+      // car either side, and STOPS among the front rows with the start gantry
+      // ahead. The old shot ran on past the line, so its last frame — the one
+      // the race cuts from — looked down an empty straight with the whole field
+      // behind the lens. The cars are placed for these shots by menuGridCars()
+      // in js/game.js; without them they are empty tarmac.
+      eye: [{ at: "grid", off: 60, x: 0, y: 1.2 }, { at: "pole", off: -12, x: 0, y: 1.3 }],
+      look: [{ at: "grid", off: 110, x: 0, y: 0.8 }, { at: "start", off: 40, x: 0, y: 1.2 }],
+      fov: [38, 40],
     },
   ];
 
@@ -472,7 +595,12 @@ const FlybySeq = (function () {
     lerpPose(track, shot.look[0], shot.look[1], e, _tgt);
     const authoredY = _eye[1];
     // A shot that runs low along the track is trusted as authored (see onRoadPose).
-    if (!(onRoadPose(shot.eye[0]) && onRoadPose(shot.eye[1]))) clearEye(track, _eye);
+    if (!(onRoadPose(shot.eye[0]) && onRoadPose(shot.eye[1]))) {
+      const plan = planShot(track, shot);
+      if (plan.eye !== shot.eye) lerpPose(track, plan.eye[0], plan.eye[1], e, _eye);
+      _eye[1] += liftAt(plan.prof, e);
+      clearEye(track, _eye);   // safety net only: the profile already cleared every sample
+    }
     // How far the clearance had to lift this eye. A shot authored beside a
     // building lifts a metre or two; one authored INSIDE a grandstand lifts
     // twenty. Reported so the difference is measurable rather than a matter of
@@ -487,6 +615,74 @@ const FlybySeq = (function () {
   }
   let _lastIdx = -1;
 
+  /* THE LIFT IS PLANNED PER SHOT, NOT DISCOVERED PER FRAME. clearEye() alone
+     runs on the frame the eye enters a box, so the camera popped straight up
+     mid-shot the instant it touched one: 17 m in a single frame on Monza's
+     turn-late, 54 m on Shanghai's turn-mid, at 27 circuits. The shot's path is
+     sampled once (LIFT_N points along the eased parameter), the lift each
+     sample needs is recorded, and the lift at any point is the largest of
+     those needs FADED linearly over LIFT_W of the shot either side — so the
+     camera is already rising before it reaches the obstruction and settles
+     after it.
+
+     AND A CORNER SHOT IS MOVED IN BEFORE IT IS LIFTED. Only street circuits
+     get the fence cap, so a corner eye 15-18 m out on an open circuit grazed
+     Shanghai's, Mexico's and Sochi's trackside structures and was lifted 30-54
+     m clear of them — a crane shot of a roof instead of a corner. When a
+     corner shot needs more than LIFT_OK, both eyes step towards the road
+     together, 1.5 m at a time (never inside IN_MIN of the centreline), and the
+     least-lifted plan wins. Cached per shot object on the track; an edited
+     list is new objects and recomputes. */
+  const LIFT_N = 32, LIFT_W = 0.3, LIFT_OK = 4, IN_STEP = 1.5, IN_MIN = 9;
+  const _lp = [0, 0, 0];
+  function profileOf(track, eye0, eye1) {
+    const prof = new Float32Array(LIFT_N + 1);
+    let max = 0;
+    for (let j = 0; j <= LIFT_N; j++) {
+      lerpPose(track, eye0, eye1, j / LIFT_N, _lp);
+      const y0 = _lp[1];
+      clearEye(track, _lp);
+      prof[j] = _lp[1] - y0;
+      if (prof[j] > max) max = prof[j];
+    }
+    return { prof: prof, max: max };
+  }
+  function inset(pose, k) {
+    const x = pose.x || 0, ax = Math.abs(x);
+    if (pose.at !== "corner" || ax <= IN_MIN) return pose;
+    const o = Object.assign({}, pose);
+    o.x = (x > 0 ? 1 : -1) * Math.max(IN_MIN, ax - k * IN_STEP);
+    return o;
+  }
+  function planShot(track, shot) {
+    const cache = track._fbPlan || (track._fbPlan = new WeakMap());
+    let plan = cache.get(shot);
+    if (plan) return plan;
+    const e0 = shot.eye[0], e1 = shot.eye[1];
+    let best = profileOf(track, e0, e1), eye = shot.eye;
+    if (best.max > LIFT_OK && (e0.at === "corner" || e1.at === "corner")) {
+      for (let k = 1; k <= 8; k++) {
+        const a = inset(e0, k), b = inset(e1, k);
+        if (a === e0 && b === e1) break;
+        const p = profileOf(track, a, b);
+        if (p.max < best.max) { best = p; eye = [a, b]; }
+        if (p.max <= LIFT_OK) break;
+      }
+    }
+    plan = { eye: eye, prof: best.prof };
+    cache.set(shot, plan);
+    return plan;
+  }
+  function liftAt(prof, e) {
+    let best = 0;
+    for (let j = 0; j <= LIFT_N; j++) {
+      if (!(prof[j] > 0)) continue;
+      const f = 1 - Math.abs(e - j / LIFT_N) / LIFT_W;
+      if (f > 0 && prof[j] * f > best) best = prof[j] * f;
+    }
+    return best;
+  }
+
   /** Called when a run begins, so the first frame of the first shot reads as a
    *  cut and the camera does not glide in from wherever it last was. */
   function reset() { _lastIdx = -1; }
@@ -494,9 +690,9 @@ const FlybySeq = (function () {
   return {
     solve, reset, clearEye, insideProp, blockers, isSolid, onRoadPose,
     landmarks, bounds, landmarkScore,
-    anchorS, posePoint, cornerS,
+    anchorS, posePoint, cornerS, cornerSide, lmFace,
     DEFAULT, EASE,
-    POLE_BACK, GRID_SPACING, GRID_ROWS, MIN_FILL, MIN_H, FAR, FOG, NEAR,
+    POLE_BACK, GRID_SPACING, GRID_ROWS, MIN_FILL, MIN_H, FAR, FOG, NEAR, FENCE,
   };
 })();
 Object.freeze(FlybySeq);
