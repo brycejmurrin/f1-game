@@ -277,12 +277,12 @@
       // low pit-lane wall along the start straight in front of the Wing
       groundedSegments({
         id: "silverstone-pit-wall",
-        points: [0.44, 0.4475, 0.455, 0.4625, 0.47, 0.4775, 0.485, 0.4925, 0.50].map((s) => ({
+        points: [0.452, 0.4595, 0.467, 0.4745, 0.482, 0.4880, 0.494].map((s) => ({
           k: k(s), side: 1, dist: 4,
         })),
         width: 0.6, height: 1.2, color: CONC,
       });
-      recordBarrier(0.44, 0.50, 1, 4);
+      recordBarrier(0.452, 0.494, 1, 4);  // strictly inside the pit window (entry engine ~0.969, exit ~0.019)
 
       // BRDC clubhouse set back (s≈0.48 R) — pale historical building
       building(k(0.48), 1, 28, 22, 9, 20, { kind: "chevron", wall: [0.76, 0.76, 0.72], window: [0.18, 0.24, 0.30] });
