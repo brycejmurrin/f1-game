@@ -719,24 +719,18 @@
 
       spectatorHill(0.08, 0.18, -1, 13, { rows: 3, rise: 1.0, depth: 1.8, density: 0.40, step: 9 });
       spectatorHill(0.43, 0.54,  1, 13, { rows: 3, rise: 1.0, depth: 1.8, density: 0.40, step: 9 });
-      // Wave-3 Curva Grande far ring — denser corridor without near-band clips.
-      // A mid-gap densify at 22–35 m stacked into Rank A / spectator crowns and
-      // raised prop-clip from 17→29 severe spots. Keep identity as a SECOND
-      // ring at 42–55 m (sparse) plus a Lesmo far outer hug.
-      every(20, (k) => {
+      // Wave-3 Curva Grande densify — sparse mid-outer ring, grounded.
+      // Far 42 m+ floated over a terrain drop (float-audit: 16 m gap at frac
+      // 0.112). Use 28–36 m with a ground-safe skip via onTrack margin.
+      every(24, (k) => {
         const s = k / n;
-        if (s < 0.08 || s > 0.18) return;
+        if (s < 0.09 || s > 0.17) return;
         const h = hash(k * 19 + 11);
-        if (h < 0.35) return;
-        pine(k, -1, 42 + h * 10, 18 + h * 10, PINE_D);
-        if (h > 0.55) pine(k,  1, 44 + h * 10, 17 + h * 9, PINE);
-      });
-      every(22, (k) => {
-        const s = k / n;
-        if (s < 0.35 || s > 0.46) return;
-        const h = hash(k * 23 + 5);
-        if (h < 0.45) return;
-        pine(k, -1, 36 + h * 8, 15 + h * 7, PINE_D);
+        if (h < 0.5) return;
+        const gap = 28 + h * 6;
+        const a = anchor(k, -1, gap);
+        if (!a || onTrack(a.c[0], a.c[2], 8)) return;
+        pine(k, -1, gap, 14 + h * 6, PINE_D);
       });
 
       every(42, (k) => {
