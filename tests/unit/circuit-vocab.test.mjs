@@ -8,11 +8,9 @@
 // by enumeration on 2026-09-22 and both fixed in the same commit:
 //
 //   furniture.tree: "pine"   anderstorp, fuji, mont_tremblant, okayama, zolder
-//     `pine` is in neither SPECIES nor the two aliases beside it, so the
-//     dispatch in js/track/tracks.js falls through to "broad". Five conifer-belt
-//     circuits — Sweden, Japan x2, Quebec, the Ardennes — grow rounded broadleaf
-//     trees on the generic scatter pass. PARKED, NOT FIXED: see KNOWN_UNHANDLED
-//     below, which carries the measurement that stopped it.
+//     FIXED 2026-09-24: canopyR("fir") aligned with conifer() mesh extent, then
+//     the five defs retargeted to "fir". (A bare SPECIES "pine" alias would have
+//     kept the broadleaf mesh — docs/BUGS.md S2.)
 //
 //   standSet: ["stone", …]   dijon
 //     `stone` is not a STAND_LIVERIES key, so grandstandEx's `lib[name] || null`
@@ -79,27 +77,8 @@ function literalKeys(src, name) {
 // it is "correcting this costs more than it buys, and here is the evidence".
 // Same contract as circuit-def-fields.test.mjs's ENGINE_ONLY: every entry owes
 // a reason, and a word NOT listed here still fails the test.
-//
-// "pine" -> "fir" was tried on 2026-09-22 and REVERTED. It is the right species
-// (the five circuits are conifer belt, and `fir` is what the other Nordic and
-// Alpine circuits use), but canopyR (js/track/scenery/nature.js) returns roughly
-// HALF the radius for `fir` that it does for `broad` — ~3.6 m vs ~6.6 m at
-// h = 12 — and the scatter keeps props clear by `dist + crown`. So the correct
-// species also halved the keep-out, and CI's per-circuit geometry sweep measured
-// prop interpenetration growing on every one of the five:
-//
-//     anderstorp 31 -> 34    fuji 24 -> 26        okayama 58 -> 59
-//     mont_tremblant 32 -> 48                     zolder 82 -> 105
-//
-// Registering "pine" in SPECIES instead is strictly worse: the emitter dispatch
-// has no pine branch, so it would keep the broadleaf mesh and take the smaller
-// clearance with it. The real fix is to check canopyR("fir") against conifer()'s
-// actual mesh extent — the comment above canopyR records that same contract
-// being found "~0.9 m optimistic" once before, for broadleaf — and that is its
-// own change with its own sweep, not a rider on a bug-fix batch.
-const KNOWN_UNHANDLED = {
-  pine: 'renders as "broad"; "fir" is correct but halves canopyR\'s keep-out and grew prop interpenetration on all five circuits (2026-09-22 sweep)',
-};
+// Empty after S2 (pine→fir + canopyR("fir") keep-out alignment, 2026-09-24).
+const KNOWN_UNHANDLED = {};
 
 test("every furniture.tree names a species the scatter dispatch honours", () => {
   const src = read("js/track/tracks.js");

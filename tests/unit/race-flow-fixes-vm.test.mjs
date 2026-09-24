@@ -29,6 +29,20 @@ test("a red flag holds the field: no stuck-rescue kicks for the AI, no rescue fo
     a.setInput({ throttle: true, steer: 0 });
     g.step(60 * 20);
     assert.equal(G.state, "race");
+    // Isolate the hold: B6 seeds AI packing from raceIndex/seasonSeed, so a
+    // live pack can shove the player off-line under the red cap and trip the
+    // legitimate beached rescue. Spread the field on the line so this asserts
+    // the red-only gate, not contact RNG.
+    let aiN = 0;
+    for (let i = 0; i < G.cars.length; i++) {
+      const c = G.cars[i];
+      if (c.human || c.retired) continue;
+      a.aiPlace(i, (0.15 + aiN * 0.04) % 1, 2, (aiN % 2 ? 1 : -1) * 1.5);
+      aiN++;
+    }
+    a.jump(0.12, 2, 0);
+    G.player.rescueT = 0; G.player.wallT = 0; G.player.wasOnWall = false;
+    G.player.wrongT = 0; G.player.wrongWay = false; G.player.offT = 0;
     G.applyCaution({ level: 4, cause: "RED FLAG", phase: "stopping", total: 16, sectors: [16, 0, 0], sinceT: 0 });
     const P = G.player;
     let kicks = 0, rescues = 0, lastRL = P.rescueLastT;

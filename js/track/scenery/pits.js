@@ -239,8 +239,9 @@ const SceneryPits = (function () {
       // already does a few dozen lines down (`kGate`).
       const ks = nodesFrom(p.sIn, (k) => p.v[k] >= 0.98, p.lenM, 24);
       // `shift(k)`, when given, slides the whole profile laterally per node.
-      const sweep = (ks, profile, col, mat, shift) => {
+      const sweep = (ks, profile, col, mat, shift, blockId) => {
         if (ks.length < 2) return;
+        const vert0 = out.pos.length / 3;
         const m = profile.length;
         const latOf = (k, q) => sd * (hw[k] + q[0] + (shift ? shift(k) : 0));
         for (let i = 0; i + 1 < ks.length; i++) {
@@ -275,15 +276,23 @@ const SceneryPits = (function () {
           }
           void u;
         }
+        // S4: tag the strip so clip/coplanar/float can name pit-wall / etc.
+        // Keep tip winding (TrackGeom.emit here coplanar-fought bay panels and
+        // left hungaroring entry lamps floating over an unmatched platform).
+        const count = out.pos.length / 3 - vert0;
+        if (count > 0) {
+          (out.__blocks || (out.__blocks = []))
+            .push({ base: vert0, count, id: blockId || "pit-sweep" });
+        }
       };
       const v0 = b.verge, v1 = b.verge + b.platform;
       // Platform: 35 cm above the lane (FIM §9.2).
-      sweep(ks, [[v0, 0], [v1, 0], [v1, 0.35], [v0, 0.35]], PLATFORM, MAT.CONCRETE);
+      sweep(ks, [[v0, 0], [v1, 0], [v1, 0.35], [v0, 0.35]], PLATFORM, MAT.CONCRETE, null, "pit-platform");
       // The pit wall on the TRACK side of the platform: 25 cm thick, 1 m high.
-      sweep(ks, [[v0, 0.35], [v0 + 0.25, 0.35], [v0 + 0.25, 1.35], [v0, 1.35]], WALL, MAT.CONCRETE);
-      sweep(ks, [[v0 - 0.02, 1.35], [v0 + 0.27, 1.35], [v0 + 0.27, 1.42], [v0 - 0.02, 1.42]], WALL_TOP, MAT.METAL);
+      sweep(ks, [[v0, 0.35], [v0 + 0.25, 0.35], [v0 + 0.25, 1.35], [v0, 1.35]], WALL, MAT.CONCRETE, null, "pit-wall");
+      sweep(ks, [[v0 - 0.02, 1.35], [v0 + 0.27, 1.35], [v0 + 0.27, 1.42], [v0 - 0.02, 1.42]], WALL_TOP, MAT.METAL, null, "pit-wall-cap");
       // The 65 cm barrier between the platform and the lane.
-      sweep(ks, [[v1 - 0.10, 0.35], [v1, 0.35], [v1, 1.0], [v1 - 0.10, 1.0]], BARRIER, MAT.METAL);
+      sweep(ks, [[v1 - 0.10, 0.35], [v1, 0.35], [v1, 1.0], [v1 - 0.10, 1.0]], BARRIER, MAT.METAL, null, "pit-lane-barrier");
       wallBuilt = ks.length >= 2;
 
       // ── 1b. THE EXIT WALL: the pit wall carried on down the exit road ────
@@ -296,8 +305,8 @@ const SceneryPits = (function () {
       const EXW = typeof TrackPit !== "undefined" ? TrackPit.EXIT_WALL_W : 0.55;
       const kx = nodesFrom(p.sOut, (k) => p.w[k] >= EXW, p.exitRoadM);
       const slide = (k) => v0 * p.v[k];
-      sweep(kx, [[-0.05, 0], [0.30, 0], [0.30, 1.0], [-0.05, 1.0]], WALL, MAT.CONCRETE, slide);
-      sweep(kx, [[-0.07, 1.0], [0.32, 1.0], [0.32, 1.07], [-0.07, 1.07]], WALL_TOP, MAT.METAL, slide);
+      sweep(kx, [[-0.05, 0], [0.30, 0], [0.30, 1.0], [-0.05, 1.0]], WALL, MAT.CONCRETE, slide, "pit-exit-wall");
+      sweep(kx, [[-0.07, 1.0], [0.32, 1.0], [0.32, 1.07], [-0.07, 1.07]], WALL_TOP, MAT.METAL, slide, "pit-exit-wall-cap");
 
       // ── 1d. THE OUTER WALL: the lane's far side, wherever a bay is not ────
       // Along the ribbon's outer edge — the garage line, scaled by the
@@ -315,8 +324,8 @@ const SceneryPits = (function () {
       const outerShift = (k) => (typeof TrackPit !== "undefined" && TrackPit.outerAt
         ? TrackPit.outerAt(p, k) : o.workOut * p.w[k]);
       const outerWall = (ks2) => {
-        sweep(ks2, [[0.02, 0], [0.32, 0], [0.32, 1.0], [0.02, 1.0]], WALL, MAT.CONCRETE, outerShift);
-        sweep(ks2, [[0.0, 1.0], [0.34, 1.0], [0.34, 1.07], [0.0, 1.07]], WALL_TOP, MAT.METAL, outerShift);
+        sweep(ks2, [[0.02, 0], [0.32, 0], [0.32, 1.0], [0.02, 1.0]], WALL, MAT.CONCRETE, outerShift, "pit-outer-wall");
+        sweep(ks2, [[0.0, 1.0], [0.34, 1.0], [0.34, 1.07], [0.0, 1.07]], WALL_TOP, MAT.METAL, outerShift, "pit-outer-wall-cap");
       };
       const hasRibbon = (k) => p.w[k] > 0.02;
       if (p.hasBays && p.row) {

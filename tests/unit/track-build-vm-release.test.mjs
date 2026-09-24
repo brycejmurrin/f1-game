@@ -142,7 +142,7 @@ test("trim(from) drops the primitive records and the live-buffer set", () => {
 // (fewer rows are enclosed, so fewer are stripped), and again after the verge
 // carve fix raised the terrain beside descents (buried counts moved).
 const STRIP = {
-  monaco: { before: 312780, after: 270310 },
+  monaco: { before: 293515, after: 252651 },
   monza: { before: 341148, after: 300843 },
 };
 for (const [id, want] of Object.entries(STRIP)) {

@@ -203,3 +203,48 @@ test("abutting runs do not emit their seam node twice", () => {
   assert.match(read("js/track/scenery/identity.js"), /\}, `canyon\|\$\{side\}\|\$\{gap\}/,
     "concreteCanyon must pass a seam tag");
 });
+
+test("along + wrapped helpers stay on the authored span (imola / spa)", () => {
+  // BUGS.md S1: transformSceneryApi remapped along via sceneryRange(+shift), then
+  // handed engine-frame k to the callback while wrapped anchor/tree/place applied
+  // sceneryNode(+shift) again. Mid-span displacement was ~1.8 km (imola) / ~277 m
+  // (spa). Authored-frame k to the callback keeps mid within tens of metres of
+  // K((s0+s1)/2) — a curved span average, not a double-shift lap away.
+  const Tracks = buildContext();
+  for (const [id, s0, s1, maxM] of [
+    ["imola", 0.30, 0.38, 120],
+    ["spa", 0.015, 0.028, 40],
+  ]) {
+    const base = Tracks.LIST.find((d) => d.id === id);
+    assert.ok(base, id);
+    let dist = Infinity;
+    const def = Object.assign({}, base, {
+      scenery(api) {
+        const mid = (s0 + s1) / 2;
+        const auth = api.anchor(api.K(mid), 1, 15);
+        let n = 0, sx = 0, sz = 0;
+        api.along(s0, s1, 40, (k) => {
+          const a = api.anchor(k, 1, 15);
+          sx += a.c[0]; sz += a.c[2]; n++;
+        });
+        assert.ok(n > 0, `${id} along walked nodes`);
+        dist = Math.hypot(sx / n - auth.c[0], sz / n - auth.c[2]);
+      },
+    });
+    Tracks.build(def);
+    assert.ok(dist < maxM,
+      `${id} along mid vs K(mid) dist=${dist.toFixed(1)} m (old double-shift was hundreds–thousands)`);
+  }
+});
+
+test("transformSceneryApi along hands authored-frame k via sceneryNodeToAuthored", () => {
+  const src = fs.readFileSync(path.join(ROOT, "js/track/tracks.js"), "utf8");
+  const i = src.indexOf("function transformSceneryApi(");
+  assert.ok(i >= 0);
+  const end = src.indexOf("\n  function ", i + 1);
+  const chunk = src.slice(i, end > i ? end : i + 8000);
+  assert.match(chunk, /w\.along = \(s0, s1, stepM, fn, tag\) =>/,
+    "along must be wrapped");
+  assert.match(chunk, /TrackSpace\.sceneryNodeToAuthored\(def, kEng, n\)/,
+    "callback k must be converted back to authored frame before helpers see it");
+});
