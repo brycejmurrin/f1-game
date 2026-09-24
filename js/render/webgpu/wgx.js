@@ -1920,13 +1920,23 @@ const WGX = (function () {
       // pass overwrite it exactly as they do on GLX.
       const decal = !!(opts && (opts.decal || opts.noDepthTest || opts.depthCompare === "always"));
       const samples = _passSamples | 0 || 1;
-      // GLX polygonOffset(factor, units) -> WebGPU: GL's FACTOR scales the
-      // depth slope and its UNITS are the constant, so units -> depthBias and
-      // factor -> depthBiasSlopeScale. They were passed the other way round,
-      // so every [factor, units] pair ran swapped on this backend.
+      // opts.depthBias is GL-style [factor, units] (gfx.js contract; GLX passes
+      // it straight to gl.polygonOffset(factor, units), TLX to
+      // polygonOffsetFactor/Units). The two APIs spell the SAME offset:
+      //   GL:     o = factor * DZ       + units      * r
+      //   WebGPU: o = SlopeScale * maxSlope + depthBias * r
+      // so factor -> depthBiasSlopeScale (a float) and units -> depthBias (an
+      // integer: GPUDepthBias is an [EnforceRange] long). Both `r`s are the
+      // format's minimum resolvable difference (2^-24 for a 24-bit unorm
+      // depth24plus; exponent-relative when the adapter backs depth24plus with
+      // depth32float, e.g. Metal — exactly what GL does on that hardware), so
+      // the units carry over 1:1 with no rescale. three's own WebGPU backend
+      // maps polygonOffsetUnits/Factor the same way. These were once swapped
+      // (factor as the constant), giving every biased WGX draw the other mix.
+      // tests/unit/webgpu-lifecycle.test.mjs ("GL depthBias ...") pins it.
       const db = (opts && opts.depthBias && opts.depthBias.length >= 2) ? opts.depthBias : null;
-      const dbC = db ? Math.round(db[1]) : 0;
-      const dbS = db ? Math.round(db[0]) : 0;
+      const dbC = db ? Math.round(db[1]) : 0;   // GL units  -> depthBias (constant, integer)
+      const dbS = db ? +db[0] || 0 : 0;         // GL factor -> depthBiasSlopeScale (float)
       // NESTED key: dbC -> dbS -> packed flags. A single packed int truncated
       // the bias with |0 and gave (bias + 32) an 8-bit lane, so any |bias| >= 32
       // wrapped into its neighbour's lane and two biases could share one
