@@ -966,23 +966,10 @@ const Tracks = (function () {
     const groundYAt = (k, dist, side) => {
       return surface.heightAt(k, dist, side);
     };
-    // Universal ground floor: one big flat slab at the lap's low point, sized to
-    // reach well past the farthest scenery. The terrain ribbon only extends ~120 m
-    // from the road, so without this, distant hills/skylines would sit over open
-    // sky (reading as "floating"). Tucked just under the ribbon's far edge so it
-    // only shows through the gap beyond it. Coloured from the circuit's ground.
-    // WGX: skip — this fused props box is the brown chase void (hard lamp
-    // triangles on two 1600 m faces). Distant fill is the floor mesh instead.
-    if (!(G && typeof G.roadLutReady === "function")) {
-      let gx = 0, gz = 0;
-      for (let i = 0; i < n; i++) { gx += px[i]; gz += pz[i]; }
-      gx /= n; gz /= n;
-      let grad = 0;
-      for (let i = 0; i < n; i++) grad = Math.max(grad, Math.hypot(px[i] - gx, pz[i] - gz));
-      const gc = pal.grass || [0.2, 0.38, 0.18];
-      addBox(out, [gx, pyMin - 5, gz], [grad * 2 + 1600, 4, grad * 2 + 1600],
-             [gc[0] * 0.9, gc[1] * 0.9, gc[2] * 0.9]);
-    }
+    // The universal ground slab that stood here (a 1600 m addBox under the lap's
+    // low point) is gone: buildFloor's mesh already reaches >= 1400 m past the
+    // track on every backend, WGX had dropped the slab for its lamp artefacts,
+    // and its top fought the terrain on 34 circuits (439 pairs).
     const onTrack = (x, z, margin, pitMargin) => {
       _pitReject = false;
       const rFull = grid.maxHw + pitMax + margin + ds + 1;

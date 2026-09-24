@@ -1920,11 +1920,13 @@ const WGX = (function () {
       // pass overwrite it exactly as they do on GLX.
       const decal = !!(opts && (opts.decal || opts.noDepthTest || opts.depthCompare === "always"));
       const samples = _passSamples | 0 || 1;
-      // GLX polygonOffset(factor, units) → WebGPU depthBias / depthBiasSlopeScale.
-      // Start-line decals pass [-1, -2]; without this they shimmer at range.
+      // GLX polygonOffset(factor, units) -> WebGPU: GL's FACTOR scales the
+      // depth slope and its UNITS are the constant, so units -> depthBias and
+      // factor -> depthBiasSlopeScale. They were passed the other way round,
+      // so every [factor, units] pair ran swapped on this backend.
       const db = (opts && opts.depthBias && opts.depthBias.length >= 2) ? opts.depthBias : null;
-      const dbC = db ? Math.round(db[0]) : 0;
-      const dbS = db ? Math.round(db[1]) : 0;
+      const dbC = db ? Math.round(db[1]) : 0;
+      const dbS = db ? Math.round(db[0]) : 0;
       // NESTED key: dbC -> dbS -> packed flags. A single packed int truncated
       // the bias with |0 and gave (bias + 32) an 8-bit lane, so any |bias| >= 32
       // wrapped into its neighbour's lane and two biases could share one
@@ -3837,7 +3839,9 @@ const WGX = (function () {
       const o = opts || {};
       let bias = o.depthBias !== undefined ? o.depthBias : null;
       let dbl = !!o.doubleSided;
-      if (o.buryRibbon) bias = _BIAS_BURY;
+      // An explicit bias wins (terrain [2, 10], floor [4, 16] from game.js): at
+      // _BIAS_BURY for both, floor and terrain tied and fought.
+      if (o.buryRibbon) bias = o.depthBias || _BIAS_BURY;
       else if (!o.depthBias && !o.surfaceId && (o.detail || 0) > 0.2) bias = _BIAS_DETAIL;
       if (o.surfaceId === 16) {
         // Winding is already swapped in _expandPull; doubleSided lets the

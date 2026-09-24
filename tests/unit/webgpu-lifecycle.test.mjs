@@ -1131,7 +1131,7 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(WGX_SOURCE, /o\.surfaceId === 16/);
   assert.match(WGX_SOURCE, /dbl = true;/);   // road forces doubleSided in _litOpts (pooled bag)
   assert.match(WGX_SOURCE, /dbl = true;\s*\n\s*bias = null;/);   // road: doubleSided, NO bias (pooled _litOpts)
-  assert.match(WGX_SOURCE, /o\.buryRibbon\) bias = _BIAS_BURY/);   // bury keeps its [5,10] push-back (pooled _litOpts)
+  assert.match(WGX_SOURCE, /o\.buryRibbon\) bias = o\.depthBias \|\| _BIAS_BURY/);   // bury keeps a push-back; an explicit bias (terrain/floor) wins (pooled _litOpts)
   assert.match(WGX_SOURCE, /_BIAS_BURY = \[5, 10\]/);
   assert.match(WGX_SOURCE, /Raw RGB\. Packing MAT into col\.x/);
   assert.match(WGX_SOURCE, /const GW = 32, GH = 32, SLOT = 16/);
