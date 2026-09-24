@@ -165,6 +165,31 @@ function restart() {
   activeSeason = season;
   return season;
 }
+// Applying a new setup replaces a saved championship. Resolve the revision
+// before changing either the active rules or the new season's in-memory state.
+function applyConfig(next) {
+  const now = currentRevision();
+  if (seasonConflict || (seasonRevision != null && now !== seasonRevision)) {
+    seasonConflict = true;
+    lastSave = { ok: false, durable: false, reason: "conflict" };
+    return Object.assign({ season: null }, lastSave);
+  }
+  const snap = frozenConfig(next);
+  const season = { round: 0, pts: {}, teamPts: {}, driverCodes: {}, finishes: {}, roundPts: {}, config: snap };
+  if (typeof store.write === "function") lastSave = store.write(SAVE_KEY, season);
+  else {
+    const durable = store.set(SAVE_KEY, season) !== false;
+    lastSave = { ok: true, durable, reason: durable ? null : (store.broken || "Error") };
+  }
+  // A quota failure still leaves the requested season in GameStore's session
+  // cache, so adopt it and let the caller show the non-durable result.
+  cfg = setConfig(next);
+  activeCfg = snap;
+  resolved = null;
+  resetWeekend();
+  armRevision(season);
+  return Object.assign({ season }, lastSave);
+}
 
 function scoreMap(raw) {
   const out = {};
@@ -439,7 +464,7 @@ function shuffled(ids, seed) {
 
 return {
   SPRINT_POINTS, CLASSIC_POINTS, DROP_OPTS, LAP_OPTS, PRESETS, DEFAULT_LAPS,
-  config, setConfig, resetConfig, fresh, normalize,
+  config, setConfig, resetConfig, applyConfig, fresh, normalize,
   engage, list, rounds, track, trackIndex,
   load, save, clear, conflicted, saveStatus,
   resume, blank, restart, resetWeekend, canRace, hasProgress,

@@ -112,6 +112,9 @@ interface CarState {
   speed: number;
   prog: number;
   lap: number;
+  /** Physical laps consumed for fuel; classification lap can rewind at a red flag. */
+  fuelLap?: number;
+  fuelRestartLaps?: number;
   rank?: number;
   /** Active-aero blend 0..1. Read this, never xOn — see docs/PHYSICS.md. */
   aeroX: number;
