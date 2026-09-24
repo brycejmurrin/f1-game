@@ -686,8 +686,12 @@ const TrackBuildProps = (function () {
         hw: hw[k],
       };
     };
-    const models = TrackModels.create({
-      out, water: waterBuf, diagnostics, n,
+    // Mutable opts so recordBarrier can be wired once defined below (T3 drape
+    // collision). Same object identity TrackModels.create closes over.
+    const modelsOpts = {
+      out, water: waterBuf, diagnostics, n, track, px, pz, hw,
+      rails: surface.rails, upOf, emitFace: emit,
+      terrainY: (x, z) => Tracks.terrainY(track, x, z),
       // true = clear; false = on the road; "pit" = inside the pit complex, which
       // modelGroup records as superseded rather than as a required failure.
       preflight: (bounds) => (!rejBox(bounds.center, bounds.size, bounds.basis) ? true : (_pitReject ? "pit" : false)),
@@ -728,7 +732,8 @@ const TrackBuildProps = (function () {
         const o = side * (hw[i] + dist);
         return [px[i] + r[0] * o, y, pz[i] + r[2] * o];
       },
-    });
+    };
+    const models = TrackModels.create(modelsOpts);
     let sceneryTheme = null, landmarkKit = null, circuitKit = null;
     try {
       if (typeof SceneryThemes !== "undefined" && SceneryThemes &&
@@ -930,42 +935,9 @@ const TrackBuildProps = (function () {
       const span = Math.abs(s1 - s0) >= 1 - 1e-9 ? n - 1 : ((k1 - k0) + n) % n;
       return waterEmit(waterRaster(k0, k0 + span, side, gap0, gap1, c), c, col, opts);
     };
-    let patchSeq = 0;
-    const groundPatch = (k, side, gap, sz, col, opts) => {
-      opts = opts || {};
-      if (!finiteVec(sz, 3, true)) {
-        diagnostics.invalid.push({ id: opts.id || "ground-patch", reason: "invalid ground-patch dimensions", size: sz });
-        return false;
-      }
-      const r = [track.rx[k], track.ry[k], track.rz[k]], u = upOf(track, k);
-      const t = [track.tx[k], track.ty[k], track.tz[k]], pieces = Math.max(2, Math.round(opts.samples || 4));
-      // Every patch's top sat AT groundY, so overlapping patches (zolder's dusk
-      // sand over its apron) shared one plane, as did a plinth flush with the
-      // ground. A per-call slot lifts each 1-5 MIN_SEP: five calls in a row
-      // never share a plane.
-      const lift = (1 + patchSeq++ % 5) * TrackGeom.MIN_SEP;
-      const midDist = gap + sz[0] / 2;
-      const mid = [px[k] + r[0] * side * (hw[k] + midDist), groundYAt(k, midDist), pz[k] + r[2] * side * (hw[k] + midDist)];
-      const emitted = modelGroup(opts.id || `ground-patch-${k}`, {
-        center: mid, size: sz, basis: [r, u, t],
-      }, (stage) => {
-        const partW = sz[0] / pieces;
-        for (let i = 0; i < pieces; i++) {
-          const dist = gap + partW * (i + 0.5);
-            const c = [
-            px[k] + r[0] * side * (hw[k] + dist),
-            groundYAt(k, dist) - sz[1] / 2 + lift,
-            pz[k] + r[2] * side * (hw[k] + dist),
-          ];
-          RAW.addBox(stage, c, [partW, sz[1], sz[2]], col, [r, u, t]);
-        }
-      }, opts);
-      if (emitted && opts.collision) {
-        const halfFrac = (sz[2] / 2) / track.total;
-        recordBarrier(k / n - halfFrac, k / n + halfFrac, side, gap);
-      }
-      return emitted;
-    };
+    // T3 draped groundPatch lives in TrackModels (models.js); thin wrapper here.
+    const groundPatch = (k, side, gap, sz, col, opts) =>
+      models.groundPatch(Object.assign({ k, side, gap, size: sz, color: col }, opts || {}));
     const groundedSegments = (spec) => models.groundedSegments(spec);
     const barSegs = [];
     const SEG = 5;                      // stride of one barSegs record
@@ -1025,6 +997,7 @@ const TrackBuildProps = (function () {
       }
     };
     const recordBarrier = (s0, s1, side, gap) => scanBarrier(s0, s1, side, gap, true);
+    modelsOpts.recordBarrier = recordBarrier;
     const indexBarrier = (s0, s1, side, gap) => scanBarrier(s0, s1, side, gap, false);
     // Register a SOLID model's footprint (not just a face) so foliage and other
     // placement guards can see it. `s0→s1` on `side`, its inner face `gap`
@@ -1225,12 +1198,20 @@ const TrackBuildProps = (function () {
       }
       return null;
     };
+    let placeSeq = 0;
     const THIN_PROP_H = 0.85;   // 0.8 m base sink + 5 cm: a shorter prop's top sits at or under the ground
     const place = (k, side, dist, sz, col) => {
       const r = [track.rx[k], track.ry[k], track.rz[k]];
       const t = [track.tx[k], track.ty[k], track.tz[k]];
       const u = upOf(track, k);
-      const jitter = hash(k * 7.7 + sz[0] * 3.1 + sz[1] * 5.3 + sz[2] * 1.9) * 0.09;
+      // A per-call SLOT, not a hash: a continuous random jitter landed two
+      // placed props a millimetre or two apart (spa, jerez), which fights at
+      // any range. TrackGeom.SEP_SLOTS, like groundPatch's patchSeq and
+      // spectatorHill's hillSeq: consecutive props — the ones that stand at
+      // the same spot (a box and its sign band) — are >= MIN_SEP apart across
+      // the road, and no slot sits within MIN_SEP of a 0.1 m authored plane.
+      // Collision and the solid index still read the authored `dist`.
+      const jitter = TrackGeom.SEP_SLOTS[placeSeq++ % 4];
       const o = side * (hw[k] + dist + jitter);
       const cx = px[k] + r[0] * o, cz = pz[k] + r[2] * o;
       // skip if this prop would overlap a parallel stretch of track
@@ -1716,8 +1697,14 @@ const TrackBuildProps = (function () {
     const crowd = NIGHT ? [0.45, 0.28, 0.3] : [0.78, 0.42, 0.32];
     for (let i = 0; i < (def.ownPitStraight ? 0 : 7); i++) {
       const k = (i * 4) % n;
+      // The bank sits wholly IN FRONT of the shell: from gap 8 its last riser
+      // ran to gap+12.43, 1.4 m into the shell (inner face at 11 + the place()
+      // slot), which buried that row and left its front face millimetres off
+      // the shell's. From 6.55 its back edge is 10.98, clear of the nearest
+      // slot (11.035); of 6.3 / 6.55 this one also keeps the riser faces off
+      // the generic catch fences (15 -> 0 pairs on estoril/jacarepagua/magny).
       place(k, -1, 14, [6, 11, 16], [0.5, 0.5, 0.56]);     // grandstand shell
-      crowdBank(k, -1, 8, 16, 7, 4.2,                        // speckled tiered crowd
+      crowdBank(k, -1, 6.55, 16, 7, 4.2,                     // speckled tiered crowd
                 [crowd[0] * 0.4, crowd[1] * 0.4, crowd[2] * 0.4]);
     }
 
