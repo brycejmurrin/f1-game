@@ -79,11 +79,12 @@ const RaceSettings = (function () {
       const presets = $("rs-presets");
       if (presets) presets.hidden = tt || isChampionship() || netRoom;
       const lapOpts = tt ? [3, 4, 5, 8] : [3, 5, 10, 25].filter((n) => n < full).concat(full);
-      // A distance the chips do not list is CLAMPED, never raised: SEASON
-      // SETUP's 57 LAPS became FULL (79 at Monaco) on every circuit shorter
-      // than ~5.35 km. A shorter-than-full value keeps its own chip.
+      // Off the ladder snaps to FULL (a room host's FULL stays FULL on the next
+      // circuit) — EXCEPT a championship's format distance, which is clamped,
+      // never raised: SEASON SETUP's 57 LAPS became FULL (79 at Monaco) on
+      // every circuit shorter than ~5.35 km. That value keeps its own chip.
       if (!tt && !lapOpts.includes(raceLaps)) {
-        if (raceLaps > 0 && raceLaps < full) { lapOpts.push(raceLaps); lapOpts.sort((a, b) => a - b); }
+        if (isChampionship() && raceLaps > 0 && raceLaps < full) { lapOpts.push(raceLaps); lapOpts.sort((a, b) => a - b); }
         else { raceLaps = full; G.raceLaps = full; }
       }
       SettingRow.paint("rs-laps", raceLaps, lapOpts.map((n) => [n, !tt && n === full ? full + " (FULL)" : String(n)]));
