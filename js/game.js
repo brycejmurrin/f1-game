@@ -7123,7 +7123,7 @@ function render(dt) {
     // and at a 16-24 slot cap 35-39 % of it comes from lamps outside the set
     // (docs/notes/LAMP-POPPING-PLAN-2026-09-24.md, b) — so they pop. Per-chunk
     // lamps, road included, cover them; the governor shed still wins.
-    const _pcWet = gfx.mobileTier && (frame.wetness || 0) > 0.3 ? 0.6 : 0;
+    const _pcWet = gfx.mobileTier && (frame.wetness || 0) > 0.75 ? 0.6 : 0;   // 0.75: dry night presets pin ~0.55 sheen (≤ 8 % pops)
     frame.perChunkLights = (!gfx.hasPerChunkLights || _perChunkOff || _pcShed >= 2) ? 0
       : (_pcShed >= 1 ? Math.min(0.3, Math.max(_pcWet, +LT.perChunkLights || 0)) : Math.max(_pcWet, +LT.perChunkLights || 0));
     frame.roadChunkLamps = (frame.perChunkLights > 0 && (LT.roadChunkLamps || _pcWet > 0)) ? 1 : 0;

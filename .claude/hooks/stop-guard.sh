@@ -29,15 +29,21 @@ except Exception:
 # `run-playwright.mjs --list` is spec SELECTION (deploy.mjs and select-specs
 # run it for a second); only a run that will drive a browser counts. The first
 # live firing (2026-09-22) was exactly that false positive, mid-deploy.
-live=$(ps -eo args 2>/dev/null | grep -E 'playwright(\.js)?\s+test\b|run-playwright\.mjs' | grep -Ev 'grep|--list' | head -1)
-[ -n "$live" ] || exit 0
+#
+# Scoped to THIS checkout by /proc/<pid>/cwd (protect-files.sh does the same):
+# another worktree's run is not this turn's unread verdict. The stamp is keyed
+# on the live PID and its start time, not on the newest log's NAME — keyed by
+# name, the second smoke run of a session was never nudged, and the message
+# could name a finished group's log (2026-09-24).
+read -r live_pid live_log < <(python3 "$ROOT/.claude/hooks/live-run.py" "$ROOT")
+[ -n "$live_pid" ] || exit 0
 
-log=$(ls -t "$ROOT"/artifacts/logs/*.log 2>/dev/null | head -1)
-key=$(printf '%s' "${log:-$live}" | md5sum | cut -c1-12)
+key=$(printf '%s' "$live_pid" | md5sum | cut -c1-12)
 mkdir -p "$ROOT/artifacts/.stop-guard"
 stamp="$ROOT/artifacts/.stop-guard/$key"
 [ -f "$stamp" ] && exit 0
 : > "$stamp"
-group=$(basename "${log:-unknown}" .log)
-echo "A browser run is still live (group: $group; log: ${log:-artifacts/logs/}). Before ending the turn, either read its verdict (grep -E '= run (passed|failed|timedout|interrupted)' on the log, or node tools/ci/test-bg.mjs --status) or say plainly which group is running, where its log is, and that its result is NOT yet read. This nudge fires once per run; touch .claude/allow-stop to silence it." >&2
+[ "$live_log" = "-" ] && live_log=""
+group=$(basename "${live_log:-unknown}" .log)
+echo "A browser run is still live (group: $group; log: ${live_log:-not started by test-bg — see ps}). Before ending the turn, either read its verdict (grep -E '^= (run (passed|failed|timedout|interrupted)|bg exit)' on the log, or node tools/ci/test-bg.mjs --status) or say plainly which group is running, where its log is, and that its result is NOT yet read. This nudge fires once per run; touch .claude/allow-stop to silence it." >&2
 exit 2

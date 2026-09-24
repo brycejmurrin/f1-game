@@ -10,8 +10,9 @@
 
    Street lamps and the ground do not move, so their diffuse light on an
    upward-facing surface can be computed once. This bakes it — every lamp, at
-   its base colour — into a half-float RGBA texture over the lamps' XZ extent.
-   The lit shaders read it with ONE texture fetch for fragments whose normal
+   its base colour — into a half-float RGBA tile atlas over the lamps' XZ extent.
+   The lit shaders read it (one indirection fetch, then a bilinear tap of the
+   atlas per layer) for fragments whose normal
    points up (road, kerbs, terrain, run-off) and scale each live lamp's diffuse
    term by (lampShadow - bakeWeight), so a lamp is counted exactly once and the
    one shadow-mapped floodlight keeps its shadow. Specular, the wet-road mirror,
@@ -35,13 +36,22 @@
    shaders skip the step-aside for them, so the live loop draws them whole. */
 "use strict";
 const LampBake = (function () {
-  // Default texel budget PER LAYER: ~4.8 MB at RGBA16F, x2 layers = ~9.6 MB; the
-  // cell grows to stay under it. A caller may pass a smaller budget (bake /
-  // forTrack `maxTexels`). No caller does yet: halving it for phones measured
-  // too coarse (scratch/lampbake-parity.cjs, Vegas interior-column effRel p95
-  // 12-14 % at 300 k, ~11 % at 400 k, vs 4-7 % at 600 k).
-  const MAX_TEXELS = 600000;
+  // SPARSE TILED ATLAS. The lamps' bounding box is mostly empty on a street
+  // circuit, so only the TILE x TILE texel tiles some lamp reaches are stored,
+  // each in a (TILE+2)^2 atlas slot with a one-texel gutter (no bilinear bleed
+  // between slots), found through a tilesX x tilesY indirection texture.
+  // Default ATLAS budget PER LAYER (x2 layers at RGBA16F = 8 bytes/texel, ~4.8
+  // MB, half the old 600 k full-bbox map); the cell grows from MIN_CELL until
+  // the kept tiles fit. A caller may pass another budget (bake / forTrack
+  // `maxTexels`). scratch/lampbake-parity.cjs, old bbox map -> 300 k atlas:
+  // cell Monza 2.27 -> 1.92 m, Vegas 2.05 -> 1.71, Singapore 1.63 -> 1.74; worst
+  // bake/truth 2.49x -> 2.10x, 1.39x -> 1.31x, 1.30x -> 1.27x. 600 k buys
+  // 1.15-1.27 m cells (worst 1.50x / 1.16x / 1.15x) at the old 9.6 MB.
+  const MAX_TEXELS = 300000;
   const MIN_CELL = 1.0;        // metres per texel at best
+  const TILE = 32, SLOT = TILE + 2;
+  // Atlas slot grid limits: 4096 texels a side (phones) for the w x 2h texture.
+  const SLOT_COLS = Math.floor(4096 / SLOT), SLOT_ROWS = Math.floor(4096 / (2 * SLOT));
 
   // float32 -> IEEE half, round-to-nearest (enough for irradiance).
   const _f32 = new Float32Array(1), _u32 = new Uint32Array(_f32.buffer);
@@ -73,12 +83,14 @@ const LampBake = (function () {
   // into the verge and dropped the bake there).
   const ROAD_EDGE = 2.2;
 
-  // Splat the ROAD surface height (centreline + banking lift) into `hgt`. The
-  // terrain heightfield is not the road: on an elevated or banked stretch it
-  // sits metres off, and a pool baked at the wrong height is the wrong size and
-  // brightness. Where two road stretches share a texel (bridge / crossover) the
-  // upper deck wins; the shaders' height fade hands the lower one to the live loop.
-  function splatRoad(road, x0, z0, cell, w, h, hgt) {
+  // Splat the ROAD surface height (centreline + banking lift) through `put(i, j, y)`
+  // (global texel i, j; put ignores texels it does not store). The terrain
+  // heightfield is not the road: on an elevated or banked stretch it sits metres
+  // off, and a pool baked at the wrong height is the wrong size and brightness.
+  // Where two road stretches share a texel (bridge / crossover) the upper deck
+  // wins (put keeps the max); the shaders' height fade hands the lower one to the
+  // live loop.
+  function splatRoad(road, x0, z0, cell, put) {
     const n = road.n | 0;
     if (!n || !road.px || !road.hw) return;
     const L = road.total > 0 ? road.total : n;
@@ -101,27 +113,90 @@ const LampBake = (function () {
         for (let li = 0; li <= nl; li++) {           // both edges exactly: symmetric
           const lat = -hw + 2 * hw * li / nl;
           const px = cx + rx / rl * lat, pz = cz + rz / rl * lat;
-          const ii = Math.floor((px - x0) / cell), jj = Math.floor((pz - z0) / cell);
-          if (ii < 0 || jj < 0 || ii >= w || jj >= h) continue;
           const dy = road.lift ? road.lift(s, lat) : 0;
-          const y = cy + (dy || 0);
-          const kk = jj * w + ii;
-          if (!(hgt[kk] >= y)) hgt[kk] = y;          // NaN or lower -> take this one
+          put(Math.floor((px - x0) / cell), Math.floor((pz - z0) / cell), cy + (dy || 0));
         }
       }
     }
   }
 
+  // Tiles (TILE x TILE texels at `cell`) that some lamp able to light the
+  // ground reaches: its XZ disk touches the tile. Returns the kept count.
+  function tileMask(lights, n, mnx, mnz, cell, tilesX, tilesY, mask) {
+    const ts = TILE * cell;
+    let cnt = 0;
+    mask.fill(0);
+    for (let i = 0; i < n; i++) {
+      const o = i * 15, rad = lights[o + 6];
+      if (!(rad > 0) || !(lights[o + 3] + lights[o + 4] + lights[o + 5] > 0)) continue;
+      const lx = lights[o] - mnx, lz = lights[o + 2] - mnz, rad2 = rad * rad;
+      const tx0 = Math.max(0, Math.floor((lx - rad) / ts)), tx1 = Math.min(tilesX - 1, Math.floor((lx + rad) / ts));
+      const tz0 = Math.max(0, Math.floor((lz - rad) / ts)), tz1 = Math.min(tilesY - 1, Math.floor((lz + rad) / ts));
+      for (let tz = tz0; tz <= tz1; tz++) {
+        const dz = Math.max(0, tz * ts - lz, lz - (tz + 1) * ts);
+        for (let tx = tx0; tx <= tx1; tx++) {
+          const k = tz * tilesX + tx;
+          if (mask[k]) continue;
+          const dx = Math.max(0, tx * ts - lx, lx - (tx + 1) * ts);
+          if (dx * dx + dz * dz < rad2) { mask[k] = 1; cnt++; }
+        }
+      }
+    }
+    return cnt;
+  }
+
+  // Atlas slot grid for `nt` tiles: the fewest slots that fit (then the most
+  // nearly 2:1 slot grid, so the stacked w x 2h texture is roughly square),
+  // within ATLAS_MAX texels a side for the two stacked layers.
+  function atlasGrid(nt) {
+    let best = null;
+    for (let cols = 1; cols <= SLOT_COLS; cols++) {
+      const rows = Math.max(1, Math.ceil(nt / cols));
+      if (rows > SLOT_ROWS) continue;
+      const area = cols * rows, skew = Math.abs(cols - 2 * rows);
+      if (!best || area < best.area || (area === best.area && skew < best.skew)) best = { cols, rows, area, skew };
+    }
+    return best;
+  }
+
+  // Where global texel index g (-1 .. nTiles*TILE) is stored along one axis:
+  // (tile, slot offset) pairs into `out` — its own tile's interior, plus the
+  // gutter of the neighbour on a tile edge. Returns the used length.
+  function copies(g, nTiles, out) {
+    const t = Math.floor(g / TILE), a = g - t * TILE + 1;
+    let m = 0;
+    if (t >= 0 && t < nTiles) { out[m++] = t; out[m++] = a; }
+    if (a === 1 && t >= 1 && t - 1 < nTiles) { out[m++] = t - 1; out[m++] = TILE + 1; }
+    if (a === TILE && t + 1 >= 0 && t + 1 < nTiles) { out[m++] = t + 1; out[m++] = 0; }
+    return m;
+  }
+
   /** Bake a light set. `lights` is the flat stride-15 track set (base colours);
    *  `groundY(x, z)` returns the ground height there or null; `nearClamp` is the
    *  LAMP NEAR CLAMP knob; optional `road` ({n,total,px,py,pz,rx,rz,hw,lift(s,lat)})
-   *  supplies the road surface, which wins over `groundY`. A texel with no known
+   *  supplies the road surface, which wins over `groundY`; optional `maxTexels`
+   *  caps the atlas texels PER LAYER (default MAX_TEXELS). A texel with no known
    *  surface gets no light and the NO_GROUND alpha. Returns null for an empty
    *  set, otherwise
-   *    { w, h, x0, z0, cell, data: Uint16Array(w*2h*4) RGBA16F, lamps, ms }
-   *  data is two w x h layers stacked: rows [0, h) the diffuse pool, rows [h, 2h)
-   *  the bounce fill per unit BOUNCE; alpha = surface Y in both.
-   *  where texel (i, j) covers world x0 + (i + 0.5) * cell, z0 + (j + 0.5) * cell. */
+   *    { x0, z0, cell, T, tilesX, tilesY, w, h, tiles, atlasW, atlasH,
+   *      data, indir, lamps, ms, liveOnly, loPos }
+   *  The lamps' XZ extent is a GRID of tilesX x tilesY tiles of T x T texels
+   *  (w = tilesX*T, h = tilesY*T texels of `cell` metres; global texel (i, j)
+   *  covers world x0 + (i + 0.5) * cell, z0 + (j + 0.5) * cell). Only the
+   *  `tiles` tiles some lamp reaches are stored:
+   *  - data: Uint16Array RGBA16F ATLAS, atlasW x (2 * atlasH) texels. Rows
+   *    [0, atlasH) the diffuse pool, rows [atlasH, 2 atlasH) the bounce fill per
+   *    unit BOUNCE (same layout, so the bounce tap is the diffuse one + 0.5 v);
+   *    alpha = surface Y in both. Each tile is a (T+2)^2 slot: the tile's T x T
+   *    texels at slot (1..T, 1..T) plus a one-texel GUTTER holding the
+   *    neighbouring global texels, so a bilinear tap inside the tile reads
+   *    exactly what the full grid would have held and never bleeds into the
+   *    next slot.
+   *  - indir: Uint16Array RGBA16F, tilesX x tilesY: (atlasX, atlasY) of the
+   *    tile's slot origin in texels (diffuse layer), or (-1, -1) = empty (no
+   *    lamp reaches it: the shaders leave it to the live loop). Read NEAREST.
+   *  Shader lookup: g = bUv * (tilesX, tilesY); tile = floor(g);
+   *  atlasUV = (indir[tile].xy + fract(g) * T + 1) / (atlasW, 2 atlasH). */
   function bake(lights, groundY, nearClamp, road, maxTexels) {
     const it = bakeSteps(lights, groundY, nearClamp, road, maxTexels);
     let r = it.next();
@@ -142,20 +217,44 @@ const LampBake = (function () {
       mnz = Math.min(mnz, lights[o + 2] - r); mxz = Math.max(mxz, lights[o + 2] + r);
     }
     if (!(mxx > mnx) || !(mxz > mnz)) return null;
-    const area = (mxx - mnx) * (mxz - mnz);
-    const budget = maxTexels > 0 ? maxTexels : MAX_TEXELS;
-    // ceil() on each axis adds up to a row and a column; grow the cell until w*h fits.
-    let cell = Math.max(MIN_CELL, Math.sqrt(area / budget)), w, h;
+    const SS = SLOT * SLOT;
+    const budget = Math.min(maxTexels > 0 ? maxTexels : MAX_TEXELS, SLOT_COLS * SLOT_ROWS * SS);
+    // The finest cell whose kept tiles fit the budget: grow it from MIN_CELL
+    // until the atlas does (or it is down to one tile).
+    let cell = MIN_CELL, tilesX, tilesY, mask, nt, grid;
     for (;;) {
-      w = Math.max(1, Math.ceil((mxx - mnx) / cell)); h = Math.max(1, Math.ceil((mxz - mnz) / cell));
-      if (w * h <= budget || w * h <= 1) break;
-      cell *= 1.002;
+      tilesX = Math.max(1, Math.ceil((mxx - mnx) / (TILE * cell)));
+      tilesY = Math.max(1, Math.ceil((mxz - mnz) / (TILE * cell)));
+      mask = new Uint8Array(tilesX * tilesY);
+      nt = tileMask(lights, n, mnx, mnz, cell, tilesX, tilesY, mask);
+      grid = atlasGrid(Math.max(1, nt));
+      if ((grid && grid.area * SS <= budget) || nt <= 1) break;
+      cell *= 1.02;
     }
-    const acc = new Float32Array(w * h * 3);
-    const accB = new Float32Array(w * h * 3);        // LAMP BOUNCE: att * (0.55 + 0.45 N.L), no cone
-    const hgt = new Float32Array(w * h).fill(NaN);   // surface height: road splat, then terrain lazily
-    if (road) splatRoad(road, mnx, mnz, cell, w, h, hgt);
-    const tried = new Uint8Array(w * h);             // terrain already queried for this texel
+    const w = tilesX * TILE, h = tilesY * TILE;
+    const cols = grid.cols, atlasW = cols * SLOT, atlasH = grid.rows * SLOT;
+    const slotOf = new Int32Array(tilesX * tilesY).fill(-1);
+    for (let k = 0, s = 0; k < mask.length; k++) if (mask[k]) slotOf[k] = s++;
+    const N = Math.max(1, nt) * SS;
+    const acc = new Float32Array(N * 3);
+    const accB = new Float32Array(N * 3);            // LAMP BOUNCE: att * (0.55 + 0.45 N.L), no cone
+    const hgt = new Float32Array(N).fill(NaN);       // surface height: road splat, then terrain lazily
+    // Global texel (i, j) lives in its own tile's interior and, on a tile edge,
+    // in the gutter of the neighbour(s): the splat writes every stored copy.
+    const cx = [0, 0, 0, 0], cz = [0, 0, 0, 0];
+    if (road) splatRoad(road, mnx, mnz, cell, (i, j, y) => {
+      if (i < -1 || j < -1 || i > w || j > h) return;
+      const mx = copies(i, tilesX, cx), mz = copies(j, tilesY, cz);
+      for (let q = 0; q < mz; q += 2) {
+        for (let p = 0; p < mx; p += 2) {
+          const s = slotOf[cz[q] * tilesX + cx[p]];
+          if (s < 0) continue;
+          const kk = s * SS + cz[q + 1] * SLOT + cx[p + 1];
+          if (!(hgt[kk] >= y)) hgt[kk] = y;          // NaN or lower -> take this one
+        }
+      }
+    });
+    const tried = new Uint8Array(N);                 // terrain already queried for this texel
     const nc = nearClamp > 0 ? nearClamp : 4.0;
     // LIVE-ONLY lamps: a pool that changes within one texel (a lens < LO_HEIGHT
     // over the surface below it, or a cone tighter than LO_COS) is smeared by
@@ -165,8 +264,9 @@ const LampBake = (function () {
       const o = i * 15, lx = lights[o], lz = lights[o + 2];
       let lo = lights[o + 11] > LO_COS;
       const ii = Math.floor((lx - mnx) / cell), jj = Math.floor((lz - mnz) / cell);
-      if (!lo && ii >= 0 && jj >= 0 && ii < w && jj < h) {
-        const k = jj * w + ii;
+      const s = ii >= 0 && jj >= 0 && ii < w && jj < h ? slotOf[Math.floor(jj / TILE) * tilesX + Math.floor(ii / TILE)] : -1;
+      if (!lo && s >= 0) {
+        const k = s * SS + (jj % TILE + 1) * SLOT + (ii % TILE + 1);
         if (hgt[k] !== hgt[k] && !tried[k]) {
           tried[k] = 1;
           const g = groundY ? groundY(mnx + (ii + 0.5) * cell, mnz + (jj + 0.5) * cell) : null;
@@ -187,58 +287,80 @@ const LampBake = (function () {
       if (!(rad > 0) || !(cr + cg + cb > 0)) continue;
       const dx0 = lights[o + 7], dy0 = lights[o + 8], dz0 = lights[o + 9];
       const cIn = lights[o + 10], cOut = lights[o + 11], bleed = lights[o + 12];
-      const i0 = Math.max(0, Math.floor((lx - rad - mnx) / cell)), i1 = Math.min(w - 1, Math.floor((lx + rad - mnx) / cell));
-      const j0 = Math.max(0, Math.floor((lz - rad - mnz) / cell)), j1 = Math.min(h - 1, Math.floor((lz + rad - mnz) / cell));
+      // Global texel range, one past the grid each side (the edge gutters), and
+      // the tiles whose slot (interior + gutter) holds any of it.
+      const i0 = Math.max(-1, Math.floor((lx - rad - mnx) / cell)), i1 = Math.min(w, Math.floor((lx + rad - mnx) / cell));
+      const j0 = Math.max(-1, Math.floor((lz - rad - mnz) / cell)), j1 = Math.min(h, Math.floor((lz + rad - mnz) / cell));
+      const tx0 = Math.max(0, Math.ceil((i0 - TILE) / TILE)), tx1 = Math.min(tilesX - 1, Math.floor((i1 + 1) / TILE));
+      const tz0 = Math.max(0, Math.ceil((j0 - TILE) / TILE)), tz1 = Math.min(tilesY - 1, Math.floor((j1 + 1) / TILE));
       const rad2 = rad * rad;
-      for (let j = j0; j <= j1; j++) {
-        const pz = mnz + (j + 0.5) * cell;
-        for (let ii = i0; ii <= i1; ii++) {
-          const px = mnx + (ii + 0.5) * cell;
-          const k = j * w + ii;
-          let py = hgt[k];
-          if (py !== py && !tried[k]) {   // NaN: no road here, ask the terrain once
-            tried[k] = 1;
-            const g = groundY ? groundY(px, pz) : null;
-            if (g != null && isFinite(g)) py = hgt[k] = g;
+      for (let tz = tz0; tz <= tz1; tz++) {
+        for (let tx = tx0; tx <= tx1; tx++) {
+          const s = slotOf[tz * tilesX + tx];
+          if (s < 0) continue;
+          const a0 = Math.max(0, i0 - tx * TILE + 1), a1 = Math.min(SLOT - 1, i1 - tx * TILE + 1);
+          const b0 = Math.max(0, j0 - tz * TILE + 1), b1 = Math.min(SLOT - 1, j1 - tz * TILE + 1);
+          for (let bb = b0; bb <= b1; bb++) {
+            const pz = mnz + (tz * TILE + bb - 0.5) * cell;
+            for (let aa = a0; aa <= a1; aa++) {
+              const px = mnx + (tx * TILE + aa - 0.5) * cell;
+              const k = s * SS + bb * SLOT + aa;
+              let py = hgt[k];
+              if (py !== py && !tried[k]) {   // NaN: no road here, ask the terrain once
+                tried[k] = 1;
+                const g = groundY ? groundY(px, pz) : null;
+                if (g != null && isFinite(g)) py = hgt[k] = g;
+              }
+              if (py !== py) continue;        // no surface known: leave it to the live loop
+              const LX = lx - px, LY = ly - py, LZ = lz - pz;
+              const d2 = LX * LX + LY * LY + LZ * LZ;
+              if (d2 >= rad2) continue;
+              const dist = Math.sqrt(d2);
+              const inv = 1 / Math.max(dist, 1e-3);
+              const NoL = LY * inv;                    // N = +Y
+              const dn = dist / rad, dn2 = dn * dn;
+              const win = Math.min(1, Math.max(0, 1 - dn2 * dn2));
+              const distC = Math.max(dist, nc);
+              const att = (win * win) / (distC * distC + 1);
+              if (att < 1e-6) continue;
+              // Bounce fill lights every normal (soft N.L floor, no cone): the
+              // shaders' bounce term per unit BOUNCE, which they scale by uBounceK.
+              const eb = att * (0.55 + 0.45 * Math.max(0, NoL)), ab = k * 3;
+              accB[ab] += cr * eb; accB[ab + 1] += cg * eb; accB[ab + 2] += cb * eb;
+              if (!(NoL > 0)) continue;
+              const cd = -(LX * dx0 + LY * dy0 + LZ * dz0) * inv;
+              const beam = smoothstep(cOut, cIn, cd);
+              const spotD = bleed + (1 - bleed) * beam;
+              const e = att * spotD * NoL;
+              acc[ab] += cr * e; acc[ab + 1] += cg * e; acc[ab + 2] += cb * e;
+            }
           }
-          if (py !== py) continue;        // no surface known: leave it to the live loop
-          const LX = lx - px, LY = ly - py, LZ = lz - pz;
-          const d2 = LX * LX + LY * LY + LZ * LZ;
-          if (d2 >= rad2) continue;
-          const dist = Math.sqrt(d2);
-          const inv = 1 / Math.max(dist, 1e-3);
-          const NoL = LY * inv;                    // N = +Y
-          const dn = dist / rad, dn2 = dn * dn;
-          const win = Math.min(1, Math.max(0, 1 - dn2 * dn2));
-          const distC = Math.max(dist, nc);
-          const att = (win * win) / (distC * distC + 1);
-          if (att < 1e-6) continue;
-          // Bounce fill lights every normal (soft N.L floor, no cone): the
-          // shaders' bounce term per unit BOUNCE, which they scale by uBounceK.
-          const eb = att * (0.55 + 0.45 * Math.max(0, NoL)), ab = k * 3;
-          accB[ab] += cr * eb; accB[ab + 1] += cg * eb; accB[ab + 2] += cb * eb;
-          if (!(NoL > 0)) continue;
-          const cd = -(LX * dx0 + LY * dy0 + LZ * dz0) * inv;
-          const beam = smoothstep(cOut, cIn, cd);
-          const spotD = bleed + (1 - bleed) * beam;
-          const e = att * spotD * NoL;
-          const a = k * 3;
-          acc[a] += cr * e; acc[a + 1] += cg * e; acc[a + 2] += cb * e;
         }
       }
     }
-    // Two layers stacked in one texture (w x 2h): rows [0, h) the diffuse pool,
-    // rows [h, 2h) the bounce fill; both carry the surface height in alpha.
-    const data = new Uint16Array(w * h * 8);
-    const none = toHalf(NO_GROUND), B = w * h * 4;
-    for (let k = 0, a = 0, b = 0; k < w * h; k++, a += 3, b += 4) {
-      if ((k & 32767) === 32767) yield;
-      const y = hgt[k] === hgt[k] ? toHalf(hgt[k]) : none;
-      data[b] = toHalf(acc[a]); data[b + 1] = toHalf(acc[a + 1]); data[b + 2] = toHalf(acc[a + 2]); data[b + 3] = y;
-      data[B + b] = toHalf(accB[a]); data[B + b + 1] = toHalf(accB[a + 1]); data[B + b + 2] = toHalf(accB[a + 2]); data[B + b + 3] = y;
+    // Encode each slot into its atlas cell (diffuse half, then the bounce half
+    // atlasH rows below); the indirection names each kept tile's slot origin.
+    const data = new Uint16Array(atlasW * atlasH * 8);
+    const indir = new Uint16Array(tilesX * tilesY * 4);
+    const none = toHalf(NO_GROUND), neg = toHalf(-1), B = atlasW * atlasH * 4;
+    for (let t = 0; t < slotOf.length; t++) {
+      const s = slotOf[t];
+      if (s < 0) { indir[t * 4] = indir[t * 4 + 1] = neg; continue; }
+      const ax = (s % cols) * SLOT, ay = Math.floor(s / cols) * SLOT;
+      indir[t * 4] = toHalf(ax); indir[t * 4 + 1] = toHalf(ay);
+      for (let bb = 0; bb < SLOT; bb++) {
+        let d = ((ay + bb) * atlasW + ax) * 4, k = s * SS + bb * SLOT;
+        for (let aa = 0; aa < SLOT; aa++, k++, d += 4) {
+          const a = k * 3, y = hgt[k] === hgt[k] ? toHalf(hgt[k]) : none;
+          data[d] = toHalf(acc[a]); data[d + 1] = toHalf(acc[a + 1]); data[d + 2] = toHalf(acc[a + 2]); data[d + 3] = y;
+          data[B + d] = toHalf(accB[a]); data[B + d + 1] = toHalf(accB[a + 1]); data[B + d + 2] = toHalf(accB[a + 2]); data[B + d + 3] = y;
+        }
+      }
+      if ((s & 31) === 31) yield;
     }
     const ms = Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - t0);
-    return { w, h, x0: mnx, z0: mnz, cell, data, lamps: n, ms, liveOnly, loPos };
+    return { x0: mnx, z0: mnz, cell, T: TILE, tilesX, tilesY, w, h, tiles: nt, atlasW, atlasH,
+      data, indir, lamps: n, ms, liveOnly, loPos };
   }
 
   // One cached bake per (light-set identity, near clamp, texel budget). The track light set is
@@ -271,14 +393,14 @@ const LampBake = (function () {
     _shK = -1;
     if (_bake) {
       _bake.gen = ++_gen;
-      try { Log.info("gfx", "lamp bake " + _bake.lamps + " lamps -> " + _bake.w + "x" + _bake.h + " @" + _bake.cell.toFixed(2) + " m in " + _bake.ms + " ms"); } catch (_) { /* Log absent in a bare VM: the bake still returns */ }
+      try { Log.info("gfx", "lamp bake " + _bake.lamps + " lamps -> " + _bake.tiles + " tiles, atlas " + _bake.atlasW + "x" + (2 * _bake.atlasH) + " @" + _bake.cell.toFixed(2) + " m in " + _bake.ms + " ms"); } catch (_) { /* Log absent in a bare VM: the bake still returns */ }
     }
   }
   function _groundFn(track) {
     return (track && typeof Tracks !== "undefined" && Tracks.terrainY)
       ? (x, z) => Tracks.terrainY(track, x, z) : null;
   }
-  // `maxTexels` (optional) caps texels per layer; omitted or 0 = MAX_TEXELS.
+  // `maxTexels` (optional) caps atlas texels per layer; omitted or 0 = MAX_TEXELS.
   function forTrack(track, lights, nearClamp, now, sync, maxTexels) {
     if (!lights || !lights.length) return null;
     const budget = maxTexels > 0 ? maxTexels : MAX_TEXELS;
@@ -351,6 +473,6 @@ const LampBake = (function () {
   // LIVE-ONLY lane (TLX's per-chunk lamp texture) key on it.
   function gen() { return _bake ? _bake.gen | 0 : 0; }
 
-  return { bake, forTrack, shadowCol, liveOnlyAt, gen, toHalf, MAX_TEXELS, NO_GROUND, LO_HEIGHT, LO_COS };
+  return { bake, forTrack, shadowCol, liveOnlyAt, gen, toHalf, MAX_TEXELS, TILE, NO_GROUND, LO_HEIGHT, LO_COS };
 })();
 Object.freeze(LampBake);

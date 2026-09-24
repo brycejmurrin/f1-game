@@ -53,10 +53,12 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | Tool | Does | Paired skill |
 |---|---|---|
 | **ci/bump-cache.mjs** | Deploy-time content hashing of a STAGED shell (`--apply --at N --root _site`); `--check` in the repo asserts `?v=dev`. | check-changes |
+| **ci/ci-watch.mjs** | Watches every workflow run for a SHA (default HEAD) and prints one `[ci-watch]` line per job as it finishes — a red… | steward |
 | **ci/deploy.mjs** | the ONE deploy: fetch → merge → tooling-fast → the Pages gate's node suites → sweeps if the union moves geometry (else… | — |
 | **ci/geometry-paths.mjs** | Single source for "which sweeps does this diff need?" — the fleet trigger (derived from the track VM's own module… | — |
 | **ci/nightly-group.mjs** | Pick the browser GROUP tonight's scheduled ci.yml run should cover. | — |
 | **ci/playwright-occupancy.mjs** | Classifies process-table lines for Playwright occupancy — the MCP lock oracle; an idle server is not busy. | check-changes |
+| **ci/session-status.mjs** | Prints this branch's handoff block (sessions from `Claude-Session:` trailers, commits vs the deploy branch,… | check-changes |
 | **ci/sync-pr.mjs** | Syncs a PR branch to the deploy tip (fetch, merge, verify). Without --push: no push, HEAD left on sync-pr-<branch>. | check-changes |
 | **ci/twinned-specs.mjs** | Browser specs whose assertions a VM twin replays on the fast gate. `--json`; exits 1 if a twin drifted. | — |
 | **ci/who-is-on-it.mjs** | Recent pushes per remote branch, which touched the paths you name, and the live claims under claude/claims/* — the… | check-changes |
@@ -254,7 +256,7 @@ MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools a
 |---|---|---|
 | **mcp/apex-report.js** | Browser paste, not a node tool: one diagnostic JSON bundle from a live page (diag, GL identity, log ring, errors). | mcp-probe |
 | **mcp/apex-tools-mcp.mjs** | Repo MCP server: wraps a pinned subset of these CLIs as `apex_*` tools; tree (no lock) vs browser (lock). | check-changes |
-| **mcp/apex-tools-mcp.sh** | Cursor / Cloud stdio entry for the `apex_*` MCP (`.mcp.json` → `run`); `help`/`call`/`smoke` from a shell. | check-changes |
+| **mcp/apex-tools-mcp.sh** | Cursor / Cloud stdio entry for the `apex_*` MCP (`.mcp.json` → `serve`); `help`/`call`/`smoke` from a shell. | check-changes |
 | **mcp/cdmcp-bg.mjs** | Detach/status/wait/stop twin of `test-bg.mjs` for `cdmcp-measure.py`: `cdmcp-bg.mjs boot --port 3462`. | mcp-probe |
 | **mcp/cdmcp-cli.py** | Stdio JSON-RPC client for chrome-devtools MCP: `list-tools`, `call`, `survey-title`, `apex-shot`, `slider-ab`. | mcp-probe |
 | **mcp/cdmcp-lamps-tune.py** | Asserts the LAMPS tuner sliders via Chromium MCP using `lightState().meanLampRGB` / `bakedLights` / `lampPosts`. | mcp-probe |
@@ -323,7 +325,7 @@ Container bootstrap: browsers and the Cursor Cloud install.
 | **ci/test-coverage-audit.mjs** | Coverage guard (`npm run test:audit`): every spec / unit file must be reachable from a topical `test:<group>` script. |
 | **ci/test-honesty.mjs** | Finds tests that pass by not testing: bare `test.skip`/`fixme`/`todo` without a `SKIP-OK:` reason, and empty bodies. |
 | **ci/test-observed.mjs** | Which tests have I never seen run? Declared spec titles (espree) vs every title any `artifacts/logs/` run reported. |
-| **ci/test-solo.mjs** | Re-runs ONE spec (or `-g` grep) alone at `APEX_WORKERS=1`, refusing to start until the box is quiet (`--max-load`). |
+| **ci/test-solo.mjs** | Re-runs ONE spec (or `-g` grep) alone at `APEX_WORKERS=1`, refusing (exit 3) while the box is busy (`--max-load`);… |
 | **ci/tooling-fast.mjs** | Runner behind `npm run test:tooling-fast`: per-file timing, buffered output, `--jobs=N`; exports the list. |
 | **ci/verify-change.mjs** | ONE command: fast gate (verify-track, graph-parity, tooling-fast, shell check) + `test-bg` batches → one verdict. |
 

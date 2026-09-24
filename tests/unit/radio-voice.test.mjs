@@ -27,6 +27,10 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { fnSource } from "../helpers/fn-source.mjs";
+// VM timers are UNREF'd: they still fire while a test awaits, but a cue the
+// module schedules seconds ahead no longer holds the process open after the
+// last assertion (measured 2026-09-24: this file sat idle for most of its run).
+const unrefTimeout = (fn, ms, ...a) => { const t = setTimeout(fn, ms, ...a); t.unref?.(); return t; };
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => readFileSync(join(ROOT, p), "utf8");
@@ -45,7 +49,7 @@ function synthStub({ voices = [] } = {}) {
 }
 function load({ api = true, voices = [], stored = {} } = {}) {
   const saved = new Map(Object.entries(stored));
-  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout, clearTimeout });
+  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout: unrefTimeout, clearTimeout });
   seedLog(ctx);
   const synth = api ? synthStub({ voices }) : null;
   ctx.window = api ? { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } } : {};
@@ -439,7 +443,7 @@ function lateCancelSynth() {
 
 function loadWithSynth(synth) {
   const ducks = [];
-  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout, clearTimeout });
+  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout: unrefTimeout, clearTimeout });
   seedLog(ctx);
   ctx.window = { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } };
   ctx.GameAudio = { setRadioDuck(on) { ducks.push(!!on); } };
@@ -496,7 +500,7 @@ test("an engine that ends an utterance inside speak() still leaves it live", () 
     speak(u) { calls.push({ m: "speak" }); if (u.onend) u.onend(); },   // ends where it starts
     set onvoiceschanged(fn) { this._vc = fn; },
   };
-  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout, clearTimeout });
+  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout: unrefTimeout, clearTimeout });
   seedLog(ctx);
   ctx.window = { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } };
   ctx.GameAudio = { setRadioDuck(on) { ducks.push(!!on); } };
@@ -567,7 +571,7 @@ test("debug() separates what we asked for from what the engine started", () => {
     /** The engine actually beginning — what iOS never does when unprimed. */
     begin() { if (pending && pending.onstart) pending.onstart(); },
   };
-  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout, clearTimeout });
+  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout: unrefTimeout, clearTimeout });
   seedLog(ctx);
   ctx.window = { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } };
   ctx.GameAudio = { setRadioDuck() {} };
