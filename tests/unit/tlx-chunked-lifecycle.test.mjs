@@ -81,3 +81,59 @@ test("free releases every chunk geometry before dropping the handle", () => {
   assert.equal(mesh.chunks, null);
   assert.equal(mesh.geo, null);
 });
+
+// DRAW MERGE (tlx-chunked.js build, PERF-FINDINGS §2ai): apex26.tlxChunkMerge
+// folds k x k lamp cells into one draw chunk. The draw chunks must carry every
+// triangle exactly once, and the lamp table must stay on the ORIGINAL cells —
+// the lit shader looks lamps up by world cell, so a merge that widened the
+// cells would squeeze more lamps under the same 24-lamp cap.
+function mergeFactory(value) {
+  const sandbox = {
+    window: {}, localStorage: { getItem: (k) => (k === "apex26.tlxChunkMerge" ? value : null) },
+    Float32Array, Uint32Array, Uint16Array, Uint8Array, Int16Array, Int32Array, Array, Map, Math,
+    Frustum: {},
+  };
+  vm.createContext(sandbox);
+  seedLog(sandbox);
+  vm.runInContext(fs.readFileSync(SRC, "utf8"), sandbox, { filename: "tlx-chunked.js" });
+  return sandbox.window.TLXShaders.chunked(THREE, { isWebGPU: () => false, releaseGeometry() {} });
+}
+function gridMesh() {
+  // 6 x 6 cells of 72 m, 70 small triangles in each: 2520 tris, past the
+  // 2000-tri threshold below which build() keeps one un-chunked geometry.
+  const pos = [], idx = [];
+  for (let cx = 0; cx < 6; cx++) for (let cz = 0; cz < 6; cz++) for (let t = 0; t < 70; t++) {
+    const x = cx * 72 + 5 + (t % 10) * 6, z = cz * 72 + 5 + Math.floor(t / 10) * 8, v = pos.length / 3;
+    pos.push(x, 0, z, x + 1, 0, z, x, 0, z + 1);
+    idx.push(v, v + 1, v + 2);
+  }
+  return { pos: new Float32Array(pos), idx: new Uint32Array(idx) };
+}
+const triSet = (mesh) => {
+  const all = [];
+  for (const c of mesh.chunks) { const a = c.geo.index.array; for (let i = 0; i < a.length; i += 3) all.push(a[i] + "," + a[i + 1] + "," + a[i + 2]); }
+  return all.sort();
+};
+
+test("merge 1 keeps one draw chunk per lamp cell and no separate lamp table", () => {
+  const mesh = mergeFactory("1").build(gridMesh(), 72);
+  assert.equal(mesh.chunks.length, 36);
+  assert.equal(mesh.lampCells, null);
+});
+
+test("merge 2 folds 2x2 cells per draw, keeps every triangle once, and keeps the lamp cells", () => {
+  const one = mergeFactory("1").build(gridMesh(), 72);
+  const two = mergeFactory("2").build(gridMesh(), 72);
+  assert.equal(two.chunks.length, 9, "6x6 cells -> 3x3 draw chunks");
+  assert.deepEqual(triSet(two), triSet(one), "the merged draws cover exactly the same triangles");
+  assert.equal(two.count, one.count);
+  assert.equal(two.lampCells.length, 36, "the lamp table stays on the 72 m cells");
+  const cellKeys = (cs) => Array.from(cs, (c) => c.gx + ":" + c.gz).sort();   // main-realm array: the build runs in a vm
+  assert.deepEqual(cellKeys(two.lampCells), cellKeys(one.chunks), "same cell coordinates as the unmerged chunks");
+  for (const c of two.chunks) for (let a = 0; a < 3; a++) assert.ok(c.min[a] <= c.max[a], "merged bounds are a real box");
+});
+
+test("the merge is ON by default (no stored value)", () => {
+  const mesh = mergeFactory(null).build(gridMesh(), 72);
+  assert.equal(mesh.chunks.length, 9);
+});
