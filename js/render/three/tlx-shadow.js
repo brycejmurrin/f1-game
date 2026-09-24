@@ -486,6 +486,9 @@
     // pass instead. The copy happens here, before the cars draw.
     function lampCarsBegin(lightVP, lightIdx) {
       if (!S.lampEnabled || !lampStaticRT || !lampStaticOn || !_lampStaticValid || !_lampRendered) return false;
+      // The static props were drawn under _lampStaticVP: any other VP (a radius /
+      // cone knob rebuilt the set in place) needs the full pass + static refresh.
+      for (let i = 0; i < 16; i++) if (Math.fround(lightVP[i]) !== _lampStaticVP[i]) return false;
       try {
         renderer.copyTextureToTexture(lampStaticRT.depthTexture, lampRT.depthTexture);
       } catch (e) {
