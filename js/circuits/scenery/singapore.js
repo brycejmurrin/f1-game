@@ -6,11 +6,11 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["singapore"] =
   function (api) {
-      const { K, out, MAT, def, n, place, backdrop, groundUnder,
+      const { K, out, MAT, def, n, place, backdrop, groundUnder, terrainYAt,
               building, billboard, anchor, every, onTrack, addBox, addCyl, addCone,
               addPrism, addFrustum, addPyramid, grandstand, grandstandEx, sponsorHoarding,
-              gantry, marshalPost, palm, bush, ds, recordBarrier,
-              fence, tyreWall, vadd, hash, cityFront, tower, ferrisWheel, modelGroup,
+              gantry, marshalPost, palm, bush, ds, recordBarrier, seat,
+              fence, tyreWall, vadd, hash, cityFront, tower, modelGroup,
               overheadSpan, waterSurface, waterBand, floodMastRing, circuitKit } = api;
       // Landing a raw anchor() on a circuitKit structure (the pit-race-control
       // beacon below). `anchor` is NOT raw here: transformSceneryApi wraps every
@@ -101,7 +101,9 @@
         palette: [WALL_CBD, WALL_LITE, WALL_CBD, [0.16, 0.18, 0.26]],
         windowCol: WIN_CYAN, floor: 18, step: 70,
       });
-      cityFront(0.16, 0.35, 1, 104, {
+      // Skip the Sands/Supertrees window (0.17–0.29 R) so hero silhouettes
+      // read against bay/backdrop rather than a competing city wall.
+      cityFront(0.29, 0.35, 1, 104, {
         minH: 55, maxH: 165, depth: 28, lit: true,
         palette: [WALL_CBD, WALL_LITE, WALL_CBD, [0.16, 0.18, 0.26]],
         windowCol: WIN_CYAN, floor: 18, step: 95,
@@ -117,18 +119,41 @@
         floor: 14, step: 75,
       });
 
+      // s 0.06 L — CBD lit-window towers (hero cluster, not generic city)
+      {
+        for (const [dist, baseW, h, capCol] of [
+          [32, 22, 96, WIN_CYAN],
+          [54, 18, 128, WIN_COOL],
+          [78, 26, 112, WIN_CYAN],
+          [102, 16, 148, WIN_COOL],
+        ]) {
+          tower(K(0.06), -1, dist, baseW, h, {
+            col: WALL_CBD, cap: true, capCol, mast: 16, seg: 8,
+          });
+          const a = anchor(K(0.06), -1, dist);
+          const gy = terrainYAt(a.c[0], a.c[2]);
+          const foot = [a.c[0], (gy == null ? a.c[1] : gy), a.c[2]];
+          seat.cone(out, vadd(foot, a.u, h + 18), 2.8, 9, NEON[1], 6, [a.r, a.u, a.t]);
+        }
+      }
+
       // s 0.18 R — MARINA BAY SANDS: 3 towers + skypark slab
       // Outer towers tip toward centre under the boat deck (postcard lean).
       // Towers spaced so faces never intersect; skypark bridges the tops.
       {
         const k    = K(0.18);
-        const a    = anchor(k, 1, 150);
+        const a0   = anchor(k, 1, 150);
+        const gy0  = terrainYAt(a0.c[0], a0.c[2]);
+        const a    = {
+          c: [a0.c[0], (gy0 == null ? a0.c[1] : gy0), a0.c[2]],
+          r: a0.r, u: a0.u, t: a0.t,
+        };
         const wall = [0.82, 0.84, 0.90];
-        const winC = [0.62, 0.80, 1.00];    // strong blue-white façade glow
+        const winC = [0.62, 0.80, 1.00];
         const H      = 200;
-        const gap    = 36;    // centre-to-centre distance between tower bases
+        const gap    = 36;
         const TOWERW = 18;
-        const LEAN   = 0.13;  // lateral tip per metre of height (~7.5°) toward centre
+        const LEAN   = 0.13;
         const tops   = [];
 
         modelGroup("marina-bay-sands", {
@@ -138,41 +163,35 @@
         }, (stage) => {
         for (let t = -1; t <= 1; t++) {
           const base = vadd(a.c, a.r, t * gap);
-          // Outer towers lean inward (toward mid); centre stays vertical.
-          const tip = t === 0 ? 0 : -t * LEAN;   // t=-1 → +r, t=+1 → −r
+          const tip = t === 0 ? 0 : -t * LEAN;
           let uT = a.u, rT = a.r, tT = a.t;
           if (tip !== 0) {
-            // Tilted up-axis: blend track-up with lateral tip toward centre
             const len = Math.hypot(a.u[0] + a.r[0] * tip, a.u[1], a.u[2] + a.r[2] * tip) || 1;
             uT = [(a.u[0] + a.r[0] * tip) / len, a.u[1] / len, (a.u[2] + a.r[2] * tip) / len];
-            // Keep right roughly horizontal / orthogonal to lean plane
             rT = a.r;
             tT = a.t;
           }
           const b = [rT, uT, tT];
-          const mid = vadd(base, uT, H * 0.5);
           stage._mat = MAT.CONCRETE;
-          TrackGeom.addBox(stage, mid,                         [TOWERW, H, 28],               wall,               b);
+          seat.box(stage, base,                         [TOWERW, H, 28],               wall,               b);
           stage._mat = MAT.GLASS;
-          TrackGeom.addBox(stage, vadd(base, uT, H * 0.52),    [TOWERW + 0.6, H * 0.76, 28.6], winC,               b);
+          seat.box(stage, vadd(base, uT, H * 0.14),    [TOWERW + 0.6, H * 0.76, 28.6], winC,               b);
           stage._mat = MAT.METAL;
           const finCol = t === 0 ? [0.90, 0.75, 0.30] : [0.40, 0.65, 1.00];
-          TrackGeom.addBox(stage, vadd(base, uT, H * 0.50),    [2.0, H * 0.60, 29.2],         finCol,             b);
-          TrackGeom.addBox(stage, vadd(base, uT, H * 0.92),    [TOWERW + 1, H * 0.10, 29],    [0.92, 0.95, 1.00], b);
+          seat.box(stage, vadd(base, uT, H * 0.20),    [2.0, H * 0.60, 29.2],         finCol,             b);
+          seat.box(stage, vadd(base, uT, H * 0.87),    [TOWERW + 1, H * 0.10, 29],    [0.92, 0.95, 1.00], b);
           tops.push(vadd(base, uT, H));
         }
 
-        // Skypark slab bridging all three tops (boat hull profile)
         const mid = tops[1];
-        // Span follows leaned tops (outers closer together at the crown)
         const spanR = Math.hypot(tops[2][0] - tops[0][0], tops[2][2] - tops[0][2]);
         const skyW  = Math.max(spanR + TOWERW, gap * 2 + TOWERW * 0.7);
         stage._mat = MAT.WOOD;
-        TrackGeom.addBox(stage, vadd(mid, a.u, 2.05), [skyW, 3.5, 32],      [0.86, 0.82, 0.74], [a.r, a.u, a.t]);
+        seat.box(stage, mid,                    [skyW, 3.5, 32],      [0.86, 0.82, 0.74], [a.r, a.u, a.t]);
         stage._mat = MAT.METAL;
-        TrackGeom.addBox(stage, vadd(mid, a.u, 4.55), [skyW + 1, 1.2, 32],  NEON[1],             [a.r, a.u, a.t]);
+        seat.box(stage, vadd(mid, a.u, 3.5),    [skyW + 1, 1.2, 32],  NEON[1],             [a.r, a.u, a.t]);
         stage._mat = MAT.GLASS;
-        TrackGeom.addBox(stage, vadd(mid, a.u, 4.05), [skyW - TOWERW + 4, 0.8, 10], WIN_GOLD,   [a.r, a.u, a.t]);
+        seat.box(stage, vadd(mid, a.u, 3.0),    [skyW - TOWERW + 4, 0.8, 10], WIN_GOLD,   [a.r, a.u, a.t]);
         stage._mat = 0;
         }, { required: true });
       }
@@ -200,32 +219,28 @@
       }
 
       {
+        // s 0.26 R — Gardens by the Bay SUPERTREES: slim tapered trunks,
+        // magenta/violet glow caps. Per-tree anchor (dist stagger) so each
+        // samples its own ground — never slide along a.r after reverse.
         const k = K(0.26);
         for (let i = 0; i < 11; i++) {
           const rowB  = i >= 6;
           const idx   = rowB ? i - 6 : i;
           const rowDist = rowB ? 90 : 70;
-          // Lateral stagger: each tree is 17 m apart along the row
           const latOff = (idx - (rowB ? 2 : 2.5)) * 17;
           const depOff = rowB ? (idx % 2) * 10 : 0;
-          // The stagger goes through the anchor's own `dist`, NOT along a.r
-          // afterwards. `dist` is the lateral axis, so the physical spot is
-          // unchanged — but a.r is a RAW BASIS VECTOR, which transformSceneryApi
-          // does not remap, and a reversed lap negates it. Sliding along it by
-          // hand therefore spread these eleven trees the wrong way round the
-          // moment singapore gained `reverse: true`, putting them on ground
-          // their shared anchor never sampled — up to 60 m in the air, and the
-          // bulk of the circuit's float-audit count. Routing through `dist` also
-          // gives each tree its own ground sample instead of all eleven
-          // inheriting one anchor's Y across an 85 m spread.
           const a    = anchor(k, 1, rowDist + depOff + latOff);
-          const c    = a.c;
+          const gy   = terrainYAt(a.c[0], a.c[2]);
+          const c    = [a.c[0], (gy == null ? a.c[1] : gy), a.c[2]];
+          const b    = [a.r, a.u, a.t];
           const h    = 28 + (idx % 4) * 9;
           const capR = 13 + (idx % 2) * 4;
-          addCyl(out, c, 2.2, h, [0.15, 0.36, 0.20], 7, [a.r, a.u, a.t]);
-          addCone(out, vadd(c, a.u, h - 2), capR, 8, NEON[(i % 2) ? 0 : 3], 9, [a.r, a.u, a.t]);
-          // Upper secondary glow, overlapping the cap it sits in.
-          addCone(out, vadd(c, a.u, h + 4), capR * 0.55, 5, NEON[(i + 1) % 4], 7, [a.r, a.u, a.t]);
+          const trunkCol = [0.15, 0.36, 0.20];
+          const glowA = NEON[(i % 2) ? 0 : 3];
+          const glowB = NEON[(i + 1) % 4];
+          seat.frustum(out, c, 1.6, 2.8, h, trunkCol, 7, b);
+          seat.cone(out, vadd(c, a.u, h - 2), capR, 8, glowA, 9, b);
+          seat.cone(out, vadd(c, a.u, h + 4), capR * 0.55, 5, glowB, 7, b);
         }
       }
 
@@ -388,32 +403,49 @@
       }
 
       {
+        // s 0.66 L — ESPLANADE: two spiky/faceted silver "durian" domes
         const k = K(0.66);
-        const DOME_SEP = 28;   // centre-to-centre; each dome rad ~14 m so no overlap
+        const DOME_SEP = 28;
+        const SILVER = [0.72, 0.74, 0.78];
+        const SILVER_HI = [0.86, 0.88, 0.92];
+        const SPIKE = [0.78, 0.80, 0.84];
         for (let i = 0; i < 2; i++) {
-          // The offset along track direction ensures clear spacing
-          const a = anchor(k, -1, 44 + i * DOME_SEP);
-          // Grey aluminium shell
-          addCone(out, vadd(a.c, a.u, 10), 16, 15, [0.52, 0.48, 0.40], 7, [a.r, a.u, a.t]);
-          // Glowing spiky crown (amber neon)
-          addCone(out, vadd(a.c, a.u, 21), 8.5, 9,  NEON[2], 6, [a.r, a.u, a.t]);
+          const a0 = anchor(k, -1, 44 + i * DOME_SEP);
+          const gy = terrainYAt(a0.c[0], a0.c[2]);
+          const a  = {
+            c: [a0.c[0], (gy == null ? a0.c[1] : gy), a0.c[2]],
+            r: a0.r, u: a0.u, t: a0.t,
+          };
+          const b = [a.r, a.u, a.t];
+          modelGroup(`singapore-esplanade-${i}`, {
+            center: vadd(a.c, a.u, 14), size: [34, 32, 34], basis: b,
+          }, (stage) => {
+            seat.frustum(stage, a.c, 15.5, 13.0, 6, SILVER, 10, b);
+            seat.frustum(stage, vadd(a.c, a.u, 6), 13.0, 9.5, 6, SILVER_HI, 10, b);
+            seat.frustum(stage, vadd(a.c, a.u, 12), 9.5, 5.0, 5, SILVER, 9, b);
+            seat.cone(stage, vadd(a.c, a.u, 17), 5.0, 4.5, SILVER_HI, 8, b);
+            for (let r = 0; r < 12; r++) {
+              const ang = (r / 12) * Math.PI * 2;
+              const dx  = Math.cos(ang) * 11;
+              const dz  = Math.sin(ang) * 11;
+              const rc  = [a.c[0] + a.r[0] * dx + a.t[0] * dz,
+                           a.c[1],
+                           a.c[2] + a.r[2] * dx + a.t[2] * dz];
+              seat.box(stage, vadd(rc, a.u, 8), [1.1, 14, 1.1], SPIKE, b);
+              const tip = [a.c[0] + a.r[0] * dx * 0.55 + a.t[0] * dz * 0.55,
+                           a.c[1],
+                           a.c[2] + a.r[2] * dx * 0.55 + a.t[2] * dz * 0.55];
+              seat.cone(stage, vadd(tip, a.u, 16), 1.4, 4.2, SPIKE, 5, b);
+            }
+          }, { required: true });
         }
-        // Esplanade ribs — 8 thin vertical fins around each dome
-        for (let i = 0; i < 2; i++) {
-          const a = anchor(k, -1, 44 + i * DOME_SEP);
-          for (let r = 0; r < 8; r++) {
-            const ang = (r / 8) * Math.PI * 2;
-            const dx  = Math.cos(ang) * 14;
-            const dz  = Math.sin(ang) * 14;
-            const rc  = [a.c[0] + a.r[0] * dx + a.t[0] * dz,
-                         a.c[1],
-                         a.c[2] + a.r[2] * dx + a.t[2] * dz];
-            addBox(out, vadd(rc, a.u, 7.5), [0.9, 15, 0.9], [0.56, 0.52, 0.44], [a.r, a.u, a.t]);
-          }
-        }
-        // Waterfront promenade terrace in front of Esplanade
-        const ta = anchor(k, -1, 26);
-        addBox(out, vadd(ta.c, ta.u, 0.3), [40, 0.5, 55], [0.30, 0.28, 0.24], [ta.r, ta.u, ta.t]);
+        const ta0 = anchor(k, -1, 26);
+        const tgy = terrainYAt(ta0.c[0], ta0.c[2]);
+        const ta  = {
+          c: [ta0.c[0], (tgy == null ? ta0.c[1] : tgy), ta0.c[2]],
+          r: ta0.r, u: ta0.u, t: ta0.t,
+        };
+        seat.box(out, ta.c, [40, 0.5, 55], [0.30, 0.28, 0.24], [ta.r, ta.u, ta.t]);
       }
 
       // s 0.70 L — The Padang: dark open field (lawn)
@@ -573,7 +605,69 @@
         }
       }
 
-      ferrisWheel(K(0.86), 1, 58, 44);
+      // s 0.86 R — SINGAPORE FLYER: large cyan-lit vertical ring
+      {
+        const k = K(0.86);
+        const a0 = anchor(k, 1, 58);
+        const gy = terrainYAt(a0.c[0], a0.c[2]);
+        const a  = {
+          c: [a0.c[0], (gy == null ? a0.c[1] : gy), a0.c[2]],
+          r: a0.r, u: a0.u, t: a0.t,
+        };
+        const radius = 44;
+        const hub = vadd(a.c, a.u, radius + 5);
+        const CYAN_RIM = [0.40, 0.80, 1.00];
+        const STEEL = [0.30, 0.32, 0.38];
+        modelGroup("singapore-flyer", {
+          center: hub,
+          size: [12, radius * 2 + 16, radius * 2 + 16],
+          basis: [a.r, a.u, a.t],
+        }, (stage) => {
+          const rim = [];
+          const seg = 18;
+          stage._mat = MAT.METAL;
+          for (const along of [-4.5, 4.5]) {
+            const foot = vadd(a.c, a.t, along);
+            seat.box(stage, foot, [1.6, radius + 5, 1.6], STEEL, [a.r, a.u, a.t]);
+          }
+          const strut = (p0, p1, thick, col, ax) => {
+            const d = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]];
+            const len = Math.hypot(d[0], d[1], d[2]) || 1;
+            const axis = [d[0] / len, d[1] / len, d[2] / len];
+            const face = [
+              a.r[1] * axis[2] - a.r[2] * axis[1],
+              a.r[2] * axis[0] - a.r[0] * axis[2],
+              a.r[0] * axis[1] - a.r[1] * axis[0],
+            ];
+            const o = ax || 0;
+            addBox(stage,
+              [(p0[0] + p1[0]) / 2 + a.r[0] * o,
+               (p0[1] + p1[1]) / 2 + a.r[1] * o,
+               (p0[2] + p1[2]) / 2 + a.r[2] * o],
+              [thick, len, thick], col, [a.r, axis, face]);
+          };
+          for (let i = 0; i < seg; i++) {
+            const ang = (i / seg) * Math.PI * 2;
+            rim.push(vadd(vadd(hub, a.t, Math.cos(ang) * radius), a.u, Math.sin(ang) * radius));
+          }
+          const HUB_R = 2.0;
+          for (let i = 0; i < seg; i++) {
+            const d = [rim[i][0] - hub[0], rim[i][1] - hub[1], rim[i][2] - hub[2]];
+            const L = Math.hypot(d[0], d[1], d[2]) || 1;
+            const root = [hub[0] + d[0] / L * HUB_R, hub[1] + d[1] / L * HUB_R,
+                          hub[2] + d[2] / L * HUB_R];
+            strut(root, rim[i], 0.30, STEEL, i % 2 ? 0.06 : -0.06);
+            strut(rim[i], rim[(i + 1) % seg], 0.42, CYAN_RIM, i % 2 ? -0.06 : 0.06);
+            const cabCol = i % 2 ? CYAN_RIM : [0.85, 0.90, 1.00];
+            addBox(stage, vadd(rim[i], a.u, -1.3), [2.6, 2.4, 2.6], cabCol, [a.r, a.u, a.t]);
+          }
+          addBox(stage, hub, [3.8, 3.8, 3.8], [0.55, 0.72, 0.90], [a.r, a.u, a.t]);
+          for (let i = 0; i < seg; i += 2) {
+            addBox(stage, rim[i], [0.7, 0.7, 0.7], CYAN_RIM, [a.r, a.u, a.t]);
+          }
+          stage._mat = 0;
+        }, { required: true });
+      }
 
       {
         billboard(K(0.92),  1,  11, 18, 11, NEON[3]);
@@ -604,7 +698,7 @@
         addBox(out, vadd(a.c, a.u, 0.8), [3.8, 1.2, 28], NEON[1],  [a.r, a.u, a.t]);
       }
 
-      const BAY = [0.06, 0.08, 0.14];
+      const BAY = [0.05, 0.07, 0.13];   // dark mirror — night bay reflection plane
 
       floodMastRing(38, { h: 24, dist: 11, cool: false, pool: true, arms: 3 });
 
@@ -622,6 +716,33 @@
           // off in the build); 33.9 puts the cone base on the roof face (30.11).
           const a = anchor(kitNode(0.999), 1, 53);
           addCone(out, vadd(a.c, a.u, 33.9), 2.2, 6, NEON[1], 6, [a.r, a.u, a.t]);
+        }
+      }
+
+      // Pit-straight cue — sage-green wave-roof hospitality massing (L).
+      {
+        const SAGE = [0.42, 0.52, 0.44];
+        const SAGE_D = [0.32, 0.40, 0.34];
+        const GLASS = [0.55, 0.78, 0.88];
+        const a0 = anchor(K(0.01), -1, 38);
+        const gy = terrainYAt(a0.c[0], a0.c[2]);
+        const a  = {
+          c: [a0.c[0], (gy == null ? a0.c[1] : gy), a0.c[2]],
+          r: a0.r, u: a0.u, t: a0.t,
+        };
+        if (!onTrack(a.c[0], a.c[2], 22)) {
+          const b = [a.r, a.u, a.t];
+          modelGroup("singapore-pit-wave-roof", {
+            center: vadd(a.c, a.u, 10), size: [28, 22, 62], basis: b,
+          }, (stage) => {
+            seat.box(stage, a.c, [22, 12, 56], SAGE_D, b);
+            seat.box(stage, vadd(vadd(a.c, a.r, 11.1), a.u, 2), [0.4, 8, 48], GLASS, b);
+            for (let i = 0; i < 5; i++) {
+              const rc = vadd(vadd(a.c, a.t, (i - 2) * 10), a.u, 12 + Math.sin(i * 1.1) * 1.8);
+              seat.box(stage, rc, [24, 1.2, 12], i % 2 ? SAGE : SAGE_D, b);
+            }
+            seat.box(stage, vadd(a.c, a.u, 0.2), [24, 0.6, 58], [0.22, 0.28, 0.24], b);
+          }, { required: true });
         }
       }
 

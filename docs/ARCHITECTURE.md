@@ -9,9 +9,11 @@ it: three.js r185.1 (TLX backend), Rapier (`debrisworld.js`), Trystero (the
 Nostr room-code rendezvous) and jsQR (the answer-code camera scan). Served as
 static files (GitHub Pages). Every JS file is an IIFE that assigns ONE global.
 
-> This file is the module **contract** — what each module is and what it may
-> assume. For an assessment of how the project is built, what the no-build-step
-> bet costs, and the register of known defects (fixed and deferred), see
+> **New here?** Start with [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) (boot path,
+> layer map, where to edit). This file is the module **contract** — what each
+> module is and what it may assume. Verified defects: [BUGS.md](BUGS.md). For an
+> assessment of how the project is built, what the no-build-step bet costs, and
+> the register of known defects (fixed and deferred), see
 > [notes/ARCHITECTURE-REVIEW.md](notes/ARCHITECTURE-REVIEW.md).
 
 Modules are grouped by domain: `js/render/` (renderers), `js/track/` (the track

@@ -470,3 +470,33 @@ test("the four garage singles are shape-checked like the liveries", () => {
   assert.equal(r2.skipped, 0);
   assert.equal(JSON.parse(b2.disk.get("apex26.team")), 4);
 });
+
+test("customLogo accepts only data:image/(png|jpeg|webp);base64 with a length cap", () => {
+  const b = boot();
+  const bad = b.loadGarage({
+    format: "apex26-garage-v1",
+    garage: {
+      customLogo: "javascript:alert(1)",
+      // also reject oversized payloads
+    },
+  });
+  assert.equal(bad.applied, 0);
+  assert.equal(bad.skipped, 1);
+  const huge = "data:image/png;base64," + "A".repeat(400001);
+  const over = b.loadGarage({ format: "apex26-garage-v1", garage: { customLogo: huge } });
+  assert.equal(over.applied, 0, "over-cap data URL is skipped");
+  const ok = b.loadGarage({
+    format: "apex26-garage-v1",
+    garage: { customLogo: "data:image/webp;base64,AAAA" },
+  });
+  assert.equal(ok.applied, 1);
+  assert.equal(JSON.parse(b.disk.get("apex26.customLogo")), "data:image/webp;base64,AAAA");
+});
+
+test("steerMode / hudProfile / drivingLine rows carry oneOf allowlists", () => {
+  const { SettingsExport } = boot();
+  const byK = Object.fromEntries(SettingsExport.SPEC.map((r) => [r.k, r]));
+  assert.deepEqual(Array.from(byK.steerMode.oneOf), ["tilt", "buttons", "touch"]);
+  assert.deepEqual(Array.from(byK.hudProfile.oneOf), ["minimal", "standard", "broadcast"]);
+  assert.deepEqual(Array.from(byK.drivingLine.oneOf), ["off", "corner", "full"]);
+});

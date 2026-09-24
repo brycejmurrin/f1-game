@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["monaco"] =
   function (api) {
-      const { K, out, MAT, def, track, n, ds, px, py, pz, hw, pyMin, terrainYAt, addBox, addPrism, addCyl, addCone, addFrustum, addPyramid, modelGroup, overheadSpan, lampPost, waterSurface, waterField, groundedSegments, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, tree, bush, hedge, grandstand, grandstandEx, scaffoldStand, bleacher, cypress, stonePine, plane, broadcastCompound, cameraTower, billboard, gantry, marshalPost, fence, guardrail, wall, cityFront, bakedModel } = api;
+      const { K, out, MAT, def, track, n, ds, px, py, pz, hw, pyMin, terrainYAt, addBox, addPrism, addCyl, addCone, addFrustum, addPyramid, modelGroup, overheadSpan, lampPost, waterSurface, waterField, groundedSegments, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, tree, bush, hedge, grandstand, grandstandEx, scaffoldStand, bleacher, cypress, stonePine, plane, broadcastCompound, cameraTower, billboard, gantry, marshalPost, fence, guardrail, wall, cityFront, bakedModel, seat } = api;
       // backdrop() culls at its anchor point with onTrack(x, z, sz[0]/2 + 6).
       // Ask the same question first, so a hill that overlaps a parallel stretch
       // is skipped instead of staged and dropped (15 per build here,
@@ -46,6 +46,10 @@
       const DUSTY  = [0.88, 0.82, 0.78];
       const STONE  = [0.78, 0.74, 0.62];
       const SAGE   = [0.72, 0.78, 0.68];
+      // Riviera landmark accents — Casino copper roofs, Port Hercule cobalt.
+      const COPPER = [0.28, 0.46, 0.38];
+      const COPPER2 = [0.22, 0.40, 0.34];
+      const COBALT = [0.08, 0.28, 0.52];
       const PASTELS = [CREAM, TERRA, OCHRE, DUSTY, STONE, SAGE,
                        [0.86, 0.78, 0.74], [0.78, 0.85, 0.82]];
       const WIN    = [0.20, 0.30, 0.36];
@@ -54,6 +58,7 @@
       const WINLIT = [0.95, 0.88, 0.55];
       // Street lamp sodium-yellow cap
       const LAMP   = [1.0, 0.90, 0.60];
+      const PALMGRN = [0.25, 0.45, 0.22];
 
       // Cream/ochre canyon palette only (no terra/sage noise for the street wall)
       const CANYON = [CREAM, OCHRE, DUSTY, [0.92, 0.86, 0.72]];
@@ -159,15 +164,31 @@
       wall(0.0, FULL_LAP, 1, 1.2, 0.8, ARMCO, 0.22);
       guardrail(0.02, 0.07, -1, 0.5, ARMCO);
 
-      // Sainte Devote chapel (s=0.05, R mid)
+      // Sainte Devote chapel (s=0.05, R mid) — small cream nave + dark pitched
+      // roof + campanile; reads as the patron-saint chapel behind the barriers.
       {
         const k = K(0.05), a = anchor(k, 1, 18);
         const b = [a.r, a.u, a.t];
         modelGroup("monaco-sainte-devote", {
-          center: vadd(a.c, a.u, 5.6), size: [9.4, 11.2, 11.2], basis: b,
+          center: vadd(a.c, a.u, 6.2), size: [11.2, 14.5, 13.5], basis: b,
         }, (stage) => {
-          addBox(stage, vadd(a.c, a.u, 4), [9, 8, 11], CREAM, b);
-          addPrism(stage, vadd(a.c, a.u, 9.2), [9.4, 3.2, 11.2], [0.32, 0.22, 0.20], b);
+          stage._mat = MAT.STONE;
+          addBox(stage, vadd(a.c, a.u, 4.2), [9.2, 8.4, 11.4], CREAM, b);
+          addBox(stage, vadd(vadd(a.c, a.r, -5.4), a.u, 2.4), [2.4, 4.8, 5.2], [0.92, 0.86, 0.74], b);
+          stage._mat = MAT.ROOF;
+          seat.prism(stage, vadd(a.c, a.u, 8.4), [9.8, 3.6, 11.8], [0.30, 0.20, 0.18], b);
+          stage._mat = MAT.STONE;
+          const bell = vadd(vadd(a.c, a.t, 4.2), a.u, 0);
+          addBox(stage, vadd(bell, a.u, 7.5), [3.2, 15.0, 3.2], CREAM, b);
+          stage._mat = MAT.ROOF;
+          seat.prism(stage, vadd(bell, a.u, 15.0), [3.6, 2.4, 3.6], [0.28, 0.18, 0.16], b);
+          stage._mat = MAT.METAL;
+          addCyl(stage, vadd(bell, a.u, 17.2), 0.08, 1.6, [0.72, 0.70, 0.66], 4, b);
+          addBox(stage, vadd(bell, a.u, 18.7), [0.9, 0.12, 0.12], [0.78, 0.76, 0.70], b);
+          addBox(stage, vadd(bell, a.u, 18.55), [0.12, 0.55, 0.12], [0.78, 0.76, 0.70], b);
+          stage._mat = MAT.GLASS;
+          addBox(stage, vadd(vadd(a.c, a.r, -4.7), a.u, 5.2), [0.2, 2.8, 2.4], WIN, b);
+          stage._mat = 0;
         }, { required: true });
       }
 
@@ -179,19 +200,22 @@
       });
 
       {
-        // Hand-spaced Beau Rivage climb (L) — step helper would over-fill.
+        // Hand-spaced Beau Rivage climb — sparse cream/ochre canyon ONLY.
+        // Kept thin on purpose: cityFront / dense hash rows read as generic
+        // city and erase the "beautiful shore" climb identity (brief §4).
+        // R-side stops short of Casino Square (~0.20) so the landmarks own it.
         const spots = [
-          [0.09, -1], [0.13, -1], [0.16, -1],                 // L inland climb
-          [0.10,  1], [0.135, 1], [0.17, 1], [0.22, 1], [0.255, 1], // R street wall
+          [0.09, -1], [0.135, -1],                 // L inland climb (2)
+          [0.10,  1], [0.145, 1], [0.185, 1],      // R street wall (3)
         ];
         for (let i = 0; i < spots.length; i++) {
           const [sf, sd] = spots[i];
           const k = K(sf);
           const hv = hash(k * 5.3 + sd * 0.9);
-          const w = 10 + hv * 8;
-          const h = 14 + hash(k * 9.1 + sd) * 12;
-          const gap = 2 + hash(k * 2.7) * 2;   // 2–4 m
-          building(k, sd, gap, w, h, 10,
+          const w = 9 + hv * 6;
+          const h = 12 + hash(k * 9.1 + sd) * 8;
+          const gap = 2.5 + hash(k * 2.7) * 1.5;   // 2.5–4 m
+          building(k, sd, gap, w, h, 9,
             { kind: ["tiered", "notch", "chevron", "podium"][i % 4],
               wall: CANYON[i % CANYON.length], window: WIN, floor: 3.5 + hv,
               lit: true, windowCol: WINLIT });
@@ -206,7 +230,8 @@
                  [0.16 + hv * 0.04, 0.34 + hv * 0.05, 0.18]);
       }
       // Far towers on LEFT — set at 80m+, clear of hillside mounds.
-      for (const [sf, ht] of [[0.10, 60], [0.15, 68], [0.20, 56], [0.24, 72]]) {
+      // Skip Casino Square fracs so the copper roof owns that skyline.
+      for (const [sf, ht] of [[0.10, 60], [0.15, 68]]) {
         const k = K(sf);
         const tDist = 84 + hash(k * 5) * 14;
         const a = anchor(k, -1, tDist);
@@ -233,23 +258,37 @@
           const b = [a.r, a.u, a.t];
           // Beaux-Arts cream limestone + oxidised-copper roofs (Garnier/Dutrou).
           modelGroup("monaco-casino", {
-            center: vadd(a.c, a.u, 22), size: [48, 46, 34], basis: b,
+            center: vadd(a.c, a.u, 24), size: [52, 52, 38], basis: b,
           }, (stage) => {
             stage._mat = MAT.STONE;
             addBox(stage, vadd(a.c, a.u, 13), [44, 26, 30], CREAM, b);
-            for (const o of [-13, 13]) {
-              addBox(stage, vadd(vadd(a.c, a.t, o), a.u, 30), [9, 18, 9], [0.90, 0.85, 0.74], b);
+            addBox(stage, vadd(a.c, a.u, 28), [18, 12, 16], [0.93, 0.88, 0.76], b);
+            for (const o of [-14, 14]) {
+              addBox(stage, vadd(vadd(a.c, a.t, o), a.u, 30), [9.5, 18, 9.5], [0.90, 0.85, 0.74], b);
+            }
+            for (const [to, ro] of [[-12, -18], [12, -18], [-12, 18], [12, 18]]) {
+              const tc = vadd(vadd(a.c, a.t, to), a.r, ro * 0.55);
+              addCyl(stage, vadd(tc, a.u, 18), 2.6, 12, [0.92, 0.87, 0.75], 8, b);
+              stage._mat = MAT.METAL;
+              seat.cone(stage, vadd(tc, a.u, 30), 3.0, 4.2, COPPER, 8, b);
+              stage._mat = MAT.STONE;
             }
             stage._mat = MAT.METAL;
-            addBox(stage, vadd(a.c, a.u, 28), [46, 4, 32], [0.30, 0.45, 0.38], b);
-            for (const o of [-13, 13]) {
-              addPrism(stage, vadd(vadd(a.c, a.t, o), a.u, 40.5), [9.2, 5, 9.2], [0.28, 0.42, 0.36], b);
+            seat.box(stage, vadd(a.c, a.u, 26), [46, 4.2, 32], COPPER, b);
+            seat.box(stage, vadd(a.c, a.u, 34), [19, 3.2, 17], COPPER2, b);
+            for (const o of [-14, 14]) {
+              seat.prism(stage, vadd(vadd(a.c, a.t, o), a.u, 39), [9.6, 5.2, 9.6], COPPER, b);
             }
-            // window bands + lit evening glow
+            addFrustum(stage, vadd(vadd(a.c, a.t, 0), a.u, 40), 7.5, 2.2, 6.5, COPPER2, 10, b);
+            addCyl(stage, vadd(a.c, a.u, 46.2), 0.35, 2.8, [0.78, 0.76, 0.70], 5, b);
             stage._mat = MAT.GLASS;
             for (let f = 0; f < 4; f++) {
               addBox(stage, vadd(a.c, a.u, 5 + f * 6), [44.4, 2.2, 30.4], WIN, b);
               addBox(stage, vadd(a.c, a.u, 6.0 + f * 6), [44.6, 1.1, 30.6], WINLIT, b);
+            }
+            stage._mat = MAT.STONE;
+            for (let i = -3; i <= 3; i++) {
+              addCyl(stage, vadd(vadd(a.c, a.t, i * 3.8), a.r, -15.2), 0.55, 7.2, [0.90, 0.85, 0.74], 6, b);
             }
             stage._mat = MAT.METAL;
             for (const o of [-8, 8]) {
@@ -268,13 +307,14 @@
         const a = anchor(k, 1, 14.5);
         if (!onTrack(a.c[0], a.c[2], 12)) {
           const b = [a.r, a.u, a.t];
-          // Cream limestone palace + terracotta mansard (Hôtel de Paris, 1864).
+          // Cream limestone palace + ochre mansard (Hôtel de Paris, 1864).
           modelGroup("monaco-hotel-de-paris", {
-            center: vadd(vadd(a.c, a.u, 22), a.t, 5.5), size: [24, 45, 31], basis: b,
+            center: vadd(vadd(a.c, a.u, 24), a.t, 5.5), size: [26, 50, 34], basis: b,
           }, (stage) => {
             stage._mat = MAT.STONE;
             addBox(stage, vadd(a.c, a.u, 20), [22, 40, 18], HOTEL, b);
             addBox(stage, vadd(vadd(a.c, a.t, 14), a.u, 14), [14, 28, 12], HOTEL, b);
+            addBox(stage, vadd(vadd(a.c, a.t, -6), a.u, 22), [10, 16, 10], [0.94, 0.90, 0.84], b);
             stage._mat = MAT.GLASS;
             for (let f = 0; f < 7; f++) {
               addBox(stage, vadd(a.c, a.u, 5 + f * 5), [22.3, 1.8, 18.3], WIN, b);
@@ -283,7 +323,16 @@
               addBox(stage, vadd(vadd(a.c, a.t, 14), a.u, 4 + f * 5), [14.3, 1.6, 12.3], WIN, b);
             }
             stage._mat = MAT.ROOF;
-            addBox(stage, vadd(a.c, a.u, 41), [23, 3.2, 19], OCHRE, b);
+            seat.box(stage, vadd(a.c, a.u, 40), [23.2, 2.4, 19.2], OCHRE, b);
+            seat.prism(stage, vadd(a.c, a.u, 42.4), [23.6, 5.0, 19.6], [0.78, 0.58, 0.34], b);
+            seat.prism(stage, vadd(vadd(a.c, a.t, 14), a.u, 28), [14.6, 3.6, 12.6], OCHRE, b);
+            stage._mat = MAT.STONE;
+            for (const o of [-6, 0, 6]) {
+              addBox(stage, vadd(vadd(a.c, a.t, o), a.u, 42.8), [3.2, 2.4, 2.6], HOTEL, b);
+            }
+            for (const o of [-5, 5]) {
+              addBox(stage, vadd(vadd(a.c, a.t, o), a.u, 46.5), [1.4, 3.2, 1.4], [0.62, 0.58, 0.52], b);
+            }
             stage._mat = 0;
           }, { required: LANDMARK_REQUIRED });
         }
@@ -292,45 +341,40 @@
       {
         const k = K(0.228);
         const CAFE  = [0.94, 0.90, 0.83];
-        const AWN_R = [0.68, 0.16, 0.16], AWN_W = [0.93, 0.92, 0.88];
-        // Raw primitives, not building() — same reason as the Hotel de Paris
-        // opposite: the `city` exclusion over s 0.17-0.24 drops building() here
-        // silently, and this landmark had the identical floating-decoration bug
-        // (awnings, parasols and barrel roof hanging at ~20 m over nothing).
-        // dist 14, not 11.5. At 11.5 the onTrack(...,12) guard below
-        // rejected the WHOLE block and this landmark drew nothing at all —
-        // verified by vertex count, which is the only thing that catches a
-        // silently-skipped guard: verify-track prints OK either way.
+        const AWN_R = [0.72, 0.14, 0.14], AWN_W = [0.95, 0.94, 0.90];
+        // Raw primitives, not building() — city exclusion drops building() here.
+        // dist 14 (not 11.5): onTrack(...,12) at 11.5 rejected the whole landmark.
         const a = anchor(k, 1, 14);
         if (!onTrack(a.c[0], a.c[2], 12)) {
           const b = [a.r, a.u, a.t];
-          // Cream pavilion, glazed barrel, terracotta cornice, canvas terrace.
+          // Lower, longer belle-époque pavilion + red/white awning terrace.
           modelGroup("monaco-cafe-de-paris", {
-            center: vadd(vadd(a.c, a.u, 11.5), a.r, -3), size: [30, 25, 36], basis: b,
+            center: vadd(vadd(a.c, a.u, 10.5), a.r, -3), size: [28, 24, 44], basis: b,
           }, (stage) => {
             stage._mat = MAT.STONE;
-            addBox(stage, vadd(a.c, a.u, 9.5), [16, 19, 34], CAFE, b);
+            addBox(stage, vadd(a.c, a.u, 7.5), [15, 15, 40], CAFE, b);
             stage._mat = MAT.GLASS;
-            for (let f = 0; f < 4; f++) {
-              addBox(stage, vadd(a.c, a.u, 3.5 + f * 4), [16.3, 1.6, 34.3], WIN, b);
+            for (let f = 0; f < 3; f++) {
+              addBox(stage, vadd(a.c, a.u, 3.0 + f * 4.2), [15.3, 1.6, 40.3], WIN, b);
             }
-            // addCyl extrudes along basis[1]; the glazed barrel runs the roof's
-            // LENGTH (t), ring in the r-u plane — the old basis sent 32 m of
-            // glass across-track out of the facade.
-            addCyl(stage, vadd(vadd(a.c, a.t, -16), a.u, 21.4), 3.6, 32, [0.72, 0.80, 0.84], 9,
+            addCyl(stage, vadd(vadd(a.c, a.t, -19), a.u, 16.8), 3.2, 38, [0.72, 0.80, 0.84], 9,
               [a.r, a.t, a.u]);
             stage._mat = MAT.ROOF;
-            addBox(stage, vadd(a.c, a.u, 19.6), [17, 1.4, 35], OCHRE, b);
-            for (let i = 0; i < 7; i++) {
-              const p = vadd(vadd(a.c, a.t, (i - 3) * 4.6), a.r, -8.5);
+            seat.box(stage, vadd(a.c, a.u, 15.2), [16.2, 1.2, 41], OCHRE, b);
+            stage._mat = MAT.STONE;
+            addBox(stage, vadd(a.c, a.u, 14.6), [16.4, 0.7, 41.2], [0.78, 0.48, 0.32], b);
+            for (let i = 0; i < 9; i++) {
+              const p = vadd(vadd(a.c, a.t, (i - 4) * 4.2), a.r, -8.2);
               stage._mat = MAT.FABRIC;
-              addBox(stage, vadd(p, a.u, 3.5), [5.2, 0.35, 4.2],
+              seat.box(stage, vadd(p, a.u, 3.2), [5.0, 0.32, 4.0],
                 i % 2 ? AWN_R : AWN_W, b);
-              addCone(stage, vadd(vadd(p, a.r, -1.6), a.u, 2.1), 1.5, 0.7, AWN_W, 7, b);
+              seat.cone(stage, vadd(vadd(p, a.r, -1.8), a.u, 2.0), 1.55, 0.75, AWN_W, 7, b);
               stage._mat = MAT.METAL;
-              addCyl(stage, p, 0.10, 3.4, [0.66, 0.64, 0.60], 4, b);
-              addCyl(stage, vadd(p, a.r, -1.6), 0.08, 2.3, [0.72, 0.70, 0.66], 4, b);
+              addCyl(stage, p, 0.10, 3.2, [0.66, 0.64, 0.60], 4, b);
+              addCyl(stage, vadd(p, a.r, -1.8), 0.08, 2.1, [0.72, 0.70, 0.66], 4, b);
             }
+            stage._mat = MAT.FOLIAGE;
+            addBox(stage, vadd(vadd(a.c, a.r, -10.2), a.u, 0.4), [1.6, 0.7, 38], PALMGRN, b);
             stage._mat = 0;
           }, { required: LANDMARK_REQUIRED });
         }
@@ -359,12 +403,12 @@
       }
 
       // Casino Square gardens — formal hedges, palms, fountain
-      hedge(0.195, 0.235, -1, 7, 1.6, [0.22, 0.42, 0.20]);
+      hedge(0.195, 0.235, -1, 7, 1.6, PALMGRN);
       for (let i = 0; i < 10; i++) {
         const k = K(0.20 + i * 0.0035);
         place(k, -1, 3, [3, 1.2, 4], [0.55, 0.55, 0.58]);
-        prop(k, -1, 3, [2, 0.5, 2], [0.25, 0.45, 0.22]);
-        palm(k, i % 2 ? 1 : -1, 7, 9, [0.25, 0.45, 0.22]);   // dist 7: palm() guards onTrack(c, 4), so dist 4 sat exactly on the margin and every odd (side 1) palm was dropped
+        prop(k, -1, 3, [2, 0.5, 2], PALMGRN);
+        palm(k, i % 2 ? 1 : -1, 7, 9, PALMGRN);   // dist 7: palm() guards onTrack(c, 4), so dist 4 sat exactly on the margin and every odd (side 1) palm was dropped
       }
       {
         const k = K(0.215), a = anchor(k, -1, 14);
@@ -398,19 +442,26 @@
 
       // ── FAIRMONT HAIRPIN HOTEL (s=0.40, R) ──────────────────────────────
       {
-        // Gaps 9-11, not 4-5: a 20-30 m mass at gap 4 beside a 10 m-radius
-        // loop lays its podium courses ACROSS the street on the inside of the
-        // hairpin — measured as flat wall bands 0.1-1.0 m above the tarmac at
-        // racing 0.376-0.390 ("white bars lying on the road"). The real hotel
-        // reads close because it is TALL, not because its plinth is on the
-        // racing line.
+        // Gaps 9-11, not 4-5: tall pale wrap reads close; plinth stays off the
+        // racing line. Apex planter/palms on the inside of the bend.
+        const FAIRMONT = [0.91, 0.89, 0.84];
         const k = K(0.40);
-        building(k, 1, 9, 20, 48, 30,
-          { kind: "notch", wall: [0.90, 0.88, 0.82], window: WIN, floor: 6, lit: true, windowCol: WINLIT, setback: true });
-        building(K(0.385), 1, 10, 22, 40, 18,
+        building(k, 1, 9, 24, 54, 32,
+          { kind: "notch", wall: FAIRMONT, window: WIN, floor: 6, lit: true, windowCol: WINLIT, setback: true });
+        building(K(0.385), 1, 10, 22, 46, 20,
           { kind: "chevron", wall: CREAM, window: WIN, floor: 6, lit: true, windowCol: WINLIT });
-        building(K(0.415), 1, 10, 22, 42, 18,
-          { kind: "podium", wall: [0.88, 0.84, 0.76], window: WIN, floor: 6, lit: true, windowCol: WINLIT });
+        building(K(0.415), 1, 10, 22, 48, 20,
+          { kind: "podium", wall: [0.90, 0.87, 0.80], window: WIN, floor: 6, lit: true, windowCol: WINLIT });
+        building(K(0.395), 1, 10.5, 14, 42, 14,
+          { kind: "slab", wall: FAIRMONT, window: WIN, floor: 5.5, lit: true, windowCol: WINLIT });
+        building(K(0.405), 1, 10.5, 14, 44, 14,
+          { kind: "slab", wall: [0.93, 0.90, 0.85], window: WIN, floor: 5.5, lit: true, windowCol: WINLIT });
+        for (let i = 0; i < 5; i++) {
+          const pk = K(0.388 + i * 0.006);
+          place(pk, -1, 3.2, [2.6, 0.7, 3.4], [0.62, 0.58, 0.50]);
+          prop(pk, -1, 3.2, [2.0, 0.45, 2.6], PALMGRN);
+          if (i % 2 === 0) palm(pk, -1, 5.5, 8 + (i % 3), PALMGRN);
+        }
       }
 
       {
@@ -571,8 +622,10 @@
           out._mat = MAT.STONE;
           for (const sd of [-1, 1]) {
             const c = [px[k] + r[0] * sd * (hw[k] + 2.6), py[k], pz[k] + r[2] * sd * (hw[k] + 2.6)];
-            addBox(out, vadd(c, u, 4.70), [2.60, 9.40, 3.12], STONE, b);
-            addBox(out, vadd(c, u, 9.70), [3.20, 0.80, 3.56], [0.70, 0.68, 0.62], b);
+            // Tall portal jambs + dark mouth reveal — light/dark beat into the bore.
+            addBox(out, vadd(c, u, 5.20), [2.90, 10.40, 3.40], [0.62, 0.60, 0.54], b);
+            addBox(out, vadd(c, u, 10.40), [3.40, 0.90, 3.80], [0.72, 0.70, 0.64], b);
+            addBox(out, vadd(vadd(c, r, -sd * 1.4), u, 3.6), [0.8, 7.0, 2.4], [0.14, 0.14, 0.16], b);
           }
           out._mat = 0;
           overheadSpan({
@@ -672,7 +725,7 @@
       }
 
       // ── HARBOUR WATER & QUAY ─────────────────────────────────────────────
-      const SEA = [0.10, 0.34, 0.55], SEA2 = [0.13, 0.40, 0.60];
+      const SEA = COBALT, SEA2 = [0.10, 0.34, 0.58];
       // Low stone quay wall between track and water
       wall(0.585, 0.99, -1, 1.0, 1.4, [0.74, 0.70, 0.62], 1.0);
 
@@ -700,17 +753,17 @@
         addBox(out, vadd(sup, u, 5.9 * sc), [W * 0.75, 0.5 * sc, L * 0.59], WINLIT, b);
       };
 
-      // Marina rows — two spaced ranks (reduced count for performance).
-      for (let i = 0; i < 10; i++) {
-        const s = 0.59 + i * 0.038;
+      // Marina rows — white deck stacks denser at Port Hercule (~0.65 L).
+      for (let i = 0; i < 12; i++) {
+        const s = 0.58 + i * 0.032;
         const k = K(s);
         const rank = i % 2;
-        const dist = 18 + rank * 22 + hash(k * 7) * 4;
+        const dist = 16 + rank * 20 + hash(k * 7) * 4;
         const a = anchor(k, -1, dist);
         if (onTrack(a.c[0], a.c[2], 12)) continue;
         const b = [a.r, a.u, a.t];
-        const sc = 0.75 + hash(k * 9 + i) * 0.8;
-        const hull = (i % 5 === 0) ? [0.18, 0.20, 0.26] : (i % 7 === 0) ? [0.85, 0.86, 0.9] : [0.97, 0.97, 0.99];
+        const sc = 0.78 + hash(k * 9 + i) * 0.75;
+        const hull = (i % 8 === 0) ? [0.16, 0.18, 0.24] : [0.97, 0.97, 0.99];
         yacht(vadd(a.c, a.r, -2 + (i % 3) * 4), b, a.u, a.r, a.t, sc, hull);
       }
       for (let i = 0; i < 6; i++) {
@@ -1093,10 +1146,10 @@
         // Warm lit interior glow band (evening party lights)
         addBox(out, vadd(sup, a.u, 6.0 * sc), [W * 0.92, 0.4 * sc, L * 0.5], WINLIT, b);
       };
-      // Two flagship yachts moored bows-out at prime harbour berths.
+      // Flagship yachts — lead berth at ~0.65 L is the Port Hercule white stack.
       {
-        const a1 = anchor(K(0.645), -1, 30);
-        if (!onTrack(a1.c[0], a1.c[2], 12)) megaYacht(a1, 0.9, [0.97, 0.97, 0.99]);
+        const a1 = anchor(K(0.65), -1, 28);
+        if (!onTrack(a1.c[0], a1.c[2], 12)) megaYacht(a1, 1.0, [0.97, 0.97, 0.99]);
         const a2 = anchor(K(0.71), -1, 34);
         if (!onTrack(a2.c[0], a2.c[2], 12)) megaYacht(a2, 1.05, [0.20, 0.22, 0.28]);
         const a3 = anchor(K(0.78), -1, 30);
@@ -1123,7 +1176,7 @@
           up += 8.5; back += 7; w -= 3.2;
         }
       };
-      for (const sf of [0.11, 0.16, 0.21]) {
+      for (const sf of [0.11, 0.16]) {
         const k = K(sf), a = anchor(k, -1, 58 + hash(k) * 10);
         if (!onTrack(a.c[0], a.c[2], 16)) terraceStack(a, 4, DUSTY);
       }
@@ -1157,16 +1210,7 @@
         });
       }
 
-      for (const [sf, side, gap, w, h, d, col] of [
-        [0.182,  1, 7, 18, 31, 16, [0.94, 0.90, 0.83]],
-        [0.238,  1, 6, 20, 34, 17, [0.88, 0.82, 0.72]],
-        [0.226, -1, 9, 16, 27, 14, [0.93, 0.88, 0.78]],
-      ]) {
-        building(K(sf), side, gap, w, h, d, {
-          kind: side > 0 ? "tiered" : "chevron",
-          wall: col, window: WIN, floor: 4.6, lit: true, windowCol: WINLIT,
-        });
-      }
+      // Thin Casino Square flanks — generic mass off landmark faces.
 
       {
         // Mirabeau Superior apartment identity: one pale slab replaces the

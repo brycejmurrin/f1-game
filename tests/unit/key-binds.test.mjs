@@ -395,6 +395,22 @@ test("an armed slot left behind (BACK / CLOSE / RESUME) never captures the next 
     "disarmAll leaves nothing listening");
 });
 
+test("disarmAll aborts the wheel wizard so the pad drives again", () => {
+  // Bug hunt 2026-09-24: disarmAll cleared key/pad button slots but not
+  // beginAxisCapture, so SET UP A WHEEL + leave settings left the pad zeroed.
+  const { Input, kb, $, fire, sb } = bootUi(true);
+  const { press } = fakePad(sb, fire);
+  $("pm-pad-wheel").onclick();
+  assert.equal($("pm-pad-wheel").textContent, "CANCEL", "wizard armed");
+  press(7, 1);
+  Input.poll();
+  assert.equal(Input.debugState().pad.throttle, false, "axis capture owns the frame");
+  kb.disarmAll();
+  assert.equal($("pm-pad-wheel").textContent, "SET UP A WHEEL", "button label restored");
+  Input.poll();
+  assert.equal(Input.debugState().pad.throttle, true, "disarmAll cleared axis capture");
+});
+
 test("a desktop shows both tables and never the hint", () => {
   const { $ } = bootUi(true);
   assert.equal($("pm-keys-section").hidden, false);
