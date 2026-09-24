@@ -458,7 +458,7 @@ const TyreModel = (function () {
   const FUEL_VMAX = 0.012;
   function fuelFrac(c, lapsTarget) {
     const n = Math.max(1, lapsTarget || 1);
-    return clamp(1 - Math.max(0, c.lap || 0) / n, 0, 1);
+    return clamp(1 - Math.max(0, c.fuelLap == null ? (c.lap || 0) : c.fuelLap) / n, 0, 1);
   }
 
   // ── COMPOUND RECORDS ──────────────────────────────────────────────────────

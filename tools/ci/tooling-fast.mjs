@@ -313,6 +313,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/move-tree.test.mjs",
   "tests/unit/gfx-backend-canary.test.mjs",
   "tests/unit/start-race-latch.test.mjs",
+  "tests/unit/session-entry-vm.test.mjs",
+  "tests/unit/red-flag-fuel-vm.test.mjs",
   "tests/unit/gfx-debug-overlay.test.mjs",
   "tests/unit/car-presentation-canary.test.mjs",
   "tests/unit/car-wing-foil.test.mjs",
