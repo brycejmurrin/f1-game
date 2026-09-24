@@ -88,7 +88,7 @@ const TLX = (function () {
       // The warm's stage timeline, read by memState().warm: the lights hold for
       // exactly this long on a player's GPU, and the census beats sample it —
       // gpu-census 207 spent its whole window inside the warm and no row said so.
-      const _warmStages = { at: 0, scene: null, post: null, shadow: null, total: null, attempts: 0, failed: 0 };
+      const _warmStages = { at: 0, scene: null, fx: null, post: null, shadow: null, total: null, attempts: 0, failed: 0 };
       const GPU_ERR_LOG_CAP = 8;
       // Heal-gate counters live HERE, not by the gate: the error hooks install
       // during bootRenderer's await, and on the WebGPU -> WebGL2 fallback an
@@ -1803,6 +1803,29 @@ const TLX = (function () {
       // with it off the race compiled the same 8 scene programs and no post
       // program, because the post recompiles were ssrTag-node churn (tsl-fx.js),
       // not a missing warm; with it on the lights held ~2.2 s longer for nothing.
+      // FX PROGRAMS DURING THE LIGHTS. Skid marks and the two particle groups
+      // push their first draw record only once a tyre marks or smokes — after
+      // the launch — so the scene warm never saw them and their three programs
+      // (five pipelines) compiled together in one mid-race frame: every sync
+      // compile left on the WebGPU lap (PERF-FINDINGS §2ah,
+      // scratch/compile-attrib-probe.mjs). Compile each FX material once on its
+      // stream's real vertex layout, under the scene target and MRT the warm has
+      // already set; the throwaway Mesh is dropped, the stream geometry kept.
+      // apex26.tlxWarmFx=0 is the A/B handle.
+      let _warmFx = true;
+      try { _warmFx = localStorage.getItem("apex26.tlxWarmFx") !== "0"; } catch (_) { /* no storage: warm them */ }
+      async function warmFxPrograms() {
+        if (!_warmFx || !fx) return;
+        const jobs = [[skidStream, fx.skidMat], [partStreams[0], fx.particleMats && fx.particleMats[0]],
+          [partStreams[1], fx.particleMats && fx.particleMats[1]], [glowStream, fx.glowMat], [lineStream, fx.lineMat]];
+        for (const [stream, mat] of jobs) {
+          if (!mat) continue;
+          ensureStream(stream, 1);
+          const m = new THREE.Mesh(stream.geo, mat);
+          m.frustumCulled = false;
+          await renderer.compileAsync(m, camera, scene);
+        }
+      }
       let _warmPlus = false;
       try { _warmPlus = localStorage.getItem("apex26.tlxWarmPlus") === "1"; } catch (_) { /* no storage: the default warm */ }
       function startProgramWarm(opts) {
@@ -1825,6 +1848,9 @@ const TLX = (function () {
             _gpuLastOperation = "compile-scene";
             await renderer.compileAsync(scene, camera);
             _warmStages.scene = Math.round(performance.now() - _tStage); _tStage = performance.now();
+            _gpuLastOperation = "compile-fx";
+            await warmFxPrograms();
+            _warmStages.fx = Math.round(performance.now() - _tStage); _tStage = performance.now();
             // MRT STAYS SET THROUGH THE POST WARM. present() sets the ssrTag MRT
             // node for the scene pass and calls post.present() BEFORE restoring
             // it, so every live post quad compiles with that node in its render
@@ -3361,7 +3387,7 @@ const TLX = (function () {
               const ck = drawList[k].chunked;
               if (!ck || !ck.chunks || !ck.chunks.length) continue;
               if (!first) first = ck.chunks;
-              nrec++; total += ck.chunks.length;
+              nrec++; total += (ck.lampCells || ck.chunks).length;
               const c = ck.cellSize > 0 ? ck.cellSize : 72;
               if (cell && c !== cell) cellSplit = true;
               cell = c;
@@ -3379,7 +3405,8 @@ const TLX = (function () {
             } else {
               // `first` stands in for chunk-array identity; a track reload also
               // replaces frameAllLights, which _lgSrc already catches.
-              const key = knob + "|" + total + "|" + nrec + "|" + cell;
+              // + the lamp bake gen: its LIVE-ONLY lane is packed into the lamp texture.
+              const key = knob + "|" + total + "|" + nrec + "|" + cell + "|" + (typeof LampBake !== "undefined" ? LampBake.gen() : 0);
               if (_lgKey !== key || _lgSrc !== AL || _lgChunks !== first) {
                 let note;
                 try {
@@ -3387,7 +3414,8 @@ const TLX = (function () {
                   for (let k = 0; k < drawList.length; k++) {
                     const ck = drawList[k].chunked;
                     if (!ck || !ck.chunks || !ck.chunks.length) continue;
-                    for (let j = 0; j < ck.chunks.length; j++) chs.push(ck.chunks[j]);
+                    const cells = ck.lampCells || ck.chunks;   // lamp cells, not merged draws
+                    for (let j = 0; j < cells.length; j++) chs.push(cells[j]);
                   }
                   const table = LampChunks.resolve(AL, chs, knob);
                   const grid = LampChunks.buildGrid(table, chs);
@@ -3953,7 +3981,7 @@ const TLX = (function () {
             o.presentMs = +_presentMs.toFixed(3);
             // The warm timeline: how long the lights held on THIS GPU, by stage;
             // pending/done say whether a census beat is inside it (207 was, all 15).
-            o.warm = { at: _warmStages.at, scene: _warmStages.scene, post: _warmStages.post, shadow: _warmStages.shadow,
+            o.warm = { at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, post: _warmStages.post, shadow: _warmStages.shadow,
                        total: _warmStages.total, attempts: _warmStages.attempts, failed: _warmStages.failed,
                        pending: !!_warmPending, done: _warmDone };
             o.presents = _presentN;   // frames presented — a spec samples both flag arms at the same count

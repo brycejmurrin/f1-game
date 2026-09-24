@@ -7115,9 +7115,14 @@ function render(dt) {
     // struggling phone the camera-culled set: slower, and the lamps ahead
     // popping on as they entered it.
     const _pcShed = PerfGov.autoShed();
+    // Wet phone floor: on a wet road ~half a lamp's light is its live reflection,
+    // and at a 16-24 slot cap 35-39 % of it comes from lamps outside the set
+    // (docs/notes/LAMP-POPPING-PLAN-2026-09-24.md, b) — so they pop. Per-chunk
+    // lamps, road included, cover them; the governor shed still wins.
+    const _pcWet = gfx.mobileTier && (frame.wetness || 0) > 0.3 ? 0.6 : 0;
     frame.perChunkLights = (!gfx.hasPerChunkLights || _perChunkOff || _pcShed >= 2) ? 0
-      : (_pcShed >= 1 ? Math.min(0.3, +LT.perChunkLights || 0) : (+LT.perChunkLights || 0));
-    frame.roadChunkLamps = (frame.perChunkLights > 0 && LT.roadChunkLamps) ? 1 : 0;
+      : (_pcShed >= 1 ? Math.min(0.3, Math.max(_pcWet, +LT.perChunkLights || 0)) : Math.max(_pcWet, +LT.perChunkLights || 0));
+    frame.roadChunkLamps = (frame.perChunkLights > 0 && (LT.roadChunkLamps || _pcWet > 0)) ? 1 : 0;
     setFrameLights(camEye, _floodRGB, _lightFwd);
     // BAKED LAMP POOLS (js/lighting/lamp-bake.js): the whole track set's ground
     // pools at base colour, scaled per frame by the same _floodRGB the live set gets.
