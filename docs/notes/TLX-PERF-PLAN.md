@@ -189,8 +189,10 @@ three's WebGL2.** three.js/WebGPU: gpuErrors 0, no compile rows, 2 frames >= 100
 117 ms), none of them in the lamp copy. three.js/WebGL2: 4 frames >= 100 ms, max 2.2 s, and
 **71.8 % of the spike time (2015 ms) was `getParameter` <- `copyTextureToTexture` <-
 `lampCarsBegin`**. Three r186's WebGL `copyTextureToTexture` saves five `UNPACK_*` states
-with `gl.getParameter` on every call; in Chrome each is a synchronous round trip to the GPU
-process, so behind a busy frame it waits for the queue. The WebGPU backend has no such read.
+through `WebGLState.getParameter`, which caches them once set — so only the FIRST copy (per
+context; nothing here calls `resetState`) reads GL. In Chrome that read is a synchronous round
+trip to the GPU process, and the first night lamp copy lands behind the queued ANGLE program
+links, so it waited ~2 s for them to drain. The WebGPU backend has no such read.
 `lampStaticOn` is now AUTO = WebGPU only (`apex26.tlxLampStatic=1` forces it on WebGL2,
 `=0` off everywhere). Lesson: a three backend call that is free on WebGPU can be a sync
 readback on WebGL — check the WebGL leg's spike stacks, not only its compile rows.
