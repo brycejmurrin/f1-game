@@ -21,7 +21,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
-import { parseBlob, readBlob, blobName, validateShots as bakeValidate, shotErrors as bakeShotErrors, bake, render }
+import { parseBlob, readBlob, blobName, validateShots as bakeValidate, shotErrors as bakeShotErrors, bake, render, DEFAULT_RE, parseLiteral }
   from "../../tools/gen/bake-flyby.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -215,6 +215,23 @@ test("the bake replaces the DEFAULT literal and nothing else", () => {
   assert.ok(out.includes('{ at: "start"|"pole"|"grid"|"corner", n, off, x, y }'),
     "the header comment is untouched — the regex is anchored at two-space indent for this reason");
   assert.equal(out.match(/^ {2}const DEFAULT = \[/gm).length, 1, "still exactly one DEFAULT");
+});
+
+test("a bake keeps DEFAULT's rationale comments", () => {
+  // Rebaking the shipped list as data used to delete every comment inside
+  // DEFAULT — the "why" of each shot. Same list in, every comment line out.
+  const src = read("js/camera/flyby-seq.js");
+  const lit = DEFAULT_RE.exec(src)[0];
+  const list = parseLiteral(lit.replace(/^ {2}const DEFAULT = /, "").replace(/;\s*$/, ""));
+  assert.ok(list.length > 3, "parsed the shipped DEFAULT");
+  const out = DEFAULT_RE.exec(bake(src, list))[0];
+  const comments = lit.split("\n").filter((l) => l.trim().startsWith("//"));
+  assert.ok(comments.length > 5, "DEFAULT carries comments to keep");
+  for (const c of comments) assert.ok(out.includes(c), "lost in the bake: " + c.trim());
+  // A dropped shot takes its own comments; the others stay.
+  const out2 = DEFAULT_RE.exec(bake(src, list.filter((s) => s.id !== "turn-mid")))[0];
+  assert.ok(!/Aimed THROUGH the corner/.test(out2), "turn-mid's own note leaves with it");
+  assert.ok(/BOTH GRID SHOTS LOOK FORWARD/.test(out2), "a section comment before a surviving shot stays");
 });
 
 /* ── DO THE EDITS REACH THE FLYBY? ────────────────────────────────────────────

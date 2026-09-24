@@ -137,11 +137,15 @@ export function parseBlob(raw) {
 }
 
 /** The literal, formatted the way flyby-seq.js writes it by hand. */
-export function render(list) {
+export function render(list, notes) {
   const pose = (p) => JSON.stringify(p);
+  const n = notes || {};
+  const lines = (a) => (a && a.length ? a.join("\n") + "\n" : "");
   const body = list.map((s) =>
+    lines(n[s.id] && n[s.id].lead) +
     "    {\n" +
     `      id: ${JSON.stringify(s.id)}, dur: ${s.dur}, ease: ${JSON.stringify(s.ease)},\n` +
+    lines(n[s.id] && n[s.id].inner) +
     `      eye: [${pose(s.eye[0])},\n            ${pose(s.eye[1])}],\n` +
     `      look: [${pose(s.look[0])},\n             ${pose(s.look[1])}],\n` +
     `      fov: [${s.fov[0]}, ${s.fov[1]}],\n` +
@@ -155,9 +159,34 @@ export function render(list) {
    indent, through the first `^  ];` at the same indent. */
 export const DEFAULT_RE = /^ {2}const DEFAULT = \[[\s\S]*?^ {2}\];/m;
 
+/** THE RATIONALE SURVIVES A BAKE. DEFAULT's comments are why each shot is the
+ *  way it is ("BOTH GRID SHOTS LOOK FORWARD", the Bahrain crane note), and a
+ *  bake that rewrote the literal from data deleted all of them. Comment lines
+ *  are collected per shot id: `lead` (between two shots — section headers and
+ *  block comments, re-emitted before that shot) and `inner` (inside its
+ *  braces, re-emitted after its id line). A shot the new list drops takes its
+ *  comments with it; a new shot has none. */
+export function shotNotes(literal) {
+  const notes = {};
+  let pending = [], cur = null, inner = [];
+  for (const line of literal.split("\n")) {
+    const t = line.trim();
+    if (/^\{$/.test(t)) { cur = null; inner = []; continue; }
+    const id = /^id:\s*"([^"]*)"/.exec(t);
+    if (id) { cur = id[1]; notes[cur] = { lead: pending, inner }; pending = []; continue; }
+    if (/^\},?$/.test(t)) { cur = null; continue; }
+    if (t.startsWith("//")) {
+      if (cur) notes[cur].inner.push(line); else pending.push(line);
+    }
+  }
+  return notes;
+}
+
 export function bake(src, list) {
-  if (!DEFAULT_RE.test(src)) throw new Error(`Could not find the \`const DEFAULT = [...]\` array in ${TARGET}`);
-  return src.replace(DEFAULT_RE, render(list));
+  const m = DEFAULT_RE.exec(src);
+  if (!m) throw new Error(`Could not find the \`const DEFAULT = [...]\` array in ${TARGET}`);
+  const notes = shotNotes(m[0]);
+  return src.replace(DEFAULT_RE, () => render(list, notes));
 }
 
 function main() {
