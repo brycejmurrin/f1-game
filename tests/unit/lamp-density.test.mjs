@@ -109,7 +109,7 @@ test("densify inserts into gaps shorter than 2× stride (the MCP monza no-op)", 
 test("dressingExcluded lamps aliases match floodlights/lighting rules", () => {
   // Source-level: the mast pass queries "lamps", and LIGHTING_KINDS treats the
   // three names as one family (any rule ↔ any query).
-  const src = read("js/track/tracks.js");
+  const src = read("js/track/scenery/build-props.js");
   assert.match(src, /dressingExcluded\("lamps"/);
   assert.match(src, /LIGHTING_KINDS\s*=\s*\{\s*lamps:\s*1,\s*floodlights:\s*1,\s*lighting:\s*1/);
   assert.match(src, /kinds\.some\(\(knd\)\s*=>\s*LIGHTING_KINDS\[knd\]\)/);
