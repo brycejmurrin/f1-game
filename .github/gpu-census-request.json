@@ -5,6 +5,6 @@
   "clock": 12,
   "census_only": false,
   "force": "",
-  "ls": "apex26.tlxWarmPlus=0",
-  "leg": "step1-safe-228-reland-warm-OFF-2026-09-24"
+  "ls": "",
+  "leg": "audit-fixes-2026-09-24"
 }
