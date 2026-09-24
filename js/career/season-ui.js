@@ -170,8 +170,12 @@ function create(G) {
 
   function build() {
     if (!draft) return;
-    buildCalendar();
-    buildPool();
+    // Every chip, preset and "Add" button repaints both panes and destroys
+    // itself; keepFocus puts focus back on the same slot (the calendar's
+    // arrows still refocus exactly via focusCal, which runs after this).
+    const panes = () => { buildCalendar(); buildPool(); };
+    if (window.TopModal && TopModal.keepFocus) TopModal.keepFocus($("season-setup"), panes);
+    else panes();
     const live = SeasonCal.hasProgress(G.season);
     // #ss-apply is a STATIC shell node — unlike the rebuilt-per-paint confirm
     // buttons, node replacement never disarms it, so an armed RESTART could
@@ -219,9 +223,17 @@ function create(G) {
   $("ss-apply").onclick = () => {
     const apply = () => {
       Log.info("ui", "SeasonUI.apply");
-      SeasonCal.setConfig(draft);
-      G.season = SeasonCal.restart();
-      SeasonCal.save(G.season);
+      const result = SeasonCal.applyConfig(draft);
+      if (!result.ok) {
+        const note = $("ss-note");
+        if (note) {
+          note.setAttribute("role", "status");
+          note.textContent = "Season changed in another tab. Reopen setup to review the latest save.";
+        }
+        return;
+      }
+      G.season = result.season;
+      if (!result.durable && G.announce) G.announce("SEASON IS SESSION ONLY — STORAGE IS FULL", 4, "race");
       G.trackIdx = SeasonCal.trackIndex(0);
       close();
       G.buildSelect();

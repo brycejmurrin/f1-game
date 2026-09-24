@@ -123,11 +123,27 @@ window.AriaState = (function () {
     });
   }
 
+  // A SLIDER SAYS WHAT ITS READOUT SAYS. Every range here paints its value into
+  // a sibling `#<id>-v` ("84%", "PULL 3", "OFF"), but the input's own aria-label
+  // outranks the wrapping label, so a screen reader heard the raw step ("11")
+  // where the screen showed "84%". Mirrored from the readout — the one place the
+  // formatting already lives — whenever it differs from the bare number.
+  function syncValueText(root) {
+    for (const input of root.querySelectorAll('input[type="range"][id]')) {
+      const out = document.getElementById(input.id + "-v");
+      const text = out ? out.textContent.trim() : "";
+      if (text && text !== String(input.value)) {
+        if (input.getAttribute("aria-valuetext") !== text) input.setAttribute("aria-valuetext", text);
+      } else if (input.hasAttribute("aria-valuetext")) input.removeAttribute("aria-valuetext");
+    }
+  }
+
   function syncAll() {
     for (const r of document.querySelectorAll(ROOTS)) {
       syncRoot(r);
       paintOnOff(r);
       syncHashNav(r);
+      syncValueText(r);
     }
   }
 

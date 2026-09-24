@@ -185,6 +185,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/telemetry-trace.test.mjs",
   "tests/unit/meeting-picker-labels.test.mjs",
   "tests/unit/data-api-status.test.mjs",
+  "tests/unit/data-lazy-loader.test.mjs",
   "tests/unit/scenery-api-contract.test.mjs",
   "tests/unit/scenery-guards.test.mjs",
   "tests/unit/track-build-vm-release.test.mjs",
@@ -194,6 +195,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/tools-runnable.test.mjs",
   "tests/unit/css-play.test.mjs",
   "tests/unit/menu-capture.test.mjs",
+  // The rendered flicker gate's metric (tools/lib/flicker-metric.mjs) on
+  // synthetic frames, plus its site table: ~0.1 s, no browser. The gate itself
+  // runs only in ci.yml's non-blocking flicker-gate job.
+  "tests/unit/flicker-metric.test.mjs",
   "tests/unit/report-server.test.mjs",
   "tests/unit/mcp-cli.test.mjs",
   "tests/unit/apex-tools-mcp.test.mjs",
@@ -308,6 +313,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/move-tree.test.mjs",
   "tests/unit/gfx-backend-canary.test.mjs",
   "tests/unit/start-race-latch.test.mjs",
+  "tests/unit/session-entry-vm.test.mjs",
+  "tests/unit/red-flag-fuel-vm.test.mjs",
   "tests/unit/gfx-debug-overlay.test.mjs",
   "tests/unit/car-presentation-canary.test.mjs",
   "tests/unit/car-wing-foil.test.mjs",
@@ -436,6 +443,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/audio-sample-upgrade.test.mjs",
   "tests/unit/audio-tune.test.mjs",
   "tests/unit/rival-audio.test.mjs",
+  "tests/unit/voice-pack.test.mjs",
   // The RESULTS tab drives OpenF1's session_result, whose duration and gap
   // change SHAPE with the session type. Pure rules over a stub DOM, ~0.1 s.
   "tests/unit/data-results.test.mjs",

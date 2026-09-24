@@ -77,9 +77,14 @@
       cameraPosition, frontFacing,
       fract, floor, mod, dot, cross, mix, smoothstep, clamp, pow, exp, sqrt,
       abs, max, min, normalize, length, reflect, select, sin, cos,
-      dFdx, dFdy, fwidth, materialReference,
+      dFdx, dFdy, fwidth,
     } = TSL;
     const { hash21, vnoise, ignoise } = ctx.chunks;
+    // ONE base node per shadow map; the PCF taps are its .sample() clones. With
+    // vendor patch 10 the clones share the base's flipY uniform, so a map's 4-8
+    // taps cost one per-object update on three's WebGL2 backend, not one each.
+    // setUpdateMatrix(false): the taps pass explicit UVs, never the uv matrix.
+    const shadowMapNode = (tex) => texture(tex).setUpdateMatrix(false);
 
     // r184 NodeMaterial.customProgramCacheKey() hashes child-node ids, and
     // MeshBasicNodeMaterial.lights defaults TRUE. setup() mints a fresh
@@ -581,8 +586,9 @@
             if (SHD.blockerTex) {
               If(nearLod.and(U.pcssOn.greaterThan(0.5)), () => {
                 const bt = float(1.5 / (SHD.blockerSize || 512)).mul(boxK).toVar();
+                const blkT = shadowMapNode(SHD.blockerTex);
                 const btap = (px, py) =>
-                  texture(SHD.blockerTex, flipUV(sc.xy.add(vec2(px, py).mul(bt)))).r;
+                  blkT.sample(flipUV(sc.xy.add(vec2(px, py).mul(bt)))).r;
                 const zb = min(min(btap(-1.0, 1.0), btap(1.0, 1.0)),
                                min(btap(-1.0, -1.0), btap(1.0, -1.0)));
                 const pen = clamp(z.sub(zb).mul(U.pcssPen), 0.0, 1.0);
@@ -609,8 +615,9 @@
             const rot = (px, py) => vec2(
               cr.mul(px).add(sr.mul(py)),
               sr.negate().mul(px).add(cr.mul(py))).mul(rk);
+            const sunT = shadowMapNode(SHD.sunTex);
             const tap = (px, py) =>
-              texture(SHD.sunTex, flipUV(sc.xy.add(rot(px, py)))).compare(z);
+              sunT.sample(flipUV(sc.xy.add(rot(px, py)))).compare(z);
             // 4 Poisson taps always; 4 more near the camera (js/render/glx/shaders/glsl-lit.js).
             const s = tap(-0.94201624, -0.39906216)
               .add(tap(0.94558609, -0.76890725))
@@ -637,8 +644,9 @@
                   .and(cs.z.lessThan(1.0)), () => {
                   const cz = cs.z.sub(biasTerm.mul(U.carBiasScale)).toVar();
                   const ct = (1.0 / (SHD.carSize || 1024)) * 0.75;   // CAR_SHADOW_SIZE texel, tightened — off the REAL map (256² under software GL)
+                  const carT = shadowMapNode(SHD.carTex);
                   const ctap = (px, py) =>
-                    texture(SHD.carTex, flipUV(cs.xy.add(vec2(px, py)))).compare(cz);
+                    carT.sample(flipUV(cs.xy.add(vec2(px, py)))).compare(cz);
                   const csh = ctap(-ct, -ct).add(ctap(ct, -ct))
                     .add(ctap(-ct, ct)).add(ctap(ct, ct)).mul(0.25);
                   sh.assign(min(sh, csh));
@@ -1680,8 +1688,9 @@
                       .and(lps.z.lessThan(1.0)), () => {
                       const lpz = lps.z.sub(float(0.0012).add(float(0.004).mul(NoLl.oneMinus()))).toVar();
                       const lpt = 1.5 / (SHD.lampSize || 512);   // LAMP_SHADOW_SIZE texel off the REAL map (256² under software GL)
+                      const lampT = shadowMapNode(SHD.lampTex);
                       const ltap = (px, py) =>
-                        texture(SHD.lampTex, flipUV(lps.xy.add(vec2(px, py)))).compare(lpz);
+                        lampT.sample(flipUV(lps.xy.add(vec2(px, py)))).compare(lpz);
                       lampSh.assign(ltap(-lpt, -lpt).add(ltap(lpt, -lpt))
                         .add(ltap(-lpt, lpt)).add(ltap(lpt, lpt)).mul(0.25));
                     });
@@ -1973,8 +1982,8 @@
      * DIFFERENT program text — a Monza load minted 595 GL programs / 615
      * unique shader strings and spent ~60 s inside the synchronous
      * getProgramParameter(LINK_STATUS) that three only skips on its
-     * compileAsync path. The scalars therefore become materialReference
-     * nodes reading `material.userData.tlx*` — per-RENDER-OBJECT uniform
+     * compileAsync path. The scalars therefore become per-object uniforms
+     * reading `material.userData.tlx*` — per-RENDER-OBJECT uniform
      * updates against ONE shared graph (exactly how three shares programs
      * between classic material instances). Three graphs total: chunked reads
      * no `trk` attribute, and instanced multiplies canonical vertex colour by
@@ -1987,10 +1996,33 @@
     // mesh's userData, and this uniform reads them per render object (the
     // same OBJECT update materialReference rides), falling back to the
     // material's own value for meshes the pool never touched.
-    const perObject = (k) => uniform(0).onObjectUpdate(({ object, material }) => {
-      const v = object && object.userData[k];
-      return v !== undefined ? v : (material ? material.userData[k] : undefined);
-    });
+    const _PACK_A_DEF = new THREE.Vector4(0.7, 0.0, 0.5, 0.0);   // roughness, metalness, specular, detail
+    const _PACK_B_DEF = new THREE.Vector4(0.0, 0.0, 1.0, 0.0);   // clearcoat, carPaint, sparkle, -
+    // ONE per-object callback per graph (was five: three per-draw scalars and
+    // two packed vec4s, each its own OBJECT update on every draw of every pass).
+    // It writes the per-draw scalars (emissive, alpha, lgRoad) into its own
+    // vec3 and points the two plain packed uniforms at this material's vectors.
+    // Safe because three runs every node update of a render object before its
+    // bindings are read. Per-draw keys fall back to the material's value for
+    // meshes the pool never touched; an absent key keeps the last value (as the
+    // old per-key uniforms did).
+    const _drawKeys = ["tlxEmissive", "tlxAlpha", "tlxLgRoad"];
+    function perDrawUniforms() {
+      const pA = uniform(_PACK_A_DEF.clone()), pB = uniform(_PACK_B_DEF.clone());
+      const draw = uniform(new THREE.Vector3(0, 1, 0)).onObjectUpdate(({ object, material }) => {
+        const v = draw.value, mud = material ? material.userData : null;
+        for (let i = 0; i < 3; i++) {
+          const k = _drawKeys[i];
+          let x = object ? object.userData[k] : undefined;
+          if (x === undefined && mud) x = mud[k];
+          if (x !== undefined) v.setComponent(i, x);
+        }
+        pA.value = (mud && mud.tlxPackA) || _PACK_A_DEF;
+        pB.value = (mud && mud.tlxPackB) || _PACK_B_DEF;
+        return v;
+      });
+      return { draw, pA, pB };
+    }
     const _sharedGraph = [null, null, null]; // [plain, chunked, instanced]
     const _mats = [];
     let _sharedPos = null;
@@ -1998,18 +2030,16 @@
       const idx = instanced ? 2 : (chunked ? 1 : 0);
       let g = _sharedGraph[idx];
       if (!g) {
-        const matU = {
-          emissive:  perObject("tlxEmissive"),
-          alpha:     perObject("tlxAlpha"),
-          lgRoad:    perObject("tlxLgRoad"),
-          roughness: materialReference("userData.tlxRoughness", "float"),
-          metalness: materialReference("userData.tlxMetalness", "float"),
-          specular:  materialReference("userData.tlxSpecular", "float"),
-          detail:    materialReference("userData.tlxDetail", "float"),
-          clearcoat: materialReference("userData.tlxClearcoat", "float"),
-          carPaint:  materialReference("userData.tlxCarPaint", "float"),
-          sparkle:   materialReference("userData.tlxSparkle", "float"),
-        };
+        // The seven per-MATERIAL scalars ride two packed vec4s (makeMaterial
+        // fills material.userData.tlxPackA/B once). Seven materialReference
+        // nodes cost seven updateReference + property-path walks per render
+        // object per pass — census 289 put updateReference at 4.6-5.6 % of the
+        // three.js/WebGL2 leg's CPU; one callback now feeds all of them.
+        const { draw, pA, pB } = perDrawUniforms();
+        const matU = { emissive: draw.x, alpha: draw.y, lgRoad: draw.z };
+        matU.roughness = pA.x; matU.metalness = pA.y;
+        matU.specular = pA.z;  matU.detail = pA.w;
+        matU.clearcoat = pB.x; matU.carPaint = pB.y; matU.sparkle = pB.z;
         const packed = buildFragment(matU, chunked, instanced);
         // Swizzle ONCE: packed.rgb mints a new wrapper node per access, and a
         // fresh wrapper is a fresh cache key — the whole point is one graph.
@@ -2048,6 +2078,8 @@
       ud.tlxClearcoat = val(o.clearcoat, 0.0);
       ud.tlxCarPaint  = val(o.carPaint, 0.0);
       ud.tlxSparkle   = val(o.sparkle, 1.0);
+      ud.tlxPackA = new THREE.Vector4(ud.tlxRoughness, ud.tlxMetalness, ud.tlxSpecular, ud.tlxDetail);
+      ud.tlxPackB = new THREE.Vector4(ud.tlxClearcoat, ud.tlxCarPaint, ud.tlxSparkle, 0);
       ud.tlxChunked   = !!o.chunked;
       ud.tlxInstanced = !!o.instanced;
       const packed = sharedFragment(!!o.chunked, !!o.instanced);

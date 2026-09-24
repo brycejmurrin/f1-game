@@ -65,6 +65,9 @@ const RadioLines = (function () {
     "eng.lastDefend": ["HOLD {behind} OFF, {gap} BEHIND", "LAST ONE. {behind} IS {gap} BACK, NO MISTAKES"],
     "eng.lastLead": ["LAST LAP, YOU'RE LEADING. BRING IT HOME", "ONE MORE. NICE AND CLEAN FOR THE WIN"],
     "eng.lastCalm": ["LAST LAP. BRING HOME P{pos}", "ONE TO GO. KEEP IT ON THE ROAD"],
+    // The RADIO CHECK over the loading flyby's last shot (js/ui/loading-screen.js),
+    // the camera settled behind the player's car in grid slot {pos}.
+    "eng.grid": ["P{pos}. SETTLE IN", "P{pos}. STAY CALM", "P{pos}. STAY FOCUSED", "P{pos}. NO MISTAKES"],
     "eng.win": ["YES! YOU WIN THE RACE!", "GET IN THERE! RACE WINNER!", "P1! WHAT A DRIVE!"],
     "eng.podium": ["P{pos}! PODIUM, GREAT JOB", "ON THE PODIUM! P{pos}, WELL DRIVEN"],
     "eng.points": ["P{pos}. GOOD POINTS TODAY", "P{pos}, SOLID RESULT. THANK YOU"],
@@ -129,7 +132,9 @@ const RadioLines = (function () {
   /** "1:32.4" — the tenth is what an engineer reads out, not the thousandth. */
   function timeText(s) {
     if (!(s > 0) || !Number.isFinite(s)) return null;
-    const m = Math.floor(s / 60), r = s - m * 60;
+    // Round to the tenth FIRST: 119.97 s is 2:00.0, not "1:60.0".
+    const q = Math.round(s * 10) / 10;
+    const m = Math.floor(q / 60), r = q - m * 60;
     const t = r.toFixed(1);
     return m > 0 ? m + ":" + (r < 10 ? "0" : "") + t : t;
   }

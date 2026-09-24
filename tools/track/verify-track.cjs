@@ -269,11 +269,18 @@ function verifyTrack(id, opts) {
 // over itself. That is circuit data, not mesh.js (docs/notes/SCENERY-QA-PLAN.md
 // §R3): these WARN; any other circuit that grows a fold FAILS. Remove an id once
 // its data is fixed — the check says so.
-// Measured 2026-09-24 (19 of 52; SCENERY-QA-PLAN named only the first four).
+// Measured 2026-09-24 (19 of 52; SCENERY-QA-PLAN named only the first four);
+// 16 fixed the same day by moving path.pts points (start + every turns apex
+// held within 2 m, lap within 0.1 %). bahrain's fix (points 2-4 by the pit
+// exit) moved the pit-exit merge cue (tests/unit/pit-lane-vm.test.mjs) and was
+// reverted. buddh and korea need more than a point
+// move: a hairpin of 5-10 m point spacing at the end of a 0.7-1.2 km
+// one-segment straight, where the Catmull-Rom tangent overshoots, and every fix
+// found shifts a turns apex or the start line past 2 m. fuji's fold moves
+// cleanly, but every variant tried re-rolled its scenery into 2-6 floating
+// tree canopies (float-audit, baseline 0), so it waits on that.
 function knownTarmacFolds() {   // a function, not a const: main() runs above this line
-  return new Set(["bahrain", "korea", "sepang", "sochi",
-    "abudhabi", "buddh", "cota", "estoril", "fuji", "imola", "indianapolis", "istanbul",
-    "jeddah", "magny_cours", "miami", "nurburgring", "shanghai", "spa", "zolder"]);
+  return new Set(["bahrain", "buddh", "fuji", "korea"]);
 }
 
 // Road-ribbon geometry checks on track.roadGeo (the 14-column main ribbon, then

@@ -165,6 +165,31 @@ function restart() {
   activeSeason = season;
   return season;
 }
+// Applying a new setup replaces a saved championship. Resolve the revision
+// before changing either the active rules or the new season's in-memory state.
+function applyConfig(next) {
+  const now = currentRevision();
+  if (seasonConflict || (seasonRevision != null && now !== seasonRevision)) {
+    seasonConflict = true;
+    lastSave = { ok: false, durable: false, reason: "conflict" };
+    return Object.assign({ season: null }, lastSave);
+  }
+  const snap = frozenConfig(next);
+  const season = { round: 0, pts: {}, teamPts: {}, driverCodes: {}, finishes: {}, roundPts: {}, config: snap };
+  if (typeof store.write === "function") lastSave = store.write(SAVE_KEY, season);
+  else {
+    const durable = store.set(SAVE_KEY, season) !== false;
+    lastSave = { ok: true, durable, reason: durable ? null : (store.broken || "Error") };
+  }
+  // A quota failure still leaves the requested season in GameStore's session
+  // cache, so adopt it and let the caller show the non-durable result.
+  cfg = setConfig(next);
+  activeCfg = snap;
+  resolved = null;
+  resetWeekend();
+  armRevision(season);
+  return Object.assign({ season }, lastSave);
+}
 
 function scoreMap(raw) {
   const out = {};
@@ -315,11 +340,16 @@ function award(season, order, fastestId) {
   delete season.lastFl;
   const rp = season.roundPts || (season.roundPts = {});
   order.forEach((c, i) => {
-    // Classified finishers only — still-running cars on a time-cap / early end
-    // must not take table points, countback finishes, or the FL bonus (BUGS.md B4).
-    const classified = !!c.finished && !c.retired;
+    // CLASSIFIED = STILL IN THE RACE. endRace ends the session 2.2 s after the
+    // last human crosses the line and classifies every running car by track
+    // position (fin, then run, then out) — a car 3 s behind at the flag is the
+    // NORMAL case here, not a time-cap corner. B4 (BUGS.md) required
+    // `c.finished` as well, and from then on most of the field scored 0 while
+    // the results sheet still showed their points. Only retirements score
+    // nothing; the fastest-lap bonus alone needs a lap actually completed.
+    const classified = !c.retired;
     let pts = classified ? (table[i] || 0) : 0;
-    if (fl && classified && c.driverId === fastestId && i < 10) { pts += 1; season.lastFl = fastestId; }
+    if (fl && classified && c.finished && c.driverId === fastestId && i < 10) { pts += 1; season.lastFl = fastestId; }
     const row = rp[c.driverId] || (rp[c.driverId] = []);
     row[season.round] = (row[season.round] || 0) + pts;
     season.pts[c.driverId] = (season.pts[c.driverId] || 0) + pts;
@@ -442,7 +472,7 @@ function shuffled(ids, seed) {
 
 return {
   SPRINT_POINTS, CLASSIC_POINTS, DROP_OPTS, LAP_OPTS, PRESETS, DEFAULT_LAPS,
-  config, setConfig, resetConfig, fresh, normalize,
+  config, setConfig, resetConfig, applyConfig, fresh, normalize,
   engage, list, rounds, track, trackIndex,
   load, save, clear, conflicted, saveStatus,
   resume, blank, restart, resetWeekend, canRace, hasProgress,

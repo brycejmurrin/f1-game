@@ -358,6 +358,40 @@
       groundPatch(K(0.785),  1, 28, [36, 0.6, 36], DIRT,
                   { id: "foro-infield-right", samples: 6 });
 
+      // ── Wave-4: Foro Sol entry/exit apertures — bright concrete portals so
+      // the stadium corridor reads as a baseball bowl the cars drive THROUGH
+      // (research: Foro Sol Norte/Sur, Turns 12–15). Gap 22 clears the tieredBowl
+      // at 9 and the boundedStand end-caps at 36. String-literal ids so the
+      // BATCH-01 requiredLandmark source gate can find them.
+      {
+        const a = anchor(K(0.72), -1, 22);
+        if (!onTrack(a.c[0], a.c[2], 10)) {
+          const b = [a.r, a.u, a.t];
+          modelGroup("mexico-foro-sol-entry", {
+            center: vadd(a.c, a.u, 10), size: [8, 22, 18], basis: b,
+          }, (stage) => {
+            addBox(stage, vadd(vadd(a.c, a.t, -6), a.u, 8), [3.5, 16, 2.2], [0.78, 0.76, 0.72], b);
+            addBox(stage, vadd(vadd(a.c, a.t,  6), a.u, 8), [3.5, 16, 2.2], [0.78, 0.76, 0.72], b);
+            addBox(stage, vadd(a.c, a.u, 17), [4.0, 2.2, 16], [0.88, 0.86, 0.80], b);
+            addBox(stage, vadd(a.c, a.u, 15.6), [3.6, 0.8, 14], BOWL_BLUE, b);
+          }, { required: true });
+        }
+      }
+      {
+        const a = anchor(K(0.875), -1, 22);
+        if (!onTrack(a.c[0], a.c[2], 10)) {
+          const b = [a.r, a.u, a.t];
+          modelGroup("mexico-foro-sol-exit", {
+            center: vadd(a.c, a.u, 10), size: [8, 22, 18], basis: b,
+          }, (stage) => {
+            addBox(stage, vadd(vadd(a.c, a.t, -6), a.u, 8), [3.5, 16, 2.2], [0.78, 0.76, 0.72], b);
+            addBox(stage, vadd(vadd(a.c, a.t,  6), a.u, 8), [3.5, 16, 2.2], [0.78, 0.76, 0.72], b);
+            addBox(stage, vadd(a.c, a.u, 17), [4.0, 2.2, 16], [0.88, 0.86, 0.80], b);
+            addBox(stage, vadd(a.c, a.u, 15.6), [3.6, 0.8, 14], BOWL_BLUE, b);
+          }, { required: true });
+        }
+      }
+
       // ── THE BOWL ITSELF ─────────────────────────────────────────────────
       // Foro Sol is a BASEBALL STADIUM the circuit drives through, and what
       // that means on camera is a steep stepped rake of navy bucket seats
@@ -450,6 +484,35 @@
       for (const s of [0.90, 0.92, 0.94]) {
         boundedStand(s, 1, 14, 24, SEATS, PINK, false);
         boundedStand(s, 1, 32, 26, CONCRETE, GREEN, false);
+      }
+      // Wave-4 hero: Peraltada / Estadio grandstand — long curved seating wall
+      // on the banked final sweep (research: Grandstand 14/15 view toward
+      // Peraltada; festive green/white/red fascia). Gap 40 sits behind the
+      // boundedStand rings at 14/32 so clip-audit stays within mexico's baseline.
+      {
+        // Far outer ring — gap 62 clears the terrace at 46 and any parallel
+        // stretch the banked Peraltada brings close.
+        const a = anchor(K(0.935), 1, 62);
+        if (!onTrack(a.c[0], a.c[2], 20)) {
+          const b = [a.r, a.u, a.t];
+          modelGroup("mexico-peraltada-stand", {
+            center: vadd(a.c, a.u, 8), size: [12, 18, 48], basis: b,
+          }, (stage) => {
+            for (let t = 0; t < 5; t++) {
+              const outLat = 1 * (1.2 + t * 1.5);
+              addBox(stage, vadd(vadd(a.c, a.r, outLat), a.u, t * 1.3 + 0.65),
+                [2.6, 1.3, 40 - t * 2], BOWL_BLUE, b);
+            }
+            addBox(stage, vadd(vadd(a.c, a.r, 1 * 2.0), a.u, 7.8),
+              [0.35, 1.0, 38], GREEN, b);
+            addBox(stage, vadd(vadd(a.c, a.r, 1 * 2.0), a.u, 9.0),
+              [0.35, 1.0, 38], [0.94, 0.94, 0.92], b);
+            addBox(stage, vadd(vadd(a.c, a.r, 1 * 2.0), a.u, 10.2),
+              [0.35, 1.0, 38], [0.86, 0.12, 0.16], b);
+            addBox(stage, vadd(vadd(a.c, a.r, 1 * 5.0), a.u, 11.8),
+              [7, 0.5, 36], [0.70, 0.70, 0.72], b);
+          }, { required: true });
+        }
       }
       terrace(0.892, 0.952, 1, 46, {
         rows: 6, rise: 1.7, depth: 2.7, crowd: crowdCols,

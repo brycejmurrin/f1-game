@@ -48,14 +48,10 @@
       runoff:        [0.66, 0.44, 0.30],   // Algarve red earth
       sunDir:        [0.38, 0.72, 0.28],
     },
-    elevations: [
-      { s: 0.045, halfM: 260, rise: -14.0 },  // the drop into Turn 1
-      { s: 0.20, halfM: 300, rise: 11.0 },    // climb to the Turn 3 crest
-      { s: 0.36, halfM: 340, rise: -13.0 },   // plunge through the middle sector
-      { s: 0.56, halfM: 300, rise: 10.0 },    // back up the hill
-      { s: 0.78, halfM: 320, rise: -9.0 },    // drop toward the final complex
-      { s: 0.93, halfM: 300, rise: 12.0 },    // climb back to the pit straight
-    ],
+    // Elevation from SRTM bake in js/track/circuit-elevations.js
+    // (`node tools/gen/bake-elevation.mjs portimao`). Six authored cosine
+    // bumps kept the rollercoaster range (~26 m) but left knife-edge grade
+    // changes (~7 pp per ~70 m step). hasRealElevation(id) ignores elevations.
     hwZones: [
       { s0: 0.140, s1: 0.185, hw: 6.3, ease: 0.012 },
       { s0: 0.470, s1: 0.515, hw: 6.2, ease: 0.012 },

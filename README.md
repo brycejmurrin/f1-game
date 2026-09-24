@@ -196,6 +196,9 @@ Music: free demo tracks from
 **CC0 1.0** (public domain) and downsampled for the web. See
 [`assets/music/CREDITS.txt`](assets/music/CREDITS.txt). The engine and sound
 effects are synthesized in-browser with the Web Audio API.
+The team-radio voice is synthetic speech from
+[Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (**Apache-2.0**),
+rendered offline; see [`assets/voice/CREDITS.txt`](assets/voice/CREDITS.txt).
 
 ---
 

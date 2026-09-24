@@ -35,7 +35,8 @@ const RaceFacts = (function () {
     const st = new Map();          // car -> per-car timing + edge memory
     const pairs = new Map();       // "id|id" -> { ahead, pend }
     const battles = new Map();     // "id|id" -> { since, a, b }
-    const hist = new Map();        // player checkpoint -> { a, ga, b, gb }
+    const hist = new Map();        // player checkpoint -> { a, ga, b, gb, t }
+    let pitEndT = -1e9;            // when the player last left the pit lane
     let order = [];
     let fastest = { time: Infinity, car: null };
     let pos = 0, pendPos = 0, pendT = 0;
@@ -91,6 +92,13 @@ const RaceFacts = (function () {
       const out = [];
       for (const c of list) if (!c.retired) out.push(c);
       out.sort((a, b) => {
+        // TWO FLAGGED CARS go by laps, then by who took the flag first — never
+        // by distance: each froze wherever its last timestep left it past the
+        // line, up to ~1.4 m at 85 m/s, and a car flagged 20 s behind the winner
+        // could rank ahead of it and be told it won.
+        if (a.finished && b.finished) {
+          return ((b.lap || 0) - (a.lap || 0)) || ((st.get(a).finT || 0) - (st.get(b).finT || 0));
+        }
         const d = distOf(b) - distOf(a);
         if (Math.abs(d) > 1) return d;
         if (a.finished !== b.finished) return a.finished ? -1 : 1;
@@ -130,6 +138,9 @@ const RaceFacts = (function () {
         if (c.retired && !s.retired) ev.push({ type: "retire", car: c, why: c.dnf || c.dnfWhy || "mechanical", pos: order.indexOf(c) + 1 });
         s.retired = !!c.retired;
         const pit = inPits(c);
+        // The player's own stop is not pace: a gap measured across it (or across
+        // a caution, below) read as "LOSING 2.7 A LAP" — start the history again.
+        if (c === p && pit !== s.pit) { hist.clear(); if (!pit) pitEndT = t; }
         if (pit && !s.pit) ev.push({ type: "pitIn", car: c, pos: order.indexOf(c) + 1 });
         if (pit || s.pit) s.pitT = t;
         s.pit = pit;
@@ -160,11 +171,16 @@ const RaceFacts = (function () {
       }
 
       // ── passes: a flipped pair that HOLDS ───────────────────────────────
+      // Pairs not looked at this tick are forgotten: a car that fell three
+      // places inside the hold left a stale "who is ahead", which fired as a
+      // pass — a lead change twenty seconds late — when the two met again.
+      const seen = new Set();
       for (let i = 0; i < order.length; i++) {
         for (let j = i + 1; j <= i + PAIR_SPAN && j < order.length; j++) {
           const a = order[i], b = order[j];
           const ia = bag(a).id, ib = bag(b).id;
           const key = ia < ib ? ia + "|" + ib : ib + "|" + ia;
+          seen.add(key);
           let r = pairs.get(key);
           if (!r) { pairs.set(key, { ahead: a, pend: 0 }); continue; }
           if (r.ahead === a) { r.pend = 0; continue; }
@@ -179,6 +195,8 @@ const RaceFacts = (function () {
         }
       }
 
+      for (const k of Array.from(pairs.keys())) if (!seen.has(k)) pairs.delete(k);
+
       // ── the player's position, with the same hold ───────────────────────
       const raw = order.indexOf(p) + 1;
       if (!pos) pos = raw;
@@ -189,9 +207,11 @@ const RaceFacts = (function () {
       } else { pendPos = 0; pendT = 0; }
 
       // ── flags and contact ───────────────────────────────────────────────
-      const ci = G.cautionInfo ? G.cautionInfo() : null;
-      const lvl = ci ? ci.level | 0 : 0;
-      if (lvl !== caution) { ev.push({ type: "caution", level: lvl, prev: caution }); caution = lvl; }
+      // cautionLevel(), not cautionInfo(): this runs every physics step, and
+      // info() builds an 11-field object (with a toFixed string) to read one int.
+      const lvl = G.cautionLevel ? G.cautionLevel() | 0 : 0;
+      // A lap under the safety car or VSC is not pace either: every gap closes.
+      if (lvl !== caution) { ev.push({ type: "caution", level: lvl, prev: caution }); caution = lvl; hist.clear(); }
       const hits = p.hits | 0;
       // hitSev is the race's WORST impact, not this one's, so "rose" is the
       // only honest signal that this contact was a big one.
@@ -209,11 +229,13 @@ const RaceFacts = (function () {
       let rateA = null, rateB = null;
       if (sp && sp.cp >= 0) {
         if (!hist.has(sp.cp)) {
-          hist.set(sp.cp, { a: ahead, ga: gA, b: behind, gb: gB });
+          hist.set(sp.cp, { a: ahead, ga: gA, b: behind, gb: gB, t });
           hist.delete(sp.cp - RING);
         }
         const old = hist.get(sp.cp - K);
-        if (old) {
+        // …and the first seconds out of the lane are still the stop (a car
+        // accelerating from the limiter): no pace is read from them either.
+        if (old && old.t - pitEndT >= 5) {
           if (ahead && old.a === ahead && old.ga != null && gA != null) rateA = gA - old.ga;
           if (behind && old.b === behind && old.gb != null && gB != null) rateB = gB - old.gb;
         }
@@ -236,11 +258,26 @@ const RaceFacts = (function () {
 
       const leader = order[0] || null, second = order[1] || null;
       const laps = G.lapsTarget || 0;
+      const leaderToGo = laps > 0 && leader ? Math.max(0, laps - (leader.lap || 0) + 1) : null;
+      // A LAPPED car is flagged at its first crossing after the leader's, so its
+      // laps to go are the leader's, not its own count: "3 LAPS LEFT" on what
+      // was really the last lap, then "2 TO GO" after the flag.
+      // When the leader will take the flag is estimated from both cars' average
+      // pace; the player's laps to go are the crossings until just after that.
+      let toGo = laps > 0 ? Math.max(0, laps - (p.lap || 0) + 1) : null;
+      if (toGo != null && leader && leader !== p && !p.finished && (leader.lap || 0) > (p.lap || 0) && t > 0) {
+        const vL = (leader.prog || 0) / t, vP = (p.prog || 0) / t;
+        if (vL > 0 && vP > 0) {
+          const tL = leader.finished ? 0 : Math.max(0, laps * lapLen - (leader.prog || 0)) / vL;
+          const at = (p.prog || 0) + tL * vP;
+          toGo = Math.max(1, Math.min(toGo, Math.floor(at / lapLen) - Math.floor((p.prog || 0) / lapLen) + 1));
+        }
+      }
       const f = {
         t, laps,
         lap: p.lap || 0,
-        toGo: laps > 0 ? Math.max(0, laps - (p.lap || 0) + 1) : null,
-        leaderToGo: laps > 0 && leader ? Math.max(0, laps - (leader.lap || 0) + 1) : null,
+        toGo,
+        leaderToGo,
         pos: pos || raw, rawPos: raw, n: order.length,
         gridPos: grid && grid.has(p) ? grid.get(p) : null,
         ahead, behind, gapA: gA, gapB: gB, rateA, rateB,

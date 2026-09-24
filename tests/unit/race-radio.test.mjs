@@ -109,6 +109,7 @@ function race(opts = {}) {
     lapsTarget: opts.laps || 20, timeTrial: false, practice: false, camMode: opts.cam || 0, hudProfile: "standard",
     LAT_MAX: 30, vTop: () => 80, raceRound: 0, announceBusy: false,
     cautionInfo: () => ({ level: G._caution || 0 }),
+    cautionLevel: () => G._caution || 0,
     store: { get: (k, d) => (store.has(k) ? store.get(k) : d), set: (k, v) => store.set(k, v) },
     announce: (msg, dur, kind) => { said.push({ t: +G.raceT.toFixed(2), msg, kind }); return true; },
   };
@@ -134,7 +135,7 @@ function race(opts = {}) {
 test("the timing-loop gap is the time between two cars at the same line, not prog/speed", () => {
   const f = RF.create();
   const a = car("AAA", 1000, 80), b = car("BBB", 920, 80);
-  const G = { state: "race", raceT: 0, cars: [a, b], player: b, track: { total: LAP }, cautionInfo: () => ({ level: 0 }) };
+  const G = { state: "race", raceT: 0, cars: [a, b], player: b, track: { total: LAP }, cautionInfo: () => ({ level: 0 }), cautionLevel: () => 0 };
   let out;
   for (let i = 0; i < 600; i++) {
     G.raceT += 1 / 60;
@@ -149,7 +150,7 @@ test("the timing-loop gap is the time between two cars at the same line, not pro
 test("a pass counts only once the new order has HELD", () => {
   const f = RF.create();
   const a = car("AAA", 1000, 60), b = car("BBB", 999, 60), p = car("PLY", 500, 60, { isPlayer: true });
-  const G = { state: "race", raceT: 0, cars: [a, b, p], player: p, track: { total: LAP }, cautionInfo: () => ({ level: 0 }) };
+  const G = { state: "race", raceT: 0, cars: [a, b, p], player: p, track: { total: LAP }, cautionInfo: () => ({ level: 0 }), cautionLevel: () => 0 };
   const passes = [];
   const tick = () => { G.raceT += 0.1; for (const c of G.cars) c.prog += c.speed * 0.1; passes.push(...f.observe(G, 0.1).ev.filter((e) => e.type === "pass")); };
   for (let i = 0; i < 40; i++) tick();
@@ -166,7 +167,7 @@ test("a pass counts only once the new order has HELD", () => {
 test("a car in the pit lane is not overtaken — that is a pit stop", () => {
   const f = RF.create();
   const a = car("AAA", 1000, 60), b = car("BBB", 950, 60), p = car("PLY", 500, 60, { isPlayer: true });
-  const G = { state: "race", raceT: 0, cars: [a, b, p], player: p, track: { total: LAP }, cautionInfo: () => ({ level: 0 }) };
+  const G = { state: "race", raceT: 0, cars: [a, b, p], player: p, track: { total: LAP }, cautionInfo: () => ({ level: 0 }), cautionLevel: () => 0 };
   const evs = [];
   const tick = () => { G.raceT += 0.1; for (const c of G.cars) c.prog += c.speed * 0.1; evs.push(...f.observe(G, 0.1).ev); };
   for (let i = 0; i < 40; i++) tick();
@@ -353,4 +354,103 @@ test("RaceRadio reads and writes only its own two settings", () => {
   assert.equal(r.store.get("radioChat"), "chatty");
   assert.equal(r.store.get("commentary"), "on");
   assert.equal(r.radio.setChat("loud"), "chatty", "an unknown level is refused");
+});
+
+// ── Regressions from the 2026-09-24 radio review (a kinematic field, 1/60 s) ──
+// Cars move at a set speed round a 3 km lap; laps, lap times and the flag are
+// kept the way js/game.js keeps them. Enough to replay each reported case.
+const SIM_L = 3000, SIM_DT = 1 / 60;
+if (!ctx.CamModes) ctx.CamModes = { CAM_MODES: [{ id: "chase" }] };
+const simCar = (code, prog, speed, extra) => Object.assign({ code, name: "Driver " + code, prog, speed,
+  lap: prog >= 0 ? Math.floor(prog / SIM_L) + 1 : 0, lastLap: 0, best: Infinity, lapStart: 0, retired: false,
+  finished: false, pitState: "none", pitStops: 0, energy: 0.6, finPos: 0, hits: 0, hitSev: 0 }, extra || {});
+function sim(cars, laps = 20) {
+  const said = [];
+  let lvl = 0;
+  const G = { state: "race", raceT: 0, cars, player: cars.find((c) => c.isPlayer), track: { total: SIM_L }, lapsTarget: laps,
+    timeTrial: false, practice: false, camMode: 0, hudProfile: "standard", LAT_MAX: 30, vTop: () => 80, raceRound: 0,
+    announceBusy: false, cautionInfo: () => ({ level: lvl }), cautionLevel: () => lvl, store: null,
+    announce: (msg, dur, kind) => { said.push({ t: G.raceT, msg, kind }); return true; } };
+  const radio = RR.create(G, { seed: 3 });
+  const flagOut = () => G.cars.some((c) => c.finished && !c.retired);
+  const step = (secs) => {
+    for (let k = 0; k < Math.round(secs / SIM_DT); k++) {
+      G.raceT += SIM_DT;
+      for (const c of G.cars) {
+        if (c.retired) continue;
+        const before = c.prog; c.prog += c.speed * SIM_DT;
+        if (c.finished) continue;
+        if (Math.floor(c.prog / SIM_L) > Math.floor(before / SIM_L)) {
+          const lt = G.raceT - c.lapStart; c.lapStart = G.raceT; c.lap += 1;
+          if (c.lap > 1) { c.lastLap = lt; c.best = Math.min(c.best, lt); }
+          if (c.lap > laps || (c.lap > 1 && flagOut())) c.finished = true;
+        }
+      }
+      radio.update(SIM_DT);
+    }
+  };
+  return { G, radio, said, step, caution: (v) => { lvl = v; }, lines: (from = 0) => said.filter((s) => s.t >= from).map((s) => s.msg) };
+}
+
+test("a car flagged second is never told it won, whatever it overshot the line by", () => {
+  for (let o = 0; o < 40; o++) {
+    const W = simCar("WIN", 3 * SIM_L - 20 - 0.03 * o, 85);
+    const P = simCar("PLY", 3 * SIM_L - 20 - 85 * 20 - 0.041 * ((o * 7) % 40), 85, { isPlayer: true });
+    const r = sim([W, P, simCar("XXX", 3 * SIM_L - 20 - 85 * 40, 85)], 3);
+    r.step(30);
+    assert.ok(!r.lines().some((m) => /YOU WIN|RACE WINNER|WHAT A DRIVE/.test(m)), `offset ${o}: ${r.lines().join(" | ")}`);
+  }
+});
+
+test("after your own stop, the next place gained is called as a gain, not 'DOWN 4'", () => {
+  const cs = ["AAA", "BBB"].map((c, i) => simCar(c, 1200 - i * 60, 60));
+  const P = simCar("PLY", 1080, 60, { isPlayer: true });
+  const rest = ["CCC", "DDD", "EEE", "FFF"].map((c, i) => simCar(c, 1020 - i * 40, 60));
+  const r = sim([...cs, P, ...rest], 30);
+  r.step(20);
+  P.prog = cs[1].prog + 10; r.step(15);
+  P.pitState = "entry"; P.speed = 25; r.step(12);
+  P.pitState = "none"; P.speed = 60; r.step(20);
+  const t0 = r.G.raceT;
+  const ahead = r.G.cars.filter((c) => c !== P && c.prog > P.prog).sort((a, b) => a.prog - b.prog)[0];
+  P.prog = ahead.prog + 8; r.step(20);
+  const after = r.lines(t0);
+  assert.ok(!after.some((m) => /DOWN \d|LOST \d|PAYBACK/.test(m)), after.join(" | "));
+  assert.ok(after.some((m) => /P6/.test(m)), `the gain to P6 is called: ${after.join(" | ")}`);
+});
+
+test("a lapped player hears the last lap on the last lap, and nothing after the flag but the result", () => {
+  const P = simCar("PLY", 30, 60, { isPlayer: true });
+  const r = sim([simCar("LDR", 60, 90), P], 6);
+  r.step(400);
+  const log = r.radio.debug().log.filter((l) => l.ch === "eng");
+  assert.equal(log.length ? log[log.length - 1].id : "", "result", `the result is the last word: ${r.lines().join(" | ")}`);
+  assert.ok(r.lines().some((m) => /ONE TO GO|LAST LAP|ONE MORE/.test(m)), `the last lap is called: ${r.lines().join(" | ")}`);
+});
+
+test("gaps closed under the safety car are not called as pace after the restart", () => {
+  const A = simCar("AAA", 1300, 60), P = simCar("PLY", 1000, 60, { isPlayer: true }), B = simCar("BBB", 820, 60);
+  const r = sim([A, P, B], 30);
+  r.step(120);
+  r.caution(3); A.speed = P.speed = B.speed = 30; r.step(20);
+  P.prog = A.prog - 45 * 1.5; B.prog = P.prog - 45 * 1.6; r.step(100);
+  const t0 = r.G.raceT;
+  r.caution(0); A.speed = P.speed = B.speed = 60; r.step(40);
+  assert.ok(!r.lines(t0).some((m) => /QUICKER|CLOSING|PULLING|LOSING/.test(m)), r.lines(t0).join(" | "));
+});
+
+test("a car that dropped three places at once does not fire a stale pass when it meets them again", () => {
+  const X = simCar("XXX", 1500, 60), A = simCar("AAA", 1480, 60), B = simCar("BBB", 1460, 60), C = simCar("CCC", 1440, 60);
+  const r = sim([X, A, B, C, simCar("PLY", 1000, 60, { isPlayer: true })], 30);
+  r.radio.setComm("on");
+  r.step(30);
+  X.prog = C.prog - 30; r.step(20);
+  const t0 = r.G.raceT;
+  X.prog = C.prog + 5; r.step(8);
+  assert.ok(!r.lines(t0).some((m) => /CHANGE AT THE FRONT|LEADS/.test(m)), r.lines(t0).join(" | "));
+});
+
+test("lap times round before they split: 119.97 s is 2:00.0", () => {
+  assert.equal(RL.timeText(119.97), "2:00.0");
+  assert.equal(RL.timeText(92.44), "1:32.4");
 });
