@@ -128,3 +128,60 @@ test("the shipped default is the card that ships TODAY: no offset, no rescale", 
   assert.equal(v["--ld-card-x"], "0vw");
   assert.equal(v["--ld-card-y"], "0vh");
 });
+
+/* ── THE LETTERBOX ─────────────────────────────────────────────────────────
+ * CSS only (css/overlays.css), so what is checkable here is the SOURCE: the
+ * bars exist, are keyed on the flyby's run phase alone, are gated on landscape
+ * and on motion being welcome, and the card paints above them. */
+
+/** The body of the first `@media` block whose prelude matches `re`. */
+function mediaBody(css, re) {
+  const at = css.search(re);
+  if (at < 0) return "";
+  let i = css.indexOf("{", at), depth = 0;
+  const start = i + 1;
+  for (; i < css.length; i++) {
+    if (css[i] === "{") depth++;
+    else if (css[i] === "}" && --depth === 0) return css.slice(start, i);
+  }
+  return "";
+}
+
+test("letterbox bars run over the flyby only, in landscape, and never under reduced motion", () => {
+  const css = read("css/overlays.css");
+  assert.match(css, /#loading::before,\s*#loading::after\s*\{[^}]*content:\s*none/,
+    "the bars must be OFF by default — only the run phase turns them on");
+  assert.match(css, /#loading::before,\s*#loading::after\s*\{[^}]*height:[^;]*2\.35/, "a 2.35:1 frame");
+  const gated = mediaBody(css, /@media[^{]*orientation:\s*landscape[^{]*prefers-reduced-motion:\s*no-preference/);
+  assert.ok(gated, "the bars are gated on landscape AND prefers-reduced-motion: no-preference");
+  assert.match(gated, /#loading\[data-phase="run"\]::before/);
+  assert.match(gated, /#loading\[data-phase="run"\]::after/);
+  assert.match(gated, /content:\s*""/, "…and that is where they get their content");
+  assert.match(gated, /var\(--ld-fly,\s*24s\)/, "timed to the run's budget, falling back to the shipped 24 s");
+  // Nowhere else turns them on: not the no-world card, not the editor's hold.
+  const outside = css.replace(gated, "");
+  assert.ok(!/#loading\[data-phase="[a-z]+"\]::(before|after)/.test(outside),
+    "a letterbox rule outside the landscape/motion gate");
+  assert.ok(!/data-phase="(card|hold)"\]::(before|after)/.test(css), "the card and hold phases never letterbox");
+  // They OPEN at the end: the last keyframe puts each bar back off-screen.
+  for (const [name, dir] of [["ld-bar-top", "-100%"], ["ld-bar-bottom", "100%"]]) {
+    const kf = css.match(new RegExp(`@keyframes ${name}\\s*\\{([\\s\\S]*?)\\n\\}`));
+    assert.ok(kf, `@keyframes ${name} is missing`);
+    assert.ok(new RegExp(`0%,\\s*100%\\s*\\{\\s*transform:\\s*translateY\\(${dir.replace(/[-%]/g, "\\$&")}\\)`).test(kf[1]),
+      `${name} must start AND end off-screen — the bars open on the last beat`);
+  }
+});
+
+test("the card paints ABOVE the letterbox, so the bottom bar never covers it", () => {
+  const css = read("css/overlays.css");
+  const card = css.match(/\n#ld-card\s*\{([\s\S]*?)\n\}/);
+  assert.ok(card, "#ld-card rule not found");
+  assert.match(card[1], /position:\s*relative/);
+  const cz = +(card[1].match(/z-index:\s*(\d+)/) || [])[1];
+  const bars = css.match(/#loading::before,\s*#loading::after\s*\{([^}]*)\}/);
+  const bz = +(bars[1].match(/z-index:\s*(\d+)/) || [])[1];
+  assert.ok(Number.isFinite(cz) && Number.isFinite(bz) && cz > bz, `card z ${cz} must exceed bar z ${bz}`);
+  // The shipped placement is bottom-centre with no offset: the lower third
+  // overlaps the bottom bar, which is why the stacking order matters at all.
+  assert.equal(CARD.y.def, 0);
+});
