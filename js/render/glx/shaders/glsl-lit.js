@@ -1360,14 +1360,17 @@ void main() {
     // On a baked fragment the live term steps aside (1 - bakeW) and the
     // shadow-mapped lamp carves its shadow out of the pool in the pool's own
     // steady colour (uBakeShCol; 1 - lampSh is 0 for every other lamp).
-    color += albedo * (lb.xyz * (lampSh * (1.0 - bakeW)) - uBakeShCol * ((1.0 - lampSh) * bakeW))
+    // LIVE-ONLY lamps (uLight[li+3].y = 1, LampBake.liveOnlyAt: a lens < 3 m
+    // over its ground or a < ~25 deg cone) are not in the bake: no step-aside.
+    float bakeWl = bakeW * (1.0 - uLight[li + 3].y);
+    color += albedo * (lb.xyz * (lampSh * (1.0 - bakeWl)) - uBakeShCol * ((1.0 - lampSh) * bakeWl))
            * (att * spotD) * NoLl * (1.0 - metalness) * (1.0 - wetSheen * 0.85);
     // Bounce fill: pool light bounced off the road washes nearby surfaces
     // (walls, kerbs, car flanks) with the lamp tint even outside the beam -
     // a near-free stand-in for local ambient probes. Soft NoL floor so
     // surfaces facing away from the lamp still catch a little.
     if (uBounceK > 0.0) {
-      color += albedo * lb.xyz * (att * uBounceK * (0.55 + 0.45 * NoLl)) * (1.0 - metalness) * (1.0 - bakeW);
+      color += albedo * lb.xyz * (att * uBounceK * (0.55 + 0.45 * NoLl)) * (1.0 - metalness) * (1.0 - bakeWl);
     }
     // GGX specular from the lamp — the same microfacet BRDF as the sun. On the
     // wet low-roughness road this physically elongates at grazing angles (the
