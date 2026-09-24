@@ -896,7 +896,10 @@ const SceneryNature = (function () {
       ctx.along(s0, s1, 4, (k, spacing) => {
         if (blocked.has(k)) return;
         const p = anchor(k, side, gap);
-        if (onTrack(p.c[0], p.c[2], 1.2)) {
+        // 5 m, not 1.2: a field hedge that the lap brings within a few metres of
+        // ANOTHER stretch of road sits over that road's terrain dip, grounded on
+        // its own node's height — magny_cours 0.405 hung 2.7 m in the air.
+        if (onTrack(p.c[0], p.c[2], 5)) {
           ctx.noteSuppressed("hedge", `hedge SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
           return;
         }
