@@ -415,6 +415,25 @@ const LoadingScreen = (function () {
       const r = radio();
       if (r) { try { r.stop(); } catch (_) { /* a synth mid-teardown */ } }
     }
+    /* The announcer's share of the flyby. When the radio check will run, the
+     * read must be OVER by the grid-mine shot — it lands its last line at the
+     * end of whatever budget it is given, and radioCheck() waits on speaking(),
+     * so handed the whole flyby it held the channel until the check had no time
+     * left, and the check never played with the announcer on (its default). */
+    function annLife(info, life) {
+      const r = radio();
+      let chat = "normal";
+      try { chat = store && store.get ? store.get("radioChat", "normal") : "normal"; } catch (_) { chat = "normal"; }
+      let on = false;
+      try { on = !!(r && r.debug && r.debug().enabled); } catch (_) { on = false; }
+      if (!on || (chat !== "normal" && chat !== "chatty")) return life;
+      const list = info && info.shots && info.shots.length ? info.shots : null;
+      if (!list) return life;
+      let total = 0, before = -1;
+      for (const sh of list) { if (sh.id === "grid-mine" && before < 0) before = total; total += sh.dur || 0; }
+      if (before < 0 || !(total > 0)) return life;
+      return Math.max(0, Math.min(life, life * before / total - 150));
+    }
     function radioCheck(field) {
       const r = radio();
       const left = (flyMs - (Date.now() - flyT0)) / 1000;
@@ -519,7 +538,7 @@ const LoadingScreen = (function () {
        * "Welcome to—" cut off mid-word is worse than silence. */
       if (info.hasWorld) {
         const a = ann();
-        if (a) { try { a.play(info, life); } catch (e) { Log.warn("audio", "announcer failed", e); } }
+        if (a) { try { a.play(info, annLife(info, life)); } catch (e) { Log.warn("audio", "announcer failed", e); } }
       }
     }
 
