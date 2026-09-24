@@ -143,8 +143,10 @@ test("trim(from) drops the primitive records and the live-buffer set", () => {
 // carve fix raised the terrain beside descents (buried counts moved).
 const STRIP = {
   monaco: { before: 293515, after: 252651 },
-  // Re-measured 2026-09-24 after landmark wave 3 Tribuna/podium + mid densify.
-  monza: { before: 341693, after: 301774 },
+  // Re-measured 2026-09-24 after landmark wave 3 Tribuna/podium + mid densify,
+  // and again after the pit-straight green band moved out of the red trim's
+  // footprint to stand 0.4 m proud (its buried underside now strips: -18).
+  monza: { before: 341693, after: 301756 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {

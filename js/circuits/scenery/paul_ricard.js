@@ -27,6 +27,142 @@
       // helipad paint opposite its circle. Negating here puts them together.
       const groundPatch = (k, side, ...rest) => api.groundPatch(k, -side, ...rest);
 
+      // DRAPE — a flat decal laid ON the rendered terrain (what runoffApron /
+      // groundPatch cannot do: both take ONE height per box, so a 30 m band on
+      // the plateau relief went wholly under grade). The footprint (depth
+      // across x len along, `gap` beyond the edge at node k) is tiled into
+      // <= 24 m cells; each cell samples terrainYAt on a 3x3 grid, is tilted to
+      // the best-fit plane, and spans from `thick` under its lowest sample to
+      // `opts.h` (default 1 cm) over its highest — never buried, never floating.
+      //  * Arc length scales by (1 - kappa*d): the cell length follows it, and
+      //    a cell folded inside a tight corner (scale < 0.25) is dropped.
+      //  * A cell any corner of which lies closer to ANOTHER part of the lap
+      //    than to its own centreline is dropped: two straights' 90 m bands
+      //    met in the infield and lay one over the other.
+      //  * The normal is quantised (0.02 in x/z) and tops and bottoms snap to a
+      //    0.24 m lattice at a per-class residue (`res` in 0.03 steps, + 0.12 on
+      //    alternate cells along the run), so no two overlapping faces share a
+      //    plane (z-fight): they are >= 3 cm apart by construction. Classes
+      //    here: apron 0, corner patch 0.03, vineyard soil 0.06, lane line 0.09.
+      let drapeGrid = null;
+      const DG = 24;
+      const nearestNode = (x, z, R) => {
+        if (!drapeGrid) {
+          drapeGrid = new Map();
+          for (let i = 0; i < n; i++) {
+            const key = Math.floor(px[i] / DG) + "," + Math.floor(pz[i] / DG);
+            let a = drapeGrid.get(key);
+            if (!a) drapeGrid.set(key, (a = []));
+            a.push(i);
+          }
+        }
+        const ix = Math.floor(x / DG), iz = Math.floor(z / DG), m = Math.ceil(R / DG);
+        let best = R * R;
+        for (let a = -m; a <= m; a++) for (let b = -m; b <= m; b++) {
+          for (const i of drapeGrid.get((ix + a) + "," + (iz + b)) || []) {
+            const d = (px[i] - x) ** 2 + (pz[i] - z) ** 2;
+            if (d < best) best = d;
+          }
+        }
+        return Math.sqrt(best);
+      };
+      let drapeSeq = 0;
+      const drape = (k, side, gap, sz, col, opts) => {
+        opts = opts || {};
+        const depth = sz[0], thick = sz[1], len = sz[2], cell = opts.cell || 24;
+        const res = opts.res || 0;
+        const phase = opts.phase != null ? opts.phase : drapeSeq++;
+        const na = Math.max(1, Math.ceil(depth / cell)), nl = Math.max(1, Math.ceil(len / cell));
+        const a0 = anchor(k, side, gap + depth / 2);
+        const cr = (p, q) => [p[1] * q[2] - p[2] * q[1], p[2] * q[0] - p[0] * q[2], p[0] * q[1] - p[1] * q[0]];
+        const dot = (p, q) => p[0] * q[0] + p[1] * q[1] + p[2] * q[2];
+        const nrm = (p) => { const m = Math.hypot(p[0], p[1], p[2]) || 1; return [p[0] / m, p[1] / m, p[2] / m]; };
+        const hand = dot(cr(a0.r, a0.u), a0.t) < 0 ? -1 : 1;
+        const tl = Math.hypot(a0.t[0], a0.t[2]) || 1, th = [a0.t[0] / tl, a0.t[2] / tl];
+        const eL = anchor(k, side, 0).c, eR = anchor(k, -side, 0).c;
+        const mid = [(eL[0] + eR[0]) / 2, (eL[2] + eR[2]) / 2];
+        const spanAt = (d) => {
+          const a = anchor(k - 1, side, d).c, b = anchor(k + 1, side, d).c;
+          return Math.hypot(b[0] - a[0], b[2] - a[2]);
+        };
+        const span0 = spanAt(0) || 1;
+        const dw = depth / na;
+        for (let i = 0; i < na; i++) {
+          const f = spanAt(gap + (i + 0.5) * dw) / span0;
+          if (!(f > 0.25)) continue;
+          const dl = Math.min(3, f) * len / nl;
+          const p0 = anchor(k, side, gap + i * dw).c, p1 = anchor(k, side, gap + (i + 1) * dw).c;
+          const rl = Math.hypot(p1[0] - p0[0], p1[2] - p0[2]) || 1;
+          const rh = [(p1[0] - p0[0]) / rl, (p1[2] - p0[2]) / rl];
+          const fb = anchor(k, side, gap + (i + 0.5) * dw).c[1] + 0.3;
+          for (let j = 0; j < nl; j++) {
+            const lc = (j + 0.5 - nl / 2) * dl;
+            const cx = (p0[0] + p1[0]) / 2 + th[0] * lc, cz = (p0[2] + p1[2]) / 2 + th[1] * lc;
+            let foreign = false;
+            for (const fa of [-0.5, 0.5]) for (const fl of [-0.5, 0.5]) {
+              const x = cx + rh[0] * fa * rl + th[0] * fl * dl, z = cz + rh[1] * fa * rl + th[1] * fl * dl;
+              const own = Math.abs((x - mid[0]) * rh[0] + (z - mid[1]) * rh[1]);
+              if (nearestNode(x, z, own) < own - 1.5) foreign = true;
+            }
+            if (foreign) continue;
+            const S = [];
+            let my = 0;
+            for (const fa of [-0.5, 0, 0.5]) for (const fl of [-0.5, 0, 0.5]) {
+              const aa = fa * rl, ll = fl * dl;
+              const x = cx + rh[0] * aa + th[0] * ll, z = cz + rh[1] * aa + th[1] * ll;
+              const ty = terrainYAt(x, z);
+              const y = ty !== null && Number.isFinite(ty) ? ty : fb;
+              S.push([aa, ll, x, y, z]); my += y / 9;
+            }
+            let ga = 0, gl = 0;
+            for (const s of S) { ga += s[0] * (s[3] - my); gl += s[1] * (s[3] - my); }
+            ga /= 6 * (0.5 * rl) * (0.5 * rl); gl /= 6 * (0.5 * dl) * (0.5 * dl);
+            // Normal quantised to a 0.02 grid in world x/z: overlapping cells
+            // then share it EXACTLY, so the lattice below separates their planes
+            // (two near-equal tilts put the same face 0-2 cm apart at random).
+            const un = nrm(cr([th[0], gl, th[1]], [rh[0], ga, rh[1]]));
+            if (un[1] < 0) { un[0] = -un[0]; un[2] = -un[2]; }
+            const ux = Math.round(un[0] * 50) / 50, uz = Math.round(un[2] * 50) / 50;
+            const u = [ux, Math.sqrt(Math.max(0.5, 1 - ux * ux - uz * uz)), uz];
+            const rd = rh[0] * u[0] + rh[1] * u[2];
+            const r = nrm([rh[0] - rd * u[0], -rd * u[1], rh[1] - rd * u[2]]);
+            const t0 = cr(r, u), t = [t0[0] * hand, t0[1] * hand, t0[2] * hand];
+            const C = [cx, my, cz], dC = dot(C, u);
+            let hi = -1e9, lo = 1e9;
+            for (const s of S) {
+              const h = dot([s[2] - C[0], s[3] - C[1], s[4] - C[2]], u);
+              if (h > hi) hi = h;
+              if (h < lo) lo = h;
+            }
+            const r0 = res + (opts.line ? 0 : 0.12 * ((phase * nl + j) & 1));
+            const top = Math.ceil((dC + hi + (opts.h || 0.01) - r0) / 0.24) * 0.24 + r0 - dC;
+            const bot = Math.floor((dC + lo - thick - r0) / 0.24) * 0.24 + r0 - dC;
+            addBox(out, vadd(C, u, (top + bot) / 2),
+              [rl / (Math.hypot(r[0], r[2]) || 1), top - bot, dl / (Math.hypot(t[0], t[2]) || 1)], col, [r, u, t]);
+          }
+        }
+      };
+      let lapLen = 0;
+      for (let i = 0; i < n; i++) lapLen += Math.hypot(px[(i + 1) % n] - px[i], pz[(i + 1) % n] - pz[i]);
+      // A patch `len` metres long centred on lap fraction `s`, draped one
+      // ~12 m station at a time so it follows the corner instead of running
+      // straight off its tangent (a 190 m box at one node left its ends 6 m
+      // under the plateau relief).
+      // `span` (default: len) is the run the stations are laid over: bands of
+      // one corner share it, so their cells abut station for station instead
+      // of skewing across each other on the curve.
+      const drapeRun = (s, side, gap, sz, col, res, span) => {
+        span = span || sz[2];
+        const k0 = K(s);
+        let st = 0;
+        along(s - span / 2 / lapLen, s + span / 2 / lapLen, 20, (k, sp) => {
+          const dk = Math.abs(((k - k0) % n + n + n / 2) % n - n / 2);
+          if (dk * lapLen / n <= sz[2] / 2 + sp / 2)
+            drape(k, side, gap, [sz[0], sz[1], sp * 1.04], col, { res, phase: st });
+          st++;
+        });
+      };
+
       // Keyed to THIS centreline's corners (Verrerie 0.087 L, Mistral chicane
       // 0.490 L / 0.502 R, Signes 0.713 R, Beausset 0.735-0.755 R, Village
       // 0.887-0.907 L): the old 0.44/0.565/0.72 were written for an earlier
@@ -46,12 +182,10 @@
         // one, far more abrasive, and it is what you hit if the blue did not
         // stop you. Shipped with red as the 9 m strip against the kerb and blue
         // filling the outfield, which reads as the opposite circuit.
-        groundPatch(K(s), side, 4, [w * 0.30, 0.18, l], BLUE,
-          { id: id + "-blue", samples: 8 });
-        groundPatch(K(s), side, 4 + w * 0.30, [w * 0.42, 0.18, l * 1.08], BLUE_D,
-          { id: id + "-blue-outer", samples: 8 });
-        groundPatch(K(s), side, 4 + w * 0.72, [w * 0.28, 0.18, l * 1.14], RED,
-          { id: id + "-red", samples: 8 });
+        // Draped (above), a lift clear of the continuous apron beneath.
+        drapeRun(s, side, 4, [w * 0.30, 0.18, l], BLUE, 0.03, l * 1.14);
+        drapeRun(s, side, 4 + w * 0.30, [w * 0.42, 0.18, l * 1.08], BLUE_D, 0.03, l * 1.14);
+        drapeRun(s, side, 4 + w * 0.72, [w * 0.28, 0.18, l * 1.14], RED, 0.03);
       }
 
       // The corner patches alone leave the rest of the lap green, which is the
@@ -67,20 +201,17 @@
           const seg = spacing * 1.05;   // slight overlap so the run reads unbroken
           // Same order as the corner patches above: blue from the kerb out, red
           // as the deep band before the barrier.
-          runoffApron(k, side, 2.5, [9, 0.16, seg], BLUE);
-          runoffApron(k, side, 11.5, [30, 0.14, seg], (i & 1) ? BLUE : BLUE_D);
-          runoffApron(k, side, 41.5, [26, 0.12, seg], (i & 1) ? RED : RED_D);
-          runoffApron(k, side, 67.5, [22, 0.10, seg], (i & 1) ? RED_D : [0.47, 0.21, 0.20]);
-          if (i % 3 === 0) {
-            const a = anchor(k, side, 26);
-            addBox(out, vadd(a.c, a.u, 0.22), [28, 0.10, 0.9], LINE, [a.r, a.u, a.t]);
-          }
+          // Draped, not runoffApron'd: one box at one anchor height across a
+          // 30 m band put 203 + 144 + 113 of these wholly under the plateau.
+          const ph = { phase: i };
+          drape(k, side, 2.5, [9, 0.16, seg], BLUE, ph);
+          drape(k, side, 11.5, [30, 0.14, seg], (i & 1) ? BLUE : BLUE_D, ph);
+          drape(k, side, 41.5, [26, 0.12, seg], (i & 1) ? RED : RED_D, ph);
+          drape(k, side, 67.5, [22, 0.10, seg], (i & 1) ? RED_D : [0.47, 0.21, 0.20], ph);
+          if (i % 3 === 0) drape(k, side, 12, [28, 0.10, 0.9], LINE, { res: 0.09, line: true });
           // A second lane-line further out, offset in phase, so the Blue Zone
           // reads as a marked run-off surface and never as open water.
-          if (i % 3 === 1) {
-            const a = anchor(k, side, 58);
-            addBox(out, vadd(a.c, a.u, 0.20), [20, 0.10, 0.9], LINE, [a.r, a.u, a.t]);
-          }
+          if (i % 3 === 1) drape(k, side, 48, [20, 0.10, 0.9], LINE, { res: 0.09, line: true });
           i++;
         });
       }
@@ -410,7 +541,10 @@
       for (let i = 0; i < 3; i++) signBoard(K(0.463 + i * 0.010), 1, 8, "braking", 3 - i);   // into the chicane
       signBoard(K(0.052), -1, 8, "corner", 1);
       signBoard(K(0.705), -1, 9, "corner", 8);
-      sponsorHoarding(0.935, 0.070, -1, 3.6, { h: 1.25, step: 10 });
+      // Posted panels, not the theme's LED ribbon: this run stands along the
+      // pit straight, where the pit complex rejects the apron, so a post-less
+      // ribbon hung 0.15 m over bare ground (24 unsupported prims).
+      sponsorHoarding(0.935, 0.070, -1, 3.6, { h: 1.25, step: 10, style: "panel" });
       sponsorHoarding(0.455, 0.520, 1, 3.6, { h: 1.25, step: 11 });
       cameraTower(K(0.030), -1, 26, { h: 17 });
       cameraTower(K(0.713), 1, 84, { h: 20 });
@@ -445,8 +579,9 @@
           // Bare tilled ground under the parcel, so rows sit on soil not grass.
           // Centred on the rows (gap ± rows·2.1): from `gap` outward it only
           // ever covered the outer half of the parcel.
-          groundPatch(K(s), side, gap - rows * 2.25, [rows * 4.5, 0.15, 120], SOIL,
-            { id: `paul-ricard-${id}-soil`, samples: 9 });   // 8 strips put a strip edge on a row face (12 and 18 rows)
+          // Draped: one groundPatch height per 120 m strip left 105 of these
+          // wholly under the rolling plateau (up to 6.4 m).
+          drapeRun(s, side, gap - rows * 2.25, [rows * 4.5, 0.15, 120], SOIL, 0.06);
           for (let r = 0; r < rows; r++) {
             const a = anchor(K(s), side, gap + (r - rows / 2) * 4.2);
             const b = [a.r, a.u, a.t];

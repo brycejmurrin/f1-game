@@ -180,8 +180,14 @@
       grandstandEx(0.02, 1, 12, 120, null, null, { livery: "steel", endWalls: true });
       // Red trim band fronting the main stand (Italian colors).
       prop(K(0.01), -1, 8, [2, 1.6, 130], [0.80, 0.16, 0.14]);
-      // Accent green band (park integration) below red trim.
-      prop(K(0.00), -1, 8.3, [1.8, 0.8, 128], [0.30, 0.54, 0.28]);
+      // Accent green band (park integration) at the foot of the red trim,
+      // 0.4 m proud in front of it. It was a 0.8 m prop INSIDE the red band's
+      // footprint with its top exactly at grade (the 0.8 m sink): invisible.
+      // Raw box, no blockAt: it stands behind the 7.2 m driving limit here.
+      {
+        const a = anchor(K(0.00), -1, 7.7);
+        addBox(out, vadd(a.c, a.u, 0.25), [0.6, 0.9, 128], [0.30, 0.54, 0.28], [a.r, a.u, a.t]);
+      }
 
       {
         const winLit = [0.98, 0.88, 0.52];  // warm amber glow
