@@ -25,8 +25,9 @@ node tools/ci/verify-change.mjs --wait       # every batch — ONLY when the par
 ```
 
 **BEFORE A PUSH, `--fast` IS NOT THE TOP RUNG.** AGENTS.md rule 3 is a ladder
-and `verify-change` sits on rung 2: `test:tooling-fast` is 208 of 278 unit
-files, and the other 70 have taken deploys red three times. The only pre-push
+and `verify-change` sits on rung 2: `test:tooling-fast` is a SUBSET of the unit
+files (the live figures are rule 3's, generated), and the rest have taken deploys
+red three times. The only pre-push
 check that runs what the deploy runs is
 
 ```sh
@@ -40,8 +41,11 @@ rung 3 (`docs/notes/PREPUSH-GATE-LADDER.md`).
 `--wait` blocks for the full queue. Subagents and the default loop use
 `--fast` or a single started batch, then read `artifacts/logs/*.log` for the
 reporter's terminal line `= run <status>  (N/M done, K failed)` — match it with
-`grep -E '= run (passed|failed|timedout|interrupted)'` (ERE alternation; a
-fixed-string or BRE grep never matches).
+`grep -E '^= (run (passed|failed|timedout|interrupted)|bg exit)'` (ERE
+alternation; a fixed-string or BRE grep never matches; `= bg exit N` is
+test-bg's own trailer, the only line a run that died before the reporter's
+summary still writes). The waiter is `node tools/ci/test-bg.mjs --wait
+--timeout <min>` as ONE background task (AGENTS.md rule 4).
 
 Push once per VERIFIED BATCH: a push over a live run cancels it, and a killed
 job runs no `if: always()` step, so its failures are lost (9 of 59 sampled runs

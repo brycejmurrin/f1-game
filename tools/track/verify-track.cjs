@@ -256,9 +256,84 @@ function verifyTrack(id, opts) {
     throw new Error(`${id} props ${props} verts exceed the fleet cap ${PROP_VERT_CAP}`);
   }
 
+  const folds = roadGeoChecks(id, track);
+
   console.log(`OK ${id}: props ${props} verts (road ${road}, terrain ${terrain})` +
     (inst ? ` — ${inst} instanced` : "") + ` — ${total} total`);
+  if (folds) console.log(folds);
   if (!opts.quiet) reportDiagnostics(diagnostics, Tracks._vmConsole || []);
+}
+
+// Circuits whose CENTRELINE kinks tighter than the half-width somewhere (turn
+// radius R < hw), so a racing-surface rail runs backwards and the tarmac folds
+// over itself. That is circuit data, not mesh.js (docs/notes/SCENERY-QA-PLAN.md
+// §R3): these WARN; any other circuit that grows a fold FAILS. Remove an id once
+// its data is fixed — the check says so.
+// Measured 2026-09-24 (19 of 52; SCENERY-QA-PLAN named only the first four).
+function knownTarmacFolds() {   // a function, not a const: main() runs above this line
+  return new Set(["bahrain", "korea", "sepang", "sochi",
+    "abudhabi", "buddh", "cota", "estoril", "fuji", "imola", "indianapolis", "istanbul",
+    "jeddah", "magny_cours", "miami", "nurburgring", "shanghai", "spa", "zolder"]);
+}
+
+// Road-ribbon geometry checks on track.roadGeo (the 14-column main ribbon, then
+// skirts, kerbs and pit hatch). Throws on a hard failure; returns a warning
+// string (or "") for the known tarmac-fold circuits.
+//  1. DUPLICATE TRIANGLES past the main ribbon (same rounded vertices, same
+//     winding — the skirts' back faces are the opposite winding): every local curvature peak used
+//     to lay its own kerb ribbon, stacking up to 9 bit-identical copies (55 % of
+//     all kerb triangles). buildKerbs now lays each covered quad once.
+//  2. TARMAC FOLDS: a rail in columns 2..11 whose step P(k+1)-P(k) has a
+//     non-positive component along the tangent t_k runs backwards.
+function roadGeoChecks(id, track) {
+  const KNOWN_TARMAC_FOLDS = knownTarmacFolds();
+  const g = track.roadGeo;
+  if (!g || !g.pos || !g.idx) return "";
+  const P = g.pos._data || g.pos, I = g.idx._data || g.idx, n = track.n, V = 14;
+  const key = (v) => Math.round(P[v * 3] * 200) + "," + Math.round(P[v * 3 + 1] * 200) + "," + Math.round(P[v * 3 + 2] * 200);
+  const seen = new Set();
+  let dups = 0, firstDup = -1;
+  for (let ti = n * (V - 1) * 2; ti < I.length / 3; ti++) {
+    const a = key(I[ti * 3]), b = key(I[ti * 3 + 1]), c = key(I[ti * 3 + 2]);
+    if (a === b || b === c || a === c) continue;                  // zero-area: harmless
+    // cyclic order kept: the skirts are deliberately two-sided (a,b,c + a,c,b)
+    const ks = a < b && a < c ? a + "|" + b + "|" + c : b < c ? b + "|" + c + "|" + a : c + "|" + a + "|" + b;
+    if (seen.has(ks)) { if (!dups++) firstDup = ti; } else seen.add(ks);
+  }
+  if (dups) throw new Error(`roadGeo has ${dups} duplicate kerb/skirt/hatch triangles (first at tri ${firstDup}) — ` +
+    "a kerb quad laid twice (see buildKerbs in js/track/core/mesh.js)");
+
+  const { px, pz, tx, tz } = track;
+  const runs = [];
+  for (let k = 0; k < n; k++) {
+    const k1 = (k + 1) % n;
+    let bad = false;
+    for (let v = 2; v <= 11 && !bad; v++) {
+      const i0 = (k * V + v) * 3, i1 = (k1 * V + v) * 3;
+      if ((P[i1] - P[i0]) * tx[k] + (P[i1 + 2] - P[i0 + 2]) * tz[k] <= 0) bad = true;
+    }
+    if (!bad) continue;
+    const last = runs[runs.length - 1];
+    if (last && last.k1 === k - 1) { last.k1 = k; continue; }
+    runs.push({ k0: k, k1: k });
+  }
+  if (!runs.length) {
+    return KNOWN_TARMAC_FOLDS.has(id) ? `  note: ${id} has no tarmac fold any more — drop it from KNOWN_TARMAC_FOLDS` : "";
+  }
+  const turnDeg = (k) => {   // heading change across node k, from the centreline chords either side
+    const a = (k - 1 + n) % n, b = (k + 1) % n;
+    const h0 = Math.atan2(pz[k] - pz[a], px[k] - px[a]), h1 = Math.atan2(pz[b] - pz[k], px[b] - px[k]);
+    let d = Math.abs(h1 - h0); if (d > Math.PI) d = 2 * Math.PI - d;
+    return d * 180 / Math.PI;
+  };
+  const desc = runs.map((r) => {
+    let worst = r.k0;
+    for (let k = r.k0; k <= r.k1 + 1; k++) if (turnDeg(k % n) > turnDeg(worst % n)) worst = k % n;
+    return `frac ${(r.k0 / n).toFixed(3)} (nodes ${r.k0}-${r.k1 + 1}, turn ${turnDeg(worst).toFixed(0)} deg at node ${worst})`;
+  }).join("; ");
+  const msg = `tarmac fold (centreline kink R < hw, rail in columns 2..11 runs backwards): ${desc}`;
+  if (!KNOWN_TARMAC_FOLDS.has(id)) throw new Error(`${msg} — fix the circuit data (SCENERY-QA-PLAN §R3)`);
+  return `  WARNING known ${msg}`;
 }
 
 // The report behind the OK line. Informational only: a required-model failure

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // test-solo — re-run ONE spec (or one grep) alone, on a box that is actually
-// @doc Re-runs ONE spec (or `-g` grep) alone at `APEX_WORKERS=1`, refusing to start until the box is quiet (`--max-load`).
+// @doc Re-runs ONE spec (or `-g` grep) alone at `APEX_WORKERS=1`, refusing (exit 3) while the box is busy (`--max-load`); foreground — background it with a log.
 // @section runner
 // quiet, and refuse to pretend otherwise.
 //
@@ -12,8 +12,9 @@
 // that the box be quiet — is the step easiest to skip when you are in a hurry.
 //
 // This makes it a command that CANNOT skip that step:
-//   1. It reads /proc/loadavg and REFUSES to start until the 1-minute average
-//      is below a threshold (default cores/2), so a run started on a hot box —
+//   1. It reads /proc/loadavg and REFUSES to start (exit 3, no waiting) while
+//      the 1-minute average is at or above a threshold (default cores/2), so a
+//      run started on a hot box —
 //      the exact mistake that produces a false timeout — does not happen.
 //   2. It runs at APEX_WORKERS=1. One Chromium, one SwiftShader, no contention
 //      the run creates on itself.
@@ -22,9 +23,11 @@
 //      budget hiding among contention artefacts) is visible rather than filed
 //      as "passed, contention, done".
 //
-// It does NOT change playwright.config.js's default of 2 local workers. That
-// default is a deliberate breadth-vs-decisiveness trade (the second worker
-// costs ~1.9x per test, accepted for covering more per wall-clock). This tool
+// It does NOT change playwright.config.js's local default (1 worker on <= 4
+// cores, min(4, cores/2) above — a breadth-vs-decisiveness trade: a second
+// worker costs ~1.9x per test). It runs in the FOREGROUND with inherited stdio
+// and writes no log of its own: start it as a background task redirected into
+// artifacts/ (AGENTS.md rule 4) when the spec takes minutes. This tool
 // is the OTHER intent — one spec, decisively — and it deserves its own verb.
 //
 // Usage:

@@ -210,13 +210,17 @@ uniform float uCarBiasScale;
 // other lamp skips the branch, so the whole feature costs one lamp's shadow.
 uniform highp sampler2DShadow uLampShadowMap;
 // BAKED LAMP POOLS (js/lighting/lamp-bake.js): every lamp's diffuse pool on an
-// upward-facing surface, RGBA16F over the lamps' XZ extent, scaled per frame.
+// upward-facing surface, scaled per frame. A sparse RGBA16F TILE ATLAS over the
+// lamps' XZ extent: uLampBakeIdx (tilesX x tilesY, NEAREST) gives each tile's
+// slot origin in uLampBake (-1 = empty tile), a (T+2)^2 slot with a 1-texel gutter.
 uniform highp sampler2D uLampBake;
+uniform highp sampler2D uLampBakeIdx;
 uniform float uBakeOn;
 uniform vec2 uBakeOrigin;
 uniform vec2 uBakeSize;
 uniform vec3 uBakeScale;
-uniform float uBakeH;      // texel rows per layer (diffuse rows [0,h), bounce rows [h,2h))
+uniform vec3 uBakeGrid;    // (tilesX, tilesY, T texels per tile side)
+uniform vec2 uBakeAtlas;   // atlas texture size: (atlasW, 2 atlasH) — diffuse half, then bounce
 uniform vec3 uBakeShCol;   // the shadow lamp's BAKED colour (LampBake.shadowCol)
 uniform mat4 uLampShadowVP;
 uniform float uLampShadowOn;
@@ -1256,14 +1260,18 @@ void main() {
   // Alpha is the surface height the texel was baked at: a fragment off it (a
   // bridge deck over a baked road, a roof, the lower road of a crossover, a
   // texel with no known ground) keeps the live loop instead.
-  // Two stacked layers; clamp v to this layer's texel centres so the bilinear
-  // tap never reads across the seam into the other one.
-  float bRow = 0.5 / max(uBakeH, 1.0);
-  vec2 bUvD = vec2(bUv.x, clamp(bUv.y, bRow, 1.0 - bRow) * 0.5);
+  // Tile atlas: the indirection names this tile's slot (empty -> live loop);
+  // inside the slot the 1-texel gutter holds the neighbours, so the bilinear
+  // tap matches the full grid and never crosses into another slot. The bounce
+  // layer is the same slot atlasH rows down (+0.5 v).
+  vec2 bG = bUv * uBakeGrid.xy;
+  vec2 bTile = clamp(floor(bG), vec2(0.0), max(uBakeGrid.xy - 1.0, vec2(0.0)));
+  vec2 bSlot = texelFetch(uLampBakeIdx, ivec2(bTile), 0).xy;
+  vec2 bUvD = (bSlot + (bG - bTile) * uBakeGrid.z + 1.0) / max(uBakeAtlas, vec2(1.0));
   vec4 bT = textureLod(uLampBake, bUvD, 0.0);
   vec3 bE = bT.rgb * uBakeScale;
   vec3 bB = textureLod(uLampBake, bUvD + vec2(0.0, 0.5), 0.0).rgb * uBakeScale;
-  float bakeW = (uBakeOn > 0.5 && all(greaterThan(bUv, vec2(0.0))) && all(lessThan(bUv, vec2(1.0))))
+  float bakeW = (uBakeOn > 0.5 && bSlot.x >= 0.0 && all(greaterThan(bUv, vec2(0.0))) && all(lessThan(bUv, vec2(1.0))))
     ? smoothstep(0.55, 0.85, N.y) * (1.0 - smoothstep(0.75, 2.5, abs(vWorldPos.y - bT.a))) : 0.0;
   color += albedo * bE * bakeW * (1.0 - metalness) * (1.0 - wetSheen * 0.85);
   // Baked LAMP BOUNCE (every lamp, per unit BOUNCE); the live bounce below

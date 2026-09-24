@@ -81,7 +81,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // the player is watching. ~0.1 s.
   "tests/unit/race-radio.test.mjs",
   "tests/unit/team-livery.test.mjs",
-  // 10 s of pure geometry: builds all 297 catalog options and hashes each
+  // ~29 s of pure geometry (measured 2026-09-24): builds every catalog option ONCE and hashes each
   // mesh, so a part that stops changing the car is caught where the catalog
   // is edited rather than in a 2-hour render sweep nobody runs.
   "tests/unit/parts-distinct-mesh.test.mjs",
@@ -205,6 +205,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Host configs — the three MCP catalogs, the path-scoped rules, the hooks —
   // asserted instead of described; under a second.
   "tests/unit/agent-config.test.mjs",
+  "tests/unit/session-status.test.mjs",
+  "tests/unit/ci-watch.test.mjs",
   // Every freezable module surface stays frozen (pure file read; < 1 s).
   "tests/unit/frozen-globals.test.mjs",
   "tests/unit/component-inventory.test.mjs",

@@ -278,6 +278,13 @@ const TrackGeom = (function () {
     return true;
   }
 
-  return { MAT, cross, norm, vadd, emit, addMesh,
+  // MIN_SEP — the smallest plane separation between two same-facing faces that
+  // does not fight within 388 m: 24-bit depth, near plane 0.3 (the cockpit/hood
+  // worst case, js/game.js _nearM), far 900 — tools/track/coplanar-audit.cjs's
+  // fightDist(0.03). Staggers, insets and layer nudges step by this, not by
+  // "a few millimetres": 6 mm fights from 174 m, 10 mm from 224 m.
+  const MIN_SEP = 0.03;
+
+  return { MAT, MIN_SEP, cross, norm, vadd, emit, addMesh,
            addBox, addPrism, addPyramid, addCone, addCyl, addFrustum, addMountain };
 })();
