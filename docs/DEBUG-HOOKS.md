@@ -461,12 +461,20 @@ __apex.previewCam("drift", 0.21, 65);   // how DRIFT frames the corner at 21%
 __apex.previewCam("heli", 0.5);          // HELI's broadcast angle at half-distance
 ```
 
-### `flybyCam(u, shots?) → {u, shot, index, cut, eye, target, fov, inside} | false`
+### `flybyCam(u, shots?) → {u, shot, index, cut, eye, target, fov, lift, onRoad, lat, inside} | false`
 Park the camera at progress `u` (0..1) through the PRE-RACE FLYBY's shot
 sequence (`js/camera/flyby-seq.js`) and report where it went. `inside` is the
 scenery record the eye landed in, or `null` — the flyby's whole reason for
 existing as a shot list is that the old rig had no such answer and flew through
-buildings. Pass `shots` to preview an EDITED sequence without reloading.
+buildings. Pass `shots` to preview an EDITED sequence without reloading; without
+it the hook solves the list a race would fly (the same one `flybyShots()` reports).
+
+`onRoad` is true for a shot whose both eye poses run low down the road
+(`FlybySeq.onRoadPose`): the solver skips clearance for those, and the unit test
+exempts them from containment — the props registry's boxes are axis-aligned, so
+an angled grandstand's box crosses the straight (Bahrain) and `inside` there is
+not a defect. What is checked instead is `lat`, the eye's metres off the
+centreline (the test fails beyond 12). `lift` is how far clearance raised the eye.
 
 The live flyby runs on the loading screen's phase timer and lasts seconds, which
 no capture tool can aim at; this drives the same solver deterministically, via
@@ -479,10 +487,13 @@ shots[0].eye[1].y = 30;        // raise the crane
 __apex.flybyCam(0.33, shots);  // …and look at it, without a reload
 ```
 `node tools/shot/flyby.mjs --track monza` renders the whole sequence as a
-contact sheet from a shell (`<track>-sheet.png`, every frame labelled), and
-exits non-zero if any frame is inside scenery. `--shots <file>` previews an
-edited list — a JSON array or the editor's `window.FlybyShots = [...]` blob —
-without baking it.
+contact sheet from a shell (`<track>-sheet.png`, every frame labelled, plus the
+per-frame numbers as `<track>-flyby.json`), and exits 1 if any frame is inside
+scenery by the unit test's rule (an `onRoad` shot is held to `|lat| <= 12`
+instead), 2 on a usage or boot error. `--track a,b,c` shoots several circuits
+from one boot; the server takes a free port unless `--port` pins one.
+`--shots <file>` previews an edited list — a JSON array or the editor's
+`window.FlybyShots = [...]` blob, warning header and all — without baking it.
 
 ### `camState().lens` — what the frame was RENDERED with
 `camState()` reports where the camera is pointed; `lens` reports what the last
