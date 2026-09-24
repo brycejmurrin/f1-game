@@ -151,7 +151,10 @@ const RadioVoice = (function () {
     // The radio is about something happening NOW at 300 km/h. The title
     // screen's "SAVE CONFLICT — reload career" card is not radio and must not
     // be read aloud at somebody browsing menus.
-    if (o.state !== "race" && o.state !== "count") { out.reason = "not-racing"; return out; }
+    // `preRace` is the ONE exemption: the engineer's radio check over the
+    // loading flyby's last shot (js/ui/loading-screen.js), which is the race
+    // about to start, asked for by name through sayPreRace() below.
+    if (o.state !== "race" && o.state !== "count" && !o.preRace) { out.reason = "not-racing"; return out; }
     const speaker = SPEAKERS[kind] || "radio";
     const tone = toneFor(speaker, o.tune);
     const text = speakable(o.msg);
@@ -176,7 +179,7 @@ const RadioVoice = (function () {
   /** A live instance's shape, with every method a no-op. */
   function inert() {
     return Object.freeze({
-      say: () => false, stop: () => {}, unlock: () => {}, preview: () => false, pack: null, volume: () => 0,
+      say: () => false, sayPreRace: () => false, stop: () => {}, unlock: () => {}, preview: () => false, pack: null, volume: () => 0,
       setPackOn: () => {}, packOn: () => false, busy: () => false,
       voiceList: () => [], tuneFor: (sp) => Object.assign(toneFor(sp, null), { name: "" }), setTune: () => false,
       setEnabled: () => {}, setVolume: (v) => v, available: () => false,
@@ -329,13 +332,13 @@ const RadioVoice = (function () {
       // transmission early for a player who never turned speech on.
       if (GameAudio && GameAudio.radioStingStop) GameAudio.radioStingStop();
     }
-    function say(msg, life, kind, lead) {
+    function say(msg, life, kind, lead, preRace) {
       const on = kind === "comm" ? !!(G.announcer && G.announcer.enabled && G.announcer.enabled()) : enabled;
       // A spotter call on the air finishes first: the line waits it out as part
       // of its lead, and pays for the wait out of the card's budget like the cue.
       const hold = pack ? pack.remaining("spotter") : 0;
       if (hold > 0) lead = Math.max(+lead || 0, hold + 0.08);
-      const p = plan({ msg, life, kind, lead, enabled: on, soundOn: !!G.soundOn, state: G.state, api: true, volume, tune });
+      const p = plan({ msg, life, kind, lead, enabled: on, soundOn: !!G.soundOn, state: G.state, preRace: !!preRace, api: true, volume, tune });
       last = { text: p.text, reason: p.reason || "spoke", rate: p.rate, budgetMs: p.budgetMs, leadMs: p.leadMs };
       if (!p.speak) return false;
       stop();
@@ -514,6 +517,12 @@ const RadioVoice = (function () {
 
     return {
       say, stop, unlock, preview,
+      /** THE PRE-RACE RADIO CHECK: one engineer line over the loading flyby's
+       *  grid-mine shot. The same plan() as every race line — TEAM RADIO off,
+       *  master sound off, or a line that will not fit its budget all refuse it
+       *  — with only the session gate lifted. No card: the loading screen owns
+       *  the screen, so `life` is the time left in the shot. */
+      sayPreRace: (msg, life, lead) => say(msg, life, "race", lead, true),
       /** The installed voices a channel may be given, as plain rows for a <select>. */
       voiceList: (speaker) => voicesFor(!!REMOTE_OK[speaker]).map((v) => ({ name: v.name, lang: v.lang })),
       /** The stored tune, or the shipped default for a channel with none. */

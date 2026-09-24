@@ -1062,19 +1062,29 @@ const FlybySeq = (function () {
     if (i < list.length) setTimeout(next, 0);
   }
   const withoutSlot = (list) => { const out = list.filter(fitsGrid); return out.length ? out : list; };
-  function solve(track, u, shots) {
-    const list = bindCorners(track, (shots && shots.length) ? shots : DEFAULT);
+  /** WHICH SHOT IS ON AIR at flyby progress `u`, and how far through it (0..1)
+   *  — the cut arithmetic solve() uses, with none of its planning, so a caller
+   *  that only needs the shot's NAME (the loading card's grid graphic and its
+   *  radio check, js/ui/loading-screen.js) pays nothing for it. Pure: binding
+   *  corners and the landmark fallback never change an id or a duration. */
+  function shotAt(u, shots) {
+    const list = (shots && shots.length) ? shots : DEFAULT;
     let total = 0;
     for (let i = 0; i < list.length; i++) total += list[i].dur || 0;
     if (!(total > 0)) total = 1;
-    let at = Math.max(0, Math.min(1, u)) * total, idx = 0, acc = 0;
+    let at = Math.max(0, Math.min(1, +u || 0)) * total, idx = 0, acc = 0;
     for (; idx < list.length - 1; idx++) {
       if (at < acc + (list[idx].dur || 0)) break;
       acc += list[idx].dur || 0;
     }
+    const dur = list[idx].dur || 1;
+    return { index: idx, id: list[idx].id || String(idx), t: Math.max(0, Math.min(1, (at - acc) / dur)), total };
+  }
+  function solve(track, u, shots) {
+    const list = bindCorners(track, (shots && shots.length) ? shots : DEFAULT);
+    const on = shotAt(u, list), idx = on.index, t = on.t, total = on.total;
     const shot = landmarkFallback(track, list[idx]);
     const dur = shot.dur || 1;
-    const t = Math.max(0, Math.min(1, (at - acc) / dur));
     const e = (EASE[shot.ease] || EASE.inOut)(t);
 
     // The PLAN is the authored shot after every per-shot correction (grid
@@ -1469,7 +1479,7 @@ const FlybySeq = (function () {
   function reset() { _lastIdx = -1; }
 
   return {
-    solve, reset, clearEye, floorEye, groundAt, insideProp, blockers, isSolid, onRoadPose,
+    solve, shotAt, reset, clearEye, floorEye, groundAt, insideProp, blockers, isSolid, onRoadPose,
     landmarks, bounds, landmarkScore, lmBase, landmarkFallback, planShot, treeBlockers,
     anchorS, posePoint, cornerS, cornerSide, cornerTurn, lmFace,
     poseFromWorld, shotFromView, nearestCorner, vary, setPlayerSlot, slotIndex, slotKnown, withoutSlot, bindCorners, warm,
