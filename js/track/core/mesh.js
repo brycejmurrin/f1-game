@@ -793,7 +793,12 @@ const TrackMesh = (function () {
             // legitimately rises with its own tarmac is not mistaken for a mound
             // — while terrain genuinely hanging over the racing line still gets
             // carved, banked or not.
-            if (wy > roadYj + 0.3) {
+            // Not against the vert's OWN road run: on a descent the tarmac 10-20 m
+            // ahead sits 1-3 m lower, and this carve trenched the verge down to it
+            // (fuji's 14 % drop at s~0.47: a 2.8 m trench, the road on a grass
+            // wall). The own run is heightAt's job; same test as the dip below.
+            const _sameRun = track.tx[k] * track.tx[j] + track.tz[k] * track.tz[j] > 0.55 && dd * ds < 60;
+            if (!_sameRun && wy > roadYj + 0.3) {
               const fr = hw[j] + 26, nr = hw[j] + 0.5;
               if (d2 < fr * fr) {
                 const dist = __M.sqrt(d2);
