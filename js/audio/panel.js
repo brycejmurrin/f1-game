@@ -294,6 +294,12 @@ const AudioPanel = (() => {
             note = "Last card was not read aloud: " + REASON[dbg.last.reason];
           }
         }
+        // A platform whose speech engine stalls the page (measured per call in
+        // js/audio/radio-voice.js): say so, and name the setting that avoids it.
+        if (radioLive && dbg && dbg.synth && dbg.synth.slow > 0) {
+          note += " This browser's speech engine held the game up (worst " + Math.round(dbg.synth.maxMs) +
+            " ms). RADIO VOICE: RECORDED speaks most lines without it.";
+        }
         rnote.textContent = note;
       }
       // THE ANNOUNCER, on the same three-part gate and for the same reason: a

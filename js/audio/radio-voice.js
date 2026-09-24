@@ -227,6 +227,45 @@ const RadioVoice = (function () {
      * exactly how this defect survived three attempts to fix it from the
      * outside. The audio panel prints the verdict; see js/audio/panel.js. */
     let asked = 0, started = 0;
+    /* OFF THE FRAME. speechSynthesis calls are synchronous IPC to the platform
+     * speech service, and on real desktops they can stall the main thread —
+     * cancel() and getVoices() especially, a network ("Google") voice worse
+     * (crbug 374263394, 40720649). say() runs inside the game tick (it hangs
+     * off showAnnounce), so every one of them used to land in a frame: a
+     * cancel() on EVERY line, speaking or not, and a resume() after it. Now
+     * the synth is only touched from its own task (`synthTask`), cancel()
+     * only when something is actually queued, resume() only straight after a
+     * cancel (the Bugzilla 1522074 case it exists for), and each call is timed
+     * so a player can see what their platform costs (debug().synth). */
+    let synthOurs = false;          // an utterance we handed over has not ended yet
+    let synthCancelT = null;        // a cancel scheduled for the next task
+    let synthStat = { calls: 0, maxMs: 0, slow: 0, lastWarn: -1e9 };
+    const clock = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
+    function timed(name, fn) {
+      const a = clock();
+      try { return fn(); } finally {
+        const ms = clock() - a;
+        synthStat.calls++;
+        if (ms > synthStat.maxMs) synthStat.maxMs = ms;
+        if (ms > 16) {
+          synthStat.slow++;
+          if (a - synthStat.lastWarn > 10000) { synthStat.lastWarn = a; Log.warn("audio", "RadioVoice: speechSynthesis." + name + " blocked " + ms.toFixed(1) + " ms"); }
+        }
+      }
+    }
+    const synthBusy = () => { try { return synthOurs || !!synth.speaking || !!synth.pending; } catch (e) { return synthOurs; } };
+    /** Cancel on the next task, not in this frame — and only if anything is queued. */
+    function synthCancelSoon() {
+      if (synthCancelT != null) return;
+      synthCancelT = setTimeout(() => {
+        synthCancelT = null;
+        if (!synthBusy()) return;
+        synthOurs = false;
+        timed("cancel", () => { try { synth.cancel(); } catch (e) { /* nothing queued, or a synth mid-teardown */ } });
+        justCancelled = true;
+      }, 0);
+    }
+    let justCancelled = false;
     function readTune() {
       const t = G.store.get("voiceTune", null);
       return t && typeof t === "object" ? t : {};
@@ -237,7 +276,7 @@ const RadioVoice = (function () {
       const cached = remoteOk ? voicesAny : voices;
       if (cached) return cached;
       let all = [];
-      try { all = synth.getVoices() || []; } catch (e) { all = []; }   // a synth mid-teardown throws
+      try { all = timed("getVoices", () => synth.getVoices()) || []; } catch (e) { all = []; }   // a synth mid-teardown throws
       const lang = (typeof document !== "undefined" && document.documentElement.lang) || "en";
       // ONE read of the platform, TWO lists: everything in this language, and
       // the local-only subset. See REMOTE_OK above for which channel gets which
@@ -283,7 +322,7 @@ const RadioVoice = (function () {
       // stale, whether the engine fires it synchronously or a turn later.
       current = null;
       if (pack) pack.stop("radio");   // the engineer's own line only — never a spotter call mid-word
-      try { synth.cancel(); } catch (e) { /* nothing queued, or a synth mid-teardown */ }
+      synthCancelSoon();
       if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false);
       // The hiss bed belongs to the line, so it goes when the line does —
       // the card-hidden and paused observers below are what stop a
@@ -303,8 +342,10 @@ const RadioVoice = (function () {
       if (speakPack(p)) return true;
       // AFTER THE CUE, NOT UNDER IT. Deferred rather than shortened: the words
       // keep their own rate and simply start when the figure has finished.
-      if (p.leadMs > 0) { pending = setTimeout(() => { pending = null; speakPlanned(p); }, p.leadMs); return true; }
-      return speakPlanned(p);
+      // Always deferred, even with no cue: the synth is never touched in the
+      // game tick (see synthTask above). The cancel stop() scheduled runs first.
+      pending = setTimeout(() => { pending = null; speakPlanned(p); }, Math.max(0, p.leadMs));
+      return true;
     }
     /* THE RECORDED PATH. Same contract as speakPlanned: claims `current`,
      * ducks the music, and the card's deadline is the hard stop. The pack
@@ -337,6 +378,7 @@ const RadioVoice = (function () {
       u.rate = p.rate; u.pitch = p.pitch; u.volume = p.volume;
       // Only the LIVE line may release the duck and the deadline — see `current`.
       u.onend = u.onerror = () => {
+        synthOurs = false;
         if (u !== current) return;
         current = null;
         clearDeadline();
@@ -353,8 +395,10 @@ const RadioVoice = (function () {
       if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(true);
       try {
         asked++;
-        synth.speak(u);
+        synthOurs = true;
+        timed("speak", () => synth.speak(u));
       } catch (e) {
+        synthOurs = false;
         current = null;
         if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false);
         Log.info("audio", "RadioVoice speak failed");
@@ -367,7 +411,8 @@ const RadioVoice = (function () {
       // "spoken after it left the screen" failure this module prevents. The
       // preempt path is exactly a cancel-then-speak, so without this the line
       // that goes missing is the PENALTY that interrupted, not the wear report.
-      try { synth.resume(); } catch (e) { /* nothing was paused; harmless */ }
+      // Only straight after a cancel — the one case it is for.
+      if (justCancelled) { justCancelled = false; timed("resume", () => { try { synth.resume(); } catch (e) { /* nothing was paused; harmless */ } }); }
       // The hard stop, armed from the card's ACTUAL remaining life rather than a
       // second copy of showAnnounce's expression. A duplicated constant is how
       // "spoken after it left the screen" gets reintroduced by a later edit.
@@ -491,7 +536,8 @@ const RadioVoice = (function () {
       setVolume(v) { volume = Math.max(0, Math.min(1, +v || 0)); return volume; },
       available: () => true,
       debug: () => ({ available: true, enabled, voices: voicesFor(false).length, voicesAny: voicesFor(true).length, last, asked, started,
-        pack: pack ? Object.assign({ on: packOn }, pack.debug()) : null }),
+        pack: pack ? Object.assign({ on: packOn }, pack.debug()) : null,
+        synth: { calls: synthStat.calls, maxMs: +synthStat.maxMs.toFixed(1), slow: synthStat.slow } }),
     };
   }
 

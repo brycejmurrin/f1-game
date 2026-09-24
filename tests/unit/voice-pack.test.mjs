@@ -161,19 +161,22 @@ test("a line the pack covers is played from it, after the courtesy figure, and s
   assert.equal(r.ducks.at(-1), false, "and comes back when it ends");
 });
 
-test("a line the pack cannot cover falls back to speech synthesis; SYSTEM never asks the pack", () => {
+test("a line the pack cannot cover falls back to speech synthesis; SYSTEM never asks the pack", async () => {
   const miss = radio({ covers: false });
   assert.equal(miss.v.say("BOX BOX BOX", 3, "info"), true);
+  await new Promise((r) => setTimeout(r, 5));
   assert.deepEqual(miss.spoken, ["BOX BOX BOX".toLowerCase()]);
   const sys = radio({ packOn: false });
   sys.v.say("BOX BOX BOX", 3, "info");
+  await new Promise((r) => setTimeout(r, 5));
   assert.equal(sys.packCalls.filter((c) => c.id).length, 0, "the SYSTEM setting keeps every line on synthesis");
   assert.equal(sys.spoken.length, 1);
 });
 
-test("race control and the coach are never recorded: only the engineer's channel has a pack voice", () => {
+test("race control and the coach are never recorded: only the engineer's channel has a pack voice", async () => {
   const r = radio();
   r.v.say("5 SECOND PENALTY", 3, "penalty-hit");
+  await new Promise((r2) => setTimeout(r2, 5));
   assert.equal(r.packCalls.filter((c) => c.id).length, 0);
   assert.equal(r.spoken.length, 1);
   assert.deepEqual(J(RadioVoice.PACK_VOICE), { radio: "george" });
