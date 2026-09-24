@@ -379,9 +379,9 @@ function buildTTResults() {
     btn.textContent = "COPY DAILY RESULT";
     btn.onclick = () => {
       const text = G.daily.shareText(Ghost.medal());
-      const ok = typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText;
-      if (ok) navigator.clipboard.writeText(text).then(() => { btn.textContent = "COPIED"; }, () => { btn.textContent = text; });
-      else btn.textContent = text;
+      ApexClipboard.write(text).then((ok) => {
+        btn.textContent = ok ? "COPIED" : text;
+      }, () => { btn.textContent = text; });
     };
     els.resultsTable.appendChild(btn);
   }
@@ -407,7 +407,7 @@ function buildTTResults() {
       btn.insertAdjacentElement ? btn.insertAdjacentElement("afterend", box) : els.resultsTable.appendChild(box);
       if (box.focus) box.focus();
       if (box.select) box.select();
-      try { if (document.execCommand) document.execCommand("copy"); } catch (_) { /* selection remains visible */ }
+      ApexClipboard.copySelection();
       btn.textContent = "SELECT & COPY";
     };
     const copy = async (btn, field, label) => {
@@ -417,11 +417,9 @@ function buildTTResults() {
         return;
       }
       const value = shared[field];
-      try {
-        if (!navigator.clipboard || !navigator.clipboard.writeText) throw new Error("clipboard unavailable");
-        await navigator.clipboard.writeText(value);
-        btn.textContent = "COPIED";
-      } catch (_) { fallback(btn, value, label); }
+      const ok = await ApexClipboard.write(value);
+      if (ok) btn.textContent = "COPIED";
+      else fallback(btn, value, label);
     };
     const action = (id, text) => {
       const btn = document.createElement("button");

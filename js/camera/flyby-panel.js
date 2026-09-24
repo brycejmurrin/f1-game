@@ -818,12 +818,8 @@ $("fb-down").onclick = () => {
 $("fb-norm").onclick = () => { shots = normaliseDurs(ensure()); edited(); };
 $("fb-reset").onclick = () => { shots = defaults(); sel = 0; setU(midOf(0)); $("fb-json").hidden = true; edited(); };
 
-/* COPY VALUES — the synchronous execCommand attempt goes FIRST.
-   The lighting tuner learned this the expensive way: reaching execCommand only
-   from the clipboard promise's rejection handler puts the copy a microtask
-   after the gesture, which Chromium forgives (transient activation lasts ~5 s)
-   and WebKit is documented not to. Ordering it first takes the engine out of
-   the question. tests/unit/ui-improve-pass.test.mjs pins that order. */
+/* COPY VALUES — preferSync so execCommand runs during the gesture
+   (same order as the lighting tuner; ui-improve-pass pins it). */
 $("fb-copy").onclick = () => {
   const btn = $("fb-copy");
   const list = ensure();
@@ -832,15 +828,8 @@ $("fb-copy").onclick = () => {
   const ta = $("fb-json");
   ta.value = json; ta.hidden = false;
   ta.focus(); if (ta.setSelectionRange) ta.setSelectionRange(0, json.length);
-  let ok = false;
-  try { ok = !!(document.execCommand && document.execCommand("copy")); } catch (_) { /* not available */ }
-  const done = (good) => flash(btn,
-    bad.length ? "COPIED (INVALID)" : (good ? "COPIED ✓" : "SELECT & COPY ↑"));
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(json).then(() => done(true), () => done(ok));
-    return;
-  }
-  done(ok);
+  ApexClipboard.write(json, { preferSync: true }).then((ok) => flash(btn,
+    bad.length ? "COPIED (INVALID)" : (ok ? "COPIED ✓" : "SELECT & COPY ↑")));
 };
 
 _refresh = () => { if (isOpen()) { refreshChips(); refreshRows(); } };

@@ -1238,7 +1238,7 @@ const NetLobby = (function () {
 
     async function pasteInto(kind) {
       let text = "";
-      try { text = await navigator.clipboard.readText(); }
+      try { text = await ApexClipboard.read(); }
       catch (err) {
         say("Could not read the clipboard — paste into the box instead.", true);
         return { ok: false, error: "denied" };
@@ -1249,8 +1249,10 @@ const NetLobby = (function () {
 
     async function copy(text) {
       if (!text) { say("There is nothing to copy yet.", true); return false; }
-      try { await navigator.clipboard.writeText(text); say("Copied."); return true; }
-      catch (e) { say("Could not copy — select the code and copy it manually.", true); return false; }
+      const ok = await ApexClipboard.write(text);
+      if (ok) { say("Copied."); return true; }
+      say("Could not copy — select the code and copy it manually.", true);
+      return false;
     }
 
     // The invite goes out as a LINK, not a code: opening it drops the guest

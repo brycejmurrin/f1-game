@@ -276,6 +276,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // zero-reference module and the two thin spots): each under a second.
   "tests/unit/body-attitude.test.mjs",
   "tests/unit/save-migrate.test.mjs",
+  // ApexClipboard.write/read + preferSync order (clipboard carve). Pure VM,
+  // well under a second; must run where the helper or a call-site is edited.
+  "tests/unit/clipboard.test.mjs",
   "tests/unit/wait-polling.test.mjs",
   // ...and its sibling over js/: a try/catch cannot swallow a promise
   // REJECTION, and index.html turns an unhandled one into a full-screen

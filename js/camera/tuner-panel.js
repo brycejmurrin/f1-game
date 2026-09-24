@@ -200,17 +200,11 @@ $("ct-copy").onclick = () => {
   const ta = $("ct-json");
   ta.value = json; ta.hidden = false;
   ta.focus(); ta.setSelectionRange(0, json.length);
-  let ok = false;
-  try { ok = !!(document.execCommand && document.execCommand("copy")); } catch (_) { /* not available */ }
   const flash = (good) => {
     btn.textContent = good ? "COPIED ✓" : "SELECT & COPY ↑";
     setTimeout(() => { btn.textContent = "COPY VALUES"; }, 1800);
   };
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(json).then(() => flash(true), () => flash(ok));
-    return;
-  }
-  flash(ok);
+  ApexClipboard.write(json, { preferSync: true }).then(flash);
 };
 _refresh = () => { if (isOpen()) refreshCamTunePanel(); };
 return { buildCamTunePanel, refreshCamTunePanel, openCamTuner, closeCamTuner, isOpen };
