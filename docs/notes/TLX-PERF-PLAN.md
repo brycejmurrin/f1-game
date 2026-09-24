@@ -12,9 +12,9 @@ verified before it merges onto the session branch, and deployed on the user's wo
 
 | # | step | status |
 |---|---|---|
-| L0 | player gated by the lamp radius (key + cast) | planned |
-| L1 | static-props lamp map, cars drawn on top | planned |
-| L1b | keep lamp instanced casters when the lamp is unchanged (fallback for L1) | only if L1's depth copy is not portable |
+| L0 | player gated by the lamp radius (key + cast) | done 3af01ea — correct, ~1 % fewer lamp passes on montreal (the lamp is picked near the camera, so the player is usually in reach) |
+| L1 | static-props lamp map, cars drawn on top | done 3af01ea — 1966 of 2005 night rebuilds served from the copy, lamp pass CPU 0.96 → 0.71 ms (Lavapipe); awaiting a night census |
+| L1b | keep lamp instanced casters when the lamp is unchanged (fallback for L1) | not needed unless the census shows the depth copy failing |
 | G1 | godray chain: night lamp beams use one blur pair, not two | planned |
 | R1 | pooled fixed-shape draw records | planned |
 | P2 | fixed per-pair post materials (no texture swaps) | low priority |
@@ -143,3 +143,24 @@ L0 → L1 (L1b only if needed) → G1 → R1 → P2. Every step: `npm run test:t
 the braking compile probe (`scratch/compile-attrib-probe.mjs`: lap sync compiles stay 0),
 frozen A/B, then a census. The census driven window is DAY montreal; L0, L1 and G1 need a
 night leg (`"tod": "night"` in `.github/gpu-census-request.json`).
+
+## Results log
+
+**L0 + L1 (3af01ea, 2026-09-24).** Lavapipe WebGPU, montreal night,
+`apex26.tlxForceHw=shadow,batches`, 8 s at each of 5 spots (`scratch/shadow-pass-count.mjs`):
+
+| | main tree | L0 + L1 |
+|---|---|---|
+| lamp passes | 2006 | 2005 |
+| served car-only from the static copy | — | 1966 |
+| static-map renders | — | 41 (2.05 ms avg) |
+| lamp pass CPU (main thread) | 0.964 ms avg | 0.708 ms avg |
+
+L0 alone: 2076 → 2053 passes (~1 %) — correct by the existing argument but small here.
+Nudged frozen frames (park, wait, move ~1 m under the same lamp so the car-only path
+runs, freeze; `scratch/ab-frames.mjs NUDGE=1`) match the main tree within the same-tree
+floor on WebGPU (0.004-0.026 % vs 0.009-0.033 %). Three's WebGL2 path ran the car-only
+copy (`blitFramebuffer`) without error, but its frame is not readable here
+(`capturePixels` returns a cleared buffer on both trees), so WebGL2 pixels are
+unverified. Lavapipe's GPU time is not on this clock, and a desktop culls and packs
+more props per pass, so the real saving should be larger — the night census is the check.

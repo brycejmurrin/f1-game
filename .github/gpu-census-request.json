@@ -1,10 +1,10 @@
 {
   "images": "macos-latest",
   "track": "montreal",
-  "tod": "day",
+  "tod": "night",
   "clock": 12,
   "census_only": false,
   "force": "",
   "ls": "",
-  "leg": "2ak-shadow-pools-per-target-perframe-trims-2026-09-24"
+  "leg": "L0-L1-lamp-static-map-NIGHT-2026-09-24"
 }
