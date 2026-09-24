@@ -236,7 +236,8 @@
       bakeSize:       uniform(new THREE.Vector2(1, 1)),
       bakeScale:      uniform(new THREE.Vector3(0, 0, 0)),
       bakeShCol:      uniform(new THREE.Vector3(0, 0, 0)),
-      bakeH:          uniform(1.0),   // texel rows per bake layer   // shadow lamp's BAKED colour (LampBake.shadowCol)
+      bakeGrid:       uniform(new THREE.Vector3(1, 1, 32)),   // tile atlas: (tilesX, tilesY, T)
+      bakeAtlas:      uniform(new THREE.Vector2(1, 2)),       // atlas texture size (atlasW, 2 atlasH)
       // PER-CHUNK ROAD (frame.roadChunkLamps). The road is ONE plain mesh on
       // TLX, but the grid lookup below reads only world position, so the plain
       // variant can take it too: gated here by the knob and per draw by
@@ -836,13 +837,27 @@
      *
      * lampTex is 4 texels per lamp on x: (pos,rad) (col,-) (dir,-) (geo). */
     const LGRID = (ctx.lampGrid && ctx.lampGrid.lampTex) ? ctx.lampGrid : null;
-    /* BAKED LAMP POOLS. One RGBA16F light map per track (LampBake.forTrack),
-     * swapped into this ONE texture node — the node, not the texture, is what
-     * the graph holds, so a new track never mints a program. A 1x1 black
-     * placeholder until the first bake; bakeOn gates the term either way. */
+    /* BAKED LAMP POOLS. One RGBA16F tile atlas per track (LampBake.forTrack)
+     * plus its tile indirection (NEAREST), each swapped into ONE texture node —
+     * the node, not the texture, is what the graph holds, so a new track never
+     * mints a program. 1x1 black placeholders until the first bake; bakeOn
+     * gates the term either way. */
     const _bakeBlank = new THREE.DataTexture(new Uint16Array(4), 1, 1, THREE.RGBAFormat, THREE.HalfFloatType);
     _bakeBlank.needsUpdate = true;
+    const _bakeIdxBlank = new THREE.DataTexture(new Uint16Array(4), 1, 1, THREE.RGBAFormat, THREE.HalfFloatType);
+    _bakeIdxBlank.minFilter = _bakeIdxBlank.magFilter = THREE.NearestFilter;
+    _bakeIdxBlank.needsUpdate = true;
     const BAKE_NODE = texture(_bakeBlank);
+    const BAKE_IDX_NODE = texture(_bakeIdxBlank);
+    function _halfData(data, w, h, filter) {
+      const t = new THREE.DataTexture(data, w, h, THREE.RGBAFormat, THREE.HalfFloatType);
+      t.minFilter = t.magFilter = filter;
+      t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+      t.generateMipmaps = false;
+      t.colorSpace = THREE.NoColorSpace;
+      t.needsUpdate = true;
+      return t;
+    }
     let _bakeSrc = null, _bakeOffN = 0;
     function setLampBake(b, scale) {
       if (!b || !scale) {
@@ -850,28 +865,29 @@
         // Bake off ~2 s (GLX bindLampBake _bakeOffN): free the light map and
         // put the placeholder back; the node keeps the program unchanged.
         if (BAKE_NODE.value !== _bakeBlank && ++_bakeOffN > 120) {
-          const old = BAKE_NODE.value;
+          const old = BAKE_NODE.value, oldIdx = BAKE_IDX_NODE.value;
           BAKE_NODE.value = _bakeBlank;
+          BAKE_IDX_NODE.value = _bakeIdxBlank;
           _bakeSrc = null;
           try { old.dispose(); } catch (_) { /* already gone */ }
+          if (oldIdx !== _bakeIdxBlank) { try { oldIdx.dispose(); } catch (_) { /* already gone */ } }
         }
         return false;
       }
       _bakeOffN = 0;
       if (b !== _bakeSrc) {
-        const t = new THREE.DataTexture(b.data, b.w, b.h * 2, THREE.RGBAFormat, THREE.HalfFloatType);   // diffuse + bounce layers
-        t.minFilter = t.magFilter = THREE.LinearFilter;
-        t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
-        t.generateMipmaps = false;
-        t.colorSpace = THREE.NoColorSpace;
-        t.needsUpdate = true;
-        const old = BAKE_NODE.value;
+        const t = _halfData(b.data, b.atlasW, b.atlasH * 2, THREE.LinearFilter);   // diffuse + bounce atlas halves
+        const ti = _halfData(b.indir, b.tilesX, b.tilesY, THREE.NearestFilter);     // tile -> slot origin
+        const old = BAKE_NODE.value, oldIdx = BAKE_IDX_NODE.value;
         BAKE_NODE.value = t;
+        BAKE_IDX_NODE.value = ti;
         if (old && old !== _bakeBlank) { try { old.dispose(); } catch (_) { /* already gone */ } }
+        if (oldIdx && oldIdx !== _bakeIdxBlank) { try { oldIdx.dispose(); } catch (_) { /* already gone */ } }
         _bakeSrc = b;
         U.bakeOrigin.value.set(b.x0, b.z0);
-        U.bakeSize.value.set(b.w * b.cell, b.h * b.cell);
-        U.bakeH.value = b.h;
+        U.bakeSize.value.set(b.tilesX * b.T * b.cell, b.tilesY * b.T * b.cell);
+        U.bakeGrid.value.set(b.tilesX, b.tilesY, b.T);
+        U.bakeAtlas.value.set(b.atlasW, b.atlasH * 2);
       }
       U.bakeScale.value.set(scale[0], scale[1], scale[2]);
       U.bakeOn.value = 1.0;
@@ -1540,15 +1556,19 @@
         // Alpha = the surface height the texel was baked at; a fragment off it
         // (bridge deck, roof, lower road of a crossover, no known ground) keeps
         // the live loop.
-        // Two stacked layers (diffuse rows [0,h), bounce rows [h,2h)); v is
-        // clamped to this layer's texel centres so the tap never crosses the seam.
-        const bRow = float(0.5).div(max(U.bakeH, 1.0));
-        const bUvD = vec2(bUv.x, clamp(bUv.y, bRow, bRow.oneMinus()).mul(0.5)).toVar();
+        // Tile atlas: the indirection (NEAREST, sampled at the tile centre)
+        // names this tile's slot origin, -1 = empty (live loop); inside the
+        // slot the 1-texel gutter holds the neighbours, so the bilinear tap
+        // matches the full grid and never crosses slots. Bounce = +0.5 v.
+        const bG = bUv.mul(U.bakeGrid.xy).toVar();
+        const bTile = clamp(floor(bG), vec2(0.0), max(U.bakeGrid.xy.sub(1.0), vec2(0.0))).toVar();
+        const bSlot = BAKE_IDX_NODE.sample(bTile.add(0.5).div(U.bakeGrid.xy)).level(0).xy.toVar();
+        const bUvD = bSlot.add(bG.sub(bTile).mul(U.bakeGrid.z)).add(1.0).div(max(U.bakeAtlas, vec2(1.0))).toVar();
         const bT = BAKE_NODE.sample(bUvD).level(0).toVar();
         const bE = bT.rgb.mul(U.bakeScale).toVar();
         const bB = BAKE_NODE.sample(bUvD.add(vec2(0.0, 0.5))).level(0).rgb.mul(U.bakeScale).toVar();
         const bOnY = smoothstep(0.75, 2.5, abs(wp.y.sub(bT.a))).oneMinus();
-        const bakeW = select(U.bakeOn.greaterThan(0.5).and(bIn), smoothstep(0.55, 0.85, N.y).mul(bOnY), float(0.0)).toVar();
+        const bakeW = select(U.bakeOn.greaterThan(0.5).and(bIn).and(bSlot.x.greaterThanEqual(0.0)), smoothstep(0.55, 0.85, N.y).mul(bOnY), float(0.0)).toVar();
         color.addAssign(albedo.mul(bE).mul(bakeW)
           .mul(metalness.oneMinus()).mul(wetSheen.mul(0.85).oneMinus()));
         // Baked LAMP BOUNCE (per unit BOUNCE); the live bounce steps aside by bakeW.

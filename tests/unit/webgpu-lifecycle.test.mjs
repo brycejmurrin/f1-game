@@ -544,7 +544,7 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   assert.match(CHUNKS_SOURCE, /params6\s*:\s*vec4<f32>.*off 368/);
   assert.match(CHUNKS_SOURCE, /params7\s*:\s*vec4<f32>.*off 448/);
   assert.match(CHUNKS_SOURCE, /params9\s*:\s*vec4<f32>.*ambContactDark/);
-  assert.match(CHUNKS_SOURCE, /FRAME_UNIFORM_BYTES:\s*656/);   // 608 + 48: bakeA..C (BAKED LAMP POOLS)
+  assert.match(CHUNKS_SOURCE, /FRAME_UNIFORM_BYTES:\s*672/);   // 608 + 64: bakeA..D (BAKED LAMP POOLS tile atlas)
   assert.match(POST_SOURCE, /COMPOSITE_UNIFORM_BYTES:\s*256/);
   assert.match(POST_SOURCE, /SSR_UNIFORM_BYTES:\s*208/,
     "SsrU must keep the carGloss vec4 (192 was the pre-streak layout)");
@@ -555,7 +555,7 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   gfx.resize();
   assert.equal(gfx.begin({ tune: {}, shadowCtr: [11, 22, 33] }), true);
   gfx.present({ tune: {} });
-  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 656);
+  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 672);
   const compositeBuffer = h.buffers.find((buffer) => buffer.desc.size === 256);
   let frame = h.writes.filter((write) => write.buffer === frameBuffer).at(-1).values;
   assert.deepEqual(frame.slice(88, 92), [11, 22, 33, 80], "shadowCtr must occupy floats 88..91");
@@ -813,7 +813,7 @@ test("lamp shadow arm does not leak into the next frame", async () => {
   const h = makeGpuHarness();
   const gfx = await h.create();
   gfx.resize();
-  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 656);
+  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 672);
   gfx.lampShadowBegin(new Float32Array([
     1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
   ]), 2);
@@ -2276,19 +2276,30 @@ test("the lamp bake light map is freed after ~2 s of bake-off frames (GLX _bakeO
   // retires the texture after 120 consecutive bake-off frames.
   const h = makeGpuHarness();
   const gfx = await h.create();
-  const lb = { w: 4, h: 3, x0: 0, z0: 0, cell: 1, data: new Uint16Array(4 * 3 * 8) };
-  const isBake = (t) => Array.isArray(t.desc.size) && t.desc.size[0] === 4 && t.desc.size[1] === 6
+  // A 2 x 1-tile grid with one kept tile: atlas 34 x (2 * 34), indirection 2 x 1.
+  const lb = { x0: 0, z0: 0, cell: 1, T: 32, tilesX: 2, tilesY: 1, atlasW: 34, atlasH: 34,
+    data: new Uint16Array(34 * 34 * 8), indir: new Uint16Array(2 * 4) };
+  const isBake = (t) => Array.isArray(t.desc.size) && t.desc.size[0] === 34 && t.desc.size[1] === 68
+    && t.desc.format === "rgba16float";
+  const isIdx = (t) => Array.isArray(t.desc.size) && t.desc.size[0] === 2 && t.desc.size[1] === 1
     && t.desc.format === "rgba16float";
   assert.equal(gfx.begin({ lampBake: lb, lampBakeScale: [1, 1, 1] }), true);
   gfx.present({});
-  const bakes = h.textures.filter(isBake);
-  assert.equal(bakes.length, 1, "the bake uploads one w x 2h texture");
+  const bakes = h.textures.filter(isBake), idxs = h.textures.filter(isIdx);
+  assert.equal(bakes.length, 1, "the bake uploads one atlasW x 2 atlasH texture");
+  assert.equal(idxs.length, 1, "and one tilesX x tilesY indirection");
+  const fb = h.buffers.find((buffer) => buffer.desc.size === 672);
+  const fv = h.writes.filter((write) => write.buffer === fb).at(-1).values;
+  assert.deepEqual(Array.from(fv.slice(152, 156)), [0, 0, 64, 32], "bakeA: origin + grid extent tilesXY * T * cell");
+  assert.equal(fv[163], 32, "bakeC.w = T");
+  assert.deepEqual(Array.from(fv.slice(164, 168)), [2, 1, 34, 68], "bakeD: tiles + atlas texture size");
   for (let i = 0; i < 120; i++) { assert.equal(gfx.begin({}), true); gfx.present({}); }
   assert.equal(bakes[0].destroyed, false, "a short bake-off gap keeps the map");
   assert.equal(gfx.begin({}), true);
   assert.equal(bakes[0].destroyed, false, "retired, not destroyed before the frame's submit");
   gfx.present({});
   assert.equal(bakes[0].destroyed, true, "the 121st bake-off frame frees the map after its submit");
+  assert.equal(idxs[0].destroyed, true, "and its indirection");
   assert.equal(gfx.begin({ lampBake: lb, lampBakeScale: [1, 1, 1] }), true);
   gfx.present({});
   assert.equal(h.textures.filter(isBake).length, 2, "the same bake re-uploads once it returns");
