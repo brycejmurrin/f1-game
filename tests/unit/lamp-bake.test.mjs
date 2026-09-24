@@ -358,3 +358,12 @@ test("live-only lamps (lens < 3 m over its surface, or cosOuter > 0.9) stay out 
   assert.deepEqual([0, 1, 2, 3].map((s) => LB.liveOnlyAt(frame, s * 15)), [1, 0, 1, 0]);
   assert.ok(LB.gen() > 0, "gen names the drawing bake");
 });
+
+test("budget: phones keep the half-memory atlas, desktop spends it on resolution", () => {
+  const LB = load();
+  assert.equal(LB.budget({ mobileTier: true }), LB.MAX_TEXELS);
+  assert.equal(LB.budget({ isMobile: true }), LB.MAX_TEXELS);
+  assert.equal(LB.budget({ mobileTier: false }), LB.DESKTOP_TEXELS);
+  assert.equal(LB.budget(null), LB.DESKTOP_TEXELS);
+  assert.ok(LB.DESKTOP_TEXELS > LB.MAX_TEXELS);
+});
