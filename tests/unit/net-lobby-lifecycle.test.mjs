@@ -536,6 +536,17 @@ test("openRoom resets READY only for a FRESH room, not on every connection", () 
     "no unconditional _ready.clear() may remain in openRoom");
 });
 
+test("READY is host-relayed with from, and guests key _ready by from||id", () => {
+  // BUGS.md B3: without a host relay, guests never learn each other's READY
+  // (their only peer connection is the host). Mirror the HELLO pattern.
+  assert.match(SOURCE, /sess\.sendEvent\(NetPlay\.EV\.READY,\s*tagged\)/,
+    "host must relay READY to every other guest");
+  assert.match(SOURCE, /ready:\s*!!\(d && d\.ready\),\s*from:\s*id/,
+    "relayed READY carries from like HELLO");
+  assert.match(SOURCE, /const who = role === "host" \? id : \(\(d && d\.from != null\) \? d\.from : id\);/,
+    "guests key _ready by from when present, else the connection id");
+});
+
 // ── the sim seed and race round travel with the host's settings ─────────────
 // Every reproducible draw — reliability DNFs, the weather arc, the AI
 // restart/skill rolls, the AI qualifying times that set the grid — hashes on

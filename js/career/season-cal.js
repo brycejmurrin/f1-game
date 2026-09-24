@@ -340,8 +340,11 @@ function award(season, order, fastestId) {
   delete season.lastFl;
   const rp = season.roundPts || (season.roundPts = {});
   order.forEach((c, i) => {
-    let pts = c.retired ? 0 : (table[i] || 0);
-    if (fl && c.driverId === fastestId && i < 10 && !c.retired) { pts += 1; season.lastFl = fastestId; }
+    // Classified finishers only — still-running cars on a time-cap / early end
+    // must not take table points, countback finishes, or the FL bonus (BUGS.md B4).
+    const classified = !!c.finished && !c.retired;
+    let pts = classified ? (table[i] || 0) : 0;
+    if (fl && classified && c.driverId === fastestId && i < 10) { pts += 1; season.lastFl = fastestId; }
     const row = rp[c.driverId] || (rp[c.driverId] = []);
     row[season.round] = (row[season.round] || 0) + pts;
     season.pts[c.driverId] = (season.pts[c.driverId] || 0) + pts;
@@ -349,7 +352,7 @@ function award(season, order, fastestId) {
     season.teamPts[c.team.id] = (season.teamPts[c.team.id] || 0) + pts;
     // Countback material: a histogram of Grand Prix finishing positions per
     // driver (sprints do not count, as in the real tie-break). rank() reads it.
-    if (scoring !== "sprint" && !c.retired) {
+    if (scoring !== "sprint" && classified) {
       const f = season.finishes || (season.finishes = {});
       const row = f[c.driverId] || (f[c.driverId] = []);
       row[i] = (row[i] || 0) + 1;

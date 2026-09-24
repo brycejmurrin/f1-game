@@ -49,10 +49,13 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 // tests/unit/pick-tests.test.mjs asserts this against pages.yml, so the two cannot
 // drift apart silently the way a comment naming a branch would.
 export const DEPLOY_BRANCH = "claude/f1-game-project-26h3ng";
-// Kept in step with tools/ci/test-bg.mjs, which enforces the same arithmetic.
-const WORKERS = +process.env.WORKERS || 2;
+// Kept in step with tools/ci/test-bg.mjs: WORKERS is its formula, and a batch
+// is ONE group because test-bg's default cap is 1 (sequential; `--parallel`
+// is the opt-in). The old cores/2 batches printed two-group commands that
+// test-bg then started only the first of.
 const CORES = os.availableParallelism ? os.availableParallelism() : (os.cpus().length || 4);
-const MAX_GROUPS = Math.max(1, Math.floor(CORES / WORKERS));
+const WORKERS = +process.env.WORKERS || (os.cpus().length <= 4 ? 1 : 2);
+const MAX_GROUPS = 1;
 
 /* [matcher, groups, why] — matcher is a RegExp over the repo-relative path.
    Every rule that matches contributes its groups; the union is what runs. */
@@ -166,6 +169,7 @@ export const RULES = [
   [/^js\/camera\//, ["input"], "camera vantage, offsets and mode switching"],
   [/^js\/audio\/spotify\.js/, ["ui", "audio-unit", "lifecycle-unit"], "token refresh races + browser integration"],
   [/^js\/audio\/radio-voice\.js/, ["audio-unit", "ui"], "the spoken radio: its own policy suite, and the mixer panel that toggles it"],
+  [/^js\/audio\/voice-pack\.js/, ["audio-unit"], "the recorded radio voice: its composer, pack coverage and the RadioVoice hand-off"],
   [/^js\/audio\/announcer\.js/, ["audio-unit", "ui"], "the pre-race announcer: its own script+voice suite, and the loading screen and settings sheet that drive it"],
   [/^js\/audio\/panel\.js/, ["ui"], "mixer panel: audio behaviour + menu DOM"],
   [/^js\/audio\//, ["ui", "lifecycle-unit"], ""],
@@ -191,6 +195,8 @@ export const RULES = [
   [/^js\/render\/shared\/driving-line\.js/, ["sweeps"], "driving-line.test.mjs"],
   [/^js\/ui\/driving-line-opts\.js/, ["sweeps"], "driving-line-opts.test.mjs"],
   [/^js\/ui\/debris-opts\.js/, ["state-unit"], "debris-opts.test.mjs"],
+  [/^js\/ui\/appearance-opts\.js/, ["state-unit"], "appearance-opts.test.mjs"],
+  [/^js\/ui\/title-fx\.js/, ["state-unit"], "title-fx.test.mjs"],
   [/^js\/ui\/track-maps\.js/, ["hooks", "circuits"], "map-hooks.spec.js reads __apex.mapPts; the layout metadata is per circuit"],
   // The SHIPPED default for any preference. Its own suite is settings-defaults
   // .test.mjs in steering-unit, but the file reaches further than that: it

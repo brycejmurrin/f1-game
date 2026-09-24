@@ -1,10 +1,10 @@
 {
   "images": "macos-latest",
   "track": "montreal",
-  "tod": "day",
+  "tod": "night",
   "clock": 12,
   "census_only": false,
   "force": "",
-  "ls": "apex26.tlxWarmPlus=0",
-  "leg": "step1-safe-228-reland-warm-OFF-2026-09-24"
+  "ls": "",
+  "leg": "L1-webgpu-only-webgl2-copy-stall-NIGHT-2026-09-24"
 }

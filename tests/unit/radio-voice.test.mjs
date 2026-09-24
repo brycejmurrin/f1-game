@@ -27,6 +27,13 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { fnSource } from "../helpers/fn-source.mjs";
+// VM timers are UNREF'd: they still fire while a test awaits, but a cue the
+// module schedules seconds ahead no longer holds the process open after the
+// last assertion (measured 2026-09-24: this file sat idle for most of its run).
+const unrefTimeout = (fn, ms, ...a) => { const t = setTimeout(fn, ms, ...a); t.unref?.(); return t; };
+// The synth is only ever touched from its own task, never inside say() (the game
+// tick): a test lets that task run before it looks at what was spoken.
+const flush = () => new Promise((r) => setTimeout(r, 5));
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => readFileSync(join(ROOT, p), "utf8");
@@ -45,7 +52,7 @@ function synthStub({ voices = [] } = {}) {
 }
 function load({ api = true, voices = [], stored = {} } = {}) {
   const saved = new Map(Object.entries(stored));
-  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout, clearTimeout });
+  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout: unrefTimeout, clearTimeout });
   seedLog(ctx);
   const synth = api ? synthStub({ voices }) : null;
   ctx.window = api ? { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } } : {};
@@ -126,7 +133,11 @@ test("every ANN_PRI kind resolves to a speaker, and the map agrees with radioWho
     const inControl = new RegExp(`"${k}"[^)]*\\)\\s*return "RACE CONTROL"`).test(who)
       || new RegExp(`return "RACE CONTROL"`).test(who) && who.split("RACE CONTROL")[0].includes(`"${k}"`);
     const inCoach = who.split("COACH")[0].includes(`"${k}"`) && !who.split("RACE CONTROL")[0].includes(`"${k}"`);
-    if (inControl) assert.equal(speaker, "control", `${k} is race control in radioWho but ${speaker} here`);
+    // The broadcaster (js/race/race-radio.js) has its own WHO line and speaks
+    // in the announcer's voice rather than on any of the three pit channels.
+    const inComm = new RegExp(`"${k}"\\)\\s*return "COMMENTARY"`).test(who);
+    if (inComm) assert.equal(speaker, "announcer", `${k} is the commentator in radioWho but ${speaker} here`);
+    else if (inControl) assert.equal(speaker, "control", `${k} is race control in radioWho but ${speaker} here`);
     else if (inCoach) assert.equal(speaker, "coach", `${k} is the coach in radioWho but ${speaker} here`);
     else assert.equal(speaker, "radio", `${k} is the driver's channel in radioWho but ${speaker} here`);
   }
@@ -180,7 +191,7 @@ test("no shipped radio line outlives its card", () => {
 
 // ── 5. The speak path, at the API boundary ──────────────────────────────────
 
-test("a preempt is cancel-then-speak-then-RESUME, which is the bug workaround", () => {
+test("a preempt is cancel-then-speak-then-RESUME, which is the bug workaround", async () => {
   // Bugzilla 1522074 (open, Firefox AND Chrome): a speak() directly after a
   // cancel() is silently dropped. Without resume() the line that goes missing
   // is the PENALTY that interrupted, not the wear report it interrupted — the
@@ -189,37 +200,46 @@ test("a preempt is cancel-then-speak-then-RESUME, which is the bug workaround", 
   const { RV: R, G, synth } = load({ stored: { radioVoice: true }, voices: [{ name: "A", lang: "en-GB", localService: true }] });
   const v = R.create(G);
   assert.equal(v.say("TYRES AT 50%", 3, "info"), true);
+  assert.equal(synth.calls.filter((c) => c.m !== "getVoices").length, 0, "nothing touches the synth inside the game tick");
+  await flush();
   assert.equal(v.say("5 SECOND PENALTY", 3, "penalty-hit"), true);
+  await flush();
   const seq = synth.calls.filter((c) => ["cancel", "speak", "resume"].includes(c.m)).map((c) => c.m);
-  assert.deepEqual(seq, ["cancel", "speak", "resume", "cancel", "speak", "resume"]);
+  // No cancel before the first line (nothing was speaking — a cancel on every
+  // line was synchronous IPC in every frame), and resume() only after a cancel.
+  assert.deepEqual(seq, ["speak", "cancel", "speak", "resume"]);
   const spoken = synth.calls.filter((c) => c.m === "speak");
   assert.match(spoken.at(-1).text, /penalty/, "the interrupting line is the one left speaking");
 });
 
-test("an empty voice list still speaks — that is the Safari path, not a refusal", () => {
+test("an empty voice list still speaks — that is the Safari path, not a refusal", async () => {
   // Safari returns nothing from getVoices() and picks a system default itself.
   // A design that requires a voice object before speaking is silent on Safari.
   const { RV: R, G, synth } = load({ stored: { radioVoice: true }, voices: [] });
   const v = R.create(G);
   assert.equal(v.say("BOX BOX BOX", 3, "info"), true);
+  await flush();
   const spoke = synth.calls.find((c) => c.m === "speak");
   assert.equal(spoke.voice, null, "voice = null is legal and is what Safari needs");
 });
 
-test("a REMOTE voice is never chosen — its lead-in is unbounded", () => {
+test("a REMOTE voice is never chosen — its lead-in is unbounded", async () => {
   const { RV: R, G, synth } = load({ stored: { radioVoice: true },
     voices: [{ name: "Google UK", lang: "en-GB", localService: false }, { name: "Local", lang: "en-GB", localService: true }] });
   const v = R.create(G);
   v.say("BOX BOX BOX", 3, "info");
+  await flush();
   const spoke = synth.calls.find((c) => c.m === "speak");
   assert.equal(spoke.voice && spoke.voice.name, "Local");
 });
 
-test("the setting round-trips, and turning it off stops a line in flight", () => {
+test("the setting round-trips, and turning it off stops a line in flight", async () => {
   const { RV: R, G, synth, saved } = load({ stored: { radioVoice: true } });
   const v = R.create(G);
   assert.equal(v.say("BOX BOX BOX", 3, "info"), true);
+  await flush();
   v.setEnabled(false);
+  await flush();
   assert.ok(synth.calls.some((c) => c.m === "cancel"), "disabling must silence what is already speaking");
   assert.equal(v.say("BOX BOX BOX", 3, "info"), false);
   assert.equal(v.setVolume(2), 1, "volume clamps to 0..1");
@@ -339,20 +359,21 @@ test("a tune round-trips through the store, per channel, and resets", () => {
   assert.equal(r.setTune("nobody", { pitch: 1.2 }), false, "an unknown channel is refused, not created");
 });
 
-test("a stored tune is read at create() and reaches the utterance", () => {
+test("a stored tune is read at create() and reaches the utterance", async () => {
   const { RV, G, synth } = load({
     voices: [LOCAL("Alpha"), LOCAL("Beta")],
     stored: { radioVoice: true, voiceTune: { radio: { pitch: 1.25, rate: 0.9, name: "Beta" } } },
   });
   const r = RV.create(G);
   r.say("box box", 9, "box");
+  await flush();
   const spoke = synth.calls.filter((c) => c.m === "speak").pop();
   assert.ok(spoke, "nothing was spoken");
   assert.equal(spoke.rate, 0.9, "the stored rate must reach the utterance");
   assert.equal(spoke.voice && spoke.voice.name, "Beta", "the stored voice must be the one chosen");
 });
 
-test("a stored voice that is no longer installed falls back, it does not silence the channel", () => {
+test("a stored voice that is no longer installed falls back, it does not silence the channel", async () => {
   // The realistic case: the save was made on another machine, or an OS update
   // removed a voice. Picking by NAME is what makes this recoverable at all — a
   // stored INDEX would silently become a different voice instead.
@@ -362,6 +383,7 @@ test("a stored voice that is no longer installed falls back, it does not silence
   });
   const r = RV.create(G);
   assert.equal(r.say("box box", 9, "box"), true, "a missing voice must not stop the line");
+  await flush();
   const spoke = synth.calls.filter((c) => c.m === "speak").pop();
   assert.ok(spoke.voice && spoke.voice.name, "it fell through to no voice at all");
   assert.ok(["Alpha", "Beta"].includes(spoke.voice.name), "it must land on an installed voice");
@@ -435,7 +457,7 @@ function lateCancelSynth() {
 
 function loadWithSynth(synth) {
   const ducks = [];
-  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout, clearTimeout });
+  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout: unrefTimeout, clearTimeout });
   seedLog(ctx);
   ctx.window = { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } };
   ctx.GameAudio = { setRadioDuck(on) { ducks.push(!!on); } };
@@ -445,11 +467,13 @@ function loadWithSynth(synth) {
   return { voice: RV.create(G), ducks };
 }
 
-test("a cancelled line's late end does not un-duck the line that replaced it", () => {
+test("a cancelled line's late end does not un-duck the line that replaced it", async () => {
   const synth = lateCancelSynth();
   const { voice, ducks } = loadWithSynth(synth);
   assert.equal(voice.say("Brake a little earlier here", 3, "coach"), true, "the coach line speaks");
+  await flush();
   assert.equal(voice.say("Car 44, track limits — +5s penalty", 3, "penalty-hit"), true, "the penalty preempts it");
+  await flush();
   const duckedBefore = ducks[ducks.length - 1];
   assert.equal(duckedBefore, true, "the penalty is speaking, so the music is ducked");
 
@@ -492,7 +516,7 @@ test("an engine that ends an utterance inside speak() still leaves it live", () 
     speak(u) { calls.push({ m: "speak" }); if (u.onend) u.onend(); },   // ends where it starts
     set onvoiceschanged(fn) { this._vc = fn; },
   };
-  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout, clearTimeout });
+  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout: unrefTimeout, clearTimeout });
   seedLog(ctx);
   ctx.window = { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } };
   ctx.GameAudio = { setRadioDuck(on) { ducks.push(!!on); } };
@@ -553,7 +577,7 @@ test("unlock() primes with an audible-volume utterance, not a muted one", () => 
  * separate them, and js/audio/panel.js prints the verdict where the player can
  * read it instead of relaying a feeling.
  */
-test("debug() separates what we asked for from what the engine started", () => {
+test("debug() separates what we asked for from what the engine started", async () => {
   const calls = [];
   let pending = null;
   const synth = {
@@ -563,7 +587,7 @@ test("debug() separates what we asked for from what the engine started", () => {
     /** The engine actually beginning — what iOS never does when unprimed. */
     begin() { if (pending && pending.onstart) pending.onstart(); },
   };
-  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout, clearTimeout });
+  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout: unrefTimeout, clearTimeout });
   seedLog(ctx);
   ctx.window = { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } };
   ctx.GameAudio = { setRadioDuck() {} };
@@ -575,6 +599,7 @@ test("debug() separates what we asked for from what the engine started", () => {
   assert.deepEqual([voice.debug().asked, voice.debug().started], [0, 0], "nothing attempted yet");
 
   voice.say("Box", 3, "info");
+  await flush();
   assert.equal(voice.debug().asked, 1, "the speak was handed to the platform");
   assert.equal(voice.debug().started, 0,
     "...and the engine has not begun it — which is exactly the state an unprimed iOS engine sits in for ever, " +
@@ -606,7 +631,9 @@ test("every channel the radio partitions into is a considered decision in the en
   assert.ok(table, "could not find RADIO_CH in js/audio/engine.js");
   const voiced = new Set([...table[1].matchAll(/^\s*(\w[\w-]*):/gm)].map((m) => m[1]));
   // `coach` is the deliberate omission: the driving coach is not on a radio.
-  const SILENT = new Set(["coach"]);
+  // `announcer` too: in-race commentary (kind "comm") is the TV booth, not a
+  // radio transmission, so it gets no click, hiss or squelch.
+  const SILENT = new Set(["coach", "announcer"]);
   for (const ch of new Set(Object.values(RV.SPEAKERS)))
     assert.ok(voiced.has(ch) || SILENT.has(ch),
       `channel "${ch}" has no entry in RADIO_CH and is not in this test's silent set — decide which`);

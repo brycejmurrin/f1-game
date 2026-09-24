@@ -131,6 +131,10 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // run from emitting its shared end node twice, and one of those duplicate
 // panels was also an interpenetrating pair here. No prop moved — one stopped
 // being emitted twice.
+// suzuka 2 -> 1 (2026-09-24): SRTM elevation bake for the stair-step twins
+// dropped one severe cone×cyl pair; measured, not assumed.
+// portimao 51 -> 44 (2026-09-24): SRTM Algarve bake + hillside escarpment
+// ground-seat; mid-sector terrace split cleared floaters and six severe spots.
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "track", "clip-baseline.json"), "utf8"),
 );

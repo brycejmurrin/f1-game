@@ -77,9 +77,14 @@
       cameraPosition, frontFacing,
       fract, floor, mod, dot, cross, mix, smoothstep, clamp, pow, exp, sqrt,
       abs, max, min, normalize, length, reflect, select, sin, cos,
-      dFdx, dFdy, fwidth, materialReference,
+      dFdx, dFdy, fwidth,
     } = TSL;
     const { hash21, vnoise, ignoise } = ctx.chunks;
+    // ONE base node per shadow map; the PCF taps are its .sample() clones. With
+    // vendor patch 10 the clones share the base's flipY uniform, so a map's 4-8
+    // taps cost one per-object update on three's WebGL2 backend, not one each.
+    // setUpdateMatrix(false): the taps pass explicit UVs, never the uv matrix.
+    const shadowMapNode = (tex) => texture(tex).setUpdateMatrix(false);
 
     // r184 NodeMaterial.customProgramCacheKey() hashes child-node ids, and
     // MeshBasicNodeMaterial.lights defaults TRUE. setup() mints a fresh
@@ -235,6 +240,9 @@
       bakeOrigin:     uniform(new THREE.Vector2(0, 0)),
       bakeSize:       uniform(new THREE.Vector2(1, 1)),
       bakeScale:      uniform(new THREE.Vector3(0, 0, 0)),
+      bakeShCol:      uniform(new THREE.Vector3(0, 0, 0)),
+      bakeGrid:       uniform(new THREE.Vector3(1, 1, 32)),   // tile atlas: (tilesX, tilesY, T)
+      bakeAtlas:      uniform(new THREE.Vector2(1, 2)),       // atlas texture size (atlasW, 2 atlasH)
       // PER-CHUNK ROAD (frame.roadChunkLamps). The road is ONE plain mesh on
       // TLX, but the grid lookup below reads only world position, so the plain
       // variant can take it too: gated here by the knob and per draw by
@@ -244,9 +252,11 @@
     // Lamp arrays: the flat stride-15 frame.lights record split by consumer,
     // exactly like js/render/glx/glx.js / the spike. geo = (rad, cosInner, cosOuter,
     // bleed). volW/glareW are godray/glow-pass fields — not consumed here.
+    // dir.w = LIVE-ONLY (LampBake.liveOnlyAt: a lamp left out of the bake, so
+    // it gets no step-aside); a vec3 array pads to vec4 anyway, so it is free.
     const lampPos = Array.from({ length: MAX_LIGHTS }, () => new THREE.Vector3());
     const lampCol = Array.from({ length: MAX_LIGHTS }, () => new THREE.Vector3());
-    const lampDir = Array.from({ length: MAX_LIGHTS }, () => new THREE.Vector3(0, -1, 0));
+    const lampDir = Array.from({ length: MAX_LIGHTS }, () => new THREE.Vector4(0, -1, 0, 0));
     const lampGeo = Array.from({ length: MAX_LIGHTS }, () => new THREE.Vector4(1, 0.8, 0.5, 0));
     U.lampPos = uniformArray(lampPos);
     // BAKED MATERIALS (TUNE_DEFS matTexMix, shipped 1.0 — the pack ships ON)
@@ -294,6 +304,7 @@
     function uf1(u, v) {
       if (u.value !== v) u.value = v;
     }
+    const _bakeShScr = [0, 0, 0];
     function updateFrame(frame) {
       const T = (frame && frame.tune) || null;
       const k = (id, def) => (T && T[id] != null ? T[id] : def);
@@ -375,16 +386,19 @@
           U.lampShadowVP.value.fromArray(SHD.S.lampLightVP);
           U.lampShadowOn.value = SHD.S.lampArmed ? 1 : 0;
           U.lampShadowIdx.value = SHD.S.lampIdx;
+          const _sc = typeof LampBake !== "undefined" ? LampBake.shadowCol(frame, SHD.S.lampIdx, _bakeShScr) : _bakeShScr;
+          U.bakeShCol.value.set(_sc[0], _sc[1], _sc[2]);
         }
       }
       const L = frame.lights;
       const nL = L ? Math.min(MAX_LIGHTS, (L.length / 15) | 0) : 0;
       U.numLights.value = nL;
+      const hasLB = typeof LampBake !== "undefined";
       for (let i = 0; i < nL; i++) {
         const o = i * 15;
         lampPos[i].set(L[o], L[o + 1], L[o + 2]);
         lampCol[i].set(L[o + 3], L[o + 4], L[o + 5]);
-        lampDir[i].set(L[o + 7], L[o + 8], L[o + 9]);
+        lampDir[i].set(L[o + 7], L[o + 8], L[o + 9], hasLB ? LampBake.liveOnlyAt(L, o) : 0);
         lampGeo[i].set(L[o + 6], L[o + 10], L[o + 11], L[o + 12]);
       }
     }
@@ -420,7 +434,8 @@
         const o = i * 15, r = i * 16;            // 4 texels x RGBA
         lt[r]      = L[o];     lt[r + 1]  = L[o + 1]; lt[r + 2]  = L[o + 2]; lt[r + 3]  = L[o + 6];
         lt[r + 4]  = L[o + 3]; lt[r + 5]  = L[o + 4]; lt[r + 6]  = L[o + 5]; lt[r + 7]  = 0;
-        lt[r + 8]  = L[o + 7]; lt[r + 9]  = L[o + 8]; lt[r + 10] = L[o + 9]; lt[r + 11] = 0;
+        lt[r + 8]  = L[o + 7]; lt[r + 9]  = L[o + 8]; lt[r + 10] = L[o + 9];
+        lt[r + 11] = typeof LampBake !== "undefined" ? LampBake.liveOnlyAt(L, o) : 0;   // LIVE-ONLY
         lt[r + 12] = L[o + 6]; lt[r + 13] = L[o + 10]; lt[r + 14] = L[o + 11]; lt[r + 15] = L[o + 12];
       }
       const it = LGRID.idxTex.image.data;
@@ -571,8 +586,9 @@
             if (SHD.blockerTex) {
               If(nearLod.and(U.pcssOn.greaterThan(0.5)), () => {
                 const bt = float(1.5 / (SHD.blockerSize || 512)).mul(boxK).toVar();
+                const blkT = shadowMapNode(SHD.blockerTex);
                 const btap = (px, py) =>
-                  texture(SHD.blockerTex, flipUV(sc.xy.add(vec2(px, py).mul(bt)))).r;
+                  blkT.sample(flipUV(sc.xy.add(vec2(px, py).mul(bt)))).r;
                 const zb = min(min(btap(-1.0, 1.0), btap(1.0, 1.0)),
                                min(btap(-1.0, -1.0), btap(1.0, -1.0)));
                 const pen = clamp(z.sub(zb).mul(U.pcssPen), 0.0, 1.0);
@@ -599,8 +615,9 @@
             const rot = (px, py) => vec2(
               cr.mul(px).add(sr.mul(py)),
               sr.negate().mul(px).add(cr.mul(py))).mul(rk);
+            const sunT = shadowMapNode(SHD.sunTex);
             const tap = (px, py) =>
-              texture(SHD.sunTex, flipUV(sc.xy.add(rot(px, py)))).compare(z);
+              sunT.sample(flipUV(sc.xy.add(rot(px, py)))).compare(z);
             // 4 Poisson taps always; 4 more near the camera (js/render/glx/shaders/glsl-lit.js).
             const s = tap(-0.94201624, -0.39906216)
               .add(tap(0.94558609, -0.76890725))
@@ -627,8 +644,9 @@
                   .and(cs.z.lessThan(1.0)), () => {
                   const cz = cs.z.sub(biasTerm.mul(U.carBiasScale)).toVar();
                   const ct = (1.0 / (SHD.carSize || 1024)) * 0.75;   // CAR_SHADOW_SIZE texel, tightened — off the REAL map (256² under software GL)
+                  const carT = shadowMapNode(SHD.carTex);
                   const ctap = (px, py) =>
-                    texture(SHD.carTex, flipUV(cs.xy.add(vec2(px, py)))).compare(cz);
+                    carT.sample(flipUV(cs.xy.add(vec2(px, py)))).compare(cz);
                   const csh = ctap(-ct, -ct).add(ctap(ct, -ct))
                     .add(ctap(-ct, ct)).add(ctap(ct, ct)).mul(0.25);
                   sh.assign(min(sh, csh));
@@ -827,29 +845,57 @@
      *
      * lampTex is 4 texels per lamp on x: (pos,rad) (col,-) (dir,-) (geo). */
     const LGRID = (ctx.lampGrid && ctx.lampGrid.lampTex) ? ctx.lampGrid : null;
-    /* BAKED LAMP POOLS. One RGBA16F light map per track (LampBake.forTrack),
-     * swapped into this ONE texture node — the node, not the texture, is what
-     * the graph holds, so a new track never mints a program. A 1x1 black
-     * placeholder until the first bake; bakeOn gates the term either way. */
+    /* BAKED LAMP POOLS. One RGBA16F tile atlas per track (LampBake.forTrack)
+     * plus its tile indirection (NEAREST), each swapped into ONE texture node —
+     * the node, not the texture, is what the graph holds, so a new track never
+     * mints a program. 1x1 black placeholders until the first bake; bakeOn
+     * gates the term either way. */
     const _bakeBlank = new THREE.DataTexture(new Uint16Array(4), 1, 1, THREE.RGBAFormat, THREE.HalfFloatType);
     _bakeBlank.needsUpdate = true;
+    const _bakeIdxBlank = new THREE.DataTexture(new Uint16Array(4), 1, 1, THREE.RGBAFormat, THREE.HalfFloatType);
+    _bakeIdxBlank.minFilter = _bakeIdxBlank.magFilter = THREE.NearestFilter;
+    _bakeIdxBlank.needsUpdate = true;
     const BAKE_NODE = texture(_bakeBlank);
-    let _bakeSrc = null;
+    const BAKE_IDX_NODE = texture(_bakeIdxBlank);
+    function _halfData(data, w, h, filter) {
+      const t = new THREE.DataTexture(data, w, h, THREE.RGBAFormat, THREE.HalfFloatType);
+      t.minFilter = t.magFilter = filter;
+      t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+      t.generateMipmaps = false;
+      t.colorSpace = THREE.NoColorSpace;
+      t.needsUpdate = true;
+      return t;
+    }
+    let _bakeSrc = null, _bakeOffN = 0;
     function setLampBake(b, scale) {
-      if (!b || !scale) { U.bakeOn.value = 0.0; return false; }
+      if (!b || !scale) {
+        U.bakeOn.value = 0.0;
+        // Bake off ~2 s (GLX bindLampBake _bakeOffN): free the light map and
+        // put the placeholder back; the node keeps the program unchanged.
+        if (BAKE_NODE.value !== _bakeBlank && ++_bakeOffN > 120) {
+          const old = BAKE_NODE.value, oldIdx = BAKE_IDX_NODE.value;
+          BAKE_NODE.value = _bakeBlank;
+          BAKE_IDX_NODE.value = _bakeIdxBlank;
+          _bakeSrc = null;
+          try { old.dispose(); } catch (_) { /* already gone */ }
+          if (oldIdx !== _bakeIdxBlank) { try { oldIdx.dispose(); } catch (_) { /* already gone */ } }
+        }
+        return false;
+      }
+      _bakeOffN = 0;
       if (b !== _bakeSrc) {
-        const t = new THREE.DataTexture(b.data, b.w, b.h, THREE.RGBAFormat, THREE.HalfFloatType);
-        t.minFilter = t.magFilter = THREE.LinearFilter;
-        t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
-        t.generateMipmaps = false;
-        t.colorSpace = THREE.NoColorSpace;
-        t.needsUpdate = true;
-        const old = BAKE_NODE.value;
+        const t = _halfData(b.data, b.atlasW, b.atlasH * 2, THREE.LinearFilter);   // diffuse + bounce atlas halves
+        const ti = _halfData(b.indir, b.tilesX, b.tilesY, THREE.NearestFilter);     // tile -> slot origin
+        const old = BAKE_NODE.value, oldIdx = BAKE_IDX_NODE.value;
         BAKE_NODE.value = t;
+        BAKE_IDX_NODE.value = ti;
         if (old && old !== _bakeBlank) { try { old.dispose(); } catch (_) { /* already gone */ } }
+        if (oldIdx && oldIdx !== _bakeIdxBlank) { try { oldIdx.dispose(); } catch (_) { /* already gone */ } }
         _bakeSrc = b;
         U.bakeOrigin.value.set(b.x0, b.z0);
-        U.bakeSize.value.set(b.w * b.cell, b.h * b.cell);
+        U.bakeSize.value.set(b.tilesX * b.T * b.cell, b.tilesY * b.T * b.cell);
+        U.bakeGrid.value.set(b.tilesX, b.tilesY, b.T);
+        U.bakeAtlas.value.set(b.atlasW, b.atlasH * 2);
       }
       U.bakeScale.value.set(scale[0], scale[1], scale[2]);
       U.bakeOn.value = 1.0;
@@ -1515,10 +1561,26 @@
         const bUv = wp.xz.sub(U.bakeOrigin).div(U.bakeSize).toVar();
         const bIn = bUv.x.greaterThan(0.0).and(bUv.x.lessThan(1.0))
           .and(bUv.y.greaterThan(0.0)).and(bUv.y.lessThan(1.0));
-        const bE = BAKE_NODE.sample(bUv).level(0).rgb.mul(U.bakeScale).toVar();
-        const bakeW = select(U.bakeOn.greaterThan(0.5).and(bIn), smoothstep(0.55, 0.85, N.y), float(0.0)).toVar();
+        // Alpha = the surface height the texel was baked at; a fragment off it
+        // (bridge deck, roof, lower road of a crossover, no known ground) keeps
+        // the live loop.
+        // Tile atlas: the indirection (NEAREST, sampled at the tile centre)
+        // names this tile's slot origin, -1 = empty (live loop); inside the
+        // slot the 1-texel gutter holds the neighbours, so the bilinear tap
+        // matches the full grid and never crosses slots. Bounce = +0.5 v.
+        const bG = bUv.mul(U.bakeGrid.xy).toVar();
+        const bTile = clamp(floor(bG), vec2(0.0), max(U.bakeGrid.xy.sub(1.0), vec2(0.0))).toVar();
+        const bSlot = BAKE_IDX_NODE.sample(bTile.add(0.5).div(U.bakeGrid.xy)).level(0).xy.toVar();
+        const bUvD = bSlot.add(bG.sub(bTile).mul(U.bakeGrid.z)).add(1.0).div(max(U.bakeAtlas, vec2(1.0))).toVar();
+        const bT = BAKE_NODE.sample(bUvD).level(0).toVar();
+        const bE = bT.rgb.mul(U.bakeScale).toVar();
+        const bB = BAKE_NODE.sample(bUvD.add(vec2(0.0, 0.5))).level(0).rgb.mul(U.bakeScale).toVar();
+        const bOnY = smoothstep(0.75, 2.5, abs(wp.y.sub(bT.a))).oneMinus();
+        const bakeW = select(U.bakeOn.greaterThan(0.5).and(bIn).and(bSlot.x.greaterThanEqual(0.0)), smoothstep(0.55, 0.85, N.y).mul(bOnY), float(0.0)).toVar();
         color.addAssign(albedo.mul(bE).mul(bakeW)
           .mul(metalness.oneMinus()).mul(wetSheen.mul(0.85).oneMinus()));
+        // Baked LAMP BOUNCE (per unit BOUNCE); the live bounce steps aside by bakeW.
+        color.addAssign(albedo.mul(bB).mul(U.bounceK.mul(bakeW)).mul(metalness.oneMinus()));
 
         /* PER-CHUNK LAMP SOURCE. Off (LGRID null, or lgOn 0) every accessor
          * below is the plain uniform-array read this loop has always done.
@@ -1566,8 +1628,11 @@
                         : ((i) => U.lampPos.element(i));
         const LCol = PC ? ((i, r) => select(PC.use, _fetch(r, 1).xyz, U.lampCol.element(i)))
                         : ((i) => U.lampCol.element(i));
-        const LDir = PC ? ((i, r) => select(PC.use, _fetch(r, 2).xyz, U.lampDir.element(i)))
-                        : ((i) => U.lampDir.element(i));
+        const LDir = PC ? ((i, r) => select(PC.use, _fetch(r, 2).xyz, U.lampDir.element(i).xyz))
+                        : ((i) => U.lampDir.element(i).xyz);
+        // LIVE-ONLY (dir.w): the bake leaves this lamp out, so no step-aside.
+        const LLo = PC ? ((i, r) => select(PC.use, _fetch(r, 2).w, U.lampDir.element(i).w))
+                       : ((i) => U.lampDir.element(i).w);
         // The loop still runs to MAX_LIGHTS — a TSL Loop bound must be a
         // compile-time constant — and breaks on whichever count applies.
         const lampN = PC ? select(PC.use, PC.n, U.numLights) : U.numLights;
@@ -1623,8 +1688,9 @@
                       .and(lps.z.lessThan(1.0)), () => {
                       const lpz = lps.z.sub(float(0.0012).add(float(0.004).mul(NoLl.oneMinus()))).toVar();
                       const lpt = 1.5 / (SHD.lampSize || 512);   // LAMP_SHADOW_SIZE texel off the REAL map (256² under software GL)
+                      const lampT = shadowMapNode(SHD.lampTex);
                       const ltap = (px, py) =>
-                        texture(SHD.lampTex, flipUV(lps.xy.add(vec2(px, py)))).compare(lpz);
+                        lampT.sample(flipUV(lps.xy.add(vec2(px, py)))).compare(lpz);
                       lampSh.assign(ltap(-lpt, -lpt).add(ltap(lpt, -lpt))
                         .add(ltap(-lpt, lpt)).add(ltap(lpt, lpt)).mul(0.25));
                     });
@@ -1632,14 +1698,19 @@
                 });
               }
               // diffuse pool — fades as the road wets (reflection takes over)
-              color.addAssign(albedo.mul(LCol(i, row))
-                .mul(att.mul(spotD).mul(lampSh.sub(bakeW))).mul(NoLl)
+              // On a baked fragment the live term steps aside (1 - bakeW) and the
+              // shadow-mapped lamp carves its shadow out of the pool in the pool's
+              // own steady colour (bakeShCol; 1 - lampSh is 0 for every other lamp).
+              const bakeWl = bakeW.mul(LLo(i, row).oneMinus()).toVar();
+              color.addAssign(albedo.mul(LCol(i, row).mul(lampSh.mul(bakeWl.oneMinus()))
+                .sub(vec3(U.bakeShCol).mul(lampSh.oneMinus().mul(bakeWl))))
+                .mul(att.mul(spotD)).mul(NoLl)
                 .mul(metalness.oneMinus()).mul(wetSheen.mul(0.85).oneMinus()));
               // bounce fill (uBounceK, def 0.04 — js/render/glx/shaders/glsl-lit.js)
               If(U.bounceK.greaterThan(0.0), () => {
                 color.addAssign(albedo.mul(LCol(i, row))
                   .mul(att.mul(U.bounceK).mul(NoLl.mul(0.45).add(0.55)))
-                  .mul(metalness.oneMinus()));
+                  .mul(metalness.oneMinus()).mul(bakeWl.oneMinus()));
               });
               // GGX + clearcoat lamp speculars, NoLl-gated (js/render/glx/shaders/glsl-lit.js)
               If(NoLl.greaterThan(0.0), () => {
@@ -1663,6 +1734,9 @@
             });
           });
         });
+        // (lampSh - bakeW) goes negative where the shadow-mapped floodlight is
+        // occluded on a baked fragment; never carve below black (GLX: same).
+        color.assign(max(color, vec3(0.0)));
 
         // sun Cook-Torrance specular, soft-clipped (js/render/glx/shaders/glsl-lit.js)
         If(NoL.greaterThan(0.0), () => {
@@ -1908,8 +1982,8 @@
      * DIFFERENT program text — a Monza load minted 595 GL programs / 615
      * unique shader strings and spent ~60 s inside the synchronous
      * getProgramParameter(LINK_STATUS) that three only skips on its
-     * compileAsync path. The scalars therefore become materialReference
-     * nodes reading `material.userData.tlx*` — per-RENDER-OBJECT uniform
+     * compileAsync path. The scalars therefore become per-object uniforms
+     * reading `material.userData.tlx*` — per-RENDER-OBJECT uniform
      * updates against ONE shared graph (exactly how three shares programs
      * between classic material instances). Three graphs total: chunked reads
      * no `trk` attribute, and instanced multiplies canonical vertex colour by
@@ -1922,10 +1996,33 @@
     // mesh's userData, and this uniform reads them per render object (the
     // same OBJECT update materialReference rides), falling back to the
     // material's own value for meshes the pool never touched.
-    const perObject = (k) => uniform(0).onObjectUpdate(({ object, material }) => {
-      const v = object && object.userData[k];
-      return v !== undefined ? v : (material ? material.userData[k] : undefined);
-    });
+    const _PACK_A_DEF = new THREE.Vector4(0.7, 0.0, 0.5, 0.0);   // roughness, metalness, specular, detail
+    const _PACK_B_DEF = new THREE.Vector4(0.0, 0.0, 1.0, 0.0);   // clearcoat, carPaint, sparkle, -
+    // ONE per-object callback per graph (was five: three per-draw scalars and
+    // two packed vec4s, each its own OBJECT update on every draw of every pass).
+    // It writes the per-draw scalars (emissive, alpha, lgRoad) into its own
+    // vec3 and points the two plain packed uniforms at this material's vectors.
+    // Safe because three runs every node update of a render object before its
+    // bindings are read. Per-draw keys fall back to the material's value for
+    // meshes the pool never touched; an absent key keeps the last value (as the
+    // old per-key uniforms did).
+    const _drawKeys = ["tlxEmissive", "tlxAlpha", "tlxLgRoad"];
+    function perDrawUniforms() {
+      const pA = uniform(_PACK_A_DEF.clone()), pB = uniform(_PACK_B_DEF.clone());
+      const draw = uniform(new THREE.Vector3(0, 1, 0)).onObjectUpdate(({ object, material }) => {
+        const v = draw.value, mud = material ? material.userData : null;
+        for (let i = 0; i < 3; i++) {
+          const k = _drawKeys[i];
+          let x = object ? object.userData[k] : undefined;
+          if (x === undefined && mud) x = mud[k];
+          if (x !== undefined) v.setComponent(i, x);
+        }
+        pA.value = (mud && mud.tlxPackA) || _PACK_A_DEF;
+        pB.value = (mud && mud.tlxPackB) || _PACK_B_DEF;
+        return v;
+      });
+      return { draw, pA, pB };
+    }
     const _sharedGraph = [null, null, null]; // [plain, chunked, instanced]
     const _mats = [];
     let _sharedPos = null;
@@ -1933,18 +2030,16 @@
       const idx = instanced ? 2 : (chunked ? 1 : 0);
       let g = _sharedGraph[idx];
       if (!g) {
-        const matU = {
-          emissive:  perObject("tlxEmissive"),
-          alpha:     perObject("tlxAlpha"),
-          lgRoad:    perObject("tlxLgRoad"),
-          roughness: materialReference("userData.tlxRoughness", "float"),
-          metalness: materialReference("userData.tlxMetalness", "float"),
-          specular:  materialReference("userData.tlxSpecular", "float"),
-          detail:    materialReference("userData.tlxDetail", "float"),
-          clearcoat: materialReference("userData.tlxClearcoat", "float"),
-          carPaint:  materialReference("userData.tlxCarPaint", "float"),
-          sparkle:   materialReference("userData.tlxSparkle", "float"),
-        };
+        // The seven per-MATERIAL scalars ride two packed vec4s (makeMaterial
+        // fills material.userData.tlxPackA/B once). Seven materialReference
+        // nodes cost seven updateReference + property-path walks per render
+        // object per pass — census 289 put updateReference at 4.6-5.6 % of the
+        // three.js/WebGL2 leg's CPU; one callback now feeds all of them.
+        const { draw, pA, pB } = perDrawUniforms();
+        const matU = { emissive: draw.x, alpha: draw.y, lgRoad: draw.z };
+        matU.roughness = pA.x; matU.metalness = pA.y;
+        matU.specular = pA.z;  matU.detail = pA.w;
+        matU.clearcoat = pB.x; matU.carPaint = pB.y; matU.sparkle = pB.z;
         const packed = buildFragment(matU, chunked, instanced);
         // Swizzle ONCE: packed.rgb mints a new wrapper node per access, and a
         // fresh wrapper is a fresh cache key — the whole point is one graph.
@@ -1983,6 +2078,8 @@
       ud.tlxClearcoat = val(o.clearcoat, 0.0);
       ud.tlxCarPaint  = val(o.carPaint, 0.0);
       ud.tlxSparkle   = val(o.sparkle, 1.0);
+      ud.tlxPackA = new THREE.Vector4(ud.tlxRoughness, ud.tlxMetalness, ud.tlxSpecular, ud.tlxDetail);
+      ud.tlxPackB = new THREE.Vector4(ud.tlxClearcoat, ud.tlxCarPaint, ud.tlxSparkle, 0);
       ud.tlxChunked   = !!o.chunked;
       ud.tlxInstanced = !!o.instanced;
       const packed = sharedFragment(!!o.chunked, !!o.instanced);
@@ -2083,7 +2180,7 @@
               const win = clamp(dn.mul(dn).mul(dn).mul(dn).oneMinus(), 0.0, 1.0);
               const distC = max(dist, U.lampNearClamp);
               const att = win.mul(win).div(distC.mul(distC).add(1.0));
-              const beam = smoothstep(geo.z, geo.y, dot(Ld.negate(), U.lampDir.element(i)));
+              const beam = smoothstep(geo.z, geo.y, dot(Ld.negate(), U.lampDir.element(i).xyz));
               const NoLl = max(dot(normalize(N), Ld), 0.0);
               sum.addAssign(U.lampCol.element(i).mul(att.mul(mix(geo.w, float(1.0), beam))).mul(NoLl).mul(0.25));
             });

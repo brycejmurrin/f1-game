@@ -111,3 +111,25 @@ test("a brief excursion under the cut threshold still sets a record", async () =
   crossLine(g);
   assert.ok(p.best < before, "a clean-enough lap must still take the record");
 });
+
+test("time trial never applies the +5s track-limits ladder", async () => {
+  // Bug hunt 2026-09-24 / defect ledger OPEN: four counted cuts announced a
+  // race-classification +5s penalty in a mode with nothing to apply it to.
+  const g = await timeTrial();
+  const p = g.G.player;
+  p.penalty = 0;
+  p.cutWarn = 0;
+
+  for (let n = 0; n < 4; n++) {
+    const cut = cutOffTrack(g, 200);
+    assert.ok(cut.counted, "cut " + (n + 1) + " must count");
+    assert.equal(p.incidentInvalidLap, true, "each counted cut still invalidates the lap");
+    // After a counted cut the car is parked at the -2 grace sentinel; jump
+    // back on-track and step until grace clears so the next off-track counts.
+    g.apex.jump(0.5, 60, 0);
+    for (let i = 0; i < 180 && p.offT < 0; i++) g.apex.step(1 / 60, 1);
+  }
+  assert.equal(p.penalty, 0, "TT must not accrue race-classification seconds");
+  assert.equal(p.cutWarn, 0, "the ladder still resets after the fourth cut");
+  assert.ok((p.cuts | 0) >= 4, "lifetime cuts still accumulate");
+});

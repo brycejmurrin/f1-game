@@ -206,6 +206,7 @@ function fakeIndexedDb(seed = []) {
       t.objectStore = () => ({
         put(row) { writes.push(() => { rows.set(row.k, row.v); lsOk.set(row.k, row.lsOk); }); return request(row.k); },
         delete(k) { writes.push(() => { rows.delete(k); lsOk.delete(k); }); return request(undefined); },
+        get(k) { return request(rows.has(k) ? { k, v: rows.get(k), lsOk: lsOk.get(k) } : undefined); },
         getAll() { return request(Array.from(rows, ([k, v]) => ({ k, v, lsOk: lsOk.get(k) }))); },
       });
       const settle = () => {
@@ -237,7 +238,7 @@ function fakeIndexedDb(seed = []) {
   };
 }
 
-function loadMirrored({ seed = [], disk = new Map(), writeError = null } = {}) {
+function loadMirrored({ seed = [], disk = new Map(), writeError = null, quota = null } = {}) {
   const idb = fakeIndexedDb(seed);
   const sandbox = {
     Math, JSON, Object, Array, String, Number, Map, isNaN, isFinite, console, Promise,
@@ -246,7 +247,8 @@ function loadMirrored({ seed = [], disk = new Map(), writeError = null } = {}) {
     localStorage: {
       getItem: (k) => (disk.has(k) ? disk.get(k) : null),
       setItem: (k, v) => {
-        if (writeError) { const e = new Error("blocked"); e.name = writeError; throw e; }
+        const err = writeError || (quota && quota.on ? "QuotaExceededError" : null);
+        if (err) { const e = new Error("blocked"); e.name = err; throw e; }
         disk.set(k, String(v));
       },
       removeItem: (k) => { disk.delete(k); },
@@ -389,6 +391,47 @@ test("a quota-refused save to an EXISTING slot wins at the next boot, over the s
   await store.mirrorFlush();
   assert.equal(JSON.parse(idb.rows.get("apex26.career.driver.0")).money, 2, "the boot re-save did not overwrite the mirror");
   assert.equal(idb.lsOk.get("apex26.career.driver.0"), true, "and the row now agrees with the disk");
+});
+
+test("a peer tab cannot replace an lsOk:false mirror row with an older lsOk:true value", async () => {
+  // BUGS.md B5: Tab A quota-refused V2 (mirror lsOk:false). Tab B never saw
+  // storage, still holds V1, and a successful save queues lsOk:true with V1.
+  const key = "apex26.career.driver.0";
+  const v2 = JSON.stringify({ money: 2 });
+  const { store, idb } = loadMirrored({ seed: [[key, v2, false]] });
+  await store.mirror.ready;
+  await store.mirrorFlush();   // clear any same-value lsOk upgrade from restore
+  // Re-assert the quota-refused durable row (as if disk filled again / peer lag).
+  idb.rows.set(key, v2);
+  idb.lsOk.set(key, false);
+  store.write("career.driver.0", { money: 1 });   // disk accepts (no writeError)
+  await store.mirrorFlush();
+  assert.equal(JSON.parse(idb.rows.get(key)).money, 2,
+    "older lsOk:true must not overwrite the quota-refused newer row");
+  assert.equal(idb.lsOk.get(key), false);
+});
+
+test("the tab that wrote the quota-refused row can still supersede it (no rollback on reload)", async () => {
+  // B5's guard refused EVERY later lsOk:true write, including this tab's own
+  // newer saves once the disk had room again: the reload then restored the
+  // refused row over them (money 4 -> 2).
+  const key = "apex26.career.driver.0";
+  const disk = new Map(), quota = { on: false };
+  const { store, idb } = loadMirrored({ disk, quota });
+  await store.mirror.ready;
+  store.set("career.driver.0", { money: 1 });
+  await store.mirrorFlush();
+  quota.on = true;
+  store.set("career.driver.0", { money: 2 });   // refused: the mirror row is the newest copy
+  await store.mirrorFlush();
+  assert.equal(idb.lsOk.get(key), false);
+  quota.on = false;
+  store.set("career.driver.0", { money: 3 });
+  store.set("career.driver.0", { money: 4 });
+  await store.mirrorFlush();
+  assert.equal(JSON.parse(disk.get(key)).money, 4);
+  assert.equal(JSON.parse(idb.rows.get(key)).money, 4, "this tab's newer save replaced its own refused row");
+  assert.equal(idb.lsOk.get(key), true, "so a reload restores nothing over the disk");
 });
 
 test("without indexedDB the mirror is inert and the store is unchanged", async () => {

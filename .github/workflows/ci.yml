@@ -138,6 +138,14 @@ name: CI
 
 on:
   push:
+    # THE DEPLOY BRANCH ONLY (2026-09-24, decision 1c). A `claude/<topic>`
+    # branch gets CI through its DRAFT PR (AGENTS.md rule 12 opens one after
+    # the first push): every branch push used to start a run that its own PR
+    # event cancelled seconds later (rule 8's dedupe), and 172 jobs queued
+    # against ~20 slots on 2026-09-23. A branch pushed with no PR starts no
+    # run — `ci-watch.mjs` says `= ci none`, and the fix is to open the PR.
+    branches:
+      - claude/f1-game-project-26h3ng
     # EVERY branch, the deploy branch included (2026-09-10). pages.yml no
     # longer runs on push — it is a release train (three ticks an hour) that
     # calls this workflow for the FULL gate on the tip. A push to the deploy
@@ -145,9 +153,9 @@ on:
     # census, driving-model and the change-aware selection, in its own
     # concurrency group so sessions never cancel each other's verdict. The
     # browser smoke shards, the geometry sweeps and the renderer jobs are the
-    # train's (and PRs' and other branches'). The tier is decided by ONE
-    # expression, repeated on the two heavy jobs:
-    #   github.event_name == 'push' && github.ref_name == '<deploy branch>' && inputs.concurrency_key == ''
+    # train's (and ready PRs'). The tier is decided by ONE expression,
+    # repeated on the heavy jobs (smoke, ship-filter, sweeps):
+    #   inputs.concurrency_key == '' && (<deploy-branch push> || <draft PR>)
     # (a Pages call always carries a concurrency_key, so it is never fast).
     # ACTIONS MINUTES (2026-09-02): a docs / skills / rules-only commit ships
     # nothing, so it buys no gate. The guard suite that checks those trees
@@ -160,6 +168,14 @@ on:
       - ".cursor/**"
       - ".codex/**"
   pull_request:
+    # A DRAFT PR is the FAST tier too (the same expression, below): guards,
+    # node suites, parts census, driving-model and the selected specs — the
+    # verdict a work-in-progress push needs, minutes after it lands. Marking
+    # it ready (`ready_for_review`) starts the FULL tier (smoke shards and
+    # geometry sweeps) on the same head, and the train gates the tip again.
+    # `ready_for_review` is not a default type; the other three are.
+    # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request
+    types: [opened, synchronize, reopened, ready_for_review]
     paths-ignore:
       - "docs/**"
       - "**/*.md"
@@ -550,7 +566,7 @@ jobs:
     name: Per-circuit geometry sweeps
     runs-on: ubuntu-latest
     # Not in the deploy branch's FAST tier (see `on: push`); the train runs it.
-    if: ${{ !(github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && inputs.concurrency_key == '') }}
+    if: ${{ !(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft))) }}
     # 35, not 20. MEASURED, not estimated: `test:sweeps` takes 14m20s on a
     # 4-core dev box with the heap ceiling below, and this job then runs
     # verify-track --all on top of it (52 circuits, 42 s on a runner), so the
@@ -743,7 +759,7 @@ jobs:
     # THE SAME `if:` AS SMOKE, deliberately. When smoke does not run, this must
     # not either, and smoke's `needs: ship-filter` then skips it with this one —
     # the behaviour the inline filter had by construction.
-    if: ${{ !(github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && inputs.concurrency_key == '') }}
+    if: ${{ !(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft))) }}
     outputs:
       ships: ${{ steps.shipfilter.outputs.ships }}
     steps:
@@ -879,7 +895,7 @@ jobs:
     name: Smoke (page boots, __apex responds)
     runs-on: ubuntu-latest
     # Not in the deploy branch's FAST tier (see `on: push`); the train runs it.
-    if: ${{ !(github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && inputs.concurrency_key == '') }}
+    if: ${{ !(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft))) }}
     # NO job-level `if` (2026-09-10). Two guards lived here and both were wrong
     # in opposite directions. `inputs.smoke != false` skipped this job on EVERY
     # branch and PR push: `inputs` is empty on a plain push, null coerces like

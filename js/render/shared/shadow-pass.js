@@ -48,6 +48,7 @@ const ShadowPass = (function () {
     // to the LAMP's frustum, so the static half of this map is a pure function of
     // which lamp it is. What actually varies is the lamp and the CARS cast into it.
     let _lampShX = null, _lampShY = null, _lampShZ = null;   // the lamp, by world position (static fixture => exact match)
+    let _lampShR = null, _lampShC = null, _lampShDx = null, _lampShDy = null, _lampShDz = null;   // ...and its VP inputs (radius, cone, aim)
     let _lampShCarKey = 0;   // quantised positions of the cars in the map
     const _shadowCtr = [0, 0, 0];   // unsnapped shadow anchor (glides) — the shader fades by distance from this
 
@@ -123,7 +124,7 @@ const ShadowPass = (function () {
     function reset() {
       _shadowSnapX = _shadowSnapZ = _shadowBox = null;
       _shadowSunX = _shadowSunY = _shadowSunZ = null;
-      _lampShX = _lampShY = _lampShZ = null; _lampShCarKey = 0;
+      _lampShX = _lampShY = _lampShZ = null; _lampShR = _lampShC = _lampShDx = _lampShDy = _lampShDz = null; _lampShCarKey = 0;
     }
     // The render loop: count reset before the car loop, one push per drawn car
     // (blob shadow this frame; sun / lamp caster next frame), flush after.
@@ -372,6 +373,14 @@ const ShadowPass = (function () {
     }
 
     // Nearest-floodlight spot shadow map (night only).
+    // One lamp caster folded into the car key: position at 0.25 m (x, y, z) and
+    // heading at 1/8 rad, all from the column-major world matrix the cast uses.
+    function _lampCasterKey(k, m) {
+      k = (k * 31 + Math.round(m[12] * 4)) | 0;
+      k = (k * 31 + Math.round(m[13] * 4)) | 0;
+      k = (k * 31 + Math.round(m[14] * 4)) | 0;
+      return (k * 31 + Math.round(Math.atan2(m[8], m[10]) * 8)) | 0;
+    }
     function lampPass(frame, _frameNo, _hasLivePlayerShadow) {
       // Night only: ONE lamp — the nearest/strongest to the camera — gets a real
       // per-frame 512² depth map (perspective, looking down its beam) so the car
@@ -429,7 +438,11 @@ const ShadowPass = (function () {
             // Lamp fixtures are STATIC and their coordinates are copied, not
             // recomputed, so exact equality is the identity test — no epsilon, and
             // no way for two distinct lamps to collide on it.
-            const _sameLamp = _lx === _lampShX && _ly === _lampShY && _lz === _lampShZ;
+            // Position alone is not the map's VP: POOL RADIUS / BEAM CONE knobs
+            // rebuild the set with the same positions but a new far plane / fov.
+            const _sameLamp = _lx === _lampShX && _ly === _lampShY && _lz === _lampShZ &&
+              rad === _lampShR && L[o + 11] === _lampShC &&
+              L[o + 7] === _lampShDx && L[o + 8] === _lampShDy && L[o + 9] === _lampShDz;
             // Same bound the cast loop below uses, hoisted so the key is computed
             // from exactly the set that gets rasterised — a key over a different set
             // than the content is how this class of cache goes wrong.
@@ -438,19 +451,31 @@ const ShadowPass = (function () {
             // coarser than the physics jitter of a stationary car. A parked field
             // therefore holds one key indefinitely and costs no rebuilds at all,
             // which is strictly cheaper than the 12 m cell it replaces.
-            let _carKey = 0;
-            if (_hasLivePlayerShadow && G.player && G.player.px != null) {   // px/pz are scalars, not a vec
-              _carKey = ((Math.round(G.player.px * 4) * 31 + Math.round(G.player.pz * 4)) * 31 + 1) | 0;
-            }
+            // THE PLAYER TAKES THE SAME BOUND AS THE AI CARS (TLX-PERF-PLAN L0). It
+            // was hashed and cast unconditionally, so while driving at night the key
+            // changed every 0.25 m and the whole static prop set was re-culled,
+            // re-packed and redrawn ~30-60 times a second even with the player far
+            // outside this lamp's reach. The cast-loop argument below holds for the
+            // player exactly as for an AI car: beyond rad + 8 its shadow can only
+            // fall on fragments this lamp does not light. Position from the same
+            // resolved transform the cast uses (game.js fills it before both passes).
+            const _pm = _livePlayerShadowMat;
+            const _pdx = _pm[12] - _lx, _pdy = _pm[13] - _ly, _pdz = _pm[14] - _lz;
+            const _playerIn = _hasLivePlayerShadow && (_pdx * _pdx + _pdy * _pdy + _pdz * _pdz) <= _lsR2;
+            // Every caster is keyed from the SAME matrix the cast draws with, on
+            // position (0.25 m, incl. height) AND heading (1/8 rad): keyed on
+            // physics px/pz alone, a car spinning or pitching in place kept its old
+            // silhouette, and the interpolated player transform trailed the key.
+            let _carKey = _playerIn ? _lampCasterKey(1, _pm) : 0;
             for (let i = 0; i < _shadowCount; i++) {
               const _cm = _shadowMats[i];
               if (_shadowCars[i] === G.player) continue;
               const _cdx = _cm[12] - _lx, _cdy = _cm[13] - _ly, _cdz = _cm[14] - _lz;
               if (_cdx * _cdx + _cdy * _cdy + _cdz * _cdz > _lsR2) continue;
-              _carKey = ((_carKey * 31 + Math.round(_cm[12] * 4)) * 31 + Math.round(_cm[14] * 4)) | 0;
+              _carKey = _lampCasterKey(_carKey, _cm);
             }
-            // The player is cast into this map unconditionally, so while driving the
-            // car half of the key changes every frame and a pure content key would
+            // The player is cast into this map whenever it is within reach, so while
+            // driving under a lamp the car half of the key changes every frame and a pure content key would
             // rebuild at 60 Hz where the old cell key rebuilt at ~5. Bound it: a
             // CAR-ONLY change may be deferred one frame at tier >= 1, which is the
             // one-frame lag this file already takes for AI casters in the sun pass
@@ -472,6 +497,7 @@ const ShadowPass = (function () {
               if (G.gfx.lampShadowKeep) G.gfx.lampShadowKeep(flBest);
             } else {
             _lampShX = _lx; _lampShY = _ly; _lampShZ = _lz; _lampShCarKey = _carKey;
+            _lampShR = rad; _lampShC = L[o + 11]; _lampShDx = L[o + 7]; _lampShDy = L[o + 8]; _lampShDz = L[o + 9];
             const fov = Math.min(2.6, 2 * Math.acos(M4.clamp(L[o + 11], -0.999, 0.999)) * 1.1 + 0.15);
             const up = Math.abs(L[o + 8]) > 0.95 ? _upX : _upY;
             _flEye[0] = L[o]; _flEye[1] = L[o + 1]; _flEye[2] = L[o + 2];
@@ -485,8 +511,13 @@ const ShadowPass = (function () {
             // walls, the mast pole below the head) is farther out than that.
             M4.perspectiveTo(_mFlProj, fov, 1, 2.5, Math.max(rad, 10));
             M4.mulTo(_mFlVP, _mFlProj, _mFlView);
-            G.gfx.lampShadowBegin(_mFlVP, flBest);
-            if (_hasLivePlayerShadow) G.gfx.castShadow(deps.teamMesh(G.player.team, G.player, true), _livePlayerShadowMat);
+            // CAR-ONLY REBUILD FROM THE STATIC MAP (TLX-PERF-PLAN L1, TLX only): the
+            // lamp is unchanged, so its static props are already in the backend's
+            // static depth map — copy it and draw the cars alone. false = no valid
+            // static map (first pass, a failed copy, GLX/WGX): the full pass below.
+            const _carsOnlyPass = _carOnly && G.gfx.lampCarsBegin && G.gfx.lampCarsBegin(_mFlVP, flBest);
+            if (!_carsOnlyPass) G.gfx.lampShadowBegin(_mFlVP, flBest);
+            if (_playerIn) G.gfx.castShadow(deps.teamMesh(G.player.team, G.player, true), _livePlayerShadowMat);
             // Distance-cull the casters, the twin of the sun pass's _csR above — the
             // comment there notes the field pays the caster cost TWICE at night, and
             // this is the second half. Only 1-3 cars are ever under a lamp, so this
@@ -509,10 +540,20 @@ const ShadowPass = (function () {
               if (_ldx * _ldx + _ldy * _ldy + _ldz * _ldz > _lsR2) continue;
               if (_shadowCars[i] !== G.player) G.gfx.castShadow(deps.teamMesh(_shadowTeams[i], _shadowCars[i], true), _shadowMats[i]);
             }
-            G.gfx.castShadowChunked(G.track.meshes.props, MAT_IDENT);
-            // Lamp pass: cull against the lamp perspective frustum (castCullVP).
-            _castPropBatchesShadow();
+            if (!_carsOnlyPass) {
+              G.gfx.castShadowChunked(G.track.meshes.props, MAT_IDENT);
+              // Lamp pass: cull against the lamp perspective frustum (castCullVP).
+              _castPropBatchesShadow();
+            }
             G.gfx.lampShadowEnd();
+            // A full pass also refreshes the static map (props only, same VP), so
+            // the car-only rebuilds that follow under this lamp can copy it. Only
+            // on a full pass — a lamp change or the first — which is rare.
+            if (!_carsOnlyPass && G.gfx.lampStaticBegin && G.gfx.lampStaticBegin(_mFlVP)) {
+              G.gfx.castShadowChunked(G.track.meshes.props, MAT_IDENT);
+              _castPropBatchesShadow();
+              G.gfx.lampStaticEnd();
+            }
             } // end lamp-shadow snap rebuild
           }
         }

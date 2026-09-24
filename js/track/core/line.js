@@ -105,7 +105,46 @@ const TrackLine = (function () {
   const FAM_SHIFT_M = 1.5;       // m the INNER / OUTER families sit off the racing line inside a corner
   const HINT_SNAP_M = 80;        // a hint's turn must sit within this of a baked corner's apex
 
+  // MEMO. Rebuilding the SAME circuit (the menu TIME chip, a field-size change)
+  // re-ran this whole bake — 127–187 ms of an 820–1100 ms desktop build,
+  // ~0.5–0.75 s on a phone — for a byte-identical LUT. The key is EVERYTHING
+  // bakeFresh reads: n, total, the curv and hw arrays (compared bit-for-bit, so
+  // a -0 or NaN cannot alias) and def.lineHints / def.turns (resolveHints);
+  // the constants above are the rest of its input. The two most recent
+  // circuits are kept, as private copies, and a hit hands out fresh copies, so
+  // no two tracks share a mutable array. A hit skips resolveHints' dropped-hint
+  // Log.warn — the miss that baked the entry already said it.
+  const MEMO_MAX = 2;
+  const OUT = ["line", "lineW", "lineIn", "lineOut", "lineK", "attackQ", "toTurnIn"];
+  const _memo = [];
+  // realm-safe (a Node VM test hands in the host's Float32Array)
+  const isF32 = (a) => Object.prototype.toString.call(a) === "[object Float32Array]";
+  const bits = (a) => new Uint32Array(a.buffer, a.byteOffset, a.length);
+  function sameBits(a, b) {
+    if (a.length !== b.length) return false;
+    const u = bits(a), v = bits(b);
+    for (let i = 0; i < u.length; i++) if (u[i] !== v[i]) return false;
+    return true;
+  }
+  const copyOut = (src, dst) => {
+    for (const f of OUT) if (src[f]) dst[f] = new Float32Array(src[f]);
+    dst.lineCorners = src.lineCorners.map((c) => ({ ...c }));
+    return dst;
+  };
   function bake(track) {
+    const curv = track.curv, hw = track.hw, def = track.def;
+    if (!isF32(curv) || !isF32(hw)) return bakeFresh(track);
+    const hints = JSON.stringify([def && def.lineHints, def && def.turns]);
+    const hit = _memo.findIndex((m) => m.n === track.n && m.total === track.total && m.hints === hints &&
+      sameBits(m.curv, curv) && sameBits(m.hw, hw));
+    if (hit >= 0) { const m = _memo.splice(hit, 1)[0]; _memo.unshift(m); return copyOut(m.out, track); }
+    bakeFresh(track);
+    _memo.unshift({ n: track.n, total: track.total, hints, curv: new Float32Array(curv), hw: new Float32Array(hw), out: copyOut(track, {}) });
+    _memo.length = Math.min(_memo.length, MEMO_MAX);
+    return track;
+  }
+
+  function bakeFresh(track) {
     const n = track.n, L = track.total, ds = L / n, curv = track.curv, hw = track.hw;
     const x = new Float32Array(n), w = new Float32Array(n);
     if (!n || !curv) { track.line = x; track.lineW = w; track.lineCorners = []; return track; }

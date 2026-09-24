@@ -686,9 +686,17 @@ function skinAccent(t) {
   // (It is also what keeps this callable from the node HUD harnesses, which
   // boot hud.js with neither Teams nor getComputedStyle.)
   const canTell = typeof Teams !== "undefined" && Teams && typeof Teams.isReal === "function";
+  // APPEARANCE › HUD ACCENT owns --accent when not TEAM (js/ui/appearance-opts.js).
+  if (typeof AppearanceOpts !== "undefined" && AppearanceOpts && !AppearanceOpts.hudUsesTeam()) {
+    AppearanceOpts.applyHudAccent();
+    return;
+  }
   if (!t || !t.color || !canTell || Teams.isReal(t) || typeof getComputedStyle !== "function") {
     root.style.removeProperty("--accent");
     root.style.removeProperty("--accent-ink");
+    if (typeof AppearanceOpts !== "undefined" && AppearanceOpts && AppearanceOpts.menuAccent() === "team") {
+      AppearanceOpts.applyMenuAccent();
+    }
     return;
   }
   const cs = getComputedStyle(root);
@@ -697,6 +705,10 @@ function skinAccent(t) {
   if (!text || !bg) return;
   const ink = _wcag(t.color, text) >= _wcag(t.color, bg) ? "var(--text)" : "var(--bg)";
   root.style.setProperty("--accent-ink", ink);
+  // Menu accent TEAM resolves a concrete --red from the constructor colour.
+  if (typeof AppearanceOpts !== "undefined" && AppearanceOpts && AppearanceOpts.menuAccent() === "team") {
+    AppearanceOpts.applyMenuAccent();
+  }
 }
 
 function updateHud(force, dtMs) {

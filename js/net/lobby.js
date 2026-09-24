@@ -442,7 +442,18 @@ const NetLobby = (function () {
       made.onEvent(NetPlay.EV.SETTINGS, (d) => { if (role === "guest") applySettings(d); });
       made.onEvent(NetPlay.EV.READY, (d) => {
         if (!underRate(readyTimes)) return;
-        _ready.set(id, !!(d && d.ready));
+        // Mirror HELLO: guests have no peer link, so the host must relay READY
+        // with `from`. Key by who the ready belongs to, not the connection id
+        // (on a guest that is always the host peer — docs/BUGS.md B3).
+        const who = role === "host" ? id : ((d && d.from != null) ? d.from : id);
+        _ready.set(who, !!(d && d.ready));
+        if (role === "host") {
+          const tagged = { ready: !!(d && d.ready), from: id };
+          for (const [k, sess] of sessions) {
+            if (k === id) continue;
+            try { sess.sendEvent(NetPlay.EV.READY, tagged); } catch (e) { /* dead session */ }
+          }
+        }
         renderRoom();
       });
       made.onEvent(NetPlay.EV.GO, () => { if (role === "guest") beginRace(); });
@@ -1007,6 +1018,7 @@ const NetLobby = (function () {
         // or a time trial. flow/session are the authority (js/game.js).
         G.flow = "gp";
         G.session = "race";
+        G.duel = false;   // the room's grid is every peer's; a duel would trim the host's to two cars
         // startRace is ASYNC (it awaits ensureScenery) — without the await,
         // netPlay.start() below ran before makeCars()/gridUp(): on a fresh
         // page G.cars was [] (no_slot → cancel → quitToMenu, the friend race
