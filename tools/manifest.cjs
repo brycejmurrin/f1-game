@@ -137,6 +137,8 @@ const FULL = [
   "js/track/scenery/city.js",
   "js/track/scenery/identity.js",
   "js/track/scenery/pits.js",
+  // buildProps orchestration (guards nested for a later peel). Tracks.build calls it.
+  "js/track/scenery/build-props.js",
   ...circuitFiles,
   "js/race/pit-lane.js",
   "js/race/session-entry.js", // invalidates pending scenery-backed starts on quit or changed selection
@@ -366,6 +368,7 @@ const TRACK_VM = [
   "js/track/scenery/city.js",
   "js/track/scenery/identity.js",
   "js/track/scenery/pits.js",
+  "js/track/scenery/build-props.js",
   // The garages ARE the setup screen's bay (GarageScene.buildStatic), placed by
   // js/track/scenery/pits.js at build time; the row is Teams.LIST's. Both load
   // here so a VM build ships the same complex the browser does.
@@ -469,11 +472,18 @@ const HARD_EDGES = [
   ["js/track/core/geom.js", "js/track/core/mesh.js"],                 // mesh destructures TrackGeom at eval
   ["js/track/core/spline.js", "js/track/core/mesh.js"],               // mesh destructures TrackSpline at eval
   ["js/track/core/mesh.js", "js/track/tracks.js"],               // tracks destructures TrackMesh at eval
-  ["js/track/scenery/graph.js", "js/track/tracks.js"],               // buildProps calls TrackGraph.create at build
-  ["js/track/scenery/nature.js", "js/track/tracks.js"],     // buildProps calls Scenery*.create (build time, keep ordered)
-  ["js/track/scenery/structures.js", "js/track/tracks.js"],
-  ["js/track/scenery/city.js", "js/track/tracks.js"],
-  ["js/track/scenery/identity.js", "js/track/tracks.js"],
+  // build-props.js owns Tracks.buildProps orchestration (Phase 1 peel).
+  ["js/core/mat4.js", "js/track/scenery/build-props.js"],        // destructures M4.lerp at eval
+  ["js/track/core/geom.js", "js/track/scenery/build-props.js"],  // destructures TrackGeom at eval
+  ["js/track/core/spline.js", "js/track/scenery/build-props.js"],
+  ["js/track/core/mesh.js", "js/track/scenery/build-props.js"],
+  ["js/track/scenery/graph.js", "js/track/scenery/build-props.js"],   // TrackGraph.create at build
+  ["js/track/scenery/nature.js", "js/track/scenery/build-props.js"],  // Scenery*.create at build
+  ["js/track/scenery/structures.js", "js/track/scenery/build-props.js"],
+  ["js/track/scenery/city.js", "js/track/scenery/build-props.js"],
+  ["js/track/scenery/identity.js", "js/track/scenery/build-props.js"],
+  ["js/track/scenery/pits.js", "js/track/scenery/build-props.js"],    // SceneryPits.build last
+  ["js/track/scenery/build-props.js", "js/track/tracks.js"],          // Tracks.build → TrackBuildProps.build
   ["js/track/core/space.js", "js/track/core/surface.js"],
   ["js/track/scenery/models.js", "js/track/scenery/circuit-kit.js"],
   ["js/track/tracks.js", "js/ui/track-maps.js"],               // maps calls Tracks.buildCenterline
