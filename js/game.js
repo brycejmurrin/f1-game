@@ -3618,8 +3618,11 @@ function menuGridCars() {
   const rng = _simRngState;
   try {
     makeCars();
-    for (let i = 0; i < cars.length; i++) {
-      const c = cars[i], slot = TrackMesh.gridSlot(track, i);
+    const order = cars.slice(), pi = order.findIndex((c) => c.isPlayer);   // seat the player where the race grid will (P12), for the flyby's grid-mine shot
+    if (pi >= 0) order.splice(Math.min(11, order.length - 1), 0, order.splice(pi, 1)[0]);
+    FlybySeq.setPlayerSlot(order.findIndex((c) => c.isPlayer));
+    for (let i = 0; i < order.length; i++) {
+      const c = order[i], slot = TrackMesh.gridSlot(track, i);
       c.s = wrapS(slot.s); c.x = slot.x; c.xVis = c.x;
       const w = worldFromTrack(c.s, c.x, smp);
       c.px = w.x; c.pz = w.z;
@@ -3648,6 +3651,7 @@ function raceIntro(go) {
   // And fly the shots the EDITOR saved, for the same reason: a list edited in
   // the pause menu is only read here, so every run picks up the latest one.
   reloadFlybyShots();
+  if (!flybyShots) flybyShots = FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0);   // a different flyby each load (never the sim RNG); an editor-saved list plays as authored
   loadingScreen.run(loadingInfo(), go);
 }
 /** WHAT THE LOADING SCREEN DESCRIBES: the circuit about to be raced, this
@@ -7367,7 +7371,8 @@ function render(dt) {
   if (state !== "menu") skids.draw(gfx, camEye);
   // The DRIVING LINE ribbon rides the same state as the skids (on the road, no
   // depth write). Drawn against the PLAYER's speed for the dynamic colour.
-  if (state !== "menu" && track && player) DrivingLine.draw(gfx, drivingLineApi(track), Math.abs(player.speed));
+  // Never in a flyby frame (`cine`: the editor preview, flybyCam, free-cam's flyby lens).
+  if (state !== "menu" && !cine && track && player) DrivingLine.draw(gfx, drivingLineApi(track), Math.abs(player.speed));
 
   // cars — skip AI cars more than 550 m of track arc from the player (past fog)
   // Cockpit view doesn't draw the car you're sitting in: a first-person RIG

@@ -33,7 +33,7 @@ import { ROOT, isMain } from "./gen-lib.mjs";
 
 export const TARGET = "js/camera/flyby-seq.js";
 export const EASES = ["linear", "in", "out", "inOut"];
-export const AT_KINDS = ["start", "pole", "grid", "corner", "centre", "landmark"];
+export const AT_KINDS = ["start", "pole", "grid", "slot", "corner", "centre", "landmark"];
 /** Durations are fractions of one run, so they must sum to 1. The solver
  *  normalises internally, which is exactly why this is checked HERE: a list
  *  whose durations sum to 1.6 plays correctly and reads as nonsense forever. */
