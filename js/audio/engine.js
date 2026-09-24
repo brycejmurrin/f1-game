@@ -2594,6 +2594,7 @@ const GameAudio = (function () {
     return new Promise((res, rej) => ctx.decodeAudioData(ab, res, rej));
   }
   let voicesLive = 0;
+  const CLIP_OVERLAP_S = 0.05;
   /** Play decoded clips back to back from `at` (numbers in `parts` are pauses,
    *  in seconds). Returns { end, stop } or null when nothing can play. */
   function radioVoice(parts, at, o) {
@@ -2610,16 +2611,21 @@ const GameAudio = (function () {
     const g = ctx.createGain(); g.gain.value = ch.level * vol;
     hp.connect(lp).connect(ws).connect(comp).connect(g).connect(master);
     const srcs = [];
-    let t = t0;
+    let t = t0, joined = false;
     for (const p of parts) {
-      if (typeof p === "number") { t += Math.max(0, p); continue; }
+      if (typeof p === "number") { t += Math.max(0, p); joined = false; continue; }
       if (!p || !(p.duration > 0)) continue;
+      // Two clips back to back overlap a little: each fragment was rendered
+      // alone and decays like the end of a sentence, and running the next one
+      // over that tail is what makes a splice sound like one breath.
+      if (joined) t = Math.max(t0, t - CLIP_OVERLAP_S);
       const s = ctx.createBufferSource();
       s.buffer = p;
       s.connect(hp);
       s.start(t);
       srcs.push(s);
       t += p.duration;
+      joined = true;
     }
     const nodes = [hp, lp, ws, comp, g];
     let dead = false;

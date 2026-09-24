@@ -38,9 +38,9 @@ const say = (t) => RadioVoice.speakable(t);
 
 test("norm keeps a gap a word, and turns sentence punctuation into pauses", () => {
   assert.deepEqual(J(VoicePack.norm(say("1.4s TO NORRIS. YOU'RE IN RANGE"))),
-    ["1.4", "seconds", "to", "norris", { p: 0.14 }, "you're", "in", "range"]);
-  assert.deepEqual(J(VoicePack.norm(say("P7. NICE MOVE"))), ["p", "7", { p: 0.14 }, "nice", "move"]);
-  assert.deepEqual(J(VoicePack.norm("rain in 3 laps, be ready!")), ["rain", "in", "3", "laps", { p: 0.07 }, "be", "ready"],
+    ["1.4", "seconds", "to", "norris", { p: 0.1 }, "you're", "in", "range"]);
+  assert.deepEqual(J(VoicePack.norm(say("P7. NICE MOVE"))), ["p", "7", { p: 0.1 }, "nice", "move"]);
+  assert.deepEqual(J(VoicePack.norm("rain in 3 laps, be ready!")), ["rain", "in", "3", "laps", { p: 0.05 }, "be", "ready"],
     "a trailing pause is dropped: the squelch ends the line, not silence");
 });
 
@@ -48,7 +48,7 @@ test("compose takes the LONGEST key at each step and refuses a line it cannot co
   const keys = new Set(["box", "box box box", "next lap", "p 3"]);
   const has = (k) => keys.has(k);
   assert.deepEqual(J(VoicePack.compose("box box box", has)), [{ k: "box box box" }], "one clip, not three");
-  assert.deepEqual(J(VoicePack.compose(say("P3. BOX NEXT LAP"), has)), [{ k: "p 3" }, { p: 0.14 }, { k: "box" }, { k: "next lap" }]);
+  assert.deepEqual(J(VoicePack.compose(say("P3. BOX NEXT LAP"), has)), [{ k: "p 3" }, { p: 0.1 }, { k: "box" }, { k: "next lap" }]);
   assert.equal(VoicePack.compose(say("BOX NEXT LAP, VERSTAPPEN"), has), null, "one missing word and the pack stays out of it");
   assert.equal(VoicePack.compose("", has), null);
 });

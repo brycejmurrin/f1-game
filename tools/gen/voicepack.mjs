@@ -90,7 +90,16 @@ async function build() {
   const { KokoroTTS } = await import(req.resolve("kokoro-js"));
   const ffmpeg = req("ffmpeg-static");
   const voice = arg("voice", "bm_george"), id = arg("id", "george"), dtype = arg("dtype", "q4");
-  const speed = +arg("speed", "1.08");
+  const speed = +arg("speed", "1.12");
+  // A word said on its own gets a whole sentence's prosody, which is slow:
+  // Kokoro gave "to" half a second. Short fragments are rendered faster so a
+  // spliced line runs at an engineer's pace; numbers stay a touch clearer.
+  const speedFor = (key) => {
+    const words = key.split(" ").length;
+    if (/^[0-9]/.test(key) || /^p [0-9]/.test(key)) return +(speed * 1.08).toFixed(2);
+    return +(words <= 1 ? speed * 1.22 : words === 2 ? speed * 1.12 : speed).toFixed(2);
+  };
+  const KBPS = 32;
   const outDir = path.resolve(ROOT, arg("out", "assets/voice"));
   const cache = path.join(ROOT, "artifacts", "voicepack", id);
   fs.mkdirSync(cache, { recursive: true });
@@ -103,15 +112,16 @@ async function build() {
   let off = 0, i = 0;
   for (const { key, text } of list) {
     i++;
-    const mp3 = path.join(cache, safe(key) + "_" + speed + ".mp3");
+    const sp = speedFor(key);
+    const mp3 = path.join(cache, safe(key) + "_" + sp + "_" + KBPS + ".mp3");
     if (!fs.existsSync(mp3)) {
       const wav = mp3.replace(/\.mp3$/, ".wav");
-      const audio = await tts.generate(text, { voice, speed });
+      const audio = await tts.generate(text, { voice, speed: sp });
       await audio.save(wav);
       // Trim Kokoro's lead-in and tail, both ends, then encode.
       execFileSync(ffmpeg, ["-y", "-loglevel", "error", "-i", wav, "-af",
-        "silenceremove=start_periods=1:start_threshold=-42dB:start_silence=0.02,areverse,silenceremove=start_periods=1:start_threshold=-42dB:start_silence=0.04,areverse",
-        "-ac", "1", "-ar", "24000", "-c:a", "libmp3lame", "-b:a", "40k", mp3]);
+        "silenceremove=start_periods=1:start_threshold=-38dB:start_silence=0.01,areverse,silenceremove=start_periods=1:start_threshold=-38dB:start_silence=0.03,areverse",
+        "-ac", "1", "-ar", "24000", "-c:a", "libmp3lame", "-b:a", KBPS + "k", mp3]);
       fs.unlinkSync(wav);
     }
     const buf = fs.readFileSync(mp3);

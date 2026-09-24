@@ -1332,6 +1332,10 @@ test("recorded radio voice: clips play back to back through the radio band, and 
   for (const n of [...pendingTimers.splice(0)]) n();
   assert.equal(GameAudio.radioVoicesLive(), 0, "the transmission is released");
   assert.equal(liveNodes(), before, "no filter, shaper or gain is left rendering");
+  const joined = GameAudio.radioVoice([clip(0.5), clip(0.3)], 10, {});
+  assert.ok(Math.abs(joined.end - 10.75) < 1e-9, `back-to-back clips overlap by 50 ms: ${joined.end}`);
+  joined.stop();
+  for (const n of [...pendingTimers.splice(0)]) n();
   assert.equal(GameAudio.radioVoice([], 0, {}), null, "nothing to play is not a transmission");
   assert.equal(GameAudio.radioVoice([clip(0.2)], 0, { volume: 0 }), null, "volume 0 is off");
 });

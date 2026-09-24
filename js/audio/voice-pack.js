@@ -16,7 +16,7 @@
  * tool writes are exactly the keys the game looks up.
  */
 const VoicePack = (() => {
-  const PAUSE = Object.freeze({ ".": 0.14, "!": 0.14, "?": 0.14, ",": 0.07, ";": 0.1, ":": 0.1 });
+  const PAUSE = Object.freeze({ ".": 0.1, "!": 0.1, "?": 0.1, ",": 0.05, ";": 0.08, ":": 0.08 });
   const MAX_WORDS = 12;          // longest key the greedy matcher tries
   const CACHE_MAX = 80;          // decoded clips kept
   const SLACK_S = 0.4;           // a composed line may run this far past the card's budget
@@ -96,7 +96,11 @@ const VoicePack = (() => {
       const seq = compose(text, hasKey(v));
       if (!seq) return null;
       let secs = 0;
-      for (const s of seq) secs += s.k ? +v.man.clips[s.k][2] || 0 : s.p;
+      let prevClip = false;
+      for (const s of seq) {
+        secs += s.k ? (+v.man.clips[s.k][2] || 0) - (prevClip ? 0.05 : 0) : s.p;
+        prevClip = !!s.k;
+      }
       return { seq, secs };
     }
 

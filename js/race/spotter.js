@@ -82,7 +82,7 @@ const Spotter = (() => {
       if (!pack || !on() || !G.soundOn || G.state !== "race" || !p || !G.track) { st = fresh(); return ""; }
       if (G.cars !== lastCars) { lastCars = G.cars; st = fresh(); }
       pack.ensure("george");
-      if (Math.abs(p.speed || 0) < 0.12 * G.vTop() || (p.pitState && p.pitState !== "none")) { st = fresh(); return ""; }
+      if (Math.abs(p.speed || 0) < G.vTop() * 0.12 || (p.pitState && p.pitState !== "none")) { st = fresh(); return ""; }
       const key = step(st, occupancy(p, G.cars, G.track.total), dt);
       if (!key || pack.busy()) return "";
       const synth = typeof window !== "undefined" && window.speechSynthesis;
