@@ -442,6 +442,11 @@ Batch 2 — order:
 2. **R3 centreline kinks** — the 19 fold-warning circuits (verify-track list);
    worst heading flips zolder 28°, mont_tremblant 13°, buddh 12°, donington 12°.
    Per circuit, data-only path fixes; each keeps its turns/start within 1 m.
+   2026-09-24: 16 fixed by moving `path.pts` points (start/turns within 2 m,
+   lap within 0.1 %; donington's kinks too). Left on the list: buddh, korea
+   (hairpin after a one-segment straight — no point move keeps the apexes),
+   fuji (the move re-rolls scenery into floating canopies). mont_tremblant's
+   worst node turn is 25° spread over a real corner, not a kink.
 3. **T4 rest** — crowdBand vs grandstandEx (fuji 7.5 mm, 27 pairs), bleacher
    concourse band enclosing the lower rows (P2 multi-tier), tracks.js place()
    jitter.
