@@ -16,6 +16,10 @@ const RadioVoice = (function () {
     warning: "control", "penalty-warn": "control", "penalty-hit": "control",
     coach: "coach", practice: "coach",
     info: "radio", box: "radio", race: "radio",
+    // IN-RACE COMMENTARY (js/race/race-radio.js) speaks in the ANNOUNCER's
+    // voice and obeys the ANNOUNCER's switch, not TEAM RADIO's (see say()): it
+    // is the same broadcaster who opened the show over the flyby.
+    comm: "announcer",
   });
   // Prosody per channel: flat and official, calm and explanatory, quick and
   // clipped. On iOS every English voice sounds the same (the platform returns
@@ -245,8 +249,12 @@ const RadioVoice = (function () {
      * index would silently become a different voice; a stored name that is gone
      * falls back here to the default spread, which is the same thing a fresh
      * save gets. A missing voice must never silence the channel. */
-    function voiceFor(speaker) {
-      const v = voicesFor(!!REMOTE_OK[speaker]);
+    // `onCard`: a line budgeted against a radio card. REMOTE_OK's whole argument
+    // is that the announcer has NO card — but in-race commentary ("comm") does,
+    // and a network voice's round trip would be cut off by the card's deadline.
+    // So every card line takes a local voice, the announcer's included.
+    function voiceFor(speaker, onCard) {
+      const v = voicesFor(!onCard && !!REMOTE_OK[speaker]);
       if (!v.length) return null;                       // Safari: prosody carries it alone
       const want = tune[speaker] && tune[speaker].name;
       if (want) {
@@ -272,7 +280,8 @@ const RadioVoice = (function () {
       if (GameAudio && GameAudio.radioStingStop) GameAudio.radioStingStop();
     }
     function say(msg, life, kind, lead) {
-      const p = plan({ msg, life, kind, lead, enabled, soundOn: !!G.soundOn, state: G.state, api: true, volume, tune });
+      const on = kind === "comm" ? !!(G.announcer && G.announcer.enabled && G.announcer.enabled()) : enabled;
+      const p = plan({ msg, life, kind, lead, enabled: on, soundOn: !!G.soundOn, state: G.state, api: true, volume, tune });
       last = { text: p.text, reason: p.reason || "spoke", rate: p.rate, budgetMs: p.budgetMs, leadMs: p.leadMs };
       if (!p.speak) return false;
       stop();
@@ -283,7 +292,7 @@ const RadioVoice = (function () {
     }
     function speakPlanned(p) {
       const u = new Utter(p.text);
-      u.voice = voiceFor(p.speaker);
+      u.voice = voiceFor(p.speaker, true);   // speakPlanned only ever carries a card line (say())
       u.rate = p.rate; u.pitch = p.pitch; u.volume = p.volume;
       // Only the LIVE line may release the duck and the deadline — see `current`.
       u.onend = u.onerror = () => {
@@ -361,7 +370,14 @@ const RadioVoice = (function () {
       const observe = (el, on) => {
         if (el && typeof MutationObserver === "function") new MutationObserver(on).observe(el, { attributes: true, attributeFilter: ["hidden"] });
       };
-      observe(card, () => { if (card.hidden) stop(); });
+      // Only if THIS channel is speaking: synth.cancel() is global, and the card
+      // expiring a few seconds into the results screen would otherwise cut the
+      // announcer's wrap-up (js/audio/announcer.js wrapUp) mid-sentence.
+      observe(card, () => {
+        if (!card.hidden) return;
+        if (current || pending != null) stop();
+        else if (GameAudio && GameAudio.radioStingStop) GameAudio.radioStingStop();   // the hiss bed still goes with the card
+      });
       // The paused gate in tickBody returns BEFORE announceT is decremented, so
       // a card frozen by a pause never ages out. Without this, Escape mid-line
       // leaves the voice talking over a stopped game.

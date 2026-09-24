@@ -791,16 +791,31 @@ function _tailGlowRes() {
 // groundMat: the car's road-aligned basis (game.js _groundMat — the blob shadow's).
 // amt: TAIL-LIGHT GLOW x brake flare; it scales the pool's SIZE, since the
 // decal's brightness is fixed per program.
-function drawTailGlow(groundMat, amt) {
+// track / s (optional): the car's circuit and arc position. The decal reaches
+// ~4 m behind the car, where the road is no longer on the car's ground plane —
+// a flat quad clipped into dips and floated over crests. With them, the quad is
+// pitched to the centreline's rise between the car and the decal centre.
+const _tgS0 = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+const _tgS1 = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+function drawTailGlow(groundMat, amt, track, s) {
   if (!(amt > 0) || !_tailGlowRes()) return;
   const W = _tgW, k = Math.min(1.8, Math.sqrt(amt));
   const hw = 1.25 * k, hl = 2.6 * k;   // half-width / half-length, metres
+  const dc = 2.4 + hl * 0.55;          // decal centre, metres behind the car
+  // Road rise at the decal centre off the car's ground plane (world Y), clamped.
+  let rise = 0;
+  if (track && s != null && typeof Tracks !== "undefined" && Tracks.sample) {
+    Tracks.sample(track, s, _tgS0); Tracks.sample(track, s - dc, _tgS1);
+    rise = Math.max(-1.5, Math.min(1.5, (_tgS1.p[1] - _tgS0.p[1]) + groundMat[9] * dc));
+  }
   // Centred where the old point light's pool landed (the light sat 2.4 m back,
-  // aimed down-rear): ~1.5 m past the rear wing, 6 cm up so the road cannot
+  // aimed down-rear): ~1.5 m past the rear wing, 8 cm up so the road cannot
   // z-fight it. The front half tucks under the car's own rear.
   for (let i = 0; i < 3; i++) {
-    W[i] = groundMat[i] * hw; W[4 + i] = groundMat[4 + i]; W[8 + i] = groundMat[8 + i] * hl;
-    W[12 + i] = groundMat[12 + i] + groundMat[4 + i] * 0.06 - groundMat[8 + i] * (2.4 + hl * 0.55);
+    const up = i === 1 ? 1 : 0;
+    W[i] = groundMat[i] * hw; W[4 + i] = groundMat[4 + i];
+    W[8 + i] = groundMat[8 + i] * hl - up * (rise / dc) * hl;
+    W[12 + i] = groundMat[12 + i] + groundMat[4 + i] * 0.08 - groundMat[8 + i] * dc + up * rise;
   }
   W[3] = W[7] = W[11] = 0; W[15] = 1;
   _gfx.drawDecal(_tgMesh, W, _tgTex, _TG_OPTS);

@@ -18,19 +18,13 @@ uses. `def._sceneryShift` is the single arc number between them.
 - **`K(s)` is authored-frame and passes straight through.** Never pre-shift it.
   The wrapped `(k, side, …)` helpers (`anchor`, `tree`, `place`, `building`, …)
   apply the shift themselves, exactly once.
-- **Do not emit through a wrapped helper inside an `along()` callback.** The
-  wrapper shifts `along`'s RANGE, the engine walker then hands the callback
-  ENGINE-frame nodes, and the helper shifts that node again — so the prop lands
-  a whole shift away from the span you asked to walk. Measured on 18 circuits;
-  Monza's chicane kerb strips land on the pit straight and Miami's boats a
-  kilometre from their water. Until the engine fix lands, place along a span
-  with your own loop over `K(...)` values, or accept the offset knowingly.
-  Table reads have the same problem: `blocked(k / n)` inside a callback tests
-  engine fracs against authored windows.
-- **`bakedModel(id, k, side, dist, opts)` does not place on a shifted
-  circuit.** It sits in the wrapper's `(k, side, …)` list, so the remap is
-  applied to the `id` string; every call falls through to its procedural
-  fallback. Report the need rather than tuning around it.
+- **`along()` hands authored-frame `k` to the callback** (fixed 2026-09-24 —
+  `sceneryNodeToAuthored`). Wrapped helpers inside an `along` span apply the
+  shift once. Table reads like `blocked(k / n)` still need care: prefer
+  authored fracs / `K(s)` when testing against authored windows.
+- **`bakedModel(id, k, side, dist, opts)` remaps correctly on shifted
+  circuits** (dedicated `(id, k, side)` wrapper in `transformSceneryApi`).
+  Always keep `if (!bakedModel(...)) …` anyway.
 - **`every()` is full-lap**, so its double phase only moves which node a hash
   lands on — harmless for authored-frame tables, NOT for a table re-keyed into
   the engine frame (a `CLEAR`/exclusion list written through an `sl()` helper).

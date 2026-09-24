@@ -34,15 +34,16 @@ QUIT stays the final destructive action, followed by playback and build info.
 
 **Settings is a drill-down stack, not tabs, not one long scroll.**
 
-Pages: `home` | `controls` | `driving` | `display` | `advanced` | `audio`.
+Pages: `home` | `controls` | `driving` | `display` | `appearance` | `advanced` | `audio`.
 
 Settings home (`#pm-settings-index`, `.pm-doors`) is a door list:
 
 1. CONTROLS… — input, pedals and bindings.
 2. DRIVING… — coach, practice and strategy.
 3. DISPLAY… — interface, HUD and graphics.
-4. STEERING & ASSISTS… — presets, response and aids.
-5. MUSIC & SOUND… — playback, effects and volume.
+4. APPEARANCE… — theme, menu accent and HUD accent.
+5. STEERING & ASSISTS… — presets, response and aids.
+6. MUSIC & SOUND… — playback, effects and volume.
 
 STEERING & ASSISTS and MUSIC are in-sheet pages, with the same chrome as
 DISPLAY (`#advanced` / `#audioset` inside `.pm-groups`). Lighting and camera

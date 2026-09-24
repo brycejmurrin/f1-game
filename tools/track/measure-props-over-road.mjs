@@ -79,7 +79,14 @@ try {
           if (tp.x < mnx - 0.3 || tp.x > mxx + 0.3 || tp.z < mnz - 0.3 || tp.z > mxz + 0.3) continue;
           const bc = pit(tp.x, tp.z, ax, az, bx, bz, cx, cz); if (!bc) continue;
           const yf = ay + bc.u * (cy - ay) + bc.vv * (by - ay); const over = yf - tp.y;
-          if (over > TOL && over < CEIL) hits.push({ frac: +tp.frac.toFixed(3), over: +over.toFixed(2), cx: +((ax + bx + cx) / 3).toFixed(1), cz: +((az + bz + cz) / 3).toFixed(1), triY: +((ay + by + cy) / 3).toFixed(2), by: owner(cap, idx[t]), col: cap.col ? [cap.col[a], cap.col[a + 1], cap.col[a + 2]].map((v) => +v.toFixed(2)) : null, edges: [Math.hypot(ax - bx, az - bz), Math.hypot(bx - cx, bz - cz), Math.hypot(cx - ax, cz - az)].map((v) => +v.toFixed(2)) });
+          // Faces whose interpolated height sits in (TOL, CEIL), OR any triangle
+          // whose y-span overlaps [road+TOL, road+CEIL] while covering the road
+          // sample (band-spanning solids — docs/BUGS.md S6).
+          const yMin = Math.min(ay, by, cy), yMax = Math.max(ay, by, cy);
+          const bandLo = tp.y + TOL, bandHi = tp.y + CEIL;
+          const inBand = over > TOL && over < CEIL;
+          const spansBand = yMax >= bandLo && yMin <= bandHi;
+          if (inBand || spansBand) hits.push({ frac: +tp.frac.toFixed(3), over: +(inBand ? over : Math.min(yMax, bandHi) - tp.y).toFixed(2), cx: +((ax + bx + cx) / 3).toFixed(1), cz: +((az + bz + cz) / 3).toFixed(1), triY: +((ay + by + cy) / 3).toFixed(2), by: owner(cap, idx[t]), col: cap.col ? [cap.col[a], cap.col[a + 1], cap.col[a + 2]].map((v) => +v.toFixed(2)) : null, edges: [Math.hypot(ax - bx, az - bz), Math.hypot(bx - cx, bz - cz), Math.hypot(cx - ax, cz - az)].map((v) => +v.toFixed(2)) });
         }
       }
     }

@@ -38,6 +38,13 @@ const GameAudio = (function () {
   let tiltEq = null;                              // rev-compensating high shelf (see setEngine)
   let gravOsc = null, gravGain = null;            // low-rev roughness: crank-rate AM into engGain.gain
   let brakeSrc = null, brakeFilter = null, brakeGain = null; // carbon-brake roar under deceleration
+  let scrubSrc = null, scrubFilter = null, scrubGain = null; // front tyres scrubbing past the grip peak
+  let lockFilter = null, lockGain = null;                    // locked-wheel squeal (rides scrubSrc)
+  let surfSrc = null, surfFilter = null, surfGain = null;    // grass / gravel rumble off the road
+  let pitLimOsc = null, pitLimGain = null;                   // pit-limiter chop: square AM into engGain.gain
+  let revFlare = 0, revFlareT = 0;                           // downshift throttle-blip overshoot (see shift)
+  let carSfxLast = { scrub: 0, lock: 0, surface: 0, pitLim: 0 };   // test hook
+  let pitGunFired = 0;
 
   // RIVAL ENGINES. The game had no opponent audio at all and no panner anywhere
   // in the graph, so a car alongside was silent and the only cue you had for it
@@ -124,6 +131,22 @@ const GameAudio = (function () {
   // rivals have to pay the same discount or the fallback puts the field louder
   // than the car you are sitting in.
   let rivalPeak = 0.28;
+
+  // CAMERA MIX. Onboard you hear the engine and your own air; from a TV camera
+  // you are a spectator, so your car sits back, the field comes forward and the
+  // venue's reverb opens up. Multipliers only, all 1 on the chase camera, so
+  // every level measured there (tools/check/audio-test.cjs) is unchanged.
+  const CAM_MIX = Object.freeze({
+    onboard: Object.freeze({ engine: 1.08, cut: 1.00, wind: 0.70, rivals: 1.00, reverb: 0.60 }),
+    chase:   Object.freeze({ engine: 1.00, cut: 1.00, wind: 1.00, rivals: 1.00, reverb: 1.00 }),
+    tv:      Object.freeze({ engine: 0.55, cut: 0.55, wind: 0.30, rivals: 1.25, reverb: 1.80 }),
+  });
+  const CAM_KIND = Object.freeze({
+    cockpit: "onboard", hood: "onboard", tcam: "onboard", rear: "onboard",
+    chase: "chase", far: "chase", drift: "chase", reverse: "chase",
+    overhead: "tv", heli: "tv", side: "tv", cinematic: "tv", low: "tv",
+  });
+  let camMix = CAM_MIX.chase, camKind = "chase";
   let rivalVoices = [];           // { filt, gain, pan, detune, start, stop, setPitch }
 
   // Per-manufacturer engine character, keyed by team.engine (js/data/teams.js).
@@ -778,6 +801,13 @@ const GameAudio = (function () {
     gravGain = ctx.createGain(); gravGain.gain.value = 0;
     gravOsc.connect(gravGain).connect(engGain.gain);
     gravOsc.start();
+    // PIT LIMITER. The same audio-thread trick: an 11 Hz square into
+    // engGain.gain is the stutter of a car held at the lane's speed limit, its
+    // depth set by setCarSfx({ pitLim }) and 0 everywhere else.
+    pitLimOsc = ctx.createOscillator(); pitLimOsc.type = "square"; pitLimOsc.frequency.value = 11;
+    pitLimGain = ctx.createGain(); pitLimGain.gain.value = 0;
+    pitLimOsc.connect(pitLimGain).connect(engGain.gain);
+    pitLimOsc.start();
     engFilter.type = "lowpass";
     engFilter.frequency.value = 600;
     engGain.gain.value = 0;
@@ -1026,6 +1056,29 @@ const GameAudio = (function () {
     skidGain.gain.value = 0;
     skidSrc.connect(skidFilter).connect(skidGain).connect(sfxBus);
 
+    // CAR SFX (setCarSfx): scrub and lock-up share one noise loop through two
+    // filters — a low, broad scrub for fronts sliding past their peak and a
+    // narrow, high squeal for a locked wheel. The surface rumble is its own
+    // low-passed loop. All silent until setCarSfx drives them.
+    scrubSrc = ctx.createBufferSource();
+    scrubSrc.buffer = noiseBuf(0.5);
+    scrubSrc.loop = true;
+    scrubFilter = ctx.createBiquadFilter();
+    scrubFilter.type = "bandpass"; scrubFilter.frequency.value = 520; scrubFilter.Q.value = 0.9;
+    scrubGain = ctx.createGain(); scrubGain.gain.value = 0;
+    lockFilter = ctx.createBiquadFilter();
+    lockFilter.type = "bandpass"; lockFilter.frequency.value = 1900; lockFilter.Q.value = 7;
+    lockGain = ctx.createGain(); lockGain.gain.value = 0;
+    scrubSrc.connect(scrubFilter).connect(scrubGain).connect(sfxBus);
+    scrubSrc.connect(lockFilter).connect(lockGain).connect(sfxBus);
+    surfSrc = ctx.createBufferSource();
+    surfSrc.buffer = noiseBuf(0.5);
+    surfSrc.loop = true;
+    surfFilter = ctx.createBiquadFilter();
+    surfFilter.type = "lowpass"; surfFilter.frequency.value = 180; surfFilter.Q.value = 0.7;
+    surfGain = ctx.createGain(); surfGain.gain.value = 0;
+    surfSrc.connect(surfFilter).connect(surfGain).connect(sfxBus);
+
     // AIRFLOW. The only speed-coupled continuous sounds were the engine and
     // the skid, so a 320 km/h straight sounded like a 120 km/h one with a
     // higher engine note. Broadband noise through a bandpass that opens with
@@ -1068,6 +1121,8 @@ const GameAudio = (function () {
     ersOsc.start();
     lfo.start();
     skidSrc.start();
+    scrubSrc.start();
+    surfSrc.start();
     windSrc.start();
     brakeSrc.start();
 
@@ -1113,6 +1168,7 @@ const GameAudio = (function () {
     ersGain.gain.setTargetAtTime(0, t0, 0.04);
     windGain.gain.setTargetAtTime(0, t0, 0.06);
     skidGain.gain.setTargetAtTime(0, t0, 0.04);
+    if (scrubGain) { scrubGain.gain.setTargetAtTime(0, t0, 0.04); lockGain.gain.setTargetAtTime(0, t0, 0.04); surfGain.gain.setTargetAtTime(0, t0, 0.06); }
     if (brakeGain) brakeGain.gain.setTargetAtTime(0, t0, 0.06);
     const stopAt = (n, t) => { try { if (n) n.stop(t); } catch (e) { /* already stopped */ } };
     if (usingSamples) {
@@ -1135,6 +1191,12 @@ const GameAudio = (function () {
     if (gravGain) gravGain.gain.setTargetAtTime(0, t0, 0.02);
     const deadGravGain = gravGain;
     if (gravOsc) { stopAt(gravOsc, t0 + 0.35); gravOsc = null; gravGain = null; }
+    if (pitLimGain) pitLimGain.gain.setTargetAtTime(0, t0, 0.02);
+    const deadPitLim = pitLimGain;                     // feeds a param: buried by name
+    if (pitLimOsc) { stopAt(pitLimOsc, t0 + 0.35); pitLimOsc = null; pitLimGain = null; }
+    stopAt(scrubSrc, t0 + 0.35);
+    stopAt(surfSrc, t0 + 0.35);
+    scrubSrc = surfSrc = null;
     stopAt(brakeSrc, t0 + 0.35);
     stopAt(whineOsc, t0 + 0.35);
     stopAt(subOctOsc, t0 + 0.35);
@@ -1172,12 +1234,15 @@ const GameAudio = (function () {
     const dead = [engFilter, engGain, tiltEq, whineGain, harvFilter, harvGain, skidFilter, skidGain, lfoG,
                   voiceFormant, ersHp, ersGain, windFilter, windGain, deadSub, subOctGain,
                   deadIdleGain, deadLimGain, deadLimPitch, deadGravGain, brakeFilter, brakeGain,
-                  revSend, convolver, revReturn];
+                  revSend, convolver, revReturn, deadPitLim, scrubFilter, scrubGain, lockFilter, lockGain,
+                  surfFilter, surfGain];
     for (const v of rivalVoices) { dead.push(v.filt, v.gain, v.pan); }
     queueDying(dead);
     engFilter = engGain = whineGain = harvFilter = harvGain = skidFilter = skidGain = lfoG = null;
     voiceFormant = ersHp = ersGain = windFilter = windGain = tiltEq = null;
     brakeFilter = brakeGain = null;
+    scrubFilter = scrubGain = lockFilter = lockGain = surfFilter = surfGain = null;
+    revFlare = 0;
     subOctOsc = subOctGain = null;
     convolver = revSend = revReturn = null;
     rivalVoices = [];
@@ -1224,6 +1289,14 @@ const GameAudio = (function () {
       shiftDuckT = t;
       if (shiftDuck < 0.0001) shiftDuck = 0;
     }
+    // Downshift throttle blip (see shift): an overshoot of the note that dies
+    // over ~90 ms, on top of the rev the gearbox already asks for.
+    if (revFlare > 0.0001) {
+      const fd = revFlareT ? Math.max(0, t - revFlareT) : 0;
+      revFlare = revFlare * Math.exp(-fd / 0.09);
+      revFlareT = t;
+      if (revFlare < 0.0001) revFlare = 0;
+    }
 
     // The pitch curve's rev term, bent by CURVE (see TUNE_DEF): an exponent
     // keeps it 0 at idle, 1 at redline and increasing in between whatever the
@@ -1237,7 +1310,7 @@ const GameAudio = (function () {
       // in rev and the gear ordering is unchanged (same trim on both sides).
       // IDLE moves only the 0.25 end, REV RANGE only the 0.45 span, PITCH the
       // sum — the decoupling TUNE_DEF explains.
-      const rate = (0.25 * tune.idle + revC * 0.45 * tune.revRange) * (1 + 0.04 * b * tune.boostPitch) * gmul * voice.rateTrim * tune.pitch;   // idle ~0.25x .. redline ~0.70x, lower in gears 1-3
+      const rate = (0.25 * tune.idle + revC * 0.45 * tune.revRange) * (1 + 0.04 * b * tune.boostPitch) * gmul * voice.rateTrim * tune.pitch * (1 + 0.05 * revFlare);   // idle ~0.25x .. redline ~0.70x, lower in gears 1-3
       lastRate = rate;
       engSrcIdle.playbackRate.setTargetAtTime(rate, t, 0.035);
       f0 = enginePeriod > 1 ? (ctx.sampleRate * rate) / enginePeriod : 0;
@@ -1297,7 +1370,7 @@ const GameAudio = (function () {
       ? Math.min(11000, 2600 + s * 5800 + rev * 2400 + b * 1500 + slipLoad * 2000 + brakeLoad * 1200)
       : Math.min(7200,  600  + s * 4200 + rev * 700  + b * 1400 + slipLoad * 1000 + brakeLoad * 600))
       * voice.cutTrim * tune.brightness * (1 + 0.22 * loadLift));
-    engFilter.frequency.setTargetAtTime(cut, t, 0.05);
+    engFilter.frequency.setTargetAtTime(cut * camMix.cut, t, 0.05);
     // Compensate the tape-speed tilt. lastRate is the pitch ratio the core was
     // just handed, ~0.25 idle to ~0.70 redline; resampling costs roughly
     // -20*log10(rate) dB of perceived top end, so put a fraction of that back.
@@ -1350,7 +1423,7 @@ const GameAudio = (function () {
       limPitch.gain.setTargetAtTime(limCents, t, 0.02);
       limPitch._apexCents = limCents;
     }
-    const engBase = (lvl - limDepth) * (1 - 0.55 * shiftDuck);
+    const engBase = (lvl - limDepth) * (1 - 0.55 * shiftDuck) * camMix.engine;
     engGain.gain.setTargetAtTime(engBase, t, 0.03);
 
     // GRAVEL (see startEngine). Rate is the CRANK rate: the recording's
@@ -1487,7 +1560,7 @@ const GameAudio = (function () {
     const rough = (offroad ? 0.5 : 0) + (onKerb ? 0.35 : 0);
     const tow = clamp01(ph.tow || 0);   // in a slipstream the air is already moving: less wind
     aimGain(windGain,
-      layers.wind ? (0.006 + 0.030 * s * s) * (1 + 0.45 * rough + 0.30 * gust) * (wet ? 1.25 : 1) * (1 - 0.35 * tow) * windOpen * tune.wind : 0,
+      layers.wind ? (0.006 + 0.030 * s * s) * (1 + 0.45 * rough + 0.30 * gust) * (wet ? 1.25 : 1) * (1 - 0.35 * tow) * windOpen * tune.wind * camMix.wind : 0,
       t, 0.10);
     windFilter.frequency.setTargetAtTime(450 + s * 1450 + rough * 260, t, 0.12);
 
@@ -1623,6 +1696,53 @@ const GameAudio = (function () {
     }
   }
 
+  // CAR SFX, fed once a frame by js/audio/car-sfx.js (all 0..1):
+  //   scrub   fronts past the grip peak (understeer scrub, a low hiss)
+  //   lock    a locked front wheel (narrow high squeal)
+  //   surface off the road (low rumble; speed is already folded in)
+  //   pitLim  held on the pit limiter (the engine stutters)
+  function setCarSfx(o) {
+    if (!engineOn || !scrubGain) return;
+    const t = now();
+    const scrub = clamp01(o && o.scrub), lock = clamp01(o && o.lock);
+    const surf = clamp01(o && o.surface), pit = clamp01(o && o.pitLim);
+    const wet = !!(o && o.wet);
+    const on = layers.screech ? tune.screech : 0;
+    aimGain(scrubGain, scrub * (wet ? 0.035 : 0.06) * on, t, 0.06);
+    aimGain(lockGain, lock * (wet ? 0.05 : 0.09) * on, t, 0.03);
+    aimGain(surfGain, surf * 0.22, t, 0.08);
+    if (surf > 0) surfFilter.frequency.setTargetAtTime(120 + 160 * surf, t, 0.1);
+    // Depth is a share of the live engine level, so the stutter is audible at
+    // any engine trim and never pushes engGain.gain negative.
+    const pDepth = pit * 0.45 * (engGain ? engGain.gain.value : 0);
+    if (pitLimGain._apexTgt !== pDepth) { pitLimGain.gain.setTargetAtTime(pDepth, t, 0.03); pitLimGain._apexTgt = pDepth; }
+    carSfxLast.scrub = scrub; carSfxLast.lock = lock; carSfxLast.surface = surf; carSfxLast.pitLim = pit;
+  }
+
+  // Wheel guns: four short pneumatic rattles, staggered like a crew that does
+  // not quite move as one. `tighten` is the second half of the stop, a touch
+  // higher and shorter.
+  function pitGun(tighten) {
+    pitGunFired++;
+    if (!sfxOk()) return;
+    const t0 = now();
+    const lag = [0, 0.05, 0.11, 0.08];
+    for (let i = 0; i < 4; i++) {
+      const w = t0 + lag[i] + Math.random() * 0.03;
+      const n = tighten ? 3 : 4;
+      for (let k = 0; k < n; k++) noise(0.07, 0.03, (tighten ? 3200 : 2600) + i * 140, w + k * 0.045);
+    }
+  }
+
+  // Which way the view is looking, from the camera id (js/camera/mode-switch.js).
+  // Unknown ids read as chase — the neutral mix.
+  function setCameraMix(id) {
+    camKind = CAM_KIND[id] || "chase";
+    camMix = CAM_MIX[camKind];
+    applyVenue();
+    return camKind;
+  }
+
   // Gear-shift cue: a quick rev-cut/blip layered over the running engine.
   // up=true -> upshift (clean clutch-kick blip up); up=false -> downshift
   // (lower heel-and-toe throttle blip). Safe to call rapidly; never restarts
@@ -1636,6 +1756,7 @@ const GameAudio = (function () {
     if (engineOn) {
       shiftDuck = isUp ? 1 : 0.7;     // downshift dips a little less (blip)
       shiftDuckT = t0;
+      if (!isUp) { revFlare = 1; revFlareT = t0; }   // heel-and-toe: the note flares, then settles
     }
 
     const osc = ctx.createOscillator();
@@ -1752,7 +1873,7 @@ const GameAudio = (function () {
     // `input` at frame rate, so one drag reconfigured the render thread ~60x/s.
     const ir = buildIR(venue);
     if (convolver.buffer !== ir) convolver.buffer = ir;
-    revReturn.gain.setTargetAtTime(layers.reverb ? venue.level * tune.reverb : 0, now(), 0.2);
+    revReturn.gain.setTargetAtTime(layers.reverb ? venue.level * tune.reverb * camMix.reverb : 0, now(), 0.2);
   }
 
   function setVoice(engineName) {
@@ -1888,7 +2009,8 @@ const GameAudio = (function () {
       // car alongside, not as a rumour.
       const near = RIVAL_REF / (RIVAL_REF + 1.15 * Math.max(0, dist - RIVAL_REF));
       const behind = arc < 0 ? 0.78 : 1;   // your own engine is between you and it
-      aimGain(v.gain, PAN_MAKEUP * rivalPeak * tune.rivals * near * behind * (0.55 + 0.45 * clamp01(r.rev)), t, 0.10);
+      const rv = (r.voice && ENGINE_VOICES[r.voice]) || ENGINE_VOICES["default"];
+      aimGain(v.gain, PAN_MAKEUP * rivalPeak * tune.rivals * camMix.rivals * near * behind * (0.55 + 0.45 * clamp01(r.rev)), t, 0.10);
 
       // Air absorbs the top end with distance, which is most of why a far car
       // reads as far rather than merely quiet. A POWER LAW, not a scale of the
@@ -1897,7 +2019,7 @@ const GameAudio = (function () {
       // absorption is a few dB per hundred metres at 4 kHz, so the exponent is
       // small and the near field stays open.
       const cut = Math.max(700, Math.min(12000,
-        12000 * Math.pow(RIVAL_REF / Math.max(dist, RIVAL_REF), 0.35)));
+        12000 * Math.pow(RIVAL_REF / Math.max(dist, RIVAL_REF), 0.35) * rv.cutTrim));
       if (Math.abs((v.filt.frequency._apexCut ?? -1) - cut) > 60) {
         v.filt.frequency.setTargetAtTime(cut, t, 0.12);
         v.filt.frequency._apexCut = cut;
@@ -1912,7 +2034,7 @@ const GameAudio = (function () {
       // speeds sampled a frame apart and one bad frame must not chirp.
       const closing = Math.max(-90, Math.min(90, +r.approach || 0));
       const dop = Math.max(0.80, Math.min(1.25, 343 / (343 - closing)));
-      v.setPitch(t, clamp01(r.rev), dop * v.detune);
+      v.setPitch(t, clamp01(r.rev), dop * v.detune * rv.rateTrim);   // their manufacturer's note, not yours
     }
   }
 
@@ -2622,6 +2744,11 @@ const GameAudio = (function () {
     stopEngine,
     setEngine,
     setSkid,
+    setCarSfx,
+    pitGun,
+    setCameraMix,
+    cameraMix: () => ({ kind: camKind, ...camMix }),
+    carSfx: () => ({ ...carSfxLast, pitGuns: pitGunFired, revFlare: +revFlare.toFixed(4) }),
     shift,
     lightOn,
     lightsOut,

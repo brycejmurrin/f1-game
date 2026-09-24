@@ -39,7 +39,19 @@ function load(options = {}) {
           return request;
         },
       }) };
-      const transaction = { objectStore: () => ({ put() {}, delete() {} }) };
+      const transaction = { objectStore: () => ({
+        // B5 flush reads prev via get() before put — refuse older lsOk:true.
+        get(k) {
+          const request = {};
+          queueMicrotask(() => {
+            const row = mirrorRows.find((r) => r && r.k === k);
+            request.result = row;
+            if (request.onsuccess) request.onsuccess();
+          });
+          return request;
+        },
+        put() {}, delete() {},
+      }) };
       queueMicrotask(() => { if (transaction.oncomplete) transaction.oncomplete(); });
       return transaction;
     },

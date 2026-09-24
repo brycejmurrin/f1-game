@@ -38,13 +38,13 @@ node -e '
   console.log(`reason=${r.reason}; groups: ${r.groups.join(", ") || "(none)"}`);
   if (r.reason === "infra")
     console.log(`::warning::SELECTION NARROWER THAN THE CHANGE: ${r.tracked.length} tracked/infra path(s) changed (${r.tracked.slice(0, 4).join(", ")}); the edited/imported specs still run, the fixed gates own the rest`);
-  console.log(`fits ${r.testsFit} tests; selected ${r.testsSelected} across ${r.selected.length} specs; ${(r.oversize || []).length} oversize shard(s)`);
+  console.log(`fits ${r.secFit} s (${r.testsFit} tests at the fallback rate, measured specs at their own median); selected ${r.testsSelected} tests (${r.secSelected} s) across ${r.selected.length} specs; ${(r.oversize || []).length} oversize shard(s)`);
   for (const s of r.overBudgetSpecs)
     console.log(`EXCLUDED (declares ${s.ownTimeoutSec}s timeout): ${s.file} (${s.tests} tests)`);
   for (const s of r.coveredByFixedGates)
     console.log(`COVERED BY FIXED BLOCKING GATE: ${s.file} (${s.tests} tests)`);
   for (const s of (r.unreachable || []))
-    console.log(`::warning::UNREACHABLE by this gate (declares ${s.tests} tests > the whole ${r.testsFit}-test cap): ${s.file}`);
+    console.log(`::warning::UNREACHABLE by this gate (declares ${s.tests} tests, over the whole ${r.secFit} s budget): ${s.file}`);
   for (const s of r.skipped) console.log(`SKIPPED (over budget): ${s.file} (${s.tests} tests)`);
   for (const s of (r.oversize || []))
     console.log(`OVERSIZE (affected by this change; its own shard): ${s.file} (${s.tests} tests)`);

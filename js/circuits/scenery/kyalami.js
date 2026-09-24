@@ -59,11 +59,17 @@
         bush(k, h < 0.72 ? -1 : 1, 7 + h * 6, h < 0.6 ? SCRUB : SCRUB_D);
       });
       // Blue-gum windbreak rows on the boundary — tall, narrow, in lines.
+      // Park-circuit fold: 52 m off one edge can sit over a parallel stretch
+      // (props-over-road S6 band-span at frac ~0.236, dark crown over the road).
       every(20, (k) => {
         const s = k / n;
         if (openArea(s)) return;
         const side = (Math.floor(k / 20) % 2) ? 1 : -1;
-        tree(k, side, 52 + (k % 3) * 4, 18 + hash(k * 7) * 6, GUM, { crown: "columnar" });
+        const dist = 52 + (k % 3) * 4;
+        const h = 18 + hash(k * 7) * 6;
+        const a = anchor(k, side, dist);
+        if (onTrack(a.c[0], a.c[2], 12)) return;
+        tree(k, side, dist, h, GUM, { crown: "columnar" });
       });
       for (const [id, s, side, d, w, l] of [
         ["kyalami-earth-crowthorne", 0.115, -1, 26, 22, 90],

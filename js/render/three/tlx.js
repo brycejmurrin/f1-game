@@ -88,7 +88,7 @@ const TLX = (function () {
       // The warm's stage timeline, read by memState().warm: the lights hold for
       // exactly this long on a player's GPU, and the census beats sample it —
       // gpu-census 207 spent its whole window inside the warm and no row said so.
-      const _warmStages = { at: 0, scene: null, post: null, shadow: null, total: null, attempts: 0, failed: 0 };
+      const _warmStages = { at: 0, scene: null, fx: null, post: null, shadow: null, total: null, attempts: 0, failed: 0 };
       const GPU_ERR_LOG_CAP = 8;
       // Heal-gate counters live HERE, not by the gate: the error hooks install
       // during bootRenderer's await, and on the WebGPU -> WebGL2 fallback an
@@ -1329,6 +1329,28 @@ const TLX = (function () {
       }
 
       const drawList = [];          // {geo, matrix, material} in submission order
+      // POOLED DRAW RECORDS (TLX-PERF-PLAN R1). Every producer used to push a
+      // fresh object literal — ~150-400 a frame, in 4-5 shapes, so V8 saw them
+      // polymorphic — and none outlives the frame (every consumer reads a record
+      // synchronously; _mirrorRelease keeps the chunked MESH, not the record).
+      // One fixed shape, every field written on every push: em/al stay
+      // undefined for FX records (acquireMesh tests `!== undefined`).
+      const _recPool = [];
+      let _recUsed = 0;
+      function pushRec(geo, m, mat, em, al, lg, chunked, instanced) {
+        let r = _recPool[_recUsed];
+        if (!r) r = _recPool[_recUsed] = { geo: null, m: null, mat: null, em: undefined, al: undefined, lg: 0, chunked: null, instanced: null };
+        _recUsed++;
+        r.geo = geo; r.m = m; r.mat = mat; r.em = em; r.al = al; r.lg = lg; r.chunked = chunked; r.instanced = instanced;
+        drawList.push(r);
+      }
+      // Every drawList reset goes through here: drop the records' references, so a
+      // pooled slot never pins an evicted material or a freed geometry.
+      function resetRecs() {
+        for (let i = 0; i < _recUsed; i++) { const r = _recPool[i]; r.geo = null; r.m = null; r.mat = null; r.chunked = null; r.instanced = null; }
+        _recUsed = 0;
+        drawList.length = 0;
+      }
       // Model matrices are COPIED into this per-frame pool at draw() time.
       // game.js reuses scratch Float32Arrays across draws (_wheelWorld is
       // written four times per car per frame), and drawList is only flushed at
@@ -1509,7 +1531,7 @@ const TLX = (function () {
         if (!batch || !batch.imesh || !batch.instances) return;
         const n = batch.visible === undefined ? batch.instances : batch.visible;
         if (n <= 0) return;
-        drawList.push({ instanced: batch, mat: materialFor(opts, false, true), em: drawEm(opts), al: drawAl(opts) });
+        pushRec(null, null, materialFor(opts, false, true), drawEm(opts), drawAl(opts), 0, null, batch);
       }
 
       function freeInstancedBatch(batch) {
@@ -1586,6 +1608,7 @@ const TLX = (function () {
         if (!_ssrMrt) _ssrMrt = TSL.mrt({ output: TSL.output, ssrTag: TSL.float(1) });
         return _ssrMrt;
       }
+      let _poolNow = typeof performance !== "undefined" ? performance.now() : Date.now();   // latched once per present (acquireMesh stamps __tlxSeen with it)
       const meshPool = [];          // every wrapper ever made — the sweep walks this
       const meshByGeo = new Map();  // geometry -> Map(material -> Mesh)
       // Batch stamp: bumped wherever a batch begins. A mesh not stamped with
@@ -1803,8 +1826,95 @@ const TLX = (function () {
       // with it off the race compiled the same 8 scene programs and no post
       // program, because the post recompiles were ssrTag-node churn (tsl-fx.js),
       // not a missing warm; with it on the lights held ~2.2 s longer for nothing.
-      let _warmPlus = false;
-      try { _warmPlus = localStorage.getItem("apex26.tlxWarmPlus") === "1"; } catch (_) { /* no storage: the default warm */ }
+      // FX PROGRAMS DURING THE LIGHTS. Skid marks and the two particle groups
+      // push their first draw record only once a tyre marks or smokes — after
+      // the launch — so the scene warm never saw them and their three programs
+      // (five pipelines) compiled together in one mid-race frame: every sync
+      // compile left on the WebGPU lap (PERF-FINDINGS §2ah,
+      // scratch/compile-attrib-probe.mjs). Compile each FX material once on its
+      // stream's real vertex layout, under the scene target and MRT the warm has
+      // already set; the throwaway Mesh is dropped, the stream geometry kept.
+      // apex26.tlxWarmFx=0 is the A/B handle.
+      let _warmFx = true;
+      try { _warmFx = localStorage.getItem("apex26.tlxWarmFx") !== "0"; } catch (_) { /* no storage: warm them */ }
+      async function warmFxPrograms() {
+        if (!_warmFx || !fx) return;
+        const jobs = [[skidStream, fx.skidMat], [partStreams[0], fx.particleMats && fx.particleMats[0]],
+          [partStreams[1], fx.particleMats && fx.particleMats[1]], [glowStream, fx.glowMat], [lineStream, fx.lineMat]];
+        for (const [stream, mat] of jobs) {
+          if (!mat) continue;
+          ensureStream(stream, 1);
+          const m = new THREE.Mesh(stream.geo, mat);
+          m.frustumCulled = false;
+          await renderer.compileAsync(m, camera, scene);
+        }
+      }
+      // LIT VARIANTS FIRST DRAWN MID-RACE. The brake-disc glow ring
+      // (car-draw.js _ringOpts) is queued only once a disc is hot, so its first
+      // draw is the first braking zone, at alpha ~0.3 — the TRANSPARENT ("t,")
+      // variant of a key the grid never draws. Census 245 caught it as the one
+      // material minted mid-race and its one lazy pipeline. The cockpit ERS /
+      // overtake / aero-flap pulses share that key. Mint it during the lights and
+      // compile it once per vertex layout already in the pool: the pipeline also
+      // keys on the layout, and tlx-chunked's pack makes layouts differ by mesh.
+      const _LATE_LIT = [{ roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 0.5 }];
+      function _layoutKey(g) {
+        let k = g.index ? g.index.array.constructor.name : "-";
+        for (const n of Object.keys(g.attributes).sort()) {
+          const a = g.attributes[n];
+          k += "|" + n + ":" + (a.array ? a.array.constructor.name : "?") + a.itemSize + (a.normalized ? "n" : "");
+        }
+        return k;
+      }
+      // Minted BEFORE startProgramWarm's lit.setSsrMrt(usePost), which stamps
+      // the ssrTag MRT on the materials that exist at that moment: one minted
+      // after it has no MRT node, and its compile built a no-MRT program the
+      // race never draws (1.2 s on Lavapipe) while the lap still built the MRT
+      // pipeline lazily (compile-attrib-probe pipeline keys, program 23/24 vs 6/7).
+      function mintLateLit() {
+        if (!_warmFx || !lit || _drawMatMode || vizMat) return;
+        for (const o of _LATE_LIT) materialFor(o, false, false);
+      }
+      async function warmLateLit() {
+        if (!_warmFx || !lit || _drawMatMode || vizMat) return;
+        // Every distinct layout, drawn or not: the ring shares its layout with
+        // car parts the grid draws, but not their OPAQUE pipeline state. With
+        // the variant minted under the MRT (mintLateLit) the program already
+        // exists, so each layout costs one pipeline, not a program.
+        const geos = new Map();
+        for (let i = 0; i < _geoReg.length; i++) {
+          const g = _geoReg[i] && _geoReg[i].deref();
+          // instanceTint marks a batch geometry: it draws through an
+          // InstancedMesh with the instanced material, never with this key.
+          if (!g || g.__tlxKind !== "mesh" || !g.attributes || !g.attributes.position || g.attributes.instanceTint) continue;
+          const k = _layoutKey(g);
+          if (!geos.has(k)) geos.set(k, g);
+        }
+        _warmStages.lateLayouts = geos.size;
+        for (const o of _LATE_LIT) {
+          const mat = materialFor(o, false, false);
+          // Both winding signs: three keys a pipeline on
+          // matrixWorld.determinantAffine() < 0, and the car draws one side's
+          // parts (the brake ring among them) through a mirrored matrix — the
+          // one field the lap's pipeline key differed in (probe, field 27).
+          for (const g of geos.values()) for (const sx of [1, -1]) {
+            const m = new THREE.Mesh(g, mat);
+            m.frustumCulled = false;
+            m.scale.x = sx; m.updateMatrixWorld(true);
+            await renderer.compileAsync(m, camera, scene);
+          }
+        }
+      }
+      // AUTO (unset) = ON for three's WebGL2 backend only. There compileAsync
+      // links with KHR_parallel_shader_compile and polls COMPLETION_STATUS, but
+      // the render path links synchronously (WebGLBackend createRenderPipeline,
+      // promises === null -> getProgramParameter(LINK_STATUS)), so the 8 post
+      // programs the gated warm skipped each blocked the thread mid-race —
+      // census 245's WebGL2 leg: 8 lazy links and a 4.25 s callback. On WebGPU
+      // the post chain does not compile lazily (census 244), so it stays off.
+      let _warmPlus = null;
+      try { const v = localStorage.getItem("apex26.tlxWarmPlus"); _warmPlus = v === "1" ? true : v === "0" ? false : null; } catch (_) { /* no storage: auto */ }
+      const warmPlusOn = () => _warmPlus !== null ? _warmPlus : !!(renderer && renderer.backend && renderer.backend.isWebGLBackend);
       function startProgramWarm(opts) {
         _warmRequested = false;
         if (typeof renderer.compileAsync !== "function") return;
@@ -1817,6 +1927,7 @@ const TLX = (function () {
         _warmPending = (async () => {
           try {
             pinSkyMaterial();
+            mintLateLit();
             if (lit && lit.setSsrMrt) lit.setSsrMrt(usePost);
             if (fx && fx.setSsrMrt) fx.setSsrMrt(usePost);
             renderer.setMRT(usePost ? _ssrMrtNode() : null);
@@ -1825,6 +1936,10 @@ const TLX = (function () {
             _gpuLastOperation = "compile-scene";
             await renderer.compileAsync(scene, camera);
             _warmStages.scene = Math.round(performance.now() - _tStage); _tStage = performance.now();
+            _gpuLastOperation = "compile-fx";
+            await warmFxPrograms();
+            await warmLateLit();
+            _warmStages.fx = Math.round(performance.now() - _tStage); _tStage = performance.now();
             // MRT STAYS SET THROUGH THE POST WARM. present() sets the ssrTag MRT
             // node for the scene pass and calls post.present() BEFORE restoring
             // it, so every live post quad compiles with that node in its render
@@ -1844,9 +1959,10 @@ const TLX = (function () {
             // the first visible present after the lights instead of during them.
             // post.warm() keeps its own deadline, so the lights hold at most a
             // few seconds longer in the worst case, which is the trade this
-            // makes — so it is OPT-IN (apex26.tlxWarmPlus=1, see _warmPlus), as is
-            // the caster warm below; by default the 3 s gate stands.
-            if (usePost && post.warm && (_warmPlus || performance.now() - _warmAt < 3000)) {
+            // makes — so it is ON only where it measured a win (three's WebGL2
+            // backend, see _warmPlus), as is the caster warm below; elsewhere
+            // the 3 s gate stands. apex26.tlxWarmPlus=1/0 forces it.
+            if (usePost && post.warm && (warmPlusOn() || performance.now() - _warmAt < 3000)) {
               _gpuLastOperation = "compile-post"; await post.warm(opts, _postF);
             }
             _warmStages.post = Math.round(performance.now() - _tStage); _tStage = performance.now();
@@ -1858,7 +1974,7 @@ const TLX = (function () {
             // endPass). sunPass runs before present() on the same frame, so by
             // now castScene holds the grid's casters and the warm compiles the
             // real ones.
-            if (_warmPlus && shadowSys && shadowSys.warm) { _gpuLastOperation = "compile-shadow"; await shadowSys.warm(); }
+            if (warmPlusOn() && shadowSys && shadowSys.warm) { _gpuLastOperation = "compile-shadow"; await shadowSys.warm(); }
             _warmStages.shadow = Math.round(performance.now() - _tStage);
           } catch (e) {
             _warmStages.failed++;
@@ -2013,7 +2129,7 @@ const TLX = (function () {
         ud.tlxLgRoad = rec && rec.lg ? 1 : 0;   // PER-CHUNK ROAD: the road draw only
         geo.__tlxDrawnBatch = _poolBatch;   // uploaded by the render that closes THIS batch
         m.__tlxBatch = _poolBatch;
-        m.__tlxSeen = (typeof performance !== "undefined" ? performance.now() : Date.now());
+        m.__tlxSeen = _poolNow;   // one clock read per present (prunePool needs ~20 s resolution)
         // scene.matrixWorldAutoUpdate is false (see create() above), so three
         // will NEVER promote m.matrix → matrixWorld. The renderer uploads
         // matrixWorld as the model matrix: writing only `.matrix` left every
@@ -2269,6 +2385,12 @@ const TLX = (function () {
 
       // CSS-box observation is shared; TLX still owns renderer.setSize(),
       // backend limits and post-target allocation.
+      // apex26.tlxMirrorSweep (see the static-sweep gates in present()): read
+      // once here, not with a localStorage call on every present.
+      let _mirrorSweepOptIn = false;
+      try { _mirrorSweepOptIn = localStorage.getItem("apex26.tlxMirrorSweep") === "1"; } catch (_) { /* no storage: off */ }
+      // The WebGL2 driver's texture ceiling is a device constant: ask once.
+      let _glMaxDim = -1;
       const cssSizeCache = CanvasCssSize.create(_layoutCanvas, { settleFrames: 30 });
       function resize() {
         // Window/settings callbacks also reach here while the frame loop waits
@@ -2295,11 +2417,14 @@ const TLX = (function () {
         const _gpuDev = (renderer.backend && renderer.backend.isWebGPUBackend && renderer.backend.device) || null;
         let maxDim = _gpuDev ? ((_gpuDev.limits && _gpuDev.limits.maxTextureDimension2D) || 8192) : 0;
         if (!_gpuDev) {
-          const _gl = (renderer.backend && renderer.backend.gl) || null;
-          try {
-            const lim = _gl ? [_gl.getParameter(_gl.MAX_TEXTURE_SIZE) | 0, _gl.getParameter(_gl.MAX_RENDERBUFFER_SIZE) | 0].filter((v) => v >= 2048) : [];   // WebGL2 guarantees 2048; a stub answers less
-            maxDim = lim.length ? Math.min(...lim) : 0;
-          } catch (_) { maxDim = 0; }
+          if (_glMaxDim < 0) {   // begin() calls resize() every frame; the limit never changes
+            const _gl = (renderer.backend && renderer.backend.gl) || null;
+            try {
+              const lim = _gl ? [_gl.getParameter(_gl.MAX_TEXTURE_SIZE) | 0, _gl.getParameter(_gl.MAX_RENDERBUFFER_SIZE) | 0].filter((v) => v >= 2048) : [];   // WebGL2 guarantees 2048; a stub answers less
+              _glMaxDim = lim.length ? Math.min(...lim) : 0;
+            } catch (_) { _glMaxDim = 0; }
+          }
+          maxDim = _glMaxDim;
         }
         if (maxDim && (presentW > maxDim || presentH > maxDim)) {
           const k = Math.min(maxDim / presentW, maxDim / presentH);
@@ -2618,6 +2743,14 @@ const TLX = (function () {
           t.needsUpdate = true;
           return { __tlx: true, tex: t };
         },
+        // Upload a createTexture() handle NOW instead of at the first frame that
+        // samples it. three defers every canvas, so the menu's first warm frame
+        // pushed all ~22 livery atlases (+ mips) in one task (3.3 s on
+        // SwiftShader, 2026-09-24); prepareMenuCarAssets calls this per car, 32 ms
+        // apart. Feature-detected: GLX and WGX already upload in createTexture.
+        uploadTexture(h) {
+          try { if (h && h.tex) renderer.initTexture(h.tex); } catch (_) { /* first draw uploads it */ }
+        },
         freeMesh(m) { if (m && m.geo) { disposeGeometry(m.geo); m.geo = null; } },
         freeChunkedMesh(m) {
           if (m && m.chunks && chunkedSys) { chunkedSys.free(m); return; }
@@ -2742,6 +2875,12 @@ const TLX = (function () {
         carShadowEnd() { if (shadowSys) shadowSys.carShadowEnd(); },
         lampShadowBegin(vp, idx) { if (shadowSys) shadowSys.lampShadowBegin(vp, idx); },
         lampShadowEnd() { if (shadowSys) shadowSys.lampShadowEnd(); },
+        // TLX-PERF-PLAN L1 (tlx-shadow.js LAMP STATIC MAP): the static-props half
+        // on a lamp change, and the car-only rebuild served from its depth copy.
+        // Absent on GLX/WGX, so shadow-pass.js keeps the full pass there.
+        lampStaticBegin(vp) { return !!(shadowSys && shadowSys.lampStaticOn && shadowSys.lampStaticBegin(vp)); },
+        lampStaticEnd() { if (shadowSys) shadowSys.lampStaticEnd(); },
+        lampCarsBegin(vp, idx) { return !!(shadowSys && shadowSys.lampStaticOn && shadowSys.lampCarsBegin(vp, idx)); },
         // Active light VP for instanced shadow cull (GLX shadowCullVP).
         get shadowCullVP() {
           if (!shadowSys) return null;
@@ -2844,7 +2983,7 @@ const TLX = (function () {
               renderer.clear();
             } catch (_) { /* a probe face must never strand the frame */ }
             renderer.setRenderTarget(softOutRT());
-            drawList.length = 0;
+            resetRecs();
             _dMatUsed = 0;
             _poolBatch++;
             _envActive = false;
@@ -2922,7 +3061,7 @@ const TLX = (function () {
             // still beats the black dummy. Nothing ready yet -> stay on dummy.
             lit.setEnvCube((faceOk || envReady) || !envDummy ? envRT.texture : envDummy.texture);
           }
-          drawList.length = 0;   // the main pass re-issues its own draws
+          resetRecs();   // the main pass re-issues its own draws
           _dMatUsed = 0;
           _poolBatch++;
           _envActive = false;
@@ -3190,7 +3329,7 @@ const TLX = (function () {
           _fxFrame.shadows = 0; _fxFrame.marks = 0; _fxFrame.skidVerts = 0;
           _fxFrame.glow = 0; _fxFrame.particles = 0; _fxFrame.decals = 0; _fxFrame.lineVerts = 0;
           scene.backgroundNode = null;
-          drawList.length = 0;
+          resetRecs();
           _dMatUsed = 0;
           return true;
         },
@@ -3207,15 +3346,15 @@ const TLX = (function () {
           pinSkyMaterial();
         },
         draw(mesh, model, opts) {
-          if (mesh && mesh.geo) drawList.push({ geo: mesh.geo, m: poolModelMat(model), mat: materialFor(opts, false), em: drawEm(opts), al: drawAl(opts),
-            lg: opts && opts.surfaceId === 16 ? 1 : 0 });
+          if (mesh && mesh.geo) pushRec(mesh.geo, poolModelMat(model), materialFor(opts, false), drawEm(opts), drawAl(opts),
+            opts && opts.surfaceId === 16 ? 1 : 0, null, null);
         },
         drawChunked(mesh, model, opts) {
           if (!mesh) return;
           if (mesh.chunks && chunkedSys) {
-            drawList.push({ geo: null, chunked: mesh, m: poolModelMat(model), mat: materialFor(opts, true), em: drawEm(opts), al: drawAl(opts) });
+            pushRec(null, poolModelMat(model), materialFor(opts, true), drawEm(opts), drawAl(opts), 0, mesh, null);
           } else if (mesh.geo) {
-            drawList.push({ geo: mesh.geo, m: poolModelMat(model), mat: materialFor(opts, true), em: drawEm(opts), al: drawAl(opts) });
+            pushRec(mesh.geo, poolModelMat(model), materialFor(opts, true), drawEm(opts), drawAl(opts), 0, null, null);
           }
         },
         // M6 FX paths — each appends a draw-list record; blend/offset/mask
@@ -3226,12 +3365,12 @@ const TLX = (function () {
         // shared geometry, untouched by the scale).
         drawShadow(modelMat, w, l) {
           if (!fx || !modelMat) return;
-          drawList.push({ geo: getFxQuad(), m: fxMatFor(modelMat, w, l), mat: fx.shadowMat });
+          pushRec(getFxQuad(), fxMatFor(modelMat, w, l), fx.shadowMat, undefined, undefined, 0, null, null);
           _fxFrame.shadows++;
         },
         drawMark(modelMat, w, l) {
           if (!fx || !modelMat) return;
-          drawList.push({ geo: getFxQuad(), m: fxMatFor(modelMat, w, l), mat: fx.markMat });
+          pushRec(getFxQuad(), fxMatFor(modelMat, w, l), fx.markMat, undefined, undefined, 0, null, null);
           _fxFrame.marks++;
         },
         drawSkidBatch(verts, vertCount, dirty) {
@@ -3242,7 +3381,7 @@ const TLX = (function () {
             uploadStream(skidStream, vertCount * 5);
           }
           skidStream.geo.setDrawRange(0, vertCount);
-          drawList.push({ geo: skidStream.geo, m: null, mat: fx.skidMat });
+          pushRec(skidStream.geo, null, fx.skidMat, undefined, undefined, 0, null, null);
           _fxFrame.skidVerts = vertCount;
           return true;
         },
@@ -3266,7 +3405,7 @@ const TLX = (function () {
           fx.lineStr.value = 1.6;           // emissive strength: a constant, no producer sends one
           fx.linePalette.value = opts && opts.palette ? 1 : 0;
           fx.lineOpacity.value = (opts && opts.opacity) || 1;
-          drawList.push({ geo: lineStream.geo, m: null, mat: fx.lineMat });
+          pushRec(lineStream.geo, null, fx.lineMat, undefined, undefined, 0, null, null);
           _fxFrame.lineVerts = vertCount;
           return true;
         },
@@ -3304,7 +3443,7 @@ const TLX = (function () {
           fx.glowStr.value = str;
           uploadStream(glowStream, p);
           glowStream.geo.setDrawRange(0, nDraw * 6);
-          drawList.push({ geo: glowStream.geo, m: null, mat: fx.glowMat });
+          pushRec(glowStream.geo, null, fx.glowMat, undefined, undefined, 0, null, null);
           _fxFrame.glow = nDraw;
         },
         // Transient FX particle batch: glx.js drawParticles — `data` is the
@@ -3319,18 +3458,19 @@ const TLX = (function () {
           slot.ib.array.set(data.subarray(0, floatCount));
           uploadStream(slot, floatCount);
           slot.geo.setDrawRange(0, verts);
-          drawList.push({ geo: slot.geo, m: null, mat: fx.particleMats[additive ? 1 : 0] });
+          pushRec(slot.geo, null, fx.particleMats[additive ? 1 : 0], undefined, undefined, 0, null, null);
           _fxFrame.particles += verts / 6;
         },
         drawDecal(mesh, modelMat, tex, opts) {
           if (!fx || !mesh || !mesh.geo || !tex || !tex.tex || !modelMat) return;
-          drawList.push({ geo: mesh.geo, m: fxMatFor(modelMat, 1, 1),
-                          mat: fx.decalMaterialFor(tex.tex, (opts && opts.glow) || 0) });
+          pushRec(mesh.geo, fxMatFor(modelMat, 1, 1),
+                  fx.decalMaterialFor(tex.tex, (opts && opts.glow) || 0), undefined, undefined, 0, null, null);
           _fxFrame.decals++;
         },
         present(opts) {
           _poolBatch++;
-          prunePool(typeof performance !== "undefined" ? performance.now() : Date.now());
+          _poolNow = typeof performance !== "undefined" ? performance.now() : Date.now();
+          prunePool(_poolNow);
           // renderOrder = submission index: three sorts opaque and transparent
           // lists by renderOrder first, so caller order (the GLX contract)
           // survives its z-sort in BOTH lists. Opaques still render before
@@ -3361,7 +3501,7 @@ const TLX = (function () {
               const ck = drawList[k].chunked;
               if (!ck || !ck.chunks || !ck.chunks.length) continue;
               if (!first) first = ck.chunks;
-              nrec++; total += ck.chunks.length;
+              nrec++; total += (ck.lampCells || ck.chunks).length;
               const c = ck.cellSize > 0 ? ck.cellSize : 72;
               if (cell && c !== cell) cellSplit = true;
               cell = c;
@@ -3379,7 +3519,8 @@ const TLX = (function () {
             } else {
               // `first` stands in for chunk-array identity; a track reload also
               // replaces frameAllLights, which _lgSrc already catches.
-              const key = knob + "|" + total + "|" + nrec + "|" + cell;
+              // + the lamp bake gen: its LIVE-ONLY lane is packed into the lamp texture.
+              const key = knob + "|" + total + "|" + nrec + "|" + cell + "|" + (typeof LampBake !== "undefined" ? LampBake.gen() : 0);
               if (_lgKey !== key || _lgSrc !== AL || _lgChunks !== first) {
                 let note;
                 try {
@@ -3387,7 +3528,8 @@ const TLX = (function () {
                   for (let k = 0; k < drawList.length; k++) {
                     const ck = drawList[k].chunked;
                     if (!ck || !ck.chunks || !ck.chunks.length) continue;
-                    for (let j = 0; j < ck.chunks.length; j++) chs.push(ck.chunks[j]);
+                    const cells = ck.lampCells || ck.chunks;   // lamp cells, not merged draws
+                    for (let j = 0; j < cells.length; j++) chs.push(cells[j]);
                   }
                   const table = LampChunks.resolve(AL, chs, knob);
                   const grid = LampChunks.buildGrid(table, chs);
@@ -3668,9 +3810,7 @@ const TLX = (function () {
           // comment or commit message claiming it is live is describing gate 2
           // alone. Turning it back on means deleting gate 1 deliberately, with
           // the bounds fix in place, and re-measuring; it is not a cleanup.
-          const _sweepOptIn = (function () {
-            try { return localStorage.getItem("apex26.tlxMirrorSweep") === "1"; } catch (_) { return false; }
-          })();
+          const _sweepOptIn = _mirrorSweepOptIn;   // read once at create: an A/B knob set before load
           pruneGeoRegistry(_now);
           _mirrorStat.drains++;
           _mirrorStat.gate = (envReady ? "R" : "-") + (_envGaveUp ? "G" : "-")
@@ -3689,7 +3829,7 @@ const TLX = (function () {
           _fxLast.shadows = _fxFrame.shadows; _fxLast.marks = _fxFrame.marks;
           _fxLast.skidVerts = _fxFrame.skidVerts; _fxLast.glow = _fxFrame.glow;
           _fxLast.particles = _fxFrame.particles; _fxLast.decals = _fxFrame.decals;
-          drawList.length = 0;
+          resetRecs();
           _dMatUsed = 0;
           // Armed shadow flags clear AFTER the main render (GLX clears them
           // in the post-chain present; game.js re-arms every frame it runs
@@ -3953,7 +4093,7 @@ const TLX = (function () {
             o.presentMs = +_presentMs.toFixed(3);
             // The warm timeline: how long the lights held on THIS GPU, by stage;
             // pending/done say whether a census beat is inside it (207 was, all 15).
-            o.warm = { at: _warmStages.at, scene: _warmStages.scene, post: _warmStages.post, shadow: _warmStages.shadow,
+            o.warm = { at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, lateLayouts: _warmStages.lateLayouts, post: _warmStages.post, shadow: _warmStages.shadow,
                        total: _warmStages.total, attempts: _warmStages.attempts, failed: _warmStages.failed,
                        pending: !!_warmPending, done: _warmDone };
             o.presents = _presentN;   // frames presented — a spec samples both flag arms at the same count

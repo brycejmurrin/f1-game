@@ -419,7 +419,7 @@ test("the derived ladder figures (whole gate, 'the other N') match the gate's re
   const whole = ladder.match(/--gate-only`[^\n]*?(\d+) of (\d+)/);
   assert.ok(whole, "the ladder doc no longer states the whole gate as N of M");
   assert.equal(Number(whole[1]), gate.size, `the ladder doc says the whole gate runs ${whole[1]} unit files; the union of tooling-fast and the gate's node groups holds ${gate.size}`);
-  assert.equal(Number(whole[2]), disk);
+  assert.equal(Number(whole[2]), disk, `the ladder doc says ${whole[2]} unit files; tests/unit holds ${disk} — run \`npm run gen:docs\``);
   const other = read("AGENTS.md").match(/The other (\d+) have taken deploys red/);
   assert.ok(other, "AGENTS.md rule 3 no longer says how many files tooling-fast leaves out");
   assert.equal(Number(other[1]), disk - fast.length, `AGENTS.md says tooling-fast leaves out ${other[1]}; ${disk} on disk minus ${fast.length} in the list is ${disk - fast.length}`);

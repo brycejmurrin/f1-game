@@ -23,6 +23,10 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+// VM timers are UNREF'd: they still fire while a test awaits, but a cue the
+// module schedules seconds ahead no longer holds the process open after the
+// last assertion (measured 2026-09-24: this file sat idle for most of its run).
+const unrefTimeout = (fn, ms, ...a) => { const t = setTimeout(fn, ms, ...a); t.unref?.(); return t; };
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => readFileSync(join(ROOT, p), "utf8");
@@ -40,9 +44,13 @@ function synthStub() {
 
 /** Both modules in one context: the announcer borrows RadioVoice.speakable()
  *  and RadioVoice.SAMPLE, so loading it alone would test a different file. */
-function load({ api = true, voices = [], stored = {}, soundOn = true, lore = true } = {}) {
+function load({ api = true, voices = [], stored = {}, soundOn = true, lore = true, clock = null } = {}) {
   const saved = new Map(Object.entries(stored));
-  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout, clearTimeout });
+  // `clock` (fakeClock() below) swaps in fake timers AND a fake Date, so a test
+  // can step through a 24 s budget without waiting for it.
+  const timers = clock ? { setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout, Date: clock.Date }
+    : { setTimeout: unrefTimeout, clearTimeout };
+  const ctx = vm.createContext(Object.assign({ Math, JSON, Object, Array, Number, String, Set, console }, timers));
   seedLog(ctx);
   const synth = api ? synthStub() : null;
   if (synth) synth._voices = voices;
@@ -326,9 +334,13 @@ test("`announcer` is a real RadioVoice channel, with prosody and a preview line"
   assert.ok(RV.SAMPLE[A.CHANNEL], "no TEST line for the announcer channel");
   assert.ok(RV.TONE[A.CHANNEL].rate < RV.TONE.radio.rate,
     "the announcer reads a paragraph over a still screen; it must not be quicker than the pit call");
-  // …and it is NOT a race-time speaker: nothing may route a `kind` here, or the
-  // gate that keeps menu cards from being read aloud is bypassed.
-  assert.ok(!Object.values(RV.SPEAKERS).includes(A.CHANNEL));
+  // ONE race-time kind routes here: "comm", the in-race commentary
+  // (js/race/race-radio.js) — the same broadcaster. Nothing else may, and the
+  // gate that keeps menu cards from being read aloud must still hold for it.
+  const kinds = Object.keys(RV.SPEAKERS).filter((k) => RV.SPEAKERS[k] === A.CHANNEL);
+  assert.deepEqual(kinds, ["comm"]);
+  const menu = RV.plan({ msg: "SAVE CONFLICT", life: 4, kind: "comm", enabled: true, soundOn: true, api: true, state: "menu" });
+  assert.equal(menu.reason, "not-racing");
 });
 
 /* ── THE READ IS A CHAIN OF LINES, NOT ONE BLOB ────────────────────────────── */
@@ -567,4 +579,187 @@ test("an impossible budget keeps the must-haves rather than falling silent", () 
   const fitted = Array.from(A.script(info(), 1), (l) => l.replace(/ .*/, ""));
   assert.deepEqual(fitted, ["Welcome", "This", "12"],
     "welcome, venue and session are priority 0 — a one-millisecond budget still says them");
+});
+
+/* ── THE CUE LANDS ON THE CUT ─────────────────────────────────────────────── */
+
+/** Fake timers with their own clock: tick(ms) fires every due callback in order. */
+function fakeClock() {
+  let now = 1000, seq = 0;
+  const q = [];
+  const c = {
+    now: () => now,
+    Date: { now: () => now },
+    setTimeout(fn, ms) { const id = ++seq; q.push({ id, at: now + Math.max(0, ms || 0), fn }); return id; },
+    clearTimeout(id) { const k = q.findIndex((t) => t.id === id); if (k >= 0) q.splice(k, 1); },
+    tick(ms) {
+      const end = now + ms;
+      for (;;) {
+        q.sort((a, b) => a.at - b.at || a.id - b.id);
+        if (!q.length || q[0].at > end) break;
+        const t = q.shift();
+        now = t.at;
+        t.fn();
+      }
+      now = end;
+    },
+  };
+  return c;
+}
+
+/** Finish every line as soon as it starts, recording WHEN each one started. */
+function readThrough(synth, clock, stepMs, untilMs) {
+  const starts = [];
+  let seen = 0;
+  for (let t = 0; t <= untilMs; t += stepMs) {
+    const sp = synth.calls.filter((c) => c.m === "speak");
+    // An engine fires each onend ONCE: finish only the lines that just started.
+    while (seen < sp.length) { starts.push({ text: sp[seen].text, at: clock.now() }); seen++; finishLine(synth); }
+    clock.tick(stepMs);
+  }
+  return starts;
+}
+
+test("play() holds the LAST line so it finishes ~600 ms before the flyby's budget ends", () => {
+  const clock = fakeClock();
+  const { A: An, RV, G, synth } = load({ clock });
+  const t0 = clock.now();
+  const budget = 24000;
+  assert.equal(An.create(G).play(info(), budget), true);
+  const starts = readThrough(synth, clock, 50, budget);
+  assert.ok(starts.length >= 3, "the whole script was read: " + starts.length);
+  const last = starts.at(-1);
+  assert.match(last.text, /racing/i, "the held line is the session cue");
+  // Every earlier line went straight through: each one is spoken the moment
+  // the one before it ends (one 50 ms step here), not spread across the gap.
+  for (let k = 1; k < starts.length - 1; k++) {
+    assert.ok(starts[k].at - starts[k - 1].at <= 50, `line ${k} was delayed: ${JSON.stringify(starts)}`);
+  }
+  const est = An.seconds(last.text, RV.TONE.announcer.rate) * 1000;
+  const want = t0 + budget - est - 600;
+  assert.ok(Math.abs(last.at - want) <= 50,
+    `last line started at +${last.at - t0} ms, want +${Math.round(want - t0)} ms (budget ${budget}, est ${Math.round(est)})`);
+  assert.ok(last.at - starts.at(-2).at > 1000, "…which is a real hold, not the chain's own pace");
+});
+
+test("the hold never makes the read LATER than the chain would reach the last line anyway", () => {
+  // A budget the script already fills: the target is in the past by the time
+  // the chain gets there, so the cue follows its predecessor immediately.
+  const clock = fakeClock();
+  const { A: An, G, synth } = load({ clock });
+  An.create(G).play(info(), 1500);
+  const starts = readThrough(synth, clock, 50, 1400);
+  assert.ok(starts.length >= 2, JSON.stringify(starts));
+  for (let k = 1; k < starts.length; k++) assert.ok(starts[k].at - starts[k - 1].at <= 50, JSON.stringify(starts));
+});
+
+test("preview() is NOT held — the editor's PLAY reads straight through", () => {
+  const clock = fakeClock();
+  const { A: An, G, synth } = load({ clock });
+  An.create(G).preview(info());
+  const starts = readThrough(synth, clock, 50, 2000);
+  assert.match(starts.at(-1).text, /racing/i);
+  for (let k = 1; k < starts.length; k++) assert.ok(starts[k].at - starts[k - 1].at <= 50, JSON.stringify(starts));
+});
+
+test("a stop() during the hold means the held line is never spoken", () => {
+  const clock = fakeClock();
+  const { A: An, G, synth } = load({ clock });
+  const ann = An.create(G);
+  ann.play(info(), 24000);
+  readThrough(synth, clock, 50, 3000);          // through every line but the held one
+  const before = spoken(synth).length;
+  assert.ok(!/racing/i.test(spoken(synth).at(-1)), "still holding the cue at +3 s");
+  ann.stop();
+  clock.tick(30000);
+  assert.equal(spoken(synth).length, before, "the skip that ended the flyby ended the held cue too");
+});
+
+/* ── THE STORY AND THE WRAP-UP ──────────────────────────────────────────────
+ * The same circuit read the same paragraph every visit. `info.story` carries
+ * what makes THIS race different — the seat, the championship, the target, the
+ * forecast — and every row it adds sits BELOW the must-keeps, so a squeezed
+ * budget drops the story before the welcome, the venue or the lights cue. */
+
+const STORY = {
+  driver: "Lando Norris", team: "McLaren", mate: "Oscar Piastri",
+  champ: { round: 4, rounds: 24, leader: "Max Verstappen", youPos: 3, gap: 18 },
+  goal: "Finish P5 or better in the championship",
+  forecast: { to: "rain", inS: 300 },
+};
+
+test("the story reads the seat, the championship, the target and the forecast — before the lights cue", () => {
+  const lines = A.script(info({ story: STORY }));
+  const all = lines.join(" ");
+  assert.match(all, /Lando Norris for McLaren, with Piastri in the sister car\./);
+  assert.match(all, /Round 5 of 24\. Verstappen leads the championship; you are 3rd, 18 points back\./);
+  assert.match(all, /The target this season: finish P5 or better in the championship\./);
+  assert.match(all, /Rain is on the way, in about 5 minutes\./);
+  assert.match(lines.at(-1), /Let's go racing\.$/, "the session cue stays last");
+  for (const l of lines) {
+    assert.match(l, /\.$|!$/, `"${l}" is not a sentence`);
+    assert.doesNotMatch(l, /undefined|NaN|\[object/);
+  }
+});
+
+test("leading the championship, and the final round, read as themselves", () => {
+  const lead = A.script(info({ story: { champ: { round: 9, rounds: 10, leader: "Lando Norris", youPos: 1, gap: 7 } } })).join(" ");
+  assert.match(lead, /The final round, and you lead the championship by 7 points\./);
+  const chase = A.script(info({ story: { champ: { round: 9, rounds: 10, leader: "Max Verstappen", youPos: 2, gap: 12 } } })).join(" ");
+  assert.match(chase, /It all comes down to this\./);
+  // Before a single round is scored there is no championship to talk about.
+  const r1 = A.script(info({ story: { champ: { round: 0, rounds: 24, leader: "Max Verstappen", youPos: 1, gap: 0 } } })).join(" ");
+  assert.doesNotMatch(r1, /championship/);
+});
+
+test("a forecast that matches the current weather says nothing; dry race, no rain words", () => {
+  const same = A.script(info({ weather: "rain", story: { forecast: { to: "rain", inS: 200 } } })).join(" ");
+  assert.doesNotMatch(same, /on the way/);
+  const dry = A.script(info({ story: { driver: "Lando Norris", team: "McLaren" } })).join(" ");
+  assert.doesNotMatch(dry, /rain|wet|fog/i);
+});
+
+test("the story never displaces a must-keep: at a 1 ms budget the same three lines survive", () => {
+  const kept = A.script(info({ story: STORY }), 1, 0.92);
+  assert.deepEqual(JSON.parse(JSON.stringify(kept.map((l) => l.split(" ")[0]))), ["Welcome", "This", "12"]);
+  for (const r of A.storyRows(STORY, {})) assert.ok(r.prio >= 1, `"${r.text}" is priority ${r.prio}`);
+});
+
+test("a sprint states the sprint distance, and still ends on the lights cue", () => {
+  const lines = A.script(info({ laps: 8, sprint: true }));
+  assert.match(lines.at(-1), /^The sprint\. 8 laps, flat out from the start\. Let's go racing\.$/);
+});
+
+test("the venue line rotates between visits and always opens 'This is'", () => {
+  const seen = new Set();
+  for (let v = 0; v < 3; v++) {
+    const venue = A.script(info({ variant: v }))[1];
+    assert.match(venue, /^This is /);
+    assert.match(venue, /Monza/); assert.match(venue, /Italian Grand Prix/);
+    seen.add(venue);
+  }
+  assert.equal(seen.size, 3);
+});
+
+test("the wrap-up names the winner, the margin, your race against your grid slot, and the fastest lap", () => {
+  const lines = A.wrapRows({
+    event: "the Italian GP", n: 20,
+    winner: { name: "Fernando Alonso" }, second: "Esteban Ocon", margin: 1.234,
+    you: { pos: 6, grid: 12, dnf: false }, fastest: { name: "Oscar Piastri", time: 81.456, you: false },
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(lines)), [
+    "Fernando Alonso wins the Italian Grand Prix, 1.2 seconds ahead of Ocon.",
+    "You finish 6th, up 6 places from 12th on the grid.",
+    "Fastest lap to Piastri, a 1 21.5.",
+  ]);
+  const won = A.wrapRows({ event: "the Italian GP", n: 20, winner: { name: "Lando Norris" }, margin: 3.1, you: { pos: 1, grid: 4 } });
+  assert.equal(won[0], "And you win the Italian Grand Prix, 3.1 seconds clear.");
+  const podium = A.wrapRows({ event: "", n: 20, winner: { name: "Max Verstappen" }, you: { pos: 3, grid: 3 } });
+  assert.equal(podium[1], "A podium for you, 3rd.");
+  const out = A.wrapRows({ event: "", n: 20, winner: { name: "Max Verstappen" }, you: { pos: 0, dnf: true } });
+  assert.match(out[1], /retirement/);
+  const { RV } = load();
+  for (const l of lines.concat(won, podium, out)) {
+    assert.ok(RV.estimate(RV.speakable(l), 0.92) < 14, `"${l}" is too long for one utterance`);
+  }
 });
