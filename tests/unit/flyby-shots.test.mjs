@@ -221,3 +221,95 @@ test("resuming releases the flyby editor's parked camera", () => {
   assert.match(body, /if \(!isOpen\(\)\) return;/,
     "…and a blind close on a shut panel touches no camera");
 });
+
+test("a corner's +x is its OUTSIDE, whichever way it turns", async () => {
+  // One shot list is written for every circuit, so "+x" at a corner cannot mean
+  // "right": that put two of the three corner shots on the INSIDE somewhere,
+  // peering through trunks and lamp posts. Checked against the curvature sign
+  // (+k = LEFT turn, measured) on every corner tight enough to have a side.
+  for (const id of ["monza", "monaco"]) {
+    const wrong = await withTrack(id, (track, g) => {
+      const FlybySeq = g.sandbox.FlybySeq, Tracks = g.sandbox.Tracks;
+      const bad = [];
+      const n = track._fbCorners ? track._fbCorners.length : (FlybySeq.cornerS(track, 1), track._fbCorners.length);
+      for (let i = 1; i <= n; i++) {
+        const s = FlybySeq.cornerS(track, i);
+        const k = Tracks.curvature(track, s);
+        if (!(Math.abs(k) > 0.004)) continue;      // a kink, not a corner with an outside
+        const want = k > 0 ? 1 : -1;                // left turn → outside is +right
+        if (FlybySeq.cornerSide(track, i) !== want) bad.push(`T${i} k=${k.toFixed(4)}`);
+      }
+      return bad;
+    });
+    assert.deepEqual(wrong, [], `${id}: corner side disagrees with the turn direction`);
+  }
+});
+
+test("a landmark bearing of 0 is the TRACK side of it", async () => {
+  // Shot from that side, the circuit is IN FRONT of the landmark: either the
+  // sightline to it crosses the track, or the eye stands between the two. A
+  // world bearing named a different picture at every circuit.
+  for (const id of CIRCUITS) {
+    const bad = await withTrack(id, (track, g) => {
+      const FlybySeq = g.sandbox.FlybySeq, Tracks = g.sandbox.Tracks;
+      const pts = FlybySeq.bounds(track).pts, out = [];
+      const nearest = (x, z) => Math.min(...pts.map((p) => Math.hypot(p[0] - x, p[2] - z)));
+      FlybySeq.landmarks(track).forEach((r, rank) => {
+        const eye = FlybySeq.posePoint(track, { at: "landmark", rank, bear: 0, distK: 1.5, yK: 0 }, [0, 0, 0]);
+        let crosses = false;
+        for (let i = 0; i <= 40 && !crosses; i++) {
+          const x = eye[0] + (r.x - eye[0]) * i / 40, z = eye[2] + (r.z - eye[2]) * i / 40;
+          const pr = Tracks.project(track, x, z);
+          if (pr && Math.abs(pr.lat) < 15) crosses = true;
+        }
+        if (!crosses && !(nearest(eye[0], eye[2]) < nearest(r.x, r.z))) out.push(`rank ${rank} (${r.kind})`);
+      });
+      return out;
+    });
+    assert.deepEqual(bad, [], `${id}: a bearing-0 landmark shot does not have the track in front of it`);
+  }
+});
+
+test("on a street circuit a corner camera stands at the fence, not in a building", async () => {
+  await withTrack("monaco", (track, g) => {
+    const FlybySeq = g.sandbox.FlybySeq, Tracks = g.sandbox.Tracks;
+    for (const shot of FlybySeq.DEFAULT) {
+      for (const pose of shot.eye) {
+        if (pose.at !== "corner") continue;
+        const s = FlybySeq.anchorS(track, pose);
+        const eye = FlybySeq.posePoint(track, pose, [0, 0, 0]);
+        const pr = Tracks.project(track, eye[0], eye[2], s, eye[1]);
+        const wall = Tracks.wallAt(track, s, pr.lat > 0 ? 1 : -1);
+        assert.ok(Math.abs(pr.lat) <= wall + FlybySeq.FENCE + 0.5,
+          `${shot.id}: eye ${pr.lat.toFixed(1)} m off the centreline, barrier at ${wall.toFixed(1)} m`);
+      }
+    }
+    return null;
+  });
+});
+
+test("the clearance lift is PLANNED: no pop inside a shot, and corners step in before they lift", async () => {
+  // clearEye() on its own ran per frame, so the eye jumped straight up the
+  // frame it touched a box: 17 m on Monza's turn-late, 54 m on Shanghai's
+  // turn-mid (fleet audit, 400 samples — 120 hid it). Shanghai and Mexico are
+  // OPEN circuits whose corner eyes grazed trackside structures; they must now
+  // step towards the road instead of craning over a roof.
+  const N = 400;
+  for (const id of ["monza", "monaco", "shanghai", "mexico"]) {
+    const bad = await withTrack(id, (track, g) => {
+      const FlybySeq = g.sandbox.FlybySeq, out = [];
+      FlybySeq.reset();
+      let prevY = null, prevIdx = -1;
+      for (let i = 0; i <= N; i++) {
+        const v = FlybySeq.solve(track, i / N);
+        if (v.index === prevIdx && Math.abs(v.eye[1] - prevY) > 4) {
+          out.push(`${v.id} jumps ${Math.abs(v.eye[1] - prevY).toFixed(1)} m in one step at u=${(i / N).toFixed(3)}`);
+        }
+        if (/^turn-/.test(v.id) && v.lift > 15) out.push(`${v.id} lifted ${v.lift.toFixed(1)} m`);
+        prevY = v.eye[1]; prevIdx = v.index;
+      }
+      return [...new Set(out)].slice(0, 6);
+    });
+    assert.deepEqual(bad, [], `${id}: ` + bad.join("; "));
+  }
+});
