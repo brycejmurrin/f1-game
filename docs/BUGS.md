@@ -149,6 +149,9 @@ matching the upload canvas path.
 
 ## Scenery / track build (2026-09-24 audit)
 
+Pipeline for contributors: [SCENERY-AND-TRACK-BUILD.md](SCENERY-AND-TRACK-BUILD.md).
+Helper catalogue: [SCENERY-API.md](SCENERY-API.md).
+
 Code-verified against tip; measurements in
 `artifacts/scenery-audit-measurements.log`. Prefer OPEN items still true in
 current code. `scenery(api)` surface is frozen at **112 members** by
@@ -274,19 +277,16 @@ exports”.
 
 **Fix direction:** Delete or wire into landmark/circuit kits — owner call.
 
-### S9 — Skill doc still claims `bakedModel` never places on shifted circuits
-**Severity:** low (docs) · **Status:** OPEN (stale doc; code FIXED) · **Confidence:** high
+### S9 — Skill doc claimed `bakedModel` never places on shifted circuits
+**Severity:** low (docs) · **Status:** FIXED this PR · **Confidence:** high
 
 **Where:** `.claude/skills/scenery-dress/references/rules.md` §Frames;
 code `tracks.js` ~385–386 + `tests/unit/scenery-guards.test.mjs`.
 
 **What:** Dedicated `(id,k,side)` wrapper remaps k/side correctly. The old
-“ID remapped as node” bug is FIXED. Stale rule text still says baked stamps
-never place — wrong, and it hides S1 when `bakedModel` is called *inside*
-`along()` (spa/silverstone).
-
-**Fix direction:** Rewrite the skill bullet to the along double-shift trap.
-
+“ID remapped as node” bug is FIXED. Skill text now points at the live
+**`along()` double-shift** trap (S1) instead — including when `bakedModel` is
+called *inside* `along()` (spa/silverstone).
 ### S10 — `bakedModel` road guard + pack-visible node VM (ledger “OPEN” half)
 **Severity:** — · **Status:** FIXED · **Confidence:** high
 
@@ -313,6 +313,6 @@ solids) and intentional overhangs, not the missing guard/harness.
 
 `docs/notes/DEFECT-LEDGER.md` is the long chronological register. This file is
 the **current credible shortlist** from the 2026-09-24 architecture/bug-hunt
-pass: fixed items B1–B2, open B3–B8, scenery/track S1–S9 (S10 FIXED). Prefer
+pass: fixed items B1–B2 and S9–S10; open B3–B8 and scenery/track S1–S8. Prefer
 linking here from PRs; promote lasting open items into the ledger when a
 campaign owns them.

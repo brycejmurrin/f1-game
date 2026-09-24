@@ -27,10 +27,12 @@ uses. `def._sceneryShift` is the single arc number between them.
   with your own loop over `K(...)` values, or accept the offset knowingly.
   Table reads have the same problem: `blocked(k / n)` inside a callback tests
   engine fracs against authored windows.
-- **`bakedModel(id, k, side, dist, opts)` does not place on a shifted
-  circuit.** It sits in the wrapper's `(k, side, …)` list, so the remap is
-  applied to the `id` string; every call falls through to its procedural
-  fallback. Report the need rather than tuning around it.
+- **`bakedModel(id, k, side, dist, opts)` remaps correctly on shifted
+  circuits** (dedicated `(id, k, side)` wrapper in `transformSceneryApi`).
+  Older notes that said it never placed were about a bug that has since been
+  fixed — the asset stood a whole shift away or fell through to the procedural
+  fallback. Always keep `if (!bakedModel(...)) …` anyway. The live double-shift
+  trap is **`along()` + wrapped helpers** (bullet above), not `bakedModel`.
 - **`every()` is full-lap**, so its double phase only moves which node a hash
   lands on — harmless for authored-frame tables, NOT for a table re-keyed into
   the engine frame (a `CLEAR`/exclusion list written through an `sl()` helper).

@@ -105,8 +105,7 @@ SwiftShader. Details: [TESTING.md](TESTING.md).
 
 | Change | Edit |
 |---|---|
-| Corner geometry / elevation / palette | `js/circuits/<id>.js` |
-| Buildings / trees / barriers | `js/circuits/scenery/<id>.js` via `scenery(api)` |
+| Circuit data / scenery dressing | `js/circuits/<id>.js` + `js/circuits/scenery/<id>.js` — see [SCENERY-AND-TRACK-BUILD.md](SCENERY-AND-TRACK-BUILD.md) |
 | Shared spline / prop emitters | `js/track/` |
 | Handling / pace / assists | `js/physics/`, tunables in `game.js` |
 | Menu / pause / a11y | `js/ui/`, `css/`, DOM in `index.html` |
@@ -116,7 +115,8 @@ SwiftShader. Details: [TESTING.md](TESTING.md).
 ## Related reading
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — full module contracts + generated index
-- [BUGS.md](BUGS.md) — verified open defects from architecture/bug-hunt passes
+- [BUGS.md](BUGS.md) — verified open/fixed defects (incl. scenery S1–S10)
+- [SCENERY-AND-TRACK-BUILD.md](SCENERY-AND-TRACK-BUILD.md) — track/scenery pipeline + accuracy levers
 - [notes/ARCHITECTURE-REVIEW.md](notes/ARCHITECTURE-REVIEW.md) — founding bet & lessons
 - [notes/DEFECT-LEDGER.md](notes/DEFECT-LEDGER.md) — historical open/fixed register
 - [AGENT-SURFACE.md](AGENT-SURFACE.md) — skills, MCP, hooks map
