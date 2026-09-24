@@ -5350,3 +5350,52 @@ drawn yet (`fx.skidMat`, `fx.particleMats[0/1]`, and for safety `markMat`,
 small programs during the lights (tens of ms), no scene reveal, no skip semantics.
 Switch `apex26.tlxWarmFx=0`. Success = the probe's `lapSync` 0 and the census
 `stack:` total 0 on the WebGPU leg.
+
+## 2ai. Plan steps 2b + 3b: the FX warm, single-pass FX, and the chunk draw merge (2026-09-24)
+
+**2b — the last lap compiles.** `warmFxPrograms()` (tlx.js, in `startProgramWarm`
+after the scene warm, under its target + MRT) compiles `skidMat`, both
+`particleMats`, `glowMat` and `lineMat` on a throwaway `Mesh` over each stream's
+real geometry (`ensureStream(stream, 1)`). That fixed the skid marks but the
+particles still built pipelines mid-race: the pipeline-key diff
+(`scratch/compile-attrib-probe.mjs` now logs new cache keys) differed ONLY in the
+side field — warm `2` (DoubleSide), lap `1` then `0`. three draws a transparent
+DoubleSide material as a back pass and a front pass unless `forceSinglePass`, and
+`compileAsync` builds the DoubleSide state. GLX draws every double-sided FX surface
+in ONE pass with culling off, so `fxMaterial` now sets `forceSinglePass` for
+`doubleSided` (particles, glow, driving line, car decals): GLX parity, half the
+draws for those records, and the warm now covers them.
+
+| Lavapipe WebGPU, montreal, 12 jumps | step 1 | + FX warm | + single pass |
+|---|---|---|---|
+| sync compiles on the lap | 5 | 4 (particle pipelines) | **0** |
+| sync compiles during race load | 18 | 19 | 14 (decals: one pipeline, not two) |
+| FX warm stage | — | 82 ms | 55 ms |
+
+Three's WebGL2 path (SwiftShader): lap 0, FX warm 21 ms. Garage luma 43.7 (43.0 /
+44.3 before), race 57.8 (57.7), gpuErrors 0. Switch `apex26.tlxWarmFx=0`.
+
+**3b — the chunk draw merge.** `tlx-chunked.js` `build()` bins triangles into 72 m
+lamp cells as before, then folds each 2 x 2 block into ONE draw chunk (its index is
+the block's cells back to back — the chunks already shared one vertex buffer). The
+lamp table stays on the 72 m cells (`mesh.lampCells`, read by tlx.js's lamp-grid
+bake), because tsl-lit looks lamps up by WORLD cell (`floor(wp / lgCell)`), so a
+merge must not widen the area under the 24-lamp cap. Default merge 2;
+`apex26.tlxChunkMerge=1` is the old shape.
+
+| montreal, Lavapipe WebGPU (`scratch/chunk-merge-probe.mjs`) | merge 1 | merge 2 |
+|---|---|---|
+| chunks (draw records) | 471 | 181 |
+| visible per present at 5 spots | 43 / 173 / 96 / 166 / 140 | 19 / 68 / 40 / 65 / 55 |
+| lamp grid (night) | 471 cells, 2213 entries, cell 72 | identical |
+
+Frozen night frames (`scratch/chunk-merge-diff.mjs`, `park` + `freeze`, three
+spots): merge 1 vs 2 differs on 0.008-0.031 % of pixels, same-page repeat floor
+0.004-0.034 %, luma equal to 0.02 — the same picture. (Unfrozen night luma reads
+moved ±7 between runs from the AI cars' lights; not a finding.) The visible chunk
+count is the scene pass; the sun pass casts the same records, so it drops too.
+Unit tests pin the merge (every triangle once, lamp cells unchanged, default on).
+
+Not measured here: CPU frame time — this box's frame clock is SwiftShader/Lavapipe,
+not a player's. That is the census's job (next push: step 2b + 3b; then
+`ls: apex26.tlxChunkMerge=1` as the A/B).
