@@ -515,7 +515,7 @@ struct Light {
   posRad   : vec4<f32>,       // xyz pos, w radius
   colBleed : vec4<f32>,       // xyz colour*intensity, w out-of-beam bleed
   dirVol   : vec4<f32>,       // xyz beam aim, w volW (godray — unused here)
-  cone     : vec4<f32>,       // x cosInner, y cosOuter, z glareW (unused), w pad
+  cone     : vec4<f32>,       // x cosInner, y cosOuter, z glareW (unused), w liveOnly (not baked)
 };                            // size 64
 struct DrawU {
   model : mat4x4<f32>,        // off  0
@@ -816,14 +816,16 @@ fn lampContrib(Lt : Light, isShadowLamp : bool, wpos : vec3<f32>, N : vec3<f32>,
   // On a baked fragment the live diffuse steps aside (1 - bakeW) and the
   // shadow-mapped lamp carves its shadow out of the pool in the pool's own
   // steady colour (bakeC.xyz; 1 - lampSh is 0 for every other lamp).
-  acc.col = acc.col + albedo * (lcol * (lampSh * (1.0 - bakeW)) - F.bakeC.xyz * ((1.0 - lampSh) * bakeW))
+  // LIVE-ONLY (cone.w = 1, LampBake.liveOnlyAt): a lamp left out of the bake gets no step-aside.
+  let bakeWl = bakeW * (1.0 - Lt.cone.w);
+  acc.col = acc.col + albedo * (lcol * (lampSh * (1.0 - bakeWl)) - F.bakeC.xyz * ((1.0 - lampSh) * bakeWl))
           * (att * spotD) * NoLl * (1.0 - metalness) * (1.0 - wetSheen * 0.85);
   // Bounce fill: pool light bounced off the road washes nearby surfaces (walls,
   // kerbs, car flanks) with the lamp tint even outside the beam — a near-free
   // stand-in for local ambient probes, with a soft NoL floor (mirrors GLX
   // js/render/glx/shaders/glsl-lit.js; BOUNCE = params3.x = uBounceK, default 0.04).
   if (F.params3.x > 0.0) {
-    acc.col = acc.col + albedo * lcol * (att * F.params3.x * (0.55 + 0.45 * NoLl)) * (1.0 - metalness) * (1.0 - bakeW);
+    acc.col = acc.col + albedo * lcol * (att * F.params3.x * (0.55 + 0.45 * NoLl)) * (1.0 - metalness) * (1.0 - bakeWl);
   }
   // GGX specular from the lamp (same microfacet BRDF as the sun).
   // LAMP WALL SPILL (params9.y = uLampWallSpill): out-of-beam reflection floor
