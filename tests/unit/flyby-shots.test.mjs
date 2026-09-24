@@ -557,3 +557,46 @@ test("one corner, one shot: no flyby films the same corner twice", async () => {
   });
   assert.deepEqual(bad, [], bad.join("\n"));
 });
+
+test("a NUMBERED corner is the author's: bindCorners never moves it, roles steer around it", async () => {
+  await withTrack("monza", (track, g) => {
+    const F = g.sandbox.FlybySeq;
+    const c = (n) => ({ at: "corner", n, off: -30, x: 15, y: 8 });
+    const sh = (id, n) => ({ id, dur: 0.25, ease: "inOut", eye: [c(n), c(n)], look: [c(n), c(n)], fov: [40, 40] });
+    // Monza's T1 and T2 share s = 592 (the Rettifilo's two halves), and a list may name one corner twice.
+    const list = [sh("a", 3), sh("b", 3), sh("c", 1), sh("d", 2), sh("e", "first")];
+    const b = F.bindCorners(track, list);
+    assert.deepEqual(b.slice(0, 4).map((s) => s.eye[0].n), [3, 3, 1, 2], "numbered corners play as authored");
+    const sFirst = F.cornerS(track, b[4].eye[0].n), s1 = F.cornerS(track, 1), s3 = F.cornerS(track, 3);
+    assert.ok(Math.abs(sFirst - s1) >= 120 && Math.abs(sFirst - s3) >= 120, "the role moved off the corners the author claimed");
+    return null;
+  });
+});
+
+test("the clearance grid index finds exactly what a full scan finds", async () => {
+  // insideProp/clearTrees query a grid instead of scanning every box (Monza's
+  // turn-first took 1.35 s to plan). Same answer, same first hit, everywhere.
+  await withTrack("monza", (track, g) => {
+    const F = g.sandbox.FlybySeq, b = F.blockers(track), B = F.bounds(track);
+    let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const scan = (p, m) => { for (const r of b) if (Math.abs(p[0] - r.x) < r.w / 2 + m && Math.abs(p[2] - r.z) < r.d / 2 + m && p[1] > r.y - r.h / 2 - m && p[1] < r.y + r.h / 2 + m) return r; return null; };
+    let hits = 0;
+    for (let i = 0; i < 4000; i++) {
+      const pick = b[(rnd() * b.length) | 0];
+      const p = i % 2 ? [pick.x + (rnd() - 0.5) * pick.w * 1.4, pick.y + (rnd() - 0.5) * pick.h, pick.z + (rnd() - 0.5) * pick.d * 1.4]
+                      : [B.x + (rnd() - 0.5) * B.rad * 2, rnd() * 40, B.z + (rnd() - 0.5) * B.rad * 2];
+      const m = [0, 2.5, 7][i % 3];
+      const want = scan(p, m), got = F.insideProp(track, p, m);
+      assert.equal(got, want, `point ${p.map((v) => v.toFixed(1))} margin ${m}`);
+      if (want) hits++;
+    }
+    assert.ok(hits > 500, `the probe points hit boxes (${hits})`);
+    return null;
+  });
+});
+
+test("the flyby's plans are made before it plays, not at each cut", () => {
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const warm = game.indexOf("FlybySeq.warm(track, flybyShots)"), run = game.indexOf("loadingScreen.run(loadingInfo(), go)");
+  assert.ok(warm > 0 && run > warm, "raceIntro warms the flyby's plans before the loading screen runs it");
+});
