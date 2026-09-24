@@ -59,14 +59,14 @@ test("MONACO has no zone at all — 2026 switches active aero off there", async 
   deepEq(g.apex.aeroZones(), []);
 });
 
-test("authored circuits get the real number of zones, not a derived guess", async () => {
-  for (const [id, want] of [["monza", 2], ["baku", 2], ["qatar", 1], ["albert_park", 5]]) {
+for (const [id, want] of [["monza", 2], ["baku", 2], ["qatar", 1], ["albert_park", 5]]) {
+  test(`${id} gets the real number of zones, not a derived guess`, async () => {
     await loadTrack(id);
     const zones = g.apex.aeroZones();
     assert.equal(zones.length, want, `${id} zone count`);
     for (const z of zones) gt(z.len, 100, `${id} zone at ${z.start}m`);
-  }
-});
+  });
+}
 
 test("with no zone, the mode can never arm however hard it is asked for", async () => {
   await loadTrack("monaco");
