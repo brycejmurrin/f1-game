@@ -142,7 +142,9 @@ test("trim(from) drops the primitive records and the live-buffer set", () => {
 // (fewer rows are enclosed, so fewer are stripped), and again after the verge
 // carve fix raised the terrain beside descents (buried counts moved).
 const STRIP = {
-  monaco: { before: 293515, after: 252651 },
+  // Re-measured after the ground-audit fixes stopped EMITTING never-visible
+  // prims (palm root stubs, underground facade detail): -5838 emitted, -218 kept.
+  monaco: { before: 287677, after: 252433 },
   // Re-measured 2026-09-24 after landmark wave 3 Tribuna/podium + mid densify,
   // and again after the pit-straight green band moved out of the red trim's
   // footprint to stand 0.4 m proud (its buried underside now strips: -18).
