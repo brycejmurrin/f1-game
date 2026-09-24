@@ -139,10 +139,11 @@ test("trim(from) drops the primitive records and the live-buffer set", () => {
 // per circuit at the measured share, deterministic across rebuilds, vertex
 // buffer untouched, every surviving index in range. Measured 2026-09-24,
 // re-measured after P2 moved the grandstand shell out from behind the crowd
-// (fewer rows are enclosed, so fewer are stripped).
+// (fewer rows are enclosed, so fewer are stripped), and again after the verge
+// carve fix raised the terrain beside descents (buried counts moved).
 const STRIP = {
-  monaco: { before: 312780, after: 270575 },
-  monza: { before: 341148, after: 300825 },
+  monaco: { before: 312780, after: 270310 },
+  monza: { before: 341148, after: 300843 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {
