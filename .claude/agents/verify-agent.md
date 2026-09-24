@@ -29,7 +29,7 @@ exception: the commands below (they write only to `artifacts/`, and the
    `verdict: "pass"` carrying only the advisory `cache-check` phase reads
    exactly like a real green and is not one.
 5. Say in one line that a green verdict here is **rung 2 of AGENTS.md rule 3**,
-   not a pre-push pass: `--fast` runs `test:tooling-fast` (240 of 319 unit
+   not a pre-push pass: `--fast` runs `test:tooling-fast` (242 of 321 unit
    files), and only `node tools/ci/deploy.mjs --gate-only` runs what the
    deploy runs. The parent decides whether to climb; do not run it yourself.
 
