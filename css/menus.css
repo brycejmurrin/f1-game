@@ -65,13 +65,23 @@
   align-content: center;
   align-content: safe center;
   /* in oklab so the red wash stays red through its falloff instead of
-     sagging grey, and .grain (css/components.css) dithers what is left */
+     sagging grey, and .grain (css/components.css) dithers what is left.
+     --menu-wash-pct is the MENU WASH player setting (js/ui/title-fx.js):
+     FULL uses the fallback below; SOFT/OFF stamp a token on :root. The
+     desktop landscape rule in css/responsive.css reads the same token. */
   background:
-    radial-gradient(115% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) 28%, transparent), transparent 58%),
+    radial-gradient(115% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) var(--menu-wash-pct, 28%), transparent), transparent 58%),
     rgba(6, 6, 10, 0.36);
   overflow-y: auto; overflow-x: hidden;
   overscroll-behavior-y: contain; touch-action: pan-y;
 }
+/* MENU WASH player setting (js/ui/title-fx.js → html[data-menu-wash]).
+   Tokens only — both this file and css/responsive.css (overlays layer) paint
+   the radial from --menu-wash-pct, so a soft/off answer wins on every
+   viewport without fighting cascade-layer order. Grain uses --grain-opacity
+   (css/components.css). */
+:root[data-menu-wash="soft"] { --menu-wash-pct: 12%; --grain-opacity: 0.025; }
+:root[data-menu-wash="off"]  { --menu-wash-pct: 0%;  --grain-opacity: 0; }
 /* THE TITLE CAR. A decorative art layer, NOT a grid item: #overlay is a grid,
    so an in-flow child would open a third row and move the composition. Absolute
    takes it out of flow and fills the fixed parent instead.
@@ -160,6 +170,11 @@
    be. Anything painting a <g> that `#title-car g` also matches has to come
    from a rule, not an attribute. */
 #title-car g[data-trail] { fill: url(#tc-trail); }
+/* TITLE ART player setting (js/ui/title-fx.js → html[data-title-art]).
+   Specificity beats the media-query opacity fades and the tall-shape
+   re-shows below so SOFT/OFF win on every viewport. ON leaves those alone. */
+:root[data-title-art="soft"] #title-car { opacity: 0.14; }
+:root[data-title-art="off"] #title-car { display: none; }
 /* COPY SPACE IS A FUNCTION OF WIDTH, and this is a COMPOSITION rule, not a
    contrast one — the difference matters, because the first measurement looked
    like a legibility problem and was not.
@@ -224,34 +239,66 @@
    every one, and a dash "draw" made every outline pop at once.
    ONLY ON FIRST SHOW: every rule keys on #overlay[data-intro], which
    js/ui/title-fx.js sets once, the first time the title is visible, and
-   removes after ~2.8 s — coming back from a room is the resting title, not a
-   second show. Every animation fills BACKWARDS only: the start state holds
-   through the delay, and when it ends the element drops back to its own
-   declared style — no clip, no fill-opacity override — so the resting title
-   is the same pixels as without the intro. Both gates, because the in-game
-   Motion setting can only add reduction; the Playwright suite runs reduced,
-   and sees no motion at all. Paint cost is transform/opacity/fill-opacity/
-   clip-path only: no filter, no shadow, and no will-change — an SVG child
-   gets no layer from it. Fills fade by fill-opacity, not group opacity, so no
-   group is flattened into an offscreen buffer to fade it. */
+   removes after ~2.8 s (QUICK ~1.2 s) — coming back from a room is the
+   resting title, not a second show. TITLE INTRO OFF (html[data-title-intro])
+   skips the reveal the same way REDUCED does. Every animation fills
+   BACKWARDS only: the start state holds through the delay, and when it ends
+   the element drops back to its own declared style — no clip, no fill-opacity
+   override — so the resting title is the same pixels as without the intro.
+   Both gates, because the in-game Motion setting can only add reduction; the
+   Playwright suite runs reduced, and sees no motion at all. Paint cost is
+   transform/opacity/fill-opacity/clip-path only: no filter, no shadow, and no
+   will-change — an SVG child gets no layer from it. Fills fade by fill-opacity,
+   not group opacity, so no group is flattened into an offscreen buffer to fade
+   it. */
 @media (prefers-reduced-motion: no-preference) {
-  :root:not([data-motion="reduce"]) #overlay[data-intro] #menu-brand { animation: sheet-in 0.32s cubic-bezier(0.2, 0.7, 0.3, 1); }
-  :root:not([data-motion="reduce"]) #overlay[data-intro] #title-car g[data-stage="ink"] {
-    animation: tc-wipe var(--dur-draw) var(--ease-out) backwards, tc-fill var(--dur-4) var(--ease-out) backwards;
-    animation-delay: calc(100ms + var(--i, 0) * 60ms), calc(400ms + var(--dur-draw) * 0.4);
+  /* Intro timeline tokens live on the overlay so QUICK can halve them without
+     touching sheet/screen --dur-* elsewhere. FULL = shipped numbers. */
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] {
+    --intro-lead: 100ms;
+    --intro-ink-gap: 60ms;
+    --intro-fill-lead: 400ms;
+    --intro-body-gap: 40ms;
+    --intro-btn-lead: 200ms;
+    --intro-btn-gap: 50ms;
+    --intro-trail-dur: 900ms;
+    --intro-brand-dur: 0.32s;
+    --intro-draw: var(--dur-draw);
+    --intro-fill: var(--dur-4);
+    --intro-btn: var(--dur-3);
+  }
+  :root[data-title-intro="quick"]:not([data-motion="reduce"]) #overlay[data-intro] {
+    --intro-lead: 40ms;
+    --intro-ink-gap: 25ms;
+    --intro-fill-lead: 160ms;
+    --intro-body-gap: 18ms;
+    --intro-btn-lead: 80ms;
+    --intro-btn-gap: 22ms;
+    --intro-trail-dur: 420ms;
+    --intro-brand-dur: 0.16s;
+    --intro-draw: 700ms;
+    --intro-fill: 300ms;
+    --intro-btn: 160ms;
+  }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-brand {
+    animation: sheet-in var(--intro-brand-dur) cubic-bezier(0.2, 0.7, 0.3, 1);
+  }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #title-car g[data-stage="ink"] {
+    animation: tc-wipe var(--intro-draw) var(--ease-out) backwards, tc-fill var(--intro-fill) var(--ease-out) backwards;
+    animation-delay: calc(var(--intro-lead) + var(--i, 0) * var(--intro-ink-gap)), calc(var(--intro-fill-lead) + var(--intro-draw) * 0.4);
   }
   /* detail sits late in the --i order and its lines are short */
-  :root:not([data-motion="reduce"]) #overlay[data-intro] #title-car g[data-stage="detail"] {
-    animation: tc-wipe calc(var(--dur-draw) / 2) var(--ease-out) backwards;
-    animation-delay: calc(100ms + var(--i, 0) * 60ms);
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #title-car g[data-stage="detail"] {
+    animation: tc-wipe calc(var(--intro-draw) / 2) var(--ease-out) backwards;
+    animation-delay: calc(var(--intro-lead) + var(--i, 0) * var(--intro-ink-gap));
   }
-  :root:not([data-motion="reduce"]) #overlay[data-intro] #title-car g:is([data-stage="body"], [data-stage="tone"], [data-stage="brush"]) {
-    animation: tc-fill var(--dur-4) var(--ease-out) backwards;
-    animation-delay: calc(100ms + var(--dur-draw) * 0.4 + var(--i, 0) * 40ms);
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #title-car g:is([data-stage="body"], [data-stage="tone"], [data-stage="brush"]) {
+    animation: tc-fill var(--intro-fill) var(--ease-out) backwards;
+    animation-delay: calc(var(--intro-lead) + var(--intro-draw) * 0.4 + var(--i, 0) * var(--intro-body-gap));
   }
-  :root:not([data-motion="reduce"]) #overlay[data-intro] #title-car g[data-stage="trail"] {
-    animation: tc-trail 900ms var(--ease-out) backwards;
-    animation-delay: calc(100ms + var(--dur-draw));
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #title-car g[data-stage="trail"] {
+    animation: tc-trail var(--intro-trail-dur) var(--ease-out) backwards;
+    animation-delay: calc(var(--intro-lead) + var(--intro-draw));
   }
   /* The doors grow into place rather than rise: #menu-buttons is a SCROLLER
      on phones, and a row shifted down 8px is 8px of scroll extent.
@@ -261,22 +308,22 @@
      no extent, and the spring's 6% overshoot on 0.94 stays under its 2px
      slack. `scale`, not `transform`: it composes with the shared :active
      skew + scale instead of fighting it. */
-  :root:not([data-motion="reduce"]) #overlay[data-intro] #menu-buttons .bigbtn {
-    animation: tc-btn-in var(--dur-3) var(--ease-spring) backwards;
-    animation-delay: calc(200ms + var(--n, 0) * 50ms);
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-buttons .bigbtn {
+    animation: tc-btn-in var(--intro-btn) var(--ease-spring) backwards;
+    animation-delay: calc(var(--intro-btn-lead) + var(--n, 0) * var(--intro-btn-gap));
   }
   /* A door focused mid-intro (keyboard, or a gamepad's first press) is never
      held invisible by the delay. */
-  :root:not([data-motion="reduce"]) #overlay[data-intro] #menu-buttons .bigbtn:focus-visible { animation: none; }
-  :root:not([data-motion="reduce"]) #overlay[data-intro] #menu-retention > .bigbtn { --n: 1; }
-  :root:not([data-motion="reduce"]) #overlay[data-intro] #menu-primary > :nth-child(1) { --n: 2; }
-  :root:not([data-motion="reduce"]) #overlay[data-intro] #menu-primary > :nth-child(2) { --n: 3; }
-  :root:not([data-motion="reduce"]) #overlay[data-intro] #menu-primary > :nth-child(3) { --n: 4; }
-  :root:not([data-motion="reduce"]) #overlay[data-intro] #menu-primary > :nth-child(4) { --n: 5; }
-  :root:not([data-motion="reduce"]) #overlay[data-intro] #menu-secondary > * { --n: 6; }
-  :root:not([data-motion="reduce"]) #overlay[data-intro] #menu-secondary > :nth-child(n+3) { --n: 7; }
-  :root:not([data-motion="reduce"]) #overlay[data-intro] #menu-secondary > :nth-child(n+4) { --n: 8; }
-  :root:not([data-motion="reduce"]) #overlay[data-intro] #menu-secondary > :nth-child(n+5) { --n: 9; }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-buttons .bigbtn:focus-visible { animation: none; }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-retention > .bigbtn { --n: 1; }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-primary > :nth-child(1) { --n: 2; }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-primary > :nth-child(2) { --n: 3; }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-primary > :nth-child(3) { --n: 4; }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-primary > :nth-child(4) { --n: 5; }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-secondary > * { --n: 6; }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-secondary > :nth-child(n+3) { --n: 7; }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-secondary > :nth-child(n+4) { --n: 8; }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-secondary > :nth-child(n+5) { --n: 9; }
 }
 /* inset() on an SVG group measures its own stroke box. The end keyframes
    restate the open clip because an inset() cannot interpolate to `none`. */

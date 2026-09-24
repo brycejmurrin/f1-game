@@ -66,15 +66,15 @@
           });
         }
       }
-      // The deep rank on the RIGHT is split twice. At 0.440-0.4456 and
-      // 0.5515-0.5631 its 41 m offset carries it to within ~11-13 m of the
-      // parallel back straight across the loop, which runs ~8 m lower (the
-      // -12 m back-loop dip): the pine is anchored off its own road while its
-      // crown tiers hang over the lower terrain — eight of float-audit's ten
-      // FLOATING clusters (the other two: `front` above). Restart points sit on the belt's own odd-node
-      // grid so every other tree keeps its spot.
+      // The deep rank on the RIGHT: its 41 m offset carries pines to within
+      // ~11-13 m of the parallel back straight across the loop. Under the
+      // authored cosine bumps that leg was ~8 m lower; under the SRTM bake
+      // it is ~40 m lower, so crowns that used to sit just over a shallow dip
+      // now float 20+ m (float-audit: cones reported at nearest-road frac
+      // 0.31 / lat 12 m, planted from this belt near 0.45). Widen the skip
+      // across the parallel zone. Restart on the belt's odd-node grid.
       const deep = (s0, s1, side) => (side > 0 && s0 === 0.215
-        ? [[0.215, 0.440], [0.4456, 0.5515], [0.5631, s1]] : [[s0, s1]]);
+        ? [[0.215, 0.430], [0.480, 0.5515], [0.5631, s1]] : [[s0, s1]]);
       for (const [a0, a1] of [[0.215, 0.605], [0.650, 0.925]]) {
         for (const side of [-1, 1]) for (const [s0, s1] of deep(a0, a1, side)) {
           forestEdge(s0, s1, side, 41, {
