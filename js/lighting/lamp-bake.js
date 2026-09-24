@@ -55,12 +55,55 @@ const LampBake = (function () {
     return t * t * (3 - 2 * t);
   }
 
+  const NO_GROUND = -60000;     // alpha sentinel: no surface known -> shaders skip the bake
+  const ROAD_EDGE = 1.5;       // metres of kerb/shoulder splatted past the road half-width
+
+  // Splat the ROAD surface height (centreline + banking lift) into `hgt`. The
+  // terrain heightfield is not the road: on an elevated or banked stretch it
+  // sits metres off, and a pool baked at the wrong height is the wrong size and
+  // brightness. Where two road stretches share a texel (bridge / crossover) the
+  // upper deck wins; the shaders' height fade hands the lower one to the live loop.
+  function splatRoad(road, x0, z0, cell, w, h, hgt) {
+    const n = road.n | 0;
+    if (!n || !road.px || !road.hw) return;
+    const L = road.total > 0 ? road.total : n;
+    const step = Math.max(0.5, cell * 0.5);
+    for (let k = 0; k < n; k++) {
+      const j = (k + 1) % n;
+      const ax = road.px[k], az = road.pz[k], bx = road.px[j], bz = road.pz[j];
+      const seg = Math.hypot(bx - ax, bz - az);
+      if (seg > 60) continue;                        // open (non-loop) end or a teleport seam
+      const ns = Math.max(1, Math.ceil(seg / step));
+      for (let q = 0; q < ns; q++) {
+        const f = q / ns;
+        const cx = ax + (bx - ax) * f, cz = az + (bz - az) * f;
+        const cy = road.py[k] + (road.py[j] - road.py[k]) * f;
+        const rx = road.rx[k] + (road.rx[j] - road.rx[k]) * f, rz = road.rz[k] + (road.rz[j] - road.rz[k]) * f;
+        const rl = Math.hypot(rx, rz) || 1;
+        const hw = road.hw[k] + (road.hw[j] - road.hw[k]) * f + ROAD_EDGE;
+        const s = (k + f) / n * L;
+        for (let lat = -hw; lat <= hw; lat += step) {
+          const px = cx + rx / rl * lat, pz = cz + rz / rl * lat;
+          const ii = Math.floor((px - x0) / cell), jj = Math.floor((pz - z0) / cell);
+          if (ii < 0 || jj < 0 || ii >= w || jj >= h) continue;
+          const dy = road.lift ? road.lift(s, lat) : 0;
+          const y = cy + (dy || 0);
+          const kk = jj * w + ii;
+          if (!(hgt[kk] >= y)) hgt[kk] = y;          // NaN or lower -> take this one
+        }
+      }
+    }
+  }
+
   /** Bake a light set. `lights` is the flat stride-15 track set (base colours);
    *  `groundY(x, z)` returns the ground height there or null; `nearClamp` is the
-   *  LAMP NEAR CLAMP knob. Returns null for an empty set, otherwise
-   *    { w, h, x0, z0, cell, data: Uint16Array(w*h*4) RGBA16F, lamps, ms }
+   *  LAMP NEAR CLAMP knob; optional `road` ({n,total,px,py,pz,rx,rz,hw,lift(s,lat)})
+   *  supplies the road surface, which wins over `groundY`. A texel with no known
+   *  surface gets no light and the NO_GROUND alpha. Returns null for an empty
+   *  set, otherwise
+   *    { w, h, x0, z0, cell, data: Uint16Array(w*h*4) RGBA16F (alpha = surface Y), lamps, ms }
    *  where texel (i, j) covers world x0 + (i + 0.5) * cell, z0 + (j + 0.5) * cell. */
-  function bake(lights, groundY, nearClamp) {
+  function bake(lights, groundY, nearClamp, road) {
     const n = lights ? (lights.length / 15) | 0 : 0;
     if (!n) return null;
     const t0 = (typeof performance !== "undefined" ? performance.now() : Date.now());
@@ -76,7 +119,9 @@ const LampBake = (function () {
     const cell = Math.max(MIN_CELL, Math.sqrt(area / MAX_TEXELS));
     const w = Math.max(1, Math.ceil((mxx - mnx) / cell)), h = Math.max(1, Math.ceil((mxz - mnz) / cell));
     const acc = new Float32Array(w * h * 3);
-    const hgt = new Float32Array(w * h).fill(NaN);   // ground height, sampled lazily
+    const hgt = new Float32Array(w * h).fill(NaN);   // surface height: road splat, then terrain lazily
+    if (road) splatRoad(road, mnx, mnz, cell, w, h, hgt);
+    const tried = new Uint8Array(w * h);             // terrain already queried for this texel
     const nc = nearClamp > 0 ? nearClamp : 4.0;
     for (let i = 0; i < n; i++) {
       const o = i * 15;
@@ -95,10 +140,12 @@ const LampBake = (function () {
           const px = mnx + (ii + 0.5) * cell;
           const k = j * w + ii;
           let py = hgt[k];
-          if (py !== py) {   // NaN: not sampled yet
+          if (py !== py && !tried[k]) {   // NaN: no road here, ask the terrain once
+            tried[k] = 1;
             const g = groundY ? groundY(px, pz) : null;
-            py = hgt[k] = (g != null && isFinite(g)) ? g : ly - 8;
+            if (g != null && isFinite(g)) py = hgt[k] = g;
           }
+          if (py !== py) continue;        // no surface known: leave it to the live loop
           const LX = lx - px, LY = ly - py, LZ = lz - pz;
           const d2 = LX * LX + LY * LY + LZ * LZ;
           if (d2 >= rad2) continue;
@@ -121,9 +168,10 @@ const LampBake = (function () {
       }
     }
     const data = new Uint16Array(w * h * 4);
-    const one = toHalf(1);
+    const none = toHalf(NO_GROUND);
     for (let k = 0, a = 0, b = 0; k < w * h; k++, a += 3, b += 4) {
-      data[b] = toHalf(acc[a]); data[b + 1] = toHalf(acc[a + 1]); data[b + 2] = toHalf(acc[a + 2]); data[b + 3] = one;
+      data[b] = toHalf(acc[a]); data[b + 1] = toHalf(acc[a + 1]); data[b + 2] = toHalf(acc[a + 2]);
+      data[b + 3] = hgt[k] === hgt[k] ? toHalf(hgt[k]) : none;
     }
     const ms = Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - t0);
     return { w, h, x0: mnx, z0: mnz, cell, data, lamps: n, ms };
@@ -132,15 +180,32 @@ const LampBake = (function () {
   // One cached bake per (light-set identity, near clamp). The track light set is
   // rebuilt as a NEW array whenever a rebuild:true lamp knob moves (profiles.js
   // nulls track._lights), so identity is the invalidation — same rule
-  // LampChunks and frame-lights _fillAllLights use.
-  let _src = null, _clamp = NaN, _bake = null, _gen = 0;
-  function forTrack(track, lights, nearClamp) {
+  // LampChunks and frame-lights _fillAllLights use. A LAMP NEAR CLAMP change on
+  // the same set is debounced: dragging the slider would otherwise rebake every
+  // frame; the previous bake keeps drawing until the value holds still.
+  const CLAMP_SETTLE_MS = 300;
+  let _src = null, _clamp = NaN, _bake = null, _gen = 0, _pend = NaN, _pendT = 0;
+  function roadOf(track) {
+    if (!track || !track.px || !track.hw || !(track.n > 0)) return null;
+    const bank = typeof Tracks !== "undefined" && Tracks.banking, o = {};
+    return {
+      n: track.n, total: track.total, px: track.px, py: track.py, pz: track.pz,
+      rx: track.rx, rz: track.rz, hw: track.hw,
+      lift: bank ? (s, lat) => { const b = bank(track, s, lat, o); return b ? b.dy : 0; } : null,
+    };
+  }
+  function forTrack(track, lights, nearClamp, now) {
     if (!lights || !lights.length) return null;
-    if (_src === lights && _clamp === nearClamp && _bake) return _bake;
+    if (_src === lights) {
+      if (_clamp === nearClamp) { _pend = NaN; return _bake; }
+      const t = now != null ? now : (typeof performance !== "undefined" ? performance.now() : Date.now());
+      if (_pend !== nearClamp) { _pend = nearClamp; _pendT = t; return _bake; }
+      if (t - _pendT < CLAMP_SETTLE_MS) return _bake;
+    }
     const gy = (track && typeof Tracks !== "undefined" && Tracks.terrainY)
       ? (x, z) => Tracks.terrainY(track, x, z) : null;
-    _bake = bake(lights, gy, nearClamp);
-    _src = lights; _clamp = nearClamp;
+    _bake = bake(lights, gy, nearClamp, roadOf(track));
+    _src = lights; _clamp = nearClamp; _pend = NaN;
     if (_bake) {
       _bake.gen = ++_gen;
       try { Log.info("gfx", "lamp bake " + _bake.lamps + " lamps -> " + _bake.w + "x" + _bake.h + " @" + _bake.cell.toFixed(2) + " m in " + _bake.ms + " ms"); } catch (_) { /* Log absent in a bare VM: the bake still returns */ }
@@ -148,6 +213,6 @@ const LampBake = (function () {
     return _bake;
   }
 
-  return { bake, forTrack, toHalf, MAX_TEXELS };
+  return { bake, forTrack, toHalf, MAX_TEXELS, NO_GROUND };
 })();
 Object.freeze(LampBake);

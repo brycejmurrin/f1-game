@@ -7036,7 +7036,7 @@ function render(dt) {
   // Cleared every frame, set only by the flood branch: `frame` outlives a
   // night->day time-of-day flip (rebuilt only in loadTrack), and a stale
   // allLights kept chunked geometry binding per-chunk night lamps in daylight.
-  frame.allLights = null; frame.perChunkLights = 0; frame.roadChunkLamps = 0; frame.tailStart = 0; frame.tailCount = 0;
+  frame.allLights = null; frame.lampBake = null; frame.perChunkLights = 0; frame.roadChunkLamps = 0; frame.tailStart = 0; frame.tailCount = 0;
   if (_floodActive || _floodDayLvl > 0) {
     // Rebuild if empty (not just undefined): a light set built before the track
     // centreline finished is empty; retry until it yields lights. Tracks always
@@ -7113,7 +7113,9 @@ function render(dt) {
     setFrameLights(camEye, _floodRGB, _lightFwd);
     // BAKED LAMP POOLS (js/lighting/lamp-bake.js): the whole track set's ground
     // pools at base colour, scaled per frame by the same _floodRGB the live set gets.
-    if (LT.lampBake > 0 && gfx.hasLampBake) {
+    // Paint-mode tails only: emitting tails ride the live loop, whose diffuse
+    // (lampSh - bakeW) would erase their unbaked pool on the road.
+    if (LT.lampBake > 0 && gfx.hasLampBake && !(LT.tailLightEmit > 0)) {
       frame.lampBake = LampBake.forTrack(track, track._lights, LT.lampNearClamp);
       frame.lampBakeScale = _floodRGB;
     }
@@ -7686,7 +7688,7 @@ function render(dt) {
         // not dim with battery. Otherwise 0.45 (flat) -> 1.0 (full).
         drawRearLights(tmpMat, (wet || preGrid || ersCode === 1) ? 1.0 : (0.45 + 0.55 * clamp(c.energy || 0, 0, 1)));
         // TAIL-LIGHT EMIT 0: the road spill is a painted decal, not a light slot.
-        if (night && !(LT.tailLightEmit > 0))
+        if (frame.glowLights && frame.glowLights !== frame.lights)
           CarMesh.drawTailGlow(_groundMat, LT.tailLightMul * (1 + clamp(c.brakeHeat || 0, 0, 1) * LT.brakeGlowMul * 1.6));
       }
     }

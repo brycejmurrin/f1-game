@@ -1515,8 +1515,13 @@
         const bUv = wp.xz.sub(U.bakeOrigin).div(U.bakeSize).toVar();
         const bIn = bUv.x.greaterThan(0.0).and(bUv.x.lessThan(1.0))
           .and(bUv.y.greaterThan(0.0)).and(bUv.y.lessThan(1.0));
-        const bE = BAKE_NODE.sample(bUv).level(0).rgb.mul(U.bakeScale).toVar();
-        const bakeW = select(U.bakeOn.greaterThan(0.5).and(bIn), smoothstep(0.55, 0.85, N.y), float(0.0)).toVar();
+        // Alpha = the surface height the texel was baked at; a fragment off it
+        // (bridge deck, roof, lower road of a crossover, no known ground) keeps
+        // the live loop.
+        const bT = BAKE_NODE.sample(bUv).level(0).toVar();
+        const bE = bT.rgb.mul(U.bakeScale).toVar();
+        const bOnY = smoothstep(0.75, 2.5, abs(wp.y.sub(bT.a))).oneMinus();
+        const bakeW = select(U.bakeOn.greaterThan(0.5).and(bIn), smoothstep(0.55, 0.85, N.y).mul(bOnY), float(0.0)).toVar();
         color.addAssign(albedo.mul(bE).mul(bakeW)
           .mul(metalness.oneMinus()).mul(wetSheen.mul(0.85).oneMinus()));
 
@@ -1663,6 +1668,9 @@
             });
           });
         });
+        // (lampSh - bakeW) goes negative where the shadow-mapped floodlight is
+        // occluded on a baked fragment; never carve below black (GLX: same).
+        color.assign(max(color, vec3(0.0)));
 
         // sun Cook-Torrance specular, soft-clipped (js/render/glx/shaders/glsl-lit.js)
         If(NoL.greaterThan(0.0), () => {
