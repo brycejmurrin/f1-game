@@ -1,6 +1,6 @@
 ---
 name: steward
-description: Use when driving a PR to green here — CI or Pages red, a PR event or check-in, a base merge conflict, a fix push to validate. Only what Apex 26 does differently: the push/PR dedupe that makes `cancelled` normal, sync-pr.mjs over a hand merge, who-is-on-it.mjs before a red on the shared deploy branch, the gate a fix push clears, what live means. Rest is AGENTS.md. Which test failed is ci-red-triage; pre-push is check-changes.
+description: Use when driving a PR to green here — CI or Pages red, a PR event or check-in, a base merge conflict, a fix push to validate. Only what Apex 26 does differently: the draft/ready dedupe that makes `cancelled` normal, sync-pr.mjs over a hand merge, who-is-on-it.mjs before a red on the shared deploy branch, the gate a fix push clears, what live means. Rest is AGENTS.md. Which test failed is ci-red-triage; pre-push is check-changes.
 ---
 
 # Driving a PR to green in Apex 26
@@ -15,9 +15,11 @@ anything on github.io → `deploy-research` (the only thing here that reaches it
 
 ## 1. `cancelled` means three different things — read the jobs, not the conclusion
 
-A push and its pull_request run land in the same concurrency group
-(`ci-…head.ref` for both) with `cancel-in-progress`, so the PR run cancels the
-push run on the same `head_sha` seconds after it starts. **A live sibling on
+A draft PR's fast-tier run and its `ready_for_review` run land in the same
+concurrency group (`ci-…head.ref`) with `cancel-in-progress`, so marking the PR
+ready cancels the fast run on the same `head_sha` seconds after it starts
+(ci.yml runs on push for the deploy branch only since 2026-09-24; before that
+a branch push and its PR run did the same). **A live sibling on
 that SHA is dedupe, not a red.** Do not re-run it and do not report it as a
 failure. (Dispatched, scheduled and deploy-branch-push runs each get their own
 `run_id` group on purpose, so they are never the sibling.)

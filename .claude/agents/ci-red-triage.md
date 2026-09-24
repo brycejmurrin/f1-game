@@ -19,8 +19,9 @@ no source edits, no local test runs, no re-run dispatch — the parent decides.
    one per workflow; a `cancelled` run with zero failures is a superseded
    push, not a verdict (AGENTS.md §Watching CI and Pages). Two shapes, both
    NOT reds: a newer commit superseded it, or — same `head_sha`, cancelled
-   seconds in, a sibling still running — the designed push/PR dedupe (one
-   group per branch name; the PR run on the merge commit wins). Say which,
+   seconds in, a sibling still running — the designed draft/ready dedupe
+   (one group per branch name; marking a draft ready cancels its fast run;
+   before 2026-09-24 a branch push and its PR run did the same). Say which,
    and never report a cancelled run as the failure: read the sibling.
 2. Tell the three trains apart and say which this is: PR CI (`ci.yml` on a
    PR head), ship-push CI (`ci.yml` on the deploy branch), or Pages

@@ -57,7 +57,7 @@ test("each finished job is one event; skipped jobs are silent; a red names its s
 });
 
 test("only a failed or timed-out job gets its annotations printed", () => {
-  // A cancelled job's annotation is the designed push/PR dedupe ("higher
+  // A cancelled job's annotation is the designed draft/ready dedupe ("higher
   // priority waiting request"); printed, every one became a Monitor event.
   assert.equal(wantsAnnotations(job(1, "a", "completed", "failure")), true);
   assert.equal(wantsAnnotations(job(2, "a", "completed", "timed_out")), true);

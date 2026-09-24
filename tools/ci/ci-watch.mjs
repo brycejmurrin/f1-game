@@ -7,7 +7,8 @@
 // it is done when its jobs are green — and a red found at the end of the turn
 // (or never: a `cancelled` run hid a FAILED one for five days) costs a cycle.
 // Waiting on a PR event alone is not enough either: webhooks arrive late or not
-// at all for success, and a docs-only push starts NO run (ci.yml paths-ignore),
+// at all for success, and a docs-only push (paths-ignore) or a topic-branch push
+// with no PR (ci.yml runs on push for the deploy branch only) starts NO run,
 // which looks exactly like "still queued". So this polls the REST API and turns
 // state into events:
 //
@@ -121,7 +122,7 @@ async function watchSha(sha, { interval, deadline, once }) {
       for (const e of newJobEvents(jobsByRun[run.id], seen, run.name)) {
         say(e.line);
         // Annotations only for a job that FAILED: a cancelled job's annotation is
-        // the push/PR dedupe's "higher priority waiting request" (rule 8) — as a
+        // the draft/ready dedupe's "higher priority waiting request" (rule 8) — as a
         // Monitor event it read as a red, eight times over, on PR #279.
         if (wantsAnnotations(e.job)) for (const a of annotations(e.job.id)) console.log(a);
       }
@@ -129,7 +130,7 @@ async function watchSha(sha, { interval, deadline, once }) {
     const v = verdict(runs, jobsByRun);
     // A commit ci.yml's paths-ignore skips (docs / *.md / .claude/) starts no
     // run at all; after 3 min of nothing that is the answer, not "queued".
-    if (v.state === "none" && Date.now() - start > 180_000) { say(`= ci none — no workflow run for ${sha.slice(0, 7)} after 3 min (paths-ignore: docs/.md/.claude-only push?)`); return 0; }
+    if (v.state === "none" && Date.now() - start > 180_000) { say(`= ci none — no workflow run for ${sha.slice(0, 7)} after 3 min (docs/.md/.claude-only push, or a topic branch with no PR — ci.yml runs on the PR, draft = fast tier)`); return 0; }
     if (v.done || once) { say(`= ci ${v.line} sha=${sha.slice(0, 7)}`); return { passed: 0, failed: 1, cancelled: 2 }[v.state] ?? 0; }
     if (Date.now() > deadline) { say(`= ci timeout — still ${v.line} sha=${sha.slice(0, 7)}; re-arm to keep watching`); return 124; }
     await sleep(interval);
