@@ -91,10 +91,11 @@
      layout shift and it was NOT — the real cause was the first-paint value of
      body[data-density] (see the inline script below). Kept because getting the
      real face onto the first paint is worth 25 KB on its own terms.
-     Only 2 of the 7 vendored faces; NO ?v= — fonts are immutable, content-named
+     Only 3 of the 8 vendored faces (the wordmark's 2.4 KB Saira subset is the third); NO ?v= — fonts are immutable, content-named
      vendored assets (same rule as vendor/three-*). -->
 <link rel="preload" href="assets/fonts/titillium-web-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="assets/fonts/titillium-web-latin-700-italic.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/saira-apex26-800-italic.woff2" as="font" type="font/woff2" crossorigin>
 <!-- MANIFEST.CSS order preserved (cascade). Title-critical sheets stay
      render-blocking; the rest use print→all so Slow-4G RenderBlocking
      (chrome-devtools) does not hold LCP for garage/tuner/hud/data CSS. -->
