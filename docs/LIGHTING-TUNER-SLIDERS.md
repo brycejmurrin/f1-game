@@ -545,7 +545,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 |---|---|---|---|---|---|---|
 | `lampLevel` | LAMP LEVEL | 0 … 0.687 | 0.26 | — | ✓ | game.js×3 |
 | `lampDensity` | LAMP DENSITY | 0.1 … 2.35 | 1 | — |   | track-lights.js×2, tracks.js×3 |
-| `floodDay` | DAYTIME LAMPS | 0 … 4.5 | 0 | — |   | game.js×3, atmosphere.js×2 |
+| `floodDay` | DAYTIME LAMPS | 0 … 4.5 | 0 | — |   | game.js×3, atmosphere.js×3 |
 | `poolEnergy` | POOL ENERGY | 0 … 1.375 | 0.55 | — | ✓ | track-lights.js×3 |
 | `lampRadiusMul` | POOL RADIUS | 0.4 … 1.9 | 1 | — | ✓ | track-lights.js×3 |
 | `bleedMul` | VALLEY BLEED | 0 … 2.5 | 1 | — | ✓ | track-lights.js×3 |
@@ -570,10 +570,10 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `lampGapFill` | DARK-GAP FILL | 0 … 150 | 60 | — |   | track-lights.js×2 |
 | `lampBehindBias` | BEHIND-CAM BIAS | 0.2 … 8 | 5.25 | — |   | frame-lights.js×3 |
 | `roadChunkLamps` | PER-CHUNK ROAD | 0 … 1 | 0 | — | ✓ | apex.js, game.js×4, chunked.js, glx.js×3, shadow-pass.js |
-| `lampBake` | BAKED LAMP POOLS | 0 … 1 | 1 | — |   | game.js×5, atmosphere.js, glx.js×2 |
+| `lampBake` | BAKED LAMP POOLS | 0 … 1 | 1 | — |   | game.js×5, atmosphere.js×2, glx.js×2 |
 | `perChunkLights` | PER-CHUNK LAMPS | 0 … 1 | 0 | — | ✓ | apex.js×3, game.js×8, frame-lights.js×2, tuner-panel.js, chunked.js×3, glx.js |
 | `lampReach` | LAMP REACH AHEAD | 1 … 4 | 1 | — |   | frame-lights.js×2 |
-| `lampNearClamp` | LAMP NEAR CLAMP | 1 … 8.5 | 4 | `uLampNearClamp` | ✓ | game.js, atmosphere.js, glx.js×2 |
+| `lampNearClamp` | LAMP NEAR CLAMP | 1 … 8.5 | 4 | `uLampNearClamp` | ✓ | game.js, atmosphere.js×2, glx.js×2 |
 
 ## NIGHT GLOW & BLOOM  (10)
 
@@ -643,7 +643,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `tailLightMul` | TAIL-LIGHT GLOW | 0 … 2.5 | 1 | — |   | game.js, frame-lights.js |
 | `brakeGlowMul` | BRAKE FLARE | 0 … 2.5 | 1 | — |   | game.js, frame-lights.js |
 | `tailRange` | TAIL-LIGHT RANGE | 60 … 310 | 160 | — |   | game.js×2, frame-lights.js×2 |
-| `tailLightEmit` | TAIL-LIGHT EMIT | 0 … 1 | 0 | — |   | game.js, atmosphere.js, frame-lights.js |
+| `tailLightEmit` | TAIL-LIGHT EMIT | 0 … 1 | 0 | — |   | game.js, atmosphere.js×2, frame-lights.js |
 | `tailFade` | TAIL-LIGHT FADE | 0 … 60 | 0 | — | ✓ | frame-lights.js×2 |
 | `carSunGlint` | PAINT SUN GLINT | 0 … 30 | 12 | `uCarSunGlint` | ✓ | glx.js×2 |
 | `carSparkle` | METALLIC SPARKLE | 0 … 4 | 1.6 | `uCarSparkle` | ✓ | glx.js×2 |

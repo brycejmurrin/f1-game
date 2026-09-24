@@ -1120,6 +1120,9 @@ const isPractice = () => practiceMode || isTimeTrial();
 // and Quali already do to `cars` after makeCars(); the rival's stats come from
 // the deltas argument DriverRatings.get() already takes for career development.
 let duelMode = false;
+// The SETTING sticks (like difficulty), but a duel is a one-off practice race:
+// never a championship round, a time trial (Daily included) or a quali lap.
+const duelOn = () => duelMode && !isChampionship() && !isTimeTrial() && !isQuali();
 // WHICH legend the duel rival is, or "" for the ordinary fastest-car duel. A
 // race SETTING like duelMode itself, so it survives a restart the same way.
 let duelLegend = "";
@@ -2432,6 +2435,10 @@ function reloadFlybyShots() {
 // Keep one prepared track, never a cache of whole circuits. A generation
 // prevents late scenery downloads (including A -> B -> A) from committing.
 const _menuGate = { warm: 0, generation: 0, ready: "", track: null };
+// The menu finished building THIS selection (circuit, time, weather): only then is
+// `track` the world the loading screen may fly, light and grid. A fast tap to RACE!
+// before the idle build ran left the OLD circuit in `track`.
+const menuWorld = () => !!track && _menuGate.track === track && _menuGate.ready === [trackIdx, raceTimeOfDay, raceWeather].join("|");
 let flybyBuildTimer = 0;
 const MENU_IDLE_MS = 1200;
 let _menuInputAt = 0;
@@ -2448,6 +2455,11 @@ async function menuIdle(current) {
     await new Promise((r) => setTimeout(r, wait));
     if (!current()) return false;
   }
+}
+// Dark sessions: bake the lamp pools in 8 ms slices now, so RACE!'s sync bake hits the cache (lamp-bake.js prebake).
+async function menuLampBake(current) {
+  const step = current() && _atmo.prebakeLamps();
+  while (step && current() && !step(8)) await new Promise((r) => setTimeout(r, 8));
 }
 function scheduleFlybyTrack(settle) {
   clearTimeout(flybyBuildTimer);
@@ -2472,7 +2484,7 @@ function scheduleFlybyTrack(settle) {
       // car's meshes and livery upload 32 ms apart; a warm frame drawn first
       // minted and uploaded all ~22 atlases in one 3-4 s task.
       if (_menuGate.ready === key && _menuGate.track === track) {
-        await prepareMenuCarAssets(current); if (await menuIdle(current)) _menuGate.warm = 2; return;
+        await prepareMenuCarAssets(current); await menuLampBake(current); if (await menuIdle(current)) _menuGate.warm = 2; return;
       }
       // The build holds the main thread for 1-3 s: never start it while the
       // player is still working the picker or RACE SETTINGS (a TIME OF DAY step
@@ -2485,6 +2497,7 @@ function scheduleFlybyTrack(settle) {
       if (current() && track.meshes && track.meshes.pitSignTex && typeof gfx.uploadTexture === "function")
         gfx.uploadTexture(track.meshes.pitSignTex);
       await prepareMenuCarAssets(current);
+      await menuLampBake(current);
       if (await menuIdle(current)) _menuGate.warm = 2;
     } catch (e) { if (current()) Log.warn("gfx", "track preparation failed", e); }
   };
@@ -2723,7 +2736,7 @@ async function startRaceBody() {
     qualiField = cars;
     cars = [player];
     lapsTarget = 1;
-  } else if (duelMode) {
+  } else if (duelOn()) {
     // ONE RIVAL, BUMPED — the same trim Quali and Time Trial do on either side
     // of this branch. js/race/duel.js owns what the format means.
     const rival = Duel.pick(cars);
@@ -3492,7 +3505,7 @@ const { buildResults, buildTTResults, buildStandings, buildChampion } = GameResu
 const hud = GameHud.create(G);
 const updateHud = hud.updateHud;
 // Session atmosphere: applyRaceSettings + per-track bias (js/lighting/atmosphere.js).
-const applyRaceSettings = Atmosphere.create(G).applyRaceSettings;
+const _atmo = Atmosphere.create(G), applyRaceSettings = _atmo.applyRaceSettings;
 // CAR SETUP panel UI (js/garage/setup-sheet.js).
 const { buildSetup, openSetup } = SetupUI.create(G);
 // Select-screen UI (js/ui/select-screen.js).
@@ -3619,7 +3632,7 @@ function menuGridCars() {
 function flybyGridOrder() {
   if (!player) return null;
   if (isQuali() || isTimeTrial()) return [player];
-  if (duelMode) { const r = Duel.pick(cars); return r ? [r, player] : [player]; }
+  if (duelOn()) { const r = Duel.pick(cars); cars = r ? [player, r] : [player]; }   // startRace's trim; the pair is then gridded like any field
   const base = gridFromQuali() ? quali.order(cars) : SeasonCal.grid(cars, season);
   if (gridRule() === "random" && !base) return null;
   const pre = gridOrderFor(base);
@@ -3630,7 +3643,8 @@ function flybyGridOrder() {
 }
 
 function raceIntro(go) {
-  menuGridCars();
+  const world = menuWorld();
+  if (world) menuGridCars();
   // LIGHT THE FLYBY WITH WHAT THE MENU CHOSE, BEFORE IT STARTS. run() fires `go`
   // (startRace) "once the card is up", and startRace only reaches
   // applyRaceSettings() after loadTrack() and makeCars() — so the whole cinematic
@@ -3639,12 +3653,13 @@ function raceIntro(go) {
   // rebuilds geometry and resolves no lighting at all. applyRaceSettings() is
   // idempotent by construction (every lighting-slider tick re-runs it), so this
   // costs one pass and startRace still re-applies after its rebuild.
-  if (track) applyRaceSettings();
+  if (world) applyRaceSettings();
   // And fly the shots the EDITOR saved, for the same reason: a list edited in
   // the pause menu is only read here, so every run picks up the latest one.
   reloadFlybyShots();
   if (!flybyShots) flybyShots = FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0, FlybySeq.slotKnown());   // a different flyby each load (never the sim RNG); an editor-saved list plays as authored
-  if (track) FlybySeq.warm(track, flybyShots);   // plan every shot now, not at its cut
+  if (flybyShots && !FlybySeq.slotKnown()) flybyShots = FlybySeq.withoutSlot(flybyShots);   // a random grid: nobody knows your slot yet
+  if (world) FlybySeq.warm(track, flybyShots);   // plan the opening shots now, the rest in slices before their cuts
   loadingScreen.run(loadingInfo(), go);
 }
 /** WHAT THE LOADING SCREEN DESCRIBES: the circuit about to be raced, this
@@ -3660,11 +3675,11 @@ function loadingInfo() {
     // WHAT SESSION THIS IS, for the announcer (js/audio/announcer.js). It read
     // the same paragraph before a qualifying hour, a duel with a legend and a
     // Grand Prix, because none of this reached it.
-    session, practice: isPractice(), duel: duelMode, duelLegend, flow,
+    session, practice: isPractice(), duel: duelOn(), duelLegend, flow,
     // Only fly over a world that is actually built. A missed pre-build (a
     // circuit switched a moment ago, scenery still downloading) would put a
     // black hold where the cinematic should be, which reads as a hang.
-    hasWorld: !!track && _menuGate.track === track,
+    hasWorld: menuWorld(),
   };
 }
 // ACTIVE AERO activation zones (js/physics/aero-zones.js) — pure circuit geometry.
