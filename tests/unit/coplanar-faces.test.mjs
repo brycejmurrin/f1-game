@@ -177,6 +177,10 @@ const { overlapArea } = createRequire(import.meta.url)("../../tools/track/coplan
 // window (584 spots measured at 300 m before TrackGeom.MIN_SEP, 289 after). At
 // the old 150 m window no circuit grew (106 -> 99); every raise here is a pair
 // the wider window now SEES, not a new fight.
+// Same day, the 11 surveyed-elevation circuits got their profile by ARC
+// fraction instead of point index (fuji's was 0.29 lap out of place, up to
+// 15 m wrong): their ground moved by metres and the counts reshuffled —
+// anderstorp/jerez/mont_tremblant/okayama down, buddh/donington/fuji/zolder up.
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "track", "coplanar-baseline.json"), "utf8"),
 );
@@ -232,8 +236,10 @@ test("baseline has no stale entries — a cap above the measured count is a lie"
 // the El Bunker wall (madrid.js groundedSegments "madrid-el-bunker"), 0.4 m2,
 // fighting only beyond 102 m. Exact, both ways, like the baselines above.
 // At the 300 m window (FIGHT_MAX, 2026-09-24) its sibling arm 4.8 mm off the
-// same wall (0.3 m2, fights from 155 m) counts too: madrid 2.
-const OVERHEAD_BASELINE = { madrid: 2 };
+// same wall (0.3 m2, fights from 155 m) counts too: madrid 2. Both cleared the
+// same day when the terrain stopped trenching the verge of a descending road
+// (mesh.js channel carve): the lamps ground on that terrain. None left.
+const OVERHEAD_BASELINE = {};
 let overheadCached = null;
 const overheadSweep = () => (overheadCached ||= JSON.parse(execFileSync(
   process.execPath,
