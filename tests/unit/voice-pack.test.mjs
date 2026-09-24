@@ -95,6 +95,30 @@ test("every engineer line with no lap time in it composes from the pack, for eve
   assert.deepEqual([...new Set(misses)], [], "lines the pack cannot say (re-run tools/gen/voicepack.mjs)");
 });
 
+test("every tyre and pit call the engineer (js/race/engineer.js) makes composes from the pack", () => {
+  const RE = sandbox(["js/core/mat4.js", "js/physics/consts.js", "js/data/teams.js", "js/car/parts.js",
+    "js/physics/tyre-model.js", "js/race/engineer.js"]).RaceEngineer;
+  const E = RE.create({});
+  const base = { wear: 0, step: -1, axle: 0, front: true, graining: 0, blistering: 0, belowWindow: 0, outLap: false,
+    wrongTread: false, freeStop: false, wet: false, rainInLaps: null, lap: 5, lapsToStop: null, nextCode: null,
+    rivalBoxed: null, marginS: null, pitLoss: null };
+  const cases = [];
+  for (const wet of [false, true]) cases.push({ wrongTread: true, wet });
+  cases.push({ freeStop: true, marginS: 3 }, { freeStop: true, pitLoss: 21 }, { freeStop: true });
+  for (const t of SB.Teams.LIST) for (const d of t.drivers || []) cases.push({ rivalBoxed: d.code, lapsToStop: 3 });
+  for (const r of [1, 2, 4]) cases.push({ rainInLaps: r, lapsToStop: 9, lap: 58 }, { rainInLaps: r });
+  cases.push({ blistering: 1 }, { wear: 1.2 }, { graining: 1 }, { outLap: true, belowWindow: 1 }, { axle: 0.5, front: true }, { axle: 0.5, front: false });
+  for (const c of ["S", "M", "H", "I", "W", null]) cases.push({ lapsToStop: 0, nextCode: c }, { lapsToStop: 1, nextCode: c });
+  for (let st = 0; st < RE.WEAR_STEPS.length; st++) cases.push({ step: st });
+  const misses = [];
+  for (const c of cases) {
+    const got = E.callFor(Object.assign({}, base, c));
+    const text = got && got[0];
+    if (text && !VoicePack.compose(say(text), hasKey)) misses.push(text);
+  }
+  assert.deepEqual([...new Set(misses)], [], "engineer calls the pack cannot say (re-run tools/gen/voicepack.mjs)");
+});
+
 test("the positions, gaps and spotter calls a line can carry are all recorded", () => {
   for (let p = 1; p <= 22; p++) assert.ok(hasKey("p " + p), "P" + p);
   for (const g of [0.1, 0.9, 1.4, 5.5, 9.9]) assert.ok(hasKey(RadioLines.gapText(g)), "gap " + g);
@@ -103,12 +127,12 @@ test("the positions, gaps and spotter calls a line can carry are all recorded", 
 
 // ── 3. RadioVoice hands a covered line to the pack ──────────────────────────
 
-function radio({ covers = true, packOn } = {}) {
+function radio({ covers = true, packOn, spotterLeft = 0 } = {}) {
   const spoken = [], packCalls = [];
   const synth = { speaking: false, speak(u) { spoken.push(u.text); }, cancel() {}, resume() {}, getVoices: () => [] };
   let onEnd = null;
   const fakePack = {
-    ensure() { return "ready"; }, stop() { packCalls.push("stop"); }, busy: () => false,
+    ensure() { return "ready"; }, stop() { packCalls.push("stop"); }, busy: () => false, remaining: (ch) => (ch === "spotter" ? spotterLeft : 0),
     speak(id, text, o) { packCalls.push({ id, text, leadS: o.leadS }); if (!covers) return false; onEnd = o.onEnd; return true; },
     debug: () => ({}),
   };
@@ -208,4 +232,113 @@ test("the spotter speaks only from the pack, and not over the engineer", () => {
   G.radio = { pack: null };
   for (let i = 0; i < 30; i++) s.update(1 / 60);
   assert.equal(said.length, 1, "no pack, no spotter — synthesis is too slow for 'car left'");
+});
+
+// ── 5. Regressions from the PR #294 audit ───────────────────────────────────
+
+test("a side change the spotter cannot say yet stays pending, and is said when the channel frees — never lost", () => {
+  const st = Spotter.fresh();
+  let free = false;
+  const out = [];
+  for (let i = 0; i < 120; i++) {           // 2 s alongside, channel busy the whole time
+    const k = Spotter.step(st, 1, 1 / 60, () => free);
+    if (k) out.push(k);
+  }
+  assert.deepEqual(out, [], "nothing said while the engineer has the channel");
+  free = true;
+  for (let i = 0; i < 30; i++) { const k = Spotter.step(st, 1, 1 / 60, () => free); if (k) out.push(k); }
+  assert.deepEqual(out, ["car left"], "the call is made the moment it can be — not skipped to 'still there'");
+});
+
+test("two spotter calls are at least GAP_S apart (lights-out is a wall of cars)", () => {
+  const st = Spotter.fresh();
+  const at = [];
+  let t = 0;
+  const seq = [1, 3, 2, 0];                  // left, three wide, right, clear — each held only 0.3 s
+  for (const occ of seq) for (let i = 0; i < 18; i++) { t += 1 / 60; const k = Spotter.step(st, occ, 1 / 60); if (k) at.push(t); }
+  for (let i = 1; i < at.length; i++) assert.ok(at[i] - at[i - 1] >= Spotter.GAP_S - 1e-9, `calls ${at.map((x) => x.toFixed(2))}`);
+});
+
+test("the spotter is silent while paused and once the player has taken the flag", () => {
+  const said = [];
+  const pack = { ensure() {}, busy: () => false, speak: (id, t) => { said.push(t); return true; } };
+  const me = { s: 500, x: 0, speed: 60 };
+  const G = { state: "race", soundOn: true, paused: true, player: me, cars: [me, { s: 501, x: -2.5 }], track: { total: 5000 },
+    vTop: () => 90, radio: { pack, volume: () => 1, busy: () => false }, store: { get: (k, d) => d, set() {} } };
+  const s = Spotter.create(G);
+  for (let i = 0; i < 30; i++) s.update(1 / 60);
+  G.paused = false; me.finished = true;
+  for (let i = 0; i < 30; i++) s.update(1 / 60);
+  assert.deepEqual(said, []);
+  me.finished = false;
+  G.radio.busy = () => true;                 // an engineer line waiting out its courtesy figure
+  for (let i = 0; i < 30; i++) s.update(1 / 60);
+  assert.deepEqual(said, [], "not over an engineer line that is about to start");
+  G.radio.busy = () => false;
+  for (let i = 0; i < 30; i++) s.update(1 / 60);
+  assert.deepEqual(said, ["Car left."], "and called as soon as the channel is clear");
+});
+
+test("VoicePack keeps one transmission per channel: the engineer never cuts the spotter off", async () => {
+  const man = { clips: { "car left": [0, 4, 0.5], "box box box": [4, 4, 0.6] } };
+  const handles = [];
+  const GA = {
+    now: () => 0, ctxGen: () => 1,
+    decodeClip: () => Promise.resolve({ duration: 0.5 }),
+    radioVoice: (parts, at, o) => { const h = { ch: o.channel, stopped: false, end: at + 0.5, stop() { h.stopped = true; } }; handles.push(h); return h; },
+  };
+  const sb = sandbox(["js/audio/voice-pack.js"], {
+    GameAudio: GA,
+    fetch: (u) => Promise.resolve({ ok: true, json: () => Promise.resolve(man), arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }),
+  });
+  const P = sb.VoicePack.create({});
+  P.ensure("george");
+  await new Promise((r) => setImmediate(r));
+  await new Promise((r) => setImmediate(r));
+  assert.equal(P.ready("george"), true);
+  assert.equal(P.speak("george", "car left", { channel: "spotter" }), true);
+  await new Promise((r) => setImmediate(r));
+  assert.equal(P.busy("spotter"), true);
+  P.stop("radio");                           // what RadioVoice.stop() now does
+  assert.equal(handles[0].stopped, false, "an engineer preempt leaves the spotter call alone");
+  assert.equal(P.speak("george", "box box box", { channel: "radio" }), true);
+  await new Promise((r) => setImmediate(r));
+  assert.equal(handles[0].stopped, false, "a new engineer line does not cut the spotter either");
+  P.stop();
+  assert.equal(handles.every((h) => h.stopped), true, "stop() with no channel cuts everything");
+});
+
+test("a failed fetch is retried later instead of disabling the pack for the session", async () => {
+  let calls = 0;
+  const sb = sandbox(["js/audio/voice-pack.js"], {
+    GameAudio: { now: () => 0 },
+    fetch: () => { calls++; return Promise.resolve({ ok: false, status: 404 }); },
+  });
+  const P = sb.VoicePack.create({});
+  P.ensure("george");
+  for (let i = 0; i < 4; i++) await new Promise((r) => setImmediate(r));
+  assert.equal(P.ensure("george"), "failed", "still failed inside the retry window");
+  const n = calls;
+  const realNow = Date.now;
+  sb.Date = { now: () => realNow() + 31000 };
+  vm.runInContext("Date = this.Date", sb);
+  P.ensure("george");
+  assert.ok(calls > n, "fetched again after the retry window");
+});
+
+test("'40%' is spoken as a word, so the tyre call comes from the pack", () => {
+  assert.equal(say("TYRES AT 40%"), "tyres at 40 percent");
+  assert.ok(VoicePack.compose(say("TYRES AT 85%"), hasKey), "85 and 'percent' are both recorded");
+  assert.ok(VoicePack.compose(say("VER HAS BOXED — UNDERCUT ON, BOX NOW OR PUSH 2 LAPS"), hasKey), "a rival's code is its surname");
+});
+
+test("an engineer line waits for a spotter call on the air, and RadioVoice reports itself busy meanwhile", () => {
+  const r = radio({ spotterLeft: 0.5 });
+  assert.equal(r.v.say("BOX BOX BOX", 3, "info", 0.2), true);
+  const call = r.packCalls.find((c) => c.id);
+  assert.ok(call.leadS >= 0.58, `the line starts after the spotter's 0.5 s: lead ${call.leadS}`);
+  assert.equal(r.v.busy(), true, "the spotter asks this before it keys up");
+  r.end();
+  assert.equal(r.v.busy(), false);
+  assert.equal(RadioVoice.inert().busy(), false);
 });

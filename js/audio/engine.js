@@ -472,6 +472,7 @@ const GameAudio = (function () {
     applySessionType();
 
     ctx = new AC();
+    ctxGen++;   // buffers decoded on the old context are stale (js/audio/voice-pack.js)
     master = ctx.createGain();
     master.gain.value = isEnabled ? 0.8 : 0;
     // MASTER LIMITER. Engine + wind + skid + rain + thunder + music summed
@@ -2495,7 +2496,7 @@ const GameAudio = (function () {
    *  Both ends of the band, unlike the plain noise() one-shots above: a click
    *  with its bottom left in reads as a thud off the car, not a mic. */
   function radioBurst(peak, decay, hi, at) {
-    if (!(peak > 0)) return;
+    if (!(peak > 0)) return null;
     const src = ctx.createBufferSource();
     const off = bindNoise(src, decay + 0.15);
     const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = RADIO_LO;
@@ -2506,6 +2507,7 @@ const GameAudio = (function () {
     src.start(at, off);
     src.stop(at + decay + 0.1);
     src.onended = () => { src.disconnect(); hp.disconnect(); lp.disconnect(); g.disconnect(); };
+    return src;
   }
 
   /** Cut a transmission short — the card was hidden, the game was paused, or
@@ -2594,6 +2596,7 @@ const GameAudio = (function () {
     return new Promise((res, rej) => ctx.decodeAudioData(ab, res, rej));
   }
   let voicesLive = 0;
+  let ctxGen = 0;
   const CLIP_OVERLAP_S = 0.05;
   /** Play decoded clips back to back from `at` (numbers in `parts` are pauses,
    *  in seconds). Returns { end, stop } or null when nothing can play. */
@@ -2638,9 +2641,10 @@ const GameAudio = (function () {
     if (!srcs.length) { dead = true; for (const n of nodes) { try { n.disconnect(); } catch (e) { /* gone */ } } return null; }
     voicesLive++;
     srcs[srcs.length - 1].onended = teardown;
+    let tail = null;   // the closing squelch: cancelled with the line, or it lands inside whatever cut it
     if (ch.click > 0 && radioFx > 0) {
       radioBurst(ch.click * radioFx, 0.04, ch.hi, Math.max(now(), t0 - 0.05));
-      radioBurst(ch.click * 1.3 * radioFx, 0.06, ch.hi, t + 0.02);
+      tail = radioBurst(ch.click * 1.3 * radioFx, 0.06, ch.hi, t + 0.02);
     }
     return {
       end: t,
@@ -2649,6 +2653,7 @@ const GameAudio = (function () {
         const tt = now();
         try { g.gain.setTargetAtTime(0, tt, 0.015); } catch (e) { /* torn down */ }
         for (const s of srcs) { try { s.stop(tt + 0.06); } catch (e) { /* not started, or ended */ } }
+        if (tail) { try { tail.stop(tt); } catch (e) { /* already played */ } }
         setTimeout(teardown, 120);
       },
     };
@@ -2814,6 +2819,7 @@ const GameAudio = (function () {
     now,
     radioVoice,
     radioVoicesLive: () => voicesLive,
+    ctxGen: () => ctxGen,
     radioSting,
     radioStingStop,
     setRadioFx,

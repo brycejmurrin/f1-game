@@ -126,6 +126,7 @@ const RadioVoice = (function () {
     s = s.replace(/\+(\d+)s\b/gi, "plus $1 seconds");
     s = s.replace(/\b(\d+)s\b/gi, "$1 seconds");
     s = s.replace(/(\d)\/(\d)/g, "$1 of $2");
+    s = s.replace(/(\d)\s*%/g, "$1 percent");   // "TYRES AT 40%": engines disagree on "%", the voice pack records the word
     // The caps pass runs BEFORE the P-number split, not after: splitting first
     // leaves a bare "P" that no longer matches KEEP_CAPS, and the position gets
     // read as the letter "p".
@@ -176,7 +177,7 @@ const RadioVoice = (function () {
   function inert() {
     return Object.freeze({
       say: () => false, stop: () => {}, unlock: () => {}, preview: () => false, pack: null, volume: () => 0,
-      setPackOn: () => {}, packOn: () => false,
+      setPackOn: () => {}, packOn: () => false, busy: () => false,
       voiceList: () => [], tuneFor: (sp) => Object.assign(toneFor(sp, null), { name: "" }), setTune: () => false,
       setEnabled: () => {}, setVolume: (v) => v, available: () => false,
       debug: () => ({ available: false, enabled: false, voices: 0, last: null, asked: 0, started: 0 }),
@@ -281,7 +282,7 @@ const RadioVoice = (function () {
       // Before cancel(): the callback it triggers must already see itself as
       // stale, whether the engine fires it synchronously or a turn later.
       current = null;
-      if (pack) pack.stop();
+      if (pack) pack.stop("radio");   // the engineer's own line only — never a spotter call mid-word
       try { synth.cancel(); } catch (e) { /* nothing queued, or a synth mid-teardown */ }
       if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false);
       // The hiss bed belongs to the line, so it goes when the line does —
@@ -291,6 +292,10 @@ const RadioVoice = (function () {
     }
     function say(msg, life, kind, lead) {
       const on = kind === "comm" ? !!(G.announcer && G.announcer.enabled && G.announcer.enabled()) : enabled;
+      // A spotter call on the air finishes first: the line waits it out as part
+      // of its lead, and pays for the wait out of the card's budget like the cue.
+      const hold = pack ? pack.remaining("spotter") : 0;
+      if (hold > 0) lead = Math.max(+lead || 0, hold + 0.08);
       const p = plan({ msg, life, kind, lead, enabled: on, soundOn: !!G.soundOn, state: G.state, api: true, volume, tune });
       last = { text: p.text, reason: p.reason || "spoke", rate: p.rate, budgetMs: p.budgetMs, leadMs: p.leadMs };
       if (!p.speak) return false;
@@ -481,6 +486,8 @@ const RadioVoice = (function () {
       volume: () => volume,
       setPackOn(b) { packOn = !!b; G.store.set("radioPack", packOn); if (packOn && enabled && pack) pack.ensure(PACK_VOICE.radio); },
       packOn: () => !!(pack && packOn),
+      /** Is the radio talking, or about to (a line waiting out its cue)? The spotter asks before it keys up. */
+      busy: () => !!(current || pending != null),
       setVolume(v) { volume = Math.max(0, Math.min(1, +v || 0)); return volume; },
       available: () => true,
       debug: () => ({ available: true, enabled, voices: voicesFor(false).length, voicesAny: voicesFor(true).length, last, asked, started,

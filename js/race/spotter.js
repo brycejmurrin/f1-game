@@ -23,9 +23,10 @@ const Spotter = (() => {
   const SIDE_MAX = 4.2;        // wider than this is a lane over, not alongside
   const DEBOUNCE_S = 0.2;      // a side must hold this long before it changes the call
   const STILL_S = 4;           // one "still there" after this long alongside
+  const GAP_S = 0.6;           // at least this between two calls: lights-out is a wall of left/right/three-wide
   const LEFT = 1, RIGHT = 2;
 
-  function fresh() { return { cur: 0, cand: 0, candT: 0, t: 0, lastCallT: 0, called: false, stillSaid: false }; }
+  function fresh() { return { cur: 0, cand: 0, candT: 0, t: 0, lastCallT: -1e9, called: false, stillSaid: false }; }
 
   /** Which sides are occupied: bit 1 left, bit 2 right. Lateral x is +right. */
   function occupancy(player, cars, lapLen) {
@@ -45,18 +46,24 @@ const Spotter = (() => {
     return occ;
   }
 
-  /** Advance the state by dt with the current occupancy; returns a KEYS key or "". Pure. */
-  function step(st, occ, dt) {
+  /** Advance the state by dt with the current occupancy; returns a KEYS key or "". Pure.
+   *  `canSpeak(key)` is asked BEFORE a call is committed: when the channel is
+   *  taken the side change stays pending and is called on a later tick,
+   *  instead of being marked as said and lost — "car left" is the one call
+   *  that must never go missing. Omitted, every call can be spoken. */
+  function step(st, occ, dt, canSpeak) {
     st.t += dt;
     if (occ !== st.cand) { st.cand = occ; st.candT = 0; } else st.candT += dt;
+    const may = (key) => st.t - st.lastCallT >= GAP_S && (!canSpeak || canSpeak(key));
     if (occ !== st.cur && st.candT >= DEBOUNCE_S) {
       const prev = st.cur;
-      st.cur = occ;
       let key = "";
       if (occ === (LEFT | RIGHT) && prev !== occ) key = "three wide";
       else if ((occ & LEFT) && !(prev & LEFT)) key = "car left";
       else if ((occ & RIGHT) && !(prev & RIGHT)) key = "car right";
       else if (occ === 0 && st.called) key = "clear";
+      if (key && !may(key)) return "";                 // not yet: the transition stays pending
+      st.cur = occ;
       if (key) {
         st.lastCallT = st.t;
         st.called = occ !== 0;
@@ -64,7 +71,7 @@ const Spotter = (() => {
       }
       return key;
     }
-    if (st.cur !== 0 && st.called && !st.stillSaid && st.t - st.lastCallT >= STILL_S) {
+    if (st.cur !== 0 && st.called && !st.stillSaid && st.t - st.lastCallT >= STILL_S && may("still there")) {
       st.stillSaid = true;
       st.lastCallT = st.t;
       return "still there";
@@ -79,21 +86,22 @@ const Spotter = (() => {
     function update(dt) {
       const pack = G.radio && G.radio.pack;
       const p = G.player;
-      if (!pack || !on() || !G.soundOn || G.state !== "race" || !p || !G.track) { st = fresh(); return ""; }
+      if (!pack || !on() || !G.soundOn || G.state !== "race" || G.paused || !p || p.finished || !G.track) { st = fresh(); return ""; }
       if (G.cars !== lastCars) { lastCars = G.cars; st = fresh(); }
       pack.ensure("george");
       if (Math.abs(p.speed || 0) < G.vTop() * 0.12 || (p.pitState && p.pitState !== "none")) { st = fresh(); return ""; }
-      const key = step(st, occupancy(p, G.cars, G.track.total), dt);
-      if (!key || pack.busy()) return "";
+      // The channel is free only when nothing is on it or about to be: the
+      // pack, the synthesiser, or an engineer line waiting out its cue.
       const synth = typeof window !== "undefined" && window.speechSynthesis;
-      if (synth && synth.speaking) return "";            // the engineer has the channel
-      if (!pack.speak("george", KEYS[key], { channel: "spotter", volume: G.radio.volume ? G.radio.volume() : 1 })) return "";
-      calls++; last = key;
+      const free = () => !pack.busy() && !(synth && synth.speaking) && !(G.radio.busy && G.radio.busy());
+      const speak = (key) => free() && pack.speak("george", KEYS[key], { channel: "spotter", volume: G.radio.volume ? G.radio.volume() : 1 });
+      const key = step(st, occupancy(p, G.cars, G.track.total), dt, speak);
+      if (key) { calls++; last = key; }
       return key;
     }
 
     return { update, debug: () => ({ on: on(), calls, last, cur: st.cur }) };
   }
 
-  return Object.freeze({ create, step, occupancy, fresh, KEYS, OVERLAP_ARC, SIDE_MIN, SIDE_MAX, DEBOUNCE_S, STILL_S });
+  return Object.freeze({ create, step, occupancy, fresh, KEYS, OVERLAP_ARC, SIDE_MIN, SIDE_MAX, DEBOUNCE_S, STILL_S, GAP_S });
 })();

@@ -70,14 +70,27 @@ export function phrases() {
   };
   for (const [k, pool] of Object.entries(sb.RadioLines.POOLS)) if (k.startsWith("eng.")) for (const t of pool) literalRuns(t);
   const eng = fs.readFileSync(path.join(ROOT, "js/race/engineer.js"), "utf8");
-  for (const m of eng.matchAll(/"([A-Z][A-Z0-9 ,.'%!?—–-]{2,})"/g)) literalRuns(m[1].replace(/\d+/g, "{n}").replace(/%/g, " PERCENT"));
+  // Every string literal carrying an upper-case word, including the pieces a
+  // line is concatenated from (", ABOUT ", " LAP"). A leading "s" is the
+  // seconds suffix of a number before it ("21s LOST"), which speakable()
+  // already turns into the word "seconds".
+  for (const m of eng.matchAll(/"([^"\n]*[A-Z]{2,}[^"\n]*)"/g)) {
+    literalRuns(m[1].replace(/^s\b/, "").replace(/\d+/g, "{n}").replace(/%/g, " PERCENT"));
+  }
   add("percent", "percent");
   for (let n = 1; n <= 22; n++) add("p " + n, "P " + n);
-  for (let n = 0; n <= 60; n++) add(String(n), String(n));
+  for (let n = 0; n <= 100; n++) add(String(n), String(n));   // laps, laps to go, tyre percent
   for (let d = 1; d < 100; d++) { const g = (d / 10).toFixed(1); add(g, g); }
   add("seconds", "seconds");
   const names = [];
-  for (const t of sb.TEAMS || sb.Teams?.LIST || []) for (const d of t.drivers || []) names.push(d.name);
+  for (const t of sb.TEAMS || sb.Teams?.LIST || []) for (const d of t.drivers || []) {
+    names.push(d.name);
+    // The engineer names a rival by timing-screen code ("VER HAS BOXED"); on
+    // the radio that is the surname, never the three letters read as a word.
+    if (d.code) add(String(d.code).toLowerCase(), String(d.name).trim().split(/\s+/).pop());
+  }
+  // The next compound, which the pit call gives by its letter ("BOX BOX BOX — M").
+  for (const [k, t] of Object.entries({ s: "Softs", m: "Mediums", h: "Hards", i: "Inters", w: "Wets" })) add(k, t);
   for (const l of sb.Legends?.LIST || sb.LEGENDS || []) names.push(l.name);
   for (const n of names) { const s = String(n).trim().split(/\s+/).pop(); if (s) add(s.toLowerCase(), s); }
   for (const [key, text] of Object.entries(sb.Spotter.KEYS)) add(key, text);
