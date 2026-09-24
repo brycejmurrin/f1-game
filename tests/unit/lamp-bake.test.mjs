@@ -168,6 +168,22 @@ test("the map stays under its texel budget on a circuit-sized extent", () => {
   assert.ok(b.cell >= 1, "never finer than 1 m");
 });
 
+test("the second layer bakes the bounce fill (no cone, soft N.L floor)", () => {
+  const LB = load();
+  const L = LAMP_A;
+  const b = LB.bake([...L], () => 0, 4.0);
+  const i = Math.floor(b.w / 2) + 3, j = Math.floor(b.h / 2);
+  const px = b.x0 + (i + 0.5) * b.cell, pz = b.z0 + (j + 0.5) * b.cell;
+  const LX = L[0] - px, LY = L[1], LZ = L[2] - pz, dist = Math.hypot(LX, LY, LZ);
+  const win = Math.min(1, Math.max(0, 1 - (dist / L[6]) ** 4));
+  const att = (win * win) / (Math.max(dist, 4) ** 2 + 1);
+  const want = L[3] * att * (0.55 + 0.45 * Math.max(0, LY / dist));
+  const k = (b.h * b.w + j * b.w + i) * 4;              // layer 2 = rows [h, 2h)
+  assert.equal(b.data.length, b.w * b.h * 8, "two stacked layers");
+  assert.ok(Math.abs(halfToFloat(b.data[k]) - want) / want < 2e-3, `bounce ${halfToFloat(b.data[k])} vs ${want}`);
+  assert.equal(halfToFloat(b.data[k + 3]), 0, "bounce layer carries the height too");
+});
+
 test("toHalf round-trips irradiance-range values", () => {
   const LB = load();
   for (const v of [0, 1e-3, 0.25, 1, 3.7, 150, 60000]) {
