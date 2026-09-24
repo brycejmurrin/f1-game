@@ -340,8 +340,10 @@ test("the audit still measures: a planted slab and the forest crown are found", 
   // over the centreline at half-lap, handed to auditProps as the props buffer
   // of a real built track. Plus mont_tremblant's crown, the one real object.
   const fl = fleet(), mt = fl.get("mont_tremblant");
-  assert.ok(mt.max >= 4.9 && mt.max <= 5.0,
-    `mont_tremblant's crown should read ~4.97 m; got ${mt.max}. If it moved, ` +
+  // 4.97 -> 4.79 on 2026-09-24: its road heights now come from the survey by
+  // arc fraction (they were read by point index, up to 8.9 m off here).
+  assert.ok(mt.max >= 4.7 && mt.max <= 4.9,
+    `mont_tremblant's crown should read ~4.79 m; got ${mt.max}. If it moved, ` +
     "re-measure and update the baseline; if the audit stopped finding it, fix the audit.");
 
   const t = ctxOnce().Tracks.build(ctxOnce().Tracks.LIST.find((d) => d.id === "shanghai"));
