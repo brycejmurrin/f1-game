@@ -65,6 +65,9 @@ const RadioLines = (function () {
     "eng.lastDefend": ["HOLD {behind} OFF, {gap} BEHIND", "LAST ONE. {behind} IS {gap} BACK, NO MISTAKES"],
     "eng.lastLead": ["LAST LAP, YOU'RE LEADING. BRING IT HOME", "ONE MORE. NICE AND CLEAN FOR THE WIN"],
     "eng.lastCalm": ["LAST LAP. BRING HOME P{pos}", "ONE TO GO. KEEP IT ON THE ROAD"],
+    // The RADIO CHECK over the loading flyby's last shot (js/ui/loading-screen.js),
+    // the camera settled behind the player's car in grid slot {pos}.
+    "eng.grid": ["P{pos}. SETTLE IN", "P{pos}. STAY CALM", "P{pos}. STAY FOCUSED", "P{pos}. NO MISTAKES"],
     "eng.win": ["YES! YOU WIN THE RACE!", "GET IN THERE! RACE WINNER!", "P1! WHAT A DRIVE!"],
     "eng.podium": ["P{pos}! PODIUM, GREAT JOB", "ON THE PODIUM! P{pos}, WELL DRIVEN"],
     "eng.points": ["P{pos}. GOOD POINTS TODAY", "P{pos}, SOLID RESULT. THANK YOU"],

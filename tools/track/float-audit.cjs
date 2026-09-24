@@ -154,6 +154,9 @@ function buildContext(opts) {
   runFile("js/track/tracks.js");
 
   if (!ctx.Tracks || !ctx.Tracks.LIST) throw new Error("Tracks.LIST missing");
+  // Prim ranges [s,e) index the raw props buffer: build uncompacted, as
+  // tools/lib/track-build-vm.cjs does (TrackHiddenFaces.compact moves them).
+  ctx.Tracks.setCompactProps(false);
   return { Tracks: ctx.Tracks, TrackSurface: ctx.TrackSurface, TrackGeom: ctx.TrackGeom, prims };
 }
 
