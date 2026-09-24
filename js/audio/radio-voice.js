@@ -80,6 +80,9 @@ const RadioVoice = (function () {
    * announcer's whole preference chain (js/audio/announcer.js PREFERRED) matched
    * nothing at all. */
   const REMOTE_OK = Object.freeze({ announcer: true });
+  // Speakers with a RECORDED voice (js/audio/voice-pack.js): the pack is tried
+  // first and speech synthesis speaks only what it cannot cover whole.
+  const PACK_VOICE = Object.freeze({ radio: "george" });
 
   const PITCH_MIN = 0.5, PITCH_MAX = 1.6;
   const RATE_MIN = 0.6;
@@ -172,7 +175,8 @@ const RadioVoice = (function () {
   /** A live instance's shape, with every method a no-op. */
   function inert() {
     return Object.freeze({
-      say: () => false, stop: () => {}, unlock: () => {}, preview: () => false,
+      say: () => false, stop: () => {}, unlock: () => {}, preview: () => false, pack: null, volume: () => 0,
+      setPackOn: () => {}, packOn: () => false,
       voiceList: () => [], tuneFor: (sp) => Object.assign(toneFor(sp, null), { name: "" }), setTune: () => false,
       setEnabled: () => {}, setVolume: (v) => v, available: () => false,
       debug: () => ({ available: false, enabled: false, voices: 0, last: null, asked: 0, started: 0 }),
@@ -191,6 +195,11 @@ const RadioVoice = (function () {
     // is naturally a record. Absent keys and absent channels both mean "the
     // shipped default", so a fresh save and a reset are the same state.
     let tune = readTune();
+    // The recorded voice. RECORDED (the default) tries the pack first; SYSTEM
+    // keeps every line on speech synthesis, for a player who prefers the
+    // voice they picked below.
+    const pack = typeof VoicePack !== "undefined" && typeof GameAudio !== "undefined" ? VoicePack.create(G) : null;
+    let packOn = G.store.get("radioPack", true) !== false;
     // `current` is the utterance THIS instance is speaking, and it exists because
     // every utterance shares one handler over module state (`deadline`, the music
     // duck). speechSynthesis fires a cancelled line's end/error ASYNCHRONOUSLY —
@@ -272,6 +281,7 @@ const RadioVoice = (function () {
       // Before cancel(): the callback it triggers must already see itself as
       // stale, whether the engine fires it synchronously or a turn later.
       current = null;
+      if (pack) pack.stop();
       try { synth.cancel(); } catch (e) { /* nothing queued, or a synth mid-teardown */ }
       if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false);
       // The hiss bed belongs to the line, so it goes when the line does —
@@ -285,10 +295,36 @@ const RadioVoice = (function () {
       last = { text: p.text, reason: p.reason || "spoke", rate: p.rate, budgetMs: p.budgetMs, leadMs: p.leadMs };
       if (!p.speak) return false;
       stop();
+      if (speakPack(p)) return true;
       // AFTER THE CUE, NOT UNDER IT. Deferred rather than shortened: the words
       // keep their own rate and simply start when the figure has finished.
       if (p.leadMs > 0) { pending = setTimeout(() => { pending = null; speakPlanned(p); }, p.leadMs); return true; }
       return speakPlanned(p);
+    }
+    /* THE RECORDED PATH. Same contract as speakPlanned: claims `current`,
+     * ducks the music, and the card's deadline is the hard stop. The pack
+     * schedules its own start after the courtesy figure (`leadS`), so there is
+     * no pending timer. False — the pack is off, still loading, or does not
+     * cover every word — hands the line to speech synthesis. */
+    function speakPack(p) {
+      const id = PACK_VOICE[p.speaker];
+      if (!pack || !packOn || !id) return false;
+      pack.ensure(id);
+      const tok = { pack: true };
+      const ok = pack.speak(id, p.text, {
+        leadS: p.leadMs / 1000, budgetS: p.budgetMs / 1000, channel: "radio", volume,
+        onEnd: () => {
+          if (tok !== current) return;
+          current = null;
+          clearDeadline();
+          if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false);
+        },
+      });
+      if (!ok) return false;
+      current = tok;
+      if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(true);
+      deadline = setTimeout(stop, p.leadMs + p.budgetMs + 400);
+      return true;
     }
     function speakPlanned(p) {
       const u = new Utter(p.text);
@@ -440,14 +476,19 @@ const RadioVoice = (function () {
         G.store.set("voiceTune", tune);
         return true;
       },
-      setEnabled(b) { enabled = !!b; if (!enabled) stop(); },
+      setEnabled(b) { enabled = !!b; if (!enabled) stop(); else if (pack && packOn) pack.ensure(PACK_VOICE.radio); },
+      pack,
+      volume: () => volume,
+      setPackOn(b) { packOn = !!b; G.store.set("radioPack", packOn); if (packOn && enabled && pack) pack.ensure(PACK_VOICE.radio); },
+      packOn: () => !!(pack && packOn),
       setVolume(v) { volume = Math.max(0, Math.min(1, +v || 0)); return volume; },
       available: () => true,
-      debug: () => ({ available: true, enabled, voices: voicesFor(false).length, voicesAny: voicesFor(true).length, last, asked, started }),
+      debug: () => ({ available: true, enabled, voices: voicesFor(false).length, voicesAny: voicesFor(true).length, last, asked, started,
+        pack: pack ? Object.assign({ on: packOn }, pack.debug()) : null }),
     };
   }
 
-  return { create, inert, plan, speakable, estimate, toneFor, SPEAKERS, TONE, SAMPLE, REMOTE_OK,
+  return { create, inert, plan, speakable, PACK_VOICE, estimate, toneFor, SPEAKERS, TONE, SAMPLE, REMOTE_OK,
            PITCH_MIN, PITCH_MAX, RATE_MIN, RATE_MAX, LEAD_RESERVE_S, WORDS_PER_S };
 })();
 Object.freeze(RadioVoice);

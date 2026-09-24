@@ -408,8 +408,12 @@ const RaceRadio = (function () {
     let last = null;
     const f2 = () => last || {};
 
+    // The spotter (js/race/spotter.js) rides this tick: car left / right / clear,
+    // from the recorded voice only.
+    const spotter = typeof Spotter !== "undefined" ? Spotter.create(G) : null;
     function update(dt) {
       if (!(dt > 0)) return;
+      if (spotter) spotter.update(dt);
       // RADIO CHECK (js/input/input.js): consumed on every tick, raced or not, so
       // a press in a menu cannot fire at the next green light.
       const asked = typeof Input !== "undefined" && Input.consumeRadio ? Input.consumeRadio() : false;
@@ -494,6 +498,9 @@ const RaceRadio = (function () {
     return {
       update, request, reset, setChat, setComm,
       chat: () => chat, comm: () => comm,
+      spotter: () => !!(store && store.get && store.get("spotter", true) !== false),
+      setSpotter(b) { if (store && store.set) store.set("spotter", !!b); return !!b; },
+      spotterDebug: () => (spotter ? spotter.debug() : null),
       debug: () => ({ live, chat, comm, tv: live && tvLive(last), t: +t.toFixed(1),
         pending: { eng: Array.from(queue.eng.keys()), tv: Array.from(queue.tv.keys()) },
         facts: last && { pos: last.pos, n: last.n, lap: last.lap, toGo: last.toGo,

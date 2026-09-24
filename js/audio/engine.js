@@ -2566,6 +2566,88 @@ const GameAudio = (function () {
     return true;
   }
 
+  /* RECORDED RADIO VOICE (js/audio/voice-pack.js). The clips are clean studio
+   * renders, so the radio is made here: the same 300 Hz-3.4 kHz band as the
+   * hiss bed, a soft-clip for the cheap mic being shouted into, and a
+   * compressor so a spliced line of clips from different sentences comes out
+   * at one level. Into MASTER, not the effects bus: the SOUND EFFECTS switch
+   * does not silence the engineer, the same as speech synthesis, which never
+   * went through WebAudio at all. `spotter` keys its own mic (a click in, a
+   * squelch out) because it has no card, and so no radioSting, to open it. */
+  const VOICE_CH = Object.freeze({
+    radio:   { hi: RADIO_HI, drive: 2.2, level: 0.95, click: 0 },
+    spotter: { hi: RADIO_HI, drive: 2.8, level: 1.0,  click: 0.07 },
+  });
+  const _shapes = new Map();
+  function softClip(k) {
+    let c = _shapes.get(k);
+    if (c) return c;
+    c = new Float32Array(1024);
+    const n = Math.tanh(k);
+    for (let i = 0; i < c.length; i++) { const x = i / (c.length - 1) * 2 - 1; c[i] = Math.tanh(k * x) / n; }
+    _shapes.set(k, c);
+    return c;
+  }
+  /** Decode one clip's bytes. Rejects without a context. */
+  function decodeClip(ab) {
+    if (!ctx) return Promise.reject(new Error("no audio context"));
+    return new Promise((res, rej) => ctx.decodeAudioData(ab, res, rej));
+  }
+  let voicesLive = 0;
+  /** Play decoded clips back to back from `at` (numbers in `parts` are pauses,
+   *  in seconds). Returns { end, stop } or null when nothing can play. */
+  function radioVoice(parts, at, o) {
+    if (!ctx || !master || !isEnabled || !Array.isArray(parts)) return null;
+    const ch = VOICE_CH[o && o.channel] || VOICE_CH.radio;
+    const vol = Math.max(0, Math.min(1, o && o.volume != null ? +o.volume || 0 : 1));
+    if (!(vol > 0)) return null;
+    const t0 = Math.max(now(), +at || 0);
+    const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = RADIO_LO;
+    const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = ch.hi;
+    const ws = ctx.createWaveShaper(); ws.curve = softClip(ch.drive);
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -26; comp.ratio.value = 4; comp.attack.value = 0.004; comp.release.value = 0.12;
+    const g = ctx.createGain(); g.gain.value = ch.level * vol;
+    hp.connect(lp).connect(ws).connect(comp).connect(g).connect(master);
+    const srcs = [];
+    let t = t0;
+    for (const p of parts) {
+      if (typeof p === "number") { t += Math.max(0, p); continue; }
+      if (!p || !(p.duration > 0)) continue;
+      const s = ctx.createBufferSource();
+      s.buffer = p;
+      s.connect(hp);
+      s.start(t);
+      srcs.push(s);
+      t += p.duration;
+    }
+    const nodes = [hp, lp, ws, comp, g];
+    let dead = false;
+    const teardown = () => {
+      if (dead) return;
+      dead = true; voicesLive--;
+      for (const s of srcs) { try { s.disconnect(); } catch (e) { /* gone */ } }
+      for (const n of nodes) { try { n.disconnect(); } catch (e) { /* gone */ } }
+    };
+    if (!srcs.length) { dead = true; for (const n of nodes) { try { n.disconnect(); } catch (e) { /* gone */ } } return null; }
+    voicesLive++;
+    srcs[srcs.length - 1].onended = teardown;
+    if (ch.click > 0 && radioFx > 0) {
+      radioBurst(ch.click * radioFx, 0.04, ch.hi, Math.max(now(), t0 - 0.05));
+      radioBurst(ch.click * 1.3 * radioFx, 0.06, ch.hi, t + 0.02);
+    }
+    return {
+      end: t,
+      stop() {
+        if (dead) return;
+        const tt = now();
+        try { g.gain.setTargetAtTime(0, tt, 0.015); } catch (e) { /* torn down */ }
+        for (const s of srcs) { try { s.stop(tt + 0.06); } catch (e) { /* not started, or ended */ } }
+        setTimeout(teardown, 120);
+      },
+    };
+  }
+
   function setRadioFx(v) {
     const n = +v;
     radioFx = Number.isFinite(n) ? Math.max(0, Math.min(RADIO_FX_MAX, n)) : 1;
@@ -2722,6 +2804,10 @@ const GameAudio = (function () {
   return {
     init,
     setRadioDuck,
+    decodeClip,
+    now,
+    radioVoice,
+    radioVoicesLive: () => voicesLive,
     radioSting,
     radioStingStop,
     setRadioFx,

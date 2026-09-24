@@ -78,6 +78,7 @@ function boot(opts) {
     createGain: () => node("gain", counts), createBiquadFilter: () => node("biquad", counts),
     createOscillator: () => node("osc", counts), createBufferSource: () => node("src", counts),
     createAnalyser: () => node("analyser", counts),
+    createWaveShaper: () => Object.assign(node("shaper", counts), { curve: null }),
     createConvolver: () => Object.assign(node("convolver", counts), { buffer: null }),
     createStereoPanner: () => Object.assign(node("panner", counts), { pan: param(0) }),
     createDynamicsCompressor: () => Object.assign(node("comp", counts),
@@ -1313,4 +1314,24 @@ test("setCarSfx and pitGun are safe with the engine off, and drive their layers 
   const before = A.carSfx().pitGuns;
   A.pitGun(true);
   assert.equal(A.carSfx().pitGuns, before + 1);
+});
+
+test("recorded radio voice: clips play back to back through the radio band, and every node is released", async () => {
+  const { GameAudio, release, ctx, liveNodes } = boot();
+  GameAudio.init();
+  await release();
+  const before = liveNodes();
+  const clip = (d) => ({ duration: d, sampleRate: SR, length: d * SR, numberOfChannels: 1, getChannelData: () => new Float32Array(1) });
+  ctx.currentTime = 10;
+  const h = GameAudio.radioVoice([clip(0.5), 0.1, clip(0.3)], 10.2, { channel: "radio", volume: 0.8 });
+  assert.ok(h, "scheduled");
+  assert.ok(Math.abs(h.end - 11.1) < 1e-9, `ends after both clips and the pause: ${h.end}`);
+  assert.equal(GameAudio.radioVoicesLive(), 1);
+  h.stop();
+  // stop() schedules the teardown; fire it the way the harness fires timers.
+  for (const n of [...pendingTimers.splice(0)]) n();
+  assert.equal(GameAudio.radioVoicesLive(), 0, "the transmission is released");
+  assert.equal(liveNodes(), before, "no filter, shaper or gain is left rendering");
+  assert.equal(GameAudio.radioVoice([], 0, {}), null, "nothing to play is not a transmission");
+  assert.equal(GameAudio.radioVoice([clip(0.2)], 0, { volume: 0 }), null, "volume 0 is off");
 });

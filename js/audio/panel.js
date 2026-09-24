@@ -66,6 +66,9 @@ const AudioPanel = (() => {
     const rr = () => { try { return G.raceRadio || null; } catch (e) { return null; } };
     const chatNow = () => (rr() ? rr().chat() : store.get("radioChat", "normal"));
     const commNow = () => (rr() ? rr().comm() : store.get("commentary", "tv"));
+    const PACK_VALUES = [["rec", "RECORDED"], ["sys", "SYSTEM"]];
+    const packNow = () => ((G.radio && G.radio.pack ? G.radio.packOn() : store.get("radioPack", true) !== false) ? "rec" : "sys");
+    const spotNow = () => (store.get("spotter", true) !== false ? "on" : "off");
     function setRadio(b) {
       if (b && !G.soundOn) setSound(true, true);
       radioOn = b; store.set("radioVoice", b);
@@ -306,6 +309,8 @@ const AudioPanel = (() => {
       }
       SettingRow.paint($("as-chat"), chatNow(), CHAT_VALUES);
       SettingRow.paint($("as-comm"), commNow(), COMM_VALUES);
+      SettingRow.paint($("as-rpack"), packNow(), PACK_VALUES);
+      SettingRow.paint($("as-spot"), spotNow(), ONOFF);
       const cnote = $("as-chat-note");
       if (cnote) {
         const c = chatNow();
@@ -371,6 +376,10 @@ const AudioPanel = (() => {
       write: (v) => { if (v === "on") { setRadio(true); GameAudio.uiTick(); } else { GameAudio.uiTick(); setRadio(false); } } });
     SettingRow.wire("as-chat", { values: CHAT_VALUES, read: chatNow,
       write: (v) => { if (rr()) rr().setChat(v); else store.set("radioChat", v); GameAudio.uiTick(); syncAudioPanel(); } });
+    SettingRow.wire("as-rpack", { values: PACK_VALUES, read: packNow,
+      write: (v) => { if (G.radio && G.radio.setPackOn) G.radio.setPackOn(v === "rec"); store.set("radioPack", v === "rec"); GameAudio.uiTick(); syncAudioPanel(); } });
+    SettingRow.wire("as-spot", { values: ONOFF, read: spotNow,
+      write: (v) => { if (rr()) rr().setSpotter(v === "on"); else store.set("spotter", v === "on"); GameAudio.uiTick(); syncAudioPanel(); } });
     SettingRow.wire("as-comm", { values: COMM_VALUES, read: commNow,
       write: (v) => { if (rr()) rr().setComm(v); else store.set("commentary", v); GameAudio.uiTick(); syncAudioPanel(); } });
     // THE PRE-RACE ANNOUNCER (js/audio/announcer.js). Same shape, same master
