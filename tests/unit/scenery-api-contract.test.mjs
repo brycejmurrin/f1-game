@@ -1,6 +1,6 @@
 // scenery-api-contract.test.mjs — freezes the shape of the `scenery(api)`
-// object that js/track/tracks.js buildProps hands to every circuit's bespoke
-// scenery callback (40 consumer files in js/circuits/).
+// object that TrackBuildProps.build (js/track/scenery/build-props.js) hands to
+// every circuit's bespoke scenery callback (40 consumer files in js/circuits/).
 //
 // The api members below are the de-facto public contract those files were
 // written against (docs/SCENERY-API.md). Any split/refactor of buildProps
@@ -109,6 +109,11 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     monaco: ["monaco-tabac-shop", "monaco-mirabeau-apartments", "monaco-rascasse-bar"],
     singapore: ["singapore-parliament-house", "singapore-fullerton-hotel", "singapore-anderson-bridge"],
     suzuka: ["suzuka-crossover-portal", "suzuka-spoon-terrace", "suzuka-130r-bank"],
+    // Wave 4 — Interlagos / COTA / Mexico / Yas Marina
+    interlagos: ["interlagos-senna-s", "interlagos-main-tribuna", "interlagos-sp-skyline"],
+    cota: ["cota-amphitheater", "cota-turn1-big-red", "cota-main-grandstand"],
+    mexico: ["mexico-foro-sol-entry", "mexico-peraltada-stand", "foro-scoreboard"],
+    abudhabi: ["abudhabi-ferrari-world", "abudhabi-marina", "abudhabi:pit-exit-tunnel-portal"],
   };
   for (const [track, ids] of Object.entries(expected)) {
     const body = landmarkSource(track);

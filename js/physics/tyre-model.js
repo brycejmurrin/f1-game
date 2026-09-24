@@ -464,7 +464,10 @@ const TyreModel = (function () {
   const lapsDone = (lap) => Math.max(0, (lap || 0) - 1);
   function fuelFrac(c, lapsTarget) {
     const n = Math.max(1, lapsTarget || 1);
-    return clamp(1 - lapsDone(c.lap) / n, 0, 1);
+    // `fuelLap` (race-control / red-flag restart) is a crossing count too: the
+    // most crossings this car has physically driven, so a restart or a
+    // backward crossing never refills the tank. Both read through lapsDone.
+    return clamp(1 - lapsDone(c.fuelLap == null ? c.lap : c.fuelLap) / n, 0, 1);
   }
 
   // ── COMPOUND RECORDS ──────────────────────────────────────────────────────

@@ -359,16 +359,31 @@
      menus.css stays the one place they are declared. -->
 <script>
   (function () {
-    // html[data-motion], the FIRST answer only, for the reason above: the
-    // title intro starts on the first frame, and js/ui/title-fx.js (which owns
-    // every later answer) evaluates far too late to stop it. Same rule as
-    // TitleFx.mode(): the OS asking for reduced motion wins, then the stored
-    // MENU ANIMATIONS choice (apex26.motion, JSON: "on" | "reduce").
-    var mv = null;
+    // html[data-motion] / data-title-intro / data-menu-wash / data-title-art,
+    // FIRST answer only: the title intro, wash and #title-car paint on the
+    // first frame, and js/ui/title-fx.js (which owns every later answer)
+    // evaluates too late to stop them.
+    // Motion: OS reduced-motion wins, then apex26.motion ("on" | "reduce").
+    // Intro: apex26.titleIntro ("full" | "quick" | "off"); unset = full.
+    // Wash: apex26.menuWash ("full" | "soft" | "off"); unset = full.
+    // Title art: apex26.titleArt ("on" | "soft" | "off"); unset = on.
+    var mv = null, ti = null, mw = null, ta = null;
     try { mv = JSON.parse(localStorage.getItem("apex26.motion")); } catch (e) { /* unset */ }
+    try { ti = JSON.parse(localStorage.getItem("apex26.titleIntro")); } catch (e) { /* unset */ }
+    try { mw = JSON.parse(localStorage.getItem("apex26.menuWash")); } catch (e) { /* unset */ }
+    try { ta = JSON.parse(localStorage.getItem("apex26.titleArt")); } catch (e) { /* unset */ }
     try {
       if (mv === "reduce" || (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches))
         document.documentElement.dataset.motion = "reduce";
+    } catch (e) { /* TitleFx answers at eval */ }
+    try {
+      if (ti === "quick" || ti === "off") document.documentElement.dataset.titleIntro = ti;
+    } catch (e) { /* TitleFx answers at eval */ }
+    try {
+      if (mw === "soft" || mw === "off") document.documentElement.dataset.menuWash = mw;
+    } catch (e) { /* TitleFx answers at eval */ }
+    try {
+      if (ta === "soft" || ta === "off") document.documentElement.dataset.titleArt = ta;
     } catch (e) { /* TitleFx answers at eval */ }
     var b = document.body;
     if (!b || !window.getComputedStyle) return;
@@ -940,7 +955,7 @@
         <section id="pm-panel-appearance" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>
           <h3 class="pm-group-h">APPEARANCE</h3>
-          <p class="adv-help">Theme and accents for menus and the race HUD. Selection rings stay on the menu accent; team identity can stay on the HUD.</p>
+          <p class="adv-help">Theme, accents, title motion, wash and the background drawing. Selection rings stay on the menu accent; team identity can stay on the HUD.</p>
           <div id="pm-appearance-preview" class="pm-accent-preview" aria-hidden="true">
             <button type="button" class="bigbtn pm-accent-preview-btn" tabindex="-1">PRIMARY</button>
             <span class="pm-accent-preview-hud"><b>42</b></span>
@@ -988,6 +1003,43 @@
               <input id="pm-hudaccent-hextext" class="pm-accent-hextext" type="text" inputmode="text" maxlength="7" spellcheck="false" autocomplete="off" aria-label="HUD accent hex" value="#e10600">
             </div>
           </div>
+          <div id="pm-motion" class="set-row" role="group" aria-labelledby="pm-motion-label">
+            <span class="tune-label" id="pm-motion-label">MENU ANIMATIONS</span>
+            <div>
+              <button id="pm-motion-prev" type="button" data-step="-1" aria-label="Previous menu animations" aria-hidden="true" tabindex="-1">&lsaquo;</button>
+              <select id="pm-motion-sel" aria-labelledby="pm-motion-label" aria-describedby="pm-motion-help"></select>
+              <button id="pm-motion-next" type="button" data-step="1" aria-label="Next menu animations" aria-hidden="true" tabindex="-1">&rsaquo;</button>
+            </div>
+          </div>
+          <p class="adv-help" id="pm-motion-help">REDUCED stills menu reveals and screen transitions. If your device asks for reduced motion, that always wins.</p>
+          <div id="pm-titleintro" class="set-row" role="group" aria-labelledby="pm-titleintro-label">
+            <span class="tune-label" id="pm-titleintro-label">TITLE INTRO</span>
+            <div>
+              <button id="pm-titleintro-prev" type="button" data-step="-1" aria-label="Previous title intro" aria-hidden="true" tabindex="-1">&lsaquo;</button>
+              <select id="pm-titleintro-sel" aria-labelledby="pm-titleintro-label" aria-describedby="pm-titleintro-help"></select>
+              <button id="pm-titleintro-next" type="button" data-step="1" aria-label="Next title intro" aria-hidden="true" tabindex="-1">&rsaquo;</button>
+            </div>
+          </div>
+          <p class="adv-help" id="pm-titleintro-help">The first-show title reveal. QUICK halves it; OFF skips straight to the resting board. REPLAY still previews once when OFF.</p>
+          <div id="pm-menuwash" class="set-row" role="group" aria-labelledby="pm-menuwash-label">
+            <span class="tune-label" id="pm-menuwash-label">MENU WASH</span>
+            <div>
+              <button id="pm-menuwash-prev" type="button" data-step="-1" aria-label="Previous menu wash" aria-hidden="true" tabindex="-1">&lsaquo;</button>
+              <select id="pm-menuwash-sel" aria-labelledby="pm-menuwash-label" aria-describedby="pm-menuwash-help"></select>
+              <button id="pm-menuwash-next" type="button" data-step="1" aria-label="Next menu wash" aria-hidden="true" tabindex="-1">&rsaquo;</button>
+            </div>
+          </div>
+          <p class="adv-help" id="pm-menuwash-help">The red radial and grain behind the title menu. SOFT eases both; OFF leaves a flat dark veil.</p>
+          <div id="pm-titleart" class="set-row" role="group" aria-labelledby="pm-titleart-label">
+            <span class="tune-label" id="pm-titleart-label">TITLE ART</span>
+            <div>
+              <button id="pm-titleart-prev" type="button" data-step="-1" aria-label="Previous title art" aria-hidden="true" tabindex="-1">&lsaquo;</button>
+              <select id="pm-titleart-sel" aria-labelledby="pm-titleart-label" aria-describedby="pm-titleart-help"></select>
+              <button id="pm-titleart-next" type="button" data-step="1" aria-label="Next title art" aria-hidden="true" tabindex="-1">&rsaquo;</button>
+            </div>
+          </div>
+          <p class="adv-help" id="pm-titleart-help">The side-on line drawing behind the title menu. SOFT fades it; OFF removes it for a cleaner board.</p>
+          <button type="button" id="pm-replay-intro" class="pm-replay-intro">REPLAY INTRO<small>play the title reveal again</small></button>
         </section>
         <section id="advanced" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>
@@ -1276,6 +1328,28 @@
           </div>
         </div>
         <p id="as-chat-note" class="as-note"></p>
+        <!-- RECORDED VOICE (js/audio/voice-pack.js): the engineer's lines spliced
+             from recorded clips through the radio filter, speech synthesis for
+             whatever the pack cannot cover. SYSTEM keeps every line on the voice
+             picked under VOICES. SPOTTER (js/race/spotter.js) is car left /
+             right / clear, recorded voice only, and speaks whatever TEAM RADIO
+             is set to. -->
+        <div id="as-rpack" class="set-row" role="group" aria-labelledby="as-rpack-label">
+          <span class="tune-label" id="as-rpack-label">RADIO VOICE</span>
+          <div>
+            <button id="as-rpack-prev" type="button" data-step="-1" aria-label="Previous radio voice">&lsaquo;</button>
+            <select id="as-rpack-sel" aria-labelledby="as-rpack-label"></select>
+            <button id="as-rpack-next" type="button" data-step="1" aria-label="Next radio voice">&rsaquo;</button>
+          </div>
+        </div>
+        <div id="as-spot" class="set-row" role="group" aria-labelledby="as-spot-label">
+          <span class="tune-label" id="as-spot-label">SPOTTER</span>
+          <div>
+            <button id="as-spot-prev" type="button" data-step="-1" aria-label="Previous spotter setting">&lsaquo;</button>
+            <select id="as-spot-sel" aria-labelledby="as-spot-label"></select>
+            <button id="as-spot-next" type="button" data-step="1" aria-label="Next spotter setting">&rsaquo;</button>
+          </div>
+        </div>
         <label class="tune-row"><span class="tune-label">VOICE VOLUME <b id="as-rvol-v">8</b></span>
           <input id="as-rvol" type="range" min="0" max="10" step="1" value="8" aria-label="Radio voice volume"></label>
         <!-- RADIO FX — the key click, the hiss under the line and the squelch
@@ -2308,30 +2382,30 @@
     <details id="cz-paint">
     <summary class="cz-sep">EXTRA PAINT — OPTIONAL</summary>
     <div id="cz-paint-rows">
-    <div class="cz-row cz-liv-row"><label for="cz-stripe">BODY STRIPE</label><input id="cz-stripe" type="color"><button type="button" id="cz-stripe-none" class="cz-liv-none">NONE</button></div>
-    <div class="cz-row cz-liv-row"><label for="cz-nosestripe">NOSE STRIPE</label><input id="cz-nosestripe" type="color"><button type="button" id="cz-nosestripe-none" class="cz-liv-none">NONE</button></div>
-    <div class="cz-row cz-liv-row"><label for="cz-detail">DETAIL</label><input id="cz-detail" type="color"><button type="button" id="cz-detail-none" class="cz-liv-none">NONE</button></div>
-    <div class="cz-row cz-liv-row"><label for="cz-nose">NOSE CAP</label><input id="cz-nose" type="color"><button type="button" id="cz-nose-none" class="cz-liv-none">NONE</button></div>
-    <div class="cz-row cz-liv-row"><label for="cz-pod">SIDEPOD</label><input id="cz-pod" type="color"><button type="button" id="cz-pod-none" class="cz-liv-none">NONE</button></div>
-    <div class="cz-row cz-liv-row"><label for="cz-wing">WINGS</label><input id="cz-wing" type="color"><button type="button" id="cz-wing-none" class="cz-liv-none">NONE</button></div>
-    <div class="cz-row cz-liv-row"><label for="cz-fin">TAIL FIN</label><input id="cz-fin" type="color"><button type="button" id="cz-fin-none" class="cz-liv-none">NONE</button></div>
-    <div class="cz-row cz-liv-row"><label for="cz-finart">TAIL GRAPHIC</label><input id="cz-finart" type="color"><button type="button" id="cz-finart-none" class="cz-liv-none">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-stripe">BODY STRIPE</label><input id="cz-stripe" type="color"><button type="button" id="cz-stripe-none" class="cz-liv-none" aria-label="No body stripe">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-nosestripe">NOSE STRIPE</label><input id="cz-nosestripe" type="color"><button type="button" id="cz-nosestripe-none" class="cz-liv-none" aria-label="No nose stripe">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-detail">DETAIL</label><input id="cz-detail" type="color"><button type="button" id="cz-detail-none" class="cz-liv-none" aria-label="No detail">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-nose">NOSE CAP</label><input id="cz-nose" type="color"><button type="button" id="cz-nose-none" class="cz-liv-none" aria-label="No nose cap">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-pod">SIDEPOD</label><input id="cz-pod" type="color"><button type="button" id="cz-pod-none" class="cz-liv-none" aria-label="No sidepod">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-wing">WINGS</label><input id="cz-wing" type="color"><button type="button" id="cz-wing-none" class="cz-liv-none" aria-label="No wings">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-fin">TAIL FIN</label><input id="cz-fin" type="color"><button type="button" id="cz-fin-none" class="cz-liv-none" aria-label="No tail fin">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-finart">TAIL GRAPHIC</label><input id="cz-finart" type="color"><button type="button" id="cz-finart-none" class="cz-liv-none" aria-label="No tail graphic">NONE</button></div>
     <!-- Upload your own emblem. Downscaled and stored locally; CLEAR falls back
          to the generated monogram crest. -->
     <div class="cz-row cz-liv-row"><label for="cz-logofile">LOGO IMAGE</label>
       <span class="cz-logo-wrap">
         <img id="cz-logo-prev" alt="" hidden>
-        <label class="cz-liv-none" for="cz-logofile">UPLOAD</label>
+        <button type="button" id="cz-logo-up" class="cz-liv-none">UPLOAD</button>
         <input id="cz-logofile" type="file" accept="image/*" hidden>
         <button type="button" id="cz-logo-clear" class="cz-liv-none">CLEAR</button>
       </span></div>
-    <div class="cz-row cz-liv-row"><label for="cz-logo">LOGO TINT</label><input id="cz-logo" type="color"><button type="button" id="cz-logo-none" class="cz-liv-none">NONE</button></div>
-    <div class="cz-row cz-liv-row"><label for="cz-logo2">MONOGRAM BOX</label><input id="cz-logo2" type="color"><button type="button" id="cz-logo2-none" class="cz-liv-none">NONE</button></div>
-    <div class="cz-row cz-liv-row"><label for="cz-logo3">LOGO OUTLINE</label><input id="cz-logo3" type="color"><button type="button" id="cz-logo3-none" class="cz-liv-none">NONE</button></div>
-    <div class="cz-row cz-liv-row"><label for="cz-halo">HALO</label><input id="cz-halo" type="color"><button type="button" id="cz-halo-none" class="cz-liv-none">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-logo">LOGO TINT</label><input id="cz-logo" type="color"><button type="button" id="cz-logo-none" class="cz-liv-none" aria-label="No logo tint">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-logo2">MONOGRAM BOX</label><input id="cz-logo2" type="color"><button type="button" id="cz-logo2-none" class="cz-liv-none" aria-label="No monogram box">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-logo3">LOGO OUTLINE</label><input id="cz-logo3" type="color"><button type="button" id="cz-logo3-none" class="cz-liv-none" aria-label="No logo outline">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-halo">HALO</label><input id="cz-halo" type="color"><button type="button" id="cz-halo-none" class="cz-liv-none" aria-label="No halo">NONE</button></div>
     <!-- FINISH is the paint MATERIAL, not a colour, so it gets a 3-way choice
          instead of a swatch + NONE. Gloss is the default clearcoat car paint. -->
-    <div class="cz-row cz-liv-row"><label>FINISH</label><span class="cz-finish" id="cz-finish"><button type="button" data-cz-finish="gloss" class="cz-liv-none active">GLOSS</button><button type="button" data-cz-finish="satin" class="cz-liv-none">SATIN</button><button type="button" data-cz-finish="chrome" class="cz-liv-none">CHROME</button></span></div>
+    <div class="cz-row cz-liv-row"><label id="cz-finish-lbl">FINISH</label><span class="cz-finish" id="cz-finish" role="group" aria-labelledby="cz-finish-lbl"><button type="button" data-cz-finish="gloss" class="cz-liv-none active">GLOSS</button><button type="button" data-cz-finish="satin" class="cz-liv-none">SATIN</button><button type="button" data-cz-finish="chrome" class="cz-liv-none">CHROME</button></span></div>
     </div><!-- /#cz-paint-rows -->
     </details>
     <!-- The driver is not paint. These three used to sit inside EXTRA PAINT —
@@ -2929,6 +3003,7 @@
 <script defer crossorigin="anonymous" src="js/track/scenery/city.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/scenery/identity.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/scenery/pits.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/track/scenery/build-props.js?v=dev"></script>
 <!-- circuit definitions (data) — must load before the tracks engine -->
 <script defer crossorigin="anonymous" src="js/circuits/bahrain.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/circuits/monaco.js?v=dev"></script>
@@ -2983,6 +3058,7 @@
 <script defer crossorigin="anonymous" src="js/circuits/mont_tremblant.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/circuits/mosport.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/pit-lane.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/session-entry.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/circuit-elevations.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/tracks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/track-maps.js?v=dev"></script>
@@ -2994,6 +3070,7 @@
 <script defer crossorigin="anonymous" src="js/audio/spotify.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/audio/rivals.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/audio/car-sfx.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/audio/voice-pack.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/audio/radio-voice.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/data/circuit-lore.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/audio/announcer.js?v=dev"></script>
@@ -3035,6 +3112,7 @@
 <script defer crossorigin="anonymous" src="js/race/engineer.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/radio-lines.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/race-facts.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/spotter.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/race-radio.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/offsets.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/flyby-seq.js?v=dev"></script>

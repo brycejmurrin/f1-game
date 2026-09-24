@@ -86,6 +86,7 @@ const RaceRadio = (function () {
         laps: [],                 // the player's recent valid lap times
         defending: null,          // the car the last defend call named
         toldPos: null,            // the position the driver was last told
+        wasPit: false,            // the player was in the pit lane last tick
         bestPos: 99,
         eng: -99, tv: -99,        // t of the last line on each channel
       };
@@ -134,6 +135,8 @@ const RaceRadio = (function () {
       if (c.once) m.once.add(c.once);
       m[c.ch] = t;
       if (c.onSaid) c.onSaid();
+      // The result is the last word: whatever else was queued is now history.
+      if (c.id === "result" && c.ch === "eng") queue.eng.clear();
       log.push({ t: +t.toFixed(1), ch: c.ch, id: c.id, tier: c.tier, text });
       if (log.length > 40) log.shift();
       return true;
@@ -160,6 +163,7 @@ const RaceRadio = (function () {
       const pos = f.rawPos || f.pos;
       switch (e.type) {
         case "playerLap": {
+          if (p.finished) break;                        // the flag has its own call; nothing after it
           if (e.lap === 2 && f.gridPos) {
             const d = f.gridPos - pos;
             offer({ id: "lap1", ch: "eng", tier: 3, chat: 1, once: "lap1",
@@ -184,7 +188,7 @@ const RaceRadio = (function () {
           break;
         }
         case "lap": {
-          if (e.car !== p) break;
+          if (e.car !== p || p.finished) break;
           m.laps.push(e.time); if (m.laps.length > 4) m.laps.shift();
           if (f.fastest && f.fastest.car === p && f.fastest.time === e.time && f.lap > 2) {
             offer({ id: "fastest", ch: "eng", tier: 3, chat: 1, cd: 45, key: "eng.fastest", vars: { time: timeT(e.time) }, ttl: 12 });
@@ -272,7 +276,7 @@ const RaceRadio = (function () {
           const fp = e.pos || pos, grid = f.gridPos || fp;
           const podium = (G.cars ? G.cars.length : 0) > 3;   // P2 of a two-car duel is not a podium
           const key = fp === 1 ? "eng.win" : fp <= 3 && podium ? "eng.podium" : grid - fp >= 5 ? "eng.recover"
-            : fp <= 10 ? "eng.points" : "eng.finish";
+            : fp <= 10 && podium ? "eng.points" : "eng.finish";   // "good points" means nothing in a duel
           offer({ id: "result", ch: "eng", tier: 5, chat: 1, once: "result", key, vars: { pos: fp, grid }, ttl: 12 });
           break;
         }
@@ -399,7 +403,7 @@ const RaceRadio = (function () {
           key: "tv.battle", vars: { a: S(bt.a), b: S(bt.b), gap: gapT(bt.gap), pos: bt.pos }, ttl: 6 });
         break;
       }
-      if (f.leader && f.second && f.leadGap != null && f.leadGap > 1.5) {
+      if (f.leader && f.second && !f.leader.finished && f.leadGap != null && f.leadGap > 1.5) {
         offer({ id: "leadGap", ch: "tv", tier: 1, cd: 75, key: "tv.lead",
           vars: { a: S(f.leader), b: S(f.second), gap: gapT(f.leadGap) }, ttl: 10 });
       }
@@ -408,8 +412,12 @@ const RaceRadio = (function () {
     let last = null;
     const f2 = () => last || {};
 
+    // The spotter (js/race/spotter.js) rides this tick: car left / right / clear,
+    // from the recorded voice only.
+    const spotter = typeof Spotter !== "undefined" ? Spotter.create(G) : null;
     function update(dt) {
       if (!(dt > 0)) return;
+      if (spotter) spotter.update(dt);
       // RADIO CHECK (js/input/input.js): consumed on every tick, raced or not, so
       // a press in a menu cannot fire at the next green light.
       const asked = typeof Input !== "undefined" && Input.consumeRadio ? Input.consumeRadio() : false;
@@ -429,6 +437,11 @@ const RaceRadio = (function () {
       // deployed on the tick the driver asked must still be offered.
       if (asked) request();
       const p = G.player;
+      // OUT OF THE PITS, the driver is told their place again from scratch:
+      // positions are not called during a stop, so the next pass was measured
+      // from the pre-stop place — gaining one from P7 read as "DOWN 4 TO P6".
+      if (m.wasPit && !f.pitting) { m.toldPos = f.rawPos || f.pos; queue.eng.delete("pos"); }
+      m.wasPit = !!f.pitting;
       const tv = tvLive(f);
       for (const e of ev) {
         engineerEvent(e, f, p);
@@ -494,6 +507,9 @@ const RaceRadio = (function () {
     return {
       update, request, reset, setChat, setComm,
       chat: () => chat, comm: () => comm,
+      spotter: () => !!(store && store.get && store.get("spotter", true) !== false),
+      setSpotter(b) { if (store && store.set) store.set("spotter", !!b); return !!b; },
+      spotterDebug: () => (spotter ? spotter.debug() : null),
       debug: () => ({ live, chat, comm, tv: live && tvLive(last), t: +t.toFixed(1),
         pending: { eng: Array.from(queue.eng.keys()), tv: Array.from(queue.tv.keys()) },
         facts: last && { pos: last.pos, n: last.n, lap: last.lap, toGo: last.toGo,

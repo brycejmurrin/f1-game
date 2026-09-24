@@ -79,18 +79,37 @@ const NetPlay = (function () {
       frac: Number.isFinite(frac) ? Math.min(Math.max(frac, 0), 1) : 0,
     });
   }
+  function validClassification(rows, cars) {
+    if (!Array.isArray(rows) || !Array.isArray(cars) || rows.length !== cars.length) return false;
+    const ids = new Set(cars.map((c) => c.driverId));
+    if (ids.size !== cars.length) return false;
+    const seen = new Set();
+    for (const e of rows) {
+      if (!e || !ids.has(e.d) || seen.has(e.d) ||
+          (e.t != null && (!Number.isFinite(e.t) || e.t < 0)) ||
+          (e.p != null && (!Number.isFinite(e.p) || e.p < 0))) return false;
+      seen.add(e.d);
+    }
+    return true;
+  }
   // Register the QUALI/QLIVE receivers on a session. `ownsDriver(d)` is the
   // caller's sender binding — the lobby keys it on the HELLO profile filed
   // under the connection, NetPlay on the remote car it seated — because the
   // two phases hold different truths about who a connection speaks for.
-  function bindQuali(s, ownsDriver, G) {
+  function bindQuali(s, ownsDriver, G, onAccepted) {
     s.onEvent(EV.QUALI, (d) => {
       const q = validQuali(d);
-      if (q && ownsDriver(q) && G.onPeerQuali) G.onPeerQuali(q);
+      if (q && ownsDriver(q)) {
+        if (G.onPeerQuali) G.onPeerQuali(q);
+        if (onAccepted) onAccepted(EV.QUALI, q);
+      }
     });
     s.onEvent(EV.QLIVE, (d) => {
       const q = validQualiLive(d);
-      if (q && ownsDriver(q) && G.onPeerQualiLive) G.onPeerQualiLive(q);
+      if (q && ownsDriver(q)) {
+        if (G.onPeerQualiLive) G.onPeerQualiLive(q);
+        if (onAccepted) onAccepted(EV.QLIVE, q);
+      }
     });
   }
   // The senders, one shape for both phases. A driven lap rides the reliable
@@ -490,7 +509,7 @@ const NetPlay = (function () {
               fr.car.finished = true; fr.car.finishT = fin;
             }
           }
-          if (name === EV.RESULT && d && !ownsClassification()) peerResult = d;
+          if (name === EV.RESULT && !ownsClassification() && validClassification(d, G.cars)) peerResult = d;
           // Only the host speaks for the roster; a guest naming a wire id
           // could otherwise park any rival it liked.
           if (name === EV.LEFT && role === "guest" && d && Number.isFinite(d.wire) && remotes.has(d.wire)) {

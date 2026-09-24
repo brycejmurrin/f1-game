@@ -44,7 +44,7 @@ function boot() {
   const G = {
     $: (id) => dom.byId(id), gfx: {}, photoCam: { pos: [0, 0, 0], pitch: 0, yaw: 0, fov: 60 },
     photoKeys: {}, photoMouse: {}, photoMove: {}, photoLook: {},
-    applyResMode() {}, camEye: [0, 0, 0], camTgt: [0, 0, -1], camFov: 60,
+    applyResMode() {}, snapGameCam() {}, camEye: [0, 0, 0], camTgt: [0, 0, -1], camFov: 60,
   };
   vm.runInContext("Photomode", ctx).create(G);
   return { dom, G };

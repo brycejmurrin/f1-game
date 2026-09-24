@@ -469,7 +469,7 @@ test("TopModal.scanLayers wires every non-dialog UiLayers layer except the two t
   const s = code("js/ui/modal.js");
   assert.match(s, /"rotate-device":\s*1,\s*"photo-controls":\s*1/, "LAYER_SKIP names exactly the rotate blocker and the fly-cam");
   assert.match(s, /el\.tagName !== "DIALOG"\) wireLayer\(el\)/, "dialogs keep showModal()/close() focus handling");
-  assert.match(s, /return \{ scan, wire, onEscape, onFocusIn, wireLayer, scanLayers, landing, syncMenuIsolation \}/);
+  assert.match(s, /return \{ scan, wire, onEscape, onFocusIn, wireLayer, scanLayers, landing, keepFocus, syncMenuIsolation \}/);
 });
 
 test("TopModal isolates the title menu behind dialog and non-dialog sheets", () => {

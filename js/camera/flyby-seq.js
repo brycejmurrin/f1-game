@@ -59,9 +59,18 @@ const FlybySeq = (function () {
   let _slotKnown = true;
   /** `null` = the race's grid cannot be known before it forms (a random grid):
    *  slotKnown() goes false and vary() leaves the grid-mine shot out. */
-  function setPlayerSlot(k) { _slotKnown = k !== null; _playerSlot = (k >= 0 && k === (k | 0)) ? k : PLAYER_SLOT_DEFAULT; }
+  /** `n` = cars on the grid (a time trial seats one, a duel two): a shot aimed
+   *  at a NUMBERED slot past it would film an empty box, so it is left out. */
+  let _gridSize = 22;
+  function setPlayerSlot(k, n) {
+    _slotKnown = k !== null; _playerSlot = (k >= 0 && k === (k | 0)) ? k : PLAYER_SLOT_DEFAULT;
+    _gridSize = n > 0 ? n | 0 : 22;
+  }
   function slotKnown() { return _slotKnown; }
-  const usesSlot = (shot) => [shot.eye[0], shot.eye[1], shot.look[0], shot.look[1]].some((p) => p && p.at === "slot");
+  const slotPoses = (shot) => [shot.eye[0], shot.eye[1], shot.look[0], shot.look[1]].filter((p) => p && p.at === "slot");
+  const usesSlot = (shot) => slotPoses(shot).length > 0;
+  /** Can this grid play the shot? Your car needs a known slot; a numbered slot needs a car in it. */
+  const fitsGrid = (shot) => slotPoses(shot).every((p) => (p.n === "player" || p.n === undefined) ? _slotKnown : (p.n | 0) < _gridSize);
   function slotIndex(pose) { return pose.n === "player" || pose.n === undefined ? _playerSlot : Math.max(0, pose.n | 0); }
   /** gridSlot()'s stagger (js/track/core/mesh.js): even slots left, odd right,
    *  min(0.4 hw, 3) m off the centreline — pinned against mesh.js by the test. */
@@ -144,7 +153,7 @@ const FlybySeq = (function () {
     }
     return cells;
   }
-  const _near = [];
+  const _near = [], byIndex = (a, b) => a - b;
   function nearBoxes(cells, x, z, m) {
     _near.length = 0;
     const x0 = Math.floor((x - m) / GRID_CELL), x1 = Math.floor((x + m) / GRID_CELL);
@@ -155,7 +164,7 @@ const FlybySeq = (function () {
       if (a) { many++; for (let j = 0; j < a.length; j++) _near.push(a[j]); }
     }
     if (many > 1) {
-      _near.sort((a, b) => a - b);
+      _near.sort(byIndex);
       let w = 0;
       for (let j = 0; j < _near.length; j++) if (!j || _near[j] !== _near[j - 1]) _near[w++] = _near[j];
       _near.length = w;
@@ -912,14 +921,14 @@ const FlybySeq = (function () {
   const DEFAULT = [
     // ---- establish: where are we -------------------------------------------
     {
-      id: "wide", dur: 0.11, ease: "inOut",
+      id: "wide", dur: 0.09, ease: "inOut",
       eye: [{ at: "centre", bear: -0.30, distR: 1.10, yR: 0.36 },
             { at: "centre", bear: -0.12, distR: 1.00, yR: 0.32 }],
       look: [{ at: "centre", distR: 0, yR: 0 }, { at: "centre", distR: 0, yR: 0 }],
       fov: [36, 38],
     },
     {
-      id: "wide2", dur: 0.09, ease: "inOut",
+      id: "wide2", dur: 0.08, ease: "inOut",
       eye: [{ at: "centre", bear: 2.35, distR: 0.80, yR: 0.30 },
             { at: "centre", bear: 2.55, distR: 0.70, yR: 0.25 }],
       look: [{ at: "centre", distR: 0, yR: 0 }, { at: "centre", distR: 0, yR: 0 }],
@@ -927,14 +936,14 @@ const FlybySeq = (function () {
     },
     // ---- this circuit in particular ----------------------------------------
     {
-      id: "landmark1", dur: 0.10, ease: "inOut",
+      id: "landmark1", dur: 0.09, ease: "inOut",
       eye: [{ at: "landmark", rank: 0, bear: -0.28, distK: 1.7, yK: -0.15, y: 12 },
             { at: "landmark", rank: 0, bear: -0.08, distK: 1.5, yK: -0.1, y: 12 }],
       look: [{ at: "landmark", rank: 0, distK: 0, yK: 0.2 }, { at: "landmark", rank: 0, distK: 0, yK: 0.25 }],
       fov: [38, 40],
     },
     {
-      id: "landmark2", dur: 0.09, ease: "inOut",
+      id: "landmark2", dur: 0.08, ease: "inOut",
       eye: [{ at: "landmark", rank: 1, bear: 0.30, distK: 1.8, yK: -0.1, y: 12 },
             { at: "landmark", rank: 1, bear: 0.10, distK: 1.6, yK: -0.05, y: 12 }],
       look: [{ at: "landmark", rank: 1, distK: 0, yK: 0.15 }, { at: "landmark", rank: 1, distK: 0, yK: 0.2 }],
@@ -942,7 +951,7 @@ const FlybySeq = (function () {
     },
     // ---- the corners you will actually drive --------------------------------
     {
-      id: "turn-first", dur: 0.10, ease: "inOut",
+      id: "turn-first", dur: 0.09, ease: "inOut",
       eye: [{ at: "corner", n: "first", off: -60, x: 16, y: 9 },
             { at: "corner", n: "first", off: 0, x: 18, y: 8 }],
       look: [{ at: "corner", n: "first", off: -12, x: 0, y: 0.6 },
@@ -975,7 +984,17 @@ const FlybySeq = (function () {
     // of pole (fixed in PR #248: the road draws unbiased), so the grid can now
     // be filmed from the front again.
     {
-      id: "grid-crane", dur: 0.10, ease: "inOut",
+      id: "grid-walk", dur: 0.08, ease: "inOut",
+      // THE GRID WALK: head height, a slow dolly up the aisle between the
+      // staggered rows (the pole anchor is the centreline), eyes on the cars a
+      // row or two ahead — the TV walk before the formation lap. Numbered slots:
+      // a grid too small to fill them (time trial, duel) leaves it out.
+      eye: [{ at: "pole", off: -44, x: 0, y: 1.6 }, { at: "pole", off: -37, x: 0, y: 1.6 }],
+      look: [{ at: "slot", n: 4, off: 0, x: 0, y: 0.6 }, { at: "slot", n: 3, off: 0, x: 0, y: 0.6 }],
+      fov: [50, 46],
+    },
+    {
+      id: "grid-crane", dur: 0.09, ease: "inOut",
       // A slow crane up behind the back row, long lens: the whole field stacked
       // up towards the lights.
       // On the aisle's line and tight behind the last row: from 6 m left and
@@ -989,7 +1008,7 @@ const FlybySeq = (function () {
       fov: [30, 32],
     },
     {
-      id: "grid-front", dur: 0.11, ease: "inOut",
+      id: "grid-front", dur: 0.10, ease: "inOut",
       // THE FRONT ROW, FROM THE START LINE, looking back down the grid: pole
       // big in frame and the field stacked behind it. Close and a little off
       // the aisle — measured with frame-report across eight circuits, 40+ m
@@ -1022,29 +1041,50 @@ const FlybySeq = (function () {
    *
    *  Beyond 1 the sequence holds on its last frame rather than looping: the
    *  screen is skippable, so a player who waits should not see it restart. */
-  /** Plan every shot of `shots` now (solve() caches a plan per shot on first
-   *  use) so the flyby never plans mid-sequence: vary() builds new shots each
-   *  load, and a cold corner plan is a visible stall at the cut. */
+  /** Plan `shots` before they play: a cold corner plan is a visible stall at its
+   *  cut (up to ~0.2 s desktop, ~1 s on a phone). The opening WARM_NOW shots are
+   *  planned at once and the rest one per timer slice, so the RACE! tap does not
+   *  pay for shots 20 s away. Plans go straight into planShot's cache — never
+   *  through solve(), whose cut tracking a background call would disturb. A newer
+   *  warm() (the next load) retires an unfinished one. */
+  const WARM_NOW = 2;
+  let _warmGen = 0;
   function warm(track, shots) {
-    const list = (shots && shots.length) ? shots : DEFAULT;
-    let total = 0, acc = 0;
-    for (let i = 0; i < list.length; i++) total += list[i].dur || 0;
-    for (let i = 0; i < list.length && total > 0; i++) { solve(track, (acc + (list[i].dur || 0) / 2) / total, list); acc += list[i].dur || 0; }
-    reset();
-  }
-  function solve(track, u, shots) {
     const list = bindCorners(track, (shots && shots.length) ? shots : DEFAULT);
     let total = 0;
     for (let i = 0; i < list.length; i++) total += list[i].dur || 0;
+    if (!(total > 0)) return;
+    const gen = ++_warmGen;
+    const plan = (i) => { const sh = landmarkFallback(track, list[i]); planShot(track, sh, (sh.dur || 1) / total); };
+    for (let i = 0; i < Math.min(WARM_NOW, list.length); i++) plan(i);
+    let i = WARM_NOW;
+    const next = () => { if (gen !== _warmGen || i >= list.length) return; plan(i++); setTimeout(next, 0); };
+    if (i < list.length) setTimeout(next, 0);
+  }
+  const withoutSlot = (list) => { const out = list.filter(fitsGrid); return out.length ? out : list; };
+  /** WHICH SHOT IS ON AIR at flyby progress `u`, and how far through it (0..1)
+   *  — the cut arithmetic solve() uses, with none of its planning, so a caller
+   *  that only needs the shot's NAME (the loading card's grid graphic and its
+   *  radio check, js/ui/loading-screen.js) pays nothing for it. Pure: binding
+   *  corners and the landmark fallback never change an id or a duration. */
+  function shotAt(u, shots) {
+    const list = (shots && shots.length) ? shots : DEFAULT;
+    let total = 0;
+    for (let i = 0; i < list.length; i++) total += list[i].dur || 0;
     if (!(total > 0)) total = 1;
-    let at = Math.max(0, Math.min(1, u)) * total, idx = 0, acc = 0;
+    let at = Math.max(0, Math.min(1, +u || 0)) * total, idx = 0, acc = 0;
     for (; idx < list.length - 1; idx++) {
       if (at < acc + (list[idx].dur || 0)) break;
       acc += list[idx].dur || 0;
     }
+    const dur = list[idx].dur || 1;
+    return { index: idx, id: list[idx].id || String(idx), t: Math.max(0, Math.min(1, (at - acc) / dur)), total };
+  }
+  function solve(track, u, shots) {
+    const list = bindCorners(track, (shots && shots.length) ? shots : DEFAULT);
+    const on = shotAt(u, list), idx = on.index, t = on.t, total = on.total;
     const shot = landmarkFallback(track, list[idx]);
     const dur = shot.dur || 1;
-    const t = Math.max(0, Math.min(1, (at - acc) / dur));
     const e = (EASE[shot.ease] || EASE.inOut)(t);
 
     // The PLAN is the authored shot after every per-shot correction (grid
@@ -1374,7 +1414,7 @@ const FlybySeq = (function () {
   function planShot(track, shot, frac) {
     const cache = track._fbPlan || (track._fbPlan = new WeakMap());
     let plan = cache.get(shot);
-    if (plan && plan.frac === frac) return plan;
+    if (plan && plan.frac === frac && plan.slot === _playerSlot) return plan;   // a slot pose moves with the player's grid slot
     const onRoad = onRoadPose(shot.eye[0]) && onRoadPose(shot.eye[1]);
     const noLift = new Float32Array(LIFT_N + 1);
     const baseLook = planLook(track, shot.eye, shot.look);
@@ -1391,7 +1431,7 @@ const FlybySeq = (function () {
     }
     // The squeezed look keeps the sightline rule: re-plan it against the eye.
     if (look !== shot.look) look = planLook(track, pe.eye, look);
-    plan = { eye: pe.eye, look: look, prof: pe.prof, onRoad: onRoad, frac: frac, squeeze: k };
+    plan = { eye: pe.eye, look: look, prof: pe.prof, onRoad: onRoad, frac: frac, squeeze: k, slot: _playerSlot };
     cache.set(shot, plan);
     return plan;
   }
@@ -1413,8 +1453,8 @@ const FlybySeq = (function () {
      the handoff to the race. Pure and seeded (never the sim RNG): the same
      seed is the same flyby, which is what the test holds it to. */
   const VARY_ROLES = ["first", "lore", "slowest", "fastest", "mid", "late"];
-  function vary(list, seed, slotOk) {
-    if (slotOk === false) list = list.filter((shot) => !usesSlot(shot));   // durations renormalise in solve()
+  function vary(list, seed) {
+    list = list.filter(fitsGrid);   // durations renormalise in solve()
     let h = (seed >>> 0) || 1;
     const rnd = () => { h ^= h << 13; h >>>= 0; h ^= h >>> 17; h ^= h << 5; h >>>= 0; return h / 4294967296; };
     const used = {}, swapLm = rnd() < 0.35;   // decided ONCE: swapping one landmark shot alone films the same landmark twice
@@ -1439,10 +1479,10 @@ const FlybySeq = (function () {
   function reset() { _lastIdx = -1; }
 
   return {
-    solve, reset, clearEye, floorEye, groundAt, insideProp, blockers, isSolid, onRoadPose,
+    solve, shotAt, reset, clearEye, floorEye, groundAt, insideProp, blockers, isSolid, onRoadPose,
     landmarks, bounds, landmarkScore, lmBase, landmarkFallback, planShot, treeBlockers,
     anchorS, posePoint, cornerS, cornerSide, cornerTurn, lmFace,
-    poseFromWorld, shotFromView, nearestCorner, vary, setPlayerSlot, slotIndex, slotKnown, bindCorners, warm,
+    poseFromWorld, shotFromView, nearestCorner, vary, setPlayerSlot, slotIndex, slotKnown, withoutSlot, bindCorners, warm,
     DEFAULT, EASE,
     POLE_BACK, GRID_SPACING, GRID_ROWS, MIN_FILL, MIN_H, FAR, FOG, NEAR, FENCE, REF_S, PAN_MAX,
   };

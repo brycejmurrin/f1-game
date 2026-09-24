@@ -189,8 +189,33 @@ three's WebGL2.** three.js/WebGPU: gpuErrors 0, no compile rows, 2 frames >= 100
 117 ms), none of them in the lamp copy. three.js/WebGL2: 4 frames >= 100 ms, max 2.2 s, and
 **71.8 % of the spike time (2015 ms) was `getParameter` <- `copyTextureToTexture` <-
 `lampCarsBegin`**. Three r186's WebGL `copyTextureToTexture` saves five `UNPACK_*` states
-with `gl.getParameter` on every call; in Chrome each is a synchronous round trip to the GPU
-process, so behind a busy frame it waits for the queue. The WebGPU backend has no such read.
+through `WebGLState.getParameter`, which caches them once set — so only the FIRST copy (per
+context; nothing here calls `resetState`) reads GL. In Chrome that read is a synchronous round
+trip to the GPU process, and the first night lamp copy lands behind the queued ANGLE program
+links, so it waited ~2 s for them to drain. The WebGPU backend has no such read.
 `lampStaticOn` is now AUTO = WebGPU only (`apex26.tlxLampStatic=1` forces it on WebGL2,
 `=0` off everywhere). Lesson: a three backend call that is free on WebGPU can be a sync
 readback on WebGL — check the WebGL leg's spike stacks, not only its compile rows.
+
+**Census 36042931057 (6d04c37 = L1 WebGPU-only, real Metal, montreal NIGHT).** three.js/WebGL2:
+worst hitch 2235 → 232 ms, spikes 14 → 7, no `copyTextureToTexture` in any spike, gpuErrors 0.
+Its remaining spike time is three's per-object node update (`updateForRender`/`update`/
+`updateReference`, ~28 % of the leg's CPU). WebGPU, GLX and WGX gpuErrors 0.
+
+**Per-object update trims from that profile (ac0ea8e, ecc845b).**
+- *three vendor patch 9* — `TextureNode.update()` rebuilt `texture.matrix` (`setUvTransform`)
+  on every per-object update even for nodes with no matrix uniform; three's WebGL2 backend
+  gives every texture node a flipY uniform, so every shadow compare / material / bake sample
+  paid it per draw. Only nodes that sample through the matrix rebuild it now (PATCHES.md §9).
+- *packed lit scalars* — the seven per-material scalars (roughness, metalness, specular,
+  detail | clearcoat, carPaint, sparkle) were seven `materialReference` nodes: seven
+  `updateReference` + property-path walks per render object per pass. `makeMaterial` packs
+  them once into `userData.tlxPackA/B`; the shared graph reads two per-object vec4 uniforms.
+- *WGX mip pipeline* — `_generateMips` compiled its pipeline on the first env face mid-race
+  (census `stack:` rows); `envInit` now prewarms it with `createRenderPipelineAsync`.
+
+Evidence (Lavapipe WebGPU, montreal day, frozen, deploy tip vs this tree): 0.027 % / 0.037 %
+of pixels against a same-tree floor of 0.018-0.412 % (two captures of ONE tree differed
+0.41 % at frac 0.1 — the floor here is wide), luma equal; braking compile probe lap sync
+compiles 0, warm failed 0; canaries 189/189, webgpu-lifecycle 80/80. The CPU saving is a
+WebGL2 real-GPU claim — the next census is its measurement.

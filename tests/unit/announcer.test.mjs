@@ -763,3 +763,10 @@ test("the wrap-up names the winner, the margin, your race against your grid slot
     assert.ok(RV.estimate(RV.speakable(l), 0.92) < 14, `"${l}" is too long for one utterance`);
   }
 });
+
+test("a photo-finish margin is read as a tenth, never '0.0 seconds'", () => {
+  const txt = A.wrapRows({ event: "the British Grand Prix", n: 20, winner: { name: "Max Verstappen" },
+    second: "Lando Norris", margin: 0.04, you: { pos: 5, grid: 5 } }).join(" ");
+  assert.doesNotMatch(txt, /0\.0 seconds/);
+  assert.match(txt, /0\.1 seconds ahead of Norris/);
+});
