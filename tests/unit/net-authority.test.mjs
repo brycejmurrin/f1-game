@@ -389,6 +389,11 @@ globalThis.Teams = {
   ],
 };
 globalThis.Tracks = { LIST: Array.from({ length: 6 }, (_, i) => ({ id: "track-" + i })) };
+// LobbyCodes peels paste/share/scan/QR from lobby; ApexClipboard is its write/read home.
+globalThis.ApexClipboard = eval(src("js/core/clipboard.js") + ";ApexClipboard");
+globalThis.NetQr = globalThis.NetQr || { draw: () => false };
+globalThis.NetScan = globalThis.NetScan || { supported: () => false, create: () => ({ start: async () => ({ ok: false }), stop() {} }) };
+globalThis.LobbyCodes = eval(src("js/net/lobby-codes.js") + ";LobbyCodes");
 const NetLobby = eval(src("js/net/lobby.js") + ";NetLobby");
 
 function lobbyG() {
