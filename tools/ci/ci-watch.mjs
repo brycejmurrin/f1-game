@@ -93,6 +93,9 @@ export function newJobEvents(jobs, seen, wf) {
   return out;
 }
 
+/** Only a failed or timed-out job carries a diagnosis worth printing. */
+export const wantsAnnotations = (job) => job.conclusion === "failure" || job.conclusion === "timed_out";
+
 function annotations(jobId) {
   const r = api(`check-runs/${jobId}/annotations?per_page=5`);
   return (r.json || []).filter((a) => a.annotation_level === "failure").slice(0, 3)
@@ -117,7 +120,10 @@ async function watchSha(sha, { interval, deadline, once }) {
       jobsByRun[run.id] = j.json?.jobs || [];
       for (const e of newJobEvents(jobsByRun[run.id], seen, run.name)) {
         say(e.line);
-        if (e.bad) for (const a of annotations(e.job.id)) console.log(a);
+        // Annotations only for a job that FAILED: a cancelled job's annotation is
+        // the push/PR dedupe's "higher priority waiting request" (rule 8) — as a
+        // Monitor event it read as a red, eight times over, on PR #279.
+        if (wantsAnnotations(e.job)) for (const a of annotations(e.job.id)) console.log(a);
       }
     }
     const v = verdict(runs, jobsByRun);
