@@ -5239,3 +5239,25 @@ Evidence on this box (Lavapipe, three.js/**WebGPU** path, `api: webgpu`):
 
 `test:tooling-fast` 238/238. Real-Metal A/B: gpu-census on this push (warm on),
 then `ls: apex26.tlxWarmPlus=0`.
+
+### Real Metal, driven montreal: census 240 (before) vs 243 (step 1)
+
+| three.js/WebGPU leg | 240 (bb93e28) | 243 (842f063) |
+|---|---|---|
+| shader modules + pipelines compiled in the window (`stack:` total) | 44 (20 via `runPass`) | **8** (none via `runPass`) |
+| frames >= 100 ms | 13 | **5** |
+| callback time inside them | 2073 ms | **706 ms** |
+| worst hitch | 248 ms | 188 ms |
+| `createBuffer` in the window | 2389 | 714 |
+| warm stages | not reported | scene 7033, post 2203, shadow 5 ms, failed 0 |
+| gpuErrors / luma | 0 / 42.7 | 0 / 49.3 |
+
+The three.js/WebGL2 control leg: frames >= 100 ms 17 → 2 (7249 → 548 ms), warm
+scene 5924 / post 1815 ms, gpuErrors 0, luma 62.3 → 55.5 (a driven window ends at a
+different place each run; GLX 70.7 → 70.3, WGX 69.9 → 73.7 are the same noise). GLX
+and WGX legs unchanged, Verdict green, CI 5039 green.
+
+What is left on WebGPU is 4 modules + 4 pipelines from `present` → `_renderTimed`,
+the scene pass (plan step 2's reveal-all warm). The cost: the post warm now runs on
+Metal (it never did — the 7 s scene warm always consumed the 3 s gate), so the lights
+hold ~2.2 s longer on WebGPU, ~1.8 s on WebGL2.
