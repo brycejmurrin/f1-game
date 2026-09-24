@@ -941,6 +941,10 @@
           aria-labelledby="dlg-settings" hidden>
           <h3 class="pm-group-h">APPEARANCE</h3>
           <p class="adv-help">Theme and accents for menus and the race HUD. Selection rings stay on the menu accent; team identity can stay on the HUD.</p>
+          <div id="pm-appearance-preview" class="pm-accent-preview" aria-hidden="true">
+            <button type="button" class="bigbtn pm-accent-preview-btn" tabindex="-1">PRIMARY</button>
+            <span class="pm-accent-preview-hud"><b>42</b></span>
+          </div>
           <div id="pm-uitheme" class="set-row" role="group" aria-labelledby="pm-uitheme-label">
             <span class="tune-label" id="pm-uitheme-label">THEME</span>
             <div>
@@ -958,11 +962,13 @@
               <button id="pm-menuaccent-next" type="button" data-step="1" aria-label="Next menu accent">&rsaquo;</button>
             </div>
           </div>
-          <p class="adv-help">Primary buttons, selected chips and sheet highlights. BRAND is Formula red; TEAM follows your constructor.</p>
+          <div id="pm-menuaccent-swatches" class="pm-accent-swatches" role="listbox" aria-label="Menu accent presets"></div>
+          <p class="adv-help">Primary buttons, selected chips and sheet highlights. BRAND is Formula red; TEAM follows your constructor. Tap a swatch or use the chevrons.</p>
           <div id="pm-menuaccent-custom" class="set-row pm-accent-custom" role="group" aria-labelledby="pm-menuaccent-hex-label" hidden>
             <span class="tune-label" id="pm-menuaccent-hex-label">CUSTOM MENU</span>
             <div>
               <input id="pm-menuaccent-hex" type="color" value="#e10600" aria-labelledby="pm-menuaccent-hex-label">
+              <input id="pm-menuaccent-hextext" class="pm-accent-hextext" type="text" inputmode="text" maxlength="7" spellcheck="false" autocomplete="off" aria-label="Menu accent hex" value="#e10600">
             </div>
           </div>
           <div id="pm-hudaccent" class="set-row" role="group" aria-labelledby="pm-hudaccent-label">
@@ -973,11 +979,13 @@
               <button id="pm-hudaccent-next" type="button" data-step="1" aria-label="Next HUD accent">&rsaquo;</button>
             </div>
           </div>
+          <div id="pm-hudaccent-swatches" class="pm-accent-swatches" role="listbox" aria-label="HUD accent presets"></div>
           <p class="adv-help">HUD stripes and the radio number plate. TEAM is the default team skin.</p>
           <div id="pm-hudaccent-custom" class="set-row pm-accent-custom" role="group" aria-labelledby="pm-hudaccent-hex-label" hidden>
             <span class="tune-label" id="pm-hudaccent-hex-label">CUSTOM HUD</span>
             <div>
               <input id="pm-hudaccent-hex" type="color" value="#e10600" aria-labelledby="pm-hudaccent-hex-label">
+              <input id="pm-hudaccent-hextext" class="pm-accent-hextext" type="text" inputmode="text" maxlength="7" spellcheck="false" autocomplete="off" aria-label="HUD accent hex" value="#e10600">
             </div>
           </div>
         </section>
