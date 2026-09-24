@@ -6,5 +6,5 @@
   "census_only": false,
   "force": "",
   "ls": "",
-  "leg": "L1-webgpu-only-webgl2-copy-stall-NIGHT-2026-09-24"
+  "leg": "patch10-shared-texture-uniforms-shadow-bugs-NIGHT-2026-09-24"
 }
