@@ -2492,6 +2492,11 @@ async function menuIdle(current) {
     if (!current()) return false;
   }
 }
+// Dark sessions: bake the lamp pools in 8 ms slices now, so RACE!'s sync bake hits the cache (lamp-bake.js prebake).
+async function menuLampBake(current) {
+  const step = current() && _atmo.prebakeLamps();
+  while (step && current() && !step(8)) await new Promise((r) => setTimeout(r, 8));
+}
 function scheduleFlybyTrack(settle) {
   clearTimeout(flybyBuildTimer);
   const generation = ++_menuGate.generation;
@@ -2515,7 +2520,7 @@ function scheduleFlybyTrack(settle) {
       // car's meshes and livery upload 32 ms apart; a warm frame drawn first
       // minted and uploaded all ~22 atlases in one 3-4 s task.
       if (_menuGate.ready === key && _menuGate.track === track) {
-        await prepareMenuCarAssets(current); if (await menuIdle(current)) _menuGate.warm = 2; return;
+        await prepareMenuCarAssets(current); await menuLampBake(current); if (await menuIdle(current)) _menuGate.warm = 2; return;
       }
       // The build holds the main thread for 1-3 s: never start it while the
       // player is still working the picker or RACE SETTINGS (a TIME OF DAY step
@@ -2528,6 +2533,7 @@ function scheduleFlybyTrack(settle) {
       if (current() && track.meshes && track.meshes.pitSignTex && typeof gfx.uploadTexture === "function")
         gfx.uploadTexture(track.meshes.pitSignTex);
       await prepareMenuCarAssets(current);
+      await menuLampBake(current);
       if (await menuIdle(current)) _menuGate.warm = 2;
     } catch (e) { if (current()) Log.warn("gfx", "track preparation failed", e); }
   };
@@ -3535,7 +3541,7 @@ const { buildResults, buildTTResults, buildStandings, buildChampion } = GameResu
 const hud = GameHud.create(G);
 const updateHud = hud.updateHud;
 // Session atmosphere: applyRaceSettings + per-track bias (js/lighting/atmosphere.js).
-const applyRaceSettings = Atmosphere.create(G).applyRaceSettings;
+const _atmo = Atmosphere.create(G), applyRaceSettings = _atmo.applyRaceSettings;
 // CAR SETUP panel UI (js/garage/setup-sheet.js).
 const { buildSetup, openSetup } = SetupUI.create(G);
 // Select-screen UI (js/ui/select-screen.js).
