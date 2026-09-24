@@ -280,7 +280,7 @@
       // Parabolica / Curva Alboreto (apex s 0.824, right) — wide outer gravel, big arc stand.
       groundPatch(K(0.819), -1, 8, [50, 0.18, 110], GRAVEL,
         { id: "monza-parabolica-gravel", samples: 10 });
-      grandstandEx(0.824, 1, 14, 96, null, null,
+      grandstandEx(0.824, -1, 14, 96, null, null,
         { livery: "crimson", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
       tyreWall(0.804, 0.839, -1, 6, [0.88, 0.20, 0.18]);
       marshalPost(K(0.829), 1, 11);
