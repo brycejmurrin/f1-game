@@ -152,6 +152,7 @@ const FULL = [
   "js/audio/spotify.js",
   "js/audio/rivals.js",
   "js/audio/car-sfx.js",
+  "js/audio/voice-pack.js",
   "js/audio/radio-voice.js",
   // The announcer's authored half. Data only, read at CALL time and guarded on
   // the global, so the order is for tidiness rather than correctness.
@@ -197,6 +198,7 @@ const FULL = [
   // that reads both. game.js calls RaceRadio.create(G) at eval.
   "js/race/radio-lines.js",
   "js/race/race-facts.js",
+  "js/race/spotter.js",
   "js/race/race-radio.js",
   "js/camera/offsets.js",
   "js/camera/flyby-seq.js",
@@ -543,6 +545,8 @@ const HARD_EDGES = [
   ["js/race/engineer.js", "js/game.js"],                 // game.js calls RaceEngineer.create(G) at eval
   ["js/race/radio-lines.js", "js/race/race-radio.js"],  // RaceRadio.create builds a RadioLines dealer (call time, keep ordered)
   ["js/race/race-facts.js", "js/race/race-radio.js"],   // …and a RaceFacts tracker
+  ["js/race/spotter.js", "js/race/race-radio.js"],      // …and a Spotter
+  ["js/audio/voice-pack.js", "js/audio/radio-voice.js"], // RadioVoice.create builds a VoicePack
   ["js/race/race-radio.js", "js/game.js"],               // game.js calls RaceRadio.create(G) at eval
   ["js/core/mat4.js", "js/physics/brake-cue.js"],        // BrakeCue aliases M4.clamp at eval
   ["js/physics/ai-drive.js", "js/physics/contact-geometry.js"],  // the impulse reads AiDrive.bumpRestitution (call time, keep ordered)
