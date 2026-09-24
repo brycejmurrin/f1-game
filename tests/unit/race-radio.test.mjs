@@ -470,3 +470,33 @@ test("two cars swapping the lead again and again get one lead-change call per 30
   assert.ok(leads.length <= 3, `lead calls in 60 s: ${leads.length} — ${leads.join(" | ")}`);
   assert.ok(leads.length >= 1, "a lead change is still called");
 });
+
+
+test("'out of reach' is an end-of-race call: never on lap one of a short race", () => {
+  const A = simCar("AAA", 1500, 70), P = simCar("PLY", 1000, 60, { isPlayer: true }), B = simCar("BBB", 900, 55);
+  const r = sim([A, P, B], 3); r.radio.setChat("chatty");
+  r.step(60);
+  // eng.outOfReach: "{ahead} IS {gap} AHEAD. HOLD P{pos}" / "TOO FAR TO {ahead}. BRING HOME P{pos}"
+  assert.ok(!r.lines().some((m) => /AHEAD\. HOLD P|TOO FAR TO/.test(m)), r.lines().join(" | "));
+});
+
+test("commentary leaves room: at least 10 s between ordinary lines, and one pass call per pair per 40 s", () => {
+  const cars = [];
+  for (let i = 0; i < 8; i++) cars.push(simCar("C" + i, 2000 - i * 12, 60));
+  cars.push(simCar("PLY", 500, 60, { isPlayer: true }));
+  const r = sim(cars, 30);
+  r.radio.setComm("on");
+  r.step(15);
+  const t0 = r.G.raceT;
+  for (let k = 0; k < 20; k++) {                 // pairs trading places every 3 s
+    const i = 1 + (k % 5), a = cars[i], b = cars[i + 1];
+    const [front, back] = a.prog > b.prog ? [a, b] : [b, a];
+    back.prog = front.prog + 4;
+    r.step(3);
+  }
+  const comm = r.said.filter((s) => s.kind === "comm" && s.t >= t0 && !/LEAD|FRONT/.test(s.msg));
+  for (let i = 1; i < comm.length; i++) {
+    assert.ok(comm[i].t - comm[i - 1].t >= 10 - 1e-6, `lines ${comm[i - 1].t.toFixed(1)} -> ${comm[i].t.toFixed(1)}: ${comm.map((c) => c.msg).join(" | ")}`);
+  }
+  assert.ok(comm.length >= 2, "commentary still talks");
+});
