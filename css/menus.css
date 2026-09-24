@@ -160,6 +160,11 @@
    be. Anything painting a <g> that `#title-car g` also matches has to come
    from a rule, not an attribute. */
 #title-car g[data-trail] { fill: url(#tc-trail); }
+/* TITLE ART player setting (js/ui/title-fx.js → html[data-title-art]).
+   Specificity beats the media-query opacity fades and the tall-shape
+   re-shows below so SOFT/OFF win on every viewport. ON leaves those alone. */
+:root[data-title-art="soft"] #title-car { opacity: 0.14; }
+:root[data-title-art="off"] #title-car { display: none; }
 /* COPY SPACE IS A FUNCTION OF WIDTH, and this is a COMPOSITION rule, not a
    contrast one — the difference matters, because the first measurement looked
    like a legibility problem and was not.

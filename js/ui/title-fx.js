@@ -1,42 +1,40 @@
-/* Apex 26 — TitleFx: the title screen's motion, as a player setting.
+/* Apex 26 — TitleFx: title-screen motion and the background drawing, as
+   player settings under SETTINGS › APPEARANCE.
 
-   MENU ANIMATIONS: ON / REDUCED (SETTINGS › DISPLAY). An OS that asks for
-   reduced motion always wins, and is followed live; otherwise the stored
-   choice answers, and unset is ON. The answer lands on
-   <html data-motion="reduce"> — absent when motion is on — so CSS keys off
-   ONE attribute instead of a media query plus a class. The OS query alone was
-   not enough: a player whose phone animates everything can still want quiet
-   menus, and there was no way to say so.
+   MENU ANIMATIONS: ON / REDUCED. An OS that asks for reduced motion always
+   wins, and is followed live; otherwise the stored choice answers, and unset
+   is ON. Lands on <html data-motion="reduce"> — absent when motion is on —
+   so CSS keys off ONE attribute.
 
-   Four small jobs, all on #overlay (the title screen):
-     * the motion attribute. index.html's inline boot script sets the FIRST
-       answer before first paint; this file owns every later one, applied at
-       eval (it sits right behind store.js in the manifest) and live after;
-     * the intro, ONCE: the reveal in CSS keys off #overlay[data-intro]. The
-       shell ships the attribute, so the very first paint is already the
-       intro's start state (set from here, the static title painted whole
-       first and then vanished to be drawn on). This file takes it off
-       INTRO_MS after the overlay is first visible, so coming back from a
-       room is the resting title, never a second show. REDUCED takes it off
-       at once. replay() is the one way to see it again;
-     * #overlay[data-paused] while the tab is hidden, so a backgrounded tab
-       does not spend frames on a menu nobody can see;
-     * a light confirm tap on a title .bigbtn. Input.vibrate is the one haptic
-       path: the player's HAPTICS slider scales it, 0 is off, and iOS has no
-       navigator.vibrate at all, so it is a no-op there by construction.
+   TITLE ART: ON / SOFT / OFF. Controls the #title-car line drawing behind the
+   title menu via <html data-title-art>. Unset is ON (the shipped look).
+
+   Four small jobs on #overlay (the title screen):
+     * motion + title-art attributes (index.html's inline boot sets the FIRST
+       answers before first paint; this file owns every later one);
+     * the intro, ONCE: CSS keys off #overlay[data-intro]. The shell ships the
+       attribute; this file takes it off INTRO_MS after the overlay is first
+       visible. REDUCED takes it off at once. replay() is the one way to see
+       it again (also wired to #pm-replay-intro);
+     * #overlay[data-paused] while the tab is hidden;
+     * a light confirm tap on a title .bigbtn via Input.vibrate.
 
    Needs GameStore at eval (HARD_EDGES). Input and SettingRow are read at call
    time only. */
 const TitleFx = (function () {
   "use strict";
 
-  const KEY = "motion";            // apex26.motion — json lane: "on" | "reduce" | unset
+  const KEY = "motion";            // apex26.motion — json: "on" | "reduce" | unset
+  const KEY_ART = "titleArt";      // apex26.titleArt — json: "on" | "soft" | "off" | unset
+  const MOTION = [["on", "ON"], ["reduce", "REDUCED"]];
+  const ARTS = [["on", "ON"], ["soft", "SOFT"], ["off", "OFF"]];
   const INTRO_MS = 2800;           // the CSS intro is over by ~2.5 s (css/menus.css)
   const store = GameStore.store;
   const root = typeof document !== "undefined" ? document.documentElement : null;
   const osQuery = (typeof window !== "undefined" && window.matchMedia)
     ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
-  const overlay = () => (typeof document !== "undefined" ? document.getElementById("overlay") : null);
+  const byId = (id) => (typeof document !== "undefined" ? document.getElementById(id) : null);
+  const overlay = () => byId("overlay");
   let introTimer = 0;
 
   const osReduce = () => !!(osQuery && osQuery.matches);
@@ -47,6 +45,11 @@ const TitleFx = (function () {
     if (osReduce()) return "reduce";
     return store.get(KEY, null) === "reduce" ? "reduce" : "on";
   }
+  function artMode() {
+    const v = store.get(KEY_ART, null);
+    if (v === "soft" || v === "off") return v;
+    return "on";
+  }
 
   function endIntro() {
     clearTimeout(introTimer);
@@ -54,16 +57,34 @@ const TitleFx = (function () {
     if (ov) ov.removeAttribute("data-intro");
   }
 
-  function apply() {
+  function applyMotion() {
     if (!root || !root.dataset) return;
     if (mode() === "reduce") { root.dataset.motion = "reduce"; endIntro(); }
     else delete root.dataset.motion;
   }
+  function applyArt() {
+    if (!root || !root.dataset) return;
+    const a = artMode();
+    if (a === "on") delete root.dataset.titleArt;
+    else root.dataset.titleArt = a;
+  }
+  function apply() {
+    applyMotion();
+    applyArt();
+  }
 
   function set(v) {
     store.set(KEY, v === "reduce" ? "reduce" : "on");
-    apply();
+    applyMotion();
+    if (typeof SettingRow !== "undefined" && SettingRow.paint) SettingRow.paint("pm-motion", mode());
     return mode();
+  }
+  function setArt(v) {
+    const next = (v === "soft" || v === "off") ? v : "on";
+    store.set(KEY_ART, next);
+    applyArt();
+    if (typeof SettingRow !== "undefined" && SettingRow.paint) SettingRow.paint("pm-titleart", artMode());
+    return artMode();
   }
 
   // Hold the intro for one pass, then drop to the resting title for good.
@@ -115,32 +136,37 @@ const TitleFx = (function () {
       if (document.visibilityState === "hidden") ov.setAttribute("data-paused", "");
       else ov.removeAttribute("data-paused");
     });
-    buildRow();
+    wireRows();
   }
 
-  // The row is BUILT, like cockpit-opts' HALO, rather than static shell DOM:
-  // it goes straight under UI SIZE in SETTINGS › DISPLAY, the other setting
-  // about how the menus themselves behave. Silent write, like DebrisOpts: no G
-  // here, so no sound gate to honour.
-  function buildRow() {
-    if (typeof SettingRow === "undefined" || document.getElementById("pm-motion")) return;
-    const slider = document.getElementById("pm-uiscale");
-    const anchor = slider && slider.parentNode;
-    if (!anchor || !anchor.parentNode) return;
-    const r = SettingRow.build("pm-motion", "MENU ANIMATIONS", [["on", "ON"], ["reduce", "REDUCED"]]);
-    SettingRow.wire(r.row, { read: mode, write: set });
-    const help = document.createElement("p");
-    help.id = "pm-motion-help";
-    help.className = "adv-help";
-    help.textContent = "REDUCED stills menu reveals and screen transitions. If your device asks for reduced motion, that always wins.";
-    if (r.sel) r.sel.setAttribute("aria-describedby", help.id);
-    anchor.parentNode.insertBefore(r.row, anchor.nextSibling);
-    anchor.parentNode.insertBefore(help, r.row.nextSibling);
+  // Static shell rows under SETTINGS › APPEARANCE (moved off DISPLAY › UI SIZE
+  // so motion + title art sit with the other visual chrome).
+  function wireRows() {
+    if (typeof SettingRow === "undefined") return;
+    if (byId("pm-motion")) {
+      SettingRow.wire("pm-motion", {
+        values: MOTION,
+        read: mode,
+        write: (v) => set(v),
+      });
+    }
+    if (byId("pm-titleart")) {
+      SettingRow.wire("pm-titleart", {
+        values: ARTS,
+        read: artMode,
+        write: (v) => setArt(v),
+      });
+    }
+    const replayBtn = byId("pm-replay-intro");
+    if (replayBtn && !replayBtn._wired) {
+      replayBtn._wired = true;
+      replayBtn.addEventListener("click", () => replay());
+    }
   }
 
   apply();
   // The OS preference is followed live, on top of the stored choice.
-  if (osQuery && osQuery.addEventListener) osQuery.addEventListener("change", apply);
+  if (osQuery && osQuery.addEventListener) osQuery.addEventListener("change", applyMotion);
 
   // Deferred scripts run while readyState is "interactive" and SettingRow loads
   // after this file, so only a document that is already COMPLETE wires now.
@@ -149,6 +175,9 @@ const TitleFx = (function () {
     else document.addEventListener("DOMContentLoaded", initUI, { once: true });
   }
 
-  return { KEY, mode, set, apply, replay, initUI };
+  return {
+    KEY, KEY_ART, MOTION, ARTS,
+    mode, artMode, set, setArt, apply, applyMotion, applyArt, replay, initUI, wireRows,
+  };
 })();
 Object.freeze(TitleFx);

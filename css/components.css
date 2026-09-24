@@ -1392,6 +1392,25 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   letter-spacing: var(--ls-5);
   text-transform: uppercase;
 }
+/* One-shot REPLAY INTRO — not a full-width Settings door. */
+#pmsettings-inner #pm-panel-appearance .pm-replay-intro {
+  width: auto;
+  align-self: flex-end;
+  flex-direction: column;
+  align-items: flex-start;
+  height: auto;
+  min-height: var(--tap);
+  margin-top: calc(var(--gap) * 0.35);
+  padding: calc(var(--gap) * 0.55) calc(var(--gap) * 0.85);
+}
+#pmsettings-inner #pm-panel-appearance .pm-replay-intro small {
+  display: block;
+  font-weight: 600;
+  font-style: italic;
+  letter-spacing: var(--ls-2);
+  color: var(--dim);
+  text-transform: none;
+}
 
 /* Every Settings page, not only STEERING / MUSIC: HUD SIZE and BUTTON SIZE
    used to be the two plain-grey labels on a sheet of steel italics. */

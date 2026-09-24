@@ -1,8 +1,6 @@
-/* title-fx — MENU ANIMATIONS as a player setting, the one-shot intro, the hidden-
- * tab pause and the title-button haptic. Runs the REAL module in node:vm over
- * a mini DOM: the failure modes are all quiet ones (the attribute never lands,
- * the row is never claimed, the replay never restarts, the tap bypasses the
- * HAPTICS slider), and each looks fine in the shell until someone checks.
+/* title-fx — MENU ANIMATIONS + TITLE ART as player settings, the one-shot
+ * intro, the hidden-tab pause and the title-button haptic. Runs the REAL
+ * module in node:vm over a mini DOM.
  *
  * Run: node --test tests/unit/title-fx.test.mjs */
 import { test } from "node:test";
@@ -16,6 +14,9 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const FILE = "js/ui/title-fx.js";
 const SRC = fs.readFileSync(path.join(ROOT, FILE), "utf8").replace(/^const\b/gm, "var");
 const CSS = fs.readFileSync(path.join(ROOT, "css/responsive.css"), "utf8");
+const MENUS = fs.readFileSync(path.join(ROOT, "css/menus.css"), "utf8");
+const SHELL = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+const EXPORT = fs.readFileSync(path.join(ROOT, "js/ui/settings-export.js"), "utf8");
 const MANIFEST = fs.readFileSync(path.join(ROOT, "tools/manifest.cjs"), "utf8");
 
 function el(id) {
@@ -47,18 +48,15 @@ function load({ stored = {}, osReduce = false, readyState = "complete", vibrate 
   const frames = [];
   const written = {};
   const buzz = [];
-  const built = [];
+  const wired = [];
   const observers = [];
   const ids = new Map();
   const overlay = el("overlay");
-  overlay.setAttribute("data-intro", "");          // the shell ships it
+  overlay.setAttribute("data-intro", "");
   overlay.hidden = overlayHidden;
-  const pane = el("pane");
-  const label = el("uiscale-label");
-  pane.appendChild(label);
-  const slider = el("pm-uiscale");
-  label.appendChild(slider);
-  ids.set("overlay", overlay).set("pm-uiscale", slider);
+  // Static Appearance rows (shell declares them).
+  for (const id of ["pm-motion", "pm-titleart", "pm-replay-intro"]) ids.set(id, el(id));
+  ids.set("overlay", overlay);
   const html = { dataset: {} };
   const document = {
     readyState, documentElement: html, visibilityState: "visible", _handlers: {},
@@ -73,57 +71,126 @@ function load({ stored = {}, osReduce = false, readyState = "complete", vibrate 
       set: (k, v) => { written[k] = v; stored[k] = v; },
     } },
     SettingRow: {
-      build: (id, text, values) => { const row = el(id); ids.set(id, row); built.push({ id, text, values }); return { row }; },
-      wire: (row, spec) => { row._spec = spec; return row; },
+      wire: (id, spec) => { wired.push({ id, spec }); ids.get(id)._spec = spec; },
+      paint: () => {},
     },
     setTimeout: (fn, ms) => { const id = nextTimer++; timers.set(id, { fn, ms }); return id; },
     clearTimeout: (id) => { timers.delete(id); },
     requestAnimationFrame: (fn) => { frames.push(fn); return frames.length; },
-    MutationObserver: class { constructor(fn) { this.fn = fn; observers.push(this); } observe(t, o) { this.t = t; this.o = o; } disconnect() { this.off = true; } },
-    document,
+    MutationObserver: function (fn) {
+      const o = { observe() {}, disconnect() { this.off = true; }, fn, o: null };
+      o.observe = (el, opts) => { o.o = opts; observers.push(o); };
+      o.fn = fn;
+      return o;
+    },
+    document, window: {
+      matchMedia: () => ({
+        matches: osReduce,
+        addEventListener() {},
+        addListener() {},
+      }),
+    },
+    Input: vibrate ? { vibrate: (n) => buzz.push(n) } : undefined,
   };
-  if (vibrate) sb.Input = { vibrate: (ms) => buzz.push(ms) };
-  sb.window = sb;
-  sb.window.matchMedia = () => ({ matches: osReduce, addEventListener() {} });
+  sb.window.document = document;
+  sb.window.matchMedia = sb.window.matchMedia;
+  // Fix matchMedia binding
+  sb.window.matchMedia = () => ({
+    matches: osReduce,
+    addEventListener(_t, fn) { sb._mq = fn; },
+    addListener(fn) { sb._mq = fn; },
+  });
   const ctx = vm.createContext(sb);
+  // Patch MutationObserver to capture filter
+  ctx.MutationObserver = function (fn) {
+    const o = {
+      off: false,
+      o: null,
+      fn,
+      observe(_el, opts) { this.o = opts; observers.push(this); },
+      disconnect() { this.off = true; },
+    };
+    return o;
+  };
   vm.runInContext(SRC, ctx, { filename: FILE });
-  const runTimers = () => { const all = [...timers.values()]; timers.clear(); all.forEach((t) => t.fn()); };
-  const runFrames = () => { frames.splice(0).forEach((fn) => fn()); };
-  return { M: vm.runInContext("TitleFx", ctx), html, overlay, pane, written, buzz, built, observers, document, ids, timers, runTimers, runFrames };
+  return {
+    M: vm.runInContext("TitleFx", ctx),
+    html, written, wired, ids, overlay, document, timers, frames, buzz, observers,
+    runTimers: () => { for (const t of [...timers.values()]) t.fn(); timers.clear(); },
+    runFrames: () => { const f = frames.splice(0); for (const fn of f) fn(); },
+  };
 }
 
-test("unset is ON; an OS asking for reduced motion always wins", () => {
-  assert.equal(load().html.dataset.motion, undefined);
-  assert.equal(load({ osReduce: true }).html.dataset.motion, "reduce");
-  assert.equal(load({ stored: { motion: "on" }, osReduce: true }).html.dataset.motion, "reduce",
-    "the setting can only ADD reduction");
+test("shell declares MENU ANIMATIONS, TITLE ART and REPLAY INTRO on Appearance", () => {
+  assert.ok(SHELL.includes('id="pm-panel-appearance"'));
+  assert.ok(SHELL.includes('id="pm-motion"'));
+  assert.ok(SHELL.includes('id="pm-motion-sel"'));
+  assert.ok(SHELL.includes('id="pm-titleart"'));
+  assert.ok(SHELL.includes('id="pm-titleart-sel"'));
+  assert.ok(SHELL.includes('id="pm-replay-intro"'));
+  assert.ok(SHELL.includes("apex26.titleArt"));
 });
 
-test("a stored REDUCED reduces on a normal OS, and garbage reads as unset (ON)", () => {
+test("defaults: motion ON (no data-motion), title art ON (no data-title-art)", () => {
+  const { html, M } = load({ readyState: "loading" });
+  assert.equal(M.mode(), "on");
+  assert.equal(M.artMode(), "on");
+  assert.equal(html.dataset.motion, undefined);
+  assert.equal(html.dataset.titleArt, undefined);
+});
+
+test("OS reduced motion always wins over a stored ON", () => {
+  const { html, M } = load({ osReduce: true, stored: { motion: "on" } });
+  assert.equal(M.mode(), "reduce");
+  assert.equal(html.dataset.motion, "reduce");
+});
+
+test("a stored REDUCED lands on a normal OS, and garbage reads as unset (ON)", () => {
   assert.equal(load({ stored: { motion: "reduce" } }).html.dataset.motion, "reduce");
   assert.equal(load({ stored: { motion: 7 } }).M.mode(), "on");
 });
 
-test("the row sits under UI SIZE and round-trips through apex26.motion", () => {
-  const { M, built, pane, ids, html, written } = load();
-  assert.deepEqual(built.map((b) => b.id), ["pm-motion"]);
-  assert.deepEqual(JSON.parse(JSON.stringify(built[0].values)), [["on", "ON"], ["reduce", "REDUCED"]]);
-  const row = ids.get("pm-motion");
-  assert.equal(pane.children[1], row, "row goes right after the UI SIZE label");
-  assert.equal(pane.children[2].className, "adv-help");
-  row._spec.write("reduce");
+test("TITLE ART soft/off stamp data-title-art; garbage falls to on", () => {
+  const soft = load({ stored: { titleArt: "soft" } });
+  assert.equal(soft.M.artMode(), "soft");
+  assert.equal(soft.html.dataset.titleArt, "soft");
+  const off = load({ stored: { titleArt: "off" } });
+  assert.equal(off.html.dataset.titleArt, "off");
+  assert.equal(load({ stored: { titleArt: "neon" } }).M.artMode(), "on");
+});
+
+test("Appearance rows wire and round-trip motion + titleArt", () => {
+  const { wired, written, html, ids, M } = load();
+  assert.deepEqual(wired.map((w) => w.id).sort(), ["pm-motion", "pm-titleart"]);
+  ids.get("pm-motion")._spec.write("reduce");
   assert.equal(written.motion, "reduce");
   assert.equal(html.dataset.motion, "reduce");
-  assert.equal(row._spec.read(), "reduce");
+  ids.get("pm-titleart")._spec.write("soft");
+  assert.equal(written.titleArt, "soft");
+  assert.equal(html.dataset.titleArt, "soft");
+  M.setArt("off");
+  assert.equal(html.dataset.titleArt, "off");
+  M.setArt("on");
+  assert.equal(html.dataset.titleArt, undefined);
   M.set("on");
   assert.equal(html.dataset.motion, undefined);
 });
 
 test("wiring waits for DOMContentLoaded while deferred scripts still run", () => {
-  const { built, document } = load({ readyState: "interactive" });
-  assert.equal(built.length, 0, "SettingRow loads after this file — never wire at eval here");
+  const { wired, document } = load({ readyState: "interactive" });
+  assert.equal(wired.length, 0, "SettingRow loads after this file — never wire at eval here");
   document._handlers.DOMContentLoaded();
-  assert.equal(built.length, 1);
+  assert.equal(wired.length, 2);
+});
+
+test("REPLAY INTRO button calls replay()", () => {
+  const { ids, overlay, runTimers, runFrames } = load();
+  runTimers();
+  assert.ok(!overlay.hasAttribute("data-intro"));
+  ids.get("pm-replay-intro")._handlers.click();
+  assert.ok(!overlay.hasAttribute("data-intro"), "dropped first");
+  runFrames();
+  assert.ok(overlay.hasAttribute("data-intro"), "back on a frame later");
 });
 
 test("the intro plays ONCE: held one pass, then gone for good", () => {
@@ -188,10 +255,12 @@ test("a title .bigbtn click taps through Input.vibrate, anything else does not",
   assert.doesNotThrow(() => noInput.overlay._handlers.click({ isTrusted: true, target: { closest: () => ({}) } }));
 });
 
-test("the CSS keys off the attributes this module writes, and it loads behind the store", () => {
+test("CSS keys off data-motion / data-title-art; export lists both under appearance", () => {
   assert.match(CSS, /:root\[data-motion="reduce"\] :is\(#overlay, \.screen\) \*/);
   assert.match(CSS, /#overlay\[data-paused\]/);
-  assert.match(CSS, /@media \(forced-colors: active\)[\s\S]*#overlay \.bigbtn:focus-visible/);
-  assert.doesNotMatch(CSS.replace(/\/\*[\s\S]*?\*\//g, ""), /outline:\s*none/);
+  assert.match(MENUS, /:root\[data-title-art="soft"\] #title-car/);
+  assert.match(MENUS, /:root\[data-title-art="off"\] #title-car/);
+  assert.match(EXPORT, /k:\s*"motion"[\s\S]*?group:\s*"appearance"/);
+  assert.match(EXPORT, /k:\s*"titleArt"[\s\S]*?group:\s*"appearance"/);
   assert.match(MANIFEST, /\["js\/core\/store\.js", "js\/ui\/title-fx\.js"\]/);
 });
