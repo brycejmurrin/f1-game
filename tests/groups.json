@@ -676,6 +676,7 @@
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/store-cross-tab.test.mjs",
         "tests/unit/debris-opts.test.mjs",
+        "tests/unit/title-fx.test.mjs",
         "tests/unit/quali-persist.test.mjs",
         "tests/unit/duel.test.mjs",
         "tests/unit/duel-row.test.mjs",

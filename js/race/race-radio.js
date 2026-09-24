@@ -71,7 +71,7 @@ const RaceRadio = (function () {
     let chat = readSetting("radioChat", CHAT, "normal");
     let comm = readSetting("commentary", COMM, "tv");
 
-    let live = false, evalT = 0, t = 0;
+    let live = false, evalT = 0, t = 0, lastCars = null;
     let m = null;
     const queue = { eng: new Map(), tv: new Map() };
     const log = [];
@@ -232,25 +232,30 @@ const RaceRadio = (function () {
               offer(Object.assign(base, { key: told === 1 ? "eng.leadLost" : "eng.lost", vars: { pos: e.pos, by: S(by) } }));
             }
             if (e.pos - Math.min(m.bestPos, f.gridPos || 99) >= 3) {
-              offer({ id: "hurt", ch: "eng", tier: 1, chat: 2, cd: 300, key: "eng.hurt", vars: {}, ttl: 20 });
+              if (f.toGo == null || f.toGo >= 4) offer({ id: "hurt", ch: "eng", tier: 1, chat: 2, cd: 300, key: "eng.hurt", vars: {}, ttl: 20 });
             }
           }
           break;
         }
         case "retire": {
-          if (e.car === p || !(e.pos > 0) || e.pos > pos + 1) break;
-          offer({ id: "rivalOut", ch: "eng", tier: 3, chat: 2, key: "eng.rivalOut",
-            vars: { name: S(e.car), pos: Math.max(1, pos - (e.pos < pos ? 1 : 0)) }, ttl: 10 });
+          if (e.car === p) { offer({ id: "result", ch: "eng", tier: 5, chat: 1, once: "result", key: "eng.out", vars: {}, ttl: 10 }); break; }
+          // AHEAD only. `pos` is already the new place (the retired car left the
+          // order this tick), and the place is TOLD here, so the playerPos event
+          // that lands a second later nets to zero instead of reading as a pass.
+          if (!(e.pos > 0) || e.pos > pos) break;
+          m.toldPos = pos;
+          offer({ id: "rivalOut", ch: "eng", tier: 3, chat: 2, key: "eng.rivalOut", vars: { name: S(e.car), pos }, ttl: 10 });
           break;
         }
         case "pitIn": {
-          if (e.car !== f.ahead || f.gapA == null || f.gapA > 4 || f.pitting) break;
+          if (e.car !== f.ahead || f.gapA == null || f.gapA > 4 || f.pitting || f.caution !== 0) break;
           offer({ id: "rivalPit", ch: "eng", tier: 3, chat: 2, cd: 60, key: "eng.rivalPit", vars: { name: S(e.car) }, ttl: 8 });
           break;
         }
         case "caution": {
           const L = e.level;
-          if (L === 3) offer({ id: "flag", ch: "eng", tier: 5, chat: 1, key: "eng.sc", vars: {}, ttl: 8 });
+          if (L === 4) offer({ id: "flag", ch: "eng", tier: 5, chat: 1, key: "eng.red", vars: {}, ttl: 8 });
+          else if (L === 3) offer({ id: "flag", ch: "eng", tier: 5, chat: 1, key: "eng.sc", vars: {}, ttl: 8 });
           else if (L === 2) offer({ id: "flag", ch: "eng", tier: 5, chat: 1, key: "eng.vsc", vars: {}, ttl: 8 });
           else if (L === 1 && e.prev === 0) offer({ id: "flag", ch: "eng", tier: 4, chat: 2, key: "eng.yellow", vars: {}, ttl: 6,
             still: () => f2().caution === 1 });
@@ -265,7 +270,8 @@ const RaceRadio = (function () {
         case "finish": {
           if (e.car !== p) break;
           const fp = e.pos || pos, grid = f.gridPos || fp;
-          const key = fp === 1 ? "eng.win" : fp <= 3 ? "eng.podium" : grid - fp >= 5 ? "eng.recover"
+          const podium = (G.cars ? G.cars.length : 0) > 3;   // P2 of a two-car duel is not a podium
+          const key = fp === 1 ? "eng.win" : fp <= 3 && podium ? "eng.podium" : grid - fp >= 5 ? "eng.recover"
             : fp <= 10 ? "eng.points" : "eng.finish";
           offer({ id: "result", ch: "eng", tier: 5, chat: 1, once: "result", key, vars: { pos: fp, grid }, ttl: 12 });
           break;
@@ -278,7 +284,8 @@ const RaceRadio = (function () {
       if (f.finished || f.retired || f.pitting || !f.started || t < SETTLE_S) return;
       const green = f.caution === 0;
       const racing = f.toGo == null || f.toGo > 1;   // the last lap has its own call
-      const a = f.ahead, b = f.behind;
+      // A car that has taken the flag is not someone to attack or defend from.
+      const a = f.ahead && !f.ahead.finished ? f.ahead : null, b = f.behind && !f.behind.finished ? f.behind : null;
       if (a && green && racing && f.gapA != null) {
         if (f.gapA < 1.0) {
           const armed = !!p.otArmed;
@@ -357,7 +364,8 @@ const RaceRadio = (function () {
           if (e.pos > 0 && e.pos <= 5) offer({ id: "pit", ch: "tv", tier: 2, key: "tv.pit", vars: { a: S(e.car), pos: e.pos }, ttl: 8 });
           break;
         case "caution":
-          if (e.level === 3) offer({ id: "flag", ch: "tv", tier: 4, key: "tv.sc", vars: {}, ttl: 8 });
+          if (e.level === 4) offer({ id: "flag", ch: "tv", tier: 4, key: "tv.red", vars: {}, ttl: 8 });
+          else if (e.level === 3) offer({ id: "flag", ch: "tv", tier: 4, key: "tv.sc", vars: {}, ttl: 8 });
           else if (e.level === 2) offer({ id: "flag", ch: "tv", tier: 4, key: "tv.vsc", vars: {}, ttl: 8 });
           else if (e.level === 0 && e.prev >= 2 && e.prev < 4) offer({ id: "flag", ch: "tv", tier: 4, key: "tv.green", vars: {}, ttl: 6 });
           break;
@@ -407,12 +415,19 @@ const RaceRadio = (function () {
       const asked = typeof Input !== "undefined" && Input.consumeRadio ? Input.consumeRadio() : false;
       const racing = G.state === "race" && !G.timeTrial && !G.practice && G.cars && G.cars.length > 1;
       if (!racing) { live = false; return; }
-      if (!live) { reset(); live = true; }
-      t = G.raceT || 0;
+      // A NEW RACE. game.js only ticks this inside a race, so the gap between
+      // two races is never seen as "not racing": a new race is recognised by
+      // its new field (makeCars builds a new array) or by the clock going back.
+      // A red flag keeps both, and keeps the memory with them.
+      const now = G.raceT || 0;
+      if (!live || G.cars !== lastCars || now + 1 < t) { reset(); live = true; lastCars = G.cars; }
+      t = now;
       const { f, ev } = facts.observe(G, dt);
       if (!f) return;
       last = f;
-      if (asked && request()) return;
+      // Not an early return: this tick's events are one-shot, and a safety car
+      // deployed on the tick the driver asked must still be offered.
+      if (asked) request();
       const p = G.player;
       const tv = tvLive(f);
       for (const e of ev) {

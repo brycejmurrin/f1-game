@@ -116,7 +116,7 @@ function race(opts = {}) {
   function step(dt, n = 1) {
     for (let i = 0; i < n; i++) {
       G.raceT += dt;
-      for (const c of cars) {
+      for (const c of G.cars) {
         if (c.retired || c.finished) continue;
         const was = Math.floor(c.prog / LAP);
         c.prog += c.speed * dt;
@@ -259,10 +259,11 @@ test("commentary talks only while the player is watching — a TV camera — unl
 });
 
 test("the result is called with the position, after the flag", () => {
-  const r = race({ laps: 2 });
+  // Four cars: P3 of a three-car field is last, not a podium.
+  const r = race({ laps: 2, cars: [car("AAA", 400, 60), car("BBB", 370, 60), car("PLY", 340, 60, { isPlayer: true, local: true }), car("CCC", 300, 60)] });
   r.step(0.05, 40);
   const p = r.G.player;
-  p.finished = true; p.finPos = 3;
+  p.finished = true;
   r.step(0.05, 10);
   assert.ok(r.said.some((s) => /P3/.test(s.msg) && /PODIUM/.test(s.msg)), JSON.stringify(r.said));
 });
@@ -279,6 +280,68 @@ test("RADIO CHECK answers on demand with the position and both gaps", () => {
     const line = r.said[before];
     assert.ok(line && /P2/.test(line.msg) && /1\.7/.test(line.msg) && /2\.5/.test(line.msg), JSON.stringify(r.said.slice(before)));
     assert.equal(line.kind, "race");
+  } finally { delete ctx.Input; }
+});
+
+// ── regressions from the post-merge bug hunt ─────────────────────────────────
+
+test("a second race starts with a fresh radio — game.js never ticks it between races", () => {
+  const field = () => [car("AAA", 400, 60), car("BBB", 370, 60), car("PLY", 340, 60, { isPlayer: true, local: true })];
+  const r = race({ cars: field() });
+  r.step(0.05, 4000);                          // race one: 200 s of memory and cooldowns
+  const before = r.said.length;
+  // The next race: makeCars builds a new array and the clock restarts. The
+  // radio sees no "not racing" tick in between (game.js returns before it).
+  r.G.cars = field(); r.G.player = r.G.cars[2]; r.G.raceT = 0;
+  r.step(0.05, 100);
+  r.G.cars[2].prog = r.G.cars[1].prog + 5;
+  r.step(0.05, 200);
+  assert.ok(r.said.slice(before).some((s) => /P2/.test(s.msg)), `race two was silent: ${JSON.stringify(r.said.slice(before))}`);
+});
+
+test("the result is the order the flag fell in, not the cars array (finPos is 0 until endRace)", () => {
+  const P = car("PLY", 900, 60, { isPlayer: true, local: true }), W = car("WIN", 1000, 60), X = car("XXX", 800, 60), Y = car("YYY", 700, 60);
+  const r = race({ cars: [P, W, X, Y] });      // the player is cars[0]
+  r.step(0.05, 100);
+  W.finished = true; r.step(0.05, 20);
+  P.finished = true; r.step(0.05, 40);
+  const result = r.said.filter((s) => s.kind === "race" && /P\d|WIN/.test(s.msg));
+  assert.equal(result.length, 1, JSON.stringify(r.said));
+  assert.doesNotMatch(result[0].msg, /WIN|RACE WINNER|WHAT A DRIVE/);
+  assert.match(result[0].msg, /P2/);
+});
+
+test("a retirement ahead is told once, as the new place — never as a pass on the car behind", () => {
+  const A = car("AAA", 1300, 60), B = car("BBB", 1200, 60), C = car("CCC", 1100, 60),
+    P = car("PLY", 1000, 60, { isPlayer: true, local: true }), D = car("DDD", 900, 60);
+  const r = race({ cars: [A, B, C, P, D] });
+  r.step(0.05, 300);
+  B.retired = true; B.dnf = "engine";
+  r.step(0.05, 400);
+  const after = r.said.filter((s) => s.t > 15);
+  assert.deepEqual(after.map((s) => s.msg).filter((m) => /P\d/.test(m)).length, 1, JSON.stringify(after));
+  assert.match(after[0].msg, /BBB.*P3/);
+});
+
+test("a red-flag restart does not read the bunched-up grid as the car ahead closing 6 s a lap", () => {
+  const A = car("AAA", 2 * LAP + 480, 60), P = car("PLY", 2 * LAP, 60, { isPlayer: true, local: true }), B = car("BBB", 2 * LAP - 600, 60);
+  const r = race({ cars: [A, P, B] });
+  r.step(0.05, 2400);
+  const before = r.said.length;
+  for (const [c, s] of [[A, LAP - 100], [P, LAP - 190], [B, LAP - 280]]) c.prog = Math.floor(c.prog / LAP) * LAP - (LAP - s);
+  r.step(0.05, 600);
+  assert.equal(r.said.slice(before).filter((s) => /QUICKER|CLOSING/.test(s.msg)).length, 0, JSON.stringify(r.said.slice(before)));
+});
+
+test("a RADIO CHECK on the tick a safety car comes out does not swallow the safety car", () => {
+  let pressed = false;
+  ctx.Input = { consumeRadio: () => { const v = pressed; pressed = false; return v; } };
+  try {
+    const r = race({ cars: [car("AAA", 2000, 60), car("PLY", 1900, 60, { isPlayer: true, local: true }), car("BBB", 1750, 60)] });
+    r.step(0.05, 200);
+    r.G._caution = 3; pressed = true;
+    r.step(0.05, 200);
+    assert.ok(r.said.some((s) => /SAFETY CAR/.test(s.msg)), JSON.stringify(r.said));
   } finally { delete ctx.Input; }
 });
 

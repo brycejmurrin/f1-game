@@ -249,8 +249,12 @@ const RadioVoice = (function () {
      * index would silently become a different voice; a stored name that is gone
      * falls back here to the default spread, which is the same thing a fresh
      * save gets. A missing voice must never silence the channel. */
-    function voiceFor(speaker) {
-      const v = voicesFor(!!REMOTE_OK[speaker]);
+    // `onCard`: a line budgeted against a radio card. REMOTE_OK's whole argument
+    // is that the announcer has NO card — but in-race commentary ("comm") does,
+    // and a network voice's round trip would be cut off by the card's deadline.
+    // So every card line takes a local voice, the announcer's included.
+    function voiceFor(speaker, onCard) {
+      const v = voicesFor(!onCard && !!REMOTE_OK[speaker]);
       if (!v.length) return null;                       // Safari: prosody carries it alone
       const want = tune[speaker] && tune[speaker].name;
       if (want) {
@@ -288,7 +292,7 @@ const RadioVoice = (function () {
     }
     function speakPlanned(p) {
       const u = new Utter(p.text);
-      u.voice = voiceFor(p.speaker);
+      u.voice = voiceFor(p.speaker, true);   // speakPlanned only ever carries a card line (say())
       u.rate = p.rate; u.pitch = p.pitch; u.volume = p.volume;
       // Only the LIVE line may release the duck and the deadline — see `current`.
       u.onend = u.onerror = () => {
