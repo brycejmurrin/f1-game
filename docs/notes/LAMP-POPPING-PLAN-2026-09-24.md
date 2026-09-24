@@ -26,6 +26,25 @@ Singapore at night, passed for all four renderers on #246 and again on #247
 
 ## Next steps
 
+**Progress (branch `claude/pr-233-fix-deploy-iu9wfs`, after #247):**
+- **d done.** Held tier (1.5 s), a slot cap that slides 16/s down and 32/s up, and a
+  0.4 s halo fade. Pinned by `frame-lights-shed.test.mjs`.
+- **f done.** The decal is pitched to the centreline's rise between the car and
+  the decal centre (clamped ±1.5 m), and lifted to 8 cm. The backend-keyed cache is
+  not needed: a backend switch reloads the page.
+- **g partly done.** GLX frees the light map after 2 s with the bake off. The
+  `MAX_TEXELS` comment now says per layer. Mobile halving is not done (needs a
+  parity measurement first).
+- **h done.**
+- **e: supersampling was tried and REJECTED.** Measured.
+  - A 3×3 box average per texel within 3 cells of each lamp's foot left Monza
+    k1380 at 27.0 vs 6.1 (was 29.7). Vegas k1505 got worse (21.1 vs 7.2, was 16.1),
+    and so did Singapore k1189 (44.8 vs 23.5, was 41.2).
+  - The overshoot is bilinear filtering spreading a sharp cone edge across
+    neighbouring texels, not point sampling inside a texel.
+  - The per-lamp "live-only" flag below is the fix that works. It needs one spare
+    lane per light record in all three backends.
+
 Order: **d → e → f → g/h**, then **b** as its own investigation. Each of d, e, f is
 one small PR. Each removes one visible artefact and has a test that pins it.
 

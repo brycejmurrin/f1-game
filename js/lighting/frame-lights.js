@@ -241,12 +241,42 @@ function lampCap(carCount, mobileTier) {
 // is the bug the appendCarTailLights comment describes. The tier shed is not a
 // reserve: it is a total per-fragment fill budget, so both the lamps AND the
 // tail-lights appended on top have to fit inside it.
+// GOVERNOR STEPS DO NOT POP THE LAMPS. The shed used to follow PerfGov.tier()
+// the frame it changed: 48 -> 32 -> 24 slots at once, and a device on the edge
+// (step down, verify, revert) flickered a dozen lamps off and on. Lighting now
+// follows a HELD tier (the tier must stand SHED_HOLD_MS before the lamps react;
+// the governor itself is untouched) and the slot limit slides toward the held
+// tier's budget at SHED_DOWN / SHED_UP slots a second, so lamps leave the set
+// one at a time through the guard band and return through the entry ramp.
+const SHED_HOLD_MS = 1500, SHED_DOWN = 16, SHED_UP = 32, GLOW_FADE_S = 0.4;
+let _shTier = 0, _shTierT = -1e9, _shHeld = 0, _shLim = NaN, _shT = NaN, _glowF = 1;
+function _shedLimit(tier) { return tier >= 2 ? LightBudget.MOBILE : tier >= 1 ? 32 : LightBudget.MAX; }
+function _shedTick() {
+  const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+  if (now === _shT) return;
+  const tier = PerfGov.tier();
+  if (tier !== _shTier) { _shTier = tier; _shTierT = now; }
+  if (now - _shTierT >= SHED_HOLD_MS || _shLim !== _shLim) _shHeld = tier;
+  const target = _shedLimit(_shHeld);
+  const dt = _shT === _shT ? Math.min(0.25, Math.max(0, (now - _shT) * 0.001)) : 1e9;
+  if (_shLim !== _shLim) _shLim = target;
+  else if (_shLim > target) _shLim = Math.max(target, _shLim - SHED_DOWN * dt);
+  else if (_shLim < target) _shLim = Math.min(target, _shLim + SHED_UP * dt);
+  // Halos are dropped outright at tier >= 3 (game.js drawGlow); fade them instead.
+  const gT = _shHeld >= 3 ? 0 : 1, gStep = dt / GLOW_FADE_S;
+  _glowF = _glowF < gT ? Math.min(gT, _glowF + gStep) : Math.max(gT, _glowF - gStep);
+  _shT = now;
+}
 function tierShed(cap) {
   if (typeof PerfGov === "undefined") return cap;
-  const tier = PerfGov.tier();
-  if (tier >= 2) return Math.min(cap, LightBudget.MOBILE);
-  if (tier >= 1) return Math.min(cap, 32);
-  return cap;
+  _shedTick();
+  return Math.min(cap, Math.ceil(_shLim));
+}
+// Halo strength multiplier under the held governor tier (1 = full, 0 = off).
+function glowFade() {
+  if (typeof PerfGov === "undefined") return 1;
+  _shedTick();
+  return _glowF;
 }
 // Scale the WHOLE baked set for the per-chunk path with the same transform the
 // culled set receives. Only runs when per-chunk lamps are actually on.
@@ -539,6 +569,6 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   if (frame.perChunkLights > 0) _fillAllLights(frame, src, sr, sg, sb, fl);
 }
 
-  return { setFrameLights, appendCarTailLights };
+  return { setFrameLights, appendCarTailLights, glowFade };
 })();
 Object.freeze(FrameLights);

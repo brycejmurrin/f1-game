@@ -31,7 +31,7 @@
    [14] glare. */
 "use strict";
 const LampBake = (function () {
-  const MAX_TEXELS = 600000;   // ~4.8 MB at RGBA16F; the cell grows to stay under it
+  const MAX_TEXELS = 600000;   // per layer: ~4.8 MB at RGBA16F, x2 layers; the cell grows to stay under it
   const MIN_CELL = 1.0;        // metres per texel at best
 
   // float32 -> IEEE half, round-to-nearest (enough for irradiance).
