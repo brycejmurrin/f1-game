@@ -367,6 +367,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/debris-step-skip.test.mjs",
   "tests/unit/camera-ride.test.mjs",
   "tests/unit/flyby-shots.test.mjs",
+  "tests/unit/flyby-pose-inverse.test.mjs",
+  "tests/unit/free-cam.test.mjs",
   // The FLYBY SHOT EDITOR's list algebra and the bake validator that stands
   // between a pasted blob and the shipped DEFAULT. Pure data, ~0.1 s, and it
   // belongs in the edit loop because tools/gen/bake-flyby.mjs is a FULL REPLACE.
