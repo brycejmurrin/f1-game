@@ -4671,6 +4671,29 @@ test("selector car assets yield per driver, preserve simulation, and cancel stal
   }
 });
 
+test("selector preparation waits for the player's hands before the build and the warm frames", async () => {
+  // A TIME OF DAY step that crosses dark rebuilds the circuit (1-3 s on the
+  // main thread) and the warm frames that follow upload and compile for seconds
+  // more; both ran 120 ms after the tap, so the RACE SETTINGS sheet froze under
+  // the player's next tap (2026-09-24). Both now wait for MENU_IDLE_MS of quiet.
+  const src = read("js/game.js");
+  const body = fnBody(src, "scheduleFlybyTrack");
+  assert.match(body, /if \(!\(await menuIdle\(current\)\)\) return;\s*loadTrack\(want\);/,
+    "the build waits for an idle menu");
+  assert.equal((body.match(/if \(await menuIdle\(current\)\) _menuGate\.warm = 2;/g) || []).length, 2,
+    "both paths arm the warm frames only after the car assets, on an idle menu");
+  assert.doesNotMatch(body, /_menuGate\.warm = 2;\s*await prepareMenuCarAssets/, "warm frames never precede the paced car assets");
+  const idle = eval("(function(){ let _menuInputAt = 0; const MENU_IDLE_MS = 1200; let now = 0;" +
+    " const performance = { now: () => now }; const waits = [];" +
+    " const setTimeout = (fn, ms) => { waits.push(ms); now += ms; fn(); };" +
+    src.match(/async function menuIdle\(current\) \{[\s\S]*?\n\}/)[0] +
+    " return { menuIdle, waits, tap: (t) => { _menuInputAt = t; now = t; } }; })()");
+  idle.tap(5000);
+  assert.equal(await idle.menuIdle(() => true), true);
+  assert.deepEqual(idle.waits, [1200], "a tap pushes the build a full idle window out");
+  assert.equal(await idle.menuIdle(() => false), false, "a stale selection never builds");
+});
+
 test("selector preparation rejects stale requests, reuses the world, and waits for compilation", async () => {
   const _menuGate = { warm: 0, generation: 0, ready: "", track: null };
   let flybyBuildTimer = 0, trackIdx = 0, raceTimeOfDay = "default", raceWeather = "dry";
@@ -4682,6 +4705,9 @@ test("selector preparation rejects stale requests, reuses the world, and waits f
   const clearTimeout = id => timers.delete(id);
   const gfx = { warming: () => compiling }, Log = { warn() {} };
   const prepareMenuCarAssets = async () => {};
+  // The idle gate and the upload slice are module-level policy (tested below);
+  // here the player is idle and a slice is immediate.
+  const menuIdle = async (current) => current(), menuSlice = async () => {};
   const ensureScenery = id => new Promise(resolve => requests.push({ id, resolve }));
   const loadTrack = id => { builds.push(id); track = { id }; };
   const schedule = eval("(function(settle){" + fnBody(read("js/game.js"), "scheduleFlybyTrack") + "})");

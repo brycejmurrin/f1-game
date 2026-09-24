@@ -2711,6 +2711,14 @@ const TLX = (function () {
           t.needsUpdate = true;
           return { __tlx: true, tex: t };
         },
+        // Upload a createTexture() handle NOW instead of at the first frame that
+        // samples it. three defers every canvas, so the menu's first warm frame
+        // pushed all ~22 livery atlases (+ mips) in one task (3.3 s on
+        // SwiftShader, 2026-09-24); prepareMenuCarAssets calls this per car, 32 ms
+        // apart. Feature-detected: GLX and WGX already upload in createTexture.
+        uploadTexture(h) {
+          try { if (h && h.tex) renderer.initTexture(h.tex); } catch (_) { /* first draw uploads it */ }
+        },
         freeMesh(m) { if (m && m.geo) { disposeGeometry(m.geo); m.geo = null; } },
         freeChunkedMesh(m) {
           if (m && m.chunks && chunkedSys) { chunkedSys.free(m); return; }
