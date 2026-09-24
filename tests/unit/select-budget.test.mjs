@@ -6,7 +6,12 @@
 // must not inherit a gate's retry settings) rests on it.
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { capacity, declaredTests, MEASURED, VARIANTS, SPEC_COUNTS } from "../../tools/ci/select-budget.mjs";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 test("a failure costs timeout x (1 + retries) — the term the design omitted", () => {
   assert.equal(capacity(15, 1, { ...MEASURED, retries: 1, perTestTimeoutSec: 240 }).perFailureSec, 480);
@@ -44,6 +49,24 @@ test("declaredTests counts by AST, and rejects nothing silently", () => {
   assert.equal(declaredTests("tests/specs/smoke.spec.js"), 10);   // 10 since the DRIVING LINE test (2026-09-08)
   assert.equal(declaredTests("tests/specs/there-is-no-such.spec.js"), null,
     "a missing file must return null, not 0 — 0 would read as an empty spec");
+});
+
+test("declaredTests expands statically resolvable for-of loops (per-circuit specs)", () => {
+  // CI run 36057109364: the selector billed tracks-walls as ~4 CallExpressions,
+  // packed it into a 39-minute selected shard, and the job cancelled at 63/76
+  // with 0 failures. The fleet has one .js def per circuit under js/circuits/.
+  const circuits = fs.readdirSync(path.join(ROOT, "js/circuits"))
+    .filter((f) => f.endsWith(".js")).length;
+  assert.ok(circuits >= 40, `expected a full circuit fleet, got ${circuits}`);
+  // 1 list-match + N boundary + 5 street + 1 wrap + 4 edge-ram = N + 11
+  assert.equal(declaredTests("tests/specs/tracks-walls.spec.js"), circuits + 11,
+    "tracks-walls must bill one test per circuit, not one CallExpression per loop");
+  // scenery-kits: 1 static + 5 theme rows
+  assert.equal(declaredTests("tests/specs/scenery-kits.spec.js"), 6);
+  // abudhabi-foundation: day + night
+  assert.equal(declaredTests("tests/specs/abudhabi-foundation.spec.js"), 2);
+  // menu-baseline: 2 shapes × 3 screens (the ci.yml comment already says six)
+  assert.equal(declaredTests("tests/specs/menu-baseline.spec.js"), 6);
 });
 
 test("the spec census is real — anti-vacuity", () => {
