@@ -140,7 +140,7 @@ closure.
 | `scenery/city.js` | `SceneryCity` | `building`, `tower`, `billboard`, `neonTower`, houses / motorhomes |
 | `scenery/identity.js` | `SceneryIdentity` | Portals, flood masts, canopies, runoff aprons, kerb strips, broadcast compounds |
 | `scenery/data.js` | `TrackSceneryData` | `FURN_DEF`, `KIT_DEF`, `STAND_*`, `THEME_DEF`, colour packs |
-| `scenery/themes.js` | `SceneryThemes` | Theme palette / spacing / budgets (see §6 — `variants` unused) |
+| `scenery/themes.js` | `SceneryThemes` | Theme palette / spacing / budgets |
 | `scenery/landmark-kit.js` / `circuit-kit.js` | kits | Bound as `landmarkKit` / `circuitKit` — circuits must **call** them |
 | `scenery/graph.js` | `TrackGraph` | Engine-internal instancing — **not** part of the 112-member contract |
 | `scenery/pits.js` | `SceneryPits` | After `scenery()` — not on `api` |
@@ -179,20 +179,18 @@ curated sectors/turns stay racing-space.
 `place` / most composites seat via `anchor`. Floating props far out → pull them
 in or read `anchor().c[1]` explicitly.
 
-### The `#1 trap`: `along()` + wrapped helpers on a shifted circuit
+### The `#1 trap` (FIXED 2026-09-24): `along()` + wrapped helpers
 
-`transformSceneryApi` shifts **ranges** for `along` / `wall` / …, then shifts
-**again** inside `(k,side)` helpers when the callback calls `tree(k,…)` with the
-engine-frame `k` that `along` handed it. Props land a whole `_sceneryShift` away
-(measured: Imola ~1.8 km, Spa ~277 m on mid-span samples).
+`transformSceneryApi` remaps **ranges** for `along` / `wall` / … into engine
+space. The `along` wrapper then converts each walked engine `k` back to
+**authored-frame** via `TrackSpace.sceneryNodeToAuthored` before the callback
+runs, so wrapped `tree` / `anchor` / `place` / … apply `sceneryNode` **once**.
+Pre-fix mid-span displacement was Imola ~1.8 km / Spa ~277 m (`docs/BUGS.md`
+S1). Engine-internal `ctx.along` (walls/fences) was always single-shift.
 
-**Until an engine fix:** walk with your own `K(s)` loop, or accept the offset.
-Do **not** call wrapped helpers inside `along()` on circuits with
-`sceneryStartFrac` / non-zero `_sceneryShift`. Full rules:
-`.claude/skills/scenery-dress/references/rules.md`.
-
-`bakedModel` **does** remapped correctly now (dedicated `(id,k,side)` wrapper);
-older skill text that said it never places on shifted circuits is obsolete.
+`bakedModel` also remaps correctly (dedicated `(id,k,side)` wrapper). Residual
+`_sceneryShift` on ~13 circuits is frame debt (S3), not a double-apply bug.
+Full rules: `.claude/skills/scenery-dress/references/rules.md`.
 
 ---
 
@@ -252,7 +250,7 @@ Vertex budget is incremental — shipped circuits ~400k–900k prop verts; Vegas
 | `scenery/city.js` | Neon tower / street massing behaviour for **all** city themes |
 | `scenery/structures.js` | Barrier cross-sections, `along` walker |
 | `scenery/identity.js` | Shared portals / flood masts / canopies |
-| `scenery/themes.js` | Theme palettes / spacing / budgets (`variants` fields are **currently unused** by any emitter) |
+| `scenery/themes.js` | Theme palettes / spacing / budgets (`variants` tables deleted 2026-09-24; `variant()` picker kept) |
 | `tracks.js` `buildProps` | Generic pass order, guards, deferred foliage — high blast radius |
 
 ### Materials / look (not mesh authorship)
@@ -303,11 +301,10 @@ copy — a field omitted from the mapper is silently `undefined`).
 
 See [BUGS.md](BUGS.md) §Scenery for the shortlist. Headline traps:
 
-1. **`along()` double-shift** on shifted circuits — high; document / avoid; do
-   not “fix” without a per-circuit re-measure.
-2. **`furniture.tree: "pine"`** → broadleaf on five circuits — parked; correct
-   species needs a `canopyR("fir")` vs mesh-extent fix first
-   (`circuit-vocab.test.mjs`).
+1. **`along()` double-shift** — FIXED 2026-09-24 (`sceneryNodeToAuthored`);
+   residual large `_sceneryShift` on ~13 circuits remains frame debt (S3).
+2. **`furniture.tree: "pine"`** — FIXED (fir + `canopyR` keep-out); unknown
+   species still fall through silently (`circuit-vocab.test.mjs`).
 3. **Silent vocab fallbacks** — unknown kit/stand/tree words never throw.
 4. **On-road cull is silent for raw primitives** — composites `Log.warn`;
    primitives only increment a cull count.

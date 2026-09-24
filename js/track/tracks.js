@@ -400,10 +400,19 @@ const Tracks = (function () {
         return f(range.s0, range.s1, SIDE(side), ...r);
       };
     }
-    // (s0, s1, stepM, fn): fraction range, no side
-    if (api.along) w.along = (s0, s1, ...r) => {
+    // (s0, s1, stepM, fn, tag?): fraction range, no side.
+    // Remap the span into engine frame (same as wall/fence), but hand the
+    // callback AUTHORIZED-frame k. along walks engine nodes; wrapped helpers
+    // then apply sceneryNode once. Passing engine k through made every
+    // anchor/tree/place/bakedModel inside the callback double-shift (Imola
+    // ~1.8 km / Spa ~277 m — docs/BUGS.md S1). Engine-internal ctx.along
+    // (wall/fence closures) is untouched and stays single-shift.
+    if (api.along) w.along = (s0, s1, stepM, fn, tag) => {
       const range = TrackSpace.sceneryRange(def, s0, s1);
-      return api.along(range.s0, range.s1, ...r);
+      if (typeof fn !== "function") return api.along(range.s0, range.s1, stepM, fn, tag);
+      return api.along(range.s0, range.s1, stepM, (kEng, spacing) => {
+        fn(TrackSpace.sceneryNodeToAuthored(def, kEng, n), spacing);
+      }, tag);
     };
     // (s, …): single fraction, no side (gantry / underpass portal)
     if (api.gantry) w.gantry = (s, ...r) => api.gantry(RS(s), ...r);
@@ -502,6 +511,9 @@ const Tracks = (function () {
     const out = TrackModels.scratch();
     const glassBuf = TrackModels.scratch();
     const waterBuf = TrackModels.scratch();
+    // Cells already emitted this build — overlapping waterBand/waterField calls
+    // skip duplicates instead of stacking coplanar quads (docs/BUGS.md S7).
+    const waterOccupied = new Set();
     const def = track.def, theme = def.theme, pal = def.palette, ds = track.total / n;
     const NIGHT = track._night != null ? track._night : !!def.night;
 
@@ -980,7 +992,9 @@ const Tracks = (function () {
       let grad = 0;
       for (let i = 0; i < n; i++) grad = Math.max(grad, Math.hypot(px[i] - gx, pz[i] - gz));
       const gc = pal.grass || [0.2, 0.38, 0.18];
-      addBox(out, [gx, pyMin - 5, gz], [grad * 2 + 1600, 4, grad * 2 + 1600],
+      // Seat 2 cm below the previous top so the universal fill does not
+      // coplanar-fight the terrain ribbon (docs/BUGS.md S5).
+      addBox(out, [gx, pyMin - 5.02, gz], [grad * 2 + 1600, 4, grad * 2 + 1600],
              [gc[0] * 0.9, gc[1] * 0.9, gc[2] * 0.9]);
     }
     const onTrack = (x, z, margin, pitMargin) => {
@@ -1235,10 +1249,12 @@ const Tracks = (function () {
         const p = key.indexOf("|");
         const ix = +key.slice(0, p), iz = +key.slice(p + 1);
         if (onTrack((ix + 0.5) * c, (iz + 0.5) * c, c / 2 + 1.5)) continue;
+        if (waterOccupied.has(key)) continue;
+        waterOccupied.add(key);
         let a = rows.get(iz); if (!a) rows.set(iz, a = []);
         a.push(ix);
       }
-      const y = pyMin - 0.8;
+      const y = pyMin - 0.82;   // 2 cm below prior sheet — overlapping bands z-fight less (S5/S7)
       const vert0 = waterBuf.pos.length / 3;
       let placed = 0;
       for (const [iz, list] of rows) {
@@ -1290,9 +1306,9 @@ const Tracks = (function () {
         const partW = sz[0] / pieces;
         for (let i = 0; i < pieces; i++) {
           const dist = gap + partW * (i + 0.5);
-          const c = [
+            const c = [
             px[k] + r[0] * side * (hw[k] + dist),
-            groundYAt(k, dist) - sz[1] / 2,
+            groundYAt(k, dist) - sz[1] / 2 - 0.02,   // 2 cm below terrain estimate (S5)
             pz[k] + r[2] * side * (hw[k] + dist),
           ];
           RAW.addBox(stage, c, [partW, sz[1], sz[2]], col, [r, u, t]);

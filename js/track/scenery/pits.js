@@ -239,51 +239,57 @@ const SceneryPits = (function () {
       // already does a few dozen lines down (`kGate`).
       const ks = nodesFrom(p.sIn, (k) => p.v[k] >= 0.98, p.lenM, 24);
       // `shift(k)`, when given, slides the whole profile laterally per node.
-      const sweep = (ks, profile, col, mat, shift) => {
+      const sweep = (ks, profile, col, mat, shift, blockId) => {
         if (ks.length < 2) return;
         const m = profile.length;
         const latOf = (k, q) => sd * (hw[k] + q[0] + (shift ? shift(k) : 0));
+        const emit = TrackGeom.emit;
+        const vert0 = out.pos.length / 3;
+        out._mat = mat;
         for (let i = 0; i + 1 < ks.length; i++) {
           const k = ks[i], k2 = ks[i + 1];
           for (let e = 0; e < m; e++) {
             const a = profile[e], c = profile[(e + 1) % m];
             const A = at(k, latOf(k, a), a[1]), B = at(k, latOf(k, c), c[1]);
             const C = at(k2, latOf(k2, a), a[1]), D = at(k2, latOf(k2, c), c[1]);
-            // Outward normal of this face of the extrusion: (along) x (around),
-            // flipped by the side so the strip faces out on either side.
-            const ax = C[0] - A[0], ay = C[1] - A[1], az = C[2] - A[2];
-            const bx = B[0] - A[0], by = B[1] - A[1], bz = B[2] - A[2];
-            let nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx;
-            const len = Math.hypot(nx, ny, nz) || 1; nx /= len; ny /= len; nz /= len;
-            if (sd < 0) { nx = -nx; ny = -ny; nz = -nz; }
-            const base = out.pos.length / 3;
-            for (const P of [A, B, C, D]) { out.pos.push(P[0], P[1], P[2]); out.nrm.push(nx, ny, nz); out.col.push(col[0], col[1], col[2]); }
-            pushMat(4, mat);
-            if (sd > 0) out.idx.push(base, base + 2, base + 1, base + 1, base + 2, base + 3);
-            else out.idx.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
+            // Interior ref just inside the extrusion so emit() orients outward.
+            const ref = [
+              (A[0] + B[0] + C[0] + D[0]) / 4 - sd * rx[k] * 0.05,
+              (A[1] + B[1] + C[1] + D[1]) / 4,
+              (A[2] + B[2] + C[2] + D[2]) / 4 - sd * rz[k] * 0.05,
+            ];
+            // Winding: sd>0 uses A,C,B / B,C,D path via emit's ref; pass perimeter.
+            if (sd > 0) emit(out, [A, C, D, B], col, ref);
+            else emit(out, [A, B, D, C], col, ref);
           }
         }
-        // End caps, so the strip is closed where it starts and stops.
         for (const [k, flip] of [[ks[0], sd < 0], [ks[ks.length - 1], sd > 0]]) {
-          const base = out.pos.length / 3;
           const u = upOf(track, k), t = [tx[k], ty[k], tz[k]];
-          const nrm = flip ? t : [-t[0], -t[1], -t[2]];
-          for (const q of profile) { const P = at(k, latOf(k, q), q[1]); out.pos.push(P[0], P[1], P[2]); out.nrm.push(nrm[0], nrm[1], nrm[2]); out.col.push(col[0], col[1], col[2]); }
-          pushMat(m, mat);
-          for (let e = 1; e + 1 < m; e++) {
-            if (flip) out.idx.push(base, base + e + 1, base + e); else out.idx.push(base, base + e, base + e + 1);
-          }
+          const cap = [];
+          for (const q of profile) cap.push(at(k, latOf(k, q), q[1]));
+          const ref = [
+            (cap[0][0] + cap[Math.floor(m / 2)][0]) / 2 + (flip ? t[0] : -t[0]),
+            (cap[0][1] + cap[Math.floor(m / 2)][1]) / 2 + (flip ? t[1] : -t[1]),
+            (cap[0][2] + cap[Math.floor(m / 2)][2]) / 2 + (flip ? t[2] : -t[2]),
+          ];
+          emit(out, flip ? cap.slice().reverse() : cap, col, ref);
           void u;
+        }
+        out._mat = 0;
+        const count = out.pos.length / 3 - vert0;
+        if (count > 0) {
+          (out.__blocks || (out.__blocks = []))
+            .push({ base: vert0, count, id: blockId || "pit-sweep" });
         }
       };
       const v0 = b.verge, v1 = b.verge + b.platform;
       // Platform: 35 cm above the lane (FIM §9.2).
-      sweep(ks, [[v0, 0], [v1, 0], [v1, 0.35], [v0, 0.35]], PLATFORM, MAT.CONCRETE);
+      sweep(ks, [[v0, 0], [v1, 0], [v1, 0.35], [v0, 0.35]], PLATFORM, MAT.CONCRETE, null, "pit-platform");
       // The pit wall on the TRACK side of the platform: 25 cm thick, 1 m high.
-      sweep(ks, [[v0, 0.35], [v0 + 0.25, 0.35], [v0 + 0.25, 1.35], [v0, 1.35]], WALL, MAT.CONCRETE);
-      sweep(ks, [[v0 - 0.02, 1.35], [v0 + 0.27, 1.35], [v0 + 0.27, 1.42], [v0 - 0.02, 1.42]], WALL_TOP, MAT.METAL);
+      sweep(ks, [[v0, 0.35], [v0 + 0.25, 0.35], [v0 + 0.25, 1.35], [v0, 1.35]], WALL, MAT.CONCRETE, null, "pit-wall");
+      sweep(ks, [[v0 - 0.02, 1.35], [v0 + 0.27, 1.35], [v0 + 0.27, 1.42], [v0 - 0.02, 1.42]], WALL_TOP, MAT.METAL, null, "pit-wall-cap");
       // The 65 cm barrier between the platform and the lane.
-      sweep(ks, [[v1 - 0.10, 0.35], [v1, 0.35], [v1, 1.0], [v1 - 0.10, 1.0]], BARRIER, MAT.METAL);
+      sweep(ks, [[v1 - 0.10, 0.35], [v1, 0.35], [v1, 1.0], [v1 - 0.10, 1.0]], BARRIER, MAT.METAL, null, "pit-lane-barrier");
       wallBuilt = ks.length >= 2;
 
       // ── 1b. THE EXIT WALL: the pit wall carried on down the exit road ────
@@ -296,8 +302,8 @@ const SceneryPits = (function () {
       const EXW = typeof TrackPit !== "undefined" ? TrackPit.EXIT_WALL_W : 0.55;
       const kx = nodesFrom(p.sOut, (k) => p.w[k] >= EXW, p.exitRoadM);
       const slide = (k) => v0 * p.v[k];
-      sweep(kx, [[-0.05, 0], [0.30, 0], [0.30, 1.0], [-0.05, 1.0]], WALL, MAT.CONCRETE, slide);
-      sweep(kx, [[-0.07, 1.0], [0.32, 1.0], [0.32, 1.07], [-0.07, 1.07]], WALL_TOP, MAT.METAL, slide);
+      sweep(kx, [[-0.05, 0], [0.30, 0], [0.30, 1.0], [-0.05, 1.0]], WALL, MAT.CONCRETE, slide, "pit-exit-wall");
+      sweep(kx, [[-0.07, 1.0], [0.32, 1.0], [0.32, 1.07], [-0.07, 1.07]], WALL_TOP, MAT.METAL, slide, "pit-exit-wall-cap");
 
       // ── 1d. THE OUTER WALL: the lane's far side, wherever a bay is not ────
       // Along the ribbon's outer edge — the garage line, scaled by the
@@ -315,8 +321,8 @@ const SceneryPits = (function () {
       const outerShift = (k) => (typeof TrackPit !== "undefined" && TrackPit.outerAt
         ? TrackPit.outerAt(p, k) : o.workOut * p.w[k]);
       const outerWall = (ks2) => {
-        sweep(ks2, [[0.02, 0], [0.32, 0], [0.32, 1.0], [0.02, 1.0]], WALL, MAT.CONCRETE, outerShift);
-        sweep(ks2, [[0.0, 1.0], [0.34, 1.0], [0.34, 1.07], [0.0, 1.07]], WALL_TOP, MAT.METAL, outerShift);
+        sweep(ks2, [[0.02, 0], [0.32, 0], [0.32, 1.0], [0.02, 1.0]], WALL, MAT.CONCRETE, outerShift, "pit-outer-wall");
+        sweep(ks2, [[0.0, 1.0], [0.34, 1.0], [0.34, 1.07], [0.0, 1.07]], WALL_TOP, MAT.METAL, outerShift, "pit-outer-wall-cap");
       };
       const hasRibbon = (k) => p.w[k] > 0.02;
       if (p.hasBays && p.row) {

@@ -90,7 +90,7 @@ const SPEC = [
   { k: "tlxForceGL", lane: "raw", group: "display", def: null, src: "js/perf/renderer-picker.js (null = AUTO)" },
   { k: "tlxEnvProbe", lane: "raw", group: "display", def: null, src: "js/perf/renderer-picker.js CAR REFLECTIONS (null = OFF)" },
   // HUD (js/game.js)
-  { k: "hudProfile", lane: "json", group: "hud", def: "standard", src: "js/game.js" },
+  { k: "hudProfile", lane: "json", group: "hud", def: "standard", oneOf: ["minimal", "standard", "broadcast"], src: "js/game.js" },
   { k: "hudMetricsLayout", lane: "json", group: "hud", def: "full", src: "js/game.js" },
   { k: "hudMapVis", lane: "json", group: "hud", def: "on", src: "js/game.js" },
   { k: "hudGapsVis", lane: "json", group: "hud", def: "on", src: "js/game.js" },
@@ -102,7 +102,7 @@ const SPEC = [
   // LIGHTING TUNER (js/lighting)
   { k: "lightTune", lane: "json", group: "lighting", def: {}, src: "js/lighting/knobs.js TUNE_DEFS (the file holds {\"track|tod|weather\":{knob:value}} edits)" },
   // DRIVING / RACE RULES (js/game.js, js/race/race-control.js)
-  { k: "steerMode", lane: "json", group: "driving", def: "buttons", src: "js/game.js" },
+  { k: "steerMode", lane: "json", group: "driving", def: "buttons", oneOf: ["tilt", "buttons", "touch"], src: "js/game.js" },
   { k: "manual", lane: "json", group: "driving", def: false, src: "js/game.js" },
   { k: "autoThrottle", lane: "json", group: "driving", def: false, src: "js/game.js (XAG 107: a held accelerator is an input barrier)" },
   { k: "mirrorControls", lane: "json", group: "driving", def: false, src: "js/game.js (left-handed dock)" },
@@ -121,7 +121,7 @@ const SPEC = [
   { k: "padLabels", lane: "json", group: "driving", def: "auto", src: "js/ui/key-binds.js (Xbox/PlayStation/Nintendo button names)" },
   { k: "padAxes", lane: "json", group: "driving", def: null, src: "js/ui/key-binds.js wheel wizard (axis indices + signs)" },
   { k: "aeroMode", lane: "json", group: "driving", def: "manual", src: "js/game.js" },
-  { k: "drivingLine", lane: "json", group: "driving", def: "full", src: "js/game.js" },
+  { k: "drivingLine", lane: "json", group: "driving", def: "full", oneOf: ["off", "corner", "full"], src: "js/game.js" },
   // DRIVING LINE prefs (js/ui/driving-line-opts.js) — separate from the mode
   // above. NOT `brakeCue` — that row is the steering panel's 1-10 slider below.
   // The two shared one key until 6ee62f21; a settings file written before the
@@ -396,7 +396,15 @@ function garageValue(k, v) {
     return v && typeof v === "object" && !Array.isArray(v)
       && Array.isArray(v.drivers) && v.drivers.length > 0 ? v : undefined;
   }
-  if (k === "customLogo") return typeof v === "string" ? v : undefined;
+  if (k === "customLogo") {
+    if (typeof v !== "string") return undefined;
+    // Match custom-team.js upload: canvas longest side CUSTOM_LOGO_MAX (384) →
+    // PNG data URL. Cap bytes generously above a worst-case 384² PNG (~200 KiB
+    // raw → ~270 KiB base64); reject non-image schemes (docs/BUGS.md B8).
+    if (!/^data:image\/(png|jpeg|webp);base64,/.test(v)) return undefined;
+    if (v.length > 400000) return undefined;
+    return v;
+  }
   if (k === "team" || k === "driver") return Number.isInteger(v) && v >= 0 ? v : undefined;
   return undefined;   // isGarageKey() admits nothing else — default deny
 }

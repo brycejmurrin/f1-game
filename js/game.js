@@ -2172,8 +2172,12 @@ function gridUp(preOrder) {
     c.kerbGripSm = 1; c.kerbCueT = 0; c.towing = 0; c.wake = 0;
     clearRacingScratch(c);
     // The launch plan and the pace phase (AiDrive): one hash per car per race,
-    // never a simRnd() draw — the stream's draw count is a contract.
-    const h = DriverRatings.hash32(simSeed() + ":" + i + ":" + c.skill);
+    // never a simRnd() draw — the stream's draw count is a contract. Season /
+    // career round + seasonSeed match armReliability (docs/BUGS.md B6).
+    const hSeed = (typeof Career !== "undefined" && Career.inCareer && Career.inCareer())
+      ? Career.seasonSeed() : simSeed();
+    const hRound = isChampionship() ? SeasonCal.drawRound(season) : raceIndex;
+    const h = DriverRatings.hash32(hSeed + ":" + hRound + ":" + i + ":" + c.skill);
     c.launch = c.human ? null : AiDrive.launchPlan(AiDrive.traits(c), (h & 0xffff) / 65536);
     c.launchOn = !c.human; c.phaseRoll = (h >>> 16) / 65536;
     c.tyreClass = c.human ? null : AiDrive.tyreClass(((h >>> 8) & 0xffff) / 65536, lapsTarget);   // the compound IS the strategy
@@ -3039,7 +3043,7 @@ function endRace(forcedOrder) {
     // The fastest lap among the CLASSIFIED finishers — award() pays the
     // 2019–2024 point only when the season format asks for it.
     let fastest = null, fastestT = Infinity;
-    for (const c of order) if (!c.retired && c.best < fastestT) { fastestT = c.best; fastest = c.driverId; }
+    for (const c of fin) if (c.best < fastestT) { fastestT = c.best; fastest = c.driverId; }
     const settles = SeasonCal.award(season, order, fastest) === "race";
     // award() deletes season.qualiOrder when the round scores; the IN-MEMORY
     // classification is that same weekend and goes with it. Left behind, it kept
@@ -4900,7 +4904,7 @@ function updateCar(c, dt, ranked) {
       const zk = Math.round(c.s + _atk.toTurnIn);
       if (zk !== c.zoneKey) {
         c.zoneKey = zk;
-        if (!c.errT && !alongO && DriverRatings.hash32(simSeed() + ":" + c.gridPos + ":" + c.lap + ":" + zk) / 4294967296 < AiDrive.mistakeChance(aiT, c.pressT / 6, dd.err)) { c.errT = AiDrive.mistakeTotal(); c.errCount = (c.errCount || 0) + 1; }
+        if (!c.errT && !alongO && DriverRatings.hash32(((typeof Career !== "undefined" && Career.inCareer && Career.inCareer()) ? Career.seasonSeed() : simSeed()) + ":" + (isChampionship() ? SeasonCal.drawRound(season) : raceIndex) + ":" + c.gridPos + ":" + c.lap + ":" + zk) / 4294967296 < AiDrive.mistakeChance(aiT, c.pressT / 6, dd.err)) { c.errT = AiDrive.mistakeTotal(); c.errCount = (c.errCount || 0) + 1; }
       }
     } else c.zoneKey = -1;
     c.wheelLock = AiDrive.mistakePhase(c.errT) === 1 && braking ? 1 : 0;   // the render freezes the fronts
@@ -8764,6 +8768,7 @@ els.pmStandings && (els.pmStandings.onclick = () => { buildStandings(); $("stand
 // STEERING INPUT: one row, ‹ TILT | BUTTONS | TOUCH › (was a button cycling the three).
 const STEER_MODES = ["tilt", "buttons", "touch"];
 function setSteerMode(mode) {
+  if (STEER_MODES.indexOf(mode) < 0) mode = "buttons";
   steerMode = mode;
   store.set("steerMode", mode);
   Input.setSteerMode(mode);

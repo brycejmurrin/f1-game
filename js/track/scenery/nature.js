@@ -846,7 +846,15 @@ const SceneryNature = (function () {
     const canopyR = (kind, h) => {
       const jMax = 1.15;                                  // per-instance jitter ceiling
       if (kind === "pine") return 2.7 * jMax + 0.4;       // pine(): widest lower tier
-      if (kind === "fir")  return (2.1 + h * 0.06) * 1.15 + 0.4;   // conifer(): +15% jitter on the base tier
+      // fir → conifer(): widest cone is (2.1+h*0.06)*j. Keep-out must not collapse
+      // below the previous broadleaf scatter corridor when furniture.tree retargets
+      // pine→fir (2026-09-22: bare mesh extent grew interpenetration on all five).
+      // Mesh extent + lean budget, floored at ~90% of broadleaf keep-out.
+      if (kind === "fir") {
+        const mesh = (2.1 + h * 0.06) * jMax + 0.8;
+        const broad = (3.7 + h * 0.14) * jMax + 0.4;
+        return Math.max(mesh, broad * 0.9);
+      }
       if (kind === "palm") return 5.2;                    // frond hub 2.4 + blade spread
       if (kind === "cypress")       return 1.45 * jMax + 0.4;   // narrow column
       if (kind === "stonePine")     return h * 0.44 + 0.6;      // wide flat parasol
