@@ -375,7 +375,7 @@ const Announcer = (function () {
   function inert() {
     return Object.freeze({
       play: () => false, stop: () => {}, preview: () => false, sample: () => false, wrapUp: () => false,
-      scriptFor: () => [], enabled: () => false, setEnabled: () => {}, available: () => false,
+      scriptFor: () => [], enabled: () => false, setEnabled: () => {}, available: () => false, speaking: () => false,
     });
   }
 
@@ -632,6 +632,10 @@ const Announcer = (function () {
       wrapUp,
       stop,
       enabled: () => on,
+      /** Is a read in progress — a line on air, or the hold before the last
+       *  one? The loading screen's radio check waits on this: the two share
+       *  one speechSynthesis, and RadioVoice's say() cancels it. */
+      speaking: () => !!speaking,
       setEnabled(b) { on = !!b; try { G.store.set("announcer", on); } catch (_) { /* storage refused */ } if (!on) stop(); },
       available: () => true,
     };

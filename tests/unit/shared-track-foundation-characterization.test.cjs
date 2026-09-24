@@ -327,9 +327,10 @@ test("road-overlapping place helper is suppressed as a whole", () => {
     let props = { vertices: 0, indices: 0 };
     harness.observe((kind, geo) => {
       if (kind === "chunked")
-        // PRE-strip index count: the props buffer loses never-visible
-        // triangles (js/track/core/hidden-faces.js), e.g. a box's ground face.
-        props = { vertices: props.vertices + geo.pos.length / 3,
+        // PRE-strip index count and PRE-compaction vertex count: the props
+        // buffer loses never-visible triangles (js/track/core/hidden-faces.js),
+        // e.g. a box's ground face, and then the vertices only they used.
+        props = { vertices: props.vertices + (geo._compact ? geo._compact.vertsBefore : geo.pos.length / 3),
                   indices: props.indices + (geo._hidden ? geo._hidden.trisBefore * 3 : geo.idx.length) };
     });
     try {

@@ -140,15 +140,12 @@ test("trim(from) drops the primitive records and the live-buffer set", () => {
 // buffer untouched, every surviving index in range. Measured 2026-09-24,
 // re-measured after P2 moved the grandstand shell out from behind the crowd
 // (fewer rows are enclosed, so fewer are stripped), and again after the verge
-// carve fix raised the terrain beside descents (buried counts moved).
+// carve fix raised the terrain beside descents (buried counts moved), and
+// after T3 draped groundPatch over the terrain (monza +834 patch triangles),
+// and after merging landmark wave 3's Tribuna/podium densify on top.
 const STRIP = {
-  // Re-measured after the ground-audit fixes stopped EMITTING never-visible
-  // prims (palm root stubs, underground facade detail): -5838 emitted, -218 kept.
-  monaco: { before: 287677, after: 252433 },
-  // Re-measured 2026-09-24 after landmark wave 3 Tribuna/podium + mid densify,
-  // and again after the pit-straight green band moved out of the red trim's
-  // footprint to stand 0.4 m proud (its buried underside now strips: -18).
-  monza: { before: 341693, after: 301756 },
+  monaco: { before: 293659, after: 258313 },
+  monza: { before: 342395, after: 315326 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {
