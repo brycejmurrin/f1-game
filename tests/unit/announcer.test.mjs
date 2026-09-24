@@ -23,6 +23,10 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+// VM timers are UNREF'd: they still fire while a test awaits, but a cue the
+// module schedules seconds ahead no longer holds the process open after the
+// last assertion (measured 2026-09-24: this file sat idle for most of its run).
+const unrefTimeout = (fn, ms, ...a) => { const t = setTimeout(fn, ms, ...a); t.unref?.(); return t; };
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => readFileSync(join(ROOT, p), "utf8");
@@ -45,7 +49,7 @@ function load({ api = true, voices = [], stored = {}, soundOn = true, lore = tru
   // `clock` (fakeClock() below) swaps in fake timers AND a fake Date, so a test
   // can step through a 24 s budget without waiting for it.
   const timers = clock ? { setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout, Date: clock.Date }
-    : { setTimeout, clearTimeout };
+    : { setTimeout: unrefTimeout, clearTimeout };
   const ctx = vm.createContext(Object.assign({ Math, JSON, Object, Array, Number, String, Set, console }, timers));
   seedLog(ctx);
   const synth = api ? synthStub() : null;
