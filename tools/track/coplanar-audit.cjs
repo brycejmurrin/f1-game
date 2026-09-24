@@ -33,7 +33,16 @@
 // Usage:
 //   node tools/track/coplanar-audit.cjs <trackId> [--why]
 //   node tools/track/coplanar-audit.cjs --all [--json] [--gate]
-//   flags: --gap <m>  --area <m2>  --fight <m>  --horizontal
+//   flags: --gap <m>  --area <m2>  --fight <m>  --horizontal  --overhead
+//
+// --overhead: ONLY the horizontal faces of OVERHEAD structures (bridges, gates,
+// gantries, tunnel roofs) — faces whose centre stands more than OVERHEAD_CLEAR
+// above the road and within hw + OVERHEAD_LAT of it, up- or down-facing. The
+// default mode skips every |n.y| >= 0.5 face, and --horizontal over the whole
+// scene drowns in ground-level prop tops (madrid 4 -> 109, monaco 4 -> 58), so
+// a deck soffit drawn in the same plane as its deck's underside went unseen
+// (madrid, 2026-09-24: two bridges, 0.0 mm, 216 and 203 m2, flickering overhead
+// while a car drove under them). The gate for this mode is ZERO fleet-wide.
 
 "use strict";
 
@@ -70,6 +79,13 @@ const GAP_MAX = 0.020;       // plane separation worth looking at (m)
 const AREA_MIN = 2.0;        // overlap area on the shared plane (m2)
 const FIGHT_MAX = 150;       // gate: fights within this distance (m)
 const NEAR_TRACK = 300;      // beyond this, fog+framing make it moot (m)
+// --overhead: a face counts when its centre is this far above the nearest road
+// node and within hw + OVERHEAD_LAT of it laterally; the gap and area defaults
+// shrink to what an underside actually shows (a soffit strip is small).
+const OVERHEAD_CLEAR = 3.0;
+const OVERHEAD_LAT = 8.0;
+const OVERHEAD_GAP = 0.005;
+const OVERHEAD_AREA = 0.25;
 // Big is not benign here. clip-audit caps primitive span at 25 m because
 // landforms are BUILT to interpenetrate — a depth-of-penetration argument. It
 // does not carry over: a grandstand wall coplanar with the band inside it is a
@@ -257,11 +273,39 @@ function analyse(track, prims, opt) {
     return false;
   };
 
+  // --overhead: nearest road node per face, on a 20 m grid over the nodes.
+  let above = null;
+  if (opt.overhead) {
+    const CELL = 20, g = new Map();
+    for (let k = 0; k < track.n; k++) {
+      const key = ck(Math.floor(track.px[k] / CELL), Math.floor(track.pz[k] / CELL));
+      let a = g.get(key); if (!a) g.set(key, (a = [])); a.push(k);
+    }
+    above = (f) => {
+      const x = (f.mn[0] + f.mx[0]) / 2, z = (f.mn[2] + f.mx[2]) / 2, y = (f.mn[1] + f.mx[1]) / 2;
+      const ix = Math.floor(x / CELL), iz = Math.floor(z / CELL);
+      let best = -1, bd = Infinity;
+      for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
+        for (const k of g.get(ck(ix + a, iz + b)) || []) {
+          const d = (x - track.px[k]) ** 2 + (z - track.pz[k]) ** 2;
+          if (d < bd) { bd = d; best = k; }
+        }
+      }
+      return best >= 0 && Math.sqrt(bd) <= track.hw[best] + OVERHEAD_LAT &&
+        y >= track.py[best] + OVERHEAD_CLEAR;
+    };
+  }
+
   const faces = [];
   for (let i = 0; i < prims.length; i++) {
     const p = prims[i];
     if (span(p) > opt.maxDim) continue;
     p.__i = i;
+    if (above) {
+      for (const f of facesOf(p, p.buf.pos, p.buf.nrm))
+        if (Math.abs(f.n[1]) >= 0.5 && above(f)) faces.push(f);
+      continue;
+    }
     // Each primitive indexes into ITS OWN buffer. Faces must be pooled across
     // all of them: props and glass are separate meshes but are rasterised into
     // the same depth buffer, so a pane coplanar with the wall behind it fights
@@ -295,7 +339,7 @@ function analyse(track, prims, opt) {
         if (a.pi === b.pi) continue;                       // same primitive
         const dot = a.n[0] * b.n[0] + a.n[1] * b.n[1] + a.n[2] * b.n[2];
         if (dot < SAME_FACING) { stats.antiParallel++; continue; }
-        if (!opt.horizontal && Math.abs(a.n[1]) >= 0.5) continue;   // vertical only
+        if (!opt.horizontal && !opt.overhead && Math.abs(a.n[1]) >= 0.5) continue;   // vertical only
         const gap = Math.abs(a.d - b.d);
         if (gap > opt.gap) continue;
         const area = overlapArea(a, b);
@@ -365,7 +409,12 @@ function main() {
     fight: flag("fight", FIGHT_MAX),
     maxDim: flag("maxdim", MAX_DIM),
     horizontal: argv.includes("--horizontal"),
+    overhead: argv.includes("--overhead"),
   };
+  if (opt.overhead) {
+    if (!argv.includes("--gap")) opt.gap = OVERHEAD_GAP;
+    if (!argv.includes("--area")) opt.area = OVERHEAD_AREA;
+  }
   const wantJson = argv.includes("--json");
   const wantGate = argv.includes("--gate");
   const why = argv.includes("--why");

@@ -72,6 +72,9 @@ function buildContext(opts) {
                time: () => {}, timeEnd: () => {} },
   };
   sandbox.window = sandbox;
+  // The baked asset pack, as tools/lib/track-build-vm.cjs installs it: without
+  // it bakedModel() stamped nothing and this audit never saw the 36 models.
+  sandbox.Assets = require("../lib/pack-assets.cjs").packAssets();
   const ctx = vm.createContext(sandbox);
 
   function runFile(relPath) {

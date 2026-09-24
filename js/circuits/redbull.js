@@ -14,7 +14,8 @@
     // 0.08-0.13 (T1 apex 0.0851). The old 0.1875 (shift 0.295) stood the paddock
     // at Remus and grew 105 trees along the pit lane — docs/notes/DEFECT-LEDGER.md.
     sceneryCoordinates: "racing",
-    // The Wing (K(0), left, 13 m) and the circuit's own pit-straight stands own
+    // The Wing (K(0), right, 38 m: behind the garages, pit side +1) and the
+    // pit-straight stands (left, opposite the pits, as at the real ring) own
     // this straight; the engine's generic 7-box stand (k 0-24, left, 14 m)
     // stood inside the Wing: a 4.00 m / 1005 m3 box-vs-box clip at frac 0.000.
     ownPitStraight: true,

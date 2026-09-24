@@ -100,18 +100,18 @@
       ];
       const rbSpan = (s, len) => { const h = (len / 2) / (ds * n); return [s - h, s + h]; };
       tyreWall(0.08, 0.13, 1, 6.5, rbRed);    // outside Turn 1 (Niki Lauda)
-      tyreWall(0.20, 0.25, 1, 6.5, rbYel);    // outside Turn 3 (Remus) crest
-      tyreWall(0.32, 0.37, -1, 6.5, rbRed);   // outside Turn 4 (Schlossgold)
+      tyreWall(0.2785, 0.3285, -1, 6.5, rbYel); // outside Turn 3 (Remus) hairpin
+      tyreWall(0.467, 0.517, -1, 6.5, rbRed);   // outside Turn 4 (Schlossgold)
       tyreWall(0.72, 0.77, -1, 6.0, rbNavy);
 
       // Green runoff aprons at the heavy stops — alpine meadow pans, not grey gravel.
       const GRN_APRON = (pal && pal.runoff) || [0.32, 0.52, 0.24];
       groundPatch(K(0.10), 1, 5.5, [16, 0.32, 30], GRN_APRON, { id: "redbull-t1-runoff-a", samples: 5 });
       groundPatch(K(0.12), 1, 6.0, [14, 0.32, 26], GRN_APRON, { id: "redbull-t1-runoff-b", samples: 5 });
-      groundPatch(K(0.22), 1, 5.5, [15, 0.32, 28], GRN_APRON, { id: "redbull-remus-runoff-a", samples: 5 });
-      groundPatch(K(0.24), 1, 6.0, [14, 0.32, 24], GRN_APRON, { id: "redbull-remus-runoff-b", samples: 5 });
-      groundPatch(K(0.34), -1, 5.5, [15, 0.32, 28], GRN_APRON, { id: "redbull-t4-runoff-a", samples: 5 });
-      groundPatch(K(0.36), -1, 6.0, [14, 0.32, 24], GRN_APRON, { id: "redbull-t4-runoff-b", samples: 5 });
+      groundPatch(K(0.2985), -1, 5.5, [15, 0.32, 28], GRN_APRON, { id: "redbull-remus-runoff-a", samples: 5 });
+      groundPatch(K(0.3185), -1, 6.0, [14, 0.32, 24], GRN_APRON, { id: "redbull-remus-runoff-b", samples: 5 });
+      groundPatch(K(0.487), -1, 5.5, [15, 0.32, 28], GRN_APRON, { id: "redbull-t4-runoff-a", samples: 5 });
+      groundPatch(K(0.507), -1, 6.0, [14, 0.32, 24], GRN_APRON, { id: "redbull-t4-runoff-b", samples: 5 });
 
       // Marshal posts spaced around the lap (orange-roofed huts + flag poles).
       for (const [s, side] of [[0.05, -1], [0.15, 1], [0.27, -1], [0.40, 1], [0.52, -1], [0.66, 1], [0.80, -1], [0.92, 1]]) {
@@ -124,8 +124,12 @@
         [0.44, -1, rbNavy], [0.58, 1, rbRed], [0.68, -1, rbYel], [0.82, 1, rbNavy], [0.88, -1, rbRed],
       ]) billboard(Math.round(n * s) % n, side, 7, 11, 3.4, col);
 
+      // Paddock on the PIT side (+1, as at the real ring): the engine's complex
+      // reaches hw + 14 m (garage line) + 12.8 m bays, so The Wing's inner face
+      // (38 - 7.25) and the motorhomes (gap 48) stand clear behind the garages.
+      // The pit-straight grandstands face them from -1 (below).
       {
-        const a = anchor(K(0), -1, 13);
+        const a = anchor(K(0), 1, 38);
         modelGroup("redbull-wing", {
           center: vadd(a.c, a.u, 6),
           size: [14.5, 12.5, 70],
@@ -135,14 +139,14 @@
           addBox(stage, vadd(a.c, a.u, 11), [14, 0.7, 66], [0.86, 0.88, 0.92], [a.r, a.u, a.t]);
           for (let i = -2; i <= 2; i++)
             addCyl(stage, vadd(a.c, a.t, i * 14), 0.3, 11, [0.70, 0.72, 0.76], 5, [a.r, a.u, a.t]);
-          addBox(stage, vadd(vadd(a.c, a.r, -6.5), a.u, 10.4), [0.25, 0.18, 64], [1.0, 0.96, 0.80], [a.r, a.u, a.t]);
+          addBox(stage, vadd(vadd(a.c, a.r, 6.5), a.u, 10.4), [0.25, 0.18, 64], [1.0, 0.96, 0.80], [a.r, a.u, a.t]);
         }, { required: true });
       }
-      motorhome(K(0), -1, 26, 18, 9, 22, { wall: [0.88, 0.90, 0.93], window: [0.20, 0.30, 0.42] });
-      motorhome(K(0.04), -1, 26, 16, 7, 18, { wall: [0.80, 0.82, 0.86], window: [0.22, 0.32, 0.42] });
-      motorhome(K(0.96), -1, 26, 16, 8, 20, { wall: [0.86, 0.88, 0.92], window: [0.20, 0.30, 0.42] });
+      motorhome(K(0), 1, 48, 18, 9, 22, { wall: [0.88, 0.90, 0.93], window: [0.20, 0.30, 0.42] });
+      motorhome(K(0.04), 1, 48, 16, 7, 18, { wall: [0.80, 0.82, 0.86], window: [0.22, 0.32, 0.42] });
+      motorhome(K(0.96), 1, 48, 16, 8, 20, { wall: [0.86, 0.88, 0.92], window: [0.20, 0.30, 0.42] });
       // Race-control / media tower over the start.
-      tower(K(0.01), -1, 18, 9, 26, { col: [0.80, 0.82, 0.86], cap: true, capCol: rbNavy, mast: 7 });
+      tower(K(0.01), 1, 52, 9, 26, { col: [0.80, 0.82, 0.86], cap: true, capCol: rbNavy, mast: 7 });
 
       const scoringGantry = (s, h, id) => {
         const k = K(s), col = [0.12, 0.13, 0.16];
@@ -242,10 +246,10 @@
       billboard(Math.round(n * 0.74) % n, 1, 18, 18, 7, [0.70, 0.70, 0.72]);
 
       const shell = [0.40, 0.41, 0.46];
-      grandstandEx(0.985, 1, 24, 30, shell, rbRed, { tiers: 2, roof: "cantilever", suites: true, endWalls: true, h: 13 });
-      grandstandEx(0.005, 1, 24, 30, shell, rbNavy, { tiers: 2, roof: "truss", suites: true, pylons: true, h: 13 });
-      grandstandEx(0.04, 1, 17, 30, shell, rbRed, { roof: "cantilever", h: 11 });
-      grandstandEx(0.07, 1, 14, 26, shell, rbNavy, { roof: "flat", h: 11 });
+      grandstandEx(0.985, -1, 24, 30, shell, rbRed, { tiers: 2, roof: "cantilever", suites: true, endWalls: true, h: 13 });
+      grandstandEx(0.005, -1, 24, 30, shell, rbNavy, { tiers: 2, roof: "truss", suites: true, pylons: true, h: 13 });
+      grandstandEx(0.04, -1, 17, 30, shell, rbRed, { roof: "cantilever", h: 11 });
+      grandstandEx(0.07, -1, 14, 26, shell, rbNavy, { roof: "flat", h: 11 });
 
       {
         const total = ds * n; // metres per lap (== track.total)
@@ -278,10 +282,10 @@
       }
 
       // T4 / Schlossgold amphitheatre face (descent side).
-      grandstandEx(0.32, -1, 10, 28, shell, rbNavy, { tiers: 2, roof: "truss", pylons: true, h: 12 });
-      grandstandEx(0.34, -1, 9, 26, shell, rbRed, { roof: "cantilever" });
-      grandstandEx(0.36, -1, 8, 24, shell, rbNavy, { roof: "flat" });
-      grandstandEx(0.50, -1, 8, 26, null, null, { livery: "steel", roof: "flat" });
+      grandstandEx(0.467, -1, 10, 28, shell, rbNavy, { tiers: 2, roof: "truss", pylons: true, h: 12 });
+      grandstandEx(0.487, -1, 9, 26, shell, rbRed, { roof: "cantilever" });
+      grandstandEx(0.507, -1, 8, 24, shell, rbNavy, { roof: "flat" });
+      grandstandEx(0.34, -1, 8, 26, null, null, { livery: "steel", roof: "flat" });
       scaffoldStand(...rbSpan(0.62, 22), 1, 8,
         { rows: 5, rise: 1.25, setback: 1.9, step: 8, legEvery: 1,
           crowd: RB_HILL_CROWD, density: 0.55,
@@ -300,8 +304,8 @@
           crowd: RB_HILL_CROWD, density: 0.58 });
 
       for (const [s, side, gap] of [
-        [0.985, 1, 24], [0.005, 1, 24], [0.04, 1, 17], [0.07, 1, 14],
-        [0.32, -1, 13], [0.34, -1, 13], [0.36, -1, 13],
+        [0.985, -1, 24], [0.005, -1, 24], [0.04, -1, 17], [0.07, -1, 14],
+        [0.467, -1, 13], [0.487, -1, 13], [0.507, -1, 13],
         [0.70, 1, 13], [0.72, -1, 13], [0.76, -1, 13], [0.88, 1, 13], [0.92, 1, 13], [0.95, 1, 13],
       ]) {
         const k = Math.round(n * s) % n;
