@@ -1967,7 +1967,14 @@ const Tracks = (function () {
     }
 
     if (theme === "green") {
-      every(140, (k) => place(k, hash(HK(k)) < 0.5 ? -1 : 1, 14, [4, 6, 22], [0.5, 0.5, 0.55]));
+      every(140, (k) => {
+        const side = hash(HK(k)) < 0.5 ? -1 : 1;
+        // The generic pit-straight grandstand below owns k 0-28 on -1 at gap
+        // 14; a -1 shed there landed in it (the 4.00 m box pair at frac 0.000
+        // on 29 circuits' clip audits). ownPitStraight circuits have no stand.
+        if (side < 0 && !def.ownPitStraight && k <= 7 * 4 + 4) return;
+        place(k, side, 14, [4, 6, 22], [0.5, 0.5, 0.55]);
+      });
     } else if (theme === "desert") {
       every(34, (k) => { for (const side of [-1, 1]) if (hash(HK(k) + side) > 0.6) place(k, side, 8 + hash(HK(k)) * 10, [2 + hash(HK(k)) * 3, 1.5, 2], [0.62, 0.5, 0.34]); });
     } else if (theme === "street_day" || theme === "street_night" || theme === "modern") {
@@ -2369,7 +2376,14 @@ const Tracks = (function () {
         const tg = [track.tx[k], 0, track.tz[k]];
         for (const side of [-1, 1]) {
           const o = side * (hw[k] + 2.0);
-          RAW.addBox(out, [px[k] + r[0] * o, deckY / 2 - 0.3, pz[k] + r[2] * o],
+          const x = px[k] + r[0] * o, z = pz[k] + r[2] * o;
+          // RAW skips rejBox, so nothing else stops a pillar standing in the
+          // OTHER road: its own deck edge is 1.2 m clear at hw + 2, so an
+          // onTrack hit here is the lower carriageway. On suzuka's oblique
+          // crossover one stood 4 m inside the lower road's tarmac (frac 0.439,
+          // lateral -3.0), a 9 m column the lower road drove straight through.
+          if (onTrack(x, z, 0.8)) continue;
+          RAW.addBox(out, [x, deckY / 2 - 0.3, z],
                  [1.6, deckY + 0.4, 1.6], [0.42, 0.42, 0.47], [r, [0, 1, 0], tg]);
           blockAt(k, side, 2.0, 1);   // solid pillar at the deck edge
         }
