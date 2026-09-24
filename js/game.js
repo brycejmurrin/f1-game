@@ -4669,8 +4669,8 @@ function updateCar(c, dt, ranked) {
     const up = c.local ? Input.consumeShiftUp() : !!inp.shiftUp,
           down = c.local ? Input.consumeShiftDown() : !!inp.shiftDown;
     if (gearsManual()) {
-      if (up && c.gear < GEARS && c.shiftT <= 0) { c.gear++; c.shiftT = 0.1; if (soundOn) GameAudio.shift(true); }
-      if (down && c.gear > 1 && c.shiftT <= 0) { c.gear--; c.shiftT = 0.1; if (soundOn) GameAudio.shift(false); }
+      if (up && c.gear < GEARS && c.shiftT <= 0) { c.gear++; c.shiftT = 0.1; if (soundOn && c.local) GameAudio.shift(true); }
+      if (down && c.gear > 1 && c.shiftT <= 0) { c.gear--; c.shiftT = 0.1; if (soundOn && c.local) GameAudio.shift(false); }
       const hi = gearHi(c.gear), lo = gearLo(c.gear);
       const frac = (c.speed - lo) / Math.max(hi - lo, 1);
       if (c.speed >= hi) { gearMult = 0.08; accelCeil = Math.min(accelCeil, hi + 1.5); }  // limiter: upshift to go faster
@@ -4764,7 +4764,7 @@ function updateCar(c, dt, ranked) {
   const gearSpeed = Math.max(0, c.speed);   // gearbox readout ignores reverse crawl
   if (c.human && !gearsManual()) {
     const ng = naturalGear(gearSpeed);
-    if (ng !== c.gear && state === "race" && soundOn) GameAudio.shift(ng > c.gear);
+    if (ng !== c.gear && state === "race" && soundOn && c.local) GameAudio.shift(ng > c.gear);   // your gearbox, not a VS FRIEND rival's
     c.gear = ng;
   } else if (!c.human) c.gear = naturalGear(gearSpeed);
   c.rpm = rpmFor(c.gear, gearSpeed);

@@ -24,7 +24,10 @@ const CarSfx = (() => {
       o.scrub = c.offroad ? 0 : Math.max(0, Math.min(1, (fu - 0.98) / 0.20)) * moving;
       o.lock = Math.max(0, Math.min(1, +c.wheelLock || 0)) * moving;
       o.surface = c.offroad ? Math.min(1, 0.25 + 0.75 * v01) * moving : 0;
-      o.pitLim = c.pitState === "lane" && v01 > 0.05 ? 1 : 0;
+      // ON THE LIMITER is the lane's own predicate (PitLane.held): the entry,
+      // and the exit road after the stop — not just pitState "lane".
+      const held = G.pits && G.pits.held ? G.pits.held(c) : c.pitState === "lane";
+      o.pitLim = held && v01 > 0.05 ? 1 : 0;
       return o;
     }
 
@@ -40,7 +43,9 @@ const CarSfx = (() => {
       if (c !== lastCar) { lastCar = c; lastPit = ps; }
       if (ps !== lastPit) {
         if (ps === "box") GameAudio.pitGun(false);
-        else if (lastPit === "box") GameAudio.pitGun(true);
+        // Released to the exit only: a red flag clears a car in the box straight
+        // to "none", and that is not a crew tightening wheels.
+        else if (lastPit === "box" && ps === "out") GameAudio.pitGun(true);
         lastPit = ps;
       }
     }
