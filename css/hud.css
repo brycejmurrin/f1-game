@@ -1172,7 +1172,7 @@ body.pc-nopanel .pc-altcol   { left: auto; right: calc(152px + var(--sar) / var(
    CONTROL LEFT ON SCREEN — there is no WASD to fall back on — which is what the
    size rule below is about. */
 body.pc-uihidden #photo-controls > :not(#pc-restore) { display: none !important; }
-body.pc-uihidden #lighting-inner { display: none !important; }
+body.pc-uihidden :is(#lighting-inner, #freecam-inner) { display: none !important; }
 body.pc-uihidden #game-metrics { display: none !important; }
 /* THE PANEL IS HUD CHROME AND FOLLOWS THE HUD. It is created at runtime with no
    index.html node, so it inherited none of the rules that clear the screen for a
