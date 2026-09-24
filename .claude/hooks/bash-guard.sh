@@ -139,7 +139,10 @@ if printf '%s' "$SCAN" | grep -Eq "(^|[;&|(][[:space:]]*)${PRE}kill([[:space:]]+
     [ -r "/proc/$pid/cmdline" ] || continue
     line=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null)
     case "$line" in
-      *test-bg.mjs*|*run-playwright*|*"npm run test:"*|*"playwright test"*)
+      # The supervisor test-bg records is `sh -c "…; npm run --silent test:<g> …;
+      # echo '[test-bg] END …'"` — `npm run test:` alone never matched it (the
+      # --silent sits between), so `kill <pid from --status>` walked through.
+      *test-bg.mjs*|*run-playwright*|*"npm run"*" test:"*|*"npm run test:"*|*"[test-bg] END"*|*"playwright test"*)
         echo "BLOCKED: pid $pid is part of a test-bg run ($line). A bare kill orphans its browsers. Use 'node tools/ci/test-bg.mjs --stop' (or '--stop --sweep' when the supervisor is already dead)." >&2
         exit 2 ;;
     esac
@@ -154,7 +157,23 @@ fi
 # --wait, the chrome daemon. Node-only groups (`npm run test:tooling-fast`,
 # `node --test`) stay open — that is what verify-agent runs.
 if [ "$SUBAGENT" = "1" ]; then
-  BROWSER='(node[[:space:]]+)?(tools/ci/)?(test-bg\.mjs([[:space:]]+(?!--status)[^[:space:]]+)|test-solo\.mjs|run-playwright\.mjs|verify-change\.mjs[^;&|]*--wait)|(python3?[[:space:]]+)?(tools/mcp/)?probe-mcp\.py[[:space:]]+chrome-start|npx[[:space:]]+playwright[[:space:]]+test|playwright[[:space:]]+test([[:space:]]|$)|npm[[:space:]]+test([[:space:]]|$)'
+  # Any path prefix (./tools/ci/, an absolute path) — `(tools/ci/)?` alone let
+  # `node ./tools/ci/test-bg.mjs smoke` through. test-bg is open only for the
+  # read-only verbs (--status, --tail). verify-change is open only for --fast /
+  # --plan: its bare form starts batch 1 through test-bg. `npm run test:<g>` is
+  # blocked for the groups that drive a browser, read from tests/groups.json.
+  P='(node[[:space:]]+)?([^[:space:];&|()]*/)?'
+  BROWSER="${P}(test-bg\.mjs([[:space:]]+(?!--status|--tail)[^[:space:]]+)|test-solo\.mjs|run-playwright\.mjs|verify-change\.mjs(?![^;&|]*--(fast|plan)))|(python3?[[:space:]]+)?([^[:space:];&|()]*/)?probe-mcp\.py[[:space:]]+chrome-start|npx[[:space:]]+playwright[[:space:]]+test|playwright[[:space:]]+test([[:space:]]|$)|npm[[:space:]]+test([[:space:]]|$)"
+  BGROUPS=$(python3 -c '
+import json,re,sys
+try:
+    g=json.load(open(sys.argv[1]))["groups"]
+    print("|".join(re.escape(k[5:]) for k,v in g.items() if k[5:]
+          if v.get("kind")=="browser" or "playwright" in (v.get("cmd") or "")))
+except Exception:
+    print("")
+' "$ROOT/tests/groups.json")
+  [ -n "$BGROUPS" ] && BROWSER="${BROWSER}|npm[[:space:]]+run([[:space:]]+-[-a-z]+)*[[:space:]]+test:(${BGROUPS})([[:space:]]|\$)"
   if printf '%s' "$SCAN" | grep -Pq "(^|[;&|(][[:space:]]*)${PRE}(${BROWSER})"; then
     echo "BLOCKED: a subagent never starts a browser run (AGENTS.md §Verification 10) — one group saturates this box and the parent owns the only Playwright process. Run the node-only checks (verify-change.mjs --fast, node --test, verify-track.cjs) and report the browser groups as NOT RUN; the parent starts them." >&2
     exit 2

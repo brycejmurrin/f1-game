@@ -972,7 +972,7 @@ function bootSettingsNav() {
   const sb = uiSandbox(dom, { ResizeObserver: class { observe() {} }, ScrollFade: { refresh() {} } });
   vm.runInNewContext(src("js/ui/settings-tabs.js"), sb, { filename: "js/ui/settings-tabs.js" });
   const index = dom.byId("pm-settings-index");
-  for (const id of ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-advanced", "pm-audio"])
+  for (const id of ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-advanced", "pm-audio"])
     index.appendChild(dom.byId(id));
   const stale = dom.document.createElement("button");
   stale.hidden = true;
@@ -1157,8 +1157,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "SCREENSHOTS / SAVE / COPY DIAG are secondary rows, not peer plates of RESET");
   assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-display-adv-body > :is(#pm-screenshots, #pm-save-shot, #pm-copy-diag, #pm-gfx-status, .set-row, .adv-help)", "grid-column"), "1 / -1",
     "capture rows always span so SAVE cannot sit in the empty THREE PATH cell");
-  assert.equal(decl(css("css/components.css"), "#pm-panel-controls > .pm-group-h:first-child, #pm-panel-display > .pm-group-h:first-child, #advanced > .pm-group-h:first-child, #audioset > .pm-group-h:first-child", "display"), "none",
-    "sheet title already names CONTROLS / DISPLAY / STEERING & ASSISTS / MUSIC; do not reprint the heading");
+  assert.equal(decl(css("css/components.css"), "#pm-panel-controls > .pm-group-h:first-child, #pm-panel-display > .pm-group-h:first-child, #pm-panel-appearance > .pm-group-h:first-child, #advanced > .pm-group-h:first-child, #audioset > .pm-group-h:first-child", "display"), "none",
+    "sheet title already names CONTROLS / DISPLAY / APPEARANCE / STEERING & ASSISTS / MUSIC; do not reprint the heading");
   assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display,[^)]*\) details > summary,/, "color"), "var(--steel)",
     "HUD / METRICS / RENDERER names are disclosure headings, not button plates");
   assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #advanced-inner, #pm-panel-driving\) details > summary/, "opacity"), "1",
@@ -1345,9 +1345,9 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(shell, /id="sp-close"[^>]*>CLOSE</, "sp-close overlay dismiss is CLOSE");
   assert.match(shell, /id="pm-advanced">STEERING &amp; ASSISTS/, "settings door is STEERING & ASSISTS");
   const settingsIndex = shell.slice(shell.indexOf('id="pm-settings-index"'), shell.indexOf("</nav>", shell.indexOf('id="pm-settings-index"')));
-  assert.deepEqual([...settingsIndex.matchAll(/<button id="(pm-(?:open-controls|open-driving|open-display|advanced|audio))"/g)].map((m) => m[1]),
-    ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-advanced", "pm-audio"],
-    "Settings home has the five primary doors in order");
+  assert.deepEqual([...settingsIndex.matchAll(/<button id="(pm-(?:open-controls|open-driving|open-display|open-appearance|advanced|audio))"/g)].map((m) => m[1]),
+    ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-advanced", "pm-audio"],
+    "Settings home has the six primary doors in order");
   const pause = shell.slice(shell.indexOf('id="pausemenu"'), shell.indexOf("</dialog>", shell.indexOf('id="pausemenu"')));
   assert.doesNotMatch(pause, /<button id="pm-driving"/, "DRIVING is a Settings page, not a pause shortcut");
   assert.match(shell, /id="pm-panel-driving"/, "DRIVING has a dedicated Settings page");

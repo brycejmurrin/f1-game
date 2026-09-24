@@ -11,12 +11,14 @@
  * WAITED; it duplicated `--parallel` + `--wait` and was removed 2026-09-10.)
  *
  *   node tools/ci/test-bg.mjs smoke                 # start one group (default)
- *   node tools/ci/test-bg.mjs smoke api collision   # SEQUENTIAL: one at a time
- *   node tools/ci/test-bg.mjs --parallel smoke api  # concurrent up to core cap
+ *   node tools/ci/test-bg.mjs smoke physics-core    # starts smoke ONLY; prints the `next:` command
+ *   node tools/ci/test-bg.mjs --parallel smoke aero # concurrent up to core cap
  *   node tools/ci/test-bg.mjs --status              # what is running / how it ended
  *   node tools/ci/test-bg.mjs --tail smoke          # print the tail command
- *   node tools/ci/test-bg.mjs --wait                # block until all groups finish
- *   node tools/ci/test-bg.mjs --wait smoke api      # start each, wait, then next
+ *   node tools/ci/test-bg.mjs --wait                # block until all groups finish (the waiter:
+ *                                                   #   run it as a background task; exit 1 = a red)
+ *   node tools/ci/test-bg.mjs --wait --timeout 45   # ...giving up after 45 min (exit 124, runs left alive)
+ *   node tools/ci/test-bg.mjs --wait smoke aero     # start each, wait, then next
  *   node tools/ci/test-bg.mjs --stop                # kill everything still running
  *   node tools/ci/test-bg.mjs --stop --sweep        # ...and hunt orphans whose supervisor is already dead
  *
@@ -158,9 +160,17 @@ function status() {
 }
 
 async function waitForRunning() {
-  const s = readState();
-  const running = () => s.runs.filter((r) => alive(r.pid));
+  // Re-read the registry every poll: a group another shell starts while this
+  // waits is part of "everything still running" (it used to be read once).
+  const running = () => readState().runs.filter((r) => alive(r.pid));
+  const deadline = waitTimeoutMin > 0 ? Date.now() + waitTimeoutMin * 60_000 : Infinity;
   while (running().length) {
+    if (Date.now() > deadline) {
+      process.stderr.write("\r" + " ".repeat(80) + "\r");
+      say(`WAIT TIMEOUT after ${waitTimeoutMin} min — still running: ${running().map((r) => r.group).join(", ")} (left alive; --status later, --stop to end)`);
+      process.exitCode = 124;
+      return;
+    }
     const live = running();
     const line = `waiting on ${live.map((r) => r.group).join(", ")} ${loadavgLine()}`;
     process.stderr.write("\r[test-bg] " + line.padEnd(70).slice(0, 70));
@@ -492,7 +502,9 @@ const argv = process.argv.slice(2);
 const force = argv.includes("--force");
 const lastFailed = argv.includes("--last-failed");
 const parallel = argv.includes("--parallel");
-const groups = argv.filter((a) => !a.startsWith("--"));
+const tIdx = argv.indexOf("--timeout");
+const waitTimeoutMin = tIdx >= 0 ? +argv[tIdx + 1] || 0 : 0;
+const groups = argv.filter((a, i) => !a.startsWith("--") && !(tIdx >= 0 && i === tIdx + 1));
 
 if (argv.includes("--status")) status();
 else if (argv.includes("--stop")) stop({ doSweep: argv.includes("--sweep") });

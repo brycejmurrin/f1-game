@@ -509,8 +509,9 @@ struct FrameU {
                               //          the row; a zero half length means no box
   bakeA      : vec4<f32>,     // off 608  BAKED LAMP POOLS: (origin x, origin z, size x m, size z m)
   bakeB      : vec4<f32>,     // off 624  (scale rgb = frame.lampBakeScale, on)
-  bakeC      : vec4<f32>,     // off 640  (shadow lamp's baked rgb = LampBake.shadowCol, rows per layer)
-};                            // size 656
+  bakeC      : vec4<f32>,     // off 640  (shadow lamp's baked rgb = LampBake.shadowCol, T texels per tile)
+  bakeD      : vec4<f32>,     // off 656  (tilesX, tilesY, atlas texture w, atlas texture h = 2 atlasH)
+};                            // size 672
 struct Light {
   posRad   : vec4<f32>,       // xyz pos, w radius
   colBleed : vec4<f32>,       // xyz colour*intensity, w out-of-beam bleed
@@ -559,10 +560,14 @@ struct MatScaleU { s : array<vec4<f32>, 5> };
 // trackLights; everything else keeps the per-frame lights set at binding 1.
 @group(0) @binding(15) var<storage, read> trackLights : array<Light>;
 @group(0) @binding(16) var<storage, read> chunkLampIdx : array<u32>;
-// BAKED LAMP POOLS (js/lighting/lamp-bake.js): rgba16float, two stacked w x h
-// layers — rows [0,h) diffuse pool, rows [h,2h) bounce fill; alpha = surface Y.
-// 1x1 placeholder until a bake lands (bakeB.w = 0 gates it off either way).
+// BAKED LAMP POOLS (js/lighting/lamp-bake.js): rgba16float sparse TILE ATLAS,
+// two stacked halves — rows [0,atlasH) diffuse pool, [atlasH,2 atlasH) bounce
+// fill; alpha = surface Y. Each kept tile is a (T+2)^2 slot with a 1-texel
+// gutter; lampBakeIdx (tilesX x tilesY, textureLoad) holds each tile's slot
+// origin in texels, -1 = empty. 1x1 placeholders until a bake lands (bakeB.w = 0
+// gates it off either way).
 @group(0) @binding(17) var lampBakeTex : texture_2d<f32>;
+@group(0) @binding(18) var lampBakeIdx : texture_2d<f32>;
 @group(1) @binding(0) var<uniform> D : DrawU;
 @group(2) @binding(0) var<storage, read> matTrkArr : array<vec4<f32>>;
 // Reconstruct (mat, s, x, hw) from world XZ via the 32×32×16 centerline LUT
@@ -1403,11 +1408,16 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // map, and each live lamp's diffuse/bounce steps aside by bakeW. Level-0
   // samples: no implicit derivative, legal in any control flow.
   let bUv = (in.wpos.xz - F.bakeA.xy) / max(F.bakeA.zw, vec2<f32>(1e-3));
-  let bRow = 0.5 / max(F.bakeC.w, 1.0);
-  let bUvD = vec2<f32>(bUv.x, clamp(bUv.y, bRow, 1.0 - bRow) * 0.5);
+  // Tile atlas: the indirection names this tile's slot (empty -> live loop);
+  // the slot's gutter holds the neighbours, so the bilinear tap matches the
+  // full grid and never crosses slots. Bounce = the same slot + 0.5 v.
+  let bG = bUv * F.bakeD.xy;
+  let bTile = clamp(floor(bG), vec2<f32>(0.0), max(F.bakeD.xy - 1.0, vec2<f32>(0.0)));
+  let bSlot = textureLoad(lampBakeIdx, vec2<i32>(bTile), 0).xy;
+  let bUvD = (bSlot + (bG - bTile) * F.bakeC.w + 1.0) / max(F.bakeD.zw, vec2<f32>(1.0));
   let bT = textureSampleLevel(lampBakeTex, envSamp, bUvD, 0.0);
   let bB = textureSampleLevel(lampBakeTex, envSamp, bUvD + vec2<f32>(0.0, 0.5), 0.0).rgb * F.bakeB.xyz;
-  let bIn = all(bUv > vec2<f32>(0.0)) && all(bUv < vec2<f32>(1.0));
+  let bIn = all(bUv > vec2<f32>(0.0)) && all(bUv < vec2<f32>(1.0)) && bSlot.x >= 0.0;
   let bakeW = select(0.0, smoothstep(0.55, 0.85, N.y) * (1.0 - smoothstep(0.75, 2.5, abs(in.wpos.y - bT.a))),
                      F.bakeB.w > 0.5 && bIn);
   color = color + albedo * bT.rgb * F.bakeB.xyz * bakeW * (1.0 - metalness) * (1.0 - wetSheen * 0.85)
@@ -2023,7 +2033,7 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     SKY_UNIFORM_BYTES: 240,
     // Lit-pipeline uniform block sizes (see the LIT struct comments; the JS-side
     // writers in wgx.js MUST agree with these).
-    FRAME_UNIFORM_BYTES: 656,   // FrameU + lampLightVP + params8..10 + pitLane (the painted lane) + pitBox (your box)
+    FRAME_UNIFORM_BYTES: 672,   // FrameU + lampLightVP + params8..10 + pitLane (the painted lane) + pitBox (your box) + bakeA..D
     SHADOW_LVP_BYTES: 64,       // ShadowU (lightVP mat4)
     SHADOW_MODEL_BYTES: 64,     // ShadowModel (model mat4), dynamic-offset stride 256
     LIGHT_STRIDE_BYTES: 64,     // one Light

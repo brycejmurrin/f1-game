@@ -163,6 +163,51 @@
    ],
    "tnumUniform": true
   },
+  "saira-apex26-800-italic.woff2": {
+   "unitsPerEm": 1000,
+   "digitAdvances": [
+    660,
+    403,
+    619,
+    615,
+    660,
+    633,
+    670,
+    581,
+    686,
+    670
+   ],
+   "digitsUniform": false,
+   "widestDigitEm": 0.686,
+   "gsubFeatures": [
+    "tnum"
+   ],
+   "gsubScripts": [
+    "DFLT",
+    "latn"
+   ],
+   "gposFeatures": [
+    "kern"
+   ],
+   "gposScripts": [
+    "DFLT",
+    "latn"
+   ],
+   "hasTnum": true,
+   "tnumAdvances": [
+    620,
+    620,
+    620,
+    620,
+    620,
+    620,
+    620,
+    620,
+    620,
+    620
+   ],
+   "tnumUniform": true
+  },
   "titillium-web-latin-400-normal.woff2": {
    "unitsPerEm": 1000,
    "digitAdvances": [

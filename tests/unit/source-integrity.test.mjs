@@ -262,6 +262,8 @@ test("Settings is a door-index stack with labelled pages", () => {
   assert.match(html, /id="pm-settings-index"[^>]*class="[^"]*pm-doors"/);
   assert.match(html, /id="pm-open-controls"/);
   assert.match(html, /id="pm-open-display"/);
+  assert.match(html, /id="pm-open-appearance"/);
+  assert.match(html, /id="pm-panel-appearance"/);
   for (const id of ["controls", "display"]) {
     assert.match(html, new RegExp(`id="pm-panel-${id}"[^>]*role="region"[\\s\\S]{0,180}aria-labelledby="dlg-settings"`));
   }
