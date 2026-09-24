@@ -77,7 +77,7 @@
       cameraPosition, frontFacing,
       fract, floor, mod, dot, cross, mix, smoothstep, clamp, pow, exp, sqrt,
       abs, max, min, normalize, length, reflect, select, sin, cos,
-      dFdx, dFdy, fwidth, materialReference,
+      dFdx, dFdy, fwidth,
     } = TSL;
     const { hash21, vnoise, ignoise } = ctx.chunks;
 
@@ -1973,8 +1973,8 @@
      * DIFFERENT program text — a Monza load minted 595 GL programs / 615
      * unique shader strings and spent ~60 s inside the synchronous
      * getProgramParameter(LINK_STATUS) that three only skips on its
-     * compileAsync path. The scalars therefore become materialReference
-     * nodes reading `material.userData.tlx*` — per-RENDER-OBJECT uniform
+     * compileAsync path. The scalars therefore become per-object uniforms
+     * reading `material.userData.tlx*` — per-RENDER-OBJECT uniform
      * updates against ONE shared graph (exactly how three shares programs
      * between classic material instances). Three graphs total: chunked reads
      * no `trk` attribute, and instanced multiplies canonical vertex colour by
@@ -1991,6 +1991,10 @@
       const v = object && object.userData[k];
       return v !== undefined ? v : (material ? material.userData[k] : undefined);
     });
+    const _PACK_A_DEF = new THREE.Vector4(0.7, 0.0, 0.5, 0.0);   // roughness, metalness, specular, detail
+    const _PACK_B_DEF = new THREE.Vector4(0.0, 0.0, 1.0, 0.0);   // clearcoat, carPaint, sparkle, -
+    const perMaterialVec = (k, def) => uniform(def.clone()).onObjectUpdate(({ material }) =>
+      (material && material.userData[k]) || def);
     const _sharedGraph = [null, null, null]; // [plain, chunked, instanced]
     const _mats = [];
     let _sharedPos = null;
@@ -2002,14 +2006,17 @@
           emissive:  perObject("tlxEmissive"),
           alpha:     perObject("tlxAlpha"),
           lgRoad:    perObject("tlxLgRoad"),
-          roughness: materialReference("userData.tlxRoughness", "float"),
-          metalness: materialReference("userData.tlxMetalness", "float"),
-          specular:  materialReference("userData.tlxSpecular", "float"),
-          detail:    materialReference("userData.tlxDetail", "float"),
-          clearcoat: materialReference("userData.tlxClearcoat", "float"),
-          carPaint:  materialReference("userData.tlxCarPaint", "float"),
-          sparkle:   materialReference("userData.tlxSparkle", "float"),
         };
+        // The seven per-MATERIAL scalars ride two packed vec4s (makeMaterial
+        // fills material.userData.tlxPackA/B once). Seven materialReference
+        // nodes cost seven updateReference + property-path walks per render
+        // object per pass — census 289 put updateReference at 4.6-5.6 % of the
+        // three.js/WebGL2 leg's CPU; two callbacks read two stored vectors.
+        const pA = perMaterialVec("tlxPackA", _PACK_A_DEF);
+        const pB = perMaterialVec("tlxPackB", _PACK_B_DEF);
+        matU.roughness = pA.x; matU.metalness = pA.y;
+        matU.specular = pA.z;  matU.detail = pA.w;
+        matU.clearcoat = pB.x; matU.carPaint = pB.y; matU.sparkle = pB.z;
         const packed = buildFragment(matU, chunked, instanced);
         // Swizzle ONCE: packed.rgb mints a new wrapper node per access, and a
         // fresh wrapper is a fresh cache key — the whole point is one graph.
@@ -2048,6 +2055,8 @@
       ud.tlxClearcoat = val(o.clearcoat, 0.0);
       ud.tlxCarPaint  = val(o.carPaint, 0.0);
       ud.tlxSparkle   = val(o.sparkle, 1.0);
+      ud.tlxPackA = new THREE.Vector4(ud.tlxRoughness, ud.tlxMetalness, ud.tlxSpecular, ud.tlxDetail);
+      ud.tlxPackB = new THREE.Vector4(ud.tlxClearcoat, ud.tlxCarPaint, ud.tlxSparkle, 0);
       ud.tlxChunked   = !!o.chunked;
       ud.tlxInstanced = !!o.instanced;
       const packed = sharedFragment(!!o.chunked, !!o.instanced);

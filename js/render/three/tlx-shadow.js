@@ -128,9 +128,10 @@
     // copies that depth into lampRT and draws only the cars on top. lampRT stays
     // the sampled map, so no shader, sampler or backend-parity change.
     // AUTO = WebGPU only: three's WebGL copyTextureToTexture reads five UNPACK_*
-    // states with gl.getParameter per copy, each a synchronous GPU-process round
-    // trip in Chrome — census 289 (real Metal, WebGL2 leg) spent 2 s of its spike
-    // frames there. apex26.tlxLampStatic=0 is the old full rebuild, =1 forces on.
+    // states with gl.getParameter (cached after the first copy); in Chrome that
+    // first read is a synchronous GPU-process round trip, and census 289 (real
+    // Metal, WebGL2 leg) spent 2 s of spike frames in it behind the queued shader
+    // links. apex26.tlxLampStatic=0 is the old full rebuild, =1 forces on.
     let lampStaticOn = isWebGPU;
     try {
       const v = localStorage.getItem("apex26.tlxLampStatic");
