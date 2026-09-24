@@ -89,13 +89,12 @@
         }
       }
 
-      hedge(0.60, 0.64, -1, 30, 2.6, COPSE);   // Village/Loop infield boundary
-      hedge(0.60, 0.64,  1, 34, 2.6, COPSE);   // Village outer enclosure
+      hedge(0.60, 0.615, -1, 30, 2.6, COPSE);  // Village/Loop boundary (stops before Village, where it folded)
       hedge(0.86, 0.94, -1, 32, 2.4, COPSE);   // Woodcote infield
       hedge(0.08, 0.12,  1, 38, 2.4, COPSE);   // Maggotts outer enclosure
       hedge(0.34, 0.38,  1, 36, 2.4, COPSE);   // Vale/Club outer
       hedge(0.70, 0.76,  1, 30, 2.4, COPSE);   // Aintree / Wellington
-      hedge(0.76, 0.82, -1, 33, 2.4, COPSE);   // Brooklands infield
+      hedge(0.76, 0.80, -1, 33, 2.4, COPSE);   // Brooklands infield (stops short of the apex, where it folded)
       hedge(0.20, 0.28,  1, 105, 2.4, COPSE);
       hedge(0.18, 0.22, -1, 120, 2.4, COPSE);
       // Outer farmland hedgerow grid — second ring of field strips.
@@ -121,7 +120,6 @@
       forestEdge(0.14, 0.17, -1, 14, { density: 0.8, hMin: 9, hMax: 14, col: COPSE,  col2: COPSE2, pineFrac: 0.1  }); // Chapel/Cheese Copse
       forestEdge(0.61, 0.64,  1, 14, { density: 0.75,hMin: 8, hMax: 13, col: COPSE,  col2: COPSE2, pineFrac: 0.15 }); // Village-side copse
       forestEdge(0.69, 0.71, -1, 13, { density: 0.8, hMin: 9, hMax: 13, col: COPSE,  col2: COPSE2, pineFrac: 0.1  }); // Loop infield copse
-      forestEdge(0.44, 0.47, -1, 16, { density: 0.7, hMin: 9, hMax: 13, col: COPSE,  col2: COPSE2, pineFrac: 0.15 }); // behind the Wing paddock
       forestEdge(0.77, 0.80,  1, 14, { density: 0.75,hMin: 8, hMax: 13, col: COPSE,  col2: COPSE2, pineFrac: 0.1  }); // Brooklands outer
       forestEdge(0.89, 0.92, -1, 14, { density: 0.7, hMin: 8, hMax: 12, col: COPSE2, col2: COPSE,  pineFrac: 0.2  }); // Woodcote area
       forestEdge(0.34, 0.36,  1, 15, { density: 0.65,hMin: 8, hMax: 12, col: COPSE,  col2: COPSE2, pineFrac: 0.2  }); // Vale outfield copse
@@ -145,7 +143,7 @@
         ["maggotts-right", 0.12, 1, 4, [32, 0.28, 48]],
         ["stowe", 0.30, 1, 5, [42, 0.28, 64]],
         ["club", 0.40, 1, 4, [36, 0.28, 54]],
-        ["abbey", 0.55, 1, 5, [40, 0.28, 60]],
+        ["abbey", 0.55, -1, 5, [40, 0.28, 60]],   // outside of Abbey (a right-hander): the inside is stand, hill and tower
       ]) groundPatch(k(s), side, gap, size, APRON, {
         id: `silverstone-runoff-${id}`, samples: 6,
       });
@@ -214,7 +212,7 @@
       ]) stand(s, side, gap, len, opts);
 
       {
-        const wingFracs = [0.435, 0.445, 0.455, 0.465];
+        const wingFracs = [0.455, 0.465, 0.475, 0.485];  // on the pit lane (engine 0.9745-0.019) under sceneryStartFrac 0.02
         for (let i = 0; i < wingFracs.length; i++) {
           const a = anchor(k(wingFracs[i]), 1, 16);
           const b = [a.r, a.u, a.t];
@@ -401,10 +399,7 @@
       forestEdge(0.78, 0.90, -1, 17, { density: 0.35, hMin: 9, hMax: 15, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // Luffield left
       forestEdge(0.05, 0.061, -1, 18, { density: 0.3, hMin: 9, hMax: 14, col: PINEG, col2: COPSE2, pineFrac: 0.55}); // Maggotts far side
       forestEdge(0.078, 0.12, -1, 18, { density: 0.3, hMin: 9, hMax: 14, col: PINEG, col2: COPSE2, pineFrac: 0.55});
-      forestEdge(0.44, 0.468,  1, 19, { density: 0.3, hMin: 9, hMax: 14, col: PINEG, col2: COPSE2, pineFrac: 0.6 }); // behind The Wing
       forestEdge(0.14, 0.17, -1, 18, { density: 0.4, hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); // Maggotts outer (pre-Hangar)
-      forestEdge(0.49, 0.497, 1, 18, { density: 0.4, hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); // Wing outer belt
-      forestEdge(0.516, 0.53, 1, 18, { density: 0.4, hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.15 }); //  (breaks over the pit complex)
       forestEdge(0.71, 0.75,  1, 18, { density: 0.4,  hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.2  }); // Aintree outer copse
       forestEdge(0.35, 0.39, -1, 19, { density: 0.3,  hMin: 9, hMax: 13, col: COPSE, col2: COPSE2, pineFrac: 0.2  }); // Vale outer field copse
       // Very thin Hangar Straight fringe only — silhouette hangars need sky behind them
@@ -485,6 +480,10 @@
       ]) {
         const a = anchor(k(s), side, d);
         if (!onTrack(a.c[0], a.c[2], 18)) {
+          // Book the yard so the deferred woodland (a nearby carriageway's
+          // belt reaches 150 m out on this compact lap) does not grow through it.
+          const hf = (ln / 2 + 6) / (n * ds);
+          indexSolid(s - hf, s + hf, side, d - w / 2 - 4, w + 8);
           addBox(out, vadd(a.c, a.u, h * 0.4), [w, h * 0.8, ln], [0.56, 0.54, 0.50], [a.r, a.u, a.t]);
           addPrism(out, vadd(a.c, a.u, h * 0.8), [w, h * 0.4, ln], [0.46, 0.44, 0.42], [a.r, a.u, a.t]);
         }
@@ -661,7 +660,7 @@
       });
 
       for (let field = 0; field < 3; field++) {
-        const s = 0.735 + field * 0.045;
+        const s = field === 2 ? 0.805 : 0.735 + field * 0.045;   // field 3 at 0.825 reached the Luffield loop (11 m)
         const a = anchor(k(s), 1, 56 + field * 12);
         const b = [a.r, a.u, a.t];
         modelGroup(`silverstone-camping-field-${field + 1}`, {
@@ -736,16 +735,14 @@
       for (const [s0, s1, side, gap, rise] of [
         [0.024, 0.042, -1, 20, 3.6],   // Copse infield bank
         [0.068, 0.084,  1, 24, 3.2],   // Copse exit outer
-        [0.128, 0.146, -1, 26, 3.4],   // Becketts infield
-        [0.306, 0.326,  1, 24, 3.8],   // Stowe outer bank
+        [0.108, 0.124, -1, 26, 3.4],   // Becketts infield (between the S-bends: on the apex its rows met)
+        [0.296, 0.316,  1, 24, 3.8],   // Stowe approach bank (clear of the bend: its inside rows met)
         [0.347, 0.365, -1, 22, 3.4],   // Vale infield
-        [0.408, 0.424, -1, 20, 3.2],   // Club infield
         [0.556, 0.576,  1, 30, 3.6],   // Abbey outer bank
         [0.597, 0.615, -1, 22, 3.4],   // Farm infield
         [0.652, 0.670,  1, 22, 3.6],   // The Loop outer
         [0.726, 0.746, -1, 20, 3.4],   // Aintree / Wellington infield
         [0.796, 0.814,  1, 22, 3.4],   // Brooklands outer
-        [0.856, 0.874,  1, 20, 3.6],   // Luffield outer
         [0.915, 0.935, -1, 22, 3.4],   // Woodcote infield
       ]) spectatorHill(s0, s1, side, gap, {
         rows: 3, rise: rise / 3, depth: 3.4, step: 7, density: 0.7,
@@ -803,6 +800,9 @@
       ]) {
         const a = anchor(k(s), side, d), b = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 14)) continue;
+        // Book the pitch: the deferred forest belts (gap 18-30) otherwise grow through the roof.
+        const hf = (ln / 2 + 4) / (n * ds);
+        indexSolid(s - hf, s + hf, side, d - w / 2 - 4, w + 8);
         out._mat = MAT.FABRIC;
         seat.box(out, a.c, [w, 3.2, ln], tCol, b);
         seat.prism(out, vadd(a.c, a.u, 3.2), [w, 2.2, ln], [0.96, 0.97, 0.98], b);

@@ -182,7 +182,7 @@ loaded, and none of them is baselined anywhere. OPEN.
 
 **2026-09-22 — the ~1.07 m reading on four circuits IS the pit wall's top cap,
 and the specs sample past the tarmac to reach it. IDENTIFIED; the sampling is
-OPEN.** jeddah, mosport, zandvoort and singapore all read 1.07 m over the road.
+FIXED (2026-09-23, below).** jeddah, mosport, zandvoort and singapore all read 1.07 m over the road.
 `js/track/scenery/pits.js:300` and `:319` sweep the pit wall's cap with the
 profile `[[-0.07,1.0],[0.32,1.0],[0.32,1.07],[-0.07,1.07]]` in `WALL_TOP`
 `[0.46,0.47,0.50]` — a 0.39 x 0.07 m section topping out at exactly 1.07. The
@@ -208,7 +208,15 @@ the racing surface by construction, on whatever boundary structure lives there
 `props-over-road.spec.js` (jeddah, mosport, zandvoort, singapore),
 `props-over-road.test.mjs` and `zandvoort-foundation.spec.js`, all citing each
 other. Scaling by `track.hw` instead would let every one of those baselines go
-back to `TOL`, and is the fix worth making. OPEN.
+back to `TOL`, and is the fix worth making. FIXED 2026-09-23: both
+`props-over-road.spec.js` and `props-over-road.test.mjs` scale the ladder by
+`track.hw` (the spec reads it from `__apex.nodeAt().hw`, added for this), out to
+0.9 hw, zandvoort-foundation's measured last clean rung. Node port, all 52
+circuits: every reading 0.00 except mont_tremblant's deliberate crown, which the
+0.9 rung meets at 4.97 (cap 5.0). monaco, singapore, baku, jeddah, mosport,
+zandvoort and albert_park dropped out of both maps; miami stays in the spec's
+because its reading is browser-only. The anti-vacuity anchor that was jeddah's
+wall cap is now a planted 1.0 m slab over shanghai's centreline.
 
 **And it is why no primitive covers the geometry.** `sweep()` in `pits.js` is a
 local extrusion that builds its quads directly rather than through a
@@ -3604,3 +3612,238 @@ corners widened.
 **Not run:** no autopilot lap A/B and no clip/coplanar/float audits. The
 geometry did not change, so there is nothing to compare.
 
+
+## `sceneryStartFrac` — the LIKELY list, worked (2026-09-23)
+
+The ten circuits the audit above filed as LIKELY, each worked the Portimão way:
+frame decided from the dressing's own numbers, then a pure-node A/B over
+`track.props.list` (130 m, fresh `buildContext()` per mode), then the knock-ons
+one at a time. Every frac-keyed def table the shift used to move was re-keyed
+so the ROAD does not move: bank lift compared node-by-node is bit-identical on
+every circuit below. Road HEIGHT moves by the engine's undulation ripple
+only, whose phase keys off `_sceneryShift` and which no def field can hold
+(0.14-1.02 m, per entry). No browser probe was run for these; the A/B is the
+evidence, and the per-circuit foundation specs are the unrun check.
+Audit counts are re-measured on the merged branch, not taken from the workers.
+
+### montreal — FIXED (`sceneryStartFrac: 0.915` removed, shift 0.860 -> 0)
+
+The pit block, Senna S and final-chicane dressing are authored against
+`startFrac` ~0; under the shift the pit lane read as forest (63 trees, 19 pines
+within 130 m of pit mid) and the pit dressing sat on the Casino straight.
+bankZones +0.8598, elevations re-solved (max |dpy| 0.16 m), lighting
+exclusions and wall-gap bands moved to the corrected frame. Knock-ons: the
+basin forest belt split around the north rowing tower, the 0.80 building
+changed cross -> slab (self-clip), hedge 0.78-0.885, the 0.23-0.24 hedge stub
+and the duplicate 0.05 marshal post dropped. **clip 7 -> 5, coplanar 4 -> 3,
+float 0 -> 0.**
+
+### indianapolis — FIXED (`sceneryStartFrac: 0.05` removed, shift 0.158 -> 0)
+
+Yard of bricks K(0), pagoda 0.005, pit stalls 0.955, Gasoline Alley
+0.906-0.946, bankZone 0.880 on the banked oval turn: all written against
+`startFrac: 0`. The shift stood the paddock, start gantry and bricks on T1-T2
+and planted trees on the pit straight (probe at pit mid 23 trees -> 0).
+Knock-ons: the scoring pylon shaft/mast were placed at mid-height on
+base-anchored `addFrustum`/`addCyl` (float 0 -> 5 once the plinth moved);
+the pagoda moved to gap 46 behind the pit complex (superseded at 30).
+**clip 90 -> 84, coplanar 2 -> 1, float 0 -> 0.**
+
+### redbull — FIXED (`sceneryStartFrac: 0.1875` removed, shift 0.295 -> 0)
+
+The line moved (0.1875 -> 0) but the dressing is written against the NEW
+line: The Wing, paddock motorhomes and towers at K(0.96-0.04), pit-straight
+stands 0.985-0.07, T1 tyre wall and run-off 0.08-0.13 (apex 0.0851). The shift
+stood the paddock at Remus (pit mid: 105 trees, no motorhome or tower -> 38
+trees, 3 motorhomes, 2 towers). Elevations +0.10775, bankZones +0.29525.
+`ownPitStraight: true` (the generic stand stood inside The Wing, a 4.00 m /
+1005 m3 clip). The pit-straight lamps over the complex lost their cross-arms
+to it and left five heads 8.8 m up; that side now skips the complex. **clip
+14 -> 4, coplanar 7 -> 7, float 1 -> 0.** OPEN: the Remus and Schlossgold
+groups sit ~0.08-0.13 early in either frame; the pit-straight grandstands
+share the complex's side, as paul_ricard's did before its mirror.
+
+### cota — FIXED (`sceneryStartFrac: 0.515` removed, shift 0.416 -> 0)
+
+Main stand K(0), T1 stands 0.07-0.135 (apex 0.0655), tower and amphitheatre
+0.76-0.78 (T16 0.7825), paddock hall and motorhomes 0.97-0.05. The shift put
+the pit-straight dressing on T10. Pit mid 16 built / 69 trees -> 19 / 14; T1
+25 / 74 -> 21 / 15. Elevations -0.09904 (fmap's `phiAuthor`), bankZones
++0.41596. Knock-ons: the T1 red-soil apron floated 2.06 m on the real hill
+and was sunk 2 m with the same crest; `cota-t1-runoff` moved 0.108 -> 0.075
+(footprint rejected); the start gantry's legs moved to `supportGap: 2`, as
+Bahrain's, because at 4.5 the right leg stood inside the pit complex and was
+superseded, which `cota-foundation.spec.js` requires to emit. **clip 6 -> 2,
+coplanar 7 -> 4, float 0 -> 0.** Left: the engine-side 4.00 m box pair at frac
+0.000 (Portimão's lead) and a 6.65 m box pair that moved 0.465 -> 0.049 with
+the shift, untraced.
+
+### monza — FIXED (`sceneryStartFrac: 0.0125` removed, shift 0.087 -> 0)
+
+Chevron garages K(0.965-0.99), canopy K(0.99), tower and podium K(0), start
+gantry 0.0: under the shift the whole pit complex sat 500 m down the road on
+the Rettifilo approach (pit mid 53 trees, no buildings -> 3 buildings, 3
+motorhomes, 2 gantries). The def's own tables were written in the SHIFTED
+frame (bankZone Parabolica 0.7355 + 0.0867 = 0.822 against apex 0.8387), so
+bankZones +0.0867, elevations +0.0742 (fmap takes 0.0125 by index, then adds
+0.0867 of arc); hwZones and dressingExclusions stay. The baselined floater
+(frac 0.962) went with the frame; a new one, the museum's end window bays at
+t +-9 outside a +-8 m hall, was seated on the facade. **clip 22 -> 18,
+coplanar 9 -> 3, float 1 -> 0.** OPEN: Lesmo, Ascari and Parabolica dressing
+(0.46-0.51 / 0.78 / 0.905) misses the apexes (0.37 / 0.63 / 0.84) in either
+frame, and the Rettifilo gravel sits ~300 m before T1.
+
+### suzuka — FIXED (`sceneryStartFrac: 0.6125` removed, shift 0.620 -> 0)
+
+Pit block 0.975-0.995, Esses 0.10-0.24, Spoon 0.55-0.66, 130R 0.80-0.90,
+Casio 0.92-0.98, all against the real line (`startFrac` 0.9942). The shift
+stood the pit complex on 200R. Pit mid 89 pines + 96 trees + 5 structures ->
+19 + 66 + 15. `elevations` and `bridges` need no re-key (the centreline
+rotation already makes them shift-invariant); bankZones +0.6198. The
+crossover stays put (0.4371 lower, 0.8458 upper); the deck, portal and
+abutments, the one item re-keyed FOR the shift, went 0.8172 -> 0.437, where
+they already landed. Knock-ons: hairpin-approach-signs 0.42 -> 0.45
+(required, footprint rejected), first Motopia canopy skipped (the complex
+takes its box but not its raw roof: floated 8.2 m). Road height moves up to
+1.02 m (ripple phase). **clip 3 -> 2, coplanar 2 -> 1, float 0 -> 0.** OPEN:
+the def's `pit.side -1` against a kit pit building on +1.
+
+### albert_park — FIXED (`sceneryStartFrac: 0.0925` removed, shift 0.102 -> 0)
+
+Paddock motorhomes k(0.0)+j*8 and podium 0.04 (pit side), Brabham stand 0.00,
+T1 kerbs 0.030-0.075, chicane kerbs 0.76-0.815: all against `startFrac: 0`.
+Under the shift the T1 kerbs sat on a straight (max |k| 0.0016 vs 0.045) and
+the paddock on T2. Pit mid 102 trees / 2 structures -> 77 trees, gantry,
+stand, 7 structures, 2 motorhomes (the rest is parkland behind the paddock).
+bankZones +0.10212 (five now on apexes), elevations 0.2125/0.6425 ->
+0.22212/0.65212 (max road dy 0.073 m). Knock-ons: `ownPitStraight` (the
+4.00 m frac-0.000 box pair was the generic stand inside Brabham); park decks
+record their back edge as a barrier (57 tree x shade-roof pairs); the 0.9125
+right backdrop mound is skipped (base culled, cap 21 m up). The baselined
+floater was the second fan-hill mound's cone, which the shift carried to
+0.012. **clip 8 -> 1, coplanar 3 -> 3, float 1 -> 0.** Left: an
+`identity.js:321` self-clip at 0.784 (engine).
+
+### silverstone — FIXED (`sceneryStartFrac` 0.64 -> 0.02, shift 0.150 -> 0.523)
+
+Not a delete: the dressing predates `startFrac` (00766e3ad^) and was authored
+on the hand-made `segs` layout with its origin on the old National straight
+(gantry 0.995). 0.64 was an OpenF1 guess (conf 0.370), never an authoring
+frame. Curvature-peak corners: Abbey 0.070, Loop 0.178, Brooklands 0.335,
+Woodcote 0.43, Copse 0.523, Becketts 0.61-0.68, Stowe 0.862, Club 0.95-0.98;
+pit lane 0.9745-0.019 R. Eleven landmarks imply a median shift of 0.53;
+shipped and shift 0 are both 0.4-0.5 lap off. 0.02 is the best single fit
+(sum |err| 0.23 lap); the trace's v0 frame fits Copse exactly but stands the
+Wing on Club. bankZones -0.3731, elevations +0.0069 (XZ and bank identical;
+0.31 m ripple residual). Pit mid built / trees 18/109 -> 6/23. The Wing's
+facades and pit-wall chords are now superseded by the pit complex, as
+Portimão's pit block is, and `new-hooks` pins that by id and reason. Knock-ons:
+four Wing-side forest bands removed; hills and hedges that folded on bend
+insides moved or trimmed; marquees and farm yards `indexSolid` their footprint
+(deferred belts grew through the roofs); runoff-abbey to the outside of the
+corner; camping field 3 0.825 -> 0.805. **clip 23 -> 17, coplanar 4 -> 4,
+float clean.** OPEN: `turns` labels (T9 0.4199 is Woodcote, not Copse),
+`recordBarrier(0.44, 0.50, 1, 4)` now falls at pit entry, and
+docs/tracks/silverstone.md still describes the 0.64 frame.
+
+### miami — FIXED (`sceneryStartFrac: 0.2325` removed, shift 0.2008 -> 0)
+
+The start-line scoring arch is `gantry(0.0)` and the pit building frac 0;
+under the shift both gantries stood on the T4-T8 sweepers and pit mid carried
+53 palms (now 17; built 29 -> 37). bankZones +0.2008 (lift identical); the
+elevation does NOT follow the shift (shipped peak 0.8577 against s 0.8925)
+and was swept to s 0.8605 (0.065 m). Knock-ons: `buildOverpass` 0.635 -> 0.66
+(a required pier sat on the T17 hairpin); the back-straight stands take
+`roof: "flat"` (their truss beams outlived a rejected deck: the baselined
+floater); the marina yachts moved out to 46-68 m, clear of the palm belt and
+the berth rank; `dressingExclusions` city 0.115-0.128 (retail boxes
+overlapping inside T4). The race-control tower then floated (three cells), which
+was the landmark kit's, fixed below. **clip 25 -> 24, coplanar 8 -> 7,
+float 1 -> 0.**
+
+### landmark-kit `tower()` — FIXED: levels floated on air gaps
+
+Each level was a box centred in its slot at 0.86 of the slot height: the ground
+floor stood 7 % of a slot off the ground and every level above sat on a 14 %
+gap; "stepped" alternated 1.0 / 0.78, so every even level overhung the level
+under it. Every `raceControl` kit tower in the game was built this way. Levels
+now stack flush from the ground and "stepped" only ever sets back.
+
+### Floating clusters — fuji (10 -> 0) and nurburgring (10 -> 0)
+
+nurburgring: all ten were pine crowns from right-side `forestEdge` belts
+11-13 m from the back straight across the loop, ~8 m lower; the road guard
+removed trunks and lower tiers and left crowns over the dip. Three belt
+windows skipped (0.5515-0.5631, 0.440-0.4456, one node at 0.4417), on each
+belt's own node spacing. fuji: six were the hospitality deck's roof plant.
+`building()` sizes its roof cap as max(w, d)/2, so the 76 m slab asked for a
+38 m cap, the road guard refused it, and the plant and HVAC boxes stayed at
+cap height 14 m up. It is one 0.95-bay unit per bay now. The other four were
+pine crowns across the 300R fold and two -1 belts, fixed by splitting the
+belts. clip and coplanar unchanged on both. **Engine leads, OPEN:** `building()`
+keeps roof plant when the cap is refused; `forestEdge`'s `clearTreeDist`
+checks only the tree's own node, so a tree near ANOTHER leg keeps its crown
+when the guard takes its trunk.
+
+### mexico — FIXED (`sceneryStartFrac: 0.635` removed, shift 0.724 -> 0)
+
+Paddock and garages K(0.00-0.05), start/finish gantry 0.00, Foro Sol exclusions
+0.70-0.89: all against `startFrac: 0`. The shift stood the paddock on the back
+of the lap (pit mid 100 trees + 25 pines -> 28 trees, gantry, building; Foro
+Sol 136 trees -> 14). The def's own tables were written in the SHIFTED frame:
+bankZones +0.72364 land all six on apexes (the "Peraltada" labels were wrong),
+elevations (s - 0.635) + 0.72364. Bank lift identical; road height within
+0.18 m (ripple phase). Paddock mirrored to `pit.side` +1 (the paul_ricard
+precedent), `ownPitStraight`, the file's own garage units and pit building
+dropped (the complex superseded them), pit-side hedge trimmed off the complex
+(its top block floated 1.02 m), cityFront and backdrops kept off the T4 leg
+(guard drops 30 -> 4). **clip 89 -> 50, coplanar 1 -> 1, float 1 -> 1.**
+tightFrac 0.587 -> 0.595.
+
+### Deliberately airborne: madrid and mexico keep a float baseline of 1-2
+
+Both clusters are airliners on approach (madrid: Barajas, 90 m up, 640 m off
+the circuit; mexico: `anchor(K(0.20), 1, 820)`, +210 m). They are scenery
+doing what it says, not a grounding defect, so the float baseline keeps them
+(madrid 2, mexico 1). OPEN: float-audit has no way to say "airborne on purpose",
+so these two entries read like defects to the next reader. A flag on the
+emitter that the audit honours would let both baselines go to 0.
+
+### Floating clusters, the other eight — FIXED (2026-09-23)
+
+Three causes, and every one of them is an engine behaviour a circuit tripped:
+
+- **A crown left behind by the per-primitive road cull.** hockenheim (2: a
+  forestEdge pine 13 m from another leg, and a hairpin verge pine), spa (2: a
+  Bus Stop pine whose tiers 1-3 hung once `onRoadHit` took tier 0; `pine()`'s
+  own guard radius, h * 0.225, is narrower than its lowest tier, ~0.26 h),
+  imola (1: a canopy backdrop's dome at dist 48, moved to 60). Fixed by
+  splitting belt windows or gating on a crown-clearance check.
+- **Roof plant left at cap height when the cap is refused.** anderstorp (1,
+  shed moved 36 -> 34 m), donington (1, gap 30 -> 26), korea (1, a 60 m block
+  whose 30 m cap radius reached the road, split into two 30 m halves). fuji's
+  six were the same. The engine lead is `building()` in city.js keeping the
+  plant box when its cap frustum is rejected.
+- **Supports short of the deck.** watkins_glen (1): the footbridge's timber
+  bents stood on a verge ~0.4 m below the road datum, cut at deck height, so
+  the span floated; they now run 1 m into the deck.
+
+All eight: float -> 0, clip and coplanar unchanged or down (donington 25 -> 24).
+
+### structures.js `alreadyLaid` — FIXED: a run ending on the seam read as ending at 0
+
+`s1 % 1` turned montreal's `[0.59, 1.0]` wall into `[0.59, 0]`, "contained" in
+its `[0.0, 0.05]` run, so it was skipped along with its collision barrier:
+wallStats tightFrac 1.000 -> 0.645 once the shift that kept these numbers off
+the seam was removed (tracks-walls.spec "Montreal full-lap walls"). A run
+ending on a whole lap now ends at 1. Fleet A/B: montreal is the only circuit
+whose tightFrac the fix changes.
+
+### physics-baseline re-blessed for monza's frame (2026-09-23)
+
+monza is the characterization track. Its corrected frame moves road height
+<= 0.14 m (ripple phase) and moves its scenery-placed walls: at arc
+1640-1680 m the barrier stands at 16.2 m, not 13.1 m, so "steady corner load"
+step 4 no longer stops on it (39.07 -> 44.44 m/s). With monza's files reverted
+to the base the vm cross-check passed 5/5 on the same tree, so no physics code
+moved. Any later frame fix on monza re-blesses the same way.

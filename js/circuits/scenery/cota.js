@@ -142,7 +142,9 @@
         addPrism(out, vadd(a1L.c, a1L.u, 3), [28, 8, 72], [0.58, 0.36, 0.26], [a1L.r, a1L.u, a1L.t]);
         // extra red-soil apron on the climb apex (outside) — sells the Big Red bank
         const a1R = anchor(K(0.085), 1, 22);
-        addPrism(out, vadd(a1R.c, a1R.u, 2.5), [16, 7, 48], redSoil, [a1R.r, a1R.u, a1R.t]);
+        // Sunk 2 m further (same 6 m crest): the T1 hill falls away under its
+        // outer edge, which the 0.416 scenery shift hid (float-audit 2.06 m).
+        addPrism(out, vadd(a1R.c, a1R.u, 0.5), [16, 11, 48], redSoil, [a1R.r, a1R.u, a1R.t]);
       }
 
       const ke = K(0.18);
@@ -411,8 +413,11 @@
               { stages: h1 > 0.55 ? 2 : 1, spread: 0.85 + h1 * 0.3 });
       }
 
-      const cotaGantry = (s, id, clearance) => {
-        const k = K(s), supportGap = 4.5, supportWidth = 0.8, thick = 0.9;
+      // supportGap 2 on the start line, as Bahrain's: the legs stand on the
+      // pit-wall strip. At 4.5 the right leg lands inside the pit complex,
+      // which supersedes it, since the pit lane runs beside the start straight.
+      const cotaGantry = (s, id, clearance, supportGap = 4.5) => {
+        const k = K(s), supportWidth = 0.8, thick = 0.9;
         const ok = overheadSpan({
           id, frac: s, clearance, thickness: thick, depth: 1.4,
           supportGap, supportWidth,
@@ -433,11 +438,11 @@
           }, { required: true });
         }
       };
-      cotaGantry(0.00, "cota-start-gantry", 7.5);
+      cotaGantry(0.00, "cota-start-gantry", 7.5, 2);
       cotaGantry(0.50, "cota-drs-gantry", 7.0);
 
       // Ground-conforming runoff at COTA's two defining braking zones.
-      groundPatch(K(0.108), 1, 1.2, [18, 0.16, 76], redSoil,
+      groundPatch(K(0.075), 1, 1.2, [18, 0.16, 76], redSoil,
                   { id: "cota-t1-runoff", samples: 6 });
       groundPatch(K(0.63), 1, 1.2, [24, 0.16, 96], [0.48, 0.49, 0.51],
                   { id: "cota-t12-runoff", samples: 8 });

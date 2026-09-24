@@ -48,13 +48,25 @@
         }
       });
 
+      // Crown clearance for the pine ranks below. pine() guards the tree at
+      // h*0.225 from the road edge, but its lowest tier is ~h*0.26 wide (2.7 m
+      // at H=12, x1.15 jitter) and the engine's per-primitive road guard
+      // (onRoadHit) drops that tier alone when it reaches ANY leg of road —
+      // the tiers above it then hang in the air. Spa's Bus Stop doubles back
+      // 11.6 m from a pine planted 25 m off the other leg (k≈0.946): tiers
+      // 1-3 floated 8-15 m up. Skip a pine whose full crown would be clipped.
+      const crownClear = (k, side, dist, h) => {
+        const a = anchor(k, side, dist);
+        return !onTrack(a.c[0], a.c[2], h * 0.32);
+      };
       every(44, (k) => {
         for (const side of [-1, 1]) {
           const s = hash(k * 41 + side);
           if (s < 0.26) continue;
           const dist = 8 + s * 20, h = 9 + s * 9;
-          pine(k, side, dist, h, [0.09 + s * 0.05, 0.30, 0.14]);
-          if (s > 0.70) pine(k, side, dist + 12 + s * 16, h + 3, [0.11 + s * 0.05, 0.28, 0.13]);
+          if (crownClear(k, side, dist, h)) pine(k, side, dist, h, [0.09 + s * 0.05, 0.30, 0.14]);
+          if (s > 0.70 && crownClear(k, side, dist + 12 + s * 16, h + 3))
+            pine(k, side, dist + 12 + s * 16, h + 3, [0.11 + s * 0.05, 0.28, 0.13]);
         }
       });
       // Fill the sparse stretches: a staggered front-line rank offset from the above.
@@ -63,7 +75,7 @@
           const s = hash(k * 67 + side * 5 + 3);
           if (s < 0.58) continue;
           const dist = 6 + s * 10, h = 8 + s * 7;
-          pine(k, side, dist, h, [0.10 + s * 0.04, 0.31, 0.15]);
+          if (crownClear(k, side, dist, h)) pine(k, side, dist, h, [0.10 + s * 0.04, 0.31, 0.15]);
         }
       });
       // Hero density at Eau Rouge / Raidillon (s≈0.05–0.10): crowd the climb with pines.

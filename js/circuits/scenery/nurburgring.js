@@ -51,7 +51,12 @@
       // break up the wall's edge rather than being the whole wood.
       for (const [s0, s1] of [[0.205, 0.615], [0.640, 0.935]]) {
         for (const side of [-1, 1]) {
-          forestEdge(s0, s1, side, 8, {
+          // Front rank, right side: skip the single node 0.4417. clearTreeDist
+          // pushes that pine ~25 m out to clear the barrier, which lands it
+          // 13 m off the lower back straight across the loop with its crown
+          // over the dip (same cause as `deep` below).
+          const front = side > 0 && s0 === 0.205 ? [[s0, 0.4409], [0.4424, s1]] : [[s0, s1]];
+          for (const [f0, f1] of front) forestEdge(f0, f1, side, 8, {
             density: 0.88, hMin: 15, hMax: 27, pineFrac: 0.88,
             col: FIR, col2: LEAF_D,
           });
@@ -61,8 +66,17 @@
           });
         }
       }
-      for (const [s0, s1] of [[0.215, 0.605], [0.650, 0.925]]) {
-        for (const side of [-1, 1]) {
+      // The deep rank on the RIGHT is split twice. At 0.440-0.4456 and
+      // 0.5515-0.5631 its 41 m offset carries it to within ~11-13 m of the
+      // parallel back straight across the loop, which runs ~8 m lower (the
+      // -12 m back-loop dip): the pine is anchored off its own road while its
+      // crown tiers hang over the lower terrain — eight of float-audit's ten
+      // FLOATING clusters (the other two: `front` above). Restart points sit on the belt's own odd-node
+      // grid so every other tree keeps its spot.
+      const deep = (s0, s1, side) => (side > 0 && s0 === 0.215
+        ? [[0.215, 0.440], [0.4456, 0.5515], [0.5631, s1]] : [[s0, s1]]);
+      for (const [a0, a1] of [[0.215, 0.605], [0.650, 0.925]]) {
+        for (const side of [-1, 1]) for (const [s0, s1] of deep(a0, a1, side)) {
           forestEdge(s0, s1, side, 41, {
             density: 0.2, hMin: 24, hMax: 40, pineFrac: 0.97,
             col: FIR_D, col2: FIR_D,

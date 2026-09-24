@@ -567,9 +567,11 @@
         out._mat = MAT.CONCRETE;
         addPrism(out, vadd(vadd(base, a.r, -9), a.u, 12), [2.2, 2.6, 25], wall, b);
         out._mat = MAT.GLASS;
-        // Warm-lit window bays on the hall.
+        // Warm-lit window bays set into the hall's road-facing facade (r -13).
+        // Were at the hall's centre, 4.5 m apart: the end bays (t ±9) stood
+        // outside its ±8 m depth, 4.2 m up — float-audit's frac-0 floater.
         for (let i = 0; i < 5; i++)
-          addBox(out, vadd(vadd(base, a.t, (i - 2) * 4.5), a.u, 6), [0.2, 3, 2.2],
+          addBox(out, vadd(vadd(vadd(base, a.t, (i - 2) * 3.2), a.r, -13.05), a.u, 6), [0.2, 3, 2.2],
                  [0.96, 0.86, 0.52], [a.r, a.u, a.t]);
         out._mat = 0;
       })();

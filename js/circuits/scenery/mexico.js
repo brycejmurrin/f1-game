@@ -15,6 +15,14 @@
               terrace, tieredBowl, broadleafFall, plane, acacia, cypress,
               cameraTower, sponsorHoarding, broadcastCompound, circuitKit } = api;
       const cityBand = (s) => (s > 0.14 && s < 0.60) || s > 0.94 || s < 0.02;
+      // Pit straight sides. The engine's pit complex (garages, pit wall) takes
+      // pit.side +1, the RIGHT: the infield of this clockwise lap, where the
+      // real paddock is. This file had the paddock on the left and the main
+      // stand on the right, inside the complex's footprint (3 stands
+      // "superseded by the pit complex" once the bogus sceneryStartFrac shift
+      // stopped carrying them onto the straight before Foro Sol). Mirrored,
+      // the paul_ricard precedent (DEFECT-LEDGER "paul_ricard — FIXED").
+      const PIT = 1, STAND = -PIT;
 
       // Track centre + radius for far horizon rings
       const { cx, cz, radius: rad } = lapBounds();
@@ -84,7 +92,7 @@
       // the occupied arcs are listed here instead. Each entry is [s0, s1, side]
       // and covers a stand's full along-track span plus a little margin.
       const SOLID = [
-        [0.965, 1.000,  1], [0.000, 0.032,  1],   // main grandstand run
+        [0.965, 1.000, STAND], [0.000, 0.032, STAND],   // main grandstand run
         [0.048, 0.063,  1], [0.048, 0.063, -1],   // named enclosures 1-2
         [0.108, 0.132,  1],                       // T1 two-deck + rear stand
         [0.158, 0.172,  1], [0.190, 0.210,  1], [0.190, 0.210, -1],
@@ -149,18 +157,18 @@
       };
 
       for (const s of [0.972, 0.990, 0.008, 0.026]) {
-        boundedStand(s, 1, 16, 26, SEATS, s < 0.98 ? ORANGE : PINK, s === 0.008);
-        boundedStand(s, 1, 34, 28, CONCRETE, GREEN, false);
+        boundedStand(s, STAND, 16, 26, SEATS, s < 0.98 ? ORANGE : PINK, s === 0.008);
+        boundedStand(s, STAND, 34, 28, CONCRETE, GREEN, false);
       }
 
       // Banners along stand fronts
-      banners(0.00, 1, 8);
+      banners(0.00, STAND, 8);
 
       // Start/finish gantry + scoring board
       gantry(0.00, 8.5, [0.14, 0.14, 0.18]);
-      billboard(K(0.005), 1, 7, 14, 5, fiesta[0]);
+      billboard(K(0.005), STAND, 7, 14, 5, fiesta[0]);
       {
-        const a = anchor(K(0.00), 1, 50);  // pushed out 40→50 m to clear wide screen overhang
+        const a = anchor(K(0.00), STAND, 50);  // pushed out 40→50 m to clear wide screen overhang
         if (!onTrack(a.c[0], a.c[2], 16)) {
           // Scoreboard mast
           addBox(out, vadd(a.c, a.u, 8),  [1.2, 16, 1.2], [0.28, 0.28, 0.32], [a.r, a.u, a.t]);
@@ -177,36 +185,30 @@
         lampPost(K(s),  1, 12);
       }
 
-      building(K(0.02), -1, 2, 16, 12, 60, { wall: [0.90, 0.90, 0.92],
-               window: [0.30, 0.38, 0.44], floor: 3 });
-      place(K(0.02), -1, 10, [17, 0.8, 60], [0.82, 0.82, 0.84]);   // flat roof slab
-
-      // Pit garage units
-      for (const s of [0.005, 0.02, 0.035, 0.05]) {
-        building(K(s), -1, 2.5, 7, 5, 14, { kind: "hall", wall: [0.93, 0.93, 0.95], window: [0.22, 0.26, 0.30], floor: 2 });
-      }
+      // No pit building or garage units of our own: the engine pit complex
+      // builds both on PIT and superseded this file's copies (gap 2-2.5 m).
       for (const s of [0.01, 0.03, 0.05]) {
-        motorhome(K(s), -1, 22, 14, 9 + hash(K(s)) * 4, 16,
+        motorhome(K(s), PIT, 22, 14, 9 + hash(K(s)) * 4, 16,
                  { wall: hash(K(s) * 5) > 0.5 ? [0.86, 0.40, 0.30] : [0.30, 0.42, 0.62],
                    window: [0.55, 0.58, 0.62] });
       }
       // Control tower at start of pit straight
-      tower(K(0.04), -1, 6, 9, 26, { col: [0.82, 0.82, 0.86], cap: true, capCol: [0.20, 0.22, 0.26], mast: 7 });
+      tower(K(0.04), PIT, 6, 9, 26, { col: [0.82, 0.82, 0.86], cap: true, capCol: [0.20, 0.22, 0.26], mast: 7 });
       marshalPost(K(0.06), 1, 6);
 
       for (const s of [0.014, 0.034, 0.054]) {
         const k = K(s), warm = hash(k * 107) > 0.5;
-        building(k, -1, 40, 12, 8 + hash(k * 109) * 3, 18, {
+        building(k, PIT, 40, 12, 8 + hash(k * 109) * 3, 18, {
           kind: "hall",
           wall: warm ? [0.78, 0.30, 0.25] : [0.24, 0.42, 0.60],
           window: [0.56, 0.62, 0.68], floor: 2,
         });
       }
-      broadcastCompound(K(0.03), -1, 58, { vans: 3, dishes: 2, mastH: 10 });
+      broadcastCompound(K(0.03), PIT, 58, { vans: 3, dishes: 2, mastH: 10 });
 
       hedge(0.04, 0.14, 1, 13, 3.2, TREEGRN);
       hedge(0.04, 0.12, -1, 16, 2.8, PARKGRN);
-      forestEdge(0.04, 0.14,  1, 26, { density: 0.30, hMin: 9, hMax: 16, col: TREEGRN, col2: PARKGRN, pineFrac: 0.22 });
+      forestEdge(0.065, 0.14, 1, 26, { density: 0.30, hMin: 9, hMax: 16, col: TREEGRN, col2: PARKGRN, pineFrac: 0.22 });
       forestEdge(0.04, 0.14, -1, 28, { density: 0.26, hMin: 8, hMax: 15, col: PARKGRN, col2: TREEGRN, pineFrac: 0.18 });
       avenue(0.04, 0.14,  1, 14, 26);
       avenue(0.04, 0.14, -1, 17, 30);
@@ -243,7 +245,7 @@
         palette: [[0.62, 0.60, 0.58], [0.68, 0.64, 0.60], [0.56, 0.54, 0.52], [0.60, 0.58, 0.56]],
         windowCol: [0.94, 0.84, 0.55], step: 40
       });
-      cityFront(0.32, 0.46, 1, 78, {
+      cityFront(0.32, 0.43, 1, 78, {   // past 0.43 the T4 hairpin loops under it
         minH: 12, maxH: 32, depth: 16, lit: true,
         palette: [[0.60, 0.62, 0.66], [0.66, 0.64, 0.60], [0.56, 0.58, 0.62], [0.68, 0.62, 0.58]],
         windowCol: [0.90, 0.82, 0.52], step: 42
@@ -268,6 +270,8 @@
           const d = 280 + hash(k * 82 + side) * 140 + (k & 1) * 24;
           const h = 26 + hash(k * 83 + side) * 40;
           const tone = 0.62 + hash(k * 84 + side) * 0.10;
+          const p = anchor(k, side, d);
+          if (onTrack(p.c[0], p.c[2], 60)) continue;   // would straddle another leg
           backdrop(k, side, d, [100, h, 45], [tone * 0.98, tone, tone * 1.02]);
         }
       });
@@ -388,7 +392,7 @@
       boundedStand(0.842, -1, 52, 26, [0.60, 0.59, 0.58], BOWL_GREY, false);
       // Entry/exit end caps stay behind the bright apertures.
       boundedStand(0.715, -1, 36, 20, [0.58, 0.56, 0.54], BOWL_GREY, false);
-      boundedStand(0.875, -1, 36, 20, [0.58, 0.56, 0.54], BOWL_BLUE, false);
+      boundedStand(0.855, -1, 36, 20, [0.58, 0.56, 0.54], BOWL_BLUE, false);
       boundedStand(0.875,  1, 36, 20, [0.58, 0.56, 0.54], BOWL_GREY, false);
 
       for (const s of [0.74, 0.77, 0.80, 0.83, 0.85]) {
@@ -501,8 +505,10 @@
         [0.86, 1.00,  1], [0.86, 1.00, -1],
       ]) fence(s0, s1, side, 5.5, 3.4, FENCE_M);
       for (const [s0, s1, side] of [
-        [0.00, 0.10,  1], [0.16, 0.30,  1], [0.30, 0.48, -1],
-        [0.48, 0.60,  1], [0.60, 0.72, -1], [0.86, 1.00,  1],
+        // +1 is the pit side: the complex (0.951-0.046) supersedes a hedge base
+        // there but not its lump, which floated 1 m (float-audit).
+        [0.05, 0.10,  1], [0.16, 0.30,  1], [0.30, 0.48, -1],
+        [0.48, 0.60,  1], [0.60, 0.72, -1], [0.86, 0.95,  1],
         [0.10, 0.30, -1], [0.48, 0.60, -1], [0.86, 1.00, -1],
       ]) hedge(s0, s1, side, 2.4, 1.4, side < 0 ? PARKGRN : TREEGRN);
       for (let i = 0; i < 44; i++) {

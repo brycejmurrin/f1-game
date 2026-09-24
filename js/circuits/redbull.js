@@ -9,8 +9,15 @@
     // Was 0.1875, which put the line inside a corner — a start line is
     // always on a straight. See docs/tracks/START-LINES.md.
     startFrac: 0.0000,
-    sceneryStartFrac: 0.1875,
+    // No sceneryStartFrac: the dressing is authored against THIS line. The Wing,
+    // motorhomes and paddock towers sit at K(0)±0.04 and the T1 tyre wall at
+    // 0.08-0.13 (T1 apex 0.0851). The old 0.1875 (shift 0.295) stood the paddock
+    // at Remus and grew 105 trees along the pit lane — docs/notes/DEFECT-LEDGER.md.
     sceneryCoordinates: "racing",
+    // The Wing (K(0), left, 13 m) and the circuit's own pit-straight stands own
+    // this straight; the engine's generic 7-box stand (k 0-24, left, 14 m)
+    // stood inside the Wing: a 4.00 m / 1005 m3 box-vs-box clip at frac 0.000.
+    ownPitStraight: true,
     name: "RED BULL RING",
     gp: "Austrian GP",
     country: "Austria",
@@ -31,18 +38,25 @@
       { kind: "foliage", s0: 0.18, s1: 0.38, side: 1 },
     ],
     pal: { zenith: [0.22, 0.48, 0.82], horizon: [0.55, 0.72, 0.88], grass: [0.14, 0.44, 0.18], runoff: [0.34, 0.50, 0.26], fogDensity: 0.0016, sunDir: [0.59693248550091, 0.6446870843409829, 0.47754598840072804], sun: [1, 0.96, 0.84], sunColor: [1, 0.96, 0.88] },
+    // Engine-frame fractions (post-startFrac arc), re-keyed when the 0.1875
+    // sceneryStartFrac went: an elevation read as (s - 0.1875) + 0.2952 and a
+    // bank as frac + 0.2952, so each now carries that offset and the road
+    // surface is unchanged (banks bit-identical; py within the 0.21 m the
+    // shift-phased ripple moves). WHERE they land is a separate question: the
+    // old "T1 climb / Remus crest" labels never matched — the bumps sit at
+    // 0.415 / 0.515 / 0.715 and each bank on a curated apex (turns[i] noted).
     elevations: [
-      { s: 0.3075, halfM: 360, rise: 22 },  // racing 0.12: T1 / Niki Lauda climb
-      { s: 0.4075, halfM: 430, rise: 32 },  // racing 0.22: Remus crest / high point
-      { s: 0.6075, halfM: 430, rise: -28 }, // racing 0.42: post-Remus / T4 descent
+      { s: 0.41525, halfM: 360, rise: 22 },
+      { s: 0.51525, halfM: 430, rise: 32 },
+      { s: 0.71525, halfM: 430, rise: -28 },
     ],
     bankZones: [
-      { frac: 0.1961, angleDeg: 4.0, widthM: 260 },   // T1 climb / Niki Lauda
-      { frac: 0.3072, angleDeg: 4.0, widthM: 180 },   // Remus
-      { frac: 0.3810, angleDeg: 4.0, widthM: 160 },   // T4 descent
-      { frac: 0.4370, angleDeg: 3.0, widthM: 120 },   // T5
-      { frac: 0.5574, angleDeg: 3.5, widthM: 110 },
-      { frac: 0.6097, angleDeg: 3.5, widthM: 90 },
+      { frac: 0.49135, angleDeg: 4.0, widthM: 260 },  // turns[2] 0.4913 Schlossgold
+      { frac: 0.60245, angleDeg: 4.0, widthM: 180 },  // turns[3] 0.6024
+      { frac: 0.67625, angleDeg: 4.0, widthM: 160 },  // turns[5] 0.6752
+      { frac: 0.73225, angleDeg: 3.0, widthM: 120 },  // turns[7] 0.7322
+      { frac: 0.85265, angleDeg: 3.5, widthM: 110 },  // turns[8] 0.8526
+      { frac: 0.90495, angleDeg: 3.5, widthM: 90 },   // turns[9] 0.9049
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──

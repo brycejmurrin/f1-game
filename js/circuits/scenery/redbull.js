@@ -165,8 +165,15 @@
       scoringGantry(0.005, 7.5, "redbull-start-gantry");
       scoringGantry(0.045, 7.0, "redbull-scoring-gantry");
 
+      // Pit-lane side (+1): the engine's pit complex (0.952-0.026) owns the
+      // lane tarmac past the verge. There the pole stood on the verge but the
+      // complex took the 3 m cross-arm and the outer head, leaving the inner
+      // head floating 8.8 m up (float-audit, five spots). Its canopy
+      // luminaires light that side; these lamps resume past the pit exit.
+      const pitSideLamp = (k) => { const f = k / n; return f > 0.945 || f < 0.035; };
       along(0.96, 0.08, 60, (k) => {
         for (const side of [-1, 1]) {
+          if (side === 1 && pitSideLamp(k)) continue;
           const a = anchor(k, side, 3.8);
           // continue, NOT return: `return` leaves the whole along() callback, so
           // a pole rejected on side -1 silently took side +1 with it — half the

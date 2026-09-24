@@ -633,7 +633,10 @@
       // 0.820 +1 — END OF THE APRON. A third, smaller corrugated shed with a
       // hoarding on its flank; the concrete gives way to grass as the
       // runway's width is taken back, in bleached slabs then sandy turf.
-      building(K(0.820), 1, 36, 14, 7.5, 24, { col: CORR_BLUE });
+      // Offset 34 (was 36): at 36 the roof cap (radius = half the diagonal,
+      // wider than the walls) was refused by the road guard against the
+      // other leg ~19 m away, leaving the rooftop plant hanging 8.7 m up.
+      building(K(0.820), 1, 34, 14, 7.5, 24, { col: CORR_BLUE });
       building(K(0.802), 1, 38, 9, 5.0, 14, { col: CORR_RUST });
       building(K(0.842), 1, 40, 7, 4.2, 10, { col: TIMBER });
       sponsorHoarding(0.808, 0.836, 1, 26, {});

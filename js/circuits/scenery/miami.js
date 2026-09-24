@@ -410,7 +410,7 @@
       // Fewer larger yacht silhouettes (6 boats, not ~50)
       for (let i = 0; i < 6; i++) {
         const k = K(0.275 + i * 0.018);
-        const a = anchor(k, 1, 18 + (i % 3) * 14);
+        const a = anchor(k, 1, 46 + (i % 3) * 11);   // beyond the promenade palms and the 26/36 m berth rank (was 18 + 14i: clipped both)
         const c = vadd(a.c, a.t, (i % 2 ? 8 : -8));
         const len = 22 + hash(i * 4) * 16;          // 22–38 m hulls
         const trim = (i % 3 === 0) ? TEAL : ((i % 3 === 1) ? CORAL : PINK);
@@ -594,7 +594,10 @@
         });
       }
 
-      buildOverpass(0.635);
+      // 0.635 sat on the T17 hairpin (15 m radius) once the bogus
+      // sceneryStartFrac shift went: pier footprint rejected. 0.66 is the
+      // straight beyond it.
+      buildOverpass(0.66);
       buildOverpass(0.685);
 
       // Lamp posts lining the underpass approaches (both sides)
@@ -613,7 +616,7 @@
       for (let i = 1; i <= 2; i++) {
         const flick = PASTELS[Math.floor(hash(i * 13 + 9) * PASTELS.length) % PASTELS.length];
         grandstandEx(0.77 + i * 0.025, -1, 20, 80, null, flick, {
-          livery: i === 1 ? "pastel" : "teal", tiers: 2, roof: "truss",
+          livery: i === 1 ? "pastel" : "teal", tiers: 2, roof: "flat",   // truss beams outlived a rejected deck and floated
         });
       }
       scaffoldStand(0.7626, 0.7774, -1, 20, {

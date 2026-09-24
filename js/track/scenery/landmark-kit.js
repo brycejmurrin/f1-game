@@ -91,18 +91,26 @@ const LandmarkKit = (function () {
             [spec.size[0] * 1.05, spec.size[1] * 0.10, spec.size[2] * 1.05],
             spec.color, spec.basis]);
       }
+      // Levels STACK: each one's base is the previous one's top, and none is
+      // wider than the one below. They used to be centred in their slot at 0.86
+      // of its height, so the ground floor stood 7 % of a slot off the ground
+      // and every level above sat on a 14 % air gap; "stepped" alternated
+      // 1.0 / 0.78, so every even level overhung the narrower one under it.
+      // float-audit read miami's race control as three floating cells.
+      // "stepped" now sets back further on every odd level, never outward.
+      const slot = spec.size[1] / levels;
       for (let i = 0; i < levels; i++) {
         const scale = kind === "stepped"
-          ? (i % 2 ? 0.78 : 1.0)
+          ? 1 - (i + (i % 2) * 0.5) / levels * 0.35
           : 1 - i / levels * 0.35;
         const center = [
           spec.center[0],
-          spec.center[1] - spec.size[1] / 2 + (i + 0.5) * spec.size[1] / levels,
+          spec.center[1] - spec.size[1] / 2 + (i + 0.5) * slot,
           spec.center[2],
         ];
         const size = [
           spec.size[0] * scale,
-          spec.size[1] / levels * 0.86,
+          slot,
           spec.size[2] * scale,
         ];
         if (!emit(p.box, [stage, center, size, spec.color, spec.basis])) return false;

@@ -618,7 +618,7 @@ const api = {
     const k = opts && opts.scenery && typeof TrackSpace !== "undefined" && TrackSpace
       ? TrackSpace.sceneryNode(G.track.def, raw, G.track.n)
       : raw;
-    return { k, frac: +(k / G.track.n).toFixed(4), x: +G.track.px[k].toFixed(3), y: +G.track.py[k].toFixed(3), z: +G.track.pz[k].toFixed(3), tx: +G.track.tx[k].toFixed(3), tz: +G.track.tz[k].toFixed(3), rx: +G.track.rx[k].toFixed(3), rz: +G.track.rz[k].toFixed(3) };
+    return { k, frac: +(k / G.track.n).toFixed(4), x: +G.track.px[k].toFixed(3), y: +G.track.py[k].toFixed(3), z: +G.track.pz[k].toFixed(3), tx: +G.track.tx[k].toFixed(3), tz: +G.track.tz[k].toFixed(3), rx: +G.track.rx[k].toFixed(3), rz: +G.track.rz[k].toFixed(3), hw: +G.track.hw[k].toFixed(3) };
   },
   // Player telemetry for steering tests: lateral offset x (m, +=right of centre),
   // heading offset angle (rad, relative to track tangent), local curvature k

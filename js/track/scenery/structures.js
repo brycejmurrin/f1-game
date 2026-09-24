@@ -40,7 +40,11 @@ const SceneryStructures = (function () {
       const key = `${kind}|${side}|${Math.round(gap * 10)}|${style || ""}`;
       const runs = laid.get(key) || [];
       // Compare on the unwrapped lap fraction; a full-lap run covers everything.
-      const a = s0 % 1, b = s1 % 1;
+      // A run that ENDS on the lap boundary (s1 = 1.0) ends at 1, not 0: read as
+      // `1 % 1`, montreal's [0.59, 1.0] wall looked contained in its [0.0, 0.05]
+      // run and was skipped along with its barrier, once the scenery shift that
+      // used to keep these numbers off the seam was removed (tightFrac 1 -> 0.645).
+      const a = s0 % 1, b = s1 > s0 && s1 % 1 === 0 ? 1 : s1 % 1;
       const full = Math.abs(s1 - s0) >= 0.999;
       for (const [ra, rb] of runs) {
         const rFull = Math.abs(rb - ra) >= 0.999;

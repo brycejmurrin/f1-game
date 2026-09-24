@@ -290,8 +290,11 @@
             basis: b,
           }, (stage) => {
             stage._mat = MAT.WOOD;
+            // The bents stand on the verge, which falls ~0.5 m below the road
+            // datum the deck's clearance is measured from: run them 1 m into
+            // the 1.4 m deck so the span never floats clear of its piers.
             for (const dt of [-2.4, 0, 2.4])
-              seat.cyl(stage, vadd(a.c, a.t, dt), 0.42, deck, [0.42, 0.36, 0.30], 6, b);
+              seat.cyl(stage, vadd(a.c, a.t, dt), 0.42, deck + 1.0, [0.42, 0.36, 0.30], 6, b);
             for (const y of [deck * 0.35, deck * 0.72])
               addBox(stage, vadd(a.c, a.u, y), [0.9, 0.3, 5.6], [0.40, 0.34, 0.28], b);
             seat.box(stage, vadd(a.c, a.u, deck + 1.4), [1.2, 3.0, 6.0], RED, b);

@@ -34,19 +34,19 @@
 // carries the same object and the spec already baselines it there; the other
 // three went unbaselined only because this spec runs on no push.
 //
-// The ladder reaches it because it scales by a half-width taken from the ROAD
-// MESH, 1.2-1.3x the engine's track.hw, so the outermost sample lands off the
-// tarmac on the boundary a car stays inside. That is the defect worth fixing
-// (scale by track.hw and every baseline here could go back to TOL); it is open
-// in docs/notes/DEFECT-LEDGER.md, along with the note that sweep() records no
-// primitive, so no audit can attribute this geometry at all.
+// The ladder reached it because it scaled by a half-width taken from the ROAD
+// MESH, 1.2-1.3x the engine's track.hw, so the outermost sample landed off the
+// tarmac on the boundary a car stays inside. FIXED 2026-09-23: the ladder now
+// scales by track.hw, out to 0.9 of it, and every edge baseline went back to
+// TOL (see BASELINE). `sweep()` still records no primitive, so no audit can
+// attribute that geometry; that stays open in docs/notes/DEFECT-LEDGER.md.
 //
 // THIS IS NOT A REPLACEMENT FOR THE SPEC, and the difference is measured, not
-// assumed. The sample ladder, the tolerance band, the barycentric test and its
-// 0.01 degeneracy floor are the spec's, and `nodeAt()`'s three-decimal rounding
-// is reproduced so the sample points are the spec's to the millimetre. On the
-// two circuits where the spec wrote down what it measured, this reads the same
-// to the centimetre: jeddah's "grey [0.46,0.47,0.5] at 1.07 m, lateral -6.35"
+// assumed. The sample ladder (track.hw-scaled in both since 2026-09-23), the
+// tolerance band, the barycentric test and its 0.01 degeneracy floor are the spec's, and `nodeAt()`'s three-decimal rounding
+// is reproduced so the sample points are the spec's to the millimetre. With the
+// old mesh-scaled ladder, on the two circuits where the spec wrote down what it
+// measured, this read the same to the centimetre: jeddah's "grey [0.46,0.47,0.5] at 1.07 m, lateral -6.35"
 // and mont_tremblant's "has read 4.74 since". It also reads mosport and
 // zandvoort at 1.07, which the spec never baselined, and a browser run
 // confirmed both — the same edge object, unnoticed because the spec never runs.
@@ -94,39 +94,27 @@ const CEIL = 5.0;
 // measured half-width. Both are the spec's; changing either changes what every
 // baseline below means.
 const M = 1200;
-const LADDER = [-0.75, -0.4, 0, 0.4, 0.75];
+const LADDER = [-0.9, -0.45, 0, 0.45, 0.9];
 
 // Circuits with a KNOWN reading, each capped at the metres seen so this still
 // fails if the intrusion GROWS or a new circuit regresses. A track NOT in this
 // map must read <= TOL — that is what keeps new bugs failing.
 //
-// miami and albert_park carried caps of 4.2 and 0.7 in the spec and read 0.00
-// here; their entries are dropped rather than kept as dead ceilings. Both are
-// held to TOL now, which is stricter.
+// Every street and pit-wall entry (monaco, singapore, baku, jeddah, mosport,
+// zandvoort) read the tarmac EDGE's boundary only because the ladder was
+// scaled by the road mesh; scaled by track.hw they read 0.00 and are held to
+// TOL now, which is stricter. miami and albert_park went the same way earlier.
 const BASELINE = {
-  // Street circuits: the ~1.1-1.3 m readings sit at the road edge, where the
-  // track boundary a car stays inside lives. Verified from driver-eye as
-  // boundary, not a lane obstruction; on four of them it is the pit wall's cap.
-  monaco: 1.4, singapore: 1.3, baku: 1.3,
-  // THE PIT WALL'S TOP CAP, on the four circuits that read it: WALL_TOP
-  // [0.46,0.47,0.5] at exactly 1.07 m, from the sweep in js/track/scenery/
-  // pits.js. Not the garage row's wall, which stands 8.2-13.0 m out, but the
-  // ENTRY/EXIT wall at the tarmac edge — on zandvoort 6.81 m against a 7.0 m
-  // half-width. jeddah is the one the spec bisected (clean at ed2221fd, over
-  // at 80acf931, the walled-exit pit redesign) and the only one it baselined;
-  // the other three went unbaselined because this spec runs on no push. The
-  // ladder reaches the wall at all because it scales by the MESH half-width,
-  // 1.2-1.3x the tarmac's; fixing that is open in DEFECT-LEDGER.
-  jeddah: 1.1, mosport: 1.1, zandvoort: 1.1,
   // A forest crown leaning over the road, not an intrusion at the edge: dark
   // green spanning y 9.96-12.46 with the road at 7.33, so 4.74 m of clearance
   // a car drives under. Deliberate — the scenery engine keeps FOOTINGS out and
   // lets crowns reach over (nature.js tree() guards with onTrack(x, z, 4,
   // h * 0.3)). This circuit's identity is a forest tunnel and it builds an
   // explicit ceiling over the cutting at 9.5-16 m, which clears CEIL; this one
-  // crown sits 0.26 m under it. Never a regression: mont_tremblant arrived in
-  // 06833f3d and has read 4.74 since.
-  mont_tremblant: 4.9,
+  // crown sits just under it. Never a regression: mont_tremblant arrived in
+  // 06833f3d and read 4.74 at the old 0.75-of-mesh rung; the 0.9 hw rung
+  // meets the same crown (lateral -8.6) at 4.97.
+  mont_tremblant: 5.0,
 };
 const ALLOW = new Set();          // fully-exempt circuits — none; everything is capped
 
@@ -219,17 +207,15 @@ function auditProps(t) {
   const nodes = grid(px, pz, idxs);
   const near = (x, z) => nodes.nearest(x, z, px, pz);
 
-  // HALF-WIDTH FROM THE ROAD MESH, not from the def: the asphalt a car can use
-  // is what was built, kerbs and run-off included. A node the road mesh never
-  // reached falls back to 6 m rather than 0, or its samples would all sit on
-  // the centreline and measure nothing.
-  const rp = caps.road.pos;
-  for (let v = 0; v < rp.length; v += 3) {
-    const k = near(rp[v], rp[v + 2]);
-    const lat = Math.abs((rp[v] - px[k]) * rx[k] + (rp[v + 2] - pz[k]) * rz[k]);
-    if (lat < 13 && lat > hw[k]) hw[k] = lat;
-  }
-  for (let k = 0; k < M; k++) if (hw[k] < 3) hw[k] = 6;
+  // HALF-WIDTH FROM THE ENGINE, track.hw per node: the tarmac a car races on.
+  // It used to come from the ROAD MESH, which carries verge and run-off out to
+  // 13 m and reads 1.2-1.3x track.hw, so the outer rung landed OFF the racing
+  // surface on whatever boundary lives there: jeddah, mosport, zandvoort and
+  // singapore all read the pit wall's 1.07 m top cap, and every one of them
+  // had to be baselined. Measured with track.hw (2026-09-23): all seven
+  // baselined circuits read 0.00 at the old 0.75 rung. zandvoort-foundation
+  // made the same correction and found 0.00 out to 0.9 hw, 1.07 at 1.0.
+  for (let i = 0; i < M; i++) hw[i] = t.hw[Math.round(i / M * t.n) % t.n];
 
   const tps = [];
   for (let i = 0; i < M; i++) for (const s of LADDER)
@@ -341,18 +327,31 @@ test("shanghai's track-owned props stay at the shared clean tolerance", () => {
     `${JSON.stringify(r.worst)}`);
 });
 
-test("the audit still measures: the known edge object and forest crown are found", () => {
+test("the audit still measures: a planted slab and the forest crown are found", () => {
   // ANTI-VACUITY. Every assertion above is "nothing over the cap", which an
-  // audit that silently stopped finding anything would pass forever. These two
-  // readings are documented objects at documented heights, so they pin that the
-  // thing still works: the edge object the spec bisected on jeddah, and
-  // mont_tremblant's crown over the cutting.
-  const jeddah = fleet().get("jeddah"), mt = fleet().get("mont_tremblant");
-  assert.ok(jeddah.max >= 1.0 && jeddah.max <= 1.1,
-    `jeddah's edge object should read ~1.07 m; got ${jeddah.max}. If it moved, ` +
+  // audit that silently stopped finding anything would pass forever. The fleet
+  // is clean at TOL now, so the known reading is PLANTED: a 4 x 4 m slab 1.0 m
+  // over the centreline at half-lap, handed to auditProps as the props buffer
+  // of a real built track. Plus mont_tremblant's crown, the one real object.
+  const fl = fleet(), mt = fl.get("mont_tremblant");
+  assert.ok(mt.max >= 4.9 && mt.max <= 5.0,
+    `mont_tremblant's crown should read ~4.97 m; got ${mt.max}. If it moved, ` +
     "re-measure and update the baseline; if the audit stopped finding it, fix the audit.");
-  assert.deepEqual(jeddah.worst.color, [0.46, 0.47, 0.5],
-    `jeddah's worst offender should be the grey edge object; got ${JSON.stringify(jeddah.worst)}`);
-  assert.ok(mt.max >= 4.7 && mt.max <= 4.8,
-    `mont_tremblant's crown should read ~4.74 m; got ${mt.max}`);
+
+  const t = ctxOnce().Tracks.build(ctxOnce().Tracks.LIST.find((d) => d.id === "shanghai"));
+  const k = Math.round(0.5 * t.n), c = [t.px[k], t.py[k] + 1.0, t.pz[k]];
+  const f = [t.tx[k], t.tz[k]], r = [t.rx[k], t.rz[k]];
+  const pos = [], idx = [], col = [];
+  for (let q = 0; q < 10; q++) {                 // 10 stacked copies: auditProps skips < 30 verts
+    const base = pos.length / 3;
+    for (const [a, b] of [[-2, -2], [2, -2], [2, 2], [-2, 2]]) {
+      pos.push(c[0] + f[0] * a + r[0] * b, c[1], c[2] + f[1] * a + r[1] * b);
+      col.push(1, 0, 1);
+    }
+    idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  }
+  const res = auditProps({ ...t, propsGeo: { pos, idx, col }, glassGeo: null });
+  ctxOnce().trim(0);
+  assert.ok(res.max >= 0.95 && res.max <= 1.05, `the planted slab should read ~1.0 m; got ${JSON.stringify(res)}`);
+  assert.deepEqual(res.worst.color, [1, 0, 1], `the worst offender should be the slab; got ${JSON.stringify(res.worst)}`);
 });

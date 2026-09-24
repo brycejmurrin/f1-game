@@ -10,7 +10,11 @@
     // Was 0.2325, which put the line inside a corner — a start line is
     // always on a straight. See docs/tracks/START-LINES.md.
     startFrac: 0.0000,
-    sceneryStartFrac: 0.2325,
+    // No sceneryStartFrac: the dressing is authored against THIS line (start
+    // gantry K(0), pit building frac 0, T1 boards 0.06). The preserved 0.2325
+    // origin shifted all of it 0.2008 of a lap onto the T4-T8 sweepers
+    // (docs/notes/DEFECT-LEDGER.md, sceneryStartFrac audit). The elevation and
+    // bank fracs below were re-keyed so the road surface did not move.
     name: "MIAMI",
     gp: "Miami GP",
     country: "USA",
@@ -30,15 +34,16 @@
       { kinds: ["city", "foliage"], s0: 0.94, s1: 0.08 },
       { kinds: ["city", "foliage"], s0: 0.26, s1: 0.38, side: 1 },
       { kinds: ["city", "foliage"], s0: 0.60, s1: 0.72 },
+      { kinds: ["city"], s0: 0.115, s1: 0.128 },   // T4 inside: retail boxes converge and interpenetrate
     ],
     pal: { zenith: [0.22, 0.5, 0.88], horizon: [0.80, 0.86, 0.90], grass: [0.20, 0.42, 0.18], runoff: [0.12, 0.72, 0.78], fogDensity: 0.0014, sunDir: [0.3131803839972462, 0.7933903061263571, 0.521967306662077], sun: [1, 0.96, 0.82], sunColor: [1, 0.94, 0.8] },
-    elevations: [{ s: 0.8925, halfM: 220, rise: 3.5 }],
+    elevations: [{ s: 0.8605, halfM: 220, rise: 3.5 }],
     bankZones: [
-      { frac: 0.0775, angleDeg: 3.5, widthM: 240 },
-      { frac: 0.3785, angleDeg: 3.0, widthM: 130 },
-      { frac: 0.6788, angleDeg: 3.5, widthM: 200 },
-      { frac: 0.7496, angleDeg: 3.0, widthM: 180 },
-      { frac: 0.8808, angleDeg: 3.0, widthM: 240 },
+      { frac: 0.0816, angleDeg: 3.0, widthM: 240 },   // T3
+      { frac: 0.2783, angleDeg: 3.5, widthM: 240 },   // T11
+      { frac: 0.5793, angleDeg: 3.0, widthM: 130 },   // T14
+      { frac: 0.8796, angleDeg: 3.5, widthM: 200 },   // T18
+      { frac: 0.9504, angleDeg: 3.0, widthM: 180 },
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
