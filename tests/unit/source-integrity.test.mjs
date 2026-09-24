@@ -362,8 +362,11 @@ test("the audio block cannot deref a null player, and a lone throw no longer kil
   // 2026-08-31 via __apex.race() + go(): 0 draws a frame, permanently, with
   // "Cannot read properties of null (reading 'rpm')" once. PERF-FINDINGS 2i.
   const src = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
-  assert.match(src, /if \(soundOn && player\) \{/,
+  // (the continuous-parameter half also rides _audioParamStep: once per frame)
+  assert.match(src, /if \(soundOn && player && _audioParamStep\) \{\s*\n\s*const revFrac/,
     "the engine-audio block must test player before dereferencing it");
+  assert.match(src, /if \(soundOn && player\) carSfx\.update\(player\);/,
+    "carSfx must be guarded on player too");
   assert.doesNotMatch(src, /if \(soundOn\) \{\n\s*const revFrac/,
     "the unguarded `if (soundOn)` form is back — it dies on a null player");
 
