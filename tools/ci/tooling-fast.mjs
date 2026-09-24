@@ -205,6 +205,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Host configs — the three MCP catalogs, the path-scoped rules, the hooks —
   // asserted instead of described; under a second.
   "tests/unit/agent-config.test.mjs",
+  "tests/unit/session-status.test.mjs",
+  "tests/unit/ci-watch.test.mjs",
   // Every freezable module surface stays frozen (pure file read; < 1 s).
   "tests/unit/frozen-globals.test.mjs",
   "tests/unit/component-inventory.test.mjs",

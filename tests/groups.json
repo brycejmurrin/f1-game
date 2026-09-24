@@ -164,6 +164,8 @@
     "// Host configs \u2014 the three MCP catalogs, the path-scoped rules, the hooks \u2014",
     "// asserted instead of described; under a second.",
     "tests/unit/agent-config.test.mjs",
+    "tests/unit/session-status.test.mjs",
+    "tests/unit/ci-watch.test.mjs",
     "// Every freezable module surface stays frozen (pure file read; < 1 s).",
     "tests/unit/frozen-globals.test.mjs",
     "tests/unit/component-inventory.test.mjs",
@@ -887,7 +889,9 @@
         "tests/unit/twinned-specs.test.mjs",
         "tests/unit/ratchets.test.mjs",
         "tests/unit/no-bare-console.test.mjs",
-        "tests/unit/lexical-window-guard.test.mjs"
+        "tests/unit/lexical-window-guard.test.mjs",
+        "tests/unit/test-coverage-audit.test.mjs",
+        "tests/unit/prepush-gate-coverage.test.mjs"
       ]
     }
   }

@@ -43,15 +43,15 @@ order dependence — `docs/TESTING.md` §Field notes has the worked example.
 
 ## Rules that prevent the class
 
-- ONE Playwright process. `verify-change.mjs` batches at **one browser
-  group** (padded with node-only groups). `test-bg.mjs` caps total groups
-  at `floor(CORES/WORKERS)` with no browser/node split — `smoke` +
-  `physics-core` is allowed on 4 cores. Browser+browser pairing is the
-  measured source of the entire 120 s class.
+- ONE Playwright process. `verify-change.mjs` batches at **one group** per
+  batch, browser groups first. `test-bg.mjs` starts ONE group at a time by
+  default (a second is refused; `--parallel` raises the cap to
+  `floor(CORES/WORKERS)`), and refuses ANY start at 1-min loadavg >= 3.
+  Browser+browser pairing is the measured source of the entire 120 s class.
 - Everything long runs in the BACKGROUND with a log (`AGENTS.md`); check
   `node tools/ci/test-bg.mjs --status` and `/proc/loadavg < 3` before starting.
 - Verdicts come from the log's terminal line `= run <status>  (N/M done,
-  K failed)` — match with `grep -E '= run (passed|failed|timedout|interrupted)'`
+  K failed)` — match with `grep -E '^= (run (passed|failed|timedout|interrupted)|bg exit)'`
   (ERE alternation; fixed-string/BRE grep never matches) — never the process
   table.
 - `tools/ci/verify-change.mjs` runs the whole selection serialized correctly and

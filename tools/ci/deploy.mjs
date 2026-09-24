@@ -271,6 +271,25 @@ function manifestMoved() {
 
 const RATCHETS = "tests/data/ratchets.json";
 const TOOLS_README = "tools/README.md";
+// Docs carrying the GENERATED gate-ladder figures (tools/gen/gen-ladder-figures.mjs
+// TARGET + SECONDARY). Kept literal so importing this module stays side-effect free.
+export const LADDER_DOCS = ["docs/notes/PREPUSH-GATE-LADDER.md", "AGENTS.md", "docs/TESTING.md",
+  ".claude/agents/verify-agent.md", "README.md"];
+
+/* A conflicted file whose EVERY hunk differs only in its digits: two stale
+   renderings of a generated count ("242 of 321" vs "244 of 323"), not two
+   intents. Any hunk that differs in a word is a real disagreement. */
+export function figureOnlyConflict(text) {
+  const hunks = [...String(text).matchAll(/^<<<<<<< [^\n]*\n([\s\S]*?)^=======\n([\s\S]*?)^>>>>>>> [^\n]*\n/gm)];
+  if (!hunks.length) return false;
+  const norm = (t) => t.replace(/\d+/g, "#");
+  return hunks.every((h) => norm(h[1]) === norm(h[2]));
+}
+
+/** Keep OUR side of every hunk (the generator rewrites the figures next). */
+export function takeOurs(text) {
+  return String(text).replace(/^<<<<<<< [^\n]*\n([\s\S]*?)^=======\n[\s\S]*?^>>>>>>> [^\n]*\n/gm, "$1");
+}
 
 /* Every number in ratchets.json, flattened to `scope/name` -> value, so the
    three sides of a conflict can be compared metric by metric. */
@@ -346,7 +365,7 @@ function cureRatchets() {
    tests/groups.json is itself conflicted, package.json cannot be derived from
    it and both are a real disagreement. Pure and exported so the rule can be
    tested without a merge to run it against. */
-export function cureableConflicts(conflicted) {
+export function cureableConflicts(conflicted, textOf = null) {
   const shellF = conflicted.filter((f) => f === "index.html" || f === "version.json");
   const ratchetF = conflicted.filter((f) => f === RATCHETS);
   const pkgF = conflicted.filter((f) => f === "package.json");
@@ -357,10 +376,17 @@ export function cureableConflicts(conflicted) {
   // package.json does: take either side to give the generator something
   // parseable, then regenerate from the merged sources.
   const toolsF = conflicted.filter((f) => f === TOOLS_README);
+  // The gate-ladder figures (2026-09-24): every unit file anyone adds rewrites
+  // "N of M" in five docs, so every open PR conflicted there within the hour —
+  // twice in one session, hand-resolved identically by regenerating. Cured ONLY
+  // when every hunk in the file differs in digits alone (figureOnlyConflict);
+  // a hunk that differs in a word is prose someone wrote, and stops. Needs the
+  // conflicted text, so a caller without `textOf` never cures these.
+  const ladderF = textOf ? conflicted.filter((f) => LADDER_DOCS.includes(f) && figureOnlyConflict(textOf(f))) : [];
   const sourceContested = conflicted.includes("tests/groups.json");
   const cureable = conflicted.length > 0 && !sourceContested
-    && shellF.length + ratchetF.length + pkgF.length + toolsF.length === conflicted.length;
-  return { cureable, shellF, ratchetF, pkgF, toolsF };
+    && shellF.length + ratchetF.length + pkgF.length + toolsF.length + ladderF.length === conflicted.length;
+  return { cureable, shellF, ratchetF, pkgF, toolsF, ladderF };
 }
 
 /* THE UNION MAY NEED A DEPENDENCY THE BOX HAS NOT GOT. A merged lockfile is
@@ -391,11 +417,12 @@ export function mergeDeployTip() {
   // The CUREABLE set: files this repo GENERATES, where a conflict is a stale
   // derived value rather than two intents to reconcile. Anything else is a
   // real disagreement and stops.
-  const { cureable, shellF, ratchetF, pkgF, toolsF } = cureableConflicts(conflicted);
+  const { cureable, shellF, ratchetF, pkgF, toolsF, ladderF } =
+    cureableConflicts(conflicted, (f) => fs.readFileSync(path.join(ROOT, f), "utf8"));
   if (!cureable) {
     git(["merge", "--abort"]);
     const moved = manifestMoved();
-    const named = conflicted.filter((f) => f !== RATCHETS && !shellF.includes(f) && !pkgF.includes(f) && !toolsF.includes(f))
+    const named = conflicted.filter((f) => f !== RATCHETS && !shellF.includes(f) && !pkgF.includes(f) && !toolsF.includes(f) && !ladderF.includes(f))
       .map((f) => (moved[f] ? `${f} (moved to ${moved[f]} — re-apply their edit there)` : f));
     throw new Error(`real conflicts (not just generated files): ${named.join(", ")} — resolve by hand`);
   }
@@ -426,6 +453,12 @@ export function mergeDeployTip() {
     run("node", ["tools/gen/gen-tools-readme.mjs"], "regenerate the tools index from the merged tree");
     must(git(["add", TOOLS_README]), "add");
     did.push("tools index regenerated");
+  }
+  if (ladderF.length) {
+    for (const f of ladderF) fs.writeFileSync(path.join(ROOT, f), takeOurs(fs.readFileSync(path.join(ROOT, f), "utf8")));
+    run("node", ["tools/gen/gen-ladder-figures.mjs"], "regenerate the gate-ladder figures from the merged groups.json");
+    must(git(["add", ...ladderF]), "add");
+    did.push("gate-ladder figures regenerated");
   }
   must(git(["commit", "--no-edit", "-q"]), "merge commit");
   installIfLockMoved(before);

@@ -310,7 +310,7 @@ test("every custom subagent declares name, description, and model", () => {
     "bloat-auditor.md": "haiku", "deploy-research.md": "haiku", "verify-agent.md": "haiku",
     "ci-red-triage.md": "sonnet", "physics-contract-auditor.md": "inherit", "track-surveyor.md": "inherit",
   };
-  const ONE_LINE = "Flat prohibitions: AGENTS.md §Verification 3 and 7 (no Playwright/test-bg/test-solo/chrome-start, no --wait, no bump); the js/css/index.html write ban is hook-enforced.";
+  const ONE_LINE = "Flat prohibitions: AGENTS.md §Verification 10, 6 and 7 (no Playwright/test-bg/test-solo/chrome-start, no --wait, no bump); the js/css/index.html write ban is hook-enforced.";
   for (const f of files) {
     const text = fs.readFileSync(path.join(AGENTS, f), "utf8");
     const fm = frontmatter(text);
