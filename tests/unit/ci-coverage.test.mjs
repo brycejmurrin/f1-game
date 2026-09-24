@@ -246,10 +246,10 @@ test("one CI run per branch head: push and pull_request share a group, manual ru
   // signature — same head_sha, cancelled seconds in, sibling still running.
   const repo = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
   const agents = fs.readFileSync(path.join(repo, "AGENTS.md"), "utf8");
-  assert.match(agents, /a push and its PR event share a group[\s\S]{0,200}head_sha/,
-    "AGENTS.md rule 8 must except the designed push/PR dedupe, or the next session triages it as a timeout");
+  assert.match(agents, /`ready_for_review` run share a group[\s\S]{0,200}head_sha/,
+    "AGENTS.md rule 8 must except the designed draft/ready dedupe, or the next session triages it as a timeout");
   const triage = fs.readFileSync(path.join(repo, ".claude/agents/ci-red-triage.md"), "utf8");
-  assert.match(triage, /push\/PR dedupe/, "ci-red-triage must tell the dedupe from a superseded push");
+  assert.match(triage, /draft\/ready dedupe/, "ci-red-triage must tell the dedupe from a superseded push");
   const pagesCi = pagesWorkflow.split("\n  ci:")[1].split("\n  publishable:")[0];
   assert.match(pagesCi, /group: pages-gate-\$\{\{ github\.ref \}\}/);
   assert.match(pagesCi, /cancel-in-progress: false/,
@@ -392,19 +392,28 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
 
   const bin = path.join(dir, "bin"); fs.mkdirSync(bin);
   fs.writeFileSync(path.join(bin, "gh"),
-    '#!/usr/bin/env bash\n[ "${FAKE_GH:-}" = fail ] && exit 1\nurl="$2"; sha="${url#*head_sha=}"; sha="${sha%%&*}"\n' +
+    '#!/usr/bin/env bash\n[ "${FAKE_GH:-}" = fail ] && exit 1\nurl="$2"\n' +
+    'case "$url" in */jobs*) id="${url%/jobs*}"; id="${id##*/}"; node -e \'const m=JSON.parse(process.env.FAKE_JOBS||"{}");console.log(JSON.stringify({jobs:m[process.argv[1]]||[]}))\' "$id"; exit 0;; esac\n' +
+    'sha="${url#*head_sha=}"; sha="${sha%%&*}"\n' +
     'node -e \'const m=JSON.parse(process.env.FAKE_RUNS||"{}");console.log(JSON.stringify({workflow_runs:m[process.argv[1]]||[]}))\' "$sha"\n');
   fs.chmodSync(path.join(bin, "gh"), 0o755);
   const script = new URL("../../tools/ci/pages-reuse-verdict.sh", import.meta.url).pathname;
+  // A READY PR's run: the sweeps job ran and passed (a draft's is skipped).
+  const fullJobs = { 7: [{ name: "Per-circuit geometry sweeps", conclusion: "success" }] };
   const run = (over) => ({ id: 7, status: "completed", conclusion: "success", path: ".github/workflows/ci.yml", event: "pull_request", head_branch: "feature", html_url: "https://example.test/run/7", ...over });
   const verdict = (sha, runs, env = {}) => Object.fromEntries(cp.execFileSync("bash", [script, sha], {
     cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"],
-    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GITHUB_REPOSITORY: "o/r", DEPLOY_BRANCH: "deploy", FAKE_RUNS: JSON.stringify(runs), ...env },
+    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GITHUB_REPOSITORY: "o/r", DEPLOY_BRANCH: "deploy", FAKE_RUNS: JSON.stringify(runs), FAKE_JOBS: JSON.stringify(fullJobs), ...env },
   }).trim().split("\n").map((l) => l.split(/=(.*)/s).slice(0, 2)));
 
   assert.deepEqual(verdict(M2, { [D]: [run()] }), { reuse: "true", source: D, run: "https://example.test/run/7", fast_run: "" },
     "merge with a parent's exact tree + that parent's green PR run: reuse");
   assert.equal(verdict(M2, { [D]: [run({ event: "push" })] }).reuse, "true", "a branch push run counts too");
+  // A DRAFT PR's run is the fast tier (sweeps and smoke skipped) and concludes
+  // success all the same: never a gate, and a real gate after it still counts.
+  assert.equal(verdict(M2, { [D]: [run({ id: 8 })] }).reuse, "false", "a draft PR run (sweeps skipped) is not a gate");
+  assert.deepEqual(verdict(M2, { [D]: [run({ id: 8 }), run()] }), { reuse: "true", source: D, run: "https://example.test/run/7", fast_run: "" },
+    "…the ready run beside it is");
   // THE FAST TIER IS NOT A GATE. Run 2237 reused the merge commit's own
   // deploy-branch push run (guards + node suites only) as if it were the full
   // gate; the head_sha candidate is checked first, so this must be rejected
@@ -891,12 +900,19 @@ test("docs-only pushes do not start CI (Actions minutes, 2026-09-02)", () => {
   // this workflow, and the two heavy browser jobs must opt out of that tier by
   // the one shared expression.
   assert.doesNotMatch(pushBlock, /branches-ignore/, "deploy-branch pushes must reach ci.yml for the fast tier");
-  const fastTier = "!(github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && inputs.concurrency_key == '')";
+  // A DRAFT PR is the fast tier too (2026-09-24, decision 1c): the heavy jobs
+  // wait for `ready_for_review`, which must therefore be a trigger type.
+  const fastTier = "!(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft)))";
+  assert.match(prBlock, /types: \[opened, synchronize, reopened, ready_for_review\]/,
+    "marking a draft ready must start the full tier");
+  // Only the deploy branch pushes start a run; a topic branch runs through its PR.
+  assert.match(pushBlock, /branches:\n\s+- claude\/f1-game-project-26h3ng\n/, "push must be scoped to the deploy branch");
   const smokeJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  smoke:\n"), ciWorkflow.indexOf("\n  driving-model:\n"));
   // BOUNDED AT ship-filter, which sits between these two since 2026-09-22 —
   // an unbounded slice to `smoke:` would read that job as part of the sweeps.
   const sweepsJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  sweeps:\n"), ciWorkflow.indexOf("\n  ship-filter:\n"));
-  for (const [name, job] of [["smoke", smokeJob], ["sweeps", sweepsJob]]) {
+  const shipFilterJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  ship-filter:\n"), ciWorkflow.indexOf("\n  smoke:\n"));
+  for (const [name, job] of [["smoke", smokeJob], ["sweeps", sweepsJob], ["ship-filter", shipFilterJob]]) {
     assert.ok(job.includes(`    if: \${{ ${fastTier} }}`), `${name} must sit out the deploy branch's fast tier with the shared expression`);
   }
   for (const name of ["guards", "node-suites", "sweeps-parts", "driving-model", "select"]) {

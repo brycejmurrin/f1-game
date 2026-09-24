@@ -71,7 +71,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_203 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_204 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -283,6 +283,7 @@ _203 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `music-lib.js` | `MusicLib` | tag | MusicLib — bring your own music. |
 | `spotify.js` | `SpotifyMusic` | tag | SpotifyMusic — OPTIONAL, PERSONAL-USE Spotify Premium soundtrack for Apex 26. |
 | `rivals.js` | `RivalAudio` | tag | RivalAudio — the field around you, reduced to the player's TRACK frame for js/audio/engine.js, which owns the sound and deliberately does no track maths. |
+| `car-sfx.js` | `CarSfx` | tag | CarSfx — the player car's contact sounds, reduced to four 0..1 levels for GameAudio.setCarSfx, plus the pit-stop wheel guns on the stop's edges. scrub fronts… |
 | `radio-voice.js` | `RadioVoice` | tag | The radio banner, spoken aloud by the browser's own speech synthesiser. |
 | `announcer.js` | `Announcer` | tag | The pre-race announcer: "Welcome to Apex 26…", read over the loading flyby. |
 | `panel.js` | `AudioPanel` | tag | MUSIC & SOUND panel — the mixer plus the master-sound plumbing. |
