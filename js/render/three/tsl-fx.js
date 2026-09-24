@@ -42,7 +42,15 @@
         m.polygonOffsetFactor = -12;
         m.polygonOffsetUnits = -24;
       }
-      if (o.doubleSided) m.side = THREE.DoubleSide;   // GLX disables CULL_FACE
+      // GLX disables CULL_FACE and draws ONE pass. three splits a transparent
+      // DoubleSide material into a back pass and a front pass unless
+      // forceSinglePass is set — two draws and two pipelines per FX record, and
+      // compileAsync builds neither of them (it compiles the DoubleSide state),
+      // so the particle groups compiled both mid-race even when warmed
+      // (PERF-FINDINGS §2ah, pipeline keys differing only in side 2 vs 1/0).
+      // Every double-sided FX surface is a billboard, a road ribbon or a flat
+      // decal, where the back/front split orders nothing.
+      if (o.doubleSided) { m.side = THREE.DoubleSide; m.forceSinglePass = true; }
       m.lights = false;
       m.customProgramCacheKey = () => (o.key || "tlx-fx") + (m.mrtNode ? "-mrt" : "");
       return m;

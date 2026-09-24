@@ -366,7 +366,17 @@ const Announcer = (function () {
      * so a caller can drop the tail). The old join(" ") threw that structure
      * away and asked the engine to re-derive it from punctuation.
      */
-    function speak(lines, budgetMs) {
+    /* THE CUE LANDS ON THE CUT. "…Let's go racing" is the line the player is
+     * waiting for, and read straight through it arrived eight seconds into a
+     * 24 s flyby, followed by sixteen seconds of silent cinematic. play() asks
+     * for the LAST line to be HELD until it will finish ~LAND_MS before the
+     * budget ends, so the cue and the flyby's final shot share the beat. Never
+     * earlier than the chain would reach it anyway: the hold only ever inserts
+     * a pause, so a script that already fills the budget is read unchanged.
+     * preview() (the editor's PLAY) and sample() do not land: an author
+     * pressing PLAY wants to hear the read, not sit through the gap. */
+    const LAND_MS = 600;
+    function speak(lines, budgetMs, landLast) {
       // MASTER SOUND gates this like everything else. speechSynthesis is not in
       // the WebAudio graph, so nothing else silences it — a player who turned
       // sound off and then heard a voice would have found a bug, not a feature.
@@ -390,10 +400,23 @@ const Announcer = (function () {
       }
       const vol = volume();
       const gen = ++generation;
-      let i = 0;
+      const t0 = Date.now();
+      // When the last line must START to finish LAND_MS before the budget ends.
+      // Estimated at the rate it will actually be spoken at (seconds() is the
+      // same slow words-per-second fit() budgets with, so it errs early).
+      const landAt = landLast && budgetMs > 0 && parts.length > 1
+        ? t0 + budgetMs - seconds(parts[parts.length - 1], tune.rate) * 1000 - LAND_MS : 0;
+      let i = 0, held = false;
       const next = () => {
-        if (gen !== generation) return;              // a newer read, or stop(), owns the synth now
+        if (gen !== generation || held) return;      // a newer read, or stop(), owns the synth now
         if (i >= parts.length) { speaking = null; return; }
+        const wait = i === parts.length - 1 && landAt ? landAt - Date.now() : 0;
+        // `held` also swallows a second onend/onerror for the line before —
+        // one hold, one cue, however noisy the engine's events are.
+        if (wait > 0) { held = true; setTimeout(() => { held = false; if (gen === generation) say(); }, wait); return; }
+        say();
+      };
+      const say = () => {
         const u = new Utter(parts[i++]);
         u.voice = voice; u.pitch = tune.pitch; u.rate = tune.rate; u.volume = vol;
         u.onend = () => { if (gen === generation) next(); };
@@ -425,7 +448,7 @@ const Announcer = (function () {
        *  the caller can tell "off" from "spoke" without reading storage. */
       play(info, budgetMs) {
         if (!on) return false;
-        return speak(scriptFor(info, budgetMs), budgetMs);
+        return speak(scriptFor(info, budgetMs), budgetMs, true);
       },
       /** The editor's PLAY button: speaks regardless of the player's toggle,
        *  because pressing play in an authoring panel IS the consent. Master
