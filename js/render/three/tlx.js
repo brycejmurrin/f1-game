@@ -2481,6 +2481,8 @@ const TLX = (function () {
         // picture TLX drew before any of this — so the honest answer to "can
         // this backend do it" is yes, with a runtime floor.
         hasPerChunkLights: true,
+        // BAKED LAMP POOLS: tsl-lit reads frame.lampBake in updateFrame.
+        hasLampBake: true,
         /** The last per-chunk lamp bake: {on, lamps, chunks, idx, gw, gh, why}
          *  or null before the first chunked draw. Read by __apex.lightState(). */
         lampGridState() { return _lampGridState; },
