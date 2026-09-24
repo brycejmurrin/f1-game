@@ -137,10 +137,12 @@ test("trim(from) drops the primitive records and the live-buffer set", () => {
 // P1 (docs/notes/SCENERY-QA-PLAN.md §2b): the build strips never-visible prop
 // triangles from the INDEX buffer only (js/track/core/hidden-faces.js). Pinned
 // per circuit at the measured share, deterministic across rebuilds, vertex
-// buffer untouched, every surviving index in range. Measured 2026-09-24.
+// buffer untouched, every surviving index in range. Measured 2026-09-24,
+// re-measured after P2 moved the grandstand shell out from behind the crowd
+// (fewer rows are enclosed, so fewer are stripped).
 const STRIP = {
-  monaco: { before: 312792, after: 267105 },
-  monza: { before: 341160, after: 287606 },
+  monaco: { before: 312780, after: 270575 },
+  monza: { before: 341148, after: 300825 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {
