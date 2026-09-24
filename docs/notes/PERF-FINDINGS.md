@@ -5131,3 +5131,76 @@ context on three's WebGL2 control leg once (pad ON); the pad-ON rerun (228)
 and round 2 did not, pad OFF never did (0/2), and that leg's driven window
 carries 5.4-5.7 s callbacks either way — the likelier trigger. Not cleared
 outright; `tlxInstPad=0` is the player-side off switch if it ever recurs.
+
+## 2af. What is left on three.js/WebGPU, and the plan for it (2026-09-24)
+
+Investigation only — no game code changed. Web research (utsubo "100 tips" r186,
+three.js #30560, the BundleGroup docs, threejsroadmap "Profiling WebGPU") checked
+against the vendored r186 and `js/render/three/`.
+
+**Facts established from the r186 source** (`vendor/three-0.186.0/three.webgpu.min.js`):
+
+- Outside `compileAsync()` the WebGPU backend calls the blocking
+  `device.createRenderPipeline`; `createRenderPipelineAsync` is reached only with a
+  promises array, which only `compileAsync` passes. Node codegen (`NodeBuilder.build`)
+  is synchronous on the render path too. Everything the warm misses stalls the frame.
+- `compileAsync(scene, camera)` walks `_projectObject` — it skips `visible === false`
+  and frustum-culled objects. Our instanced batches start `visible = false`
+  (`tlx.js` createInstancedBatch) and pooled meshes exist only once drawn, so the
+  warm compiles what the grid can see and nothing else.
+- Pipelines are keyed per render context (target formats, MRT, samples): the scene
+  warm does not cover the sun caster pass (`castScene`, its own Scene), the PCSS
+  blocker quad, or post quads compiled under a different MRT.
+- On WebGPU a `BatchedMesh` is ONE render object: `draw()` loops `drawIndexed` per
+  range on one pipeline and one bind group; WebGL2 uses `WEBGL_multi_draw`.
+  three #30560 (open) — per-object UBO cost makes many plain meshes 2-4x slower on
+  WebGPU than WebGL; the maintainer's workaround is instancing/batching.
+
+**What #228 was, split by risk** (its revert, e837853, is the whole list):
+
+| part | risk to the picture |
+|---|---|
+| vendor patch 7 — every pipeline async, `draw()` SKIPS an object whose pipeline has not landed | skip semantics: a one-shot render (snap-cached sun map, env probe face, a garage frame) keeps the hole |
+| vendor patch 8 — codegen deferred, object SKIPPED until its node state lands | same, plus it drew black once already (census 211: luma 3.2) before the render-state hold; the most likely black-screen cause |
+| vendor patch 6 — `getDynamicCacheKey` scratch array (upstream PR #34553, r187) | none: same key producer and consumer |
+| shadow `warm()` of castScene + blocker under their targets | none: compileAsync only |
+| post warm keeps the live MRT, compiles the LIVE quad, no 3 s gate | none: compileAsync only |
+| material-key quantisation (ERS blink, brake glow, rear lights, exhaust alpha) and key memo | none: fewer distinct materials |
+| NEW_MESH_BUDGET 24/present | deferred draws (visible pop-in of distant scenery) |
+| ssrTag MRT node built once (tsl-fx.js) | none |
+| coach `jsonClone`, ghost `TextEncoder` reuse | none (not render) |
+
+**Draw mix, measured** (`scratch/drawcount-probe.mjs`, montreal, TLX/WebGL2 on
+SwiftShader, five jumps, render objects per frame across ALL passes):
+113-297 per frame, **87 % non-instanced**; the non-instanced draws are track
+`chunk` meshes — 18-150 in the main pass plus 36-49 into a 512² target — then
+22 car-part meshes and ~20 post quads. Chunks of one `drawChunked` record share
+material, model matrix and the lamp grid (a single shared uniform set, baked
+once per present), so only their geometry differs.
+
+**Plan, in order** (each step its own commit, each A/B'd on `gpu-census.yml`
+driven montreal against the previous step, each behind an `apex26.` off-switch):
+
+1. **Re-land #228's zero-risk half** — the rows marked "none" above: shadow and post
+   warms, material-key quantisation, the MRT node, patch 6. No skip semantics
+   anywhere. Expect most of #228's post/shadow compile reduction; gate on luma and
+   `gpuErrors` in the garage AND the race on the three.js/WebGPU leg.
+2. **Reveal-all warm** — during the lights, set every instanced batch and every
+   chunk visible (`perObjectFrustumCulled` off), `compileAsync` the scene, the
+   castScene under `sunRT`, then restore. Also `compileAsync(object, camera, scene)`
+   for not-yet-added content. Target: `stack:` compiles in the driven window → ~0.
+3. **Chunks → `BatchedMesh`** — one per `drawChunked` record, our own cull
+   driving `setVisibleAt`. Precondition: every chunk of a record packs to the same
+   attribute layout (the pack can leave one chunk Float32 and another half — force
+   the record's widest). Must keep the mirror-release and env-probe rules above
+   §2m. Target: 40-150 render objects → a handful; measure CPU frame time, not fps.
+4. **Per-pass GPU timestamps** — split `gpuMs` into sun/car/lamp shadow, scene and
+   post (`resolveTimestampsAsync` between passes) so the next decision (cascaded
+   `CSMShadowNode`, render bundles) is made on numbers.
+5. **Only if 1-4 leave hitches: patches 7/8 WITHOUT skipping** — e.g. async
+   pipelines only for objects first seen off-screen/far, or a draw-with-fallback
+   material while the real one compiles, never a hole.
+
+Not planned: occlusion queries (open track, results a frame late), GPU-driven
+indirect draws (a rewrite for instance counts we do not have), render bundles
+before step 3 (our culler toggles visibility every frame, which re-records them).
