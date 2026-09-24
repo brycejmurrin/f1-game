@@ -166,6 +166,10 @@ interface DebugCam {
   fov: number;
   far?: number;
   fog?: unknown;
+  /** Radians; the FREE CAMERA's ROLL dial (js/camera/free-cam.js). Absent = level. */
+  roll?: number;
+  /** Render through the flyby's lens (FlybySeq.FAR / FOG / NEAR). */
+  cine?: boolean;
 }
 
 /** The horizon-facing sky override __apex.sky() installs, or null. */
@@ -792,6 +796,7 @@ declare const Menus: GameModuleFactory;
 declare const NetLobby: GameModuleFactory;
 declare const NetPlay: GameModuleFactory;
 declare const Photomode: GameModuleFactory;
+declare const FreeCam: GameModuleFactory;
 declare const Quali: GameModuleFactory;
 declare const QualiSheet: GameModuleFactory;
 declare const RaceControl: GameModuleFactory;

@@ -884,6 +884,8 @@ const api = {
     return { speed: +(G.player.speed || 0).toFixed(2), vLat: +(G.player.vLat || 0).toFixed(2) };
   },
 
+  // the FREE CAMERA panel: none = state, {eye,target,fov,roll,lens,speed} = place, {snap:"car"|"corner",n} = snap, false = exit
+  freeCam(opts) { return typeof FreeCam !== "undefined" ? FreeCam.cmd(opts) : false; },
   view(opts) {
     if (!G.track) return false;
     if (opts === "chase" || (opts && opts.mode === "chase")) { G.dbgCam = null; return { mode: "chase" }; }
