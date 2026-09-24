@@ -453,7 +453,7 @@ const TrackHiddenFaces = (function () {
     return [kept, nEnc, nBur, nBot];
   }
 
-  function compact(idx, keep, kept, T) {
+  function keptIndices(idx, keep, kept, T) {
     const out = new Uint32Array(kept * 3);
     let w = 0;
     for (let t = 0; t < T; t++) if (keep[t]) { out[w++] = idx[t * 3]; out[w++] = idx[t * 3 + 1]; out[w++] = idx[t * 3 + 2]; }
@@ -485,7 +485,7 @@ const TrackHiddenFaces = (function () {
     const n = classify(pos, idx, mat, T, G, S.B, enc, ceil, groundY, keep);
     const kept = n[0];
     stats.enclosed = n[1]; stats.buried = n[2]; stats.bottom = n[3];
-    if (kept !== T) geo.idx = compact(idx, keep, kept, T);
+    if (kept !== T) geo.idx = keptIndices(idx, keep, kept, T);
     stats.trisAfter = kept;
     stats.ms = now() - t0;
     return stats;
