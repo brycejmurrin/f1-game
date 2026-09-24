@@ -65,6 +65,50 @@ Lead:
 4. Open the PR.
 5. Use C's numbers to decide **b**.
 
+### Results of the execution round
+
+**A (e, live-only flag): merged as ba13071c6.**
+- A lamp is live-only when its lens is < 3 m above the baked surface under it, or
+  cosOuter > 0.9. It is skipped by the bake, and every backend packs a flag in a
+  spare lane:
+  - GLX: `uLight[li+3].y`
+  - WGX: `Light.cone.w`, in both the frame and the per-chunk pack
+  - TLX: `lampDir.w` and the per-chunk texture
+- The shaders use `bakeW*(1-lo)` for the step-aside and the carve.
+- Two lamps per track were flagged, all 2.5 m ground fixtures. No track has a
+  cone with cosOuter above 0.9.
+
+| track | worst before | worst after |
+|---|---|---|
+| Monza | k1380 4.91× | k1442 2.64× (bl 2.65 vs tl 1.0) |
+| Vegas | k1505 2.24× | k8 1.44× (1.5 vs 1.05) |
+| Singapore | k1189 1.76× | 1.24× |
+
+What remains is the dim cone edge of ordinary 8 m fixtures: small in absolute
+terms and not a hotspot.
+
+**B (g): merged as b6c399c28.**
+- TLX and WGX free the bake after 120 frames with it off. WGX destroys the texture
+  after the frame's submit.
+- The texel budget is now exact: Monza was 600×1001, over its 600 k budget.
+- The **mobile half budget was not shipped.** Vegas interior p95 goes from 7.3 %
+  to 14.4 % at 300 k, and is still 10.7 % at 400 k.
+
+**C (b, measurement): wet nights.** `scratch/wet-lamp-share.cjs`, Singapore,
+mean of 5 spots, shares for 0–120 m.
+
+| case | diffuse | bounce | spec | spec from lamps outside the set, 250–400 m (cap 40 / 24 / 16) |
+|---|---|---|---|---|
+| wet, wetness 0.5 | 71 | 6 | 23 | 7 / 15 / 18 % |
+| wet, wetness 1 | 36 | 12 | 52 | 18 / 35 / 39 % |
+| rain, wetness 1 | 59 | 18 | 23 | 13 / 30 / 36 % |
+
+- **Desktop:** at most 18 % from outside the set, so the entry ramp is enough.
+- **Phones:** 35–39 % from outside the set. Option 1 is shipped as af5e66753: on
+  `gfx.mobileTier` with wetness > 0.3, PER-CHUNK LAMPS floors at 0.6, road
+  included; the governor shed still wins.
+- **Option 2 (a baked lobe) is not justified:** the pops are 200 m or more out, in fog.
+
 ### e. Over-bright hotspots: the live-only flag (small–medium)
 
 **Symptom.** A bright smear about 2 m across under a few fixtures:
