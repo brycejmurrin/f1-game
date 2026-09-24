@@ -45,6 +45,26 @@ Singapore at night, passed for all four renderers on #246 and again on #247
    - confirm lamps and halos step smoothly
    - confirm the decal sits on the road through Singapore's elevation changes
 
+### Execution (2026-09-24, after #250)
+
+Three subagents work in parallel, each in its own git worktree based on 8a1d988dc.
+Each one commits locally and does not push. The lead session merges their commits
+onto `claude/pr-233-fix-deploy-iu9wfs`, runs the browser checks and the
+gpu-census (subagents cannot launch browsers), and opens one PR.
+
+| Agent | Item | Files it owns | Deliverable |
+|---|---|---|---|
+| A | **e**: live-only flag | `lamp-bake.js`; the light packing in `glx.js` / `wgx.js` / `tlx.js`; `glsl-lit.js`, `tsl-lit.js`, `wgsl-chunks.js` (the step-aside and carve only); tests | Commit, plus parity-harness numbers before and after |
+| B | **g**: mobile size and TLX/WGX freeing | `lamp-bake.js` (`MAX_TEXELS` per call), `game.js` bake call site (the mobile argument), `tsl-lit.js` `setLampBake` off-path, `wgx.js` `_syncLampBake` off-path | Commit, plus the parity error at 300 k vs 600 k texels |
+| C | **b**: wet-night measurement | a new `scratch/` harness only (no shipped code) | Table: share of each lamp's on-road luminance that is diffuse, bounce and specular, dry vs wet, at 5 Singapore spots, from the shader formulas on the CPU |
+
+Lead:
+1. Merge A and B.
+2. Run the unit tests and a GLX boot.
+3. Run gpu-census with a forced tier (also covers the #250 hardware check).
+4. Open the PR.
+5. Use C's numbers to decide **b**.
+
 ### e. Over-bright hotspots: the live-only flag (small–medium)
 
 **Symptom.** A bright smear about 2 m across under a few fixtures:
