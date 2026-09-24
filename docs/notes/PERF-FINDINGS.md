@@ -5450,3 +5450,40 @@ soft-blit readback allocates a full frame (census/soft path only); the godray ch
 (march + 4 half-res blurs) runs every frame; post ping-pong swaps textures on shared
 materials ~14x/frame. Upstream candidates (research subagent): #34506
 (`compileAsync` render-state fix, dev), #34637/#34531 (codegen size/time, r187).
+
+## 2ak. Backlog pass 1: one caster pool per shadow target, three per-frame trims (2026-09-24)
+
+Checked against the code before acting (§2aj's list came from a read-only
+subagent): the **env-probe** item does not apply to players — TLX's probe is opt-in
+(`apex26.tlxEnvProbe=1`, `_envOptOut`), so it is left alone.
+
+**Shadow caster pools per target** (`tlx-shadow.js`). The sun, car and each lamp pass
+shared ONE slot pool, so slot i held whichever caster the last pass of any kind put
+there; at night the car and lamp passes alternate every frame, so every used slot
+changed `.geometry` every pass (three re-runs `setGeometry` on its RenderObject), and
+each short pass also parked the whole pool the last sun rebuild had grown. Now
+`pools` is keyed by render target: a slot keeps its caster between passes of the
+same kind; `beginPass` hides AND parks only the slots the previous target's pass
+showed (the `parkedGeo` rule — a target that never runs again pins nothing, and
+parking costs no `setGeometry`, since three compares against the geometry a
+RenderObject last RENDERED with); `endPass` parks only `[used, prevUsed)`.
+
+Evidence (Lavapipe WebGPU, montreal night, `scratch/ab-frames.mjs` +
+`png-diff.mjs`, frozen `park`, deploy tip vs this tree): pixel diff 0.021-0.036 %
+against a same-tree floor of 0.015-0.038 %, luma equal, with and without
+`apex26.tlxForceHw=shadow`. What this box can exercise: sun (day) and lamp passes
+(~47/s at night, `scratch/shadow-pass-count.mjs`); the car pass does not run on a
+software adapter, so the night car/lamp alternation the change targets is a desktop
+path — the census is its only real-GPU check.
+
+**Per-frame trims** (`tlx.js`): the `apex26.tlxMirrorSweep` opt-in is read once at
+create instead of a `localStorage.getItem` every present; `resize()` (called from
+every `begin()`) caches the WebGL2 `MAX_TEXTURE_SIZE`/`MAX_RENDERBUFFER_SIZE`
+ceiling instead of two `getParameter` calls, an array and a `filter` per frame;
+`acquireMesh` stamps `__tlxSeen` from one clock read per present (`_poolNow`)
+instead of `performance.now()` per pooled draw (200-600 a frame).
+
+Braking compile probe on this tree: lap sync compiles 0, warm failed 0.
+tooling-fast 244/244. Remaining §2aj items (lamp-shadow static/dynamic split,
+draw-record pooling, godray rate, post ping-pong materials, SSR MRT loop skip)
+each change more than a line and want their own A/B.

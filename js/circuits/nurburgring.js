@@ -32,12 +32,11 @@
       grass:         [0.16, 0.36, 0.17],
       sunDir:        [0.50, 0.52, 0.42],
     },
-    elevations: [
-      { s: 0.18, halfM: 340, rise: -8.0 },   // drop out of the Mercedes-Arena
-      { s: 0.42, halfM: 460, rise: -12.0 },  // low ground through the back loop
-      { s: 0.66, halfM: 380, rise: 6.0 },    // Dunlop-Kehre rise
-      { s: 0.86, halfM: 420, rise: 11.0 },   // climb back to Veedol / the pits
-    ],
+    // Elevation comes from the surveyed SRTM bake in
+    // js/track/circuit-elevations.js (`node tools/gen/bake-elevation.mjs nurburgring`).
+    // Four authored cosine bumps used to leave long dead-flat plateaus between
+    // short ramps (~25% of the built lap under 0.5% grade) — the stair-step
+    // hills drivers felt. hasRealElevation(id) nulls any `elevations` key here.
     hwZones: [
       { s0: 0.100, s1: 0.180, hw: 6.2, ease: 0.012 },  // Mercedes-Arena complex
       { s0: 0.630, s1: 0.690, hw: 6.4, ease: 0.012 },  // Dunlop-Kehre

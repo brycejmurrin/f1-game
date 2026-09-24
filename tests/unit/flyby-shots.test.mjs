@@ -475,7 +475,7 @@ test("corners by character: slowest / fastest / lore resolve to filmable corners
     if (slow < 0 || fast < 0 || lore < 0) out.push(`${id}: a role missed every corner (${slow} ${fast} ${lore})`);
     else {
       if (!track._fbFilmable[slow] || !track._fbFilmable[fast] || !track._fbFilmable[lore]) out.push(`${id}: a role landed on an unfilmable corner`);
-      if (!(cs[slow].v <= cs[fast].v)) out.push(`${id}: slowest ${cs[slow].v} is faster than fastest ${cs[fast].v}`);
+      if (!(cs[slow].r <= cs[fast].r)) out.push(`${id}: slowest (r ${cs[slow].r}) is wider than fastest (r ${cs[fast].r})`);
     }
     return out;
   });
@@ -537,4 +537,113 @@ test("no racing line in a flyby frame", () => {
   assert.ok(call, "game.js still draws the driving line");
   assert.match(call, /!cine\b/, "the driving line is gated off in cinematic frames: " + call.trim());
   assert.match(call, /state !== "menu"/, "and off under the loading-screen flyby");
+});
+
+test("one corner, one shot: no flyby films the same corner twice", async () => {
+  // Roles resolve independently, and did collide: Monza's first and fastest
+  // were both T1, and 14 of 52 circuits filmed one corner twice (a third of
+  // varied loads). bindCorners() moves a clash to that role's next choice.
+  const bad = await withFleet(["monza", "bahrain", "mont_tremblant", "qatar", "jeddah", "nurburgring"], (id, track, g) => {
+    const F = g.sandbox.FlybySeq, out = [];
+    for (let seed = -1; seed < 12; seed++) {
+      const list = F.bindCorners(track, seed < 0 ? F.DEFAULT : F.vary(F.DEFAULT, seed));
+      const s = list.filter((sh) => sh.eye[0].at === "corner").map((sh) => F.cornerS(track, sh.eye[0].n));
+      for (let i = 0; i < s.length; i++) for (let j = i + 1; j < s.length; j++) {
+        const d = Math.abs(s[i] - s[j]), gap = Math.min(d, track.total - d);
+        if (gap < 120) out.push(`${id} ${seed < 0 ? "DEFAULT" : "seed " + seed}: corner shots ${i} and ${j} are ${gap.toFixed(0)} m apart`);
+      }
+    }
+    return out;
+  });
+  assert.deepEqual(bad, [], bad.join("\n"));
+});
+
+test("a NUMBERED corner is the author's: bindCorners never moves it, roles steer around it", async () => {
+  await withTrack("monza", (track, g) => {
+    const F = g.sandbox.FlybySeq;
+    const c = (n) => ({ at: "corner", n, off: -30, x: 15, y: 8 });
+    const sh = (id, n) => ({ id, dur: 0.25, ease: "inOut", eye: [c(n), c(n)], look: [c(n), c(n)], fov: [40, 40] });
+    // Monza's T1 and T2 share s = 592 (the Rettifilo's two halves), and a list may name one corner twice.
+    const list = [sh("a", 3), sh("b", 3), sh("c", 1), sh("d", 2), sh("e", "first")];
+    const b = F.bindCorners(track, list);
+    assert.deepEqual(b.slice(0, 4).map((s) => s.eye[0].n), [3, 3, 1, 2], "numbered corners play as authored");
+    const sFirst = F.cornerS(track, b[4].eye[0].n), s1 = F.cornerS(track, 1), s3 = F.cornerS(track, 3);
+    assert.ok(Math.abs(sFirst - s1) >= 120 && Math.abs(sFirst - s3) >= 120, "the role moved off the corners the author claimed");
+    return null;
+  });
+});
+
+test("the clearance grid index finds exactly what a full scan finds", async () => {
+  // insideProp/clearTrees query a grid instead of scanning every box (Monza's
+  // turn-first took 1.35 s to plan). Same answer, same first hit, everywhere.
+  await withTrack("monza", (track, g) => {
+    const F = g.sandbox.FlybySeq, b = F.blockers(track), B = F.bounds(track);
+    let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const scan = (p, m) => { for (const r of b) if (Math.abs(p[0] - r.x) < r.w / 2 + m && Math.abs(p[2] - r.z) < r.d / 2 + m && p[1] > r.y - r.h / 2 - m && p[1] < r.y + r.h / 2 + m) return r; return null; };
+    let hits = 0;
+    for (let i = 0; i < 4000; i++) {
+      const pick = b[(rnd() * b.length) | 0];
+      const p = i % 2 ? [pick.x + (rnd() - 0.5) * pick.w * 1.4, pick.y + (rnd() - 0.5) * pick.h, pick.z + (rnd() - 0.5) * pick.d * 1.4]
+                      : [B.x + (rnd() - 0.5) * B.rad * 2, rnd() * 40, B.z + (rnd() - 0.5) * B.rad * 2];
+      const m = [0, 2.5, 7][i % 3];
+      const want = scan(p, m), got = F.insideProp(track, p, m);
+      assert.equal(got, want, `point ${p.map((v) => v.toFixed(1))} margin ${m}`);
+      if (want) hits++;
+    }
+    assert.ok(hits > 500, `the probe points hit boxes (${hits})`);
+    return null;
+  });
+});
+
+test("the flyby's plans are made before it plays, not at each cut", () => {
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const warm = game.indexOf("FlybySeq.warm(track, flybyShots)"), run = game.indexOf("loadingScreen.run(loadingInfo(), go)");
+  assert.ok(warm > 0 && run > warm, "raceIntro warms the flyby's plans before the loading screen runs it");
+});
+
+test("the menu grid seats YOUR car where the race will start it, in every mode", async () => {
+  // grid-mine frames the player's slot. menuGridCars used to seat P12 always, so
+  // a time trial (you, alone, slot 0), a duel (P2 behind the rival), a
+  // qualifying/sprint/rev10 grid all filmed somebody else's car. flybyGridOrder
+  // is game.js module scope: evaluate the REAL function (with the real gridRule
+  // and gridOrderFor) against stubbed modes.
+  const vm = await import("node:vm");
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const fn = (name) => { const i = game.indexOf("function " + name + "("); assert.ok(i > 0, name); return game.slice(i, game.indexOf("\n}\n", i) + 3); };
+  const src = fn("gridRule") + fn("gridOrderFor") + fn("flybyGridOrder") + "flybyGridOrder();";
+  const mk = (n) => Array.from({ length: n }, (_, i) => ({ id: i, driverId: "d" + i, skill: i, isPlayer: i === 3 }));
+  const run = (o) => {
+    const cars = mk(o.n || 22), player = cars[3];
+    let draws = 0;
+    const ctx = {
+      cars, player, season: {}, raceGrid: o.rule || "tier", duelMode: !!o.duel,
+      isQuali: () => !!o.quali, isTimeTrial: () => !!o.tt, isChampionship: () => !!o.champ, gridFromQuali: () => !!o.qorder,
+      quali: { order: () => (o.qorder ? cars.slice().reverse() : null) }, SeasonCal: { grid: () => null, quali: () => false, rank: (a, b) => (a < b ? -1 : 1) },
+      Duel: { pick: (cs) => cs.filter((c) => !c.isPlayer).sort((a, b) => b.skill - a.skill)[0] },
+      netPlay: { active: () => false }, simRnd: () => { draws++; return 0.5; },
+    };
+    const order = vm.runInNewContext(src, ctx);
+    return { order, slot: order ? order.indexOf(player) : null, n: order ? order.length : 0 };
+  };
+  assert.deepEqual([run({}).slot, run({}).n], [11, 22], "a Grand Prix on pace order: P12");
+  assert.deepEqual([run({ tt: true }).slot, run({ tt: true }).n], [0, 1], "time trial: you, alone, on slot 0");
+  assert.deepEqual([run({ quali: true }).slot, run({ quali: true }).n], [0, 1], "qualifying lap: you alone");
+  const d = run({ duel: true });
+  assert.deepEqual([d.slot, d.n, d.order[0].id], [1, 2, 21], "duel: the rival on pole, you P2 — as gridUp lays [player, rival]");
+  assert.equal(run({ qorder: true }).slot, 18, "a qualifying order seats you where you qualified (reversed stub: 22-1-3)");
+  assert.equal(run({ qorder: true, rule: "rev10" }).slot, 18, "rev10 flips only the top ten");
+  assert.equal(run({ rule: "random" }).order, null, "a random grid is the race's draw: not knowable, so no grid-mine");
+});
+
+test("a random grid's flyby leaves out the shot of your car", async () => {
+  await withTrack("monza", (track, g) => {
+    const F = g.sandbox.FlybySeq;
+    const has = (l) => l.some((s) => [s.eye[0], s.eye[1], s.look[0], s.look[1]].some((p) => p.at === "slot"));
+    assert.ok(has(F.vary(F.DEFAULT, 5, true)), "known slot: grid-mine plays");
+    const v = F.vary(F.DEFAULT, 5, false);
+    assert.ok(!has(v) && v.length === F.DEFAULT.length - 1, "unknown slot: grid-mine is dropped, the rest stays");
+    F.setPlayerSlot(null); assert.equal(F.slotKnown(), false);
+    F.setPlayerSlot(11); assert.equal(F.slotKnown(), true);
+    return null;
+  });
 });

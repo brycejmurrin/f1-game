@@ -817,6 +817,7 @@ declare const SetupCamera: GameModuleFactory;
 declare const SetupUI: GameModuleFactory;
 declare const RaceSettings: GameModuleFactory;
 declare const RivalAudio: GameModuleFactory;
+declare const CarSfx: GameModuleFactory;
 declare const SteerTuning: GameModuleFactory;
 declare const TunerPanel: GameModuleFactory;
 declare const UiScale: GameModuleFactory;

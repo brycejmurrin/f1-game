@@ -246,6 +246,86 @@ test("a rebake on the same track waits for the input to settle, then runs in sli
   assert.equal(LB.forTrack(trk, moved, 6.0, 3000), b, "then it is cached");
 });
 
+test("a sliced rebake yields at least once per tile, so one frame never queries more than a tile of terrain", () => {
+  // A slow terrain (~20 us/query) makes a whole-lamp or whole-splat step blow the
+  // 3 ms slice; the bound is structural: one step touches at most one slot.
+  let calls = 0;
+  const slowY = () => { calls++; const t = performance.now(); while (performance.now() - t < 0.02); return 0; };
+  const LB = load({ Tracks: { terrainY: slowY }, performance });
+  const trk = {};
+  const lights = [];
+  for (let i = 0; i < 12; i++) lights.push(...LAMP_A.map((v, k) => k === 0 ? i * 30 : k === 6 ? 60 : v));
+  LB.forTrack(trk, lights, 4.0);
+  const moved = lights.slice();
+  LB.forTrack(trk, moved, 6.0, 0);
+  let worst = 0, b = null, n = 0;
+  while (n++ < 20000) {
+    calls = 0;
+    b = LB.forTrack(trk, moved, 6.0, 1000);
+    worst = Math.max(worst, calls);
+    if (b && b.gen > 1) break;
+  }
+  assert.ok(b && b.gen > 1, "the sliced rebake lands");
+  assert.ok(worst <= 34 * 34 + 64, `one forTrack call queried ${worst} terrain texels (> one slot)`);
+});
+
+test("the atlas stays near-square: no side over WebGL2's guaranteed 2048, slot origins exact in half", () => {
+  const LB = load({ Tracks: { terrainY: () => 0 } });
+  for (const nLamps of [7, 37, 113, 241, 401]) {
+    const lights = [];
+    for (let i = 0; i < nLamps; i++) lights.push(...LAMP_A.map((v, k) => k === 0 ? (i % 23) * 97 : k === 2 ? Math.floor(i / 23) * 131 : v));
+    for (const bud of [LB.MAX_TEXELS, LB.DESKTOP_TEXELS]) {
+      const b = LB.bake(lights, () => 0, 4.0, null, bud);
+      assert.ok(b.atlasW <= 2048 && 2 * b.atlasH <= 2048, `${nLamps} lamps @${bud}: atlas ${b.atlasW}x${2 * b.atlasH}`);
+      assert.ok(b.atlasW * b.atlasH <= bud, "within the texel budget");
+    }
+  }
+  assert.equal((LB.TILE + 2) % 2, 0, "SLOT even: slot origins are even integers < 4096, exact in half float");
+});
+
+test("sync=false never blocks: a first bake mid-race is sliced and returns null until it lands", () => {
+  const LB = load({ Tracks: { terrainY: () => 0 } });
+  const trk = {}, lights = [];
+  for (let i = 0; i < 60; i++) lights.push(...LAMP_A.map((v, k) => k === 0 ? i * 9 : k === 2 ? (i % 12) * 40 : v));
+  assert.equal(LB.forTrack(trk, lights, 4.0, 0, false), null, "no bake in hand: nothing drawn baked yet");
+  let b = null, n = 0;
+  while (!b && n++ < 20000) b = LB.forTrack(trk, lights, 4.0, 0, false);
+  assert.ok(b, "the sliced first bake lands");
+  assert.deepEqual(Array.from(b.data), Array.from(LB.bake(lights, () => 0, 4.0).data), "sliced == synchronous");
+  assert.equal(LB.forTrack(trk, lights, 4.0, 0, false), b, "then cached");
+  LB.reset();
+  assert.ok(LB.forTrack(trk, lights, 4.0, 0, true), "sync=true bakes at once");
+});
+
+test("reset drops the cached bake and track, so the next forTrack bakes afresh", () => {
+  const LB = load({ Tracks: { terrainY: () => 0 } });
+  const trk = {}, set = [...LAMP_A];
+  const a = LB.forTrack(trk, set, 4.0);
+  LB.reset();
+  assert.equal(LB.liveOnlyAt([0, 0, 0], 0), 0, "no bake -> nothing flagged");
+  const b = LB.forTrack(trk, set, 4.0, 0);
+  assert.notEqual(b, a, "same set after reset bakes again, synchronously");
+  assert.ok(b.gen > a.gen);
+});
+
+test("the road splat leaves no hole on the outside of a tight turn", () => {
+  const LB = load();
+  // A hairpin: 40 nodes on a 6 m-radius arc, 12 m half-width — the outer verge
+  // sweeps ~3x the centreline step.
+  const n = 40, R = 6, px = new Float32Array(n), py = new Float32Array(n).fill(2), pz = new Float32Array(n);
+  const rx = new Float32Array(n), rz = new Float32Array(n);
+  for (let k = 0; k < n; k++) { const a = Math.PI * k / (n - 1); px[k] = R * Math.cos(a); pz[k] = R * Math.sin(a); rx[k] = Math.cos(a); rz[k] = Math.sin(a); }
+  const road = { n, total: Math.PI * R, px, py, pz, rx, rz, hw: new Float32Array(n).fill(12), lift: null };
+  const lamp = LAMP_A.slice(); lamp[0] = 0; lamp[2] = 10; lamp[6] = 40;
+  const b = LB.bake(lamp, () => null, 4.0, road);
+  let holes = 0;
+  for (let k = 3; k < n - 3; k++) for (const lat of [10, 12, 14]) {
+    const a = Math.PI * k / (n - 1), x = (R + lat) * Math.cos(a), z = (R + lat) * Math.sin(a);
+    if (halfToFloat(b.data[worldIdx(b, x, z) + 3]) !== 2) holes++;
+  }
+  assert.equal(holes, 0, `${holes} outer-verge texels missed by the splat`);
+});
+
 test("the road splat covers both edges out to the verge", () => {
   const LB = load();
   const n = 50, px = new Float32Array(n), py = new Float32Array(n).fill(4), pz = new Float32Array(n);
@@ -357,4 +437,13 @@ test("live-only lamps (lens < 3 m over its surface, or cosOuter > 0.9) stay out 
   const frame = [...TIGHT, ...LAMP_A, ...LOW, 1, 2, 3, 1, 0, 0, 5, 0, -1, 0, 0.9, 0.5, 0, 0, 0];
   assert.deepEqual([0, 1, 2, 3].map((s) => LB.liveOnlyAt(frame, s * 15)), [1, 0, 1, 0]);
   assert.ok(LB.gen() > 0, "gen names the drawing bake");
+});
+
+test("budget: phones keep the half-memory atlas, desktop spends it on resolution", () => {
+  const LB = load();
+  assert.equal(LB.budget({ mobileTier: true }), LB.MAX_TEXELS);
+  assert.equal(LB.budget({ isMobile: true }), LB.MAX_TEXELS);
+  assert.equal(LB.budget({ mobileTier: false }), LB.DESKTOP_TEXELS);
+  assert.equal(LB.budget(null), LB.DESKTOP_TEXELS);
+  assert.ok(LB.DESKTOP_TEXELS > LB.MAX_TEXELS);
 });

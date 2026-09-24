@@ -1,10 +1,10 @@
 {
   "images": "macos-latest",
   "track": "montreal",
-  "tod": "day",
+  "tod": "night",
   "clock": 12,
   "census_only": false,
   "force": "",
   "ls": "",
-  "leg": "step2c-brake-ring-variant-webgl2-warmplus-auto-2026-09-24"
+  "leg": "L1-webgpu-only-webgl2-copy-stall-NIGHT-2026-09-24"
 }

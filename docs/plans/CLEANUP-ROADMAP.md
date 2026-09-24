@@ -1,5 +1,10 @@
 # Cleanup roadmap — dedupe and extract (2026-09)
 
+> **Superseded as the ranked backlog** by
+> [`2026-09-24-refactor-readability.md`](2026-09-24-refactor-readability.md)
+> (impact×risk hotspots + Phase 0–2 sequence). Keep this page as the **shipped
+> carve log** and status of Tier A items that already landed.
+
 Structured pass across `js/`: remove duplicated helpers, peel cohesive chunks out of
 monoliths, lower line ratchets. **Not a rewrite** — IIFE globals, `<script>` load order,
 no ESM.
@@ -48,11 +53,11 @@ Eighteen parallel read-only bloat-auditor runs (see agent IDs in scratch matrix)
 | ✅ | **shared frustum helper** (js/render/shared/frustum.js) | 4 render copies | **Done** (PR #107) |
 | ✅ | **save-migrate** (js/career/save-migrate.js) | store.js (~100 ln) | **Done** (PR #108) |
 | ✅ | **race-settings + custom-team** | game.js (~690 ln) | **Done** (PR #110) |
-| 5 | res-row UI helper | duplicated row builders | **NEXT** |
-| 6 | lobby-codes | lobby.js (~230 ln) | Planned |
-| 7 | car-aero | car3d.js (~520 ln) | Planned |
-| 8 | copy-text clipboard helper | perf + elsewhere | Planned |
-| 9 | music-playback | engine.js | Planned |
+| ✅ | SettingRow (`js/ui/setting-row.js`) | enumerated preference rows | **Done** (landed; CLEANUP called this “res-row”) |
+| 6 | lobby-codes | lobby.js (~230 ln) | → readability plan #11 |
+| 7 | car-aero | car3d.js (~520 ln) | → readability plan #6 |
+| 8 | copy-text clipboard helper | perf + elsewhere | → readability plan #8 |
+| 9 | music-playback | engine.js | → readability plan #10 |
 
 ---
 
@@ -138,7 +143,7 @@ Review size is flexible: one carve per PR (safest) or batched Tier A slices (fas
 
 ## Next action
 
-1. Tier A next: **res-row UI helper** (`js/ui/`).
-2. Then lobby-codes, car-aero, copy-text, music-playback.
+Follow [`2026-09-24-refactor-readability.md`](2026-09-24-refactor-readability.md)
+Phase 1 order (clipboard → lobby-codes → car-aero → WGX seams → buildProps peel).
 
 Scratch working matrix (agent IDs, line-level BLOAT rows): `scratch/cleanup-roadmap-draft.md` (gitignored).

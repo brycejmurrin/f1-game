@@ -2021,14 +2021,17 @@ function makeCars() {
 // sorts on ONE simRnd() per car — the same draw gridUp() would have spent, so
 // the stream position after the grid is identical whichever rule ran
 // (makeCars' stream contract).
+function gridRule() {
+  const rule0 = isTimeTrial() ? "tier" : (isChampionship() && SeasonCal.quali()) ? "quali" : raceGrid;
+  return (rule0 === "random" && netPlay.active()) ? "tier" : rule0;
+}
 function gridOrderFor(base) {
   // RANDOM CANNOT BE DECIDED LOCALLY IN A ROOM. netplay's grid is
   // negotiation-free precisely because gridUp() runs identically on every peer
   // (js/net/netplay.js separateGrid) — but no seed crosses the wire, so each
   // peer would roll its own order and lay the humans into different boxes.
   // Fall back to the pace order every peer already agrees on.
-  const rule0 = isTimeTrial() ? "tier" : (isChampionship() && SeasonCal.quali()) ? "quali" : raceGrid;
-  const rule = (rule0 === "random" && netPlay.active()) ? "tier" : rule0;
+  const rule = gridRule();
   if (rule === "rev10" && base && base.length === cars.length) {
     return base.slice(0, 10).reverse().concat(base.slice(10));
   }
@@ -2385,6 +2388,7 @@ function _loadTrackBody(idx, def) {
     // resident at once. loadTrack is synchronous, so nothing can observe the
     // null between here and the assignment below.
     track = null;
+    if (typeof LampBake !== "undefined") LampBake.reset();   // its cache holds the old track + atlas too
     // Pass the active backend so tracks.js builds its meshes through the façade
     // (opts.gfx) instead of reaching the GLX global directly. On the explicit
     // or fallback WebGL2 path gfx===GLX; on TLX/WGX it is that backend
@@ -3623,11 +3627,11 @@ function menuGridCars() {
   const rng = _simRngState;
   try {
     makeCars();
-    const order = cars.slice(), pi = order.findIndex((c) => c.isPlayer);   // seat the player where the race grid will (P12), for the flyby's grid-mine shot
-    if (pi >= 0) order.splice(Math.min(11, order.length - 1), 0, order.splice(pi, 1)[0]);
-    FlybySeq.setPlayerSlot(order.findIndex((c) => c.isPlayer));
-    for (let i = 0; i < order.length; i++) {
-      const c = order[i], slot = TrackMesh.gridSlot(track, i);
+    const order = flybyGridOrder();
+    cars = order || cars;
+    FlybySeq.setPlayerSlot(order ? order.indexOf(player) : null);   // null: not knowable yet, so no grid-mine shot
+    for (let i = 0; i < cars.length; i++) {
+      const c = cars[i], slot = TrackMesh.gridSlot(track, i);
       c.s = wrapS(slot.s); c.x = slot.x; c.xVis = c.x;
       const w = worldFromTrack(c.s, c.x, smp);
       c.px = w.x; c.pz = w.z;
@@ -3640,6 +3644,25 @@ function menuGridCars() {
     Log.warn("gfx", "menu grid failed", e);
   }
   _simRngState = rng;
+}
+
+/** THE GRID THE RACE WILL FORM, seated before it exists so the flyby's
+ *  grid-mine shot frames YOUR car: startRace's trims (quali/time trial: you
+ *  alone; duel: you and the rival the race grids ahead of you) and the race grid's
+ *  pre-orders (qualifying, sprint, rev10, revchamp) — else the pace order with
+ *  you at P12. Null for a RANDOM grid: its draw belongs to the race. Any simRnd()
+ *  spent here is rolled back by menuGridCars. */
+function flybyGridOrder() {
+  if (!player) return null;
+  if (isQuali() || isTimeTrial()) return [player];
+  if (duelMode) { const r = Duel.pick(cars); return r ? [r, player] : [player]; }
+  const base = gridFromQuali() ? quali.order(cars) : SeasonCal.grid(cars, season);
+  if (gridRule() === "random" && !base) return null;
+  const pre = gridOrderFor(base);
+  if (pre && pre.length === cars.length) return pre.slice();
+  const o = cars.filter((c) => c !== player);
+  o.splice(Math.min(11, o.length), 0, player);
+  return o;
 }
 
 function raceIntro(go) {
@@ -3656,7 +3679,8 @@ function raceIntro(go) {
   // And fly the shots the EDITOR saved, for the same reason: a list edited in
   // the pause menu is only read here, so every run picks up the latest one.
   reloadFlybyShots();
-  if (!flybyShots) flybyShots = FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0);   // a different flyby each load (never the sim RNG); an editor-saved list plays as authored
+  if (!flybyShots) flybyShots = FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0, FlybySeq.slotKnown());   // a different flyby each load (never the sim RNG); an editor-saved list plays as authored
+  if (track) FlybySeq.warm(track, flybyShots);   // plan every shot now, not at its cut
   loadingScreen.run(loadingInfo(), go);
 }
 /** WHAT THE LOADING SCREEN DESCRIBES: the circuit about to be raced, this
@@ -3704,6 +3728,7 @@ function drivingLineApi(trk) {
   return _dlApi;
 }
 const rivalAudio = RivalAudio.create(G);   // the field around you, for GameAudio.setRivals
+const carSfx = CarSfx.create(G);           // tyre scrub, lock-up, surface, pit limiter and wheel guns
 // Photo mode (js/camera/photo-cam.js).
 const { updatePhotoCam, enterPhotoMode, exitPhotoMode } = Photomode.create(G);
 // LIGHTING TUNER panel UI (js/lighting/tuner-panel.js).
@@ -4111,6 +4136,7 @@ function update(dt) {
     // The field around you: panned, distance-rolled and Doppler-shifted. Before
     // this there was no opponent audio at all, so a car alongside was silent.
     GameAudio.setRivals(rivalAudio.collect(player));
+    carSfx.update(player);
   }
 }
 
@@ -7179,7 +7205,7 @@ function render(dt) {
     // Paint-mode tails only: emitting tails ride the live loop, whose diffuse
     // (lampSh - bakeW) would erase their unbaked pool on the road.
     if (LT.lampBake > 0 && gfx.hasLampBake && !(LT.tailLightEmit > 0)) {
-      frame.lampBake = LampBake.forTrack(track, track._lights, LT.lampNearClamp);
+      frame.lampBake = LampBake.forTrack(track, track._lights, LT.lampNearClamp, undefined, false, LampBake.budget(gfx));
       frame.lampBakeScale = _floodRGB;
     }
     // PER-CHUNK LAMPS (experimental): hand the renderer the FULL baked lamp list

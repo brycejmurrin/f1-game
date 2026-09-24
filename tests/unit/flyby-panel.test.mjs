@@ -230,7 +230,7 @@ test("a bake keeps DEFAULT's rationale comments", () => {
   for (const c of comments) assert.ok(out.includes(c), "lost in the bake: " + c.trim());
   // A dropped shot takes its own comments; the others stay.
   const out2 = DEFAULT_RE.exec(bake(src, list.filter((s) => s.id !== "turn-mid")))[0];
-  assert.ok(!/Aimed THROUGH the corner/.test(out2), "turn-mid's own note leaves with it");
+  assert.ok(!/Held on the APEX/.test(out2), "turn-mid's own note leaves with it");
   assert.ok(/and then the grid you start from/.test(out2), "a section comment before a surviving shot stays");
 });
 
@@ -397,4 +397,14 @@ test("the structural half agrees too — what a PREVIEW is held to", () => {
     assert.deepEqual([...FP.shotErrors(list)], bakeShotErrors(list),
       "tools/shot/flyby.mjs --shots uses the bake's copy; the panel's saved list uses its own");
   }
+});
+
+test("the preview flies a COPY re-taken when the list's contents change", () => {
+  // FlybySeq caches plans and corner bindings per shot/list object, and the
+  // sliders edit the list in place: passing it straight to flybyCam previewed
+  // the first plan forever (a corner shot's x/y/off/corner did nothing).
+  const src = read("js/camera/flyby-panel.js");
+  assert.ok(!/flybyCam\(u, ensure\(\)\)/.test(src), "preview does not hand FlybySeq the list it edits in place");
+  assert.match(src, /flybyCam\(u, playable\(\)\)/, "preview flies playable()");
+  assert.match(src, /JSON\.stringify\(ensure\(\)\)/, "playable() keys its copy on the list's contents");
 });

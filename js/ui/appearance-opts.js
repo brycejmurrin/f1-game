@@ -5,7 +5,8 @@
    in css/tokens.css so fills/grads that derive from --red follow automatically.
 
    Stored values are read at EVAL so the first paint matches the player's pick.
-   UI wiring waits for the DOM. */
+   UI wiring waits for the DOM. Preset swatches + hex text fields sit beside
+   the SettingRow selects; a live preview strip mirrors --red / --accent. */
 const AppearanceOpts = (function () {
   "use strict";
 
@@ -34,9 +35,12 @@ const AppearanceOpts = (function () {
     violet: "#7a5cff",
     lime: "#b7e11b",
   };
+  // Named presets that tokens.css must define as :root[data-menu-accent=…].
+  const CSS_MENU_PRESETS = ["ember", "amber", "cyan", "violet", "lime"];
 
   const store = GameStore.store;
   const root = () => (typeof document !== "undefined" ? document.documentElement : null);
+  const byId = (id) => (typeof document !== "undefined" ? document.getElementById(id) : null);
 
   function oneOf(v, allowed, fallback) {
     const s = String(v == null ? "" : v);
@@ -150,22 +154,69 @@ const AppearanceOpts = (function () {
     el.style.setProperty("--accent-ink", pickInk(hex));
   }
 
+  function syncCustomRows() {
+    const menuRow = byId("pm-menuaccent-custom");
+    const hudRow = byId("pm-hudaccent-custom");
+    if (menuRow) menuRow.hidden = menuAccent !== "custom";
+    if (hudRow) hudRow.hidden = hudAccent !== "custom";
+    const menuIn = byId("pm-menuaccent-hex");
+    const hudIn = byId("pm-hudaccent-hex");
+    const menuTx = byId("pm-menuaccent-hextext");
+    const hudTx = byId("pm-hudaccent-hextext");
+    if (menuIn) menuIn.value = menuHex;
+    if (hudIn) hudIn.value = hudHex;
+    if (menuTx && document.activeElement !== menuTx) menuTx.value = menuHex;
+    if (hudTx && document.activeElement !== hudTx) hudTx.value = hudHex;
+    syncSwatches("pm-menuaccent-swatches", menuAccent, "menu");
+    syncSwatches("pm-hudaccent-swatches", hudAccent, "hud");
+  }
+
+  function chipHex(id, which) {
+    if (id === "custom") return which === "menu" ? menuHex : hudHex;
+    return resolveAccent(id, which === "menu" ? menuHex : hudHex);
+  }
+
+  function buildSwatches(containerId, which) {
+    const el = byId(containerId);
+    if (!el || el.dataset.built === "1") return;
+    el.dataset.built = "1";
+    for (const [id, label] of ACCENTS) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "pm-accent-chip" + (id === "custom" ? " pm-accent-chip-custom" : "");
+      btn.dataset.accent = id;
+      btn.setAttribute("role", "option");
+      btn.setAttribute("aria-label", label);
+      btn.title = label;
+      if (id !== "custom") btn.style.setProperty("--chip", chipHex(id, which));
+      btn.addEventListener("click", () => {
+        if (which === "menu") setMenuAccent(id);
+        else setHudAccent(id);
+      });
+      el.appendChild(btn);
+    }
+  }
+
+  function syncSwatches(containerId, selected, which) {
+    const el = byId(containerId);
+    if (!el) return;
+    const chips = el.querySelectorAll ? el.querySelectorAll(".pm-accent-chip") : [];
+    for (const btn of chips) {
+      const id = btn.dataset.accent;
+      const on = id === selected;
+      btn.setAttribute("aria-selected", on ? "true" : "false");
+      if (id === "team" || id === "custom") {
+        if (id === "custom") continue;
+        btn.style.setProperty("--chip", chipHex(id, which));
+      }
+    }
+  }
+
   function applyAll() {
     applyTheme();
     applyMenuAccent();
     applyHudAccent();
     syncCustomRows();
-  }
-
-  function syncCustomRows() {
-    const menuRow = typeof document !== "undefined" ? document.getElementById("pm-menuaccent-custom") : null;
-    const hudRow = typeof document !== "undefined" ? document.getElementById("pm-hudaccent-custom") : null;
-    if (menuRow) menuRow.hidden = menuAccent !== "custom";
-    if (hudRow) hudRow.hidden = hudAccent !== "custom";
-    const menuIn = typeof document !== "undefined" ? document.getElementById("pm-menuaccent-hex") : null;
-    const hudIn = typeof document !== "undefined" ? document.getElementById("pm-hudaccent-hex") : null;
-    if (menuIn) menuIn.value = menuHex;
-    if (hudIn) hudIn.value = hudHex;
   }
 
   function paintRow(id, value) {
@@ -195,7 +246,9 @@ const AppearanceOpts = (function () {
     return hudAccent;
   }
   function setMenuHex(v) {
-    menuHex = normHex(v, menuHex);
+    const next = normHex(v, null);
+    if (!next) return menuHex;
+    menuHex = next;
     store.set(K_MENU_HEX, menuHex);
     if (menuAccent !== "custom") menuAccent = "custom";
     store.set(K_MENU, menuAccent);
@@ -204,13 +257,37 @@ const AppearanceOpts = (function () {
     return menuHex;
   }
   function setHudHex(v) {
-    hudHex = normHex(v, hudHex);
+    const next = normHex(v, null);
+    if (!next) return hudHex;
+    hudHex = next;
     store.set(K_HUD_HEX, hudHex);
     if (hudAccent !== "custom") hudAccent = "custom";
     store.set(K_HUD, hudAccent);
     applyAll();
     paintRow("pm-hudaccent", hudAccent);
     return hudHex;
+  }
+
+  function wireHexPair(colorId, textId, write) {
+    const color = byId(colorId);
+    const text = byId(textId);
+    if (color) {
+      color.addEventListener("input", () => write(color.value));
+      color.addEventListener("change", () => write(color.value));
+    }
+    if (text) {
+      text.addEventListener("input", () => {
+        const n = normHex(text.value, null);
+        if (n) write(n);
+      });
+      text.addEventListener("change", () => {
+        write(text.value);
+        text.value = write === setMenuHex ? menuHex : hudHex;
+      });
+      text.addEventListener("blur", () => {
+        text.value = write === setMenuHex ? menuHex : hudHex;
+      });
+    }
   }
 
   function initUI() {
@@ -230,18 +307,10 @@ const AppearanceOpts = (function () {
       read: () => hudAccent,
       write: (v) => setHudAccent(v),
     });
-    const menuIn = document.getElementById("pm-menuaccent-hex");
-    if (menuIn) {
-      menuIn.value = menuHex;
-      menuIn.addEventListener("input", () => setMenuHex(menuIn.value));
-      menuIn.addEventListener("change", () => setMenuHex(menuIn.value));
-    }
-    const hudIn = document.getElementById("pm-hudaccent-hex");
-    if (hudIn) {
-      hudIn.value = hudHex;
-      hudIn.addEventListener("input", () => setHudHex(hudIn.value));
-      hudIn.addEventListener("change", () => setHudHex(hudIn.value));
-    }
+    buildSwatches("pm-menuaccent-swatches", "menu");
+    buildSwatches("pm-hudaccent-swatches", "hud");
+    wireHexPair("pm-menuaccent-hex", "pm-menuaccent-hextext", setMenuHex);
+    wireHexPair("pm-hudaccent-hex", "pm-hudaccent-hextext", setHudHex);
     syncCustomRows();
   }
 
@@ -261,13 +330,14 @@ const AppearanceOpts = (function () {
 
   return {
     K_THEME, K_MENU, K_HUD, K_MENU_HEX, K_HUD_HEX,
-    THEMES, ACCENTS, PRESET_HEX,
+    THEMES, ACCENTS, PRESET_HEX, CSS_MENU_PRESETS,
     theme: () => theme,
     menuAccent: () => menuAccent,
     hudAccent: () => hudAccent,
     menuHex: () => menuHex,
     hudHex: () => hudHex,
     hudUsesTeam: () => hudAccent === "team",
+    teamHex, resolveAccent, pickInk,
     setTheme, setMenuAccent, setHudAccent, setMenuHex, setHudHex,
     applyAll, applyMenuAccent, applyHudAccent, initUI,
   };

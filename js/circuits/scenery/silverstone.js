@@ -13,7 +13,7 @@
               forestEdge, ATM, modelGroup, overheadSpan, groundPatch,
               bleacher, broadleafFall, plane,
               groundedSegments, recordBarrier, circuitKit,
-              signBoard, seat,
+              signBoard, seat, bankedKerbStrip,
               spectatorHill, cameraTower, sponsorHoarding, bakedModel, along } = api;
       // backdrop() culls at its anchor point with onTrack(x, z, sz[0]/2 + 6).
       // Ask the same question first, so a hill that overlaps a parallel stretch
@@ -211,37 +211,98 @@
         [0.940,  1, 16, 52, {}],                             // National straight (old pits side)
       ]) stand(s, side, gap, len, opts);
 
+      // ── The Wing — wave-3 hero: zig-zag roof + red/white edge trim ──────────
+      // Research photo: long low white-grey slab, dark glass band, multi-peak
+      // wing roofline with a continuous red/white border on the leading edge.
+      // Four bays cover the pit-lane frontage; each bay owns one roof peak so
+      // the silhouette reads as the Wing, not a flat slab.
+      //
+      // These sit ON the pit lane (sceneryStartFrac 0.02). ALWAYS call
+      // modelGroup — do NOT preflight with onTrack and skip: the engine's pit
+      // complex must supersede all four (models.suppressed, reason
+      // "superseded by the pit complex"), same Portimão pattern pinned by
+      // new-hooks-vm. Skipping the call leaves suppressed=[] and CI red.
       {
-        const wingFracs = [0.455, 0.465, 0.475, 0.485];  // on the pit lane (engine 0.9745-0.019) under sceneryStartFrac 0.02
+        const wingFracs = [0.455, 0.465, 0.475, 0.485];  // on the pit lane under sceneryStartFrac 0.02
+        const ROOF_DK = [0.42, 0.44, 0.48];
+        const ROOF_LT = [0.88, 0.90, 0.94];
+        const SOFFIT  = [0.94, 0.93, 0.90];
+        const GLASS_D = [0.10, 0.14, 0.22];
         for (let i = 0; i < wingFracs.length; i++) {
           const a = anchor(k(wingFracs[i]), 1, 16);
           const b = [a.r, a.u, a.t];
-          const sweepPeak = Math.sin(((i + 0.5) / wingFracs.length) * Math.PI);
-          const roofY = 12.0 + sweepPeak * 1.8;
+          // Zig-zag: bays 0/2 peak high, 1/3 dip — angular wing silhouette.
+          const peakHi = (i % 2 === 0);
+          const roofY = peakHi ? 14.8 : 11.2;
+          const roofRise = peakHi ? 3.4 : 1.6;
           modelGroup(`silverstone-wing-facade-${i + 1}`, {
-            center: vadd(a.c, a.u, 7.8), size: [26, 16, 64], basis: b,
+            center: vadd(a.c, a.u, 8.2), size: [28, 18, 64], basis: b,
           }, (stage) => {
             stage._mat = MAT.CONCRETE;
             TrackGeom.addBox(stage, vadd(a.c, a.u, 5.5), [20, 11, 64], [0.86, 0.86, 0.88], b);
+            // Dark charcoal angular support blocks breaking the glass curtain.
+            stage._mat = MAT.METAL;
+            for (const tOff of [-22, -7, 7, 22]) {
+              TrackGeom.addBox(stage, vadd(vadd(a.c, a.t, tOff), a.u, 5.5),
+                [20.4, 11, 3.2], [0.28, 0.30, 0.34], b);
+            }
             stage._mat = MAT.GLASS;
-            TrackGeom.addBox(stage, vadd(a.c, a.u, 7.8), [20.2, 3.8, 62], [0.10, 0.14, 0.22], b);
+            TrackGeom.addBox(stage, vadd(a.c, a.u, 7.8), [20.2, 3.8, 62], GLASS_D, b);
             TrackGeom.addBox(stage, vadd(a.c, a.u, 7.8), [18, 3.2, 60], LIT_WIN, b);
+            // Stepped zig-zag roof bands — back spine tallest, leading edge thin.
             stage._mat = MAT.METAL;
             const bands = [
-              { rOff:  8, h: 1.7,  top: roofY + 0.9 },   // back spine (tallest)
-              { rOff:  0, h: 1.15, top: roofY + 0.35 },  // mid step
-              { rOff: -8, h: 0.55, top: roofY - 0.25 },  // thin cantilevered leading edge
+              { rOff:  9, h: roofRise,       top: roofY + 0.6 },
+              { rOff:  2, h: roofRise * 0.65, top: roofY - 0.4 },
+              { rOff: -6, h: 0.55,            top: roofY - 1.6 },
             ];
             for (const bd of bands) {
               const rc = vadd(vadd(a.c, a.r, bd.rOff), a.u, bd.top - bd.h / 2);
-              TrackGeom.addBox(stage, rc, [8.4, bd.h, 64], [0.90, 0.92, 0.96], b);
+              TrackGeom.addBox(stage, rc, [9.2, bd.h, 64], ROOF_LT, b);
             }
-            TrackGeom.addBox(stage, vadd(vadd(a.c, a.r, 8), a.u, roofY + 1.6), [0.5, 1.0, 60], [0.86, 0.88, 0.92], b);
+            // Cream soffit under the cantilevered leading edge.
+            TrackGeom.addBox(stage, vadd(vadd(a.c, a.r, -8.2), a.u, roofY - 2.0),
+              [4.0, 0.35, 62], SOFFIT, b);
+            // Red/white edge trim — THE Wing identity marker from trackside.
+            const TRIM_R = [0.88, 0.14, 0.14], TRIM_W = [0.96, 0.96, 0.94];
+            for (let ti = 0; ti < 16; ti++) {
+              const tOff = -30 + ti * 4;
+              const trimCol = (ti % 2 === 0) ? TRIM_R : TRIM_W;
+              TrackGeom.addBox(stage,
+                vadd(vadd(vadd(a.c, a.r, -8.6), a.t, tOff), a.u, roofY - 1.55),
+                [0.55, 0.55, 3.6], trimCol, b);
+            }
+            // Dark roof top surface over the highest band.
+            TrackGeom.addBox(stage, vadd(vadd(a.c, a.r, 9), a.u, roofY + 0.85),
+              [9.0, 0.4, 62], ROOF_DK, b);
           }, { required: true });
+        }
+        // Checkered podium backdrop recessed into the Wing's right bay (photo).
+        {
+          const a = anchor(k(0.482), 1, 22);
+          if (!onTrack(a.c[0], a.c[2], 12)) {
+            const b = [a.r, a.u, a.t];
+            modelGroup("silverstone-wing-podium-check", {
+              center: vadd(a.c, a.u, 5.5), size: [2.4, 12, 18], basis: b,
+            }, (stage) => {
+              stage._mat = MAT.FABRIC;
+              for (let row = 0; row < 6; row++) {
+                for (let col = 0; col < 8; col++) {
+                  const chk = ((row + col) % 2 === 0) ? [0.08, 0.08, 0.10] : [0.94, 0.94, 0.92];
+                  TrackGeom.addBox(stage,
+                    vadd(vadd(vadd(a.c, a.t, -7 + col * 2), a.u, 1.2 + row * 1.6), a.r, 0),
+                    [0.35, 1.5, 1.9], chk, b);
+                }
+              }
+            }, { required: true });
+          }
         }
       }
 
       stand(0.46, 1, 12, 110, { tiers: 3, roof: "cantilever", suites: true, endWalls: true, pylons: true });
+      // Tall stepped seating boxes flanking The Wing (research priority).
+      stand(0.442, 1, 14, 48, { tiers: 3, roof: "cantilever", endWalls: true, pylons: true });
+      stand(0.498, 1, 14, 48, { tiers: 3, roof: "cantilever", endWalls: true, pylons: true });
 
       // Placed at dist=32, anchored cleanly off track — uses tower() composite helper
       {
@@ -496,6 +557,32 @@
       // Extra kerb at The Wing area
       place(k(0.45), 1, 2, [0.4, 0.28, 6], RED);
       place(k(0.45), 1, 8, [11, 0.1, 10], CONC);
+
+      // ── Wave-3 identity kerbs — Copse + Maggotts–Becketts punctuation ─────
+      // Red/white rumble strips at the two signature high-speed corners; safer
+      // walls off so the apron stays open airfield runoff.
+      if (typeof bankedKerbStrip === "function") {
+        bankedKerbStrip(0.025, 0.055,  1, { safer: false, step: 3.0 }); // Copse outer
+        bankedKerbStrip(0.028, 0.052, -1, { safer: false, step: 3.0 }); // Copse inner
+        bankedKerbStrip(0.095, 0.145,  1, { safer: false, step: 3.0 }); // Maggotts–Becketts outer
+        bankedKerbStrip(0.100, 0.155, -1, { safer: false, step: 3.0 }); // Maggotts–Becketts inner
+      }
+
+      // Northamptonshire wheat-gold field patches — flat airfield infield feel.
+      {
+        const WHEAT = [0.72, 0.62, 0.28], WHEAT_L = [0.78, 0.68, 0.34];
+        for (const [sf, side, dist, w, ln, col] of [
+          [0.22, -1, 55, 28, 40, WHEAT],
+          [0.25,  1, 62, 32, 48, WHEAT_L],
+          [0.58, -1, 48, 26, 36, WHEAT],
+          [0.74,  1, 58, 30, 42, WHEAT_L],
+          [0.88, -1, 52, 24, 34, WHEAT],
+        ]) {
+          const a = anchor(k(sf), side, dist);
+          if (onTrack(a.c[0], a.c[2], Math.max(w, ln) * 0.45 + 8)) continue;
+          addBox(out, vadd(a.c, a.u, 0.12), [w, 0.22, ln], col, [a.r, a.u, a.t]);
+        }
+      }
 
       {
         for (let i = 0; i < 10; i++) {

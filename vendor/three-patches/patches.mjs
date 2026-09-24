@@ -99,6 +99,27 @@ export const PATCHES = [
       },
     ],
   },
+  {
+    id: 9,
+    title: "TextureNode.update rebuilds an unread UV matrix for every sampled texture on every draw",
+    file: "build/three.webgpu.js",
+    why: "TextureNode.update() runs per render OBJECT whenever the node has a matrix OR a flipY " +
+      "uniform, and it calls texture.updateMatrix() (Matrix3.setUvTransform: a cos, a sin, nine " +
+      "writes) whenever texture.matrixAutoUpdate is true, even when this node has no matrix " +
+      "uniform, so nothing reads the result. On three's WebGL2 backend every texture node gets " +
+      "a flipY uniform, so every shadow-map compare, material-array and lamp-bake sample pays it " +
+      "on every draw: census 289 (real Metal, montreal night) sampled 293 ms of setUvTransform " +
+      "self time in a 21.9 s WebGL2 leg. The matrix is still rebuilt for any node that samples " +
+      "through it, so texture offset/repeat/rotation behave exactly as before.",
+    upstream: "unfixed on dev as of r186",
+    edits: [
+      {
+        find: "\t\tif ( matrixUniform !== null ) matrixUniform.value = texture.matrix;\n\n\t\tif ( texture.matrixAutoUpdate === true ) {\n",
+        replace: "\t\tif ( matrixUniform !== null ) matrixUniform.value = texture.matrix;\n\n\t\tif ( matrixUniform !== null && texture.matrixAutoUpdate === true ) {\n",
+        count: 1,
+      },
+    ],
+  },
 ];
 
 /** Retired patches, kept so the canary can assert the UPSTREAM form is present. */
