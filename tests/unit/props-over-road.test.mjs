@@ -342,8 +342,10 @@ test("the audit still measures: a planted slab and the forest crown are found", 
   const fl = fleet(), mt = fl.get("mont_tremblant");
   // 4.97 -> 4.79 on 2026-09-24: its road heights now come from the survey by
   // arc fraction (they were read by point index, up to 8.9 m off here).
-  assert.ok(mt.max >= 4.7 && mt.max <= 4.9,
-    `mont_tremblant's crown should read ~4.79 m; got ${mt.max}. If it moved, ` +
+  // 4.79 -> 4.54 (batch 2, same day): the run-off shelf and the placed-prop
+  // MIN_SEP slots moved the ground and the props under the same crown.
+  assert.ok(mt.max >= 4.45 && mt.max <= 4.65,
+    `mont_tremblant's crown should read ~4.54 m; got ${mt.max}. If it moved, ` +
     "re-measure and update the baseline; if the audit stopped finding it, fix the audit.");
 
   const t = ctxOnce().Tracks.build(ctxOnce().Tracks.LIST.find((d) => d.id === "shanghai"));
