@@ -267,7 +267,7 @@ test("the panel saves on every edit, and a pristine list clears the key", () => 
   assert.match(src, /function edited\(\)\s*\{\s*persist\(\);/,
     "edited() is the one funnel every mutation goes through — persisting anywhere else means DONE, ESCAPE or " +
     "QUIT can still lose an afternoon of framing");
-  assert.match(src, /store\.set\("flybyShots", pristine \? null : list\)/,
+  assert.match(src, /store\.set\("flybyShots", pristine \? null : savedForm\(list\)\)/,
     "storing a COPY of the shipped default would pin this player to today's shots and ignore every later " +
     "change to them — an unedited list has to clear the key instead");
 });
@@ -283,8 +283,56 @@ test("a saved list is read back through shotErrors, not the bake's sum rule", ()
   assert.deepEqual([...FP.shotErrors(loose)], [], "an un-normalised but structurally sound list is playable");
   assert.ok([...FP.validateShots(loose)].some((m) => /sum/.test(m)),
     "...and still refused by the BAKE validator");
-  assert.match(read("js/camera/flyby-panel.js"), /const bad = shotErrors\(saved\);/,
+  // Behaviourally, through the real loadSaved() (panelWith below).
+  assert.ok(panelWith(FP.savedForm(loose)).panel.loadSaved(),
     "loadSaved() must use the playable rule set, not the bake one");
+});
+
+/* ── the saved list, read back through a real create(G) ───────────────────── */
+
+/** create(G) against a stub G: every $() is an inert object (the panel only
+ *  assigns handlers at create time), and `store` is a Map, so loadSaved() — the
+ *  function game.js calls at every run start — runs for real. */
+function panelWith(saved) {
+  const warned = [];
+  const sb = { Math, JSON, Object, Array, Number, String, isFinite, Date, console,
+    Log: { info() {}, warn: (_t, m) => warned.push(String(m)) } };
+  sb.window = sb;
+  vm.runInNewContext(read("js/camera/flyby-panel.js").replace(/^const\b/gm, "var"), sb);
+  const map = new Map([["flybyShots", saved]]);
+  const G = { $: () => ({ style: {}, dataset: {} }), els: {},
+    store: { get: (k, d) => (map.has(k) ? map.get(k) : d), set: (k, v) => { map.set(k, v); return true; } } };
+  return { panel: sb.FlybyPanel.create(G), warned, map };
+}
+
+test("a saved list round-trips only in the current pose meaning", () => {
+  const list = FP.normaliseDurs(goodList());
+  const cur = panelWith(FP.savedForm(list));
+  assert.deepEqual(JSON.parse(JSON.stringify(cur.panel.loadSaved())), JSON.parse(JSON.stringify(list)));
+  // A BARE ARRAY is what the editor saved while bearings were world bearings and
+  // a corner's +x was its right. Structurally it is perfect, which is exactly
+  // why it needs refusing by version: loaded, every such shot plays mirrored.
+  const legacy = panelWith(list);
+  assert.equal(legacy.panel.loadSaved(), null, "a pre-version (bare array) list is not played");
+  assert.match(legacy.warned.join("\n"), /predate/, "…and the log says why");
+  assert.ok(legacy.map.get("flybyShots"), "…nor deleted: the next edit overwrites it");
+  assert.equal(panelWith({ v: FP.SHOTS_VERSION + 1, shots: list }).panel.loadSaved(), null,
+    "a list from a NEWER build is not guessed at either");
+  assert.equal(panelWith({ v: FP.SHOTS_VERSION, shots: [{ id: "x" }] }).panel.loadSaved(), null,
+    "the version is not a pass: the list is still held to shotErrors");
+  assert.equal(panelWith(null).panel.loadSaved(), null, "nothing saved -> the shipped sequence");
+});
+
+test("loadSaved hands out a copy, not the store's cached object", () => {
+  // store.get() returns its cache entry; game.js keeps the result as the list
+  // the render path flies, and the panel edits ITS list in place. Shared, every
+  // slider drag moved the live sequence and the store cache without a save.
+  const saved = FP.savedForm(FP.normaliseDurs(goodList()));
+  const { panel } = panelWith(saved);
+  const a = panel.loadSaved();
+  a[0].eye[0].x = 999;
+  assert.notEqual(saved.shots[0].eye[0].x, 999);
+  assert.notEqual(panel.loadSaved()[0].eye[0].x, 999);
 });
 
 /* ── the blob as COPY VALUES actually emits it ────────────────────────────── */

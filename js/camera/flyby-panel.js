@@ -203,9 +203,26 @@ function toBlob(list) {
   return "window.FlybyShots = [\n" + body + "\n];";
 }
 
+/* THE SAVED LIST CARRIES THE MEANING IT WAS AUTHORED IN. apex26.flybyShots was
+ * first written as a bare array while a `centre`/`landmark` bear was a WORLD
+ * bearing and a corner's +x was its right. Both became relative (bear 0 = the
+ * track side, +x = the corner's outside), and a bare array is structurally
+ * identical under either meaning — so an old edit would have loaded clean and
+ * played every such shot from the other side. No migration is possible: the
+ * new value depends on each circuit's geometry, and one list serves them all.
+ * So a list is saved as { v, shots }, and anything that is not the current
+ * version is ignored (not deleted: the player's next edit overwrites it). Bump
+ * SHOTS_VERSION whenever a pose field changes what it means. */
+const SHOTS_VERSION = 2;
+function savedForm(list) { return { v: SHOTS_VERSION, shots: list }; }
+/** The list inside a saved value, or null when it is from another version. */
+function fromSaved(saved) {
+  return (saved && !Array.isArray(saved) && saved.v === SHOTS_VERSION) ? saved.shots : null;
+}
+
 const ops = {
-  EASES, AT_KINDS, POSE_FIELDS, FIELD, SLOTS, CORNER_NS, RANKS,
-  clone, poseFields, switchPoseAt, uniqueId, blankShot,
+  EASES, AT_KINDS, POSE_FIELDS, FIELD, SLOTS, CORNER_NS, RANKS, SHOTS_VERSION,
+  clone, poseFields, switchPoseAt, uniqueId, blankShot, savedForm, fromSaved,
   addShot, duplicateShot, deleteShot, moveShot, normaliseDurs, shotErrors, validateShots, toBlob,
 };
 
@@ -249,20 +266,24 @@ function defaults() {
 function persist() {
   const list = shots || [];
   const pristine = !list.length || JSON.stringify(list) === JSON.stringify(defaults());
-  try { store.set("flybyShots", pristine ? null : list); }
+  try { store.set("flybyShots", pristine ? null : savedForm(list)); }
   catch (e) { Log.warn("game", "flyby shots did not save", e); }
 }
 
 /** The saved list, or null. Held to shotErrors() and not validateShots(): the
  *  solver normalises by the durations' own total, so a list nobody pressed
- *  NORMALISE on plays exactly as previewed and must not be thrown away. */
+ *  NORMALISE on plays exactly as previewed and must not be thrown away.
+ *  A COPY: store.get() hands out its cache object, and the panel edits its list
+ *  in place — sharing it made game.js's flybyShots move under every slider. */
 function loadSaved() {
   let saved = null;
   try { saved = store.get("flybyShots", null); } catch (_) { return null; }
   if (!saved) return null;
-  const bad = shotErrors(saved);
+  const list = fromSaved(saved);
+  if (!list) { Log.warn("game", "saved flyby shots predate the current pose meaning — playing the shipped sequence"); return null; }
+  const bad = shotErrors(list);
   if (bad.length) { Log.warn("game", "saved flyby shots unusable: " + bad[0]); return null; }
-  return saved;
+  return clone(list);
 }
 
 function ensure() { if (!shots) shots = loadSaved() || defaults(); return shots; }
@@ -320,12 +341,22 @@ function preview() {
 function status(r, note) {
   const host = $("fb-status"); if (!host) return;
   if (!r) { host.textContent = note || ""; host.classList.remove("fb-inside"); return; }
-  const inside = r.inside
-    ? "  ·  INSIDE A " + String(r.inside.kind).toUpperCase() + " — move this eye"
-    : "  ·  clear";
+  // A shot down the ROAD is judged the way tests/unit/flyby-shots.test.mjs
+  // judges it: the props' axis-aligned boxes of an angled grandstand cross the
+  // straight (Bahrain), so `inside` there is not a defect — being off the road is.
+  const offRoad = !!r.onRoad && !(Math.abs(r.lat) <= 12);
+  const bad = r.onRoad ? offRoad : !!r.inside;
+  const verdict = r.onRoad
+    ? (offRoad ? "  ·  ON-ROAD SHOT " + (r.lat == null ? "OFF THE TRACK" : Math.abs(r.lat).toFixed(1) + " m OFF THE ROAD") + " — move this eye"
+      : "  ·  clear (on road)")
+    : r.inside ? "  ·  INSIDE A " + String(r.inside.kind).toUpperCase() + " — move this eye"
+      : "  ·  clear";
+  // The clearance's rescue, made visible: a shot authored beside a building
+  // lifts a metre or two, one authored inside a grandstand lifts twenty.
+  const lift = r.lift > 0.05 ? "  ·  lifted " + r.lift.toFixed(1) + " m" : "";
   host.textContent = "u " + r.u.toFixed(3) + "  ·  " + r.shot + " [" + r.index + "]" +
-    "  ·  eye " + r.eye.join(", ") + "  ·  fov " + r.fov + inside;
-  host.classList.toggle("fb-inside", !!r.inside);
+    "  ·  eye " + r.eye.join(", ") + "  ·  fov " + r.fov + lift + verdict;
+  host.classList.toggle("fb-inside", bad);
 }
 
 // ---- rows -----------------------------------------------------------------
@@ -785,7 +816,7 @@ $("fb-copy").onclick = () => {
   let ok = false;
   try { ok = !!(document.execCommand && document.execCommand("copy")); } catch (_) { /* not available */ }
   const done = (good) => flash(btn,
-    bad.length ? "COPIED (INVALID)" : (good ? "COPIED ✓" : "SELECT & COPY ↑"), "COPY VALUES");
+    bad.length ? "COPIED (INVALID)" : (good ? "COPIED ✓" : "SELECT & COPY ↑"));
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(json).then(() => done(true), () => done(ok));
     return;
