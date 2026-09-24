@@ -83,7 +83,8 @@ not ride the flyover.
 
 ## 3. `buildProps` — two layers of dressing
 
-`buildProps(track)` (`js/track/tracks.js`) fills one shared props buffer (`out`)
+`buildProps(track)` (`js/track/scenery/build-props.js`, via `TrackBuildProps.build`) fills one shared props buffer (`out`)
+from `Tracks.build`.
 plus glass/water. Order matters:
 
 ### A. Setup

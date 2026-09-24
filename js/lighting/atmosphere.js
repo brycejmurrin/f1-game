@@ -481,7 +481,19 @@ function _trackAtmoBias(def) {
   if (def.theme === "street_night") return -0.10;
   return 0;
 }
-return { applyRaceSettings };
+// MENU LAMP PRE-BAKE (scheduleFlybyTrack): the lamp half of applyRaceSettings
+// for the menu-built track and the chosen time/weather — the same resolved LT,
+// the same _lights array, the same forTrack key — started as a sliced job
+// (LampBake.prebake) so the sync forTrack on the RACE! tap is a cache hit.
+// Returns step(ms) (true when done) or null when the session bakes nothing.
+function prebakeLamps() {
+  if (!G.track || !G.gfx || !G.gfx.hasLampBake) return null;
+  if (typeof applyLightTune === "function") applyLightTune(true);
+  if (!(isFloodActiveSession() || LT.floodDay > 0) || !(LT.lampBake > 0) || LT.tailLightEmit > 0) return null;
+  if (!G.track._lights || !G.track._lights.length) G.track._lights = buildTrackLights(G.track);
+  return LampBake.prebake(G.track, G.track._lights, LT.lampNearClamp, LampBake.budget(G.gfx));
+}
+return { applyRaceSettings, prebakeLamps };
 }
 
 return { create };

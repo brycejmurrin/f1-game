@@ -258,12 +258,27 @@ const SceneryIdentity = (function () {
       else { depth = sz || 18; thick = 0.35; len = 24; }
       const dist = gap + depth / 2;
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
-      const box = [depth, thick, len];
-      if (rejBox(a.c, box, b)) {
-        ctx.noteSuppressed("runoffApron", `runoffApron SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
-        return;
+      // A painted surface, not a model: it must SHOW. anchor() sinks its point
+      // 0.3 m for flat-based models on a slope, which left a 0.16 m slab wholly
+      // under the ground once the run-off shelf flattened the first 12 m
+      // (paul_ricard's Blue Zone: 639 buried prims, was 203). Sample the ground
+      // at both edges and the centre; the top clears the highest by 3 cm and
+      // the slab reaches 5 cm under the lowest, so neither edge floats.
+      const gy = (d) => anchor(k, side, d).c[1] + 0.3;
+      const g0 = gy(gap), g1 = a.c[1] + 0.3, g2 = gy(gap + depth);
+      const top = Math.max(g0, g1, g2) + 0.03, h = Math.max(thick, top - Math.min(g0, g1, g2) + 0.05);
+      // Where the raised slab would reach over the tarmac (the inside of a
+      // corner, the pit straight), fall back to the slab and the guard test
+      // this helper always had.
+      let box = [depth, h, len], c = vadd(a.c, a.u, top - h / 2 - a.c[1]);
+      if (rejBox(c, box, b)) {
+        box = [depth, thick, len]; c = vadd(a.c, a.u, thick / 2);
+        if (rejBox(a.c, box, b)) {
+          ctx.noteSuppressed("runoffApron", `runoffApron SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
+          return;
+        }
       }
-      addBox(out, vadd(a.c, a.u, thick / 2), box, col || [0.42, 0.40, 0.38], b);
+      addBox(out, c, box, col || [0.42, 0.40, 0.38], b);
     };
 
     const bankedKerbStrip = (s0, s1, side, opts) => {

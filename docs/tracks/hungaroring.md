@@ -9,7 +9,10 @@ A tight, twisty permanent circuit carved into a natural valley basin in the dust
 Hot, hazy summer afternoon. Pale washed-out blue sky, strong overhead sun, dry heat shimmer. Grass hills are dry straw-olive, not lush lawn — `ATM.dustyBowl`: grass `[0.42, 0.40, 0.22]`, runoff `[0.58, 0.50, 0.34]`, fog `[0.72, 0.68, 0.55]`. Amphitheatre banking stays slightly greener G-dominant (`[0.48, 0.54, 0.28]`) so mounds still read as rounded hills. Tarmac dark; kerb red/white and white walls pop against straw.
 
 ## 3. Elevation
-Undulating valley, ~36 m total relief (authored cosine bumps ≈38 m peak-to-trough). Start/finish sits high on a plateau (`rise: +14` at s≈0); the lap plunges DOWN into the basin at Turn 1 / T2–4 (`rise: −22` at s≈0.12). Gradual CLIMB back up through the twisty middle sector, cresting near Turns 10–11 (`rise: +16` at s≈0.52), then rolling home.
+Real Hungaroring basin from the SRTM bake in `js/track/circuit-elevations.js`
+(~30 m peak-to-trough). Continuous valley bowl — not three isolated cosine
+bumps. Start/finish sits high; the lap plunges into the T1 / T2–4 basin, then
+climbs through the middle sector before rolling home.
 
 ## 4. Landmarks & surroundings by lap position
 

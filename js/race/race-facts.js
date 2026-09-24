@@ -207,8 +207,9 @@ const RaceFacts = (function () {
       } else { pendPos = 0; pendT = 0; }
 
       // ── flags and contact ───────────────────────────────────────────────
-      const ci = G.cautionInfo ? G.cautionInfo() : null;
-      const lvl = ci ? ci.level | 0 : 0;
+      // cautionLevel(), not cautionInfo(): this runs every physics step, and
+      // info() builds an 11-field object (with a toFixed string) to read one int.
+      const lvl = G.cautionLevel ? G.cautionLevel() | 0 : 0;
       // A lap under the safety car or VSC is not pace either: every gap closes.
       if (lvl !== caution) { ev.push({ type: "caution", level: lvl, prev: caution }); caution = lvl; hist.clear(); }
       const hits = p.hits | 0;

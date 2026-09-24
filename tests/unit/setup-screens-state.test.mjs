@@ -92,7 +92,13 @@ function careerStub(opts = {}) {
     slot: () => ({ ...ptr }),
     useSlot: (f, i) => { ptr = { flavour: f, i }; C.calls.push(["useSlot", f, i]); },
     firstFree: (f) => data[f].findIndex((s) => !s.used),
-    deleteSlot: (f, i) => { data[f][i] = { used: false }; C.calls.push(["deleteSlot", f, i]); },
+    slotRevision: (f, i) => `${f}:${i}:1`,
+    deleteSlot: (f, i, revision) => {
+      assert.equal(revision, C.slotRevision(f, i));
+      data[f][i] = { used: false };
+      C.calls.push(["deleteSlot", f, i]);
+      return { ok: true, durable: true, reason: null };
+    },
     active: () => career != null, data: () => career, load: () => career,
     setCareer: (c) => { career = c; },
     freeAgents: () => [{ name: "Yuki Nakamura", code: "NKM", num: 52, tier: 3, ask: 38 },

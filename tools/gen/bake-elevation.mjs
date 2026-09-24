@@ -62,6 +62,9 @@ const MAP = {
   // Baking overrides authored cosine bumps — only add an id when the bumps are
   // the problem (sparse plateaus / stair-steps), not for every classic.
   nurburgring: "de-1927",
+  // Portimão (Algarve): rollercoaster hills are real; sparse authored cosines
+  // left knife-edge grade changes (max ~7 pp/step). Same SRTM path as #287.
+  portimao: "pt-2008",
 };
 
 const GEO = (id) => `https://raw.githubusercontent.com/bacinger/f1-circuits/master/circuits/${id}.geojson`;

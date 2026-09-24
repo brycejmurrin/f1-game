@@ -389,25 +389,120 @@ const TrackModels = (function () {
       return true;
     }
 
+    // T3 drape: sand/apron/car-park grid over the drawn terrain (SCENERY-QA-PLAN
+    // §2b). Columns break at ribbon rails; rows ~4 m; sz[1] skirt on the rim.
+    // Per-cell footprint guard — one box round a climbing drape suppressed every
+    // lower road in the footprint. Falls back to N closed-form boxes when the
+    // build has no track frame (unit harness).
+    let patchSeq = 0;
     function groundPatch(spec) {
       spec = spec || {};
-      if (!validSize(spec.size) || !ctx.groundHeight) return false;
-      const samples = Math.max(2, Math.round(spec.samples || 4));
-      const depth = spec.size[0] / samples;
-      const posBefore = out.pos.length;
-      let emitted = 0;
-      for (let i = 0; i < samples; i++) {
-        const dist = (spec.gap || 0) + depth * (i + 0.5);
-        const y = ctx.groundHeight(spec.k || 0, dist);
-        if (!Number.isFinite(y)) continue;
-        const center = [dist * (spec.side || 1), y - spec.size[1] / 2, 0];
-        if (box(out, center, [depth, spec.size[1], spec.size[2]], spec.color, spec.basis)) emitted++;
-      }
-      if (!emitted) {
-        diagnostics.invalid.push({ id: spec.id || "ground-patch", reason: "no finite ground samples" });
+      if (!validSize(spec.size)) {
+        diagnostics.invalid.push({ id: spec.id || "ground-patch", reason: "invalid ground-patch dimensions", size: spec.size });
         return false;
       }
-      diagnostics.emitted.push({ id: spec.id || "ground-patch", vertices: (out.pos.length - posBefore) / 3, groundPatch: true });
+      const track = ctx.track, px = ctx.px, pz = ctx.pz, hw = ctx.hw;
+      if (!track || !px || !pz || !hw || !ctx.groundHeight) {
+        // Box path: sample groundHeight along the gap (no world frame).
+        const samples = Math.max(2, Math.round(spec.samples || 4));
+        const depth = spec.size[0] / samples;
+        const posBefore = out.pos.length;
+        let emitted = 0;
+        for (let i = 0; i < samples; i++) {
+          const dist = (spec.gap || 0) + depth * (i + 0.5);
+          const y = ctx.groundHeight(spec.k || 0, dist);
+          if (!Number.isFinite(y)) continue;
+          const center = [dist * (spec.side || 1), y - spec.size[1] / 2, 0];
+          if (box(out, center, [depth, spec.size[1], spec.size[2]], spec.color, spec.basis)) emitted++;
+        }
+        if (!emitted) {
+          diagnostics.invalid.push({ id: spec.id || "ground-patch", reason: "no finite ground samples" });
+          return false;
+        }
+        diagnostics.emitted.push({ id: spec.id || "ground-patch", vertices: (out.pos.length - posBefore) / 3, groundPatch: true });
+        return true;
+      }
+      const n = ctx.n || track.n || px.length;
+      const k = ((Math.round(spec.k || 0) % n) + n) % n;
+      const side = spec.side || 1, gap = spec.gap || 0, sz = spec.size;
+      const col = spec.color || [0.5, 0.5, 0.5];
+      const pieces = Math.max(2, Math.round(spec.samples || 4));
+      const id = spec.id || ("ground-patch-" + k), required = !!spec.required;
+      const emitFace = ctx.emitFace || (typeof TrackGeom !== "undefined" && TrackGeom.emit);
+      const normFn = (typeof TrackGeom !== "undefined" && TrackGeom.norm) || ((v) => {
+        const L = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / L, v[1] / L, v[2] / L];
+      });
+      const minSep = (typeof TrackGeom !== "undefined" && TrackGeom.MIN_SEP) || 0.02;
+      const UPV = [0, 1, 0];
+      const r = [track.rx[k], track.ry[k], track.rz[k]];
+      const t = [track.tx[k], track.ty[k], track.tz[k]];
+      const u = ctx.upOf ? ctx.upOf(track, k) : UPV;
+      // Per-call lift slot so overlapping patches never share a plane.
+      const lift = (1 + patchSeq++ % 5) * minSep;
+      const midDist = gap + sz[0] / 2;
+      const mid = [px[k] + r[0] * side * (hw[k] + midDist),
+        ctx.groundHeight(k, midDist), pz[k] + r[2] * side * (hw[k] + midDist)];
+      const suppress = (em, pit) => (diagnostics.suppressed.push({
+        id, required: pit ? false : required,
+        reason: (pit ? (em ? "emitted footprint " : "") + "superseded by the pit complex"
+          : (em ? "emitted " : "") + "footprint rejected"),
+      }), false);
+      const reject = (center, size, basis) => {
+        const v = preflight({ center, size, basis });
+        return v === true ? null : v;
+      };
+      const hit = reject(mid, sz, [r, u, t]);
+      if (hit !== null) return suppress(false, hit === "pit");
+      const cuts = [gap];
+      const rails = ctx.rails || [];
+      for (const d of rails) if (d > gap + 0.25 && d < gap + sz[0] - 0.25) cuts.push(d);
+      cuts.push(gap + sz[0]);
+      while (cuts.length - 1 < pieces) {
+        let w = 0;
+        for (let i = 1; i < cuts.length; i++) if (cuts[i] - cuts[i - 1] > cuts[w + 1] - cuts[w]) w = i - 1;
+        cuts.splice(w + 1, 0, (cuts[w] + cuts[w + 1]) / 2);
+      }
+      const cols = cuts.length - 1, rows = Math.min(16, Math.max(1, Math.ceil(sz[2] / 4)));
+      const top = [], bot = [], at = (i, j) => j * (cols + 1) + i;
+      const terrainAt = ctx.terrainY || (() => null);
+      for (let j = 0; j <= rows; j++) for (let i = 0; i <= cols; i++) {
+        const o = side * (hw[k] + cuts[i]), f = (j / rows - 0.5) * sz[2];
+        const x = px[k] + r[0] * o + t[0] * f, z = pz[k] + r[2] * o + t[2] * f;
+        const g = terrainAt(x, z), y = (g != null ? g : ctx.groundHeight(k, cuts[i])) + lift;
+        top.push([x, y, z]); bot.push([x, y - sz[1], z]);
+      }
+      const cellB = [normFn([r[0], 0, r[2]]), UPV, normFn([t[0], 0, t[2]])];
+      const keep = new Uint8Array(cols * rows);
+      const quad = (i, j) => [top[at(i, j)], top[at(i + 1, j)], top[at(i + 1, j + 1)], top[at(i, j + 1)]];
+      let kept = 0;
+      for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+        const q = quad(i, j), hi = Math.max(q[0][1], q[1][1], q[2][1], q[3][1]);
+        const lo = Math.min(q[0][1], q[1][1], q[2][1], q[3][1]) - sz[1];
+        const c = [(q[0][0] + q[2][0]) / 2, (lo + hi) / 2, (q[0][2] + q[2][2]) / 2];
+        if (reject(c, [cuts[i + 1] - cuts[i], hi - lo, sz[2] / rows], cellB) === null) {
+          keep[j * cols + i] = 1; kept++;
+        }
+      }
+      if (!kept) return suppress(true, false);
+      if (typeof emitFace !== "function") {
+        diagnostics.invalid.push({ id, required, reason: "no emitFace for draped groundPatch" });
+        return false;
+      }
+      const v0 = out.pos.length / 3, mat0 = out._mat, below = [mid[0], mid[1] - 1e4, mid[2]];
+      out._mat = 0;
+      for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++)
+        if (keep[j * cols + i]) emitFace(out, quad(i, j), col, below);
+      const skirt = (a, b, cell) => { if (keep[cell]) emitFace(out, [top[a], top[b], bot[b], bot[a]], col, mid); };
+      for (let i = 0; i < cols; i++) skirt(at(i, 0), at(i + 1, 0), i);
+      for (let j = 0; j < rows; j++) skirt(at(cols, j), at(cols, j + 1), j * cols + cols - 1);
+      for (let i = cols; i > 0; i--) skirt(at(i, rows), at(i - 1, rows), (rows - 1) * cols + i - 1);
+      for (let j = rows; j > 0; j--) skirt(at(0, j), at(0, j - 1), (j - 1) * cols);
+      out._mat = mat0;
+      diagnostics.emitted.push({ id, required, vertices: out.pos.length / 3 - v0, kind: spec.kind || "model", groundPatch: true });
+      if (spec.collision && typeof ctx.recordBarrier === "function") {
+        const halfFrac = (sz[2] / 2) / (track.total || 1);
+        ctx.recordBarrier(k / n - halfFrac, k / n + halfFrac, side, gap);
+      }
       return true;
     }
 
