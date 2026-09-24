@@ -248,6 +248,8 @@ const ACCENT_DECOR = {
   "css/components.css": [
     "the scroll-fade nub — a 3px bar that repeats the scrollbar's own message",
     "`.sel-label::before` — a skewed tick giving section labels a shared left edge",
+    "`.pm-accent-preview-hud` — Appearance's live HUD sample plate; the number is `--accent-ink`, the plate is ornament mirroring the radio card",
+    "`.pm-accent-chip-custom` conic-gradient — the CUSTOM swatch's rainbow hint; tap target identity is the chip ring + aria-label, not the wash",
   ],
   "css/hud.css": [
     "`.hud-box` border-left — the team stripe on a box whose value is the readout",

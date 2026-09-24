@@ -25,7 +25,11 @@ name: Spec timings
 # anyone looking is how a budget drifts silently in the other direction.
 on:
   workflow_run:
-    workflows: ["CI"]
+    # "Deploy to GitHub Pages" too (2026-09-24): pages.yml runs ci.yml as a
+    # REUSABLE workflow, so the train's gate uploads its junit into the Pages
+    # run — and a `workflow_run` on "CI" never fires for it. The train is the
+    # one gate that runs the whole smoke suite on the deploy tip every time.
+    workflows: ["CI", "Deploy to GitHub Pages"]
     types: [completed]
   workflow_dispatch:
 
@@ -64,6 +68,24 @@ jobs:
           ref: claude/f1-game-project-26h3ng
           fetch-depth: 0
       - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
+
+      # START FROM THE RECORD, NOT THE DEPLOY TIP'S COPY (2026-09-24). This job
+      # used to merge one run into the deploy branch's file and force-push the
+      # result over the side branch — so every run threw the previous runs'
+      # samples away: 43 successful runs left 1 sample per spec across 5 specs,
+      # and select-budget.mjs (MIN_SAMPLES = 3) never billed a single spec from
+      # a measurement. The merge is idempotent (keyed by bucket + run start), so
+      # starting from the side branch's accumulated record is always safe.
+      - name: Start from the accumulated record on the side branch
+        run: |
+          set -u
+          if git fetch -q origin "$TIMINGS_BRANCH" 2>/dev/null \
+             && git show "FETCH_HEAD:tests/data/spec-timings.json" > /tmp/record.json 2>/dev/null; then
+            cp /tmp/record.json tests/data/spec-timings.json
+            echo "starting from $TIMINGS_BRANCH's record ($(wc -c < tests/data/spec-timings.json) bytes)"
+          else
+            echo "no $TIMINGS_BRANCH record yet — starting from the deploy tip's file"
+          fi
 
       # `gh run download`, not actions/download-artifact: C1 SHA-pins every
       # third-party action, and gh is already how poke-train talks to Actions.

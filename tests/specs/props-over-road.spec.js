@@ -122,16 +122,21 @@ test("no prop geometry on/above the racing line (all circuits)", async ({ page }
             const bc = pit(tp.x, tp.z, ax, az, bx, bz, cx, cz); if (!bc) continue;
             const yf = ay + bc.u * (cy - ay) + bc.vv * (by - ay);
             const over = yf - tp.y;
-            if (over > TOL && over < CEIL) {
+            const yMin = Math.min(ay, by, cy), yMax = Math.max(ay, by, cy);
+            const bandLo = tp.y + TOL, bandHi = tp.y + CEIL;
+            const inBand = over > TOL && over < CEIL;
+            const spansBand = yMax >= bandLo && yMin <= bandHi;
+            if (inBand || spansBand) {
+              const report = inBand ? over : Math.min(yMax, bandHi) - tp.y;
               const f = Math.round(tp.frac * 200) / 2;
-              merged[f] = Math.max(merged[f] || 0, +over.toFixed(2));
-              if (over > max) {
-                max = over;
+              merged[f] = Math.max(merged[f] || 0, +report.toFixed(2));
+              if (report > max) {
+                max = report;
                 const centerX = (ax + bx + cx) / 3;
                 const centerZ = (az + bz + cz) / 3;
                 const centerK = near(centerX, centerZ);
                 worst = {
-                  name, f, over: +over.toFixed(2),
+                  name, f, over: +report.toFixed(2),
                   sourceFrac: +(centerK / M).toFixed(4),
                   lateral: +((centerX - px[centerK]) * rx[centerK] +
                     (centerZ - pz[centerK]) * rz[centerK]).toFixed(2),

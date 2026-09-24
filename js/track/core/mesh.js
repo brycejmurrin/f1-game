@@ -357,13 +357,47 @@ const TrackMesh = (function () {
         out.idx.push(a, a + 1, b, a + 1, b + 1, b);
       }
     }
+    // findCorners returns EVERY local curvature peak, and a long corner has
+    // several whose spans overlap (one corner's exit kerb also lies on the next
+    // corner's inside). One ribbon per span stacked up to 9 bit-identical copies
+    // of the same kerb quads — 55 % of all kerb triangles fleet-wide. Instead
+    // mark the covered QUADS per side and emit one ribbon per contiguous run:
+    // the union of the old quads, each exactly once. A quad remembers the lap
+    // (wrap) of the first span that covered it, because the stripe phase is the
+    // UNWRAPPED arc k·ds — a span from k = -3 and one from k = n-3 stripe
+    // differently unless the lap is a whole number of stripe periods.
+    const quad = { "-1": new Int8Array(n), "1": new Int8Array(n) };   // 0 = bare, else wrap + 2
+    const cover = (k0, k1, side) => {   // ribbon(k0, k1) lays quads k0..k1-1
+      const q = quad[side];
+      for (let k = k0; k < k1; k++) {
+        const i = ((k % n) + n) % n;
+        if (!q[i]) q[i] = (k - i) / n + 2;
+      }
+    };
     for (const c of findCorners(track, 0.006)) {
       const inside = c.sign > 0 ? -1 : 1;
-      ribbon(c.k - c.lo, c.k + c.hi, inside);
+      cover(c.k - c.lo, c.k + c.hi, inside);
       markKerb(c.k - c.lo, c.k + c.hi, inside);
       const exLen = Math.max(2, Math.round(c.hi * 0.7));
-      ribbon(c.k + 1, c.k + 1 + exLen, -inside);
+      cover(c.k + 1, c.k + 1 + exLen, -inside);
       markKerb(c.k + 1, c.k + 1 + exLen, -inside);
+    }
+    for (const side of [-1, 1]) {
+      const q = quad[side];
+      const U = (i) => i + (q[i] - 2) * n;                       // unwrapped node index of quad i
+      // quad i continues quad i-1's strip when both are laid and their unwrapped
+      // indices are consecutive (at i = 0 that means the lap count stepped up).
+      const joins = (i) => { const j = (i + n - 1) % n; return q[i] && q[j] && U(i) === U(j) + 1; };
+      let s0 = 0;
+      while (s0 < n && joins(s0)) s0++;   // a strip start; always exists — U cannot rise all round the lap
+      for (let m = 0; m < n; ) {
+        const i = (s0 + m) % n;
+        if (!q[i]) { m++; continue; }
+        let len = 1;
+        while (len < n - m && joins((i + len) % n)) len++;
+        ribbon(U(i), U(i) + len, side);
+        m += len;
+      }
     }
   }
 
@@ -517,12 +551,26 @@ const TrackMesh = (function () {
       const u = upOf(track, k);
       const r = [track.rx[k], track.ry[k], track.rz[k]];
       const w = hw[k];
-      const offs = [-w - 2.2, -w - 0.4,
+      let   offs = [-w - 2.2, -w - 0.4,
                     -w, -w + 0.2, -w + 0.25,        // left edge line + step
                     -0.35, -0.30,                    // centre line (left half)
                     0.30, 0.35,                      // centre line (right half)
                     w - 0.25, w - 0.2, w,            // right step + edge line
                     w + 0.4, w + 2.2];
+      // VERGE FOLD CLAMP. A rail at offset o runs BACKWARDS over a node span when
+      // o·dot(r[k+1]-r[k], t) < -|dP| (turn radius < |o|); its quads then fold
+      // back over the neighbouring strip. On the fold side only, pull the verge
+      // columns (0/1 or 12/13) in to 0.85 of the fold limit of either
+      // neighbouring span, never inside w: the running surface (2..11) is untouched.
+      for (let sp = 0; sp < 2; sp++) {
+        const ka = sp ? k : (k - 1 + n) % n, kb = sp ? (k + 1) % n : k;
+        const dx = px[kb] - px[ka], dz = pz[kb] - pz[ka], L = __M.hypot(dx, dz) || 1;
+        const drt = ((track.rx[kb] - track.rx[ka]) * dx + (track.rz[kb] - track.rz[ka]) * dz) / L;
+        if (__M.abs(drt) < 1e-6) continue;
+        const lim = __M.max(w, 0.85 * L / __M.abs(drt));
+        const v0 = drt > 0 ? 0 : 12, sg = drt > 0 ? -1 : 1;   // fold side: o·drt < 0
+        for (let v = v0; v < v0 + 2; v++) if (__M.abs(offs[v]) > lim) offs[v] = sg * lim;
+      }
       const rise = [-0.05, -0.02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.02, -0.05];
       for (let v = 0; v < V; v++) {
         const o = offs[v];
@@ -745,7 +793,12 @@ const TrackMesh = (function () {
             // legitimately rises with its own tarmac is not mistaken for a mound
             // — while terrain genuinely hanging over the racing line still gets
             // carved, banked or not.
-            if (wy > roadYj + 0.3) {
+            // Not against the vert's OWN road run: on a descent the tarmac 10-20 m
+            // ahead sits 1-3 m lower, and this carve trenched the verge down to it
+            // (fuji's 14 % drop at s~0.47: a 2.8 m trench, the road on a grass
+            // wall). The own run is heightAt's job; same test as the dip below.
+            const _sameRun = track.tx[k] * track.tx[j] + track.tz[k] * track.tz[j] > 0.55 && dd * ds < 60;
+            if (!_sameRun && wy > roadYj + 0.3) {
               const fr = hw[j] + 26, nr = hw[j] + 0.5;
               if (d2 < fr * fr) {
                 const dist = __M.sqrt(d2);

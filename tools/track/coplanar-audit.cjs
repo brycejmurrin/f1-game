@@ -77,7 +77,7 @@ function site(stack) {
 const SAME_FACING = 0.999;   // dot(nA,nB) — the cull-based legitimacy gate
 const GAP_MAX = 0.020;       // plane separation worth looking at (m)
 const AREA_MIN = 2.0;        // overlap area on the shared plane (m2)
-const FIGHT_MAX = 150;       // gate: fights within this distance (m)
+const FIGHT_MAX = 300;       // gate: fights within this distance (m) — the window where surfaces still visibly fight; TrackGeom.MIN_SEP (3 cm) clears it (388 m)
 const NEAR_TRACK = 300;      // beyond this, fog+framing make it moot (m)
 // --overhead: a face counts when its centre is this far above the nearest road
 // node and within hw + OVERHEAD_LAT of it laterally; the gap and area defaults

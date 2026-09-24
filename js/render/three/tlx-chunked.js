@@ -254,6 +254,13 @@
      * indices reference the full shared vertex array). The returned handle
      * also works as a plain mesh (top-level geo = chunk 0) so a stray
      * draw()/castShadow() won't crash — js/render/glx/chunked.js semantics. */
+    // apex26.tlxChunkMerge: 2 (default) = 2x2 lamp cells per draw; 1 = one
+    // draw per cell, the pre-2026-09-24 shape and the off switch. Read once;
+    // see DRAW MERGE in build(). Montreal on Lavapipe WebGPU: 471 -> 181
+    // chunks, ~2.5x fewer visible per frame, night frames pixel-identical to
+    // merge 1 at a frozen state (PERF-FINDINGS §2ai).
+    let mergeK = 2;
+    try { const v = +localStorage.getItem("apex26.tlxChunkMerge"); if (v >= 1 && v <= 4) mergeK = v | 0; } catch (_) { /* no storage: 1 */ }
     function build(data, cellSize) {
       const cell = cellSize > 0 ? cellSize : 72;
       const srcIdx = data.idx;
@@ -309,6 +316,37 @@
       pos = null;
       if (!data._keepPositions) { data.pos = null; data.idx = null; }
       const IndexArray = big ? Uint32Array : Uint16Array;
+      // DRAW MERGE. Every chunk is its own three RenderObject — a bind group
+      // and per-object uniforms, which three's WebGPU path pays per draw
+      // (three.js #30560) — and a record's chunks already share ONE vertex
+      // buffer (aPos..aMat below), differing only in their index ranges. So a
+      // merge factor k folds each k x k block of lamp cells into one DRAW chunk
+      // whose index is the block's cells back to back: ~k² fewer render
+      // objects in the scene pass and again in the sun pass, for a coarser
+      // cull. The lamp table stays on the original cells (`lampCells`, same
+      // gx/gz/min/max as before): the lamp grid is world-cell keyed, so
+      // merging draws must not widen the 24-lamp cap's area.
+      let lampCells = null;
+      if (mergeK > 1) {
+        lampCells = [];
+        const merged = new Map();
+        buckets.forEach((bk, key) => {
+          const gx = (key / 4096) | 0, gz = key - gx * 4096;
+          lampCells.push({ min: bk.mn.slice(), max: bk.mx.slice(), gx, gz });
+          const mk = Math.floor(gx / mergeK) * 4096 + Math.floor(gz / mergeK);
+          let m = merged.get(mk);
+          if (!m) { m = { parts: [], n: 0, mn: [Infinity, Infinity, Infinity], mx: [-Infinity, -Infinity, -Infinity], gx, gz }; merged.set(mk, m); }
+          m.parts.push(bk.idx); m.n += bk.idx.length;
+          for (let a = 0; a < 3; a++) { if (bk.mn[a] < m.mn[a]) m.mn[a] = bk.mn[a]; if (bk.mx[a] > m.mx[a]) m.mx[a] = bk.mx[a]; }
+        });
+        buckets.clear();
+        merged.forEach((m, mk) => {
+          const idx = new Array(m.n);
+          let o = 0;
+          for (const part of m.parts) for (let i = 0; i < part.length; i++) idx[o++] = part[i];
+          buckets.set(mk, { idx, mn: m.mn, mx: m.mx, gx: m.gx, gz: m.gz });
+        });
+      }
       const chunks = [];
       let count = 0;
       buckets.forEach((bk, key) => {
@@ -336,12 +374,12 @@
         // triangles' vertex AABBs, so a triangle binned by its CENTROID can push
         // them outside their own cell and two neighbours' boxes can overlap.
         // TLXLampGrid needs the exact mapping; nothing else reads these.
-        const gx = (key / 4096) | 0, gz = key - gx * 4096;
+        const gx = bk.gx !== undefined ? bk.gx : (key / 4096) | 0, gz = bk.gz !== undefined ? bk.gz : key - gx * 4096;
         chunks.push({ geo, count: arr.length, min: mn, max: mx, gx, gz,
                       wrap: { __tlx: true, geo } });
       });
       return { __tlx: true, chunked: true, geo: chunks.length ? chunks[0].geo : null,
-               chunks, cellSize: cell, count };
+               chunks, lampCells, cellSize: cell, count };
     }
 
     // Per-frame culling. Fills _visList (module scratch — reused, never reallocated) with the

@@ -192,6 +192,10 @@ const GameStore = (function () {
   const mirror = { supported: false, restored: 0, flushed: 0, failed: 0, pending: 0, ready: null };
   let _mirrorDb = null;             // memoised open (a failure is never memoised)
   let _mirrorPending = new Map();   // full key -> { v: JSON string or null for a delete, lsOk }
+  // Keys THIS tab holds the newest value of (it wrote one the quota refused, or
+  // restored a refused row): its later lsOk:true saves supersede that row — only
+  // a PEER's lsOk:true write is the stale downgrade the B5 guard refuses.
+  const _ownNewer = new Set();
   let _mirrorTimer = null;
   let _mirrorFlight = null;         // serialize bursts so an older transaction cannot finish last
   let _restoreDone = false;         // flush waits for mirrorRestore: a boot re-save must not overwrite the row it restores
@@ -234,7 +238,8 @@ const GameStore = (function () {
   // restore must prefer it even though the key is present on disk.
   function mirrorQueue(key, json, lsOk) {
     if (typeof indexedDB === "undefined" || !indexedDB) return;
-    _mirrorPending.set(key, { v: json, lsOk: lsOk !== false });
+    if (lsOk === false) _ownNewer.add(key);
+    _mirrorPending.set(key, { v: json, lsOk: lsOk !== false, own: _ownNewer.has(key) });
     mirror.pending = _mirrorPending.size;
     if (_mirrorTimer !== null) return;
     if (typeof setTimeout !== "function") { mirrorFlush(); return; }
@@ -273,7 +278,17 @@ const GameStore = (function () {
       try { t = db.transaction(MIRROR_STORE, "readwrite"); } catch (e) { res(false); return; }
       const os = t.objectStore(MIRROR_STORE);
       for (const [k, e] of batch) {
-        if (e.v === null) os.delete(k); else os.put({ k, v: e.v, lsOk: e.lsOk });
+        if (e.v === null) { os.delete(k); continue; }
+        // Cross-tab: a quota-refused (lsOk:false) row is the only durable copy
+        // of a newer save. A peer tab that never saw storage events can still
+        // flush lsOk:true with an OLDER value — refuse that downgrade (BUGS.md B5).
+        // Same payload with lsOk:true is fine (boot healed the disk and agrees).
+        const getReq = os.get(k);
+        getReq.onsuccess = () => {
+          const prev = getReq.result;
+          if (prev && prev.lsOk === false && e.lsOk === true && e.v !== prev.v && !e.own) return;
+          os.put({ k, v: e.v, lsOk: e.lsOk });
+        };
       }
       t.oncomplete = () => { mirror.flushed += batch.size; res(true); };
       t.onerror = t.onabort = () => { res(false); };
@@ -337,6 +352,7 @@ const GameStore = (function () {
           // Still no room, but the session must run on the newer value, not the
           // stale disk copy: serve it from the cache; the row stays lsOk:false.
           try { store._cache.set(row.k, JSON.parse(row.v)); } catch (e) { continue; }
+          _ownNewer.add(row.k);             // this session runs on the newest value: its saves supersede the row
         } else {
           if (newer) mirrorQueue(row.k, row.v, true);   // the disk has it now
           store._cache.delete(row.k);
