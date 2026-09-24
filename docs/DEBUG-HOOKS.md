@@ -486,10 +486,13 @@ shots[0].eye[1].y = 30;        // raise the crane
 __apex.flybyCam(0.33, shots);  // …and look at it, without a reload
 ```
 `node tools/shot/flyby.mjs --track monza` renders the whole sequence as a
-contact sheet from a shell (`<track>-sheet.png`, every frame labelled), and
-exits non-zero if any frame is inside scenery. `--shots <file>` previews an
-edited list — a JSON array or the editor's `window.FlybyShots = [...]` blob —
-without baking it.
+contact sheet from a shell (`<track>-sheet.png`, every frame labelled, plus the
+per-frame numbers as `<track>-flyby.json`), and exits 1 if any frame is inside
+scenery by the unit test's rule (an `onRoad` shot is held to `|lat| <= 12`
+instead), 2 on a usage or boot error. `--track a,b,c` shoots several circuits
+from one boot; the server takes a free port unless `--port` pins one.
+`--shots <file>` previews an edited list — a JSON array or the editor's
+`window.FlybyShots = [...]` blob, warning header and all — without baking it.
 
 ### `camState().lens` — what the frame was RENDERED with
 `camState()` reports where the camera is pointed; `lens` reports what the last
