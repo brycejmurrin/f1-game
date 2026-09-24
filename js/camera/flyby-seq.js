@@ -334,6 +334,10 @@ const FlybySeq = (function () {
     }
     const cs = track._fbCorners;
     if (!cs.length) return 0;
+    const c = cs[Math.min(cornerIndex(track, cs, n), cs.length - 1)];
+    return (c && typeof c.f === "number") ? c.f * track.total : 0;
+  }
+  function cornerIndex(track, cs, n) {
     // A shot list is written once for every circuit, and circuits do not agree
     // on how many corners they have — Monza has 11, Suzuka 18. Naming a ROLE
     // ("the first corner", "something mid-lap") ports; naming corner 14 does not.
@@ -344,8 +348,55 @@ const FlybySeq = (function () {
     else if (n === "slowest" || n === "fastest") i = extremeCorner(track, cs, n === "slowest");
     else if (n === "lore") { const L = loreCorner(track, cs), slow = extremeCorner(track, cs, true); i = L >= 0 && track._fbFilmable[L] ? L : slow; }
     else i = Math.min(Math.max(1, n | 0), cs.length) - 1;
-    const c = cs[Math.min(i, cs.length - 1)];
-    return (c && typeof c.f === "number") ? c.f * track.total : 0;
+    return i;
+  }
+
+  /* ONE CORNER, ONE SHOT. Roles resolve independently, so two can name the
+     same corner: Monza's "first" and "fastest" are both T1, and 14 of 52
+     circuits filmed one corner twice in a single flyby (a third of varied
+     loads). bindCorners() resolves a list's roles in order and moves a clash to
+     that role's NEXT choice — the next-slowest, the next-fastest, else the
+     nearest filmable corner — returning a copy whose corner poses carry plain
+     corner numbers. Cached per list, so the per-shot caches downstream hold. */
+  function roleRank(track, cs, n, home) {
+    const ok = track._fbFilmable || (track._fbFilmable = cs.map((c) => filmable(track, c)));
+    const idx = [];
+    for (let k = 0; k < cs.length; k++) if (ok[k] && k !== home) idx.push(k);
+    if (n === "slowest" || n === "fastest" || n === "lore") {   // lore's own fallback is the slowest
+      const sg = n === "fastest" ? -1 : 1, r = (k) => (cs[k].r > 0 ? sg * cs[k].r : Infinity);
+      return idx.sort((a, b) => r(a) - r(b));
+    }
+    return idx.sort((a, b) => Math.abs(a - home) - Math.abs(b - home) || b - a);
+  }
+  function shotCorner(shot) {
+    const poses = [shot.eye[0], shot.eye[1], shot.look[0], shot.look[1]];
+    for (let i = 0; i < 4; i++) if (poses[i] && poses[i].at === "corner") return poses[i].n === undefined ? 1 : poses[i].n;
+    return null;
+  }
+  const SAME_M = 120;
+  function bindCorners(track, list) {
+    const cache = track._fbBind || (track._fbBind = new WeakMap());
+    let out = cache.get(list);
+    if (out) return out;
+    cornerS(track, 1);
+    const cs = track._fbCorners, used = [], total = track.total || 1;
+    // By PLACE, not index: the measured list can hold one corner twice (Monza's
+    // T1 and T2 are both s = 592, the two halves of the Rettifilo).
+    const taken = (k) => used.some((j) => { const d = Math.abs(cs[j].f - cs[k].f) * total; return Math.min(d, total - d) < SAME_M; });
+    out = list.map((shot) => {
+      const role = shotCorner(shot);
+      if (role === null || !cs.length) return shot;
+      let k = Math.min(cornerIndex(track, cs, role), cs.length - 1);
+      if (taken(k)) {
+        const alt = roleRank(track, cs, role, k).filter((j) => !taken(j));
+        if (alt.length) k = alt[0];
+      }
+      used.push(k);
+      const bind = (p) => (p && p.at === "corner" && (p.n === undefined ? 1 : p.n) === role ? Object.assign({}, p, { n: k + 1 }) : p);
+      return Object.assign({}, shot, { eye: shot.eye.map(bind), look: shot.look.map(bind) });
+    });
+    cache.set(list, out);
+    return out;
   }
 
   /* A ROLE NAMES A CORNER WORTH FILMING. The measured list counts kinks and
@@ -380,15 +431,16 @@ const FlybySeq = (function () {
   /* CORNERS BY CHARACTER. "first/mid/late" are positions; a circuit is known
      for its hairpin, its flat-out sweep, or the corner the announcer names
      (js/data/circuit-lore.js `corner`). `slowest`/`fastest` read the measured
-     apex speed (TrackMaps.corners `v`) among FILMABLE corners; `lore` pulls
+     apex RADIUS (TrackMaps.corners `r`; its `v` is peak CURVATURE, not speed —
+     reading `v` as a speed swapped the two) among FILMABLE corners; `lore` pulls
      "Turn N" out of the lore line and falls back to the slowest. All three
      cache like the others (cornerSide keys by n). */
   function extremeCorner(track, cs, slow) {
     const ok = track._fbFilmable || (track._fbFilmable = cs.map((c) => filmable(track, c)));
     let best = -1;
     for (let k = 0; k < cs.length; k++) {
-      if (!ok[k] || typeof cs[k].v !== "number") continue;
-      if (best < 0 || (slow ? cs[k].v < cs[best].v : cs[k].v > cs[best].v)) best = k;
+      if (!ok[k] || !(cs[k].r > 0)) continue;
+      if (best < 0 || (slow ? cs[k].r < cs[best].r : cs[k].r > cs[best].r)) best = k;
     }
     return best >= 0 ? best : 0;
   }
@@ -843,13 +895,16 @@ const FlybySeq = (function () {
     },
     {
       id: "turn-mid", dur: 0.09, ease: "inOut",
-      eye: [{ at: "corner", n: "lore", off: -45, x: 15, y: 8 },
-            { at: "corner", n: "lore", off: 5, x: 17, y: 7 }],
-      // Aimed THROUGH the corner: at a hairpin the apex is right under a
-      // fence-line camera, and aiming at it filmed a kerb from above.
-      look: [{ at: "corner", n: "lore", off: 15, x: 0, y: 0.6 },
-             { at: "corner", n: "lore", off: 55, x: 0, y: 0.6 }],
-      fov: [38, 42],
+      eye: [{ at: "corner", n: "lore", off: -35, x: 16, y: 9 },
+            { at: "corner", n: "lore", off: 0, x: 18, y: 8 }],
+      // Held on the APEX and 20 m past it, not 15-55 m down the road: the lore
+      // corner is often the slowest one, and past a 10 m hairpin that aim swung
+      // behind the camera (frame-report, 16 circuits: 40 -> 52; renders agree).
+      // An apex aim once filmed a kerb from above from a fence-line camera;
+      // 16-18 m out and 8-9 m up, this one keeps the whole bend and its exit.
+      look: [{ at: "corner", n: "lore", off: 0, x: 0, y: 0.6 },
+             { at: "corner", n: "lore", off: 20, x: 0, y: 0.6 }],
+      fov: [42, 44],
     },
     {
       id: "turn-late", dur: 0.09, ease: "inOut",
@@ -912,7 +967,7 @@ const FlybySeq = (function () {
    *  Beyond 1 the sequence holds on its last frame rather than looping: the
    *  screen is skippable, so a player who waits should not see it restart. */
   function solve(track, u, shots) {
-    const list = (shots && shots.length) ? shots : DEFAULT;
+    const list = bindCorners(track, (shots && shots.length) ? shots : DEFAULT);
     let total = 0;
     for (let i = 0; i < list.length; i++) total += list[i].dur || 0;
     if (!(total > 0)) total = 1;
@@ -1319,7 +1374,7 @@ const FlybySeq = (function () {
     solve, reset, clearEye, floorEye, groundAt, insideProp, blockers, isSolid, onRoadPose,
     landmarks, bounds, landmarkScore, lmBase, landmarkFallback, planShot, treeBlockers,
     anchorS, posePoint, cornerS, cornerSide, cornerTurn, lmFace,
-    poseFromWorld, shotFromView, nearestCorner, vary, setPlayerSlot, slotIndex,
+    poseFromWorld, shotFromView, nearestCorner, vary, setPlayerSlot, slotIndex, bindCorners,
     DEFAULT, EASE,
     POLE_BACK, GRID_SPACING, GRID_ROWS, MIN_FILL, MIN_H, FAR, FOG, NEAR, FENCE, REF_S, PAN_MAX,
   };
