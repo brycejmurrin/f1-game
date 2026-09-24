@@ -4822,3 +4822,15 @@ test("lamp static map: car-only rebuilds copy the static props depth and draw th
   assert.match(lamp, /if \(!_carsOnlyPass\) G\.gfx\.lampShadowBegin\(_mFlVP, flBest\);/);
   assert.match(lamp, /if \(!_carsOnlyPass && G\.gfx\.lampStaticBegin && G\.gfx\.lampStaticBegin\(_mFlVP\)\) \{/);
 });
+
+test("godray: lamp beams alone take one blur pair, sun shafts keep two, on TLX and GLX alike (TLX-PERF-PLAN G1)", () => {
+  // The second H+V pair removes the sun march's shadow-slice stripes; a lamp
+  // cone has none, so night frames with only lamp beams skip it: -2 half-res
+  // passes. One backend-neutral knob, apex26.grLite=0, restores two pairs.
+  const tlx = code("js/render/three/tlx-post.js"), glx = code("js/render/glx/post.js");
+  for (const [name, src] of [["tlx-post", tlx], ["glx/post", glx]]) {
+    assert.match(src, /const grPairs = \(!sunGR && _grLite\) \? 1 : 2;/, name + ": one pair only without sun shafts");
+    assert.match(src, /for \(let bp = 0; bp < grPairs; bp\+\+\)/, name + ": the blur loop runs grPairs");
+    assert.match(src, /_grLite = localStorage\.getItem\("apex26\.grLite"\) !== "0"/, name + ": the shared knob");
+  }
+});
