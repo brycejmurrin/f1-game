@@ -655,7 +655,7 @@ test("a duel never leaks into a championship round, a time trial or a quali lap"
   const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
   assert.match(game, /const duelOn = \(\) => duelMode && !isChampionship\(\) && !isTimeTrial\(\) && !isQuali\(\);/);
   const uses = game.split("\n").filter((l) => /\bduelMode\b/.test(l) && !/^\s*\/\//.test(l));
-  const bad = uses.filter((l) => !/let duelMode|const duelOn|set duel\(v\)|get duel\(\)/.test(l));
+  const bad = uses.filter((l) => !/let duelMode|const duelOn|const duelSetting|set duel\(v\)|get duel\(\)/.test(l));
   assert.deepEqual(bad, [], "duelMode is read only through duelOn(): " + bad.join(" | "));
   const lobby = fs.readFileSync(path.join(ROOT, "js/net/lobby.js"), "utf8");
   assert.match(lobby, /G\.duel = false;/, "a friend race clears duel: the room's grid is every peer's");

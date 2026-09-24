@@ -50,7 +50,7 @@ test("bakedModel rides the scenery transform like the fallback it replaces", () 
   // so RK() was handed a string and the real k was read as the side — see the
   // behavioural test below for what that cost. This guard now pins the shape the
   // signature actually needs: out of the list, and its own wrapper.
-  const src = fs.readFileSync(path.join(ROOT, "js/track/tracks.js"), "utf8");
+  const src = fs.readFileSync(path.join(ROOT, "js/track/scenery/build-props.js"), "utf8");
   const i = src.indexOf("function transformSceneryApi(");
   assert.ok(i >= 0);
   const kSide = src.slice(i).match(/for \(const name of \[([^\]]*)\]\) \{\s*const f = api\[name\]; if \(f\) w\[name\] = \(k, side, \.\.\.r\)/);
@@ -238,7 +238,7 @@ test("along + wrapped helpers stay on the authored span (imola / spa)", () => {
 });
 
 test("transformSceneryApi along hands authored-frame k via sceneryNodeToAuthored", () => {
-  const src = fs.readFileSync(path.join(ROOT, "js/track/tracks.js"), "utf8");
+  const src = fs.readFileSync(path.join(ROOT, "js/track/scenery/build-props.js"), "utf8");
   const i = src.indexOf("function transformSceneryApi(");
   assert.ok(i >= 0);
   const end = src.indexOf("\n  function ", i + 1);

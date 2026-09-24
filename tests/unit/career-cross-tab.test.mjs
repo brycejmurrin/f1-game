@@ -85,8 +85,10 @@ function load(options = {}) {
   vm.runInContext(readFileSync(join(ROOT, "js/career/save-migrate.js"), "utf8"), ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/core/store.js"), "utf8"), ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/career/season-cal.js"), "utf8"), ctx);
   return {
     Career: vm.runInContext("Career", ctx), disk,
+    SeasonCal: vm.runInContext("SeasonCal", ctx),
     store: vm.runInContext("GameStore.store", ctx),
     SaveMigrate: vm.runInContext("SaveMigrate", ctx),
     foreign: (key) => listeners.get("storage")({ key, newValue: disk.get(key) }),
@@ -236,6 +238,125 @@ test("settleRound refuses a conflicted save before mutating results", () => {
   assert.equal(career.results.length, before, "RAM must not record a round the disk will not keep");
   assert.equal(career.money, money);
   assert.equal(JSON.parse(disk.get(key)).season.round, 9);
+});
+
+test("career scoring checks its slot before championship points mutate", () => {
+  const { Career, disk, foreign } = load();
+  Career.load(); Career.engage(true);
+  const local = Career.data();
+  const key = "apex26.career.driver.0";
+  disk.set(key, JSON.stringify(save(9, 900))); foreign(key);
+  const player = { driverId: "haas:0", code: "YOU", team: { id: "haas" }, retired: false };
+  assert.equal(Career.scoreRound([player], player), null);
+  assert.equal(local.season.round, 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(local.season.pts)), {});
+  assert.equal(JSON.parse(disk.get(key)).money, 900);
+});
+
+test("career scoring commits points and settlement together on an unchanged slot", () => {
+  const { Career, SeasonCal, disk } = load();
+  Career.load(); Career.engage(true); SeasonCal.engage("career");
+  const c = Career.data();
+  c.season.round = 0;
+  // Classified finishers only (BUGS.md B4 / SeasonCal.award) — a still-running
+  // car must not take table points. Mark finished so the P1 fixture earns 25.
+  const player = { driverId: "haas:0", code: "YOU", team: { id: "haas" }, retired: false,
+    finished: true, cuts: 0, penalty: 0, gridPos: 1 };
+  const result = Career.scoreRound([player], player);
+  assert.ok(result && result.save.ok);
+  assert.equal(c.season.round, 1);
+  assert.equal(c.season.pts["haas:0"], 25);
+  assert.equal(c.results.length, 1);
+  const durable = JSON.parse(disk.get("apex26.career.driver.0"));
+  assert.equal(durable.season.round, 1);
+  assert.equal(durable.results.length, 1);
+});
+
+test("a revision changing after award staging leaves the live season alias untouched", () => {
+  const { Career, SeasonCal, disk, store, foreign } = load();
+  Career.load(); Career.engage(true); SeasonCal.engage("career");
+  const career = Career.data();
+  career.season.round = 0;
+  const alias = career.season, before = JSON.stringify(career);
+  const key = "apex26.career.driver.0";
+  const originalRev = store.keyRevision.bind(store);
+  let reads = 0;
+  store.keyRevision = (k) => {
+    if (k === "career.driver.0" && ++reads === 2) {
+      disk.set(key, JSON.stringify(save(9, 900))); foreign(key);
+    }
+    return originalRev(k);
+  };
+  const player = { driverId: "haas:0", code: "YOU", team: { id: "haas" }, retired: false };
+  assert.equal(Career.scoreRound([player], player), null);
+  assert.equal(reads, 2);
+  assert.equal(career.season, alias);
+  assert.equal(JSON.stringify(career), before);
+  assert.equal(JSON.parse(disk.get(key)).money, 900);
+});
+
+test("a rejected settlement rolls back staged points and economy in place", () => {
+  const { Career, SeasonCal, disk, store, foreign } = load();
+  Career.load(); Career.engage(true); SeasonCal.engage("career");
+  const career = Career.data();
+  career.season.round = 0;
+  const alias = career.season, before = JSON.stringify(career);
+  const key = "apex26.career.driver.0";
+  const originalRev = store.keyRevision.bind(store);
+  let reads = 0;
+  store.keyRevision = (k) => {
+    if (k === "career.driver.0" && ++reads === 3) {
+      disk.set(key, JSON.stringify(save(9, 900))); foreign(key);
+    }
+    return originalRev(k);
+  };
+  const player = { driverId: "haas:0", code: "YOU", team: { id: "haas" }, retired: false,
+    cuts: 0, penalty: 0, gridPos: 1 };
+  assert.equal(Career.scoreRound([player], player), null);
+  assert.ok(reads >= 3);
+  assert.equal(career.season, alias);
+  assert.equal(JSON.stringify(career), before);
+  assert.equal(Career.conflicted(), true);
+  assert.equal(JSON.parse(disk.get(key)).money, 900);
+});
+
+test("a conflicted career cannot be cleared or deleted, including from a stale slot card", () => {
+  const { Career, disk, foreign } = load();
+  Career.load(); Career.engage(true);
+  const key = "apex26.career.driver.0";
+  const seen = Career.slotRevision("driver", 0);
+  disk.set(key, JSON.stringify(save(9, 900))); foreign(key);
+  assert.equal(Career.clear().reason, "conflict");
+  assert.equal(Career.deleteSlot("driver", 0, seen).reason, "conflict");
+  assert.equal(JSON.parse(disk.get(key)).money, 900);
+  const other = "apex26.career.driver.1";
+  disk.set(other, JSON.stringify(save(2, 200)));
+  const otherSeen = Career.slotRevision("driver", 1);
+  disk.set(other, JSON.stringify(save(3, 300))); foreign(other);
+  assert.equal(Career.deleteSlot("driver", 1, otherSeen).reason, "conflict");
+  assert.equal(JSON.parse(disk.get(other)).money, 300);
+});
+
+test("quota-refused clear and deletion report session-only outcomes", () => {
+  const opts = { setItem(key, value, target) {
+    if (key.startsWith("apex26.career.driver.") && value === "null") {
+      const err = new Error("full"); err.name = "QuotaExceededError"; throw err;
+    }
+    target.set(key, value);
+  } };
+  const a = load(opts);
+  a.Career.load();
+  const clear = a.Career.clear();
+  assert.equal(clear.ok, true);
+  assert.equal(clear.durable, false);
+  assert.equal(a.Career.active(), false, "session cache still follows the requested deletion");
+  assert.equal(JSON.parse(a.disk.get("apex26.career.driver.0")).money, 100, "disk still has the save");
+  const b = load(opts);
+  b.Career.load();
+  const del = b.Career.deleteSlot("driver", 0, b.Career.slotRevision("driver", 0));
+  assert.equal(del.ok, true);
+  assert.equal(del.durable, false);
+  assert.equal(JSON.parse(b.disk.get("apex26.career.driver.0")).money, 100);
 });
 
 test("career hub BACK hides the title STANDINGS chip from the standalone season", () => {

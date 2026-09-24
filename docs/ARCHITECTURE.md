@@ -77,7 +77,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_210 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_212 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -225,6 +225,7 @@ _210 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `city.js` | `SceneryCity` | tag | SceneryCity: the city/building band of the buildProps composite-model toolkit — the shared neonFacade curtain wall, the building()/neonTower() massing… |
 | `identity.js` | `SceneryIdentity` | tag | SceneryIdentity: the shared circuit-identity toolkit of the buildProps composite models — underpass portals, flood masts (+ ring), LED facade bands, c… |
 | `pits.js` | `SceneryPits` | tag | SceneryPits: the pit complex's 3D furniture, built FROM TrackPit. |
+| `build-props.js` | `TrackBuildProps` | tag | TrackBuildProps: buildProps orchestration (guards + theme dress + scenery API + lamps + pits). |
 
 **`js/circuits/`**
 
@@ -237,6 +238,7 @@ _210 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `pit-lane.js` | `PitLane` | tag | PIT LANE: the other half of the sentence js/physics/tyre-model.js opened. |
+| `session-entry.js` | `SessionEntry` | tag | One owner for the asynchronous gap before a race or qualifying sheet commits. |
 | `session-records.js` | `SessionRecords` | tag | Comparable time-trial classes and lap configuration continuity. |
 | `race-insights.js` | `RaceInsights` | tag | Measured stint/energy advice, unscored drills and ordered race explanations. |
 | `driving-coach.js` | `DrivingCoach` | tag | Read-only driving feedback and explicitly unscored solo practice. |
@@ -259,7 +261,7 @@ _210 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `circuit-elevations.js` | `—` | tag | surveyed circuit elevation profiles (metres relative to the start/finish line, 64 samples by arc-fraction around the lap). |
-| `tracks.js` | `Tracks` | tag | track engine: circuit defs (js/circuits/) → splines, meshes, scenery(api). |
+| `tracks.js` | `Tracks` | tag | track engine shell: LIST / build() / centerline / pit helpers / terrainY. |
 
 **`js/car/`**
 
@@ -819,17 +821,19 @@ One concern per file, all loaded before `tracks.js`:
 | `landmark-kit.js` / `circuit-kit.js` | `LandmarkKit` / `CircuitKit` | landmark & circuit composite kits for `scenery(api)` |
 | `maps.js` | `TrackMaps` | offline 2D picker outlines from the spline engine — was `trackmaps.js` |
 | `scenery-nature.js` / `scenery-city.js` / `scenery-structures.js` / `scenery-identity.js` | `Scenery*` | the buildProps split (below) |
+| `scenery/build-props.js` | `TrackBuildProps` | `buildProps` orchestration (guards nested pending a later peel); `Tracks.build` calls `TrackBuildProps.build` |
 | `scenery/pits.js` | `SceneryPits` | the pit complex's 3D furniture, last in `buildProps` and every position `track.pit`'s: the signalling platform, wall and barrier swept along the lane, the entry boards and exit lights, and the garages — `GarageScene.buildStatic` (the setup screen's own bay) placed once per team with `TrackGeom.addMesh` under a per-bay roof, hospitality storey and race control. Emits with the RAW emitters; every other prop is kept out of the complex by `onRoadHit` / `onTrack`, and a circuit's superseded pit block is recorded as such rather than as a required failure |
 
-**The buildProps split.** Prop placement is four `Scenery*.create(ctx)`
-modules — nature (trees/terrain furniture), city (the `cityStyle` building
-generator, neon, glass), structures (grandstands, gantries, barriers,
-floodmasts), identity (per-circuit landmark passes) — each instantiated with a
-ctx of the placement helpers and accumulators. Together they serve the
-**112-member `scenery(api)` contract**, frozen by
-`tests/unit/scenery-api-contract.test.mjs`: a circuit's `scenery(api)` callback can
-destructure any of those 112 names, so removing/renaming one is a breaking
-change the test catches. See [SCENERY-API.md](SCENERY-API.md).
+**The buildProps split.** Orchestration (guards + theme dress + API wrap +
+lamps + pits) lives in `scenery/build-props.js` (`TrackBuildProps.build`).
+Prop placement is four `Scenery*.create(ctx)` modules — nature (trees/terrain
+furniture), city (the `cityStyle` building generator, neon, glass), structures
+(grandstands, gantries, barriers, floodmasts), identity (per-circuit landmark
+passes) — each instantiated with a ctx of the placement helpers and
+accumulators. Together they serve the **112-member `scenery(api)` contract**,
+frozen by `tests/unit/scenery-api-contract.test.mjs`: a circuit's `scenery(api)`
+callback can destructure any of those 112 names, so removing/renaming one is a
+breaking change the test catches. See [SCENERY-API.md](SCENERY-API.md).
 
 ## js/circuits/<id>.js — `TrackDefs` (circuit data)
 
@@ -870,8 +874,9 @@ Resolves each `TrackDefs` entry (palette from the `night` flag, geometry from
 the def's `path` — a def without one is a build error naming the circuit, there
 is no authored-segment fallback), samples the
 closed Catmull-Rom spline (via `TrackSpline`), and orchestrates the build —
-road/terrain meshes through `TrackMesh`/`TrackSurface`, props through the four
-scenery modules.
+road/terrain meshes through `TrackMesh`/`TrackSurface`, props through
+`TrackBuildProps.build` (`js/track/scenery/build-props.js`) and the four
+`Scenery*.create(ctx)` bands.
 
 ```
 Tracks.LIST -> [ trackDef, ... ]   // 52 circuits. LIST order == the `<script>` load
