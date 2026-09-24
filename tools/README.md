@@ -36,6 +36,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | **lib/chromium-path.mjs** | Derives the Chromium executable from playwright-core's browsers.json revision + the browsers root; run it to print. | playwright-probe |
 | **lib/cli-args.mjs** | Shared CLI flag reader: both `--name=v` and `--name v`, and an unknown flag is an ERROR not a shrug. | — |
 | **lib/flyby-audit.cjs** | Fleet audit of the pre-race FLYBY path (FlybySeq.solve) in the node VM: jumps, lift, ground, grid sightline, pan rate. | playwright-probe |
+| **lib/frame-fleet.mjs** | Pure FLEET half of frame-report.mjs: compact per-circuit reports, worst-frame summary, and the old-vs-new diff. | — |
 | **lib/frame-math.mjs** | Pure framing math for frame-report.mjs: projection, ray-cast vs boxes/terrain, occlusion, horizon, motion, flags. | — |
 | **lib/game-vm-pool.cjs** | Pool of game-vm contexts in worker threads: one circuit's probe per worker, JSON back — assertions stay in the parent. | — |
 | **lib/game-vm.cjs** | Boots js/game.js + `__apex` in a Node VM (renderer/DOM stubbed); `createGame({track})` drives physics, no browser. | — |
@@ -131,7 +132,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/backend-compare.mjs** | Same deterministic scene on GLX/TLX/WGX + numeric pixel diff (MAD, %px changed) and per-backend console errors. | playwright-probe |
 | **shot/baked-scenery.mjs** | Curated free-cam gallery of `bakedModel` sites (Monza/Spa/Silverstone/Monaco/Vegas); PNGs + `manifest.json`. | playwright-probe / scenery-dress |
 | **shot/flyby.mjs** | Contact sheet + JSON of the pre-race FLYBY shot sequence, flagging a camera inside scenery. `--track a,b --frames… | — |
-| **shot/frame-report.mjs** | Node-only FRAMING REPORT of flyby shots/poses: subject cover, occlusion, sky, near obstructions, motion, ASCII. | playwright-probe |
+| **shot/frame-report.mjs** | Node-only FRAMING REPORT of flyby shots: cover, occlusion, sky, motion, ASCII; --fleet sweeps all, --diff compares two. | playwright-probe |
 | **shot/garage-angles.mjs** | Garage shots, ONE Chromium: walks teams x liveries x parts x cameras x viewports; clears dead DISPLAY. | — |
 | **shot/garage-frame.mjs** | Garage turntable screenshot + garageCam() JSON for WebGPU/WebGL2 A/B. | — |
 | **shot/garage-interior.mjs** | PNG gap-pixel gate for garage-frame.mjs (flat wall / paddock bleed); used after soft/CDP capture. | — |

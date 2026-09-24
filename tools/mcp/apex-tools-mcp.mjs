@@ -5,7 +5,7 @@
  * apex-tools-mcp — wrap committed tools/ CLIs as MCP tools (apex_* only).
  *
  * One of the THREE .mcp.json servers (beside chrome-devtools and
- * playwright-official; catalog trimmed 7 → 3 and wraps 30 → 11 on 2026-09).
+ * playwright-official; catalog trimmed 7 → 3 and wraps 30 → 11 on 2026-09; 12 with apex_frame_report).
  * Never chrome_* / tinyfish_*. Local working tree only; no github.io.
  * Design: docs/research/APEX-TOOLS-MCP.md — map: docs/AGENT-SURFACE.md
  *
@@ -30,7 +30,7 @@ const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const PROTOCOL = "2025-06-18";
 const SERVER_NAME = "apex-tools-mcp";
-const SERVER_VERSION = "1.5.0";
+const SERVER_VERSION = "1.6.0";
 const HTTP_HOST = "127.0.0.1";
 const HTTP_PORT_DEFAULT = 3713;
 const PREFIX = "apex_";
@@ -494,6 +494,26 @@ const CATALOG = [
       },
     },
   },
+  {
+    name: "apex_frame_report",
+    week: 5,
+    kind: "tree",
+    description: "Tree — FRAMING REPORT of the flyby with no browser and no GPU (node VM, ~3 s boot): per frame subject cover / % visible / occluders, sky, near obstructions, motion, flags, score, ASCII thumb. One circuit; the fleet sweep and --diff stay CLI (minutes). Never --out / --fleet / --pose. Skill: playwright-probe.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        track: { type: "string", description: "Circuit id (required) — one of Tracks.LIST (tools/manifest.cjs CIRCUITS)." },
+        u: { type: "array", items: { type: "number" }, description: "Exact flyby points 0..1 (max 64). Not with frames." },
+        frames: { type: "integer", description: "N evenly spaced frames (1..120). Not with u. Default: each shot's start/mid/end." },
+        shots: { type: "string", description: "Shot-list JSON/JS file under scratch/ or artifacts/ (default FlybySeq.DEFAULT)." },
+        json: { type: "boolean", description: "Full JSON report (parsed into out) instead of the text table + thumbs." },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+      required: ["track"],
+    },
+  },
 ];
 
 function badArgs(message, fix) {
@@ -522,8 +542,87 @@ function assertSafeOut(raw) {
   return resolved;
 }
 
+function underScratchOrArtifacts(resolved) {
+  return [ARTIFACTS_DIR, SCRATCH_DIR].some((base) => {
+    const rel = path.relative(base, resolved);
+    return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel);
+  });
+}
+
+/** An INPUT file the wrapped CLI will read: it must be a real file under
+ *  artifacts/ or scratch/, and still be there once symlinks are resolved. */
+function assertSafeIn(raw, what) {
+  const s = String(raw || "");
+  if (!s) badArgs(`empty ${what} path`, "Pass a path under artifacts/ or scratch/.");
+  const escaped = () => {
+    throw Object.assign(new Error("path_escaped"), {
+      refuse: refuse(
+        "path_escaped",
+        `${what} must be a file under artifacts/ or scratch/ (got ${s})`,
+        "Copy the file into scratch/ and pass its repo-relative path.",
+      ),
+    });
+  };
+  const resolved = path.resolve(ROOT, s);
+  if (!underScratchOrArtifacts(resolved)) escaped();
+  let real;
+  try {
+    real = fs.realpathSync(resolved);
+  } catch {
+    badArgs(`${what} not found: ${s}`, "Write the file under scratch/ first.");
+  }
+  const realBases = [ARTIFACTS_DIR, SCRATCH_DIR].map((b) => { try { return fs.realpathSync(b); } catch { return b; } });
+  const inside = realBases.some((base) => {
+    const rel = path.relative(base, real);
+    return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel);
+  });
+  if (!inside) escaped();
+  if (!fs.statSync(real).isFile()) badArgs(`${what} is not a file: ${s}`, "Pass a shot-list JSON file.");
+  return real;
+}
+
+let circuitIds = null;
+function knownCircuits() {
+  if (!circuitIds) circuitIds = require(path.join(ROOT, "tools/manifest.cjs")).CIRCUITS.slice();
+  return circuitIds;
+}
+
+/** apex_frame_report argv. Every value is validated here; nothing the caller
+ *  passes reaches the CLI as a free-form flag. */
+function frameReportArgv(args) {
+  const track = args.track == null ? "" : String(args.track);
+  if (!track) badArgs("apex_frame_report needs track", 'Pass {"track":"monza"} — a Tracks.LIST id.');
+  if (!knownCircuits().includes(track)) {
+    badArgs(`unknown track ${track}`, `Tracks.LIST ids: ${knownCircuits().join(", ")}.`);
+  }
+  const argv = [...nodeTool("shot/frame-report.mjs"), "--track", track];
+  const hasU = args.u != null, hasFrames = args.frames != null;
+  if (hasU && hasFrames) badArgs("pass u or frames, not both", 'Either {"u":[0.1,0.5]} or {"frames":12}.');
+  if (hasU) {
+    if (!Array.isArray(args.u) || !args.u.length || args.u.length > 64) {
+      badArgs("u must be a non-empty array of at most 64 numbers", 'Pass {"u":[0.25,0.5]}.');
+    }
+    for (const v of args.u) {
+      if (typeof v !== "number" || !Number.isFinite(v) || v < 0 || v > 1) {
+        badArgs(`u values must be numbers in 0..1 (got ${JSON.stringify(v)})`, "The flyby runs u = 0 → 1.");
+      }
+    }
+    argv.push(`--u=${args.u.join(",")}`);
+  }
+  if (hasFrames) {
+    const n = args.frames;
+    if (!Number.isInteger(n) || n < 1 || n > 120) badArgs(`frames must be an integer 1..120 (got ${JSON.stringify(n)})`);
+    argv.push(`--frames=${n}`);
+  }
+  if (args.shots != null && args.shots !== "") argv.push("--shots", assertSafeIn(args.shots, "shots"));
+  if (args.json) argv.push("--json");
+  return argv;
+}
+
 function buildArgv(name, args) {
   switch (name) {
+    case "apex_frame_report":
+      return frameReportArgv(args);
     case "apex_verify_change_fast": {
       const argv = [...nodeTool("ci/verify-change.mjs"), "--fast", "--json"];
       if (args.since) argv.push("--since", String(args.since));
@@ -778,6 +877,16 @@ function pinOk(name, argv) {
       );
     }
   }
+  if (name === "apex_frame_report") {
+    if (!argv.some((a) => a.endsWith("frame-report.mjs")) || !argv.includes("--track")
+        || argv.some((a) => /^--(out|fleet|diff|pose|tracks)(=|$)/.test(a))) {
+      return refuse(
+        "pin_violated",
+        "apex_frame_report is one circuit, read-only: --track, never --out / --fleet / --diff / --pose",
+        "Run `node tools/shot/frame-report.mjs --fleet` / `--diff` from a shell for the fleet sweep.",
+      );
+    }
+  }
   if (argv.includes("--url")) {
     return refuse(
       "pin_violated",
@@ -999,7 +1108,8 @@ function dispatch(name, args = {}) {
   }
 
   const longTree = name === "apex_verify_change_fast"
-    || name === "apex_rotate_markings_check" || name === "apex_graph_parity";
+    || name === "apex_rotate_markings_check" || name === "apex_graph_parity"
+    || name === "apex_frame_report";
   const timeoutMs = longTree ? 180000 : 60000;
   // Classified non-zero: verify-change --fast exit 2 = verdict partial (fast
   // phase passed, remaining browser groups are not-run — never a tool crash).

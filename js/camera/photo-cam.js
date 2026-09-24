@@ -7,6 +7,12 @@ Log.info("game", "Photomode.create");
 // Stable bindings from the game.js closure.
 const { $, gfx, photoCam, photoKeys, photoMouse, photoMove, photoLook,
         applyResMode } = G;
+// THE FREE CAMERA panel (js/camera/free-cam.js) is this fly-cam with its own
+// dock, created here so js/game.js gains nothing. Absent in the VM tests that
+// boot this file alone, so every use below is guarded.
+const freeCam = typeof FreeCam !== "undefined"
+  ? FreeCam.create(G, { enter: enterPhotoMode, exit: exitPhotoMode, publish: () => updatePhotoCam(0), releaseKeys: releasePhotoInput })
+  : null;
 
 function initPhotoCam() {
   photoCam.pos[0] = G.camEye[0]; photoCam.pos[1] = G.camEye[1]; photoCam.pos[2] = G.camEye[2];
@@ -37,7 +43,8 @@ function releasePhotoInput() {
 }
 // Integrate held input into the fly-cam each paused frame and publish dbgCam.
 function updatePhotoCam(dt) {
-  const spd = photoKeys.boost ? 95 : 34;          // m/s (Shift = boost)
+  const spd = freeCam && freeCam.isOpen() ? freeCam.speed(photoKeys.boost)   // the panel's SPEED dial
+    : (photoKeys.boost ? 95 : 34);                // m/s (Shift = boost)
   const lookRate = 1.7;                           // rad/s for key/stick look
   // Look: arrow keys + touch look stick + mouse drag delta.
   const yawIn   = (photoKeys.yr ? 1 : 0) - (photoKeys.yl ? 1 : 0) + photoLook.x;
@@ -69,6 +76,7 @@ function updatePhotoCam(dt) {
   // view() hook; the tuner preview should show the REAL race fog anyway.
   G.dbgCam = { eye: [e[0], e[1], e[2]], target: [e[0] + fwd[0] * 100, e[1] + fwd[1] * 100, e[2] + fwd[2] * 100],
              fov: photoCam.fov, far: gfx.isMobile ? 1100 : 2500, fog: 1.0 };   // not 8000 — a huge far plane wrecks depth precision → z-fighting/flicker
+  if (freeCam) freeCam.decorate(G.dbgCam, dt);   // roll, lens, status line — inert unless its panel is open
 }
 function enterPhotoMode() {
   if (G.photoMode) return;
@@ -89,6 +97,7 @@ function exitPhotoMode() {
   if (!G.photoMode) return;
   Log.info("game", "Photomode.exit");
   G.photoMode = false;
+  if (freeCam) freeCam.onPhotoExit();       // resume / quit / the tuner closing take the free-cam panel with them
   G.dbgCam = null;                          // hand the game camera back
   document.body.classList.remove("photo-mode", "pc-nopanel", "pc-uihidden");
   $("photo-controls").hidden = true;
@@ -102,7 +111,7 @@ function exitPhotoMode() {
   applyResMode();
 }
 function togglePhotoPanel() {
-  const p = $("lighting-inner"); if (!p) return;
+  const p = freeCam && freeCam.isOpen() ? freeCam.panel() : $("lighting-inner"); if (!p) return;
   const hide = !p.hidden;
   p.hidden = hide;
   document.body.classList.toggle("pc-nopanel", hide);
@@ -118,6 +127,9 @@ function photoKeyHandler(e) {
   const tag = (document.activeElement && document.activeElement.tagName) || "";
   if (e.code !== "Escape" && (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT")) return;  // typing in a slider
   const down = e.type === "keydown";
+  const fc = freeCam ? freeCam.key(e.code, down, document.activeElement) : 0;
+  if (fc < 0) return;                        // an arrow key over the free-cam panel belongs to its focused control
+  if (fc > 0) { e.preventDefault(); e.stopPropagation(); return; }
   let hit = true;
   switch (e.code) {
     case "KeyW": photoKeys.w = down; break;
@@ -248,13 +260,16 @@ wirePhotoHold("pc-down", () => G.photoAlt = -1, () => G.photoAlt = 0);
   }
 }
 $("pc-toggle").onclick = () => { if (G.soundOn) GameAudio.uiSelect(); G.photoMode ? exitPhotoMode() : enterPhotoMode(); };
-$("pc-exit").onclick = () => { if (G.soundOn) GameAudio.uiTick(); exitPhotoMode(); };
+$("pc-exit").onclick = () => {
+  if (G.soundOn) GameAudio.uiTick();
+  if (freeCam && freeCam.isOpen()) freeCam.close(true); else exitPhotoMode();   // EXIT from the free-cam panel goes back to the menu
+};
 $("pc-panel").onclick = togglePhotoPanel;
 $("pc-hud").onclick = () => setPhotoUiHidden(true);
 $("pc-restore").onclick = () => setPhotoUiHidden(false);
 $("pc-fov").oninput = (e) => { photoCam.fov = +e.target.value; };
 
-return { initPhotoCam, updatePhotoCam, enterPhotoMode, exitPhotoMode };
+return { initPhotoCam, updatePhotoCam, enterPhotoMode, exitPhotoMode, freeCam };
 }
 
 return { create };

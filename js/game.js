@@ -6695,7 +6695,7 @@ function render(dt) {
   // (the flyby's own roll would otherwise be whatever the last race left behind,
   // decaying over the first half-second of a shot the editor showed level).
   if (dbgCam || cine) {
-    camRoll = 0;
+    camRoll = (dbgCam && dbgCam.roll) || 0;   // level unless the FREE CAMERA's ROLL dial set one (js/camera/free-cam.js)
   } else {
     // Slip source smoothed at λ10 (τ≈0.1 s): vLat/speed are RAW 60 Hz-stepped
     // physics values, and feeding them straight into screen roll printed every
@@ -7112,9 +7112,14 @@ function render(dt) {
     // struggling phone the camera-culled set: slower, and the lamps ahead
     // popping on as they entered it.
     const _pcShed = PerfGov.autoShed();
+    // Wet phone floor: on a wet road ~half a lamp's light is its live reflection,
+    // and at a 16-24 slot cap 35-39 % of it comes from lamps outside the set
+    // (docs/notes/LAMP-POPPING-PLAN-2026-09-24.md, b) — so they pop. Per-chunk
+    // lamps, road included, cover them; the governor shed still wins.
+    const _pcWet = gfx.mobileTier && (frame.wetness || 0) > 0.3 ? 0.6 : 0;
     frame.perChunkLights = (!gfx.hasPerChunkLights || _perChunkOff || _pcShed >= 2) ? 0
-      : (_pcShed >= 1 ? Math.min(0.3, +LT.perChunkLights || 0) : (+LT.perChunkLights || 0));
-    frame.roadChunkLamps = (frame.perChunkLights > 0 && LT.roadChunkLamps) ? 1 : 0;
+      : (_pcShed >= 1 ? Math.min(0.3, Math.max(_pcWet, +LT.perChunkLights || 0)) : Math.max(_pcWet, +LT.perChunkLights || 0));
+    frame.roadChunkLamps = (frame.perChunkLights > 0 && (LT.roadChunkLamps || _pcWet > 0)) ? 1 : 0;
     setFrameLights(camEye, _floodRGB, _lightFwd);
     // BAKED LAMP POOLS (js/lighting/lamp-bake.js): the whole track set's ground
     // pools at base colour, scaled per frame by the same _floodRGB the live set gets.
@@ -8065,13 +8070,13 @@ function tickBody(now) {
     // to place shots in the world, and without this gate it parked dbgCam on a
     // frame nothing was redrawing, so the screen kept showing the race the
     // player paused out of.
-    // THIS IS THE ONLY updatePhotoCam CALL SITE, and that is on purpose: the
-    // free camera is a sub-mode OF the tuner, only reachable from it, and the
-    // tuner is only reachable from the pause menu. Resuming tears it down
-    // (setPaused -> closeLightTuner -> exitPhotoMode), so there is no unpaused
+    // THE ONLY PER-FRAME updatePhotoCam CALL SITE, on purpose: the free camera
+    // (the lighting tuner's, or the FREE CAMERA panel's) is only reachable from
+    // the pause menu, and its placements publish one zero-dt frame. Resuming tears
+    // it down (setPaused -> exitPhotoMode -> FreeCam.onPhotoExit), so no unpaused
     // state in which it should still be flying.
     if ((state === "race" || state === "count") &&
-        (!els.lighting.hidden || !els.camtune.hidden || !els.flyby.hidden)) {
+        (!els.lighting.hidden || !els.camtune.hidden || !els.flyby.hidden || photoMode)) {   // photoMode: the FREE CAMERA panel docks with no tuner open
       // NO governor here: paused preview frames are vsync-cheap, so the governor
       // only ever stepped the scale UP toward full res — each step a complete
       // render-target reallocation. The scale simply stays where the race left it
@@ -8373,7 +8378,7 @@ function syncSettingsAvailability() {
   SettingRow.disable($("pm-hidehud"), !inRace);
   $("pm-lighting").disabled = !inRace;
   $("pm-camtune").disabled = !inRace;
-  $("pm-flyby").disabled = !inRace;
+  $("pm-flyby").disabled = !inRace; $("pm-freecam").disabled = !inRace;
 }
 function openSettings() {
   // AUTO is always the full set; re-read the LAYOUT note on open so "Here

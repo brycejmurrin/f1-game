@@ -214,6 +214,7 @@ const FULL = [
   "js/fx/skidmarks.js",
   "js/race/race-control.js",
   "js/race/weather-arc.js",
+  "js/camera/free-cam.js",
   "js/camera/photo-cam.js",
   "js/lighting/tuner-panel.js",
   "js/camera/tuner-panel.js",

@@ -761,7 +761,8 @@ function closeFlyby(showPauseMenu) {
   // The preview parks the camera through dbgCam; leaving it parked would hand
   // the player back a frozen flyby camera instead of their own car.
   // view("chase") is the release, for two reasons that both matter here.
-  // __apex.freeCam does not exist — the guard reading it was always false, so
+  // __apex.freeCam did not exist then (it is the FREE CAMERA panel's hook now,
+  // not a release) — the guard reading it was always false, so
   // NOTHING was unparking the camera and closing the panel left the player
   // looking through the last previewed frame. And snapCam(), the other
   // documented clear, returns early when there is no G.player — which is

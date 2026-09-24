@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// @doc Node-only FRAMING REPORT of flyby shots/poses: subject cover, occlusion, sky, near obstructions, motion, ASCII.
+// @doc Node-only FRAMING REPORT of flyby shots: cover, occlusion, sky, motion, ASCII; --fleet sweeps all, --diff compares two.
 // @skill playwright-probe
 /*
  * frame-report.mjs — JUDGE A SHOT WITHOUT RENDERING IT.
@@ -22,6 +22,19 @@
  *   node tools/shot/frame-report.mjs --track monza --pose=520,12,300:480,1,330:40 --subject corner:first
  *   node tools/shot/frame-report.mjs --track monza --json > artifacts/fr.json
  *
+ * FLEET (tools/lib/frame-fleet.mjs): one child process per circuit, strictly
+ * sequential (one game-vm boot at a time), ~6 s a circuit, ~5 min for all 52:
+ *
+ *   node tools/shot/frame-report.mjs --fleet                       # -> artifacts/frame-report/fleet.json
+ *   node tools/shot/frame-report.mjs --fleet --shots scratch/shots.json --out artifacts/frame-report/new.json
+ *   node tools/shot/frame-report.mjs --fleet --tracks monza,spa --worst 20
+ *   node tools/shot/frame-report.mjs --diff artifacts/frame-report/fleet.json artifacts/frame-report/new.json
+ *
+ * A fleet frame is keyed `<shot>@start|mid|end`, not by u, so a `dur` edit
+ * that shifts every later u still lines the same frames up; `--diff` prints
+ * per circuit / frame the score change and the flag NAMES gained or lost
+ * (`--min-delta N`, default 1, hides smaller score moves; `--json` for data).
+ *
  * WHAT IT CANNOT SEE: materials, lighting, fog, billboards' faces, the look of
  * anything. Props are axis-aligned boxes (a long grandstand at 45 degrees
  * over-covers), trees are a trunk + a 80 %-opaque canopy box, sparse `structure`
@@ -34,12 +47,17 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { makeFlags, CliArgError, runCli } from "../lib/cli-args.mjs";
 import * as FM from "../lib/frame-math.mjs";
+import * as FF from "../lib/frame-fleet.mjs";
+import { spawnSync } from "node:child_process";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const require = createRequire(import.meta.url);
 
 const KNOWN = ["--track", "--u", "--frames", "--shots", "--pose", "--subject", "--json", "--out",
-               "--thumb", "--aspect", "--range", "--res", "--quiet"];
+               "--thumb", "--aspect", "--range", "--res", "--quiet",
+               "--fleet", "--tracks", "--worst", "--diff", "--min-delta"];
+const SELF = fileURLToPath(import.meta.url);
+const FLEET_OUT = "artifacts/frame-report/fleet.json";
 
 function readShots(file) {
   const raw = fs.readFileSync(path.resolve(file), "utf8");
@@ -358,15 +376,95 @@ function fmtRow(r, u, id) {
 const HEADER = "u      shot       scr subj  vis  inF 3rds  sky road nearest-obstruction cars pan par  flags\n" +
   "                   (score; subject % of frame / % visible / % of its points in frame; thirds dist; pan & parallax deg/s, | = first frame of a shot)";
 
+// ---------------------------------------------------------------------------
+// Fleet + diff
+// ---------------------------------------------------------------------------
+
+const CIRCUITS = require(path.join(ROOT, "tools/manifest.cjs")).CIRCUITS;   // == Tracks.LIST order
+
+function gitHead() {
+  const r = spawnSync("git", ["rev-parse", "--short", "HEAD"], { cwd: ROOT, encoding: "utf8" });
+  const d = spawnSync("git", ["status", "--porcelain", "--untracked-files=no"], { cwd: ROOT, encoding: "utf8" });
+  return r.status === 0 ? r.stdout.trim() + (d.stdout && d.stdout.trim() ? "+dirty" : "") : null;
+}
+
+/** One CHILD per circuit, strictly in turn: a crash or a hang costs that
+ *  circuit, not the sweep, and no two game VMs are ever alive at once. */
+async function fleet(F) {
+  const ids = F.has("--tracks") ? F.list("--tracks") : CIRCUITS.slice();
+  const bad = ids.filter((id) => !CIRCUITS.includes(id));
+  if (bad.length) throw new CliArgError(`unknown circuit ${bad.join(", ")} — ids are Tracks.LIST (tools/manifest.cjs CIRCUITS)`);
+  if (F.has("--pose")) throw new CliArgError("--fleet judges the flyby; --pose is a one-circuit question");
+  const pass = [];
+  if (F.has("--shots")) pass.push("--shots", path.resolve(F.flag("--shots")));
+  for (const k of ["--frames", "--u", "--aspect", "--res", "--range"]) if (F.has(k)) pass.push(k + "=" + F.flag(k));
+  const rec = {
+    kind: FF.FLEET_KIND, version: FF.FLEET_VERSION, createdAt: new Date().toISOString(), head: gitHead(),
+    shots: F.has("--shots") ? path.relative(ROOT, path.resolve(F.flag("--shots"))) : null,
+    sampling: F.has("--u") ? "u" : F.has("--frames") ? "frames" : "shots",
+    args: pass.filter((a) => !path.isAbsolute(a)), tracks: {},
+  };
+  const t0 = Date.now();
+  ids.forEach((id, i) => {
+    const t = Date.now();
+    const r = spawnSync(process.execPath, [SELF, "--track", id, "--json", "--thumb", "0", ...pass],
+                        { cwd: ROOT, encoding: "utf8", timeout: 180000, maxBuffer: 64 * 1024 * 1024 });
+    let entry;
+    try {
+      if (r.error) throw r.error;
+      if (r.status !== 0) throw new Error(`exit ${r.status}${r.signal ? " " + r.signal : ""}: ${(r.stderr || "").trim().split("\n").pop()}`);
+      entry = FF.compactReport(JSON.parse(r.stdout));
+    } catch (e) {
+      entry = { error: String(e.message || e).slice(0, 300) };
+    }
+    rec.tracks[id] = entry;
+    console.error(`[${i + 1}/${ids.length}] ${id.padEnd(14)} ` +
+      (entry.error ? "ERROR " + entry.error : `${entry.frames.length} frames, mean ${entry.meanScore}`) + ` (${Date.now() - t} ms)`);
+  });
+  rec.wallMs = Date.now() - t0;
+  const file = path.resolve(F.flag("--out", FLEET_OUT));
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(rec, null, 1));
+  if (F.has("--json")) { process.stdout.write(JSON.stringify(rec, null, 1) + "\n"); return; }
+  console.log(FF.formatSummary(rec, +F.flag("--worst", 10)));
+  console.log(`wrote ${path.relative(ROOT, file)} (${(rec.wallMs / 1000).toFixed(0)} s)`);
+}
+
+function diff(F, argv) {
+  const i = argv.indexOf("--diff");
+  const a = argv[i + 1], b = argv[i + 2];
+  if (i < 0 || !a || !b || a.startsWith("--") || b.startsWith("--")) {
+    throw new CliArgError("--diff <old.json> <new.json> — two fleet files written by --fleet");
+  }
+  const load = (f) => {
+    let obj;
+    try { obj = JSON.parse(fs.readFileSync(path.resolve(f), "utf8")); } catch (e) { throw new CliArgError(`${f}: ${e.message}`); }
+    try { return FF.assertFleet(obj, f); } catch (e) { throw new CliArgError(e.message); }
+  };
+  const d = FF.diffFleet(load(a), load(b), { minDelta: +F.flag("--min-delta", 1) });
+  if (F.has("--json")) { process.stdout.write(JSON.stringify(d, null, 1) + "\n"); return; }
+  console.log(FF.formatDiff(d));
+}
+
 async function main() {
-  const F = makeFlags(process.argv.slice(2), KNOWN);
+  const argv = process.argv.slice(2);
+  const F = makeFlags(argv, KNOWN);
+  if (F.has("--diff")) return diff(F, argv);
+  if (F.has("--fleet")) return fleet(F);
+  if (F.has("--track") && !CIRCUITS.includes(F.flag("--track"))) {
+    throw new CliArgError(`unknown circuit ${F.flag("--track")} — ids are Tracks.LIST (tools/manifest.cjs CIRCUITS)`);
+  }
   const track = F.flag("--track", "monza");
   const asp = String(F.flag("--aspect", "16/9")).split("/").map(Number);   // "16/9" or "1.78"
   const aspect = (asp.length === 2 ? asp[0] / asp[1] : asp[0]) || 16 / 9;
   const thumbCols = +F.flag("--thumb", 48);
   const thumbRows = Math.max(4, Math.round(thumbCols / aspect / 2));
   const res = +F.flag("--res", 2);                   // rays per thumbnail char, per axis (x2 → 96 × 28 for 48 × 14)
-  const cols = Math.max(24, (thumbCols || 48) * res), rows = Math.max(12, (thumbRows || 14) * res);
+  // Size the raster off the DEFAULT thumbnail when --thumb 0 hides it: the
+  // numbers must not depend on whether the ASCII is printed (--thumb 0 used
+  // to cast 96 x 12 instead of 96 x 28, which moved every score).
+  const rasterRows = thumbCols ? thumbRows : Math.max(4, Math.round(48 / aspect / 2));
+  const cols = Math.max(24, (thumbCols || 48) * res), rows = Math.max(12, rasterRows * res);
   const range = +F.flag("--range", 2500);
   const opts = { aspect, cols, rows, thumbCols, thumbRows };
   const shots = F.has("--shots") ? readShots(F.flag("--shots")) : null;
@@ -391,16 +489,25 @@ async function main() {
     frames.push({ u: null, id: "pose", r: reportFrame(ctx, pose, subj, opts) });
   } else {
     // Which u to judge: explicit, evenly spaced, or (default) each shot's first, middle and last moment.
+    // `pos` names a default-sampled frame (start/mid/end of its shot) so a
+    // fleet diff can line frames up across a `dur` edit that moves every u.
     let us = [];
+    const pos = [];
     const total = list.reduce((a, s) => a + (s.dur || 0), 0) || 1;
     if (F.has("--u")) us = F.list("--u").map(Number);
     else if (F.has("--frames")) { const n = +F.flag("--frames"); for (let i = 0; i < n; i++) us.push((i + 0.5) / n); }
-    else { let acc = 0; for (const s of list) { const d = (s.dur || 0) / total; us.push(acc + d * 0.03, acc + d * 0.5, acc + d * 0.97); acc += d; } }
+    else {
+      let acc = 0;
+      for (const s of list) {
+        const d = (s.dur || 0) / total;
+        us.push(acc + d * 0.03, acc + d * 0.5, acc + d * 0.97); pos.push("start", "mid", "end"); acc += d;
+      }
+    }
     const solve = (u) => { const v = FlybySeq.solve(T, u, shots); return { eye: v.eye.slice(), tgt: v.tgt.slice(), fov: v.fov, index: v.index, id: v.id, lift: v.lift }; };
     FlybySeq.reset();
     let prevIdx = -1;
     const EPS = 0.001;                                // 24 ms of the flyby
-    for (const u of us) {
+    for (const [ui, u] of us.entries()) {
       // Motion from a second solve 24 ms away, on the same side of any cut.
       const pose = solve(u);
       let q = solve(Math.min(1, u + EPS));
@@ -416,7 +523,7 @@ async function main() {
       prevIdx = pose.index;
       const shot = list[pose.index];
       const subj = subjectFor(ctx, shot.look, shot.id);
-      frames.push({ u, id: pose.id, r: reportFrame(ctx, pose, subj, opts) });
+      frames.push({ u, id: pose.id, pos: pos[ui], r: reportFrame(ctx, pose, subj, opts) });
     }
   }
   // Cuts: how different is the frame either side of each shot boundary? A cut
@@ -440,7 +547,7 @@ async function main() {
     }
   }
   const out = { track, bootMs, analyseMs: Date.now() - t1, aspect: +aspect.toFixed(3), raster: [cols, rows],
-                legend: FM.LEGEND, thresholds: FM.THRESH, frames: frames.map((f) => ({ u: f.u, shot: f.id, ...f.r })), cuts };
+                legend: FM.LEGEND, thresholds: FM.THRESH, frames: frames.map((f) => ({ u: f.u, shot: f.id, pos: f.pos, ...f.r })), cuts };
   g.close();
   if (F.has("--out")) {
     const file = path.resolve(F.flag("--out"));
