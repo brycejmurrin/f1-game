@@ -263,7 +263,8 @@ const CarDraw = (function () {
             playerBodyMesh(c.team, c, visualKey);
             if (CamModes.CAM_MODES[G.camMode].id === "cockpit") cockpitBodyMesh(c.team, c, visualKey);
           } else teamBodyMesh(c.team, c);
-          getCarDecalTexture(c.team, carDecalNum(c.team, c), c.isPlayer);
+          const tex = getCarDecalTexture(c.team, carDecalNum(c.team, c), c.isPlayer);
+          if (tex && typeof G.gfx.uploadTexture === "function") G.gfx.uploadTexture(tex);
         } catch (e) { Log.warn("gfx", "selector car asset preparation failed", e); }
         const elapsed = performance.now() - at; cpuMs += elapsed; maxCpuMs = Math.max(maxCpuMs, elapsed);
       }
