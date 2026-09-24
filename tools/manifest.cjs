@@ -168,6 +168,7 @@ const FULL = [
   "js/lighting/knobs.js",
   "js/lighting/track-lights.js",
   "js/lighting/frame-lights.js",
+  "js/lighting/lamp-bake.js",           // LampBake: every lamp's diffuse pool baked into a ground light map (TLX/GLX read it)
   "js/lighting/lighting.js",
   "js/lighting/profiles.js",
   "js/car/car-mesh.js",

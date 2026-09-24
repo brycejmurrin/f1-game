@@ -6405,7 +6405,7 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
     // the preset floor on the first step and is never restored below it, so one
     // shed on MEDIUM held these lamps off for the session. autoShed() is the
     // measured shed alone (perf.js `_autoShed`).
-    const _wantRoadChunk = gfx.chunkedTrackCoords !== false && ((LT.roadChunkLamps && LT.perChunkLights && gfx.hasPerChunkLights && !_perChunkOff && PerfGov.autoShed() < 1)
+    const _wantRoadChunk = gfx.chunkedTrackCoords !== false && ((LT.roadChunkLamps && LT.perChunkLights && gfx.hasPerChunkLights && !_perChunkOff && PerfGov.autoShed() < 2)
       || (PerfGov.tier() < 3));
     if (_wantRoadChunk) {
       if (track.meshes.roadChunked === undefined) {
@@ -6428,7 +6428,7 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
   // (Skipped for the studio rig — its lamps have no fixtures, and floating
   // glow-cone billboards ringing the car read as artifacts. Skipped in the env
   // probe too: 64px additive halos just smear the reflection.)
-  if (withGlow && frame.lights && !_studioRig) gfx.drawGlow(frame.lights, LT.glareStr);
+  if (withGlow && frame.lights && !_studioRig) gfx.drawGlow(frame.glowLights || frame.lights, LT.glareStr);
   if (!hideMeshes.props) {
     let m;
     // Lit windows / signage / neon glow whenever the session is dark enough to
@@ -7068,6 +7068,8 @@ function render(dt) {
     const _ltr = 1 + Math.max(0, -_lt) * 0.18 - Math.max(0, _lt) * 0.12;
     const _ltg = 1 - Math.abs(_lt) * 0.02;
     const _ltb = 1 - Math.max(0, -_lt) * 0.30 + Math.max(0, _lt) * 0.20;
+    frame.glowLights = null;   // appendCarTailLights sets it; stale otherwise (TAIL-LIGHT EMIT 0)
+    frame.lampBake = null;     // BAKED LAMP POOLS: set below for the night flood set only
     if (_floodActive) {
       const _sy = frame.sunDir ? frame.sunDir[1] : -1;
       // Floor the twilight ramp at 0.30: the dusk sunDir sits slightly higher than
@@ -7104,9 +7106,22 @@ function render(dt) {
     // tier()>=1 rested on one un-reproduced scare at knob 1 — the shipped 0.3
     // measured 18.6%/23.5% FASTER (docs/PERF-FINDINGS.md §R5) and locked out
     // MEDIUM. autoTier() was the first fix and leaked the preset back in.
-    frame.perChunkLights = (!gfx.hasPerChunkLights || _perChunkOff || PerfGov.autoShed() >= 1) ? 0 : (+LT.perChunkLights || 0);
+    // SHED TO THE CHEAP SETTING, NOT OFF. At autoShed 1 the knob is capped at
+    // 0.3 (8 lamps a chunk) — the setting §R5 measured FASTER than off — and
+    // only autoShed 2 turns it off. Switching it off at the first shed handed a
+    // struggling phone the camera-culled set: slower, and the lamps ahead
+    // popping on as they entered it.
+    const _pcShed = PerfGov.autoShed();
+    frame.perChunkLights = (!gfx.hasPerChunkLights || _perChunkOff || _pcShed >= 2) ? 0
+      : (_pcShed >= 1 ? Math.min(0.3, +LT.perChunkLights || 0) : (+LT.perChunkLights || 0));
     frame.roadChunkLamps = (frame.perChunkLights > 0 && LT.roadChunkLamps) ? 1 : 0;
     setFrameLights(camEye, _floodRGB, _lightFwd);
+    // BAKED LAMP POOLS (js/lighting/lamp-bake.js): the whole track set's ground
+    // pools at base colour, scaled per frame by the same _floodRGB the live set gets.
+    if (LT.lampBake > 0 && gfx.hasLampBake) {
+      frame.lampBake = LampBake.forTrack(track, track._lights, LT.lampNearClamp);
+      frame.lampBakeScale = _floodRGB;
+    }
     // PER-CHUNK LAMPS (experimental): hand the renderer the FULL baked lamp list
     // alongside the globally-culled frame.lights, so GLXChunked can bind each
     // chunk its own nearest-24 instead of every chunk sharing this one set.
@@ -7675,6 +7690,9 @@ function render(dt) {
         // Wet, grid and ERS-code lights stay full-bright — a status light must
         // not dim with battery. Otherwise 0.45 (flat) -> 1.0 (full).
         drawRearLights(tmpMat, (wet || preGrid || ersCode === 1) ? 1.0 : (0.45 + 0.55 * clamp(c.energy || 0, 0, 1)));
+        // TAIL-LIGHT EMIT 0: the road spill is a painted decal, not a light slot.
+        if (night && !(LT.tailLightEmit > 0))
+          CarMesh.drawTailGlow(_groundMat, LT.tailLightMul * (1 + clamp(c.brakeHeat || 0, 0, 1) * LT.brakeGlowMul * 1.6));
       }
     }
     // 2026 amber mirror lamps: under 20 km/h or stopped — the pit lane, the grid,
@@ -7764,7 +7782,7 @@ function render(dt) {
   }
 
   // Rapier debris shards (render-only side-world; poses stepped in update()).
-  if (frame.lights && !_studioRig && PerfGov.tier() < 3) gfx.drawGlow(frame.lights, LT.glareStr);   // AFTER the cars: depth-tested, no depth write — before them a halo in front of a body was overwritten
+  if (frame.lights && !_studioRig && PerfGov.tier() < 3) gfx.drawGlow(frame.glowLights || frame.lights, LT.glareStr);   // AFTER the cars: depth-tested, no depth write — before them a halo in front of a body was overwritten
   if (DebrisWorld.active()) DebrisWorld.draw();
 
   // Transient FX particles (tyre smoke / sparks / kickup / spray): advanced

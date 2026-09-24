@@ -1729,7 +1729,7 @@ const api = {
         if (G.frame.perChunkLights > 0) return null;         // actually running
         if (gfx && gfx.hasPerChunkLights === false) return "backend";
         try { if (localStorage.getItem("apex26.perChunkOff") === "1") return "latch"; } catch (_) { /* no storage */ }
-        if (typeof PerfGov !== "undefined" && PerfGov.autoShed && PerfGov.autoShed() >= 1) return "tier";
+        if (typeof PerfGov !== "undefined" && PerfGov.autoShed && PerfGov.autoShed() >= 2) return "tier";
         return "day";   // the flood branch never ran: daylight with no daytime lamps
       })(),
       sunY: G.frame.sunDir ? G.frame.sunDir[1] : null,

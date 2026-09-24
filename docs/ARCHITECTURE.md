@@ -69,7 +69,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_195 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_196 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -302,6 +302,7 @@ _195 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `knobs.js` | `LightKnobs` | tag | the LIGHTING TUNER knob registry: TUNE_DEFS (the slider registry — the `def` values ARE the shipped tuning; min/max/step are the clamps… |
 | `track-lights.js` | `TrackLights` | tag | per-track lamp baking: floodColor / LAMP_KINDS (per-theme and per-fixture light character), the LAMP DENSITY / DARK-GAP FILL walks and buildTrackLights(track)… |
 | `frame-lights.js` | `FrameLights` | tag | per-frame light state: setFrameLights (the nearest-CAP cull with the twilight scale, flicker / warm-up and the per-chunk full-set twin the renderer samples… |
+| `lamp-bake.js` | `LampBake` | tag | LampBake: every static track lamp's diffuse pool, baked once per track into a world-space ground light map. |
 | `lighting.js` | `LightTune` | tag | LightTune, the lighting façade every consumer addresses. |
 | `profiles.js` | `LightStore` | tag | LIGHTING PROFILE STORE (LightStore.create(G)): the resolution and persistence half of the lighting tuner. js/lighting/knobs.js owns the registry (TUNE_DEFS +… |
 | `atmosphere.js` | `Atmosphere` | tag | session atmosphere for js/game.js: applyRaceSettings(), the lighting/weather/time-of-day monolith (sun + sky + ambient + fog branches for night/dawn/dusk/day… |
