@@ -235,6 +235,7 @@ const FULL = [
   "js/ui/scale.js",
   "js/camera/cockpit-opts.js",
   "js/ui/driving-line-opts.js",
+  "js/ui/appearance-opts.js",
   "js/ui/debris-opts.js",
   "js/perf/metrics-overlay.js",
   "js/camera/vantage.js",
@@ -384,6 +385,8 @@ const HARD_EDGES = [
   // frame cannot draw a default the player did not choose.
   ["js/render/shared/driving-line.js", "js/ui/driving-line-opts.js"],
   ["js/core/store.js", "js/ui/driving-line-opts.js"],
+  ["js/core/store.js", "js/ui/appearance-opts.js"],
+  ["js/ui/setting-row.js", "js/ui/appearance-opts.js"],
   // js/data/hub.js (LAZY_DATA) binds Dom.el at eval too; dom.js is FULL, so the order holds without an edge.
   ["js/ui/dom.js", "js/career/career-ui.js"],    // career-ui binds Dom.el at eval
   ["js/ui/dom.js", "js/career/season-ui.js"],    // season-ui binds Dom.el at eval

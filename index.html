@@ -584,6 +584,7 @@
         <button id="pm-open-controls" type="button">CONTROLS&hellip;<small>Input, pedals &amp; bindings</small></button>
         <button id="pm-open-driving" type="button">DRIVING&hellip;<small>Coach, practice &amp; strategy</small></button>
         <button id="pm-open-display" type="button">DISPLAY&hellip;<small>UI, HUD &amp; graphics</small></button>
+        <button id="pm-open-appearance" type="button">APPEARANCE&hellip;<small>Theme, menu &amp; HUD colours</small></button>
         <button id="pm-advanced">STEERING &amp; ASSISTS&hellip;<small>Presets, response &amp; aids</small></button>
         <button id="pm-audio">MUSIC &amp; SOUND&hellip;<small>Playback, effects &amp; volume</small></button>
       </nav>
@@ -934,6 +935,50 @@
               <button id="pm-freecam" aria-describedby="pm-visual-tuners-help">FREE CAMERA&hellip;</button>
             </div>
           </details>
+        </section>
+        <section id="pm-panel-appearance" class="pm-group" role="region"
+          aria-labelledby="dlg-settings" hidden>
+          <h3 class="pm-group-h">APPEARANCE</h3>
+          <p class="adv-help">Theme and accents for menus and the race HUD. Selection rings stay on the menu accent; team identity can stay on the HUD.</p>
+          <div id="pm-uitheme" class="set-row" role="group" aria-labelledby="pm-uitheme-label">
+            <span class="tune-label" id="pm-uitheme-label">THEME</span>
+            <div>
+              <button id="pm-uitheme-prev" type="button" data-step="-1" aria-label="Previous theme">&lsaquo;</button>
+              <select id="pm-uitheme-sel" aria-labelledby="pm-uitheme-label"></select>
+              <button id="pm-uitheme-next" type="button" data-step="1" aria-label="Next theme">&rsaquo;</button>
+            </div>
+          </div>
+          <p class="adv-help">DARK is the shipped look. LIGHT flips the surface ladder. SYSTEM follows the device.</p>
+          <div id="pm-menuaccent" class="set-row" role="group" aria-labelledby="pm-menuaccent-label">
+            <span class="tune-label" id="pm-menuaccent-label">MENU ACCENT</span>
+            <div>
+              <button id="pm-menuaccent-prev" type="button" data-step="-1" aria-label="Previous menu accent">&lsaquo;</button>
+              <select id="pm-menuaccent-sel" aria-labelledby="pm-menuaccent-label"></select>
+              <button id="pm-menuaccent-next" type="button" data-step="1" aria-label="Next menu accent">&rsaquo;</button>
+            </div>
+          </div>
+          <p class="adv-help">Primary buttons, selected chips and sheet highlights. BRAND is Formula red; TEAM follows your constructor.</p>
+          <div id="pm-menuaccent-custom" class="set-row pm-accent-custom" role="group" aria-labelledby="pm-menuaccent-hex-label" hidden>
+            <span class="tune-label" id="pm-menuaccent-hex-label">CUSTOM MENU</span>
+            <div>
+              <input id="pm-menuaccent-hex" type="color" value="#e10600" aria-labelledby="pm-menuaccent-hex-label">
+            </div>
+          </div>
+          <div id="pm-hudaccent" class="set-row" role="group" aria-labelledby="pm-hudaccent-label">
+            <span class="tune-label" id="pm-hudaccent-label">HUD ACCENT</span>
+            <div>
+              <button id="pm-hudaccent-prev" type="button" data-step="-1" aria-label="Previous HUD accent">&lsaquo;</button>
+              <select id="pm-hudaccent-sel" aria-labelledby="pm-hudaccent-label"></select>
+              <button id="pm-hudaccent-next" type="button" data-step="1" aria-label="Next HUD accent">&rsaquo;</button>
+            </div>
+          </div>
+          <p class="adv-help">HUD stripes and the radio number plate. TEAM is the default team skin.</p>
+          <div id="pm-hudaccent-custom" class="set-row pm-accent-custom" role="group" aria-labelledby="pm-hudaccent-hex-label" hidden>
+            <span class="tune-label" id="pm-hudaccent-hex-label">CUSTOM HUD</span>
+            <div>
+              <input id="pm-hudaccent-hex" type="color" value="#e10600" aria-labelledby="pm-hudaccent-hex-label">
+            </div>
+          </div>
         </section>
         <section id="advanced" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>
@@ -3072,6 +3117,7 @@
 <script defer crossorigin="anonymous" src="js/ui/scale.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/cockpit-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/driving-line-opts.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/appearance-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/debris-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/metrics-overlay.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/vantage.js?v=dev"></script>

@@ -180,6 +180,7 @@ _202 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `settings-export.js` | `SettingsExport` | tag | SettingsExport: the FILES section of SETTINGS › DISPLAY › RENDERER, which carries a player's state OUT of the browser and back IN. |
 | `scale.js` | `UiScale` | tag | UI SIZE / HUD SIZE / BUTTON SIZE sliders + RESOLUTION pin. |
 | `driving-line-opts.js` | `DrivingLineOpts` | tag | DrivingLineOpts: the DRIVING LINE's player PREFERENCES — LINE COLOUR, LINE OPACITY and BRAKE CUE, the three that persist per player rather than per race. |
+| `appearance-opts.js` | `AppearanceOpts` | tag | AppearanceOpts: THEME + MENU ACCENT + HUD ACCENT preferences. |
 | `debris-opts.js` | `DebrisOpts` | tag | DebrisOpts: the DEBRIS switch as a player setting. |
 | `hud.js` | `GameHud` | tag | in-race HUD + minimap for js/game.js. |
 | `results-sheet.js` | `GameResults` | tag | results / time-trial / championship-standings DOM builders for js/game.js. |
