@@ -40,9 +40,13 @@ function synthStub() {
 
 /** Both modules in one context: the announcer borrows RadioVoice.speakable()
  *  and RadioVoice.SAMPLE, so loading it alone would test a different file. */
-function load({ api = true, voices = [], stored = {}, soundOn = true, lore = true } = {}) {
+function load({ api = true, voices = [], stored = {}, soundOn = true, lore = true, clock = null } = {}) {
   const saved = new Map(Object.entries(stored));
-  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout, clearTimeout });
+  // `clock` (fakeClock() below) swaps in fake timers AND a fake Date, so a test
+  // can step through a 24 s budget without waiting for it.
+  const timers = clock ? { setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout, Date: clock.Date }
+    : { setTimeout, clearTimeout };
+  const ctx = vm.createContext(Object.assign({ Math, JSON, Object, Array, Number, String, Set, console }, timers));
   seedLog(ctx);
   const synth = api ? synthStub() : null;
   if (synth) synth._voices = voices;
@@ -567,4 +571,98 @@ test("an impossible budget keeps the must-haves rather than falling silent", () 
   const fitted = Array.from(A.script(info(), 1), (l) => l.replace(/ .*/, ""));
   assert.deepEqual(fitted, ["Welcome", "This", "12"],
     "welcome, venue and session are priority 0 — a one-millisecond budget still says them");
+});
+
+/* ── THE CUE LANDS ON THE CUT ─────────────────────────────────────────────── */
+
+/** Fake timers with their own clock: tick(ms) fires every due callback in order. */
+function fakeClock() {
+  let now = 1000, seq = 0;
+  const q = [];
+  const c = {
+    now: () => now,
+    Date: { now: () => now },
+    setTimeout(fn, ms) { const id = ++seq; q.push({ id, at: now + Math.max(0, ms || 0), fn }); return id; },
+    clearTimeout(id) { const k = q.findIndex((t) => t.id === id); if (k >= 0) q.splice(k, 1); },
+    tick(ms) {
+      const end = now + ms;
+      for (;;) {
+        q.sort((a, b) => a.at - b.at || a.id - b.id);
+        if (!q.length || q[0].at > end) break;
+        const t = q.shift();
+        now = t.at;
+        t.fn();
+      }
+      now = end;
+    },
+  };
+  return c;
+}
+
+/** Finish every line as soon as it starts, recording WHEN each one started. */
+function readThrough(synth, clock, stepMs, untilMs) {
+  const starts = [];
+  let seen = 0;
+  for (let t = 0; t <= untilMs; t += stepMs) {
+    const sp = synth.calls.filter((c) => c.m === "speak");
+    // An engine fires each onend ONCE: finish only the lines that just started.
+    while (seen < sp.length) { starts.push({ text: sp[seen].text, at: clock.now() }); seen++; finishLine(synth); }
+    clock.tick(stepMs);
+  }
+  return starts;
+}
+
+test("play() holds the LAST line so it finishes ~600 ms before the flyby's budget ends", () => {
+  const clock = fakeClock();
+  const { A: An, RV, G, synth } = load({ clock });
+  const t0 = clock.now();
+  const budget = 24000;
+  assert.equal(An.create(G).play(info(), budget), true);
+  const starts = readThrough(synth, clock, 50, budget);
+  assert.ok(starts.length >= 3, "the whole script was read: " + starts.length);
+  const last = starts.at(-1);
+  assert.match(last.text, /racing/i, "the held line is the session cue");
+  // Every earlier line went straight through: each one is spoken the moment
+  // the one before it ends (one 50 ms step here), not spread across the gap.
+  for (let k = 1; k < starts.length - 1; k++) {
+    assert.ok(starts[k].at - starts[k - 1].at <= 50, `line ${k} was delayed: ${JSON.stringify(starts)}`);
+  }
+  const est = An.seconds(last.text, RV.TONE.announcer.rate) * 1000;
+  const want = t0 + budget - est - 600;
+  assert.ok(Math.abs(last.at - want) <= 50,
+    `last line started at +${last.at - t0} ms, want +${Math.round(want - t0)} ms (budget ${budget}, est ${Math.round(est)})`);
+  assert.ok(last.at - starts.at(-2).at > 1000, "…which is a real hold, not the chain's own pace");
+});
+
+test("the hold never makes the read LATER than the chain would reach the last line anyway", () => {
+  // A budget the script already fills: the target is in the past by the time
+  // the chain gets there, so the cue follows its predecessor immediately.
+  const clock = fakeClock();
+  const { A: An, G, synth } = load({ clock });
+  An.create(G).play(info(), 1500);
+  const starts = readThrough(synth, clock, 50, 1400);
+  assert.ok(starts.length >= 2, JSON.stringify(starts));
+  for (let k = 1; k < starts.length; k++) assert.ok(starts[k].at - starts[k - 1].at <= 50, JSON.stringify(starts));
+});
+
+test("preview() is NOT held — the editor's PLAY reads straight through", () => {
+  const clock = fakeClock();
+  const { A: An, G, synth } = load({ clock });
+  An.create(G).preview(info());
+  const starts = readThrough(synth, clock, 50, 2000);
+  assert.match(starts.at(-1).text, /racing/i);
+  for (let k = 1; k < starts.length; k++) assert.ok(starts[k].at - starts[k - 1].at <= 50, JSON.stringify(starts));
+});
+
+test("a stop() during the hold means the held line is never spoken", () => {
+  const clock = fakeClock();
+  const { A: An, G, synth } = load({ clock });
+  const ann = An.create(G);
+  ann.play(info(), 24000);
+  readThrough(synth, clock, 50, 3000);          // through every line but the held one
+  const before = spoken(synth).length;
+  assert.ok(!/racing/i.test(spoken(synth).at(-1)), "still holding the cue at +3 s");
+  ann.stop();
+  clock.tick(30000);
+  assert.equal(spoken(synth).length, before, "the skip that ended the flyby ended the held cue too");
 });
