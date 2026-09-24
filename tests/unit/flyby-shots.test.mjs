@@ -600,3 +600,50 @@ test("the flyby's plans are made before it plays, not at each cut", () => {
   const warm = game.indexOf("FlybySeq.warm(track, flybyShots)"), run = game.indexOf("loadingScreen.run(loadingInfo(), go)");
   assert.ok(warm > 0 && run > warm, "raceIntro warms the flyby's plans before the loading screen runs it");
 });
+
+test("the menu grid seats YOUR car where the race will start it, in every mode", async () => {
+  // grid-mine frames the player's slot. menuGridCars used to seat P12 always, so
+  // a time trial (you, alone, slot 0), a duel (P2 behind the rival), a
+  // qualifying/sprint/rev10 grid all filmed somebody else's car. flybyGridOrder
+  // is game.js module scope: evaluate the REAL function (with the real gridRule
+  // and gridOrderFor) against stubbed modes.
+  const vm = await import("node:vm");
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const fn = (name) => { const i = game.indexOf("function " + name + "("); assert.ok(i > 0, name); return game.slice(i, game.indexOf("\n}\n", i) + 3); };
+  const src = fn("gridRule") + fn("gridOrderFor") + fn("flybyGridOrder") + "flybyGridOrder();";
+  const mk = (n) => Array.from({ length: n }, (_, i) => ({ id: i, driverId: "d" + i, skill: i, isPlayer: i === 3 }));
+  const run = (o) => {
+    const cars = mk(o.n || 22), player = cars[3];
+    let draws = 0;
+    const ctx = {
+      cars, player, season: {}, raceGrid: o.rule || "tier", duelMode: !!o.duel,
+      isQuali: () => !!o.quali, isTimeTrial: () => !!o.tt, isChampionship: () => !!o.champ, gridFromQuali: () => !!o.qorder,
+      quali: { order: () => (o.qorder ? cars.slice().reverse() : null) }, SeasonCal: { grid: () => null, quali: () => false, rank: (a, b) => (a < b ? -1 : 1) },
+      Duel: { pick: (cs) => cs.filter((c) => !c.isPlayer).sort((a, b) => b.skill - a.skill)[0] },
+      netPlay: { active: () => false }, simRnd: () => { draws++; return 0.5; },
+    };
+    const order = vm.runInNewContext(src, ctx);
+    return { order, slot: order ? order.indexOf(player) : null, n: order ? order.length : 0 };
+  };
+  assert.deepEqual([run({}).slot, run({}).n], [11, 22], "a Grand Prix on pace order: P12");
+  assert.deepEqual([run({ tt: true }).slot, run({ tt: true }).n], [0, 1], "time trial: you, alone, on slot 0");
+  assert.deepEqual([run({ quali: true }).slot, run({ quali: true }).n], [0, 1], "qualifying lap: you alone");
+  const d = run({ duel: true });
+  assert.deepEqual([d.slot, d.n, d.order[0].id], [1, 2, 21], "duel: the rival on pole, you P2 — as gridUp lays [player, rival]");
+  assert.equal(run({ qorder: true }).slot, 18, "a qualifying order seats you where you qualified (reversed stub: 22-1-3)");
+  assert.equal(run({ qorder: true, rule: "rev10" }).slot, 18, "rev10 flips only the top ten");
+  assert.equal(run({ rule: "random" }).order, null, "a random grid is the race's draw: not knowable, so no grid-mine");
+});
+
+test("a random grid's flyby leaves out the shot of your car", async () => {
+  await withTrack("monza", (track, g) => {
+    const F = g.sandbox.FlybySeq;
+    const has = (l) => l.some((s) => [s.eye[0], s.eye[1], s.look[0], s.look[1]].some((p) => p.at === "slot"));
+    assert.ok(has(F.vary(F.DEFAULT, 5, true)), "known slot: grid-mine plays");
+    const v = F.vary(F.DEFAULT, 5, false);
+    assert.ok(!has(v) && v.length === F.DEFAULT.length - 1, "unknown slot: grid-mine is dropped, the rest stays");
+    F.setPlayerSlot(null); assert.equal(F.slotKnown(), false);
+    F.setPlayerSlot(11); assert.equal(F.slotKnown(), true);
+    return null;
+  });
+});
