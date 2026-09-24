@@ -839,9 +839,21 @@
     const _bakeBlank = new THREE.DataTexture(new Uint16Array(4), 1, 1, THREE.RGBAFormat, THREE.HalfFloatType);
     _bakeBlank.needsUpdate = true;
     const BAKE_NODE = texture(_bakeBlank);
-    let _bakeSrc = null;
+    let _bakeSrc = null, _bakeOffN = 0;
     function setLampBake(b, scale) {
-      if (!b || !scale) { U.bakeOn.value = 0.0; return false; }
+      if (!b || !scale) {
+        U.bakeOn.value = 0.0;
+        // Bake off ~2 s (GLX bindLampBake _bakeOffN): free the light map and
+        // put the placeholder back; the node keeps the program unchanged.
+        if (BAKE_NODE.value !== _bakeBlank && ++_bakeOffN > 120) {
+          const old = BAKE_NODE.value;
+          BAKE_NODE.value = _bakeBlank;
+          _bakeSrc = null;
+          try { old.dispose(); } catch (_) { /* already gone */ }
+        }
+        return false;
+      }
+      _bakeOffN = 0;
       if (b !== _bakeSrc) {
         const t = new THREE.DataTexture(b.data, b.w, b.h * 2, THREE.RGBAFormat, THREE.HalfFloatType);   // diffuse + bounce layers
         t.minFilter = t.magFilter = THREE.LinearFilter;

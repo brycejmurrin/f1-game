@@ -164,8 +164,25 @@ test("the map stays under its texel budget on a circuit-sized extent", () => {
   const lights = [];
   for (let i = 0; i < 300; i++) lights.push(...LAMP_A.map((v, k) => k === 0 ? i * 7 : k === 2 ? (i % 20) * 60 : v));
   const b = LB.bake(lights, () => 0, 4.0);
-  assert.ok(b.w * b.h <= LB.MAX_TEXELS * 1.02, `${b.w}x${b.h} within budget`);
+  assert.ok(b.w * b.h <= LB.MAX_TEXELS, `${b.w}x${b.h} within budget`);
   assert.ok(b.cell >= 1, "never finer than 1 m");
+  const small = LB.bake(lights, () => 0, 4.0, null, 300000);
+  assert.ok(small.w * small.h <= 300000, `${small.w}x${small.h} within a 300 k budget`);
+  assert.ok(small.w * small.h > 250000, "a smaller budget is spent, not wasted");
+  assert.ok(small.cell > b.cell, "a smaller budget grows the cell");
+});
+
+test("forTrack keys its cache on the texel budget", () => {
+  const LB = load({ Tracks: { terrainY: () => 0 } });
+  const trk = {}, set = [];
+  for (let i = 0; i < 60; i++) set.push(...LAMP_A.map((v, k) => k === 0 ? i * 9 : k === 2 ? (i % 6) * 40 : v));
+  const full = LB.forTrack(trk, set, 4.0, 0, true);
+  assert.equal(LB.forTrack(trk, set, 4.0, 0, true, LB.MAX_TEXELS), full, "an explicit default budget is the same bake");
+  const lite = LB.forTrack(trk, set, 4.0, 0, true, 2000);
+  assert.notEqual(lite, full, "a different budget rebakes");
+  assert.ok(lite.w * lite.h <= 2000 && lite.cell > full.cell, `${lite.w}x${lite.h} under the 2000-texel budget`);
+  assert.equal(LB.forTrack(trk, set, 4.0, 0, true, 2000), lite, "same budget -> cached");
+  assert.notEqual(LB.forTrack(trk, set, 4.0, 0, true), lite, "back to the default budget rebakes");
 });
 
 test("the second layer bakes the bounce fill (no cone, soft N.L floor)", () => {
@@ -191,4 +208,14 @@ test("toHalf round-trips irradiance-range values", () => {
     assert.ok(Math.abs(back - v) <= Math.max(1e-6, v * 1e-3), `${v} -> ${back}`);
   }
   assert.equal(halfToFloat(LB.toHalf(1e9)), 65504, "clamps to the largest finite half");
+});
+
+test("TLX setLampBake frees its light map on the off path (GLX _bakeOffN parity)", () => {
+  const src = readFileSync(path.join(ROOT, "js/render/three/tsl-lit.js"), "utf8");
+  const off = /function setLampBake\(b, scale\) \{\s*if \(!b \|\| !scale\) \{([\s\S]*?)return false;/.exec(src);
+  assert.ok(off, "setLampBake's off branch moved");
+  assert.match(off[1], /\+\+_bakeOffN > 120/, "debounced like GLX");
+  assert.match(off[1], /BAKE_NODE\.value = _bakeBlank/, "the placeholder goes back on the node");
+  assert.match(off[1], /_bakeSrc = null/, "the source resets so a return re-uploads");
+  assert.match(off[1], /\.dispose\(\)/, "the DataTexture is disposed");
 });

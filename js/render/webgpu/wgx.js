@@ -1097,7 +1097,7 @@ const WGX = (function () {
     let _lampShadowArmed = false, _lampArms = 0, _lampIdx = -1;
     // BAKED LAMP POOLS: the light map texture (a 1x1 placeholder until a bake
     // lands) and the bake it was uploaded from.
-    let _bakePlace = null, _bakeTexW = null, lampBakeView = null, _bakeSrcW = null;
+    let _bakePlace = null, _bakeTexW = null, lampBakeView = null, _bakeSrcW = null, _bakeOffW = 0;
     const _bakeShScr = [0, 0, 0];
     function _syncLampBake(lb) {
       if (!lb || lb === _bakeSrcW || !lb.data) return;
@@ -1109,6 +1109,15 @@ const WGX = (function () {
       _bakeTexW = tex; lampBakeView = tex.createView(); _bakeSrcW = lb;
       _rebuildFrameBG();
       if (old) old.destroy();
+    }
+    // Bake off ~2 s (GLX bindLampBake _bakeOffN): rebind the placeholder, then
+    // retire the light map — destroyed after this frame's submit, never while
+    // a bind group recorded earlier could still reference it.
+    function _freeLampBake() {
+      const old = _bakeTexW;
+      _bakeTexW = null; lampBakeView = _bakePlace.createView(); _bakeSrcW = null;
+      _rebuildFrameBG();
+      _retiredBufs.push(old);
     }
     const lampShadowLVPData = new Float32Array(16);
     let matPlaceTex = null;
@@ -3544,7 +3553,8 @@ const WGX = (function () {
       {
         const lb = f.lampBake, sc = f.lampBakeScale;
         const on = !!(lb && sc && lb.data);
-        if (on) _syncLampBake(lb);
+        if (on) { _bakeOffW = 0; _syncLampBake(lb); }
+        else if (_bakeTexW && _bakePlace && ++_bakeOffW > 120) _freeLampBake();
         const live = on && lb === _bakeSrcW;
         d[152] = live ? lb.x0 : 0; d[153] = live ? lb.z0 : 0;
         d[154] = live ? lb.w * lb.cell : 1; d[155] = live ? lb.h * lb.cell : 1;
