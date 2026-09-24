@@ -1,6 +1,10 @@
 // @ts-check
-import { test, expect } from "@playwright/test";
-import { BOOT_MS, TRACK_MS } from "../helpers/fixtures.js";
+// Import test/expect FROM fixtures (not @playwright/test): fixtures pin
+// apex26.gfxBackend=webgl2 so this grade gate measures GLX (shared CI
+// coverage). Raw @playwright/test after TLX became default (fff8d3da1) put
+// Metal on TLX and crushed.signed fell under the -1 bound that still held on
+// GLX — see docs/notes/RENDERER-MACOS-RED-2026-09.md.
+import { test, expect, BOOT_MS, TRACK_MS } from "../helpers/fixtures.js";
 import { pageScreenshot } from "../helpers/soft-capture.js";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
