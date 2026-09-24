@@ -20,7 +20,7 @@
 //
 // THE VALID SETS ARE READ OUT OF THE ENGINE, not restated here, because a
 // hardcoded copy is the same silent-drift bug one level up: add a species to
-// tracks.js and this test would start rejecting it.
+// build-props.js and this test would start rejecting it.
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -81,8 +81,8 @@ function literalKeys(src, name) {
 const KNOWN_UNHANDLED = {};
 
 test("every furniture.tree names a species the scatter dispatch honours", () => {
-  const src = read("js/track/tracks.js");
-  // js/track/tracks.js: `SPECIES[fz.tree] ? fz.tree : fz.tree === "palm" ? "palm"
+  const src = read("js/track/scenery/build-props.js");
+  // js/track/scenery/build-props.js: `SPECIES[fz.tree] ? fz.tree : fz.tree === "palm" ? "palm"
   //                    : fz.tree === "fir" ? "fir" : … : "broad"`
   const valid = literalKeys(src, "SPECIES = ");
   for (const alias of ["palm", "fir", "broad"]) valid.add(alias);
@@ -102,7 +102,7 @@ test("every furniture.tree names a species the scatter dispatch honours", () => 
 // since learned is no longer a known gap, and leaving it here would hide the
 // next real typo of the same word.
 test("nothing in KNOWN_UNHANDLED is a species the engine now honours", () => {
-  const valid = literalKeys(read("js/track/tracks.js"), "SPECIES = ");
+  const valid = literalKeys(read("js/track/scenery/build-props.js"), "SPECIES = ");
   for (const alias of ["palm", "fir", "broad"]) valid.add(alias);
   for (const k of Object.keys(KNOWN_UNHANDLED))
     assert.ok(!valid.has(k), `"${k}" is handled now — drop it from KNOWN_UNHANDLED`);

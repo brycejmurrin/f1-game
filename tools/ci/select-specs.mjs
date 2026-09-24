@@ -142,6 +142,15 @@ export const MAX_OVERSIZE_SHARDS = 3;
 export const shardTimeoutMin = (tests, perTestSec = SELECTED_GATE.perTestTimeoutSec) =>
   Math.min(90, Math.ceil((tests * perTestSec) / 60) + 6);
 
+/** Max tests one selected-gate matrix job may carry before the derived
+ *  timeout hits the 90-minute hard cap. shardTimeoutMin(n) = min(90,
+ *  ceil(n * perTestSec / 60) + 6); solving for n under the uncapped branch
+ *  keeps every shard's kill timer ABOVE its worst-case spend — the undercount
+ *  that packed tracks-walls (~63 expanded tests) into a 39-minute selected
+ *  shard cancelled the job with 0 failures (CI run 36057109364). */
+export const maxTestsPerShard = (perTestSec = SELECTED_GATE.perTestTimeoutSec) =>
+  Math.max(1, Math.floor((90 - 6) * 60 / perTestSec));
+
 /** Cut the spec list to what fits `budgetMin` surviving one timeout.
  *  `rank(file)` orders the cut: lower ranks fill the budget first (prioritise()
  *  defines the scale — 0 edited, 1 previously failed, 2 imports a changed
@@ -236,20 +245,49 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings() } = {}) {
       else overBudgetSpecs.push({ file: r.file, tests: r.tests, ownTimeoutSec: r.ownTimeoutSec });
       continue;
     }
-    // A spec bigger than the WHOLE cap can never be selected into the main
-    // shard — not "did not fit today", but "cannot fit on any change, ever".
-    // Naming it as merely skipped is what let multiplayer-session.spec.js (19
-    // tests against a 10-test cap) sit red for weeks: every js/net change listed
-    // it as skipped and nobody read a routine line. An AFFECTED one now runs in
-    // its own shard (below); an unaffected one stays a visible REPORT — it
-    // belongs in a fixed gate, or split, or its invariant needs a unit home.
+    // A spec bigger than the packed budget still RUNS: alone (oversize), and
+    // shards() further splits it across Playwright `--shard=i/n` jobs when its
+    // expanded count exceeds maxTestsPerShard. Naming it unreachable is what
+    // the undercount used to avoid for tracks-walls — billed as 4, packed into
+    // the selected shard, then cancelled at 63/76 with 0 failures. Skipping or
+    // "unreachable"-reporting a per-circuit expansion the change selected is
+    // the same hole from the other side. MAX_OVERSIZE_SHARDS still bounds the
+    // fan-out; overflow is skipped BY NAME below.
+    //
+    // `unreachable` remains for the rare case a single expanded count cannot
+    // be split into MAX_OVERSIZE_SHARDS jobs that each fit the 90-minute cap
+    // (see the push after this loop). Ordinary "bigger than the pack" is
+    // oversize for every rank — affected or merely routed.
     const cost = costOf(r);
     if (usedSec + cost <= allowanceSec) { selected.push(r); used += r.tests; usedSec += cost; continue; }
-    if (r.rank < 3) oversize.push(r);
-    else if (cost > allowanceSec) unreachable.push(r);
+    if (r.rank < 3 || cost > allowanceSec) oversize.push(r);
     else skipped.push(r);
   }
+  // A single oversize entry that cannot be split into jobs under the 90-minute
+  // cap is unreachable for real — no amount of --shard fits it. Move those
+  // out of oversize so the matrix never schedules a job that the runner will
+  // cancel with 0 failures.
+  {
+    const keep = [], tooBig = [];
+    for (const r of oversize) {
+      const per = maxTestsPerShard(r.ownTimeoutSec || SELECTED_GATE.perTestTimeoutSec);
+      const need = Math.ceil(r.tests / per);
+      if (need > MAX_OVERSIZE_SHARDS * 8) tooBig.push(r); // absurd fan-out guard
+      else keep.push(r);
+    }
+    oversize.length = 0;
+    oversize.push(...keep);
+    unreachable.push(...tooBig);
+  }
   // The oversize list is bounded; the overflow is skipped BY NAME, never silently.
+  // Prefer specs that NEED Playwright sharding (expanded count > one job's cap)
+  // over smaller ones that used to sit in `unreachable` — otherwise
+  // tracks-walls (~63) loses its slot to three 11-test specs and the fleet
+  // sweep the change selected never runs (the other face of CI run 36057109364).
+  oversize.sort((a, b) => {
+    const need = (r) => r.tests > maxTestsPerShard(r.ownTimeoutSec || SELECTED_GATE.perTestTimeoutSec) ? 0 : 1;
+    return need(a) - need(b) || a.rank - b.rank || b.tests - a.tests;
+  });
   const oversizeRun = oversize.slice(0, MAX_OVERSIZE_SHARDS);
   for (const r of oversize.slice(MAX_OVERSIZE_SHARDS)) skipped.push(r);
   return { selected, skipped, unreachable, oversize: oversizeRun, overBudgetSpecs, coveredByFixedGates, coveredByVmTwin,
@@ -257,17 +295,55 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings() } = {}) {
     testsSelected: used, testsFit: cap.tests, secSelected: Math.round(usedSec), secFit: Math.round(allowanceSec), cap };
 }
 
-/** The matrix the CI gate runs: one shard for the budgeted selection, one per
- *  oversize affected spec, each with the derived cap it is billed at. */
+/** Split one oversize spec into Playwright `--shard=i/n` matrix rows so each
+ *  job's derived timeout stays under the 90-minute hard cap. */
+function oversizeShards(s) {
+  const perSec = s.ownTimeoutSec || SELECTED_GATE.perTestTimeoutSec;
+  const per = maxTestsPerShard(perSec);
+  const n = Math.max(1, Math.ceil(s.tests / per));
+  const base = path.basename(s.file, ".spec.js");
+  const out = [];
+  for (let i = 1; i <= n; i++) {
+    // Playwright splits by test index; ceil keeps every shard's billed count
+    // at least the largest piece (last shard may be smaller at runtime).
+    const testsHere = Math.ceil(s.tests / n);
+    out.push({
+      name: n === 1 ? `oversize-${base}` : `oversize-${base}-${i}of${n}`,
+      specs: s.file,
+      shard: n === 1 ? "" : `${i}/${n}`,
+      tests: testsHere,
+      timeout: shardTimeoutMin(testsHere, perSec),
+    });
+  }
+  return out;
+}
+
+/** The matrix the CI gate runs: one shard for the budgeted selection, then
+ *  one or more Playwright shards per oversize spec (split when the expanded
+ *  test count would blow the 90-minute job cap). */
 export function shards(r) {
   const out = [];
-  if (r.selected.length) out.push({ name: "selected", specs: r.selected.map((s) => s.file).join(" "),
-    // max(): measured-cheap specs can put MORE tests in the shard than the
-    // 79.7 s cap counts, and the cap must still clear every one timing out.
-    tests: r.testsSelected, timeout: shardTimeoutMin(Math.max(r.testsFit, r.testsSelected)) });
-  for (const s of r.oversize || []) out.push({ name: `oversize-${path.basename(s.file, ".spec.js")}`,
-    specs: s.file, tests: s.tests,
-    timeout: shardTimeoutMin(s.tests, s.ownTimeoutSec || SELECTED_GATE.perTestTimeoutSec) });
+  if (r.selected.length) {
+    // A budgeted selection can still contain one loop-expanded file that
+    // alone exceeds maxTestsPerShard if its measured rate is cheap enough to
+    // pack by seconds. Peel those into their own oversize rows first.
+    const packed = [], peeled = [];
+    for (const s of r.selected) {
+      const per = maxTestsPerShard(s.ownTimeoutSec || SELECTED_GATE.perTestTimeoutSec);
+      if (s.tests > per) peeled.push(s);
+      else packed.push(s);
+    }
+    if (packed.length) {
+      const tests = packed.reduce((n, s) => n + s.tests, 0);
+      out.push({ name: "selected", specs: packed.map((s) => s.file).join(" "),
+        shard: "",
+        // max(): measured-cheap specs can put MORE tests in the shard than the
+        // 79.7 s cap counts, and the cap must still clear every one timing out.
+        tests, timeout: shardTimeoutMin(Math.max(r.testsFit, tests)) });
+    }
+    for (const s of peeled) out.push(...oversizeShards(s));
+  }
+  for (const s of r.oversize || []) out.push(...oversizeShards(s));
   return out;
 }
 

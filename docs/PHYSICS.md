@@ -881,7 +881,8 @@ Still open:
 ## Curvature channels — the "arc must not reach the driver" table
 
 Every consumer of `Tracks.curvature()` (direct calls plus the two
-destructured aliases in `js/track/core/mesh.js` and `js/track/tracks.js`)
+destructured aliases in `js/track/core/mesh.js` and `js/track/tracks.js` /
+`js/track/scenery/build-props.js`)
 classified into its legitimate channel. Audited 2026-08-27 by the
 physics-contract-auditor: ZERO violations — every player-path read is
 behind an assist knob that defaults to 0, or reaches only render / audio /
@@ -908,7 +909,8 @@ it lands.
 | `js/agent/agentview.js` | state dump, corner table | **broadcast-only** | agent telemetry output |
 | `js/ui/track-maps.js` | measureApex/detectDRS/detectCorners | **broadcast-only** | 2D picker/popup/minimap outlines (menus + HUD drawing only) |
 | `js/track/core/mesh.js` | findCorners, bankingProfile, banked-corner pick | **surface** | build-time road-geometry decisions baked into the mesh — road shape itself |
-| `js/track/tracks.js` | build LUT bake, signboard side pick | **surface** | the producer itself, plus static scenery placement |
+| `js/track/tracks.js` | build LUT bake | **surface** | the producer itself (centreline curv[] bake) |
+| `js/track/scenery/build-props.js` | signboard side pick, pit-pass curvature | **surface** | static scenery placement (`TrackBuildProps.build`) |
 
 A module that consumes only REPORTS other code already produced is not in this
 table, because it has no curvature site to classify — the first-run coach marks
