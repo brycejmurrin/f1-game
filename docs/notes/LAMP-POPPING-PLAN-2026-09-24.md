@@ -41,6 +41,12 @@ Singapore at night, passed for all four renderers on #246 and again on #247
      atlas with an indirection table) would keep a 1.5 m cell at a fraction of the
      texels.
    - It is worth doing only if phone memory becomes a measured problem. ~9.6 MB today.
+   - **Done (branch `agentD-atlas`, unverified in a browser):** 32² tiles in 34² gutter
+     slots plus a tilesX × tilesY indirection, `MAX_TEXELS` 300 k atlas texels per layer.
+     Measured with `scratch/lampbake-parity.cjs`: Monza 9.57 → 4.69 MB, cell 2.27 → 1.92 m,
+     worst bake/truth 2.49× → 2.10×; Vegas 9.56 → 4.78 MB, 2.05 → 1.71 m, 1.39× → 1.31×;
+     Singapore 9.58 → 4.68 MB, 1.63 → 1.74 m, 1.30× → 1.27×. A 600 k budget buys
+     1.15–1.27 m cells at the old 9.6 MB.
 2. **Cone-edge residue** after e.
    - Worst is Monza k1442 at 2.64× of a dim value (tl 1.0 vs peak 34), and Vegas at 1.44×.
    - Small in absolute terms; not a hotspot.
