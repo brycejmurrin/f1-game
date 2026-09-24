@@ -21,7 +21,8 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
-import { parseBlob, validateShots as bakeValidate, bake, render } from "../../tools/gen/bake-flyby.mjs";
+import { parseBlob, readBlob, blobName, validateShots as bakeValidate, shotErrors as bakeShotErrors, bake, render }
+  from "../../tools/gen/bake-flyby.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -284,4 +285,42 @@ test("a saved list is read back through shotErrors, not the bake's sum rule", ()
     "...and still refused by the BAKE validator");
   assert.match(read("js/camera/flyby-panel.js"), /const bad = shotErrors\(saved\);/,
     "loadSaved() must use the playable rule set, not the bake one");
+});
+
+/* ── the blob as COPY VALUES actually emits it ────────────────────────────── */
+
+test("an invalid copy's warning header does not hide the reasons", () => {
+  // COPY VALUES prefixes a list that will not bake with `// THIS LIST WILL NOT
+  // BAKE:` lines. Those lines used to hide the assignment name, so the bake
+  // reported a parse error about `window` instead of the rule that failed, and
+  // tools/shot/flyby.mjs --shots could not preview the blob at all.
+  const loose = goodList();                                   // sums to 1 …
+  loose[0].dur = 0.9;                                         // … now 1.4
+  const bad = [...FP.validateShots(loose)];
+  const blob = "// THIS LIST WILL NOT BAKE:\n// " + bad.join("\n// ") + "\n" + FP.toBlob(loose);
+  assert.equal(blobName(blob), "FlybyShots", "the name is found under the header");
+  assert.deepEqual(readBlob(blob).map((s) => s.id), ["one", "two"], "…and the list still reads, for a preview");
+  assert.throws(() => parseBlob(blob), /sum to 1\.4000/, "the bake names the rule, not a parse error");
+});
+
+test("the literal fallback is data only: no process, no hang", () => {
+  assert.throws(() => readBlob("[process.exit(3)]"), /Could not parse/);
+  assert.throws(() => readBlob("[globalThis.require('fs')]"), /Could not parse/);
+  assert.throws(() => readBlob("[(() => { for (;;); })()]"), /Could not parse/, "a runaway literal times out");
+  // Unquoted keys — the shape the panel emits — still parse, into HOST arrays.
+  const v = readBlob('[{ id: "a", eye: [1, 2] }]');
+  assert.ok(Array.isArray(v) && Array.isArray(v[0].eye), "host-realm arrays after the round trip");
+});
+
+test("the structural half agrees too — what a PREVIEW is held to", () => {
+  const cases = [
+    goodList().map((s) => ({ ...s, dur: s.dur * 3 })),      // loose sum: playable
+    (() => { const l = goodList(); l[0].fov = [40]; return l; })(),
+    (() => { const l = goodList(); l[1].look = [{ at: "start" }]; return l; })(),
+    [],
+  ];
+  for (const list of cases) {
+    assert.deepEqual([...FP.shotErrors(list)], bakeShotErrors(list),
+      "tools/shot/flyby.mjs --shots uses the bake's copy; the panel's saved list uses its own");
+  }
 });

@@ -12,8 +12,7 @@
  *
  * Accepts either the full `window.FlybyShots = [...];` the panel exports or a
  * bare `[...]` array. The export is a JS array literal (unquoted keys), so the
- * parse is JSON-first with an eval fallback, exactly as the lighting tuner's
- * bake does.
+ * parse is JSON-first with a sandboxed (empty vm context) literal fallback.
  *
  * SAFETY INTERLOCK — THE NAME IS THE CHECK. This tool REPLACES the whole
  * `const DEFAULT = [...]` literal in js/camera/flyby-seq.js. The lighting tuner
@@ -29,6 +28,7 @@
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import vm from "node:vm";
 import { ROOT, isMain } from "./gen-lib.mjs";
 
 export const TARGET = "js/camera/flyby-seq.js";
@@ -39,19 +39,17 @@ export const AT_KINDS = ["start", "pole", "grid", "corner", "centre", "landmark"
  *  whose durations sum to 1.6 plays correctly and reads as nonsense forever. */
 export const DUR_TOLERANCE = 0.01;
 
-/** Every reason this list cannot be baked, as plain sentences. Empty == good.
- *  Mirrors validateShots() in js/camera/flyby-panel.js — the panel refuses the
- *  copy and this refuses the paste, so neither end is the only guard. */
-export function validateShots(list) {
+/** Every reason FlybySeq.solve() could not PLAY this list. Empty == good.
+ *  Mirrors shotErrors() in js/camera/flyby-panel.js: the structural half, which
+ *  a PREVIEW needs (tools/shot/flyby.mjs --shots) and a bake needs as well. */
+export function shotErrors(list) {
   const bad = [];
   if (!Array.isArray(list) || !list.length) return ["the shot list must be a non-empty array"];
-  let sum = 0;
   list.forEach((s, i) => {
     const at = `shot ${i} (${(s && s.id) || "?"})`;
     if (!s || typeof s !== "object" || Array.isArray(s)) { bad.push(`${at} is not an object`); return; }
     if (typeof s.id !== "string" || !s.id) bad.push(`${at} has no string id`);
     if (typeof s.dur !== "number" || !isFinite(s.dur) || s.dur <= 0) bad.push(`${at} has no finite positive dur`);
-    else sum += s.dur;
     if (!EASES.includes(s.ease)) bad.push(`${at} ease must be one of ${EASES.join(", ")}`);
     for (const k of ["eye", "look"]) {
       if (!Array.isArray(s[k]) || s[k].length !== 2) { bad.push(`${at} ${k} must be a [from, to] pair`); continue; }
@@ -63,7 +61,17 @@ export function validateShots(list) {
     if (!Array.isArray(s.fov) || s.fov.length !== 2 ||
         !s.fov.every((n) => typeof n === "number" && isFinite(n))) bad.push(`${at} fov must be [from, to] numbers`);
   });
+  return bad;
+}
+
+/** Every reason this list cannot be baked, as plain sentences. Empty == good.
+ *  Mirrors validateShots() in js/camera/flyby-panel.js — the panel refuses the
+ *  copy and this refuses the paste, so neither end is the only guard. */
+export function validateShots(list) {
+  const bad = shotErrors(list);
   if (bad.length) return bad;
+  let sum = 0;
+  for (const s of list) sum += s.dur;
   if (Math.abs(sum - 1) > DUR_TOLERANCE) {
     bad.push(`durations sum to ${sum.toFixed(4)}, not 1 — they are fractions of ONE run, ` +
       "so a sum other than 1 means the shot list does not say what it looks like it says " +
@@ -72,14 +80,38 @@ export function validateShots(list) {
   return bad;
 }
 
+/** The blob minus its leading `//` lines. COPY VALUES prefixes an invalid list
+ *  with `// THIS LIST WILL NOT BAKE: ...`; left in, those lines hid the name from
+ *  blobName() and turned the refusal into a parse error about `window`, instead
+ *  of the reasons the panel had already written down. */
+export function stripLeadingComments(raw) {
+  return String(raw).replace(/^(?:\s*\/\/[^\n]*\n)+/, "");
+}
+
 /** The blob's assignment name, or null when it is a bare array literal. */
 export function blobName(raw) {
-  const m = /^\s*(?:window\.)?([A-Za-z_$][\w$]*)\s*=/.exec(raw);
+  const m = /^\s*(?:window\.)?([A-Za-z_$][\w$]*)\s*=/.exec(stripLeadingComments(raw));
   return m ? m[1] : null;
 }
 
-/** Blob text -> the shot array. Throws with a readable message. */
-export function parseBlob(raw) {
+/** A JS array literal (unquoted keys) -> plain data. JSON first; the fallback
+ *  evaluates in an EMPTY vm context with a timeout, not through indirect eval,
+ *  which runs in this process's global scope with `process` in reach -- a pasted
+ *  blob is data and gets no more than data's privileges. The JSON round trip
+ *  hands back host-realm arrays and drops anything that is not data. */
+export function parseLiteral(body) {
+  try { return JSON.parse(body); }
+  catch (e) {
+    let v;
+    try { v = vm.runInNewContext("(" + body + ")", Object.create(null), { timeout: 1000 }); }
+    catch (_) { throw new Error("Could not parse the shot list: " + e.message); }
+    return JSON.parse(JSON.stringify(v === undefined ? null : v));
+  }
+}
+
+/** Blob text -> the list as written, NOT validated (the preview tool holds it to
+ *  shotErrors, the bake to validateShots). Throws with a readable message. */
+export function readBlob(raw) {
   const name = blobName(raw);
   if (name && name !== "FlybyShots") {
     throw new Error(
@@ -90,14 +122,15 @@ export function parseBlob(raw) {
       "every shot it does not mention, silently. Re-copy from the editor (it always exports\n" +
       "the whole list) rather than renaming this one.");
   }
-  const body = raw.replace(/^\s*(?:window\.)?[A-Za-z_$][\w$]*\s*=\s*/, "").replace(/;\s*$/, "").trim();
+  const body = stripLeadingComments(raw).replace(/^\s*(?:window\.)?[A-Za-z_$][\w$]*\s*=\s*/, "")
+    .replace(/;\s*$/, "").trim();
   if (!body) throw new Error("No input. Pass a file path or pipe the copied shot list on stdin.");
-  let list;
-  try { list = JSON.parse(body); }
-  catch (e) {
-    try { list = (0, eval)("(" + body + ")"); }   // fallback: a JS array literal (unquoted keys)
-    catch (_) { throw new Error("Could not parse the shot list: " + e.message); }
-  }
+  return parseLiteral(body);
+}
+
+/** Blob text -> the shot array, held to the bake rules. Throws with a readable message. */
+export function parseBlob(raw) {
+  const list = readBlob(raw);
   const bad = validateShots(list);
   if (bad.length) throw new Error("This shot list will not bake:\n  - " + bad.join("\n  - "));
   return list;
