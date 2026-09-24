@@ -1293,7 +1293,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 
 /* APPEARANCE — same setting-row chrome as the rest of SETTINGS; colour wells
    match MY TEAM / garage (floored chip height, plate-line border). */
-#pm-panel-appearance .app-accent-custom > div {
+#pm-panel-appearance .pm-accent-custom > div {
   display: flex; align-items: center; justify-content: flex-end; gap: calc(var(--gap) * 0.5);
 }
 #pm-panel-appearance input[type="color"] {
