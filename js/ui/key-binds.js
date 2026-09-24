@@ -360,6 +360,10 @@ function create(G) {
      ask: move the control, and whichever axis travels furthest from where it
      was resting is the answer. Sequential, one prompt at a time, and
      abandonable — a half-finished wizard leaves the previous map alone. */
+  /* Abort the wheel wizard without changing the saved map. closeSettings /
+     disarmAll must call this: beginAxisCapture alone zeroes the pad every
+     frame until cancelled, and the 2026-09-22 slot disarm left the wizard out. */
+  let abortWheel = null;
   const wheelBtn = $("pm-pad-wheel");
   if (wheelBtn && Input.beginAxisCapture) {
     const STEPS = [
@@ -368,6 +372,12 @@ function create(G) {
       { key: "brake", ask: "Now press the BRAKE pedal all the way…", done: "Brake found." },
     ];
     let running = false;
+    abortWheel = () => {
+      if (!running) return;
+      running = false;
+      Input.beginAxisCapture(null);
+      wheelBtn.textContent = "SET UP A WHEEL";
+    };
     const finish = (map, msg) => {
       running = false;
       Input.setPadAxisMap(map);
@@ -378,9 +388,7 @@ function create(G) {
     };
     wheelBtn.onclick = () => {
       if (running) {   // a second press abandons it and puts everything back
-        running = false;
-        Input.beginAxisCapture(null);
-        wheelBtn.textContent = "SET UP A WHEEL";
+        abortWheel();
         say("Wheel setup cancelled — nothing changed.");
         return;
       }
@@ -414,7 +422,10 @@ function create(G) {
   if (keys || pad) Log.info("ui", "KeyBinds.create");
   return {
     render() { for (const s of sections) s.render(); },
-    disarmAll() { for (const s of sections) s.disarm(true, false); },   // closeSettings: nothing stays armed into a race
+    disarmAll() {
+      for (const s of sections) s.disarm(true, false);   // closeSettings: nothing stays armed into a race
+      if (abortWheel) abortWheel();
+    },
   };
 }
 

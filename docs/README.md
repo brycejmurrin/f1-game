@@ -13,13 +13,14 @@ drives it.
 | # | Read | Why, and how much |
 |---|---|---|
 | 1 | [`../AGENTS.md`](../AGENTS.md) | The rules. Every flat prohibition lives there and nowhere else. Read the whole thing — it is deliberately short. |
-| 2 | [ARCHITECTURE.md](ARCHITECTURE.md) | The module map, the `G` façade, the game loop, and the three renderers behind one seam. Skim the generated module index; read the section for the directory you are about to edit. |
-| 3 | [TESTING.md](TESTING.md) §1-2 | How to run tests without burning an hour, and which GROUP your change needs. §5 is a lookup table, not reading. |
-| 4 | the area doc | One of the seven below. Load it only when the task touches its area. |
-| 5 | the skill | `.claude/skills/README.md` picks it; the skill drives the tools. |
+| 2 | [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) | **New contributors start here** — boot path, layer map, data flow, where to edit what. Ten-minute read. |
+| 3 | [ARCHITECTURE.md](ARCHITECTURE.md) | The module **contract**, the `G` façade, the game loop, and the three renderers behind one seam. Skim the generated module index; read the section for the directory you are about to edit. |
+| 4 | [TESTING.md](TESTING.md) §1-2 | How to run tests without burning an hour, and which GROUP your change needs. §5 is a lookup table, not reading. |
+| 5 | the area doc | One of the seven below. Load it only when the task touches its area. |
+| 6 | the skill | `.claude/skills/README.md` picks it; the skill drives the tools. |
 
 **If you are a person** reading to understand the game: [`../README.md`](../README.md)
-→ [ARCHITECTURE.md](ARCHITECTURE.md) → [PHYSICS.md](PHYSICS.md) or
+→ [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) → [ARCHITECTURE.md](ARCHITECTURE.md) → [PHYSICS.md](PHYSICS.md) or
 [CAREER.md](CAREER.md) → [TESTING.md](TESTING.md) §1.
 
 ## The area docs (load one on demand)
@@ -35,6 +36,8 @@ drives it.
 | [COMPONENTS.md](COMPONENTS.md) | Every class family in `css/`, the file that owns it, which classes are defined in more than one file — plus the screen x viewport layout axes and what the layout probe measures. |
 | [CODE-STANDARDS.md](CODE-STANDARDS.md) | The JavaScript house style: module shape, naming, declarations, functions, duplication, and the comment policy — plus the frozen surfaces a style pass must never rename. |
 | [PLATFORM.md](PLATFORM.md) | iOS/Safari quirks, controller support, and what a static GitHub Pages host does and does not give you. |
+| [BUGS.md](BUGS.md) | Current verified open/fixed shortlist from architecture/bug-hunt passes (not the full chronological ledger). |
+| [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) | Contributor orientation: boot, layers, data flow, edit map (complements the full contract in ARCHITECTURE.md). |
 
 ## Agent surface and hooks
 

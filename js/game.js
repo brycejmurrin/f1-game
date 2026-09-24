@@ -4796,11 +4796,15 @@ function updateCar(c, dt, ranked) {
       c.cutWarn = (c.cutWarn | 0) + 1;
       if (c.cutWarn >= 4) {
         c.cutWarn = 0;
-        c.penalty += 5;
-        if (c.isPlayer) {
-          const pk = hudProfile === "broadcast" ? "race" : "penalty-hit";
-          announce("+5s TRACK LIMITS PENALTY", 2, pk);
-          if (soundOn) GameAudio.penalty();
+        // Time trial already invalidated the lap on the first counted cut; the
+        // +5s ladder is race classification only (docs/BUGS.md B2 / defect ledger).
+        if (!isTimeTrial()) {
+          c.penalty += 5;
+          if (c.isPlayer) {
+            const pk = hudProfile === "broadcast" ? "race" : "penalty-hit";
+            announce("+5s TRACK LIMITS PENALTY", 2, pk);
+            if (soundOn) GameAudio.penalty();
+          }
         }
       } else if (c.isPlayer) {
         // The n/4 count is the race ladder's; in a time trial the lap is simply gone.
@@ -8685,9 +8689,15 @@ els.resNext.onclick = () => {
 function setPaused(p) {
   if (state !== "race" && state !== "count") return; hideCamPicker();
   paused = p;
-  if (!p) { closeLightTuner(false); closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode(); }
+  if (!p) {
+    closeLightTuner(false); closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();
+    // closeSettings disarms key/pad slots AND the wheel wizard (beginAxisCapture
+    // zeroes the pad every frame while armed). Hiding #pmsettings alone left
+    // capture live after HUD OFF / RECALIBRATE / RESUME — sibling of the
+    // 2026-09-22 Escape-path fix.
+    closeSettings();
+  }
   els.pausemenu.hidden = !p;
-  if (!p) els.pmsettings.hidden = true;   // never leave the settings sub-menu up after resume
   if (els.pmStandings) els.pmStandings.hidden = !(isChampionship() && SeasonCal.hasProgress(season) && season.round < SeasonCal.rounds());
   // never leave an overlay up after resume
   if (!p) { $("advanced").hidden = true; els.howtoplay.hidden = true; $("audioset").hidden = true; $("standings").hidden = true; $("track-detail").hidden = true; $("quali").hidden = true; els.results.hidden = true; }
