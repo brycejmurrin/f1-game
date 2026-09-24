@@ -39,7 +39,7 @@
       "slack": 5
     },
     "shellNodes": {
-      "ceiling": 1849,
+      "ceiling": 1856,
       "slack": 25
     },
     "bareCatches": {
@@ -64,7 +64,7 @@
       "slack": 0
     },
     "rawColor": {
-      "ceiling": 321,
+      "ceiling": 323,
       "slack": 0
     },
     "rawColorDistinct": {

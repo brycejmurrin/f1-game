@@ -360,19 +360,22 @@
 <script>
   (function () {
     // html[data-motion] / data-title-intro / data-menu-wash / data-menu-layout /
-    // data-title-art, FIRST answer only: the title intro, wash, door layout and
-    // #title-car paint on the first frame, and js/ui/title-fx.js (which owns
-    // every later answer) evaluates too late to stop them.
+    // data-title-board / data-title-art, FIRST answer only: the title intro,
+    // wash, door layout, board placement and #title-car paint on the first
+    // frame, and js/ui/title-fx.js (which owns every later answer) evaluates
+    // too late to stop them.
     // Motion: OS reduced-motion wins, then apex26.motion ("on" | "reduce").
     // Intro: apex26.titleIntro ("full" | "quick" | "off"); unset = full.
     // Wash: apex26.menuWash ("full" | "soft" | "off"); unset = full.
     // Layout: apex26.menuLayout ("auto" | "stack" | "compact"); unset = auto.
+    // Board: apex26.titleBoard ("auto" | "mirror" | "center"); unset = auto.
     // Title art: apex26.titleArt ("on" | "soft" | "off"); unset = on.
-    var mv = null, ti = null, mw = null, ml = null, ta = null;
+    var mv = null, ti = null, mw = null, ml = null, tb = null, ta = null;
     try { mv = JSON.parse(localStorage.getItem("apex26.motion")); } catch (e) { /* unset */ }
     try { ti = JSON.parse(localStorage.getItem("apex26.titleIntro")); } catch (e) { /* unset */ }
     try { mw = JSON.parse(localStorage.getItem("apex26.menuWash")); } catch (e) { /* unset */ }
     try { ml = JSON.parse(localStorage.getItem("apex26.menuLayout")); } catch (e) { /* unset */ }
+    try { tb = JSON.parse(localStorage.getItem("apex26.titleBoard")); } catch (e) { /* unset */ }
     try { ta = JSON.parse(localStorage.getItem("apex26.titleArt")); } catch (e) { /* unset */ }
     try {
       if (mv === "reduce" || (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches))
@@ -386,6 +389,9 @@
     } catch (e) { /* TitleFx answers at eval */ }
     try {
       if (ml === "stack" || ml === "compact") document.documentElement.dataset.menuLayout = ml;
+    } catch (e) { /* TitleFx answers at eval */ }
+    try {
+      if (tb === "mirror" || tb === "center") document.documentElement.dataset.titleBoard = tb;
     } catch (e) { /* TitleFx answers at eval */ }
     try {
       if (ta === "soft" || ta === "off") document.documentElement.dataset.titleArt = ta;
@@ -605,7 +611,7 @@
         <button id="pm-open-controls" type="button">CONTROLS&hellip;<small>Input, pedals &amp; bindings</small></button>
         <button id="pm-open-driving" type="button">DRIVING&hellip;<small>Coach, practice &amp; strategy</small></button>
         <button id="pm-open-display" type="button">DISPLAY&hellip;<small>HUD &amp; graphics</small></button>
-        <button id="pm-open-appearance" type="button">APPEARANCE&hellip;<small>Size, theme, menu layout &amp; colours</small></button>
+        <button id="pm-open-appearance" type="button">APPEARANCE&hellip;<small>Size, title board, layout &amp; colours</small></button>
         <button id="pm-advanced">STEERING &amp; ASSISTS&hellip;<small>Presets, response &amp; aids</small></button>
         <button id="pm-audio">MUSIC &amp; SOUND&hellip;<small>Playback, effects &amp; volume</small></button>
       </nav>
@@ -950,7 +956,7 @@
         <section id="pm-panel-appearance" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>
           <h3 class="pm-group-h">APPEARANCE</h3>
-          <p class="adv-help">Interface size, theme, title-menu layout and colours. Selection rings stay on the menu accent; team identity can stay on the HUD. Race HUD size stays under DISPLAY.</p>
+          <p class="adv-help">Interface size, title-menu placement, theme and colours. Selection rings stay on the menu accent; team identity can stay on the HUD. Race HUD size stays under DISPLAY.</p>
           <!-- step 0.5 — layout tiers (`--pair-at` / `--compact-at` via
                SheetShape) sit INSIDE this range, so a notch can flip arrangement
                not just size. MEASURED garage portrait: two columns at 80%,
@@ -971,6 +977,52 @@
             </div>
           </div>
           <p class="adv-help" id="pm-menulayout-help">How the title-menu doors are arranged. AUTO is the shipped 2×2 play grid; STACK is one column of full-width doors; COMPACT tightens gaps for short screens.</p>
+          <div id="pm-titleboard" class="set-row" role="group" aria-labelledby="pm-titleboard-label">
+            <span class="tune-label" id="pm-titleboard-label">TITLE BOARD</span>
+            <div>
+              <button id="pm-titleboard-prev" type="button" data-step="-1" aria-label="Previous title board" aria-hidden="true" tabindex="-1">&lsaquo;</button>
+              <select id="pm-titleboard-sel" aria-labelledby="pm-titleboard-label" aria-describedby="pm-titleboard-help"></select>
+              <button id="pm-titleboard-next" type="button" data-step="1" aria-label="Next title board" aria-hidden="true" tabindex="-1">&rsaquo;</button>
+            </div>
+          </div>
+          <p class="adv-help" id="pm-titleboard-help">Where the wordmark and small print sit. AUTO is brand left / doors right on wide screens; MIRROR swaps the columns; CENTER stacks the title over the doors on every shape.</p>
+          <div id="pm-titleart" class="set-row" role="group" aria-labelledby="pm-titleart-label">
+            <span class="tune-label" id="pm-titleart-label">TITLE ART</span>
+            <div>
+              <button id="pm-titleart-prev" type="button" data-step="-1" aria-label="Previous title art" aria-hidden="true" tabindex="-1">&lsaquo;</button>
+              <select id="pm-titleart-sel" aria-labelledby="pm-titleart-label" aria-describedby="pm-titleart-help"></select>
+              <button id="pm-titleart-next" type="button" data-step="1" aria-label="Next title art" aria-hidden="true" tabindex="-1">&rsaquo;</button>
+            </div>
+          </div>
+          <p class="adv-help" id="pm-titleart-help">The side-on line drawing behind the title menu. SOFT fades it; OFF removes it for a cleaner board.</p>
+          <div id="pm-menuwash" class="set-row" role="group" aria-labelledby="pm-menuwash-label">
+            <span class="tune-label" id="pm-menuwash-label">MENU WASH</span>
+            <div>
+              <button id="pm-menuwash-prev" type="button" data-step="-1" aria-label="Previous menu wash" aria-hidden="true" tabindex="-1">&lsaquo;</button>
+              <select id="pm-menuwash-sel" aria-labelledby="pm-menuwash-label" aria-describedby="pm-menuwash-help"></select>
+              <button id="pm-menuwash-next" type="button" data-step="1" aria-label="Next menu wash" aria-hidden="true" tabindex="-1">&rsaquo;</button>
+            </div>
+          </div>
+          <p class="adv-help" id="pm-menuwash-help">The red radial and grain behind the title menu. SOFT eases both; OFF leaves a flat dark veil.</p>
+          <div id="pm-titleintro" class="set-row" role="group" aria-labelledby="pm-titleintro-label">
+            <span class="tune-label" id="pm-titleintro-label">TITLE INTRO</span>
+            <div>
+              <button id="pm-titleintro-prev" type="button" data-step="-1" aria-label="Previous title intro" aria-hidden="true" tabindex="-1">&lsaquo;</button>
+              <select id="pm-titleintro-sel" aria-labelledby="pm-titleintro-label" aria-describedby="pm-titleintro-help"></select>
+              <button id="pm-titleintro-next" type="button" data-step="1" aria-label="Next title intro" aria-hidden="true" tabindex="-1">&rsaquo;</button>
+            </div>
+          </div>
+          <p class="adv-help" id="pm-titleintro-help">The first-show title reveal. QUICK halves it; OFF skips straight to the resting board. REPLAY still previews once when OFF.</p>
+          <div id="pm-motion" class="set-row" role="group" aria-labelledby="pm-motion-label">
+            <span class="tune-label" id="pm-motion-label">MENU ANIMATIONS</span>
+            <div>
+              <button id="pm-motion-prev" type="button" data-step="-1" aria-label="Previous menu animations" aria-hidden="true" tabindex="-1">&lsaquo;</button>
+              <select id="pm-motion-sel" aria-labelledby="pm-motion-label" aria-describedby="pm-motion-help"></select>
+              <button id="pm-motion-next" type="button" data-step="1" aria-label="Next menu animations" aria-hidden="true" tabindex="-1">&rsaquo;</button>
+            </div>
+          </div>
+          <p class="adv-help" id="pm-motion-help">REDUCED stills menu reveals and screen transitions. If your device asks for reduced motion, that always wins.</p>
+          <button type="button" id="pm-replay-intro" class="pm-replay-intro">REPLAY INTRO<small>play the title reveal again</small></button>
           <div id="pm-appearance-preview" class="pm-accent-preview" aria-hidden="true">
             <button type="button" class="bigbtn pm-accent-preview-btn" tabindex="-1">PRIMARY</button>
             <span class="pm-accent-preview-hud"><b>42</b></span>
@@ -1018,43 +1070,6 @@
               <input id="pm-hudaccent-hextext" class="pm-accent-hextext" type="text" inputmode="text" maxlength="7" spellcheck="false" autocomplete="off" aria-label="HUD accent hex" value="#e10600">
             </div>
           </div>
-          <div id="pm-motion" class="set-row" role="group" aria-labelledby="pm-motion-label">
-            <span class="tune-label" id="pm-motion-label">MENU ANIMATIONS</span>
-            <div>
-              <button id="pm-motion-prev" type="button" data-step="-1" aria-label="Previous menu animations" aria-hidden="true" tabindex="-1">&lsaquo;</button>
-              <select id="pm-motion-sel" aria-labelledby="pm-motion-label" aria-describedby="pm-motion-help"></select>
-              <button id="pm-motion-next" type="button" data-step="1" aria-label="Next menu animations" aria-hidden="true" tabindex="-1">&rsaquo;</button>
-            </div>
-          </div>
-          <p class="adv-help" id="pm-motion-help">REDUCED stills menu reveals and screen transitions. If your device asks for reduced motion, that always wins.</p>
-          <div id="pm-titleintro" class="set-row" role="group" aria-labelledby="pm-titleintro-label">
-            <span class="tune-label" id="pm-titleintro-label">TITLE INTRO</span>
-            <div>
-              <button id="pm-titleintro-prev" type="button" data-step="-1" aria-label="Previous title intro" aria-hidden="true" tabindex="-1">&lsaquo;</button>
-              <select id="pm-titleintro-sel" aria-labelledby="pm-titleintro-label" aria-describedby="pm-titleintro-help"></select>
-              <button id="pm-titleintro-next" type="button" data-step="1" aria-label="Next title intro" aria-hidden="true" tabindex="-1">&rsaquo;</button>
-            </div>
-          </div>
-          <p class="adv-help" id="pm-titleintro-help">The first-show title reveal. QUICK halves it; OFF skips straight to the resting board. REPLAY still previews once when OFF.</p>
-          <div id="pm-menuwash" class="set-row" role="group" aria-labelledby="pm-menuwash-label">
-            <span class="tune-label" id="pm-menuwash-label">MENU WASH</span>
-            <div>
-              <button id="pm-menuwash-prev" type="button" data-step="-1" aria-label="Previous menu wash" aria-hidden="true" tabindex="-1">&lsaquo;</button>
-              <select id="pm-menuwash-sel" aria-labelledby="pm-menuwash-label" aria-describedby="pm-menuwash-help"></select>
-              <button id="pm-menuwash-next" type="button" data-step="1" aria-label="Next menu wash" aria-hidden="true" tabindex="-1">&rsaquo;</button>
-            </div>
-          </div>
-          <p class="adv-help" id="pm-menuwash-help">The red radial and grain behind the title menu. SOFT eases both; OFF leaves a flat dark veil.</p>
-          <div id="pm-titleart" class="set-row" role="group" aria-labelledby="pm-titleart-label">
-            <span class="tune-label" id="pm-titleart-label">TITLE ART</span>
-            <div>
-              <button id="pm-titleart-prev" type="button" data-step="-1" aria-label="Previous title art" aria-hidden="true" tabindex="-1">&lsaquo;</button>
-              <select id="pm-titleart-sel" aria-labelledby="pm-titleart-label" aria-describedby="pm-titleart-help"></select>
-              <button id="pm-titleart-next" type="button" data-step="1" aria-label="Next title art" aria-hidden="true" tabindex="-1">&rsaquo;</button>
-            </div>
-          </div>
-          <p class="adv-help" id="pm-titleart-help">The side-on line drawing behind the title menu. SOFT fades it; OFF removes it for a cleaner board.</p>
-          <button type="button" id="pm-replay-intro" class="pm-replay-intro">REPLAY INTRO<small>play the title reveal again</small></button>
         </section>
         <section id="advanced" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>

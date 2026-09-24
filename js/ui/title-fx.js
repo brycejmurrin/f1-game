@@ -1,5 +1,5 @@
-/* Apex 26 — TitleFx: title-screen motion, wash, door layout and the background
-   drawing, as player settings under SETTINGS › APPEARANCE.
+/* Apex 26 — TitleFx: title-screen motion, wash, door layout, board placement
+   and the background drawing, as player settings under SETTINGS › APPEARANCE.
 
    MENU ANIMATIONS: ON / REDUCED. An OS that asks for reduced motion always
    wins, and is followed live; otherwise the stored choice answers, and unset
@@ -17,13 +17,19 @@
    MENU LAYOUT: AUTO / STACK / COMPACT. How the title-menu doors are arranged.
    Lands on <html data-menu-layout>. Unset is AUTO (shipped 2×2 play grid).
 
+   TITLE BOARD: AUTO / MIRROR / CENTER. Where the wordmark + small print sit
+   relative to the doors. Lands on <html data-title-board>. Unset is AUTO
+   (brand left / doors right on wide; stacked on tall). MIRROR swaps the
+   wide columns and flips the title art; CENTER stacks brand over doors on
+   every shape.
+
    TITLE ART: ON / SOFT / OFF. Controls the #title-car line drawing behind the
    title menu via <html data-title-art>. Unset is ON (the shipped look).
 
-   Six small jobs on #overlay (the title screen):
-     * motion / intro / wash / layout / title-art attributes (index.html's
-       inline boot sets the FIRST answers before first paint; this file owns
-       every later one);
+   Seven small jobs on #overlay (the title screen):
+     * motion / intro / wash / layout / board / title-art attributes
+       (index.html's inline boot sets the FIRST answers before first paint;
+       this file owns every later one);
      * the intro, ONCE: CSS keys off #overlay[data-intro]. The shell ships the
        attribute; this file takes it off after introHoldMs() once the overlay
        is first visible. REDUCED and INTRO OFF take it off at once. replay()
@@ -41,11 +47,13 @@ const TitleFx = (function () {
   const KEY_INTRO = "titleIntro";    // apex26.titleIntro — json: "full" | "quick" | "off" | unset
   const KEY_WASH = "menuWash";       // apex26.menuWash — json: "full" | "soft" | "off" | unset
   const KEY_LAYOUT = "menuLayout";   // apex26.menuLayout — json: "auto" | "stack" | "compact" | unset
+  const KEY_BOARD = "titleBoard";    // apex26.titleBoard — json: "auto" | "mirror" | "center" | unset
   const KEY_ART = "titleArt";        // apex26.titleArt — json: "on" | "soft" | "off" | unset
   const MOTION = [["on", "ON"], ["reduce", "REDUCED"]];
   const INTROS = [["full", "FULL"], ["quick", "QUICK"], ["off", "OFF"]];
   const WASHES = [["full", "FULL"], ["soft", "SOFT"], ["off", "OFF"]];
   const LAYOUTS = [["auto", "AUTO"], ["stack", "STACK"], ["compact", "COMPACT"]];
+  const BOARDS = [["auto", "AUTO"], ["mirror", "MIRROR"], ["center", "CENTER"]];
   const ARTS = [["on", "ON"], ["soft", "SOFT"], ["off", "OFF"]];
   // Hold windows: FULL covers the CSS timeline (~2.5 s); QUICK matches the
   // halved --intro-* / --dur-* tokens under data-title-intro="quick".
@@ -79,6 +87,11 @@ const TitleFx = (function () {
   function layoutMode() {
     const v = store.get(KEY_LAYOUT, null);
     if (v === "stack" || v === "compact") return v;
+    return "auto";
+  }
+  function boardMode() {
+    const v = store.get(KEY_BOARD, null);
+    if (v === "mirror" || v === "center") return v;
     return "auto";
   }
   function artMode() {
@@ -121,6 +134,12 @@ const TitleFx = (function () {
     if (L === "auto") delete root.dataset.menuLayout;
     else root.dataset.menuLayout = L;
   }
+  function applyBoard() {
+    if (!root || !root.dataset) return;
+    const b = boardMode();
+    if (b === "auto") delete root.dataset.titleBoard;
+    else root.dataset.titleBoard = b;
+  }
   function applyArt() {
     if (!root || !root.dataset) return;
     const a = artMode();
@@ -132,6 +151,7 @@ const TitleFx = (function () {
     applyIntro();
     applyWash();
     applyLayout();
+    applyBoard();
     applyArt();
   }
 
@@ -161,6 +181,13 @@ const TitleFx = (function () {
     applyLayout();
     if (typeof SettingRow !== "undefined" && SettingRow.paint) SettingRow.paint("pm-menulayout", layoutMode());
     return layoutMode();
+  }
+  function setBoard(v) {
+    const next = (v === "mirror" || v === "center") ? v : "auto";
+    store.set(KEY_BOARD, next);
+    applyBoard();
+    if (typeof SettingRow !== "undefined" && SettingRow.paint) SettingRow.paint("pm-titleboard", boardMode());
+    return boardMode();
   }
   function setArt(v) {
     const next = (v === "soft" || v === "off") ? v : "on";
@@ -262,6 +289,13 @@ const TitleFx = (function () {
         write: (v) => setLayout(v),
       });
     }
+    if (byId("pm-titleboard")) {
+      SettingRow.wire("pm-titleboard", {
+        values: BOARDS,
+        read: boardMode,
+        write: (v) => setBoard(v),
+      });
+    }
     if (byId("pm-titleart")) {
       SettingRow.wire("pm-titleart", {
         values: ARTS,
@@ -288,11 +322,11 @@ const TitleFx = (function () {
   }
 
   return {
-    KEY, KEY_INTRO, KEY_WASH, KEY_LAYOUT, KEY_ART,
-    MOTION, INTROS, WASHES, LAYOUTS, ARTS, INTRO_MS,
-    mode, introMode, washMode, layoutMode, artMode, introHoldMs,
-    set, setIntro, setWash, setLayout, setArt,
-    apply, applyMotion, applyIntro, applyWash, applyLayout, applyArt,
+    KEY, KEY_INTRO, KEY_WASH, KEY_LAYOUT, KEY_BOARD, KEY_ART,
+    MOTION, INTROS, WASHES, LAYOUTS, BOARDS, ARTS, INTRO_MS,
+    mode, introMode, washMode, layoutMode, boardMode, artMode, introHoldMs,
+    set, setIntro, setWash, setLayout, setBoard, setArt,
+    apply, applyMotion, applyIntro, applyWash, applyLayout, applyBoard, applyArt,
     replay, initUI, wireRows,
   };
 })();

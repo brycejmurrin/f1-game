@@ -439,6 +439,48 @@
 :root[data-menu-layout="compact"] #menu-secondary .bigbtn { padding-block: 6px; }
 :root[data-menu-layout="compact"] #menu-retention { gap: calc(var(--gap) * 0.4); }
 :root[data-menu-layout="compact"] #menu-retention .bigbtn { padding-block: calc(var(--gap) * 0.4); }
+/* TITLE BOARD player setting (js/ui/title-fx.js → html[data-title-board]).
+   AUTO leaves the shipped wide brand-left / doors-right composition alone.
+   MIRROR swaps the wide columns and flips the title art so the cars still
+   sit under the brand. CENTER stacks brand over doors on every shape. Tall
+   screens are already stacked: MIRROR only right-aligns the brand column. */
+:root[data-title-board="mirror"] :where(body[data-shape="tall"]) #menu-brand {
+  align-items: flex-end;
+}
+:root[data-title-board="mirror"] :where(body[data-shape="wide"][data-density="compact"]) #overlay {
+  grid-template-columns: min(46%, 400px) minmax(0, 1fr);
+}
+:root[data-title-board="mirror"] :where(body[data-shape="wide"][data-density="compact"]) #menu-brand {
+  grid-column: 2;
+  align-items: flex-end;
+}
+:root[data-title-board="mirror"] :where(body[data-shape="wide"][data-density="compact"]) #menu-buttons {
+  grid-column: 1;
+}
+:root[data-title-board="mirror"] :where(body[data-shape="wide"]) #title-car {
+  transform: scaleX(-1);
+}
+:root[data-title-board="center"] :where(body[data-shape="wide"]) #overlay {
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  justify-content: safe center;
+  column-gap: 0;
+}
+:root[data-title-board="center"] :where(body[data-shape="wide"]) #menu-brand {
+  grid-column: 1;
+  grid-row: 1;
+  align-items: center;
+  width: min(calc(42 * var(--vwz)), 420px, 100%);
+  max-width: 100%;
+}
+:root[data-title-board="center"] :where(body[data-shape="wide"]) #menu-buttons {
+  grid-column: 1;
+  grid-row: 2;
+  align-self: start;
+  width: min(calc(42 * var(--vwz)), 420px, 100%);
+  max-width: 100%;
+  justify-items: stretch;
+}
 /* The hero is the one button on the screen with two lines of text, so it centres
    its own stack rather than inheriting the single-line baseline the others use. */
 #menu-hero .bigbtn { padding-block: 13px; }

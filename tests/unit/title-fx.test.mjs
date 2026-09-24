@@ -1,6 +1,7 @@
-/* title-fx — MENU ANIMATIONS + TITLE INTRO + MENU WASH + TITLE ART as player
- * settings, the one-shot intro, the hidden-tab pause and the title-button
- * haptic. Runs the REAL module in node:vm over a mini DOM.
+/* title-fx — MENU ANIMATIONS + TITLE INTRO + MENU WASH + MENU LAYOUT +
+ * TITLE BOARD + TITLE ART as player settings, the one-shot intro, the
+ * hidden-tab pause and the title-button haptic. Runs the REAL module in
+ * node:vm over a mini DOM.
  *
  * Run: node --test tests/unit/title-fx.test.mjs */
 import { test } from "node:test";
@@ -56,7 +57,7 @@ function load({ stored = {}, osReduce = false, readyState = "complete", vibrate 
   overlay.setAttribute("data-intro", "");
   overlay.hidden = overlayHidden;
   // Static Appearance rows (shell declares them).
-  for (const id of ["pm-motion", "pm-titleintro", "pm-menuwash", "pm-menulayout", "pm-titleart", "pm-replay-intro"]) {
+  for (const id of ["pm-motion", "pm-titleintro", "pm-menuwash", "pm-menulayout", "pm-titleboard", "pm-titleart", "pm-replay-intro"]) {
     ids.set(id, el(id));
   }
   ids.set("overlay", overlay);
@@ -121,36 +122,46 @@ function load({ stored = {}, osReduce = false, readyState = "complete", vibrate 
   };
 }
 
-test("shell declares MENU ANIMATIONS, TITLE INTRO, MENU WASH, MENU LAYOUT, TITLE ART and REPLAY INTRO", () => {
+test("shell declares MENU ANIMATIONS, TITLE INTRO, MENU WASH, MENU LAYOUT, TITLE BOARD, TITLE ART and REPLAY INTRO", () => {
   assert.ok(SHELL.includes('id="pm-panel-appearance"'));
   assert.ok(SHELL.includes('id="pm-motion"'));
   assert.ok(SHELL.includes('id="pm-titleintro"'));
   assert.ok(SHELL.includes('id="pm-menuwash"'));
   assert.ok(SHELL.includes('id="pm-menulayout"'));
+  assert.ok(SHELL.includes('id="pm-titleboard"'));
   assert.ok(SHELL.includes('id="pm-titleart"'));
   assert.ok(SHELL.includes('id="pm-replay-intro"'));
   assert.ok(SHELL.includes('id="pm-uiscale"'));
   assert.ok(SHELL.includes("apex26.titleIntro"));
   assert.ok(SHELL.includes("apex26.menuWash"));
   assert.ok(SHELL.includes("apex26.menuLayout"));
+  assert.ok(SHELL.includes("apex26.titleBoard"));
   assert.ok(SHELL.includes("apex26.titleArt"));
   // UI SIZE moved under APPEARANCE (not DISPLAY).
   const app = SHELL.slice(SHELL.indexOf('id="pm-panel-appearance"'), SHELL.indexOf('id="advanced"'));
   assert.ok(app.includes('id="pm-uiscale"'));
   assert.ok(!SHELL.slice(SHELL.indexOf('id="pm-panel-display"'), SHELL.indexOf('id="pm-panel-appearance"')).includes('id="pm-uiscale"'));
+  // Title chrome sits with size/layout, ahead of theme/accents.
+  const boardAt = app.indexOf('id="pm-titleboard"');
+  const artAt = app.indexOf('id="pm-titleart"');
+  const themeAt = app.indexOf('id="pm-uitheme"');
+  assert.ok(boardAt > 0 && artAt > boardAt && themeAt > artAt,
+    "TITLE BOARD → TITLE ART → … → THEME order in Appearance");
 });
 
-test("defaults: motion ON, intro FULL, wash FULL, layout AUTO, title art ON (no data-*)", () => {
+test("defaults: motion ON, intro FULL, wash FULL, layout AUTO, board AUTO, title art ON (no data-*)", () => {
   const { html, M } = load({ readyState: "loading" });
   assert.equal(M.mode(), "on");
   assert.equal(M.introMode(), "full");
   assert.equal(M.washMode(), "full");
   assert.equal(M.layoutMode(), "auto");
+  assert.equal(M.boardMode(), "auto");
   assert.equal(M.artMode(), "on");
   assert.equal(html.dataset.motion, undefined);
   assert.equal(html.dataset.titleIntro, undefined);
   assert.equal(html.dataset.menuWash, undefined);
   assert.equal(html.dataset.menuLayout, undefined);
+  assert.equal(html.dataset.titleBoard, undefined);
   assert.equal(html.dataset.titleArt, undefined);
 });
 
@@ -194,6 +205,15 @@ test("MENU LAYOUT stack/compact stamp data-menu-layout; garbage falls to auto", 
   assert.equal(load({ stored: { menuLayout: "masonry" } }).M.layoutMode(), "auto");
 });
 
+test("TITLE BOARD mirror/center stamp data-title-board; garbage falls to auto", () => {
+  const mirror = load({ stored: { titleBoard: "mirror" } });
+  assert.equal(mirror.M.boardMode(), "mirror");
+  assert.equal(mirror.html.dataset.titleBoard, "mirror");
+  const center = load({ stored: { titleBoard: "center" } });
+  assert.equal(center.html.dataset.titleBoard, "center");
+  assert.equal(load({ stored: { titleBoard: "side" } }).M.boardMode(), "auto");
+});
+
 test("TITLE ART soft/off stamp data-title-art; garbage falls to on", () => {
   const soft = load({ stored: { titleArt: "soft" } });
   assert.equal(soft.M.artMode(), "soft");
@@ -203,10 +223,10 @@ test("TITLE ART soft/off stamp data-title-art; garbage falls to on", () => {
   assert.equal(load({ stored: { titleArt: "neon" } }).M.artMode(), "on");
 });
 
-test("Appearance rows wire and round-trip motion + intro + wash + layout + titleArt", () => {
+test("Appearance rows wire and round-trip motion + intro + wash + layout + board + titleArt", () => {
   const { wired, written, html, ids, M } = load();
   assert.deepEqual(wired.map((w) => w.id).sort(), [
-    "pm-menulayout", "pm-menuwash", "pm-motion", "pm-titleart", "pm-titleintro",
+    "pm-menulayout", "pm-menuwash", "pm-motion", "pm-titleart", "pm-titleboard", "pm-titleintro",
   ]);
   ids.get("pm-motion")._spec.write("reduce");
   assert.equal(written.motion, "reduce");
@@ -220,6 +240,9 @@ test("Appearance rows wire and round-trip motion + intro + wash + layout + title
   ids.get("pm-menulayout")._spec.write("stack");
   assert.equal(written.menuLayout, "stack");
   assert.equal(html.dataset.menuLayout, "stack");
+  ids.get("pm-titleboard")._spec.write("mirror");
+  assert.equal(written.titleBoard, "mirror");
+  assert.equal(html.dataset.titleBoard, "mirror");
   ids.get("pm-titleart")._spec.write("soft");
   assert.equal(written.titleArt, "soft");
   assert.equal(html.dataset.titleArt, "soft");
@@ -227,6 +250,10 @@ test("Appearance rows wire and round-trip motion + intro + wash + layout + title
   assert.equal(html.dataset.titleArt, "off");
   M.setArt("on");
   assert.equal(html.dataset.titleArt, undefined);
+  M.setBoard("center");
+  assert.equal(html.dataset.titleBoard, "center");
+  M.setBoard("auto");
+  assert.equal(html.dataset.titleBoard, undefined);
   M.setIntro("full");
   assert.equal(html.dataset.titleIntro, undefined);
   M.setWash("full");
@@ -241,7 +268,7 @@ test("wiring waits for DOMContentLoaded while deferred scripts still run", () =>
   const { wired, document } = load({ readyState: "interactive" });
   assert.equal(wired.length, 0, "SettingRow loads after this file — never wire at eval here");
   document._handlers.DOMContentLoaded();
-  assert.equal(wired.length, 5);
+  assert.equal(wired.length, 6);
 });
 
 test("REPLAY INTRO button calls replay()", () => {
@@ -336,7 +363,7 @@ test("a title .bigbtn click taps through Input.vibrate, anything else does not",
   assert.doesNotThrow(() => noInput.overlay._handlers.click({ isTrusted: true, target: { closest: () => ({}) } }));
 });
 
-test("CSS keys off data-motion / data-title-intro / data-menu-wash / data-menu-layout / data-title-art; export lists them", () => {
+test("CSS keys off data-motion / data-title-intro / data-menu-wash / data-menu-layout / data-title-board / data-title-art; export lists them", () => {
   assert.match(CSS, /:root\[data-motion="reduce"\] :is\(#overlay, \.screen\) \*/);
   assert.match(CSS, /#overlay\[data-paused\]/);
   assert.match(MENUS, /:root\[data-title-art="soft"\] #title-car/);
@@ -353,10 +380,16 @@ test("CSS keys off data-motion / data-title-intro / data-menu-wash / data-menu-l
   assert.match(COMP, /:not\(\[data-title-intro="off"\]\)/);
   assert.match(MENUS, /:root\[data-menu-layout="stack"\] #menu-primary/);
   assert.match(MENUS, /:root\[data-menu-layout="compact"\] #menu-buttons/);
+  assert.match(MENUS, /:root\[data-title-board="mirror"\]/);
+  assert.match(MENUS, /:root\[data-title-board="center"\]/);
+  assert.match(MENUS, /transform:\s*scaleX\(-1\)/);
+  assert.match(CSS, /:root\[data-title-board="mirror"\]/);
+  assert.match(CSS, /:root\[data-title-board="center"\]/);
   assert.match(EXPORT, /k:\s*"motion"[\s\S]*?group:\s*"appearance"/);
   assert.match(EXPORT, /k:\s*"titleIntro"[\s\S]*?group:\s*"appearance"/);
   assert.match(EXPORT, /k:\s*"menuWash"[\s\S]*?group:\s*"appearance"/);
   assert.match(EXPORT, /k:\s*"menuLayout"[\s\S]*?group:\s*"appearance"/);
+  assert.match(EXPORT, /k:\s*"titleBoard"[\s\S]*?group:\s*"appearance"/);
   assert.match(EXPORT, /k:\s*"titleArt"[\s\S]*?group:\s*"appearance"/);
   assert.match(EXPORT, /k:\s*"uiScale"[\s\S]*?group:\s*"appearance"/);
   assert.match(MANIFEST, /\["js\/core\/store\.js", "js\/ui\/title-fx\.js"\]/);
