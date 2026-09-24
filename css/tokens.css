@@ -643,6 +643,31 @@
      Derived with color-mix rather than a second hex so there is still one red:
      change --red and the fills follow. */
   --red-fill: color-mix(in oklab, var(--red) 90%, #1a0008);
+  /* THE RED RAMP — twelve steps, one job each (the Radix convention), so a
+     surface asks for a ROLE instead of hand-mixing another percentage of red:
+       1-2   app / pane background tints     6-8   borders: subtle, idle, hover/focus
+       3-5   component fill: idle/hover/press 9    the solid brand red (= --red)
+       10    solid hover                      11   low-contrast text   12  high-contrast text
+     Built for THIS dark UI: steps 1-8 climb from --bg's lightness (L 0.17) so a
+     tint reads as red-on-black, not as a pink smear. OKLCH because its L is
+     perceptual — equal L steps look like equal steps — and one hue (29.5deg,
+     measured from #e10600: oklch(0.573 0.233 29.5)) holds the family together;
+     11-12 drift a few degrees pinker the way light reds do at high L, and 12
+     trims chroma to stay inside sRGB. Step 9 IS var(--red), not a copy, so there
+     is still one red. Measured (WCAG) on --bg: 11 is 8.6:1, 12 is 14:1; white on
+     10 is 4.2:1 — a hover is transient, the resting solid is 9 at 5:1. */
+  --red-1: oklch(0.17 0.02 29.5);
+  --red-2: oklch(0.2 0.035 29.5);
+  --red-3: oklch(0.25 0.07 29.5);
+  --red-4: oklch(0.29 0.095 29.5);
+  --red-5: oklch(0.33 0.11 29.5);
+  --red-6: oklch(0.38 0.125 29.5);
+  --red-7: oklch(0.44 0.145 29.5);
+  --red-8: oklch(0.51 0.175 29.5);
+  --red-9: var(--red);
+  --red-10: oklch(0.61 0.225 29.5);
+  --red-11: oklch(0.76 0.14 27);
+  --red-12: oklch(0.9 0.045 22);
   --grad-primary:     linear-gradient(135deg in oklab,
                         color-mix(in oklab, var(--red-fill) 76%, #fff) 0%,
                         color-mix(in oklab, var(--red-fill) 74%, #000) 100%);
@@ -671,7 +696,57 @@
      the bands into grain the eye reads as texture. feTurbulence in a data URI
      keeps it to one tiled 160px tile and no network request. */
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+
+  /* MOTION. Four durations, not a continuum: 1 = press/hover feedback, 2 =
+     a control changing state, 3 = a panel or sheet entering, 4 = a screen-sized
+     move; --dur-draw is the slow one-shot (a line or ring drawing itself). A
+     step either reads as instant, as a change, or as travel — values in between
+     just look undecided. The easings: --ease-out for anything ARRIVING (fast
+     start, long soft landing — it answers the input at once), --ease-in-out for
+     things moving between two resting places. */
+  --dur-1: 120ms;
+  --dur-2: 200ms;
+  --dur-3: 320ms;
+  --dur-4: 600ms;
+  --dur-draw: 1400ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  /* The fallback: without linear() a spring cannot be written in CSS, and
+     ease-out is the same arrival without the bounce. The real curve is in the
+     @supports block below. */
+  --ease-spring: var(--ease-out);
+  /* A multiplier, not a switch: write `calc(var(--dur-3) * var(--motion))`
+     and reduced motion becomes 0ms with the end state intact, which no
+     `animation: none` can promise for a `both`-filled entrance. 0 under the
+     OS preference and under html[data-motion="reduce"] (the in-game setting),
+     below. */
+  --motion: 1;
 }
+
+/* THE SPRING, as linear(): 25 evenly spaced samples of a damped spring
+     x(t) = 1 - e^(-zeta*w*t) * (cos(wd*t) + (zeta*w/wd) * sin(wd*t)),
+     wd = w * sqrt(1 - zeta^2),  w = 9.3,  zeta = 0.667,  t in [0, 1].
+   zeta comes from the overshoot: e^(-zeta*pi/sqrt(1-zeta^2)) = 0.06 is a 6%
+   peak (at t ~ 0.45), enough to read as physical, not enough to look loose.
+   w puts the envelope at 0.3% by t = 1, so pinning the last stop to exactly 1
+   is an invisible step, not a snap. Values rounded to 3 dp. Regenerate from
+   the formula, never hand-nudge a stop. Duration is the caller's (--dur-3 or
+   --dur-4 — at --dur-1 a bounce is noise). */
+@supports (animation-timing-function: linear(0, 1)) {
+  :root {
+    --ease-spring: linear(0, 0.063, 0.209, 0.388, 0.565, 0.721, 0.847, 0.939,
+      1.001, 1.038, 1.056, 1.06, 1.055, 1.046, 1.035, 1.025, 1.016, 1.008,
+      1.003, 1, 0.998, 0.997, 0.996, 0.997, 1);
+  }
+}
+
+/* --motion: 0 — the OS asks, or the player does (js sets data-motion on
+   <html> from the setting). Both, not either-or: the setting can only ADD
+   reduction; nothing here re-enables motion the OS has asked to drop. */
+@media (prefers-reduced-motion: reduce) {
+  :root { --motion: 0; }
+}
+:root[data-motion="reduce"] { --motion: 0; }
 
 /* THE TOUCH LADDER. The tokens above are a FLOOR (44px is the smallest box
    Apple's HIG and WCAG 2.5.5 accept) and a phone was being handed the floor —
