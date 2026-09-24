@@ -15,34 +15,138 @@ problem and what is still left.
 | #242 | Tail-lights are paint by default (glow plus a road decal, no light slot). Per-chunk lamps shed to 0.3 rather than switching off | `frame-lights.js`, `car-mesh.js` |
 | #243 | **BAKED LAMP POOLS**: every lamp's diffuse pool on up-facing ground, baked once per track into an RGBA16F world-XZ map (TLX + GLX) | `js/lighting/lamp-bake.js` |
 | #246 | Bug-hunt fixes (four read-only reviewers): <br>• road-height bake with height in alpha and a height fade in the shader <br>• symmetric, verge-wide road splat <br>• steady-colour shadow carve <br>• colour clamp <br>• pre-bake at race start; debounced, time-sliced rebakes <br>• 0.35 s entry ramp for lamps joining the set <br>• steady, distance-faded tail-glow decal | as listed |
-| #247 (open) | **a**: LAMP BOUNCE baked as a second texture layer. **c**: baked pools ported to WGX (WebGPU) | `lamp-bake.js`, all three lit shaders, `wgx.js` |
+| #247 | **a**: LAMP BOUNCE baked as a second texture layer. **c**: baked pools ported to WGX (WebGPU) | `lamp-bake.js`, all three lit shaders, `wgx.js` |
 
 Measured (real-track harness, `buildRoad` vertices, Monza / Vegas / Singapore):
 road samples that lose the bake at the edges went from thousands to 0. Interior
 error has a p95 under 2–9 % (worst on Vegas). The gpu-census on macos-latest,
-Singapore at night, passed for all four renderers on #246.
+Singapore at night, passed for all four renderers on #246 and again on #247
+(run 35955024485: WGX `ok=true gpuErrors=0`, drove 439 m; GLX `gpuErrors=0`).
+#246 is live (`apex-sha` 4efe11cd0). #247 merged as de4faf2fc; Pages dispatched.
 
-## Open: #247 gate
+## Next steps
 
-- [ ] gpu-census on #247's head shows WGX with **0 gpuErrors** (Verdict step).
-  Local lavapipe WGX (singapore night, bake on): booted and bound, **gpuErrors 0, no console errors**
-  (so the WGSL validates), but no frame reached the soft-present capture within 90 s. That is the
-  known lavapipe present path, not a validation fault; the census is the real-GPU check.
-- [ ] CI green, then merge, `pages.yml`, and confirm the live `apex-sha` includes the merge.
+Order: **d → e → f → g/h**, then **b** as its own investigation. Each of d, e, f is
+one small PR. Each removes one visible artefact and has a test that pins it.
 
-## Next, in order of how glitchy they read
+### d. Governor steps pop the lamp set (small)
 
-| # | Item | Plan | Size |
-|---|---|---|---|
-| d | **Governor steps.** `tierShed` cuts the lamp cap 48 → 32 → 24 with no fade. Halos all go at tier ≥ 3. A device near its frame budget can oscillate between tiers (`governor.js` step-then-revert) | Fade cap changes over ~0.5 s through the entry ramp's machinery. Add hysteresis (a minimum hold time) before a tier step touches lighting | Small |
-| b | **Wet nights.** Diffuse is × 0.15 when wet, so most of a lamp's on-road brightness is the live GGX reflection, which the bake does not cover | Option 1: bake a rough "wet sheen" irradiance term at a fixed roughness and view-independent approximation, blended by `wetSheen`. Option 2: raise the cap (per-chunk lamps) when wet. Measure the fraction first | Large; decide first |
-| e | **Local over-brightness** within ~2 m of very low or tight-cone fixtures (Monza start gantry k1380, Singapore k1189, Vegas k1505). The ~2 m texel is too coarse at the hotspot | Leave those fixtures out of the bake (they stay live, flagged at build time: lens < 3 m or cone < 25°), or bake them at a finer local tile | Small |
-| f | **Tail-glow decal is a flat plane.** It clips on dips and floats on crests | Tilt it to the road's local pitch (`Tracks.sample` tangent at the decal's centre) | Small |
-| g | Bake memory: two layers at 600 k texels is ~9.6 MB. The GLX texture is not freed when the bake is switched off | Free on off. Consider lowering MAX_TEXELS on the mobile tier | Small |
-| h | Stale comment at game.js "night flood set only" (day floods bake too) | Fix the text | Trivial |
+**Symptom.** On a device near its frame budget, lamps and halos vanish and come
+back in bursts.
 
-Recommended next: **d**, then **e**, then **f** (each is small and removes a visible artefact). Take **b** as its
-own measured investigation.
+**Cause.**
+- `tierShed` (`js/lighting/frame-lights.js:244`) cuts the per-fragment lamp cap
+  from 48 to 32 at tier 1, and to `LightBudget.MOBILE` (24) at tier 2, in one frame.
+- Every halo disappears at tier ≥ 3 (`js/game.js:7794`, `PerfGov.tier() < 3`).
+- The governor (`js/perf/governor.js`, `_pendingVerify`) reverts a step that
+  bought nothing. So a device on the edge steps down, pops, steps back up, and pops again.
+
+**Plan.**
+1. Smooth the cap instead of the tier. `setFrameLights` keeps a float `_capF` that
+   moves toward `tierShed(cap)` at about 16 slots/s (down) and 32 slots/s (up).
+   The integer cap is `ceil(_capF)`. The existing guard band then ends the dropped
+   lamps at 0 as the set shrinks, and the 0.35 s entry ramp already covers regrowth.
+2. Fade the halos rather than cutting them: a `_glowF` that falls to 0 over 0.4 s once
+   tier ≥ 3, passed as a multiplier into `gfx.drawGlow`'s strength (the
+   `LT.glareStr` argument).
+3. Hysteresis for lighting only: the cap target follows the tier only after the tier
+   has held for 1.5 s. The governor itself is unchanged, since its verify/revert
+   logic is measured and pinned.
+
+**Tests.**
+- `all-lights-fill` or a new `frame-lights-cap.test.mjs`: a tier step 0 → 2 drops the
+  output count by at most ⌈16·dt⌉ per frame, and a lamp that leaves the set is at
+  colour 0 on its last frame.
+- A 0 → 2 → 0 flip inside 1.5 s leaves the cap untouched.
+
+**Verify.** Force tiers with `__apex` (`perfTier` / governor hooks in
+`docs/DEBUG-HOOKS.md`). Take GLX SwiftShader luma samples across a forced step and
+confirm there is no single-frame change above noise.
+
+### e. Over-bright hotspots under very low or tight-cone lamps (small)
+
+**Symptom.** A bright smear about 2 m across directly under a few fixtures:
+- the Monza start gantry (k1380, cone 0.92 / 0.78)
+- Singapore k1189 and Vegas k1505 (lens at 2.5–2.6 m, aim −0.2)
+
+**Cause.** At a 1.6–2.3 m texel, bilinear filtering spreads a pool whose gradient
+changes over less than a texel. The parity harness measured the baked value at up
+to 3.9× the true one, locally.
+
+**Plan.**
+1. Exclude such fixtures from the bake at build time: lens height < 3 m above the
+   baked surface, or a cone narrower than ~25° (`cosOuter > 0.9`). They stay on the
+   live loop at full per-pixel accuracy, and there are few of them.
+2. Mark excluded records with a flag lane: bit 1 of record [13] `volW`'s fraction, or a
+   parallel `Uint8Array` held by `LampBake`. `bake()` skips them.
+3. The shaders must NOT scale an excluded lamp by `(1 - bakeW)`. Pass a per-lamp
+   "baked" bit:
+   - GLX/TLX: the `w` of the colour lane is taken, so use `cone.w` (pad in WGX's
+     `Light`, lane 15 is spare in the uniform array).
+   - Multiply the step-aside by it: `mix(1, 1 - bakeW, baked)`.
+
+**Tests.**
+- `lamp-bake.test.mjs`: an excluded lamp contributes 0 to the bake.
+- The parity harness: the worst-case ratio on Monza/Vegas/Singapore falls under 1.3×.
+
+**Verify.** The harness numbers, plus an OFF/ON GLX screenshot at Monza's start
+line.
+
+### f. Tail-glow decal is a flat plane (small)
+
+**Symptom.** The red road glow behind a car clips into the road on dips, and floats
+over crests.
+
+**Cause.** `CarMesh.drawTailGlow` (`js/car/car-mesh.js:794`) lays a flat quad in the
+car's `_groundMat`, 3–9 m behind it.
+
+**Plan.**
+1. Pitch the quad to the road between the car and the decal centre: sample
+   `Tracks.sample` at `s − 6 m` and use the height delta over the run.
+2. Lift it 6 cm → 10 cm to clear banking noise.
+3. `_tgTried` caches the mesh per backend: key the cache on the backend so a
+   backend switch rebuilds it.
+
+**Verify.** GLX screenshots on Spa (Eau Rouge dip) and Zandvoort (banking) with a
+rival ahead.
+
+### g. Bake memory and freeing (small)
+
+- Two layers at 600 k texels is ~9.6 MB of RGBA16F. The `MAX_TEXELS` comment in
+  `lamp-bake.js:34` still says 4.8 MB; it is per layer.
+- On the mobile tier (`gfx.isMobile`), halve `MAX_TEXELS`. This costs about 1.4× the
+  cell size. Measure the error with the parity harness first.
+- GLX keeps `_bakeTex` (`glx.js:111`) after the bake is switched off. Delete it when
+  `frame.lampBake` has been null for about 2 s. TLX and WGX free on replacement
+  only; do the same there.
+
+### h. Stale comment (trivial)
+
+- `js/game.js:7072` says "night flood set only". Day floods bake too.
+
+### b. Wet nights (investigation first; large)
+
+**Symptom.** On a wet night, lamps ahead still visibly switch on.
+
+**Why.** Wet diffuse is × 0.15, so most of a lamp's on-road brightness is the live
+GGX reflection (plus spill and bounce), and the bake does not hold it.
+
+**Step 1: measure.** Instrument the lit shader behind a debug uniform to write, per
+lamp term, the share of final luminance: diffuse, bounce, specular. Do this at 5
+spots on Singapore, dry and wet. If specular is under 30 % of lamp light when
+wet, **stop**: the 0.35 s ramp is enough.
+
+**Step 2: options, if measurement says it matters.**
+1. **Raise the cap when wet.** Per-chunk lamps at 1.0 give 24 lamps per chunk. That
+   is cheap and already built; measure its frame cost on the macOS census.
+2. **Bake a rough-reflection term.** Store an irradiance-weighted dominant light
+   direction per texel (a third layer: rgb = colour, a = packed direction). The
+   shader then evaluates one GGX lobe against it. This is view-dependent-correct for
+   one lobe, wrong for overlapping pools, and a third texture layer.
+3. **Screen-space.** Let SSR carry the pools' reflection. It already reflects lit
+   geometry, and it needs the baked pools to be in the reflected colour, which they are.
+
+Option 1 first. Take option 2 only with a measured, visible win.
 
 ## How to verify a lamp change
 
