@@ -136,7 +136,43 @@
         if (h > 0.70) tree(k,  1, 15 + h * 3, 12 + h * 8, LEAF);
       });
 
-      grandstandEx(0.005, -1, 10, 160, null, null,
+      // ── Tribuna Centrale — wave-3 hero: stepped grey-blue slabs + red trim ─
+      // Research: stepped stack of long grey-blue boxes [0.55,0.58,0.62] with a
+      // red trim row. The crimson grandstandEx below keeps crowd/roof mass; this
+      // atomic facade is the Italian-park identity read from the pit straight.
+      {
+        const a = anchor(K(0.005), -1, 12);
+        if (!onTrack(a.c[0], a.c[2], 28)) {
+          const b = [a.r, a.u, a.t];
+          const GREY_A = [0.55, 0.58, 0.62], GREY_B = [0.50, 0.53, 0.58], GREY_C = [0.46, 0.49, 0.54];
+          const RED_TRIM = [0.82, 0.14, 0.14];
+          modelGroup("monza-tribuna-centrale", {
+            center: vadd(a.c, a.u, 9), size: [18, 20, 140], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.CONCRETE;
+            // Three rising tiers — long boxes, each set slightly back.
+            const slabs = [
+              [0.0,  16, 5.2, 132, GREY_A],
+              [5.4,  14, 5.0, 120, GREY_B],
+              [10.6, 12, 4.8, 108, GREY_C],
+            ];
+            for (const [y0, w, h, len, col] of slabs) {
+              addBox(stage, vadd(vadd(a.c, a.r, -(16 - w) * 0.35), a.u, y0 + h * 0.5),
+                [w, h, len], col, b);
+            }
+            // Red trim row across the middle tier face (Italian signature).
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(vadd(a.c, a.r, -7.2), a.u, 8.2),
+              [0.55, 1.1, 118], RED_TRIM, b);
+            // Flat canopy slab over the top tier.
+            addBox(stage, vadd(a.c, a.u, 16.0), [13.5, 0.7, 110], [0.72, 0.74, 0.78], b);
+            // Slim red fascia on the canopy lip.
+            addBox(stage, vadd(vadd(a.c, a.r, -6.5), a.u, 15.7),
+              [0.4, 0.55, 108], RED_TRIM, b);
+          }, { required: true });
+        }
+      }
+      grandstandEx(0.005, -1, 18, 160, null, null,
         { livery: "crimson", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
       // Secondary lower stand behind Centrale (historic structure).
       grandstandEx(0.955, -1, 10, 110, null, null, { livery: "concrete", endWalls: true });
@@ -192,11 +228,42 @@
           addCyl(out, a2.c, 0.35, 9, [0.72, 0.70, 0.68], 8, null);
         }
       }
-      tower(K(0.0), 1, 13, 6, 46, { col: [0.92, 0.92, 0.90], cap: true, capCol: [0.78, 0.14, 0.12], mast: 8 });
+      // ── Slim white podium tower + red cap — wave-3 hero ────────────────────
+      // Research: pit wall + tall slim white box [0.90,0.90,0.88] with red cap.
+      // Replaces the generic tower() so the pit-straight silhouette is Monza.
+      {
+        const a = anchor(K(0.0), 1, 13);
+        if (!onTrack(a.c[0], a.c[2], 10)) {
+          const b = [a.r, a.u, a.t];
+          const WHITE = [0.90, 0.90, 0.88], RED_CAP = [0.78, 0.14, 0.12];
+          const GLASS = [0.55, 0.72, 0.88];
+          modelGroup("monza-podium-tower", {
+            center: vadd(a.c, a.u, 24), size: [8, 50, 8], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.CONCRETE;
+            // Slim shaft — ~46 m, slightly tapered via two stacked boxes.
+            addBox(stage, vadd(a.c, a.u, 18), [5.6, 36, 5.6], WHITE, b);
+            addBox(stage, vadd(a.c, a.u, 40), [4.8, 10, 4.8], WHITE, b);
+            // Observation deck band with cool glass.
+            stage._mat = MAT.GLASS;
+            addBox(stage, vadd(a.c, a.u, 36), [6.2, 3.2, 6.2], GLASS, b);
+            // Red cap + mast.
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(a.c, a.u, 46.2), [6.4, 1.4, 6.4], RED_CAP, b);
+            addCyl(stage, vadd(a.c, a.u, 47.0), 0.22, 8, [0.55, 0.56, 0.60], 5, b);
+            addBox(stage, vadd(a.c, a.u, 55.2), [0.9, 0.5, 0.9], RED_CAP, b);
+          }, { required: true });
+        }
+      }
       // Podium base platform (marble-look step for award ceremony).
       {
         const aPod = anchor(K(0.0), 1, 11);
-        addBox(out, vadd(aPod.c, aPod.u, 1), [14, 0.8, 12], [0.88, 0.88, 0.90], [aPod.r, aPod.u, aPod.t]);
+        if (!onTrack(aPod.c[0], aPod.c[2], 8)) {
+          addBox(out, vadd(aPod.c, aPod.u, 1), [14, 0.8, 12], [0.88, 0.88, 0.90], [aPod.r, aPod.u, aPod.t]);
+          // Low pit-wall strip in front of the podium.
+          addBox(out, vadd(aPod.c, aPod.u, 0.55), [1.2, 1.1, 28], [0.86, 0.86, 0.84],
+            [aPod.r, aPod.u, aPod.t]);
+        }
       }
       // Start gantry spanning the straight.
       gantry(0.0, 9, [0.14, 0.14, 0.17]);
@@ -640,14 +707,28 @@
         }
       }
 
-      every(14, (k) => {
+      // Dense Curva Grande pine corridor — wave-3 densify (research: dark-green wall).
+      every(10, (k) => {
         const s = k / n;
         if (s < 0.08 || s > 0.18) return;
         const h = hash(k * 19 + 11);
-        stonePine(k, -1, 10 + h * 3, 14 + h * 6, h < 0.4 ? PINE_D : PINE, { spread: 0.72 });
-        stonePine(k,  1, 10 + h * 3.5, 13 + h * 6, h < 0.5 ? PINE : PINE_D, { spread: 0.70 });
-        if (h > 0.40) pine(k, -1, 20 + h * 4, 18 + h * 10, PINE_D);
-        if (h > 0.50) pine(k,  1, 21 + h * 4, 17 + h * 9, PINE);
+        stonePine(k, -1, 9 + h * 2.5, 15 + h * 7, h < 0.4 ? PINE_D : PINE, { spread: 0.72 });
+        stonePine(k,  1, 9 + h * 3.0, 14 + h * 7, h < 0.5 ? PINE : PINE_D, { spread: 0.70 });
+        if (h > 0.30) pine(k, -1, 18 + h * 4, 20 + h * 12, PINE_D);
+        if (h > 0.40) pine(k,  1, 19 + h * 4, 19 + h * 11, PINE);
+        // Inner verge saplings — keep the corridor hugging the racing line.
+        if (h > 0.55) bush(k, -1, 6.5 + h * 1.5, [0.12, 0.32, 0.14]);
+        if (h > 0.60) bush(k,  1, 6.5 + h * 1.5, [0.14, 0.34, 0.16]);
+      });
+
+      // Lesmo woodland hug — tight tree boxes outside both right-handers.
+      every(16, (k) => {
+        const s = k / n;
+        if (s < 0.35 || s > 0.46) return;
+        const h = hash(k * 23 + 5);
+        if (h < 0.25) return;
+        stonePine(k, -1, 10 + h * 3, 13 + h * 6, PINE_D, { spread: 0.68 });
+        if (h > 0.45) pine(k, -1, 16 + h * 4, 16 + h * 8, PINE);
       });
 
       spectatorHill(0.08, 0.18, -1, 13, { rows: 3, rise: 1.0, depth: 1.8, density: 0.40, step: 9 });
