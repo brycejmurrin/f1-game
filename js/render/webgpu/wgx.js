@@ -16,6 +16,8 @@ const WGX = (function () {
   // the typeof guard is belt-and-braces for a standalone harness.
   const IS_MOBILE = typeof GLX !== "undefined" && !!GLX.isMobile;
   const MOBILE_TIER = typeof GLX !== "undefined" && !!GLX.mobileTier;
+  let _grLite = true;   // godray: lamp beams alone take one blur pair (GLX/TLX parity)
+  try { _grLite = localStorage.getItem("apex26.grLite") !== "0"; } catch (_) { /* no storage: on */ }
   // Safari Mac is NOT IS_MOBILE. Its WebGPU still sheds the device on the
   // first full-size frame if we take the desktop stack (high-performance +
   // timestamp-query + MSAA 4× rgba16float + 2048 shadows). Same sniff as TLX.
@@ -4793,8 +4795,10 @@ const WGX = (function () {
           clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
         p.setPipeline(pGodray); p.setBindGroup(0, godrayBG); p.draw(3, 1, 0, 0); p.end();
         if (pBlurHDR && godrayBlurView && godrayBlurSrcBG && godrayBlurDstBG) {
+          // Lamp beams alone take ONE pair (GLX post.js / TLX tlx-post.js parity;
+          // apex26.grLite=0 restores two).
           _blurSep(pBlurHDR, godrayView, godrayBlurView, godrayBlurSrcBG, godrayBlurDstBG,
-            1 / halfW, 1 / halfH, 2);
+            1 / halfW, 1 / halfH, (!sunGR && _grLite) ? 1 : 2);
         }
       }
 

@@ -4864,6 +4864,22 @@ test("godray: lamp beams alone take one blur pair, sun shafts keep two, on TLX a
   }
 });
 
+test("godray: WGX takes the same one-pair lamp-only blur as TLX/GLX", () => {
+  const src = code("js/render/webgpu/wgx.js");
+  assert.match(src, /1 \/ halfW, 1 \/ halfH, \(!sunGR && _grLite\) \? 1 : 2\)/, "wgx: one pair only without sun shafts");
+  assert.match(src, /_grLite = localStorage\.getItem\("apex26\.grLite"\) !== "0"/, "wgx: the shared knob");
+});
+
+test("lamp shadow cache keys on the lamp's VP inputs, not its position alone", () => {
+  // POOL RADIUS / BEAM CONE rebuild the set with the same positions: a key on
+  // x,y,z kept (or car-only-copied) a map drawn under the old far plane / fov.
+  const sp = code("js/render/shared/shadow-pass.js");
+  assert.match(sp, /rad === _lampShR && L\[o \+ 11\] === _lampShC/, "radius + cone in the same-lamp key");
+  assert.match(sp, /L\[o \+ 7\] === _lampShDx && L\[o \+ 8\] === _lampShDy && L\[o \+ 9\] === _lampShDz/, "aim in the key");
+  const sh = code("js/render/three/tlx-shadow.js");
+  assert.match(sh, /if \(Math\.fround\(lightVP\[i\]\) !== _lampStaticVP\[i\]\) return false;/, "L1 copy only under the static map's own VP");
+});
+
 test("TLX draw records are pooled, one fixed shape, reset through resetRecs (TLX-PERF-PLAN R1)", () => {
   const src = read("js/render/three/tlx.js");
   const stripped = code("js/render/three/tlx.js");

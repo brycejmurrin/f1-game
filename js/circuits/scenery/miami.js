@@ -577,17 +577,22 @@
       // horizontal stripes on flat runoff pads at the heavy brake zones.
       {
         const LIME = [0.55, 0.92, 0.22];
-        const stripeSites = [
-          [0.07, 1, 5.5], [0.155, 1, 5.0], [0.51, 1, 5.5], [0.655, -1, 5.0], [0.95, 1, 5.0],
-        ];
+        // Open brake zones only: 0.155/+1, 0.655/-1 and 0.95/+1 lay behind the
+        // gap-3 concrete walls, and a 10 m stripe field cannot fit inside a
+        // 3 m wall gap — those sites are dropped.
+        const stripeSites = [[0.07, 1, 5.5], [0.51, 1, 5.5]];
         for (let si = 0; si < stripeSites.length; si++) {
           const [s, side, gap] = stripeSites[si];
           const a = anchor(K(s), side, gap + 6), b = [a.r, a.u, a.t];
           if (onTrack(a.c[0], a.c[2], 10)) continue;
           const cols = [TEAL, LIME, WHITE];
+          // anchor() sits 0.3 m below ground: a 0.3 m slab centred 0.28 up
+          // keeps every top corner >= MIN_SEP above the terrain along its
+          // 22-28 m length (slope) with its base still embedded. Bands step
+          // away from the track.
           for (let band = 0; band < 6; band++) {
-            addBox(out, vadd(vadd(a.c, a.r, band * 1.9), a.u, 0.14),
-              [1.7, 0.16, 22 + (si % 2) * 6], cols[band % 3], b);
+            addBox(out, vadd(vadd(a.c, a.r, side * band * 1.9), a.u, 0.28),
+              [1.7, 0.3, 22 + (si % 2) * 6], cols[band % 3], b);
           }
         }
       }
@@ -596,13 +601,19 @@
       for (const [sf, side] of [[0.14, 1], [0.17, -1], [0.48, 1], [0.66, -1], [0.93, 1]]) {
         const a = anchor(K(sf), side, 4.2), b = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 3)) continue;
+        // Free-standing boards on two posts each: posts start at the anchor
+        // (0.3 m below ground) and run up inside the board, so nothing floats.
+        // Board 0.8-3.8 m above ground — about the one fence's height (0.14/+1).
         for (let i = 0; i < 4; i++) {
           const along2 = (i - 1.5) * 4.5;
           const col = (i % 2) ? [0.08, 0.62, 0.28] : [0.10, 0.42, 0.78];
-          addBox(out, vadd(vadd(a.c, a.t, along2), a.u, 4.5),
-            [0.25, 7.5, 2.8], col, b);
-          // Logo patch proud of the banner face — not coplanar with it.
-          addBox(out, vadd(vadd(vadd(a.c, a.t, along2), a.r, -side * 0.22), a.u, 5.2),
+          const foot = vadd(a.c, a.t, along2);
+          addBox(out, vadd(foot, a.u, 2.6), [0.25, 3.0, 2.8], col, b);
+          for (const po of [-1.0, 1.0]) {
+            addBox(out, vadd(vadd(foot, a.t, po), a.u, 1.5), [0.15, 3.0, 0.15], GREYWHITE, b);
+          }
+          // Logo patch: embedded 1.5 cm in the board face, 16.5 cm proud.
+          addBox(out, vadd(vadd(foot, a.r, -side * 0.2), a.u, 2.7),
             [0.18, 1.4, 2.2], WHITE, b);
         }
       }
@@ -612,13 +623,15 @@
         const a = anchor(K(0.30), 1, 22), b = [a.r, a.u, a.t];
         if (!onTrack(a.c[0], a.c[2], 8)) {
           modelGroup("miami-mia-sign", {
-            center: vadd(a.c, a.u, 6), size: [2.4, 10, 18], basis: b,
+            center: vadd(a.c, a.u, 4.8), size: [2.4, 9.8, 18], basis: b,
           }, (stage) => {
-            addBox(stage, vadd(a.c, a.u, 5.5), [0.5, 8, 16], [0.08, 0.08, 0.10], b);
+            // Panel stands on the anchor (0.3 m below ground): no gap under it.
+            addBox(stage, vadd(a.c, a.u, 4.75), [0.5, 9.5, 16], [0.08, 0.08, 0.10], b);
             for (let ch = 0; ch < 3; ch++) {
               const z = (ch - 1) * 5.0;
+              // 0.60 vs 0.50 panel: each face 5 cm proud (> MIN_SEP 3 cm).
               addBox(stage, vadd(vadd(a.c, a.t, z), a.u, 5.5),
-                [0.55, 6.2, 3.2], WHITE, b);
+                [0.60, 6.2, 3.2], WHITE, b);
             }
           }, { required: true });
         }

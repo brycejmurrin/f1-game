@@ -458,8 +458,12 @@
           { kind: "slab", wall: [0.93, 0.90, 0.85], window: WIN, floor: 5.5, lit: true, windowCol: WINLIT });
         for (let i = 0; i < 5; i++) {
           const pk = K(0.388 + i * 0.006);
-          place(pk, -1, 3.2, [2.6, 0.7, 3.4], [0.62, 0.58, 0.50]);
-          prop(pk, -1, 3.2, [2.0, 0.45, 2.6], PALMGRN);
+          // place() seats a box at ground + h/2 - 0.8, so height = 0.8 + the
+          // visible height: a 0.7 m planter with its shrubs 0.25 m proud. The
+          // shrubs share the planter's centre (prop() added w/2 and pushed
+          // them 0.7 m out past its outer wall).
+          place(pk, -1, 3.2, [2.6, 0.8 + 0.7, 3.4], [0.62, 0.58, 0.50]);
+          place(pk, -1, 3.2, [2.0, 0.8 + 0.95, 2.6], PALMGRN);
           if (i % 2 === 0) palm(pk, -1, 5.5, 8 + (i % 3), PALMGRN);
         }
       }
