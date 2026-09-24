@@ -4833,6 +4833,9 @@ test("lamp static map: car-only rebuilds copy the static props depth and draw th
   assert.match(sh, /if \(floatDepth\) depthTexture\.type = THREE\.FloatType;/);
   assert.match(sh, /const lampRT = isMobile \? null : makeDepthTarget\(LAMP_SIZE, "TLXLampShadow", false, lampStaticOn\);/);
   assert.match(sh, /const lampStaticRT = lampStaticOn \? makeDepthTarget\(LAMP_SIZE, "TLXLampStatic", false, true\) : null;/);
+  // AUTO is WebGPU only: three's WebGL copy does five synchronous gl.getParameter
+  // reads per call (census 289: 2 s of WebGL2 spike frames inside lampCarsBegin).
+  assert.match(sh, /let lampStaticOn = isWebGPU;/, "the depth copy must not default on for three's WebGL2 backend");
   // The car-only pass: copy first, then draw onto the copied depth with the clear off,
   // and autoClear restored in a finally so a throwing caster cannot leave it off.
   const cars = fnBody(sh, "lampCarsBegin");

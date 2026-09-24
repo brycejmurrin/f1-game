@@ -127,9 +127,15 @@
     // now render into lampStaticRT when the LAMP changes; a car-only rebuild
     // copies that depth into lampRT and draws only the cars on top. lampRT stays
     // the sampled map, so no shader, sampler or backend-parity change.
-    // apex26.tlxLampStatic=0 is the old full rebuild.
-    let lampStaticOn = true;
-    try { lampStaticOn = localStorage.getItem("apex26.tlxLampStatic") !== "0"; } catch (_) { /* no storage: on */ }
+    // AUTO = WebGPU only: three's WebGL copyTextureToTexture reads five UNPACK_*
+    // states with gl.getParameter per copy, each a synchronous GPU-process round
+    // trip in Chrome — census 289 (real Metal, WebGL2 leg) spent 2 s of its spike
+    // frames there. apex26.tlxLampStatic=0 is the old full rebuild, =1 forces on.
+    let lampStaticOn = isWebGPU;
+    try {
+      const v = localStorage.getItem("apex26.tlxLampStatic");
+      if (v === "0" || v === "1") lampStaticOn = v === "1";
+    } catch (_) { /* no storage: AUTO */ }
     if (isMobile || typeof renderer.copyTextureToTexture !== "function") lampStaticOn = false;
     const lampRT = isMobile ? null : makeDepthTarget(LAMP_SIZE, "TLXLampShadow", false, lampStaticOn);
     const lampStaticRT = lampStaticOn ? makeDepthTarget(LAMP_SIZE, "TLXLampStatic", false, true) : null;

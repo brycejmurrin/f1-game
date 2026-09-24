@@ -13,7 +13,7 @@ verified before it merges onto the session branch, and deployed on the user's wo
 | # | step | status |
 |---|---|---|
 | L0 | player gated by the lamp radius (key + cast) | done 3af01ea — correct, ~1 % fewer lamp passes on montreal (the lamp is picked near the camera, so the player is usually in reach) |
-| L1 | static-props lamp map, cars drawn on top | done 3af01ea — 1966 of 2005 night rebuilds served from the copy, lamp pass CPU 0.96 → 0.71 ms (Lavapipe); awaiting a night census |
+| L1 | static-props lamp map, cars drawn on top | done 3af01ea — 1966 of 2005 night rebuilds served from the copy, lamp pass CPU 0.96 → 0.71 ms (Lavapipe); WebGPU only since census 289 (below) |
 | L1b | keep lamp instanced casters when the lamp is unchanged (fallback for L1) | not needed unless the census shows the depth copy failing |
 | G1 | godray chain: night lamp beams use one blur pair, not two | done 40a627f (TLX + GLX, `apex26.grLite`) |
 | R1 | pooled fixed-shape draw records | done (R1 commit) |
@@ -183,3 +183,14 @@ tree (meanAbs 0.077 / 0.007 vs 0.209 / 0.095); no striping by eye. GLX night rai
 lap 0 sync compiles, race luma 57.7 (unchanged), garage 44.9. The allocation saving
 (~150-400 objects/frame) is not measured on this box — a heap-sawtooth read here would
 be dominated by SwiftShader/Lavapipe noise; it is structural.
+
+**Census 289 (a37d26b, the shipped L0/L1/G1/R1, real Metal, montreal NIGHT) — L1 off on
+three's WebGL2.** three.js/WebGPU: gpuErrors 0, no compile rows, 2 frames >= 100 ms (max
+117 ms), none of them in the lamp copy. three.js/WebGL2: 4 frames >= 100 ms, max 2.2 s, and
+**71.8 % of the spike time (2015 ms) was `getParameter` <- `copyTextureToTexture` <-
+`lampCarsBegin`**. Three r186's WebGL `copyTextureToTexture` saves five `UNPACK_*` states
+with `gl.getParameter` on every call; in Chrome each is a synchronous round trip to the GPU
+process, so behind a busy frame it waits for the queue. The WebGPU backend has no such read.
+`lampStaticOn` is now AUTO = WebGPU only (`apex26.tlxLampStatic=1` forces it on WebGL2,
+`=0` off everywhere). Lesson: a three backend call that is free on WebGPU can be a sync
+readback on WebGL — check the WebGL leg's spike stacks, not only its compile rows.
