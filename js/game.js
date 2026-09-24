@@ -2425,7 +2425,8 @@ function _loadTrackBody(idx, def) {
     // (opts.gfx) instead of reaching the GLX global directly. On the explicit
     // or fallback WebGL2 path gfx===GLX; on TLX/WGX it is that backend
     // (descriptor-copied onto GLX, so object identity is preserved either way).
-    track = Tracks.build(def, { night: sessionDark, gfx, chunkRibbons: PerfGov.tier() < 3, gridSlots: wantSlots });
+    track = Tracks.build(def, { night: sessionDark, gfx, chunkRibbons: PerfGov.tier() < 3,
+      gridSlots: wantSlots, retainGraph: wantAgentSurface() });
     // Rapier debris side-world: register the circuit's near-apex clippable cones
     // (A3). Cheap pure derivation from track.def.turns; stores the list even when
     // the side-world is disabled/loading so it's ready once rapier is live.

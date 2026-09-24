@@ -3257,3 +3257,6 @@ instead of reading `career.obj` and the settlement cannot disagree with the hub.
 Buttons rather than rows, because a line you can press has to look like one; the
 chosen one keeps the `.cr-obj-line` weight so the card reads as it always did.
 No raw px: the vertical padding is `calc(var(--gap) / 2)`.
+## 2026-09-24 — track build-state release
+
+`js/game.js` 9090 → 9091 lines and 4729 → 4730 code lines; `js/track/tracks.js` 2838 → 2859 lines. The new call-site flag releases the large scenery graph after upload in production, while dev/test sessions retain it. Track code finalizes prop counts instead of retaining build-local closures, and stores upload-only columns in float32 when ribbons start unchunked but may be chunked later. The growth pays for a measured retained-heap reduction on Vegas (source-VM graph release: 62.41 → 38.00 MiB after explicit GC); no frame-time gain is claimed.

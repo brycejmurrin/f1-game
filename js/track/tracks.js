@@ -35,6 +35,11 @@ const Tracks = (function () {
     const M = dx.length;
     const closeGap = Math.hypot(dx[0] - dx[M - 1], dy[0] - dy[M - 1], dz[0] - dz[M - 1]);
     const total = dlen[M - 1] + closeGap;
+    // The last dense point is still short of the lap origin. Include that
+    // final chord as a real interpolation interval: otherwise the final
+    // output nodes extrapolate the preceding Catmull segment with f > 1.
+    dx.push(dx[0]); dy.push(dy[0]); dz.push(dz[0]);
+    dhw.push(dhw[0]); dbank.push(dbank[0]); dlen.push(total);
 
     if (def.sceneryStartFrac != null) {
       const offNew = Math.round(TrackSpace.wrap01(def.startFrac) * N) % N;
@@ -54,7 +59,7 @@ const Tracks = (function () {
     let di = 0;
     for (let k = 0; k < n; k++) {
       const target = k * ds;
-      while (di < M - 2 && dlen[di + 1] < target) di++;
+      while (di < M - 1 && dlen[di + 1] < target) di++;
       const seg = dlen[di + 1] - dlen[di] || 1;
       const f = (target - dlen[di]) / seg;
       px[k] = lerp(dx[di], dx[di + 1], f);
@@ -222,6 +227,11 @@ const Tracks = (function () {
   // plenty for phases measured in tens.
   const _now = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
   function build(def, opts) {
+    // A centerline-only consumer has buildCenterline(). A full build without
+    // uploads silently skipped road, props, barriers and pit boundary opening,
+    // yet returned a track that looked ready to physics and render callers.
+    const G = (opts && opts.gfx) || (typeof GLX !== "undefined" ? GLX : null);
+    if (!G || typeof G.createMesh !== "function") throw new Error("Tracks.build requires gfx.createMesh");
     Log.info("track", "build start " + def.id + (opts && opts.night != null ? " night=" + !!opts.night : ""));
     const _prof = []; let _t = _now();
     const lap = (n, k) => { const now = _now(); _prof.push({ n, k, ms: +(now - _t).toFixed(2) }); _t = now; };
@@ -246,15 +256,19 @@ const Tracks = (function () {
     // actually in use. The `typeof GLX` branch is the fallback for callers that
     // don't inject one: the Node-VM build guard (tools/track/verify-track.cjs) and the
     // VM tests, which install a stub GLX global instead of an opts.gfx.
-    const G = (opts && opts.gfx) || (typeof GLX !== "undefined" ? GLX : null);
     track._gfx = G;
-    if (G && G.createMesh) {
+    // Keep the upload block scoped; the precondition at entry guarantees it runs.
+    {
       track.geometryDiagnostics = [];
       const chunkRibbons = !!(opts && opts.chunkRibbons && G.createChunkedMesh);
       const buildRibbon = (geo, key) => {
         const canChunk = chunkRibbons && (key !== "road" || G.chunkedTrackCoords !== false);
         if (!canChunk) {
           track.meshes[key] = G.createMesh(geo);
+          // Quality recovery may build a chunked copy later. Keep the source
+          // channels at their authored precision: TLX quantizes normals from
+          // these numbers *before* converting to float32, so compacting even
+          // after the first upload changes some late-chunk GPU bytes by 1 LSB.
           if (chunkRibbons) track.meshes[key + "Chunked"] = null;
           return;
         }
@@ -322,6 +336,11 @@ const Tracks = (function () {
         }
       }
       lap("batches", "up");
+      // The graph's placement nodes are build inputs, not race state. On a
+      // production page they have already been fused/uploaded into meshes;
+      // retaining tens of thousands of nodes keeps an entire build-local object
+      // graph alive. VM parity and the opt-in dev API retain the graph explicitly.
+      if (opts && opts.retainGraph === false) track.graph = null;
       const glassGeo = safe("glass", _props.glass);
       const waterGeo = safe("water", _props.water);
       track.glassGeo = glassGeo;
@@ -697,10 +716,11 @@ const Tracks = (function () {
     const absorbUp = (c, r, h) => absorb(c[0] - r, c[1], c[2] - r,
                                          c[0] + r, c[1] + h, c[2] + r);
 
+    // These counts are finalised below. Getters here close over buildProps's
+    // entire emission scope, pinning its graph, spatial hashes and temporary
+    // model state through the whole race just to read three integers.
     track.props = { list: propList, spans: spanList, cap: PROP_CAP,
-                    get count() { return propList.length; },
-                    get spanCount() { return spanList.length; },
-                    get dropped() { return propDropped; } };
+                    count: 0, spanCount: 0, dropped: 0 };
     // Plain loop — the every() form allocated a closure per call (~200k calls/build).
     const finiteVec = (v, len, positive) => {
       if (!Array.isArray(v) || v.length !== len) return false;
@@ -2422,6 +2442,9 @@ const Tracks = (function () {
       track.pitBuilt = pits;   // kept, not just logged: `wall` false is invisible from the buffers
       Log.info("track", `pits ${track.def.id}: ${pits.bays} bays, wall ${pits.wall}, ${pitLamps.length} lamps`);
     }
+    track.props.count = propList.length;
+    track.props.spanCount = spanList.length;
+    track.props.dropped = propDropped;
     return { out, glass: TrackModels.sealGeometry(glassBuf), water: TrackModels.sealGeometry(waterBuf) };
   }
 

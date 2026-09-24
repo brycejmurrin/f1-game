@@ -147,6 +147,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/curvature-channels.test.mjs",
   "tests/unit/track-line.test.mjs",
   "tests/unit/track-line-circuits.test.mjs",
+  "tests/unit/track-centerline-seam.test.mjs",
+  "tests/unit/track-retained-state.test.mjs",
   "tests/unit/twin-drift.test.mjs",
   "tests/unit/storage-key-prefix.test.mjs",
   // ...and its sibling: the PREFIX is not the whole contract. Two features
