@@ -630,7 +630,10 @@ const SceneryStructures = (function () {
           const rc = vadd(vadd(a.c, a.r, lat), a.u, y);
           out._mat = timber ? MAT.WOOD : MAT.METAL;
           addBox(out, rc, [setback * 1.05, 0.16, seg], plankCol, b);                     // tread plank
-          addBox(out, vadd(vadd(rc, a.r, -side * setback * 0.46), a.u, -rise * 0.42),
+          // Foot board: its nose MIN_SEP behind the plank's, its top at the
+          // plank's mid-plane — both faces used to sit 12-22 mm off the plank's
+          // (a fight from ~240 m), and flush outright at rise 1.0.
+          addBox(out, vadd(vadd(rc, a.r, -side * (setback * 0.525 - 0.08 - TrackGeom.MIN_SEP)), a.u, -rise * 0.5),
                  [0.16, rise, seg], riserCol, b);                                        // foot board
           crowdBand(vadd(rc, a.u, 0.68), b, side, 0.58, 0.78, seg - 0.6,
                     opts.crowd, dens, k * 13.1 + r * 97.3 + side * 5.7);

@@ -1213,10 +1213,11 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   margin: 0; padding-bottom: 4px;
   background: var(--grad-rule) bottom left / 100% 1px no-repeat;
 }
-/* Sheet title names CONTROLS / DISPLAY. Later DISPLAY headings
+/* Sheet title names CONTROLS / DISPLAY / APPEARANCE. Later DISPLAY headings
    (HUD / RENDERER / COCKPIT) stay. */
 #pm-panel-controls > .pm-group-h:first-child,
 #pm-panel-display > .pm-group-h:first-child,
+#pm-panel-appearance > .pm-group-h:first-child,
 #advanced > .pm-group-h:first-child,
 #audioset > .pm-group-h:first-child {
   display: none;
@@ -1291,6 +1292,22 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 }
 #pm-coach-tip { color: var(--text); padding-bottom: calc(var(--gap) * 0.5); }
 #pm-panel-driving :is(#pm-incident-log, #pm-ai-decisions) { padding-inline-start: 1.5em; }
+
+/* APPEARANCE — same setting-row chrome as the rest of SETTINGS; colour wells
+   match MY TEAM / garage (floored chip height, plate-line border). */
+#pm-panel-appearance .pm-accent-custom > div {
+  display: flex; align-items: center; justify-content: flex-end; gap: calc(var(--gap) * 0.5);
+}
+#pm-panel-appearance input[type="color"] {
+  flex: 0 0 auto;
+  width: max(52px, var(--tap-min));
+  height: var(--chip-h);
+  padding: 0;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--plate-line);
+  background: none;
+  cursor: pointer;
+}
 
 /* Every Settings page, not only STEERING / MUSIC: HUD SIZE and BUTTON SIZE
    used to be the two plain-grey labels on a sheet of steel italics. */

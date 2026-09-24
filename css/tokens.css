@@ -914,6 +914,65 @@ body:not(.desktop) {
 :root[data-team="astonmartin"] { --accent: #b7e11b; --accent-ink: var(--bg); }    /* 12.80:1 */
 :root[data-team="cadillac"]    { --accent: #f5f5f5; --accent-ink: var(--bg); }    /* 17.86:1 */
 
+/* ---- APPEARANCE: menu accent presets (SETTINGS › APPEARANCE) ------------
+   Re-point --red only. Fills/grads/selection washes derive via color-mix, so
+   the whole chrome family follows. brand = shipped default (no override).
+   team / custom are applied as concrete --red from js/ui/appearance-opts.js. */
+:root[data-menu-accent="ember"]  { --red: #ff4d1a; }
+:root[data-menu-accent="amber"]  { --red: #ffb000; }
+:root[data-menu-accent="cyan"]   { --red: #00a3e0; }
+:root[data-menu-accent="violet"] { --red: #7a5cff; }
+:root[data-menu-accent="lime"]   { --red: #b7e11b; }
+
+/* ---- APPEARANCE: light / system theme ----------------------------------
+   Dark stays the :root default. Light rewrites the surface ladder so every
+   consumer of --bg/--text/--panel/--plate* adapts without per-sheet edits.
+   SYSTEM copies light when prefers-color-scheme: light. */
+:root[data-ui-theme="light"] {
+  --bg: #f0f0f4;
+  --carbon: #e6e6ec;
+  --text: #14141c;
+  --dim: #5a5a68;
+  --panel: color-mix(in oklab, #fff 78%, var(--carbon));
+  --surf-1: color-mix(in oklab, #000 3.5%, var(--bg));
+  --surf-3: color-mix(in oklab, #000 8%, var(--bg));
+  --plate: color-mix(in oklab, var(--carbon) 70%, transparent);
+  --plate-line: rgba(20, 20, 28, 0.16);
+  --card-line: rgba(20, 20, 28, 0.12);
+  --plate-hover: color-mix(in oklab, var(--carbon) 82%, #000 6%);
+  --plate-press: color-mix(in oklab, var(--carbon) 88%, #000 10%);
+  --plate-opaque: color-mix(in oklab, #fff 86%, var(--carbon));
+  --scrim: rgba(20, 20, 28, 0.28);
+  --scrim-heavy: rgba(20, 20, 28, 0.72);
+  --hud-halo: 0 1px 3px rgba(255, 255, 255, 0.85);
+  --edge: inset 0 1px 0 rgba(255, 255, 255, 0.65), inset 0 -1px 0 rgba(0, 0, 0, 0.08);
+  --focus: #111118;
+  --red-fill: color-mix(in oklab, var(--red) 86%, #3a0000);
+}
+@media (prefers-color-scheme: light) {
+  :root[data-ui-theme="system"] {
+    --bg: #f0f0f4;
+    --carbon: #e6e6ec;
+    --text: #14141c;
+    --dim: #5a5a68;
+    --panel: color-mix(in oklab, #fff 78%, var(--carbon));
+    --surf-1: color-mix(in oklab, #000 3.5%, var(--bg));
+    --surf-3: color-mix(in oklab, #000 8%, var(--bg));
+    --plate: color-mix(in oklab, var(--carbon) 70%, transparent);
+    --plate-line: rgba(20, 20, 28, 0.16);
+    --card-line: rgba(20, 20, 28, 0.12);
+    --plate-hover: color-mix(in oklab, var(--carbon) 82%, #000 6%);
+    --plate-press: color-mix(in oklab, var(--carbon) 88%, #000 10%);
+    --plate-opaque: color-mix(in oklab, #fff 86%, var(--carbon));
+    --scrim: rgba(20, 20, 28, 0.28);
+    --scrim-heavy: rgba(20, 20, 28, 0.72);
+    --hud-halo: 0 1px 3px rgba(255, 255, 255, 0.85);
+    --edge: inset 0 1px 0 rgba(255, 255, 255, 0.65), inset 0 -1px 0 rgba(0, 0, 0, 0.08);
+    --focus: #111118;
+    --red-fill: color-mix(in oklab, var(--red) 86%, #3a0000);
+  }
+}
+
 * { margin: 0; padding: 0; box-sizing: border-box;
   /* iPhone home-screen / Safari: kill the gray tap flash, the blue text
      selection, the long-press Copy/Look Up sheet, and image-drag ghosts.
