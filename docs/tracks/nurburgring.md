@@ -17,12 +17,12 @@ Muted, washed, high-haze. Saturated colour is wrong for this circuit; even the s
 - Muted hoarding primaries: `[0.72, 0.20, 0.18]`, `[0.16, 0.30, 0.54]`, `[0.80, 0.70, 0.16]`
 
 ## 3. Elevation
-Real upland relief — the lap falls away from the Arena and climbs hard back to the pits.
-- s≈0.00–0.10: level pit straight into the Castrol-S and the Mercedes-Arena.
-- s≈0.18: **8 m drop** out of the Arena through the Ford Kurve.
-- s≈0.42: low ground through the back loop, ~12 m below the line.
-- s≈0.66: **Dunlop-Kehre** rise (~6 m).
-- s≈0.86: long ~11 m **climb** back to the Veedol chicane and the pit straight.
+Real Eifel upland relief from the SRTM bake in `js/track/circuit-elevations.js`
+(~50 m peak-to-trough, grade capped at 5.5%). Continuous rolling — not four
+isolated cosine bumps with flat plateaus between them.
+- Pit / Arena end sits high; the lap falls away through the forest loop.
+- Low ground through the back section (~50 m below the crest).
+- Long climb back toward Dunlop-Kehre / Schumacher-S / Veedol and the pits.
 
 ## 4. Landmarks & surroundings by lap position
 | s | Side | Distance | Box description |
