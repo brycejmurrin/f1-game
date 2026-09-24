@@ -544,7 +544,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | id | slider | range | def | uniform | preset | consumed in |
 |---|---|---|---|---|---|---|
 | `lampLevel` | LAMP LEVEL | 0 … 0.687 | 0.26 | — | ✓ | game.js×3 |
-| `lampDensity` | LAMP DENSITY | 0.1 … 2.35 | 1 | — |   | track-lights.js×2, tracks.js×3 |
+| `lampDensity` | LAMP DENSITY | 0.1 … 2.35 | 1 | — |   | track-lights.js×2, build-props.js×3 |
 | `floodDay` | DAYTIME LAMPS | 0 … 4.5 | 0 | — |   | game.js×3, atmosphere.js×2 |
 | `poolEnergy` | POOL ENERGY | 0 … 1.375 | 0.55 | — | ✓ | track-lights.js×3 |
 | `lampRadiusMul` | POOL RADIUS | 0.4 … 1.9 | 1 | — | ✓ | track-lights.js×3 |
@@ -709,7 +709,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `gainG` | GAIN · GREEN | 0.4 … 2.5 | 1 | — | ✓ | post-common.js×2 |
 | `gainB` | GAIN · BLUE | 0.4 … 2.5 | 1 | — | ✓ | post-common.js×2 |
 | `vibrance` | VIBRANCE | 0 … 1.5 | 0.2 | `uVibrance` | ✓ | — |
-| `tint` | WARM / COOL | -6 … 6 | 0 | `uTint` | ✓ | track-lights.js×2, gltf.js, geom.js, tracks.js |
+| `tint` | WARM / COOL | -6 … 6 | 0 | `uTint` | ✓ | track-lights.js×2, gltf.js, geom.js, build-props.js |
 | `gradeStr` | GRADE STRENGTH | 0 … 2.5 | 1 | — | ✓ | game.js |
 | `shadowHue` | SHADOW TINT HUE | -180 … 180 | 0 | — |   | game.js×2 |
 | `hiHue` | HIGHLIGHT TINT HUE | -180 … 180 | 0 | — |   | game.js×2 |

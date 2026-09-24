@@ -1,6 +1,6 @@
 // scenery-api-contract.test.mjs — freezes the shape of the `scenery(api)`
-// object that js/track/tracks.js buildProps hands to every circuit's bespoke
-// scenery callback (40 consumer files in js/circuits/).
+// object that TrackBuildProps.build (js/track/scenery/build-props.js) hands to
+// every circuit's bespoke scenery callback (40 consumer files in js/circuits/).
 //
 // The api members below are the de-facto public contract those files were
 // written against (docs/SCENERY-API.md). Any split/refactor of buildProps
