@@ -1343,14 +1343,6 @@ body[data-density="compact"] #campicker {
   transform: translateY(var(--gap));
   transition: opacity 0.4s ease-out, transform 0.4s cubic-bezier(0.2, 0.7, 0.3, 1);
 }
-#ld-skip {
-  display: block; margin: var(--gap) 0 0 auto;
-  min-height: var(--chip-h); padding: 0 var(--gap);
-  background: var(--plate); border: 1px solid var(--plate-line);
-  border-radius: var(--r-sm); color: var(--text);
-  font: inherit; font-weight: 800; cursor: pointer;
-}
-#ld-skip-help { margin: calc(var(--gap) * 0.35) 0 0; color: var(--text); font-size: var(--fs-micro); text-align: right; }
 /* Both live phases show the card: "run" is the flyby with the card up, "card"
    is the no-world fallback where the card is all there is. */
 #loading[data-phase="run"] #ld-card,

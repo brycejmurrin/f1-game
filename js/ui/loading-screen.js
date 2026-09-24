@@ -513,12 +513,7 @@ const LoadingScreen = (function () {
       paint(info);
       applyCard();
       r.hidden = false;
-      const skip = $("ld-skip");
-      if (skip) skip.onclick = onSkip;
       const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-      if (skip) skip.hidden = !info.hasWorld || reduced;
-      const help = $("ld-skip-help");
-      if (help) help.hidden = !info.hasWorld || reduced;
       addEventListener("pointerdown", onSkip, true);
       addEventListener("keydown", onSkip, true);
       padHeld.clear();
