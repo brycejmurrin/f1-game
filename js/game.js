@@ -1123,6 +1123,7 @@ let duelMode = false;
 // The SETTING sticks (like difficulty), but a duel is a one-off practice race:
 // never a championship round, a time trial (Daily included) or a quali lap.
 const duelOn = () => duelMode && !isChampionship() && !isTimeTrial() && !isQuali();
+const duelSetting = () => duelMode;   // sticky race SETTING for session keys; gated use goes through duelOn()
 // WHICH legend the duel rival is, or "" for the ordinary fastest-car duel. A
 // race SETTING like duelMode itself, so it survives a restart the same way.
 let duelLegend = "";
@@ -2934,7 +2935,7 @@ let _nextSeasonEntryId = 0;
 function entrySettings() {
   if (season && !_seasonEntryIds.has(season)) _seasonEntryIds.set(season, ++_nextSeasonEntryId);
   return JSON.stringify([trackIdx, flow, session, raceWeather, raceTimeOfDay, raceLaps,
-    teamIdx, driverIdx, difficulty, raceGrid, duelMode, duelLegend, raceTyreWear,
+    teamIdx, driverIdx, difficulty, raceGrid, duelSetting(), duelLegend, raceTyreWear,
     raceReliability, raceAeroMode, simSeed(), raceIndex,
     wxArc.changeable, wxArc.plan && [wxArc.plan.to, wxArc.plan.dur],
     netPlay.active(), raceSettings && raceSettings.netRoom,
