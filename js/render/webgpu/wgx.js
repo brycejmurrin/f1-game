@@ -122,8 +122,8 @@ const WGX = (function () {
   })();
   const _CH = _Chunks || {};   // sizes below fall back to 0 when absent; create() refuses first
 
-  const FRAME_BYTES = _CH.FRAME_UNIFORM_BYTES | 0;      // 576
-  const FRAME_FLOATS = FRAME_BYTES / 4;                 // 144
+  const FRAME_BYTES = _CH.FRAME_UNIFORM_BYTES | 0;      // 656
+  const FRAME_FLOATS = FRAME_BYTES / 4;                 // 164
   const LIGHT_STRIDE = _CH.LIGHT_STRIDE_BYTES | 0;      // 64
   const MAX_LIGHTS = _CH.MAX_LIGHTS | 0;                // 48
   const LIGHT_BYTES = LIGHT_STRIDE * MAX_LIGHTS;        // 3072
@@ -1012,7 +1012,7 @@ const WGX = (function () {
     // Memo for the armed-shadow-lamp position -> absolute index scan in _writeFrame.
     let _asAL = null, _asX = 0, _asY = 0, _asZ = 0, _asIdx = -1;
     // Which source array _tlScratch's STATIC lanes were packed from.
-    let _tlFullPack = null;
+    let _tlFullPack = null, _tlLoGen = -1;   // + the lamp bake gen its LIVE-ONLY lane (cone.w) came from
     let _ciCursor = 0, _ciSeg = new WeakMap();
     const _tlScratch = new Float32Array(TRACK_LIGHT_CAP * 16);
     let frameLights = null, frameNL = 0;   // this frame's stride-15 light array (lamp-mask cull)
@@ -1095,6 +1095,30 @@ const WGX = (function () {
     const carShadowLVPData = new Float32Array(16);
     let lampShadowTex = null, lampShadowView = null, lampShadowUBO = null, lampShadowG0BindGroup = null;
     let _lampShadowArmed = false, _lampArms = 0, _lampIdx = -1;
+    // BAKED LAMP POOLS: the light map texture (a 1x1 placeholder until a bake
+    // lands) and the bake it was uploaded from.
+    let _bakePlace = null, _bakeTexW = null, lampBakeView = null, _bakeSrcW = null, _bakeOffW = 0;
+    const _bakeShScr = [0, 0, 0];
+    function _syncLampBake(lb) {
+      if (!lb || lb === _bakeSrcW || !lb.data) return;
+      const tex = device.createTexture({ size: [lb.w, lb.h * 2], format: "rgba16float",
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+      device.queue.writeTexture({ texture: tex }, lb.data, { bytesPerRow: lb.w * 8, rowsPerImage: lb.h * 2 },
+        { width: lb.w, height: lb.h * 2 });
+      const old = _bakeTexW;
+      _bakeTexW = tex; lampBakeView = tex.createView(); _bakeSrcW = lb;
+      _rebuildFrameBG();
+      if (old) old.destroy();
+    }
+    // Bake off ~2 s (GLX bindLampBake _bakeOffN): rebind the placeholder, then
+    // retire the light map — destroyed after this frame's submit, never while
+    // a bind group recorded earlier could still reference it.
+    function _freeLampBake() {
+      const old = _bakeTexW;
+      _bakeTexW = null; lampBakeView = _bakePlace.createView(); _bakeSrcW = null;
+      _rebuildFrameBG();
+      _retiredBufs.push(old);
+    }
     const lampShadowLVPData = new Float32Array(16);
     let matPlaceTex = null;
     let matAlbedoView = null, matNormalView = null, matArraySamp = null;
@@ -1287,6 +1311,8 @@ const WGX = (function () {
             buffer: { type: "read-only-storage" } },                     // baked track lights (per-chunk)
           { binding: 16, visibility: GPUShaderStage.FRAGMENT,
             buffer: { type: "read-only-storage" } },                     // concat per-chunk lamp indices
+          { binding: 17, visibility: GPUShaderStage.FRAGMENT,
+            texture: { sampleType: "float" } },                          // baked lamp pools (rgba16float)
         ],
       });
       g1Layout = device.createBindGroupLayout({
@@ -1318,6 +1344,9 @@ const WGX = (function () {
       // concat index table. Static between bakes; zero per-frame upload.
       trackLightSBO = device.createBuffer({ size: TRACK_LIGHT_CAP * LIGHT_STRIDE, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
       chunkIdxSBO = device.createBuffer({ size: CHUNK_IDX_CAP * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+      _bakePlace = device.createTexture({ size: [1, 1], format: "rgba16float",
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+      lampBakeView = _bakePlace.createView(); _bakeSrcW = null;
       drawUBO  = device.createBuffer({ size: MAX_DRAWS * DRAW_STRIDE, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
       blitUBO  = device.createBuffer({ size: BLIT_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
       skyUBO   = device.createBuffer({ size: WGSLChunks.SKY_UNIFORM_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
@@ -2318,7 +2347,7 @@ const WGX = (function () {
       if (!g0Layout || !frameUBO || !lightSBO || !matScaleUBO) return;
       if (!shadowView || !shadowSampler || !linearSampler || !envCubeSamp || !nextSsrView) return;
       if (!blockerView || !carShadowView || !lampShadowView) return;
-      if (!matAlbedoView || !matNormalView || !matArraySamp) return;
+      if (!matAlbedoView || !matNormalView || !matArraySamp || !lampBakeView) return;
       const base = (cubeView) => ({
         layout: g0Layout,
         entries: [
@@ -2339,6 +2368,7 @@ const WGX = (function () {
           { binding: 14, resource: envCubeSamp },
           { binding: 15, resource: { buffer: trackLightSBO } },
           { binding: 16, resource: { buffer: chunkIdxSBO } },
+          { binding: 17, resource: lampBakeView },
         ],
       });
       // Main group binds the real cube once the probe is live; the env-render group
@@ -3519,6 +3549,20 @@ const WGX = (function () {
         const pb = f.pitBox;
         d[148] = pb ? pb[0] : 0; d[149] = pb ? pb[1] : 0; d[150] = 0; d[151] = 0;
       }
+      // bakeA/B/C (floats 152..163, off 608): BAKED LAMP POOLS — GLX bindLampBake.
+      {
+        const lb = f.lampBake, sc = f.lampBakeScale;
+        const on = !!(lb && sc && lb.data);
+        if (on) { _bakeOffW = 0; _syncLampBake(lb); }
+        else if (_bakeTexW && _bakePlace && ++_bakeOffW > 120) _freeLampBake();
+        const live = on && lb === _bakeSrcW;
+        d[152] = live ? lb.x0 : 0; d[153] = live ? lb.z0 : 0;
+        d[154] = live ? lb.w * lb.cell : 1; d[155] = live ? lb.h * lb.cell : 1;
+        d[156] = live ? sc[0] : 0; d[157] = live ? sc[1] : 0; d[158] = live ? sc[2] : 0; d[159] = live ? 1 : 0;
+        const shc = live && typeof LampBake !== "undefined" ? LampBake.shadowCol(f, _lampIdx, _bakeShScr) : null;
+        d[160] = shc ? shc[0] : 0; d[161] = shc ? shc[1] : 0; d[162] = shc ? shc[2] : 0;
+        d[163] = live ? lb.h : 1;
+      }
       device.queue.writeBuffer(frameUBO, 0, frameData);
 
       // Lights: flat stride-15 -> 4×vec4 per light (verbatim field map).
@@ -3528,6 +3572,7 @@ const WGX = (function () {
       // being overwritten — 4 compares × nL, vs the visibleChunks × nL AABB
       // tests the generation lets drawChunked's cache skip.
       let _lmMoved = nL !== frameNL;
+      const _hasLB = typeof LampBake !== "undefined";
       if (nL > 0) {
         const ld = lightData;
         for (let i = 0; i < nL; i++) {
@@ -3536,7 +3581,8 @@ const WGX = (function () {
           ld[b]    = L[o];    ld[b+1]  = L[o+1];  ld[b+2]  = L[o+2];  ld[b+3]  = L[o+6];  // pos.xyz, rad
           ld[b+4]  = L[o+3];  ld[b+5]  = L[o+4];  ld[b+6]  = L[o+5];  ld[b+7]  = L[o+12]; // col.rgb, bleed
           ld[b+8]  = L[o+7];  ld[b+9]  = L[o+8];  ld[b+10] = L[o+9];  ld[b+11] = L[o+13]; // dir.xyz, volW
-          ld[b+12] = L[o+10]; ld[b+13] = L[o+11]; ld[b+14] = L[o+14]; ld[b+15] = 0;       // cosIn, cosOut, glareW
+          ld[b+12] = L[o+10]; ld[b+13] = L[o+11]; ld[b+14] = L[o+14];                    // cosIn, cosOut, glareW
+          ld[b+15] = _hasLB ? LampBake.liveOnlyAt(L, o) : 0;                               // LIVE-ONLY (not baked)
         }
         device.queue.writeBuffer(lightSBO, 0, lightData, 0, nL * 16);
       }
@@ -3564,8 +3610,9 @@ const WGX = (function () {
       // per-chunk TABLES, and only via capFor() — 1000 slider steps, <=17 caps.
       const _tlCap = (typeof LampChunks !== "undefined") ? LampChunks.capFor(framePerChunk) : 0;
       const _tlSetMoved = _tlSrc !== frameAllLights;
+      const _lbGen = f.lampBake ? f.lampBake.gen | 0 : 0;
       if (framePerChunk > 0 && frameAllLights &&
-          (_tlSetMoved || _tlGen !== frameAllLightsGen)) {
+          (_tlSetMoved || _tlGen !== frameAllLightsGen || _tlLoGen !== _lbGen)) {
         const AL = frameAllLights;
         const tn = Math.min(TRACK_LIGHT_CAP, (AL.length / 15) | 0), td = _tlScratch;
         // THIRTEEN of the sixteen lanes are baked-static — the same split
@@ -3574,15 +3621,16 @@ const WGX = (function () {
         // between frames and only need writing when the SET changes. Gen moves
         // every frame under flicker or the warm-up ramp, and that used to rewrite
         // all 16 lanes of up to TRACK_LIGHT_CAP 1024 records to change three.
-        if (_tlFullPack !== AL) {
+        if (_tlFullPack !== AL || _tlLoGen !== _lbGen) {
           for (let i = 0; i < tn; i++) {
             const o = i * 15, b = i * 16;
             td[b]    = AL[o];        td[b+1]  = AL[o+1];      td[b+2]  = AL[o+2];  td[b+3]  = AL[o+6];
             td[b+7]  = AL[o+12];
             td[b+8]  = AL[o+7];      td[b+9]  = AL[o+8];      td[b+10] = AL[o+9];  td[b+11] = AL[o+13];
-            td[b+12] = AL[o+10];     td[b+13] = AL[o+11];     td[b+14] = AL[o+14]; td[b+15] = 0;
+            td[b+12] = AL[o+10];     td[b+13] = AL[o+11];     td[b+14] = AL[o+14];
+            td[b+15] = _hasLB ? LampBake.liveOnlyAt(AL, o) : 0;
           }
-          _tlFullPack = AL;
+          _tlFullPack = AL; _tlLoGen = _lbGen;
         }
         for (let i = 0; i < tn; i++) {
           const o = i * 15, b = i * 16;
@@ -3844,6 +3892,10 @@ const WGX = (function () {
       noAlphaWrite: false, decal: false, depthCompare: undefined,
       noDepthTest: false,
     };
+    // GL-order [factor, units] like every other depthBias (see _litPipeline).
+    // WGX-only divergence: GLX/TLX draw the road at its game.js [-8, -16] and
+    // the floor at [4, 8]; WGX drops the road bias (surfaceId 16 below) and
+    // pushes the buried floor a little further back instead.
     const _BIAS_BURY = [5, 10], _BIAS_DETAIL = [3, 6];
     function _litOpts(opts) {
       const o = opts || {};
@@ -6096,7 +6148,7 @@ const WGX = (function () {
 
       chunkedTrackCoords: true,
       hasPerChunkLights: true,       // consumes the LampChunks bake (trackLightSBO/chunkIdxSBO)
-      hasLampBake: undefined,        // BAKED LAMP POOLS not ported yet: game.js never builds frame.lampBake here
+      hasLampBake: true,             // BAKED LAMP POOLS: binding 17 + FrameU bakeA..C (GLX/TLX parity)
       createMesh,
       createTexMesh,                 // textured decals
       createChunkedMesh,

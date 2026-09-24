@@ -216,6 +216,8 @@ uniform float uBakeOn;
 uniform vec2 uBakeOrigin;
 uniform vec2 uBakeSize;
 uniform vec3 uBakeScale;
+uniform float uBakeH;      // texel rows per layer (diffuse rows [0,h), bounce rows [h,2h))
+uniform vec3 uBakeShCol;   // the shadow lamp's BAKED colour (LampBake.shadowCol)
 uniform mat4 uLampShadowVP;
 uniform float uLampShadowOn;
 uniform int uLampShadowIdx;
@@ -1251,10 +1253,22 @@ void main() {
   // each live lamp below scales its diffuse by (lampSh - bakeW) so no lamp is
   // counted twice and the shadow-mapped floodlight still carves its shadow.
   vec2 bUv = (vWorldPos.xz - uBakeOrigin) / uBakeSize;
-  vec3 bE = textureLod(uLampBake, bUv, 0.0).rgb * uBakeScale;
+  // Alpha is the surface height the texel was baked at: a fragment off it (a
+  // bridge deck over a baked road, a roof, the lower road of a crossover, a
+  // texel with no known ground) keeps the live loop instead.
+  // Two stacked layers; clamp v to this layer's texel centres so the bilinear
+  // tap never reads across the seam into the other one.
+  float bRow = 0.5 / max(uBakeH, 1.0);
+  vec2 bUvD = vec2(bUv.x, clamp(bUv.y, bRow, 1.0 - bRow) * 0.5);
+  vec4 bT = textureLod(uLampBake, bUvD, 0.0);
+  vec3 bE = bT.rgb * uBakeScale;
+  vec3 bB = textureLod(uLampBake, bUvD + vec2(0.0, 0.5), 0.0).rgb * uBakeScale;
   float bakeW = (uBakeOn > 0.5 && all(greaterThan(bUv, vec2(0.0))) && all(lessThan(bUv, vec2(1.0))))
-    ? smoothstep(0.55, 0.85, N.y) : 0.0;
+    ? smoothstep(0.55, 0.85, N.y) * (1.0 - smoothstep(0.75, 2.5, abs(vWorldPos.y - bT.a))) : 0.0;
   color += albedo * bE * bakeW * (1.0 - metalness) * (1.0 - wetSheen * 0.85);
+  // Baked LAMP BOUNCE (every lamp, per unit BOUNCE); the live bounce below
+  // steps aside by the same weight.
+  color += albedo * bB * (uBounceK * bakeW) * (1.0 - metalness);
   for (int i = 0; i < MAX_LIGHTS; i++) {
     if (i >= uNumLights) break;
     int li = i * 4;
@@ -1343,13 +1357,20 @@ void main() {
     }
     // Diffuse pool — fades as the road wets so a wet surface shows the lamp's
     // REFLECTION (SSR + the GGX lobe below), not a painted matte circle.
-    color += albedo * lb.xyz * (att * spotD * (lampSh - bakeW)) * NoLl * (1.0 - metalness) * (1.0 - wetSheen * 0.85);
+    // On a baked fragment the live term steps aside (1 - bakeW) and the
+    // shadow-mapped lamp carves its shadow out of the pool in the pool's own
+    // steady colour (uBakeShCol; 1 - lampSh is 0 for every other lamp).
+    // LIVE-ONLY lamps (uLight[li+3].y = 1, LampBake.liveOnlyAt: a lens < 3 m
+    // over its ground or a < ~25 deg cone) are not in the bake: no step-aside.
+    float bakeWl = bakeW * (1.0 - uLight[li + 3].y);
+    color += albedo * (lb.xyz * (lampSh * (1.0 - bakeWl)) - uBakeShCol * ((1.0 - lampSh) * bakeWl))
+           * (att * spotD) * NoLl * (1.0 - metalness) * (1.0 - wetSheen * 0.85);
     // Bounce fill: pool light bounced off the road washes nearby surfaces
     // (walls, kerbs, car flanks) with the lamp tint even outside the beam -
     // a near-free stand-in for local ambient probes. Soft NoL floor so
     // surfaces facing away from the lamp still catch a little.
     if (uBounceK > 0.0) {
-      color += albedo * lb.xyz * (att * uBounceK * (0.55 + 0.45 * NoLl)) * (1.0 - metalness);
+      color += albedo * lb.xyz * (att * uBounceK * (0.55 + 0.45 * NoLl)) * (1.0 - metalness) * (1.0 - bakeWl);
     }
     // GGX specular from the lamp — the same microfacet BRDF as the sun. On the
     // wet low-roughness road this physically elongates at grazing angles (the
@@ -1379,6 +1400,9 @@ void main() {
       }
     }
   }
+  // (lampSh - bakeW) is negative where the shadow-mapped floodlight is occluded
+  // on a baked fragment; never let that carve below black.
+  color = max(color, vec3(0.0));
 
   // Cook-Torrance specular, soft-clipped so highlights sheen instead of clipping.
   // specCol is * litNoL (= NoL * …). A backface paid GGX + F_Schlick + Reinhard

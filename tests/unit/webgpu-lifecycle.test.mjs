@@ -544,7 +544,7 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   assert.match(CHUNKS_SOURCE, /params6\s*:\s*vec4<f32>.*off 368/);
   assert.match(CHUNKS_SOURCE, /params7\s*:\s*vec4<f32>.*off 448/);
   assert.match(CHUNKS_SOURCE, /params9\s*:\s*vec4<f32>.*ambContactDark/);
-  assert.match(CHUNKS_SOURCE, /FRAME_UNIFORM_BYTES:\s*608/);   // 592 + 16: pitBox (off 592), YOUR box in the lane
+  assert.match(CHUNKS_SOURCE, /FRAME_UNIFORM_BYTES:\s*656/);   // 608 + 48: bakeA..C (BAKED LAMP POOLS)
   assert.match(POST_SOURCE, /COMPOSITE_UNIFORM_BYTES:\s*256/);
   assert.match(POST_SOURCE, /SSR_UNIFORM_BYTES:\s*208/,
     "SsrU must keep the carGloss vec4 (192 was the pre-streak layout)");
@@ -555,7 +555,7 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   gfx.resize();
   assert.equal(gfx.begin({ tune: {}, shadowCtr: [11, 22, 33] }), true);
   gfx.present({ tune: {} });
-  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 608);
+  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 656);
   const compositeBuffer = h.buffers.find((buffer) => buffer.desc.size === 256);
   let frame = h.writes.filter((write) => write.buffer === frameBuffer).at(-1).values;
   assert.deepEqual(frame.slice(88, 92), [11, 22, 33, 80], "shadowCtr must occupy floats 88..91");
@@ -813,7 +813,7 @@ test("lamp shadow arm does not leak into the next frame", async () => {
   const h = makeGpuHarness();
   const gfx = await h.create();
   gfx.resize();
-  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 608);
+  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 656);
   gfx.lampShadowBegin(new Float32Array([
     1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
   ]), 2);
@@ -880,6 +880,58 @@ test("depth-testing pipelines never use compare 'always' (skyLate erased the wor
   for (const d of readOnlyDepth) {
     assert.notEqual(d.depthStencil.depthCompare, "always",
       "a depth-test-only pipeline must respect the world's depth (GLX LEQUAL parity)");
+  }
+});
+
+test("GL depthBias [factor, units] maps to WebGPU slope scale / constant, not swapped", async () => {
+  // gfx.js's contract is GL polygonOffset order: depthBias = [factor, units].
+  //   GL:     offset = factor * DZ + units * r
+  //   WebGPU: offset = depthBiasSlopeScale * maxSlope + depthBias * r
+  // so factor -> depthBiasSlopeScale and units -> depthBias (integer), 1:1 —
+  // the same mapping three's WebGPU backend uses for TLX's polygonOffset. WGX
+  // once wrote factor into depthBias and units into the slope scale, so the
+  // floor [4, 8], buried terrain, start line [-12, -24] and fx decals all drew
+  // with the wrong constant/slope mix. Asymmetric pairs make a swap visible.
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  gfx.resize();
+  assert.equal(gfx.begin({}), true);
+  const mesh = gfx.createMesh({
+    pos: [0, 0, 0, 1, 0, 0, 0, 0, 1], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0],
+    col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2],
+  });
+  const model = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  const biased = () => h.pipelineDescs.filter((d) => d && d.depthStencil &&
+    d.depthStencil.depthBias !== undefined && d.depthStencil.depthBias !== 0);
+  const cases = [
+    { bias: [-12, -24], constant: -24, slope: -12 },   // game.js _startBias
+    { bias: [3, 7], constant: 7, slope: 3 },
+    { bias: [-1.5, -2], constant: -2, slope: -1.5 },    // slope scale is a float: kept exact
+  ];
+  for (const c of cases) {
+    const before = biased().length;
+    gfx.draw(mesh, model, { depthBias: c.bias });
+    const made = biased().slice(before);
+    assert.equal(made.length, 1, "depthBias " + JSON.stringify(c.bias) + " builds one biased pipeline");
+    const ds = made[0].depthStencil;
+    assert.equal(ds.depthBias, c.constant, "GL units -> WebGPU depthBias (constant term)");
+    assert.ok(Number.isInteger(ds.depthBias), "GPUDepthBias is an integer");
+    assert.equal(ds.depthBiasSlopeScale, c.slope, "GL factor -> WebGPU depthBiasSlopeScale");
+    assert.equal(ds.depthBiasClamp, 0);
+  }
+  // buryRibbon (the floor/terrain) goes through WGX's _BIAS_BURY [5, 10]:
+  // units 10 is the constant, factor 5 the slope.
+  const before = biased().length;
+  gfx.draw(mesh, model, { buryRibbon: true, depthBias: [4, 8] });
+  const bury = biased().slice(before);
+  assert.equal(bury.length, 1);
+  assert.equal(bury[0].depthStencil.depthBias, 10);
+  assert.equal(bury[0].depthStencil.depthBiasSlopeScale, 5);
+  // The road (surfaceId 16) deliberately draws unbiased on WGX.
+  const n = h.pipelineDescs.length;
+  gfx.draw(mesh, model, { surfaceId: 16, depthBias: [-8, -16], doubleSided: true });
+  for (const d of h.pipelineDescs.slice(n)) {
+    assert.ok(!d.depthStencil || !d.depthStencil.depthBias, "road pipeline carries no depth bias");
   }
 });
 
@@ -964,7 +1016,7 @@ test("WGX full parity batch is wired", () => {
   assert.match(POST_SOURCE, /shaftDecay/);
   assert.match(POST_SOURCE, /carReflect = U\.upVS\.w/);
   assert.match(WGX_SOURCE, /maxAnisotropy: 4/);
-  assert.match(WGX_SOURCE, /depthStencil\.depthBias = dbC/);
+  assert.match(WGX_SOURCE, /depthStencil\.depthBias = dbC/);   // dbC = GL units (see the depthBias mapping test)
   assert.match(WGX_SOURCE, /_carBoxScale/);
   assert.match(WGX_SOURCE, /binding: 7, resource: next\.depthSampleView/);
   assert.match(WGX_SOURCE, /sunShaftDecay/);
@@ -2216,4 +2268,28 @@ test("WGX shadow cull packs into the batch's OWN buffer and leaves the camera pa
   assert.equal(batch.visible, camVisible, "the camera count survives the shadow cull");
   assert.equal(gfx.cullInstances(batch, planes(2e6)), 2);
   assert.equal(instWrites(), camWrites, "…so the next camera cull with the same cells is still a cache hit");
+});
+
+test("the lamp bake light map is freed after ~2 s of bake-off frames (GLX _bakeOffN parity)", async () => {
+  // WGX used to free the bake only on replacement, so a night race followed by
+  // a day one kept ~9.6 MB of RGBA16F alive. It now rebinds the placeholder and
+  // retires the texture after 120 consecutive bake-off frames.
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  const lb = { w: 4, h: 3, x0: 0, z0: 0, cell: 1, data: new Uint16Array(4 * 3 * 8) };
+  const isBake = (t) => Array.isArray(t.desc.size) && t.desc.size[0] === 4 && t.desc.size[1] === 6
+    && t.desc.format === "rgba16float";
+  assert.equal(gfx.begin({ lampBake: lb, lampBakeScale: [1, 1, 1] }), true);
+  gfx.present({});
+  const bakes = h.textures.filter(isBake);
+  assert.equal(bakes.length, 1, "the bake uploads one w x 2h texture");
+  for (let i = 0; i < 120; i++) { assert.equal(gfx.begin({}), true); gfx.present({}); }
+  assert.equal(bakes[0].destroyed, false, "a short bake-off gap keeps the map");
+  assert.equal(gfx.begin({}), true);
+  assert.equal(bakes[0].destroyed, false, "retired, not destroyed before the frame's submit");
+  gfx.present({});
+  assert.equal(bakes[0].destroyed, true, "the 121st bake-off frame frees the map after its submit");
+  assert.equal(gfx.begin({ lampBake: lb, lampBakeScale: [1, 1, 1] }), true);
+  gfx.present({});
+  assert.equal(h.textures.filter(isBake).length, 2, "the same bake re-uploads once it returns");
 });
