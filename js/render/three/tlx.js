@@ -1826,8 +1826,72 @@ const TLX = (function () {
           await renderer.compileAsync(m, camera, scene);
         }
       }
-      let _warmPlus = false;
-      try { _warmPlus = localStorage.getItem("apex26.tlxWarmPlus") === "1"; } catch (_) { /* no storage: the default warm */ }
+      // LIT VARIANTS FIRST DRAWN MID-RACE. The brake-disc glow ring
+      // (car-draw.js _ringOpts) is queued only once a disc is hot, so its first
+      // draw is the first braking zone, at alpha ~0.3 — the TRANSPARENT ("t,")
+      // variant of a key the grid never draws. Census 245 caught it as the one
+      // material minted mid-race and its one lazy pipeline. The cockpit ERS /
+      // overtake / aero-flap pulses share that key. Mint it during the lights and
+      // compile it once per vertex layout already in the pool: the pipeline also
+      // keys on the layout, and tlx-chunked's pack makes layouts differ by mesh.
+      const _LATE_LIT = [{ roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 0.5 }];
+      function _layoutKey(g) {
+        let k = g.index ? g.index.array.constructor.name : "-";
+        for (const n of Object.keys(g.attributes).sort()) {
+          const a = g.attributes[n];
+          k += "|" + n + ":" + (a.array ? a.array.constructor.name : "?") + a.itemSize + (a.normalized ? "n" : "");
+        }
+        return k;
+      }
+      // Minted BEFORE startProgramWarm's lit.setSsrMrt(usePost), which stamps
+      // the ssrTag MRT on the materials that exist at that moment: one minted
+      // after it has no MRT node, and its compile built a no-MRT program the
+      // race never draws (1.2 s on Lavapipe) while the lap still built the MRT
+      // pipeline lazily (compile-attrib-probe pipeline keys, program 23/24 vs 6/7).
+      function mintLateLit() {
+        if (!_warmFx || !lit || _drawMatMode || vizMat) return;
+        for (const o of _LATE_LIT) materialFor(o, false, false);
+      }
+      async function warmLateLit() {
+        if (!_warmFx || !lit || _drawMatMode || vizMat) return;
+        // Every distinct layout, drawn or not: the ring shares its layout with
+        // car parts the grid draws, but not their OPAQUE pipeline state. With
+        // the variant minted under the MRT (mintLateLit) the program already
+        // exists, so each layout costs one pipeline, not a program.
+        const geos = new Map();
+        for (let i = 0; i < _geoReg.length; i++) {
+          const g = _geoReg[i] && _geoReg[i].deref();
+          // instanceTint marks a batch geometry: it draws through an
+          // InstancedMesh with the instanced material, never with this key.
+          if (!g || g.__tlxKind !== "mesh" || !g.attributes || !g.attributes.position || g.attributes.instanceTint) continue;
+          const k = _layoutKey(g);
+          if (!geos.has(k)) geos.set(k, g);
+        }
+        _warmStages.lateLayouts = geos.size;
+        for (const o of _LATE_LIT) {
+          const mat = materialFor(o, false, false);
+          // Both winding signs: three keys a pipeline on
+          // matrixWorld.determinantAffine() < 0, and the car draws one side's
+          // parts (the brake ring among them) through a mirrored matrix — the
+          // one field the lap's pipeline key differed in (probe, field 27).
+          for (const g of geos.values()) for (const sx of [1, -1]) {
+            const m = new THREE.Mesh(g, mat);
+            m.frustumCulled = false;
+            m.scale.x = sx; m.updateMatrixWorld(true);
+            await renderer.compileAsync(m, camera, scene);
+          }
+        }
+      }
+      // AUTO (unset) = ON for three's WebGL2 backend only. There compileAsync
+      // links with KHR_parallel_shader_compile and polls COMPLETION_STATUS, but
+      // the render path links synchronously (WebGLBackend createRenderPipeline,
+      // promises === null -> getProgramParameter(LINK_STATUS)), so the 8 post
+      // programs the gated warm skipped each blocked the thread mid-race —
+      // census 245's WebGL2 leg: 8 lazy links and a 4.25 s callback. On WebGPU
+      // the post chain does not compile lazily (census 244), so it stays off.
+      let _warmPlus = null;
+      try { const v = localStorage.getItem("apex26.tlxWarmPlus"); _warmPlus = v === "1" ? true : v === "0" ? false : null; } catch (_) { /* no storage: auto */ }
+      const warmPlusOn = () => _warmPlus !== null ? _warmPlus : !!(renderer && renderer.backend && renderer.backend.isWebGLBackend);
       function startProgramWarm(opts) {
         _warmRequested = false;
         if (typeof renderer.compileAsync !== "function") return;
@@ -1840,6 +1904,7 @@ const TLX = (function () {
         _warmPending = (async () => {
           try {
             pinSkyMaterial();
+            mintLateLit();
             if (lit && lit.setSsrMrt) lit.setSsrMrt(usePost);
             if (fx && fx.setSsrMrt) fx.setSsrMrt(usePost);
             renderer.setMRT(usePost ? _ssrMrtNode() : null);
@@ -1850,6 +1915,7 @@ const TLX = (function () {
             _warmStages.scene = Math.round(performance.now() - _tStage); _tStage = performance.now();
             _gpuLastOperation = "compile-fx";
             await warmFxPrograms();
+            await warmLateLit();
             _warmStages.fx = Math.round(performance.now() - _tStage); _tStage = performance.now();
             // MRT STAYS SET THROUGH THE POST WARM. present() sets the ssrTag MRT
             // node for the scene pass and calls post.present() BEFORE restoring
@@ -1870,9 +1936,10 @@ const TLX = (function () {
             // the first visible present after the lights instead of during them.
             // post.warm() keeps its own deadline, so the lights hold at most a
             // few seconds longer in the worst case, which is the trade this
-            // makes — so it is OPT-IN (apex26.tlxWarmPlus=1, see _warmPlus), as is
-            // the caster warm below; by default the 3 s gate stands.
-            if (usePost && post.warm && (_warmPlus || performance.now() - _warmAt < 3000)) {
+            // makes — so it is ON only where it measured a win (three's WebGL2
+            // backend, see _warmPlus), as is the caster warm below; elsewhere
+            // the 3 s gate stands. apex26.tlxWarmPlus=1/0 forces it.
+            if (usePost && post.warm && (warmPlusOn() || performance.now() - _warmAt < 3000)) {
               _gpuLastOperation = "compile-post"; await post.warm(opts, _postF);
             }
             _warmStages.post = Math.round(performance.now() - _tStage); _tStage = performance.now();
@@ -1884,7 +1951,7 @@ const TLX = (function () {
             // endPass). sunPass runs before present() on the same frame, so by
             // now castScene holds the grid's casters and the warm compiles the
             // real ones.
-            if (_warmPlus && shadowSys && shadowSys.warm) { _gpuLastOperation = "compile-shadow"; await shadowSys.warm(); }
+            if (warmPlusOn() && shadowSys && shadowSys.warm) { _gpuLastOperation = "compile-shadow"; await shadowSys.warm(); }
             _warmStages.shadow = Math.round(performance.now() - _tStage);
           } catch (e) {
             _warmStages.failed++;
@@ -3981,7 +4048,7 @@ const TLX = (function () {
             o.presentMs = +_presentMs.toFixed(3);
             // The warm timeline: how long the lights held on THIS GPU, by stage;
             // pending/done say whether a census beat is inside it (207 was, all 15).
-            o.warm = { at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, post: _warmStages.post, shadow: _warmStages.shadow,
+            o.warm = { at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, lateLayouts: _warmStages.lateLayouts, post: _warmStages.post, shadow: _warmStages.shadow,
                        total: _warmStages.total, attempts: _warmStages.attempts, failed: _warmStages.failed,
                        pending: !!_warmPending, done: _warmDone };
             o.presents = _presentN;   // frames presented — a spec samples both flag arms at the same count
