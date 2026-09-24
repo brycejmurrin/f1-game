@@ -173,6 +173,25 @@ test("a malformed event is dropped rather than thrown", () => {
   assert.equal(b.alive(), true, "a bad event is not a disconnect");
 });
 
+test("an open transport that never receives a valid packet times out", () => {
+  let inbound, closed = 0;
+  const transport = {
+    onMessage(fn) { inbound = fn; }, onClose() {},
+    send() { return true; }, close() { closed++; },
+  };
+  const s = NetSession.create({ transport, timeoutMs: 500 });
+  const reasons = [];
+  s.onClose((reason) => reasons.push(reason));
+  s.pump(100);
+  inbound(NetTransport.EVENT, JSON.stringify({ t: "unknown", d: {} }), 300);
+  inbound(NetTransport.EVENT, "{", 400);
+  for (let t = 401; t <= 701; t += 100) s.pump(t);
+  assert.equal(s.alive(), false);
+  assert.deepEqual(reasons, ["timeout"]);
+  assert.equal(closed, 1);
+  assert.equal(s.lastHeard(), null, "unhandled or malformed frames are not game liveness");
+});
+
 test("silence is detected, and reported once", () => {
   const p = pair({ latency: 20 });
   const closes = [];
@@ -223,15 +242,15 @@ test("a stall in OUR loop is not silence from THEM", () => {
   assert.equal(p.a.alive(), false, "a genuine silence must still be caught");
 });
 
-test("a slow connect is never mistaken for a disconnect", () => {
-  // The death clock only starts once the peer has actually been heard from.
-  // Otherwise a session that takes 3 s to establish would kill itself.
+test("a connecting transport gets its ICE window before the first-packet deadline", () => {
+  // Do not start the first-packet deadline until the data channel is open.
   const [ta] = NetTransport.loopback({ latencyMs: 0, rnd: seededRnd(5) });
+  ta.status = "connecting";
   const a = NetSession.create({ transport: ta, timeoutMs: 500 });
   let closed = false;
   a.onClose(() => { closed = true; });
   for (let i = 0; i < 500; i++) a.pump(i * 10);   // 5 s, peer never replies
-  assert.equal(closed, false, "must not time out before the first packet ever arrives");
+  assert.equal(closed, false, "a connection still establishing ICE is not a silent open channel");
   assert.equal(a.alive(), true);
 });
 
