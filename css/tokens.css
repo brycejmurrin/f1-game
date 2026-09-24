@@ -43,6 +43,19 @@
   font-display: swap;
   src: url("../assets/fonts/titillium-web-latin-700-italic.woff2") format("woff2");
 }
+/* SAIRA, FOR THE WORDMARK ONLY. The APEX 26 title is the one place a face with
+   a motorsport accent earns its bytes, and Titillium is the face Formula 1's
+   own brand guidelines single out ("must not imply association"), so the
+   wordmark moved off it. Everything else stays Titillium. The file is Saira
+   Italic (OFL; the licence text sits beside it in assets/fonts) pinned to weight 800 and subset to
+   the glyphs the wordmark can draw — A P E X, the digits, a space — so it is
+   2.4 KB instead of 37 KB; any other character falls through to Titillium.
+   Its digits are uniform through tnum (the tests/data font-digits ledger). */
+@font-face {
+  font-family: "Saira Wordmark"; font-style: italic; font-weight: 800;
+  font-display: swap;
+  src: url("../assets/fonts/saira-apex26-800-italic.woff2") format("woff2");
+}
 /* BARLOW CONDENSED, AND THE size-adjust IS MEASURED, NOT TASTEFUL.
    Rajdhani stood here and its ~36 `font-variant-numeric: tabular-nums`
    declarations were INERT: its Latin subset carries no OpenType features at all

@@ -338,7 +338,10 @@
 @keyframes tc-btn-in { from { opacity: 0; scale: 0.94; } }
 #title {
   font-size: clamp(34px, calc(9 * var(--vwz)), 92px);
-  font-weight: 700; font-style: italic;
+  /* Saira for the letters it carries (css/tokens.css says why), Titillium for
+     anything else — the inherited stack stays the fallback. */
+  font-family: "Saira Wordmark", var(--font-ui);
+  font-weight: 800; font-style: italic;
   color: var(--text);
   letter-spacing: var(--ls-2);
   text-shadow: 0 0 42px color-mix(in oklab, var(--red) 82%, transparent), 0 2px 12px rgba(0, 0, 0, 0.8);
@@ -820,6 +823,33 @@ body { --compact-at: 600px; --wide-at: 620px; }
 }
 /* Re-stated after the display:block above, which would otherwise out-order it. */
 @media (max-width: 699px) and (prefers-reduced-transparency: reduce) {
+  :where(body[data-shape="tall"]) #title-car { display: none; }
+}
+/* THE TALL TABLET GETS THE SAME THREE BANDS (2026-09-24). An upright iPad kept
+   the old composition: the 900/1600 top-down drawing as a full-height layer
+   with the button column over it — the exact complaint that redesigned the
+   portrait phone. The doors keep the large-portrait sizes from
+   css/responsive.css; only the structure and the art change: doors sized to
+   their content, and the side-on pair in the clear in row 3, framed as on the
+   phone. #title-car-top is now shown nowhere; its generated block is a
+   follow-up cleanup (tools/gen/title-art.mjs, tests/unit/title-art.test.mjs). */
+@media (min-width: 700px) {
+  :where(body[data-shape="tall"]) #overlay { grid-template-rows: auto minmax(0, auto) minmax(0, 1fr); }
+  :where(body[data-shape="tall"]) #menu-buttons { height: auto; align-self: start; align-content: start; }
+  :where(body[data-shape="tall"]) #title-car-top { display: none; }
+  :where(body[data-shape="tall"]) #title-car {
+    display: block;
+    position: relative;
+    grid-row: 3;
+    align-self: center;
+    width: 100%;
+    height: auto;
+    max-height: 100%;
+    opacity: 0.9;
+  }
+  :where(body[data-shape="tall"]) #tc-frame { transform: translate(100px, -388px) scale(1.2); }
+}
+@media (min-width: 700px) and (prefers-reduced-transparency: reduce) {
   :where(body[data-shape="tall"]) #title-car { display: none; }
 }
 /* LANDSCAPE COMPACT: side-by-side brand + buttons.
