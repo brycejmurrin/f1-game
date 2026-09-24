@@ -255,10 +255,13 @@
       // spectatorHill takes neither `h` nor `col`: both layered calls of every
       // cut emitted the SAME default ladder a few mm apart, and their treads
       // were 400 flat-coplanar pairs (z-fight). ONE call per cut now, its
-      // height set by `rise` and the two tones as tread / riser colours.
+      // two tones as tread / riser colours. The ladder keeps spectatorHill's
+      // default rise (1.15 m): h/4 raised it to ~1.7 m and pushed the terraces
+      // into the roadside trees (clip-audit severe 55 -> 59). `h` is kept for
+      // the call sites' record of the intended bank height.
       const clayCut = (s0, s1, side, gap, h, col, col2) =>
         spectatorHill(s0, s1, side, gap,
-          { rise: h / 4, grass: col || CLAY, riser: col2 || col || CLAY });
+          { grass: col || CLAY, riser: col2 || col || CLAY });
 
       // The lap folds back on itself inside 100 m in several places, so every
       // free-standing prop added by this pass is checked against the road
