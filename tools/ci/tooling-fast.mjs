@@ -374,6 +374,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ray-vs-box, occlusion, horizon, motion and the flags an agent acts on without
   // a picture. Hand-built worlds, no game VM, ~0.1 s.
   "tests/unit/frame-math.test.mjs",
+  // The FRAMING REPORT fleet diff (tools/lib/frame-fleet.mjs): frame identity across
+  // a shot-list edit, flag-name comparison, worst-frame summary. Pure, ~0.1 s.
+  "tests/unit/frame-fleet.test.mjs",
   // The LOADING CARD's geometry: the three numbers the flyby editor authors,
   // clamped out of localStorage before they reach a CSS custom property, where
   // a NaN is not an error but a silently dropped declaration.
