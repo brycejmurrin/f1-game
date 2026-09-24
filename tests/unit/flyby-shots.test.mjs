@@ -444,3 +444,97 @@ test("a planned eye is not inside a tree canopy (Monza turn-first, the frame rep
     return null;
   });
 });
+
+test("the player's slot anchor is gridSlot()'s own slot: same arc, same stagger", async () => {
+  // grid-mine ends the loading flyby on YOUR car; an anchor a slot off films
+  // someone else's. Held to the mesh's gridSlot(), not to restated numbers.
+  await withTrack("bahrain", (track, g) => {
+    const F = g.sandbox.FlybySeq, M = g.sandbox.TrackMesh, T = g.sandbox.Tracks;
+    for (const k of [0, 1, 11, 19]) {
+      F.setPlayerSlot(k);
+      assert.equal(F.slotIndex({ at: "slot", n: "player" }), k);
+      const want = M.gridSlot(track, k);
+      assert.ok(Math.abs(F.anchorS(track, { at: "slot", n: "player" }) - want.s) < 1e-6, `slot ${k}: arc`);
+      const p = F.posePoint(track, { at: "slot", n: "player", off: 0, x: 0, y: 0 }, [0, 0, 0]);
+      const pr = T.project(track, p[0], p[2], null, p[1]);
+      assert.ok(Math.abs(pr.lat - want.x) < 0.1, `slot ${k}: lateral ${pr.lat.toFixed(2)} vs gridSlot ${want.x.toFixed(2)}`);
+    }
+    F.setPlayerSlot(-1);
+    assert.equal(F.slotIndex({ at: "slot", n: "player" }), 11, "an unknown seat falls back to the pace-order P12");
+    return null;
+  });
+});
+
+test("corners by character: slowest / fastest / lore resolve to filmable corners", async () => {
+  const bad = await withFleet(["monaco", "monza", "bahrain", "spa"], (id, track, g) => {
+    const F = g.sandbox.FlybySeq, out = [];
+    F.cornerS(track, 1);
+    const cs = track._fbCorners, s = (n) => F.cornerS(track, n);
+    const at = (n) => cs.findIndex((c) => Math.abs(F.cornerS(track, cs.indexOf(c) + 1) - s(n)) < 1e-6);
+    const slow = at("slowest"), fast = at("fastest"), lore = at("lore");
+    if (slow < 0 || fast < 0 || lore < 0) out.push(`${id}: a role missed every corner (${slow} ${fast} ${lore})`);
+    else {
+      if (!track._fbFilmable[slow] || !track._fbFilmable[fast] || !track._fbFilmable[lore]) out.push(`${id}: a role landed on an unfilmable corner`);
+      if (!(cs[slow].v <= cs[fast].v)) out.push(`${id}: slowest ${cs[slow].v} is faster than fastest ${cs[fast].v}`);
+    }
+    return out;
+  });
+  assert.deepEqual(bad, [], bad.join("\n"));
+});
+
+test("vary: one seed, one sequence; every variant is a valid list that keeps the grid close", async () => {
+  const { shotErrors } = await import("../../tools/gen/bake-flyby.mjs");
+  await withTrack("monza", (track, g) => {
+    const F = g.sandbox.FlybySeq, D = JSON.parse(JSON.stringify(F.DEFAULT));
+    assert.deepEqual(JSON.parse(JSON.stringify(F.vary(F.DEFAULT, 7))), JSON.parse(JSON.stringify(F.vary(F.DEFAULT, 7))), "deterministic per seed");
+    let differs = 0;
+    for (let seed = 0; seed < 16; seed++) {
+      const v = JSON.parse(JSON.stringify(F.vary(F.DEFAULT, seed)));
+      assert.deepEqual(shotErrors(v), [], `seed ${seed}: ${shotErrors(v).join("; ")}`);
+      assert.deepEqual(v.map((s) => s.id), D.map((s) => s.id), "same shots, same order");
+      assert.deepEqual(v.filter((s) => /^grid/.test(s.id)), D.filter((s) => /^grid/.test(s.id)), "the grid close is untouched");
+      const roles = v.filter((s) => s.eye[0].at === "corner").map((s) => s.eye[0].n);
+      assert.equal(new Set(roles).size, roles.length, `seed ${seed}: a corner role repeats: ${roles}`);
+      if (JSON.stringify(v) !== JSON.stringify(D)) differs++;
+    }
+    assert.ok(differs >= 12, `vary changed only ${differs} of 16 loads`);
+    assert.deepEqual(JSON.parse(JSON.stringify(F.DEFAULT)), D, "vary never mutates DEFAULT");
+    return null;
+  });
+});
+
+test("varied flybys hold the fleet audit too (seeds 0-5 on three circuits)", async () => {
+  const bad = await withFleet(["monza", "monaco", "mont_tremblant"], (id, track, g) => {
+    const F = g.sandbox.FlybySeq, out = [];
+    for (let seed = 0; seed < 6; seed++) {
+      for (const r of auditTrack(g.sandbox, track, { samples: 200, shots: F.vary(F.DEFAULT, seed) })) {
+        if (r.under > 0) out.push(`${id}#${seed} ${r.id}: underground`);
+        if (r.inside) out.push(`${id}#${seed} ${r.id}: inside a solid prop on ${r.inside} samples`);
+        if (r.lift >= 25) out.push(`${id}#${seed} ${r.id}: lifted ${r.lift.toFixed(1)} m`);
+        if (r.pan > 45) out.push(`${id}#${seed} ${r.id}: pans ${r.pan.toFixed(0)} deg/s`);
+      }
+    }
+    return out;
+  });
+  assert.deepEqual(bad, [], bad.join("\n"));
+});
+
+test("a corner eye in canopy falls back to the road edge (Mont-Tremblant turn-late)", async () => {
+  await withTrack("mont_tremblant", (track, g) => {
+    const rows = auditTrack(g.sandbox, track, { samples: 400 });
+    const trees = rows.filter((r) => r.tree > 0).map((r) => `${r.id} on ${r.tree} samples from u=${r.treeU.toFixed(3)}`);
+    assert.deepEqual(trees, [], "eye inside a tree: " + trees.join("; "));
+    return null;
+  });
+});
+
+test("no racing line in a flyby frame", () => {
+  // The green driving-line chevrons are a driving aid, not scenery: every
+  // cinematic frame (editor preview, __apex.flybyCam, free-cam's flyby lens)
+  // skips them. The live loading flyby runs in state "menu", which already does.
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const call = game.split("\n").find((l) => /DrivingLine\.draw\(/.test(l));
+  assert.ok(call, "game.js still draws the driving line");
+  assert.match(call, /!cine\b/, "the driving line is gated off in cinematic frames: " + call.trim());
+  assert.match(call, /state !== "menu"/, "and off under the loading-screen flyby");
+});
