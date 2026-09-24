@@ -2385,6 +2385,7 @@ function _loadTrackBody(idx, def) {
     // resident at once. loadTrack is synchronous, so nothing can observe the
     // null between here and the assignment below.
     track = null;
+    if (typeof LampBake !== "undefined") LampBake.reset();   // its cache holds the old track + atlas too
     // Pass the active backend so tracks.js builds its meshes through the façade
     // (opts.gfx) instead of reaching the GLX global directly. On the explicit
     // or fallback WebGL2 path gfx===GLX; on TLX/WGX it is that backend
