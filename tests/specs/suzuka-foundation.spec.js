@@ -23,18 +23,20 @@ test("Suzuka keeps its elevation, crossover, and track-owned models aligned", as
       raw: {
         sceneryCoordinates: raw.sceneryCoordinates,
         terrainOuter: raw.terrainOuter,
-        elevations: raw.elevations.map(({ s, halfM, rise }) => ({ s, halfM, rise })),
+        // Elevation is the SRTM bake in CircuitElevations (hasRealElevation);
+        // authored cosine bumps were removed — they left ~71% of the lap flat.
+        hasAuthoredElevations: Array.isArray(raw.elevations) && raw.elevations.length > 0,
         bridges: raw.bridges.map(({ s, halfM, rise }) => ({ s, halfM, rise })),
       },
       built: {
-        elevations: built.elevations.map(({ s, halfM, rise }) => ({ s, halfM, rise })),
+        hasAuthoredElevations: Array.isArray(built.elevations) && built.elevations.length > 0,
         bridges: built.bridges.map(({ s, halfM, rise }) => ({ s, halfM, rise })),
       },
-      // The corrected figure-eight lifts the back straight at racing 0.845,
-      // while the broad 26 m Esses elevation follows the terrain at 0.24.
+      // SRTM undulation: Degner basin near 0.15, climb through the Esses to
+      // ~0.30; figure-8 flyover stays a BRIDGE lift at racing 0.845.
       relief: {
-        esses: at(0.240) - (at(0.130) + at(0.350)) / 2,
-        degner: at(0.070) - (at(0.010) + at(0.130)) / 2,
+        essesClimb: at(0.30) - at(0.15),
+        degnerBasin: at(0.15) - (at(0.05) + at(0.25)) / 2,
         crossover: at(0.845) - (at(0.810) + at(0.880)) / 2,
       },
       ground,
@@ -46,21 +48,15 @@ test("Suzuka keeps its elevation, crossover, and track-owned models aligned", as
 
   expect(audit.raw.sceneryCoordinates).toBe("racing");
   expect(audit.raw.terrainOuter).toBe(120);
-  expect(audit.raw.elevations).toEqual([
-    { s: 0.0625, halfM: 260, rise: -5 },
-    { s: 0.24, halfM: 620, rise: 26 },
-  ]);
+  expect(audit.raw.hasAuthoredElevations).toBe(false);
+  expect(audit.built.hasAuthoredElevations).toBe(false);
   expect(audit.raw.bridges).toEqual([{ s: 0.845, halfM: 160, rise: 10 }]);
-  // Built fracs are the source fracs mapped through startFrac 0.9942 alone
-  // (s + 0.0058). They read 0.45 / 0.6275 / 0.2325 while the bogus
-  // sceneryStartFrac 0.6125 added its shift on top; it was removed on
-  // 2026-09-23 (DEFECT-LEDGER "suzuka — FIXED") and the road did not move.
-  expect(audit.built.elevations[0].s).toBeCloseTo(0.0683, 6);
-  expect(audit.built.elevations[1].s).toBeCloseTo(0.2458, 6);
+  // Built bridge frac is the source frac mapped through startFrac 0.9942 alone
+  // (s + 0.0058).
   expect(audit.built.bridges[0].s).toBeCloseTo(0.8508, 6);
 
-  expect(audit.relief.esses).toBeGreaterThan(4);
-  expect(audit.relief.degner).toBeLessThan(-2);
+  expect(audit.relief.essesClimb).toBeGreaterThan(18);
+  expect(audit.relief.degnerBasin).toBeLessThan(-8);
   expect(audit.relief.crossover).toBeGreaterThan(2);
   for (const probe of audit.ground) {
     expect(probe.gap === null || probe.gap <= 0.18,

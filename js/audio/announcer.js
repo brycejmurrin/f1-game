@@ -290,10 +290,12 @@ const Announcer = (function () {
   // ── THE WRAP-UP ──────────────────────────────────────────────────────────
   // Read over the results screen: the winner, the margin, your race against
   // your grid slot, the fastest lap. Pure over a plain summary, like rows().
-  function secs(s) { return s < 10 ? s.toFixed(1) : String(Math.round(s)); }
+  // Never "0.0": a margin under a tenth is a tenth, as on a timing screen.
+  function secs(s) { return s < 10 ? Math.max(0.1, s).toFixed(1) : String(Math.round(s)); }
   function lapTime(s) {
     if (!(s > 0) || !Number.isFinite(s)) return "";
-    const m = Math.floor(s / 60), r = s - m * 60;
+    const q = Math.round(s * 10) / 10;   // 119.97 is "2 oh 0.0", not "1 60.0"
+    const m = Math.floor(q / 60), r = q - m * 60;
     return m > 0 ? m + " " + (r < 10 ? "oh " : "") + r.toFixed(1) : r.toFixed(1);
   }
   function wrapRows(sum) {

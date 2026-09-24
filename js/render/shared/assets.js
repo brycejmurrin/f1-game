@@ -37,20 +37,20 @@ const Assets = (function () {
     if (_manifest !== null) return Promise.resolve(_manifest);
     // Material arrays and model prefetch start together at boot. Cache the
     // pending request too, so they share both the fetch and its JSON parse.
-    if (!_manifestPromise) _manifestPromise = _fetchManifest();
+    if (!_manifestPromise) _manifestPromise = _fetchManifest().finally(() => { _manifestPromise = null; });
     return _manifestPromise;
   }
 
   async function _fetchManifest() {
     try {
       const res = await fetch(MANIFEST);
-      if (!res.ok) { _manifest = false; _err = "no-pack"; return false; }
+      if (!res.ok) { _err = "no-pack"; return false; }
       const j = await res.json();
-      if (!j || typeof j !== "object") { _manifest = false; _err = "bad-manifest"; return false; }
+      if (!j || typeof j !== "object") { _err = "bad-manifest"; return false; }
       _manifest = j;
       return j;
     } catch (e) {
-      _manifest = false; _err = "no-pack";
+      _err = "no-pack";
       return false;
     }
   }
@@ -119,9 +119,15 @@ const Assets = (function () {
   function load(opts) {
     if (_loadPromise) return _loadPromise;
     const generation = _loadGeneration;
-    _loadPromise = _load(opts || {}, generation).catch((e) => {
+    const work = _load(opts || {}, generation).catch((e) => {
       if (generation === _loadGeneration) _err = (e && e.message) || "load-failed";
       return false;
+    });
+    _loadPromise = work.then((ok) => {
+      // Missing manifests / partial downloads can recover in this same tab;
+      // retain only a completed upload. A concurrent caller shares work.
+      if (!ok && generation === _loadGeneration) _loadPromise = null;
+      return ok;
     });
     return _loadPromise;
   }
@@ -301,14 +307,13 @@ const Assets = (function () {
       try {
         const m = await manifest();
         const rec = m && m.models && m.models[id];
-        if (!rec || !rec.file) { _models[id] = null; return null; }
+        if (!rec || !rec.file) { if (m) _models[id] = null; return null; }
         const res = await fetch(PACK_DIR + rec.file);
-        if (!res.ok) { _models[id] = null; return null; }
+        if (!res.ok) return null;
         const parsed = _parseModel(await res.arrayBuffer());
-        _models[id] = parsed;
+        if (parsed) _models[id] = parsed;
         return parsed;
       } catch (_) {
-        _models[id] = null;
         return null;
       } finally {
         delete _modelPromises[id];

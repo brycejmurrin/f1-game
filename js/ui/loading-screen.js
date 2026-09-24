@@ -253,7 +253,9 @@ const LoadingScreen = (function () {
      *  any more, and the build behind it is already warm. */
     // A keydown AUTO-REPEAT is not a new press: holding Enter a beat long on
     // RACE! used to skip the flyby on the first repeat.
-    function onSkip(e) { if (e && e.type === "keydown" && e.repeat) return; if (phase) { noteFlyby(true); fire(); } }
+    // Once per run: the listeners stay up until startRace lowers the screen, and a
+    // triple tap counted three skips (the short flyby arrived a run early).
+    function onSkip(e) { if (e && e.type === "keydown" && e.repeat) return; if (phase && build) { noteFlyby(true); fire(); } }
     /* THE PAD SKIPS TOO. No UI layer is open during the flyby, so the gamepad
      * walker sends no synthetic keydown and a controller-only player (TV, a
      * handheld) waited the full FLY_MS before every race. Poll the pads while

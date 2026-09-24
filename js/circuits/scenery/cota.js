@@ -89,6 +89,32 @@
                  [11.6, 0.5, 150 / segs_ + 0.8], [0.30, 0.32, 0.37], mb);
         }
       }
+      // Wave-4 hero: Main Grandstand red/white fascia — COTA's start/finish identity
+      // (research: permanent Main Grandstand under Big Red's shadow).
+      {
+        const a = anchor(K(0.00), 1, 10);
+        if (!onTrack(a.c[0], a.c[2], 16)) {
+          const b = [a.r, a.u, a.t];
+          modelGroup("cota-main-grandstand", {
+            center: vadd(a.c, a.u, 10), size: [14, 22, 140], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.METAL;
+            // Red leading-edge fascia under the cantilever lip.
+            addBox(stage, vadd(vadd(a.c, a.r, -5.8), a.u, 14.5),
+              [0.4, 1.2, 130], redSteel, b);
+            // White stripe below — stars-and-stripes cue without literal flags.
+            addBox(stage, vadd(vadd(a.c, a.r, -5.8), a.u, 13.0),
+              [0.35, 0.7, 128], white, b);
+            // Dark steel nose panels breaking the long face.
+            stage._mat = MAT.CONCRETE;
+            for (const tOff of [-45, -15, 15, 45]) {
+              addBox(stage, vadd(vadd(a.c, a.t, tOff), a.u, 8),
+                [10, 12, 8], darkSteel, b);
+            }
+            stage._mat = 0;
+          }, { required: true });
+        }
+      }
       // Opposite paddock-side stand on the main straight (s≈0.00, L)
       grandstandEx(0.985, -1, 16, 90, null, null, { livery: "darkSteel", endWalls: true });
       // Final-corner stepped stand leading onto the main straight (s≈0.95, R)
@@ -133,6 +159,10 @@
       // ACROSS the circuit, so every one of them overlapped the road and was
       // culled: Big Red and the esses mounds have never rendered. (The tent
       // ridges at :331 swap deliberately for variety — they are 2.6 m, and stay.)
+      //
+      // Wave-4: wrap Big Red as one required modelGroup so the Turn 1 climb
+      // (research: 133 ft hill, packed red-soil banks + crowd terraces OUTSIDE
+      // the left-hander — tower stays at T16–18) is a named identity landmark.
       {
         const k1 = K(0.10);
         const a1 = anchor(k1, 1, 16);
@@ -145,6 +175,27 @@
         // Sunk 2 m further (same 6 m crest): the T1 hill falls away under its
         // outer edge, which the 0.416 scenery shift hid (float-audit 2.06 m).
         addPrism(out, vadd(a1R.c, a1R.u, 0.5), [16, 11, 48], redSoil, [a1R.r, a1R.u, a1R.t]);
+        // Wave-4 hero marker: red lattice crest posts — compact required group
+        // set well clear of the road (gap 48) so footprint never rejects.
+        const aM = anchor(k1, -1, 48);
+        if (!onTrack(aM.c[0], aM.c[2], 12)) {
+          const bm = [aM.r, aM.u, aM.t];
+          modelGroup("cota-turn1-big-red", {
+            center: vadd(aM.c, aM.u, 6), size: [12, 14, 44], basis: bm,
+          }, (stage) => {
+            stage._mat = MAT.METAL;
+            for (const tOff of [-16, -5, 5, 16]) {
+              const p = vadd(aM.c, aM.t, tOff);
+              addCyl(stage, p, 0.4, 10, redSteel, 5, bm);
+              addBox(stage, vadd(p, aM.u, 10.2), [2.8, 0.45, 0.45], white, bm);
+              addBox(stage, vadd(p, aM.u, 5.0), [1.2, 0.3, 1.2], redSteel, bm);
+            }
+            // Red soil apron pad under the posts.
+            stage._mat = MAT.CONCRETE;
+            addPrism(stage, vadd(aM.c, aM.u, 1.2), [10, 4, 40], redSoil, bm);
+            stage._mat = 0;
+          }, { required: true });
+        }
       }
 
       const ke = K(0.18);

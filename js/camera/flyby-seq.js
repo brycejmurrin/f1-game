@@ -144,7 +144,7 @@ const FlybySeq = (function () {
     }
     return cells;
   }
-  const _near = [];
+  const _near = [], byIndex = (a, b) => a - b;
   function nearBoxes(cells, x, z, m) {
     _near.length = 0;
     const x0 = Math.floor((x - m) / GRID_CELL), x1 = Math.floor((x + m) / GRID_CELL);
@@ -155,7 +155,7 @@ const FlybySeq = (function () {
       if (a) { many++; for (let j = 0; j < a.length; j++) _near.push(a[j]); }
     }
     if (many > 1) {
-      _near.sort((a, b) => a - b);
+      _near.sort(byIndex);
       let w = 0;
       for (let j = 0; j < _near.length; j++) if (!j || _near[j] !== _near[j - 1]) _near[w++] = _near[j];
       _near.length = w;
@@ -1022,16 +1022,27 @@ const FlybySeq = (function () {
    *
    *  Beyond 1 the sequence holds on its last frame rather than looping: the
    *  screen is skippable, so a player who waits should not see it restart. */
-  /** Plan every shot of `shots` now (solve() caches a plan per shot on first
-   *  use) so the flyby never plans mid-sequence: vary() builds new shots each
-   *  load, and a cold corner plan is a visible stall at the cut. */
+  /** Plan `shots` before they play: a cold corner plan is a visible stall at its
+   *  cut (up to ~0.2 s desktop, ~1 s on a phone). The opening WARM_NOW shots are
+   *  planned at once and the rest one per timer slice, so the RACE! tap does not
+   *  pay for shots 20 s away. Plans go straight into planShot's cache — never
+   *  through solve(), whose cut tracking a background call would disturb. A newer
+   *  warm() (the next load) retires an unfinished one. */
+  const WARM_NOW = 2;
+  let _warmGen = 0;
   function warm(track, shots) {
-    const list = (shots && shots.length) ? shots : DEFAULT;
-    let total = 0, acc = 0;
+    const list = bindCorners(track, (shots && shots.length) ? shots : DEFAULT);
+    let total = 0;
     for (let i = 0; i < list.length; i++) total += list[i].dur || 0;
-    for (let i = 0; i < list.length && total > 0; i++) { solve(track, (acc + (list[i].dur || 0) / 2) / total, list); acc += list[i].dur || 0; }
-    reset();
+    if (!(total > 0)) return;
+    const gen = ++_warmGen;
+    const plan = (i) => { const sh = landmarkFallback(track, list[i]); planShot(track, sh, (sh.dur || 1) / total); };
+    for (let i = 0; i < Math.min(WARM_NOW, list.length); i++) plan(i);
+    let i = WARM_NOW;
+    const next = () => { if (gen !== _warmGen || i >= list.length) return; plan(i++); setTimeout(next, 0); };
+    if (i < list.length) setTimeout(next, 0);
   }
+  const withoutSlot = (list) => { const out = list.filter((shot) => !usesSlot(shot)); return out.length ? out : list; };
   function solve(track, u, shots) {
     const list = bindCorners(track, (shots && shots.length) ? shots : DEFAULT);
     let total = 0;
@@ -1374,7 +1385,7 @@ const FlybySeq = (function () {
   function planShot(track, shot, frac) {
     const cache = track._fbPlan || (track._fbPlan = new WeakMap());
     let plan = cache.get(shot);
-    if (plan && plan.frac === frac) return plan;
+    if (plan && plan.frac === frac && plan.slot === _playerSlot) return plan;   // a slot pose moves with the player's grid slot
     const onRoad = onRoadPose(shot.eye[0]) && onRoadPose(shot.eye[1]);
     const noLift = new Float32Array(LIFT_N + 1);
     const baseLook = planLook(track, shot.eye, shot.look);
@@ -1391,7 +1402,7 @@ const FlybySeq = (function () {
     }
     // The squeezed look keeps the sightline rule: re-plan it against the eye.
     if (look !== shot.look) look = planLook(track, pe.eye, look);
-    plan = { eye: pe.eye, look: look, prof: pe.prof, onRoad: onRoad, frac: frac, squeeze: k };
+    plan = { eye: pe.eye, look: look, prof: pe.prof, onRoad: onRoad, frac: frac, squeeze: k, slot: _playerSlot };
     cache.set(shot, plan);
     return plan;
   }
@@ -1442,7 +1453,7 @@ const FlybySeq = (function () {
     solve, reset, clearEye, floorEye, groundAt, insideProp, blockers, isSolid, onRoadPose,
     landmarks, bounds, landmarkScore, lmBase, landmarkFallback, planShot, treeBlockers,
     anchorS, posePoint, cornerS, cornerSide, cornerTurn, lmFace,
-    poseFromWorld, shotFromView, nearestCorner, vary, setPlayerSlot, slotIndex, slotKnown, bindCorners, warm,
+    poseFromWorld, shotFromView, nearestCorner, vary, setPlayerSlot, slotIndex, slotKnown, withoutSlot, bindCorners, warm,
     DEFAULT, EASE,
     POLE_BACK, GRID_SPACING, GRID_ROWS, MIN_FILL, MIN_H, FAR, FOG, NEAR, FENCE, REF_S, PAN_MAX,
   };

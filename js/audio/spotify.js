@@ -79,6 +79,11 @@ window.SpotifyMusic = (function () {
   // the old token can erase the fresh token written by the winning request.
   let refreshInFlight = null;
   let refreshTokenInFlight = null;
+  // Teardown invalidates callbacks from the former connection, including
+  // requests that already passed through fetch before sign-out.
+  let sessionGen = 0;
+  let searchT = null;
+  const commandTimers = new Set();
 
   /* ---------------- storage (GameStore's raw lane) ----------------
      Deliberately the RAW lane, not store.get/set: the JSON cache would hold a
@@ -321,11 +326,13 @@ window.SpotifyMusic = (function () {
     }
     const cid = clientId();
     if (!cid) return Promise.resolve();
+    const gen = sessionGen;
     setStatus("connecting", "Completing Spotify sign-in…");
     return postToken(new URLSearchParams({
       grant_type: "authorization_code", code: code, redirect_uri: redirectUri(),
       client_id: cid, code_verifier: verifier,
     })).then((j) => {
+      if (gen !== sessionGen || cid !== clientId()) return;
       if (!j || j.error || !j.access_token) {
         setStatus("error", "Token exchange failed" + (j && j.error ? " (" + j.error + ")" : "") +
           ". The redirect URI here must match the dashboard exactly.");
@@ -381,9 +388,11 @@ window.SpotifyMusic = (function () {
 
   function bootPlayer() {
     if (player) { installBackend(); return Promise.resolve(); }
+    const gen = sessionGen;
     explained = false;
     setStatus("connecting", "Loading the Spotify player…");
     return loadSdk().then(() => {
+      if (gen !== sessionGen || mode() !== "browser") return;
       if (typeof GameAudio !== "undefined" && GameAudio.volumes) {
         try { vol = GameAudio.volumes().music; } catch (e) { /* keep the default volume if GameAudio is not ready yet */ }
       }
@@ -399,6 +408,7 @@ window.SpotifyMusic = (function () {
         // up, and this generic line was overwriting the specific cause.
         getOAuthToken: (cb) => {
           validToken().then((t) => {
+            if (gen !== sessionGen) return;
             if (t) { cb(t); return; }
             teardown();
             if (!explained) {
@@ -409,24 +419,29 @@ window.SpotifyMusic = (function () {
         volume: vol,
       });
       player.addListener("ready", ({ device_id }) => {
+        if (gen !== sessionGen) return;
         deviceId = device_id;
         ready = true;
         explained = false;
         setStatus("connected", "Connected. Apex 26 is now a Spotify device.");
-        transfer(device_id).then(installBackend, installBackend);
+        transfer(device_id).then(() => { if (gen === sessionGen) installBackend(); },
+          () => { if (gen === sessionGen) installBackend(); });
         loadPlaylists();
       });
       player.addListener("not_ready", () => {
+        if (gen !== sessionGen) return;
         ready = false;
         setStatus("connecting", "Playback moved to another Spotify device.");
       });
       player.addListener("authentication_error", () => {
+        if (gen !== sessionGen) return;
         explained = true;
         teardown();
         setStatus("configured", "Spotify rejected the session — checking why…");
         check();
       });
       player.addListener("account_error", () => {
+        if (gen !== sessionGen) return;
         explained = true;
         teardown();
         setStatus("error", "This Spotify account cannot play here — full Premium is " +
@@ -434,14 +449,17 @@ window.SpotifyMusic = (function () {
           "are not supported by Spotify's web player.");
       });
       player.addListener("initialization_error", () => {
+        if (gen !== sessionGen) return;
         explained = true;
         teardown();
         setStatus("error", "This browser can't run the Spotify player (no encrypted-" +
           "media support). iOS Safari is the usual case — try desktop Chrome, Edge or Firefox.");
       });
-      player.addListener("playback_error", () =>
-        setStatus("connected", "Spotify could not play that track. Try SKIP TRACK."));
+      player.addListener("playback_error", () => {
+        if (gen === sessionGen) setStatus("connected", "Spotify could not play that track. Try SKIP TRACK.");
+      });
       player.addListener("player_state_changed", (s) => {
+        if (gen !== sessionGen) return;
         if (!s) { track = null; paused = true; emit(); return; }
         const t = s.track_window && s.track_window.current_track;
         track = t ? (t.name + " — " + (t.artists || []).map((a) => a.name).join(", ")) : null;
@@ -450,8 +468,10 @@ window.SpotifyMusic = (function () {
       });
       return player.connect();
     }).then((ok) => {
+      if (gen !== sessionGen) return;
       if (ok === false) setStatus("error", "The Spotify player refused to connect.");
     }).catch((e) => {
+      if (gen !== sessionGen) return;
       sdkPromise = null;                 // allow a retry after a transient failure
       teardown();
       setStatus("error", e && e.message === "blocked"
@@ -461,7 +481,14 @@ window.SpotifyMusic = (function () {
   }
 
   function teardown() {
+    sessionGen++;
     stopPolling();
+    pollBusy = false;
+    if (volTimer !== null) { clearTimeout(volTimer); volTimer = null; }
+    volPend = null;
+    if (searchT !== null) { clearTimeout(searchT); searchT = null; }
+    for (const timer of commandTimers) clearTimeout(timer);
+    commandTimers.clear();
     ready = false;
     deviceId = null;
     track = null;
@@ -471,8 +498,9 @@ window.SpotifyMusic = (function () {
   }
 
   function api(path, opts) {
+    const gen = sessionGen;
     return validToken().then((t) => {
-      if (!t) return null;
+      if (!t || gen !== sessionGen) return null;
       const o = Object.assign({}, opts || {});
       o.headers = Object.assign(
         { Authorization: "Bearer " + t, "Content-Type": "application/json" },
@@ -495,7 +523,9 @@ window.SpotifyMusic = (function () {
   }
 
   function loadPlaylists() {
+    const gen = sessionGen;
     return api("/me/playlists?limit=50").then((r) => {
+      if (gen !== sessionGen) return [];
       if (!r) return [];
       if (r.status === 403) {
         setStatus(state, "Your Spotify session predates the playlist permission. " +
@@ -504,12 +534,16 @@ window.SpotifyMusic = (function () {
       }
       if (!r.ok) return [];
       return r.json().then((j) => (j.items || []).map((p) => ({ name: p.name, uri: p.uri })), () => []);
-    }).then((ls_) => { lists = ls_ || []; render(); return lists; });
+    }).then((ls_) => {
+      if (gen !== sessionGen) return [];
+      lists = ls_ || []; render(); return lists;
+    });
   }
 
   // PUT /me/player/play, aimed at THIS device, with whatever the player chose.
   // Reports the refusals that otherwise look like "connected but silent".
   function playChosen() {
+    const gen = sessionGen;
     const q = mode() === "remote" ? remoteQuery()
       : (deviceId ? "?device_id=" + encodeURIComponent(deviceId) : "");
     const ctx = contextUri();
@@ -517,6 +551,7 @@ window.SpotifyMusic = (function () {
     if (ctx === "liked") {
       return api("/me/tracks?limit=50")
         .then((r) => (r && r.ok ? r.json().catch(() => null) : null)).then((j) => {
+        if (gen !== sessionGen) return;
         const uris = j && j.items ? j.items.map((i) => i.track && i.track.uri).filter(Boolean) : [];
         if (!uris.length) { releaseToBuiltIn("No liked songs found to play."); return; }
         return sendPlay(q, JSON.stringify({ uris: uris }));
@@ -532,7 +567,9 @@ window.SpotifyMusic = (function () {
   }
 
   function sendPlay(q, body, retried) {
+    const gen = sessionGen;
     return api("/me/player/play" + q, { method: "PUT", body: body }).then((r) => {
+      if (gen !== sessionGen) return;
       if (!r) return;
       if (r.ok || r.status === 204) {
         setStatus("connected", "Playing.");
@@ -541,6 +578,7 @@ window.SpotifyMusic = (function () {
         return;
       }
       return r.text().then((txt) => {
+        if (gen !== sessionGen) return;
         let reason = "";
         try { const j = JSON.parse(txt); reason = (j.error && (j.error.reason || j.error.message)) || ""; }
         catch (e) { reason = (txt || "").slice(0, 120); }
@@ -548,6 +586,7 @@ window.SpotifyMusic = (function () {
         if (r.status === 404 && !retried && mode() === "remote") {
           setStatus("connected", "Waking your Spotify device…");
           return loadDevices().then((ds) => {
+            if (gen !== sessionGen) return;
             const d = deviceId2();
             if (!d || !ds.length) {
               releaseToBuiltIn("No Spotify device is available. Open Spotify on your phone or " +
@@ -555,7 +594,7 @@ window.SpotifyMusic = (function () {
               return;
             }
             return api("/me/player", { method: "PUT", body: JSON.stringify({ device_ids: [d], play: true }) })
-              .then(() => sendPlay(remoteQuery(), body, true));
+              .then(() => { if (gen === sessionGen) return sendPlay(remoteQuery(), body, true); });
           });
         }
         const hint = r.status === 404
@@ -564,7 +603,7 @@ window.SpotifyMusic = (function () {
           : r.status === 401 ? " Press CONNECT to sign in again."
           : "";
         releaseToBuiltIn("Spotify refused playback (" + r.status + (reason ? ": " + reason : "") + ")." + hint);
-      }, () => { lastPlayError = { status: r.status, reason: "" };
+      }, () => { if (gen !== sessionGen) return; lastPlayError = { status: r.status, reason: "" };
         setStatus("connected", "Spotify refused playback (" + r.status + ")."); });
     });
   }
@@ -586,7 +625,9 @@ window.SpotifyMusic = (function () {
   }
 
   function loadDevices() {
+    const gen = sessionGen;
     return devicesList().then((ds) => {
+      if (gen !== sessionGen) return [];
       devices = ds;
       const known = deviceId2();
       if (known && !ds.some((d) => d.id === known)) lsDel(K_DEV);
@@ -616,12 +657,15 @@ window.SpotifyMusic = (function () {
     // stacks against the 10 s interval into a request pile-up.
     if (pollBusy || document.hidden) return Promise.resolve();
     pollBusy = true;
-    const done = () => { pollBusy = false; };
+    const gen = sessionGen;
+    const done = () => { if (gen === sessionGen) pollBusy = false; };
     return api("/me/player").then((r) => {
+      if (gen !== sessionGen) return;
       if (!r) return;
       if (r.status === 204) { track = null; paused = true; emit(); return; }   // nothing playing
       if (!r.ok) return;
       return r.json().then((j) => {
+        if (gen !== sessionGen) return;
         const it = j && j.item;
         track = it ? (it.name + " — " + (it.artists || []).map((a) => a.name).join(", ")) : null;
         title = it ? it.name : "";
@@ -653,8 +697,10 @@ window.SpotifyMusic = (function () {
   function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
 
   function connectRemote() {
+    const gen = sessionGen;
     setStatus("connecting", "Looking for your Spotify devices…");
     return validToken().then((t) => {
+      if (gen !== sessionGen) return;
       if (!t) {
         setStatus("configured", readToken()
           ? "Could not renew the Spotify session. Check your connection and try again."
@@ -678,11 +724,23 @@ window.SpotifyMusic = (function () {
      Each one fires and then re-polls shortly after: Spotify applies these
      asynchronously on the target device, so reading back immediately returns
      the previous state and the panel would show the opposite of what happened. */
-  function afterCommand() { setTimeout(pollNowPlaying, 600); }
+  function afterCommand(gen = sessionGen) {
+    if (gen !== sessionGen) return;
+    const timer = setTimeout(() => {
+      commandTimers.delete(timer);
+      if (gen === sessionGen) pollNowPlaying();
+    }, 600);
+    commandTimers.add(timer);
+  }
+  function pollAfterCommand(gen) { if (gen === sessionGen) pollNowPlaying(); }
 
   function prev() {
     if (!BACKEND.active()) return;
-    if (mode() === "remote") { api("/me/player/previous" + remoteQuery(), { method: "POST" }).then(afterCommand); return; }
+    if (mode() === "remote") {
+      const gen = sessionGen;
+      api("/me/player/previous" + remoteQuery(), { method: "POST" }).then(() => afterCommand(gen));
+      return;
+    }
     if (player) { try { player.previousTrack(); } catch (e) { /* a broken SDK call must not take the transport down */ } }
   }
   function toggle() {
@@ -692,14 +750,16 @@ window.SpotifyMusic = (function () {
   }
   function setShuffle(on) {
     if (!BACKEND.active() || mode() !== "remote") return;
+    const gen = sessionGen;
     api("/me/player/shuffle?state=" + (on ? "true" : "false") +
-        (deviceId2() ? "&device_id=" + encodeURIComponent(deviceId2()) : ""), { method: "PUT" }).then(afterCommand);
+        (deviceId2() ? "&device_id=" + encodeURIComponent(deviceId2()) : ""), { method: "PUT" }).then(() => afterCommand(gen));
   }
   function setRepeat(next) {
     if (!BACKEND.active() || mode() !== "remote") return;
     if (next !== "off" && next !== "context" && next !== "track") return;
+    const gen = sessionGen;
     api("/me/player/repeat?state=" + next +
-        (deviceId2() ? "&device_id=" + encodeURIComponent(deviceId2()) : ""), { method: "PUT" }).then(afterCommand);
+        (deviceId2() ? "&device_id=" + encodeURIComponent(deviceId2()) : ""), { method: "PUT" }).then(() => afterCommand(gen));
   }
   // Volume is DRAGGED, not clicked: both sliders fire per `oninput`, so one
   // sweep across the track used to send one PUT /me/player/volume per pixel —
@@ -712,9 +772,11 @@ window.SpotifyMusic = (function () {
   function putDeviceVolume(pct) {
     volPend = Math.max(0, Math.min(100, Math.round(pct)));
     if (volTimer !== null) return;
+    const gen = sessionGen;
     volTimer = setTimeout(() => {
       volTimer = null;
       const v = volPend; volPend = null;
+      if (gen !== sessionGen || v === null) return;
       api("/me/player/volume?volume_percent=" + v +
           (deviceId2() ? "&device_id=" + encodeURIComponent(deviceId2()) : ""), { method: "PUT" });
     }, VOL_PUT_MS);
@@ -726,6 +788,7 @@ window.SpotifyMusic = (function () {
     putDeviceVolume(v);
   }
   function searchPlaylists(q) {
+    const gen = sessionGen;
     const term = (q || "").trim();
     if (!term) { results = []; render(); return Promise.resolve([]); }
     return api("/search?type=playlist&limit=10&q=" + encodeURIComponent(term)).then((r) => {
@@ -736,7 +799,10 @@ window.SpotifyMusic = (function () {
         return items.map((p) => ({ name: p.name, uri: p.uri,
           by: (p.owner && p.owner.display_name) || "" }));
       }, () => []);
-    }).then((rs) => { results = rs || []; render(); return results; });
+    }).then((rs) => {
+      if (gen !== sessionGen) return [];
+      results = rs || []; render(); return results;
+    });
   }
   function playUri(uri) {
     if (!uri) return;
@@ -758,7 +824,12 @@ window.SpotifyMusic = (function () {
       if (!BACKEND.active()) return;
       if (!paused) return;                     // already playing: no-op
       if (mode() === "remote") {
-        if (track) { api("/me/player/play" + remoteQuery(), { method: "PUT", body: "{}" }).then(pollNowPlaying); return; }
+        if (track) {
+          const gen = sessionGen;
+          api("/me/player/play" + remoteQuery(), { method: "PUT", body: "{}" })
+            .then(() => pollAfterCommand(gen));
+          return;
+        }
         playChosen();
         return;
       }
@@ -772,7 +843,11 @@ window.SpotifyMusic = (function () {
     },
     stop() {
       if (mode() === "remote") {
-        if (BACKEND.active()) api("/me/player/pause" + remoteQuery(), { method: "PUT" }).then(pollNowPlaying);
+        if (BACKEND.active()) {
+          const gen = sessionGen;
+          api("/me/player/pause" + remoteQuery(), { method: "PUT" })
+            .then(() => pollAfterCommand(gen));
+        }
         return;
       }
       if (player) { try { const p = player.pause(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* a broken SDK call must not take the transport down */ } }
@@ -780,8 +855,9 @@ window.SpotifyMusic = (function () {
     skip() {
       if (!BACKEND.active()) return null;
       if (mode() === "remote") {
+        const gen = sessionGen;
         api("/me/player/next" + remoteQuery(), { method: "POST" })
-          .then(() => setTimeout(pollNowPlaying, 600));   // Spotify needs a beat to settle
+          .then(() => afterCommand(gen));   // Spotify needs a beat to settle
         return track;
       }
       try { player.nextTrack(); } catch (e) { /* a broken SDK call must not take the transport down */ }
@@ -946,12 +1022,13 @@ window.SpotifyMusic = (function () {
   function connect() {
     if (!available()) { setStatus("off", copyOff()); return Promise.resolve(); }
     if (state === "connected") return Promise.resolve();
+    const gen = sessionGen;
     if (mode() === "remote") {
-      return validToken().then((t) => t ? connectRemote()
+      return validToken().then((t) => gen !== sessionGen ? undefined : t ? connectRemote()
         : (readToken() ? setStatus("configured",
           "Could not renew the Spotify session. Check your connection and try again.") : beginAuth()));
     }
-    return validToken().then((t) => t ? bootPlayer()
+    return validToken().then((t) => gen !== sessionGen ? undefined : t ? bootPlayer()
       : (readToken() ? setStatus("configured",
         "Could not renew the Spotify session. Check your connection and try again.") : beginAuth()));
   }
@@ -1161,12 +1238,15 @@ window.SpotifyMusic = (function () {
       const settings = el("pmsettings"); if (settings) settings.hidden = false;
       if (typeof SettingsNav !== "undefined" && SettingsNav.show) SettingsNav.show("audio", false);
     });
-    let searchT = null;
     on("sp-search", "input", (e) => {
       const q = e.target.value;
-      if (searchT) clearTimeout(searchT);
+      if (searchT !== null) clearTimeout(searchT);
       // Debounced: one request per pause in typing, not per keystroke.
-      searchT = setTimeout(() => searchPlaylists(q), 350);
+      const gen = sessionGen;
+      searchT = setTimeout(() => {
+        searchT = null;
+        if (gen === sessionGen) searchPlaylists(q);
+      }, 350);
     });
     on("as-sp-playlist", "change", (e) => {
       activate();

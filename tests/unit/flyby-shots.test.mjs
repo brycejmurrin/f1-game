@@ -616,7 +616,7 @@ test("the menu grid seats YOUR car where the race will start it, in every mode",
     const cars = mk(o.n || 22), player = cars[3];
     let draws = 0;
     const ctx = {
-      cars, player, season: {}, raceGrid: o.rule || "tier", duelMode: !!o.duel,
+      cars, player, season: {}, raceGrid: o.rule || "tier", duelOn: () => !!o.duel,
       isQuali: () => !!o.quali, isTimeTrial: () => !!o.tt, isChampionship: () => !!o.champ, gridFromQuali: () => !!o.qorder,
       quali: { order: () => (o.qorder ? cars.slice().reverse() : null) }, SeasonCal: { grid: () => null, quali: () => false, rank: (a, b) => (a < b ? -1 : 1) },
       Duel: { pick: (cs) => cs.filter((c) => !c.isPlayer).sort((a, b) => b.skill - a.skill)[0] },
@@ -644,6 +644,49 @@ test("a random grid's flyby leaves out the shot of your car", async () => {
     assert.ok(!has(v) && v.length === F.DEFAULT.length - 1, "unknown slot: grid-mine is dropped, the rest stays");
     F.setPlayerSlot(null); assert.equal(F.slotKnown(), false);
     F.setPlayerSlot(11); assert.equal(F.slotKnown(), true);
+    return null;
+  });
+});
+
+test("a duel never leaks into a championship round, a time trial or a quali lap", () => {
+  // duelMode is a sticky SETTING; startRaceBody checked it before isTimeTrial()
+  // with no championship guard, so after one duel a time trial ran with an AI
+  // rival and a season round scored a 2-car race. Every consumer goes through duelOn().
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  assert.match(game, /const duelOn = \(\) => duelMode && !isChampionship\(\) && !isTimeTrial\(\) && !isQuali\(\);/);
+  const uses = game.split("\n").filter((l) => /\bduelMode\b/.test(l) && !/^\s*\/\//.test(l));
+  const bad = uses.filter((l) => !/let duelMode|const duelOn|const duelSetting|set duel\(v\)|get duel\(\)/.test(l));
+  assert.deepEqual(bad, [], "duelMode is read only through duelOn(): " + bad.join(" | "));
+  const lobby = fs.readFileSync(path.join(ROOT, "js/net/lobby.js"), "utf8");
+  assert.match(lobby, /G\.duel = false;/, "a friend race clears duel: the room's grid is every peer's");
+});
+
+test("the loading screen flies only the world built for THIS selection", () => {
+  // A fast tap to RACE! before the menu's idle build ran left the previous
+  // circuit in `track`: the flyby filmed it under the new circuit's card, and a
+  // dark session baked its lamps twice. menuWorld() also checks the build's key.
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  assert.match(game, /const menuWorld = \(\) => !!track && _menuGate\.track === track && _menuGate\.ready === \[trackIdx, raceTimeOfDay, raceWeather\]\.join\("\|"\);/);
+  assert.match(game, /hasWorld: menuWorld\(\),/);
+  const i = game.indexOf("function raceIntro(go)"), body = game.slice(i, game.indexOf("\n}\n", i));
+  for (const call of ["menuGridCars()", "applyRaceSettings()", "FlybySeq.warm(track, flybyShots)"])
+    assert.match(body, new RegExp("if \\(world\\) " + call.replace(/[()]/g, "\\$&")), call + " waits for the right world");
+});
+
+test("warm() plans the opening shots at once and the rest in slices, never through solve()", async () => {
+  await withTrack("monza", async (track, g) => {
+    const F = g.sandbox.FlybySeq, list = F.vary(F.DEFAULT, 11);
+    F.reset(); F.solve(track, 0.5, list); const idxBefore = F.solve(track, 0.5, list).index;
+    F.warm(track, list);
+    // No solve() side effect: the cut tracker still sees the same shot.
+    assert.equal(F.solve(track, 0.5, list).cut, false, "warm() did not disturb solve()'s cut tracking");
+    assert.equal(F.solve(track, 0.5, list).index, idxBefore);
+    for (let k = 0; k < 20; k++) g.flushTimers();   // the VM queues timers; fire the slices by hand
+    // Everything is planned: a solve at each shot's middle is a cache hit (fast).
+    let total = 0; for (const s of list) total += s.dur;
+    let acc = 0, worst = 0;
+    for (const s of list) { const t0 = process.hrtime.bigint(); F.solve(track, (acc + s.dur / 2) / total, list); worst = Math.max(worst, Number(process.hrtime.bigint() - t0) / 1e6); acc += s.dur; }
+    assert.ok(worst < 20, `every shot was pre-planned (worst solve ${worst.toFixed(1)} ms)`);
     return null;
   });
 });

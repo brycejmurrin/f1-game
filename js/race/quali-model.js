@@ -230,11 +230,10 @@ const Quali = (function () {
       // A provisional all-AI sheet is not a weekend result — writing it here is
       // what made every openQuali() throw away a driven grid. Friend races must
       // not stamp Career/season either: the lobby can sit on an active career
-      // save, and netPlay.active() is the "this is a room, not a championship"
-      // bit. (This used to probe NetPlay.isOn(), which exists on neither the
-      // module nor the instance — the guard was dead and a VS FRIEND quali
-      // overwrote the real weekend's stored grid.)
+      // save. The lobby owns qualifying BEFORE NetPlay adopts its sessions;
+      // the active race flag alone cannot identify this phase.
       if (!classification.some((r) => r.human)) return;
+      if (G.netLobby && G.netLobby.qualifying && G.netLobby.qualifying()) return;
       if (G.netPlay && G.netPlay.active && G.netPlay.active()) return;
       if (typeof Career !== "undefined" && Career.conflicted && Career.conflicted()) return;
       if (typeof SeasonCal !== "undefined" && SeasonCal.conflicted && SeasonCal.conflicted()) return;
@@ -261,6 +260,12 @@ const Quali = (function () {
       if (G.season.qualiTrack && here && G.season.qualiTrack !== here) return false;
       const byId = new Map();
       if (G.cars) for (const c of G.cars) byId.set(c.driverId, c);
+      // An imported/older save may name a driver twice or one no longer in
+      // the field. Length alone lets duplicate rows through to order(), which
+      // then grids the same car twice and omits another live car.
+      const ids = raw.map((e) => e && typeof e === "object" ? e.id : e);
+      if (ids.length !== byId.size || new Set(ids).size !== byId.size ||
+          ids.some((id) => !byId.has(id))) return false;
       classification = raw.map((entry, i) => {
         const obj = entry && typeof entry === "object";
         const driverId = obj ? entry.id : entry;

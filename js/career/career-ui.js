@@ -104,6 +104,7 @@ function create(G) {
     card.appendChild(open);
     if (s.used) {
       const id = `${s.flavour}:${s.i}`;
+      const revision = Career.slotRevision(s.flavour, s.i);
       const armed = armedDelete === id;
       const del = el("button", `cr-slot-del${armed ? " armed" : ""}`, armed ? "DELETE?" : "DELETE");
       del.setAttribute("aria-label",
@@ -113,7 +114,7 @@ function create(G) {
         if (G.soundOn) GameAudio.uiTick();
         if (!armed) { armedDelete = id; build(); return; }
         armedDelete = "";
-        Career.deleteSlot(s.flavour, s.i);
+        if (!Career.deleteSlot(s.flavour, s.i, revision).ok) { build(); return; }
         Career.load();
         G.refreshCareerButton();
         build();

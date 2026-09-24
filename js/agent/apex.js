@@ -17,7 +17,11 @@ function create(G) {
 function settled(promise, out) {
   const value = Object.assign({}, out);
   return Object.assign({}, out, {
-    then: (res, rej) => Promise.resolve(promise).then(() => res(value), rej),
+    then: (res, rej) => Promise.resolve(promise).then((result) => {
+      if (result && result.kind === "canceled") return rej(new Error("Race start " + result.reason));
+      if (result === false) return rej(new Error("Race start did not reach the grid"));
+      return res(value);
+    }, rej),
   });
 }
 // The four audio hooks share one precondition. `null` when GameAudio is there,
@@ -1365,7 +1369,7 @@ const api = {
     if (n != null) { c.money = Math.max(0, n | 0); Career.save(); }
     return c.money;
   },
-  careerReset() { Career.clear(); G.refreshCareerButton(); return true; },
+  careerReset() { const result = Career.clear(); if (result.ok) G.refreshCareerButton(); return result; },
   careerFreeMoney(on) { return Career.freeMoney(on); },
   // Hand the live career credits. No argument grants Career.GRANT.
   careerGrant(n) { return Career.grant(n); },
@@ -1407,7 +1411,8 @@ const api = {
     return c;
   },
   careerSlotDelete(flavour, i) {
-    Career.deleteSlot(flavour, i);
+    const result = Career.deleteSlot(flavour, i);
+    if (!result.ok) return null;
     Career.load();               // land on whatever is left, anywhere
     G.refreshCareerButton();
     return Career.slots();
