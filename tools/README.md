@@ -35,6 +35,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 |---|---|---|
 | **lib/chromium-path.mjs** | Derives the Chromium executable from playwright-core's browsers.json revision + the browsers root; run it to print. | playwright-probe |
 | **lib/cli-args.mjs** | Shared CLI flag reader: both `--name=v` and `--name v`, and an unknown flag is an ERROR not a shrug. | — |
+| **lib/flyby-audit.cjs** | Fleet audit of the pre-race FLYBY path (FlybySeq.solve) in the node VM: jumps, lift, ground, grid sightline, pan rate. | playwright-probe |
 | **lib/frame-math.mjs** | Pure framing math for frame-report.mjs: projection, ray-cast vs boxes/terrain, occlusion, horizon, motion, flags. | — |
 | **lib/game-vm-pool.cjs** | Pool of game-vm contexts in worker threads: one circuit's probe per worker, JSON back — assertions stay in the parent. | — |
 | **lib/game-vm.cjs** | Boots js/game.js + `__apex` in a Node VM (renderer/DOM stubbed); `createGame({track})` drives physics, no browser. | — |
