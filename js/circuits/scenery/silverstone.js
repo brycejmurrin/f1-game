@@ -215,8 +215,13 @@
       // Research photo: long low white-grey slab, dark glass band, multi-peak
       // wing roofline with a continuous red/white border on the leading edge.
       // Four bays cover the pit-lane frontage; each bay owns one roof peak so
-      // the silhouette reads as the Wing, not a flat slab. required so a silent
-      // onTrack drop becomes a thrown build (wave-1 Monaco pattern).
+      // the silhouette reads as the Wing, not a flat slab.
+      //
+      // These sit ON the pit lane (sceneryStartFrac 0.02). ALWAYS call
+      // modelGroup — do NOT preflight with onTrack and skip: the engine's pit
+      // complex must supersede all four (models.suppressed, reason
+      // "superseded by the pit complex"), same Portimão pattern pinned by
+      // new-hooks-vm. Skipping the call leaves suppressed=[] and CI red.
       {
         const wingFracs = [0.455, 0.465, 0.475, 0.485];  // on the pit lane under sceneryStartFrac 0.02
         const ROOF_DK = [0.42, 0.44, 0.48];
@@ -225,7 +230,6 @@
         const GLASS_D = [0.10, 0.14, 0.22];
         for (let i = 0; i < wingFracs.length; i++) {
           const a = anchor(k(wingFracs[i]), 1, 16);
-          if (onTrack(a.c[0], a.c[2], 22)) continue;
           const b = [a.r, a.u, a.t];
           // Zig-zag: bays 0/2 peak high, 1/3 dip — angular wing silhouette.
           const peakHi = (i % 2 === 0);
