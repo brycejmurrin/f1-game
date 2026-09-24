@@ -129,13 +129,40 @@ const FlybySeq = (function () {
    *  shot cannot know (both ways may be blocked), and it would swing the framing;
    *  going over the top keeps the subject in the same part of the screen and is
    *  always available. Bounded so a bad shot reads as a high shot, not as orbit. */
+  const CLEAR_M = 2.5;            // metres over a roof the eye is lifted to
   function clearEye(track, eye, margin) {
-    const m = margin === undefined ? 2.5 : margin;
+    const m = margin === undefined ? CLEAR_M : margin;
     for (let i = 0; i < 4; i++) {
       const hit = insideProp(track, eye, m);
       if (!hit) break;
       eye[1] = hit.y + hit.h / 2 + m;
     }
+    return eye;
+  }
+
+  /** NEVER BELOW THE GROUND. `centre` and `landmark` heights are measured from
+   *  a centroid and a prop's middle, not from the ground under the eye, so on a
+   *  hillside (or over a road that runs above the anchor) nothing else stops an
+   *  eye being authored underground: Red Bull Ring's rank-0 landmark is a 34 m
+   *  tower standing in a valley, and landmark1 put the eye 6.1 m below the start
+   *  straight on every sample. Terrain where there is terrain, the road where
+   *  the eye is over it. Part of the PLANNED lift (profileOf), so the camera
+   *  rises into the floor smoothly instead of popping up onto it. */
+  const FLOOR = 1.5;
+  const _fl = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 10 };
+  function groundAt(track, x, z, y) {
+    let g = Tracks.terrainY ? Tracks.terrainY(track, x, z) : null;
+    if (g == null || !isFinite(g)) g = -Infinity;
+    const pr = Tracks.project(track, x, z, null, y);
+    if (pr) {
+      Tracks.sample(track, pr.s, _fl);
+      if (Math.abs(pr.lat) <= (_fl.hw || 10) + 2 && _fl.p[1] > g) g = _fl.p[1];
+    }
+    return g;
+  }
+  function floorEye(track, eye) {
+    const g = groundAt(track, eye[0], eye[2], eye[1]);
+    if (eye[1] < g + FLOOR) eye[1] = g + FLOOR;
     return eye;
   }
 
@@ -151,7 +178,10 @@ const FlybySeq = (function () {
      circuit is recognised by; a grandstand says "motor racing" but not which
      circuit; a `structure` is an assembled hull and only earns a shot when it is
      both tall and mostly solid (Monaco's whole skyline arrives this way). */
-  const LM_WEIGHT = { tower: 3, building: 1.6, gantry: 1.2, grandstand: 1.3, motorhome: 1, structure: 0.9 };
+  // No `gantry`: a gantry spans the road, so "the track side of it" is the
+  // road under it — Buenos Aires's start gantry was its landmark2, framed from
+  // its own footprint. The start line has the grid shots.
+  const LM_WEIGHT = { tower: 3, building: 1.6, grandstand: 1.3, motorhome: 1, structure: 0.9 };
   const LM_MIN_H = 8;             // shorter than this reads as trackside furniture
   // metres — two boxes of one grandstand are one landmark, and so is a CLUSTER:
   // at 80 m Monza's three towers (84 m apart) were ranks 0 and 1, so the second
@@ -161,6 +191,7 @@ const FlybySeq = (function () {
   const LM_SPAN = 0.45;           // how much of a landmark's footprint counts as its framing size
   const LM_MIN_SIZE = 40;         // metres — nothing is framed as if it were smaller
   const LM_NEAR = 220;            // metres from the centreline — beyond this it is scenery, not a landmark
+  const LM_EDGE = 5;              // metres past the road edge — nearer than this it is ON the track, not beside it
 
   function landmarkScore(r) {
     const w = LM_WEIGHT[r.kind];
@@ -179,9 +210,22 @@ const FlybySeq = (function () {
     const scored = [];
     for (let i = 0; i < list.length; i++) {
       const r = list[i];
-      if (TERRAIN.indexOf(r.kind) !== -1) continue;
-      const sc = landmarkScore(r);
-      if (sc > 0) scored.push({ r: r, score: sc });
+      if (TERRAIN.indexOf(r.kind) !== -1 || !LM_WEIGHT[r.kind]) continue;
+      // Scored on the part ABOVE GROUND (lmBase): Hockenheim's stands are 30 m
+      // hulls sunk 16 m into a bank, and Red Bull Ring's tower stands in a
+      // valley — ranked on their hull heights they framed a buried box.
+      const hv = lmH(track, r);
+      const sc = landmarkScore(hv === r.h ? r : Object.assign({}, r, { h: hv }));
+      if (!(sc > 0)) continue;
+      // ON the road is not beside it: a box whose centre is within LM_EDGE of
+      // the road edge straddles the track (a bridge, an overhead sign), and its
+      // "track side" is the tarmac under it.
+      const pr = Tracks.project(track, r.x, r.z);
+      if (pr) {
+        Tracks.sample(track, pr.s, _smp);
+        if (Math.abs(pr.lat) - (_smp.hw || 10) < LM_EDGE) continue;
+      }
+      scored.push({ r: r, score: sc });
     }
     // NEAR THE TRACK, OR IT IS NOT A SHOT. Bahrain's tallest structure is a
     // 126 m tower out in the desert: framed on its own at dusk it is a lit pole
@@ -213,6 +257,21 @@ const FlybySeq = (function () {
     track._fbLandmarks = keep;
     return keep;
   }
+
+  /** Where a landmark's VISIBLE part starts: its hull bottom, or the ground
+   *  under its centre when the hull is sunk into a bank. Cached per record on
+   *  the track, never written onto the shared record. */
+  function lmBase(track, r) {
+    const cache = track._fbLmBase || (track._fbLmBase = new Map());
+    if (cache.has(r)) return cache.get(r);
+    const bottom = r.y - r.h / 2, top = r.y + r.h / 2;
+    const g = groundAt(track, r.x, r.z, top);
+    const base = (isFinite(g) && g > bottom) ? Math.min(g, top) : bottom;
+    cache.set(r, base);
+    return base;
+  }
+  function lmH(track, r) { return r.y + r.h / 2 - lmBase(track, r); }
+  function lmMid(track, r) { return lmBase(track, r) + lmH(track, r) / 2; }
 
   /** Centroid and radius of the whole lap, for the establishing shots. Sampled
    *  from the centreline rather than from props, so an outlying mountain cannot
@@ -264,12 +323,50 @@ const FlybySeq = (function () {
     // on how many corners they have — Monza has 11, Suzuka 18. Naming a ROLE
     // ("the first corner", "something mid-lap") ports; naming corner 14 does not.
     let i;
-    if (n === "first") i = 0;
-    else if (n === "mid") i = Math.floor(cs.length * 0.45);
-    else if (n === "late") i = Math.floor(cs.length * 0.78);
+    if (n === "first") i = roleCorner(track, cs, 0);
+    else if (n === "mid") i = roleCorner(track, cs, Math.floor(cs.length * 0.45));
+    else if (n === "late") i = roleCorner(track, cs, Math.floor(cs.length * 0.78));
     else i = Math.min(Math.max(1, n | 0), cs.length) - 1;
     const c = cs[Math.min(i, cs.length - 1)];
     return (c && typeof c.f === "number") ? c.f * track.total : 0;
+  }
+
+  /* A ROLE NAMES A CORNER WORTH FILMING. The measured list counts kinks and
+     chicane flicks as corners, and a role landing on one filmed a straight:
+     Mont-Tremblant's "first" turns 0 degrees net over +-40 m, Sochi's 20,
+     Jeddah's "late" 17, Buenos Aires's "mid" 21 — and a camera on "the outside"
+     of a chicane is on the inside of its other half (Montreal's late, 42 net of
+     75 swept). A role therefore takes the NEAREST corner (forward first) that
+     turns at least TURN_MIN net over TURN_WIN either side, and a chicane — one
+     that sweeps half as much again as it nets — only at TURN_CHICANE. Numbered
+     corners are the author's own choice and are never moved. */
+  const TURN_WIN = 40, TURN_MIN = 35 * Math.PI / 180, TURN_CHICANE = 45 * Math.PI / 180;
+  const _tA = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 10 };
+  function cornerTurn(track, s) {
+    let net = 0, swept = 0, prev = null;
+    for (let d = -TURN_WIN; d <= TURN_WIN; d += 4) {
+      Tracks.sample(track, wrapS(track, s + d), _tA);
+      const a = Math.atan2(_tA.t[2], _tA.t[0]);
+      if (prev !== null) {
+        const x = Math.atan2(Math.sin(a - prev), Math.cos(a - prev));
+        net += x; swept += Math.abs(x);
+      }
+      prev = a;
+    }
+    return { net: Math.abs(net), swept: swept };
+  }
+  function filmable(track, c) {
+    if (!c || typeof c.f !== "number") return false;
+    const t = cornerTurn(track, c.f * track.total);
+    return t.net >= TURN_MIN && (t.swept <= 1.5 * t.net || t.net >= TURN_CHICANE);
+  }
+  function roleCorner(track, cs, i) {
+    const ok = track._fbFilmable || (track._fbFilmable = cs.map((c) => filmable(track, c)));
+    for (let d = 0; d < cs.length; d++) {
+      if (i + d < cs.length && ok[i + d]) return i + d;
+      if (d && i - d >= 0 && ok[i - d]) return i - d;
+    }
+    return i;
   }
 
   function anchorS(track, pose) {
@@ -303,6 +400,27 @@ const FlybySeq = (function () {
     const a = Math.atan2(bz - r.z, bx - r.x);
     cache.set(r, a);
     return a;
+  }
+
+  /* A LANDMARK SHOT STANDS ON THE TRACK SIDE, NOT A BLOCK BEYOND IT. The eye
+     is `distK` landmark sizes out, and a size is the landmark's HEIGHT, so a
+     170 m Las Vegas tower 60 m from the road put the eye 157-170 m past the
+     track, inside the next tower along, and the planned lift then cleared
+     that one by 40 m. Past LM_REACH beyond the landmark's own distance to the
+     centreline the extra distance is taken at a quarter: the dolly between the
+     two ends survives, the overshoot does not. */
+  const LM_REACH = 40, LM_REACH_MIN = 60;
+  function lmNear(track, r) {
+    const cache = track._fbLmNear || (track._fbLmNear = new Map());
+    if (cache.has(r)) return cache.get(r);
+    const pr = Tracks.project(track, r.x, r.z);
+    const d = pr ? Math.abs(pr.lat) : 0;
+    cache.set(r, d);
+    return d;
+  }
+  function lmDist(track, r, d) {
+    const cap = Math.max(LM_REACH_MIN, lmNear(track, r) + LM_REACH);
+    return d <= cap ? d : cap + (d - cap) * 0.25;
   }
 
   /** +1 when a corner turns LEFT (its outside is the road's +right), -1 when it
@@ -366,8 +484,14 @@ const FlybySeq = (function () {
       // establishing shot became a map of the circuit with no scenery, no
       // scale and nothing to recognise. These bounds are what a helicopter
       // shot actually lives in.
-      const d = Math.max(200, Math.min(850, (pose.distR === undefined ? 1.4 : pose.distR) * b.rad));
-      const h = Math.max(55, Math.min(190, (pose.yR === undefined ? 0.5 : pose.yR) * b.rad));
+      // ZERO MEANS THE CENTROID. The clamps are for a camera; the establishing
+      // shots' LOOK pose is {distR: 0, yR: 0}, "at the middle of the lap", and
+      // clamping it too aimed every one of them at a point 200 m out towards the
+      // start line and 55 m up — off-centre and above the horizon of a low shot.
+      const dR = pose.distR === undefined ? 1.4 : pose.distR;
+      const yR = pose.yR === undefined ? 0.5 : pose.yR;
+      const d = dR > 0 ? Math.max(C_DMIN, Math.min(C_DMAX, dR * b.rad)) : 0;
+      const h = yR > 0 ? Math.max(C_HMIN, Math.min(C_HMAX, yR * b.rad)) : yR * b.rad;
       const a = b.face + (pose.bear || 0);
       out[0] = b.x + Math.cos(a) * d;
       out[1] = b.y + h + (pose.y || 0);
@@ -379,7 +503,15 @@ const FlybySeq = (function () {
     // out than a grandstand without a per-circuit number.
     if (pose.at === "landmark") {
       const lm = landmarks(track);
-      if (!lm.length) return posePoint(track, { at: "start", off: pose.off || 0, x: pose.x, y: pose.y || 20 }, out);
+      // NO LANDMARK: the whole circuit instead. This used to be "start + 20 m",
+      // which for a LOOK pose sat 8 m above an eye that the same fallback put
+      // at start + 12 m — the camera stared straight up. A whole-circuit pose
+      // keeps an eye an eye and a look a look (solve() swaps the whole shot for
+      // landmarkFallback(); this is for callers that solve one pose).
+      if (!lm.length) {
+        const eye = (pose.distK || 0) > 0;
+        return posePoint(track, { at: "centre", bear: pose.bear || 0, distR: eye ? 0.8 : 0, yR: eye ? 0.25 : 0 }, out);
+      }
       const r = lm[Math.min(pose.rank || 0, lm.length - 1)];
       // HEIGHT FIRST, footprint at a discount. The longest side made a 162 m x
       // 21 m grandstand "162 m big", so Monza's was framed from ~290 m as a
@@ -387,11 +519,12 @@ const FlybySeq = (function () {
       // floor, because a shot's `y` is in metres: Bahrain's 15 m pavilion,
       // framed from 1.6 of its own size, put a 12 m-high eye 29 m away looking
       // down at the roof.
-      const size = lmSize(r);
-      const d = (pose.distK === undefined ? 0 : pose.distK) * size;
+      // Heights are of the part ABOVE GROUND (lmBase), centred on its middle.
+      const size = lmSize(track, r);
+      const d = lmDist(track, r, (pose.distK === undefined ? 0 : pose.distK) * size);
       const a = lmFace(track, r) + (pose.bear || 0);
       out[0] = r.x + Math.cos(a) * d;
-      out[1] = r.y + (pose.yK === undefined ? 0 : pose.yK) * r.h + (pose.y || 0);
+      out[1] = lmMid(track, r) + (pose.yK === undefined ? 0 : pose.yK) * lmH(track, r) + (pose.y || 0);
       out[2] = r.z + Math.sin(a) * d;
       return out;
     }
@@ -476,7 +609,7 @@ const FlybySeq = (function () {
     return pose;
   }
 
-  function lmSize(r) { return Math.max(LM_MIN_SIZE, r.h, LM_SPAN * Math.max(r.w, r.d)); }
+  function lmSize(track, r) { return Math.max(LM_MIN_SIZE, lmH(track, r), LM_SPAN * Math.max(r.w, r.d)); }
 
   /** The nearest landmark to `p` in XZ as {rank, r, d}, or null. */
   function nearestLandmark(track, p) {
@@ -494,7 +627,10 @@ const FlybySeq = (function () {
     const i = Math.max(0, Math.min(rank | 0, lm.length - 1)), r = lm[i];
     const d = Math.hypot(p[0] - r.x, p[2] - r.z);
     const bear = d > 1e-6 ? wrapAng(Math.atan2(p[2] - r.z, p[0] - r.x) - lmFace(track, r)) : 0;
-    return { at: "landmark", rank: i, bear: r5(bear), distK: r5(d / lmSize(r)), yK: 0, y: r2(p[1] - r.y) };
+    // lmDist() inverted: past the reach cap a world metre is four authored ones.
+    const cap = Math.max(LM_REACH_MIN, lmNear(track, r) + LM_REACH);
+    const da = d <= cap ? d : cap + (d - cap) * 4;
+    return { at: "landmark", rank: i, bear: r5(bear), distK: r5(da / lmSize(track, r)), yK: 0, y: r2(p[1] - lmMid(track, r)) };
   }
 
   /** A world point → the pose that names it, with its round-trip miss.
@@ -517,7 +653,7 @@ const FlybySeq = (function () {
       const trackMax = opts.trackMax == null ? 80 : opts.trackMax;
       if (pr.dist > trackMax) {
         const nl = nearestLandmark(track, p);
-        if (nl && nl.d <= 3 * lmSize(nl.r)) pose = landmarkPose(track, p, nl.rank);
+        if (nl && nl.d <= 3 * lmSize(track, nl.r)) pose = landmarkPose(track, p, nl.rank);
         else pose = centrePose(track, p);
       }
     }
@@ -537,7 +673,7 @@ const FlybySeq = (function () {
     let lookOpts = { at: "track" };
     if (e.pose.at === "landmark") {
       const nl = nearestLandmark(track, target);
-      if (nl && nl.rank === e.pose.rank && nl.d <= lmSize(nl.r)) lookOpts = { at: "landmark", rank: nl.rank };
+      if (nl && nl.rank === e.pose.rank && nl.d <= lmSize(track, nl.r)) lookOpts = { at: "landmark", rank: nl.rank };
     }
     const t = poseFromWorld(track, target, lookOpts);
     const f = Math.round((fov || 50) * 10) / 10;
@@ -730,20 +866,21 @@ const FlybySeq = (function () {
       if (at < acc + (list[idx].dur || 0)) break;
       acc += list[idx].dur || 0;
     }
-    const shot = list[idx];
+    const shot = landmarkFallback(track, list[idx]);
     const dur = shot.dur || 1;
     const t = Math.max(0, Math.min(1, (at - acc) / dur));
     const e = (EASE[shot.ease] || EASE.inOut)(t);
 
-    lerpPose(track, shot.eye[0], shot.eye[1], e, _eye);
-    lerpPose(track, shot.look[0], shot.look[1], e, _tgt);
+    // The PLAN is the authored shot after every per-shot correction (grid
+    // sightline, corner step-in, pan budget, lift profile) — see planShot().
+    const plan = planShot(track, shot, dur / total);
+    lerpPose(track, plan.eye[0], plan.eye[1], e, _eye);
+    lerpPose(track, plan.look[0], plan.look[1], e, _tgt);
     const authoredY = _eye[1];
     // A shot that runs low along the track is trusted as authored (see onRoadPose).
-    if (!(onRoadPose(shot.eye[0]) && onRoadPose(shot.eye[1]))) {
-      const plan = planShot(track, shot);
-      if (plan.eye !== shot.eye) lerpPose(track, plan.eye[0], plan.eye[1], e, _eye);
+    if (!plan.onRoad) {
       _eye[1] += liftAt(plan.prof, e);
-      clearEye(track, _eye);   // safety net only: the profile already cleared every sample
+      floorEye(track, clearEye(track, _eye));   // safety net only: the profile already cleared every sample
     }
     // How far the clearance had to lift this eye. A shot authored beside a
     // building lifts a metre or two; one authored INSIDE a grandstand lifts
@@ -778,42 +915,289 @@ const FlybySeq = (function () {
      least-lifted plan wins. Cached per shot object on the track; an edited
      list is new objects and recomputes. */
   const LIFT_N = 32, LIFT_W = 0.3, LIFT_OK = 4, IN_STEP = 1.5, IN_MIN = 9;
+
+  /* TREES ARE OBSTACLES TO A PLAN, NOT TO A FRAME. Canopies are not in the
+     solid set — a camera brushing a hedge is not a camera inside a wall, and
+     lifting every frame over every pine would make forest circuits all crane
+     — but a PLANNED eye should not sit in one: the frame report found Monza's
+     turn-first eye inside a stone-pine canopy, a screen of leaves. So the
+     plan's profile clears tall trees too (TREE_H up, their full box, TREE_M
+     over the top), which is what the step-in then works to avoid, and the
+     per-frame safety net (clearEye) still ignores them. */
+  const TREES = ["pine", "stonePine", "cypress", "broadleafFall", "palm", "acacia", "tree"];
+  const TREE_H = 8, TREE_M = 1;
+  function treeBlockers(track) {
+    if (track._fbTrees) return track._fbTrees;
+    const out = [];
+    const list = track.props && track.props.list;
+    if (list) for (let i = 0; i < list.length; i++) {
+      const r = list[i];
+      if (r && r.h >= TREE_H && TREES.indexOf(r.kind) !== -1) out.push(r);
+    }
+    track._fbTrees = out;
+    return out;
+  }
+  function clearTrees(track, eye) {
+    const b = treeBlockers(track);
+    for (let i = 0; i < b.length; i++) {
+      const r = b[i];
+      if (Math.abs(eye[0] - r.x) < r.w / 2 && Math.abs(eye[2] - r.z) < r.d / 2 &&
+          eye[1] > r.y - r.h / 2 && eye[1] < r.y + r.h / 2 + TREE_M) eye[1] = r.y + r.h / 2 + TREE_M;
+    }
+    return eye;
+  }
+
   const _lp = [0, 0, 0];
+  /* The profile is SAMPLED, and the per-frame safety net is not: an eye that
+     grazes a box's corner between two samples was lifted 27 m for one frame
+     at Sochi's turn-late. So the plan clears solids with the safety net's
+     margin PLUS half the widest gap between its samples — anything the net
+     could catch between two samples, the plan has already cleared. */
+  const _lq = [0, 0, 0];
   function profileOf(track, eye0, eye1) {
     const prof = new Float32Array(LIFT_N + 1);
-    let max = 0;
+    let max = 0, gap = 0;
+    lerpPose(track, eye0, eye1, 0, _lq);
+    for (let j = 1; j <= LIFT_N; j++) {
+      lerpPose(track, eye0, eye1, j / LIFT_N, _lp);
+      gap = Math.max(gap, Math.hypot(_lp[0] - _lq[0], _lp[1] - _lq[1], _lp[2] - _lq[2]));
+      _lq[0] = _lp[0]; _lq[1] = _lp[1]; _lq[2] = _lp[2];
+    }
+    const m = CLEAR_M + gap / 2 + 0.25;
     for (let j = 0; j <= LIFT_N; j++) {
       lerpPose(track, eye0, eye1, j / LIFT_N, _lp);
       const y0 = _lp[1];
-      clearEye(track, _lp);
+      for (let k = 0; k < 3; k++) {
+        const y = _lp[1];
+        floorEye(track, clearTrees(track, clearEye(track, _lp, m)));
+        if (_lp[1] === y) break;
+      }
       prof[j] = _lp[1] - y0;
       if (prof[j] > max) max = prof[j];
     }
-    return { prof: prof, max: max };
+    return { prof: bridge(prof), max: max };
   }
+  /* A LIFT HOLDS ACROSS A SHORT GAP. Two obstructions a little apart left the
+     faded profile with a valley between them, and the camera dipped 8 m and
+     rose again inside one shot (Mont-Tremblant's turn-late, through a pine
+     wood with one clearing) — a bob, and at 20 m up a fast pitch. A valley
+     narrower than BRIDGE of the shot is filled at the lower of its two sides. */
+  const BRIDGE = 0.6;
+  function bridge(prof) {
+    const n = prof.length, w = Math.round(BRIDGE * (n - 1)), out = new Float32Array(n);
+    for (let j = 0; j < n; j++) {
+      let l = 0, r = 0;
+      for (let i = Math.max(0, j - w); i <= j; i++) if (prof[i] > l) l = prof[i];
+      for (let i = j; i <= Math.min(n - 1, j + w); i++) if (prof[i] > r) r = prof[i];
+      out[j] = Math.max(prof[j], Math.min(l, r));
+    }
+    return out;
+  }
+  /** A corner eye k steps towards the road; a landmark eye k steps towards its
+   *  landmark (LM_STEP of the distance each, never under LM_IN_MIN of it). */
+  const LM_STEP = 0.08, LM_IN_MIN = 0.6;
   function inset(pose, k) {
+    if (pose.at === "landmark") {
+      if (!((pose.distK || 0) > 0)) return pose;
+      const o = Object.assign({}, pose);
+      o.distK = pose.distK * Math.max(LM_IN_MIN, 1 - k * LM_STEP);
+      return o;
+    }
     const x = pose.x || 0, ax = Math.abs(x);
     if (pose.at !== "corner" || ax <= IN_MIN) return pose;
     const o = Object.assign({}, pose);
     o.x = (x > 0 ? 1 : -1) * Math.max(IN_MIN, ax - k * IN_STEP);
     return o;
   }
-  function planShot(track, shot) {
-    const cache = track._fbPlan || (track._fbPlan = new WeakMap());
-    let plan = cache.get(shot);
-    if (plan) return plan;
-    const e0 = shot.eye[0], e1 = shot.eye[1];
-    let best = profileOf(track, e0, e1), eye = shot.eye;
-    if (best.max > LIFT_OK && (e0.at === "corner" || e1.at === "corner")) {
+
+  /* NO LANDMARK TO FILM. A circuit with one landmark filmed it twice (the
+     rank clamps), and one with none filmed the start line from 20 m up. A
+     landmark shot whose rank this circuit does not have becomes a whole-circuit
+     shot from a side the establishing shots do not use (FB_BEAR, by rank), so
+     the sequence still has as many different pictures as it has shots. Cached
+     per shot object, like the plan. */
+  const FB_BEAR = [1.25, -1.75];
+  function landmarkFallback(track, shot) {
+    let rank = -1;
+    const poses = [shot.eye[0], shot.eye[1], shot.look[0], shot.look[1]];
+    for (let i = 0; i < 4; i++) if (poses[i] && poses[i].at === "landmark") rank = Math.max(rank, poses[i].rank || 0);
+    if (rank < 0 || rank < landmarks(track).length) return shot;
+    const cache = track._fbFallback || (track._fbFallback = new WeakMap());
+    let fb = cache.get(shot);
+    if (fb) return fb;
+    const bear = FB_BEAR[Math.min(rank, FB_BEAR.length - 1)];
+    fb = Object.assign({}, shot, {
+      eye: [{ at: "centre", bear: bear - 0.1, distR: 0.75, yR: 0.24 },
+            { at: "centre", bear: bear + 0.1, distR: 0.66, yR: 0.2 }],
+      look: [{ at: "centre", distR: 0, yR: 0 }, { at: "centre", distR: 0, yR: 0 }],
+    });
+    cache.set(shot, fb);
+    return fb;
+  }
+
+  /* A SIGHTLINE DOWN THE GRID STAYS OVER THE GRID. The grid shots look 60-110
+     m up the road from an eye on the centreline; on a grid that runs out of a
+     bend (Bahrain's, Jeddah's, Magny-Cours's) that chord crossed the infield —
+     13.6 m past the road edge at Bahrain, a crane shot of the inside
+     grandstand. A shot whose eye runs down the road (onRoadPose) and whose
+     look is a road pose too has each look's LEAD over its eye shortened, in
+     steps, until the chord stays within SIGHT_EDGE of the road edge at every
+     sample, never below SIGHT_MIN of the authored lead. */
+  const SIGHT_EDGE = 1, SIGHT_MIN = 0.3;
+  const _sa = [0, 0, 0], _sb = [0, 0, 0], _sm = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 10 };
+  function arcDelta(track, a, b) {
+    const total = track.total || 1;
+    let d = anchorS(track, b) - anchorS(track, a);
+    while (d > total / 2) d -= total;
+    while (d < -total / 2) d += total;
+    return d;
+  }
+  function sightOff(track, eye, look) {
+    let worst = -Infinity;
+    for (let j = 0; j <= 4; j++) {
+      lerpPose(track, eye[0], eye[1], j / 4, _sa);
+      lerpPose(track, look[0], look[1], j / 4, _sb);
+      for (let k = 1; k <= 8; k++) {
+        const f = k / 8;
+        const pr = Tracks.project(track, _sa[0] + (_sb[0] - _sa[0]) * f, _sa[2] + (_sb[2] - _sa[2]) * f);
+        if (!pr) continue;
+        Tracks.sample(track, pr.s, _sm);
+        const off = Math.abs(pr.lat) - (_sm.hw || 10);
+        if (off > worst) worst = off;
+      }
+    }
+    return worst;
+  }
+  function planLook(track, eye, look) {
+    if (!(onRoadPose(eye[0]) && onRoadPose(eye[1]) && trackAnchored(look[0]) && trackAnchored(look[1]) &&
+          look[0].at !== "corner" && look[1].at !== "corner")) return look;
+    if (sightOff(track, eye, look) <= SIGHT_EDGE) return look;
+    const lead = [arcDelta(track, eye[0], look[0]), arcDelta(track, eye[1], look[1])];
+    let best = look;
+    for (let f = 0.9; f >= SIGHT_MIN - 1e-9; f -= 0.1) {
+      const cand = [0, 1].map((i) => Object.assign({}, look[i], { off: (look[i].off || 0) - (1 - f) * lead[i] }));
+      best = cand;
+      if (sightOff(track, eye, cand) <= SIGHT_EDGE) break;
+    }
+    return best;
+  }
+
+  /* PANS HAVE A SPEED LIMIT. Eye and look are interpolated separately, so a
+     corner shot whose eye sweeps round the outside of a hairpin while its look
+     slides through it turned the view 150-200 degrees a second at the ease's
+     peak (Bahrain's turn-late 206, Monaco's turn-mid 152) — a whip pan, read
+     as a glitch. The plan measures the peak rate over REF_S (the loading
+     screen's FLY_MS; the unit test pins the two together) and, while it is
+     over PAN_MAX, squeezes the shot's travel about its middle (both pairs, the
+     same factor), down to PAN_MIN_K of it. */
+  const REF_S = 24, PAN_MAX = 40 * Math.PI / 180, PAN_K = 0.85, PAN_MIN_K = 0.1, PAN_N = 48;
+  const _pe = [0, 0, 0], _pt = [0, 0, 0];
+  function panRate(track, shot, frac, eye, look, prof) {
+    const ease = EASE[shot.ease] || EASE.inOut;
+    let peak = 0, px = 0, py = 0, pz = 0;
+    for (let j = 0; j <= PAN_N; j++) {
+      const e = ease(j / PAN_N);
+      lerpPose(track, eye[0], eye[1], e, _pe);
+      if (prof) _pe[1] += liftAt(prof, e);
+      lerpPose(track, look[0], look[1], e, _pt);
+      let dx = _pt[0] - _pe[0], dy = _pt[1] - _pe[1], dz = _pt[2] - _pe[2];
+      const l = Math.hypot(dx, dy, dz) || 1;
+      dx /= l; dy /= l; dz /= l;
+      if (j) {
+        const a = Math.acos(Math.max(-1, Math.min(1, dx * px + dy * py + dz * pz)));
+        if (a > peak) peak = a;
+      }
+      px = dx; py = dy; pz = dz;
+    }
+    return peak * PAN_N / (Math.max(1e-6, frac) * REF_S);
+  }
+  function squeeze(track, pair, k) {
+    const a = pair[0], b = pair[1];
+    if (trackAnchored(a) && trackAnchored(b)) {
+      const d = arcDelta(track, a, b) * (1 - k) / 2;
+      if (!d) return pair;
+      return [Object.assign({}, a, { off: (a.off || 0) + d }), Object.assign({}, b, { off: (b.off || 0) - d })];
+    }
+    if (a.at === b.at && (a.at === "centre" || a.at === "landmark") && (a.bear || 0) !== (b.bear || 0)) {
+      const d = ((b.bear || 0) - (a.bear || 0)) * (1 - k) / 2;
+      return [Object.assign({}, a, { bear: (a.bear || 0) + d }), Object.assign({}, b, { bear: (b.bear || 0) - d })];
+    }
+    return pair;
+  }
+
+  /** Eye poses with the least lift: authored, else stepped in (corners towards
+   *  the road, landmarks towards the landmark), the least-lifted winning. */
+  function planEye(track, eye) {
+    const e0 = eye[0], e1 = eye[1];
+    let best = profileOf(track, e0, e1), out = eye;
+    if (best.max > LIFT_OK && (e0.at === "corner" || e1.at === "corner" || e0.at === "landmark" || e1.at === "landmark")) {
       for (let k = 1; k <= 8; k++) {
         const a = inset(e0, k), b = inset(e1, k);
         if (a === e0 && b === e1) break;
         const p = profileOf(track, a, b);
-        if (p.max < best.max) { best = p; eye = [a, b]; }
+        if (p.max < best.max) { best = p; out = [a, b]; }
         if (p.max <= LIFT_OK) break;
       }
+      // STEPPING IN CAN RUN OUT OF ROOM: a thin structure or a treeline standing
+      // AT the fence (Sochi's turn-mid, 16 m of sparse hull at 9 m out) is in
+      // the way at every inset. Stepping OUT past it, OUT_STEP at a time to
+      // OUT_MAX, is the other side of the same obstacle; still the least lift wins.
+      for (let k = 1; best.max > LIFT_OK && k <= OUT_N; k++) {
+        const a = outset(e0, k), b = outset(e1, k);
+        if (a === e0 && b === e1) break;
+        const p = profileOf(track, a, b);
+        if (p.max < best.max - 0.5) { best = p; out = [a, b]; }
+      }
+      // Last, SLIDE the move: a corner eye along the arc, a landmark eye round
+      // its landmark. An obstruction at one END of a move (Istanbul's turn-mid
+      // began inside a 24 m hull and craned down out of it) is often a few
+      // metres from a clean start.
+      const base = out;
+      for (let i = 0; best.max > LIFT_OK && i < NUDGE.length; i++) {
+        const a = nudge(base[0], NUDGE[i]), b = nudge(base[1], NUDGE[i]);
+        if (a === base[0] && b === base[1]) continue;
+        const p = profileOf(track, a, b);
+        if (p.max < best.max - 0.5) { best = p; out = [a, b]; }
+      }
     }
-    plan = { eye: eye, prof: best.prof };
+    return { eye: out, prof: best.prof };
+  }
+  const NUDGE = [1, -1, 2, -2];
+  function nudge(pose, k) {
+    if (pose.at === "corner") return Object.assign({}, pose, { off: (pose.off || 0) + k * 8 });
+    if (pose.at === "landmark" && (pose.distK || 0) > 0) return Object.assign({}, pose, { bear: (pose.bear || 0) + k * 0.2 });
+    return pose;
+  }
+  const OUT_STEP = 2, OUT_N = 6, OUT_MAX = 30;
+  function outset(pose, k) {
+    const x = pose.x || 0, ax = Math.abs(x);
+    if (pose.at !== "corner" || !x) return pose;
+    const o = Object.assign({}, pose);
+    o.x = (x > 0 ? 1 : -1) * Math.min(OUT_MAX, ax + k * OUT_STEP);
+    return o;
+  }
+
+  function planShot(track, shot, frac) {
+    const cache = track._fbPlan || (track._fbPlan = new WeakMap());
+    let plan = cache.get(shot);
+    if (plan && plan.frac === frac) return plan;
+    const onRoad = onRoadPose(shot.eye[0]) && onRoadPose(shot.eye[1]);
+    const noLift = new Float32Array(LIFT_N + 1);
+    const baseLook = planLook(track, shot.eye, shot.look);
+    let eye = shot.eye, look = baseLook;
+    let pe = onRoad ? { eye: eye, prof: noLift } : planEye(track, eye);
+    let k = 1;
+    while (panRate(track, shot, frac, pe.eye, look, pe.prof) > PAN_MAX && k * PAN_K >= PAN_MIN_K) {
+      k *= PAN_K;
+      const ey = squeeze(track, shot.eye, k), lk = squeeze(track, baseLook, k);
+      if (ey === shot.eye && lk === baseLook) break;
+      eye = ey;
+      pe = onRoad ? { eye: ey, prof: noLift } : planEye(track, ey);
+      look = lk;
+    }
+    // The squeezed look keeps the sightline rule: re-plan it against the eye.
+    if (look !== shot.look) look = planLook(track, pe.eye, look);
+    plan = { eye: pe.eye, look: look, prof: pe.prof, onRoad: onRoad, frac: frac, squeeze: k };
     cache.set(shot, plan);
     return plan;
   }
@@ -832,12 +1216,12 @@ const FlybySeq = (function () {
   function reset() { _lastIdx = -1; }
 
   return {
-    solve, reset, clearEye, insideProp, blockers, isSolid, onRoadPose,
-    landmarks, bounds, landmarkScore,
-    anchorS, posePoint, cornerS, cornerSide, lmFace,
+    solve, reset, clearEye, floorEye, groundAt, insideProp, blockers, isSolid, onRoadPose,
+    landmarks, bounds, landmarkScore, lmBase, landmarkFallback, planShot, treeBlockers,
+    anchorS, posePoint, cornerS, cornerSide, cornerTurn, lmFace,
     poseFromWorld, shotFromView, nearestCorner,
     DEFAULT, EASE,
-    POLE_BACK, GRID_SPACING, GRID_ROWS, MIN_FILL, MIN_H, FAR, FOG, NEAR, FENCE,
+    POLE_BACK, GRID_SPACING, GRID_ROWS, MIN_FILL, MIN_H, FAR, FOG, NEAR, FENCE, REF_S, PAN_MAX,
   };
 })();
 Object.freeze(FlybySeq);
