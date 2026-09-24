@@ -387,7 +387,7 @@ const FlybySeq = (function () {
       // floor, because a shot's `y` is in metres: Bahrain's 15 m pavilion,
       // framed from 1.6 of its own size, put a 12 m-high eye 29 m away looking
       // down at the roof.
-      const size = Math.max(LM_MIN_SIZE, r.h, LM_SPAN * Math.max(r.w, r.d));
+      const size = lmSize(r);
       const d = (pose.distK === undefined ? 0 : pose.distK) * size;
       const a = lmFace(track, r) + (pose.bear || 0);
       out[0] = r.x + Math.cos(a) * d;
@@ -402,6 +402,150 @@ const FlybySeq = (function () {
     out[1] = _smp.p[1] + (pose.y || 0);
     out[2] = _smp.p[2] + _smp.r[2] * x;
     return out;
+  }
+
+  // ---- the inverse: a world point back to a pose ---------------------------
+  //
+  // THE FREE CAMERA'S "COPY AS FLYBY POSE". A camera flown to a good spot is a
+  // world point, and a world point is exactly what a shot list must not hold
+  // (see the header: it names a different picture on every circuit). This
+  // re-expresses the point in the anchor it is nearest, so the result can be
+  // pasted into the editor and still means "just outside turn 3" rather than
+  // "x = 412". Every answer is re-solved through posePoint() and the miss is
+  // reported as `err`, so a caller never has to trust the inversion.
+
+  const _inv = [0, 0, 0];
+  const r2 = (n) => Math.round(n * 100) / 100;
+  const r5 = (n) => Math.round(n * 1e5) / 1e5;
+  function wrapAng(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
+
+  /** Arc distance from `s` to the nearest corner apex, signed along the lap. */
+  function nearestCorner(track, s) {
+    cornerS(track, 1);                           // fills track._fbCorners
+    const cs = track._fbCorners || [], total = track.total || 1;
+    let best = null;
+    for (let i = 0; i < cs.length; i++) {
+      if (!cs[i] || typeof cs[i].f !== "number") continue;
+      let off = s - cs[i].f * total;
+      off -= Math.round(off / total) * total;    // wrap into (-total/2, total/2]
+      if (!best || Math.abs(off) < Math.abs(best.off)) best = { n: i + 1, off };
+    }
+    return best;
+  }
+
+  function trackPose(track, p, opts) {
+    const pr = Tracks.project(track, p[0], p[2]);
+    // project() measures `lat` along the interpolated right vector from the
+    // nearest point on the node CHORD, but that vector is not square to the
+    // chord inside a corner, and posePoint() walks it from sample(s). At 18 m
+    // out on a Monza corner that is 0.8 m of miss. A few Newton steps in the
+    // XZ plane solve posePoint's own equation, p = sample(s).p + r(s) * x.
+    let s = pr.s, x = pr.lat;
+    for (let it = 0; it < 4; it++) {
+      Tracks.sample(track, s, _smp);
+      const ex = p[0] - _smp.p[0] - _smp.r[0] * x, ez = p[2] - _smp.p[2] - _smp.r[2] * x;
+      const tl = Math.hypot(_smp.t[0], _smp.t[2]) || 1, rl = Math.hypot(_smp.r[0], _smp.r[2]) || 1;
+      s += (ex * _smp.t[0] + ez * _smp.t[2]) / tl;
+      x += (ex * _smp.r[0] + ez * _smp.r[2]) / rl / rl;
+    }
+    s = wrapS(track, s); pr.s = s; pr.lat = x;
+    Tracks.sample(track, s, _smp);
+    const y = r2(p[1] - _smp.p[1]);
+    const win = opts.cornerWindow == null ? 150 : opts.cornerWindow;
+    const c = opts.at === "start" ? null : nearestCorner(track, pr.s);
+    if (c && (opts.at === "corner" || Math.abs(c.off) <= win)) {
+      // A corner's +x is its OUTSIDE (poseX multiplies by cornerSide), and the
+      // side is ±1, so dividing it back out is multiplying by it.
+      return { at: "corner", n: c.n, off: r2(c.off), x: r2(pr.lat * cornerSide(track, c.n)), y };
+    }
+    const total = track.total || 1;
+    return { at: "start", off: r2(pr.s > total / 2 ? pr.s - total : pr.s), x: r2(pr.lat), y };
+  }
+
+  // posePoint's helicopter clamps, mirrored: a `centre` pose cannot say "closer
+  // than 200 m" or "further than 850 m", so outside them it is not an answer.
+  const C_DMIN = 200, C_DMAX = 850, C_HMIN = 55, C_HMAX = 190;
+  function centrePose(track, p) {
+    const b = bounds(track);
+    const d = Math.hypot(p[0] - b.x, p[2] - b.z);
+    if (d < C_DMIN || d > C_DMAX) return null;
+    const dy = p[1] - b.y, h = Math.max(C_HMIN, Math.min(C_HMAX, dy));
+    const pose = { at: "centre", bear: r5(wrapAng(Math.atan2(p[2] - b.z, p[0] - b.x) - b.face)),
+      distR: r5(d / b.rad), yR: r5(h / b.rad) };
+    if (Math.abs(dy - h) > 0.005) pose.y = r2(dy - h);   // the part the clamp cannot carry
+    return pose;
+  }
+
+  function lmSize(r) { return Math.max(LM_MIN_SIZE, r.h, LM_SPAN * Math.max(r.w, r.d)); }
+
+  /** The nearest landmark to `p` in XZ as {rank, r, d}, or null. */
+  function nearestLandmark(track, p) {
+    const lm = landmarks(track);
+    let best = null;
+    for (let i = 0; i < lm.length; i++) {
+      const d = Math.hypot(p[0] - lm[i].x, p[2] - lm[i].z);
+      if (!best || d < best.d) best = { rank: i, r: lm[i], d };
+    }
+    return best;
+  }
+  function landmarkPose(track, p, rank) {
+    const lm = landmarks(track);
+    if (!lm.length) return null;
+    const i = Math.max(0, Math.min(rank | 0, lm.length - 1)), r = lm[i];
+    const d = Math.hypot(p[0] - r.x, p[2] - r.z);
+    const bear = d > 1e-6 ? wrapAng(Math.atan2(p[2] - r.z, p[0] - r.x) - lmFace(track, r)) : 0;
+    return { at: "landmark", rank: i, bear: r5(bear), distK: r5(d / lmSize(r)), yK: 0, y: r2(p[1] - r.y) };
+  }
+
+  /** A world point → the pose that names it, with its round-trip miss.
+   *  opts.at: "auto" (default) | "track" | "corner" | "start" | "centre" | "landmark"
+   *  opts.rank (landmark), opts.cornerWindow (m, default 150), opts.trackMax
+   *  (m from the centreline beyond which "auto" stops anchoring on the road,
+   *  default 80). "auto" picks the road when near it, then a landmark the point
+   *  is within three sizes of, then the whole circuit — and the road whenever
+   *  the others cannot represent the point, since a track pose always can. */
+  function poseFromWorld(track, p, opts) {
+    opts = opts || {};
+    const at = opts.at || "auto";
+    let pose = null;
+    if (at === "centre") pose = centrePose(track, p);
+    else if (at === "landmark") {
+      const nl = opts.rank == null ? nearestLandmark(track, p) : null;
+      pose = landmarkPose(track, p, opts.rank != null ? opts.rank : (nl ? nl.rank : 0));
+    } else if (at === "auto") {
+      const pr = Tracks.project(track, p[0], p[2]);
+      const trackMax = opts.trackMax == null ? 80 : opts.trackMax;
+      if (pr.dist > trackMax) {
+        const nl = nearestLandmark(track, p);
+        if (nl && nl.d <= 3 * lmSize(nl.r)) pose = landmarkPose(track, p, nl.rank);
+        else pose = centrePose(track, p);
+      }
+    }
+    if (!pose) pose = trackPose(track, p, { at, cornerWindow: opts.cornerWindow });
+    posePoint(track, pose, _inv);
+    const err = Math.hypot(_inv[0] - p[0], _inv[1] - p[1], _inv[2] - p[2]);
+    return { pose, err: Math.round(err * 1000) / 1000 };
+  }
+
+  /** The free camera's current view as a HELD one-shot list entry — eye and
+   *  look both converted, same pose at both ends — ready for the editor. The
+   *  look is anchored on the road unless the eye framed a landmark it is
+   *  looking at, so a pan along the track later follows the track. */
+  function shotFromView(track, eye, target, fov, opts) {
+    opts = opts || {};
+    const e = poseFromWorld(track, eye, opts);
+    let lookOpts = { at: "track" };
+    if (e.pose.at === "landmark") {
+      const nl = nearestLandmark(track, target);
+      if (nl && nl.rank === e.pose.rank && nl.d <= lmSize(nl.r)) lookOpts = { at: "landmark", rank: nl.rank };
+    }
+    const t = poseFromWorld(track, target, lookOpts);
+    const f = Math.round((fov || 50) * 10) / 10;
+    return {
+      shot: { id: opts.id || "freecam", dur: opts.dur || 0.1, ease: "inOut",
+        eye: [e.pose, Object.assign({}, e.pose)], look: [t.pose, Object.assign({}, t.pose)], fov: [f, f] },
+      err: { eye: e.err, look: t.err },
+    };
   }
 
   // ---- easing --------------------------------------------------------------
@@ -691,6 +835,7 @@ const FlybySeq = (function () {
     solve, reset, clearEye, insideProp, blockers, isSolid, onRoadPose,
     landmarks, bounds, landmarkScore,
     anchorS, posePoint, cornerS, cornerSide, lmFace,
+    poseFromWorld, shotFromView, nearestCorner,
     DEFAULT, EASE,
     POLE_BACK, GRID_SPACING, GRID_ROWS, MIN_FILL, MIN_H, FAR, FOG, NEAR, FENCE,
   };

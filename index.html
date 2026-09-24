@@ -914,12 +914,13 @@
             </div>
           </details>
           <details id="pm-visual-tuners" class="pm-renderer-sub">
-            <summary class="adv-more-btn" id="pm-visual-tuners-sum">ADVANCED VISUALS · 3 TOOLS</summary>
+            <summary class="adv-more-btn" id="pm-visual-tuners-sum">ADVANCED VISUALS · 4 TOOLS</summary>
             <div id="pm-visual-tuners-body" role="group" aria-label="Advanced visual tools">
               <p id="pm-visual-tuners-help" class="adv-help">Start a race, then pause to preview lighting and camera changes on track.</p>
               <button id="pm-lighting" aria-describedby="pm-visual-tuners-help">LIGHTING TUNER&hellip;</button>
               <button id="pm-camtune" aria-describedby="pm-visual-tuners-help">CAMERA TUNER&hellip;</button>
               <button id="pm-flyby" aria-describedby="pm-visual-tuners-help">FLYBY SHOT EDITOR&hellip;</button>
+              <button id="pm-freecam" aria-describedby="pm-visual-tuners-help">FREE CAMERA&hellip;</button>
             </div>
           </details>
         </section>
@@ -2780,6 +2781,14 @@
   </div>
 </div>
 
+<!-- free camera: photo mode's fly-cam as its own pause-menu tool, docked right
+     like the three tuners. Only the layer and its Escape door live here; the
+     panel (speed / roll / FOV, snaps, lens, copy) is built by
+     js/camera/free-cam.js, which adopts fc-close into its footer. -->
+<div id="freecam" role="region" aria-label="Free camera" data-esc-close="fc-close" hidden>
+  <button id="fc-close" class="bigbtn" type="button">DONE</button>
+</div>
+
 <!-- photo mode: on-screen fly-cam controls (shown while FREE CAMERA is on).
      Desktop uses WASD / R-F / arrows / drag; touch uses the two thumbsticks
      + the up/down buttons. Container is click-through; only the controls grab
@@ -3033,6 +3042,7 @@
 <script defer crossorigin="anonymous" src="js/fx/skidmarks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/race-control.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/weather-arc.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/free-cam.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/photo-cam.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/lighting/tuner-panel.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/tuner-panel.js?v=dev"></script>

@@ -3208,17 +3208,16 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   assert.doesNotMatch(glx, /setPolyOffset\(\[-4/, "no per-draw bias literal");
   // Four since 2026-09-08: shadow, mark, skid batch, and the DRIVING LINE ribbon.
   assert.equal((glx.match(/setPolyOffset\(ROAD_BIAS\)/g) || []).length, 4, "the four road decal draws share ROAD_BIAS");
-  // TLX: three honours the ROAD's own depthBias (game.js _wmRoad*, applied by
-  // tsl-lit.js) on both of its backends, GLX does not. An fx decal biased by
-  // GLX's -4/-8 therefore sits BEHIND the road on three — gpu-census 48 on an
-  // Apple GPU drew the driving line on GLX and WGX and nothing on TLX, with
-  // zero GPU errors (2026-09-08). The fx offset must be beyond the road's.
+  // TLX: three honours any depthBias a material carries. The fx decals must sit
+  // nearer than the road (they were -4/-8 over a [-8,-16] road and vanished,
+  // gpu-census 48, 2026-09-08), and the road is now unbiased on every backend.
   const tslFx = read("js/render/three/tsl-fx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const fxF = +tslFx.match(/polygonOffsetFactor = (-?[\d.]+)/)[1], fxU = +tslFx.match(/polygonOffsetUnits = (-?[\d.]+)/)[1];
-  const road = read("js/game.js").match(/_wmRoadDryD = \{[^}]*depthBias: \[(-?[\d.]+), (-?[\d.]+)\]/);
-  assert.ok(road, "the dry road material declares a depthBias");
-  assert.ok(fxF < +road[1] && fxU < +road[2],
-    `tsl-fx fx decal offset (${fxF},${fxU}) must be nearer the camera than the road's (${road[1]},${road[2]})`);
+  const road = read("js/game.js").match(/_wmRoadDryD = \{[^}]*\}/);
+  assert.ok(road, "the dry road material exists");
+  const rb = road[0].match(/depthBias: \[(-?[\d.]+), (-?[\d.]+)\]/) || [0, 0, 0];
+  assert.ok(fxF < +rb[1] && fxU < +rb[2],
+    `tsl-fx fx decal offset (${fxF},${fxU}) must be nearer the camera than the road's (${rb[1]},${rb[2]})`);
 });
 
 test("all three backends carry the driving line's colour-blind palette", () => {
@@ -4742,21 +4741,22 @@ test("tick()'s fatal catch arms the boot-canary probe before rethrowing (a pre-p
     "the fatal-branch call site must gate on the same latch state as the render() call site");
 });
 
-test("the startline mesh out-biases the road it is painted on", () => {
-  // The start line, grid boxes and pit paint ride one decal mesh drawn with
-  // _startBias. The road itself draws with depthBias [-8, -16] on every backend,
-  // so a weaker decal bias pulls the paint BEHIND the asphalt and it fights the
-  // road beyond a few metres (2026-09-24: [-1, -2], 28k overlapping pairs, all
-  // 52 circuits). Both numbers must be strictly more negative than the road's.
+test("the startline mesh beats the unbiased road without burying the cars", () => {
+  // The start line, grid boxes and pit paint ride one OPAQUE decal mesh drawn
+  // with _startBias, and the grid boxes lie under the cars. A slope factor of -f
+  // pulls paint behind a car forward by f px of its depth gradient and hides the
+  // car's bottom f px: at -12 (over a road at [-8, -16]) whole cars vanished at
+  // range (2026-09-24). So: the road carries NO depthBias, and _startBias is a
+  // small negative bias that still beats it.
   const src = read("js/game.js");
   const start = src.match(/const _startBias = \[(-?[\d.]+), (-?[\d.]+)\]/);
   assert.ok(start, "_startBias not found in js/game.js");
-  const roads = [...src.matchAll(/const _wmRoad\w+ = \{[^}]*depthBias: \[(-?[\d.]+), (-?[\d.]+)\]/g)];
+  const roads = [...src.matchAll(/const _wmRoad\w+ = \{[^}]*\}/g)];
   assert.ok(roads.length >= 4, `expected the four _wmRoad* materials, found ${roads.length}`);
-  for (const r of roads) {
-    assert.ok(Number(start[1]) < Number(r[1]) && Number(start[2]) < Number(r[2]),
-      `_startBias [${start[1]}, ${start[2]}] must be stronger than the road's [${r[1]}, ${r[2]}]`);
-  }
+  for (const r of roads) assert.doesNotMatch(r[0], /depthBias/, `road material must not carry a depth bias: ${r[0]}`);
+  const f = Number(start[1]), u = Number(start[2]);
+  assert.ok(f < 0 && u < 0, `_startBias [${f}, ${u}] must pull the paint toward the camera`);
+  assert.ok(f >= -4, `_startBias factor ${f} would bury the cars standing on the grid boxes`);
 });
 
 test("TLX FX: double-sided FX draw in ONE pass and their programs warm on the stream layouts (PERF-FINDINGS §2ah)", () => {

@@ -6320,22 +6320,25 @@ try { _perChunkOff = localStorage.getItem("apex26.perChunkOff") === "1"; } catch
 // per-variant reused objects mutated in place each call (never a stale key).
 const _wmFloorN = { emissive: 0.14, roughness: 0.98, specular: 0.05, depthBias: [4, 8], buryRibbon: true };
 const _wmFloorD = { roughness: 0.98, specular: 0.05, depthBias: [4, 8], buryRibbon: true };
-const _wmTerrainN = { emissive: 0.18, roughness: 0.97, specular: 0.06, detail: 0, buryRibbon: true };
-const _wmTerrainD = { roughness: 0.97, specular: 0.06, detail: 0, buryRibbon: true };
-const _wmRoadWetN = { emissive: 0.06, roughness: 0.14, specular: 0.85, detail: 0, surfaceId: 16, depthBias: [-8, -16], doubleSided: true };
-const _wmRoadWetD = { roughness: 0.14, specular: 0.85, detail: 0, surfaceId: 16, depthBias: [-8, -16], doubleSided: true };
-const _wmRoadDryN = { emissive: 0.09, roughness: 0, specular: 0.20, detail: 0, surfaceId: 16, depthBias: [-8, -16], doubleSided: true };
-const _wmRoadDryD = { roughness: 0, specular: 0.20, detail: 0, surfaceId: 16, depthBias: [-8, -16], doubleSided: true };
+// The ROAD carries NO depth bias; the terrain is pushed AWAY instead (WGX has done both
+// since its port, wgx.js _litOpts). A slope-scaled bias on the road ([-8,-16]) pulled the
+// asphalt BEHIND every car forward by 8 px of its own depth gradient: cars under ~8 px tall
+// vanished (the whole grid, seen from past the line) and nearer ones sank. Push-away bias on
+// terrain can never cover a car. Terrain stays nearer than the floor's [4, 8].
+const _wmTerrainN = { emissive: 0.18, roughness: 0.97, specular: 0.06, detail: 0, buryRibbon: true, depthBias: [2, 4] };
+const _wmTerrainD = { roughness: 0.97, specular: 0.06, detail: 0, buryRibbon: true, depthBias: [2, 4] };
+const _wmRoadWetN = { emissive: 0.06, roughness: 0.14, specular: 0.85, detail: 0, surfaceId: 16, doubleSided: true };
+const _wmRoadWetD = { roughness: 0.14, specular: 0.85, detail: 0, surfaceId: 16, doubleSided: true };
+const _wmRoadDryN = { emissive: 0.09, roughness: 0, specular: 0.20, detail: 0, surfaceId: 16, doubleSided: true };
+const _wmRoadDryD = { roughness: 0, specular: 0.20, detail: 0, surfaceId: 16, doubleSided: true };
 // depthBias [factor, units]: the start line is a DECAL laid on the asphalt, so
 // bias its depth toward the camera rather than relying on the small geometric
 // lift alone — that lift is fixed in metres and loses to depth quantisation at
 // range, which is what makes a decal shimmer and drop out as you approach.
-// It must also OUT-BIAS the road it sits on: the road draws at [-8, -16]
-// (_wmRoad* above, honoured by GLX, TLX and WGX alike), so at [-1, -2] the start
-// line, grid boxes and pit paint (the startline mesh) were pulled BEHIND the
-// asphalt and fought it beyond ~5 m. Road bias plus the fx decals' margin, as
-// tsl-fx.js settled for the same bug: -12 / -24. grid-boxes.test.mjs pins it.
-const _startBias = [-12, -24];
+// KEEP IT SMALL: this mesh is opaque and the grid boxes lie under the cars, so a
+// factor of -f hides the bottom f px of any car standing in front of the paint
+// (at -12 it hid whole cars at range). The road is unbiased, so -2 beats it.
+const _startBias = [-2, -4];
 const _wmStartWet = { roughness: 0.16, specular: 0.80, detail: 0, depthBias: _startBias };
 const _wmStartN = { emissive: 0.10, roughness: 0.80, specular: 0.22, detail: 0, depthBias: _startBias };
 const _wmStartD = { roughness: 0.80, specular: 0.22, detail: 0, depthBias: _startBias };
@@ -6699,7 +6702,7 @@ function render(dt) {
   // (the flyby's own roll would otherwise be whatever the last race left behind,
   // decaying over the first half-second of a shot the editor showed level).
   if (dbgCam || cine) {
-    camRoll = 0;
+    camRoll = (dbgCam && dbgCam.roll) || 0;   // level unless the FREE CAMERA's ROLL dial set one (js/camera/free-cam.js)
   } else {
     // Slip source smoothed at λ10 (τ≈0.1 s): vLat/speed are RAW 60 Hz-stepped
     // physics values, and feeding them straight into screen roll printed every
@@ -8074,13 +8077,13 @@ function tickBody(now) {
     // to place shots in the world, and without this gate it parked dbgCam on a
     // frame nothing was redrawing, so the screen kept showing the race the
     // player paused out of.
-    // THIS IS THE ONLY updatePhotoCam CALL SITE, and that is on purpose: the
-    // free camera is a sub-mode OF the tuner, only reachable from it, and the
-    // tuner is only reachable from the pause menu. Resuming tears it down
-    // (setPaused -> closeLightTuner -> exitPhotoMode), so there is no unpaused
+    // THE ONLY PER-FRAME updatePhotoCam CALL SITE, on purpose: the free camera
+    // (the lighting tuner's, or the FREE CAMERA panel's) is only reachable from
+    // the pause menu, and its placements publish one zero-dt frame. Resuming tears
+    // it down (setPaused -> exitPhotoMode -> FreeCam.onPhotoExit), so no unpaused
     // state in which it should still be flying.
     if ((state === "race" || state === "count") &&
-        (!els.lighting.hidden || !els.camtune.hidden || !els.flyby.hidden)) {
+        (!els.lighting.hidden || !els.camtune.hidden || !els.flyby.hidden || photoMode)) {   // photoMode: the FREE CAMERA panel docks with no tuner open
       // NO governor here: paused preview frames are vsync-cheap, so the governor
       // only ever stepped the scale UP toward full res — each step a complete
       // render-target reallocation. The scale simply stays where the race left it
@@ -8382,7 +8385,7 @@ function syncSettingsAvailability() {
   SettingRow.disable($("pm-hidehud"), !inRace);
   $("pm-lighting").disabled = !inRace;
   $("pm-camtune").disabled = !inRace;
-  $("pm-flyby").disabled = !inRace;
+  $("pm-flyby").disabled = !inRace; $("pm-freecam").disabled = !inRace;
 }
 function openSettings() {
   // AUTO is always the full set; re-read the LAYOUT note on open so "Here

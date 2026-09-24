@@ -37,7 +37,7 @@ generated row.
 race
 ├─ HUD / #pausebtn ──> #pausemenu ──> #pmsettings?
 ├─ race flow ────────> #quali | #standings | #results
-└─ tools ────────────> #lighting | #camtune | #flyby | #photo-controls
+└─ tools ────────────> #lighting | #camtune | #flyby | #freecam | #photo-controls
 ```
 
 `?` means optional. Pause was walked headlessly; the race-flow and visual-tuner
@@ -249,6 +249,10 @@ Assists and Music & Sound doors documented above.
 Other in-race roots are:
 
 - `#lighting`, `#camtune` and `#flyby` — visual tuner docks.
+- `#freecam` — the FREE CAMERA dock (`#pm-freecam` under Display → Advanced
+  Visuals, disabled outside a race like the three tuners). It flies with
+  `#photo-controls`; DONE, EXIT or Escape returns to Settings, and resume/quit
+  close it.
 - `#photo-controls` — free-camera overlay.
 - `#quali`, `#standings` and `#results` — session flow.
 - `#rotate-device` — portrait race blocker.
@@ -314,6 +318,7 @@ driving/menu input unless its definition explicitly sets `gate: false`.
 | `#lighting` | yes | Lighting tuner |
 | `#camtune` | yes | Camera tuner |
 | `#flyby` | yes | Flyby shot editor |
+| `#freecam` | yes | Free camera panel |
 | `#photo-controls` | yes | Free-camera controls |
 | `#datahub` | yes | Data and telemetry hub |
 
@@ -322,7 +327,7 @@ open. `#rotate-device` is non-gating so Escape and driving keys still reach the
 race beneath its opaque, media-query-controlled blocker.
 
 Most roots are real `<dialog>` elements and begin hidden. The non-dialog
-screen/region roots are `#lighting`, `#camtune`, `#flyby`, `#photo-controls`,
+screen/region roots are `#lighting`, `#camtune`, `#flyby`, `#freecam`, `#photo-controls`,
 `#carsetup`, `#career` and `#select`.
 
 ### Major shell and race IDs
@@ -385,6 +390,7 @@ screen/region roots are `#lighting`, `#camtune`, `#flyby`, `#photo-controls`,
 | `#lighting` | `#lighting-inner`, `#lt-rail`, `#lt-rows` |
 | `#camtune` | `#camtune-inner`, `#ct-rail`, `#ct-rows` |
 | `#flyby` | `#flyby-inner`, `#fb-rail`, `#fb-rows` |
+| `#freecam` | Runtime-built `#freecam-inner` (`#fc-status`, `#fc-rows`: `#fc-speed`, `#fc-roll`, `#fc-fov`, `#fc-snap-car`, `#fc-corner-prev`/`-next`, `#fc-lens-race`/`-flyby`, `#fc-copy-view`, `#fc-copy-pose`, `#fc-out`); `#fc-close` is the boot-time Escape target |
 | `#datahub` | Runtime-built inner UI; `#dh-close-btn` is the boot-time Escape target |
 
 The tuner `*-rail` roots hold fixed headers/mode controls; `*-rows` receive
