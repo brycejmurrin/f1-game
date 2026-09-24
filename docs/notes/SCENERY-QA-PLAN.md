@@ -30,27 +30,53 @@ Known blind spots, measured before this plan:
   returns false in the VM and every node audit skips them;
 - `pits.js` `sweep()` geometry records no primitive, so no audit can attribute it
   (1.5 % of zandvoort's prop vertices, the pit wall among them);
-- coplanar-audit is SAME-facing only. That is correct for scenery (GLX culls back
-  faces, TLX prop materials are FrontSide, verified 2026-09-24), but it has a gap
-  cut-off, and the depth buffer resolves only ~2 cm at 300 m (TLX camera near
-  0.3 / far 4000, 24-bit), so layers a few cm apart fight at distance unflagged;
-- nothing targets overhead structures (deck undersides against what sits under
-  them);
+- coplanar-audit is SAME-facing only. That is correct for scenery: GLX culls back
+  faces (`glx.js:941`), TLX scenery materials are FrontSide (`tsl-lit.js:1919`),
+  WGX's lit pipeline uses `cullMode "back"`, so ~600 opposite-facing touching pairs
+  fleet-wide can never fight. Depth is 24-bit, near 0.9 m (0.3 m in cockpit/hood,
+  `game.js:6751`), far 900 m: one depth step is ~2.6 mm at 200 m (8 mm with the
+  0.3 m near plane), so only a gap of ~0 mm fights at driving distances;
+- **coplanar-audit skips every face with |n.y| >= 0.5 unless `--horizontal` is
+  passed, and `coplanar-faces.test.mjs` never passes it**: no deck bottom, soffit,
+  gantry underside or roof top has ever been checked. `--horizontal` globally is too
+  noisy (madrid 4 -> 109, monaco 4 -> 58, mostly ground-level prop tops);
 - nothing renders.
 
 ## 2. Workstreams
 
-### A. Overhead undersides (bridges, gates, gantries) — PENDING investigation 1
+### A. Overhead undersides (bridges, gates, gantries) — MEASURED
 
-Hypotheses under measurement: stacked `overheadSpan` layers at the same frac
-(watkins_glen's covered bridge is five), deck/cap/sign faces a few cm apart,
-thin deck slabs at view distance, the upper road of a crossover against a deck
-prop, opposite-facing pairs if any overhead material is double-sided.
+Measured with `scratch/under/overhead-coplanar.cjs` (reuses coplanar-audit's
+`facesOf`/`overlapArea`; near-horizontal faces > road + 3 m within hw + 8 m of the
+centreline; all 52 circuits).
 
-Deliverable: the fix per cause (engine emitter preferred: one deck per span, a
-minimum layer separation, or a thicker slab), and an OVERHEAD audit: every
-face above road + 3 m, same-facing pairs within the depth-resolvable separation
-at the distance a car passes under (not the few-mm gap), baselined per circuit.
+- **The reported flicker is madrid, and only madrid.** Two structures draw a thin
+  "soffit" span at the SAME clearance as their deck, so both bottoms sit in one
+  plane, 0.0 mm apart, both down-facing and drawn:
+  `madrid.js:471` motorway overpass (frac 0.085, clearance 6.2) with its soffit at
+  `:483` (216 m2), and `:508` IFEMA access bridge (0.885, clearance 6.4) with `:519`
+  (203 m2). `overheadSpan` (`models.js:309-316`) puts every box's bottom exactly at
+  `clearance`, so two spans at one frac and clearance always coincide. These are
+  the only down-facing same-facing overhead pairs in the fleet.
+  **Fix:** soffit clearances 6.15 / 6.35 (thickness 0.22 unchanged): the soffit top
+  lands inside the deck and the dark soffit owns the underside. Engine option: a
+  `soffitColor` on `overheadSpan` that emits the plate itself 0.03-0.05 m under
+  `clearance`, so "one bridge in two layers" cannot be written wrong again.
+- **monaco tunnel tops** (up-facing, seen only from orbit/cinematic/photo cameras):
+  roof, haunch and springing (`monaco.js:473-493`) all top out at road + 7.80 m,
+  124 pairs, gap 0. Fix: thicknesses 1.35 / 1.72 / 2.21 (tops 7.80 / 7.77 / 7.76).
+  Minor, also up-facing: `miami.js:181/182` tops coplanar at road + 10 m (4 pairs).
+- Ruled out: opposite-facing pairs (culled, above), depth precision (slabs
+  0.22-1.7 m against mm-scale steps), shadow acne (down-facing faces skip the sun
+  and lamp shadow, `glsl-lit.js:1215`), crossovers (suzuka deck top 7.2 m against
+  the upper road at 9.1 m; nothing on monza or any def bridge).
+- **Audit extension:** `coplanar-audit --overhead`: faces with n.y <= -0.5 centred
+  above road + 3 m within hw + 8 m, same-facing, gap < 5 mm, area >= 0.25 m2; gated
+  at ZERO fleet-wide in `coplanar-faces.test.mjs` (it finds exactly the 2 madrid
+  pairs today, so no baseline noise). An up-facing overhead ratchet catches the
+  monaco class.
+- Verify: re-run the scratch audit (0 hits), then motion-capture driving under
+  madrid 0.085 and 0.885 before/after.
 
 ### B. Remaining z-fighting — PENDING investigation 2
 
