@@ -483,7 +483,7 @@ test("a buried thin prop (kerb flash, paint decal) sets no driving limit — no 
   // place() sinks every box 0.8 m, so one shorter than THIN_PROP_H is at or
   // under the ground; its blockAt used to stop cars 0.4-2 m past the road edge
   // on 12 circuits (albert_park's kerb flashes held the limit at hw + 0.53 m).
-  const src = fs.readFileSync(path.join(ROOT, "js/track/tracks.js"), "utf8");
+  const src = fs.readFileSync(path.join(ROOT, "js/track/scenery/build-props.js"), "utf8");
   assert.match(src, /if \(sz\[1\] >= THIN_PROP_H\) blockAt\(k, side, dist - sz\[0\] \/ 2, sz\[2\] \/ 2\);/);
   const env = buildContext();
   const def = env.Tracks.LIST.find((entry) => entry.id === "albert_park");

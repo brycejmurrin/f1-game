@@ -96,8 +96,91 @@ export const VARIANTS = [
 // (2026-09-04), so the gate failed specs that pass. Read a timeout row here
 // against the SLOWEST spec you might select, never against secPerTest.
 
-/** Declared `test(...)` / `it(...)` calls in a spec, by AST — a grep miscounts
- *  the loop-generated ones (17 across 16 specs, per tools/ci/test-observed.mjs). */
+/** How many `js/circuits/*.js` defs exist — the length a `readdirSync` of that
+ *  directory expands to at module load (tracks-walls, elevation-tracks, …). */
+function circuitDefCount() {
+  try {
+    return fs.readdirSync(path.join(ROOT, "js/circuits"))
+      .filter((f) => f.endsWith(".js")).length;
+  } catch { return null; }
+}
+
+/** True when an AST node names the circuits directory (Literal / template). */
+function mentionsCircuitsDir(node) {
+  if (!node || typeof node !== "object") return false;
+  if (node.type === "Literal" && typeof node.value === "string"
+      && /(^|\/)circuits\/?$/.test(node.value.replace(/\\/g, "/"))) return true;
+  if (node.type === "TemplateLiteral"
+      && node.quasis.some((q) => /circuits/.test(q.value.cooked || ""))) return true;
+  for (const k of Object.keys(node)) {
+    if (k === "loc" || k === "range" || k === "start" || k === "end") continue;
+    const v = node[k];
+    if (Array.isArray(v)) { if (v.some(mentionsCircuitsDir)) return true; }
+    else if (v && typeof v === "object" && mentionsCircuitsDir(v)) return true;
+  }
+  return false;
+}
+
+/** Statically resolvable length of a for-of right-hand side (array literal,
+ *  const bound to one, or `fs.readdirSync(…/js/circuits)` chain). null when
+ *  unknown — the caller then bills the enclosed `test(` once, as before. */
+function staticArrayLen(node, bindings) {
+  if (!node || typeof node !== "object") return null;
+  if (node.type === "ArrayExpression")
+    return node.elements.filter((e) => e != null && e.type !== "SpreadElement").length;
+  if (node.type === "Identifier") {
+    const v = bindings.get(node.name);
+    return typeof v === "number" ? v : null;
+  }
+  // ONLY_TRACK / process.env.TRACK ternaries: CI runs the full fleet (no TRACK),
+  // so take the alternate branch — the one that keeps every id.
+  if (node.type === "ConditionalExpression") {
+    const t = node.test;
+    const envish = (t.type === "Identifier" && /^(ONLY_TRACK|TRACK)$/.test(t.name))
+      || (t.type === "MemberExpression" && t.object?.type === "MemberExpression"
+          && t.object.object?.name === "process" && t.object.property?.name === "env")
+      || (t.type === "MemberExpression" && t.object?.name === "process"
+          && t.property?.name === "env");
+    if (envish) return staticArrayLen(node.alternate, bindings);
+    const a = staticArrayLen(node.consequent, bindings);
+    const b = staticArrayLen(node.alternate, bindings);
+    if (a != null && b != null) return Math.max(a, b);
+    return a ?? b;
+  }
+  // .filter / .map / .sort / .slice keep (or shrink) length; we cannot see a
+  // filter predicate's runtime, so keep the base length — exact for the
+  // `!ONLY_TRACK || …` guards these specs use when TRACK is unset.
+  if (node.type === "CallExpression" && node.callee?.type === "MemberExpression"
+      && /^(filter|map|sort|slice|concat)$/.test(node.callee.property?.name || "")) {
+    return staticArrayLen(node.callee.object, bindings);
+  }
+  // fs.readdirSync(path.join(ROOT, "js/circuits")) — same source tracks-walls
+  // and friends use to build their per-circuit list at module load.
+  if (node.type === "CallExpression" && node.callee?.type === "MemberExpression"
+      && node.callee.property?.name === "readdirSync" && mentionsCircuitsDir(node)) {
+    return circuitDefCount();
+  }
+  return null;
+}
+
+/** Is this CallExpression a Playwright / node:test test declaration?
+ *  `freshTest` is fixtures.js's `test` rebound (tracks-walls edge-ram loop). */
+function isTestCall(callee) {
+  if (!callee) return false;
+  if (callee.type === "Identifier")
+    return /^(test|it|sharedTest|freshTest)$/.test(callee.name);
+  if (callee.type === "MemberExpression"
+      && /^(test|sharedTest|freshTest)$/.test(callee.object?.name || "")
+      && /^(only|fixme)$/.test(callee.property?.name || "")) return true;
+  return false;
+}
+
+/** Declared `test(...)` / `it(...)` calls in a spec, by AST — EXPANDED through
+ *  statically resolvable `for…of` loops. A bare CallExpression count bills
+ *  tracks-walls as ~4 tests; Playwright runs one per circuit (~63). Undercount
+ *  packed it into the selected shard and cancelled the job at the cap with
+ *  0 failures (CI run 36057109364). tools/ci/test-observed.mjs already knew
+ *  about loop-generated titles; the budget must bill the same expansion. */
 export function declaredTests(file) {
   // The READ is inside the try too. It was not, and the guard below caught it:
   // a missing file threw ENOENT instead of returning null, so any caller
@@ -110,26 +193,43 @@ export function declaredTests(file) {
     const src = fs.readFileSync(path.join(ROOT, file), "utf8");
     ast = espree.parse(src, { ecmaVersion: "latest", sourceType: "module" });
   } catch { return null; }
+  const bindings = new Map();
   let n = 0;
-  const walk = (x) => {
+  const walk = (x, mult) => {
     if (!x || typeof x !== "object") return;
-    if (Array.isArray(x)) return x.forEach(walk);
-    if (x.type === "CallExpression") {
-      const c = x.callee;
+    if (Array.isArray(x)) return x.forEach((c) => walk(c, mult));
+    if (x.type === "VariableDeclaration") {
+      for (const d of x.declarations) {
+        if (d.id?.type === "Identifier") {
+          const len = staticArrayLen(d.init, bindings);
+          if (len != null) bindings.set(d.id.name, len);
+        }
+      }
+    }
+    if (x.type === "ForOfStatement") {
+      // Unknown RHS → multiply by 1 (prior undercount), never invent a length.
+      const len = staticArrayLen(x.right, bindings) ?? 1;
+      walk(x.left, mult);
+      walk(x.body, mult * len);
+      return;
+    }
+    if (x.type === "CallExpression" && isTestCall(x.callee)) {
       // `sharedTest` IS a test declaration. Every spec on it today follows the
       // documented idiom `import { sharedTest as test }`, so the call sites read
       // `test(` and this counter never had to know the real name. A file that
       // cannot alias — smoke.spec.js keeps plain `test` for the seven specs
       // asserting FIRST-LOAD behaviour, which fixtures.js warns sharedTest off —
       // has to call it by name, and those tests then counted as ZERO. That is
-      // the silent rejection the guard below exists to catch, and it caught it.
-      if (c.type === "Identifier" && /^(test|it|sharedTest)$/.test(c.name)) n++;
-      if (c.type === "MemberExpression" && /^(test|sharedTest)$/.test(c.object?.name)
-          && /^(only|fixme)$/.test(c.property?.name)) n++;
+      // the silent rejection the twin-count guard exists to catch, and it caught it.
+      n += mult;
+      return; // do not walk the test body for nested declarations
     }
-    for (const k of Object.keys(x)) if (k !== "loc" && k !== "range") walk(x[k]);
+    for (const k of Object.keys(x)) {
+      if (k === "loc" || k === "range" || k === "start" || k === "end") continue;
+      walk(x[k], mult);
+    }
   };
-  walk(ast);
+  walk(ast, 1);
   return n;
 }
 

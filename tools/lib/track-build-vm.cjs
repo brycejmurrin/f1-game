@@ -24,11 +24,15 @@ const ROOT = path.resolve(__dirname, "../..");
 // Engine load order comes from tools/manifest.cjs (TRACK_VM) — the same source
 // of truth the load-order test asserts index.html against, so a file added to
 // the engine cannot silently go missing here. "@circuits" expands to every
-// circuit definition; js/track/tracks.js runs LAST because it destructures
-// TrackGeom at load time and the emitter wrappers must already be installed.
+// circuit definition. `build-props.js` and `tracks.js` run AFTER the emitter
+// wrappers below: both destructure TrackGeom at load time, and the wrappers
+// must already be installed (otherwise RAW / guarded add* bind the unwrapped
+// originals and audits see ~0 prop primitives).
 const MANIFEST = require("../manifest.cjs");
+const BUILD_PROPS_ENTRY = "js/track/scenery/build-props.js";
 const TRACKS_ENTRY = "js/track/tracks.js";
-const PRELUDE = MANIFEST.TRACK_VM.filter((e) => e !== "@circuits" && e !== TRACKS_ENTRY);
+const PRELUDE = MANIFEST.TRACK_VM.filter((e) =>
+  e !== "@circuits" && e !== TRACKS_ENTRY && e !== BUILD_PROPS_ENTRY);
 
 // Emitters that name a primitive but never the model that wanted one. The
 // reporters walk outward past these to the first frame that names a real
@@ -142,6 +146,7 @@ function buildContext(opts) {
   // baseline quietly drops its props. Order is free: tracks.js reads
   // window.TrackScenery at BUILD time, not at load.
   for (const f of MANIFEST.LAZY_SCENERY) runFile(f);
+  runFile(BUILD_PROPS_ENTRY);
   runFile(TRACKS_ENTRY);
 
   if (!ctx.Tracks || !ctx.Tracks.LIST) throw new Error("Tracks.LIST missing");
