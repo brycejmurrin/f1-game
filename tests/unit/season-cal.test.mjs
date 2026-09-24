@@ -315,20 +315,23 @@ test("a retirement scores nothing while the cars above keep their points", () =>
   assert.equal(season.pts.d2, 15, "P3 still earns what P3 earns");
 });
 
-test("unfinished cars (time-cap / early end) take no points, finishes, or FL", () => {
+test("cars still running at the flag are classified by position; FL needs a finish", () => {
+  // endRace ends the session 2.2 s after the human finishes and orders the
+  // still-running cars by progress, so they are classified, as the results
+  // sheet shows. Only the fastest-lap point requires a completed race.
   const { S } = load({ seasonCfg: { flPoint: true } });
   S.engage("season");
   const season = S.blank();
   const cars = field(4);
-  cars[1].finished = false;   // still running when the clock cuts
+  cars[1].finished = false;   // still running when the session ends
   cars[2].finished = false;
   S.award(season, cars, "d1");
   assert.equal(season.pts.d0, 25);
-  assert.equal(season.pts.d1 || 0, 0, "unfinished takes no table points");
-  assert.equal(season.pts.d2 || 0, 0);
-  assert.equal(season.pts.d3, 12, "last classified finisher still scores from its order index");
-  assert.equal(season.lastFl, undefined, "FL only among classified finishers");
-  assert.equal((season.finishes.d1 || [])[1] || 0, 0, "no countback for unfinished");
+  assert.equal(season.pts.d1, 18, "a running car scores its classified position");
+  assert.equal(season.pts.d2, 15);
+  assert.equal(season.pts.d3, 12);
+  assert.equal(season.lastFl, undefined, "no FL point for a car that never finished");
+  assert.equal(season.finishes.d1[1], 1, "countback counts the classified position");
   assert.equal(season.finishes.d0[0], 1);
 });
 

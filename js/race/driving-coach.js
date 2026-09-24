@@ -142,7 +142,7 @@ const DrivingCoach = (function () {
       if (G.player.finished || G.player.retired) return "complete";
       if (G.paused) return "paused";
       if (G.player.pitState && G.player.pitState !== "none") return "pit";
-      if (G.announceBusy || G.cautionInfo().level > 0 || G.player.contactT > 0) return "waiting";
+      if (G.announceBusy || G.cautionLevel() > 0 || G.player.contactT > 0) return "waiting";
       return "watching";
     }
     function feedback() {
@@ -161,18 +161,27 @@ const DrivingCoach = (function () {
           goalLabel: (GOALS.find(g => g[0] === TRAINS[repeated.id]) || [, TRAINS[repeated.id]])[1] } : null };
     }
     function clearCandidate() { candidate = ""; held = 0; }
-    function status() {
-      const c = G.player;
-      if (!c) return null;
+    // ONE SAMPLE: the per-tick channels only. The trace keeps 600 of these
+    // (60 s at 10 Hz) and used to store full status() rows — a fresh feedback()
+    // ranking, insights summary and deep-copied lap report in every one, ~1 MB
+    // held per race and all of it promoted to the old generation, for a trace
+    // only the DRIVING TRACE button ever reads. Those are session totals; the
+    // download adds them once.
+    function sample(c) {
       const ghostSpeed = Ghost.speedAt ? Ghost.speedAt(c.lapTime) : null;
       return { time: G.raceT, speed: c.speed, steer: c.steerAngle || 0, brake: c.brakeDemand || 0,
         throttle: c.throttleDemand || 0, command: c.steerCommand || 0,
         slipFront: c.slipFront || 0, slipRear: c.slipRear || 0, frontUtil: c.frontUtil || 0, rearUtil: c.rearUtil || 0,
         forceFront: c.forceFront || 0, forceRear: c.forceRear || 0, lateralAccel: c.lateralAccel || 0,
         longitudinalUse: c.axFrac || 0, brakeUse: brakeUse(c), yawRate: c.yawRateCur || 0, energy: c.energy,
-        wetness: G.roadWetness(), practice, enabled, coach: feedback(), insights: insights.summary(),
-        lapReport: lapReport && { ...lapReport, worst: { ...lapReport.worst }, segments: lapReport.segments.map(r => ({ ...r })) },
+        wetness: G.roadWetness(), practice, enabled,
         ghostSpeedDelta: ghostSpeed == null ? null : c.speed - ghostSpeed };
+    }
+    function status() {
+      const c = G.player;
+      if (!c) return null;
+      return Object.assign(sample(c), { coach: feedback(), insights: insights.summary(),
+        lapReport: lapReport && { ...lapReport, worst: { ...lapReport.worst }, segments: lapReport.segments.map(r => ({ ...r })) } });
     }
     function tipFor(c) {
       if (!c || c.finished || c.retired || (c.pitState && c.pitState !== "none") || c.speed <= 0) return "";
@@ -218,8 +227,7 @@ const DrivingCoach = (function () {
         elapsed %= 0.1;
         insights.update(G.player);
         if (enabled || practice) {
-          const s = status();
-          if (s) { trace.push(s); if (trace.length > 600) trace.shift(); }
+          if (G.player) { trace.push(sample(G.player)); if (trace.length > 600) trace.shift(); }
         }
       }
       // Track limits is an EVENT, not a sustained state: the game only announces
@@ -443,6 +451,7 @@ const DrivingCoach = (function () {
     }
     function downloadTrace() {
       const blob = new Blob([JSON.stringify({ physics: PhysicsConsts.REVISION, configuration: G.records.config(), rows: trace,
+        coach: feedback(), lapReport,
         aiDecisions: (G.cars || []).filter(c => !c.human && c.passPlan).map(c => ({ driver: c.code, ...c.passPlan })),
         journal: insights.journal(), forecast: insights.forecast(), practice: insights.summary() }, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob), a = document.createElement("a");
@@ -603,7 +612,10 @@ const DrivingCoach = (function () {
       G.announce("PRACTICE ARMED — THIS SESSION IS NOT SCORED", 3, "practice");
       return true;
     }
-    function canArm() { return !!(!G.timeTrial && !G.daily.isActive() && !G.netPlay.active() && G.state === "race" && G.player && !G.practice); }
+    // Not in a championship: practice promises "THIS SESSION IS NOT SCORED" and
+    // unlocks rewind, but a season or career round is always scored — a rewound
+    // P1 took full points and prize money. Practice those in a one-off race.
+    function canArm() { return !!(!G.timeTrial && !G.daily.isActive() && !G.netPlay.active() && G.state === "race" && G.player && !G.practice && G.flow !== "season" && G.flow !== "career"); }
     return { update, status, feedback, advice, mark, retry, rewind, reset, toggle, paint, armPractice, canArm,
       canPractice, rewindReady: () => canPractice() && rewindBuf.length > 0,
       practiceActive: () => practice,

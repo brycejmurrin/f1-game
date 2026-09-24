@@ -55,6 +55,7 @@ function sessionFor({ weather = "dry", cautionLevel = 0, arc = null, laps = 25, 
   const G = {
     tyres, raceWeather: weather, weatherArc: arc,
     cautionInfo: () => ({ level: cautionLevel }),
+    cautionLevel: () => cautionLevel,
     announce: (msg, dur, kind) => { said.push(msg); kinds.push(kind); return hear; },
   };
   return { eng: E.create(G), tyres, said, kinds, G, setHeard };
