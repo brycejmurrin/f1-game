@@ -320,6 +320,9 @@ test("CSS keys off data-motion / data-title-intro / data-menu-wash / data-title-
   assert.match(MENUS, /:root\[data-title-art="off"\] #title-car/);
   assert.match(MENUS, /:root\[data-menu-wash="soft"\] #overlay/);
   assert.match(MENUS, /:root\[data-menu-wash="off"\] #overlay/);
+  assert.match(MENUS, /--grain-opacity:\s*0\.025/);
+  assert.match(MENUS, /--grain-opacity:\s*0/);
+  assert.match(COMP, /opacity:\s*var\(--grain-opacity/);
   assert.match(MENUS, /data-title-intro="quick"/);
   assert.match(MENUS, /:not\(\[data-title-intro="off"\]\)/);
   assert.match(COMP, /:not\(\[data-title-intro="off"\]\)/);

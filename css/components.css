@@ -34,7 +34,7 @@
   pointer-events: none;
   background-image: var(--grain);
   background-size: 160px 160px;
-  opacity: 0.05;
+  opacity: var(--grain-opacity, 0.05);
   mix-blend-mode: overlay;
 }
 /* Grain is texture, and texture is motion-adjacent for some people; it also

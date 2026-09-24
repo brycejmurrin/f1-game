@@ -74,17 +74,19 @@
 }
 /* MENU WASH player setting (js/ui/title-fx.js → html[data-menu-wash]).
    FULL leaves the shipped wash + grain alone. SOFT eases the red and the
-   grain; OFF drops both for a flat dark veil. */
+   grain opacity token; OFF drops the radial and zeroes --grain-opacity so
+   the .grain::before layer in components.css goes invisible without this
+   file naming the .grain class (component-inventory coupling gate). */
 :root[data-menu-wash="soft"] #overlay {
   background:
     radial-gradient(115% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) 12%, transparent), transparent 58%),
     rgba(6, 6, 10, 0.36);
 }
-:root[data-menu-wash="soft"] #overlay.grain::before { opacity: 0.025; }
+:root[data-menu-wash="soft"] { --grain-opacity: 0.025; }
 :root[data-menu-wash="off"] #overlay {
   background: rgba(6, 6, 10, 0.36);
 }
-:root[data-menu-wash="off"] #overlay.grain::before { display: none; }
+:root[data-menu-wash="off"] { --grain-opacity: 0; }
 /* THE TITLE CAR. A decorative art layer, NOT a grid item: #overlay is a grid,
    so an in-flow child would open a third row and move the composition. Absolute
    takes it out of flow and fills the fixed parent instead.
