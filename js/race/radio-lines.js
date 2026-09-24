@@ -129,7 +129,9 @@ const RadioLines = (function () {
   /** "1:32.4" — the tenth is what an engineer reads out, not the thousandth. */
   function timeText(s) {
     if (!(s > 0) || !Number.isFinite(s)) return null;
-    const m = Math.floor(s / 60), r = s - m * 60;
+    // Round to the tenth FIRST: 119.97 s is 2:00.0, not "1:60.0".
+    const q = Math.round(s * 10) / 10;
+    const m = Math.floor(q / 60), r = q - m * 60;
     const t = r.toFixed(1);
     return m > 0 ? m + ":" + (r < 10 ? "0" : "") + t : t;
   }
