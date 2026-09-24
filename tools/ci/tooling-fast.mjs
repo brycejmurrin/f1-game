@@ -105,6 +105,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/godray-keep-nearest.test.mjs",
   "tests/unit/lamp-chunks.test.mjs",
   "tests/unit/all-lights-fill.test.mjs",
+  "tests/unit/lamp-bake.test.mjs",
   // Sibling of cockpit-pale-surfaces, which moved to test:node-slow for costing
   // 69 s. This one is 2.5 s — 178 differential builds, no rasteriser — so it
   // stays in the edit loop where a cockpit geometry change is actually made.

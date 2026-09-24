@@ -28,7 +28,8 @@ test("tail-light selection reuses capacity through sorting, shrink and regrowth"
   assert.ok(source.includes(anchor));
   const sampled = [];
   const ctx = vm.createContext({
-    LightKnobs: { LT: { tailRange: 160, tailLightMul: 1, brakeGlowMul: 1 } },
+    // tailLightEmit 1: this test is about the EMIT path's pooled selection.
+    LightKnobs: { LT: { tailRange: 160, tailLightMul: 1, brakeGlowMul: 1, tailLightEmit: 1 } },
     LightBudget: { MAX: 48, MOBILE: 24, slots: () => 48 },
     Tracks: { sample(_t, s, out) { sampled.push(s); out.p[2] = s; } },
   });
@@ -56,6 +57,36 @@ test("tail-light selection reuses capacity through sorting, shrink and regrowth"
   const newCars = cars.map((c) => ({ s: c.s+1, x: 2 }));
   const rows = assemble(newCars);
   for (const row of rows) assert.ok(newCars.includes(row.c), "a new grid must not use stale car references");
+});
+
+test("TAIL-LIGHT EMIT 0: tail-lights take no light slot but keep their halo", () => {
+  const source = readFileSync(path.join(ROOT, "js/lighting/frame-lights.js"), "utf8");
+  const LT = { tailRange: 160, tailLightMul: 1, brakeGlowMul: 1, tailLightEmit: 0 };
+  const ctx = vm.createContext({
+    LightKnobs: { LT },
+    LightBudget: { MAX: 48, MOBILE: 24, slots: () => 16 },
+    Tracks: { sample(_t, s, out) { out.p[2] = s; } },
+  });
+  vm.runInContext(source, ctx);
+  const api = vm.runInContext("FrameLights", ctx);
+  const track = { total: 5000 }, player = { s: 0, x: 0 };
+  const cars = Array.from({ length: 22 }, (_, i) => ({ s: i * 5, x: 0 }));
+  // A full 16-slot phone set: in emit mode five lamps would be evicted.
+  const lamps = Array.from({ length: 16 * 15 }, (_, i) => i);
+  const frame = { lights: lamps.slice() };
+  api.appendCarTailLights(frame, track, cars, player, true);
+  assert.equal(frame.lights.length, 16 * 15, "no lamp evicted, no slot taken");
+  assert.deepEqual(frame.lights, lamps, "the lamp records are untouched");
+  assert.equal(frame.tailCount, 0, "per-chunk consumers see no dynamic tail-lights");
+  assert.equal(frame.glowLights.length, (16 + 5) * 15, "the halo list carries lamps + five tails");
+  assert.deepEqual(Array.from(frame.glowLights).slice(0, 16 * 15), lamps, "halo list = lamps first, tails after");
+  // And the emit path is unchanged: five evicted, five appended, halo list = lights.
+  LT.tailLightEmit = 1;
+  const f2 = { lights: lamps.slice() };
+  api.appendCarTailLights(f2, track, cars, player, true);
+  assert.equal(f2.lights.length, 16 * 15);
+  assert.equal(f2.tailCount, 5);
+  assert.equal(f2.glowLights, f2.lights);
 });
 
 // frame-lights.js is an IIFE exporting a fixed surface, and _fillAllLights is
