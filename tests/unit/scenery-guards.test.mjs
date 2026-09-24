@@ -241,7 +241,8 @@ test("transformSceneryApi along hands authored-frame k via sceneryNodeToAuthored
   const src = fs.readFileSync(path.join(ROOT, "js/track/tracks.js"), "utf8");
   const i = src.indexOf("function transformSceneryApi(");
   assert.ok(i >= 0);
-  const chunk = src.slice(i, i + 2500);
+  const end = src.indexOf("\n  function ", i + 1);
+  const chunk = src.slice(i, end > i ? end : i + 8000);
   assert.match(chunk, /w\.along = \(s0, s1, stepM, fn, tag\) =>/,
     "along must be wrapped");
   assert.match(chunk, /TrackSpace\.sceneryNodeToAuthored\(def, kEng, n\)/,
