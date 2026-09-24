@@ -34,6 +34,15 @@ function timingSummary(G, order, dnfOf, sourceOf) {
 // One POS / SWATCH / NAME / PTS row, the shape every ranking list on this
 // screen shares (results top-10, constructors, standings, the champion
 // panel). `extraClass` appends to "res-row" (e.g. " you").
+// ONE points label for every standings list. The lists are ORDERED by
+// SeasonCal.rank, which ranks the counting (net) total when scores are dropped;
+// two of them printed the gross, so a driver could show more points than the
+// one ranked above. The counting total, with the gross beside it when they differ.
+function ptsLabel(season, driverId) {
+  const pts = season.pts[driverId] || 0;
+  const net = SeasonCal.netPts(season, driverId);
+  return net === pts ? `${pts} pts` : `${net} (${pts}) pts`;
+}
 function rankRow(container, i, color, name, ptsText, extraClass) {
   const row = document.createElement("div");
   row.className = `res-row${extraClass || ""}`;
@@ -274,7 +283,7 @@ function buildResults(order) {
     const all = cars.slice().sort((a, b) => SeasonCal.rank(season, a.driverId, b.driverId)).slice(0, 10);
     all.forEach((c, i) => {
       rankRow(els.resultsTable, i, G.cssCol(c.team.color), `${c.code}  ${c.name}`,
-        `${season.pts[c.driverId] || 0} pts`, c.isPlayer ? " you" : "");
+        ptsLabel(season, c.driverId), c.isPlayer ? " you" : "");
     });
     // Team championship (top 5)
     const tmHead = document.createElement("div");
@@ -505,11 +514,8 @@ function buildStandings() {
   drList.forEach(([driverId, pts], i) => {
     const c = cars.find((x) => x.driverId === driverId);
     const code = c ? c.code : ((season.driverCodes && season.driverCodes[driverId]) || driverId);
-    // Dropped scores: the COUNTING total, with the gross beside it.
-    const net = SeasonCal.netPts(season, driverId);
-    const ptsText = net === pts ? `${pts} pts` : `${net} (${pts}) pts`;
     rankRow(body, i, c ? G.cssCol(c.team.color) : "#555", `${code}${c ? `  ${c.name}` : ""}`,
-      ptsText, c && c.isPlayer ? " you" : "");
+      ptsLabel(season, driverId), c && c.isPlayer ? " you" : "");
   });
 
   // Team standings
@@ -561,7 +567,7 @@ function buildChampion() {
   head.textContent = "FINAL STANDINGS";
   els.resultsTable.appendChild(head);
   sorted.forEach((c, i) => {
-    rankRow(els.resultsTable, i, G.cssCol(c.team.color), c.code, `${season.pts[c.driverId] || 0} pts`);
+    rankRow(els.resultsTable, i, G.cssCol(c.team.color), c.code, ptsLabel(season, c.driverId));
   });
   els.resNext.textContent = "MAIN MENU";
   G.announce(`${champ.code} IS WORLD CHAMPION!`, 4);

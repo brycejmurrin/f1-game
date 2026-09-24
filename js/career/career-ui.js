@@ -107,8 +107,10 @@ function create(G) {
       const revision = Career.slotRevision(s.flavour, s.i);
       const armed = armedDelete === id;
       const del = el("button", `cr-slot-del${armed ? " armed" : ""}`, armed ? "DELETE?" : "DELETE");
-      del.setAttribute("aria-label",
-        `Delete the ${s.flavour === "myteam" ? "team" : "career"} in slot ${s.i + 1}`);
+      const what = `the ${s.flavour === "myteam" ? "team" : "career"} in slot ${s.i + 1}`;
+      // Armed, the NAME says so too: the visible DELETE? never reached a
+      // screen reader, and the second press deleted a save with no warning.
+      del.setAttribute("aria-label", armed ? `Confirm: delete ${what}. Press again to delete` : `Delete ${what}`);
       del.onclick = (ev) => {
         ev.stopPropagation();
         if (G.soundOn) GameAudio.uiTick();
@@ -512,7 +514,8 @@ function create(G) {
     return wrap;
   }
 
-  function buildSetupPanes() {
+  function buildSetupPanes() { keep(buildSetupPanesNow); }
+  function buildSetupPanesNow() {
     const left = $("cr-left"), right = $("cr-right");
     left.textContent = ""; right.textContent = "";
 
@@ -1070,10 +1073,16 @@ function create(G) {
     // scroll saw three recap cards and a deferral, and no sign a choice existed.
     // THE YEAR / YOUR CONTRACT / THE DRIVER MARKET are context FOR the choice,
     // so they still belong on this screen — underneath it.
-    body.appendChild(head("ON THE TABLE"));
-    body.appendChild(el("div", "cr-note",
-      "Pick a seat for " + c.year + ". Moving team means starting the car over from " +
-      "that team's works build — you do not take your parts with you."));
+    // No offers (MY TEAM, or a driver mid-contract — rollover() leaves the list
+    // empty for both) means no seat to pick: the sheet is a recap, not a table
+    // with nothing on it under "Pick a seat for …".
+    const hasOffers = !!(c.offers && c.offers.length);
+    if (hasOffers) {
+      body.appendChild(head("ON THE TABLE"));
+      body.appendChild(el("div", "cr-note",
+        "Pick a seat for " + c.year + ". Moving team means starting the car over from " +
+        "that team's works build — you do not take your parts with you."));
+    }
 
     const stEra = Career.state() && Career.state().era;
     if (stEra && stEra.cats.length) {
@@ -1086,15 +1095,17 @@ function create(G) {
       body.appendChild(rg);
     }
 
-    body.appendChild(head("YOUR PROMISE"));
-    body.appendChild(el("div", "cr-note",
-      "The target applies to whichever seat you take, and the offers above move "
-      + "with it. It is priced in reputation, not money — keep it and the better "
-      + "seats open sooner, miss it and they close."));
-    body.appendChild(ambitionPicker(Career.ambition(), (i) => {
-      Career.setAmbition(i);   // re-stamps every offer's target, then we redraw
-      buildOffers();
-    }));
+    if (c.flavour !== "myteam") {   // an owner is not promising anyone a result for a seat
+      body.appendChild(head("YOUR PROMISE"));
+      body.appendChild(el("div", "cr-note",
+        "The target applies to whichever seat you take, and the offers above move "
+        + "with it. It is priced in reputation, not money — keep it and the better "
+        + "seats open sooner, miss it and they close."));
+      body.appendChild(ambitionPicker(Career.ambition(), (i) => {
+        Career.setAmbition(i);   // re-stamps every offer's target, then we redraw
+        buildOffers();
+      }));
+    }
 
     (c.offers || []).forEach((o, i) => {
       const t = teamById(o.teamId);
@@ -1266,11 +1277,18 @@ function create(G) {
     return (d > 0 ? "+" : "") + d + " (" + (d > 0 ? "gaining" : "slipping") + ")";
   }
 
+  // Every tile, budget step, re-sign and DELETE? arm rebuilds #cr-left/#cr-right
+  // and destroys the focused button; with no focus() anywhere in this file a
+  // keyboard or pad player was left on <body>. keepFocus (js/ui/modal.js) puts
+  // it back on the same slot.
+  const keep = (fn) => (window.TopModal && TopModal.keepFocus ? TopModal.keepFocus($("career"), fn) : fn());
   function build() {
-    if (picking) { draft = null; buildSlotPanes(); }
-    else if (Career.active()) { draft = null; buildHubPanes(); }
-    else if (draft) buildSetupPanes();
-    else buildSlotPanes();
+    keep(() => {
+      if (picking) { draft = null; buildSlotPanes(); }
+      else if (Career.active()) { draft = null; buildHubPanes(); }
+      else if (draft) buildSetupPanes();
+      else buildSlotPanes();
+    });
     // The foot button must say where it GOES: from the slot picker over an
     // active career it returns to the HUB, and a button labelled MAIN MENU
     // that lands you back in the career was the one lying label in the app.
@@ -1307,7 +1325,11 @@ function create(G) {
   }
 
   $("cr-back").onclick = () => {
-    if (picking && Career.active()) { picking = false; armedDelete = ""; build(); return; }
+    // Back to the hub through openCareer(), not a bare rebuild: if the live
+    // career was just DELETED, Career.load() re-homed to another save, and
+    // G.season / trackIdx / teamIdx still pointed at the deleted one — the
+    // next GO RACING raced it and settled against the wrong round.
+    if (picking && Career.active()) { picking = false; armedDelete = ""; G.openCareer(); return; }
     if (draft && draftFrom && !Career.active()) { Career.useSlot(draftFrom.flavour, draftFrom.i); draftFrom = null; }
     // (build() retitles this button per state — see buildSlotPanes/buildHubPanes.)
     close();

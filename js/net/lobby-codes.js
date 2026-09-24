@@ -32,9 +32,12 @@ const LobbyCodes = (function () {
    * @param {(code?: string) => any} api.makeAnswer
    * @param {(code?: string) => any} api.acceptAnswer
    * @param {() => {ok:false,error:string}} api.cancelledResult
+   * @param {(box: Element|null, el: Element|null) => boolean} [api.has]
+   * @param {(host: Element|null) => void} [api.focusInto]
+   * @param {(e: object) => Element|undefined} [api.shownStep]
    */
   function create(api) {
-    const { els, $, say, makeAnswer, acceptAnswer, cancelledResult } = api;
+    const { els, $, say, makeAnswer, acceptAnswer, cancelledResult, has, focusInto, shownStep } = api;
 
     function deliver(kind, text) {
       const code = codeFrom(text);
@@ -54,7 +57,12 @@ const LobbyCodes = (function () {
       scanner = null;
       if (active) active.stop();
       const e = els();
+      // DOM-optional: the node harness's mini DOM has no Element.contains.
+      const hadFocus = has
+        ? has(e.scan, document.activeElement)
+        : !!(e.scan && e.scan.contains && e.scan.contains(document.activeElement));
       if (e.scan) e.scan.hidden = true;
+      if (hadFocus && focusInto && shownStep) focusInto(shownStep(e));
     }
 
     async function scan(kind) {
@@ -67,6 +75,7 @@ const LobbyCodes = (function () {
       stopScan();
       const gen = scannerGeneration;
       e.scan.hidden = false;
+      if (focusInto) focusInto(e.scan);
       say("Point the camera at their code…");
       const attempt = NetScan.create();
       scanner = attempt;
