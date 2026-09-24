@@ -43,27 +43,37 @@ const GRADE_MAX = {
 };
 
 async function waitForTune(page, values) {
-  await page.waitForFunction((expected) => {
-    const tune = window.__apex?.lightTune?.();
-    if (!tune) return false;
-    // Wait for what the STORE will actually resolve to, not the raw ask.
-    // js/lighting/profiles.js clamps every write to the knob's declared
-    // [min, max], so a test driving past a bound waits forever on a value that
-    // can never appear — the helper just sits here for the whole 15 s and the
-    // rest of the serial block skips. That is exactly what happened when BLACKS
-    // was re-cut from ±1.5 to ±0.6 (it goes non-monotonic above +0.635) while
-    // this file still asked for ±1. Clamping the expectation the same way the
-    // store does keeps a test aimed at "the extreme" whatever the registry says
-    // that is today, instead of at a number somebody typed once.
-    // BARE `LightTune`: lighting.js declares it as a top-level `const` in a
-    // CLASSIC script, which is script-scoped and NOT a property of window.
-    const defs = (typeof LightTune !== "undefined" && LightTune.TUNE_DEFS) || [];
-    return Object.entries(expected).every(([id, value]) => {
-      const d = defs.find((x) => x.id === id);
-      const want = d ? Math.min(d.max, Math.max(d.min, value)) : value;
-      return Math.abs(tune[id] - want) < 0.0001;
-    });
-  }, values, { timeout: 15_000, polling: 100 });
+  // 15 s was enough on an idle Metal box; under SwiftShader contention the
+  // first post-boot lightTune poll can sit behind a multi-second present, and
+  // the helper then timed out while the store already held the values (CI
+  // oversize-image-grade on 36066863753). TRACK_MS matches the other boot
+  // waits in this file — still a settle budget, not an assertion bound.
+  try {
+    await page.waitForFunction((expected) => {
+      const tune = window.__apex?.lightTune?.();
+      if (!tune) return false;
+      // Wait for what the STORE will actually resolve to, not the raw ask.
+      // js/lighting/profiles.js clamps every write to the knob's declared
+      // [min, max], so a test driving past a bound waits forever on a value that
+      // can never appear — the helper just sits here for the whole budget and the
+      // rest of the serial block skips. That is exactly what happened when BLACKS
+      // was re-cut from ±1.5 to ±0.6 (it goes non-monotonic above +0.635) while
+      // this file still asked for ±1. Clamping the expectation the same way the
+      // store does keeps a test aimed at "the extreme" whatever the registry says
+      // that is today, instead of at a number somebody typed once.
+      // BARE `LightTune`: lighting.js declares it as a top-level `const` in a
+      // CLASSIC script, which is script-scoped and NOT a property of window.
+      const defs = (typeof LightTune !== "undefined" && LightTune.TUNE_DEFS) || [];
+      return Object.entries(expected).every(([id, value]) => {
+        const d = defs.find((x) => x.id === id);
+        const want = d ? Math.min(d.max, Math.max(d.min, value)) : value;
+        return Math.abs(tune[id] - want) < 0.0001;
+      });
+    }, values, { timeout: TRACK_MS, polling: 100 });
+  } catch (err) {
+    const got = await page.evaluate(() => window.__apex?.lightTune?.() || null).catch(() => null);
+    throw new Error(`waitForTune timed out; want=${JSON.stringify(values)} got=${JSON.stringify(got)}; ${err.message}`);
+  }
   await page.waitForTimeout(250);
 }
 
