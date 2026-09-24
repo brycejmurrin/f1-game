@@ -118,7 +118,13 @@ between GPU stacks would otherwise read as a regression.
 `tools/ci/select-budget.mjs` bills a spec at the median of its own CI-bucket
 samples once it has three of them and falls back to the measured 79.7 s constant
 otherwise — `--json` reports `source: "measured" | "constant"` per spec, so a
-default can never be mistaken for a measurement. `node tools/ci/spec-timings.mjs
+default can never be mistaken for a measurement. `select-specs.mjs`' cut spends
+that rate: a spec costs `tests x its own rate` against the budget in seconds, so
+an unmeasured selection cuts exactly where the old 10-test cap did and a measured
+one fits what it actually costs (2026-09-24; before, the cut counted tests and the
+medians moved nothing). CI merges into `bot/spec-timings`, never the deploy
+branch; adopt it with `git show origin/bot/spec-timings:tests/data/spec-timings.json`
+in a reviewed PR. `node tools/ci/spec-timings.mjs
 --check` prints every spec or test whose latest sample is more than twice its own
 median and **exits 0 either way**: a busy box and a slow test look identical from
 here, so the flag is advisory until it has a few weeks of history behind it.
