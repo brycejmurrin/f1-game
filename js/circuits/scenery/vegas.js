@@ -7,7 +7,7 @@
 (window.TrackScenery = window.TrackScenery || {})["vegas"] =
   function (api) {
       const { K, lapBounds, out, MAT, seat, track, upOf, n, px, py, pz, hw, pyMin, place, prop, backdrop, addBox, addCyl,
-        addFrustum, addPyramid, groundPlane, anchor, vadd, onTrack, building, tower, billboard,
+        addFrustum, addPyramid, groundPlane, groundPatch, along, anchor, vadd, onTrack, building, tower, billboard,
         grandstand, grandstandEx, marshalPost, gantry, palm, fence, wall, guardrail, tyreWall, hash, addCone, addPrism,
         cityFront, modelGroup, overheadSpan, waterSurface, circuitKit, broadcastCompound, cameraTower,
         bakedModel } = api;
