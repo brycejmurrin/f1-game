@@ -288,6 +288,9 @@ function _fillAllLights(frame, src, sr, sg, sb, fl) {
   frame.allLightsGen = _allLightsGen;
 }
 
+const _ENTRY_S = 0.35;   // seconds a lamp takes to ramp in after joining the set
+let _entrySrc = null, _entryLvl = new Float32Array(0), _entryStamp = new Uint32Array(0);
+let _entryFrame = 1, _entryT = 0;
 function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet) {
   // srcSet overrides the session light set (the daylight always-on subset);
   // absent, the baked full set is used exactly as before.
@@ -496,13 +499,32 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   }
   const _cullBand = gRef * fade;
   const _guardBand = dEdge * 0.08;
+  // ENTRY RAMP. The guard band above is ~4% of the set radius (kept narrow on
+  // purpose — see the yaw note), so at racing speed a lamp joining the set went
+  // 0 -> full in ~4 frames: its specular, bounce, fog and halo snapped on ahead
+  // of the car (the baked pools only cover ground diffuse). A lamp that was NOT
+  // in last frame's set now ramps in over _ENTRY_S of wall time. Upward only:
+  // the leaving side keeps the geometric fade, which already reaches 0 at the
+  // boundary, and a steady lamp converges to exactly the geometric value, so no
+  // camera-direction dependence is added.
+  const _nSrc = (src.length / 15) | 0;
+  if (_entrySrc !== src || _entryLvl.length < _nSrc) {
+    _entrySrc = src; _entryLvl = new Float32Array(_nSrc); _entryStamp = new Uint32Array(_nSrc); _entryFrame = 1;
+  }
+  const _eStep = Math.min(1, Math.max(0, tNow - _entryT) / _ENTRY_S);
+  _entryT = tNow;
+  const _eFrame = ++_entryFrame;
   let j = 0;   // index writes + one trim, as in the dense path above
   for (let i = 0; i < heap.length; i++) {
     const e = heap[i], o = e.o;
-    const cullF = truncated
+    let cullF = truncated
       ? Math.min(Math.max(0, Math.min(1, (gRef - e.g) / _cullBand)),
                  Math.max(0, Math.min(1, (dEdge - e.d) / _guardBand)))
       : 1;
+    const li = (o / 15) | 0;
+    const prev = _entryStamp[li] === _eFrame - 1 ? _entryLvl[li] : 0;
+    if (truncated && cullF > prev + _eStep) cullF = prev + _eStep;
+    _entryLvl[li] = cullF; _entryStamp[li] = _eFrame;
     const f = fl(o);
     out[j++] = src[o]; out[j++] = src[o+1]; out[j++] = src[o+2];
     out[j++] = src[o+3] * sr * f[0] * cullF; out[j++] = src[o+4] * sg * f[1] * cullF; out[j++] = src[o+5] * sb * f[2] * cullF;
