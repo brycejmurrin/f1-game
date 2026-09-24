@@ -418,7 +418,7 @@ test("per-chunk lamps: every half shares ONE gate, and it is autoShed", () => {
 
   const road = src.match(/const _wantRoadChunk = [^;]+;/);
   assert.ok(road, "_wantRoadChunk still exists");
-  assert.match(road[0], /!_perChunkOff && PerfGov\.autoShed\(\) < 1/,
+  assert.match(road[0], /!_perChunkOff && PerfGov\.autoShed\(\) < 2/,
     "the road lamp clause must gate on autoShed() — tier() makes it dead code, " +
     "and autoTier() pins it off for the session after one shed on any preset " +
     "below GRAPHICS: HIGH");
@@ -427,16 +427,22 @@ test("per-chunk lamps: every half shares ONE gate, and it is autoShed", () => {
   // the rest of the frame fields, and matching that read as a missing gate.
   const scenery = src.match(/frame\.perChunkLights = \(![^;]*hasPerChunkLights[^;]+;/);
   assert.ok(scenery, "the GATED frame.perChunkLights assignment still exists");
-  assert.match(scenery[0], /PerfGov\.autoShed\(\) >= 1/,
-    "the scenery half must stay on the same accessor as the road half so the " +
-    "two cannot disagree");
+  assert.match(scenery[0], /_pcShed >= 2/,
+    "the scenery half must stay on the same accessor and rung as the road half " +
+    "so the two cannot disagree");
+  assert.match(src, /const _pcShed = PerfGov\.autoShed\(\);/,
+    "_pcShed is the autoShed() read, not tier()/autoTier()");
+  // One shed tier CAPS the knob at 0.3 (measured cheaper than off) instead of
+  // switching it off — off handed a struggling device the popping global set.
+  assert.match(src, /_pcShed >= 1 \? Math\.min\(0\.3,/,
+    "autoShed 1 caps PER-CHUNK LAMPS at 0.3 rather than turning it off");
 
   // And the knob's own explanation has to describe the gate that actually runs.
   const tuner = fs.readFileSync(path.join(ROOT, "js/lighting/tuner-panel.js"), "utf8");
   assert.match(tuner, /PerfGov\.autoShed\s*\)\s*\?\s*PerfGov\.autoShed\(\)/,
     "tuner.js's held-off note must read the same accessor as the gate");
   const apex = fs.readFileSync(path.join(ROOT, "js/agent/apex.js"), "utf8");
-  assert.match(apex, /PerfGov\.autoShed\(\) >= 1\) return "tier"/,
+  assert.match(apex, /PerfGov\.autoShed\(\) >= 2\) return "tier"/,
     "__apex.perChunkHeld() must name the same gate the render path runs");
 
   // The tier-4 post stack keeps autoTier(): the degrade branch stops at an

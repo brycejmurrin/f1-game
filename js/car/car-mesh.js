@@ -750,6 +750,59 @@ function drawRearLights(mat, emissive) {
     _gfx.draw(getEndplateLight(), W, _RL_FX);
   }
 }
+// TAIL-LIGHT EMIT 0: the red spill a tail-light used to cast on the road as a
+// real point light, painted instead — a flat decal behind the car, drawn through
+// the decal path every backend already has (createTexMesh + createTexture +
+// drawDecal: lit colour + tex * glow, alpha-blended, depth-write off). No light
+// slot, so the lamps keep it (frame-lights.js appendCarTailLights). Built once;
+// null forever if the backend or the page cannot make it (no canvas in a node
+// VM, a backend without decals) — the lens itself still draws either way.
+let _tgMesh = null, _tgTex = null, _tgTried = false;
+const _tgW = new Float32Array(16);
+const _TG_OPTS = { glow: 1.6 };   // one constant: glow is part of the decal program key
+function _tailGlowRes() {
+  if (_tgTried) return _tgMesh && _tgTex;
+  _tgTried = true;
+  try {
+    if (!_gfx.createTexMesh || !_gfx.createTexture || !_gfx.drawDecal || typeof document === "undefined") return false;
+    const cv = document.createElement("canvas");
+    cv.width = cv.height = 64;
+    const g = cv.getContext("2d");
+    const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, "rgba(255,34,22,0.62)");
+    gr.addColorStop(0.45, "rgba(255,26,18,0.30)");
+    gr.addColorStop(1, "rgba(255,20,14,0)");
+    g.fillStyle = gr;
+    g.fillRect(0, 0, 64, 64);
+    _tgTex = _gfx.createTexture(cv);
+    // Unit quad in the ground plane (x across, z along), facing up.
+    _tgMesh = _gfx.createTexMesh({
+      pos: [-1, 0, -1,  1, 0, -1,  1, 0, 1,  -1, 0, 1],
+      nrm: [0, 1, 0,  0, 1, 0,  0, 1, 0,  0, 1, 0],
+      uv: [0, 0,  1, 0,  1, 1,  0, 1],
+      idx: [0, 2, 1, 0, 3, 2],
+    });
+  } catch (e) {
+    try { Log.warn("gfx", "tail glow decal unavailable —", e); } catch (_) {}
+    _tgMesh = _tgTex = null;
+  }
+  return _tgMesh && _tgTex;
+}
+// groundMat: the car's road-aligned basis (game.js _groundMat — the blob shadow's).
+// amt: TAIL-LIGHT GLOW x brake flare; it scales the pool's SIZE, since the
+// decal's brightness is fixed per program.
+function drawTailGlow(groundMat, amt) {
+  if (!(amt > 0) || !_tailGlowRes()) return;
+  const W = _tgW, k = Math.min(1.8, Math.sqrt(amt));
+  const hw = 1.25 * k, hl = 2.6 * k;   // half-width / half-length, metres
+  // Centre 3.6 m behind the car origin, 6 cm up so the road cannot z-fight it.
+  for (let i = 0; i < 3; i++) {
+    W[i] = groundMat[i] * hw; W[4 + i] = groundMat[4 + i]; W[8 + i] = groundMat[8 + i] * hl;
+    W[12 + i] = groundMat[12 + i] + groundMat[4 + i] * 0.06 - groundMat[8 + i] * (2.6 + hl);
+  }
+  W[3] = W[7] = W[11] = 0; W[15] = 1;
+  _gfx.drawDecal(_tgMesh, W, _tgTex, _TG_OPTS);
+}
 // 2026 amber mirror lamps: a car under 20 km/h or stopped lights amber on both
 // mirror housings (The Race, 2026 rear-lights explainer). A SIDE-facing quad in
 // the yz plane — the rear lights face -z and would read edge-on here.
@@ -802,6 +855,6 @@ function getOtLamp(active) {
   return m;
 }
 
-  return { init, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getCompoundRing, getCrewMesh, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRearLights, drawMirrorLights, ersLightCode, gridStrobe };
+  return { init, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getCompoundRing, getCrewMesh, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRearLights, drawTailGlow, drawMirrorLights, ersLightCode, gridStrobe };
 })();
 Object.freeze(CarMesh);
