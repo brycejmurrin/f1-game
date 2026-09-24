@@ -507,7 +507,10 @@ struct FrameU {
                               //           PAINTED pit lane; length 0 = no lane (roadMarkings)
   pitBox     : vec4<f32>,     // off 592  (through, half length, 0, 0) — YOUR box in
                               //          the row; a zero half length means no box
-};                            // size 608
+  bakeA      : vec4<f32>,     // off 608  BAKED LAMP POOLS: (origin x, origin z, size x m, size z m)
+  bakeB      : vec4<f32>,     // off 624  (scale rgb = frame.lampBakeScale, on)
+  bakeC      : vec4<f32>,     // off 640  (shadow lamp's baked rgb = LampBake.shadowCol, rows per layer)
+};                            // size 656
 struct Light {
   posRad   : vec4<f32>,       // xyz pos, w radius
   colBleed : vec4<f32>,       // xyz colour*intensity, w out-of-beam bleed
@@ -556,6 +559,10 @@ struct MatScaleU { s : array<vec4<f32>, 5> };
 // trackLights; everything else keeps the per-frame lights set at binding 1.
 @group(0) @binding(15) var<storage, read> trackLights : array<Light>;
 @group(0) @binding(16) var<storage, read> chunkLampIdx : array<u32>;
+// BAKED LAMP POOLS (js/lighting/lamp-bake.js): rgba16float, two stacked w x h
+// layers — rows [0,h) diffuse pool, rows [h,2h) bounce fill; alpha = surface Y.
+// 1x1 placeholder until a bake lands (bakeB.w = 0 gates it off either way).
+@group(0) @binding(17) var lampBakeTex : texture_2d<f32>;
 @group(1) @binding(0) var<uniform> D : DrawU;
 @group(2) @binding(0) var<storage, read> matTrkArr : array<vec4<f32>>;
 // Reconstruct (mat, s, x, hw) from world XZ via the 32×32×16 centerline LUT
@@ -761,7 +768,7 @@ fn vs_main(
 struct LampAcc { col : vec3<f32>, fog : vec3<f32> };
 fn lampContrib(Lt : Light, isShadowLamp : bool, wpos : vec3<f32>, N : vec3<f32>, V : vec3<f32>,
                albedo : vec3<f32>, metalness : f32, wetSheen : f32, rough : f32, a : f32,
-               f0 : vec3<f32>, NoV : f32, clearcoat : f32) -> LampAcc {
+               f0 : vec3<f32>, NoV : f32, clearcoat : f32, bakeW : f32) -> LampAcc {
   var acc : LampAcc;
   acc.col = vec3<f32>(0.0);
   acc.fog = vec3<f32>(0.0);
@@ -806,13 +813,17 @@ fn lampContrib(Lt : Light, isShadowLamp : bool, wpos : vec3<f32>, N : vec3<f32>,
       }
     }
   }
-  acc.col = acc.col + albedo * lcol * (att * spotD * lampSh) * NoLl * (1.0 - metalness) * (1.0 - wetSheen * 0.85);
+  // On a baked fragment the live diffuse steps aside (1 - bakeW) and the
+  // shadow-mapped lamp carves its shadow out of the pool in the pool's own
+  // steady colour (bakeC.xyz; 1 - lampSh is 0 for every other lamp).
+  acc.col = acc.col + albedo * (lcol * (lampSh * (1.0 - bakeW)) - F.bakeC.xyz * ((1.0 - lampSh) * bakeW))
+          * (att * spotD) * NoLl * (1.0 - metalness) * (1.0 - wetSheen * 0.85);
   // Bounce fill: pool light bounced off the road washes nearby surfaces (walls,
   // kerbs, car flanks) with the lamp tint even outside the beam — a near-free
   // stand-in for local ambient probes, with a soft NoL floor (mirrors GLX
   // js/render/glx/shaders/glsl-lit.js; BOUNCE = params3.x = uBounceK, default 0.04).
   if (F.params3.x > 0.0) {
-    acc.col = acc.col + albedo * lcol * (att * F.params3.x * (0.55 + 0.45 * NoLl)) * (1.0 - metalness);
+    acc.col = acc.col + albedo * lcol * (att * F.params3.x * (0.55 + 0.45 * NoLl)) * (1.0 - metalness) * (1.0 - bakeW);
   }
   // GGX specular from the lamp (same microfacet BRDF as the sun).
   // LAMP WALL SPILL (params9.y = uLampWallSpill): out-of-beam reflection floor
@@ -1385,6 +1396,20 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // per-light shadows (cost); the cone shapes the light. The nearest floodlight
   // also 4-tap-PCF-samples lampShadowTex.
   var lampFog = vec3<f32>(0.0);   // lamp irradiance reaching the fog column (Block 6)
+  // BAKED LAMP POOLS (GLX/TLX parity): an upward-facing fragment near the baked
+  // surface height takes EVERY lamp's diffuse pool and bounce from the light
+  // map, and each live lamp's diffuse/bounce steps aside by bakeW. Level-0
+  // samples: no implicit derivative, legal in any control flow.
+  let bUv = (in.wpos.xz - F.bakeA.xy) / max(F.bakeA.zw, vec2<f32>(1e-3));
+  let bRow = 0.5 / max(F.bakeC.w, 1.0);
+  let bUvD = vec2<f32>(bUv.x, clamp(bUv.y, bRow, 1.0 - bRow) * 0.5);
+  let bT = textureSampleLevel(lampBakeTex, envSamp, bUvD, 0.0);
+  let bB = textureSampleLevel(lampBakeTex, envSamp, bUvD + vec2<f32>(0.0, 0.5), 0.0).rgb * F.bakeB.xyz;
+  let bIn = all(bUv > vec2<f32>(0.0)) && all(bUv < vec2<f32>(1.0));
+  let bakeW = select(0.0, smoothstep(0.55, 0.85, N.y) * (1.0 - smoothstep(0.75, 2.5, abs(in.wpos.y - bT.a))),
+                     F.bakeB.w > 0.5 && bIn);
+  color = color + albedo * bT.rgb * F.bakeB.xyz * bakeW * (1.0 - metalness) * (1.0 - wetSheen * 0.85)
+                + albedo * bB * (F.params3.x * bakeW) * (1.0 - metalness);
   if (D.lampRange.z > 0.5) {
     // Per-chunk mode (chunked draws only): this draw's lamps are its slice of
     // the baked chunkLampIdx table over the full trackLights set. The shadow
@@ -1397,7 +1422,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     for (var i = 0u; i < lrCnt; i = i + 1u) {
       let idx = chunkLampIdx[lrOff + i];
       let r = lampContrib(trackLights[idx], i32(idx) == sIdx, in.wpos, N, V,
-                          albedo, metalness, wetSheen, rough, a, f0, NoV, clearcoat);
+                          albedo, metalness, wetSheen, rough, a, f0, NoV, clearcoat, bakeW);
       color = color + r.col;
       lampFog = lampFog + r.fog;
     }
@@ -1418,11 +1443,13 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
                           (lampM0 >> (lampBit & 31u)) & 1u, i < 24);
       if (masked == 0u) { continue; }
       let r = lampContrib(lights[i], i == i32(F.params8.z), in.wpos, N, V,
-                          albedo, metalness, wetSheen, rough, a, f0, NoV, clearcoat);
+                          albedo, metalness, wetSheen, rough, a, f0, NoV, clearcoat, bakeW);
       color = color + r.col;
       lampFog = lampFog + r.fog;
     }
   }
+  // (lampSh - bakeW) carving can undershoot a baked fragment; never below black.
+  color = max(color, vec3<f32>(0.0));
 
   // [Block 4] Metallic-flake SPARKLE (mirrors GLX LIT_FS js/render/glx/shaders/glsl-lit.js). A
   // view-dependent micro-glint: each tiny cell gets a random flake tilt and flashes
@@ -1994,7 +2021,7 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     SKY_UNIFORM_BYTES: 240,
     // Lit-pipeline uniform block sizes (see the LIT struct comments; the JS-side
     // writers in wgx.js MUST agree with these).
-    FRAME_UNIFORM_BYTES: 608,   // FrameU + lampLightVP + params8..10 + pitLane (the painted lane) + pitBox (your box)
+    FRAME_UNIFORM_BYTES: 656,   // FrameU + lampLightVP + params8..10 + pitLane (the painted lane) + pitBox (your box)
     SHADOW_LVP_BYTES: 64,       // ShadowU (lightVP mat4)
     SHADOW_MODEL_BYTES: 64,     // ShadowModel (model mat4), dynamic-offset stride 256
     LIGHT_STRIDE_BYTES: 64,     // one Light
