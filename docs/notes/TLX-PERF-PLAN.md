@@ -15,8 +15,8 @@ verified before it merges onto the session branch, and deployed on the user's wo
 | L0 | player gated by the lamp radius (key + cast) | done 3af01ea — correct, ~1 % fewer lamp passes on montreal (the lamp is picked near the camera, so the player is usually in reach) |
 | L1 | static-props lamp map, cars drawn on top | done 3af01ea — 1966 of 2005 night rebuilds served from the copy, lamp pass CPU 0.96 → 0.71 ms (Lavapipe); awaiting a night census |
 | L1b | keep lamp instanced casters when the lamp is unchanged (fallback for L1) | not needed unless the census shows the depth copy failing |
-| G1 | godray chain: night lamp beams use one blur pair, not two | planned |
-| R1 | pooled fixed-shape draw records | planned |
+| G1 | godray chain: night lamp beams use one blur pair, not two | done 40a627f (TLX + GLX, `apex26.grLite`) |
+| R1 | pooled fixed-shape draw records | done (R1 commit) |
 | P2 | fixed per-pair post materials (no texture swaps) | low priority |
 | — | SSR MRT loop skip / attachment skip | dropped (below) |
 
@@ -164,3 +164,22 @@ copy (`blitFramebuffer`) without error, but its frame is not readable here
 (`capturePixels` returns a cleared buffer on both trees), so WebGL2 pixels are
 unverified. Lavapipe's GPU time is not on this clock, and a desktop culls and packs
 more props per pass, so the real saving should be larger — the night census is the check.
+
+**Night census for L0 + L1 (e6d3962, macos-latest Metal, montreal NIGHT).** three.js/WebGPU:
+gpuErrors 0 (the depth32float lamp maps and the static→lamp depth copy are valid on
+Metal), no compile `stack:` rows, luma 49.2, 3 frames ≥ 100 ms. three.js/WebGL2:
+gpuErrors 0, no compile rows (the AUTO post warm holds), 3 frames ≥ 100 ms. GLX and WGX
+clean. There is no pre-L1 night census to compare lamp cost against; the frame-time
+effect on real hardware is not isolated by this run.
+
+**G1 (40a627f).** Lamp beams alone (no sun shafts) take one H+V blur pair instead of two
+— on TLX and GLX, one knob `apex26.grLite=0`. Lavapipe TLX WebGPU, montreal night rain,
+frozen, base vs new: composite within the same-tree floor (0.086 % / 0.027 % vs 0.089 % /
+0.025 %), and the `tlxViz=shafts` buffer closer to base than two captures of the same
+tree (meanAbs 0.077 / 0.007 vs 0.209 / 0.095); no striping by eye. GLX night rain race:
+0 GL errors, no page errors.
+
+**R1.** Pooled records via `pushRec()`/`resetRecs()`; a canary runs the real pool. Braking
+lap 0 sync compiles, race luma 57.7 (unchanged), garage 44.9. The allocation saving
+(~150-400 objects/frame) is not measured on this box — a heap-sawtooth read here would
+be dominated by SwiftShader/Lavapipe noise; it is structural.
