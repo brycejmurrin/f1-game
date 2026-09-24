@@ -36,7 +36,7 @@ const RadioLines = (function () {
       "P{pos}. HEADS DOWN, WE GO AGAIN", "{by} GOT BY. P{pos}, STAY IN THE FIGHT"],
     "eng.leadLost": ["{by} TAKES THE LEAD. P2, STAY IN TOUCH", "P2. {by} IS AHEAD, KEEP THE PRESSURE ON"],
     "eng.lap1Up": ["GOOD START! P{pos}, UP {n}", "GREAT FIRST LAP. P{pos}, GAINED {n}"],
-    "eng.lap1Down": ["TOUGH START. P{pos}, PLENTY OF RACE LEFT", "P{pos} AFTER LAP ONE. STAY CALM"],
+    "eng.lap1Down": ["TOUGH START. P{pos}, KEEP FIGHTING", "P{pos} AFTER LAP ONE. STAY CALM"],
     "eng.lap1Same": ["P{pos} AFTER LAP ONE. SETTLE IN", "CLEAN START. P{pos}"],
     // ── ENGINEER: the car ahead ────────────────────────────────────────────
     "eng.attack": ["{gap} TO {ahead}. YOU'RE IN RANGE", "WITHIN A SECOND OF {ahead}. GO FOR IT",
@@ -65,7 +65,7 @@ const RadioLines = (function () {
     "eng.lastDefend": ["HOLD {behind} OFF, {gap} BEHIND", "LAST ONE. {behind} IS {gap} BACK, NO MISTAKES"],
     "eng.lastLead": ["LAST LAP, YOU'RE LEADING. BRING IT HOME", "ONE MORE. NICE AND CLEAN FOR THE WIN"],
     "eng.lastCalm": ["LAST LAP. BRING HOME P{pos}", "ONE TO GO. KEEP IT ON THE ROAD"],
-    "eng.win": ["YES! YOU WIN THE GRAND PRIX!", "GET IN THERE! RACE WINNER!", "P1! WHAT A DRIVE!"],
+    "eng.win": ["YES! YOU WIN THE RACE!", "GET IN THERE! RACE WINNER!", "P1! WHAT A DRIVE!"],
     "eng.podium": ["P{pos}! PODIUM, GREAT JOB", "ON THE PODIUM! P{pos}, WELL DRIVEN"],
     "eng.points": ["P{pos}. GOOD POINTS TODAY", "P{pos}, SOLID RESULT. THANK YOU"],
     "eng.recover": ["P{pos} FROM P{grid}. GREAT RECOVERY", "UP FROM P{grid} TO P{pos}. MEGA"],
@@ -75,7 +75,9 @@ const RadioLines = (function () {
     "eng.vsc": ["VSC, VSC. SLOW DOWN, HOLD POSITION", "VIRTUAL SAFETY CAR. BACK OFF"],
     "eng.yellow": ["YELLOW FLAG AHEAD. CAREFUL", "YELLOWS IN THE NEXT SECTOR. TAKE CARE"],
     "eng.green": ["GREEN FLAG. RACE ON", "GREEN, GREEN. GO GO GO", "TRACK IS CLEAR. PUSH NOW"],
-    "eng.hit": ["BIG HIT. ARE YOU OK?", "THAT WAS A BIG ONE. CHECK THE CAR", "CONTACT. KEEP IT CALM"],
+    "eng.out": ["WE'RE STOPPING THE CAR. SORRY", "THAT'S THE END OF OUR RACE. SORRY"],
+    "eng.red": ["RED FLAG, RED FLAG. SLOW DOWN", "RED FLAG. BACK OFF, THE RACE IS STOPPED"],
+    "eng.hit": ["BIG HIT. ARE YOU OKAY?", "THAT WAS A BIG ONE. CHECK THE CAR", "CONTACT. KEEP IT CALM"],
     "eng.rivalOut": ["{name} IS OUT. THAT'S P{pos}", "{name} HAS RETIRED. UP TO P{pos}"],
     "eng.rivalPit": ["{name} HAS PITTED. PUSH NOW", "{name} IN THE PITS. CLEAR AIR, GO"],
     "eng.battLow": ["BATTERY LOW. LIFT AND COAST", "ENERGY LOW, HARVEST THIS LAP"],
@@ -97,7 +99,8 @@ const RadioLines = (function () {
     "tv.toGo": ["{left} LAPS TO GO. {a} LEADS BY {gap}", "{left} TO GO, {a} {gap} CLEAR"],
     "tv.lastLap": ["LAST LAP! {a} LEADS BY {gap}", "FINAL LAP. {a} HAS {gap} IN HAND"],
     "tv.lead": ["{a} LEADS {b} BY {gap}", "{a} IN CONTROL, {gap} CLEAR OF {b}"],
-    "tv.win": ["{a} WINS THE GRAND PRIX!", "AND IT'S {a} WHO TAKES THE FLAG!"],
+    "tv.win": ["{a} WINS THE RACE!", "AND IT'S {a} WHO TAKES THE FLAG!"],
+    "tv.red": ["RED FLAG! THE RACE IS STOPPED", "AND THAT'S A RED FLAG"],
     "tv.closeWin": ["BY JUST {gap}! {a} WINS IT!", "{a} HOLDS ON BY {gap}!"],
   });
 
@@ -120,7 +123,8 @@ const RadioLines = (function () {
   /** "1.2" for a gap in seconds — one decimal under 10, whole seconds above. */
   function gapText(s) {
     if (!(s >= 0) || !Number.isFinite(s)) return null;
-    return s < 10 ? s.toFixed(1) : String(Math.round(s));
+    // Never "0.0": two cars that close are a tenth apart on any real timing screen.
+    return s < 10 ? Math.max(0.1, s).toFixed(1) : String(Math.round(s));
   }
   /** "1:32.4" — the tenth is what an engineer reads out, not the thousandth. */
   function timeText(s) {
