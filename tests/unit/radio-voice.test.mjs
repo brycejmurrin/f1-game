@@ -735,3 +735,50 @@ test("quitting to the title ends the radio, not just the card", () => {
     "quitToMenu must end the sting itself rather than borrow the voice's observer");
   assert.match(quit, /_annQueue\.length = 0/, "…on the same pass that empties the announce queue");
 });
+
+// ── Regressions from the 2026-09-24 integration audit ───────────────────────
+
+test("the radio never cancels speech that is not its own (the announcer shares the synth)", async () => {
+  const { RV: R, G, synth } = load({ stored: { radioVoice: true } });
+  synth.speaking = true;                       // the announcer is mid-read
+  const v = R.create(G);
+  v.stop();
+  v.setEnabled(false); v.setEnabled(true);
+  await flush();
+  assert.equal(synth.calls.filter((c) => c.m === "cancel").length, 0, "no global cancel while nothing of ours is queued");
+});
+
+test("a line's own preempt cancels synchronously, before anything else can start speaking", async () => {
+  const { RV: R, G, synth } = load({ stored: { radioVoice: true } });
+  const v = R.create(G);
+  v.say("TYRES AT 50%", 3, "info");
+  await flush();                               // our line is on the synth
+  v.stop();
+  const n = synth.calls.length;
+  assert.equal(synth.calls[n - 1].m, "cancel", "cancelled in the same task as stop()");
+  // Something else (the announcer's wrap-up) speaks next, in the same task:
+  synth.speak({ text: "And the winner is" });
+  await flush();
+  assert.equal(synth.calls.at(-1).m, "speak", "no deferred cancel lands after it and kills it");
+});
+
+test("the settings TEST sample is not cancelled a task later", async () => {
+  const { RV: R, G, synth } = load({ stored: { radioVoice: true } });
+  G.state = "menu";
+  const speak = synth.speak.bind(synth);
+  synth.speak = (u) => { synth.speaking = true; speak(u); };   // a real engine reports what it is saying
+  const v = R.create(G);
+  assert.equal(v.preview("radio"), true);
+  await flush();
+  const tail = synth.calls.filter((c) => c.m === "speak" || c.m === "cancel").map((c) => c.m);
+  assert.equal(tail.at(-1), "speak", `the sample is the last thing on the synth: ${tail.join(",")}`);
+});
+
+test("a line still waiting out its cue when the race ends is dropped, not read over the results", async () => {
+  const { RV: R, G, synth } = load({ stored: { radioVoice: true } });
+  const v = R.create(G);
+  assert.equal(v.say("BOX BOX BOX", 3, "info", 0.05), true);
+  G.state = "results";                         // endRace() lands before the cue finishes
+  await new Promise((r) => setTimeout(r, 80));
+  assert.equal(synth.calls.filter((c) => c.m === "speak").length, 0);
+});

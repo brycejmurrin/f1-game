@@ -91,6 +91,7 @@ const FULL = [
   "js/render/glx/shadow.js",
   "js/render/shared/lamp-chunks.js",
   "js/render/shared/frustum.js",
+  "js/render/shared/inst-cells.js",  // InstCells: shared cell-set cull cache (GLX+WGX)
   "js/render/shared/vertex-pack.js",   // VertexPack: the ONE definition of how a world vertex channel is quantised — GLX's interleaved layout plus the snorm/half primitives WGX and TLX pack with
   "js/render/glx/chunked.js",
   "js/render/glx/glx.js",
@@ -327,6 +328,7 @@ const CARVIEW = [
   "js/render/glx/shadow.js",
   "js/render/shared/lamp-chunks.js",
   "js/render/shared/frustum.js",
+  "js/render/shared/inst-cells.js",  // InstCells: shared cell-set cull cache (GLX+WGX)
   "js/render/shared/vertex-pack.js",   // VertexPack: the ONE definition of how a world vertex channel is quantised — GLX's interleaved layout plus the snorm/half primitives WGX and TLX pack with
   "js/render/glx/chunked.js",
   "js/render/glx/glx.js",
@@ -453,6 +455,7 @@ const HARD_EDGES = [
   ["js/render/glx/shadow.js", "js/render/glx/glx.js"],
   ["js/render/shared/lamp-chunks.js", "js/render/glx/chunked.js"], // drawChunked resolves LampChunks tables (call-time; keep explicit)
   ["js/render/shared/frustum.js", "js/render/glx/chunked.js"],     // cull helpers (call-time; keep explicit)
+  ["js/render/shared/inst-cells.js", "js/render/glx/glx.js"],
   ["js/render/glx/chunked.js", "js/render/glx/glx.js"],
   ["js/render/glx/glx.js", "js/render/shared/assets.js"],         // Assets feature-detects the backend's createTextureArray
   ["js/track/core/geom.js", "js/garage/scene-prims.js"],    // the bay's primitives read TrackGeom.MAT at eval for their per-vertex material ids
@@ -604,6 +607,9 @@ const DEFERRED = {
     "js/render/webgpu/wgsl-chunks.js",
     "js/render/webgpu/wgsl-post.js",
     "js/render/webgpu/wgsl-fx.js",
+    "js/render/webgpu/wgx-shadow.js",
+    "js/render/webgpu/wgx-chunked.js",
+    "js/render/webgpu/wgx-post.js",
     "js/render/webgpu/wgx.js",
   ],
   three: [
@@ -718,8 +724,11 @@ const LAZY_NET_EDGES = [
 const DEFERRED_EDGES = [
   ["js/render/webgpu/wgsl-chunks.js", "js/render/webgpu/wgsl-post.js"], // string concat at eval
   ["js/render/webgpu/wgsl-chunks.js", "js/render/webgpu/wgsl-fx.js"],
-  ["js/render/webgpu/wgsl-post.js", "js/render/webgpu/wgx.js"],
+  ["js/render/webgpu/wgsl-post.js", "js/render/webgpu/wgx-post.js"],
   ["js/render/webgpu/wgsl-fx.js", "js/render/webgpu/wgx.js"],
+  ["js/render/webgpu/wgx-shadow.js", "js/render/webgpu/wgx.js"],
+  ["js/render/webgpu/wgx-chunked.js", "js/render/webgpu/wgx.js"],
+  ["js/render/webgpu/wgx-post.js", "js/render/webgpu/wgx.js"],
   ["js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js"],
   ["js/render/three/tsl-lit.js", "js/render/three/tlx.js"],
   ["js/render/three/tsl-sky.js", "js/render/three/tlx.js"],      // TLX.create invokes TLXShaders.sky
@@ -747,7 +756,11 @@ const PATHS = {
   POST_COMMON: "js/render/shared/post-common.js",
   WGSL_CHUNKS: "js/render/webgpu/wgsl-chunks.js",
   WGSL_POST: "js/render/webgpu/wgsl-post.js",
+  WGX_SHADOW: "js/render/webgpu/wgx-shadow.js",
+  WGX_CHUNKED: "js/render/webgpu/wgx-chunked.js",
+  WGX_POST: "js/render/webgpu/wgx-post.js",
   WGX: "js/render/webgpu/wgx.js",
+  INST_CELLS: "js/render/shared/inst-cells.js",
   GLTF: "js/render/shared/gltf.js",
   ASSETS: "js/render/shared/assets.js",
   TRACK_SPACE: "js/track/core/space.js",

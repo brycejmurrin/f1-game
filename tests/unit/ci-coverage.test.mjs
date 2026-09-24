@@ -776,15 +776,16 @@ test("the renderer job proves the adapter before trusting the run, and uploads i
 
 test("the renderer job is path-filtered on a cheap runner and stays out of the deploy gate", () => {
   assert.match(rendererFilter, /^    runs-on: ubuntu-latest$/m, "the filter must not allocate a macOS runner to say no");
-  // 2026-09-02 (Actions minutes): the macOS runner bills at 10x Linux and
-  // gpu-census.yml already gives every renderer commit its real-GPU verdict,
-  // so the gfx specs on Metal are nightly or opt-in (`renderer_macos: true`)
-  // — a push must never allocate that runner. The `!inputs.concurrency_key`
-  // term is what tools/ci/ci-coverage.mjs reads to keep both jobs out of the
-  // deploy gate; it has to stay first.
-  assert.match(rendererFilter, /if: \$\{\{ !inputs\.concurrency_key && \(github\.event_name == 'schedule' \|\| github\.event_name == 'workflow_dispatch'\) \}\}/);
+  // 2026-09-02 (Actions minutes): the macOS runner bills at 10x Linux, so
+  // drafts and topic-branch pushes stay off it. Ready (non-draft) PRs that
+  // touch js/render/ MUST allocate it — otherwise a WGX/GLX rewrite can go
+  // "green" with Metal never running. Nightly + `renderer_macos: true`
+  // dispatch remain. The `!inputs.concurrency_key` term is what
+  // tools/ci/ci-coverage.mjs reads to keep both jobs out of the deploy gate;
+  // it has to stay first.
+  assert.match(rendererFilter, /if: \$\{\{ !inputs\.concurrency_key && \(github\.event_name == 'schedule' \|\| github\.event_name == 'workflow_dispatch' \|\| \(github\.event_name == 'pull_request' && !github\.event\.pull_request\.draft\)\) \}\}/);
   assert.match(rendererJob, /^    needs: renderer-filter$/m);
-  assert.match(rendererJob, /if: needs\.renderer-filter\.outputs\.renderer == 'true' && \(github\.event_name == 'schedule' \|\| inputs\.renderer_macos == true\)/);
+  assert.match(rendererJob, /if: needs\.renderer-filter\.outputs\.renderer == 'true' && \(github\.event_name == 'schedule' \|\| inputs\.renderer_macos == true \|\| \(github\.event_name == 'pull_request' && !github\.event\.pull_request\.draft\)\)/);
   assert.match(ciWorkflow, /workflow_dispatch:\n    inputs:\n(?:.*\n)*?      renderer_macos:\n(?:.*\n)*?        type: boolean\n(?:.*\n)*?        default: false\n/,
     "the dispatch must declare the renderer_macos opt-in, default off");
   assert.equal(report.rendererGate.deployGate, false,

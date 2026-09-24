@@ -47,6 +47,7 @@
   "Hash32",
   "Helmets",
   "IncidentSim",
+  "InstCells",
   "KeyBinds",
   "LampBake",
   "LandmarkKit",
@@ -111,6 +112,9 @@
   "TrackSpline",
   "TrackSurface",
   "TunerPanel",
+  "WGXChunked",
+  "WGXPost",
+  "WGXShadow",
   "WeatherArc"
  ],
  "mutable": [

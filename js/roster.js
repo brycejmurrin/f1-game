@@ -10,6 +10,9 @@
       "js/render/webgpu/wgsl-chunks.js",
       "js/render/webgpu/wgsl-post.js",
       "js/render/webgpu/wgsl-fx.js",
+      "js/render/webgpu/wgx-shadow.js",
+      "js/render/webgpu/wgx-chunked.js",
+      "js/render/webgpu/wgx-post.js",
       "js/render/webgpu/wgx.js"
     ],
     "three": [
@@ -35,10 +38,22 @@
     ],
     [
       "js/render/webgpu/wgsl-post.js",
-      "js/render/webgpu/wgx.js"
+      "js/render/webgpu/wgx-post.js"
     ],
     [
       "js/render/webgpu/wgsl-fx.js",
+      "js/render/webgpu/wgx.js"
+    ],
+    [
+      "js/render/webgpu/wgx-shadow.js",
+      "js/render/webgpu/wgx.js"
+    ],
+    [
+      "js/render/webgpu/wgx-chunked.js",
+      "js/render/webgpu/wgx.js"
+    ],
+    [
+      "js/render/webgpu/wgx-post.js",
       "js/render/webgpu/wgx.js"
     ],
     [

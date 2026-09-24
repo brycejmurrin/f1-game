@@ -91,28 +91,28 @@
       1645.7314
     ],
     [
-      1658.7603,
-      8.5252,
-      54.2273,
-      -3.6322,
-      -1.8353,
-      1658.7603
+      1658.789,
+      8.5354,
+      55.1165,
+      -3.5924,
+      -1.8354,
+      1658.789
     ],
     [
-      1669.9081,
-      13.9731,
-      44.4413,
-      -5.1099,
-      -1.9171,
-      1669.9081
+      1670.798,
+      14.3977,
+      51.742,
+      -4.7468,
+      -1.9232,
+      1670.798
     ],
     [
-      1678.0568,
-      16.1604,
-      27.6076,
+      1681.3648,
+      16.1388,
+      41.3136,
       0,
-      -1.6932,
-      1678.0568
+      -1.6826,
+      1681.3648
     ]
   ],
   "trail brake into rotation": [
@@ -149,76 +149,76 @@
       1663.8732
     ],
     [
-      1676.3282,
-      9.6678,
-      48.9247,
-      -1.3955,
-      -1.7583,
-      1676.3282
+      1676.5797,
+      9.7361,
+      51.7023,
+      -1.3783,
+      -1.7585,
+      1676.5797
     ],
     [
-      1686.8547,
-      12.6857,
-      38.7739,
-      -0.6188,
-      -1.7799,
-      1686.8547
+      1688.5568,
+      13.1861,
+      48.3062,
+      -0.7336,
+      -1.7805,
+      1688.5568
     ]
   ],
   "off-track recovery": [
     [
-      2889.3059,
+      2889.3119,
       11.0029,
-      44.4104,
-      -0.0672,
+      44.7778,
+      -0.0665,
       2.1771,
-      2889.3059
+      2889.3119
     ],
     [
-      2899.0937,
-      10.8427,
-      35.7276,
-      0.5576,
-      2.2196,
-      2899.0937
+      2899.9047,
+      10.8158,
+      41.4572,
+      0.6929,
+      2.2203,
+      2899.9047
     ],
     [
-      2906.8506,
-      10.3989,
-      27.69,
-      0.3077,
-      2.2641,
-      2906.8506
+      2909.7179,
+      10.1873,
+      38.1702,
+      0.8071,
+      2.2678,
+      2909.7179
     ],
     [
-      2912.713,
-      9.8914,
-      20.5208,
-      -0.2124,
-      2.3042,
-      2912.713
+      2918.6399,
+      9.3001,
+      34.9589,
+      0.6313,
+      2.3134,
+      2918.6399
     ],
     [
-      2916.8876,
-      9.4373,
-      14.2022,
-      -0.6615,
-      2.3382,
-      2916.8876
+      2926.8915,
+      8.2718,
+      33.4514,
+      0.4516,
+      2.3591,
+      2926.8915
     ],
     [
-      2919.6111,
-      9.097,
-      9.0679,
-      -0.9611,
-      2.3636,
-      2919.6111
+      2935.1001,
+      7.0298,
+      33.9707,
+      0.4349,
+      2.4053,
+      2935.1001
     ]
   ],
   "_blessed": {
-    "sha": "c039752eae534f12e35675389a53e3bbd7e71905",
-    "reason": "monza (the characterization track) lost its bogus sceneryStartFrac (0.0125, shift 0.087). Two knock-ons, no physics code change: (1) road height moves <=0.14 m because the undulation ripple is phased on _sceneryShift, giving ~0.01-0.04 m/s speed drift in every scenario; (2) monza's scenery-placed walls moved with the corrected frame (wallStats tightFrac 0.81 -> 0.78), so 'steady corner load' step 4, which runs out to ~13 m lateral, no longer meets a wall that sat there only in the wrong frame (speed 39.07 -> 44.44, slip 0 -> -5.1). With monza's circuit files reverted to the base, the vm cross-check passes 5/5 on this tree.",
-    "at": "2026-09-23T13:59:19.422Z",
-    "hash": "d2ceeb4b91675d435c149d13b2523660b2d7492d83dec67bdc9796a6a6f48001"
+    "sha": "b0b31292927e3962bf0f6501e32f095288f06fd4",
+    "reason": "Intentional grass grip correction: drive and pedal forces respect surface grip; passive drag and pedal braking share a bounded tarmac-relative budget. Retain throttle-on grass recovery and low-speed stopping with worn weak brakes. Road-only acceleration stays unchanged.",
+    "at": "2026-09-24T04:49:14.014Z",
+    "hash": "0f4e2f9a8920f755bb35b98661af82481f69ea1097f9d10fb6a552fd19ba9b0f"
   }
 }

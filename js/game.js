@@ -2130,7 +2130,7 @@ function redFlagRestart() {
     c.prog = c.lap * L - (L - c.s);
     c._progGift = (c._progGift || 0) + (c.prog - progWas);
     c.head = 0; c.yawVis = 0; c.rPrevHead = 0; c.rPrevYawVis = 0;
-    c.speed = 0; c.accSm = 0; c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.lane = c.lanePref;   // as gridUp
+    c.speed = 0; c.accSm = 0; c.corridorAccel = 0; c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.lane = c.lanePref;   // as gridUp
     c.xOn = false; c.aeroX = 0; c.xArmed = false; c.towing = 0; c.wake = 0; c.wheelLock = 0;
     clearRacingScratch(c);
     // A CAR ON A GRID BOX IS STATIONARY, ALONE AND ON CLEAN TARMAC. This path
@@ -2211,7 +2211,7 @@ function gridUp(preOrder) {
       c.rPrevS = c.s; c.rPrevX = c.x;
     }
     c.head = 0; c.yawVis = 0;   // straight ahead on the grid (heading model)
-    c.speed = 0; c.accSm = 0; c.prog = -(14 + i * 8); c.lap = 0; c.fuelLap = 0; c.fuelRestartLaps = 0; c.energy = 1; c._progGift = 0;   // a car on the grid is pulling nothing — apex.js reset() has the full list and why
+    c.speed = 0; c.accSm = 0; c.corridorAccel = 0; c.prog = -(14 + i * 8); c.lap = 0; c.fuelLap = 0; c.fuelRestartLaps = 0; c.energy = 1; c._progGift = 0;   // a car on the grid is pulling nothing — apex.js reset() has the full list and why
     c.otT = 0; c.otCool = 0; c.lapTime = 0; c.best = Infinity; c.totalT = 0;
     c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
     c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.penalty = 0; c.offT = 0; c.hits = 0; c.hitSev = 0; c.wallHits = 0; c.errCount = 0;   // mistakes THIS race — the instrument's denominator, cleared only by a NEW race
@@ -4815,6 +4815,21 @@ function updateCar(c, dt, ranked) {
     }
   }
 
+  // Classify the visible surface BEFORE applying longitudinal forces. Kerbs
+  // and the separate pit ribbon remain road, even outside the main half-width.
+  c.onKerb = Tracks.onKerb(track, c.s, c.x) > 0;
+  c.inPitLane = Math.abs(c.x) > hw && Tracks.inPitLane(track, c.s, c.x);
+  c.offroad = Math.abs(c.x) > hw && !c.onKerb && !c.inPitLane;
+  const surfaceMu = c.offroad ? lerp(1, OFF_GRIP, clamp((Math.abs(c.x) - hw) / 1.5, 0, 1)) : 1;
+  const roadBrake = BRAKE * tyres.tractionMul(c) * (c.human ? mods.braking : 1) * (gripMult(c) / gripMult());
+  // Rolling resistance and pedal braking share a budget below tarmac braking.
+  // Reserve drag first so a throttle-on excursion still slows; the remaining
+  // pedal force grows continuously with demand, even with weak or worn brakes.
+  const grassDrag = Math.min((1 - surfaceMu) * 24, roadBrake * .75);
+  const surfaceBrake = c.offroad
+    ? Math.min(roadBrake * surfaceMu, Math.max(0, roadBrake * .95 - grassDrag)) : roadBrake;
+  const longitudinalSpeed = c.speed;
+
   // --- integrate speed ---
   // AI always drives; the player holds GAS unless auto-throttle is on (then the
   // car accelerates on its own and braking still takes over below).
@@ -4828,11 +4843,11 @@ function updateCar(c, dt, ranked) {
     if (c.speed > 0) {
       // Tread pays braking back in the wet — the ratio is exactly 1 on slicks and in the dry (docs/PHYSICS.md). The AI earns it too: its
       // `tread: null` resolves to the right compound for cornering, and until 2026-09-22 it braked as if on slicks in the rain.
-      c.speed = Math.max(0, c.speed - BRAKE * tyres.tractionMul(c) * (c.human ? mods.braking * brakeLvl : brakeLvl) * (gripMult(c) / gripMult()) * dt);
+      c.speed = Math.max(0, c.speed - surfaceBrake * brakeLvl * dt);
     } else if (c.human && state === "race") {
       // Stopped and still braking: crawl backwards so the player can ease off a
       // wall or re-aim after a spin. Capped slow; throttle drives forward again.
-      c.speed = Math.max(REVERSE_MAX, c.speed - REVERSE_ACCEL * dt);
+      c.speed = Math.max(REVERSE_MAX, c.speed - REVERSE_ACCEL * surfaceMu * dt);
     }
     c.energy = Math.min(1, c.energy + regenFor(c) * 1.6 * dt);
   } else if (!onThrottle) {
@@ -4849,7 +4864,7 @@ function updateCar(c, dt, ranked) {
     // 8 m pitch to T1 — see the start test in ai-racecraft-vm.
     const launch = c.launchOn ? AiDrive.launchMul(raceT - launchT0, c.launch) : 1;
     if (c.launchOn && AiDrive.launchDone(raceT - launchT0, c.launch)) c.launchOn = false;
-    const a = (ACCEL * PACE * perfMul * (c.human ? mods.accel * throttleLvl : launch) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
+    const a = (ACCEL * PACE * perfMul * (c.human ? mods.accel * throttleLvl : launch) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy) * surfaceMu * (state === "race" ? 1 : 0);
     if (!c.human) c.accSm = damp(c.accSm ?? 0, a, 6, dt);   // what this car is pulling — AiDrive.otWant reads it on the blocker
     // A ceiling that drops under the car (VSC vmax cut, limiter downshift) bleeds
     // at coast drag; it used to scrub 25 m/s in one step.
@@ -4906,37 +4921,10 @@ function updateCar(c, dt, ranked) {
   } else if (!c.human) c.gear = naturalGear(gearSpeed);
   c.rpm = rpmFor(c.gear, gearSpeed);
 
-  // Kerb vs off-track: a kerb sits just outside the road edge and is DRIVABLE
-  // (rumble + a little grip loss), whereas going past the edge with no kerb is
-  // grass/run-off. So detect the kerb first and exclude it from "offroad".
-  c.onKerb = Tracks.onKerb(track, c.s, c.x) > 0;
-
-  // --- offroad ---
-  // THE PIT LANE IS ROAD. On the 34 circuits that have room for a separate
-  // ribbon it sits beyond `hw`, so without this every car that drove into it
-  // would pick up grass drag, a cut count and eventually a rescue — i.e. the
-  // lane would be paint you get penalised for using. Tracks.inPitLane is the
-  // same fit the ribbon is built from, so the surface a driver can see and the
-  // surface the physics grants are the same strip by construction.
-  c.inPitLane = Math.abs(c.x) > hw && Tracks.inPitLane(track, c.s, c.x);
-  c.offroad = Math.abs(c.x) > hw && !c.onKerb && !c.inPitLane;
+  // Passive resistance never raises speed to the crawl floor or prevents a stop.
   if (c.offroad) {
-    const offDepth = clamp((Math.abs(c.x) - hw) / 5, 0, 1);
-    // Grass DRAG: slows you toward a crawl, and never speeds you up. The floor
-    // used to be a bare Math.max, so any time you were off-track below 10.8 m/s
-    // it RAISED your speed to 10.8 — you could not brake below 39 km/h on the
-    // grass (BRAKE removes 0.37 m/s per frame and this put it straight back),
-    // could not stop at all, and crawling out of a gravel trap at 3 m/s snapped
-    // you to 10.8 in a single frame. It also runs after the accel/brake/slope
-    // integration, so it overrode all of them.
-    // The floor is a SPEED, so it rides the pace scale — otherwise the crawl sits
-    // at 24% of top speed at pace 2 and 15% at pace 5, i.e. the grass would let you
-    // off progressively lighter the faster the field runs. The scrub RATE is a
-    // force and stays absolute, like BRAKE.
     const grassFloor = GRASS_V * 0.6 * Math.max(PACE, 0.05);
-    if (c.speed > grassFloor) {
-      c.speed = Math.max(grassFloor, c.speed - (20 + offDepth * 28) * dt);
-    }
+    if (c.speed > grassFloor) c.speed = Math.max(grassFloor, c.speed - grassDrag * dt);
     c.offT += dt;
     if (c.offT > 1.2) {
       c.offT = -2;   // grace before next count
@@ -5004,6 +4992,10 @@ function updateCar(c, dt, ranked) {
     if (soundOn && c.kerbSndT <= 0) { GameAudio.rumble(); c.kerbSndT = 0.07; }
     if ((c.kerbHapT = (c.kerbHapT || 0) - dt) <= 0) { Input.vibrate(15); Input.rumble(0.25, 90); c.kerbHapT = 0.12; }
   }
+
+  // Signed observed acceleration, including braking/grass, for AI lane
+  // prediction. Keep the existing engine-pull accSm contract separate.
+  c.corridorAccel = damp(c.corridorAccel || 0, (c.speed - longitudinalSpeed) / Math.max(dt, 1e-6), 6, dt);
 
   // --- lateral ---
   let steer;
@@ -5452,9 +5444,9 @@ function updateCar(c, dt, ranked) {
     // this the friction ellipse would shave cornering grip (and add rear weight
     // transfer) for an acceleration that isn't actually happening.
     // The SURFACE brakes you too — surfMu below scaled LATERAL grip alone, so a tyre on grass retarded the car as hard as one on tarmac. Same lerp, same depth.
-    const axEstTarget = braking ? -BRAKE * tyres.tractionMul(c) * brakeLvl * (c.onKerb ? 1 : lerp(1, OFF_GRIP, clamp((Math.abs(c.x) - hw) / 1.5, 0, 1))) * (c.human ? (mods.braking || 1) : 1) * (gripMult(c) / gripMult())
+    const axEstTarget = braking ? -surfaceBrake * brakeLvl
       : (onThrottle
-          ? ACCEL * PACE * perfMul * (c.human ? mods.accel * throttleLvl : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy
+          ? (ACCEL * PACE * perfMul * (c.human ? mods.accel * throttleLvl : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy) * surfaceMu
           : -COAST_DRAG);
     c.axEstSm = damp(c.axEstSm ?? axEstTarget, axEstTarget, 10, dt);
     const wt = clamp(-c.axEstSm / LAT_MAX * WT_LONG, -0.16, 0.18);
@@ -5521,8 +5513,7 @@ function updateCar(c, dt, ranked) {
     const aeroGrip = (1 + DOWNFORCE * aeroDfMult(c) * Math.min(1, (Math.abs(c.speed) / vTop())) ** 2)
       * dirtyAirMul(c.wake || 0, c.speed);
     c._aeroGrip = aeroGrip;          // see c._vmaxNow — the other half of the trade
-    const offDepth = clamp((Math.abs(c.x) - hw) / 1.5, 0, 1);
-    const surfMu = c.onKerb ? 1 : lerp(1, OFF_GRIP, offDepth);
+    const surfMu = surfaceMu;
     // B3 (marbles-affect-grip, flag apex26.marbleGrip): an EXTERNAL grip scalar
     // for a player sitting on a settled off-line marble cluster, fed in ALONGSIDE
     // gripMult()/kerbGrip/bankMu here — the existing mu-scaling seam. It NEVER
@@ -5704,8 +5695,7 @@ function updateCar(c, dt, ranked) {
     // Same off-track lateral fade the player gets via surfMu — AI used to keep
     // full STEER_VMAX authority on grass, skating wide while the human path
     // was already grip-thinned. Continuous in |x| past the edge (player idiom).
-    const aiOffDepth = clamp((Math.abs(c.x) - hw) / 1.5, 0, 1);
-    const aiSurfMu = c.onKerb ? 1 : lerp(1, OFF_GRIP, aiOffDepth);
+    const aiSurfMu = surfaceMu;
     // latFac is zero at a standstill — the exact state the dig-out exists for,
     // so the pull it computes could never be applied. Floored while
     // unstuckActive ONLY (AiDrive.unstuckLatFloor); slow running is untouched.
