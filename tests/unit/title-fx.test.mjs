@@ -1,6 +1,6 @@
-/* title-fx — MENU ANIMATIONS + TITLE ART as player settings, the one-shot
- * intro, the hidden-tab pause and the title-button haptic. Runs the REAL
- * module in node:vm over a mini DOM.
+/* title-fx — MENU ANIMATIONS + TITLE INTRO + MENU WASH + TITLE ART as player
+ * settings, the one-shot intro, the hidden-tab pause and the title-button
+ * haptic. Runs the REAL module in node:vm over a mini DOM.
  *
  * Run: node --test tests/unit/title-fx.test.mjs */
 import { test } from "node:test";
@@ -15,6 +15,7 @@ const FILE = "js/ui/title-fx.js";
 const SRC = fs.readFileSync(path.join(ROOT, FILE), "utf8").replace(/^const\b/gm, "var");
 const CSS = fs.readFileSync(path.join(ROOT, "css/responsive.css"), "utf8");
 const MENUS = fs.readFileSync(path.join(ROOT, "css/menus.css"), "utf8");
+const COMP = fs.readFileSync(path.join(ROOT, "css/components.css"), "utf8");
 const SHELL = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 const EXPORT = fs.readFileSync(path.join(ROOT, "js/ui/settings-export.js"), "utf8");
 const MANIFEST = fs.readFileSync(path.join(ROOT, "tools/manifest.cjs"), "utf8");
@@ -55,7 +56,9 @@ function load({ stored = {}, osReduce = false, readyState = "complete", vibrate 
   overlay.setAttribute("data-intro", "");
   overlay.hidden = overlayHidden;
   // Static Appearance rows (shell declares them).
-  for (const id of ["pm-motion", "pm-titleart", "pm-replay-intro"]) ids.set(id, el(id));
+  for (const id of ["pm-motion", "pm-titleintro", "pm-menuwash", "pm-titleart", "pm-replay-intro"]) {
+    ids.set(id, el(id));
+  }
   ids.set("overlay", overlay);
   const html = { dataset: {} };
   const document = {
@@ -93,15 +96,12 @@ function load({ stored = {}, osReduce = false, readyState = "complete", vibrate 
     Input: vibrate ? { vibrate: (n) => buzz.push(n) } : undefined,
   };
   sb.window.document = document;
-  sb.window.matchMedia = sb.window.matchMedia;
-  // Fix matchMedia binding
   sb.window.matchMedia = () => ({
     matches: osReduce,
     addEventListener(_t, fn) { sb._mq = fn; },
     addListener(fn) { sb._mq = fn; },
   });
   const ctx = vm.createContext(sb);
-  // Patch MutationObserver to capture filter
   ctx.MutationObserver = function (fn) {
     const o = {
       off: false,
@@ -121,21 +121,27 @@ function load({ stored = {}, osReduce = false, readyState = "complete", vibrate 
   };
 }
 
-test("shell declares MENU ANIMATIONS, TITLE ART and REPLAY INTRO on Appearance", () => {
+test("shell declares MENU ANIMATIONS, TITLE INTRO, MENU WASH, TITLE ART and REPLAY INTRO", () => {
   assert.ok(SHELL.includes('id="pm-panel-appearance"'));
   assert.ok(SHELL.includes('id="pm-motion"'));
-  assert.ok(SHELL.includes('id="pm-motion-sel"'));
+  assert.ok(SHELL.includes('id="pm-titleintro"'));
+  assert.ok(SHELL.includes('id="pm-menuwash"'));
   assert.ok(SHELL.includes('id="pm-titleart"'));
-  assert.ok(SHELL.includes('id="pm-titleart-sel"'));
   assert.ok(SHELL.includes('id="pm-replay-intro"'));
+  assert.ok(SHELL.includes("apex26.titleIntro"));
+  assert.ok(SHELL.includes("apex26.menuWash"));
   assert.ok(SHELL.includes("apex26.titleArt"));
 });
 
-test("defaults: motion ON (no data-motion), title art ON (no data-title-art)", () => {
+test("defaults: motion ON, intro FULL, wash FULL, title art ON (no data-*)", () => {
   const { html, M } = load({ readyState: "loading" });
   assert.equal(M.mode(), "on");
+  assert.equal(M.introMode(), "full");
+  assert.equal(M.washMode(), "full");
   assert.equal(M.artMode(), "on");
   assert.equal(html.dataset.motion, undefined);
+  assert.equal(html.dataset.titleIntro, undefined);
+  assert.equal(html.dataset.menuWash, undefined);
   assert.equal(html.dataset.titleArt, undefined);
 });
 
@@ -150,6 +156,26 @@ test("a stored REDUCED lands on a normal OS, and garbage reads as unset (ON)", (
   assert.equal(load({ stored: { motion: 7 } }).M.mode(), "on");
 });
 
+test("TITLE INTRO quick/off stamp data-title-intro; garbage falls to full", () => {
+  const quick = load({ stored: { titleIntro: "quick" } });
+  assert.equal(quick.M.introMode(), "quick");
+  assert.equal(quick.html.dataset.titleIntro, "quick");
+  assert.equal(quick.M.introHoldMs(), 1200);
+  const off = load({ stored: { titleIntro: "off" } });
+  assert.equal(off.html.dataset.titleIntro, "off");
+  assert.ok(!off.overlay.hasAttribute("data-intro"), "OFF drops the intro at once");
+  assert.equal(load({ stored: { titleIntro: "slow" } }).M.introMode(), "full");
+});
+
+test("MENU WASH soft/off stamp data-menu-wash; garbage falls to full", () => {
+  const soft = load({ stored: { menuWash: "soft" } });
+  assert.equal(soft.M.washMode(), "soft");
+  assert.equal(soft.html.dataset.menuWash, "soft");
+  const off = load({ stored: { menuWash: "off" } });
+  assert.equal(off.html.dataset.menuWash, "off");
+  assert.equal(load({ stored: { menuWash: "neon" } }).M.washMode(), "full");
+});
+
 test("TITLE ART soft/off stamp data-title-art; garbage falls to on", () => {
   const soft = load({ stored: { titleArt: "soft" } });
   assert.equal(soft.M.artMode(), "soft");
@@ -159,12 +185,20 @@ test("TITLE ART soft/off stamp data-title-art; garbage falls to on", () => {
   assert.equal(load({ stored: { titleArt: "neon" } }).M.artMode(), "on");
 });
 
-test("Appearance rows wire and round-trip motion + titleArt", () => {
+test("Appearance rows wire and round-trip motion + intro + wash + titleArt", () => {
   const { wired, written, html, ids, M } = load();
-  assert.deepEqual(wired.map((w) => w.id).sort(), ["pm-motion", "pm-titleart"]);
+  assert.deepEqual(wired.map((w) => w.id).sort(), [
+    "pm-menuwash", "pm-motion", "pm-titleart", "pm-titleintro",
+  ]);
   ids.get("pm-motion")._spec.write("reduce");
   assert.equal(written.motion, "reduce");
   assert.equal(html.dataset.motion, "reduce");
+  ids.get("pm-titleintro")._spec.write("quick");
+  assert.equal(written.titleIntro, "quick");
+  assert.equal(html.dataset.titleIntro, "quick");
+  ids.get("pm-menuwash")._spec.write("soft");
+  assert.equal(written.menuWash, "soft");
+  assert.equal(html.dataset.menuWash, "soft");
   ids.get("pm-titleart")._spec.write("soft");
   assert.equal(written.titleArt, "soft");
   assert.equal(html.dataset.titleArt, "soft");
@@ -172,6 +206,10 @@ test("Appearance rows wire and round-trip motion + titleArt", () => {
   assert.equal(html.dataset.titleArt, "off");
   M.setArt("on");
   assert.equal(html.dataset.titleArt, undefined);
+  M.setIntro("full");
+  assert.equal(html.dataset.titleIntro, undefined);
+  M.setWash("full");
+  assert.equal(html.dataset.menuWash, undefined);
   M.set("on");
   assert.equal(html.dataset.motion, undefined);
 });
@@ -180,7 +218,7 @@ test("wiring waits for DOMContentLoaded while deferred scripts still run", () =>
   const { wired, document } = load({ readyState: "interactive" });
   assert.equal(wired.length, 0, "SettingRow loads after this file — never wire at eval here");
   document._handlers.DOMContentLoaded();
-  assert.equal(wired.length, 2);
+  assert.equal(wired.length, 4);
 });
 
 test("REPLAY INTRO button calls replay()", () => {
@@ -203,11 +241,31 @@ test("the intro plays ONCE: held one pass, then gone for good", () => {
   assert.equal(overlay.offsetWidthReads, 0, "no forced layout anywhere");
 });
 
-test("reduced motion drops the intro at once", () => {
+test("QUICK intro holds for 1200 ms", () => {
+  const { timers } = load({ stored: { titleIntro: "quick" } });
+  assert.equal([...timers.values()][0].ms, 1200);
+});
+
+test("reduced motion and INTRO OFF drop the intro at once", () => {
   assert.ok(!load({ osReduce: true }).overlay.hasAttribute("data-intro"));
+  assert.ok(!load({ stored: { titleIntro: "off" } }).overlay.hasAttribute("data-intro"));
   const { M, overlay } = load();
   M.set("reduce");
   assert.ok(!overlay.hasAttribute("data-intro"));
+});
+
+test("replay under INTRO OFF lifts the stamp for one FULL preview", () => {
+  const { M, html, overlay, runFrames, runTimers, timers } = load({ stored: { titleIntro: "off" } });
+  assert.equal(html.dataset.titleIntro, "off");
+  assert.ok(!overlay.hasAttribute("data-intro"));
+  M.replay();
+  assert.equal(html.dataset.titleIntro, undefined, "off stamp lifted so CSS can run");
+  runFrames();
+  assert.ok(overlay.hasAttribute("data-intro"));
+  assert.equal([...timers.values()][0].ms, 2800, "FULL timing for the preview");
+  runTimers();
+  assert.ok(!overlay.hasAttribute("data-intro"));
+  assert.equal(html.dataset.titleIntro, "off", "off stamp restored");
 });
 
 test("booted past the title, the intro waits for the first time it is seen", () => {
@@ -255,12 +313,19 @@ test("a title .bigbtn click taps through Input.vibrate, anything else does not",
   assert.doesNotThrow(() => noInput.overlay._handlers.click({ isTrusted: true, target: { closest: () => ({}) } }));
 });
 
-test("CSS keys off data-motion / data-title-art; export lists both under appearance", () => {
+test("CSS keys off data-motion / data-title-intro / data-menu-wash / data-title-art; export lists all four", () => {
   assert.match(CSS, /:root\[data-motion="reduce"\] :is\(#overlay, \.screen\) \*/);
   assert.match(CSS, /#overlay\[data-paused\]/);
   assert.match(MENUS, /:root\[data-title-art="soft"\] #title-car/);
   assert.match(MENUS, /:root\[data-title-art="off"\] #title-car/);
+  assert.match(MENUS, /:root\[data-menu-wash="soft"\] #overlay/);
+  assert.match(MENUS, /:root\[data-menu-wash="off"\] #overlay/);
+  assert.match(MENUS, /data-title-intro="quick"/);
+  assert.match(MENUS, /:not\(\[data-title-intro="off"\]\)/);
+  assert.match(COMP, /:not\(\[data-title-intro="off"\]\)/);
   assert.match(EXPORT, /k:\s*"motion"[\s\S]*?group:\s*"appearance"/);
+  assert.match(EXPORT, /k:\s*"titleIntro"[\s\S]*?group:\s*"appearance"/);
+  assert.match(EXPORT, /k:\s*"menuWash"[\s\S]*?group:\s*"appearance"/);
   assert.match(EXPORT, /k:\s*"titleArt"[\s\S]*?group:\s*"appearance"/);
   assert.match(MANIFEST, /\["js\/core\/store\.js", "js\/ui\/title-fx\.js"\]/);
 });

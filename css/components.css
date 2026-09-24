@@ -816,7 +816,7 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
      for as long as the menu is open — a permanent 60fps cost on a phone for a
      decoration, and it never lets the compositor reach a stable frame (it hung
      the screenshot tooling, which is how it was caught). */
-  :root:not([data-motion="reduce"]) #overlay[data-intro] #mb-career::after { animation: sheen 0.85s 0.5s cubic-bezier(0.3, 0, 0.2, 1) both; }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #mb-career::after { animation: sheen 0.85s 0.5s cubic-bezier(0.3, 0, 0.2, 1) both; }
 }
 @keyframes sheen {
   from { --sheen: -30%; }

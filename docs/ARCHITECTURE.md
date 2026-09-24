@@ -164,7 +164,7 @@ _204 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `dom.js` | `Dom` | tag | Dom: the three DOM/format helpers every DOM-built screen shares (el / paintFold / fmtLap). |
-| `title-fx.js` | `TitleFx` | tag | TitleFx: title-screen motion and the background drawing, as player settings under SETTINGS › APPEARANCE. |
+| `title-fx.js` | `TitleFx` | tag | TitleFx: title-screen motion, wash and the background drawing, as player settings under SETTINGS › APPEARANCE. |
 | `track-maps.js` | `TrackMaps` | tag | TrackMaps: offline 2D circuit outlines for the track picker. |
 | `flags.js` | `Flags` | tag | national flags as inline SVG, for the circuit picker's flag strip and the hero caption beside a circuit's name. |
 | `select-screen.js` | `Menus` | tag | the select-screen UI for js/game.js: the circuit picker as a flag strip over a hero (the in-game still of the chosen circuit with its lap outline drawn on top… |
