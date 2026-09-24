@@ -78,14 +78,36 @@ test("the bake reproduces the shader's diffuse pool at texel centres", () => {
   assert.ok(maxRel < 2e-3, `half-float bake within 0.2% of the shader term (worst ${maxRel})`);
 });
 
-test("ground height feeds the bake; a missing height falls back below the lamp", () => {
+test("ground height feeds the bake; no known ground bakes nothing", () => {
   const LB = load();
   const flat = LB.bake([...LAMP_A], () => 0, 4.0);
   const raised = LB.bake([...LAMP_A], () => 3, 4.0);
   const none = LB.bake([...LAMP_A], () => null, 4.0);
-  const mid = (b) => { const i = Math.floor(b.w / 2), j = Math.floor(b.h / 2); return halfToFloat(b.data[(j * b.w + i) * 4]); };
-  assert.ok(mid(raised) > mid(flat), "ground closer to the lamp is brighter under it");
-  assert.ok(mid(none) > 0, "no height -> lamp base (y - 8), still lit");
+  const at = (b, c) => { const i = Math.floor(b.w / 2), j = Math.floor(b.h / 2); return halfToFloat(b.data[(j * b.w + i) * 4 + c]); };
+  assert.ok(at(raised, 0) > at(flat, 0), "ground closer to the lamp is brighter under it");
+  assert.equal(at(flat, 3), 0, "alpha carries the baked surface height");
+  assert.equal(at(raised, 3), 3, "alpha carries the baked surface height");
+  assert.equal(at(none, 0), 0, "no surface -> no baked light (the live loop keeps it)");
+  assert.ok(at(none, 3) < -50000, "no surface -> the NO_GROUND sentinel the shaders fade out");
+});
+
+test("the road surface wins over the terrain under it", () => {
+  const LB = load();
+  // A straight 200 m road along +Z at x = 0, 4 m ABOVE a terrain at 0 (an
+  // embankment), 6 m half-width, lamps over it.
+  const n = 50, px = new Float32Array(n), py = new Float32Array(n).fill(4), pz = new Float32Array(n);
+  for (let k = 0; k < n; k++) pz[k] = -100 + k * 4;
+  const road = { n, total: 200, px, py, pz, rx: new Float32Array(n).fill(1), rz: new Float32Array(n), hw: new Float32Array(n).fill(6), lift: null };
+  const b = LB.bake([...LAMP_A], () => 0, 4.0, road);
+  const texel = (x, z) => { const i = Math.floor((x - b.x0) / b.cell), j = Math.floor((z - b.z0) / b.cell); return (j * b.w + i) * 4; };
+  const onRoad = texel(0.5, 0.5), offRoad = texel(15.5, 0.5);
+  assert.equal(halfToFloat(b.data[onRoad + 3]), 4, "on the road: road height");
+  assert.equal(halfToFloat(b.data[offRoad + 3]), 0, "beyond the road edge: terrain height");
+  const want = shaderPool(LAMP_A, b.x0 + (Math.floor((0.5 - b.x0) / b.cell) + 0.5) * b.cell, 4, b.z0 + (Math.floor((0.5 - b.z0) / b.cell) + 0.5) * b.cell, 4.0)[0];
+  assert.ok(Math.abs(halfToFloat(b.data[onRoad]) - want) / want < 2e-3, "road texel lit at the ROAD height");
+  const lifted = LB.bake([...LAMP_A], () => 0, 4.0, Object.assign({}, road, { lift: (s, lat) => lat * 0.1 }));
+  const edge = texel(5.5, 0.5);
+  assert.ok(Math.abs(halfToFloat(lifted.data[edge + 3]) - (4 + 5.5 * 0.1)) < 0.3, "banking lift applied across the road");
 });
 
 test("forTrack caches by light-set identity and near clamp", () => {
@@ -93,12 +115,48 @@ test("forTrack caches by light-set identity and near clamp", () => {
   const set = [...LAMP_A];
   const a = LB.forTrack({}, set, 4.0);
   assert.equal(LB.forTrack({}, set, 4.0), a, "same set, same clamp -> same bake");
-  const b = LB.forTrack({}, set, 6.0);
-  assert.notEqual(b, a, "a new LAMP NEAR CLAMP rebakes");
   const c = LB.forTrack({}, [...LAMP_A], 6.0);
-  assert.notEqual(c, b, "a rebuilt light set (new array) rebakes");
-  assert.ok(c.gen > b.gen && b.gen > a.gen, "gen increases per bake");
+  assert.notEqual(c, a, "another track's set bakes at once");
+  assert.ok(c.gen > a.gen, "gen increases per bake");
   assert.equal(LB.forTrack({}, [], 4.0), null, "no lamps -> no bake");
+});
+
+test("a rebake on the same track waits for the input to settle, then runs in slices", () => {
+  const LB = load({ Tracks: { terrainY: () => 0 } });
+  const trk = {};
+  const lights = [];
+  for (let i = 0; i < 120; i++) lights.push(...LAMP_A.map((v, k) => k === 0 ? i * 9 : k === 2 ? (i % 12) * 40 : v));
+  const a = LB.forTrack(trk, lights, 4.0);
+  assert.equal(LB.forTrack(trk, lights, 6.0, 1000), a, "a moving LAMP NEAR CLAMP keeps the old bake...");
+  assert.equal(LB.forTrack(trk, lights, 6.0, 1200), a, "...until it has held still");
+  const moved = lights.slice();
+  assert.equal(LB.forTrack(trk, moved, 6.0, 1250), a, "a rebuilt set restarts the settle window");
+  let b = a, calls = 0;
+  while (b === a && calls < 5000) { b = LB.forTrack(trk, moved, 6.0, 2000); calls++; }
+  assert.notEqual(b, a, "the sliced rebake lands");
+  assert.deepEqual(Array.from(b.data), Array.from(LB.bake(moved, () => 0, 6.0).data), "sliced == synchronous bake");
+  assert.equal(LB.forTrack(trk, moved, 6.0, 3000), b, "then it is cached");
+});
+
+test("the road splat covers both edges out to the verge", () => {
+  const LB = load();
+  const n = 50, px = new Float32Array(n), py = new Float32Array(n).fill(4), pz = new Float32Array(n);
+  for (let k = 0; k < n; k++) pz[k] = -100 + k * 4;
+  const road = { n, total: 200, px, py, pz, rx: new Float32Array(n).fill(1), rz: new Float32Array(n), hw: new Float32Array(n).fill(6), lift: null };
+  const b = LB.bake([...LAMP_A], () => null, 4.0, road);
+  const alpha = (x, z) => { const i = Math.floor((x - b.x0) / b.cell), j = Math.floor((z - b.z0) / b.cell); return halfToFloat(b.data[(j * b.w + i) * 4 + 3]); };
+  for (const x of [-6 - 2.2, -6, 0, 6, 6 + 2.2]) assert.equal(alpha(x, 0.5), 4, `road height at lateral ${x} m`);
+});
+
+test("shadowCol returns the shadow lamp's steady baked colour, not its live one", () => {
+  const LB = load({ Tracks: { terrainY: () => 0 } });
+  const set = [...LAMP_A, ...LAMP_B];
+  LB.forTrack({}, set, 4.0);
+  const live = set.slice(15);                        // slot 0 = lamp B, flickered to half
+  live[3] *= 0.5; live[4] *= 0.5; live[5] *= 0.5;
+  const out = LB.shadowCol({ lights: live, lampBakeScale: [2, 1, 0.5] }, 0, [0, 0, 0]);
+  assert.deepEqual(Array.from(out), [LAMP_B[3] * 2, LAMP_B[4] * 1, LAMP_B[5] * 0.5]);
+  assert.deepEqual(Array.from(LB.shadowCol({ lights: live, lampBakeScale: [1, 1, 1] }, 5, [9, 9, 9])), [0, 0, 0], "bad slot -> no carve");
 });
 
 test("the map stays under its texel budget on a circuit-sized extent", () => {
@@ -106,8 +164,41 @@ test("the map stays under its texel budget on a circuit-sized extent", () => {
   const lights = [];
   for (let i = 0; i < 300; i++) lights.push(...LAMP_A.map((v, k) => k === 0 ? i * 7 : k === 2 ? (i % 20) * 60 : v));
   const b = LB.bake(lights, () => 0, 4.0);
-  assert.ok(b.w * b.h <= LB.MAX_TEXELS * 1.02, `${b.w}x${b.h} within budget`);
+  assert.ok(b.w * b.h <= LB.MAX_TEXELS, `${b.w}x${b.h} within budget`);
   assert.ok(b.cell >= 1, "never finer than 1 m");
+  const small = LB.bake(lights, () => 0, 4.0, null, 300000);
+  assert.ok(small.w * small.h <= 300000, `${small.w}x${small.h} within a 300 k budget`);
+  assert.ok(small.w * small.h > 250000, "a smaller budget is spent, not wasted");
+  assert.ok(small.cell > b.cell, "a smaller budget grows the cell");
+});
+
+test("forTrack keys its cache on the texel budget", () => {
+  const LB = load({ Tracks: { terrainY: () => 0 } });
+  const trk = {}, set = [];
+  for (let i = 0; i < 60; i++) set.push(...LAMP_A.map((v, k) => k === 0 ? i * 9 : k === 2 ? (i % 6) * 40 : v));
+  const full = LB.forTrack(trk, set, 4.0, 0, true);
+  assert.equal(LB.forTrack(trk, set, 4.0, 0, true, LB.MAX_TEXELS), full, "an explicit default budget is the same bake");
+  const lite = LB.forTrack(trk, set, 4.0, 0, true, 2000);
+  assert.notEqual(lite, full, "a different budget rebakes");
+  assert.ok(lite.w * lite.h <= 2000 && lite.cell > full.cell, `${lite.w}x${lite.h} under the 2000-texel budget`);
+  assert.equal(LB.forTrack(trk, set, 4.0, 0, true, 2000), lite, "same budget -> cached");
+  assert.notEqual(LB.forTrack(trk, set, 4.0, 0, true), lite, "back to the default budget rebakes");
+});
+
+test("the second layer bakes the bounce fill (no cone, soft N.L floor)", () => {
+  const LB = load();
+  const L = LAMP_A;
+  const b = LB.bake([...L], () => 0, 4.0);
+  const i = Math.floor(b.w / 2) + 3, j = Math.floor(b.h / 2);
+  const px = b.x0 + (i + 0.5) * b.cell, pz = b.z0 + (j + 0.5) * b.cell;
+  const LX = L[0] - px, LY = L[1], LZ = L[2] - pz, dist = Math.hypot(LX, LY, LZ);
+  const win = Math.min(1, Math.max(0, 1 - (dist / L[6]) ** 4));
+  const att = (win * win) / (Math.max(dist, 4) ** 2 + 1);
+  const want = L[3] * att * (0.55 + 0.45 * Math.max(0, LY / dist));
+  const k = (b.h * b.w + j * b.w + i) * 4;              // layer 2 = rows [h, 2h)
+  assert.equal(b.data.length, b.w * b.h * 8, "two stacked layers");
+  assert.ok(Math.abs(halfToFloat(b.data[k]) - want) / want < 2e-3, `bounce ${halfToFloat(b.data[k])} vs ${want}`);
+  assert.equal(halfToFloat(b.data[k + 3]), 0, "bounce layer carries the height too");
 });
 
 test("toHalf round-trips irradiance-range values", () => {
@@ -117,4 +208,40 @@ test("toHalf round-trips irradiance-range values", () => {
     assert.ok(Math.abs(back - v) <= Math.max(1e-6, v * 1e-3), `${v} -> ${back}`);
   }
   assert.equal(halfToFloat(LB.toHalf(1e9)), 65504, "clamps to the largest finite half");
+});
+
+test("TLX setLampBake frees its light map on the off path (GLX _bakeOffN parity)", () => {
+  const src = readFileSync(path.join(ROOT, "js/render/three/tsl-lit.js"), "utf8");
+  const off = /function setLampBake\(b, scale\) \{\s*if \(!b \|\| !scale\) \{([\s\S]*?)return false;/.exec(src);
+  assert.ok(off, "setLampBake's off branch moved");
+  assert.match(off[1], /\+\+_bakeOffN > 120/, "debounced like GLX");
+  assert.match(off[1], /BAKE_NODE\.value = _bakeBlank/, "the placeholder goes back on the node");
+  assert.match(off[1], /_bakeSrc = null/, "the source resets so a return re-uploads");
+  assert.match(off[1], /\.dispose\(\)/, "the DataTexture is disposed");
+});
+
+test("live-only lamps (lens < 3 m over its surface, or cosOuter > 0.9) stay out of the bake", () => {
+  const LB = load({ Tracks: { terrainY: () => 0 } });
+  const LOW = LAMP_A.map((v, k) => k === 0 ? 60 : k === 1 ? 2 : v);                 // lens 2 m up
+  const TIGHT = LAMP_A.map((v, k) => k === 0 ? -60 : k === 10 ? 0.98 : k === 11 ? 0.95 : v);
+  const sum = (b) => { let s = 0; for (let k = 0; k < b.data.length; k++) s += halfToFloat(b.data[k] & 0x7fff) * ((k & 3) === 3 ? 0 : 1); return s; };
+  const base = LB.bake([...LAMP_A], () => 0, 4.0);
+  const mixed = LB.bake([...LAMP_A, ...LOW, ...TIGHT], () => 0, 4.0);
+  assert.deepEqual(Array.from(mixed.liveOnly), [0, 1, 1], "the low and the tight lamp are live-only");
+  // Same light over the normal lamp's texels: the extent grows, so compare sums.
+  assert.ok(Math.abs(sum(mixed) - sum(base)) / sum(base) < 5e-3, `live-only lamps add nothing (${sum(mixed)} vs ${sum(base)})`);
+  const alone = LB.bake([...LOW, ...TIGHT], () => 0, 4.0);
+  assert.equal(sum(alone), 0, "a bake of live-only lamps is dark");
+  // A lamp 2 m over a 4 m road is low even though it sits 6 m over the terrain.
+  const n = 50, px = new Float32Array(n), py = new Float32Array(n).fill(4), pz = new Float32Array(n);
+  for (let k = 0; k < n; k++) pz[k] = -100 + k * 4;
+  const road = { n, total: 200, px, py, pz, rx: new Float32Array(n).fill(1), rz: new Float32Array(n), hw: new Float32Array(n).fill(6), lift: null };
+  const onRoad = LAMP_A.map((v, k) => k === 1 ? 6 : v);
+  assert.deepEqual(Array.from(LB.bake([...onRoad], () => 0, 4.0, road).liveOnly), [1], "height is over the ROAD surface");
+  assert.deepEqual(Array.from(LB.bake([...onRoad], () => 0, 4.0).liveOnly), [0], "6 m over bare terrain is baked");
+  // liveOnlyAt: by position in any verbatim copy; tail lights never match.
+  LB.forTrack({}, [...LAMP_A, ...LOW, ...TIGHT], 4.0);
+  const frame = [...TIGHT, ...LAMP_A, ...LOW, 1, 2, 3, 1, 0, 0, 5, 0, -1, 0, 0.9, 0.5, 0, 0, 0];
+  assert.deepEqual([0, 1, 2, 3].map((s) => LB.liveOnlyAt(frame, s * 15)), [1, 0, 1, 0]);
+  assert.ok(LB.gen() > 0, "gen names the drawing bake");
 });

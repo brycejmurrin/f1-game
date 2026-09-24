@@ -211,6 +211,44 @@ test("baseline has no stale entries — a cap above the measured count is a lie"
   assert.deepEqual(slack, [], `stale baseline entries:\n  ${slack.join("\n  ")}`);
 });
 
+// --- overhead undersides and tops (2026-09-24) ------------------------------
+//
+// The sweep above skips every face with |n.y| >= 0.5, so no deck underside,
+// soffit, gantry bottom or tunnel roof had ever been checked. Two madrid bridges
+// drew a thin soffit span at their deck's own clearance: both undersides in one
+// plane, 0.0 mm apart, 216 and 203 m2, flickering overhead as a car drove under.
+// monaco's tunnel roof, haunch and springing all topped out at exactly 7.80 m
+// (124 pairs) and miami's Turnpike pier shafts shared their caps' top plane.
+// `--overhead` audits only horizontal faces above road + 3 m within hw + 8 m,
+// up- and down-facing, and this holds it at the exception list below — ZERO
+// everywhere else, so a new overhead layer drawn in its neighbour's plane fails.
+//
+// The one exception is not an overhead structure: on madrid a generic street
+// lamp's arm (buildProps, js/track/tracks.js) stands 2.1 mm off a sloped face of
+// the El Bunker wall (madrid.js groundedSegments "madrid-el-bunker"), 0.4 m2,
+// fighting only beyond 102 m. Exact, both ways, like the baselines above.
+const OVERHEAD_BASELINE = { madrid: 1 };
+let overheadCached = null;
+const overheadSweep = () => (overheadCached ||= JSON.parse(execFileSync(
+  process.execPath,
+  [path.join(ROOT, "tools", "track", "coplanar-audit.cjs"), "--all", "--json", "--overhead"],
+  { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+)));
+
+test("overhead structures: no horizontal face shares its neighbour's plane", () => {
+  const results = overheadSweep();
+  const roster = createRequire(import.meta.url)("../../tools/manifest.cjs").CIRCUITS.length;
+  assert.equal(results.length, roster, `expected ${roster} circuits, got ${results.length}`);
+  const off = [];
+  for (const r of results) {
+    const cap = OVERHEAD_BASELINE[r.id] || 0;
+    if (r.spots !== cap) off.push(`${r.id}: ${r.spots} overhead spot(s), expected ${cap}`);
+  }
+  assert.deepEqual(off, [], "overhead coplanar faces changed — run " +
+    "`node tools/track/coplanar-audit.cjs <id> --overhead --why` to name the emitters:\n  " +
+    off.join("\n  "));
+});
+
 // --- the overlap metric itself (2026-09-22) --------------------------------
 //
 // `spots` above is only as honest as the area that gates them: AREA_MIN drops a
