@@ -190,6 +190,11 @@ const FULL = [
   "js/physics/ai-drive.js",
   "js/physics/ai-corridor.js",
   "js/race/engineer.js",
+  // The race radio: phrasebook, facts (timing loop + events), then the brain
+  // that reads both. game.js calls RaceRadio.create(G) at eval.
+  "js/race/radio-lines.js",
+  "js/race/race-facts.js",
+  "js/race/race-radio.js",
   "js/camera/offsets.js",
   "js/camera/flyby-seq.js",
   "js/camera/flyby-panel.js",
@@ -529,6 +534,9 @@ const HARD_EDGES = [
   ["js/race/pit-lane.js", "js/game.js"],                 // game.js calls PitLane.create(G) at eval
   ["js/core/mat4.js", "js/race/engineer.js"],            // RaceEngineer binds M4.clamp at eval
   ["js/race/engineer.js", "js/game.js"],                 // game.js calls RaceEngineer.create(G) at eval
+  ["js/race/radio-lines.js", "js/race/race-radio.js"],  // RaceRadio.create builds a RadioLines dealer (call time, keep ordered)
+  ["js/race/race-facts.js", "js/race/race-radio.js"],   // …and a RaceFacts tracker
+  ["js/race/race-radio.js", "js/game.js"],               // game.js calls RaceRadio.create(G) at eval
   ["js/core/mat4.js", "js/physics/brake-cue.js"],        // BrakeCue aliases M4.clamp at eval
   ["js/physics/ai-drive.js", "js/physics/contact-geometry.js"],  // the impulse reads AiDrive.bumpRestitution (call time, keep ordered)
   ["js/core/mat4.js", "js/physics/collide.js"],          // Collide binds M4.clamp at eval
