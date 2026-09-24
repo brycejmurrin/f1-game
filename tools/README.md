@@ -54,6 +54,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/geometry-paths.mjs** | Single source for "which sweeps does this diff need?" — the fleet trigger (derived from the track VM's own module… | — |
 | **ci/nightly-group.mjs** | Pick the browser GROUP tonight's scheduled ci.yml run should cover. | — |
 | **ci/playwright-occupancy.mjs** | Classifies process-table lines for Playwright occupancy — the MCP lock oracle; an idle server is not busy. | check-changes |
+| **ci/session-status.mjs** | Prints this branch's handoff block (sessions from `Claude-Session:` trailers, commits vs the deploy branch,… | check-changes |
 | **ci/sync-pr.mjs** | Syncs a PR branch to the deploy tip (fetch, merge, verify). Without --push: no push, HEAD left on sync-pr-<branch>. | check-changes |
 | **ci/twinned-specs.mjs** | Browser specs whose assertions a VM twin replays on the fast gate. `--json`; exits 1 if a twin drifted. | — |
 | **ci/who-is-on-it.mjs** | Recent pushes per remote branch, which touched the paths you name, and the live claims under claude/claims/* — the… | check-changes |

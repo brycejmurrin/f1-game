@@ -13,14 +13,14 @@ their files from `.claude/rules/`. `CLAUDE.md` imports this; Cursor and Codex re
 npx serve -l 3456 .                   # run locally (or: python3 -m http.server 3456)
 node tools/ci/pick-tests.mjs          # 1. which GROUPS does this change need? (the table below; select-specs.mjs: per-SPEC)
 #                                       2. make ALL edits, then verify ONCE (rule 2); a new test file = a tests/groups.json group + a TESTING.md §5 row + `npm run gen`
-npm run test:tooling-fast             # 3. edit-loop check, a SUBSET (rule 3); verify-change.mjs --fast adds verify-track + the batch plan
+node tools/ci/tooling-fast.mjs --jobs=3   # 3. edit-loop check, a SUBSET (rule 3): ~2 min idle; `npm run test:tooling-fast` is --jobs=1, ~9 min
 node tools/ci/test-bg.mjs <group>     # 4. ONE browser group, in the background → artifacts/logs/<group>.log (rule 5)
 node tools/ci/test-bg.mjs --wait --timeout 45   # 5. the waiter, as ONE background task (rule 4); the verdict is the log's `= run …` line
 node tools/ci/deploy.mjs --gate-only  # 6. before a push: the only check that runs what the deploy runs
-git commit && git push -u origin claude/<topic>   # 7. commit runs test:guards; push once per VERIFIED batch, naming what did not run
+git commit && git push -u origin claude/<topic>   # 7. commit runs test:guards; push, then open/refresh the DRAFT PR (rule 12)
 ```
 Then watch CI (§Watching CI and Pages). Memory: auto memory is ON and synced to `.claude/memory/` — it holds
-preferences and corrections; a measured lesson goes to `docs/notes/`, a rule to a hook or test.
+preferences and corrections; a measured lesson goes to `docs/notes/`, a rule to a hook or test, a work log to the PR body.
 
 ## Verification — scale it to the change
 One browser GROUP costs 10–40 minutes of serialized SwiftShader here, so
@@ -38,7 +38,7 @@ faster when Mesa is installed (no `navigator.gpu`; `docs/notes/CI-RENDERING-PERF
 | engine / physics / `js/game.js` | the groups `pick-tests` names, capped at two browser groups: run the two most specific, name the rest as not-run in the PR |
 | geometry pushed to the deploy branch, or a group this box cannot time | `npm run test:sweeps` when the diff reaches the FLEET build (`tools/ci/geometry-paths.mjs` derives that from `tools/manifest.cjs`'s `TRACK_VM`); a lighting, car, debris-world or driving-line edit needs only its TARGETED suite, which that module names (`--targeted`) and ci.yml and `deploy.mjs` both run for you. Dispatch `ci.yml` with `group: <name>` (one per change) and read the four Smoke jobs. Docs-only pushes start no CI |
 
-Session shape — eleven rules that control wall time and waiting:
+Session shape — twelve rules that control wall time, waiting and handoff:
 
 1. Fresh container: the SessionStart hook runs `npm install` and checks for
    `chromium-headless-shell` (fallback `bash tools/env/cloud-agent-install.sh`); either missing reads as a total-red run — read the FIRST failure first.
@@ -46,9 +46,10 @@ Session shape — eleven rules that control wall time and waiting:
    from the working tree, so a run in flight forbids source edits (the edit
    hook blocks them). `test:tooling-fast` is the edit-loop check.
 3. THE GATE IS A LADDER, EACH RUNG A SUBSET — green below never means green above:
-   `test:guards` (hook-enforced, every commit) ⊂ `test:tooling-fast` (239 of 318 unit files)
+   `test:guards` (hook-enforced, every commit) ⊂ `test:tooling-fast` (240 of 319 unit files)
    ⊂ `deploy.mjs --gate-only`, the only pre-push check that runs what the deploy runs (pushes nothing, dirty tree fine). The other 79 have taken deploys red three times — `docs/notes/PREPUSH-GATE-LADDER.md`. A commit whose every staged path is prose (`docs/`, `*.md`, skills, agents — no generated doc) runs only `docs-integrity`, and no ratchet raise.
-4. Never block the foreground on a test run: background it (log in `artifacts/`). Push once per VERIFIED BATCH: a push over a live run cancels it, and a killed job runs no `if: always()` step, so its failures are lost (9 of 59 sampled runs). The waiter is ONE background task (Bash `run_in_background`, one notification when it exits): `node tools/ci/test-bg.mjs --wait --timeout 45` (exit 1 = a red, 124 = still running), or a command that exits on its own run the same way (`deploy.mjs --gate-only > artifacts/logs/gate.log 2>&1`). A `Monitor` expires at 30 min — early warning only (`tail -f <log> | grep --line-buffered -E '^= |Error:'`), never the sole watch. Never wait on the process table: `pgrep -f` matches its own shell, and `[ ! -e /proc/$(pgrep …) ]` never exits (`docs/notes/TESTING-FIELD-NOTES.md` 2026-09-22); the verdict is still rule 5's, never the waiter's.
+4. BLOCK OR BACKGROUND, by duration and whether the NEXT step needs the answer. Foreground: under 2 min and needed now (`test:guards` ~25 s, one `node --test`, `verify-track`, `pick-tests`). Background, ONE Bash `run_in_background` task with its log in `artifacts/logs/` (one notification when it exits): 2–15 min (`tooling-fast`, `deploy.mjs --gate-only > artifacts/logs/gate.log 2>&1`), and a browser group — `test-bg.mjs <group>`, then `test-bg.mjs --wait --timeout 45` as the task (exit 1 = red, 124 = still running). CI and Pages (minutes to hours): `subscribe_pr_activity` / `send_later`, never a sleep loop.
+   While it runs, do the next thing that does not touch it: research, docs/tools/tests edits, a read-only subagent, or the NEXT change in a linked worktree (`EnterWorktree`; the edit hook scopes a live run to its own checkout, and shared-contract files stay out of worktrees). Never `js/`/`css/` in this checkout, a second browser group, or a CPU-heavy node suite on top of a browser run — that load IS the timeout. A `Monitor` expires at 30 min: early warning only (`tail -f <log> | grep --line-buffered -E '^= |Error:'`). Never wait on the process table (`pgrep -f` matches its own shell; `docs/notes/TESTING-FIELD-NOTES.md` 2026-09-22); the verdict is rule 5's, never the waiter's. Push once per VERIFIED batch: a push over a live CI run cancels it and its failures are lost (9 of 59 sampled runs).
 5. ONE Playwright process, ONE browser group per batch, via `test-bg.mjs`
    (it refuses ANY start at loadavg ≥ 3, and a second concurrent group — tool-enforced).
    Anchor on `grep -E '^= (run (passed|failed|timedout|interrupted)|bg exit)'`, never a
@@ -60,27 +61,13 @@ Session shape — eleven rules that control wall time and waiting:
    judgement, `ps -eo pid,pcpu,args --sort=-pcpu | head` (`etimes` does not track
    wall clock here); kill a busy Chrome of yours by a listed PID, never `pkill -f`
    (it matches your own shell; blocked). The MCP servers at 0 % are the harness's.
-8. A timeout on a busy box measures the machine: check `/proc/loadavg` (< 3)
-   and for a live `playwright test` first; re-run alone only when the verdict
-   matters. On CI, `cancelled` with zero failures is a timeout until proven
-   otherwise — EXCEPT the designed one: a push and its PR event share a group
-   on purpose, so the PR run (merge commit) cancels the push run on the same
-   `head_sha` seconds in. A live sibling on that SHA means dedupe, not a red.
-9. Stopping is allowed: a pushed change that names its unverified groups
-   beats an hour of SwiftShader. Never widen a tolerance to make a spec pass;
-   a `waitForFunction` on a rendering page needs `{ polling: 100 }`
-   (`tools/check/wait-polling-lint.mjs`). A pass that needed a retry is a red:
-   name the flaky test in the PR like a not-run group and fix or quarantine it
-   by name; `APEX_FAIL_ON_FLAKY=1` makes the runner fail it.
+8. A timeout on a busy box measures the machine: check `/proc/loadavg` (< 3) and for a live `playwright test` first; re-run alone only when the verdict matters. On CI, `cancelled` with zero failures is a timeout until proven otherwise — EXCEPT the designed one: a push and its PR event share a group on purpose, so the PR run (merge commit) cancels the push run on the same `head_sha` seconds in. A live sibling on that SHA means dedupe, not a red.
+9. Stopping is allowed: a pushed change that names its unverified groups beats an hour of SwiftShader. Never widen a tolerance to make a spec pass; a `waitForFunction` on a rendering page needs `{ polling: 100 }` (`tools/check/wait-polling-lint.mjs`). A pass that needed a retry is a red: name the flaky test in the PR like a not-run group and fix or quarantine it by name; `APEX_FAIL_ON_FLAKY=1` makes the runner fail it.
 10. Never hand a subagent a browser run ("report it unverified"; the Bash hook
     blocks it inside one). A worktree starts STALE unless `.claude/settings.json`
     sets `worktree.baseRef: "head"`: `git checkout -B <branch> <session SHA>` first.
-11. Never hand-edit a generated file (the edit hook blocks it): `index.html`'s
-    `@gen-shell` blocks, `version.json`, `package.json`'s test scripts
-    (source `tests/groups.json`), `tools/README.md` (source: `@doc` headers),
-    `js/roster.js`, `tools/carview.html`, and the ladder figures in rule 3 /
-    `docs/notes/PREPUSH-GATE-LADDER.md` / `docs/TESTING.md` (source: the same
-    `groups.json`, via `tools/gen/gen-ladder-figures.mjs`). Edit the SOURCE, then `npm run gen` (`gen:check` names drift).
+11. Never hand-edit a generated file (the edit hook blocks it): `index.html`'s `@gen-shell` blocks, `version.json`, `package.json`'s test scripts (source `tests/groups.json`), `tools/README.md` (source: `@doc` headers), `js/roster.js`, `tools/carview.html`, and the ladder figures in rule 3 / `docs/notes/PREPUSH-GATE-LADDER.md` / `docs/TESTING.md` (source: the same `groups.json`, via `tools/gen/gen-ladder-figures.mjs`). Edit the SOURCE, then `npm run gen` (`gen:check` names drift).
+12. HAND OFF THROUGH GIT: commit and push `claude/<topic>` at every verified checkpoint and BEFORE any wait over ~10 min — a reclaimed container loses an unpushed branch, and another agent cannot see it. After the first push open a DRAFT PR into the deploy branch (GitHub MCP, `draft: true`; `deploy.mjs --pr` is the gated, ready form) and refresh its body at every push from `.github/pull_request_template.md`: Goal, `node tools/ci/session-status.mjs` output, Verified / Not run, Next step. That body IS the session log — no committed per-session doc (it conflicts on a shared branch), no work log in memory. Before starting, read `who-is-on-it.mjs` and the open draft PRs; to continue one, check out its branch and catch it up with `sync-pr.mjs`, never a force-push.
 
 ## Seeing the game (cheapest first)
 1. `__apex` JSON hooks (`info/probe/physState/world/scene/field`) —
