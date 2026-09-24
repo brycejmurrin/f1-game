@@ -4671,3 +4671,20 @@ test("tick()'s fatal catch arms the boot-canary probe before rethrowing (a pre-p
   assert.match(afterFault.slice(armIdx - 60, armIdx), /_backendBound\s*&&\s*!_backendProved/,
     "the fatal-branch call site must gate on the same latch state as the render() call site");
 });
+
+test("the startline mesh out-biases the road it is painted on", () => {
+  // The start line, grid boxes and pit paint ride one decal mesh drawn with
+  // _startBias. The road itself draws with depthBias [-8, -16] on every backend,
+  // so a weaker decal bias pulls the paint BEHIND the asphalt and it fights the
+  // road beyond a few metres (2026-09-24: [-1, -2], 28k overlapping pairs, all
+  // 52 circuits). Both numbers must be strictly more negative than the road's.
+  const src = read("js/game.js");
+  const start = src.match(/const _startBias = \[(-?[\d.]+), (-?[\d.]+)\]/);
+  assert.ok(start, "_startBias not found in js/game.js");
+  const roads = [...src.matchAll(/const _wmRoad\w+ = \{[^}]*depthBias: \[(-?[\d.]+), (-?[\d.]+)\]/g)];
+  assert.ok(roads.length >= 4, `expected the four _wmRoad* materials, found ${roads.length}`);
+  for (const r of roads) {
+    assert.ok(Number(start[1]) < Number(r[1]) && Number(start[2]) < Number(r[2]),
+      `_startBias [${start[1]}, ${start[2]}] must be stronger than the road's [${r[1]}, ${r[2]}]`);
+  }
+});
