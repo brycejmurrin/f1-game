@@ -95,13 +95,37 @@ resolvable separation.
 Deliverable: fixes per class, and the gap threshold re-derived from the depth
 buffer at the distance each pair is seen from, not a fixed millimetre count.
 
-### C. Make the asset pack visible to the node audits — PENDING investigation 3
+### C. The asset pack and the "overhang class" — MEASURED
 
-Supply `Assets` in `track-build-vm.cjs` (the loader in
-`tests/unit/baked-model-road-guard.test.mjs` shows the shape), re-baseline
-float/clip/coplanar/props-over-road with the pack in, then fix the overhang class
-(models anchored off-track whose upper parts reach over it; 14 circuits read
-over tolerance with the pack visible, 8 of them only then).
+Harness: `scratch/overhang/` (injects `Assets` into the VM; `preload.cjs` does it
+for any audit CLI).
+
+- **The ledger's "14 of 52 over tolerance with the pack visible, 8 only then" is a
+  method artifact, not the pack.** It reproduces exactly with the triangle-centroid
+  method (nearest-node height, 0.75 x road-mesh half-width) — with the pack OFF as
+  well. Under props-over-road's current method (track.hw, 0.9 rung) the fleet
+  reads 1 of 52 over TOL with or without the pack: mont_tremblant's baselined
+  crown. 13 of the 14 are edge objects at >= 0.94 hw (pit-wall caps, corner tyre
+  stacks `tracks.js:1855`, graph-instanced boundary boxes `tracks.js:943`).
+  Only 5 circuits call `bakedModel` (monza 49 stamps, spa 48, silverstone 39,
+  monaco 5, vegas 3); none overhangs. The ledger entry needs correcting.
+- **Making the pack visible costs nothing in baselines**: on those 5 circuits,
+  clip severe, coplanar, float and props-over-road are identical pack on/off
+  (+~80 MB peak RSS). Worth doing: set `sandbox.Assets` in
+  `tools/lib/track-build-vm.cjs` (export the parser from
+  `js/render/shared/assets.js` rather than copy it a third time) and in
+  `float-audit.cjs`'s own VM context.
+- **Real defect found on the way — suzuka crossover pillar in the lower road.**
+  A bridge pillar (`RAW.addBox`, `tracks.js:2371`), 1.6 x 9.2 m, stands at
+  lateral -3.0 on the LOWER road (frac 0.439, hw 7): placed at hw + 2 from the
+  upper deck's node, which on the oblique crossover lands on the other road. RAW
+  deliberately skips `rejBox` (`tracks.js:2358-2360`), and its collider belongs to
+  the upper-road node, so a car on the lower road drives through a concrete
+  column. props-over-road cannot see it: a solid spanning the whole [TOL, CEIL]
+  band has no qualifying face. Fix: reject a pillar whose footprint is
+  `onTrack` at a node outside the deck's own arc window (> ~30 nodes from k).
+  Audit: flag any shipped primitive whose XZ footprint covers a road sample and
+  whose y-span overlaps [road + TOL, road + CEIL].
 
 ### D. Open track items — MEASURED (proposals tested on a scratch copy)
 
