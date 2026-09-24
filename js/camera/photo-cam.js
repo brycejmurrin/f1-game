@@ -99,6 +99,7 @@ function exitPhotoMode() {
   G.photoMode = false;
   if (freeCam) freeCam.onPhotoExit();       // resume / quit / the tuner closing take the free-cam panel with them
   G.dbgCam = null;                          // hand the game camera back
+  G.snapGameCam();                          // …AT the car: the damped rig otherwise swoops back from wherever the free camera was parked
   document.body.classList.remove("photo-mode", "pc-nopanel", "pc-uihidden");
   $("photo-controls").hidden = true;
   $("lighting-inner").hidden = false;     // un-hide the tuner if it was tucked away
@@ -125,10 +126,12 @@ function setPhotoUiHidden(hide) {
 // Dedicated key handler (not Input.onKey) so photo controls never touch driving.
 function photoKeyHandler(e) {
   const tag = (document.activeElement && document.activeElement.tagName) || "";
-  if (e.code !== "Escape" && (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT")) return;  // typing in a slider
   const down = e.type === "keydown";
+  // Typing in a slider — but a key-UP always releases: W held while a click
+  // moved focus into a slider (or COPY VIEW's textarea) stayed down forever.
+  if (down && e.code !== "Escape" && (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT")) return;
   const fc = freeCam ? freeCam.key(e.code, down, document.activeElement) : 0;
-  if (fc < 0) return;                        // an arrow key over the free-cam panel belongs to its focused control
+  if (fc < 0 && down) return;                // an arrow key over the free-cam panel belongs to its focused control
   if (fc > 0) { e.preventDefault(); e.stopPropagation(); return; }
   let hit = true;
   switch (e.code) {
