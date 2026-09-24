@@ -23,17 +23,23 @@ test.describe("Interlagos track-owned foundation migration", () => {
         coordinates: def?.sceneryCoordinates,
         range: high.y - low.y,
         highFrac: high.frac,
-        sennaDrop: at(0.02) - at(0.10),
-        boxClimb: at(0.82) - at(0.98),
+        lowFrac: low.frac,
+        // SRTM bake (CircuitElevations): continuous drop through S1, climb home.
+        // Authored cosine put ~25 m of Senna plunge into 0.02→0.10; the survey
+        // spreads that fall across the first third of the lap.
+        sector1Drop: at(0.03) - at(0.36),
+        climbHome: at(0.98) - at(0.72),
       };
     });
 
     expect(result.coordinates).toBe("racing");
-    expect(result.range).toBeGreaterThanOrEqual(40);
-    expect(result.range).toBeLessThanOrEqual(46);
-    expect(result.highFrac >= 0.92 || result.highFrac <= 0.03).toBe(true);
-    expect(result.sennaDrop).toBeGreaterThan(25);
-    expect(result.boxClimb).toBeLessThan(-30);
+    expect(result.range).toBeGreaterThanOrEqual(38);
+    expect(result.range).toBeLessThanOrEqual(44);
+    expect(result.highFrac >= 0.92 || result.highFrac <= 0.06).toBe(true);
+    expect(result.lowFrac).toBeGreaterThan(0.30);
+    expect(result.lowFrac).toBeLessThan(0.42);
+    expect(result.sector1Drop).toBeGreaterThan(35);
+    expect(result.climbHome).toBeGreaterThan(20);
   });
 
   test("emits required hero models and reflective reservoir water", async ({ page }) => {

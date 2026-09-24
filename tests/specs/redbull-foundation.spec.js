@@ -67,17 +67,14 @@ test("Red Bull Ring owns a safe migrated alpine foundation", async ({ page }) =>
   expect(result.coordinates).toBe("racing");
   expect(result.terrainOuter).toBeGreaterThanOrEqual(28);
   expect(result.terrainOuter).toBeLessThanOrEqual(72);
-  expect(result.profile.swing).toBeGreaterThanOrEqual(55);
-  expect(result.profile.swing).toBeLessThanOrEqual(65);
-  // 7a173519 moved the start line (startFrac 0.1875 -> 0.0), rotating racing
-  // fractions by the arc shift (+0.2952); the alpine peak and the valley did
-  // not move physically. Measured in the new frame (headless VM,
-  // trackProfile(800) grid): peak at frac 0.51 / +32.0 m, low at
-  // 0.7113 / -27.9 m.
-  expect(result.profile.peak.frac).toBeGreaterThan(0.45);
-  expect(result.profile.peak.frac).toBeLessThan(0.57);
-  expect(result.profile.low.frac).toBeGreaterThan(0.65);
-  expect(result.profile.low.frac).toBeLessThan(0.77);
+  // SRTM bake (~53 m continuous Styrian bowl). Authored cosines were ~60 m
+  // with peak mid-lap; the survey crest sits earlier and the low near SF.
+  expect(result.profile.swing).toBeGreaterThanOrEqual(50);
+  expect(result.profile.swing).toBeLessThanOrEqual(58);
+  expect(result.profile.peak.frac).toBeGreaterThan(0.30);
+  expect(result.profile.peak.frac).toBeLessThan(0.40);
+  expect(result.profile.low.frac).toBeGreaterThan(0.92);
+  expect(result.profile.low.frac).toBeLessThan(1.0);
   expect(result.profile.maxSlope).toBeLessThan(0.14);
 
   for (const [time, session] of Object.entries(result.sessions)) {
