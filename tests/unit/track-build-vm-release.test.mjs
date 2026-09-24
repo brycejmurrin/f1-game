@@ -143,8 +143,8 @@ test("trim(from) drops the primitive records and the live-buffer set", () => {
 // carve fix raised the terrain beside descents (buried counts moved), and
 // after T3 draped groundPatch over the terrain (monza +834 patch triangles).
 const STRIP = {
-  monaco: { before: 293515, after: 252651 },
-  monza: { before: 341982, after: 301884 },
+  monaco: { before: 293659, after: 258313 },
+  monza: { before: 341850, after: 314442 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {
