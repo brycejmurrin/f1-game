@@ -739,9 +739,12 @@ const SceneryNature = (function () {
       // 10 mm can still land flush on one (monza gained a 12 m2 pair against a
       // tracks.js place() prop at exactly that). An odd base breaks the tie
       // with the authored grid without changing any separation BETWEEN slots.
-      const slot = hillSeq++ % 5;
-      gap += 0.003 + slot * 0.01;
-      const sShift = 0.007 + ((slot * 2) % 5) * 0.01;
+      // Stepped by TrackGeom.MIN_SEP (2026-09-24): at the 300 m window the
+      // 10 mm slots fought from 224 m, so the slots are now MIN_SEP apart
+      // across the gap (fights beyond 388 m) and 2 x MIN_SEP along it.
+      const slot = hillSeq++ % 5, SEP = TrackGeom.MIN_SEP;
+      gap += 0.017 + slot * SEP;
+      const sShift = 0.007 + ((slot * 2) % 5) * SEP;
       const rows = Math.max(2, Math.min(8, Math.round(opts.rows || 4)));
       const rise = opts.rise != null ? opts.rise : 1.15;      // per-row height gain
       const depth = opts.depth != null ? opts.depth : 2.0;    // per-row setback

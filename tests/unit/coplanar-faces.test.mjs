@@ -227,7 +227,9 @@ test("baseline has no stale entries — a cap above the measured count is a lie"
 // lamp's arm (buildProps, js/track/tracks.js) stands 2.1 mm off a sloped face of
 // the El Bunker wall (madrid.js groundedSegments "madrid-el-bunker"), 0.4 m2,
 // fighting only beyond 102 m. Exact, both ways, like the baselines above.
-const OVERHEAD_BASELINE = { madrid: 1 };
+// At the 300 m window (FIGHT_MAX, 2026-09-24) its sibling arm 4.8 mm off the
+// same wall (0.3 m2, fights from 155 m) counts too: madrid 2.
+const OVERHEAD_BASELINE = { madrid: 2 };
 let overheadCached = null;
 const overheadSweep = () => (overheadCached ||= JSON.parse(execFileSync(
   process.execPath,
