@@ -5322,3 +5322,31 @@ census A/B'd with its switch, deployed on the user's word.
 
 Dropped: `BatchedMesh` for chunks (above), occlusion queries, GPU-driven indirect
 draws, render bundles before chunks stop toggling visibility per frame.
+
+### 2a answered: the 8 are three FX materials, first drawn together
+
+`scratch/compile-attrib-probe.mjs montreal` (Lavapipe WebGPU, 12 jumps round the lap,
+on the step-1 tree): 18 sync compiles during race load (behind the loading screen),
+13 async in the warm, and on the lap exactly **5 events, all within 5 ms — one frame**:
+
+| material (`customProgramCacheKey`) | geometry | new VS / FS / pipelines |
+|---|---|---|
+| `tlx-fx-pt-mrt` (particles, alpha blend) | 1536-vert particle slot | 1 / 1 / 2 |
+| `tlx-fx-pt-add-mrt` (particles, additive) | 1536-vert particle slot | 0 / 1 / 2 |
+| `tlx-fx-skid-mrt` (skid marks, polygon offset) | 720-vert skid stream | 1 / 1 / 1 |
+
+All three draw into the scene target with the ssrTag MRT. None exists at the warm:
+`drawSkidBatch` / `drawParticles` (tlx.js) only push a record once the first tyre
+mark or puff of smoke/sparks exists, i.e. after the launch. So what is left on
+WebGPU is ONE hitch, the first time marks and particles appear — not scenery, not
+chunks, not a hidden batch. Census 243's 4 modules + 4 pipelines match (3 VS/FS
+pairs less the shared vertex stage, 5 pipelines).
+
+**2b, concretely:** in `startProgramWarm`, after the scene warm and under the same
+target + MRT, `compileAsync` one throwaway `Mesh` per FX material that has not been
+drawn yet (`fx.skidMat`, `fx.particleMats[0/1]`, and for safety `markMat`,
+`glowMat`, `lineMat`) on a geometry with the SAME vertex layout the stream will use
+(`ensureStream(skidStream, n)`, a particle slot), then drop the mesh. Cost: three
+small programs during the lights (tens of ms), no scene reveal, no skip semantics.
+Switch `apex26.tlxWarmFx=0`. Success = the probe's `lapSync` 0 and the census
+`stack:` total 0 on the WebGPU leg.
