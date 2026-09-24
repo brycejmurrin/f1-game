@@ -144,6 +144,10 @@ window.CamModes = (function () {
       });
     })();
     refreshCamBtn();
+    // The SAVED camera's mix, at boot: setCamMode is the only other caller,
+    // so a session that starts in the cockpit heard the chase mix until the
+    // first camera change.
+    if (typeof GameAudio !== "undefined") GameAudio.setCameraMix(CAM_MODES[G.camMode].id);
 
     return { refreshCamBtn, setCamMode, cycleCam, hideCamPicker: camPicker.hide };
   }
