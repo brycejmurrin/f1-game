@@ -34,6 +34,10 @@ const TrackHiddenFaces = (function () {
   const floor = (x) => { const t = x | 0; return t > x ? t - 1 : t; };   // |x| < 2^31
   const min = (a, b) => (a < b ? a : b), max = (a, b) => (a > b ? a : b);
   const isFlag = (m) => m >= MAT_FLAG - 0.5 && m < MAT_FLAG + 0.5;
+  // Same reason for these: in a vm context `Infinity`, `NaN` and `isFinite`
+  // are global-object lookups through the context's property interceptor —
+  // with `Infinity` read per box, the vegas box scan took 3x as long.
+  const INF = 1 / 0, NAN = 0 / 0;
   const IN_EPS = 0.01, MIN_HALF = 0.03, BURY = 0.05, BOTTOM = 0.10, BOTTOM_NY = -0.95;
   const CELL = 8, TCELL = 8;
   const MAT_GLASS = 3, MAT_FLAG = 15;
@@ -41,8 +45,9 @@ const TrackHiddenFaces = (function () {
   const now = () => (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
   const arr = (a) => (a && a._data) ? a._data : a;
 
-  // Scratch for boxAt: axes (3x3), half extents, per-corner axis signs.
-  const ax = new Float64Array(9), h = new Float64Array(3), sg = new Int8Array(72);
+  // Scratch for boxAt: axes (3x3), half extents, per-corner axis signs, and
+  // each corner's projection on each axis (computed once, read twice).
+  const ax = new Float64Array(9), h = new Float64Array(3), sg = new Int8Array(72), D = new Float64Array(72);
   const REC = new Float64Array(15);
 
   // Is [v, v+24) an addBox? Fills REC = [cx,cy,cz, ax0(3), ax1(3), ax2(3), h0,h1,h2]
@@ -76,26 +81,27 @@ const TrackHiddenFaces = (function () {
     let cx = 0, cy = 0, cz = 0;
     for (let k = 0; k < 24; k++) { const q = (v + k) * 3; cx += pos[q]; cy += pos[q + 1]; cz += pos[q + 2]; }
     cx /= 24; cy /= 24; cz /= 24;
-    h[0] = h[1] = h[2] = 0;
+    // (scalar locals and inline |x|: this is the per-box hot loop)
+    const a0 = ax[0], a1 = ax[1], a2 = ax[2], b0 = ax[3], b1 = ax[4], b2 = ax[5], c0 = ax[6], c1 = ax[7], c2 = ax[8];
+    let h0 = 0, h1 = 0, h2 = 0;
     for (let k = 0; k < 24; k++) {
-      const q = (v + k) * 3;
-      for (let p = 0; p < 3; p++) {
-        const d = (pos[q] - cx) * ax[p * 3] + (pos[q + 1] - cy) * ax[p * 3 + 1] + (pos[q + 2] - cz) * ax[p * 3 + 2];
-        sg[k * 3 + p] = d < 0 ? -1 : 1;
-        if (abs(d) > h[p]) h[p] = abs(d);
-      }
+      const q = (v + k) * 3, px = pos[q] - cx, py = pos[q + 1] - cy, pz = pos[q + 2] - cz, s = k * 3;
+      const d0 = px * a0 + py * a1 + pz * a2, d1 = px * b0 + py * b1 + pz * b2, d2 = px * c0 + py * c1 + pz * c2;
+      D[s] = d0; D[s + 1] = d1; D[s + 2] = d2;
+      sg[s] = d0 < 0 ? -1 : 1; sg[s + 1] = d1 < 0 ? -1 : 1; sg[s + 2] = d2 < 0 ? -1 : 1;
+      const e0 = d0 < 0 ? -d0 : d0, e1 = d1 < 0 ? -d1 : d1, e2 = d2 < 0 ? -d2 : d2;
+      if (e0 > h0) h0 = e0; if (e1 > h1) h1 = e1; if (e2 > h2) h2 = e2;
     }
-    if (h[0] < MIN_HALF || h[1] < MIN_HALF || h[2] < MIN_HALF) return null;
+    h[0] = h0; h[1] = h1; h[2] = h2;
+    if (h0 < MIN_HALF || h1 < MIN_HALF || h2 < MIN_HALF) return null;
     // every vertex a true corner; each face's quad on its own outward side,
     // four DISTINCT corners with 0 and 2 diagonal, drawn as (0,1,2)+(0,2,3)
     // with winding agreeing with the outward normal.
-    const tol = 1e-4 * (1 + h[0] + h[1] + h[2]);
-    for (let k = 0; k < 24; k++) {
-      const q = (v + k) * 3;
-      for (let p = 0; p < 3; p++) {
-        const d = (pos[q] - cx) * ax[p * 3] + (pos[q + 1] - cy) * ax[p * 3 + 1] + (pos[q + 2] - cz) * ax[p * 3 + 2];
-        if (abs(abs(d) - h[p]) > tol) return null;
-      }
+    const tol = 1e-4 * (1 + h0 + h1 + h2);
+    for (let k = 0; k < 72; k += 3) {
+      const d0 = D[k], d1 = D[k + 1], d2 = D[k + 2];
+      const f0 = (d0 < 0 ? -d0 : d0) - h0, f1 = (d1 < 0 ? -d1 : d1) - h1, f2 = (d2 < 0 ? -d2 : d2) - h2;
+      if ((f0 < 0 ? -f0 : f0) > tol || (f1 < 0 ? -f1 : f1) > tol || (f2 < 0 ? -f2 : f2) > tol) return null;
     }
     for (let fc = 0; fc < 6; fc++) {
       const base = v + fc * 4, p = fc >> 1;
@@ -104,18 +110,16 @@ const TrackHiddenFaces = (function () {
       const d = (pos[n] - cx) * nrm[n] + (pos[n + 1] - cy) * nrm[n + 1] + (pos[n + 2] - cz) * nrm[n + 2];
       if (d <= 0) return null;
       let mask = 0;
+      const side = (nrm[n] * ax[p * 3] + nrm[n + 1] * ax[p * 3 + 1] + nrm[n + 2] * ax[p * 3 + 2]) < 0 ? -1 : 1;
+      const r1 = p === 0 ? 1 : 0, r2 = p === 2 ? 1 : 2;   // the two other axes, ascending
       for (let i = 0; i < 4; i++) {
-        const k = fc * 4 + i;
-        if (sg[k * 3 + p] !== ((nrm[n] * ax[p * 3] + nrm[n + 1] * ax[p * 3 + 1] + nrm[n + 2] * ax[p * 3 + 2]) < 0 ? -1 : 1)) return null;
-        let bit = 0, b = 0;
-        for (let r = 0; r < 3; r++) if (r !== p) { if (sg[k * 3 + r] > 0) bit |= 1 << b; b++; }
-        mask |= 1 << bit;
+        const s = (fc * 4 + i) * 3;
+        if (sg[s + p] !== side) return null;
+        mask |= 1 << ((sg[s + r1] > 0 ? 1 : 0) | (sg[s + r2] > 0 ? 2 : 0));
       }
       if (mask !== 15) return null;
-      const k0 = fc * 4, k2 = fc * 4 + 2;
-      let diag = true;
-      for (let r = 0; r < 3; r++) if (r !== p && sg[k0 * 3 + r] === sg[k2 * 3 + r]) diag = false;
-      if (!diag) return null;
+      const s0 = fc * 12, s2 = s0 + 6;                    // corners 0 and 2 of the quad
+      if (sg[s0 + r1] === sg[s2 + r1] || sg[s0 + r2] === sg[s2 + r2]) return null;
       const t = firstTri[base];
       if (t < 0 || (t + 1) * 3 + 2 >= idx.length) return null;
       for (let u = t; u <= t + 1; u++) {
@@ -137,98 +141,275 @@ const TrackHiddenFaces = (function () {
     return true;
   }
 
+
   // Upper bound on the drawn terrain's height per coarse XZ cell: the max
   // vertex y of every terrain triangle whose AABB touches the cell. A prop
   // vertex above it cannot be buried (nor resting under a down face), so the
   // exact groundY lookups only run on the few that pass. -Infinity = no terrain.
+  // Returns the raw grid; classify() does the lookup inline.
   function terrainCeil(terrain) {
     const tp = terrain && arr(terrain.pos), ti = terrain && arr(terrain.idx);
     if (!tp || !ti || !ti.length) return null;
-    let mnx = Infinity, mxx = -Infinity, mnz = Infinity, mxz = -Infinity;
+    let mnx = INF, mxx = -INF, mnz = INF, mxz = -INF;
     for (let i = 0; i < tp.length; i += 3) {
-      if (tp[i] < mnx) mnx = tp[i]; if (tp[i] > mxx) mxx = tp[i];
-      if (tp[i + 2] < mnz) mnz = tp[i + 2]; if (tp[i + 2] > mxz) mxz = tp[i + 2];
+      const x = tp[i], z = tp[i + 2];
+      if (x < mnx) mnx = x; if (x > mxx) mxx = x;
+      if (z < mnz) mnz = z; if (z > mxz) mxz = z;
     }
     const C = TCELL, nx = floor((mxx - mnx) / C) + 1, nz = floor((mxz - mnz) / C) + 1;
-    const top = new Float64Array(nx * nz).fill(-Infinity);
+    const top = new Float64Array(nx * nz).fill(-INF);
     for (let t = 0; t + 2 < ti.length; t += 3) {
       const a = ti[t] * 3, b = ti[t + 1] * 3, c = ti[t + 2] * 3;
+      const xa = tp[a], xb = tp[b], xc = tp[c], za = tp[a + 2], zb = tp[b + 2], zc = tp[c + 2];
       const y = max(max(tp[a + 1], tp[b + 1]), tp[c + 1]);
-      const i0 = floor((min(min(tp[a], tp[b]), tp[c]) - mnx) / C), i1 = floor((max(max(tp[a], tp[b]), tp[c]) - mnx) / C);
-      const j0 = floor((min(min(tp[a + 2], tp[b + 2]), tp[c + 2]) - mnz) / C), j1 = floor((max(max(tp[a + 2], tp[b + 2]), tp[c + 2]) - mnz) / C);
-      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const k = j * nx + i; if (y > top[k]) top[k] = y; }
+      const i0 = floor((min(min(xa, xb), xc) - mnx) / C), i1 = floor((max(max(xa, xb), xc) - mnx) / C);
+      const j0 = floor((min(min(za, zb), zc) - mnz) / C), j1 = floor((max(max(za, zb), zc) - mnz) / C);
+      for (let j = j0; j <= j1; j++) for (let i = i0, k = j * nx + i0; i <= i1; i++, k++) if (y > top[k]) top[k] = y;
     }
-    return (x, z) => {
-      const i = floor((x - mnx) / C), j = floor((z - mnz) / C);
-      return (i < 0 || j < 0 || i >= nx || j >= nz) ? -Infinity : top[j * nx + i];
-    };
+    return { top, mnx, mnz, nx, nz };
   }
 
-  // strip(geo, { groundY(x, z) -> y|null, terrain: terrainGeo }) -> stats.
-  function strip(geo, opts) {
-    const t0 = now();
-    const stats = { trisBefore: 0, trisAfter: 0, enclosed: 0, buried: 0, bottom: 0, boxes: 0, ms: 0 };
-    if (!geo || !geo.pos || !geo.idx) return stats;
-    const pos = arr(geo.pos), nrm = arr(geo.nrm), col = arr(geo.col), mat = arr(geo.mat), idx = arr(geo.idx);
-    const V = (pos.length / 3) | 0, T = (idx.length / 3) | 0;
-    stats.trisBefore = stats.trisAfter = T;
-    if (!T || !nrm || nrm.length !== pos.length) return stats;
-    const groundY = opts && opts.groundY;
-    const ceil = groundY ? terrainCeil(opts.terrain) : null;
+  // Each phase below is its own function on purpose: one function holding
+  // every loop runs each new loop in the interpreter until on-stack
+  // replacement, then deopts on reaching the next ("insufficient type
+  // feedback"). Split, each is optimised on its own.
 
+  // firstTri[v] = the first triangle whose FIRST index is v, else -1.
+  function firstTris(idx, T, V) {
     const firstTri = new Int32Array(V).fill(-1);
     for (let t = T - 1; t >= 0; t--) firstTri[idx[t * 3]] = t;
+    return firstTri;
+  }
 
-    // boxes → flat records (+ their XZ AABBs), then a dense CSR grid over them
-    const B0 = [], BB0 = [];
+  // Every addBox, in vertex order → flat records B (REC layout), their AABBs
+  // BB = [mnx, mxx, mnz, mxz, mny, mxy], and first vertices BV. Boxes never
+  // overlap in the scan (v += 24), so V/24 bounds their count.
+  function scanBoxes(pos, nrm, col, mat, idx, firstTri, V) {
+    const cap = ((V / 24) | 0) + 1;
+    const B = new Float64Array(cap * 15), BB = new Float64Array(cap * 6), BV = new Int32Array(cap);
+    let NB = 0;
     for (let v = 0; v + 24 <= V;) {
-      if (!boxAt(pos, nrm, col, mat, idx, firstTri, v)) { v++; continue; }
-      for (let i = 0; i < 15; i++) B0.push(REC[i]);
-      let mnx = Infinity, mxx = -Infinity, mny = Infinity, mxy = -Infinity, mnz = Infinity, mxz = -Infinity;
-      for (let q = v * 3; q < (v + 24) * 3; q += 3) {
-        if (pos[q] < mnx) mnx = pos[q]; if (pos[q] > mxx) mxx = pos[q];
-        if (pos[q + 1] < mny) mny = pos[q + 1]; if (pos[q + 1] > mxy) mxy = pos[q + 1];
-        if (pos[q + 2] < mnz) mnz = pos[q + 2]; if (pos[q + 2] > mxz) mxz = pos[q + 2];
+      // boxAt's own necessary conditions, cheapest first: each face quad
+      // starts a triangle, and face 0's first normals agree.
+      const o = v * 3;
+      if (firstTri[v] < 0 || firstTri[v + 4] < 0 || firstTri[v + 8] < 0 || firstTri[v + 12] < 0 ||
+          firstTri[v + 16] < 0 || firstTri[v + 20] < 0 ||
+          nrm[o] !== nrm[o + 3] || nrm[o] !== nrm[o + 9] || nrm[o + 1] !== nrm[o + 7] ||
+          !boxAt(pos, nrm, col, mat, idx, firstTri, v)) { v++; continue; }
+      const r = NB * 15;
+      for (let i = 0; i < 15; i++) B[r + i] = REC[i];
+      let mnx = INF, mxx = -INF, mny = INF, mxy = -INF, mnz = INF, mxz = -INF;
+      for (let q = o; q < o + 72; q += 3) {
+        const x = pos[q], y = pos[q + 1], z = pos[q + 2];
+        if (x < mnx) mnx = x; if (x > mxx) mxx = x;
+        if (y < mny) mny = y; if (y > mxy) mxy = y;
+        if (z < mnz) mnz = z; if (z > mxz) mxz = z;
       }
-      BB0.push(mnx, mxx, mnz, mxz, mny, mxy);
+      const w = NB * 6;
+      BB[w] = mnx; BB[w + 1] = mxx; BB[w + 2] = mnz; BB[w + 3] = mxz; BB[w + 4] = mny; BB[w + 5] = mxy;
+      BV[NB] = v;
+      NB++;
       v += 24;
     }
-    const B = new Float64Array(B0), BB = new Float64Array(BB0), NB = B.length / 15;
-    stats.boxes = NB;
-    let gx0 = Infinity, gz0 = Infinity, gnx = 0, gnz = 0, start = null, list = null;
-    if (NB) {
-      let gx1 = -Infinity, gz1 = -Infinity;
-      for (let k = 0; k < NB; k++) {
-        if (BB[k * 6] < gx0) gx0 = BB[k * 6]; if (BB[k * 6 + 1] > gx1) gx1 = BB[k * 6 + 1];
-        if (BB[k * 6 + 2] < gz0) gz0 = BB[k * 6 + 2]; if (BB[k * 6 + 3] > gz1) gz1 = BB[k * 6 + 3];
-      }
-      gnx = floor((gx1 - gx0) / CELL) + 1; gnz = floor((gz1 - gz0) / CELL) + 1;
-      start = new Int32Array(gnx * gnz + 1);
-      const span = (k, fn) => {
-        const i0 = floor((BB[k * 6] - gx0) / CELL), i1 = floor((BB[k * 6 + 1] - gx0) / CELL);
-        const j0 = floor((BB[k * 6 + 2] - gz0) / CELL), j1 = floor((BB[k * 6 + 3] - gz0) / CELL);
-        for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) fn(j * gnx + i);
-      };
-      for (let k = 0; k < NB; k++) span(k, (c) => { start[c + 1]++; });
-      for (let c = 0; c < gnx * gnz; c++) start[c + 1] += start[c];
-      const fill = start.slice(0, gnx * gnz);
-      list = new Int32Array(start[gnx * gnz]);
-      for (let k = 0; k < NB; k++) span(k, (c) => { list[fill[c]++] = k; });
-    }
-    const inBox = (k, q) => {
-      const o = k * 15;
-      const dx = pos[q] - B[o], dy = pos[q + 1] - B[o + 1], dz = pos[q + 2] - B[o + 2];
-      return abs(dx * B[o + 3] + dy * B[o + 4] + dz * B[o + 5]) < B[o + 12] - IN_EPS &&
-             abs(dx * B[o + 6] + dy * B[o + 7] + dz * B[o + 8]) < B[o + 13] - IN_EPS &&
-             abs(dx * B[o + 9] + dy * B[o + 10] + dz * B[o + 11]) < B[o + 14] - IN_EPS;
-    };
+    return { B: B.subarray(0, NB * 15), BB: BB.subarray(0, NB * 6), BV: BV.subarray(0, NB), NB };
+  }
 
+  // Dense CSR grid over the boxes' XZ AABBs. Each cell's list is sorted by
+  // AABB bottom (NaN first, as -INF) and carries the running max of AABB top
+  // (NaN as +INF), packed per entry so a walk reads one cache line per box:
+  // E[n*8] = running top max, E[n*8+1..6] = the AABB as in BB, E[n*8+7] = the
+  // sort key. A centroid at y then only needs the entries before the first
+  // bottom >= y (the rest fail `y <= bottom`), walked backwards until the
+  // running top <= y (that entry and all before it fail `y >= top`).
+  function buildGrid(BB, NB) {
+    let gx0 = INF, gz0 = INF, gx1 = -INF, gz1 = -INF;
+    for (let k = 0; k < NB; k++) {
+      if (BB[k * 6] < gx0) gx0 = BB[k * 6]; if (BB[k * 6 + 1] > gx1) gx1 = BB[k * 6 + 1];
+      if (BB[k * 6 + 2] < gz0) gz0 = BB[k * 6 + 2]; if (BB[k * 6 + 3] > gz1) gz1 = BB[k * 6 + 3];
+    }
+    const gnx = floor((gx1 - gx0) / CELL) + 1, gnz = floor((gz1 - gz0) / CELL) + 1, NC = gnx * gnz;
+    const start = new Int32Array(NC + 1), SP = new Int32Array(NB * 4);
+    for (let k = 0; k < NB; k++) {
+      const i0 = floor((BB[k * 6] - gx0) / CELL), i1 = floor((BB[k * 6 + 1] - gx0) / CELL);
+      const j0 = floor((BB[k * 6 + 2] - gz0) / CELL), j1 = floor((BB[k * 6 + 3] - gz0) / CELL);
+      SP[k * 4] = i0; SP[k * 4 + 1] = i1; SP[k * 4 + 2] = j0; SP[k * 4 + 3] = j1;
+      for (let j = j0; j <= j1; j++) for (let c = j * gnx + i0, e = j * gnx + i1; c <= e; c++) start[c + 1]++;
+    }
+    for (let c = 0; c < NC; c++) start[c + 1] += start[c];
+    const list = new Int32Array(start[NC]);
+    // start[c] doubles as cell c's fill cursor, then shifts back one slot.
+    for (let k = 0; k < NB; k++) {
+      const i0 = SP[k * 4], i1 = SP[k * 4 + 1], j0 = SP[k * 4 + 2], j1 = SP[k * 4 + 3];
+      for (let j = j0; j <= j1; j++) for (let c = j * gnx + i0, e = j * gnx + i1; c <= e; c++) list[start[c]++] = k;
+    }
+    for (let c = NC; c > 0; c--) start[c] = start[c - 1];
+    start[0] = 0;
+    const bot = new Float64Array(NB);
+    for (let k = 0; k < NB; k++) { const y = BB[k * 6 + 4]; bot[k] = y === y ? y : -INF; }
+    const E = new Float64Array(list.length * 8);
+    for (let c = 0; c < NC; c++) {
+      const s = start[c], e = start[c + 1];
+      for (let n = s + 1; n < e; n++) {             // stable insertion sort; lists are short
+        const k = list[n], y = bot[k];
+        let m = n;
+        while (m > s && bot[list[m - 1]] > y) { list[m] = list[m - 1]; m--; }
+        list[m] = k;
+      }
+      let pm = -INF;
+      for (let n = s; n < e; n++) {
+        const k = list[n], o = k * 6, w = n * 8, top = BB[o + 5];
+        if (!(top <= pm)) pm = top === top ? top : INF;
+        E[w] = pm; E[w + 1] = BB[o]; E[w + 2] = BB[o + 1]; E[w + 3] = BB[o + 2]; E[w + 4] = BB[o + 3];
+        E[w + 5] = BB[o + 4]; E[w + 6] = top; E[w + 7] = bot[k];
+      }
+    }
+    return { gx0, gz0, gnx, gnz, start, list, E };
+  }
+
+  // inBox(k, ·) for all three corners (pos offsets A, Bq, C) of box record
+  // r = k * 15: each strictly (IN_EPS) inside on every axis.
+  function in3(B, pos, r, A, Bq, C) {
+    const ox = B[r], oy = B[r + 1], oz = B[r + 2];
+    const u0 = B[r + 3], u1 = B[r + 4], u2 = B[r + 5], v0 = B[r + 6], v1 = B[r + 7], v2 = B[r + 8];
+    const w0 = B[r + 9], w1 = B[r + 10], w2 = B[r + 11];
+    const hu = B[r + 12] - IN_EPS, hv = B[r + 13] - IN_EPS, hw = B[r + 14] - IN_EPS;
+    let dx = pos[A] - ox, dy = pos[A + 1] - oy, dz = pos[A + 2] - oz;
+    let pu = dx * u0 + dy * u1 + dz * u2, pv = dx * v0 + dy * v1 + dz * v2, pw = dx * w0 + dy * w1 + dz * w2;
+    if (!((pu < 0 ? -pu : pu) < hu && (pv < 0 ? -pv : pv) < hv && (pw < 0 ? -pw : pw) < hw)) return false;
+    dx = pos[Bq] - ox; dy = pos[Bq + 1] - oy; dz = pos[Bq + 2] - oz;
+    pu = dx * u0 + dy * u1 + dz * u2; pv = dx * v0 + dy * v1 + dz * v2; pw = dx * w0 + dy * w1 + dz * w2;
+    if (!((pu < 0 ? -pu : pu) < hu && (pv < 0 ? -pv : pv) < hv && (pw < 0 ? -pw : pw) < hw)) return false;
+    dx = pos[C] - ox; dy = pos[C + 1] - oy; dz = pos[C + 2] - oz;
+    pu = dx * u0 + dy * u1 + dz * u2; pv = dx * v0 + dy * v1 + dz * v2; pw = dx * w0 + dy * w1 + dz * w2;
+    return (pu < 0 ? -pu : pu) < hu && (pv < 0 ? -pv : pv) < hv && (pw < 0 ? -pw : pw) < hw;
+  }
+
+  // Is the triangle (pos offsets A, Bq, C) inside some box whose AABB
+  // strictly holds its centroid?
+  function enclosedTri(G, B, pos, A, Bq, C) {
+    const mx = (pos[A] + pos[Bq] + pos[C]) / 3, my = (pos[A + 1] + pos[Bq + 1] + pos[C + 1]) / 3;
+    const mz = (pos[A + 2] + pos[Bq + 2] + pos[C + 2]) / 3;
+    const i = floor((mx - G.gx0) / CELL), j = floor((mz - G.gz0) / CELL);
+    if (!(i >= 0 && j >= 0 && i < G.gnx && j < G.gnz)) return false;
+    const E = G.E, list = G.list, cell = j * G.gnx + i, s = G.start[cell];
+    let lo = s, hi = G.start[cell + 1];
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (E[mid * 8 + 7] < my) lo = mid + 1; else hi = mid; }
+    for (let n = lo - 1; n >= s; n--) {
+      const w = n * 8;
+      if (E[w] <= my) break;
+      if (mx <= E[w + 1] || mx >= E[w + 2] || mz <= E[w + 3] || mz >= E[w + 4] || my <= E[w + 5] || my >= E[w + 6]) continue;
+      if (in3(B, pos, list[n] * 15, A, Bq, C)) return true;
+    }
+    return false;
+  }
+
+  // The same question for the boxes' OWN triangles (most of the buffer: 12
+  // per box, known from the scan), a box at a time: its triangles that share
+  // a grid cell share one walk, bounded by their joint centroid extent.
+  // Returns enc[t]: 0 = not a box triangle, 1 = enclosed, 2 = not. A centroid
+  // with a NaN coordinate stays 2: its triangle has a non-finite corner,
+  // which no inBox test passes.
+  function boxEnclosure(G, B, BV, NB, firstTri, pos, idx, T) {
+    const enc = new Uint8Array(T), E = G.E, list = G.list, start = G.start;
+    const gx0 = G.gx0, gz0 = G.gz0, gnx = G.gnx, gnz = G.gnz;
+    const TT = new Int32Array(12), TC = new Int32Array(12);
+    const TX = new Float64Array(12), TY = new Float64Array(12), TZ = new Float64Array(12);
+    for (let k = 0; k < NB; k++) {
+      const v = BV[k];
+      for (let f = 0; f < 6; f++) { const t = firstTri[v + f * 4]; TT[f * 2] = t; TT[f * 2 + 1] = t + 1; }
+      for (let q = 0; q < 12; q++) {
+        const t = TT[q], A = idx[t * 3] * 3, Bq = idx[t * 3 + 1] * 3, C = idx[t * 3 + 2] * 3;
+        const mx = (pos[A] + pos[Bq] + pos[C]) / 3, my = (pos[A + 1] + pos[Bq + 1] + pos[C + 1]) / 3;
+        const mz = (pos[A + 2] + pos[Bq + 2] + pos[C + 2]) / 3;
+        const i = floor((mx - gx0) / CELL), j = floor((mz - gz0) / CELL);
+        TX[q] = mx; TY[q] = my; TZ[q] = mz;
+        TC[q] = (mx === mx && my === my && mz === mz && i >= 0 && j >= 0 && i < gnx && j < gnz) ? j * gnx + i : -1;
+        enc[t] = 2;
+      }
+      for (let q = 0; q < 12; q++) {
+        const cell = TC[q];
+        if (cell < 0) continue;
+        let x0 = INF, x1 = -INF, y0 = INF, y1 = -INF, z0 = INF, z1 = -INF, left = 0;
+        for (let p = q; p < 12; p++) if (TC[p] === cell) {
+          const x = TX[p], y = TY[p], z = TZ[p];
+          if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+          if (z < z0) z0 = z; if (z > z1) z1 = z;
+          left++;
+        }
+        const s = start[cell];
+        let lo = s, hi = start[cell + 1];
+        while (lo < hi) { const mid = (lo + hi) >> 1; if (E[mid * 8 + 7] < y1) lo = mid + 1; else hi = mid; }
+        for (let n = lo - 1; n >= s && left; n--) {
+          const w = n * 8;
+          if (E[w] <= y0) break;
+          // no centroid of the group can be strictly inside this AABB
+          if (E[w + 2] <= x0 || E[w + 1] >= x1 || E[w + 4] <= z0 || E[w + 3] >= z1 || E[w + 6] <= y0 || E[w + 5] >= y1) continue;
+          const r = list[n] * 15;
+          for (let p = q; p < 12; p++) {
+            const t = TT[p];
+            if (TC[p] !== cell || enc[t] === 1) continue;
+            const mx = TX[p], my = TY[p], mz = TZ[p];
+            if (mx <= E[w + 1] || mx >= E[w + 2] || mz <= E[w + 3] || mz >= E[w + 4] || my <= E[w + 5] || my >= E[w + 6]) continue;
+            if (in3(B, pos, r, idx[t * 3] * 3, idx[t * 3 + 1] * 3, idx[t * 3 + 2] * 3)) { enc[t] = 1; left--; }
+          }
+        }
+        for (let p = q; p < 12; p++) if (TC[p] === cell) TC[p] = -1;
+      }
+    }
+    return enc;
+  }
+
+  // The per-triangle pass: enclosed, else buried, else bottom. Fills keep[]
+  // and returns [kept, enclosed, buried, bottom].
+  function classify(pos, idx, mat, T, G, B, enc, ceil, groundY, keep) {
+    // terrain ceiling over vertex v (recomputed: a vertex is shared by ~1.5
+    // triangles here, too few to pay for a per-vertex cache)
+    let cTop = null, cMnx = 0, cMnz = 0, cNx = 0, cNz = 0;
+    if (ceil) { cTop = ceil.top; cMnx = ceil.mnx; cMnz = ceil.mnz; cNx = ceil.nx; cNz = ceil.nz; }
+    const cAt = (v) => {
+      const i = floor((pos[v * 3] - cMnx) / TCELL), j = floor((pos[v * 3 + 2] - cMnz) / TCELL);
+      return (i < 0 || j < 0 || i >= cNx || j >= cNz) ? -INF : cTop[j * cNx + i];
+    };
     // exact ground under a point; NaN over a hole (a NaN comparison is false,
-    // so a hole never strips anything)
-    const gPt = (x, z) => { const h = groundY(x, z); return (h == null || !isFinite(h)) ? NaN : h; };
-    const gy = new Map();                               // per-vertex cache; few vertices get here
-    const gAt = (v) => { let g = gy.get(v); if (g === undefined) gy.set(v, g = gPt(pos[v * 3], pos[v * 3 + 2])); return g; };
-    const cAt = (q) => ceil(pos[q], pos[q + 2]);
+    // so a hole never strips anything)...
+    const gRaw = (x, z) => {
+      const h = groundY(x, z);
+      if (h == null) return NAN;
+      return (typeof h === "number" ? h - h === 0 : isFinite(h)) ? h : NAN;   // isFinite, without the global lookup
+    };
+    // ...memoised on the exact bit pattern of (x, z): a box repeats each
+    // corner on three vertices and neighbouring triangles share edge
+    // midpoints (~1 in 4 groundY calls at vegas). Open addressing, grown at
+    // half full.
+    const HB = new Float64Array(2), HU = new Uint32Array(HB.buffer);
+    let hCap = 1 << 12, hN = 0, hK = new Uint32Array(hCap * 4), hV = new Float64Array(hCap), hUsed = new Uint8Array(hCap);
+    const hSlot = (k0, k1, k2, k3, cap, K, used) => {
+      // 16-bit multipliers keep every product exact in a double
+      let x = (((k0 ^ k1) * 0x9E37) | 0) ^ (((k2 ^ (k3 >>> 7)) * 0x85EB) | 0) ^ (k1 >>> 11) ^ (k3 << 9);
+      x ^= x >>> 15; x = (x * 0xC2B3) | 0; x ^= x >>> 13;
+      let i = x & (cap - 1);
+      while (used[i] && !(K[i * 4] === k0 && K[i * 4 + 1] === k1 && K[i * 4 + 2] === k2 && K[i * 4 + 3] === k3)) i = (i + 1) & (cap - 1);
+      return i;
+    };
+    const gPt = (x, z) => {
+      HB[0] = x; HB[1] = z;
+      const k0 = HU[0], k1 = HU[1], k2 = HU[2], k3 = HU[3];
+      const i = hSlot(k0, k1, k2, k3, hCap, hK, hUsed);
+      if (hUsed[i]) return hV[i];
+      const g = gRaw(x, z);
+      hUsed[i] = 1; hV[i] = g; hK[i * 4] = k0; hK[i * 4 + 1] = k1; hK[i * 4 + 2] = k2; hK[i * 4 + 3] = k3;
+      if (++hN * 2 > hCap) {
+        const cap = hCap * 2, K = new Uint32Array(cap * 4), Vv = new Float64Array(cap), used = new Uint8Array(cap);
+        for (let j = 0; j < hCap; j++) if (hUsed[j]) {
+          const a = hK[j * 4], b = hK[j * 4 + 1], c = hK[j * 4 + 2], d = hK[j * 4 + 3];
+          const w = hSlot(a, b, c, d, cap, K, used);
+          used[w] = 1; Vv[w] = hV[j]; K[w * 4] = a; K[w * 4 + 1] = b; K[w * 4 + 2] = c; K[w * 4 + 3] = d;
+        }
+        hCap = cap; hK = K; hV = Vv; hUsed = used;
+      }
+      return g;
+    };
+    const gAt = (v) => gPt(pos[v * 3], pos[v * 3 + 2]);     // exact ground under vertex v
     // centroid and edge midpoints all satisfy y < ground + off (strictly)
     const interiorUnder = (A, Bq, C, off) => {
       for (let s = 0; s < 4; s++) {
@@ -240,50 +421,71 @@ const TrackHiddenFaces = (function () {
       return true;
     };
 
-    const keep = new Uint8Array(T);
-    let kept = 0;
+    let kept = 0, nEnc = 0, nBur = 0, nBot = 0;
     for (let t = 0; t < T; t++) {
       const a = idx[t * 3], b = idx[t * 3 + 1], c = idx[t * 3 + 2];
       let hide = 0;
       if (!(mat && (isFlag(mat[a]) || isFlag(mat[b]) || isFlag(mat[c])))) {
         const A = a * 3, Bq = b * 3, C = c * 3;
-        if (NB) {
-          const mx = (pos[A] + pos[Bq] + pos[C]) / 3, my = (pos[A + 1] + pos[Bq + 1] + pos[C + 1]) / 3;
-          const mz = (pos[A + 2] + pos[Bq + 2] + pos[C + 2]) / 3;
-          const i = floor((mx - gx0) / CELL), j = floor((mz - gz0) / CELL);
-          if (i >= 0 && j >= 0 && i < gnx && j < gnz) {
-            const cell = j * gnx + i;
-            for (let n = start[cell], e = start[cell + 1]; n < e; n++) {
-              const k = list[n], o = k * 6;
-              if (mx <= BB[o] || mx >= BB[o + 1] || mz <= BB[o + 2] || mz >= BB[o + 3] || my <= BB[o + 4] || my >= BB[o + 5]) continue;
-              if (inBox(k, A) && inBox(k, Bq) && inBox(k, C)) { hide = 1; stats.enclosed++; break; }
-            }
-          }
+        if (G) {
+          const e = enc[t];
+          if (e === 1 || (e === 0 && enclosedTri(G, B, pos, A, Bq, C))) { hide = 1; nEnc++; }
         }
         if (!hide && ceil) {
           const ya = pos[A + 1], yb = pos[Bq + 1], yc = pos[C + 1];
-          if (ya < cAt(A) - BURY && yb < cAt(Bq) - BURY && yc < cAt(C) - BURY &&
+          const ca = cAt(a);
+          if (ya < ca - BURY && yb < cAt(b) - BURY && yc < cAt(c) - BURY &&
               ya < gAt(a) - BURY && yb < gAt(b) - BURY && yc < gAt(c) - BURY &&
-              interiorUnder(A, Bq, C, -BURY)) { hide = 1; stats.buried++; }
-          else if (ya <= cAt(A) + BOTTOM && yb <= cAt(Bq) + BOTTOM && yc <= cAt(C) + BOTTOM) {
+              interiorUnder(A, Bq, C, -BURY)) { hide = 1; nBur++; }
+          else if (ya <= ca + BOTTOM && yb <= cAt(b) + BOTTOM && yc <= cAt(c) + BOTTOM) {
             const e1x = pos[Bq] - pos[A], e1y = yb - ya, e1z = pos[Bq + 2] - pos[A + 2];
             const e2x = pos[C] - pos[A], e2y = yc - ya, e2z = pos[C + 2] - pos[A + 2];
             const nx = e1y * e2z - e1z * e2y, ny = e1z * e2x - e1x * e2z, nz = e1x * e2y - e1y * e2x;
             const L2 = nx * nx + ny * ny + nz * nz;
             if (L2 > 1e-24 && ny < 0 && ny * ny > BOTTOM_NY * BOTTOM_NY * L2 &&
                 ya <= gAt(a) + BOTTOM && yb <= gAt(b) + BOTTOM && yc <= gAt(c) + BOTTOM &&
-                interiorUnder(A, Bq, C, BOTTOM + 1e-9)) { hide = 1; stats.bottom++; }
+                interiorUnder(A, Bq, C, BOTTOM + 1e-9)) { hide = 1; nBot++; }
           }
         }
       }
       if (!hide) { keep[t] = 1; kept++; }
     }
-    if (kept !== T) {
-      const out = new Uint32Array(kept * 3);
-      let w = 0;
-      for (let t = 0; t < T; t++) if (keep[t]) { out[w++] = idx[t * 3]; out[w++] = idx[t * 3 + 1]; out[w++] = idx[t * 3 + 2]; }
-      geo.idx = out;
-    }
+    return [kept, nEnc, nBur, nBot];
+  }
+
+  function compact(idx, keep, kept, T) {
+    const out = new Uint32Array(kept * 3);
+    let w = 0;
+    for (let t = 0; t < T; t++) if (keep[t]) { out[w++] = idx[t * 3]; out[w++] = idx[t * 3 + 1]; out[w++] = idx[t * 3 + 2]; }
+    return out;
+  }
+
+  // strip(geo, { groundY(x, z) -> y|null, terrain: terrainGeo }) -> stats.
+  //
+  // Every test is the same arithmetic as the single-pass original, only
+  // ordered and indexed to skip work whose answer is already known, so the
+  // kept index buffer and the stats are identical to it on every circuit.
+  function strip(geo, opts) {
+    const t0 = now();
+    const stats = { trisBefore: 0, trisAfter: 0, enclosed: 0, buried: 0, bottom: 0, boxes: 0, ms: 0 };
+    if (!geo || !geo.pos || !geo.idx) return stats;
+    const pos = arr(geo.pos), nrm = arr(geo.nrm), col = arr(geo.col), mat = arr(geo.mat), idx = arr(geo.idx);
+    const V = (pos.length / 3) | 0, T = (idx.length / 3) | 0;
+    stats.trisBefore = stats.trisAfter = T;
+    if (!T || !nrm || nrm.length !== pos.length) return stats;
+    const groundY = opts && opts.groundY;
+    const ceil = groundY ? terrainCeil(opts.terrain) : null;
+
+    const firstTri = firstTris(idx, T, V);
+    const S = scanBoxes(pos, nrm, col, mat, idx, firstTri, V);
+    stats.boxes = S.NB;
+    const G = S.NB ? buildGrid(S.BB, S.NB) : null;
+    const enc = G ? boxEnclosure(G, S.B, S.BV, S.NB, firstTri, pos, idx, T) : null;
+    const keep = new Uint8Array(T);
+    const n = classify(pos, idx, mat, T, G, S.B, enc, ceil, groundY, keep);
+    const kept = n[0];
+    stats.enclosed = n[1]; stats.buried = n[2]; stats.bottom = n[3];
+    if (kept !== T) geo.idx = compact(idx, keep, kept, T);
     stats.trisAfter = kept;
     stats.ms = now() - t0;
     return stats;
