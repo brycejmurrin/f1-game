@@ -643,31 +643,6 @@
      Derived with color-mix rather than a second hex so there is still one red:
      change --red and the fills follow. */
   --red-fill: color-mix(in oklab, var(--red) 90%, #1a0008);
-  /* THE RED RAMP — twelve steps, one job each (the Radix convention), so a
-     surface asks for a ROLE instead of hand-mixing another percentage of red:
-       1-2   app / pane background tints     6-8   borders: subtle, idle, hover/focus
-       3-5   component fill: idle/hover/press 9    the solid brand red (= --red)
-       10    solid hover                      11   low-contrast text   12  high-contrast text
-     Built for THIS dark UI: steps 1-8 climb from --bg's lightness (L 0.17) so a
-     tint reads as red-on-black, not as a pink smear. OKLCH because its L is
-     perceptual — equal L steps look like equal steps — and one hue (29.5deg,
-     measured from #e10600: oklch(0.573 0.233 29.5)) holds the family together;
-     11-12 drift a few degrees pinker the way light reds do at high L, and 12
-     trims chroma to stay inside sRGB. Step 9 IS var(--red), not a copy, so there
-     is still one red. Measured (WCAG) on --bg: 11 is 8.6:1, 12 is 14:1; white on
-     10 is 4.2:1 — a hover is transient, the resting solid is 9 at 5:1. */
-  --red-1: oklch(0.17 0.02 29.5);
-  --red-2: oklch(0.2 0.035 29.5);
-  --red-3: oklch(0.25 0.07 29.5);
-  --red-4: oklch(0.29 0.095 29.5);
-  --red-5: oklch(0.33 0.11 29.5);
-  --red-6: oklch(0.38 0.125 29.5);
-  --red-7: oklch(0.44 0.145 29.5);
-  --red-8: oklch(0.51 0.175 29.5);
-  --red-9: var(--red);
-  --red-10: oklch(0.61 0.225 29.5);
-  --red-11: oklch(0.76 0.14 27);
-  --red-12: oklch(0.9 0.045 22);
   --grad-primary:     linear-gradient(135deg in oklab,
                         color-mix(in oklab, var(--red-fill) 76%, #fff) 0%,
                         color-mix(in oklab, var(--red-fill) 74%, #000) 100%);
@@ -697,20 +672,19 @@
      keeps it to one tiled 160px tile and no network request. */
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
 
-  /* MOTION. Four durations, not a continuum: 1 = press/hover feedback, 2 =
-     a control changing state, 3 = a panel or sheet entering, 4 = a screen-sized
-     move; --dur-draw is the slow one-shot (a line or ring drawing itself). A
-     step either reads as instant, as a change, or as travel — values in between
-     just look undecided. The easings: --ease-out for anything ARRIVING (fast
-     start, long soft landing — it answers the input at once), --ease-in-out for
-     things moving between two resting places. */
+  /* MOTION. Steps, not a continuum: 1 = press/hover feedback, 3 = a panel or
+     sheet entering, 4 = a screen-sized move; --dur-draw is the slow one-shot (a
+     line or ring drawing itself). A step either reads as instant or as travel —
+     values in between just look undecided. --ease-out is for anything ARRIVING
+     (fast start, long soft landing — it answers the input at once). Only tokens
+     something reads live here (tests/unit/css-tokens.test.mjs): a --dur-2 and an
+     --ease-in-out, and a twelve-step OKLCH red ramp, were drafted with these and
+     cut until a rule needs them. */
   --dur-1: 120ms;
-  --dur-2: 200ms;
   --dur-3: 320ms;
   --dur-4: 600ms;
   --dur-draw: 1400ms;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
   /* The fallback: without linear() a spring cannot be written in CSS, and
      ease-out is the same arrival without the bounce. The real curve is in the
      @supports block below. */
