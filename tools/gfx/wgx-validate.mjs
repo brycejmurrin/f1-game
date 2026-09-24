@@ -68,7 +68,7 @@ if (!Number.isSafeInteger(frames) || frames < 1) throw new Error("--frames must 
 // depthCompare: "always" validates). Run these FIRST, and `--static` stops here
 // so a verify-agent can gate WGX edits without launching Chromium.
 
-// Every WGX file that CARRIES WGSL, not just the two the invariants below read.
+// Every WGX file that CARRIES WGSL or is part of the DEFERRED.webgpu roster.
 // The WGSL lives in JS template literals, so a stray backtick in a shader
 // comment ends the string and the whole module stops parsing — and until this
 // check existed `--static` reported ok:true for exactly that, because it only
@@ -77,12 +77,10 @@ if (!Number.isSafeInteger(frames) || frames < 1) throw new Error("--frames must 
 // WGX, so the page falls back to GLX with one console line: the silent-fallback
 // failure this whole tool exists to catch. vm.Script COMPILES without running,
 // which is what makes it safe to point at an IIFE backend file from node.
-const WGSL_FILES = [
-  "js/render/webgpu/wgx.js",
-  "js/render/webgpu/wgsl-chunks.js",
-  "js/render/webgpu/wgsl-post.js",
-  "js/render/webgpu/wgsl-fx.js",
-];
+// After the GLX-seam peel (wgx-shadow/chunked/post), the roster IS the parse
+// set — a seam file that does not parse is the same silent-fallback failure.
+const MANIFEST = require("../manifest.cjs");
+const WGSL_FILES = MANIFEST.DEFERRED.webgpu.slice();
 function parseCheck() {
   for (const rel of WGSL_FILES) {
     let src = null;
@@ -95,16 +93,20 @@ function parseCheck() {
 
 function staticCheck() {
   parseCheck();
-  const wgx = readFileSync(join(ROOT, "js/render/webgpu/wgx.js"), "utf8");
+  // Concatenate the roster so source invariants still see peel targets
+  // (pBloomDown lives in wgx-post.js; shadow depthCompare "less" used to sit
+  // between skyPipeline and the depth-resolve "always" and accidentally kept
+  // the old \w+-only sky regex from spanning to it — match less-equal properly).
+  const wgx = WGSL_FILES.map((rel) => readFileSync(join(ROOT, rel), "utf8")).join("\n");
   const chunks = readFileSync(join(ROOT, "js/render/webgpu/wgsl-chunks.js"), "utf8");
-  const sky = [...wgx.matchAll(/skyPipeline\w*\s*=\s*device\.createRenderPipeline\(\{[\s\S]*?depthCompare:\s*"(\w+)"/g)];
+  const sky = [...wgx.matchAll(/skyPipeline\w*\s*=\s*device\.createRenderPipeline\(\{[\s\S]*?depthCompare:\s*"([\w-]+)"/g)];
   for (const m of sky) {
     if (m[1] === "always") fail("sky pipeline depthCompare is \"always\" — late sky erases the world; must be less-equal");
   }
   if (/MSAA_COUNT\s*=\s*[^;\n]*\b2\b/.test(wgx) || /sampleCount:\s*2\b/.test(wgx)) {
     fail("MSAA sampleCount 2 is not a legal WebGPU value (only 1 or 4)");
   }
-  if (!/pBloomDown = fsPipe\([^,]+,\s*POST_HDR_FORMAT/.test(wgx)) {
+  if (!/pBloomDown\s*=\s*(?:core\.)?fsPipe\([^,]+,\s*(?:core\.)?POST_HDR_FORMAT/.test(wgx)) {
     fail("pBloomDown must target POST_HDR_FORMAT (mismatch vs bloom textures when rg11b10 is granted)");
   }
   if (!/textureLoad\(src,\s*c,\s*3\)/.test(chunks)) {
