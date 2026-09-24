@@ -216,6 +216,7 @@ uniform float uBakeOn;
 uniform vec2 uBakeOrigin;
 uniform vec2 uBakeSize;
 uniform vec3 uBakeScale;
+uniform float uBakeH;      // texel rows per layer (diffuse rows [0,h), bounce rows [h,2h))
 uniform vec3 uBakeShCol;   // the shadow lamp's BAKED colour (LampBake.shadowCol)
 uniform mat4 uLampShadowVP;
 uniform float uLampShadowOn;
@@ -1255,11 +1256,19 @@ void main() {
   // Alpha is the surface height the texel was baked at: a fragment off it (a
   // bridge deck over a baked road, a roof, the lower road of a crossover, a
   // texel with no known ground) keeps the live loop instead.
-  vec4 bT = textureLod(uLampBake, bUv, 0.0);
+  // Two stacked layers; clamp v to this layer's texel centres so the bilinear
+  // tap never reads across the seam into the other one.
+  float bRow = 0.5 / max(uBakeH, 1.0);
+  vec2 bUvD = vec2(bUv.x, clamp(bUv.y, bRow, 1.0 - bRow) * 0.5);
+  vec4 bT = textureLod(uLampBake, bUvD, 0.0);
   vec3 bE = bT.rgb * uBakeScale;
+  vec3 bB = textureLod(uLampBake, bUvD + vec2(0.0, 0.5), 0.0).rgb * uBakeScale;
   float bakeW = (uBakeOn > 0.5 && all(greaterThan(bUv, vec2(0.0))) && all(lessThan(bUv, vec2(1.0))))
     ? smoothstep(0.55, 0.85, N.y) * (1.0 - smoothstep(0.75, 2.5, abs(vWorldPos.y - bT.a))) : 0.0;
   color += albedo * bE * bakeW * (1.0 - metalness) * (1.0 - wetSheen * 0.85);
+  // Baked LAMP BOUNCE (every lamp, per unit BOUNCE); the live bounce below
+  // steps aside by the same weight.
+  color += albedo * bB * (uBounceK * bakeW) * (1.0 - metalness);
   for (int i = 0; i < MAX_LIGHTS; i++) {
     if (i >= uNumLights) break;
     int li = i * 4;
@@ -1358,7 +1367,7 @@ void main() {
     // a near-free stand-in for local ambient probes. Soft NoL floor so
     // surfaces facing away from the lamp still catch a little.
     if (uBounceK > 0.0) {
-      color += albedo * lb.xyz * (att * uBounceK * (0.55 + 0.45 * NoLl)) * (1.0 - metalness);
+      color += albedo * lb.xyz * (att * uBounceK * (0.55 + 0.45 * NoLl)) * (1.0 - metalness) * (1.0 - bakeW);
     }
     // GGX specular from the lamp — the same microfacet BRDF as the sun. On the
     // wet low-roughness road this physically elongates at grazing angles (the
