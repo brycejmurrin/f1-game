@@ -287,3 +287,29 @@ test("on a street circuit a corner camera stands at the fence, not in a building
     return null;
   });
 });
+
+test("the clearance lift is PLANNED: no pop inside a shot, and corners step in before they lift", async () => {
+  // clearEye() on its own ran per frame, so the eye jumped straight up the
+  // frame it touched a box: 17 m on Monza's turn-late, 54 m on Shanghai's
+  // turn-mid (fleet audit, 400 samples — 120 hid it). Shanghai and Mexico are
+  // OPEN circuits whose corner eyes grazed trackside structures; they must now
+  // step towards the road instead of craning over a roof.
+  const N = 400;
+  for (const id of ["monza", "monaco", "shanghai", "mexico"]) {
+    const bad = await withTrack(id, (track, g) => {
+      const FlybySeq = g.sandbox.FlybySeq, out = [];
+      FlybySeq.reset();
+      let prevY = null, prevIdx = -1;
+      for (let i = 0; i <= N; i++) {
+        const v = FlybySeq.solve(track, i / N);
+        if (v.index === prevIdx && Math.abs(v.eye[1] - prevY) > 4) {
+          out.push(`${v.id} jumps ${Math.abs(v.eye[1] - prevY).toFixed(1)} m in one step at u=${(i / N).toFixed(3)}`);
+        }
+        if (/^turn-/.test(v.id) && v.lift > 15) out.push(`${v.id} lifted ${v.lift.toFixed(1)} m`);
+        prevY = v.eye[1]; prevIdx = v.index;
+      }
+      return [...new Set(out)].slice(0, 6);
+    });
+    assert.deepEqual(bad, [], `${id}: ` + bad.join("; "));
+  }
+});

@@ -595,7 +595,12 @@ const FlybySeq = (function () {
     lerpPose(track, shot.look[0], shot.look[1], e, _tgt);
     const authoredY = _eye[1];
     // A shot that runs low along the track is trusted as authored (see onRoadPose).
-    if (!(onRoadPose(shot.eye[0]) && onRoadPose(shot.eye[1]))) clearEye(track, _eye);
+    if (!(onRoadPose(shot.eye[0]) && onRoadPose(shot.eye[1]))) {
+      const plan = planShot(track, shot);
+      if (plan.eye !== shot.eye) lerpPose(track, plan.eye[0], plan.eye[1], e, _eye);
+      _eye[1] += liftAt(plan.prof, e);
+      clearEye(track, _eye);   // safety net only: the profile already cleared every sample
+    }
     // How far the clearance had to lift this eye. A shot authored beside a
     // building lifts a metre or two; one authored INSIDE a grandstand lifts
     // twenty. Reported so the difference is measurable rather than a matter of
@@ -609,6 +614,74 @@ const FlybySeq = (function () {
     return _out;
   }
   let _lastIdx = -1;
+
+  /* THE LIFT IS PLANNED PER SHOT, NOT DISCOVERED PER FRAME. clearEye() alone
+     runs on the frame the eye enters a box, so the camera popped straight up
+     mid-shot the instant it touched one: 17 m in a single frame on Monza's
+     turn-late, 54 m on Shanghai's turn-mid, at 27 circuits. The shot's path is
+     sampled once (LIFT_N points along the eased parameter), the lift each
+     sample needs is recorded, and the lift at any point is the largest of
+     those needs FADED linearly over LIFT_W of the shot either side — so the
+     camera is already rising before it reaches the obstruction and settles
+     after it.
+
+     AND A CORNER SHOT IS MOVED IN BEFORE IT IS LIFTED. Only street circuits
+     get the fence cap, so a corner eye 15-18 m out on an open circuit grazed
+     Shanghai's, Mexico's and Sochi's trackside structures and was lifted 30-54
+     m clear of them — a crane shot of a roof instead of a corner. When a
+     corner shot needs more than LIFT_OK, both eyes step towards the road
+     together, 1.5 m at a time (never inside IN_MIN of the centreline), and the
+     least-lifted plan wins. Cached per shot object on the track; an edited
+     list is new objects and recomputes. */
+  const LIFT_N = 32, LIFT_W = 0.3, LIFT_OK = 4, IN_STEP = 1.5, IN_MIN = 9;
+  const _lp = [0, 0, 0];
+  function profileOf(track, eye0, eye1) {
+    const prof = new Float32Array(LIFT_N + 1);
+    let max = 0;
+    for (let j = 0; j <= LIFT_N; j++) {
+      lerpPose(track, eye0, eye1, j / LIFT_N, _lp);
+      const y0 = _lp[1];
+      clearEye(track, _lp);
+      prof[j] = _lp[1] - y0;
+      if (prof[j] > max) max = prof[j];
+    }
+    return { prof: prof, max: max };
+  }
+  function inset(pose, k) {
+    const x = pose.x || 0, ax = Math.abs(x);
+    if (pose.at !== "corner" || ax <= IN_MIN) return pose;
+    const o = Object.assign({}, pose);
+    o.x = (x > 0 ? 1 : -1) * Math.max(IN_MIN, ax - k * IN_STEP);
+    return o;
+  }
+  function planShot(track, shot) {
+    const cache = track._fbPlan || (track._fbPlan = new WeakMap());
+    let plan = cache.get(shot);
+    if (plan) return plan;
+    const e0 = shot.eye[0], e1 = shot.eye[1];
+    let best = profileOf(track, e0, e1), eye = shot.eye;
+    if (best.max > LIFT_OK && (e0.at === "corner" || e1.at === "corner")) {
+      for (let k = 1; k <= 8; k++) {
+        const a = inset(e0, k), b = inset(e1, k);
+        if (a === e0 && b === e1) break;
+        const p = profileOf(track, a, b);
+        if (p.max < best.max) { best = p; eye = [a, b]; }
+        if (p.max <= LIFT_OK) break;
+      }
+    }
+    plan = { eye: eye, prof: best.prof };
+    cache.set(shot, plan);
+    return plan;
+  }
+  function liftAt(prof, e) {
+    let best = 0;
+    for (let j = 0; j <= LIFT_N; j++) {
+      if (!(prof[j] > 0)) continue;
+      const f = 1 - Math.abs(e - j / LIFT_N) / LIFT_W;
+      if (f > 0 && prof[j] * f > best) best = prof[j] * f;
+    }
+    return best;
+  }
 
   /** Called when a run begins, so the first frame of the first shot reads as a
    *  cut and the camera does not glide in from wherever it last was. */
