@@ -123,6 +123,7 @@ Author-time generation: the generated doc blocks, the shell, and the asset bakes
 | **gen/title-art.mjs** | Draws index.html's #title-car from js/car/car3d.js through the garage camera; --check fails on drift. | — |
 | **gen/track-stills.mjs** | One car-free in-game still per circuit into `assets/stills/<id>.webp` for the picker hero (`--only/--frac/--force`). | playwright-probe |
 | **gen/vendor-three.mjs** | Vendors three.js: patches the readable npm build (vendor/three-patches), minifies with the pinned terser, writes… | check-changes |
+| **gen/voicepack.mjs** | Author-time radio voice pack (Kokoro-82M) → `assets/voice/<id>.{bin,json}`; `--list` prints the phrases. | audio-debug |
 
 ### `tools/shot/`
 

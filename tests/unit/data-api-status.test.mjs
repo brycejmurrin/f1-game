@@ -167,6 +167,58 @@ test("same-resource callers share one fetch, then cancelAll detaches the next ge
   assert.equal((await reopened).rainfall, 3);
 });
 
+test("a response stuck after headers is abortable and releases the shared queue on close", async () => {
+  const calls = [];
+  const context = vm.createContext({
+    fetch(url, init) {
+      calls.push({ url, signal: init.signal });
+      return Promise.resolve({ ok: true, json: () => calls.length === 1
+        ? new Promise(() => {}) : Promise.resolve([{ rainfall: 4 }]) });
+    },
+    AbortController, Date, setTimeout, clearTimeout,
+    localStorage: { length: 0, getItem: () => null, setItem() {}, key: () => null, removeItem() {} },
+  });
+  seedLog(context);
+  vm.runInContext(apiSource + ";globalThis.__api=F1API", context);
+  const api = context.__api;
+  const first = api.weather(1, 0).catch((e) => e);
+  const queued = api.weather(2, 0).catch((e) => e);
+  await new Promise((r) => setImmediate(r));
+  assert.equal(calls.length, 1, "body reading occupies the queue slot");
+  assert.equal(api.cancelAll(), 1, "a controller remains live through body parsing");
+  const [a, b] = await Promise.all([first, queued]);
+  assert.equal(a.cancelled, true);
+  assert.equal(b.cancelled, true);
+  assert.equal(calls.length, 1);
+  const recovered = await api.weather(3, 0);
+  assert.equal(recovered.rainfall, 4, "a new request can start after the aborted body");
+});
+
+test("a response body that ignores abort is still bounded by the full-attempt timeout", async () => {
+  let deadline = null, calls = 0;
+  const context = vm.createContext({
+    fetch() {
+      calls++;
+      return Promise.resolve({ ok: true, json: () => calls === 1
+        ? new Promise(() => {}) : Promise.resolve([{ rainfall: 7 }]) });
+    },
+    AbortController, Date,
+    setTimeout(fn, ms) { if (ms === 15000) { deadline = fn; return 1; } return setTimeout(fn, ms); },
+    clearTimeout(id) { if (id !== 1) clearTimeout(id); },
+    localStorage: { length: 0, getItem: () => null, setItem() {}, key: () => null, removeItem() {} },
+  });
+  seedLog(context);
+  vm.runInContext(apiSource + ";globalThis.__api=F1API", context);
+  const first = context.__api.weather(1, 0).catch((e) => e);
+  await new Promise((r) => setImmediate(r));
+  deadline();
+  const err = await first;
+  assert.match(err.message, /timed out/);
+  assert.equal(err.cancelled, undefined, "deadline remains a fetch failure, eligible for stale fallback");
+  const recovered = await context.__api.weather(2, 0);
+  assert.equal(recovered.rainfall, 7);
+});
+
 test("Data Hub, LIVE, and telemetry keep failed state distinct from a valid empty response", async () => {
   assert.match(hubSource, /status:\s*node[^\n]+dh-empty[^\n]+\?\s*"empty"\s*:\s*"ready"/);
   assert.match(hubSource, /status:\s*"failed",\s*error:\s*err/);

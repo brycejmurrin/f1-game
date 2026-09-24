@@ -182,6 +182,9 @@ const { overlapArea } = createRequire(import.meta.url)("../../tools/track/coplan
 // lap out of place, 15 m wrong): their ground moved by metres and the counts
 // reshuffled — anderstorp/dijon/okayama down, fuji 19 -> 21 (a crowd band
 // 7.5 mm off its stand, fighting from 194 m); fleet 289 -> 287.
+// 2026-09-24: SRTM bake for interlagos/suzuka/redbull/hungaroring/cota —
+// hungaroring 3 -> 5, redbull 10 -> 11 (ground moved under existing props;
+// floaters fixed separately; coplanar spots are residual same-facing pairs).
 // Batch 2 (same day): stepped multi-tier shells + MIN_SEP slots for place(),
 // crowdBand and stands, draped groundPatch, the run-off shelf and the R3
 // centreline fixes: fleet 286 -> 245 (fuji 21 -> 10, watkins_glen 4 -> 0,
@@ -189,6 +192,7 @@ const { overlapArea } = createRequire(import.meta.url)("../../tools/track/coplan
 // landing a prop by chance on an unrelated face (baku, donington, indianapolis,
 // istanbul, jerez, nurburgring, portimao) — a fixed slot moves coincidences,
 // it cannot remove them.
+// Both re-measured together on the merged tree.
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "track", "coplanar-baseline.json"), "utf8"),
 );
