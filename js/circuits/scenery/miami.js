@@ -178,7 +178,9 @@
             center: vadd(a.c, a.u, clearance / 2),
             size: [4.0, clearance, 4.0], basis: bv,
           }, (stage) => {
-            addBox(stage, vadd(a.c, a.u, 5.2), [supportWidth, 10.4, 3.4], CONCRETE, bv);
+            // Shaft tops out at 10.3, INSIDE the 10.0-10.4 cap: at 10.4 its top
+            // shared the cap's top plane and fought (coplanar-audit --overhead).
+            addBox(stage, vadd(a.c, a.u, 5.15), [supportWidth, 10.3, 3.4], CONCRETE, bv);
             addBox(stage, vadd(a.c, a.u, 10.2), [4.0, 0.4, 4.0], [0.45, 0.45, 0.47], bv);
           }, { required: true });
           recordBarrier(s - 0.002, s + 0.002, side, supportGap);

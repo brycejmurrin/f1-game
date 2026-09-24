@@ -59,9 +59,27 @@
     };
     const _fxMats = [];
     function trackFx(m) { _fxMats.push(m); return m; }
+    // BUILD THE NODE ONCE — the unfixed sibling of docs/notes/PERF-FINDINGS.md
+    // §2p. That entry found `renderer.setMRT(TSL.mrt({...}))` inline in
+    // present() and wrote down why it cost: "A new node, a new id, a new key,
+    // a new permanent context — and every object and material re-created
+    // against it." tsl-lit.js's setSsrMrt was fixed to reuse the memoized
+    // `sharedFragment(...).mrt`; THIS one was missed, and tlx.js calls it on
+    // and off inside every present(), so a fresh mrt node was assigned to
+    // every FX material (7 fixed + up to DECAL_CACHE_CAP decals) every frame.
+    //
+    // The contents are frame-invariant — one tag channel holding the constant
+    // 1.0 — so a single node is not a cache, it is the correct lifetime, which
+    // is §2p's own argument verbatim. Measured on three's WebGPU path
+    // (montreal, 60 s, 7148 frames, backendState api:"webgpu") before this fix:
+    // three's uniform buffers +451, geometries +202, our mesh pool +1137, JS
+    // heap +17.4 MB, with 773 createBindGroup and 512 createBuffer calls
+    // arriving AFTER the warm-up window instead of settling.
+    let _ssrTagNode = null;
     function setSsrMrt(on) {
       if (typeof mrt !== "function") return;
-      const node = on ? mrt({ ssrTag: float(1) }).setBlendMode("ssrTag", _tagKeep) : null;
+      if (on && !_ssrTagNode) _ssrTagNode = mrt({ ssrTag: float(1) }).setBlendMode("ssrTag", _tagKeep);
+      const node = on ? _ssrTagNode : null;
       for (let i = 0; i < _fxMats.length; i++) _fxMats[i].mrtNode = node;
     }
 

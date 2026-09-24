@@ -6326,7 +6326,12 @@ const _wmRoadDryD = { roughness: 0, specular: 0.20, detail: 0, surfaceId: 16, de
 // bias its depth toward the camera rather than relying on the small geometric
 // lift alone — that lift is fixed in metres and loses to depth quantisation at
 // range, which is what makes a decal shimmer and drop out as you approach.
-const _startBias = [-1, -2];
+// It must also OUT-BIAS the road it sits on: the road draws at [-8, -16]
+// (_wmRoad* above, honoured by GLX, TLX and WGX alike), so at [-1, -2] the start
+// line, grid boxes and pit paint (the startline mesh) were pulled BEHIND the
+// asphalt and fought it beyond ~5 m. Road bias plus the fx decals' margin, as
+// tsl-fx.js settled for the same bug: -12 / -24. grid-boxes.test.mjs pins it.
+const _startBias = [-12, -24];
 const _wmStartWet = { roughness: 0.16, specular: 0.80, detail: 0, depthBias: _startBias };
 const _wmStartN = { emissive: 0.10, roughness: 0.80, specular: 0.22, detail: 0, depthBias: _startBias };
 const _wmStartD = { roughness: 0.80, specular: 0.22, detail: 0, depthBias: _startBias };
