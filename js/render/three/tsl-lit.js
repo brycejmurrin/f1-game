@@ -235,6 +235,7 @@
       bakeOrigin:     uniform(new THREE.Vector2(0, 0)),
       bakeSize:       uniform(new THREE.Vector2(1, 1)),
       bakeScale:      uniform(new THREE.Vector3(0, 0, 0)),
+      bakeShCol:      uniform(new THREE.Vector3(0, 0, 0)),   // shadow lamp's BAKED colour (LampBake.shadowCol)
       // PER-CHUNK ROAD (frame.roadChunkLamps). The road is ONE plain mesh on
       // TLX, but the grid lookup below reads only world position, so the plain
       // variant can take it too: gated here by the knob and per draw by
@@ -294,6 +295,7 @@
     function uf1(u, v) {
       if (u.value !== v) u.value = v;
     }
+    const _bakeShScr = [0, 0, 0];
     function updateFrame(frame) {
       const T = (frame && frame.tune) || null;
       const k = (id, def) => (T && T[id] != null ? T[id] : def);
@@ -375,6 +377,8 @@
           U.lampShadowVP.value.fromArray(SHD.S.lampLightVP);
           U.lampShadowOn.value = SHD.S.lampArmed ? 1 : 0;
           U.lampShadowIdx.value = SHD.S.lampIdx;
+          const _sc = typeof LampBake !== "undefined" ? LampBake.shadowCol(frame, SHD.S.lampIdx, _bakeShScr) : _bakeShScr;
+          U.bakeShCol.value.set(_sc[0], _sc[1], _sc[2]);
         }
       }
       const L = frame.lights;
@@ -1515,8 +1519,13 @@
         const bUv = wp.xz.sub(U.bakeOrigin).div(U.bakeSize).toVar();
         const bIn = bUv.x.greaterThan(0.0).and(bUv.x.lessThan(1.0))
           .and(bUv.y.greaterThan(0.0)).and(bUv.y.lessThan(1.0));
-        const bE = BAKE_NODE.sample(bUv).level(0).rgb.mul(U.bakeScale).toVar();
-        const bakeW = select(U.bakeOn.greaterThan(0.5).and(bIn), smoothstep(0.55, 0.85, N.y), float(0.0)).toVar();
+        // Alpha = the surface height the texel was baked at; a fragment off it
+        // (bridge deck, roof, lower road of a crossover, no known ground) keeps
+        // the live loop.
+        const bT = BAKE_NODE.sample(bUv).level(0).toVar();
+        const bE = bT.rgb.mul(U.bakeScale).toVar();
+        const bOnY = smoothstep(0.75, 2.5, abs(wp.y.sub(bT.a))).oneMinus();
+        const bakeW = select(U.bakeOn.greaterThan(0.5).and(bIn), smoothstep(0.55, 0.85, N.y).mul(bOnY), float(0.0)).toVar();
         color.addAssign(albedo.mul(bE).mul(bakeW)
           .mul(metalness.oneMinus()).mul(wetSheen.mul(0.85).oneMinus()));
 
@@ -1632,8 +1641,12 @@
                 });
               }
               // diffuse pool — fades as the road wets (reflection takes over)
-              color.addAssign(albedo.mul(LCol(i, row))
-                .mul(att.mul(spotD).mul(lampSh.sub(bakeW))).mul(NoLl)
+              // On a baked fragment the live term steps aside (1 - bakeW) and the
+              // shadow-mapped lamp carves its shadow out of the pool in the pool's
+              // own steady colour (bakeShCol; 1 - lampSh is 0 for every other lamp).
+              color.addAssign(albedo.mul(LCol(i, row).mul(lampSh.mul(bakeW.oneMinus()))
+                .sub(vec3(U.bakeShCol).mul(lampSh.oneMinus().mul(bakeW))))
+                .mul(att.mul(spotD)).mul(NoLl)
                 .mul(metalness.oneMinus()).mul(wetSheen.mul(0.85).oneMinus()));
               // bounce fill (uBounceK, def 0.04 — js/render/glx/shaders/glsl-lit.js)
               If(U.bounceK.greaterThan(0.0), () => {
@@ -1663,6 +1676,9 @@
             });
           });
         });
+        // (lampSh - bakeW) goes negative where the shadow-mapped floodlight is
+        // occluded on a baked fragment; never carve below black (GLX: same).
+        color.assign(max(color, vec3(0.0)));
 
         // sun Cook-Torrance specular, soft-clipped (js/render/glx/shaders/glsl-lit.js)
         If(NoL.greaterThan(0.0), () => {

@@ -257,6 +257,7 @@ const GLX = (function () {
   }
   // Called from begin() with the lit program bound. Uploads a new bake once
   // (identity-keyed, like LampBake itself), binds unit 12 every frame.
+  const _bakeShScr = [0, 0, 0];
   function bindLampBake(frame) {
     const lb = frame.lampBake, sc = frame.lampBakeScale;
     gl.activeTexture(gl.TEXTURE12);
@@ -744,7 +745,7 @@ const GLX = (function () {
     // floor does not, and until now the only symptom was init() returning
     // false with a 100 KB shader dumped to the console. Say the two numbers
     // side by side so a "no WebGL" report on a phone names its cause.
-    const LIT_FS_ROWS = 279;
+    const LIT_FS_ROWS = 284;
     try {
       const rows = gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS) | 0;
       if (rows && rows < LIT_FS_ROWS) {
@@ -892,7 +893,7 @@ const GLX = (function () {
       "uCarSunGlint", "uCarSparkle", "uFogSunCore",
       "uLampNearClamp", "uWindowSunFlash", "uSkyRimGlow", "uAmbContactDark", "uLampWallSpill",
       "uMatAlbedoTex", "uMatNormalTex", "uMatTexMix", "uMatTexScale[0]",
-      "uLampBake", "uBakeOn", "uBakeOrigin", "uBakeSize", "uBakeScale",
+      "uLampBake", "uBakeOn", "uBakeOrigin", "uBakeSize", "uBakeScale", "uBakeShCol",
       "uNumLights", "uLight[0]"]);
     skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon", "uCityGlow", "uStarBright", "uCloudSpeed", "uSkyGrad", "uStarDensity", "uDaySkyBlue", "uMieScatter", "uCloudSilver", "uCoronaAureole", "uSunDiscSize", "uStarSize", "uStarTwinkle", "uMoonDiscSize", "uMoonHalo", "uSunCorona", "uSunSquash", "uCityGlowReach", "uCloudDef", "uLightning"]);
     shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
@@ -1807,6 +1808,7 @@ const GLX = (function () {
         ufM4(litU.uLampShadowVP, _litUf, "lampLightVP", SHD.lampLightVP);
         uf1(litU.uLampShadowOn, _litUf, "lampShadowOn", SHD.lampArmed ? 1.0 : 0.0);
         ufI(litU.uLampShadowIdx, _litUf, "lampShadowIdx", SHD.lampIdx | 0);
+        uf3(litU.uBakeShCol, _litUf, "bakeShCol", (typeof LampBake !== "undefined" ? LampBake.shadowCol(frame, SHD.lampIdx | 0, _bakeShScr) : _bakeShScr));
       } else {
         uf1(litU.uLampShadowOn, _litUf, "lampShadowOn", 0.0);
       }

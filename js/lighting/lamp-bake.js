@@ -55,12 +55,69 @@ const LampBake = (function () {
     return t * t * (3 - 2 * t);
   }
 
+  const NO_GROUND = -60000;     // alpha sentinel: no surface known -> shaders skip the bake
+  // Metres splatted past the road half-width: buildRoad's outer verge column sits
+  // at hw + 2.2, and the shader's bilinear tap reaches one more cell, so the splat
+  // covers hw + ROAD_EDGE + cell (a narrower one blended the NO_GROUND sentinel
+  // into the verge and dropped the bake there).
+  const ROAD_EDGE = 2.2;
+
+  // Splat the ROAD surface height (centreline + banking lift) into `hgt`. The
+  // terrain heightfield is not the road: on an elevated or banked stretch it
+  // sits metres off, and a pool baked at the wrong height is the wrong size and
+  // brightness. Where two road stretches share a texel (bridge / crossover) the
+  // upper deck wins; the shaders' height fade hands the lower one to the live loop.
+  function splatRoad(road, x0, z0, cell, w, h, hgt) {
+    const n = road.n | 0;
+    if (!n || !road.px || !road.hw) return;
+    const L = road.total > 0 ? road.total : n;
+    const step = Math.max(0.5, cell * 0.5);
+    for (let k = 0; k < n; k++) {
+      const j = (k + 1) % n;
+      const ax = road.px[k], az = road.pz[k], bx = road.px[j], bz = road.pz[j];
+      const seg = Math.hypot(bx - ax, bz - az);
+      if (seg > 60) continue;                        // open (non-loop) end or a teleport seam
+      const ns = Math.max(1, Math.ceil(seg / step));
+      for (let q = 0; q < ns; q++) {
+        const f = q / ns;
+        const cx = ax + (bx - ax) * f, cz = az + (bz - az) * f;
+        const cy = road.py[k] + (road.py[j] - road.py[k]) * f;
+        const rx = road.rx[k] + (road.rx[j] - road.rx[k]) * f, rz = road.rz[k] + (road.rz[j] - road.rz[k]) * f;
+        const rl = Math.hypot(rx, rz) || 1;
+        const hw = road.hw[k] + (road.hw[j] - road.hw[k]) * f + ROAD_EDGE + cell;
+        const s = (k + f) / n * L;
+        const nl = Math.max(1, Math.ceil(2 * hw / step));
+        for (let li = 0; li <= nl; li++) {           // both edges exactly: symmetric
+          const lat = -hw + 2 * hw * li / nl;
+          const px = cx + rx / rl * lat, pz = cz + rz / rl * lat;
+          const ii = Math.floor((px - x0) / cell), jj = Math.floor((pz - z0) / cell);
+          if (ii < 0 || jj < 0 || ii >= w || jj >= h) continue;
+          const dy = road.lift ? road.lift(s, lat) : 0;
+          const y = cy + (dy || 0);
+          const kk = jj * w + ii;
+          if (!(hgt[kk] >= y)) hgt[kk] = y;          // NaN or lower -> take this one
+        }
+      }
+    }
+  }
+
   /** Bake a light set. `lights` is the flat stride-15 track set (base colours);
    *  `groundY(x, z)` returns the ground height there or null; `nearClamp` is the
-   *  LAMP NEAR CLAMP knob. Returns null for an empty set, otherwise
-   *    { w, h, x0, z0, cell, data: Uint16Array(w*h*4) RGBA16F, lamps, ms }
+   *  LAMP NEAR CLAMP knob; optional `road` ({n,total,px,py,pz,rx,rz,hw,lift(s,lat)})
+   *  supplies the road surface, which wins over `groundY`. A texel with no known
+   *  surface gets no light and the NO_GROUND alpha. Returns null for an empty
+   *  set, otherwise
+   *    { w, h, x0, z0, cell, data: Uint16Array(w*h*4) RGBA16F (alpha = surface Y), lamps, ms }
    *  where texel (i, j) covers world x0 + (i + 0.5) * cell, z0 + (j + 0.5) * cell. */
-  function bake(lights, groundY, nearClamp) {
+  function bake(lights, groundY, nearClamp, road) {
+    const it = bakeSteps(lights, groundY, nearClamp, road);
+    let r = it.next();
+    while (!r.done) r = it.next();
+    return r.value;
+  }
+  // The bake as resumable steps (one lamp, or one encode stripe, per yield) so
+  // forTrack can spread a mid-race rebake over frames instead of freezing one.
+  function* bakeSteps(lights, groundY, nearClamp, road) {
     const n = lights ? (lights.length / 15) | 0 : 0;
     if (!n) return null;
     const t0 = (typeof performance !== "undefined" ? performance.now() : Date.now());
@@ -76,9 +133,13 @@ const LampBake = (function () {
     const cell = Math.max(MIN_CELL, Math.sqrt(area / MAX_TEXELS));
     const w = Math.max(1, Math.ceil((mxx - mnx) / cell)), h = Math.max(1, Math.ceil((mxz - mnz) / cell));
     const acc = new Float32Array(w * h * 3);
-    const hgt = new Float32Array(w * h).fill(NaN);   // ground height, sampled lazily
+    const hgt = new Float32Array(w * h).fill(NaN);   // surface height: road splat, then terrain lazily
+    if (road) splatRoad(road, mnx, mnz, cell, w, h, hgt);
+    const tried = new Uint8Array(w * h);             // terrain already queried for this texel
     const nc = nearClamp > 0 ? nearClamp : 4.0;
+    yield;
     for (let i = 0; i < n; i++) {
+      if (i) yield;
       const o = i * 15;
       const lx = lights[o], ly = lights[o + 1], lz = lights[o + 2];
       const cr = lights[o + 3], cg = lights[o + 4], cb = lights[o + 5];
@@ -95,10 +156,12 @@ const LampBake = (function () {
           const px = mnx + (ii + 0.5) * cell;
           const k = j * w + ii;
           let py = hgt[k];
-          if (py !== py) {   // NaN: not sampled yet
+          if (py !== py && !tried[k]) {   // NaN: no road here, ask the terrain once
+            tried[k] = 1;
             const g = groundY ? groundY(px, pz) : null;
-            py = hgt[k] = (g != null && isFinite(g)) ? g : ly - 8;
+            if (g != null && isFinite(g)) py = hgt[k] = g;
           }
+          if (py !== py) continue;        // no surface known: leave it to the live loop
           const LX = lx - px, LY = ly - py, LZ = lz - pz;
           const d2 = LX * LX + LY * LY + LZ * LZ;
           if (d2 >= rad2) continue;
@@ -121,9 +184,11 @@ const LampBake = (function () {
       }
     }
     const data = new Uint16Array(w * h * 4);
-    const one = toHalf(1);
+    const none = toHalf(NO_GROUND);
     for (let k = 0, a = 0, b = 0; k < w * h; k++, a += 3, b += 4) {
-      data[b] = toHalf(acc[a]); data[b + 1] = toHalf(acc[a + 1]); data[b + 2] = toHalf(acc[a + 2]); data[b + 3] = one;
+      if ((k & 32767) === 32767) yield;
+      data[b] = toHalf(acc[a]); data[b + 1] = toHalf(acc[a + 1]); data[b + 2] = toHalf(acc[a + 2]);
+      data[b + 3] = hgt[k] === hgt[k] ? toHalf(hgt[k]) : none;
     }
     const ms = Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - t0);
     return { w, h, x0: mnx, z0: mnz, cell, data, lamps: n, ms };
@@ -132,22 +197,92 @@ const LampBake = (function () {
   // One cached bake per (light-set identity, near clamp). The track light set is
   // rebuilt as a NEW array whenever a rebuild:true lamp knob moves (profiles.js
   // nulls track._lights), so identity is the invalidation — same rule
-  // LampChunks and frame-lights _fillAllLights use.
-  let _src = null, _clamp = NaN, _bake = null, _gen = 0;
-  function forTrack(track, lights, nearClamp) {
-    if (!lights || !lights.length) return null;
-    if (_src === lights && _clamp === nearClamp && _bake) return _bake;
-    const gy = (track && typeof Tracks !== "undefined" && Tracks.terrainY)
-      ? (x, z) => Tracks.terrainY(track, x, z) : null;
-    _bake = bake(lights, gy, nearClamp);
-    _src = lights; _clamp = nearClamp;
+  // LampChunks and frame-lights _fillAllLights use. A LAMP NEAR CLAMP change on
+  // the same set is debounced: dragging the slider would otherwise rebake every
+  // frame; the previous bake keeps drawing until the value holds still.
+  const CLAMP_SETTLE_MS = 300;
+  let _src = null, _clamp = NaN, _bake = null, _gen = 0, _pend = NaN, _pendT = 0;
+  let _trk = null, _pendSrc = null;
+  function roadOf(track) {
+    if (!track || !track.px || !track.hw || !(track.n > 0)) return null;
+    const bank = typeof Tracks !== "undefined" && Tracks.banking, o = {};
+    return {
+      n: track.n, total: track.total, px: track.px, py: track.py, pz: track.pz,
+      rx: track.rx, rz: track.rz, hw: track.hw,
+      lift: bank ? (s, lat) => { const b = bank(track, s, lat, o); return b ? b.dy : 0; } : null,
+    };
+  }
+  // A REBAKE while a bake is already drawing (weather change mid-race, a lamp
+  // knob) runs as a background job: SLICE_MS of steps per frame, the old bake
+  // keeps drawing, and the new one swaps in whole. The first bake of a track
+  // (race start, pre-baked by atmosphere.js) runs synchronously.
+  const SLICE_MS = 3;
+  let _job = null, _jobSrc = null, _jobClamp = NaN, _jobTrk = null;
+  function _now() { return typeof performance !== "undefined" ? performance.now() : Date.now(); }
+  function _install(b, track, lights, nearClamp) {
+    _bake = b; _src = lights; _clamp = nearClamp; _trk = track; _pend = NaN; _pendSrc = null;
+    _shK = -1;
     if (_bake) {
       _bake.gen = ++_gen;
       try { Log.info("gfx", "lamp bake " + _bake.lamps + " lamps -> " + _bake.w + "x" + _bake.h + " @" + _bake.cell.toFixed(2) + " m in " + _bake.ms + " ms"); } catch (_) { /* Log absent in a bare VM: the bake still returns */ }
     }
+  }
+  function _groundFn(track) {
+    return (track && typeof Tracks !== "undefined" && Tracks.terrainY)
+      ? (x, z) => Tracks.terrainY(track, x, z) : null;
+  }
+  function forTrack(track, lights, nearClamp, now, sync) {
+    if (!lights || !lights.length) return null;
+    const cur = _src === lights && _clamp === nearClamp;
+    if (cur) { _job = null; return _bake; }
+    // Same track, bake in hand: a new light set (a rebuild:true lamp knob) or a
+    // new clamp keeps the old bake until the input has held still, then rebakes
+    // in slices — a whole bake is 0.3-2 s of main thread.
+    if (_trk === track && _bake && !sync) {
+      const t = now != null ? now : _now();
+      if (_pendSrc !== lights || _pend !== nearClamp) { _pendSrc = lights; _pend = nearClamp; _pendT = t; _job = null; return _bake; }
+      if (t - _pendT < CLAMP_SETTLE_MS) return _bake;
+      if (!_job || _jobSrc !== lights || _jobClamp !== nearClamp || _jobTrk !== track) {
+        _job = bakeSteps(lights, _groundFn(track), nearClamp, roadOf(track));
+        _jobSrc = lights; _jobClamp = nearClamp; _jobTrk = track;
+      }
+      const end = _now() + SLICE_MS;
+      let r;
+      do { r = _job.next(); } while (!r.done && _now() < end);
+      if (!r.done) return _bake;
+      _job = null;
+      _install(r.value, track, lights, nearClamp);
+      return _bake;
+    }
+    _job = null;
+    _install(bake(lights, _groundFn(track), nearClamp, roadOf(track)), track, lights, nearClamp);
     return _bake;
   }
 
-  return { bake, forTrack, toHalf, MAX_TEXELS };
+  // The shadow-mapped lamp's BAKED colour. On a baked fragment the live loop
+  // carves that lamp's shadow out of the pool by subtracting its diffuse; the
+  // pool holds the steady base colour x lampBakeScale, so the carve must use the
+  // same colour — the live slot's colour carries flicker, warm-up tint and the
+  // cull fade, which left a pulsing, bluish residue inside the shadow. Found by
+  // position in the source set (fixtures are static and copied verbatim).
+  let _shK = -1, _shX = NaN, _shY = NaN, _shZ = NaN;
+  function shadowCol(frame, slot, out) {
+    out[0] = out[1] = out[2] = 0;
+    const L = frame && frame.lights, src = _src, sc = frame && frame.lampBakeScale;
+    if (!L || !src || !sc || !(slot >= 0) || slot * 15 + 5 >= L.length) return out;
+    const o = slot * 15, x = L[o], y = L[o + 1], z = L[o + 2];
+    if (!(_shK >= 0 && x === _shX && y === _shY && z === _shZ && src[_shK] === x)) {
+      _shK = -1;
+      for (let i = 0; i + 2 < src.length; i += 15) {
+        if (src[i] === x && src[i + 1] === y && src[i + 2] === z) { _shK = i; break; }
+      }
+      _shX = x; _shY = y; _shZ = z;
+    }
+    if (_shK < 0) return out;
+    out[0] = src[_shK + 3] * sc[0]; out[1] = src[_shK + 4] * sc[1]; out[2] = src[_shK + 5] * sc[2];
+    return out;
+  }
+
+  return { bake, forTrack, shadowCol, toHalf, MAX_TEXELS, NO_GROUND };
 })();
 Object.freeze(LampBake);
