@@ -177,24 +177,35 @@ const F1API = (function () {
     return last.replace(/\.json$/i, "").slice(0, 32);
   }
 
-  function fetchTimed(url) {
+  // Own the entire attempt, including reading/parsing the body. fetch() itself
+  // resolves at headers; timing only that Promise leaves a stalled response
+  // body holding the one global queue slot forever.
+  function fetchTimed(url, consume) {
     const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
     if (controller) liveControllers.add(controller);
     let timer = null;
+    let onAbort = null;
     const timeout = new Promise(function (_resolve, reject) {
       timer = setTimeout(function () {
-        if (controller) controller.abort();
         reject(new Error("Request timed out for " + url));
+        if (controller) controller.abort();
       }, FETCH_TIMEOUT_MS);
     });
+    const cancelled = controller ? new Promise(function (_resolve, reject) {
+      onAbort = function () { reject(cancelledError(url)); };
+      controller.signal.addEventListener("abort", onAbort, { once: true });
+    }) : null;
     let network;
-    try { network = fetch(url, controller ? { signal: controller.signal } : undefined); }
+    try { network = Promise.resolve(fetch(url, controller ? { signal: controller.signal } : undefined)).then(consume); }
     catch (e) { network = Promise.reject(e); }
     // Promise.race is intentional even with AbortController: a broken fetch
-    // implementation that ignores abort must still release the global queue.
-    return Promise.race([network, timeout]).finally(function () {
+    // or body implementation that ignores abort must release the global queue.
+    return Promise.race(cancelled ? [network, timeout, cancelled] : [network, timeout]).finally(function () {
       clearTimeout(timer);
-      if (controller) liveControllers.delete(controller);
+      if (controller) {
+        controller.signal.removeEventListener("abort", onAbort);
+        liveControllers.delete(controller);
+      }
     });
   }
 
@@ -204,7 +215,7 @@ const F1API = (function () {
   // (2 × 10-20 s backoff + 3 × 15 s timeouts on the shared chain).
   function fetchOnce(url) {
     lastNetAt = Date.now();
-    return fetchTimed(url).then(function (res) {
+    return fetchTimed(url, function (res) {
       if (!res.ok) {
         // Retry-After is NOT a CORS-safelisted response header, so on a
         // cross-origin 429 `hdr` is null unless the API lists it in

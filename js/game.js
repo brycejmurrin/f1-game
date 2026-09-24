@@ -67,12 +67,17 @@ let _backendBound = false;
 // The rosters below are ApexRoster (js/roster.js), GENERATED from
 // tools/manifest.cjs by tools/gen/gen-shell.mjs — one truth, no hand mirror.
 // The two DEFERRED renderer groups, in documented toposort order:
-// loadBackendScripts starts a file once its BACKEND_EDGES predecessors have
-// evaluated. A load error RESOLVES — a missing global is already the fallback.
+// loadBackendScripts starts a file once its edges' predecessors have evaluated.
+// Renderer/optional groups keep their graceful fallback; data's eval-time
+// dependencies request strict loading so a failed predecessor never executes
+// hub.js and poisons its top-level lexical binding for the entire page.
 const BACKEND_FILES = ApexRoster.DEFERRED;
 const BACKEND_EDGES = ApexRoster.DEFERRED_EDGES;
-function loadBackendScripts(files, edges) {
-  const pending = new Set(files), done = new Set(), inflight = new Set();
+function loadBackendScripts(files, edges, opts) {
+  const strict = !!(opts && opts.strict);
+  const loaded = opts && opts.loaded;
+  const pending = new Set(files.filter((f) => !loaded || !loaded.has(f)));
+  const done = new Set(loaded || []), inflight = new Set();
   const preds = new Map(files.map((f) => [f, []]));
   for (const [a, b] of (edges || BACKEND_EDGES)) {
     if (preds.has(a) && preds.has(b)) preds.get(b).push(a);
@@ -87,18 +92,31 @@ function loadBackendScripts(files, edges) {
     // global IS the fallback), so a reload would throw away a working
     // degradation path — and loop, since the one-shot guard already cleared.
     if (el.dataset) el.dataset.apexLazy = "1";   // guarded: a stubbed element has none
-    el.onload = el.onerror = () => resolve();
+    el.onload = () => {
+      let ready = true;
+      try { if (opts && opts.ready) ready = !!opts.ready(src); }
+      catch (e) { ready = false; }
+      resolve(ready);
+    };
+    el.onerror = () => { if (el.remove) el.remove(); resolve(false); };
     document.head.appendChild(el);
   });
   return new Promise((finish) => {
+    let failed = false;
     const pump = () => {
-      if (!pending.size && !inflight.size) { finish(); return; }
+      if (failed && strict) { if (!inflight.size) finish(false); return; }
+      if (!pending.size && !inflight.size) { finish(!failed); return; }
       for (const src of files) {
         if (!pending.has(src)) continue;
         if (!preds.get(src).every((p) => done.has(p))) continue;
         pending.delete(src);
         inflight.add(src);
-        inject(src).then(() => { inflight.delete(src); done.add(src); pump(); });
+        inject(src).then((ok) => {
+          inflight.delete(src);
+          if (ok) { done.add(src); if (loaded) loaded.add(src); }
+          else { failed = true; if (!strict) done.add(src); }
+          pump();
+        });
       }
     };
     pump();
@@ -147,18 +165,36 @@ const DATA_FILES = ApexRoster.LAZY_DATA;
 // hub.js calls Data*.create() at EVAL time, so every tab module lands first —
 // the manifest derives "everything, then the hub" and the roster carries it.
 const DATA_EDGES = ApexRoster.LAZY_DATA_EDGES;
+// Keep successfully evaluated script-level consts across a failed attempt:
+// reinjecting one on retry throws "Identifier has already been declared".
+const dataScriptsLoaded = new Set();
+const DATA_READY = {
+  "js/data/api.js": () => typeof F1API !== "undefined",
+  "js/data/telemetry.js": () => typeof DataTelemetry !== "undefined",
+  "js/data/export.js": () => typeof DataExport !== "undefined",
+  "js/data/schedule.js": () => typeof DataSchedule !== "undefined",
+  "js/data/standings.js": () => typeof DataStandings !== "undefined",
+  "js/data/results.js": () => typeof DataResults !== "undefined",
+  "js/data/live.js": () => typeof DataLive !== "undefined",
+  "js/data/hub.js": () => typeof DataHub !== "undefined",
+};
 // Memoised on the PROMISE, not on a boolean: two fast taps on DATA must not
 // inject the bundle twice, and the second tap has to await the first load
 // rather than call DataHub.open() while hub.js is still in flight.
 let dataHubLoad = null;
 function ensureDataHub() {
   if (dataHubLoad) return dataHubLoad;
-  dataHubLoad = loadBackendScripts(DATA_FILES, DATA_EDGES).then(() => {
+  dataHubLoad = loadBackendScripts(DATA_FILES, DATA_EDGES, {
+    strict: true, loaded: dataScriptsLoaded,
+    ready: (src) => DATA_READY[src] && DATA_READY[src](),
+  }).then((complete) => {
     // Bare global, not window.DataHub: hub.js is a script-level `const`, a
-    // lexical binding that is never a window property. inject() resolves even
-    // on error, so this is the ONLY place a miss is visible; null the memo so
-    // a later tap retries instead of latching the failure for the session.
-    if (typeof DataHub === "undefined") {
+    // lexical binding that is never a window property. Null the memo on an
+    // incomplete group so a later tap retries instead of latching failure.
+    // A failed sibling must not even START hub.js. The binding can be in its
+    // temporal dead zone after a script exception, so do not probe it on an
+    // incomplete load (even typeof throws in that case).
+    if (!complete) {
       Log.warn("data", "the data hub bundle did not load — DATA stays closed");
       dataHubLoad = null;
       return false;
