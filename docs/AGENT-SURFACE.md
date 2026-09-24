@@ -1,7 +1,7 @@
 # Agent surface — skills, MCP, tools, wrap
 
 One map. Skills say **when**. MCP servers are **pinned calls**. `tools/` CLIs
-do the work. Only ten CLIs are wrapped as `apex_*` (eleven tools: `apex_garage` is a
+do the work. Only eleven CLIs are wrapped as `apex_*` (twelve tools: `apex_garage` is a
 session over one of them).
 
 ```
@@ -158,10 +158,12 @@ it spawns the CLI with flags the project already considers safe (`--check`,
 
 `Kind` is `tree` (TRACK_VM / static, no Chromium lock) or `browser` (harness
 Chromium; takes `scratch/apex-browser.lock`). `Skill` is the workflow that
-names the CLI. Ten wraps, eleven tools (30 → 11 on 2026-09: the audits, startline,
+names the CLI. Eleven wraps, twelve tools (30 → 11 on 2026-09: the audits, startline,
 survey-track, carshot, wgx-shot/capture/validate-live, layout-audit --survey,
 quick-validate, select-recall, track-verts, assets-verify
-and verify-track are plain CLIs now — `tools/README.md`).
+and verify-track are plain CLIs now — `tools/README.md`; 11 → 12 on 2026-09-24 for
+`apex_frame_report`, a node-VM framing report that answers in seconds what a
+flyby render answers in minutes).
 
 <!-- WRAP-MAP -->
 | MCP tool | CLI | Kind | Skill |
@@ -173,6 +175,7 @@ and verify-track are plain CLIs now — `tools/README.md`).
 | `apex_bump_cache_check` | `ci/bump-cache.mjs` | tree | check-changes |
 | `apex_rotate_markings_check` | `track/rotate-markings.cjs` | tree | new-track |
 | `apex_graph_parity` | `track/graph-parity.cjs` | tree | scenery-dress |
+| `apex_frame_report` | `shot/frame-report.mjs` | tree | playwright-probe |
 | `apex_eval` | `shot/apex-eval.mjs` | browser | playwright-probe |
 | `apex_agent` | `shot/agent.mjs` | browser | agent-view |
 | `apex_shot` | `shot/shot.mjs` | browser | playwright-probe |
@@ -185,6 +188,11 @@ Pins the wrap always applies (you cannot override them):
 - `apex_pick_tests` / `apex_select_specs` → `--json` (never `--bg`)
 - `apex_rotate_markings_check` → `--check` (never `--write`)
 - `apex_graph_parity` → requires `base` (never vacuous HEAD-vs-clean)
+- `apex_frame_report` → one circuit: `track` must be a `Tracks.LIST` id, `u`
+  (numbers in 0..1, ≤ 64) or `frames` (1..120) but not both, `shots` must be an
+  existing file under `artifacts/` or `scratch/` (symlinks resolved); never
+  `--out` / `--fleet` / `--diff` / `--pose`. The fleet sweep
+  (`frame-report.mjs --fleet`, ~10 min) and `--diff old.json new.json` stay CLI.
 - Browser wraps never take `--url`; output paths (`out`) must stay under
   `artifacts/` or `scratch/`
 
