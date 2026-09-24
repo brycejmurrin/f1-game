@@ -69,7 +69,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_197 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_200 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -231,6 +231,9 @@ _197 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `duel.js` | `Duel` | tag | DUEL: a practice race against ONE rival with his rating lifted. |
 | `reliability.js` | `Reliability` | tag | RELIABILITY: whether a car reaches the flag at all. |
 | `engineer.js` | `RaceEngineer` | tag | RACE ENGINEER: the voice that makes the tyre model legible. |
+| `radio-lines.js` | `RadioLines` | tag | RADIO LINES: the phrasebook the race engineer and the TV commentator speak from (js/race/race-radio.js decides WHEN; this decides the WORDS). |
+| `race-facts.js` | `RaceFacts` | tag | RACE FACTS: what is happening in the race, as numbers and events a radio can talk about (js/race/race-radio.js is the only reader). |
+| `race-radio.js` | `RaceRadio` | tag | RACE RADIO: the race engineer's situational awareness and the TV commentator, on the one radio card (js/game.js announce()). |
 | `race-control.js` | `RaceControl` | tag | RACE CONTROL (RaceControl.create(G)) The flag state: green / local yellow / VSC / safety car, and the one rule that reads off it (whether OVERTAKE is … |
 | `weather-arc.js` | `WeatherArc` | tag | LIVE WEATHER + the DYNAMIC WEATHER ARC (WeatherArc.create(G, deps)): the one path a session's weather changes through, and the optional per-race progression… |
 | `quali-model.js` | `Quali` | tag | QUALIFYING: one flying lap, and the simulated times it is measured against. |

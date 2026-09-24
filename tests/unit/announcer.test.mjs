@@ -330,9 +330,13 @@ test("`announcer` is a real RadioVoice channel, with prosody and a preview line"
   assert.ok(RV.SAMPLE[A.CHANNEL], "no TEST line for the announcer channel");
   assert.ok(RV.TONE[A.CHANNEL].rate < RV.TONE.radio.rate,
     "the announcer reads a paragraph over a still screen; it must not be quicker than the pit call");
-  // …and it is NOT a race-time speaker: nothing may route a `kind` here, or the
-  // gate that keeps menu cards from being read aloud is bypassed.
-  assert.ok(!Object.values(RV.SPEAKERS).includes(A.CHANNEL));
+  // ONE race-time kind routes here: "comm", the in-race commentary
+  // (js/race/race-radio.js) — the same broadcaster. Nothing else may, and the
+  // gate that keeps menu cards from being read aloud must still hold for it.
+  const kinds = Object.keys(RV.SPEAKERS).filter((k) => RV.SPEAKERS[k] === A.CHANNEL);
+  assert.deepEqual(kinds, ["comm"]);
+  const menu = RV.plan({ msg: "SAVE CONFLICT", life: 4, kind: "comm", enabled: true, soundOn: true, api: true, state: "menu" });
+  assert.equal(menu.reason, "not-racing");
 });
 
 /* ── THE READ IS A CHAIN OF LINES, NOT ONE BLOB ────────────────────────────── */
