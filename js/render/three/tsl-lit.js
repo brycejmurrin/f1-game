@@ -235,7 +235,8 @@
       bakeOrigin:     uniform(new THREE.Vector2(0, 0)),
       bakeSize:       uniform(new THREE.Vector2(1, 1)),
       bakeScale:      uniform(new THREE.Vector3(0, 0, 0)),
-      bakeShCol:      uniform(new THREE.Vector3(0, 0, 0)),   // shadow lamp's BAKED colour (LampBake.shadowCol)
+      bakeShCol:      uniform(new THREE.Vector3(0, 0, 0)),
+      bakeH:          uniform(1.0),   // texel rows per bake layer   // shadow lamp's BAKED colour (LampBake.shadowCol)
       // PER-CHUNK ROAD (frame.roadChunkLamps). The road is ONE plain mesh on
       // TLX, but the grid lookup below reads only world position, so the plain
       // variant can take it too: gated here by the knob and per draw by
@@ -842,7 +843,7 @@
     function setLampBake(b, scale) {
       if (!b || !scale) { U.bakeOn.value = 0.0; return false; }
       if (b !== _bakeSrc) {
-        const t = new THREE.DataTexture(b.data, b.w, b.h, THREE.RGBAFormat, THREE.HalfFloatType);
+        const t = new THREE.DataTexture(b.data, b.w, b.h * 2, THREE.RGBAFormat, THREE.HalfFloatType);   // diffuse + bounce layers
         t.minFilter = t.magFilter = THREE.LinearFilter;
         t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
         t.generateMipmaps = false;
@@ -854,6 +855,7 @@
         _bakeSrc = b;
         U.bakeOrigin.value.set(b.x0, b.z0);
         U.bakeSize.value.set(b.w * b.cell, b.h * b.cell);
+        U.bakeH.value = b.h;
       }
       U.bakeScale.value.set(scale[0], scale[1], scale[2]);
       U.bakeOn.value = 1.0;
@@ -1522,12 +1524,19 @@
         // Alpha = the surface height the texel was baked at; a fragment off it
         // (bridge deck, roof, lower road of a crossover, no known ground) keeps
         // the live loop.
-        const bT = BAKE_NODE.sample(bUv).level(0).toVar();
+        // Two stacked layers (diffuse rows [0,h), bounce rows [h,2h)); v is
+        // clamped to this layer's texel centres so the tap never crosses the seam.
+        const bRow = float(0.5).div(max(U.bakeH, 1.0));
+        const bUvD = vec2(bUv.x, clamp(bUv.y, bRow, bRow.oneMinus()).mul(0.5)).toVar();
+        const bT = BAKE_NODE.sample(bUvD).level(0).toVar();
         const bE = bT.rgb.mul(U.bakeScale).toVar();
+        const bB = BAKE_NODE.sample(bUvD.add(vec2(0.0, 0.5))).level(0).rgb.mul(U.bakeScale).toVar();
         const bOnY = smoothstep(0.75, 2.5, abs(wp.y.sub(bT.a))).oneMinus();
         const bakeW = select(U.bakeOn.greaterThan(0.5).and(bIn), smoothstep(0.55, 0.85, N.y).mul(bOnY), float(0.0)).toVar();
         color.addAssign(albedo.mul(bE).mul(bakeW)
           .mul(metalness.oneMinus()).mul(wetSheen.mul(0.85).oneMinus()));
+        // Baked LAMP BOUNCE (per unit BOUNCE); the live bounce steps aside by bakeW.
+        color.addAssign(albedo.mul(bB).mul(U.bounceK.mul(bakeW)).mul(metalness.oneMinus()));
 
         /* PER-CHUNK LAMP SOURCE. Off (LGRID null, or lgOn 0) every accessor
          * below is the plain uniform-array read this loop has always done.
@@ -1652,7 +1661,7 @@
               If(U.bounceK.greaterThan(0.0), () => {
                 color.addAssign(albedo.mul(LCol(i, row))
                   .mul(att.mul(U.bounceK).mul(NoLl.mul(0.45).add(0.55)))
-                  .mul(metalness.oneMinus()));
+                  .mul(metalness.oneMinus()).mul(bakeW.oneMinus()));
               });
               // GGX + clearcoat lamp speculars, NoLl-gated (js/render/glx/shaders/glsl-lit.js)
               If(NoLl.greaterThan(0.0), () => {
