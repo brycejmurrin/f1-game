@@ -270,6 +270,15 @@ Scripts and raw output: `scratch/roadfold/`, `scratch/terrainz/`, `scratch/guard
   lines, top coplanar sites. Positive control: the pre-fix madrid.js must go
   red. Cost ~20 min on llvmpipe fleet-wide; start as a non-blocking CI job,
   block after ~5 runs with A/A' exactly 0.
+  **Built (2026-09-24), browser run UNVERIFIED:** `tools/shot/flicker-gate.mjs`
+  (9 sites) + `tools/lib/flicker-metric.mjs`, ci.yml job `flicker-gate`
+  (`continue-on-error`). One change from the design above: the jitter is four
+  sub-mm dollies (+-1, +-2 mm; 1 cm at the 150 m telephoto site) scored
+  2-of-4, not one +-1-2 cm pair AND-ed — an AND of two re-rolls keeps ~25 % of
+  a fight's pixels, below the 8-neighbour percolation threshold, so the 9 px
+  cluster floor erased it (measured on synthetic frames, flicker-metric.test.mjs);
+  and 1-2 cm shifts real edges by ~1 px, 1 mm by <= 0.1 px. Ceilings are 1/10
+  of each target's screen area, set from geometry; ratchet from the job's JSON.
 - **G3 — `overheadSpan({ soffit })`.** Plate bottom AT `clearance`, deck raised
   by `inset`, plate thickness > inset (buried), span/depth scaled < 1 so its end
   faces never meet the deck's. Migrates madrid's two hand-rolled soffits (and
