@@ -485,8 +485,13 @@ jobs:
   sweeps-parts:
     name: Parts option-resolution census
     runs-on: ubuntu-latest
-    # Tree-only: skipped when the train reuses a green fast tier (`fast_tier_run`).
-    if: ${{ inputs.fast_tier_run == '' }}
+    # NOT tree-only, so NOT skipped by `fast_tier_run` (2026-09-24). Its filter
+    # diffs a BASE (the push's `before`, or the train's live `before_sha`), so a
+    # green fast tier only proves the census for the LAST push's diff: push A
+    # edits js/car/ and its census goes red, push B (tests only) skips the
+    # census and goes green, and the train that reused B's run shipped A's car
+    # change never censused against what is live. On the train the filter diffs
+    # live..tip and skips cheaply when no parts path moved.
     # One subtest of parts-visual-distinctness ("every option resolves to
     # itself") measured 559 s of the 999 s sweeps run on 2026-09-01. Its own
     # runner, unconditional and in parallel, so the geometry sweeps finish in

@@ -124,8 +124,22 @@ function outcome(run) {
   if (alive(run.pid)) return "running";
   let text = "";
   try { text = fs.readFileSync(run.log, "utf8"); } catch (_) { return "gone (no log)"; }
+  return outcomeOf(text);
+}
 
-  const pw = [...text.matchAll(/= run (\w+)\s+\(([^)]*)\)/g)].pop();
+/** The verdict in a finished log. THE EXIT CODE IS CHECKED FIRST (2026-09-24):
+ *  a group can be two commands (`test:tooling` is tooling-fast && sweeps, a
+ *  twinned group is its VM twins then Playwright), and the first half's
+ *  `= run passed` or `# fail 0` used to win over a non-zero `= bg exit`, so a
+ *  red second half — or a Playwright half SIGKILLed before its summary — read
+ *  as passed and `--wait` exited 0. The detail line still names the counts. */
+export function outcomeOf(text) {
+  const bgExit = [...text.matchAll(/^= bg exit (\d+)$/gm)].pop();
+  const detail = [...text.matchAll(/= run (\w+)\s+\(([^)]*)\)/g)].pop();
+  if (bgExit && bgExit[1] !== "0") {
+    return `failed (exit ${bgExit[1]}${detail ? `; last summary: ${detail[1]} (${detail[2]})` : ""})`;
+  }
+  const pw = detail;
   if (pw) return `${pw[1]} (${pw[2]})`;
 
   const tap = text.match(/^# pass (\d+)$[\s\S]*?^# fail (\d+)$/m);
@@ -498,7 +512,8 @@ async function waitChain(groups, { force = false } = {}) {
   process.exitCode = allOk ? 0 : 1;
 }
 
-const argv = process.argv.slice(2);
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+const argv = isMain ? process.argv.slice(2) : [];
 const force = argv.includes("--force");
 const lastFailed = argv.includes("--last-failed");
 const parallel = argv.includes("--parallel");
@@ -506,7 +521,8 @@ const tIdx = argv.indexOf("--timeout");
 const waitTimeoutMin = tIdx >= 0 ? +argv[tIdx + 1] || 0 : 0;
 const groups = argv.filter((a, i) => !a.startsWith("--") && !(tIdx >= 0 && i === tIdx + 1));
 
-if (argv.includes("--status")) status();
+if (!isMain) { /* imported for outcomeOf (tests/unit/test-bg-outcome.test.mjs) */ }
+else if (argv.includes("--status")) status();
 else if (argv.includes("--stop")) stop({ doSweep: argv.includes("--sweep") });
 else if (argv.includes("--tail")) {
   const g = argv[argv.indexOf("--tail") + 1];
