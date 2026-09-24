@@ -369,7 +369,7 @@ function sim(cars, laps = 20) {
   let lvl = 0;
   const G = { state: "race", raceT: 0, cars, player: cars.find((c) => c.isPlayer), track: { total: SIM_L }, lapsTarget: laps,
     timeTrial: false, practice: false, camMode: 0, hudProfile: "standard", LAT_MAX: 30, vTop: () => 80, raceRound: 0,
-    announceBusy: false, cautionInfo: () => ({ level: lvl }), store: null,
+    announceBusy: false, cautionInfo: () => ({ level: lvl }), cautionLevel: () => lvl, store: null,
     announce: (msg, dur, kind) => { said.push({ t: G.raceT, msg, kind }); return true; } };
   const radio = RR.create(G, { seed: 3 });
   const flagOut = () => G.cars.some((c) => c.finished && !c.retired);
