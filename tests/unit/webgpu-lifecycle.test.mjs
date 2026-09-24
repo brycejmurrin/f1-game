@@ -2286,3 +2286,27 @@ test("WGX shadow cull packs into the batch's OWN buffer and leaves the camera pa
   assert.equal(gfx.cullInstances(batch, planes(2e6)), 2);
   assert.equal(instWrites(), camWrites, "…so the next camera cull with the same cells is still a cache hit");
 });
+
+test("the lamp bake light map is freed after ~2 s of bake-off frames (GLX _bakeOffN parity)", async () => {
+  // WGX used to free the bake only on replacement, so a night race followed by
+  // a day one kept ~9.6 MB of RGBA16F alive. It now rebinds the placeholder and
+  // retires the texture after 120 consecutive bake-off frames.
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  const lb = { w: 4, h: 3, x0: 0, z0: 0, cell: 1, data: new Uint16Array(4 * 3 * 8) };
+  const isBake = (t) => Array.isArray(t.desc.size) && t.desc.size[0] === 4 && t.desc.size[1] === 6
+    && t.desc.format === "rgba16float";
+  assert.equal(gfx.begin({ lampBake: lb, lampBakeScale: [1, 1, 1] }), true);
+  gfx.present({});
+  const bakes = h.textures.filter(isBake);
+  assert.equal(bakes.length, 1, "the bake uploads one w x 2h texture");
+  for (let i = 0; i < 120; i++) { assert.equal(gfx.begin({}), true); gfx.present({}); }
+  assert.equal(bakes[0].destroyed, false, "a short bake-off gap keeps the map");
+  assert.equal(gfx.begin({}), true);
+  assert.equal(bakes[0].destroyed, false, "retired, not destroyed before the frame's submit");
+  gfx.present({});
+  assert.equal(bakes[0].destroyed, true, "the 121st bake-off frame frees the map after its submit");
+  assert.equal(gfx.begin({ lampBake: lb, lampBakeScale: [1, 1, 1] }), true);
+  gfx.present({});
+  assert.equal(h.textures.filter(isBake).length, 2, "the same bake re-uploads once it returns");
+});
