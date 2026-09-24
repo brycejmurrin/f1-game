@@ -25,6 +25,11 @@ import http from "node:http";
 import { readFileSync, existsSync, writeFileSync } from "node:fs";
 import { join, extname, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+// The spike-train verdict, shared with tools/gfx/frame-hitch.mjs rather than
+// reimplemented: it is unit-tested both ways in
+// tests/unit/frame-hitch-analyse.test.mjs, and a second copy of a periodicity
+// test is a second copy of its bugs.
+import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds } from "./frame-hitch.mjs";
 
 // fileURLToPath, NOT `new URL(..).pathname`. On Windows that pathname is
 // `/D:/a/f1-game/f1-game/` and resolve() prefixes the cwd's drive, giving a
@@ -53,6 +58,17 @@ const backend = flag("--backend", "three");
 // real-GPU content path is reproduced on a software adapter.
 const extraLs = argv.reduce((acc, a2, i) => (a2 === "--ls" && argv[i + 1] ? acc.concat(argv[i + 1]) : acc), []);
 const path3 = flag("--path", "webgpu");
+// --beats N: the measured window, one beat a second (default 15). The window
+// used to open at arm() with the car PARKED at the lights, and the pre-race
+// phase (race entry + the TLX program warm) takes 10-15 s on macos-latest
+// (census 200-207, beats: memState.presentMs=0 and the governor ring at n=1
+// until the race), so fifteen beats held 0-5 s of a parked race. The race
+// gate below waits for the race itself; --beats sizes what it then measures.
+const beats = Math.max(1, Math.round(Number(flag("--beats", 15))) || 15);
+// --no-drive keeps the car parked for the window (the pre-2026-09-22 census).
+// The default DRIVES: a parked car streams nothing, and the hitch this tool
+// exists to find is scenery reaching a moving car.
+const drive = !process.argv.includes("--no-drive");
 
 function serve() {
   // A server rooted at the wrong directory answers 404 to everything, which is
@@ -126,6 +142,305 @@ try {
   page.on("close", () => { out.pageClosed = true; });
   browser.on("disconnected", () => { out.browserGone = true; });
   await page.addInitScript(([be, p, ls]) => {
+    // THE SPIKE TRAIN, recorded on the machine that has a real GPU.
+    //
+    // Everything else this file measures is a SETTLED number: fps is an EMA,
+    // floorMs a derived budget, and PerfGov's own frameStats() is percentiles
+    // over a ring, so the summary can only aggregate per-beat percentiles and
+    // a max-of-p95 collapses onto the single worst stall (census 195 printed
+    // p95 == p99 == max on all four legs for exactly that reason). None of
+    // them can answer the actual report — "it hitches every few seconds" —
+    // which is a question about the PERIOD of the tail.
+    //
+    // So record every rAF callback's own wall cost, the way frame-hitch.mjs
+    // does in the container, and let analyse() find the spikes and ask whether
+    // they are evenly spaced. Installed before any page script so it wraps the
+    // game's own rAF chain, preallocated so the recorder never allocates
+    // inside the frame it is timing, and armed later so the track build and
+    // the first laps of warm-up are not counted as hitches.
+    const _hCAP = 40000;
+    const _hT = new Float64Array(_hCAP), _hD = new Float64Array(_hCAP);
+    const _hP = new Int16Array(_hCAP);
+    let _hN = 0, _hArmed = false, _hPass = 0, _hSigCur = [];
+    const _hSig = [];
+    // THE PASS CENSUS, and the reason it belongs HERE rather than only in the
+    // container. tlx-shadow.js sizes its maps by `softwareGL`: SUN_SIZE is 512
+    // on a software adapter and 2048 on a real desktop, CAR_SIZE 256 against
+    // 1024. macos-latest reports softAdapter=false, so this job is the only
+    // place this project can see what the shadow rebuild actually costs at the
+    // size a player renders it — sixteen times the pixels the container
+    // measured. Resolution is the fingerprint; GPUTextureView carries no size,
+    // so tag the view as it is created from a texture that does.
+    // WHAT THE RESOURCE BURST IS MADE OF. Run 197's beats showed the uniform
+    // buffer count go 90 -> 558 in one second as the race started, then climb
+    // to 755 while groupVer went 3 -> 190 and fps halved, with frames of 258,
+    // 346, 441 and 556 ms landing in that window. A new uniform buffer is a
+    // new three RenderObject; whether it also cost a PIPELINE COMPILE is the
+    // difference between "allocate faster" and "warm the programs", and the
+    // beats cannot tell them apart. Count the calls: they are exact even
+    // where milliseconds are not.
+    const _hWork = new Map();
+    // WHO COMPILES. Run 198 counted 25 synchronous createRenderPipeline calls
+    // in the race window on the TLX/WebGPU leg against 1 on WGX, and the
+    // spike counts track them one for one. A count says the renderer is
+    // compiling mid-race; it does not say which draw asked for a program the
+    // warm never built. Capture a bounded sample of stacks per compile and
+    // aggregate by signature — the answer wanted is a function name in our
+    // own files, below three's, so keep enough frames to walk through three.
+    const _hStacks = new Map();
+    let _hStackBudget = 200;
+    // createShaderModule, not createRenderPipeline: patch 7 moved the lazy
+    // WebGPU path to createRenderPipelineAsync, so run 202 had nothing to
+    // attribute but the mipmap pipeline. A shader module is exactly one per
+    // new program on both paths, and it is created right after the codegen
+    // that census 202 named as the cost.
+    const STACK_KINDS = { "gpu.createShaderModule": 1, "gpu.createRenderPipeline": 1, "gl.linkProgram": 1 };
+    // PER FRAME as well as per window: census 208 counted 778 createBuffer
+    // and 705 createBindGroup calls over a driven window beside eleven
+    // 130-310 ms callbacks, and a window total cannot say whether the spike
+    // frames made them. One record per callback that made any call.
+    let _hWorkCur = null;
+    const _hWorkFrames = [];
+    const _bumpWorkN = (k, n) => {
+      if (!_hArmed) return;
+      if (_hWorkCur === null) _hWorkCur = {};
+      _hWorkCur[k] = (_hWorkCur[k] || 0) + n;
+      // Every timed kind also feeds one per-frame total, so the analyser can
+      // print how much of a spike frame the wrapped calls explain at all.
+      if (k.endsWith("Ms") && k !== "gpu.wrappedMs") _hWorkCur["gpu.wrappedMs"] = (_hWorkCur["gpu.wrappedMs"] || 0) + n;
+    };
+    const _bumpWork = (k) => {
+      if (!_hArmed) return;
+      _hWork.set(k, (_hWork.get(k) || 0) + 1);
+      _bumpWorkN(k, 1);
+      if (!STACK_KINDS[k] || _hStackBudget <= 0) return;
+      _hStackBudget--;
+      let sig = "?";
+      try {
+        // THE WHOLE STACK for the OURS filter. Run 199 kept fifteen frames
+        // and every WebGPU compile came back "(none in window)": three's
+        // render path from _getRenderPipeline up to renderer.render() is
+        // deeper than that, and the frame that names a fix sits above it.
+        // A bounded sample (200) of full stacks is cheap; a window that
+        // never reaches our code is worthless.
+        // V8 captures 10 frames by default; three's render path from
+        // createRenderPipeline up to renderer.render() is longer than that, so
+        // run 200 read every WebGPU compile as "(none in window)" with the
+        // slice already removed — the window was the engine's, not ours.
+        const prevLimit = Error.stackTraceLimit;
+        Error.stackTraceLimit = 80;
+        let raw;
+        try { raw = (new Error().stack || "").split("\n").slice(3); } finally { Error.stackTraceLimit = prevLimit; }
+        const fr = raw.map((l) => l.trim().replace(/^at\s+/, "").replace(/\?v=[a-z0-9]+/g, "").replace(/https?:\/\/[^\s)]*\//g, ""));
+        const ours = fr.filter((l) => !/three\.webgpu|three\.core|three\.tsl/.test(l));
+        sig = fr.slice(0, 2).join(" <- ") + "  ||OURS|| " + (ours.slice(0, 5).join(" <- ") || "(none in window)");
+      } catch (_) { /* no stack: the count still stands */ }
+      const key = k + " :: " + sig;
+      _hStacks.set(key, (_hStacks.get(key) || 0) + 1);
+    };
+    try {
+      // Count AND time: census 209 put 45% of the time inside the >= 100 ms
+      // callbacks at (idle) — the VM off the stack inside a synchronous
+      // callback, which is a native wait — beside 2x the submits and
+      // writeBuffers of a normal frame. The wall time of each wrapped call,
+      // summed per frame as <kind>Ms, names the call that waits.
+      const wrapCall = (proto, name, kind) => {
+        if (!proto || typeof proto[name] !== "function") return;
+        const orig = proto[name];
+        proto[name] = function () {
+          _bumpWork(kind);
+          const t = performance.now();
+          try { return orig.apply(this, arguments); } finally { _bumpWorkN(kind + "Ms", performance.now() - t); }
+        };
+      };
+      const GD = window.GPUDevice && window.GPUDevice.prototype;
+      wrapCall(GD, "createRenderPipeline", "gpu.createRenderPipeline");
+      wrapCall(GD, "createRenderPipelineAsync", "gpu.createRenderPipelineAsync");
+      wrapCall(GD, "createShaderModule", "gpu.createShaderModule");
+      wrapCall(GD, "createBindGroup", "gpu.createBindGroup");
+      wrapCall(GD, "createBuffer", "gpu.createBuffer");
+      // The upload side: how many writes a frame makes and how many KB they
+      // carry (size is elements for a typed array, bytes for an ArrayBuffer).
+      const GQ = window.GPUQueue && window.GPUQueue.prototype;
+      if (GQ && typeof GQ.writeBuffer === "function") {
+        const origWB = GQ.writeBuffer;
+        GQ.writeBuffer = function (buffer, offset, data, dataOffset, size) {
+          _bumpWork("gpu.writeBuffer");
+          try {
+            const per = (data && data.BYTES_PER_ELEMENT) || 1;
+            const bytes = size != null ? size * per : ((data && data.byteLength) || 0) - ((dataOffset || 0) * per);
+            _bumpWorkN("gpu.writeBufferKB", Math.max(0, bytes) / 1024);
+          } catch (_) { /* the count stands without the size */ }
+          const t = performance.now();
+          try { return origWB.apply(this, arguments); } finally { _bumpWorkN("gpu.writeBufferMs", performance.now() - t); }
+        };
+      }
+      wrapCall(GQ, "submit", "gpu.submit");
+      wrapCall(GQ, "writeTexture", "gpu.writeTexture");
+      wrapCall(GQ, "copyExternalImageToTexture", "gpu.copyExternalImageToTexture");
+      wrapCall(GD, "createTexture", "gpu.createTexture");
+      wrapCall(GD, "createCommandEncoder", "gpu.createCommandEncoder");
+      const GB = window.GPUBuffer && window.GPUBuffer.prototype;
+      wrapCall(GB, "getMappedRange", "gpu.getMappedRange");
+      wrapCall(GB, "unmap", "gpu.unmap");
+      const GCE = window.GPUCommandEncoder && window.GPUCommandEncoder.prototype;
+      wrapCall(GCE, "finish", "gpu.encoderFinish");
+      // THE SWAPCHAIN ACQUIRE. Census 210 timed every wrapped call inside the
+      // >= 100 ms frames at under 90 ms in total and still found 46% of their
+      // time with the VM idle: a native wait that is none of the above. On
+      // Metal getCurrentTexture() blocks until the compositor frees a
+      // drawable, and WGX on this runner soft-presents and never calls it.
+      const GCC = window.GPUCanvasContext && window.GPUCanvasContext.prototype;
+      wrapCall(GCC, "getCurrentTexture", "gpu.getCurrentTexture");
+      const GRP = window.GPURenderPassEncoder && window.GPURenderPassEncoder.prototype;
+      wrapCall(GRP, "end", "gpu.passEnd");
+      wrapCall(GD, "createBindGroupLayout", "gpu.createBindGroupLayout");
+      wrapCall(GD, "createPipelineLayout", "gpu.createPipelineLayout");
+      wrapCall(GD, "createSampler", "gpu.createSampler");
+      const G2 = window.WebGL2RenderingContext && window.WebGL2RenderingContext.prototype;
+      wrapCall(G2, "linkProgram", "gl.linkProgram");
+      wrapCall(G2, "compileShader", "gl.compileShader");
+      wrapCall(G2, "getProgramParameter", "gl.getProgramParameter");
+    } catch (_) { /* a frozen prototype leaves this column absent, not zero */ }
+    try {
+      const TP = window.GPUTexture && window.GPUTexture.prototype;
+      if (TP && typeof TP.createView === "function") {
+        const origCV = TP.createView;
+        TP.createView = function () {
+          const _t0 = performance.now();
+          const v = origCV.apply(this, arguments);
+          _bumpWorkN("gpu.createViewMs", performance.now() - _t0);
+          try { v.__sig = this.width + "x" + this.height + "/" + this.format; } catch (_) { /* expando refused */ }
+          return v;
+        };
+      }
+      const CE = window.GPUCommandEncoder && window.GPUCommandEncoder.prototype;
+      if (CE && typeof CE.beginRenderPass === "function") {
+        const origBRP = CE.beginRenderPass;
+        CE.beginRenderPass = function (desc) {
+          if (_hArmed) {
+            _hPass++;
+            if (_hSigCur.length < 64) {
+              let sig = "";
+              try {
+                const ca = (desc && desc.colorAttachments) || [];
+                for (let i = 0; i < ca.length; i++) {
+                  const v = ca[i] && (ca[i].view || ca[i].resolveTarget);
+                  sig += (i ? "+" : "") + ((v && v.__sig) || "?");
+                }
+                if (!ca.length) sig = "depth-only";
+                if (desc && desc.depthStencilAttachment) sig += "|d";
+                const lo = ca.length && ca[0] ? ca[0].loadOp
+                  : (desc && desc.depthStencilAttachment && desc.depthStencilAttachment.depthLoadOp);
+                if (lo) sig += ":" + lo;
+              } catch (_) { sig = "?"; }
+              _hSigCur.push(sig);
+            }
+          }
+          const _t1 = performance.now();
+          try { return origBRP.apply(this, arguments); } finally { _bumpWorkN("gpu.beginRenderPassMs", performance.now() - _t1); }
+        };
+      }
+    } catch (_) { /* WebGL2 legs have no GPUCommandEncoder; the timing still runs */ }
+    try {
+      // THE DRIVER. tests/specs/autopilot.spec.js's closed-loop law — a braking
+      // envelope over scan() (v_now^2 = v_corner^2 + 2 a d for every look-ahead
+      // point), pure pursuit on probe() — run from the RAW rAF against the live
+      // loop: setInput() only, the game steps itself. It binds the un-wrapped
+      // requestAnimationFrame on purpose: the hitch recorder below wraps every
+      // callback, and a second callback per frame would halve every per-frame
+      // statistic it reports.
+      const _rawRaf = window.requestAnimationFrame.bind(window), _rawCaf = window.cancelAnimationFrame.bind(window);
+      const DISTS = []; for (let d = 5; d <= 160; d += 6) DISTS.push(d);
+      const VMAX = 94, A_LAT = 13, A_BRAKE = 24, KP = 2.4;
+      let _dOn = false, _dRaf = 0, _dPrev = 0, _dHold = 30, _dStalled = 0, _dLastProg = null, _dLastS = null;
+      let _dFrames = 0, _dDist = 0, _dSpeedSum = 0, _dOff = 0, _dErr = null;
+      const tick = (ts) => {
+        if (!_dOn) return;
+        _dRaf = _rawRaf(tick);
+        const A = window.__apex;
+        if (!A || !A.probe || !A.scan || !A.setInput) return;
+        const dt = _dPrev ? Math.min(0.1, Math.max(0.001, (ts - _dPrev) / 1000)) : 1 / 60; _dPrev = ts;
+        let p = null, pts = null;
+        try { p = A.probe(); pts = p ? A.scan(DISTS) : null; } catch (e) { _dErr = String(e && e.message).slice(0, 80); return; }
+        if (!p || !pts) return;
+        let kSteer = p.k; const steerLook = Math.max(9, p.speed * 0.4);
+        let vT = Math.abs(p.k) > 1e-4 ? Math.sqrt(A_LAT / Math.abs(p.k)) : VMAX;
+        for (let j = 0; j < pts.length; j++) {
+          const d = DISTS[j], k = Math.abs(pts[j].k);
+          if (d <= steerLook) kSteer = pts[j].k;
+          const vCorner = k > 1e-4 ? Math.sqrt(A_LAT / k) : VMAX;
+          const vAllow = Math.sqrt(vCorner * vCorner + 2 * A_BRAKE * d);
+          if (vAllow < vT) vT = vAllow;
+        }
+        vT = Math.max(11, Math.min(VMAX, vT));
+        _dHold = Math.min(vT, _dHold + 30 * dt); vT = _dHold;
+        const L = Math.max(8, Math.min(38, p.speed * 0.6));
+        const latTarget = kSteer * L * L * 0.5;
+        let steer = KP * (Math.atan2(latTarget - p.x, L) - p.angle);
+        steer = Math.max(-1, Math.min(1, steer));
+        const offRoad = Math.abs(p.x) - p.hw > 0.4;
+        if (_dLastProg != null && p.s - _dLastProg < 0.05 && p.speed < 3) _dStalled++; else _dStalled = 0;
+        _dLastProg = p.s;
+        let throttle = p.speed < vT, brake = p.speed > vT * 1.04;
+        if (_dStalled > 10) { steer = Math.max(-0.4, Math.min(0.4, steer)); throttle = true; brake = false; }
+        else if (offRoad) { throttle = false; }
+        try { A.setInput({ steer, throttle, brake }); } catch (e) { _dErr = String(e && e.message).slice(0, 80); }
+        _dFrames++; _dSpeedSum += p.speed; if (offRoad) _dOff++;
+        if (_dLastS != null) { const ds = p.s - _dLastS; if (ds > 0 && ds < 50) _dDist += ds; }
+        _dLastS = p.s;
+      };
+      window.__gcDrive = {
+        start() {
+          if (_dOn) return;
+          // park(0.1) FREEZES the sim for a deterministic screenshot (apex.js
+          // park: G.frozen = true), so a driver over a parked car goes nowhere
+          // — the first local dry run ticked 14 frames for 0 m. Lift the
+          // freeze and release the field, then drive.
+          const A = window.__apex;
+          try { if (A && A.freeze) A.freeze(false); } catch (_) { /* pre-park */ }
+          try { if (A && A.go) A.go(); } catch (_) { /* no race yet */ }
+          _dOn = true; _dPrev = 0; _dRaf = _rawRaf(tick);
+        },
+        stop() {
+          _dOn = false;
+          try { _rawCaf(_dRaf); } catch (_) { /* already fired */ }
+          const A = window.__apex;
+          try { if (A && A.clearInput) A.clearInput(); } catch (_) { /* input hook absent */ }
+          // Put the car back where every later phase (feature A/B, shots)
+          // expects it: parked at 0.1, frozen — the state before the window.
+          try { if (A && A.park) A.park(0.1); } catch (_) { /* the A/B re-parks on its own */ }
+        },
+        stats: () => ({ frames: _dFrames, distM: Math.round(_dDist), meanSpeed: _dFrames ? +(_dSpeedSum / _dFrames).toFixed(1) : 0,
+                        offRoadFrames: _dOff, error: _dErr }),
+      };
+    } catch (_) { /* no driver: the window measures a parked car, and the race: row says PARKED */ }
+    try {
+      const _raf = window.requestAnimationFrame.bind(window);
+      window.requestAnimationFrame = function (cb) {
+        return _raf(function (ts) {
+          const a = performance.now();
+          try { return cb(ts); } finally {
+            if (_hArmed && _hN < _hCAP) {
+              _hT[_hN] = a; _hD[_hN] = performance.now() - a;
+              _hP[_hN] = _hPass > 32767 ? 32767 : _hPass;
+              if (_hN < 4000) _hSig.push(_hSigCur);
+              if (_hWorkCur !== null && _hWorkFrames.length < 4000) _hWorkFrames.push([_hN, _hWorkCur]);
+              _hN++;
+            }
+            _hPass = 0; _hSigCur = []; _hWorkCur = null;
+          }
+        });
+      };
+      window.__gcHitch = {
+        arm() { _hArmed = true; _hN = 0; _hSig.length = 0; _hWork.clear(); _hStacks.clear(); _hStackBudget = 200; _hWorkFrames.length = 0; _hWorkCur = null; },
+        dump: () => ({ t0: Array.from(_hT.subarray(0, _hN)), dur: Array.from(_hD.subarray(0, _hN)),
+                       passes: Array.from(_hP.subarray(0, _hN)), passSig: _hSig,
+                       work: [..._hWork.entries()].sort((a, b) => b[1] - a[1]),
+                       workFrames: _hWorkFrames,
+                       stacks: [..._hStacks.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30) }),
+      };
+    } catch (_) { /* a frozen rAF just means this leg reports no hitch series */ }
     try {
       localStorage.setItem("apex26.gfxBackend", be);
       if (be === "three") localStorage.setItem("apex26.tlxForceGL", p === "webgl2" ? "1" : "0");
@@ -237,6 +552,56 @@ try {
   // scales with pixel count is fragment-bound.
   out.gpuTimerStart = await bounded(() => page.evaluate(() => window.__apex.gpuTimer(true)), 20000, "gpu-timer-on");
   checkpoint("racing", { track });
+  // THE RACE GATE. park() sits the car at the lights and the TLX program warm
+  // holds the whole loop (game.js tickBody returns while gfx.warming()) — 10 to
+  // 15 s on macos-latest, measured across census 200-207 — so a window armed
+  // here timed the lights and 0-5 s of a parked race, whatever it reported.
+  // Wait for state "race" with no warm pending, then drive, THEN arm.
+  const _gateT0 = Date.now();
+  out.race = { beats, drive, reached: false };
+  try {
+    await page.waitForFunction(() => {
+      const A = window.__apex; const i = A && A.info ? A.info() : null;
+      const t = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null;
+      // TLX requests its warm at race start and STARTS it on the next present,
+      // so "not warming" alone is true in the gap before it begins (the local
+      // dry run passed the gate at +0.1 s and then timed the warm anyway). A
+      // leg that has a warm must have FINISHED one; GLX/WGX report no warm.
+      const m = t && t.memState ? t.memState() : null;
+      const w = m && m.warm ? m.warm : null;
+      const warming = !!(t && t.warming && t.warming());
+      // A tree whose memState() has no warm timeline (the pre-#228 TLX) still
+      // warms: warming() goes true a present after race start. With no
+      // timeline, require the warm SEEN and ended, or 5 s of race with none —
+      // census 224 passed this gate at +46 ms and timed the warm's twelve
+      // compiles as race hitches.
+      const g = window.__raceGate || (window.__raceGate = { t0: 0, saw: false });
+      if (i && i.state === "race" && !g.t0) g.t0 = performance.now();
+      if (warming) g.saw = true;
+      const tlxNoTimeline = !!(t && t.warming) && !w;
+      const warmDone = w ? w.done === true
+        : (!tlxNoTimeline || g.saw || (g.t0 && performance.now() - g.t0 > 5000));
+      return !!(i && i.state === "race" && !warming && warmDone);
+    }, null, { polling: 100, timeout: Number(flag("--race-timeout", 90000)) });
+    out.race.reached = true;
+  } catch (e) {
+    out.race.note = "RACE NOT REACHED: " + String((e && e.message) || e).slice(0, 100);
+  }
+  out.race.gateMs = Date.now() - _gateT0;
+  // The warm's own timeline (tlx.js memState().warm): how long the lights held
+  // for a player on this GPU, by stage. Absent on GLX/WGX, which have no warm.
+  out.race.warm = await bounded(() => page.evaluate(() => {
+    const t = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null;
+    const m = t && t.memState ? t.memState() : null;
+    return m && m.warm ? m.warm : null;
+  }), 10000, "warm-read").catch(() => null);
+  if (drive && out.race.reached) {
+    out.race.driver = await bounded(() => page.evaluate(() => {
+      if (!window.__gcDrive) return "absent";
+      window.__gcDrive.start(); return "started";
+    }), 10000, "drive-start").catch((e) => "failed: " + String((e && e.message) || e).slice(0, 60));
+  }
+  checkpoint("race-gate", out.race);
   // Poll instead of one blind sleep. The question after park() is whether the
   // page is STILL ANSWERING, and a single waitForTimeout cannot tell a healthy
   // wait from a wedged renderer — on Apple Metal both three paths went silent
@@ -255,8 +620,32 @@ try {
   // it is refusing to call one slow beat a corpse, the same reason tlx.js
   // heals on HEAL_MIN_FRAMES = 2 rather than on a single transient.
   out.beats = [];
+  // Arm AFTER the track build and the boot ladder: an opening stall is a
+  // different report (out.raceProfile answers that one) and counting it here
+  // would put one 1.4 s frame in the spike list and call the run periodic.
+  try { await page.evaluate(() => window.__gcHitch && window.__gcHitch.arm()); } catch (_) { /* no recorder on this leg */ }
+  // WHERE THE CPU TIME GOES over the same window, by function. Census 201
+  // moved every lazy pipeline compile off the main thread (createRenderPipeline
+  // 26 -> 1) and the 18-25 s spikes stayed, so the stall is one step upstream
+  // in the same first-draw path — node-graph codegen, per-object bind-group
+  // cloning, uniform-buffer allocation, or something not yet named. Those are
+  // CPU time, which V8's sampling profiler measures honestly (the heap sampler
+  // was the wrong tool for garbage; this one has no such gap). And it has to
+  // run HERE: the burst is scenery streaming into view as the car reaches new
+  // track, and the container's car drives into the first wall, so its
+  // profile is flat — 40% idle, no function above 2.3%.
+  let _cpu = null, _cpuProfile = null, _cpuPageAtStart = null;
+  try {
+    _cpu = await page.context().newCDPSession(page);
+    await _cpu.send("Profiler.enable");
+    await _cpu.send("Profiler.setSamplingInterval", { interval: 500 });
+    await _cpu.send("Profiler.start");
+    // The clock join for the spike attribution: the page clock as the profile
+    // began, within one CDP round trip (analyseSpikeCpu prints its coverage).
+    _cpuPageAtStart = await page.evaluate(() => performance.now());
+  } catch (e) { out.cpuProfileError = String((e && e.message) || e).slice(0, 120); _cpu = null; }
   let missed = 0;
-  for (let i = 0; i < 15; i++) {
+  for (let i = 0; i < beats; i++) {
     if (out.crashed || out.browserGone) break;
     try {
       const beat = await Promise.race([
@@ -286,6 +675,20 @@ try {
             // is the one census number that does not need a quiet runner.
             ubo: (() => { try { const t = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null; const m = t && t.memState ? t.memState() : null;
               return m && m.rUbo != null ? { n: m.rUbo, kb: m.rUboKB, ver: m.groupVer, pms: m.presentMs, dr: m.draws } : null; } catch (_) { return null; } })(),
+            // Programs and materials as the car drives: three's program count is
+            // the lazy-program tally of the window, and matMiss/matEvict say
+            // whether tlx.js is minting materials (MAT_CACHE_CAP evictions
+            // re-mint a material and so a program). The container measured
+            // this parked; the driven window is where it can move.
+            mm: (() => { try { const t = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null; const m = t && t.memState ? t.memState() : null;
+              return m ? { progs: m.progs, mats: m.mats, pool: m.pool, hit: m.matHit, miss: m.matMiss, evict: m.matEvict, keys: m.matMissKeys || null } : null; } catch (_) { return null; } })(),
+            // THE HITCH SIGNATURE. p99 against p50 over the last 2048 frames:
+            // a healthy p50 beside a p99 several times larger IS a spike train,
+            // and no settled average can show it. `open` carries the worst
+            // single frame of the race's first 600 for the opening-stall
+            // question, which is a different report.
+            ft: (() => { try { const q = g && g.frameTimes; return q ? { p50: +(+q.p50).toFixed(1), p95: +(+q.p95).toFixed(1), p99: +(+q.p99).toFixed(1), max: +(+q.maxMs).toFixed(1), n: q.frames } : null; } catch (_) { return null; } })(),
+            open: (() => { try { const o = g && g.open; return o ? { maxMs: +(+o.maxMs).toFixed(1), slow: o.slow, frames: o.frames } : null; } catch (_) { return null; } })(),
           };
         }),
         new Promise((_, rj) => setTimeout(() => rj(new Error("beat timeout")), 8000)),
@@ -300,6 +703,44 @@ try {
     }
     await new Promise((r) => setTimeout(r, 1000));
   }
+  if (_cpu) {
+    try { const { profile } = await _cpu.send("Profiler.stop"); _cpuProfile = profile; out.cpu = analyseCpu(profile, 24); }
+    catch (e) { out.cpu = { note: "profile stop failed: " + String((e && e.message) || e).slice(0, 120) }; }
+  } else {
+    out.cpu = { note: "no CPU profile: " + (out.cpuProfileError || "CDP unavailable") };
+  }
+  // The driver stops HERE, before the A/B phases below pin the clock and
+  // freeze the sim; stop() also clears the input override it held.
+  if (out.race && out.race.driver === "started") {
+    out.race.driven = await bounded(() => page.evaluate(() => {
+      const d = window.__gcDrive; if (!d) return null;
+      const st = d.stats(); d.stop(); return st;
+    }), 10000, "drive-stop").catch((e) => ({ error: String((e && e.message) || e).slice(0, 80) }));
+  }
+  // THE PERIOD OF THE TAIL, from the raw per-callback series rather than from
+  // aggregated per-beat percentiles. bounded() because a leg whose renderer
+  // crashed leaves every later evaluate hanging for ever.
+  out.hitch = await bounded(async () => {
+    const d = await page.evaluate(() => (window.__gcHitch ? window.__gcHitch.dump() : null));
+    if (!d || !d.dur || d.dur.length < 30) return { note: "no rAF series — the recorder never armed, or the leg drew too few frames" };
+    const a = analyse(d.t0, d.dur);
+    // The pass census rides the same series: same frames, same window, so
+    // "wide frames cost Nx" compares like with like.
+    out.passes = analysePasses(d.passes || [], d.t0 || [], d.dur || [], a.spikeThresholdMs);
+    // Absent, never zero: a leg whose prototypes could not be wrapped has not
+    // proved that nothing compiled.
+    out.gpuWork = (d.work && d.work.length) ? Object.fromEntries(d.work)
+      : { note: "no resource calls observed — wrapping failed, or this leg creates none" };
+    out.compileStacks = d.stacks || [];
+    out.passKinds = analysePassKinds(d.passSig || [], d.passes || []);
+    // WHAT IS INSIDE THE SPIKES: the profile joined to the frames at or over
+    // 100 ms (the ones a player feels), and the resource calls those frames
+    // made against the rest.
+    out.spikeCpu = analyseSpikeCpu(_cpuProfile, d.t0, d.dur, 100, _cpuPageAtStart);
+    out.spikeWork = analyseSpikeWork(d.workFrames || [], d.dur, 100);
+    out.spikePasses = analyseSpikePassKinds(d.passSig || [], d.dur, 100);
+    return a;
+  }, 30000, "hitch-series").catch((e) => ({ note: "hitch read failed: " + String((e && e.message) || e).slice(0, 80) }));
   checkpoint("settled");
 
   // THE RACE-ENTRY WINDOW: race() called -> the track is there. Everything the
@@ -353,6 +794,20 @@ try {
       top: p.slice().sort((a, b) => b.ms - a.ms).slice(0, 4).map((r) => `${r.n}=${r.ms}`), rows: p };
   }), 20000, "race-profile");
   // Median rather than mean: one stalled beat is not the frame cost.
+  // Worst tail across the run: the LAST beat's ring covers the most frames,
+  // and the max over beats catches a spike that a later quiet stretch would
+  // otherwise average away.
+  const _ft = out.beats.map((b) => b.ft).filter(Boolean);
+  out.frameTail = _ft.length
+    ? { p50: _ft[_ft.length - 1].p50,
+        p95: Math.max(..._ft.map((x) => x.p95)),
+        p99: Math.max(..._ft.map((x) => x.p99)),
+        max: Math.max(..._ft.map((x) => x.max)),
+        // The ratio is the call: a spike train has a healthy p50 and a p99
+        // several times it. Constant slowness moves both together.
+        p99OverP50: +(Math.max(..._ft.map((x) => x.p99)) / Math.max(0.1, _ft[_ft.length - 1].p50)).toFixed(1),
+        beats: _ft.length }
+    : { note: "no frameTimes — this build predates the ring on renderScale()" };
   const _g = out.beats.map((b) => b.gms).filter((x) => x != null).sort((a, b) => a - b);
   const _sc = out.beats.map((b) => b.sc).filter((x) => x != null);
   out.gpuFrame = _g.length
@@ -594,6 +1049,25 @@ try {
   checkpoint("gfx-read");
   const shot = flag("--shot", null);
   if (shot) {
+    // THE SOFT BLIT MUST HAVE PAINTED. Where the frame reaches the page through
+    // #game-soft (the headless readback), a resize clears that canvas and the
+    // next blit lands a few frames later; a screenshot in the gap read luma
+    // 3.4-3.7 on censuses 222 and 223 while the overlay said "nothing blitted
+    // yet" and the same leg's A/B shots showed the full scene. Wait for any
+    // non-zero pixel (the overlay's own test), bounded, and SAY whether it
+    // came: a frame that is really black still reads black, a blank canvas
+    // now reads as blank.
+    const t0 = Date.now();
+    out.softBlitAtShot = await page.waitForFunction(() => {
+      const c = document.getElementById("game-soft");
+      if (!c || !c.width || !c.height) return "no-soft-canvas";
+      try {
+        const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
+        for (let i = 0; i < d.length; i += 4) if (d[i] | d[i + 1] | d[i + 2]) return "painted";
+      } catch (_) { return "unreadable"; }
+      return false;
+    }, null, { polling: 100, timeout: 10000 }).then((h) => h.jsonValue(), () => "blank-after-10s");
+    out.softBlitWaitMs = Date.now() - t0;
     const r = await bounded(() => page.screenshot({ path: shot, fullPage: false }), 30000, "screenshot");
     out.shot = (r && r.error) ? null : shot;
     if (r && r.error) out.shotError = r.error;

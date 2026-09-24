@@ -4,6 +4,36 @@
 "use strict";
 
 (function () {
+  // The smallest InstancedMesh capacity three draws from instance-rate
+  // attributes instead of a uniform block named after the node (see the note
+  // at iByBatch below): max(n, floor(limit / 64) + 1). Shared by the shadow
+  // casters here and TLX's lit instanced batches, which have the same
+  // one-program-per-object property. Cached per renderer.
+  const _uboCap = new WeakMap();
+  // A/B and escape hatch: apex26.tlxInstPad=0 allocates at the real count
+  // (the per-object programs come back). Census 224 lost the WebGL context on
+  // three's WebGL2 control leg with the pad in; this is how one commit is
+  // measured both ways on the same runner.
+  let _padOff = null;
+  function uboInstCap(renderer, n) {
+    if (_padOff === null) {
+      try { _padOff = localStorage.getItem("apex26.tlxInstPad") === "0"; } catch (_) { _padOff = false; }
+    }
+    if (_padOff) return n | 0;
+    let cap = _uboCap.get(renderer);
+    if (!cap) {
+      let lim = 65536;   // WebGPU's default maxUniformBufferBindingSize (TLX requests no limits)
+      try {
+        const caps = renderer.backend && renderer.backend.capabilities;
+        const l = caps && caps.getUniformBufferLimit ? caps.getUniformBufferLimit() : 0;
+        if (l > 0) lim = l;
+      } catch (_) { /* no capabilities: keep the WebGPU default */ }
+      cap = Math.floor(lim / 64) + 1;
+      _uboCap.set(renderer, cap);
+    }
+    return Math.max(n | 0, cap);
+  }
+
   function shadowSys(THREE, TSL, ctx) {
     const renderer = ctx.renderer;
     // Keyed on the DEVICE, not the memory tier — js/render/glx/shadow.js's rule,
@@ -215,19 +245,7 @@
     // ever entered a shadow box. `count` still limits the draw to the culled set.
     const iByBatch = new Map();   // batch -> InstancedMesh (sized past the UBO limit)
     const iCast = [];             // this pass's casts, hidden again at the next Begin
-    let _uboInstCap = 0;          // smallest capacity three draws from attributes
-    function sharedInstCap(n) {
-      if (!_uboInstCap) {
-        let lim = 65536;   // WebGPU's default maxUniformBufferBindingSize (TLX requests no limits)
-        try {
-          const caps = renderer.backend && renderer.backend.capabilities;
-          const l = caps && caps.getUniformBufferLimit ? caps.getUniformBufferLimit() : 0;
-          if (l > 0) lim = l;
-        } catch (_) { /* no capabilities: keep the WebGPU default */ }
-        _uboInstCap = Math.floor(lim / 64) + 1;
-      }
-      return Math.max(n, _uboInstCap);
-    }
+    const sharedInstCap = (n) => uboInstCap(renderer, n);
     // Scratch for setMatrixAt — never allocate per cast (was per-instance GC).
     const _castMat = new THREE.Matrix4();
     function castInstanced(batch, count) {
@@ -475,5 +493,5 @@
     };
   }
 
-  window.TLXShaders = Object.assign(window.TLXShaders || {}, { shadowSys });
+  window.TLXShaders = Object.assign(window.TLXShaders || {}, { shadowSys, uboInstCap });
 })();

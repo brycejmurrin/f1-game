@@ -1356,7 +1356,14 @@ const TLX = (function () {
         }
         const geo = buildGeometry(data);
         const n = (matrices.length / 16) | 0;
-        const imesh = new THREE.InstancedMesh(geo, unlitMat, n);
+        // Allocated PAST three's uniform-buffer limit (tlx-shadow.js
+        // uboInstCap): at or under it, three names the instance block after
+        // the node, so every batch is its own program and each one first seen
+        // mid-lap compiled on the main thread (the probe counted 44 instanced
+        // programs in five jumps). Padded, the batches share their material's
+        // program. tlxInstCap stays n: count and uploads never touch the pad.
+        const cap = (window.TLXShaders && TLXShaders.uboInstCap) ? TLXShaders.uboInstCap(renderer, n) : n;
+        const imesh = new THREE.InstancedMesh(geo, unlitMat, cap);
         imesh.matrixAutoUpdate = false;
         imesh.frustumCulled = false;
         imesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -1617,6 +1624,7 @@ const TLX = (function () {
       let frameAllLights = null;    // frame.allLights — the full baked track set
       let framePerChunk = 0;        // frame.perChunkLights — the 0..1 knob
       let _lgKey = null, _lgSrc = null, _lgChunks = null;   // bake-once cache
+      let frameAllLightsGen = -1, _lgGen = -1;   // colour-only refresh (allLightsGen)
       // READ-BACK, not a log line. docs/ARCHITECTURE.md §Boot evidence: a unit
       // test of a renderer backend is not evidence that it RUNS, and no
       // software adapter can show whether this path looks right — so the one
@@ -1904,6 +1912,7 @@ const TLX = (function () {
         const ud = m.userData;
         ud.tlxEmissive = rec && rec.em !== undefined ? rec.em : undefined;
         ud.tlxAlpha = rec && rec.al !== undefined ? rec.al : undefined;
+        ud.tlxLgRoad = rec && rec.lg ? 1 : 0;   // PER-CHUNK ROAD: the road draw only
         geo.__tlxDrawnBatch = _poolBatch;   // uploaded by the render that closes THIS batch
         m.__tlxBatch = _poolBatch;
         m.__tlxSeen = (typeof performance !== "undefined" ? performance.now() : Date.now());
@@ -3055,7 +3064,10 @@ const TLX = (function () {
           // frame-lights.js fills allLights only while the knob is on, so a null
           // here is the feature being OFF rather than data going missing.
           frameAllLights = (frame && frame.allLights) || null;
+          frameAllLightsGen = frame && frame.allLightsGen != null ? +frame.allLightsGen : -1;
           framePerChunk = +(frame && frame.perChunkLights) || 0;
+          if (lit && lit.uniforms && lit.uniforms.lgRoad)
+            lit.uniforms.lgRoad.value = (framePerChunk > 0 && +(frame && frame.roadChunkLamps) > 0) ? 1.0 : 0.0;
           _postF.proj = (frame && frame.proj) || null;
           // GL convention on BOTH backends: tsl-post reconstructs with d*2-1, and
           // the depth texture stores 0.5*z_gl+0.5 under WebGPU's Z01 remap too.
@@ -3095,7 +3107,8 @@ const TLX = (function () {
           pinSkyMaterial();
         },
         draw(mesh, model, opts) {
-          if (mesh && mesh.geo) drawList.push({ geo: mesh.geo, m: poolModelMat(model), mat: materialFor(opts, false), em: drawEm(opts), al: drawAl(opts) });
+          if (mesh && mesh.geo) drawList.push({ geo: mesh.geo, m: poolModelMat(model), mat: materialFor(opts, false), em: drawEm(opts), al: drawAl(opts),
+            lg: opts && opts.surfaceId === 16 ? 1 : 0 });
         },
         drawChunked(mesh, model, opts) {
           if (!mesh) return;
@@ -3293,7 +3306,12 @@ const TLX = (function () {
                   note = "TLX per-chunk lamp bake failed - " + e;
                 }
                 try { Log.info("gfx", note); } catch (_) {}
-                _lgKey = key; _lgSrc = AL; _lgChunks = first;
+                _lgKey = key; _lgSrc = AL; _lgChunks = first; _lgGen = frameAllLightsGen;
+              } else if (_lgGen !== frameAllLightsGen && lit.setLampGridColors) {
+                // Same set, new VALUES (warm-up, twilight, flicker, LAMP LEVEL):
+                // colours only — the tables and positions are still valid.
+                lit.setLampGridColors(AL);
+                _lgGen = frameAllLightsGen;
               }
             }
           }
