@@ -45,6 +45,7 @@ const GameAudio = (function () {
   let revFlare = 0, revFlareT = 0;                           // downshift throttle-blip overshoot (see shift)
   let carSfxLast = { scrub: 0, lock: 0, surface: 0, pitLim: 0 };   // test hook
   let pitGunFired = 0;
+  let pitLimLvl = 0;                                          // 0..1 from setCarSfx; applied in setEngine
 
   // RIVAL ENGINES. The game had no opponent audio at all and no panner anywhere
   // in the graph, so a car alongside was silent and the only cue you had for it
@@ -1243,7 +1244,7 @@ const GameAudio = (function () {
     voiceFormant = ersHp = ersGain = windFilter = windGain = tiltEq = null;
     brakeFilter = brakeGain = null;
     scrubFilter = scrubGain = lockFilter = lockGain = surfFilter = surfGain = null;
-    revFlare = 0;
+    revFlare = 0; pitLimLvl = 0;
     subOctOsc = subOctGain = null;
     convolver = revSend = revReturn = null;
     rivalVoices = [];
@@ -1424,7 +1425,15 @@ const GameAudio = (function () {
       limPitch.gain.setTargetAtTime(limCents, t, 0.02);
       limPitch._apexCents = limCents;
     }
-    const engBase = (lvl - limDepth) * (1 - 0.55 * shiftDuck) * camMix.engine;
+    // PIT LIMITER, the same shape as the rev limiter: the base comes DOWN by
+    // the depth and the square swings +-depth on top, so the stutter only ever
+    // cuts (trough ~0.56 of the level) — riding the square on the full base
+    // made the engine 45% LOUDER half of every cycle. Quantised so a steady
+    // lane is not rescheduled every frame.
+    const mult = (1 - 0.55 * shiftDuck) * camMix.engine;
+    const pitDepth = Math.round(pitLimLvl * Math.max(0, Math.min(lvl * 0.22, lvl * 0.5 - limDepth)) * mult * 1000) / 1000;
+    if (pitLimGain && pitLimGain._apexTgt !== pitDepth) { pitLimGain.gain.setTargetAtTime(pitDepth, t, 0.03); pitLimGain._apexTgt = pitDepth; }
+    const engBase = (lvl - limDepth) * mult - pitDepth;
     engGain.gain.setTargetAtTime(engBase, t, 0.03);
 
     // GRAVEL (see startEngine). Rate is the CRANK rate: the recording's
@@ -1444,7 +1453,7 @@ const GameAudio = (function () {
       }
       const lump = (1 - rev) * (1 - rev);
       const want = layers.gravel ? engBase * 0.55 * lump * tune.gravel : 0;
-      aimGain(gravGain, Math.min(want, Math.max(0, engBase - limDepth)), t, 0.05);
+      aimGain(gravGain, Math.min(want, Math.max(0, engBase - limDepth - pitDepth)), t, 0.05);
     }
 
     // Turbo whine: in low gears (1-3) mechanical supercharger character — the
@@ -1713,10 +1722,8 @@ const GameAudio = (function () {
     aimGain(lockGain, lock * (wet ? 0.05 : 0.09) * on, t, 0.03);
     aimGain(surfGain, surf * 0.22, t, 0.08);
     if (surf > 0) surfFilter.frequency.setTargetAtTime(120 + 160 * surf, t, 0.1);
-    // Depth is a share of the live engine level, so the stutter is audible at
-    // any engine trim and never pushes engGain.gain negative.
-    const pDepth = pit * 0.45 * (engGain ? engGain.gain.value : 0);
-    if (pitLimGain._apexTgt !== pDepth) { pitLimGain.gain.setTargetAtTime(pDepth, t, 0.03); pitLimGain._apexTgt = pDepth; }
+    // The depth is set in setEngine, against the engine's own base (see there).
+    pitLimLvl = layers.limiter === false ? 0 : pit;
     carSfxLast.scrub = scrub; carSfxLast.lock = lock; carSfxLast.surface = surf; carSfxLast.pitLim = pit;
   }
 
@@ -2846,7 +2853,7 @@ const GameAudio = (function () {
     pitGun,
     setCameraMix,
     cameraMix: () => ({ kind: camKind, ...camMix }),
-    carSfx: () => ({ ...carSfxLast, pitGuns: pitGunFired, revFlare: +revFlare.toFixed(4) }),
+    carSfx: () => ({ ...carSfxLast, pitGuns: pitGunFired, revFlare: +revFlare.toFixed(4), pitDepth: pitLimGain ? pitLimGain._apexTgt || 0 : 0 }),
     shift,
     lightOn,
     lightsOut,
