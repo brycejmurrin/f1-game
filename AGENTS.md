@@ -155,6 +155,8 @@ pre-push or deploy → `check-changes` (spawns `verify-agent`; `--base <ref>` is
 the "was it already red?" check); live `version.json` → `deploy-research`;
 dead code / fat skill → `slim-bloat` and `bloat-auditor`.
 
+WEB RESEARCH IS PART OF DESIGN: before building a tool, a workflow or CI change, or using an API you have not checked this session, read the current docs — `WebSearch` to find them, `WebFetch` to read them (Context7 for library APIs) — and cite the URLs in the commit message, PR body or `docs/notes/`. Training-data memory of a CLI flag, a limit or a default is not evidence. It is the default work while a run is live (rule 4); bulk or post-deploy web reading goes to the `deploy-research` subagent.
+
 Hooks (`.claude/hooks/`, wired by `.claude/settings.json`): `session-start.sh` installs deps and prints the orientation line (also after a compaction); `protect-files.sh` blocks generated-file edits and source edits during a live browser run; `bash-guard.sh` runs the guards before `git commit`, blocks `pkill -f` and PID kills of a test-bg run, and blocks a browser run inside a subagent; `post-edit.sh` (PostToolUse, advisory) says at once when a `js/` edit does not parse, staled a generated file or broke a circuit build;
 `stop-guard.sh` nudges once when a turn would end over a live run (`live-run.py` is the one "live in this checkout?" test); `memory-sync.sh` carries auto memory across cloud containers (`docs/notes/AGENT-MEMORY.md`). `touch .claude/allow-protected` lifts every edit rule except the live-run one. Never duplicate skills or agents under `.cursor/`.
 
