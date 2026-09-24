@@ -3678,7 +3678,7 @@ function menuGridCars() {
     makeCars();
     const order = flybyGridOrder();
     cars = order || cars;
-    FlybySeq.setPlayerSlot(order ? order.indexOf(player) : null);   // null: not knowable yet, so no grid-mine shot
+    FlybySeq.setPlayerSlot(order ? order.indexOf(player) : null, cars.length);   // null: not knowable yet, so no grid-mine shot
     for (let i = 0; i < cars.length; i++) {
       const c = cars[i], slot = TrackMesh.gridSlot(track, i);
       c.s = wrapS(slot.s); c.x = slot.x; c.xVis = c.x;
@@ -3729,8 +3729,8 @@ function raceIntro(go) {
   // And fly the shots the EDITOR saved, for the same reason: a list edited in
   // the pause menu is only read here, so every run picks up the latest one.
   reloadFlybyShots();
-  if (!flybyShots) flybyShots = FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0, FlybySeq.slotKnown());   // a different flyby each load (never the sim RNG); an editor-saved list plays as authored
-  if (flybyShots && !FlybySeq.slotKnown()) flybyShots = FlybySeq.withoutSlot(flybyShots);   // a random grid: nobody knows your slot yet
+  if (!flybyShots) flybyShots = FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0);   // a different flyby each load (never the sim RNG); an editor-saved list plays as authored
+  if (flybyShots) flybyShots = FlybySeq.withoutSlot(flybyShots);   // nobody knows your slot on a random grid; a small grid has empty boxes
   if (world) FlybySeq.warm(track, flybyShots);   // plan the opening shots now, the rest in slices before their cuts
   loadingScreen.run(loadingInfo(), go);
 }

@@ -59,9 +59,18 @@ const FlybySeq = (function () {
   let _slotKnown = true;
   /** `null` = the race's grid cannot be known before it forms (a random grid):
    *  slotKnown() goes false and vary() leaves the grid-mine shot out. */
-  function setPlayerSlot(k) { _slotKnown = k !== null; _playerSlot = (k >= 0 && k === (k | 0)) ? k : PLAYER_SLOT_DEFAULT; }
+  /** `n` = cars on the grid (a time trial seats one, a duel two): a shot aimed
+   *  at a NUMBERED slot past it would film an empty box, so it is left out. */
+  let _gridSize = 22;
+  function setPlayerSlot(k, n) {
+    _slotKnown = k !== null; _playerSlot = (k >= 0 && k === (k | 0)) ? k : PLAYER_SLOT_DEFAULT;
+    _gridSize = n > 0 ? n | 0 : 22;
+  }
   function slotKnown() { return _slotKnown; }
-  const usesSlot = (shot) => [shot.eye[0], shot.eye[1], shot.look[0], shot.look[1]].some((p) => p && p.at === "slot");
+  const slotPoses = (shot) => [shot.eye[0], shot.eye[1], shot.look[0], shot.look[1]].filter((p) => p && p.at === "slot");
+  const usesSlot = (shot) => slotPoses(shot).length > 0;
+  /** Can this grid play the shot? Your car needs a known slot; a numbered slot needs a car in it. */
+  const fitsGrid = (shot) => slotPoses(shot).every((p) => (p.n === "player" || p.n === undefined) ? _slotKnown : (p.n | 0) < _gridSize);
   function slotIndex(pose) { return pose.n === "player" || pose.n === undefined ? _playerSlot : Math.max(0, pose.n | 0); }
   /** gridSlot()'s stagger (js/track/core/mesh.js): even slots left, odd right,
    *  min(0.4 hw, 3) m off the centreline — pinned against mesh.js by the test. */
@@ -912,14 +921,14 @@ const FlybySeq = (function () {
   const DEFAULT = [
     // ---- establish: where are we -------------------------------------------
     {
-      id: "wide", dur: 0.11, ease: "inOut",
+      id: "wide", dur: 0.09, ease: "inOut",
       eye: [{ at: "centre", bear: -0.30, distR: 1.10, yR: 0.36 },
             { at: "centre", bear: -0.12, distR: 1.00, yR: 0.32 }],
       look: [{ at: "centre", distR: 0, yR: 0 }, { at: "centre", distR: 0, yR: 0 }],
       fov: [36, 38],
     },
     {
-      id: "wide2", dur: 0.09, ease: "inOut",
+      id: "wide2", dur: 0.08, ease: "inOut",
       eye: [{ at: "centre", bear: 2.35, distR: 0.80, yR: 0.30 },
             { at: "centre", bear: 2.55, distR: 0.70, yR: 0.25 }],
       look: [{ at: "centre", distR: 0, yR: 0 }, { at: "centre", distR: 0, yR: 0 }],
@@ -927,14 +936,14 @@ const FlybySeq = (function () {
     },
     // ---- this circuit in particular ----------------------------------------
     {
-      id: "landmark1", dur: 0.10, ease: "inOut",
+      id: "landmark1", dur: 0.09, ease: "inOut",
       eye: [{ at: "landmark", rank: 0, bear: -0.28, distK: 1.7, yK: -0.15, y: 12 },
             { at: "landmark", rank: 0, bear: -0.08, distK: 1.5, yK: -0.1, y: 12 }],
       look: [{ at: "landmark", rank: 0, distK: 0, yK: 0.2 }, { at: "landmark", rank: 0, distK: 0, yK: 0.25 }],
       fov: [38, 40],
     },
     {
-      id: "landmark2", dur: 0.09, ease: "inOut",
+      id: "landmark2", dur: 0.08, ease: "inOut",
       eye: [{ at: "landmark", rank: 1, bear: 0.30, distK: 1.8, yK: -0.1, y: 12 },
             { at: "landmark", rank: 1, bear: 0.10, distK: 1.6, yK: -0.05, y: 12 }],
       look: [{ at: "landmark", rank: 1, distK: 0, yK: 0.15 }, { at: "landmark", rank: 1, distK: 0, yK: 0.2 }],
@@ -942,7 +951,7 @@ const FlybySeq = (function () {
     },
     // ---- the corners you will actually drive --------------------------------
     {
-      id: "turn-first", dur: 0.10, ease: "inOut",
+      id: "turn-first", dur: 0.09, ease: "inOut",
       eye: [{ at: "corner", n: "first", off: -60, x: 16, y: 9 },
             { at: "corner", n: "first", off: 0, x: 18, y: 8 }],
       look: [{ at: "corner", n: "first", off: -12, x: 0, y: 0.6 },
@@ -975,7 +984,17 @@ const FlybySeq = (function () {
     // of pole (fixed in PR #248: the road draws unbiased), so the grid can now
     // be filmed from the front again.
     {
-      id: "grid-crane", dur: 0.10, ease: "inOut",
+      id: "grid-walk", dur: 0.08, ease: "inOut",
+      // THE GRID WALK: head height, a slow dolly up the aisle between the
+      // staggered rows (the pole anchor is the centreline), eyes on the cars a
+      // row or two ahead — the TV walk before the formation lap. Numbered slots:
+      // a grid too small to fill them (time trial, duel) leaves it out.
+      eye: [{ at: "pole", off: -44, x: 0, y: 1.6 }, { at: "pole", off: -37, x: 0, y: 1.6 }],
+      look: [{ at: "slot", n: 4, off: 0, x: 0, y: 0.6 }, { at: "slot", n: 3, off: 0, x: 0, y: 0.6 }],
+      fov: [50, 46],
+    },
+    {
+      id: "grid-crane", dur: 0.09, ease: "inOut",
       // A slow crane up behind the back row, long lens: the whole field stacked
       // up towards the lights.
       // On the aisle's line and tight behind the last row: from 6 m left and
@@ -989,7 +1008,7 @@ const FlybySeq = (function () {
       fov: [30, 32],
     },
     {
-      id: "grid-front", dur: 0.11, ease: "inOut",
+      id: "grid-front", dur: 0.10, ease: "inOut",
       // THE FRONT ROW, FROM THE START LINE, looking back down the grid: pole
       // big in frame and the field stacked behind it. Close and a little off
       // the aisle — measured with frame-report across eight circuits, 40+ m
@@ -1042,7 +1061,7 @@ const FlybySeq = (function () {
     const next = () => { if (gen !== _warmGen || i >= list.length) return; plan(i++); setTimeout(next, 0); };
     if (i < list.length) setTimeout(next, 0);
   }
-  const withoutSlot = (list) => { const out = list.filter((shot) => !usesSlot(shot)); return out.length ? out : list; };
+  const withoutSlot = (list) => { const out = list.filter(fitsGrid); return out.length ? out : list; };
   function solve(track, u, shots) {
     const list = bindCorners(track, (shots && shots.length) ? shots : DEFAULT);
     let total = 0;
@@ -1424,8 +1443,8 @@ const FlybySeq = (function () {
      the handoff to the race. Pure and seeded (never the sim RNG): the same
      seed is the same flyby, which is what the test holds it to. */
   const VARY_ROLES = ["first", "lore", "slowest", "fastest", "mid", "late"];
-  function vary(list, seed, slotOk) {
-    if (slotOk === false) list = list.filter((shot) => !usesSlot(shot));   // durations renormalise in solve()
+  function vary(list, seed) {
+    list = list.filter(fitsGrid);   // durations renormalise in solve()
     let h = (seed >>> 0) || 1;
     const rnd = () => { h ^= h << 13; h >>>= 0; h ^= h >>> 17; h ^= h << 5; h >>>= 0; return h / 4294967296; };
     const used = {}, swapLm = rnd() < 0.35;   // decided ONCE: swapping one landmark shot alone films the same landmark twice
