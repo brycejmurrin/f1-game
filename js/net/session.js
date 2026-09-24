@@ -72,6 +72,7 @@ const NetSession = (function () {
       return false;
     }
     let lastHeardAt = null;            // null until the first packet ever
+    let firstPumpAt = null;            // open-but-silent transports need a deadline too
     let best = null;                   // { rtt, offset } — lowest-RTT sample
     let samples = [];
     let alive = true;
@@ -103,19 +104,20 @@ const NetSession = (function () {
 
     function onStateBytes(data, now) {
       const dv = NetSnapshot.toView(data);
-      if (!dv || !dv.byteLength) return;
+      if (!dv || !dv.byteLength) return false;
       const type = dv.getUint8(0);
 
       if (type === PING) {
         if (dv.byteLength >= PING_BYTES) {
           transport.send(CH_STATE, encodePong(dv.getUint32(1), dv.getFloat64(5), now));
+          return true;
         }
-        return;
+        return false;
       }
       if (type === PONG) {
         if (dv.byteLength >= PONG_BYTES) {
           const id = dv.getUint32(1), t0 = dv.getFloat64(5), t1 = dv.getFloat64(13);
-          if (!takePing(id, t0)) return;   // not a ping of ours, or already answered
+          if (!takePing(id, t0)) return false;   // not a ping of ours, or already answered
           const roundTrip = now - t0;
           // Assume a symmetric path: their t1 lines up with our midpoint.
           addSample(roundTrip, t1 - (t0 + roundTrip / 2));
@@ -125,13 +127,15 @@ const NetSession = (function () {
           heldState = null;
           deliverState(held.data, held.now);
         }
-        return;
+        return synced();
       }
+      const valid = !!NetSnapshot.decodeSnapshot(dv);
       if (!synced()) {
         heldState = { data: data, now: now };
-        return;
+        return valid;
       }
       deliverState(data, now);
+      return valid;
     }
 
     function deliverState(data, now) {
@@ -143,13 +147,14 @@ const NetSession = (function () {
     function onEventJson(data) {
       let msg;
       try { msg = JSON.parse(typeof data === "string" ? data : new TextDecoder().decode(NetSnapshot.toView(data))); }
-      catch (e) { return; }            // malformed event: drop, never throw
-      if (!msg || typeof msg.t !== "string") return;
+      catch (e) { return false; }            // malformed event: drop, never throw
+      if (!msg || typeof msg.t !== "string") return false;
       const list = eventHandlers.get(msg.t);
-      if (!list) return;
+      if (!list) return false;
       for (const fn of list) {
         try { fn(msg.d, msg.t); } catch (e) { /* as above */ }
       }
+      return true;
     }
 
     transport.onMessage((channel, data, at) => {
@@ -158,9 +163,9 @@ const NetSession = (function () {
       // Pump-time stamping put up to a frame of scheduling into every RTT
       // sample and PONG t1 (the C-12 skew).
       const t = at != null ? at : lastNow;
-      lastHeardAt = t;
-      if (channel === CH_STATE) onStateBytes(data, t);
-      else onEventJson(data);
+      const valid = channel === CH_STATE ? onStateBytes(data, t)
+        : channel === CH_EVENT ? onEventJson(data) : false;
+      if (valid) lastHeardAt = t;
     });
     // `released` latches "the transport is closed" SEPARATELY from `alive`
     // ("this session's bookkeeping is over"). Conflating them was the leak
@@ -188,7 +193,9 @@ const NetSession = (function () {
     function pump(now) {
       const gap = lastNow ? now - lastNow : 0;   // 0 = never pumped, not a stall
       if (gap > cfg.stallForgiveMs && lastHeardAt != null) lastHeardAt += gap;
+      if (gap > cfg.stallForgiveMs && firstPumpAt != null) firstPumpAt += gap;
       lastNow = now;
+      if (firstPumpAt == null && transport.status !== "connecting") firstPumpAt = now;
       if (transport.pump) transport.pump(now);
 
       const pingGap = synced() ? cfg.pingEveryMs : cfg.syncPingEveryMs;
@@ -200,9 +207,10 @@ const NetSession = (function () {
                (sentPings.length > 1 && now - sentPings[0].t0 > MAX_PLAUSIBLE_RTT_MS)) sentPings.shift();
         transport.send(CH_STATE, encodePing(id, now));
       }
-      // Only start the death clock once we have actually heard from them, so
-      // a slow connect is never mistaken for a disconnect.
-      if (alive && lastHeardAt != null && now - lastHeardAt > cfg.timeoutMs) {
+      // A connecting transport gets its own ICE window. Once open, a silent
+      // peer is bounded even if no first protocol frame ever arrives.
+      const heardOrOpen = lastHeardAt == null ? firstPumpAt : lastHeardAt;
+      if (alive && heardOrOpen != null && now - heardOrOpen > cfg.timeoutMs) {
         alive = false;
         release();   // idempotent — a transport that throws is already gone,
                      // and this path exists precisely because the peer

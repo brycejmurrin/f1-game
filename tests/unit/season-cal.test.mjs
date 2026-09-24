@@ -200,6 +200,21 @@ test("a foreign season save conflicts before standings mutate or stale data writ
   assert.equal(stored.get("season"), winner);
 });
 
+test("setup apply refuses a foreign season before changing active rules", () => {
+  const { S, stored, foreign } = load({ seasonCfg: { trackIds: ["monza"], points: "modern" },
+    season: { round: 0, pts: {}, teamPts: {}, driverCodes: {} } });
+  S.engage("season");
+  const local = S.load();
+  const winner = { round: 1, pts: { d0: 25 }, teamPts: {}, driverCodes: {}, config: local.config };
+  stored.set("season", winner); foreign("season");
+  const result = S.applyConfig({ trackIds: ["kyalami"], points: "classic" });
+  assert.equal(result.reason, "conflict");
+  assert.equal(result.season, null);
+  assert.equal(S.track(0).id, "monza");
+  assert.equal(stored.get("season"), winner);
+  assert.equal(stored.get("seasonCfg").points, "modern");
+});
+
 // ── the calendar gate ─────────────────────────────────────────────────────────
 
 test("the calendar is the player's in season AND in gp, but never in career", () => {
