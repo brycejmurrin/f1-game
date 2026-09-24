@@ -131,6 +131,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // run from emitting its shared end node twice, and one of those duplicate
 // panels was also an interpenetrating pair here. No prop moved — one stopped
 // being emitted twice.
+// suzuka 2 -> 1 (2026-09-24): SRTM elevation bake for the stair-step twins
+// dropped one severe cone×cyl pair; measured, not assumed.
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "track", "clip-baseline.json"), "utf8"),
 );
