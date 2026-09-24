@@ -45,8 +45,19 @@ function applyRaceSettings() {
   // Pre-build the lamp set at race start so the first dark-session frame is
   // never unlit (the render path rebuilds it if empty as a fallback). Floodlights
   // are used on ANY track at night/dusk/dawn, so build whenever the scene is dark.
-  const floodActive = isFloodActiveSession();
-  if (floodActive && G.track && (!G.track._lights || !G.track._lights.length)) G.track._lights = buildTrackLights(G.track);
+  // DAYTIME LAMPS (LT.floodDay > 0, resolved by applyLightTune above) light the
+  // same set by day: the render loop gates on exactly (floodActive || floodDay).
+  const floodLit = isFloodActiveSession() || LT.floodDay > 0;
+  if (floodLit && G.track && (!G.track._lights || !G.track._lights.length)) G.track._lights = buildTrackLights(G.track);
+  // ...and bake its ground pools now, not on the first lit frame (a hitch there).
+  // Pre-race this bakes SYNC under the loading screen (a same-circuit restart with
+  // new weather keeps the track but rebuilds _lights: the debounced path would
+  // draw the OLD bake into the race). Mid-race (setWeatherLive swaps the preset
+  // profile, whose rebuild knobs null _lights) it must never block: false keeps
+  // the drawing bake while the new one is sliced over frames.
+  const midRace = G.state === "race" || G.state === "count";
+  if (floodLit && G.track && G.gfx && G.gfx.hasLampBake && LT.lampBake > 0 && !(LT.tailLightEmit > 0))
+    LampBake.forTrack(G.track, G.track._lights, LT.lampNearClamp, undefined, !midRace, LampBake.budget(G.gfx));
   if (G.raceTimeOfDay !== "default") {
     const night = G.raceTimeOfDay === "night";
     G.frameSky.stars = night ? 1 : 0;
@@ -470,7 +481,19 @@ function _trackAtmoBias(def) {
   if (def.theme === "street_night") return -0.10;
   return 0;
 }
-return { applyRaceSettings };
+// MENU LAMP PRE-BAKE (scheduleFlybyTrack): the lamp half of applyRaceSettings
+// for the menu-built track and the chosen time/weather — the same resolved LT,
+// the same _lights array, the same forTrack key — started as a sliced job
+// (LampBake.prebake) so the sync forTrack on the RACE! tap is a cache hit.
+// Returns step(ms) (true when done) or null when the session bakes nothing.
+function prebakeLamps() {
+  if (!G.track || !G.gfx || !G.gfx.hasLampBake) return null;
+  if (typeof applyLightTune === "function") applyLightTune(true);
+  if (!(isFloodActiveSession() || LT.floodDay > 0) || !(LT.lampBake > 0) || LT.tailLightEmit > 0) return null;
+  if (!G.track._lights || !G.track._lights.length) G.track._lights = buildTrackLights(G.track);
+  return LampBake.prebake(G.track, G.track._lights, LT.lampNearClamp, LampBake.budget(G.gfx));
+}
+return { applyRaceSettings, prebakeLamps };
 }
 
 return { create };

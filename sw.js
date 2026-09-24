@@ -101,11 +101,15 @@ async function precacheAssetLists() {
     "assets/fonts/barlow-condensed-latin-500-normal.woff2",
     "assets/fonts/barlow-condensed-latin-600-normal.woff2",
     "assets/fonts/barlow-condensed-latin-700-normal.woff2",
+    "assets/fonts/saira-apex26-800-italic.woff2",
     // @gen-shell:sw-optional
     // DEFERRED renderer backends (no <script> tag; injected on opt-in)
     "js/render/webgpu/wgsl-chunks.js",
     "js/render/webgpu/wgsl-post.js",
     "js/render/webgpu/wgsl-fx.js",
+    "js/render/webgpu/wgx-shadow.js",
+    "js/render/webgpu/wgx-chunked.js",
+    "js/render/webgpu/wgx-post.js",
     "js/render/webgpu/wgx.js",
     "js/render/three/tsl-chunks.js",
     "js/render/three/tsl-lit.js",

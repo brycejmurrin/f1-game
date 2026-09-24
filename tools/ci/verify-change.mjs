@@ -289,6 +289,12 @@ for (let i = 0; i < batches.length; i++) {
   const batch = batches[i];
   say(`batch START ${i + 1}/${batches.length}: ${batch.join(" ")} at=${new Date().toISOString()} ${loadavgLine()}`);
   const t0 = Date.now();
+  // test-bg refuses ANY start at 1-min loadavg >= 3, and the batch that just
+  // ended leaves the average above that for a minute or two — so batch 2 was
+  // recorded "refused" on a box that was merely settling. Wait for it (cap 5
+  // min); a box still hot after that is a real refusal and is reported as one.
+  for (const until = Date.now() + 5 * 60_000; os.loadavg()[0] >= 3 && Date.now() < until;)
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10_000);
   const started = spawnSync("node", ["tools/ci/test-bg.mjs", ...batch], { cwd: ROOT, encoding: "utf8", stdio: JSON_OUT ? "pipe" : "inherit" });
   if (started.status !== 0) {
     allOk = false;

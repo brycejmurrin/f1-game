@@ -30,19 +30,23 @@
       m.blendSrcAlpha = THREE.ZeroFactor;   // dst alpha preserved (SSR tag / canvas)
       m.blendDstAlpha = THREE.OneFactor;
       if (o.offset) {
-        // Decals sit ON the road. GLX draws them at polygonOffset(-4,-8) over an
-        // UNBIASED road; three honours the road's own depthBias [-8,-16]
-        // (game.js _wmRoad*, tsl-lit.js) on both backends, so a decal at -4/-8
-        // lands BEHIND the road and every fx quad — blob shadow, tyre mark,
-        // skid, the driving line — failed the depth test on real hardware
-        // (gpu-census 48, Apple GPU: chevrons on GLX and WGX, none on TLX;
-        // reproduced on lavapipe, artifacts/tlx-line 2026-09-08). Road bias
-        // plus GLX's decal margin: -12/-24.
+        // Decals sit ON the road: GLX's ROAD_BIAS (-4,-8) over an UNBIASED road
+        // (game.js _wmRoad* carry no depthBias). This was -12/-24 while the road
+        // itself drew at [-8,-16] (gpu-census 48, 2026-09-08); must stay beyond
+        // the road's bias, which gfx-backend-canary pins.
         m.polygonOffset = true;
-        m.polygonOffsetFactor = -12;
-        m.polygonOffsetUnits = -24;
+        m.polygonOffsetFactor = -4;
+        m.polygonOffsetUnits = -8;
       }
-      if (o.doubleSided) m.side = THREE.DoubleSide;   // GLX disables CULL_FACE
+      // GLX disables CULL_FACE and draws ONE pass. three splits a transparent
+      // DoubleSide material into a back pass and a front pass unless
+      // forceSinglePass is set — two draws and two pipelines per FX record, and
+      // compileAsync builds neither of them (it compiles the DoubleSide state),
+      // so the particle groups compiled both mid-race even when warmed
+      // (PERF-FINDINGS §2ah, pipeline keys differing only in side 2 vs 1/0).
+      // Every double-sided FX surface is a billboard, a road ribbon or a flat
+      // decal, where the back/front split orders nothing.
+      if (o.doubleSided) { m.side = THREE.DoubleSide; m.forceSinglePass = true; }
       m.lights = false;
       m.customProgramCacheKey = () => (o.key || "tlx-fx") + (m.mrtNode ? "-mrt" : "");
       return m;

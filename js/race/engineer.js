@@ -156,7 +156,7 @@ const RaceEngineer = (function () {
       // drying track — read exactly as PitLane.think reads it for an AI car, so
       // the advice the player gets and the call the field makes cannot diverge.
       const wantTread = TyreModel.treadFor(G.raceWeather, G.roadWetness && G.roadWetness());
-      const caution = G.cautionInfo ? G.cautionInfo() : null;
+      const cautionLvl = G.cautionLevel ? G.cautionLevel() : 0;   // per step: the allocation-free read
       const pit = G.pits && G.pits.estimate(c);
       const armed = !!c.pitArmed || (c.pitState && c.pitState !== "none");
       // "Rain in N laps" needs a lap estimate and the arc is in SECONDS. The
@@ -209,7 +209,7 @@ const RaceEngineer = (function () {
         // A discounted stop needs something to gain: a part-used set.
         // The estimate includes lane travel and stationary service time.
         pitLoss: pit ? pit.lossS : null,
-        freeStop: !armed && !!caution && caution.level >= 2 && caution.level < 4 && wear >= 0.35,
+        freeStop: !armed && cautionLvl >= 2 && cautionLvl < 4 && wear >= 0.35,
         wet: wantTread > 0,
         rainInLaps: !armed && arc && WET.indexOf(arc.to) >= 0 && lapS > 0 && left > 0
           ? Math.max(1, Math.round(left / lapS)) : null,

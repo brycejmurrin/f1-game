@@ -12,7 +12,7 @@
               marshalPost, gantry, fence, guardrail, tyreWall, wall,
               modelGroup, overheadSpan, groundPatch, circuitKit, ATM, onTrack,
               grandstandEx, spectatorHill, broadcastCompound, sponsorHoarding,
-              waterSurface, terrainYAt, bakedModel, along } = api;
+              waterSurface, terrainYAt, bakedModel, along, foundation } = api;
 
       // 1. Cool Ardennes atmosphere — grey zenith/horizon/fog; kill alpine sun.
       if (ATM && ATM.dampArdennes) Object.assign(pal, ATM.dampArdennes);
@@ -103,7 +103,8 @@
       motorhome(Math.round(n * 0.006) % n, -1, 24, 15, 7, 18, { wall: [0.82, 0.84, 0.88], window: [0.32, 0.40, 0.48] });
       motorhome(Math.round(n * 0.994) % n, -1, 24, 15, 7, 18, { wall: [0.86, 0.87, 0.90], window: [0.30, 0.38, 0.46] });
       // Lone weathered old pit building on the original Kemmel straight (s≈0.10, far left).
-      building(Math.round(n * 0.10) % n, -1, 40, 12, 9, 40, { kind: "chevron", wall: [0.74, 0.72, 0.66], window: [0.34, 0.34, 0.32], floor: 4 });
+      building(Math.round(n * 0.10) % n, -1, 40, 14, 9, 44,
+        { kind: "chevron", wall: [0.78, 0.76, 0.70], window: [0.36, 0.36, 0.34], floor: 4 });
       broadcastCompound(K(0.755), -1, 45, { vans: 3, dishes: 2, mastH: 9 });
 
       {
@@ -180,38 +181,44 @@
         });
       }
 
-      const GOLD4 = [0.46, 0.47, 0.50];   // darker concrete — Raidillon Gold 4 mass
-      grandstandEx(0.00, 1, 8, 46, null, null,
-        { livery: "darkSteel", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
-      grandstandEx(0.02, 1, 8, 26, null, null,
-        { livery: "crimson", roof: "truss", endWalls: true, h: 9 });
-      for (const [s, gp] of [[0.070, 8], [0.088, 9], [0.097, 9]]) {
-        grandstandEx(s, 1, gp, 26, GOLD4, [0.96, 0.46, 0.08],
-          { tiers: 2, roof: "cantilever", pylons: true, roofCol: [0.62, 0.63, 0.66], fasciaCol: GOLD4 });
+      const GOLD3 = [0.46, 0.47, 0.50];   // darker concrete — Raidillon Gold 3 mass
+      // La Source / pit grandstands ~s 0.00–0.02
+      grandstandEx(0.00, 1, 8, 52, null, null,
+        { livery: "darkSteel", tiers: 3, roof: "cantilever", suites: true, endWalls: true, pylons: true });
+      grandstandEx(0.018, 1, 8, 30, null, null,
+        { livery: "crimson", roof: "truss", endWalls: true, tiers: 2, h: 10 });
+      // Gold 3 Raidillon amphitheatre ~s 0.06–0.09: dual-bay stand row + jumbotron.
+      for (const [s, gp, len] of [[0.068, 8, 30], [0.080, 9, 32], [0.092, 9, 28]]) {
+        grandstandEx(s, 1, gp, len, GOLD3, [0.96, 0.46, 0.08],
+          { tiers: 2, roof: "cantilever", pylons: true, roofCol: [0.62, 0.63, 0.66], fasciaCol: GOLD3 });
       }
       ardennesTerrace("spa-terrace-raidillon", K(0.105), 1, 16, 7, { rows: 7 });
       {
-        // Gold amphitheatre hero: two unmistakable screen bays in one deep
+        // Gold 3 amphitheatre hero: two unmistakable screen bays in one deep
         // fascia mass, high enough to read from the Raidillon climb and Kemmel.
+        // Proven footprint K(0.085)/gap 19 — shifting along the climb rejects.
         const a = anchor(K(0.085), 1, 19), b = [a.r, a.u, a.t];
         const SCREEN = [0.025, 0.035, 0.055], FASCIA = [0.88, 0.52, 0.08];
+        const LEG = [0.30, 0.32, 0.34];
+        if (foundation) {
+          foundation(out, {
+            center: a.c, size: [3.4, 32], top: a.c[1] + 0.1,
+            basis: b, col: [0.42, 0.43, 0.45], embed: 0.7,
+          });
+        }
         modelGroup("spa-raidillon-gold-dual-jumbotron", {
           center: vadd(a.c, a.u, 7.2), size: [4.2, 14.4, 37], basis: b,
         }, (stage) => {
           stage._mat = MAT.METAL;
-          // Four grounded legs and a deep rear cabinet keep the display from
-          // reading as a thin billboard when seen obliquely from Kemmel.
+          // Four seated legs — seat.box puts the underside on the plinth/grade.
           for (const z of [-14.5, 14.5]) {
             for (const x of [-0.35, 1.05]) {
               const p = vadd(vadd(a.c, a.t, z), a.r, x);
-              addBox(stage, vadd(p, a.u, 3.0),
-                [0.8, 6.0, 0.8], [0.30, 0.32, 0.34], b);
+              seat.box(stage, p, [0.8, 6.0, 0.8], LEG, b);
             }
           }
           addBox(stage, vadd(vadd(a.c, a.r, 0.35), a.u, 9.4),
             [2.8, 8.0, 35], [0.12, 0.14, 0.16], b);
-          // Separate inset screens plus a bright centre mullion make the
-          // dual-bay arrangement legible at driver-eye distance.
           stage._mat = MAT.GLASS;
           for (const z of [-8.3, 8.3]) {
             addBox(stage, vadd(vadd(vadd(a.c, a.r, -1.10), a.t, z), a.u, 9.4),
@@ -227,10 +234,20 @@
           stage._mat = 0;
         }, { required: true });
       }
-      // Stepped banking slabs climbing the R hillside behind/beside the stands.
-      place(K(0.072), 1, 22, [10, 2.4, 16], GOLD4);
-      place(K(0.080), 1, 26, [11, 3.6, 18], [0.44, 0.45, 0.48]);
-      place(K(0.090), 1, 30, [12, 4.8, 20], [0.42, 0.43, 0.46]);
+      // Stepped banking slabs climbing the R hillside — seat.box (underside on grade).
+      {
+        const slabs = [
+          [0.066, 22, [10, 2.4, 16], GOLD3],
+          [0.074, 26, [11, 3.4, 18], [0.44, 0.45, 0.48]],
+          [0.082, 30, [12, 4.6, 20], [0.42, 0.43, 0.46]],
+          [0.090, 34, [13, 5.6, 18], [0.40, 0.41, 0.44]],
+          [0.098, 38, [12, 4.2, 16], [0.43, 0.44, 0.47]],
+        ];
+        for (const [s, dist, sz, col] of slabs) {
+          const a = anchor(K(s), 1, dist), b = [a.r, a.u, a.t];
+          seat.box(out, a.c, sz, col, b);
+        }
+      }
       sponsorHoarding(0.10, 0.18, -1, 3, { h: 1.2 });
       ardennesTerrace("spa-terrace-kemmel", K(0.135), -1, 14, 6, { rows: 5 });
       grandstandEx(0.16, 1, 8, 30, null, null,
@@ -411,12 +428,18 @@
       footbridge(0.125, [0.62, 0.34, 0.20]);   // Kemmel crossing
       footbridge(0.50,  [0.40, 0.42, 0.46]);   // mid-forest crossing
 
-      forestEdge(0.050, 0.112, -1, 30, { density: 0.64, hMin: 14, hMax: 25,
-        col: [0.07, 0.24, 0.11], col2: [0.13, 0.34, 0.15], pineFrac: 0.94 });
-      forestEdge(0.058, 0.070,  1, 38, { density: 0.58, hMin: 15, hMax: 26,
-        col: [0.08, 0.25, 0.12], col2: [0.14, 0.35, 0.16], pineFrac: 0.92 });
-      forestEdge(0.088, 0.108,  1, 38, { density: 0.58, hMin: 15, hMax: 26,
-        col: [0.08, 0.25, 0.12], col2: [0.14, 0.35, 0.16], pineFrac: 0.92 });
+      // Ardennes fir walls. dressingExclusions foliage is full-lap, so these
+      // bespoke forestEdge belts carry the look. density > 0.6 unlocks the
+      // engine back-row stagger; pineFrac high keeps the belt conifer-dominant
+      // (residual tree() → furniture.tree fir).
+      const PINE_D = [0.07, 0.24, 0.11], PINE_M = [0.10, 0.30, 0.14], PINE_L = [0.13, 0.34, 0.15];
+      // Eau Rouge / Raidillon climb is too steep for forestEdge: crowns plant at
+      // trackside height and hang over the valley (float-audit 11–25 m gaps at
+      // frac≈0.05). Gold-3 stands + jumbotron already own that amphitheatre;
+      // fir walls resume past Les Combes (0.18+) and Blanchimont below.
+      // La Source outer verge (beyond the pit grandstands).
+      forestEdge(0.00, 0.04, 1, 44, { density: 0.70, hMin: 11, hMax: 20,
+        col: PINE_M, col2: PINE_L, pineFrac: 0.90 });
 
       spectatorHill(0.525, 0.560, -1, 11, { rows: 4, density: 0.55, step: 6 });
       spectatorHill(0.658, 0.672, -1, 10, { rows: 3, density: 0.42, step: 6 });
@@ -443,17 +466,38 @@
                    rock: [0.30, 0.35, 0.31], snowline: 2 });
       }
 
-      forestEdge(0.18, 0.42, -1, 14, { density: 0.6, hMin: 12, hMax: 22, col: [0.09, 0.28, 0.13], col2: [0.14, 0.36, 0.17], pineFrac: 0.85 });
-      forestEdge(0.42, 0.58, -1, 11, { density: 0.78, hMin: 13, hMax: 24, col: [0.08, 0.26, 0.12], col2: [0.12, 0.34, 0.15], pineFrac: 0.9 });
-      forestEdge(0.55, 0.74,  1, 14, { density: 0.6, hMin: 12, hMax: 22, col: [0.09, 0.28, 0.13], col2: [0.14, 0.36, 0.17], pineFrac: 0.85 });
-      forestEdge(0.74, 0.88,  1, 12, { density: 0.72, hMin: 12, hMax: 23, col: [0.08, 0.27, 0.12], col2: [0.13, 0.35, 0.16], pineFrac: 0.88 });
-      // A few broadleaf oaks softening the pit-straight and Les Combes verges.
+      // Mid-lap + Blanchimont fir belts — dense, pine-led (not broadleaf).
+      forestEdge(0.18, 0.42, -1, 14, { density: 0.74, hMin: 13, hMax: 24,
+        col: PINE_D, col2: PINE_M, pineFrac: 0.92 });
+      forestEdge(0.18, 0.42,  1, 16, { density: 0.72, hMin: 12, hMax: 22,
+        col: PINE_M, col2: PINE_L, pineFrac: 0.90 });
+      forestEdge(0.42, 0.58, -1, 11, { density: 0.82, hMin: 14, hMax: 26,
+        col: PINE_D, col2: PINE_M, pineFrac: 0.94 });
+      forestEdge(0.42, 0.58,  1, 12, { density: 0.78, hMin: 13, hMax: 24,
+        col: PINE_D, col2: PINE_M, pineFrac: 0.93 });
+      forestEdge(0.55, 0.74,  1, 14, { density: 0.74, hMin: 13, hMax: 24,
+        col: PINE_D, col2: PINE_M, pineFrac: 0.92 });
+      forestEdge(0.55, 0.74, -1, 13, { density: 0.72, hMin: 12, hMax: 23,
+        col: PINE_M, col2: PINE_L, pineFrac: 0.90 });
+      forestEdge(0.74, 0.88,  1, 12, { density: 0.78, hMin: 13, hMax: 24,
+        col: PINE_D, col2: PINE_M, pineFrac: 0.93 });
+      forestEdge(0.74, 0.88, -1, 14, { density: 0.74, hMin: 12, hMax: 23,
+        col: PINE_M, col2: PINE_L, pineFrac: 0.91 });
+      forestEdge(0.88, 0.98,  1, 14, { density: 0.72, hMin: 12, hMax: 22,
+        col: PINE_D, col2: PINE_M, pineFrac: 0.90 });
+      forestEdge(0.88, 0.98, -1, 16, { density: 0.70, hMin: 12, hMax: 22,
+        col: PINE_M, col2: PINE_L, pineFrac: 0.90 });
+      // Sparse fir accents on pit / Les Combes verges (not broadleaf oaks).
       for (const [s, side] of [[0.01, 1], [0.16, 1], [0.30, -1], [0.62, 1], [0.78, -1]]) {
-        for (let j = 0; j < 3; j++) tree(K(s) + j, side, 18 + hash(K(s) * 5 + j) * 14, 10 + hash(K(s) * 9 + j) * 5, [0.13, 0.34, 0.16]);
+        for (let j = 0; j < 3; j++) {
+          const kk = (K(s) + j) % n;
+          const hv = hash(kk * 5 + j);
+          pine(kk, side, 18 + hv * 14, 10 + hv * 5, [0.09 + hv * 0.04, 0.30, 0.14]);
+        }
       }
 
       fence(0.0, 0.03, 1, 6, 4.2, [0.74, 0.76, 0.80]);        // main straight stand
-      fence(0.06, 0.11, 1, 7, 4.6, [0.74, 0.76, 0.80]);       // Raidillon Gold-4 amphitheatre
+      fence(0.06, 0.11, 1, 7, 4.6, [0.74, 0.76, 0.80]);       // Raidillon Gold-3 amphitheatre
       fence(0.15, 0.18, 1, 7, 4.2, [0.74, 0.76, 0.80]);       // Les Combes
       fence(0.90, 0.94, 1, 6, 4.2, [0.74, 0.76, 0.80]);       // Bus Stop
       guardrail(0.42, 0.58, -1, 3.4, [0.84, 0.85, 0.88]);     // Pouhon sweep

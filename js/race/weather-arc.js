@@ -82,7 +82,13 @@ const WeatherArc = (function () {
     /** The CHANGEABLE plan derived from (sim seed, race counter): 2–7 minutes
      *  to a target that is never the weather we start on. */
     function planFor() {
-      const r = (k) => Career.hash(G.simSeed(), G.raceRound, "wx", k);
+      const r = (k) => {
+        const seed = (typeof Career !== "undefined" && Career.inCareer && Career.inCareer() && Career.seasonSeed)
+          ? Career.seasonSeed() : G.simSeed();
+        const round = (G.seasonMode && typeof SeasonCal !== "undefined" && SeasonCal.drawRound && G.season)
+          ? SeasonCal.drawRound(G.season) : G.raceRound;
+        return Career.hash(seed, round, "wx", k);
+      };
       const opts = TARGETS.filter((w) => w !== G.raceWeather);
       const to = opts[Math.floor(r("to") * opts.length)] || "wet";
       const dur = 120 + Math.floor(r("dur") * 300);   // 2–7 minutes of transition

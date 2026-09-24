@@ -5,16 +5,28 @@ import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 
 const ROOT = new URL("../..", import.meta.url);
-const P = (await import("node:module")).createRequire(import.meta.url)("../../tools/manifest.cjs").PATHS;
+const MANIFEST = (await import("node:module")).createRequire(import.meta.url)("../../tools/manifest.cjs");
+const P = MANIFEST.PATHS;
 const CSS_SIZE_SOURCE = await readFile(new URL("js/render/shared/canvas-css-size.js", ROOT), "utf8");
+const DEFERRED_WEBGPU = MANIFEST.DEFERRED.webgpu;
+const deferredWebgpuSources = await Promise.all(
+  DEFERRED_WEBGPU.map((rel) => readFile(new URL(rel, ROOT), "utf8")),
+);
+// Bundle every DEFERRED.webgpu file in roster order so source-text pins and the
+ // VM eval still see _buildPost / shadowBegin after the GLX-seam peel.
+const WGX_BUNDLE = deferredWebgpuSources.join("\n");
+const WGX_POST_SOURCE = await readFile(new URL(P.WGX_POST, ROOT), "utf8");
+const WGX_SHADOW_SOURCE = await readFile(new URL(P.WGX_SHADOW, ROOT), "utf8");
+const WGX_CHUNKED_SOURCE = await readFile(new URL(P.WGX_CHUNKED, ROOT), "utf8");
+const WGX_MAIN_SOURCE = await readFile(new URL(P.WGX, ROOT), "utf8");
 const [CHUNKS_SOURCE, POST_SOURCE, FX_SOURCE, FRUSTUM_SOURCE, WGX_SOURCE,
        LIGHT_BUDGET_SOURCE, POST_COMMON_SOURCE, KNOBS_SOURCE,
-       VERTEX_PACK_SOURCE] = await Promise.all([
+       VERTEX_PACK_SOURCE, INST_CELLS_SOURCE] = await Promise.all([
   readFile(new URL(P.WGSL_CHUNKS, ROOT), "utf8"),
   readFile(new URL(P.WGSL_POST, ROOT), "utf8"),
   readFile(new URL("js/render/webgpu/wgsl-fx.js", ROOT), "utf8"),
   readFile(new URL(P.FRUSTUM, ROOT), "utf8"),
-  readFile(new URL(P.WGX, ROOT), "utf8"),
+  Promise.resolve(WGX_BUNDLE),
   readFile(new URL("js/render/shared/light-budget.js", ROOT), "utf8"),
   readFile(new URL("js/render/shared/post-common.js", ROOT), "utf8"),
   readFile(new URL("js/lighting/knobs.js", ROOT), "utf8"),
@@ -22,6 +34,7 @@ const [CHUNKS_SOURCE, POST_SOURCE, FX_SOURCE, FRUSTUM_SOURCE, WGX_SOURCE,
   // not a stub: a scale that drifted between the three backends should fail
   // here, in three seconds, rather than on somebody's GPU.
   readFile(new URL("js/render/shared/vertex-pack.js", ROOT), "utf8"),
+  readFile(new URL(P.INST_CELLS, ROOT), "utf8"),
 ]);
 
 // The light storage buffer's size, DERIVED from the same constants WGX derives
@@ -34,18 +47,26 @@ const LIGHT_SBO_BYTES =
   Number(/LIGHT_STRIDE_BYTES:\s*(\d+)/.exec(CHUNKS_SOURCE)[1]) *
   Number(/MAX_LIGHTS:\s*(\d+)/.exec(CHUNKS_SOURCE)[1]);
 
+
+test("WGX deferred seams expose WGXShadow / WGXChunked / WGXPost globals", () => {
+  assert.match(WGX_SHADOW_SOURCE, /const WGXShadow/);
+  assert.match(WGX_CHUNKED_SOURCE, /const WGXChunked/);
+  assert.match(WGX_POST_SOURCE, /const WGXPost/);
+  assert.match(INST_CELLS_SOURCE, /const InstCells/);
+});
+
 test("WGX constructs SGSR resources only when spatial upscaling is requested", () => {
-  assert.match(WGX_SOURCE, /function _ensureSpatial\(\)/);
-  const post = WGX_SOURCE.slice(WGX_SOURCE.indexOf("function _buildPost()"),
-    WGX_SOURCE.indexOf("function _ensureSpatial()"));
+  // Pipeline construction lives in wgx-post.js after the GLX-seam peel.
+  assert.match(WGX_POST_SOURCE, /function _ensureSpatial\(\)/);
+  const post = WGX_POST_SOURCE.slice(WGX_POST_SOURCE.indexOf("function _buildPost()"),
+    WGX_POST_SOURCE.indexOf("function _ensureSpatial()"));
   assert.doesNotMatch(post, /pSGSR\s*=\s*fsPipe|sgsrUBO\s*=\s*device\.createBuffer/,
     "the disabled-by-default boot must not construct SGSR pipelines or buffers");
-  const ensure = WGX_SOURCE.slice(WGX_SOURCE.indexOf("function _ensureSpatial()"),
-    WGX_SOURCE.indexOf("function _buildFx()"));
-  assert.match(ensure, /pSGSR\s*=\s*fsPipe/);
-  assert.match(ensure, /sgsrUBO\s*=\s*device\.createBuffer/);
-  const setter = WGX_SOURCE.slice(WGX_SOURCE.indexOf("function setSpatialUpscale"),
-    WGX_SOURCE.indexOf("function getSpatialUpscale"));
+  const ensure = WGX_POST_SOURCE.slice(WGX_POST_SOURCE.indexOf("function _ensureSpatial()"));
+  assert.match(ensure, /pSGSR\s*=\s*.*fsPipe|core\.pSGSR\s*=/);
+  assert.match(ensure, /sgsrUBO\s*=\s*.*createBuffer|core\.sgsrUBO\s*=/);
+  const setter = WGX_MAIN_SOURCE.slice(WGX_MAIN_SOURCE.indexOf("function setSpatialUpscale"),
+    WGX_MAIN_SOURCE.indexOf("function getSpatialUpscale"));
   assert.match(setter, /if\s*\(\s*spatialUpscale\s*\)\s*_ensureSpatial\(\)/);
 });
 
@@ -307,8 +328,14 @@ function makeGpuHarness(opts = {}) {
   vm.runInContext(`${KNOBS_SOURCE.replace(/^const\b/gm, "var")}\nwindow.LightKnobs = LightKnobs;`, context);
   vm.runInContext(`${POST_COMMON_SOURCE.replace(/^const\b/gm, "var")}\nwindow.PostCommon = PostCommon;`, context);
   vm.runInContext(`${VERTEX_PACK_SOURCE.replace(/^const\b/gm, "var")}\nwindow.VertexPack = VertexPack;`, context);
+  vm.runInContext(`${INST_CELLS_SOURCE.replace(/^const\b/gm, "var")}\nwindow.InstCells = InstCells;`, context);
   vm.runInContext(`${CSS_SIZE_SOURCE.replace(/^const\b/gm, "var")}\nwindow.CanvasCssSize = CanvasCssSize;`, context);
-  vm.runInContext(`${WGX_SOURCE}\nwindow.WGX = WGX;`, context);
+  // GLX-seam modules (must precede wgx.js). Eval as separate scripts — the
+  // WGX_BUNDLE used for source-text pins would redeclare WGSLChunks/Post/Fx.
+  vm.runInContext(`${WGX_SHADOW_SOURCE}\nwindow.WGXShadow = WGXShadow;`, context);
+  vm.runInContext(`${WGX_CHUNKED_SOURCE}\nwindow.WGXChunked = WGXChunked;`, context);
+  vm.runInContext(`${WGX_POST_SOURCE}\nwindow.WGXPost = WGXPost;`, context);
+  vm.runInContext(`${WGX_MAIN_SOURCE}\nwindow.WGX = WGX;`, context);
 
   return {
     canvas,
@@ -362,7 +389,9 @@ test("software-present pipelines match the rgba8 attachment format", () => {
   assert.match(WGX_SOURCE, /const _presentFormat = _softGpu \? LDR_FORMAT : format/);
   assert.match(WGX_SOURCE, /targets: \[\{ format: _presentFormat \}\]/,
     "tonemap blit must target the actual currentView format");
-  assert.match(WGX_SOURCE, /pFXAA\s*=\s*fsPipe\(_Post\.FXAA,\s*_presentFormat/,
+  // FXAA pipe construction moved to wgx-post.js; it still binds the soft-present
+  // attachment format via core.presentFormat (=_presentFormat from create).
+  assert.match(WGX_SOURCE, /pFXAA\s*=\s*(?:core\.)?fsPipe\((?:core\.)?_?Post\.FXAA,\s*(?:core\.)?(?:_presentFormat|presentFormat)/,
     "FXAA must target the same soft-present attachment format");
 });
 
@@ -544,7 +573,7 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   assert.match(CHUNKS_SOURCE, /params6\s*:\s*vec4<f32>.*off 368/);
   assert.match(CHUNKS_SOURCE, /params7\s*:\s*vec4<f32>.*off 448/);
   assert.match(CHUNKS_SOURCE, /params9\s*:\s*vec4<f32>.*ambContactDark/);
-  assert.match(CHUNKS_SOURCE, /FRAME_UNIFORM_BYTES:\s*608/);   // 592 + 16: pitBox (off 592), YOUR box in the lane
+  assert.match(CHUNKS_SOURCE, /FRAME_UNIFORM_BYTES:\s*672/);   // 608 + 64: bakeA..D (BAKED LAMP POOLS tile atlas)
   assert.match(POST_SOURCE, /COMPOSITE_UNIFORM_BYTES:\s*256/);
   assert.match(POST_SOURCE, /SSR_UNIFORM_BYTES:\s*208/,
     "SsrU must keep the carGloss vec4 (192 was the pre-streak layout)");
@@ -555,7 +584,7 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   gfx.resize();
   assert.equal(gfx.begin({ tune: {}, shadowCtr: [11, 22, 33] }), true);
   gfx.present({ tune: {} });
-  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 608);
+  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 672);
   const compositeBuffer = h.buffers.find((buffer) => buffer.desc.size === 256);
   let frame = h.writes.filter((write) => write.buffer === frameBuffer).at(-1).values;
   assert.deepEqual(frame.slice(88, 92), [11, 22, 33, 80], "shadowCtr must occupy floats 88..91");
@@ -813,7 +842,7 @@ test("lamp shadow arm does not leak into the next frame", async () => {
   const h = makeGpuHarness();
   const gfx = await h.create();
   gfx.resize();
-  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 608);
+  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 672);
   gfx.lampShadowBegin(new Float32Array([
     1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
   ]), 2);
@@ -883,8 +912,68 @@ test("depth-testing pipelines never use compare 'always' (skyLate erased the wor
   }
 });
 
+test("GL depthBias [factor, units] maps to WebGPU slope scale / constant, not swapped", async () => {
+  // gfx.js's contract is GL polygonOffset order: depthBias = [factor, units].
+  //   GL:     offset = factor * DZ + units * r
+  //   WebGPU: offset = depthBiasSlopeScale * maxSlope + depthBias * r
+  // so factor -> depthBiasSlopeScale and units -> depthBias (integer), 1:1 —
+  // the same mapping three's WebGPU backend uses for TLX's polygonOffset. WGX
+  // once wrote factor into depthBias and units into the slope scale, so the
+  // floor [4, 8], buried terrain, start line [-12, -24] and fx decals all drew
+  // with the wrong constant/slope mix. Asymmetric pairs make a swap visible.
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  gfx.resize();
+  assert.equal(gfx.begin({}), true);
+  const mesh = gfx.createMesh({
+    pos: [0, 0, 0, 1, 0, 0, 0, 0, 1], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0],
+    col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2],
+  });
+  const model = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  const biased = () => h.pipelineDescs.filter((d) => d && d.depthStencil &&
+    d.depthStencil.depthBias !== undefined && d.depthStencil.depthBias !== 0);
+  const cases = [
+    { bias: [-12, -24], constant: -24, slope: -12 },   // game.js _startBias
+    { bias: [3, 7], constant: 7, slope: 3 },
+    { bias: [-1.5, -2], constant: -2, slope: -1.5 },    // slope scale is a float: kept exact
+  ];
+  for (const c of cases) {
+    const before = biased().length;
+    gfx.draw(mesh, model, { depthBias: c.bias });
+    const made = biased().slice(before);
+    assert.equal(made.length, 1, "depthBias " + JSON.stringify(c.bias) + " builds one biased pipeline");
+    const ds = made[0].depthStencil;
+    assert.equal(ds.depthBias, c.constant, "GL units -> WebGPU depthBias (constant term)");
+    assert.ok(Number.isInteger(ds.depthBias), "GPUDepthBias is an integer");
+    assert.equal(ds.depthBiasSlopeScale, c.slope, "GL factor -> WebGPU depthBiasSlopeScale");
+    assert.equal(ds.depthBiasClamp, 0);
+  }
+  // buryRibbon (the floor/terrain) takes its caller's explicit bias — game.js
+  // gives terrain [2, 10] and the floor [4, 16] so the two never tie (at a
+  // shared _BIAS_BURY they fought) — and falls back to WGX's _BIAS_BURY
+  // [5, 10] without one: units 10 the constant, factor 5 the slope.
+  let before = biased().length;
+  gfx.draw(mesh, model, { buryRibbon: true, depthBias: [4, 16] });
+  const own = biased().slice(before);
+  assert.equal(own.length, 1);
+  assert.equal(own[0].depthStencil.depthBias, 16);
+  assert.equal(own[0].depthStencil.depthBiasSlopeScale, 4);
+  before = biased().length;
+  gfx.draw(mesh, model, { buryRibbon: true });
+  const bury = biased().slice(before);
+  assert.equal(bury.length, 1);
+  assert.equal(bury[0].depthStencil.depthBias, 10);
+  assert.equal(bury[0].depthStencil.depthBiasSlopeScale, 5);
+  // The road (surfaceId 16) deliberately draws unbiased on WGX.
+  const n = h.pipelineDescs.length;
+  gfx.draw(mesh, model, { surfaceId: 16, depthBias: [-8, -16], doubleSided: true });
+  for (const d of h.pipelineDescs.slice(n)) {
+    assert.ok(!d.depthStencil || !d.depthStencil.depthBias, "road pipeline carries no depth bias");
+  }
+});
+
 test("WGX source keeps the proven parity fixes", () => {
-  assert.match(WGX_SOURCE, /_lampShadowArmed = false/);
+  assert.match(WGX_SOURCE, /SHD\.lampArmed = false/);
   assert.match(WGX_SOURCE, /mapState === "unmapped"/);
   assert.match(WGX_SOURCE, /pParticleAdd/);
   assert.match(WGX_SOURCE, /_grKeepNearest/);
@@ -938,7 +1027,7 @@ test("WGX R8 perf changes hold (SSR depth stride, pooled merge-run, lamp-mask ca
   // when a ranked light's position or radius moves, instead of re-running
   // visibleChunks x nL AABB tests every frame.
   assert.match(WGX_SOURCE, /const _lmCache = new WeakMap\(\);/);
-  assert.match(WGX_SOURCE, /if \(_lmMoved\) _lmGen\+\+;/);
+  assert.match(WGX_SOURCE, /if \(_lmMoved\) CHK\.bumpLampGen\(\);/);
   assert.match(WGX_SOURCE, /if \(cm && cm\.gen === _lmGen\)/);
   // F7-lite: the dead DRAW_FLOATS const is gone (it looked like the stride but
   // nothing read it); the deferral doctrine stays written down.
@@ -964,8 +1053,8 @@ test("WGX full parity batch is wired", () => {
   assert.match(POST_SOURCE, /shaftDecay/);
   assert.match(POST_SOURCE, /carReflect = U\.upVS\.w/);
   assert.match(WGX_SOURCE, /maxAnisotropy: 4/);
-  assert.match(WGX_SOURCE, /depthStencil\.depthBias = dbC/);
-  assert.match(WGX_SOURCE, /_carBoxScale/);
+  assert.match(WGX_SOURCE, /depthStencil\.depthBias = dbC/);   // dbC = GL units (see the depthBias mapping test)
+  assert.match(WGX_SOURCE, /carBoxScale/);
   assert.match(WGX_SOURCE, /binding: 7, resource: next\.depthSampleView/);
   assert.match(WGX_SOURCE, /sunShaftDecay/);
   assert.match(WGX_SOURCE, /f\.lightning/);
@@ -1025,7 +1114,7 @@ test("WGX LIT keeps high-severity GLX parity sites", () => {
 test("WGX god-ray and env probe match GLX gates", () => {
   // Volumetric shafts must not require sun.onScreen (GLX post.js).
   assert.doesNotMatch(WGX_SOURCE, /grStr > 0 && sun && sun\.onScreen && sun\.shaft/);
-  assert.match(WGX_SOURCE, /const sunGR = !!shadowView && grStr > 0/);
+  assert.match(WGX_SOURCE, /const sunGR = !!SHD\.shadowView && grStr > 0/);
   assert.match(WGX_SOURCE, /!f\.noEnv/);
   // Env probe always applies the 300 m radial cap (baked ON).
   assert.match(WGX_SOURCE, /Math\.min\(svCull, 300\)/);
@@ -1112,13 +1201,14 @@ test("WGSL closes the documented GLX look gaps", () => {
   // container's stacks: docs/archive/tools/gfx/wgx-vid-repro.mjs (30/30 OK incl. firstVertex
   // and whole draw(N) to 24576, three runs).
   assert.match(WGX_SOURCE, /const PIECE = 4095/);
-  assert.match(WGX_SOURCE, /const vidDead = indexed \|\| !!_roadLutBG;/,
+  assert.match(WGX_SOURCE, /const vidDead = indexed \|\| !!(?:_roadLutBG|core\.roadLutBG);/,
     "the non-indexed merge is gated on vertex_index being provably dead");
   assert.match(WGX_SOURCE, /&& contig && vidDead && nightOK\) \{/,
     "and on contiguity, and on the night stand-down");
   assert.match(WGX_SOURCE, /const nightOK = indexed \|\| !maskL;/,
     "the night stand-down is ROAD-only — indexed meshes keep merging as today");
-  assert.match(WGX_SOURCE, /hasTrk roads are createMesh pieces/);
+  assert.match(WGX_SOURCE, /hasTrk roads are (?:core\.)?createMesh pieces/,
+    "hasTrk roads stay on createMesh pieces (chunks=null)");
   assert.match(WGX_SOURCE, /g2Layout/);
   assert.match(WGX_SOURCE, /read-only-storage/);
   // LUT-first priority survives the redundant-state cache in _bindLitVerts.
@@ -1131,7 +1221,7 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(WGX_SOURCE, /o\.surfaceId === 16/);
   assert.match(WGX_SOURCE, /dbl = true;/);   // road forces doubleSided in _litOpts (pooled bag)
   assert.match(WGX_SOURCE, /dbl = true;\s*\n\s*bias = null;/);   // road: doubleSided, NO bias (pooled _litOpts)
-  assert.match(WGX_SOURCE, /o\.buryRibbon\) bias = _BIAS_BURY/);   // bury keeps its [5,10] push-back (pooled _litOpts)
+  assert.match(WGX_SOURCE, /o\.buryRibbon\) bias = o\.depthBias \|\| _BIAS_BURY/);   // bury keeps a push-back; an explicit bias (terrain/floor) wins (pooled _litOpts)
   assert.match(WGX_SOURCE, /_BIAS_BURY = \[5, 10\]/);
   assert.match(WGX_SOURCE, /Raw RGB\. Packing MAT into col\.x/);
   assert.match(WGX_SOURCE, /const GW = 32, GH = 32, SLOT = 16/);
@@ -1151,7 +1241,7 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(CHUNKS_SOURCE, /isRoadDraw \|\| classified > 0\.5/);
   assert.doesNotMatch(WGX_SOURCE, /extra\.decal = true/);
   assert.match(WGX_SOURCE, /depthCompare: decal \? "always"/);
-  assert.match(WGX_SOURCE, /const cull = !!frameViewProj;/);
+  assert.match(WGX_SOURCE, /const cull = !!(?:frameViewProj|core\.frameViewProj);/);
   assert.doesNotMatch(WGX_SOURCE, /o\.surfaceId !== 16/);
   assert.doesNotMatch(WGX_SOURCE, /if \(o\.buryRibbon\) return;/);
   assert.match(CHUNKS_SOURCE, /if \(!ff && !isRoadDraw\) \{ N = -N; \}/);
@@ -1562,8 +1652,8 @@ test("rg11b10ufloat is only rendered into when the device grants the feature", a
   // Bloom pipelines must write the SAME format as those targets. Godray/blur
   // already did; bloom down/up shipped on SCENE_FORMAT (rgba16float) and
   // every bloom draw was a color-format mismatch once the feature was granted.
-  assert.match(WGX_SOURCE, /pBloomDown = fsPipe\([^,]+,\s*POST_HDR_FORMAT/);
-  assert.match(WGX_SOURCE, /pBloomUp\s*= fsPipe\([^,]+,\s*POST_HDR_FORMAT/);
+  assert.match(WGX_SOURCE, /pBloomDown\s*=\s*(?:core\.)?fsPipe\([^,]+,\s*(?:core\.)?POST_HDR_FORMAT/);
+  assert.match(WGX_SOURCE, /pBloomUp\s*=\s*(?:core\.)?fsPipe\([^,]+,\s*(?:core\.)?POST_HDR_FORMAT/);
   const bloomPipeWrong = rich.pipelines.filter((p) =>
     (((p.desc || {}).fragment || {}).targets || []).some((t) => t && t.format === "rgba16float")
     && /BLOOM/i.test(JSON.stringify(p.desc || {})));
@@ -1683,7 +1773,7 @@ test("MAT array upload is byte-exact like GLX texSubImage3D, not sRGB-converted"
   assert.match(WGX_SOURCE, /device\.queue\.writeTexture\(\{ texture: tex, origin: \[0, 0, i\] \}/);
   assert.match(WGX_SOURCE, /placePx\[i \* bpr\] = placePx\[i \* bpr \+ 1\] = placePx\[i \* bpr \+ 2\] = 128/);
   assert.match(WGX_SOURCE, /const _presentFormat = _softGpu \? LDR_FORMAT : format/);
-  assert.match(WGX_SOURCE, /pFXAA\s*=\s*fsPipe\(_Post\.FXAA,\s*_presentFormat/);
+  assert.match(WGX_SOURCE, /pFXAA\s*=\s*(?:core\.)?fsPipe\((?:core\.)?_?Post\.FXAA,\s*(?:core\.)?(?:_presentFormat|presentFormat)/);
 });
 
 test("MAT/env mip blit UVs cover the full parent mip, not the top-left quadrant", () => {
@@ -1898,9 +1988,9 @@ test("bloom pipelines target POST_HDR_FORMAT, the bloom mips' own format", () =>
   // the feature is granted AND the perf tier lets bloom run — no container
   // run reaches that pair (software forces MSAA 1 and low tiers), so this is
   // pinned at the source. Real-device confirmation lives in wgx-capture runs.
-  assert.match(WGX_SOURCE, /fsPipe\(_Post\.BLOOM_DOWN,\s*POST_HDR_FORMAT/,
+  assert.match(WGX_SOURCE, /fsPipe\((?:core\.)?_?Post\.BLOOM_DOWN,\s*(?:core\.)?POST_HDR_FORMAT/,
     "pBloomDown must target POST_HDR_FORMAT (the bloom mip texture format)");
-  assert.match(WGX_SOURCE, /fsPipe\(_Post\.BLOOM_UP,\s*POST_HDR_FORMAT/,
+  assert.match(WGX_SOURCE, /fsPipe\((?:core\.)?_?Post\.BLOOM_UP,\s*(?:core\.)?POST_HDR_FORMAT/,
     "pBloomUp must target POST_HDR_FORMAT (the bloom mip texture format)");
 });
 
@@ -2039,22 +2129,23 @@ test("freeMesh owns the road-LUT storage buffer and clears the global bind group
 
 test("freeChunkedMesh clears the road-LUT bind group its own sbuf.destroy() invalidates", () => {
   // The chunked twin of the test above, and it was MISSED when that one landed.
-  // createChunkedMesh's road path calls _rememberRoadLut(lut) and then returns
+  // createChunkedMesh's road path calls rememberRoadLut(lut) and then returns
   // `sbuf: lut.sbuf, attrBG: lut.attrBG` — so the chunked mesh OWNS the buffer
   // the global bind group is built over. freeChunkedMesh destroys m.sbuf, and
-  // without a matching clear draw()'s `_roadLutBG || attrBG || zeroAttrBG`
+  // without a matching clear draw()'s roadLutBG || attrBG || zeroAttrBG
   // keeps binding a bind group whose buffer is gone: a per-draw validation
   // error, plus `vidDead` in the shadow path silently flipping meaning.
   //
   // Reachable on EVERY track switch — game.js frees track.meshes.roadChunked on
   // teardown and the replacement build is async, so frames render in the gap;
   // and a next road that never produces a LUT never overwrites the stale value.
-  const free = WGX_SOURCE.match(/function freeChunkedMesh\(m\)[\s\S]*?\n    \}/);
+  // After the GLX-seam peel the clear goes through core.setRoadLutBG(null).
+  const free = WGX_CHUNKED_SOURCE.match(/function freeChunkedMesh\(m\)[\s\S]*?\n    \}/);
   assert.ok(free, "freeChunkedMesh exists");
   assert.match(free[0], /m\.sbuf\.destroy\(\)/, "it destroys the shared storage buffer");
-  assert.match(free[0], /_roadLutBG = null/,
+  assert.match(free[0], /(?:_roadLutBG = null|setRoadLutBG\(null\))/,
     "and must drop the global bind group built over that buffer");
-  assert.match(free[0], /_roadLutReady = false/,
+  assert.match(free[0], /(?:_roadLutReady = false|setRoadLutReady\(false\))/,
     "and the ready flag with it, or the road path believes a dead LUT is live");
   // The clear must precede the destroy in source order for the same reason
   // freeMesh does it that way: nothing may observe the global between the two.
@@ -2062,9 +2153,10 @@ test("freeChunkedMesh clears the road-LUT bind group its own sbuf.destroy() inva
   // names m.sbuf.destroy() in prose, so a raw indexOf finds the PROSE first and
   // reports the wrong order — this assertion failed that way on its first run.
   const body = free[0].replace(/^[ \t]*\/\/.*$/gm, "");
-  assert.ok(body.indexOf("_roadLutBG = null") < body.indexOf("m.sbuf.destroy()"),
+  const clearAt = Math.max(body.indexOf("_roadLutBG = null"), body.indexOf("setRoadLutBG(null)"));
+  assert.ok(clearAt >= 0 && clearAt < body.indexOf("m.sbuf.destroy()"),
     "clear the global before destroying the buffer it points at");
-  assert.match(WGX_SOURCE, /sbuf: lut\.sbuf, attrBG: lut\.attrBG/,
+  assert.match(WGX_CHUNKED_SOURCE, /sbuf: lut\.sbuf, attrBG: lut\.attrBG/,
     "createChunkedMesh really does hand the LUT buffer to the mesh");
 });
 
@@ -2216,4 +2308,39 @@ test("WGX shadow cull packs into the batch's OWN buffer and leaves the camera pa
   assert.equal(batch.visible, camVisible, "the camera count survives the shadow cull");
   assert.equal(gfx.cullInstances(batch, planes(2e6)), 2);
   assert.equal(instWrites(), camWrites, "…so the next camera cull with the same cells is still a cache hit");
+});
+
+test("the lamp bake light map is freed after ~2 s of bake-off frames (GLX _bakeOffN parity)", async () => {
+  // WGX used to free the bake only on replacement, so a night race followed by
+  // a day one kept ~9.6 MB of RGBA16F alive. It now rebinds the placeholder and
+  // retires the texture after 120 consecutive bake-off frames.
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  // A 2 x 1-tile grid with one kept tile: atlas 34 x (2 * 34), indirection 2 x 1.
+  const lb = { x0: 0, z0: 0, cell: 1, T: 32, tilesX: 2, tilesY: 1, atlasW: 34, atlasH: 34,
+    data: new Uint16Array(34 * 34 * 8), indir: new Uint16Array(2 * 4) };
+  const isBake = (t) => Array.isArray(t.desc.size) && t.desc.size[0] === 34 && t.desc.size[1] === 68
+    && t.desc.format === "rgba16float";
+  const isIdx = (t) => Array.isArray(t.desc.size) && t.desc.size[0] === 2 && t.desc.size[1] === 1
+    && t.desc.format === "rgba16float";
+  assert.equal(gfx.begin({ lampBake: lb, lampBakeScale: [1, 1, 1] }), true);
+  gfx.present({});
+  const bakes = h.textures.filter(isBake), idxs = h.textures.filter(isIdx);
+  assert.equal(bakes.length, 1, "the bake uploads one atlasW x 2 atlasH texture");
+  assert.equal(idxs.length, 1, "and one tilesX x tilesY indirection");
+  const fb = h.buffers.find((buffer) => buffer.desc.size === 672);
+  const fv = h.writes.filter((write) => write.buffer === fb).at(-1).values;
+  assert.deepEqual(Array.from(fv.slice(152, 156)), [0, 0, 64, 32], "bakeA: origin + grid extent tilesXY * T * cell");
+  assert.equal(fv[163], 32, "bakeC.w = T");
+  assert.deepEqual(Array.from(fv.slice(164, 168)), [2, 1, 34, 68], "bakeD: tiles + atlas texture size");
+  for (let i = 0; i < 120; i++) { assert.equal(gfx.begin({}), true); gfx.present({}); }
+  assert.equal(bakes[0].destroyed, false, "a short bake-off gap keeps the map");
+  assert.equal(gfx.begin({}), true);
+  assert.equal(bakes[0].destroyed, false, "retired, not destroyed before the frame's submit");
+  gfx.present({});
+  assert.equal(bakes[0].destroyed, true, "the 121st bake-off frame frees the map after its submit");
+  assert.equal(idxs[0].destroyed, true, "and its indirection");
+  assert.equal(gfx.begin({ lampBake: lb, lampBakeScale: [1, 1, 1] }), true);
+  gfx.present({});
+  assert.equal(h.textures.filter(isBake).length, 2, "the same bake re-uploads once it returns");
 });

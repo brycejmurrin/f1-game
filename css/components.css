@@ -34,7 +34,7 @@
   pointer-events: none;
   background-image: var(--grain);
   background-size: 160px 160px;
-  opacity: 0.05;
+  opacity: var(--grain-opacity, 0.05);
   mix-blend-mode: overlay;
 }
 /* Grain is texture, and texture is motion-adjacent for some people; it also
@@ -804,17 +804,19 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
   @media (hover: hover) {
     .bigbtn:hover::after { animation: sheen 0.62s cubic-bezier(0.3, 0, 0.2, 1); }
   }
-  /* The single primary call to action catches the light ONCE, as the menu
-     arrives — scoped to one button because a menu where everything shimmers has
-     no focal point. #overlay is toggled with the hidden attribute, so coming
-     back from display:none restarts this by itself, exactly like the dialog
-     entry animations.
+  /* The hero (CAREER, the one solid-red door) catches the light ONCE, just
+     after it lands in the title intro (css/menus.css) — scoped to one button
+     because a menu where everything shimmers has no focal point. It sat on
+     RACE until RACE became a dark plate; a sweep of white over a plate reads
+     as a glitch, over the red face as gloss. Keyed on #overlay[data-intro]
+     like the rest of the intro: the first show only, never again on the way
+     back from a room (js/ui/title-fx.js owns the attribute).
      Once, NOT on a loop. An infinite sweep animates a registered custom
      property inside a gradient, which means repainting the button every frame
      for as long as the menu is open — a permanent 60fps cost on a phone for a
      decoration, and it never lets the compositor reach a stable frame (it hung
      the screenshot tooling, which is how it was caught). */
-  #mb-race::after { animation: sheen 0.85s 0.28s cubic-bezier(0.3, 0, 0.2, 1) both; }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #mb-career::after { animation: sheen 0.85s 0.5s cubic-bezier(0.3, 0, 0.2, 1) both; }
 }
 @keyframes sheen {
   from { --sheen: -30%; }
@@ -1212,10 +1214,11 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   margin: 0; padding-bottom: 4px;
   background: var(--grad-rule) bottom left / 100% 1px no-repeat;
 }
-/* Sheet title names CONTROLS / DISPLAY. Later DISPLAY headings
+/* Sheet title names CONTROLS / DISPLAY / APPEARANCE. Later DISPLAY headings
    (HUD / RENDERER / COCKPIT) stay. */
 #pm-panel-controls > .pm-group-h:first-child,
 #pm-panel-display > .pm-group-h:first-child,
+#pm-panel-appearance > .pm-group-h:first-child,
 #advanced > .pm-group-h:first-child,
 #audioset > .pm-group-h:first-child {
   display: none;
@@ -1290,6 +1293,125 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 }
 #pm-coach-tip { color: var(--text); padding-bottom: calc(var(--gap) * 0.5); }
 #pm-panel-driving :is(#pm-incident-log, #pm-ai-decisions) { padding-inline-start: 1.5em; }
+
+/* APPEARANCE — same setting-row chrome as the rest of SETTINGS; colour wells
+   match MY TEAM / garage (floored chip height, plate-line border). Live
+   preview + preset swatches sit above/beside the selects so dual accents are
+   obvious without leaving the sheet. */
+#pm-panel-appearance .pm-accent-preview {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--gap) * 0.75);
+  margin: 0 0 calc(var(--gap) * 0.75);
+  padding: calc(var(--gap) * 0.65) calc(var(--gap) * 0.75);
+  border-radius: var(--r-md);
+  background: var(--plate);
+  border: 1px solid var(--plate-line);
+}
+#pm-panel-appearance .pm-accent-preview-btn {
+  flex: 1 1 auto;
+  min-width: 0;
+  pointer-events: none;
+}
+#pm-panel-appearance .pm-accent-preview-hud {
+  flex: 0 0 auto;
+  min-width: calc(var(--chip-h) * 1.6);
+  height: var(--chip-h);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 calc(var(--gap) * 0.75);
+  border-radius: var(--r-sm);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 800;
+  font-style: italic;
+  letter-spacing: var(--ls-2);
+  border: 1px solid color-mix(in oklab, var(--accent-ink) 28%, transparent);
+}
+#pm-panel-appearance .pm-accent-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: calc(var(--gap) * 0.5);
+  margin: calc(var(--gap) * -0.25) 0 calc(var(--gap) * 0.35);
+}
+/* Beat `.pm-group button { width:100%; height:var(--tap) }` — chips are
+   colour samples, not full-row actions (same carve-out as `.as-tbtn`). */
+#pmsettings-inner #pm-panel-appearance .pm-accent-chip {
+  flex: 0 0 auto;
+  width: max(var(--chip-h), calc(var(--tap-min) * 0.72));
+  height: max(var(--chip-h), calc(var(--tap-min) * 0.72));
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--plate-line);
+  background: var(--chip, var(--red));
+  cursor: pointer;
+  font-size: 0;
+  line-height: 0;
+  white-space: nowrap;
+  overflow: hidden;
+}
+#pmsettings-inner #pm-panel-appearance .pm-accent-chip[aria-selected="true"] {
+  border-color: var(--text);
+  box-shadow: var(--edge);
+}
+#pmsettings-inner #pm-panel-appearance .pm-accent-chip-custom {
+  /* Token-only rainbow so CUSTOM reads as "picker" without raw palette literals. */
+  background: conic-gradient(from 0.25turn, var(--red), var(--accent), var(--red));
+}
+#pm-panel-appearance .pm-accent-custom > div {
+  display: flex; align-items: center; justify-content: flex-end; gap: calc(var(--gap) * 0.5);
+}
+#pmsettings-inner #pm-panel-appearance input[type="color"] {
+  flex: 0 0 auto;
+  width: max(var(--tap-min), calc(var(--chip-h) * 1.35));
+  height: var(--chip-h);
+  min-height: var(--chip-h);
+  padding: 0;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--plate-line);
+  background: none;
+  cursor: pointer;
+}
+#pmsettings-inner #pm-panel-appearance .pm-accent-hextext {
+  width: 9.5ch;
+  min-width: 9.5ch;
+  height: var(--chip-h);
+  min-height: var(--chip-h);
+  padding: 0 calc(var(--gap) * 0.5);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--plate-line);
+  background: var(--plate);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  letter-spacing: var(--ls-5);
+  text-transform: uppercase;
+}
+/* One-shot REPLAY INTRO — not a full-width Settings door. */
+#pmsettings-inner #pm-panel-appearance .pm-replay-intro {
+  width: auto;
+  align-self: flex-end;
+  flex-direction: column;
+  align-items: flex-start;
+  height: auto;
+  min-height: var(--tap);
+  margin-top: calc(var(--gap) * 0.35);
+  padding: calc(var(--gap) * 0.55) calc(var(--gap) * 0.85);
+}
+#pmsettings-inner #pm-panel-appearance .pm-replay-intro small {
+  display: block;
+  font-weight: 600;
+  font-style: italic;
+  letter-spacing: var(--ls-2);
+  color: var(--dim);
+  text-transform: none;
+}
 
 /* Every Settings page, not only STEERING / MUSIC: HUD SIZE and BUTTON SIZE
    used to be the two plain-grey labels on a sheet of steel italics. */

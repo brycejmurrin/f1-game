@@ -1538,9 +1538,14 @@ function rollover() {
   // points tie in season N was broken by season N-1's wins. The weekend
   // staging fields are last season's too.
   s.finishes = {};
+  // …and the per-round tallies: award() ADDS into roundPts[id][round], so each
+  // index kept summing across years, and objPick is keyed by round alone, so
+  // last season's round-1 brief was pre-selected for the new round 1.
+  s.roundPts = {}; delete s.lastFl;
   delete s.stage; delete s.sprintOrder; delete s.qualiOrder; delete s.qualiTrack;
   career.results = [];
   career.obj = null;
+  career.objPick = null;
   career.paidSponsors = [];
   save();
   return { year: career.year, champion: entry.champion, summary: entry,

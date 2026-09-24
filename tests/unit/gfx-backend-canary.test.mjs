@@ -204,6 +204,27 @@ test("the shared Playwright fixture pins native GLX coverage", () => {
   assert.match(install, /localStorage\.setItem\(\s*"apex26\.gfxBackend"\s*,\s*"webgl2"\s*\)/);
 });
 
+// The pin above only reaches specs that import `test` from fixtures.js. Four
+// gfx specs used to import raw @playwright/test and silently measured TLX on
+// Metal after the three default (RENDERER-MACOS-RED-2026-09.md). Keep them on
+// the fixtures path — tlx-probes is the TLX product gate and pins "three"
+// itself.
+test("gfx specs that name GLX import Playwright test from fixtures", () => {
+  for (const rel of [
+    "tests/specs/webgl-probes.spec.js",
+    "tests/specs/image-grade-visual.spec.js",
+    "tests/specs/lighting-ab.spec.js",
+    "tests/specs/lighting-tuner-grade.spec.js",
+    "tests/specs/instanced-draw.spec.js",
+  ]) {
+    const src = code(rel);
+    assert.match(src, /from\s+["']\.\.\/helpers\/fixtures\.js["']/,
+      rel + " must import test from fixtures (webgl2 pin)");
+    assert.doesNotMatch(src, /from\s+["']@playwright\/test["']/,
+      rel + " must not import raw @playwright/test (skips the webgl2 pin)");
+  }
+});
+
 test("first world present re-arms the canary so a jetsam mid-frame still reverts", () => {
   // The arm used to be inlined right before gfx.present(po); it is now the
   // extracted armBackendProbe() (also called from tick()'s fatal catch, so a
@@ -491,7 +512,9 @@ test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", ()
   // begin() strikes out…", "clean sessions heal the ladder") — not repeated
   // here as source text.
   assert.match(wgx, /_allocFail\(\s*"createMesh"/, "lazy mesh creation on the render path degrades to inert, not a throw");
-  assert.match(wgx, /_allocFail\(\s*"createChunkedMesh"/);
+  // createChunkedMesh moved to wgx-chunked.js (GLX-seam peel); it still routes
+  // through core.allocFail so a failed upload stays inert, not a throw.
+  assert.match(code("js/render/webgpu/wgx-chunked.js"), /allocFail\(\s*"createChunkedMesh"/);
   // A hand re-pick of WEBGPU resets the ladder so the player can retry full:
   // BEHAVIOUR through the picker.
   const a = bootPicker({
@@ -1369,12 +1392,14 @@ test("TLX shadow cull packs CPU-side without uploading the lit InstancedMesh", (
 
 test("WGX phone post targets use the slim GLX-equivalent formats", () => {
   const wgx = read("js/render/webgpu/wgx.js");
+  const post = read("js/render/webgpu/wgx-post.js");
   assert.match(wgx, /SSAO_FORMAT\s*=\s*"r8unorm"/);
   assert.match(wgx, /POST_HDR_FORMAT\s*=\s*"rg11b10ufloat"/);
-  // Blur pipelines use an explicit dynamic-offset layout (not fsPipe) so H/V
-  // passes do not share one writeBuffer slot before submit.
-  assert.match(wgx, /pBlurHDR\s*=\s*blurPipe\(POST_HDR_FORMAT\)/);
-  assert.match(wgx, /pBlur\s*=\s*blurPipe\(SSAO_FORMAT\)/);
+  // Blur pipelines live in wgx-post.js after the GLX-seam peel; they use an
+  // explicit dynamic-offset layout (not fsPipe) so H/V passes do not share one
+  // writeBuffer slot before submit.
+  assert.match(post, /pBlurHDR\s*=\s*blurPipe\((?:core\.)?POST_HDR_FORMAT\)/);
+  assert.match(post, /pBlur\s*=\s*blurPipe\((?:core\.)?SSAO_FORMAT\)/);
 });
 
 test("TLX present() records gfxBound when a fallback still paints", () => {
@@ -2097,6 +2122,62 @@ test("getDynamicCacheKey fills a scratch array instead of minting one per draw (
     "the nested per-call hash survives in getDynamicCacheKey (PATCHES.md §6)");
 });
 
+test("TextureNode clones share the BASE node's flipY / uv-matrix uniforms (PATCHES.md §10)", () => {
+  // r186 minted a flipY uniform per texture node (three's WebGL2 backend always
+  // flips) and marked every node OBJECT-update; the lit shader's 20 PCF taps
+  // were 20 per-object updates per draw. The uniforms now live on getBase() and
+  // update themselves; the node no longer needs an OBJECT update.
+  assert.match(THREE_BUNDLE, /(\w+)=this\.getBase\(\);null===\1\._flipYUniform&&\(\1\._flipYUniform=\w+\(!1\)\.onObjectUpdate\(/,
+    "the flipY uniform is per-clone again (vendor/three-0.186.0/PATCHES.md §10)");
+  assert.match(THREE_BUNDLE, /(\w+)=this\.getBase\(\);return null===\1\._matrixUniform&&\(\1\._matrixUniform=\w+\(\1\.value\.matrix\)\.onObjectUpdate\(/,
+    "the uv-matrix uniform is per-clone again (PATCHES.md §10)");
+  assert.doesNotMatch(THREE_BUNDLE, /this\.updateType=null!==this\._matrixUniform\|\|null!==this\._flipYUniform/,
+    "TextureNode still marks itself OBJECT-update (PATCHES.md §10)");
+  // And the lit shader samples each shadow map through ONE base node.
+  const lit = code("js/render/three/tsl-lit.js");
+  assert.doesNotMatch(lit, /texture\(SHD\.(sunTex|carTex|lampTex|blockerTex), /, "a PCF tap mints its own texture node again");
+  for (const m of ["sunTex", "carTex", "lampTex", "blockerTex"])
+    assert.match(lit, new RegExp(`shadowMapNode\\(SHD\\.${m}\\)`), m + " taps must share one base node");
+});
+
+test("shadow-bug batch: lamp/car targets warmed, caster key from the cast matrix, thrown-pass recovery", () => {
+  const sh = code("js/render/three/tlx-shadow.js");
+  const warm = sh.slice(sh.indexOf("async warm()"), sh.indexOf("async warm()") + 1200);
+  assert.match(warm, /for \(const rt of \[lampRT, lampStaticRT, carRT\]\)/, "warm() must compile the lamp/car targets' pipelines too");
+  assert.match(sh, /_lampStaticValid = _lastPassOk;/, "lampStaticEnd judges its own render, not the sticky S.enabled");
+  const begin = fnBody(sh, "beginPass");
+  assert.match(begin, /_passKeepsDepth = false;/, "a thrown car-only pass must not skip the next target's clear");
+  assert.match(begin, /if \(_passOpen\)/, "a thrown pass's casters must be hidden before the next target draws");
+  const lamp = fnBody(code("js/render/shared/shadow-pass.js"), "lampPass");
+  assert.match(lamp, /let _carKey = _playerIn \? _lampCasterKey\(1, _pm\) : 0;/, "the player is keyed from the matrix it is cast with");
+  assert.match(code("js/render/shared/shadow-pass.js"), /Math\.atan2\(m\[8\], m\[10\]\)/, "heading is part of the lamp caster key");
+  assert.match(code("js/render/three/tlx.js"), /if \(lim\.length\) _glMaxDim = Math\.min\(\.\.\.lim\);/, "a lost-context 0 must not latch");
+});
+
+test("lit material scalars ride two packed per-object vec4s, not seven materialReference nodes", () => {
+  // Seven materialReference nodes = seven updateReference + property-path walks
+  // per render object per pass (census 289: updateReference 4.6-5.6 % of the
+  // three.js/WebGL2 leg). makeMaterial packs them once; the shared graph reads two.
+  const lit = code("js/render/three/tsl-lit.js");
+  assert.doesNotMatch(lit, /materialReference\("userData\.tlx/, "a per-material scalar went back to a materialReference node");
+  assert.match(lit, /ud\.tlxPackA = new THREE\.Vector4\(ud\.tlxRoughness, ud\.tlxMetalness, ud\.tlxSpecular, ud\.tlxDetail\);/);
+  assert.match(lit, /ud\.tlxPackB = new THREE\.Vector4\(ud\.tlxClearcoat, ud\.tlxCarPaint, ud\.tlxSparkle, 0\);/);
+  // One per-object callback feeds the per-draw scalars AND both packed vectors.
+  assert.match(lit, /const \{ draw, pA, pB \} = perDrawUniforms\(\);/);
+  assert.match(lit, /pA\.value = \(mud && mud\.tlxPackA\) \|\| _PACK_A_DEF;/);
+  assert.doesNotMatch(lit, /const perObject = /, "the per-key OBJECT uniforms are back (five callbacks per lit draw)");
+});
+
+test("TextureNode.update rebuilds the UV matrix only for a node that samples through it (PATCHES.md §9)", () => {
+  // r186 called texture.updateMatrix() (setUvTransform) from every per-object
+  // TextureNode.update() whenever matrixAutoUpdate was on, even with no matrix
+  // uniform to read it; three's WebGL2 backend gives every texture node a flipY
+  // uniform, so every shadow compare / material / bake sample paid it per draw
+  // (census 289: 293 ms of setUvTransform in a 21.9 s WebGL2 leg).
+  assert.match(THREE_BUNDLE, /update\(\)\{const (\w+)=this\.value,(\w+)=this\._matrixUniform;null!==\2&&\(\2\.value=\1\.matrix\),null!==\2&&!0===\1\.matrixAutoUpdate&&\1\.updateMatrix\(\)/,
+    "TextureNode.update rebuilds the uv matrix without a matrix uniform again (vendor/three-0.186.0/PATCHES.md §9)");
+});
+
 test("the vendored three emits render-stage node variables at FUNCTION scope (WebKit 8 KB private cap, PATCHES.md §4)", () => {
   // iOS/Safari 26 refuses a module whose module-scope var<private> sum passes
   // 8,192 bytes ("The combined byte size of all variables in the private
@@ -2159,7 +2240,7 @@ test("the vendored three matches its MANIFEST.json — generated by tools/gen/ve
   const dir = "vendor/three-0.186.0";
   const m = JSON.parse(read(`${dir}/MANIFEST.json`));
   assert.equal(m.three, "0.186.0");
-  assert.deepEqual(m.patches, [1, 4, 5, 6], "patch ids applied (2 and 3 retired in r186)");
+  assert.deepEqual(m.patches, [1, 4, 5, 6, 9, 10], "patch ids applied (2 and 3 retired in r186; 7 and 8 were #228's reverted skip-draw pair)");
   const pkg = JSON.parse(read("package.json"));
   assert.equal(pkg.devDependencies.terser, m.terser, "package.json must pin the terser the manifest was generated with");
   for (const [file, rec] of Object.entries(m.files)) {
@@ -2783,7 +2864,7 @@ test("instanced cull cache only hits the transform pack resident in the GPU buff
     }
   }
   const glShadow = read("js/render/glx/shadow.js");
-  const wgx = read("js/render/webgpu/wgx.js");
+  const wgxSh = read("js/render/webgpu/wgx-shadow.js");
   assert.match(glShadow, /bufferSubData\([^]*?batch\._cullPlanes\s*=\s*null/,
     "GLX full-set shadow restore must invalidate the resident cull pack");
   // WGX (bug hunt 2026-09-02): the shadow pass packs into the batch's OWN
@@ -2791,13 +2872,15 @@ test("instanced cull cache only hits the transform pack resident in the GPU buff
   // writing instBuf here WAS the bug: the shadow encoder rides the frame
   // submit while the camera cull's writeBuffer is queue-ordered before it, so
   // every shadow pass drew the camera's pack. Pin the separation.
-  const wgxCast = wgx.slice(wgx.indexOf("function castShadowInstanced("), wgx.indexOf("function castShadowInstanced(") + 2200);
+  // castShadowInstanced lives in wgx-shadow.js after the GLX-seam peel.
+  const wgxCast = wgxSh.slice(wgxSh.indexOf("function castShadowInstanced("), wgxSh.indexOf("function castShadowInstanced(") + 2200);
   assert.doesNotMatch(wgxCast, /writeBuffer\(batch\.instBuf/,
     "WGX castShadowInstanced must never write instBuf (frame-order bug)");
   assert.match(wgxCast, /writeBuffer\(batch\.shadowInstBuf/,
     "WGX full-set cast packs into the batch's own shadow instance buffer");
-  assert.match(wgxCast, /_setVB1\(shadowPass, vb \|\| batch\.instBuf \|\| identInstanceBuf\)/,
+  assert.match(wgxCast, /(?:_setVB1|core\.setVB1)\(shadowPass, vb \|\| batch\.instBuf \|\| (?:core\.)?identInstanceBuf\)/,
     "the shadow draw binds the shadow buffer when it has one");
+  const wgx = read("js/render/webgpu/wgx.js");
   const wgxCull = wgx.slice(wgx.indexOf("function cullInstances(batch, planes, opts)"), wgx.indexOf("function cullInstances(batch, planes, opts)") + 4200);
   assert.match(wgxCull, /const shadow = !!\(opts && opts\.upload === false\);/,
     "cullInstances must recognise the shadow cull (upload:false)");
@@ -2822,7 +2905,7 @@ test("instanced cull cache only hits the transform pack resident in the GPU buff
   // _shadowEncoderBegin must therefore submit ANY pending encoder, not only one
   // whose model ring is nearly full — that ring threshold is a memory concern
   // and says nothing about which light packed the instance buffer.
-  const beginFn = fnBody(code("js/render/webgpu/wgx.js"), "_shadowEncoderBegin");
+  const beginFn = fnBody(code("js/render/webgpu/wgx-shadow.js"), "_shadowEncoderBegin");
   assert.match(beginFn, /if\s*\(\s*_pendingShadowEnc\s*\)\s*\{[^]*?queue\.submit/,
     "each shadow pass must submit the previous one — an unconditional submit, not a ring-threshold one");
   assert.doesNotMatch(beginFn, /_pendingShadowEnc\s*&&\s*_shadowSlot\s*>/,
@@ -2835,7 +2918,7 @@ test("instanced cull cache only hits the transform pack resident in the GPU buff
 test("all three backends take a shadow KEEP, and game.js says which skips are cadence", () => {
   for (const [file, fn] of [
     ["js/render/glx/shadow.js", "carShadowKeep"],
-    ["js/render/webgpu/wgx.js", "carShadowKeep"],
+    ["js/render/webgpu/wgx-shadow.js", "carShadowKeep"],
     ["js/render/three/tlx-shadow.js", "carShadowKeep"],
   ]) {
     const src = code(file);
@@ -2879,7 +2962,7 @@ test("all three backends take a shadow KEEP, and game.js says which skips are ca
   // so they share one bound rather than each computing their own.
   assert.equal((gsrc.match(/const _lsR = rad \+ 8/g) || []).length, 1,
     "the content key and the cast loop must share one radius bound, not compute two");
-  for (const file of ["js/render/glx/shadow.js", "js/render/webgpu/wgx.js",
+  for (const file of ["js/render/glx/shadow.js", "js/render/webgpu/wgx-shadow.js",
                       "js/render/three/tlx-shadow.js"]) {
     assert.ok(code(file).includes("lampShadowKeep"), `${file} must expose lampShadowKeep`);
   }
@@ -2896,12 +2979,11 @@ test("all three backends take a shadow KEEP, and game.js says which skips are ca
 // The flag the shader reads must be observable, or a strobe is invisible.
 test("shadow state reports the frame-live armed flag, not just a lifetime count", () => {
   // BOUND EACH WINDOW AT THE SIBLING. carShadowState and lampShadowState are
-  // adjacent one-liners — 211 stripped bytes apart in wgx.js, 269 in glx.js — so
-  // a flat 300-char window let the car assertion pass on the LAMP accessor's
-  // armed field, and deleting `armed: SHD.carArmed` stayed green on two of the
-  // three backends. This is the same defect the arms pin above documents,
-  // repeated in the same diff that documented it.
-  for (const file of ["js/render/glx/glx.js", "js/render/webgpu/wgx.js", "js/render/three/tlx.js"]) {
+  // adjacent one-liners in the owning module — GLX/TLX keep them in the main
+  // backend file; WGX peels them into wgx-shadow.js. A flat 300-char window
+  // let the car assertion pass on the LAMP accessor's armed field, and deleting
+  // `armed: …` stayed green on two of the three backends.
+  for (const file of ["js/render/glx/glx.js", "js/render/webgpu/wgx-shadow.js", "js/render/three/tlx.js"]) {
     const src = code(file);
     for (const [which, sib] of [["carShadowState", "lampShadowState"],
                                 ["lampShadowState", "carShadowState"]]) {
@@ -2913,6 +2995,10 @@ test("shadow state reports the frame-live armed flag, not just a lifetime count"
         `${file}: ${which} must expose armed — arms stays true straight through a strobe`);
     }
   }
+  // WGX still re-exports the accessors from wgx.js so game.js / surface parity
+  // keep calling through the backend façade.
+  assert.match(code("js/render/webgpu/wgx.js"), /carShadowState\s*=\s*\(\)\s*=>\s*SHD\.carShadowState/);
+  assert.match(code("js/render/webgpu/wgx.js"), /lampShadowState\s*=\s*\(\)\s*=>\s*SHD\.lampShadowState/);
 });
 
 // A hidden or closing tab is not a crash, and the canary must not read one as one.
@@ -3191,8 +3277,14 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   // shadow-pool slot the new track did not refill kept an old chunk alive.
   const sh = read("js/render/three/tlx-shadow.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(sh, /const parkedGeo = new THREE\.BufferGeometry\(\)/, "one shared empty geometry for parked wrappers");
-  assert.match(sh, /for \(let i = used; i < pool\.length; i\+\+\) \{ pool\[i\]\.visible = false; pool\[i\]\.geometry = parkedGeo; \}/,
+  // One pool per target since 2026-09-24 (PERF-FINDINGS §2ak): endPass parks
+  // the slots this target stopped using, and beginPass parks the slots the
+  // previous target's pass showed — both release geometry, not only hide.
+  assert.match(sh, /for \(let i = used; i < cur\.prevUsed; i\+\+\) \{ pool\[i\]\.visible = false; pool\[i\]\.geometry = parkedGeo; \}/,
     "endPass must release the discrete casters' geometry, not only hide them");
+  assert.match(sh, /for \(let i = 0; i < shown\.prevUsed; i\+\+\) \{ shown\.pool\[i\]\.visible = false; shown\.pool\[i\]\.geometry = parkedGeo; \}/,
+    "a pass parks the other target's shown casters, so a target that never runs again pins nothing");
+  assert.match(sh, /const pools = new Map\(\);/, "one caster pool per shadow target");
   // Instanced casters are keyed one per batch (a slot pool recompiled programs
   // mid-race); freeing the batch must release its caster and geometry.
   assert.match(sh, /const iByBatch = new Map\(\)/, "instanced casters are keyed per batch, not a slot pool");
@@ -3208,17 +3300,16 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   assert.doesNotMatch(glx, /setPolyOffset\(\[-4/, "no per-draw bias literal");
   // Four since 2026-09-08: shadow, mark, skid batch, and the DRIVING LINE ribbon.
   assert.equal((glx.match(/setPolyOffset\(ROAD_BIAS\)/g) || []).length, 4, "the four road decal draws share ROAD_BIAS");
-  // TLX: three honours the ROAD's own depthBias (game.js _wmRoad*, applied by
-  // tsl-lit.js) on both of its backends, GLX does not. An fx decal biased by
-  // GLX's -4/-8 therefore sits BEHIND the road on three — gpu-census 48 on an
-  // Apple GPU drew the driving line on GLX and WGX and nothing on TLX, with
-  // zero GPU errors (2026-09-08). The fx offset must be beyond the road's.
+  // TLX: three honours any depthBias a material carries. The fx decals must sit
+  // nearer than the road (they were -4/-8 over a [-8,-16] road and vanished,
+  // gpu-census 48, 2026-09-08), and the road is now unbiased on every backend.
   const tslFx = read("js/render/three/tsl-fx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const fxF = +tslFx.match(/polygonOffsetFactor = (-?[\d.]+)/)[1], fxU = +tslFx.match(/polygonOffsetUnits = (-?[\d.]+)/)[1];
-  const road = read("js/game.js").match(/_wmRoadDryD = \{[^}]*depthBias: \[(-?[\d.]+), (-?[\d.]+)\]/);
-  assert.ok(road, "the dry road material declares a depthBias");
-  assert.ok(fxF < +road[1] && fxU < +road[2],
-    `tsl-fx fx decal offset (${fxF},${fxU}) must be nearer the camera than the road's (${road[1]},${road[2]})`);
+  const road = read("js/game.js").match(/_wmRoadDryD = \{[^}]*\}/);
+  assert.ok(road, "the dry road material exists");
+  const rb = road[0].match(/depthBias: \[(-?[\d.]+), (-?[\d.]+)\]/) || [0, 0, 0];
+  assert.ok(fxF < +rb[1] && fxU < +rb[2],
+    `tsl-fx fx decal offset (${fxF},${fxU}) must be nearer the camera than the road's (${rb[1]},${rb[2]})`);
 });
 
 test("all three backends carry the driving line's colour-blind palette", () => {
@@ -4309,11 +4400,13 @@ test("UPSCALE SettingRow + TLX spatial API markers", () => {
   // Dawn/Naga reserves `std` — the shared SGSR port must use edgeStd (validate caught this).
   assert.match(wgsl, /fn weightY\([^)]*edgeStd/, "SGSR WGSL weightY must not use reserved std");
   const wgx = read("js/render/webgpu/wgx.js");
+  const wgxPost = read("js/render/webgpu/wgx-post.js");
   assert.match(wgx, /setSpatialUpscale/, "WGX must export setSpatialUpscale");
   assert.match(wgx, /wantSpatialUpscale/, "WGX must gate size split");
   assert.match(wgx, /!!pSGSR/, "WGX wantSpatialUpscale must require linked SGSR pipeline");
-  assert.match(wgx, /SGSR_GATHER/, "WGX must try the gather pipeline first");
-  assert.match(wgx, /spatialUpscaleGather/, "gather escape pin apex26.spatialUpscaleGather=0");
+  // SGSR pipeline link + gather escape live in wgx-post.js after the peel.
+  assert.match(wgxPost, /SGSR_GATHER/, "WGX must try the gather pipeline first");
+  assert.match(wgxPost, /spatialUpscaleGather/, "gather escape pin apex26.spatialUpscaleGather=0");
   assert.match(wgx, /getSpatialUpscaleGather/, "WGX must export gather active state");
 });
 
@@ -4395,8 +4488,18 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
   // render context, hence the program cache, on the MRT node's id), the MRT is
   // nulled only after it, and the casters compile under null (sunPass runs before
   // present(), with the MRT restored).
-  let shadowCalls = 0, postCalls = 0;
-  const _warmPlus = true;   // apex26.tlxWarmPlus=1: the full warm (opt-in)
+  let shadowCalls = 0, postCalls = 0, fxCalls = 0;
+  // The FX warm (particles, skid marks — PERF-FINDINGS §2ah) runs after the
+  // scene warm, under the SAME target and ssrTag MRT the scene compiled with.
+  const warmFxPrograms = async () => {
+    fxCalls++; await Promise.resolve();
+    assert.equal(target, "HDR"); assert.equal(mrt, "tag", "FX programs compile under the scene MRT, the variant present() draws");
+    assert.equal(postCalls, 0, "the FX warm runs before the post warm");
+  };
+  let minted = false;
+  const mintLateLit = () => { assert.equal(tag, false, "late lit variants are minted BEFORE setSsrMrt stamps the MRT"); minted = true; };
+  const warmLateLit = async () => { assert.ok(minted); assert.equal(mrt, "tag", "late lit variants compile under the scene MRT"); };
+  const warmPlusOn = () => true;   // apex26.tlxWarmPlus=1 or three's WebGL2 backend: the full warm
   // The stage timeline memState().warm reports (census 207 spent its window
   // inside the warm with no row saying so): the sandbox owns the record.
   const _warmStages = { at: 0, scene: null, post: null, shadow: null, total: null, attempts: 0, failed: 0 };
@@ -4433,8 +4536,8 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
     iShadow = body.indexOf("shadowSys.warm()");
   assert.ok(iPost > 0 && iNull > iPost && iShadow > iNull, "setMRT(null) must sit between the post warm and the caster warm");
   assert.equal(body.indexOf("renderer.setMRT(null)", iNull + 1), -1, "startProgramWarm nulls the MRT exactly once");
-  assert.match(body, /if \(_warmPlus && shadowSys && shadowSys\.warm\)/, "the caster warm is skipped when the module offers none or apex26.tlxWarmPlus is not 1");
-  assert.match(body, /post\.warm && \(_warmPlus \|\| performance\.now\(\) - _warmAt < 3000\)/, "without tlxWarmPlus=1 the post warm keeps its 3 s gate");
+  assert.match(body, /if \(warmPlusOn\(\) && shadowSys && shadowSys\.warm\)/, "the caster warm is skipped when the module offers none or apex26.tlxWarmPlus is not 1");
+  assert.match(body, /post\.warm && \(warmPlusOn\(\) \|\| performance\.now\(\) - _warmAt < 3000\)/, "without tlxWarmPlus=1 the post warm keeps its 3 s gate");
   const warm = eval("(function(opts){" + body + "})");
   warm({}); await Promise.resolve();
   assert.equal(target, "HDR"); assert.equal(mrt, "tag"); assert.equal(postCalls, 0);
@@ -4442,11 +4545,11 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
   assert.equal(target, "canvas"); assert.equal(mrt, "previous"); assert.equal(tag, false);
   assert.equal(_warmRequested, true); assert.equal(_warmPending, null);
   warm({}); await _warmPending;
-  assert.equal(_warmRequested, false); assert.equal(postCalls, 1); assert.equal(shadowCalls, 1);
+  assert.equal(_warmRequested, false); assert.equal(postCalls, 1); assert.equal(shadowCalls, 1); assert.equal(fxCalls, 1);
   assert.equal(target, "canvas"); assert.equal(mrt, "previous"); assert.equal(tag, false);
   // Two attempts, one failed; every stage of the successful one is a number.
   assert.equal(_warmStages.attempts, 2); assert.equal(_warmStages.failed, 1);
-  for (const k of ["scene", "post", "shadow", "total"]) assert.ok(Number.isFinite(_warmStages[k]) && _warmStages[k] >= 0, k + " stage timed");
+  for (const k of ["scene", "fx", "post", "shadow", "total"]) assert.ok(Number.isFinite(_warmStages[k]) && _warmStages[k] >= 0, k + " stage timed");
   assert.ok(_warmStages.at > 0, "warm start stamped");
 });
 
@@ -4501,6 +4604,7 @@ test("TLX defers resize during compilation and applies the latest requested size
   let cssW = 1136, cssH = 524, presentW = 1704, presentH = 786, W = 852, H = 393;
   let renderScale = 0.5, _softReadEpoch = 0, _softReadQueued = null;
   let _gpuLastResize = null, _gpuLastOperation = "compile-scene";
+  let _glMaxDim = -1;   // resize()'s once-per-device WebGL2 texture ceiling
   const DPR_CAP = 1.5;
   const window = { innerWidth: 1100, innerHeight: 500, devicePixelRatio: 3 };
   const _layoutCanvas = { clientWidth: 1100, clientHeight: 500 }, _displayCanvas = null;
@@ -4662,6 +4766,29 @@ test("selector car assets yield per driver, preserve simulation, and cancel stal
   }
 });
 
+test("selector preparation waits for the player's hands before the build and the warm frames", async () => {
+  // A TIME OF DAY step that crosses dark rebuilds the circuit (1-3 s on the
+  // main thread) and the warm frames that follow upload and compile for seconds
+  // more; both ran 120 ms after the tap, so the RACE SETTINGS sheet froze under
+  // the player's next tap (2026-09-24). Both now wait for MENU_IDLE_MS of quiet.
+  const src = read("js/game.js");
+  const body = fnBody(src, "scheduleFlybyTrack");
+  assert.match(body, /if \(!\(await menuIdle\(current\)\)\) return;\s*loadTrack\(want\);/,
+    "the build waits for an idle menu");
+  assert.equal((body.match(/if \(await menuIdle\(current\)\) _menuGate\.warm = 2;/g) || []).length, 2,
+    "both paths arm the warm frames only after the car assets, on an idle menu");
+  assert.doesNotMatch(body, /_menuGate\.warm = 2;\s*await prepareMenuCarAssets/, "warm frames never precede the paced car assets");
+  const idle = eval("(function(){ let _menuInputAt = 0; const MENU_IDLE_MS = 1200; let now = 0;" +
+    " const performance = { now: () => now }; const waits = [];" +
+    " const setTimeout = (fn, ms) => { waits.push(ms); now += ms; fn(); };" +
+    src.match(/async function menuIdle\(current\) \{[\s\S]*?\n\}/)[0] +
+    " return { menuIdle, waits, tap: (t) => { _menuInputAt = t; now = t; } }; })()");
+  idle.tap(5000);
+  assert.equal(await idle.menuIdle(() => true), true);
+  assert.deepEqual(idle.waits, [1200], "a tap pushes the build a full idle window out");
+  assert.equal(await idle.menuIdle(() => false), false, "a stale selection never builds");
+});
+
 test("selector preparation rejects stale requests, reuses the world, and waits for compilation", async () => {
   const _menuGate = { warm: 0, generation: 0, ready: "", track: null };
   let flybyBuildTimer = 0, trackIdx = 0, raceTimeOfDay = "default", raceWeather = "dry";
@@ -4673,6 +4800,10 @@ test("selector preparation rejects stale requests, reuses the world, and waits f
   const clearTimeout = id => timers.delete(id);
   const gfx = { warming: () => compiling }, Log = { warn() {} };
   const prepareMenuCarAssets = async () => {};
+  const menuLampBake = async () => {};   // the lamp prebake is LampBake.prebake's (lamp-bake.test.mjs)
+  // The idle gate and the upload slice are module-level policy (tested below);
+  // here the player is idle and a slice is immediate.
+  const menuIdle = async (current) => current(), menuSlice = async () => {};
   const ensureScenery = id => new Promise(resolve => requests.push({ id, resolve }));
   const loadTrack = id => { builds.push(id); track = { id }; };
   const schedule = eval("(function(settle){" + fnBody(read("js/game.js"), "scheduleFlybyTrack") + "})");
@@ -4735,19 +4866,129 @@ test("tick()'s fatal catch arms the boot-canary probe before rethrowing (a pre-p
     "the fatal-branch call site must gate on the same latch state as the render() call site");
 });
 
-test("the startline mesh out-biases the road it is painted on", () => {
-  // The start line, grid boxes and pit paint ride one decal mesh drawn with
-  // _startBias. The road itself draws with depthBias [-8, -16] on every backend,
-  // so a weaker decal bias pulls the paint BEHIND the asphalt and it fights the
-  // road beyond a few metres (2026-09-24: [-1, -2], 28k overlapping pairs, all
-  // 52 circuits). Both numbers must be strictly more negative than the road's.
+test("the startline mesh beats the unbiased road without burying the cars", () => {
+  // The start line, grid boxes and pit paint ride one OPAQUE decal mesh drawn
+  // with _startBias, and the grid boxes lie under the cars. A slope factor of -f
+  // pulls paint behind a car forward by f px of its depth gradient and hides the
+  // car's bottom f px: at -12 (over a road at [-8, -16]) whole cars vanished at
+  // range (2026-09-24). So: the road carries NO depthBias, and _startBias is a
+  // small negative bias that still beats it.
   const src = read("js/game.js");
   const start = src.match(/const _startBias = \[(-?[\d.]+), (-?[\d.]+)\]/);
   assert.ok(start, "_startBias not found in js/game.js");
-  const roads = [...src.matchAll(/const _wmRoad\w+ = \{[^}]*depthBias: \[(-?[\d.]+), (-?[\d.]+)\]/g)];
+  const roads = [...src.matchAll(/const _wmRoad\w+ = \{[^}]*\}/g)];
   assert.ok(roads.length >= 4, `expected the four _wmRoad* materials, found ${roads.length}`);
-  for (const r of roads) {
-    assert.ok(Number(start[1]) < Number(r[1]) && Number(start[2]) < Number(r[2]),
-      `_startBias [${start[1]}, ${start[2]}] must be stronger than the road's [${r[1]}, ${r[2]}]`);
+  for (const r of roads) assert.doesNotMatch(r[0], /depthBias/, `road material must not carry a depth bias: ${r[0]}`);
+  const f = Number(start[1]), u = Number(start[2]);
+  assert.ok(f < 0 && u < 0, `_startBias [${f}, ${u}] must pull the paint toward the camera`);
+  assert.ok(f >= -4, `_startBias factor ${f} would bury the cars standing on the grid boxes`);
+});
+
+test("TLX FX: double-sided FX draw in ONE pass and their programs warm on the stream layouts (PERF-FINDINGS §2ah)", () => {
+  // three splits a transparent DoubleSide material into back + front passes
+  // unless forceSinglePass: two draws, two pipelines, and compileAsync builds
+  // neither — the particle groups compiled mid-race even when warmed.
+  const fxSrc = code("js/render/three/tsl-fx.js");
+  assert.match(fxSrc, /if \(o\.doubleSided\) \{ m\.side = THREE\.DoubleSide; m\.forceSinglePass = true; \}/,
+    "double-sided FX materials must set forceSinglePass (GLX draws them in one pass, cull off)");
+  const tlx = code("js/render/three/tlx.js");
+  const body = fnBody(tlx, "warmFxPrograms");
+  for (const pair of [/\[skidStream, fx\.skidMat\]/, /\[partStreams\[0\], fx\.particleMats/, /\[partStreams\[1\], fx\.particleMats/])
+    assert.match(body, pair, "the FX warm compiles " + pair + " on its real stream geometry");
+  assert.match(body, /ensureStream\(stream, 1\)/, "the stream geometry (its vertex layout) exists before the compile");
+  assert.match(fnBody(tlx, "startProgramWarm"), /await warmFxPrograms\(\);\s*await warmLateLit\(\);/, "startProgramWarm runs the FX warm, then the late lit variants");
+  assert.match(tlx, /const _LATE_LIT = \[\{ roughness: 0\.9, specular: 0, noAlphaWrite: true, alpha: 0\.5 \}\]/,
+    "the brake-ring transparent variant (census 245 minted t,0.9,0,0,0,0,0,1|na) is pre-minted during the lights");
+});
+
+test("lamp shadow: the player takes the AI cars' lamp-radius bound in BOTH the key and the cast (TLX-PERF-PLAN L0)", () => {
+  // Hashed and cast unconditionally, the player changed the key every 0.25 m, so a
+  // night drive rebuilt the whole static prop set 30-60 times a second even far
+  // outside the lamp's reach. The key must cover exactly the set the pass draws.
+  const sp = code("js/render/shared/shadow-pass.js");
+  const lamp = fnBody(sp, "lampPass");
+  assert.match(lamp, /const _playerIn = _hasLivePlayerShadow && \(_pdx \* _pdx \+ _pdy \* _pdy \+ _pdz \* _pdz\) <= _lsR2;/,
+    "the player is tested against the same _lsR2 as the AI casters");
+  assert.match(lamp, /let _carKey = _playerIn \? _lampCasterKey\(1, _pm\) : 0;/, "the key hashes the player only when it is cast");
+  assert.match(lamp, /if \(_playerIn\) G\.gfx\.castShadow\(deps\.teamMesh\(G\.player\.team, G\.player, true\), _livePlayerShadowMat\);/,
+    "the cast draws the player only when it is within reach");
+  assert.doesNotMatch(lamp, /if \(_hasLivePlayerShadow\) G\.gfx\.castShadow/, "no unconditional player cast left in the lamp pass");
+});
+
+test("lamp static map: car-only rebuilds copy the static props depth and draw the cars alone (TLX-PERF-PLAN L1)", () => {
+  const sh = code("js/render/three/tlx-shadow.js");
+  // WebGPU cannot copyTextureToTexture a depth24plus texture: both lamp targets
+  // carry depth32float when the static map is on.
+  assert.match(sh, /if \(floatDepth\) depthTexture\.type = THREE\.FloatType;/);
+  assert.match(sh, /const lampRT = isMobile \? null : makeDepthTarget\(LAMP_SIZE, "TLXLampShadow", false, lampStaticOn\);/);
+  assert.match(sh, /const lampStaticRT = lampStaticOn \? makeDepthTarget\(LAMP_SIZE, "TLXLampStatic", false, true\) : null;/);
+  // AUTO is WebGPU only: three's WebGL copy does five synchronous gl.getParameter
+  // reads per call (census 289: 2 s of WebGL2 spike frames inside lampCarsBegin).
+  assert.match(sh, /let lampStaticOn = isWebGPU;/, "the depth copy must not default on for three's WebGL2 backend");
+  // The car-only pass: copy first, then draw onto the copied depth with the clear off,
+  // and autoClear restored in a finally so a throwing caster cannot leave it off.
+  const cars = fnBody(sh, "lampCarsBegin");
+  assert.match(cars, /renderer\.copyTextureToTexture\(lampStaticRT\.depthTexture, lampRT\.depthTexture\)/);
+  assert.match(cars, /!_lampStaticValid \|\| !_lampRendered\) return false;/, "no copy before a valid static map AND a rendered lampRT");
+  const end = fnBody(sh, "endPass");
+  assert.match(end, /if \(keepDepth\) renderer\.autoClear = false;/);
+  assert.match(end, /finally \{ renderer\.autoClear = autoClear0; \}/);
+  // shadow-pass: cars-only on a car-only change, the full pass otherwise, and the
+  // static map refreshed after every full pass (a lamp change or the first).
+  const lamp = fnBody(code("js/render/shared/shadow-pass.js"), "lampPass");
+  assert.match(lamp, /const _carsOnlyPass = _carOnly && G\.gfx\.lampCarsBegin && G\.gfx\.lampCarsBegin\(_mFlVP, flBest\);/);
+  assert.match(lamp, /if \(!_carsOnlyPass\) G\.gfx\.lampShadowBegin\(_mFlVP, flBest\);/);
+  assert.match(lamp, /if \(!_carsOnlyPass && G\.gfx\.lampStaticBegin && G\.gfx\.lampStaticBegin\(_mFlVP\)\) \{/);
+});
+
+test("godray: lamp beams alone take one blur pair, sun shafts keep two, on TLX and GLX alike (TLX-PERF-PLAN G1)", () => {
+  // The second H+V pair removes the sun march's shadow-slice stripes; a lamp
+  // cone has none, so night frames with only lamp beams skip it: -2 half-res
+  // passes. One backend-neutral knob, apex26.grLite=0, restores two pairs.
+  const tlx = code("js/render/three/tlx-post.js"), glx = code("js/render/glx/post.js");
+  for (const [name, src] of [["tlx-post", tlx], ["glx/post", glx]]) {
+    assert.match(src, /const grPairs = \(!sunGR && _grLite\) \? 1 : 2;/, name + ": one pair only without sun shafts");
+    assert.match(src, /for \(let bp = 0; bp < grPairs; bp\+\+\)/, name + ": the blur loop runs grPairs");
+    assert.match(src, /_grLite = localStorage\.getItem\("apex26\.grLite"\) !== "0"/, name + ": the shared knob");
   }
+});
+
+test("godray: WGX takes the same one-pair lamp-only blur as TLX/GLX", () => {
+  const src = code("js/render/webgpu/wgx.js");
+  assert.match(src, /1 \/ halfW, 1 \/ halfH, \(!sunGR && _grLite\) \? 1 : 2\)/, "wgx: one pair only without sun shafts");
+  assert.match(src, /_grLite = localStorage\.getItem\("apex26\.grLite"\) !== "0"/, "wgx: the shared knob");
+});
+
+test("lamp shadow cache keys on the lamp's VP inputs, not its position alone", () => {
+  // POOL RADIUS / BEAM CONE rebuild the set with the same positions: a key on
+  // x,y,z kept (or car-only-copied) a map drawn under the old far plane / fov.
+  const sp = code("js/render/shared/shadow-pass.js");
+  assert.match(sp, /rad === _lampShR && L\[o \+ 11\] === _lampShC/, "radius + cone in the same-lamp key");
+  assert.match(sp, /L\[o \+ 7\] === _lampShDx && L\[o \+ 8\] === _lampShDy && L\[o \+ 9\] === _lampShDz/, "aim in the key");
+  const sh = code("js/render/three/tlx-shadow.js");
+  assert.match(sh, /if \(Math\.fround\(lightVP\[i\]\) !== _lampStaticVP\[i\]\) return false;/, "L1 copy only under the static map's own VP");
+});
+
+test("TLX draw records are pooled, one fixed shape, reset through resetRecs (TLX-PERF-PLAN R1)", () => {
+  const src = read("js/render/three/tlx.js");
+  const stripped = code("js/render/three/tlx.js");
+  assert.doesNotMatch(stripped, /drawList\.push\(\{/, "no per-draw object literal left");
+  assert.equal((stripped.match(/drawList\.length = 0/g) || []).length, 1, "the one raw reset is inside resetRecs");
+  assert.ok((stripped.match(/resetRecs\(\);/g) || []).length >= 4, "begin, env-soft exit, env face end and present tail all reset through resetRecs");
+  // Run the real pool: a slot reused by an FX record must not carry the previous
+  // lit draw's emissive/alpha (acquireMesh tests `!== undefined`), and a reset
+  // must drop every reference the slot held.
+  const a = src.indexOf("const _recPool = [];"), b = src.indexOf("drawList.length = 0;", a);
+  const end = src.indexOf("}", b) + 1;
+  const drawList = [];
+  const lib = new Function("drawList", src.slice(a, end) + "; return { pushRec, resetRecs, pool: () => _recPool };")(drawList);
+  lib.pushRec("G1", "M1", "MAT1", 0.7, 0.4, 1, null, null);
+  const slot = drawList[0];
+  lib.resetRecs();
+  assert.equal(drawList.length, 0);
+  assert.equal(slot.geo, null); assert.equal(slot.mat, null); assert.equal(slot.m, null);
+  lib.pushRec("G2", null, "FXMAT", undefined, undefined, 0, null, null);
+  assert.equal(drawList[0], slot, "the slot is reused");
+  assert.equal(slot.em, undefined); assert.equal(slot.al, undefined); assert.equal(slot.lg, 0);
+  assert.deepEqual(Object.keys(slot), ["geo", "m", "mat", "em", "al", "lg", "chunked", "instanced"], "one fixed shape");
 });

@@ -53,20 +53,41 @@ const NetLobby = (function () {
       status: $("vs-status"),
     });
 
-    function say(msg, isError) {
+    // #vs-status is a polite live region. `busy` marks a TICKING message (the
+    // connect counter): aria-busy holds the announcement until the state
+    // settles, instead of a screen reader reading "Connecting… 7s" every second.
+    // Unchanged text is not rewritten — the 4 Hz polls re-said the same line.
+    function say(msg, isError, busy) {
       statusText = msg || "";
       // Direct lookup: els() rebuilds a 35-element map per call, and say()
       // fires from 4 Hz polls and 1 Hz relay ticks during every connect.
       const e = document.getElementById("vs-status");
       if (!e) return;
-      e.textContent = statusText;
+      if (typeof e.setAttribute === "function") {
+        if (busy) e.setAttribute("aria-busy", "true");
+        else e.removeAttribute("aria-busy");
+      }
+      if (e.textContent !== statusText) e.textContent = statusText;
       e.classList.toggle("vs-error", !!isError);
     }
 
+    // Focus follows the step: hiding the section that held the pressed button
+    // (HOST A RACE -> #vs-hosting, …) left a keyboard or pad player on <body>.
+    const has = (box, el) => !!(box && el && typeof box.contains === "function" && box.contains(el));
+    const focusInto = (host) => {
+      const a = document.activeElement;
+      const lobby = document.getElementById("vsfriend");
+      if (!host || host.hidden || (a && a !== document.body && lobby && !has(lobby, a))) return;
+      if (has(host, a)) return;
+      const t = typeof TopModal !== "undefined" && TopModal.landing ? TopModal.landing(host) : null;
+      if (t) { try { t.focus({ preventScroll: true }); } catch (_) { t.focus(); } }
+    };
     function show(step) {
       const e = els();
       for (const k of ["pick", "hosting", "joining", "room", "code"]) if (e[k]) e[k].hidden = (k !== step);
+      focusInto(e[step]);
     }
+    const shownStep = (e) => ["pick", "hosting", "joining", "room", "code"].map((k) => e[k]).find((x) => x && !x.hidden);
 
     function localProfile() {
       const team = Teams.LIST[G.teamIdx] || Teams.LIST[0];
@@ -331,7 +352,7 @@ const NetLobby = (function () {
         }
         const st = watched.stats ? watched.stats() : null;
         const secs = Math.round((Date.now() - started) / 1000);
-        if (st) say("Connecting… " + secs + "s (" + (st.ice || "?") + "/" + (st.connection || "?") + ")" + relayNote);
+        if (st) say("Connecting… " + secs + "s (" + (st.ice || "?") + "/" + (st.connection || "?") + ")" + relayNote, false, true);
 
         const dead = st && (st.ice === "failed" || st.connection === "failed");
         if (dead || Date.now() - started > CONNECT_TIMEOUT_MS) {
@@ -442,7 +463,18 @@ const NetLobby = (function () {
       made.onEvent(NetPlay.EV.SETTINGS, (d) => { if (role === "guest") applySettings(d); });
       made.onEvent(NetPlay.EV.READY, (d) => {
         if (!underRate(readyTimes)) return;
-        _ready.set(id, !!(d && d.ready));
+        // Mirror HELLO: guests have no peer link, so the host must relay READY
+        // with `from`. Key by who the ready belongs to, not the connection id
+        // (on a guest that is always the host peer — docs/BUGS.md B3).
+        const who = role === "host" ? id : ((d && d.from != null) ? d.from : id);
+        _ready.set(who, !!(d && d.ready));
+        if (role === "host") {
+          const tagged = { ready: !!(d && d.ready), from: id };
+          for (const [k, sess] of sessions) {
+            if (k === id) continue;
+            try { sess.sendEvent(NetPlay.EV.READY, tagged); } catch (e) { /* dead session */ }
+          }
+        }
         renderRoom();
       });
       made.onEvent(NetPlay.EV.GO, () => { if (role === "guest") beginRace(); });
@@ -1007,6 +1039,7 @@ const NetLobby = (function () {
         // or a time trial. flow/session are the authority (js/game.js).
         G.flow = "gp";
         G.session = "race";
+        G.duel = false;   // the room's grid is every peer's; a duel would trim the host's to two cars
         // startRace is ASYNC (it awaits ensureScenery) — without the await,
         // netPlay.start() below ran before makeCars()/gridUp(): on a fresh
         // page G.cars was [] (no_slot → cancel → quitToMenu, the friend race
@@ -1201,7 +1234,9 @@ const NetLobby = (function () {
       scanner = null;
       if (active) active.stop();
       const e = els();
+      const hadFocus = has(e.scan, document.activeElement);
       if (e.scan) e.scan.hidden = true;
+      if (hadFocus) focusInto(shownStep(e));
     }
 
     async function scan(kind) {
@@ -1214,6 +1249,7 @@ const NetLobby = (function () {
       stopScan();
       const gen = scannerGeneration;
       e.scan.hidden = false;
+      focusInto(e.scan);
       say("Point the camera at their code…");
       const attempt = NetScan.create();
       scanner = attempt;

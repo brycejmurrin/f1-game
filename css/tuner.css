@@ -30,7 +30,8 @@
 :root { --dock-w: 0px; --dock-px: 0px; }
 body:has(#lighting:not([hidden])),
 body:has(#camtune:not([hidden])),
-body:has(#flyby:not([hidden])) {
+body:has(#flyby:not([hidden])),
+body:has(#freecam:not([hidden])) {
   /* `88 * --vwz`, NOT `88vw`. This value is in the panel's own ZOOMED local
      space (see --dock-px below), and a bare viewport unit resolves against the
      UNZOOMED viewport and is then multiplied by the zoom — so 88vw paints as
@@ -68,7 +69,7 @@ body:has(#flyby:not([hidden])) {
      repeating this formula. */
   --dock-px: calc((var(--dock-w) + 8px + var(--sar)) * var(--ui-scale));
 }
-#lighting-inner, #camtune-inner, #flyby-inner { --fit-at: 200px; }
+#lighting-inner, #camtune-inner, #flyby-inner, #freecam-inner { --fit-at: 200px; }
 /* FLYING: the dock gives width back to the controls, at every size.
    `:has()` takes the specificity of its argument, so `body:has(#lighting…)` is
    ID-level — a plain `body.photo-mode` override loses to it no matter how many
@@ -77,7 +78,8 @@ body:has(#flyby:not([hidden])) {
    each side there are 549 usable pixels, and a 380px panel leaves 151 — not one
    thumbstick, never mind two and a climb/dive column. */
 body.photo-mode:not(.pc-nopanel):has(#lighting:not([hidden])),
-body.photo-mode:not(.pc-nopanel):has(#camtune:not([hidden])) {
+body.photo-mode:not(.pc-nopanel):has(#camtune:not([hidden])),
+body.photo-mode:not(.pc-nopanel):has(#freecam:not([hidden])) {
   /* `46 * --vwz`, not `46vw` — same correction as the base --dock-w above and
      for the same reason: this is consumed inside `zoom: var(--ui-scale)`, so a
      bare viewport unit paints at 53vw on the coarse-pointer default. */
@@ -163,8 +165,8 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 
 /* Docked to the RIGHT edge with no backdrop: the game keeps rendering while the
    panel is open, so the left of the screen is the live preview. */
-#lighting, #camtune, #flyby { position: fixed; top: 0; right: 0; bottom: 0; z-index: 42; pointer-events: none; }
-#lighting-inner, #camtune-inner, #flyby-inner {
+#lighting, #camtune, #flyby, #freecam { position: fixed; top: 0; right: 0; bottom: 0; z-index: 42; pointer-events: none; }
+#lighting-inner, #camtune-inner, #flyby-inner, #freecam-inner {
   /* Docked, not centred: .sheet gives the head/body/foot shape and the query
      container, and these override the sheet's centred sizing. */
   pointer-events: auto;
@@ -213,7 +215,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 /* padding-right buys the scroll indicator its own lane. Without it the thumb
    is drawn on the content-box edge, which is where each row's VALUE sits — the
    0.55 beside KEY LIGHT had a red bar through it. */
-#lt-rows, #ct-rows, #fb-rows {
+#lt-rows, #ct-rows, #fb-rows, #fc-rows {
   /* max() with a painted floor: the 84px local minimum shrank with the sheet
      zoom to 33.6 painted px at UI SIZE 40% — the audit's `starved` finding
      (a scroll region under its 44 device-px threshold). 44/scale keeps the
@@ -295,8 +297,8 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 }
 .lt-group .lt-section:first-of-type { margin-top: calc(var(--gap) * 0.5); }
 /* panel header: title + FREE CAMERA button on one line */
-#lt-head, #ct-head, #fb-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: calc(var(--gap) / 3); }
-#lt-head h2, #ct-head h2, #fb-head h2 { margin: 0; }
+#lt-head, #ct-head, #fb-head, #fc-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: calc(var(--gap) / 3); }
+#lt-head h2, #ct-head h2, #fb-head h2, #fc-head h2 { margin: 0; }
 /* preview time/weather: one compact line each — small inline label + tight chips */
 .lt-preview-row { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--gap) / 3); margin: calc(var(--gap) * 0.25) 0; }
 .lt-preview-lbl { flex: 0 0 auto; width: 56px; font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4); color: var(--dim); }
@@ -313,13 +315,14 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
    rule as a gradient ::before (css/components.css) — re-adding a solid border
    painted BOTH, so these two panels were the only feet in the app with a
    hairline and a solid line stacked at the same edge. */
-#lighting-inner .sheet-foot, #camtune-inner .sheet-foot, #flyby-inner .sheet-foot {
+#lighting-inner .sheet-foot, #camtune-inner .sheet-foot, #flyby-inner .sheet-foot, #freecam-inner .sheet-foot {
   display: flex; gap: calc(var(--gap) * 2 / 3); flex-shrink: 0;
   margin-top: 10px; padding-top: 10px;
 }
 #lighting-inner .sheet-foot button,
 #camtune-inner .sheet-foot button,
-#flyby-inner .sheet-foot button {
+#flyby-inner .sheet-foot button,
+#freecam-inner .sheet-foot button {
   margin: 0;
   /* Same WCAG floor the compact rung already carries (see its note further
      down): these are padding-driven (~45 local px), which is 19 painted px
@@ -359,6 +362,21 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 }
 #fb-status.fb-inside { color: var(--red); font-weight: 700; }
 #fb-scrub { margin: calc(var(--gap) / 3) 0; }
+/* ---------- free camera (js/camera/free-cam.js) ----------
+   The same dock once more; the status line reads like the flyby editor's, and
+   the button rows share one rhythm. Everything is styled by id: the panel is
+   built in JS and adds no class of its own. */
+#fc-status {
+  font-size: var(--fs-micro); line-height: 1.35; color: var(--dim);
+  margin: 0 0 calc(var(--gap) / 3);
+  min-height: 2.7em;                 /* two lines reserved: no reflow as the camera flies */
+  overflow-wrap: anywhere;
+}
+#fc-snaps, #fc-lens, #fc-copies { display: flex; flex-wrap: wrap; gap: calc(var(--gap) / 3); margin: calc(var(--gap) / 2) 0; }
+#fc-snaps > button, #fc-lens > button, #fc-copies > button { flex: 1 1 0; margin: 0; min-height: var(--tap-min); }
+#fc-lens > button[aria-pressed="true"] { background: var(--plate-on); border-color: var(--red); color: var(--text); }
+#fc-help, #fc-msg { font-size: var(--fs-micro); color: var(--dim); margin: calc(var(--gap) / 3) 0; }
+#fc-out { flex-shrink: 0; width: 100%; min-height: 6em; }
 /* EYE FROM / EYE TO / LOOK FROM / LOOK TO. Four poses of nine sliders read as
    one undifferentiated column without them. */
 #fb-rows .fb-group {
@@ -614,8 +632,8 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
    `--rail-at` is 640, above the 560px the rail-on dock grows to, so a compact
    wide dock keeps the horizontal chip strip and the sliders keep the full
    dock width. Rail-on only when the sheet is already wider than that dock. */
-#lighting-inner, #camtune-inner, #flyby-inner { --compact-at: 620px; --rail-at: 640px; }
-#lighting-inner > .sheet-foot, #camtune-inner > .sheet-foot, #flyby-inner > .sheet-foot {
+#lighting-inner, #camtune-inner, #flyby-inner, #freecam-inner { --compact-at: 620px; --rail-at: 640px; }
+#lighting-inner > .sheet-foot, #camtune-inner > .sheet-foot, #flyby-inner > .sheet-foot, #freecam-inner > .sheet-foot {
   position: sticky; bottom: 0; z-index: 2;
 }
 
@@ -650,6 +668,15 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] :is(#lt-rows, #ct-rows) {
     min-height: 0;
+  }
+  /* The corner previews are three jump buttons, not a second menu: at UI SIZE
+     150% on a 734x343 phone the balanced row wrapped them into two ~70px lines
+     and #ct-rows was left 15px — every slider hidden behind MONZA / SPA /
+     MONACO (survey-ui-matrix, 2026-09-24). One equal row at the tap floor. */
+  #camtune-inner[data-density="compact"] #ct-previews { --balance-basis: 0px; --balance-min: 0px; flex-wrap: nowrap; }
+  #camtune-inner[data-density="compact"] #ct-previews > button {
+    min-width: 0; min-height: var(--tap-min); padding: 0 calc(var(--gap) * 0.25);
+    font-size: var(--fs-micro); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-head,
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] #ct-head { margin-bottom: 2px; }

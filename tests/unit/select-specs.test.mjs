@@ -9,7 +9,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
-  DOCS_ONLY, isDocsOnly, shards, shardTimeoutMin, MAX_OVERSIZE_SHARDS,
+  DOCS_ONLY, isDocsOnly, shards, shardTimeoutMin, maxTestsPerShard, MAX_OVERSIZE_SHARDS,
   SELECTED_GATE, FIXED_GATE_SPECS, dropBootFallback, BOOT_FALLBACK_REASONS,
   scopeCarryForward } from "../../tools/ci/select-specs.mjs";
 import { pick } from "../../tools/ci/pick-tests.mjs";
@@ -49,33 +49,37 @@ test("fit cuts at the budget and names every skipped spec", () => {
   // so fit() reports it as coveredByVmTwin before any budgeting happens.
   const specs = ["tests/specs/smoke.spec.js", "tests/specs/boot-guard.spec.js"];
   const r = fit(specs, 5);
-  assert.equal(r.selected.length + r.skipped.length + r.unreachable.length + r.coveredByFixedGates.length, 2,
-    "every spec lands in selected, skipped, unreachable, or an independent fixed gate");
+  assert.equal(r.selected.length + r.skipped.length + r.unreachable.length
+    + r.oversize.length + r.coveredByFixedGates.length, 2,
+    "every spec lands in selected, skipped, unreachable, oversize, or an independent fixed gate");
   assert.ok(r.testsSelected <= r.testsFit, `${r.testsSelected} selected into ${r.testsFit}`);
   for (const s of r.skipped) assert.ok(s.tests > 0, "a skipped spec carries its cost");
 });
 
-test("a spec bigger than the whole cap is UNREACHABLE, not merely skipped", () => {
-  // The hole this exists for: the cut is greedy smallest-first, so a spec whose
-  // declared test count exceeds the ENTIRE cap can never be selected — not
-  // "did not fit this time", but "cannot fit on any change, ever". Every
-  // js/net/ change duly listed multiplayer-session.spec.js (19 tests against a
-  // 10-test cap) as skipped, which reads as routine, and it sat red for weeks
-  // with nothing running it. Two categories, so the permanent one is legible.
+test("a spec bigger than the whole pack runs as OVERSIZE shards, not unreachable", () => {
+  // Was "unreachable": every js/net change listed multiplayer-session (19 tests
+  // against a 10-test pack) as a permanent REPORT and nobody ran it. With
+  // expanded per-circuit counts the same path would have dropped tracks-walls
+  // (~63) after the undercount was fixed — skipping the tests the change
+  // selected. Too-big-for-the-pack now means its own matrix shard(s); Playwright
+  // --shard splits when the expanded count exceeds maxTestsPerShard.
   const big = "tests/specs/multiplayer-session.spec.js";
   const r = fit([big, "tests/specs/boot-guard.spec.js"], 15);
-  assert.ok(r.unreachable.some((s) => s.file === big),
-    `${big} declares ${r.unreachable.concat(r.skipped, r.selected).find((s) => s.file === big)?.tests} ` +
-    `tests against a ${r.testsFit}-test cap and must be reported as unreachable`);
-  assert.ok(!r.skipped.some((s) => s.file === big), "unreachable is not double-counted as skipped");
+  assert.ok(r.oversize.some((s) => s.file === big),
+    `${big} declares ${r.oversize.concat(r.skipped, r.selected, r.unreachable).find((s) => s.file === big)?.tests} ` +
+    `tests against a ${r.testsFit}-test pack and must run as its own oversize shard`);
+  assert.ok(!r.unreachable.some((s) => s.file === big), "oversize is not double-counted as unreachable");
+  assert.ok(!r.skipped.some((s) => s.file === big), "oversize is not double-counted as skipped");
   assert.deepEqual(r.selected.map((s) => s.file), ["tests/specs/boot-guard.spec.js"],
-    "a spec that does fit is still selected alongside the report");
-  // A spec that fits the cap ON ITS OWN is ordinary skipping, never
-  // unreachable — 9 tests + 4 tests against a 10-test cap takes the 4 and
+    "a spec that does fit is still selected alongside the oversize plan");
+  // A spec that fits the pack ON ITS OWN is ordinary skipping, never
+  // oversize — 9 tests + 4 tests against a 10-test pack takes the 4 and
   // skips the 9, which a later change with fewer candidates would pick up.
   const small = fit(["tests/specs/multiplayer-seats.spec.js", "tests/specs/multiplayer-npeer.spec.js"], 15);
+  assert.deepEqual(small.oversize.map((s) => s.file), [],
+    "a spec smaller than the pack is skipped, not oversize");
   assert.deepEqual(small.unreachable.map((s) => s.file), [],
-    "a spec smaller than the cap is skipped, not unreachable");
+    "a spec smaller than the pack is skipped, not unreachable");
   assert.deepEqual(small.skipped.map((s) => s.file), ["tests/specs/multiplayer-seats.spec.js"]);
 });
 
@@ -416,14 +420,38 @@ test("an affected spec that cannot fit the budget runs in its own OVERSIZE shard
   const affected = fit([big, "tests/specs/boot-guard.spec.js"], 15, { rank: (f) => f === big ? 0 : 3 });
   assert.deepEqual(affected.oversize.map((s) => s.file), [big], "affected + too big = its own shard");
   assert.ok(!affected.unreachable.some((s) => s.file === big), "not reported as unreachable when it will run");
+  // Merely routed + too big ALSO runs as oversize: after expanded counts,
+  // dropping tracks-walls here would re-open the cancel-with-0-failures hole.
   const routed = fit([big, "tests/specs/boot-guard.spec.js"], 15);
-  assert.ok(routed.unreachable.some((s) => s.file === big), "merely routed + too big stays a visible REPORT");
-  assert.deepEqual(routed.oversize, [], "no shard is spent on a spec the change did not touch");
+  assert.deepEqual(routed.oversize.map((s) => s.file), [big], "routed + too big still gets a shard");
+  assert.deepEqual(routed.unreachable.map((s) => s.file), [], "not parked as unreachable");
   const plan = shards({ ...affected, testsSelected: affected.testsSelected });
   const shard = plan.find((s) => s.name.startsWith("oversize-"));
   assert.ok(shard && shard.specs === big, "the plan carries the oversize spec as its own matrix entry");
   assert.equal(shard.timeout, shardTimeoutMin(declaredTests(big)), "billed at its own declared count");
   assert.ok(MAX_OVERSIZE_SHARDS >= 1 && MAX_OVERSIZE_SHARDS <= 4, "fan-out stays bounded");
+});
+
+test("a loop-expanded per-circuit spec is billed at fleet size and split across --shard jobs", () => {
+  // The concrete failure: select billed tracks-walls as 4, packed it with
+  // foundations into one selected shard (timeout 39), Playwright ran ~63 tests
+  // at 45-58 s each, job cancelled at the cap with 0 failures.
+  const walls = "tests/specs/tracks-walls.spec.js";
+  const n = declaredTests(walls);
+  assert.ok(n > maxTestsPerShard(), `walls expands to ${n}, must exceed one job's cap`);
+  const r = fit([walls, "tests/specs/boot-guard.spec.js"], 15);
+  assert.ok(r.oversize.some((s) => s.file === walls && s.tests === n),
+    "walls must leave the packed shard as oversize at its expanded count");
+  assert.ok(!r.selected.some((s) => s.file === walls), "must not pack into the budgeted shard");
+  const plan = shards({ ...r, testsSelected: r.testsSelected });
+  const wallShards = plan.filter((s) => s.specs === walls);
+  assert.ok(wallShards.length >= 2, `expected multiple Playwright shards, got ${wallShards.length}`);
+  assert.ok(wallShards.every((s) => s.shard && /^\d+\/\d+$/.test(s.shard)),
+    "each piece must carry a Playwright --shard=i/n token");
+  assert.ok(wallShards.every((s) => s.tests <= maxTestsPerShard()),
+    "no piece may exceed the 90-minute-derived per-job cap");
+  assert.ok(wallShards.every((s) => s.timeout === shardTimeoutMin(s.tests)),
+    "each piece's kill timer matches its billed count");
 });
 
 test("a tracked-path change narrows the selection to the edited/imported specs instead of emptying it", () => {
@@ -564,13 +592,20 @@ test("an over-budget spec the diff EDITS still runs; one merely routed still doe
   assert.deepEqual(routed.overBudgetSpecs.map((s) => s.file), [over], "a merely ROUTED one is still excluded");
   assert.equal(routed.oversize.length, 0);
 
-  // And its shard is billed at the spec's OWN declared figure, not the gate's:
+  // And each shard is billed at the spec's OWN declared figure, not the gate's:
   // deriving a 180 s cap for a spec that says it needs 300+ kills the job, and
-  // a killed job reads as "0 failures".
-  const shard = shards(edited).find((x) => x.name.startsWith("oversize-"));
-  assert.ok(shard, "the oversize spec gets a shard");
-  assert.ok(shard.timeout >= shardTimeoutMin(edited.oversize[0].tests),
-    "billed at least at the gate rate");
+  // a killed job reads as "0 failures". Loop-expanded / high-timeout specs
+  // further split across --shard=i/n so each piece stays under the 90-minute
+  // hard cap (career at 540 s/test → 9 tests/job).
+  const pieces = shards(edited).filter((x) => x.name.startsWith("oversize-"));
+  assert.ok(pieces.length >= 1, "the oversize spec gets at least one shard");
+  assert.ok(pieces.every((s) => s.specs === over), "every piece names the edited spec");
+  assert.ok(pieces.every((s) => s.timeout === shardTimeoutMin(s.tests, edited.oversize[0].ownTimeoutSec)),
+    "each piece is billed at the spec's own per-test timeout");
+  if (pieces.length > 1) {
+    assert.ok(pieces.every((s) => /^\d+\/\d+$/.test(s.shard)),
+      "a split plan carries Playwright --shard tokens");
+  }
 });
 
 test("a spec this tool cannot READ is reported, never silently dropped", () => {
@@ -588,4 +623,32 @@ test("a spec this tool cannot READ is reported, never silently dropped", () => {
   for (const k of ["selected", "skipped", "unreachable", "oversize", "overBudgetSpecs"]) {
     assert.equal((r[k] || []).length, 0, `${k} must not claim a spec that could not be read`);
   }
+});
+
+test("fit bills each spec at its MEASURED rate, and an unmeasured selection cuts where it always did", () => {
+  // 2026-09-24: the cut counted TESTS against a cap derived from one 79.7 s
+  // mean, so the per-spec medians select-budget reports (3+ CI samples) never
+  // moved a selection — ~12 % of routed specs ran. Synthetic histories pin it.
+  // Budgeted specs only: none twinned, fixed-gate or over the per-test gate.
+  const specs = ["tests/specs/output-paths.spec.js", "tests/specs/telemetry-compare.spec.js",
+                 "tests/specs/assets-api.spec.js"];
+  const empty = { specs: {} };
+  const flat = fit(specs, 15, { db: empty });
+  assert.ok(flat.testsSelected <= flat.testsFit, "no history: the old test-count boundary holds");
+  const cheap = { specs: Object.fromEntries(specs.map((f) => [f,
+    { s: [1, 2, 3].map((i) => [`2026-09-2${i}T00:00:00Z`, "llvmpipe", 5 * declaredTests(f), declaredTests(f)]) }])) };
+  const measured = fit(specs, 15, { db: cheap });
+  assert.equal(measured.selected.length, specs.length, "every spec at 5 s a test fits a 15-minute budget");
+  assert.ok(measured.selected.length > flat.selected.length, "the measured rate must change the cut, or it is decoration");
+  assert.ok(measured.secSelected <= measured.secFit, `${measured.secSelected} s billed into ${measured.secFit} s`);
+  // Two samples are not a median: below MIN_SAMPLES the constant stands.
+  const thin = { specs: Object.fromEntries(Object.entries(cheap.specs).map(([f, v]) => [f, { s: v.s.slice(0, 2) }])) };
+  assert.deepEqual(fit(specs, 15, { db: thin }).selected.map((s) => s.file), flat.selected.map((s) => s.file));
+  // A local sample never sets a CI budget.
+  const local = { specs: Object.fromEntries(Object.entries(cheap.specs).map(([f, v]) => [f, { s: v.s.map((x) => [x[0], "local", x[2], x[3]]) }])) };
+  assert.deepEqual(fit(specs, 15, { db: local }).selected.map((s) => s.file), flat.selected.map((s) => s.file));
+  // More tests than the fallback cap counts may now share the shard; its
+  // runner cap must still clear every one of them timing out.
+  const plan = shards({ ...measured, oversize: [] });
+  assert.equal(plan[0].timeout, shardTimeoutMin(Math.max(measured.testsFit, measured.testsSelected)));
 });

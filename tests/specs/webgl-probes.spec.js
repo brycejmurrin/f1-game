@@ -4,12 +4,16 @@
 //   - __apex.lightState() shape
 //   - setTimeOfDay() night/day floodlight transitions
 //   - engine 48-light cap (MAX_LIGHTS packed vec4 arrays — not a WebGL / UBO limit)
-import { test, expect } from "@playwright/test";
-// The measured boot budgets. This file carried 8000 / 10_000 and a set of
-// 3000-5000 ms lighting waits; on an idle box the boot alone takes up to
-// 24.6 s and a day/night lamp transition up to 17.3 s, so every test here
-// failed on the budget rather than on the renderer. See fixtures.js.
-import { BOOT_MS, TRACK_MS } from "../helpers/fixtures.js";
+// Import test/expect FROM fixtures (not @playwright/test): fixtures' context
+// fixture pins apex26.gfxBackend=webgl2. After TLX became the shipped default
+// (fff8d3da1), raw @playwright/test left this file on TLX while it monkey-
+// patches GLX.castShadow — Metal nightly then read casterCount=0 forever
+// (docs/notes/RENDERER-MACOS-RED-2026-09.md). The measured boot budgets still
+// apply: this file carried 8000 / 10_000 and a set of 3000-5000 ms lighting
+// waits; on an idle box the boot alone takes up to 24.6 s and a day/night
+// lamp transition up to 17.3 s, so every test here failed on the budget
+// rather than on the renderer. See fixtures.js.
+import { test, expect, BOOT_MS, TRACK_MS } from "../helpers/fixtures.js";
 // setTimeOfDay -> lightState().numLights settles: measured 12.8-17.3 s idle.
 const LIGHT_MS = 45000;
 test.describe.configure({ timeout: 240_000 });   // several of those waits per test
@@ -70,10 +74,16 @@ test.describe("WebGL renderer probes", () => {
     // false (no HDR), but it must be a boolean either way.
     const hdrMode = await page.evaluate(() => typeof GLX !== "undefined" ? GLX.hdrMode() : undefined);
     expect(typeof hdrMode).toBe("boolean");
+    // Fixtures pin webgl2; refuse a silent TLX boot (the standing Metal red).
+    const bound = await page.evaluate(() => {
+      try { return sessionStorage.getItem("apex26.gfxBound"); } catch (_) { return null; }
+    });
+    expect(bound, "webgl-probes must boot native GLX (fixtures pin webgl2)").toBe("webgl2");
     await page.waitForTimeout(300);
     const result = await page.evaluate(async () => {
       const frames = (n) => new Promise((resolve) => {
-        const next = () => { if (--n <= 0) resolve(); else requestAnimationFrame(next); };
+        let left = n;
+        const next = () => { if (--left <= 0) resolve(); else requestAnimationFrame(next); };
         requestAnimationFrame(next);
       });
       window.__apex.jump(0.20, 60, 0);
@@ -100,15 +110,28 @@ test.describe("WebGL renderer probes", () => {
 
       const target = window.__apex.nodeAt(0.75);
       window.__apex.jump(0.75, 60, 0);
-      await frames(1);
-      const firstPass = passes[0] || [];
+      // Wait for a Begin that actually cast — a single rAF can land on a
+      // cadence-keep frame (carShadowKeep) with zero casts recorded.
+      for (let i = 0; i < 30; i++) {
+        await frames(1);
+        if (passes.some((p) => p.length > 0)) break;
+      }
+      const firstPass = passes.find((p) => p.length > 0) || passes[0] || [];
       const minDistance = firstPass.reduce((best, p) =>
         Math.min(best, Math.hypot(p[0] - target.x, p[1] - target.z)), Infinity);
-      return { minDistance, casterCount: firstPass.length };
+      const cs = (typeof GLX.carShadowState === "function") ? GLX.carShadowState() : null;
+      return {
+        minDistance,
+        casterCount: firstPass.length,
+        passCount: passes.length,
+        carShadowState: cs,
+        gfxBound: (() => { try { return sessionStorage.getItem("apex26.gfxBound"); } catch (_) { return null; } })(),
+      };
     });
 
-    expect(result.casterCount).toBeGreaterThan(0);
-    expect(result.minDistance).toBeLessThan(5);
+    expect(result, JSON.stringify(result)).toMatchObject({ gfxBound: "webgl2" });
+    expect(result.casterCount, JSON.stringify(result)).toBeGreaterThan(0);
+    expect(result.minDistance, JSON.stringify(result)).toBeLessThan(5);
   });
 
   test("setTimeOfDay night increases numLights on track with floodlights", async ({ page }) => {

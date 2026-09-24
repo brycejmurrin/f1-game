@@ -121,7 +121,9 @@ test("one flag decides the whole lens, and the preview carries it", () => {
   const body = bodyOf("function render(");
   assert.match(body, /if \(dbgCam && dbgCam\.cine\) cine = true;/,
     "the editor's preview must be recognised as the cinematic it is previewing");
-  assert.match(body, /if \(dbgCam \|\| cine\) \{\s*\n\s*camRoll = 0;/,
+  // Set outright, never damped: level (0) unless the FREE CAMERA's ROLL dial put
+  // one on its own dbgCam (js/camera/free-cam.js) — a live flyby has no dbgCam.
+  assert.match(body, /if \(dbgCam \|\| cine\) \{\s*\n\s*camRoll = \(dbgCam && dbgCam\.roll\) \|\| 0;/,
     "the live flyby would otherwise inherit the roll the last race left behind, and decay it over the " +
     "first half-second of a shot the editor showed level");
   assert.match(body, /const _near = cine \? FlybySeq\.NEAR/,

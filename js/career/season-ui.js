@@ -170,8 +170,12 @@ function create(G) {
 
   function build() {
     if (!draft) return;
-    buildCalendar();
-    buildPool();
+    // Every chip, preset and "Add" button repaints both panes and destroys
+    // itself; keepFocus puts focus back on the same slot (the calendar's
+    // arrows still refocus exactly via focusCal, which runs after this).
+    const panes = () => { buildCalendar(); buildPool(); };
+    if (window.TopModal && TopModal.keepFocus) TopModal.keepFocus($("season-setup"), panes);
+    else panes();
     const live = SeasonCal.hasProgress(G.season);
     // #ss-apply is a STATIC shell node — unlike the rebuilt-per-paint confirm
     // buttons, node replacement never disarms it, so an armed RESTART could

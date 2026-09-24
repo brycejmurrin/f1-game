@@ -23,14 +23,13 @@
    The title screen is not a `.sheet`, so without this it is the one screen the
    setting would never move. */
 #overlay > * { zoom: var(--ui-scale); }
-/* Title arrives once. Reuses sheet-in (css/components.css) so the doors and
-   the wordmark share the same motion as every modal sheet — one-shot, never
-   a loop (the sheen rule below documents why). hidden on #overlay restarts it
-   when the player comes back from a room. */
-@media (prefers-reduced-motion: no-preference) {
-  #menu-brand { animation: sheet-in 0.32s cubic-bezier(0.2, 0.7, 0.3, 1); }
-  #menu-buttons { animation: sheet-in 0.4s 0.05s cubic-bezier(0.2, 0.7, 0.3, 1); }
-}
+/* Title arrives once. The wordmark reuses sheet-in (css/components.css), the
+   motion every modal sheet shares — one-shot, never a loop (the sheen rule in
+   css/components.css documents why) — inside the title intro below, so it
+   plays on the first show only, not every time the player comes back from a
+   room. The doors do not ride sheet-in as ONE block: each button enters on
+   its own there, and a parent slide under a child stagger is the same motion
+   twice. */
 #overlay {
   position: fixed; inset: 0;
   z-index: 20;
@@ -66,13 +65,23 @@
   align-content: center;
   align-content: safe center;
   /* in oklab so the red wash stays red through its falloff instead of
-     sagging grey, and .grain (css/components.css) dithers what is left */
+     sagging grey, and .grain (css/components.css) dithers what is left.
+     --menu-wash-pct is the MENU WASH player setting (js/ui/title-fx.js):
+     FULL uses the fallback below; SOFT/OFF stamp a token on :root. The
+     desktop landscape rule in css/responsive.css reads the same token. */
   background:
-    radial-gradient(115% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) 28%, transparent), transparent 58%),
+    radial-gradient(115% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) var(--menu-wash-pct, 28%), transparent), transparent 58%),
     rgba(6, 6, 10, 0.36);
   overflow-y: auto; overflow-x: hidden;
   overscroll-behavior-y: contain; touch-action: pan-y;
 }
+/* MENU WASH player setting (js/ui/title-fx.js → html[data-menu-wash]).
+   Tokens only — both this file and css/responsive.css (overlays layer) paint
+   the radial from --menu-wash-pct, so a soft/off answer wins on every
+   viewport without fighting cascade-layer order. Grain uses --grain-opacity
+   (css/components.css). */
+:root[data-menu-wash="soft"] { --menu-wash-pct: 12%; --grain-opacity: 0.025; }
+:root[data-menu-wash="off"]  { --menu-wash-pct: 0%;  --grain-opacity: 0; }
 /* THE TITLE CAR. A decorative art layer, NOT a grid item: #overlay is a grid,
    so an in-flow child would open a third row and move the composition. Absolute
    takes it out of flow and fills the fixed parent instead.
@@ -108,27 +117,12 @@
   z-index: -1;
   color: var(--red);                 /* the ONE declaration that themes every
                                         currentColor stroke and gradient stop */
+  contain: paint;                    /* the svg clips its art already; this lets
+                                        the intro's per-frame repaints stop at its box */
 }
-/* THE PORTRAIT DRAWING IS A SECOND PICTURE, NOT A SECOND CROP. It sits in the
-   same slot on the same terms — bottom-anchored, behind everything, its own
-   aspect on the box so cover and fit agree — but its viewBox is 900/1600,
-   because a high-and-behind view of two cars is taller than it is wide and a
-   tall phone has nothing else to put in that shape.
-   Exactly one of the two is ever rendered: display:none, not opacity, so the
-   one that is not on screen costs no paint at all. */
-#title-car-top {
-  position: absolute;
-  left: 0; right: 0; bottom: 0; top: auto;
-  width: 100%; height: auto;
-  aspect-ratio: 900 / 1600;
-  zoom: normal;
-  pointer-events: none;
-  z-index: -1;
-  color: var(--red);
-  display: none;
-}
+/* Every tall shape re-shows #title-car in its own grid band (the portrait
+   blocks at the end of this file), so as a full-screen LAYER it is off. */
 :where(body[data-shape="tall"]) #title-car { display: none; }
-:where(body[data-shape="tall"]) #title-car-top { display: block; }
 /* Literal colours live on the elements as presentation attributes, which carry
    specificity 0 — so these rules win without !important and a theme can win
    over these. */
@@ -149,25 +143,25 @@
    opposite assumption, and the car rendered as a wireframe every time. The
    open-line paths carry their own fill="none" attribute, which beats this
    inherited value. */
-:is(#title-car, #title-car-top) g { fill: var(--carbon); stroke-linecap: round; stroke-linejoin: round; }
+#title-car g { fill: var(--carbon); stroke-linecap: round; stroke-linejoin: round; }
 /* :not([stroke]) rather than a class — the glow group is the only one that
    names its own paint (the gradient), so the art needs no class at all, and
    cssClasses stays where it was. A CSS rule would otherwise WIN over that
    presentation attribute, which carries specificity 0. */
-:is(#title-car, #title-car-top) g:not([stroke]) { stroke: var(--steel); }
+#title-car g:not([stroke]) { stroke: var(--steel); }
 /* ONE CONTOUR, NOT THIRTY. The car's outline is a DILATE-AND-KNOCKOUT, not an
    SVG filter: every panel is drawn once swollen and inked (this rule), then
    again in the body colour on top, so what survives is the outer edge of their
    union. Thirty individual panel outlines is what made two cars side by side
    read as one tangle rather than as two cars. An attribute hook, not a class,
    so cssClasses stays where it was. */
-:is(#title-car, #title-car-top) g[data-ink] { fill: var(--steel); stroke: var(--steel); }
+#title-car g[data-ink] { fill: var(--steel); stroke: var(--steel); }
 /* VOLUME. The silhouette alone reads flat because every panel takes the same
    tone, yet the geometry already knows which faces point up and which fall
    away. These carry the light: one ink at three fill-opacities (set as
    presentation attributes, which take a plain number and so need no rule of
    their own) -- tops catch the sky, flanks sit back, rubber stays darkest. */
-:is(#title-car, #title-car-top) g[data-tone] { fill: var(--steel); }
+#title-car g[data-tone] { fill: var(--steel); }
 /* THE TRAILS HAVE TO BE PAINTED FROM CSS. Carrying fill="url(#tc-trail)" as a
    presentation attribute does not work here: `#title-car g` above sets fill on
    the very same element, and a CSS rule beats a presentation attribute, which
@@ -175,11 +169,12 @@
    life because of it -- dark smears rather than the red they were written to
    be. Anything painting a <g> that `#title-car g` also matches has to come
    from a rule, not an attribute. */
-:is(#title-car, #title-car-top) g[data-trail] { fill: url(#tc-trail); }
-/* The portrait marks take the vertical ramp defined in their own svg. Same
-   reason the rule above exists — a presentation attribute loses to `g` — plus
-   the paint server has to live in the svg that is actually displayed. */
-#title-car-top g[data-trail] { fill: url(#tc-trail-v); }
+#title-car g[data-trail] { fill: url(#tc-trail); }
+/* TITLE ART player setting (js/ui/title-fx.js → html[data-title-art]).
+   Specificity beats the media-query opacity fades and the tall-shape
+   re-shows below so SOFT/OFF win on every viewport. ON leaves those alone. */
+:root[data-title-art="soft"] #title-car { opacity: 0.14; }
+:root[data-title-art="off"] #title-car { display: none; }
 /* COPY SPACE IS A FUNCTION OF WIDTH, and this is a COMPOSITION rule, not a
    contrast one — the difference matters, because the first measurement looked
    like a legibility problem and was not.
@@ -227,11 +222,131 @@
    the screen. prefers-reduced-transparency is not Baseline yet, so it is a
    progressive enhancement on a design that is already legible without it. */
 @media (prefers-reduced-transparency: reduce) {
-  #title-car, #title-car-top { display: none; }
+  #title-car { display: none; }
 }
+/* THE TITLE INTRO — one pass, over by ~2.5 s, never a loop (WCAG 2.2.2 wants a
+   pause control past 5 s; a loop would also repaint the SVG every frame on an
+   iPhone, whose SVG has no compositing). CSS only: tools/gen/title-art.mjs
+   stamps every art group with data-stage (WHAT it does) and --i (WHEN).
+     0.10 s  outlines wipe on left to right (ink, then detail), 60 ms apart
+     0.20 s  buttons grow in, CAREER first, 50 ms apart, landed by ~1.0 s
+     0.66 s  panels fade in, 40 % into the draw, so no panel pops in before
+             the outline that bounds it; the ink fill follows the panels, or
+             the dilated silhouette would flash in as a solid blob
+     1.50 s  the tyre marks sweep out behind the cars and catch the light once
+   A WIPE on the group, not a dash draw on the path: each ink path is dozens
+   of subpaths (54 M in the landscape contour), the dash pattern restarts at
+   every one, and a dash "draw" made every outline pop at once.
+   ONLY ON FIRST SHOW: every rule keys on #overlay[data-intro], which
+   js/ui/title-fx.js sets once, the first time the title is visible, and
+   removes after ~2.8 s (QUICK ~1.2 s) — coming back from a room is the
+   resting title, not a second show. TITLE INTRO OFF (html[data-title-intro])
+   skips the reveal the same way REDUCED does. Every animation fills
+   BACKWARDS only: the start state holds through the delay, and when it ends
+   the element drops back to its own declared style — no clip, no fill-opacity
+   override — so the resting title is the same pixels as without the intro.
+   Both gates, because the in-game Motion setting can only add reduction; the
+   Playwright suite runs reduced, and sees no motion at all. Paint cost is
+   transform/opacity/fill-opacity/clip-path only: no filter, no shadow, and no
+   will-change — an SVG child gets no layer from it. Fills fade by fill-opacity,
+   not group opacity, so no group is flattened into an offscreen buffer to fade
+   it. */
+@media (prefers-reduced-motion: no-preference) {
+  /* Intro timeline tokens live on the overlay so QUICK can halve them without
+     touching sheet/screen --dur-* elsewhere. FULL = shipped numbers. */
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] {
+    --intro-lead: 100ms;
+    --intro-ink-gap: 60ms;
+    --intro-fill-lead: 400ms;
+    --intro-body-gap: 40ms;
+    --intro-btn-lead: 200ms;
+    --intro-btn-gap: 50ms;
+    --intro-trail-dur: 900ms;
+    --intro-brand-dur: 0.32s;
+    --intro-draw: var(--dur-draw);
+    --intro-fill: var(--dur-4);
+    --intro-btn: var(--dur-3);
+  }
+  :root[data-title-intro="quick"]:not([data-motion="reduce"]) #overlay[data-intro] {
+    --intro-lead: 40ms;
+    --intro-ink-gap: 25ms;
+    --intro-fill-lead: 160ms;
+    --intro-body-gap: 18ms;
+    --intro-btn-lead: 80ms;
+    --intro-btn-gap: 22ms;
+    --intro-trail-dur: 420ms;
+    --intro-brand-dur: 0.16s;
+    --intro-draw: 700ms;
+    --intro-fill: 300ms;
+    --intro-btn: 160ms;
+  }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-brand {
+    animation: sheet-in var(--intro-brand-dur) cubic-bezier(0.2, 0.7, 0.3, 1);
+  }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #title-car g[data-stage="ink"] {
+    animation: tc-wipe var(--intro-draw) var(--ease-out) backwards, tc-fill var(--intro-fill) var(--ease-out) backwards;
+    animation-delay: calc(var(--intro-lead) + var(--i, 0) * var(--intro-ink-gap)), calc(var(--intro-fill-lead) + var(--intro-draw) * 0.4);
+  }
+  /* detail sits late in the --i order and its lines are short */
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #title-car g[data-stage="detail"] {
+    animation: tc-wipe calc(var(--intro-draw) / 2) var(--ease-out) backwards;
+    animation-delay: calc(var(--intro-lead) + var(--i, 0) * var(--intro-ink-gap));
+  }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #title-car g:is([data-stage="body"], [data-stage="tone"], [data-stage="brush"]) {
+    animation: tc-fill var(--intro-fill) var(--ease-out) backwards;
+    animation-delay: calc(var(--intro-lead) + var(--intro-draw) * 0.4 + var(--i, 0) * var(--intro-body-gap));
+  }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #title-car g[data-stage="trail"] {
+    animation: tc-trail var(--intro-trail-dur) var(--ease-out) backwards;
+    animation-delay: calc(var(--intro-lead) + var(--intro-draw));
+  }
+  /* The doors grow into place rather than rise: #menu-buttons is a SCROLLER
+     on phones, and a row shifted down 8px is 8px of scroll extent.
+     js/ui/scroll-fade.js measures the column the moment #overlay is shown —
+     mid-entrance — and latched a red thumb and a bottom fade on a column with
+     nothing below it (measured 393x852: 331 vs 323). A scale under 1 adds
+     no extent, and the spring's 6% overshoot on 0.94 stays under its 2px
+     slack. `scale`, not `transform`: it composes with the shared :active
+     skew + scale instead of fighting it. */
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-buttons .bigbtn {
+    animation: tc-btn-in var(--intro-btn) var(--ease-spring) backwards;
+    animation-delay: calc(var(--intro-btn-lead) + var(--n, 0) * var(--intro-btn-gap));
+  }
+  /* A door focused mid-intro (keyboard, or a gamepad's first press) is never
+     held invisible by the delay. */
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-buttons .bigbtn:focus-visible { animation: none; }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-retention > .bigbtn { --n: 1; }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-primary > :nth-child(1) { --n: 2; }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-primary > :nth-child(2) { --n: 3; }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-primary > :nth-child(3) { --n: 4; }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-primary > :nth-child(4) { --n: 5; }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-secondary > * { --n: 6; }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-secondary > :nth-child(n+3) { --n: 7; }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-secondary > :nth-child(n+4) { --n: 8; }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-secondary > :nth-child(n+5) { --n: 9; }
+}
+/* inset() on an SVG group measures its own stroke box. The end keyframes
+   restate the open clip because an inset() cannot interpolate to `none`. */
+@keyframes tc-wipe {
+  from { clip-path: inset(0 100% 0 0); }
+  to   { clip-path: inset(0 0 0 0); }
+}
+/* `from` only: each group returns to its own declared fill-opacity. */
+@keyframes tc-fill { from { fill-opacity: 0; } }
+/* Revealed at half strength, then the light catches: the marks come up to
+   full as the sweep finishes. */
+@keyframes tc-trail {
+  0%   { clip-path: inset(0 100% 0 0); opacity: 0.45; }
+  65%  { clip-path: inset(0 0 0 0); opacity: 0.45; }
+  100% { clip-path: inset(0 0 0 0); }
+}
+@keyframes tc-btn-in { from { opacity: 0; scale: 0.94; } }
 #title {
   font-size: clamp(34px, calc(9 * var(--vwz)), 92px);
-  font-weight: 700; font-style: italic;
+  /* Saira for the letters it carries (css/tokens.css says why), Titillium for
+     anything else — the inherited stack stays the fallback. */
+  font-family: "Saira Wordmark", var(--font-ui);
+  font-weight: 800; font-style: italic;
   color: var(--text);
   letter-spacing: var(--ls-2);
   text-shadow: 0 0 42px color-mix(in oklab, var(--red) 82%, transparent), 0 2px 12px rgba(0, 0, 0, 0.8);
@@ -252,7 +367,7 @@
 }
 /* THREE TIERS, by how much of your evening the thing costs.
    HERO is the career — the 24-round game everything else feeds into. PLAY NOW is
-   the four one-sitting modes, 2x2. SECONDARY is the rooms: half-height, two
+   the four one-sitting modes, 2x2, as dark plates with a red leading edge. SECONDARY is the rooms: half-height, two
    across, no glow.
 
    It was two tiers, but the play row had grown to FIVE full-size red buttons, so
@@ -333,6 +448,9 @@
    changes height after boot. One line, always: the returning-player string is
    the long one and must not wrap. See docs/PERF-FINDINGS.md 4a. */
 #mb-career-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+/* On the red hero the 72% mix measured under 4.5:1 against the gradient's
+   light end; full ink passes. The dark plates keep the dim sub line. */
+#overlay #mb-career .mb-sub { color: var(--text); }
 /* The 2x2 modes stack label over sub. No span for the label itself: a bare
    text node is already an anonymous flex item, so only the stack needs a box. */
 #menu-primary .bigbtn > span { display: inline-flex; flex-direction: column; align-items: center; gap: calc(var(--gap) / 6); }
@@ -392,6 +510,60 @@
   color: var(--text);
 }
 .minibtn .btn-ico { margin-right: 0.35em; }
+/* ONE RED HERO. Solid red is CAREER's alone; the four play-now modes are dark
+   plates one clear step above the rooms — a lighter, near-opaque carbon, full
+   ink, a red icon and a red LEADING EDGE. The edge is a background layer on the
+   border box, so it rides the button's own skewX(-6deg) and rounded corners
+   with no extra element and no change to the box or its padding.
+   These IDs outrank .bigbtn:hover / :active (0,2,0), so the red gradient and
+   its animated glow never reach the plates; transform is left alone, which
+   keeps the shared :active press (skew + scale 0.97). The hover/press "glow"
+   is ::before — a red-tinted wash faded by OPACITY, which the compositor can
+   run without repainting the shadow every frame (::after is the sheen). */
+#menu-buttons #menu-primary .bigbtn {
+  background:
+    linear-gradient(90deg, var(--red) 0 4px, transparent 4px) border-box,
+    color-mix(in oklab, var(--carbon) 88%, var(--text) 9%);
+  border-color: var(--plate-line);
+  color: var(--text);
+  box-shadow: none;
+  transition: transform var(--dur-1, 120ms) var(--ease-out, ease-out);
+}
+#menu-buttons #menu-primary .bigbtn::before {
+  content: "";
+  position: absolute; inset: 0; z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(90deg,
+    color-mix(in oklab, var(--red) 30%, transparent),
+    color-mix(in oklab, var(--text) 9%, transparent) 55%);
+  opacity: 0;
+  transition: opacity var(--dur-1, 120ms) var(--ease-out, ease-out);
+}
+@media (hover: hover) {
+  #menu-buttons #menu-primary .bigbtn:hover::before { opacity: 1; }
+}
+#menu-buttons #menu-primary .bigbtn:active::before { opacity: 1; }
+#menu-buttons #menu-primary .bigbtn .btn-ico { color: color-mix(in oklab, var(--red) 88%, var(--text)); }
+/* The hero keeps its red and its resting glow, but its hover heat is now the
+   same opacity fade: the hot gradient lives on ::before, the face stays on
+   --grad-primary, and box-shadow no longer TRANSITIONS (a gradient never
+   interpolated anyway; the shadow change is one paint, not a per-frame one).
+   An outer bloom cannot ride a pseudo here — .bigbtn clips with overflow. */
+#mb-career { transition: transform var(--dur-1, 120ms) var(--ease-out, ease-out); }
+#mb-career::before {
+  content: "";
+  position: absolute; inset: 0; z-index: -1;
+  pointer-events: none;
+  background: var(--grad-primary-hot);
+  opacity: 0;
+  transition: opacity var(--dur-1, 120ms) var(--ease-out, ease-out);
+}
+@media (hover: hover) {
+  #mb-career:hover { background: var(--grad-primary); }
+  #mb-career:hover::before { opacity: 1; }
+}
+#mb-career:active { background: var(--grad-primary); }
+#mb-career:active::before { opacity: 1; }
 /* Branding and small print as blocks — portrait stacks them centred, exactly as
    the loose elements did. */
 #menu-brand, #menu-meta { display: flex; flex-direction: column; align-items: inherit; }
@@ -631,7 +803,6 @@ body { --compact-at: 600px; --wide-at: 620px; }
      to edge) and, with the pair framed on the viewBox's middle below, what the
      xMidYMid crop takes is the empty sky and ground either side of it.
      Everything on the element is layout, so zoom stays normal (see #title-car). */
-  :where(body[data-shape="tall"]) #title-car-top { display: none; }
   :where(body[data-shape="tall"]) #title-car {
     display: block;
     position: relative;
@@ -662,6 +833,32 @@ body { --compact-at: 600px; --wide-at: 620px; }
 }
 /* Re-stated after the display:block above, which would otherwise out-order it. */
 @media (max-width: 699px) and (prefers-reduced-transparency: reduce) {
+  :where(body[data-shape="tall"]) #title-car { display: none; }
+}
+/* THE TALL TABLET GETS THE SAME THREE BANDS (2026-09-24). An upright iPad kept
+   the old composition: a 900/1600 top-down drawing as a full-height layer
+   with the button column over it — the exact complaint that redesigned the
+   portrait phone. The doors keep the large-portrait sizes from
+   css/responsive.css; only the structure and the art change: doors sized to
+   their content, and the side-on pair in the clear in row 3, framed as on the
+   phone. That left the top-down drawing shown nowhere, so it was removed —
+   24 KB of shell every visitor downloaded and nobody saw. */
+@media (min-width: 700px) {
+  :where(body[data-shape="tall"]) #overlay { grid-template-rows: auto minmax(0, auto) minmax(0, 1fr); }
+  :where(body[data-shape="tall"]) #menu-buttons { height: auto; align-self: start; align-content: start; }
+  :where(body[data-shape="tall"]) #title-car {
+    display: block;
+    position: relative;
+    grid-row: 3;
+    align-self: center;
+    width: 100%;
+    height: auto;
+    max-height: 100%;
+    opacity: 0.9;
+  }
+  :where(body[data-shape="tall"]) #tc-frame { transform: translate(100px, -388px) scale(1.2); }
+}
+@media (min-width: 700px) and (prefers-reduced-transparency: reduce) {
   :where(body[data-shape="tall"]) #title-car { display: none; }
 }
 /* LANDSCAPE COMPACT: side-by-side brand + buttons.

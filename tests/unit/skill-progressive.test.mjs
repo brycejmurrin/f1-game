@@ -160,7 +160,7 @@ test("the 2026-09 skill set: folded and deleted skills stay gone, the pointer st
   // Count tracks disk: webgpu-debug returned with the backends; keep the
   // assertion message honest so a drift failure does not cite a stale 25.
   // 27 since 2026-09-22: `steward` carries the handful of places this repo
-  // OVERRIDES generic PR stewardship (the designed push/PR dedupe, sync-pr over
+  // OVERRIDES generic PR stewardship (the designed draft/ready dedupe, sync-pr over
   // a hand merge, who-is-on-it before a red on the shared deploy branch). It is
   // an overrides list, not a second copy of AGENTS.md — that is the condition
   // on which it earns its 77 always-on words in agent-config's budget.
@@ -310,7 +310,7 @@ test("every custom subagent declares name, description, and model", () => {
     "bloat-auditor.md": "haiku", "deploy-research.md": "haiku", "verify-agent.md": "haiku",
     "ci-red-triage.md": "sonnet", "physics-contract-auditor.md": "inherit", "track-surveyor.md": "inherit",
   };
-  const ONE_LINE = "Flat prohibitions: AGENTS.md §Verification 3 and 7 (no Playwright/test-bg/test-solo/chrome-start, no --wait, no bump); the js/css/index.html write ban is hook-enforced.";
+  const ONE_LINE = "Flat prohibitions: AGENTS.md §Verification 10, 6 and 7 (no Playwright/test-bg/test-solo/chrome-start, no --wait, no bump); the js/css/index.html write ban is hook-enforced.";
   for (const f of files) {
     const text = fs.readFileSync(path.join(AGENTS, f), "utf8");
     const fm = frontmatter(text);

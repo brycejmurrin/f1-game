@@ -16,7 +16,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -110,7 +110,7 @@ test("settings.json registers the hooks that enforce the rules, and each hook ex
   assert.ok(byEvent("PreToolUse").some((c) => c.matcher === "Bash" && c.command.includes("bash-guard.sh")),
     "PreToolUse Bash guard missing");
   for (const c of commands) {
-    const rel = c.command.replace(/^"?\$CLAUDE_PROJECT_DIR\//, "").replace(/"$/, "");
+    const rel = c.command.replace(/^"?\$CLAUDE_PROJECT_DIR\//, "").replace(/"(\s.*)?$/, "");   // drop args
     assert.ok(exists(rel), `hook ${rel} is registered but missing`);
     assert.ok(fs.statSync(path.join(ROOT, rel)).mode & 0o111, `hook ${rel} is not executable`);
   }
@@ -187,10 +187,19 @@ test("the Bash guard refuses a browser run from inside a subagent, and only ther
     "node tools/ci/verify-change.mjs --wait",
     "node tools/ci/test-solo.mjs tests/specs/autopilot.spec.js",
     "python3 tools/mcp/probe-mcp.py chrome-start",
+    // 2026-09-24: the path-prefix and npm-script forms walked past the guard.
+    "node ./tools/ci/test-bg.mjs smoke",
+    "node /home/user/f1-game/tools/ci/test-bg.mjs smoke",
+    "npm run test:smoke",
+    "npm run --silent test:smoke -- --workers=1",
+    "node tools/ci/verify-change.mjs",     // bare form starts batch 1 via test-bg
   ];
   const nodeOnly = [
     "node tools/ci/test-bg.mjs --status",
+    "node tools/ci/test-bg.mjs --tail smoke",
     "node tools/ci/verify-change.mjs --fast --json",
+    "node tools/ci/verify-change.mjs --plan",
+    "npm run test:guards",
     "npm run test:tooling-fast",
     "node --test tests/unit/ratchets.test.mjs",
     "node tools/track/verify-track.cjs monza",
@@ -198,6 +207,51 @@ test("the Bash guard refuses a browser run from inside a subagent, and only ther
   for (const cmd of browser) assert.equal(run(cmd, true).status, 2, `a subagent must not run: ${cmd}`);
   for (const cmd of nodeOnly) assert.equal(run(cmd, true).status, 0, `a subagent may run: ${cmd}`);
   for (const cmd of browser) assert.equal(run(cmd, false).status, 0, `the main session may run: ${cmd}`);
+});
+
+test("the Bash guard blocks a bare kill of the supervisor pid test-bg records", () => {
+  // test-bg.mjs spawns `sh -c "start_s=…; npm run --silent test:<g> …; echo
+  // '[test-bg] END …'"` and registers THAT pid. The /proc cmdline walk looked
+  // for "npm run test:" — the --silent in between meant `kill <pid from
+  // --status>`, the exact incident AGENTS.md rule 6 exists for, went through.
+  const sup = spawn("sh", ["-c", "sleep 30; npm run --silent test:zz-probe; echo '[test-bg] END group=zz-probe'"],
+    { stdio: "ignore", detached: true });
+  try {
+    const r = spawnSync("bash", [path.join(ROOT, ".claude/hooks/bash-guard.sh")], {
+      input: JSON.stringify({ tool_name: "Bash", tool_input: { command: `kill ${sup.pid}` } }),
+      encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT },
+    });
+    assert.equal(r.status, 2, `bash-guard must block a kill of the test-bg supervisor: ${r.stderr}`);
+  } finally {
+    try { process.kill(-sup.pid, "SIGKILL"); } catch { /* already gone */ }
+  }
+});
+
+test("auto memory is on, synced, and its tracked copy stays small, typed and secret-free", () => {
+  // docs/notes/AGENT-MEMORY.md: the CLI turns auto memory OFF in cloud sessions
+  // unless this env is falsy, and memory-sync.sh is the only thing that carries
+  // it across containers. The tracked copy is model-written and committed, so
+  // it gets the same limits the CLI applies (200-line index) plus a secret scan.
+  const settings = JSON.parse(read(".claude/settings.json"));
+  assert.equal(settings.env?.CLAUDE_CODE_DISABLE_AUTO_MEMORY, "0", "auto memory must be forced on (it is off in remote sessions)");
+  const cmds = (ev) => (settings.hooks?.[ev] || []).flatMap((g) => (g.hooks || []).map((h) => h.command));
+  for (const ev of ["PostToolUse", "Stop"])
+    assert.ok(cmds(ev).some((c) => /memory-sync\.sh" save$/.test(c)), `${ev} must run memory-sync.sh save`);
+  assert.match(read(".claude/hooks/session-start.sh"), /memory-sync\.sh" restore/, "session-start must restore memory");
+  assert.match(read(".gitignore"), /^!\.claude\/memory\/$/m, ".claude/memory/ must be tracked");
+  const dir = path.join(ROOT, ".claude/memory");
+  const index = read(".claude/memory/MEMORY.md");
+  assert.ok(index.split("\n").length <= 200, "MEMORY.md past 200 lines is silently truncated at load — move detail into topic files");
+  for (const [, file] of index.matchAll(/\]\(([^)]+\.md)\)/g))
+    assert.ok(fs.existsSync(path.join(dir, file)), `MEMORY.md links ${file}, which does not exist`);
+  const SECRET = /(gh[pousr]_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY|(api[_-]?key|token|password|secret)\s*[:=]\s*\S{12,})/i;
+  for (const f of fs.readdirSync(dir).filter((n) => n.endsWith(".md"))) {
+    const text = read(`.claude/memory/${f}`);
+    assert.doesNotMatch(text, SECRET, `.claude/memory/${f} holds a secret-shaped string — memories are committed`);
+    if (f !== "MEMORY.md")
+      assert.match(text, /^---\n[\s\S]*?^type:\s*(user|feedback|project|reference)\s*$[\s\S]*?^---/m,
+        `.claude/memory/${f} needs frontmatter with type: user|feedback|project|reference`);
+  }
 });
 
 test("the edit guard treats tests/data/ratchets.json as tool-written", () => {

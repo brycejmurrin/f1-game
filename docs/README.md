@@ -13,13 +13,14 @@ drives it.
 | # | Read | Why, and how much |
 |---|---|---|
 | 1 | [`../AGENTS.md`](../AGENTS.md) | The rules. Every flat prohibition lives there and nowhere else. Read the whole thing — it is deliberately short. |
-| 2 | [ARCHITECTURE.md](ARCHITECTURE.md) | The module map, the `G` façade, the game loop, and the three renderers behind one seam. Skim the generated module index; read the section for the directory you are about to edit. |
-| 3 | [TESTING.md](TESTING.md) §1-2 | How to run tests without burning an hour, and which GROUP your change needs. §5 is a lookup table, not reading. |
-| 4 | the area doc | One of the seven below. Load it only when the task touches its area. |
-| 5 | the skill | `.claude/skills/README.md` picks it; the skill drives the tools. |
+| 2 | [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) | **New contributors start here** — boot path, layer map, data flow, where to edit what. Ten-minute read. |
+| 3 | [ARCHITECTURE.md](ARCHITECTURE.md) | The module **contract**, the `G` façade, the game loop, and the three renderers behind one seam. Skim the generated module index; read the section for the directory you are about to edit. |
+| 4 | [TESTING.md](TESTING.md) §1-2 | How to run tests without burning an hour, and which GROUP your change needs. §5 is a lookup table, not reading. |
+| 5 | the area doc | One of the seven below. Load it only when the task touches its area. |
+| 6 | the skill | `.claude/skills/README.md` picks it; the skill drives the tools. |
 
 **If you are a person** reading to understand the game: [`../README.md`](../README.md)
-→ [ARCHITECTURE.md](ARCHITECTURE.md) → [PHYSICS.md](PHYSICS.md) or
+→ [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) → [ARCHITECTURE.md](ARCHITECTURE.md) → [PHYSICS.md](PHYSICS.md) or
 [CAREER.md](CAREER.md) → [TESTING.md](TESTING.md) §1.
 
 ## The area docs (load one on demand)
@@ -29,12 +30,15 @@ drives it.
 | [PHYSICS.md](PHYSICS.md) | The driving model and its tuning variables, combined slip, active aero / X-mode, the overtake gate, and the world-space rigid-body authority. **Two rules bind everywhere** — see `AGENTS.md` §Physics. |
 | [CAREER.md](CAREER.md) | Career mode: the flow/session axes, the six `apex26.career.<flavour>.N` save slots, driver ratings, the economy and R&D gate, qualifying, reliability — and the 12-category upgrade catalog with its measured ERS/aero tables. |
 | [SCENERY-API.md](SCENERY-API.md) | The `scenery(api)` callback — buildings, props, barriers, terrain anchoring — how props seat on the terrain ribbon (the float/clip audits), and the checklist for migrating a circuit onto the shared foundation. |
+| [SCENERY-AND-TRACK-BUILD.md](SCENERY-AND-TRACK-BUILD.md) | **Track/scenery build pipeline** — load order, `buildProps` layers, frames/shift traps, and accuracy levers (per-circuit vs shared generators). Start here before dressing a circuit. |
 | [MULTIPLAYER.md](MULTIPLAYER.md) | The `js/net/` wire: transport channels, the packed invite SDP, Nostr/room-code rendezvous, snapshots and interpolation, and who owns which car. |
 | [LIGHTING.md](LIGHTING.md) | Light-record layout, shader uniforms, time-of-day branches, track lamps; every hand-tuned constant and how to A/B it; the per-track × time-of-day × weather presets. |
 | [UI-MAP.md](UI-MAP.md) | The title-to-race navigation web, mode-specific flows, Settings values, How to Play anchors, all 15 Garage tabs and pause actions, plus the source-backed inventory of `UiLayers`, major DOM IDs and CSS entrypoints. |
 | [COMPONENTS.md](COMPONENTS.md) | Every class family in `css/`, the file that owns it, which classes are defined in more than one file — plus the screen x viewport layout axes and what the layout probe measures. |
 | [CODE-STANDARDS.md](CODE-STANDARDS.md) | The JavaScript house style: module shape, naming, declarations, functions, duplication, and the comment policy — plus the frozen surfaces a style pass must never rename. |
 | [PLATFORM.md](PLATFORM.md) | iOS/Safari quirks, controller support, and what a static GitHub Pages host does and does not give you. |
+| [BUGS.md](BUGS.md) | Current verified open/fixed shortlist from architecture/bug-hunt passes (not the full chronological ledger). |
+| [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) | Contributor orientation: boot, layers, data flow, edit map (complements the full contract in ARCHITECTURE.md). |
 
 ## Agent surface and hooks
 
@@ -56,6 +60,8 @@ anything in here.
 | Note | What it records |
 |---|---|
 | [notes/PERF-FINDINGS.md](notes/PERF-FINDINGS.md) | **Start at §0: which instrument answers which perf question, and the three that lie on this box.** Then the four-way audit: what was measured, taken, reverted, and the recorded negative results. Its real content is which KINDS of finding survived measurement. |
+| [notes/TLX-PERF-PLAN.md](notes/TLX-PERF-PLAN.md) | The working plan for the three.js backend's remaining per-frame costs (night lamp shadow, godray chain, draw records, post materials): steps, status, switches and checks. Results land in PERF-FINDINGS. |
+| [notes/AGENT-MEMORY.md](notes/AGENT-MEMORY.md) | The three memory stores (instructions, subagent memory, auto memory), why auto memory was off in cloud sessions, and how `memory-sync.sh` makes it persist. |
 | [notes/TESTING-FIELD-NOTES.md](notes/TESTING-FIELD-NOTES.md) | The operational field notes carved out of `TESTING.md`: boot walls on this box, the two-worker factor, the instruments that lie here, the real-GPU runs. Cited from `AGENTS.md` as "TESTING field notes". |
 | [notes/UPSTREAM-THREE-ISSUES.md](notes/UPSTREAM-THREE-ISSUES.md) | Draft issue bodies for the three local three.js patches (swizzle gate, WGSL `var<private>` scope, `yieldToMain` fallback) — none is filed upstream as of 2026-09-22; post, then put the URLs in `vendor/three-0.186.0/PATCHES.md` and `patches.mjs`. |
 | [notes/DEFECT-LEDGER.md](notes/DEFECT-LEDGER.md) | The open-defect register and the backlog behind it (was `ARCHITECTURE-REVIEW.md` §7-8). |
@@ -90,6 +96,7 @@ rather than rewriting the record.
 | [research/AI-CONTACT-RESEARCH-2026-09.md](research/AI-CONTACT-RESEARCH-2026-09.md) | Six-lens web research into AI racecraft and car-to-car contact: GT Sophy's transferable parts, overtake decision rules, field spread from driver error rather than speed, PBD/XPBD contact, where a Frenet formulation breaks and whether the Rapier handback seam is in the right place, and deterministic contact between peers. Carries three source-verified defects (straight-line defence, the contact-normal choice, the non-invertible handback) and an appendix of what was rejected, so it is not re-proposed. NOT a plan of record. | `js/physics/ai-drive.js`, `js/physics/collide.js`, `js/physics/incident-sim.js` |
 | [research/CONTROLS-AUDIT-2026-09.md](research/CONTROLS-AUDIT-2026-09.md) | Whole-surface control audit: what every device and mode ships, measured against four parallel external research passes (mobile touch, Apple platform, gamepad, desktop). Ranked improvements, the negative decisions, and the corrections to its own briefing. | `js/input/input.js`, `js/input/steer-tuning.js`, `js/ui/key-binds.js`, `js/ui/onboard.js` |
 | [research/CONTROLS-RESEARCH-2026-09-14.md](research/CONTROLS-RESEARCH-2026-09-14.md) | Second mobile-controls research pass (tilt/gyro, touch & buttons, competitive scan, accessibility). Every checkable claim verified against source first, so it opens with what is ALREADY ours and must not be rebuilt — gravity-vector tilt, One-Euro, and analogue touch throttle, which the competitive scan wrongly called the category's biggest gap. Carries one shipped defect (the HAPTICS slider is dead on every iPhone), the WCAG 2.5.4 problem with defaulting to tilt, four guideline conflicts stated as deliberate gaps, and an evidence-quality section for the claims that must not be acted on alone. NOT a plan of record. | `js/input/input.js`, `js/input/steer-tuning.js`, `index.html` |
+| [research/RACE-RADIO-REDESIGN-2026-09.md](research/RACE-RADIO-REDESIGN-2026-09.md) | The race radio and in-race commentary: the timing-loop gaps, the facts → rules → expiring queue → corner-aware gate pipeline, the deck-dealt phrasebook, and the Crew Chief / Valve dynamic dialogue sources behind them. | `js/race/race-radio.js`, `js/race/race-facts.js`, `js/race/radio-lines.js` |
 | [research/DRIVING-CONTROLS-RESEARCH.md](research/DRIVING-CONTROLS-RESEARCH.md) | What shipped racing games do for assists and speed-sensitive steering — including the deliberately NEGATIVE conclusions that keep un-built features from being re-litigated. | `js/audio/engine.js`, `js/physics/brake-cue.js` |
 | [research/SCENE-GRAPH-PLAN.md](research/SCENE-GRAPH-PLAN.md) | Why detail is unaffordable without instancing; the staged scenery scene-graph plan and its measured per-emitter reuse. | `js/render/glx/glx.js` |
 | [research/UI-DESIGN-PRINCIPLES.md](research/UI-DESIGN-PRINCIPLES.md) | Why the UI is sized the way it is: size for the PHONE at arm's length, and collapse a primitive only when it passes the three-places-plus-generic test. | `css/tokens.css`, `tests/unit/game-ctx-surface.test.mjs` |
@@ -166,3 +173,5 @@ For day-to-day workflows, see the **skills** in `.claude/skills/`
 - [Mechanics coherence implementation](plans/2026-09-14-mechanics-coherence.md): completed behavior, validation and remaining opportunities.
 - [Process speed-up research, five plans](plans/research-2026-09-16/README.md): testing (a `vmPage` adapter for the 67 DOM-free specs), the VM harness (measured: physics stepping is 70 % of the fast tier's floor — a worker pool, not a cache), CI (base-red verdict line, per-job verdict cache, status.json), measurement (a nightly process dashboard, waste detectors, a session ledger) and agent ergonomics (hook filters, a Stop hook, `defaultMode: auto`, an AGENTS.md re-cut).
 - [Process speed-up: the next fifteen](plans/2026-09-16-process-speedup-next.md): plans for what the 2026-09-16 research landing left — `selected` on llvmpipe, the elevation-tracks floor, a runner-side dispatch tool, more VM twins, the settings and docs items — each with evidence, files, verification and expected saving.
+- [Loading-screen flyby improvements](plans/2026-09-24-flyby-improvements.md): the fleet audit of the pre-race flyby (52 circuits, headless), what the follow-up branch fixed (pops, cranes, landmark overshoot, grid sightlines, whip pans, corner roles) and the phased plan beyond it.
+- [Refactor readability plan](plans/2026-09-24-refactor-readability.md): ranked hotspots (game.js, tracks buildProps, WGX, presets, …), Phase 0–2 sequence, explicit non-goals; supersedes [CLEANUP-ROADMAP](plans/CLEANUP-ROADMAP.md) as the backlog.

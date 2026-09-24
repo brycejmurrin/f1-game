@@ -90,6 +90,7 @@ const FULL = [
   "js/render/glx/shadow.js",
   "js/render/shared/lamp-chunks.js",
   "js/render/shared/frustum.js",
+  "js/render/shared/inst-cells.js",  // InstCells: shared cell-set cull cache (GLX+WGX)
   "js/render/shared/vertex-pack.js",   // VertexPack: the ONE definition of how a world vertex channel is quantised — GLX's interleaved layout plus the snorm/half primitives WGX and TLX pack with
   "js/render/glx/chunked.js",
   "js/render/glx/glx.js",
@@ -116,6 +117,7 @@ const FULL = [
   "js/data/settings-defaults.js",
   "js/core/store.js",
   "js/ui/dom.js",            // Dom.el / paintFold / fmtLap — the one DOM-helper home (hub, career-ui, season-ui destructure it at eval)
+  "js/ui/title-fx.js",       // <html data-motion> at eval, as early as the store allows: the first menu frame must not animate for a player who said REDUCED
   "js/track/core/geom.js",
   "js/track/core/pit.js",
   "js/track/scenery/data.js",
@@ -129,11 +131,14 @@ const FULL = [
   "js/track/core/spline.js",
   "js/track/core/line.js",
   "js/track/core/mesh.js",
+  "js/track/core/hidden-faces.js",
   "js/track/scenery/nature.js",
   "js/track/scenery/structures.js",
   "js/track/scenery/city.js",
   "js/track/scenery/identity.js",
   "js/track/scenery/pits.js",
+  // buildProps orchestration (guards nested for a later peel). Tracks.build calls it.
+  "js/track/scenery/build-props.js",
   ...circuitFiles,
   "js/race/pit-lane.js",
   "js/race/session-entry.js", // invalidates pending scenery-backed starts on quit or changed selection
@@ -149,6 +154,8 @@ const FULL = [
   "js/audio/music-lib.js",
   "js/audio/spotify.js",
   "js/audio/rivals.js",
+  "js/audio/car-sfx.js",
+  "js/audio/voice-pack.js",
   "js/audio/radio-voice.js",
   // The announcer's authored half. Data only, read at CALL time and guarded on
   // the global, so the order is for tidiness rather than correctness.
@@ -190,6 +197,12 @@ const FULL = [
   "js/physics/ai-drive.js",
   "js/physics/ai-corridor.js",
   "js/race/engineer.js",
+  // The race radio: phrasebook, facts (timing loop + events), then the brain
+  // that reads both. game.js calls RaceRadio.create(G) at eval.
+  "js/race/radio-lines.js",
+  "js/race/race-facts.js",
+  "js/race/spotter.js",
+  "js/race/race-radio.js",
   "js/camera/offsets.js",
   "js/camera/flyby-seq.js",
   "js/camera/flyby-panel.js",
@@ -215,6 +228,7 @@ const FULL = [
   "js/fx/skidmarks.js",
   "js/race/race-control.js",
   "js/race/weather-arc.js",
+  "js/camera/free-cam.js",
   "js/camera/photo-cam.js",
   "js/lighting/tuner-panel.js",
   "js/camera/tuner-panel.js",
@@ -228,6 +242,7 @@ const FULL = [
   "js/ui/scale.js",
   "js/camera/cockpit-opts.js",
   "js/ui/driving-line-opts.js",
+  "js/ui/appearance-opts.js",
   "js/ui/debris-opts.js",
   "js/perf/metrics-overlay.js",
   "js/camera/vantage.js",
@@ -312,6 +327,7 @@ const CARVIEW = [
   "js/render/glx/shadow.js",
   "js/render/shared/lamp-chunks.js",
   "js/render/shared/frustum.js",
+  "js/render/shared/inst-cells.js",  // InstCells: shared cell-set cull cache (GLX+WGX)
   "js/render/shared/vertex-pack.js",   // VertexPack: the ONE definition of how a world vertex channel is quantised — GLX's interleaved layout plus the snorm/half primitives WGX and TLX pack with
   "js/render/glx/chunked.js",
   "js/render/glx/glx.js",
@@ -347,11 +363,13 @@ const TRACK_VM = [
   "js/track/core/spline.js",
   "js/track/core/line.js",
   "js/track/core/mesh.js",
+  "js/track/core/hidden-faces.js",
   "js/track/scenery/nature.js",
   "js/track/scenery/structures.js",
   "js/track/scenery/city.js",
   "js/track/scenery/identity.js",
   "js/track/scenery/pits.js",
+  "js/track/scenery/build-props.js",
   // The garages ARE the setup screen's bay (GarageScene.buildStatic), placed by
   // js/track/scenery/pits.js at build time; the row is Teams.LIST's. Both load
   // here so a VM build ships the same complex the browser does.
@@ -376,10 +394,13 @@ const HARD_EDGES = [
   // frame cannot draw a default the player did not choose.
   ["js/render/shared/driving-line.js", "js/ui/driving-line-opts.js"],
   ["js/core/store.js", "js/ui/driving-line-opts.js"],
+  ["js/core/store.js", "js/ui/appearance-opts.js"],
+  ["js/ui/setting-row.js", "js/ui/appearance-opts.js"],
   // js/data/hub.js (LAZY_DATA) binds Dom.el at eval too; dom.js is FULL, so the order holds without an edge.
   ["js/ui/dom.js", "js/career/career-ui.js"],    // career-ui binds Dom.el at eval
   ["js/ui/dom.js", "js/career/season-ui.js"],    // season-ui binds Dom.el at eval
   ["js/core/store.js", "js/ui/debris-opts.js"],   // binds GameStore.store at eval
+  ["js/core/store.js", "js/ui/title-fx.js"],      // binds GameStore.store and applies data-motion at eval
   // M4 is also the home of the shared scalar helpers (clamp/lerp/wrapDelta) and
   // every consumer ALIASES them at eval (`const clamp = M4.clamp;`). mat4.js is
   // the 2nd tag so the order is never in doubt, but these are real eval-time
@@ -433,6 +454,7 @@ const HARD_EDGES = [
   ["js/render/glx/shadow.js", "js/render/glx/glx.js"],
   ["js/render/shared/lamp-chunks.js", "js/render/glx/chunked.js"], // drawChunked resolves LampChunks tables (call-time; keep explicit)
   ["js/render/shared/frustum.js", "js/render/glx/chunked.js"],     // cull helpers (call-time; keep explicit)
+  ["js/render/shared/inst-cells.js", "js/render/glx/glx.js"],
   ["js/render/glx/chunked.js", "js/render/glx/glx.js"],
   ["js/render/glx/glx.js", "js/render/shared/assets.js"],         // Assets feature-detects the backend's createTextureArray
   ["js/track/core/geom.js", "js/garage/scene-prims.js"],    // the bay's primitives read TrackGeom.MAT at eval for their per-vertex material ids
@@ -452,11 +474,18 @@ const HARD_EDGES = [
   ["js/track/core/geom.js", "js/track/core/mesh.js"],                 // mesh destructures TrackGeom at eval
   ["js/track/core/spline.js", "js/track/core/mesh.js"],               // mesh destructures TrackSpline at eval
   ["js/track/core/mesh.js", "js/track/tracks.js"],               // tracks destructures TrackMesh at eval
-  ["js/track/scenery/graph.js", "js/track/tracks.js"],               // buildProps calls TrackGraph.create at build
-  ["js/track/scenery/nature.js", "js/track/tracks.js"],     // buildProps calls Scenery*.create (build time, keep ordered)
-  ["js/track/scenery/structures.js", "js/track/tracks.js"],
-  ["js/track/scenery/city.js", "js/track/tracks.js"],
-  ["js/track/scenery/identity.js", "js/track/tracks.js"],
+  // build-props.js owns Tracks.buildProps orchestration (Phase 1 peel).
+  ["js/core/mat4.js", "js/track/scenery/build-props.js"],        // destructures M4.lerp at eval
+  ["js/track/core/geom.js", "js/track/scenery/build-props.js"],  // destructures TrackGeom at eval
+  ["js/track/core/spline.js", "js/track/scenery/build-props.js"],
+  ["js/track/core/mesh.js", "js/track/scenery/build-props.js"],
+  ["js/track/scenery/graph.js", "js/track/scenery/build-props.js"],   // TrackGraph.create at build
+  ["js/track/scenery/nature.js", "js/track/scenery/build-props.js"],  // Scenery*.create at build
+  ["js/track/scenery/structures.js", "js/track/scenery/build-props.js"],
+  ["js/track/scenery/city.js", "js/track/scenery/build-props.js"],
+  ["js/track/scenery/identity.js", "js/track/scenery/build-props.js"],
+  ["js/track/scenery/pits.js", "js/track/scenery/build-props.js"],    // SceneryPits.build last
+  ["js/track/scenery/build-props.js", "js/track/tracks.js"],          // Tracks.build → TrackBuildProps.build
   ["js/track/core/space.js", "js/track/core/surface.js"],
   ["js/track/scenery/models.js", "js/track/scenery/circuit-kit.js"],
   ["js/track/tracks.js", "js/ui/track-maps.js"],               // maps calls Tracks.buildCenterline
@@ -528,6 +557,11 @@ const HARD_EDGES = [
   ["js/race/pit-lane.js", "js/game.js"],                 // game.js calls PitLane.create(G) at eval
   ["js/core/mat4.js", "js/race/engineer.js"],            // RaceEngineer binds M4.clamp at eval
   ["js/race/engineer.js", "js/game.js"],                 // game.js calls RaceEngineer.create(G) at eval
+  ["js/race/radio-lines.js", "js/race/race-radio.js"],  // RaceRadio.create builds a RadioLines dealer (call time, keep ordered)
+  ["js/race/race-facts.js", "js/race/race-radio.js"],   // …and a RaceFacts tracker
+  ["js/race/spotter.js", "js/race/race-radio.js"],      // …and a Spotter
+  ["js/audio/voice-pack.js", "js/audio/radio-voice.js"], // RadioVoice.create builds a VoicePack
+  ["js/race/race-radio.js", "js/game.js"],               // game.js calls RaceRadio.create(G) at eval
   ["js/core/mat4.js", "js/physics/brake-cue.js"],        // BrakeCue aliases M4.clamp at eval
   ["js/physics/ai-drive.js", "js/physics/contact-geometry.js"],  // the impulse reads AiDrive.bumpRestitution (call time, keep ordered)
   ["js/core/mat4.js", "js/physics/collide.js"],          // Collide binds M4.clamp at eval
@@ -572,6 +606,9 @@ const DEFERRED = {
     "js/render/webgpu/wgsl-chunks.js",
     "js/render/webgpu/wgsl-post.js",
     "js/render/webgpu/wgsl-fx.js",
+    "js/render/webgpu/wgx-shadow.js",
+    "js/render/webgpu/wgx-chunked.js",
+    "js/render/webgpu/wgx-post.js",
     "js/render/webgpu/wgx.js",
   ],
   three: [
@@ -681,8 +718,11 @@ const LAZY_NET_EDGES = [
 const DEFERRED_EDGES = [
   ["js/render/webgpu/wgsl-chunks.js", "js/render/webgpu/wgsl-post.js"], // string concat at eval
   ["js/render/webgpu/wgsl-chunks.js", "js/render/webgpu/wgsl-fx.js"],
-  ["js/render/webgpu/wgsl-post.js", "js/render/webgpu/wgx.js"],
+  ["js/render/webgpu/wgsl-post.js", "js/render/webgpu/wgx-post.js"],
   ["js/render/webgpu/wgsl-fx.js", "js/render/webgpu/wgx.js"],
+  ["js/render/webgpu/wgx-shadow.js", "js/render/webgpu/wgx.js"],
+  ["js/render/webgpu/wgx-chunked.js", "js/render/webgpu/wgx.js"],
+  ["js/render/webgpu/wgx-post.js", "js/render/webgpu/wgx.js"],
   ["js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js"],
   ["js/render/three/tsl-lit.js", "js/render/three/tlx.js"],
   ["js/render/three/tsl-sky.js", "js/render/three/tlx.js"],      // TLX.create invokes TLXShaders.sky
@@ -710,7 +750,11 @@ const PATHS = {
   POST_COMMON: "js/render/shared/post-common.js",
   WGSL_CHUNKS: "js/render/webgpu/wgsl-chunks.js",
   WGSL_POST: "js/render/webgpu/wgsl-post.js",
+  WGX_SHADOW: "js/render/webgpu/wgx-shadow.js",
+  WGX_CHUNKED: "js/render/webgpu/wgx-chunked.js",
+  WGX_POST: "js/render/webgpu/wgx-post.js",
   WGX: "js/render/webgpu/wgx.js",
+  INST_CELLS: "js/render/shared/inst-cells.js",
   GLTF: "js/render/shared/gltf.js",
   ASSETS: "js/render/shared/assets.js",
   TRACK_SPACE: "js/track/core/space.js",

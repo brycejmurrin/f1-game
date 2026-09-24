@@ -78,6 +78,7 @@ function boot(opts) {
     createGain: () => node("gain", counts), createBiquadFilter: () => node("biquad", counts),
     createOscillator: () => node("osc", counts), createBufferSource: () => node("src", counts),
     createAnalyser: () => node("analyser", counts),
+    createWaveShaper: () => Object.assign(node("shaper", counts), { curve: null }),
     createConvolver: () => Object.assign(node("convolver", counts), { buffer: null }),
     createStereoPanner: () => Object.assign(node("panner", counts), { pan: param(0) }),
     createDynamicsCompressor: () => Object.assign(node("comp", counts),
@@ -1233,4 +1234,149 @@ test("the hiss bed outlasts the figure, however short the card", () => {
     "hold must be floored by the figure's own length, not just the card's");
   // ...and the figure has to be measured, not assumed: radioTune returns it.
   assert.match(fn[0], /const tuneS = [\d.]+ \+ radioTune\(/);
+});
+
+// ---- camera mix, downshift flare, car SFX, wheel guns (js/audio/car-sfx.js) ----
+
+test("the camera mix: chase is neutral, TV sits your car back and opens the venue, onboard dries it", async () => {
+  const A = await sampleEngine();
+  const drive = () => { for (let i = 0; i < 4; i++) A.setEngine(0.7, 0, false, 0.6, 5, {}); return A.engineLevel(); };
+  assert.equal(A.setCameraMix("chase"), "chase");
+  const chase = drive(), chaseRev = A.venue().level;
+  assert.equal(A.setCameraMix("heli"), "tv");
+  const tv = drive(), tvRev = A.venue().level;
+  assert.ok(tv < chase * 0.7, `TV camera must pull your engine back: ${tv} vs ${chase}`);
+  assert.ok(tvRev >= chaseRev, "TV camera opens the reverb, never closes it");
+  assert.equal(A.setCameraMix("cockpit"), "onboard");
+  assert.ok(drive() > chase, "onboard is closer to the engine than the chase camera");
+  assert.equal(A.setCameraMix("no-such-camera"), "chase", "an unknown id is the neutral mix");
+  assert.equal(drive(), chase, "back on chase, every level is what it was");
+});
+
+test("a downshift flares the note, then it settles; an upshift does not", async () => {
+  const A = await sampleEngine();
+  for (let i = 0; i < 4; i++) A.setEngine(0.5, 0, false, 0.5, 4, {});
+  const base = A.rate();
+  A.shift(true);
+  A.setEngine(0.5, 0, false, 0.5, 4, {});
+  assert.equal(A.carSfx().revFlare, 0, "an upshift is a cut, not a blip");
+  A.shift(false);
+  A.setEngine(0.5, 0, false, 0.5, 4, {});
+  const flared = A.rate();
+  assert.ok(flared > base * 1.02 && flared < base * 1.06, `downshift blip overshoots by a few percent: ${flared} vs ${base}`);
+});
+
+test("car SFX levels follow the car's own state, never the road's curvature", () => {
+  const sb = { Math, Number, Object, GameAudio: {} };
+  const vctx = vm.createContext(sb);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/car-sfx.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: "car-sfx.js" });
+  const sent = [], guns = [];
+  sb.GameAudio.setCarSfx = (o) => sent.push({ ...o });
+  sb.GameAudio.pitGun = (t) => guns.push(t);
+  const G = { vTop: () => 100, isWetRoad: () => false };
+  const S = vm.runInContext("CarSfx", vctx).create(G);
+  const L = (c, v) => ({ ...S.levels(c, v) });
+
+  assert.deepEqual(L({ frontUtil: 0.9, wheelLock: 0 }, 0.5), { scrub: 0, lock: 0, surface: 0, pitLim: 0 }, "below the grip peak it is silent");
+  assert.ok(L({ frontUtil: 1.1 }, 0.5).scrub > 0.5, "fronts past the peak scrub");
+  assert.equal(L({ frontUtil: 1.1, offroad: true }, 0.5).scrub, 0, "off the road the rumble carries it, not the scrub");
+  assert.equal(L({ wheelLock: 1 }, 0.5).lock, 1, "a locked wheel squeals");
+  assert.equal(L({ wheelLock: 1 }, 0.01).lock, 0, "...but not at a crawl");
+  assert.ok(L({ offroad: true }, 0.9).surface > L({ offroad: true }, 0.2).surface, "the rumble grows with speed");
+  assert.equal(L({ pitState: "lane" }, 0.2).pitLim, 1, "rolling down the lane is on the limiter");
+  assert.equal(L({ pitState: "box" }, 0).pitLim, 0, "stationary in the box is not");
+
+  // Wheel guns on the stop's edges: loosen into the box, tighten on release.
+  const car = { speed: 10, pitState: "none" };
+  S.update(car);
+  car.pitState = "lane"; S.update(car);
+  car.pitState = "box"; S.update(car); S.update(car);
+  car.pitState = "out"; S.update(car);
+  assert.deepEqual(guns, [false, true], "one loosen, one tighten, nothing per frame");
+  assert.equal(sent.length, 5, "levels go out every frame");
+  // A new race's car starting mid-state does not fire a phantom gun.
+  S.update({ speed: 0, pitState: "box" });
+  assert.equal(guns.length, 2, "a fresh car resets the edge");
+});
+
+test("setCarSfx and pitGun are safe with the engine off, and drive their layers with it on", async () => {
+  const { GameAudio } = boot();
+  GameAudio.init();
+  GameAudio.setCarSfx({ scrub: 1, lock: 1, surface: 1, pitLim: 1 });   // engine off: no throw
+  GameAudio.pitGun(false);
+  const A = await sampleEngine();
+  A.setCarSfx({ scrub: 0.5, lock: 1, surface: 0.3, pitLim: 1, wet: false });
+  const got = A.carSfx();
+  assert.equal(got.scrub, 0.5); assert.equal(got.lock, 1); assert.equal(got.pitLim, 1);
+  A.setCarSfx({ scrub: NaN, lock: -3, surface: 9 });
+  assert.equal(A.carSfx().scrub, 0, "NaN clamps to off");
+  assert.equal(A.carSfx().surface, 1, "levels clamp to 1");
+  const before = A.carSfx().pitGuns;
+  A.pitGun(true);
+  assert.equal(A.carSfx().pitGuns, before + 1);
+});
+
+test("recorded radio voice: clips play back to back through the radio band, and every node is released", async () => {
+  const { GameAudio, release, ctx, liveNodes } = boot();
+  GameAudio.init();
+  await release();
+  const before = liveNodes();
+  const clip = (d) => ({ duration: d, sampleRate: SR, length: d * SR, numberOfChannels: 1, getChannelData: () => new Float32Array(1) });
+  ctx.currentTime = 10;
+  const h = GameAudio.radioVoice([clip(0.5), 0.1, clip(0.3)], 10.2, { channel: "radio", volume: 0.8 });
+  assert.ok(h, "scheduled");
+  assert.ok(Math.abs(h.end - 11.1) < 1e-9, `ends after both clips and the pause: ${h.end}`);
+  assert.equal(GameAudio.radioVoicesLive(), 1);
+  h.stop();
+  // stop() schedules the teardown; fire it the way the harness fires timers.
+  for (const n of [...pendingTimers.splice(0)]) n();
+  assert.equal(GameAudio.radioVoicesLive(), 0, "the transmission is released");
+  assert.equal(liveNodes(), before, "no filter, shaper or gain is left rendering");
+  const joined = GameAudio.radioVoice([clip(0.5), clip(0.3)], 10, {});
+  assert.ok(Math.abs(joined.end - 10.75) < 1e-9, `back-to-back clips overlap by 50 ms: ${joined.end}`);
+  joined.stop();
+  for (const n of [...pendingTimers.splice(0)]) n();
+  assert.equal(GameAudio.radioVoice([], 0, {}), null, "nothing to play is not a transmission");
+  assert.equal(GameAudio.radioVoice([clip(0.2)], 0, { volume: 0 }), null, "volume 0 is off");
+});
+
+test("the pit limiter only ever CUTS the engine: base down by the depth, never louder, never negative", async () => {
+  const A = await sampleEngine();
+  const run = () => { for (let i = 0; i < 4; i++) A.setEngine(0.4, 0, false, 0.15, 2, {}); return A.engineLevel(); };
+  const free = run();
+  A.setCarSfx({ pitLim: 1 });
+  const base = run();
+  const depth = A.carSfx().pitDepth;
+  assert.ok(depth > 0, "the stutter is on");
+  assert.ok(base + depth <= free + 1e-9, `the peak of the swing (${base + depth}) never exceeds the free engine (${free})`);
+  assert.ok(base - depth >= 0, `the trough (${base - depth}) never inverts`);
+  A.setCarSfx({ pitLim: 0 });
+  assert.ok(Math.abs(run() - free) < 1e-9, "and it is gone the moment the limiter is");
+});
+
+test("pit limiter follows the lane's own predicate (the exit road too); a red flag in the box fires no guns", () => {
+  const sb = { Math, Number, Object, GameAudio: {} };
+  const vctx = vm.createContext(sb);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/car-sfx.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: "car-sfx.js" });
+  const guns = [];
+  sb.GameAudio.setCarSfx = () => {};
+  sb.GameAudio.pitGun = (t) => guns.push(t);
+  const exitRoad = new Set();
+  const G = { vTop: () => 100, isWetRoad: () => false, pits: { held: (c) => c.pitState === "lane" || exitRoad.has(c) } };
+  const S = vm.runInContext("CarSfx", vctx).create(G);
+  const car = { speed: 20, pitState: "out" };
+  exitRoad.add(car);
+  assert.equal(S.levels(car, 0.2).pitLim, 1, "still limited on the exit road after the stop");
+  exitRoad.delete(car);
+  assert.equal(S.levels(car, 0.2).pitLim, 0, "released at the exit line");
+  const c2 = { speed: 0, pitState: "none" };
+  S.update(c2); c2.pitState = "box"; S.update(c2);
+  c2.pitState = "none"; S.update(c2);        // redFlagRestart -> pits.clearArm
+  assert.deepEqual(guns, [false], "loosened on arrival, but a red flag is not a crew tightening wheels");
+});
+
+test("the saved camera's mix is applied at boot, not only on the first camera change", () => {
+  const src = fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8");
+  const tail = src.slice(src.lastIndexOf("refreshCamBtn();"));
+  assert.match(tail, /GameAudio\.setCameraMix\(CAM_MODES\[G\.camMode\]\.id\)/);
 });

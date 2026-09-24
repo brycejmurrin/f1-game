@@ -548,8 +548,18 @@ const SceneryStructures = (function () {
     // track (which is -side along r) rather than into the seating behind it.
     const CROWD_FALLBACK = [[0.86, 0.30, 0.24], [0.92, 0.90, 0.86],
                             [0.24, 0.36, 0.62], [0.72, 0.63, 0.30]];
+    // Per-call MIN_SEP slot (as nature.js's hillSeq): a band crossing another
+    // stand — fuji's terrace bays run through grandstandEx shells and rakes —
+    // landed 7-13 mm off their faces, a fight from ~190 m. Each band moves
+    // OUTWARD and ALONG by TrackGeom.SEP_SLOTS on two permutations, so
+    // consecutive bands differ by >= MIN_SEP on both axes and neither side
+    // faces nor end caps sit near the authored grid. <= 16.5 cm stays on its
+    // own tread (the next row's riser is further back than that).
+    let bandSeq = 0;
     const crowdBand = (c, b, side, thick, h, len, pal, dens, seed) => {
       if (len <= 0.5) return;
+      const slot = bandSeq++ % 4, SL = TrackGeom.SEP_SLOTS;
+      c = vadd(vadd(c, b[0], side * SL[slot]), b[2], SL[(slot * 3 + 1) % 4]);
       const cols = (pal && pal.length) ? pal : (CROWD_DAY && CROWD_DAY.length ? CROWD_DAY : CROWD_FALLBACK);
       const pick = (t) => NIGHT
         ? (t > 0.945 ? [2.5, 2.3, 1.9] : t > 0.55 ? [0.10, 0.11, 0.14] : [0.15, 0.16, 0.20])
@@ -630,7 +640,10 @@ const SceneryStructures = (function () {
           const rc = vadd(vadd(a.c, a.r, lat), a.u, y);
           out._mat = timber ? MAT.WOOD : MAT.METAL;
           addBox(out, rc, [setback * 1.05, 0.16, seg], plankCol, b);                     // tread plank
-          addBox(out, vadd(vadd(rc, a.r, -side * setback * 0.46), a.u, -rise * 0.42),
+          // Foot board: its nose MIN_SEP behind the plank's, its top at the
+          // plank's mid-plane — both faces used to sit 12-22 mm off the plank's
+          // (a fight from ~240 m), and flush outright at rise 1.0.
+          addBox(out, vadd(vadd(rc, a.r, -side * (setback * 0.525 - 0.08 - TrackGeom.MIN_SEP)), a.u, -rise * 0.5),
                  [0.16, rise, seg], riserCol, b);                                        // foot board
           crowdBand(vadd(rc, a.u, 0.68), b, side, 0.58, 0.78, seg - 0.6,
                     opts.crowd, dens, k * 13.1 + r * 97.3 + side * 5.7);

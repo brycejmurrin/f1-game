@@ -15,7 +15,7 @@ function fixture() {
   // sits just before the line so the wrap is exercised.
   const G = { player: c, track: { total: 1000, def: { turns: [0.10, 0.50, 0.98] } },
     state: 'race', raceT: 0, paused: false, announceBusy: false,
-    vTop: () => 100, roadWetness: () => 0, cautionInfo: () => ({ level: 0 }),
+    vTop: () => 100, roadWetness: () => 0, cautionInfo: () => ({ level: 0 }), cautionLevel: () => 0,
     fmtTime: t => { const m = Math.floor(t / 60), s = t - m * 60; return m + ':' + (s < 10 ? '0' : '') + s.toFixed(2); },
     store: { get: (key, fallback) => saved.get(key) ?? fallback, set: (key, value) => saved.set(key, value) },
     // practice, not timeTrial, is what gates checkpoints and rewind now — a
@@ -301,10 +301,10 @@ test('cautions and race messages discard pending evidence rather than queue a st
   for (const block of ['message', 'caution', 'contact']) {
     const { coach, G, c, tick, enable, announcements } = fixture(); enable(); tick(.4, braking);
     if (block === 'message') G.announceBusy = true;
-    if (block === 'caution') G.cautionInfo = () => ({ level: 1 });
+    if (block === 'caution') { G.cautionInfo = () => ({ level: 1 }); G.cautionLevel = () => 1; }
     if (block === 'contact') c.contactT = .5;
     tick(2); assert.equal(coach.feedback().state, 'waiting'); assert.equal(announcements.length, 0);
-    G.announceBusy = false; G.cautionInfo = () => ({ level: 0 }); c.contactT = 0;
+    G.announceBusy = false; G.cautionInfo = () => ({ level: 0 }); G.cautionLevel = () => 0; c.contactT = 0;
     tick(.2); assert.equal(announcements.length, 0);
     tick(.3); assert.equal(announcements.length, 1);
   }

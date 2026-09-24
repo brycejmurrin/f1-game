@@ -139,3 +139,41 @@ re-landed alone after its revert (the revert's black screen came from the skip-d
 patches 7 and 8, which stay out — PERF-FINDINGS §2af).
 
 Upstream: PR #34553 (issue #34535), milestone r187 — RETIRE THIS ON THE r187 BUMP.
+
+## 9. `TextureNode.update` rebuilds an unread UV matrix for every sampled texture on every draw
+
+`TextureNode.update()` runs per render OBJECT whenever the node carries a matrix OR a
+flipY uniform, and it called `texture.updateMatrix()` (`Matrix3.setUvTransform`: a cos, a
+sin, nine writes) whenever `texture.matrixAutoUpdate` is true, even when the node has
+no matrix uniform, so nothing reads the result. Three's WebGL2 backend gives every
+texture node a flipY uniform, so every shadow-map compare, material-array and lamp-bake
+sample paid it on every draw: census 289 (real Metal, montreal night) sampled 293 ms of
+`setUvTransform` self time in a 21.9 s WebGL2 leg. The patch rebuilds the matrix only
+when this node has a matrix uniform. Any node that samples through the matrix still
+refreshes it, so texture offset/repeat/rotation behave exactly as before.
+
+Ids 7 and 8 stay unused: they were #228's skip-draw patches, reverted (PERF-FINDINGS §2af).
+
+Upstream: unfixed on dev as of r186.
+
+## 10. TextureNode: one shared flipY / uv-matrix uniform per BASE node (backport of #34552)
+
+Every TextureNode minted its OWN flipY uniform (three's WebGL2 backend always flips)
+and matrix uniform, and marked itself OBJECT-update to feed them, so each `.sample()`
+clone added one more entry to the per-object update set and the object UBO. Apex's
+lit shader samples ~27 texture nodes per draw, 20 of them PCF taps on four shadow
+maps: ~33 per-object updates per lit draw on WebGL2 (census 289: `updateForRender` +
+`update` + `updateReference` ≈ 28 % of the leg's CPU).
+
+Upstream's r187 fix moves both uniforms onto the base node as `onObjectUpdate`
+uniforms. This backports that shape: the uniforms live on `getBase()` and read the
+base's CURRENT `value` on each object update (a node whose `.value` is swapped still
+reports the new texture), and the node itself is `NodeUpdateType.NONE`. `sample()`
+also carries the base's `updateMatrix` to the clone, so a base marked
+`setUpdateMatrix(false)` yields clones without the uv matrix. The lit shader
+(`tsl-lit.js` `shadowMapNode`) samples each shadow map through one such base.
+Patch 9's edit is left in place but is dead code once this applies (the old
+`update()` is no longer called).
+
+Upstream: PR #34552 ("TextureNode: Simplify and optimize uniforms"), r187 — RETIRE
+THIS AND PATCH 9 ON THE r187 BUMP.
