@@ -109,8 +109,8 @@
 
       for (const side of [-1, 1]) {
         for (const [s0, s1, gap] of [
-          [0.0, 0.19, 2.5], [0.19, 0.23, 3.5], [0.23, 0.69, 2.5],
-          [0.69, 0.73, 3.5], [0.73, 1.0, 2.5],
+          [0.0, 0.05, 2.5], [0.05, 0.09, 3.5], [0.09, 0.55, 2.5],   // foldback bands re-keyed from 0.19-0.23 / 0.69-0.73 (the dropped 0.86 shift)
+          [0.55, 0.59, 3.5], [0.59, 1.0, 2.5],
         ]) wall(s0, s1, side, gap, 1.5, WALL);
       }
 
@@ -139,14 +139,13 @@
 
       // Continuous low clipped hedge / treeline ribbon framing the verges
       hedge(0.13, 0.19,  1, 9, 1.6, HEDGE);
-      hedge(0.23, 0.24,  1, 9, 1.6, HEDGE);
       hedge(0.38, 0.50,  1, 9, 1.4, HEDGE);   // mid-island right verge
       hedge(0.62, 0.69, -1, 9, 1.6, HEDGE);
       hedge(0.73, 0.78, -1, 9, 1.6, HEDGE);
-      hedge(0.78, 0.90,  1, 9, 1.6, HEDGE);
+      hedge(0.78, 0.885, 1, 9, 1.6, HEDGE);
 
       // Marshal posts spaced around the lap (orange-roofed bunkers + flag pole)
-      for (const s of [0.05, 0.18, 0.32, 0.47, 0.56, 0.68, 0.82, 0.94]) {
+      for (const s of [0.18, 0.32, 0.47, 0.56, 0.68, 0.82, 0.94]) {   // 0.05: the Senna S post below
         marshalPost(K(s), (Math.round(s * 100) % 2) ? 1 : -1, 8.5);
       }
 
@@ -213,7 +212,9 @@
         waterBand(0.065, 0.20, -1, 26, 136, 12, BASIN,
           { id: "montreal-olympic-basin-north" });
       }
-      forestEdge(0.07, 0.19, -1, 42, {
+      // Split around the north rowing tower (0.135, 49 m): a belt tree grew
+      // through it once the frame was corrected.
+      for (const [s0, s1] of [[0.07, 0.128], [0.142, 0.19]]) forestEdge(s0, s1, -1, 42, {
         density: 0.75, hMin: 9, hMax: 16,
         col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.2
       });
@@ -765,7 +766,7 @@
       {
         const k = K(0.80);
         building(k, 1, 28, 18, 12, 16,
-          { kind: "cross", wall: [0.74, 0.76, 0.80], window: [0.52, 0.64, 0.76], floor: 3 });
+          { kind: "slab", wall: [0.74, 0.76, 0.80], window: [0.52, 0.64, 0.76], floor: 3 });
       }
 
       for (const side of [-1, 1]) {

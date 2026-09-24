@@ -9,7 +9,12 @@
     // Was 0.6400, which put the line inside a corner — a start line is
     // always on a straight. See docs/tracks/START-LINES.md.
     startFrac: 0.5224,
-    sceneryStartFrac: 0.6400,
+    // Scenery frame: the dressing predates startFrac (authored on the old `segs`
+    // layout, origin on the National straight). 0.02 is the best single fit over
+    // 11 landmarks (shift 0.5233; Copse/Wing/Abbey/Loop/Brooklands on their
+    // corners). Was 0.64, an OpenF1 guess, which put the paddock on Maggotts.
+    // bankZones/elevations were re-keyed with it so the road did not move.
+    sceneryStartFrac: 0.0200,
     name: "SILVERSTONE",
     gp: "British GP",
     country: "UK",
@@ -35,17 +40,17 @@
     pal: { zenith: [0.55, 0.62, 0.72], horizon: [0.72, 0.76, 0.82], grass: [0.16, 0.40, 0.18], runoff: [0.48, 0.46, 0.42], fog: [0.68, 0.72, 0.78], fogDensity: 0.0020, sunDir: [0.42010419876354255, 0.5521369469463703, 0.7201786264517872], sun: [0.92, 0.94, 0.96], sunColor: [0.92, 0.94, 0.96], ambientSky: [0.58, 0.62, 0.70], ambientGround: [0.30, 0.34, 0.28] },
     // Source-trace fractions mapping to racing s≈0.12 (rise) and s≈0.55 (dip).
     elevations: [
-      { s: 0.76, halfM: 420, rise: 7 },
-      { s: 0.19, halfM: 480, rise: -7 },
+      { s: 0.7669, halfM: 420, rise: 7 },
+      { s: 0.1969, halfM: 480, rise: -7 },
     ],
     bankZones: [
-      { frac: 0.0267, angleDeg: 4.0, widthM: 110 },   // Copse
-      { frac: 0.2122, angleDeg: 3.5, widthM: 190 },   // Becketts
-      { frac: 0.3723, angleDeg: 4.5, widthM: 150 },   // Stowe
-      { frac: 0.5359, angleDeg: 3.5, widthM: 150 },   // Vale/Club
-      { frac: 0.7064, angleDeg: 4.0, widthM: 200 },
-      { frac: 0.8001, angleDeg: 3.5, widthM: 200 },   // Luffield
-      { frac: 0.9199, angleDeg: 3.0, widthM: 100 },
+      { frac: 0.6536, angleDeg: 4.0, widthM: 110 },   // Loop (engine 0.177)
+      { frac: 0.8391, angleDeg: 3.5, widthM: 190 },   // Luffield (engine 0.362)
+      { frac: 0.9992, angleDeg: 4.5, widthM: 150 },   // Copse (engine 0.523)
+      { frac: 0.1628, angleDeg: 3.5, widthM: 150 },   // Becketts (engine 0.686)
+      { frac: 0.3333, angleDeg: 4.0, widthM: 200 },   // Stowe (engine 0.857)
+      { frac: 0.4270, angleDeg: 3.5, widthM: 200 },   // Vale/Club (engine 0.950)
+      { frac: 0.5468, angleDeg: 3.0, widthM: 100 },   // Abbey (engine 0.070)
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──

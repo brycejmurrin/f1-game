@@ -176,7 +176,10 @@
       terrainPatch("acque-mist-4", 0.48, -1, 12, [36, 55], [0.71, 0.77, 0.73]);
       // Extra dark canopy walls for the enclosed park-in-the-loop read
       backdrop(K(0.46),  1, 42, [34, 20, 50], [0.08, 0.20, 0.10]);
-      backdrop(K(0.50),  1, 48, [36, 24, 52], [0.07, 0.18, 0.09]);
+      // dist 60 (was 48): at 48 the engine's per-primitive road cull ate this
+      // canopy's frustum base near the start/finish leg, leaving its dome cap
+      // hanging 10.7 m up (float-audit frac 0.009, lat 55).
+      backdrop(K(0.50),  1, 60, [36, 24, 52], [0.07, 0.18, 0.09]);
       backdrop(K(0.54), -1, 40, [32, 18, 48], [0.09, 0.22, 0.11]);
 
       backdrop(K(0.60), -1,  70, [44, 26, 58], [0.12, 0.28, 0.14]);

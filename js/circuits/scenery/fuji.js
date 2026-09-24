@@ -97,9 +97,16 @@
         // Door band across the face of each bay.
         prop(k, 1, 6.6, [0.4, 2.8, GAR_STEP * 0.60], DOORS[i % DOORS.length]);
         // Second storey / hospitality deck set back behind it.
-        if (i % 2 === 0)
-          building(k, 1, 27, 11, 12.6, GAR_STEP * 1.9,
-            { wall: i % 4 ? CLAD_L : CLAD_W, window: GLASS, floor: 4.0, lit: false });
+        // One unit PER BAY, not a 1.9-bay slab every other bay: building()'s
+        // crown radius is max(w, d)/2, so a 76 m slab asked for a 38 m cap
+        // that the road guard refused, leaving its roof plant floating 14 m up
+        // (float-audit, 2026-09-23). Two 0.95-bay units cover the same run.
+        // Skipped: inside the control tower's footprint (0.028; a unit there
+        // clipped its deck ring), and bay cnt-2, where the frontage bends
+        // into Turn 1 and the road guard refuses the unit.
+        const dT = Math.abs(k - K(0.028));
+        if (Math.min(dT, n - dT) >= GAR_N && i !== cnt - 2)
+          building(k, 1, 27, 11, 12.6, GAR_STEP * 0.95, { wall: (i >> 1) % 2 ? CLAD_L : CLAD_W, window: GLASS, floor: 4.0, lit: false });
       }
       // Continuous fascia band along the garage roofline + the pit wall.
       run(GAR_S, GAR_LEN, 48, (s) => {
@@ -378,14 +385,21 @@
       // Marshal hut and a tyre store behind the hairpin bank.
       building(K(0.744), 1, 38, 10, 5, 22, { wall: CLAD_W, window: GLASS, lit: false });
       prop(K(0.750), 1, 34, [3.4, 1.9, 9], [0.10, 0.10, 0.11]);
-      forestEdge(0.716, 0.770, 1, 56, { hMin: 15, hMax: 27, col: SUGI_D, col2: SUGI, pineFrac: 0.95, density: 0.22 });
+      // Starts at 0.724, not 0.716: across the 300R fold a tall cedar from
+      // 0.716-0.724 lands ~12 m off the 0.690 road, where the guard culls its
+      // trunk and lower tier and leaves the crown floating 15 m up
+      // (float-audit, 2026-09-23).
+      forestEdge(0.724, 0.770, 1, 56, { hMin: 15, hMax: 27, col: SUGI_D, col2: SUGI, pineFrac: 0.95, density: 0.22 });
 
       // 11. THE 30R/45R FLICK — tree-lined and enclosed  [0.808 -1 18]
       forestEdge(0.762, 0.860, -1, 18, { hMin: 15, hMax: 27, col: SUGI, col2: SUGI_D, pineFrac: 0.95, density: 0.3 });
       forestEdge(0.762, 0.860, 1, 20, { hMin: 15, hMax: 27, col: SUGI_D, col2: SUGI, pineFrac: 0.95, density: 0.3 });
       forestEdge(0.766, 0.858, -1, 48, { hMin: 17, hMax: 30, col: SUGI_D, col2: SUGI, pineFrac: 0.96, density: 0.2 });
       forestEdge(0.768, 0.856, 1, 50, { hMin: 17, hMax: 30, col: SUGI_B, col2: SUGI_D, pineFrac: 0.96, density: 0.2 });
-      forestEdge(0.770, 0.854, -1, 96, { hMin: 18, hMax: 31, col: SUGI_B, col2: SUGI_D, pineFrac: 0.97, density: 0.15 });
+      // Skips 0.780-0.790: the 96 m rank there reaches ~12 m off the 0.860
+      // road, whose guard culls the trunk and leaves a crown 15 m up.
+      for (const [a, b] of [[0.770, 0.780], [0.790, 0.854]])
+        forestEdge(a, b, -1, 96, { hMin: 18, hMax: 31, col: SUGI_B, col2: SUGI_D, pineFrac: 0.97, density: 0.15 });
       hedge(0.770, 0.856, -1, 13, 1.7, SCRUB);
       marshalPost(K(0.808), -1, 14);
       marshalPost(K(0.838), 1, 14);
@@ -412,7 +426,10 @@
         conc: CONC_D, concAlt: CONC });
       // Depth behind the last corner's seating.
       building(K(0.912), -1, 84, 16, 9, 66, { wall: [0.34, 0.35, 0.37], window: GLASS, lit: false });
-      forestEdge(0.860, 0.960, -1, 120, { hMin: 16, hMax: 28, col: SUGI_D, col2: SUGI_B, pineFrac: 0.95, density: 0.16 });
+      // Skips 0.866-0.873: the 120 m rank there reaches ~12 m off the 0.771
+      // road (the flick doubles back), leaving a culled cedar's crown 18 m up.
+      for (const [a, b] of [[0.860, 0.866], [0.873, 0.960]])
+        forestEdge(a, b, -1, 120, { hMin: 16, hMax: 28, col: SUGI_D, col2: SUGI_B, pineFrac: 0.95, density: 0.16 });
       tyreWall(0.888, 0.912, -1, 12, [0.86, 0.20, 0.16]);
       cameraTower(K(0.896), -1, 32, { h: 12 });
       billboard(K(0.884), -1, 30, 18, 8, [0.06, 0.07, 0.09], { style: "monopole" });

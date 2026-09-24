@@ -9,7 +9,6 @@
     // Was 0.0125, which put the line inside a corner — a start line is
     // always on a straight. See docs/tracks/START-LINES.md.
     startFrac: 0.0000,
-    sceneryStartFrac: 0.0125,
     name: "MONZA",
     gp: "Italian GP",
     country: "Italy",
@@ -40,9 +39,12 @@
       grass:         [0.20, 0.44, 0.18],
       sunDir:        [0.5, 0.55, 0.3],
     },
+    // elevations/bankZones re-keyed to the start line (startFrac 0) when the
+    // bogus sceneryStartFrac 0.0125 (shift 0.0867) was removed: elev s +0.0742
+    // (index -0.0125, arc +0.0867), bank frac +0.0867. Road surface unchanged.
     elevations: [
-      { s: 0.3125, halfM: 220, rise: -1.5 },
-      { s: 0.4925, halfM: 340, rise: 4.5 },
+      { s: 0.3867, halfM: 220, rise: -1.5 },
+      { s: 0.5667, halfM: 340, rise: 4.5 },
     ],
     hwZones: [
       { s0: 0.0155, s1: 0.0949, hw: 6.8, ease: 0.012 },  // arc 0.003-0.024 Rettifilo
@@ -50,11 +52,11 @@
       { s0: 0.5960, s1: 0.7315, hw: 7.2, ease: 0.012 },  // arc 0.524-0.572 Ascari
     ],
     bankZones: [
-      { frac: 0.0769, angleDeg: 3.0, widthM: 240 },   // Curva Grande
-      { frac: 0.2964, angleDeg: 6.0, widthM: 140 },   // Lesmo 1
-      { frac: 0.3456, angleDeg: 6.0, widthM: 80 },    // Lesmo 2
-      { frac: 0.5443, angleDeg: 3.5, widthM: 110 },   // Ascari
-      { frac: 0.7355, angleDeg: 4.0, widthM: 300 },   // Parabolica
+      { frac: 0.1636, angleDeg: 3.0, widthM: 240 },   // Curva Grande
+      { frac: 0.3831, angleDeg: 6.0, widthM: 140 },   // Lesmo 1
+      { frac: 0.4323, angleDeg: 6.0, widthM: 80 },    // Lesmo 2
+      { frac: 0.6310, angleDeg: 3.5, widthM: 110 },   // Ascari
+      { frac: 0.8222, angleDeg: 4.0, widthM: 300 },   // Parabolica
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──

@@ -118,9 +118,12 @@ test("Miami declares explicit racing scenery and source-mapped Turnpike elevatio
   // 0.66 while miami's startFrac was 0.2325 (0.8925 - 0.2325); the start line
   // has since been corrected onto the real one at 0.0, so the map is now the
   // identity and the source fraction stands unchanged. The assertion is kept
-  // because it still pins WHICH space the field is read in.
+  // because it still pins WHICH space the field is read in. 0.8925 -> 0.8605
+  // when the bogus sceneryStartFrac 0.2325 went (DEFECT-LEDGER "miami"): the
+  // shift's undulation phase had carried the crest, so the source fraction was
+  // re-swept to keep the road where it was (peak ~0.858, within 0.065 m).
   assert.equal(miami.startFrac, 0);
-  assert.ok(Math.abs(TrackSpace.toRacingFrac(miami, miami.elevations[0].s) - 0.8925) < 1e-12);
+  assert.ok(Math.abs(TrackSpace.toRacingFrac(miami, miami.elevations[0].s) - 0.8605) < 1e-12);
   // Curated hero zones only (eb0b6b3 narrowed the old full-lap exclusion):
   // Hard Rock bowl horizon, marina, and beach club.
   const cityFoliage = Array.from(miami.dressingExclusions) // host-realm copy for deepEqual

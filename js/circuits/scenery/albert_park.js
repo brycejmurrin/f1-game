@@ -197,6 +197,9 @@
       every(100, (kk) => {
         for (const side of [-1, 1]) {
           if (side === -1 && kk >= k(0.27) && kk <= k(0.65)) continue;
+          // The 0.9125 right-hand mound: its frustum base is culled (footprint)
+          // and the dome cap hung 21 m in the air (float-audit, frac 0.944).
+          if (side === 1 && kk === k(0.9125)) continue;
           const dist = 165 + hash(kk * 6 + side) * 60;
           const w    = 130 + hash(kk * 11 + side) * 60;  // 130–190 m footprint (wider, fewer)
           const h    =  24 + hash(kk * 17 + side) * 16;  // 24–40 m mound height
@@ -542,6 +545,10 @@
         const topH = 0.9 + rows * 1.3;
         const half = (len / 2) / track.total;
         recordBarrier(s - half, s + half, side, gap);
+        // The deck's BACK edge too (a.c ± 6.5 m, shade roof to gap + ~11 m):
+        // clearTreeDist only pushed the belt past the front face, so the park
+        // trees grew up through the shade roofs.
+        recordBarrier(s - half, s + half, side, gap + 12);
         modelGroup(id, {
           center: vadd(a.c, a.u, topH * 0.7),
           size: [14, topH + 12, len + 4],

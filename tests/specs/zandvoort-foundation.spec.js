@@ -261,21 +261,13 @@ test.describe("Zandvoort shared-foundation migration", () => {
     expect(Number.isFinite(clearance.hwMin) && Number.isFinite(clearance.hwMax)).toBe(true);
     expect(clearance.hwMin).toBeGreaterThan(3);
     expect(clearance.hwMax).toBeLessThan(13);
-    // THE PIT WALL'S TOP CAP, and why this one reading is allowed.
-    // `propClearance` scales its lateral ladder by a half-width taken from the
-    // ROAD MESH, which runs 1.2-1.3x the engine's own `track.hw` because the
-    // mesh carries verge and run-off out to 13 m. Zandvoort's outermost sample
-    // therefore lands at 6.9 m against a 7.0 m tarmac half-width — off the
-    // racing surface, on the boundary — where `js/track/scenery/pits.js`
-    // sweeps the pit wall's cap at y 1.00-1.07 in WALL_TOP [0.46,0.47,0.50].
-    // Measured 1.07 m, on jeddah, mosport, singapore and zandvoort alike;
-    // `props-over-road.spec.js` baselines the same object on all four for the
-    // same reason. It is a boundary structure at the road edge, not scenery
-    // reaching in, and this spec is about zandvoort's scenery migration.
-    // docs/notes/DEFECT-LEDGER.md carries the identification and the open item
-    // behind it: that ladder samples past the tarmac by construction.
-    const PIT_WALL_CAP = 1.1;
-    expect(clearance.max, `prop intrusions: ${JSON.stringify(clearance.top)}`).toBeLessThanOrEqual(PIT_WALL_CAP);
+    // NO PIT-WALL ALLOWANCE ANY MORE. This was capped at 1.1 m for the pit
+    // wall's 1.07 m top cap, read when the ladder was scaled by the ROAD MESH
+    // (1.2-1.3x track.hw) and sampled past the tarmac. halfWidth is track.hw
+    // now (above), and the sweep recorded there reads 0.00 m out to 0.9 hw, so
+    // the wall is out of reach and the shared TOL holds. props-over-road made
+    // the same correction on 2026-09-23 (docs/notes/DEFECT-LEDGER.md).
+    expect(clearance.max, `prop intrusions: ${JSON.stringify(clearance.top)}`).toBeLessThanOrEqual(TOL);
     expect(clearance.terrainMax,
       `terrain intrusions: ${JSON.stringify(clearance.terrainTop)}`).toBeLessThanOrEqual(0.18);
 
