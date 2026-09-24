@@ -4395,7 +4395,14 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
   // render context, hence the program cache, on the MRT node's id), the MRT is
   // nulled only after it, and the casters compile under null (sunPass runs before
   // present(), with the MRT restored).
-  let shadowCalls = 0, postCalls = 0;
+  let shadowCalls = 0, postCalls = 0, fxCalls = 0;
+  // The FX warm (particles, skid marks — PERF-FINDINGS §2ah) runs after the
+  // scene warm, under the SAME target and ssrTag MRT the scene compiled with.
+  const warmFxPrograms = async () => {
+    fxCalls++; await Promise.resolve();
+    assert.equal(target, "HDR"); assert.equal(mrt, "tag", "FX programs compile under the scene MRT, the variant present() draws");
+    assert.equal(postCalls, 0, "the FX warm runs before the post warm");
+  };
   const _warmPlus = true;   // apex26.tlxWarmPlus=1: the full warm (opt-in)
   // The stage timeline memState().warm reports (census 207 spent its window
   // inside the warm with no row saying so): the sandbox owns the record.
@@ -4442,11 +4449,11 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
   assert.equal(target, "canvas"); assert.equal(mrt, "previous"); assert.equal(tag, false);
   assert.equal(_warmRequested, true); assert.equal(_warmPending, null);
   warm({}); await _warmPending;
-  assert.equal(_warmRequested, false); assert.equal(postCalls, 1); assert.equal(shadowCalls, 1);
+  assert.equal(_warmRequested, false); assert.equal(postCalls, 1); assert.equal(shadowCalls, 1); assert.equal(fxCalls, 1);
   assert.equal(target, "canvas"); assert.equal(mrt, "previous"); assert.equal(tag, false);
   // Two attempts, one failed; every stage of the successful one is a number.
   assert.equal(_warmStages.attempts, 2); assert.equal(_warmStages.failed, 1);
-  for (const k of ["scene", "post", "shadow", "total"]) assert.ok(Number.isFinite(_warmStages[k]) && _warmStages[k] >= 0, k + " stage timed");
+  for (const k of ["scene", "fx", "post", "shadow", "total"]) assert.ok(Number.isFinite(_warmStages[k]) && _warmStages[k] >= 0, k + " stage timed");
   assert.ok(_warmStages.at > 0, "warm start stamped");
 });
 
@@ -4750,4 +4757,19 @@ test("the startline mesh out-biases the road it is painted on", () => {
     assert.ok(Number(start[1]) < Number(r[1]) && Number(start[2]) < Number(r[2]),
       `_startBias [${start[1]}, ${start[2]}] must be stronger than the road's [${r[1]}, ${r[2]}]`);
   }
+});
+
+test("TLX FX: double-sided FX draw in ONE pass and their programs warm on the stream layouts (PERF-FINDINGS §2ah)", () => {
+  // three splits a transparent DoubleSide material into back + front passes
+  // unless forceSinglePass: two draws, two pipelines, and compileAsync builds
+  // neither — the particle groups compiled mid-race even when warmed.
+  const fxSrc = code("js/render/three/tsl-fx.js");
+  assert.match(fxSrc, /if \(o\.doubleSided\) \{ m\.side = THREE\.DoubleSide; m\.forceSinglePass = true; \}/,
+    "double-sided FX materials must set forceSinglePass (GLX draws them in one pass, cull off)");
+  const tlx = code("js/render/three/tlx.js");
+  const body = fnBody(tlx, "warmFxPrograms");
+  for (const pair of [/\[skidStream, fx\.skidMat\]/, /\[partStreams\[0\], fx\.particleMats/, /\[partStreams\[1\], fx\.particleMats/])
+    assert.match(body, pair, "the FX warm compiles " + pair + " on its real stream geometry");
+  assert.match(body, /ensureStream\(stream, 1\)/, "the stream geometry (its vertex layout) exists before the compile");
+  assert.match(fnBody(tlx, "startProgramWarm"), /await warmFxPrograms\(\)/, "startProgramWarm runs the FX warm");
 });
