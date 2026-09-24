@@ -1,0 +1,312 @@
+// The hitch instrument's own arithmetic, on synthetic series where the answer
+// is known.
+//
+// WHY THIS EXISTS. This repository has retracted three performance findings in
+// a row, and not one of them was a reasoning error — each was an instrument
+// that returned a number nobody had checked against a case with a known
+// answer. `window.GLX` never resolved, so a whole memory column silently went
+// unsampled and read as "flat". A steering driver ran its own rAF loop, added
+// 3600 non-rendering callbacks, and moved the median that decided what
+// "wide" meant. A leak was measured over a window that opened while the
+// working set was still filling.
+//
+// analyseHeap() is the instrument the current hypothesis rests on: that the
+// hitch is a major GC, driven by a per-frame allocation rate that every
+// earlier pass missed because snapMem() forces a collection before reading and
+// therefore reports RETENTION. Retention was flat. Allocation was never
+// measured. Before that function is allowed to produce a verdict about the
+// shipped renderer, it has to produce the right verdict about a series built
+// to contain the thing, and the right verdict about one built not to.
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { analyse, analyseHeap, analyseAlloc, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds } from "../../tools/gfx/frame-hitch.mjs";
+
+// A frame series: `spikeEvery` frames apart, `spikeMs` long, `baseMs` otherwise.
+function series(frames, baseMs, spikeEvery, spikeMs) {
+  const t0 = [], dur = [];
+  let t = 0;
+  for (let i = 0; i < frames; i++) {
+    const isSpike = spikeEvery > 0 && i > 0 && i % spikeEvery === 0;
+    const d = isSpike ? spikeMs : baseMs;
+    t0.push(t); dur.push(d); t += d;
+  }
+  return { t0, dur };
+}
+
+test("analyse separates a periodic spike train from a clean run", () => {
+  const clean = series(600, 16, 0, 0);
+  assert.equal(analyse(clean.t0, clean.dur).spikes, 0, "a flat series has no spikes");
+
+  // 16 ms frames with a 120 ms frame every 180 — about every 3 s, the symptom.
+  const hitchy = series(1200, 16, 180, 120);
+  const a = analyse(hitchy.t0, hitchy.dur);
+  assert.ok(a.spikes >= 4, `expected a spike train, got ${a.spikes}`);
+  assert.equal(a.periodic, true, `expected periodic, got CV ${a.gapCV}`);
+  assert.ok(a.gapMedianS > 2.5 && a.gapMedianS < 4, `gap ${a.gapMedianS}s should be ~3s`);
+});
+
+// Build a sawtooth heap: `allocPerFrameMB` added each frame, and a collection
+// that returns it to `floorMB` whenever the heap passes `ceilMB`. `onSpike`
+// decides whether the collecting frame is also the expensive one.
+function sawtooth(frames, baseMs, allocPerFrameMB, floorMB, ceilMB, gcCostMs) {
+  const t0 = [], dur = [], heap = [];
+  let t = 0, h = floorMB;
+  for (let i = 0; i < frames; i++) {
+    h += allocPerFrameMB;
+    let d = baseMs;
+    if (h > ceilMB) { h = floorMB; d = gcCostMs; }
+    t0.push(t); dur.push(d); heap.push(h); t += d;
+  }
+  return { t0, dur, heap };
+}
+
+test("analyseHeap names GC when the collections land on the spikes", () => {
+  // 0.7 MB/frame at 16 ms is ~44 MB/s: a 130 MB band then collects about
+  // every 3 s, and the collecting frame costs 110 ms. This is the hypothesis
+  // rendered as data.
+  const s = sawtooth(1500, 16, 0.7, 60, 190, 110);
+  const a = analyse(s.t0, s.dur);
+  assert.ok(a.spikes >= 4, `fixture should spike, got ${a.spikes}`);
+  const h = analyseHeap(s.heap, s.t0, s.dur, a.spikeThresholdMs);
+  assert.ok(h.allocMBps > 35 && h.allocMBps < 55, `alloc rate ${h.allocMBps} MB/s should be ~44`);
+  assert.ok(h.collections >= 4, `expected collections, got ${h.collections}`);
+  assert.equal(h.spikesNearGC, h.spikes, "every spike here IS a collection");
+  assert.ok(h.enrichment >= 1.8, `enrichment ${h.enrichment} should be well above chance`);
+  assert.match(h.verdict, /GC IS ON THE SPIKES/);
+});
+
+test("analyseHeap clears GC when the spikes are somewhere else", () => {
+  // Same allocation rate and the same collection cadence — but collecting is
+  // cheap, and the expensive frames come from elsewhere on a DIFFERENT period.
+  // A verdict that keys on "there are collections and there are spikes" passes
+  // this by mistake; only the coincidence test rejects it.
+  const s = sawtooth(1500, 16, 0.7, 60, 190, 16);
+  for (let i = 0; i < s.dur.length; i++) if (i > 0 && i % 137 === 0) s.dur[i] = 120;
+  // rebuild the clock so the injected spikes carry their own cost
+  let t = 0;
+  for (let i = 0; i < s.dur.length; i++) { s.t0[i] = t; t += s.dur[i]; }
+  const a = analyse(s.t0, s.dur);
+  assert.ok(a.spikes >= 4, `fixture should spike, got ${a.spikes}`);
+  const h = analyseHeap(s.heap, s.t0, s.dur, a.spikeThresholdMs);
+  assert.ok(h.collections >= 4, "the collections are still there");
+  assert.ok(h.enrichment < 1.8, `enrichment ${h.enrichment} should not clear the bar`);
+  assert.match(h.verdict, /GC is NOT the spike source/);
+});
+
+test("analyseHeap reports an unsampled series as unsampled, never as flat", () => {
+  // The GLX-identifier bug in one line: a column that was never read must not
+  // come back as a measurement. An all-zero heap is "no performance.memory",
+  // not "0 MB/s allocated".
+  const s = series(600, 16, 0, 0);
+  const h = analyseHeap(new Array(600).fill(0), s.t0, s.dur, 40);
+  assert.ok(h.note && /no performance\.memory/.test(h.note), `got ${JSON.stringify(h)}`);
+  assert.equal(h.allocMBps, undefined, "an unsampled series reports no rate at all");
+});
+
+// A CDP sampling profile: a node tree plus a `samples` array, where each
+// sample is one sampled allocation carrying its REAL size and the id of the
+// node that made it.
+function node(id, fn, url, line, selfSize, children) {
+  return { id, callFrame: { functionName: fn, url, lineNumber: line }, selfSize, children: children || [] };
+}
+function samplesOf(nodeId, size, count) {
+  const out = [];
+  for (let i = 0; i < count; i++) out.push({ size, nodeId, ordinal: i });
+  return out;
+}
+
+test("analyseAlloc corrects the sampler's bias against many small objects", () => {
+  // THE CALIBRATION, as a fixture. A run injected a known 500 KB/frame of
+  // 56-byte objects against a ~250 KB/frame page baseline, so the injector had
+  // to come out around two thirds of the profile. Reading the tree's selfSize
+  // put it at 1.2%, below fourteen three.js internals, because V8 samples one
+  // allocation per `rate` bytes: a 56-byte object is sampled with probability
+  // 1-exp(-56/16384) ~ 1/293, a 64 KB object with probability ~0.98. Raw bytes
+  // therefore under-count small-object sites by nearly three hundred times.
+  //
+  // Here: 2,000 samples of 56 bytes (112 KB raw) against 40 samples of 64 KB
+  // (2,560 KB raw). By raw bytes the big-object site wins 23:1. Corrected, the
+  // small-object site stands for 2000*56*293 ~ 32.8 MB and the other for
+  // 40*64K*1.02 ~ 2.6 MB, so it wins about 12:1 — which is the truth.
+  const head = node(1, "(root)", "", 0, 0, [
+    node(2, "mintsManySmall", "http://x/js/render/three/tlx.js?v=abc", 1224, 112 * 1024, []),
+    node(3, "mintsFewLarge", "http://x/js/render/three/tlx.js?v=abc", 2000, 2560 * 1024, []),
+  ]);
+  const profile = { head, samples: samplesOf(2, 56, 2000).concat(samplesOf(3, 65536, 40)) };
+  const a = analyseAlloc(profile, 100, 6000, 16384);
+  assert.match(a.verdict, /TOP RETAINER: mintsManySmall/,
+    `raw selfSize would have named mintsFewLarge; got ${a.verdict}`);
+  assert.ok(a.sites[0].share > 0.85, `small-object site should dominate once corrected, got ${a.sites[0].share}`);
+  // And the bias it corrected stays visible, so a reader can check the claim.
+  assert.ok(a.biasedSelfMB < a.totalMB / 10, "the uncorrected total must be reported and must be far smaller");
+});
+
+test("analyseAlloc folds one site reached two ways into one row", () => {
+  // `materialFor` is reached from draw() and from drawChunked(); the profile
+  // therefore holds two nodes for it. They are ONE site — a report that split
+  // them would rank a single 60% allocator below a 25% one.
+  const head = node(1, "(root)", "", 0, 0, [
+    node(2, "draw", "http://x/js/render/three/tlx.js?v=abc", 3107, 0, [
+      node(3, "materialFor", "http://x/js/render/three/tlx.js?v=abc", 1224, 0, []),
+    ]),
+    node(4, "drawChunked", "http://x/js/render/three/tlx.js?v=abc", 3110, 0, [
+      node(5, "materialFor", "http://x/js/render/three/tlx.js?v=abc", 1224, 0, []),
+    ]),
+    node(6, "acquireMesh", "http://x/js/render/three/tlx.js?v=abc", 1859, 0, []),
+  ]);
+  const profile = { head, samples: samplesOf(3, 64, 500).concat(samplesOf(5, 64, 500), samplesOf(6, 64, 120)) };
+  const a = analyseAlloc(profile, 100, 6000, 16384);
+  const top = a.sites[0];
+  assert.match(top.site, /^materialFor @ js\/render\/three\/tlx\.js:1225$/,
+    `site should be folded and cache-buster-free, got ${top.site}`);
+  assert.equal(a.sites.filter((x) => /materialFor/.test(x.site)).length, 1, "one site, not two");
+  assert.ok(top.share > 0.85, `folded materialFor should dominate, got ${top.share}`);
+});
+
+test("analyseAlloc refuses to name a winner when the profile is flat", () => {
+  // Eight sites at 12.5% each. The failure mode this guards is the one that
+  // matters: a ranked list always HAS a first row, and reporting it as "the
+  // allocator" when it holds an eighth of the bytes is how a round gets spent
+  // fixing 2% of a problem.
+  const kids = [];
+  let samples = [];
+  for (let i = 0; i < 8; i++) {
+    kids.push(node(10 + i, `f${i}`, `http://x/js/a${i}.js`, 10, 0, []));
+    samples = samples.concat(samplesOf(10 + i, 64, 100));
+  }
+  const a = analyseAlloc({ head: node(1, "(root)", "", 0, 0, kids), samples }, 100, 6000, 16384);
+  assert.match(a.verdict, /no dominant retainer/);
+});
+
+test("analyseAlloc reports an absent or sample-less profile as unusable, never as zero", () => {
+  assert.match(analyseAlloc(null, 100, 6000, 16384).note, /no sampling profile/);
+  // A tree with no samples is the biased view only. It must say so rather than
+  // quietly fall back to it — falling back is what produced the 1.2% reading.
+  const t = analyseAlloc({ head: node(1, "(root)", "", 0, 0, [node(2, "f", "u", 1, 999, [])]) }, 100, 6000, 16384);
+  assert.match(t.note, /no samples/);
+  assert.equal(t.totalMB, undefined, "an unusable profile reports no total at all");
+});
+
+test("analyseAlloc says on every result that it measures RETENTION, not allocation", () => {
+  // The name is a trap and the last reader of it fell in: a 500 KB/frame
+  // injection of pure garbage came out at 1.2% of the profile, because V8
+  // holds each sampled object weakly and drops it from the profile when it is
+  // collected. Every shape of result therefore carries the caveat, including
+  // the degraded one — a note is exactly where a hurried reader looks.
+  const withSamples = analyseAlloc(
+    { head: node(1, "(root)", "", 0, 0, [node(2, "f", "u", 1, 0, [])]), samples: samplesOf(2, 64, 50) },
+    100, 6000, 16384);
+  assert.match(withSamples.means, /RETAINED/);
+  const noSamples = analyseAlloc({ head: node(1, "(root)", "", 0, 0, [node(2, "f", "u", 1, 9, [])]) }, 100, 6000, 16384);
+  assert.match(noSamples.means, /RETAINED/);
+});
+
+// A CDP Profiler.Profile: nodes with callFrames, `samples` naming the node
+// hit at each tick, `timeDeltas` in MICROseconds between ticks.
+function cpuNode(id, fn, url, line, children) {
+  return { id, callFrame: { functionName: fn, url, lineNumber: line }, children: children || [] };
+}
+
+test("analyseCpu ranks by exact self time and folds a function reached two ways", () => {
+  // getNodeBuilderState reached from two parents (ids 3 and 5) with 300 ms
+  // between them; createBindings 100 ms; the root itself 10 ms. Self time is
+  // the sum of the deltas of the samples that hit a node, not a hit count,
+  // so unequal sample spacing must be respected.
+  const profile = {
+    nodes: [
+      cpuNode(1, "(root)", "", 0, [2, 4]),
+      cpuNode(2, "render", "http://x/js/render/three/tlx.js?v=abc", 3400, [3]),
+      cpuNode(3, "getNodeBuilderState", "http://x/vendor/three-0.186.0/three.webgpu.min.js", 5, []),
+      cpuNode(4, "endPass", "http://x/js/render/three/tlx-shadow.js?v=abc", 260, [5, 6]),
+      cpuNode(5, "getNodeBuilderState", "http://x/vendor/three-0.186.0/three.webgpu.min.js", 5, []),
+      cpuNode(6, "createBindings", "http://x/vendor/three-0.186.0/three.webgpu.min.js", 5, []),
+    ],
+    samples:    [3,      3,      5,       6,      1,     6],
+    timeDeltas: [100000, 50000,  150000,  40000,  10000, 60000],
+  };
+  const a = analyseCpu(profile);
+  assert.equal(a.totalMs, 410, "total is the sum of the deltas");
+  assert.match(a.verdict, /TOP SELF TIME: getNodeBuilderState/);
+  assert.equal(a.rows[0].ms, 300, "two parents fold into one 300 ms row");
+  assert.equal(a.rows[1].site, "createBindings @ vendor/three-0.186.0/three.webgpu.min.js:6");
+  assert.equal(a.rows[1].ms, 100);
+  assert.equal(a.files[0].file, "vendor/three-0.186.0/three.webgpu.min.js");
+  assert.ok(a.files[0].share > 0.97, "the per-file fold attributes 400 of 410 ms to the bundle");
+});
+
+test("analyseCpu reports an absent profile as absent, never as an empty ranking", () => {
+  assert.match(analyseCpu(null).note, /no CPU profile/);
+  assert.match(analyseCpu({ nodes: [] }).note, /no CPU profile/);
+});
+
+test("analyseSpikeCpu attributes only the samples that fall inside spike frames, on the joined clock", () => {
+  // Profiler clock: startTime 5,000,000 us; one sample every 500 us. Page clock at
+  // Profiler.start: 1000 ms. So sample i sits at page 1000 + 0.5 * (i + 1) ms.
+  const nodes = [
+    { id: 1, callFrame: { functionName: "(root)", url: "" }, children: [2, 5, 4] },
+    { id: 2, callFrame: { functionName: "(garbage collector)", url: "" } },
+    { id: 5, callFrame: { functionName: "tick", url: "http://127.0.0.1:1/probe-fixture.js?v=dev", lineNumber: 1 }, children: [6] },
+    { id: 6, callFrame: { functionName: "build", url: "" }, children: [7] },
+    { id: 7, callFrame: { functionName: "build", url: "" }, children: [3] },
+    { id: 3, callFrame: { functionName: "render", url: "http://127.0.0.1:1/probe-fixture.js?v=dev", lineNumber: 9 } },
+    { id: 4, callFrame: { functionName: "idle", url: "" } },
+  ];
+  const samples = [], timeDeltas = [];
+  for (let i = 0; i < 2000; i++) {           // 1000 ms of samples, page 1000.5 .. 2000
+    const page = 1000 + 0.5 * (i + 1);
+    samples.push(page >= 1200 && page < 1350 ? 2 : page >= 1350 && page < 1400 ? 3 : 4);
+    timeDeltas.push(500);
+  }
+  const profile = { startTime: 5000000, nodes, samples, timeDeltas };
+  // Frames: one 200 ms spike at page 1200-1400, normal frames elsewhere.
+  const t0 = [1100, 1200, 1500], dur = [16, 200, 16];
+  const a = analyseSpikeCpu(profile, t0, dur, 100, 1000);
+  assert.equal(a.spikes, 1); assert.equal(a.spikeMs, 200);
+  assert.ok(Math.abs(a.sampledMs - 200) <= 1, "every sample of the 200 ms frame is inside: " + a.sampledMs);
+  assert.ok(a.coverage >= 0.99 && a.coverage <= 1.01, "the clock join covers the spike: " + a.coverage);
+  assert.equal(a.rows[0].site, "(garbage collector) @ :?"); assert.ok(Math.abs(a.rows[0].ms - 150) <= 1);
+  assert.equal(a.rows[1].site, "render @ probe-fixture.js:10"); assert.ok(Math.abs(a.rows[1].ms - 50) <= 1);
+  assert.equal(a.rows[1].path, "build×2 <- tick", "the caller chain, nearest first, repeats folded, without (root)");
+  assert.ok(!a.rows.some((r) => r.site.startsWith("idle")), "samples outside the spike are not attributed");
+  assert.match(a.verdict, /INSIDE THE 1 SPIKES: \(garbage collector\)/);
+  // A wrong join (page clock off by a second) reports a coverage of ~0, not a ranking.
+  const off = analyseSpikeCpu(profile, t0, dur, 100, 3000);
+  assert.equal(off.sampledMs, 0); assert.match(off.verdict, /clock join failed/);
+  assert.equal(analyseSpikeCpu(profile, t0, [16, 16, 16], 100, 1000).spikes, 0);
+  assert.match(analyseSpikeCpu(null, t0, dur, 100, 1000).note, /no CPU profile/);
+});
+
+test("analyseSpikeWork sums per-frame resource calls inside and outside the spike frames", () => {
+  const dur = [16, 200, 16, 150, 16];
+  const workFrames = [[0, { "gpu.createBuffer": 1, "gpu.submitMs": 0.5, "gpu.wrappedMs": 0.5 }], [1, { "gpu.createBuffer": 30, "gpu.writeBufferKB": 4096, "gpu.submitMs": 180.2, "gpu.writeBufferMs": 4, "gpu.wrappedMs": 184.2 }],
+                      [3, { "gpu.createBuffer": 10, "gpu.submitMs": 120, "gpu.wrappedMs": 120 }], [4, { "gpu.submit": 1 }]];
+  const w = analyseSpikeWork(workFrames, dur, 100);
+  assert.equal(w.frames, 2); assert.equal(w.restFrames, 3);
+  assert.equal(w.inSpike["gpu.createBuffer"], 40); assert.equal(w.inRest["gpu.createBuffer"], 1);
+  assert.equal(w.inSpike["gpu.writeBufferKB"], 4096); assert.equal(w.inRest["gpu.submit"], 1);
+  assert.match(w.summary, /createBuffer=40 \(20\.0\/f vs 0\.33\/f\)/);
+  assert.doesNotMatch(w.summary, /Ms/, "timed kinds leave the count summary");
+  assert.match(w.timed, /^submit=300ms \(150\.1\/f vs 0\.17\/f\) writeBuffer=4ms/, "the blocking call reads first: " + w.timed);
+  assert.doesNotMatch(w.timed, /wrapped/, "the per-frame total is not a timed kind");
+  assert.deepEqual(w.wrappedMs, { spike: 304.2, rest: 0.5, spikeDur: 350, restDur: 48 });
+  assert.match(w.remainder, /^wrapped GPU calls 304 ms of 350 ms inside the spikes \(87%\) vs 1 of 48 ms outside \(1%\)/, w.remainder);
+  assert.match(analyseSpikeWork(null, dur, 100).note, /no per-frame work/);
+});
+
+test("analyseSpikePassKinds ranks the pass kinds that spike frames run and normal frames do not", () => {
+  const main = "1152x648/rgba16float:clear", shadow = "2048x2048/depth:clear", post = "1152x648/rgba8unorm:load";
+  const passSig = [], dur = [];
+  for (let i = 0; i < 40; i++) {
+    const isSpike = i % 10 === 0;                       // 4 spike frames, 36 normal
+    passSig.push(isSpike ? [main, shadow, post] : (i % 3 === 0 ? [main, post] : [main, post, post]));
+    dur.push(isSpike ? 180 : 16);
+  }
+  passSig.push([]); dur.push(16);                       // a frame that drew nothing is not counted
+  const k = analyseSpikePassKinds(passSig, dur, 100);
+  assert.equal(k.spikeFrames, 4); assert.equal(k.restFrames, 36);
+  assert.equal(k.rows[0].sig, shadow); assert.equal(k.rows[0].inSpikeFrames, 4);
+  assert.equal(k.rows[0].spikePerFrame, 1); assert.equal(k.rows[0].restPerFrame, 0);
+  assert.match(k.summary, /^2048x2048\/depth:clear: 4\/4 spike frames, 1\/f vs 0\/f/);
+  assert.match(analyseSpikePassKinds(passSig, dur.map(() => 16), 100).note, /no rendering frame/);
+  assert.match(analyseSpikePassKinds(null, dur, 100).note, /no per-frame pass/);
+});

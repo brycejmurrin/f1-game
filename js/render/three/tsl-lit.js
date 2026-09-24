@@ -229,6 +229,11 @@
       lgCell:         uniform(72.0),
       lgIdxW:         uniform(256.0),
       lgOn:           uniform(0.0),
+      // PER-CHUNK ROAD (frame.roadChunkLamps). The road is ONE plain mesh on
+      // TLX, but the grid lookup below reads only world position, so the plain
+      // variant can take it too: gated here by the knob and per draw by
+      // tlxLgRoad (tlx.js sets it on the surfaceId-16 road draw only).
+      lgRoad:         uniform(0.0),
     };
     // Lamp arrays: the flat stride-15 frame.lights record split by consumer,
     // exactly like js/render/glx/glx.js / the spike. geo = (rad, cosInner, cosOuter,
@@ -433,6 +438,26 @@
       U.lgCell.value = info.cell > 0 ? info.cell : 72.0;
       U.lgIdxW.value = LGRID.IDXW;
       U.lgOn.value = 1.0;
+      return true;
+    }
+
+    /* Refresh ONLY the lamp colours of an installed grid (texel 1 of each lamp).
+     * The bake above is once per track, but colour is the one lane that moves:
+     * the switch-on warm-up, the twilight ramp, flicker and LAMP LEVEL all
+     * rewrite allLights rgb in place (frame-lights.js, signalled by
+     * allLightsGen). Without this the grid kept whatever colour the lamps had
+     * on the bake frame — mid warm-up at race start — so every per-chunk
+     * surface (and, since PER-CHUNK ROAD, the road) stayed dim for the whole
+     * race. WGX re-uploads on the same signal. */
+    function setLampGridColors(L) {
+      if (!LGRID || !(U.lgOn.value > 0.5) || !L) return false;
+      const nLamps = Math.min((L.length / 15) | 0, LGRID.LAMPS);
+      const lt = LGRID.lampTex.image.data;
+      for (let i = 0; i < nLamps; i++) {
+        const o = i * 15, r = i * 16 + 4;
+        lt[r] = L[o + 3]; lt[r + 1] = L[o + 4]; lt[r + 2] = L[o + 5];
+      }
+      LGRID.lampTex.needsUpdate = true;
       return true;
     }
 
@@ -1458,8 +1483,13 @@
          *
          * `lgOn` is a UNIFORM, not a compile flag, so the knob and an empty bake
          * both switch this at runtime without minting a second node graph. */
-        const PC = (LGRID && chunked) ? (() => {
-          const on = U.lgOn.greaterThan(0.5);
+        // The plain variant (road, walls, cars) compiles the lookup too, but
+        // switches it on only for a draw tlx.js flagged as the road and only
+        // while PER-CHUNK ROAD is on — every other plain draw keeps the global
+        // set. Instanced batches never take it.
+        const PC = (LGRID && !instanced) ? (() => {
+          const on = chunked ? U.lgOn.greaterThan(0.5)
+            : U.lgOn.greaterThan(0.5).and(U.lgRoad.greaterThan(0.5)).and(matU.lgRoad.greaterThan(0.5));
           const cx = floor(wp.x.div(U.lgCell)).add(1024.0).sub(U.lgOrigin.x);
           const cz = floor(wp.z.div(U.lgCell)).add(1024.0).sub(U.lgOrigin.y);
           const inside = on.and(cx.greaterThanEqual(0.0)).and(cx.lessThan(U.lgSize.x))
@@ -1857,6 +1887,7 @@
         const matU = {
           emissive:  perObject("tlxEmissive"),
           alpha:     perObject("tlxAlpha"),
+          lgRoad:    perObject("tlxLgRoad"),
           roughness: materialReference("userData.tlxRoughness", "float"),
           metalness: materialReference("userData.tlxMetalness", "float"),
           specular:  materialReference("userData.tlxSpecular", "float"),
@@ -1895,6 +1926,7 @@
       const ud = m.userData;
       ud.tlxEmissive  = val(o.emissive, 0);
       ud.tlxAlpha     = alpha;
+      ud.tlxLgRoad    = 0;
       ud.tlxRoughness = val(o.roughness, 0.7);
       ud.tlxMetalness = val(o.metalness, 0.0);
       ud.tlxSpecular  = val(o.specular, 0.5);
@@ -2072,7 +2104,7 @@
       if (i >= 0) _mats.splice(i, 1);
     }
 
-    return { makeMaterial, makeViz, releaseMaterial, uniforms: U, sharedUniforms: SHARED_UNIFORMS, updateFrame, setEnvStr, setEnvCube, setLampGrid,
+    return { makeMaterial, makeViz, releaseMaterial, uniforms: U, sharedUniforms: SHARED_UNIFORMS, updateFrame, setEnvStr, setEnvCube, setLampGrid, setLampGridColors,
              setSsrMrt, setMaterialMaps, hasMaterialMaps: !!matAlbedoNode, MAX_LIGHTS };
   }
 
