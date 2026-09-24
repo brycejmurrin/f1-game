@@ -28,10 +28,19 @@
 
    Record layout (track-lights.js): [0..2] pos, [3..5] rgb, [6] radius,
    [7..9] aim dir, [10] cos inner, [11] cos outer, [12] spill floor, [13] vol,
-   [14] glare. */
+   [14] glare.
+
+   LIVE-ONLY lamps (a lens < LO_HEIGHT over its surface, or cosOuter > LO_COS)
+   are left out of the bake; the packers flag them per slot (liveOnlyAt) and the
+   shaders skip the step-aside for them, so the live loop draws them whole. */
 "use strict";
 const LampBake = (function () {
-  const MAX_TEXELS = 600000;   // ~4.8 MB at RGBA16F; the cell grows to stay under it
+  // Default texel budget PER LAYER: ~4.8 MB at RGBA16F, x2 layers = ~9.6 MB; the
+  // cell grows to stay under it. A caller may pass a smaller budget (bake /
+  // forTrack `maxTexels`). No caller does yet: halving it for phones measured
+  // too coarse (scratch/lampbake-parity.cjs, Vegas interior-column effRel p95
+  // 12-14 % at 300 k, ~11 % at 400 k, vs 4-7 % at 600 k).
+  const MAX_TEXELS = 600000;
   const MIN_CELL = 1.0;        // metres per texel at best
 
   // float32 -> IEEE half, round-to-nearest (enough for irradiance).
@@ -55,6 +64,8 @@ const LampBake = (function () {
     return t * t * (3 - 2 * t);
   }
 
+  const LO_HEIGHT = 3.0;         // live-only: lens less than this many metres over its baked surface
+  const LO_COS = 0.9;           // live-only: cosOuter above this (a cone narrower than ~25 deg)
   const NO_GROUND = -60000;     // alpha sentinel: no surface known -> shaders skip the bake
   // Metres splatted past the road half-width: buildRoad's outer verge column sits
   // at hw + 2.2, and the shader's bilinear tap reaches one more cell, so the splat
@@ -111,15 +122,15 @@ const LampBake = (function () {
    *  data is two w x h layers stacked: rows [0, h) the diffuse pool, rows [h, 2h)
    *  the bounce fill per unit BOUNCE; alpha = surface Y in both.
    *  where texel (i, j) covers world x0 + (i + 0.5) * cell, z0 + (j + 0.5) * cell. */
-  function bake(lights, groundY, nearClamp, road) {
-    const it = bakeSteps(lights, groundY, nearClamp, road);
+  function bake(lights, groundY, nearClamp, road, maxTexels) {
+    const it = bakeSteps(lights, groundY, nearClamp, road, maxTexels);
     let r = it.next();
     while (!r.done) r = it.next();
     return r.value;
   }
   // The bake as resumable steps (one lamp, or one encode stripe, per yield) so
   // forTrack can spread a mid-race rebake over frames instead of freezing one.
-  function* bakeSteps(lights, groundY, nearClamp, road) {
+  function* bakeSteps(lights, groundY, nearClamp, road, maxTexels) {
     const n = lights ? (lights.length / 15) | 0 : 0;
     if (!n) return null;
     const t0 = (typeof performance !== "undefined" ? performance.now() : Date.now());
@@ -132,17 +143,43 @@ const LampBake = (function () {
     }
     if (!(mxx > mnx) || !(mxz > mnz)) return null;
     const area = (mxx - mnx) * (mxz - mnz);
-    const cell = Math.max(MIN_CELL, Math.sqrt(area / MAX_TEXELS));
-    const w = Math.max(1, Math.ceil((mxx - mnx) / cell)), h = Math.max(1, Math.ceil((mxz - mnz) / cell));
+    const budget = maxTexels > 0 ? maxTexels : MAX_TEXELS;
+    // ceil() on each axis adds up to a row and a column; grow the cell until w*h fits.
+    let cell = Math.max(MIN_CELL, Math.sqrt(area / budget)), w, h;
+    for (;;) {
+      w = Math.max(1, Math.ceil((mxx - mnx) / cell)); h = Math.max(1, Math.ceil((mxz - mnz) / cell));
+      if (w * h <= budget || w * h <= 1) break;
+      cell *= 1.002;
+    }
     const acc = new Float32Array(w * h * 3);
     const accB = new Float32Array(w * h * 3);        // LAMP BOUNCE: att * (0.55 + 0.45 N.L), no cone
     const hgt = new Float32Array(w * h).fill(NaN);   // surface height: road splat, then terrain lazily
     if (road) splatRoad(road, mnx, mnz, cell, w, h, hgt);
     const tried = new Uint8Array(w * h);             // terrain already queried for this texel
     const nc = nearClamp > 0 ? nearClamp : 4.0;
+    // LIVE-ONLY lamps: a pool that changes within one texel (a lens < LO_HEIGHT
+    // over the surface below it, or a cone tighter than LO_COS) is smeared by
+    // bilinear filtering up to ~5x too bright, so it stays on the live loop.
+    const liveOnly = new Uint8Array(n), loPos = [];
+    for (let i = 0; i < n; i++) {
+      const o = i * 15, lx = lights[o], lz = lights[o + 2];
+      let lo = lights[o + 11] > LO_COS;
+      const ii = Math.floor((lx - mnx) / cell), jj = Math.floor((lz - mnz) / cell);
+      if (!lo && ii >= 0 && jj >= 0 && ii < w && jj < h) {
+        const k = jj * w + ii;
+        if (hgt[k] !== hgt[k] && !tried[k]) {
+          tried[k] = 1;
+          const g = groundY ? groundY(mnx + (ii + 0.5) * cell, mnz + (jj + 0.5) * cell) : null;
+          if (g != null && isFinite(g)) hgt[k] = g;
+        }
+        lo = lights[o + 1] - hgt[k] < LO_HEIGHT;   // NaN (no surface) -> false
+      }
+      if (lo) { liveOnly[i] = 1; loPos.push(lx, lights[o + 1], lz); }
+    }
     yield;
     for (let i = 0; i < n; i++) {
       if (i) yield;
+      if (liveOnly[i]) continue;
       const o = i * 15;
       const lx = lights[o], ly = lights[o + 1], lz = lights[o + 2];
       const cr = lights[o + 3], cg = lights[o + 4], cb = lights[o + 5];
@@ -201,10 +238,10 @@ const LampBake = (function () {
       data[B + b] = toHalf(accB[a]); data[B + b + 1] = toHalf(accB[a + 1]); data[B + b + 2] = toHalf(accB[a + 2]); data[B + b + 3] = y;
     }
     const ms = Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - t0);
-    return { w, h, x0: mnx, z0: mnz, cell, data, lamps: n, ms };
+    return { w, h, x0: mnx, z0: mnz, cell, data, lamps: n, ms, liveOnly, loPos };
   }
 
-  // One cached bake per (light-set identity, near clamp). The track light set is
+  // One cached bake per (light-set identity, near clamp, texel budget). The track light set is
   // rebuilt as a NEW array whenever a rebuild:true lamp knob moves (profiles.js
   // nulls track._lights), so identity is the invalidation — same rule
   // LampChunks and frame-lights _fillAllLights use. A LAMP NEAR CLAMP change on
@@ -212,7 +249,7 @@ const LampBake = (function () {
   // frame; the previous bake keeps drawing until the value holds still.
   const CLAMP_SETTLE_MS = 300;
   let _src = null, _clamp = NaN, _bake = null, _gen = 0, _pend = NaN, _pendT = 0;
-  let _trk = null, _pendSrc = null;
+  let _trk = null, _pendSrc = null, _budget = 0, _pendBudget = 0;
   function roadOf(track) {
     if (!track || !track.px || !track.hw || !(track.n > 0)) return null;
     const bank = typeof Tracks !== "undefined" && Tracks.banking, o = {};
@@ -227,10 +264,10 @@ const LampBake = (function () {
   // keeps drawing, and the new one swaps in whole. The first bake of a track
   // (race start, pre-baked by atmosphere.js) runs synchronously.
   const SLICE_MS = 3;
-  let _job = null, _jobSrc = null, _jobClamp = NaN, _jobTrk = null;
+  let _job = null, _jobSrc = null, _jobClamp = NaN, _jobTrk = null, _jobBudget = 0;
   function _now() { return typeof performance !== "undefined" ? performance.now() : Date.now(); }
-  function _install(b, track, lights, nearClamp) {
-    _bake = b; _src = lights; _clamp = nearClamp; _trk = track; _pend = NaN; _pendSrc = null;
+  function _install(b, track, lights, nearClamp, budget) {
+    _bake = b; _src = lights; _clamp = nearClamp; _trk = track; _budget = budget; _pend = NaN; _pendSrc = null;
     _shK = -1;
     if (_bake) {
       _bake.gen = ++_gen;
@@ -241,31 +278,33 @@ const LampBake = (function () {
     return (track && typeof Tracks !== "undefined" && Tracks.terrainY)
       ? (x, z) => Tracks.terrainY(track, x, z) : null;
   }
-  function forTrack(track, lights, nearClamp, now, sync) {
+  // `maxTexels` (optional) caps texels per layer; omitted or 0 = MAX_TEXELS.
+  function forTrack(track, lights, nearClamp, now, sync, maxTexels) {
     if (!lights || !lights.length) return null;
-    const cur = _src === lights && _clamp === nearClamp;
+    const budget = maxTexels > 0 ? maxTexels : MAX_TEXELS;
+    const cur = _src === lights && _clamp === nearClamp && _budget === budget;
     if (cur) { _job = null; return _bake; }
     // Same track, bake in hand: a new light set (a rebuild:true lamp knob) or a
     // new clamp keeps the old bake until the input has held still, then rebakes
     // in slices — a whole bake is 0.3-2 s of main thread.
     if (_trk === track && _bake && !sync) {
       const t = now != null ? now : _now();
-      if (_pendSrc !== lights || _pend !== nearClamp) { _pendSrc = lights; _pend = nearClamp; _pendT = t; _job = null; return _bake; }
+      if (_pendSrc !== lights || _pend !== nearClamp || _pendBudget !== budget) { _pendSrc = lights; _pend = nearClamp; _pendBudget = budget; _pendT = t; _job = null; return _bake; }
       if (t - _pendT < CLAMP_SETTLE_MS) return _bake;
-      if (!_job || _jobSrc !== lights || _jobClamp !== nearClamp || _jobTrk !== track) {
-        _job = bakeSteps(lights, _groundFn(track), nearClamp, roadOf(track));
-        _jobSrc = lights; _jobClamp = nearClamp; _jobTrk = track;
+      if (!_job || _jobSrc !== lights || _jobClamp !== nearClamp || _jobTrk !== track || _jobBudget !== budget) {
+        _job = bakeSteps(lights, _groundFn(track), nearClamp, roadOf(track), budget);
+        _jobSrc = lights; _jobClamp = nearClamp; _jobTrk = track; _jobBudget = budget;
       }
       const end = _now() + SLICE_MS;
       let r;
       do { r = _job.next(); } while (!r.done && _now() < end);
       if (!r.done) return _bake;
       _job = null;
-      _install(r.value, track, lights, nearClamp);
+      _install(r.value, track, lights, nearClamp, budget);
       return _bake;
     }
     _job = null;
-    _install(bake(lights, _groundFn(track), nearClamp, roadOf(track)), track, lights, nearClamp);
+    _install(bake(lights, _groundFn(track), nearClamp, roadOf(track), budget), track, lights, nearClamp, budget);
     return _bake;
   }
 
@@ -293,6 +332,25 @@ const LampBake = (function () {
     return out;
   }
 
-  return { bake, forTrack, shadowCol, toHalf, MAX_TEXELS, NO_GROUND };
+  // 1 when the record at L[o..o+2] is a LIVE-ONLY lamp of the drawing bake (not
+  // in the bake: the shaders give it no step-aside), else 0. The packers call it
+  // per lamp slot, so the common case (no live-only lamp) is one length test;
+  // otherwise it scans the handful of live-only positions (records are copied
+  // verbatim, as shadowCol relies on). Tail lights and rigs never match.
+  function liveOnlyAt(L, o) {
+    const p = _bake && _bake.loPos;
+    if (!p || !p.length || !L) return 0;
+    const x = L[o];
+    for (let i = 0; i < p.length; i += 3) {
+      if (p[i] === x && p[i + 1] === L[o + 1] && p[i + 2] === L[o + 2]) return 1;
+    }
+    return 0;
+  }
+
+  // The drawing bake's generation (0 = none): packers that cache the
+  // LIVE-ONLY lane (TLX's per-chunk lamp texture) key on it.
+  function gen() { return _bake ? _bake.gen | 0 : 0; }
+
+  return { bake, forTrack, shadowCol, liveOnlyAt, gen, toHalf, MAX_TEXELS, NO_GROUND, LO_HEIGHT, LO_COS };
 })();
 Object.freeze(LampBake);

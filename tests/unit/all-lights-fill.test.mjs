@@ -24,7 +24,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 
 test("tail-light selection reuses capacity through sorting, shrink and regrowth", () => {
   const source = readFileSync(path.join(ROOT, "js/lighting/frame-lights.js"), "utf8");
-  const anchor = "return { setFrameLights, appendCarTailLights };";
+  const anchor = "return { setFrameLights, appendCarTailLights, glowFade };";
   assert.ok(source.includes(anchor));
   const sampled = [];
   const ctx = vm.createContext({
@@ -34,7 +34,7 @@ test("tail-light selection reuses capacity through sorting, shrink and regrowth"
     Tracks: { sample(_t, s, out) { sampled.push(s); out.p[2] = s; } },
   });
   vm.runInContext(source.replace(anchor,
-    "return { setFrameLights, appendCarTailLights, selection: () => _tlSel.slice() };"), ctx);
+    "return { setFrameLights, appendCarTailLights, glowFade, selection: () => _tlSel.slice() };"), ctx);
   const api = vm.runInContext("FrameLights", ctx);
   const track = { total: 5000 }, player = { s: 0, x: 0 };
   const cars = Array.from({ length: 22 }, (_,i) => ({ s: (21-i)*5, x: 0 }));
@@ -96,7 +96,7 @@ test("TAIL-LIGHT EMIT 0: tail-lights take no light slot but keep their halo", ()
 // instead of silently testing nothing.
 function loadFill() {
   const src = readFileSync(path.join(ROOT, "js/lighting/frame-lights.js"), "utf8");
-  const anchor = "  return { setFrameLights, appendCarTailLights };";
+  const anchor = "  return { setFrameLights, appendCarTailLights, glowFade };";
   assert.ok(src.includes(anchor), "frame-lights.js export list moved — update this loader");
   const patched = src.replace(anchor,
     "  return { setFrameLights, appendCarTailLights, _fillAllLights };");
