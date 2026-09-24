@@ -139,6 +139,32 @@ const FlybySeq = (function () {
     return eye;
   }
 
+  /** NEVER BELOW THE GROUND. `centre` and `landmark` heights are measured from
+   *  a centroid and a prop's middle, not from the ground under the eye, so on a
+   *  hillside (or over a road that runs above the anchor) nothing else stops an
+   *  eye being authored underground: Red Bull Ring's rank-0 landmark is a 34 m
+   *  tower standing in a valley, and landmark1 put the eye 6.1 m below the start
+   *  straight on every sample. Terrain where there is terrain, the road where
+   *  the eye is over it. Part of the PLANNED lift (profileOf), so the camera
+   *  rises into the floor smoothly instead of popping up onto it. */
+  const FLOOR = 1.5;
+  const _fl = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 10 };
+  function groundAt(track, x, z, y) {
+    let g = Tracks.terrainY ? Tracks.terrainY(track, x, z) : null;
+    if (g == null || !isFinite(g)) g = -Infinity;
+    const pr = Tracks.project(track, x, z, null, y);
+    if (pr) {
+      Tracks.sample(track, pr.s, _fl);
+      if (Math.abs(pr.lat) <= (_fl.hw || 10) + 2 && _fl.p[1] > g) g = _fl.p[1];
+    }
+    return g;
+  }
+  function floorEye(track, eye) {
+    const g = groundAt(track, eye[0], eye[2], eye[1]);
+    if (eye[1] < g + FLOOR) eye[1] = g + FLOOR;
+    return eye;
+  }
+
   // ---- what this circuit looks like ----------------------------------------
 
   /* TERRAIN IS NOT A LANDMARK. Ranked by raw volume the answer is always the
@@ -743,7 +769,7 @@ const FlybySeq = (function () {
       const plan = planShot(track, shot);
       if (plan.eye !== shot.eye) lerpPose(track, plan.eye[0], plan.eye[1], e, _eye);
       _eye[1] += liftAt(plan.prof, e);
-      clearEye(track, _eye);   // safety net only: the profile already cleared every sample
+      floorEye(track, clearEye(track, _eye));   // safety net only: the profile already cleared every sample
     }
     // How far the clearance had to lift this eye. A shot authored beside a
     // building lifts a metre or two; one authored INSIDE a grandstand lifts
@@ -785,7 +811,7 @@ const FlybySeq = (function () {
     for (let j = 0; j <= LIFT_N; j++) {
       lerpPose(track, eye0, eye1, j / LIFT_N, _lp);
       const y0 = _lp[1];
-      clearEye(track, _lp);
+      floorEye(track, clearEye(track, _lp));
       prof[j] = _lp[1] - y0;
       if (prof[j] > max) max = prof[j];
     }
@@ -832,7 +858,7 @@ const FlybySeq = (function () {
   function reset() { _lastIdx = -1; }
 
   return {
-    solve, reset, clearEye, insideProp, blockers, isSolid, onRoadPose,
+    solve, reset, clearEye, floorEye, groundAt, insideProp, blockers, isSolid, onRoadPose,
     landmarks, bounds, landmarkScore,
     anchorS, posePoint, cornerS, cornerSide, lmFace,
     poseFromWorld, shotFromView, nearestCorner,
