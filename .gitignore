@@ -23,6 +23,7 @@ tools/_*.mjs
 tools/_*.cjs
 tools/_*.js
 tools/_*.sh
+tools/_*.py
 # ...and stray dotfiles/backups a parallel agent leaves behind, which a
 # blanket `git add -A` would otherwise commit (tools/.vt-warn.cjs did).
 tools/.*
