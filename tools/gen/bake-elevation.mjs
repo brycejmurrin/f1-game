@@ -58,6 +58,10 @@ const MAP = {
   jeddah: "sa-2021", albert_park: "au-1953", shanghai: "cn-2004", miami: "us-2022",
   imola: "it-1953", montreal: "ca-1978", redbull: "at-1969", hungaroring: "hu-1986",
   baku: "az-2016", mexico: "mx-1962", qatar: "qa-2004", abudhabi: "ae-2009",
+  // Classics with bacinger traces (same ids as tools/track/import-circuit-path.mjs).
+  // Baking overrides authored cosine bumps — only add an id when the bumps are
+  // the problem (sparse plateaus / stair-steps), not for every classic.
+  nurburgring: "de-1927",
 };
 
 const GEO = (id) => `https://raw.githubusercontent.com/bacinger/f1-circuits/master/circuits/${id}.geojson`;

@@ -139,3 +139,19 @@ re-landed alone after its revert (the revert's black screen came from the skip-d
 patches 7 and 8, which stay out — PERF-FINDINGS §2af).
 
 Upstream: PR #34553 (issue #34535), milestone r187 — RETIRE THIS ON THE r187 BUMP.
+
+## 9. `TextureNode.update` rebuilds an unread UV matrix for every sampled texture on every draw
+
+`TextureNode.update()` runs per render OBJECT whenever the node carries a matrix OR a
+flipY uniform, and it called `texture.updateMatrix()` (`Matrix3.setUvTransform`: a cos, a
+sin, nine writes) whenever `texture.matrixAutoUpdate` is true, even when the node has
+no matrix uniform, so nothing reads the result. Three's WebGL2 backend gives every
+texture node a flipY uniform, so every shadow-map compare, material-array and lamp-bake
+sample paid it on every draw: census 289 (real Metal, montreal night) sampled 293 ms of
+`setUvTransform` self time in a 21.9 s WebGL2 leg. The patch rebuilds the matrix only
+when this node has a matrix uniform. Any node that samples through the matrix still
+refreshes it, so texture offset/repeat/rotation behave exactly as before.
+
+Ids 7 and 8 stay unused: they were #228's skip-draw patches, reverted (PERF-FINDINGS §2af).
+
+Upstream: unfixed on dev as of r186.

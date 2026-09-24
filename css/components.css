@@ -34,7 +34,7 @@
   pointer-events: none;
   background-image: var(--grain);
   background-size: 160px 160px;
-  opacity: 0.05;
+  opacity: var(--grain-opacity, 0.05);
   mix-blend-mode: overlay;
 }
 /* Grain is texture, and texture is motion-adjacent for some people; it also
@@ -816,7 +816,7 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
      for as long as the menu is open — a permanent 60fps cost on a phone for a
      decoration, and it never lets the compositor reach a stable frame (it hung
      the screenshot tooling, which is how it was caught). */
-  :root:not([data-motion="reduce"]) #overlay[data-intro] #mb-career::after { animation: sheen 0.85s 0.5s cubic-bezier(0.3, 0, 0.2, 1) both; }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #mb-career::after { animation: sheen 0.85s 0.5s cubic-bezier(0.3, 0, 0.2, 1) both; }
 }
 @keyframes sheen {
   from { --sheen: -30%; }
@@ -1391,6 +1391,25 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   font-weight: 700;
   letter-spacing: var(--ls-5);
   text-transform: uppercase;
+}
+/* One-shot REPLAY INTRO — not a full-width Settings door. */
+#pmsettings-inner #pm-panel-appearance .pm-replay-intro {
+  width: auto;
+  align-self: flex-end;
+  flex-direction: column;
+  align-items: flex-start;
+  height: auto;
+  min-height: var(--tap);
+  margin-top: calc(var(--gap) * 0.35);
+  padding: calc(var(--gap) * 0.55) calc(var(--gap) * 0.85);
+}
+#pmsettings-inner #pm-panel-appearance .pm-replay-intro small {
+  display: block;
+  font-weight: 600;
+  font-style: italic;
+  letter-spacing: var(--ls-2);
+  color: var(--dim);
+  text-transform: none;
 }
 
 /* Every Settings page, not only STEERING / MUSIC: HUD SIZE and BUTTON SIZE

@@ -359,16 +359,31 @@
      menus.css stays the one place they are declared. -->
 <script>
   (function () {
-    // html[data-motion], the FIRST answer only, for the reason above: the
-    // title intro starts on the first frame, and js/ui/title-fx.js (which owns
-    // every later answer) evaluates far too late to stop it. Same rule as
-    // TitleFx.mode(): the OS asking for reduced motion wins, then the stored
-    // MENU ANIMATIONS choice (apex26.motion, JSON: "on" | "reduce").
-    var mv = null;
+    // html[data-motion] / data-title-intro / data-menu-wash / data-title-art,
+    // FIRST answer only: the title intro, wash and #title-car paint on the
+    // first frame, and js/ui/title-fx.js (which owns every later answer)
+    // evaluates too late to stop them.
+    // Motion: OS reduced-motion wins, then apex26.motion ("on" | "reduce").
+    // Intro: apex26.titleIntro ("full" | "quick" | "off"); unset = full.
+    // Wash: apex26.menuWash ("full" | "soft" | "off"); unset = full.
+    // Title art: apex26.titleArt ("on" | "soft" | "off"); unset = on.
+    var mv = null, ti = null, mw = null, ta = null;
     try { mv = JSON.parse(localStorage.getItem("apex26.motion")); } catch (e) { /* unset */ }
+    try { ti = JSON.parse(localStorage.getItem("apex26.titleIntro")); } catch (e) { /* unset */ }
+    try { mw = JSON.parse(localStorage.getItem("apex26.menuWash")); } catch (e) { /* unset */ }
+    try { ta = JSON.parse(localStorage.getItem("apex26.titleArt")); } catch (e) { /* unset */ }
     try {
       if (mv === "reduce" || (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches))
         document.documentElement.dataset.motion = "reduce";
+    } catch (e) { /* TitleFx answers at eval */ }
+    try {
+      if (ti === "quick" || ti === "off") document.documentElement.dataset.titleIntro = ti;
+    } catch (e) { /* TitleFx answers at eval */ }
+    try {
+      if (mw === "soft" || mw === "off") document.documentElement.dataset.menuWash = mw;
+    } catch (e) { /* TitleFx answers at eval */ }
+    try {
+      if (ta === "soft" || ta === "off") document.documentElement.dataset.titleArt = ta;
     } catch (e) { /* TitleFx answers at eval */ }
     var b = document.body;
     if (!b || !window.getComputedStyle) return;
@@ -940,7 +955,7 @@
         <section id="pm-panel-appearance" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>
           <h3 class="pm-group-h">APPEARANCE</h3>
-          <p class="adv-help">Theme and accents for menus and the race HUD. Selection rings stay on the menu accent; team identity can stay on the HUD.</p>
+          <p class="adv-help">Theme, accents, title motion, wash and the background drawing. Selection rings stay on the menu accent; team identity can stay on the HUD.</p>
           <div id="pm-appearance-preview" class="pm-accent-preview" aria-hidden="true">
             <button type="button" class="bigbtn pm-accent-preview-btn" tabindex="-1">PRIMARY</button>
             <span class="pm-accent-preview-hud"><b>42</b></span>
@@ -988,6 +1003,43 @@
               <input id="pm-hudaccent-hextext" class="pm-accent-hextext" type="text" inputmode="text" maxlength="7" spellcheck="false" autocomplete="off" aria-label="HUD accent hex" value="#e10600">
             </div>
           </div>
+          <div id="pm-motion" class="set-row" role="group" aria-labelledby="pm-motion-label">
+            <span class="tune-label" id="pm-motion-label">MENU ANIMATIONS</span>
+            <div>
+              <button id="pm-motion-prev" type="button" data-step="-1" aria-label="Previous menu animations" aria-hidden="true" tabindex="-1">&lsaquo;</button>
+              <select id="pm-motion-sel" aria-labelledby="pm-motion-label" aria-describedby="pm-motion-help"></select>
+              <button id="pm-motion-next" type="button" data-step="1" aria-label="Next menu animations" aria-hidden="true" tabindex="-1">&rsaquo;</button>
+            </div>
+          </div>
+          <p class="adv-help" id="pm-motion-help">REDUCED stills menu reveals and screen transitions. If your device asks for reduced motion, that always wins.</p>
+          <div id="pm-titleintro" class="set-row" role="group" aria-labelledby="pm-titleintro-label">
+            <span class="tune-label" id="pm-titleintro-label">TITLE INTRO</span>
+            <div>
+              <button id="pm-titleintro-prev" type="button" data-step="-1" aria-label="Previous title intro" aria-hidden="true" tabindex="-1">&lsaquo;</button>
+              <select id="pm-titleintro-sel" aria-labelledby="pm-titleintro-label" aria-describedby="pm-titleintro-help"></select>
+              <button id="pm-titleintro-next" type="button" data-step="1" aria-label="Next title intro" aria-hidden="true" tabindex="-1">&rsaquo;</button>
+            </div>
+          </div>
+          <p class="adv-help" id="pm-titleintro-help">The first-show title reveal. QUICK halves it; OFF skips straight to the resting board. REPLAY still previews once when OFF.</p>
+          <div id="pm-menuwash" class="set-row" role="group" aria-labelledby="pm-menuwash-label">
+            <span class="tune-label" id="pm-menuwash-label">MENU WASH</span>
+            <div>
+              <button id="pm-menuwash-prev" type="button" data-step="-1" aria-label="Previous menu wash" aria-hidden="true" tabindex="-1">&lsaquo;</button>
+              <select id="pm-menuwash-sel" aria-labelledby="pm-menuwash-label" aria-describedby="pm-menuwash-help"></select>
+              <button id="pm-menuwash-next" type="button" data-step="1" aria-label="Next menu wash" aria-hidden="true" tabindex="-1">&rsaquo;</button>
+            </div>
+          </div>
+          <p class="adv-help" id="pm-menuwash-help">The red radial and grain behind the title menu. SOFT eases both; OFF leaves a flat dark veil.</p>
+          <div id="pm-titleart" class="set-row" role="group" aria-labelledby="pm-titleart-label">
+            <span class="tune-label" id="pm-titleart-label">TITLE ART</span>
+            <div>
+              <button id="pm-titleart-prev" type="button" data-step="-1" aria-label="Previous title art" aria-hidden="true" tabindex="-1">&lsaquo;</button>
+              <select id="pm-titleart-sel" aria-labelledby="pm-titleart-label" aria-describedby="pm-titleart-help"></select>
+              <button id="pm-titleart-next" type="button" data-step="1" aria-label="Next title art" aria-hidden="true" tabindex="-1">&rsaquo;</button>
+            </div>
+          </div>
+          <p class="adv-help" id="pm-titleart-help">The side-on line drawing behind the title menu. SOFT fades it; OFF removes it for a cleaner board.</p>
+          <button type="button" id="pm-replay-intro" class="pm-replay-intro">REPLAY INTRO<small>play the title reveal again</small></button>
         </section>
         <section id="advanced" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>

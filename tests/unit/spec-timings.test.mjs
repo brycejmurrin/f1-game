@@ -434,7 +434,15 @@ test("the committed spec-timings.json is well formed, bounded and honestly bucke
   }
   assert.equal(serialise(db), fs.readFileSync(file, "utf8"),
     "the committed file is not what the writer would produce — re-run tools/ci/spec-timings.mjs");
-  assert.deepEqual(growth(db), [], "the seeded history carries no growth flag");
+  // Growth flags are ADVISORY (docs/TESTING.md: `--check` exits 0 either way —
+  // a busy runner and a slow test look identical). The seeded file had none;
+  // real CI history adopted from bot/spec-timings does (pit-signs at 3.4x on
+  // one llvmpipe run, 2026-09-24), so the committed file is only held to
+  // flags that are well formed, never to having none.
+  for (const g of growth(db)) {
+    assert.ok(specs.includes(g.spec) && BUCKETS.includes(g.bucket), `growth row names a real spec/bucket: ${JSON.stringify(g)}`);
+    assert.ok(g.ratio > 1 && Number.isFinite(g.median), `growth row is a real ratio: ${JSON.stringify(g)}`);
+  }
 });
 
 test("select-budget reads the committed file rather than a fixture", () => {

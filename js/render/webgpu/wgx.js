@@ -2737,16 +2737,12 @@ const WGX = (function () {
 
     const _mipPipes = new Map();
     let _mipSamp = null;
-    function _generateMips(tex, layers) {
-      if (!tex || !device) return;
-      const w0 = tex.width | 0, h0 = tex.height | 0;
-      const levels = tex.mipLevelCount | 0;
-      if (levels <= 1 || !w0) return;
-      const nLay = layers || 1;
-      try {
-        let pipe = _mipPipes.get(tex.format);
-        if (!pipe) {
-          const code = `
+    // One pipeline per target format. _mipPrewarm builds it off the render path
+    // (createRenderPipelineAsync) when a mip-mapped target is created: census 289
+    // caught WGX compiling it mid-race on the first env face (envFaceEnd).
+    let _mipMod = null;
+    function _mipPipeDesc(format) {
+      const code = `
 @group(0) @binding(0) var src : texture_2d<f32>;
 @group(0) @binding(1) var samp : sampler;
 @vertex fn vs_main(@builtin(vertex_index) vi : u32) -> @builtin(position) vec4<f32> {
@@ -2762,16 +2758,35 @@ const WGX = (function () {
   let dstSize = max(floor(srcSize * 0.5), vec2<f32>(1.0));
   return textureSampleLevel(src, samp, pos.xy / dstSize, 0.0);
 }`;
-          const mod = device.createShaderModule({ code });
-          pipe = device.createRenderPipeline({
-            layout: "auto",
-            vertex: { module: mod, entryPoint: "vs_main" },
-            fragment: { module: mod, entryPoint: "fs_main", targets: [{ format: tex.format }] },
-            primitive: { topology: "triangle-list" },
-          });
+      if (!_mipMod) _mipMod = device.createShaderModule({ code });
+      return {
+        layout: "auto",
+        vertex: { module: _mipMod, entryPoint: "vs_main" },
+        fragment: { module: _mipMod, entryPoint: "fs_main", targets: [{ format }] },
+        primitive: { topology: "triangle-list" },
+      };
+    }
+    function _mipPrewarm(format) {
+      if (!device || _mipPipes.has(format) || !device.createRenderPipelineAsync) return;
+      try {
+        device.createRenderPipelineAsync(_mipPipeDesc(format))
+          .then((p) => { if (!_mipPipes.has(format)) _mipPipes.set(format, p); })
+          .catch(() => { /* the sync path in _generateMips still builds it */ });
+      } catch (_) { /* ditto */ }
+    }
+    function _generateMips(tex, layers) {
+      if (!tex || !device) return;
+      const w0 = tex.width | 0, h0 = tex.height | 0;
+      const levels = tex.mipLevelCount | 0;
+      if (levels <= 1 || !w0) return;
+      const nLay = layers || 1;
+      try {
+        let pipe = _mipPipes.get(tex.format);
+        if (!pipe) {
+          pipe = device.createRenderPipeline(_mipPipeDesc(tex.format));
           _mipPipes.set(tex.format, pipe);
-          if (!_mipSamp) _mipSamp = device.createSampler({ magFilter: "linear", minFilter: "linear" });
         }
+        if (!_mipSamp) _mipSamp = device.createSampler({ magFilter: "linear", minFilter: "linear" });
         // Views + bind groups on an immutable texture are stable. Rebuilding
         // the full ladder every call was 72 createView + 36 createBindGroup
         // per 6-face env cycle (~every 6 frames with CAR ENV REFLECTION on).
@@ -4279,6 +4294,7 @@ const WGX = (function () {
           usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
         });
         envSampleView = envCubeTex.createView({ dimension: "cube" });
+        _mipPrewarm(SCENE_FORMAT);
         envFaceViews = [];
         for (let f = 0; f < 6; f++)
           envFaceViews.push(envCubeTex.createView({ dimension: "2d", baseArrayLayer: f, arrayLayerCount: 1, baseMipLevel: 0, mipLevelCount: 1 }));

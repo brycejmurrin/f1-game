@@ -505,6 +505,9 @@ async function main() {
     }
     const solve = (u) => { const v = FlybySeq.solve(T, u, shots); return { eye: v.eye.slice(), tgt: v.tgt.slice(), fov: v.fov, index: v.index, id: v.id, lift: v.lift }; };
     FlybySeq.reset();
+    // Measure the shot solve() FILMS: corner roles bound (a duplicate role is
+    // re-assigned — Watkins Glen's "lore" is its "first") and landmark fallbacks applied.
+    const bound = FlybySeq.bindCorners(T, list);
     let prevIdx = -1;
     const EPS = 0.001;                                // 24 ms of the flyby
     for (const [ui, u] of us.entries()) {
@@ -521,7 +524,7 @@ async function main() {
         zoomDps: mo ? +Math.abs(mo.zoomDps).toFixed(2) : 0, cut: pose.index !== prevIdx,
       };
       prevIdx = pose.index;
-      const shot = list[pose.index];
+      const shot = FlybySeq.landmarkFallback(T, bound[pose.index]);
       const subj = subjectFor(ctx, shot.look, shot.id);
       frames.push({ u, id: pose.id, pos: pos[ui], r: reportFrame(ctx, pose, subj, opts) });
     }
