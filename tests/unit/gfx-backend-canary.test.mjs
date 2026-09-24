@@ -4834,3 +4834,27 @@ test("godray: lamp beams alone take one blur pair, sun shafts keep two, on TLX a
     assert.match(src, /_grLite = localStorage\.getItem\("apex26\.grLite"\) !== "0"/, name + ": the shared knob");
   }
 });
+
+test("TLX draw records are pooled, one fixed shape, reset through resetRecs (TLX-PERF-PLAN R1)", () => {
+  const src = read("js/render/three/tlx.js");
+  const stripped = code("js/render/three/tlx.js");
+  assert.doesNotMatch(stripped, /drawList\.push\(\{/, "no per-draw object literal left");
+  assert.equal((stripped.match(/drawList\.length = 0/g) || []).length, 1, "the one raw reset is inside resetRecs");
+  assert.ok((stripped.match(/resetRecs\(\);/g) || []).length >= 4, "begin, env-soft exit, env face end and present tail all reset through resetRecs");
+  // Run the real pool: a slot reused by an FX record must not carry the previous
+  // lit draw's emissive/alpha (acquireMesh tests `!== undefined`), and a reset
+  // must drop every reference the slot held.
+  const a = src.indexOf("const _recPool = [];"), b = src.indexOf("drawList.length = 0;", a);
+  const end = src.indexOf("}", b) + 1;
+  const drawList = [];
+  const lib = new Function("drawList", src.slice(a, end) + "; return { pushRec, resetRecs, pool: () => _recPool };")(drawList);
+  lib.pushRec("G1", "M1", "MAT1", 0.7, 0.4, 1, null, null);
+  const slot = drawList[0];
+  lib.resetRecs();
+  assert.equal(drawList.length, 0);
+  assert.equal(slot.geo, null); assert.equal(slot.mat, null); assert.equal(slot.m, null);
+  lib.pushRec("G2", null, "FXMAT", undefined, undefined, 0, null, null);
+  assert.equal(drawList[0], slot, "the slot is reused");
+  assert.equal(slot.em, undefined); assert.equal(slot.al, undefined); assert.equal(slot.lg, 0);
+  assert.deepEqual(Object.keys(slot), ["geo", "m", "mat", "em", "al", "lg", "chunked", "instanced"], "one fixed shape");
+});
