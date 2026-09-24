@@ -400,7 +400,8 @@ interface GameCtx {
   readonly roadWetness: () => number;
   readonly recordControls: () => Record<string, unknown>;
   readonly records: { key(): string | null; current(): string; config(): Record<string, unknown>; invalidate(): void; prepareDaily(): void; restoreDaily(): void; board(id: string): TTBoardRow[] };
-  readonly coach: { status(): Record<string, unknown> | null };
+  readonly coach: { status(): Record<string, unknown> | null; feedback(): Record<string, unknown> };
+  readonly openCoachDetails: () => void;
   /**
    * The radio's VOICE — js/audio/radio-voice.js. Always an object: create()
    * hands back a frozen no-op (RadioVoice.inert) where speechSynthesis is

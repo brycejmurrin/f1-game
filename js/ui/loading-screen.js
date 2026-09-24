@@ -259,6 +259,12 @@ const LoadingScreen = (function () {
       paint(info);
       applyCard();
       r.hidden = false;
+      const skip = $("ld-skip");
+      if (skip) skip.onclick = onSkip;
+      const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (skip) skip.hidden = !info.hasWorld || reduced;
+      const help = $("ld-skip-help");
+      if (help) help.hidden = !info.hasWorld || reduced;
       addEventListener("pointerdown", onSkip, true);
       addEventListener("keydown", onSkip, true);
       padHeld.clear();
@@ -267,8 +273,8 @@ const LoadingScreen = (function () {
       flyT0 = Date.now();
       // "run" is the flyby WITH the card up; "card" is the no-world fallback.
       // Both show the card, so the stylesheet reveals it for either.
-      setPhase(info.hasWorld ? "run" : "card");
-      const life = info.hasWorld ? FLY_MS : CARD_MS;
+      setPhase(info.hasWorld && !reduced ? "run" : "card");
+      const life = info.hasWorld && !reduced ? FLY_MS : CARD_MS;
       timer = setTimeout(fire, life);
       /* THE ANNOUNCER (js/audio/announcer.js) reads the card aloud, and it is
        * given THIS SCREEN'S budget so the skip that ends the flyby ends the
@@ -278,7 +284,7 @@ const LoadingScreen = (function () {
        *
        * ONLY OVER THE FLYBY. The no-world path is a 700 ms fade, and 700 ms of
        * "Welcome to—" cut off mid-word is worse than silence. */
-      if (info.hasWorld) {
+      if (info.hasWorld && !reduced) {
         const a = ann();
         if (a) { try { a.play(info, life); } catch (e) { Log.warn("audio", "announcer failed", e); } }
       }

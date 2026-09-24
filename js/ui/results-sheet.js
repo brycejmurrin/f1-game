@@ -143,6 +143,26 @@ function buildResults(order) {
     box.textContent = `OFFICIAL WINNER ELAPSED — ${timing.winner.code || "WINNER"}  ${timing.winner.name || ""}: ${timing.text}`;
     els.resultsTable.appendChild(box);
   }
+  const playerPlace = order.findIndex((c) => c.isPlayer);
+  if (playerPlace >= 0) {
+    const self = order[playerPlace], verdict = sourceOf(self), elapsed = correctedFinish(verdict);
+    const card = document.createElement("div"); card.className = "res-personal";
+    const heading = document.createElement("strong"); heading.textContent = dnfOf(self) ? "YOUR RACE · DNF" : "YOUR RACE · P" + (playerPlace + 1);
+    const detail = document.createElement("span");
+    detail.textContent = elapsed == null ? self.name : self.name + " · " + raceClock(G, elapsed);
+    card.append(heading, detail); els.resultsTable.appendChild(card);
+  }
+  const coaching = G.coach && G.coach.feedback && G.coach.feedback();
+  if (coaching && coaching.enabled && coaching.latest) {
+    const card = document.createElement("div"); card.className = "res-personal";
+    const heading = document.createElement("strong"); heading.textContent = "COACH INSIGHT";
+    const detail = document.createElement("span");
+    detail.textContent = (coaching.latest.turn ? "Turn " + coaching.latest.turn + " · " : "") + coaching.latest.detail;
+    const more = document.createElement("button"); more.type = "button";
+    more.textContent = "VIEW IN DRIVING SETTINGS";
+    more.onclick = () => { if (G.openCoachDetails) G.openCoachDetails(); };
+    card.append(heading, detail, more); els.resultsTable.appendChild(card);
+  }
   order.forEach((c, i) => {
     const dnf = dnfOf(c);
     const row = document.createElement("div");
@@ -289,7 +309,7 @@ function buildResults(order) {
     // Never "MAIN MENU" for a sprint: the champion panel at the end of a season
     // uses that exact string as its first-click sentinel (js/game.js resNext).
     els.resNext.textContent = sprint ? "TO THE GRAND PRIX"
-      : season.round >= SeasonCal.rounds() ? "FINISH SEASON" : "NEXT ROUND";
+      : season.round >= SeasonCal.rounds() ? "VIEW CHAMPION" : "NEXT ROUND";
   } else {
     els.resNext.textContent = "RACE AGAIN";
   }

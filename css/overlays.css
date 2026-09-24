@@ -682,7 +682,6 @@ body.hud-hidden #lights,
 body.hud-hidden #announce,
 body.hud-hidden #campicker,
 body.hud-hidden #btn-cam,
-body.hud-hidden #pausebtn,
 body.hud-hidden .touchbtn { display: none !important; }
 #hud-restore {
   position: fixed;
@@ -702,6 +701,17 @@ body.hud-hidden .touchbtn { display: none !important; }
 @media (hover: hover) { #hud-restore:hover { opacity: 0.95; } }
 #hud-restore:active { opacity: 0.95; }
 body.hud-hidden #hud-restore { display: block; }
+body.hud-hidden #pausebtn { right: calc(10px + var(--tap) + 4px + var(--sar)); opacity: 0.75; }
+body.hud-hidden #hud-restore::after {
+  content: "HUD HIDDEN · TAP EYE";
+  position: absolute; right: 0; top: calc(100% + var(--gap) * 0.35);
+  white-space: nowrap; padding: calc(var(--gap) * 0.35) calc(var(--gap) * 0.6);
+  background: var(--plate-opaque); border: 1px solid var(--plate-line);
+  border-radius: var(--r-sm); color: var(--text); font-size: var(--fs-micro);
+  animation: hud-hint-out 3.5s forwards;
+}
+@keyframes hud-hint-out { 0%, 55% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { body.hud-hidden #hud-restore::after { animation: none; } }
 /* Camera picker grid: opened by press-and-hold on the CAM button. Anchored
    under the button (top-right), thumb-reachable in landscape. */
 #campicker {
@@ -763,6 +773,15 @@ body[data-density="compact"] #campicker {
    in css/components.css, and so are the .res-* row rules now that four screens
    use them. Only what is specific to THIS container stays here. */
 #results-table { font-size: var(--fs-micro); font-variant-numeric: tabular-nums; }
+.res-personal {
+  display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--gap) * 0.5) var(--gap);
+  padding: calc(var(--gap) * 0.8) var(--gap); margin: 0 0 var(--gap);
+  border: 1px solid var(--plate-line); border-left: 3px solid var(--red);
+  border-radius: var(--r-sm); background: var(--plate);
+}
+.res-personal strong { font-size: var(--fs-3); color: var(--text); }
+.res-personal span { color: var(--dim); }
+.res-personal button { margin-left: auto; min-height: var(--chip-h); color: var(--text); }
 #results-table > .sel-label,
 #standings-body > .sel-label { margin-top: calc(var(--gap) * 1.2); }
 #standings-body > .sel-label:first-child { margin-top: 0; }
@@ -1320,6 +1339,14 @@ body[data-density="compact"] #campicker {
   transform: translateY(var(--gap));
   transition: opacity 0.4s ease-out, transform 0.4s cubic-bezier(0.2, 0.7, 0.3, 1);
 }
+#ld-skip {
+  display: block; margin: var(--gap) 0 0 auto;
+  min-height: var(--chip-h); padding: 0 var(--gap);
+  background: var(--plate); border: 1px solid var(--plate-line);
+  border-radius: var(--r-sm); color: var(--text);
+  font: inherit; font-weight: 800; cursor: pointer;
+}
+#ld-skip-help { margin: calc(var(--gap) * 0.35) 0 0; color: var(--text); font-size: var(--fs-micro); text-align: right; }
 /* Both live phases show the card: "run" is the flyby with the card up, "card"
    is the no-world fallback where the card is all there is. */
 #loading[data-phase="run"] #ld-card,

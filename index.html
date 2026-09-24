@@ -1605,7 +1605,7 @@
     <button id="mb-career" class="bigbtn" data-menu-default aria-label="Career modes — Driver Career and My Team"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg><span><span class="mb-label">CAREER</span><span id="mb-career-sub" class="mb-sub">DRIVER CAREER  ·  MY TEAM</span></span></button>
     <div id="menu-retention" class="balanced-row">
       <button id="mb-continue" class="bigbtn alt minibtn" hidden><span>CONTINUE</span><span id="mb-continue-sub" class="mb-sub"></span></button>
-      <button id="mb-daily" class="bigbtn alt minibtn"><span>DAILY</span><span id="mb-daily-sub" class="mb-sub">TODAY'S TIME TRIAL</span></button>
+      <button id="mb-daily" class="bigbtn alt minibtn"><span>DAILY TIME TRIAL</span><span id="mb-daily-sub" class="mb-sub">TODAY'S CHALLENGE</span></button>
     </div>
     </div>
     <!-- PLAY NOW: the four one-sitting modes, 2x2 so four entries cost two rows
@@ -1702,7 +1702,7 @@
 <div id="select" class="screen" role="region" aria-labelledby="select-title" data-esc-close="sel-back" hidden>
   <div id="sel-inner" class="sheet">
 
-    <div class="sheet-head"><h2 id="select-title">SELECT</h2></div>
+    <div class="sheet-head"><h2 id="select-title">SELECT</h2><span id="sel-track-count" class="session-summary"></span></div>
 
     <div class="sheet-body" id="sel-body">
       <!-- THE SHELF: filter + search toolbar (js builds #sel-track-filter into
@@ -1756,8 +1756,8 @@
 
     <div class="sheet-foot">
       <button id="sel-back" class="bigbtn alt">BACK</button>
-      <button id="sel-car" class="bigbtn alt">YOUR CAR</button>
-      <button id="sel-go" class="bigbtn">NEXT</button>
+      <button id="sel-car" class="bigbtn alt"><span>CHANGE CAR</span><small id="sel-car-current">CURRENT CAR</small></button>
+      <button id="sel-go" class="bigbtn">RACE SETUP</button>
     </div>
   </div>
 </div>
@@ -2044,13 +2044,15 @@
         <dl id="ld-meta"></dl>
       </div>
     </div>
+    <button id="ld-skip" type="button">SKIP INTRO <span aria-hidden="true">›</span></button>
+    <p id="ld-skip-help">Tap or press any key to skip</p>
   </div>
 </div>
 
 <!-- race settings -->
 <dialog id="race-settings" class="screen dim" data-esc-close="rs-cancel" aria-labelledby="dlg-racesettings" hidden>
   <div class="sheet">
-    <div class="sheet-head"><h2 id="dlg-racesettings">RACE SETTINGS</h2></div>
+    <div class="sheet-head"><h2 id="dlg-racesettings">RACE SETTINGS</h2><p id="rs-summary" class="session-summary" aria-live="polite"></p></div>
     <!-- Twelve SETTING ROWS (js/ui/setting-row.js), the same control as pause >
          SETTINGS: LABEL ‹ VALUE ›. This screen was the last one on chips, and
          it needed ~130 lines of shape-and-density grid CSS to fit seven chip
@@ -2184,7 +2186,7 @@
     </div>
     <div class="sheet-foot">
       <button id="rs-cancel" autofocus class="bigbtn alt">BACK</button>
-      <button id="rs-go" class="bigbtn">RACE!</button>
+      <button id="rs-go" class="bigbtn">START RACE</button>
     </div>
   </div>
 </dialog>

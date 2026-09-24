@@ -27,10 +27,9 @@ const tracks = () => (g.sandbox && g.sandbox.Tracks) || (g.ctx && g.ctx.Tracks);
 const idx = (id) => tracks().LIST.findIndex((t) => t.id === id);
 const full = (id) => tracks().LIST[idx(id)].gpLaps;
 // openRaceSettings() runs buildRaceSettings() on the inert DOM; the state it
-// leaves in G.raceLaps is the assertion, the chips are not. Outside the VS
-// FRIEND room every visit resets the chips to the default (3, or a season
-// format's distance), so the carried-over case is the ROOM's: the host picks a
-// distance, changes circuit, and comes back to the sheet.
+// leaves in G.raceLaps is the assertion, the chips are not. In a room, the
+// host's choice is authoritative. Solo sessions initialize on first entry and
+// preserve edits while backing through the picker or garage.
 function open(trackId, room = true) {
   g.G.setNetRoom(room);
   try { g.G.trackIdx = idx(trackId); g.G.openRaceSettings("select"); return g.G.raceLaps; }
@@ -68,9 +67,16 @@ test("time trial keeps its own ladder and never snaps to a grand prix distance",
   g.G.timeTrial = false;
 });
 
-test("outside the room a visit still resets to the default, which is on every ladder", () => {
+test("solo setup initializes once per track and preserves a draft on re-entry", () => {
   g.G.raceLaps = full("monaco");
   assert.equal(open("spa", false), 3, "the solo flow's default (GAME_LAPS) — a preselection, not a carry-over");
+  g.G.raceLaps = 10;
+  g.G.raceWeather = "rain";
+  g.G.raceTimeOfDay = "night";
+  assert.equal(open("spa", false), 10, "Back → settings preserves the pending lap choice");
+  assert.equal(g.G.raceWeather, "rain");
+  assert.equal(g.G.raceTimeOfDay, "night");
+  assert.equal(open("monza", false), 3, "changing circuit starts a new draft");
 });
 
 // ── the GRID RULE ─────────────────────────────────────────────────────────────
