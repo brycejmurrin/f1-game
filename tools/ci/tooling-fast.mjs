@@ -147,8 +147,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/curvature-channels.test.mjs",
   "tests/unit/track-line.test.mjs",
   "tests/unit/track-line-circuits.test.mjs",
-  "tests/unit/track-centerline-seam.test.mjs",
-  "tests/unit/track-retained-state.test.mjs",
   "tests/unit/twin-drift.test.mjs",
   "tests/unit/storage-key-prefix.test.mjs",
   // ...and its sibling: the PREFIX is not the whole contract. Two features
@@ -180,7 +178,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/telemetry-trace.test.mjs",
   "tests/unit/meeting-picker-labels.test.mjs",
   "tests/unit/data-api-status.test.mjs",
-  "tests/unit/data-lazy-loader.test.mjs",
   "tests/unit/scenery-api-contract.test.mjs",
   "tests/unit/scenery-guards.test.mjs",
   "tests/unit/track-build-vm-release.test.mjs",
@@ -444,6 +441,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The PRE-RACE ANNOUNCER: the derived script, and the Daniel-first voice
   // ladder on the platforms that do not have Daniel.
   "tests/unit/announcer.test.mjs",
+  "tests/unit/data-lazy-loader.test.mjs",
+  "tests/unit/track-retained-state.test.mjs",
+  "tests/unit/track-centerline-seam.test.mjs",
   // @gen-test-groups:end
 ]);
 

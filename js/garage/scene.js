@@ -1298,7 +1298,7 @@ const DRESS_OPTS = { glow: 0.62 };
 // A slot that any future dressing reads MUST be added here too.
 let floorMesh = null, cacheKey = "";
 const dressMesh = {};
-let dressTex = null, dressFail = 0;
+let dressTex = null, dressFail = 0, dressRetryAt = 0;
 // TWO keys, not one. Everything above is GEOMETRY and depends on the team and
 // its colours; the dress atlas additionally carries boardKey(info), which
 // changes on every part pick. One combined key made a brake-duct choice
@@ -1366,8 +1366,14 @@ function rebuild(team, liv, info, ctx) {
                + `|${logoGen}|${drv[0] && drv[0].num}-${drv[1] && drv[1].num}`
                + `|${ctxKey(ctx)}`;
   const key = `${gKey}|${boardKey(info)}`;
-  if (key === cacheKey && shellMesh) return;
+  const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+  if (key === cacheKey && shellMesh &&
+      (dressTex || dressFail >= 3 || now < dressRetryAt ||
+       !_gfx.createTexture || !_gfx.createTexMesh || typeof LiveryTex === "undefined")) return;
   if (gKey !== geomKey || !shellMesh) {
+    // A new team/paint/context is a fresh texture; old failed uploads must
+    // not permanently remove this team's wall graphics or moving trace.
+    dressFail = 0; dressRetryAt = 0; traceFail = 0;
     if (shellMesh) _gfx.freeMesh(shellMesh);
     for (let i = 0; i < SIDES.length; i++)
       if (ledMesh[SIDES[i]]) { _gfx.freeMesh(ledMesh[SIDES[i]]); ledMesh[SIDES[i]] = null; }
@@ -1408,6 +1414,7 @@ function rebuild(team, liv, info, ctx) {
         paintLive(liveCanvas, team, liv, ctx);
         if (liveTex && _gfx.freeTexture) _gfx.freeTexture(liveTex);
         liveTex = _gfx.createTexture(liveCanvas);
+        if (!liveTex || liveTex._phase === 4) throw new Error("live texture upload returned no handle");
         if (!liveMesh.mid) {
           const lg = GarageLive.build(FIXTURES);
           for (const k in lg) if (lg[k].idx.length) liveMesh[k] = _gfx.createTexMesh(lg[k]);
@@ -1429,8 +1436,11 @@ function rebuild(team, liv, info, ctx) {
         for (let i = 0; i < SIDES.length; i++)
           if (dg[SIDES[i]].idx.length) dressMesh[SIDES[i]] = _gfx.createTexMesh(dg[SIDES[i]]);
       }
+      if (!dressTex || dressTex._phase === 4) throw new Error("dress texture upload returned no handle");
+      dressFail = 0; dressRetryAt = 0;
     } catch (e) {
-      dressFail++; dressTex = null; dressCanvas = null;
+      if (dressTex && _gfx.freeTexture) _gfx.freeTexture(dressTex);
+      dressFail++; dressRetryAt = now + 1000; dressTex = null; dressCanvas = null;
       Log.warn("game", `GarageScene dress failed: ${e && e.message}`);
     }
   }
@@ -1507,18 +1517,19 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh) {
   // The engineers' traces tick over every 1.5 s: repaint one region of the
   // live atlas and re-upload it (1 MB, a quarter of the dress).
   // Three strikes, as the dress: the atlas stays up with its last traces. A
-  // freed handle is dropped, not drawn — GLX's deleteTexture leaves it truthy,
-  // so drawDecal would bind a dead texture (INVALID_OPERATION per decal).
+  // Keep the last working handle until the replacement uploads successfully:
+  // a transient upload failure can then retry without losing the live atlas.
   if (liveTex && liveCanvas && traceFail < 3 && now - lastTrace > 1500) {
     lastTrace = now;
-    let freed = false;
     try {
       paintTrace(liveCanvas, liv, now);
-      if (_gfx.freeTexture) { _gfx.freeTexture(liveTex); freed = true; }
-      liveTex = _gfx.createTexture(liveCanvas);
+      const nextTex = _gfx.createTexture(liveCanvas);
+      if (!nextTex || nextTex._phase === 4) throw new Error("trace texture upload returned no handle");
+      if (_gfx.freeTexture) _gfx.freeTexture(liveTex);
+      liveTex = nextTex;
+      traceFail = 0;
     } catch (e) {
       traceFail++;
-      if (freed) liveTex = null;
       Log.warn("game", `GarageScene live trace failed: ${e && e.message}`);
     }
   }

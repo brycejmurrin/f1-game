@@ -6,6 +6,17 @@
   "use strict";
   self.ApexRoster = Object.freeze({
     DEFERRED: {
+    "webgl2": [
+      "js/render/glx/shaders/glsl-chunks.js",
+      "js/render/glx/shaders/glsl-lit.js",
+      "js/render/glx/shaders/glsl-sky.js",
+      "js/render/glx/shaders/glsl-fx.js",
+      "js/render/glx/shaders/glsl-post.js",
+      "js/render/glx/post.js",
+      "js/render/glx/shadow.js",
+      "js/render/glx/chunked.js",
+      "js/render/glx/glx.js"
+    ],
     "webgpu": [
       "js/render/webgpu/wgsl-chunks.js",
       "js/render/webgpu/wgsl-post.js",
@@ -25,6 +36,50 @@
     ]
   },
     DEFERRED_EDGES: [
+    [
+      "js/render/glx/shaders/glsl-chunks.js",
+      "js/render/glx/shaders/glsl-lit.js"
+    ],
+    [
+      "js/render/glx/shaders/glsl-chunks.js",
+      "js/render/glx/shaders/glsl-sky.js"
+    ],
+    [
+      "js/render/glx/shaders/glsl-chunks.js",
+      "js/render/glx/shaders/glsl-fx.js"
+    ],
+    [
+      "js/render/glx/shaders/glsl-chunks.js",
+      "js/render/glx/shaders/glsl-post.js"
+    ],
+    [
+      "js/render/glx/shaders/glsl-lit.js",
+      "js/render/glx/glx.js"
+    ],
+    [
+      "js/render/glx/shaders/glsl-sky.js",
+      "js/render/glx/glx.js"
+    ],
+    [
+      "js/render/glx/shaders/glsl-fx.js",
+      "js/render/glx/glx.js"
+    ],
+    [
+      "js/render/glx/shaders/glsl-post.js",
+      "js/render/glx/glx.js"
+    ],
+    [
+      "js/render/glx/post.js",
+      "js/render/glx/glx.js"
+    ],
+    [
+      "js/render/glx/shadow.js",
+      "js/render/glx/glx.js"
+    ],
+    [
+      "js/render/glx/chunked.js",
+      "js/render/glx/glx.js"
+    ],
     [
       "js/render/webgpu/wgsl-chunks.js",
       "js/render/webgpu/wgsl-post.js"

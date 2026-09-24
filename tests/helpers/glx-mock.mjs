@@ -30,9 +30,9 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const MANIFEST = createRequire(import.meta.url)(path.join(ROOT, "tools/manifest.cjs"));
 const GLX_FILE = "js/render/glx/glx.js";
-// Everything the manifest loads before glx.js is what glx.js needs: Log, M4,
-// the GLSL-as-data shader files, the split pass modules, LampChunks.
-const FILES = MANIFEST.FULL.slice(0, MANIFEST.FULL.indexOf(GLX_FILE) + 1);
+// Shared dependencies and the deferred GLX group in production order.
+const FILES = [...MANIFEST.FULL.slice(0, MANIFEST.FULL.indexOf("js/render/gfx.js")),
+  ...MANIFEST.DEFERRED.webgl2];
 const SOURCES = FILES.map((f) => [f, fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var")]);
 
 

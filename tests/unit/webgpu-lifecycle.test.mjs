@@ -49,6 +49,23 @@ test("WGX constructs SGSR resources only when spatial upscaling is requested", (
   assert.match(setter, /if\s*\(\s*spatialUpscale\s*\)\s*_ensureSpatial\(\)/);
 });
 
+// GPUTexture.destroy() is deterministic; waiting for the wrapper to be garbage
+// collected after a failed view/upload needlessly holds GPU memory on phones.
+test("WebGPU releases textures if decal or material-array view creation fails", async () => {
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  assert.ok(gfx, "the mock backend must initialise before injecting failures");
+  h.failNextView();
+  const badDecal = gfx.createTexture({ width: 2, height: 2 });
+  assert.equal(badDecal._phase, 4);
+  assert.equal(h.textures.at(-1).destroyed, true, "failed decal upload retained its GPU texture");
+  h.clearFailures();
+  h.failNextView();
+  const badArray = gfx.createTextureArray(1, [new Uint8Array(4)], 1);
+  assert.equal(badArray, null);
+  assert.equal(h.textures.at(-1).destroyed, true, "failed material-array view retained its GPU texture");
+});
+
 // opts lets a test pick a REAL WebGPU failure shape. Defaults keep the healthy
 // device every existing test was written against, so these are new switches and
 // never a changed baseline:

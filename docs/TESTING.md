@@ -1164,6 +1164,8 @@ what it covers.
 | `debris-hazard-hint.test.mjs` | `projectHazard` in `js/physics/debris-world.js`: the hazard query seeds `Tracks.project` with each body's own placed arc (33 segments instead of all ~1500) and must fall back to the full scan whenever that seed cannot be trusted. Sweeps monza/monaco/spa/miami at every staleness up to a 2 km wrong hint for a single changed accept/reject verdict, and pins suzuka — a figure-of-eight whose legs cross 1.43 m apart in XZ and 8.07 m apart in Y, where the height half of the trust test is the only thing that stops a hint on one deck being trusted for a body on the other. The subject is extracted from the real source, and two deliberately-broken variants keep the assertions honest |
 | `spline-project-height.test.mjs` | `Tracks.project` in `js/track/core/spline.js` searches in XZ only, so on a circuit that crosses ITSELF it cannot tell the two legs apart even in principle — the information was absent, not mis-weighted. Pins the optional `wy` argument that adds a height term: on suzuka's crossover (~2.6 m apart in XZ, ~8.3 m in Y) a body on the upper deck displaced toward the road beneath projects onto the WRONG leg at every offset tried without it, ~2368 m away in arc, and onto the right one at all of them with it. Carries an anti-vacuity assertion that the flat search must still be wrong somewhere, and checks that away from the crossover the two forms agree exactly, so existing callers are unaffected |
 | `f1-track-accuracy.spec.js` | each def's `path` OSM trace vs a pinned subset of real GeoJSON outlines (direction, shape) |
+| `track-retained-state.test.mjs` | Production releases scenery graph ownership after batch creation; diagnostics retain it and late-upload source attributes remain exact |
+| `track-centerline-seam.test.mjs` | The resampled centerline interpolates the explicit closing chord; full track builds reject a missing mesh factory |
 | `track-foundation.test.mjs` | Node contracts for TrackSpace, TrackSurface, TrackModels, atomic diagnostics, terrain grounding, mesh validation |
 | `track-maps-corners.test.mjs` | turn class = radius + heading-sweep (not raw \|k\|); Monza includes Curva Grande; Spa La Source HAIRPIN / Eau Rouge FAST |
 | `track-preview-plan.test.mjs` | `TrackMaps.planPreview` — stacked vs beside, and the slot it sizes, over measured card geometry x circuit aspect. Holds shut the tall-circuit sliver, the caption charged to the wrong shape's budget, `beside` on a wide circuit, the 175% collapse, and two-column on a phone |
@@ -1325,10 +1327,8 @@ what it covers.
 | `telemetry-compare.spec.js` | TELEMETRY multi-lane compare and cross-session (one driver's race vs quali) |
 | `telemetry-trace.test.mjs` | GPS-trace sanity and the playback dot's motion |
 | `meeting-picker-labels.test.mjs` | OpenF1 meeting picker labels stay unique when `meeting_name` collides — circuit suffix, then YYYY-MM-DD |
+| `data-lazy-loader.test.mjs` | Failed predecessor scripts stop before DataHub initialization and successful siblings are retained across retry |
 | `data-api-status.test.mjs` | a `"null"` error body still throws with `.status` attached, so a 401/403 lockout can never serve stale cache |
-| `data-lazy-loader.test.mjs` | a failed deferred data script blocks its dependent hub, then retry reuses the siblings already evaluated without redeclaring them |
-| `track-retained-state.test.mjs` | the production upload releases its build graph while keeping rendering and race geometry available; a developer build retains inspection state |
-| `track-centerline-seam.test.mjs` | the generated centerline samples its closing chord and validates full-build geometry at the seam |
 | `audio-smoke.spec.js` | the WebAudio engine/sfx initialise and respond, objectively |
 | `music-library.spec.js` | the bring-your-own-music library and the Spotify backend |
 | `spotify-refresh.test.mjs` | Spotify refresh single-flight, retry preservation, rotated-token ownership, and terminal revocation |

@@ -45,7 +45,7 @@ const els = {
 // Renderer selection: an unset apex26.gfxBackend or ="three" uses TLX
 // (three.js); ="webgpu" uses WGX when the browser supports it; ="webgl2"
 // uses GLX. Any deferred-backend init failure also falls back to GLX. This
-// async IIFE awaits while loading TLX/WGX, or when the lazy __apex surface
+// async IIFE awaits while loading the selected renderer, or when the lazy __apex surface
 // loads (localhost / tests / ?apex=1). `gfx` is the handle every later
 // renderer call goes through.
 let gfx = null;
@@ -66,7 +66,7 @@ let _probeArmed = false;      // mirrors the stored probe, so the loop never rea
 let _backendBound = false;
 // The rosters below are ApexRoster (js/roster.js), GENERATED from
 // tools/manifest.cjs by tools/gen/gen-shell.mjs — one truth, no hand mirror.
-// The two DEFERRED renderer groups, in documented toposort order:
+// The three DEFERRED renderer groups, in documented toposort order:
 // loadBackendScripts starts a file once its edges' predecessors have evaluated.
 // Renderer/optional groups keep their graceful fallback; data's eval-time
 // dependencies request strict loading so a failed predecessor never executes
@@ -369,6 +369,10 @@ try {
   }
 } catch (_) { gfx = null; }
 if (!gfx) {
+  // Load GLX only when selected or needed after TLX/WGX refuses. A missing
+  // script must not trigger the claim-failure reload loop while offline.
+  if (typeof GLX.init !== "function") await loadBackendScripts(BACKEND_FILES.webgl2);
+  if (typeof GLX.init !== "function") { showGraphicsUnavailable(); return; }
   if (!GLX.init(canvas)) {
     // A failed backend opt-in (WGX or TLX) may have already claimed the
     // canvas (getContext "webgpu"/"webgl2" succeeded before init died), so
