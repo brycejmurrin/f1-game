@@ -1328,6 +1328,28 @@
           </div>
         </div>
         <p id="as-chat-note" class="as-note"></p>
+        <!-- RECORDED VOICE (js/audio/voice-pack.js): the engineer's lines spliced
+             from recorded clips through the radio filter, speech synthesis for
+             whatever the pack cannot cover. SYSTEM keeps every line on the voice
+             picked under VOICES. SPOTTER (js/race/spotter.js) is car left /
+             right / clear, recorded voice only, and speaks whatever TEAM RADIO
+             is set to. -->
+        <div id="as-rpack" class="set-row" role="group" aria-labelledby="as-rpack-label">
+          <span class="tune-label" id="as-rpack-label">RADIO VOICE</span>
+          <div>
+            <button id="as-rpack-prev" type="button" data-step="-1" aria-label="Previous radio voice">&lsaquo;</button>
+            <select id="as-rpack-sel" aria-labelledby="as-rpack-label"></select>
+            <button id="as-rpack-next" type="button" data-step="1" aria-label="Next radio voice">&rsaquo;</button>
+          </div>
+        </div>
+        <div id="as-spot" class="set-row" role="group" aria-labelledby="as-spot-label">
+          <span class="tune-label" id="as-spot-label">SPOTTER</span>
+          <div>
+            <button id="as-spot-prev" type="button" data-step="-1" aria-label="Previous spotter setting">&lsaquo;</button>
+            <select id="as-spot-sel" aria-labelledby="as-spot-label"></select>
+            <button id="as-spot-next" type="button" data-step="1" aria-label="Next spotter setting">&rsaquo;</button>
+          </div>
+        </div>
         <label class="tune-row"><span class="tune-label">VOICE VOLUME <b id="as-rvol-v">8</b></span>
           <input id="as-rvol" type="range" min="0" max="10" step="1" value="8" aria-label="Radio voice volume"></label>
         <!-- RADIO FX — the key click, the hiss under the line and the squelch
@@ -3047,6 +3069,7 @@
 <script defer crossorigin="anonymous" src="js/audio/spotify.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/audio/rivals.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/audio/car-sfx.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/audio/voice-pack.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/audio/radio-voice.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/data/circuit-lore.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/audio/announcer.js?v=dev"></script>
@@ -3088,6 +3111,7 @@
 <script defer crossorigin="anonymous" src="js/race/engineer.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/radio-lines.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/race-facts.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/spotter.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/race-radio.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/offsets.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/flyby-seq.js?v=dev"></script>

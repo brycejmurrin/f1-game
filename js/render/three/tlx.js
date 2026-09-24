@@ -2421,10 +2421,12 @@ const TLX = (function () {
             const _gl = (renderer.backend && renderer.backend.gl) || null;
             try {
               const lim = _gl ? [_gl.getParameter(_gl.MAX_TEXTURE_SIZE) | 0, _gl.getParameter(_gl.MAX_RENDERBUFFER_SIZE) | 0].filter((v) => v >= 2048) : [];   // WebGL2 guarantees 2048; a stub answers less
-              _glMaxDim = lim.length ? Math.min(...lim) : 0;
-            } catch (_) { _glMaxDim = 0; }
+              // A lost context answers null (-> 0): no clamp this frame, and ask
+              // again next frame rather than latching "no limit" for the session.
+              if (lim.length) _glMaxDim = Math.min(...lim);
+            } catch (_) { /* ask again next frame */ }
           }
-          maxDim = _glMaxDim;
+          maxDim = Math.max(0, _glMaxDim);
         }
         if (maxDim && (presentW > maxDim || presentH > maxDim)) {
           const k = Math.min(maxDim / presentW, maxDim / presentH);

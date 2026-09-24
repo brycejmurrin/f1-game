@@ -1,0 +1,13 @@
+Recorded radio voice
+--------------------
+george.bin / george.json — the race engineer's clips, rendered offline by
+tools/gen/voicepack.mjs with Kokoro-82M v1.0 (hexgrad), voice "bm_george",
+through the ONNX export (onnx-community/Kokoro-82M-v1.0-ONNX) and kokoro-js.
+
+Licence: Apache-2.0 (model weights and voices).
+  https://huggingface.co/hexgrad/Kokoro-82M
+  https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX
+  https://www.npmjs.com/package/kokoro-js
+
+The clips are synthetic speech, not a recording of any person. Regenerate
+with: node tools/gen/voicepack.mjs --kokoro <dir with kokoro-js + ffmpeg-static>
