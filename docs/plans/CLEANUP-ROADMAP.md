@@ -54,9 +54,9 @@ Eighteen parallel read-only bloat-auditor runs (see agent IDs in scratch matrix)
 | ✅ | **save-migrate** (js/career/save-migrate.js) | store.js (~100 ln) | **Done** (PR #108) |
 | ✅ | **race-settings + custom-team** | game.js (~690 ln) | **Done** (PR #110) |
 | ✅ | SettingRow (`js/ui/setting-row.js`) | enumerated preference rows | **Done** (landed; CLEANUP called this “res-row”) |
-| 6 | lobby-codes | lobby.js (~230 ln) | → readability plan #11 |
+| 6 | lobby-codes | lobby.js (~230 ln) | **Done** (this PR — `js/net/lobby-codes.js`) |
 | 7 | car-aero | car3d.js (~520 ln) | → readability plan #6 |
-| 8 | copy-text clipboard helper | perf + elsewhere | → readability plan #8 |
+| 8 | copy-text clipboard helper | perf + elsewhere | **Done** (this PR — `js/core/clipboard.js`) |
 | 9 | music-playback | engine.js | → readability plan #10 |
 
 ---

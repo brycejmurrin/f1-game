@@ -279,6 +279,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ApexClipboard.write/read + preferSync order (clipboard carve). Pure VM,
   // well under a second; must run where the helper or a call-site is edited.
   "tests/unit/clipboard.test.mjs",
+  // LobbyCodes.codeFrom / paintQr / canShare (lobby-codes peel). Pure VM.
+  "tests/unit/lobby-codes.test.mjs",
   "tests/unit/wait-polling.test.mjs",
   // ...and its sibling over js/: a try/catch cannot swallow a promise
   // REJECTION, and index.html turns an unhandled one into a full-screen

@@ -676,6 +676,7 @@ const LAZY_NET = [
   "js/net/scan.js",
   "js/net/transport.js",
   "js/net/handshake.js",
+  "js/net/lobby-codes.js",  // LobbyCodes: paste/copy/share/scan/QR for invite+answer (before lobby)
   "js/net/snapshot.js",
   "js/net/session.js",
   "js/net/netplay.js",
@@ -683,15 +684,19 @@ const LAZY_NET = [
 ];
 // Eval-time pairs, moved verbatim from HARD_EDGES. Listed, not derived: unlike
 // the data hub these are a real graph (rendezvous needs nostr, handshake needs
-// sdp, session needs snapshot, the lobby needs qr/scan/rendezvous), not one
-// module gathering the rest.
+// sdp, session needs snapshot, the lobby needs qr/scan/rendezvous/lobby-codes),
+// not one module gathering the rest.
 const LAZY_NET_EDGES = [
   ["js/net/snapshot.js", "js/net/session.js"],
   ["js/net/sdp.js", "js/net/handshake.js"],
+  ["js/net/qr.js", "js/net/lobby-codes.js"],
   ["js/net/qr.js", "js/net/lobby.js"],
   ["js/net/rendezvous.js", "js/net/lobby.js"],
   ["js/net/nostr.js", "js/net/rendezvous.js"],
+  ["js/net/scan.js", "js/net/lobby-codes.js"],
   ["js/net/scan.js", "js/net/lobby.js"],
+  ["js/net/handshake.js", "js/net/lobby-codes.js"],
+  ["js/net/lobby-codes.js", "js/net/lobby.js"],
 ];
 
 const DEFERRED_EDGES = [

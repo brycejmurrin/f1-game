@@ -27,7 +27,7 @@
       "lines": 2732
     },
     "js/net/lobby.js": {
-      "lines": 1822
+      "lines": 1679
     },
     "tools/ci/pick-tests.mjs": {
       "blanketOnlyRoutes": 1
