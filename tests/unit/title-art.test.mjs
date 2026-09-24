@@ -161,14 +161,11 @@ test("every art group carries its reveal stage and order", () => {
   }
 });
 
-test("stroked paths carry pathLength=1 and fill-only ones do not", () => {
-  // stroke-dasharray: 1 / stroke-dashoffset 1 -> 0 draws a stroke on only if
-  // its path is normalised to length 1. A fill-only path has no dash to scale.
+test("no path carries pathLength", () => {
+  // The outlines reveal with a clip-path wipe on their GROUP (css/menus.css).
+  // A dash draw-on was tried and cannot trace these paths: each is many
+  // subpaths, and the dash pattern restarts at every M, so they all popped.
   for (const [name, block] of DRAWINGS) {
-    for (const m of block.matchAll(/<g ([^>]*)><path ([^>]*?)d="/g)) {
-      const stroked = !/stroke="none"/.test(m[1]);
-      assert.equal(/pathLength="1"/.test(m[2]), stroked,
-        `${name}: <g ${m[1].slice(0, 60)}> ${stroked ? "is stroked but lacks" : "is fill-only but carries"} pathLength="1"`);
-    }
+    assert.doesNotMatch(block, /pathLength/, `${name}: pathLength is back — the draw is a group wipe, not a dash`);
   }
 });

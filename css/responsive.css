@@ -263,17 +263,18 @@ body.rotate-help-open #rotate-device { display: none !important; }
   #rotate-race, #rotate-controls, #rotate-exit { width: min(100%, 22rem); }
 }
 
-/* ---------- TITLE SCREEN MOTION (js/ui/title-fx.js) ---------- */
-/* MENU ANIMATIONS: REDUCED, or an unset preference on an OS that asks for
-   reduced motion, puts data-motion="reduce" on <html>. Same shape as the
-   prefers-reduced-motion backstop in css/tokens.css — instant and
-   non-repeating rather than `none`, so a one-shot reveal still lands on its
-   end state — but keyed on the player's choice, and scoped to the title
-   screen. !important for the backstop's reason: it has to beat every
+/* ---------- MENU MOTION (js/ui/title-fx.js) ---------- */
+/* MENU ANIMATIONS: REDUCED, or an OS that asks for reduced motion, puts
+   data-motion="reduce" on <html> (first set by the inline script in
+   index.html, before first paint). Same shape as the prefers-reduced-motion
+   backstop in css/tokens.css — instant and non-repeating rather than `none`,
+   so a one-shot reveal still lands on its end state — but keyed on the
+   player's choice, and scoped to the menus: the title screen and every
+   dialog sheet. !important for the backstop's reason: it has to beat every
    per-element animation shorthand without matching their specificity. */
-:root[data-motion="reduce"] #overlay *,
-:root[data-motion="reduce"] #overlay *::before,
-:root[data-motion="reduce"] #overlay *::after {
+:root[data-motion="reduce"] :is(#overlay, .screen) *,
+:root[data-motion="reduce"] :is(#overlay, .screen) *::before,
+:root[data-motion="reduce"] :is(#overlay, .screen) *::after {
   animation-duration: 0.01ms !important;
   animation-iteration-count: 1 !important;
   transition-duration: 0.01ms !important;
@@ -298,6 +299,12 @@ body.rotate-help-open #rotate-device { display: none !important; }
     outline-offset: -5px;
   }
   #disclaimer { border-color: CanvasText; }
+  /* hover had no system-colour cue at all: the gradient it swaps is gone */
+  @media (hover: hover) {
+    #overlay .bigbtn:hover { border-color: Highlight; }
+  }
+  /* the hero is the one door that was only told apart by its red fill */
+  #mb-career { border-width: 3px; }
 }
 /* prefers-contrast: more — css/components.css already makes the sheets opaque;
    here the title doors get a full-strength edge and the disclaimer drops its

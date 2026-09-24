@@ -1,4 +1,4 @@
-/* title-fx — MENU ANIMATIONS as a player setting, the intro replay, the hidden-
+/* title-fx — MENU ANIMATIONS as a player setting, the one-shot intro, the hidden-
  * tab pause and the title-button haptic. Runs the REAL module in node:vm over
  * a mini DOM: the failure modes are all quiet ones (the attribute never lands,
  * the row is never claimed, the replay never restarts, the tap bypasses the
@@ -41,13 +41,18 @@ function el(id) {
   return e;
 }
 
-function load({ stored = {}, osReduce = false, readyState = "complete", vibrate = true } = {}) {
+function load({ stored = {}, osReduce = false, readyState = "complete", vibrate = true, overlayHidden = false } = {}) {
+  const timers = new Map();
+  let nextTimer = 1;
+  const frames = [];
   const written = {};
   const buzz = [];
   const built = [];
   const observers = [];
   const ids = new Map();
   const overlay = el("overlay");
+  overlay.setAttribute("data-intro", "");          // the shell ships it
+  overlay.hidden = overlayHidden;
   const pane = el("pane");
   const label = el("uiscale-label");
   pane.appendChild(label);
@@ -71,7 +76,10 @@ function load({ stored = {}, osReduce = false, readyState = "complete", vibrate 
       build: (id, text, values) => { const row = el(id); ids.set(id, row); built.push({ id, text, values }); return { row }; },
       wire: (row, spec) => { row._spec = spec; return row; },
     },
-    MutationObserver: class { constructor(fn) { this.fn = fn; observers.push(this); } observe(t, o) { this.t = t; this.o = o; } },
+    setTimeout: (fn, ms) => { const id = nextTimer++; timers.set(id, { fn, ms }); return id; },
+    clearTimeout: (id) => { timers.delete(id); },
+    requestAnimationFrame: (fn) => { frames.push(fn); return frames.length; },
+    MutationObserver: class { constructor(fn) { this.fn = fn; observers.push(this); } observe(t, o) { this.t = t; this.o = o; } disconnect() { this.off = true; } },
     document,
   };
   if (vibrate) sb.Input = { vibrate: (ms) => buzz.push(ms) };
@@ -79,18 +87,21 @@ function load({ stored = {}, osReduce = false, readyState = "complete", vibrate 
   sb.window.matchMedia = () => ({ matches: osReduce, addEventListener() {} });
   const ctx = vm.createContext(sb);
   vm.runInContext(SRC, ctx, { filename: FILE });
-  return { M: vm.runInContext("TitleFx", ctx), html, overlay, pane, written, buzz, built, observers, document, ids };
+  const runTimers = () => { const all = [...timers.values()]; timers.clear(); all.forEach((t) => t.fn()); };
+  const runFrames = () => { frames.splice(0).forEach((fn) => fn()); };
+  return { M: vm.runInContext("TitleFx", ctx), html, overlay, pane, written, buzz, built, observers, document, ids, timers, runTimers, runFrames };
 }
 
-test("unset follows the OS: no attribute on a normal OS, reduce on a reduced one", () => {
+test("unset is ON; an OS asking for reduced motion always wins", () => {
   assert.equal(load().html.dataset.motion, undefined);
   assert.equal(load({ osReduce: true }).html.dataset.motion, "reduce");
+  assert.equal(load({ stored: { motion: "on" }, osReduce: true }).html.dataset.motion, "reduce",
+    "the setting can only ADD reduction");
 });
 
-test("a stored choice beats the OS both ways, and garbage reads as unset", () => {
+test("a stored REDUCED reduces on a normal OS, and garbage reads as unset (ON)", () => {
   assert.equal(load({ stored: { motion: "reduce" } }).html.dataset.motion, "reduce");
-  assert.equal(load({ stored: { motion: "on" }, osReduce: true }).html.dataset.motion, undefined);
-  assert.equal(load({ stored: { motion: 7 }, osReduce: true }).M.mode(), "reduce");
+  assert.equal(load({ stored: { motion: 7 } }).M.mode(), "on");
 });
 
 test("the row sits under UI SIZE and round-trips through apex26.motion", () => {
@@ -115,17 +126,45 @@ test("wiring waits for DOMContentLoaded while deferred scripts still run", () =>
   assert.equal(built.length, 1);
 });
 
-test("showing #overlay replays the intro with a reflow between", () => {
-  const { overlay, observers } = load();
-  assert.ok(overlay.hasAttribute("data-intro"), "visible at boot → intro on");
+test("the intro plays ONCE: held one pass, then gone for good", () => {
+  const { overlay, timers, runTimers, observers } = load();
+  assert.ok(overlay.hasAttribute("data-intro"), "visible at boot → the shell's intro stays on");
+  assert.equal([...timers.values()][0].ms, 2800);
+  runTimers();
+  assert.ok(!overlay.hasAttribute("data-intro"), "after one pass the title rests");
+  assert.equal(observers.length, 0, "no observer: coming back from a room never replays");
+  assert.equal(overlay.offsetWidthReads, 0, "no forced layout anywhere");
+});
+
+test("reduced motion drops the intro at once", () => {
+  assert.ok(!load({ osReduce: true }).overlay.hasAttribute("data-intro"));
+  const { M, overlay } = load();
+  M.set("reduce");
+  assert.ok(!overlay.hasAttribute("data-intro"));
+});
+
+test("booted past the title, the intro waits for the first time it is seen", () => {
+  const { overlay, observers, timers, runTimers } = load({ overlayHidden: true });
   const mo = observers[0];
   assert.deepEqual(JSON.parse(JSON.stringify(mo.o.attributeFilter)), ["hidden"]);
-  const before = overlay.offsetWidthReads;
-  overlay.hidden = true; mo.fn();
-  assert.equal(overlay.offsetWidthReads, before, "hiding does not replay");
+  assert.equal(timers.size, 0);
   overlay.hidden = false; mo.fn();
-  assert.equal(overlay.offsetWidthReads, before + 1, "the forced reflow is what restarts the animation");
-  assert.ok(overlay.hasAttribute("data-intro"));
+  assert.ok(mo.off, "one-shot: the observer disconnects");
+  assert.equal(timers.size, 1);
+  runTimers();
+  assert.ok(!overlay.hasAttribute("data-intro"));
+});
+
+test("replay() restarts on the next frame, never with a forced layout", () => {
+  const { M, overlay, runTimers, runFrames } = load();
+  runTimers();
+  M.replay();
+  assert.ok(!overlay.hasAttribute("data-intro"), "dropped first");
+  runFrames();
+  assert.ok(overlay.hasAttribute("data-intro"), "back on a frame later");
+  runTimers();
+  assert.ok(!overlay.hasAttribute("data-intro"));
+  assert.equal(overlay.offsetWidthReads, 0);
 });
 
 test("a hidden tab pauses the title animations and a visible one resumes them", () => {
@@ -139,17 +178,18 @@ test("a hidden tab pauses the title animations and a visible one resumes them", 
 test("a title .bigbtn click taps through Input.vibrate, anything else does not", () => {
   const { overlay, buzz } = load();
   const btn = { disabled: false };
-  overlay._handlers.click({ target: { closest: (s) => (s === ".bigbtn" ? btn : null) } });
-  overlay._handlers.click({ target: { closest: () => null } });
+  overlay._handlers.click({ isTrusted: true, target: { closest: (s) => (s === ".bigbtn" ? btn : null) } });
+  overlay._handlers.click({ isTrusted: true, target: { closest: () => null } });
+  overlay._handlers.click({ isTrusted: false, target: { closest: () => btn } });
   btn.disabled = true;
-  overlay._handlers.click({ target: { closest: () => btn } });
-  assert.deepEqual(buzz, [8], "one tap, via the slider-scaled path (no-op on iOS inside Input)");
+  overlay._handlers.click({ isTrusted: true, target: { closest: () => btn } });
+  assert.deepEqual(buzz, [8], "one tap, via the slider-scaled path (no-op on iOS inside Input); a scripted click is not a finger");
   const noInput = load({ vibrate: false });
-  assert.doesNotThrow(() => noInput.overlay._handlers.click({ target: { closest: () => ({}) } }));
+  assert.doesNotThrow(() => noInput.overlay._handlers.click({ isTrusted: true, target: { closest: () => ({}) } }));
 });
 
 test("the CSS keys off the attributes this module writes, and it loads behind the store", () => {
-  assert.match(CSS, /:root\[data-motion="reduce"\] #overlay \*/);
+  assert.match(CSS, /:root\[data-motion="reduce"\] :is\(#overlay, \.screen\) \*/);
   assert.match(CSS, /#overlay\[data-paused\]/);
   assert.match(CSS, /@media \(forced-colors: active\)[\s\S]*#overlay \.bigbtn:focus-visible/);
   assert.doesNotMatch(CSS.replace(/\/\*[\s\S]*?\*\//g, ""), /outline:\s*none/);
