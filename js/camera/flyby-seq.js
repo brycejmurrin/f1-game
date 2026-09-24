@@ -895,13 +895,16 @@ const FlybySeq = (function () {
     },
     {
       id: "turn-mid", dur: 0.09, ease: "inOut",
-      eye: [{ at: "corner", n: "lore", off: -45, x: 15, y: 8 },
-            { at: "corner", n: "lore", off: 5, x: 17, y: 7 }],
-      // Aimed THROUGH the corner: at a hairpin the apex is right under a
-      // fence-line camera, and aiming at it filmed a kerb from above.
-      look: [{ at: "corner", n: "lore", off: 15, x: 0, y: 0.6 },
-             { at: "corner", n: "lore", off: 55, x: 0, y: 0.6 }],
-      fov: [38, 42],
+      eye: [{ at: "corner", n: "lore", off: -35, x: 16, y: 9 },
+            { at: "corner", n: "lore", off: 0, x: 18, y: 8 }],
+      // Held on the APEX and 20 m past it, not 15-55 m down the road: the lore
+      // corner is often the slowest one, and past a 10 m hairpin that aim swung
+      // behind the camera (frame-report, 16 circuits: 40 -> 52; renders agree).
+      // An apex aim once filmed a kerb from above from a fence-line camera;
+      // 16-18 m out and 8-9 m up, this one keeps the whole bend and its exit.
+      look: [{ at: "corner", n: "lore", off: 0, x: 0, y: 0.6 },
+             { at: "corner", n: "lore", off: 20, x: 0, y: 0.6 }],
+      fov: [42, 44],
     },
     {
       id: "turn-late", dur: 0.09, ease: "inOut",
