@@ -5131,3 +5131,271 @@ context on three's WebGL2 control leg once (pad ON); the pad-ON rerun (228)
 and round 2 did not, pad OFF never did (0/2), and that leg's driven window
 carries 5.4-5.7 s callbacks either way — the likelier trigger. Not cleared
 outright; `tlxInstPad=0` is the player-side off switch if it ever recurs.
+
+## 2af. What is left on three.js/WebGPU, and the plan for it (2026-09-24)
+
+Investigation only — no game code changed. Web research (utsubo "100 tips" r186,
+three.js #30560, the BundleGroup docs, threejsroadmap "Profiling WebGPU") checked
+against the vendored r186 and `js/render/three/`.
+
+**Facts established from the r186 source** (`vendor/three-0.186.0/three.webgpu.min.js`):
+
+- Outside `compileAsync()` the WebGPU backend calls the blocking
+  `device.createRenderPipeline`; `createRenderPipelineAsync` is reached only with a
+  promises array, which only `compileAsync` passes. Node codegen (`NodeBuilder.build`)
+  is synchronous on the render path too. Everything the warm misses stalls the frame.
+- `compileAsync(scene, camera)` walks `_projectObject` — it skips `visible === false`
+  and frustum-culled objects. Our instanced batches start `visible = false`
+  (`tlx.js` createInstancedBatch) and pooled meshes exist only once drawn, so the
+  warm compiles what the grid can see and nothing else.
+- Pipelines are keyed per render context (target formats, MRT, samples): the scene
+  warm does not cover the sun caster pass (`castScene`, its own Scene), the PCSS
+  blocker quad, or post quads compiled under a different MRT.
+- On WebGPU a `BatchedMesh` is ONE render object: `draw()` loops `drawIndexed` per
+  range on one pipeline and one bind group; WebGL2 uses `WEBGL_multi_draw`.
+  three #30560 (open) — per-object UBO cost makes many plain meshes 2-4x slower on
+  WebGPU than WebGL; the maintainer's workaround is instancing/batching.
+
+**What #228 was, split by risk** (its revert, e837853, is the whole list):
+
+| part | risk to the picture |
+|---|---|
+| vendor patch 7 — every pipeline async, `draw()` SKIPS an object whose pipeline has not landed | skip semantics: a one-shot render (snap-cached sun map, env probe face, a garage frame) keeps the hole |
+| vendor patch 8 — codegen deferred, object SKIPPED until its node state lands | same, plus it drew black once already (census 211: luma 3.2) before the render-state hold; the most likely black-screen cause |
+| vendor patch 6 — `getDynamicCacheKey` scratch array (upstream PR #34553, r187) | none: same key producer and consumer |
+| shadow `warm()` of castScene + blocker under their targets | none: compileAsync only |
+| post warm keeps the live MRT, compiles the LIVE quad, no 3 s gate | none: compileAsync only |
+| material-key quantisation (ERS blink, brake glow, rear lights, exhaust alpha) and key memo | none: fewer distinct materials |
+| NEW_MESH_BUDGET 24/present | deferred draws (visible pop-in of distant scenery) |
+| ssrTag MRT node built once (tsl-fx.js) | none |
+| coach `jsonClone`, ghost `TextEncoder` reuse | none (not render) |
+
+**Draw mix, measured** (`scratch/drawcount-probe.mjs`, montreal, TLX/WebGL2 on
+SwiftShader, five jumps, render objects per frame across ALL passes):
+113-297 per frame, **87 % non-instanced**; the non-instanced draws are track
+`chunk` meshes — 18-150 in the main pass plus 36-49 into a 512² target — then
+22 car-part meshes and ~20 post quads. Chunks of one `drawChunked` record share
+material, model matrix and the lamp grid (a single shared uniform set, baked
+once per present), so only their geometry differs.
+
+**Plan, in order** (each step its own commit, each A/B'd on `gpu-census.yml`
+driven montreal against the previous step, each behind an `apex26.` off-switch):
+
+1. **Re-land #228's zero-risk half** — the rows marked "none" above: shadow and post
+   warms, material-key quantisation, the MRT node, patch 6. No skip semantics
+   anywhere. Expect most of #228's post/shadow compile reduction; gate on luma and
+   `gpuErrors` in the garage AND the race on the three.js/WebGPU leg.
+2. **Reveal-all warm** — during the lights, set every instanced batch and every
+   chunk visible (`perObjectFrustumCulled` off), `compileAsync` the scene, the
+   castScene under `sunRT`, then restore. Also `compileAsync(object, camera, scene)`
+   for not-yet-added content. Target: `stack:` compiles in the driven window → ~0.
+3. **Chunks → `BatchedMesh`** — one per `drawChunked` record, our own cull
+   driving `setVisibleAt`. Precondition: every chunk of a record packs to the same
+   attribute layout (the pack can leave one chunk Float32 and another half — force
+   the record's widest). Must keep the mirror-release and env-probe rules above
+   §2m. Target: 40-150 render objects → a handful; measure CPU frame time, not fps.
+4. **Per-pass GPU timestamps** — split `gpuMs` into sun/car/lamp shadow, scene and
+   post (`resolveTimestampsAsync` between passes) so the next decision (cascaded
+   `CSMShadowNode`, render bundles) is made on numbers.
+5. **Only if 1-4 leave hitches: patches 7/8 WITHOUT skipping** — e.g. async
+   pipelines only for objects first seen off-screen/far, or a draw-with-fallback
+   material while the real one compiles, never a hole.
+
+Not planned: occlusion queries (open track, results a frame late), GPU-driven
+indirect draws (a rewrite for instance counts we do not have), render bundles
+before step 3 (our culler toggles visibility every frame, which re-records them).
+
+## 2ag. Plan step 1: #228's safe half re-landed (2026-09-24)
+
+§2af step 1. Taken from #228 (reverse of e837853), minus everything that skips a
+draw: vendor patches 7 and 8 and `NEW_MESH_BUDGET` stay out.
+
+- `tlx-shadow.js` `warm()` — castScene under `sunRT`, the PCSS blocker under
+  `blockerRT`; called last in `startProgramWarm`, after the MRT is nulled.
+- Post warm keeps the live ssrTag MRT and compiles the LIVE `quad`; ungated
+  (was: skipped once the scene warm passed 3 s).
+- `apex26.tlxWarmPlus` gates the ungated post warm and the caster warm — ON when first
+  pushed, OPT-IN (`=1`) after the A/B below.
+- `tsl-fx.js` builds the ssrTag MRT node once.
+- Vendor patch 6 (`getDynamicCacheKey` scratch array, upstream r187), regenerated
+  with `tools/gen/vendor-three.mjs`; canary pins it.
+- The material-key memo, rebased on today's key (emissive/alpha are per-draw
+  uniforms now, so only `alpha < 1` enters the compare); `memState()` gets
+  `matHit/matMiss/matEvict/matMissKeys`, the `warm` stage timeline, `geoKinds`.
+- NOT taken: #228's quantisation of rear-light / flame / aero-blink / brake-glow
+  values — it existed because emissive and alpha were in the key; they no longer
+  are, so it would only change the look.
+- Also re-landed (not render): coach `jsonClone`, ghost `TextEncoder` reuse +
+  O(n) trim, HUD computed-style reads behind a layout-free key.
+
+Evidence on this box (Lavapipe, three.js/**WebGPU** path, `api: webgpu`):
+
+| check | this tree | deploy tip | `tlxWarmPlus=0` |
+|---|---|---|---|
+| race warm stages (ms) | scene 5645, post 518-583, shadow 7-8, failed 0 | — | post 0, shadow 0 |
+| race frame, montreal jump(0.3), mean luma | 57.7 | 57.7 | — |
+| race frame after 8 s drive, luma | 76.3 | — | 76.3 |
+| garage (openGarage + settle), luma / dark px | 43.0 / 8.6 % | 44.3 / 7.7 % (turntable) | — |
+| gfx-probe plain / `tlxForceHw=shadow` | PASS, gpuErrors 0, luma 65.3 / 65.3 | | |
+
+`test:tooling-fast` 238/238. Real-Metal A/B: gpu-census on this push (warm on),
+then `ls: apex26.tlxWarmPlus=0`.
+
+### Real Metal, driven montreal: census 240 (before) vs 243 (step 1)
+
+| three.js/WebGPU leg | 240 (bb93e28) | 243 (842f063) |
+|---|---|---|
+| shader modules + pipelines compiled in the window (`stack:` total) | 44 (20 via `runPass`) | **8** (none via `runPass`) |
+| frames >= 100 ms | 13 | **5** |
+| callback time inside them | 2073 ms | **706 ms** |
+| worst hitch | 248 ms | 188 ms |
+| `createBuffer` in the window | 2389 | 714 |
+| warm stages | not reported | scene 7033, post 2203, shadow 5 ms, failed 0 |
+| gpuErrors / luma | 0 / 42.7 | 0 / 49.3 |
+
+The three.js/WebGL2 control leg: frames >= 100 ms 17 → 2 (7249 → 548 ms), warm
+scene 5924 / post 1815 ms, gpuErrors 0, luma 62.3 → 55.5 (a driven window ends at a
+different place each run; GLX 70.7 → 70.3, WGX 69.9 → 73.7 are the same noise). GLX
+and WGX legs unchanged, Verdict green, CI 5039 green.
+
+What is left on WebGPU is 4 modules + 4 pipelines from `present` → `_renderTimed`,
+the scene pass (plan step 2's reveal-all warm). The cost: the post warm now runs on
+Metal (it never did — the 7 s scene warm always consumed the 3 s gate), so the lights
+hold ~2.2 s longer on WebGPU, ~1.8 s on WebGL2.
+
+### The A/B: the longer warm is not what helped (census 244, `tlxWarmPlus=0`)
+
+| three.js/WebGPU leg | 243 warm ON | 244 warm OFF |
+|---|---|---|
+| compiles in the window | 8 (4 modules + 4 pipelines, scene `present`) | 8 (the same stacks) |
+| post (`runPass`) compiles | 0 | 0 |
+| frames >= 100 ms | 5 (706 ms) | 2 (350 ms) |
+| warm stages | scene 7033, post 2203, shadow 5 | scene 6984, post 0, shadow 0 |
+| gpuErrors / luma | 0 / 49.3 | 0 / 48.7 |
+
+WebGL2 control with it off: 2 compiles, 4 frames >= 100 ms, luma 68.1. With the post
+warm skipped the race still compiled NO post program, so the 20 post compiles in
+census 240 were not a missing warm: they were the ssrTag MRT node minted every
+present (`tsl-fx.js`, now built once) keying a fresh render context — the same
+§2p mechanism. The caster warm measured 5 ms and the scene warm alone takes ~7 s, so
+neither the ungated post warm nor the caster warm bought anything the census can see,
+and together they held the lights ~2.2 s longer. `tlxWarmPlus` is therefore OPT-IN
+(`=1`); the default is the census-244 configuration. Hitch counts between single
+driven windows are noisy (§2w), so "5 vs 2" is not a finding; "same compiles,
+shorter lights" is.
+
+## 2ah. The plan, revised after step 1 (2026-09-24)
+
+Supersedes §2af's steps 2-5. Step 1 is done (§2ag): on real Metal the race window
+went 44 → 8 compiles, and the post chain's 20 were ssrTag-node churn, not a missing
+warm. What that changes, and what reading the code since showed:
+
+- **The 8 left are all the scene pass** (`present` → `_renderTimed`: 4 modules + 4
+  pipelines), plus one material minted mid-race (census 243 `minted:
+  t,0.9,0,0,0,0,0,1|na` — a transparent, no-alpha-write FX key). A blind
+  "reveal everything" warm is the wrong first move; name the objects first.
+- **`BatchedMesh` is wrong for chunks.** `tlx-chunked.js` `build()` gives every chunk
+  of a record the SAME four vertex attributes (`aPos/aNrm/aCol/aMat`); a chunk is
+  only its own index range. `BatchedMesh.addGeometry` copies vertices per geometry,
+  so it would duplicate the shared buffer once per chunk (the city is ~5 M verts).
+- **Chunks cost twice.** The 36-49 `chunk@512x512` draws in the SwiftShader probe
+  are the SUN pass (`SUN_SIZE` is 512 on software GL, 2048 on a desktop), so every
+  chunk draw saved is saved again on each snap rebuild.
+- `readbackTextureLayers` (`tlx.js:2219`, 223 ms in census 240's profile) is the
+  asset-pack decode — a sync `readPixels` per layer, once at load. Not a race hitch.
+
+### Steps
+
+| # | what | how it is measured | off switch |
+|---|---|---|---|
+| 2a | **Name the 8.** `scratch/compile-attrib-probe.mjs` wraps `Pipelines.getForRender` and logs object / geometry kind / material / target for every sync compile after the warm, on Lavapipe WebGPU and three's WebGL2 | the probe's `lapByWhat` table | — (tooling) |
+| 2b | **Warm exactly those**: per cause — a material minted mid-race → pre-mint its key during the lights; a hidden instanced batch → `visible` for one `compileAsync`; a pass/target not warmed → compile under that target | census `stack:` total → ~0, lights no longer than today | `apex26.tlxWarmMore=0` |
+| 3a | **Chunk census.** Chunks per record, tris per chunk, visible chunks per frame in main and sun passes, three tracks | a probe table in this file | — |
+| 3b | **Bigger cells** — TLX-side override of the 72 m `cellSize` (144 m = ~4x fewer chunks, coarser cull). Cheapest possible A/B | census driven window: CPU frame time, frames ≥ 100 ms, GPU ms (`gpuTimer`) | `apex26.tlxChunkCell=72` |
+| 3c | **Only if 3b's GPU cost is too high: ordered index ranges** — lay each record's index buffer out in track order and draw the visible stretch as 1-3 `drawRange` spans per record, not one mesh per chunk | same | `apex26.tlxChunkRuns=0` |
+| 4 | **Per-pass GPU timestamps** (sun / car / lamp shadow, scene, post) so a CSM or render-bundle decision is made on numbers | `gpuTimer` rows in the census | — |
+| 5 | Async pipelines/codegen (#228 patches 7/8) — **only if 2b leaves hitches, and never with skip-draw semantics** (a fallback material while compiling, never a hole) | census | per patch |
+
+Ordering: 2a and 3a are measurement only and can run together. 2b before 3b so the
+compile noise is gone before judging frame time. Each step is its own commit,
+census A/B'd with its switch, deployed on the user's word.
+
+Dropped: `BatchedMesh` for chunks (above), occlusion queries, GPU-driven indirect
+draws, render bundles before chunks stop toggling visibility per frame.
+
+### 2a answered: the 8 are three FX materials, first drawn together
+
+`scratch/compile-attrib-probe.mjs montreal` (Lavapipe WebGPU, 12 jumps round the lap,
+on the step-1 tree): 18 sync compiles during race load (behind the loading screen),
+13 async in the warm, and on the lap exactly **5 events, all within 5 ms — one frame**:
+
+| material (`customProgramCacheKey`) | geometry | new VS / FS / pipelines |
+|---|---|---|
+| `tlx-fx-pt-mrt` (particles, alpha blend) | 1536-vert particle slot | 1 / 1 / 2 |
+| `tlx-fx-pt-add-mrt` (particles, additive) | 1536-vert particle slot | 0 / 1 / 2 |
+| `tlx-fx-skid-mrt` (skid marks, polygon offset) | 720-vert skid stream | 1 / 1 / 1 |
+
+All three draw into the scene target with the ssrTag MRT. None exists at the warm:
+`drawSkidBatch` / `drawParticles` (tlx.js) only push a record once the first tyre
+mark or puff of smoke/sparks exists, i.e. after the launch. So what is left on
+WebGPU is ONE hitch, the first time marks and particles appear — not scenery, not
+chunks, not a hidden batch. Census 243's 4 modules + 4 pipelines match (3 VS/FS
+pairs less the shared vertex stage, 5 pipelines).
+
+**2b, concretely:** in `startProgramWarm`, after the scene warm and under the same
+target + MRT, `compileAsync` one throwaway `Mesh` per FX material that has not been
+drawn yet (`fx.skidMat`, `fx.particleMats[0/1]`, and for safety `markMat`,
+`glowMat`, `lineMat`) on a geometry with the SAME vertex layout the stream will use
+(`ensureStream(skidStream, n)`, a particle slot), then drop the mesh. Cost: three
+small programs during the lights (tens of ms), no scene reveal, no skip semantics.
+Switch `apex26.tlxWarmFx=0`. Success = the probe's `lapSync` 0 and the census
+`stack:` total 0 on the WebGPU leg.
+
+## 2ai. Plan steps 2b + 3b: the FX warm, single-pass FX, and the chunk draw merge (2026-09-24)
+
+**2b — the last lap compiles.** `warmFxPrograms()` (tlx.js, in `startProgramWarm`
+after the scene warm, under its target + MRT) compiles `skidMat`, both
+`particleMats`, `glowMat` and `lineMat` on a throwaway `Mesh` over each stream's
+real geometry (`ensureStream(stream, 1)`). That fixed the skid marks but the
+particles still built pipelines mid-race: the pipeline-key diff
+(`scratch/compile-attrib-probe.mjs` now logs new cache keys) differed ONLY in the
+side field — warm `2` (DoubleSide), lap `1` then `0`. three draws a transparent
+DoubleSide material as a back pass and a front pass unless `forceSinglePass`, and
+`compileAsync` builds the DoubleSide state. GLX draws every double-sided FX surface
+in ONE pass with culling off, so `fxMaterial` now sets `forceSinglePass` for
+`doubleSided` (particles, glow, driving line, car decals): GLX parity, half the
+draws for those records, and the warm now covers them.
+
+| Lavapipe WebGPU, montreal, 12 jumps | step 1 | + FX warm | + single pass |
+|---|---|---|---|
+| sync compiles on the lap | 5 | 4 (particle pipelines) | **0** |
+| sync compiles during race load | 18 | 19 | 14 (decals: one pipeline, not two) |
+| FX warm stage | — | 82 ms | 55 ms |
+
+Three's WebGL2 path (SwiftShader): lap 0, FX warm 21 ms. Garage luma 43.7 (43.0 /
+44.3 before), race 57.8 (57.7), gpuErrors 0. Switch `apex26.tlxWarmFx=0`.
+
+**3b — the chunk draw merge.** `tlx-chunked.js` `build()` bins triangles into 72 m
+lamp cells as before, then folds each 2 x 2 block into ONE draw chunk (its index is
+the block's cells back to back — the chunks already shared one vertex buffer). The
+lamp table stays on the 72 m cells (`mesh.lampCells`, read by tlx.js's lamp-grid
+bake), because tsl-lit looks lamps up by WORLD cell (`floor(wp / lgCell)`), so a
+merge must not widen the area under the 24-lamp cap. Default merge 2;
+`apex26.tlxChunkMerge=1` is the old shape.
+
+| montreal, Lavapipe WebGPU (`scratch/chunk-merge-probe.mjs`) | merge 1 | merge 2 |
+|---|---|---|
+| chunks (draw records) | 471 | 181 |
+| visible per present at 5 spots | 43 / 173 / 96 / 166 / 140 | 19 / 68 / 40 / 65 / 55 |
+| lamp grid (night) | 471 cells, 2213 entries, cell 72 | identical |
+
+Frozen night frames (`scratch/chunk-merge-diff.mjs`, `park` + `freeze`, three
+spots): merge 1 vs 2 differs on 0.008-0.031 % of pixels, same-page repeat floor
+0.004-0.034 %, luma equal to 0.02 — the same picture. (Unfrozen night luma reads
+moved ±7 between runs from the AI cars' lights; not a finding.) The visible chunk
+count is the scene pass; the sun pass casts the same records, so it drops too.
+Unit tests pin the merge (every triangle once, lamp cells unchanged, default on).
+
+Not measured here: CPU frame time — this box's frame clock is SwiftShader/Lavapipe,
+not a player's. That is the census's job (next push: step 2b + 3b; then
+`ls: apex26.tlxChunkMerge=1` as the A/B).

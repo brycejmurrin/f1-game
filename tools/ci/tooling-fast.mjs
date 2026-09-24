@@ -111,6 +111,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/lamp-chunks.test.mjs",
   "tests/unit/all-lights-fill.test.mjs",
   "tests/unit/lamp-bake.test.mjs",
+  "tests/unit/frame-lights-shed.test.mjs",
   // Sibling of cockpit-pale-surfaces, which moved to test:node-slow for costing
   // 69 s. This one is 2.5 s — 178 differential builds, no rasteriser — so it
   // stays in the edit loop where a cockpit geometry change is actually made.
@@ -330,6 +331,14 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The hitch instrument's own arithmetic (tools/gfx/frame-hitch.mjs), on
   // synthetic series with known answers; gpu-census's driven window imports it.
   "tests/unit/frame-hitch-analyse.test.mjs",
+  // TLX's material cache key is memoised on the opts object; the memo's
+  // failure mode is a STALE key, which returns the wrong material and shows
+  // up only on screen. Fuzzes the real lifted source over every field.
+  "tests/unit/tlx-mat-key-memo.test.mjs",
+  // The coach's rewind clone replaced JSON.parse(JSON.stringify()); restore()
+  // reads back what capture() wrote, so any drift from JSON semantics is a
+  // rewind into a state the car was never in. Tested AGAINST the round trip.
+  "tests/unit/coach-clone.test.mjs",
   "tests/unit/webgpu-lifecycle.test.mjs",
   "tests/unit/wgsl-bindings.test.mjs",
   "tests/unit/renderer-soft-lifecycle.test.mjs",

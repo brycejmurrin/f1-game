@@ -121,3 +121,21 @@ The canary exercises the actual vendored function body: native method preservati
 asynchronous/concurrent completion, both-port cleanup, absence of animation-frame
 waits, and the timer fallback. Unchanged upstream as of r186 and on `dev`
 (2026-09-22). No issue is filed; the draft is `docs/notes/UPSTREAM-THREE-ISSUES.md` §3.
+
+## 6. #34535 `getDynamicCacheKey` allocates an array PER RENDER OBJECT PER FRAME
+
+`hash$1` is `( ...params ) => cyrb53( params )`, so every call mints a rest array, and
+`RenderObject.getDynamicCacheKey()` calls it up to three times. `get needsUpdate()`
+calls `getDynamicCacheKey()` for every render object on every draw, so the arrays are
+(objects × frames) of pure garbage. Measured on the three.js/WebGPU path before the
+patch: 255 KB/frame of JS allocation, 28.4 MB/s, a collection about once a second
+freeing a median 25.8 MB (`tools/gfx/frame-hitch.mjs`).
+
+The fix is upstream's: one module-scope scratch array, filled by index and hashed with
+`hashArray` (already in the bundle). The key VALUE changes — a flat hash of five slots
+replaces three nested hashes — which is safe because this method is the key's only
+producer and every consumer compares its output to itself. First carried by #228;
+re-landed alone after its revert (the revert's black screen came from the skip-draw
+patches 7 and 8, which stay out — PERF-FINDINGS §2af).
+
+Upstream: PR #34553 (issue #34535), milestone r187 — RETIRE THIS ON THE r187 BUMP.
