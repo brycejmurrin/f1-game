@@ -74,15 +74,14 @@ function cornerPose(track, n) {
   const count = (track._fbCorners || []).length;
   if (!count) return null;
   const k = ((((n | 0) - 1) % count) + count) % count + 1;
-  const s = FlybySeq.cornerS(track, k), side = FlybySeq.cornerSide(track, k) || 1;
-  const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0] };
-  Tracks.sample(track, s, smp);
-  const p = smp.p, r = smp.r, t = smp.t;
-  return {
-    n: k, count,
-    eye: [p[0] + r[0] * side * CN_OUT - t[0] * CN_BACK, p[1] + CN_UP, p[2] + r[2] * side * CN_OUT - t[2] * CN_BACK],
-    target: [p[0], p[1] + 1, p[2]],
-  };
+  // Through the FLYBY PLANNER, as a held one-frame shot: the same fence cap,
+  // step-in, tree and building clearance the loading screen's corner shots
+  // get. A raw point 30 m out landed inside Monza's pine canopy.
+  const eye = { at: "corner", n: k, off: -CN_BACK, x: CN_OUT, y: CN_UP }, look = { at: "corner", n: k, off: 0, x: 0, y: 1 };
+  const v = FlybySeq.solve(track, 0, [{ id: "snap", dur: 1, ease: "linear", eye: [eye, eye], look: [look, look], fov: [50, 50] }]);
+  const out = { n: k, count, eye: v.eye.slice(), target: v.tgt.slice() };
+  FlybySeq.reset();   // a borrowed solve must not leave the next loading-screen flyby thinking its first frame is not a cut
+  return out;
 }
 
 /** A pose from FlybySeq.poseFromWorld as a short human line. */

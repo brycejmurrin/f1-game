@@ -50,6 +50,21 @@ const FlybySeq = (function () {
   // tests that check these shots, and a wrong number here is a framing bug, not
   // a crash — the unit test pins them against mesh.js.
   const POLE_BACK = 14, GRID_SPACING = 8, GRID_ROWS = 20;
+  /* THE PLAYER'S OWN SLOT. gridUp() (js/game.js) seats the local player at P12
+     (slot 11) unless a qualifying order exists, and menuGridCars() seats the
+     flyby's field the same way and tells us here — so `{ at: "slot", n:
+     "player" }` is the car the race is about to start from, not a stranger. */
+  const PLAYER_SLOT_DEFAULT = 11;
+  let _playerSlot = PLAYER_SLOT_DEFAULT;
+  function setPlayerSlot(k) { _playerSlot = (k >= 0 && k === (k | 0)) ? k : PLAYER_SLOT_DEFAULT; }
+  function slotIndex(pose) { return pose.n === "player" || pose.n === undefined ? _playerSlot : Math.max(0, pose.n | 0); }
+  /** gridSlot()'s stagger (js/track/core/mesh.js): even slots left, odd right,
+   *  min(0.4 hw, 3) m off the centreline — pinned against mesh.js by the test. */
+  const _gs = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 10 };
+  function slotX(track, k, s) {
+    Tracks.sample(track, s, _gs);
+    return (k % 2 === 0 ? -1 : 1) * Math.min((_gs.hw || 7) * 0.4, 3);
+  }
 
   /* HOW THE FLYBY IS RENDERED, not where it is pointed — and the reason those
    * two live in the same file. The shots are VISTAS: a crane 190 m up looking
@@ -326,6 +341,8 @@ const FlybySeq = (function () {
     if (n === "first") i = roleCorner(track, cs, 0);
     else if (n === "mid") i = roleCorner(track, cs, Math.floor(cs.length * 0.45));
     else if (n === "late") i = roleCorner(track, cs, Math.floor(cs.length * 0.78));
+    else if (n === "slowest" || n === "fastest") i = extremeCorner(track, cs, n === "slowest");
+    else if (n === "lore") { const L = loreCorner(track, cs), slow = extremeCorner(track, cs, true); i = L >= 0 && track._fbFilmable[L] ? L : slow; }
     else i = Math.min(Math.max(1, n | 0), cs.length) - 1;
     const c = cs[Math.min(i, cs.length - 1)];
     return (c && typeof c.f === "number") ? c.f * track.total : 0;
@@ -360,6 +377,34 @@ const FlybySeq = (function () {
     const t = cornerTurn(track, c.f * track.total);
     return t.net >= TURN_MIN && (t.swept <= 1.5 * t.net || t.net >= TURN_CHICANE);
   }
+  /* CORNERS BY CHARACTER. "first/mid/late" are positions; a circuit is known
+     for its hairpin, its flat-out sweep, or the corner the announcer names
+     (js/data/circuit-lore.js `corner`). `slowest`/`fastest` read the measured
+     apex speed (TrackMaps.corners `v`) among FILMABLE corners; `lore` pulls
+     "Turn N" out of the lore line and falls back to the slowest. All three
+     cache like the others (cornerSide keys by n). */
+  function extremeCorner(track, cs, slow) {
+    const ok = track._fbFilmable || (track._fbFilmable = cs.map((c) => filmable(track, c)));
+    let best = -1;
+    for (let k = 0; k < cs.length; k++) {
+      if (!ok[k] || typeof cs[k].v !== "number") continue;
+      if (best < 0 || (slow ? cs[k].v < cs[best].v : cs[k].v > cs[best].v)) best = k;
+    }
+    return best >= 0 ? best : 0;
+  }
+  const NUM_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+    "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty"];
+  function loreCorner(track, cs) {
+    let line = "";
+    try {
+      const L = typeof CircuitLore !== "undefined" && track.def ? CircuitLore.forId(track.def.id) : null;
+      line = (L && L.corner) || "";
+    } catch (_) { line = ""; }
+    const m = /\bturns? (\d+|[a-z]+)\b/i.exec(line);
+    if (!m) return -1;
+    const n = /^\d+$/.test(m[1]) ? +m[1] : NUM_WORDS.indexOf(m[1].toLowerCase());
+    return n >= 1 && n <= cs.length ? n - 1 : -1;
+  }
   function roleCorner(track, cs, i) {
     const ok = track._fbFilmable || (track._fbFilmable = cs.map((c) => filmable(track, c)));
     for (let d = 0; d < cs.length; d++) {
@@ -376,6 +421,7 @@ const FlybySeq = (function () {
       case "pole": return wrapS(track, total - POLE_BACK + off);
       case "grid": return wrapS(track, total - POLE_BACK - (GRID_ROWS - 1) * GRID_SPACING + off);
       case "corner": return wrapS(track, cornerS(track, pose.n || 1) + off);
+      case "slot": return wrapS(track, total - POLE_BACK - slotIndex(pose) * GRID_SPACING + off);
       default: return wrapS(track, off);          // "start" — the line is s = 0 by construction
     }
   }
@@ -465,6 +511,8 @@ const FlybySeq = (function () {
   function poseX(track, pose, s) {
     let x = pose.x || 0;
     if (pose.at === "corner" && x) x *= cornerSide(track, pose.n);
+    // A slot pose's x is relative to THAT car, so "x: 0" is right behind it.
+    if (pose.at === "slot") { const k = slotIndex(pose); x += slotX(track, k, wrapS(track, (track.total || 1) - POLE_BACK - k * GRID_SPACING)); }
     if (x && track.def && track.def.street && Tracks.wallAt) {
       const w = Tracks.wallAt(track, s, x > 0 ? 1 : -1);
       if (w > 0 && Math.abs(x) > w + FENCE) x = (x > 0 ? 1 : -1) * (w + FENCE);
@@ -756,14 +804,14 @@ const FlybySeq = (function () {
   const DEFAULT = [
     // ---- establish: where are we -------------------------------------------
     {
-      id: "wide", dur: 0.12, ease: "inOut",
+      id: "wide", dur: 0.11, ease: "inOut",
       eye: [{ at: "centre", bear: -0.30, distR: 1.10, yR: 0.36 },
             { at: "centre", bear: -0.12, distR: 1.00, yR: 0.32 }],
       look: [{ at: "centre", distR: 0, yR: 0 }, { at: "centre", distR: 0, yR: 0 }],
       fov: [36, 38],
     },
     {
-      id: "wide2", dur: 0.10, ease: "inOut",
+      id: "wide2", dur: 0.09, ease: "inOut",
       eye: [{ at: "centre", bear: 2.35, distR: 0.80, yR: 0.30 },
             { at: "centre", bear: 2.55, distR: 0.70, yR: 0.25 }],
       look: [{ at: "centre", distR: 0, yR: 0 }, { at: "centre", distR: 0, yR: 0 }],
@@ -771,14 +819,14 @@ const FlybySeq = (function () {
     },
     // ---- this circuit in particular ----------------------------------------
     {
-      id: "landmark1", dur: 0.11, ease: "inOut",
+      id: "landmark1", dur: 0.10, ease: "inOut",
       eye: [{ at: "landmark", rank: 0, bear: -0.28, distK: 1.7, yK: -0.15, y: 12 },
             { at: "landmark", rank: 0, bear: -0.08, distK: 1.5, yK: -0.1, y: 12 }],
       look: [{ at: "landmark", rank: 0, distK: 0, yK: 0.2 }, { at: "landmark", rank: 0, distK: 0, yK: 0.25 }],
       fov: [38, 40],
     },
     {
-      id: "landmark2", dur: 0.10, ease: "inOut",
+      id: "landmark2", dur: 0.09, ease: "inOut",
       eye: [{ at: "landmark", rank: 1, bear: 0.30, distK: 1.8, yK: -0.1, y: 12 },
             { at: "landmark", rank: 1, bear: 0.10, distK: 1.6, yK: -0.05, y: 12 }],
       look: [{ at: "landmark", rank: 1, distK: 0, yK: 0.15 }, { at: "landmark", rank: 1, distK: 0, yK: 0.2 }],
@@ -786,7 +834,7 @@ const FlybySeq = (function () {
     },
     // ---- the corners you will actually drive --------------------------------
     {
-      id: "turn-first", dur: 0.11, ease: "inOut",
+      id: "turn-first", dur: 0.10, ease: "inOut",
       eye: [{ at: "corner", n: "first", off: -60, x: 16, y: 9 },
             { at: "corner", n: "first", off: 0, x: 18, y: 8 }],
       look: [{ at: "corner", n: "first", off: -12, x: 0, y: 0.6 },
@@ -794,30 +842,29 @@ const FlybySeq = (function () {
       fov: [38, 42],
     },
     {
-      id: "turn-mid", dur: 0.10, ease: "inOut",
-      eye: [{ at: "corner", n: "mid", off: -45, x: 15, y: 8 },
-            { at: "corner", n: "mid", off: 5, x: 17, y: 7 }],
+      id: "turn-mid", dur: 0.09, ease: "inOut",
+      eye: [{ at: "corner", n: "lore", off: -45, x: 15, y: 8 },
+            { at: "corner", n: "lore", off: 5, x: 17, y: 7 }],
       // Aimed THROUGH the corner: at a hairpin the apex is right under a
       // fence-line camera, and aiming at it filmed a kerb from above.
-      look: [{ at: "corner", n: "mid", off: 15, x: 0, y: 0.6 },
-             { at: "corner", n: "mid", off: 55, x: 0, y: 0.6 }],
+      look: [{ at: "corner", n: "lore", off: 15, x: 0, y: 0.6 },
+             { at: "corner", n: "lore", off: 55, x: 0, y: 0.6 }],
       fov: [38, 42],
     },
     {
-      id: "turn-late", dur: 0.10, ease: "inOut",
-      eye: [{ at: "corner", n: "late", off: -35, x: 13, y: 6 },
-            { at: "corner", n: "late", off: 20, x: 14, y: 5 }],
-      look: [{ at: "corner", n: "late", off: 5, x: 0, y: 0.6 },
-             { at: "corner", n: "late", off: 45, x: 0, y: 0.6 }],
+      id: "turn-late", dur: 0.09, ease: "inOut",
+      eye: [{ at: "corner", n: "fastest", off: -35, x: 13, y: 6 },
+            { at: "corner", n: "fastest", off: 20, x: 14, y: 5 }],
+      look: [{ at: "corner", n: "fastest", off: 5, x: 0, y: 0.6 },
+             { at: "corner", n: "fastest", off: 45, x: 0, y: 0.6 }],
       fov: [40, 43],
     },
     // ---- and then the grid you start from ------------------------------------
-    // BOTH GRID SHOTS LOOK FORWARD, deliberately. Seen from ahead of pole the
-    // road's depth bias (js/game.js _wmRoad*, [-8, -16]) lifts the tarmac over
-    // the cars standing on it at that grazing angle, and the whole field
-    // vanishes; from behind it renders. Reframe here only if that is fixed.
+    // The road's slope-scaled depth bias used to hide every car seen from ahead
+    // of pole (fixed in PR #248: the road draws unbiased), so the grid can now
+    // be filmed from the front again.
     {
-      id: "grid-crane", dur: 0.12, ease: "inOut",
+      id: "grid-crane", dur: 0.10, ease: "inOut",
       // A slow crane up behind the back row, long lens: the whole field stacked
       // up towards the lights.
       // On the aisle's line and tight behind the last row: from 6 m left and
@@ -831,17 +878,25 @@ const FlybySeq = (function () {
       fov: [30, 32],
     },
     {
-      id: "grid", dur: 0.14, ease: "inOut",
-      // LOW, UP THE MIDDLE: x: 0 is the centreline, which on a grid is the empty
-      // aisle between the two staggered columns — the camera threads it with a
-      // car either side, and STOPS among the front rows with the start gantry
-      // ahead. The old shot ran on past the line, so its last frame — the one
-      // the race cuts from — looked down an empty straight with the whole field
-      // behind the lens. The cars are placed for these shots by menuGridCars()
-      // in js/game.js; without them they are empty tarmac.
-      eye: [{ at: "grid", off: 60, x: 0, y: 1.2 }, { at: "pole", off: -12, x: 0, y: 1.3 }],
-      look: [{ at: "grid", off: 110, x: 0, y: 0.8 }, { at: "start", off: 40, x: 0, y: 1.2 }],
-      fov: [38, 40],
+      id: "grid-front", dur: 0.11, ease: "inOut",
+      // THE FRONT ROW, FROM THE START LINE, looking back down the grid: pole
+      // big in frame and the field stacked behind it. Close and a little off
+      // the aisle — measured with frame-report across eight circuits, 40+ m
+      // out on a long lens left the cars at 1-2 % of the frame and put the
+      // eye inside Bahrain's and Istanbul's main grandstands.
+      eye: [{ at: "pole", off: 14, x: 3.5, y: 2.2 }, { at: "pole", off: 10, x: 2.5, y: 1.8 }],
+      look: [{ at: "pole", off: -12, x: 0, y: 0.6 }, { at: "pole", off: -12, x: 0, y: 0.6 }],
+      fov: [40, 40],
+    },
+    {
+      id: "grid-mine", dur: 0.12, ease: "out",
+      // YOUR CAR, in the slot the race starts you from (menuGridCars seats the
+      // field as gridUp will, and tells FlybySeq which slot is yours): a low
+      // push-in from two rows back that settles just behind the car, looking
+      // past it at the lights — the frame the race's own camera takes over from.
+      eye: [{ at: "slot", n: "player", off: -22, x: 0, y: 1.9 }, { at: "slot", n: "player", off: -9, x: 0, y: 1.5 }],
+      look: [{ at: "slot", n: "player", off: 6, x: 0, y: 0.9 }, { at: "start", off: 30, x: 0, y: 1.2 }],
+      fov: [36, 40],
     },
   ];
 
@@ -1159,8 +1214,25 @@ const FlybySeq = (function () {
         const p = profileOf(track, a, b);
         if (p.max < best.max - 0.5) { best = p; out = [a, b]; }
       }
+      // A CORNER WALLED IN BY TREES has no clear eye at the fence at any
+      // inset, outset or slide (Mont-Tremblant's turn-late craned 17-21 m up a
+      // pine wood and still looked through canopy). Last resort: drop to the
+      // road's OUTER EDGE, low — nothing grows on the tarmac, and a road-level
+      // camera looks down the tree tunnel at the corner instead of over it.
+      if (best.max > TREE_ROAD && e0.at === "corner" && e1.at === "corner") {
+        const a = roadEdge(e0), b = roadEdge(e1);
+        const p = profileOf(track, a, b);
+        if (p.max < best.max) { best = p; out = [a, b]; }
+      }
     }
     return { eye: out, prof: best.prof };
+  }
+  const TREE_ROAD = 8, EDGE_X = 5.5, EDGE_Y = 3.2;
+  function roadEdge(pose) {
+    const o = Object.assign({}, pose);
+    o.x = (pose.x >= 0 ? 1 : -1) * EDGE_X;
+    o.y = Math.min(pose.y || EDGE_Y, EDGE_Y);
+    return o;
   }
   const NUDGE = [1, -1, 2, -2];
   function nudge(pose, k) {
@@ -1211,6 +1283,34 @@ const FlybySeq = (function () {
     return best;
   }
 
+  /* A DIFFERENT FLYBY EACH LOAD. The same nine shots on the fifth load of a
+     circuit is a loading screen; the same LANGUAGE redrawn is a broadcast.
+     vary() jitters the establishing bearings, sometimes films the second
+     landmark first, sometimes runs a pan the other way, and draws the three
+     corner shots from roles without repeats. The grid finale is fixed — it is
+     the handoff to the race. Pure and seeded (never the sim RNG): the same
+     seed is the same flyby, which is what the test holds it to. */
+  const VARY_ROLES = ["first", "lore", "slowest", "fastest", "mid", "late"];
+  function vary(list, seed) {
+    let h = (seed >>> 0) || 1;
+    const rnd = () => { h ^= h << 13; h >>>= 0; h ^= h >>> 17; h ^= h << 5; h >>>= 0; return h / 4294967296; };
+    const used = {}, swapLm = rnd() < 0.35;   // decided ONCE: swapping one landmark shot alone films the same landmark twice
+    return list.map((shot) => {
+      if (/^grid/.test(shot.id || "")) return shot;
+      const o = JSON.parse(JSON.stringify(shot));
+      const at = o.eye[0] && o.eye[0].at;
+      if (at === "centre") { const j = (rnd() - 0.5) * 0.5; o.eye.forEach((p) => { p.bear = (p.bear || 0) + j; }); }
+      if (at === "landmark" && swapLm) [o.eye, o.look].forEach((a) => a.forEach((p) => { p.rank = (p.rank | 0) === 0 ? 1 : 0; }));
+      if (at === "corner") {
+        const free = VARY_ROLES.filter((r) => !used[r]);
+        const n = free.length ? free[Math.floor(rnd() * free.length)] : o.eye[0].n;
+        used[n] = true;
+        [o.eye, o.look].forEach((a) => a.forEach((p) => { p.n = n; }));
+      } else if (rnd() < 0.4) { o.eye.reverse(); o.look.reverse(); o.fov.reverse(); }
+      return o;
+    });
+  }
+
   /** Called when a run begins, so the first frame of the first shot reads as a
    *  cut and the camera does not glide in from wherever it last was. */
   function reset() { _lastIdx = -1; }
@@ -1219,7 +1319,7 @@ const FlybySeq = (function () {
     solve, reset, clearEye, floorEye, groundAt, insideProp, blockers, isSolid, onRoadPose,
     landmarks, bounds, landmarkScore, lmBase, landmarkFallback, planShot, treeBlockers,
     anchorS, posePoint, cornerS, cornerSide, cornerTurn, lmFace,
-    poseFromWorld, shotFromView, nearestCorner,
+    poseFromWorld, shotFromView, nearestCorner, vary, setPlayerSlot, slotIndex,
     DEFAULT, EASE,
     POLE_BACK, GRID_SPACING, GRID_ROWS, MIN_FILL, MIN_H, FAR, FOG, NEAR, FENCE, REF_S, PAN_MAX,
   };
