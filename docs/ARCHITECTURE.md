@@ -9,9 +9,11 @@ it: three.js r185.1 (TLX backend), Rapier (`debrisworld.js`), Trystero (the
 Nostr room-code rendezvous) and jsQR (the answer-code camera scan). Served as
 static files (GitHub Pages). Every JS file is an IIFE that assigns ONE global.
 
-> This file is the module **contract** — what each module is and what it may
-> assume. For an assessment of how the project is built, what the no-build-step
-> bet costs, and the register of known defects (fixed and deferred), see
+> **New here?** Start with [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) (boot path,
+> layer map, where to edit). This file is the module **contract** — what each
+> module is and what it may assume. Verified defects: [BUGS.md](BUGS.md). For an
+> assessment of how the project is built, what the no-build-step bet costs, and
+> the register of known defects (fixed and deferred), see
 > [notes/ARCHITECTURE-REVIEW.md](notes/ARCHITECTURE-REVIEW.md).
 
 Modules are grouped by domain: `js/render/` (renderers), `js/track/` (the track
@@ -69,7 +71,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_203 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_204 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -281,6 +283,7 @@ _203 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `music-lib.js` | `MusicLib` | tag | MusicLib — bring your own music. |
 | `spotify.js` | `SpotifyMusic` | tag | SpotifyMusic — OPTIONAL, PERSONAL-USE Spotify Premium soundtrack for Apex 26. |
 | `rivals.js` | `RivalAudio` | tag | RivalAudio — the field around you, reduced to the player's TRACK frame for js/audio/engine.js, which owns the sound and deliberately does no track maths. |
+| `car-sfx.js` | `CarSfx` | tag | CarSfx — the player car's contact sounds, reduced to four 0..1 levels for GameAudio.setCarSfx, plus the pit-stop wheel guns on the stop's edges. scrub fronts… |
 | `radio-voice.js` | `RadioVoice` | tag | The radio banner, spoken aloud by the browser's own speech synthesiser. |
 | `announcer.js` | `Announcer` | tag | The pre-race announcer: "Welcome to Apex 26…", read over the loading flyby. |
 | `panel.js` | `AudioPanel` | tag | MUSIC & SOUND panel — the mixer plus the master-sound plumbing. |

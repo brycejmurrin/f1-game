@@ -106,6 +106,22 @@ const TrackSpace = (function () {
     return ((k % n) + n) % n;
   }
 
+  // Inverse of sceneryNode for racing-space defs — used by transformSceneryApi's
+  // along() wrapper so the callback receives AUTHORIZED-frame k and wrapped
+  // helpers (anchor/tree/…) apply sceneryNode once, not twice (BUGS.md S1).
+  function sceneryNodeToAuthored(def, engineNode, count) {
+    const n = Math.max(1, Math.round(count) || 1);
+    const shift = Math.round(sceneryOriginDelta(def) * n);
+    if (scenerySpace(def) !== "racing") {
+      // eng = sourceNodeToRacing(authored) + shift  →  authored ≈ racingNodeToSource(eng - shift)
+      const racing = ((Math.round(engineNode) - shift) % n + n) % n;
+      return racingNodeToSource(def, racing, n);
+    }
+    let k = Math.round(engineNode) - shift;
+    if (lapMirror(def)) k = -k;
+    return ((k % n) + n) % n;
+  }
+
   // The range twin of sceneryFrac. Every SCENERY call site must use this and
   // never range() directly. range() keeps its explicit space parameter because
   // resolve()'s hwZones remap genuinely is source-space by convention, and that
@@ -142,7 +158,7 @@ const TrackSpace = (function () {
   return {
     wrap01, toRacingFrac, toSourceFrac,
     sourceNodeToRacing, racingNodeToSource, sampleSource,
-    scenerySpace, sceneryFrac, sceneryNode, sceneryRange, sceneryOriginDelta, range,
+    scenerySpace, sceneryFrac, sceneryNode, sceneryNodeToAuthored, sceneryRange, sceneryOriginDelta, range,
   };
 })();
 Object.freeze(TrackSpace);

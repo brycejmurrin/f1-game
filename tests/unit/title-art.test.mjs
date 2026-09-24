@@ -21,11 +21,7 @@ const CSS = fs.readFileSync(path.join(ROOT, "css", "menus.css"), "utf8");
 const OPEN = "<!-- @gen-shell:title-art -->";
 const CLOSE = "<!-- @gen-shell:/title-art -->";
 const ART = SHELL.slice(SHELL.indexOf(OPEN) + OPEN.length, SHELL.indexOf(CLOSE));
-// The PORTRAIT drawing: the same mesh through a second camera, its own block.
-const OPEN_TOP = "<!-- @gen-shell:title-art-top -->";
-const CLOSE_TOP = "<!-- @gen-shell:/title-art-top -->";
-const ART_TOP = SHELL.slice(SHELL.indexOf(OPEN_TOP) + OPEN_TOP.length, SHELL.indexOf(CLOSE_TOP));
-const DRAWINGS = [["the landscape drawing", ART], ["the portrait drawing", ART_TOP]];
+const DRAWINGS = [["the landscape drawing", ART]];
 
 test("the art lives in a generated block", () => {
   assert.ok(SHELL.includes(OPEN) && SHELL.includes(CLOSE),
@@ -86,35 +82,22 @@ test("the trail colour comes from a CSS rule, not a presentation attribute", () 
     assert.equal(/<g data-trail[^>]*fill="url\(/.test(block), false,
       `${name}: the trail fill is a presentation attribute again — it will lose to the group rule`);
   }
-  assert.ok(/\)\s*g\[data-trail\]\s*\{[^}]*fill:\s*url\(#tc-trail\)/.test(CSS),
+  assert.ok(/#title-car\)?\s*g\[data-trail\]\s*\{[^}]*fill:\s*url\(#tc-trail\)/.test(CSS),
     "css/menus.css lost the [data-trail] fill rule for the landscape drawing");
-  assert.ok(/#title-car-top g\[data-trail\]\s*\{[^}]*fill:\s*url\(#tc-trail-v\)/.test(CSS),
-    "css/menus.css lost the portrait drawing's own [data-trail] fill rule");
 });
 
-test("the portrait drawing paints from a gradient in its OWN svg", () => {
-  // A paint server inside an svg that is display:none paints nothing when it is
-  // referenced from another svg, and the landscape drawing IS display:none on a
-  // portrait phone. The marks rendered as empty shapes until #tc-trail-v moved
-  // into #title-car-top's own <defs>; the geometry was on screen the whole time.
-  const top = SHELL.slice(SHELL.indexOf('<svg id="title-car-top"'));
-  const own = top.slice(0, top.indexOf("</svg>"));
-  for (const [, id] of ART_TOP.matchAll(/url\(#(tc-[\w-]+)\)/g)) {
-    assert.ok(own.includes(`<linearGradient id="${id}"`),
-      `the portrait drawing references #${id}, which is not defined inside its own svg`);
-  }
-});
-
-test("exactly one drawing is ever rendered", () => {
-  // Both are absolutely positioned in the same slot at z-index -1. If the swap
-  // ever paints both, the portrait phone gets two cars' worth of paint and the
-  // landscape one shows through it.
-  assert.ok(/#title-car-top\s*\{[^}]*display:\s*none/.test(CSS),
-    "#title-car-top does not start hidden");
+test("one drawing serves every shape, laid out per shape", () => {
+  // A second, top-down drawing for tall screens lived beside this one until
+  // 2026-09-24. Once the portrait phone and the tall tablet both took the side
+  // view into their own grid band it was shown nowhere, yet every visitor still
+  // downloaded its 24 KB. Tall shapes turn the full-screen layer off and each
+  // portrait block puts #title-car back in row 3.
+  assert.doesNotMatch(SHELL, /id="title-car-top"|@gen-shell:title-art-top/,
+    "a second title drawing is back in the shell — is anything showing it?");
   assert.ok(/\[data-shape="tall"\]\)? ?#title-car \{ display: none/.test(CSS),
-    "the tall shape does not hide the landscape drawing");
-  assert.ok(/\[data-shape="tall"\]\)? ?#title-car-top \{ display: block/.test(CSS),
-    "the tall shape does not show the portrait drawing");
+    "the tall shape no longer turns off the full-screen art layer");
+  const bands = [...CSS.matchAll(/\[data-shape="tall"\]\) #title-car \{\s*display: block;[^}]*grid-row: 3/g)];
+  assert.equal(bands.length, 2, "the portrait phone and the tall tablet should each put #title-car in row 3");
 });
 
 test("every gradient the art references is defined", () => {

@@ -31,6 +31,15 @@ rendered. Fleet sweep, 52 circuits x 400 samples, before -> after:
 - [x] 0.3 tool commits, the free-camera inverse (`00c2f4e`) and frame-report (`cd0ede2`) cherry-picked
 - [ ] still open: 0.2 items 6 (dead slider ranges), 9 (fence cap between endpoints); mont_tremblant turn-late crane over a pine wood at the fence (20.8 m); sochi turn-mid 12 m over a sparse hull; 0.4
 
+## Done on `claude/flyby-next-ttcaik` (2026-09-24, after #245–#255 shipped as build 10285)
+- **Canopy.** A corner shot whose planned eye still sits in a tree (> 8 m of canopy, Mont-Tremblant `turn-late`) falls back to the road edge (x ±5.5 m, y ≤ 3.2 m). The free-camera corner snap now goes through the planner (`FlybySeq.solve`, one held frame) instead of a raw point 30 m out.
+- **Front-of-grid shot restored** (`grid-front`): from the start line looking back at pole, 40° lens. Safe since #248 unbiased the road. The first draft (40 m out, 26° lens) scored 48 fleet-wide in `frame-report` (cars at 1–2 % of frame); four variants were scored on eight circuits and the closest won (fleet mean 80; the old `grid` shot was 83). Its remaining low scores (Suzuka, Catalunya, Mugello, Madrid…) blame a grandstand: renders show a clear grid, so that is frame-report's axis-aligned grandstand box, not the shot.
+- **No racing line in flyby frames.** `DrivingLine.draw` skips every `cine` frame (editor preview, `__apex.flybyCam`, free-cam's flyby lens); the live loading flyby already ran in `state "menu"`.
+- **Phase 1.1** `grid-mine` ends on the player's car: new `{at:"slot", n:"player"}` anchor; `menuGridCars` seats the player at P12 like the race grid and calls `FlybySeq.setPlayerSlot`.
+- **Phase 1.2** corner roles `slowest` / `fastest` / `lore` (the "Turn N" the circuit lore names, else the slowest; filmable corners only).
+- **Phase 1.3** `FlybySeq.vary(list, seed)`: a different sequence per load (role draw, bearing jitter, landmark swap, reversed moves); the grid close is untouched. Only when the player has no saved shot list.
+- Tests in `tests/unit/flyby-shots.test.mjs` (slot == `gridSlot`, roles, `vary` validity + fleet audit on six seeds, Mont-Tremblant canopy); verified with `frame-report --fleet --diff` (corner shots neutral: turn-mid −0.5, turn-late +0.7) and `flyby.mjs` renders of nine circuits.
+
 ## Next steps (as of 2026-09-24 04:20 UTC)
 
 ### Shipped / in flight
@@ -44,10 +53,10 @@ rendered. Fleet sweep, 52 circuits x 400 samples, before -> after:
 1. **Confirm live.** Pages #35954916425 green → check the live `version.json` / `apex-sha` contains `5269cb5` (deploy-research agent). Only then call it live. If the ci.yml push run goes red, triage with ci-red-triage before touching anything.
 2. **Depth-bias PR.** Read the census Verdict (macOS Metal, Monza: grid visible from ahead on GLX and both TLX legs; no start-line/grid-box z-fight; chevrons on all backends). Then run the TLX gate locally (`gfx-probe --backend three --tlx-webgpu --lavapipe montreal`, and with `--ls apex26.tlxForceHw=env`, 0 `gpuErrors`) and a GLX look at a hilly verge (Spa). Green → open the PR, CI, merge. Red → report the exact failing check; don't loosen anything.
 3. **Follow-up PR.** When the agent reports: review its commits, render the frames it flags (`flyby.mjs --track a,b,c` in one browser), run `deploy.mjs --pr`, merge on green CI.
-4. **After depth bias ships.** Restore the front-of-grid closing shot (looking back at the front row, long lens) and update the stale comment at the grid shots.
+4. ~~**After depth bias ships.** Restore the front-of-grid closing shot (looking back at the front row, long lens) and update the stale comment at the grid shots.~~ Done (above).
 
 ### Then (by value)
-5. **Phase 1 batch** — end on the player's car in its real slot; corners by character (slowest / fastest / the one the announcer names); a varied flyby per load. ~10 game.js lines; logic in `flyby-seq.js`.
+5. ~~**Phase 1 batch**~~ Done (above) — end on the player's car in its real slot; corners by character (slowest / fastest / the one the announcer names); a varied flyby per load. ~10 game.js lines; logic in `flyby-seq.js`.
 6. **Agent tooling** — wrap `frame-report.mjs` as an `apex_frame_report` MCP tool; add a fleet sweep diff; then an auto-search that tunes a shot's parameters against the framing score.
 7. **Free camera MVP** (Phase 5) — pause-card entry, dock, roll, snaps, COPY AS FLYBY POSE, `__apex.freeCam()`. Budget first: game.js, apex.js, shell nodes and CSS classes are all at their ceilings. Merge with the photo-mode kit (4.1).
 8. **Presentation quick wins** — announcer's last line on the grid shot, letterbox, skip hint / shorter flyby for habitual skippers, look presets, start-light grid shots.

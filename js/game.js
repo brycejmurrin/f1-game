@@ -2172,8 +2172,12 @@ function gridUp(preOrder) {
     c.kerbGripSm = 1; c.kerbCueT = 0; c.towing = 0; c.wake = 0;
     clearRacingScratch(c);
     // The launch plan and the pace phase (AiDrive): one hash per car per race,
-    // never a simRnd() draw — the stream's draw count is a contract.
-    const h = DriverRatings.hash32(simSeed() + ":" + i + ":" + c.skill);
+    // never a simRnd() draw — the stream's draw count is a contract. Season /
+    // career round + seasonSeed match armReliability (docs/BUGS.md B6).
+    const hSeed = (typeof Career !== "undefined" && Career.inCareer && Career.inCareer())
+      ? Career.seasonSeed() : simSeed();
+    const hRound = isChampionship() ? SeasonCal.drawRound(season) : raceIndex;
+    const h = DriverRatings.hash32(hSeed + ":" + hRound + ":" + i + ":" + c.skill);
     c.launch = c.human ? null : AiDrive.launchPlan(AiDrive.traits(c), (h & 0xffff) / 65536);
     c.launchOn = !c.human; c.phaseRoll = (h >>> 16) / 65536;
     c.tyreClass = c.human ? null : AiDrive.tyreClass(((h >>> 8) & 0xffff) / 65536, lapsTarget);   // the compound IS the strategy
@@ -2381,6 +2385,7 @@ function _loadTrackBody(idx, def) {
     // resident at once. loadTrack is synchronous, so nothing can observe the
     // null between here and the assignment below.
     track = null;
+    if (typeof LampBake !== "undefined") LampBake.reset();   // its cache holds the old track + atlas too
     // Pass the active backend so tracks.js builds its meshes through the façade
     // (opts.gfx) instead of reaching the GLX global directly. On the explicit
     // or fallback WebGL2 path gfx===GLX; on TLX/WGX it is that backend
@@ -2461,6 +2466,22 @@ function reloadFlybyShots() {
 // prevents late scenery downloads (including A -> B -> A) from committing.
 const _menuGate = { warm: 0, generation: 0, ready: "", track: null };
 let flybyBuildTimer = 0;
+const MENU_IDLE_MS = 1200;
+let _menuInputAt = 0;
+for (const ev of ["pointerdown", "keydown"])
+  addEventListener(ev, () => { _menuInputAt = performance.now(); }, { capture: true, passive: true });
+// Resolves true once the menu has had MENU_IDLE_MS without a tap or key (false
+// if the selection moved on meanwhile): the build and the warm frames each hold
+// the main thread for seconds, so they wait for the player's hands to stop.
+const menuSlice = () => new Promise((r) => setTimeout(r, 32));
+async function menuIdle(current) {
+  for (;;) {
+    const wait = MENU_IDLE_MS - (performance.now() - _menuInputAt);
+    if (wait <= 0) return current();
+    await new Promise((r) => setTimeout(r, wait));
+    if (!current()) return false;
+  }
+}
 function scheduleFlybyTrack(settle) {
   clearTimeout(flybyBuildTimer);
   const generation = ++_menuGate.generation;
@@ -2480,12 +2501,24 @@ function scheduleFlybyTrack(settle) {
       await ensureScenery(want);
       if (!current()) return;
       if (gfx.warming && gfx.warming()) { flybyBuildTimer = setTimeout(prepare, 100); return; }
+      // Car assets BEFORE the warm frames: prepareMenuCarAssets paces each
+      // car's meshes and livery upload 32 ms apart; a warm frame drawn first
+      // minted and uploaded all ~22 atlases in one 3-4 s task.
       if (_menuGate.ready === key && _menuGate.track === track) {
-        _menuGate.warm = 2; await prepareMenuCarAssets(current); return;
+        await prepareMenuCarAssets(current); if (await menuIdle(current)) _menuGate.warm = 2; return;
       }
+      // The build holds the main thread for 1-3 s: never start it while the
+      // player is still working the picker or RACE SETTINGS (a TIME OF DAY step
+      // that crosses dark rebuilds, and every tap then froze the sheet).
+      if (!(await menuIdle(current))) return;
       loadTrack(want);
-      _menuGate.ready = key; _menuGate.track = track; _menuGate.warm = 2;
+      _menuGate.ready = key; _menuGate.track = track;
+      // Its own slice, like each car below: the pit-sign atlas is a 1024^2 canvas.
+      await menuSlice();
+      if (current() && track.meshes && track.meshes.pitSignTex && typeof gfx.uploadTexture === "function")
+        gfx.uploadTexture(track.meshes.pitSignTex);
       await prepareMenuCarAssets(current);
+      if (await menuIdle(current)) _menuGate.warm = 2;
     } catch (e) { if (current()) Log.warn("gfx", "track preparation failed", e); }
   };
   flybyBuildTimer = setTimeout(prepare, settle ? 1500 : 120);
@@ -3039,7 +3072,7 @@ function endRace(forcedOrder) {
     // The fastest lap among the CLASSIFIED finishers — award() pays the
     // 2019–2024 point only when the season format asks for it.
     let fastest = null, fastestT = Infinity;
-    for (const c of order) if (!c.retired && c.best < fastestT) { fastestT = c.best; fastest = c.driverId; }
+    for (const c of fin) if (c.best < fastestT) { fastestT = c.best; fastest = c.driverId; }
     const settles = SeasonCal.award(season, order, fastest) === "race";
     // award() deletes season.qualiOrder when the round scores; the IN-MEMORY
     // classification is that same weekend and goes with it. Left behind, it kept
@@ -3060,6 +3093,7 @@ function endRace(forcedOrder) {
   dbgCam = null;
   buildResults(order);
   els.results.hidden = false;
+  announcer.wrapUp(order, loadingInfo());   // js/audio/announcer.js — the broadcaster's read over the results
 }
 
 let ltStore = null;   // LightStore.create(G), assigned once G exists (below)
@@ -3590,8 +3624,11 @@ function menuGridCars() {
   const rng = _simRngState;
   try {
     makeCars();
-    for (let i = 0; i < cars.length; i++) {
-      const c = cars[i], slot = TrackMesh.gridSlot(track, i);
+    const order = cars.slice(), pi = order.findIndex((c) => c.isPlayer);   // seat the player where the race grid will (P12), for the flyby's grid-mine shot
+    if (pi >= 0) order.splice(Math.min(11, order.length - 1), 0, order.splice(pi, 1)[0]);
+    FlybySeq.setPlayerSlot(order.findIndex((c) => c.isPlayer));
+    for (let i = 0; i < order.length; i++) {
+      const c = order[i], slot = TrackMesh.gridSlot(track, i);
       c.s = wrapS(slot.s); c.x = slot.x; c.xVis = c.x;
       const w = worldFromTrack(c.s, c.x, smp);
       c.px = w.x; c.pz = w.z;
@@ -3620,6 +3657,7 @@ function raceIntro(go) {
   // And fly the shots the EDITOR saved, for the same reason: a list edited in
   // the pause menu is only read here, so every run picks up the latest one.
   reloadFlybyShots();
+  if (!flybyShots) flybyShots = FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0);   // a different flyby each load (never the sim RNG); an editor-saved list plays as authored
   loadingScreen.run(loadingInfo(), go);
 }
 /** WHAT THE LOADING SCREEN DESCRIBES: the circuit about to be raced, this
@@ -3667,6 +3705,7 @@ function drivingLineApi(trk) {
   return _dlApi;
 }
 const rivalAudio = RivalAudio.create(G);   // the field around you, for GameAudio.setRivals
+const carSfx = CarSfx.create(G);           // tyre scrub, lock-up, surface, pit limiter and wheel guns
 // Photo mode (js/camera/photo-cam.js).
 const { updatePhotoCam, enterPhotoMode, exitPhotoMode } = Photomode.create(G);
 // LIGHTING TUNER panel UI (js/lighting/tuner-panel.js).
@@ -4074,6 +4113,7 @@ function update(dt) {
     // The field around you: panned, distance-rolled and Doppler-shifted. Before
     // this there was no opponent audio at all, so a car alongside was silent.
     GameAudio.setRivals(rivalAudio.collect(player));
+    carSfx.update(player);
   }
 }
 
@@ -4796,11 +4836,15 @@ function updateCar(c, dt, ranked) {
       c.cutWarn = (c.cutWarn | 0) + 1;
       if (c.cutWarn >= 4) {
         c.cutWarn = 0;
-        c.penalty += 5;
-        if (c.isPlayer) {
-          const pk = hudProfile === "broadcast" ? "race" : "penalty-hit";
-          announce("+5s TRACK LIMITS PENALTY", 2, pk);
-          if (soundOn) GameAudio.penalty();
+        // Time trial already invalidated the lap on the first counted cut; the
+        // +5s ladder is race classification only (docs/BUGS.md B2 / defect ledger).
+        if (!isTimeTrial()) {
+          c.penalty += 5;
+          if (c.isPlayer) {
+            const pk = hudProfile === "broadcast" ? "race" : "penalty-hit";
+            announce("+5s TRACK LIMITS PENALTY", 2, pk);
+            if (soundOn) GameAudio.penalty();
+          }
         }
       } else if (c.isPlayer) {
         // The n/4 count is the race ladder's; in a time trial the lap is simply gone.
@@ -4896,7 +4940,7 @@ function updateCar(c, dt, ranked) {
       const zk = Math.round(c.s + _atk.toTurnIn);
       if (zk !== c.zoneKey) {
         c.zoneKey = zk;
-        if (!c.errT && !alongO && DriverRatings.hash32(simSeed() + ":" + c.gridPos + ":" + c.lap + ":" + zk) / 4294967296 < AiDrive.mistakeChance(aiT, c.pressT / 6, dd.err)) { c.errT = AiDrive.mistakeTotal(); c.errCount = (c.errCount || 0) + 1; }
+        if (!c.errT && !alongO && DriverRatings.hash32(((typeof Career !== "undefined" && Career.inCareer && Career.inCareer()) ? Career.seasonSeed() : simSeed()) + ":" + (isChampionship() ? SeasonCal.drawRound(season) : raceIndex) + ":" + c.gridPos + ":" + c.lap + ":" + zk) / 4294967296 < AiDrive.mistakeChance(aiT, c.pressT / 6, dd.err)) { c.errT = AiDrive.mistakeTotal(); c.errCount = (c.errCount || 0) + 1; }
       }
     } else c.zoneKey = -1;
     c.wheelLock = AiDrive.mistakePhase(c.errT) === 1 && braking ? 1 : 0;   // the render freezes the fronts
@@ -7138,7 +7182,7 @@ function render(dt) {
     // Paint-mode tails only: emitting tails ride the live loop, whose diffuse
     // (lampSh - bakeW) would erase their unbaked pool on the road.
     if (LT.lampBake > 0 && gfx.hasLampBake && !(LT.tailLightEmit > 0)) {
-      frame.lampBake = LampBake.forTrack(track, track._lights, LT.lampNearClamp);
+      frame.lampBake = LampBake.forTrack(track, track._lights, LT.lampNearClamp, undefined, false, LampBake.budget(gfx));
       frame.lampBakeScale = _floodRGB;
     }
     // PER-CHUNK LAMPS (experimental): hand the renderer the FULL baked lamp list
@@ -7339,7 +7383,8 @@ function render(dt) {
   if (state !== "menu") skids.draw(gfx, camEye);
   // The DRIVING LINE ribbon rides the same state as the skids (on the road, no
   // depth write). Drawn against the PLAYER's speed for the dynamic colour.
-  if (state !== "menu" && track && player) DrivingLine.draw(gfx, drivingLineApi(track), Math.abs(player.speed));
+  // Never in a flyby frame (`cine`: the editor preview, flybyCam, free-cam's flyby lens).
+  if (state !== "menu" && !cine && track && player) DrivingLine.draw(gfx, drivingLineApi(track), Math.abs(player.speed));
 
   // cars — skip AI cars more than 550 m of track arc from the player (past fog)
   // Cockpit view doesn't draw the car you're sitting in: a first-person RIG
@@ -8690,9 +8735,15 @@ els.resNext.onclick = () => {
 function setPaused(p) {
   if (state !== "race" && state !== "count") return; hideCamPicker();
   paused = p;
-  if (!p) { closeLightTuner(false); closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode(); }
+  if (!p) {
+    closeLightTuner(false); closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();
+    // closeSettings disarms key/pad slots AND the wheel wizard (beginAxisCapture
+    // zeroes the pad every frame while armed). Hiding #pmsettings alone left
+    // capture live after HUD OFF / RECALIBRATE / RESUME — sibling of the
+    // 2026-09-22 Escape-path fix.
+    closeSettings();
+  }
   els.pausemenu.hidden = !p;
-  if (!p) els.pmsettings.hidden = true;   // never leave the settings sub-menu up after resume
   if (els.pmStandings) els.pmStandings.hidden = !(isChampionship() && SeasonCal.hasProgress(season) && season.round < SeasonCal.rounds());
   // never leave an overlay up after resume
   if (!p) { $("advanced").hidden = true; els.howtoplay.hidden = true; $("audioset").hidden = true; $("standings").hidden = true; $("track-detail").hidden = true; $("quali").hidden = true; els.results.hidden = true; }
@@ -8759,6 +8810,7 @@ els.pmStandings && (els.pmStandings.onclick = () => { buildStandings(); $("stand
 // STEERING INPUT: one row, ‹ TILT | BUTTONS | TOUCH › (was a button cycling the three).
 const STEER_MODES = ["tilt", "buttons", "touch"];
 function setSteerMode(mode) {
+  if (STEER_MODES.indexOf(mode) < 0) mode = "buttons";
   steerMode = mode;
   store.set("steerMode", mode);
   Input.setSteerMode(mode);

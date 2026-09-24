@@ -13,13 +13,14 @@ drives it.
 | # | Read | Why, and how much |
 |---|---|---|
 | 1 | [`../AGENTS.md`](../AGENTS.md) | The rules. Every flat prohibition lives there and nowhere else. Read the whole thing — it is deliberately short. |
-| 2 | [ARCHITECTURE.md](ARCHITECTURE.md) | The module map, the `G` façade, the game loop, and the three renderers behind one seam. Skim the generated module index; read the section for the directory you are about to edit. |
-| 3 | [TESTING.md](TESTING.md) §1-2 | How to run tests without burning an hour, and which GROUP your change needs. §5 is a lookup table, not reading. |
-| 4 | the area doc | One of the seven below. Load it only when the task touches its area. |
-| 5 | the skill | `.claude/skills/README.md` picks it; the skill drives the tools. |
+| 2 | [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) | **New contributors start here** — boot path, layer map, data flow, where to edit what. Ten-minute read. |
+| 3 | [ARCHITECTURE.md](ARCHITECTURE.md) | The module **contract**, the `G` façade, the game loop, and the three renderers behind one seam. Skim the generated module index; read the section for the directory you are about to edit. |
+| 4 | [TESTING.md](TESTING.md) §1-2 | How to run tests without burning an hour, and which GROUP your change needs. §5 is a lookup table, not reading. |
+| 5 | the area doc | One of the seven below. Load it only when the task touches its area. |
+| 6 | the skill | `.claude/skills/README.md` picks it; the skill drives the tools. |
 
 **If you are a person** reading to understand the game: [`../README.md`](../README.md)
-→ [ARCHITECTURE.md](ARCHITECTURE.md) → [PHYSICS.md](PHYSICS.md) or
+→ [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) → [ARCHITECTURE.md](ARCHITECTURE.md) → [PHYSICS.md](PHYSICS.md) or
 [CAREER.md](CAREER.md) → [TESTING.md](TESTING.md) §1.
 
 ## The area docs (load one on demand)
@@ -29,12 +30,15 @@ drives it.
 | [PHYSICS.md](PHYSICS.md) | The driving model and its tuning variables, combined slip, active aero / X-mode, the overtake gate, and the world-space rigid-body authority. **Two rules bind everywhere** — see `AGENTS.md` §Physics. |
 | [CAREER.md](CAREER.md) | Career mode: the flow/session axes, the six `apex26.career.<flavour>.N` save slots, driver ratings, the economy and R&D gate, qualifying, reliability — and the 12-category upgrade catalog with its measured ERS/aero tables. |
 | [SCENERY-API.md](SCENERY-API.md) | The `scenery(api)` callback — buildings, props, barriers, terrain anchoring — how props seat on the terrain ribbon (the float/clip audits), and the checklist for migrating a circuit onto the shared foundation. |
+| [SCENERY-AND-TRACK-BUILD.md](SCENERY-AND-TRACK-BUILD.md) | **Track/scenery build pipeline** — load order, `buildProps` layers, frames/shift traps, and accuracy levers (per-circuit vs shared generators). Start here before dressing a circuit. |
 | [MULTIPLAYER.md](MULTIPLAYER.md) | The `js/net/` wire: transport channels, the packed invite SDP, Nostr/room-code rendezvous, snapshots and interpolation, and who owns which car. |
 | [LIGHTING.md](LIGHTING.md) | Light-record layout, shader uniforms, time-of-day branches, track lamps; every hand-tuned constant and how to A/B it; the per-track × time-of-day × weather presets. |
 | [UI-MAP.md](UI-MAP.md) | The title-to-race navigation web, mode-specific flows, Settings values, How to Play anchors, all 15 Garage tabs and pause actions, plus the source-backed inventory of `UiLayers`, major DOM IDs and CSS entrypoints. |
 | [COMPONENTS.md](COMPONENTS.md) | Every class family in `css/`, the file that owns it, which classes are defined in more than one file — plus the screen x viewport layout axes and what the layout probe measures. |
 | [CODE-STANDARDS.md](CODE-STANDARDS.md) | The JavaScript house style: module shape, naming, declarations, functions, duplication, and the comment policy — plus the frozen surfaces a style pass must never rename. |
 | [PLATFORM.md](PLATFORM.md) | iOS/Safari quirks, controller support, and what a static GitHub Pages host does and does not give you. |
+| [BUGS.md](BUGS.md) | Current verified open/fixed shortlist from architecture/bug-hunt passes (not the full chronological ledger). |
+| [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) | Contributor orientation: boot, layers, data flow, edit map (complements the full contract in ARCHITECTURE.md). |
 
 ## Agent surface and hooks
 
@@ -56,6 +60,7 @@ anything in here.
 | Note | What it records |
 |---|---|
 | [notes/PERF-FINDINGS.md](notes/PERF-FINDINGS.md) | **Start at §0: which instrument answers which perf question, and the three that lie on this box.** Then the four-way audit: what was measured, taken, reverted, and the recorded negative results. Its real content is which KINDS of finding survived measurement. |
+| [notes/TLX-PERF-PLAN.md](notes/TLX-PERF-PLAN.md) | The working plan for the three.js backend's remaining per-frame costs (night lamp shadow, godray chain, draw records, post materials): steps, status, switches and checks. Results land in PERF-FINDINGS. |
 | [notes/AGENT-MEMORY.md](notes/AGENT-MEMORY.md) | The three memory stores (instructions, subagent memory, auto memory), why auto memory was off in cloud sessions, and how `memory-sync.sh` makes it persist. |
 | [notes/TESTING-FIELD-NOTES.md](notes/TESTING-FIELD-NOTES.md) | The operational field notes carved out of `TESTING.md`: boot walls on this box, the two-worker factor, the instruments that lie here, the real-GPU runs. Cited from `AGENTS.md` as "TESTING field notes". |
 | [notes/UPSTREAM-THREE-ISSUES.md](notes/UPSTREAM-THREE-ISSUES.md) | Draft issue bodies for the three local three.js patches (swizzle gate, WGSL `var<private>` scope, `yieldToMain` fallback) — none is filed upstream as of 2026-09-22; post, then put the URLs in `vendor/three-0.186.0/PATCHES.md` and `patches.mjs`. |

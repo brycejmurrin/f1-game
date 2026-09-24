@@ -273,7 +273,17 @@ const GameStore = (function () {
       try { t = db.transaction(MIRROR_STORE, "readwrite"); } catch (e) { res(false); return; }
       const os = t.objectStore(MIRROR_STORE);
       for (const [k, e] of batch) {
-        if (e.v === null) os.delete(k); else os.put({ k, v: e.v, lsOk: e.lsOk });
+        if (e.v === null) { os.delete(k); continue; }
+        // Cross-tab: a quota-refused (lsOk:false) row is the only durable copy
+        // of a newer save. A peer tab that never saw storage events can still
+        // flush lsOk:true with an OLDER value — refuse that downgrade (BUGS.md B5).
+        // Same payload with lsOk:true is fine (boot healed the disk and agrees).
+        const getReq = os.get(k);
+        getReq.onsuccess = () => {
+          const prev = getReq.result;
+          if (prev && prev.lsOk === false && e.lsOk === true && e.v !== prev.v) return;
+          os.put({ k, v: e.v, lsOk: e.lsOk });
+        };
       }
       t.oncomplete = () => { mirror.flushed += batch.size; res(true); };
       t.onerror = t.onabort = () => { res(false); };

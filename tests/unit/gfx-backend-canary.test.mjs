@@ -3191,8 +3191,14 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   // shadow-pool slot the new track did not refill kept an old chunk alive.
   const sh = read("js/render/three/tlx-shadow.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(sh, /const parkedGeo = new THREE\.BufferGeometry\(\)/, "one shared empty geometry for parked wrappers");
-  assert.match(sh, /for \(let i = used; i < pool\.length; i\+\+\) \{ pool\[i\]\.visible = false; pool\[i\]\.geometry = parkedGeo; \}/,
+  // One pool per target since 2026-09-24 (PERF-FINDINGS §2ak): endPass parks
+  // the slots this target stopped using, and beginPass parks the slots the
+  // previous target's pass showed — both release geometry, not only hide.
+  assert.match(sh, /for \(let i = used; i < cur\.prevUsed; i\+\+\) \{ pool\[i\]\.visible = false; pool\[i\]\.geometry = parkedGeo; \}/,
     "endPass must release the discrete casters' geometry, not only hide them");
+  assert.match(sh, /for \(let i = 0; i < shown\.prevUsed; i\+\+\) \{ shown\.pool\[i\]\.visible = false; shown\.pool\[i\]\.geometry = parkedGeo; \}/,
+    "a pass parks the other target's shown casters, so a target that never runs again pins nothing");
+  assert.match(sh, /const pools = new Map\(\);/, "one caster pool per shadow target");
   // Instanced casters are keyed one per batch (a slot pool recompiled programs
   // mid-race); freeing the batch must release its caster and geometry.
   assert.match(sh, /const iByBatch = new Map\(\)/, "instanced casters are keyed per batch, not a slot pool");
@@ -4510,6 +4516,7 @@ test("TLX defers resize during compilation and applies the latest requested size
   let cssW = 1136, cssH = 524, presentW = 1704, presentH = 786, W = 852, H = 393;
   let renderScale = 0.5, _softReadEpoch = 0, _softReadQueued = null;
   let _gpuLastResize = null, _gpuLastOperation = "compile-scene";
+  let _glMaxDim = -1;   // resize()'s once-per-device WebGL2 texture ceiling
   const DPR_CAP = 1.5;
   const window = { innerWidth: 1100, innerHeight: 500, devicePixelRatio: 3 };
   const _layoutCanvas = { clientWidth: 1100, clientHeight: 500 }, _displayCanvas = null;
@@ -4671,6 +4678,29 @@ test("selector car assets yield per driver, preserve simulation, and cancel stal
   }
 });
 
+test("selector preparation waits for the player's hands before the build and the warm frames", async () => {
+  // A TIME OF DAY step that crosses dark rebuilds the circuit (1-3 s on the
+  // main thread) and the warm frames that follow upload and compile for seconds
+  // more; both ran 120 ms after the tap, so the RACE SETTINGS sheet froze under
+  // the player's next tap (2026-09-24). Both now wait for MENU_IDLE_MS of quiet.
+  const src = read("js/game.js");
+  const body = fnBody(src, "scheduleFlybyTrack");
+  assert.match(body, /if \(!\(await menuIdle\(current\)\)\) return;\s*loadTrack\(want\);/,
+    "the build waits for an idle menu");
+  assert.equal((body.match(/if \(await menuIdle\(current\)\) _menuGate\.warm = 2;/g) || []).length, 2,
+    "both paths arm the warm frames only after the car assets, on an idle menu");
+  assert.doesNotMatch(body, /_menuGate\.warm = 2;\s*await prepareMenuCarAssets/, "warm frames never precede the paced car assets");
+  const idle = eval("(function(){ let _menuInputAt = 0; const MENU_IDLE_MS = 1200; let now = 0;" +
+    " const performance = { now: () => now }; const waits = [];" +
+    " const setTimeout = (fn, ms) => { waits.push(ms); now += ms; fn(); };" +
+    src.match(/async function menuIdle\(current\) \{[\s\S]*?\n\}/)[0] +
+    " return { menuIdle, waits, tap: (t) => { _menuInputAt = t; now = t; } }; })()");
+  idle.tap(5000);
+  assert.equal(await idle.menuIdle(() => true), true);
+  assert.deepEqual(idle.waits, [1200], "a tap pushes the build a full idle window out");
+  assert.equal(await idle.menuIdle(() => false), false, "a stale selection never builds");
+});
+
 test("selector preparation rejects stale requests, reuses the world, and waits for compilation", async () => {
   const _menuGate = { warm: 0, generation: 0, ready: "", track: null };
   let flybyBuildTimer = 0, trackIdx = 0, raceTimeOfDay = "default", raceWeather = "dry";
@@ -4682,6 +4712,9 @@ test("selector preparation rejects stale requests, reuses the world, and waits f
   const clearTimeout = id => timers.delete(id);
   const gfx = { warming: () => compiling }, Log = { warn() {} };
   const prepareMenuCarAssets = async () => {};
+  // The idle gate and the upload slice are module-level policy (tested below);
+  // here the player is idle and a slice is immediate.
+  const menuIdle = async (current) => current(), menuSlice = async () => {};
   const ensureScenery = id => new Promise(resolve => requests.push({ id, resolve }));
   const loadTrack = id => { builds.push(id); track = { id }; };
   const schedule = eval("(function(settle){" + fnBody(read("js/game.js"), "scheduleFlybyTrack") + "})");
@@ -4777,4 +4810,77 @@ test("TLX FX: double-sided FX draw in ONE pass and their programs warm on the st
   assert.match(fnBody(tlx, "startProgramWarm"), /await warmFxPrograms\(\);\s*await warmLateLit\(\);/, "startProgramWarm runs the FX warm, then the late lit variants");
   assert.match(tlx, /const _LATE_LIT = \[\{ roughness: 0\.9, specular: 0, noAlphaWrite: true, alpha: 0\.5 \}\]/,
     "the brake-ring transparent variant (census 245 minted t,0.9,0,0,0,0,0,1|na) is pre-minted during the lights");
+});
+
+test("lamp shadow: the player takes the AI cars' lamp-radius bound in BOTH the key and the cast (TLX-PERF-PLAN L0)", () => {
+  // Hashed and cast unconditionally, the player changed the key every 0.25 m, so a
+  // night drive rebuilt the whole static prop set 30-60 times a second even far
+  // outside the lamp's reach. The key must cover exactly the set the pass draws.
+  const sp = code("js/render/shared/shadow-pass.js");
+  const lamp = fnBody(sp, "lampPass");
+  assert.match(lamp, /const _playerIn = _hasLivePlayerShadow && \(_pdx \* _pdx \+ _pdy \* _pdy \+ _pdz \* _pdz\) <= _lsR2;/,
+    "the player is tested against the same _lsR2 as the AI casters");
+  assert.match(lamp, /if \(_playerIn && G\.player && G\.player\.px != null\) \{/, "the key hashes the player only when it is cast");
+  assert.match(lamp, /if \(_playerIn\) G\.gfx\.castShadow\(deps\.teamMesh\(G\.player\.team, G\.player, true\), _livePlayerShadowMat\);/,
+    "the cast draws the player only when it is within reach");
+  assert.doesNotMatch(lamp, /if \(_hasLivePlayerShadow\) G\.gfx\.castShadow/, "no unconditional player cast left in the lamp pass");
+});
+
+test("lamp static map: car-only rebuilds copy the static props depth and draw the cars alone (TLX-PERF-PLAN L1)", () => {
+  const sh = code("js/render/three/tlx-shadow.js");
+  // WebGPU cannot copyTextureToTexture a depth24plus texture: both lamp targets
+  // carry depth32float when the static map is on.
+  assert.match(sh, /if \(floatDepth\) depthTexture\.type = THREE\.FloatType;/);
+  assert.match(sh, /const lampRT = isMobile \? null : makeDepthTarget\(LAMP_SIZE, "TLXLampShadow", false, lampStaticOn\);/);
+  assert.match(sh, /const lampStaticRT = lampStaticOn \? makeDepthTarget\(LAMP_SIZE, "TLXLampStatic", false, true\) : null;/);
+  // The car-only pass: copy first, then draw onto the copied depth with the clear off,
+  // and autoClear restored in a finally so a throwing caster cannot leave it off.
+  const cars = fnBody(sh, "lampCarsBegin");
+  assert.match(cars, /renderer\.copyTextureToTexture\(lampStaticRT\.depthTexture, lampRT\.depthTexture\)/);
+  assert.match(cars, /!_lampStaticValid \|\| !_lampRendered\) return false;/, "no copy before a valid static map AND a rendered lampRT");
+  const end = fnBody(sh, "endPass");
+  assert.match(end, /if \(keepDepth\) renderer\.autoClear = false;/);
+  assert.match(end, /finally \{ renderer\.autoClear = autoClear0; \}/);
+  // shadow-pass: cars-only on a car-only change, the full pass otherwise, and the
+  // static map refreshed after every full pass (a lamp change or the first).
+  const lamp = fnBody(code("js/render/shared/shadow-pass.js"), "lampPass");
+  assert.match(lamp, /const _carsOnlyPass = _carOnly && G\.gfx\.lampCarsBegin && G\.gfx\.lampCarsBegin\(_mFlVP, flBest\);/);
+  assert.match(lamp, /if \(!_carsOnlyPass\) G\.gfx\.lampShadowBegin\(_mFlVP, flBest\);/);
+  assert.match(lamp, /if \(!_carsOnlyPass && G\.gfx\.lampStaticBegin && G\.gfx\.lampStaticBegin\(_mFlVP\)\) \{/);
+});
+
+test("godray: lamp beams alone take one blur pair, sun shafts keep two, on TLX and GLX alike (TLX-PERF-PLAN G1)", () => {
+  // The second H+V pair removes the sun march's shadow-slice stripes; a lamp
+  // cone has none, so night frames with only lamp beams skip it: -2 half-res
+  // passes. One backend-neutral knob, apex26.grLite=0, restores two pairs.
+  const tlx = code("js/render/three/tlx-post.js"), glx = code("js/render/glx/post.js");
+  for (const [name, src] of [["tlx-post", tlx], ["glx/post", glx]]) {
+    assert.match(src, /const grPairs = \(!sunGR && _grLite\) \? 1 : 2;/, name + ": one pair only without sun shafts");
+    assert.match(src, /for \(let bp = 0; bp < grPairs; bp\+\+\)/, name + ": the blur loop runs grPairs");
+    assert.match(src, /_grLite = localStorage\.getItem\("apex26\.grLite"\) !== "0"/, name + ": the shared knob");
+  }
+});
+
+test("TLX draw records are pooled, one fixed shape, reset through resetRecs (TLX-PERF-PLAN R1)", () => {
+  const src = read("js/render/three/tlx.js");
+  const stripped = code("js/render/three/tlx.js");
+  assert.doesNotMatch(stripped, /drawList\.push\(\{/, "no per-draw object literal left");
+  assert.equal((stripped.match(/drawList\.length = 0/g) || []).length, 1, "the one raw reset is inside resetRecs");
+  assert.ok((stripped.match(/resetRecs\(\);/g) || []).length >= 4, "begin, env-soft exit, env face end and present tail all reset through resetRecs");
+  // Run the real pool: a slot reused by an FX record must not carry the previous
+  // lit draw's emissive/alpha (acquireMesh tests `!== undefined`), and a reset
+  // must drop every reference the slot held.
+  const a = src.indexOf("const _recPool = [];"), b = src.indexOf("drawList.length = 0;", a);
+  const end = src.indexOf("}", b) + 1;
+  const drawList = [];
+  const lib = new Function("drawList", src.slice(a, end) + "; return { pushRec, resetRecs, pool: () => _recPool };")(drawList);
+  lib.pushRec("G1", "M1", "MAT1", 0.7, 0.4, 1, null, null);
+  const slot = drawList[0];
+  lib.resetRecs();
+  assert.equal(drawList.length, 0);
+  assert.equal(slot.geo, null); assert.equal(slot.mat, null); assert.equal(slot.m, null);
+  lib.pushRec("G2", null, "FXMAT", undefined, undefined, 0, null, null);
+  assert.equal(drawList[0], slot, "the slot is reused");
+  assert.equal(slot.em, undefined); assert.equal(slot.al, undefined); assert.equal(slot.lg, 0);
+  assert.deepEqual(Object.keys(slot), ["geo", "m", "mat", "em", "al", "lg", "chunked", "instanced"], "one fixed shape");
 });

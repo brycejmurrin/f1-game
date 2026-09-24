@@ -438,8 +438,19 @@ const ShadowPass = (function () {
             // coarser than the physics jitter of a stationary car. A parked field
             // therefore holds one key indefinitely and costs no rebuilds at all,
             // which is strictly cheaper than the 12 m cell it replaces.
+            // THE PLAYER TAKES THE SAME BOUND AS THE AI CARS (TLX-PERF-PLAN L0). It
+            // was hashed and cast unconditionally, so while driving at night the key
+            // changed every 0.25 m and the whole static prop set was re-culled,
+            // re-packed and redrawn ~30-60 times a second even with the player far
+            // outside this lamp's reach. The cast-loop argument below holds for the
+            // player exactly as for an AI car: beyond rad + 8 its shadow can only
+            // fall on fragments this lamp does not light. Position from the same
+            // resolved transform the cast uses (game.js fills it before both passes).
+            const _pm = _livePlayerShadowMat;
+            const _pdx = _pm[12] - _lx, _pdy = _pm[13] - _ly, _pdz = _pm[14] - _lz;
+            const _playerIn = _hasLivePlayerShadow && (_pdx * _pdx + _pdy * _pdy + _pdz * _pdz) <= _lsR2;
             let _carKey = 0;
-            if (_hasLivePlayerShadow && G.player && G.player.px != null) {   // px/pz are scalars, not a vec
+            if (_playerIn && G.player && G.player.px != null) {   // px/pz are scalars, not a vec
               _carKey = ((Math.round(G.player.px * 4) * 31 + Math.round(G.player.pz * 4)) * 31 + 1) | 0;
             }
             for (let i = 0; i < _shadowCount; i++) {
@@ -449,8 +460,8 @@ const ShadowPass = (function () {
               if (_cdx * _cdx + _cdy * _cdy + _cdz * _cdz > _lsR2) continue;
               _carKey = ((_carKey * 31 + Math.round(_cm[12] * 4)) * 31 + Math.round(_cm[14] * 4)) | 0;
             }
-            // The player is cast into this map unconditionally, so while driving the
-            // car half of the key changes every frame and a pure content key would
+            // The player is cast into this map whenever it is within reach, so while
+            // driving under a lamp the car half of the key changes every frame and a pure content key would
             // rebuild at 60 Hz where the old cell key rebuilt at ~5. Bound it: a
             // CAR-ONLY change may be deferred one frame at tier >= 1, which is the
             // one-frame lag this file already takes for AI casters in the sun pass
@@ -485,8 +496,13 @@ const ShadowPass = (function () {
             // walls, the mast pole below the head) is farther out than that.
             M4.perspectiveTo(_mFlProj, fov, 1, 2.5, Math.max(rad, 10));
             M4.mulTo(_mFlVP, _mFlProj, _mFlView);
-            G.gfx.lampShadowBegin(_mFlVP, flBest);
-            if (_hasLivePlayerShadow) G.gfx.castShadow(deps.teamMesh(G.player.team, G.player, true), _livePlayerShadowMat);
+            // CAR-ONLY REBUILD FROM THE STATIC MAP (TLX-PERF-PLAN L1, TLX only): the
+            // lamp is unchanged, so its static props are already in the backend's
+            // static depth map — copy it and draw the cars alone. false = no valid
+            // static map (first pass, a failed copy, GLX/WGX): the full pass below.
+            const _carsOnlyPass = _carOnly && G.gfx.lampCarsBegin && G.gfx.lampCarsBegin(_mFlVP, flBest);
+            if (!_carsOnlyPass) G.gfx.lampShadowBegin(_mFlVP, flBest);
+            if (_playerIn) G.gfx.castShadow(deps.teamMesh(G.player.team, G.player, true), _livePlayerShadowMat);
             // Distance-cull the casters, the twin of the sun pass's _csR above — the
             // comment there notes the field pays the caster cost TWICE at night, and
             // this is the second half. Only 1-3 cars are ever under a lamp, so this
@@ -509,10 +525,20 @@ const ShadowPass = (function () {
               if (_ldx * _ldx + _ldy * _ldy + _ldz * _ldz > _lsR2) continue;
               if (_shadowCars[i] !== G.player) G.gfx.castShadow(deps.teamMesh(_shadowTeams[i], _shadowCars[i], true), _shadowMats[i]);
             }
-            G.gfx.castShadowChunked(G.track.meshes.props, MAT_IDENT);
-            // Lamp pass: cull against the lamp perspective frustum (castCullVP).
-            _castPropBatchesShadow();
+            if (!_carsOnlyPass) {
+              G.gfx.castShadowChunked(G.track.meshes.props, MAT_IDENT);
+              // Lamp pass: cull against the lamp perspective frustum (castCullVP).
+              _castPropBatchesShadow();
+            }
             G.gfx.lampShadowEnd();
+            // A full pass also refreshes the static map (props only, same VP), so
+            // the car-only rebuilds that follow under this lamp can copy it. Only
+            // on a full pass — a lamp change or the first — which is rare.
+            if (!_carsOnlyPass && G.gfx.lampStaticBegin && G.gfx.lampStaticBegin(_mFlVP)) {
+              G.gfx.castShadowChunked(G.track.meshes.props, MAT_IDENT);
+              _castPropBatchesShadow();
+              G.gfx.lampStaticEnd();
+            }
             } // end lamp-shadow snap rebuild
           }
         }

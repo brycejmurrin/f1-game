@@ -48,6 +48,11 @@ const LampBake = (function () {
   // bake/truth 2.49x -> 2.10x, 1.39x -> 1.31x, 1.30x -> 1.27x. 600 k buys
   // 1.15-1.27 m cells (worst 1.50x / 1.16x / 1.15x) at the old 9.6 MB.
   const MAX_TEXELS = 300000;
+  // Desktop spends the old full-bbox memory on resolution instead: 600 k atlas
+  // texels per layer (~9.3 MB, 1.15-1.27 m cells, worst 1.50x / 1.16x / 1.15x
+  // on Monza / Vegas / Singapore). Phones keep the 300 k default (~4.7 MB).
+  const DESKTOP_TEXELS = 600000;
+  function budget(gfx) { return gfx && (gfx.mobileTier || gfx.isMobile) ? MAX_TEXELS : DESKTOP_TEXELS; }
   const MIN_CELL = 1.0;        // metres per texel at best
   const TILE = 32, SLOT = TILE + 2;
   // Atlas slot grid limits: 4096 texels a side (phones) for the w x 2h texture.
@@ -90,7 +95,9 @@ const LampBake = (function () {
   // Where two road stretches share a texel (bridge / crossover) the upper deck
   // wins (put keeps the max); the shaders' height fade hands the lower one to the
   // live loop.
-  function splatRoad(road, x0, z0, cell, put) {
+  // A generator: it yields every 8 centreline segments so a sliced rebake
+  // (forTrack) stays inside SLICE_MS — the whole-track splat was one ~200 ms step.
+  function* splatRoad(road, x0, z0, cell, put) {
     const n = road.n | 0;
     if (!n || !road.px || !road.hw) return;
     const L = road.total > 0 ? road.total : n;
@@ -99,8 +106,14 @@ const LampBake = (function () {
       const j = (k + 1) % n;
       const ax = road.px[k], az = road.pz[k], bx = road.px[j], bz = road.pz[j];
       const seg = Math.hypot(bx - ax, bz - az);
+      if ((k & 7) === 7) yield;
       if (seg > 60) continue;                        // open (non-loop) end or a teleport seam
-      const ns = Math.max(1, Math.ceil(seg / step));
+      // Steps by the OUTER edge's sweep, not the centreline's: on a tight turn
+      // the verge moves up to turn*hw further and left NO_GROUND holes.
+      const hwMax = Math.max(road.hw[k], road.hw[j]) + ROAD_EDGE + cell;
+      const r0 = Math.hypot(road.rx[k], road.rz[k]) || 1, r1 = Math.hypot(road.rx[j], road.rz[j]) || 1;
+      const turn = Math.hypot(road.rx[j] / r1 - road.rx[k] / r0, road.rz[j] / r1 - road.rz[k] / r0);
+      const ns = Math.max(1, Math.ceil((seg + turn * hwMax) / step));
       for (let q = 0; q < ns; q++) {
         const f = q / ns;
         const cx = ax + (bx - ax) * f, cz = az + (bz - az) * f;
@@ -145,16 +158,17 @@ const LampBake = (function () {
     return cnt;
   }
 
-  // Atlas slot grid for `nt` tiles: the fewest slots that fit (then the most
-  // nearly 2:1 slot grid, so the stacked w x 2h texture is roughly square),
-  // within ATLAS_MAX texels a side for the two stacked layers.
+  // Atlas slot grid for `nt` tiles: the smallest LONGEST SIDE of the stacked
+  // w x 2h texture, then the fewest slots. Area-first gave prime tile counts a
+  // 3434x340 strip — over WebGL2's guaranteed 2048 MAX_TEXTURE_SIZE; near-square
+  // wastes a few slots and keeps every fleet atlas well inside it.
   function atlasGrid(nt) {
     let best = null;
     for (let cols = 1; cols <= SLOT_COLS; cols++) {
       const rows = Math.max(1, Math.ceil(nt / cols));
       if (rows > SLOT_ROWS) continue;
-      const area = cols * rows, skew = Math.abs(cols - 2 * rows);
-      if (!best || area < best.area || (area === best.area && skew < best.skew)) best = { cols, rows, area, skew };
+      const area = cols * rows, side = Math.max(cols, 2 * rows);
+      if (!best || side < best.side || (side === best.side && area < best.area)) best = { cols, rows, area, side };
     }
     return best;
   }
@@ -230,6 +244,7 @@ const LampBake = (function () {
       grid = atlasGrid(Math.max(1, nt));
       if ((grid && grid.area * SS <= budget) || nt <= 1) break;
       cell *= 1.02;
+      yield;
     }
     const w = tilesX * TILE, h = tilesY * TILE;
     const cols = grid.cols, atlasW = cols * SLOT, atlasH = grid.rows * SLOT;
@@ -242,7 +257,7 @@ const LampBake = (function () {
     // Global texel (i, j) lives in its own tile's interior and, on a tile edge,
     // in the gutter of the neighbour(s): the splat writes every stored copy.
     const cx = [0, 0, 0, 0], cz = [0, 0, 0, 0];
-    if (road) splatRoad(road, mnx, mnz, cell, (i, j, y) => {
+    if (road) yield* splatRoad(road, mnx, mnz, cell, (i, j, y) => {
       if (i < -1 || j < -1 || i > w || j > h) return;
       const mx = copies(i, tilesX, cx), mz = copies(j, tilesY, cz);
       for (let q = 0; q < mz; q += 2) {
@@ -261,6 +276,7 @@ const LampBake = (function () {
     // bilinear filtering up to ~5x too bright, so it stays on the live loop.
     const liveOnly = new Uint8Array(n), loPos = [];
     for (let i = 0; i < n; i++) {
+      if ((i & 31) === 31) yield;
       const o = i * 15, lx = lights[o], lz = lights[o + 2];
       let lo = lights[o + 11] > LO_COS;
       const ii = Math.floor((lx - mnx) / cell), jj = Math.floor((lz - mnz) / cell);
@@ -298,6 +314,7 @@ const LampBake = (function () {
         for (let tx = tx0; tx <= tx1; tx++) {
           const s = slotOf[tz * tilesX + tx];
           if (s < 0) continue;
+          if (tx !== tx0 || tz !== tz0) yield;       // one tile per step: terrain queries made a lamp 10-40 ms
           const a0 = Math.max(0, i0 - tx * TILE + 1), a1 = Math.min(SLOT - 1, i1 - tx * TILE + 1);
           const b0 = Math.max(0, j0 - tz * TILE + 1), b1 = Math.min(SLOT - 1, j1 - tz * TILE + 1);
           for (let bb = b0; bb <= b1; bb++) {
@@ -400,6 +417,12 @@ const LampBake = (function () {
     return (track && typeof Tracks !== "undefined" && Tracks.terrainY)
       ? (x, z) => Tracks.terrainY(track, x, z) : null;
   }
+  // Forget the cached bake and any job (loadTrack): they hold the previous
+  // track object and its atlas, which must not stay resident through the build.
+  function reset() {
+    _job = null; _jobSrc = null; _jobTrk = null; _src = null; _bake = null; _trk = null;
+    _pendSrc = null; _pend = NaN; _clamp = NaN; _budget = 0; _shK = -1;
+  }
   // `maxTexels` (optional) caps atlas texels per layer; omitted or 0 = MAX_TEXELS.
   function forTrack(track, lights, nearClamp, now, sync, maxTexels) {
     if (!lights || !lights.length) return null;
@@ -473,6 +496,6 @@ const LampBake = (function () {
   // LIVE-ONLY lane (TLX's per-chunk lamp texture) key on it.
   function gen() { return _bake ? _bake.gen | 0 : 0; }
 
-  return { bake, forTrack, shadowCol, liveOnlyAt, gen, toHalf, MAX_TEXELS, TILE, NO_GROUND, LO_HEIGHT, LO_COS };
+  return { bake, forTrack, reset, shadowCol, liveOnlyAt, gen, budget, toHalf, MAX_TEXELS, DESKTOP_TEXELS, TILE, NO_GROUND, LO_HEIGHT, LO_COS };
 })();
 Object.freeze(LampBake);

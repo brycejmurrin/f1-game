@@ -674,3 +674,92 @@ test("a stop() during the hold means the held line is never spoken", () => {
   clock.tick(30000);
   assert.equal(spoken(synth).length, before, "the skip that ended the flyby ended the held cue too");
 });
+
+/* ── THE STORY AND THE WRAP-UP ──────────────────────────────────────────────
+ * The same circuit read the same paragraph every visit. `info.story` carries
+ * what makes THIS race different — the seat, the championship, the target, the
+ * forecast — and every row it adds sits BELOW the must-keeps, so a squeezed
+ * budget drops the story before the welcome, the venue or the lights cue. */
+
+const STORY = {
+  driver: "Lando Norris", team: "McLaren", mate: "Oscar Piastri",
+  champ: { round: 4, rounds: 24, leader: "Max Verstappen", youPos: 3, gap: 18 },
+  goal: "Finish P5 or better in the championship",
+  forecast: { to: "rain", inS: 300 },
+};
+
+test("the story reads the seat, the championship, the target and the forecast — before the lights cue", () => {
+  const lines = A.script(info({ story: STORY }));
+  const all = lines.join(" ");
+  assert.match(all, /Lando Norris for McLaren, with Piastri in the sister car\./);
+  assert.match(all, /Round 5 of 24\. Verstappen leads the championship; you are 3rd, 18 points back\./);
+  assert.match(all, /The target this season: finish P5 or better in the championship\./);
+  assert.match(all, /Rain is on the way, in about 5 minutes\./);
+  assert.match(lines.at(-1), /Let's go racing\.$/, "the session cue stays last");
+  for (const l of lines) {
+    assert.match(l, /\.$|!$/, `"${l}" is not a sentence`);
+    assert.doesNotMatch(l, /undefined|NaN|\[object/);
+  }
+});
+
+test("leading the championship, and the final round, read as themselves", () => {
+  const lead = A.script(info({ story: { champ: { round: 9, rounds: 10, leader: "Lando Norris", youPos: 1, gap: 7 } } })).join(" ");
+  assert.match(lead, /The final round, and you lead the championship by 7 points\./);
+  const chase = A.script(info({ story: { champ: { round: 9, rounds: 10, leader: "Max Verstappen", youPos: 2, gap: 12 } } })).join(" ");
+  assert.match(chase, /It all comes down to this\./);
+  // Before a single round is scored there is no championship to talk about.
+  const r1 = A.script(info({ story: { champ: { round: 0, rounds: 24, leader: "Max Verstappen", youPos: 1, gap: 0 } } })).join(" ");
+  assert.doesNotMatch(r1, /championship/);
+});
+
+test("a forecast that matches the current weather says nothing; dry race, no rain words", () => {
+  const same = A.script(info({ weather: "rain", story: { forecast: { to: "rain", inS: 200 } } })).join(" ");
+  assert.doesNotMatch(same, /on the way/);
+  const dry = A.script(info({ story: { driver: "Lando Norris", team: "McLaren" } })).join(" ");
+  assert.doesNotMatch(dry, /rain|wet|fog/i);
+});
+
+test("the story never displaces a must-keep: at a 1 ms budget the same three lines survive", () => {
+  const kept = A.script(info({ story: STORY }), 1, 0.92);
+  assert.deepEqual(JSON.parse(JSON.stringify(kept.map((l) => l.split(" ")[0]))), ["Welcome", "This", "12"]);
+  for (const r of A.storyRows(STORY, {})) assert.ok(r.prio >= 1, `"${r.text}" is priority ${r.prio}`);
+});
+
+test("a sprint states the sprint distance, and still ends on the lights cue", () => {
+  const lines = A.script(info({ laps: 8, sprint: true }));
+  assert.match(lines.at(-1), /^The sprint\. 8 laps, flat out from the start\. Let's go racing\.$/);
+});
+
+test("the venue line rotates between visits and always opens 'This is'", () => {
+  const seen = new Set();
+  for (let v = 0; v < 3; v++) {
+    const venue = A.script(info({ variant: v }))[1];
+    assert.match(venue, /^This is /);
+    assert.match(venue, /Monza/); assert.match(venue, /Italian Grand Prix/);
+    seen.add(venue);
+  }
+  assert.equal(seen.size, 3);
+});
+
+test("the wrap-up names the winner, the margin, your race against your grid slot, and the fastest lap", () => {
+  const lines = A.wrapRows({
+    event: "the Italian GP", n: 20,
+    winner: { name: "Fernando Alonso" }, second: "Esteban Ocon", margin: 1.234,
+    you: { pos: 6, grid: 12, dnf: false }, fastest: { name: "Oscar Piastri", time: 81.456, you: false },
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(lines)), [
+    "Fernando Alonso wins the Italian Grand Prix, 1.2 seconds ahead of Ocon.",
+    "You finish 6th, up 6 places from 12th on the grid.",
+    "Fastest lap to Piastri, a 1 21.5.",
+  ]);
+  const won = A.wrapRows({ event: "the Italian GP", n: 20, winner: { name: "Lando Norris" }, margin: 3.1, you: { pos: 1, grid: 4 } });
+  assert.equal(won[0], "And you win the Italian Grand Prix, 3.1 seconds clear.");
+  const podium = A.wrapRows({ event: "", n: 20, winner: { name: "Max Verstappen" }, you: { pos: 3, grid: 3 } });
+  assert.equal(podium[1], "A podium for you, 3rd.");
+  const out = A.wrapRows({ event: "", n: 20, winner: { name: "Max Verstappen" }, you: { pos: 0, dnf: true } });
+  assert.match(out[1], /retirement/);
+  const { RV } = load();
+  for (const l of lines.concat(won, podium, out)) {
+    assert.ok(RV.estimate(RV.speakable(l), 0.92) < 14, `"${l}" is too long for one utterance`);
+  }
+});

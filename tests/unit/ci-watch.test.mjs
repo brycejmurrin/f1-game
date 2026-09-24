@@ -10,7 +10,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { latestPerWorkflow, verdict, newJobEvents } from "../../tools/ci/ci-watch.mjs";
+import { latestPerWorkflow, verdict, newJobEvents, wantsAnnotations } from "../../tools/ci/ci-watch.mjs";
 
 const run = (id, name, status, conclusion, created) => ({ id, name, status, conclusion, created_at: created });
 const job = (id, name, status, conclusion, steps = []) => ({ id, name, status, conclusion, steps, html_url: `u/${id}` });
@@ -54,4 +54,13 @@ test("each finished job is one event; skipped jobs are silent; a red names its s
   assert.equal(newJobEvents(jobs, seen, "CI").length, 0, "a job already reported is never reported again");
   jobs[3] = job(4, "Sweeps", "completed", "success");
   assert.deepEqual(newJobEvents(jobs, seen, "CI").map((e) => e.line), ["CI › Sweeps → success"]);
+});
+
+test("only a failed or timed-out job gets its annotations printed", () => {
+  // A cancelled job's annotation is the designed draft/ready dedupe ("higher
+  // priority waiting request"); printed, every one became a Monitor event.
+  assert.equal(wantsAnnotations(job(1, "a", "completed", "failure")), true);
+  assert.equal(wantsAnnotations(job(2, "a", "completed", "timed_out")), true);
+  assert.equal(wantsAnnotations(job(3, "a", "completed", "cancelled")), false);
+  assert.equal(wantsAnnotations(job(4, "a", "completed", "success")), false);
 });
