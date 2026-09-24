@@ -192,6 +192,7 @@ export const RULES = [
   [/^js\/ui\/driving-line-opts\.js/, ["sweeps"], "driving-line-opts.test.mjs"],
   [/^js\/ui\/debris-opts\.js/, ["state-unit"], "debris-opts.test.mjs"],
   [/^js\/ui\/appearance-opts\.js/, ["state-unit"], "appearance-opts.test.mjs"],
+  [/^js\/ui\/title-fx\.js/, ["state-unit"], "title-fx.test.mjs"],
   [/^js\/ui\/track-maps\.js/, ["hooks", "circuits"], "map-hooks.spec.js reads __apex.mapPts; the layout metadata is per circuit"],
   // The SHIPPED default for any preference. Its own suite is settings-defaults
   // .test.mjs in steering-unit, but the file reaches further than that: it

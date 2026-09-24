@@ -812,6 +812,10 @@ body[data-density="compact"]:has(#hud-flag:not([hidden])) #announce { top: calc(
 #announce[data-kind="penalty-hit"] #announce-who { color: var(--slower); }
 #announce[data-kind="coach"] #announce-who,
 #announce[data-kind="practice"] #announce-who { color: var(--faster); }
+/* The broadcaster (js/race/race-radio.js commentary): gold, the TV graphic's
+   colour, so a glance tells the booth from the pit wall. No plate number —
+   the commentator is not talking to the player's car (showAnnounce). */
+#announce[data-kind="comm"] #announce-who { color: var(--gold); }
 
 /* ---------- in-game metrics overlay (js/perf/metrics-overlay.js) ---------- */
 /* Position is data-pos=left|right (AUTO resolves in JS). Left is the
@@ -1172,7 +1176,7 @@ body.pc-nopanel .pc-altcol   { left: auto; right: calc(152px + var(--sar) / var(
    CONTROL LEFT ON SCREEN — there is no WASD to fall back on — which is what the
    size rule below is about. */
 body.pc-uihidden #photo-controls > :not(#pc-restore) { display: none !important; }
-body.pc-uihidden #lighting-inner { display: none !important; }
+body.pc-uihidden :is(#lighting-inner, #freecam-inner) { display: none !important; }
 body.pc-uihidden #game-metrics { display: none !important; }
 /* THE PANEL IS HUD CHROME AND FOLLOWS THE HUD. It is created at runtime with no
    index.html node, so it inherited none of the rules that clear the screen for a

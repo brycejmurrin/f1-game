@@ -2,7 +2,7 @@
   "name": "apex-tools",
   "serverInfo": {
     "name": "apex-tools-mcp",
-    "version": "1.5.0"
+    "version": "1.6.0"
   },
   "prefix": "apex_",
   "stdio": {
@@ -33,6 +33,7 @@
     "apex_garage",
     "apex_select_specs",
     "apex_rotate_markings_check",
-    "apex_graph_parity"
+    "apex_graph_parity",
+    "apex_frame_report"
   ]
 }

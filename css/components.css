@@ -804,17 +804,19 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
   @media (hover: hover) {
     .bigbtn:hover::after { animation: sheen 0.62s cubic-bezier(0.3, 0, 0.2, 1); }
   }
-  /* The single primary call to action catches the light ONCE, as the menu
-     arrives — scoped to one button because a menu where everything shimmers has
-     no focal point. #overlay is toggled with the hidden attribute, so coming
-     back from display:none restarts this by itself, exactly like the dialog
-     entry animations.
+  /* The hero (CAREER, the one solid-red door) catches the light ONCE, just
+     after it lands in the title intro (css/menus.css) — scoped to one button
+     because a menu where everything shimmers has no focal point. It sat on
+     RACE until RACE became a dark plate; a sweep of white over a plate reads
+     as a glitch, over the red face as gloss. Keyed on #overlay[data-intro]
+     like the rest of the intro: the first show only, never again on the way
+     back from a room (js/ui/title-fx.js owns the attribute).
      Once, NOT on a loop. An infinite sweep animates a registered custom
      property inside a gradient, which means repainting the button every frame
      for as long as the menu is open — a permanent 60fps cost on a phone for a
      decoration, and it never lets the compositor reach a stable frame (it hung
      the screenshot tooling, which is how it was caught). */
-  #mb-race::after { animation: sheen 0.85s 0.28s cubic-bezier(0.3, 0, 0.2, 1) both; }
+  :root:not([data-motion="reduce"]) #overlay[data-intro] #mb-career::after { animation: sheen 0.85s 0.5s cubic-bezier(0.3, 0, 0.2, 1) both; }
 }
 @keyframes sheen {
   from { --sheen: -30%; }

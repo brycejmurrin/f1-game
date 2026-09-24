@@ -21,7 +21,8 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
-import { parseBlob, validateShots as bakeValidate, bake, render } from "../../tools/gen/bake-flyby.mjs";
+import { parseBlob, readBlob, blobName, validateShots as bakeValidate, shotErrors as bakeShotErrors, bake, render, DEFAULT_RE, parseLiteral }
+  from "../../tools/gen/bake-flyby.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -52,6 +53,15 @@ function goodList() {
 }
 
 /* ── the list algebra ─────────────────────────────────────────────────────── */
+
+test("the pickers reach every corner, a normalised one-shot list, and name the height offset", () => {
+  for (let n = 1; n <= 18; n++) assert.ok(FP.CORNER_NS.includes(String(n)), `corner ${n} is pickable`);
+  const one = FP.normaliseDurs([goodList()[0]]);
+  assert.ok(one[0].dur <= FP.DUR.max, `a normalised single shot (dur ${one[0].dur}) fits the slider (max ${FP.DUR.max})`);
+  assert.equal(FP.fieldLabel("centre", "y"), "HEIGHT OFFSET");
+  assert.equal(FP.fieldLabel("landmark", "y"), "HEIGHT OFFSET");
+  assert.equal(FP.fieldLabel("corner", "y"), FP.FIELD.y.label);
+});
 
 test("the module freezes and exports its pure operations", () => {
   assert.ok(Object.isFrozen(FP), "FlybyPanel is frozen");
@@ -207,6 +217,23 @@ test("the bake replaces the DEFAULT literal and nothing else", () => {
   assert.equal(out.match(/^ {2}const DEFAULT = \[/gm).length, 1, "still exactly one DEFAULT");
 });
 
+test("a bake keeps DEFAULT's rationale comments", () => {
+  // Rebaking the shipped list as data used to delete every comment inside
+  // DEFAULT — the "why" of each shot. Same list in, every comment line out.
+  const src = read("js/camera/flyby-seq.js");
+  const lit = DEFAULT_RE.exec(src)[0];
+  const list = parseLiteral(lit.replace(/^ {2}const DEFAULT = /, "").replace(/;\s*$/, ""));
+  assert.ok(list.length > 3, "parsed the shipped DEFAULT");
+  const out = DEFAULT_RE.exec(bake(src, list))[0];
+  const comments = lit.split("\n").filter((l) => l.trim().startsWith("//"));
+  assert.ok(comments.length > 5, "DEFAULT carries comments to keep");
+  for (const c of comments) assert.ok(out.includes(c), "lost in the bake: " + c.trim());
+  // A dropped shot takes its own comments; the others stay.
+  const out2 = DEFAULT_RE.exec(bake(src, list.filter((s) => s.id !== "turn-mid")))[0];
+  assert.ok(!/Aimed THROUGH the corner/.test(out2), "turn-mid's own note leaves with it");
+  assert.ok(/BOTH GRID SHOTS LOOK FORWARD/.test(out2), "a section comment before a surviving shot stays");
+});
+
 /* ── DO THE EDITS REACH THE FLYBY? ────────────────────────────────────────────
  *
  * Reported 2026-09-18: "once I hit done in the editor it doesn't actually change
@@ -266,7 +293,7 @@ test("the panel saves on every edit, and a pristine list clears the key", () => 
   assert.match(src, /function edited\(\)\s*\{\s*persist\(\);/,
     "edited() is the one funnel every mutation goes through — persisting anywhere else means DONE, ESCAPE or " +
     "QUIT can still lose an afternoon of framing");
-  assert.match(src, /store\.set\("flybyShots", pristine \? null : list\)/,
+  assert.match(src, /store\.set\("flybyShots", pristine \? null : savedForm\(list\)\)/,
     "storing a COPY of the shipped default would pin this player to today's shots and ignore every later " +
     "change to them — an unedited list has to clear the key instead");
 });
@@ -282,6 +309,92 @@ test("a saved list is read back through shotErrors, not the bake's sum rule", ()
   assert.deepEqual([...FP.shotErrors(loose)], [], "an un-normalised but structurally sound list is playable");
   assert.ok([...FP.validateShots(loose)].some((m) => /sum/.test(m)),
     "...and still refused by the BAKE validator");
-  assert.match(read("js/camera/flyby-panel.js"), /const bad = shotErrors\(saved\);/,
+  // Behaviourally, through the real loadSaved() (panelWith below).
+  assert.ok(panelWith(FP.savedForm(loose)).panel.loadSaved(),
     "loadSaved() must use the playable rule set, not the bake one");
+});
+
+/* ── the saved list, read back through a real create(G) ───────────────────── */
+
+/** create(G) against a stub G: every $() is an inert object (the panel only
+ *  assigns handlers at create time), and `store` is a Map, so loadSaved() — the
+ *  function game.js calls at every run start — runs for real. */
+function panelWith(saved) {
+  const warned = [];
+  const sb = { Math, JSON, Object, Array, Number, String, isFinite, Date, console,
+    Log: { info() {}, warn: (_t, m) => warned.push(String(m)) } };
+  sb.window = sb;
+  vm.runInNewContext(read("js/camera/flyby-panel.js").replace(/^const\b/gm, "var"), sb);
+  const map = new Map([["flybyShots", saved]]);
+  const G = { $: () => ({ style: {}, dataset: {} }), els: {},
+    store: { get: (k, d) => (map.has(k) ? map.get(k) : d), set: (k, v) => { map.set(k, v); return true; } } };
+  return { panel: sb.FlybyPanel.create(G), warned, map };
+}
+
+test("a saved list round-trips only in the current pose meaning", () => {
+  const list = FP.normaliseDurs(goodList());
+  const cur = panelWith(FP.savedForm(list));
+  assert.deepEqual(JSON.parse(JSON.stringify(cur.panel.loadSaved())), JSON.parse(JSON.stringify(list)));
+  // A BARE ARRAY is what the editor saved while bearings were world bearings and
+  // a corner's +x was its right. Structurally it is perfect, which is exactly
+  // why it needs refusing by version: loaded, every such shot plays mirrored.
+  const legacy = panelWith(list);
+  assert.equal(legacy.panel.loadSaved(), null, "a pre-version (bare array) list is not played");
+  assert.match(legacy.warned.join("\n"), /predate/, "…and the log says why");
+  assert.ok(legacy.map.get("flybyShots"), "…nor deleted: the next edit overwrites it");
+  assert.equal(panelWith({ v: FP.SHOTS_VERSION + 1, shots: list }).panel.loadSaved(), null,
+    "a list from a NEWER build is not guessed at either");
+  assert.equal(panelWith({ v: FP.SHOTS_VERSION, shots: [{ id: "x" }] }).panel.loadSaved(), null,
+    "the version is not a pass: the list is still held to shotErrors");
+  assert.equal(panelWith(null).panel.loadSaved(), null, "nothing saved -> the shipped sequence");
+});
+
+test("loadSaved hands out a copy, not the store's cached object", () => {
+  // store.get() returns its cache entry; game.js keeps the result as the list
+  // the render path flies, and the panel edits ITS list in place. Shared, every
+  // slider drag moved the live sequence and the store cache without a save.
+  const saved = FP.savedForm(FP.normaliseDurs(goodList()));
+  const { panel } = panelWith(saved);
+  const a = panel.loadSaved();
+  a[0].eye[0].x = 999;
+  assert.notEqual(saved.shots[0].eye[0].x, 999);
+  assert.notEqual(panel.loadSaved()[0].eye[0].x, 999);
+});
+
+/* ── the blob as COPY VALUES actually emits it ────────────────────────────── */
+
+test("an invalid copy's warning header does not hide the reasons", () => {
+  // COPY VALUES prefixes a list that will not bake with `// THIS LIST WILL NOT
+  // BAKE:` lines. Those lines used to hide the assignment name, so the bake
+  // reported a parse error about `window` instead of the rule that failed, and
+  // tools/shot/flyby.mjs --shots could not preview the blob at all.
+  const loose = goodList();                                   // sums to 1 …
+  loose[0].dur = 0.9;                                         // … now 1.4
+  const bad = [...FP.validateShots(loose)];
+  const blob = "// THIS LIST WILL NOT BAKE:\n// " + bad.join("\n// ") + "\n" + FP.toBlob(loose);
+  assert.equal(blobName(blob), "FlybyShots", "the name is found under the header");
+  assert.deepEqual(readBlob(blob).map((s) => s.id), ["one", "two"], "…and the list still reads, for a preview");
+  assert.throws(() => parseBlob(blob), /sum to 1\.4000/, "the bake names the rule, not a parse error");
+});
+
+test("the literal fallback is data only: no process, no hang", () => {
+  assert.throws(() => readBlob("[process.exit(3)]"), /Could not parse/);
+  assert.throws(() => readBlob("[globalThis.require('fs')]"), /Could not parse/);
+  assert.throws(() => readBlob("[(() => { for (;;); })()]"), /Could not parse/, "a runaway literal times out");
+  // Unquoted keys — the shape the panel emits — still parse, into HOST arrays.
+  const v = readBlob('[{ id: "a", eye: [1, 2] }]');
+  assert.ok(Array.isArray(v) && Array.isArray(v[0].eye), "host-realm arrays after the round trip");
+});
+
+test("the structural half agrees too — what a PREVIEW is held to", () => {
+  const cases = [
+    goodList().map((s) => ({ ...s, dur: s.dur * 3 })),      // loose sum: playable
+    (() => { const l = goodList(); l[0].fov = [40]; return l; })(),
+    (() => { const l = goodList(); l[1].look = [{ at: "start" }]; return l; })(),
+    [],
+  ];
+  for (const list of cases) {
+    assert.deepEqual([...FP.shotErrors(list)], bakeShotErrors(list),
+      "tools/shot/flyby.mjs --shots uses the bake's copy; the panel's saved list uses its own");
+  }
 });
