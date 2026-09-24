@@ -9035,6 +9035,12 @@ window.addEventListener("pagehide", () => { PerfGov.sentinelArm(false); _disarmP
 customTeam.init();
 raceSettings.wireButtons();
 customTeam.syncCustomTeam();   // inject "MY TEAM" so saved selections and chips resolve
+// LEGACY CODE-KEYED POINTS -> STABLE DRIVER IDS, here and not in SeasonCal.load
+// (which runs at eval, before MY TEAM is in Teams.LIST, so "YOU" matched no
+// roster entry). 6091fb859 dropped this call with the move to SeasonCal.load,
+// whose comment still promised it; from then on an old save's points stayed
+// under the display code and a custom-code edit split the player in two.
+if (season && store.get("season", null)) { season = GameStore.migrateSeasonPoints(season); SeasonCal.save(season); }
 teamIdx = idxOr(teamIdx, Teams.LIST.length, 2);
 clampDriverIdx();
 // Clamp a legacy positional selection before migrating it to stable identity.
