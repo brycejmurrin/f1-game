@@ -7041,7 +7041,7 @@ function render(dt) {
   // Cleared every frame, set only by the flood branch: `frame` outlives a
   // night->day time-of-day flip (rebuilt only in loadTrack), and a stale
   // allLights kept chunked geometry binding per-chunk night lamps in daylight.
-  frame.allLights = null; frame.perChunkLights = 0; frame.roadChunkLamps = 0; frame.tailStart = 0; frame.tailCount = 0;
+  frame.allLights = null; frame.lampBake = null; frame.perChunkLights = 0; frame.roadChunkLamps = 0; frame.tailStart = 0; frame.tailCount = 0;
   if (_floodActive || _floodDayLvl > 0) {
     // Rebuild if empty (not just undefined): a light set built before the track
     // centreline finished is empty; retry until it yields lights. Tracks always
@@ -7069,7 +7069,7 @@ function render(dt) {
     const _ltg = 1 - Math.abs(_lt) * 0.02;
     const _ltb = 1 - Math.max(0, -_lt) * 0.30 + Math.max(0, _lt) * 0.20;
     frame.glowLights = null;   // appendCarTailLights sets it; stale otherwise (TAIL-LIGHT EMIT 0)
-    frame.lampBake = null;     // BAKED LAMP POOLS: set below for the night flood set only
+    frame.lampBake = null;     // BAKED LAMP POOLS: set below whenever the flood set is lit (night or day floods)
     if (_floodActive) {
       const _sy = frame.sunDir ? frame.sunDir[1] : -1;
       // Floor the twilight ramp at 0.30: the dusk sunDir sits slightly higher than
@@ -7118,7 +7118,9 @@ function render(dt) {
     setFrameLights(camEye, _floodRGB, _lightFwd);
     // BAKED LAMP POOLS (js/lighting/lamp-bake.js): the whole track set's ground
     // pools at base colour, scaled per frame by the same _floodRGB the live set gets.
-    if (LT.lampBake > 0 && gfx.hasLampBake) {
+    // Paint-mode tails only: emitting tails ride the live loop, whose diffuse
+    // (lampSh - bakeW) would erase their unbaked pool on the road.
+    if (LT.lampBake > 0 && gfx.hasLampBake && !(LT.tailLightEmit > 0)) {
       frame.lampBake = LampBake.forTrack(track, track._lights, LT.lampNearClamp);
       frame.lampBakeScale = _floodRGB;
     }
@@ -7189,7 +7191,7 @@ function render(dt) {
   // Studio rig override: replaces the session lamps with the inspection ring.
   if (_studioRig) {
     const rig = buildStudioRig();
-    if (rig) frame.lights = rig;
+    if (rig) { frame.lights = rig; frame.lampBake = null; }   // the rig is not in the bake
   }
   // ── Nearest-floodlight SPOT shadow pass ─────────────────────────────────
   // Nearest-floodlight spot shadow map (night): js/render/shared/shadow-pass.js.
@@ -7690,10 +7692,17 @@ function render(dt) {
         // Wet, grid and ERS-code lights stay full-bright — a status light must
         // not dim with battery. Otherwise 0.45 (flat) -> 1.0 (full).
         drawRearLights(tmpMat, (wet || preGrid || ersCode === 1) ? 1.0 : (0.45 + 0.55 * clamp(c.energy || 0, 0, 1)));
-        // TAIL-LIGHT EMIT 0: the road spill is a painted decal, not a light slot.
-        if (night && !(LT.tailLightEmit > 0))
-          CarMesh.drawTailGlow(_groundMat, LT.tailLightMul * (1 + clamp(c.brakeHeat || 0, 0, 1) * LT.brakeGlowMul * 1.6));
       }
+    }
+    // TAIL-LIGHT EMIT 0: the road spill is a painted decal standing in for the
+    // tail light's glow on the road. Steady (the emitted light never strobed with
+    // the rain light or the ERS codes) and faded out over the last 40% of TAIL-
+    // LIGHT RANGE, not cut at the 40 m lens gate above.
+    if (frame.glowLights && frame.glowLights !== frame.lights) {
+      const tgR = LT.tailRange != null ? LT.tailRange : 160;
+      const tgd = Math.hypot(tmpP[0] - camEye[0], tmpP[2] - camEye[2]);
+      const tgF = c.isPlayer ? 1 : clamp((tgR - tgd) / (tgR * 0.4), 0, 1);
+      if (tgF > 0) CarMesh.drawTailGlow(_groundMat, tgF * LT.tailLightMul * (1 + clamp(c.brakeHeat || 0, 0, 1) * LT.brakeGlowMul * 1.6), track, c.s);
     }
     // 2026 amber mirror lamps: under 20 km/h or stopped — the pit lane, the grid,
     // a spin. Same 40 m rival gate as the rear lights; the player always draws.
@@ -7782,7 +7791,8 @@ function render(dt) {
   }
 
   // Rapier debris shards (render-only side-world; poses stepped in update()).
-  if (frame.lights && !_studioRig && PerfGov.tier() < 3) gfx.drawGlow(frame.glowLights || frame.lights, LT.glareStr);   // AFTER the cars: depth-tested, no depth write — before them a halo in front of a body was overwritten
+  const _glowF = FrameLights.glowFade();   // held-tier fade, not a tier-3 cut (frame-lights.js)
+  if (frame.lights && !_studioRig && _glowF > 0) gfx.drawGlow(frame.glowLights || frame.lights, LT.glareStr * _glowF);   // AFTER the cars: depth-tested, no depth write — before them a halo in front of a body was overwritten
   if (DebrisWorld.active()) DebrisWorld.draw();
 
   // Transient FX particles (tyre smoke / sparks / kickup / spray): advanced
