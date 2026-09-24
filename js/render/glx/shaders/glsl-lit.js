@@ -216,6 +216,7 @@ uniform float uBakeOn;
 uniform vec2 uBakeOrigin;
 uniform vec2 uBakeSize;
 uniform vec3 uBakeScale;
+uniform vec3 uBakeShCol;   // the shadow lamp's BAKED colour (LampBake.shadowCol)
 uniform mat4 uLampShadowVP;
 uniform float uLampShadowOn;
 uniform int uLampShadowIdx;
@@ -1347,7 +1348,11 @@ void main() {
     }
     // Diffuse pool — fades as the road wets so a wet surface shows the lamp's
     // REFLECTION (SSR + the GGX lobe below), not a painted matte circle.
-    color += albedo * lb.xyz * (att * spotD * (lampSh - bakeW)) * NoLl * (1.0 - metalness) * (1.0 - wetSheen * 0.85);
+    // On a baked fragment the live term steps aside (1 - bakeW) and the
+    // shadow-mapped lamp carves its shadow out of the pool in the pool's own
+    // steady colour (uBakeShCol; 1 - lampSh is 0 for every other lamp).
+    color += albedo * (lb.xyz * (lampSh * (1.0 - bakeW)) - uBakeShCol * ((1.0 - lampSh) * bakeW))
+           * (att * spotD) * NoLl * (1.0 - metalness) * (1.0 - wetSheen * 0.85);
     // Bounce fill: pool light bounced off the road washes nearby surfaces
     // (walls, kerbs, car flanks) with the lamp tint even outside the beam -
     // a near-free stand-in for local ambient probes. Soft NoL floor so

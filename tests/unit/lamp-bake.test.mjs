@@ -115,14 +115,48 @@ test("forTrack caches by light-set identity and near clamp", () => {
   const set = [...LAMP_A];
   const a = LB.forTrack({}, set, 4.0);
   assert.equal(LB.forTrack({}, set, 4.0), a, "same set, same clamp -> same bake");
-  assert.equal(LB.forTrack({}, set, 6.0, 1000), a, "a moving LAMP NEAR CLAMP keeps the old bake...");
-  assert.equal(LB.forTrack({}, set, 6.0, 1200), a, "...until it has held still");
-  const b = LB.forTrack({}, set, 6.0, 1400);
-  assert.notEqual(b, a, "a settled LAMP NEAR CLAMP rebakes");
   const c = LB.forTrack({}, [...LAMP_A], 6.0);
-  assert.notEqual(c, b, "a rebuilt light set (new array) rebakes");
-  assert.ok(c.gen > b.gen && b.gen > a.gen, "gen increases per bake");
+  assert.notEqual(c, a, "another track's set bakes at once");
+  assert.ok(c.gen > a.gen, "gen increases per bake");
   assert.equal(LB.forTrack({}, [], 4.0), null, "no lamps -> no bake");
+});
+
+test("a rebake on the same track waits for the input to settle, then runs in slices", () => {
+  const LB = load({ Tracks: { terrainY: () => 0 } });
+  const trk = {};
+  const lights = [];
+  for (let i = 0; i < 120; i++) lights.push(...LAMP_A.map((v, k) => k === 0 ? i * 9 : k === 2 ? (i % 12) * 40 : v));
+  const a = LB.forTrack(trk, lights, 4.0);
+  assert.equal(LB.forTrack(trk, lights, 6.0, 1000), a, "a moving LAMP NEAR CLAMP keeps the old bake...");
+  assert.equal(LB.forTrack(trk, lights, 6.0, 1200), a, "...until it has held still");
+  const moved = lights.slice();
+  assert.equal(LB.forTrack(trk, moved, 6.0, 1250), a, "a rebuilt set restarts the settle window");
+  let b = a, calls = 0;
+  while (b === a && calls < 5000) { b = LB.forTrack(trk, moved, 6.0, 2000); calls++; }
+  assert.notEqual(b, a, "the sliced rebake lands");
+  assert.deepEqual(Array.from(b.data), Array.from(LB.bake(moved, () => 0, 6.0).data), "sliced == synchronous bake");
+  assert.equal(LB.forTrack(trk, moved, 6.0, 3000), b, "then it is cached");
+});
+
+test("the road splat covers both edges out to the verge", () => {
+  const LB = load();
+  const n = 50, px = new Float32Array(n), py = new Float32Array(n).fill(4), pz = new Float32Array(n);
+  for (let k = 0; k < n; k++) pz[k] = -100 + k * 4;
+  const road = { n, total: 200, px, py, pz, rx: new Float32Array(n).fill(1), rz: new Float32Array(n), hw: new Float32Array(n).fill(6), lift: null };
+  const b = LB.bake([...LAMP_A], () => null, 4.0, road);
+  const alpha = (x, z) => { const i = Math.floor((x - b.x0) / b.cell), j = Math.floor((z - b.z0) / b.cell); return halfToFloat(b.data[(j * b.w + i) * 4 + 3]); };
+  for (const x of [-6 - 2.2, -6, 0, 6, 6 + 2.2]) assert.equal(alpha(x, 0.5), 4, `road height at lateral ${x} m`);
+});
+
+test("shadowCol returns the shadow lamp's steady baked colour, not its live one", () => {
+  const LB = load({ Tracks: { terrainY: () => 0 } });
+  const set = [...LAMP_A, ...LAMP_B];
+  LB.forTrack({}, set, 4.0);
+  const live = set.slice(15);                        // slot 0 = lamp B, flickered to half
+  live[3] *= 0.5; live[4] *= 0.5; live[5] *= 0.5;
+  const out = LB.shadowCol({ lights: live, lampBakeScale: [2, 1, 0.5] }, 0, [0, 0, 0]);
+  assert.deepEqual(Array.from(out), [LAMP_B[3] * 2, LAMP_B[4] * 1, LAMP_B[5] * 0.5]);
+  assert.deepEqual(Array.from(LB.shadowCol({ lights: live, lampBakeScale: [1, 1, 1] }, 5, [9, 9, 9])), [0, 0, 0], "bad slot -> no carve");
 });
 
 test("the map stays under its texel budget on a circuit-sized extent", () => {

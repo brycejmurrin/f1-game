@@ -7186,7 +7186,7 @@ function render(dt) {
   // Studio rig override: replaces the session lamps with the inspection ring.
   if (_studioRig) {
     const rig = buildStudioRig();
-    if (rig) frame.lights = rig;
+    if (rig) { frame.lights = rig; frame.lampBake = null; }   // the rig is not in the bake
   }
   // ── Nearest-floodlight SPOT shadow pass ─────────────────────────────────
   // Nearest-floodlight spot shadow map (night): js/render/shared/shadow-pass.js.
@@ -7687,10 +7687,17 @@ function render(dt) {
         // Wet, grid and ERS-code lights stay full-bright — a status light must
         // not dim with battery. Otherwise 0.45 (flat) -> 1.0 (full).
         drawRearLights(tmpMat, (wet || preGrid || ersCode === 1) ? 1.0 : (0.45 + 0.55 * clamp(c.energy || 0, 0, 1)));
-        // TAIL-LIGHT EMIT 0: the road spill is a painted decal, not a light slot.
-        if (frame.glowLights && frame.glowLights !== frame.lights)
-          CarMesh.drawTailGlow(_groundMat, LT.tailLightMul * (1 + clamp(c.brakeHeat || 0, 0, 1) * LT.brakeGlowMul * 1.6));
       }
+    }
+    // TAIL-LIGHT EMIT 0: the road spill is a painted decal standing in for the
+    // tail light's glow on the road. Steady (the emitted light never strobed with
+    // the rain light or the ERS codes) and faded out over the last 40% of TAIL-
+    // LIGHT RANGE, not cut at the 40 m lens gate above.
+    if (frame.glowLights && frame.glowLights !== frame.lights) {
+      const tgR = LT.tailRange != null ? LT.tailRange : 160;
+      const tgd = Math.hypot(tmpP[0] - camEye[0], tmpP[2] - camEye[2]);
+      const tgF = c.isPlayer ? 1 : clamp((tgR - tgd) / (tgR * 0.4), 0, 1);
+      if (tgF > 0) CarMesh.drawTailGlow(_groundMat, tgF * LT.tailLightMul * (1 + clamp(c.brakeHeat || 0, 0, 1) * LT.brakeGlowMul * 1.6));
     }
     // 2026 amber mirror lamps: under 20 km/h or stopped — the pit lane, the grid,
     // a spin. Same 40 m rival gate as the rear lights; the player always draws.
