@@ -86,3 +86,42 @@ test("more lock is more lateral g up to the front's limit, then no more (underst
     assert.ok(rows[rows.length - 1].uF >= rows[rows.length - 1].uR, `v=${v}: the front saturates first at full lock`);
   }
 });
+
+// Hold position on a straight, preserving speed, so barriers/corners cannot
+// turn a surface-force comparison into a collision or rescue measurement.
+test("grass never becomes a braking shortcut across pace, worn tyres and weak brakes", async () => {
+  const physicsBefore = { ...g.apex.tuning() };
+  await g.race("monza", "day", "dry");
+  const P = g.G.player;
+  for (const c of g.G.cars) if (c !== P) { c.retired = true; c.x = 80; }
+  const originalMods = P.mods;
+  g.G.tyres.setLevel("real");
+  const distance = (pace, lateral, wear) => {
+    g.apex.jump(0, 50 * pace, lateral);
+    const pin = { px:P.px, pz:P.pz, s:P.s, x:P.x, head:P.head };
+    let d = 0, ticks = 0;
+    g.apex.setInput({ brake:true, throttle:false, steer:0 });
+    while (P.speed > 20 * pace && ticks++ < 2000) {
+      Object.assign(P, pin, { vLat:0, yawRateCur:0, offT:0, rescueT:0, wallT:0,
+        tyreWear:wear, tyreWearF:wear, tyreWearR:wear });
+      g.step(1, 1/60);
+      assert.equal(P.offroad, lateral !== 0, "fixture must stay on its intended surface");
+      d += Math.max(0, P.speed) / 60;
+    }
+    assert.ok(ticks < 2000, "braking must reach target speed");
+    g.apex.clearInput(); return d;
+  };
+  try {
+    for (let notch = 1; notch <= 19; notch++) {
+      const pace = 1.06 ** (notch - 14); g.apex.setPhysics({ pace });
+      for (const braking of [.5, 1]) for (const wear of [0, .9]) {
+        P.mods = { ...originalMods, braking };
+        const road = distance(pace, 0, wear);
+        for (const lat of [-10, -14]) {
+          const grass = distance(pace, lat, wear);
+          assert.ok(grass > road, JSON.stringify({notch,braking,wear,lat,road,grass}));
+        }
+      }
+    }
+  } finally { P.mods = originalMods; g.apex.clearInput(); g.apex.setPhysics(physicsBefore); }
+});

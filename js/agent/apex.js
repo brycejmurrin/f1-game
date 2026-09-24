@@ -2728,7 +2728,7 @@ const api = {
     G.player.x     = x     != null ? x     : 0;
     G.player.xVis  = G.player.x;
     G.player.vLat  = 0; G.player.yawRateCur = 0;
-    G.player.lap   = 0; G.player.axEstSm = 0;
+    G.player.lap   = 0; G.player.axEstSm = 0; G.player.corridorAccel = 0;
     // seed world-space position + heading from (s, x) immediately, same as jump()
     Tracks.sample(G.track, G.player.s, smp);
     placeFromTrack(G.player, smp);
@@ -2742,7 +2742,7 @@ const api = {
     // is exactly the uncontrolled variable seeding is meant to remove.
     for (const c of G.cars) {
       c.gear = 1; c.rpm = PhysicsConsts.IDLE_RPM; c.shiftT = 0;
-      c.steerSm = 0; c.brakeHeat = 0; c.axEstSm = 0; c.slipDeg = 0;
+      c.steerSm = 0; c.brakeHeat = 0; c.axEstSm = 0; c.corridorAccel = 0; c.slipDeg = 0;
       // The heading-state controller's own per-episode state (game.js
       // "--- lateral ---", 2026-09-08). Missed when that controller landed, and
       // it broke replay determinism outright rather than by a metre: `aiBias`
