@@ -202,12 +202,13 @@ test("openQuali restores via begin(); quit-to-menu keeps persist; friend-race us
     "openQualiForNet must NOT assign qualiNetDone — the async reset would wipe it");
   assert.match(QUALI_NET, /RIVAL LEFT — TO THE GRID/);
   assert.match(QUALI_NET, /qualiHadRivals/);
-  // RESUME AND QUIT TEAR DOWN EVERY LIVE PREVIEW, on one line each, because
-  // that line is exactly where a new panel gets forgotten: the flyby shot
-  // editor shipped without its closer here, and resuming left the player
-  // driving the race from a camera parked on a flyby vantage. A fourth panel
-  // JOINS this list; it does not replace anyone on it.
-  assert.match(GAME, /if \(!p\) \{ closeLightTuner\(false\); closeCamTuner\(false\); flybyPanel\.closeFlyby\(false\); exitPhotoMode\(\); \}/);
+  // RESUME AND QUIT TEAR DOWN EVERY LIVE PREVIEW. Resume also closeSettings()
+  // so the wheel-wizard axis capture disarms (BUGS.md B1) — that call may sit
+  // on its own line under the closers; the closers themselves must still all
+  // fire together so a new panel is not forgotten here.
+  assert.match(GAME, /if \(!p\) \{[\s\S]*?closeLightTuner\(false\);[\s\S]*?closeCamTuner\(false\);[\s\S]*?flybyPanel\.closeFlyby\(false\);[\s\S]*?exitPhotoMode\(\);/);
+  assert.match(fnSource(GAME, "function setPaused(p)"), /closeSettings\(\)/,
+    "setPaused(false) must closeSettings so pad axis capture cannot survive resume");
   assert.match(GAME, /closeCamTuner\(false\); flybyPanel\.closeFlyby\(false\); exitPhotoMode\(\);/);
   assert.match(GAME, /isCareer\(\) && Career\.conflicted\(\)/);
   // The caution pace cap, now four levels deep: RED (4) stops the field at a

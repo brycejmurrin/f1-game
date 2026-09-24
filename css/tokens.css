@@ -43,6 +43,19 @@
   font-display: swap;
   src: url("../assets/fonts/titillium-web-latin-700-italic.woff2") format("woff2");
 }
+/* SAIRA, FOR THE WORDMARK ONLY. The APEX 26 title is the one place a face with
+   a motorsport accent earns its bytes, and Titillium is the face Formula 1's
+   own brand guidelines single out ("must not imply association"), so the
+   wordmark moved off it. Everything else stays Titillium. The file is Saira
+   Italic (OFL; the licence text sits beside it in assets/fonts) pinned to weight 800 and subset to
+   the glyphs the wordmark can draw — A P E X, the digits, a space — so it is
+   2.4 KB instead of 37 KB; any other character falls through to Titillium.
+   Its digits are uniform through tnum (the tests/data font-digits ledger). */
+@font-face {
+  font-family: "Saira Wordmark"; font-style: italic; font-weight: 800;
+  font-display: swap;
+  src: url("../assets/fonts/saira-apex26-800-italic.woff2") format("woff2");
+}
 /* BARLOW CONDENSED, AND THE size-adjust IS MEASURED, NOT TASTEFUL.
    Rajdhani stood here and its ~36 `font-variant-numeric: tabular-nums`
    declarations were INERT: its Latin subset carries no OpenType features at all
@@ -105,6 +118,13 @@
     scroll-behavior: auto !important;
   }
 }
+/* The same cancel for the in-game MENU ANIMATIONS: REDUCED setting
+   (html[data-motion="reduce"], js/ui/title-fx.js). js/ui/select-screen.js
+   skips startViewTransition under it too, so this only catches a transition
+   some other caller starts. */
+:root[data-motion="reduce"]::view-transition-group(*),
+:root[data-motion="reduce"]::view-transition-old(*),
+:root[data-motion="reduce"]::view-transition-new(*) { animation: none !important; }
 
 /* Windows High Contrast / forced-colors: gradients and translucent panel edges
    flatten to system colours, so the red-border "selected" cue and panel outlines
@@ -671,6 +691,43 @@
      the bands into grain the eye reads as texture. feTurbulence in a data URI
      keeps it to one tiled 160px tile and no network request. */
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+
+  /* MOTION. Steps, not a continuum: 1 = press/hover feedback, 3 = a panel or
+     sheet entering, 4 = a screen-sized move; --dur-draw is the slow one-shot (a
+     line or ring drawing itself). A step either reads as instant or as travel —
+     values in between just look undecided. --ease-out is for anything ARRIVING
+     (fast start, long soft landing — it answers the input at once). Only tokens
+     something reads live here (tests/unit/css-tokens.test.mjs): a --dur-2, an
+     --ease-in-out, a --motion multiplier and a twelve-step OKLCH red ramp were
+     drafted with these and cut until a rule needs them. Reduced motion is not
+     a token: it is html[data-motion="reduce"] (js/ui/title-fx.js) and the
+     prefers-reduced-motion backstop above, both in !important rules. */
+  --dur-1: 120ms;
+  --dur-3: 320ms;
+  --dur-4: 600ms;
+  --dur-draw: 1400ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  /* The fallback: without linear() a spring cannot be written in CSS, and
+     ease-out is the same arrival without the bounce. The real curve is in the
+     @supports block below. */
+  --ease-spring: var(--ease-out);
+}
+
+/* THE SPRING, as linear(): 25 evenly spaced samples of a damped spring
+     x(t) = 1 - e^(-zeta*w*t) * (cos(wd*t) + (zeta*w/wd) * sin(wd*t)),
+     wd = w * sqrt(1 - zeta^2),  w = 9.3,  zeta = 0.667,  t in [0, 1].
+   zeta comes from the overshoot: e^(-zeta*pi/sqrt(1-zeta^2)) = 0.06 is a 6%
+   peak (at t ~ 0.45), enough to read as physical, not enough to look loose.
+   w puts the envelope at 0.3% by t = 1, so pinning the last stop to exactly 1
+   is an invisible step, not a snap. Values rounded to 3 dp. Regenerate from
+   the formula, never hand-nudge a stop. Duration is the caller's (--dur-3 or
+   --dur-4 — at --dur-1 a bounce is noise). */
+@supports (animation-timing-function: linear(0, 1)) {
+  :root {
+    --ease-spring: linear(0, 0.063, 0.209, 0.388, 0.565, 0.721, 0.847, 0.939,
+      1.001, 1.038, 1.056, 1.06, 1.055, 1.046, 1.035, 1.025, 1.016, 1.008,
+      1.003, 1, 0.998, 0.997, 0.996, 0.997, 1);
+  }
 }
 
 /* THE TOUCH LADDER. The tokens above are a FLOOR (44px is the smallest box
@@ -869,6 +926,65 @@ body:not(.desktop) {
 :root[data-team="audi"]        { --accent: #fa470d; --accent-ink: var(--bg); }    /*  5.54:1 */
 :root[data-team="astonmartin"] { --accent: #b7e11b; --accent-ink: var(--bg); }    /* 12.80:1 */
 :root[data-team="cadillac"]    { --accent: #f5f5f5; --accent-ink: var(--bg); }    /* 17.86:1 */
+
+/* ---- APPEARANCE: menu accent presets (SETTINGS › APPEARANCE) ------------
+   Re-point --red only. Fills/grads/selection washes derive via color-mix, so
+   the whole chrome family follows. brand = shipped default (no override).
+   team / custom are applied as concrete --red from js/ui/appearance-opts.js. */
+:root[data-menu-accent="ember"]  { --red: #ff4d1a; }
+:root[data-menu-accent="amber"]  { --red: #ffb000; }
+:root[data-menu-accent="cyan"]   { --red: #00a3e0; }
+:root[data-menu-accent="violet"] { --red: #7a5cff; }
+:root[data-menu-accent="lime"]   { --red: #b7e11b; }
+
+/* ---- APPEARANCE: light / system theme ----------------------------------
+   Dark stays the :root default. Light rewrites the surface ladder so every
+   consumer of --bg/--text/--panel/--plate* adapts without per-sheet edits.
+   SYSTEM copies light when prefers-color-scheme: light. */
+:root[data-ui-theme="light"] {
+  --bg: #f0f0f4;
+  --carbon: #e6e6ec;
+  --text: #14141c;
+  --dim: #5a5a68;
+  --panel: color-mix(in oklab, #fff 78%, var(--carbon));
+  --surf-1: color-mix(in oklab, #000 3.5%, var(--bg));
+  --surf-3: color-mix(in oklab, #000 8%, var(--bg));
+  --plate: color-mix(in oklab, var(--carbon) 70%, transparent);
+  --plate-line: rgba(20, 20, 28, 0.16);
+  --card-line: rgba(20, 20, 28, 0.12);
+  --plate-hover: color-mix(in oklab, var(--carbon) 82%, #000 6%);
+  --plate-press: color-mix(in oklab, var(--carbon) 88%, #000 10%);
+  --plate-opaque: color-mix(in oklab, #fff 86%, var(--carbon));
+  --scrim: rgba(20, 20, 28, 0.28);
+  --scrim-heavy: rgba(20, 20, 28, 0.72);
+  --hud-halo: 0 1px 3px rgba(255, 255, 255, 0.85);
+  --edge: inset 0 1px 0 rgba(255, 255, 255, 0.65), inset 0 -1px 0 rgba(0, 0, 0, 0.08);
+  --focus: #111118;
+  --red-fill: color-mix(in oklab, var(--red) 86%, #3a0000);
+}
+@media (prefers-color-scheme: light) {
+  :root[data-ui-theme="system"] {
+    --bg: #f0f0f4;
+    --carbon: #e6e6ec;
+    --text: #14141c;
+    --dim: #5a5a68;
+    --panel: color-mix(in oklab, #fff 78%, var(--carbon));
+    --surf-1: color-mix(in oklab, #000 3.5%, var(--bg));
+    --surf-3: color-mix(in oklab, #000 8%, var(--bg));
+    --plate: color-mix(in oklab, var(--carbon) 70%, transparent);
+    --plate-line: rgba(20, 20, 28, 0.16);
+    --card-line: rgba(20, 20, 28, 0.12);
+    --plate-hover: color-mix(in oklab, var(--carbon) 82%, #000 6%);
+    --plate-press: color-mix(in oklab, var(--carbon) 88%, #000 10%);
+    --plate-opaque: color-mix(in oklab, #fff 86%, var(--carbon));
+    --scrim: rgba(20, 20, 28, 0.28);
+    --scrim-heavy: rgba(20, 20, 28, 0.72);
+    --hud-halo: 0 1px 3px rgba(255, 255, 255, 0.85);
+    --edge: inset 0 1px 0 rgba(255, 255, 255, 0.65), inset 0 -1px 0 rgba(0, 0, 0, 0.08);
+    --focus: #111118;
+    --red-fill: color-mix(in oklab, var(--red) 86%, #3a0000);
+  }
+}
 
 * { margin: 0; padding: 0; box-sizing: border-box;
   /* iPhone home-screen / Safari: kill the gray tap flash, the blue text

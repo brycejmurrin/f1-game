@@ -231,7 +231,7 @@ test("a bake keeps DEFAULT's rationale comments", () => {
   // A dropped shot takes its own comments; the others stay.
   const out2 = DEFAULT_RE.exec(bake(src, list.filter((s) => s.id !== "turn-mid")))[0];
   assert.ok(!/Aimed THROUGH the corner/.test(out2), "turn-mid's own note leaves with it");
-  assert.ok(/BOTH GRID SHOTS LOOK FORWARD/.test(out2), "a section comment before a surviving shot stays");
+  assert.ok(/and then the grid you start from/.test(out2), "a section comment before a surviving shot stays");
 });
 
 /* ── DO THE EDITS REACH THE FLYBY? ────────────────────────────────────────────

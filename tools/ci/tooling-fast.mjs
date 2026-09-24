@@ -75,8 +75,13 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // graining and blistering say different things (one heals, one does not),
   // the axle call names an end of the car, and it does not nag. ~0.1 s.
   "tests/unit/engineer.test.mjs",
+  // ...and the race radio: every phrasebook line fits its card when spoken,
+  // pools deal like a deck, gaps come from the timing loop, a pass must hold,
+  // lines wait for the straight and die when stale, commentary only while
+  // the player is watching. ~0.1 s.
+  "tests/unit/race-radio.test.mjs",
   "tests/unit/team-livery.test.mjs",
-  // 10 s of pure geometry: builds all 297 catalog options and hashes each
+  // ~29 s of pure geometry (measured 2026-09-24): builds every catalog option ONCE and hashes each
   // mesh, so a part that stops changing the car is caught where the catalog
   // is edited rather than in a 2-hour render sweep nobody runs.
   "tests/unit/parts-distinct-mesh.test.mjs",
@@ -200,6 +205,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Host configs — the three MCP catalogs, the path-scoped rules, the hooks —
   // asserted instead of described; under a second.
   "tests/unit/agent-config.test.mjs",
+  "tests/unit/session-status.test.mjs",
+  "tests/unit/ci-watch.test.mjs",
   // Every freezable module surface stays frozen (pure file read; < 1 s).
   "tests/unit/frozen-globals.test.mjs",
   "tests/unit/component-inventory.test.mjs",
@@ -413,6 +420,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/terrain-normals.test.mjs",
   "tests/unit/aero-zones-turns.test.mjs",
   "tests/unit/ui-improve-pass.test.mjs",
+  "tests/unit/appearance-opts.test.mjs",
   "tests/unit/ui-sheets-audit.test.mjs",
   "tests/unit/menu-nav-spatial.test.mjs",
   "tests/unit/menu-a11y-audit.test.mjs",

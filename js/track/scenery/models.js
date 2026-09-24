@@ -306,18 +306,55 @@ const TrackModels = (function () {
       const supportGap = spec.supportGap != null ? spec.supportGap : 1.5;
       const span = spec.span != null ? spec.span : frame.hw * 2 + supportGap * 2 + 2;
       const offset = Number.isFinite(spec.offset) ? spec.offset : 0;
-      const lift = clearance + thickness / 2;
-      const center = [
-        frame.c[0] + frame.r[0] * offset + frame.u[0] * lift,
-        frame.c[1] + frame.r[1] * offset + frame.u[1] * lift,
-        frame.c[2] + frame.r[2] * offset + frame.u[2] * lift,
+      // soffit: a dark plate under the deck (tunnel shade). `clearance` stays
+      // truthful: the PLATE's bottom sits at it, the deck is raised by `inset`,
+      // and the plate is thicker than the inset so its top is buried in the
+      // deck. Span/depth are scaled < 1 so the plate's end faces never meet
+      // the deck's — two hand-rolled spans at one frac used to share planes.
+      const soffitSpec = spec.soffit || (spec.soffitColor ? { color: spec.soffitColor } : null);
+      let soffit = null;
+      if (soffitSpec) {
+        const o = typeof soffitSpec === "object" ? soffitSpec : {};
+        let inset = o.inset != null ? Number(o.inset) : 0.05;
+        let plate = o.thickness != null ? Number(o.thickness) : 0.2;
+        const spanScale = o.spanScale != null ? Number(o.spanScale) : 0.97;
+        const depthScale = o.depthScale != null ? Number(o.depthScale) : 0.94;
+        // Clamp (never refuse a required bridge) and record why, as `escaped`.
+        const clampLog = () => diagnostics.clamped || (diagnostics.clamped = []);
+        if (!(inset > 0 && inset < thickness)) {
+          const clamped = Math.min(0.05, thickness / 4);
+          clampLog().push({ id, required: !!spec.required, reason: "soffit inset must be > 0 and < deck thickness", inset, clampedTo: clamped });
+          inset = clamped;
+        }
+        if (!Number.isFinite(plate)) plate = 0.2;
+        if (!(plate > inset && plate < thickness)) {
+          const clamped = Math.min(Math.max(plate, inset * 2), (inset + thickness) / 2);
+          clampLog().push({ id, required: !!spec.required, reason: "soffit thickness must be > inset and < deck thickness", thickness: plate, clampedTo: clamped });
+          plate = clamped;
+        }
+        soffit = {
+          color: o.color || spec.soffitColor || [0.08, 0.08, 0.10],
+          inset, thickness: plate,
+          spanScale: spanScale > 0 && spanScale < 1 ? spanScale : 0.97,
+          depthScale: depthScale > 0 && depthScale < 1 ? depthScale : 0.94,
+        };
+      }
+      const deckUnder = clearance + (soffit ? soffit.inset : 0);
+      const lift = deckUnder + thickness / 2;
+      const at = (h) => [
+        frame.c[0] + frame.r[0] * offset + frame.u[0] * h,
+        frame.c[1] + frame.r[1] * offset + frame.u[1] * h,
+        frame.c[2] + frame.r[2] * offset + frame.u[2] * h,
       ];
       const stage = emptyBuffer();
-      if (!box(stage, center, [span, thickness, depth], spec.color, [frame.r, frame.u, frame.t])) return false;
+      if (!box(stage, at(lift), [span, thickness, depth], spec.color, [frame.r, frame.u, frame.t])) return false;
+      if (soffit && !box(stage, at(clearance + soffit.thickness / 2),
+          [span * soffit.spanScale, soffit.thickness, depth * soffit.depthScale],
+          soffit.color, [frame.r, frame.u, frame.t])) return false;
       if (spec.supports !== false && ctx.groundHeight && ctx.groundPoint) {
         const sw = (spec.supportWidth != null ? spec.supportWidth : 0.8) * 0.9;
         const lat = supportGap + sw / 2 + 0.12;
-        const under = clearance;           // deck underside above the road datum
+        const under = deckUnder;           // deck underside above the road datum
         for (const side of [-1, 1]) {
           const foot = ctx.groundPoint(frame.k, side, lat, ctx.groundHeight(frame.k, lat));
           if (!finiteArray(foot, 3)) continue;
@@ -333,7 +370,8 @@ const TrackModels = (function () {
         }
       }
       appendBuffer(out, stage, id);
-      diagnostics.emitted.push({ id, required: !!spec.required, vertices: stage.pos.length / 3, overhead: true, clearance });
+      diagnostics.emitted.push(Object.assign({ id, required: !!spec.required, vertices: stage.pos.length / 3, overhead: true, clearance, frac: spec.frac },
+        soffit ? { soffit: true } : null));
       return true;
     }
 

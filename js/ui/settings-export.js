@@ -65,6 +65,8 @@ const SPEC = [
   { k: "radioVoice", lane: "json", group: "audio", def: false, src: "js/audio/panel.js" },
   { k: "volRadio", lane: "json", group: "audio", def: 0.8, src: "js/audio/panel.js" },
   { k: "voiceTune", lane: "json", group: "audio", def: {}, src: "js/audio/radio-voice.js" },
+  { k: "radioChat", lane: "json", group: "audio", def: "normal", src: "js/race/race-radio.js", oneOf: ["off", "key", "normal", "chatty"] },
+  { k: "commentary", lane: "json", group: "audio", def: "tv", src: "js/race/race-radio.js", oneOf: ["off", "tv", "on"] },
   { k: "musicSource", lane: "json", group: "audio", def: "all", src: "js/audio/panel.js" },
   { k: "sndProfile", lane: "json", group: "audio", def: "team", src: "js/audio/panel.js" },
   { k: "sndTune", lane: "json", group: "audio", def: () => (typeof GameAudio !== "undefined" && GameAudio.tuneDefaults) ? GameAudio.tuneDefaults() : {}, src: "js/audio/engine.js TUNE_DEF" },
@@ -78,6 +80,7 @@ const SPEC = [
   { k: "hudScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%; touch defaults 100 hud / 109 ui, scale.js scaleDefault)" },
   { k: "hudBtnScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = follows hudScale)" },
   { k: "hudBtnOpacity", lane: "json", group: "display", def: null, src: "js/ui/scale.js (null = 100%)" },
+  { k: "motion", lane: "json", group: "display", def: null, src: "js/ui/title-fx.js (null = follows the OS prefers-reduced-motion)", oneOf: ["on", "reduce"] },
   { k: "resMode", lane: "json", group: "display", def: (G) => (G && G.gfx && G.gfx.isMobile) ? "low" : "auto", src: "js/ui/scale.js (LOW on a touch device)" },
   { k: "spatialUpscale", lane: "raw", group: "display", def: "0", src: "js/ui/scale.js + GLX/WGX/TLX SGSR (UPSCALING-2026-09 §6–7; OFF by default)" },
   { k: "occlusionCull", lane: "raw", group: "display", def: "0", src: "js/ui/scale.js OCCLUSION row + GLX hardware depth queries (js/render/glx/chunked.js; GLX only, OFF by default)" },
@@ -88,7 +91,7 @@ const SPEC = [
   { k: "tlxForceGL", lane: "raw", group: "display", def: null, src: "js/perf/renderer-picker.js (null = AUTO)" },
   { k: "tlxEnvProbe", lane: "raw", group: "display", def: null, src: "js/perf/renderer-picker.js CAR REFLECTIONS (null = OFF)" },
   // HUD (js/game.js)
-  { k: "hudProfile", lane: "json", group: "hud", def: "standard", src: "js/game.js" },
+  { k: "hudProfile", lane: "json", group: "hud", def: "standard", oneOf: ["minimal", "standard", "broadcast"], src: "js/game.js" },
   { k: "hudMetricsLayout", lane: "json", group: "hud", def: "full", src: "js/game.js" },
   { k: "hudMapVis", lane: "json", group: "hud", def: "on", src: "js/game.js" },
   { k: "hudGapsVis", lane: "json", group: "hud", def: "on", src: "js/game.js" },
@@ -100,7 +103,7 @@ const SPEC = [
   // LIGHTING TUNER (js/lighting)
   { k: "lightTune", lane: "json", group: "lighting", def: {}, src: "js/lighting/knobs.js TUNE_DEFS (the file holds {\"track|tod|weather\":{knob:value}} edits)" },
   // DRIVING / RACE RULES (js/game.js, js/race/race-control.js)
-  { k: "steerMode", lane: "json", group: "driving", def: "buttons", src: "js/game.js" },
+  { k: "steerMode", lane: "json", group: "driving", def: "buttons", oneOf: ["tilt", "buttons", "touch"], src: "js/game.js" },
   { k: "manual", lane: "json", group: "driving", def: false, src: "js/game.js" },
   { k: "autoThrottle", lane: "json", group: "driving", def: false, src: "js/game.js (XAG 107: a held accelerator is an input barrier)" },
   { k: "mirrorControls", lane: "json", group: "driving", def: false, src: "js/game.js (left-handed dock)" },
@@ -119,7 +122,7 @@ const SPEC = [
   { k: "padLabels", lane: "json", group: "driving", def: "auto", src: "js/ui/key-binds.js (Xbox/PlayStation/Nintendo button names)" },
   { k: "padAxes", lane: "json", group: "driving", def: null, src: "js/ui/key-binds.js wheel wizard (axis indices + signs)" },
   { k: "aeroMode", lane: "json", group: "driving", def: "manual", src: "js/game.js" },
-  { k: "drivingLine", lane: "json", group: "driving", def: "full", src: "js/game.js" },
+  { k: "drivingLine", lane: "json", group: "driving", def: "full", oneOf: ["off", "corner", "full"], src: "js/game.js" },
   // DRIVING LINE prefs (js/ui/driving-line-opts.js) — separate from the mode
   // above. NOT `brakeCue` — that row is the steering panel's 1-10 slider below.
   // The two shared one key until 6ee62f21; a settings file written before the
@@ -127,6 +130,12 @@ const SPEC = [
   { k: "drivingLinePalette", lane: "json", group: "driving", def: "f1", src: "js/ui/driving-line-opts.js" },
   { k: "drivingLineOpacity", lane: "json", group: "driving", def: "normal", src: "js/ui/driving-line-opts.js" },
   { k: "lineBrakeCue", lane: "json", group: "driving", def: "off", src: "js/ui/driving-line-opts.js" },
+  // APPEARANCE (js/ui/appearance-opts.js) — theme + dual accents
+  { k: "uiTheme", lane: "json", group: "appearance", def: "dark", src: "js/ui/appearance-opts.js" },
+  { k: "menuAccent", lane: "json", group: "appearance", def: "brand", src: "js/ui/appearance-opts.js" },
+  { k: "hudAccent", lane: "json", group: "appearance", def: "team", src: "js/ui/appearance-opts.js" },
+  { k: "menuAccentHex", lane: "json", group: "appearance", def: "#e10600", src: "js/ui/appearance-opts.js" },
+  { k: "hudAccentHex", lane: "json", group: "appearance", def: "#e10600", src: "js/ui/appearance-opts.js" },
   // `oneOf`: the file is player input and game.js reads DIFF[difficulty] — a
   // string the ladder does not name is skipped here rather than stored.
   { k: "difficulty", lane: "json", group: "driving", def: "hard", src: "js/game.js", oneOf: ["easy", "normal", "hard"] },
@@ -394,7 +403,15 @@ function garageValue(k, v) {
     return v && typeof v === "object" && !Array.isArray(v)
       && Array.isArray(v.drivers) && v.drivers.length > 0 ? v : undefined;
   }
-  if (k === "customLogo") return typeof v === "string" ? v : undefined;
+  if (k === "customLogo") {
+    if (typeof v !== "string") return undefined;
+    // Match custom-team.js upload: canvas longest side CUSTOM_LOGO_MAX (384) →
+    // PNG data URL. Cap bytes generously above a worst-case 384² PNG (~200 KiB
+    // raw → ~270 KiB base64); reject non-image schemes (docs/BUGS.md B8).
+    if (!/^data:image\/(png|jpeg|webp);base64,/.test(v)) return undefined;
+    if (v.length > 400000) return undefined;
+    return v;
+  }
   if (k === "team" || k === "driver") return Number.isInteger(v) && v >= 0 ? v : undefined;
   return undefined;   // isGarageKey() admits nothing else — default deny
 }

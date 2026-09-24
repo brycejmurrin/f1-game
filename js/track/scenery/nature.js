@@ -589,10 +589,17 @@ const SceneryNature = (function () {
       }
       ctx.note("grandstand", [px[k] + r[0] * oInner, groundYAt(k, gap) + 6, pz[k] + r[2] * oInner],
                [10, 12, len], { k, side });
-      // Back shell — center at gap+7.5 beyond road edge
-      const oShell = side * (hw[k] + gap + 7.5);
-      const cShell = [px[k] + r[0] * oShell, groundYAt(k, gap + 7.5) + shellH / 2 - 0.8, pz[k] + r[2] * oShell];
-      addBox(out, cShell, [10, shellH, len], shell || [0.40, 0.41, 0.46], [r, u, t]);
+      // Back shell — BEHIND the rake, gap+6 .. gap+12.5 beyond the road edge.
+      // The crowd bank below runs from gap+1.5 back 4.2 m (+ half a 1.3 m
+      // riser): its last row's back edge is at gap+5.93. The shell used to be
+      // 10 m deep from gap+2.5, so it swallowed four of the five seating rows
+      // — the stand read as a wall with one row of heads in front, and 10 %
+      // of all prop triangles were crowd nobody could see (P2,
+      // docs/notes/SCENERY-QA-PLAN.md). Same back face, same footprint.
+      const SHELL_IN = 6, SHELL_OUT = 12.5, shellD = SHELL_OUT - SHELL_IN, shellMid = (SHELL_IN + SHELL_OUT) / 2;
+      const oShell = side * (hw[k] + gap + shellMid);
+      const cShell = [px[k] + r[0] * oShell, groundYAt(k, gap + shellMid) + shellH / 2 - 0.8, pz[k] + r[2] * oShell];
+      addBox(out, cShell, [shellD, shellH, len], shell || [0.40, 0.41, 0.46], [r, u, t]);
       const riserTint = crowd ? [crowd[0] * 0.4, crowd[1] * 0.4, crowd[2] * 0.4] : null;
       crowdBank(k, side, gap + 1.5, len - 2, 7, 4.2, riserTint);
       const tierLift = [];
@@ -739,9 +746,12 @@ const SceneryNature = (function () {
       // 10 mm can still land flush on one (monza gained a 12 m2 pair against a
       // tracks.js place() prop at exactly that). An odd base breaks the tie
       // with the authored grid without changing any separation BETWEEN slots.
-      const slot = hillSeq++ % 5;
-      gap += 0.003 + slot * 0.01;
-      const sShift = 0.007 + ((slot * 2) % 5) * 0.01;
+      // Stepped by TrackGeom.MIN_SEP (2026-09-24): at the 300 m window the
+      // 10 mm slots fought from 224 m, so the slots are now MIN_SEP apart
+      // across the gap (fights beyond 388 m) and 2 x MIN_SEP along it.
+      const slot = hillSeq++ % 5, SEP = TrackGeom.MIN_SEP;
+      gap += 0.017 + slot * SEP;
+      const sShift = 0.007 + ((slot * 2) % 5) * SEP;
       const rows = Math.max(2, Math.min(8, Math.round(opts.rows || 4)));
       const rise = opts.rise != null ? opts.rise : 1.15;      // per-row height gain
       const depth = opts.depth != null ? opts.depth : 2.0;    // per-row setback
@@ -846,7 +856,15 @@ const SceneryNature = (function () {
     const canopyR = (kind, h) => {
       const jMax = 1.15;                                  // per-instance jitter ceiling
       if (kind === "pine") return 2.7 * jMax + 0.4;       // pine(): widest lower tier
-      if (kind === "fir")  return (2.1 + h * 0.06) * 1.15 + 0.4;   // conifer(): +15% jitter on the base tier
+      // fir → conifer(): widest cone is (2.1+h*0.06)*j. Keep-out must not collapse
+      // below the previous broadleaf scatter corridor when furniture.tree retargets
+      // pine→fir (2026-09-22: bare mesh extent grew interpenetration on all five).
+      // Mesh extent + lean budget, floored at ~90% of broadleaf keep-out.
+      if (kind === "fir") {
+        const mesh = (2.1 + h * 0.06) * jMax + 0.8;
+        const broad = (3.7 + h * 0.14) * jMax + 0.4;
+        return Math.max(mesh, broad * 0.9);
+      }
       if (kind === "palm") return 5.2;                    // frond hub 2.4 + blade spread
       if (kind === "cypress")       return 1.45 * jMax + 0.4;   // narrow column
       if (kind === "stonePine")     return h * 0.44 + 0.6;      // wide flat parasol

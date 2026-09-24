@@ -28,6 +28,13 @@ const FlybySeq = {
   cornerSide: (track, n) => (n % 2 ? 1 : -1),
   poseFromWorld: () => ({ pose: { at: "corner", n: 2, off: -12.5, x: 30 }, err: 0.01 }),
   shotFromView: (track, eye, target, fov) => ({ shot: { id: "freecam", eye: [{ at: "corner", n: 2 }], fov: [fov, fov] }, err: { eye: 0.01, look: 0.2 } }),
+  // The planner stand-in: a corner pose sits at its apex, +x outside by cornerSide, off along +Z.
+  solve(track, u, shots) {
+    const at = (q) => { const s0 = track._fbCorners[q.n - 1].f * track.total, sd = this.cornerSide(track, q.n); return [(q.x || 0) * sd, 2 + (q.y || 0), s0 + (q.off || 0)]; };
+    this.lastShot = shots[0]; this.resets = this.resets || 0;
+    return { eye: at(shots[0].eye[0]), tgt: at(shots[0].look[0]) };
+  },
+  reset() { this.resets = (this.resets || 0) + 1; },
 };
 const Tracks = {
   sample(track, s, out) { out.p[0] = 0; out.p[1] = 2; out.p[2] = s; out.t[0] = 0; out.t[1] = 0; out.t[2] = 1; out.r[0] = 1; out.r[1] = 0; out.r[2] = 0; return out; },
@@ -106,6 +113,9 @@ test("snap maths: behind the car along its heading; a corner from its outside, b
   assert.ok(c2.eye[0] < 0, "side −1 puts the eye on the other side");
   assert.equal(FC.cornerPose({ total: 1000 }, 5).n, 1, "n wraps past the last corner");
   assert.equal(FC.cornerPose({ total: 1000 }, 0).n, 4, "and before the first");
+  const shot = FlybySeq.lastShot;
+  assert.equal(shot.eye[0].at, "corner"); assert.equal(shot.look[0].at, "corner");
+  assert.ok(FlybySeq.resets >= 4, "a borrowed solve resets the flyby's cut state every time");
   const a = FC.aim([0, 0, 0], [0, 0, -10]);
   assert.ok(Math.abs(a.yaw) < 1e-9 && Math.abs(a.pitch) < 1e-9, "photo mode's convention: yaw 0 looks down −Z");
 });

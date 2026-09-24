@@ -9,9 +9,11 @@ it: three.js r185.1 (TLX backend), Rapier (`debrisworld.js`), Trystero (the
 Nostr room-code rendezvous) and jsQR (the answer-code camera scan). Served as
 static files (GitHub Pages). Every JS file is an IIFE that assigns ONE global.
 
-> This file is the module **contract** — what each module is and what it may
-> assume. For an assessment of how the project is built, what the no-build-step
-> bet costs, and the register of known defects (fixed and deferred), see
+> **New here?** Start with [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) (boot path,
+> layer map, where to edit). This file is the module **contract** — what each
+> module is and what it may assume. Verified defects: [BUGS.md](BUGS.md). For an
+> assessment of how the project is built, what the no-build-step bet costs, and
+> the register of known defects (fixed and deferred), see
 > [notes/ARCHITECTURE-REVIEW.md](notes/ARCHITECTURE-REVIEW.md).
 
 Modules are grouped by domain: `js/render/` (renderers), `js/track/` (the track
@@ -69,7 +71,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_197 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_203 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -162,6 +164,7 @@ _197 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `dom.js` | `Dom` | tag | Dom: the three DOM/format helpers every DOM-built screen shares (el / paintFold / fmtLap). |
+| `title-fx.js` | `TitleFx` | tag | TitleFx: the title screen's motion, as a player setting. |
 | `track-maps.js` | `TrackMaps` | tag | TrackMaps: offline 2D circuit outlines for the track picker. |
 | `flags.js` | `Flags` | tag | national flags as inline SVG, for the circuit picker's flag strip and the hero caption beside a circuit's name. |
 | `select-screen.js` | `Menus` | tag | the select-screen UI for js/game.js: the circuit picker as a flag strip over a hero (the in-game still of the chosen circuit with its lap outline drawn on top… |
@@ -179,6 +182,7 @@ _197 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `settings-export.js` | `SettingsExport` | tag | SettingsExport: the FILES section of SETTINGS › DISPLAY › RENDERER, which carries a player's state OUT of the browser and back IN. |
 | `scale.js` | `UiScale` | tag | UI SIZE / HUD SIZE / BUTTON SIZE sliders + RESOLUTION pin. |
 | `driving-line-opts.js` | `DrivingLineOpts` | tag | DrivingLineOpts: the DRIVING LINE's player PREFERENCES — LINE COLOUR, LINE OPACITY and BRAKE CUE, the three that persist per player rather than per race. |
+| `appearance-opts.js` | `AppearanceOpts` | tag | AppearanceOpts: THEME + MENU ACCENT + HUD ACCENT preferences. |
 | `debris-opts.js` | `DebrisOpts` | tag | DebrisOpts: the DEBRIS switch as a player setting. |
 | `hud.js` | `GameHud` | tag | in-race HUD + minimap for js/game.js. |
 | `results-sheet.js` | `GameResults` | tag | results / time-trial / championship-standings DOM builders for js/game.js. |
@@ -197,6 +201,7 @@ _197 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `spline.js` | `TrackSpline` | tag | TrackSpline: pure centreline / spline math for the tracks engine. centerline() integrates an authored segment list into closed control points, cr() is… |
 | `line.js` | `TrackLine` | tag | TrackLine: the baked RACING LINE, a lateral offset per centreline node, computed once at track build beside track.curv. |
 | `mesh.js` | `TrackMesh` | tag | TrackMesh: the kerb/banking band + the road/terrain/floor mesh builders for the tracks engine. upOf() is the shared per-node up-basis, hash() the dete… |
+| `hidden-faces.js` | `TrackHiddenFaces` | tag | build-time strip of prop triangles no camera can see (enclosed in an opaque box, buried under terrain, down-facing on the ground). |
 
 **`js/track/scenery/`**
 
@@ -231,6 +236,9 @@ _197 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `duel.js` | `Duel` | tag | DUEL: a practice race against ONE rival with his rating lifted. |
 | `reliability.js` | `Reliability` | tag | RELIABILITY: whether a car reaches the flag at all. |
 | `engineer.js` | `RaceEngineer` | tag | RACE ENGINEER: the voice that makes the tyre model legible. |
+| `radio-lines.js` | `RadioLines` | tag | RADIO LINES: the phrasebook the race engineer and the TV commentator speak from (js/race/race-radio.js decides WHEN; this decides the WORDS). |
+| `race-facts.js` | `RaceFacts` | tag | RACE FACTS: what is happening in the race, as numbers and events a radio can talk about (js/race/race-radio.js is the only reader). |
+| `race-radio.js` | `RaceRadio` | tag | RACE RADIO: the race engineer's situational awareness and the TV commentator, on the one radio card (js/game.js announce()). |
 | `race-control.js` | `RaceControl` | tag | RACE CONTROL (RaceControl.create(G)) The flag state: green / local yellow / VSC / safety car, and the one rule that reads off it (whether OVERTAKE is … |
 | `weather-arc.js` | `WeatherArc` | tag | LIVE WEATHER + the DYNAMIC WEATHER ARC (WeatherArc.create(G, deps)): the one path a session's weather changes through, and the optional per-race progression… |
 | `quali-model.js` | `Quali` | tag | QUALIFYING: one flying lap, and the simulated times it is measured against. |

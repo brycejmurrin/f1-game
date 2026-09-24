@@ -203,7 +203,155 @@ between frames, so any difference there is z-fighting or shadow boil. Cost and
 determinism under SwiftShader need measuring before it is gated; start
 non-blocking, like "Golden menus on a runner".
 
-## 3. Order of work
+## 2b. Next campaign — designed 2026-09-24 (four read-only investigations)
+
+Scripts and raw output: `scratch/roadfold/`, `scratch/terrainz/`, `scratch/guards/`,
+`scratch/perf/`. Nothing below is shipped yet.
+
+### R. Road ribbon (mesh.js buildRoad)
+- **R1 — duplicate kerbs (the whole "road folding" signal).** `findCorners`
+  (mesh.js 34-58) returns every local |k| peak and each gets its own span, so a
+  long corner lays its kerb ribbon once per peak: 55 % of kerb/hatch triangles
+  fleet-wide are bit-identical copies (up to 9 on shanghai). Same position and
+  colour, so no flicker — pure waste and audit noise (it was ~308k of the
+  triangle audit's road pairs). Fix: a per-side quad-coverage mask and one
+  `ribbon()` per contiguous run (prototype `scratch/roadfold/mesh.js`): kerb
+  set, colours and `kerbL`/`kerbR` identical on the 33 circuits compared, kerb
+  triangles 170,786 -> 78,554. The other 19 circuits must be compared before shipping.
+- **R2 — verge clamp on the fold side** (optional): |o| = min(|o|,
+  max(w, 0.85 |dP| / |dot(dr, t)|)) on columns 0/1/12/13 only; never below w,
+  so the racing surface is bit-identical. Moves 0-77 verge vertices per circuit.
+- **R3 — true tarmac folds are centreline kinks** (R < hw): korea (f ~0.064,
+  0.30, 0.43, 0.66; one node turns 97 deg in 4 m), bahrain, sepang, sochi. A
+  circuit-data fix, not mesh.js.
+- **Check:** verify-track fails on duplicate kerb triangles and on any rail in
+  columns 2-11 running backwards (known-list ratchet for R3 circuits).
+- Moves: road idx counts (`shared-track-foundation-characterization`
+  records idxCount), coplanar/float baselines. The earlier "shanghai probe" was
+  a false positive (sampled on shared strip edges).
+
+### T. Terrain z-fighting and the 300 m audit window
+- **T1 — props crossing terrain.** GLX/TLX draw terrain UNBIASED (only WGX
+  reads `buryRibbon`), and the fighting props sit on BOTH sides of it (238
+  above / 184 below on 5 circuits), so a geometric lift or sink does nothing
+  (prototyped: 422 -> 428 pairs). Fix: `_terrainBias = [2, 10]` on
+  `_wmTerrain*`, floor [4, 8] -> [4, 16] so it stays behind; WGX `_litOpts` to
+  honour `depthBias` over `_BIAS_BURY`. Modelled: fighting metres within 300 m
+  34,208 -> 5,339 (-84 %). Check first: wgx.js:1926-1927 may pass GL's
+  [factor, units] into constant/slope swapped. Needs a live boot + gpu-census.
+- **T2 — delete the universal ground slab** (tracks.js:983, 439 pairs on 34
+  circuits; duplicates buildFloor, hidden from coplanar-audit by MAX_DIM, WGX
+  already skips it).
+- **T3 — groundPatch rigid for up to 96 m** (tracks.js:1298, models.js:354):
+  tessellate along the track so it follows the terrain (220 pairs, 14 circuits).
+- **T4 — MIN_SEP and the 300 m window.** At `--fight 300`: 584 spots vs 106
+  today; 7 emitters are 80 % of the new ones, pits.js:516 x :533 alone 51 % (baked
+  bay face vs jamb/lintel skin at 5 / 11 mm; the 6 mm alternate-slice stagger).
+  Export `TrackGeom.MIN_SEP = 0.03` (fights only beyond 388 m), use it in
+  pits.js staggers/insets, structures.js:633, nature.js step arithmetic;
+  coplanar-audit gap window and FIGHT_MAX 300 from the same constant.
+  Prototype: qatar 21 -> 0, bahrain 6 -> 0, 6 circuits 87 -> 42. Order: pits
+  first, then rebaseline at 300 m (~250) and ratchet down.
+
+### G. Guards
+- **G1 — solid-in-the-road audit.** Prototyped (`scratch/guards/
+  solid-in-road.cjs`): convex hull of each shipped prop primitive's real XZ
+  vertices vs tarmac samples (|lat| <= 0.9 hw, <= 1 m along), counted only
+  when the primitive is GROUNDED (minY <= road + 0.2) and spans into
+  [road + 0.2, road + 5]. Catches the suzuka pillar on the pre-fix tree, 0 on
+  HEAD, 52 circuits in ~100 s; fold into props-over-road.test.mjs's fleet pass.
+- **G2 — flicker gate.** Two identical still frames CANNOT show z-fighting
+  (a deterministic rasteriser resolves the fight the same way every frame).
+  Per site: A and A' at one pose must diff to 0 (proves every time source is
+  frozen: park, view(), renderClock, govHold + renderScale, lampFlicker 0, day
+  dry, hud off); B and C with the eye moved 1-2 cm along the view ray; score =
+  pixels flipping by > 48 in BOTH moves, in >= 9 px clusters. Sites: ~120 from
+  overhead spans (add `frac` to overheadSpan's emitted record, models.js), start
+  lines, top coplanar sites. Positive control: the pre-fix madrid.js must go
+  red. Cost ~20 min on llvmpipe fleet-wide; start as a non-blocking CI job,
+  block after ~5 runs with A/A' exactly 0.
+- **G3 — `overheadSpan({ soffit })`.** Plate bottom AT `clearance`, deck raised
+  by `inset`, plate thickness > inset (buried), span/depth scaled < 1 so its end
+  faces never meet the deck's. Migrates madrid's two hand-rolled soffits (and
+  should clear madrid's last 2 regular coplanar spots).
+
+### P. Rendering only what a player can see
+Already in place: props/glass/terrain/road in 72 m cells, frustum-culled on all
+three backends; distance cull ~1424 m; instanced batches with per-cell cull;
+per-chunk shadow-caster cull; probe cull 300 m. Occlusion culling and
+multi-draw exist on GLX but ship OFF. Far/fogged geometry is ~0 % (0.03 % /
+0.08 %), so impostors and tighter fog culls would gain nothing.
+
+**13.7 % of all prop triangles (2.55 M of 18.6 M) can never be seen**:
+enclosed in another opaque box 10.4 %, buried > 5 cm 1.5 %, bottom faces on
+the ground 1.5 %, coincident opposite faces 1.3 % (worst: indianapolis 34 %,
+fuji 29 %, interlagos 27 %).
+- **P1 — strip never-visible triangles from the INDEX buffer at build time**
+  (after buildProps, before createChunkedMesh; vertex buffer untouched so the
+  audits' positions stay valid). Removes 13.7 % of prop vertex/primitive work
+  in the main, shadow and probe passes. Small effort, low risk.
+- **P2 — the main enclosure source is a look bug too.** grandstandEx's shell
+  (gap + 2.5 .. + 12.5) swallows crowdBank's back rows (gap + 1.5, depth 4.2);
+  the green shed also lands inside stands. Moving the crowd out may make it
+  VISIBLE — confirm with a rendered before/after.
+- **P3 — compact the vertex buffer too + a per-circuit props-triangle ratchet**
+  (~9-10 MB of vegas's ~80 MB props; iPhone SE kills at ~100 MB). Medium risk:
+  audit primitive ranges shift, rebaseline in the same change.
+- **P4 — detail LOD:** props < ~1 m into a separate chunked mesh drawn within
+  ~200-250 m (up to ~20 % of in-radius triangles are < 3 px). Needs multi-draw
+  and a fade.
+- Measurement: GPU timing on this box can't resolve it (RENDER-PERF-PLAN §6,
+  same-state samples vary 18-45 %), so gate on COUNTS (props tris/verts per
+  frame, glx-call-census, chunk-reach) and confirm frame time on gpu-census.
+
+### Verification of the shipped batch (2026-09-24)
+- Foundation specs (browser): cota and redbull passed; monza and suzuka were
+  red since the 2026-09-23 frame fixes (never selected by CI) — monza's pit
+  canopy is now superseded by the complex, suzuka's built fracs lost the bogus
+  shift. Specs corrected (d7eaa6395), both pass.
+- gpu-census on macos-latest (madrid: bridges + start-line bias): dispatched.
+- Deploy of c08803d8: check scheduled.
+
+## 3. Order of work (next campaign)
+
+Batch 1 — DONE (branch claude/tracks-needing-work-0ifyg3): G1, G3, R1, R2,
+T1, T2, T4 (fight window 300 m, fleet 584 -> 287), P1 (-2.33 M props tris,
+-12.5 %), P2 (crowd rows out of the stand shell). Found on the way and fixed:
+
+- **Surveyed elevation read by point index** (tracks.js realPoints): the 11
+  OSM circuits' profiles were up to 0.29 lap out of place (fuji 15 m, dijon
+  13 m, mosport 11 m). Now read by arc fraction at every 4 m node
+  (surveyHeights); 0.2-0.6 m of the survey everywhere. Densifying the path
+  instead rotated the laps 49-277 m (startFrac is index algebra) — reverted.
+- **Verge trench on descents** (mesh.js channel carve read the road's own run
+  as a lower road): spa 2417 -> 287 deep verge samples, fleet-wide.
+- **groundPatch tops at groundY** — overlapping patches shared a plane; per-call
+  MIN_SEP slots.
+
+Batch 2 — order:
+
+1. **V1 run-off shelf** (NEW, highest visible value). The terrain starts 0.30 m
+   under the verge edge (surface.js `base - 0.3 - dist*0.018`) behind a vertical
+   skirt, and cars off the tarmac ride the ROAD PLANE (game.js, render-only),
+   so a car in the gravel hovers 0.35 m at 2 m out, 0.6 m at 12 m, 0.85 m at
+   20 m. Shelf: meet the verge at -0.05, flat to ~hw+12, ease into the old
+   fall-off by ~hw+30; skirt stays for real embankments. Physics untouched.
+   Checks: banked low sides (zandvoort, indianapolis) keep terrain under the
+   verge; fleet rebaseline; renders of monza/spa/zandvoort with a parked car
+   in the run-off.
+2. **R3 centreline kinks** — the 19 fold-warning circuits (verify-track list);
+   worst heading flips zolder 28°, mont_tremblant 13°, buddh 12°, donington 12°.
+   Per circuit, data-only path fixes; each keeps its turns/start within 1 m.
+3. **T4 rest** — crowdBand vs grandstandEx (fuji 7.5 mm, 27 pairs), bleacher
+   concourse band enclosing the lower rows (P2 multi-tier), tracks.js place()
+   jitter.
+4. **P1 speed** — strip costs ~300 ms/circuit (vegas 790 ms): test each box's
+   corners once, cheaper box recognition; target < 200 ms.
+5. **P3** vertex compaction + a per-circuit props-triangle ratchet.
+6. **G2** flicker gate as a non-blocking CI job, calibrated on fixed sites.
+7. **P4** detail LOD (multi-draw + fade), T3 groundPatch tessellation.
+
+## 3a. Order of work (first campaign, done)
 
 1. A (what the player sees most), then B's top classes.
 2. C, because it changes every baseline, and anything fixed before it is

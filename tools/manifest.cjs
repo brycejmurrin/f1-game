@@ -116,6 +116,7 @@ const FULL = [
   "js/data/settings-defaults.js",
   "js/core/store.js",
   "js/ui/dom.js",            // Dom.el / paintFold / fmtLap — the one DOM-helper home (hub, career-ui, season-ui destructure it at eval)
+  "js/ui/title-fx.js",       // <html data-motion> at eval, as early as the store allows: the first menu frame must not animate for a player who said REDUCED
   "js/track/core/geom.js",
   "js/track/core/pit.js",
   "js/track/scenery/data.js",
@@ -129,6 +130,7 @@ const FULL = [
   "js/track/core/spline.js",
   "js/track/core/line.js",
   "js/track/core/mesh.js",
+  "js/track/core/hidden-faces.js",
   "js/track/scenery/nature.js",
   "js/track/scenery/structures.js",
   "js/track/scenery/city.js",
@@ -189,6 +191,11 @@ const FULL = [
   "js/physics/ai-drive.js",
   "js/physics/ai-corridor.js",
   "js/race/engineer.js",
+  // The race radio: phrasebook, facts (timing loop + events), then the brain
+  // that reads both. game.js calls RaceRadio.create(G) at eval.
+  "js/race/radio-lines.js",
+  "js/race/race-facts.js",
+  "js/race/race-radio.js",
   "js/camera/offsets.js",
   "js/camera/flyby-seq.js",
   "js/camera/flyby-panel.js",
@@ -228,6 +235,7 @@ const FULL = [
   "js/ui/scale.js",
   "js/camera/cockpit-opts.js",
   "js/ui/driving-line-opts.js",
+  "js/ui/appearance-opts.js",
   "js/ui/debris-opts.js",
   "js/perf/metrics-overlay.js",
   "js/camera/vantage.js",
@@ -347,6 +355,7 @@ const TRACK_VM = [
   "js/track/core/spline.js",
   "js/track/core/line.js",
   "js/track/core/mesh.js",
+  "js/track/core/hidden-faces.js",
   "js/track/scenery/nature.js",
   "js/track/scenery/structures.js",
   "js/track/scenery/city.js",
@@ -376,10 +385,13 @@ const HARD_EDGES = [
   // frame cannot draw a default the player did not choose.
   ["js/render/shared/driving-line.js", "js/ui/driving-line-opts.js"],
   ["js/core/store.js", "js/ui/driving-line-opts.js"],
+  ["js/core/store.js", "js/ui/appearance-opts.js"],
+  ["js/ui/setting-row.js", "js/ui/appearance-opts.js"],
   // js/data/hub.js (LAZY_DATA) binds Dom.el at eval too; dom.js is FULL, so the order holds without an edge.
   ["js/ui/dom.js", "js/career/career-ui.js"],    // career-ui binds Dom.el at eval
   ["js/ui/dom.js", "js/career/season-ui.js"],    // season-ui binds Dom.el at eval
   ["js/core/store.js", "js/ui/debris-opts.js"],   // binds GameStore.store at eval
+  ["js/core/store.js", "js/ui/title-fx.js"],      // binds GameStore.store and applies data-motion at eval
   // M4 is also the home of the shared scalar helpers (clamp/lerp/wrapDelta) and
   // every consumer ALIASES them at eval (`const clamp = M4.clamp;`). mat4.js is
   // the 2nd tag so the order is never in doubt, but these are real eval-time
@@ -527,6 +539,9 @@ const HARD_EDGES = [
   ["js/race/pit-lane.js", "js/game.js"],                 // game.js calls PitLane.create(G) at eval
   ["js/core/mat4.js", "js/race/engineer.js"],            // RaceEngineer binds M4.clamp at eval
   ["js/race/engineer.js", "js/game.js"],                 // game.js calls RaceEngineer.create(G) at eval
+  ["js/race/radio-lines.js", "js/race/race-radio.js"],  // RaceRadio.create builds a RadioLines dealer (call time, keep ordered)
+  ["js/race/race-facts.js", "js/race/race-radio.js"],   // …and a RaceFacts tracker
+  ["js/race/race-radio.js", "js/game.js"],               // game.js calls RaceRadio.create(G) at eval
   ["js/core/mat4.js", "js/physics/brake-cue.js"],        // BrakeCue aliases M4.clamp at eval
   ["js/physics/ai-drive.js", "js/physics/contact-geometry.js"],  // the impulse reads AiDrive.bumpRestitution (call time, keep ordered)
   ["js/core/mat4.js", "js/physics/collide.js"],          // Collide binds M4.clamp at eval

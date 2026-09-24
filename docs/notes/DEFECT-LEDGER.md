@@ -300,6 +300,9 @@ RECORDED, NOT FIXED, from the same hunt:
   speed-limited, so it is not an exploit route.
 - **In a time trial the +5 s ladder still runs** alongside the invalidation
   above, announcing a penalty in a mode with nothing to apply it to.
+  **FIXED 2026-09-24** (`docs/BUGS.md` B2): the ladder is gated on
+  `!isTimeTrial()`; `tests/unit/tt-lap-validity-vm.test.mjs` pins `penalty === 0`
+  after four counted cuts.
 - **Points and the fastest-lap bonus reach cars that never finished.**
   `js/career/season-cal.js` excludes only `c.retired`, not `!c.finished`, and
   `order` carries cars still running when the hard time cap ends a race

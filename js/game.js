@@ -1221,7 +1221,7 @@ let announcer = Announcer.inert();   // js/audio/announcer.js — the pre-race w
 // is a report. It ranks with the pit-lane messages it belongs to rather than
 // under them — before this it was "info", so the confirmation that you HAD
 // entered the pits outranked the call telling you to.
-const ANN_PRI = { coach: 1, practice: 2, info: 2, warning: 3, "penalty-warn": 3, box: 4, race: 4, "penalty-hit": 5 };
+const ANN_PRI = { comm: 1, coach: 1, practice: 2, info: 2, warning: 3, "penalty-warn": 3, box: 4, race: 4, "penalty-hit": 5 };
 // THE FLOOR. Every card gets ANN_MIN_S on screen, whatever its caller asked for
 // and whatever arrives next. Callers passed durations from 1.4 s up, and 1.4 s
 // is not a message — it is a flash you notice after it has gone. The floor is
@@ -1256,6 +1256,7 @@ let _annPri = 0, _annFloor = 0, _annQueue = [];
 function radioWho(kind) {
   if (kind === "penalty-hit" || kind === "penalty-warn" || kind === "warning") return "RACE CONTROL";
   if (kind === "coach" || kind === "practice") return "COACH";
+  if (kind === "comm") return "COMMENTARY";   // js/race/race-radio.js — the broadcaster, not the pit wall
   const p = player;
   const who = p && p.name ? String(p.name).split(" ").pop().toUpperCase() : (p && p.code) || "";
   return (who ? who + " · " : "") + "RADIO";
@@ -1267,6 +1268,7 @@ function showAnnounce(msg, dur, kind) {
   els.announceText.textContent = msg;
   els.announceWho.textContent = radioWho(kind);
   els.announceNum.textContent = radioNum();   // "" collapses the plate to the old 3px stripe
+  if (kind === "comm") els.announceNum.textContent = "";   // the broadcaster is not talking to the player's car
   els.announce.className = "";
   if (kind && kind !== "race") els.announce.dataset.kind = kind;
   else delete els.announce.dataset.kind;
@@ -2170,8 +2172,12 @@ function gridUp(preOrder) {
     c.kerbGripSm = 1; c.kerbCueT = 0; c.towing = 0; c.wake = 0;
     clearRacingScratch(c);
     // The launch plan and the pace phase (AiDrive): one hash per car per race,
-    // never a simRnd() draw — the stream's draw count is a contract.
-    const h = DriverRatings.hash32(simSeed() + ":" + i + ":" + c.skill);
+    // never a simRnd() draw — the stream's draw count is a contract. Season /
+    // career round + seasonSeed match armReliability (docs/BUGS.md B6).
+    const hSeed = (typeof Career !== "undefined" && Career.inCareer && Career.inCareer())
+      ? Career.seasonSeed() : simSeed();
+    const hRound = isChampionship() ? SeasonCal.drawRound(season) : raceIndex;
+    const h = DriverRatings.hash32(hSeed + ":" + hRound + ":" + i + ":" + c.skill);
     c.launch = c.human ? null : AiDrive.launchPlan(AiDrive.traits(c), (h & 0xffff) / 65536);
     c.launchOn = !c.human; c.phaseRoll = (h >>> 16) / 65536;
     c.tyreClass = c.human ? null : AiDrive.tyreClass(((h >>> 8) & 0xffff) / 65536, lapsTarget);   // the compound IS the strategy
@@ -2459,6 +2465,22 @@ function reloadFlybyShots() {
 // prevents late scenery downloads (including A -> B -> A) from committing.
 const _menuGate = { warm: 0, generation: 0, ready: "", track: null };
 let flybyBuildTimer = 0;
+const MENU_IDLE_MS = 1200;
+let _menuInputAt = 0;
+for (const ev of ["pointerdown", "keydown"])
+  addEventListener(ev, () => { _menuInputAt = performance.now(); }, { capture: true, passive: true });
+// Resolves true once the menu has had MENU_IDLE_MS without a tap or key (false
+// if the selection moved on meanwhile): the build and the warm frames each hold
+// the main thread for seconds, so they wait for the player's hands to stop.
+const menuSlice = () => new Promise((r) => setTimeout(r, 32));
+async function menuIdle(current) {
+  for (;;) {
+    const wait = MENU_IDLE_MS - (performance.now() - _menuInputAt);
+    if (wait <= 0) return current();
+    await new Promise((r) => setTimeout(r, wait));
+    if (!current()) return false;
+  }
+}
 function scheduleFlybyTrack(settle) {
   clearTimeout(flybyBuildTimer);
   const generation = ++_menuGate.generation;
@@ -2478,12 +2500,24 @@ function scheduleFlybyTrack(settle) {
       await ensureScenery(want);
       if (!current()) return;
       if (gfx.warming && gfx.warming()) { flybyBuildTimer = setTimeout(prepare, 100); return; }
+      // Car assets BEFORE the warm frames: prepareMenuCarAssets paces each
+      // car's meshes and livery upload 32 ms apart; a warm frame drawn first
+      // minted and uploaded all ~22 atlases in one 3-4 s task.
       if (_menuGate.ready === key && _menuGate.track === track) {
-        _menuGate.warm = 2; await prepareMenuCarAssets(current); return;
+        await prepareMenuCarAssets(current); if (await menuIdle(current)) _menuGate.warm = 2; return;
       }
+      // The build holds the main thread for 1-3 s: never start it while the
+      // player is still working the picker or RACE SETTINGS (a TIME OF DAY step
+      // that crosses dark rebuilds, and every tap then froze the sheet).
+      if (!(await menuIdle(current))) return;
       loadTrack(want);
-      _menuGate.ready = key; _menuGate.track = track; _menuGate.warm = 2;
+      _menuGate.ready = key; _menuGate.track = track;
+      // Its own slice, like each car below: the pit-sign atlas is a 1024^2 canvas.
+      await menuSlice();
+      if (current() && track.meshes && track.meshes.pitSignTex && typeof gfx.uploadTexture === "function")
+        gfx.uploadTexture(track.meshes.pitSignTex);
       await prepareMenuCarAssets(current);
+      if (await menuIdle(current)) _menuGate.warm = 2;
     } catch (e) { if (current()) Log.warn("gfx", "track preparation failed", e); }
   };
   flybyBuildTimer = setTimeout(prepare, settle ? 1500 : 120);
@@ -3037,7 +3071,7 @@ function endRace(forcedOrder) {
     // The fastest lap among the CLASSIFIED finishers — award() pays the
     // 2019–2024 point only when the season format asks for it.
     let fastest = null, fastestT = Infinity;
-    for (const c of order) if (!c.retired && c.best < fastestT) { fastestT = c.best; fastest = c.driverId; }
+    for (const c of fin) if (c.best < fastestT) { fastestT = c.best; fastest = c.driverId; }
     const settles = SeasonCal.award(season, order, fastest) === "race";
     // award() deletes season.qualiOrder when the round scores; the IN-MEMORY
     // classification is that same weekend and goes with it. Left behind, it kept
@@ -3058,6 +3092,7 @@ function endRace(forcedOrder) {
   dbgCam = null;
   buildResults(order);
   els.results.hidden = false;
+  announcer.wrapUp(order, loadingInfo());   // js/audio/announcer.js — the broadcaster's read over the results
 }
 
 let ltStore = null;   // LightStore.create(G), assigned once G exists (below)
@@ -3109,6 +3144,7 @@ const G = {
   get coach() { return coach; },
   get radio() { return radioVoice; },   // js/audio/radio-voice.js — AudioPanel drives its toggle and volume
   get announcer() { return announcer; },   // js/audio/announcer.js — AudioPanel drives its switch and voice
+  get raceRadio() { return raceRadio; },   // js/race/race-radio.js — AudioPanel drives chatter + commentary
   recordControls: () => ({ autoThrottle: autoThrottle(), gearsManual: gearsManual(), steerMode, aero: raceAeroMode }),
   get ttRecord() { return ttRecord; }, set ttRecord(v) { ttRecord = v; },
   get timeTrial() { return isTimeTrial(); },
@@ -3478,6 +3514,7 @@ radioVoice = RadioVoice.create(G);
 announcer = Announcer.create(G);
 const records = SessionRecords.create(G);
 const coach = DrivingCoach.create(G);
+const raceRadio = RaceRadio.create(G);    // the engineer's race awareness + TV commentary (js/race/race-radio.js)
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
 titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js/ui/title-menu.js)
 const onboard = Onboard.create(G);        // first-run coach marks (js/ui/onboard.js)
@@ -3586,8 +3623,11 @@ function menuGridCars() {
   const rng = _simRngState;
   try {
     makeCars();
-    for (let i = 0; i < cars.length; i++) {
-      const c = cars[i], slot = TrackMesh.gridSlot(track, i);
+    const order = cars.slice(), pi = order.findIndex((c) => c.isPlayer);   // seat the player where the race grid will (P12), for the flyby's grid-mine shot
+    if (pi >= 0) order.splice(Math.min(11, order.length - 1), 0, order.splice(pi, 1)[0]);
+    FlybySeq.setPlayerSlot(order.findIndex((c) => c.isPlayer));
+    for (let i = 0; i < order.length; i++) {
+      const c = order[i], slot = TrackMesh.gridSlot(track, i);
       c.s = wrapS(slot.s); c.x = slot.x; c.xVis = c.x;
       const w = worldFromTrack(c.s, c.x, smp);
       c.px = w.x; c.pz = w.z;
@@ -3616,6 +3656,7 @@ function raceIntro(go) {
   // And fly the shots the EDITOR saved, for the same reason: a list edited in
   // the pause menu is only read here, so every run picks up the latest one.
   reloadFlybyShots();
+  if (!flybyShots) flybyShots = FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0);   // a different flyby each load (never the sim RNG); an editor-saved list plays as authored
   loadingScreen.run(loadingInfo(), go);
 }
 /** WHAT THE LOADING SCREEN DESCRIBES: the circuit about to be raced, this
@@ -4017,7 +4058,7 @@ function update(dt) {
 
   // B1 — debris caution: consume hazards() and drive the local-yellow / VSC / SC
   // flag state (READ-ONLY; never slows or moves a car). Self-guarding + throttled.
-  updateCaution(dt); coach.update(dt);
+  updateCaution(dt); coach.update(dt); raceRadio.update(dt);
 
   // Race-control owns the finish policy as well as neutralisation rules. In a
   // human race an AI/other player crossing first must NOT start a 3.5 s result
@@ -4792,11 +4833,15 @@ function updateCar(c, dt, ranked) {
       c.cutWarn = (c.cutWarn | 0) + 1;
       if (c.cutWarn >= 4) {
         c.cutWarn = 0;
-        c.penalty += 5;
-        if (c.isPlayer) {
-          const pk = hudProfile === "broadcast" ? "race" : "penalty-hit";
-          announce("+5s TRACK LIMITS PENALTY", 2, pk);
-          if (soundOn) GameAudio.penalty();
+        // Time trial already invalidated the lap on the first counted cut; the
+        // +5s ladder is race classification only (docs/BUGS.md B2 / defect ledger).
+        if (!isTimeTrial()) {
+          c.penalty += 5;
+          if (c.isPlayer) {
+            const pk = hudProfile === "broadcast" ? "race" : "penalty-hit";
+            announce("+5s TRACK LIMITS PENALTY", 2, pk);
+            if (soundOn) GameAudio.penalty();
+          }
         }
       } else if (c.isPlayer) {
         // The n/4 count is the race ladder's; in a time trial the lap is simply gone.
@@ -4892,7 +4937,7 @@ function updateCar(c, dt, ranked) {
       const zk = Math.round(c.s + _atk.toTurnIn);
       if (zk !== c.zoneKey) {
         c.zoneKey = zk;
-        if (!c.errT && !alongO && DriverRatings.hash32(simSeed() + ":" + c.gridPos + ":" + c.lap + ":" + zk) / 4294967296 < AiDrive.mistakeChance(aiT, c.pressT / 6, dd.err)) { c.errT = AiDrive.mistakeTotal(); c.errCount = (c.errCount || 0) + 1; }
+        if (!c.errT && !alongO && DriverRatings.hash32(((typeof Career !== "undefined" && Career.inCareer && Career.inCareer()) ? Career.seasonSeed() : simSeed()) + ":" + (isChampionship() ? SeasonCal.drawRound(season) : raceIndex) + ":" + c.gridPos + ":" + c.lap + ":" + zk) / 4294967296 < AiDrive.mistakeChance(aiT, c.pressT / 6, dd.err)) { c.errT = AiDrive.mistakeTotal(); c.errCount = (c.errCount || 0) + 1; }
       }
     } else c.zoneKey = -1;
     c.wheelLock = AiDrive.mistakePhase(c.errT) === 1 && braking ? 1 : 0;   // the render freezes the fronts
@@ -6314,15 +6359,20 @@ try { _perChunkOff = localStorage.getItem("apex26.perChunkOff") === "1"; } catch
 // Pure night/wet variants are constants; the few with live-tunable fields (detail
 // from LT.surfDetail, roughness from LT.roadRough, emissive from floodEmit) are
 // per-variant reused objects mutated in place each call (never a stale key).
-const _wmFloorN = { emissive: 0.14, roughness: 0.98, specular: 0.05, depthBias: [4, 8], buryRibbon: true };
-const _wmFloorD = { roughness: 0.98, specular: 0.05, depthBias: [4, 8], buryRibbon: true };
 // The ROAD carries NO depth bias; the terrain is pushed AWAY instead (WGX has done both
 // since its port, wgx.js _litOpts). A slope-scaled bias on the road ([-8,-16]) pulled the
 // asphalt BEHIND every car forward by 8 px of its own depth gradient: cars under ~8 px tall
 // vanished (the whole grid, seen from past the line) and nearer ones sank. Push-away bias on
-// terrain can never cover a car. Terrain stays nearer than the floor's [4, 8].
-const _wmTerrainN = { emissive: 0.18, roughness: 0.97, specular: 0.06, detail: 0, buryRibbon: true, depthBias: [2, 4] };
-const _wmTerrainD = { roughness: 0.97, specular: 0.06, detail: 0, buryRibbon: true, depthBias: [2, 4] };
+// terrain can never cover a car.
+// Terrain [2, 10]: props that cross the terrain (faces both above and below it, so no
+// geometric lift helps) otherwise fight it wherever they meet — 2.8k pairs on 48 circuits.
+// [2, 10] cuts the fighting metres within 300 m by ~84 % (modelled) while a buried face
+// shows through only ~2 cm at 100 m. The floor stays behind the terrain on BOTH terms: [4, 16].
+const _terrainBias = [2, 10];
+const _wmFloorN = { emissive: 0.14, roughness: 0.98, specular: 0.05, depthBias: [4, 16], buryRibbon: true };
+const _wmFloorD = { roughness: 0.98, specular: 0.05, depthBias: [4, 16], buryRibbon: true };
+const _wmTerrainN = { emissive: 0.18, roughness: 0.97, specular: 0.06, detail: 0, buryRibbon: true, depthBias: _terrainBias };
+const _wmTerrainD = { roughness: 0.97, specular: 0.06, detail: 0, buryRibbon: true, depthBias: _terrainBias };
 const _wmRoadWetN = { emissive: 0.06, roughness: 0.14, specular: 0.85, detail: 0, surfaceId: 16, doubleSided: true };
 const _wmRoadWetD = { roughness: 0.14, specular: 0.85, detail: 0, surfaceId: 16, doubleSided: true };
 const _wmRoadDryN = { emissive: 0.09, roughness: 0, specular: 0.20, detail: 0, surfaceId: 16, doubleSided: true };
@@ -7119,7 +7169,7 @@ function render(dt) {
     // and at a 16-24 slot cap 35-39 % of it comes from lamps outside the set
     // (docs/notes/LAMP-POPPING-PLAN-2026-09-24.md, b) — so they pop. Per-chunk
     // lamps, road included, cover them; the governor shed still wins.
-    const _pcWet = gfx.mobileTier && (frame.wetness || 0) > 0.3 ? 0.6 : 0;
+    const _pcWet = gfx.mobileTier && (frame.wetness || 0) > 0.75 ? 0.6 : 0;   // 0.75: dry night presets pin ~0.55 sheen (≤ 8 % pops)
     frame.perChunkLights = (!gfx.hasPerChunkLights || _perChunkOff || _pcShed >= 2) ? 0
       : (_pcShed >= 1 ? Math.min(0.3, Math.max(_pcWet, +LT.perChunkLights || 0)) : Math.max(_pcWet, +LT.perChunkLights || 0));
     frame.roadChunkLamps = (frame.perChunkLights > 0 && (LT.roadChunkLamps || _pcWet > 0)) ? 1 : 0;
@@ -7330,7 +7380,8 @@ function render(dt) {
   if (state !== "menu") skids.draw(gfx, camEye);
   // The DRIVING LINE ribbon rides the same state as the skids (on the road, no
   // depth write). Drawn against the PLAYER's speed for the dynamic colour.
-  if (state !== "menu" && track && player) DrivingLine.draw(gfx, drivingLineApi(track), Math.abs(player.speed));
+  // Never in a flyby frame (`cine`: the editor preview, flybyCam, free-cam's flyby lens).
+  if (state !== "menu" && !cine && track && player) DrivingLine.draw(gfx, drivingLineApi(track), Math.abs(player.speed));
 
   // cars — skip AI cars more than 550 m of track arc from the player (past fog)
   // Cockpit view doesn't draw the car you're sitting in: a first-person RIG
@@ -8681,9 +8732,15 @@ els.resNext.onclick = () => {
 function setPaused(p) {
   if (state !== "race" && state !== "count") return; hideCamPicker();
   paused = p;
-  if (!p) { closeLightTuner(false); closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode(); }
+  if (!p) {
+    closeLightTuner(false); closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();
+    // closeSettings disarms key/pad slots AND the wheel wizard (beginAxisCapture
+    // zeroes the pad every frame while armed). Hiding #pmsettings alone left
+    // capture live after HUD OFF / RECALIBRATE / RESUME — sibling of the
+    // 2026-09-22 Escape-path fix.
+    closeSettings();
+  }
   els.pausemenu.hidden = !p;
-  if (!p) els.pmsettings.hidden = true;   // never leave the settings sub-menu up after resume
   if (els.pmStandings) els.pmStandings.hidden = !(isChampionship() && SeasonCal.hasProgress(season) && season.round < SeasonCal.rounds());
   // never leave an overlay up after resume
   if (!p) { $("advanced").hidden = true; els.howtoplay.hidden = true; $("audioset").hidden = true; $("standings").hidden = true; $("track-detail").hidden = true; $("quali").hidden = true; els.results.hidden = true; }
@@ -8750,6 +8807,7 @@ els.pmStandings && (els.pmStandings.onclick = () => { buildStandings(); $("stand
 // STEERING INPUT: one row, ‹ TILT | BUTTONS | TOUCH › (was a button cycling the three).
 const STEER_MODES = ["tilt", "buttons", "touch"];
 function setSteerMode(mode) {
+  if (STEER_MODES.indexOf(mode) < 0) mode = "buttons";
   steerMode = mode;
   store.set("steerMode", mode);
   Input.setSteerMode(mode);

@@ -11,6 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DEPLOY_BRANCH, touchedCircuits, preflight, ratchetMetrics, ratchetOverruns, cureableConflicts,
+  LADDER_DOCS, figureOnlyConflict, takeOurs,
   sweepSuites, touchesGeometry, targetedFor, notCovered, anyGeometry, proseOnly, changedPaths } from "../../tools/ci/deploy.mjs";
 import { DEPLOY_BRANCH as PICK_BRANCH } from "../../tools/ci/pick-tests.mjs";
 import { GEOMETRY_ERE, GEOMETRY_PATHS, namedPaths, fleetFiles, TARGETED, targetedSuites, PARTS_ERE, partsFiles } from "../../tools/ci/geometry-paths.mjs";
@@ -141,6 +142,33 @@ test("only GENERATED files cure themselves, and only when their source merged cl
   assert.deepEqual(parts.pkgF, ["package.json"]);
   assert.deepEqual(parts.shellF, ["index.html"]);
   assert.deepEqual(parts.ratchetF, ["tests/data/ratchets.json"]);
+});
+
+test("gate-ladder docs cure only when every conflict hunk differs in digits alone", async () => {
+  // Every unit file anyone adds rewrites "N of M" in these docs, so every open
+  // PR conflicted there within the hour (hand-resolved twice on 2026-09-24,
+  // identically, by regenerating). The rule must still refuse prose.
+  const hunk = (a, b) => `<<<<<<< HEAD\n${a}\n=======\n${b}\n>>>>>>> origin/x\n`;
+  const figures = "intro\n" + hunk("`tooling-fast` (242 of 321 unit files)", "`tooling-fast` (244 of 323 unit files)") + "tail\n";
+  const prose = "intro\n" + hunk("`tooling-fast` (242 of 321 unit files)", "`tooling-fast` (244 of 323 files, see note)") + "tail\n";
+  const mixed = figures + hunk("rule 4 says wait", "rule 4 says poll");
+  assert.equal(figureOnlyConflict(figures), true);
+  assert.equal(figureOnlyConflict(prose), false, "a hunk that differs in a word is a real disagreement");
+  assert.equal(figureOnlyConflict(mixed), false, "one prose hunk makes the whole file a real conflict");
+  assert.equal(figureOnlyConflict("no markers"), false, "nothing conflicted is not a cure");
+  assert.equal(takeOurs(figures), "intro\n`tooling-fast` (242 of 321 unit files)\ntail\n");
+
+  const text = { "AGENTS.md": figures, "docs/TESTING.md": prose, "js/game.js": figures };
+  const cure = (list) => cureableConflicts(list, (f) => text[f]).cureable;
+  assert.equal(cure(["AGENTS.md"]), true);
+  assert.equal(cure(["AGENTS.md", "package.json"]), true, "with another derived file");
+  assert.equal(cure(["AGENTS.md", "docs/TESTING.md"]), false, "one prose hunk stops the merge");
+  assert.equal(cure(["js/game.js"]), false, "digits-only is not enough outside the ladder docs");
+  assert.equal(cureableConflicts(["AGENTS.md"]).cureable, false, "no reader, no cure: old callers unchanged");
+
+  const { TARGET, SECONDARY } = await import("../../tools/gen/gen-ladder-figures.mjs");
+  assert.deepEqual([...LADDER_DOCS].sort(), [TARGET, ...SECONDARY].sort(),
+    "LADDER_DOCS must name exactly the docs gen-ladder-figures rewrites");
 });
 
 /* THE GATE THAT MEASURED NO GEOMETRY. deploy.mjs ran tooling-fast and every
