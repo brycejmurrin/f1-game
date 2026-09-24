@@ -65,28 +65,23 @@
   align-content: center;
   align-content: safe center;
   /* in oklab so the red wash stays red through its falloff instead of
-     sagging grey, and .grain (css/components.css) dithers what is left */
+     sagging grey, and .grain (css/components.css) dithers what is left.
+     --menu-wash-pct is the MENU WASH player setting (js/ui/title-fx.js):
+     FULL uses the fallback below; SOFT/OFF stamp a token on :root. The
+     desktop landscape rule in css/responsive.css reads the same token. */
   background:
-    radial-gradient(115% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) 28%, transparent), transparent 58%),
+    radial-gradient(115% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) var(--menu-wash-pct, 28%), transparent), transparent 58%),
     rgba(6, 6, 10, 0.36);
   overflow-y: auto; overflow-x: hidden;
   overscroll-behavior-y: contain; touch-action: pan-y;
 }
 /* MENU WASH player setting (js/ui/title-fx.js → html[data-menu-wash]).
-   FULL leaves the shipped wash + grain alone. SOFT eases the red and the
-   grain opacity token; OFF drops the radial and zeroes --grain-opacity so
-   the .grain::before layer in components.css goes invisible without this
-   file naming the .grain class (component-inventory coupling gate). */
-:root[data-menu-wash="soft"] #overlay {
-  background:
-    radial-gradient(115% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) 12%, transparent), transparent 58%),
-    rgba(6, 6, 10, 0.36);
-}
-:root[data-menu-wash="soft"] { --grain-opacity: 0.025; }
-:root[data-menu-wash="off"] #overlay {
-  background: rgba(6, 6, 10, 0.36);
-}
-:root[data-menu-wash="off"] { --grain-opacity: 0; }
+   Tokens only — both this file and css/responsive.css (overlays layer) paint
+   the radial from --menu-wash-pct, so a soft/off answer wins on every
+   viewport without fighting cascade-layer order. Grain uses --grain-opacity
+   (css/components.css). */
+:root[data-menu-wash="soft"] { --menu-wash-pct: 12%; --grain-opacity: 0.025; }
+:root[data-menu-wash="off"]  { --menu-wash-pct: 0%;  --grain-opacity: 0; }
 /* THE TITLE CAR. A decorative art layer, NOT a grid item: #overlay is a grid,
    so an in-flow child would open a third row and move the composition. Absolute
    takes it out of flow and fills the fixed parent instead.
