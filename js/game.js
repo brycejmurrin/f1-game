@@ -2465,6 +2465,22 @@ function reloadFlybyShots() {
 // prevents late scenery downloads (including A -> B -> A) from committing.
 const _menuGate = { warm: 0, generation: 0, ready: "", track: null };
 let flybyBuildTimer = 0;
+const MENU_IDLE_MS = 1200;
+let _menuInputAt = 0;
+for (const ev of ["pointerdown", "keydown"])
+  addEventListener(ev, () => { _menuInputAt = performance.now(); }, { capture: true, passive: true });
+// Resolves true once the menu has had MENU_IDLE_MS without a tap or key (false
+// if the selection moved on meanwhile): the build and the warm frames each hold
+// the main thread for seconds, so they wait for the player's hands to stop.
+const menuSlice = () => new Promise((r) => setTimeout(r, 32));
+async function menuIdle(current) {
+  for (;;) {
+    const wait = MENU_IDLE_MS - (performance.now() - _menuInputAt);
+    if (wait <= 0) return current();
+    await new Promise((r) => setTimeout(r, wait));
+    if (!current()) return false;
+  }
+}
 function scheduleFlybyTrack(settle) {
   clearTimeout(flybyBuildTimer);
   const generation = ++_menuGate.generation;
@@ -2484,12 +2500,24 @@ function scheduleFlybyTrack(settle) {
       await ensureScenery(want);
       if (!current()) return;
       if (gfx.warming && gfx.warming()) { flybyBuildTimer = setTimeout(prepare, 100); return; }
+      // Car assets BEFORE the warm frames: prepareMenuCarAssets paces each
+      // car's meshes and livery upload 32 ms apart; a warm frame drawn first
+      // minted and uploaded all ~22 atlases in one 3-4 s task.
       if (_menuGate.ready === key && _menuGate.track === track) {
-        _menuGate.warm = 2; await prepareMenuCarAssets(current); return;
+        await prepareMenuCarAssets(current); if (await menuIdle(current)) _menuGate.warm = 2; return;
       }
+      // The build holds the main thread for 1-3 s: never start it while the
+      // player is still working the picker or RACE SETTINGS (a TIME OF DAY step
+      // that crosses dark rebuilds, and every tap then froze the sheet).
+      if (!(await menuIdle(current))) return;
       loadTrack(want);
-      _menuGate.ready = key; _menuGate.track = track; _menuGate.warm = 2;
+      _menuGate.ready = key; _menuGate.track = track;
+      // Its own slice, like each car below: the pit-sign atlas is a 1024^2 canvas.
+      await menuSlice();
+      if (current() && track.meshes && track.meshes.pitSignTex && typeof gfx.uploadTexture === "function")
+        gfx.uploadTexture(track.meshes.pitSignTex);
       await prepareMenuCarAssets(current);
+      if (await menuIdle(current)) _menuGate.warm = 2;
     } catch (e) { if (current()) Log.warn("gfx", "track preparation failed", e); }
   };
   flybyBuildTimer = setTimeout(prepare, settle ? 1500 : 120);
