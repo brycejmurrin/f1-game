@@ -84,16 +84,18 @@ function buildContext(opts) {
 
   // Load list comes from tools/manifest.cjs (TRACK_VM) — same source of truth
   // as verify-track.cjs. Everything before the instrumentation point (the
-  // emitter wrappers below must install before tracks.js runs).
+  // emitter wrappers below must install before build-props.js / tracks.js run).
   const MANIFEST = require("../manifest.cjs");
-  const PRE = MANIFEST.TRACK_VM.slice(0, MANIFEST.TRACK_VM.indexOf("@circuits"));
+  const BUILD_PROPS = "js/track/scenery/build-props.js";
+  const PRE = MANIFEST.TRACK_VM.slice(0, MANIFEST.TRACK_VM.indexOf("@circuits"))
+    .filter((f) => f !== BUILD_PROPS);
   for (const f of PRE) runFile(f);
 
   // Instrument the geometry emitters so every flagged cluster can name the
-  // primitive that produced it. tracks.js destructures TrackGeom at load time,
-  // so the wrappers must be installed BEFORE it runs. Emitters called from
-  // inside js/track/core/geom.js (addCyl -> emit) use module-scope references and
-  // are untouched, so nothing is double-counted.
+  // primitive that produced it. build-props.js (and tracks.js) destructure
+  // TrackGeom at load time, so the wrappers must be installed BEFORE they run.
+  // Emitters called from inside js/track/core/geom.js (addCyl -> emit) use
+  // module-scope references and are untouched, so nothing is double-counted.
   const prims = [];
   const TG = ctx.TrackGeom;
   for (const name of Object.keys(TG)) {
@@ -148,6 +150,7 @@ function buildContext(opts) {
   // and terrain, no dressing — and the numbers look plausible enough to trust.
   // That is exactly how cota read 3,988 prop cells here instead of 32,897.
   for (const f of MANIFEST.LAZY_SCENERY) runFile(f);
+  runFile(BUILD_PROPS);
   runFile("js/track/tracks.js");
 
   if (!ctx.Tracks || !ctx.Tracks.LIST) throw new Error("Tracks.LIST missing");
