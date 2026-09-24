@@ -252,7 +252,7 @@
 }
 /* THREE TIERS, by how much of your evening the thing costs.
    HERO is the career — the 24-round game everything else feeds into. PLAY NOW is
-   the four one-sitting modes, 2x2. SECONDARY is the rooms: half-height, two
+   the four one-sitting modes, 2x2, as dark plates with a red leading edge. SECONDARY is the rooms: half-height, two
    across, no glow.
 
    It was two tiers, but the play row had grown to FIVE full-size red buttons, so
@@ -386,6 +386,60 @@
   color: var(--text);
 }
 .minibtn .btn-ico { margin-right: 0.35em; }
+/* ONE RED HERO. Solid red is CAREER's alone; the four play-now modes are dark
+   plates one clear step above the rooms — a lighter, near-opaque carbon, full
+   ink, a red icon and a red LEADING EDGE. The edge is a background layer on the
+   border box, so it rides the button's own skewX(-6deg) and rounded corners
+   with no extra element and no change to the box or its padding.
+   These IDs outrank .bigbtn:hover / :active (0,2,0), so the red gradient and
+   its animated glow never reach the plates; transform is left alone, which
+   keeps the shared :active press (skew + scale 0.97). The hover/press "glow"
+   is ::before — a red-tinted wash faded by OPACITY, which the compositor can
+   run without repainting the shadow every frame (::after is the sheen). */
+#menu-buttons #menu-primary .bigbtn {
+  background:
+    linear-gradient(90deg, var(--red) 0 4px, transparent 4px) border-box,
+    color-mix(in oklab, var(--carbon) 88%, var(--text) 9%);
+  border-color: var(--plate-line);
+  color: var(--text);
+  box-shadow: none;
+  transition: transform var(--dur-1, 120ms) var(--ease-out, ease-out);
+}
+#menu-buttons #menu-primary .bigbtn::before {
+  content: "";
+  position: absolute; inset: 0; z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(90deg,
+    color-mix(in oklab, var(--red) 30%, transparent),
+    color-mix(in oklab, var(--text) 9%, transparent) 55%);
+  opacity: 0;
+  transition: opacity var(--dur-1, 120ms) var(--ease-out, ease-out);
+}
+@media (hover: hover) {
+  #menu-buttons #menu-primary .bigbtn:hover::before { opacity: 1; }
+}
+#menu-buttons #menu-primary .bigbtn:active::before { opacity: 1; }
+#menu-buttons #menu-primary .bigbtn .btn-ico { color: color-mix(in oklab, var(--red) 88%, var(--text)); }
+/* The hero keeps its red and its resting glow, but its hover heat is now the
+   same opacity fade: the hot gradient lives on ::before, the face stays on
+   --grad-primary, and box-shadow no longer TRANSITIONS (a gradient never
+   interpolated anyway; the shadow change is one paint, not a per-frame one).
+   An outer bloom cannot ride a pseudo here — .bigbtn clips with overflow. */
+#mb-career { transition: transform var(--dur-1, 120ms) var(--ease-out, ease-out); }
+#mb-career::before {
+  content: "";
+  position: absolute; inset: 0; z-index: -1;
+  pointer-events: none;
+  background: var(--grad-primary-hot);
+  opacity: 0;
+  transition: opacity var(--dur-1, 120ms) var(--ease-out, ease-out);
+}
+@media (hover: hover) {
+  #mb-career:hover { background: var(--grad-primary); }
+  #mb-career:hover::before { opacity: 1; }
+}
+#mb-career:active { background: var(--grad-primary); }
+#mb-career:active::before { opacity: 1; }
 /* Branding and small print as blocks — portrait stacks them centred, exactly as
    the loose elements did. */
 #menu-brand, #menu-meta { display: flex; flex-direction: column; align-items: inherit; }
