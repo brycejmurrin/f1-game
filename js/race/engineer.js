@@ -163,6 +163,7 @@ const RaceEngineer = (function () {
       // there costs a place for nothing, and "BOX FOR WETS" with the flag in
       // sight is the one call that must not be obeyed.
       const noStop = armed || (G.lapsTarget > 0 && (c.lap || 0) >= G.lapsTarget);
+      if (armed) b.undercut = null;   // our own stop answers the undercut: never "BOX NOW" on the out-lap
       // "Rain in N laps" needs a lap estimate and the arc is in SECONDS. The
       // driver's own last lap is the only honest converter: a fixed guess would
       // be wrong at both Monaco and Monza.
@@ -226,7 +227,7 @@ const RaceEngineer = (function () {
 
     /** One tick for ONE car — the local player only; nobody else has a banner. */
     function update(c, dt) {
-      if (!c || !c.local || !(dt > 0)) return "";
+      if (!c || !c.local || !(dt > 0) || G.paused) return "";   // VS FRIEND ticks under pause: no call on the pause menu (a wear step waits for resume)
       const s = senseOf(c);
       if (!s) return "";
       const b = bag(c);

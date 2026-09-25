@@ -173,6 +173,12 @@ const RaceFacts = (function () {
         if (s.finDue != null && t >= s.finDue - 1e-9) { s.finDue = null; finishers.push(c); }
       }
 
+      // EVERY CAR IN: the classification is final, and endRace (race-control's
+      // finishDelay) no longer waits on a penalty — release the held finishes now
+      // or the last car home with a +5 s never hears its result.
+      if (cars.every((c) => c.finished || c.retired))
+        for (const c of cars) { const s = bag(c); if (s.finDue != null) { s.finDue = null; finishers.push(c); } }
+
       order = rank(cars);
       // The finish position is the flagged car's place in the ranking — after
       // ranking, so a car that just took the flag is placed by it.
