@@ -852,6 +852,12 @@ test("gamepad menu nav seeds focus on open and uses a larger stick deadzone than
   assert.equal(wrap("HALO: OFF"), "HALO:\u00a0<span data-fold=\"off\">OFF</span>");
   assert.equal(wrap("♪ SOUND OFF"), "♪ SOUND <span data-fold=\"off\">OFF</span>");
   assert.equal(wrap("ON"), '<span data-fold="on">ON</span>');
+  // Stored XSS (2026-09-24): an imported custom-team driver name reaches a
+  // garage chip's text, and paintOnOff writes this result through innerHTML.
+  assert.equal(wrap('#7 ON <img src=x onerror="alert(1)">'),
+    '#7 <span data-fold="on">ON</span> &lt;img src=x onerror=&quot;alert(1)&quot;&gt;',
+    "button text is escaped before the ON/OFF spans are added");
+  assert.equal(wrap("R&D: ON"), 'R&amp;D:\u00a0<span data-fold="on">ON</span>', "a literal & survives the round trip");
   assert.equal(wrap("STYLE: STANDARD"), null, "named styles stay unpainted");
   assert.equal(wrap("LAYOUT: AUTO"), null, "AUTO on a named cycle is not agency");
   assert.equal(wrap("RESOLUTION: AUTO"), null);

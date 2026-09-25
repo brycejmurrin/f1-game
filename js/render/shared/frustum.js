@@ -62,8 +62,17 @@ const Frustum = (function () {
   // WGX, TLX): same key, same insertion order, same bounds.
   function bucketInstances(matrices, n, pos, cell, radius) {
     let reach = radius || 0;
+    // The reach is the mesh's bounding RADIUS: the farthest vertex's distance
+    // from the local origin. It used to be the largest single |coordinate|,
+    // which is only the half-width of the axis box — a rotated instance's
+    // corner reaches up to sqrt(3)x that, so props (2.55 m at Singapore) poked
+    // out of their cell box and popped at the screen and shadow edges on all
+    // three backends (2026-09-24).
     if (!reach) {
-      for (let i = 0; i < pos.length; i++) { const a = Math.abs(pos[i]); if (a > reach) reach = a; }
+      for (let i = 0; i + 2 < pos.length; i += 3) {
+        const d = Math.hypot(pos[i], pos[i + 1], pos[i + 2]);
+        if (d > reach) reach = d;
+      }
     }
     const buckets = new Map();
     for (let i = 0; i < n; i++) {

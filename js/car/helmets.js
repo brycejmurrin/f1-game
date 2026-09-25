@@ -242,7 +242,7 @@ const Helmets = (function () {
       z.band(0.78, 0.88, C.lime), z.key(0.745, C.papaya), z.band(0.90, 0.955, C.papaya)] },
     // Red Bull: navy crown, red face flash, white band. Royal rather than navy
     // as the base, or it vanishes into a Red Bull.
-    33: { name: "VER", base: C.royal, alt: C.orange, visor: C.black, zones: [
+     3: { name: "VER", base: C.royal, alt: C.orange, visor: C.black, zones: [
       z.cap(0.22, C.red), z.key(0.22, C.white), z.flash(0, 12, 46, 0.16, 0.44, 0, C.navy),
       ...z.sides((a) => z.flash(a, 9, 24, 0.18, 0.62, 24, C.navy)),
       z.band(0.68, 0.80, C.white), z.key(0.625, C.navy), z.band(0.88, 0.955, C.navy)] },
@@ -262,7 +262,7 @@ const Helmets = (function () {
       ...z.sides((a) => z.flash(a, 6, 16, 0.12, 0.39, 24, C.pink)), ...centre(10, C.pink),
       z.band(0.68, 0.82, C.navy), z.key(0.82, C.sky), z.band(0.90, 0.955, C.navy)] },
     // Racing Bulls: pink over white, navy skirt.
-    40: { name: "LAW", base: C.pink, alt: C.forest, visor: C.silver, zones: [
+    30: { name: "LAW", base: C.pink, alt: C.forest, visor: C.silver, zones: [
       z.cap(0.16, C.white), z.key(0.16, C.navy), ...z.sides((a) => z.flash(a, 8, 22, 0.16, 0.60, 24, C.white)),
       z.band(0.66, 0.88, C.white), z.key(0.605, C.navy), ...centre(7, C.navy), z.band(0.88, 0.955, C.navy)] },
     // Racing Bulls: sky blue, navy crown, a red centre.
