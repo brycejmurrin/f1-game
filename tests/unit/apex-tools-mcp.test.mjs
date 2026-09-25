@@ -157,6 +157,7 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_agent",
     "apex_bump_cache_check",
     "apex_eval",
+    "apex_frame_report",
     "apex_garage",
     "apex_graph_parity",
     "apex_pick_tests",
@@ -415,6 +416,67 @@ test("tree pins: rotate-markings --check only, graph-parity needs base", () => {
   const gone = callCli("apex_verify_track", { dryRun: true, id: "monza" });
   assert.equal(gone.status, 1);
   assert.equal(JSON.parse(gone.stdout).error, "unknown_tool");
+});
+
+test("apex_frame_report: tree tool, validated track / u / frames / shots, never --out or --fleet", () => {
+  const body = (r) => JSON.parse(r.stdout);
+  const ok = callCli("apex_frame_report", { dryRun: true, track: "monaco", u: [0.25, 0.5], json: true });
+  assert.equal(ok.status, 0, ok.stderr);
+  const argv = body(ok).argv;
+  assert.match(argv.join(" "), /shot\/frame-report\.mjs --track monaco --u=0\.25,0\.5 --json$/);
+  for (const bad of ["--out", "--fleet", "--diff", "--pose", "--url"]) assert.ok(!argv.some((a) => a.startsWith(bad)), bad);
+  // Tree kind: no browser lock, so a dryRun never consults occupancy.
+  const src = fs.readFileSync(MCP, "utf8");
+  assert.match(src, /name: "apex_frame_report",\s*week: 5,\s*kind: "tree"/);
+
+  const fr = callCli("apex_frame_report", { dryRun: true, track: "spa", frames: 12 });
+  assert.equal(fr.status, 0, fr.stderr);
+  assert.ok(body(fr).argv.includes("--frames=12"));
+
+  const refused = [
+    [{}, "bad_args", /needs track/],
+    [{ track: "atlantis" }, "bad_args", /unknown track atlantis/],
+    [{ track: "../monza" }, "bad_args", /unknown track/],
+    [{ track: "monza", u: [0.2], frames: 3 }, "bad_args", /u or frames/],
+    [{ track: "monza", u: [] }, "bad_args", /non-empty array/],
+    [{ track: "monza", u: "0.5" }, "bad_args", /non-empty array/],
+    [{ track: "monza", u: [1.5] }, "bad_args", /0\.\.1/],
+    [{ track: "monza", u: [0.1, "x"] }, "bad_args", /0\.\.1/],
+    [{ track: "monza", u: Array(65).fill(0.5) }, "bad_args", /at most 64/],
+    [{ track: "monza", frames: 0 }, "bad_args", /1\.\.120/],
+    [{ track: "monza", frames: 2.5 }, "bad_args", /1\.\.120/],
+    [{ track: "monza", frames: 500 }, "bad_args", /1\.\.120/],
+    [{ track: "monza", shots: "/etc/passwd" }, "path_escaped", /artifacts\/ or scratch\//],
+    [{ track: "monza", shots: "scratch/../package.json" }, "path_escaped", /artifacts\/ or scratch\//],
+    [{ track: "monza", shots: "scratch" }, "path_escaped", /artifacts\/ or scratch\//],
+    [{ track: "monza", shots: "scratch/frame-report-test-missing.json" }, "bad_args", /not found/],
+  ];
+  for (const [args, error, msg] of refused) {
+    const r = callCli("apex_frame_report", { dryRun: true, ...args });
+    assert.equal(r.status, 1, `${JSON.stringify(args)} should be refused: ${r.stdout}`);
+    const b = body(r);
+    assert.equal(b.error, error, JSON.stringify(args));
+    assert.match(b.message, msg, JSON.stringify(args));
+  }
+  const gone = callCli("apex_frame_report", { dryRun: true, track: "monza", target: "deploy" });
+  assert.equal(body(gone).error, "tree_only");
+
+  // A shots file under scratch/ is passed through (absolute); a symlink out of
+  // scratch/ is refused once resolved.
+  const dir = path.join(ROOT, "scratch", `frame-report-mcp-test-${process.pid}`);
+  fs.mkdirSync(dir, { recursive: true });
+  try {
+    fs.writeFileSync(path.join(dir, "shots.json"), "[]");
+    fs.symlinkSync(path.join(ROOT, "package.json"), path.join(dir, "link.json"));
+    const s = callCli("apex_frame_report", { dryRun: true, track: "monza", shots: path.relative(ROOT, path.join(dir, "shots.json")) });
+    assert.equal(s.status, 0, s.stdout);
+    const sa = body(s).argv;
+    assert.equal(sa[sa.indexOf("--shots") + 1], fs.realpathSync(path.join(dir, "shots.json")));
+    const l = callCli("apex_frame_report", { dryRun: true, track: "monza", shots: path.relative(ROOT, path.join(dir, "link.json")) });
+    assert.equal(body(l).error, "path_escaped");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("committed catalog JSON matches tools/list and never binds 0.0.0.0", () => {

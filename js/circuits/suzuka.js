@@ -54,14 +54,10 @@
     // terrain up with it at exactly the XZ where the lower road has to pass —
     // burying the road that is supposed to go underneath.
     //
-    // THE ESSES now climb, which is the other half of what makes Suzuka read:
-    // T2 through Dunlop gains ~26 m in reality and measured dead flat here
-    // (0.1 m across racing 0.12-0.30). An elevation, not a bridge — it is a real
-    // hill and the terrain should follow it.
-    elevations: [
-      { s: 0.0625, halfM: 260, rise: -5 },
-      { s: 0.240, halfM: 620, rise: 26 },
-    ],
+    // Elevation from SRTM bake in js/track/circuit-elevations.js
+    // (`node tools/gen/bake-elevation.mjs suzuka`). Two authored cosine bumps
+    // left ~71% of the lap under 0.5% grade — the stair-step undulation drivers
+    // felt. The figure-8 flyover stays a BRIDGE (terrain stays flat under it).
     bridges: [{ s: 0.845, halfM: 160, rise: 10 }],
     hwZones: [
       { s0: 0.8710, s1: 0.9671, hw: 6.1, ease: 0.012 },  // arc 0.300-0.348 the Esses

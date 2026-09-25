@@ -53,20 +53,41 @@ const NetLobby = (function () {
       status: $("vs-status"),
     });
 
-    function say(msg, isError) {
+    // #vs-status is a polite live region. `busy` marks a TICKING message (the
+    // connect counter): aria-busy holds the announcement until the state
+    // settles, instead of a screen reader reading "Connecting… 7s" every second.
+    // Unchanged text is not rewritten — the 4 Hz polls re-said the same line.
+    function say(msg, isError, busy) {
       statusText = msg || "";
       // Direct lookup: els() rebuilds a 35-element map per call, and say()
       // fires from 4 Hz polls and 1 Hz relay ticks during every connect.
       const e = document.getElementById("vs-status");
       if (!e) return;
-      e.textContent = statusText;
+      if (typeof e.setAttribute === "function") {
+        if (busy) e.setAttribute("aria-busy", "true");
+        else e.removeAttribute("aria-busy");
+      }
+      if (e.textContent !== statusText) e.textContent = statusText;
       e.classList.toggle("vs-error", !!isError);
     }
 
+    // Focus follows the step: hiding the section that held the pressed button
+    // (HOST A RACE -> #vs-hosting, …) left a keyboard or pad player on <body>.
+    const has = (box, el) => !!(box && el && typeof box.contains === "function" && box.contains(el));
+    const focusInto = (host) => {
+      const a = document.activeElement;
+      const lobby = document.getElementById("vsfriend");
+      if (!host || host.hidden || (a && a !== document.body && lobby && !has(lobby, a))) return;
+      if (has(host, a)) return;
+      const t = typeof TopModal !== "undefined" && TopModal.landing ? TopModal.landing(host) : null;
+      if (t) { try { t.focus({ preventScroll: true }); } catch (_) { t.focus(); } }
+    };
     function show(step) {
       const e = els();
       for (const k of ["pick", "hosting", "joining", "room", "code"]) if (e[k]) e[k].hidden = (k !== step);
+      focusInto(e[step]);
     }
+    const shownStep = (e) => ["pick", "hosting", "joining", "room", "code"].map((k) => e[k]).find((x) => x && !x.hidden);
 
     function localProfile() {
       const team = Teams.LIST[G.teamIdx] || Teams.LIST[0];
@@ -331,7 +352,7 @@ const NetLobby = (function () {
         }
         const st = watched.stats ? watched.stats() : null;
         const secs = Math.round((Date.now() - started) / 1000);
-        if (st) say("Connecting… " + secs + "s (" + (st.ice || "?") + "/" + (st.connection || "?") + ")" + relayNote);
+        if (st) say("Connecting… " + secs + "s (" + (st.ice || "?") + "/" + (st.connection || "?") + ")" + relayNote, false, true);
 
         const dead = st && (st.ice === "failed" || st.connection === "failed");
         if (dead || Date.now() - started > CONNECT_TIMEOUT_MS) {
@@ -442,7 +463,18 @@ const NetLobby = (function () {
       made.onEvent(NetPlay.EV.SETTINGS, (d) => { if (role === "guest") applySettings(d); });
       made.onEvent(NetPlay.EV.READY, (d) => {
         if (!underRate(readyTimes)) return;
-        _ready.set(id, !!(d && d.ready));
+        // Mirror HELLO: guests have no peer link, so the host must relay READY
+        // with `from`. Key by who the ready belongs to, not the connection id
+        // (on a guest that is always the host peer — docs/BUGS.md B3).
+        const who = role === "host" ? id : ((d && d.from != null) ? d.from : id);
+        _ready.set(who, !!(d && d.ready));
+        if (role === "host") {
+          const tagged = { ready: !!(d && d.ready), from: id };
+          for (const [k, sess] of sessions) {
+            if (k === id) continue;
+            try { sess.sendEvent(NetPlay.EV.READY, tagged); } catch (e) { /* dead session */ }
+          }
+        }
         renderRoom();
       });
       made.onEvent(NetPlay.EV.GO, () => { if (role === "guest") beginRace(); });
@@ -1007,6 +1039,7 @@ const NetLobby = (function () {
         // or a time trial. flow/session are the authority (js/game.js).
         G.flow = "gp";
         G.session = "race";
+        G.duel = false;   // the room's grid is every peer's; a duel would trim the host's to two cars
         // startRace is ASYNC (it awaits ensureScenery) — without the await,
         // netPlay.start() below ran before makeCars()/gridUp(): on a fresh
         // page G.cars was [] (no_slot → cancel → quitToMenu, the friend race
@@ -1177,151 +1210,13 @@ const NetLobby = (function () {
       return res;
     }
 
-    function codeFrom(text) {
-      const raw = String(text || "").trim();
-      if (!raw) return "";
-      return NetHandshake.inviteFromUrl(raw) || raw;
-    }
-
-    function deliver(kind, text) {
-      const code = codeFrom(text);
-      if (!code) return false;
-      const e = els();
-      const box = kind === "invite" ? e.inviteIn : e.answerIn;
-      if (box) box.value = code;
-      return kind === "invite" ? makeAnswer(code) : acceptAnswer(code);
-    }
-
-    let scanner = null;
-    let scannerGeneration = 0;
-
-    function stopScan() {
-      scannerGeneration++;
-      const active = scanner;
-      scanner = null;
-      if (active) active.stop();
-      const e = els();
-      if (e.scan) e.scan.hidden = true;
-    }
-
-    async function scan(kind) {
-      const e = els();
-      if (!e.scan || !e.scanVideo) return { ok: false, error: "no_ui" };
-      if (!NetScan.supported()) {
-        say("This browser cannot use the camera — paste the code instead.", true);
-        return { ok: false, error: "unsupported" };
-      }
-      stopScan();
-      const gen = scannerGeneration;
-      e.scan.hidden = false;
-      say("Point the camera at their code…");
-      const attempt = NetScan.create();
-      scanner = attempt;
-      let delivered = false;
-      const res = await attempt.start(e.scanVideo, (text) => {
-        // A decoder/camera from an older scan may finish after a second scan has
-        // started. It may stop itself, but it must not stop the new scanner,
-        // hide its panel, or deliver into the wrong input.
-        if (scanner !== attempt || scannerGeneration !== gen) { attempt.stop(); return; }
-        delivered = true;
-        stopScan();
-        say("Got it.");
-        deliver(kind, text);
-      });
-      if (delivered) return res;
-      if (scanner !== attempt || scannerGeneration !== gen) {
-        attempt.stop();
-        return cancelledResult();
-      }
-      if (!res.ok) { stopScan(); say(res.message || "Could not start the camera.", true); }
-      return res;
-    }
-
-    async function pasteInto(kind) {
-      let text = "";
-      try { text = await navigator.clipboard.readText(); }
-      catch (err) {
-        say("Could not read the clipboard — paste into the box instead.", true);
-        return { ok: false, error: "denied" };
-      }
-      if (!codeFrom(text)) { say("There is no code on the clipboard.", true); return { ok: false, error: "empty" }; }
-      return deliver(kind, text);
-    }
-
-    async function copy(text) {
-      if (!text) { say("There is nothing to copy yet.", true); return false; }
-      try { await navigator.clipboard.writeText(text); say("Copied."); return true; }
-      catch (e) { say("Could not copy — select the code and copy it manually.", true); return false; }
-    }
-
-    // The invite goes out as a LINK, not a code: opening it drops the guest
-    // straight into joining with the box already filled (see wire()), which
-    // removes the "paste this into the right field" step entirely. The code
-    // rides in the fragment, so it never reaches a server — which matters
-    // because the entire design is that there ISN'T one.
-    //
-    // The ANSWER is shared as bare text on purpose. There is no "open this to
-    // answer" flow — the host pastes it into a box they already have open — so
-    // dressing it as a link would promise a journey that does not exist.
-    //
-    // navigator.share is a progressive enhancement: where it exists this opens
-    // the OS share sheet (Messages, WhatsApp, AirDrop), and where it doesn't we
-    // fall back to the clipboard. The button says which it will do rather than
-    // disappearing, because a control that vanishes reflows the sheet and the
-    // next tap lands on something else.
-    const canShare = () => typeof navigator !== "undefined" && !!navigator.share;
-
-    async function handOff(data, fallbackText) {
-      if (!fallbackText) { say("There is nothing to share yet.", true); return false; }
-      if (canShare()) {
-        try { await navigator.share(data); say("Shared."); return true; }
-        catch (e) {
-          if (e && e.name === "AbortError") return false;
-        }
-      }
-      return copy(fallbackText);
-    }
-
-    // The QR carries the invite LINK, not the code, and that distinction is the
-    // whole feature: a link scanned by the guest's ordinary camera app opens
-    // the game with the joining step showing and the code already filled in. A
-    // QR of the bare code would just show them 240 characters to retype.
-    //
-    // The OS camera app reads it (a link), and so does the in-page scanner
-    // (NetScan, for the ANSWER leg where there is no link to open):
-    // BarcodeDetector where the platform has one, jsQR everywhere else.
-    // Draw `payload` into `canvas`, revealing `wrap` only if it actually
-    // encoded. A code too long for any version, or a page with no location to
-    // build a URL from, hides the QR rather than showing an unreadable one —
-    // the text code beside it still works.
-    function paintQr(wrap, canvas, payload) {
-      if (!wrap || !canvas) return false;
-      const ok = !!(payload && NetQr.draw(canvas, payload, { px: 320 }));
-      wrap.hidden = !ok;
-      return ok;
-    }
-
-    function drawQr(code) {
-      return paintQr($("vs-qr-wrap"), $("vs-qr"),
-        code ? NetHandshake.inviteUrl(code) : null);
-    }
-    function drawAnswerQr(code) {
-      const e = els();
-      return paintQr(e.answerQrWrap, e.answerQr, code || null);
-    }
-
-    function shareInvite() {
-      const e = els();
-      const code = e.invite ? e.invite.value : "";
-      const url = code ? NetHandshake.inviteUrl(code) : null;
-      if (!url) return handOff({ title: "Apex 26", text: code }, code);
-      return handOff({ title: "Apex 26", text: "Race me on Apex 26", url }, url);
-    }
-
-    function shareAnswer() {
-      const code = (els().answer || {}).value || "";
-      return handOff({ title: "Apex 26 answer", text: code }, code);
-    }
+    const {
+      codeFrom, deliver, scan, stopScan, pasteInto, copy, handOff,
+      drawQr, drawAnswerQr, shareInvite, shareAnswer, canShare,
+    } = LobbyCodes.create({
+      els, $, say, makeAnswer, acceptAnswer, cancelledResult,
+      has, focusInto, shownStep,
+    });
 
     // Same handshake, same codes on the wire — a relay carries the two strings
     // instead of a human. ALWAYS SHOWN: with no private Worker URL set the

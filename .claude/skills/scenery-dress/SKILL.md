@@ -21,10 +21,10 @@ Every helper takes `(k, side, dist, …)`:
 **Forgetting `out` is the #1 crash** — destructure it from `api` first.
 
 `K(s)` is AUTHORED-frame: pass it straight through, never pre-shift it. On a
-shifted circuit two traps are open — a wrapped helper called inside an
-`along()` callback lands a whole `_sceneryShift` away, and `bakedModel` never
-places at all. Read [references/rules.md](references/rules.md) §Frames before
-placing on a circuit with `sceneryStartFrac` or `reverse`.
+shifted circuit, wrapped helpers and `along()` callbacks both expect authored
+`k` (the double-shift bug is fixed — see [references/rules.md](references/rules.md)
+§Frames). Residual `_sceneryShift` is still frame debt: survey before dropping
+`sceneryStartFrac`.
 
 ## Helper families
 

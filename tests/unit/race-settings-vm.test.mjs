@@ -81,10 +81,11 @@ test("solo setup initializes once per track and preserves a draft on re-entry", 
 
 // ── the GRID RULE ─────────────────────────────────────────────────────────────
 
-// gridOrderFor() is pure over its closure: lift its source and bind stubs.
+// gridOrderFor() is pure over its closure: lift its source (and gridRule(),
+// which it and the flyby's menu grid share) and bind stubs.
 const GAME = readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
 function gridRule(rule, o = {}) {
-  const src = fnSource(GAME, "function gridOrderFor(base)");
+  const src = fnSource(GAME, "function gridRule()") + fnSource(GAME, "function gridOrderFor(base)");
   const rank = (season, a, b) => (season.pts[b] || 0) - (season.pts[a] || 0) || (a < b ? -1 : 1);
   return new Function("isTimeTrial", "isChampionship", "SeasonCal", "raceGrid", "season", "cars", "simRnd", "netPlay",
     src + ";return gridOrderFor;")(() => !!o.tt, () => !!o.champ, { quali: () => !!o.squali, rank },

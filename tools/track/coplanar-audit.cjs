@@ -33,7 +33,11 @@
 // Usage:
 //   node tools/track/coplanar-audit.cjs <trackId> [--why]
 //   node tools/track/coplanar-audit.cjs --all [--json] [--gate]
-//   flags: --gap <m>  --area <m2>  --fight <m>  --horizontal  --overhead
+//   flags: --gap <m>  --area <m2>  --fight <m>  --horizontal  --flat  --overhead
+//
+// --flat: horizontal faces ONLY (|n.y| >= 0.5) — the population --horizontal
+// adds over the default mode. Ratcheted per circuit by tools/track/ground-audit.cjs
+// against tests/data/scenery-audit-baseline.json (`flatCoplanar`).
 //
 // --overhead: ONLY the horizontal faces of OVERHEAD structures (bridges, gates,
 // gantries, tunnel roofs) — faces whose centre stands more than OVERHEAD_CLEAR
@@ -77,7 +81,7 @@ function site(stack) {
 const SAME_FACING = 0.999;   // dot(nA,nB) — the cull-based legitimacy gate
 const GAP_MAX = 0.020;       // plane separation worth looking at (m)
 const AREA_MIN = 2.0;        // overlap area on the shared plane (m2)
-const FIGHT_MAX = 150;       // gate: fights within this distance (m)
+const FIGHT_MAX = 300;       // gate: fights within this distance (m) — the window where surfaces still visibly fight; TrackGeom.MIN_SEP (3 cm) clears it (388 m)
 const NEAR_TRACK = 300;      // beyond this, fog+framing make it moot (m)
 // --overhead: a face counts when its centre is this far above the nearest road
 // node and within hw + OVERHEAD_LAT of it laterally; the gap and area defaults
@@ -340,6 +344,10 @@ function analyse(track, prims, opt) {
         const dot = a.n[0] * b.n[0] + a.n[1] * b.n[1] + a.n[2] * b.n[2];
         if (dot < SAME_FACING) { stats.antiParallel++; continue; }
         if (!opt.horizontal && !opt.overhead && Math.abs(a.n[1]) >= 0.5) continue;   // vertical only
+        // flat: the HORIZONTAL faces alone — what --horizontal adds over the
+        // default mode, without re-counting the vertical pairs the default
+        // baseline already ratchets. tools/track/ground-audit.cjs gates it.
+        if (opt.flat && Math.abs(a.n[1]) < 0.5) continue;
         const gap = Math.abs(a.d - b.d);
         if (gap > opt.gap) continue;
         const area = overlapArea(a, b);
@@ -408,7 +416,8 @@ function main() {
     area: flag("area", AREA_MIN),
     fight: flag("fight", FIGHT_MAX),
     maxDim: flag("maxdim", MAX_DIM),
-    horizontal: argv.includes("--horizontal"),
+    horizontal: argv.includes("--horizontal") || argv.includes("--flat"),
+    flat: argv.includes("--flat"),
     overhead: argv.includes("--overhead"),
   };
   if (opt.overhead) {
@@ -510,4 +519,5 @@ function main() {
 }
 
 if (require.main === module) main();
-module.exports = { fightDist, overlapArea, facesOf, SAME_FACING };
+module.exports = { fightDist, overlapArea, facesOf, analyse, site, SAME_FACING,
+  DEFAULTS: { gap: GAP_MAX, area: AREA_MIN, fight: FIGHT_MAX, maxDim: MAX_DIM } };

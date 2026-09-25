@@ -23,7 +23,7 @@ test.describe.configure({ timeout: 300000 });
 // The boot split (456af0f3) moved every shipped closure out of the def and into
 // a lazy registry: js/circuits/scenery/<id>.js does
 // `(window.TrackScenery = window.TrackScenery || {})["<id>"] = fn`, fetched by
-// game.js for the one circuit being built, and tracks.js:1818 resolves
+// game.js for the one circuit being built, and build-props.js:1844 resolves
 // `def.scenery || window.TrackScenery[def.id]`. These tests used to wrap
 // TrackDefs.push and skip any def whose `.scenery` was not ALREADY a function —
 // which, after the split, is every def. The wrapper silently never installed,
@@ -128,7 +128,7 @@ for (const [trackId, themeName] of [
   test(`${trackId} emits validated ${themeName} kit facilities`, async ({ page }) => {
     await page.addInitScript(installSceneryHook, { id: trackId, replace: false });
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex?.race);
+    await page.waitForFunction(() => window.__apex?.race, null, { polling: 100 });
     await page.evaluate(([id]) => {
       window.__resolvedSceneryTheme = null;
       window.__apex.headless(true);

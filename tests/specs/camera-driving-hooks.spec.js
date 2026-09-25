@@ -263,12 +263,14 @@ test("spin false without initialised player", async ({ page }) => {
 });
 
 // ── nudge() ───────────────────────────────────────────────────────────────────
+// reset() and nudge() share ONE evaluate: as two round trips the live loop ticked
+// between them and coast drag bled the reset speed (30 + 10 read back 39.9 on a
+// busy runner) — a race in the spec, not in nudge().
 
 test("nudge adds lateral velocity", async ({ page }) => {
   await page.setViewportSize(VIEWPORT);
   await loadTrack(page);
-  await page.evaluate(() => __apex.reset(0.1, 0));
-  const res = await page.evaluate(() => __apex.nudge(8, 0));
+  const res = await page.evaluate(() => { __apex.reset(0.1, 0); return __apex.nudge(8, 0); });
   expect(res).not.toBeFalsy();
   expect(res.vLat).toBeCloseTo(8, 1);
 });
@@ -276,24 +278,21 @@ test("nudge adds lateral velocity", async ({ page }) => {
 test("nudge adds to forward speed", async ({ page }) => {
   await page.setViewportSize(VIEWPORT);
   await loadTrack(page);
-  await page.evaluate(() => __apex.reset(0.1, 20));
-  const res = await page.evaluate(() => __apex.nudge(0, 15));
+  const res = await page.evaluate(() => { __apex.reset(0.1, 20); return __apex.nudge(0, 15); });
   expect(res.speed).toBeCloseTo(35, 1);
 });
 
 test("nudge speed clamped at 0 minimum", async ({ page }) => {
   await page.setViewportSize(VIEWPORT);
   await loadTrack(page);
-  await page.evaluate(() => __apex.reset(0.1, 10));
-  const res = await page.evaluate(() => __apex.nudge(0, -50));
+  const res = await page.evaluate(() => { __apex.reset(0.1, 10); return __apex.nudge(0, -50); });
   expect(res.speed).toBe(0);
 });
 
 test("nudge both args", async ({ page }) => {
   await page.setViewportSize(VIEWPORT);
   await loadTrack(page);
-  await page.evaluate(() => __apex.reset(0.1, 30));
-  const res = await page.evaluate(() => __apex.nudge(5, 10));
+  const res = await page.evaluate(() => { __apex.reset(0.1, 30); return __apex.nudge(5, 10); });
   expect(res.speed).toBeCloseTo(40, 1);
   expect(res.vLat).toBeCloseTo(5, 1);
 });

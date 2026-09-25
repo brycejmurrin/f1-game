@@ -40,6 +40,7 @@ const Input = (function () {
   // edge-triggered camera cycle (C key / CAM tap)
   let cameraCyclePressed = false;
   let recoverPressed = false;   // edge-triggered manual recover / put-me-back
+  let radioPressed = false;     // edge-triggered RADIO CHECK — ask the engineer for the gaps (js/race/race-radio.js)
   let keyLookBack = false;      // HELD: look-back mirror while the key/button is down
   let padLookBack = false;
 
@@ -442,6 +443,10 @@ const Input = (function () {
     // position, not being able to look back is functional, not cosmetic.
     { id: "lookBack",  label: "LOOK BACK",   def: ["KeyB", null] },
     { id: "recover",   label: "RECOVER",     def: ["KeyR", null] },
+    // RADIO CHECK: the driver keys the mic and the engineer answers with the
+    // position and both gaps — Crew Chief's "how's my gap", on one key. T for
+    // TALK; free in every default layout above.
+    { id: "radio",     label: "RADIO CHECK", def: ["KeyT", null] },
     /* PAUSE IS A BINDING NOW, not a literal. XAG 107 asks that a player be
        able to remap ALL of a game's controls "including the Esc key on PC
        games", and P being permanently off-limits meant a player who wanted
@@ -484,6 +489,9 @@ const Input = (function () {
         });
         keyMap[a.id] = slots;
       }
+      // An action the save predates (new since it was written) keeps its
+      // default — unless the player already put that key on something else.
+      for (const a of KEY_ACTIONS) if (!Array.isArray(saved[a.id])) keyMap[a.id] = keyMap[a.id].map((c) => (c && seen[c] ? null : c));
       rebuildKeyIndex();
     }
     return getKeyMap();
@@ -575,6 +583,7 @@ const Input = (function () {
     { id: "camera",    label: "CAMERA",      def: [8, null] },
     { id: "lookBack",  label: "LOOK BACK",   def: [11, null] },
     { id: "recover",   label: "RECOVER",     def: [10, null] },
+    { id: "radio",     label: "RADIO CHECK", def: [13, null] },   // d-pad down; d-pad up is ACTIVE AERO
     { id: "pause",     label: "PAUSE",       def: [9, null] },
   ];
   // The d-pad's left/right are the digital STEER axis, not bindings — the same
@@ -599,6 +608,7 @@ const Input = (function () {
           return b;
         });
       }
+      for (const a of PAD_ACTIONS) if (!Array.isArray(saved[a.id])) padMap[a.id] = padMap[a.id].map((b) => (b != null && seen[b] ? null : b));
     }
     return getPadMap();
   }
@@ -919,6 +929,7 @@ const Input = (function () {
       case "camera": if (edge) cameraCyclePressed = true; break;
       case "lookBack": keyLookBack = down; if (down) e.preventDefault(); break;
       case "recover": if (edge) recoverPressed = true; break;
+      case "radio": if (edge) radioPressed = true; break;
       // PAUSE and Escape are handled ABOVE the driving gate — see the comment
       // there. They are commands, and a menu being open must not swallow them.
     }
@@ -1426,6 +1437,7 @@ const Input = (function () {
         if (padActEdge(pad, "shiftDown")) shiftDownPressed = true;
         if (padActEdge(pad, "camera")) cameraCyclePressed = true;
         if (padActEdge(pad, "recover")) recoverPressed = true;
+        if (padActEdge(pad, "radio")) radioPressed = true;
         padLookBack = padActVal(pad, "lookBack") > 0.5;
       }
     }
@@ -1843,6 +1855,12 @@ const Input = (function () {
     recoverPressed = false;
     return v;
   }
+
+  function consumeRadio() {
+    const v = radioPressed;
+    radioPressed = false;
+    return v;
+  }
   /* HELD, not edged: the mirror is only up while the control is down.
      KEY AND PAD ONLY. There was an on-screen LOOK button in the tap column too;
      it was removed on request — the dock had grown to five buttons in one thumb
@@ -2197,6 +2215,7 @@ const Input = (function () {
     padDpadT = 0;
     keyLookBack = false;
     recoverPressed = false;
+    radioPressed = false;
     // padPrevButtons is deliberately KEPT: emptying it on a window blur made
     // every button merely held across the blur a rising edge on the next poll
     // (boost toggled, a gear grabbed, the camera cycled). The next poll
@@ -2224,6 +2243,7 @@ const Input = (function () {
     shiftDownPressed = false;
     cameraCyclePressed = false;
     recoverPressed = false;
+    radioPressed = false;
   }
 
   function debugState() {
@@ -2285,6 +2305,7 @@ const Input = (function () {
     consumeShiftDown,
     consumeCameraCycle,
     consumeRecover,
+    consumeRadio,
     lookingBack,
     lockEscape, unlockEscape,
     tiltActive,

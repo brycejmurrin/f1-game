@@ -37,7 +37,7 @@ generated row.
 race
 ├─ HUD / #pausebtn ──> #pausemenu ──> #pmsettings?
 ├─ race flow ────────> #quali | #standings | #results
-└─ tools ────────────> #lighting | #camtune | #flyby | #photo-controls
+└─ tools ────────────> #lighting | #camtune | #flyby | #freecam | #photo-controls
 ```
 
 `?` means optional. Pause was walked headlessly; the race-flow and visual-tuner
@@ -69,6 +69,7 @@ Settings opens at an index, then pushes one page at a time:
 | Controls | `#pm-open-controls` | `#pm-panel-controls` | CONTROLS |
 | Driving | `#pm-open-driving` | `#pm-panel-driving` | DRIVING |
 | Display | `#pm-open-display` | `#pm-panel-display` | DISPLAY |
+| Appearance | `#pm-open-appearance` | `#pm-panel-appearance` | APPEARANCE |
 | Steering & Assists | `#pm-advanced` | `#advanced` | STEERING & ASSISTS |
 | Music & Sound | `#pm-audio` | `#audioset` | MUSIC & SOUND |
 
@@ -249,6 +250,10 @@ Assists and Music & Sound doors documented above.
 Other in-race roots are:
 
 - `#lighting`, `#camtune` and `#flyby` — visual tuner docks.
+- `#freecam` — the FREE CAMERA dock (`#pm-freecam` under Display → Advanced
+  Visuals, disabled outside a race like the three tuners). It flies with
+  `#photo-controls`; DONE, EXIT or Escape returns to Settings, and resume/quit
+  close it.
 - `#photo-controls` — free-camera overlay.
 - `#quali`, `#standings` and `#results` — session flow.
 - `#rotate-device` — portrait race blocker.
@@ -314,6 +319,7 @@ driving/menu input unless its definition explicitly sets `gate: false`.
 | `#lighting` | yes | Lighting tuner |
 | `#camtune` | yes | Camera tuner |
 | `#flyby` | yes | Flyby shot editor |
+| `#freecam` | yes | Free camera panel |
 | `#photo-controls` | yes | Free-camera controls |
 | `#datahub` | yes | Data and telemetry hub |
 
@@ -322,7 +328,7 @@ open. `#rotate-device` is non-gating so Escape and driving keys still reach the
 race beneath its opaque, media-query-controlled blocker.
 
 Most roots are real `<dialog>` elements and begin hidden. The non-dialog
-screen/region roots are `#lighting`, `#camtune`, `#flyby`, `#photo-controls`,
+screen/region roots are `#lighting`, `#camtune`, `#flyby`, `#freecam`, `#photo-controls`,
 `#carsetup`, `#career` and `#select`.
 
 ### Major shell and race IDs
@@ -351,7 +357,7 @@ screen/region roots are `#lighting`, `#camtune`, `#flyby`, `#photo-controls`,
 |---|---|
 | `#overlay` | `#menu-brand`, `#menu-buttons`, `#menu-hero`, `#menu-primary`, `#menu-secondary`; title actions `#mb-career`, `#mb-race`, `#mb-tt`, `#mb-vs`, `#mb-season`, `#mb-data`, `#mb-garage`, `#mb-settings`, `#mb-help` |
 | `#pmsettings` | `#pmsettings-inner`, `#dlg-settings`, `#pm-settings-body`, `#pm-settings-index` |
-| Settings pages | `#pm-panel-controls`, `#pm-panel-driving`, `#pm-panel-display`, `#pm-display-adv`, `#advanced`, `#audioset` |
+| Settings pages | `#pm-panel-controls`, `#pm-panel-driving`, `#pm-panel-display`, `#pm-panel-appearance`, `#pm-display-adv`, `#advanced`, `#audioset` |
 | `#howtoplay` | `#howtoplay-inner`, `#htp-contents`, `#htp-controls`, `#htp-racing`, `#htp-pits`, `#htp-driving`, `#htp-setup`, `#htp-modes`, `#htp-friends`, `#htp-close` |
 | `#spotifypanel` | `#spotifypanel-inner` |
 
@@ -385,6 +391,7 @@ screen/region roots are `#lighting`, `#camtune`, `#flyby`, `#photo-controls`,
 | `#lighting` | `#lighting-inner`, `#lt-rail`, `#lt-rows` |
 | `#camtune` | `#camtune-inner`, `#ct-rail`, `#ct-rows` |
 | `#flyby` | `#flyby-inner`, `#fb-rail`, `#fb-rows` |
+| `#freecam` | Runtime-built `#freecam-inner` (`#fc-status`, `#fc-rows`: `#fc-speed`, `#fc-roll`, `#fc-fov`, `#fc-snap-car`, `#fc-corner-prev`/`-next`, `#fc-lens-race`/`-flyby`, `#fc-copy-view`, `#fc-copy-pose`, `#fc-out`); `#fc-close` is the boot-time Escape target |
 | `#datahub` | Runtime-built inner UI; `#dh-close-btn` is the boot-time Escape target |
 
 The tuner `*-rail` roots hold fixed headers/mode controls; `*-rows` receive

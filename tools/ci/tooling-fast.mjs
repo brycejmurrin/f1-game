@@ -75,8 +75,13 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // graining and blistering say different things (one heals, one does not),
   // the axle call names an end of the car, and it does not nag. ~0.1 s.
   "tests/unit/engineer.test.mjs",
+  // ...and the race radio: every phrasebook line fits its card when spoken,
+  // pools deal like a deck, gaps come from the timing loop, a pass must hold,
+  // lines wait for the straight and die when stale, commentary only while
+  // the player is watching. ~0.1 s.
+  "tests/unit/race-radio.test.mjs",
   "tests/unit/team-livery.test.mjs",
-  // 10 s of pure geometry: builds all 297 catalog options and hashes each
+  // ~29 s of pure geometry (measured 2026-09-24): builds every catalog option ONCE and hashes each
   // mesh, so a part that stops changing the car is caught where the catalog
   // is edited rather than in a 2-hour render sweep nobody runs.
   "tests/unit/parts-distinct-mesh.test.mjs",
@@ -104,8 +109,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/surface-id-parity.test.mjs",
   "tests/unit/godray-keep-nearest.test.mjs",
   "tests/unit/lamp-chunks.test.mjs",
+  "tests/unit/frustum-buckets.test.mjs",
   "tests/unit/all-lights-fill.test.mjs",
   "tests/unit/lamp-bake.test.mjs",
+  "tests/unit/frame-lights-shed.test.mjs",
   // Sibling of cockpit-pale-surfaces, which moved to test:node-slow for costing
   // 69 s. This one is 2.5 s — 178 differential builds, no rasteriser — so it
   // stays in the edit loop where a cockpit geometry change is actually made.
@@ -190,6 +197,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/tools-runnable.test.mjs",
   "tests/unit/css-play.test.mjs",
   "tests/unit/menu-capture.test.mjs",
+  // The rendered flicker gate's metric (tools/lib/flicker-metric.mjs) on
+  // synthetic frames, plus its site table: ~0.1 s, no browser. The gate itself
+  // runs only in ci.yml's non-blocking flicker-gate job.
+  "tests/unit/flicker-metric.test.mjs",
   "tests/unit/report-server.test.mjs",
   "tests/unit/mcp-cli.test.mjs",
   "tests/unit/apex-tools-mcp.test.mjs",
@@ -202,6 +213,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Host configs — the three MCP catalogs, the path-scoped rules, the hooks —
   // asserted instead of described; under a second.
   "tests/unit/agent-config.test.mjs",
+  "tests/unit/session-status.test.mjs",
+  "tests/unit/ci-watch.test.mjs",
+  "tests/unit/test-bg-outcome.test.mjs",
   // Every freezable module surface stays frozen (pure file read; < 1 s).
   "tests/unit/frozen-globals.test.mjs",
   "tests/unit/component-inventory.test.mjs",
@@ -271,6 +285,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // zero-reference module and the two thin spots): each under a second.
   "tests/unit/body-attitude.test.mjs",
   "tests/unit/save-migrate.test.mjs",
+  // ApexClipboard.write/read + preferSync order (clipboard carve). Pure VM,
+  // well under a second; must run where the helper or a call-site is edited.
+  "tests/unit/clipboard.test.mjs",
+  // LobbyCodes.codeFrom / paintQr / canShare (lobby-codes peel). Pure VM.
+  "tests/unit/lobby-codes.test.mjs",
   "tests/unit/wait-polling.test.mjs",
   // ...and its sibling over js/: a try/catch cannot swallow a promise
   // REJECTION, and index.html turns an unhandled one into a full-screen
@@ -371,10 +390,19 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/debris-step-skip.test.mjs",
   "tests/unit/camera-ride.test.mjs",
   "tests/unit/flyby-shots.test.mjs",
+  "tests/unit/flyby-pose-inverse.test.mjs",
+  "tests/unit/free-cam.test.mjs",
   // The FLYBY SHOT EDITOR's list algebra and the bake validator that stands
   // between a pasted blob and the shipped DEFAULT. Pure data, ~0.1 s, and it
   // belongs in the edit loop because tools/gen/bake-flyby.mjs is a FULL REPLACE.
   "tests/unit/flyby-panel.test.mjs",
+  // The FRAMING REPORT's math (tools/lib/frame-math.mjs): projection handedness,
+  // ray-vs-box, occlusion, horizon, motion and the flags an agent acts on without
+  // a picture. Hand-built worlds, no game VM, ~0.1 s.
+  "tests/unit/frame-math.test.mjs",
+  // The FRAMING REPORT fleet diff (tools/lib/frame-fleet.mjs): frame identity across
+  // a shot-list edit, flag-name comparison, worst-frame summary. Pure, ~0.1 s.
+  "tests/unit/frame-fleet.test.mjs",
   // The LOADING CARD's geometry: the three numbers the flyby editor authors,
   // clamped out of localStorage before they reach a CSS custom property, where
   // a NaN is not an error but a silently dropped declaration.
@@ -408,6 +436,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/terrain-normals.test.mjs",
   "tests/unit/aero-zones-turns.test.mjs",
   "tests/unit/ui-improve-pass.test.mjs",
+  "tests/unit/appearance-opts.test.mjs",
   "tests/unit/ui-sheets-audit.test.mjs",
   "tests/unit/menu-nav-spatial.test.mjs",
   "tests/unit/menu-a11y-audit.test.mjs",
@@ -422,6 +451,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/audio-sample-upgrade.test.mjs",
   "tests/unit/audio-tune.test.mjs",
   "tests/unit/rival-audio.test.mjs",
+  "tests/unit/voice-pack.test.mjs",
   // The RESULTS tab drives OpenF1's session_result, whose duration and gap
   // change SHAPE with the session type. Pure rules over a stub DOM, ~0.1 s.
   "tests/unit/data-results.test.mjs",

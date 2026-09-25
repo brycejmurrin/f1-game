@@ -114,7 +114,7 @@
             cc[1] = groundUnder(cc[0], cc[2]) - 0.7;
             if (onTrack(cc[0], cc[2], 8)) continue;
             const ch = 12 + hash(kk + t) * 4;
-            addCone(out, vadd(cc, a.u, ch * 0.10), 1.5, ch * 0.55, CYP, 6, b);
+            addCone(out, cc, 1.5, ch * 0.65, CYP, 6, b);   // base in the ground (cc is sunk 0.7 m)
             addCone(out, vadd(cc, a.u, ch * 0.62), 1.15, ch * 0.38, CYP, 6, b);
           }
           out._mat = 0;
@@ -314,6 +314,11 @@
           const railUp = railGy != null ? railGy - a.c[1] + 1.3 : topUp + 1.0;
           addBox(out, vadd(railBase, a.u, railUp),
             [0.09, 0.09, seg], [0.72, 0.74, 0.76], b);
+          // The rail's post, planted 0.2 m into the ground (or the top row) —
+          // without it the rail hung 1.3 m in the air.
+          const postBot = railGy != null ? railGy - a.c[1] - 0.2 : topUp - rise;
+          addBox(out, vadd(railBase, a.u, (postBot + railUp) * 0.5),
+            [0.07, railUp - postBot, 0.07], [0.72, 0.74, 0.76], b);
           out._mat = 0;
         });
       };
@@ -385,7 +390,7 @@
         }, (stage) => {
           stage._mat = MAT.STONE;
           addBox(stage, vadd(a.c, a.u, 5.5), [16, 11, 22], STONE, b);
-          addBox(stage, vadd(vadd(a.c, a.t, -8), a.u, 8.5), [9, 17, 9],
+          addBox(stage, vadd(vadd(a.c, a.t, -8), a.u, 8.45), [9, 17.1, 9],
             [0.80, 0.74, 0.60], b);
           stage._mat = 0;
           addPrism(stage, vadd(a.c, a.u, 12.5), [16.6, 3.2, 22.6], TERRA, b);
@@ -393,7 +398,7 @@
           // Attached lower barn with an open cart arch.
           const p = vadd(a.c, a.t, 16);
           stage._mat = MAT.STONE;
-          addBox(stage, vadd(p, a.u, 3), [12, 6, 12], [0.78, 0.72, 0.58], b);
+          addBox(stage, vadd(p, a.u, 2.95), [12, 6.1, 12], [0.78, 0.72, 0.58], b);
           stage._mat = 0;
           addPrism(stage, vadd(p, a.u, 7), [12.4, 2.2, 12.4], [0.58, 0.32, 0.22], b);
           addBox(stage, vadd(vadd(p, a.r, -6.1), a.u, 2.2), [0.3, 4.0, 5], [0.20, 0.18, 0.16], b);
@@ -418,7 +423,7 @@
         }, (stage) => {
           stage._mat = MAT.STONE;
           addBox(stage, vadd(a.c, a.u, 4.5), [13, 9, 26], TRAV, b);           // nave
-          addBox(stage, vadd(vadd(a.c, a.t, 16), a.u, 11), [7, 22, 7], TRAV, b); // campanile
+          addBox(stage, vadd(vadd(a.c, a.t, 16), a.u, 10.95), [7, 22.1, 7], TRAV, b); // campanile (foot 10 cm below the nave's)
           stage._mat = 0;
           addPrism(stage, vadd(a.c, a.u, 9.6), [13.6, 3.4, 26.6], TERRA, b);
           addPrism(stage, vadd(vadd(a.c, a.t, 16), a.u, 22.4), [7.6, 2.6, 7.6], TERRA, b);
@@ -442,30 +447,50 @@
       ]) {
         const rows = kind === "vine" ? 9 : 6;
         const pitch = kind === "vine" ? 3.4 : 6.2;
+        // Two passes: every row's base first, then the rows. A row sits up to
+        // 27 m back from the road, so on the INSIDE of a bend adjacent segments'
+        // rows overlapped ~6 m end to end in one tilted plane (flatCoplanar);
+        // each vine row is now cut to the real distance to its neighbours.
+        const segs = [];
         along(s0, s1, 11, (k, spacing) => {
           const a = anchor(k, side, gap);
-          const b = [a.r, a.u, a.t];
+          const bases = [];
           for (let r = 0; r < rows; r++) {
-            const back = r * pitch;
             // TRAP B (docs/SCENERY-GROUNDING.md §2): anchor() samples the ground
             // at the ROAD EDGE, and these rows march up to 37 m back from it —
             // across a Tuscan hillside. Reusing a.c's height that far put the
             // back rows metres into the air. Re-seat each row on the ground
             // under it; terrainYAt is null off the rendered ribbon, where a.c
             // remains the best available guess.
-            const base = vadd(a.c, a.r, side * back);
+            const base = vadd(a.c, a.r, side * r * pitch);
             const by = terrainYAt(base[0], base[2]);
             if (by != null) base[1] = by;
+            bases.push(base);
+          }
+          segs.push({ k, spacing, a, bases });
+        });
+        const flatD = (p, q) => Math.hypot(p[0] - q[0], p[2] - q[2]);
+        segs.forEach(({ k, spacing, a, bases }, i) => {
+          const b = [a.r, a.u, a.t];
+          for (let r = 0; r < rows; r++) {
+            const base = bases[r];
             if (kind === "vine") {
+              let len = spacing;
+              if (i > 0) len = Math.min(len, flatD(base, segs[i - 1].bases[r]));
+              if (i + 1 < segs.length) len = Math.min(len, flatD(base, segs[i + 1].bases[r]));
+              // Rooted 0.35 m into the slope (a row's length rides the hillside
+              // and its ends lifted clear); the top steps 4 cm by (segment +
+              // 2*row) mod 4 so no touching neighbour shares its plane.
+              const vh = 1.9 + 0.04 * ((i + 2 * r) % 4);
               out._mat = MAT.FOLIAGE;
-              addBox(out, vadd(base, a.u, 0.85),
-                [0.9, 1.5, spacing * 0.96], r & 1 ? VINE : [0.26, 0.36, 0.20], b);
+              addBox(out, vadd(base, a.u, vh * 0.5 - 0.35),
+                [0.9, vh, len * 0.96], r & 1 ? VINE : [0.26, 0.36, 0.20], b);
               out._mat = 0;
             } else {
               const h = hash(k * 7 + r * 13);
               if (h < 0.45) continue;
-              addCyl(out, vadd(base, a.u, 0.7),
-                0.18, 1.4, [0.42, 0.36, 0.28], 5, b);
+              addCyl(out, vadd(base, a.u, -0.2),   // cyl origin is its BASE
+                0.18, 1.6, [0.42, 0.36, 0.28], 5, b);
               out._mat = MAT.FOLIAGE;
               addFrustum(out, vadd(base, a.u, 1.4),
                 1.5, 0.9, 2.2, OLIVE, 6, b);

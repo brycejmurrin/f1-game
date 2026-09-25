@@ -174,10 +174,13 @@
       // complex took the 3 m cross-arm and the outer head, leaving the inner
       // head floating 8.8 m up (float-audit, five spots). Its canopy
       // luminaires light that side; these lamps resume past the pit exit.
-      const pitSideLamp = (k) => { const f = k / n; return f > 0.945 || f < 0.035; };
+      const pitSideLamp = (k) => { const f = k / n; return f > 0.945 || f < 0.055; };
       along(0.96, 0.08, 60, (k) => {
         for (const side of [-1, 1]) {
           if (side === 1 && pitSideLamp(k)) continue;
+          // SRTM bowl at the pit exit: lamp heads on +1 near frac 0.044 sat
+          // ~9 m over the dropped verge (float-audit after elevation bake).
+          if (side === 1 && (k / n) > 0.035 && (k / n) < 0.06) continue;
           const a = anchor(k, side, 3.8);
           // continue, NOT return: `return` leaves the whole along() callback, so
           // a pole rejected on side -1 silently took side +1 with it — half the
@@ -303,15 +306,18 @@
           frameCol: [0.70, 0.71, 0.75], plankCol: [0.78, 0.79, 0.82],
           crowd: RB_HILL_CROWD, density: 0.58 });
 
-      for (const [s, side, gap] of [
-        [0.985, -1, 24], [0.005, -1, 24], [0.04, -1, 17], [0.07, -1, 14],
+      // [s, side, gap, y]: y is the strip's height, just under the stand's roof
+      // (h - 0.4). The two 11 m stands (0.04, 0.07) carried the 13 m stands'
+      // 12.6, which left 0.04's strip hanging 12 m over the ground (float-audit).
+      for (const [s, side, gap, y = 12.6] of [
+        [0.985, -1, 24], [0.005, -1, 24], [0.04, -1, 17, 10.6], [0.07, -1, 14, 10.6],
         [0.467, -1, 13], [0.487, -1, 13], [0.507, -1, 13],
         [0.70, 1, 13], [0.72, -1, 13], [0.76, -1, 13], [0.88, 1, 13], [0.92, 1, 13], [0.95, 1, 13],
       ]) {
         const k = Math.round(n * s) % n;
         const a = anchor(k, side, gap);
         // Slim bright strip just below the roof edge — warm amber/white.
-        addBox(out, vadd(a.c, a.u, 12.6), [0.22, 0.16, 28], [1.0, 0.92, 0.70], [a.r, a.u, a.t]);
+        addBox(out, vadd(a.c, a.u, y), [0.22, 0.16, 28], [1.0, 0.92, 0.70], [a.r, a.u, a.t]);
       }
 
       every(36, (k) => {
@@ -510,9 +516,11 @@
         }
       }
 
-      // Chairlifts riding the Remus crest and the famous grassy spectator hill.
+      // Chairlifts riding the Remus crest. The mid-lap hillside lift
+      // (was K(0.52), distFar 140) floated gondolas 20 m over the parallel
+      // lower road once SRTM replaced the cosine plateaus — drop it; the
+      // Remus crest lift still reads the ski-resort cue.
       chairlift(K(0.30), 1, 44, 150, 5);
-      chairlift(K(0.52), 1, 40, 140, 5);
       // Styrian chalets scattered on the surrounding meadows.
       alpineChalet(K(0.18), -1, 60, 10, 6, 12);
       alpineChalet(K(0.34),  1, 66, 9, 6, 11);

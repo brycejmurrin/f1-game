@@ -85,7 +85,7 @@
           addBox(stage, vadd(vadd(g.c, g.r, -5.5), g.u, 8.5 / 2), [1.2, 8.5, 1.4], [0.92, 0.92, 0.94], gb);
           addBox(stage, vadd(vadd(g.c, g.r,  5.5), g.u, 8.5 / 2), [1.2, 8.5, 1.4], [0.92, 0.92, 0.94], gb);
           addBox(stage, vadd(g.c, g.u, 8.2), [13.2, 1.5, 2.2], neonRed, gb);
-          addBox(stage, vadd(g.c, g.u, 9.5), [9.0, 0.55, 2.5], [0.96, 0.96, 0.94], gb);
+          addBox(stage, vadd(g.c, g.u, 9.22), [9.0, 0.55, 2.5], [0.96, 0.96, 0.94], gb);
         }, { required: true });
       }
 
@@ -200,7 +200,7 @@
                     pz[lk2] + track.rz[lk2] * (-1) * (hw[lk2] + ldist2), 3)) continue;
         const lp2 = anchor(lk2, -1, ldist2), lb2 = [lp2.r, lp2.u, lp2.t];
         addCyl(out, lp2.c, 0.12, 8, steel, 5, lb2);
-        addBox(out, vadd(lp2.c, lp2.u, 8.4), [1.4, 0.4, 0.9], lampWarm, lb2);
+        addBox(out, vadd(lp2.c, lp2.u, 8.18), [1.4, 0.4, 0.9], lampWarm, lb2);
       }
 
       const RC_GAP = 38, BC_GAP = 46, HOSP_GAP = 58;
@@ -240,16 +240,65 @@
         });
       }
       guardrail(0.965, 0.04, 1, 2.5, [0.88, 0.88, 0.90]);
+      // Start gantry — teal/green "SUZUKA" identity bar (photo: dark teal span).
       overheadSpan({ id: "suzuka-start-gantry", frac: 0.0, clearance: 7.2,
         thickness: 0.9, depth: 1.8, supportGap: 2.8, supportWidth: 1.0,
-        color: [0.14, 0.14, 0.18], required: true });
+        color: [0.08, 0.42, 0.40], required: true });
+      // White brand / checkered cue on the RIGHT gantry tower (off the racing line).
+      {
+        const ga = anchor(K(0.0), 1, 3.2);
+        const gb = [ga.r, ga.u, ga.t];
+        if (!onTrack(ga.c[0], ga.c[2], 3)) {
+          modelGroup("suzuka-start-gantry-brand", {
+            center: vadd(ga.c, ga.u, 8.0), size: [3.2, 2.4, 6.5], basis: gb,
+          }, (stage) => {
+            addBox(stage, vadd(ga.c, ga.u, 8.0),
+              [0.45, 1.4, 5.5], [0.94, 0.96, 0.94], gb);
+            for (let ci = 0; ci < 4; ci++) {
+              const chk = (ci % 2 === 0) ? [0.08, 0.08, 0.10] : [0.94, 0.94, 0.92];
+              addBox(stage, vadd(vadd(ga.c, ga.t, -2.2 + ci * 1.15), ga.u, 8.0),
+                [0.55, 1.2, 1.05], chk, gb);
+            }
+          }, { required: true });
+        }
+      }
+
+      // ── Tall pit/paddock long grey box — wave-3 hero opposite main stand ──
+      // Research: long low grey box + slab roof on the pit side (-1). Sit BEHIND
+      // the engine pit complex so we do not fight the garage footprint.
+      {
+        const a = anchor(K(0.0), -1, 42);
+        if (!onTrack(a.c[0], a.c[2], 28)) {
+          const b = [a.r, a.u, a.t];
+          const GREY = [0.62, 0.64, 0.68], GREY_D = [0.48, 0.50, 0.54], WHITE = [0.90, 0.91, 0.93];
+          modelGroup("suzuka-pit-paddock", {
+            center: vadd(a.c, a.u, 7), size: [22, 16, 110], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.CONCRETE;
+            addBox(stage, vadd(a.c, a.u, 5.5), [18, 11, 100], GREY, b);
+            // Dark glass curtain band.
+            stage._mat = MAT.GLASS;
+            addBox(stage, vadd(a.c, a.u, 7.5), [18.3, 3.2, 96], [0.18, 0.28, 0.38], b);
+            // Slab roof + rounded aerodynamic overhang at the front end.
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(a.c, a.u, 11.4), [19.5, 0.7, 102], WHITE, b);
+            addBox(stage, vadd(vadd(a.c, a.t, -48), a.u, 10.2),
+              [20, 2.4, 14], WHITE, b);
+            // Vertical roof towers (timing / VIP cubes from the photo).
+            for (const tOff of [-28, -8, 12, 32]) {
+              addBox(stage, vadd(vadd(a.c, a.t, tOff), a.u, 15),
+                [6, 7, 8], GREY_D, b);
+            }
+          }, { required: true });
+        }
+      }
 
       // Pit-straight lamp posts (right side)
       for (let i = 0; i < 8; i++) {
         const lk3 = Math.round(n * (0.97 + i * 0.007)) % n;
         const lp3 = anchor(lk3, 1, 8), lb3 = [lp3.r, lp3.u, lp3.t];
         addCyl(out, lp3.c, 0.12, 9, steel, 5, lb3);
-        addBox(out, vadd(lp3.c, lp3.u, 9.4), [1.4, 0.4, 0.9], lampWarm, lb3);
+        addBox(out, vadd(lp3.c, lp3.u, 9.18), [1.4, 0.4, 0.9], lampWarm, lb3);
       }
 
       // Pit-straight sponsor billboards (left side)
@@ -268,8 +317,11 @@
           modelGroup(`${id}-${side < 0 ? "left" : "right"}-tower`, {
             center: towerC, size: [2.2, deckH, 2.8], basis: b,
           }, (stage) => {
-            addBox(stage, towerC, [2.2, deckH, 2.8], concrete, b);
-            addBox(stage, vadd(a.c, a.u, deckH + 0.6), [3.2, 1.2, 3.4], steel, b);
+            addBox(stage, vadd(a.c, a.u, deckH / 2 - 0.03), [2.2, deckH + 0.06, 2.8], concrete, b);  // foot 6 cm under the span support's
+            // Cap: foot 5 cm into the tower, top 10 cm over the deck's. At the
+            // deck's own 1.2 m both its faces sat 15 mm off the deck's (flat
+            // z-fight); 1.35 m keeps each >= 3 cm (MIN_SEP) clear.
+            addBox(stage, vadd(a.c, a.u, deckH + 0.625), [3.2, 1.35, 3.4], steel, b);
           }, { required: true });
         }
       };
@@ -441,23 +493,45 @@
         billboard(Math.round(n * s) % n, sd, gap, 7, 3.5, parkCol[Math.round(s * 10) % parkCol.length]);
       }
 
-      // ── Figure-8 crossover ────────────────────────────────────────────────────
+      // ── Figure-8 crossover — wave-3 bold green bridge span ──────────────────
       // THE DECK GOES ON THE ROAD THAT PASSES UNDER, because a flyover's deck
       // is the thing you drive BENEATH. Measured self-crossing: racing 0.437
       // (Degner to the hairpin, the lower road) and racing 0.845 (the back
       // straight, which `bridges` now lifts to y 9.1).
       //
-      // The def has no `sceneryStartFrac`, so this file's fracs ARE racing
-      // fracs: the deck goes at 0.437 (measured crossing 0.4371 / 0.8458,
-      // 1.4 m apart in XZ). It read 0.437 only while a 0.6198 shift applied.
+      // Research: bold green span lifting the line over the main straight —
+      // the dark soffit stays under; the upper ribbon and abutments read green.
       //
       // Clearance 5.5 + thickness 1.7 puts the deck top at 7.2 m — beneath the
       // 9.1 m upper ribbon, above the lower road, so it reads as the dark
       // structural soffit under the bridge.
+      const XOVER_GREEN = [0.12, 0.48, 0.28];
+      const XOVER_DK    = [0.055, 0.075, 0.105];
       overheadSpan({ id: "suzuka-crossover-deck", frac: 0.437, clearance: 5.5,
         minimumClearance: 4.8, thickness: 1.7, depth: 20, span: hw[Math.round(0.437 * n) % n] * 2 + 8,
-        supportGap: 2.8, supportWidth: 1.8, color: [0.055, 0.075, 0.105],
+        supportGap: 2.8, supportWidth: 1.8, color: XOVER_DK,
         required: true });
+      // Bold green upper ribbon on the lifted back-straight (s≈0.845).
+      // supports:false — the def's bridges:[] already lifts the ribbon; piers
+      // would reject against the elevated road footprint (same pattern as
+      // monza-sopraelevata-flyover).
+      overheadSpan({ id: "suzuka-crossover-green-span", frac: 0.845, clearance: 8.6,
+        minimumClearance: 7.5, thickness: 1.4, depth: 18,
+        span: hw[Math.round(0.845 * n) % n] * 2 + 10,
+        supports: false, color: XOVER_GREEN,
+        required: true });
+      // Green cheek walls flanking the lifted ribbon — identity without piers.
+      for (const side of [-1, 1]) {
+        const ca = anchor(K(0.845), side, 6.5), cb = [ca.r, ca.u, ca.t];
+        if (onTrack(ca.c[0], ca.c[2], 5)) continue;
+        const cc = vadd(ca.c, ca.u, 4.5);
+        modelGroup(`suzuka-crossover-green-cheek-${side < 0 ? "left" : "right"}`, {
+          center: cc, size: [2.2, 10, 22], basis: cb,
+        }, (stage) => {
+          addBox(stage, cc, [1.6, 9.0, 20], XOVER_GREEN, cb);
+          addBox(stage, vadd(ca.c, ca.u, 9.2), [2.0, 0.5, 21], [0.18, 0.55, 0.32], cb);
+        }, { required: true });
+      }
       {
         // The deck above remains the clearance-bearing span.  This deep,
         // one-sided reveal enlarges the lower-road mouth without moving or
@@ -468,11 +542,11 @@
           center: pc, size: [2.2, 5.3, 25], basis: pb,
         }, (stage) => {
           stage._mat = MAT.CONCRETE;
-          addBox(stage, pc, [1.7, 5.3, 24], [0.045, 0.055, 0.075], pb);
+          addBox(stage, vadd(pa.c, pa.u, 2.62), [1.7, 5.24, 24], XOVER_DK, pb);
           stage._mat = MAT.METAL;
-          addBox(stage, vadd(vadd(pa.c, pa.r, 0.88), pa.u, 2.65),
-                 [0.18, 5.3, 24.4], [0.12, 0.16, 0.22], pb);
-          addBox(stage, vadd(pa.c, pa.u, 5.12),
+          addBox(stage, vadd(vadd(pa.c, pa.r, 0.88), pa.u, 2.61),
+                 [0.18, 5.32, 24.4], [0.12, 0.16, 0.22], pb);
+          addBox(stage, vadd(pa.c, pa.u, 5.12),   // tops under it: body 5.24, plate 5.27, cap 5.30
                  [2.0, 0.36, 24.4], [0.08, 0.11, 0.15], pb);
         }, { required: true });
       }
@@ -483,7 +557,8 @@
           center: cc, size: [7.6, 6.2, 12.8], basis: cb,
         }, (stage) => {
           addBox(stage, cc, [6.5, 5.2, 12], concrete, cb);
-          addBox(stage, vadd(ca.c, ca.u, 5.35), [7.0, 0.45, 12.5], neonRed, cb);
+          // Green identity cap on abutments (was neonRed).
+          addBox(stage, vadd(ca.c, ca.u, 5.35), [7.0, 0.45, 12.5], XOVER_GREEN, cb);
           addBox(stage, vadd(vadd(ca.c, ca.r, side * 3.55), ca.u, 3.0),
                  [0.35, 3.0, 10.5], steel, cb);
         }, { required: true });
@@ -514,11 +589,33 @@
                     pz[k] + track.rz[k] * side * (hw[k] + ldist), 2)) return;
         const lp4 = anchor(k, side, ldist), lb4 = [lp4.r, lp4.u, lp4.t];
         addCyl(out, lp4.c, 0.13, 9, steel, 5, lb4);
-        addBox(out, vadd(lp4.c, lp4.u, 9.4), [1.6, 0.4, 1.0], lampWarm, lb4);
+        addBox(out, vadd(lp4.c, lp4.u, 9.18), [1.6, 0.4, 1.0], lampWarm, lb4);
       });
 
       stand(0.00,  1, 15, 52, { livery: "navy", tiers: 2, roof: "cantilever",
         suites: true, endWalls: true, pylons: true }); // Main grandstand V1/V2 — right, opposite the pits (-1); navy base under the Honda crown accent
+      // Stepped dark-blue seating rows — wave-3 identity under the main canopy.
+      {
+        const a = anchor(K(0.0), 1, 18);
+        if (!onTrack(a.c[0], a.c[2], 16)) {
+          const b = [a.r, a.u, a.t];
+          const NAVY_A = [0.16, 0.24, 0.42], NAVY_B = [0.20, 0.28, 0.48];
+          modelGroup("suzuka-main-stand-tiers", {
+            center: vadd(a.c, a.u, 5), size: [14, 12, 48], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.CONCRETE;
+            for (let tier = 0; tier < 4; tier++) {
+              const y0 = 1.2 + tier * 2.2;
+              const w = 10 - tier * 0.8;
+              addBox(stage, vadd(vadd(a.c, a.r, tier * 0.9), a.u, y0),
+                [w, 1.8, 44 - tier * 2], (tier % 2) ? NAVY_A : NAVY_B, b);
+            }
+            // Flat white canopy over the top tier.
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(a.c, a.u, 10.4), [12, 0.55, 46], [0.92, 0.93, 0.94], b);
+          }, { required: true });
+        }
+      }
       stand(0.15,  1, 15, 28, { livery: "steel", roof: "truss" });         // Esses — compact bank on the rising outside
       stand(0.28, -1, 9, 28,  { livery: "orange", roof: "flat" });      // Degner entry
       stand(0.45,  1, 9, 38,  { livery: "navy", tiers: 2, endWalls: true }); // Hairpin
@@ -645,7 +742,7 @@
               const lc = vadd(vadd(a.c, a.t, t), a.r, 1.4);
               addCyl(stage, lc, 0.24, 1.1, [0.70, 0.69, 0.64], 6, b);
               addBox(stage, vadd(lc, a.u, 1.5), [0.62, 0.62, 0.62], [0.76, 0.75, 0.70], b);
-              addPyramid(stage, vadd(lc, a.u, 2.1), [1.0, 0.5, 1.0], [0.66, 0.65, 0.60], b);
+              addPyramid(stage, vadd(lc, a.u, 1.8), [1.0, 0.5, 1.0], [0.66, 0.65, 0.60], b);
             }
             stage._mat = MAT.WOOD;
             const hc = vadd(vadd(a.c, a.r, 12.5), a.u, 2.6);

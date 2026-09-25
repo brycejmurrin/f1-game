@@ -183,6 +183,8 @@ window.PhysicsConsts = {
   // FALLS with speed (game.js gripScale), so an aero planner outran it and cost
   // 0.60 m of apex depth at a short monza corner. Details and the lap-time
   // table it produced: docs/notes/AI-FIELD-RESEARCH.md. DIFF is unchanged.
+  // 2026-09-24: done properly — AiDrive.lateralScale (planner AND actuator)
+  // now carries DOWNFORCE, so the aero rise no longer outruns the car.
   // game.js's BAND_CEIL caps a rubber-banded AI at this table's top scale:
   // easy's 0.851 x 1.18 = 1.004 used to beat hard's own 0.980.
   // `corner` is the SECOND dimension of difficulty, added 2026-09-15 with the

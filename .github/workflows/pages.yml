@@ -166,7 +166,8 @@ jobs:
       concurrency_key: pages-${{ github.run_id }}
       # The deploy push's fast tier already passed the tree-only jobs on this
       # exact tree (verdict looked it up): the gate runs smoke + sweeps +
-      # selection and reuses the rest — see ci.yml's `fast_tier_run` input.
+      # selection + the parts census (base-diffed, not tree-only) and reuses
+      # the rest — see ci.yml's `fast_tier_run` input.
       fast_tier_run: ${{ needs.verdict.outputs.fast_run }}
     # ONE TRAIN AT A TIME (rule 1 above). One group per branch, no cancel: a
     # running gate finishes, the next tick waits, a later tick replaces the

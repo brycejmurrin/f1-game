@@ -377,7 +377,7 @@
       tyreWall(0.728, 0.758, -1, 15, [0.86, 0.20, 0.16]);
       for (const s of [0.734, 0.746]) groundPatch(K(s), -1, 16, [22, 0.18, 26], GRAVEL);
       bleacher(0.726, 0.752, 1, 24, { rows: 6, rise: 1.35, density: 0.35 });
-      scaffoldStand(0.734, 0.756, -1, 30, { rows: 7, rise: 1.4, density: 0.3 });
+      scaffoldStand(0.734, 0.756, -1, 30, { rows: 7, rise: 1.4, density: 0.3, legEvery: 1 });
       billboard(K(0.742), 1, 20, 14, 5, [0.90, 0.74, 0.10], { style: "monopole" });
       gantry(0.732, 6.9, [0.90, 0.74, 0.10]);            // the corner's sponsor arch
       for (const [s1, g] of [[0.733, 17], [0.741, 16], [0.749, 17]])

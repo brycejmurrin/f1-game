@@ -438,8 +438,11 @@
       for (let i = 0; i < 4; i++) {
         const k = (K(0.62) + i * 2) % n;
         place(k, 1, 26 + i * 5, [4, 4, 5], [0.90, 0.90, 0.88]);
-        place(k, 1, 26 + i * 5, [4.4, 0.65, 5.4], [0.55, 0.18, 0.16]);
         const a = anchor(k, 1, 26 + i * 5), bv = [a.r, a.u, a.t];
+        // The red 0.65 m skirt, from 0.3 m under grade to 0.65 m over it. As a
+        // place() its top sat 0.15 m UNDER the ground (0.8 m sink): invisible.
+        // Raw box, no blockAt: the white box already bounds the car here.
+        addBox(out, vadd(a.c, a.u, 0.475), [4.4, 1.25, 5.4], [0.55, 0.18, 0.16], bv);
         addBox(out, vadd(a.c, a.u, 2.8), [0.18, 1.4, 1.4], WIN_WARM, bv);
       }
       marshalPost(K(0.61), 1, 6);

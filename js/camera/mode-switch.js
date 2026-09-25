@@ -39,6 +39,7 @@ window.CamModes = (function () {
         G.camCutT = (CAM_MODES[G.camMode] || CAM_MODES[0]).cut || 0.35;
         Log.info("game", `CamModes.setCamMode ${CAM_MODES[prev].id} -> ${CAM_MODES[G.camMode].id}`);
       }
+      if (typeof GameAudio !== "undefined") GameAudio.setCameraMix(CAM_MODES[G.camMode].id);   // onboard / chase / TV mix
       refreshCamBtn();   // the CAM button label is the only mode indicator (no big announce)
       // The CAMERA TUNER edits whichever mode you are looking through, so every
       // mode change re-points its sliders. Reached through the global, not a
@@ -143,6 +144,10 @@ window.CamModes = (function () {
       });
     })();
     refreshCamBtn();
+    // The SAVED camera's mix, at boot: setCamMode is the only other caller,
+    // so a session that starts in the cockpit heard the chase mix until the
+    // first camera change.
+    if (typeof GameAudio !== "undefined") GameAudio.setCameraMix(CAM_MODES[G.camMode].id);
 
     return { refreshCamBtn, setCamMode, cycleCam, hideCamPicker: camPicker.hide };
   }

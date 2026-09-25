@@ -36,7 +36,7 @@
         building, grandstandEx, spectatorHill, terrace,
         guardrail, fence, tyreWall,
         marshalPost, cameraTower, billboard, sponsorHoarding, gantry,
-        motorhome, groundPatch, runoffApron, place } = api;
+        motorhome, groundPatch, runoffApron, place, addBox, vadd } = api;
 
       // ---------------------------------------------------------------- 0.
       // Lap-position helper + the cool northern palette. Pine is dark and
@@ -105,12 +105,23 @@
       const farPine = (k, side, d, ht, col) => { if (clear(k, side, d)) pine(k, side, d, ht, col); };
       const farTree = (k, side, d, ht, col) => { if (clear(k, side, d, 12)) tree(k, side, d, ht, col); };
 
-      // A parked light aircraft, drawn as four ground-anchored boxes: cabin,
-      // high wing, tailplane and fin, the tail set ~6 m aft of the wing.
+      // A thin prop seated ON the ground. place() sinks every box 0.8 m, so a
+      // part under ~0.85 m tall vanished whole; anchor() returns a point 0.3 m
+      // under the ground, so `lift` is measured from the ground itself. Raw
+      // boxes register no barrier — these stay the non-solid decor they were.
+      const seatBox = (k, side, gap, sz, col, lift) => {
+        const a = anchor(k, side, gap);
+        if (onTrack(a.c[0], a.c[2], sz[0] / 2 + 1.5)) return;
+        addBox(out, vadd(a.c, a.u, 0.3 + (lift || 0) + sz[1] / 2), sz, col, [a.r, a.u, a.t]);
+      };
+
+      // A parked light aircraft: cabin, high wing, tailplane and fin, the tail
+      // set ~6 m aft of the wing. The fuselage and fin are place()d (1.3 m and
+      // 1.5 m showing); the wing sits on the cabin roof, the tailplane on the fin.
       const aircraft = (s, gap, skin) => {
         place(K(s), 1, gap, [1.5, 2.1, 6.0], skin);              // fuselage
-        place(K(s), 1, gap, [10.6, 0.55, 1.4], skin);            // high wing
-        place(K(s - 0.0016), 1, gap, [3.4, 0.45, 0.9], skin);    // tailplane
+        seatBox(K(s), 1, gap, [10.6, 0.55, 1.4], skin, 1.25);    // high wing
+        seatBox(K(s - 0.0016), 1, gap, [3.4, 0.45, 0.9], skin, 0.95);  // tailplane
         place(K(s - 0.0016), 1, gap, [0.35, 2.3, 1.6], AC_RED);  // fin
       };
 
@@ -119,7 +130,7 @@
       const boards = (s0, side, gap, step) => {
         for (let i = 0; i < 3; i++) {
           place(K(s0 - (i + 1) * step), side, gap, [0.25, 1.7, 1.3], TRIM);
-          place(K(s0 - (i + 1) * step), side, gap, [0.28, 0.35, 1.4], TYRE_K);
+          seatBox(K(s0 - (i + 1) * step), side, gap, [0.28, 0.35, 1.4], TYRE_K, -0.05);
         }
       };
 
@@ -619,7 +630,7 @@
       place(K(0.700), -1, 44, [1.0, 1.0, 3.4], ORANGE);
       for (let i = 0; i < 14; i++) {   // grass-strip edge markers
         const s = RW0 + 0.014 + (i / 13) * (RW1 - RW0 - 0.028);
-        place(K(s), -1, 50, [0.7, 0.55, 0.7], PAINT);
+        seatBox(K(s), -1, 50, [0.7, 0.55, 0.7], PAINT, -0.05);   // 0.5 m showing, not buried
       }
       building(K(0.712), -1, 78, 8, 4.0, 12, { col: CORR_RUST });  // strip hut
       building(K(0.828), -1, 74, 7, 3.6, 10, { col: TIMBER });

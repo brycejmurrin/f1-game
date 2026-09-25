@@ -191,6 +191,12 @@
                 a.t, (cCol - 10.5) * 1.55), [0.45, 1.15, 1.15], WALL, b);
             }
           }
+          // The lattice's concrete mullions, slab top (4.2) to eave soffit
+          // (12.35): every block touches one, so the screen — and the eave and
+          // fins it now carries — stands on the slab instead of hanging free.
+          for (let m = 0; m <= 22; m++)
+            addBox(stage, vadd(vadd(vadd(a.c, a.r, -5.0), a.u, 8.275),
+              a.t, (m - 11) * 1.55), [0.45, 8.15, 0.4], WALL, b);
           // Deep flat eave with vertical brise-soleil fins on the sun side.
           addBox(stage, vadd(vadd(a.c, a.r, -1.5), a.u, 12.6), [19, 0.5, 38],
             [0.88, 0.86, 0.80], b);

@@ -26,7 +26,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { pick } from "./pick-tests.mjs";
-import { MEASURED, capacity, declaredTests } from "./select-budget.mjs";
+import { MEASURED, capacity, declaredTests, specSecPerTest, timings } from "./select-budget.mjs";
 import { isTwinned, twinOf } from "./twinned-specs.mjs";
 import { referencesIn } from "../check/cross-file-paths.mjs";
 import * as espree from "espree";
@@ -142,14 +142,35 @@ export const MAX_OVERSIZE_SHARDS = 3;
 export const shardTimeoutMin = (tests, perTestSec = SELECTED_GATE.perTestTimeoutSec) =>
   Math.min(90, Math.ceil((tests * perTestSec) / 60) + 6);
 
+/** Max tests one selected-gate matrix job may carry before the derived
+ *  timeout hits the 90-minute hard cap. shardTimeoutMin(n) = min(90,
+ *  ceil(n * perTestSec / 60) + 6); solving for n under the uncapped branch
+ *  keeps every shard's kill timer ABOVE its worst-case spend — the undercount
+ *  that packed tracks-walls (~63 expanded tests) into a 39-minute selected
+ *  shard cancelled the job with 0 failures (CI run 36057109364). */
+export const maxTestsPerShard = (perTestSec = SELECTED_GATE.perTestTimeoutSec) =>
+  Math.max(1, Math.floor((90 - 6) * 60 / perTestSec));
+
 /** Cut the spec list to what fits `budgetMin` surviving one timeout.
  *  `rank(file)` orders the cut: lower ranks fill the budget first (prioritise()
  *  defines the scale — 0 edited, 1 previously failed, 2 imports a changed
  *  helper, 3 routed by a path rule), ties smallest-first. Affected specs
- *  (rank < 3) that miss the budget go to `oversize` instead of `skipped`. */
-export function fit(specs, budgetMin, { rank = () => 3 } = {}) {
+ *  (rank < 3) that miss the budget go to `oversize` instead of `skipped`.
+ *
+ *  BILLED IN SECONDS, PER SPEC (2026-09-24). The cut used to count TESTS
+ *  against `cap.tests`, i.e. every test in the tree at the 2026-08-07 mean
+ *  (79.7 s) — so select-budget's per-spec median (`specSecPerTest`, 3+ CI
+ *  samples) was reported and never used, and a 2-test spec measured at 7 s a
+ *  test cost the budget as much as two boot-heavy ones. Now a spec costs
+ *  `tests x its own rate`, and the allowance is the same budget expressed in
+ *  seconds: `(budget - one failure) + one test at the fallback rate`, which
+ *  is exactly `cap.tests` x 79.7 s's boundary — an UNMEASURED selection cuts
+ *  where it always did. `db` pins the timing history (tests pass an empty one). */
+export function fit(specs, budgetMin, { rank = () => 3, db = timings() } = {}) {
   const m = { ...MEASURED, ...SELECTED_GATE };
   const cap = capacity(budgetMin, 1, m);
+  const allowanceSec = cap.budgetSec - cap.perFailureSec + m.secPerTest;
+  const costOf = (r) => r.tests * specSecPerTest(r.file, db).sec;
   const counted = [], overBudgetSpecs = [], coveredByFixedGates = [], coveredByVmTwin = [];
   const unreadable = [];
   for (const file of specs) {
@@ -214,7 +235,7 @@ export function fit(specs, budgetMin, { rank = () => 3 } = {}) {
   for (const r of counted) r.rank = rank(r.file);
   counted.sort((a, b) => a.rank - b.rank || a.tests - b.tests);
   const selected = [], skipped = [], unreachable = [], oversize = [];
-  let used = 0;
+  let used = 0, usedSec = 0;
   for (const r of counted) {
     // An over-budget spec never joins the budgeted shard. Affected (rank < 3)
     // it runs alone, billed at its own declared timeout; merely routed, it is
@@ -224,35 +245,105 @@ export function fit(specs, budgetMin, { rank = () => 3 } = {}) {
       else overBudgetSpecs.push({ file: r.file, tests: r.tests, ownTimeoutSec: r.ownTimeoutSec });
       continue;
     }
-    // A spec bigger than the WHOLE cap can never be selected into the main
-    // shard — not "did not fit today", but "cannot fit on any change, ever".
-    // Naming it as merely skipped is what let multiplayer-session.spec.js (19
-    // tests against a 10-test cap) sit red for weeks: every js/net change listed
-    // it as skipped and nobody read a routine line. An AFFECTED one now runs in
-    // its own shard (below); an unaffected one stays a visible REPORT — it
-    // belongs in a fixed gate, or split, or its invariant needs a unit home.
-    if (used + r.tests <= cap.tests) { selected.push(r); used += r.tests; continue; }
-    if (r.rank < 3) oversize.push(r);
-    else if (r.tests > cap.tests) unreachable.push(r);
+    // A spec bigger than the packed budget still RUNS: alone (oversize), and
+    // shards() further splits it across Playwright `--shard=i/n` jobs when its
+    // expanded count exceeds maxTestsPerShard. Naming it unreachable is what
+    // the undercount used to avoid for tracks-walls — billed as 4, packed into
+    // the selected shard, then cancelled at 63/76 with 0 failures. Skipping or
+    // "unreachable"-reporting a per-circuit expansion the change selected is
+    // the same hole from the other side. MAX_OVERSIZE_SHARDS still bounds the
+    // fan-out; overflow is skipped BY NAME below.
+    //
+    // `unreachable` remains for the rare case a single expanded count cannot
+    // be split into MAX_OVERSIZE_SHARDS jobs that each fit the 90-minute cap
+    // (see the push after this loop). Ordinary "bigger than the pack" is
+    // oversize for every rank — affected or merely routed.
+    const cost = costOf(r);
+    if (usedSec + cost <= allowanceSec) { selected.push(r); used += r.tests; usedSec += cost; continue; }
+    if (r.rank < 3 || cost > allowanceSec) oversize.push(r);
     else skipped.push(r);
   }
+  // A single oversize entry that cannot be split into jobs under the 90-minute
+  // cap is unreachable for real — no amount of --shard fits it. Move those
+  // out of oversize so the matrix never schedules a job that the runner will
+  // cancel with 0 failures.
+  {
+    const keep = [], tooBig = [];
+    for (const r of oversize) {
+      const per = maxTestsPerShard(r.ownTimeoutSec || SELECTED_GATE.perTestTimeoutSec);
+      const need = Math.ceil(r.tests / per);
+      if (need > MAX_OVERSIZE_SHARDS * 8) tooBig.push(r); // absurd fan-out guard
+      else keep.push(r);
+    }
+    oversize.length = 0;
+    oversize.push(...keep);
+    unreachable.push(...tooBig);
+  }
   // The oversize list is bounded; the overflow is skipped BY NAME, never silently.
+  // Prefer specs that NEED Playwright sharding (expanded count > one job's cap)
+  // over smaller ones that used to sit in `unreachable` — otherwise
+  // tracks-walls (~63) loses its slot to three 11-test specs and the fleet
+  // sweep the change selected never runs (the other face of CI run 36057109364).
+  oversize.sort((a, b) => {
+    const need = (r) => r.tests > maxTestsPerShard(r.ownTimeoutSec || SELECTED_GATE.perTestTimeoutSec) ? 0 : 1;
+    return need(a) - need(b) || a.rank - b.rank || b.tests - a.tests;
+  });
   const oversizeRun = oversize.slice(0, MAX_OVERSIZE_SHARDS);
   for (const r of oversize.slice(MAX_OVERSIZE_SHARDS)) skipped.push(r);
   return { selected, skipped, unreachable, oversize: oversizeRun, overBudgetSpecs, coveredByFixedGates, coveredByVmTwin,
     unreadable,
-    testsSelected: used, testsFit: cap.tests, cap };
+    testsSelected: used, testsFit: cap.tests, secSelected: Math.round(usedSec), secFit: Math.round(allowanceSec), cap };
 }
 
-/** The matrix the CI gate runs: one shard for the budgeted selection, one per
- *  oversize affected spec, each with the derived cap it is billed at. */
+/** Split one oversize spec into Playwright `--shard=i/n` matrix rows so each
+ *  job's derived timeout stays under the 90-minute hard cap. */
+function oversizeShards(s) {
+  const perSec = s.ownTimeoutSec || SELECTED_GATE.perTestTimeoutSec;
+  const per = maxTestsPerShard(perSec);
+  const n = Math.max(1, Math.ceil(s.tests / per));
+  const base = path.basename(s.file, ".spec.js");
+  const out = [];
+  for (let i = 1; i <= n; i++) {
+    // Playwright splits by test index; ceil keeps every shard's billed count
+    // at least the largest piece (last shard may be smaller at runtime).
+    const testsHere = Math.ceil(s.tests / n);
+    out.push({
+      name: n === 1 ? `oversize-${base}` : `oversize-${base}-${i}of${n}`,
+      specs: s.file,
+      shard: n === 1 ? "" : `${i}/${n}`,
+      tests: testsHere,
+      timeout: shardTimeoutMin(testsHere, perSec),
+    });
+  }
+  return out;
+}
+
+/** The matrix the CI gate runs: one shard for the budgeted selection, then
+ *  one or more Playwright shards per oversize spec (split when the expanded
+ *  test count would blow the 90-minute job cap). */
 export function shards(r) {
   const out = [];
-  if (r.selected.length) out.push({ name: "selected", specs: r.selected.map((s) => s.file).join(" "),
-    tests: r.testsSelected, timeout: shardTimeoutMin(r.testsFit) });
-  for (const s of r.oversize || []) out.push({ name: `oversize-${path.basename(s.file, ".spec.js")}`,
-    specs: s.file, tests: s.tests,
-    timeout: shardTimeoutMin(s.tests, s.ownTimeoutSec || SELECTED_GATE.perTestTimeoutSec) });
+  if (r.selected.length) {
+    // A budgeted selection can still contain one loop-expanded file that
+    // alone exceeds maxTestsPerShard if its measured rate is cheap enough to
+    // pack by seconds. Peel those into their own oversize rows first.
+    const packed = [], peeled = [];
+    for (const s of r.selected) {
+      const per = maxTestsPerShard(s.ownTimeoutSec || SELECTED_GATE.perTestTimeoutSec);
+      if (s.tests > per) peeled.push(s);
+      else packed.push(s);
+    }
+    if (packed.length) {
+      const tests = packed.reduce((n, s) => n + s.tests, 0);
+      out.push({ name: "selected", specs: packed.map((s) => s.file).join(" "),
+        shard: "",
+        // max(): measured-cheap specs can put MORE tests in the shard than the
+        // 79.7 s cap counts, and the cap must still clear every one timing out.
+        tests, timeout: shardTimeoutMin(Math.max(r.testsFit, tests)) });
+    }
+    for (const s of peeled) out.push(...oversizeShards(s));
+  }
+  for (const s of r.oversize || []) out.push(...oversizeShards(s));
   return out;
 }
 
@@ -450,8 +541,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     "SELECTION NOT TRUSTWORTHY: files changed but no pick-tests rule claimed them.");
   for (const s of r.failedDropped || []) console.error(
     `CARRY-FORWARD DROPPED (not routed by this change): ${s}`);
-  console.error(`budget fits ${r.testsFit} tests (retries ${SELECTED_GATE.retries}, ` +
-    `${SELECTED_GATE.perTestTimeoutSec}s/test, surviving 1 timeout); selected ${r.testsSelected}`);
+  console.error(`budget fits ${r.secFit} s — ${r.testsFit} tests at the ${MEASURED.secPerTest} s fallback, measured specs at ` +
+    `their own median (retries ${SELECTED_GATE.retries}, ${SELECTED_GATE.perTestTimeoutSec}s/test, surviving 1 timeout); ` +
+    `selected ${r.testsSelected} tests, ${r.secSelected} s`);
   for (const s of r.overBudgetSpecs) console.error(
     `EXCLUDED (declares ${s.ownTimeoutSec}s test budget > gate ${SELECTED_GATE.perTestTimeoutSec}s): ${s.file}`);
   for (const s of r.coveredByFixedGates) console.error(
@@ -459,7 +551,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   for (const s of r.coveredByVmTwin || []) console.error(
     `COVERED BY A VM TWIN ON THE NODE GATE: ${s.file} (${s.tests} tests) -> ${s.twin}`);
   for (const s of r.unreachable) console.error(
-    `UNREACHABLE (declares ${s.tests} tests > the whole ${r.testsFit}-test cap — this gate can ` +
+    `UNREACHABLE (declares ${s.tests} tests, over the whole ${r.secFit} s budget — this gate can ` +
     `NEVER run it): ${s.file}`);
   for (const s of r.skipped) console.error(`SKIPPED (over budget): ${s.file} (${s.tests} tests)`);
   for (const s of r.oversize) console.error(

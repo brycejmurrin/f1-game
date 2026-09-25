@@ -13,7 +13,6 @@ const SceneryThemes = (function () {
       accent: [0.82, 0.12, 0.16],
       service: [0.72, 0.74, 0.78],
     },
-    variants: { roof: ["flat"], facade: ["glazed"], tower: ["lattice"] },
     spacing: { furniture: 80, service: 180 },
     budgets: { hero: 50000, facility: 25000, repeated: 10000 },
   };
@@ -23,25 +22,20 @@ const SceneryThemes = (function () {
       palette: { shell: [0.72, 0.73, 0.75], roof: [0.34, 0.36, 0.40],
                  glass: [0.28, 0.38, 0.50], accent: [0.86, 0.30, 0.20] },
       spacing: { furniture: 150, service: 260 },
-      variants: { roof: ["flat", "sawtooth"], tower: ["lattice", "stepped"] },
     },
     street: {
       palette: { shell: [0.45, 0.47, 0.52], glass: [0.20, 0.34, 0.52] },
-      variants: { roof: ["flat", "cantilever"], facade: ["glazed", "led"] },
     },
     desert: {
       palette: { shell: [0.68, 0.58, 0.44], accent: [0.96, 0.68, 0.16] },
       spacing: { furniture: 120, service: 220 },
-      variants: { roof: ["flat"], tower: ["tapered", "drum"] },
     },
     park: {
       palette: { shell: [0.68, 0.68, 0.64], roof: [0.20, 0.28, 0.22] },
       spacing: { furniture: 140, service: 240 },
-      variants: { roof: ["sawtooth", "flat"], tower: ["lattice", "stepped"] },
     },
     "night-event": {
       palette: { shell: [0.30, 0.32, 0.38], window: [0.70, 0.86, 1.00] },
-      variants: { facade: ["glazed", "led"], tower: ["lattice", "tapered"] },
     },
   };
 

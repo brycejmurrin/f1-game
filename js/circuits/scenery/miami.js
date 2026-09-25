@@ -16,6 +16,122 @@
       } = api;
 
       const { cx, cz, radius: rad } = lapBounds();
+      const { terrainYAt } = api;
+
+      // DRAPE — a flat decal laid ON the rendered terrain (what runoffApron /
+      // groundPatch cannot do: both take ONE height per box, and place() sinks
+      // every box 0.8 m, so the marina's 5-6 cm paint went wholly under grade). The footprint (depth
+      // across x len along, `gap` beyond the edge at node k) is tiled into
+      // <= 24 m cells; each cell samples terrainYAt on a 3x3 grid, is tilted to
+      // the best-fit plane, and spans from `thick` under its lowest sample to
+      // `opts.h` (default 1 cm) over its highest — never buried, never floating.
+      //  * Arc length scales by (1 - kappa*d): the cell length follows it, and
+      //    a cell folded inside a tight corner (scale < 0.25) is dropped.
+      //  * A cell any corner of which lies closer to ANOTHER part of the lap
+      //    than to its own centreline is dropped.
+      //  * The normal is quantised (0.02 in x/z) and tops and bottoms snap to a
+      //    0.24 m lattice at a per-class residue (`res` in 0.03 steps, + 0.12 on
+      //    alternate cells along the run), so no two overlapping faces share a
+      //    plane (z-fight): they are >= 3 cm apart by construction. Classes
+      //    here: marina boundary paint 0 / 0.03.
+      let drapeGrid = null;
+      const DG = 24;
+      const nearestNode = (x, z, R) => {
+        if (!drapeGrid) {
+          drapeGrid = new Map();
+          for (let i = 0; i < n; i++) {
+            const key = Math.floor(px[i] / DG) + "," + Math.floor(pz[i] / DG);
+            let a = drapeGrid.get(key);
+            if (!a) drapeGrid.set(key, (a = []));
+            a.push(i);
+          }
+        }
+        const ix = Math.floor(x / DG), iz = Math.floor(z / DG), m = Math.ceil(R / DG);
+        let best = R * R;
+        for (let a = -m; a <= m; a++) for (let b = -m; b <= m; b++) {
+          for (const i of drapeGrid.get((ix + a) + "," + (iz + b)) || []) {
+            const d = (px[i] - x) ** 2 + (pz[i] - z) ** 2;
+            if (d < best) best = d;
+          }
+        }
+        return Math.sqrt(best);
+      };
+      let drapeSeq = 0;
+      const drape = (k, side, gap, sz, col, opts) => {
+        opts = opts || {};
+        const depth = sz[0], thick = sz[1], len = sz[2], cell = opts.cell || 24;
+        const res = opts.res || 0;
+        const phase = opts.phase != null ? opts.phase : drapeSeq++;
+        const na = Math.max(1, Math.ceil(depth / cell)), nl = Math.max(1, Math.ceil(len / cell));
+        const a0 = anchor(k, side, gap + depth / 2);
+        const cr = (p, q) => [p[1] * q[2] - p[2] * q[1], p[2] * q[0] - p[0] * q[2], p[0] * q[1] - p[1] * q[0]];
+        const dot = (p, q) => p[0] * q[0] + p[1] * q[1] + p[2] * q[2];
+        const nrm = (p) => { const m = Math.hypot(p[0], p[1], p[2]) || 1; return [p[0] / m, p[1] / m, p[2] / m]; };
+        const hand = dot(cr(a0.r, a0.u), a0.t) < 0 ? -1 : 1;
+        const tl = Math.hypot(a0.t[0], a0.t[2]) || 1, th = [a0.t[0] / tl, a0.t[2] / tl];
+        const eL = anchor(k, side, 0).c, eR = anchor(k, -side, 0).c;
+        const mid = [(eL[0] + eR[0]) / 2, (eL[2] + eR[2]) / 2];
+        const spanAt = (d) => {
+          const a = anchor(k - 1, side, d).c, b = anchor(k + 1, side, d).c;
+          return Math.hypot(b[0] - a[0], b[2] - a[2]);
+        };
+        const span0 = spanAt(0) || 1;
+        const dw = depth / na;
+        for (let i = 0; i < na; i++) {
+          const f = spanAt(gap + (i + 0.5) * dw) / span0;
+          if (!(f > 0.25)) continue;
+          const dl = Math.min(3, f) * len / nl;
+          const p0 = anchor(k, side, gap + i * dw).c, p1 = anchor(k, side, gap + (i + 1) * dw).c;
+          const rl = Math.hypot(p1[0] - p0[0], p1[2] - p0[2]) || 1;
+          const rh = [(p1[0] - p0[0]) / rl, (p1[2] - p0[2]) / rl];
+          const fb = anchor(k, side, gap + (i + 0.5) * dw).c[1] + 0.3;
+          for (let j = 0; j < nl; j++) {
+            const lc = (j + 0.5 - nl / 2) * dl;
+            const cx = (p0[0] + p1[0]) / 2 + th[0] * lc, cz = (p0[2] + p1[2]) / 2 + th[1] * lc;
+            let foreign = false;
+            for (const fa of [-0.5, 0.5]) for (const fl of [-0.5, 0.5]) {
+              const x = cx + rh[0] * fa * rl + th[0] * fl * dl, z = cz + rh[1] * fa * rl + th[1] * fl * dl;
+              const own = Math.abs((x - mid[0]) * rh[0] + (z - mid[1]) * rh[1]);
+              if (nearestNode(x, z, own) < own - 1.5) foreign = true;
+            }
+            if (foreign) continue;
+            const S = [];
+            let my = 0;
+            for (const fa of [-0.5, 0, 0.5]) for (const fl of [-0.5, 0, 0.5]) {
+              const aa = fa * rl, ll = fl * dl;
+              const x = cx + rh[0] * aa + th[0] * ll, z = cz + rh[1] * aa + th[1] * ll;
+              const ty = terrainYAt(x, z);
+              const y = ty !== null && Number.isFinite(ty) ? ty : fb;
+              S.push([aa, ll, x, y, z]); my += y / 9;
+            }
+            let ga = 0, gl = 0;
+            for (const s of S) { ga += s[0] * (s[3] - my); gl += s[1] * (s[3] - my); }
+            ga /= 6 * (0.5 * rl) * (0.5 * rl); gl /= 6 * (0.5 * dl) * (0.5 * dl);
+            // Normal quantised to a 0.02 grid in world x/z: overlapping cells
+            // then share it EXACTLY, so the lattice below separates their planes
+            // (two near-equal tilts put the same face 0-2 cm apart at random).
+            const un = nrm(cr([th[0], gl, th[1]], [rh[0], ga, rh[1]]));
+            if (un[1] < 0) { un[0] = -un[0]; un[2] = -un[2]; }
+            const ux = Math.round(un[0] * 50) / 50, uz = Math.round(un[2] * 50) / 50;
+            const u = [ux, Math.sqrt(Math.max(0.5, 1 - ux * ux - uz * uz)), uz];
+            const rd = rh[0] * u[0] + rh[1] * u[2];
+            const r = nrm([rh[0] - rd * u[0], -rd * u[1], rh[1] - rd * u[2]]);
+            const t0 = cr(r, u), t = [t0[0] * hand, t0[1] * hand, t0[2] * hand];
+            const C = [cx, my, cz], dC = dot(C, u);
+            let hi = -1e9, lo = 1e9;
+            for (const s of S) {
+              const h = dot([s[2] - C[0], s[3] - C[1], s[4] - C[2]], u);
+              if (h > hi) hi = h;
+              if (h < lo) lo = h;
+            }
+            const r0 = res + (opts.line ? 0 : 0.12 * ((phase * nl + j) & 1));
+            const top = Math.ceil((dC + hi + (opts.h || 0.01) - r0) / 0.24) * 0.24 + r0 - dC;
+            const bot = Math.floor((dC + lo - thick - r0) / 0.24) * 0.24 + r0 - dC;
+            addBox(out, vadd(C, u, (top + bot) / 2),
+              [rl / (Math.hypot(r[0], r[2]) || 1), top - bot, dl / (Math.hypot(t[0], t[2]) || 1)], col, [r, u, t]);
+          }
+        }
+      };
 
       const TEAL       = [0.20, 0.80, 0.78];
       const CORAL      = [1.0,  0.55, 0.45];
@@ -224,6 +340,10 @@
         }
       }
 
+      // ── Hard Rock Stadium — coral/teal rim bowl (wave-2 crowd denser) ─────
+      // Not a required modelGroup: the 132×100 m ellipse at gap 155 reaches the
+      // pit-straight edge, so a whole-bowl footprint test rejects every build.
+      // Individual prims still go through rejBox; the silhouette is the hero.
       {
         const a = anchor(K(0.0), 1, 155);
         const r = a.r, u = a.u, t = a.t;
@@ -243,29 +363,26 @@
           const tan = [-rad2[2], 0, rad2[0]];
           const h = 48 + (i % 3) * 5;
           const segW = 19;
-          // lower raked seating
           addBox(out, vadd(vadd(c, u, h * 0.5),  rad2,  6), [12, h + 2, segW], GREYWHITE, [rad2, u, tan]);
-          // upper shell tier
           addBox(out, vadd(vadd(c, u, h + 10),   rad2,  9), [11, 18, segW + 1], WHITE,     [rad2, u, tan]);
           addBox(out, vadd(vadd(c, u, h + 20.9), rad2,  9), [12, 4.2, segW + 2],
             (i % 2) ? CORAL : TEAL, [rad2, u, tan]);
-          // outer aqua accent stripe (Dolphins cue on the bowl shell)
           if (i % 2 === 0)
             addBox(out, vadd(vadd(c, u, h + 18), rad2, 10.5), [2.2, 2.4, segW],
               AQUA, [rad2, u, tan]);
-          // crowd colour detail — lit so the stadium bowl reads at dusk
           if (i % 2 === 0)
             addBox(out, vadd(vadd(c, u, h * 0.6), rad2, 0), [1.5, h * 0.65, segW - 2],
               PASTELS[(i * 3) % PASTELS.length], [rad2, u, tan]);
           if (i % 3 === 1)
             addBox(out, vadd(vadd(c, u, h * 0.45), rad2, 2), [0.8, h * 0.5, segW - 3],
               PASTELS[(i * 5 + 2) % PASTELS.length], [rad2, u, tan]);
-          // Interior concourse lighting strips
+          if (i % 5 === 2)
+            addBox(out, vadd(vadd(c, u, h * 0.72), rad2, -1.5), [1.1, h * 0.35, segW - 5],
+              PASTELS[(i * 7 + 1) % PASTELS.length], [rad2, u, tan]);
           if (i % 4 === 0)
             addBox(out, vadd(vadd(c, u, h * 0.25), rad2, -1), [1.0, h * 0.3, segW - 4],
               [WIN_AMBER[0] * 0.75, WIN_AMBER[1] * 0.6, WIN_AMBER[2] * 0.2], [rad2, u, tan]);
         }
-        // 6 floodlight masts — taller shafts so the bowl reads from farther out
         for (let i = 0; i < 6; i++) {
           const ang = (i + 0.5) / 6 * 6.2832;
           const ex = Math.cos(ang) * RA, ez = Math.sin(ang) * RB;
@@ -275,12 +392,10 @@
           addCyl(out, vadd(c, u, 70), 5.0, 1.4, FLOOD_WH, 8, [r, u, t]);
           addBox(out, vadd(c, u, 0.05), [20, 0.2, 20], [0.96, 0.96, 0.88], [r, u, t]);
         }
-        // Massive curved roof cap
         addFrustum(out, vadd(stadiumBase, u, 56), 118, 74, 18,
           [0.82, 0.84, 0.86], 48, [r, u, t]);
         addFrustum(out, vadd(stadiumBase, u, 55), 120, 76, 0.8,
           [0.55, 0.55, 0.57], 48, [r, u, t]);
-        // Concourse hospitality ring
         for (let i = 0; i < 8; i++) {
           const ang = i / 8 * 6.2832;
           const ex = Math.cos(ang) * (RA - 22), ez = Math.sin(ang) * (RB - 22);
@@ -386,9 +501,11 @@
       }
       guardrail(0.26, 0.38, 1, 2.8, GREYWHITE);
 
+      // Draped paint (place() sank these 5-6 cm strips 0.74 m under grade:
+      // 148 invisible boxes), 0.2 m over grade so it reads on the pontoon.
       along(0.265, 0.375, 8, (k) => {
-        place(k, 1, 6.3, [0.45, 0.06, 8], WHITE);        // painted vinyl boundary
-        place(k, 1, 6.9, [0.7, 0.05, 8], [0.34, 0.34, 0.36]);  // asphalt showing through
+        drape(k, 1, 6.075, [0.45, 0.06, 8], WHITE, { res: 0, phase: 0, h: 0.2 });   // painted vinyl boundary
+        drape(k, 1, 6.55, [0.7, 0.05, 8], [0.34, 0.34, 0.36], { res: 0.03, phase: 0, h: 0.2 });  // asphalt showing through
       });
       // Moored rank — one hull repeated at a fixed berth pitch, bows all the
       // same way. A real harbour never looks this regular; a boat show does.
@@ -570,6 +687,71 @@
           const depth = 16 + hash(i * 17) * 8;
           const len = 28 + hash(i * 23) * 16;
           runoffApron(K(s), side, gap, [depth, 0.32, len], AQUA);
+        }
+      }
+
+      // ── Miami signature striped runoff — teal / lime / white (photo cue) ──
+      // The Autodrome's widest identity mark under the car: three alternating
+      // horizontal stripes on flat runoff pads at the heavy brake zones.
+      {
+        const LIME = [0.55, 0.92, 0.22];
+        // Open brake zones only: 0.155/+1, 0.655/-1 and 0.95/+1 lay behind the
+        // gap-3 concrete walls, and a 10 m stripe field cannot fit inside a
+        // 3 m wall gap — those sites are dropped.
+        const stripeSites = [[0.07, 1, 5.5], [0.51, 1, 5.5]];
+        for (let si = 0; si < stripeSites.length; si++) {
+          const [s, side, gap] = stripeSites[si];
+          const a = anchor(K(s), side, gap + 6), b = [a.r, a.u, a.t];
+          if (onTrack(a.c[0], a.c[2], 10)) continue;
+          const cols = [TEAL, LIME, WHITE];
+          // anchor() sits 0.3 m below ground: a 0.3 m slab centred 0.28 up
+          // keeps every top corner >= MIN_SEP above the terrain along its
+          // 22-28 m length (slope) with its base still embedded. Bands step
+          // away from the track.
+          for (let band = 0; band < 6; band++) {
+            addBox(out, vadd(vadd(a.c, a.r, side * band * 1.9), a.u, 0.28),
+              [1.7, 0.3, 22 + (si % 2) * 6], cols[band % 3], b);
+          }
+        }
+      }
+
+      // Vertical green/blue fence banners (trackside brand panels).
+      for (const [sf, side] of [[0.14, 1], [0.17, -1], [0.48, 1], [0.66, -1], [0.93, 1]]) {
+        const a = anchor(K(sf), side, 4.2), b = [a.r, a.u, a.t];
+        if (onTrack(a.c[0], a.c[2], 3)) continue;
+        // Free-standing boards on two posts each: posts start at the anchor
+        // (0.3 m below ground) and run up inside the board, so nothing floats.
+        // Board 0.8-3.8 m above ground — about the one fence's height (0.14/+1).
+        for (let i = 0; i < 4; i++) {
+          const along2 = (i - 1.5) * 4.5;
+          const col = (i % 2) ? [0.08, 0.62, 0.28] : [0.10, 0.42, 0.78];
+          const foot = vadd(a.c, a.t, along2);
+          addBox(out, vadd(foot, a.u, 2.6), [0.25, 3.0, 2.8], col, b);
+          for (const po of [-1.0, 1.0]) {
+            addBox(out, vadd(vadd(foot, a.t, po), a.u, 1.5), [0.15, 3.0, 0.15], GREYWHITE, b);
+          }
+          // Logo patch: embedded 1.5 cm in the board face, 16.5 cm proud.
+          addBox(out, vadd(vadd(foot, a.r, -side * 0.2), a.u, 2.7),
+            [0.18, 1.4, 2.2], WHITE, b);
+        }
+      }
+
+      // MIA word-mark cue — three solid letter slabs (no overlapping outlines).
+      {
+        const a = anchor(K(0.30), 1, 22), b = [a.r, a.u, a.t];
+        if (!onTrack(a.c[0], a.c[2], 8)) {
+          modelGroup("miami-mia-sign", {
+            center: vadd(a.c, a.u, 4.8), size: [2.4, 9.8, 18], basis: b,
+          }, (stage) => {
+            // Panel stands on the anchor (0.3 m below ground): no gap under it.
+            addBox(stage, vadd(a.c, a.u, 4.75), [0.5, 9.5, 16], [0.08, 0.08, 0.10], b);
+            for (let ch = 0; ch < 3; ch++) {
+              const z = (ch - 1) * 5.0;
+              // 0.60 vs 0.50 panel: each face 5 cm proud (> MIN_SEP 3 cm).
+              addBox(stage, vadd(vadd(a.c, a.t, z), a.u, 5.5),
+                [0.60, 6.2, 3.2], WHITE, b);
+            }
+          }, { required: true });
         }
       }
 

@@ -82,7 +82,8 @@ import path from "node:path";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const { buildContext } = require(path.join(ROOT, "tools", "lib", "track-build-vm.cjs"));
+const { buildContext, shipped } = require(path.join(ROOT, "tools", "lib", "track-build-vm.cjs"));
+const { solidsInRoad } = require(path.join(ROOT, "tools", "lib", "solid-in-road.cjs"));
 
 // Vertical band that counts as an intrusion. Below TOL is ground-level dressing
 // (kerbs, tyre-wall bases) that legitimately hugs the edge; above CEIL is
@@ -266,7 +267,8 @@ function auditProps(t) {
   };
 }
 
-/** ONE fleet pass, memoised, for all three tests — the lesson from
+/** ONE fleet pass, memoised, for every test here (the surface audit and the
+ *  solid-in-road audit share each build) — the lesson from
  *  lamp-fixture-anchor, which rebuilt the fleet once per guard.
  *
  *  Nothing survives a circuit but its verdict. That matters here: the audit
@@ -292,7 +294,11 @@ const fleet = (() => {
     assert.equal(T.setKeepGeometry(true), true, "the build must keep its geometry for this audit");
     for (const def of T.LIST) {
       const t = T.build(def);
-      out.set(def.id, auditProps(t));
+      const r = auditProps(t);
+      // The solid-in-the-road audit reads the PRIMITIVE records, so it runs on
+      // this build before trim(0) drops them (tools/lib/solid-in-road.cjs).
+      r.solids = solidsInRoad(t, shipped(ctx.prims, ctx.liveBufs));
+      out.set(def.id, r);
       ctx.trim(0);
     }
     return out;
@@ -334,8 +340,12 @@ test("the audit still measures: a planted slab and the forest crown are found", 
   // over the centreline at half-lap, handed to auditProps as the props buffer
   // of a real built track. Plus mont_tremblant's crown, the one real object.
   const fl = fleet(), mt = fl.get("mont_tremblant");
-  assert.ok(mt.max >= 4.9 && mt.max <= 5.0,
-    `mont_tremblant's crown should read ~4.97 m; got ${mt.max}. If it moved, ` +
+  // 4.97 -> 4.79 on 2026-09-24: its road heights now come from the survey by
+  // arc fraction (they were read by point index, up to 8.9 m off here).
+  // 4.79 -> 4.54 (batch 2, same day): the run-off shelf and the placed-prop
+  // MIN_SEP slots moved the ground and the props under the same crown.
+  assert.ok(mt.max >= 4.45 && mt.max <= 4.65,
+    `mont_tremblant's crown should read ~4.54 m; got ${mt.max}. If it moved, ` +
     "re-measure and update the baseline; if the audit stopped finding it, fix the audit.");
 
   const t = ctxOnce().Tracks.build(ctxOnce().Tracks.LIST.find((d) => d.id === "shanghai"));
@@ -354,4 +364,53 @@ test("the audit still measures: a planted slab and the forest crown are found", 
   ctxOnce().trim(0);
   assert.ok(res.max >= 0.95 && res.max <= 1.05, `the planted slab should read ~1.0 m; got ${JSON.stringify(res)}`);
   assert.deepEqual(res.worst.color, [1, 0, 1], `the worst offender should be the slab; got ${JSON.stringify(res.worst)}`);
+});
+
+test("no grounded solid stands on the tarmac, on any circuit", () => {
+  // THE AXIS THE SURFACE AUDIT ABOVE IS BLIND TO. It reads the height of a face
+  // over each sample; a pillar footed ON the road whose top is above CEIL and
+  // whose sides project to slivers reads nothing. suzuka's crossover pillar
+  // (fixed in 30359c708) stood in the racing line at frac 0.439 and passed it;
+  // this audit reads 1 hit on that tree and 0 fleet-wide at HEAD.
+  // docs/notes/SCENERY-QA-PLAN.md section 2b "G1"; the rule: tools/lib/solid-in-road.cjs.
+  const offenders = [];
+  for (const [id, r] of fleet()) {
+    for (const h of r.solids || []) {
+      offenders.push(`${id} frac ${h.frac} lateral ${h.lat} hw: ${h.name} mat ${h.mat}, ` +
+        `${h.xz[0]} x ${h.xz[1]} m footprint, y ${h.yspan[0]}..${h.yspan[1]} m over road, ` +
+        `${h.samples} tarmac samples inside`);
+    }
+  }
+  assert.deepEqual(offenders, [],
+    "grounded solids standing on the racing surface (a car would hit these). Move the " +
+    "emitter off the tarmac in its scenery file or js/track/scenery/; never exempt one:\n  " +
+    offenders.join("\n  "));
+});
+
+test("the solid-in-road audit still measures: a planted pillar is found, a lifted one is not", () => {
+  // ANTI-VACUITY for the test above, in the planted-slab test's style: the
+  // fleet reads zero, so the known hit is PLANTED — a grounded 1.6 x 1.6 x 9 m
+  // box at half-lap, 0.3 hw right of the centreline, as the only primitive of
+  // a real built track's props buffer. The same box lifted clear of the band
+  // (an overhead gantry) must NOT be found, or the grounded rule has gone.
+  const T = ctxOnce().Tracks, t = T.build(T.LIST.find((d) => d.id === "shanghai"));
+  ctxOnce().trim(0);
+  const k = Math.round(0.5 * t.n), lat = 0.3 * t.hw[k];
+  const cx = t.px[k] + t.rx[k] * lat, cz = t.pz[k] + t.rz[k] * lat;
+  const box = (y0) => {
+    const pos = [];
+    for (const y of [y0, y0 + 9]) for (const [a, b] of [[-0.8, -0.8], [0.8, -0.8], [0.8, 0.8], [-0.8, 0.8]])
+      pos.push(cx + t.tx[k] * a + t.rx[k] * b, y, cz + t.tz[k] * a + t.rz[k] * b);
+    const geo = { pos }, xs = pos.filter((_, i) => i % 3 === 0), zs = pos.filter((_, i) => i % 3 === 2);
+    const prim = { name: "planted", mat: 0, s: 0, e: pos.length, buf: geo,
+      minX: Math.min(...xs), maxX: Math.max(...xs), minY: y0, maxY: y0 + 9,
+      minZ: Math.min(...zs), maxZ: Math.max(...zs) };
+    return solidsInRoad({ ...t, propsGeo: geo, glassGeo: null }, [prim]);
+  };
+  const hit = box(t.py[k] - 0.3);
+  assert.equal(hit.length, 1, `the planted pillar should be found once; got ${JSON.stringify(hit)}`);
+  assert.ok(Math.abs(hit[0].frac - 0.5) < 0.01 && Math.abs(hit[0].lat - 0.3) < 0.05,
+    `the hit should sit at half-lap, 0.3 hw right; got ${JSON.stringify(hit[0])}`);
+  const lifted = box(t.py[k] + 6);
+  assert.deepEqual(lifted, [], `a pillar 6 m up is overhead, not in the road; got ${JSON.stringify(lifted)}`);
 });

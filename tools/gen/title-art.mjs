@@ -38,15 +38,11 @@ const SHELL = path.join(ROOT, "index.html");
 // guard for free — the hook blocks any edit landing inside the pair.
 const OPEN = "    <!-- @gen-shell:title-art -->";
 const CLOSE = "    <!-- @gen-shell:/title-art -->";
-// The PORTRAIT drawing is a second block, not a second file: it is the same car
-// mesh through a second camera, so one generator owns both.
-const OPEN_TOP = "    <!-- @gen-shell:title-art-top -->";
-const CLOSE_TOP = "    <!-- @gen-shell:/title-art-top -->";
 
 // ---------------------------------------------------------------- camera
-// ONE CAMERA. The landscape drawing is the garage's own orbit. The portrait
-// half is not projected at all — see sceneTop, which traces a real render
-// instead, because this projector cannot draw a car pointed at its own lens.
+// ONE CAMERA: the garage's own orbit. (A portrait, top-down drawing traced off
+// a real render lived here until 2026-09-24; every tall shape now shows this
+// side view in its own grid band, so it was shown nowhere and was removed.)
 const CAM_SIDE = { az: 0.663, el: 0.055, dist: 5.5, target: [0, 0.50, -1.40] };
 const FOCAL = 1000;
 const sub = (a, b) => a.map((x, i) => x - b[i]);
@@ -456,8 +452,68 @@ function build() {
 }
 
 // ============================================================== the layers
-const g = (attrs, d, fill = true) =>
-  `      <g ${attrs}><path ${fill ? "" : 'fill="none" '}d="${d}"/></g>`;
+/**
+ * REVEAL HOOKS. Every art group — a <g> that holds a <path> directly — carries
+ * `data-stage` (WHAT it is, so an animator can pick a stage) and `style="--i:N"`
+ * (WHEN it draws on, so one rule can stagger by calc(var(--i) * step)). Neither
+ * changes a pixel when no animation CSS applies: the custom property is inert,
+ * and data-stage matches no existing rule. Existing attributes keep their order
+ * and the new ones go LAST, so `<g data-trail` and every `g[data-ink]` /
+ * `g:not([stroke])` selector still read the same tag.
+ *
+ * THE STAGES, and the groups each one names:
+ *   ink    g[data-ink] with a stroke — the dilated outline passes: carLayers'
+ *          bleed (inkW + 12, landscape near car only), the main contour (inkW)
+ *          and the accent (4 px); tracedCar's halo and contour. The draw-on.
+ *   body   the plain `stroke="none"` fill in --carbon — carLayers' knock-out
+ *          and its near-half re-knock-out (occlude). No data-* hook of its own.
+ *   tone   g[data-tone] — carLayers' ambient, far-face, tyre, flank and top
+ *          passes; tracedCar's ambient fill and its posterised tone steps
+ *          (which carry a hairline stroke).
+ *   detail the fill="none" stroked lines — halo and near-side wheel rims.
+ *   brush  g[data-ink][stroke="none"] — the filled loaded-brush marks.
+ *   trail  g[data-trail] — the tyre marks, filled from #tc-trail(-v).
+ *
+ * --i IS STAGE-MAJOR, per drawing: every ink group of both cars first (in paint
+ * order), then every body, tone, detail and brush group, and the trails LAST,
+ * whatever their paint position. So the two cars outline together, then fill.
+ * Wrappers that only place things (#tc-frame, the placement group, tracedCar's
+ * per-car transform group) hold no path and carry no stage.
+ *
+ * NO pathLength, deliberately. A dash draw-on (pathLength="1", dasharray 1,
+ * dashoffset 1 -> 0) was tried and does not trace: an ink path is one <path>
+ * of many subpaths (54 M in the landscape contour), and the dash pattern
+ * restarts at every M, so every outline popped at once. The outlines reveal
+ * with a clip-path wipe on the GROUP instead (css/menus.css), which needs no
+ * per-path length at all.
+ */
+const STAGES = ["ink", "body", "tone", "detail", "brush", "trail"];
+const SLOT = "@@I@@";
+/** Which stage a group is, read off the same attributes the CSS keys on. */
+function stageOf(attrs, fill) {
+  if (/\bdata-trail\b/.test(attrs)) return "trail";
+  if (/\bdata-tone\b/.test(attrs)) return "tone";
+  if (/\bdata-ink\b/.test(attrs)) return /stroke="none"/.test(attrs) ? "brush" : "ink";
+  if (!fill) return "detail";
+  if (/stroke="none"/.test(attrs)) return "body";
+  throw new Error(`title-art: no reveal stage for <g ${attrs}>`);
+}
+/** One art group. `pathAttrs` precede d= on the path. The --i slot is filled
+ *  later by numberStages, once the whole drawing's group list is known. */
+function artGroup(indent, attrs, d, pathAttrs = "", fill = true) {
+  return `${indent}<g ${attrs} data-stage="${stageOf(attrs, fill)}" style="--i:${SLOT}"><path ${pathAttrs}d="${d}"/></g>`;
+}
+/** Fill every --i slot in one drawing: stage-major, paint order within a stage. */
+function numberStages(text) {
+  const stages = [...text.matchAll(/data-stage="(\w+)" style="--i:@@I@@"/g)].map((m) => m[1]);
+  const idx = [];
+  stages.map((s, k) => [STAGES.indexOf(s), k])
+    .sort((a, b) => a[0] - b[0] || a[1] - b[1])
+    .forEach(([, k], n) => { idx[k] = n; });
+  let k = 0;
+  return text.replace(/@@I@@/g, () => String(idx[k++]));
+}
+const g = (attrs, d, fill = true) => artGroup("      ", attrs, d, fill ? "" : 'fill="none" ', fill);
 
 /**
  * One car, as the stack of groups that paints it.
@@ -527,127 +583,12 @@ function carLayers(off, inkW, detW, opts = {}) {
 // spokes, suspension or brush marks, and drawing them would cost ratcheted
 // shell nodes to add clutter at exactly the scale that can least afford it.
 function scene() {
-  return [
+  return numberStages([
     ...carLayers([1.90, 0.98, 0.028], 7, 3,
                  { lite: true, topA: 0.17, flankA: 0.07, tyreA: 0.04, baseA: 0.09,
                    paint: false, occlude: false }),
     ...carLayers([2.20, -1.32, 0.030], 10, 4),
-  ].join("\n");
-}
-
-/**
- * THE PORTRAIT SCENE IS A TRACE OF A REAL RENDER, NOT A PROJECTION.
- *
- * The flank drawing is projected from a hand-built mesh in this file, and that
- * works because a car in profile is a stack of boxes. From behind it is not:
- * the shapes that carry the read are the rear wing's slot gaps, the diffuser
- * strakes, the halo over the airbox and the tyre shoulders, and a projector
- * that can draw those is a renderer. So the portrait half traces one instead.
- *
- * THE MATTE IS A DIFFERENCE, NOT A THRESHOLD. Earlier drafts traced a GARAGE
- * photo and tried to split car from floor by brightness or saturation. That
- * cannot work: the front wing, the rear wing and the diffuser are matte black
- * and so is the pit box. A cut high enough to keep the wings swallowed the pit
- * wall; a cut low enough to lose the garage lost the wings; hole filling could
- * not rescue it because from behind you see UNDER the rear wing to the floor,
- * so the bay is not an enclosed hole. Each fix traded one missing part for
- * another, and the drawing kept arriving incomplete.
- *
- * tools/car/trace-car.mjs solves it by construction: tools/carview.html renders
- * the car ALONE with no floor at all, then renders the identical camera with
- * ?hidecar=1, and every pixel that differs is car. Black bodywork still differs
- * from a dark backdrop, so nothing drops out, and there is no floor in either
- * frame to exclude. Its output is baked to title-art-top-{a,b}.json and
- * committed, so this generator needs no browser.
- */
-// Two traces, not one flipped: the cars head 3 degrees apart (az -3 and +3), so
-// the pair is neither parallel nor a mirror — the same difference in heading the
-// flank drawing gives them, seen from behind.
-//   node tools/car/trace-car.mjs --az=-3 --el=30 --dist=11 --team=ferrari \\
-//     --mindetail=100000 --simplify=2.2 --box=600x800 --out=tools/gen/title-art-top-a.json
-//   (and --az=3 ... -top-b.json)
-const TRACE = Object.fromEntries(["a", "b"].map((k) =>
-  [k, JSON.parse(fs.readFileSync(path.join(ROOT, `tools/gen/title-art-top-${k}.json`), "utf8"))]));
-// Where the rear tyres meet the road, in the trace's own 600x800 box — the one
-// anchor the marks need. Measured off the trace once (the widest rows below
-// mid-box are the rear axle); re-measure if the camera moves.
-const REAR = { y: 645, half: 58, cx: [81, 519] };
-
-const loops = (cs) => cs.map((c) => "M" + c.map((p) => p.join(" ")).join(" L") + " Z").join(" ");
-
-/**
- * One traced car, placed, in the FLANK drawing's language so the two halves of
- * the title screen read as one hand: a steel ink contour, a low ambient fill
- * that lifts the mass off the wash, then the tone steps — three luminance bands
- * the tracer posterised from the lit render, stacked at rising opacity, each
- * with a hairline so the panel edges read as drawn lines. No opaque knock-out:
- * the flank car is translucent, and a solid grey cut-out beside it read as a
- * different picture.
- */
-function tracedCar(x, y, sc, which, lite = false) {
-  const T = TRACE[which];
-  const at = `translate(${x} ${y}) scale(${sc.toFixed(3)})`;
-  const t = lite ? 0.45 : 1;
-  const o = (v) => (v * t).toFixed(2);
-  const ink = (lite ? 4 : 6) / sc;           // constant weight ON SCREEN, so the
-  const hair = 1.6 / sc;                     // leader is not also thinner-lined
-  const OUT = loops(T.outline);
-  const TONE = [0.20, 0.32, 0.46];           // three luminance steps, darkest first
-  return [
-    `      <g transform="${at}">`,
-    `        <g data-ink stroke-width="${(ink + 8 / sc).toFixed(2)}" stroke-opacity="${o(0.18)}" fill-opacity="0"><path d="${OUT}"/></g>`,
-    `        <g data-ink stroke-width="${ink.toFixed(2)}" stroke-opacity="${o(0.95)}" fill-opacity="0"><path fill-rule="evenodd" d="${OUT}"/></g>`,
-    `        <g data-tone stroke="none" fill-opacity="${o(0.24)}"><path fill-rule="evenodd" d="${OUT}"/></g>`,
-    ...T.tone.map((step, i) =>
-      `        <g data-tone stroke-width="${hair.toFixed(2)}" stroke-opacity="${o(0.55)}" fill-opacity="${o(TONE[i] || 0.38)}">`
-      + `<path fill-rule="evenodd" d="${loops(step)}"/></g>`),
-    "      </g>",
-  ].join("\n");
-}
-
-/**
- * The marks the pair left, in the FRAME's coordinates rather than a car's.
- *
- * These cannot be projected through this file's camera the way the flank ones
- * are: from behind, the marks run TOWARD the lens, so a 13 m trail crosses the
- * eye plane and folds into a diagonal smear across the whole drawing. Drawing
- * them in the frame is also the honest construction — the trace fixed the cars'
- * perspective, and the marks only have to agree with it.
- */
-function trails(c, floor) {
-  const out = [];
-  for (let i = 0; i < 2; i++) {
-    const x0 = c.x + REAR.cx[i] * c.sc, y0 = c.y + REAR.y * c.sc;
-    const h0 = REAR.half * c.sc;
-    // Toward the lens the marks widen and swing outward, the way a pair of
-    // parallel lines does under perspective. The swing is off the FRAME's
-    // centre so both cars' marks fan the same way.
-    const k = (x0 - 450) / 450;
-    const x1 = x0 + k * 210, h1 = h0 * 1.85;
-    out.push(`M${Math.round(x0 - h0)} ${Math.round(y0)}`
-      + ` L${Math.round(x0 + h0)} ${Math.round(y0)}`
-      + ` L${Math.round(x1 + h1)} ${floor} L${Math.round(x1 - h1)} ${floor} Z`);
-  }
-  return out.join(" ");
-}
-
-function sceneTop() {
-  // The flank pair's formation read from behind: side by side with clear road
-  // between them, the leader on the left a nose ahead, the chaser on the right
-  // nearer the lens. Not overlapping, not parallel (the traces differ by six
-  // degrees of heading), and the same size to within perspective.
-  const cars = [
-    { x: 34, y: 490, sc: 0.66, which: "a", lite: true },
-    { x: 468, y: 610, sc: 0.70, which: "b", lite: false },
-  ];
-  // The LEADER's marks are older and further up the road, so they go down with
-  // the rest of it. One group each, not one for the pair: fill-opacity on a
-  // shared group would flatten the two together and the depth cue with them.
-  return [
-    ...cars.map((c) => `      <g data-trail stroke="none"${c.lite ? ' fill-opacity="0.55"' : ""}>`
-      + `<path d="${trails(c, 1600)}"/></g>`),
-    ...cars.map((c) => tracedCar(c.x, c.y, c.sc, c.which, c.lite)),
-  ].join("\n");
+  ].join("\n"));
 }
 
 // ================================================================== output
@@ -657,10 +598,6 @@ function sceneTop() {
 // right, and finding that took a dozen renders.
 const PLACE = process.env.TA_PLACE || "202 675";
 const SCALE = process.env.TA_SCALE || "0.99";
-// The portrait drawing has its own viewBox (900x1600) because it is a different
-// composition, not a crop of the first one.
-const PLACE_TOP = process.env.TA_TOP_PLACE || "0 0";
-const SCALE_TOP = process.env.TA_TOP_SCALE || "1";
 const argv = process.argv.slice(2);
 // #tc-frame is the per-SHAPE framing that css/menus.css puts on top of that one
 // placement: a phone in portrait wants the pair nudged off the left edge, a
@@ -671,8 +608,6 @@ const argv = process.argv.slice(2);
 const BLOCKS = [
   { open: OPEN, close: CLOSE, frame: "tc-frame",
     body: `    <g transform="translate(${PLACE}) scale(${SCALE})">\n${scene()}\n    </g>` },
-  { open: OPEN_TOP, close: CLOSE_TOP, frame: "tc-top-frame",
-    body: `    <g transform="translate(${PLACE_TOP}) scale(${SCALE_TOP})">\n${sceneTop()}\n    </g>` },
 ];
 let shell = fs.readFileSync(SHELL, "utf8");
 let wrote = 0, drift = [];

@@ -66,8 +66,8 @@ const LiveryTex = (function () {
 
   // Primary driver number per team.
   const NUMBERS = {
-    mercedes: 63, ferrari: 16, mclaren: 1, redbull: 33, alpine: 10,
-    racingbulls: 40, haas: 31, williams: 55, audi: 27, astonmartin: 14,
+    mercedes: 63, ferrari: 16, mclaren: 1, redbull: 3, alpine: 10,
+    racingbulls: 30, haas: 31, williams: 55, audi: 27, astonmartin: 14,
     cadillac: 11,
   };
   // buildAtlas's override, else the team's own number, else 0 (custom team).
