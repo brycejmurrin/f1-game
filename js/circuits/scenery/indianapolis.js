@@ -65,7 +65,11 @@
             const w = 17 - t * 2.2, d = 21 - t * 2.6;
             const y = 12 + t * 6.85;
             // Each storey steps inward beneath a shallow blue-glass band.
-            addBox(stage, vadd(a.c, a.u, y), [w - 1.2, 5.4, d - 1.2],
+            // Storey rises to the eave's underside (y + 3.15) from the eave
+            // below's top (y - 2.8): at 5.4 m centred on y each eave hung
+            // 0.45 m over its storey and the tower above rested on nothing
+            // (ground-audit unsupported, 14 prims).
+            addBox(stage, vadd(a.c, a.u, y + 0.175), [w - 1.2, 5.95, d - 1.2],
               [0.76, 0.77, 0.79], b);
             addBox(stage, vadd(vadd(a.c, a.r, w * 0.48), a.u, y + 0.2),
               [0.45, 2.2, d - 2.0], [0.26, 0.39, 0.52], b);
@@ -227,11 +231,13 @@
       ]) {
         groundPatch(K(s), side, gap, [26, 0.16, 30], [0.30, 0.52, 0.22],
           { id: `indy-green-${id}`, samples: 8 });
-        groundPatch(K(s), side, gap + 17, [11, 0.14, 14], [0.84, 0.79, 0.62],
+        // Bunker beside the green, not draped over it: overlapping patches
+        // sit one 2 cm lift slot apart (ground-audit flatCoplanar).
+        groundPatch(K(s), side, gap + 26.5, [11, 0.14, 14], [0.84, 0.79, 0.62],
           { id: `indy-bunker-${id}`, samples: 6 });
         const a = anchor(K(s), side, gap + 4);
         const b = [a.r, a.u, a.t];
-        addCyl(out, vadd(a.c, a.u, 1.1), 0.05, 2.4, [0.94, 0.94, 0.92], 4, b);
+        addCyl(out, vadd(a.c, a.u, -0.1), 0.05, 3.6, [0.94, 0.94, 0.92], 4, b);   // pin from grade (base at 1.1 hovered)
         addBox(out, vadd(vadd(a.c, a.u, 2.0), a.t, 0.5), [0.06, 0.5, 0.9],
           [0.90, 0.16, 0.14], b);
       }

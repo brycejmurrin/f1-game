@@ -198,9 +198,13 @@
       // Cooler basin zone starts here (Olympic Basin rowing lake) — teal/blue.
       billboard(K(0.07), -1, 11, 12, 4, [0.18, 0.52, 0.58]);
 
+      // Kerb-paint pads: place() sinks 0.8 m (height = 0.8 + visible), so at
+      // 0.2 every pad here and at 0.55 / 0.92 was laid wholly underground
+      // (ground-audit buried). 0.84 = 4 cm proud and still under THIN_PROP_H:
+      // a paint decal, never a driving limit.
       for (const side of [-1, 1]) {
         for (let j = 0; j < 4; j++) {
-          place(K(0.04 + j * 0.004), side, 3, [3, 0.2, 4], (j % 2) ? KERB_W : KERB_R);
+          place(K(0.04 + j * 0.004), side, 3, [3, 0.84, 4], (j % 2) ? KERB_W : KERB_R);
         }
       }
       // Tyre barriers stacked against the apex walls of the Senna S
@@ -696,7 +700,7 @@
       grandstandEx(0.53, -1, 12, 60, null, null, { livery: "teal", roof: "flat" });
       grandstandEx(0.57,  1, 13, 60, null, null, { livery: "steel", roof: "cantilever" });
       for (const side of [-1, 1]) {
-        for (let j = 0; j < 3; j++) place(K(0.55 + j * 0.004), side, 3, [3, 0.2, 4], (j % 2) ? KERB_R : KERB_W);
+        for (let j = 0; j < 3; j++) place(K(0.55 + j * 0.004), side, 3, [3, 0.84, 4], (j % 2) ? KERB_R : KERB_W);
       }
       // Tyre walls + marshal post packed around the slow hairpin apex
       tyreWall(0.545, 0.565, -1, 3.0, [0.90, 0.85, 0.20]);
@@ -770,7 +774,7 @@
       }
 
       for (const side of [-1, 1]) {
-        for (let j = 0; j < 4; j++) place(K(0.92 + j * 0.004), side, 3, [3, 0.2, 4], (j % 2) ? KERB_W : KERB_R);
+        for (let j = 0; j < 4; j++) place(K(0.92 + j * 0.004), side, 3, [3, 0.84, 4], (j % 2) ? KERB_W : KERB_R);
       }
       tyreWall(0.915, 0.935, -1, 3.0, [0.90, 0.85, 0.20]);
       marshalPost(K(0.93), -1, 9);

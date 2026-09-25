@@ -11,7 +11,7 @@
               addPrism, addFrustum, addPyramid, grandstand, grandstandEx, sponsorHoarding,
               gantry, marshalPost, palm, bush, ds, recordBarrier, seat,
               fence, tyreWall, vadd, hash, cityFront, tower, modelGroup,
-              overheadSpan, waterSurface, waterBand, floodMastRing, circuitKit } = api;
+              overheadSpan, waterSurface, waterBand, floodMastRing, circuitKit, pyMin } = api;
       // Landing a raw anchor() on a circuitKit structure (the pit-race-control
       // beacon below). `anchor` is NOT raw here: transformSceneryApi wraps every
       // k-keyed helper as f(sceneryNode(k), -side) for this reverse +
@@ -133,7 +133,11 @@
           const a = anchor(K(0.06), -1, dist);
           const gy = terrainYAt(a.c[0], a.c[2]);
           const foot = [a.c[0], (gy == null ? a.c[1] : gy), a.c[2]];
-          seat.cone(out, vadd(foot, a.u, h + 18), 2.8, 9, NEON[1], 6, [a.r, a.u, a.t]);
+          // Sleeved over the mast tip: tower() stands a 16 m mast on its cap
+          // (h + 0.09 baseW) from its OWN anchor, which reads up to ~0.3 m off
+          // this terrain foot — a fixed h + 18 left a cone 0.25-0.56 m clear
+          // of it (ground-audit unsupported). 0.4 m of overlap absorbs both.
+          seat.cone(out, vadd(foot, a.u, h + baseW * 0.09 + 16 - 0.4), 2.8, 9, NEON[1], 6, [a.r, a.u, a.t]);
         }
       }
 
@@ -282,7 +286,14 @@
       for (const s of [0.20, 0.28, 0.38, 0.46, 0.80, 0.88]) {
         const a = anchor(K(s), 1, 74);
         for (let i = 0; i < 10; i++) {
-          const c   = vadd(vadd(a.c, a.t, (i - 4) * 11), a.u, 0.5);
+          // Level with the bay (waterBand's sheet is pyMin - 0.82), not with
+          // one shore anchor: off the anchor's height half the strips hung up
+          // to 1.1 m over the water and the rest lay under the quay (ground-
+          // audit). A strip the land covers is never seen — skip it.
+          const c0  = vadd(a.c, a.t, (i - 4) * 11);
+          const c   = [c0[0], pyMin - 0.82 - 0.14, c0[2]];
+          const g   = terrainYAt(c[0], c[2]);
+          if (g != null && g > c[1] + 0.2) continue;
           const hue = (i + Math.round(s * 17)) % 4;
           // brighter reflection: 0.45-0.65 intensity range (was 0.35)
           const inten = 0.45 + Math.sin(i * 0.8) * 0.20;

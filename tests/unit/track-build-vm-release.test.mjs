@@ -150,9 +150,13 @@ test("trim(from) drops the primitive records and the live-buffer set", () => {
 // numbers; tip then moved both circuits again.
 const STRIP = {
   // ship 293659/258313 → audit 287677/252433 → tip 287821/258089
-  monaco: { before: 287821, after: 258089 },
+  // → fix-top-counts 285112/256710 (yachts/pontoons under the quay land no
+  // longer moored; buried harbour balconies skipped; ground-audit)
+  monaco: { before: 285112, after: 256710 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
-  monza: { before: 342551, after: 315519 },   // +30 kept: restoring place()'s SEP_SLOTS sequence (marshal board) shifts a few buried props back above grade
+  // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
+  // banking tiers abut, moss band out of the lower tier; ground-audit)
+  monza: { before: 342563, after: 315709 },   // +30 kept: restoring place()'s SEP_SLOTS sequence (marshal board) shifts a few buried props back above grade
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {

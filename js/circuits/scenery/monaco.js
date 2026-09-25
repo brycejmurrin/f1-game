@@ -534,15 +534,17 @@
             const side = sd < 0 ? "l" : "r";
             overheadSpan({
               id: `monaco-tunnel-haunch-${side}-${k}`, frac: k / n, rawFrac: true, clearance: 6.05,
-              // Tops step down 7.80 / 7.77 / 7.76 (roof / haunch / springing):
+              // Tops step down 7.80 / 7.77 / 7.69 (roof / haunch / springing):
               // at 1.75 and 2.25 all three topped out at exactly 7.80 and the
-              // roof fought from any camera above it (124 pairs, --overhead).
+              // roof fought from any camera above it (124 pairs, --overhead);
+              // 7.76 left haunch/springing 1 cm apart (62 flat pairs); 7.72 met a
+              // shoulder-wall face (coplanar --overhead).
               thickness: 1.72, depth: dz * 1.02, span: cw * 0.28, offset: sd * cw * 0.26,
               color: VAULT2, supports: false, required: true,
             });
             overheadSpan({
               id: `monaco-tunnel-springing-${side}-${k}`, frac: k / n, rawFrac: true, clearance: 5.55,
-              thickness: 2.21, depth: dz * 1.10, span: cw * 0.32, offset: sd * cw * 0.44,
+              thickness: 2.14, depth: dz * 1.10, span: cw * 0.32, offset: sd * cw * 0.44,
               color: VAULT, supports: false, required: true,
             });
             overheadSpan({
@@ -627,7 +629,7 @@
           for (const sd of [-1, 1]) {
             const c = [px[k] + r[0] * sd * (hw[k] + 2.6), py[k], pz[k] + r[2] * sd * (hw[k] + 2.6)];
             // Tall portal jambs + dark mouth reveal — light/dark beat into the bore.
-            addBox(out, vadd(c, u, 5.20), [2.90, 10.40, 3.40], [0.62, 0.60, 0.54], b);
+            addBox(out, vadd(c, u, 5.10), [2.90, 10.60, 3.40], [0.62, 0.60, 0.54], b);   // foot 0.2 under the wall's
             addBox(out, vadd(c, u, 10.40), [3.40, 0.90, 3.80], [0.72, 0.70, 0.64], b);
             addBox(out, vadd(vadd(c, r, -sd * 1.4), u, 3.6), [0.8, 7.0, 2.4], [0.14, 0.14, 0.16], b);
           }
@@ -648,7 +650,8 @@
             color: SCRUB, supports: false, required: true,
           });
           overheadSpan({
-            id: `monaco-tunnel-portal-${tag}-sign`, frac: k / n, rawFrac: true, clearance: 6.90,
+            // Hung from the arch soffit (8.00): at 6.90 its top stopped 0.55 m short.
+            id: `monaco-tunnel-portal-${tag}-sign`, frac: k / n, rawFrac: true, clearance: 7.46,
             thickness: 0.55, depth: 0.30, span: cw * 0.13,
             color: [0.94, 0.92, 0.86], supports: false, required: true,
           });
@@ -734,8 +737,22 @@
       wall(0.585, 0.99, -1, 1.0, 1.4, [0.74, 0.70, 0.62], 1.0);
 
       // ── YACHT BUILDER ─────────────────────────────────────────────────────
+      // A hull whose berth the terrain ribbon covers is invisible below the
+      // deck and a superstructure sprouting from the quay above it: 7 marina
+      // yachts and 2 flagships stood under 1-8 m of land (ground-audit
+      // buried/unsupported). Only moor a hull where the land at its bow, beam
+      // and stern stays under its deck line.
+      const afloat = (c, t, r, halfL, halfW, deckY) => {
+        for (const f of [-1, -0.5, 0, 0.5, 1]) for (const e of [-1, 0, 1]) {
+          const g = terrainYAt(c[0] + t[0] * f * halfL + r[0] * e * halfW,
+                               c[2] + t[2] * f * halfL + r[2] * e * halfW);
+          if (g != null && g > deckY) return false;
+        }
+        return true;
+      };
       const yacht = (yc, b, u, r, t, sc, hullCol) => {
         yc = [yc[0], pyMin - 0.8 - 0.25 * sc, yc[2]];
+        if (!afloat(yc, t, r, 11 * sc, 3.5 * sc, yc[1] + 3.1 * sc)) return;
         const HULL = hullCol || [0.97, 0.97, 0.99];
         const L = 22 * sc, W = 7 * sc;
         out._mat = MAT.METAL;
@@ -747,9 +764,12 @@
         out._mat = MAT.GLASS;
         addBox(out, vadd(sup, u, 5.8 * sc), [W * 0.74, 1.0 * sc, L * 0.58], [0.40, 0.55, 0.70], b);
         out._mat = MAT.METAL;
-        addBox(out, vadd(sup, u, 6.8 * sc), [W * 0.6, 2.2 * sc, L * 0.40], [0.94, 0.95, 0.97], b);
-        addBox(out, vadd(sup, u, 9.0 * sc), [W * 0.42, 1.8 * sc, L * 0.26], [0.84, 0.86, 0.90], b);
-        addBox(out, vadd(sup, u, 9.95 * sc), [W * 0.5, 0.5 * sc, 0.6 * sc], [0.80, 0.82, 0.86], b);
+        // Decks stacked face to face (5.5 / 7.7 / 9.5 / 10.0 sc): each stood
+        // 0.2 sc clear of the one below, so the bridge and mast hung loose
+        // off the hull (ground-audit unsupported).
+        addBox(out, vadd(sup, u, 6.6 * sc), [W * 0.6, 2.2 * sc, L * 0.40], [0.94, 0.95, 0.97], b);
+        addBox(out, vadd(sup, u, 8.6 * sc), [W * 0.42, 1.8 * sc, L * 0.26], [0.84, 0.86, 0.90], b);
+        addBox(out, vadd(sup, u, 9.75 * sc), [W * 0.5, 0.5 * sc, 0.6 * sc], [0.80, 0.82, 0.86], b);
         addCyl(out, vadd(sup, u, 10.0 * sc), 0.18 * sc, 5 * sc, [0.85, 0.85, 0.88], 4, b);
         addBox(out, vadd(vadd(yc, t, L * 0.30), u, 3.4 * sc), [W * 0.7, 0.7 * sc, 0.3 * sc], [0.85, 0.86, 0.9], b);
         out._mat = 0;
@@ -1100,6 +1120,7 @@
 
       const megaYacht = (a, sc, hullCol) => {
         a = Object.assign({}, a, { c: [a.c[0], pyMin - 0.8 - 0.2 * sc, a.c[2]] });
+        if (!afloat(a.c, a.t, a.r, 22 * sc, 5 * sc, a.c[1] + 4.2 * sc)) return;
         const b = [a.r, a.u, a.t];
         const HULL = hullCol || [0.97, 0.97, 0.99];
         const NAVY = [0.14, 0.20, 0.30];
@@ -1143,7 +1164,7 @@
         // Wrap-around deck railings — a run of thin stanchions each side
         for (let s = -6; s <= 6; s++) {
           for (const sd of [-1, 1]) {
-            addCyl(out, vadd(vadd(vadd(a.c, a.t, s * L * 0.06), a.r, sd * W * 0.5), a.u, 4.6 * sc), 0.05 * sc, 1.0 * sc, [0.86, 0.86, 0.9], 3, b);
+            addCyl(out, vadd(vadd(vadd(a.c, a.t, s * L * 0.06), a.r, sd * W * 0.5), a.u, 4.2 * sc), 0.05 * sc, 1.4 * sc, [0.86, 0.86, 0.9], 3, b);
           }
         }
         out._mat = 0;
@@ -1189,11 +1210,12 @@
         const k = K(0.63 + i * 0.052);
         const a = anchor(k, -1, 66 + (i & 1) * 8);
         const b = [a.r, a.u, a.t];
+        if (!afloat(a.c, a.t, a.r, 21, 6.5, a.c[1] + 0.7)) continue;   // quay land over the berth
         modelGroup(`monaco-marina-pontoon-${i}`, {
           center: vadd(a.c, a.u, 1.4), size: [14, 3, 46], basis: b,
         }, (stage) => {
           addBox(stage, vadd(a.c, a.u, 0.35), [3.2, 0.7, 42], [0.68, 0.58, 0.42], b);
-          addBox(stage, vadd(vadd(a.c, a.t, 19), a.u, 0.35), [13, 0.7, 3.2], [0.68, 0.58, 0.42], b);
+          addBox(stage, vadd(vadd(a.c, a.t, 19), a.u, 0.32), [13, 0.64, 3.2], [0.68, 0.58, 0.42], b);   // 6 cm under the spine deck
           for (const o of [-18, -6, 6, 18]) {
             addCyl(stage, vadd(vadd(a.c, a.t, o), a.u, 0.7), 0.12, 2.0, [0.78, 0.80, 0.82], 5, b);
           }
@@ -1204,12 +1226,15 @@
         const a = anchor(k, -1, 104 + (i % 3) * 13);
         const b = [a.r, a.u, a.t];
         const sc = 0.72 + hash(k * 4.7) * 0.24;
+        if (!afloat(a.c, a.t, a.r, 8.5 * sc, 2.75 * sc, a.c[1] + 2.4 * sc)) continue;
         modelGroup(`monaco-far-sailboat-${i}`, {
           center: vadd(a.c, a.u, 8 * sc), size: [8 * sc, 18 * sc, 20 * sc], basis: b,
         }, (stage) => {
           addBox(stage, vadd(a.c, a.u, 1.2 * sc), [5.5 * sc, 2.4 * sc, 17 * sc], [0.95, 0.96, 0.98], b);
           addCyl(stage, vadd(a.c, a.u, 2.0 * sc), 0.12 * sc, 14 * sc, [0.82, 0.84, 0.86], 4, b);
-          addPrism(stage, vadd(vadd(a.c, a.r, 1.5 * sc), a.u, 9 * sc),
+          // Sail bent on the mast and boom (hull top 2.4 sc): 1.5 sc abeam of
+          // the mast and 9 sc up, it flew free of both (ground-audit).
+          addPrism(stage, vadd(vadd(a.c, a.t, -4.3 * sc), a.u, 2.4 * sc),
             [0.25 * sc, 11 * sc, 9 * sc], i & 1 ? CREAM : DUSTY, b);
         });
       }
@@ -1280,10 +1305,18 @@
           addBox(stage, vadd(a.c, a.u, h * 0.5), [22, h, 10], wall, b);
           for (let floor = 1; floor * 4.2 < h - 1; floor++) {
             const fc = vadd(vadd(a.c, a.t, -5.3), a.u, floor * 4.2);
+            // A floor the hillside covers has no balcony to show (ground-audit
+            // buried: slabs and rails up to 6 m under the slope).
+            const under = (q, top) => {
+              const g = terrainYAt(q[0], q[2]);
+              return g != null && g > top;
+            };
+            if ([-11.5, 0, 11.5].every((x) => under(vadd(fc, a.r, x), fc[1] + 0.16))) continue;
             stage._mat = MAT.STONE;
             addBox(stage, fc, [23, 0.32, 1.2], CREAM, b);
             stage._mat = MAT.METAL;
             for (const x of [-8, -4, 0, 4, 8]) {
+              if (under(vadd(fc, a.r, x), fc[1] + 1.35)) continue;
               addCyl(stage, vadd(vadd(fc, a.r, x), a.u, 0.45), 0.05, 0.9, [0.50, 0.52, 0.54], 3, b);
             }
           }
