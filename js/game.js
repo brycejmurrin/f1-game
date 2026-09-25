@@ -3704,7 +3704,36 @@ function flybyGridOrder() {
   return o;
 }
 
+// RACE! BEFORE THE MENU'S IDLE BUILD (a tap within ~2-4 s of picking): build it
+// now, under the held card, then fly. startRace pays the same 1-3 s anyway (its
+// loadTrack reuses this build), so this buys the cinematic, not a longer wait.
+let _introKey = "", _introRun = 0;
+function introBuild(go) {
+  const idx = trackIdx, key = [idx, raceTimeOfDay, raceWeather].join("|"), n = ++_introRun;
+  if (!(idx >= 0) || (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches)) return false;
+  clearTimeout(flybyBuildTimer); _menuGate.generation++;   // the menu's own build stands down
+  loadingScreen.building(loadingInfo());
+  (async () => {
+    try {
+      await ensureScenery(idx);
+      await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));   // the card paints first
+      if (n !== _introRun || state !== "menu" || key !== [trackIdx, raceTimeOfDay, raceWeather].join("|")) return;
+      loadTrack(idx); _menuGate.ready = key; _menuGate.track = track;
+      // Plan the flyby here too, up to a budget: whatever is left plans mid-flyby.
+      const fly = { key, track, shots: FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (idx * 2654435761)) >>> 0, false) }, step = FlybySeq.planSteps(track, fly.shots), t0 = performance.now();
+      while (!step() && performance.now() - t0 < 800) await menuSlice();
+      _menuFly = fly;
+    } catch (e) { Log.warn("gfx", "intro build failed", e); }
+    finally {
+      // Always hand over (a failed build falls back to the card), unless a newer tap or a quit owns the screen.
+      if (n === _introRun) { if (state === "menu") { _introKey = key; raceIntro(go); } else loadingScreen.stop(); }
+    }
+  })();
+  return true;
+}
 function raceIntro(go) {
+  const built = _introKey; _introKey = "";
+  if (!built && !menuWorld() && introBuild(go)) return;
   const world = menuWorld();
   if (world) menuGridCars();
   // LIGHT THE FLYBY WITH WHAT THE MENU CHOSE, BEFORE IT STARTS. run() fires `go`
