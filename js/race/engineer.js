@@ -167,6 +167,7 @@ const RaceEngineer = (function () {
       // before its own counter says so.
       const finalLap = (G.lapsTarget > 0 && (c.lap || 0) >= G.lapsTarget) || (G.cars || []).some((o) => o.finished && !o.retired);
       const noStop = armed || finalLap;
+      if (armed) b.undercut = null;   // our own stop answers the undercut: never "BOX NOW" on the out-lap
       // "Rain in N laps" needs a lap estimate and the arc is in SECONDS. The
       // driver's own last lap is the only honest converter: a fixed guess would
       // be wrong at both Monaco and Monza.
@@ -230,9 +231,7 @@ const RaceEngineer = (function () {
 
     /** One tick for ONE car — the local player only; nobody else has a banner. */
     function update(c, dt) {
-      // Paused: a VS FRIEND race keeps simulating under the menu, and a line
-      // said there is spoken over it and then counted as said.
-      if (!c || !c.local || !(dt > 0) || G.paused) return "";
+      if (!c || !c.local || !(dt > 0) || G.paused) return "";   // VS FRIEND ticks under pause: no call on the pause menu (a wear step waits for resume)
       const s = senseOf(c);
       if (!s) return "";
       const b = bag(c);

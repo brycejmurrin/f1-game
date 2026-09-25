@@ -684,6 +684,7 @@
         "tests/unit/net-grid-separation.test.mjs",
         "tests/unit/net-roster.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
+        "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/lobby-codes.test.mjs",
         "tests/unit/net-stub-surface.test.mjs"
       ]

@@ -115,7 +115,7 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
 
 test("peer leave refreshes the friend-quali gate so a dropped rival unlocks the sheet", () => {
   assert.match(SOURCE, /renderRoom\(\); if \(G\.refreshQualiGate\) G\.refreshQualiGate\(\);/);
-  assert.match(SOURCE, /if \(!sessions\.size\) \{ clearInterval\(pumpTimer\); pumpTimer = null; close\(\); return; \}/);
+  assert.match(SOURCE, /if \(!sessions\.size\) \{ friendQualifying = false; clearInterval\(pumpTimer\); pumpTimer = null; close\(\); return; \}/);
   assert.match(SOURCE, /if \(G\.quitToMenu\) G\.quitToMenu\(\)/);
   assert.match(SOURCE, /cancel\(\);\s*\n\s*if \(G\.quitToMenu\) G\.quitToMenu\(\)/);
 });

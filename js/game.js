@@ -1407,7 +1407,9 @@ const damp = (c, t, l, dt) => lerp(c, t, 1 - Math.exp(-l * dt));
 // timing-sheet style) is the other formatter on purpose; do not merge them.
 function fmtTime(t) {
   if (!isFinite(t) || t <= 0) return "-";
-  const m = Math.floor(t / 60), s = t - m * 60;
+  // ROUND FIRST, then split: 119.9996 split first read "1:60.00" (and 69.9996
+  // "1:010.00") — toFixed rounded the seconds up without carrying the minute.
+  const cs = Math.round(t * 100), m = Math.floor(cs / 6000), s = (cs - m * 6000) / 100;
   return m + ":" + (s < 10 ? "0" : "") + s.toFixed(2);
 }
 // RETURNS WHETHER THE MESSAGE REACHED THE SCREEN — true shown, false dropped
@@ -3046,6 +3048,7 @@ function netOrder(order) {
 }
 
 function endRace(forcedOrder) {
+  Ghost.flush();   // off-race: write a pending lap-record ghost now (js/car/ghost.js)
   PerfGov.cleanRace();   // finished cleanly — disarm + pay a crash strike down
   // raceCtl.update's own not-in-race reset is unreachable (update() only calls
   // it in state "race"), so without this a flying flag survives into results
@@ -3700,12 +3703,17 @@ function menuGridCars() {
 function flybyGridOrder() {
   if (!player) return null;
   if (isQuali() || isTimeTrial()) return [player];
-  if (duelOn()) { const r = Duel.pick(cars); cars = r ? [player, r] : [player]; }   // startRace's trim; the pair is then gridded like any field
+  if (duelOn()) {   // startRace's trim (and its legend swap); the pair is then gridded like any field
+    const r = Duel.pick(cars);
+    const lg = r && duelLegend && typeof Legends !== "undefined" ? Legends.byId(duelLegend) : null;
+    if (lg) Duel.asLegend(r, { id: lg.id, name: lg.name, code: lg.code, ratings: Legends.ratings(lg.id), team: Legends.raceTeam(lg.id) }, DriverRatings);
+    cars = r ? [player, r] : [player];
+  }
   const base = gridFromQuali() ? quali.order(cars) : SeasonCal.grid(cars, season);
   if (gridRule() === "random" && !base) return null;
   const pre = gridOrderFor(base);
   if (pre && pre.length === cars.length) return pre.slice();
-  const o = cars.filter((c) => c !== player);
+  const o = cars.filter((c) => c !== player).sort((a, b) => a.tier - b.tier);   // gridUp's tier order (its jitter is the race's draw)
   o.splice(Math.min(11, o.length), 0, player);
   return o;
 }
@@ -3971,6 +3979,7 @@ if (rotateBlockMql.addEventListener) rotateBlockMql.addEventListener("change", (
 else if (rotateBlockMql.addListener) rotateBlockMql.addListener(() => syncRotateBlocker(true));
 
 function quitToMenu() {
+  Ghost.flush();
   sessionEntry.cancel();
   qualiSheet.close();
   _ltBase = null; _ltFlash = 0;   // the lightning's saved race base is not the menu's
@@ -8830,6 +8839,7 @@ $("cs-unlimited").onclick = () => {
 };
 els.resMenu.onclick = () => quitToMenu();
 els.resNext.onclick = () => {
+  if (announcer.stop) announcer.stop();   // a read-out still waiting on the radio must not start over the hub / quali sheet
   // Career never jumps straight into the next round: the weekend is one step of a
   // longer loop, and the hub is where you spend what you just earned.
   if (isCareer()) {
@@ -8870,6 +8880,7 @@ els.resNext.onclick = () => {
 
 function setPaused(p) {
   if (state !== "race" && state !== "count") return; hideCamPicker();
+  if (p) Ghost.flush();   // paused: the frame budget is free for the ghost write
   // THE PIT GARAGE HOLDS THE PAUSE. openPitWork freezes the race behind
   // #carsetup; a Start/P press or RESUME on a pause card stacked over it
   // (hidden tab) used to run the race UNDER the garage, the box timer expired,

@@ -428,6 +428,7 @@ const LoadingScreen = (function () {
       let on = false;
       try { on = !!(r && r.debug && r.debug().enabled); } catch (_) { on = false; }
       if (!on || (chat !== "normal" && chat !== "chatty")) return life;
+      if (!gridField(info && info.grid)) return life;   // no field (time trial): radioCheck has nothing to say
       const list = info && info.shots && info.shots.length ? info.shots : null;
       if (!list) return life;
       let total = 0, before = -1;
