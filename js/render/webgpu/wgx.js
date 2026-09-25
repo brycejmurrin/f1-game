@@ -718,7 +718,9 @@ const WGX = (function () {
     // Same-page GLX fallback must not inherit a soft GPU canvas or a live
     // device: tear them down before every post-soft _fail so #game is free
     // for webgl2 and the orphaned offscreen node is gone.
+    let _cssSizeCache = null;
     function _bootFail(reason) {
+      try { if (_cssSizeCache) _cssSizeCache.dispose(); } catch (_) { /* observer already gone */ }
       try {
         if (_gpuCanvas && _gpuCanvas.parentNode) _gpuCanvas.parentNode.removeChild(_gpuCanvas);
       } catch (_) { /* already detached */ }
@@ -732,7 +734,7 @@ const WGX = (function () {
     // swapchain configuration and target allocation.
     const _layoutCanvas = (_softGpu && _displayCanvas) ? _displayCanvas : canvas;
     let _cssApplying = false;
-    const _cssSizeCache = CanvasCssSize.create(_layoutCanvas, {
+    _cssSizeCache = CanvasCssSize.create(_layoutCanvas, {
       settleFrames: 30,
       ignore: () => _cssApplying,
     });
@@ -2970,11 +2972,12 @@ const WGX = (function () {
     // (via copyExternalImageToTexture, flipY to match GLX's UNPACK_FLIP_Y) or raw
     // RGBA bytes (via writeTexture). Returns { texture, view } or an inert token.
     function createTexture(src) {
+      let tex = null;
       try {
         const w = src ? (src.width | 0) : 0, h = src ? (src.height | 0) : 0;
         if (!w || !h) return { _wgx: "texture", _phase: 4 };
         const mips = Math.floor(Math.log2(Math.max(w, h))) + 1;
-        const tex = device.createTexture({
+        tex = device.createTexture({
           size: [w, h], format: "rgba8unorm", mipLevelCount: mips,
           usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
         });
@@ -2985,7 +2988,10 @@ const WGX = (function () {
         }
         _generateMips(tex, 1);
         return { _wgx: "texture", texture: tex, view: tex.createView() };
-      } catch (_) { return { _wgx: "texture", _phase: 4 }; /* upload failed: caller treats as inert token */ }
+      } catch (_) {
+        if (tex) try { tex.destroy(); } catch (__) { /* device lost */ }
+        return { _wgx: "texture", _phase: 4 }; /* upload failed: caller treats as inert token */
+      }
     }
 
     function freeMesh(m) {
@@ -4460,9 +4466,10 @@ const WGX = (function () {
     function createTextureArray(size, images, layers) {
       if (!size || !images) return null;
       const n = layers || MAT_TEX_LAYERS;
+      let tex = null;
       try {
         const mips = Math.floor(Math.log2(size)) + 1;
-        const tex = device.createTexture({
+        tex = device.createTexture({
           size: [size, size, n], format: "rgba8unorm", mipLevelCount: mips,
           usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
         });
@@ -4488,7 +4495,10 @@ const WGX = (function () {
         if (!filled) { try { tex.destroy(); } catch (_) { /* already invalid */ } return null; }
         _generateMips(tex, n);
         return { _wgx: "texarray", texture: tex, view: tex.createView({ dimension: "2d-array" }), layers: n };
-      } catch (_) { return null; /* alloc/copy failed: pack stays procedural */ }
+      } catch (_) {
+        if (tex) try { tex.destroy(); } catch (__) { /* device lost */ }
+        return null; /* alloc/copy failed: pack stays procedural */
+      }
     }
     // `keep` is the incoming maps: a caller re-passing a token it already handed
     // over must not have it destroyed under the new binding (assets.js always
@@ -5067,7 +5077,9 @@ const WGX = (function () {
         const gpuErr = await device.popErrorScope();
         if (!reason && gpuErr) reason = "smoke test validation: " + String(gpuErr.message || "error").slice(0, 200);
       }
-      try { if (src) src.destroy(); if (dst) dst.destroy(); if (buf) buf.destroy(); } catch (_) { /* smoke-test temps already invalid */ }
+      for (const resource of [src, dst, buf]) {
+        try { if (resource) resource.destroy(); } catch (_) { /* already invalid */ }
+      }
       if (reason) return reason;
       // Anything the device reported asynchronously while we were booting.
       if (_bootError) return "gpu error during init: " + _bootError;
@@ -5085,7 +5097,7 @@ const WGX = (function () {
         ((GPUTextureUsage && GPUTextureUsage.COPY_SRC) | 0) > 0 &&
         ((GPUBufferUsage && GPUBufferUsage.MAP_READ) | 0) > 0;
       if (!canRead || !blitPipeline) return null;
-      let buf = null, reason = null;
+      let buf = null, src = null, reason = null;
       const scoped = typeof device.pushErrorScope === "function" &&
                      typeof device.popErrorScope === "function";
       if (scoped) device.pushErrorScope("validation");
@@ -5093,7 +5105,7 @@ const WGX = (function () {
         let tex;
         try { tex = ctx.getCurrentTexture(); } catch (_) { throw { _skip: true }; }
         const tw = Math.min(64, width), th = Math.min(64, height);
-        const src = device.createTexture({
+        src = device.createTexture({
           size: [1, 1], format: SCENE_FORMAT,
           usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
         });
@@ -5125,21 +5137,22 @@ const WGX = (function () {
           { buffer: buf, bytesPerRow: 256, rowsPerImage: 4 },
           [4, 4, 1]);
         device.queue.submit([enc.finish()]);
-        src.destroy();
         await buf.mapAsync(GPUMapMode.READ);
         const px = new Uint8Array(buf.getMappedRange().slice(0, 4));
         buf.unmap();
         if (!(px[0] > 8 || px[1] > 8 || px[2] > 8)) reason = "swapchain smoke test rendered black";
       } catch (e) {
-        if (e && e._skip) return null;
-        reason = "swapchain smoke test threw: " + (((e && e.message) || String(e)).slice(0, 200));
+        if (!(e && e._skip))
+          reason = "swapchain smoke test threw: " + (((e && e.message) || String(e)).slice(0, 200));
       }
+      let gpuErr = null;
       if (scoped) {
-        const gpuErr = await device.popErrorScope();
+        gpuErr = await device.popErrorScope();
         // Swapchain textures often lack COPY_SRC — readback is best-effort only.
-        if (!reason && gpuErr) return null;
       }
       try { if (buf) buf.destroy(); } catch (_) { /* smoke-test temps already invalid */ }
+      try { if (src) src.destroy(); } catch (_) { /* smoke-test temps already invalid */ }
+      if (!reason && gpuErr) return null;
       return reason;
     }
 
