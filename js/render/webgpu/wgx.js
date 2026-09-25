@@ -2824,7 +2824,12 @@ const WGX = (function () {
     }
     function _meshFromPull(vert, attr, count, indexFormat, shared) {
       const vbuf = _mkBuffer(vert, GPUBufferUsage.VERTEX);
-      const a = shared || _makeAttrBG(attr);
+      let a;
+      // The attr buffer can fail after the vertex buffer landed: release it.
+      try { a = shared || _makeAttrBG(attr); } catch (e) {
+        try { vbuf.destroy(); } catch (_) { /* already invalid */ }
+        throw e;
+      }
       return { vbuf, ibuf: null, sbuf: a.sbuf, attrBG: a.attrBG, count, indexFormat, chunks: null };
     }
     function createMesh(data) {
@@ -2833,13 +2838,16 @@ const WGX = (function () {
       const lut = b.hasTrk ? _makeRoadLUT(data.pos, data.trk, data.mat) : null;
       if (lut) _rememberRoadLut(lut);
       let vbuf = null, ibuf = null, sbuf = null, attrBG = null;
+      // Hoisted out of the piece branch so the catch can see it: an OOM on
+      // piece k used to drop pieces 0..k-1 undestroyed.
+      let pieces = null;
       try {
         if (pulled) {
           // 4095 = 1365 tris. Large non-indexed draws still saw vertex_index=0
           // on this adapter; car-sized pieces do not.
           const PIECE = 4095;
           if (pulled.count > PIECE) {
-            const pieces = [];
+            pieces = [];
             for (let off = 0; off < pulled.count; off += PIECE) {
               let n = Math.min(PIECE, pulled.count - off);
               n -= n % 3;
@@ -2879,6 +2887,13 @@ const WGX = (function () {
         // the returned mesh on success and must go with the failure.
         try { if (vbuf) vbuf.destroy(); } catch (_) { /* already invalid */ }
         try { if (ibuf) ibuf.destroy(); } catch (_) { /* already invalid */ }
+        if (pieces) {
+          for (let i = 0; i < pieces.length; i++) {
+            const pc = pieces[i];
+            try { if (pc.vbuf) pc.vbuf.destroy(); } catch (_) { /* already invalid */ }
+            try { if (pc.sbuf) pc.sbuf.destroy(); } catch (_) { /* already invalid */ }
+          }
+        }
         try { if (sbuf && sbuf !== (lut && lut.sbuf)) sbuf.destroy(); } catch (_) { /* already invalid */ }
         try { if (lut && lut.sbuf) { if (lut.attrBG === _roadLutBG) { _roadLutBG = null; _roadLutReady = false; } lut.sbuf.destroy(); } } catch (_) { /* already invalid */ }
         _allocFail("createMesh", e);

@@ -2369,3 +2369,34 @@ test("the lamp bake light map is freed after ~2 s of bake-off frames (GLX _bakeO
   gfx.present({});
   assert.equal(h.textures.filter(isBake).length, 2, "the same bake re-uploads once it returns");
 });
+
+// createMesh road pieces (hasTrk, > 4095 pulled verts): an allocation failure
+// on piece k used to leak pieces 0..k-1 — `pieces` was scoped inside the
+// branch, so the catch could not see it — and the failing piece's own vertex
+// buffer (_meshFromPull uploaded it before its attr bind group threw). Every
+// buffer the failed call made must be destroyed, and the call degrades to an
+// inert count-0 mesh.
+test("createMesh road-piece OOM destroys every piece already uploaded", async () => {
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  gfx.resize();
+  assert.equal(gfx.begin({}), true);
+  const TRIS = 3000;                         // 9000 pulled verts -> 3 pieces
+  const pos = [], nrm = [], col = [], trk = [], mat = [], idx = [];
+  for (let t = 0; t < TRIS; t++) {
+    const x = (t % 60) * 2, z = Math.floor(t / 60) * 2, v = pos.length / 3;
+    pos.push(x, 0, z, x + 1, 0, z, x, 0, z + 1);
+    for (let k = 0; k < 3; k++) { nrm.push(0, 1, 0); col.push(1, 1, 1); trk.push(z, x - 60, 7); mat.push(0); }
+    idx.push(v, v + 1, v + 2);
+  }
+  const start = h.buffers.length;
+  // Bind groups in order: the road LUT, piece 0, piece 1 <- fail here.
+  h.failNextBindGroup(3);
+  const mesh = gfx.createMesh({ pos, nrm, col, trk, mat, idx });
+  h.clearFailures();
+  assert.equal(mesh.count, 0, "failed upload degrades to an inert mesh");
+  const made = h.buffers.slice(start);
+  assert.ok(made.length >= 4, `fixture reached the pieces (made ${made.length} buffers)`);
+  const leaked = made.filter((b) => !b.destroyed);
+  assert.equal(leaked.length, 0, `${leaked.length} of ${made.length} buffers leaked on the failed createMesh`);
+});

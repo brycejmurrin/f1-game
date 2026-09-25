@@ -56,7 +56,7 @@ const LampChunks = (function () {
       offsets[c] = off; counts[c] = lists[c].length;
       concat.set(lists[c], off); off += lists[c].length;
     }
-    return { lists, concat, offsets, counts };
+    return { lists, concat, offsets, counts, cap };
   }
 
   // Re-cap an existing bake WITHOUT re-testing a single lamp.
@@ -84,7 +84,7 @@ const LampChunks = (function () {
       offsets[c] = off; counts[c] = lists[c].length;
       concat.set(lists[c], off); off += lists[c].length;
     }
-    return { lists, concat, offsets, counts };
+    return { lists, concat, offsets, counts, cap };
   }
 
   // Cached bake. Keyed on the chunks array (WeakMap) plus lights ARRAY
@@ -142,10 +142,21 @@ const LampChunks = (function () {
   // backends, and docs/ARCHITECTURE.md §Cross-backend parity is where that is
   // argued rather than discovered.
   //
-  // Returns { gw, gh, gx0, gz0, data } — `data` is gw*gh*2 Uint32, (offset,
-  // count) per cell, zero where no chunk occupies it. Cell (gx,gz) lives at
-  // ((gz - gz0) * gw + (gx - gx0)) * 2. Empty input gives a 1x1 zero grid so a
-  // consumer always has a texture to bind.
+  // Returns { gw, gh, gx0, gz0, data, concat } — `data` is gw*gh*2 Uint32,
+  // (offset, count) per cell into `concat`, zero where no chunk occupies it.
+  // Cell (gx,gz) lives at ((gz - gz0) * gw + (gx - gx0)) * 2. Empty input gives
+  // a 1x1 zero grid so a consumer always has a texture to bind.
+  //
+  // SHARED CELLS ARE MERGED, NOT OVERWRITTEN. TLX hands in the road, terrain
+  // AND props chunk sets together, and all three bin onto the same world grid,
+  // so one cell routinely holds two or three chunks. The grid has ONE slot per
+  // cell, and the last writer used to win: every prop in a cell shared with
+  // terrain lit from the TERRAIN chunk's lamp list (and lost the lamps that
+  // reach only the prop's box — a floodlight mast's own lamps on a hillside
+  // cell). A shared cell now gets the UNION of its chunks' lists — round-robin
+  // over the nearest-first lists so each chunk's nearest lamps come first,
+  // de-duplicated, capped at the table's cap — appended to a copy of the
+  // table's concat. `concat` is the table's own array when nothing collides.
   function buildGrid(table, chunks) {
     const nc = chunks.length;
     let gx0 = Infinity, gz0 = Infinity, gx1 = -Infinity, gz1 = -Infinity;
@@ -160,17 +171,56 @@ const LampChunks = (function () {
       if (ch.gz < gz0) gz0 = ch.gz;
       if (ch.gz > gz1) gz1 = ch.gz;
     }
-    if (!(gx1 >= gx0)) return { gw: 1, gh: 1, gx0: 0, gz0: 0, data: new Uint32Array(2) };
+    if (!(gx1 >= gx0)) return { gw: 1, gh: 1, gx0: 0, gz0: 0, data: new Uint32Array(2), concat: table.concat };
     const gw = gx1 - gx0 + 1, gh = gz1 - gz0 + 1;
     const data = new Uint32Array(gw * gh * 2);
+    // First chunk per cell (index + 1; 0 = empty), and the extra members of
+    // any shared cell.
+    const firstAt = new Int32Array(gw * gh);
+    let shared = null;
     for (let c = 0; c < nc; c++) {
       const ch = chunks[c];
       if (!(ch.gx >= 0) || !(ch.gz >= 0)) continue;
-      const o = ((ch.gz - gz0) * gw + (ch.gx - gx0)) * 2;
+      const cell = (ch.gz - gz0) * gw + (ch.gx - gx0), o = cell * 2;
+      if (firstAt[cell]) {
+        if (!shared) shared = new Map();
+        let m = shared.get(cell);
+        if (!m) { m = [firstAt[cell] - 1]; shared.set(cell, m); }
+        m.push(c);
+        continue;
+      }
+      firstAt[cell] = c + 1;
       data[o] = table.offsets[c];
       data[o + 1] = table.counts[c];
     }
-    return { gw, gh, gx0, gz0, data };
+    if (!shared) return { gw, gh, gx0, gz0, data, concat: table.concat };
+    const cap = table.cap > 0 ? table.cap : CAP;
+    const listOf = (c) => table.lists ? table.lists[c]
+      : table.concat.subarray(table.offsets[c], table.offsets[c] + table.counts[c]);
+    const extra = [];
+    let off = table.concat.length;
+    for (const [cell, members] of shared) {
+      const seen = new Set(), out = [];
+      for (let k = 0, more = true; more && out.length < cap; k++) {
+        more = false;
+        for (let j = 0; j < members.length && out.length < cap; j++) {
+          const li = listOf(members[j]);
+          if (k >= li.length) continue;
+          more = true;
+          const i = li[k];
+          if (!seen.has(i)) { seen.add(i); out.push(i); }
+        }
+      }
+      data[cell * 2] = off;
+      data[cell * 2 + 1] = out.length;
+      off += out.length;
+      extra.push(out);
+    }
+    const concat = new Uint32Array(off);
+    concat.set(table.concat);
+    let w = table.concat.length;
+    for (const out of extra) { concat.set(out, w); w += out.length; }
+    return { gw, gh, gx0, gz0, data, concat };
   }
 
   /** Copy a grid from buildGrid() into a fixed-width texture buffer.

@@ -91,7 +91,7 @@ const FULL = [
   "js/render/glx/shadow.js",
   "js/render/shared/lamp-chunks.js",
   "js/render/shared/frustum.js",
-  "js/render/shared/inst-cells.js",  // InstCells: shared cell-set cull cache (GLX+WGX)
+  "js/render/shared/inst-cells.js",  // InstCells: shared cell-set cull cache (GLX+WGX+TLX)
   "js/render/shared/vertex-pack.js",   // VertexPack: the ONE definition of how a world vertex channel is quantised — GLX's interleaved layout plus the snorm/half primitives WGX and TLX pack with
   "js/render/glx/chunked.js",
   "js/render/glx/glx.js",
@@ -329,7 +329,7 @@ const CARVIEW = [
   "js/render/glx/shadow.js",
   "js/render/shared/lamp-chunks.js",
   "js/render/shared/frustum.js",
-  "js/render/shared/inst-cells.js",  // InstCells: shared cell-set cull cache (GLX+WGX)
+  "js/render/shared/inst-cells.js",  // InstCells: shared cell-set cull cache (GLX+WGX+TLX)
   "js/render/shared/vertex-pack.js",   // VertexPack: the ONE definition of how a world vertex channel is quantised — GLX's interleaved layout plus the snorm/half primitives WGX and TLX pack with
   "js/render/glx/chunked.js",
   "js/render/glx/glx.js",

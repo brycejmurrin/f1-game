@@ -304,3 +304,54 @@ test("blitGrid refuses a grid the texture cannot hold, and leaves it untouched",
   assert.equal(LampChunks.blitGrid(null, dst, 4), false);
   assert.ok(dst.every((v) => v === 7), "a refused blit must not have written anything");
 });
+
+/* ── buildGrid: shared cells ──────────────────────────────────────────────────
+ *
+ * TLX feeds road, terrain AND props chunks into ONE grid, and all three bin
+ * onto the same world cells. The grid has one slot per cell; the last writer
+ * used to win, so every prop in a cell shared with terrain lit from the
+ * terrain chunk's lamp list and lost the lamps that reach only its own box.
+ * A shared cell must carry the UNION of its chunks' lists, capped. */
+test("buildGrid merges the lamp lists of chunks that share a cell", () => {
+  // Lamp 0 reaches only the road box, lamp 1 only the prop box (a mast lamp
+  // 30 m up), lamp 2 both. Same cell (7, 7) for both chunks.
+  const lights = lampSet([[0, 0, 0, 8], [40, 30, 40, 8], [20, 5, 20, 40]]);
+  const road = { min: [-2, -1, -2], max: [4, 1, 4], gx: 7, gz: 7 };
+  const prop = { min: [38, 20, 38], max: [42, 28, 42], gx: 7, gz: 7 };
+  const lone = { min: [100, 0, 0], max: [101, 1, 1], gx: 8, gz: 7 };
+  for (const order of [[road, prop, lone], [prop, road, lone]]) {
+    const t = LampChunks.buildTable(lights, order, 1);
+    const g = LampChunks.buildGrid(t, order);
+    const cat = g.concat || t.concat;
+    const at = (gx, gz) => {
+      const o = ((gz - g.gz0) * g.gw + (gx - g.gx0)) * 2;
+      return Array.from(cat.slice(g.data[o], g.data[o] + g.data[o + 1])).sort();
+    };
+    assert.deepEqual(at(7, 7), [0, 1, 2], "shared cell carries every lamp that reaches either chunk");
+    assert.deepEqual(at(8, 7), [], "an unshared cell keeps its own (empty) list");
+    // The table's own ranges are untouched: per-chunk (GLX/WGX-style) reads agree.
+    for (let c = 0; c < order.length; c++) {
+      assert.deepEqual(Array.from(cat.slice(t.offsets[c], t.offsets[c] + t.counts[c])),
+        Array.from(t.lists[c]));
+    }
+  }
+});
+
+test("a merged cell respects the table's cap", () => {
+  // Two chunks in one cell, each reached by its own 20 lamps: the union (40)
+  // must be cut to the knob's cap, with both chunks' nearest lamps in it.
+  const recs = [];
+  for (let i = 0; i < 20; i++) recs.push([i * 0.1, 0, 0, 5]);
+  for (let i = 0; i < 20; i++) recs.push([200 + i * 0.1, 0, 0, 5]);
+  const lights = lampSet(recs);
+  const a = { min: [-1, -1, -1], max: [3, 1, 1], gx: 3, gz: 3 };
+  const b = { min: [199, -1, -1], max: [203, 1, 1], gx: 3, gz: 3 };
+  const t = LampChunks.buildTable(lights, [a, b], 0.5);
+  const cap = LampChunks.capFor(0.5);
+  const g = LampChunks.buildGrid(t, [a, b]);
+  const cat = g.concat || t.concat;
+  assert.equal(g.data[1], cap, "union capped at the knob's cap");   // 1x1 grid
+  const got = Array.from(cat.slice(g.data[0], g.data[0] + g.data[1]));
+  assert.ok(got.some((i) => i < 20) && got.some((i) => i >= 20), "both chunks contribute");
+  assert.equal(new Set(got).size, got.length, "no duplicates");
+});

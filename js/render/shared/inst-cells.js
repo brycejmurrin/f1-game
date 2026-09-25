@@ -1,7 +1,7 @@
-/* Apex 26 — InstCells: shared cell-set key cache for GLX + WGX cullInstances.
+/* Apex 26 — InstCells: shared cell-set key cache for GLX + WGX + TLX cullInstances.
  * The pack uploaded for an instanced batch is a deterministic function of the
  * surviving cell set (docs/notes/PERF-FINDINGS 2c). When the set is unchanged
- * across frames, both backends skip the copy loop and the buffer upload.
+ * across frames, every backend skips the copy loop and the buffer upload.
  * Plane-equality fast paths and the per-backend pack/upload stay local.
  */
 "use strict";
