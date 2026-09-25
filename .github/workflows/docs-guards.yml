@@ -1,0 +1,45 @@
+name: Docs guards
+
+# THE PROSE-ONLY PR HOLE (2026-09-25). ci.yml ignores docs/**, **/*.md,
+# .claude/**, .cursor/** and .codex/** on push AND pull_request, so a PR that
+# touches only those trees starts no CI at all — yet tooling-fast holds guards
+# OVER exactly those trees (docs-integrity, generated-docs, agent-config,
+# skill-progressive, hooks-documented, …). A prose PR could merge red on them.
+#
+# This workflow runs ONLY that group (`npm run test:docs-guards`, whose file
+# list lives in tests/groups.json), and its `paths:` is ci.yml's `paths-ignore`
+# list VERBATIM — tests/unit/ci-coverage.test.mjs fails if the two drift.
+# Semantics (https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax):
+# `paths-ignore` skips a run only when EVERY changed path matches, `paths` runs
+# when AT LEAST ONE matches — so a mixed PR runs both workflows (this one is
+# ~1 min of node), and a prose-only PR runs this one alone.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "docs/**"
+      - "**/*.md"
+      - ".claude/**"
+      - ".cursor/**"
+      - ".codex/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-guards-${{ github.event.pull_request.head.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docs-guards:
+    name: Docs guards (prose-tree unit files)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Same as ci.yml's guards job: a few of these read git history.
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
+      - run: npm run test:docs-guards

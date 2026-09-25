@@ -25,6 +25,9 @@
  *   node tools/ci/tooling-fast.mjs                  # full suite, serial
  *   node tools/ci/tooling-fast.mjs --jobs=3         # …three at a time
  *   node tools/ci/tooling-fast.mjs tests/unit/x…    # subset (same logging)
+ *   … --order=list                                   # list order, not longest-first
+ *   … --record                                       # rewrite tests/data/tooling-fast-timings.json
+ *   … --test-timeout=S --file-timeout=S              # per-test / per-file bounds (seconds)
  *
  * `--jobs=N`, never `--jobs N`: a flag whose value is a bare positional gets
  * swallowed into the file list by the `!a.startsWith("--")` filter below. This
@@ -366,6 +369,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/deploy-stamp.test.mjs",
   "tests/unit/track-build-wait.test.mjs",
   "tests/unit/deploy-tool.test.mjs",
+  "tests/unit/tooling-fast-runner.test.mjs",
   // The Node VM game harness (tools/lib/game-vm.cjs): boots js/game.js headless in
   // ~300 ms and reproduces tests/data/physics-baseline.json EXACTLY, so the
   // driving-model gate runs here in seconds rather than in a browser job.
@@ -486,6 +490,62 @@ const loadavgLine = () => {
 
 const fmtDur = (ms) => (ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`);
 
+/* LONGEST FIRST (2026-09-25). The pool used to start files in LIST order, and
+ * the list is ordered by when a file was added, so the ~30-60 s files (game-vm,
+ * parts-distinct-mesh, car-mesh-anchors, session-entry-vm …) started wherever
+ * they happened to sit — one of them starting last leaves the other workers
+ * idle while it runs alone. Scheduling longest-processing-time first is the
+ * textbook fix for that tail (Graham's LPT bound: within 4/3 of optimal).
+ *
+ * The durations come from the last full run on THIS box when there is one
+ * (artifacts/logs/tooling-fast-timings.json, written at the end of every full
+ * run) and otherwise from the committed tests/data/tooling-fast-timings.json,
+ * which is what a fresh CI runner reads. A file with no recorded duration is
+ * scheduled FIRST: an unmeasured file is the one that may be slow, and a few
+ * fast files started early cost nothing. `--order=list` restores list order;
+ * `--record` rewrites the committed table from this run. */
+export const TIMINGS_FILE = path.join(ROOT, "tests/data/tooling-fast-timings.json");
+export const LOCAL_TIMINGS_FILE = path.join(LOGDIR, "tooling-fast-timings.json");
+
+/** { <repo-relative file>: ms } — local measurements override committed ones. */
+export function loadTimings(files = [TIMINGS_FILE, LOCAL_TIMINGS_FILE]) {
+  const out = {};
+  for (const f of files) {
+    try { Object.assign(out, JSON.parse(fs.readFileSync(f, "utf8")).ms || {}); } catch (_) { /* absent or unreadable: no hint */ }
+  }
+  return out;
+}
+
+/** Longest recorded duration first; unmeasured files ahead of all of them, in
+ *  list order; ties keep list order (the sort is stable). Pure. */
+export function scheduleLongestFirst(files, timings = {}) {
+  const key = (f) => { const v = timings[path.isAbsolute(f) ? path.relative(ROOT, f) : f]; return typeof v === "number" ? v : Infinity; };
+  return files.map((f, i) => ({ f, i, ms: key(f) }))
+    .sort((a, b) => (b.ms - a.ms) || (a.i - b.i)).map((x) => x.f);
+}
+
+/* A HUNG FILE FAILS BY NAME. Without a bound a file that never exits (an open
+ * handle, a never-settled await) runs until the CI job's timeout-minutes, and
+ * the job reports `cancelled` with every START line but no verdict — the shape
+ * AGENTS.md rule 8 teaches everyone to read as a busy runner. Two layers:
+ *   --test-timeout   node's own bound (ms, default Infinity:
+ *                    https://nodejs.org/api/cli.html#--test-timeout). MEASURED:
+ *                    under `node --test <file>` the FILE is itself a test of
+ *                    the runner and inherits it, so this bounds each test AND
+ *                    the file's tests as a whole — a stuck one fails as
+ *                    `not ok … test timed out after Nms` with its name;
+ *   the file timer   a hard wall per FILE, a minute later, because the
+ *                    timeout cannot see work outside a test (a handle that
+ *                    keeps the process alive after the last test). SIGKILLs
+ *                    the child's whole process group, logs FAIL reason=timeout.
+ * SIZED FOR A LOADED BOX: flyby-shots, the slowest file, measured 370 s at
+ * loadavg ~15 on 4 cores (2026-09-25) and hit a 300 s bound at loadavg 20, so
+ * 540 s; the 600 s wall still lands inside ci.yml's 15-minute guards job for a
+ * file that starts first, which longest-first makes the slow ones do.
+ * APEX_TOOLING_TEST_TIMEOUT_S / APEX_TOOLING_FILE_TIMEOUT_S override both. */
+export const PER_TEST_TIMEOUT_MS = (Number(process.env.APEX_TOOLING_TEST_TIMEOUT_S) || 540) * 1000;
+export const PER_FILE_TIMEOUT_MS = (Number(process.env.APEX_TOOLING_FILE_TIMEOUT_S) || 600) * 1000;
+
 /**
  * Run the structural suites one file at a time.
  * @param {string[]} [files]
@@ -495,7 +555,11 @@ const fmtDur = (ms) => (ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`);
 export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {}) {
   const jobs = Math.max(1, Number(opts.jobs) || 1);
   const logPath = opts.logPath || LOGFILE;
+  const testTimeoutMs = Number(opts.testTimeoutMs) || PER_TEST_TIMEOUT_MS;
+  const fileTimeoutMs = Number(opts.fileTimeoutMs) || PER_FILE_TIMEOUT_MS;
   fs.mkdirSync(path.dirname(logPath), { recursive: true });
+  const timings = opts.order === "list" ? {} : (opts.timings || loadTimings());
+  if (opts.order !== "list") files = scheduleLongestFirst(files, timings);
   const lines = [];
   const emit = (msg) => {
     const line = `[tooling-fast] ${msg}`;
@@ -506,10 +570,31 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   const suiteStart = Date.now();
   const startedAt = new Date(suiteStart).toISOString();
   emit(`suite start at=${startedAt} files=${files.length} concurrency=${jobs} ${loadavgLine()}`);
+  const unmeasured = files.filter((f) => typeof timings[path.isAbsolute(f) ? path.relative(ROOT, f) : f] !== "number").length;
+  emit(opts.order === "list" ? "order=list" :
+    `order=longest-first (${files.length - unmeasured} with a recorded duration, ${unmeasured} unmeasured scheduled first) ` +
+    `test-timeout=${fmtDur(testTimeoutMs)} file-timeout=${fmtDur(fileTimeoutMs)}`);
 
   const results = [];
   let passed = 0;
   let failed = 0;
+  // Each child leads its own process group (see runOne), so a signal to THIS
+  // process no longer reaches them by itself: forward it, then exit, or an
+  // interrupted run (Ctrl-C, test-bg --stop) would orphan every file in flight.
+  const live = new Set();
+  // NODE_TEST_CONTEXT is how node's runner marks the process it spawned for a
+  // test file. Inherited by a nested `node --test` (this runner called from a
+  // test, e.g. tooling-fast-runner.test.mjs), it switches that child into
+  // report-to-parent mode, where a failing or hung file exits 0 — measured:
+  // both hang tests "passed" until this line. Each child is a fresh runner.
+  const childEnv = { ...process.env };
+  delete childEnv.NODE_TEST_CONTEXT;
+  const reap = (sig) => {
+    for (const c of live) { try { process.kill(-c.pid, "SIGKILL"); } catch (_) { /* already gone */ } }
+    process.exit(sig === "SIGINT" ? 130 : 143);
+  };
+  const onSig = { SIGINT: () => reap("SIGINT"), SIGTERM: () => reap("SIGTERM") };
+  for (const [s, fn] of Object.entries(onSig)) process.on(s, fn);
 
   // One file, start to verdict. spawnSync CANNOT be pooled — it blocks the only
   // thread, so N of them still run strictly one after another; the first draft of
@@ -528,19 +613,30 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
       return resolve();
     }
 
-    const child = spawn(process.execPath, ["--test", "--test-concurrency=1", abs],
-                        { cwd: ROOT, env: process.env });
-    let out = "", err = "";
+    // detached: the child leads its own process group, so the file timer can
+    // kill `node --test` AND the per-file subprocess it spawns in one signal.
+    const child = spawn(process.execPath,
+                        ["--test", "--test-concurrency=1", `--test-timeout=${testTimeoutMs}`, abs],
+                        { cwd: ROOT, env: childEnv, detached: true });
+    live.add(child);
+    let out = "", err = "", timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      try { process.kill(-child.pid, "SIGKILL"); } catch (_) { try { child.kill("SIGKILL"); } catch (_) { /* gone */ } }
+    }, fileTimeoutMs);
     child.stdout.on("data", (d) => { out += d; });
     child.stderr.on("data", (d) => { err += d; });
     child.on("error", (e) => { err += String(e && e.message || e); });
-    child.on("close", (status) => {
+    child.on("close", (status, signal) => {
+    clearTimeout(timer);
     const r = { status, stdout: out, stderr: err };
     const dur = Date.now() - t0;
-    const ok = r.status === 0;
+    const ok = r.status === 0 && !timedOut;
     if (ok) passed++; else failed++;
     const verdict = ok ? "PASS" : "FAIL";
-    emit(`${verdict}  ${n}/${files.length} ${rel} duration=${fmtDur(dur)} exit=${r.status} ${loadavgLine()}`);
+    live.delete(child);
+    emit(`${verdict}  ${n}/${files.length} ${rel} duration=${fmtDur(dur)} exit=${r.status ?? signal}` +
+      `${timedOut ? ` reason=timeout (no exit within ${fmtDur(fileTimeoutMs)}; process group killed)` : ""} ${loadavgLine()}`);
     if (!ok) {
       const text = ((r.stdout || "") + (r.stderr || "")).replace(/\r/g, "");
       const notoks = text.split("\n").filter((L) => /^not ok /.test(L));
@@ -585,17 +681,44 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   emit(`suite end at=${new Date().toISOString()} duration=${fmtDur(suiteDur)} ` +
     `passed=${passed} failed=${failed} ${loadavgLine()}`);
   emit(`= run ${ok ? "passed" : "failed"} (${passed} passed, ${failed} failed)`);
+  for (const [s, fn] of Object.entries(onSig)) process.off(s, fn);
 
   fs.writeFileSync(logPath, lines.join("\n") + "\n");
+  // Every run teaches the next one: the passing files' durations go to the
+  // local table (a timed-out or failed file's duration says nothing about its
+  // normal cost). --record also rewrites the committed table CI reads.
+  const measured = Object.fromEntries(results.filter((r) => r.ok).map((r) => [r.file, Math.round(r.durationMs / 10) * 10]));
+  const merge = (file, note) => {
+    let prev = {};
+    try { prev = JSON.parse(fs.readFileSync(file, "utf8")).ms || {}; } catch (_) { /* first run */ }
+    const ms = Object.fromEntries(Object.entries({ ...prev, ...measured }).sort(([a], [b]) => a.localeCompare(b)));
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify({ _doc: note, jobs, ms }, null, 2) + "\n");
+  };
+  if (opts.localTimingsPath !== null) {
+    try { merge(opts.localTimingsPath || LOCAL_TIMINGS_FILE, "local per-file durations from the last tooling-fast run on this box (ms); overrides tests/data/tooling-fast-timings.json"); }
+    catch (_) { /* a hint cache; never fail a run over it */ }
+  }
+  if (opts.record) {
+    merge(TIMINGS_FILE, "Per-file tooling-fast durations (ms) for longest-first scheduling (tools/ci/tooling-fast.mjs). " +
+      "Rewritten by `node tools/ci/tooling-fast.mjs --jobs=3 --record`; order hints only — a missing or stale entry never fails anything.");
+  }
   return { ok, passed, failed, results, logPath };
 }
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
-  const args = process.argv.slice(2).filter((a) => !a.startsWith("--"));
+  const argv = process.argv.slice(2);
+  const args = argv.filter((a) => !a.startsWith("--"));
   const files = args.length ? args : [...TOOLING_FAST_FILES];
-  const jobsArg = process.argv.slice(2).find((a) => a.startsWith("--jobs="));
-  const jobs = jobsArg ? Number(jobsArg.slice(7)) : 1;
-  const { ok } = await runToolingFast(files, { jobs });
+  const val = (name) => { const a = argv.find((x) => x.startsWith(`--${name}=`)); return a ? a.slice(name.length + 3) : undefined; };
+  const jobs = val("jobs") ? Number(val("jobs")) : 1;
+  const { ok } = await runToolingFast(files, {
+    jobs,
+    order: val("order"),
+    record: argv.includes("--record"),
+    testTimeoutMs: val("test-timeout") ? Number(val("test-timeout")) * 1000 : undefined,
+    fileTimeoutMs: val("file-timeout") ? Number(val("file-timeout")) * 1000 : undefined,
+  });
   process.exit(ok ? 0 : 1);
 }
