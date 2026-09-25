@@ -347,3 +347,34 @@ test("the last lap (and a one-lap qualifying run) gets no call to stop: the flag
   c.lap = 9;                                       // a lap earlier every one of them is live again
   assert.equal(eng.senseOf(c).wrongTread, true);
 });
+
+test("paused (a VS FRIEND race keeps running under the menu), the engineer holds its lines", () => {
+  const { eng, tyres, said, G } = sessionFor();
+  const c = carOn(tyres, { wear: 1.2 });
+  G.paused = true;
+  eng.update(c, 1);
+  assert.deepEqual(said, [], "spoke over the pause menu");
+  G.paused = false;
+  eng.update(c, 1);
+  assert.ok(said.some((m) => /GONE/.test(m)), "the line it owed is still owed: " + said.join(" | "));
+});
+
+test("a lapped car's last lap starts when the leader takes the flag: no stop calls from then on", () => {
+  const { eng, tyres, G } = sessionFor({ laps: 10 });
+  const c = carOn(tyres, { wear: 1.2, lap: 5 });   // lap 8 of 10: a lap down
+  G.cars = [c, { code: "LDR", finished: false, retired: false }];
+  assert.equal(eng.callFor(eng.senseOf(c))[1], "gone");
+  G.cars[1].finished = true;
+  const s = eng.senseOf(c);
+  assert.equal(s.finalLap, true);
+  assert.equal(eng.callFor(s)[1] === "gone", false, "TYRES ARE GONE — BOX with the flag already out");
+});
+
+test("no 'take a lap' for cold tyres on the only lap there is (qualifying, a one-lap race)", () => {
+  const { eng, tyres } = sessionFor({ laps: 1 });
+  const c = carOn(tyres, { lap: -2 });            // carOn adds three: lap 1 of 1, fresh set
+  c.tyreLap0 = 1; c.tyreTs = 70; c.tyreTb = 70;
+  const s = eng.senseOf(c);
+  assert.equal(s.outLap, true, "precondition: an out-lap by the stint count");
+  assert.notEqual((eng.callFor(s) || [])[1], "cold", eng.callFor(s));
+});

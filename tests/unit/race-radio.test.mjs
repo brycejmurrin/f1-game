@@ -625,3 +625,36 @@ test("a penalised player who takes the flag last hears the result before race co
   assert.equal(result.length, 1, "no result call before the race ended: " + JSON.stringify(r.said));
   assert.match(result[0].msg, /P3/);
 });
+
+test("a one-lap race still gets attack and defend calls: it is all last lap", () => {
+  const A = simCar("AAA", 60, 60), P = simCar("PLY", 30, 60.5, { isPlayer: true });
+  const r = sim([A, P], 1);
+  r.step(40);
+  assert.ok(r.lines(0).some((m) => /AAA/.test(m) && /ATTACK|RANGE|GO FOR IT|LINE IT UP|AHEAD/.test(m)), r.lines(0).join(" | "));
+});
+
+test("a rival's lap time that arrives after its lap count (VS FRIEND) is still timed, and can take the fastest lap", () => {
+  const f = RF.create();
+  const a = car("RIV", 100, 60), p = car("PLY", 90, 60, { isPlayer: true });
+  const G = { state: "race", raceT: 0, cars: [a, p], player: p, track: { total: LAP }, cautionInfo: () => ({ level: 0 }), cautionLevel: () => 0 };
+  const evs = [];
+  const tick = () => { G.raceT += 0.1; evs.push(...f.observe(G, 0.1).ev); };
+  for (let i = 0; i < 5; i++) tick();
+  p.lap = 2; p.lastLap = 60; tick();
+  a.lap = 2; tick(); tick();                        // the pose: a new lap count, no time yet
+  a.lastLap = 58; a.best = 58; tick();              // the LAP event lands a tick later
+  const fastest = evs.filter((e) => e.type === "fastest").map((e) => e.car.code);
+  assert.deepEqual(fastest, ["PLY", "RIV"]);
+});
+
+test("two finishers are ordered by their own flag times, not by the tick the radio saw them cross", () => {
+  const f = RF.create();
+  const r = car("RIV", 100, 60), p = car("PLY", 99, 60, { isPlayer: true });
+  const G = { state: "race", raceT: 10, cars: [r, p], player: p, track: { total: LAP }, cautionInfo: () => ({ level: 0 }), cautionLevel: () => 0 };
+  const evs = [];
+  const tick = () => { G.raceT += 0.05; evs.push(...f.observe(G, 0.05).ev); };
+  tick();
+  p.finished = true; p.finishT = G.raceT; tick();   // you cross; the rival is drawn ~100 ms behind
+  r.finished = true; r.finishT = p.finishT - 0.04; tick();
+  assert.equal(f.order().map((c) => c.code).join(","), "RIV,PLY");
+});

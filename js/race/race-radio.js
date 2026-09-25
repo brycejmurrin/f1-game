@@ -303,7 +303,9 @@ const RaceRadio = (function () {
     function engineerState(f, p) {
       if (f.finished || f.retired || f.pitting || !f.started || t < SETTLE_S) return;
       const green = f.caution === 0;
-      const racing = f.toGo == null || f.toGo > 1;   // the last lap has its own call
+      // The last lap has its own call — except in a one-lap race, which is
+      // all last lap and would otherwise have no attack or defend call at all.
+      const racing = f.toGo == null || f.toGo > 1 || f.laps <= 1;
       // A car that has taken the flag is not someone to attack or defend from.
       const a = f.ahead && !f.ahead.finished ? f.ahead : null, b = f.behind && !f.behind.finished ? f.behind : null;
       if (a && green && racing && f.gapA != null) {
