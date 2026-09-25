@@ -304,21 +304,6 @@ test("senseOf reads the plan and the field: the next stop lap, its compound, and
   assert.equal(eng.senseOf(c).lapsToStop, null, "a called stop needs no calling");
 });
 
-test("our own stop clears a latched undercut: no BOX NOW on the out-lap", () => {
-  const { eng, tyres, G } = sessionFor();
-  const c = carOn(tyres, { wear: 0.2, lap: 6, prog: 5000 });
-  c.pitPlan = { stops: 1, seq: ["medium", "hard"], stints: [12, 13], lapsAt: [12] };
-  c.pitStops = 0;
-  const rival = { code: "VER", prog: 4900, speed: 50, pitStops: 0, human: false };
-  G.cars = [c, rival];
-  G.pits = { estimate: () => ({ lossS: 22, gapS: 2, marginS: -20, caution: false }), lastCue: () => null };
-  eng.senseOf(c);
-  rival.pitStops = 1;
-  assert.equal(eng.senseOf(c).rivalBoxed, "VER", "latched");
-  c.tyreStints = (c.tyreStints || 0) + 1;      // we boxed too: a new set
-  assert.equal(eng.senseOf(c).rivalBoxed, null, "the new set answered the undercut");
-});
-
 test("the PIT CALL rides its own priority; every other line still yields", () => {
   // Every engineer line was "info" (js/game.js ANN_PRI rank 2), which put the
   // instruction to pit BELOW the pit lane's own "PIT ENTRY — LIMITER ON"
@@ -361,4 +346,42 @@ test("the last lap (and a one-lap qualifying run) gets no call to stop: the flag
   assert.ok(!said.some((m) => /BOX|STOP|GONE/.test(m)), said.join(" | "));
   c.lap = 9;                                       // a lap earlier every one of them is live again
   assert.equal(eng.senseOf(c).wrongTread, true);
+});
+
+
+test("our own stop answers a rival's latched undercut: no BOX NOW on the out-lap", () => {
+  const ctx = vm.createContext({ Math, console, Object, Array, Number, JSON, isFinite });
+  seedLog(ctx); ctx.window = ctx;
+  for (const f of ["js/core/mat4.js","js/physics/consts.js","js/data/teams.js","js/car/parts.js","js/physics/tyre-model.js","js/race/engineer.js"])
+    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
+  const E = vm.runInContext("RaceEngineer", ctx), T = vm.runInContext("TyreModel", ctx);
+  const said = [];
+  const tyres = T.create({ lapsTarget: 25, track: { total: 5386, def: {} }, LAT_MAX: 22, aTop: () => 7, vTop: () => 60, raceWeather: "dry" });
+  tyres.setLevel("real");
+  let hear = false; // the card queue is full / quiet gap on the tick VER boxes
+  const G = { tyres, raceWeather: "dry", lapsTarget: 25, cautionLevel: () => 0,
+    announce: (m) => { if (hear) said.push(m); return hear; } };
+  const eng = E.create(G);
+  const c = Object.assign({ human: true, local: true, speed: 60, lap: 8, consistency: 0.75, accSm: 0, lastLap: 90, prog: 5000 });
+  tyres.fit(c, { id: "t", code: "M", life: 0.88, off: 0, tread: 0, colour: [1,1,1] });
+  c.tyreTs = T.optTemp(0.88); c.tyreTb = T.optTemp(0.88); c.tyreWear = c.tyreWearF = c.tyreWearR = 0.2;
+  c.pitStops = 0;
+  const rival = { code: "VER", prog: 4900, speed: 50, pitStops: 0 };
+  G.cars = [c, rival];
+  G.pits = { estimate: () => ({ lossS: 22, gapS: 2, marginS: -20 }), lastCue: () => null };
+  eng.update(c, 0.05);
+  rival.pitStops = 1; eng.update(c, 0.05);   // VER boxes, call refused
+  c.pitArmed = true; eng.update(c, 1);        // player presses BOX
+  c.pitState = "entry"; for (let i = 0; i < 25; i++) eng.update(c, 1);  // 25 s in the lane
+  c.pitArmed = false; c.pitState = "none"; c.pitStops = 1;
+  tyres.fit(c, { id: "t2", code: "H", life: 0.88, off: 0, tread: 0, colour: [1,1,1] }); c.tyreStints = 1;
+  c.tyreTs = T.optTemp(0.88); c.tyreTb = T.optTemp(0.88); c.tyreWear = c.tyreWearF = c.tyreWearR = 0;
+  hear = true;
+  for (let i = 0; i < 20; i++) eng.update(c, 1);
+  assert.deepEqual(said, [], "no BOX NOW for a rival's undercut once we have stopped ourselves");
+});
+
+test("no engineer call under the pause menu (VS FRIEND keeps ticking)", () => {
+  const src = readFileSync(join(ROOT, "js/race/engineer.js"), "utf8");
+  assert.match(src, /if \(!c \|\| !c\.local \|\| !\(dt > 0\) \|\| G\.paused\) return "";/);
 });

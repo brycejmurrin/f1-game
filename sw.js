@@ -26,6 +26,9 @@ const OPTIONAL_ASSET_MS = 4000;
 // exercises this branch; the deployed site never does.
 const DEV_HOST = /^(localhost|127\.0\.0\.1|\[::1\])$/.test((self.location && self.location.hostname) || "");
 const INSTALL_COMPLETE_URL = "__apex_install_complete__";
+// Written after the OPTIONAL pool too, right before skipWaiting: the cache holds
+// everything its build will ever precache. The opportunistic sweep waits for it.
+const INSTALL_SETTLED_URL = "__apex_install_settled__";
 
 let _cacheNamePromise = null;
 // The RESOLVED name, readable without awaiting: cache matching must never wait
@@ -75,17 +78,21 @@ async function matchPreferCurrent(req) {
   let names;
   try { names = await caches.keys(); } catch (_) { return caches.match(req); }
   const current = _cacheNameKnown;
-  // A fresh worker offline has no current name yet: a NEWER generation whose
-  // install was cut off holds the new shell but none of its deferred files, so
-  // a generation that finished its install outranks one that did not.
-  const done = new Set();
-  if (!current) {
-    for (const n of names) {
-      try { if (cacheBuild(n) && await caches.match(INSTALL_COMPLETE_URL, { cacheName: n })) done.add(n); } catch (_) { /* rank it as incomplete */ }
-    }
-  }
+  // A FINISHED install outranks a newer name: a fetch mid-deploy opens the next
+  // build's cache and writes its shell before that build installs, and an app
+  // closed then and relaunched offline got the new shell with none of its lazy
+  // `?v=<new>` payloads — while the previous, complete generation sat unused.
+  const done = new Map();
+  await Promise.all(names.map(async (n) => {
+    let d = 0;
+    try {
+      if (await caches.match(INSTALL_SETTLED_URL, { cacheName: n })) d = 2;
+      else if (await caches.match(INSTALL_COMPLETE_URL, { cacheName: n })) d = 1;
+    } catch (_) { /* unreadable: rank it last */ }
+    done.set(n, d);
+  }));
   const rank = (n) => (n === current ? Infinity : (cacheBuild(n) || 0));
-  const ordered = names.slice().sort((a, b) => (done.has(b) - done.has(a)) || (rank(b) - rank(a)));
+  const ordered = names.slice().sort((a, b) => (done.get(b) - done.get(a)) || (rank(b) - rank(a)));
   for (const name of ordered) {
     const hit = await caches.match(req, { cacheName: name });
     if (hit) return hit;
@@ -110,7 +117,11 @@ async function sweepStaleCaches() {
   if (!(build > 0)) return;
   const keys = await caches.keys();
   if (!keys.includes(name)) return;
-  if (!(await caches.match(INSTALL_COMPLETE_URL, { cacheName: name }))) return;
+  // SETTLED, not just complete: the complete marker lands before the optional
+  // pool, and an OLD active worker that has learned the new name would sweep its
+  // own cache inside the window "SKIPWAITING STAYS LAST" protects (an old-shell
+  // tab offline then lost its lazy ?v=<old> assets).
+  if (!(await caches.match(INSTALL_SETTLED_URL, { cacheName: name }))) return;
   const stale = keys.filter((k) => cacheBuild(k) < build);
   await Promise.all(stale.map((k) => caches.delete(k)));
   _sweepDone = true;
@@ -398,6 +409,7 @@ self.addEventListener("install", (event) => {
     // previous cache still held a moment earlier. The first-visit boot win
     // comes from deferring REGISTRATION (index.html), which costs nothing here.
     await pooled(stamped, 4, (u) => cacheOptionalAsset(cache, u));
+    await cache.put(INSTALL_SETTLED_URL, new Response("settled"));
     await self.skipWaiting();
   })());
 });

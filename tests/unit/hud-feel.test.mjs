@@ -475,3 +475,18 @@ test("a garage colour edit re-skins the plate — the id has not changed", () =>
   tick();
   assert.equal(accentOf(dom)["--accent"], "rgb(230,51,26)", "the repaint never reached the plate");
 });
+
+test("lap clocks carry the minute: never 1:60.00 or 1:010.00 (round first, then split)", async () => {
+  const fs = await import("node:fs"), vm = await import("node:vm"), { seedDom } = await import("../helpers/seed-dom.mjs");
+  const game = fs.readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
+  const fmtTime = new Function(game.match(/function fmtTime\(t\) \{[\s\S]*?\n\}/)[0] + "; return fmtTime;")();
+  const ctx = vm.createContext({}); seedDom(ctx);
+  const fmtLap = vm.runInContext("Dom", ctx).fmtLap;
+  const cases = [[59.996, "1:00.00", "59.996"], [119.9996, "2:00.00", "2:00.000"], [69.9996, "1:10.00", "1:10.000"], [9.996, "0:10.00", "9.996"], [83.456, "1:23.46", "1:23.456"]];
+  for (const [t, clock, lap] of cases) {
+    assert.equal(fmtTime(t), clock, `fmtTime(${t})`);
+    assert.equal(fmtLap(t), lap, `fmtLap(${t})`);
+  }
+  const rs = fs.readFileSync(new URL("../../js/ui/results-sheet.js", import.meta.url), "utf8");
+  assert.match(rs, /const cs = Math\.round\(seconds \* 100\)/, "the results sheet's fallback clock rounds first too");
+});
