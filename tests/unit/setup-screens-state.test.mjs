@@ -303,7 +303,7 @@ test("career.css: the lines the fixes extend must wrap, not ellipsize", () => {
 
 /* ── SEASON SETUP (#season-setup): SeasonUI in a VM ─────────────────────── */
 
-function loadSeasonUi(trackIds = ["a", "b"]) {
+function loadSeasonUi(trackIds = ["a", "b"], cal = {}) {
   const dom = makeDom({ tagFor: (id) => (/^(ss-back|ss-apply|mb-season)$/.test(id) ? "button" : "div") });
   const G = {
     $: (id) => dom.byId(id), els: {}, soundOn: false, season: null,
@@ -316,6 +316,7 @@ function loadSeasonUi(trackIds = ["a", "b"]) {
       PRESETS: [{ id: "full", label: "FULL" }], presetIds: () => ["a"], shuffled: (x) => x,
       LAP_OPTS: [3, 5, 10, 25, 57], SPRINT_POINTS: [8, 7, 6, 5, 4, 3, 2, 1], DROP_OPTS: [0, 2, 3],
       hasProgress: () => false, rounds: () => 2, restart: () => ({}), setConfig() {}, save() {}, trackIndex: () => 0,
+      ...cal,
     },
     Tracks: { LIST: [{ id: "a", name: "A" }, { id: "b", name: "B" }, { id: "c", name: "C", country: "X" }] },
   });
@@ -350,6 +351,26 @@ test("season setup: ↑ / ↓ / ✕ keep keyboard focus on the row they moved or
   btn("Remove — C").click();                        // [a, b]: the neighbour takes R1
   assert.equal(focused(), "Remove — A", "after a remove, the row that took its place");
   assert.ok(dom.document.activeElement.disabled === false, "never a disabled button");
+});
+
+test("season setup: 2026 REAL marks its sprint rounds, and each round toggles", () => {
+  const { ui, $ } = loadSeasonUi(["a", "b"], {
+    PRESETS: [{ id: "full", label: "FULL" }, { id: "real2026", label: "2026 REAL" }],
+    preset: (id) => (id === "real2026" ? { trackIds: ["b", "c"], sprint: "rounds", sprintIds: ["c"] } : { trackIds: ["a"] }),
+  });
+  ui.open();
+  assert.equal($("ss-cal").querySelectorAll("button").filter((b) => /Sprint weekend/.test(b.getAttribute("aria-label") || "")).length, 0,
+    "no per-round toggles while the sprint is global");
+  $("ss-presets").querySelectorAll("button").find((b) => b.textContent === "2026 REAL").onclick();
+  // The last paint's two rows (the stub DOM keeps detached nodes queryable,
+  // which is why the focus test above reads findLast too).
+  const toggles = () => $("ss-cal").querySelectorAll("button")
+    .filter((b) => /^Sprint weekend/.test(b.getAttribute("aria-label") || "")).slice(-2);
+  assert.deepEqual(toggles().map((b) => [b.textContent, b.getAttribute("aria-pressed")]), [["GP", "false"], ["SPRINT", "true"]]);
+  assert.match($("ss-note").textContent, /^1 of 2 rounds are sprint weekends/);
+  toggles()[0].onclick();
+  assert.deepEqual(toggles().map((b) => b.textContent), ["SPRINT", "SPRINT"]);
+  assert.equal($("ss-sprint").querySelectorAll(".sel-chip.active")[0].textContent, "SPRINT ROUNDS");
 });
 
 test("season setup: the sprint note names the unit of the points it quotes", () => {
