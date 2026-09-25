@@ -597,3 +597,20 @@ test("a lap that ends green but ran under a VSC is not called slow", () => {
   r.step(60);                                      // the neutralised lap ends green
   assert.ok(!r.lines(t0).some((m) => /OFF\. RESET|LOST TIME|SLOW/.test(m)), r.lines(t0).join(" | "));
 });
+
+test("a red-flag re-grid reorders the field without a pass being called, then or after the lights", () => {
+  const L = simCar("LLL", 2400, 60), A = simCar("AAA", 1300, 60), B = simCar("BBB", 1290, 60), P = simCar("PLY", 900, 60, { isPlayer: true });
+  const r = sim([L, A, B, P], 30);
+  r.radio.setComm("on");
+  r.step(30);
+  const t0 = r.G.raceT;
+  r.G.state = "count";                              // the restart countdown: the field back on the grid
+  const base = L.prog - 1500;
+  for (const [k, c] of [L, B, A, P].entries()) { c.prog = base - k * 8; c.speed = 0; }   // B now ahead of A
+  r.step(6);
+  r.G.state = "race"; for (const c of [L, A, B, P]) c.speed = 60;
+  r.step(20);
+  const said = r.lines(t0);
+  assert.ok(!said.some((m) => /BBB|AAA/.test(m) && /MOVE|PAST|THROUGH|FAVOUR|BACK FROM|GREAT/.test(m)), said.join(" | "));
+  assert.ok(!said.some((m) => /LIGHTS OUT/.test(m)), "the radio forgot the race and started it again: " + said.join(" | "));
+});

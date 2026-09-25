@@ -127,6 +127,7 @@ const RaceFacts = (function () {
       const seg = lapLen / K;
 
       // ── per car: timing loop and edges ──────────────────────────────────
+      let regrid = false;
       for (const c of cars) {
         const s = bag(c);
         const i = Math.floor((c.prog || 0) / seg);
@@ -135,6 +136,9 @@ const RaceFacts = (function () {
         if (s.fresh) { s.fresh = false; s.cp = i; }
         if (i < s.cp) {                             // shoved backwards: give the checkpoints back
           s.cp = i;
+          // …and who-is-ahead with them: a re-grid or a rescue is not a pass,
+          // so the order after it is the new baseline, not a flip to call.
+          regrid = true;
           // …and the player's gap history with them. A red-flag restart puts the
           // field back on the grid, bunched; comparing those gaps with the
           // pre-flag ones logged at the same checkpoints read as "6.5 quicker".
@@ -187,6 +191,7 @@ const RaceFacts = (function () {
       // Pairs not looked at this tick are forgotten: a car that fell three
       // places inside the hold left a stale "who is ahead", which fired as a
       // pass — a lead change twenty seconds late — when the two met again.
+      if (regrid) pairs.clear();
       const seen = _seen; seen.clear();
       for (let i = 0; i < order.length; i++) {
         for (let j = i + 1; j <= i + PAIR_SPAN && j < order.length; j++) {

@@ -459,7 +459,11 @@ const RaceRadio = (function () {
       // its new field (makeCars builds a new array) or by the clock going back.
       // A red flag keeps both, and keeps the memory with them.
       const now = G.raceT || 0;
-      if (!live || G.cars !== lastCars || now + 1 < t) { reset(); live = true; lastCars = G.cars; }
+      // NOT on `!live`: a red flag's restart countdown is "not racing" too, and
+      // resetting there forgot the grid, every once-only line and the told
+      // place — and read the re-grid as a lap of passes.
+      if (G.cars !== lastCars || now + 1 < t) { reset(); lastCars = G.cars; }
+      live = true;
       t = now;
       const { f, ev } = facts.observe(G, dt);
       if (!f) return;
