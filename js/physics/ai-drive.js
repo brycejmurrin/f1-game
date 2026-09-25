@@ -328,22 +328,46 @@ const AiDrive = (function () {
   }
 
   // One feasible lateral envelope for the planner and the kinematic actuator.
-  // speed is in world m/s; pace removes the ground-speed scale for the taper.
-  function lateralScale(speed, load = 0.5, grip = 1, pace = 1, vmax = 72) {
-    const v = Math.abs(speed) / Math.max(0.05, pace);
-    return (1 + (load - 0.5) * 0.16) * Math.max(0.01, grip)
-      * (1 - clamp((v - 20) / Math.max(1, vmax - 20), 0, 1) * 0.28);
+  // speed is in world m/s; pace removes the ground-speed scale.
+  //
+  // THE SAME WINGS AS THE PLAYER. This envelope used to FALL by 28 % from
+  // 20 m/s to the top speed (the old arcade taper) while the player's grip
+  // RISES by DOWNFORCE (65 %) over the same range (game.js aeroGrip), so at
+  // 60 m/s a player had roughly twice the lateral grip the AI credited itself
+  // with and every fast corner was a free second. The earlier fix gave only
+  // the PLANNER aero and was reverted because the actuator could not turn at
+  // the speeds it planned (docs/notes/AI-FIELD-RESEARCH.md, 2026-09-09); this
+  // is the shared-function route that note asked for: planner (cornerSpeed
+  // inverts this exactly) and actuator (game.js gripScale / yaw cap) read the
+  // one curve, so they rise together. The player's PLAYER_GRIP forgiveness
+  // headroom is NOT copied — the AI gets the car's aero, not the assist.
+  const AI_DF = 0.65;   // PhysicsConsts.DOWNFORCE (not bound here: unit VMs load this file alone)
+  // `aero` scales the wing term. The heading controller's YAW budget is the
+  // exception that does not get the wings (yawScale below): it is how quickly
+  // a lane change may bend the nose, a smoothness budget rather than grip, and
+  // letting it rise with downforce took the solo-lap lateral-jerk figure in
+  // ai-racecraft-vm from 5.9 to 8.1 m/s² (cap 7.5) — twitchier lane changes on
+  // every straight for no corner speed at all.
+  function lateralScale(speed, load = 0.5, grip = 1, pace = 1, vmax = 72, aero = 1) {
+    const q = Math.min(1, Math.abs(speed) / (Math.max(0.05, pace) * Math.max(1, vmax)));
+    return (1 + (load - 0.5) * 0.16) * Math.max(0.01, grip) * (1 + AI_DF * aero * q * q);
   }
-  // Solve k*v² = a(v) analytically over the taper's three continuous pieces.
+  // The yaw budget keeps the OLD high-speed taper (1 - 0.28 at the top speed,
+  // here as its quadratic twin) so the heading controller is exactly as calm
+  // as it was measured to be.
+  const YAW_AERO = -0.28 / AI_DF;
+  function yawScale(speed, load, grip, pace, vmax) { return lateralScale(speed, load, grip, pace, vmax, YAW_AERO); }
+  // Solve k*v² = lat*(1 + D*(v/V)²) analytically: v² = lat / (k - lat*D/V²)
+  // below the top speed V, and the flat (1 + D) envelope past it.
   // No iterative solver in the per-car, per-node brake lookahead.
   function cornerSpeed(k, lat, pace = 1, vmax = 72) {
-    const p = Math.max(0.05, pace), span = Math.max(1, vmax - 20);
-    const flat = Math.sqrt(Math.max(0, lat) / Math.max(k, 1e-5));
-    if (flat <= 20 * p) return flat;
-    const fast = flat * Math.sqrt(0.72);
-    if (fast >= vmax * p) return fast;
-    const a = lat * (1 + 0.28 * 20 / span), b = lat * 0.28 / (span * p);
-    return 2 * a / (b + Math.sqrt(b * b + 4 * Math.max(k, 1e-5) * a));
+    const V = Math.max(0.05, pace) * Math.max(1, vmax), kk = Math.max(k, 1e-5), L = Math.max(0, lat);
+    const den = kk - L * AI_DF / (V * V);
+    if (den > 0) {
+      const v = Math.sqrt(L / den);
+      if (v <= V) return v;
+    }
+    return Math.sqrt(L * (1 + AI_DF) / kk);
   }
 
   function brakeTarget(ctx) {
@@ -462,7 +486,9 @@ const AiDrive = (function () {
   function otWant(ctx) {
     const street = !!ctx.street;
     const ref = ctx.vTop > 0 ? ctx.vTop : 72;
-    const margin = (street ? 0.055 : 0.07) * ref;
+    // QUEUE PRESSURE lowers the bar: a car held behind the same car for its
+    // patience window will take a 2 % edge (the tow alone is 4.5 %), not 7 %.
+    const margin = (street ? 0.055 : 0.07) * ref * lerp(1, 0.3, queuePress(ctx));
     const bv = ctx.blockerVmax > 0 ? ctx.blockerVmax : (ctx.blockerSpeed || 0);
     // A car under ~12 % of the top speed is an OBSTACLE whatever its pace: the
     // follower behind it sits on the queue crawl floor, which is below the
@@ -539,6 +565,18 @@ const AiDrive = (function () {
     const lim = (hw || 5) - 0.6;
     return clamp(passX + side * clear, -lim, lim);
   }
+  // IS THE PASS LANE STILL REACHABLE? The latch used to drop whenever less
+  // than a car width (WCAR) of road was left beyond the passing car on its
+  // side — checked every frame, INCLUDING after the car had arrived in the
+  // lane. passTarget allows a lane 0.6 m from the edge, so a pass round the
+  // outside was cancelled the moment it got there: on monza that branch ended
+  // 73-105 of ~180 pass attempts per 240 s against ~20 completions, and every
+  // one of them dropped the car back into the queue it had just left (the
+  // clump). The side is closed only when the room left is less than the
+  // distance still to travel (`need`, capped at a car width), with 0.1 m of slack.
+  function passSideClosed(sideRoom, need, wcar) {
+    return sideRoom < Math.min(wcar || 2, Math.max(0, need || 0)) - 0.1;
+  }
   // How long a committed pass is held without gaining ground before the car
   // gives it up (patience), and how long it then waits before trying the same
   // car again (the bt LAP_BACK_TIME_PENALTY shape, scaled to a same-lap fight).
@@ -599,7 +637,47 @@ const AiDrive = (function () {
     const closing = clamp(((ctx.speed || 0) - (ctx.blockerSpeed || 0)) / (6 * ref / 72), 0.25, 1);
     const craft = lerp(0.7, 1.25, ctx.traits ? ctx.traits.craft : 0.75);
     const roll = 0.85 + 0.3 * (ctx.roll != null ? ctx.roll : 0.5);
-    return q * Math.max(closing, deficit) * craft * roll >= 0.32;
+    // A queued car can never show a closing rate — the queue cap pins it to the
+    // blocker's speed — so time held behind stands in for it (queuePress).
+    return q * Math.max(closing, deficit, 0.7 * queuePress(ctx)) * craft * roll >= 0.32 && passReach(ctx);
+  }
+
+  // CAN IT BE HALF ALONGSIDE BY THE TURN-IN? game.js abandons a pass that is
+  // not (the lunge rule: FIA's front axle past the mirror), so a move started
+  // too close to the corner was always going to be given up — measured on
+  // monza, 22-43 lunge aborts per 240 s with a median life of 0.5-0.8 s, each
+  // one a car pulling out and dropping straight back into the queue. Ground to
+  // gain is the gap less the half-car level; the closing rate is the larger of
+  // the live one and the pace edge, floored at 1 m/s (pace-scaled) so a queued
+  // car is judged on the tow it will get, and 1.25x the plain distance is
+  // allowed because the late brake (brakeTarget) makes up the rest.
+  function passReach(ctx) {
+    const to = ctx.toTurnIn;
+    if (!(to < 1e8) || !(ctx.blockerGap > 0)) return true;
+    const ref = ctx.vTop > 0 ? ctx.vTop : 72;
+    if ((ctx.blockerSpeed || 0) < 0.12 * ref) return true;   // an obstacle: go now
+    const gain = ctx.blockerGap - SIDE_LEVEL;
+    if (gain <= 0) return true;
+    const bv = ctx.blockerVmax > 0 ? ctx.blockerVmax : (ctx.blockerSpeed || 0);
+    const dv = Math.max((ctx.speed || 0) - (ctx.blockerSpeed || 0), (ctx.freeSpeed || 0) - bv, ref / 72);
+    return (ctx.speed || 0) * gain / dv <= 1.25 * to;
+  }
+
+  // QUEUE PRESSURE. THE TRAIN: the queue cap holds a follower at the blocker's
+  // speed, and otWant then asked for a 7 % pace edge (5 m/s) the field's own
+  // 1.4 % spread can never produce — so evenly matched cars sat nose to tail
+  // for whole races, which is what a player sees as "they clump and get stuck
+  // behind each other". Real drivers get impatient: the longer they are held,
+  // the smaller the edge they will try a move on. `queueT` counts seconds held
+  // by the queue cap behind the SAME car (game.js); it decays at twice the
+  // rate when free, so a brief break in the queue does not reset the clock.
+  // Craft is patience spent: a racer tries after ~3.5 s, a rookie after ~7 s.
+  function queueTime(prevT, held, dt) {
+    return held ? (prevT || 0) + dt : Math.max(0, (prevT || 0) - 2 * dt);
+  }
+  function queuePatience(t) { return lerp(7, 3.5, t ? t.craft : 0.75); }
+  function queuePress(ctx) {
+    return clamp((ctx.queueT || 0) / queuePatience(ctx.traits), 0, 1);
   }
   function sideLevel() { return SIDE_LEVEL; }
 
@@ -1116,13 +1194,13 @@ const AiDrive = (function () {
 
   try { Log.info("game", "AiDrive ready"); } catch (_) { /* Log absent in isolated VM */ }
   return {
-    lateralScale, cornerSpeed, traits, houseStyle, isMate, ordersMul, stuckThreshold, followPad, followBase, towGain, queueBrake, sepClamp,
+    lateralScale, yawScale, cornerSpeed, traits, houseStyle, isMate, ordersMul, stuckThreshold, followPad, followBase, towGain, queueBrake, sepClamp,
     humanInvMass, contactGive, steerDamp, unstuckPull, streetOtScale, otFireRate,
     otShouldFire, wantBoost, wantX, brakeTarget, brakeDecision, adaptLane, otPull,
     defendPull, isBoxed, minLatGap, wallHitLoss, wallSteerScrub,
     wallAiScrub, beginLook, pushLook, endLook, aiRescueDelay, otSide,
     letPassDelay, letPassPull, letPassEase, queueFloor, laneFollow, unstuckLatFloor,
-    otWant, passTarget, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes,
+    otWant, queueTime, queuePatience, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes,
     launchPlan, launchMul, launchDone, pacePhase, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,
