@@ -750,9 +750,20 @@
         }
         return true;
       };
+      // A berth the land covers moves the hull OUT into open water (either side,
+      // 4 m steps up to 40 m) rather than dropping the yacht: the harbour keeps
+      // its boats until the basin gets a real terrain carve.
+      const moor = (c, t, r, halfL, halfW, deckDy) => {
+        if (afloat(c, t, r, halfL, halfW, c[1] + deckDy)) return c;
+        for (let d = 4; d <= 40; d += 4) for (const sg of [1, -1]) {
+          const cc = [c[0] + r[0] * sg * d, c[1], c[2] + r[2] * sg * d];
+          if (afloat(cc, t, r, halfL, halfW, cc[1] + deckDy)) return cc;
+        }
+        return null;
+      };
       const yacht = (yc, b, u, r, t, sc, hullCol) => {
-        yc = [yc[0], pyMin - 0.8 - 0.25 * sc, yc[2]];
-        if (!afloat(yc, t, r, 11 * sc, 3.5 * sc, yc[1] + 3.1 * sc)) return;
+        yc = moor([yc[0], pyMin - 0.8 - 0.25 * sc, yc[2]], t, r, 11 * sc, 3.5 * sc, 3.1 * sc);
+        if (!yc) return;
         const HULL = hullCol || [0.97, 0.97, 0.99];
         const L = 22 * sc, W = 7 * sc;
         out._mat = MAT.METAL;
@@ -1119,8 +1130,9 @@
       // stations.
 
       const megaYacht = (a, sc, hullCol) => {
-        a = Object.assign({}, a, { c: [a.c[0], pyMin - 0.8 - 0.2 * sc, a.c[2]] });
-        if (!afloat(a.c, a.t, a.r, 22 * sc, 5 * sc, a.c[1] + 4.2 * sc)) return;
+        const mc = moor([a.c[0], pyMin - 0.8 - 0.2 * sc, a.c[2]], a.t, a.r, 22 * sc, 5 * sc, 4.2 * sc);
+        if (!mc) return;
+        a = Object.assign({}, a, { c: mc });
         const b = [a.r, a.u, a.t];
         const HULL = hullCol || [0.97, 0.97, 0.99];
         const NAVY = [0.14, 0.20, 0.30];
