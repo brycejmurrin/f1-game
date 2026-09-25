@@ -125,7 +125,9 @@ not.
 The long tail (`fb-`, `sf-`, `q-`, `cg-`, `tm-`, `ot-`, `ax-`, `flag-`, `sec-`, `limits-`,
 `sur-`, `trb-`, `tdf-`, `tds-`, `tdd-`, `balanced-`, `rotate-`,
 `cockpit-`, `budget-`, `over-`, `dock-`, `in-`, `btn-`, `chip-`,
-`season-`, `pair-`, `build-`, `mb-`, `mirror-`, `duel-`) is one file each and needs no map.
+`season-`, `pair-`, `build-`, `mb-`, `mirror-`, `duel-`, `session-`) is one file each and needs no map.
+`.session-summary` lives in `menus.css`: it keeps the circuit count and race setup
+summary readable in their sheet headers, truncating when the header narrows.
 
 **A family leaves this list when it leaves `css/`.** The title screen's old
 `.mb-stack` / `.mb-sub` pair was replaced by `#mb-career > span` and

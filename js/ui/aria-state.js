@@ -40,7 +40,10 @@ window.AriaState = (function () {
   // listbox option or a tab must NOT also claim to be a toggle button.
   const claimed = (el) =>
     el.hasAttribute("aria-selected") || el.hasAttribute("aria-checked") ||
-    el.hasAttribute("aria-pressed") ||
+    // The observer itself adds aria-pressed after the first selection. Treat
+    // those buttons as ours on later class mutations, or their announced state
+    // freezes at the first value forever.
+    (el.hasAttribute("aria-pressed") && !labelled.has(el)) ||
     el.hasAttribute("data-aria-toggle") ||
     el.hasAttribute("data-aria-action") ||
     el.getAttribute("role") === "option" || el.getAttribute("role") === "tab";

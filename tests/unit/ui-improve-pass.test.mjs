@@ -890,6 +890,19 @@ test("gamepad menu nav seeds focus on open and uses a larger stick deadzone than
   hashSb.AriaState.sync();
   assert.equal(a1.getAttribute("aria-current"), "true");
   assert.equal(a2.getAttribute("aria-current"), null);
+  const toggleDom = makeDom({ readyState: "loading" });
+  const group = toggleDom.document.createElement("div");
+  const one = toggleDom.document.createElement("button"), two = toggleDom.document.createElement("button");
+  one.classList.add("active"); group.append(one, two); toggleDom.byId("overlay").appendChild(group);
+  const toggleSb = uiSandbox(toggleDom);
+  vm.runInNewContext(src("js/ui/aria-state.js"), toggleSb);
+  toggleSb.AriaState.sync();
+  assert.equal(one.getAttribute("aria-pressed"), "true");
+  assert.equal(two.getAttribute("aria-pressed"), "false");
+  one.classList.remove("active"); two.classList.add("active");
+  toggleSb.AriaState.sync();
+  assert.equal(one.getAttribute("aria-pressed"), "false", "managed toggle updates after first paint");
+  assert.equal(two.getAttribute("aria-pressed"), "true", "new selection is announced");
   assert.match(code("js/ui/scroll-fade.js"), /"#menu-buttons"/,
     "title chrome fade watches the zoomed #menu-buttons scroller");
   assert.match(code("js/ui/scroll-fade.js"), /\boverflowX\b/,
@@ -1336,8 +1349,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(shell, /id="ss-inner"[^>]*pair-foot-full/,
     "season-setup foot spans both pair columns like SELECT");
   assert.match(shell, /id="sel-car"[^>]*class="bigbtn alt"/, "YOUR CAR sits on the alt plate beside NEXT");
-  assert.match(shell, /id="sel-car"[^>]*>YOUR CAR</);
-  assert.match(shell, /id="sel-go"[^>]*>NEXT</);
+  assert.match(shell, /id="sel-car"[^>]*><span>CHANGE CAR<\/span>/);
+  assert.match(shell, /id="sel-go"[^>]*>RACE SETUP</);
   assert.match(shell, /id="htp-close"[^>]*class="bigbtn alt"/, "How to Play dismiss is CLOSE on the alt plate");
   assert.match(shell, /id="htp-close"[^>]*>CLOSE</, "How to Play overlay dismiss is CLOSE");
   assert.match(shell, /id="standings-close"[^>]*class="bigbtn alt"/, "Standings CLOSE is dismiss, not a red commit");

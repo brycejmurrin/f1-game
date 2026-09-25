@@ -64,12 +64,15 @@ const RaceSettings = (function () {
     const gridFromQuali = () => (isChampionship() && SeasonCal.quali()) || (G.raceQuali && !isTimeTrial());
 
     let rsReturn = "select";
+    let draftKey = "";
     let netRoom = false;
 
     function setDrivingLine(v) { store.set("drivingLine", DrivingLine.setMode(v)); }
 
     function buildRaceSettings() {
-      $("rs-go").textContent = netRoom ? "CONFIRM" : "RACE!";
+      const qualifies = !isTimeTrial() && !qualiResults() &&
+        (isChampionship() ? SeasonCal.qualiNext(G.season) : gridFromQuali());
+      $("rs-go").textContent = netRoom ? "CONFIRM FOR LOBBY" : qualifies ? "START QUALIFYING" : "START RACE";
       wireRaceSettings();
       const tt = isTimeTrial();
       const daily = tt && G.daily ? G.daily.current() : null;
@@ -126,6 +129,13 @@ const RaceSettings = (function () {
       paintPlan(tt, raceLaps);
       paintPresetState(full);
       paintFolds();
+      const summary = $("rs-summary");
+      if (summary) {
+        const track = Tracks.LIST[trackIdx];
+        const team = typeof Teams !== "undefined" && Teams.LIST[G.teamIdx];
+        summary.textContent = [track && track.name, team && team.name,
+          G.raceLaps + " LAPS", String(G.raceWeather).toUpperCase()].filter(Boolean).join(" · ");
+      }
     }
 
     /** ONE ROW'S LIVE VALUE, read off the control rather than recomputed.
@@ -156,7 +166,13 @@ const RaceSettings = (function () {
       // · OFF · OFF · OFF" — a summary that is mostly padding stops being read.
       // The locked examples are the same length: "FEEL · NORMAL · TILT 6",
       // "MUSIC · ON · ALL". Opening the fold is what shows the rest.
-      const vals = rows.map(foldValue).filter(Boolean).slice(0, 3);
+      const priority = name === "FIELD" ? ["rs-quali", "rs-diff", "rs-duel"]
+        : ["rs-tyres", "rs-line", "rs-plan"];
+      const vals = priority.map((id) => rows.find((r) => r.id === id))
+        .filter(Boolean).map((r) => {
+          const label = r.querySelector(".tune-label");
+          return (label ? label.textContent.trim() + ": " : "") + foldValue(r);
+        }).filter(Boolean).slice(0, 2);
       // ONE STRING, like every other summary in the shell ("HUD · ON · STANDARD",
       // "FEEL · NORMAL"). Not a name span plus a value span: the component is
       // .adv-more-btn and it already reads and announces as one line.
@@ -346,9 +362,14 @@ const RaceSettings = (function () {
       rsReturn = from || "select";
       if (!netRoom) {
         const daily = isTimeTrial() && G.daily ? G.daily.current() : null;
-        G.raceLaps = isTimeTrial() ? TT_LAPS : SeasonCal.formatLaps(GAME_LAPS);
-        G.raceWeather = daily ? daily.weather : "dry";
-        G.raceTimeOfDay = daily ? daily.tod : "default";
+        const key = [G.flow, G.session, G.trackIdx, daily && daily.day,
+          G.season && G.season.round].join(":");
+        if (key !== draftKey) {
+          draftKey = key;
+          G.raceLaps = isTimeTrial() ? TT_LAPS : SeasonCal.formatLaps(GAME_LAPS);
+          G.raceWeather = daily ? daily.weather : "dry";
+          G.raceTimeOfDay = daily ? daily.tod : "default";
+        }
       }
       buildRaceSettings();
       $(rsReturn).hidden = true;
