@@ -76,6 +76,8 @@ test("the portrait blocker's buttons sit on the touch rung, not the 24px WCAG fl
   // The layer is coarse-pointer-only, so the rung that applies is the touch one.
   const gate = rulesFor(rules, /#rotate-device$/).find((r) => r.context.some((c) => /pointer: coarse/.test(c)));
   assert.ok(gate, "#rotate-device is shown by a (pointer: coarse) media query");
+  assert.ok(gate.context.some((c) => /max-height:\s*956px/.test(c)),
+    "the tallest stated 956px phone portrait still gets the rotate choice");
   const touch = rung(decl(css("css/tokens.css"), "body:not(.desktop)", "--tap"), "touch --tap");
   assert.ok(touch >= 44, `the touch --tap rung (${touch}px) clears Apple's 44pt`);
   const floor = rung(decl(css("css/tokens.css"), ":root", "--tap-min"), "--tap-min");

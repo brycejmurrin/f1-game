@@ -35,42 +35,31 @@ test('lane reaching is checked across the lap seam and result storage is reusabl
   const left=result.left; A.choose(context,c,b,[c,b],1000,2.8,out); assert.equal(out.left,left);
 });
 
-// CHARACTERISATION — the corridor extrapolates every rival at CONSTANT closing
-// speed. `candidate()` reads `closing = other.speed - car.speed` ONCE and
-// `crosses()` sweeps the slab with it over the whole horizon: the lane-change
-// window (`seconds`, clamped to 0.4-1.6 s) plus the 0.5 s settled tail of the
-// second call. A rival that is ACCELERATING inside that window — a pit-lane
-// exit merging on, a car powering out of a slow corner — closes more ground
-// than the straight line predicts, so the planner can declare a lane clear
-// that the rival actually reaches. This test asserts what the code does TODAY,
-// so a future move to a second-order (or mean-speed) prediction is a deliberate
-// change and not a silent one. It is NOT a licence to widen the slab.
-test('constant-closing extrapolation clears a lane an ACCELERATING rival reaches', () => {
-  // 16 m back in the left lane, closing at 6 m/s and pulling +6 m/s² relative
-  // to us (a rival on corner exit against a car already near its ceiling).
-  const GAP = -16, CLOSING = 6, ACCEL = 6;
-  const open = scenario([{ prog: 100 + GAP, x: -2.8, speed: 40 + CLOSING }]);
-  assert.equal(open.side, -1, 'today the left lane is taken as reachable');
-  assert.equal(open.left.reason, 'clear passing lane');
+test('observed accelerating rival blocks a lane reached within the horizon', () => {
+  const p = scenario([{ prog: 84, x: -2.8, speed: 46, corridorAccel: 6 }]);
+  assert.equal(p.side, 1);
+  assert.match(p.left.reason, /traffic/);
+  // Without observed acceleration, retain the existing constant-speed model.
+  assert.equal(scenario([{ prog: 84, x: -2.8, speed: 46 }]).side, -1);
+});
+test('bounded acceleration ignores corrupt estimates and does not close distant lanes', () => {
+  assert.equal(scenario([{ prog: -100, x: -2.8, speed: 40, corridorAccel: 1e9 }]).side, -1);
+  assert.equal(scenario([{ prog: 84, x: -2.8, speed: 46, corridorAccel: NaN }]).side, -1);
+  assert.equal(scenario([{ prog: 84, x: -2.8, speed: 46, corridorAccel: -6 }]).side, -1);
+});
+test('accelerating approach is detected across the lap seam', () => {
+  const c = { prog: 5, x: 0, speed: 40 }, b = { prog: 20, x: 0, speed: 37 };
+  const ctx = { roomL: 6, roomR: 6, roadL: 6, roadR: 6, kAhead: .01 };
+  const p = A.choose(ctx, c, b, [c,b,{ prog:989,x:-2.8,speed:46,corridorAccel:6 }],1000,2.8);
+  assert.equal(p.side, 1);
+});
 
-  // The horizon the verdict covers: the lane-change window plus the tail.
-  const T = open.left.seconds + 0.5;
-  // ...over which the REAL rival arrives. Integrate its own motion (nothing the
-  // planner does) and find it inside the same 5.2 m x 2.2 m slab crosses() uses,
-  // while our car is still crossing to the target lane.
-  let reached = 0;
-  for (let t = 0; t <= T + 1e-9; t += 0.01) {
-    const ds = GAP + CLOSING * t + 0.5 * ACCEL * t * t;
-    const dx = -2.8 + Math.min(t / open.left.seconds, 1) * 2.8;   // we close the 2.8 m to the target lane
-    if (Math.abs(ds) < 5.2 && Math.abs(dx) < 2.2) { reached = t; break; }
-  }
-  assert.ok(reached > 0 && reached <= T,
-    `the accelerating rival occupies the slab at t=${reached.toFixed(2)}s, inside the ${T.toFixed(2)}s the verdict covers`);
-
-  // And the miss is the EXTRAPOLATION, not the geometry: hand the planner the
-  // same car at its MEAN closing speed over that horizon (6 + 6*T/2) and the
-  // very same lane comes back as traffic.
-  const mean = scenario([{ prog: 100 + GAP, x: -2.8, speed: 40 + CLOSING + ACCEL * T / 2 }]);
-  assert.equal(mean.side, 1, 'at the window-average closing rate the left lane is refused');
-  assert.match(mean.left.reason, /traffic/);
+test('our braking does not hide a steady rival closing from behind', () => {
+  const car = {prog:100,x:0,speed:40,corridorAccel:-22};
+  const blocker = {prog:115,x:0,speed:37,corridorAccel:0};
+  const rival = {prog:82,x:-2.8,speed:40,corridorAccel:0};
+  const ctx = {roomL:6,roomR:6,roadL:6,roadR:6,kAhead:.01};
+  const p = A.choose(ctx,car,blocker,[car,blocker,rival],1000,2.8);
+  assert.equal(p.side,1);
+  assert.match(p.left.reason,/traffic/);
 });

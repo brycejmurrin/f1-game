@@ -213,11 +213,11 @@ test.describe("the waiting room", () => {
     await expect(page.locator("#sel-left")).toHaveCount(0);
     await expect(page.locator("#sel-setup")).toHaveCount(0);   // ...and no way into the garage
     // START does not start anything here — it goes on to laps/weather.
-    await expect(page.locator("#sel-go")).toHaveText("NEXT");
+    await expect(page.locator("#sel-go")).toHaveText("RACE SETUP");
 
     await page.click("#sel-go");
     await expect(page.locator("#race-settings")).toBeVisible({ timeout: 30000 });
-    await expect(page.locator("#rs-go")).toHaveText("CONFIRM", { timeout: 30000 });
+    await expect(page.locator("#rs-go")).toHaveText("CONFIRM FOR LOBBY", { timeout: 30000 });
     await page.click("#rs-go");
     await expect(page.locator("#vs-room")).toBeVisible({ timeout: 30000 });
     expect(await page.evaluate(() => window.__apex.info().state)).not.toBe("race");

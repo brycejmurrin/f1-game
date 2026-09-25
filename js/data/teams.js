@@ -81,7 +81,7 @@ const Teams = (function () {
       engine: "Red Bull Ford", tier: 2,
       stats: { speed: 90, accel: 88, cornering: 91, braking: 87 },
       drivers: [
-        { name: "Max Verstappen", code: "VER", num: 33 },
+        { name: "Max Verstappen", code: "VER", num: 3 },
         { name: "Isack Hadjar", code: "HAD", num: 6 }
       ]
     },
@@ -115,7 +115,7 @@ const Teams = (function () {
       engine: "Red Bull Ford", tier: 3,
       stats: { speed: 82, accel: 82, cornering: 81, braking: 80 },
       drivers: [
-        { name: "Liam Lawson", code: "LAW", num: 40 },
+        { name: "Liam Lawson", code: "LAW", num: 30 },
         { name: "Arvid Lindblad", code: "LIN", num: 41 }
       ]
     },

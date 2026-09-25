@@ -240,8 +240,12 @@ const RadioVoice = (function () {
      * only when something is actually queued, resume() only straight after a
      * cancel (the Bugzilla 1522074 case it exists for), and each call is timed
      * so a player can see what their platform costs (debug().synth). */
-    let synthOurs = false;          // an utterance we handed over has not ended yet
-    let synthCancelT = null;        // a cancel scheduled for the next task
+    // Our utterances still on the platform's queue. A Set, not a flag: a
+    // cancelled line's LATE end must not clear the mark while its replacement
+    // speaks. The synth is shared with the announcer (js/audio/announcer.js),
+    // and speechSynthesis.cancel() is global — so this module cancels only
+    // when one of ITS lines is queued, never because something else is talking.
+    const ours = new Set();
     let synthStat = { calls: 0, maxMs: 0, slow: 0, lastWarn: -1e9 };
     const clock = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
     function timed(name, fn) {
@@ -256,17 +260,17 @@ const RadioVoice = (function () {
         }
       }
     }
-    const synthBusy = () => { try { return synthOurs || !!synth.speaking || !!synth.pending; } catch (e) { return synthOurs; } };
-    /** Cancel on the next task, not in this frame — and only if anything is queued. */
-    function synthCancelSoon() {
-      if (synthCancelT != null) return;
-      synthCancelT = setTimeout(() => {
-        synthCancelT = null;
-        if (!synthBusy()) return;
-        synthOurs = false;
-        timed("cancel", () => { try { synth.cancel(); } catch (e) { /* nothing queued, or a synth mid-teardown */ } });
-        justCancelled = true;
-      }, 0);
+    /** Cancel OUR line, now, if one is queued — and nothing otherwise. Synchronous
+     *  on purpose: a cancel deferred to a later task fired after whatever was
+     *  spoken in between (the settings TEST sample, the announcer's wrap-up) and
+     *  killed it. The frame cost that motivated deferring was the cancel on EVERY
+     *  line, idle or not; a preempt of our own line is rare, and that is all
+     *  that remains here. */
+    function cancelOurs() {
+      if (!ours.size) return;
+      ours.clear();
+      timed("cancel", () => { try { synth.cancel(); } catch (e) { /* nothing queued, or a synth mid-teardown */ } });
+      justCancelled = true;
     }
     let justCancelled = false;
     function readTune() {
@@ -325,7 +329,7 @@ const RadioVoice = (function () {
       // stale, whether the engine fires it synchronously or a turn later.
       current = null;
       if (pack) pack.stop("radio");   // the engineer's own line only — never a spotter call mid-word
-      synthCancelSoon();
+      cancelOurs();
       if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false);
       // The hiss bed belongs to the line, so it goes when the line does —
       // the card-hidden and paused observers below are what stop a
@@ -341,6 +345,7 @@ const RadioVoice = (function () {
       const p = plan({ msg, life, kind, lead, enabled: on, soundOn: !!G.soundOn, state: G.state, preRace: !!preRace, api: true, volume, tune });
       last = { text: p.text, reason: p.reason || "spoke", rate: p.rate, budgetMs: p.budgetMs, leadMs: p.leadMs };
       if (!p.speak) return false;
+      p.preRace = !!preRace;   // speakPlanned re-checks the session at speak time
       stop();
       if (speakPack(p)) return true;
       // AFTER THE CUE, NOT UNDER IT. Deferred rather than shortened: the words
@@ -376,12 +381,16 @@ const RadioVoice = (function () {
       return true;
     }
     function speakPlanned(p) {
+      // Re-checked at speak time: a line that waited out its cue across the
+      // flag must not be read over the results (and its deadline would then
+      // cancel the announcer's wrap-up). A pre-race line carries its own pass.
+      if (!p.preRace && G.state !== "race" && G.state !== "count") { current = null; return false; }
       const u = new Utter(p.text);
       u.voice = voiceFor(p.speaker, true);   // speakPlanned only ever carries a card line (say())
       u.rate = p.rate; u.pitch = p.pitch; u.volume = p.volume;
       // Only the LIVE line may release the duck and the deadline — see `current`.
       u.onend = u.onerror = () => {
-        synthOurs = false;
+        ours.delete(u);
         if (u !== current) return;
         current = null;
         clearDeadline();
@@ -398,10 +407,10 @@ const RadioVoice = (function () {
       if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(true);
       try {
         asked++;
-        synthOurs = true;
+        ours.add(u);
         timed("speak", () => synth.speak(u));
       } catch (e) {
-        synthOurs = false;
+        ours.delete(u);
         current = null;
         if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false);
         Log.info("audio", "RadioVoice speak failed");
@@ -507,6 +516,10 @@ const RadioVoice = (function () {
       const words = speakable(text || SAMPLE[sp] || SAMPLE.radio);
       if (!words) return false;
       stop();
+      // A TEST press is the player asking for THIS sample now, from a settings
+      // click, not a frame: whatever is speaking — an earlier sample, the
+      // announcer's own TEST — gives way, synchronously, before the speak.
+      try { synth.cancel(); } catch (e) { /* nothing queued */ }
       const u = new Utter(words);
       u.voice = voiceFor(sp);
       u.rate = t.rate; u.pitch = t.pitch; u.volume = volume;
