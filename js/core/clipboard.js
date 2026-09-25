@@ -12,13 +12,19 @@ const ApexClipboard = (function () {
       ta.value = String(text == null ? "" : text);
       ta.setAttribute("readonly", "");
       ta.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0";
-      document.body.appendChild(ta);
+      // Inside the open modal <dialog>: showModal() makes everything outside it
+      // inert, and an inert textarea takes no selection — execCommand then
+      // copied whatever was selected and still said it worked.
+      const act = document.activeElement;
+      const host = (act && act.closest && act.closest("dialog[open]")) || (document.querySelector && document.querySelector("dialog[open]")) || document.body;
+      host.appendChild(ta);
       ta.focus();
       ta.select();
       if (ta.setSelectionRange) ta.setSelectionRange(0, ta.value.length);
       let ok = false;
       try { ok = !!(document.execCommand && document.execCommand("copy")); } catch (_) { ok = false; }
-      document.body.removeChild(ta);
+      ta.remove();
+      if (act && act.focus && act !== document.body) act.focus();   // back to the COPY button
       return ok !== false && !!ok;
     } catch (_) { return false; }
   }

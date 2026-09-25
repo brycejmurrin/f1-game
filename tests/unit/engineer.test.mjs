@@ -304,6 +304,21 @@ test("senseOf reads the plan and the field: the next stop lap, its compound, and
   assert.equal(eng.senseOf(c).lapsToStop, null, "a called stop needs no calling");
 });
 
+test("our own stop clears a latched undercut: no BOX NOW on the out-lap", () => {
+  const { eng, tyres, G } = sessionFor();
+  const c = carOn(tyres, { wear: 0.2, lap: 6, prog: 5000 });
+  c.pitPlan = { stops: 1, seq: ["medium", "hard"], stints: [12, 13], lapsAt: [12] };
+  c.pitStops = 0;
+  const rival = { code: "VER", prog: 4900, speed: 50, pitStops: 0, human: false };
+  G.cars = [c, rival];
+  G.pits = { estimate: () => ({ lossS: 22, gapS: 2, marginS: -20, caution: false }), lastCue: () => null };
+  eng.senseOf(c);
+  rival.pitStops = 1;
+  assert.equal(eng.senseOf(c).rivalBoxed, "VER", "latched");
+  c.tyreStints = (c.tyreStints || 0) + 1;      // we boxed too: a new set
+  assert.equal(eng.senseOf(c).rivalBoxed, null, "the new set answered the undercut");
+});
+
 test("the PIT CALL rides its own priority; every other line still yields", () => {
   // Every engineer line was "info" (js/game.js ANN_PRI rank 2), which put the
   // instruction to pit BELOW the pit lane's own "PIT ENTRY — LIMITER ON"

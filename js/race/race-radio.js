@@ -141,7 +141,7 @@ const RaceRadio = (function () {
       // Refused (a full card queue): an URGENT line stays queued and is offered
       // again until its ttl — "LAST LAP" is a once line, and dropping it here
       // lost it for the race. Anything else is dropped, as before.
-      if (!G.announce(text, durFor(text), kind)) { if (c.tier < 5) queue[c.ch].delete(c.id); return false; }
+      if (!G.announce(text, durFor(text), kind, c.still)) { if (c.tier < 5) queue[c.ch].delete(c.id); return false; }
       queue[c.ch].delete(c.id);
       m.said.set(c.cdKey, t);
       if (c.once) m.once.add(c.once);

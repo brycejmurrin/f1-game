@@ -254,7 +254,7 @@ const WGXChunked = (function () {
       if (!core.litPass || !mesh || !mesh.vbuf) return;
       const o = core.litOpts(opts);
       const slot = core.allocDrawSlot();
-      if (slot >= core.MAX_DRAWS) return;
+      if (slot < 0) return;   // allocDrawSlot: -1 once the pass's MAX_DRAWS is spent
       core.writeDraw(slot, model, o);
       core.setPipe(core.litPass, core.litPipeline(o));
       core.setBG0(core.litPass, core.activeFrameBG);
@@ -340,7 +340,7 @@ const WGXChunked = (function () {
               if (!Frustum.aabbInFrustum(core.fcPlanes, ch.min, ch.max) || (cd > 0 && dist2 > cd2)) continue;
             }
             const cslot = core.allocDrawSlot();
-            if (cslot >= core.MAX_DRAWS) break;
+            if (cslot < 0) break;
             core.writeDraw(cslot, model, o);
             const cbase = cslot * core.DRAW_F32_STRIDE;
             // lampRange lives at lanes 32-34 (lanes 28-29 are the lamp masks).

@@ -414,3 +414,17 @@ test("a record still pending when the page goes away is flushed on pagehide", ()
   h.fire("pagehide");
   assert.equal(ghostOnDisk(h), true, "the new ghost must not die with the tab");
 });
+
+test("Ghost.flush() writes a pending record at once (endRace / quitToMenu)", () => {
+  // A pending rAF caps every idle slot at one frame, so the game's own loop
+  // never yields the 25 ms slot: the race's end is where the write lands.
+  const h = createHarness({ idle: true });
+  h.Ghost.setTrack("monza");
+  recordLap(h.Ghost, 1.0);
+  h.runIdle(8);
+  assert.equal(ghostOnDisk(h), false);
+  h.Ghost.flush();
+  assert.equal(ghostOnDisk(h), true);
+  h.Ghost.flush();                               // idempotent: nothing left pending
+  assert.equal(ghostOnDisk(h), true);
+});

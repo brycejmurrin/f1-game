@@ -485,6 +485,10 @@ const GameAudio = (function () {
 
     ctx = new AC();
     ctxGen++;   // buffers decoded on the old context are stale (js/audio/voice-pack.js)
+    // iOS drops a VISIBLE page to "interrupted" for an alarm or Siri; a gamepad
+    // player never makes the gesture the listeners below wait for. Our own
+    // suspend() only runs while hidden, so a visible stop is never ours.
+    ctx.onstatechange = () => { if (ctx && ctx.state !== "running" && ctx.state !== "closed" && !document.hidden) resumeIfNeeded(); };
     master = ctx.createGain();
     master.gain.value = isEnabled ? 0.8 : 0;
     // MASTER LIMITER. Engine + wind + skid + rain + thunder + music summed

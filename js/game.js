@@ -1417,7 +1417,7 @@ function fmtTime(t) {
 // still waiting on the next tick rather than silently spent". That promise was
 // unkeepable while this told it nothing. Both early returns below are silent
 // drops, and the camera one is permanent — see the note on it.
-function announce(msg, dur, kind) {
+function announce(msg, dur, kind, still) {   // still(): false once a queued line is no longer true
   kind = kind || "race";
   const pri = ANN_PRI[kind] || 2;
   if (hudProfile !== "broadcast") {
@@ -1452,7 +1452,7 @@ function announce(msg, dur, kind) {
     if (_annQueue.length >= (pri > low ? ANN_QUEUE_MAX + 3 : ANN_QUEUE_MAX)) return false;
     let at = _annQueue.length;
     while (at > 0 && _annQueue[at - 1].pri < pri) at--;
-    _annQueue.splice(at, 0, { msg, dur, kind, pri });
+    _annQueue.splice(at, 0, { msg, dur, kind, pri, still });
     return true;
   }
   showAnnounce(msg, dur, kind);
@@ -3047,6 +3047,7 @@ function netOrder(order) {
 
 function endRace(forcedOrder) {
   PerfGov.cleanRace();   // finished cleanly — disarm + pay a crash strike down
+  Ghost.flush();   // a PB ghost waits for an idle slot the running loop never yields
   // raceCtl.update's own not-in-race reset is unreachable (update() only calls
   // it in state "race"), so without this a flying flag survives into results
   // for anything reading raceCtl.info()/level between races.
@@ -3504,6 +3505,7 @@ const G = {
   refreshHud: (...a) => updateHud(...a),   // const initialised below — defer
   // The waiting room reuses the real menus rather than reimplementing them.
   setNetRoom: (...a) => raceSettings.setNetRoom(...a),
+  resetRaceDraft: () => raceSettings.resetDraft(),
   openRaceSetup: (...a) => raceSettings.openRaceSetup(...a),
   get netRoom() { return raceSettings.netRoom; },
   // Seats held by the OTHER players, so the garage can refuse to hand out one
@@ -3975,7 +3977,7 @@ function quitToMenu() {
   qualiSheet.close();
   _ltBase = null; _ltFlash = 0;   // the lightning's saved race base is not the menu's
   if (announcer.stop) announcer.stop();   // the results commentary ran on over the title for up to 16 s
-  shake = 0; hitStop = 0;
+  shake = 0; hitStop = 0; Ghost.flush();
   PerfGov.sentinelArm(false); if (netPlay.active()) netPlay.stop("local"); hideCamPicker();
   closeLightTuner(false);
   closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();
@@ -8283,7 +8285,7 @@ function tickBody(now) {
       _annPri = 0; _annFloor = 0;
       // showAnnounce re-arms both, so the card taken off the queue gets the
       // same floor the one before it did.
-      if (_annQueue.length) { const q = _annQueue.shift(); showAnnounce(q.msg, q.dur, q.kind); }
+      while (_annQueue.length) { const q = _annQueue.shift(); if (q.still && !q.still()) continue; showAnnounce(q.msg, q.dur, q.kind); break; }
     }
   }
   // hit-stop: slow the simulation to a crawl for a few frames after a hard

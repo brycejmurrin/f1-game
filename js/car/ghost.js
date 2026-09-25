@@ -265,7 +265,9 @@ const Ghost = (function () {
       // A LONG idle slot only: the write (trim + 2-3 stringifies of a store of up
       // to 512 KB + setItem) is one 5-30 ms job on a phone. With a 2 s timeout it
       // ran mid-race — a frame's idle tail is < 16 ms, so it overran into the next
-      // frame. A 25 ms slot comes with pause, menus or results; pagehide flushes.
+      // frame. A pending rAF caps every idle slot at one frame, so the game's own
+      // loop never yields 25 ms: endRace/quitToMenu call flush(), and pagehide or
+      // a hidden tab flushes, which is where the write actually lands.
       const idle = (dl) => {
         if (pending.get(id) !== snap) return;
         if (dl && typeof dl.timeRemaining === "function" && dl.timeRemaining() < 25) { requestIdleCallback(idle); return; }
@@ -285,10 +287,14 @@ const Ghost = (function () {
     _flushes.add(fn);
     if (_flushArmed || typeof addEventListener !== "function") return;
     _flushArmed = true;
-    addEventListener("pagehide", () => {
-      const fns = Array.from(_flushes); _flushes.clear();
-      for (const f of fns) { try { f(); } catch (_) { /* best effort on the way out */ } }
-    });
+    addEventListener("pagehide", flush);
+    // A phone kills a backgrounded tab without pagehide; hidden is the last safe point.
+    if (typeof document !== "undefined") document.addEventListener("visibilitychange", () => { if (document.hidden) flush(); });
+  }
+  // Write every pending record now (end of race, quit, leaving the page).
+  function flush() {
+    const fns = Array.from(_flushes); _flushes.clear();
+    for (const f of fns) { try { f(); } catch (_) { /* best effort on the way out */ } }
   }
 
   // `meta` (optional, a plain object — medal, pole, pace, weather) is stored
@@ -378,7 +384,7 @@ const Ghost = (function () {
   return {
     setTrack, startLap, record, finishLap, at, timeAt, contextKey,
     context: () => context, track: () => trackId,
-    hasGhost, bestTime, snapshot, meta, medal, clear, speedAt,
+    hasGhost, bestTime, snapshot, meta, medal, clear, speedAt, flush,
   };
 })();
 

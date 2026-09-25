@@ -71,6 +71,7 @@ const RaceEngineer = (function () {
       if (!b) b = c._eng = { t: 0, said: {}, step: -1, set: c.tyreStints || 0 };
       if (b.set !== (c.tyreStints || 0)) {
         b.set = c.tyreStints || 0; b.step = -1; b.said = {};
+        b.undercut = null;   // our own stop answered it: no "box now" on the out-lap
       }
       return b;
     }
