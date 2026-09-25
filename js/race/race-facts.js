@@ -126,6 +126,9 @@ const RaceFacts = (function () {
       t = G.raceT || 0;
       const seg = lapLen / K;
 
+      let running = false;
+      for (const c of cars) if (!c.finished && !c.retired) { running = true; break; }
+
       // ── per car: timing loop and edges ──────────────────────────────────
       for (const c of cars) {
         const s = bag(c);
@@ -170,7 +173,9 @@ const RaceFacts = (function () {
         // A car flagged with a time penalty has no place until the penalty has
         // run out: a rival crossing inside it still beats it, and "YOU WIN THE
         // RACE" 3 s before the results say P2 is the one call that must not be wrong.
-        if (s.finDue != null && t >= s.finDue - 1e-9) { s.finDue = null; finishers.push(c); }
+        // Nobody left running: the order is final and endRace will not wait out
+        // the penalty (RaceControl.finishDelay), so the call goes now or never.
+        if (s.finDue != null && (t >= s.finDue - 1e-9 || !running)) { s.finDue = null; finishers.push(c); }
       }
 
       order = rank(cars);

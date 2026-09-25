@@ -3047,6 +3047,7 @@ function netOrder(order) {
 
 function endRace(forcedOrder) {
   PerfGov.cleanRace();   // finished cleanly — disarm + pay a crash strike down
+  Ghost.flush();         // a new PB ghost is written now, not only on pagehide
   // raceCtl.update's own not-in-race reset is unreachable (update() only calls
   // it in state "race"), so without this a flying flag survives into results
   // for anything reading raceCtl.info()/level between races.
@@ -3700,12 +3701,17 @@ function menuGridCars() {
 function flybyGridOrder() {
   if (!player) return null;
   if (isQuali() || isTimeTrial()) return [player];
-  if (duelOn()) { const r = Duel.pick(cars); cars = r ? [player, r] : [player]; }   // startRace's trim; the pair is then gridded like any field
+  if (duelOn()) {   // startRace's trim (and its legend swap); the pair is then gridded like any field
+    const r = Duel.pick(cars);
+    const lg = r && duelLegend && typeof Legends !== "undefined" ? Legends.byId(duelLegend) : null;
+    if (lg) Duel.asLegend(r, { id: lg.id, name: lg.name, code: lg.code, ratings: Legends.ratings(lg.id), team: Legends.raceTeam(lg.id) }, DriverRatings);
+    cars = r ? [player, r] : [player];
+  }
   const base = gridFromQuali() ? quali.order(cars) : SeasonCal.grid(cars, season);
   if (gridRule() === "random" && !base) return null;
   const pre = gridOrderFor(base);
   if (pre && pre.length === cars.length) return pre.slice();
-  const o = cars.filter((c) => c !== player);
+  const o = cars.filter((c) => c !== player).sort((a, b) => a.tier - b.tier);   // gridUp's tier order (its jitter is the race's draw)
   o.splice(Math.min(11, o.length), 0, player);
   return o;
 }
@@ -3974,6 +3980,7 @@ function quitToMenu() {
   sessionEntry.cancel();
   qualiSheet.close();
   _ltBase = null; _ltFlash = 0;   // the lightning's saved race base is not the menu's
+  Ghost.flush();   // a time-trial PB ghost pending an idle slot is written on the way out
   if (announcer.stop) announcer.stop();   // the results commentary ran on over the title for up to 16 s
   shake = 0; hitStop = 0;
   PerfGov.sentinelArm(false); if (netPlay.active()) netPlay.stop("local"); hideCamPicker();

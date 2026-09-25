@@ -414,3 +414,20 @@ test("a record still pending when the page goes away is flushed on pagehide", ()
   h.fire("pagehide");
   assert.equal(ghostOnDisk(h), true, "the new ghost must not die with the tab");
 });
+
+test("a pending record is written when the race ends (Ghost.flush), not only on pagehide", () => {
+  // A visible tab keeps a frame pending even in menus, so every idle deadline
+  // is capped at one frame and the 25 ms slot never comes: the record lived
+  // only in memory until pagehide — lost if a phone killed the hidden tab.
+  const h = createHarness({ idle: true });
+  h.Ghost.setTrack("monza");
+  recordLap(h.Ghost, 1.0);
+  h.runIdle(8);
+  assert.equal(ghostOnDisk(h), false);
+  h.Ghost.flush();
+  assert.equal(ghostOnDisk(h), true, "endRace/quitToMenu write the new ghost");
+  const game = readFileSync(join(ROOT, "js", "game.js"), "utf8");
+  assert.ok((game.match(/Ghost\.flush\(\)/g) || []).length >= 2, "endRace and quitToMenu both flush");
+  const src = readFileSync(join(ROOT, "js", "car", "ghost.js"), "utf8");
+  assert.match(src, /visibilitychange[\s\S]{0,120}visibilityState === "hidden"/, "a hidden tab flushes too");
+});

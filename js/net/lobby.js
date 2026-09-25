@@ -1048,10 +1048,15 @@ const NetLobby = (function () {
         // and the rival's slot ran as AI while our own pose parked on the
         // old grid.
         const outcome = await G.startRace();
-        if (outcome && outcome.kind === "canceled") { close(); return; }
-        if (!sessions.size) { clearInterval(pumpTimer); pumpTimer = null; close(); return; }
+        // Every failed exit tears the lobby down (cancel(), not close()):
+        // close() left friendQualifying true and the RTC sessions open, and
+        // Quali.persistOrder skips saving while qualifying() is true — so no
+        // season/career grid was saved for the rest of the page session.
+        if (outcome && outcome.kind === "canceled") { cancel(); return; }
+        if (!sessions.size) { clearInterval(pumpTimer); pumpTimer = null; cancel(); return; }
       } catch (e) {
         say("Could not start the race: " + (e && e.message), true);
+        friendQualifying = false;   // keep the room and its message up, but stop gating quali saves
         return;
       }
       const started = G.netPlay.start({
