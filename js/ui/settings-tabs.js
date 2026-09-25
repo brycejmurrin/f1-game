@@ -72,6 +72,18 @@ const SettingsNav = (function () {
     function show(want, focus, after) {
       const id = TITLES[want] ? want : "home";
       const index = document.getElementById("pm-settings-index");
+      if (id === "home") {
+        for (const [doorId, selectId, prefix] of [
+          ["pm-open-controls", "pm-steer-sel", "Steering"],
+          ["pm-open-driving", "pm-coach-sel", "Coach"],
+          ["pm-open-display", "pm-hudprofile-sel", "HUD"],
+        ]) {
+          const door = document.getElementById(doorId), sel = document.getElementById(selectId);
+          const small = door && door.querySelector("small");
+          const current = sel && sel.selectedOptions && sel.selectedOptions[0];
+          if (small && current) small.textContent = prefix + ": " + current.textContent.trim();
+        }
+      }
       // Capture the door before it is hidden. This also makes a programmatic
       // SettingsNav.show("audio") behave like a click when called from home.
       if (id !== "home" && current === "home" && index && !originDoor) {

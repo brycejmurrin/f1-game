@@ -102,7 +102,10 @@ function ctxFor({ laps = 25, total = 5386, severity = null } = {}) {
 function run(session, car, laps, { speed = 60, total = 5386 } = {}) {
   const dt = 1;
   const ticks = Math.round((laps * total) / speed);
-  const lap0 = car.lap || 0;
+  // `c.lap` counts LINE CROSSINGS, as in the game: 1 on the first lap (the
+  // start crossing), lapsTarget + 1 at the flag. A car on the grid (0) is on
+  // lap 1 as soon as it moves.
+  const lap0 = Math.max(1, car.lap || 0);
   for (let i = 0; i < ticks; i++) {
     car.lap = lap0 + Math.floor((i * speed * dt) / total);
     session.update(car, dt);
@@ -244,11 +247,17 @@ test("fuel runs from a full tank at the start to empty at the flag", () => {
   const s = ctxFor({ laps: 20 }); s.setLevel("real");
   const c = freshCar(s, 0.6);
   assert.equal(T.fuelFrac(c, 20), 1, "a car on the grid carries a full load");
+  // `c.lap` counts crossings: 1 through the first lap, 21 at a 20-lap flag.
+  // Reading it as laps DONE burned a lap at the start and ran lap 20 empty.
+  c.lap = 1;
+  assert.equal(T.fuelFrac(c, 20), 1, "the first lap starts on a full load, not 1/n down");
   c.lap = 20;
+  assert.ok(Math.abs(T.fuelFrac(c, 20) - 1 / 20) < 1e-12, "the last lap starts with one lap of fuel, not an empty tank");
+  c.lap = 21;
   assert.equal(T.fuelFrac(c, 20), 0, "a car taking the flag carries none");
   c.lap = 0;
   const full = s.fuelAccelMul(c);
-  c.lap = 20;
+  c.lap = 21;
   assert.ok(s.fuelAccelMul(c) > full, "burning fuel must make the car quicker, not slower");
 });
 
@@ -455,9 +464,10 @@ test("every set fitted opens a stint, and the previous one closes at that lap", 
   const c = freshCar(s, 0.5);
   c.lap = 0;
   const set = (code, life) => s.fit(c, { id: code, code, life, off: 0, tread: 0, colour: [1, 1, 1] });
-  c.lap = 8; set("M", 0.88);
-  c.lap = 15; set("H", 1.05);
-  c.lap = 20;
+  // Crossing counts: a stop on lap 9 comes after 8 laps, the flag is 21.
+  c.lap = 9; set("M", 0.88);
+  c.lap = 16; set("H", 1.05);
+  c.lap = 21;
   s.closeStints(c);
   const st = s.stints(c);
   assert.deepEqual([...st.map((e) => e.code)], ["M", "M", "H"], "the GRID set is a stint too");
@@ -468,7 +478,7 @@ test("every set fitted opens a stint, and the previous one closes at that lap", 
 test("the set the car is ON runs to the current lap, with no end recorded yet", () => {
   const s = ctxFor({ laps: 20 }); s.setLevel("real");
   const c = freshCar(s, 0.5);   // freshCar already fits the grid set, at lap 0
-  c.lap = 6;
+  c.lap = 7;   // on lap 7: six done
   assert.equal(s.stints(c)[0].laps, 6, "an open stint must still be drawable mid-race");
   assert.equal(c.tyreLog[0].lap1, null, "an open stint must not claim an end lap");
 });
@@ -477,7 +487,7 @@ test("closeStints ends the last stint where the CAR stopped, not where the leade
   // A retired car stopped laps ago. Its strip has to show the race it ran.
   const s = ctxFor({ laps: 50 }); s.setLevel("real");
   const c = freshCar(s, 0.5);
-  c.lap = 3; c.retired = true;
+  c.lap = 4; c.retired = true;   // stopped on lap 4, three done
   s.closeStints(c);
   assert.equal(s.stints(c)[0].lap1, 3);
   assert.equal(s.stints(c)[0].laps, 3);
@@ -486,7 +496,7 @@ test("closeStints ends the last stint where the CAR stopped, not where the leade
 test("closeStints is idempotent, and a car that never ran has an empty strip", () => {
   const s = ctxFor({ laps: 10 }); s.setLevel("real");
   const c = freshCar(s, 0.5);
-  c.lap = 4; s.closeStints(c); s.closeStints(c); c.lap = 9; s.closeStints(c);
+  c.lap = 5; s.closeStints(c); s.closeStints(c); c.lap = 9; s.closeStints(c);
   assert.equal(s.stints(c)[0].lap1, 4, "a second close moved an already-closed stint");
   assert.deepEqual([...s.stints({})], [], "a car with no log must not throw");
 });

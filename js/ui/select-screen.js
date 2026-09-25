@@ -439,10 +439,17 @@ function buildSelect() {
   const room = !!G.netRoom;
   const seasonComplete = !room && G.seasonMode && G.season && !SeasonCal.canRace(G.season);
   // NEXT opens race settings. YOUR CAR is the garage door beside it.
-  els.selGo.textContent = seasonComplete ? "VIEW FINAL STANDINGS" : "NEXT";
+  els.selGo.textContent = seasonComplete ? "VIEW FINAL STANDINGS" : "RACE SETUP";
   els.selGo.dataset.seasonComplete = seasonComplete ? "1" : "";
   const selCar = $("sel-car");
-  if (selCar) selCar.hidden = seasonComplete || room;
+  if (selCar) {
+    selCar.hidden = seasonComplete || room;
+    const current = $("sel-car-current"), team = Teams.LIST[G.teamIdx];
+    if (current) current.textContent = team ? team.name.toUpperCase() : "CURRENT CAR";
+    selCar.setAttribute("aria-label", "Change car" + (team ? ": " + team.name : ""));
+  }
+  const count = $("sel-track-count");
+  if (count) count.textContent = G.seasonMode ? "SWIPE ROUNDS →" : Tracks.LIST.length + " CIRCUITS · MORE →";
   els.selTitle.textContent = room ? "THE RACE"
     : seasonComplete ? "SEASON COMPLETE"
     : G.seasonMode ? "SEASON — ROUND " + ((G.season && G.season.round || 0) + 1)

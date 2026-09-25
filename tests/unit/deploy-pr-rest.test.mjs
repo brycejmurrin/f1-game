@@ -16,6 +16,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { openPrRest, DEPLOY_BRANCH } from "../../tools/ci/deploy.mjs";
 
 function fakeCurl(dir, replies) {
@@ -78,8 +79,19 @@ test("no open PR: create one, ARM auto-merge over the CCR route, and keep the to
     assert.equal(body.head, "claude/unit-branch");
     assert.equal(body.base, DEPLOY_BRANCH);
     assert.ok(body.title.length > 0, "a title is always sent");
-    assert.ok(!/^Merge /.test(body.title),
-      "the title must come from the branch's last NON-MERGE commit: a deploy merges the base tip before it opens the PR, so HEAD is a merge commit (PR #182 shipped titled 'Merge remote-tracking branch …')");
+    // The title is the branch's last NON-MERGE commit: a deploy merges the base
+    // tip before it opens the PR, so HEAD is a merge commit (PR #182 shipped
+    // titled 'Merge remote-tracking branch …'). Compared against git itself,
+    // not a /^Merge / pattern: that read the REAL repo's HEAD, so any branch
+    // whose last ordinary commit was titled "Merge deploy tip; …" failed here
+    // (PR #303, 2026-09-24) while a real merge commit could not reach it.
+    const git = (a) => execFileSync("git", a, { encoding: "utf8" }).trim();
+    const nonMerge = [`origin/${DEPLOY_BRANCH}..HEAD`, `${DEPLOY_BRANCH}..HEAD`, "HEAD"]
+      .map((r) => { try { return git(["log", "-1", "--no-merges", "--format=%s", r]); } catch { return ""; } })
+      .find(Boolean);
+    assert.equal(body.title, nonMerge, "the title must be the last NON-MERGE commit's subject");
+    const headIsMerge = git(["rev-list", "--parents", "-n", "1", "HEAD"]).split(" ").length > 2;
+    if (headIsMerge) assert.notEqual(body.title, git(["log", "-1", "--format=%s", "HEAD"]), "never the merge commit's own subject");
     assert.match(c[2].argv.at(-1), /\/pulls\/999\/ccr\/auto_merge$/, "auto-merge goes through the session's CCR route");
     assert.ok(c[2].argv.includes("PUT"));
     assert.match(c[3].argv.at(-1), /\/pulls\/999$/, "the PR is read back to confirm");

@@ -68,7 +68,7 @@ test.describe("Time Trial — daily picker flow", () => {
       expect(await page.evaluate(() => window.__apex.info().state)).toBe("menu");
       await expect(page.locator("#rs-weather-sel")).toBeDisabled();
       await expect(page.locator("#rs-time-sel")).toBeDisabled();
-      await expect(page.locator("#rs-go")).toHaveText("RACE!");
+      await expect(page.locator("#rs-go")).toHaveText("START RACE");
     });
   }
 });
