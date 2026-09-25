@@ -7,11 +7,14 @@
  * times in the browser (the aero part is read by makeCars()); here it boots
  * three extra VMs with the same localStorage seed via createGame({ storage })
  * and closes each — the one test in the set with more than one boot.
- * The opening-lap overtake test steps 220 s of sim (~16 s here).
+ * The opening-lap overtake test does not step the browser spec's 220 s: the
+ * rule is a pure function of the leader's lap, so it samples the first 10 s,
+ * places the leader short of the line and samples the crossing (see the test).
  * Not portable: none — every assertion reads an `__apex` JSON hook.
  *
  * The browser spec stays the truth until CI has run this twin.
- * Run: node --test tests/unit/aero-zones-vm.test.mjs   (~35 s)
+ * Run: node --test tests/unit/aero-zones-vm.test.mjs   (~45 s on a loaded box;
+ * the opening-lap test was 80 s of it before 2026-09-25)
  */
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
@@ -133,6 +136,18 @@ test("outside a zone, zoneAhead counts down a real distance", async () => {
 // ── overtake mode — the rules active aero does NOT share ────────────────────
 
 test("overtake stays disabled for the whole opening lap, then arms when the LEADER starts lap 2", async () => {
+  // otEnabled() is `caution.level === 0 && leader.lap > 1` (js/race/race-control.js):
+  // a pure function of the leader's lap count, so the 220 s the browser spec
+  // drives to get the leader round (~16 s of VM here) buys nothing a line
+  // crossing does not. The SAME invariant — on === (leaderLap > 1) on every
+  // sample — is held over three stretches instead:
+  //   1. the first 10 s from the lights, 1 s a sample (the opening lap);
+  //   2. the leader placed 3 % of a lap short of the line, still on lap 1
+  //      (aiPlace keeps its lap), sampled every 0.1 s as it drives across —
+  //      the lap counter moves through race-control's real lineTransition();
+  //   3. 5 s more of racing on lap 2, 1 s a sample.
+  // The edge is asserted outright: the gate is shut on every sample before the
+  // leader's lap reads 2 and open on every one after — no flicker, no lag.
   await loadTrack("monza");
   const A = g.apex;
   A.headless(true);
@@ -140,14 +155,27 @@ test("overtake stays disabled for the whole opening lap, then arms when the LEAD
   A.jump(0, 60, 0);
   A.setInput({ throttle: true });
   const trail = [];
-  for (let i = 0; i < 220; i++) {
-    A.step(1 / 60, 60);        // 1 s of sim per iteration
-    trail.push({ leaderLap: Math.max(...A.cars().map((c) => c.lap)), on: A.carAt().otEnabled });
-  }
+  const sample = (phase) => trail.push({ phase, leaderLap: Math.max(...A.cars().map((c) => c.lap)),
+    on: A.carAt().otEnabled, level: A.caution().level });
+  for (let i = 0; i < 10; i++) { A.step(1 / 60, 60); sample("open"); }   // 1 s of sim per sample
+  // The AI leader (the player is under full throttle with no steering).
+  const lead = A.cars().filter((c) => !c.p).sort((a, b) => b.prog - a.prog)[0];
+  assert.equal(lead.lap, 1, "the leader is on the opening lap when it is placed");
+  assert.ok(A.aiPlace(lead.id, 0.97, 60, 0), "leader placed short of the line");
+  for (let i = 0; i < 80; i++) { A.step(1 / 60, 6); sample("edge"); }    // 0.1 s a sample
+  for (let i = 0; i < 5; i++) { A.step(1 / 60, 60); sample("lap2"); }
   A.clearInput();
-  for (const s of trail) assert.equal(s.on, s.leaderLap > 1, `leaderLap ${s.leaderLap} on ${s.on}`);
-  assert.equal(trail.some((s) => !s.on), true, "the opening lap is covered");
+  for (const s of trail) assert.equal(s.level, 0, `no flag flew (${s.phase})`);
+  for (const s of trail) assert.equal(s.on, s.leaderLap > 1, `${s.phase}: leaderLap ${s.leaderLap} on ${s.on}`);
+  assert.equal(trail.filter((s) => s.phase === "open").every((s) => !s.on), true, "the opening lap is covered");
   assert.equal(trail.some((s) => s.on), true, "and the race gets past it");
+  // The edge: one transition, off -> on, exactly where the leader's lap reads 2.
+  const flips = trail.map((s, i) => (i && s.on !== trail[i - 1].on ? i : -1)).filter((i) => i > 0);
+  assert.equal(flips.length, 1, `the gate changes state exactly once (flips at samples ${flips})`);
+  const at = trail[flips[0]], prev = trail[flips[0] - 1];
+  assert.equal(at.phase, "edge", "and it changes inside the sampled crossing");
+  assert.deepEqual([prev.leaderLap, prev.on, at.leaderLap, at.on], [1, false, 2, true],
+    "shut on the last lap-1 sample, open on the first lap-2 sample");
 });
 
 test("active aero is NOT gated by the opening lap — it arms inside a zone on lap 1", async () => {

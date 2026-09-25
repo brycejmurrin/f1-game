@@ -197,13 +197,17 @@ const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "track", "coplanar-baseline.json"), "utf8"),
 );
 
-// The sweep rebuilds every circuit, so run it ONCE and share it.
+// The sweep rebuilds every circuit, so run it ONCE and share it — and run the
+// default AND the --overhead analysis on that one build per circuit (`--both`):
+// the two used to be separate `--all` runs, rebuilding the fleet twice. Each
+// half is exactly what its own `--json` / `--json --overhead` run prints.
 let cached = null;
-const sweep = () => (cached ||= JSON.parse(execFileSync(
+const bothSweeps = () => (cached ||= JSON.parse(execFileSync(
   process.execPath,
-  [path.join(ROOT, "tools", "track", "coplanar-audit.cjs"), "--all", "--json"],
+  [path.join(ROOT, "tools", "track", "coplanar-audit.cjs"), "--all", "--json", "--both"],
   { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
 )));
+const sweep = () => bothSweeps().default;
 
 test("same-facing coplanar faces stay within the per-circuit baseline", () => {
   const results = sweep();
@@ -252,12 +256,7 @@ test("baseline has no stale entries — a cap above the measured count is a lie"
 // same day when the terrain stopped trenching the verge of a descending road
 // (mesh.js channel carve): the lamps ground on that terrain. None left.
 const OVERHEAD_BASELINE = {};
-let overheadCached = null;
-const overheadSweep = () => (overheadCached ||= JSON.parse(execFileSync(
-  process.execPath,
-  [path.join(ROOT, "tools", "track", "coplanar-audit.cjs"), "--all", "--json", "--overhead"],
-  { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
-)));
+const overheadSweep = () => bothSweeps().overhead;
 
 test("overhead structures: no horizontal face shares its neighbour's plane", () => {
   const results = overheadSweep();

@@ -10,7 +10,7 @@
  * shipped sequence across real circuits and assert it stays outside them, plus
  * the framing invariants a shot list has to hold to read as one move.
  */
-import { test } from "node:test";
+import { test, after } from "node:test";
 import assert from "node:assert";
 import fs from "node:fs";
 import path from "node:path";
@@ -18,6 +18,7 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+import { fleetFindings, variedAudit } from "../helpers/flyby-audit-rules.mjs";
 const require = createRequire(import.meta.url);
 const { createGame } = require(path.join(ROOT, "tools/lib/game-vm.cjs"));
 
@@ -27,12 +28,58 @@ const { createGame } = require(path.join(ROOT, "tools/lib/game-vm.cjs"));
 const CIRCUITS = ["monza", "monaco", "bahrain"];
 const SAMPLES = 120;          // across the whole sequence — ~40 per shot
 
-async function withTrack(id, fn) {
-  const g = await createGame({ track: id });
-  try {
-    await g.race(id, "day", "dry");
-    return await fn(g.G.track, g);
-  } finally { g.close(); }
+// ONE BUILD PER CIRCUIT, shared by every test that only READS it. Each
+// withTrack() used to boot a fresh VM and race (~3.5 s), and monza alone was
+// built fourteen times. What a test here does to a build is read-only on the
+// track's geometry and props: FlybySeq only adds MEMO caches to the track
+// (`_fbCorners`, `_fbFilmable`, `_fbSolidGrid`, `_fbPlan`, `_fbBind`, …), each a
+// pure function of the build and its key, so a warm cache returns exactly what
+// a cold one computes. The module-scope state a test CAN change — the player's
+// grid slot and the cut tracker — is put back to its boot values before every
+// borrow (setPlayerSlot(11, 22) is the initial `_playerSlot` / `_slotKnown` /
+// `_gridSize`; apex.race() never sets it, only raceIntro's menuGridCars does).
+// A test that measures a COLD cache (warm()) or pumps the VM's timers asks for
+// `{ fresh: true }` and gets its own boot, as before.
+const VMS = new Map();                 // circuit id -> Promise<game handle>, raced once
+let roam = null;                       // one VM re-raced over the circuits nobody pins
+let roamId = null;
+// Every circuit more than one test reads (~100 MB of VM each); the rest roam.
+const PINNED = new Set(["monza", "monaco", "bahrain", "mont_tremblant", "jeddah", "buenos_aires"]);
+after(async () => {
+  for (const p of VMS.values()) (await p).close();
+  if (roam) (await roam).close();
+});
+
+function borrowed(g) {
+  const F = g.sandbox.FlybySeq;
+  F.setPlayerSlot(11, 22);
+  F.reset();
+  return g;
+}
+
+async function vmFor(id) {
+  // createGame({ track }) has already raced it — race(id, "day", "dry") is the
+  // harness default — so a pinned VM is one boot and one build.
+  if (PINNED.has(id)) {
+    if (!VMS.has(id)) VMS.set(id, createGame({ track: id }));
+    return borrowed(await VMS.get(id));
+  }
+  if (!roam) { roam = createGame({ track: id }); roamId = id; }
+  const g = await roam;
+  if (roamId !== id) { roamId = null; await g.race(id, "day", "dry"); roamId = id; }
+  return borrowed(g);
+}
+
+async function withTrack(id, fn, opts) {
+  if (opts && opts.fresh) {
+    const g = await createGame({ track: id });
+    try {
+      await g.race(id, "day", "dry");
+      return await fn(g.G.track, g);
+    } finally { g.close(); }
+  }
+  const g = await vmFor(id);
+  return await fn(g.G.track, g);
 }
 
 test("the shipped flyby never puts the eye inside a building", async () => {
@@ -316,45 +363,26 @@ test("the clearance lift is PLANNED: no pop inside a shot, and corners step in b
 
 // ---- the fleet audit (tools/lib/flyby-audit.cjs) ---------------------------
 //
-// One game VM, re-raced per circuit (~1 s each). The circuits are the ones the
-// 2026-09-24 fleet audit named: an open, a street and a night circuit, then
-// every one that failed a rule below before it was fixed — Sochi's crane and
-// kink, Las Vegas's and Madrid's landmark overshoot, Jeddah's and Magny-Cours's
-// bent grids, Red Bull Ring's valley tower, Mont-Tremblant's pine wood and
-// kink, Kyalami's single landmark, Buenos Aires's gantry.
-const FLEET = ["monza", "monaco", "bahrain", "sochi", "vegas", "madrid", "jeddah",
-  "redbull", "mont_tremblant", "magny_cours", "kyalami", "buenos_aires"];
+// The two FLEET-WIDE sweeps — twelve circuits at 400 samples, and seeds 0-5 of
+// vary() on three — live in tests/unit/flyby-fleet.test.mjs (test:node-slow):
+// they build a dozen circuits. Here, in the edit loop, both run on monza with
+// the SAME rule functions (tests/helpers/flyby-audit-rules.mjs), so an edit to
+// the sequencer meets every rule at once and the fleet file adds only circuits.
 const { auditTrack } = require(path.join(ROOT, "tools/lib/flyby-audit.cjs"));
 
+// Same builds as withTrack(): a pinned circuit's shared VM, the rest re-raced
+// on the one roaming VM (~1 s each) — what this helper always did.
 async function withFleet(ids, fn) {
-  const g = await createGame({ track: ids[0] });
-  try {
-    const out = [];
-    for (const id of ids) {
-      await g.race(id, "day", "dry");
-      out.push(...(await fn(id, g.G.track, g)));
-    }
-    return out;
-  } finally { g.close(); }
+  const out = [];
+  for (const id of ids) {
+    const g = await vmFor(id);
+    out.push(...(await fn(id, g.G.track, g)));
+  }
+  return out;
 }
 
-test("fleet: no pop, no crane, no eye underground, grid sightline on the road, no whip pan", async () => {
-  const bad = await withFleet(FLEET, (id, track, g) => {
-    const out = [];
-    for (const r of auditTrack(g.sandbox, track, { samples: 400 })) {
-      // 4 m between two of 400 samples (60 ms) is a visible pop.
-      if (r.jump > 4) out.push(`${id} ${r.id}: eye jumps ${r.jump.toFixed(1)} m in one step at u=${r.jumpU.toFixed(3)}`);
-      // A planned lift is a raised camera; 25 m is a crane over a roof.
-      if (r.lift >= 25) out.push(`${id} ${r.id}: lifted ${r.lift.toFixed(1)} m at u=${r.liftU.toFixed(3)}`);
-      if (r.under > 0) out.push(`${id} ${r.id}: eye ${r.under.toFixed(1)} m underground at u=${r.underU.toFixed(3)}`);
-      // The grid shots' sightline: within 2 m of the road edge (a verge, not the infield).
-      if (r.gridOff > 2) out.push(`${id} ${r.id}: sightline ${r.gridOff.toFixed(1)} m past the road edge at u=${r.gridU.toFixed(3)}`);
-      // 45 deg/s at FLY_MS 24 s: faster reads as the camera being yanked.
-      if (r.pan > 45) out.push(`${id} ${r.id}: pans ${r.pan.toFixed(0)} deg/s at u=${r.panU.toFixed(3)}`);
-      if (r.inside) out.push(`${id} ${r.id}: eye inside a solid prop on ${r.inside} samples`);
-    }
-    return out;
-  });
+test("fleet rules on monza: no pop, no crane, no eye underground, grid sightline on the road, no whip pan", async () => {
+  const bad = await withFleet(["monza"], (id, track, g) => fleetFindings(id, auditTrack(g.sandbox, track, { samples: 400 })));
   assert.deepEqual(bad, [], "flyby fleet audit:\n  " + bad.join("\n  "));
 });
 
@@ -503,19 +531,8 @@ test("vary: one seed, one sequence; every variant is a valid list that keeps the
   });
 });
 
-test("varied flybys hold the fleet audit too (seeds 0-5 on three circuits)", async () => {
-  const bad = await withFleet(["monza", "monaco", "mont_tremblant"], (id, track, g) => {
-    const F = g.sandbox.FlybySeq, out = [];
-    for (let seed = 0; seed < 6; seed++) {
-      for (const r of auditTrack(g.sandbox, track, { samples: 200, shots: F.vary(F.DEFAULT, seed) })) {
-        if (r.under > 0) out.push(`${id}#${seed} ${r.id}: underground`);
-        if (r.inside) out.push(`${id}#${seed} ${r.id}: inside a solid prop on ${r.inside} samples`);
-        if (r.lift >= 25) out.push(`${id}#${seed} ${r.id}: lifted ${r.lift.toFixed(1)} m`);
-        if (r.pan > 45) out.push(`${id}#${seed} ${r.id}: pans ${r.pan.toFixed(0)} deg/s`);
-      }
-    }
-    return out;
-  });
+test("varied flybys hold the fleet audit too (seeds 0-5 on monza)", async () => {
+  const bad = await withFleet(["monza"], (id, track, g) => variedAudit(auditTrack, g.sandbox, id, track));
   assert.deepEqual(bad, [], bad.join("\n"));
 });
 
@@ -691,7 +708,7 @@ test("warm() plans the opening shots at once and the rest in slices, never throu
     for (const s of list) { const t0 = process.hrtime.bigint(); F.solve(track, (acc + s.dur / 2) / total, list); worst = Math.max(worst, Number(process.hrtime.bigint() - t0) / 1e6); acc += s.dur; }
     assert.ok(worst < 20, `every shot was pre-planned (worst solve ${worst.toFixed(1)} ms)`);
     return null;
-  });
+  }, { fresh: true });   // a COLD plan cache, and its own timer queue to flush
 });
 
 test("a grid too small to fill a numbered slot leaves that shot out (time trial, duel)", async () => {
