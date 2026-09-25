@@ -45,6 +45,10 @@ function create(G) {
       const you = rows.find((r) => r.isPlayer);
       title.textContent = you ? `QUALIFYING — P${you.pos}` : "QUALIFYING";
     }
+    // LICENCE BADGES: a DRIVEN pole only — a simulated time for a player who
+    // never ran a lap is not one (js/career/badges.js).
+    const me = rows.find((r) => r.isPlayer);
+    if (me && me.pos === 1 && me.human && typeof Badges !== "undefined") Badges.onPole();
   }
 
   function open(rows) {

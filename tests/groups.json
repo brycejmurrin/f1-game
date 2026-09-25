@@ -342,6 +342,7 @@
     "tests/unit/career-legends.test.mjs",
     "tests/unit/career-seat-rollover.test.mjs",
     "tests/unit/season-cal.test.mjs",
+    "tests/unit/badges.test.mjs",
     "tests/unit/setup-screens-state.test.mjs",
     "tests/unit/incident-gate.test.mjs",
     "tests/unit/debris-step-skip.test.mjs",
@@ -686,6 +687,7 @@
       "files": [
         "tests/unit/season-cal.test.mjs",
         "tests/unit/daily-challenge.test.mjs",
+        "tests/unit/badges.test.mjs",
         "tests/unit/career-regulations.test.mjs",
         "tests/unit/career-settle.test.mjs",
         "tests/unit/career-legends.test.mjs",

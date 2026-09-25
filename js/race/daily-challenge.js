@@ -108,6 +108,7 @@ const DailyChallenge = (function () {
         for (const k of Object.keys(d.days)) if (k < cut) delete d.days[k];
       }
       store.set(KEY, d);
+      if (typeof Badges !== "undefined") Badges.onStreak(d.streak.count);   // js/career/badges.js
       return e;
     }
 

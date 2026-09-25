@@ -57,6 +57,23 @@ function rankRow(container, i, color, name, ptsText, extraClass) {
 
 function create(G) {
 Log.info("ui", "GameResults.create");
+// LICENCE BADGES toast through the one banner (js/career/badges.js owns the rules).
+if (typeof Badges !== "undefined") Badges.setNotifier((labels) =>
+  G.announce && G.announce((labels.length > 1 ? "BADGES UNLOCKED — " : "BADGE UNLOCKED — ") + labels.join(" · "), 3, "race"));
+
+// The player's classified result as Badges.forRace reads it. Never in a
+// practice (unscored) session; a retirement earns nothing there anyway.
+function awardBadges(order) {
+  const p = G.player;
+  if (typeof Badges === "undefined" || !p || G.practice || G.timeTrial) return;
+  let best = Infinity;
+  for (const c of order) if (c.finished && !c.retired && c.best < best) best = c.best;
+  Badges.onRace({
+    pos: order.indexOf(p) + 1, retired: !!p.retired, finished: !!p.finished,
+    cuts: p.cuts | 0, penalty: p.penalty || 0, trackId: G.track && G.track.def && G.track.def.id,
+    fastest: isFinite(best) && p.best === best,
+  });
+}
 
 // The car's race as a proportional bar: one segment per set, width = its share
 // of the laps that car ran. Returns NULL when TYRE WEAR is off or the car never
@@ -105,6 +122,7 @@ function buildResults(order) {
   els.resultsTitle.textContent = sprint ? `SPRINT — ${track.def.name}`
     : G.seasonMode ? `ROUND ${season.round} — ${track.def.name}`
     : `${track.def.name} RESULT`;
+  if (!sprint) awardBadges(order);   // a sprint is not a Grand Prix result
   // On a GUEST the order is the host's (game.js netOrder) but `retired`/`dnf`
   // were still this peer's own: each peer arms reliability off its OWN seed
   // and race counter (game.js armReliability), so the guest parked different

@@ -598,7 +598,7 @@
     <div id="pm-settings-body" class="sheet-body pane">
       <nav id="pm-settings-index" class="pm-doors" aria-label="Settings">
         <button id="pm-open-controls" type="button">CONTROLS&hellip;<small>Input, pedals &amp; bindings</small></button>
-        <button id="pm-open-driving" type="button">DRIVING&hellip;<small>Coach, practice &amp; strategy</small></button>
+        <button id="pm-open-driving" type="button">DRIVING&hellip;<small>Coach, practice, strategy &amp; badges</small></button>
         <button id="pm-open-display" type="button">DISPLAY&hellip;<small>UI, HUD &amp; graphics</small></button>
         <button id="pm-open-appearance" type="button">APPEARANCE&hellip;<small>Theme, menu &amp; HUD colours</small></button>
         <button id="pm-advanced">STEERING &amp; ASSISTS&hellip;<small>Presets, response &amp; aids</small></button>
@@ -765,6 +765,12 @@
               <p class="adv-help">AI passing decisions: each rival’s latest choice. An earlier commitment may still be active.</p>
               <ol id="pm-ai-decisions"></ol>
             </details>
+          </details>
+          <!-- LICENCE BADGES: local achievements (js/career/badges.js fills both on open). -->
+          <details id="pm-badges-panel">
+            <summary class="adv-more-btn">LICENCE BADGES</summary>
+            <p id="pm-badges-summary" class="adv-help">No badges yet.</p>
+            <ol id="pm-badges-list"></ol>
           </details>
         </section>
         <section id="pm-panel-display" class="pm-group" role="region"
@@ -3108,6 +3114,7 @@
 <script defer crossorigin="anonymous" src="js/career/regulations.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/career.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/season-cal.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/career/badges.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/reliability.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/tyre-model.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/ai-drive.js?v=dev"></script>

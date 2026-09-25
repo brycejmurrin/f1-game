@@ -194,6 +194,7 @@ const FULL = [
   "js/career/regulations.js",
   "js/career/career.js",
   "js/career/season-cal.js",
+  "js/career/badges.js",       // after season-cal: reads SeasonCal.REAL_2026 (call time)
   "js/race/reliability.js",
   "js/physics/tyre-model.js",
   "js/physics/ai-drive.js",
@@ -403,6 +404,7 @@ const HARD_EDGES = [
   ["js/ui/dom.js", "js/career/season-ui.js"],    // season-ui binds Dom.el at eval
   ["js/core/store.js", "js/ui/debris-opts.js"],   // binds GameStore.store at eval
   ["js/core/store.js", "js/ui/title-fx.js"],      // binds GameStore.store and applies data-motion at eval
+  ["js/core/store.js", "js/career/badges.js"],    // binds GameStore.store at eval
   // M4 is also the home of the shared scalar helpers (clamp/lerp/wrapDelta) and
   // every consumer ALIASES them at eval (`const clamp = M4.clamp;`). mat4.js is
   // the 2nd tag so the order is never in doubt, but these are real eval-time
