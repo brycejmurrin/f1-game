@@ -454,7 +454,7 @@ const RaceInsights = (function () {
       if (current.tyre !== previous.tyre || current.stint !== previous.stint || current.wear < previous.wear) {
         tyreStart = current; laps = []; event("tyres", "New stint: " + (current.tyre || "unknown compound"));
       }
-      if (current.contact || current.off || current.invalid || current.pit !== "track") { sector.valid = false; lapClean = false; }
+      if (current.contact || current.off || current.invalid || current.pit !== "track" || (G.cautionLevel ? G.cautionLevel() : 0) > 0) { sector.valid = false; lapClean = false; }
       if (current.sector !== previous.sector) {
         if (current.sector === (previous.sector + 1) % 3 && sector.valid && ds > 0 && now - sector.time > 1 && Number.isFinite(current.energy) && Number.isFinite(sector.energy))
           boundedPush(energy[previous.sector], { seconds: now - sector.time, used: sector.energy - current.energy }, 6);

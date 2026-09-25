@@ -299,7 +299,12 @@ const SceneryCity = (function () {
       // never reach (their outer face is 0.13 m proud) while leaving wide
       // buildings, where 1 % is already larger, looking exactly as before.
       const plOut = Math.max(0.22, w * 0.01), pdOut = Math.max(0.22, d * 0.01);
-      addBox(out, vadd(p.c, p.u, plH / 2), [w + 2 * plOut, plH, d + 2 * pdOut], plinth, b);
+      // The plinth's bottom sits PL_SINK under the base: at y = 0 it shared the
+      // wall mass's underside plane (down-facing, 0 mm — the bulk of the
+      // flat-coplanar spots on fuji/interlagos/cota/shanghai/mosport). Its top
+      // (the visible ledge) stays at plH.
+      const PL_SINK = 0.05;
+      addBox(out, vadd(p.c, p.u, (plH - PL_SINK) / 2), [w + 2 * plOut, plH + PL_SINK, d + 2 * pdOut], plinth, b);
       // Ground-floor entrance on the trackside face — a recessed door + short
       // canopy so a blank plinth reads as a building people enter, not a crate.
       // Skipped at night (neon facade owns the read) and for very narrow units.
@@ -374,9 +379,11 @@ const SceneryCity = (function () {
           if (!nightLit && h >= 10 && h < 40 && rt > 0.55) {
             const hx = (hash(k * 7.1 + side) - 0.5) * topW * 0.35;
             const hz = (hash(k * 9.3 + side) - 0.5) * topD * 0.35;
+            // Bottom 5 cm under the plant housing's (both stood on topY:
+            // a shared underside plane); the top stays at topY + 1.4.
             addBox(out,
-              vadd(vadd(vadd(p.c, p.u, topY + 0.7), p.r, hx), p.t, hz),
-              [topW * 0.18, 1.4, topD * 0.22], [0.38, 0.38, 0.40], b);
+              vadd(vadd(vadd(p.c, p.u, topY + 0.675), p.r, hx), p.t, hz),
+              [topW * 0.18, 1.45, topD * 0.22], [0.38, 0.38, 0.40], b);
           }
         }
         // else: clean chamfered cap, no finial

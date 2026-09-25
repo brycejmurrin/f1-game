@@ -27,7 +27,7 @@ Frozen surfaces (rename = a broken guard or a broken player save):
 | The one global each file assigns (`const Foo = (function () { … })();`) | `global-registry.test.mjs` |
 | `G` façade member names and `Module.create(G)` shape | `check-gctx.mjs`, `types/game-ctx.d.ts` |
 | `window.__apex` hook names | `hooks-documented.test.mjs`, `docs/DEBUG-HOOKS.md` |
-| The 112-member `scenery(api)` contract | `scenery-api-contract.test.mjs` |
+| The 114-member `scenery(api)` contract | `scenery-api-contract.test.mjs` |
 | Cross-file method names (`Tracks.curvature`, `M4.clamp`, …) | `scan-globals.mjs` + the caller |
 | `apex26.*` localStorage keys, DOM ids and CSS classes | player saves; `shell-ids.mjs`, `css-*` tests |
 | Shader uniform/attribute names, GLSL/WGSL/TSL source | `backend-surface-parity`, render specs |

@@ -482,15 +482,24 @@
       // 30 m slabs for the first four steps out of T6, 44 m thereafter, and
       // alternating 0.17/0.20 thickness so abutting tops never co-plane.
       const APR0 = 0.564, APR1 = 0.850;
+      const APR_STEP = (APR1 - APR0) / 29 * api.ds * api.n;   // metres between slabs
       for (let i = 0; i < 30; i++) {
         const s = APR0 + (i / 29) * (APR1 - APR0);
         const k = K(s);
         const th = (i & 1) ? 0.20 : 0.17;
         // Flare: the apron opens out over the first ~150 m of the corridor.
         const f = Math.min(1, 0.45 + i * 0.14);
-        const ln = i < 4 ? 30 : 44;   // short slabs while T6 is still bending
+        // Short slabs while T6 is still bending; then one step long, not 44 m.
+        // (The 0.17/0.20 thickness only moves a draped patch's UNDERSIDE — its
+        // top is terrain + a lift slot — so 44 m slabs on a ~40 m step laid
+        // each overlap twice, and every fifth patch shares a slot: 28+ flat-
+        // coplanar spots, ground-audit.)
+        const ln = i < 4 ? 30 : Math.min(44, APR_STEP - 0.1);
         groundPatch(k, 1, 6, [26 * f, th, ln], CONCRETE);
-        groundPatch(k, 1, 30, [24 * f, th, ln], CONCRETE);
+        // Outer slab starts where the inner one ends (same outer edge): the 2 m
+        // lateral overlap draped one terrain with two tessellations.
+        const g2 = Math.max(30, 6 + 26 * f + 0.1);
+        groundPatch(k, 1, g2, [30 + 24 * f - g2, th, ln], CONCRETE);
         // Weathering: every third bay is a bleached or oil-darkened slab so
         // the concrete reads as poured in panels, not rolled as one sheet.
         if (i % 3 === 1) groundPatch(k, 1, 12, [9 * f, th + 0.02, ln - 8], CONC_W);

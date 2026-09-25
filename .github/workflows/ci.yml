@@ -1537,11 +1537,14 @@ jobs:
         id: sel
         env:
           # On a Pages call the resolver is handed the train's base as a push:
-          # EVENT=push with PUSH_BEFORE = the live commit (empty when the live
-          # site was unreadable, which falls back to HEAD~1 with a warning).
+          # EVENT=push with PUSH_BEFORE = the live commit. EMPTY when the live
+          # site was unreadable — and CALLED makes that select EVERYTHING (the
+          # empty tree), like the sweeps/parts/ship filters, never HEAD~1: a
+          # one-commit slice of a tip carrying every unpublished commit.
           EVENT: ${{ inputs.concurrency_key != '' && 'push' || github.event_name }}
           PUSH_BEFORE: ${{ inputs.concurrency_key != '' && inputs.before_sha || github.event.before }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
+          CALLED: ${{ inputs.concurrency_key != '' }}
         run: bash tools/ci/ci-select-specs-step.sh
       # WHOSE RED IS IT? A gate that goes red asks two different questions
       # depending on a fact nobody has to hand: was the base already red?

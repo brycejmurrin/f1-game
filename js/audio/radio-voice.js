@@ -323,6 +323,14 @@ const RadioVoice = (function () {
     function clearDeadline() { if (deadline != null) { clearTimeout(deadline); deadline = null; } }
     function clearPending() { if (pending != null) { clearTimeout(pending); pending = null; } }
     function stop() {
+      stopVoice();
+      // The hiss bed belongs to the line, so it goes when the line does —
+      // the card-hidden and paused observers below are what stop a
+      // transmission early for a player who never turned speech on.
+      if (GameAudio && GameAudio.radioStingStop) GameAudio.radioStingStop();
+    }
+    /** The words only: the hiss bed is the CARD's, and may already be the next one's. */
+    function stopVoice() {
       clearPending();
       clearDeadline();
       // Before cancel(): the callback it triggers must already see itself as
@@ -331,10 +339,6 @@ const RadioVoice = (function () {
       if (pack) pack.stop("radio");   // the engineer's own line only — never a spotter call mid-word
       cancelOurs();
       if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false);
-      // The hiss bed belongs to the line, so it goes when the line does —
-      // the card-hidden and paused observers below are what stop a
-      // transmission early for a player who never turned speech on.
-      if (GameAudio && GameAudio.radioStingStop) GameAudio.radioStingStop();
     }
     function say(msg, life, kind, lead, preRace) {
       const on = kind === "comm" ? !!(G.announcer && G.announcer.enabled && G.announcer.enabled()) : enabled;
@@ -344,7 +348,10 @@ const RadioVoice = (function () {
       if (hold > 0) lead = Math.max(+lead || 0, hold + 0.08);
       const p = plan({ msg, life, kind, lead, enabled: on, soundOn: !!G.soundOn, state: G.state, preRace: !!preRace, api: true, volume, tune });
       last = { text: p.text, reason: p.reason || "spoke", rate: p.rate, budgetMs: p.budgetMs, leadMs: p.leadMs };
-      if (!p.speak) return false;
+      // A card that will not be spoken still REPLACES the one on screen: its
+      // words stop with it (and its deadline, which would later cut this card's
+      // hiss bed). Not the words' sting — that is already the new card's.
+      if (!p.speak) { if (!preRace && (current || pending != null)) stopVoice(); return false; }
       p.preRace = !!preRace;   // speakPlanned re-checks the session at speak time
       stop();
       if (speakPack(p)) return true;

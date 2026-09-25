@@ -82,9 +82,14 @@ window.DrivingLine = (function () {
   // keep its bloom.
   let opacity = "normal";
   const OPACITIES = [["subtle", 0.65], ["normal", 1], ["solid", 1.35]];
-  function setOpacity(o) { opacity = OPACITIES.some((r) => r[0] === o) ? o : "normal"; return opacity; }
+  let _opMul = 1;   // opacityMul(), resolved once per setOpacity — draw() reads it every frame
+  function setOpacity(o) {
+    opacity = OPACITIES.some((r) => r[0] === o) ? o : "normal";
+    _opMul = (OPACITIES.find((r) => r[0] === opacity) || OPACITIES[1])[1];
+    return opacity;
+  }
   function getOpacity() { return opacity; }
-  function opacityMul() { return (OPACITIES.find((r) => r[0] === opacity) || OPACITIES[1])[1]; }
+  function opacityMul() { return _opMul; }
 
   /* The banked surface's lift at lateral o, the road mesh's own formula
      (js/track/core/mesh.js bankOffsetAt, index-keyed there) at the nearest
@@ -215,13 +220,14 @@ window.DrivingLine = (function () {
   /* Draw through a backend: `gfx.drawDrivingLine(verts, count, dirty, opts)`.
      Builds lazily when the circuit changed. Returns false when the line is off
      or the backend's pass is not ready. */
+  const _drawOpts = { speed: 0, cornersOnly: false, palette: 0, opacity: 1 };
   function draw(gfx, api, playerSpeed) {
     if (mode === "off" || !gfx || typeof gfx.drawDrivingLine !== "function") return false;
     if (cache.id !== api.id || !cache.verts) build(api);
-    const drew = gfx.drawDrivingLine(cache.verts, cache.count, cache.dirty, {
-      speed: playerSpeed || 0, cornersOnly: mode === "corner", palette: palette === "safe" ? 1 : 0,
-      opacity: opacityMul(),
-    });
+    // One scratch opts, refilled per frame: every backend reads it synchronously.
+    _drawOpts.speed = playerSpeed || 0; _drawOpts.cornersOnly = mode === "corner";
+    _drawOpts.palette = palette === "safe" ? 1 : 0; _drawOpts.opacity = _opMul;
+    const drew = gfx.drawDrivingLine(cache.verts, cache.count, cache.dirty, _drawOpts);
     if (drew) cache.dirty = false;
     return !!drew;
   }

@@ -898,7 +898,14 @@ body { --compact-at: 600px; --wide-at: 620px; }
 /* The wordmark is the only thing in the brand column tall enough to answer the
    button stack beside it. At the old 64px cap a 1000x444 phone put it in
    y 85..197 of 444 and left the whole top third of the screen empty. */
-:where(body[data-shape="wide"][data-density="compact"]) #title { font-size: clamp(32px, calc(11 * var(--vwz)), 84px); }
+/* …but never wider than its OWN column. The Saira wordmark (#273) sets
+   ~4.47em wide, and the brand track is whatever minmax(0,1fr) leaves beside
+   the doors: on a 734x343 phone 11vwz is 81px, 361px of wordmark in a 316px
+   column, and the "6" ran under CAREER MODES. The column is a size container
+   (its width comes from the grid, never from content), so 21cqi is the cap
+   that fits any phone's split — 100/4.47 = 22.4, less the italic overhang. */
+:where(body[data-shape="wide"][data-density="compact"]) #menu-brand { container-type: inline-size; }
+:where(body[data-shape="wide"][data-density="compact"]) #title { font-size: min(clamp(32px, calc(11 * var(--vwz)), 84px), 21cqi); }
 /* LOWER, AND ONLY AS SMALL AS THE TRAIL NEEDS. The landscape phone puts the
    button column over viewBox x > ~770, which is exactly where the trail runs
    once it leaves the cars, so at the full placement the whole ribbon was behind

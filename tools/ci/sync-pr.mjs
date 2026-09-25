@@ -26,6 +26,11 @@
 // stop and hand back a list of files "resolve by hand" for anything beyond
 // the generated set; that is deploy.mjs's tested judgment, not a gap here.
 //
+// A CLEAN merge is re-derived too: mergeDeployTip() runs `npm run gen` after
+// every merge and commits what it rewrites, because two sides that each added
+// a unit file merge their identical "N of M" ladder lines without a conflict
+// and leave the union's figures one file short (four red PRs, 2026-09-24).
+//
 // Refuses the same things deploy.mjs refuses: a dirty tree, loadavg >= 3, a
 // live Playwright run. Never force-pushes, never rebases, never amends —
 // the merge is a real merge commit, so the branch stays valid for whoever has

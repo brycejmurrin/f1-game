@@ -10,7 +10,7 @@
         addFrustum, addPyramid, groundPlane, groundPatch, along, anchor, vadd, onTrack, building, tower, billboard,
         grandstand, grandstandEx, marshalPost, gantry, palm, fence, wall, guardrail, tyreWall, hash, addCone, addPrism,
         cityFront, modelGroup, overheadSpan, waterSurface, circuitKit, broadcastCompound, cameraTower,
-        bakedModel } = api;
+        bakedModel, terrainYAt, foundation } = api;
 
       const ferrisWheel = (k, side, dist, radius) => {
         const a = anchor(k, side, dist);
@@ -89,14 +89,27 @@
         opts = opts || {};
         const rows = opts.rows || 7, pitch = 6.8, len = bays * pitch;
         const ribbon = opts.ribbon || NEON[Math.round(s * 31) % NEON.length];
-        const k = K(s), a = anchor(k, side, gap + 8), b = [a.r, a.u, a.t];
+        const k = K(s), a0 = anchor(k, side, gap + 8), b = [a0.r, a0.u, a0.t];
         const IN = -side;                       // +1 along a.r faces the track
         const topH = 2.2 + rows * 1.38;
+        // The lot is 16 m deep: one anchor sample left its far half, and every
+        // stall line, up to 1.7 m under the verge rising behind it (ground-
+        // audit buried, 117 prims). Lift the whole rig to the HIGHEST ground
+        // under the lot and stand it on a plinth down to the lowest.
+        let hi = a0.c[1], lo = a0.c[1];
+        for (const fr of [-8, -4, 0, 4, 8]) for (const ft of [-0.5, 0, 0.5]) {
+          const q = vadd(vadd(a0.c, a0.r, fr), a0.t, ft * (len + 3)), g = terrainYAt(q[0], q[2]);
+          if (g != null) { hi = Math.max(hi, g); lo = Math.min(lo, g); }
+        }
+        const lift = hi - a0.c[1] > 0.03 ? hi - a0.c[1] + 0.02 : 0;
+        const a = Object.assign({}, a0, { c: vadd(a0.c, a0.u, lift) });
         modelGroup(id, {
           center: vadd(a.c, a.u, (topH + 2.5) / 2),
           size: [17, topH + 2.5, len + 4], basis: b,
         }, (stage) => {
           // The lot itself, stall lines still painted on it.
+          if (lift) foundation(stage, { center: a.c, size: [15.9, len + 2.9], top: a.c[1],
+                                        basis: b, col: [0.30, 0.30, 0.33], embed: 0.3 });
           addBox(stage, vadd(a.c, a.u, 0.08), [16, 0.16, len + 3], LOT_ASPHALT, b);
           for (let i = 0; i * 2.8 < len + 2; i++)
             addBox(stage, vadd(vadd(a.c, a.t, -len / 2 - 1 + i * 2.8), a.r, IN * 6.6),
@@ -142,7 +155,8 @@
           // Bolt-on stair tower at one end — the giveaway that this is rented.
           {
             const e = vadd(a.c, a.t, -(len / 2 + 2.0));
-            seat.box(stage, vadd(e, a.r, -IN * 1.5), [7.4, topH, 3.4], [0.30, 0.31, 0.34], b);
+            // Foot 0.1 m under the lot's: flush, the undersides z-fought.
+            seat.box(stage, vadd(vadd(e, a.r, -IN * 1.5), a.u, -0.1), [7.4, topH + 0.1, 3.4], [0.30, 0.31, 0.34], b);
             for (let f = 0; f * 2.4 < topH; f++)
               addBox(stage, vadd(vadd(e, a.r, -IN * 1.5), a.u, 1.2 + f * 2.4),
                 [7.6, 0.16, 3.6], TUBE, b);
@@ -576,8 +590,11 @@
             const neon = NEON[(idx + (side > 0 ? 4 : 1)) % NEON.length];
             const fh = 80 + h1 * 100;
             backdrop(k, side, 185, [50, fh, 30], backdropCols[idx % 3]);
-            // Bright neon crown bands on top — Strip glow visible over the midground
-            backdrop(k, side, 182, [52, 7.0, 26], neon);
+            // Bright neon band at street level — backdrop() always stands on
+            // the ground, so the "crown" never reached the top. Now a 3 m
+            // strip against the tower's front face (170 m) instead of a slab
+            // round its foot sharing its underside (63 flat-coplanar pairs).
+            backdrop(k, side, 168.5, [52, 7.0, 3], neon);
           }
         }
 

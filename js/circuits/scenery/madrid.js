@@ -85,8 +85,8 @@
                 [30, 3.2, 0.35], GLASS, b);
             }
           }
-          const entrance = vadd(vadd(a.c, a.r, IN * 11), a.u, 6);
-          addBox(stage, entrance, [7, 12, 34], GLASS, b);
+          const entrance = vadd(vadd(a.c, a.r, IN * 11), a.u, 5.9);
+          addBox(stage, entrance, [7, 12.2, 34], GLASS, b);   // foot 0.2 under the hall's
           addBox(stage, vadd(vadd(a.c, a.r, IN * 14.4), a.u, 13.2),
             [1.0, 2.2, 26], sign, b);
         });
@@ -104,7 +104,7 @@
             [18, 3.2, 33], WHITE, b);
           const wall = vadd(a.c, a.r, -side * 7.5);
           addBox(stage, vadd(wall, a.u, 5.0), [1.0, 10, 33], OFFWHITE, b);
-          addBox(stage, vadd(wall, a.u, 9.4), [1.15, 1.2, 33], MADRID_RED, b);   // capping band
+          addBox(stage, vadd(wall, a.u, 9.45), [1.15, 1.2, 33], MADRID_RED, b);  // capping band, 5 cm proud of the wall top (was coplanar)
           addBox(stage, vadd(wall, a.u, 8.5), [1.2, 0.3, 33], GOLD, b);          // pinstripe
           for (let gate = -1; gate <= 1; gate++) {
             addBox(stage, vadd(vadd(wall, a.t, gate * 10.5), a.u, 2.4),
@@ -199,11 +199,18 @@
           if (headroom > 1.2) {
             const ch = Math.min(2.6, headroom);
             stage._mat = MAT.METAL;
-            addBox(stage, vadd(vadd(a.c, a.t, (hv - 0.5) * d * 0.5), a.u, roofTop + ch * 0.35),
-              [1.8, ch * 0.7, 2.2], [0.62, 0.60, 0.56], b);
+            // Rooted in the roof they stand on: on the pitched type the ridge
+            // (bodyH + 2.4) is below roofTop and slopes away off-centre, so
+            // both stood 0.3 m+ clear of it (ground-audit unsupported). They
+            // now start at the eave slab (bodyH + 0.6) and rise through the
+            // pitch; the ático type keeps its setback-storey roof.
+            const chBase = type === 1 ? roofTop : bodyH + 0.6;
+            const h1 = roofTop + ch * 0.7 - chBase, h2 = roofTop + ch - chBase;
+            addBox(stage, vadd(vadd(a.c, a.t, (hv - 0.5) * d * 0.5), a.u, chBase + h1 / 2),
+              [1.8, h1, 2.2], [0.62, 0.60, 0.56], b);
             stage._mat = MAT.STONE;
-            addBox(stage, vadd(vadd(a.c, a.t, (0.5 - hv) * d * 0.34), a.u, roofTop + ch * 0.5),
-              [1.1, ch, 1.1], trim, b);
+            addBox(stage, vadd(vadd(a.c, a.t, (0.5 - hv) * d * 0.34), a.u, chBase + h2 / 2),
+              [1.1, h2, 1.1], trim, b);
             stage._mat = 0;
           }
         });
@@ -504,7 +511,8 @@
         supportGap: 2.8,
         supportWidth: 0.9,
         color: GLASS,
-        supports: false,
+        // Its own legs (supportGap/Width were already specified for them):
+        // with supports: false the deck hung 6.4 m up on nothing (ground-audit).
         soffit: { color: TUNNEL_DARK },
       });
       for (const side of [-1, 1]) {
