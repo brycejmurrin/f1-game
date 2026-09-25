@@ -3,8 +3,10 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { seedClipboard } from "../helpers/seed-clipboard.mjs";
 
 const SOURCE = await readFile(new URL("../../js/net/lobby.js", import.meta.url), "utf8");
+const LOBBY_CODES = await readFile(new URL("../../js/net/lobby-codes.js", import.meta.url), "utf8");
 // The REAL NetPlay: the lobby registers its QUALI/QLIVE receivers and senders
 // through NetPlay.bindQuali / qualiReporters (one validation site for both
 // phases), and a stub of those would only pin the stub.
@@ -90,6 +92,8 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
     Tracks: { LIST: [{ id: "track" }] },
   });
   seedLog(context);
+  seedClipboard(context);
+  vm.runInContext(LOBBY_CODES.replace(/^const\b/gm, "var"), context, { filename: "lobby-codes.js" });
   context.NetPlay = vm.runInContext(NETPLAY + ";NetPlay", context, { filename: "netplay.js" });
   const NetLobby = vm.runInContext(SOURCE + ";NetLobby", context, { filename: "lobby.js" });
   const G = {

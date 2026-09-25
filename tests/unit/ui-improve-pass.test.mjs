@@ -28,6 +28,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { cssRules, decl, declares, ruleFor, rulesFor } from "../helpers/css-rules.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { seedClipboard } from "../helpers/seed-clipboard.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
@@ -1440,6 +1441,7 @@ function bootCopyValues(opts = {}) {
   });
   sb.document.execCommand = (c) => { order.push("execCommand:" + c); return !!opts.execOk; };
   const ctx = vm.createContext(sb);
+  seedClipboard(ctx);
   vm.runInContext(src("js/lighting/tuner-panel.js"), ctx, { filename: "js/lighting/tuner-panel.js" });
   const G = {
     $: (id) => dom.byId(id), gfx: {}, els: { pmsettings: {} },
