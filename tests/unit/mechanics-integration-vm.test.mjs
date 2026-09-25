@@ -456,7 +456,8 @@ test("the radio queue keeps a burst in priority order, and drops only what would
   assert.equal(A("FOURTH", "info"), false,
     "two deep is the cap: under the floor a fourth card would land six seconds after its event");
   // A higher priority does not wait behind two reports — it takes the HEAD of
-  // the queue, and the cost is paid by the oldest LOWEST, not by itself.
+  // the queue, and NOBODY pays for it: the queue grows rather than evicting an
+  // accepted line, whose caller was already told it would be heard.
   assert.equal(A("LIMITS", "warning"), true, "a warning must never be refused behind two info lines");
   // …and the engineer's pit call outranks the pit lane's own confirmations,
   // which is the whole point of the "box" kind: at "info" it lost to

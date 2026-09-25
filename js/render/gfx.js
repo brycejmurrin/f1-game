@@ -10,9 +10,10 @@
  *                          lamp shadows, instancing, particles, MSAA 4×).
  *                          pcss() returns true (Poisson-8 + blocker search).
  *
- * TLX and WGX are DEFERRED backends: they have NO <script> tags. game.js
- * injects their files at boot (manifest DEFERRED via js/roster.js) only for
- * the resolved pick, then calls `Gfx.create()`, which returns a ready
+ * All three implementations are DEFERRED and have NO <script> tags; the
+ * stable GLX facade is eager for eval-time device-tier consumers. game.js
+ * injects the TLX or WGX implementation for the resolved pick, then calls
+ * `Gfx.create()`, which returns a ready
  * TLX or WGX backend implementing the interface below — or `null` on absence
  * or ANY failure, and THE CALLER falls back to GLX. This module deliberately
  * does NOT reference GLX — keeping the fallback decision in game.js avoids
