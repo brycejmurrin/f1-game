@@ -1048,9 +1048,12 @@ const NetLobby = (function () {
         // and the rival's slot ran as AI while our own pose parked on the
         // old grid.
         const outcome = await G.startRace();
-        if (outcome && outcome.kind === "canceled") { close(); return; }
-        if (!sessions.size) { clearInterval(pumpTimer); pumpTimer = null; close(); return; }
+        // Every exit clears friendQualifying: left true, quali-model's
+        // persistOrder dropped every later SOLO career/season quali result.
+        if (outcome && outcome.kind === "canceled") { friendQualifying = false; close(); return; }
+        if (!sessions.size) { friendQualifying = false; clearInterval(pumpTimer); pumpTimer = null; close(); return; }
       } catch (e) {
+        friendQualifying = false;
         say("Could not start the race: " + (e && e.message), true);
         return;
       }
@@ -1517,6 +1520,7 @@ const NetLobby = (function () {
       const e = els();
       if (!e.screen) return false;
       _peers.clear(); _ready.clear(); clashClear(); myRank = Infinity;
+      friendQualifying = false;   // a fresh lobby never inherits a stuck quali flag
       show("pick");
       // inviteAnother() hides these; a fresh open must always offer all four
       // routes again, or a player who once invited a second guest can never

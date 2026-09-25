@@ -47,10 +47,11 @@ function createHarness(opts = {}) {
     console,
   };
   if (opts.deferWrites) sandbox.setTimeout = (fn) => { timers.push(fn); return timers.length; };
-  const idles = [], listeners = {};
-  if (opts.idle) {
-    sandbox.requestIdleCallback = (fn) => { idles.push(fn); return idles.length; };
+  const listeners = {}, docListeners = {};
+  const doc = { visibilityState: "visible", addEventListener: (type, fn) => { (docListeners[type] = docListeners[type] || []).push(fn); } };
+  if (opts.events) {
     sandbox.addEventListener = (type, fn) => { (listeners[type] = listeners[type] || []).push(fn); };
+    sandbox.document = doc;
   }
   const ctx = vm.createContext(sandbox);
   seedLog(ctx);
@@ -64,9 +65,9 @@ function createHarness(opts = {}) {
     store: mockLocalStorage,
     flushMicrotasks: () => { while (microtasks.length) microtasks.shift()(); },
     flushTimers: () => { while (timers.length) timers.shift()(); },
-    runIdle: (ms) => { const q = idles.splice(0); for (const f of q) f({ timeRemaining: () => ms, didTimeout: false }); },
-    idleQueued: () => idles.length,
     fire: (type) => { for (const f of listeners[type] || []) f(); },
+    hide: () => { doc.visibilityState = "hidden"; for (const f of docListeners.visibilitychange || []) f(); },
+    pendingTimers: () => timers.length,
     disk: store,
   };
 }
@@ -391,26 +392,47 @@ function recordLap(Ghost, time) {
 }
 const ghostOnDisk = (h) => { for (const k of h.disk.keys()) if (/ghost/i.test(k)) return true; return false; };
 
-test("a new record is written in a LONG idle slot only, never a short mid-race one", () => {
-  const h = createHarness({ idle: true });
+test("a new record is not written mid-lap; Ghost.flush() at a break writes it", () => {
+  const h = createHarness({ events: true, deferWrites: true });
   h.Ghost.setTrack("monza");
   assert.equal(recordLap(h.Ghost, 1.0), true);
   assert.equal(h.Ghost.bestTime(), 1.0, "visible at once, before the write");
-  assert.equal(ghostOnDisk(h), false);
-  h.runIdle(8);                                  // a frame's idle tail: too short
-  assert.equal(ghostOnDisk(h), false, "no 5-30 ms store write inside an 8 ms slot");
-  assert.equal(h.idleQueued(), 1, "re-queued for a longer slot");
-  h.runIdle(40);                                 // pause / menu / results
+  assert.equal(ghostOnDisk(h), false, "no 5-30 ms store write on the lap-line frame");
+  h.Ghost.flush();                               // pause / race end / quit to menu
   assert.equal(ghostOnDisk(h), true);
-  assert.equal(h.idleQueued(), 0);
+  h.flushTimers();                               // the 60 s safety net finds nothing left to do
+  assert.equal(ghostOnDisk(h), true);
 });
 
-test("a record still pending when the page goes away is flushed on pagehide", () => {
-  const h = createHarness({ idle: true });
+test("the 60 s safety net writes a record no break ever flushed", () => {
+  const h = createHarness({ events: true, deferWrites: true });
   h.Ghost.setTrack("monza");
   recordLap(h.Ghost, 1.0);
-  h.runIdle(8);
   assert.equal(ghostOnDisk(h), false);
-  h.fire("pagehide");
-  assert.equal(ghostOnDisk(h), true, "the new ghost must not die with the tab");
+  h.flushTimers();
+  assert.equal(ghostOnDisk(h), true);
+});
+
+test("the tab going hidden flushes (mobile rarely fires pagehide); pagehide does too", () => {
+  const h = createHarness({ events: true, deferWrites: true });
+  h.Ghost.setTrack("monza");
+  recordLap(h.Ghost, 1.0);
+  h.hide();
+  assert.equal(ghostOnDisk(h), true, "the new ghost must not die with a backgrounded tab");
+  const h2 = createHarness({ events: true, deferWrites: true });
+  h2.Ghost.setTrack("monza");
+  recordLap(h2.Ghost, 1.0);
+  h2.fire("pagehide");
+  assert.equal(ghostOnDisk(h2), true);
+});
+
+test("a newer record on the same circuit replaces the pending write instead of queueing beside it", () => {
+  const h = createHarness({ events: true, deferWrites: true });
+  h.Ghost.setTrack("monza");
+  recordLap(h.Ghost, 2.0);
+  recordLap(h.Ghost, 1.0);
+  h.Ghost.flush();
+  const k = [...h.disk.keys()].find((x) => /ghost/i.test(x));
+  assert.ok(k);
+  assert.match(h.disk.get(k), /"time":1(?:[,}.])/, "the store holds the newer (faster) lap");
 });

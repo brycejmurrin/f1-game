@@ -115,7 +115,7 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
 
 test("peer leave refreshes the friend-quali gate so a dropped rival unlocks the sheet", () => {
   assert.match(SOURCE, /renderRoom\(\); if \(G\.refreshQualiGate\) G\.refreshQualiGate\(\);/);
-  assert.match(SOURCE, /if \(!sessions\.size\) \{ clearInterval\(pumpTimer\); pumpTimer = null; close\(\); return; \}/);
+  assert.match(SOURCE, /if \(!sessions\.size\) \{ friendQualifying = false; clearInterval\(pumpTimer\); pumpTimer = null; close\(\); return; \}/);
   assert.match(SOURCE, /if \(G\.quitToMenu\) G\.quitToMenu\(\)/);
   assert.match(SOURCE, /cancel\(\);\s*\n\s*if \(G\.quitToMenu\) G\.quitToMenu\(\)/);
 });
@@ -610,4 +610,15 @@ test("makeAnswer and acceptAnswer refuse a malformed code before they need a tra
     const c = await h.lobby.makeAnswer("APEX1.p.e30");
     assert.equal(c.error, "no_transport", "a well-shaped code with no connection is the transport's problem");
   } finally { h.lobby.cancel(); }
+});
+
+test("every early exit of finishStart clears friendQualifying (a stuck flag drops solo quali results)", () => {
+  const src = SOURCE;
+  const a = src.indexOf("async function finishStart()");
+  const body = src.slice(a, src.indexOf("const started = G.netPlay.start(", a));
+  assert.match(body, /outcome\.kind === "canceled"\) \{ friendQualifying = false; close\(\); return; \}/);
+  assert.match(body, /if \(!sessions\.size\) \{ friendQualifying = false;/);
+  assert.match(body, /\} catch \(e\) \{\s*friendQualifying = false;/);
+  const open = src.slice(src.indexOf("function open() {"), src.indexOf("function open() {") + 800);
+  assert.match(open, /friendQualifying = false;/, "open() must not inherit a stuck flag");
 });

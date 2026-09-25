@@ -249,7 +249,7 @@ const Ghost = (function () {
     pending.set(id, snap);
     loadStore()[id] = snap;   // immediately visible if another class is selected before idle
     const write = () => {
-      _flushes.delete(write);
+      if (_writers.get(id) === write) _writers.delete(id);
       if (pending.get(id) !== snap) return;   // cleared or superseded before the deferred write
       try {
         const store = loadStore();
@@ -261,34 +261,37 @@ const Ghost = (function () {
         else Log.warn("car", `ghost save ${id} is session-only`);
       } catch { Log.warn("car", "ghost save fail"); }
     };
-    if (typeof requestIdleCallback === "function") {
-      // A LONG idle slot only: the write (trim + 2-3 stringifies of a store of up
-      // to 512 KB + setItem) is one 5-30 ms job on a phone. With a 2 s timeout it
-      // ran mid-race — a frame's idle tail is < 16 ms, so it overran into the next
-      // frame. A 25 ms slot comes with pause, menus or results; pagehide flushes.
-      const idle = (dl) => {
-        if (pending.get(id) !== snap) return;
-        if (dl && typeof dl.timeRemaining === "function" && dl.timeRemaining() < 25) { requestIdleCallback(idle); return; }
-        write();
-      };
-      requestIdleCallback(idle);
-      armFlush(write);
-    }
-    else if (typeof setTimeout === "function") setTimeout(write, 0);
+    // ONE writer per circuit: a newer record replaces the older closure (and
+    // the ~40 KB trace it held) instead of queueing beside it.
+    _writers.set(id, write);
+    armFlush();
+    // WHEN. The write (trim + 2-3 stringifies of a store of up to 512 KB +
+    // setItem) is one 5-30 ms job on a phone, so it must not land mid-lap.
+    // Idle slots cannot be waited for: the game keeps a rAF pending in every
+    // state, so Chrome caps each idle period at the next frame (<= 16.7 ms) —
+    // a ">= 25 ms slot" rule never fired and the record reached storage only
+    // on pagehide. Instead: Ghost.flush() at the natural breaks (pause, race
+    // end, quit to menu — game.js), on the tab going hidden or away, and a
+    // 60 s safety net for a long unbroken session (one hitch a minute, worst case).
+    if (typeof setTimeout === "function") setTimeout(() => { if (_writers.get(id) === write) write(); }, 60000);
     else write();   // bare VM harness: no scheduler, write now
   }
-  // Leaving the page with a record still pending: write it now (synchronous
-  // localStorage is allowed in pagehide), or the new ghost dies with the tab.
-  const _flushes = new Set();
+  // Write every pending record now. Cheap when nothing is pending.
+  const _writers = new Map();   // circuit id -> its pending write
+  function flush() {
+    if (!_writers.size) return;
+    for (const w of Array.from(_writers.values())) { try { w(); } catch (_) { /* best effort */ } }
+  }
   let _flushArmed = false;
-  function armFlush(fn) {
-    _flushes.add(fn);
+  function armFlush() {
     if (_flushArmed || typeof addEventListener !== "function") return;
     _flushArmed = true;
-    addEventListener("pagehide", () => {
-      const fns = Array.from(_flushes); _flushes.clear();
-      for (const f of fns) { try { f(); } catch (_) { /* best effort on the way out */ } }
-    });
+    // pagehide alone is not enough on mobile: a backgrounded tab is often
+    // killed without it. visibilitychange -> hidden is the reliable last call.
+    addEventListener("pagehide", flush);
+    if (typeof document !== "undefined" && document && document.addEventListener) {
+      document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flush(); });
+    }
   }
 
   // `meta` (optional, a plain object — medal, pole, pace, weather) is stored
@@ -378,7 +381,7 @@ const Ghost = (function () {
   return {
     setTrack, startLap, record, finishLap, at, timeAt, contextKey,
     context: () => context, track: () => trackId,
-    hasGhost, bestTime, snapshot, meta, medal, clear, speedAt,
+    hasGhost, bestTime, snapshot, meta, medal, clear, speedAt, flush,
   };
 })();
 
