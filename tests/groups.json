@@ -854,6 +854,7 @@
       "files": [
         "tests/unit/cockpit-pale-surfaces.test.mjs",
         "tests/unit/crest-marks.test.mjs",
+        "tests/unit/flyby-fleet.test.mjs",
         "tests/unit/foundation-core-vm.test.mjs",
         "tests/unit/slider-effect.test.mjs"
       ]

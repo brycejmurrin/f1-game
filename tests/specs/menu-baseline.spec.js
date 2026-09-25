@@ -54,6 +54,13 @@ for (const [shapeName, viewport] of SHAPES) {
 
     for (const [screenName, open] of SCREENS) {
       test(`${screenName} looks like itself`, async ({ page }) => {
+        // PIN THE CALENDAR DAY. The title's DAILY door names the day's seeded
+        // venue and weather (js/race/daily-challenge.js dayKey), so an unpinned
+        // clock changes the title golden every UTC midnight — BAKU · WET when
+        // blessed, MEXICO CITY · RAIN a day later (2026-09-25). setFixedTime
+        // fakes Date only; timers and rAF keep running, so boot is unchanged.
+        // https://playwright.dev/docs/clock
+        await page.clock.setFixedTime(new Date("2026-09-01T12:00:00Z"));
         await page.goto("/");
         // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
         await page.waitForFunction(() => window.__apex && window.__apex.race,
