@@ -166,10 +166,15 @@ const VoicePack = (() => {
       // A decode that never settles (a context closed under it) must not hold
       // the channel — busy() would silence the spotter for the rest of the race.
       const watchdog = setTimeout(() => { if (!token.h) release(); }, WATCHDOG_MS);
+      const gen0 = GameAudio.ctxGen ? GameAudio.ctxGen() : 0;
       Promise.all(pl.seq.map((s) => (s.k ? decode(v, s.k) : s.p)))
         .then((parts) => {
           clearTimeout(watchdog);
           if (live[ch] !== token) return;                   // preempted while decoding
+          // A context rebuilt mid-decode restarts its clock near 0: `at` is in
+          // the old one and would schedule the line minutes ahead, holding the
+          // channel (and the spotter) for all of it.
+          if ((GameAudio.ctxGen ? GameAudio.ctxGen() : 0) !== gen0) { release(); return; }
           const h = GameAudio.radioVoice(parts, Math.max(at, GameAudio.now() + 0.02), {
             channel: ch, volume: opt.volume == null ? 1 : opt.volume });
           if (!h) { release(); return; }

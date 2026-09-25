@@ -611,6 +611,66 @@ test("a lap that ends green but ran under a VSC is not called slow", () => {
   assert.ok(!r.lines(t0).some((m) => /OFF\. RESET|LOST TIME|SLOW/.test(m)), r.lines(t0).join(" | "));
 });
 
+test("a red-flag re-grid reorders the field without a pass being called, then or after the lights", () => {
+  const L = simCar("LLL", 2400, 60), A = simCar("AAA", 1300, 60), B = simCar("BBB", 1290, 60), P = simCar("PLY", 900, 60, { isPlayer: true });
+  const r = sim([L, A, B, P], 30);
+  r.radio.setComm("on");
+  r.step(30);
+  const t0 = r.G.raceT;
+  r.G.state = "count";                              // the restart countdown: the field back on the grid
+  const base = L.prog - 1500;
+  for (const [k, c] of [L, B, A, P].entries()) { c.prog = base - k * 8; c.speed = 0; }   // B now ahead of A
+  r.step(6);
+  r.G.state = "race"; for (const c of [L, A, B, P]) c.speed = 60;
+  r.step(20);
+  const said = r.lines(t0);
+  assert.ok(!said.some((m) => /BBB|AAA/.test(m) && /MOVE|PAST|THROUGH|FAVOUR|BACK FROM|GREAT/.test(m)), said.join(" | "));
+  assert.ok(!said.some((m) => /LIGHTS OUT/.test(m)), "the radio forgot the race and started it again: " + said.join(" | "));
+});
+
+test("a penalised player who takes the flag last hears the result before race control ends the race", () => {
+  const W = car("WIN", 1400, 60), X = car("XXX", 1300, 60), P = car("PLY", 1200, 60, { isPlayer: true, local: true, penalty: 5 }), Y = car("YYY", 1000, 60);
+  const r = race({ cars: [W, X, P, Y] });
+  r.step(0.05, 100);
+  W.finished = X.finished = true; Y.retired = true; r.step(0.05, 20);
+  P.finished = true; r.step(0.05, 40);          // 2 s: finishDelay ends the race at 2.2 s, inside the +5 s
+  const result = r.said.filter((s) => s.kind === "race" && /P\d/.test(s.msg));
+  assert.equal(result.length, 1, "no result call before the race ended: " + JSON.stringify(r.said));
+  assert.match(result[0].msg, /P3/);
+});
+
+test("a one-lap race still gets attack and defend calls: it is all last lap", () => {
+  const A = simCar("AAA", 60, 60), P = simCar("PLY", 30, 60.5, { isPlayer: true });
+  const r = sim([A, P], 1);
+  r.step(40);
+  assert.ok(r.lines(0).some((m) => /AAA/.test(m) && /ATTACK|RANGE|GO FOR IT|LINE IT UP|AHEAD/.test(m)), r.lines(0).join(" | "));
+});
+
+test("a rival's lap time that arrives after its lap count (VS FRIEND) is still timed, and can take the fastest lap", () => {
+  const f = RF.create();
+  const a = car("RIV", 100, 60), p = car("PLY", 90, 60, { isPlayer: true });
+  const G = { state: "race", raceT: 0, cars: [a, p], player: p, track: { total: LAP }, cautionInfo: () => ({ level: 0 }), cautionLevel: () => 0 };
+  const evs = [];
+  const tick = () => { G.raceT += 0.1; evs.push(...f.observe(G, 0.1).ev); };
+  for (let i = 0; i < 5; i++) tick();
+  p.lap = 2; p.lastLap = 60; tick();
+  a.lap = 2; tick(); tick();                        // the pose: a new lap count, no time yet
+  a.lastLap = 58; a.best = 58; tick();              // the LAP event lands a tick later
+  const fastest = evs.filter((e) => e.type === "fastest").map((e) => e.car.code);
+  assert.deepEqual(fastest, ["PLY", "RIV"]);
+});
+
+test("two finishers are ordered by their own flag times, not by the tick the radio saw them cross", () => {
+  const f = RF.create();
+  const r = car("RIV", 100, 60), p = car("PLY", 99, 60, { isPlayer: true });
+  const G = { state: "race", raceT: 10, cars: [r, p], player: p, track: { total: LAP }, cautionInfo: () => ({ level: 0 }), cautionLevel: () => 0 };
+  const evs = [];
+  const tick = () => { G.raceT += 0.05; evs.push(...f.observe(G, 0.05).ev); };
+  tick();
+  p.finished = true; p.finishT = G.raceT; tick();   // you cross; the rival is drawn ~100 ms behind
+  r.finished = true; r.finishT = p.finishT - 0.04; tick();
+  assert.equal(f.order().map((c) => c.code).join(","), "RIV,PLY");
+});
 
 test("everyone in: a penalty-held finish is released before endRace, not lost", () => {
   const ctx = vm.createContext({ Math, console, Object, Array, Number, JSON, isFinite, Map, Set });
