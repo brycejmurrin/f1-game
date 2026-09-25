@@ -242,6 +242,11 @@
     "// zero-reference module and the two thin spots): each under a second.",
     "tests/unit/body-attitude.test.mjs",
     "tests/unit/save-migrate.test.mjs",
+    "// ApexClipboard.write/read + preferSync order (clipboard carve). Pure VM,",
+    "// well under a second; must run where the helper or a call-site is edited.",
+    "tests/unit/clipboard.test.mjs",
+    "// LobbyCodes.codeFrom / paintQr / canShare (lobby-codes peel). Pure VM.",
+    "tests/unit/lobby-codes.test.mjs",
     "tests/unit/wait-polling.test.mjs",
     "// ...and its sibling over js/: a try/catch cannot swallow a promise",
     "// REJECTION, and index.html turns an unhandled one into a full-screen",
@@ -665,6 +670,7 @@
         "tests/unit/net-grid-separation.test.mjs",
         "tests/unit/net-roster.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
+        "tests/unit/lobby-codes.test.mjs",
         "tests/unit/net-stub-surface.test.mjs"
       ]
     },

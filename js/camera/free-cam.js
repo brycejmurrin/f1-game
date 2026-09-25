@@ -310,17 +310,11 @@ function onPhotoExit() { if (st.open) close(false); }
 function copyOut(text, okMsg) {
   const ta = E["fc-out"];
   if (ta) { ta.value = text; ta.hidden = false; ta.focus(); if (ta.setSelectionRange) ta.setSelectionRange(0, text.length); }
-  // The synchronous execCommand attempt goes FIRST (see js/camera/flyby-panel.js
-  // COPY VALUES: WebKit does not forgive a copy a microtask after the gesture).
-  let ok = false;
-  try { ok = !!(document.execCommand && document.execCommand("copy")); } catch (_) { /* not available */ }
-  // Copied: hand the keyboard back to the camera (WASD is ignored while a text
-  // field has focus). Not copied: leave the text selected for a manual copy.
-  if (ok && ta && ta.blur) ta.blur();
-  const done = (good) => say(good ? okMsg : "Select the text below and copy it.");
-  if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).then(() => done(true), () => done(ok));
-  } else done(ok);
+  // preferSync: execCommand during the gesture (see ApexClipboard / flyby-panel).
+  ApexClipboard.write(text, { preferSync: true }).then((ok) => {
+    if (ok && ta && ta.blur) ta.blur();
+    say(ok ? okMsg : "Select the text below and copy it.");
+  });
   return text;
 }
 function cam() { return G.dbgCam || { eye: photoCam.pos, target: photoCam.pos, fov: photoCam.fov }; }

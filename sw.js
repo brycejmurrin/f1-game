@@ -192,6 +192,7 @@ async function precacheAssetLists() {
     "js/net/scan.js",
     "js/net/transport.js",
     "js/net/handshake.js",
+    "js/net/lobby-codes.js",
     "js/net/snapshot.js",
     "js/net/session.js",
     "js/net/netplay.js",

@@ -4202,7 +4202,7 @@ const AI_BIAS_SLEW = 3.0;      // m/s: how fast a pass / defend / yield / separa
 const _aiBr = { traits: null, samples: null, latMax: 0, aeroLoad: 0, brake: 0, grip: 0, speed: 0, blocker: false, blockerGap: 0, blockerSpeed: 0, roomL: 0, roomR: 0, team: null, seat: 0, stats: null, errMul: 1 };
 const _aiLane = { traits: null, nearby: 0, roomL: 0, roomR: 0, street: false, baseLane: 0 };
 const _aiWantX = { armed: true, team: null, seat: 0, stats: null, energy: 0, catching: false, otActive: false };
-const _aiOtPull = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null, kAhead: 0, lane: 0, freeSpeed: 0, blockerVmax: 0, vTop: 0, blockerAccel: 0, attackQ: 0, toTurnIn: 0, roll: 0.5 };
+const _aiOtPull = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null, kAhead: 0, lane: 0, freeSpeed: 0, blockerVmax: 0, vTop: 0, blockerAccel: 0, attackQ: 0, toTurnIn: 0, roll: 0.5, queueT: 0 };
 const _aiDefend = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, chaser: false, chaserGap: 0, chaserSpeed: 0, kA: 0, roomL: 0, roomR: 0, other: null, blocker: null, x: 0 };
 const _aiBoxed = { contactT: 0, roomL: 0, roomR: 0, blocker: null, blockerGap: 0, street: false };
 const _aiDefOnce = { defend: 0, side: 0 };
@@ -4643,6 +4643,7 @@ function updateCar(c, dt, ranked) {
     const capBlocks = blocker && blockerGap < 16 &&
       !(blocker === c.passOf && Math.abs(c.x - blocker.x) >= 1.8);
     if (blocker && blockerGap < 16) aiFreeSpeed = vmax;   // our pace with this car gone (AiDrive.otWant)
+    c.queueT = AiDrive.queueTime(c.queueT, capBlocks && blocker === c._qOf, dt); c._qOf = capBlocks ? blocker : null;   // held behind the SAME car (AiDrive.queuePress)
     if (capBlocks) {
       // Held behind a car SERVING A STOP (or queued for one), not by the ground
       // — the pit-lane rescue reads this. Only a lane car: a car welded to
@@ -5046,7 +5047,7 @@ function updateCar(c, dt, ranked) {
           if (po.passOf === c) { po.passOf = null; po.passCool = po.passFailT; }
         }
       }
-      else if (sideRoom < WCAR) { c.passOf = null; c.passCool = AiDrive.passCooldown(aiT); }       // side closed
+      else if (AiDrive.passSideClosed(sideRoom, c.passSide * (AiDrive.passTarget(po.x, c.passSide, CLEAR, hw) - c.x), WCAR)) { c.passOf = null; c.passCool = AiDrive.passCooldown(aiT); }       // side closed: no room left to REACH the pass lane
       else if (squeezed) { c.passOf = null; c.passCool = AiDrive.passCooldown(aiT); }             // walked to the edge: abandon it
       // NOT ON: at the turn-in and still not half alongside — that is a lunge
       // (the FIA's inside-pass entitlement is the front axle past the mirror
@@ -5074,7 +5075,8 @@ function updateCar(c, dt, ranked) {
       // so a player doing 40 read as "pace 60" and was never attacked; their
       // speed is their pace, so the fallback (0 -> blockerSpeed) is the read.
       _aiOtPull.kAhead = kA; _aiOtPull.lane = c.lane; _aiOtPull.freeSpeed = aiFreeSpeed;
-      _aiOtPull.blockerVmax = blocker.human ? 0 : (blocker._vmaxNow || 0); _aiOtPull.vTop = vTop();
+      // ...and with the blocker's X-mode gain taken back out: freeSpeed is read before our own flap opens, so a raw _vmaxNow hid up to 15 % of pace
+      _aiOtPull.blockerVmax = blocker.human ? 0 : (blocker._vmaxNow || 0) / (1 + xVmaxGain(blocker) * (blocker.aeroX || 0)); _aiOtPull.vTop = vTop(); _aiOtPull.queueT = c.queueT || 0;
       _aiOtPull.blockerAccel = blocker.human ? (blocker.axEstSm || 0) : (blocker.accSm || 0);
       // Engage only with a reachable lane and no cooldown on this stretch.
       // ...and only where the move is ON (AiDrive.attackOK: a straight, or an
@@ -5233,7 +5235,7 @@ function updateCar(c, dt, ranked) {
       // full-lock authority, so every existing multiplier on the step below
       // (grip taper, kerb, contact give, off-track fade) still applies.
       const headWant = clamp(Math.atan(tanT) + Math.atan(AI_XTRACK_GAIN * err / Math.max(vAbs, 1)), -AI_HEAD_MAX, AI_HEAD_MAX);
-      const yawMax = Math.min(AI_YAW_MAX, AI_YAW_LAT * LAT_MAX * AiDrive.lateralScale(c.speed, c.aeroLoad, gripMult(c) * tyres.gripMul(c) * dirtyAirMul(c.wake || 0, c.speed), PACE, VMAX) / vAbs);
+      const yawMax = Math.min(AI_YAW_MAX, AI_YAW_LAT * LAT_MAX * AiDrive.yawScale(c.speed, c.aeroLoad, gripMult(c) * tyres.gripMul(c) * dirtyAirMul(c.wake || 0, c.speed), PACE, VMAX) / vAbs);   // no wings in the yaw budget (AiDrive.yawScale)
       const head0 = c.aiHead || 0;
       c.aiHead = head0 + clamp(headWant - head0, -yawMax * dt, yawMax * dt);
       steer = clamp(vAbs * Math.sin(c.aiHead) / Math.max(STEER_VMAX * clamp(vStd(vAbs) / 18, 0, 1) * AiDrive.lateralScale(c.speed, c.aeroLoad, gripMult(c) * tyres.gripMul(c) * dirtyAirMul(c.wake || 0, c.speed), PACE, VMAX), 1), -1, 1);

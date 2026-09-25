@@ -707,3 +707,63 @@ dimension (`tools/check/ai-race.mjs`, Monza, VM):
   a player leaning on an AI holding its own line is a rub by design, and
   making it a concession is the pushover outcome the grace's own comment
   rejects.
+
+## 2026-09-24 — "too easy, and they clump": the wings, the queue, and a pass cancelled on arrival
+
+Owner report: the AI is too easy and the field clumps, stuck behind each other
+following the line. Three defects, each measured in the VM before it was fixed
+(`scratch/` probes, paired against a worktree at the base commit).
+
+**1. The AI had no wings.** `AiDrive.lateralScale` fell 28 % from 20 m/s to
+the top speed while the player's grip rises 65 % over the same range
+(`aeroGrip`), so a player had roughly twice the AI's lateral grip in every fast
+corner. The 2026-09-09 attempt gave only the PLANNER aero and was reverted
+(above); this time the shared envelope carries `1 + DOWNFORCE·(v/vTop)²`, so the
+lateral step and `cornerSpeed` (which inverts it in closed form) rise together.
+The player-only `PLAYER_GRIP` headroom is not copied. The heading controller's
+YAW budget keeps the old taper (`AiDrive.yawScale`): with the wings it took
+ai-racecraft-vm's solo lateral-jerk figure 5.9 → 8.1 m/s² against a 7.5 cap; with
+the taper, 6.5. Solo laps, one mid-grid car, best of two:
+
+| | easy | normal | hard |
+|---|---|---|---|
+| monza  | 140.20 → 135.35 | 134.18 → 130.02 | 127.10 → 122.40 |
+| spa    | 175.35 → 169.08 | 168.00 → 161.07 | 160.28 → 154.22 |
+| monaco | 102.53 →  99.30 |  98.88 →  95.92 |  94.35 →  91.27 |
+
+3.2–4.1 % faster everywhere, ladder spacing kept, so `DIFF` is unchanged.
+ai-line ×3 at monza: apex depth 6.04 / 6.51 / 5.92 m (was 6.04 / 6.91 / 5.95) —
+still far inside the 3.5 m gate.
+
+**2. A queued car could never want to pass.** The queue cap pins a follower to
+the blocker's speed, and `otWant` asked for a 7 % pace edge the field's 1.4 %
+spread cannot produce. `queuePress` (seconds held by the cap behind the SAME car
+over a craft-scaled 3.5–7 s patience) lowers that margin to 30 % of itself and
+stands in for the closing rate in `attackOK`. Alongside it, `blockerVmax` had the
+blocker's X-mode gain in it while our `freeSpeed` is read before our own flap
+opens — up to 15 % of phantom pace — and is now divided back out.
+
+**3. The pass was cancelled the moment it arrived.** Instrumented abort reasons,
+monza 240 s: ~180 latches, ~20 completions, and 73–105 ended by "side closed":
+the latch dropped whenever less than a car width of road was left beyond the
+passer, checked every frame including AFTER it reached the pass lane, which
+`passTarget` places up to 0.6 m from the edge. `passSideClosed` now closes the
+side only when the room left is less than the distance still to travel (26–48).
+And a pass latched too close to the corner was always abandoned by the lunge
+rule (22–43 per run, median life 0.5–0.8 s): `passReach` refuses a move that
+cannot be half alongside by the turn-in (13–16 left, median life 2–2.8 s).
+
+**Result — "stuck in a train"** (continuous time within 16 m behind the SAME
+car, |dx| < 2.2, launch excluded, 300 s, seeds 1 / 2):
+
+| | time >5 s behind one car | longest |
+|---|---|---|
+| monza  | 4.8 / 3.8 % → 2.3 / 2.1 % | 24.1 / 18.7 → 15.4 / 11.4 s |
+| monaco | 6.2 / 6.7 % → 5.1 / 4.7 % | 12.7 / 17.0 → 15.7 / 25.2 s |
+| spa    | 4.2 / 3.2 % → 3.0 / 3.2 % | 17.6 / 17.6 → 18.2 / 10.2 s |
+
+Monza halves; monaco and spa move less, which is the right shape (monaco should
+stay hard to pass). `ai-field ×5` at monza: order flips 165 → 219, settled
+passes 32 → 30, nose-to-tail 22.6 → 23.6 % — inside the ranges, and that metric
+counts close racing as well as queueing, so it cannot see this. `ai-human ×3`:
+contact 4.6–6.3 → 0.8–6.3 per 100 s, no regression.
