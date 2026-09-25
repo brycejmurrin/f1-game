@@ -17,7 +17,7 @@ import { seedLog } from "../helpers/seed-log.mjs";
 
 const read = rel => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 
-function sunVP(sunDir, ctr = [0, 0, 0]) {
+function sunVP(sunDir, ctr = [0, 0, 0], propTop) {
   const ctx = vm.createContext({ Math, Float32Array, Array, Object, Number, Infinity });
   seedLog(ctx);
   vm.runInContext(read("js/core/mat4.js").replace(/^const\b/gm, "var"), ctx, { filename: "mat4.js" });
@@ -28,7 +28,7 @@ function sunVP(sunDir, ctr = [0, 0, 0]) {
   let vp = null;
   const noop = () => {};
   const G = {
-    track: { meshes: { terrainChunked: null, roadChunked: null, terrain: {}, road: {}, props: {} } },
+    track: { propTop, meshes: { terrainChunked: null, roadChunked: null, terrain: {}, road: {}, props: {} } },
     gfx: {
       shadowBegin: m => { vp = Float32Array.from(m); },
       shadowEnd: noop, castShadow: noop, castShadowChunked: noop,
@@ -75,4 +75,31 @@ test("the receiver side keeps its 170 m below the anchor", () => {
     const z = ndcZ(vp, p);
     assert.ok(z >= -1 && z <= 1, `elev ${e}°: receiver 165 m down-sun clipped (ndc z ${z.toFixed(3)})`);
   }
+});
+
+test("the depth span is PER CIRCUIT: a circuit without tall props keeps the old 150/320 (and its bias in metres)", () => {
+  // An ortho maps [near, far] to [-1, 1]: dNDC/dz = 2 / (far - near). The lit
+  // shaders' bias is in normalised depth, so the span IS the bias's world size.
+  const r = 30 * Math.PI / 180, sd = [Math.cos(r) * 0.6, Math.sin(r), Math.cos(r) * 0.8];
+  const span = (top) => {
+    const vp = sunVP(sd, [0, 0, 0], top);
+    const a = ndcZ(vp, [0, 0, 0]), b = ndcZ(vp, [sd[0], sd[1], sd[2]]);   // 1 m up the sun axis
+    return 2 / Math.abs(a - b);
+  };
+  assert.ok(Math.abs(span(40) - 319) < 0.5, `a 40 m circuit: span ${span(40).toFixed(1)} m, the old 319`);
+  const tall = span(250);
+  assert.ok(tall > 319 && tall <= 569 + 0.5, `a 250 m tower circuit: ${tall.toFixed(1)} m, grown only as far as it needs`);
+  assert.ok(Math.abs(span(undefined) - 569) < 0.5, "unknown prop height: the full 400/570");
+  // …and the tall circuit's own tower still lands inside the map.
+  const vp = sunVP(sd, [0, 0, 0], 250);
+  for (const top of [[0, 250, 0], [0.6 * 80, 250, 0.8 * 80]]) {
+    const z = ndcZ(vp, top);
+    assert.ok(z > -1 && z < 1, `250 m top at ${top} -> ndc z ${z.toFixed(3)}`);
+  }
+});
+
+test("Tracks measures the tallest prop above its OWN ground, before the upload", () => {
+  const src = read("js/track/tracks.js");
+  assert.match(src, /track\.propTop = propTop\(track, propsGeo\);/);
+  assert.match(src, /const g = terrainY\(track, p\[i\], p\[i \+ 2\]\);/, "height above the prop's own terrain, not the lowest road point");
 });

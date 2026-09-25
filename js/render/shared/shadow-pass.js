@@ -46,7 +46,23 @@ const ShadowPass = (function () {
     // lit shaders' biasTerm is in normalised depth, so its world size grows by
     // 569/319 (≈0.32 → 0.57 m at the defaults). The CAR map keeps 150/320: cars
     // are never tall. Pinned: tests/unit/shadow-pass-depth.test.mjs.
-    const SUN_BACK = 400, SUN_FAR = 570;
+    // PER CIRCUIT. 400/570 on every circuit (for four circuits' towers) made the
+    // lit shaders' normalised-depth bias and PCSS falloff 1.8x bigger in METRES
+    // everywhere: at a 20-degree sun, shadows detached 0.75 -> 1.34 m from the
+    // base of every barrier and hoarding. A caster h m above the ground, within
+    // the ±box footprint, sits at most hypot(h, box) up the sun axis from the
+    // anchor, so sunSpan() sizes the near side from the circuit's tallest prop
+    // (Tracks: track.propTop, above its own ground) + 10 m: every circuit that
+    // fits keeps exactly the old 150/320 (and its shadows); Singapore, Shanghai,
+    // Vegas, Jeddah… get what they need, up to 400. Unknown propTop = the max.
+    const SUN_BACK_MIN = 150, SUN_BACK_MAX = 400, SUN_RECV = 170;
+    let SUN_BACK = SUN_BACK_MAX, SUN_FAR = SUN_BACK_MAX + SUN_RECV;
+    function sunSpan(track, box) {
+      const top = track && track.propTop;
+      SUN_BACK = (typeof top === "number" && top >= 0)
+        ? Math.min(SUN_BACK_MAX, Math.max(SUN_BACK_MIN, Math.ceil(Math.hypot(top, box)) + 10)) : SUN_BACK_MAX;
+      SUN_FAR = SUN_BACK + SUN_RECV;
+    }
     let _shadowSnapX = null, _shadowSnapZ = null, _shadowBox = null;
     let _shadowSunX = null, _shadowSunY = null, _shadowSunZ = null;
     // Lamp-spot shadow snap: skip full rebuild when nearest flood + eye cell hold.
@@ -181,6 +197,7 @@ const ShadowPass = (function () {
         // SHADOW DISTANCE knob: re-render the map when the box size changes too (not
         // only on the position snap), so the slider responds without driving.
         const sBox = LT.shadowRange != null ? LT.shadowRange : 80;
+        sunSpan(G.track, sBox);
         const step = sBox / 4;
         // Forward-biased CAMERA anchor, not the raw player position: the box budget
         // goes where you look. Centred on the car, up to sBox/8 of snap slack plus

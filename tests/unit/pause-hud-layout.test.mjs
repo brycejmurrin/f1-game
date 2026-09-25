@@ -58,3 +58,29 @@ test("compact pause stack tightens without changing type tokens", () => {
   // flat 36 local px painted RESUME at 14-18px (2026-08-21 sweep, pause @40).
   assert.match(css, /#pausemenu\s+\.sheet\[data-density="compact"\]\s+\.stack\s+button[^}]*min-height:\s*max\(36px,\s*var\(--tap-min\)\)/);
 });
+
+test("a queued INFO card older than ANN_STALE_MS is dropped at the drain; a warning never is", () => {
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const priorities = game.match(/const ANN_PRI = [^;]+;/)[0];
+  const stale = game.match(/const ANN_STALE_MS = [^;]+;/)[0];
+  const qmax = game.match(/const ANN_QUEUE_MAX = [^;]+;/)[0];
+  const announce = game.match(/function announce\([^]*?\n\}/)[0];
+  const drain = game.match(/ {6}while \(_annQueue\.length && _annQueue\[0\]\.pri <= ANN_PRI\.info[^\n]*\n[^\n]*_annQueue\.shift\(\); showAnnounce[^\n]*/)[0];
+  let now = 0;
+  const shown = [];
+  const ctx = vm.createContext({ hudProfile: "broadcast", CAM_MODES: [{ id: "chase" }], camMode: 0,
+    announceT: 5, _annPri: 5, _annFloor: 3, _annQueue: [], performance: { now: () => now },
+    showAnnounce: (...args) => shown.push(args) });
+  vm.runInContext(priorities + "\n" + stale + "\n" + qmax + "\n" + announce + "\nfunction drain(){\n" + drain + "\n}", ctx);
+  vm.runInContext('announce("UP TO P5", 2, "info"); announce("TRACK LIMITS", 2, "warning")', ctx);
+  now = 9000;   // a burst held the card on screen past ANN_STALE_MS
+  vm.runInContext("drain()", ctx);
+  assert.deepEqual(shown.map((s) => s[0]), ["TRACK LIMITS"], "the warning plays; the stale position call is dropped");
+  vm.runInContext("drain()", ctx);
+  assert.equal(shown.length, 1, "UP TO P5 never reads out 9 s late");
+  now = 0; shown.length = 0; ctx._annQueue.length = 0;
+  vm.runInContext('announce("TYRES AT 50%", 2, "info")', ctx);
+  now = 3000;
+  vm.runInContext("drain()", ctx);
+  assert.deepEqual(shown.map((s) => s[0]), ["TYRES AT 50%"], "a fresh info card still plays");
+});

@@ -152,6 +152,20 @@ function list() {
 }
 function rounds() { return list().length; }
 function track(round) { return list()[round] || null; }
+/** The round's Grand Prix name. A circuit carries its classic name (Sepang is
+ *  the "Malaysian GP"); the 2026 REAL calendar, raced as published, renames two
+ *  rounds — the Bahrain GP runs at Sepang, and Barcelona's round is the
+ *  Barcelona-Catalunya GP now that the Spanish GP is Madrid's. Only an unedited
+ *  2026 calendar (the preset's ids, in order) takes those names. */
+const REAL_2026_GP = Object.freeze({ sepang: "Bahrain GP", catalunya: "Barcelona-Catalunya GP" });
+function gpName(t) {
+  if (!t) return "";
+  if (fmtActive() && REAL_2026_GP[t.id]) {
+    const ids = rulesConfig().trackIds || [];
+    if (ids.length === REAL_2026.length && REAL_2026.every((r, i) => r.id === ids[i])) return REAL_2026_GP[t.id];
+  }
+  return t.gp || "";
+}
 function trackIndex(round) {
   const t = track(round);
   return t ? Tracks.LIST.indexOf(t) : -1;
@@ -533,6 +547,6 @@ return {
   resume, blank, restart, resetWeekend, canRace, hasProgress,
   quali, qualiNext, stage, midWeekend, sprintOn, lapsFor, formatLaps, pointsTable,
   award, scored, rank, netPts, grid, drawRound,
-  presetIds, preset, shuffled,
+  presetIds, preset, shuffled, gpName,
 };
 })();
