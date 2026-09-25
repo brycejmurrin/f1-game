@@ -10,6 +10,7 @@
 
 const Collide = (() => {
   const clamp = M4.clamp;   // js/core/mat4.js (eval-time: HARD_EDGES mat4 -> collide)
+  const wrapDelta = M4.wrapDelta, TWO_PI = 2 * Math.PI;
   // The loop's fixed step (js/physics/consts.js FIXED_DT); the literal is the
   // fallback for a bare test VM that loads this file without PhysicsConsts.
   const FIXED_DT = (typeof PhysicsConsts !== "undefined" && PhysicsConsts.FIXED_DT) || 1 / 60;
@@ -125,16 +126,19 @@ const Collide = (() => {
     function sweepContacts(ranked, dt) {
       // Previous resolved poses are local collision state, never render history.
       // A teleport or rapidly rotating body is not a linear driving sweep.
+      // The rotation test is on the WRAPPED angle: yawVis lives in (-π, π], so
+      // a car turning through ±π (spun, facing back up the road) read as a
+      // ~2π "rotation" and its swept contact was skipped every such step.
       for (let i = 0; i < ranked.length; i++) {
         const a = ranked[i], pa = motion.get(a);
         if (!pa || incidentSim.owns(a) || netPlay.owns(a)) continue;
         const da = deltaS(a.prog - pa.prog), xa = a.x - pa.x;
-        if (Math.hypot(da, xa) > Math.max(6, Math.abs(a.speed) * dt * 2 + 1) || Math.abs(bodyAngle(a) - pa.angle) > 0.15) continue;
+        if (Math.hypot(da, xa) > Math.max(6, Math.abs(a.speed) * dt * 2 + 1) || Math.abs(wrapDelta(bodyAngle(a) - pa.angle, TWO_PI)) > 0.15) continue;
         for (let k = i + 1; k < ranked.length; k++) {
           const b = ranked[k], pb = motion.get(b);
           if (!pb || incidentSim.owns(b) || netPlay.owns(b)) continue;
           const db = deltaS(b.prog - pb.prog), xb = b.x - pb.x;
-          if (Math.hypot(db, xb) > Math.max(6, Math.abs(b.speed) * dt * 2 + 1) || Math.abs(bodyAngle(b) - pb.angle) > 0.15) continue;
+          if (Math.hypot(db, xb) > Math.max(6, Math.abs(b.speed) * dt * 2 + 1) || Math.abs(wrapDelta(bodyAngle(b) - pb.angle, TWO_PI)) > 0.15) continue;
           if (Math.hypot(da - db, xa - xb) < 1) continue;
           const x0 = deltaS(pa.prog - pb.prog), y0 = pa.x - pb.x, x1 = x0 + da - db, y1 = y0 + xa - xb;
           if (Math.min(x0, x1) > LCAR_MAX || Math.max(x0, x1) < -LCAR_MAX) continue;

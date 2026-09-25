@@ -43,10 +43,23 @@ const RaceControl = (function () {
   // advances a car, but IncidentSim temporarily owns the same (s, lap, clock,
   // finish) state; keeping a smaller copy there lost the chequered-flag rule and
   // the backward undo. Presentation/timing side effects stay with each caller.
-  function lineTransition(c, oldS, newS, ds, total, lapsTarget, cars, raceT) {
+  //
+  // `dt` (optional) is the step the caller ALREADY added to c.lapTime / raceT
+  // before this call (updateCar does). The line falls part-way through that
+  // step, at frac = (total - oldS) / ds of it, so the lap and the finish are
+  // timed to the crossing and the remainder dt·(1-frac) opens the next lap —
+  // up to 16.7 ms per lap otherwise, on the leaderboard and between two cars
+  // crossing in the same step. A caller that did not advance the clock this
+  // step (IncidentSim's takeover) omits it and gets the step-quantised time.
+  function lineTransition(c, oldS, newS, ds, total, lapsTarget, cars, raceT, dt) {
     if (!c || c.finished || !(total > 0)) return null;
     if (ds > 0 && oldS > total * 0.5 && newS < total * 0.5) {
-      const lapDone = c.lapTime || 0;
+      let over = 0;
+      if (dt > 0 && Number.isFinite(dt)) {
+        const frac = (total - oldS) / ds;
+        if (Number.isFinite(frac)) over = dt * (1 - Math.min(1, Math.max(0, frac)));
+      }
+      const lapDone = Math.max(0, (c.lapTime || 0) - over);
       // A crossing that follows a backward undo re-crosses a line the lap was
       // ALREADY timed at: the caller must not record it a second time (a Time
       // Trial reverse-and-recross put a lap nobody drove on the leaderboard).
@@ -57,12 +70,12 @@ const RaceControl = (function () {
       // physical lap. Backward line crossings do not refund fuel either.
       c.fuelLap = Math.max(c.fuelLap || 0, c.lap + (c.fuelRestartLaps || 0));
       c._lapTimeAtLine = lapDone;
-      c.lapTime = 0;
+      c.lapTime = (c.lapTime || 0) - lapDone;   // the post-line remainder (0 without dt)
       const target = Number(lapsTarget);
       const flagged = target > 0 && (c.lap > target || (c.lap > 1 && flagOut(cars)));
       if (flagged) {
         c.finished = true;
-        c.finishT = Number.isFinite(raceT) ? raceT : 0;
+        c.finishT = Number.isFinite(raceT) ? Math.max(0, raceT - over) : 0;
       }
       return { direction: 1, changed: true, lapDone, flagged, recross };
     }

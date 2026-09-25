@@ -5977,7 +5977,7 @@ function updateCar(c, dt, ranked) {
   // full lap early. The backward branch below restores the symmetry `prog`
   // already had.
   const lineCross = RaceControl.lineTransition(c, oldS, c.s, dLine, track.total,
-    lapsTarget, cars, raceT);
+    lapsTarget, cars, raceT, dt);   // dt: lapTime/raceT already hold this whole step — timed to the crossing inside it
   if (lineCross && lineCross.direction > 0) {
     // A takeover (R2/R3/C1) during this lap invalidates it EXPLICITLY: the car
     // was moved by Rapier, so it is not a timed lap — no personal best, no
@@ -5997,7 +5997,7 @@ function updateCar(c, dt, ranked) {
       // `fin` is OUR finishT at the crossing that ends the race: the remote's
       // pose-time stamp is one interp delay late (netplay.js poseRemote).
       if (lapValid && c.local && netPlay.active()) {
-        netPlay.reportLap({ lap: c.lap, time: lapDone, best: isFinite(c.best) ? c.best : null, code: c.code, fin: flagged ? raceT : undefined });
+        netPlay.reportLap({ lap: c.lap, time: lapDone, best: isFinite(c.best) ? c.best : null, code: c.code, fin: flagged ? c.finishT : undefined });   // finishT: the in-step crossing, as classified locally
       }
       if (c.isPlayer && isTimeTrial()) { if (lapValid) onTTLap(lapDone); else Ghost.startLap(); }
     } else if (c.isPlayer && isTimeTrial()) {

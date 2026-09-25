@@ -306,6 +306,7 @@ Container bootstrap: browsers and the Cursor Cloud install.
 | **check/class-usage.mjs** | Finds classes APPLIED by index.html or js/ that no css/ rule defines (the opposite of the dead-class check). |
 | **check/cross-file-paths.mjs** | Every relative reference between files resolves to a file that exists (espree extraction; built for the tests/ split). |
 | **check/evaluate-scope-lint.mjs** | A `page.evaluate()` callback may not close over Node — flags module-scope reads inside serialised callbacks. |
+| **check/html-sink-lint.mjs** | Flags `.innerHTML =` / `.outerHTML =` / `insertAdjacentHTML()` in js/ whose HTML is not constant and not in the… |
 | **check/offline-precache-check.cjs** | Does an installed PWA still work with the origin gone? The only check that sees a bare circuit after a missed precache. |
 | **check/reject-lint.mjs** | An unhandled rejection paints a full-screen overlay — finds promise-returning API calls that discard theirs. |
 | **check/wait-polling-lint.mjs** | A declared `waitForFunction` timeout that cannot fire is not a bound — checks every call carries `{ polling }`. |

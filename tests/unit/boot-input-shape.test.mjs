@@ -15,6 +15,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -71,14 +72,16 @@ test("idxOr rejects every non-index, not just out-of-range numbers", () => {
 // every sync push ANOTHER car onto the grid.
 test("a corrupt custom team is repaired, not pushed into Teams.LIST as it lies", () => {
   const src = extractFn(read("js/career/custom-team.js"), "loadCustomTeam", "js/career/custom-team.js");
-  const DEFAULT_CUSTOM = {
-    id: "custom", name: "My Team", tier: 2,
-    color: [0.13, 0.79, 0.85], stats: { speed: 84 },
-    drivers: [{ name: "Your Name", code: "YOU", num: 99 }],
-  };
-  const load = (stored) => new Function("store", "DEFAULT_CUSTOM",
+  // The repair itself is Teams.sanitizeCustom (js/data/teams.js) — run the
+  // shipped one, not a copy.
+  const ctx = vm.createContext({});
+  vm.runInContext(read("js/data/teams.js"), ctx, { filename: "js/data/teams.js" });
+  const Teams = vm.runInContext("Teams", ctx);
+  const DEFAULT_CUSTOM = Teams.DEFAULT_CUSTOM;
+  const plain = (v) => JSON.parse(JSON.stringify(v));
+  const load = (stored) => plain(new Function("store", "DEFAULT_CUSTOM", "Teams",
     `${src}\nreturn loadCustomTeam();`)(
-    { get: (k, d) => (stored === undefined ? d : stored) }, DEFAULT_CUSTOM);
+    { get: (k, d) => (stored === undefined ? d : stored) }, DEFAULT_CUSTOM, Teams));
 
   // Every shape that reached `.drivers.forEach` and threw.
   for (const bad of [{}, null, [], "team", 7, { id: "custom", name: "Mine" },
@@ -94,11 +97,38 @@ test("a corrupt custom team is repaired, not pushed into Teams.LIST as it lies",
   const half = load({ id: "custom", name: "Scuderia Me", color: [1, 0, 0], drivers: 0 });
   assert.equal(half.name, "Scuderia Me", "the player's own fields survive the repair");
   assert.deepEqual(half.color, [1, 0, 0]);
-  assert.deepEqual(half.drivers, DEFAULT_CUSTOM.drivers);
-  // …and a sound team is returned untouched, by identity.
-  const sound = { id: "custom", name: "Mine", drivers: [{ name: "A", code: "AAA", num: 1 }] };
-  assert.equal(load(sound), sound, "nothing is rebuilt when nothing is wrong");
-  assert.equal(load(undefined), DEFAULT_CUSTOM, "an empty store still gets the seed");
+  assert.deepEqual(half.drivers, plain(DEFAULT_CUSTOM.drivers));
+  // …and a sound team comes back with every field it had, unchanged.
+  const sound = plain(Object.assign({}, DEFAULT_CUSTOM,
+    { name: "Mine", drivers: [{ name: "A", code: "AAA", num: 1 }] }));
+  assert.deepEqual(load(sound), sound, "nothing the dialog could have saved is altered");
+  assert.deepEqual(load(undefined), plain(DEFAULT_CUSTOM), "an empty store still gets the seed");
+});
+
+// …AND A SHAPE-SOUND TEAM IS STILL PLAYER INPUT. The dialog caps every field as
+// it is typed (custom-team.js clean()); a stored or imported team never went
+// through the dialog. The names are painted into chips, the HUD and results —
+// and aria-state.js paintOnOff once wrote one back through innerHTML
+// (2026-09-24). The load is the second wall: rebuilt to the dialog's limits.
+test("a loaded custom team is capped to the dialog's limits (malicious store)", () => {
+  const src = extractFn(read("js/career/custom-team.js"), "loadCustomTeam", "js/career/custom-team.js");
+  const ctx = vm.createContext({});
+  vm.runInContext(read("js/data/teams.js"), ctx, { filename: "js/data/teams.js" });
+  const Teams = vm.runInContext("Teams", ctx);
+  const t = new Function("store", "DEFAULT_CUSTOM", "Teams", `${src}\nreturn loadCustomTeam();`)(
+    { get: () => ({
+      id: "custom", name: "\u0007" + "N".repeat(400), short: "toolong", engine: 5,
+      drivers: Array.from({ length: 50 }, (_, i) => ({ name: "<i>" + i + "</i>" + "x".repeat(99), code: "abcdef", num: 123.7 + i })),
+    }) }, Teams.DEFAULT_CUSTOM, Teams);
+  assert.equal(t.name, "N".repeat(22));
+  assert.equal(t.short, "TOOL");
+  assert.equal(t.engine, "Custom", "a non-string falls back");
+  assert.equal(t.drivers.length, 2, "fifty seats are not a team");
+  for (const d of t.drivers) {
+    assert.ok(d.name.length <= 22, d.name);
+    assert.equal(d.code, "ABC");
+    assert.equal(d.num, 99);
+  }
 });
 
 // DebrisWorld._active is the ONE boolean game.js reads to decide whether debris,
