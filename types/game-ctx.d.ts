@@ -659,7 +659,7 @@ interface GameCtx {
    * can already be held by something higher. A caller that spends state on the
    * line (a cooldown, a wear step) must spend it only on true.
    */
-  readonly announce: (msg: string, dur?: number, kind?: string) => boolean;
+  readonly announce: (msg: string, dur?: number, kind?: string, still?: () => boolean) => boolean;
   readonly applyCaution: (d: unknown) => void;
   readonly camVantage: (mode: number, s: number, x: number, spd: number, now: number, extra?: Opaque) => CamVantage;
   readonly endRace: (forcedOrder?: CarState[]) => void;
@@ -717,6 +717,8 @@ interface GameCtx {
 
   // ── The waiting room reuses the real menus rather than reimplementing them ─
   readonly setNetRoom: (on: boolean) => void;
+  /** Forget RACE SETTINGS' per-track draft: another writer (the Daily) staged laps/weather/time of day. */
+  readonly resetRaceDraft: () => void;
   readonly openRaceSetup: () => void;
   readonly netRoom: boolean;
   /** Seats held by the OTHER players; empty off-line. */
