@@ -723,3 +723,38 @@ test("a grid too small to fill a numbered slot leaves that shot out (time trial,
     return null;
   });
 });
+
+test("the menu plans the flyby; the loading screen reuses every plan (no planning mid-flyby)", async () => {
+  // Corner plans on a built-up circuit cost 150-380 ms each on a desktop (Singapore);
+  // made in timer slices DURING the flyby they were visible hitches, ~1-2 s on a
+  // phone. menuFinish plans the load's list with planSteps; the flyby then only
+  // reads plans — which needs the SAME bound shot objects (bindCorners' memo) and
+  // the SAME list when nothing is filtered (withoutSlot).
+  await withTrack("singapore", (track, g) => {
+    const F = g.sandbox.FlybySeq;
+    F.setPlayerSlot(11, 22);
+    const list = F.vary(F.DEFAULT, 9, false), step = F.planSteps(track, list);
+    let n = 0; while (!step()) n++;
+    assert.ok(n >= list.length - 2, "planSteps plans one shot per call");
+    assert.equal(F.withoutSlot(list), list, "nothing filtered: the same array, so the bound shots and plans are reused");
+    const b1 = F.bindCorners(track, list), b2 = F.bindCorners(track, list.slice());
+    assert.ok(b1.every((s, i) => s === b2[i]), "a re-made list binds to the SAME shot objects");
+    let total = 0; for (const s of list) total += s.dur;
+    let acc = 0, worst = 0; F.reset();
+    for (const s of list) { const t0 = process.hrtime.bigint(); F.solve(track, (acc + s.dur / 2) / total, list); worst = Math.max(worst, Number(process.hrtime.bigint() - t0) / 1e6); acc += s.dur; }
+    assert.ok(worst < 25, `every shot was planned in the menu (worst solve ${worst.toFixed(1)} ms)`);
+    return null;
+  });
+});
+
+test("the menu build warms its shaders BEFORE the slow extras (lamp pre-bake, flyby plans)", () => {
+  // The lamp pre-bake (seconds of slices) ran before the warm frames: a RACE! tap
+  // mid-bake met cold shaders and the loading screen's flyby froze on its first frames.
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const i = game.indexOf("async function menuFinish(current, key)"), body = game.slice(i, game.indexOf("\n}\n", i));
+  assert.ok(i > 0, "menuFinish exists");
+  const warm = body.indexOf("_menuGate.warm = 2"), lamp = body.indexOf("menuLampBake(current)"), plan = body.indexOf("FlybySeq.planSteps(");
+  assert.ok(warm > 0 && warm < lamp && lamp < plan, "car assets -> warm -> lamp bake -> flyby plans");
+  assert.match(body, /if \(lit && await menuIdle\(current\)\) _menuGate\.warm = 2;/, "and warm again once a baked (dark) world is in — only then");
+  assert.match(game, /const planned = world && _menuFly && _menuFly\.track === track && _menuFly\.key === _menuGate\.ready/);
+});

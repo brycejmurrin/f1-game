@@ -457,8 +457,13 @@ const FlybySeq = (function () {
         if (alt.length) k = alt[0];
       }
       used.push(k);
+      // ONE bound copy per (shot, corner): a list re-filtered or re-bound reuses it,
+      // so the plan cached on it (planShot) survives — the menu plans, the flyby plays.
+      const memo = track._fbBoundShot || (track._fbBoundShot = new WeakMap());
+      const byK = memo.get(shot) || (memo.set(shot, {}), memo.get(shot));
+      if (byK[k]) return byK[k];
       const bind = (p) => (p && p.at === "corner" && (p.n === undefined ? 1 : p.n) === role ? Object.assign({}, p, { n: k + 1 }) : p);
-      return Object.assign({}, shot, { eye: shot.eye.map(bind), look: shot.look.map(bind) });
+      return (byK[k] = Object.assign({}, shot, { eye: shot.eye.map(bind), look: shot.look.map(bind) }));
     });
     cache.set(list, out);
     return out;
@@ -1061,7 +1066,21 @@ const FlybySeq = (function () {
     const next = () => { if (gen !== _warmGen || i >= list.length) return; plan(i++); setTimeout(next, 0); };
     if (i < list.length) setTimeout(next, 0);
   }
-  const withoutSlot = (list) => { const out = list.filter(fitsGrid); return out.length ? out : list; };
+  // The SAME array when nothing is dropped: bindCorners and the plans cache by identity.
+  /** The same plans as warm(), one shot per call, for a caller that owns the
+   *  pacing (the menu, between its idle slices). step() → true when all are planned. */
+  function planSteps(track, shots) {
+    const list = bindCorners(track, (shots && shots.length) ? shots : DEFAULT);
+    let total = 0, i = 0;
+    for (let j = 0; j < list.length; j++) total += list[j].dur || 0;
+    return () => {
+      if (!(total > 0) || i >= list.length) return true;
+      const sh = landmarkFallback(track, list[i++]);
+      planShot(track, sh, (sh.dur || 1) / total);
+      return i >= list.length;
+    };
+  }
+  const withoutSlot = (list) => { const out = list.filter(fitsGrid); return out.length && out.length < list.length ? out : list; };
   /** WHICH SHOT IS ON AIR at flyby progress `u`, and how far through it (0..1)
    *  — the cut arithmetic solve() uses, with none of its planning, so a caller
    *  that only needs the shot's NAME (the loading card's grid graphic and its
@@ -1453,8 +1472,8 @@ const FlybySeq = (function () {
      the handoff to the race. Pure and seeded (never the sim RNG): the same
      seed is the same flyby, which is what the test holds it to. */
   const VARY_ROLES = ["first", "lore", "slowest", "fastest", "mid", "late"];
-  function vary(list, seed) {
-    list = list.filter(fitsGrid);   // durations renormalise in solve()
+  function vary(list, seed, fit) {
+    if (fit !== false) list = list.filter(fitsGrid);   // durations renormalise in solve(); the menu passes false (the race's grid is not known yet)
     let h = (seed >>> 0) || 1;
     const rnd = () => { h ^= h << 13; h >>>= 0; h ^= h >>> 17; h ^= h << 5; h >>>= 0; return h / 4294967296; };
     const used = {}, swapLm = rnd() < 0.35;   // decided ONCE: swapping one landmark shot alone films the same landmark twice
@@ -1482,7 +1501,7 @@ const FlybySeq = (function () {
     solve, shotAt, reset, clearEye, floorEye, groundAt, insideProp, blockers, isSolid, onRoadPose,
     landmarks, bounds, landmarkScore, lmBase, landmarkFallback, planShot, treeBlockers,
     anchorS, posePoint, cornerS, cornerSide, cornerTurn, lmFace,
-    poseFromWorld, shotFromView, nearestCorner, vary, setPlayerSlot, slotIndex, slotKnown, withoutSlot, bindCorners, warm,
+    poseFromWorld, shotFromView, nearestCorner, vary, setPlayerSlot, slotIndex, slotKnown, withoutSlot, bindCorners, warm, planSteps,
     DEFAULT, EASE,
     POLE_BACK, GRID_SPACING, GRID_ROWS, MIN_FILL, MIN_H, FAR, FOG, NEAR, FENCE, REF_S, PAN_MAX,
   };

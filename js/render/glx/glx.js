@@ -7,7 +7,7 @@
  */
 "use strict";
 
-const GLX = (function () {
+const GLXBackend = (function () {
   // GLSL sources live in js/render/shaders/{lit,sky,fx,post}.js (loaded before this
   // file). The post/shadow sources are destructured by the split subsystem modules
   // (js/render/glx/post.js, js/render/glx/shadow.js) instead of here.
@@ -33,29 +33,17 @@ const GLX = (function () {
   // path — the only way Playwright/desktop DevTools can exercise and A/B the
   // phone-only downgrades (lamp budget, beams-off, atlas sizes, shadow sizes).
   //
-  // THIS IS THE ONE COPY. The sniff was reimplemented in four files and the
-  // copies had already drifted — js/game.js's omitted `_forceMobile` entirely,
-  // so the override that exists to make the phone tier testable did not reach
-  // the backend gate it most needed to (docs/ARCHITECTURE-REVIEW.md §8).
-  // Everything else reads GLX.isMobile / GLX.mobileTier (exported below):
-  // glx.js is the 11th <script> tag, ahead of every consumer, and the deferred
-  // backends load last, so the value is always there to read. Any new consumer
-  // does the same — do not re-sniff navigator.
-  let _forceMobile = false;
-  try { _forceMobile = localStorage.getItem("apex26.forceMobileTier") === "1"; } catch (_) {}
-  const IS_MOBILE = _forceMobile ||
-    /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
-    (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent));
+  // The eager GLX facade owns the single device sniff, ahead of eval-time
+  // consumers and deferred renderers. Read that tier rather than re-sniffing.
   // A capable phone can opt into the desktop-quality tier (full DPR + MSAA +
   // full-res atlases + 2048 shadows) via the pause-menu GRAPHICS: HIGH setting.
   // Default OFF — the safe tier is what keeps memory-limited devices alive.
-  let _gfxHigh = false;
-  try { _gfxHigh = localStorage.getItem("apex26.gfxHigh") === "1"; } catch (_) {}
+  const IS_MOBILE = GLX.isMobile;
   // INSTANCE CELL-SET CULL CACHE — owned by js/render/shared/inst-cells.js
   // (apex26.instCellCache=0 escape hatch). Numbers: docs/PERF-FINDINGS.md 2c.
   // MOBILE TIER = a phone NOT opted into high quality. All the memory downgrades
   // key off this, so HIGH restores full quality (a reload re-runs init with it).
-  const MOBILE_TIER = IS_MOBILE && !_gfxHigh;
+  const MOBILE_TIER = GLX.mobileTier;
   let _ctxLost = false;   // true between webglcontextlost and the reload on restore
   // GPU error counter — WebGL has no onuncapturederror, so drain getError() once
   // per present. Exists because the real-GPU gate read null here and passed
@@ -2713,3 +2701,4 @@ const GLX = (function () {
     mobileTier: MOBILE_TIER,   // phone NOT opted into GRAPHICS: HIGH → memory-safe caps apply
   };
 })();
+GLX.install(GLXBackend);
