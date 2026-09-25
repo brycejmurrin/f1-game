@@ -285,7 +285,7 @@ const Ghost = (function () {
   // Leaving the page with a record still pending: write it now (synchronous
   // localStorage is allowed in pagehide), or the new ghost dies with the tab.
   const _flushes = new Set();
-  const IDLE_CAP_MS = 20000;
+  const IDLE_CAP_MS = 5000;    // one write per PB, so at worst one short hitch a lap
   let _flushArmed = false;
   function armFlush(fn) {
     _flushes.add(fn);

@@ -413,7 +413,7 @@ test("a record waits for a long idle slot, but not forever: a 60 Hz loop never o
   recordLap(h.Ghost, 1.0);
   for (let i = 0; i < 50; i++) { clock.t += 16; h.runIdle(8); }
   assert.equal(ghostOnDisk(h), false, "still preferring a long slot");
-  clock.t += 25000;
+  clock.t += 6000;
   h.runIdle(8);
   assert.equal(ghostOnDisk(h), true, "the PB only ever lived in memory");
 });
