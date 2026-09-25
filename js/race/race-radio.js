@@ -136,9 +136,12 @@ const RaceRadio = (function () {
 
     function speak(c, kind) {
       const text = lines.pick(c.key, c.vars);
+      if (!text) { queue[c.ch].delete(c.id); return false; }
+      // Refused (a full card queue): an URGENT line stays queued and is offered
+      // again until its ttl — "LAST LAP" is a once line, and dropping it here
+      // lost it for the race. Anything else is dropped, as before.
+      if (!G.announce(text, durFor(text), kind)) { if (c.tier < 5) queue[c.ch].delete(c.id); return false; }
       queue[c.ch].delete(c.id);
-      if (!text) return false;
-      if (!G.announce(text, durFor(text), kind)) return false;
       m.said.set(c.cdKey, t);
       if (c.once) m.once.add(c.once);
       m[c.ch] = t;
@@ -168,6 +171,10 @@ const RaceRadio = (function () {
 
     // ── ENGINEER: events ────────────────────────────────────────────────────
     function engineerEvent(e, f, p) {
+      // A driver who has taken the flag or retired is off the radio: only their
+      // own result is still to come. (Solo that is 2.2 s; in VS FRIEND it is
+      // the rest of the race, which used to hear safety cars and "UP TO P5".)
+      if ((f.finished || f.retired) && e.type !== "finish" && !(e.type === "retire" && e.car === p)) return;
       const pos = f.rawPos || f.pos;
       switch (e.type) {
         case "playerLap": {
@@ -482,6 +489,8 @@ const RaceRadio = (function () {
     // Pick at most one line per tick: the engineer's best if it may speak now,
     // else the commentator's.
     function pump(f, p, tv) {
+      // A VS FRIEND race keeps running under the pause menu; the radio waits.
+      if (G.paused) return;
       const e = best("eng");
       if (e) {
         const urgent = e.tier >= 5;

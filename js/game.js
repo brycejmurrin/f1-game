@@ -1443,12 +1443,17 @@ function announce(msg, dur, kind) {
     // slot means the line still gets its turn, so that counts as accepted;
     // being pushed off the end means it is gone and the caller must offer it
     // again (RaceEngineer does, on its next tick).
-    const entry = { msg, dur, kind, pri };
+    // A slot once given is NEVER taken back: evicting an accepted line told its
+    // caller "said" for words nobody heard (RaceEngineer spends the wear step,
+    // race-radio its cooldowns and the told position). A full queue refuses a
+    // newcomer that outranks nothing waiting; one that does (a warning behind
+    // two reports) queues deeper instead of pushing an accepted line out.
+    const low = _annQueue.length ? _annQueue[_annQueue.length - 1].pri : 0;
+    if (_annQueue.length >= (pri > low ? ANN_QUEUE_MAX + 3 : ANN_QUEUE_MAX)) return false;
     let at = _annQueue.length;
     while (at > 0 && _annQueue[at - 1].pri < pri) at--;
-    _annQueue.splice(at, 0, entry);
-    const dropped = _annQueue.splice(ANN_QUEUE_MAX);
-    return dropped.indexOf(entry) < 0;
+    _annQueue.splice(at, 0, { msg, dur, kind, pri });
+    return true;
   }
   showAnnounce(msg, dur, kind);
   return true;
