@@ -27,6 +27,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import vm from "node:vm";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { seedStore } from "../helpers/seed-store.mjs";   // gfx-quality.js persists through GameStore.store's raw lane
@@ -4963,6 +4964,114 @@ test("godray: lamp beams alone take one blur pair, sun shafts keep two, on TLX a
   }
 });
 
+// The boot fallback runs the actual game.js selection block against a stable
+// GLX facade and injected loader outcomes, without claiming a real canvas.
+{
+const lazyRequire = createRequire(import.meta.url);
+const LAZY_ROOT = new URL("../../", import.meta.url);
+const source = (path) => fs.readFileSync(new URL(path, LAZY_ROOT), "utf8");
+const manifest = lazyRequire("../../tools/manifest.cjs");
+const game = source("js/game.js");
+const begin = game.indexOf("\nif (!gfx) {");
+const end = game.indexOf("\n// Baked asset pack", begin);
+assert.ok(begin > 0 && end > begin, "boot's GLX fallback must remain identifiable");
+const fallback = `(async function () { let gfx = null; ${game.slice(begin, end)} return gfx; })()`;
+
+test("the eager GLX handle preserves eval-time mobile tier and live backend getters", () => {
+  const storage = new Map([["apex26.forceMobileTier", "1"]]);
+  const context = vm.createContext({
+    navigator: { userAgent: "Desktop Test", maxTouchPoints: 0 },
+    localStorage: { getItem: (k) => storage.get(k) || null },
+  });
+  context.window = context;
+  vm.runInContext(source("js/render/shared/glx-facade.js"), context);
+  const handle = context.GLX;
+  assert.equal(handle.isMobile, true);
+  assert.equal(handle.mobileTier, true);
+  assert.equal(typeof handle.init, "undefined", "GLX implementation should remain deferred");
+  const backend = { init: () => true, get width() { return 42; } };
+  handle.install(backend);
+  assert.equal(context.GLX, handle, "consumers must retain their GLX object identity");
+  assert.equal(handle.width, 42, "descriptor-copy must preserve live getters");
+  assert.equal(handle.init(), true);
+  storage.set("apex26.gfxHigh", "1");
+  const next = vm.createContext({
+    navigator: { userAgent: "iPad", maxTouchPoints: 5 },
+    localStorage: { getItem: (k) => storage.get(k) || null },
+  });
+  next.window = next;
+  vm.runInContext(source("js/render/shared/glx-facade.js"), next);
+  assert.equal(next.GLX.isMobile, true);
+  assert.equal(next.GLX.mobileTier, false, "high quality overrides only the safe tier");
+});
+
+test("GLX implementation is deferred and ordered, while the facade precedes its consumers", () => {
+  assert.ok(manifest.FULL.includes("js/render/shared/glx-facade.js"));
+  assert.ok(!manifest.FULL.includes("js/render/glx/glx.js"));
+  assert.equal(manifest.DEFERRED.webgl2.at(-1), "js/render/glx/glx.js");
+  assert.ok(manifest.HARD_EDGES.some(([a, b]) => a === "js/render/shared/glx-facade.js" && b === "js/car/liverytex.js"));
+  assert.ok(manifest.CARVIEW.includes("js/render/shared/glx-facade.js"));
+});
+
+function bootScenario({ install = true, init = true, pref = "webgl2", skip = false, blocked = false } = {}) {
+  const events = [], storage = new Map();
+  const context = vm.createContext({
+    navigator: { userAgent: "", maxTouchPoints: 0 },
+    localStorage: { getItem: () => null, removeItem: (k) => events.push(`remove:${k}`) },
+    sessionStorage: {
+      getItem: (k) => blocked ? null : storage.get(k) || null,
+      setItem(k, v) { if (blocked) throw new Error("blocked"); storage.set(k, v); },
+    },
+    Event: class { constructor(type) { this.type = type; } },
+    location: { reload: () => events.push("reload") },
+    BACKEND_FILES: { webgl2: ["glsl-chunks.js", "glx.js"] },
+    canvas: {}, _claimSkipped: skip,
+    backendPreference: () => pref,
+    showGraphicsUnavailable: () => events.push("unavailable"),
+    async loadBackendScripts(group) {
+      events.push(`load:${group.join(",")}`);
+      if (install) context.GLX.install({ init: () => { events.push("init"); return init; } });
+    },
+  });
+  context.window = context;
+  context.dispatchEvent = (event) => events.push(event.type);
+  vm.runInContext(source("js/render/shared/glx-facade.js"), context);
+  return { run: () => vm.runInContext(fallback, context), events, context, storage };
+}
+
+test("explicit GLX and refused opt-in backends load the implementation before context claim", async () => {
+  for (const pref of ["webgl2", "webgpu", "three"]) {
+    const h = bootScenario({ pref });
+    assert.equal(await h.run(), h.context.GLX);
+    assert.equal(h.events[0], "load:glsl-chunks.js,glx.js");
+    assert.ok(h.events.indexOf("init") > h.events.indexOf("load:glsl-chunks.js,glx.js"));
+    assert.equal(h.events.includes("reload"), false);
+    assert.equal(h.storage.get("apex26.gfxBound"), "webgl2");
+  }
+});
+
+test("missing GLX script shows an unavailable panel without reloading indefinitely", async () => {
+  const h = bootScenario({ install: false, pref: "webgpu" });
+  assert.equal(await h.run(), undefined);
+  assert.deepEqual(h.events, ["load:glsl-chunks.js,glx.js", "unavailable"]);
+});
+
+test("an already-claimed canvas reloads once only with a durable session skip", async () => {
+  const h = bootScenario({ pref: "webgpu", init: false });
+  await h.run();
+  assert.equal(h.events.includes("reload"), true);
+  assert.equal(h.events.includes("unavailable"), false);
+  assert.equal(h.storage.get("apex26.gfxClaimFail"), "1");
+  for (const opts of [{ pref: "webgpu", init: false, skip: true },
+                     { pref: "webgpu", init: false, blocked: true }]) {
+    const stopped = bootScenario(opts);
+    await stopped.run();
+    assert.equal(stopped.events.includes("reload"), false);
+    assert.equal(stopped.events.includes("unavailable"), true);
+  }
+});
+
+}
 test("godray: WGX takes the same one-pair lamp-only blur as TLX/GLX", () => {
   const src = code("js/render/webgpu/wgx.js");
   assert.match(src, /1 \/ halfW, 1 \/ halfH, \(!sunGR && _grLite\) \? 1 : 2\)/, "wgx: one pair only without sun shafts");

@@ -44,6 +44,37 @@ test("two seconds of laying leaves the same trail at 30, 60 and 144 Hz", () => {
   }
 });
 
+test("rain re-seeds only newly visible drops when the governor sheds less", () => {
+  const moves = [];
+  const c2d = {
+    clearRect() {}, beginPath() {}, moveTo(x, y) { moves.push([x, y]); },
+    lineTo() {}, stroke() {},
+  };
+  const canvas = { width: 0, height: 0, style: {}, getContext: () => c2d };
+  let shed = 1, random = 0.5;
+  const rngMath = Object.create(Math);
+  rngMath.random = () => random;
+  const ctx = vm.createContext({
+    Math: rngMath, Float32Array, Uint8Array,
+    document: { createElement: () => canvas, body: { appendChild() {} } },
+    window: { innerWidth: 100, innerHeight: 100 },
+    LightTune: { LT: { rainCount: 4, rainStreak: 1, rainWind: 0 } },
+    PerfGov: { autoShed: () => shed },
+  });
+  seedLog(ctx);
+  const rain = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/fx/particles.js"), "utf8") + ";Particles", ctx);
+  rain.rainSeed(false);
+  rain.rainDraw(0.01, 0, true);
+  assert.equal(moves.length, 2, "shed level 1 draws half the seeded rain");
+  moves.length = 0;
+  random = 0.75;
+  shed = 0;
+  rain.rainDraw(0.01, 0, true);
+  assert.equal(moves.length, 4);
+  assert.ok(moves[2][1] > 70 && moves[3][1] > 70,
+    `returning drops used stale hidden positions: ${JSON.stringify(moves)}`);
+});
+
 test("the first stamp of a slide lands at once, and lifting off re-arms it", () => {
   const skids = make();
   skids.stamp(IDENT, true, 1 / 60);
