@@ -244,7 +244,7 @@ function harness(stored = {}, storeOverride = null) {
   return {
     screen, saved, plays, races, els,
     run: (over = {}) => screen.run(Object.assign({}, info, over), () => races.push(now)),
-    skip: () => { for (const fn of listeners.keydown || []) fn({ type: "keydown", repeat: false }); },
+    skip: (ev = {}) => { for (const fn of listeners.keydown || []) fn(Object.assign({ type: "keydown", repeat: false }, ev)); },
     tick(ms) {
       const end = now + ms;
       for (;;) {
@@ -278,6 +278,35 @@ test("three skips in a row shorten the next flyby — and its announcer budget �
   assert.equal(h.races.length, 4, "every run handed over to the race");
 });
 
+test("building(): the card over the scrim, no timer, no skip, not active — then run() takes over", () => {
+  const h = harness();
+  assert.equal(h.screen.building({ track: { id: "monza", name: "MONZA", country: "Italy" }, laps: 5 }), true);
+  assert.equal(h.els.loading.dataset.phase, "build");
+  assert.equal(h.els.loading.hidden, false, "the card is up while the world builds");
+  assert.equal(h.screen.active(), false, "not active: game.js keeps the canvas hidden, so the old circuit never shows");
+  h.skip();
+  h.tick(LS.FLY_MS * 2);
+  assert.equal(h.races.length, 0, "nothing to skip to and no timer: only run() starts the race");
+  h.run();
+  assert.equal(h.els.loading.dataset.phase, "run");
+  h.tick(LS.FLY_MS);
+  assert.equal(h.races.length, 1);
+  assert.match(read("css/overlays.css"), /#loading\[data-phase="build"\] #ld-card/, "the build phase shows the card");
+});
+
+test("a skip inside SKIP_GRACE_MS is ignored (a double-click on RACE!), and a real skip stops the event", () => {
+  const h = harness();
+  h.run();
+  h.skip();
+  assert.equal(h.races.length, 0, "the second click of a double-click does not skip the flyby");
+  assert.equal(h.saved.get("flySkips"), undefined, "…nor count toward the short cut");
+  h.tick(LS.SKIP_GRACE_MS);
+  let stopped = 0, prevented = 0;
+  h.skip({ stopPropagation() { stopped++; }, preventDefault() { prevented++; }, cancelable: true });
+  assert.equal(h.races.length, 1, "after the grace a skip starts the race");
+  assert.equal(stopped + prevented, 2, "…and swallows the key, or Escape/P reach the race's pause handler on frame one");
+});
+
 test("a flyby that plays out resets the streak, and the full cut comes back", () => {
   const h = harness({ flySkips: 5 });
   h.run();
@@ -309,6 +338,7 @@ test("a store that throws never stops the flyby", () => {
   const h = harness({}, { get: boom, set: boom });
   h.run();
   assert.equal(h.plays.at(-1), LS.FLY_MS, "an unreadable streak is no streak");
+  h.tick(LS.SKIP_GRACE_MS);
   h.skip();
   assert.equal(h.races.length, 1, "the skip still reaches the race when the write throws");
   h.screen.stop();
@@ -448,7 +478,7 @@ function gridHarness({ grid = field(22, 11), speaking = () => false, radioOn = t
   const h = {
     screen, said, stops, stings, ops, els, plays,
     run: (over = {}) => { h.t0 = now; screen.run(Object.assign({}, info, over), () => {}); },
-    skip: () => { for (const fn of listeners.keydown || []) fn({ type: "keydown", repeat: false }); },
+    skip: (ev = {}) => { for (const fn of listeners.keydown || []) fn(Object.assign({ type: "keydown", repeat: false }, ev)); },
     view: () => els["ld-map"].dataset.view,
     tickTo(u) { h.tick(h.t0 + u * LS.FLY_MS - now); },
     tick(ms) {

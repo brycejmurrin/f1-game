@@ -145,7 +145,8 @@
 
       for (let i = 0; i < 6; i++) {
         place(K(0.0 + i * 0.012), 1, 12, [9, 6, 30], [0.30, 0.31, 0.36]);   // pit garages
-        place(K(0.0 + i * 0.012), 1, 12, [9.4, 1.0, 30.4], FLOOD);          // lit fascia band
+        // deeper 0.1: its sunk foot shared the garage's underside (flat coplanar)
+        place(K(0.0 + i * 0.012), 1, 12, [9.4, 1.0, 30.4], FLOOD, 0.1);     // lit fascia band
       }
       grandstandEx(0.0, -1, 18, 90, null, null,
         { livery: "darkSteel", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
@@ -342,7 +343,9 @@
         const a = anchor(lampK, 1, 11);
         addCyl(out, a.c, 0.14, 5.5, [0.28, 0.24, 0.17], 4, [a.r, a.u, a.t]);
         addBox(out, vadd(a.c, a.u, 5.5), [1.4, 1.2, 1.4], WARM, [a.r, a.u, a.t]);
-        addCyl(out, vadd(a.c, a.u, 0.08), 3.5, 0.15, [0.96, 0.82, 0.44], 8, [a.r, a.u, a.t]);
+        // 0.25 thick (top 0.33): at 0.15 the verge's camber buried all ten
+        // light pools by 3-6 cm (ground-audit).
+        addCyl(out, vadd(a.c, a.u, 0.08), 3.5, 0.25, [0.96, 0.82, 0.44], 8, [a.r, a.u, a.t]);
       }
 
       // Water reflection streaks + dock glow (hotel approach reads from basin)
@@ -392,7 +395,9 @@
               }
             }
             stage._mat = 0;
-            addBox(stage, vadd(a.c, a.u, H + 2), [16, 3.5, 20], [1.0, 0.98, 0.88], b);
+            // Roof plant seated on the shaft top (H): at H + 2 it and the crown
+            // above it hovered 0.25 m clear (ground-audit unsupported).
+            addBox(stage, vadd(a.c, a.u, H + 1.7), [16, 3.5, 20], [1.0, 0.98, 0.88], b);
             addBox(stage, vadd(a.c, a.u, H + 5.5), [4, 5, 4], LED_MAG, b);
             addBox(stage, vadd(a.c, a.u, H - 1.5), [28, 1.5, 38], [1.0, 0.88, 0.38], b);
           }, { required: true });
@@ -655,7 +660,7 @@
         // pit-lane back wall + garage roof line (more prominent)
         for (let i = 0; i < 7; i++) {
           place(K(0.0 + i * 0.011), 1, 22, [11, 9, 30], [0.24, 0.25, 0.30]);
-          place(K(0.0 + i * 0.011), 1, 22, [11.4, 1.4, 30.4], [1.0, 0.95, 0.80]); // roof fascia glow
+          place(K(0.0 + i * 0.011), 1, 22, [11.4, 1.4, 30.4], [1.0, 0.95, 0.80], 0.1); // roof fascia glow; foot 0.1 under the wall's
         }
         // Paddock floodlight masts — taller, with large light pools below
         for (let i = 0; i < 7; i++) {
@@ -663,7 +668,7 @@
           tower(tk, 1, 50, 5, 32, { col: DARK, seg: 4, cap: true, capCol: FLOOD });
           const pa = anchor(tk, 1, 50);
           addCyl(out, vadd(pa.c, pa.u, 0.1), 12, 0.30, POOL, 12, [pa.r, pa.u, pa.t]);
-          addCyl(out, vadd(pa.c, pa.u, 0.04), 22, 0.12, POOL_SOFT, 12, [pa.r, pa.u, pa.t]);
+          addCyl(out, vadd(pa.c, pa.u, 0.04), 22, 0.18, POOL_SOFT, 12, [pa.r, pa.u, pa.t]);   // 0.12 lay 2 cm under grade
         }
       }
 
@@ -691,7 +696,7 @@
         out._mat = 0;
         // Lit crown beacon
         addBox(out, vadd(a.c, a.u, 42), [10, 5, 10], FLOOD, [a.r, a.u, a.t]);
-        addBox(out, vadd(a.c, a.u, 47), [4, 4, 4], LED_TEAL, [a.r, a.u, a.t]);
+        addBox(out, vadd(a.c, a.u, 46.5), [4, 4, 4], LED_TEAL, [a.r, a.u, a.t]);   // on the beacon (top 44.5), not 0.5 m over it
         // Ground light pool at tower base
         addCyl(out, vadd(a.c, a.u, 0.10), 14, 0.20, POOL_SOFT, 10, [a.r, a.u, a.t]);
       }

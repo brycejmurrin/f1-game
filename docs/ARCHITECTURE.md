@@ -835,9 +835,9 @@ Prop placement is four `Scenery*.create(ctx)` modules — nature (trees/terrain
 furniture), city (the `cityStyle` building generator, neon, glass), structures
 (grandstands, gantries, barriers, floodmasts), identity (per-circuit landmark
 passes) — each instantiated with a ctx of the placement helpers and
-accumulators. Together they serve the **112-member `scenery(api)` contract**,
+accumulators. Together they serve the **114-member `scenery(api)` contract**,
 frozen by `tests/unit/scenery-api-contract.test.mjs`: a circuit's `scenery(api)`
-callback can destructure any of those 112 names, so removing/renaming one is a
+callback can destructure any of those 114 names, so removing/renaming one is a
 breaking change the test catches. See [SCENERY-API.md](SCENERY-API.md).
 
 ## js/circuits/<id>.js — `TrackDefs` (circuit data)

@@ -29,7 +29,7 @@ const CONTRACT = [
   "billboard", "bleacher", "bowlSeatWall",
   "broadcastCompound", "broadleafFall", "building", "bush", "cameraTower", "cantilever", "circuitKit",
   "cityFront", "concreteCanyon", "conifer",
-  "cross", "cypress", "def", "ds", "every", "fence", "ferrisWheel", "floodMast",
+  "cross", "cypress", "def", "drape", "drapeRun", "ds", "every", "fence", "ferrisWheel", "floodMast",
   "floodMastRing", "forestEdge", "foundation", "frameAt", "gantry", "grandstand", "grandstandEx",
   "gridshellCanopy",
   "groundPatch", "groundPlane", "groundUnder", "groundYAt", "groundedSegments", "guardrail",
@@ -52,7 +52,10 @@ const CONTRACT = [
 // 111 -> 112 (2026-09-10): `bakedModels` dropped (no circuit ever called it);
 // `K` (frac -> un-shifted node) and `lapBounds()` (cached lap centroid +
 // radius) added — the two pieces of boilerplate 37 and 30 files carried.
-const CONTRACT_SIZE = 112;
+// 112 -> 114 (2026-09-25): `drape` + `drapeRun` (terrain-fitted flat decals,
+// TrackModels.drapeKit) — promoted from four identical ~100-line circuit-local
+// copies (paul_ricard, dijon, okayama, miami), vertex-identical to them.
+const CONTRACT_SIZE = 114;
 
 test("the frozen contract is the size it declares", () => {
   assert.equal(CONTRACT.length, CONTRACT_SIZE);

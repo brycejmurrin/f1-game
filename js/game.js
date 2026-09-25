@@ -2370,7 +2370,7 @@ function _loadTrackBody(idx, def) {
     // track's terrainGeo/_lights/mesh handles through it stacks old + new
     // resident at once. loadTrack is synchronous, so nothing can observe the
     // null between here and the assignment below.
-    track = null;
+    track = null; builtTrackId = null;   // a build that throws must not leave the old id claiming a freed world
     if (typeof LampBake !== "undefined") LampBake.reset();   // its cache holds the old track + atlas too
     // Pass the active backend so tracks.js builds its meshes through the façade
     // (opts.gfx) instead of reaching the GLX global directly. On the explicit
@@ -2455,7 +2455,10 @@ const _menuGate = { warm: 0, generation: 0, ready: "", track: null };
 // The menu finished building THIS selection (circuit, time, weather): only then is
 // `track` the world the loading screen may fly, light and grid. A fast tap to RACE!
 // before the idle build ran left the OLD circuit in `track`.
-const menuWorld = () => !!track && _menuGate.track === track && _menuGate.ready === [trackIdx, raceTimeOfDay, raceWeather].join("|");
+// The menu build's identity: circuit, time, weather AND grid size (a team change
+// to or from MY TEAM moves the grid slots, which loadTrack rebuilds for).
+const menuKey = (idx) => [idx, raceTimeOfDay, raceWeather, fieldSize()].join("|");
+const menuWorld = () => !!track && _menuGate.track === track && _menuGate.ready === menuKey(trackIdx);
 let flybyBuildTimer = 0;
 const MENU_IDLE_MS = 1200;
 let _menuInputAt = 0;
@@ -2487,12 +2490,13 @@ async function menuLampBake(current) {
 let _menuFly = null;
 async function menuFinish(current, key) {
   await prepareMenuCarAssets(current);
-  if (await menuIdle(current)) _menuGate.warm = 2;
+  if (await menuIdle(current)) { FlybySeq.reset(); _menuGate.warm = 2; }   // reset: a new world's shot 0 snaps, never glides in from the last one
   const lit = await menuLampBake(current);
+  FlybySeq.setDuration(loadingScreen.nextFlyMs());
   const fly = { key, track, shots: FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0, false) }, step = FlybySeq.planSteps(track, fly.shots);
   while (current() && !step()) await menuSlice();
   if (current()) _menuFly = fly;
-  if (lit && await menuIdle(current)) _menuGate.warm = 2;   // only a baked (dark) world changed the shaders
+  if (lit && await menuIdle(current)) { FlybySeq.reset(); _menuGate.warm = 2; }   // only a baked (dark) world changed the shaders
 }
 function scheduleFlybyTrack(settle) {
   clearTimeout(flybyBuildTimer);
@@ -2500,7 +2504,7 @@ function scheduleFlybyTrack(settle) {
   _menuGate.warm = 0;
   if (!(trackIdx >= 0)) return;
   const want = trackIdx, tod = raceTimeOfDay, weather = raceWeather;
-  const key = [want, tod, weather].join("|");
+  const key = menuKey(want);
   const current = () => generation === _menuGate.generation && state === "menu" &&
     !setupPreviewOn && trackIdx === want && raceTimeOfDay === tod && raceWeather === weather &&
     (!els.select.hidden || !$("race-settings").hidden);
@@ -3106,6 +3110,8 @@ function endRace(forcedOrder) {
   // block that used to live here, unchanged in behaviour.
   const order = netOrder(forcedOrder || fin.concat(run, out));
   order.forEach((c, i) => { c.finPos = i + 1; });
+  // Read BEFORE award() advances the stage, or the sprint is wrapped up as the Grand Prix.
+  const wasSprint = isChampionship() && SeasonCal.stage(season) === "sprint";
   if (isChampionship()) {
     // A standalone season may sprint before the Grand Prix. A career scores
     // through its save owner, which checks the active slot revision before the
@@ -3134,7 +3140,7 @@ function endRace(forcedOrder) {
   dbgCam = null;
   buildResults(order);
   els.results.hidden = false;
-  announcer.wrapUp(order, loadingInfo());   // js/audio/announcer.js — the broadcaster's read over the results
+  announcer.wrapUp(order, Object.assign(loadingInfo(), { sprint: wasSprint }));   // js/audio/announcer.js — the broadcaster's read over the results
 }
 
 let ltStore = null;   // LightStore.create(G), assigned once G exists (below)
@@ -3704,7 +3710,50 @@ function flybyGridOrder() {
   return o;
 }
 
+// RACE! BEFORE THE MENU'S IDLE BUILD (a tap within ~2-4 s of picking): build it
+// now, under the held card, then fly. startRace pays the same 1-3 s anyway (its
+// loadTrack reuses this build), so this buys the cinematic, not a longer wait.
+let _introKey = "", _introRun = 0;
+function introBuild(go) {
+  const idx = trackIdx, key = menuKey(idx), n = ++_introRun;
+  if (!(idx >= 0) || (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches)) return false;
+  clearTimeout(flybyBuildTimer); _menuGate.generation++;   // the menu's own build stands down
+  loadingScreen.building(loadingInfo());
+  (async () => {
+    try {
+      await ensureScenery(idx);
+      await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));   // the card paints first
+      const live = () => n === _introRun && state === "menu" && key === menuKey(trackIdx);
+      while (live() && gfx.warming && gfx.warming()) await menuSlice();   // a compile owns its scene: never free it mid-warm
+      if (!live()) return;
+      loadTrack(idx); _menuGate.ready = key; _menuGate.track = track;
+      // What menuFinish does, under the card: car assets (bounded), then hidden warm
+      // frames — "build" is not active(), so they draw with the canvas hidden and
+      // the flyby's first frame is not the one that compiles every shader.
+      const t1 = performance.now();
+      await prepareMenuCarAssets(() => live() && performance.now() - t1 < 1500);
+      if (!live()) return;
+      FlybySeq.reset(); _menuGate.warm = 2;
+      for (let f = 0; f < 3 && _menuGate.warm > 0; f++) await new Promise((r) => requestAnimationFrame(r));
+      // Plan the flyby here too, up to a budget: whatever is left plans mid-flyby.
+      FlybySeq.setDuration(loadingScreen.nextFlyMs());
+      const fly = { key, track, shots: FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (idx * 2654435761)) >>> 0, false) }, step = FlybySeq.planSteps(track, fly.shots), t0 = performance.now();
+      while (!step() && performance.now() - t0 < 800) await menuSlice();
+      _menuFly = fly;
+    } catch (e) { Log.warn("gfx", "intro build failed", e); }
+    finally {
+      // Always hand over (a failed build falls back to the card), unless a newer tap or a quit owns the screen.
+      if (n === _introRun) {
+        if (state !== "menu") loadingScreen.stop();
+        else try { _introKey = key; raceIntro(go); } catch (e) { Log.warn("gfx", "loading screen failed", e); loadingScreen.stop(); go(); }   // "build" has no timer or skip: never leave it up
+      }
+    }
+  })();
+  return true;
+}
 function raceIntro(go) {
+  const built = _introKey; _introKey = "";
+  if (!built && !menuWorld() && introBuild(go)) return;
   const world = menuWorld();
   if (world) menuGridCars();
   // LIGHT THE FLYBY WITH WHAT THE MENU CHOSE, BEFORE IT STARTS. run() fires `go`
@@ -3723,7 +3772,9 @@ function raceIntro(go) {
   _menuFly = null;   // one load's flyby: the next one varies again
   if (!flybyShots) flybyShots = planned || FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0);   // a different flyby each load (never the sim RNG); an editor-saved list plays as authored
   if (flybyShots) flybyShots = FlybySeq.withoutSlot(flybyShots);   // nobody knows your slot on a random grid; a small grid has empty boxes
+  FlybySeq.setDuration(loadingScreen.nextFlyMs());   // plan every pan for the seconds this run has
   if (world) FlybySeq.warm(track, flybyShots);   // plan the opening shots now, the rest in slices before their cuts
+  FlybySeq.reset();   // this run's shot 0 is a cut, not a glide from wherever the camera was
   loadingScreen.run(loadingInfo(), go);
 }
 /** WHAT THE LOADING SCREEN DESCRIBES: the circuit about to be raced, this
@@ -3881,6 +3932,7 @@ function clearMenuScreens() {
   // Disarm the loading screen BEFORE the sweep hides it: it holds a pending
   // timer that would otherwise fire its build callback into a running race.
   loadingScreen.stop();
+  FlybySeq.cancelWarm();   // and the flyby's unplanned shots: they would only stall the countdown
   for (const el of document.querySelectorAll(".screen")) el.hidden = true;
   for (const id of ["overlay", "lighting", "camtune", "flyby"]) { const el = $(id); if (el) el.hidden = true; }
   // The garage's 3D turntable keeps rendering while #carsetup is up; a race
@@ -3987,7 +4039,7 @@ function quitToMenu() {
 // ---------- per-frame update ----------
 // Reusable rank buffer — refilled and sorted each physics step (up to 5x per
 // rendered frame) so we don't allocate a fresh array via cars.slice() each time.
-const ranked = [];
+const ranked = [], byProgDesc = (a, b) => b.prog - a.prog;   // hoisted: no comparator closure per step
 // Live weather (setWeatherLive/setTimeOfDay) and the dynamic weather arc live in
 // js/race/weather-arc.js — WeatherArc.create(G, deps), wired as `wxArc` above.
 
@@ -4108,7 +4160,7 @@ function update(dt) {
   // own `c.retired` check and one of them would eventually be forgotten.
   ranked.length = 0;
   for (const c of cars) if (!c.retired) ranked.push(c);
-  ranked.sort((a, b) => b.prog - a.prog);
+  ranked.sort(byProgDesc);
   for (let i = 0; i < ranked.length; i++) {
     ranked[i].rank = i + 1;
   }
@@ -4481,10 +4533,12 @@ function updateCar(c, dt, ranked) {
   // ahead"), not ranked[rank-2]: that is the classification neighbour — a
   // leader has none (a backmarker 0.5 s ahead could not be attacked), it can
   // sit a lap away, and a finished car coasting right ahead armed OT.
-  let ahead = null, gapAhead = Infinity;
+  // Only a car inside OT_GAP·speed can arm (`ahead` is read only then): the traffic scan's cheap reject, +1 m margin.
+  let ahead = null, gapAhead = Infinity; const otL = track.total, otW = OT_GAP * c.speed + 1;
   for (const o of ranked) {
     if (o === c || o.finished) continue;
-    const d = ((o.prog - c.prog + track.total / 2) % track.total + track.total) % track.total - track.total / 2;   // full wrap (a twice-lapped car is 2L back in prog)
+    const dp = o.prog - c.prog, adp = dp < 0 ? -dp : dp; if (adp > otW && adp < otL - otW) continue;
+    const d = ((dp + otL / 2) % otL + otL) % otL - otL / 2;   // full wrap (a twice-lapped car is 2L back in prog)
     if (d > 0.5 && d < gapAhead) { ahead = o; gapAhead = d; }
   }
   gapAhead = ahead && c.speed > 1 ? gapAhead / c.speed : Infinity;
@@ -6631,7 +6685,7 @@ function render(dt) {
   // moving, high-contrast backdrop to be read against. The world the picker warms is
   // still built — it is just not SHOWN until the player commits to the race, where
   // js/ui/loading-screen.js spends it as the cinematic it always wanted to be.
-  const menuBlank = state === "menu" && !setupPreviewOn && (!track || !loadingScreen.active());
+  const menuBlank = state === "menu" && !setupPreviewOn && (!track || !loadingScreen.active() || !menuWorld());   // the no-world card must not show the LAST circuit
   const vis = menuBlank ? "hidden" : "";
   if (canvas.style.visibility !== vis) canvas.style.visibility = vis;
   // Soft-present #game-soft is a sibling overlay (GLX HeadlessChrome / TLX). Keep
