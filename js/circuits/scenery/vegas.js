@@ -496,7 +496,13 @@
       // Paris / Eiffel + Montgolfier balloon.
       tower(K(0.74), -1, 68, 22, 130, { col: [0.55, 0.48, 0.35], seg: 4, cap: true, capCol: [1.0, 0.85, 0.4], mast: true });
       place(K(0.74), -1, 20, [10, 1.6, 10], [1.0, 0.80, 0.25]);
-      place(K(0.74), -1, 22, [14, 0.7, 14], [0.95, 0.75, 0.20]);
+      {
+        // Gold plaza plinth 0.7 m proud. As a place() its top sat 0.1 m under
+        // the ground (0.8 m sink): invisible. Raw box from 0.3 m under grade,
+        // no blockAt — the pylon base above already bounds the car at 15 m.
+        const a = anchor(K(0.74), -1, 22);
+        addBox(out, vadd(a.c, a.u, 0.65), [14, 1.3, 14], [0.95, 0.75, 0.20], [a.r, a.u, a.t]);
+      }
       building(K(0.73), -1, 24, 36, 55, 34, { wall: [0.62, 0.58, 0.48], window: [1.0, 0.82, 0.30], floor: 7 });
       {
         const a = anchor(K(0.748), -1, 26), b = [a.r, a.u, a.t];

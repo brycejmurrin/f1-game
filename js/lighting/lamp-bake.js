@@ -54,7 +54,10 @@ const LampBake = (function () {
   const DESKTOP_TEXELS = 600000;
   function budget(gfx) { return gfx && (gfx.mobileTier || gfx.isMobile) ? MAX_TEXELS : DESKTOP_TEXELS; }
   const MIN_CELL = 1.0;        // metres per texel at best
-  const TILE = 32, SLOT = TILE + 2;
+  // 16-texel tiles: a finer sparse mask keeps fewer empty texels, so the same
+  // budget buys 2-11 % finer cells on 6 of 7 measured tracks (2026-09-24). The
+  // shaders read the tile size from a uniform; SLOT stays even (exact half).
+  const TILE = 16, SLOT = TILE + 2;
   // Atlas slot grid limits: 4096 texels a side (phones) for the w x 2h texture.
   const SLOT_COLS = Math.floor(4096 / SLOT), SLOT_ROWS = Math.floor(4096 / (2 * SLOT));
 

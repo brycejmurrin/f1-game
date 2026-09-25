@@ -671,8 +671,11 @@
       tyreWall(0.13, 0.16, -1, 3.2, [0.18, 0.38, 0.82]);
       tyreWall(0.49, 0.525, 1, 3.2, [0.92, 0.74, 0.13]);
 
-      sponsorHoarding(0.00, 0.03, -1, 6, { h: 1.3 });
-      sponsorHoarding(0.615, 0.645, 1, 6, { h: 1.3 });
+      // Posted panels, not the kit's banner: sponsorHoarding seats a banner's
+      // masts 0.5 m above the sunk anchor, so on this street circuit's verge
+      // every mast and banner hung 0.2-0.4 m over the ground (45 unsupported).
+      sponsorHoarding(0.00, 0.03, -1, 6, { h: 1.3, style: "panel" });
+      sponsorHoarding(0.615, 0.645, 1, 6, { h: 1.3, style: "panel" });
       cameraTower(at(0.078), 1, 20, { h: 16 });
       cameraTower(at(0.75), -1, 56, { h: 18 });
       broadcastCompound(at(0.965), -1, 75, { vans: 3, dishes: 2, mastH: 9 });
