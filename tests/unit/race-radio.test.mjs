@@ -572,6 +572,19 @@ test("a player flagged first with a time penalty is not told they won when a riv
   assert.doesNotMatch(result[0].msg, /WIN|RACE WINNER|WHAT A DRIVE/);
 });
 
+test("a penalised player flagged last still hears the result before endRace (no one left running)", () => {
+  // RaceControl.finishDelay waits out a penalty only while a car is running;
+  // with none left, endRace comes 2.2 s after the flag and the radio stops.
+  const R = car("RIV", 1400, 60), X = car("XXX", 1300, 60), P = car("PLY", 1000, 60, { isPlayer: true, local: true, penalty: 5 });
+  const r = race({ cars: [R, X, P] });
+  r.step(0.05, 100);
+  R.finished = true; X.finished = true; r.step(0.05, 20);
+  P.finished = true; r.step(0.05, 40);         // 2 s: inside the 2.2 s before results
+  const result = r.said.filter((s) => s.kind === "race" && /P\d|WIN/.test(s.msg));
+  assert.equal(result.length, 1, JSON.stringify(r.said));
+  assert.match(result[0].msg, /P3/);
+});
+
 test("under a safety car a place changing is not called as a move", () => {
   const L = simCar("LLL", 2400, 60), A = simCar("AAA", 1300, 60), B = simCar("BBB", 1280, 60), P = simCar("PLY", 900, 60, { isPlayer: true });
   const r = sim([L, A, B, P], 30);
