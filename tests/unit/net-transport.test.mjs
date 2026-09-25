@@ -554,6 +554,9 @@ test("the invite link keeps the code in the fragment", () => {
   const code = "APEX1.z.SOMECODE";
   assert.equal(NetHandshake.inviteFromUrl("https://x.dev/#vs=" + code), code);
   assert.equal(NetHandshake.inviteFromUrl("https://x.dev/#a=1&vs=" + code), code);
+  // A link pasted from a message carries the message's tail: the code ends at whitespace.
+  assert.equal(NetHandshake.inviteFromUrl("https://x.dev/#vs=" + code + "\nSent from my iPhone"), code);
+  assert.equal(NetHandshake.inviteFromUrl("https://x.dev/#vs=" + code + " see you on track"), code);
   assert.equal(NetHandshake.inviteFromUrl("https://x.dev/?vs=nope"), null,
     "a query-string code must NOT be honoured — that one does reach the server");
   assert.equal(

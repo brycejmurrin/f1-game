@@ -47,9 +47,19 @@ function create(G) {
     }
     // LICENCE BADGES: a DRIVEN pole only — a simulated time for a player who
     // never ran a lap is not one (js/career/badges.js).
+    // The banner toast is hidden behind this sheet, so the unlock is a card on
+    // it, kept across rebuilds until the sheet closes.
     const me = rows.find((r) => r.isPlayer);
-    if (me && me.pos === 1 && me.human && typeof Badges !== "undefined") Badges.onPole();
+    if (me && me.pos === 1 && me.human && typeof Badges !== "undefined" && Badges.onPole().length) poleNew = true;
+    if (poleNew) {
+      const card = document.createElement("div"); card.className = "res-personal";
+      card.setAttribute("role", "status");
+      const head = document.createElement("strong"); head.textContent = "BADGE UNLOCKED";
+      card.append(head, span("", Badges.labelOf("pole")));
+      body.appendChild(card);
+    }
   }
+  let poleNew = false;
 
   function open(rows) {
     Log.info("ui", "QualiSheet.open");
@@ -60,6 +70,7 @@ function create(G) {
   function close() {
     Log.info("ui", "QualiSheet.close");
     $("quali").hidden = true;
+    poleNew = false;
   }
 
   return { build, open, close };

@@ -61,6 +61,7 @@ const DailyChallenge = (function () {
       G.trackIdx = idx;
       G.raceWeather = p.weather; G.raceTimeOfDay = p.tod;
       G.raceLaps = G.ttDistance;
+      if (G.resetRaceDraft) G.resetRaceDraft();   // not a draft RACE SETTINGS should keep for this track
       G.seed = p.seed;
       active = p;
       p.class = mode === "standard" && G.records ? "standard" : "open";
