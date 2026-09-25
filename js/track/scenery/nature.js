@@ -114,6 +114,23 @@ const SceneryNature = (function () {
       planted.get(key).push([x, z]);
       return false;
     };
+    // Placed pines' tier-cone facet planes [nx, ny, nz, d], bucketed on a
+    // 10 m grid, for pine()'s coplanar guard.
+    const PINE_CELL = 10, pineFacetGrid = new Map();
+    const pineFacetsNear = (x, z, reach) => {
+      const res = [], cx = Math.floor(x / PINE_CELL), cz = Math.floor(z / PINE_CELL);
+      for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+        const cell = pineFacetGrid.get(`${cx + i}|${cz + j}`);
+        if (cell) for (const q of cell)
+          if (Math.hypot(q.x - x, q.z - z) < q.reach + reach) res.push(q.facets);
+      }
+      return res;
+    };
+    const pineFacetsAdd = (x, z, reach, facets) => {
+      const key = `${Math.floor(x / PINE_CELL)}|${Math.floor(z / PINE_CELL)}`;
+      if (!pineFacetGrid.has(key)) pineFacetGrid.set(key, []);
+      pineFacetGrid.get(key).push({ x, z, reach, facets });
+    };
     const pine = (k, side, dist, h, col, opts) => {
       opts = opts || {};
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
@@ -143,6 +160,52 @@ const SceneryNature = (function () {
       const s = h / PINE_REF_H;
       const o = [a.c[0] - a.u[0] * 0.5, a.c[1] - a.u[1] * 0.5, a.c[2] - a.u[2] * 0.5];
       const r = side < 0 ? [-a.r[0], -a.r[1], -a.r[2]] : a.r;
+      // COPLANAR GUARD. Pines on neighbouring nodes share (nearly) one basis,
+      // so two trees' same-aspect tier cones have PARALLEL side facets
+      // (|n.y| ~0.57, inside ground-audit's flat check), and in a dense belt
+      // some pair lands within 2 cm of one plane by chance (nurburgring
+      // forestEdge, 5 spots). Every side facet passes through its cone's
+      // apex, so the plane offset is n . apex: sink this tree by the first
+      // SEP slot that keeps each of its facets >= MIN_SEP off every parallel
+      // facet of an overlapping neighbour. Nothing moves sideways (a yaw
+      // fixed it but swung leans and 7-gon corners into other props: +9
+      // clip-audit severe spots); a few cm more trunk embed is invisible.
+      const facets = [];
+      {
+        const H = PINE_REF_H, w0 = (sparse ? 2.3 : 2.7) * jQ, dy = H * (sparse ? 0.24 : 0.18) * jQ;
+        const W = (m) => [o[0] + s * (r[0] * m[0] + a.u[0] * m[1] + a.t[0] * m[2]),
+                          o[1] + s * (r[1] * m[0] + a.u[1] * m[1] + a.t[1] * m[2]),
+                          o[2] + s * (r[2] * m[0] + a.u[2] * m[1] + a.t[2] * m[2])];
+        let y = H * 0.3 + 0.5;
+        for (let i = 0; i < tiers; i++, y += dy) {
+          const w = w0 * (1 - i * (sparse ? 0.24 : 0.21)), lx = leanQ ? leanQ * (y / H) * 1.6 : 0;
+          const ap = W([lx, y + H * 0.32, 0]);
+          for (let f = 0; f < 7; f++) {
+            const a0 = f / 7 * 6.2832, a1 = (f + 1) / 7 * 6.2832;
+            const p0 = W([lx + Math.cos(a0) * w, y, Math.sin(a0) * w]);
+            const p1 = W([lx + Math.cos(a1) * w, y, Math.sin(a1) * w]);
+            const e1 = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]], e2 = [ap[0] - p0[0], ap[1] - p0[1], ap[2] - p0[2]];
+            const n = norm([e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]]);
+            facets.push([n[0], n[1], n[2], n[0] * ap[0] + n[1] * ap[1] + n[2] * ap[2]]);
+          }
+        }
+      }
+      const reach = ((sparse ? 2.3 : 2.7) * jQ + leanQ * 1.6) * s;
+      const near = pineFacetsNear(a.c[0], a.c[2], reach);
+      let dz = 0;
+      if (near.length) {
+        const clash = (d) => {
+          for (const q of near) for (const F of facets) for (const G of q) {
+            if (Math.abs(F[0] * G[0] + F[1] * G[1] + F[2] * G[2]) < 0.999) continue;
+            const dF = F[3] - d * F[1], sgn = F[0] * G[0] + F[1] * G[1] + F[2] * G[2] > 0 ? 1 : -1;
+            if (Math.abs(dF - sgn * G[3]) < TrackGeom.MIN_SEP) return true;
+          }
+          return false;
+        };
+        for (let i = 0; clash(dz) && i < 12; i++) dz = TrackGeom.SEP_SLOTS[i % 4] + Math.floor(i / 4) * 0.2;
+      }
+      if (dz) { o[1] -= dz; for (const F of facets) F[3] -= dz * F[1]; }
+      pineFacetsAdd(a.c[0], a.c[2], reach, facets);
       ctx.instance(
         `pine|${sparse ? 1 : 0}|${tiers}|${leanQ}|${jQ}`,
         { o, r, u: a.u, t: a.t, s: [s, s, s], col },
