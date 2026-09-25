@@ -1407,7 +1407,9 @@ const damp = (c, t, l, dt) => lerp(c, t, 1 - Math.exp(-l * dt));
 // timing-sheet style) is the other formatter on purpose; do not merge them.
 function fmtTime(t) {
   if (!isFinite(t) || t <= 0) return "-";
-  const m = Math.floor(t / 60), s = t - m * 60;
+  // ROUND FIRST, then split: 119.9996 split first read "1:60.00" (and 69.9996
+  // "1:010.00") — toFixed rounded the seconds up without carrying the minute.
+  const cs = Math.round(t * 100), m = Math.floor(cs / 6000), s = (cs - m * 6000) / 100;
   return m + ":" + (s < 10 ? "0" : "") + s.toFixed(2);
 }
 // RETURNS WHETHER THE MESSAGE REACHED THE SCREEN — true shown, false dropped
