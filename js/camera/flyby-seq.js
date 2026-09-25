@@ -1332,7 +1332,7 @@ const FlybySeq = (function () {
      screen's FLY_MS; the unit test pins the two together) and, while it is
      over PAN_MAX, squeezes the shot's travel about its middle (both pairs, the
      same factor), down to PAN_MIN_K of it. */
-  const REF_S = 24, PAN_MAX = 40 * Math.PI / 180, PAN_MIN_K = 0.1, PAN_N = 48;
+  const REF_S = 24, PAN_MAX = 40 * Math.PI / 180, PAN_K = 0.85, PAN_MIN_K = 0.1, PAN_N = 48;
   const _pe = [0, 0, 0], _pt = [0, 0, 0];
   function panRate(track, shot, frac, eye, look, prof) {
     const ease = EASE[shot.ease] || EASE.inOut;
@@ -1355,6 +1355,7 @@ const FlybySeq = (function () {
   }
   /** The run's real length: a habitual skipper's flyby is 12 s, and every shot
    *  planned against REF_S's 24 panned at twice PAN_MAX. */
+  const PAN_RUNGS = Math.floor(Math.log(PAN_MIN_K) / Math.log(PAN_K) + 1e-9);   // 0.85^14 = 0.103: the walk's last rung
   let _flyS = REF_S;
   function setDuration(ms) { _flyS = ms > 0 ? ms / 1000 : REF_S; }
   function squeeze(track, pair, k) {
@@ -1459,19 +1460,21 @@ const FlybySeq = (function () {
       const rate = panRate(track, shot, frac, pe.eye, lk, pe.prof);
       return { k, pe, look: lk, rate, fast: rate > PAN_MAX };
     };
-    // The widest travel under PAN_MAX. The rate falls roughly in proportion to
-    // the squeeze, so the first measurement predicts it: aim just under, and step
-    // down only if the terrain lift disagrees. One planEye is up to ~30 ms on a
-    // dense circuit; the old 0.85^n walk ran up to 14 of them for one shot
-    // (657 ms, Mont-Tremblant's turn-mid).
+    // The widest travel under PAN_MAX, on the SAME 0.85^n ladder the planner has
+    // always used (the fleet audit is tuned to those squeezes) — but found in 2-3
+    // plans, not up to 14: the rate falls roughly with the travel, so the first
+    // measurement predicts the rung; walk down while too fast, then up while the
+    // rung above still passes. One planEye is up to ~30 ms on a dense circuit,
+    // and the old walk from the top cost 657 ms for one shot (Mont-Tremblant).
     let best = at(1);
     if (best.fast && (squeeze(track, shot.eye, 0.5) !== shot.eye || squeeze(track, baseLook, 0.5) !== baseLook)) {   // else nothing to squeeze
-      let k = Math.max(PAN_MIN_K, Math.min(0.95, 0.95 * PAN_MAX / best.rate));
-      for (let i = 0; i < 5; i++) {
-        best = at(k);
-        if (!best.fast || k <= PAN_MIN_K) break;
-        k = Math.max(PAN_MIN_K, Math.min(k * 0.75, 0.95 * k * PAN_MAX / best.rate));
-      }
+      const rung = (n) => at(Math.pow(PAN_K, n));
+      const ahead = (c) => Math.max(1, Math.ceil(Math.log(PAN_MAX / c.rate) / Math.log(PAN_K)));   // rungs the rate says are left
+      let lo = 0, n = Math.min(PAN_RUNGS, ahead(best));
+      best = rung(n);
+      while (best.fast && n < PAN_RUNGS) { lo = n; best = rung(n = Math.min(PAN_RUNGS, n + ahead(best))); }
+      // Too fast at rung `lo`, passing at `n`: the highest passing rung between them.
+      while (!best.fast && n - lo > 1) { const m = (lo + n) >> 1, c = rung(m); if (c.fast) lo = m; else { n = m; best = c; } }
     }
     let look = best.look;
     // The squeezed look keeps the sightline rule: re-plan it against the eye.
