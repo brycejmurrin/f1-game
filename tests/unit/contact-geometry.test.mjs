@@ -102,6 +102,17 @@ test("actual resolver stops a fast car crossing through another between steps",(
   collision.resolveCollisions([a,b],.03);
   assert.ok(a.prog<b.prog);close(b.prog-a.prog,4.8);close(a.speed,b.speed);
 });
+// yawVis lives in (-π, π]. A spun player turning through ±π between two steps
+// changes it by ~2π while its body turned 0.04 rad; the unwrapped rotation
+// guard read that as a fast spin and skipped the swept test, so a car facing
+// back up the road could tunnel through another at speed.
+test("a spun car turning through ±π still gets its swept contact",()=>{
+  const {collision,G}=setup(),a=car(0,600),b=car(9,0);
+  a.human=true;a.yawVis=Math.PI-0.02;
+  collision.resolveCollisions([a,b],.03);a.prog=a.s=18;a.yawVis=-Math.PI+0.02;G.raceT=.03;
+  collision.resolveCollisions([a,b],.03);
+  assert.ok(a.prog<b.prog,`tunnelled: a at ${a.prog}, b at ${b.prog}`);
+});
 test("sweep ignores teleports and cars owned by another simulator",()=>{
   for(const owned of ["remote","owned"]){
     const {collision}=setup(),a=car(0,600),b=car(9,0);b[owned]=true;

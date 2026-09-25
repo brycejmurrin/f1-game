@@ -233,6 +233,68 @@ const Teams = (function () {
     drivers: [{ name: "Your Name", code: "YOU", num: 99 }],
   };
 
-  return { LIST, POINTS, TIER_V, DEFAULT_CUSTOM, isReal };
+  /* A STORED OR IMPORTED CUSTOM TEAM IS PLAYER INPUT. The customize dialog
+     caps every field as it is typed (custom-team.js `clean()`), but a garage
+     file (js/ui/settings-export.js) or a hand-edited localStorage reaches
+     Teams.LIST without passing that dialog — and the names are painted into
+     chips, the HUD and the results table. aria-state.js paintOnOff once wrote
+     one back through innerHTML (stored XSS, 2026-09-24); this is the defence
+     in depth behind that fix: every field is rebuilt to the dialog's own
+     limits at LOAD, whatever wrote it. REPAIR, NOT DISCARD — a bad field falls
+     back to its default and the player's other fields survive. Always a fresh
+     record with exactly the keys the dialog writes; `id`/`custom` are forced,
+     because syncCustomTeam() splices on id === "custom". */
+  const CUSTOM_MAX_DRIVERS = 2;   // a team's seat count; the dialog writes one
+  // C0/C1 controls, and the bidi overrides/isolates that reorder a label.
+  const CTRL = /[\u0000-\u001f\u007f-\u009f‎‏‪-‮⁦-⁩]/g;
+  function cleanText(v, fb, n, upper) {
+    if (typeof v !== "string") return fb;
+    let s = v.replace(CTRL, "").trim().slice(0, n).trim();
+    if (upper) s = s.toUpperCase();
+    return s || fb;
+  }
+  const isObj = (v) => !!v && typeof v === "object" && !Array.isArray(v);
+  const fin = (v) => typeof v === "number" && Number.isFinite(v);
+  function cleanRgb(v, fb) {
+    if (!Array.isArray(v) || v.length < 3 || !v.slice(0, 3).every(fin)) return fb.slice();
+    return v.slice(0, 3).map((x) => Math.min(1, Math.max(0, x)));
+  }
+  function cleanDriver(d, fb) {
+    const num = isObj(d) && fin(d.num) ? Math.round(d.num) : fb.num;
+    return {
+      name: cleanText(isObj(d) ? d.name : null, fb.name, 22, false),
+      code: cleanText(isObj(d) ? d.code : null, fb.code, 3, true),
+      num: Math.min(99, Math.max(0, num)),
+    };
+  }
+  function sanitizeCustom(t) {
+    const D = DEFAULT_CUSTOM;
+    const src = isObj(t) ? t : {};
+    const rows = Array.isArray(src.drivers) ? src.drivers.filter(isObj).slice(0, CUSTOM_MAX_DRIVERS) : [];
+    const stats = {};
+    for (const k of Object.keys(D.stats)) {
+      stats[k] = isObj(src.stats) && fin(src.stats[k]) ? Math.min(100, Math.max(0, src.stats[k])) : D.stats[k];
+    }
+    // Livery values are ids (strings) and rgb triples; nothing nested.
+    const livery = {};
+    for (const [k, v] of Object.entries(isObj(src.livery) ? src.livery : D.livery)) {
+      if (typeof v === "string") { const s = cleanText(v, "", 32, false); if (s) livery[k] = s; }
+      else if (Array.isArray(v) && v.length === 3 && v.every(fin)) livery[k] = cleanRgb(v, [0, 0, 0]);
+    }
+    return {
+      id: "custom", custom: true,
+      name: cleanText(src.name, D.name, 22, false),
+      short: cleanText(src.short, D.short, 4, true),
+      engine: cleanText(src.engine, D.engine, 16, false),
+      tier: Number.isInteger(src.tier) && src.tier >= 0 && src.tier <= 4 ? src.tier : D.tier,
+      color: cleanRgb(src.color, D.color),
+      color2: cleanRgb(src.color2, D.color2),
+      stats,
+      livery,
+      drivers: rows.length ? rows.map((d) => cleanDriver(d, D.drivers[0])) : D.drivers.map((d) => cleanDriver(d, d)),
+    };
+  }
+
+  return { LIST, POINTS, TIER_V, DEFAULT_CUSTOM, isReal, sanitizeCustom };
 })();
 Object.freeze(Teams);

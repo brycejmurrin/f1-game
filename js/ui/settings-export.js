@@ -404,9 +404,15 @@ function garageValue(k, v) {
   // whole (js/career/custom-team.js). `{}` there was a boot-time TypeError.
   // Rejecting one key still applies the rest of the file, which is the same
   // bargain the custom-livery array already makes.
+  // A shape-sound team is also rebuilt field by field (Teams.sanitizeCustom:
+  // length caps, control characters, num 0-99, a bounded roster), so what is
+  // WRITTEN is already what the dialog could have saved. custom-team.js runs
+  // the same repair again at load — this is the door, that is the reader.
   if (k === "customTeam") {
-    return v && typeof v === "object" && !Array.isArray(v)
-      && Array.isArray(v.drivers) && v.drivers.length > 0 ? v : undefined;
+    const ok = v && typeof v === "object" && !Array.isArray(v)
+      && Array.isArray(v.drivers) && v.drivers.length > 0;
+    if (!ok) return undefined;
+    return typeof Teams !== "undefined" && Teams.sanitizeCustom ? Teams.sanitizeCustom(v) : v;
   }
   if (k === "customLogo") {
     if (typeof v !== "string") return undefined;

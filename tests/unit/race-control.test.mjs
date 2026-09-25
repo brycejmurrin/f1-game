@@ -102,6 +102,34 @@ test("lineTransition gives normal and incident motion the same chequered-flag ru
   assert.equal(c.lapTime, 0);
 });
 
+// updateCar adds the WHOLE step to lapTime (and raceT) before it tests the
+// line, so a lap used to be timed at the end of the step it crossed in — up to
+// 1/60 s late, and two cars crossing in one step tied on finishT. With `dt`
+// the crossing is placed inside the step: frac = (L - oldS) / ds of it had run.
+test("lineTransition times the lap to the crossing inside the step, not the step's end", () => {
+  const R = load({ active: () => false, hazards: () => hazards(0, 0) });
+  const dt = 1 / 60;
+  // 995 -> 1005 (wraps to 5): the line is 5 m into a 10 m step, frac 0.5.
+  const c = { lap: 2, lapTime: 80 + dt, finished: false };
+  const cross = R.lineTransition(c, 995, 5, 10, 1000, 5, [c], 300 + dt, dt);
+  assert.ok(Math.abs(cross.lapDone - (80 + dt / 2)) < 1e-12, `lapDone ${cross.lapDone}`);
+  assert.ok(Math.abs(c.lapTime - dt / 2) < 1e-12, "the post-line half of the step opens the next lap");
+  assert.ok(Math.abs(cross.lapDone + c.lapTime - (80 + dt)) < 1e-12, "no time is lost or invented");
+  // …and the chequered flag is stamped at the crossing too, so two cars that
+  // cross in the SAME step are classified by who crossed first.
+  const lead = { lap: 5, lapTime: 70, finished: false };
+  const chase = { lap: 5, lapTime: 70, finished: false };
+  R.lineTransition(lead, 999, 9, 10, 1000, 5, [lead, chase], 400, dt);    // frac 0.1
+  R.lineTransition(chase, 991, 1, 10, 1000, 5, [lead, chase], 400, dt);   // frac 0.9
+  assert.ok(lead.finished && chase.finished);
+  assert.ok(lead.finishT < chase.finishT, `lead ${lead.finishT} must precede chase ${chase.finishT}`);
+  assert.ok(Math.abs(lead.finishT - (400 - dt * 0.9)) < 1e-12);
+  // A caller that did not advance the clock (the incident takeover) omits dt.
+  const inc = { lap: 2, lapTime: 50, finished: false };
+  assert.equal(R.lineTransition(inc, 995, 5, 10, 1000, 5, [inc], 0).lapDone, 50);
+  assert.equal(inc.lapTime, 0);
+});
+
 test("lineTransition undoes a backward crossing and restores the lap clock", () => {
   const R = load({ active: () => false, hazards: () => hazards(0, 0) });
   const c = { lap: 3, lapTime: 0.4, _lapTimeAtLine: 81.7, finished: false };

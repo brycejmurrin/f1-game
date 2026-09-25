@@ -36,14 +36,11 @@ const CustomTeam = (function () {
     // "custom", so every sync would push ANOTHER team onto the grid.
     // Repair rather than discard — the player's name and colours are not the
     // corrupt field, and losing them to a bad `drivers` array is its own bug.
+    // Teams.sanitizeCustom rebuilds every field to the save dialog's limits
+    // (length caps, control characters, num 0-99, a bounded roster): the
+    // dialog's clean() only ever guarded what was TYPED, never what was loaded.
     function loadCustomTeam() {
-      const t = store.get("customTeam", DEFAULT_CUSTOM);
-      if (!t || typeof t !== "object" || Array.isArray(t)) return DEFAULT_CUSTOM;
-      const ok = Array.isArray(t.drivers) && t.drivers.length > 0
-        && t.drivers.every((d) => d && typeof d === "object");
-      if (ok && t.id === "custom") return t;
-      return Object.assign({}, DEFAULT_CUSTOM, t,
-        { id: "custom", drivers: ok ? t.drivers : DEFAULT_CUSTOM.drivers });
+      return Teams.sanitizeCustom(store.get("customTeam", DEFAULT_CUSTOM));
     }
     function customTeamIndex() { return Teams.LIST.findIndex((t) => t.id === "custom"); }
 

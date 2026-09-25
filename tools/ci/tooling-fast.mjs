@@ -295,6 +295,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // REJECTION, and index.html turns an unhandled one into a full-screen
   // overlay over the running race. Pure source scan, well under a second.
   "tests/unit/reject-lint.test.mjs",
+  // ...and an HTML-sink audit over js/: every innerHTML/outerHTML/
+  // insertAdjacentHTML writes a constant or is in the reasoned allowlist
+  // (the 2026-09-24 stored XSS went through one). Pure source scan, ~1 s.
+  "tests/unit/html-sink-lint.test.mjs",
   // ...and a third of the same family: two widgets keyed on ONE sign convention
   // were painted opposite colours. Neither half is wrong alone, so only a test
   // comparing the PAIR can see it. Pure text, well under a second.
