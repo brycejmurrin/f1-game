@@ -1407,7 +1407,9 @@ const damp = (c, t, l, dt) => lerp(c, t, 1 - Math.exp(-l * dt));
 // timing-sheet style) is the other formatter on purpose; do not merge them.
 function fmtTime(t) {
   if (!isFinite(t) || t <= 0) return "-";
-  const m = Math.floor(t / 60), s = t - m * 60;
+  // ROUND FIRST, then split: 119.9996 split first read "1:60.00" (and 69.9996
+  // "1:010.00") — toFixed rounded the seconds up without carrying the minute.
+  const cs = Math.round(t * 100), m = Math.floor(cs / 6000), s = (cs - m * 6000) / 100;
   return m + ":" + (s < 10 ? "0" : "") + s.toFixed(2);
 }
 // RETURNS WHETHER THE MESSAGE REACHED THE SCREEN — true shown, false dropped
@@ -3046,8 +3048,8 @@ function netOrder(order) {
 }
 
 function endRace(forcedOrder) {
+  Ghost.flush();   // off-race: write a pending lap-record ghost now (js/car/ghost.js)
   PerfGov.cleanRace();   // finished cleanly — disarm + pay a crash strike down
-  Ghost.flush();         // a new PB ghost is written now, not only on pagehide
   // raceCtl.update's own not-in-race reset is unreachable (update() only calls
   // it in state "race"), so without this a flying flag survives into results
   // for anything reading raceCtl.info()/level between races.
@@ -3977,10 +3979,10 @@ if (rotateBlockMql.addEventListener) rotateBlockMql.addEventListener("change", (
 else if (rotateBlockMql.addListener) rotateBlockMql.addListener(() => syncRotateBlocker(true));
 
 function quitToMenu() {
+  Ghost.flush();
   sessionEntry.cancel();
   qualiSheet.close();
   _ltBase = null; _ltFlash = 0;   // the lightning's saved race base is not the menu's
-  Ghost.flush();   // a time-trial PB ghost pending an idle slot is written on the way out
   if (announcer.stop) announcer.stop();   // the results commentary ran on over the title for up to 16 s
   shake = 0; hitStop = 0;
   PerfGov.sentinelArm(false); if (netPlay.active()) netPlay.stop("local"); hideCamPicker();
@@ -8837,6 +8839,7 @@ $("cs-unlimited").onclick = () => {
 };
 els.resMenu.onclick = () => quitToMenu();
 els.resNext.onclick = () => {
+  if (announcer.stop) announcer.stop();   // a read-out still waiting on the radio must not start over the hub / quali sheet
   // Career never jumps straight into the next round: the weekend is one step of a
   // longer loop, and the hub is where you spend what you just earned.
   if (isCareer()) {
@@ -8877,6 +8880,7 @@ els.resNext.onclick = () => {
 
 function setPaused(p) {
   if (state !== "race" && state !== "count") return; hideCamPicker();
+  if (p) Ghost.flush();   // paused: the frame budget is free for the ghost write
   // THE PIT GARAGE HOLDS THE PAUSE. openPitWork freezes the race behind
   // #carsetup; a Start/P press or RESUME on a pause card stacked over it
   // (hidden tab) used to run the race UNDER the garage, the box timer expired,

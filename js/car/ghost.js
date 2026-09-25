@@ -265,9 +265,10 @@ const Ghost = (function () {
       // A LONG idle slot only: the write (trim + 2-3 stringifies of a store of up
       // to 512 KB + setItem) is one 5-30 ms job on a phone. With a 2 s timeout it
       // ran mid-race — a frame's idle tail is < 16 ms, so it overran into the next
-      // frame. A 25 ms slot comes with pause, menus or results; pagehide flushes.
+      // frame. That slot rarely comes while the loop renders, so flush() (pause,
+      // results, quit, hidden, pagehide) is what actually writes it.
       const idle = (dl) => {
-        if (pending.get(id) !== snap) { _flushes.delete(write); return; }
+        if (pending.get(id) !== snap) return;
         if (dl && typeof dl.timeRemaining === "function" && dl.timeRemaining() < 25) { requestIdleCallback(idle); return; }
         write();
       };
@@ -286,15 +287,15 @@ const Ghost = (function () {
     if (_flushArmed || typeof addEventListener !== "function") return;
     _flushArmed = true;
     addEventListener("pagehide", flush);
-    // A visible tab rarely yields a 25 ms idle slot (tick() keeps a frame
-    // pending in menus too, which caps every idle deadline at one frame), and a
-    // backgrounded phone tab can be killed without pagehide: hidden is the last
-    // reliable moment (page-lifecycle guidance), so write there as well.
+    // A LONG idle slot never comes while the render loop runs (it asks for every
+    // frame, on menus too: the spec gives < 16 ms between frames), and pagehide is
+    // not fired when a phone swipes the app away or a tab is discarded — HIDDEN is
+    // the last reliable moment. flush() is also called at the game's own off-race
+    // moments (pause, results, quit), where a 5-30 ms write costs no race frame.
     if (typeof document !== "undefined" && document.addEventListener)
       document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flush(); });
   }
-  // Write every pending record now. Also called when a race ends (results /
-  // quit), where a 5-30 ms synchronous write costs no race frame.
+  /** Write every pending record now. */
   function flush() {
     const fns = Array.from(_flushes); _flushes.clear();
     for (const f of fns) { try { f(); } catch (_) { /* best effort on the way out */ } }

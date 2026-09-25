@@ -17,7 +17,7 @@ function correctedFinish(c) {
 function raceClock(G, seconds) {
   if (!(typeof seconds === "number" && isFinite(seconds) && seconds > 0)) return null;
   if (G && typeof G.fmtTime === "function") return G.fmtTime(seconds);
-  const m = Math.floor(seconds / 60), s = seconds - m * 60;
+  const cs = Math.round(seconds * 100), m = Math.floor(cs / 6000), s = (cs - m * 6000) / 100;   // round first (see game.js fmtTime)
   return m + ":" + (s < 10 ? "0" : "") + s.toFixed(2);
 }
 

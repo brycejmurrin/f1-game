@@ -51,6 +51,7 @@ function createHarness(opts = {}) {
   if (opts.idle) {
     sandbox.requestIdleCallback = (fn) => { idles.push(fn); return idles.length; };
     sandbox.addEventListener = (type, fn) => { (listeners[type] = listeners[type] || []).push(fn); };
+    sandbox.document = { visibilityState: "visible", addEventListener: (type, fn) => { (listeners["doc:" + type] = listeners["doc:" + type] || []).push(fn); } };
   }
   const ctx = vm.createContext(sandbox);
   seedLog(ctx);
@@ -67,6 +68,7 @@ function createHarness(opts = {}) {
     runIdle: (ms) => { const q = idles.splice(0); for (const f of q) f({ timeRemaining: () => ms, didTimeout: false }); },
     idleQueued: () => idles.length,
     fire: (type) => { for (const f of listeners[type] || []) f(); },
+    hide: () => { sandbox.document.visibilityState = "hidden"; for (const f of listeners["doc:visibilitychange"] || []) f(); },
     disk: store,
   };
 }
@@ -415,19 +417,28 @@ test("a record still pending when the page goes away is flushed on pagehide", ()
   assert.equal(ghostOnDisk(h), true, "the new ghost must not die with the tab");
 });
 
-test("a pending record is written when the race ends (Ghost.flush), not only on pagehide", () => {
-  // A visible tab keeps a frame pending even in menus, so every idle deadline
-  // is capped at one frame and the 25 ms slot never comes: the record lived
-  // only in memory until pagehide — lost if a phone killed the hidden tab.
+test("the render loop never leaves a long idle slot: flush() and a HIDDEN tab write the record", () => {
+  // requestAnimationFrame runs on menus too, so idle tails stay < 16 ms and the
+  // 25 ms slot the deferred write waits for never comes while the game is open.
   const h = createHarness({ idle: true });
   h.Ghost.setTrack("monza");
   recordLap(h.Ghost, 1.0);
-  h.runIdle(8);
-  assert.equal(ghostOnDisk(h), false);
-  h.Ghost.flush();
-  assert.equal(ghostOnDisk(h), true, "endRace/quitToMenu write the new ghost");
+  for (let i = 0; i < 50; i++) h.runIdle(8);
+  assert.equal(ghostOnDisk(h), false, "fifty frames of short idle tails: still pending");
+  h.Ghost.flush();                               // pause / results / quit (js/game.js)
+  assert.equal(ghostOnDisk(h), true, "the game's off-race moments write it");
+
+  const h2 = createHarness({ idle: true });
+  h2.Ghost.setTrack("monza");
+  recordLap(h2.Ghost, 1.0);
+  h2.runIdle(8);
+  h2.hide();                                     // a phone swiping the app away fires this, not pagehide
+  assert.equal(ghostOnDisk(h2), true, "a hidden tab writes the record before it can be killed");
+});
+
+test("game.js flushes the ghost at its off-race moments", () => {
   const game = readFileSync(join(ROOT, "js", "game.js"), "utf8");
-  assert.ok((game.match(/Ghost\.flush\(\)/g) || []).length >= 2, "endRace and quitToMenu both flush");
-  const src = readFileSync(join(ROOT, "js", "car", "ghost.js"), "utf8");
-  assert.match(src, /visibilitychange[\s\S]{0,120}visibilityState === "hidden"/, "a hidden tab flushes too");
+  assert.match(game, /function endRace\(forcedOrder\) \{\s*Ghost\.flush\(\);/);
+  assert.match(game, /function quitToMenu\(\) \{\s*Ghost\.flush\(\);/);
+  assert.match(game, /if \(p\) Ghost\.flush\(\);/, "pause writes it too");
 });

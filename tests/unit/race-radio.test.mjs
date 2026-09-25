@@ -610,3 +610,27 @@ test("a lap that ends green but ran under a VSC is not called slow", () => {
   r.step(60);                                      // the neutralised lap ends green
   assert.ok(!r.lines(t0).some((m) => /OFF\. RESET|LOST TIME|SLOW/.test(m)), r.lines(t0).join(" | "));
 });
+
+
+test("everyone in: a penalty-held finish is released before endRace, not lost", () => {
+  const ctx = vm.createContext({ Math, console, Object, Array, Number, JSON, isFinite, Map, Set });
+  seedLog(ctx); ctx.window = ctx;
+  for (const f of ["js/race/race-facts.js", "js/race/race-control.js"]) vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
+  const RF = vm.runInContext("RaceFacts", ctx), RC = vm.runInContext("RaceControl", ctx);
+  const facts = RF.create();
+  const p = { isPlayer: true, human: true, name: "You", prog: 0, lap: 1, penalty: 0 };
+  const ai = { name: "Rival", prog: 10, lap: 1, penalty: 0 };
+  const G = { player: p, cars: [ai, p], track: { total: 5000 }, raceT: 0, state: "race", lapsTarget: 3, cautionLevel: () => 0 };
+  let resultT = 0, ended = null; const evs = [];
+  for (let i = 0; i < 4000 && ended == null; i++) {
+    G.raceT += 0.05;
+    for (const c of G.cars) if (!c.finished) { c.prog += 4; if (c.prog >= 15000) { c.finished = true; c.finishT = G.raceT; c.lap = 4; } }
+    if (G.raceT > 1 && !p.penalty) p.penalty = 5;   // a +5 s track-limits penalty
+    const { ev } = facts.observe(G, 0.05);
+    for (const e of ev) if (e.type === "finish") evs.push({ car: e.car.name, pos: e.pos, t: +G.raceT.toFixed(2) });
+    if (resultT === 0) resultT = RC.finishDelay(G.cars, G.raceT, G.lapsTarget);
+    if (resultT > 0 && (resultT -= 0.05) <= 0) ended = +G.raceT.toFixed(2);
+  }
+  assert.ok(ended != null, "the race ended");
+  assert.ok(evs.some((e) => e.car === "You"), "the last car home with a penalty still gets its finish (and its engineer line) before endRace");
+});
