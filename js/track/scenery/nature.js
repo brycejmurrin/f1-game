@@ -864,8 +864,18 @@ const SceneryNature = (function () {
       const sShift = 0.007 + ((slot * 2) % 5) * SEP;
       const rows = Math.max(2, Math.min(8, Math.round(opts.rows || 4)));
       const rise = opts.rise != null ? opts.rise : 1.15;      // per-row height gain
+      // `opts.h` (total bank height, passed by donington / mosport / okayama)
+      // is deliberately NOT honoured. Measured 2026-09-25 with rise = h / rows:
+      // clip-audit severe donington 20 -> 22, okayama 57 -> 60; coplanar
+      // donington 2 -> 3 spots; ground-audit flatCoplanar donington 23 -> 24,
+      // mosport 6 -> 7 — the taller banks push into the trees and terraces laid
+      // around the default ladder. Those call sites keep `h` as a record of the
+      // intended height; honouring it needs those circuits re-dressed first.
+      // (okayama's `steps` is likewise unread — `rows` is the knob.)
       const depth = opts.depth != null ? opts.depth : 2.0;    // per-row setback
-      const grass = opts.grass || [0.26, 0.42, 0.20];
+      // `col` is the older name some circuits pass for the tread colour
+      // (donington, mosport, okayama): honoured when `grass` is absent.
+      const grass = opts.grass || opts.col || [0.26, 0.42, 0.20];
       const riser = opts.riser || [0.30, 0.30, 0.28];
       const dens = opts.density != null ? Math.max(0.05, Math.min(1, opts.density)) : 0.65;
       const step = opts.step || 5;

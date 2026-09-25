@@ -1,7 +1,7 @@
 # Refactor plan — readability & maintainability (2026-09-24)
 
 Practical, phased structure work for Apex 26. **Not a rewrite.** Preserve public
-contracts (`window.__apex`, scenery API 112 members, track def fields, CI gates,
+contracts (`window.__apex`, scenery API 114 members, track def fields, CI gates,
 IIFE + `tools/manifest.cjs` load order). Measured at ship tip
 `ecc06469f` (`claude/f1-game-project-26h3ng`, 2026-09-24).
 
@@ -82,7 +82,7 @@ Size alone is not rank: `presets.js` is huge but mostly JSON-shaped data; `updat
 
 ### 2. `js/track/tracks.js` → peel `buildProps` / guards (impact 5 × risk 3 = **15**) — L
 
-**Why it hurts:** Engine shell + **~1 942-line** `buildProps` (terrain raycast grid, on-road/pit guards, mass index, theme dress via `Scenery*`, 112-member API wrap, lamp registries, pit furniture). Scenery agents and landmark waves all read this file; `scenery-guards` / `scenery-api-contract` / `verify-track` depend on it.
+**Why it hurts:** Engine shell + **~1 942-line** `buildProps` (terrain raycast grid, on-road/pit guards, mass index, theme dress via `Scenery*`, 114-member API wrap, lamp registries, pit furniture). Scenery agents and landmark waves all read this file; `scenery-guards` / `scenery-api-contract` / `verify-track` depend on it.
 
 **Proposed shape:**
 
@@ -93,7 +93,7 @@ js/track/scenery/<guards>.js       # proposed — onTrack / onRoadHit / pit keep
 js/track/scenery/<api-wrap>.js     # proposed — transformSceneryApi + guarded emitters (optional)
 ```
 
-Contract **frozen:** `tests/unit/scenery-api-contract.test.mjs` (112 members). No circuit scenery churn.
+Contract **frozen:** `tests/unit/scenery-api-contract.test.mjs` (114 members). No circuit scenery churn.
 
 **Risk / tests:** `scenery-guards`, `scenery-api-contract`, `track-graph`, `pit-complex`, `verify-track` smoke on 2–3 ids, graph-parity if emitters move. Prefer mechanical move of closed functions first (Phase 1).
 
