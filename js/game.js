@@ -3246,6 +3246,7 @@ const G = {
   get ttSessionTs() { return ttSessionTs; },
   get records() { return records; },
   get coach() { return coach; },
+  openCoachDetails: () => { openSettings(); settingsNav.show("driving", true); },
   get radio() { return radioVoice; },   // js/audio/radio-voice.js — AudioPanel drives its toggle and volume
   get announcer() { return announcer; },   // js/audio/announcer.js — AudioPanel drives its switch and voice
   get raceRadio() { return raceRadio; },   // js/race/race-radio.js — AudioPanel drives chatter + commentary
@@ -6071,7 +6072,7 @@ function updateCar(c, dt, ranked) {
     // The flag: the distance, or the leader already home (RaceControl.flagOut —
     // a lapped car is flagged at its next crossing, not after the full count).
     const flagged = lineCross.flagged;
-    if (c.lap > 1) {
+    if (c.lap > 1 && !lineCross.recross) {   // a re-crossing after a reverse was timed the first time
       const lapDone = lineCross.lapDone;
       if (lapValid) c.lastLap = lapDone;
       if (lapValid && lapDone < c.best) c.best = lapDone;
@@ -8718,6 +8719,9 @@ function openGarage(from) {
   if (from === "menu" && soundOn) GameAudio.init();
   else if (soundOn) GameAudio.uiSelect();
   garageReturn = from;
+  $("cs-done").textContent = from === "select" ? "RACE SETUP" :
+    from === "pit" ? "RETURN TO RACE" : from === "career" ? "RETURN TO CAREER" :
+    from === "vsfriend" ? "RETURN TO LOBBY" : "CLOSE GARAGE";
   // Fresh camera every visit: a garage that reopened on the last angle someone
   // dragged to — nose-down, zoomed into a wheel — reads as broken rather than
   // as remembered. The turntable is the front door; the controls are there for

@@ -41,7 +41,10 @@ const RaceRadio = (function () {
   const COMM = Object.freeze(["off", "tv", "on"]);
   // Minimum seconds between two engineer lines, by chatter level. Tier 5 ignores it.
   const GAP_S = Object.freeze([Infinity, 18, 9, 5]);
-  const COMM_GAP_S = 6;         // between two commentary lines
+  // Between two commentary lines. 6 s read as a line every breath on ALWAYS
+  // (a 22-car soak, 2026-09-24: ~60 lines in six minutes); a broadcast booth
+  // leaves room. Colour (battles, the gap, a charge) waits half as long again.
+  const COMM_GAP_S = 10;
   const AFTER_ENG_S = 2.5;      // commentary lets an engineer line breathe
   const EVAL_S = 0.5;           // state rules are re-checked this often
   const SETTLE_S = 10;
@@ -87,6 +90,7 @@ const RaceRadio = (function () {
         defending: null,          // the car the last defend call named
         toldPos: null,            // the position the driver was last told
         wasPit: false,            // the player was in the pit lane last tick
+        pitLap: -9,               // the lap the player was last in the pit lane (in-lap / out-lap are not pace)
         bestPos: 99,
         eng: -99, tv: -99,        // t of the last line on each channel
       };
@@ -104,6 +108,10 @@ const RaceRadio = (function () {
     const lvl = () => CHAT.indexOf(chat);
     const inPits = (c) => !!(c && c.pitState && c.pitState !== "none");
     const cool = (key, cd) => !(m.said.has(key) && t - m.said.get(key) < cd);
+    /** A `still` for a line that names a position: dropped once the player's
+     *  place (or whatever `and` checks) is no longer what it says — the line
+     *  waited behind others and would otherwise be read out stale. */
+    const samePos = (pos, and) => () => { const g = f2(); return (g.rawPos || g.pos) === pos && (!and || and()); };
 
     /** Offer a line. `c` = { id, ch, tier, chat, key, vars, ttl, cd, cdKey, once, still, onSaid, hold } */
     function offer(c) {
@@ -167,7 +175,7 @@ const RaceRadio = (function () {
           if (e.lap === 2 && f.gridPos) {
             const d = f.gridPos - pos;
             offer({ id: "lap1", ch: "eng", tier: 3, chat: 1, once: "lap1",
-              key: d > 0 ? "eng.lap1Up" : d < 0 ? "eng.lap1Down" : "eng.lap1Same", vars: { pos, n: d }, ttl: 12,
+              key: d > 0 ? "eng.lap1Up" : d < 0 ? "eng.lap1Down" : "eng.lap1Same", vars: { pos, n: d }, ttl: 12, still: samePos(pos),
               onSaid: () => { m.toldPos = pos; } });
           }
           if (f.toGo === 1 && f.laps > 1) {
@@ -180,10 +188,10 @@ const RaceRadio = (function () {
             offer({ id: "last", ch: "eng", tier: 5, chat: 1, once: "last", key, vars, ttl: 10 });
           } else if (f.toGo != null && [10, 5, 3, 2].indexOf(f.toGo) >= 0 && f.toGo < f.laps) {
             offer({ id: "toGo", ch: "eng", tier: 3, chat: f.toGo === 10 ? 3 : 2, once: "toGo" + f.toGo,
-              key: "eng.toGo", vars: { left: f.toGo, pos }, ttl: 15 });
+              key: "eng.toGo", vars: { left: f.toGo, pos }, ttl: 15, still: samePos(pos) });
           } else if (e.lap > 2 && f.gapA != null && f.gapB != null) {
             offer({ id: "status", ch: "eng", tier: 1, chat: 3, cd: 50, key: "eng.status",
-              vars: { pos, gapA: gapT(f.gapA), gapB: gapT(f.gapB) }, ttl: 12 });
+              vars: { pos, gapA: gapT(f.gapA), gapB: gapT(f.gapB) }, ttl: 12, still: samePos(pos) });
           }
           break;
         }
@@ -194,7 +202,7 @@ const RaceRadio = (function () {
             offer({ id: "fastest", ch: "eng", tier: 3, chat: 1, cd: 45, key: "eng.fastest", vars: { time: timeT(e.time) }, ttl: 12 });
           } else if (e.pb && f.lap > 2) {
             offer({ id: "pb", ch: "eng", tier: 2, chat: 2, cd: 70, key: "eng.pb", vars: { time: timeT(e.time) }, ttl: 12 });
-          } else if (f.best > 0 && e.time > f.best + 1.5 && f.caution === 0 && f.lap > 3) {
+          } else if (f.best > 0 && e.time > f.best + 1.5 && f.caution === 0 && f.lap > 3 && f.lap - m.pitLap > 1) {
             offer({ id: "slow", ch: "eng", tier: 2, chat: 3, cd: 120, key: "eng.slow",
               vars: { time: timeT(e.time), delta: gapT(e.time - f.best) }, ttl: 10 });
           } else if (m.laps.length >= 3) {
@@ -305,10 +313,13 @@ const RaceRadio = (function () {
             still: () => f2().ahead === a });
         } else if (f.gapA < 6 && f.rateA != null && f.rateA > 0.3) {
           offer({ id: "pulling", ch: "eng", tier: 1, chat: 3, cd: 120, cdKey: "pulling:" + S(a), key: "eng.pulling",
-            vars: { gap: gapT(f.gapA), ahead: S(a), rate: gapT(f.rateA) }, ttl: 8 });
-        } else if (f.toGo != null && f.toGo <= 3 && f.gapA > 4 && (f.rateA == null || -f.rateA * f.toGo < f.gapA)) {
+            vars: { gap: gapT(f.gapA), ahead: S(a), rate: gapT(f.rateA) }, ttl: 8, still: () => f2().ahead === a });
+        // "Out of reach" is an END-of-race verdict: the last 3 laps of a long
+        // race, the last third of a short one — in a 3-lap sprint "3 to go"
+        // is lap one, and "BRING HOME P22" 38 s after the lights is nonsense.
+        } else if (f.toGo != null && f.toGo <= Math.min(3, Math.ceil(f.laps / 3)) && f.gapA > 4 && (f.rateA == null || -f.rateA * f.toGo < f.gapA)) {
           offer({ id: "reach", ch: "eng", tier: 1, chat: 3, once: "reach", key: "eng.outOfReach",
-            vars: { gap: gapT(f.gapA), ahead: S(a), pos: f.pos }, ttl: 8 });
+            vars: { gap: gapT(f.gapA), ahead: S(a), pos: f.pos }, ttl: 8, still: samePos(f.pos, () => f2().ahead === a) });
         }
       }
       if (b && green && racing && f.gapB != null) {
@@ -319,19 +330,21 @@ const RaceRadio = (function () {
             still: () => { const g = f2(); return g.behind === b && g.gapB != null && g.gapB < 1.2; } });
         } else if (f.gapB < 3 && f.rateB != null && f.rateB < -0.25) {
           offer({ id: "threat", ch: "eng", tier: 2, chat: 2, cd: 90, cdKey: "threat:" + S(b), key: "eng.threat",
-            vars: { gap: gapT(f.gapB), behind: S(b), rate: gapT(-f.rateB) }, ttl: 8 });
+            vars: { gap: gapT(f.gapB), behind: S(b), rate: gapT(-f.rateB) }, ttl: 8, still: () => f2().behind === b });
         } else if (m.defending === b && f.gapB > 2.0) {
           m.defending = null;
-          offer({ id: "clear", ch: "eng", tier: 2, chat: 2, key: "eng.clear", vars: { gap: gapT(f.gapB), behind: S(b) }, ttl: 8 });
+          offer({ id: "clear", ch: "eng", tier: 2, chat: 2, key: "eng.clear", vars: { gap: gapT(f.gapB), behind: S(b) }, ttl: 8,
+            still: () => f2().behind === b });
         } else if (f.pos === 1 && f.gapB > 3 && f.toGo != null && f.toGo <= Math.ceil(f.laps / 2)) {
-          offer({ id: "manage", ch: "eng", tier: 1, chat: 2, cd: 150, key: "eng.manage", vars: { gap: gapT(f.gapB), behind: S(b) }, ttl: 10 });
+          offer({ id: "manage", ch: "eng", tier: 1, chat: 2, cd: 150, key: "eng.manage", vars: { gap: gapT(f.gapB), behind: S(b) }, ttl: 10,
+            still: samePos(1, () => f2().behind === b) });
         }
       }
       if (f.energy != null && green) {
         if (f.energy < 0.1 && (p.speed || 0) > G.vTop() * 0.25) {
           offer({ id: "batt", ch: "eng", tier: 2, chat: 2, cd: 100, key: "eng.battLow", vars: {}, ttl: 8 });
         } else if (f.energy > 0.97 && a && f.gapA != null && f.gapA < 1.5 && racing) {
-          offer({ id: "batt", ch: "eng", tier: 1, chat: 3, cd: 120, key: "eng.battFull", vars: { ahead: S(a) }, ttl: 6 });
+          offer({ id: "batt", ch: "eng", tier: 1, chat: 3, cd: 120, key: "eng.battFull", vars: { ahead: S(a) }, ttl: 6, still: () => f2().ahead === a });
         }
       }
     }
@@ -352,7 +365,10 @@ const RaceRadio = (function () {
           if (e.pos === 1) offer({ id: "lead", ch: "tv", tier: 4, cd: 30, key: "tv.leadChange", vars, ttl: 7,
             still: () => { const o = facts.order(); return o[0] === e.a; } });
           else if (e.pos <= 6 || e.a.isPlayer || e.b.isPlayer) {
-            offer({ id: "pass", ch: "tv", tier: 3, key: back ? "tv.repass" : "tv.pass", vars, ttl: 5 });
+            // One call per PAIR per 40 s: two cars trading a place corner after
+            // corner are one story, not seven "returns the favour" lines.
+            offer({ id: "pass", ch: "tv", tier: 3, cd: 40, cdKey: "pass:" + [S(e.a), S(e.b)].sort().join("|"),
+              key: back ? "tv.repass" : "tv.pass", vars, ttl: 5 });
           }
           const grid = facts.gridOf(e.a);
           if (grid && grid - e.pos >= 5 && e.pos <= 10 && !m.charged.has(e.a)) {
@@ -446,6 +462,7 @@ const RaceRadio = (function () {
       // from the pre-stop place — gaining one from P7 read as "DOWN 4 TO P6".
       if (m.wasPit && !f.pitting) { m.toldPos = f.rawPos || f.pos; queue.eng.delete("pos"); }
       m.wasPit = !!f.pitting;
+      if (f.pitting) m.pitLap = f.lap;
       const tv = tvLive(f);
       for (const e of ev) {
         engineerEvent(e, f, p);
@@ -481,7 +498,7 @@ const RaceRadio = (function () {
       if (!c) return;
       const urgent = c.tier >= 4;
       if (G.announceBusy && !urgent) return;
-      if (!urgent && (t - m.tv < COMM_GAP_S || t - m.eng < AFTER_ENG_S)) return;
+      if (!urgent && (t - m.tv < (c.tier <= 2 ? COMM_GAP_S * 1.5 : COMM_GAP_S) || t - m.eng < AFTER_ENG_S)) return;
       speak(c, "comm");
     }
 

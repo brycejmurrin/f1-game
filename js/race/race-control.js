@@ -47,6 +47,11 @@ const RaceControl = (function () {
     if (!c || c.finished || !(total > 0)) return null;
     if (ds > 0 && oldS > total * 0.5 && newS < total * 0.5) {
       const lapDone = c.lapTime || 0;
+      // A crossing that follows a backward undo re-crosses a line the lap was
+      // ALREADY timed at: the caller must not record it a second time (a Time
+      // Trial reverse-and-recross put a lap nobody drove on the leaderboard).
+      const recross = !!c._recross;
+      c._recross = false;
       c.lap = (c.lap || 0) + 1;
       // A red-flag restart rewinds the classification lap but burns another
       // physical lap. Backward line crossings do not refund fuel either.
@@ -59,12 +64,13 @@ const RaceControl = (function () {
         c.finished = true;
         c.finishT = Number.isFinite(raceT) ? raceT : 0;
       }
-      return { direction: 1, changed: true, lapDone, flagged };
+      return { direction: 1, changed: true, lapDone, flagged, recross };
     }
     if (ds < 0 && oldS < total * 0.5 && newS > total * 0.5) {
       if (!(c.lap > 0)) return { direction: -1, changed: false, lapDone: null, flagged: false };
       c.lap--;
       c.lapTime = c._lapTimeAtLine != null ? c._lapTimeAtLine : c.lapTime;
+      c._recross = true;
       return { direction: -1, changed: true, lapDone: null, flagged: false };
     }
     return null;
