@@ -1,11 +1,12 @@
 // @ts-check
-import { test, expect } from "@playwright/test";
+// fixtures' test (not @playwright/test) so apex26.gfxBackend=webgl2 is pinned
+// — shared CI coverage is native GLX; TLX product coverage lives in tlx-probes.
+import { test, expect, BOOT_MS, TRACK_MS } from "../helpers/fixtures.js";
 // BUDGETS, FROM A MEASUREMENT. Every wait below was under the worst case this
 // class of box actually posts: measured idle (loadavg 0.00, three cold boots,
 // scratch/perf/boot-budget.mjs) the page needs up to 24.6 s to publish __apex
 // and 16.9 s to build a track, and this file was asking for 15 s and 25 s. See
 // the BOOT_MS note in tests/helpers/fixtures.js — these are the same numbers.
-import { BOOT_MS, TRACK_MS } from "../helpers/fixtures.js";
 
 // FOUR OF THE FIVE TESTS HERE ARE GENUINELY OVER THE DEFAULT 120 s BUDGET, not
 // flaky. Solo at APEX_WORKERS=1 on a quiet box: 191.3 / 173.7 / 155.6 / 135.5 s;

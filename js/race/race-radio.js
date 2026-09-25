@@ -346,7 +346,11 @@ const RaceRadio = (function () {
           const pairKey = S(e.a) + ">" + S(e.b), back = m.tvPairs.has(S(e.b) + ">" + S(e.a));
           m.tvPairs.add(pairKey);
           const vars = { a: S(e.a), b: S(e.b), pos: e.pos };
-          if (e.pos === 1) offer({ id: "lead", ch: "tv", tier: 4, key: "tv.leadChange", vars, ttl: 7 });
+          // One lead change per 30 s, and only if it is still true when said: two
+          // cars swapping P1 corner after corner read as eight "CHANGE AT THE
+          // FRONT" calls in three minutes (a full-race soak, 2026-09-24).
+          if (e.pos === 1) offer({ id: "lead", ch: "tv", tier: 4, cd: 30, key: "tv.leadChange", vars, ttl: 7,
+            still: () => { const o = facts.order(); return o[0] === e.a; } });
           else if (e.pos <= 6 || e.a.isPlayer || e.b.isPlayer) {
             offer({ id: "pass", ch: "tv", tier: 3, key: back ? "tv.repass" : "tv.pass", vars, ttl: 5 });
           }
