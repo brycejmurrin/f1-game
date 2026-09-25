@@ -160,7 +160,10 @@
         motorhome(k, 1, 52 + h * 10, 10, 4, 6, { wall: [0.66 + h * 0.24, 0.66, 0.68] });
       });
       broadcastCompound(K(0.918), 1, 68, { vans: 2, dishes: 2, mastH: 9 });
-      sponsorHoarding(0.955, 0.045, -1, 6.5, { h: 2.2, step: 10,
+      // Was 6.5: after the closing-chord centerline fix the default panel face
+      // sat 9.5 mm off the generic crowdBank riser (gap 6.55) at the start seam.
+      // 6.0 leaves ~24 cm clear of the riser's trackward face (MIN_SEP = 3 cm).
+      sponsorHoarding(0.955, 0.045, -1, 6.0, { h: 2.2, step: 10,
         palette: [[0.20, 0.28, 0.54], [0.82, 0.18, 0.16], [0.92, 0.90, 0.86], [0.18, 0.36, 0.24]] });
 
       const CROWD = [[0.30, 0.32, 0.36], [0.68, 0.24, 0.20], [0.84, 0.82, 0.78],

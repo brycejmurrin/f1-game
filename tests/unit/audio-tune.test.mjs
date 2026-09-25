@@ -1422,3 +1422,21 @@ test("a steady setEngine and a quiet setSkid schedule nothing after the first fr
     assert.equal(GameAudio.skidLevel(), 0, core + ": releasing the slide lands an exact 0");
   }
 });
+
+test("on a TV camera the rev limiter's swing scales with the engine: the gain never inverts", async () => {
+  const A = await sampleEngine();
+  for (const cam of ["chase", "heli", "cockpit"]) {
+    A.setCameraMix(cam);
+    for (let i = 0; i < 6; i++) A.setEngine(1, 0, false, 0.9, 5, {});
+    const base = A.engineLevel(), swing = A.debug().limSwing;
+    assert.ok(swing != null, "limSwing is reported");
+    assert.ok(base - swing >= -1e-9, `${cam}: trough ${base - swing} (base ${base}, swing ${swing})`);
+  }
+});
+
+test("the off-road rumble's filter is not rescheduled every frame for a steady surface", async () => {
+  const A = await sampleEngine();
+  const before = A.debug().surfSched;
+  for (let i = 0; i < 120; i++) A.setCarSfx({ surface: 0.5 });
+  assert.ok(A.debug().surfSched - before <= 1, `rescheduled ${A.debug().surfSched - before} times`);
+});

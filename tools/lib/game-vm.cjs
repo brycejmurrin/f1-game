@@ -48,9 +48,9 @@ const { performance } = require("perf_hooks");
 const ROOT = path.resolve(__dirname, "../..");
 const MANIFEST = require("../manifest.cjs");
 
-// The one FULL entry NOT loaded: the WebGL2 renderer. Everything it would have
-// exported is served by the GLX stub below. The shader/glx-pass files before it
-// are plain data (GLSL strings, tables) and load unchanged.
+// The WebGL2 renderer is deferred; the VM's GLX stub preserves eval-time
+// consumers without creating a GPU context. Keep the SKIP defensive for
+// callers that may load the manifest's deferred group into this harness.
 const SKIP = new Set([MANIFEST.PATHS.GLX]);
 
 const noop = () => {};
