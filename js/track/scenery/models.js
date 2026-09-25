@@ -596,6 +596,162 @@ const TrackModels = (function () {
     };
   }
 
-  return { create, validateGeometry, scratch, sealGeometry };
+  // DRAPE — a flat decal laid ON the rendered terrain, for what runoffApron /
+  // place() / groundPatch cannot do: each takes ONE height per box (place()
+  // also sinks it 0.8 m), so a 30 m band on relief went wholly under grade.
+  // Promoted from four identical circuit-local copies (paul_ricard, dijon,
+  // okayama, miami) — vertex-identical to them.
+  //
+  // Built from the FINAL scenery api (after transformSceneryApi), so it calls
+  // the wrapped anchor/K/along exactly as circuit code does: `k` is the
+  // authored-frame node and it must NOT be wrapped again.
+  //
+  // drape(k, side, gap, [depth, thick, len], col, opts?) — the footprint
+  // (depth across x len along, `gap` beyond the edge at node k) is tiled into
+  // <= opts.cell (24) m cells; each samples terrainYAt on a 3x3 grid, is tilted
+  // to the best-fit plane, and spans from `thick` under its lowest sample to
+  // `opts.h` (default 1 cm) over its highest — never buried, never floating.
+  //  * Arc length scales by (1 - kappa*d): the cell length follows it, and a
+  //    cell folded inside a tight corner (scale < 0.25) is dropped.
+  //  * A cell any corner of which lies closer to ANOTHER part of the lap than
+  //    to its own centreline is dropped (two straights' 90 m bands met in the
+  //    infield and lay one over the other).
+  //  * The normal is quantised (0.02 in x/z) and tops and bottoms snap to a
+  //    0.24 m lattice at a per-class residue (`opts.res` in 0.03 steps, +0.12
+  //    on alternate cells along the run unless `opts.line`), so no two
+  //    overlapping faces share a plane: >= 3 cm apart by construction.
+  //  * `opts.phase` seeds that alternation (default: a per-build call count).
+  //  * `opts.widen`: alternate cells run that much wider (split both sides)
+  //    and the parity also alternates across the depth — a crop field's
+  //    stations overlap 4 % end to end, and on a near-straight their side
+  //    faces were 0-2 cm apart; the sliver a wide cell lays over its
+  //    neighbour's top is then 0.12 m off it.
+  //
+  // drapeRun(s, side, gap, sz, col, res, span?, extra?) — a patch sz[2] m long
+  // centred on lap fraction `s`, draped one ~20 m along() station at a time so
+  // it follows the corner instead of running straight off its tangent.
+  // `span` (default sz[2]) is the run the stations are laid over: bands of one
+  // corner share it so their cells abut station for station. `extra` merges
+  // into each station's drape opts.
+  function drapeKit(api) {
+    const { n, px, pz, K, along, anchor, terrainYAt, addBox, out, vadd } = api;
+    let grid = null;
+    const DG = 24;
+    const nearestNode = (x, z, R) => {
+      if (!grid) {
+        grid = new Map();
+        for (let i = 0; i < n; i++) {
+          const key = __M.floor(px[i] / DG) + "," + __M.floor(pz[i] / DG);
+          let a = grid.get(key);
+          if (!a) grid.set(key, (a = []));
+          a.push(i);
+        }
+      }
+      const ix = __M.floor(x / DG), iz = __M.floor(z / DG), m = __M.ceil(R / DG);
+      let best = R * R;
+      for (let a = -m; a <= m; a++) for (let b = -m; b <= m; b++) {
+        for (const i of grid.get((ix + a) + "," + (iz + b)) || []) {
+          const d = (px[i] - x) ** 2 + (pz[i] - z) ** 2;
+          if (d < best) best = d;
+        }
+      }
+      return __M.sqrt(best);
+    };
+    const cr = (p, q) => [p[1] * q[2] - p[2] * q[1], p[2] * q[0] - p[0] * q[2], p[0] * q[1] - p[1] * q[0]];
+    const dot = (p, q) => p[0] * q[0] + p[1] * q[1] + p[2] * q[2];
+    const nrm = (p) => { const m = __M.hypot(p[0], p[1], p[2]) || 1; return [p[0] / m, p[1] / m, p[2] / m]; };
+    let seq = 0;
+    const drape = (k, side, gap, sz, col, opts) => {
+      opts = opts || {};
+      const depth = sz[0], thick = sz[1], len = sz[2], cell = opts.cell || 24;
+      const res = opts.res || 0, widen = opts.widen || 0;
+      const phase = opts.phase != null ? opts.phase : seq++;
+      const na = __M.max(1, __M.ceil(depth / cell)), nl = __M.max(1, __M.ceil(len / cell));
+      const a0 = anchor(k, side, gap + depth / 2);
+      const hand = dot(cr(a0.r, a0.u), a0.t) < 0 ? -1 : 1;
+      const tl = __M.hypot(a0.t[0], a0.t[2]) || 1, th = [a0.t[0] / tl, a0.t[2] / tl];
+      const eL = anchor(k, side, 0).c, eR = anchor(k, -side, 0).c;
+      const mid = [(eL[0] + eR[0]) / 2, (eL[2] + eR[2]) / 2];
+      const spanAt = (d) => {
+        const a = anchor(k - 1, side, d).c, b = anchor(k + 1, side, d).c;
+        return __M.hypot(b[0] - a[0], b[2] - a[2]);
+      };
+      const span0 = spanAt(0) || 1;
+      const dw = depth / na;
+      for (let i = 0; i < na; i++) {
+        const f = spanAt(gap + (i + 0.5) * dw) / span0;
+        if (!(f > 0.25)) continue;
+        const dl = __M.min(3, f) * len / nl;
+        const p0 = anchor(k, side, gap + i * dw).c, p1 = anchor(k, side, gap + (i + 1) * dw).c;
+        const rl = __M.hypot(p1[0] - p0[0], p1[2] - p0[2]) || 1;
+        const rh = [(p1[0] - p0[0]) / rl, (p1[2] - p0[2]) / rl];
+        const fb = anchor(k, side, gap + (i + 0.5) * dw).c[1] + 0.3;
+        for (let j = 0; j < nl; j++) {
+          const lc = (j + 0.5 - nl / 2) * dl;
+          const cx = (p0[0] + p1[0]) / 2 + th[0] * lc, cz = (p0[2] + p1[2]) / 2 + th[1] * lc;
+          let foreign = false;
+          for (const fa of [-0.5, 0.5]) for (const fl of [-0.5, 0.5]) {
+            const x = cx + rh[0] * fa * rl + th[0] * fl * dl, z = cz + rh[1] * fa * rl + th[1] * fl * dl;
+            const own = __M.abs((x - mid[0]) * rh[0] + (z - mid[1]) * rh[1]);
+            if (nearestNode(x, z, own) < own - 1.5) foreign = true;
+          }
+          if (foreign) continue;
+          const S = [];
+          let my = 0;
+          for (const fa of [-0.5, 0, 0.5]) for (const fl of [-0.5, 0, 0.5]) {
+            const aa = fa * rl, ll = fl * dl;
+            const x = cx + rh[0] * aa + th[0] * ll, z = cz + rh[1] * aa + th[1] * ll;
+            const ty = terrainYAt(x, z);
+            const y = ty !== null && __isFinite(ty) ? ty : fb;
+            S.push([aa, ll, x, y, z]); my += y / 9;
+          }
+          let ga = 0, gl = 0;
+          for (const s of S) { ga += s[0] * (s[3] - my); gl += s[1] * (s[3] - my); }
+          ga /= 6 * (0.5 * rl) * (0.5 * rl); gl /= 6 * (0.5 * dl) * (0.5 * dl);
+          // Normal quantised to a 0.02 grid in world x/z: overlapping cells
+          // then share it EXACTLY, so the lattice below separates their planes
+          // (two near-equal tilts put the same face 0-2 cm apart at random).
+          const un = nrm(cr([th[0], gl, th[1]], [rh[0], ga, rh[1]]));
+          if (un[1] < 0) { un[0] = -un[0]; un[2] = -un[2]; }
+          const ux = __M.round(un[0] * 50) / 50, uz = __M.round(un[2] * 50) / 50;
+          const u = [ux, __M.sqrt(__M.max(0.5, 1 - ux * ux - uz * uz)), uz];
+          const rd = rh[0] * u[0] + rh[1] * u[2];
+          const r = nrm([rh[0] - rd * u[0], -rd * u[1], rh[1] - rd * u[2]]);
+          const t0 = cr(r, u), t = [t0[0] * hand, t0[1] * hand, t0[2] * hand];
+          const C = [cx, my, cz], dC = dot(C, u);
+          let hi = -1e9, lo = 1e9;
+          for (const s of S) {
+            const h = dot([s[2] - C[0], s[3] - C[1], s[4] - C[2]], u);
+            if (h > hi) hi = h;
+            if (h < lo) lo = h;
+          }
+          const odd = (phase * nl + j + (widen ? i : 0)) & 1;
+          const r0 = res + (opts.line ? 0 : 0.12 * odd);
+          const top = __M.ceil((dC + hi + (opts.h || 0.01) - r0) / 0.24) * 0.24 + r0 - dC;
+          const bot = __M.floor((dC + lo - thick - r0) / 0.24) * 0.24 + r0 - dC;
+          const rw = rl + widen * odd;
+          addBox(out, vadd(C, u, (top + bot) / 2),
+            [rw / (__M.hypot(r[0], r[2]) || 1), top - bot, dl / (__M.hypot(t[0], t[2]) || 1)], col, [r, u, t]);
+        }
+      }
+    };
+    let lapLen = 0;
+    for (let i = 0; i < n; i++) lapLen += __M.hypot(px[(i + 1) % n] - px[i], pz[(i + 1) % n] - pz[i]);
+    const drapeRun = (s, side, gap, sz, col, res, span, extra) => {
+      span = span || sz[2];
+      const k0 = K(s);
+      let st = 0;
+      along(s - span / 2 / lapLen, s + span / 2 / lapLen, 20, (k, sp) => {
+        const dk = __M.abs(((k - k0) % n + n + n / 2) % n - n / 2);
+        if (dk * lapLen / n <= sz[2] / 2 + sp / 2)
+          drape(k, side, gap, [sz[0], sz[1], sp * 1.04], col,
+            extra ? Object.assign({ res, phase: st }, extra) : { res, phase: st });
+        st++;
+      });
+    };
+    return { drape, drapeRun };
+  }
+
+  return { create, validateGeometry, scratch, sealGeometry, drapeKit };
 })();
 Object.freeze(TrackModels);

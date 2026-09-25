@@ -324,8 +324,10 @@
           }
           // Church: a short nave, a square tower and the spire on top of it.
           const ch = vadd(a.c, a.t, -30);
-          addBox(stage, vadd(ch, a.u, 4.5), [10, 9, 18], RENDER, b);
-          addBox(stage, vadd(vadd(ch, a.t, -11), a.u, 9), [7, 18, 7], RENDER, b);
+          // Nave and tower foot 4 / 8 cm deeper (same tops): their undersides
+          // were one plane with each other and the houses' (ground-audit).
+          addBox(stage, vadd(ch, a.u, 4.48), [10, 9.04, 18], RENDER, b);
+          addBox(stage, vadd(vadd(ch, a.t, -11), a.u, 8.96), [7, 18.08, 7], RENDER, b);
           stage._mat = 0;
           addPrism(stage, vadd(ch, a.u, 9), [10.5, 3.0, 18.5], SLATE, b);
           addCone(stage, vadd(vadd(ch, a.t, -11), a.u, 18), 4.6, 13, SLATE, 4, b);

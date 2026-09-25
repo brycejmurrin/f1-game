@@ -36,9 +36,10 @@
                        27 - i * 5, 23 - i * 5, 2.6, [0.82 - i * 0.06, 0.82 - i * 0.06, 0.86], 18, bv);
           }
           stage._mat = 0;
-          // proscenium back wall + big glowing LED video wall
+          // proscenium back wall + big glowing LED video wall (wall base 4 cm
+          // under the deck's, so the two undersides are not one plane)
           stage._mat = MAT.CONCRETE;
-          addBox(stage, vadd(vadd(origin, a.u, 11), a.r, -8), [2.2, 22, 30], [0.14, 0.14, 0.16], bv);
+          addBox(stage, vadd(vadd(origin, a.u, 10.96), a.r, -8), [2.2, 22, 30], [0.14, 0.14, 0.16], bv);
           stage._mat = 0;
           addBox(stage, vadd(vadd(origin, a.u, 11), a.r, -6.8), [0.6, 13, 22], [0.32, 0.56, 0.88], bv);
           // PA line-array towers flanking the stage
@@ -139,7 +140,14 @@
       grandstandEx(0.83, 1, 16, 64, null, null,
         { livery: "sandstone", roof: "truss", suites: true, endWalls: true, h: 11 });
       // Extra deep main-straight upper tier behind the front stand (s≈0.02, R far)
-      grandstandEx(0.02, 1, 30, 130, null, null, { livery: "darkSteel", roof: "flat" });
+      // Three 43 m bays, not one 130 m shell at gap 30: grandstandEx seats its
+      // crowd bank on ONE node's ground, and past ~25 m the SRTM-baked straight
+      // (up to 10 m over the lap's low point) falls away toward the terrain
+      // skirt, so the long stand straddled that drop and buried 67 crowd prims
+      // up to 3.9 m deep (ground-audit). Each bay now stands on the shelf; the
+      // middle one is 6 m nearer (clear of the main stand, which ends at 0.0136).
+      for (const [off, gap] of [[-43.4, 22], [0, 16], [43.4, 22]])
+        grandstandEx(0.02 + mFrac(off), 1, gap, 43, null, null, { livery: "darkSteel", roof: "flat" });
 
       // long low pit garage block flanking the main straight
       building(K(0.97), -1, 12, 24, 8, 120, { kind: "hall", wall: [0.84, 0.84, 0.86], window: glass, floor: 2 });
@@ -205,7 +213,9 @@
       addPrism(out, vadd(me2.c, me2.u, 2), [34, 6, 64], scrub, [me2.r, me2.u, me2.t]);
 
       const ALU_FRAME = [0.70, 0.71, 0.75], ALU_PLANK = [0.78, 0.79, 0.82];
-      const t1Rake = { rows: 8, rise: 1.45, setback: 2.1, step: 10,
+      // rail:false — bleacher()'s crest rail sits 0.27 m over its back leg and
+      // only touches the top crowd row at rise <= ~0.8; at 1.45 it floated.
+      const t1Rake = { rows: 8, rise: 1.45, setback: 2.1, step: 10, rail: false,
                        frameCol: ALU_FRAME, plankCol: ALU_PLANK,
                        crowd: crowdCols, density: 0.62 };
       bleacher(...span(0.095, 110), -1, 40, t1Rake);
@@ -315,11 +325,13 @@
       const redFramework = (k, side, dist) => {
         const af = anchor(k, side, dist), fb = [af.r, af.u, af.t];
         if (onTrack(af.c[0], af.c[2], 24)) return;
+        // Wings sit 4 cm lower and one slat 4 cm higher: their undersides / the
+        // two slats' faces were coplanar with their neighbours' (ground-audit).
         addBox(out, vadd(af.c, af.u, 16),              [4, 32, 30], redSteel, fb);
-        addBox(out, vadd(vadd(af.c, af.t,  14), af.u,  9), [4, 18, 22], redSteel, fb);
-        addBox(out, vadd(vadd(af.c, af.t, -14), af.u,  9), [4, 18, 22], redSteel, fb);
+        addBox(out, vadd(vadd(af.c, af.t,  14), af.u, 8.96), [4, 18, 22], redSteel, fb);
+        addBox(out, vadd(vadd(af.c, af.t, -14), af.u, 8.96), [4, 18, 22], redSteel, fb);
         addBox(out, vadd(vadd(af.c, af.t,   7), af.u, 12), [6,  1, 18], white,    fb);
-        addBox(out, vadd(vadd(af.c, af.t,  -7), af.u, 12), [6,  1, 18], white,    fb);
+        addBox(out, vadd(vadd(af.c, af.t,  -7), af.u, 12.04), [6,  1, 18], white,    fb);
       };
       redFramework(K(0.65), 1, 46);
       redFramework(K(0.65), 1, 78);    // second red stand behind the first
@@ -553,7 +565,9 @@
           if (onTrack(pa.c[0], pa.c[2], 1)) continue;
           addCyl(out, pa.c, 0.18, 10, lampPost, 5, [pa.r, pa.u, pa.t]);
           addBox(out, vadd(pa.c, pa.u, 9.5), [0.14, 0.14, 2.8], lampPost, [pa.r, pa.u, pa.t]);
-          addBox(out, vadd(vadd(pa.c, pa.t, -side * 1.2), pa.u, 9.0),
+          // Head hangs FROM the arm (arm underside 9.43): at 9.0 its top sat
+          // 0.29 m below it, a lamp head floating free (ground-audit).
+          addBox(out, vadd(vadd(pa.c, pa.t, -side * 1.2), pa.u, 9.32),
                  [0.6, 0.28, 1.2], lampHead, [pa.r, pa.u, pa.t]);
         }
       });

@@ -7,10 +7,10 @@
 (window.TrackScenery = window.TrackScenery || {})["zandvoort"] =
   function (api) {
       const { K, out, MAT, n, px, py, pz, pyMin, hw, prop, backdrop, groundPlane, seat, track,
-              addBox, addCyl, addPrism, addPyramid, addCone, addFrustum, anchor, vadd, onTrack, hash, every,
+              addBox, addCyl, addPrism, addPyramid, addCone, addFrustum, addMountain, anchor, vadd, onTrack, hash, every,
               along, runoffApron, bowlSeatWall,
               modelGroup, waterSurface, waterBand, groundPatch,
-              mountain, peak, bush, hedge, grandstand, grandstandEx, tower, ferrisWheel,
+              mountain, peak, bush, terrainYAt, hedge, grandstand, grandstandEx, tower, ferrisWheel,
               pine, tree, forestEdge,
               fence, guardrail, tyreWall, billboard, gantry, marshalPost, recordBarrier } = api;
 
@@ -49,6 +49,36 @@
       // All use anchor() so they sit on the terrain surface, never float.
       // mountain() baseY = a.c[1] (terrain-anchored ground Y at that lateral dist).
 
+      // dune(): mountain() minus the skirts nobody can see. mountain()'s skirt
+      // frustum stands at baseY - 2 with height 0.18 h, so under an 11 m dune
+      // (most here) its top ring lies under the sand: 130 buried prims
+      // (ground-audit) that the hidden-face strip already discarded. Same
+      // fit/shrink rule and same skirt as mountain(); the skirt is emitted
+      // only where some of its top ring (0.42 w) clears the ground.
+      const ROAD_SKIRT = 2.6;
+      const dune = (x, z, baseY, w, h, opts) => {
+        const rough = opts.rough != null ? opts.rough : 0.34;
+        const reach = (ww) => ROAD_SKIRT +
+          Math.max(ww * 0.62, ww * 0.5 * (1 + 0.7 * rough) * (1 + 0.35 * rough));
+        let fit = w;
+        for (let i = 0; i < 6 && onTrack(x, z, reach(fit)); i++) fit *= 0.88;
+        if (onTrack(x, z, reach(fit))) return;
+        if (fit < w) h *= Math.sqrt(fit / w);
+        w = fit;
+        const top = baseY - 2 + h * 0.18;
+        let seen = false, judged = 0;
+        for (let i = 0; i <= 9 && !seen; i++) {
+          const ang = i / 9 * 6.2832, rr = i === 9 ? 0 : w * 0.42;
+          const g = terrainYAt(x + Math.cos(ang) * rr, z + Math.sin(ang) * rr);
+          if (g == null) continue;          // off the ribbon: no ground to judge by
+          judged++;
+          seen = g - top <= 0.02;
+        }
+        if (!judged) seen = true;
+        if (seen) addFrustum(out, [x, baseY - 2, z], w * 0.62, w * 0.42, h * 0.18, opts.forest, 9, null);
+        addMountain(out, [x, baseY, z], w * 0.5, h, opts);
+      };
+
       every(55, (k) => {
         const frac = k / n;
         const midLap = frac >= 0.20 && frac <= 0.58;
@@ -61,7 +91,7 @@
           if (onTrack(a.c[0], a.c[2], 18)) continue;
           const h = (midLap ? 4 : 5) + hash(k * 73 + side) * (midLap ? 7 : 8);
           const w = (midLap ? 34 : 42) + hash(k * 74 + side) * (midLap ? 26 : 34);
-          mountain(a.c[0], a.c[2], a.c[1], w, h, {
+          dune(a.c[0], a.c[2], a.c[1], w, h, {
             seg: 10, seed: k * 13 + side, rough: 0.35, snowline: 2,
             forest: marramT, rock: sandDk, snow: sand,
           });
@@ -78,7 +108,7 @@
           const a = anchor(k, side, dist);
           const w = 30 + hash(k * 90 + side) * 18;
           const h = 3 + hash(k * 91 + side) * 5;
-          mountain(a.c[0], a.c[2], a.c[1], w, h, {
+          dune(a.c[0], a.c[2], a.c[1], w, h, {
             seg: 10, seed: k * 17 + side, rough: 0.25, snowline: 2,
             forest: marramT, rock: sandDk, snow: sand,
           });
@@ -95,7 +125,7 @@
           if (onTrack(a.c[0], a.c[2], 18)) continue;
           const w = 58 + hash(k * 83 + side) * 42;
           const h = 8 + hash(k * 82 + side) * 10;
-          mountain(a.c[0], a.c[2], a.c[1], w, h, {
+          dune(a.c[0], a.c[2], a.c[1], w, h, {
             seg: 10, seed: k * 19 + side, rough: 0.28, snowline: 2,
             forest: marramT, rock: sandDk,
             snow: hash(k * 84 + side) < 0.5 ? sand : sandLt,
@@ -242,8 +272,8 @@
             }
           }
           stage._mat = MAT.FABRIC;
-          addBox(stage, vadd(vadd(a.c, a.r, IN * 4.4), a.u, 0.9),
-            [0.12, 1.8, len], opts.fascia || [0.94, 0.92, 0.88], b);
+          addBox(stage, vadd(vadd(a.c, a.r, IN * 4.4), a.u, 0.85),
+            [0.12, 1.7, len], opts.fascia || [0.94, 0.92, 0.88], b);   // top 5 cm under row 0's seats
           // Bolt-on stair tower at one end — always visible on a modular build.
           stage._mat = MAT.METAL;
           const st = vadd(vadd(a.c, a.t, len / 2 + 1.2), a.r, IN * -2.5);
@@ -332,15 +362,21 @@
           for (let i = -2; i <= 2; i++) {
             const p = vadd(vadd(a.c, a.t, i * 6), a.r, (i & 1) ? 3 : -2);
             stage._mat = MAT.FABRIC;
-            addPrism(stage, vadd(p, a.u, 1.4), [4.4, 2.8, 4.8],
-                     i % 2 ? [0.94, 0.91, 0.82] : orange, b);
+            // addPrism anchors at the BASE: at a.u 1.4 each tent hung 1.4 m
+            // clear (ground-audit). Stand it on the ground under its own foot.
+            const gy = terrainYAt(p[0], p[2]);
+            addPrism(stage, gy != null ? [p[0], gy - 0.1, p[2]] : vadd(p, a.u, -0.1),
+                     [4.4, 2.8, 4.8], i % 2 ? [0.94, 0.91, 0.82] : orange, b);
           }
           for (const off of [-13, 13]) {
             stage._mat = MAT.METAL;
-            addCyl(stage, vadd(vadd(a.c, a.t, off), a.u, 0.5),
-                   0.09, 6.0, [0.34, 0.34, 0.36], 5, b);
+            const pf = vadd(a.c, a.t, off), pg = terrainYAt(pf[0], pf[2]);
+            const pb = pg != null ? [pf[0], pg - 0.3, pf[2]] : vadd(pf, a.u, -0.3);
+            addCyl(stage, pb, 0.09, 6.8, [0.34, 0.34, 0.36], 5, b);
             stage._mat = MAT.FABRIC;
-            addBox(stage, vadd(vadd(vadd(a.c, a.t, off), a.u, 5.6), a.r, -side * 0.8),
+            // Flag flies FROM the pole (along t, inboard): offset 0.8 m across
+            // it hung detached 4.5 m up.
+            addBox(stage, vadd(vadd(pb, a.u, 5.9), a.t, -Math.sign(off) * 1.29),
                    [0.12, 1.6, 2.4], orange, b);
           }
         });
@@ -366,7 +402,8 @@
         }, (stage) => {
           stage._mat = MAT.FLAT;
           addBox(stage, vadd(a.c, a.u, 0.20), [46, 0.35, 2.2], [0.86, 0.91, 0.91], b);
-          addBox(stage, vadd(vadd(a.c, a.u, 0.12), a.r, 4.5),
+          // Bottom 5.5 cm above the first line's: flush undersides z-fought.
+          addBox(stage, vadd(vadd(a.c, a.u, 0.19), a.r, 4.5),
                  [38, 0.22, 1.2], [0.72, 0.84, 0.87], b);
         });
       }
@@ -610,7 +647,9 @@
           const spotCount = Math.round(len / 8);
           for (let i = 0; i < spotCount; i++) {
             const offset = (i - (spotCount - 1) / 2) * 8;
-            addBox(out, vadd(vadd(a.c, a.u, 12.6), a.t, offset),
+            // Hung FROM the fascia (bottom 13.275): at 12.6 each spot floated
+            // 0.4 m under it (ground-audit).
+            addBox(out, vadd(vadd(a.c, a.u, 13.03), a.t, offset),
                    [0.6, 0.5, 0.6], spotCol, b);
           }
         }
@@ -673,7 +712,8 @@
                     a.c[2] + a.t[2] * ((hash(k * 5) - 0.5) * width * 0.4)];
         out._mat = MAT.STONE;
         // Tower: 12m tall, center at pyMin + 6
-        addBox(out, vadd(cs, a.u, 6), [5, 12, 5], [0.82, 0.80, 0.74], b);
+        // Sunk 0.1 m: its underside shared the houses' pyMin plane.
+        addBox(out, vadd(cs, a.u, 5.95), [5, 12.1, 5], [0.82, 0.80, 0.74], b);
         out._mat = 0;
         // Spire base at pyMin + 12
         addCone(out, vadd(cs, a.u, 12), 3.2, 9, [0.36, 0.30, 0.28], 4, b);
@@ -720,7 +760,7 @@
           addCyl(stage, vadd(a.c, a.u, shaftH * 0.70), shaftR + 0.05, 1.0, brickDk, 12, b);
           addCyl(stage, vadd(a.c, a.u, shaftH), shaftR + 1.3, 1.0, brickDk, 12, b);       // 20 → 21
           addCyl(stage, vadd(a.c, a.u, shaftH + 1), 4.4, drumH, brick, 12, b);            // 21 → 27
-          addCyl(stage, vadd(a.c, a.u, shaftH + 1 + drumH - 0.8), 4.5, 0.8, brickDk, 12, b); // flush at 27
+          addCyl(stage, vadd(a.c, a.u, shaftH + 1 + drumH - 0.8), 4.5, 0.75, brickDk, 12, b); // 5 cm shy of the drum top (coplanar)
           // Conical red cap.
           stage._mat = MAT.ROOF;
           addCone(stage, vadd(a.c, a.u, shaftH + 1 + drumH), 4.7, capH, capCol, 12, b);

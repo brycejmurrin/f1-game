@@ -56,7 +56,10 @@
               const wallCol = fin < 0.46 ? RAW[(r * 3 + c) % RAW.length]
                             : fin < 0.60 ? SCREED[(r + c) % SCREED.length]
                             : FAV[(r * 4 + c * 3 + (k & 3)) % FAV.length];
-              addBox(stage, vadd(base, a.u, h / 2), [w, h, d], wallCol, bv);
+              // Odd columns foot 5 cm deeper (same top): neighbours overlap and
+              // their undersides were one plane (ground-audit flatCoplanar).
+              const foot = (c & 1) * 0.05;
+              addBox(stage, vadd(base, a.u, (h - foot) / 2), [w, h + foot, d], wallCol, bv);
               if (hash(k * 17 + r + c) > 0.50) {
                 const h2 = 2.8 + hash(k + c * 7) * 2.6;
                 const fin2 = hash(k * 43 + r * 7 + c * 31);
@@ -65,7 +68,9 @@
                                    : FAV[(r + c + 1) % FAV.length], bv);
               }
               if (hash(k * 53 + r * 13 + c * 7) > 0.62) {
-                addCyl(stage, vadd(vadd(base, a.u, h + 0.5), a.t, d * 0.30),
+                // On the slab (2 cm in), not 0.5 m above it: on a one-storey
+                // house the lid hovered over the roof (ground-audit).
+                addCyl(stage, vadd(vadd(base, a.u, h - 0.02), a.t, d * 0.30),
                        0.42, 0.14, [0.88, 0.87, 0.84], 7, bv);
               }
               // Exposed rebar stubs on an unfinished top slab — the laje left
@@ -178,11 +183,19 @@
             stage._mat = MAT.RUST;
             for (let i = 0; i <= bays; i++) {
               const p = vadd(a.c, a.t, (i - bays / 2) * pitch);
-              seat.cyl(stage, vadd(p, a.r, -IN * 6.0), 0.17, backH + 4.4, RUST_DK, 5, b);
-              seat.cyl(stage, vadd(p, a.r, IN * 0.4), 0.14, backH + 3.2, RUST_DK, 5, b);
+              // Footed 0.5 m below the anchor (same tops): on a falling bay the
+              // anchor's 0.3 m embed left end posts 0.2-0.3 m in the air, and
+              // the whole canopy hung off them (ground-audit unsupported).
+              seat.cyl(stage, vadd(vadd(p, a.r, -IN * 6.0), a.u, -0.5), 0.17, backH + 4.9, RUST_DK, 5, b);
+              seat.cyl(stage, vadd(vadd(p, a.r, IN * 0.4), a.u, -0.5), 0.14, backH + 3.7, RUST_DK, 5, b);
               addBox(stage, vadd(vadd(p, a.r, -IN * 2.8), a.u, backH + 3.6),
                 [7.2, 0.14, 0.14], RUST_DK, b);
             }
+            // Two purlins between truss tops and sheet undersides: the sheets
+            // between posts rested on nothing, 0.42 m clear of the trusses.
+            for (const lat of [-1.0, -4.6])
+              addBox(stage, vadd(vadd(a.c, a.r, IN * lat), a.u, backH + 3.88),
+                [0.16, 0.42, len], RUST_DK, b);
             for (let i = 0; i * 1.5 < len; i++) {
               const p = vadd(a.c, a.t, -len / 2 + i * 1.5 + 0.75);
               addBox(stage, vadd(vadd(p, a.r, -IN * 2.8), a.u, backH + 4.2),
@@ -304,7 +317,8 @@
         const ahp = anchor(K(0.025), 1, 40);
         addBox(out, vadd(ahp.c, ahp.u, 0.1), [20, 0.2, 20], [0.52, 0.54, 0.54], [ahp.r, ahp.u, ahp.t]);
         addBox(out, vadd(ahp.c, ahp.u, 0.2), [18, 0.2, 2.0], [0.92, 0.88, 0.10], [ahp.r, ahp.u, ahp.t]);
-        addBox(out, vadd(ahp.c, ahp.u, 0.2), [2.0, 0.2, 18], [0.92, 0.88, 0.10], [ahp.r, ahp.u, ahp.t]);
+        // 4 cm above its cross-bar, whose top and underside it shared.
+        addBox(out, vadd(ahp.c, ahp.u, 0.24), [2.0, 0.2, 18], [0.92, 0.88, 0.10], [ahp.r, ahp.u, ahp.t]);
       }
 
       for (const s of [0.94, 0.96, 0.98, 0.00, 0.02, 0.04]) {
@@ -356,7 +370,6 @@
       arquibancada("interlagos-arq-sol", 0.117, -1, 16, 7, { rows: 8, required: true, brFlag: true });
       for (const s of [0.00, 0.04, 0.08]) billboard(K(s), -1, 26, 16, 7, [0.94, 0.92, 0.88]);
 
-      const KERB_R = [0.80, 0.18, 0.18], KERB_W = [0.92, 0.92, 0.92];
       // ── Senna S corridor — wave-4 hero (research: downhill L-R into Curva do Sol)
       // Compact yellow/green packed stand on the outside + thick kerb teeth both
       // apexes. Kept as one required modelGroup so clip-audit treats the assembly
@@ -399,10 +412,9 @@
         [0.04, -1], [0.05, 1], [0.055, -1], [0.065, 1], [0.075, -1], [0.085, 1], [0.095, -1],
       ]) {
         const k = K(s);
-        // Alternating red/white kerb teeth — thicker + longer for race-speed read
-        place(k, side, 1.7, [0.75, 0.24, 5.5], KERB_R);
-        place(k, side, 2.5, [0.75, 0.24, 5.5], KERB_W);
-        place(k, side, 3.3, [0.75, 0.24, 5.5], KERB_R);
+        // (Three 0.24 m red/white "kerb teeth" place()s stood here at 1.7-3.3 m:
+        // place() sinks a box 0.8 m, so all 21 were whole-top buried and never
+        // rendered — ground-audit. The engine draws the real kerbs.)
         place(k, side, 4.8, [3.6, 0.22, 10], [0.88, 0.88, 0.88]);
       }
       // Tyre barriers at the Senna S chicane — blue/white for Turn 1, yellow for T2

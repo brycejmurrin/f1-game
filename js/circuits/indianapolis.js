@@ -70,8 +70,12 @@
     standSet: ["alu", "scaffold", "navy"],  // bare bleachers; navy nods to the blue seat bands
     // Speedway apron: red brick, steel sheds, water towers. Midwest, not modern.
     // cityStyle: neon / dayPal name TrackSceneryData.NC / .DC colours
+    // "slab" holds the slot "cross" had (same hash picks for every other kind):
+    // neonTower's cross emits two full-height slabs sharing top AND underside
+    // planes — 104 flat-coplanar pairs here (ground-audit), an engine defect
+    // in js/track/scenery/city.js (kind === "cross").
     cityStyle: { neon: ["white", "red", "gold", "blue"], bias: 0.10, fh: [7, 15], bh: [11, 24],
-                 kinds: ["hall", "slab", "chevron", "drum", "setback", "cross"], neonKinds: [], tone: { n: [0.19, 0.16, 0.15], d: [0.66, 0.52, 0.44] },
+                 kinds: ["hall", "slab", "chevron", "drum", "setback", "slab"], neonKinds: [], tone: { n: [0.19, 0.16, 0.15], d: [0.66, 0.52, 0.44] },
                  dayPal: ["brick", "white", "steel", "terra", "stone", "concrete", "paleblue"] },
     // Real centreline: OSM trace (bacinger/f1-circuits, ODbL) — [x,z] metres,
     // recentred, one lap, open loop. tools/track/import-circuit-path.mjs regenerates it.

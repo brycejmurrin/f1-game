@@ -1,6 +1,6 @@
 /* Apex 26 — TrackBuildProps: buildProps orchestration (guards + theme dress + scenery API + lamps + pits).
    Mechanical peel from js/track/tracks.js (Phase 1 readability). Tracks.build calls TrackBuildProps.build.
-   Guards stay nested here for a later guards.js PR; scenery(api) contract stays frozen (112 members). */
+   Guards stay nested here for a later guards.js PR; scenery(api) contract stays frozen (114 members). */
 const TrackBuildProps = (function () {
   "use strict";
 
@@ -1963,6 +1963,10 @@ const TrackBuildProps = (function () {
       };
       if (def.reverse || def.sceneryCoordinates === "source" || TrackSpace.sceneryOriginDelta(def))
         sceneryApi = transformSceneryApi(sceneryApi, def, n);
+      // drape / drapeRun (terrain-fitted flat decals) are composed from the
+      // FINAL api — the wrapped anchor/K/along — so they take authored-frame
+      // k and s like circuit code and need no wrapper of their own.
+      Object.assign(sceneryApi, TrackModels.drapeKit(sceneryApi));
       sceneryFn(sceneryApi);
     }
 

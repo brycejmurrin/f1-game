@@ -254,7 +254,9 @@
       guardrail(0.3600, 0.4700, -1, 11.5, ARMCO);
       mixedWood(0.3600, 0.4700, -1, 18, 26, 11);
       groundPatch(K(0.4050), -1, 14, [8, 0.16, 70], SAND);
-      groundPatch(K(0.4400), -1, 14, [8, 0.16, 56], SAND);
+      // 12..22 m (was 14..22): it now also covers the 0.44 sandy shoulder the
+      // loop near the end of this file used to lay under it on one plane.
+      groundPatch(K(0.4400), -1, 12, [10, 0.16, 56], SAND);
       marshalPost(K(0.4200), -1, 16);
       // Infield stays OPEN here too — §6: the drop must read.
       for (let i = 0; i < 5; i++) specimen(K(0.3800 + i * 0.0190), 1, 40 + (i % 2) * 16, 200 + i * 9);
@@ -427,6 +429,7 @@
       // Dry sandy shoulders rather than kerbing everywhere (§2).
       for (let i = 0; i < 9; i++) {
         const s = 0.02 + i * 0.105;
+        if (i === 4) continue;   // 0.44: the Moss run-down's own 12..22 m patch
         groundPatch(K(s), -1, 12, [6, 0.14, 34], SAND);
       }
 

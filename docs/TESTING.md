@@ -1231,7 +1231,7 @@ what it covers.
 | `harness-display.test.mjs` | headless shot tools: `clearDeadDisplay` drops a stale local `DISPLAY=:N` with no `/tmp/.X11-unix/XN` so SwiftShader WebGL can start; `chromiumArgsForBackend` pins `--enable-unsafe-swiftshader`; `gotoGame` names WebGL/DISPLAY on boot timeout |
 | `scenery-kits.test.mjs` | Node contracts for deterministic themes, every LandmarkKit form and CircuitKit facility, bounded counts, budgets, fail-closed behaviour |
 | `scenery-kits.spec.js` | the browser binding of those kits into Silverstone's `scenery(api)` |
-| `scenery-api-contract.test.mjs` | freezes the 112-member `scenery(api)` surface across the `js/track/scenery-*.js` split |
+| `scenery-api-contract.test.mjs` | freezes the 114-member `scenery(api)` surface across the `js/track/scenery-*.js` split |
 | `scenery-guards.test.mjs` | the on-track guards drop what is ON the road, not everything with a normal gap: Monaco's armco keeps its posts (guardrail margin below the gap), Qatar/Monaco billboards build (panel ENDS guarded, not the along-track length as a radius), and `bakedModel` rides the scenery transform like the fallback it replaces — counts from `modelDiagnostics.suppressedCounts` on the real build |
 | `lamp-density.test.mjs` | `LAMP DENSITY` thins/densifies baked lights; lamps dressing aliases |
 | `floodmast-lamp-register.test.mjs` | `floodMast`/`floodMastRing` register lens posts into `track.lampPosts` (Singapore/Bahrain on; Qatar `light:false` opt-out) |

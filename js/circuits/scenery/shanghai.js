@@ -49,6 +49,11 @@
               const hv = hash(kk * 29 + r * 17 + c * 11);
               const p = vadd(vadd(a0.c, a0.r, r * 26), a0.t, (c - 1) * 30);
               if (onTrack(p[0], p[2], 20)) continue;
+              // Seat EACH paddy on its own ground (anchor's 0.3 m embed), not
+              // the block anchor's: the far row is 26 m out on a slope and its
+              // bund, water and shoots were whole-top buried (ground-audit).
+              const gyP = groundUnder(p[0], p[2]);
+              if (gyP !== null) p[1] = gyP - 0.3;
               const jit = (hash(kk * 61 + r * 23 + c * 37) - 0.5) * 0.24;
               // Raised bund frame — the paddy sits INSIDE it, slightly sunk.
               addBox(out, vadd(p, a0.u, 0.28 + jit), [24 + jit * 4, 0.56, 28 - jit * 3], BUND, b);
@@ -115,8 +120,6 @@
       const TREE_G = [0.24, 0.40, 0.22];
       const CROWD = [0.62, 0.30, 0.30];
       const TARMAC = [0.26, 0.27, 0.29];
-      const KERB_R = [0.80, 0.16, 0.14];
-      const KERB_W = [0.90, 0.90, 0.90];
       // Pearl Tower salmon-pink terracotta
       const PEARL = [0.78, 0.62, 0.58];
       // Lit window colours (warm cream — simulate emissive fill from indoor daylight)
@@ -236,7 +239,8 @@
       // coplanar pair, 2026-09-22). Sized to show 0.6 m and stand proud of the
       // block: 10 cm along the road, 20 cm across it, where place()'s size-
       // hashed lateral jitter (≤ 9 cm) would otherwise eat the standoff.
-      place(K(0.99), 1, 10, [5.4, 1.4, 12.2], RED);
+      // `deeper` 0.05: both boxes' sunk undersides shared one plane.
+      place(K(0.99), 1, 10, [5.4, 1.4, 12.2], RED, 0.05);
 
       broadcastCompound(K(0.975), 1, 30, { vans: 3, dishes: 2, mastH: 10 });
 
@@ -300,14 +304,8 @@
         for (const [s, sd, gap, sz] of pads) {
           runoffApron(K(s), sd, gap, sz, PALE);
         }
-        // Stronger red/white kerb + verge rhythm through the coil
-        let j = 0;
-        along(0.048, 0.112, 2.6, (k) => {
-          place(k, 1, 2.4, [1.8, 0.26, 2.6], (j++) % 2 ? KERB_R : KERB_W);
-        });
-        along(0.055, 0.100, 5.5, (k) => {
-          place(k, 1, 3.8, [1.2, 0.35, 2.2], CONC);
-        });
+        // (The kerb + verge place() rhythm here was 0.26-0.35 m tall under
+        // place()'s 0.8 m sink — 62 boxes, all buried, never visible.)
       })();
       grandstandEx(0.05,  1, 95, 30, null, null,
         { livery: "darkSteel", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
@@ -699,20 +697,10 @@
       tyreWall(0.06,  0.09,  1, 4, YELLOW);
       tyreWall(0.305, 0.325, -1, 10, RED);
 
-      // Low red/white kerb-edge markers — denser through the snail coil.
-      (function kerbs() {
-        const spots = [
-          [0.048, 0.112,  1], [0.070, 0.095, -1], [0.30, 0.32, -1],
-          [0.46,  0.48,   1], [0.595, 0.61, -1], [0.895, 0.915, 1],
-        ];
-        for (const [s0, s1, sd] of spots) {
-          let j = 0;
-          const step = (s0 < 0.15) ? 2.4 : 3.2;
-          along(s0, s1, step, (k) => {
-            place(k, sd, 2.8, [1.6, 0.24, 2.6], (j++) % 2 ? KERB_R : KERB_W);
-          });
-        }
-      })();
+      // (The 0.24 m red/white kerb-edge markers that stood here never rendered:
+      // place() sinks every box 0.8 m, so all 138 were whole-top buried —
+      // ground-audit. Removed rather than raised: a place() box tall enough to
+      // show (>= THIN_PROP_H) is a SOLID and would move the driving limit.)
 
       // Marshal posts + extra billboards spread around the lap.
       marshalPost(K(0.20), -1, 18);
