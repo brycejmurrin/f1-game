@@ -77,7 +77,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_212 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_213 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -271,6 +271,7 @@ _212 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `car3d.js` | `Car3D` | tag | procedural 2026 F1 car. |
 | `parts.js` | `Parts` | tag | Parts catalog and stat helpers. |
 | `liveries.js` | `Liveries` | tag | custom paint jobs (liveries). |
+| `custom-liveries.js` | `CustomLiveries` | tag | CustomLiveries: persist / resolve / live-draft paint jobs out of js/game.js. |
 | `crest-paths.js` | `CrestPaths` | tag | team crest path data. |
 | `liverytex.js` | `LiveryTex` | tag | — (no header comment) |
 | `ghost.js` | `Ghost` | tag | Ghost: records the player's lap and replays the best one as a translucent "ghost" car to race against — the core time-attack loop. |
@@ -953,6 +954,7 @@ shading (duplicated verts, face normals).
 | File | Global | Owns |
 |---|---|---|
 | `liveries.js` | `Liveries` | custom paint jobs — `{id, name, c1, c2, stripe?, noseStripe?, …}` |
+| `custom-liveries.js` | `CustomLiveries` | persist / resolve / live-draft override for player paint jobs (`CustomLiveries.create({ store })`); catalog stays in `Liveries` |
 | `liverytex.js` | `LiveryTex` | per-team livery texture atlas (canvas-2D; stylised fan-art crests, invented sponsor wordmarks, car number onto a 1024² atlas mapped by panel UVs) |
 | `driver-ratings.js` | `DriverRatings` | the five-axis skill table for the grid (pace / racecraft / awareness / consistency / experience), keyed by driver CODE. Feeds every AI car's `skill` in EVERY mode, not just career. Kept out of `teams.js` because that is verified real-world data and is also loaded by `tools/carview.html` |
 | `parts.js` | `Parts` | upgrade catalog — 12 ordered categories, `getMods`, `getCost`, `statMult`, 780 cr budget (see CAREER.md) |
