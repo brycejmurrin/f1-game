@@ -17,6 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 
 const require = createRequire(import.meta.url);
@@ -29,6 +30,40 @@ const ALLOWED = new Set(["CC0", "CC0-1.0", "Apex26-Procedural"]);
 const TOOL_SRC = fs.readFileSync(path.join(ROOT, "tools", "gen", "assets.mjs"), "utf8");
 const hasPack = fs.existsSync(MANIFEST);
 const manifest = hasPack ? JSON.parse(fs.readFileSync(MANIFEST, "utf8")) : null;
+
+test("GLTF accessors stay inside their declared bufferView and reject invalid stride", () => {
+  const ctx = vm.createContext({
+    ArrayBuffer, DataView, Uint8Array, Float32Array, Uint16Array, Uint32Array,
+    TextDecoder, Log: { enabled: () => false },
+  });
+  const gltf = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/shared/gltf.js"), "utf8") + ";GLTF", ctx);
+  const makeGlb = (viewLength, stride) => {
+    const bin = Buffer.alloc(48);
+    for (let i = 0; i < 9; i++) bin.writeFloatLE(i % 3 === 2 ? 0 : i, i * 4);
+    const view = { buffer: 0, byteOffset: 0, byteLength: viewLength };
+    if (stride !== undefined) view.byteStride = stride;
+    const json = { asset: { version: "2.0" }, buffers: [{ byteLength: bin.length }],
+      bufferViews: [view], accessors: [{ bufferView: 0, componentType: 5126, count: 3, type: "VEC3" }],
+      meshes: [{ primitives: [{ attributes: { POSITION: 0 } }] }],
+      nodes: [{ mesh: 0 }], scenes: [{ nodes: [0] }], scene: 0 };
+    const j = Buffer.from(JSON.stringify(json));
+    const padded = Buffer.concat([j, Buffer.alloc((4 - j.length % 4) % 4, 0x20)]);
+    const glb = Buffer.alloc(12 + 8 + padded.length + 8 + bin.length);
+    glb.writeUInt32LE(0x46546c67, 0); glb.writeUInt32LE(2, 4);
+    glb.writeUInt32LE(glb.length, 8);
+    glb.writeUInt32LE(padded.length, 12); glb.writeUInt32LE(0x4e4f534a, 16);
+    padded.copy(glb, 20);
+    glb.writeUInt32LE(bin.length, 20 + padded.length);
+    glb.writeUInt32LE(0x004e4942, 24 + padded.length);
+    bin.copy(glb, 28 + padded.length);
+    return Uint8Array.from(glb).buffer;
+  };
+  assert.equal(gltf.toMesh(makeGlb(36)).pos.length, 9, "valid packed accessor must still parse");
+  assert.throws(() => gltf.toMesh(makeGlb(24)), /GLTF: accessor exceeds bufferView bounds/);
+  assert.throws(() => gltf.toMesh(makeGlb(36, 8)), /invalid stride/);
+  assert.throws(() => gltf.toMesh(makeGlb(36, 16)), /GLTF: accessor exceeds bufferView bounds/);
+  assert.throws(() => gltf.toMesh(makeGlb(100)), /GLTF: accessor exceeds bufferView bounds/);
+});
 
 function assetLoader(overrides = {}) {
   const vm = require("node:vm");

@@ -265,9 +265,15 @@ const RaceFacts = (function () {
       // When the leader will take the flag is estimated from both cars' average
       // pace; the player's laps to go are the crossings until just after that.
       let toGo = laps > 0 ? Math.max(0, laps - (p.lap || 0) + 1) : null;
-      if (toGo != null && leader && leader !== p && !p.finished && (leader.lap || 0) > (p.lap || 0) && t > 0) {
-        const vL = (leader.prog || 0) / t, vP = (p.prog || 0) / t;
-        if (vL > 0 && vP > 0) {
+      // LAPPED means a lap down ON THE ROAD, not a higher lap counter (the
+      // leader has simply crossed the line first), and pace is the last LAP
+      // TIME, not distance over race time — a red-flag restart re-grids the
+      // field without resetting the clock, and read a player on lap 1 as
+      // "ONE TO GO".
+      const lapped = leader && leader !== p && !p.finished && (leader.prog || 0) - (p.prog || 0) >= lapLen;
+      if (toGo != null && lapped && leader.lastLap > 0 && p.lastLap > 0) {
+        const vL = lapLen / leader.lastLap, vP = lapLen / p.lastLap;
+        {
           const tL = leader.finished ? 0 : Math.max(0, laps * lapLen - (leader.prog || 0)) / vL;
           const at = (p.prog || 0) + tL * vP;
           toGo = Math.max(1, Math.min(toGo, Math.floor(at / lapLen) - Math.floor((p.prog || 0) / lapLen) + 1));
