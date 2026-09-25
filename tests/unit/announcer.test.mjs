@@ -770,3 +770,23 @@ test("a photo-finish margin is read as a tenth, never '0.0 seconds'", () => {
   assert.doesNotMatch(txt, /0\.0 seconds/);
   assert.match(txt, /0\.1 seconds ahead of Norris/);
 });
+
+test("the wrap-up reads the result the stewards gave: a penalty is part of the margin, and a sprint is the sprint", async () => {
+  const { A: An, G, synth } = load();
+  G.state = "results";
+  const a = An.create(G);
+  const you = { name: "You", isPlayer: true, finishT: 100, penalty: 5, lap: 13, gridPos: 3, finPos: 1, best: 80 };
+  const ver = { name: "Max Verstappen", finishT: 107, penalty: 0, lap: 13, finPos: 2, best: 81 };
+  assert.equal(a.wrapUp([you, ver], info({ sprint: true })), true);
+  await new Promise((r) => setTimeout(r, 400));
+  const text = synth.calls.filter((c) => c.m === "speak").map((c) => c.text).join(" ");
+  assert.match(text, /win the sprint, 2\.0 seconds clear/, text);
+  assert.doesNotMatch(text, /7\.0|Grand Prix/, text);
+});
+
+test("a flyby with no room before the grid shot plays nothing — a zero budget used to mean 'no limit'", () => {
+  const { A: An, G, synth } = load();
+  const a = An.create(G);
+  assert.equal(a.play(info(), -1), false);
+  assert.equal(synth.calls.filter((c) => c.m === "speak").length, 0);
+});

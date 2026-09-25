@@ -4313,7 +4313,7 @@ state that already exists. Highest value per line of code.
 
 **Phase 3 — prop registry.** The only phase that touches the build path, so
 the only one that needs `tools/track/verify-track.cjs` and the scenery contract test
-(`tests/unit/scenery-api-contract.test.mjs`, which freezes a 112-member API) run
+(`tests/unit/scenery-api-contract.test.mjs`, which freezes a 114-member API) run
 against it. Vertex-budget sensitive.
 
 **Phase 4 — rollout summariser and the toolbelt.**

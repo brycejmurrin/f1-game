@@ -38,6 +38,7 @@ const LoadingScreen = (function () {
    * the streak — the long cut comes back for anyone who watched it again.
    * Stored as `apex26.flySkips` through the game's store. */
   const SHORT_FLY_MS = 12000;
+  const SKIP_GRACE_MS = 400;
   const SKIP_STREAK = 3;
   /** The flyby's budget for a stored streak. Pure; hostile input is no streak. */
   function flyMsFor(skips) {
@@ -432,7 +433,10 @@ const LoadingScreen = (function () {
       let total = 0, before = -1;
       for (const sh of list) { if (sh.id === "grid-mine" && before < 0) before = total; total += sh.dur || 0; }
       if (before < 0 || !(total > 0)) return life;
-      return Math.max(0, Math.min(life, life * before / total - 150));
+      // No room at all (grid-mine opens the flyby) is -1, "say nothing": 0
+      // is the announcer's "no budget", which read the whole 26 s script.
+      const share = life * before / total - 150;
+      return share > 0 ? Math.min(life, share) : -1;
     }
     function radioCheck(field) {
       const r = radio();
@@ -476,7 +480,16 @@ const LoadingScreen = (function () {
     // RACE! used to skip the flyby on the first repeat.
     // Once per run: the listeners stay up until startRace lowers the screen, and a
     // triple tap counted three skips (the short flyby arrived a run early).
-    function onSkip(e) { if (e && e.type === "keydown" && e.repeat) return; if (phase && build) { noteFlyby(true); cutRadio(); fire(); } }
+    // SKIP_GRACE_MS: the second click of a double-click on RACE! (or a second
+    // Enter) is not a verdict on the flyby. A skip that DOES fire stops the event:
+    // the race starts inside this listener, so an Escape/P/Space let through
+    // bubbled on into the race and paused it (or latched a boost) on frame one.
+    function onSkip(e) {
+      if (e && e.type === "keydown" && e.repeat) return;
+      if (!(phase && build) || Date.now() - flyT0 < SKIP_GRACE_MS) return;
+      if (e) { if (e.cancelable && e.preventDefault) e.preventDefault(); if (e.stopPropagation) e.stopPropagation(); }
+      noteFlyby(true); cutRadio(); fire();
+    }
     /* THE PAD SKIPS TOO. No UI layer is open during the flyby, so the gamepad
      * walker sends no synthetic keydown and a controller-only player (TV, a
      * handheld) waited the full FLY_MS before every race. Poll the pads while
@@ -585,8 +598,26 @@ const LoadingScreen = (function () {
       return true;
     }
 
+    /* THE BUILD. RACE! before the menu built the world: the card goes up over the
+     * usual scrim while game.js builds it, then run() takes over. No timer, no
+     * skip (nothing to skip to yet), and not active(): the canvas stays hidden,
+     * so the previous circuit never shows through. */
+    function building(info) {
+      stop();
+      const r = root();
+      if (!r || !info || !info.track) return false;
+      cur = info; paint(info);
+      applyCard();
+      r.hidden = false;
+      setPhase("build");
+      return true;
+    }
+
     return {
-      run, stop, hold,
+      run, stop, hold, building,
+      /** The next flyby's length (the short cut for a habitual skipper), so its
+       *  shots are planned for the seconds they will actually have. */
+      nextFlyMs: () => flyMsFor(readSkips()),
       /** The flyby editor's three sliders. setCard() PATCHES — it merges onto
        *  what is there, so a size slider does not reset the position. RESET is
        *  resetCard(), which drops the geometry first: clampCard(null) is every
@@ -608,7 +639,7 @@ const LoadingScreen = (function () {
     };
   }
 
-  return { create, FLY_MS, SHORT_FLY_MS, SKIP_STREAK, flyMsFor, nextSkips, CARD_MS, CARD, CARD_KEYS, clampCard, cardPristine, cardVars,
+  return { create, FLY_MS, SHORT_FLY_MS, SKIP_GRACE_MS, SKIP_STREAK, flyMsFor, nextSkips, CARD_MS, CARD, CARD_KEYS, clampCard, cardPristine, cardVars,
     gridLayout, gridField, gridColour, isGridShot, GRID_ROW_MIN };
 })();
 Object.freeze(LoadingScreen);

@@ -5,7 +5,7 @@ Each circuit's bespoke surroundings live in `js/circuits/<id>.js` as a
 (`buildProps`, split across the `js/track/scenery/nature.js` / `scenery-city.js`
 / `scenery-structures.js` / `scenery-identity.js` modules and orchestrated by
 `js/track/tracks.js`) calls it once with an `api` of placement helpers, geometry
-primitives, and composite models. The **112-member `api` surface is a frozen
+primitives, and composite models. The **114-member `api` surface is a frozen
 contract** — `tests/unit/scenery-api-contract.test.mjs` fails on any rename/removal,
 because every circuit callback destructures from it. Everything emits
 flat-shaded geometry into the track's prop mesh.
@@ -104,6 +104,8 @@ sectors and turns remain racing-lap data.
 | `waterSurface(k, side, gap, size, col, opts?)` | typed water emission to the reflective water buffer |
 | `groundPatch(k, side, gap, size, col, opts?)` | subdivided terrain-conforming patch; `opts.collision` optionally registers its visual boundary |
 | `groundedSegments(spec)` | multi-sample connected model segments grounded at every endpoint |
+| `drape(k, side, gap, [depth, thick, len], col, opts?)` | terrain-fitted flat decal (TrackModels.drapeKit): the footprint is tiled into <= 24 m cells, each tilted to the best-fit plane of 3x3 `terrainYAt` samples, spanning `thick` under its lowest sample to `opts.h` (1 cm) over its highest; cells folded in a tight corner or nearer another part of the lap are dropped. Tops/bottoms snap to a 0.24 m lattice at residue `opts.res` (0.03 steps; +0.12 on alternate cells unless `opts.line`) so overlapping decals never share a plane. `opts.phase`, `opts.cell`, `opts.widen` |
+| `drapeRun(s, side, gap, size, col, res, span?, extra?)` | a `drape` `size[2]` m long centred on lap fraction `s`, laid one `along()` station at a time so it follows the corner; bands of one corner share `span` so their cells abut; `extra` merges into each station's opts |
 
 Use `required: true` only for a hero model whose absence must fail
 `verify-track`. Invalid or suppressed groups are skipped instead of uploading
@@ -158,7 +160,7 @@ through the same guarded emitters, so geometry and on-track suppression are
 unchanged — the build simply also leaves behind `track.graph`, a description of
 what stands where.
 
-This is internal to `js/track/`: the 112-member `scenery(api)` surface a circuit
+This is internal to `js/track/`: the 114-member `scenery(api)` surface a circuit
 destructures is untouched, and circuit files need no changes. Gate any migration
 with `node tools/track/graph-parity.cjs --all`. See
 [research/SCENE-GRAPH-PLAN.md](research/SCENE-GRAPH-PLAN.md).
@@ -273,7 +275,7 @@ throws; bespoke posts go through `lampPost` / `floodMast`). Tuner
 `px/py/pz/hw` (per-node arrays), `pyMin` (lap's low point), plus resolved
 `sceneryTheme`, `landmarkKit`, and `circuitKit`.
 
-Also on the 112-member contract but not detailed in this doc: `MAT` (material
+Also on the 114-member contract but not detailed in this doc: `MAT` (material
 ids), the math utilities `lerp` / `norm` / `cross` / `upOf`, the `night`
 session flag, `groundUnder` (world-XZ ground query — ribbon-aware, distinct
 from `terrainYAt`/`groundYAt`), the grounding helpers `seat` / `foundation` / `frameAt` / `cantilever` and
@@ -401,7 +403,7 @@ setting it there is a declaration of the local species, not a visible change.
 | `tower(k, side, dist, baseW, h, opts)` | tapered tower; `opts:{col,seg,cap,capCol,mast}` |
 | `grandstand(s, side, gap, len, shell, crowd)` | raked stand: shell + crowd + cantilever roof (legacy 6-arg form; delegates to `grandstandEx` with no opts) |
 | `grandstandEx(s, side, gap, len, shell, crowd, opts)` | the full stand model — see **Grandstand variants** below |
-| `spectatorHill(s0, s1, side, gap, opts)` | informal grass-bank terracing: stepped earth risers + standing crowd, no shell/roof. `opts:{rows,rise,depth,grass,riser,density,step,crowd}` |
+| `spectatorHill(s0, s1, side, gap, opts)` | informal grass-bank terracing: stepped earth risers + standing crowd, no shell/roof. `opts:{rows,rise,depth,grass,riser,density,step,crowd}`; `col` stands in for `grass` when that is absent; `h` is NOT honoured (see nature.js) |
 | `bleacher(s0, s1, side, gap, opts)` | open raked seating on a bolted frame — see **Open seating** below |
 | `scaffoldStand(s0, s1, side, gap, opts)` | rented tube-and-plank temporary seating — see **Open seating** below |
 | `terrace(s0, s1, side, gap, opts)` | mass-concrete stepped terracing — see **Open seating** below |

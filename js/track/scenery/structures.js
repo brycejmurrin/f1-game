@@ -630,7 +630,12 @@ const SceneryStructures = (function () {
         const backLat = side * (rows - 0.5) * setback;
         out._mat = timber ? MAT.WOOD : MAT.METAL;
         addCyl(out, vadd(a.c, a.u, -0.4), 0.14, 1.4, frameCol, 5, b);                    // front stub leg
-        addCyl(out, vadd(vadd(a.c, a.r, backLat), a.u, -0.4), 0.17, topH + 0.6, frameCol, 5, b);   // back leg
+        // Back leg: it carries the crest rail (centre topH + 0.55, 0.16 thick),
+        // so it runs up to the rail's mid-line. Stopping at topH + 0.2 left the
+        // rail's underside floating 0.27 m over it — unsupported once the rows
+        // rise past ~0.8 m and the top crowd band no longer bridges the gap.
+        const legH = opts.rail !== false ? topH + 0.95 : topH + 0.6;
+        addCyl(out, vadd(vadd(a.c, a.r, backLat), a.u, -0.4), 0.17, legH, frameCol, 5, b);   // back leg
         // Horizontal ledgers every ~2.2 m — what makes a frame read as a frame.
         for (let y = 1.6; y < topH; y += 2.2)
           addBox(out, vadd(vadd(a.c, a.r, backLat / 2), a.u, y),

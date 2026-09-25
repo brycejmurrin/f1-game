@@ -504,10 +504,13 @@ const Announcer = (function () {
       let fast = null;
       for (const c of order) if (c.best > 0 && Number.isFinite(c.best) && (!fast || c.best < fast.best)) fast = c;
       const sum = {
-        event: t.gp ? "the " + t.gp : "", n: order.length,
+        event: info && info.sprint ? "the sprint" : t.gp ? "the " + t.gp : "", n: order.length,
         winner: { name: w.name || w.code || "" },
         second: s2 && !s2.retired ? s2.name : "",
-        margin: s2 && !s2.retired && s2.finishT > 0 && w.finishT > 0 && (s2.lap | 0) >= (w.lap | 0) ? s2.finishT - w.finishT : 0,
+        // On the corrected clock, as the results sheet classifies: a +5 s penalty
+        // is part of the margin, not seven seconds of daylight.
+        margin: s2 && !s2.retired && s2.finishT > 0 && w.finishT > 0 && (s2.lap | 0) >= (w.lap | 0)
+          ? (s2.finishT + (s2.penalty || 0)) - (w.finishT + (w.penalty || 0)) : 0,
         you: you ? { pos: you.retired ? 0 : (you.finPos || order.indexOf(you) + 1), grid: you.gridPos || 0, dnf: !!you.retired } : null,
         fastest: fast ? { name: fast.name || "", time: fast.best, you: !!fast.isPlayer } : null,
       };
@@ -635,7 +638,7 @@ const Announcer = (function () {
       /** Called by the loading screen. Returns false when it said nothing, so
        *  the caller can tell "off" from "spoke" without reading storage. */
       play(info, budgetMs) {
-        if (!on) return false;
+        if (!on || (budgetMs != null && budgetMs < 0)) return false;   // a flyby with no room for it
         return speak(scriptFor(info, budgetMs), budgetMs, true);
       },
       /** The editor's PLAY button: speaks regardless of the player's toggle,

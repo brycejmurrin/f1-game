@@ -135,7 +135,7 @@ phaseRoll/mistake hashes used bare `simSeed()` / `raceIndex`.
 
 Pipeline: [SCENERY-AND-TRACK-BUILD.md](SCENERY-AND-TRACK-BUILD.md). Helper
 catalogue: [SCENERY-API.md](SCENERY-API.md). `scenery(api)` surface frozen at
-**112 members** by `tests/unit/scenery-api-contract.test.mjs`.
+**114 members** by `tests/unit/scenery-api-contract.test.mjs`.
 
 ### S1 — `along()` + wrapped helpers double-apply `_sceneryShift`
 **Severity:** high · **Status:** FIXED here · **Confidence:** high
