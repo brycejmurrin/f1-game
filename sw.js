@@ -28,6 +28,10 @@ const DEV_HOST = /^(localhost|127\.0\.0\.1|\[::1\])$/.test((self.location && sel
 const INSTALL_COMPLETE_URL = "__apex_install_complete__";
 
 let _cacheNamePromise = null;
+// The RESOLVED name, readable without awaiting: cache matching must never wait
+// on a version.json round trip (offline, that fetch can hang for as long as the
+// link does), so it prefers the current generation only once it is known.
+let _cacheNameKnown = null;
 function currentCacheName() {
   if (_cacheNamePromise) return _cacheNamePromise;
   _cacheNamePromise = fetch("version.json", { cache: "no-store" })
@@ -38,7 +42,8 @@ function currentCacheName() {
     .then((v) => {
       const build = Number(v && v.build);
       if (!Number.isSafeInteger(build) || build <= 0) throw new Error("Invalid deployed build");
-      return CACHE_PREFIX + build;
+      _cacheNameKnown = CACHE_PREFIX + build;
+      return _cacheNameKnown;
     })
     .catch((e) => {
       // Never memoize a rejection: one offline/failed read poisoned the name
@@ -48,6 +53,63 @@ function currentCacheName() {
       throw e;
     });
   return _cacheNamePromise;
+}
+
+// The build number an apex26-<n> cache belongs to, or NaN for any other name.
+function cacheBuild(name) {
+  if (typeof name !== "string" || !name.startsWith(CACHE_PREFIX)) return NaN;
+  const n = Number(name.slice(CACHE_PREFIX.length));
+  return Number.isSafeInteger(n) && n > 0 ? n : NaN;
+}
+
+// CURRENT GENERATION FIRST. `caches.match()` walks every cache in CREATION
+// order, so while two generations coexist — `activate` is the only sweep, and
+// a fetch can open a cache under a NEWER build's name mid-deploy (the worker
+// reads version.json lazily) — an unversioned key (index.html, version.json,
+// the path-pinned fonts) was answered from the OLDEST build's copy. The known
+// current name is searched first, then every other apex26 generation newest
+// first, then anything else, which is `caches.match()`'s own last resort.
+// Per-cache matches use the `cacheName` option, so a lookup never CREATES a
+// cache the way `caches.open()` would.
+async function matchPreferCurrent(req) {
+  let names;
+  try { names = await caches.keys(); } catch (_) { return caches.match(req); }
+  const current = _cacheNameKnown;
+  const rank = (n) => (n === current ? Infinity : (cacheBuild(n) || 0));
+  const ordered = names.slice().sort((a, b) => rank(b) - rank(a));
+  for (const name of ordered) {
+    const hit = await caches.match(req, { cacheName: name });
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
+// OPPORTUNISTIC SWEEP. `activate` deletes older generations once, but a worker
+// that outlives a deploy — or a fetch that opened a newer build's cache before
+// that build's worker installed — leaves stale apex26-* caches behind until
+// the next activate. Swept from the fetch path, at most once per worker
+// lifetime once it succeeds, under the same rules `activate` keeps:
+//   - only when the CURRENT generation finished its install (never strand a
+//     client on an incomplete cache — the test holds activate to that too), and
+//   - only generations OLDER than the current one: a worker whose memoised
+//     name is stale must never delete the newer cache the next worker is
+//     installing into.
+let _sweepDone = false, _sweepBusy = false;
+async function sweepStaleCaches() {
+  const name = _cacheNameKnown;
+  const build = cacheBuild(name);
+  if (!(build > 0)) return;
+  const keys = await caches.keys();
+  if (!keys.includes(name)) return;
+  if (!(await caches.match(INSTALL_COMPLETE_URL, { cacheName: name }))) return;
+  const stale = keys.filter((k) => cacheBuild(k) < build);
+  await Promise.all(stale.map((k) => caches.delete(k)));
+  _sweepDone = true;
+}
+function maybeSweep(event) {
+  if (_sweepDone || _sweepBusy || !_cacheNameKnown) return;
+  _sweepBusy = true;
+  event.waitUntil(sweepStaleCaches().catch(() => {}).finally(() => { _sweepBusy = false; }));
 }
 
 // Parse the shell's own tags so the precache lists cannot drift from what
@@ -342,6 +404,7 @@ self.addEventListener("fetch", (event) => {
   // the guard is here so that stays true if it ever does.
   if (url.protocol !== "http:" && url.protocol !== "https:") return;
   if (url.origin !== self.location.origin) return;   // never touch cross-origin (Jolpica/OpenF1 data hub)
+  maybeSweep(event);
 
   // Network-first for the HTML shell + version.json: the existing "SHELL
   // VERSION GUARD" in index.html depends on version.json always reflecting the
@@ -414,9 +477,9 @@ self.addEventListener("fetch", (event) => {
       // it fell through to the index.html fallback below and answered a JSON
       // request with the shell's HTML (survivable only because the version
       // guard swallows the parse error).
-      if (isVersion) return (await caches.match("version.json")) || Response.error();
-      if (isShellBust) return (await caches.match(req)) || Response.error();
-      return (await caches.match(req)) || (await caches.match("index.html")) || Response.error();
+      if (isVersion) return (await matchPreferCurrent("version.json")) || Response.error();
+      if (isShellBust) return (await matchPreferCurrent(req)) || Response.error();
+      return (await matchPreferCurrent(req)) || (await matchPreferCurrent("index.html")) || Response.error();
     })());
     return;
   }
@@ -444,7 +507,7 @@ self.addEventListener("fetch", (event) => {
         }
       } catch (_) { /* offline: fall through to the cache */ }
     }
-    const cached = await caches.match(req);
+    const cached = await matchPreferCurrent(req);
     if (cached) return cached;
     // On a miss there is nothing to fall back to, so a timeout race could only
     // FAIL a slow-but-alive request (and drop its late response uncached) — a
