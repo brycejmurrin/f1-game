@@ -176,6 +176,11 @@ const RaceFacts = (function () {
         // RACE" 3 s before the results say P2 is the one call that must not be wrong.
         if (s.finDue != null && t >= s.finDue - 1e-9) { s.finDue = null; finishers.push(c); }
       }
+      // …unless nobody is left to cross: race control ends a race 2.2 s after
+      // its last car, well inside a 5 s penalty, and the result was never said.
+      if (!cars.some((c) => !c.finished && !c.retired)) {
+        for (const c of cars) { const s = st.get(c); if (s && s.finDue != null) { s.finDue = null; finishers.push(c); } }
+      }
 
       order = rank(cars);
       // The finish position is the flagged car's place in the ranking — after

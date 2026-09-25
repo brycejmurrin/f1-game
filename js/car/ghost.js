@@ -266,9 +266,14 @@ const Ghost = (function () {
       // to 512 KB + setItem) is one 5-30 ms job on a phone. With a 2 s timeout it
       // ran mid-race — a frame's idle tail is < 16 ms, so it overran into the next
       // frame. A 25 ms slot comes with pause, menus or results; pagehide flushes.
+      // …but not forever: the game loop requests a frame every frame, even in
+      // menus, and the spec caps an idle period at the next frame, so at 60 Hz
+      // a 25 ms slot may never come and the PB lived only in memory. After
+      // IDLE_CAP_MS any idle slot will do.
+      const since = Date.now();
       const idle = (dl) => {
-        if (pending.get(id) !== snap) return;
-        if (dl && typeof dl.timeRemaining === "function" && dl.timeRemaining() < 25) { requestIdleCallback(idle); return; }
+        if (pending.get(id) !== snap) { _flushes.delete(write); return; }   // superseded: do not pin its lap until pagehide
+        if (dl && typeof dl.timeRemaining === "function" && dl.timeRemaining() < 25 && Date.now() - since < IDLE_CAP_MS) { requestIdleCallback(idle); return; }
         write();
       };
       requestIdleCallback(idle);
@@ -280,15 +285,21 @@ const Ghost = (function () {
   // Leaving the page with a record still pending: write it now (synchronous
   // localStorage is allowed in pagehide), or the new ghost dies with the tab.
   const _flushes = new Set();
+  const IDLE_CAP_MS = 20000;
   let _flushArmed = false;
   function armFlush(fn) {
     _flushes.add(fn);
     if (_flushArmed || typeof addEventListener !== "function") return;
     _flushArmed = true;
-    addEventListener("pagehide", () => {
+    const flush = () => {
       const fns = Array.from(_flushes); _flushes.clear();
       for (const f of fns) { try { f(); } catch (_) { /* best effort on the way out */ } }
-    });
+    };
+    addEventListener("pagehide", flush);
+    // A backgrounded mobile tab is often killed without a pagehide.
+    if (typeof document !== "undefined" && document.addEventListener) {
+      document.addEventListener("visibilitychange", () => { if (document.hidden) flush(); });
+    }
   }
 
   // `meta` (optional, a plain object — medal, pole, pace, weather) is stored

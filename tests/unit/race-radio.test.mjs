@@ -614,3 +614,14 @@ test("a red-flag re-grid reorders the field without a pass being called, then or
   assert.ok(!said.some((m) => /BBB|AAA/.test(m) && /MOVE|PAST|THROUGH|FAVOUR|BACK FROM|GREAT/.test(m)), said.join(" | "));
   assert.ok(!said.some((m) => /LIGHTS OUT/.test(m)), "the radio forgot the race and started it again: " + said.join(" | "));
 });
+
+test("a penalised player who takes the flag last hears the result before race control ends the race", () => {
+  const W = car("WIN", 1400, 60), X = car("XXX", 1300, 60), P = car("PLY", 1200, 60, { isPlayer: true, local: true, penalty: 5 }), Y = car("YYY", 1000, 60);
+  const r = race({ cars: [W, X, P, Y] });
+  r.step(0.05, 100);
+  W.finished = X.finished = true; Y.retired = true; r.step(0.05, 20);
+  P.finished = true; r.step(0.05, 40);          // 2 s: finishDelay ends the race at 2.2 s, inside the +5 s
+  const result = r.said.filter((s) => s.kind === "race" && /P\d/.test(s.msg));
+  assert.equal(result.length, 1, "no result call before the race ended: " + JSON.stringify(r.said));
+  assert.match(result[0].msg, /P3/);
+});

@@ -48,6 +48,7 @@ function createHarness(opts = {}) {
   };
   if (opts.deferWrites) sandbox.setTimeout = (fn) => { timers.push(fn); return timers.length; };
   const idles = [], listeners = {};
+  if (opts.clock) sandbox.Date = { now: () => opts.clock.t };
   if (opts.idle) {
     sandbox.requestIdleCallback = (fn) => { idles.push(fn); return idles.length; };
     sandbox.addEventListener = (type, fn) => { (listeners[type] = listeners[type] || []).push(fn); };
@@ -403,6 +404,18 @@ test("a new record is written in a LONG idle slot only, never a short mid-race o
   h.runIdle(40);                                 // pause / menu / results
   assert.equal(ghostOnDisk(h), true);
   assert.equal(h.idleQueued(), 0);
+});
+
+test("a record waits for a long idle slot, but not forever: a 60 Hz loop never offers one", () => {
+  const clock = { t: 1000 };
+  const h = createHarness({ idle: true, clock });
+  h.Ghost.setTrack("monza");
+  recordLap(h.Ghost, 1.0);
+  for (let i = 0; i < 50; i++) { clock.t += 16; h.runIdle(8); }
+  assert.equal(ghostOnDisk(h), false, "still preferring a long slot");
+  clock.t += 25000;
+  h.runIdle(8);
+  assert.equal(ghostOnDisk(h), true, "the PB only ever lived in memory");
 });
 
 test("a record still pending when the page goes away is flushed on pagehide", () => {

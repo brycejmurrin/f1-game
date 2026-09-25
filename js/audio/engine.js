@@ -1173,7 +1173,7 @@ const GameAudio = (function () {
   function stopEngine() {
     if (!engineOn) return;
     const t0 = now();
-    if (musicGain) { musicGain.gain.setTargetAtTime(musicVol * MUSIC_FULL, t0, 0.3); musicGain._apexDuckTgt = null; }   // release the engine duck
+    if (musicGain) { musicGain.gain.setTargetAtTime(musicVol * MUSIC_FULL * radioDuck, t0, 0.3); musicGain._apexDuckTgt = null; }   // release the engine duck (a line still on air keeps its own)
     engGain.gain.cancelScheduledValues(t0);
     engGain.gain.setTargetAtTime(0, t0, 0.06);
     whineGain.gain.setTargetAtTime(0, t0, 0.06);
@@ -2500,7 +2500,7 @@ const GameAudio = (function () {
    */
   /** The figure, one oscillator per note, scheduled back to back from `at`.
    *  Returns the seconds it occupies, so the caller can hold the bed over it. */
-  function radioTune(seq, peak, at) {
+  function radioTune(seq, peak, at, keep) {
     if (!(peak > 0) || !Array.isArray(seq) || !seq.length) return 0;
     let t = at;
     for (const [hz, secs, lvl] of seq) {
@@ -2518,6 +2518,7 @@ const GameAudio = (function () {
       osc.start(t);
       osc.stop(t + secs + 0.04);
       osc.onended = () => { osc.disconnect(); g.disconnect(); };
+      if (keep) keep.push(osc);
       t += secs;
     }
     return t - at;
@@ -2554,6 +2555,9 @@ const GameAudio = (function () {
       b.gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
       b.src.stop(t + 0.08);
     } catch (e) { /* already stopped, or a ctx torn down under us */ }
+    // The figure and the squelch tail are scheduled ahead: stopping only the
+    // bed left the squelch to fire seconds later, over the pause menu.
+    for (const x of b.extra || []) { try { x.stop(t); } catch (e) { /* already ended */ } }
   }
 
   /** One transmission: key-up, a hiss bed held for `seconds`, then squelch.
@@ -2571,7 +2575,8 @@ const GameAudio = (function () {
     // opens (a click, which is a noise burst and not an oscillator), and the
     // courtesy figure follows a hair later rather than landing on top of it.
     radioBurst(ch.click * radioFx, 0.045, ch.hi, t0);
-    const tuneS = 0.03 + radioTune(ch.tune, ch.toneAmp * radioFx, t0 + 0.03);
+    const extra = [];
+    const tuneS = 0.03 + radioTune(ch.tune, ch.toneAmp * radioFx, t0 + 0.03, extra);
     // THE BED MUST OUTLAST THE FIGURE. `seconds` is the card's life, and a short
     // card is shorter than four notes — scheduling the squelch tail off that
     // alone closed the mic while the cue was still playing, which is backwards:
@@ -2592,10 +2597,10 @@ const GameAudio = (function () {
     src.start(t0, Math.random() * (NOISE_POOL_S - 0.5));
     src.stop(t0 + hold + 0.2);
     src.onended = () => { src.disconnect(); hp.disconnect(); lp.disconnect(); g.disconnect(); };
-    radioBed = { src, gain: g };
+    radioBed = { src, gain: g, extra };
     // The tail is the single most recognisable part of a two-way radio: the
     // burst you hear AFTER the talking stops, when the mic un-keys.
-    if (ch.tail > 0) radioBurst(ch.tail * radioFx, 0.07, ch.hi, t0 + hold);
+    if (ch.tail > 0) { const tail = radioBurst(ch.tail * radioFx, 0.07, ch.hi, t0 + hold); if (tail) extra.push(tail); }
     return true;
   }
 
@@ -2633,6 +2638,9 @@ const GameAudio = (function () {
    *  in seconds). Returns { end, stop } or null when nothing can play. */
   function radioVoice(parts, at, o) {
     if (!ctx || !master || !isEnabled || !Array.isArray(parts)) return null;
+    // A suspended context (an iOS interruption, no gesture yet) keeps its
+    // clock still: lines scheduled on it all play at once when it resumes.
+    if (ctx.state && ctx.state !== "running") return null;
     const ch = VOICE_CH[o && o.channel] || VOICE_CH.radio;
     const vol = Math.max(0, Math.min(1, o && o.volume != null ? +o.volume || 0 : 1));
     if (!(vol > 0)) return null;
@@ -2703,6 +2711,9 @@ const GameAudio = (function () {
     if (want === radioDuck) return radioDuck;
     radioDuck = want;
     if (musicGain) musicGain._apexDuckTgt = null;   // invalidate the equality cache so the ramp re-aims
+    // setEngine applies the duck, and it is not running with the engine off
+    // (the pre-race check, after the flag) or SOUND EFFECTS off.
+    if (musicGain && ctx && (!engineOn || !sfxOk())) musicGain.gain.setTargetAtTime(musicVol * MUSIC_FULL * radioDuck, now(), 0.15);
     return radioDuck;
   }
   function setMusicVolume(v) {
