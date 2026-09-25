@@ -430,7 +430,10 @@ const TrackPit = (function () {
       // Where the lane has width its outer wall IS the limit, in both
       // directions: the default run-off (hw+9) sat past the wall wherever the
       // entry/exit road narrows, and cars drove through it on 51 circuits.
-      bar[k] = p.w[k] > 0.02 ? lim : Math.max(bar[k], lim);
+      // Only where the lane is wider than the car: at the taper (a lane
+      // centimetres wide) a wall-bound limit would close the run-off at the
+      // road edge, so there it keeps only raising.
+      bar[k] = lim > track.hw[k] + 1.2 ? lim : Math.max(bar[k], lim);
     }
   }
 
