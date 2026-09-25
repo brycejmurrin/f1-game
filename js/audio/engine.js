@@ -44,7 +44,7 @@ const GameAudio = (function () {
   let pitLimOsc = null, pitLimGain = null;                   // pit-limiter chop: square AM into engGain.gain
   let revFlare = 0, revFlareT = 0;                           // downshift throttle-blip overshoot (see shift)
   let carSfxLast = { scrub: 0, lock: 0, surface: 0, pitLim: 0 };   // test hook
-  let pitGunFired = 0;
+  let pitGunFired = 0, surfSched = 0;
   let pitLimLvl = 0;                                          // 0..1 from setCarSfx; applied in setEngine
 
   // RIVAL ENGINES. The game had no opponent audio at all and no panner anywhere
@@ -1412,9 +1412,14 @@ const GameAudio = (function () {
     // cache lives ON THE NODE so a stopEngine/startEngine pair cannot leave a
     // module variable stale (a fresh GainNode has no _apexLimTgt, which never
     // equals a number, so the first call after any restart re-issues).
-    if (limGain && limGain._apexLimTgt !== limDepth) {
-      limGain.gain.setTargetAtTime(limDepth, t, 0.02);
-      limGain._apexLimTgt = limDepth;
+    // The swing is scaled with the base it rides on (shift duck, camera mix):
+    // on a TV camera the base drops to 0.55 and an unscaled ±limDepth took the
+    // trough below zero — the phase inversion the cap above exists to prevent.
+    const mult = (1 - 0.55 * shiftDuck) * camMix.engine;
+    const limSwing = Math.floor(limDepth * mult * 1e4) / 1e4;   // floor: rounding up would dip the trough below 0
+    if (limGain && limGain._apexLimTgt !== limSwing) {
+      limGain.gain.setTargetAtTime(limSwing, t, 0.02);
+      limGain._apexLimTgt = limSwing;
     }
     // The sag: ±limCents around the note, in step with the cut. 30 cents at
     // the stock trim is the rpm visibly dropping on a dead cylinder bank; the
@@ -1430,7 +1435,6 @@ const GameAudio = (function () {
     // cuts (trough ~0.56 of the level) — riding the square on the full base
     // made the engine 45% LOUDER half of every cycle. Quantised so a steady
     // lane is not rescheduled every frame.
-    const mult = (1 - 0.55 * shiftDuck) * camMix.engine;
     const pitDepth = Math.round(pitLimLvl * Math.max(0, Math.min(lvl * 0.22, lvl * 0.5 - limDepth)) * mult * 1000) / 1000;
     if (pitLimGain && pitLimGain._apexTgt !== pitDepth) { pitLimGain.gain.setTargetAtTime(pitDepth, t, 0.03); pitLimGain._apexTgt = pitDepth; }
     const engBase = (lvl - limDepth) * mult - pitDepth;
@@ -1453,7 +1457,7 @@ const GameAudio = (function () {
       }
       const lump = (1 - rev) * (1 - rev);
       const want = layers.gravel ? engBase * 0.55 * lump * tune.gravel : 0;
-      aimGain(gravGain, Math.min(want, Math.max(0, engBase - limDepth - pitDepth)), t, 0.05);
+      aimGain(gravGain, Math.min(want, Math.max(0, engBase - limSwing - pitDepth)), t, 0.05);
     }
 
     // Turbo whine: in low gears (1-3) mechanical supercharger character — the
@@ -1721,7 +1725,10 @@ const GameAudio = (function () {
     aimGain(scrubGain, scrub * (wet ? 0.035 : 0.06) * on, t, 0.06);
     aimGain(lockGain, lock * (wet ? 0.05 : 0.09) * on, t, 0.03);
     aimGain(surfGain, surf * 0.22, t, 0.08);
-    if (surf > 0) surfFilter.frequency.setTargetAtTime(120 + 160 * surf, t, 0.1);
+    const surfHz = 120 + 160 * surf;   // rescheduled only on a real change (the gravOsc pattern)
+    if (surf > 0 && Math.abs((surfFilter.frequency._apexHz ?? -99) - surfHz) > 2) {
+      surfFilter.frequency.setTargetAtTime(surfHz, t, 0.1); surfFilter.frequency._apexHz = surfHz; surfSched++;
+    }
     // The depth is set in setEngine, against the engine's own base (see there).
     pitLimLvl = layers.limiter === false ? 0 : pit;
     carSfxLast.scrub = scrub; carSfxLast.lock = lock; carSfxLast.surface = surf; carSfxLast.pitLim = pit;
@@ -2994,6 +3001,7 @@ const GameAudio = (function () {
       return den > 0 ? Math.round(num / den) : 0;
     },
     // debug/telemetry: lets tests confirm the recorded engine samples loaded
-    debug() { return { contextState: ctx ? ctx.state : "uninitialised", samplesReady, usingSamples, engineOn, voice: voiceName, loop: engSrcIdle ? { s: +engSrcIdle.loopStart.toFixed(2), e: +engSrcIdle.loopEnd.toFixed(2) } : null }; },
+    debug() { return { contextState: ctx ? ctx.state : "uninitialised", samplesReady, usingSamples, engineOn, voice: voiceName,
+      limSwing: limGain ? limGain._apexLimTgt ?? 0 : null, surfSched, loop: engSrcIdle ? { s: +engSrcIdle.loopStart.toFixed(2), e: +engSrcIdle.loopEnd.toFixed(2) } : null }; },
   };
 })();
