@@ -1441,10 +1441,11 @@ function announce(msg, dur, kind) {
     // again (RaceEngineer does, on its next tick).
     // A slot once given is NEVER taken back: evicting an accepted line told its
     // caller "said" for words nobody heard (RaceEngineer spends the wear step,
-    // race-radio its cooldowns and the told position). A full queue refuses the
-    // newcomer instead, which callers already handle; box/race/penalties may
-    // queue two deeper rather than push anything out.
-    if (_annQueue.length >= ANN_QUEUE_MAX + (pri >= 4 ? 2 : 0)) return false;
+    // race-radio its cooldowns and the told position). A full queue refuses a
+    // newcomer that outranks nothing waiting; one that does (a warning behind
+    // two reports) queues deeper instead of pushing an accepted line out.
+    const low = _annQueue.length ? _annQueue[_annQueue.length - 1].pri : 0;
+    if (_annQueue.length >= (pri > low ? ANN_QUEUE_MAX + 3 : ANN_QUEUE_MAX)) return false;
     let at = _annQueue.length;
     while (at > 0 && _annQueue[at - 1].pri < pri) at--;
     _annQueue.splice(at, 0, { msg, dur, kind, pri });
