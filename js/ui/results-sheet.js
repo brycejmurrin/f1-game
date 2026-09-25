@@ -590,7 +590,7 @@ function buildStandings() {
     // From the pause menu this round is the one being driven, not the next.
     const live = G.state === "race" || G.state === "count";
     const lead = live ? "IN PROGRESS: ROUND " : midWeekend ? "NEXT: GRAND PRIX, ROUND " : "NEXT: ROUND ";
-    info.textContent = `${lead}${round + 1} — ${nextTrack.name} (${nextTrack.gp})`;
+    info.textContent = `${lead}${round + 1} — ${nextTrack.name} (${SeasonCal.gpName ? SeasonCal.gpName(nextTrack) : nextTrack.gp})`;
     body.appendChild(info);
   }
 }

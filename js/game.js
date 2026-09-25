@@ -1284,6 +1284,11 @@ const ANN_MIN_S = 3;
 // under the floor above a third would arrive six seconds after the thing it
 // describes, by which time it is a lie, not a message.
 const ANN_QUEUE_MAX = 2;
+// …and when a burst of warnings or penalties queues ahead of them anyway (the
+// +3 depth below), an INFO-or-lower card that has waited ANN_STALE_MS is dropped
+// at the drain rather than read out as a lie ("UP TO P5" after losing it).
+// Warnings, box calls and penalties always play.
+const ANN_STALE_MS = 8000;
 // _annFloor is what is LEFT of the current card's floor, run down beside
 // announceT in tickBody. One `let` statement on purpose: the ratchet counts
 // column-0 declarations, so splitting these for a comment would raise it
@@ -1454,7 +1459,7 @@ function announce(msg, dur, kind, still) {   // still(): false once a queued lin
     if (_annQueue.length >= (pri > low ? ANN_QUEUE_MAX + 3 : ANN_QUEUE_MAX)) return false;
     let at = _annQueue.length;
     while (at > 0 && _annQueue[at - 1].pri < pri) at--;
-    _annQueue.splice(at, 0, { msg, dur, kind, pri, still });
+    _annQueue.splice(at, 0, { msg, dur, kind, pri, still, t: performance.now() });
     return true;
   }
   showAnnounce(msg, dur, kind);
@@ -3795,6 +3800,7 @@ function raceIntro(go) {
 function loadingInfo() {
   return {
     track: Tracks.LIST[trackIdx], laps: raceLaps,
+    gp: SeasonCal.gpName ? SeasonCal.gpName(Tracks.LIST[trackIdx]) : undefined,   // the 2026 REAL calendar renames two rounds (season-cal.js)
     weather: raceWeather, tod: raceTimeOfDay,
     // WHAT SESSION THIS IS, for the announcer (js/audio/announcer.js). It read
     // the same paragraph before a qualifying hour, a duel with a legend and a
@@ -8293,7 +8299,12 @@ function tickBody(now) {
       _annPri = 0; _annFloor = 0;
       // showAnnounce re-arms both, so the card taken off the queue gets the
       // same floor the one before it did.
-      while (_annQueue.length) { const q = _annQueue.shift(); if (q.still && !q.still()) continue; showAnnounce(q.msg, q.dur, q.kind); break; }
+      while (_annQueue.length) {
+        const q = _annQueue.shift();
+        if (q.still && !q.still()) continue;   // the caller says it is no longer true
+        if (q.pri <= ANN_PRI.info && performance.now() - q.t > ANN_STALE_MS) continue;   // no still(): too old to trust
+        showAnnounce(q.msg, q.dur, q.kind); break;
+      }
     }
   }
   // hit-stop: slow the simulation to a crawl for a few frames after a hard

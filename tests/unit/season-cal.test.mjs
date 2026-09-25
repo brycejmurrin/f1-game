@@ -715,3 +715,18 @@ test("2026 REAL survives a save/load round-trip, sprint rounds and all", () => {
   assert.equal(T.stage(s), "sprint");
   assert.ok(Object.isFrozen(s.config.sprintIds), "the frozen season rules include the sprint rounds");
 });
+
+test("the 2026 REAL calendar names its rounds as raced: Bahrain GP at Sepang, Barcelona-Catalunya GP", () => {
+  const tracks = realTracks();
+  const { S } = load(null, tracks);
+  S.engage("season");
+  assert.equal(S.applyConfig(S.preset("real2026")).ok, true);
+  const byId = (id) => tracks.LIST.find((t) => t.id === id);
+  assert.equal(S.gpName(byId("sepang")), "Bahrain GP");
+  assert.equal(S.gpName(byId("catalunya")), "Barcelona-Catalunya GP");
+  assert.equal(S.gpName(byId("madrid")), byId("madrid").gp || "", "the Spanish GP is Madrid's");
+  assert.equal(S.gpName(byId("monza")), byId("monza").gp || "", "every other round keeps its circuit's name");
+  // An edited calendar is no longer 2026 as raced: the circuit's own name again.
+  assert.equal(S.applyConfig(S.preset("full")).ok, true);
+  assert.equal(S.gpName(byId("sepang")), byId("sepang").gp || "");
+});
