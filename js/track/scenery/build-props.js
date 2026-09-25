@@ -1642,6 +1642,7 @@ const TrackBuildProps = (function () {
       every(270, (k) => {
         const side = hash(HK(k) * 7) < 0.5 ? -1 : 1;
         const post = place(k, side, 25, [0.55, 1.3, 0.55], [0.95, 0.55, 0.08]);
+        placeSeq++;   // the board's old place() slot: keeps every later prop's SEP_SLOTS phase
         // The signal board sits ON its post. Placed as its own box it took
         // place()'s 0.8 m sink and its 0.75 m height ended 5 cm under the
         // ground — 860 invisible boards on 50 circuits. Too short to block.

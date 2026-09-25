@@ -318,7 +318,10 @@
             center: towerC, size: [2.2, deckH, 2.8], basis: b,
           }, (stage) => {
             addBox(stage, vadd(a.c, a.u, deckH / 2 - 0.03), [2.2, deckH + 0.06, 2.8], concrete, b);  // foot 6 cm under the span support's
-            addBox(stage, vadd(a.c, a.u, deckH + 0.65), [3.2, 1.2, 3.4], steel, b);
+            // Cap: foot 5 cm into the tower, top 10 cm over the deck's. At the
+            // deck's own 1.2 m both its faces sat 15 mm off the deck's (flat
+            // z-fight); 1.35 m keeps each >= 3 cm (MIN_SEP) clear.
+            addBox(stage, vadd(a.c, a.u, deckH + 0.625), [3.2, 1.35, 3.4], steel, b);
           }, { required: true });
         }
       };

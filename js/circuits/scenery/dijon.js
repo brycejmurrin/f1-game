@@ -188,11 +188,18 @@
               if (h > hi) hi = h;
               if (h < lo) lo = h;
             }
-            const r0 = res + (opts.line ? 0 : 0.12 * ((phase * nl + j) & 1));
+            const odd = (phase * nl + j + (opts.widen ? i : 0)) & 1;
+            const r0 = res + (opts.line ? 0 : 0.12 * odd);
             const top = Math.ceil((dC + hi + (opts.h || 0.01) - r0) / 0.24) * 0.24 + r0 - dC;
             const bot = Math.floor((dC + lo - thick - r0) / 0.24) * 0.24 + r0 - dC;
+            // `widen`: alternate cells run that much wider (split both sides):
+            // a crop field's stations overlap 4 % end to end, and on a
+            // near-straight their side faces were 0-2 cm apart (0.014, 17.7 mm).
+            // With `widen` the parity also alternates across the depth, so the
+            // sliver a wide cell lays over its neighbour's top is 0.12 m off it.
+            const rw = rl + (opts.widen || 0) * odd;
             addBox(out, vadd(C, u, (top + bot) / 2),
-              [rl / (Math.hypot(r[0], r[2]) || 1), top - bot, dl / (Math.hypot(t[0], t[2]) || 1)], col, [r, u, t]);
+              [rw / (Math.hypot(r[0], r[2]) || 1), top - bot, dl / (Math.hypot(t[0], t[2]) || 1)], col, [r, u, t]);
           }
         }
       };
@@ -252,7 +259,7 @@
       let fieldSeq = 0;
       const field = (s, side, gap, w, d, col) => {
         if (spotClear(s, side, gap, Math.max(w, d) * 0.5 + 8))
-          drapeRun(s, side, gap, [w, 0.13, d], col, (fieldSeq++ & 1) ? 0.09 : 0);
+          drapeRun(s, side, gap, [w, 0.13, d], col, (fieldSeq++ & 1) ? 0.09 : 0, null, { widen: 0.16 });
       };
       // Vine rows: thin strips stepping away up the slope, on their own
       // earth block, so the block reads as a planted parcel at distance.
@@ -733,8 +740,10 @@
 
       // Rapeseed parcels: the one strong colour accent on the slope, used
       // sparingly so the patchwork still reads as dry summer Burgundy.
+      // 0.144 sits at gap 78: from 104 it lay over the 0.150 wheat field in the
+      // same drape residue, two tops in one plane (0.0 mm, coplanar-audit).
       for (const [s, side, gap, w, d] of [
-        [0.144, -1, 104, 42, 56], [0.330,  1,  86, 38, 50],
+        [0.144, -1,  78, 42, 56], [0.330,  1,  86, 38, 50],
         [0.520, -1, 118, 44, 58], [0.658,  1,  92, 40, 54],
         [0.882, -1, 112, 42, 56],
       ]) field(s, side, gap, w, d, RAPE);

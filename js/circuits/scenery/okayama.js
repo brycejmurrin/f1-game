@@ -361,7 +361,9 @@
       for (let i = 0; i < 6; i++) {                   // garage bays, one per shutter
         const s = 0.0165 + i * 0.0072;
         bld(s, 1, 9.5, 9.0, 4.4, 6.4, i & 1 ? WALL_CREAM : CLUB_WALL, ROOF_TIN, 1);
-        box(s, 1, 9.2, [0.5, 3.0, 4.2], SHUTTER[i % SHUTTER.length]);
+        // 9.3, not 9.2: place()'s slot (+0.035..0.165) put the shutter's back
+        // face 15 mm off the bay door's on two slots of four; now >= 5 cm on all.
+        box(s, 1, 9.3, [0.5, 3.0, 4.2], SHUTTER[i % SHUTTER.length]);
       }
       bld(0.0620, 1, 9.5, 8.0, 10.5, 5.0, WALL_GREY, ROOF_BLUE, 3);   // timing box
       cameraTower(K(0.0660), 1, 12);
@@ -388,7 +390,9 @@
       sponsorHoarding(0.996, 0.046, -1, 8, { h: 1.3 });
       bld(0.0330, -1, 26, 10.0, 9.0, 7.0, WALL_CREAM, ROOF_BLUE, 3);  // commentary
       bld(0.0080, -1, 24, 7.0, 4.0, 5.0, WALL_BEIGE, ROOF_GRN, 1);    // kiosk
-      box(0.0430, -1, 12, [0.6, 5.0, 9.0], [0.14, 0.15, 0.17]);       // scoreboard
+      // 12.1: at 12 its front face met the billboard's 15 mm away on two of
+      // place()'s four slots; 10 cm back it clears it on every slot.
+      box(0.0430, -1, 12.1, [0.6, 5.0, 9.0], [0.14, 0.15, 0.17]);     // scoreboard
       billboard(K(0.0430), -1, 12, 8, 3.4, [0.95, 0.95, 0.92]);
       spectatorHill(0.000, 0.014, -1, 10, { h: 3.6, col: GRASS, steps: 2 });
       spectatorHill(0.055, 0.070, -1, 10, { h: 3.6, col: GRASS_D, steps: 2 });

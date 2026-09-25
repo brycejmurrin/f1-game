@@ -11,11 +11,15 @@
         spectatorHill, broadcastCompound, billboard, gantry, marshalPost,
         motorhome, fence, guardrail, tyreWall, groundPatch, modelGroup,
         bowlSeatWall, cameraTower, sponsorHoarding, seat, forestEdge,
-        addBox, addCyl, addCone, addPrism, addFrustum } = api;
+        addBox, addCyl, addCone, addPrism, addFrustum, indexSolid } = api;
 
       function scaffoldStand(s0, s1, side, gap, rows) {
         const TUBE = [0.62, 0.63, 0.66], DECK = [0.44, 0.45, 0.48];
         const BENCH = [[0.80, 0.78, 0.74], [0.30, 0.36, 0.52], [0.72, 0.28, 0.24]];
+        // Raw primitives book no ground: reserve the rake so the deferred
+        // roadside scatter does not plant through it (0.766-0.78 lost the
+        // spectator bank that used to hold that ground).
+        indexSolid(s0, s1, side, gap, rows * 1.9 + 1);
         let i = 0;
         along(s0, s1, 6, (k, spacing) => {
           const seg = spacing * 0.98;
