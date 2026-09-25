@@ -4039,7 +4039,7 @@ function quitToMenu() {
 // ---------- per-frame update ----------
 // Reusable rank buffer — refilled and sorted each physics step (up to 5x per
 // rendered frame) so we don't allocate a fresh array via cars.slice() each time.
-const ranked = [];
+const ranked = [], byProgDesc = (a, b) => b.prog - a.prog;   // hoisted: no comparator closure per step
 // Live weather (setWeatherLive/setTimeOfDay) and the dynamic weather arc live in
 // js/race/weather-arc.js — WeatherArc.create(G, deps), wired as `wxArc` above.
 
@@ -4160,7 +4160,7 @@ function update(dt) {
   // own `c.retired` check and one of them would eventually be forgotten.
   ranked.length = 0;
   for (const c of cars) if (!c.retired) ranked.push(c);
-  ranked.sort((a, b) => b.prog - a.prog);
+  ranked.sort(byProgDesc);
   for (let i = 0; i < ranked.length; i++) {
     ranked[i].rank = i + 1;
   }
@@ -4533,10 +4533,12 @@ function updateCar(c, dt, ranked) {
   // ahead"), not ranked[rank-2]: that is the classification neighbour — a
   // leader has none (a backmarker 0.5 s ahead could not be attacked), it can
   // sit a lap away, and a finished car coasting right ahead armed OT.
-  let ahead = null, gapAhead = Infinity;
+  // Only a car inside OT_GAP·speed can arm (`ahead` is read only then): the traffic scan's cheap reject, +1 m margin.
+  let ahead = null, gapAhead = Infinity; const otL = track.total, otW = OT_GAP * c.speed + 1;
   for (const o of ranked) {
     if (o === c || o.finished) continue;
-    const d = ((o.prog - c.prog + track.total / 2) % track.total + track.total) % track.total - track.total / 2;   // full wrap (a twice-lapped car is 2L back in prog)
+    const dp = o.prog - c.prog, adp = dp < 0 ? -dp : dp; if (adp > otW && adp < otL - otW) continue;
+    const d = ((dp + otL / 2) % otL + otL) % otL - otL / 2;   // full wrap (a twice-lapped car is 2L back in prog)
     if (d > 0.5 && d < gapAhead) { ahead = o; gapAhead = d; }
   }
   gapAhead = ahead && c.speed > 1 ? gapAhead / c.speed : Infinity;
