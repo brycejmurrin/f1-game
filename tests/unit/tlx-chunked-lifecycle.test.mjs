@@ -137,3 +137,22 @@ test("the merge is ON by default (no stored value)", () => {
   const mesh = mergeFactory(null).build(gridMesh(), 72);
   assert.equal(mesh.chunks.length, 9);
 });
+
+// NORMAL PACK CLAMP. packAttr's range scan admits |v| <= 1.0001 (float noise on
+// normalised normals), but round(1.0001 * 32767) = 32770 overflows Int16 and
+// WRAPS to -32766 — a normal flipped into the opposite hemisphere. The pack
+// must clamp to ±32767 like VertexPack.qs.
+test("snorm16 normal pack clamps, never wraps, at the 1.0001 admission edge", () => {
+  // Float32 values just under the edge (1.0001 itself rounds ABOVE it in f32);
+  // both still round past 32767 unclamped.
+  const sys = factory([]);
+  const mesh = sys.build({
+    pos: new Float32Array([0, 0, 0, 1, 0, 0, 0, 0, 1]),
+    nrm: new Float32Array([1.00009, -1.00009, 0, 0, 1.00005, -1.00005, 0.5, -0.5, 1]),
+    idx: new Uint16Array([0, 1, 2]),
+  }, 72);
+  const a = mesh.geo.attributes.normal.array;
+  assert.equal(a.constructor.name, "Int16Array", "normals packed to Int16");
+  assert.deepEqual(Array.from(a),
+    [32767, -32767, 0, 0, 32767, -32767, Math.round(0.5 * 32767), Math.round(-0.5 * 32767), 32767]);
+});
