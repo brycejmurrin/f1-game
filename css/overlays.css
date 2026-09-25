@@ -1329,6 +1329,10 @@ body[data-density="compact"] #campicker {
      place-items: end center). Scaling about the default 50% 50% pushed the
      plate's bottom edge down past its own margin and off the screen. */
   transform-origin: 50% 100%;
+  /* Above the letterbox bars (#loading::before/::after), which are positioned
+     and would otherwise paint over the plate where they overlap it. */
+  position: relative;
+  z-index: 1;
   margin-bottom: clamp(var(--gap), 6vh, calc(4 * var(--pad)));
   padding: var(--gap) var(--pad);
   border: 1px solid var(--card-line);
@@ -1339,24 +1343,91 @@ body[data-density="compact"] #campicker {
   transform: translateY(var(--gap));
   transition: opacity 0.4s ease-out, transform 0.4s cubic-bezier(0.2, 0.7, 0.3, 1);
 }
-#ld-skip {
-  display: block; margin: var(--gap) 0 0 auto;
-  min-height: var(--chip-h); padding: 0 var(--gap);
-  background: var(--plate); border: 1px solid var(--plate-line);
-  border-radius: var(--r-sm); color: var(--text);
-  font: inherit; font-weight: 800; cursor: pointer;
-}
-#ld-skip-help { margin: calc(var(--gap) * 0.35) 0 0; color: var(--text); font-size: var(--fs-micro); text-align: right; }
 /* Both live phases show the card: "run" is the flyby with the card up, "card"
    is the no-world fallback where the card is all there is. */
 #loading[data-phase="run"] #ld-card,
 #loading[data-phase="card"] #ld-card,
 #loading[data-phase="hold"] #ld-card { opacity: 1; transform: none; }
+/* THE SKIP HINT. The flyby has always been skippable and nothing said so. A
+   pseudo-element, not a node: the shell is at its node ceiling, and the hint
+   is decoration of the card, not content of its own. Pinned just above the
+   card's top-right corner, so it follows the player's authored placement, and
+   faded in after ~3 s: long enough that it does not compete with the card
+   arriving, soon enough that a player who wants to skip learns how. Run phase
+   only — the no-world card is gone in 700 ms and the editor's hold is not
+   skippable. Under reduced motion the tokens.css backstop makes the fade
+   instant; the delay stays, so the hint still waits its turn. */
+#loading[data-phase="run"] #ld-card::after {
+  content: "PRESS ANY KEY TO RACE";
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.5 * var(--gap));
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: var(--ls-4);
+  color: var(--text);
+  text-shadow: 0 1px 3px var(--scrim-heavy);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  animation: ld-hint 0.6s ease-out 3s both;
+}
+@media (hover: none) and (pointer: coarse) {
+  #loading[data-phase="run"] #ld-card::after { content: "TAP TO RACE"; }
+}
+@keyframes ld-hint { to { opacity: 0.85; } }
 /* HOLD is the flyby editor's live preview of the card, shown under the docked
    panel while its size and position sliders move. It is not a loading screen:
    the scrim would hide the scene the card is being framed against, and the
    full-screen click-swallow would eat every click meant for the panel. */
 #loading[data-phase="hold"] { background: none; pointer-events: none; }
+/* LETTERBOX — 2.35:1 bars over the flyby, which is what makes the same shots
+   read as a title sequence rather than a paused game. One bar per pseudo so
+   each moves on `transform` alone (compositor-only; the flyby is already
+   spending the main thread on the scene), in from the edges at the start and
+   OPEN on the last beat, so the widescreen frame gives way to the grid.
+   --ld-fly is the run's own budget (js/ui/loading-screen.js), falling back to
+   the shipped 24 s.
+
+   RUN ONLY: never the no-world card or the editor's hold, which is a preview
+   of the card, not a cinematic. LANDSCAPE ONLY: in portrait the bars would
+   eat most of the screen, and on a 21:9-or-wider monitor the height clamps to
+   zero on its own. NOT under reduced motion: bars that slide in and out are
+   exactly the full-screen movement that setting asks us to leave out.
+
+   The card stays readable because it sits ABOVE the bars (z-index below): its
+   anchored lower third overlaps the bottom bar, and its plate is opaque. */
+#loading::before,
+#loading::after {
+  content: none;
+  position: absolute;
+  inset-inline: 0;
+  z-index: 0;
+  height: max(0px, calc((100vh - 100vw / 2.35) / 2));
+  background: var(--bg);
+  pointer-events: none;
+}
+#loading::before { top: 0; }
+#loading::after { bottom: 0; }
+@media (orientation: landscape) and (prefers-reduced-motion: no-preference) {
+  #loading[data-phase="run"]::before,
+  #loading[data-phase="run"]::after {
+    content: "";
+    animation: var(--ld-fly, 24s) linear both;
+  }
+  #loading[data-phase="run"]::before { animation-name: ld-bar-top; }
+  #loading[data-phase="run"]::after { animation-name: ld-bar-bottom; }
+}
+/* The same shape for both bars, mirrored: in over the first ~3 %, held, and
+   open over the last ~6 % (about 1.4 s of a 24 s flyby). */
+@keyframes ld-bar-top {
+  0%, 100% { transform: translateY(-100%); }
+  3%, 94% { transform: none; }
+}
+@keyframes ld-bar-bottom {
+  0%, 100% { transform: translateY(100%); }
+  3%, 94% { transform: none; }
+}
 /* The wordmark is #title's recipe at card scale — same italic, same skewed red
    underline — because this IS the title screen's brand arriving on the grid. */
 #ld-wordmark {

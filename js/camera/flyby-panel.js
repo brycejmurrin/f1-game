@@ -10,7 +10,7 @@ const FlybyPanel = (function () {
 // and lifts an eye out of a building, so a slider that can reach silly numbers
 // only costs the author a bad frame, never a crash.
 const EASES = ["linear", "in", "out", "inOut"];
-const AT_KINDS = ["start", "pole", "grid", "corner", "centre", "landmark"];
+const AT_KINDS = ["start", "pole", "grid", "slot", "corner", "centre", "landmark"];
 const SLOTS = [
   { key: "eye0", arr: "eye", i: 0, label: "EYE FROM" },
   { key: "eye1", arr: "eye", i: 1, label: "EYE TO" },
@@ -25,15 +25,17 @@ const POSE_FIELDS = {
   start: ["off", "x", "y"],
   pole: ["off", "x", "y"],
   grid: ["off", "x", "y"],
+  slot: ["off", "x", "y"],
   corner: ["off", "x", "y"],
   centre: ["bear", "distR", "yR", "y"],
   landmark: ["bear", "distK", "yK", "y"],
 };
 const FIELD = {
   off: { label: "ARC OFFSET", min: -400, max: 400, step: 1, unit: " m", def: 0 },
-  x: { label: "LATERAL", min: -60, max: 60, step: 0.5, unit: " m", def: 0 },
+  // + is RIGHT of the road, except at a corner, where + is its OUTSIDE (flyby-seq.js)
+  x: { label: "LATERAL (+ OUTSIDE AT A CORNER)", min: -60, max: 60, step: 0.5, unit: " m", def: 0 },
   y: { label: "HEIGHT", min: -5, max: 200, step: 0.05, unit: " m", def: 5 },
-  bear: { label: "BEARING", min: -3.15, max: 3.15, step: 0.01, unit: " rad", def: 0 },
+  bear: { label: "BEARING (0 = TRACK SIDE)", min: -3.15, max: 3.15, step: 0.01, unit: " rad", def: 0 },
   distR: { label: "DISTANCE (LAP RADII)", min: 0, max: 3, step: 0.01, unit: "", def: 1.2 },
   yR: { label: "HEIGHT (LAP RADII)", min: 0, max: 1.5, step: 0.01, unit: "", def: 0.4 },
   distK: { label: "DISTANCE (LANDMARK SIZES)", min: 0, max: 6, step: 0.05, unit: "", def: 1.8 },
@@ -43,9 +45,11 @@ const FIELD_IDS = Object.keys(FIELD);
 // `rank` is a landmark index and `n` a corner, and neither is a continuous
 // quantity — both are pickers, and both live outside FIELD for that reason.
 const RANKS = [0, 1, 2, 3, 4, 5];
-const CORNER_NS = ["first", "mid", "late", "1", "2", "3", "4", "5", "6", "8", "10", "12", "14", "16", "18"];
+const CORNER_NS = ["first", "mid", "late", "slowest", "fastest", "lore", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18"];
 
-const DUR = { min: 0.01, max: 0.6, step: 0.005, unit: "" };
+// max 1: a NORMALISED one-shot list is a single shot of dur 1, and a cap below
+// it left that slider pinned at the end and the value unreachable.
+const DUR = { min: 0.01, max: 1, step: 0.005, unit: "" };
 const FOV = { min: 15, max: 90, step: 0.5, unit: "°" };
 
 // ---- pure list operations -------------------------------------------------
@@ -58,6 +62,11 @@ function clone(v) { return JSON.parse(JSON.stringify(v)); }
 
 /** The fields this pose's anchor reads, in row order. */
 function poseFields(pose) { return POSE_FIELDS[pose && pose.at] || POSE_FIELDS.start; }
+/** A field's label for this anchor. On `centre` and `landmark` the height is
+ *  yR / yK; `y` there is metres ADDED to it, and "HEIGHT" read as the height. */
+function fieldLabel(at, f) {
+  return (f === "y" && (at === "centre" || at === "landmark")) ? "HEIGHT OFFSET" : FIELD[f].label;
+}
 
 /** Re-anchor a pose, KEEPING whatever the new anchor can still use. Switching
  *  `corner` -> `centre` has no sensible arc offset to carry, but a height does,
@@ -66,6 +75,7 @@ function switchPoseAt(pose, at) {
   if (AT_KINDS.indexOf(at) === -1) return clone(pose);
   const next = { at: at };
   if (at === "corner") next.n = (pose && pose.n !== undefined) ? pose.n : "first";
+  if (at === "slot") next.n = "player";
   if (at === "landmark") next.rank = (pose && typeof pose.rank === "number") ? pose.rank : 0;
   for (const f of POSE_FIELDS[at]) {
     const carried = (pose && typeof pose[f] === "number") ? pose[f] : undefined;
@@ -202,9 +212,26 @@ function toBlob(list) {
   return "window.FlybyShots = [\n" + body + "\n];";
 }
 
+/* THE SAVED LIST CARRIES THE MEANING IT WAS AUTHORED IN. apex26.flybyShots was
+ * first written as a bare array while a `centre`/`landmark` bear was a WORLD
+ * bearing and a corner's +x was its right. Both became relative (bear 0 = the
+ * track side, +x = the corner's outside), and a bare array is structurally
+ * identical under either meaning — so an old edit would have loaded clean and
+ * played every such shot from the other side. No migration is possible: the
+ * new value depends on each circuit's geometry, and one list serves them all.
+ * So a list is saved as { v, shots }, and anything that is not the current
+ * version is ignored (not deleted: the player's next edit overwrites it). Bump
+ * SHOTS_VERSION whenever a pose field changes what it means. */
+const SHOTS_VERSION = 2;
+function savedForm(list) { return { v: SHOTS_VERSION, shots: list }; }
+/** The list inside a saved value, or null when it is from another version. */
+function fromSaved(saved) {
+  return (saved && !Array.isArray(saved) && saved.v === SHOTS_VERSION) ? saved.shots : null;
+}
+
 const ops = {
-  EASES, AT_KINDS, POSE_FIELDS, FIELD, SLOTS, CORNER_NS, RANKS,
-  clone, poseFields, switchPoseAt, uniqueId, blankShot,
+  EASES, AT_KINDS, POSE_FIELDS, FIELD, SLOTS, CORNER_NS, RANKS, SHOTS_VERSION, DUR,
+  clone, poseFields, fieldLabel, switchPoseAt, uniqueId, blankShot, savedForm, fromSaved,
   addShot, duplicateShot, deleteShot, moveShot, normaliseDurs, shotErrors, validateShots, toBlob,
 };
 
@@ -248,20 +275,24 @@ function defaults() {
 function persist() {
   const list = shots || [];
   const pristine = !list.length || JSON.stringify(list) === JSON.stringify(defaults());
-  try { store.set("flybyShots", pristine ? null : list); }
+  try { store.set("flybyShots", pristine ? null : savedForm(list)); }
   catch (e) { Log.warn("game", "flyby shots did not save", e); }
 }
 
 /** The saved list, or null. Held to shotErrors() and not validateShots(): the
  *  solver normalises by the durations' own total, so a list nobody pressed
- *  NORMALISE on plays exactly as previewed and must not be thrown away. */
+ *  NORMALISE on plays exactly as previewed and must not be thrown away.
+ *  A COPY: store.get() hands out its cache object, and the panel edits its list
+ *  in place — sharing it made game.js's flybyShots move under every slider. */
 function loadSaved() {
   let saved = null;
   try { saved = store.get("flybyShots", null); } catch (_) { return null; }
   if (!saved) return null;
-  const bad = shotErrors(saved);
+  const list = fromSaved(saved);
+  if (!list) { Log.warn("game", "saved flyby shots predate the current pose meaning — playing the shipped sequence"); return null; }
+  const bad = shotErrors(list);
   if (bad.length) { Log.warn("game", "saved flyby shots unusable: " + bad[0]); return null; }
-  return saved;
+  return clone(list);
 }
 
 function ensure() { if (!shots) shots = loadSaved() || defaults(); return shots; }
@@ -303,10 +334,21 @@ function apiReady() {
   return typeof __apex !== "undefined" && !!__apex && !!__apex.flybyCam;
 }
 
+/** The list the PREVIEW flies: a copy, re-taken whenever the edited list's
+ *  CONTENTS change. FlybySeq caches plans and corner bindings per shot/list
+ *  object, and the sliders edit this panel's list in place — so passing it
+ *  directly previewed the first plan forever (a corner shot's x/y/off/corner
+ *  did nothing after the first frame). A scrub with no edit reuses the copy. */
+let playKey = "", playList = null;
+function playable() {
+  const key = JSON.stringify(ensure());
+  if (key !== playKey || !playList) { playKey = key; playList = clone(ensure()); }
+  return playList;
+}
 function preview() {
   if (!apiReady()) { askApi(); status(null, "preview unavailable — loading the dev API…"); return; }
   let r = null;
-  try { r = __apex.flybyCam(u, ensure()); } catch (e) { status(null, "preview failed: " + (e && e.message)); return; }
+  try { r = __apex.flybyCam(u, playable()); } catch (e) { status(null, "preview failed: " + (e && e.message)); return; }
   if (!r) { status(null, "no track built yet — start a race, then pause"); return; }
   if (r.index !== sel) { sel = r.index; refreshChips(); refreshRows(); }
   status(r, "");
@@ -319,15 +361,33 @@ function preview() {
 function status(r, note) {
   const host = $("fb-status"); if (!host) return;
   if (!r) { host.textContent = note || ""; host.classList.remove("fb-inside"); return; }
-  const inside = r.inside
-    ? "  ·  INSIDE A " + String(r.inside.kind).toUpperCase() + " — move this eye"
-    : "  ·  clear";
+  // A shot down the ROAD is judged the way tests/unit/flyby-shots.test.mjs
+  // judges it: the props' axis-aligned boxes of an angled grandstand cross the
+  // straight (Bahrain), so `inside` there is not a defect — being off the road is.
+  const offRoad = !!r.onRoad && !(Math.abs(r.lat) <= 12);
+  const bad = r.onRoad ? offRoad : !!r.inside;
+  const verdict = r.onRoad
+    ? (offRoad ? "  ·  ON-ROAD SHOT " + (r.lat == null ? "OFF THE TRACK" : Math.abs(r.lat).toFixed(1) + " m OFF THE ROAD") + " — move this eye"
+      : "  ·  clear (on road)")
+    : r.inside ? "  ·  INSIDE A " + String(r.inside.kind).toUpperCase() + " — move this eye"
+      : "  ·  clear";
+  // The clearance's rescue, made visible: a shot authored beside a building
+  // lifts a metre or two, one authored inside a grandstand lifts twenty.
+  const lift = r.lift > 0.05 ? "  ·  lifted " + r.lift.toFixed(1) + " m" : "";
   host.textContent = "u " + r.u.toFixed(3) + "  ·  " + r.shot + " [" + r.index + "]" +
-    "  ·  eye " + r.eye.join(", ") + "  ·  fov " + r.fov + inside;
-  host.classList.toggle("fb-inside", !!r.inside);
+    "  ·  eye " + r.eye.join(", ") + "  ·  fov " + r.fov + lift + verdict;
+  host.classList.toggle("fb-inside", bad);
 }
 
 // ---- rows -----------------------------------------------------------------
+
+/** Rename a numberRow in place: the label's text node and the input's aria-label. */
+function relabel(id, label) {
+  const row = $("fb-row-" + id), inp = $("fb-in-" + id);
+  const span = row && row.querySelector(".tune-label");
+  if (span && span.firstChild && span.firstChild.nodeType === 3) span.firstChild.nodeValue = label + " ";
+  if (inp) inp.setAttribute("aria-label", label);
+}
 
 function numberRow(host, id, label, d, onInput) {
   const item = document.createElement("div");
@@ -642,6 +702,7 @@ function refreshRows() {
     for (const f of FIELD_IDS) {
       const on = fields.indexOf(f) !== -1;
       show(slot.key + "-" + f, on);
+      if (on && f === "y") relabel(slot.key + "-y", slot.label + " " + fieldLabel(p.at, "y"));
       if (on) setNum(slot.key + "-" + f, FIELD[f], typeof p[f] === "number" ? p[f] : FIELD[f].def);
     }
   }
@@ -713,7 +774,8 @@ function closeFlyby(showPauseMenu) {
   // The preview parks the camera through dbgCam; leaving it parked would hand
   // the player back a frozen flyby camera instead of their own car.
   // view("chase") is the release, for two reasons that both matter here.
-  // __apex.freeCam does not exist — the guard reading it was always false, so
+  // __apex.freeCam did not exist then (it is the FREE CAMERA panel's hook now,
+  // not a release) — the guard reading it was always false, so
   // NOTHING was unparking the camera and closing the panel left the player
   // looking through the last previewed frame. And snapCam(), the other
   // documented clear, returns early when there is no G.player — which is
@@ -723,6 +785,7 @@ function closeFlyby(showPauseMenu) {
   if (typeof __apex !== "undefined" && __apex && __apex.view) {
     try { __apex.view("chase"); } catch (_) { /* no track built — nothing parked */ }
   }
+  G.snapGameCam();   // at the car, not a swoop back from the last previewed frame (no-op without a player)
   if (showPauseMenu && G.paused) {
     els.pmsettings.hidden = false;   // back to the settings menu
     const displayPage = $("pm-panel-display");
@@ -767,12 +830,8 @@ $("fb-down").onclick = () => {
 $("fb-norm").onclick = () => { shots = normaliseDurs(ensure()); edited(); };
 $("fb-reset").onclick = () => { shots = defaults(); sel = 0; setU(midOf(0)); $("fb-json").hidden = true; edited(); };
 
-/* COPY VALUES — the synchronous execCommand attempt goes FIRST.
-   The lighting tuner learned this the expensive way: reaching execCommand only
-   from the clipboard promise's rejection handler puts the copy a microtask
-   after the gesture, which Chromium forgives (transient activation lasts ~5 s)
-   and WebKit is documented not to. Ordering it first takes the engine out of
-   the question. tests/unit/ui-improve-pass.test.mjs pins that order. */
+/* COPY VALUES — preferSync so execCommand runs during the gesture
+   (same order as the lighting tuner; ui-improve-pass pins it). */
 $("fb-copy").onclick = () => {
   const btn = $("fb-copy");
   const list = ensure();
@@ -781,15 +840,8 @@ $("fb-copy").onclick = () => {
   const ta = $("fb-json");
   ta.value = json; ta.hidden = false;
   ta.focus(); if (ta.setSelectionRange) ta.setSelectionRange(0, json.length);
-  let ok = false;
-  try { ok = !!(document.execCommand && document.execCommand("copy")); } catch (_) { /* not available */ }
-  const done = (good) => flash(btn,
-    bad.length ? "COPIED (INVALID)" : (good ? "COPIED ✓" : "SELECT & COPY ↑"), "COPY VALUES");
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(json).then(() => done(true), () => done(ok));
-    return;
-  }
-  done(ok);
+  ApexClipboard.write(json, { preferSync: true }).then((ok) => flash(btn,
+    bad.length ? "COPIED (INVALID)" : (ok ? "COPIED ✓" : "SELECT & COPY ↑")));
 };
 
 _refresh = () => { if (isOpen()) { refreshChips(); refreshRows(); } };

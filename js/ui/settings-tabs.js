@@ -1,5 +1,5 @@
 /* SettingsNav — page stack for the pause/title Settings sheet.
-   Home opens CONTROLS, DRIVING, DISPLAY, STEERING & ASSISTS and MUSIC pages.
+   Home opens CONTROLS, DRIVING, DISPLAY, APPEARANCE, STEERING & ASSISTS and MUSIC pages.
    Lighting / camera tuners stay as their own docks. BACK pops.
    Decisions: docs/research/PAUSE-SETTINGS-IA.md.
    game.js still owns availability and all individual controls. */
@@ -10,6 +10,7 @@ const SettingsNav = (function () {
     controls: "CONTROLS",
     driving: "DRIVING",
     display: "DISPLAY",
+    appearance: "APPEARANCE",
     advanced: "STEERING & ASSISTS",
     audio: "MUSIC & SOUND",
   };
@@ -22,6 +23,7 @@ const SettingsNav = (function () {
       controls: document.getElementById("pm-panel-controls"),
       driving: document.getElementById("pm-panel-driving"),
       display: document.getElementById("pm-panel-display"),
+      appearance: document.getElementById("pm-panel-appearance"),
       advanced: document.getElementById("advanced"),
       audio: document.getElementById("audioset"),
     };
@@ -131,6 +133,11 @@ const SettingsNav = (function () {
     if (openDisplay) openDisplay.onclick = () => {
       originDoor = openDisplay;
       show("display", true, () => { if (onSelect) onSelect("display"); });
+    };
+    const openAppearance = document.getElementById("pm-open-appearance");
+    if (openAppearance) openAppearance.onclick = () => {
+      originDoor = openAppearance;
+      show("appearance", true, () => { if (onSelect) onSelect("appearance"); });
     };
     const openAdvanced = document.getElementById("pm-advanced");
     if (openAdvanced) openAdvanced.onclick = () => {

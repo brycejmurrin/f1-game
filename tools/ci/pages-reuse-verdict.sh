@@ -22,6 +22,12 @@
 # DEPLOY_BRANCH must be set (pages.yml's workflow env); without it no push run
 # counts at all, which fails safe into the gate.
 #
+# A DRAFT PR's run is the fast tier too (2026-09-24, ci.yml decision 1c): it
+# concludes success with smoke and the geometry sweeps SKIPPED. The runs
+# listing does not say whether the PR was a draft, so a pull_request run
+# counts only when its jobs show the sweeps job actually ran and passed; a
+# jobs lookup that fails is, as everywhere here, "run the gate".
+#
 # A pull_request run tests GitHub's merge ref, not the PR head. That is still
 # sound here: this only reuses such a run when merging the base into the head
 # produced the head's own tree, so the earlier, older base merged into it the
@@ -41,8 +47,9 @@ say() { echo "$*" >&2; }
 # fast_run: the FAST-tier ci.yml run (a deploy-branch push: guards, node
 # suites, sweeps-parts, driving-model, selection) that already passed on this
 # exact tree, when there is one. Never a reason to skip the gate — the train
-# still runs the browser smoke and the geometry sweeps — but the four tree-only
-# jobs it already passed give the same answer on the same bytes, so ci.yml's
+# still runs the browser smoke, the geometry sweeps and the parts census (whose
+# filter diffs a base, so it is not tree-only) — but the tree-only jobs it
+# already passed give the same answer on the same bytes, so ci.yml's
 # `fast_tier_run` input skips them (2026-09-16; a deploy push paid ~12 min of
 # fast tier and then ~14 min of full tier, serially, with no job shared).
 FAST_RUN=""
@@ -89,14 +96,24 @@ for c in $candidates; do
       const gate = (r) => r.status === "completed" && r.conclusion === "success" && String(r.id) !== self && (
         (r.path === ".github/workflows/ci.yml" && (fullPush(r) || r.event === "pull_request")) ||
         (r.path === ".github/workflows/pages.yml" && (r.event === "push" || r.event === "workflow_dispatch" || r.event === "schedule")));
-      const r = runs.find(gate);
-      if (r) process.stdout.write(`${r.path} ${r.event} ${r.html_url || r.id}`);
+      for (const r of runs.filter(gate)) console.log(`${r.id} ${r.path} ${r.event} ${r.html_url || r.id}`);
     });')"
-  if [ -n "$hit" ]; then
-    say "REUSING the gate: $c already passed ${hit% *}"
-    verdict true "$c" "${hit##* }"
+  while read -r id path event url; do
+    [ -n "$id" ] || continue
+    if [ "$event" = pull_request ]; then
+      full="$(gh api "repos/$REPO/actions/runs/$id/jobs?per_page=100" 2>/dev/null | node -e '
+        let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => {
+          let jobs = []; try { jobs = JSON.parse(s).jobs || []; } catch (_) {}
+          if (jobs.some((j) => j.name === "Per-circuit geometry sweeps" && j.conclusion === "success")) process.stdout.write("yes");
+        });')" || full=""
+      if [ "$full" != yes ]; then say "run $id is a pull_request run whose sweeps did not run (a draft PR: fast tier) — not a gate"; continue; fi
+    fi
+    say "REUSING the gate: $c already passed $path $event"
+    verdict true "$c" "$url"
     exit 0
-  fi
+  done <<EOF_HITS
+$hit
+EOF_HITS
   say "no successful gate run recorded for $c"
 done
 

@@ -391,32 +391,13 @@ $("lt-copy").onclick = () => {
   // select() alone does not.
   ta.focus(); ta.setSelectionRange(0, json.length);
 
-  // THE SYNCHRONOUS ATTEMPT COMES FIRST. execCommand("copy") needs user
-  // activation, and the old handler only reached it from inside the clipboard
-  // promise's REJECTION handler — a microtask later. MEASURED, and the obvious
-  // story turned out wrong on the browser nearest to hand: Chromium keeps
-  // transient activation ~5 s, so the late call still copied there (verified by
-  // reading the clipboard back, both with the API working and with it stubbed
-  // to reject). WebKit is documented as the strict one — the copy must happen
-  // while the gesture is being processed, not merely soon after — but that half
-  // is UNVERIFIED here: this container's proxy blocks the WebKit download, so
-  // nobody has run it. Ordering the synchronous attempt first costs nothing and
-  // takes the engine out of the question either way. Do NOT read it as a claim
-  // that the old order was broken everywhere: on Chromium it demonstrably was
-  // not, and the payload size below is what a player was actually hitting.
-  let ok = false;
-  try { ok = !!(document.execCommand && document.execCommand("copy")); } catch (_) { /* not available */ }
+  // THE SYNCHRONOUS ATTEMPT COMES FIRST — ApexClipboard.write({preferSync:true}).
+  // See js/core/clipboard.js and tests/unit/ui-improve-pass.test.mjs.
   const flash = (good) => {
     btn.textContent = good ? "COPIED ✓" : "SELECT & COPY ↑";
     setTimeout(() => { btn.textContent = "COPY VALUES"; }, 1800);
   };
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    // Still preferred where it works — the only path that survives a browser
-    // with execCommand removed. Either success is a success.
-    navigator.clipboard.writeText(json).then(() => flash(true), () => flash(ok));
-    return;
-  }
-  flash(ok);
+  ApexClipboard.write(json, { preferSync: true }).then(flash);
 };
 $("pm-lighting").onclick = () => {
   Log.info("game", "TunerPanel.open");

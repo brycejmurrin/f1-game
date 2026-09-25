@@ -177,6 +177,19 @@ function capRadius2(buf, count, CAP) {
 }
 let _lampWarmT0 = -1e9;        // wall-clock (s) when the floods last switched ON (warmup ramp origin)
 let _lampLastT = -1e9;         // last frame we copied lights — a gap means the floods were off
+// A gap while the tab was HIDDEN (rAF stops) is not a switch-on: no re-warmup.
+let _lampHid = false;
+if (typeof document !== "undefined" && document.addEventListener)
+  document.addEventListener("visibilitychange", () => { if (document.hidden) _lampHid = true; });
+// Per-lamp hash cache, keyed by the stable source offset (the sin-hash was
+// ~40 % of setFrameLights with flicker on). -1 = not yet computed.
+let _hshC = new Float32Array(0);
+function _hshOf(o) {
+  if (o >= _hshC.length) { const nc = new Float32Array(Math.max(o + 1, _hshC.length * 2, 1024)).fill(-1); nc.set(_hshC); _hshC = nc; }
+  let h = _hshC[o];
+  if (h < 0) { const x = Math.sin((o + 13) * 91.17) * 43758.5453; h = _hshC[o] = x - Math.floor(x); }
+  return h;
+}
 const _flScr = [1, 1, 1];      // per-lamp rgb factor scratch (flicker × breathe × warmup tint)
 const _flSteady = [1, 1, 1];   // identity when flicker+warmup would leave intensity unchanged
 // Flicker/warmup factors — closed over by hoisted `_flLive` so setFrameLights
@@ -185,8 +198,7 @@ let _flFlick = 0, _flWarmK = 1, _flTNow = 0;
 function _flSteadyFn() { return _flSteady; }
 function _flLive(o) {
   const flick = _flFlick, tNow = _flTNow, warmK = _flWarmK;
-  const x = Math.sin((o + 13) * 91.17) * 43758.5453;
-  const hsh = x - Math.floor(x);
+  const hsh = _hshOf(o);
   const amp = hsh > 0.90 ? flick : flick * 0.2;
   let f = 1 + amp * Math.sin(tNow * (6 + hsh * 9) + hsh * 40)
             + flick * 0.15 * Math.sin(tNow * (0.35 + hsh * 0.5) + hsh * 20);
@@ -241,12 +253,42 @@ function lampCap(carCount, mobileTier) {
 // is the bug the appendCarTailLights comment describes. The tier shed is not a
 // reserve: it is a total per-fragment fill budget, so both the lamps AND the
 // tail-lights appended on top have to fit inside it.
+// GOVERNOR STEPS DO NOT POP THE LAMPS. The shed used to follow PerfGov.tier()
+// the frame it changed: 48 -> 32 -> 24 slots at once, and a device on the edge
+// (step down, verify, revert) flickered a dozen lamps off and on. Lighting now
+// follows a HELD tier (the tier must stand SHED_HOLD_MS before the lamps react;
+// the governor itself is untouched) and the slot limit slides toward the held
+// tier's budget at SHED_DOWN / SHED_UP slots a second, so lamps leave the set
+// one at a time through the guard band and return through the entry ramp.
+const SHED_HOLD_MS = 1500, SHED_DOWN = 16, SHED_UP = 32, GLOW_FADE_S = 0.4;
+let _shTier = 0, _shTierT = -1e9, _shHeld = 0, _shLim = NaN, _shT = NaN, _glowF = 1;
+function _shedLimit(tier) { return tier >= 2 ? LightBudget.MOBILE : tier >= 1 ? 32 : LightBudget.MAX; }
+function _shedTick() {
+  const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+  if (now === _shT) return;
+  const tier = PerfGov.tier();
+  if (tier !== _shTier) { _shTier = tier; _shTierT = now; }
+  if (now - _shTierT >= SHED_HOLD_MS || _shLim !== _shLim) _shHeld = tier;
+  const target = _shedLimit(_shHeld);
+  const dt = _shT === _shT ? Math.min(0.25, Math.max(0, (now - _shT) * 0.001)) : 1e9;
+  if (_shLim !== _shLim) _shLim = target;
+  else if (_shLim > target) _shLim = Math.max(target, _shLim - SHED_DOWN * dt);
+  else if (_shLim < target) _shLim = Math.min(target, _shLim + SHED_UP * dt);
+  // Halos are dropped outright at tier >= 3 (game.js drawGlow); fade them instead.
+  const gT = _shHeld >= 3 ? 0 : 1, gStep = dt / GLOW_FADE_S;
+  _glowF = _glowF < gT ? Math.min(gT, _glowF + gStep) : Math.max(gT, _glowF - gStep);
+  _shT = now;
+}
 function tierShed(cap) {
   if (typeof PerfGov === "undefined") return cap;
-  const tier = PerfGov.tier();
-  if (tier >= 2) return Math.min(cap, LightBudget.MOBILE);
-  if (tier >= 1) return Math.min(cap, 32);
-  return cap;
+  _shedTick();
+  return Math.min(cap, Math.ceil(_shLim));
+}
+// Halo strength multiplier under the held governor tier (1 = full, 0 = off).
+function glowFade() {
+  if (typeof PerfGov === "undefined") return 1;
+  _shedTick();
+  return _glowF;
 }
 // Scale the WHOLE baked set for the per-chunk path with the same transform the
 // culled set receives. Only runs when per-chunk lamps are actually on.
@@ -288,6 +330,9 @@ function _fillAllLights(frame, src, sr, sg, sb, fl) {
   frame.allLightsGen = _allLightsGen;
 }
 
+const _ENTRY_S = 0.35;   // seconds a lamp takes to ramp in after joining the set
+let _entrySrc = null, _entryLvl = new Float32Array(0), _entryStamp = new Uint32Array(0);
+let _entryFrame = 1, _entryT = 0;
 function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet) {
   // srcSet overrides the session light set (the daylight always-on subset);
   // absent, the baked full set is used exactly as before.
@@ -315,7 +360,8 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   // lamp on its own stagger. A >1 s gap since the last copy means the floods
   // were off, so this frame is a fresh switch-on. Per-frame copy only — the
   // baked track records are never touched.
-  if (tNow - _lampLastT > 1.0) { _lampWarmT0 = tNow; _rankSrc = null; }
+  if (tNow - _lampLastT > 1.0) { if (!_lampHid) _lampWarmT0 = tNow; _rankSrc = null; }
+  _lampHid = false;
   _lampLastT = tNow;
   // Skip sin/hash work when intensity would be unchanged: flicker knob at 0 and
   // warmup fully settled (or warmup knob 0 = instant). Max warmDur is 8×knob.
@@ -496,13 +542,32 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   }
   const _cullBand = gRef * fade;
   const _guardBand = dEdge * 0.08;
+  // ENTRY RAMP. The guard band above is ~4% of the set radius (kept narrow on
+  // purpose — see the yaw note), so at racing speed a lamp joining the set went
+  // 0 -> full in ~4 frames: its specular, bounce, fog and halo snapped on ahead
+  // of the car (the baked pools only cover ground diffuse). A lamp that was NOT
+  // in last frame's set now ramps in over _ENTRY_S of wall time. Upward only:
+  // the leaving side keeps the geometric fade, which already reaches 0 at the
+  // boundary, and a steady lamp converges to exactly the geometric value, so no
+  // camera-direction dependence is added.
+  const _nSrc = (src.length / 15) | 0;
+  if (_entrySrc !== src || _entryLvl.length < _nSrc) {
+    _entrySrc = src; _entryLvl = new Float32Array(_nSrc); _entryStamp = new Uint32Array(_nSrc); _entryFrame = 1;
+  }
+  const _eStep = Math.min(1, Math.max(0, tNow - _entryT) / _ENTRY_S);
+  _entryT = tNow;
+  const _eFrame = ++_entryFrame;
   let j = 0;   // index writes + one trim, as in the dense path above
   for (let i = 0; i < heap.length; i++) {
     const e = heap[i], o = e.o;
-    const cullF = truncated
+    let cullF = truncated
       ? Math.min(Math.max(0, Math.min(1, (gRef - e.g) / _cullBand)),
                  Math.max(0, Math.min(1, (dEdge - e.d) / _guardBand)))
       : 1;
+    const li = (o / 15) | 0;
+    const prev = _entryStamp[li] === _eFrame - 1 ? _entryLvl[li] : 0;
+    if (truncated && cullF > prev + _eStep) cullF = prev + _eStep;
+    _entryLvl[li] = cullF; _entryStamp[li] = _eFrame;
     const f = fl(o);
     out[j++] = src[o]; out[j++] = src[o+1]; out[j++] = src[o+2];
     out[j++] = src[o+3] * sr * f[0] * cullF; out[j++] = src[o+4] * sg * f[1] * cullF; out[j++] = src[o+5] * sb * f[2] * cullF;
@@ -517,6 +582,6 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   if (frame.perChunkLights > 0) _fillAllLights(frame, src, sr, sg, sb, fl);
 }
 
-  return { setFrameLights, appendCarTailLights };
+  return { setFrameLights, appendCarTailLights, glowFade };
 })();
 Object.freeze(FrameLights);

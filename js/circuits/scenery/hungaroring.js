@@ -13,7 +13,25 @@
               anchor, addBox, addCyl, addCone, addFrustum, addPrism, vadd, onTrack, groundYAt,
               seat, foundation, cantilever, lampPost,
               forestEdge, along, modelGroup, overheadSpan, waterSurface, groundPatch, groundedSegments,
-              recordBarrier, circuitKit, pal, ATM } = api;
+              recordBarrier, circuitKit, pal, ATM, terrainYAt } = api;
+
+      // A crowd blanket on the hillside: prop()'s footprint and gap (near
+      // edge), but ~6 m tiles each seated on the ground under it and standing
+      // `h` proud. prop() sinks 0.8 m, so these 0.3-0.65 m patches were buried
+      // whole; raw tiles also register no barrier, as before (all < 0.85 m).
+      const blanket = (k, side, gap, sz, col) => {
+        const [w, h, len] = sz;
+        const a = anchor(k, side, gap + w / 2), b = [a.r, a.u, a.t];
+        if (onTrack(a.c[0], a.c[2], w / 2 + 1.5)) return;
+        const NX = Math.max(1, Math.round(w / 6)), NZ = Math.max(1, Math.round(len / 6));
+        const tw = w / NX, tl = len / NZ;
+        for (let ix = 0; ix < NX; ix++) for (let iz = 0; iz < NZ; iz++) {
+          const c = vadd(vadd(a.c, a.r, (ix + 0.5) * tw - w / 2), a.t, (iz + 0.5) * tl - len / 2);
+          const gy = terrainYAt(c[0], c[2]);
+          c[1] = gy != null ? gy : c[1] + 0.3;             // anchor() sits 0.3 m under
+          addBox(out, vadd(c, a.u, h / 2 - 0.05), [tw, h, tl], col, b);
+        }
+      };
 
       {
         const POP    = [0.34, 0.50, 0.24];
@@ -248,7 +266,7 @@
           addCyl(out, a.c, 0.12, 10, LAMP_POST, 5, b);
           const armC = vadd(vadd(a.c, a.u, 9.6), a.r, side * 1.2);
           addBox(out, armC, [2.4, 0.18, 0.18], LAMP_ARM, b);
-          const headC = vadd(vadd(a.c, a.u, 9.2), a.r, side * 2.2);
+          const headC = vadd(vadd(a.c, a.u, 9.4), a.r, side * 2.2);
           addBox(out, headC, [1.0, 0.3, 0.7], LAMP_HEAD, b);
           if (typeof lampPost === "function")
             lampPost({ pos: headC, k: kk, side, kind: "halogen" });
@@ -492,7 +510,7 @@
           const base = 40 + hh * 18;  // increased from 30 to clear road intrusion at frac ~0.432
           const col = CROWD[((kk + (side > 0 ? 1 : 0)) | 0) % CROWD.length];
           // Low, wide patch stepping up the slope — a distant crowd, not a slab.
-          prop(kk, side, base, [10 + hh * 8, 0.35 + hh * 0.3, 12 + hh * 6], col);
+          blanket(kk, side, base, [10 + hh * 8, 0.35 + hh * 0.3, 12 + hh * 6], col);
         }
       });
 
@@ -512,7 +530,7 @@
           if (hh < 0.80) continue;   // sparse: ~1 in 5 nodes gets a patch
           const base = 30 + hh * 16;
           const col = CROWD[((kk + (side > 0 ? 1 : 0)) | 0) % CROWD.length];
-          prop(kk, side, base, [7 + hh * 5, 0.3 + hh * 0.2, 8 + hh * 4], col);
+          blanket(kk, side, base, [7 + hh * 5, 0.3 + hh * 0.2, 8 + hh * 4], col);
         }
       });
 
@@ -665,7 +683,7 @@
         const k = K(s);
         const hh = hash(k * 41 + side * 17);
         backdrop(k, side, dist, [76 + hh * 18, 12 + hh * 4, len + 20], AMPH2);
-        prop(k, side, 62 + hh * 8, [14, 0.45, len], CROWD[(k + (side > 0 ? 1 : 0)) % CROWD.length]);
+        blanket(k, side, 62 + hh * 8, [14, 0.45, len], CROWD[(k + (side > 0 ? 1 : 0)) % CROWD.length]);
       }
 
       for (const [s, side, dist] of [

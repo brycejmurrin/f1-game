@@ -57,6 +57,18 @@ const AudioPanel = (() => {
      * moment it did, which is the exact shape of bug the lighting tuner's
      * "read the live profile back" rule exists to prevent. */
     const annOn = () => !!(G.announcer && G.announcer.enabled && G.announcer.enabled());
+    /* THE RACE RADIO (js/race/race-radio.js) — engineer chatter and in-race
+     * commentary. Read from the module, like the announcer; the store is the
+     * fallback only because this panel is wired at eval, before game.js has
+     * created the module (G.raceRadio is still in its TDZ then). */
+    const CHAT_VALUES = [["off", "OFF"], ["key", "KEY CALLS"], ["normal", "NORMAL"], ["chatty", "CHATTY"]];
+    const COMM_VALUES = [["off", "OFF"], ["tv", "TV CAMERAS"], ["on", "ALWAYS"]];
+    const rr = () => { try { return G.raceRadio || null; } catch (e) { return null; } };
+    const chatNow = () => (rr() ? rr().chat() : store.get("radioChat", "normal"));
+    const commNow = () => (rr() ? rr().comm() : store.get("commentary", "tv"));
+    const PACK_VALUES = [["rec", "RECORDED"], ["sys", "SYSTEM"]];
+    const packNow = () => ((G.radio && G.radio.pack ? G.radio.packOn() : store.get("radioPack", true) !== false) ? "rec" : "sys");
+    const spotNow = () => (store.get("spotter", true) !== false ? "on" : "off");
     function setRadio(b) {
       if (b && !G.soundOn) setSound(true, true);
       radioOn = b; store.set("radioVoice", b);
@@ -136,13 +148,16 @@ const AudioPanel = (() => {
         ["k", "SOUND"],
         [sfxOn ? "on" : "off", sfxOn ? "ON" : "OFF"],
       ]);
+      const label = (list, v) => (list.find((r) => r[0] === v) || [, ""])[1];
       Dom.paintFold($("as-radio-sum"), [
         ["k", "TEAM RADIO"],
         [radioOn ? "on" : "off", radioOn ? "ON" : "OFF"],
+        ["val", label(CHAT_VALUES, chatNow())],
       ]);
       Dom.paintFold($("as-ann-sum"), [
         ["k", "ANNOUNCER"],
         [annOn() ? "on" : "off", annOn() ? "ON" : "OFF"],
+        ["val", label(COMM_VALUES, commNow())],
       ]);
       const prof = (typeof GameAudio !== "undefined" && GameAudio.profile) ? GameAudio.profile() : "team";
       Dom.paintFold($("as-engine-sum"), [
@@ -279,6 +294,12 @@ const AudioPanel = (() => {
             note = "Last card was not read aloud: " + REASON[dbg.last.reason];
           }
         }
+        // A platform whose speech engine stalls the page (measured per call in
+        // js/audio/radio-voice.js): say so, and name the setting that avoids it.
+        if (radioLive && dbg && dbg.synth && dbg.synth.slow > 0) {
+          note += " This browser's speech engine held the game up (worst " + Math.round(dbg.synth.maxMs) +
+            " ms). RADIO VOICE: RECORDED speaks most lines without it.";
+        }
         rnote.textContent = note;
       }
       // THE ANNOUNCER, on the same three-part gate and for the same reason: a
@@ -292,10 +313,22 @@ const AudioPanel = (() => {
       if (ah && typeof ah.querySelectorAll === "function") {
         for (const el of ah.querySelectorAll("select,input,button")) el.disabled = !annLive;
       }
+      SettingRow.paint($("as-chat"), chatNow(), CHAT_VALUES);
+      SettingRow.paint($("as-comm"), commNow(), COMM_VALUES);
+      SettingRow.paint($("as-rpack"), packNow(), PACK_VALUES);
+      SettingRow.paint($("as-spot"), spotNow(), ONOFF);
+      const cnote = $("as-chat-note");
+      if (cnote) {
+        const c = chatNow();
+        cnote.textContent = c === "off" ? "The engineer only talks tyres and pit stops."
+          : c === "key" ? "Flags, places won and lost, the last lap and the result — nothing else."
+          : c === "chatty" ? "Everything: gaps every lap, pace, battery, who is closing and how fast."
+          : "Places, gaps when a fight is on, laps to go, flags and the result. RADIO CHECK (see Controls) asks for the gaps.";
+      }
       const anote = $("as-ann-note");
       if (anote) anote.textContent = !annReady ? "This browser has no speech voices, so the loading card stays written."
         : !G.soundOn ? "Master sound is off — ANNOUNCER ON turns it on."
-        : "The welcome is written from the circuit itself, so every track gets one. VOICE VOLUME above sets the level.";
+        : "The welcome is written from the circuit itself, and COMMENTARY calls the race in the same voice. VOICE VOLUME above sets the level.";
       // The master gate is what silences music when SOUND is off, and the MUSIC
       // switch still reads ON then — so the readout names the gate that is
       // actually shut instead of contradicting the switch beside it. The title
@@ -347,6 +380,14 @@ const AudioPanel = (() => {
     // ticks first, while the bus is still open.
     SettingRow.wire("as-radio", { values: ONOFF, read: () => (radioOn ? "on" : "off"),
       write: (v) => { if (v === "on") { setRadio(true); GameAudio.uiTick(); } else { GameAudio.uiTick(); setRadio(false); } } });
+    SettingRow.wire("as-chat", { values: CHAT_VALUES, read: chatNow,
+      write: (v) => { if (rr()) rr().setChat(v); else store.set("radioChat", v); GameAudio.uiTick(); syncAudioPanel(); } });
+    SettingRow.wire("as-rpack", { values: PACK_VALUES, read: packNow,
+      write: (v) => { if (G.radio && G.radio.setPackOn) G.radio.setPackOn(v === "rec"); store.set("radioPack", v === "rec"); GameAudio.uiTick(); syncAudioPanel(); } });
+    SettingRow.wire("as-spot", { values: ONOFF, read: spotNow,
+      write: (v) => { if (rr()) rr().setSpotter(v === "on"); else store.set("spotter", v === "on"); GameAudio.uiTick(); syncAudioPanel(); } });
+    SettingRow.wire("as-comm", { values: COMM_VALUES, read: commNow,
+      write: (v) => { if (rr()) rr().setComm(v); else store.set("commentary", v); GameAudio.uiTick(); syncAudioPanel(); } });
     // THE PRE-RACE ANNOUNCER (js/audio/announcer.js). Same shape, same master
     // lift — but its own switch, because it speaks on the loading screen and
     // the radio speaks in the race, and a player who wants one rarely wants

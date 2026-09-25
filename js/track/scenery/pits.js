@@ -239,8 +239,9 @@ const SceneryPits = (function () {
       // already does a few dozen lines down (`kGate`).
       const ks = nodesFrom(p.sIn, (k) => p.v[k] >= 0.98, p.lenM, 24);
       // `shift(k)`, when given, slides the whole profile laterally per node.
-      const sweep = (ks, profile, col, mat, shift) => {
+      const sweep = (ks, profile, col, mat, shift, blockId) => {
         if (ks.length < 2) return;
+        const vert0 = out.pos.length / 3;
         const m = profile.length;
         const latOf = (k, q) => sd * (hw[k] + q[0] + (shift ? shift(k) : 0));
         for (let i = 0; i + 1 < ks.length; i++) {
@@ -275,15 +276,23 @@ const SceneryPits = (function () {
           }
           void u;
         }
+        // S4: tag the strip so clip/coplanar/float can name pit-wall / etc.
+        // Keep tip winding (TrackGeom.emit here coplanar-fought bay panels and
+        // left hungaroring entry lamps floating over an unmatched platform).
+        const count = out.pos.length / 3 - vert0;
+        if (count > 0) {
+          (out.__blocks || (out.__blocks = []))
+            .push({ base: vert0, count, id: blockId || "pit-sweep" });
+        }
       };
       const v0 = b.verge, v1 = b.verge + b.platform;
       // Platform: 35 cm above the lane (FIM §9.2).
-      sweep(ks, [[v0, 0], [v1, 0], [v1, 0.35], [v0, 0.35]], PLATFORM, MAT.CONCRETE);
+      sweep(ks, [[v0, 0], [v1, 0], [v1, 0.35], [v0, 0.35]], PLATFORM, MAT.CONCRETE, null, "pit-platform");
       // The pit wall on the TRACK side of the platform: 25 cm thick, 1 m high.
-      sweep(ks, [[v0, 0.35], [v0 + 0.25, 0.35], [v0 + 0.25, 1.35], [v0, 1.35]], WALL, MAT.CONCRETE);
-      sweep(ks, [[v0 - 0.02, 1.35], [v0 + 0.27, 1.35], [v0 + 0.27, 1.42], [v0 - 0.02, 1.42]], WALL_TOP, MAT.METAL);
+      sweep(ks, [[v0, 0.35], [v0 + 0.25, 0.35], [v0 + 0.25, 1.35], [v0, 1.35]], WALL, MAT.CONCRETE, null, "pit-wall");
+      sweep(ks, [[v0 - 0.02, 1.35], [v0 + 0.27, 1.35], [v0 + 0.27, 1.42], [v0 - 0.02, 1.42]], WALL_TOP, MAT.METAL, null, "pit-wall-cap");
       // The 65 cm barrier between the platform and the lane.
-      sweep(ks, [[v1 - 0.10, 0.35], [v1, 0.35], [v1, 1.0], [v1 - 0.10, 1.0]], BARRIER, MAT.METAL);
+      sweep(ks, [[v1 - 0.10, 0.35], [v1, 0.35], [v1, 1.0], [v1 - 0.10, 1.0]], BARRIER, MAT.METAL, null, "pit-lane-barrier");
       wallBuilt = ks.length >= 2;
 
       // ── 1b. THE EXIT WALL: the pit wall carried on down the exit road ────
@@ -296,8 +305,8 @@ const SceneryPits = (function () {
       const EXW = typeof TrackPit !== "undefined" ? TrackPit.EXIT_WALL_W : 0.55;
       const kx = nodesFrom(p.sOut, (k) => p.w[k] >= EXW, p.exitRoadM);
       const slide = (k) => v0 * p.v[k];
-      sweep(kx, [[-0.05, 0], [0.30, 0], [0.30, 1.0], [-0.05, 1.0]], WALL, MAT.CONCRETE, slide);
-      sweep(kx, [[-0.07, 1.0], [0.32, 1.0], [0.32, 1.07], [-0.07, 1.07]], WALL_TOP, MAT.METAL, slide);
+      sweep(kx, [[-0.05, 0], [0.30, 0], [0.30, 1.0], [-0.05, 1.0]], WALL, MAT.CONCRETE, slide, "pit-exit-wall");
+      sweep(kx, [[-0.07, 1.0], [0.32, 1.0], [0.32, 1.07], [-0.07, 1.07]], WALL_TOP, MAT.METAL, slide, "pit-exit-wall-cap");
 
       // ── 1d. THE OUTER WALL: the lane's far side, wherever a bay is not ────
       // Along the ribbon's outer edge — the garage line, scaled by the
@@ -315,8 +324,8 @@ const SceneryPits = (function () {
       const outerShift = (k) => (typeof TrackPit !== "undefined" && TrackPit.outerAt
         ? TrackPit.outerAt(p, k) : o.workOut * p.w[k]);
       const outerWall = (ks2) => {
-        sweep(ks2, [[0.02, 0], [0.32, 0], [0.32, 1.0], [0.02, 1.0]], WALL, MAT.CONCRETE, outerShift);
-        sweep(ks2, [[0.0, 1.0], [0.34, 1.0], [0.34, 1.07], [0.0, 1.07]], WALL_TOP, MAT.METAL, outerShift);
+        sweep(ks2, [[0.02, 0], [0.32, 0], [0.32, 1.0], [0.02, 1.0]], WALL, MAT.CONCRETE, outerShift, "pit-outer-wall");
+        sweep(ks2, [[0.0, 1.0], [0.34, 1.0], [0.34, 1.07], [0.0, 1.07]], WALL_TOP, MAT.METAL, outerShift, "pit-outer-wall-cap");
       };
       const hasRibbon = (k) => p.w[k] > 0.02;
       if (p.hasBays && p.row) {
@@ -465,17 +474,23 @@ const SceneryPits = (function () {
         }
       }
       if (p.v[kOut] >= 0.98) {
-        const c = at(kOut, sd * (hw[kOut] + v1 - 0.5), 0.35);
+        // The post is footed on the LANE FLOOR, through the 0.35 m platform
+        // slab, the way the entry posts stand on their own floor: a foot on
+        // the platform's top rested on a raw sweep no prim records, so the
+        // post and the three prims on it read as floating 0.38-4.2 m up on
+        // ~35 circuits (ground-audit, 2026-09-24). The head stays 4.1 m up.
+        const rise = 3.95;
+        const c = at(kOut, sd * (hw[kOut] + v1 - 0.5), 0);
         const bs = basisAt(kOut);
-        rawBox(out, [c[0], c[1] + 1.8, c[2]], [0.16, 3.6, 0.16], POST, bs);
-        rawBox(out, [c[0], c[1] + 3.75, c[2]], [0.5, 0.9, 0.34], DARK, bs);
+        rawBox(out, [c[0], c[1] + rise / 2, c[2]], [0.16, rise, 0.16], POST, bs);
+        rawBox(out, [c[0], c[1] + rise + 0.15, c[2]], [0.5, 0.9, 0.34], DARK, bs);
         // The exit signal. At night the lit aspect (green: the lane is open)
         // is over-white so the props draw blooms it, and the dead one is dark
         // glass, so it reads as a signal rather than two painted discs. No
         // light record: a halo would be 2 m wide on a 28 cm lamp.
         const go = night ? [0.30, 1.40, 0.45] : [0.2, 0.9, 0.3], stop = night ? [0.30, 0.06, 0.04] : [0.9, 0.15, 0.1];
-        rawBox(out, [c[0] + bs[0][0] * 0.2, c[1] + 3.95, c[2] + bs[0][2] * 0.2], [0.12, 0.28, 0.28], go, bs);
-        rawBox(out, [c[0] + bs[0][0] * 0.2, c[1] + 3.55, c[2] + bs[0][2] * 0.2], [0.12, 0.28, 0.28], stop, bs);
+        rawBox(out, [c[0] + bs[0][0] * 0.2, c[1] + rise + 0.35, c[2] + bs[0][2] * 0.2], [0.12, 0.28, 0.28], go, bs);
+        rawBox(out, [c[0] + bs[0][0] * 0.2, c[1] + rise - 0.05, c[2] + bs[0][2] * 0.2], [0.12, 0.28, 0.28], stop, bs);
       }
     }
 
@@ -520,13 +535,17 @@ const SceneryPits = (function () {
         // in front of the door plane, a back wall, a roof slab, the glazed
         // hospitality storey and its roof — one slice per bay so the building
         // follows a gently curving pit straight instead of chording it. Every
-        // other slice sits 6 mm higher: two slices on ONE plane are what the
-        // coplanar sweep ratchets, and 6 mm is invisible from the lane.
-        // …and the VERTICAL faces get the same 6 mm sideways: on a gently
+        // other slice sits MIN_SEP (3 cm) higher: two slices on ONE plane are
+        // what the coplanar sweep ratchets, and the old 6 mm still fought from
+        // 174 m. 3 cm is invisible from the lane.
+        // …and the VERTICAL faces get the same step sideways: on a gently
         // curving row two back walls stand end to end on one plane too.
-        const lift = (i & 1) ? 0.006 : 0, bump = sd * lift;
+        const lift = (i & 1) ? TrackGeom.MIN_SEP : 0, bump = sd * lift;
         const kap = ctx.curvature ? ctx.curvature(box.s) : 0;   // +k = left turn; lateral +x right
-        const front = sd * (h + garage - 0.13) - bump;
+        // The jambs' back face stands MIN_SEP proud of the baked bay's door
+        // wall (at h + garage): at 5 mm the two fought from 159 m on every pit
+        // row (coplanar-audit --fight 300, half of all the new spots).
+        const front = sd * (h + garage - 0.125 - TrackGeom.MIN_SEP) - bump;
         const jamb = (B.w - doorW) / 2;
         for (const side of [-1, 1]) {
           const cj = atF(f, front, B.h / 2, k);
@@ -534,7 +553,7 @@ const SceneryPits = (function () {
                  [0.25, B.h, jamb], SHELL, bs);
         }
         const lintH = B.h - doorH + 0.6;
-        const cl = atF(f, sd * (h + garage - 0.14) - bump, doorH + lintH / 2, k);   // a centimetre proud of the jambs
+        const cl = atF(f, sd * (h + garage - 0.125 - 2 * TrackGeom.MIN_SEP) - bump, doorH + lintH / 2, k);   // one MIN_SEP proud of the jambs
         rawBox(out, cl, [0.25, lintH, doorW], box.col, bs);
         if (S && i < S.cells) {
           const right = [-sd * f.t[0], -sd * f.t[1], -sd * f.t[2]];   // the viewer's right, facing the bay from the lane
@@ -588,7 +607,7 @@ const SceneryPits = (function () {
       for (let i = 0; i < count; i++) {
         const box = boxes[i], k = box.k;
         const f = frameAtS(box.s), bs = f.basis, h = f.hw;
-        const lift = (i & 1) ? 0.006 : 0, bump = sd * lift;
+        const lift = (i & 1) ? TrackGeom.MIN_SEP : 0, bump = sd * lift;
         const kap = ctx.curvature ? ctx.curvature(box.s) : 0;
         const canLat = sd * (h + garage - 1.45) - bump;
         rawBox(out, atF(f, canLat, B.h + 0.45 + lift, k), [2.6, 0.25, segAt(kap, canLat)], ROOF, bs);

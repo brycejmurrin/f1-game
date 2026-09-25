@@ -57,7 +57,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 //                treads of ONE crowdMound run, same call site, same CONCRETE
 //                material, shared volume interior. The limitation above, exactly.
 //   indianapolis NO new pairing at all; three existing city-row pairings
-//                (tracks.js:1940 x neonTower) each gained one hit — the
+//                (build-props.js:1591 x neonTower) each gained one hit — the
 //                arc-length row compression named above.
 // Neither is a new defect class and neither is visible. Raised rather than
 // chased: the alternative is re-authoring two circuits' scenery to suit a
@@ -77,7 +77,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // indianapolis 94 → 100 (2026-08-18): same oval-stand remesh as the
 // coplanar 8→9 raise. clip-audit --why: 100 severe / 107 total from
 // 305 pairs. Dominant pairings stay the documented neonTower × city-row
-// / tree class (tracks.js:2061); grandstandEx × neonTower appears at
+// / tree class (build-props.js:1669); grandstandEx × neonTower appears at
 // 6 hits (max 1.80 m). More shorter bays, more existing-class contacts.
 // No new defect class. Locked to the measured count.
 //
@@ -131,6 +131,10 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // run from emitting its shared end node twice, and one of those duplicate
 // panels was also an interpenetrating pair here. No prop moved — one stopped
 // being emitted twice.
+// suzuka 2 -> 1 (2026-09-24): SRTM elevation bake for the stair-step twins
+// dropped one severe cone×cyl pair; measured, not assumed.
+// portimao 51 -> 44 (2026-09-24): SRTM Algarve bake + hillside escarpment
+// ground-seat; mid-sector terrace split cleared floaters and six severe spots.
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "track", "clip-baseline.json"), "utf8"),
 );

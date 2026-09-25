@@ -16,11 +16,12 @@ Bright, clear alpine daylight, vivid summer-green hills against forested dark-gr
 - Red Bull brand red/navy: `[0.82, 0.10, 0.16]` / `[0.10, 0.14, 0.40]`
 
 ## 3. Elevation
-Big ~55–65 m swing per lap (cosine bumps on the GPS path); the bowl makes climbs and drops very readable.
-- s≈0.00–0.12: launch uphill off the start straight, **steep climb** into Turn 1 (Niki Lauda Kurve).
-- s≈0.12–0.25: keep climbing to the **high point at Turn 3 (Remus)** — circuit's crest (~+32 m bump).
-- s≈0.25–0.55: **long descent** through Turn 4 (Schlossgold) and fast downhill sweepers (~−28 m).
-- s≈0.70–1.00: undulating final sector dropping back down into the stadium / start straight.
+Real Styrian bowl from the SRTM bake in `js/track/circuit-elevations.js`
+(~53 m peak-to-trough, grade capped at 5.5%). Continuous climb and descent —
+not three cosine bumps with flat shelves between them.
+- Launch uphill into Turn 1 (Niki Lauda); crest near Remus / Turn 3.
+- Long descent through Schlossgold and the downhill sweepers.
+- Undulating final sector back into the stadium / start straight.
 
 ## 4. Landmarks & surroundings by lap position
 | s | Side | Distance | Box description |

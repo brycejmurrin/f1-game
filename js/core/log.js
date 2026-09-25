@@ -144,6 +144,7 @@ const Log = (function () {
     warn(ns, ...args) { emit(LEVELS.warn, ns, args); },
     info(ns, ...args) { emit(LEVELS.info, ns, args); },
     debug(ns, ...args) { emit(LEVELS.debug, ns, args); },
+    trace(ns, ...args) { emit(LEVELS.trace, ns, args); },   // the level existed; the method did not
 
     enabled,
 

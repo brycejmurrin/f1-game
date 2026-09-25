@@ -28,7 +28,7 @@ window.AriaState = (function () {
   const ON = ["active", "on"];
   // Roots to watch: everything that is a menu, plus the two DOM-built overlays.
   const ROOTS = "#overlay,#select,#career,#career-offers,#career-history,#career-guide,#teampicker,#carsetup,#howtoplay," +
-    "#pmsettings,#pausemenu,#lighting,#camtune,#flyby,#results,#quali,#standings,#duel-picker," +
+    "#pmsettings,#pausemenu,#lighting,#camtune,#flyby,#freecam,#results,#quali,#standings,#duel-picker," +
     // #spotifypanel's SHUFFLE/REPEAT are the same `.active`-class opt-row shape as
     // the Spotify mode toggles on the MUSIC page (#audioset, inside #pmsettings).
     // #vsfriend / #season-setup are already in UiLayers; they were the two
@@ -84,10 +84,15 @@ window.AriaState = (function () {
     }
   }
 
+  // The text is ESCAPED before it is wrapped: paintOnOff writes the result back
+  // through innerHTML, and a button's text is not always ours — the garage
+  // DRIVER chips print a custom team's driver names, which an imported garage
+  // file sets, so `ON <img onerror=…>` was stored XSS (2026-09-24).
+  const HTML_ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
   function wrapOnOff(text) {
     const t = String(text || "").replace(/\s+/g, " ").trim();
     if (!/\b(ON|OFF)\b/.test(t)) return null;
-    return t.replace(/\b(ON|OFF)\b/g, (w) => `<span data-fold="${w.toLowerCase()}">${w}</span>`)
+    return t.replace(/[&<>"']/g, (c) => HTML_ESC[c]).replace(/\b(ON|OFF)\b/g, (w) => `<span data-fold="${w.toLowerCase()}">${w}</span>`)
       .replace(/:\s+<span/g, ":\u00a0<span")
       .replace(/·\s+<span/g, "·\u00a0<span");
   }
@@ -121,11 +126,27 @@ window.AriaState = (function () {
     });
   }
 
+  // A SLIDER SAYS WHAT ITS READOUT SAYS. Every range here paints its value into
+  // a sibling `#<id>-v` ("84%", "PULL 3", "OFF"), but the input's own aria-label
+  // outranks the wrapping label, so a screen reader heard the raw step ("11")
+  // where the screen showed "84%". Mirrored from the readout — the one place the
+  // formatting already lives — whenever it differs from the bare number.
+  function syncValueText(root) {
+    for (const input of root.querySelectorAll('input[type="range"][id]')) {
+      const out = document.getElementById(input.id + "-v");
+      const text = out ? out.textContent.trim() : "";
+      if (text && text !== String(input.value)) {
+        if (input.getAttribute("aria-valuetext") !== text) input.setAttribute("aria-valuetext", text);
+      } else if (input.hasAttribute("aria-valuetext")) input.removeAttribute("aria-valuetext");
+    }
+  }
+
   function syncAll() {
     for (const r of document.querySelectorAll(ROOTS)) {
       syncRoot(r);
       paintOnOff(r);
       syncHashNav(r);
+      syncValueText(r);
     }
   }
 

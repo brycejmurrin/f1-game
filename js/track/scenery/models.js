@@ -306,18 +306,55 @@ const TrackModels = (function () {
       const supportGap = spec.supportGap != null ? spec.supportGap : 1.5;
       const span = spec.span != null ? spec.span : frame.hw * 2 + supportGap * 2 + 2;
       const offset = Number.isFinite(spec.offset) ? spec.offset : 0;
-      const lift = clearance + thickness / 2;
-      const center = [
-        frame.c[0] + frame.r[0] * offset + frame.u[0] * lift,
-        frame.c[1] + frame.r[1] * offset + frame.u[1] * lift,
-        frame.c[2] + frame.r[2] * offset + frame.u[2] * lift,
+      // soffit: a dark plate under the deck (tunnel shade). `clearance` stays
+      // truthful: the PLATE's bottom sits at it, the deck is raised by `inset`,
+      // and the plate is thicker than the inset so its top is buried in the
+      // deck. Span/depth are scaled < 1 so the plate's end faces never meet
+      // the deck's — two hand-rolled spans at one frac used to share planes.
+      const soffitSpec = spec.soffit || (spec.soffitColor ? { color: spec.soffitColor } : null);
+      let soffit = null;
+      if (soffitSpec) {
+        const o = typeof soffitSpec === "object" ? soffitSpec : {};
+        let inset = o.inset != null ? Number(o.inset) : 0.05;
+        let plate = o.thickness != null ? Number(o.thickness) : 0.2;
+        const spanScale = o.spanScale != null ? Number(o.spanScale) : 0.97;
+        const depthScale = o.depthScale != null ? Number(o.depthScale) : 0.94;
+        // Clamp (never refuse a required bridge) and record why, as `escaped`.
+        const clampLog = () => diagnostics.clamped || (diagnostics.clamped = []);
+        if (!(inset > 0 && inset < thickness)) {
+          const clamped = Math.min(0.05, thickness / 4);
+          clampLog().push({ id, required: !!spec.required, reason: "soffit inset must be > 0 and < deck thickness", inset, clampedTo: clamped });
+          inset = clamped;
+        }
+        if (!Number.isFinite(plate)) plate = 0.2;
+        if (!(plate > inset && plate < thickness)) {
+          const clamped = Math.min(Math.max(plate, inset * 2), (inset + thickness) / 2);
+          clampLog().push({ id, required: !!spec.required, reason: "soffit thickness must be > inset and < deck thickness", thickness: plate, clampedTo: clamped });
+          plate = clamped;
+        }
+        soffit = {
+          color: o.color || spec.soffitColor || [0.08, 0.08, 0.10],
+          inset, thickness: plate,
+          spanScale: spanScale > 0 && spanScale < 1 ? spanScale : 0.97,
+          depthScale: depthScale > 0 && depthScale < 1 ? depthScale : 0.94,
+        };
+      }
+      const deckUnder = clearance + (soffit ? soffit.inset : 0);
+      const lift = deckUnder + thickness / 2;
+      const at = (h) => [
+        frame.c[0] + frame.r[0] * offset + frame.u[0] * h,
+        frame.c[1] + frame.r[1] * offset + frame.u[1] * h,
+        frame.c[2] + frame.r[2] * offset + frame.u[2] * h,
       ];
       const stage = emptyBuffer();
-      if (!box(stage, center, [span, thickness, depth], spec.color, [frame.r, frame.u, frame.t])) return false;
+      if (!box(stage, at(lift), [span, thickness, depth], spec.color, [frame.r, frame.u, frame.t])) return false;
+      if (soffit && !box(stage, at(clearance + soffit.thickness / 2),
+          [span * soffit.spanScale, soffit.thickness, depth * soffit.depthScale],
+          soffit.color, [frame.r, frame.u, frame.t])) return false;
       if (spec.supports !== false && ctx.groundHeight && ctx.groundPoint) {
         const sw = (spec.supportWidth != null ? spec.supportWidth : 0.8) * 0.9;
         const lat = supportGap + sw / 2 + 0.12;
-        const under = clearance;           // deck underside above the road datum
+        const under = deckUnder;           // deck underside above the road datum
         for (const side of [-1, 1]) {
           const foot = ctx.groundPoint(frame.k, side, lat, ctx.groundHeight(frame.k, lat));
           if (!finiteArray(foot, 3)) continue;
@@ -333,7 +370,8 @@ const TrackModels = (function () {
         }
       }
       appendBuffer(out, stage, id);
-      diagnostics.emitted.push({ id, required: !!spec.required, vertices: stage.pos.length / 3, overhead: true, clearance });
+      diagnostics.emitted.push(Object.assign({ id, required: !!spec.required, vertices: stage.pos.length / 3, overhead: true, clearance, frac: spec.frac },
+        soffit ? { soffit: true } : null));
       return true;
     }
 
@@ -351,25 +389,120 @@ const TrackModels = (function () {
       return true;
     }
 
+    // T3 drape: sand/apron/car-park grid over the drawn terrain (SCENERY-QA-PLAN
+    // §2b). Columns break at ribbon rails; rows ~4 m; sz[1] skirt on the rim.
+    // Per-cell footprint guard — one box round a climbing drape suppressed every
+    // lower road in the footprint. Falls back to N closed-form boxes when the
+    // build has no track frame (unit harness).
+    let patchSeq = 0;
     function groundPatch(spec) {
       spec = spec || {};
-      if (!validSize(spec.size) || !ctx.groundHeight) return false;
-      const samples = Math.max(2, Math.round(spec.samples || 4));
-      const depth = spec.size[0] / samples;
-      const posBefore = out.pos.length;
-      let emitted = 0;
-      for (let i = 0; i < samples; i++) {
-        const dist = (spec.gap || 0) + depth * (i + 0.5);
-        const y = ctx.groundHeight(spec.k || 0, dist);
-        if (!Number.isFinite(y)) continue;
-        const center = [dist * (spec.side || 1), y - spec.size[1] / 2, 0];
-        if (box(out, center, [depth, spec.size[1], spec.size[2]], spec.color, spec.basis)) emitted++;
-      }
-      if (!emitted) {
-        diagnostics.invalid.push({ id: spec.id || "ground-patch", reason: "no finite ground samples" });
+      if (!validSize(spec.size)) {
+        diagnostics.invalid.push({ id: spec.id || "ground-patch", reason: "invalid ground-patch dimensions", size: spec.size });
         return false;
       }
-      diagnostics.emitted.push({ id: spec.id || "ground-patch", vertices: (out.pos.length - posBefore) / 3, groundPatch: true });
+      const track = ctx.track, px = ctx.px, pz = ctx.pz, hw = ctx.hw;
+      if (!track || !px || !pz || !hw || !ctx.groundHeight) {
+        // Box path: sample groundHeight along the gap (no world frame).
+        const samples = Math.max(2, Math.round(spec.samples || 4));
+        const depth = spec.size[0] / samples;
+        const posBefore = out.pos.length;
+        let emitted = 0;
+        for (let i = 0; i < samples; i++) {
+          const dist = (spec.gap || 0) + depth * (i + 0.5);
+          const y = ctx.groundHeight(spec.k || 0, dist);
+          if (!Number.isFinite(y)) continue;
+          const center = [dist * (spec.side || 1), y - spec.size[1] / 2, 0];
+          if (box(out, center, [depth, spec.size[1], spec.size[2]], spec.color, spec.basis)) emitted++;
+        }
+        if (!emitted) {
+          diagnostics.invalid.push({ id: spec.id || "ground-patch", reason: "no finite ground samples" });
+          return false;
+        }
+        diagnostics.emitted.push({ id: spec.id || "ground-patch", vertices: (out.pos.length - posBefore) / 3, groundPatch: true });
+        return true;
+      }
+      const n = ctx.n || track.n || px.length;
+      const k = ((Math.round(spec.k || 0) % n) + n) % n;
+      const side = spec.side || 1, gap = spec.gap || 0, sz = spec.size;
+      const col = spec.color || [0.5, 0.5, 0.5];
+      const pieces = Math.max(2, Math.round(spec.samples || 4));
+      const id = spec.id || ("ground-patch-" + k), required = !!spec.required;
+      const emitFace = ctx.emitFace || (typeof TrackGeom !== "undefined" && TrackGeom.emit);
+      const normFn = (typeof TrackGeom !== "undefined" && TrackGeom.norm) || ((v) => {
+        const L = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / L, v[1] / L, v[2] / L];
+      });
+      const minSep = (typeof TrackGeom !== "undefined" && TrackGeom.MIN_SEP) || 0.02;
+      const UPV = [0, 1, 0];
+      const r = [track.rx[k], track.ry[k], track.rz[k]];
+      const t = [track.tx[k], track.ty[k], track.tz[k]];
+      const u = ctx.upOf ? ctx.upOf(track, k) : UPV;
+      // Per-call lift slot so overlapping patches never share a plane.
+      const lift = (1 + patchSeq++ % 5) * minSep;
+      const midDist = gap + sz[0] / 2;
+      const mid = [px[k] + r[0] * side * (hw[k] + midDist),
+        ctx.groundHeight(k, midDist), pz[k] + r[2] * side * (hw[k] + midDist)];
+      const suppress = (em, pit) => (diagnostics.suppressed.push({
+        id, required: pit ? false : required,
+        reason: (pit ? (em ? "emitted footprint " : "") + "superseded by the pit complex"
+          : (em ? "emitted " : "") + "footprint rejected"),
+      }), false);
+      const reject = (center, size, basis) => {
+        const v = preflight({ center, size, basis });
+        return v === true ? null : v;
+      };
+      const hit = reject(mid, sz, [r, u, t]);
+      if (hit !== null) return suppress(false, hit === "pit");
+      const cuts = [gap];
+      const rails = ctx.rails || [];
+      for (const d of rails) if (d > gap + 0.25 && d < gap + sz[0] - 0.25) cuts.push(d);
+      cuts.push(gap + sz[0]);
+      while (cuts.length - 1 < pieces) {
+        let w = 0;
+        for (let i = 1; i < cuts.length; i++) if (cuts[i] - cuts[i - 1] > cuts[w + 1] - cuts[w]) w = i - 1;
+        cuts.splice(w + 1, 0, (cuts[w] + cuts[w + 1]) / 2);
+      }
+      const cols = cuts.length - 1, rows = Math.min(16, Math.max(1, Math.ceil(sz[2] / 4)));
+      const top = [], bot = [], at = (i, j) => j * (cols + 1) + i;
+      const terrainAt = ctx.terrainY || (() => null);
+      for (let j = 0; j <= rows; j++) for (let i = 0; i <= cols; i++) {
+        const o = side * (hw[k] + cuts[i]), f = (j / rows - 0.5) * sz[2];
+        const x = px[k] + r[0] * o + t[0] * f, z = pz[k] + r[2] * o + t[2] * f;
+        const g = terrainAt(x, z), y = (g != null ? g : ctx.groundHeight(k, cuts[i])) + lift;
+        top.push([x, y, z]); bot.push([x, y - sz[1], z]);
+      }
+      const cellB = [normFn([r[0], 0, r[2]]), UPV, normFn([t[0], 0, t[2]])];
+      const keep = new Uint8Array(cols * rows);
+      const quad = (i, j) => [top[at(i, j)], top[at(i + 1, j)], top[at(i + 1, j + 1)], top[at(i, j + 1)]];
+      let kept = 0;
+      for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+        const q = quad(i, j), hi = Math.max(q[0][1], q[1][1], q[2][1], q[3][1]);
+        const lo = Math.min(q[0][1], q[1][1], q[2][1], q[3][1]) - sz[1];
+        const c = [(q[0][0] + q[2][0]) / 2, (lo + hi) / 2, (q[0][2] + q[2][2]) / 2];
+        if (reject(c, [cuts[i + 1] - cuts[i], hi - lo, sz[2] / rows], cellB) === null) {
+          keep[j * cols + i] = 1; kept++;
+        }
+      }
+      if (!kept) return suppress(true, false);
+      if (typeof emitFace !== "function") {
+        diagnostics.invalid.push({ id, required, reason: "no emitFace for draped groundPatch" });
+        return false;
+      }
+      const v0 = out.pos.length / 3, mat0 = out._mat, below = [mid[0], mid[1] - 1e4, mid[2]];
+      out._mat = 0;
+      for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++)
+        if (keep[j * cols + i]) emitFace(out, quad(i, j), col, below);
+      const skirt = (a, b, cell) => { if (keep[cell]) emitFace(out, [top[a], top[b], bot[b], bot[a]], col, mid); };
+      for (let i = 0; i < cols; i++) skirt(at(i, 0), at(i + 1, 0), i);
+      for (let j = 0; j < rows; j++) skirt(at(cols, j), at(cols, j + 1), j * cols + cols - 1);
+      for (let i = cols; i > 0; i--) skirt(at(i, rows), at(i - 1, rows), (rows - 1) * cols + i - 1);
+      for (let j = rows; j > 0; j--) skirt(at(0, j), at(0, j - 1), (j - 1) * cols);
+      out._mat = mat0;
+      diagnostics.emitted.push({ id, required, vertices: out.pos.length / 3 - v0, kind: spec.kind || "model", groundPatch: true });
+      if (spec.collision && typeof ctx.recordBarrier === "function") {
+        const halfFrac = (sz[2] / 2) / (track.total || 1);
+        ctx.recordBarrier(k / n - halfFrac, k / n + halfFrac, side, gap);
+      }
       return true;
     }
 

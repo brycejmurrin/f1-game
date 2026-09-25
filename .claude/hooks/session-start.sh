@@ -9,6 +9,9 @@
 ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
 cd "$ROOT" || exit 0
 [ -f package.json ] || exit 0
+# Every documented log path (test-bg, the waiter, `> artifacts/logs/gate.log`)
+# assumes this exists; a fresh clone has no artifacts/ at all (2026-09-24).
+mkdir -p artifacts/logs
 [ "${APEX_SKIP_SESSION_INSTALL:-}" = "1" ] && exit 0
 
 status=()
@@ -51,8 +54,13 @@ else
 fi
 dirty=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
 load=$(cut -d' ' -f1 /proc/loadavg 2>/dev/null || echo "?")
-if ps -eo args 2>/dev/null | grep -Eq 'playwright(\.js)?\s+test\b|run-playwright\.mjs'; then pw="LIVE — no js/css edits"; else pw="none"; fi
+live=$(python3 "$ROOT/.claude/hooks/live-run.py" "$ROOT" 2>/dev/null)
+if [ -n "$live" ]; then pw="LIVE ($live) — no js/css edits"; else pw="none"; fi
 status+=("branch $branch (ahead/behind deploy tip $ab, dirty $dirty)" "loadavg $load" "playwright $pw")
+# Auto memory (cloud only; see memory-sync.sh): put .claude/memory/ back where
+# the CLI reads it, before the first prompt is built.
+mem=$("$ROOT/.claude/hooks/memory-sync.sh" restore </dev/null 2>/dev/null)
+[ -n "$mem" ] && status+=("$mem")
 
 printf 'apex26 session-start:'; printf ' %s;' "${status[@]}"; printf '\n'
 exit 0

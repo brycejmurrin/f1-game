@@ -16,7 +16,11 @@ Variable tropical sky — bright sun one moment, brooding grey cloud and rain th
 - Kerbs: red/white `[0.80,0.18,0.18]` + `[0.92,0.92,0.92]`
 
 ## 3. Elevation
-~43 m of change over the lap. High point is the start/finish straight on the plateau. Sharp **downhill plunge into the Senna S** (s≈0.03→0.10), running low through the fast infield and Reta Oposta. The track stays low through Descida do Lago and Ferradura, then **climbs back hard from the Junção up the long banked drag to the start/finish line** (s≈0.80→1.0).
+Real Interlagos relief from the SRTM bake in `js/track/circuit-elevations.js`
+(~40 m peak-to-trough, grade capped at 5.5%). Continuous rolling — not one
+cosine hill with a dead-flat infield between Senna S and the climb home.
+High point is the start/finish plateau; the lap plunges into the Senna S,
+runs low through the infield / Reta Oposta, then climbs back from Junção.
 
 ## 4. Landmarks & surroundings by lap position
 | s | Side | Dist | Landmark — box-modelling note |

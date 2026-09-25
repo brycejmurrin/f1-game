@@ -68,6 +68,7 @@ test("every test file in THIS repo belongs to a topical test:* group", () => {
   const { orphans } = auditCoverage(testFiles, pkg.scripts);
   assert.deepEqual(orphans, [],
     "a test file belongs to no topical test:* group, so nothing runs it. Add it to the right " +
-    "`test:<group>` script in package.json (and give it a row in docs/TESTING.md, which " +
-    "tests/unit/test-groups.test.mjs checks separately).");
+    "group in tests/groups.json, then `node tools/gen/gen-test-groups.mjs` (package.json's " +
+    "test:* scripts are generated), and give it a row in docs/TESTING.md, which " +
+    "tests/unit/test-groups.test.mjs checks separately.");
 });

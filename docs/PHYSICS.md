@@ -397,8 +397,14 @@ ones were unmoved. That planner/actuator disagreement was CLOSED on
 (load ±8 %, grip, the 0.28 speed taper) that both the kinematic lateral step
 in `updateCar` and `brakeTarget` read, and `AiDrive.cornerSpeed` inverts the
 taper analytically so the planner's entry speed is one the actuator can turn
-at. `latMax` is no longer flat — it carries the aero-load term — but it still
-has no `aeroGrip` rise, on purpose: the actuator has none either. The 12 m
+at. 2026-09-24: the envelope now carries the car's downforce — `1 +
+DOWNFORCE·(v/vTop)²`, the player's own `aeroGrip` shape, minus the player-only
+`PLAYER_GRIP` headroom — in BOTH the lateral step and the planner, so they
+still agree and the AI finally corners fast corners like a car with wings
+(solo hard lap at Monza 127.1 → 120.8 s). The heading controller's yaw
+budget alone keeps the old 0.28 taper (`AiDrive.yawScale`): it is a
+smoothness budget, and letting it rise too took the solo-lap lateral-jerk
+figure past its 7.5 m/s² cap. The 12 m
 look-ahead floor that let every AI carry `sqrt(vC² + 449)` into an apex was
 removed on 2026-09-15 with the `corner` difficulty dimension
 (`docs/notes/AI-FIELD-RESEARCH.md`).
@@ -414,7 +420,11 @@ the numbers):
 
 - **Overtake want compares PACE with pace** (`AiDrive.otWant`). The pull fires
   when the follower is closing, OR its free-running target speed beats the
-  blocker's own ceiling by ~7% of the top speed (5.5% on a street circuit), OR
+  blocker's own ceiling by ~7% of the top speed (5.5% on a street circuit) —
+  falling to 30 % of that as QUEUE PRESSURE builds (`AiDrive.queuePress`:
+  seconds held by the queue cap behind the same car, over a craft-scaled
+  3.5–7 s patience), so evenly matched cars no longer queue for a whole race —
+  OR
   the blocker is crawling (under 12% of the top speed — an obstacle whatever
   its pace). So an AI blocker that is slow for a corner, but no slower over a
   lap, is left alone; a genuinely slower car is attacked even while both are
@@ -875,7 +885,8 @@ Still open:
 ## Curvature channels — the "arc must not reach the driver" table
 
 Every consumer of `Tracks.curvature()` (direct calls plus the two
-destructured aliases in `js/track/core/mesh.js` and `js/track/tracks.js`)
+destructured aliases in `js/track/core/mesh.js` and `js/track/tracks.js` /
+`js/track/scenery/build-props.js`)
 classified into its legitimate channel. Audited 2026-08-27 by the
 physics-contract-auditor: ZERO violations — every player-path read is
 behind an assist knob that defaults to 0, or reaches only render / audio /
@@ -902,7 +913,8 @@ it lands.
 | `js/agent/agentview.js` | state dump, corner table | **broadcast-only** | agent telemetry output |
 | `js/ui/track-maps.js` | measureApex/detectDRS/detectCorners | **broadcast-only** | 2D picker/popup/minimap outlines (menus + HUD drawing only) |
 | `js/track/core/mesh.js` | findCorners, bankingProfile, banked-corner pick | **surface** | build-time road-geometry decisions baked into the mesh — road shape itself |
-| `js/track/tracks.js` | build LUT bake, signboard side pick | **surface** | the producer itself, plus static scenery placement |
+| `js/track/tracks.js` | build LUT bake | **surface** | the producer itself (centreline curv[] bake) |
+| `js/track/scenery/build-props.js` | signboard side pick, pit-pass curvature | **surface** | static scenery placement (`TrackBuildProps.build`) |
 
 A module that consumes only REPORTS other code already produced is not in this
 table, because it has no curvature site to classify — the first-run coach marks

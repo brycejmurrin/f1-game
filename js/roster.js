@@ -21,6 +21,9 @@
       "js/render/webgpu/wgsl-chunks.js",
       "js/render/webgpu/wgsl-post.js",
       "js/render/webgpu/wgsl-fx.js",
+      "js/render/webgpu/wgx-shadow.js",
+      "js/render/webgpu/wgx-chunked.js",
+      "js/render/webgpu/wgx-post.js",
       "js/render/webgpu/wgx.js"
     ],
     "three": [
@@ -90,10 +93,22 @@
     ],
     [
       "js/render/webgpu/wgsl-post.js",
-      "js/render/webgpu/wgx.js"
+      "js/render/webgpu/wgx-post.js"
     ],
     [
       "js/render/webgpu/wgsl-fx.js",
+      "js/render/webgpu/wgx.js"
+    ],
+    [
+      "js/render/webgpu/wgx-shadow.js",
+      "js/render/webgpu/wgx.js"
+    ],
+    [
+      "js/render/webgpu/wgx-chunked.js",
+      "js/render/webgpu/wgx.js"
+    ],
+    [
+      "js/render/webgpu/wgx-post.js",
       "js/render/webgpu/wgx.js"
     ],
     [
@@ -193,6 +208,7 @@
     "js/net/scan.js",
     "js/net/transport.js",
     "js/net/handshake.js",
+    "js/net/lobby-codes.js",
     "js/net/snapshot.js",
     "js/net/session.js",
     "js/net/netplay.js",
@@ -209,6 +225,10 @@
     ],
     [
       "js/net/qr.js",
+      "js/net/lobby-codes.js"
+    ],
+    [
+      "js/net/qr.js",
       "js/net/lobby.js"
     ],
     [
@@ -221,6 +241,18 @@
     ],
     [
       "js/net/scan.js",
+      "js/net/lobby-codes.js"
+    ],
+    [
+      "js/net/scan.js",
+      "js/net/lobby.js"
+    ],
+    [
+      "js/net/handshake.js",
+      "js/net/lobby-codes.js"
+    ],
+    [
+      "js/net/lobby-codes.js",
       "js/net/lobby.js"
     ]
   ],

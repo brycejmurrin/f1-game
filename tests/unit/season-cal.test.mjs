@@ -82,12 +82,17 @@ function load(stored0) {
   };
 }
 
-// A classified field, finishing in the order given. `retired` cars are still
-// classified — that is the case the award rule is about.
+// A classified field, finishing in the order given. Points / finishes / FL need
+// `finished` (BUGS.md B4); retired cars stay at 0 even if they crossed the line.
 function field(n, retired) {
   const out = [];
-  for (let i = 0; i < n; i++)
-    out.push({ driverId: "d" + i, code: "D" + i, team: { id: "t" + i }, retired: !!(retired || []).includes(i) });
+  for (let i = 0; i < n; i++) {
+    const isRet = !!(retired || []).includes(i);
+    out.push({
+      driverId: "d" + i, code: "D" + i, team: { id: "t" + i },
+      finished: !isRet, retired: isRet,
+    });
+  }
   return out;
 }
 
@@ -306,8 +311,28 @@ test("a retirement scores nothing while the cars above keep their points", () =>
   const season = S.blank();
   S.award(season, field(4, [1]));
   assert.equal(season.pts.d0, 25);
-  assert.equal(season.pts.d1, 0, "classified P2, retired, scores nothing");
+  assert.equal(season.pts.d1, 0, "retired P2 scores nothing");
   assert.equal(season.pts.d2, 15, "P3 still earns what P3 earns");
+});
+
+test("cars still running at the flag are classified by position; FL needs a finish", () => {
+  // endRace ends the session 2.2 s after the human finishes and orders the
+  // still-running cars by progress, so they are classified, as the results
+  // sheet shows. Only the fastest-lap point requires a completed race.
+  const { S } = load({ seasonCfg: { flPoint: true } });
+  S.engage("season");
+  const season = S.blank();
+  const cars = field(4);
+  cars[1].finished = false;   // still running when the session ends
+  cars[2].finished = false;
+  S.award(season, cars, "d1");
+  assert.equal(season.pts.d0, 25);
+  assert.equal(season.pts.d1, 18, "a running car scores its classified position");
+  assert.equal(season.pts.d2, 15);
+  assert.equal(season.pts.d3, 12);
+  assert.equal(season.lastFl, undefined, "no FL point for a car that never finished");
+  assert.equal(season.finishes.d1[1], 1, "countback counts the classified position");
+  assert.equal(season.finishes.d0[0], 1);
 });
 
 test("the sprint leg draws retirements on a different key from the Grand Prix", () => {
@@ -553,12 +578,12 @@ test("DROP WORST 2 ranks on the best rounds — countback and the gross total ar
   const { S } = load({ seasonCfg: { drop: 2 } });        // 8 rounds → the best 6 count
   S.engage("season");
   const season = S.blank();
-  const d0 = { driverId: "d0", code: "D0", team: { id: "t0" } };
-  const d1 = { driverId: "d1", code: "D1", team: { id: "t1" } };
+  const d0 = { driverId: "d0", code: "D0", team: { id: "t0" }, finished: true };
+  const d1 = { driverId: "d1", code: "D1", team: { id: "t1" }, finished: true };
   for (let r = 0; r < 6; r++) S.award(season, [d0, d1]);           // d0 25×6, d1 18×6
   assert.equal(S.netPts(season, "d0"), 150, "inside the counting rounds net is gross");
   assert.equal(S.rank(season, "d0", "d1") < 0, true);
-  for (let r = 0; r < 2; r++) S.award(season, [d1, { ...d0, retired: true }]);   // d1 wins twice, d0 out
+  for (let r = 0; r < 2; r++) S.award(season, [d1, { ...d0, retired: true, finished: false }]);   // d1 wins twice, d0 out
   assert.equal(season.pts.d1, 108 + 50, "gross: d1 leads");
   assert.equal(season.pts.d0, 150);
   assert.equal(S.netPts(season, "d1"), 25 + 25 + 18 * 4, "d1's two 18s drop");

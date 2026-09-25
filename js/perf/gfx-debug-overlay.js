@@ -203,31 +203,13 @@ const GfxDebug = (() => {
     catch (e) { pre.textContent = "gfx-debug failed: " + (e && e.message); }
   }
 
-  function fallbackCopy(text, done) {
-    try {
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      ta.style.cssText = "position:fixed;left:-9999px;top:0";
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand("copy");
-      document.body.removeChild(ta);
-      done();
-    } catch (_) { /* the text is selectable in place; nothing else to offer */ }
-  }
-
-  // clipboard.writeText needs a secure context and can reject; the textarea
-  // fallback is what makes this usable over plain http on a phone
+  // ApexClipboard: clipboard.writeText + textarea fallback (plain http / phone).
   function copyReport(btn) {
     const text = pre ? pre.textContent : "";
     const done = () => { btn.textContent = "COPIED"; setTimeout(() => { btn.textContent = "COPY"; }, 1200); };
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(done, () => fallbackCopy(text, done));
-        return;
-      }
-    } catch (_) { /* fall through */ }
-    fallbackCopy(text, done);
+    // Always flash COPIED after an attempt — the overlay text stays selectable
+    // if both paths fail (previous fallbackCopy called done() even on a soft miss).
+    ApexClipboard.write(text).then(done, done);
   }
 
   function install() {

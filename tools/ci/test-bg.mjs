@@ -11,12 +11,14 @@
  * WAITED; it duplicated `--parallel` + `--wait` and was removed 2026-09-10.)
  *
  *   node tools/ci/test-bg.mjs smoke                 # start one group (default)
- *   node tools/ci/test-bg.mjs smoke api collision   # SEQUENTIAL: one at a time
- *   node tools/ci/test-bg.mjs --parallel smoke api  # concurrent up to core cap
+ *   node tools/ci/test-bg.mjs smoke physics-core    # starts smoke ONLY; prints the `next:` command
+ *   node tools/ci/test-bg.mjs --parallel smoke aero # concurrent up to core cap
  *   node tools/ci/test-bg.mjs --status              # what is running / how it ended
  *   node tools/ci/test-bg.mjs --tail smoke          # print the tail command
- *   node tools/ci/test-bg.mjs --wait                # block until all groups finish
- *   node tools/ci/test-bg.mjs --wait smoke api      # start each, wait, then next
+ *   node tools/ci/test-bg.mjs --wait                # block until all groups finish (the waiter:
+ *                                                   #   run it as a background task; exit 1 = a red)
+ *   node tools/ci/test-bg.mjs --wait --timeout 45   # ...giving up after 45 min (exit 124, runs left alive)
+ *   node tools/ci/test-bg.mjs --wait smoke aero     # start each, wait, then next
  *   node tools/ci/test-bg.mjs --stop                # kill everything still running
  *   node tools/ci/test-bg.mjs --stop --sweep        # ...and hunt orphans whose supervisor is already dead
  *
@@ -122,8 +124,22 @@ function outcome(run) {
   if (alive(run.pid)) return "running";
   let text = "";
   try { text = fs.readFileSync(run.log, "utf8"); } catch (_) { return "gone (no log)"; }
+  return outcomeOf(text);
+}
 
-  const pw = [...text.matchAll(/= run (\w+)\s+\(([^)]*)\)/g)].pop();
+/** The verdict in a finished log. THE EXIT CODE IS CHECKED FIRST (2026-09-24):
+ *  a group can be two commands (`test:tooling` is tooling-fast && sweeps, a
+ *  twinned group is its VM twins then Playwright), and the first half's
+ *  `= run passed` or `# fail 0` used to win over a non-zero `= bg exit`, so a
+ *  red second half — or a Playwright half SIGKILLed before its summary — read
+ *  as passed and `--wait` exited 0. The detail line still names the counts. */
+export function outcomeOf(text) {
+  const bgExit = [...text.matchAll(/^= bg exit (\d+)$/gm)].pop();
+  const detail = [...text.matchAll(/= run (\w+)\s+\(([^)]*)\)/g)].pop();
+  if (bgExit && bgExit[1] !== "0") {
+    return `failed (exit ${bgExit[1]}${detail ? `; last summary: ${detail[1]} (${detail[2]})` : ""})`;
+  }
+  const pw = detail;
   if (pw) return `${pw[1]} (${pw[2]})`;
 
   const tap = text.match(/^# pass (\d+)$[\s\S]*?^# fail (\d+)$/m);
@@ -158,9 +174,17 @@ function status() {
 }
 
 async function waitForRunning() {
-  const s = readState();
-  const running = () => s.runs.filter((r) => alive(r.pid));
+  // Re-read the registry every poll: a group another shell starts while this
+  // waits is part of "everything still running" (it used to be read once).
+  const running = () => readState().runs.filter((r) => alive(r.pid));
+  const deadline = waitTimeoutMin > 0 ? Date.now() + waitTimeoutMin * 60_000 : Infinity;
   while (running().length) {
+    if (Date.now() > deadline) {
+      process.stderr.write("\r" + " ".repeat(80) + "\r");
+      say(`WAIT TIMEOUT after ${waitTimeoutMin} min — still running: ${running().map((r) => r.group).join(", ")} (left alive; --status later, --stop to end)`);
+      process.exitCode = 124;
+      return;
+    }
     const live = running();
     const line = `waiting on ${live.map((r) => r.group).join(", ")} ${loadavgLine()}`;
     process.stderr.write("\r[test-bg] " + line.padEnd(70).slice(0, 70));
@@ -488,13 +512,17 @@ async function waitChain(groups, { force = false } = {}) {
   process.exitCode = allOk ? 0 : 1;
 }
 
-const argv = process.argv.slice(2);
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+const argv = isMain ? process.argv.slice(2) : [];
 const force = argv.includes("--force");
 const lastFailed = argv.includes("--last-failed");
 const parallel = argv.includes("--parallel");
-const groups = argv.filter((a) => !a.startsWith("--"));
+const tIdx = argv.indexOf("--timeout");
+const waitTimeoutMin = tIdx >= 0 ? +argv[tIdx + 1] || 0 : 0;
+const groups = argv.filter((a, i) => !a.startsWith("--") && !(tIdx >= 0 && i === tIdx + 1));
 
-if (argv.includes("--status")) status();
+if (!isMain) { /* imported for outcomeOf (tests/unit/test-bg-outcome.test.mjs) */ }
+else if (argv.includes("--status")) status();
 else if (argv.includes("--stop")) stop({ doSweep: argv.includes("--sweep") });
 else if (argv.includes("--tail")) {
   const g = argv[argv.indexOf("--tail") + 1];

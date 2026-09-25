@@ -2,19 +2,173 @@
  "//": "spec -> { s: [[ts, env, sec, tests]] whole-run wall, t: { title: [[ts, env, sec]] } }; ts = run start at second precision; env = swiftshader|llvmpipe|local; newest last; bounded to the last KEEP samples per key. Writer: tools/ci/spec-timings.mjs",
  "keep": 10,
  "specs": {
-  "tests/specs/smoke.spec.js": {
-   "s": [["2026-09-16T06:06:01Z","local",475.289,10]],
+  "tests/specs/abudhabi-foundation.spec.js": {
+   "s": [["2026-09-24T16:38:46Z","llvmpipe",19.868,2], ["2026-09-24T16:41:25Z","llvmpipe",18.643,2], ["2026-09-24T17:09:03Z","llvmpipe",16.445,2], ["2026-09-24T17:15:45Z","llvmpipe",16.314,2], ["2026-09-24T17:29:11Z","llvmpipe",12.123,2], ["2026-09-24T17:58:43Z","llvmpipe",14.08,2]],
    "t": {
-    "Apex 26 — HUD › minimap canvas has content after race starts": [["2026-09-16T06:06:01Z","local",10.078]],
-    "Apex 26 — HUD › speed readout updates after jump() at speed": [["2026-09-16T06:06:01Z","local",100.626]],
-    "Apex 26 — smoke › corner approach renders a non-blank frame": [["2026-09-16T06:06:01Z","local",95.818]],
-    "Apex 26 — smoke › grid start renders a non-blank frame": [["2026-09-16T06:06:01Z","local",30.438]],
-    "Apex 26 — smoke › jump() sets player speed and lateral offset": [["2026-09-16T06:06:01Z","local",85.368]],
-    "Apex 26 — smoke › page loads without WebGL error": [["2026-09-16T06:06:01Z","local",2.434]],
-    "Apex 26 — smoke › park() skips countdown and positions player": [["2026-09-16T06:06:01Z","local",96.787]],
-    "Apex 26 — smoke › race starts and __apex hook is available": [["2026-09-16T06:06:01Z","local",6.896]],
-    "Apex 26 — smoke › the DRIVING LINE is built for the circuit on the first frame it is on": [["2026-09-16T06:06:01Z","local",41.46]],
-    "Apex 26 — smoke › the select screen is a circuit picker, and YOUR CAR opens the garage": [["2026-09-16T06:06:01Z","local",5.384]]
+    "Abu Dhabi foundation contracts hold at day": [["2026-09-24T16:38:46Z","llvmpipe",13.978], ["2026-09-24T16:41:25Z","llvmpipe",13.126], ["2026-09-24T17:09:03Z","llvmpipe",10.838], ["2026-09-24T17:15:45Z","llvmpipe",10.455], ["2026-09-24T17:29:11Z","llvmpipe",7.196], ["2026-09-24T17:58:43Z","llvmpipe",7.48]],
+    "Abu Dhabi foundation contracts hold at night": [["2026-09-24T16:38:46Z","llvmpipe",5.89], ["2026-09-24T16:41:25Z","llvmpipe",5.517], ["2026-09-24T17:09:03Z","llvmpipe",5.607], ["2026-09-24T17:15:45Z","llvmpipe",5.859], ["2026-09-24T17:29:11Z","llvmpipe",4.927], ["2026-09-24T17:58:43Z","llvmpipe",6.6]]
+   }
+  },
+  "tests/specs/browser-ui-hunt.spec.js": {
+   "s": [["2026-09-24T18:13:13Z","llvmpipe",28.992,6]],
+   "t": {
+    "Duel help belongs to the Duel control at every grid width": [["2026-09-24T18:13:13Z","llvmpipe",16.345]],
+    "Export explains the Gather prerequisite before Download is ready": [["2026-09-24T18:13:13Z","llvmpipe",1.463]],
+    "Live uses the hub content as its only stacked scroll owner": [["2026-09-24T18:13:13Z","llvmpipe",1.155]],
+    "Results preserves complete driver and team names without table overflow": [["2026-09-24T18:13:13Z","llvmpipe",1.538]],
+    "Telemetry explains driver selection and comparison before using lane terms": [["2026-09-24T18:13:13Z","llvmpipe",1.135]],
+    "choosing a free Time Trial circuit clears Daily Standard chrome": [["2026-09-24T18:13:13Z","llvmpipe",7.356]]
+   }
+  },
+  "tests/specs/camera-hooks.spec.js": {
+   "s": [["2026-09-24T17:46:53Z","llvmpipe",47.659,7]],
+   "t": {
+    "dolly() places camera in local track frame": [["2026-09-24T17:46:53Z","llvmpipe",11.36]],
+    "orbit() never sinks the eye underground at low/negative elevation": [["2026-09-24T17:46:53Z","llvmpipe",5.903]],
+    "previewCam() frames any in-game mode without moving the car": [["2026-09-24T17:46:53Z","llvmpipe",5.879]],
+    "roadside() look modes all return valid camera": [["2026-09-24T17:46:53Z","llvmpipe",6.119]],
+    "tourShots() returns n descriptors spanning the full circuit": [["2026-09-24T17:46:53Z","llvmpipe",6.337]],
+    "tourShots({atCorners}) frames each apex from the outside": [["2026-09-24T17:46:53Z","llvmpipe",6.13]],
+    "view() with no args frames the whole track (not chase)": [["2026-09-24T17:46:53Z","llvmpipe",5.931]]
+   }
+  },
+  "tests/specs/interlagos-foundation.spec.js": {
+   "s": [["2026-09-24T17:15:45Z","llvmpipe",22.452,4], ["2026-09-24T17:29:11Z","llvmpipe",16.56,4]],
+   "t": {
+    "Interlagos track-owned foundation migration › emits required hero models and reflective reservoir water": [["2026-09-24T17:15:45Z","llvmpipe",6.063], ["2026-09-24T17:29:11Z","llvmpipe",4.17]],
+    "Interlagos track-owned foundation migration › keeps terrain grounded and collision barriers finite": [["2026-09-24T17:15:45Z","llvmpipe",5.26], ["2026-09-24T17:29:11Z","llvmpipe",4.168]],
+    "Interlagos track-owned foundation migration › keeps track-owned dressing within a focused geometry budget": [["2026-09-24T17:15:45Z","llvmpipe",5.256], ["2026-09-24T17:29:11Z","llvmpipe",3.916]],
+    "Interlagos track-owned foundation migration › uses racing coordinates and reproduces the finish plateau elevation": [["2026-09-24T17:15:45Z","llvmpipe",5.873], ["2026-09-24T17:29:11Z","llvmpipe",4.306]]
+   }
+  },
+  "tests/specs/menu-baseline.spec.js": {
+   "s": [["2026-09-24T17:58:43Z","llvmpipe",27.049,6], ["2026-09-24T18:13:13Z","llvmpipe",33.873,6]],
+   "t": {
+    "menu identity — desktop › garage looks like itself": [["2026-09-24T17:58:43Z","llvmpipe",3.643], ["2026-09-24T18:13:13Z","llvmpipe",5.058]],
+    "menu identity — desktop › select looks like itself": [["2026-09-24T17:58:43Z","llvmpipe",5.697], ["2026-09-24T18:13:13Z","llvmpipe",7.637]],
+    "menu identity — desktop › title looks like itself": [["2026-09-24T17:58:43Z","llvmpipe",4.387], ["2026-09-24T18:13:13Z","llvmpipe",5.33]],
+    "menu identity — phone-landscape › garage looks like itself": [["2026-09-24T17:58:43Z","llvmpipe",3.533], ["2026-09-24T18:13:13Z","llvmpipe",4.268]],
+    "menu identity — phone-landscape › select looks like itself": [["2026-09-24T17:58:43Z","llvmpipe",4.739], ["2026-09-24T18:13:13Z","llvmpipe",5.573]],
+    "menu identity — phone-landscape › title looks like itself": [["2026-09-24T17:58:43Z","llvmpipe",5.05], ["2026-09-24T18:13:13Z","llvmpipe",6.007]]
+   }
+  },
+  "tests/specs/output-paths.spec.js": {
+   "s": [["2026-09-24T16:31:41Z","llvmpipe",0.025,3], ["2026-09-24T16:38:46Z","llvmpipe",0.013,3], ["2026-09-24T16:41:25Z","llvmpipe",0.02,3], ["2026-09-24T17:09:03Z","llvmpipe",0.022,3], ["2026-09-24T17:58:43Z","llvmpipe",0.008,3]],
+   "t": {
+    "each producer can own a stable suite directory": [["2026-09-24T16:31:41Z","llvmpipe",0.004], ["2026-09-24T16:38:46Z","llvmpipe",0.002], ["2026-09-24T16:41:25Z","llvmpipe",0.002], ["2026-09-24T17:09:03Z","llvmpipe",0.002], ["2026-09-24T17:58:43Z","llvmpipe",0.002]],
+    "gallery paths are port-scoped and create their parent directories": [["2026-09-24T16:31:41Z","llvmpipe",0.013], ["2026-09-24T16:38:46Z","llvmpipe",0.006], ["2026-09-24T16:41:25Z","llvmpipe",0.009], ["2026-09-24T17:09:03Z","llvmpipe",0.004], ["2026-09-24T17:58:43Z","llvmpipe",0.003]],
+    "gallery paths reject traversal and empty segments": [["2026-09-24T16:31:41Z","llvmpipe",0.008], ["2026-09-24T16:38:46Z","llvmpipe",0.005], ["2026-09-24T16:41:25Z","llvmpipe",0.009], ["2026-09-24T17:09:03Z","llvmpipe",0.016], ["2026-09-24T17:58:43Z","llvmpipe",0.003]]
+   }
+  },
+  "tests/specs/physics-characterization.spec.js": {
+   "s": [["2026-09-24T16:29:33Z","llvmpipe",49.979,1], ["2026-09-24T16:36:51Z","llvmpipe",79.514,1], ["2026-09-24T16:37:23Z","llvmpipe",55.104,1], ["2026-09-24T16:38:52Z","llvmpipe",76.864,1], ["2026-09-24T17:08:22Z","llvmpipe",78,1], ["2026-09-24T17:14:52Z","llvmpipe",32.87,1], ["2026-09-24T17:44:33Z","llvmpipe",62.808,1], ["2026-09-24T17:57:47Z","llvmpipe",29.606,1], ["2026-09-24T17:59:19Z","llvmpipe",51.06,1], ["2026-09-24T18:08:51Z","llvmpipe",76.574,1]],
+   "t": {
+    "the driving model produces the same numbers it did before": [["2026-09-24T16:29:33Z","llvmpipe",49.979], ["2026-09-24T16:36:51Z","llvmpipe",79.514], ["2026-09-24T16:37:23Z","llvmpipe",55.104], ["2026-09-24T16:38:52Z","llvmpipe",76.864], ["2026-09-24T17:08:22Z","llvmpipe",78], ["2026-09-24T17:14:52Z","llvmpipe",32.87], ["2026-09-24T17:44:33Z","llvmpipe",62.808], ["2026-09-24T17:57:47Z","llvmpipe",29.606], ["2026-09-24T17:59:19Z","llvmpipe",51.06], ["2026-09-24T18:08:51Z","llvmpipe",76.574]]
+   }
+  },
+  "tests/specs/pit-signs.spec.js": {
+   "s": [["2026-09-24T16:38:46Z","llvmpipe",23.585,1], ["2026-09-24T16:41:25Z","llvmpipe",23.377,1], ["2026-09-24T17:09:03Z","llvmpipe",22.92,1], ["2026-09-24T17:15:45Z","llvmpipe",22.631,1], ["2026-09-24T17:29:11Z","llvmpipe",16.287,1], ["2026-09-24T17:58:43Z","llvmpipe",77.133,1]],
+   "t": {
+    "pit signs › every bay wears its team's sign as one decal, and meshToggle hides it": [["2026-09-24T16:38:46Z","llvmpipe",23.585], ["2026-09-24T16:41:25Z","llvmpipe",23.377], ["2026-09-24T17:09:03Z","llvmpipe",22.92], ["2026-09-24T17:15:45Z","llvmpipe",22.631], ["2026-09-24T17:29:11Z","llvmpipe",16.287], ["2026-09-24T17:58:43Z","llvmpipe",77.133]]
+   }
+  },
+  "tests/specs/render-boot.spec.js": {
+   "s": [["2026-09-24T16:31:41Z","llvmpipe",20.586,3], ["2026-09-24T16:38:46Z","llvmpipe",14.413,3], ["2026-09-24T16:41:25Z","llvmpipe",15.23,3], ["2026-09-24T17:09:03Z","llvmpipe",14.328,3]],
+   "t": {
+    "GLX boots as the bare WebGL2 path and presents a frame": [["2026-09-24T16:31:41Z","llvmpipe",13.509], ["2026-09-24T16:38:46Z","llvmpipe",9.967], ["2026-09-24T16:41:25Z","llvmpipe",10.702], ["2026-09-24T17:09:03Z","llvmpipe",10.075]],
+    "TLX boots, installs its three marker, and presents a frame": [["2026-09-24T16:31:41Z","llvmpipe",3.903], ["2026-09-24T16:38:46Z","llvmpipe",2.346], ["2026-09-24T16:41:25Z","llvmpipe",2.45], ["2026-09-24T17:09:03Z","llvmpipe",2.259]],
+    "an unset backend still boots TLX — the shipped default": [["2026-09-24T16:31:41Z","llvmpipe",3.174], ["2026-09-24T16:38:46Z","llvmpipe",2.1], ["2026-09-24T16:41:25Z","llvmpipe",2.078], ["2026-09-24T17:09:03Z","llvmpipe",1.994]]
+   }
+  },
+  "tests/specs/smoke.spec.js": {
+   "s": [["2026-09-16T06:06:01Z","local",475.289,10], ["2026-09-24T16:40:29Z","llvmpipe",23.012,2], ["2026-09-24T16:40:35Z","llvmpipe",64.72,3], ["2026-09-24T16:40:50Z","llvmpipe",64.724,3], ["2026-09-24T16:41:20Z","llvmpipe",5.556,2], ["2026-09-24T17:28:51Z","llvmpipe",5.768,2], ["2026-09-24T17:28:52Z","llvmpipe",29.278,2], ["2026-09-24T17:28:53Z","llvmpipe",64.066,3], ["2026-09-24T17:29:09Z","llvmpipe",31.873,3]],
+   "t": {
+    "Apex 26 — HUD › minimap canvas has content after race starts": [["2026-09-16T06:06:01Z","local",10.078], ["2026-09-24T16:41:20Z","llvmpipe",3.439], ["2026-09-24T17:28:51Z","llvmpipe",3.748]],
+    "Apex 26 — HUD › speed readout updates after jump() at speed": [["2026-09-16T06:06:01Z","local",100.626], ["2026-09-24T16:41:20Z","llvmpipe",2.117], ["2026-09-24T17:28:51Z","llvmpipe",2.02]],
+    "Apex 26 — smoke › corner approach renders a non-blank frame": [["2026-09-16T06:06:01Z","local",95.818], ["2026-09-24T16:40:29Z","llvmpipe",19.363], ["2026-09-24T17:28:52Z","llvmpipe",26.016]],
+    "Apex 26 — smoke › grid start renders a non-blank frame": [["2026-09-16T06:06:01Z","local",30.438], ["2026-09-24T16:40:35Z","llvmpipe",19.896], ["2026-09-24T17:29:09Z","llvmpipe",13.731]],
+    "Apex 26 — smoke › jump() sets player speed and lateral offset": [["2026-09-16T06:06:01Z","local",85.368], ["2026-09-24T16:40:50Z","llvmpipe",11.368], ["2026-09-24T17:28:53Z","llvmpipe",10.875]],
+    "Apex 26 — smoke › page loads without WebGL error": [["2026-09-16T06:06:01Z","local",2.434], ["2026-09-24T16:40:29Z","llvmpipe",3.649], ["2026-09-24T17:28:52Z","llvmpipe",3.262]],
+    "Apex 26 — smoke › park() skips countdown and positions player": [["2026-09-16T06:06:01Z","local",96.787], ["2026-09-24T16:40:50Z","llvmpipe",41.372], ["2026-09-24T17:28:53Z","llvmpipe",41.029]],
+    "Apex 26 — smoke › race starts and __apex hook is available": [["2026-09-16T06:06:01Z","local",6.896], ["2026-09-24T16:40:50Z","llvmpipe",11.984], ["2026-09-24T17:28:53Z","llvmpipe",12.162]],
+    "Apex 26 — smoke › the DRIVING LINE is built for the circuit on the first frame it is on": [["2026-09-16T06:06:01Z","local",41.46], ["2026-09-24T16:40:35Z","llvmpipe",40.004], ["2026-09-24T17:29:09Z","llvmpipe",14.33]],
+    "Apex 26 — smoke › the select screen is a circuit picker, and YOUR CAR opens the garage": [["2026-09-16T06:06:01Z","local",5.384], ["2026-09-24T16:40:35Z","llvmpipe",4.82], ["2026-09-24T17:29:09Z","llvmpipe",3.812]]
+   }
+  },
+  "tests/specs/telemetry-compare.spec.js": {
+   "s": [["2026-09-24T16:31:41Z","llvmpipe",2.912,3], ["2026-09-24T17:58:43Z","llvmpipe",7.138,3]],
+   "t": {
+    "a lane can be removed from the tray before loading": [["2026-09-24T16:31:41Z","llvmpipe",0.575], ["2026-09-24T17:58:43Z","llvmpipe",0.48]],
+    "cross-session: one driver's race lap vs qualifying lap": [["2026-09-24T16:31:41Z","llvmpipe",0.803], ["2026-09-24T17:58:43Z","llvmpipe",0.817]],
+    "more drivers: three lanes load, each with its own colour and map dot": [["2026-09-24T16:31:41Z","llvmpipe",1.534], ["2026-09-24T17:58:43Z","llvmpipe",5.841]]
+   }
+  },
+  "tests/specs/tracks-walls.spec.js": {
+   "s": [["2026-09-24T17:15:45Z","llvmpipe",154.406,63], ["2026-09-24T17:29:11Z","llvmpipe",109.578,63]],
+   "t": {
+    "Apex 26 — track boundaries › abudhabi: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",2.858], ["2026-09-24T17:29:11Z","llvmpipe",2.17]],
+    "Apex 26 — track boundaries › albert_park: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",3.865], ["2026-09-24T17:29:11Z","llvmpipe",0.951]],
+    "Apex 26 — track boundaries › anderstorp: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",1.932], ["2026-09-24T17:29:11Z","llvmpipe",0.768]],
+    "Apex 26 — track boundaries › bahrain: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",0.867], ["2026-09-24T17:29:11Z","llvmpipe",1.466]],
+    "Apex 26 — track boundaries › baku: driving hard into either edge stops bounded and recovers": [["2026-09-24T17:15:45Z","llvmpipe",11.859], ["2026-09-24T17:29:11Z","llvmpipe",8.037]],
+    "Apex 26 — track boundaries › baku: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",2.828], ["2026-09-24T17:29:11Z","llvmpipe",2.065]],
+    "Apex 26 — track boundaries › baku: walled tight, as a street circuit": [["2026-09-24T17:15:45Z","llvmpipe",0.957], ["2026-09-24T17:29:11Z","llvmpipe",0.765]],
+    "Apex 26 — track boundaries › brands_hatch: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",2.833], ["2026-09-24T17:29:11Z","llvmpipe",2.049]],
+    "Apex 26 — track boundaries › buddh: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",2.716], ["2026-09-24T17:29:11Z","llvmpipe",1.537]],
+    "Apex 26 — track boundaries › buenos_aires: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",4.304], ["2026-09-24T17:29:11Z","llvmpipe",1.864]],
+    "Apex 26 — track boundaries › catalunya: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",3.235], ["2026-09-24T17:29:11Z","llvmpipe",0.667]],
+    "Apex 26 — track boundaries › cota: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",2.616], ["2026-09-24T17:29:11Z","llvmpipe",2.234]],
+    "Apex 26 — track boundaries › dijon: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",2.001], ["2026-09-24T17:29:11Z","llvmpipe",2.215]],
+    "Apex 26 — track boundaries › donington: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",2.193], ["2026-09-24T17:29:11Z","llvmpipe",0.778]],
+    "Apex 26 — track boundaries › estoril: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",0.976], ["2026-09-24T17:29:11Z","llvmpipe",0.739]],
+    "Apex 26 — track boundaries › fuji: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",1.183], ["2026-09-24T17:29:11Z","llvmpipe",0.923]],
+    "Apex 26 — track boundaries › full-lap visual barriers register collision boundaries across the wrap": [["2026-09-24T17:15:45Z","llvmpipe",0.866], ["2026-09-24T17:29:11Z","llvmpipe",0.699]],
+    "Apex 26 — track boundaries › hockenheim: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",2.518], ["2026-09-24T17:29:11Z","llvmpipe",0.71]],
+    "Apex 26 — track boundaries › hungaroring: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",2.286], ["2026-09-24T17:29:11Z","llvmpipe",0.757]],
+    "Apex 26 — track boundaries › imola: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",1.522], ["2026-09-24T17:29:11Z","llvmpipe",2.114]],
+    "Apex 26 — track boundaries › indianapolis: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",1.432], ["2026-09-24T17:29:11Z","llvmpipe",2.034]],
+    "Apex 26 — track boundaries › interlagos: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",1.031], ["2026-09-24T17:29:11Z","llvmpipe",0.793]],
+    "Apex 26 — track boundaries › istanbul: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",0.811], ["2026-09-24T17:29:11Z","llvmpipe",0.636]],
+    "Apex 26 — track boundaries › jacarepagua: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",1.225], ["2026-09-24T17:29:11Z","llvmpipe",2.123]],
+    "Apex 26 — track boundaries › jeddah: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",2.181], ["2026-09-24T17:29:11Z","llvmpipe",2.339]],
+    "Apex 26 — track boundaries › jeddah: walled tight, as a street circuit": [["2026-09-24T17:15:45Z","llvmpipe",0.996], ["2026-09-24T17:29:11Z","llvmpipe",0.774]],
+    "Apex 26 — track boundaries › jerez: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",0.711], ["2026-09-24T17:29:11Z","llvmpipe",1.424]],
+    "Apex 26 — track boundaries › korea: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",2.025], ["2026-09-24T17:29:11Z","llvmpipe",1.704]],
+    "Apex 26 — track boundaries › kyalami: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",2.776], ["2026-09-24T17:29:11Z","llvmpipe",1.687]],
+    "Apex 26 — track boundaries › madrid: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",0.909], ["2026-09-24T17:29:11Z","llvmpipe",1.548]],
+    "Apex 26 — track boundaries › magny_cours: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",1.837], ["2026-09-24T17:29:11Z","llvmpipe",1.836]],
+    "Apex 26 — track boundaries › mexico: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",2.433], ["2026-09-24T17:29:11Z","llvmpipe",1.018]],
+    "Apex 26 — track boundaries › miami: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",2.73], ["2026-09-24T17:29:11Z","llvmpipe",1.05]],
+    "Apex 26 — track boundaries › monaco: driving hard into either edge stops bounded and recovers": [["2026-09-24T17:15:45Z","llvmpipe",9.834], ["2026-09-24T17:29:11Z","llvmpipe",8.614]],
+    "Apex 26 — track boundaries › monaco: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",0.964], ["2026-09-24T17:29:11Z","llvmpipe",1.908]],
+    "Apex 26 — track boundaries › monaco: walled tight, as a street circuit": [["2026-09-24T17:15:45Z","llvmpipe",0.947], ["2026-09-24T17:29:11Z","llvmpipe",0.764]],
+    "Apex 26 — track boundaries › mont_tremblant: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",1.045], ["2026-09-24T17:29:11Z","llvmpipe",2.354]],
+    "Apex 26 — track boundaries › montreal: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",2.388], ["2026-09-24T17:29:11Z","llvmpipe",1.734]],
+    "Apex 26 — track boundaries › monza: driving hard into either edge stops bounded and recovers": [["2026-09-24T17:15:45Z","llvmpipe",10.376], ["2026-09-24T17:29:11Z","llvmpipe",8.745]],
+    "Apex 26 — track boundaries › monza: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",2.027], ["2026-09-24T17:29:11Z","llvmpipe",0.725]],
+    "Apex 26 — track boundaries › mosport: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",2.218], ["2026-09-24T17:29:11Z","llvmpipe",0.641]],
+    "Apex 26 — track boundaries › mugello: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",2.064], ["2026-09-24T17:29:11Z","llvmpipe",0.871]],
+    "Apex 26 — track boundaries › nurburgring: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",2.537], ["2026-09-24T17:29:11Z","llvmpipe",0.797]],
+    "Apex 26 — track boundaries › okayama: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",2.883], ["2026-09-24T17:29:11Z","llvmpipe",0.924]],
+    "Apex 26 — track boundaries › paul_ricard: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",2.698], ["2026-09-24T17:29:11Z","llvmpipe",0.786]],
+    "Apex 26 — track boundaries › portimao: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",0.884], ["2026-09-24T17:29:11Z","llvmpipe",1.509]],
+    "Apex 26 — track boundaries › qatar: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",2.617], ["2026-09-24T17:29:11Z","llvmpipe",0.635]],
+    "Apex 26 — track boundaries › redbull: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",2.166], ["2026-09-24T17:29:11Z","llvmpipe",1.599]],
+    "Apex 26 — track boundaries › sepang: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",2.791], ["2026-09-24T17:29:11Z","llvmpipe",0.828]],
+    "Apex 26 — track boundaries › shanghai: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",0.811], ["2026-09-24T17:29:11Z","llvmpipe",0.635]],
+    "Apex 26 — track boundaries › silverstone: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",1.481], ["2026-09-24T17:29:11Z","llvmpipe",1.571]],
+    "Apex 26 — track boundaries › singapore: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",1.977], ["2026-09-24T17:29:11Z","llvmpipe",1.137]],
+    "Apex 26 — track boundaries › singapore: walled tight, as a street circuit": [["2026-09-24T17:15:45Z","llvmpipe",1.427], ["2026-09-24T17:29:11Z","llvmpipe",0.754]],
+    "Apex 26 — track boundaries › sochi: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",2.999], ["2026-09-24T17:29:11Z","llvmpipe",1.855]],
+    "Apex 26 — track boundaries › spa: driving hard into either edge stops bounded and recovers": [["2026-09-24T17:15:45Z","llvmpipe",10.359], ["2026-09-24T17:29:11Z","llvmpipe",7.687]],
+    "Apex 26 — track boundaries › spa: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",2.165], ["2026-09-24T17:29:11Z","llvmpipe",1.661]],
+    "Apex 26 — track boundaries › suzuka: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",2.065], ["2026-09-24T17:29:11Z","llvmpipe",1.618]],
+    "Apex 26 — track boundaries › the swept circuit list matches what the game actually loads": [["2026-09-24T17:15:45Z","llvmpipe",1.173], ["2026-09-24T17:29:11Z","llvmpipe",0.833]],
+    "Apex 26 — track boundaries › vegas: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",1.353], ["2026-09-24T17:29:11Z","llvmpipe",1.053]],
+    "Apex 26 — track boundaries › vegas: walled tight, as a street circuit": [["2026-09-24T17:15:45Z","llvmpipe",1.468], ["2026-09-24T17:29:11Z","llvmpipe",1.148]],
+    "Apex 26 — track boundaries › watkins_glen: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",0.865], ["2026-09-24T17:29:11Z","llvmpipe",0.692]],
+    "Apex 26 — track boundaries › zandvoort: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",1.291], ["2026-09-24T17:29:11Z","llvmpipe",1.033]],
+    "Apex 26 — track boundaries › zolder: finite, sane driving boundary on both sides": [["2026-09-24T17:15:45Z","llvmpipe",1.021], ["2026-09-24T17:29:11Z","llvmpipe",1.993]]
    }
   },
   "tests/specs/wake-lock.spec.js": {

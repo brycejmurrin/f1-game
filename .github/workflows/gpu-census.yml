@@ -103,11 +103,43 @@ jobs:
       tod: ${{ steps.split.outputs.tod }}
       force: ${{ steps.split.outputs.force }}
       census_only: ${{ steps.split.outputs.census_only }}
+      run: ${{ steps.gate.outputs.run }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: ${{ github.event_name == 'push' }}
         with:
           persist-credentials: false
+          fetch-depth: 0
+      # INHERITED REQUESTS DO NOT RUN (2026-09-24). `paths:` matches the pushed
+      # RANGE, so a session branch that merges the deploy tip re-fires the census
+      # for every request someone else already measured there: 40 of 74 push runs
+      # in 48 h (54%, ~10 runner-min each on macOS) were exactly that. A push
+      # runs the census only when a NON-MERGE commit on the branch's own
+      # first-parent line in this push edited the request. The deploy branch,
+      # dispatch and schedule are unchanged.
+      - id: gate
+        run: |
+          F=.github/gpu-census-request.json
+          if [ "$EVENT" != "push" ] || [ "$BRANCH" = "claude/f1-game-project-26h3ng" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ -n "$BEFORE" ] && ! echo "$BEFORE" | grep -q '^0*$' && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            BASE="$BEFORE"
+          else
+            BASE=$(git merge-base origin/claude/f1-game-project-26h3ng "$GITHUB_SHA" 2>/dev/null || echo "")
+          fi
+          OWN=$( [ -n "$BASE" ] && git log --first-parent --no-merges --format=%h "$BASE..$GITHUB_SHA" -- "$F" || echo "unknown")
+          if [ -n "$OWN" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "census: this push's own commit(s) edited the request: $OWN"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::gpu-census skipped: the request change arrived by merge (already measured where it was made). Edit the request on this branch, or dispatch, to measure this tree."
+          fi
+        env:
+          EVENT: ${{ github.event_name }}
+          BRANCH: ${{ github.ref_name }}
+          BEFORE: ${{ github.event.before }}
       - id: split
         run: |
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
@@ -155,6 +187,7 @@ jobs:
 
   census:
     needs: plan
+    if: ${{ needs.plan.outputs.run == 'true' }}
     runs-on: ${{ matrix.image }}
     timeout-minutes: 30
     strategy:

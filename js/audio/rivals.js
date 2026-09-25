@@ -14,7 +14,7 @@ const RivalAudio = (() => {
   // collector's edge instead of fading out. Kept equal to it.
   const RANGE = 150;             // metres; past this a rival is inaudible anyway
   const slots = Array.from({ length: SLOTS },
-    () => ({ lat: 0, arc: 0, rev: 0, approach: 0, dist: 0 }));
+    () => ({ lat: 0, arc: 0, rev: 0, approach: 0, dist: 0, voice: "" }));
   const out = [];
 
   function create(G) {
@@ -43,11 +43,14 @@ const RivalAudio = (() => {
         while (at > 0 && slots[at - 1].dist > dist) {
           const prev = slots[at - 1], cur = slots[at];
           cur.lat = prev.lat; cur.arc = prev.arc; cur.rev = prev.rev;
-          cur.approach = prev.approach; cur.dist = prev.dist;
+          cur.approach = prev.approach; cur.dist = prev.dist; cur.voice = prev.voice;
           at--;
         }
         const slot = slots[at];
         slot.lat = lat; slot.arc = arc; slot.dist = dist;
+        // Their power unit's voice (engine.js ENGINE_VOICES key): a Ferrari
+        // passing you should not sound like your own Mercedes.
+        slot.voice = (c.team && c.team.engine) || "";
         slot.rev = clamp(((c.rpm || IDLE_RPM) - IDLE_RPM) / revSpan, 0, 1);
         // d(gap)/dt is (their speed - yours); whether that CLOSES the gap
         // depends on which side of you they are, which is what the sign carries.

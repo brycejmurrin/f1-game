@@ -278,6 +278,19 @@ const TrackGeom = (function () {
     return true;
   }
 
-  return { MAT, cross, norm, vadd, emit, addMesh,
+  // MIN_SEP — the smallest plane separation between two same-facing faces that
+  // does not fight within 388 m: 24-bit depth, near plane 0.3 (the cockpit/hood
+  // worst case, js/game.js _nearM), far 900 — tools/track/coplanar-audit.cjs's
+  // fightDist(0.03). Staggers, insets and layer nudges step by this, not by
+  // "a few millimetres": 6 mm fights from 174 m, 10 mm from 224 m.
+  const MIN_SEP = 0.03;
+  // SEP_SLOTS — per-call nudges for emitters whose calls can land on the same
+  // plane (tracks.js place(), structures.js crowdBand): each slot is >= MIN_SEP
+  // from every other AND from every 0.1 m plane of the authored grid, so a
+  // nudge never parks a face 1 cm off an authored one (a 13 mm base did:
+  // madrid's retail boxes vs the guardrail). Index by a per-emitter sequence.
+  const SEP_SLOTS = Object.freeze([0.035, 0.065, 0.135, 0.165]);
+
+  return { MAT, MIN_SEP, SEP_SLOTS, cross, norm, vadd, emit, addMesh,
            addBox, addPrism, addPyramid, addCone, addCyl, addFrustum, addMountain };
 })();

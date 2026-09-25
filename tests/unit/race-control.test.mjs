@@ -114,6 +114,9 @@ test("lineTransition undoes a backward crossing and restores the lap clock", () 
   const forward = R.lineTransition(c, 995, 5, 10, 1000, 5, [c], 0);
   assert.equal(forward.direction, 1);
   assert.equal(c.lap, 3, "re-crossing advances the same lap instead of gifting one");
+  assert.equal(forward.recross, true, "…and says so, so the caller does not time that lap twice");
+  const next = R.lineTransition(c, 995, 5, 10, 1000, 5, [c], 0);
+  assert.equal(next.recross, false, "the flag is spent on one crossing");
 });
 
 test("the finish policy closes completed human races and bounded edge cases", () => {

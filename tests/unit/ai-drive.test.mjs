@@ -1002,3 +1002,64 @@ test("aimIntrudes: an aim into the other car's gap, on their side of us, intrude
   assert.equal(A.aimIntrudes(0.2, 0.5, -1, CLEAR), true, "inside the gap and still closing");
   assert.equal(A.aimIntrudes(0.9, 0.5, -1, CLEAR), false, "inside the gap but opening it");
 });
+
+test("queue pressure: time held behind one car lowers the pass bar, craft spends patience faster", () => {
+  // queueTime counts up while held, decays at twice the rate when free, never below 0.
+  assert.equal(A.queueTime(0, true, 0.5), 0.5);
+  assert.equal(A.queueTime(1, false, 0.25), 0.5);
+  assert.equal(A.queueTime(0.1, false, 1), 0);
+  assert.ok(A.queuePatience({ craft: 1 }) < A.queuePatience({ craft: 0.2 }), "a racer tries sooner than a rookie");
+  assert.equal(A.queuePress({ traits: mid, queueT: 0 }), 0);
+  assert.equal(A.queuePress({ traits: mid, queueT: 60 }), 1);
+  // THE TRAIN: two equal cars, the follower in the tow (+4.5 %). Fresh, the 7 %
+  // margin refuses it; after the patience window, it wants the pass.
+  const tow = { street: false, speed: 60, blockerSpeed: 60, vTop: 72, freeSpeed: 66 * 1.045, blockerVmax: 66, traits: mid };
+  assert.equal(A.otWant({ ...tow, queueT: 0 }), false, "not the moment a car arrives behind another");
+  assert.equal(A.otWant({ ...tow, queueT: A.queuePatience(mid) }), true, "held long enough: the tow is enough");
+  assert.equal(A.otWant({ ...tow, freeSpeed: 66, queueT: 60 }), false, "no pace edge at all: still no pass");
+  // attackOK: a queued car shows no closing rate; pressure stands in for it on a straight.
+  const st = { traits: mid, speed: 40, blockerSpeed: 40, roll: 0.5, kAhead: 0, toTurnIn: 1e9, attackQ: 0 };
+  assert.equal(A.attackOK({ ...st, queueT: 0 }), false);
+  assert.equal(A.attackOK({ ...st, queueT: 60 }), true);
+  assert.equal(A.attackOK({ ...st, queueT: 60, kAhead: 0.02 }), false, "never mid-corner on pressure alone");
+});
+
+test("the AI's lateral envelope carries the car's downforce, and the yaw budget does not", () => {
+  // Rising with speed like the player's aeroGrip (1 + 0.65 (v/vTop)^2).
+  assert.equal(A.lateralScale(0, 0.5, 1, 1, 72), 1);
+  assert.ok(Math.abs(A.lateralScale(72, 0.5, 1, 1, 72) - 1.65) < 1e-9);
+  assert.ok(A.lateralScale(50, 0.5, 1, 1, 72) > A.lateralScale(30, 0.5, 1, 1, 72));
+  // Yaw keeps the old calm taper: falling with speed, 0.72 at the top.
+  assert.ok(Math.abs(A.yawScale(72, 0.5, 1, 1, 72) - 0.72) < 1e-9);
+  assert.ok(A.yawScale(50, 0.5, 1, 1, 72) < A.yawScale(30, 0.5, 1, 1, 72));
+  // A fast corner the old flat envelope took well under the top speed is now
+  // flat out; a hairpin barely moves.
+  assert.ok(A.cornerSpeed(0.004, 22, 1, 72) > 72 * 0.99);
+  assert.ok(Math.abs(A.cornerSpeed(0.05, 22, 1, 72) / Math.sqrt(22 / 0.05) - 1) < 0.05);
+});
+
+test("passSideClosed: the lane closes only when the car can no longer REACH it", () => {
+  // Still 2.4 m to go and only 1.5 m left: closed.
+  assert.equal(A.passSideClosed(1.5, 2.4, 2), true);
+  // Arrived in the pass lane beside the outside edge (0.1 m of road left): hold it.
+  assert.equal(A.passSideClosed(0.1, 0, 2), false);
+  assert.equal(A.passSideClosed(0.8, 0.5, 2), false);
+  // A car that has moved INTO our path (room gone negative) closes it.
+  assert.equal(A.passSideClosed(-0.3, 0, 2), true);
+  // Never asks for more than a car width.
+  assert.equal(A.passSideClosed(1.95, 5, 2), false);
+});
+
+test("passReach: no move that cannot be half alongside by the turn-in", () => {
+  const b = { vTop: 72, speed: 60, blockerSpeed: 58, blockerGap: 8.4, freeSpeed: 61, blockerVmax: 60 };
+  // 6 m to gain at 2 m/s closing = 3 s = 180 m at 60 m/s.
+  assert.equal(A.passReach({ ...b, toTurnIn: 200 }), true);
+  assert.equal(A.passReach({ ...b, toTurnIn: 60 }), false, "a lunge");
+  assert.equal(A.passReach({ ...b, toTurnIn: 1e9 }), true, "no corner ahead");
+  assert.equal(A.passReach({ ...b, blockerGap: 2, toTurnIn: 5 }), true, "already alongside");
+  assert.equal(A.passReach({ ...b, blockerSpeed: 3, toTurnIn: 5 }), true, "a crawling car is an obstacle");
+  // attackOK carries it: a prime zone is still no place for a hopeless lunge.
+  const z = { traits: { craft: 0.75 }, speed: 46, blockerSpeed: 40, roll: 0.5, kAhead: 0, attackQ: 0.9, vTop: 72 };
+  assert.equal(A.attackOK({ ...z, toTurnIn: 80, blockerGap: 8 }), true);
+  assert.equal(A.attackOK({ ...z, toTurnIn: 20, blockerGap: 14 }), false);
+});

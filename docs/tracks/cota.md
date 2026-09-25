@@ -19,11 +19,12 @@ Light fog mood: thin warm haze low on the ridgelines, fading distant boxes to a
 pale dusty green-gray.
 
 ## 3. Elevation
-- `s≈0.08–0.12` — steep Turn 1 climb, the signature ~18 m ascent from the start
-  line to a blind hairpin apex (steepest braking zone of the year).
-- `s≈0.12–0.28` — rapid descent off T1 into the flowing Esses, rolling up-and-down.
-- `s≈0.46–0.62` — long back straight with a subtle crest ~1/3 along (briefly blind).
-- `s≈0.78–0.90` — gentle undulation through the multi-apex sweepers.
+Real Hill Country relief from the SRTM bake in `js/track/circuit-elevations.js`
+(~22 m peak-to-trough). Continuous rolling — not three sparse cosine bumps
+with ~70% of the lap dead-flat between them.
+- Steep Turn 1 climb from the start line to the blind hairpin.
+- Descent into the flowing Esses, then rolling mid-lap and back-straight crest.
+- Gentle undulation through the multi-apex sweepers.
 
 ## 4. Landmarks & Surroundings by Lap Position
 

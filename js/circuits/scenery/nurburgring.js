@@ -11,11 +11,15 @@
         spectatorHill, broadcastCompound, billboard, gantry, marshalPost,
         motorhome, fence, guardrail, tyreWall, groundPatch, modelGroup,
         bowlSeatWall, cameraTower, sponsorHoarding, seat, forestEdge,
-        addBox, addCyl, addCone, addPrism, addFrustum } = api;
+        addBox, addCyl, addCone, addPrism, addFrustum, indexSolid } = api;
 
       function scaffoldStand(s0, s1, side, gap, rows) {
         const TUBE = [0.62, 0.63, 0.66], DECK = [0.44, 0.45, 0.48];
         const BENCH = [[0.80, 0.78, 0.74], [0.30, 0.36, 0.52], [0.72, 0.28, 0.24]];
+        // Raw primitives book no ground: reserve the rake so the deferred
+        // roadside scatter does not plant through it (0.766-0.78 lost the
+        // spectator bank that used to hold that ground).
+        indexSolid(s0, s1, side, gap, rows * 1.9 + 1);
         let i = 0;
         along(s0, s1, 6, (k, spacing) => {
           const seg = spacing * 0.98;
@@ -66,15 +70,17 @@
           });
         }
       }
-      // The deep rank on the RIGHT is split twice. At 0.440-0.4456 and
-      // 0.5515-0.5631 its 41 m offset carries it to within ~11-13 m of the
-      // parallel back straight across the loop, which runs ~8 m lower (the
-      // -12 m back-loop dip): the pine is anchored off its own road while its
-      // crown tiers hang over the lower terrain — eight of float-audit's ten
-      // FLOATING clusters (the other two: `front` above). Restart points sit on the belt's own odd-node
-      // grid so every other tree keeps its spot.
+      // The deep rank on the RIGHT: its 41 m offset carries pines to within
+      // ~11-13 m of the parallel back straight across the loop. Under the
+      // authored cosine bumps that leg was ~8 m lower; under the SRTM bake
+      // it is ~40 m lower, so crowns that used to sit just over a shallow dip
+      // now float 20+ m (float-audit: cones reported at nearest-road frac
+      // 0.31 / lat 12 m, planted from this belt near 0.45). Widen the skip
+      // across the parallel zone. Restart on the belt's odd-node grid. 0.5500, not
+      // 0.5515: node 0.5516 planted a pine 56 m out over the 0.17 leg's verge,
+      // 18 m in the air once the SRTM smoothing (#287) lowered that verge.
       const deep = (s0, s1, side) => (side > 0 && s0 === 0.215
-        ? [[0.215, 0.440], [0.4456, 0.5515], [0.5631, s1]] : [[s0, s1]]);
+        ? [[0.215, 0.430], [0.480, 0.5500], [0.5631, s1]] : [[s0, s1]]);
       for (const [a0, a1] of [[0.215, 0.605], [0.650, 0.925]]) {
         for (const side of [-1, 1]) for (const [s0, s1] of deep(a0, a1, side)) {
           forestEdge(s0, s1, side, 41, {
@@ -365,7 +371,7 @@
 
       // General-admission grass banks cut into the treeline on the back section.
       spectatorHill(0.36, 0.46, 1, 14, { rows: 3, rise: 1.0, depth: 1.8, density: 0.38, step: 9 });
-      spectatorHill(0.70, 0.78, -1, 14, { rows: 3, rise: 1.0, depth: 1.8, density: 0.38, step: 9 });
+      spectatorHill(0.70, 0.762, -1, 14, { rows: 3, rise: 1.0, depth: 1.8, density: 0.38, step: 9 });  // ends before the Schumacher-S scaffold stand (0.766, same side)
 
       {
         const ang = 1.15 * 6.2832 % 6.2832;

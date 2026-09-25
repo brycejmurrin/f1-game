@@ -26,7 +26,12 @@
         const g = Math.floor(i * 12 / OUTER_BAYS);       // original 12-bay index — keeps the banding
         // Slight overlap closes the chord gap between independently oriented
         // bays, so the oval reads as one stadium wall through the corners.
-        grandstandEx(s % 1, 1, 13, OUTER_BAY_LEN * 1.035, null, null, {
+        // Near s≈0 the closing-chord centerline remapped neonTower onto the
+        // crowdBank (+1 coplanar). Nudge those bays out by MIN_SEP (3 cm).
+        const s01 = ((s % 1) + 1) % 1;
+        const nearStart = s01 < 0.04 || s01 > 0.96;
+        const gap = 13 + (nearStart ? 0.03 : 0);
+        grandstandEx(s01, 1, gap, OUTER_BAY_LEN * 1.035, null, null, {
           livery: g % 3 === 0 ? "alu" : (g % 3 === 1 ? "concrete" : "darkSteel"),
           tiers: 3, roof: g % 4 === 0 ? "cantilever" : null,
           endWalls: false, pylons: g % 4 === 0,
@@ -211,7 +216,7 @@
         crowd: [[0.30, 0.42, 0.66], [0.86, 0.86, 0.84], [0.72, 0.20, 0.18]],
       });
       scaffoldStand(0.512, 0.528, 1, 22, {
-        rows: 6, step: 9, density: 0.40,
+        rows: 6, step: 9, density: 0.40, legEvery: 1,   // every bay on its own legs: bays do not touch
         bench: [[0.30, 0.42, 0.66], [0.82, 0.80, 0.76]],
         crowd: [[0.86, 0.86, 0.84], [0.30, 0.42, 0.66], [0.72, 0.20, 0.18]],
       });

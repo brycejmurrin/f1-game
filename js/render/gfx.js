@@ -67,6 +67,9 @@
  *     arrays. assets.js supported() detects the pair (GLX + WGX + TLX).
  *   drawParticles(data, floatCount, additive)    transient FX vertex batch —
  *     js/fx/particles.js feature-detects it (GLX + WGX + TLX).
+ *   uploadTexture(tex)                           push a createTexture() handle to
+ *     the GPU now rather than at its first draw. TLX only (GLX and WGX upload
+ *     inside createTexture); the menu's paced car preparation calls it.
  *
  * Frame protocol (per rendered frame, in this order):
  *   shadowBegin(lightVP) -> castShadow(mesh,model) / castShadowChunked(mesh,model)

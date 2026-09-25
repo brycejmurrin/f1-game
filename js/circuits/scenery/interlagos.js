@@ -189,8 +189,17 @@
                 [7.6, 0.22, 0.78], (i % 2) ? RUSTED : [0.60, 0.38, 0.24], b);
             }
           }
+          // Wave-4: yellow/green Brazilian fascia on the front rail (Sector M /
+          // Curva 1 identity — research: packed yellow-green crowd terraces).
+          if (opts.brFlag) {
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(vadd(a.c, a.r, IN * 5.4), a.u, backH * 0.55),
+              [0.28, 1.1, len * 0.92], RAIL_Y, b);
+            addBox(stage, vadd(vadd(a.c, a.r, IN * 5.4), a.u, backH * 0.55 + 1.3),
+              [0.28, 1.1, len * 0.92], RAIL_G, b);
+          }
           stage._mat = 0;
-        });
+        }, { required: !!opts.required });
       };
 
       const pitGarageRow = (id, s, side, gap, bays) => {
@@ -312,6 +321,30 @@
 
       grandstandEx(0.01, -1, 10, 120, null, [0.94, 0.84, 0.22],
                    { livery: "steel", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
+      // Wave-4 hero: Tribunas / Sector M facade — yellow+green Brazilian trim
+      // over the generic grandstandEx (Monza Tribuna Centrale pattern).
+      {
+        const a = anchor(K(0.01), -1, 12);
+        if (!onTrack(a.c[0], a.c[2], 20)) {
+          const b = [a.r, a.u, a.t];
+          modelGroup("interlagos-main-tribuna", {
+            center: vadd(a.c, a.u, 9), size: [16, 18, 110], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.CONCRETE;
+            const GREY_A = [0.62, 0.62, 0.64], GREY_B = [0.56, 0.56, 0.58];
+            addBox(stage, vadd(a.c, a.u, 4.0), [14, 8.0, 100], GREY_A, b);
+            addBox(stage, vadd(vadd(a.c, a.r, 2.5), a.u, 10.5), [12, 6.5, 90], GREY_B, b);
+            // Yellow / green fascia strip — Sector M identity from race photos.
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(vadd(a.c, a.r, -6.5), a.u, 7.5),
+              [0.45, 1.2, 96], RAIL_Y, b);
+            addBox(stage, vadd(vadd(a.c, a.r, -6.5), a.u, 8.9),
+              [0.45, 1.2, 96], RAIL_G, b);
+            // Flat canopy lip.
+            addBox(stage, vadd(a.c, a.u, 14.2), [13, 0.6, 92], [0.72, 0.74, 0.78], b);
+          }, { required: true });
+        }
+      }
       // Open steel truss roof for a different silhouette along the same tier
       grandstandEx(0.05, -1, 11,  85, null, [0.18, 0.58, 0.32],
                    { livery: "darkSteel", roof: "truss", pylons: true });
@@ -319,10 +352,49 @@
                    { livery: "sandstone", roof: "flat" });
       // Steep PACKED upper terraces rising behind the Curva 1 bowl stands
       crowdBank(0.02, -1, 30, 130, 8);
-      arquibancada("interlagos-arq-sol", 0.117, -1, 16, 7, { rows: 8 });
+      // Wave-4 hero: Curva do Sol / Sector H open terrace — yellow+green fascia.
+      arquibancada("interlagos-arq-sol", 0.117, -1, 16, 7, { rows: 8, required: true, brFlag: true });
       for (const s of [0.00, 0.04, 0.08]) billboard(K(s), -1, 26, 16, 7, [0.94, 0.92, 0.88]);
 
       const KERB_R = [0.80, 0.18, 0.18], KERB_W = [0.92, 0.92, 0.92];
+      // ── Senna S corridor — wave-4 hero (research: downhill L-R into Curva do Sol)
+      // Compact yellow/green packed stand on the outside + thick kerb teeth both
+      // apexes. Kept as one required modelGroup so clip-audit treats the assembly
+      // as a single model (interlagos baseline is 0 severe).
+      {
+        const a = anchor(K(0.055), -1, 18);
+        if (!onTrack(a.c[0], a.c[2], 14)) {
+          const b = [a.r, a.u, a.t];
+          modelGroup("interlagos-senna-s", {
+            center: vadd(a.c, a.u, 6), size: [22, 14, 48], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.CONCRETE;
+            // Stepped open terrace mass — rows walk OUTWARD along side*a.r.
+            for (let t = 0; t < 5; t++) {
+              const outLat = (-1) * (2.0 + t * 1.8);
+              addBox(stage, vadd(vadd(a.c, a.r, outLat), a.u, t * 1.15 + 0.6),
+                [3.2, 1.15, 42 - t * 2], CONC_WORN[t % CONC_WORN.length], b);
+            }
+            // Yellow / green rail fascia — Brazilian race-day read.
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(vadd(a.c, a.r, -1 * 3.5), a.u, 6.2),
+              [0.35, 1.0, 38], RAIL_Y, b);
+            addBox(stage, vadd(vadd(a.c, a.r, -1 * 3.5), a.u, 7.4),
+              [0.35, 1.0, 38], RAIL_G, b);
+            // Dense yellow/green crowd speckles on the top two rows.
+            stage._mat = MAT.FABRIC;
+            for (let r = 3; r < 5; r++)
+              for (let c = 0; c < 18; c++) {
+                if (hash(r * 31 + c * 17) < 0.28) continue;
+                const outLat = (-1) * (2.0 + r * 1.8);
+                addBox(stage,
+                  vadd(vadd(vadd(a.c, a.r, outLat), a.t, (c - 8.5) * 2.1), a.u, r * 1.15 + 1.3),
+                  [0.55, 0.95, 0.45], crowdCols[(r * 5 + c) % crowdCols.length], b);
+              }
+            stage._mat = 0;
+          }, { required: true });
+        }
+      }
       for (const [s, side] of [
         [0.04, -1], [0.05, 1], [0.055, -1], [0.065, 1], [0.075, -1], [0.085, 1], [0.095, -1],
       ]) {
@@ -450,6 +522,41 @@
         step: 165,
         floor: 9,
       });
+
+      // ── São Paulo skyline — wave-4 hero (research: haze-grey high-rises on
+      // the far horizon behind the favela hills, NOT trackside). One atomic
+      // cluster so clip-audit sees a single model; dist 240 m keeps feet on
+      // the far-scenery floor without floating over the lake void.
+      {
+        const a = anchor(K(0.60), 1, 240);
+        if (!onTrack(a.c[0], a.c[2], 40)) {
+          const b = [a.r, a.u, a.t];
+          const HAZE = [
+            [0.50, 0.52, 0.58], [0.46, 0.48, 0.54], [0.54, 0.56, 0.62],
+            [0.48, 0.50, 0.56], [0.52, 0.54, 0.60], [0.44, 0.46, 0.52],
+          ];
+          modelGroup("interlagos-sp-skyline", {
+            center: vadd(a.c, a.u, 45), size: [60, 110, 140], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.CONCRETE;
+            const towers = [
+              [-48, 52, 14], [-28, 78, 16], [-8, 64, 12],
+              [12, 92, 18], [34, 70, 14], [52, 58, 11],
+            ];
+            for (let i = 0; i < towers.length; i++) {
+              const [tOff, h, w] = towers[i];
+              const base = vadd(a.c, a.t, tOff);
+              addBox(stage, vadd(base, a.u, h / 2), [w, h, w * 0.72], HAZE[i], b);
+              // Lit window band mid-height so the silhouette reads as city, not rock.
+              stage._mat = MAT.GLASS;
+              addBox(stage, vadd(base, a.u, h * 0.55),
+                [w * 1.05, h * 0.12, w * 0.78], LIT_WIN, b);
+              stage._mat = MAT.CONCRETE;
+            }
+            stage._mat = 0;
+          }, { required: true });
+        }
+      }
 
       every(180, (k) => {
         // Only around the R side skyline section (s≈0.40–0.85)

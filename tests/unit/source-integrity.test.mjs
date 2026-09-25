@@ -262,6 +262,8 @@ test("Settings is a door-index stack with labelled pages", () => {
   assert.match(html, /id="pm-settings-index"[^>]*class="[^"]*pm-doors"/);
   assert.match(html, /id="pm-open-controls"/);
   assert.match(html, /id="pm-open-display"/);
+  assert.match(html, /id="pm-open-appearance"/);
+  assert.match(html, /id="pm-panel-appearance"/);
   for (const id of ["controls", "display"]) {
     assert.match(html, new RegExp(`id="pm-panel-${id}"[^>]*role="region"[\\s\\S]{0,180}aria-labelledby="dlg-settings"`));
   }
@@ -334,6 +336,7 @@ test("Circuit filters are not nested in a listbox and circuits expose button sta
 test("scenery SUPPRESSED is coalesced, not a per-prop Log.warn", () => {
   const files = [
     "js/track/tracks.js",
+    "js/track/scenery/build-props.js",
     "js/track/scenery/structures.js",
     "js/track/scenery/nature.js",
     "js/track/scenery/city.js",
@@ -346,9 +349,9 @@ test("scenery SUPPRESSED is coalesced, not a per-prop Log.warn", () => {
     assert.doesNotMatch(src, /Log\.warn\("track", `place SUPPRESSED/,
       rel + " still warns per suppressed place()");
   }
-  const tracks = fs.readFileSync(path.join(ROOT, "js/track/tracks.js"), "utf8");
-  assert.match(tracks, /const noteSuppressed = /);
-  assert.match(tracks, /: suppressed /);
+  const props = fs.readFileSync(path.join(ROOT, "js/track/scenery/build-props.js"), "utf8");
+  assert.match(props, /const noteSuppressed = /);
+  assert.match(props, /: suppressed /);
 });
 
 
