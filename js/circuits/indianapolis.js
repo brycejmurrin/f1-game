@@ -30,10 +30,7 @@
     sceneryCoordinates: "racing",
     terrainOuter: 90,
     dressingExclusions: [
-      // City too: after the closing-chord centerline fix, neonTower slabs at
-      // gap 13-25 sat 1.5 mm off the oval grandstandEx crowdBank near s≈0
-      // (coplanar +1). The 40 outer bays already dress that band.
-      { kinds: ["foliage", "city"], s0: 0.86, s1: 0.22 },
+      { kinds: ["foliage"], s0: 0.86, s1: 0.22 },
       { kind: "foliage", s0: 0.30, s1: 0.70 },
     ],
     // Flat Midwestern summer: high hazy sun, humid white horizon.

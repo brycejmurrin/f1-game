@@ -3263,4 +3263,4 @@ No raw px: the vertical padding is `calc(var(--gap) / 2)`.
 
 ## 2026-09-25 — closing-chord coplanar seam fixes
 
-Closing-chord centerline interpolation shifted start-seam props on indy/madrid/watkins (+1 coplanar spot each). Fixed at source: indy city dressing exclusion on the oval band, madrid `ownPitStraight` (bespoke grandstandEx owns the pit straight), watkins hoarding gap 6.5→6.0. Lowered stale coplanar caps (indianapolis 8→3, istanbul 2→1, jerez 3→2, silverstone 11→10).
+Closing-chord centerline interpolation shifted start-seam props on indy/madrid/watkins (+1 coplanar spot each). Fixed at source: Indy outer-bay gap +MIN_SEP near s≈0 (city carve unmasked an intentional upper-tier shell floater), madrid `ownPitStraight` (bespoke grandstandEx owns the pit straight), watkins hoarding gap 6.5→6.0. Lowered stale caps that measured better (coplanar istanbul/jerez/silverstone; props-tris indy/madrid; monza hidden-face STRIP after count).
