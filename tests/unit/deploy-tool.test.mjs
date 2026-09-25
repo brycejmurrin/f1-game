@@ -374,6 +374,10 @@ test("the parts census derives its trigger, and every fail-safe branch RUNS it",
   // pages.yml has `needs: ci`, and both read the AGGREGATE of the jobs that ran.
   assert.ok(!/^    if: \$\{\{ inputs\.fast_tier_run == '' && /m.test(job),
     "the census must stay a job that runs and skips a step, not a job that skips");
+  // NOT skipped by a reused fast tier (2026-09-24): its filter diffs a base, so
+  // the last push's green census says nothing about the train's live..tip diff.
+  assert.ok(!/^    if: .*fast_tier_run/m.test(job),
+    "the train must census live..tip itself; a reused fast run only covered the last push's diff");
   assert.match(job, /- if: steps\.filter\.outputs\.parts == 'true'\n\s+run: npm run test:sweeps-parts/,
     "the expensive step is what the filter gates");
 });
