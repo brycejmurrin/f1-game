@@ -105,16 +105,38 @@ const CarDraw = (function () {
     // is called for EVERY drawn car in the body pass, again in the dynamic car-shadow
     // pass and again in the night lamp-shadow pass — up to ~66 times a frame for a
     // value that cannot change unless something was written to the store.
+    // The memo entry also holds each FULL key (base + ":" + seat number or
+    // ":sh"), so a hit concatenates nothing, and the rev test compares the two
+    // parts (a number and the interned ruleset string) instead of building a
+    // "rev|legality" string on every call.
     const _teamMeshKeyCache = new Map();
-    function teamMeshKey(team) {
+    function teamMeshEntry(team) {
       // The era moves the factory build without a store write (Career.engage
       // → applyRegs), so the memo is keyed on the ruleset as well as rev.
-      const rev = G.store.rev + "|" + Parts.legalityKey();
-      const c = _teamMeshKeyCache.get(team.id);
-      if (c && c.rev === rev) return c.val;
+      const rev = G.store.rev, leg = Parts.legalityKey();
+      let c = _teamMeshKeyCache.get(team.id);
+      if (c && c.rev === rev && c.leg === leg) return c;
       const val = team.id + ":" + G.getLiveryId(team.id) + ":" + Parts.factoryKey(team);
-      _teamMeshKeyCache.set(team.id, { val, rev });
-      return val;
+      c = { val, rev, leg, full: new Map() };
+      _teamMeshKeyCache.set(team.id, c);
+      return c;
+    }
+    function teamMeshKey(team) { return teamMeshEntry(team).val; }
+    // teamMeshKey(team) + ":" + suffix, memoised with it (suffix: a seat number or "sh").
+    function teamMeshKeyFor(team, suffix) {
+      const c = teamMeshEntry(team);
+      let k = c.full.get(suffix);
+      if (k === undefined) { k = c.val + ":" + suffix; c.full.set(suffix, k); }
+      return k;
+    }
+    // ONE hoisted factory for the three team caches: the caller sets the pending
+    // build, then putBoundedMesh calls it on a miss only. A per-call arrow here
+    // was a fresh closure per drawn car per pass (~66 a frame) on the hit path.
+    let _pbTeam = null, _pbNum = null, _pbKind = 0;   // 0 painted, 1 silhouette, 2 body-only
+    function buildPendingTeamMesh() {
+      const team = _pbTeam, num = _pbNum;
+      return G.gfx.createMesh(buildCarData(team, _pbKind === 1 ? { num, silhouette: true }
+        : _pbKind === 2 ? { noWheels: true, num } : { num }));
     }
     // Painted full meshes are KEYED PER DRIVER (helmet design is opts.num). Shadow
     // casters pass silhouette:true — depth cannot see paint, and Car3D already
@@ -124,17 +146,14 @@ const CarDraw = (function () {
     // painted key only.
     function teamMesh(team, car, silhouette) {
       const sil = silhouette === true || (car == null && silhouette !== false);
-      if (sil) {
-        return putBoundedMesh(teamMeshes, teamMeshOrder, teamMeshKey(team) + ":sh",
-          () => G.gfx.createMesh(buildCarData(team, { num: carDecalNum(team, car), silhouette: true })),
-          TEAM_MESH_CACHE_MAX);
-      }
       const num = carDecalNum(team, car);
-      return putBoundedMesh(teamMeshes, teamMeshOrder, teamMeshKey(team) + ":" + num,
-        () => G.gfx.createMesh(buildCarData(team, { num })), TEAM_MESH_CACHE_MAX);
+      _pbTeam = team; _pbNum = num; _pbKind = sil ? 1 : 0;
+      return putBoundedMesh(teamMeshes, teamMeshOrder, sil ? teamMeshKeyFor(team, "sh") : teamMeshKeyFor(team, num),
+        buildPendingTeamMesh, TEAM_MESH_CACHE_MAX);
     }
     function teamBodyMesh(team, car) {
-      return putBoundedMesh(teamBodies, teamBodyOrder, teamMeshKey(team) + ":" + carDecalNum(team, car), () => G.gfx.createMesh(buildCarData(team, { noWheels: true, num: carDecalNum(team, car) })), TEAM_MESH_CACHE_MAX);
+      _pbTeam = team; _pbNum = carDecalNum(team, car); _pbKind = 2;   // body-only: noWheels, num
+      return putBoundedMesh(teamBodies, teamBodyOrder, teamMeshKeyFor(team, _pbNum), buildPendingTeamMesh, TEAM_MESH_CACHE_MAX);
     }
 
     // ── decals ──────────────────────────────────────────────────────
@@ -198,13 +217,15 @@ const CarDraw = (function () {
     // A team's rear-wing downforce level (0..4), driving which endplate-number mesh
     // to draw. getVisualTiers is a small 12-category loop and the resulting mesh is
     // cached per level, so resolving this per car/frame is negligible.
-    const _aeroLevelCache = new Map();   // "player|factory:team.id" -> {val, rev}
+    // [factory, player] maps of team.id -> state; rev/leg compared as parts, no
+    // per-call key or "rev|legality" string (this runs per drawn car per frame).
+    const _aeroLevelCache = [new Map(), new Map()];
     function teamDecalState(team, usePlayerSetup) {
-      const key = (usePlayerSetup ? "player:" : "factory:") + team.id;
+      const cache = _aeroLevelCache[usePlayerSetup ? 1 : 0];
       // Factory: the ruleset (Parts.setLegality) is the only thing that moves it.
-      const rev = usePlayerSetup ? G.store.rev + "|" + Parts.legalityKey() : "L" + Parts.legalityKey();
-      const c = _aeroLevelCache.get(key);
-      if (c && c.rev === rev) return c;
+      const rev = usePlayerSetup ? G.store.rev : -1, leg = Parts.legalityKey();
+      const c = cache.get(team.id);
+      if (c && c.rev === rev && c.leg === leg) return c;
       const setup = usePlayerSetup ? G.getTeamParts(team.id) : Parts.getFactorySetup(team);
       const parts = Parts.getVisualTiers(setup, team);
       // aero: the resolved RECIPE, resolved once here for every flap consumer.
@@ -212,8 +233,8 @@ const CarDraw = (function () {
       // every flap vertex and made the moveable wings invisible (see aeroStyleOf).
       const state = { val: Car3D.aeroLevelOf ? Car3D.aeroLevelOf(parts) : 2,
                       aero: Car3D.aeroStyleOf ? Car3D.aeroStyleOf(parts) : null,
-                      parts, rev };
-      _aeroLevelCache.set(key, state);
+                      parts, rev, leg, fwKey: null };
+      cache.set(team.id, state);
       return state;
     }
     // Build every car's body mesh and livery atlas BEFORE the first frame draws
@@ -522,10 +543,17 @@ const CarDraw = (function () {
     // factory parts, so distinct fitted combos in one race are far fewer.
     const fieldWheelOrder = [];
     const FIELD_WHEEL_CACHE_MAX = 12;
+    let _fwVt = null;   // the pending build for the hoisted factory below (no closure per car per frame)
     function getFieldWheelMeshes(team) {
-      const vt = teamDecalState(team, false).parts;   // permanently cached factory resolve — was ~1260 resolveSetup/s across the drawn field
-      const key = "field:" + (vt._ids ? vt._ids.tyres + ":" + vt._ids.brakes + ":" + vt._ids.wheels : "1:1:1");
-      return putBoundedMesh(fieldWheelCache, fieldWheelOrder, key, () => {
+      const st = teamDecalState(team, false);
+      const vt = st.parts;   // permanently cached factory resolve — was ~1260 resolveSetup/s across the drawn field
+      // A pure function of the cached state's parts, so it is built once per state.
+      const key = st.fwKey || (st.fwKey = "field:" + (vt._ids ? vt._ids.tyres + ":" + vt._ids.brakes + ":" + vt._ids.wheels : "1:1:1"));
+      _fwVt = vt;
+      return putBoundedMesh(fieldWheelCache, fieldWheelOrder, key, buildPendingFieldWheels, FIELD_WHEEL_CACHE_MAX, freeWheelPair);
+    }
+    function buildPendingFieldWheels() {
+        const vt = _fwVt;
         const tyre = vt._visual && vt._visual.tyres;
         const brake = vt._visual && vt._visual.brakes;
         const wheel = vt._visual && vt._visual.wheels;
@@ -545,7 +573,6 @@ const CarDraw = (function () {
           FFixed: G.gfx.createMesh(front.fixed),
           RFixed: G.gfx.createMesh(rear.fixed),
         };
-      }, FIELD_WHEEL_CACHE_MAX, freeWheelPair);
     }
     const _cq = [], _cqMesh = [];
     let _cqN = 0;

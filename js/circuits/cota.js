@@ -23,7 +23,12 @@
     lengthKm: 5.5,
     baseHW: 8,
     sceneryCoordinates: "racing",
-    terrainOuter: 48,
+    // 60, not 48: since the SRTM bake lifted the straight/T1 up to 10 m over
+    // the lap's low point, a 48 m skirt dropped ~10 m to the floor between 35
+    // and 48 m out — right under the T1 bleachers, pit motorhomes and the
+    // upper main-straight stand (ground-audit buried 42 -> 11). 90+ floats
+    // the amphitheatre lawn and tower props instead (unsupported 43-73).
+    terrainOuter: 60,
     dressingExclusions: [
       { kind: "foliage", s0: 0.94, s1: 0.16 },          // pits + Big Red sightline
       { kinds: ["foliage"], s0: 0.72, s1: 0.86, side: 1 }, // tower/amphitheater

@@ -13,7 +13,7 @@
               modelGroup, groundPatch, groundedSegments,
               cityFront, forestEdge, bush,
               terrace, tieredBowl, broadleafFall, plane, acacia, cypress,
-              cameraTower, sponsorHoarding, broadcastCompound, circuitKit } = api;
+              cameraTower, sponsorHoarding, broadcastCompound, circuitKit, terrainYAt } = api;
       const cityBand = (s) => (s > 0.14 && s < 0.60) || s > 0.94 || s < 0.02;
       // Pit straight sides. The engine's pit complex (garages, pit wall) takes
       // pit.side +1, the RIGHT: the infield of this clockwise lap, where the
@@ -64,8 +64,17 @@
             addBox(stage, vadd(vadd(p.c, p.u, h - 0.3), p.r, side * i * 1.5),
                    [1.1, 0.9, 1.0], [1.00, 0.97, 0.78], [p.r, p.u, p.t]);
           }
-          addBox(stage, vadd(p.c, p.u, 0.05),
-                 [10, 0.08, 10], [0.82, 0.76, 0.52], [p.r, p.u, p.t]);
+          // Pad top 2 cm over the HIGHEST ground under its 10 m square, its
+          // body reaching 5 cm under the lowest: at the anchor's height it lay
+          // under the sloping verge (ground-audit buried).
+          let hi = p.c[1], lo = p.c[1];
+          for (const fr of [-5, 0, 5]) for (const ft of [-5, 0, 5]) {
+            const q = vadd(vadd(p.c, p.r, fr), p.t, ft), g = terrainYAt(q[0], q[2]);
+            if (g != null) { hi = Math.max(hi, g); lo = Math.min(lo, g); }
+          }
+          const padH = hi + 0.02 - (lo - 0.05);
+          addBox(stage, [p.c[0], hi + 0.02 - padH / 2, p.c[2]],
+                 [10, padH, 10], [0.82, 0.76, 0.52], [p.r, p.u, p.t]);
         });
       };
 
@@ -123,8 +132,13 @@
       // ── Kerb accent strips ────────────────────────────────────────────────────
       const kerb = (s, side, len) => {
         const k = K(s);
-        place(k, side, 2, [0.5, 0.16, len], [0.82, 0.16, 0.16]);
-        place(k, side, 3.4, [2.6, 0.16, len], [0.94, 0.94, 0.94]);
+        // place() sinks 0.8 m (height = 0.8 + visible): at 0.16 every strip
+        // lay wholly underground (ground-audit buried, 29 prims). 0.84 = 4 cm
+        // proud and still under THIN_PROP_H, so they stay decals (no driving
+        // limit). The white strip starts clear of the red one: at 3.4 they
+        // overlapped 0.15 m with coplanar tops.
+        place(k, side, 2, [0.5, 0.84, len], [0.82, 0.16, 0.16]);
+        place(k, side, 3.6, [2.6, 0.84, len], [0.94, 0.94, 0.94]);
       };
 
       const BOWL_BLUE = [0.25, 0.35, 0.62];
@@ -152,7 +166,8 @@
           addBox(stage, vadd(vadd(a.c, a.r, -side * 4.7), a.u, 6.2),
                  [1.0, 7.8, len - 1.2], crowd, bv);
           // High roof: underside > 11 m, and its bounded footprint stays off-road.
-          addBox(stage, vadd(a.c, a.u, 11.8), [depth + 2, 0.8, len + 1], [0.84, 0.85, 0.87], bv);
+          // Underside 2 cm over the 11 m body: at 11.4 it hovered (ground-audit).
+          addBox(stage, vadd(a.c, a.u, 11.42), [depth + 2, 0.8, len + 1], [0.84, 0.85, 0.87], bv);
         }, { required: !!required });
       };
 

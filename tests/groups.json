@@ -324,6 +324,7 @@
     "tests/unit/deploy-stamp.test.mjs",
     "tests/unit/track-build-wait.test.mjs",
     "tests/unit/deploy-tool.test.mjs",
+    "tests/unit/tooling-fast-runner.test.mjs",
     "// The Node VM game harness (tools/lib/game-vm.cjs): boots js/game.js headless in",
     "// ~300 ms and reproduces tests/data/physics-baseline.json EXACTLY, so the",
     "// driving-model gate runs here in seconds rather than in a browser job.",
@@ -818,6 +819,27 @@
       "kind": "node",
       "files": [
         "tests/unit/environment-json.test.mjs"
+      ]
+    },
+    "test:docs-guards": {
+      "kind": "node",
+      "files": [
+        "tests/unit/agent-config.test.mjs",
+        "tests/unit/agent-surface.test.mjs",
+        "tests/unit/apex-tools-mcp.test.mjs",
+        "tests/unit/assets-pack.test.mjs",
+        "tests/unit/cdmcp-measure.test.mjs",
+        "tests/unit/ci-coverage.test.mjs",
+        "tests/unit/component-inventory.test.mjs",
+        "tests/unit/curvature-channels.test.mjs",
+        "tests/unit/docs-integrity.test.mjs",
+        "tests/unit/environment-json.test.mjs",
+        "tests/unit/gen-arch-table.test.mjs",
+        "tests/unit/generated-docs.test.mjs",
+        "tests/unit/hooks-documented.test.mjs",
+        "tests/unit/skill-progressive.test.mjs",
+        "tests/unit/test-groups.test.mjs",
+        "tests/unit/ui-improve-pass.test.mjs"
       ]
     },
     "test:node-slow": {

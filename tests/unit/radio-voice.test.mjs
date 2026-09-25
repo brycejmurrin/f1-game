@@ -233,6 +233,20 @@ test("a REMOTE voice is never chosen — its lead-in is unbounded", async () => 
   assert.equal(spoke.voice && spoke.voice.name, "Local");
 });
 
+test("a card that will not be spoken still ends the words of the card it replaced", async () => {
+  // The shipped defaults: TEAM RADIO off, the announcer on.
+  const { RV: R, G, synth } = load();
+  G.announcer = { enabled: () => true };
+  const v = R.create(G);
+  assert.equal(v.say("GASLY MAKES THE MOVE ON BOTTAS", 4, "comm"), true);
+  await flush();
+  assert.ok(synth.calls.some((c) => c.m === "speak"), "precondition: the commentator is talking");
+  const cancels = synth.calls.filter((c) => c.m === "cancel").length;
+  assert.equal(v.say("SAFETY CAR, SAFETY CAR. NO OVERTAKING", 3, "race"), false, "precondition: TEAM RADIO off does not speak the flag");
+  await flush();
+  assert.ok(synth.calls.filter((c) => c.m === "cancel").length > cancels, "the commentary kept talking over the flag card");
+});
+
 test("the setting round-trips, and turning it off stops a line in flight", async () => {
   const { RV: R, G, synth, saved } = load({ stored: { radioVoice: true } });
   const v = R.create(G);

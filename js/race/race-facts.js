@@ -89,6 +89,7 @@ const RaceFacts = (function () {
       return c.finished && s && s.finProg != null ? s.finProg : (c.prog || 0);
     };
     function rank(list) {
+      const clockOf = (c) => (st.get(c).finT || 0) + (c.penalty || 0);
       const out = [];
       for (const c of list) if (!c.retired) out.push(c);
       out.sort((a, b) => {
@@ -96,13 +97,14 @@ const RaceFacts = (function () {
         // by distance: each froze wherever its last timestep left it past the
         // line, up to ~1.4 m at 85 m/s, and a car flagged 20 s behind the winner
         // could rank ahead of it and be told it won.
+        // A time penalty is served on that clock, as endRace classifies.
         if (a.finished && b.finished) {
-          return ((b.lap || 0) - (a.lap || 0)) || ((st.get(a).finT || 0) - (st.get(b).finT || 0));
+          return ((b.lap || 0) - (a.lap || 0)) || (clockOf(a) - clockOf(b));
         }
         const d = distOf(b) - distOf(a);
         if (Math.abs(d) > 1) return d;
         if (a.finished !== b.finished) return a.finished ? -1 : 1;
-        if (a.finished) return (st.get(a).finT || 0) - (st.get(b).finT || 0);
+        if (a.finished) return clockOf(a) - clockOf(b);
         return d;
       });
       return out;
@@ -156,8 +158,12 @@ const RaceFacts = (function () {
         }
         if ((c.lap || 0) > s.lap && c === p) ev.push({ type: "playerLap", lap: c.lap });
         s.lap = c.lap || 0; s.lastLap = c.lastLap || 0;
-        if (c.finished && !s.finished) { s.finProg = c.prog || 0; s.finT = t; finishers.push(c); }
+        if (c.finished && !s.finished) { s.finProg = c.prog || 0; s.finT = t; s.finDue = t + (c.penalty || 0); }
         s.finished = !!c.finished;
+        // A car flagged with a time penalty has no place until the penalty has
+        // run out: a rival crossing inside it still beats it, and "YOU WIN THE
+        // RACE" 3 s before the results say P2 is the one call that must not be wrong.
+        if (s.finDue != null && t >= s.finDue - 1e-9) { s.finDue = null; finishers.push(c); }
       }
 
       order = rank(cars);
