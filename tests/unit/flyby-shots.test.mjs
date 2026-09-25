@@ -741,3 +741,15 @@ test("the menu build warms its shaders BEFORE the slow extras (lamp pre-bake, fl
   assert.match(body, /if \(lit && await menuIdle\(current\)\) _menuGate\.warm = 2;/, "and warm again once a baked (dark) world is in — only then");
   assert.match(game, /const planned = world && _menuFly && _menuFly\.track === track && _menuFly\.key === _menuGate\.ready/);
 });
+
+test("RACE! before the menu's build: build under the card, then fly (never the bare card)", () => {
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const i = game.indexOf("function raceIntro(go)"), body = game.slice(i, game.indexOf("\n}\n", i));
+  assert.match(body, /if \(!built && !menuWorld\(\) && introBuild\(go\)\) return;/, "no world: raceIntro diverts to the build");
+  const j = game.indexOf("function introBuild(go)"), ib = game.slice(j, game.indexOf("\n}\n", j));
+  const b = ib.indexOf("loadingScreen.building("), l = ib.indexOf("loadTrack(idx)"), p = ib.indexOf("FlybySeq.planSteps"), r = ib.indexOf("raceIntro(go)");
+  assert.ok(b > 0 && l > b && p > l && r > p, "card up, then build, then plan, then the flyby");
+  assert.match(ib, /_menuGate\.ready = key; _menuGate\.track = track;/, "the build is keyed like the menu's, so menuWorld() sees it");
+  assert.match(ib, /_introKey = key; raceIntro\(go\)/, "the hand-over marks itself, so a failed build falls back to the card instead of looping");
+  assert.match(ib, /prefers-reduced-motion/, "reduced motion has no flyby to build for");
+});

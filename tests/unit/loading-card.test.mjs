@@ -278,6 +278,22 @@ test("three skips in a row shorten the next flyby — and its announcer budget �
   assert.equal(h.races.length, 4, "every run handed over to the race");
 });
 
+test("building(): the card over the scrim, no timer, no skip, not active — then run() takes over", () => {
+  const h = harness();
+  assert.equal(h.screen.building({ track: { id: "monza", name: "MONZA", country: "Italy" }, laps: 5 }), true);
+  assert.equal(h.els.loading.dataset.phase, "build");
+  assert.equal(h.els.loading.hidden, false, "the card is up while the world builds");
+  assert.equal(h.screen.active(), false, "not active: game.js keeps the canvas hidden, so the old circuit never shows");
+  h.skip();
+  h.tick(LS.FLY_MS * 2);
+  assert.equal(h.races.length, 0, "nothing to skip to and no timer: only run() starts the race");
+  h.run();
+  assert.equal(h.els.loading.dataset.phase, "run");
+  h.tick(LS.FLY_MS);
+  assert.equal(h.races.length, 1);
+  assert.match(read("css/overlays.css"), /#loading\[data-phase="build"\] #ld-card/, "the build phase shows the card");
+});
+
 test("a flyby that plays out resets the streak, and the full cut comes back", () => {
   const h = harness({ flySkips: 5 });
   h.run();
