@@ -1347,7 +1347,8 @@ body[data-density="compact"] #campicker {
    is the no-world fallback where the card is all there is. */
 #loading[data-phase="run"] #ld-card,
 #loading[data-phase="card"] #ld-card,
-#loading[data-phase="hold"] #ld-card { opacity: 1; transform: none; }
+#loading[data-phase="hold"] #ld-card,
+#loading[data-phase="build"] #ld-card { opacity: 1; transform: none; }
 /* THE SKIP HINT. The flyby has always been skippable and nothing said so. A
    pseudo-element, not a node: the shell is at its node ceiling, and the hint
    is decoration of the card, not content of its own. Pinned just above the

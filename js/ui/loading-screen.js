@@ -585,8 +585,23 @@ const LoadingScreen = (function () {
       return true;
     }
 
+    /* THE BUILD. RACE! before the menu built the world: the card goes up over the
+     * usual scrim while game.js builds it, then run() takes over. No timer, no
+     * skip (nothing to skip to yet), and not active(): the canvas stays hidden,
+     * so the previous circuit never shows through. */
+    function building(info) {
+      stop();
+      const r = root();
+      if (!r || !info || !info.track) return false;
+      cur = info; paint(info);
+      applyCard();
+      r.hidden = false;
+      setPhase("build");
+      return true;
+    }
+
     return {
-      run, stop, hold,
+      run, stop, hold, building,
       /** The flyby editor's three sliders. setCard() PATCHES — it merges onto
        *  what is there, so a size slider does not reset the position. RESET is
        *  resetCard(), which drops the geometry first: clampCard(null) is every
