@@ -487,7 +487,10 @@ const Announcer = (function () {
       const plan = G.raceChangeable && G.wxArcPlan;
       if (plan && plan.to && race) st.forecast = { to: plan.to, inS: plan.dur };
       if (info.session === "tt" && typeof GameStore !== "undefined" && GameStore.ttBoard && info.track) {
-        const b = GameStore.ttBoard(info.track.id);
+        // This session's class only (car, weather, pace…), as the HUD's target
+        // is: another class's best can be unbeatable here. No class, no line.
+        const cls = G.records && G.records.current ? G.records.current() : undefined;
+        const b = cls ? GameStore.ttBoard(info.track.id, cls) : null;
         if (b && b[0] && b[0].t > 0) st.best = lapTime(b[0].t);
       }
       extra.story = st;

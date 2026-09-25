@@ -303,7 +303,9 @@ const RaceRadio = (function () {
     function engineerState(f, p) {
       if (f.finished || f.retired || f.pitting || !f.started || t < SETTLE_S) return;
       const green = f.caution === 0;
-      const racing = f.toGo == null || f.toGo > 1;   // the last lap has its own call
+      // The last lap has its own call — except in a one-lap race, which is
+      // all last lap and would otherwise have no attack or defend call at all.
+      const racing = f.toGo == null || f.toGo > 1 || f.laps <= 1;
       // A car that has taken the flag is not someone to attack or defend from.
       const a = f.ahead && !f.ahead.finished ? f.ahead : null, b = f.behind && !f.behind.finished ? f.behind : null;
       if (a && green && racing && f.gapA != null) {
@@ -459,7 +461,11 @@ const RaceRadio = (function () {
       // its new field (makeCars builds a new array) or by the clock going back.
       // A red flag keeps both, and keeps the memory with them.
       const now = G.raceT || 0;
-      if (!live || G.cars !== lastCars || now + 1 < t) { reset(); live = true; lastCars = G.cars; }
+      // NOT on `!live`: a red flag's restart countdown is "not racing" too, and
+      // resetting there forgot the grid, every once-only line and the told
+      // place — and read the re-grid as a lap of passes.
+      if (G.cars !== lastCars || now + 1 < t) { reset(); lastCars = G.cars; }
+      live = true;
       t = now;
       const { f, ev } = facts.observe(G, dt);
       if (!f) return;

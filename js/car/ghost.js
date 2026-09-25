@@ -267,9 +267,12 @@ const Ghost = (function () {
       // ran mid-race — a frame's idle tail is < 16 ms, so it overran into the next
       // frame. That slot rarely comes while the loop renders, so flush() (pause,
       // results, quit, hidden, pagehide) is what actually writes it.
+      // …and a capped wait: a Time Trial driven lap after lap never pauses, so
+      // after IDLE_CAP_MS any idle slot will do (one short write per PB lap).
+      const since = Date.now();
       const idle = (dl) => {
-        if (pending.get(id) !== snap) return;
-        if (dl && typeof dl.timeRemaining === "function" && dl.timeRemaining() < 25) { requestIdleCallback(idle); return; }
+        if (pending.get(id) !== snap) { _flushes.delete(write); return; }   // superseded: do not pin its lap until pagehide
+        if (dl && typeof dl.timeRemaining === "function" && dl.timeRemaining() < 25 && Date.now() - since < IDLE_CAP_MS) { requestIdleCallback(idle); return; }
         write();
       };
       requestIdleCallback(idle);
@@ -281,6 +284,7 @@ const Ghost = (function () {
   // Leaving the page with a record still pending: write it now (synchronous
   // localStorage is allowed in pagehide), or the new ghost dies with the tab.
   const _flushes = new Set();
+  const IDLE_CAP_MS = 5000;    // one write per PB, so at worst one short hitch a lap
   let _flushArmed = false;
   function armFlush(fn) {
     _flushes.add(fn);
