@@ -466,16 +466,6 @@
    keeps the two 2-up columns on the same vertical tracks (measured 205 vs 203
    on 1280 before this). Color stays transparent on the red doors. */
 #menu-buttons :is(#menu-hero, #menu-primary) .bigbtn { border-color: transparent; }
-/* Long-form play is its own darker invitation; immediate sessions remain the
-   red actions. The contrast also separates the saved-career door at a glance. */
-/* #menu-hero in the selector for WEIGHT: `#menu-buttons :is(#menu-hero,
-   #menu-primary) .bigbtn` (2,1,0) above clears door borders to transparent and
-   out-ranked this (2,0,0) rule, so the red edge that marks this door never
-   painted and it read as an unmarked dark tile. */
-#menu-buttons #menu-hero #mb-career {
-  background: var(--plate-opaque); border-color: var(--red);
-  box-shadow: var(--edge); color: var(--text);
-}
 /* width: 100% is REDUNDANT in the cascade (#menu-buttons .bigbtn at (1,1,0)
    already wins it on every branch) and KEPT on purpose: tests/unit/title-menu-even
    pins this exact declaration as the contract that 2-up cells fill, and
