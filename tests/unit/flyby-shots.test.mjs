@@ -773,3 +773,52 @@ test("the world key includes the grid size, and a failed build does not keep the
   assert.match(game, /track = null; builtTrackId = null;/, "a build that throws must force the next loadTrack to rebuild");
   assert.match(game, /const menuBlank = state === "menu" && !setupPreviewOn && \(!track \|\| !loadingScreen\.active\(\) \|\| !menuWorld\(\)\);/, "the no-world card shows no stale circuit");
 });
+
+test("plans are reused when they still hold, and re-planned when they do not", async () => {
+  await withTrack("monaco", (track, g) => {
+    const F = g.sandbox.FlybySeq;
+    F.setDuration(24000); F.setPlayerSlot(11, 22);
+    const list = F.bindCorners(track, F.DEFAULT), total = list.reduce((a, s) => a + s.dur, 0);
+    const plain = list.find((s) => !JSON.stringify(s).includes('"slot"') && !JSON.stringify(s).includes('"grid"'));
+    const slotShot = list.find((s) => JSON.stringify(s).includes('"slot"'));
+    const a = F.planShot(track, plain, plain.dur / total);
+    F.setPlayerSlot(3, 22);
+    assert.equal(F.planShot(track, plain, plain.dur / total), a, "a shot aimed at no slot keeps its plan when the player's slot moves");
+    assert.equal(F.planShot(track, plain, plain.dur / (total * 0.9)), a, "more screen time (a dropped shot) keeps a plan squeezed for less");
+    F.setDuration(12000);
+    assert.notEqual(F.planShot(track, plain, plain.dur / total), a, "the 12 s cut re-plans: half the seconds, the pans are held to PAN_MAX again");
+    F.setDuration(24000);
+    if (slotShot) {
+      const b = F.planShot(track, slotShot, slotShot.dur / total);
+      F.setPlayerSlot(7, 22);
+      assert.notEqual(F.planShot(track, slotShot, slotShot.dur / total), b, "a slot shot follows the player's slot");
+    }
+    F.setPlayerSlot(11, 22);
+  });
+});
+
+test("the grid's back is the grid that is there: a time trial is not filmed from 19 empty rows", async () => {
+  await withTrack("monza", (track, g) => {
+    const F = g.sandbox.FlybySeq;
+    const pose = { at: "grid" };
+    F.setPlayerSlot(0, 22); const full = F.anchorS ? F.anchorS(track, pose) : null;
+    F.setPlayerSlot(0, 1); const solo = F.anchorS ? F.anchorS(track, pose) : null;
+    F.setPlayerSlot(11, 22);
+    if (full === null) {
+      const src = fs.readFileSync(path.join(ROOT, "js/camera/flyby-seq.js"), "utf8");
+      assert.match(src, /case "grid": return wrapS\(track, total - POLE_BACK - \(Math\.min\(GRID_ROWS, _gridSize\) - 1\) \* GRID_SPACING \+ off\);/);
+      return;
+    }
+    const d = ((full - solo) % track.total + track.total) % track.total;
+    assert.ok(d > track.total / 2, `a one-car grid's back sits ahead of a 22-car one (Δs ${d.toFixed(0)} of ${track.total.toFixed(0)})`);
+  });
+});
+
+test("warm() can be retired, and the race start retires it", () => {
+  const seq = fs.readFileSync(path.join(ROOT, "js/camera/flyby-seq.js"), "utf8");
+  assert.match(seq, /function cancelWarm\(\) \{ _warmGen\+\+; \}/);
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  assert.match(game, /function clearMenuScreens\(\) \{[\s\S]{0,300}FlybySeq\.cancelWarm\(\);/, "clearMenuScreens stops the leftover plans before the countdown");
+  const i = game.indexOf("function raceIntro(go)"), body = game.slice(i, game.indexOf("\n}\n", i));
+  assert.ok(body.indexOf("FlybySeq.setDuration(loadingScreen.nextFlyMs())") < body.indexOf("FlybySeq.warm("), "the run's real length is set before its shots are planned");
+});

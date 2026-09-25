@@ -612,6 +612,9 @@ const LoadingScreen = (function () {
 
     return {
       run, stop, hold, building,
+      /** The next flyby's length (the short cut for a habitual skipper), so its
+       *  shots are planned for the seconds they will actually have. */
+      nextFlyMs: () => flyMsFor(readSkips()),
       /** The flyby editor's three sliders. setCard() PATCHES — it merges onto
        *  what is there, so a size slider does not reset the position. RESET is
        *  resetCard(), which drops the geometry first: clampCard(null) is every

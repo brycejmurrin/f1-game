@@ -4811,7 +4811,8 @@ test("selector preparation rejects stale requests, reuses the world, and waits f
   const menuLampBake = async () => {};   // the lamp prebake is LampBake.prebake's (lamp-bake.test.mjs)
   // The REAL menuFinish, with the flyby planning stubbed (flyby-shots.test.mjs covers it).
   let _menuFly = null;
-  const FlybySeq = { DEFAULT: [], vary: () => [], planSteps: () => () => true, reset() {} };
+  const FlybySeq = { DEFAULT: [], vary: () => [], planSteps: () => () => true, reset() {}, setDuration() {} };
+  const loadingScreen = { nextFlyMs: () => 24000 };
   // The idle gate and the upload slice are module-level policy (tested below);
   // here the player is idle and a slice is immediate.
   const menuIdle = async (current) => current(), menuSlice = async () => {};

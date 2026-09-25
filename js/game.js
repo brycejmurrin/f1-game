@@ -2492,6 +2492,7 @@ async function menuFinish(current, key) {
   await prepareMenuCarAssets(current);
   if (await menuIdle(current)) { FlybySeq.reset(); _menuGate.warm = 2; }   // reset: a new world's shot 0 snaps, never glides in from the last one
   const lit = await menuLampBake(current);
+  FlybySeq.setDuration(loadingScreen.nextFlyMs());
   const fly = { key, track, shots: FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0, false) }, step = FlybySeq.planSteps(track, fly.shots);
   while (current() && !step()) await menuSlice();
   if (current()) _menuFly = fly;
@@ -3733,6 +3734,7 @@ function introBuild(go) {
       FlybySeq.reset(); _menuGate.warm = 2;
       for (let f = 0; f < 3 && _menuGate.warm > 0; f++) await new Promise((r) => requestAnimationFrame(r));
       // Plan the flyby here too, up to a budget: whatever is left plans mid-flyby.
+      FlybySeq.setDuration(loadingScreen.nextFlyMs());
       const fly = { key, track, shots: FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (idx * 2654435761)) >>> 0, false) }, step = FlybySeq.planSteps(track, fly.shots), t0 = performance.now();
       while (!step() && performance.now() - t0 < 800) await menuSlice();
       _menuFly = fly;
@@ -3768,6 +3770,7 @@ function raceIntro(go) {
   _menuFly = null;   // one load's flyby: the next one varies again
   if (!flybyShots) flybyShots = planned || FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0);   // a different flyby each load (never the sim RNG); an editor-saved list plays as authored
   if (flybyShots) flybyShots = FlybySeq.withoutSlot(flybyShots);   // nobody knows your slot on a random grid; a small grid has empty boxes
+  FlybySeq.setDuration(loadingScreen.nextFlyMs());   // plan every pan for the seconds this run has
   if (world) FlybySeq.warm(track, flybyShots);   // plan the opening shots now, the rest in slices before their cuts
   FlybySeq.reset();   // this run's shot 0 is a cut, not a glide from wherever the camera was
   loadingScreen.run(loadingInfo(), go);
@@ -3927,6 +3930,7 @@ function clearMenuScreens() {
   // Disarm the loading screen BEFORE the sweep hides it: it holds a pending
   // timer that would otherwise fire its build callback into a running race.
   loadingScreen.stop();
+  FlybySeq.cancelWarm();   // and the flyby's unplanned shots: they would only stall the countdown
   for (const el of document.querySelectorAll(".screen")) el.hidden = true;
   for (const id of ["overlay", "lighting", "camtune", "flyby"]) { const el = $(id); if (el) el.hidden = true; }
   // The garage's 3D turntable keeps rendering while #carsetup is up; a race

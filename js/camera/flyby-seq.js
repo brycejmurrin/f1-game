@@ -69,6 +69,7 @@ const FlybySeq = (function () {
   function slotKnown() { return _slotKnown; }
   const slotPoses = (shot) => [shot.eye[0], shot.eye[1], shot.look[0], shot.look[1]].filter((p) => p && p.at === "slot");
   const usesSlot = (shot) => slotPoses(shot).length > 0;
+  const usesGrid = (shot) => [shot.eye[0], shot.eye[1], shot.look[0], shot.look[1]].some((p) => p && p.at === "grid");
   /** Can this grid play the shot? Your car needs a known slot; a numbered slot needs a car in it. */
   const fitsGrid = (shot) => slotPoses(shot).every((p) => (p.n === "player" || p.n === undefined) ? _slotKnown : (p.n | 0) < _gridSize);
   function slotIndex(pose) { return pose.n === "player" || pose.n === undefined ? _playerSlot : Math.max(0, pose.n | 0); }
@@ -541,7 +542,9 @@ const FlybySeq = (function () {
     const off = pose.off || 0;
     switch (pose.at) {
       case "pole": return wrapS(track, total - POLE_BACK + off);
-      case "grid": return wrapS(track, total - POLE_BACK - (GRID_ROWS - 1) * GRID_SPACING + off);
+      // The BACK of the grid that is there: a time trial seats one car and a duel
+      // two, and a fixed 20th row filmed 19 empty boxes 160 m from them.
+      case "grid": return wrapS(track, total - POLE_BACK - (Math.min(GRID_ROWS, _gridSize) - 1) * GRID_SPACING + off);
       case "corner": return wrapS(track, cornerS(track, pose.n || 1) + off);
       case "slot": return wrapS(track, total - POLE_BACK - slotIndex(pose) * GRID_SPACING + off);
       default: return wrapS(track, off);          // "start" — the line is s = 0 by construction
@@ -1066,6 +1069,9 @@ const FlybySeq = (function () {
     const next = () => { if (gen !== _warmGen || i >= list.length) return; plan(i++); setTimeout(next, 0); };
     if (i < list.length) setTimeout(next, 0);
   }
+  /** Retire an unfinished warm(): the race started (or the screen closed), and
+   *  its remaining plans would only stall the countdown. */
+  function cancelWarm() { _warmGen++; }
   // The SAME array when nothing is dropped: bindCorners and the plans cache by identity.
   /** The same plans as warm(), one shot per call, for a caller that owns the
    *  pacing (the menu, between its idle slices). step() → true when all are planned. */
@@ -1326,7 +1332,7 @@ const FlybySeq = (function () {
      screen's FLY_MS; the unit test pins the two together) and, while it is
      over PAN_MAX, squeezes the shot's travel about its middle (both pairs, the
      same factor), down to PAN_MIN_K of it. */
-  const REF_S = 24, PAN_MAX = 40 * Math.PI / 180, PAN_K = 0.85, PAN_MIN_K = 0.1, PAN_N = 48;
+  const REF_S = 24, PAN_MAX = 40 * Math.PI / 180, PAN_MIN_K = 0.1, PAN_N = 48;
   const _pe = [0, 0, 0], _pt = [0, 0, 0];
   function panRate(track, shot, frac, eye, look, prof) {
     const ease = EASE[shot.ease] || EASE.inOut;
@@ -1345,8 +1351,12 @@ const FlybySeq = (function () {
       }
       px = dx; py = dy; pz = dz;
     }
-    return peak * PAN_N / (Math.max(1e-6, frac) * REF_S);
+    return peak * PAN_N / (Math.max(1e-6, frac) * _flyS);
   }
+  /** The run's real length: a habitual skipper's flyby is 12 s, and every shot
+   *  planned against REF_S's 24 panned at twice PAN_MAX. */
+  let _flyS = REF_S;
+  function setDuration(ms) { _flyS = ms > 0 ? ms / 1000 : REF_S; }
   function squeeze(track, pair, k) {
     const a = pair[0], b = pair[1];
     if (trackAnchored(a) && trackAnchored(b)) {
@@ -1433,24 +1443,40 @@ const FlybySeq = (function () {
   function planShot(track, shot, frac) {
     const cache = track._fbPlan || (track._fbPlan = new WeakMap());
     let plan = cache.get(shot);
-    if (plan && plan.frac === frac && plan.slot === _playerSlot) return plan;   // a slot pose moves with the player's grid slot
+    // REUSE WHAT STILL HOLDS. The slot is part of the key only for a shot aimed at
+    // a slot, the grid size only for one aimed at the grid's back; and a plan made
+    // for LESS screen time is squeezed at least as hard as this one needs (a list
+    // that dropped a shot gives every other shot more time). Keying every shot on
+    // the slot and the exact fraction threw the menu's plans away on most races.
+    const secs = frac * _flyS, slot = usesSlot(shot) ? _playerSlot : -1, rows = usesGrid(shot) ? Math.min(GRID_ROWS, _gridSize) : -1;
+    if (plan && plan.secs <= secs + 1e-6 && plan.slot === slot && plan.rows === rows) return plan;
     const onRoad = onRoadPose(shot.eye[0]) && onRoadPose(shot.eye[1]);
     const noLift = new Float32Array(LIFT_N + 1);
     const baseLook = planLook(track, shot.eye, shot.look);
-    let eye = shot.eye, look = baseLook;
-    let pe = onRoad ? { eye: eye, prof: noLift } : planEye(track, eye);
-    let k = 1;
-    while (panRate(track, shot, frac, pe.eye, look, pe.prof) > PAN_MAX && k * PAN_K >= PAN_MIN_K) {
-      k *= PAN_K;
-      const ey = squeeze(track, shot.eye, k), lk = squeeze(track, baseLook, k);
-      if (ey === shot.eye && lk === baseLook) break;
-      eye = ey;
-      pe = onRoad ? { eye: ey, prof: noLift } : planEye(track, ey);
-      look = lk;
+    const at = (k) => {
+      const ey = k === 1 ? shot.eye : squeeze(track, shot.eye, k), lk = k === 1 ? baseLook : squeeze(track, baseLook, k);
+      const pe = onRoad ? { eye: ey, prof: noLift } : planEye(track, ey);
+      const rate = panRate(track, shot, frac, pe.eye, lk, pe.prof);
+      return { k, pe, look: lk, rate, fast: rate > PAN_MAX };
+    };
+    // The widest travel under PAN_MAX. The rate falls roughly in proportion to
+    // the squeeze, so the first measurement predicts it: aim just under, and step
+    // down only if the terrain lift disagrees. One planEye is up to ~30 ms on a
+    // dense circuit; the old 0.85^n walk ran up to 14 of them for one shot
+    // (657 ms, Mont-Tremblant's turn-mid).
+    let best = at(1);
+    if (best.fast && (squeeze(track, shot.eye, 0.5) !== shot.eye || squeeze(track, baseLook, 0.5) !== baseLook)) {   // else nothing to squeeze
+      let k = Math.max(PAN_MIN_K, Math.min(0.95, 0.95 * PAN_MAX / best.rate));
+      for (let i = 0; i < 5; i++) {
+        best = at(k);
+        if (!best.fast || k <= PAN_MIN_K) break;
+        k = Math.max(PAN_MIN_K, Math.min(k * 0.75, 0.95 * k * PAN_MAX / best.rate));
+      }
     }
+    let look = best.look;
     // The squeezed look keeps the sightline rule: re-plan it against the eye.
-    if (look !== shot.look) look = planLook(track, pe.eye, look);
-    plan = { eye: pe.eye, look: look, prof: pe.prof, onRoad: onRoad, frac: frac, squeeze: k, slot: _playerSlot };
+    if (look !== shot.look) look = planLook(track, best.pe.eye, look);
+    plan = { eye: best.pe.eye, look: look, prof: best.pe.prof, onRoad: onRoad, frac: frac, secs: secs, squeeze: best.k, slot: slot, rows: rows };
     cache.set(shot, plan);
     return plan;
   }
@@ -1501,7 +1527,7 @@ const FlybySeq = (function () {
     solve, shotAt, reset, clearEye, floorEye, groundAt, insideProp, blockers, isSolid, onRoadPose,
     landmarks, bounds, landmarkScore, lmBase, landmarkFallback, planShot, treeBlockers,
     anchorS, posePoint, cornerS, cornerSide, cornerTurn, lmFace,
-    poseFromWorld, shotFromView, nearestCorner, vary, setPlayerSlot, slotIndex, slotKnown, withoutSlot, bindCorners, warm, planSteps,
+    poseFromWorld, shotFromView, nearestCorner, vary, setPlayerSlot, slotIndex, slotKnown, withoutSlot, bindCorners, warm, cancelWarm, setDuration, planSteps,
     DEFAULT, EASE,
     POLE_BACK, GRID_SPACING, GRID_ROWS, MIN_FILL, MIN_H, FAR, FOG, NEAR, FENCE, REF_S, PAN_MAX,
   };
