@@ -17,9 +17,12 @@ export function chromiumArgsForBackend(backend) {
 /**
  * Runs before any page script. Pins backend/team and disables view transitions
  * (headless compositing rejects them → index.html error overlay blocks shots).
+ * Reduced motion is forced ON by default (stable shots) — which also skips the
+ * pre-race FLYBY (js/ui/loading-screen.js has no flyby under it). Pass
+ * `motion: true` to probe the loading screen / flyby.
  */
-export function installProbeInit(page, { backend = "webgl2", team = null, tlxForceGL = true } = {}) {
-  return page.addInitScript(({ be, teamIdx, forceGl }) => {
+export function installProbeInit(page, { backend = "webgl2", team = null, tlxForceGL = true, motion = false } = {}) {
+  return page.addInitScript(({ be, teamIdx, forceGl, keepMotion }) => {
     try {
       // Pin webgl2 explicitly. Clearing the key means the shipped TLX/Three
       // default on every device, which is not the native GLX path this probe's
@@ -34,7 +37,7 @@ export function installProbeInit(page, { backend = "webgl2", team = null, tlxFor
       if (teamIdx != null) localStorage.setItem("apex26.team", JSON.stringify(+teamIdx));
     } catch (_) {}
 
-    try {
+    if (!keepMotion) try {
       const orig = window.matchMedia.bind(window);
       window.matchMedia = (query) => {
         const m = orig(query);
@@ -55,7 +58,7 @@ export function installProbeInit(page, { backend = "webgl2", team = null, tlxFor
       const msg = (r && (r.message || r)) || "";
       if (String(msg).includes("Transition was skipped")) e.preventDefault();
     }, true);
-  }, { be: backend, teamIdx: team, forceGl: tlxForceGL });
+  }, { be: backend, teamIdx: team, forceGl: tlxForceGL, keepMotion: !!motion });
 }
 
 /** Snapshot why boot stalled — bare waitForFunction timeouts never name WebGL. */
