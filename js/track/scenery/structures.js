@@ -355,6 +355,12 @@ const SceneryStructures = (function () {
       // A cantilever gantry hangs from ONE side — that is its whole silhouette.
       mast(aL.c, b);
       if (st !== "cantilever") mast(aR.c, [aR.r, u, aR.t]);
+      // Each mast is solid at hw+1.5: stop the car at its face, or it drove
+      // through the leg (the limit stayed at the default run-off).
+      const legX = { truss: 0.66, portal: 0.75, scaffold: 0.09, cantilever: 0.42, box: 0.3 }[st] || 0.3;   // lateral half-width at wheel height
+      const legZ = { truss: 0.66, portal: 0.55, scaffold: 0.65, cantilever: 0.42, box: 0.3 }[st] || 0.3;   // along-track half-depth
+      blockAt(k, -1, 1.5 - legX, legZ + 0.3);
+      if (st !== "cantilever") blockAt(k, 1, 1.5 - legX, legZ + 0.3);
       const beam = [px[k] + u[0] * h, py[k] + u[1] * h, pz[k] + u[2] * h];
       // Span legs: half-width + 1.5 m clearance each side + 1 m past each mast.
       overheadSpan({

@@ -1420,6 +1420,9 @@ const TrackBuildProps = (function () {
     if (def.street) {
       const WH = 1.1, WT = 0.4, STEP = 2;
       const barrierOffset = def.barrierGap != null ? def.barrierGap : 0.35;
+      // Nodes a panel actually stands on: the limit follows the wall, so a
+      // panel the on-road test drops (Baku's bends) leaves no invisible wall.
+      const walledL = new Uint8Array(n), walledR = new Uint8Array(n);
       const panel = (kA, kB, col, side) => {
         const rA = [track.rx[kA], track.ry[kA], track.rz[kA]];
         const rB = [track.rx[kB], track.ry[kB], track.rz[kB]];
@@ -1430,10 +1433,11 @@ const TrackBuildProps = (function () {
         const len = Math.hypot(bx - ax, by - ay, bz - az) + 0.05;
         const f = norm([bx - ax, by - ay, bz - az]);
         const rr = norm(cross(f, upOf(track, kA)));
-        instance(`street-barrier|${col.join(",")}`,
+        const got = instance(`street-barrier|${col.join(",")}`,
           { o: [cx, cy + WH / 2, cz], r: rr, u: [0, 1, 0], t: f, s: [1, 1, len] },
           (rec) => rec.box([0, 0, 0], [WT, WH, 1], col),
           { kind: "streetBarrier", k: kA, side });
+        if (got > 0) { const on = side > 0 ? walledR : walledL; for (let k = kA; k !== kB; k = (k + 1) % n) on[k] = 1; on[kB] = 1; }
         return [cx, cz];
       };
       // The panel stands ON the pit lane where the complex owns the ground
@@ -1476,7 +1480,7 @@ const TrackBuildProps = (function () {
         }
       }
       const off = def.barrierGap != null ? def.barrierGap : 0.35;
-      for (let k = 0; k < n; k++) for (const side of [-1, 1]) if (!pitOwned(k, side)) markBarrier(k, side, off);
+      for (let k = 0; k < n; k++) for (const side of [-1, 1]) if (!pitOwned(k, side) && (side > 0 ? walledR : walledL)[k]) markBarrier(k, side, off);
     }
     if (!def.street) {
       // findCorners returns every local curvature peak, and two peaks a few

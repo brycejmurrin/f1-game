@@ -427,7 +427,10 @@ const TrackPit = (function () {
       // (SceneryPits). It was 1.5 m past it, and a car pushed out there stood
       // through that wall.
       const lim = track.hw[k] + outerAt(p, k) - 0.9;
-      if (bar[k] < lim) bar[k] = lim;
+      // Where the lane has width its outer wall IS the limit, in both
+      // directions: the default run-off (hw+9) sat past the wall wherever the
+      // entry/exit road narrows, and cars drove through it on 51 circuits.
+      bar[k] = p.w[k] > 0.02 ? lim : Math.max(bar[k], lim);
     }
   }
 
