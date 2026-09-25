@@ -12,6 +12,16 @@
 "use strict";
 
 const ShadowPass = (function () {
+  // SUN MAP DEPTH SPAN (the note in create() says why it grew). The sun eye sits
+  // SUN_BACK m up the sun axis, near 1, far SUN_FAR; the CAR map keeps CAR_BACK /
+  // CAR_FAR. SUN_DEPTH_K = old sun span / new span = (320-1)/(570-1) ≈ 0.561.
+  // The lit shaders' depth bias and PCSS receiver-blocker gap are in NORMALISED
+  // depth, so on the STATIC SUN MAP ONLY each backend rescales them by it to keep
+  // the world-space behaviour the 150/320 map was tuned at: bias × K, gap ÷ K
+  // (GLX uSunDepthK, TLX U.sunDepthK, WGX F.params4.z). The car map path
+  // (biasTerm × carBiasScale against CAR_FAR) is untouched.
+  const SUN_BACK = 400, SUN_FAR = 570, CAR_BACK = 150, CAR_FAR = 320;
+  const SUN_DEPTH_K = (CAR_FAR - 1) / (SUN_FAR - 1);
   function create(G, deps) {
     Log.info("game", "ShadowPass.create");
     // The LIVE lighting-knob values (js/lighting/knobs.js, re-exported by the
@@ -43,10 +53,11 @@ const ShadowPass = (function () {
     // towers (to 250 m), Baku, Vegas, Jeddah lost their tops' shadows. The side
     // AWAY from the sun keeps its 170 m exactly; only the near side grew. Depth
     // quantisation is linear in an ortho (569 m / 2^24 ≈ 34 µm) — immaterial; the
-    // lit shaders' biasTerm is in normalised depth, so its world size grows by
-    // 569/319 (≈0.32 → 0.57 m at the defaults). The CAR map keeps 150/320: cars
-    // are never tall. Pinned: tests/unit/shadow-pass-depth.test.mjs.
-    const SUN_BACK = 400, SUN_FAR = 570;
+    // lit shaders' biasTerm and PCSS gap are in normalised depth, so unscaled
+    // their world size would grow by 569/319 (≈0.32 → 0.57 m of push at the
+    // defaults); every backend multiplies back by SUN_DEPTH_K (module scope
+    // above). The CAR map keeps 150/320: cars are never tall. Pinned:
+    // tests/unit/shadow-pass-depth.test.mjs.
     let _shadowSnapX = null, _shadowSnapZ = null, _shadowBox = null;
     let _shadowSunX = null, _shadowSunY = null, _shadowSunZ = null;
     // Lamp-spot shadow snap: skip full rebuild when nearest flood + eye cell hold.
@@ -340,10 +351,10 @@ const ShadowPass = (function () {
           // keep casting so they throw faint moon shadows too instead of popping
           // to blob-only.
           if (_ck > 0.28 || (LT.moonShadow > 0 && (frame.moonGate || 0) > 0.01)) {
-            _shEye[0] = _shadowCtr[0] + sd[0] * 150; _shEye[1] = _shadowCtr[1] + sd[1] * 150; _shEye[2] = _shadowCtr[2] + sd[2] * 150;
+            _shEye[0] = _shadowCtr[0] + sd[0] * CAR_BACK; _shEye[1] = _shadowCtr[1] + sd[1] * CAR_BACK; _shEye[2] = _shadowCtr[2] + sd[2] * CAR_BACK;
             M4.lookAtTo(_mCView, _shEye, _shadowCtr, up);
             const cBox = 42 * Math.max(1, sBox / 80);
-            M4.orthoTo(_mCProj, -cBox, cBox, -cBox, cBox, 1.0, 320);
+            M4.orthoTo(_mCProj, -cBox, cBox, -cBox, cBox, 1.0, CAR_FAR);
             M4.mulTo(_mCVP, _mCProj, _mCView);
             // The depth-comparison bias baked into lit.js's biasTerm was tuned for the
             // map's texel size at the DEFAULT ±42m box; cBox growing with SHADOW DISTANCE
@@ -577,6 +588,6 @@ const ShadowPass = (function () {
       get count() { return _shadowCount; },
     };
   }
-  return { create };
+  return { create, SUN_BACK, SUN_FAR, CAR_BACK, CAR_FAR, SUN_DEPTH_K };
 })();
 Object.freeze(ShadowPass);

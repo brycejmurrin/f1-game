@@ -211,6 +211,9 @@
       // S.pcssEnabled each frame so a live blocker failure degrades cleanly.
       pcssPen:        uniform(80.0),
       pcssOn:         uniform(0.0),
+      // Sun-map depth-span compensation (GLX uSunDepthK parity): ShadowPass.SUN_DEPTH_K
+      // = (320-1)/(570-1). Sun-map bias × K and PCSS gap ÷ K; never the car map.
+      sunDepthK:      uniform(1.0),
       lightVP:        uniform(new THREE.Matrix4()),
       carLightVP:     uniform(new THREE.Matrix4()),
       carShadowOn:    uniform(0.0),
@@ -358,6 +361,7 @@
       if (shadowOn) {
         uf1(U.shadowBias, k("shadowBias", 0.001));
         uf1(U.pcssPen, k("pcssPen", 80.0));
+        uf1(U.sunDepthK, typeof ShadowPass !== "undefined" && ShadowPass.SUN_DEPTH_K || 1.0);
         U.pcssOn.value = SHD.S.pcssEnabled ? 1 : 0;
         // Key-luminance fade: cast shadows dissolve as the key dims toward
         // moonlight, floored by MOON SHADOWS × the clear-night factor
@@ -574,7 +578,10 @@
             // too much at the near end and barely covers acne at the far end.
             // STATIC map only: the car branch below multiplies the SAME biasTerm
             // by carBiasScale, so scaling the shared term would square it there.
-            const z = sc.z.sub(biasTerm.mul(U.shadowRange.div(80.0))).toVar();
+            // × sunDepthK: the sun map spans 569 m now (ShadowPass SUN_FAR 570), so
+            // the NORMALISED bias is rescaled to the 319 m world push it was tuned at
+            // (GLX uSunDepthK). Sun map only — the car branch keeps biasTerm raw.
+            const z = sc.z.sub(biasTerm.mul(U.shadowRange.div(80.0)).mul(U.sunDepthK)).toVar();
             // SHADOW DISTANCE kernel compensation (js/render/glx/shaders/glsl-lit.js).
             const boxK = min(1.0, float(80.0).div(U.shadowRange)).toVar();
             // Distance LOD on the same gliding anchor (js/render/glx/shaders/glsl-lit.js).
@@ -594,7 +601,9 @@
                   blkT.sample(flipUV(sc.xy.add(vec2(px, py).mul(bt)))).r;
                 const zb = min(min(btap(-1.0, 1.0), btap(1.0, 1.0)),
                                min(btap(-1.0, -1.0), btap(1.0, -1.0)));
-                const pen = clamp(z.sub(zb).mul(U.pcssPen), 0.0, 1.0);
+                // Normalised gap ÷ sunDepthK → the 319 m-span units pcssPen was
+                // tuned in (GLX sampleShadow parity).
+                const pen = clamp(z.sub(zb).mul(U.pcssPen).div(max(U.sunDepthK, 1e-3)), 0.0, 1.0);
                 R.assign(mix(float(1.5), float(6.0), pen));
               }).Else(() => {
                 // Desktop WebGL2 / WebGPU: blocker exists but PCSS is off

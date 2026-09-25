@@ -192,6 +192,7 @@ uniform float uSkyRimGlow;     // grazing-angle atmospheric sky-rim brightening 
 uniform float uAmbContactDark; // ambient contact-darkening depth on downward faces (def 1.0 = shipped 0.88 floor)
 uniform float uLampWallSpill;  // out-of-beam lamp reflection floor on walls/road (def 1.0 = shipped 0.16/0.30)
 uniform float uShadowRange; // sun shadow box half-size (m, def 80) — drives the receiver-distance shadow fade
+uniform float uSunDepthK;   // ShadowPass.SUN_DEPTH_K: old/new sun-map depth span ((320-1)/(570-1)) — sun-map bias × K, PCSS gap ÷ K
 uniform vec3 uShadowCtr;    // unsnapped shadow-box snap anchor (Y = look-target height; fade uses eye XZ + this Y)
 // Dynamic CAR shadow map: car meshes only, re-rendered every frame (the static
 // map above is snap-cached and can't hold movers). 1024², box ±42 m on the anchor
@@ -790,7 +791,11 @@ float sampleShadow(vec3 wpos) {
   // Applied to the STATIC map ONLY: the car map below multiplies the same
   // biasTerm by uCarBiasScale (= max(1, box/80) from game.js), so scaling the
   // shared term would square the correction on cars.
-  float z = sc.z - biasTerm * (uShadowRange / 80.0);
+  // SUN-MAP DEPTH SPAN (× uSunDepthK): biasTerm is NORMALISED depth and the sun
+  // map now spans 569 m (ShadowPass SUN_FAR 570) where it was tuned at 319 m, so
+  // unscaled the same term pushed 1.78x further in world metres. K = 319/569
+  // restores the tuned world push. Sun map only — the car map keeps its 319 m.
+  float z = sc.z - biasTerm * (uShadowRange / 80.0) * uSunDepthK;
   // SHADOW DISTANCE compensation: the PCF/blocker offsets below are in shadow-map
   // UV space, so their WORLD footprint = offset * (2*uShadowRange). Without this,
   // raising SHADOW DISTANCE widened the penumbra proportionally and washed thin
@@ -819,7 +824,10 @@ float sampleShadow(vec3 wpos) {
                        texture(uBlockerMap, sc.xy + vec2( bt,  bt)).r),
                    min(texture(uBlockerMap, sc.xy + vec2(-bt, -bt)).r,
                        texture(uBlockerMap, sc.xy + vec2( bt, -bt)).r));
-    float pen = clamp((z - zb) * uPcssPen, 0.0, 1.0);
+    // (z - zb) is a NORMALISED gap on the 569 m sun map: ÷ uSunDepthK turns it
+    // back into the 319 m-span units uPcssPen was tuned in (same world gap →
+    // same penumbra). max() guards an unset uniform (GL default 0).
+    float pen = clamp((z - zb) * uPcssPen / max(uSunDepthK, 1e-3), 0.0, 1.0);
     R = mix(1.5, 6.0, pen);
   }
   // Dither anchored to the SHADOW-MAP TEXEL GRID, not gl_FragCoord: screen-keyed

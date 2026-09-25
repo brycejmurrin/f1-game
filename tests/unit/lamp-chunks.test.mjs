@@ -355,3 +355,90 @@ test("a merged cell respects the table's cap", () => {
   assert.ok(got.some((i) => i < 20) && got.some((i) => i >= 20), "both chunks contribute");
   assert.equal(new Set(got).size, got.length, "no duplicates");
 });
+
+/* ── TLX's caller: the bake-once promise must survive tlx.js ──────────────
+ *
+ * resolve() caches on the chunks ARRAY (WeakMap). TLX flattens its chunked
+ * records into that array inside present(), and used to mint a fresh [] on
+ * every rebake — and it rebaked whenever the RAW knob float moved (the slider
+ * is step 0.001). So a PER-CHUNK LAMPS drag re-ran the full O(chunks x lamps)
+ * bake plus buildGrid per input event, exactly the hitch resolve()'s cache was
+ * built to remove. This lifts the REAL lamp-grid block out of
+ * js/render/three/tlx.js (a re-implementation would test the test), runs it
+ * against a counting LampChunks and a stub lit, and pins:
+ *   - a drag inside one cap never re-uploads the grid (key = capFor(knob));
+ *   - a full 0..1 drag bakes the table ONCE (the chs array is kept);
+ *   - a changed chunk set still rebuilds the array and rebakes. */
+function liftBlock(src, head) {
+  const start = src.indexOf(head);
+  assert.notEqual(start, -1, "tlx.js lamp-grid block moved — update this test, do not delete it");
+  let depth = 0, i = src.indexOf("{", start);
+  for (; i < src.length; i++) {
+    if (src[i] === "{") depth++;
+    else if (src[i] === "}" && --depth === 0) break;
+  }
+  return src.slice(start, i + 1);
+}
+/** A `let <name> ...` state line tlx.js declares for the block ("" if absent:
+ *  the behavioural assertions below, not a missing name, are the verdict). */
+function liftDecl(src, name) {
+  const m = src.match(new RegExp(`^\\s*let ${name}\\b[^\\n]*$`, "m"));
+  return m ? m[0] : "";
+}
+function tlxLampGrid() {
+  const TLX = readFileSync(join(ROOT, "js/render/three/tlx.js"), "utf8");
+  const block = liftBlock(TLX, "if (lit && lit.setLampGrid) {");
+  const src = readFileSync(join(ROOT, SRC_PATH), "utf8");
+  const LC = new Function(
+    DEPS + "\n" + src.replace("function buildTable(lights, chunks, knob) {",
+                "function buildTable(lights, chunks, knob) { __n.bakes++;")
+    + "; return LampChunks;")
+  ;
+  const n = { bakes: 0, grids: 0 };
+  globalThis.__n = n;
+  const LampChunksC = LC();
+  const lit = { setLampGrid: (g) => { if (g) n.grids++; return true; }, setLampGridColors: () => {} };
+  const decls = [liftDecl(TLX, "_lgKey"), liftDecl(TLX, "_lgChs")].join("\n");
+  const run = new Function("LampChunks", "Log", "lit", `
+    ${decls}
+    let frameAllLightsGen = 0, _lgGen = -1, _lampGridState = null;
+    let frameAllLights = null, framePerChunk = 0, drawList = null;
+    return function (dl, AL, knob) {
+      drawList = dl; frameAllLights = AL; framePerChunk = knob;
+      ${block}
+      return _lampGridState;
+    };`)(LampChunksC, { info() {} }, lit);
+  return { run, n };
+}
+
+test("TLX lamp grid: a PER-CHUNK LAMPS drag bakes once and re-grids only per cap", () => {
+  const lights = lampSet(Array.from({ length: 40 }, (_, i) => [i * 4, 0, 0, 50]));
+  const cells = Array.from({ length: 12 }, (_, c) =>
+    ({ min: [c * 9, -1, -1], max: [c * 9 + 8, 1, 1], gx: c, gz: 0 }));
+  const drawList = [{ chunked: { chunks: cells, cellSize: 72 } }, { geo: {} }];
+  const { run, n } = tlxLampGrid();
+  try {
+    const st = run(drawList, lights, 0.3);
+    assert.equal(st.on, true, `grid refused: ${st.why}`);
+    assert.equal(n.bakes, 1);
+    assert.equal(n.grids, 1);
+    // Same cap: 0.300 .. 0.310 all map onto one capFor() value.
+    const cap = LampChunks.capFor(0.3);
+    for (let k = 0.301; k <= 0.3101; k += 0.001) {
+      const knob = Math.round(k * 1000) / 1000;
+      if (LampChunks.capFor(knob) !== cap) continue;
+      run(drawList, lights, knob);
+    }
+    assert.equal(n.grids, 1, "a drag inside one cap must not rebuild the grid (key on capFor(knob), not the raw float)");
+    // A full drag crosses every cap: re-grids per cap, but ONE bake.
+    for (let k = 0.001; k <= 1.0001; k += 0.001) run(drawList, lights, Math.round(k * 1000) / 1000);
+    assert.equal(n.bakes, 1, `a full drag baked ${n.bakes} times — tlx.js must keep its chs array across rebakes`);
+    assert.ok(n.grids > 1, "crossing caps must still re-grid");
+    // A new chunk set is a new array and a genuine rebake.
+    const cells2 = cells.slice(0, 6);
+    run([{ chunked: { chunks: cells2, cellSize: 72 } }], lights, 1);
+    assert.equal(n.bakes, 2, "a changed chunk set must rebake");
+  } finally {
+    delete globalThis.__n;
+  }
+});

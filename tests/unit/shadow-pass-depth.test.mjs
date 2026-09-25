@@ -8,7 +8,10 @@
  * renderer, captures the light VP it hands gfx.shadowBegin, and projects points
  * through it: a 250 m prop top at the anchor must land inside the depth range at
  * every sun elevation, and the receiver side (ground well below the anchor,
- * away from the sun) must not have lost the 170 m it had. No browser (~0.1 s). */
+ * away from the sun) must not have lost the 170 m it had. It also pins the
+ * depth-span compensation that span change needs (ShadowPass.SUN_DEPTH_K,
+ * applied to the sun-map bias and PCSS gap in GLX, TLX and WGX, never the car
+ * map). No browser (~0.1 s). */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -75,4 +78,74 @@ test("the receiver side keeps its 170 m below the anchor", () => {
     const z = ndcZ(vp, p);
     assert.ok(z >= -1 && z <= 1, `elev ${e}°: receiver 165 m down-sun clipped (ndc z ${z.toFixed(3)})`);
   }
+});
+
+/* ── Depth-span compensation: the sun map's NORMALISED bias and PCSS gap ──
+ *
+ * The lit shaders' biasTerm (clamped 0.0005..0.004) and the PCSS
+ * receiver-blocker gap `(z - zb) * pcssPen` are in NORMALISED depth. Growing
+ * the sun map from 319 m to SUN_FAR-1 m of depth grew their world size by the
+ * same factor (~1.78x more push, ~1.78x less penumbra per metre of gap).
+ * ShadowPass exports SUN_DEPTH_K = (CAR_FAR-1)/(SUN_FAR-1) and every backend
+ * multiplies the SUN-map bias by it and divides the gap by it. The CAR map
+ * (still CAR_FAR) keeps the raw biasTerm × carBiasScale. */
+function shadowPassModule() {
+  const ctx = vm.createContext({ Math, Float32Array, Array, Object, Number, Infinity });
+  seedLog(ctx);
+  vm.runInContext(read("js/core/mat4.js").replace(/^const\b/gm, "var"), ctx, { filename: "mat4.js" });
+  vm.runInContext(read("js/render/shared/shadow-pass.js").replace(/^const\b/gm, "var"), ctx,
+    { filename: "shadow-pass.js" });
+  return ctx.ShadowPass;
+}
+
+test("ShadowPass exports the sun-map depth-span ratio, derived from its own constants", () => {
+  const SP = shadowPassModule();
+  assert.equal(SP.CAR_FAR, 320, "the car map's depth span is what the bias was tuned at");
+  assert.ok(SP.SUN_FAR > SP.CAR_FAR);
+  assert.equal(SP.SUN_DEPTH_K, (SP.CAR_FAR - 1) / (SP.SUN_FAR - 1));
+  assert.ok(SP.SUN_DEPTH_K > 0 && SP.SUN_DEPTH_K < 1);
+  // The light VP handed to shadowBegin really spans SUN_FAR - 1 m of depth: the
+  // ortho's z row has norm 2/(far-near) under any orthonormal view.
+  const vp = sunVP([0.3, 0.8, 0.5]);
+  const span = 2 / Math.hypot(vp[2], vp[6], vp[10]);
+  assert.ok(Math.abs(span - (SP.SUN_FAR - 1)) < 1e-2, `sun VP depth span ${span} != SUN_FAR-1`);
+});
+
+test("GLX applies uSunDepthK to the sun-map bias and PCSS gap, never the car map", () => {
+  const src = read("js/render/glx/shaders/glsl-lit.js");
+  assert.match(src, /uniform float uSunDepthK;/);
+  assert.match(src, /float z = sc\.z - biasTerm \* \(uShadowRange \/ 80\.0\) \* uSunDepthK;/);
+  assert.match(src, /float pen = clamp\(\(z - zb\) \* uPcssPen \/ max\(uSunDepthK, 1e-3\), 0\.0, 1\.0\);/);
+  assert.match(src, /float cz = cs\.z - biasTerm \* uCarBiasScale;/, "car map bias must stay unscaled");
+  const uses = src.split("\n").filter(l => /uSunDepthK/.test(l) && !/^\s*\/\//.test(l));
+  assert.equal(uses.length, 3, `uSunDepthK: 1 declaration + 2 sun-map uses, got\n${uses.join("\n")}`);
+  const glx = read("js/render/glx/glx.js");
+  assert.match(glx, /"uSunDepthK"/, "glx.js must locate uSunDepthK");
+  assert.match(glx, /uf1\(litU\.uSunDepthK,[^\n]*ShadowPass\.SUN_DEPTH_K/);
+});
+
+test("TLX applies U.sunDepthK to the sun-map bias and PCSS gap, never the car map", () => {
+  const src = read("js/render/three/tsl-lit.js");
+  assert.match(src, /sunDepthK:\s+uniform\(1\.0\)/);
+  assert.match(src, /uf1\(U\.sunDepthK,[^\n]*ShadowPass\.SUN_DEPTH_K/);
+  assert.match(src, /const z = sc\.z\.sub\(biasTerm\.mul\(U\.shadowRange\.div\(80\.0\)\)\.mul\(U\.sunDepthK\)\)/);
+  assert.match(src, /const pen = clamp\(z\.sub\(zb\)\.mul\(U\.pcssPen\)\.div\(max\(U\.sunDepthK, 1e-3\)\)/);
+  assert.match(src, /const cz = cs\.z\.sub\(biasTerm\.mul\(U\.carBiasScale\)\)/, "car map bias must stay unscaled");
+  const uses = src.split("\n").filter(l => /U\.sunDepthK/.test(l) && !/^\s*\/\//.test(l));
+  assert.equal(uses.length, 3, `U.sunDepthK: 1 upload + 2 sun-map uses, got\n${uses.join("\n")}`);
+});
+
+test("WGX packs SUN_DEPTH_K into params4.z and applies it on the sun map only", () => {
+  const src = read("js/render/webgpu/wgsl-chunks.js");
+  // FrameU: params4 at byte 320 → floats 80..83, so .z is float 82.
+  const m = src.match(/params4\s*:\s*vec4<f32>,\s*\/\/ off (\d+)/);
+  assert.ok(m, "FrameU params4 moved");
+  const zIdx = Number(m[1]) / 4 + 2;
+  const wgx = read("js/render/webgpu/wgx.js");
+  assert.match(wgx, new RegExp(`d\\[${zIdx}\\] = [^\\n]*ShadowPass\\.SUN_DEPTH_K`),
+    `_writeFrame must pack SUN_DEPTH_K at float ${zIdx} (params4.z)`);
+  assert.match(src, /let sunK = max\(F\.params4\.z, 1e-3\);/);
+  assert.match(src, /let refD = ndc\.z - biasTerm \* \(shRange \/ 80\.0\) \* sunK;/);
+  assert.match(src, /let pen = clamp\(\(refD - zb\) \* F\.params4\.x \/ sunK, 0\.0, 1\.0\);/);
+  assert.match(src, /let crefD = cn\.z - biasTerm \* F\.params6\.y;/, "car map bias must stay unscaled");
 });

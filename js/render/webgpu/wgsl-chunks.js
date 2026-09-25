@@ -492,7 +492,7 @@ struct FrameU {
   lightVP    : mat4x4<f32>,   // off 224  sun light-space view-proj (shadow, Phase 3)
   params2    : vec4<f32>,     // off 288  (shadowOn, shadowStrength, shadowTexel, shadowBias)
   params3    : vec4<f32>,     // off 304  (bounceK, fogTint, groundMist, mistHeight) — live tuner knobs
-  params4    : vec4<f32>,     // off 320  (pcssPen, shadowTintAmt, reserved, reserved) — zw unread: SSR is same-frame in COMPOSITE, car reflection is analytic-sky / params5.x
+  params4    : vec4<f32>,     // off 320  (pcssPen, shadowTintAmt, sunDepthK, reserved) — z = ShadowPass.SUN_DEPTH_K (sun-map bias × z, PCSS gap ÷ z; GLX uSunDepthK); w unread: SSR is same-frame in COMPOSITE
   params5    : vec4<f32>,     // off 336  (envProbeStr, cloudSpeed, cloudShadowDim, mistShare) — env-cube probe strength (0 = analytic sky only), cloud-shadow drift rate, cloud-shadow depth, ground-mist share of the lamp-fog glow
   shadowCtr  : vec4<f32>,     // off 352  (xyz unsnapped shadow-box anchor — fade origin; w shadowRange = box half-size m)
   params6    : vec4<f32>,     // off 368  (wetDark, carShadowOn, carSparkle, fogSunCore) — wet darkening + car-shadow arm flag + pure-look sparkle/fog knobs (zw always packed; WGSL reads them directly)
@@ -1235,7 +1235,11 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
         // and barely covers acne at 200. Car map below uses biasTerm × params6.y
         // (carBoxScale when armed — GLX uCarBiasScale).
         let biasTerm = clamp(slopeB, 0.0005, 0.004) + max(F.params2.w, 0.0) * 0.5;
-        let refD = ndc.z - biasTerm * (shRange / 80.0);
+        // × params4.z (sunDepthK, GLX uSunDepthK): biasTerm is NORMALISED depth and
+        // the sun map spans 569 m (ShadowPass SUN_FAR 570) where it was tuned at
+        // 319 m — K = 319/569 restores the tuned world push. Sun map only.
+        let sunK = max(F.params4.z, 1e-3);
+        let refD = ndc.z - biasTerm * (shRange / 80.0) * sunK;
         // True PCSS-Lite for WebGPU: blocker search scales the penumbra dynamically
         let aDist = distance(in.wpos, fadeCtr);
         let near = aDist < shRange * 0.80;
@@ -1244,7 +1248,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
         if (near && F.params4.x > 0.0) {
           let bt = (1.5 / 512.0) * boxK;
           let zb = findBlocker(suv, bt);
-          let pen = clamp((refD - zb) * F.params4.x, 0.0, 1.0);
+          // Normalised gap ÷ sunK → the 319 m-span units pcssPen was tuned in.
+          let pen = clamp((refD - zb) * F.params4.x / sunK, 0.0, 1.0);
           R = mix(1.5, 6.0, pen);
         }
         let ign = ignoise(floor(suv / max(F.params2.z, 1e-6)));
