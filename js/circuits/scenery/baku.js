@@ -12,7 +12,7 @@
         gantry, marshalPost, billboard,
         palm, anchor, along, every, onTrack, addBox, addCyl, addCone, addPrism,
         addFrustum, ferrisWheel, vadd, hash, cityFront,
-        circuitKit, plane, cypress, terrace,
+        circuitKit, plane, cypress, terrace, terrainYAt,
       } = api;
 
       const SAND        = [0.62, 0.50, 0.34];        // Old-City sandstone
@@ -70,9 +70,14 @@
       // window (.9203-.0261) and resume after it: at 1.8-2.2 m they survive
       // the keep-out's placeable band and stood on the lane (62 slabs
       // measured) — docs/research/STREET-PIT-LANES-PLAN-2026-09.md §4.
-      wall(0.0261, 0.65, 1, 2.0, 1.3, CONCRETE, 0.4);
+      // The concrete wall stops where the castle wall (0.42-0.50, same gap,
+      // h 11) stands: inside it, its slab shared the rampart's footing plane
+      // on every node (ground-audit flatCoplanar, 115 pairs).
+      wall(0.0261, 0.42, 1, 2.0, 1.3, CONCRETE, 0.4);
+      wall(0.50, 0.65, 1, 2.0, 1.3, CONCRETE, 0.4);
       wall(0.82, 0.9203, 1, 2.0, 1.3, CONCRETE, 0.4);
-      wall(0.0, 0.62, -1, 2.0, 1.3, CONCRETE, 0.4);
+      wall(0.0, 0.42, -1, 2.0, 1.3, CONCRETE, 0.4);
+      wall(0.50, 0.62, -1, 2.0, 1.3, CONCRETE, 0.4);
       wall(0.97, 1.0, -1, 2.0, 1.3, CONCRETE, 0.4);
 
       fence(0.0261, 0.35, 1, 2.6, 3.4, FENCE_COL);
@@ -89,12 +94,15 @@
         addCyl(out, a.c, 0.18, 13, [0.22, 0.22, 0.25], 5, b);
         // Horizontal lamp arm (short bracket)
         addBox(out, vadd(vadd(a.c, a.u, 12.5), a.r, side * 1.2), [2.4, 0.25, 0.5], [0.28, 0.28, 0.32], b);
-        // Lamp head housing
-        addBox(out, vadd(vadd(a.c, a.u, 12.0), a.r, side * 2.0), [1.4, 0.5, 1.4], [0.26, 0.26, 0.30], b);
-        // Warm sodium emissive bulb (bright underside)
-        addBox(out, vadd(vadd(a.c, a.u, 11.8), a.r, side * 2.0), [1.2, 0.25, 1.2], LAMP_WARM, b);
-        // Small ground-level light-pool: low flat slab simulating spill
-        addBox(out, vadd(vadd(a.c, a.u, 0.05), a.r, side * 1.0), [3.0, 0.08, 5.0], [0.30, 0.28, 0.20], b);
+        // Lamp head housing; the bulb hangs from it, so a rejected head takes
+        // the bulb with it (one bulb hovered alone 9.8 m up, ground-audit).
+        if (addBox(out, vadd(vadd(a.c, a.u, 12.0), a.r, side * 2.0), [1.4, 0.5, 1.4], [0.26, 0.26, 0.30], b) !== false)
+          addBox(out, vadd(vadd(a.c, a.u, 11.8), a.r, side * 2.0), [1.2, 0.25, 1.2], LAMP_WARM, b);
+        // Small ground-level light-pool: low flat slab simulating spill, laid on
+        // the ground under ITSELF — the pole's anchor sat up to 0.4 m below it.
+        const pool = vadd(a.c, a.r, side * 1.0), pg = terrainYAt(pool[0], pool[2]);
+        addBox(out, [pool[0], (pg != null ? Math.max(pg, a.c[1]) : a.c[1]) + 0.05, pool[2]],
+          [3.0, 0.08, 5.0], [0.30, 0.28, 0.20], b);
       }
 
       // Extra waterfront lamp posts along the Caspian straight (denser)
@@ -160,7 +168,7 @@
           const aTow = anchor(k, 1, 75);
           const tc = vadd(aTow.c, aTow.t, tOff);
           const b  = [aTow.r, aTow.u, aTow.t];
-          addBox(out, vadd(tc, aTow.u, 5),  [14, 10, 14], SAND,     b);
+          addBox(out, vadd(tc, aTow.u, 4.9), [14, 10.2, 14], SAND,   b);   // foot under the plinth's underside
           addCyl(out, vadd(tc, aTow.u, 10), 6.0, 20, SAND,     8, b);
           addFrustum(out, vadd(tc, aTow.u, 30), 6.5, 5.0, 3, SAND_LIT, 8, b);
           addFrustum(out, vadd(tc, aTow.u, 33), 5.0, 1.5, 6, SAND_LIT, 8, b);
@@ -170,7 +178,7 @@
 
         // Ornate entrance gate portico in front of central body
         const aGate = anchor(k, 1, 40);
-        addBox(out, vadd(aGate.c, aGate.u, 3), [40, 6, 3], [0.78, 0.68, 0.50], [aGate.r, aGate.u, aGate.t]);
+        addBox(out, vadd(aGate.c, aGate.u, 2.9), [40, 6.2, 3], [0.78, 0.68, 0.50], [aGate.r, aGate.u, aGate.t]);
         addBox(out, vadd(aGate.c, aGate.u, 7), [42, 2, 3], WIN_WARM, [aGate.r, aGate.u, aGate.t]);
 
         // Uplit wash at Government House base (warm stone courtyard glow)
@@ -355,7 +363,7 @@
       for (const s of [0.365, 0.385, 0.405, 0.515, 0.535, 0.555]) {
         const a = anchor(K(s), 1, 19.4);
         const b = [a.r, a.u, a.t];
-        addBox(out, vadd(a.c, a.u, 4.5), [2.6, 9.0, 3.2], SAND_DARK, b);
+        addBox(out, vadd(a.c, a.u, 4.4), [2.6, 9.2, 3.2], SAND_DARK, b);   // foot 0.2 under the plinth's
         addBox(out, vadd(a.c, a.u, 0.18), [3.4, 0.34, 3.8], SAND_LIT, b);
         addBox(out, vadd(vadd(a.c, a.u, 2.4), a.r, -0.75), [0.28, 3.2, 1.2],
           WIN_WARM, b);
@@ -492,22 +500,29 @@
         // Main palace structure (gap=20 to clear the castle wall at gap=1.5)
         building(k, 1, 20, 22, 10, 28, { kind: "arch", wall: PALACE, window: WIN_WARM, floor: 2, lit: true });
 
-        // Crenellated parapet: merlons at y=10 (top of 10m building)
+        // Crenellated parapet + corner turrets. The palace itself is
+        // massBlocked by the cityFront row already standing at gap 24, so these
+        // crown the RAMPART wall they overlook (wall(0.36-0.537, gap 20, h 9);
+        // top = its node's ground + 9.08) instead of an absent 10 m roof — at
+        // +10 over one anchor they hovered up to 9 m clear (ground-audit).
         const a = anchor(k, 1, 20);
         const b = [a.r, a.u, a.t];
+        const wallTop = (off) => {
+          const q = vadd(a.c, a.t, off), g = terrainYAt(q[0], q[2]);
+          return (g != null ? g : a.c[1]) + 9.08 - 0.05;
+        };
         for (let j = 0; j < 8; j++) {
           if (j % 2 === 0) {
-            addBox(out, vadd(vadd(a.c, a.t, (j - 3.5) * 3.8), a.u, 10.9), [2.5, 1.8, 2.5], PALACE, b);
+            const off = (j - 3.5) * 3.8, q = vadd(a.c, a.t, off);
+            addBox(out, [q[0], wallTop(off) + 0.9, q[2]], [2.5, 1.8, 2.5], PALACE, b);
           }
         }
-
-        // Ornamental turrets at corners — cylinders that begin AT the building top
-        addCyl(out, vadd(vadd(a.c, a.t, -13), a.u, 10), 2.2, 6, PALACE_DARK, 8, b);
-        addCyl(out, vadd(vadd(a.c, a.t,  13), a.u, 10), 2.2, 6, PALACE_DARK, 8, b);
-        addCone(out, vadd(vadd(a.c, a.t, -13), a.u, 16), 2.2, 4, PALACE, 8, b);
-        addCone(out, vadd(vadd(a.c, a.t,  13), a.u, 16), 2.2, 4, PALACE, 8, b);
-        addBox(out, vadd(vadd(a.c, a.t, -13), a.u, 19.5), [1.0, 0.8, 1.0], WIN_WARM, b);
-        addBox(out, vadd(vadd(a.c, a.t,  13), a.u, 19.5), [1.0, 0.8, 1.0], WIN_WARM, b);
+        for (const off of [-13, 13]) {
+          const q = vadd(a.c, a.t, off), y0 = wallTop(off), top = Math.max(a.c[1] + 16, y0 + 5);
+          addCyl(out, [q[0], y0, q[2]], 2.2, top - y0, PALACE_DARK, 8, b);
+          addCone(out, [q[0], top, q[2]], 2.2, 4, PALACE, 8, b);
+          addBox(out, [q[0], top + 3.5, q[2]], [1.0, 0.8, 1.0], WIN_WARM, b);
+        }
 
         // Flanking wing building (east)
         building(K(0.505), 1, 14, 12, 7, 16, { kind: "chevron", wall: PALACE, window: WIN_WARM, floor: 2, lit: true });
@@ -551,7 +566,7 @@
       for (let i = 0; i < 12; i++) {
         const s = 0.58 + i * 0.031;
         const a = anchor(K(s), -1, 5.7);
-        addCyl(out, vadd(a.c, a.u, 0.7), 0.16, 1.1, [0.80, 0.74, 0.62], 6, [a.r, a.u, a.t]);
+        addCyl(out, vadd(a.c, a.u, -0.1), 0.16, 1.9, [0.80, 0.74, 0.62], 6, [a.r, a.u, a.t]);   // from grade: at 0.7 up they hovered
       }
 
       for (let i = 0; i < 5; i++) {
@@ -697,9 +712,11 @@
         addBox(out, vadd(sup, a.u, 4.6 * sc), [W * 0.84, 0.7 * sc, L * 0.5], WIN_WARM, b);
         addBox(out, vadd(sup, a.u, 6.9 * sc), [W * 0.68, 0.6 * sc, L * 0.32], WIN_COOL, b);
         out._mat = MAT.METAL;
-        addCyl(out, vadd(sup, a.u, 8.2 * sc), 0.12 * sc, 4.5 * sc, [0.80, 0.82, 0.86], 4, b);
+        // Stepped from the upper deck's roof (7.6 sc): at 8.2 sc the mast and
+        // its beacon hung 0.6 sc clear of the yacht (ground-audit).
+        addCyl(out, vadd(sup, a.u, 7.6 * sc), 0.12 * sc, 4.5 * sc, [0.80, 0.82, 0.86], 4, b);
         out._mat = 0;
-        addBox(out, vadd(sup, a.u, 12.4 * sc), [0.4 * sc, 0.4 * sc, 0.4 * sc], [0.95, 0.30, 0.25], b);
+        addBox(out, vadd(sup, a.u, 12.3 * sc), [0.4 * sc, 0.4 * sc, 0.4 * sc], [0.95, 0.30, 0.25], b);
       };
       for (let i = 0; i < 3; i++) {
         const k = K(0.64 + i * 0.10);

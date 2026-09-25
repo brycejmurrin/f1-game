@@ -135,7 +135,7 @@ export function plan() {
   return { branch, head, tip, fastForward: ancestor, theirCommits: theirs, ourCommits: ours, theirDiffstat: stat, conflicts,
     touchedCircuits: touchedCircuits(tip),
     steps: [
-      ancestor ? "merge: nothing to merge (deploy tip is an ancestor)" : "merge origin/" + DEPLOY_BRANCH + " (conflicts in GENERATED files cure themselves: index.html/version.json via gen-shell, ratchets.json re-measured, package.json from groups.json, tools/README.md from the tools' @doc headers)",
+      ancestor ? "merge: nothing to merge (deploy tip is an ancestor)" : "merge origin/" + DEPLOY_BRANCH + " (conflicts in GENERATED files cure themselves: index.html/version.json via gen-shell, ratchets.json re-measured, package.json from groups.json, tools/README.md from the tools' @doc headers; then `npm run gen` re-derives every generated file on the union, conflict or not, and commits any drift)",
       `tools/ci/tooling-fast.mjs ${GATE_JOBS} (the full node gate, two files at a time)`,
       "the Pages gate's node suites (ci.yml \"Pure-node unit suites\", read from the file)",
       touchesGeometry(tip) ? "test:sweeps (~10 min — this union can move geometry)"
@@ -409,10 +409,36 @@ export function installIfLockMoved(before) {
   return true;
 }
 
+/* A CLEAN MERGE CAN STILL BE STALE (2026-09-24, four red PRs in one day).
+   The cures below run only when git reports a CONFLICT, but a generated figure
+   goes stale without one: two sides that each added one unit file both rewrite
+   AGENTS.md to "257 of 340", the identical hunks merge silently, and the union
+   holds 341 files — docs-integrity turns the PR red on a merge nobody touched.
+   So after EVERY merge the derived files are re-derived from the merged
+   sources with `npm run gen` (package.json's own list of every generator, read
+   rather than retyped here, ~3 s), and whatever it rewrites is committed as a
+   follow-up commit. On a consistent union it writes nothing and commits
+   nothing. Exported for tests/unit/deploy-tool.test.mjs, which runs it against
+   a real clean-but-stale merge. */
+export const REGEN_MESSAGE = "merge: regenerate derived files on the union (npm run gen)";
+export function regenerateDerived(cwd = ROOT) {
+  const r = spawnSync("npm", ["run", "gen"], { cwd, stdio: JSON_OUT ? ["ignore", "ignore", "inherit"] : "inherit" });
+  if (r.status !== 0) throw new Error(`npm run gen failed on the merged tree (exit ${r.status}) — a generator's source did not merge into something it can read`);
+  const dirty = git(["status", "--porcelain"], { cwd }).out;
+  if (!dirty) return null;
+  must(git(["add", "-A"], { cwd }), "add regenerated files");
+  must(git(["commit", "-q", "-m", REGEN_MESSAGE], { cwd }), "commit regenerated files");
+  return dirty.split("\n").filter(Boolean).map((l) => l.slice(3));
+}
+
 export function mergeDeployTip() {
   const before = git(["rev-parse", "HEAD"]).out.trim();
   const r = git(["merge", "--no-edit", `${REMOTE}/${DEPLOY_BRANCH}`]);
-  if (r.code === 0) { installIfLockMoved(before); return "merged"; }
+  if (r.code === 0) {
+    installIfLockMoved(before);
+    const regen = regenerateDerived();
+    return regen ? `merged (clean; regenerated ${regen.join(", ")})` : "merged";
+  }
   const conflicted = git(["diff", "--name-only", "--diff-filter=U"]).out.split("\n").filter(Boolean);
   // The CUREABLE set: files this repo GENERATES, where a conflict is a stale
   // derived value rather than two intents to reconcile. Anything else is a
@@ -462,6 +488,10 @@ export function mergeDeployTip() {
   }
   must(git(["commit", "--no-edit", "-q"]), "merge commit");
   installIfLockMoved(before);
+  // The cures above re-derive only the files that CONFLICTED; a derived file
+  // that merged clean can be stale all the same (see regenerateDerived).
+  const regen = regenerateDerived();
+  if (regen) did.push(`regenerated ${regen.join(", ")}`);
   return `merged (${did.join("; ")})`;
 }
 

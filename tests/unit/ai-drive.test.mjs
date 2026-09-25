@@ -1063,3 +1063,56 @@ test("passReach: no move that cannot be half alongside by the turn-in", () => {
   assert.equal(A.attackOK({ ...z, toTurnIn: 80, blockerGap: 8 }), true);
   assert.equal(A.attackOK({ ...z, toTurnIn: 20, blockerGap: 14 }), false);
 });
+
+// THE OVERTAKE "CAR AHEAD" SCAN (game.js updateCar) skips the modulo wrap for a
+// pair farther apart than OT_GAP·speed + 1 m — the traffic scan's cheap reject.
+// A car past that window can never arm OVERTAKE, and `ahead` is read only once
+// armed, so the pre-reject must leave every armed outcome — armed or not, WHICH
+// car, and the exact gap — identical to the unfiltered scan. Randomised fields
+// with wrap-around, lapped (2L) cars, finished cars, NaN progress and speeds
+// from reversing to 95 m/s; the scan is lifted out of game.js, not copied.
+test("the overtake car-ahead pre-reject is result-identical to the full wrap scan", () => {
+  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const a = src.indexOf("let ahead = null, gapAhead = Infinity;");
+  const endMark = "gapAhead = ahead && c.speed > 1 ? gapAhead / c.speed : Infinity;";
+  const b = src.indexOf(endMark, a);
+  assert.ok(a > 0 && b > a, "the scan is where this test expects it");
+  const scan = new Function("c", "ranked", "track", "OT_GAP",
+    src.slice(a, b + endMark.length) + "\nreturn { ahead, gapAhead };");
+  const ref = (c, ranked, track, OT_GAP) => {   // the unfiltered scan, as it was
+    let ahead = null, gapAhead = Infinity;
+    for (const o of ranked) {
+      if (o === c || o.finished) continue;
+      const d = ((o.prog - c.prog + track.total / 2) % track.total + track.total) % track.total - track.total / 2;
+      if (d > 0.5 && d < gapAhead) { ahead = o; gapAhead = d; }
+    }
+    gapAhead = ahead && c.speed > 1 ? gapAhead / c.speed : Infinity;
+    return { ahead, gapAhead };
+  };
+  let seed = 7;
+  const rnd = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
+  const OT_GAP = 1.0;
+  let armed = 0, rejected = 0;
+  for (let trial = 0; trial < 4000; trial++) {
+    const track = { total: 3000 + rnd() * 4000 };
+    const L = track.total, n = 2 + Math.floor(rnd() * 21);
+    const cluster = rnd() * L;
+    const cars = Array.from({ length: n }, () => {
+      const r = rnd();
+      const prog = r < 0.02 ? NaN
+        : (r < 0.5 ? cluster + (rnd() - 0.5) * 300 : rnd() * L) + Math.floor(rnd() * 3) * L;   // 0-2 laps up
+      return { prog, finished: rnd() < 0.05, speed: [-3, 0, 1, 1.5][Math.floor(rnd() * 8)] ?? rnd() * 95 };
+    });
+    for (const c of cars) {
+      const want = ref(c, cars, track, OT_GAP), got = scan(c, cars, track, OT_GAP);
+      const wantArmed = want.gapAhead < OT_GAP, gotArmed = got.gapAhead < OT_GAP;
+      assert.equal(gotArmed, wantArmed, `trial ${trial}: armed differs`);
+      if (wantArmed) {
+        armed++;
+        assert.equal(got.ahead, want.ahead, `trial ${trial}: a different car ahead`);
+        assert.equal(Object.is(got.gapAhead, want.gapAhead), true, `trial ${trial}: gap ${got.gapAhead} vs ${want.gapAhead}`);
+      } else if (want.ahead && !got.ahead) rejected++;
+    }
+  }
+  assert.ok(armed > 500 && rejected > 500, `the field exercised both sides (armed ${armed}, rejected ${rejected})`);
+});

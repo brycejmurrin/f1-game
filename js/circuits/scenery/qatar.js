@@ -502,9 +502,13 @@
       // Verge gap 1.5, not 0.3: a 14 m straight slab hugging the edge at 0.3 m
       // swings over the tarmac on every curve, and modelGroup's footprint test
       // rejected 129 of ~190 of these each build (verify-track's report).
+      // Each patch is the walk's own step long (less 10 cm), not 14 m: the 2 m
+      // overlap between consecutive patches draped the same terrain twice, one
+      // lift slot apart — 41 flat-coplanar spots (ground-audit).
+      const vergeLen = Math.max(1, Math.round(12 / api.ds)) * api.ds - 0.1;
       every(12, (k) => {
         for (const side of [-1, 1]) {
-          groundPatch(k, side, 1.5, [3.6, 0.16, 14], GRASS,
+          groundPatch(k, side, 1.5, [3.6, 0.16, vergeLen], GRASS,
             { id: `qatar-green-verge-${k}-${side}`, samples: 2 });
         }
       });

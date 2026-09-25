@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # @doc The CI "select specs for this change" step body: base via `ci-resolve-before.sh`, then `select-specs.mjs --since`.
 # @section runner
-# Full "Select specs for this change" step body. Env: EVENT, PUSH_BEFORE, PR_BASE, GITHUB_OUTPUT
+# Full "Select specs for this change" step body. Env: EVENT, PUSH_BEFORE, PR_BASE, CALLED, GITHUB_OUTPUT
+# CALLED=true (a Pages call): an empty/unreachable base selects everything
+# (ci-resolve-before.sh diffs against the empty tree), never HEAD~1.
 set -eu
 fail() { echo "::error::SELECTED GATE FAILED CLOSED: $1"; exit 1; }
 chmod +x tools/ci/ci-resolve-before.sh 2>/dev/null || true
 if [ -f tools/ci/ci-resolve-before.sh ]; then
-  BEFORE="$(EVENT="${EVENT:-}" PUSH_BEFORE="${PUSH_BEFORE:-}" PR_BASE="${PR_BASE:-}" bash tools/ci/ci-resolve-before.sh)" \
+  BEFORE="$(EVENT="${EVENT:-}" PUSH_BEFORE="${PUSH_BEFORE:-}" PR_BASE="${PR_BASE:-}" CALLED="${CALLED:-false}" bash tools/ci/ci-resolve-before.sh)" \
     || fail "could not resolve comparison base"
 else
   case "${EVENT:-}" in
