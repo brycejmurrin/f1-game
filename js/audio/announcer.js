@@ -407,6 +407,7 @@ const Announcer = (function () {
     }
 
     function stop() {
+      wrapGen++;               // a wrap-up still waiting for the radio is retired too
       generation++;            // before cancel(): a queued onend must already see itself as stale
       speaking = null;
       try { synth.cancel(); } catch (e) { /* nothing queued, or a synth mid-teardown */ }
@@ -494,6 +495,7 @@ const Announcer = (function () {
     }
 
     /** The results screen's read: winner, margin, your race, fastest lap. */
+    let wrapGen = 0;   // a newer wrap-up (or a stop) retires a waiting one
     function wrapUp(order, info) {
       if (!on || !Array.isArray(order) || !order.length) return false;
       const t = (info && info.track) || {};
@@ -510,7 +512,24 @@ const Announcer = (function () {
         fastest: fast ? { name: fast.name || "", time: fast.best, you: !!fast.isPlayer } : null,
       };
       const lines = wrapRows(sum);
-      return lines.length ? speak(lines, 16000, false) : false;
+      if (!lines.length) return false;
+      // AFTER THE ENGINEER, NOT OVER HIM. endRace runs 2.2 s after the flag and
+      // the engineer's result line ("P3, GREAT JOB") is often still on air:
+      // speaking now cut a synthesised line mid-word, or ran over a recorded
+      // one (the voice pack is WebAudio, which cancel() never touches). Wait
+      // for the radio to be quiet — at most 6 s, then read anyway.
+      const radio = G.radio;
+      const gen = ++wrapGen;
+      let waited = 0;
+      const go = () => {
+        if (gen !== wrapGen) return;
+        let busy = false;
+        try { busy = !!(radio && radio.busy && radio.busy()); } catch (_) { busy = false; }
+        if (busy && waited < 6000 && typeof setTimeout === "function") { waited += 250; setTimeout(go, 250); return; }
+        speak(lines, 16000, false);
+      };
+      go();
+      return true;
     }
 
     /** The budget is the loading screen's own window, so the read is CUT TO FIT

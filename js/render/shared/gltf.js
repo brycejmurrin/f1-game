@@ -187,6 +187,18 @@ const GLTF = (function () {
     const count = acc.count;
     const elemStride = bytes * nc;
     const stride = view.byteStride || elemStride; // interleaved support
+    const viewStart = view.byteOffset || 0, accStart = acc.byteOffset || 0;
+    const end = count ? accStart + (count - 1) * stride + elemStride : accStart;
+    if (!Number.isSafeInteger(count) || count < 0 ||
+        !Number.isSafeInteger(viewStart) || viewStart < 0 ||
+        !Number.isSafeInteger(view.byteLength) || view.byteLength < 0 ||
+        !Number.isSafeInteger(accStart) || accStart < 0 ||
+        !Number.isSafeInteger(stride) || stride < elemStride || stride % bytes !== 0 ||
+        (view.byteStride != null && view.byteStride !== stride) ||
+        !Number.isSafeInteger(end) || end > view.byteLength ||
+        viewStart + view.byteLength > bufBytes.byteLength) {
+      throw new Error("GLTF: accessor exceeds bufferView bounds or has invalid stride");
+    }
 
     const out = new Array(count * nc);
     // Need a DataView for arbitrary (possibly unaligned) offsets.

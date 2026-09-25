@@ -500,3 +500,40 @@ test("commentary leaves room: at least 10 s between ordinary lines, and one pass
   }
   assert.ok(comm.length >= 2, "commentary still talks");
 });
+
+test("a driver who has finished hears nothing more but their result — not a safety car for the others", () => {
+  const P = simCar("PLY", 3 * SIM_L - 100, 60, { isPlayer: true });
+  const r = sim([P, simCar("AAA", 3 * SIM_L - 400, 60), simCar("BBB", 3 * SIM_L - 700, 60)], 3);
+  r.step(8);                                       // the player takes the flag
+  assert.ok(P.finished, "precondition: flagged");
+  const t0 = r.G.raceT;
+  r.caution(3); r.step(10);
+  // The COMMENTATOR may call it — a finished driver is watching the broadcast;
+  // the ENGINEER may not.
+  const eng = r.said.filter((x) => x.t >= t0 && x.kind !== "comm").map((x) => x.msg);
+  assert.ok(!eng.some((m) => /SAFETY CAR/.test(m)), eng.join(" | "));
+});
+
+test("paused (a VS FRIEND race keeps running under the menu), the radio holds its lines", () => {
+  const A = simCar("AAA", 1010, 60), P = simCar("PLY", 1000, 60, { isPlayer: true });
+  const r = sim([A, P], 30);
+  r.step(20);
+  r.G.paused = true;
+  const t0 = r.G.raceT;
+  P.prog = A.prog + 8; r.step(15);
+  assert.deepEqual(r.lines(t0), [], "nothing while paused");
+  r.G.paused = false; r.step(3);
+  assert.ok(r.lines(t0).length > 0, "and the queued line comes out after");
+});
+
+test("an urgent line refused by a full card queue is offered again, not lost", () => {
+  const P = simCar("PLY", 2 * SIM_L - 300, 60, { isPlayer: true });
+  const r = sim([P, simCar("AAA", 2 * SIM_L - 600, 60)], 3);
+  let refuse = 0;
+  const real = r.G.announce;
+  r.G.announce = (msg, dur, kind) => { if (kind === "race" && refuse < 3) { refuse++; return false; } return real(msg, dur, kind); };
+  r.step(12);                                      // crosses into the last lap
+  assert.ok(refuse > 0, "precondition: the card refused it");
+  assert.ok(r.lines().some((m) => /LAST LAP|ONE TO GO|ONE MORE/.test(m)), r.lines().join(" | "));
+});
+

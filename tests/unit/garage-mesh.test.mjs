@@ -135,13 +135,12 @@ test("preview hulls are dropped when their mesh LRU slot is evicted", () => {
   assert.match(scene, /previewHulls\.delete\(victim\.hullKey\)/);
 });
 
-// The engineers' traces re-upload the live atlas every 1.5 s: free the old
-// texture, create the new one. The catch around that used to set a module-level
+// The engineers' traces re-upload the live atlas every 1.5 s. The catch around
+// that used to set a module-level
 // latch 31 years out, log nothing, and keep the freed handle — so one throw from
-// createTexture froze the traces for the page load, stayed invisible to Log, and
-// on GLX (deleteTexture leaves the object truthy) drew a dead texture into up to
-// five decals a frame. Now: warn, drop a freed handle, three strikes.
-test("a failed trace upload warns and never draws the texture it freed", () => {
+// createTexture froze the traces for the page load and stayed invisible to Log.
+// Keep the old handle while trying the replacement so a later tick can retry.
+test("a failed trace upload preserves its decal and retries after recovery", () => {
   // Any 2D-context call returns the context itself; any numeric read is 0.
   const c2d = new Proxy(function () {}, {
     get: (_, k) => (k === Symbol.toPrimitive ? () => 0 : c2d),
@@ -173,12 +172,69 @@ test("a failed trace upload warns and never draws the texture it freed", () => {
   GarageScene.draw(TEAM, LIV, [0, 1.6, 0], null, 0);
   assert.ok(nTex >= 1, "the live atlas was never created — the harness no longer reaches the trace path");
   assert.equal(warns.filter((m) => /live trace/.test(m)).length, 0);
+  const freedBeforeFailure = freed.size;
 
   failNext = true;
   now = 2000;
   GarageScene.draw(TEAM, LIV, [0, 1.6, 0], null, 0);
   assert.equal(warns.filter((m) => /live trace failed: context lost/.test(m)).length, 1,
     `the failure must reach Log; warned: ${JSON.stringify(warns)}`);
-  assert.ok(freed.size >= 1, "the trace path never freed the old atlas");
+  assert.equal(freed.size, freedBeforeFailure, "a failed replacement should preserve the old atlas");
   assert.deepEqual(drawnFreed, [], "a decal drew a texture handle that had been freed");
+  failNext = false;
+  now = 4000;
+  GarageScene.draw(TEAM, LIV, [0, 1.6, 0], null, 0);
+  assert.ok(freed.size > freedBeforeFailure, "a successful replacement should retire the old atlas");
+  assert.deepEqual(drawnFreed, [], "a decal drew a texture handle that had been freed");
+});
+
+test("garage dress upload retries after a transient failure, and a new team clears its cutoff", () => {
+  const c2d = new Proxy(function () {}, {
+    get: (_, k) => (k === Symbol.toPrimitive ? () => 0 : c2d),
+    set: () => true, apply: () => c2d,
+  });
+  let now = 0, failures = 1, attempts = 0;
+  const gfx = {
+    createMesh: () => ({}), createTexMesh: () => ({}), freeMesh() {}, freeTexture() {},
+    createTexture(src) {
+      if (src.width === 1024) {
+        attempts++;
+        if (failures-- > 0) throw new Error("injected dress upload failure");
+      }
+      return { tex: attempts };
+    },
+    draw() {}, drawDecal() {}, drawGlow() {},
+  };
+  const ctx = vm.createContext({
+    console, Math, Object, Array, Number, String, JSON, Float32Array, Uint16Array,
+    Uint32Array, isFinite, parseFloat, parseInt, Date,
+    performance: { now: () => now },
+    document: { createElement: () => ({ width: 0, height: 0, getContext: () => c2d }) },
+    LiveryTex: {},
+    Log: { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false },
+  });
+  for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
+                   "js/garage/scene-live.js", "js/garage/scene.js"])
+    vm.runInContext(read(f), ctx, { filename: f });
+  const garage = vm.runInContext("GarageScene", ctx);
+  garage.init(gfx);
+  const draw = (team = TEAM) => garage.draw(team, LIV, [0, 1.6, 0], null, 0);
+  draw();
+  assert.equal(attempts, 1);
+  now = 500; draw();
+  assert.equal(attempts, 1, "retry must be bounded in a per-frame draw loop");
+  now = 1100; draw();
+  assert.equal(attempts, 2, "a transient upload failure should recover on the same team");
+  failures = 4;
+  const broken = { ...TEAM, id: "broken" };
+  for (let i = 0; i < 3; i++) {
+    now += 1100;
+    draw(broken);
+  }
+  const before = attempts;
+  now += 1100;
+  draw(broken);
+  assert.equal(attempts, before, "three failures stop retries for the same team");
+  draw({ ...TEAM, id: "recovered" });
+  assert.equal(attempts, before + 1, "a new team clears the previous upload cutoff");
 });

@@ -2957,29 +2957,17 @@
 <script defer crossorigin="anonymous" src="js/core/hash32.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/clipboard.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/roster.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/render/glx/shaders/glsl-chunks.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/render/glx/shaders/glsl-lit.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/render/glx/shaders/glsl-sky.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/render/glx/shaders/glsl-fx.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/render/glx/shaders/glsl-post.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/render/shared/glx-facade.js?v=dev"></script>
+<!-- GLX, TLX and WGX implementations have no script tags. game.js injects
+     only the selected backend, with GLX available as the lazy fallback. -->
+
 <script defer crossorigin="anonymous" src="js/render/shared/light-budget.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/post-common.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/canvas-css-size.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/render/glx/post.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/render/glx/shadow.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/lamp-chunks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/frustum.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/inst-cells.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/vertex-pack.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/render/glx/chunked.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/render/glx/glx.js?v=dev"></script>
-<!-- js/render/webgpu/* (WGX) and js/render/three/* (TLX) have NO tags: they are the
-     two OPT-IN renderer backends and are injected by js/game.js only when
-     apex26.gfxBackend selects one (tools/manifest.cjs DEFERRED). ~532 KB that
-     every visitor used to parse for a backend almost nobody runs. sw.js seeds
-     them into its OPTIONAL precache set, since it discovers everything else by
-     parsing the tags below. -->
-
 <script defer crossorigin="anonymous" src="js/render/gfx.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/gltf.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/assets.js?v=dev"></script>
