@@ -77,7 +77,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_214 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_215 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -272,6 +272,7 @@ _214 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `car3d.js` | `Car3D` | tag | procedural 2026 F1 car. |
 | `parts.js` | `Parts` | tag | Parts catalog and stat helpers. |
 | `liveries.js` | `Liveries` | tag | custom paint jobs (liveries). |
+| `custom-liveries.js` | `CustomLiveries` | tag | CustomLiveries: persist / resolve / live-draft paint jobs out of js/game.js. |
 | `crest-paths.js` | `CrestPaths` | tag | team crest path data. |
 | `liverytex.js` | `LiveryTex` | tag | — (no header comment) |
 | `ghost.js` | `Ghost` | tag | Ghost: records the player's lap and replays the best one as a translucent "ghost" car to race against — the core time-attack loop. |

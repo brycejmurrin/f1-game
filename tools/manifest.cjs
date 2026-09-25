@@ -165,6 +165,7 @@ const FULL = [
   "js/audio/panel.js",
   "js/car/parts.js",
   "js/car/liveries.js",
+  "js/car/custom-liveries.js",   // persist/resolve/live-draft (CustomLiveries.create({ store })), peeled from game.js
   "js/car/crest-paths.js",
   "js/car/liverytex.js",
   "js/car/ghost.js",
@@ -530,6 +531,8 @@ const HARD_EDGES = [
   ["js/ui/title-menu.js", "js/game.js"],          // game.js calls TitleMenu.create(G) at eval time
   ["js/race/quali-net.js", "js/game.js"],         // game.js calls QualiNet.create(hooks) after quali wiring
   ["js/race/race-settings.js", "js/game.js"],      // game.js calls RaceSettings.create(G, deps) after quali wiring
+  ["js/car/custom-liveries.js", "js/game.js"],    // game.js calls CustomLiveries.create({ store }) at eval time
+  ["js/car/liveries.js", "js/car/custom-liveries.js"], // resolve/getLiveries read Liveries at call time; keep ordered
   ["js/data/teams.js", "js/career/custom-team.js"], // DEFAULT_CUSTOM + Teams.LIST
   ["js/career/custom-team.js", "js/game.js"],      // game.js calls CustomTeam.create(hooks) after Menus
   ["js/lighting/knobs.js", "js/lighting/track-lights.js"],  // track-lights destructures LightKnobs.LT at eval

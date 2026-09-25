@@ -148,6 +148,8 @@ test("every livery field a team names is one the renderer knows", () => {
  */
 const SHEET = fs.readFileSync(path.join(ROOT, "js/garage/setup-sheet.js"), "utf8");
 const LIVERIES_SRC = fs.readFileSync(path.join(ROOT, "js/car/liveries.js"), "utf8");
+const CUSTOM_LIV_SRC = fs.readFileSync(path.join(ROOT, "js/car/custom-liveries.js"), "utf8");
+const GAME = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
 
 const listFrom = (src, re) => {
   const m = src.match(re);
@@ -208,10 +210,11 @@ test("forTeam's default entry carries the team's whole livery block", () => {
 });
 
 test("resolveLivery falls back through the team's own list", () => {
-  const GAME = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
-  assert.match(GAME, /const list = getLiveries\(team\);/,
+  assert.match(GAME, /CustomLiveries\.create\(\{\s*store\s*\}\)/,
+    "game.js must wire CustomLiveries.create({ store })");
+  assert.match(CUSTOM_LIV_SRC, /const list = getLiveries\(team\);/,
     "resolveLivery must load the team's livery list");
-  assert.match(GAME, /list\.find\(\(l\) => l\.id === getLiveryId\(team\.id\)\) \|\| list\[0\]/,
+  assert.match(CUSTOM_LIV_SRC, /list\.find\(\(l\) => l\.id === getLiveryId\(team\.id\)\) \|\| list\[0\]/,
     "resolveLivery must fall back to the team's default entry — a bare " +
     "{ c1, c2 } literal drops finShape/spineHeight/spineSide and regrows the fin");
 });
@@ -223,9 +226,8 @@ test("resolveLivery and the live preview keep every editor tint", () => {
   // so a tint is on the car iff it is in that list and both paths call it.
   // The four RETIRED keys (crestInk / plateInk / ridgeTint / airboxTint) are
   // folded or dropped by migratePaint and must not be in the list at all.
-  const GAME = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
-  const fields = GAME.match(/const LIVERY_FIELDS = \[([\s\S]*?)\];/);
-  assert.ok(fields, "LIVERY_FIELDS is gone from js/game.js");
+  const fields = CUSTOM_LIV_SRC.match(/const LIVERY_FIELDS = \[([\s\S]*?)\];/);
+  assert.ok(fields, "LIVERY_FIELDS is gone from js/car/custom-liveries.js");
   for (const k of ["spineTint", "sideTint", "sunTint", "bandTint2", "plateTint",
     "saddleTint", "coverBind", "finHandoff"]) {
     assert.match(fields[1], new RegExp('"' + k + '"'), `LIVERY_FIELDS must carry ${k}`);
@@ -241,15 +243,15 @@ test("resolveLivery and the live preview keep every editor tint", () => {
   // two lists. Every field Liveries.FIELDS publishes reaches the car through
   // resolveLivery, or it does not reach it at all.
   const published = listFrom(LIVERIES_SRC, /const FIELDS = \[([\s\S]*?)\];/);
-  const picked = listFrom(GAME, /const LIVERY_FIELDS = \[([\s\S]*?)\];/);
+  const picked = listFrom(CUSTOM_LIV_SRC, /const LIVERY_FIELDS = \[([\s\S]*?)\];/);
   const missing = [...published].filter((k) => !picked.has(k)).sort();
   const extra = [...picked].filter((k) => !published.has(k)).sort();
   assert.deepEqual(missing, [], "LIVERY_FIELDS drops fields Liveries.FIELDS publishes");
   assert.deepEqual(extra, [], "LIVERY_FIELDS names fields Liveries.FIELDS does not");
   // …and every read path folds a stored file's retired keys exactly once.
-  assert.match(GAME, /return pickLivery\(migrateLivery\(livDraftOverride\.liv\)\)/,
+  assert.match(CUSTOM_LIV_SRC, /return pickLivery\(migrateLivery\(livDraftOverride\.liv\)\)/,
     "draft resolveLivery must migrate, then resolve through pickLivery");
-  assert.match(GAME, /pickLivery\(migrateLivery\(liv\)\)/,
+  assert.match(CUSTOM_LIV_SRC, /pickLivery\(migrateLivery\(liv\)\)/,
     "cached resolveLivery must migrate, then resolve through pickLivery");
   assert.match(SHEET, /id:\s*"default"/,
     "livePreviewDraft must set id:\"default\" so brand plates stay on while editing");
