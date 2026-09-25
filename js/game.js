@@ -4045,6 +4045,7 @@ const ranked = [], byProgDesc = (a, b) => b.prog - a.prog;   // hoisted: no comp
 
 const _engArg = { slip: 1, ax: 0, onKerb: false, wet: false, tow: 0,
                   deploy: 0, energy: 1, ersDeploy: 0.5 };  // setEngine reads synchronously
+let _audioParamStep = true;   // tickBody clears it on all but a frame's last physics step
 function update(dt) {
   // Camera cycling works during the countdown and the race (set your view before
   // lights-out). Edge-triggered via the C key or the CAM button.
@@ -4218,7 +4219,11 @@ function update(dt) {
   // before the requestAnimationFrame re-schedule, so the render loop dies for
   // the rest of the session. Measured: __apex.race() + go() left the canvas at
   // ZERO draws a frame, permanently. docs/PERF-FINDINGS.md 2i.
-  if (soundOn && player) {
+  // Continuous audio parameters (engine, skid, brake cue, rivals) are set on the
+  // LAST physics step of a frame only: each call is a setTargetAtTime insertion
+  // on the audio thread, and a 2-5 step frame on a slow device paid them 2-5x
+  // for values only the last step's survive. carSfx keeps every step (edges).
+  if (soundOn && player && _audioParamStep) {
     const revFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
     _engArg.slip = player.slipFactor ?? 1; _engArg.ax = player.axEstSm ?? 0;
     _engArg.onKerb = !!player.onKerb; _engArg.wet = isWetRoad(); _engArg.tow = player.towing || 0;
@@ -4244,8 +4249,8 @@ function update(dt) {
     // The field around you: panned, distance-rolled and Doppler-shifted. Before
     // this there was no opponent audio at all, so a car alongside was silent.
     GameAudio.setRivals(rivalAudio.collect(player));
-    carSfx.update(player);
   }
+  if (soundOn && player) carSfx.update(player);
 }
 
 const _aiBoost = { traits: null, energy: 0, otActive: false, kAhead60: 0, towCar: false, towGap: 0, towSpeed: 0, speed: 0, chaser: false, chaserGap: 0, chaserSpeed: 0, team: null, seat: 0, stats: null, ersDeploy: 0, ersRegen: 0 };
@@ -8310,8 +8315,10 @@ function tickBody(now) {
         c.rPrevYawVis = c.yawVis;             // orientation interpolates like position
         c.rPrevHead = c.head;                 // world heading interpolates like position too
       }
+      _audioParamStep = physAcc - PHYS_DT < PHYS_DT || steps === 4;   // this frame's last step
       update(PHYS_DT); physAcc -= PHYS_DT; steps++;
     }
+    _audioParamStep = true;   // any other update() caller (the __apex step hooks) sets them
     PerfGov.recordSimulation(steps, steps === 5 ? physAcc : 0);
     if (steps === 5) physAcc = 0;             // fell badly behind — drop the backlog
   }

@@ -164,6 +164,27 @@ test("a pass counts only once the new order has HELD", () => {
   assert.equal(passes[0].pos, 1);
 });
 
+test("the caution edge reads the allocation-free cautionLevel() when the facade has it", () => {
+  const f = RF.create();
+  const a = car("AAA", 1000, 60), p = car("PLY", 900, 60, { isPlayer: true });
+  let lvl = 0, infoCalls = 0;
+  const G = { state: "race", raceT: 0, cars: [a, p], player: p, track: { total: LAP },
+    cautionLevel: () => lvl, cautionInfo: () => { infoCalls++; return { level: lvl }; } };
+  const evs = [];
+  const tick = () => { G.raceT += 0.1; for (const c of G.cars) c.prog += c.speed * 0.1; evs.push(...f.observe(G, 0.1).ev); };
+  for (let i = 0; i < 10; i++) tick();
+  lvl = 2; tick();
+  const c = evs.filter((e) => e.type === "caution");
+  assert.equal(c.length, 1);
+  assert.equal(c[0].level, 2);
+  assert.equal(infoCalls, 0, "cautionInfo() allocates an object per call; the per-step path must not use it");
+  // The ranking is one array reused in place, and order() still hands out a copy.
+  const o1 = f.order(), o2 = f.order();
+  assert.notEqual(o1, o2);
+  assert.equal(o1.length, 2);
+  assert.ok(o1[0] === a && o1[1] === p, "the leader first");
+});
+
 test("a car in the pit lane is not overtaken — that is a pit stop", () => {
   const f = RF.create();
   const a = car("AAA", 1000, 60), b = car("BBB", 950, 60), p = car("PLY", 500, 60, { isPlayer: true });

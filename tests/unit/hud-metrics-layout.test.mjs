@@ -91,8 +91,8 @@ test("dropped gaps and the limits chip ride measured offsets", () => {
   const hud = fs.readFileSync(path.join(root, "js/ui/hud.js"), "utf8");
   assert.match(css, /:root\[data-gap-drop\] \.hud-gaps \{\s*\n\s*top: calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 4px\);/);
   assert.match(css, /var\(--hud-sec-h, 4\.8em\)/);
-  assert.match(hud, /setProperty\("--hud-top-h"/);
-  assert.match(hud, /setProperty\("--hud-sec-h"/);
+  assert.match(hud, /(?:setProperty\(|hStyle\(root, )"--hud-top-h"/);
+  assert.match(hud, /(?:setProperty\(|hStyle\(root, )"--hud-sec-h"/);
   // The dock stand-off is CONDITIONAL: an unconditional one dragged a top-right
   // chip into the middle of the screen on every viewport tall enough for the
   // two never to meet.
@@ -106,13 +106,13 @@ test("dropped gaps and the limits chip ride measured offsets", () => {
   // widgets used to resolve to the same slot and the panel won, which the chip
   // being `hidden` until a real strike kept out of every fixture.
   assert.match(css, /top: calc\(max\(var\(--hud-left-h, 112px\), var\(--hud-metrics-b, 0px\)\) \+ 8px\)/);
-  assert.match(hud, /setProperty\("--hud-left-h"/);
-  assert.match(hud, /setProperty\("--hud-metrics-b"/);
+  assert.match(hud, /(?:setProperty\(|hStyle\(root, )"--hud-left-h"/);
+  assert.match(hud, /(?:setProperty\(|hStyle\(root, )"--hud-metrics-b"/);
   // ONE DIRECTION: the map decides where the panel goes, the panel decides
   // where the chip goes. The panel's own bottom must never feed back into the
   // column edge it is positioned from — that is a latch, and this file has been
   // bitten by one before.
-  const leftPxCall = (hud.match(/setProperty\("--hud-left-px",[^;]*;/) || [""])[0];
+  const leftPxCall = (hud.match(/(?:setProperty\(|hStyle\(root, )"--hud-left-px",[^;]*;/) || [""])[0];
   assert.ok(leftPxCall, "--hud-left-px is not published at all");
   assert.ok(!/gm/i.test(leftPxCall),
     "--hud-left-px must not read the metrics panel's own box: " + leftPxCall);
