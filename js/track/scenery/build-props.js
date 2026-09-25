@@ -364,10 +364,11 @@ const TrackBuildProps = (function () {
     const absorbUp = (c, r, h) => absorb(c[0] - r, c[1], c[2] - r,
                                          c[0] + r, c[1] + h, c[2] + r);
 
+    // These counts are finalised below. Getters here close over buildProps's
+    // entire emission scope, pinning its graph, spatial hashes and temporary
+    // model state through the whole race just to read three integers.
     track.props = { list: propList, spans: spanList, cap: PROP_CAP,
-                    get count() { return propList.length; },
-                    get spanCount() { return spanList.length; },
-                    get dropped() { return propDropped; } };
+                    count: 0, spanCount: 0, dropped: 0 };
     // Plain loop — the every() form allocated a closure per call (~200k calls/build).
     const finiteVec = (v, len, positive) => {
       if (!Array.isArray(v) || v.length !== len) return false;
@@ -2116,6 +2117,9 @@ const TrackBuildProps = (function () {
       track.pitBuilt = pits;   // kept, not just logged: `wall` false is invisible from the buffers
       Log.info("track", `pits ${track.def.id}: ${pits.bays} bays, wall ${pits.wall}, ${pitLamps.length} lamps`);
     }
+    track.props.count = propList.length;
+    track.props.spanCount = spanList.length;
+    track.props.dropped = propDropped;
     return { out, glass: TrackModels.sealGeometry(glassBuf), water: TrackModels.sealGeometry(waterBuf) };
   }
 

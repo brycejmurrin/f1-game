@@ -45,6 +45,9 @@ function materialiseBaseline(ref) {
 function buildTrack(Tracks, id) {
   const def = Tracks.LIST.find((d) => d.id === id);
   if (!def) throw new Error(`no such track: ${id}`);
+  // Compare authored source values, not the release-mode float32 copy held
+  // only so an unchunked road/terrain can acquire chunks later in a race.
+  Tracks.setKeepGeometry(true);
   return Tracks.build(def, {});
 }
 

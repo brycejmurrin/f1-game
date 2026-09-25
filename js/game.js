@@ -45,7 +45,7 @@ const els = {
 // Renderer selection: an unset apex26.gfxBackend or ="three" uses TLX
 // (three.js); ="webgpu" uses WGX when the browser supports it; ="webgl2"
 // uses GLX. Any deferred-backend init failure also falls back to GLX. This
-// async IIFE awaits while loading TLX/WGX, or when the lazy __apex surface
+// async IIFE awaits while loading the selected renderer, or when the lazy __apex surface
 // loads (localhost / tests / ?apex=1). `gfx` is the handle every later
 // renderer call goes through.
 let gfx = null;
@@ -66,7 +66,7 @@ let _probeArmed = false;      // mirrors the stored probe, so the loop never rea
 let _backendBound = false;
 // The rosters below are ApexRoster (js/roster.js), GENERATED from
 // tools/manifest.cjs by tools/gen/gen-shell.mjs — one truth, no hand mirror.
-// The two DEFERRED renderer groups, in documented toposort order:
+// The three DEFERRED renderer groups, in documented toposort order:
 // loadBackendScripts starts a file once its edges' predecessors have evaluated.
 // Renderer/optional groups keep their graceful fallback; data's eval-time
 // dependencies request strict loading so a failed predecessor never executes
@@ -369,6 +369,10 @@ try {
   }
 } catch (_) { gfx = null; }
 if (!gfx) {
+  // Load GLX only when selected or needed after TLX/WGX refuses. A missing
+  // script must not trigger the claim-failure reload loop while offline.
+  if (typeof GLX.init !== "function") await loadBackendScripts(BACKEND_FILES.webgl2);
+  if (typeof GLX.init !== "function") { showGraphicsUnavailable(); return; }
   if (!GLX.init(canvas)) {
     // A failed backend opt-in (WGX or TLX) may have already claimed the
     // canvas (getContext "webgpu"/"webgl2" succeeded before init died), so
@@ -1439,12 +1443,17 @@ function announce(msg, dur, kind) {
     // slot means the line still gets its turn, so that counts as accepted;
     // being pushed off the end means it is gone and the caller must offer it
     // again (RaceEngineer does, on its next tick).
-    const entry = { msg, dur, kind, pri };
+    // A slot once given is NEVER taken back: evicting an accepted line told its
+    // caller "said" for words nobody heard (RaceEngineer spends the wear step,
+    // race-radio its cooldowns and the told position). A full queue refuses a
+    // newcomer that outranks nothing waiting; one that does (a warning behind
+    // two reports) queues deeper instead of pushing an accepted line out.
+    const low = _annQueue.length ? _annQueue[_annQueue.length - 1].pri : 0;
+    if (_annQueue.length >= (pri > low ? ANN_QUEUE_MAX + 3 : ANN_QUEUE_MAX)) return false;
     let at = _annQueue.length;
     while (at > 0 && _annQueue[at - 1].pri < pri) at--;
-    _annQueue.splice(at, 0, entry);
-    const dropped = _annQueue.splice(ANN_QUEUE_MAX);
-    return dropped.indexOf(entry) < 0;
+    _annQueue.splice(at, 0, { msg, dur, kind, pri });
+    return true;
   }
   showAnnounce(msg, dur, kind);
   return true;
@@ -2367,7 +2376,8 @@ function _loadTrackBody(idx, def) {
     // (opts.gfx) instead of reaching the GLX global directly. On the explicit
     // or fallback WebGL2 path gfx===GLX; on TLX/WGX it is that backend
     // (descriptor-copied onto GLX, so object identity is preserved either way).
-    track = Tracks.build(def, { night: sessionDark, gfx, chunkRibbons: PerfGov.tier() < 3, gridSlots: wantSlots });
+    track = Tracks.build(def, { night: sessionDark, gfx, chunkRibbons: PerfGov.tier() < 3,
+      gridSlots: wantSlots, retainGraph: wantAgentSurface() });
     // Rapier debris side-world: register the circuit's near-apex clippable cones
     // (A3). Cheap pure derivation from track.def.turns; stores the list even when
     // the side-world is disabled/loading so it's ready once rapier is live.
@@ -2467,6 +2477,22 @@ async function menuIdle(current) {
 async function menuLampBake(current) {
   const step = current() && _atmo.prebakeLamps();
   while (step && current() && !step(8)) await new Promise((r) => setTimeout(r, 8));
+  return !!step;
+}
+// AFTER THE BUILD, in this order: car assets; the warm frames (shader compile —
+// before anything slow, or a RACE! tap mid-bake met cold shaders and the flyby
+// froze on its first frames); the lamp pre-bake and this load's flyby, PLANNED
+// here in slices so the loading screen plans nothing; then warm again for the lit
+// world. `_menuFly` is the planned list, keyed like the build.
+let _menuFly = null;
+async function menuFinish(current, key) {
+  await prepareMenuCarAssets(current);
+  if (await menuIdle(current)) _menuGate.warm = 2;
+  const lit = await menuLampBake(current);
+  const fly = { key, track, shots: FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0, false) }, step = FlybySeq.planSteps(track, fly.shots);
+  while (current() && !step()) await menuSlice();
+  if (current()) _menuFly = fly;
+  if (lit && await menuIdle(current)) _menuGate.warm = 2;   // only a baked (dark) world changed the shaders
 }
 function scheduleFlybyTrack(settle) {
   clearTimeout(flybyBuildTimer);
@@ -2491,7 +2517,7 @@ function scheduleFlybyTrack(settle) {
       // car's meshes and livery upload 32 ms apart; a warm frame drawn first
       // minted and uploaded all ~22 atlases in one 3-4 s task.
       if (_menuGate.ready === key && _menuGate.track === track) {
-        await prepareMenuCarAssets(current); await menuLampBake(current); if (await menuIdle(current)) _menuGate.warm = 2; return;
+        await menuFinish(current, key); return;
       }
       // The build holds the main thread for 1-3 s: never start it while the
       // player is still working the picker or RACE SETTINGS (a TIME OF DAY step
@@ -2503,9 +2529,7 @@ function scheduleFlybyTrack(settle) {
       await menuSlice();
       if (current() && track.meshes && track.meshes.pitSignTex && typeof gfx.uploadTexture === "function")
         gfx.uploadTexture(track.meshes.pitSignTex);
-      await prepareMenuCarAssets(current);
-      await menuLampBake(current);
-      if (await menuIdle(current)) _menuGate.warm = 2;
+      await menuFinish(current, key);
     } catch (e) { if (current()) Log.warn("gfx", "track preparation failed", e); }
   };
   flybyBuildTimer = setTimeout(prepare, settle ? 1500 : 120);
@@ -3695,7 +3719,9 @@ function raceIntro(go) {
   // And fly the shots the EDITOR saved, for the same reason: a list edited in
   // the pause menu is only read here, so every run picks up the latest one.
   reloadFlybyShots();
-  if (!flybyShots) flybyShots = FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0);   // a different flyby each load (never the sim RNG); an editor-saved list plays as authored
+  const planned = world && _menuFly && _menuFly.track === track && _menuFly.key === _menuGate.ready ? _menuFly.shots : null;   // planned in the menu (menuFinish)
+  _menuFly = null;   // one load's flyby: the next one varies again
+  if (!flybyShots) flybyShots = planned || FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0);   // a different flyby each load (never the sim RNG); an editor-saved list plays as authored
   if (flybyShots) flybyShots = FlybySeq.withoutSlot(flybyShots);   // nobody knows your slot on a random grid; a small grid has empty boxes
   if (world) FlybySeq.warm(track, flybyShots);   // plan the opening shots now, the rest in slices before their cuts
   loadingScreen.run(loadingInfo(), go);

@@ -185,7 +185,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/telemetry-trace.test.mjs",
   "tests/unit/meeting-picker-labels.test.mjs",
   "tests/unit/data-api-status.test.mjs",
-  "tests/unit/data-lazy-loader.test.mjs",
   "tests/unit/scenery-api-contract.test.mjs",
   "tests/unit/scenery-guards.test.mjs",
   "tests/unit/track-build-vm-release.test.mjs",
@@ -476,6 +475,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The PRE-RACE ANNOUNCER: the derived script, and the Daniel-first voice
   // ladder on the platforms that do not have Daniel.
   "tests/unit/announcer.test.mjs",
+  "tests/unit/data-lazy-loader.test.mjs",
+  "tests/unit/track-retained-state.test.mjs",
+  "tests/unit/track-centerline-seam.test.mjs",
   // @gen-test-groups:end
 ]);
 
