@@ -1048,10 +1048,13 @@ const NetLobby = (function () {
         // and the rival's slot ran as AI while our own pose parked on the
         // old grid.
         const outcome = await G.startRace();
-        if (outcome && outcome.kind === "canceled") { close(); return; }
-        if (!sessions.size) { clearInterval(pumpTimer); pumpTimer = null; close(); return; }
+        // Every failed exit ends the lobby's hold on qualifying: left true,
+        // Quali.persistOrder skipped saving for the rest of the page session.
+        if (outcome && outcome.kind === "canceled") { friendQualifying = false; close(); return; }
+        if (!sessions.size) { friendQualifying = false; clearInterval(pumpTimer); pumpTimer = null; close(); return; }
       } catch (e) {
         say("Could not start the race: " + (e && e.message), true);
+        friendQualifying = false;   // keep the room and its message up, but stop gating quali saves
         return;
       }
       const started = G.netPlay.start({

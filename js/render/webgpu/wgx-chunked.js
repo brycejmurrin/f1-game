@@ -254,7 +254,7 @@ const WGXChunked = (function () {
       if (!core.litPass || !mesh || !mesh.vbuf) return;
       const o = core.litOpts(opts);
       const slot = core.allocDrawSlot();
-      if (slot < 0) return;   // allocDrawSlot: -1 once the pass's MAX_DRAWS is spent
+      if (slot < 0) return;   // allocDrawSlot: -1 = ring full (drop, as before the split)
       core.writeDraw(slot, model, o);
       core.setPipe(core.litPass, core.litPipeline(o));
       core.setBG0(core.litPass, core.activeFrameBG);

@@ -3704,12 +3704,17 @@ function menuGridCars() {
 function flybyGridOrder() {
   if (!player) return null;
   if (isQuali() || isTimeTrial()) return [player];
-  if (duelOn()) { const r = Duel.pick(cars); cars = r ? [player, r] : [player]; }   // startRace's trim; the pair is then gridded like any field
+  if (duelOn()) {   // startRace's trim (and its legend swap); the pair is then gridded like any field
+    const r = Duel.pick(cars);
+    const lg = r && duelLegend && typeof Legends !== "undefined" ? Legends.byId(duelLegend) : null;
+    if (lg) Duel.asLegend(r, { id: lg.id, name: lg.name, code: lg.code, ratings: Legends.ratings(lg.id), team: Legends.raceTeam(lg.id) }, DriverRatings);
+    cars = r ? [player, r] : [player];
+  }
   const base = gridFromQuali() ? quali.order(cars) : SeasonCal.grid(cars, season);
   if (gridRule() === "random" && !base) return null;
   const pre = gridOrderFor(base);
   if (pre && pre.length === cars.length) return pre.slice();
-  const o = cars.filter((c) => c !== player);
+  const o = cars.filter((c) => c !== player).sort((a, b) => a.tier - b.tier);   // gridUp's tier order (its jitter is the race's draw)
   o.splice(Math.min(11, o.length), 0, player);
   return o;
 }
