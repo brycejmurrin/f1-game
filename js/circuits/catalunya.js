@@ -1,4 +1,4 @@
-/* Apex 26 — CIRCUIT DE BARCELONA-CATALUNYA definition (data only). Off-calendar (`classic: true`): the Spanish GP moved to the Madring for 2026, so Catalunya is p… */
+/* Apex 26 — CIRCUIT DE BARCELONA-CATALUNYA (data only). `classic: true` keeps it off the built-in calendar, but it IS a 2026 round: the Barcelona-Catalunya GP, 12–14 Jun (the Spanish GP moved to the Madring). */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(

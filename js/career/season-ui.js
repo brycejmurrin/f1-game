@@ -50,6 +50,8 @@ function create(G) {
       if (!t) return;
       const row = el("div", "season-upcoming-row");
       row.append(el("span", "sur-rnd", `R${i + 1}`), el("span", "sur-name", t.name));
+      const perRound = draft.sprint === "rounds";
+      const sprintHere = perRound && sprintIds().indexOf(id) >= 0;
       // Each action returns the row the SAME circuit sits on after it — or,
       // after a remove, the neighbour that took its place — for the refocus.
       const ctl = [
@@ -58,12 +60,15 @@ function create(G) {
         ["✕", "Remove", draft.trackIds.length > 1,
           () => { draft.trackIds.splice(i, 1); return Math.min(i, draft.trackIds.length - 1); }],
       ];
+      // SPRINT ROUNDS mode: each round says whether it sprints, and toggles.
+      if (perRound) ctl.push([sprintHere ? "SPRINT" : "GP", "Sprint weekend", true, () => { toggleSprint(id); return i; }]);
       const btns = [];
       ctl.forEach(([glyph, label, on, act], k) => {
         const b = el("button", "sel-chip", glyph);
         b.type = "button";
         b.disabled = !on;
         b.setAttribute("aria-label", `${label} — ${t.name}`);
+        if (k === 3) b.setAttribute("aria-pressed", sprintHere ? "true" : "false");
         b.onclick = () => { const row = act(); tick(); build(); focusCal(row, k); };
         row.appendChild(b);
         btns.push(b);
@@ -79,6 +84,13 @@ function create(G) {
     const btns = calBtns[row] || [];
     const b = btns[k] && !btns[k].disabled ? btns[k] : btns.find((x) => !x.disabled);
     (b || $("ss-apply")).focus();
+  }
+  function sprintIds() { return Array.isArray(draft.sprintIds) ? draft.sprintIds : (draft.sprintIds = []); }
+  function toggleSprint(id) {
+    const ids = sprintIds();
+    const at = ids.indexOf(id);
+    if (at >= 0) ids.splice(at, 1);
+    else ids.push(id);
   }
   function swap(a, b) {
     const ids = draft.trackIds;
@@ -99,7 +111,12 @@ function create(G) {
     for (const p of SeasonCal.PRESETS) {
       const b = el("button", "sel-chip", p.label);
       b.type = "button";
-      b.onclick = () => { draft.trackIds = SeasonCal.presetIds(p.id); tick(); build(); };
+      b.onclick = () => {
+        const next = SeasonCal.preset ? SeasonCal.preset(p.id) : { trackIds: SeasonCal.presetIds(p.id) };
+        Object.assign(draft, next);
+        if (next.sprintIds) draft.sprintIds = next.sprintIds.slice();
+        tick(); build();
+      };
       pre.appendChild(b);
     }
     for (const [label, act] of [
@@ -115,8 +132,10 @@ function create(G) {
 
     chipRow(pane, "QUALIFYING", "ss-quali",
       [[true, "ON"], [false, "OFF"]], draft.quali, (v) => { draft.quali = v; });
+    // ON is every round; SPRINT ROUNDS is only the rounds marked on the
+    // calendar (2026 REAL marks the real six) — toggled per row there.
     chipRow(pane, "SPRINT RACE", "ss-sprint",
-      [[false, "OFF"], [true, "ON"]], draft.sprint, (v) => { draft.sprint = v; });
+      [[false, "OFF"], [true, "ON"], ["rounds", "SPRINT ROUNDS"]], draft.sprint, (v) => { draft.sprint = v; });
     // Units on the chips, and no "(FULL)": the race-settings sibling's FULL is
     // the CIRCUIT's own distance (Monaco 78, Spa 44 — game.js buildRaceSettings),
     // while this 57 is a flat 57 laps preselected at every round — clamped down
@@ -141,7 +160,11 @@ function create(G) {
     // minting a class, which the cssClasses ratchet (tests/data/ratchets.json) asks for by name.
     const note = el("div", "sur-country");
     note.id = "ss-note";
-    note.textContent = (draft.sprint
+    const marked = draft.trackIds.filter((id) => sprintIds().indexOf(id) >= 0).length;
+    note.textContent = (draft.sprint === "rounds"
+      ? `${marked} of ${draft.trackIds.length} rounds are sprint weekends: a sprint runs a third of the `
+        + `distance before the Grand Prix and pays ${SeasonCal.SPRINT_POINTS.join(" · ")} pts.`
+      : draft.sprint
       ? `A sprint runs a third of the distance before the Grand Prix and pays `
         + `${SeasonCal.SPRINT_POINTS.join(" · ")} pts. Both legs score.`
       : "One race per round.")
@@ -192,6 +215,7 @@ function create(G) {
     // A COPY, and a fresh one every visit: BACK has to be able to discard.
     draft = Object.assign({}, SeasonCal.config());
     draft.trackIds = draft.trackIds.slice();
+    draft.sprintIds = Array.isArray(draft.sprintIds) ? draft.sprintIds.slice() : [];
     build();
     $("season-setup").hidden = false;
     Log.info("ui", "SeasonUI.open");

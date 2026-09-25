@@ -31,7 +31,8 @@ function fresh() {
   return {
     trackIds: Tracks.SEASON.map((t) => t.id),
     quali: true,
-    sprint: false,
+    sprint: false,    // false | true (every round) | "rounds" (only the rounds in sprintIds)
+    sprintIds: [],    // circuit ids that hold a sprint when sprint === "rounds"
     laps: DEFAULT_LAPS,
     points: "modern",
     flPoint: false,   // the 2019–2024 fastest-lap point (top-ten finisher, Grand Prix only)
@@ -44,20 +45,27 @@ function fresh() {
 // for a save whose shape may predate the build reading it. An id that no longer
 // exists is dropped rather than failing the whole config, because losing one
 // retired circuit should not cost the player their calendar.
-function normalize(raw) {
-  const def = fresh();
-  const c = raw && typeof raw === "object" ? raw : {};
+function knownIds(raw) {
   const seen = new Set();
-  const ids = (Array.isArray(c.trackIds) ? c.trackIds : []).filter((id) => {
+  return (Array.isArray(raw) ? raw : []).filter((id) => {
     if (typeof id !== "string" || seen.has(id)) return false;
     if (!Tracks.LIST.some((t) => t.id === id)) return false;
     seen.add(id);
     return true;
   });
+}
+// PER-ROUND SPRINTS are additive: a config written before them has no
+// `sprintIds` and a boolean `sprint`, and normalises to exactly what it meant.
+// An older build reading "rounds" sees a non-true sprint and races no sprints.
+function normalize(raw) {
+  const def = fresh();
+  const c = raw && typeof raw === "object" ? raw : {};
+  const ids = knownIds(c.trackIds);
   return {
     trackIds: ids.length ? ids : def.trackIds,
     quali: c.quali !== false,
-    sprint: c.sprint === true,
+    sprint: c.sprint === true ? true : c.sprint === "rounds" ? "rounds" : false,
+    sprintIds: knownIds(c.sprintIds),
     laps: LAP_OPTS.indexOf(c.laps) >= 0 ? c.laps : def.laps,
     points: c.points === "classic" ? "classic" : "modern",
     flPoint: c.flPoint === true,
@@ -110,6 +118,7 @@ function resetConfig() { return setConfig(null); }
 function frozenConfig(raw) {
   const out = normalize(raw);
   out.trackIds = Object.freeze(out.trackIds);
+  out.sprintIds = Object.freeze(out.sprintIds);
   return Object.freeze(out);
 }
 function rulesConfig() { return flow === "season" && activeCfg ? activeCfg : config(); }
@@ -301,12 +310,22 @@ function hasProgress(season) {
   return !!(season && (season.round > 0 || season.stage === "race"));
 }
 
-function sprintOn() { return fmtActive() && rulesConfig().sprint; }
+// Whether THIS round is a sprint weekend. `season` names the round; without
+// one (a label asking in general) the live standalone season stands in.
+function sprintOn(season) {
+  if (!fmtActive()) return false;
+  const c = rulesConfig();
+  if (c.sprint === true) return true;
+  if (c.sprint !== "rounds" || !c.sprintIds || !c.sprintIds.length) return false;
+  const s = season || activeSeason;
+  const t = track(s && Number.isInteger(s.round) ? s.round : 0);
+  return !!t && c.sprintIds.indexOf(t.id) >= 0;
+}
 function stage(season) {
-  if (!sprintOn()) return "race";
+  if (!sprintOn(season)) return "race";
   return season && season.stage === "race" ? "race" : "sprint";
 }
-function midWeekend(season) { return sprintOn() && !!season && season.stage === "race"; }
+function midWeekend(season) { return sprintOn(season) && !!season && season.stage === "race"; }
 
 function quali() { return !fmtActive() || rulesConfig().quali; }
 function qualiNext(season) { return quali() && !midWeekend(season); }
@@ -436,18 +455,54 @@ function drawRound(season) {
   return stage(season) === "sprint" ? r + SPRINT_SEED_OFFSET : r;
 }
 
+// THE 2026 CALENDAR AS RACED — verified 2026-09-25, in calendar order, mapped
+// to the circuits this game has (all 23 do). Weekend dates are Fri–Sun (Baku
+// races on Saturday 26 Sep; Las Vegas on Saturday 21 Nov). Bahrain and Saudi
+// Arabia were cancelled in April over the Middle East conflict; the Bahrain GP
+// runs at SEPANG on 2–4 Oct. Qatar and Abu Dhabi are still scheduled (plan A;
+// Imola is the stated plan B, decision expected mid-October). Barcelona hosts
+// the "Barcelona-Catalunya GP"; the Spanish GP moved to Madrid (Madring).
+// Sprints: China, Miami, Canada, Britain, Netherlands, Singapore.
+//   https://www.formula1.com/en/racing/2026
+//   https://www.formula1.com/en/latest/article/formula-1-and-fia-announce-2026-sprint-calendar.3PyLPAazrBNe8kQIS3wOfY
+//   https://www.gpfans.com/en/f1-news/1090484/f1-schedule-2026-september-azerbaijan-middle-east-conflict/
+//   https://www.skysports.com/f1/news/13591254/formula-1-teams-expect-final-call-on-qatar-abu-dhabi-grands-prix-by-middle-of-october-on-closing-2026-season-races
+//   https://en.wikipedia.org/wiki/2026_Barcelona-Catalunya_Grand_Prix
+const REAL_2026 = Object.freeze([
+  ["albert_park", "03-06", "03-08"], ["shanghai", "03-13", "03-15", 1], ["suzuka", "03-27", "03-29"],
+  ["miami", "05-01", "05-03", 1], ["montreal", "05-22", "05-24", 1], ["monaco", "06-05", "06-07"],
+  ["catalunya", "06-12", "06-14"], ["redbull", "06-26", "06-28"], ["silverstone", "07-03", "07-05", 1],
+  ["spa", "07-17", "07-19"], ["hungaroring", "07-24", "07-26"], ["zandvoort", "08-21", "08-23", 1],
+  ["monza", "09-04", "09-06"], ["madrid", "09-11", "09-13"], ["baku", "09-24", "09-26"],
+  ["sepang", "10-02", "10-04"], ["singapore", "10-09", "10-11", 1], ["cota", "10-23", "10-25"],
+  ["mexico", "10-30", "11-01"], ["interlagos", "11-06", "11-08"], ["vegas", "11-19", "11-21"],
+  ["qatar", "11-27", "11-29"], ["abudhabi", "12-04", "12-06"],
+].map(([id, from, to, sprint]) => Object.freeze({ id, from: "2026-" + from, to: "2026-" + to, sprint: !!sprint })));
+
 const PRESETS = [
   { id: "full", label: "FULL" },
+  { id: "real2026", label: "2026 REAL" },
   { id: "12", label: "12" },
   { id: "8", label: "8" },
   { id: "5", label: "5" },
   { id: "classics", label: "CLASSICS" },
 ];
 function presetIds(id) {
+  if (id === "real2026") return knownIds(REAL_2026.map((r) => r.id));
   if (id === "classics") return Tracks.LIST.filter((t) => t.classic).map((t) => t.id);
   const all = Tracks.SEASON.map((t) => t.id);
   const n = parseInt(id, 10);
   return n > 0 ? all.slice(0, Math.min(n, all.length)) : all;
+}
+// What a preset changes in a setup draft. Only 2026 REAL sets the format too
+// (its own sprint rounds); every other preset is a calendar and nothing else.
+function preset(id) {
+  const out = { trackIds: presetIds(id) };
+  if (id === "real2026") {
+    out.sprint = "rounds";
+    out.sprintIds = knownIds(REAL_2026.filter((r) => r.sprint).map((r) => r.id));
+  }
+  return out;
 }
 function shuffled(ids, seed) {
   const a = ids.slice();
@@ -471,13 +526,13 @@ function shuffled(ids, seed) {
 }
 
 return {
-  SPRINT_POINTS, CLASSIC_POINTS, DROP_OPTS, LAP_OPTS, PRESETS, DEFAULT_LAPS,
+  SPRINT_POINTS, CLASSIC_POINTS, DROP_OPTS, LAP_OPTS, PRESETS, DEFAULT_LAPS, REAL_2026,
   config, setConfig, resetConfig, applyConfig, fresh, normalize,
   engage, list, rounds, track, trackIndex,
   load, save, clear, conflicted, saveStatus,
   resume, blank, restart, resetWeekend, canRace, hasProgress,
   quali, qualiNext, stage, midWeekend, sprintOn, lapsFor, formatLaps, pointsTable,
   award, scored, rank, netPts, grid, drawRound,
-  presetIds, shuffled,
+  presetIds, preset, shuffled,
 };
 })();

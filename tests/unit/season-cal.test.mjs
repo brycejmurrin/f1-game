@@ -41,12 +41,12 @@ function trackDefs() {
 // `const SeasonCal` lands in the context's global LEXICAL scope, not on the
 // global object — read it back by evaluating its name (same shape as
 // career-settle.test.mjs).
-function load(stored0) {
+function load(stored0, tracks0) {
   const stored = new Map(Object.entries(stored0 || {}));
   const subscribers = [];
   const revisions = new Map();
   let clearRevision = 0;
-  const tracks = trackDefs();
+  const tracks = tracks0 || trackDefs();
   const notify = (change) => subscribers.forEach((fn) => fn(change));
   const bump = (key) => revisions.set(key, (revisions.get(key) || 0) + 1);
   const write = (k, v) => {
@@ -602,4 +602,116 @@ test("an old save without roundPts normalises to {} and a bad lastFl is dropped"
   const c = S.normalize({ flPoint: "yes", drop: 7 });
   assert.equal(c.flPoint, false, "only an explicit true turns the fastest-lap point on");
   assert.equal(c.drop, 0, "an unknown drop count falls back to all rounds counting");
+});
+
+// ── 2026 REAL: the calendar as raced, with per-round sprints ─────────────────
+
+// The REAL circuit roster, read from the circuit files themselves (id +
+// classic flag), in script-tag order — so "every id exists" is checked against
+// what ships, not against the eight-circuit stub above.
+function realTracks() {
+  const html = readFileSync(join(ROOT, "index.html"), "utf8");
+  const files = [...html.matchAll(/src="(js\/circuits\/[a-z_]+\.js)/g)].map((m) => m[1]);
+  const LIST = files.map((f) => {
+    const s = readFileSync(join(ROOT, f), "utf8");
+    return { id: /\bid:\s*"([^"]+)"/.exec(s)[1], name: f, classic: /\bclassic:\s*true/.test(s) };
+  });
+  return { LIST, SEASON: LIST.filter((t) => !t.classic) };
+}
+const REAL_ORDER = ["albert_park", "shanghai", "suzuka", "miami", "montreal", "monaco", "catalunya",
+  "redbull", "silverstone", "spa", "hungaroring", "zandvoort", "monza", "madrid", "baku", "sepang",
+  "singapore", "cota", "mexico", "interlagos", "vegas", "qatar", "abudhabi"];
+const REAL_SPRINTS = ["shanghai", "miami", "montreal", "silverstone", "zandvoort", "singapore"];
+
+test("2026 REAL: every round is a shipped circuit, in calendar order, 23 rounds", () => {
+  const tracks = realTracks();
+  assert.ok(tracks.LIST.length > 40, "precondition: the circuit tags were found");
+  const { S } = load(null, tracks);
+  const ids = S.presetIds("real2026");
+  assert.deepEqual([...ids], REAL_ORDER);
+  for (const id of ids) assert.ok(tracks.LIST.some((t) => t.id === id), id + " is in Tracks.LIST");
+  for (const gone of ["bahrain", "jeddah", "istanbul", "portimao"]) assert.ok(!ids.includes(gone), gone + " is not a 2026 round");
+  // Dates ascend (Baku and Vegas race on a Saturday; `to` is the last day).
+  const days = S.REAL_2026.map((r) => r.to);
+  assert.deepEqual([...days], [...days].sort(), "rounds are in date order");
+  assert.equal(S.REAL_2026.find((r) => r.id === "sepang").to, "2026-10-04", "Bahrain GP at Sepang");
+});
+
+test("2026 REAL: exactly the six real sprint weekends, per round", () => {
+  const { S } = load(null, realTracks());
+  const p = S.preset("real2026");
+  assert.equal(p.sprint, "rounds");
+  assert.deepEqual([...p.sprintIds], REAL_SPRINTS);
+  S.setConfig(p);
+  S.engage("season");
+  const season = S.restart();
+  const sprinted = [];
+  for (let r = 0; r < S.rounds(); r++) {
+    season.round = r;
+    delete season.stage;
+    if (S.stage(season) === "sprint") sprinted.push(S.track(r).id);
+  }
+  assert.deepEqual(sprinted, REAL_SPRINTS);
+  season.round = 0;
+  assert.equal(S.stage(season), "race", "Australia is a plain Grand Prix");
+  // China sprints, then its Grand Prix closes the round; Japan does not sprint.
+  season.round = 1;
+  assert.equal(S.stage(season), "sprint");
+  assert.equal(S.award(season, field(10)), "sprint");
+  assert.equal(S.midWeekend(season), true);
+  assert.equal(S.award(season, field(10)), "race");
+  assert.equal(season.round, 2);
+  assert.equal(S.stage(season), "race", "Japan is a plain Grand Prix");
+  // Outside a season the format is neutral whatever the config says.
+  S.engage("gp");
+  season.round = 1;
+  assert.equal(S.stage(season), "race");
+});
+
+test("2026 REAL leaves the other presets and old configs exactly as they were", () => {
+  const { S, tracks } = load();
+  assert.deepEqual([...S.PRESETS.map((p) => p.id)], ["full", "real2026", "12", "8", "5", "classics"]);
+  assert.deepEqual(JSON.parse(JSON.stringify(S.preset("full"))), { trackIds: tracks.SEASON.map((t) => t.id) },
+    "a calendar preset sets no format");
+  assert.deepEqual([...S.preset("8").trackIds], tracks.SEASON.map((t) => t.id).slice(0, 8));
+  // An old boolean config normalises to what it meant, with no sprint rounds.
+  const on = S.normalize({ trackIds: ["monza"], sprint: true });
+  assert.equal(on.sprint, true);
+  assert.deepEqual([...on.sprintIds], []);
+  assert.equal(S.normalize({ sprint: false }).sprint, false);
+  const mixed = S.normalize({ sprint: "rounds", sprintIds: ["monza", "nowhere", "monza", 7] });
+  assert.equal(mixed.sprint, "rounds");
+  assert.deepEqual([...mixed.sprintIds], ["monza"]);
+  // A global sprint still sprints every round.
+  S.setConfig({ sprint: true });
+  S.engage("season");
+  const season = S.restart();
+  season.round = 5;
+  assert.equal(S.stage(season), "sprint");
+  // "rounds" with no marked rounds is simply no sprints.
+  const { S: S2 } = load({ seasonCfg: { sprint: "rounds" } });
+  S2.engage("season");
+  assert.equal(S2.stage(S2.restart()), "race");
+});
+
+test("2026 REAL survives a save/load round-trip, sprint rounds and all", () => {
+  const tracks = realTracks();
+  const { S, stored } = load(null, tracks);
+  S.engage("season");
+  const res = S.applyConfig(S.preset("real2026"));
+  assert.equal(res.ok, true);
+  const saved = JSON.parse(JSON.stringify(stored.get("season")));
+  const cfg = JSON.parse(JSON.stringify(stored.get("seasonCfg")));
+  assert.equal(saved.config.sprint, "rounds");
+  assert.deepEqual(saved.config.sprintIds, REAL_SPRINTS);
+  assert.deepEqual(cfg.trackIds, REAL_ORDER);
+  // A fresh module over the same storage resumes the same season rules.
+  const { S: T } = load({ season: saved, seasonCfg: cfg }, tracks);
+  T.engage("season");
+  const s = T.load();
+  assert.equal(T.rounds(), 23);
+  s.round = 11;
+  assert.equal(T.track(11).id, "zandvoort");
+  assert.equal(T.stage(s), "sprint");
+  assert.ok(Object.isFrozen(s.config.sprintIds), "the frozen season rules include the sprint rounds");
 });

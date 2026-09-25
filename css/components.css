@@ -1286,13 +1286,14 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   min-width: 0;
 }
 #pm-panel-driving details > :not(summary) { margin-block: calc(var(--gap) * 0.5); }
-#pm-panel-driving :is(#pm-coach-tip, #pm-incident-log, #pm-ai-decisions) {
+#pm-panel-driving :is(#pm-coach-tip, #pm-incident-log, #pm-ai-decisions, #pm-badges-list) {
   font-size: var(--fs-micro);
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
 #pm-coach-tip { color: var(--text); padding-bottom: calc(var(--gap) * 0.5); }
 #pm-panel-driving :is(#pm-incident-log, #pm-ai-decisions) { padding-inline-start: 1.5em; }
+#pm-badges-list { list-style: none; padding-inline-start: 0; }
 
 /* APPEARANCE — same setting-row chrome as the rest of SETTINGS; colour wells
    match MY TEAM / garage (floored chip height, plate-line border). Live
