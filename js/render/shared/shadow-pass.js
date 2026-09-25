@@ -36,6 +36,17 @@ const ShadowPass = (function () {
     // (GLX shadowIbo / WGX shadowInstBuf / TLX CPU pack) — camera ibo untouched.
     const _shEye = [0, 0, 0], _shCtr = [0, 0, 0], _flEye = [0, 0, 0], _flTgt = [0, 0, 0];
     const CULL_NO_UPLOAD = { upload: false };
+    // SUN MAP DEPTH SPAN. The eye sits SUN_BACK m up the sun axis from the
+    // anchor, near 1, far SUN_FAR: casters up to SUN_BACK-1 m toward the sun and
+    // receivers down to SUN_FAR-SUN_BACK m away from it land in the map. The old
+    // 150/320 clipped every caster more than 149 m up the sun axis — Singapore's
+    // towers (to 250 m), Baku, Vegas, Jeddah lost their tops' shadows. The side
+    // AWAY from the sun keeps its 170 m exactly; only the near side grew. Depth
+    // quantisation is linear in an ortho (569 m / 2^24 ≈ 34 µm) — immaterial; the
+    // lit shaders' biasTerm is in normalised depth, so its world size grows by
+    // 569/319 (≈0.32 → 0.57 m at the defaults). The CAR map keeps 150/320: cars
+    // are never tall. Pinned: tests/unit/shadow-pass-depth.test.mjs.
+    const SUN_BACK = 400, SUN_FAR = 570;
     let _shadowSnapX = null, _shadowSnapZ = null, _shadowBox = null;
     let _shadowSunX = null, _shadowSunY = null, _shadowSunZ = null;
     // Lamp-spot shadow snap: skip full rebuild when nearest flood + eye cell hold.
@@ -251,14 +262,14 @@ const ShadowPass = (function () {
           const wx = xx * lu + yx * lv + zx * lw;
           const wy = xy * lu + yy * lv + zy * lw;
           const wz = xz * lu + yz * lv + zz * lw;
-          _shEye[0] = wx + sd[0] * 150; _shEye[1] = wy + sd[1] * 150; _shEye[2] = wz + sd[2] * 150;
+          _shEye[0] = wx + sd[0] * SUN_BACK; _shEye[1] = wy + sd[1] * SUN_BACK; _shEye[2] = wz + sd[2] * SUN_BACK;
           _shCtr[0] = wx; _shCtr[1] = wy; _shCtr[2] = wz;
           M4.lookAtTo(_mLView, _shEye, _shCtr, up);
           // Half-size box (default ±80 m / 160 m) snapped around the anchor;
           // sampleShadow fades shadows out by ANCHOR distance (uShadowCtr) well
           // inside its border. Bigger = more reach, smaller = crisper contacts
           // (texel density = 2048/box).
-          M4.orthoTo(_mLProj, -sBox, sBox, -sBox, sBox, 1.0, 320);
+          M4.orthoTo(_mLProj, -sBox, sBox, -sBox, sBox, 1.0, SUN_FAR);
           M4.mulTo(_mLVP, _mLProj, _mLView);
           G.gfx.shadowBegin(_mLVP);
           // Shadow ribbons: chunk + frustum-cull against the ±shadow-box ortho

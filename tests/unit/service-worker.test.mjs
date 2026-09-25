@@ -46,8 +46,15 @@ function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediate
         },
       };
     },
-    async match(request) {
+    // CacheStorage.match(request, { cacheName }) searches ONE cache and never
+    // creates it (w3c.github.io/ServiceWorker/#cache-storage-match); without
+    // the option it walks every cache in creation order — Map insertion order.
+    async match(request, options) {
       const key = requestKey(request);
+      if (options && options.cacheName != null) {
+        const store = stores.get(options.cacheName);
+        return store && store.has(key) ? store.get(key).clone() : undefined;
+      }
       for (const store of stores.values()) {
         if (store.has(key)) return store.get(key).clone();
       }
@@ -609,4 +616,84 @@ test("a dev host fetches assets network-first and falls back to the cache offlin
   const cached = prod.fetchEvent(new Request(`${ORIGIN}/js/game.js?v=321`));
   assert.equal(await (await cached.responsePromise).text(), "asset",
     "on the deployed host the content-hashed precache is served cache-first");
+});
+
+// TWO GENERATIONS COEXIST FOR LONGER THAN `activate` ASSUMES. The old worker
+// reads version.json lazily, so mid-deploy a fetch can open a cache under the
+// NEWER build's name while the previous generation is still on disk, and
+// `activate` is the only sweep. caches.match() walks caches in CREATION order,
+// so an unversioned key (index.html, version.json) was answered from the OLDEST
+// generation. Matching now prefers the current build, then newest first.
+function generationFetch(state) {
+  return async (request) => {
+    if (state.offline) throw new TypeError("offline");
+    const url = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
+    if (url.pathname.endsWith("/version.json")) return new Response('{"build":321}', { status: 200 });
+    return new Response("network", { status: 200 });
+  };
+}
+
+test("an offline fallback prefers the current generation's shell over an older one", async () => {
+  const state = { offline: false };
+  const harness = createHarness({ fetchImpl: generationFetch(state) });
+  // 320 is created FIRST, so a creation-order caches.match() reaches it first.
+  harness.stores.set("apex26-320", new Map([
+    [`${ORIGIN}/index.html`, new Response("old shell", { status: 200 })],
+    [`${ORIGIN}/version.json`, new Response('{"build":320}', { status: 200 })],
+  ]));
+  harness.stores.set("apex26-321", new Map([
+    [`${ORIGIN}/index.html`, new Response("current shell", { status: 200 })],
+    [`${ORIGIN}/version.json`, new Response('{"build":321}', { status: 200 })],
+  ]));
+  // One ordinary online navigation resolves the worker's build name.
+  const warm = harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` });
+  await warm.responsePromise; await Promise.all(warm.lifetimes);
+
+  state.offline = true;
+  const nav = harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/race` });
+  assert.equal(await (await nav.responsePromise).text(), "current shell");
+  const version = harness.fetchEvent(new Request(`${ORIGIN}/version.json?_=1`));
+  assert.equal((await (await version.responsePromise).json()).build, 321);
+});
+
+test("with the build still unknown, the newest generation answers first", async () => {
+  const harness = createHarness({ fetchImpl: generationFetch({ offline: true }) });
+  harness.stores.set("apex26-320", new Map([[`${ORIGIN}/index.html`, new Response("old shell", { status: 200 })]]));
+  harness.stores.set("apex26-321", new Map([[`${ORIGIN}/index.html`, new Response("newer shell", { status: 200 })]]));
+  const nav = harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/race` });
+  assert.equal(await (await nav.responsePromise).text(), "newer shell");
+});
+
+function sweepHarness({ complete }) {
+  const harness = createHarness({ fetchImpl: generationFetch({ offline: false }) });
+  harness.stores.set("apex26-319", new Map([["a", new Response("x")]]));
+  harness.stores.set("apex26-320", new Map([["a", new Response("x")]]));
+  harness.stores.set("apex26-321", new Map(complete
+    ? [[`${ORIGIN}/__apex_install_complete__`, new Response("complete")]] : []));
+  harness.stores.set("apex26-322", new Map([["a", new Response("x")]]));   // a newer, still-installing generation
+  harness.stores.set("someone-else", new Map([["a", new Response("x")]]));
+  return harness;
+}
+async function twoFetches(harness) {
+  for (let i = 0; i < 2; i++) {
+    const ev = harness.fetchEvent(new Request(`${ORIGIN}/assets/sfx-${i}.ogg`));
+    await ev.responsePromise; await Promise.all(ev.lifetimes);
+  }
+}
+
+test("stale generations are swept from the fetch path once the current one is complete", async () => {
+  const harness = sweepHarness({ complete: true });
+  await twoFetches(harness);   // the first resolves the build name, the second sweeps
+  assert.deepEqual(harness.deleted.slice().sort(), ["apex26-319", "apex26-320"]);
+  assert.ok(harness.stores.has("apex26-322"), "a NEWER generation is never deleted by an older name");
+  assert.ok(harness.stores.has("someone-else"), "only apex26-* caches are ours");
+  assert.ok(harness.stores.has("apex26-321"));
+  await twoFetches(harness);
+  assert.equal(harness.deleted.length, 2, "one sweep per worker lifetime, not one per fetch");
+});
+
+test("no fetch-path sweep while the current generation is incomplete", async () => {
+  const harness = sweepHarness({ complete: false });
+  await twoFetches(harness);
+  assert.deepEqual(harness.deleted, [], "never strand a client on an unfinished cache");
 });

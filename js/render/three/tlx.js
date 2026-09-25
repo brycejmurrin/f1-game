@@ -1425,6 +1425,7 @@ const TLX = (function () {
         _writeInstanceMatrices(batch.imesh, matrices, null, v);
         batch.visible = v;
         batch._cullPlanes = null;
+        InstCells.invalidate(batch);
         return v;
       }
 
@@ -1484,11 +1485,26 @@ const TLX = (function () {
           }
         }
         if (samePack) { batch.visible = batch._cullN; return batch._cullN; }
+        // CELL-SET KEY (GLX/WGX parity; apex26.instCellCache=0 disables —
+        // docs/notes/PERF-FINDINGS 2c). A moving camera never repeats its
+        // planes, but the pack is a function of the surviving cell set: an
+        // unchanged set skips the copy loop AND the upload. The shadow cull
+        // (upload:false) neither consults nor records it — the key means "this
+        // pack is in imesh", and a shadow pack never is.
+        const shadow = !!(opts && opts.upload === false);
+        const cs = batch.cells;
+        const useKey = !shadow && InstCells.enabled();
+        const ks = useKey ? InstCells.scratchKeys(batch, cs.length) : null;
+        const kN = useKey ? InstCells.collectVisible(planes, cs, ks, TLXShaders.aabbInFrustum) : -1;
+        // NOT writing _cullPlanes on a hit is load-bearing: it must keep
+        // describing the frustum that physically wrote imesh.
+        if (useKey && InstCells.sameKey(batch, ks, kN)) { batch.visible = batch._cullN; return batch._cullN; }
         const src = batch.srcMatrices, dst = batch.packMatrices;
         const sc = batch.srcColors, dc = batch.packColors;
         let n = 0;
-        for (const c of batch.cells) {
-          if (!TLXShaders.aabbInFrustum(planes, c.mn, c.mx)) continue;
+        for (let ci = 0, cn = useKey ? kN : cs.length; ci < cn; ci++) {
+          const c = useKey ? cs[ks[ci]] : cs[ci];
+          if (!useKey && !TLXShaders.aabbInFrustum(planes, c.mn, c.mx)) continue;
           for (const i of c.idx) {
             // No src.subarray — per-instance views were GC on Vegas-scale batches
             // (GLX/WGX already element-copy; design E mirrored here).
@@ -1518,6 +1534,7 @@ const TLX = (function () {
           for (let k = 0; k < 4; k++, po++) snap[po] = p[k];
         }
         batch._cullN = n;
+        if (useKey) InstCells.recordKey(batch, ks, kN);
         return n;
       }
 
@@ -3537,12 +3554,12 @@ const TLX = (function () {
                   const grid = LampChunks.buildGrid(table, chs);
                   const okG = lit.setLampGrid({ lights: AL, table, grid, cell });
                   _lampGridState = { on: !!okG, lamps: (AL.length / 15) | 0,
-                                     chunks: chs.length, recs: nrec, idx: table.concat.length,
+                                     chunks: chs.length, recs: nrec, idx: (grid.concat || table.concat).length,
                                      gw: grid.gw, gh: grid.gh, cell,
                                      why: okG ? null : "does not fit the fixed textures" };
                   note = "TLX per-chunk lamps " + (okG ? "ON" : "REFUSED")
                     + " lamps=" + _lampGridState.lamps + " chunks=" + chs.length
-                    + " recs=" + nrec + " idx=" + table.concat.length
+                    + " recs=" + nrec + " idx=" + (grid.concat || table.concat).length
                     + " grid=" + grid.gw + "x" + grid.gh;
                 } catch (e) {
                   lit.setLampGrid(null);

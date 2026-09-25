@@ -46,6 +46,9 @@ function boot(opts = {}) {
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
+  // In the page js/data/teams.js loads long before this file; opt in where a
+  // test is about what Teams.sanitizeCustom does to an imported team.
+  if (opts.teams) vm.runInContext(read("js/data/teams.js"), ctx, { filename: "js/data/teams.js" });
   vm.runInContext(read("js/ui/settings-export.js"), ctx, { filename: "js/ui/settings-export.js" });
   const SettingsExport = vm.runInContext("SettingsExport", ctx);
   const G = { gfx: { isMobile: !!opts.mobile }, soundOn: false };
@@ -469,6 +472,57 @@ test("the four garage singles are shape-checked like the liveries", () => {
   assert.equal(r2.applied, 4, "a real garage file is untouched by the guard");
   assert.equal(r2.skipped, 0);
   assert.equal(JSON.parse(b2.disk.get("apex26.team")), 4);
+});
+
+// A SHAPE-SOUND TEAM CAN STILL CARRY A PAYLOAD. The shape check above keeps
+// boot alive; it said nothing about what the fields HOLD. The customize dialog
+// caps every field as it is typed (custom-team.js clean()), so the only way to
+// a 5 000-character driver name, markup in a team name or a car number of 1e9
+// was this door. aria-state.js paintOnOff once wrote such a name back through
+// innerHTML (stored XSS, 2026-09-24) — escaped now; this is the second wall.
+test("an imported custom team is rebuilt to the dialog's own limits", () => {
+  const b = boot({ teams: true });
+  const evil = {
+    id: "not-custom", custom: false, tier: 99, engine: "E".repeat(500),
+    name: "<img src=x onerror=alert(1)>" + "A".repeat(5000),
+    short: "\u202eabcdefg", color: [5, -1, "x"], stats: { speed: 1e9 },
+    livery: { finShape: "<script>" + "x".repeat(100), nested: { a: 1 }, stripe: [2, 0, 0] },
+    extra: "<svg onload=alert(1)>",
+    drivers: [
+      { name: "\u0000Evil\u0007 <b>Name</b>" + "Z".repeat(100), code: "<script>", num: 1e9, onclick: "x" },
+      { name: 42, code: null, num: -5.4 },
+      { name: "Third", code: "TRD", num: 3 },
+      null,
+    ],
+  };
+  const r = b.loadGarage({ format: "apex26-garage-v1", garage: { customTeam: evil } });
+  assert.equal(r.applied, 1, "a shape-sound team is written, repaired");
+  const t = JSON.parse(b.disk.get("apex26.customTeam"));
+  assert.equal(t.id, "custom", "the id syncCustomTeam() splices on is forced");
+  assert.equal(t.custom, true);
+  assert.deepEqual(Object.keys(t).sort(),
+    ["color", "color2", "custom", "drivers", "engine", "id", "livery", "name", "short", "stats", "tier"],
+    "unknown keys are dropped — only what the dialog writes survives");
+  assert.ok(t.name.length <= 22 && t.name.startsWith("<img"), `name capped at 22: ${t.name}`);
+  assert.equal(t.short, "ABCD", "short: bidi override stripped, capped at 4, upper-cased");
+  assert.ok(t.engine.length <= 16);
+  assert.equal(t.tier, 2);
+  assert.deepEqual(t.color, [0.13, 0.79, 0.85], "a non-numeric colour falls back");
+  assert.equal(t.stats.speed, 100, "stats clamp to 0..100");
+  assert.ok(t.livery.finShape.length <= 32);
+  assert.equal("nested" in t.livery, false, "nothing nested survives in a livery");
+  assert.deepEqual(t.livery.stripe, [1, 0, 0], "rgb clamps to 0..1");
+  assert.equal(t.drivers.length, 2, "the roster is bounded (a team has two seats)");
+  const [d0, d1] = t.drivers;
+  assert.deepEqual(Object.keys(d0).sort(), ["code", "name", "num"]);
+  assert.ok(!/[\u0000-\u001f]/.test(d0.name), "control characters are stripped");
+  assert.ok(d0.name.length <= 22 && d0.name.startsWith("Evil"), d0.name);
+  assert.equal(d0.code, "<SC", "code capped at 3");
+  assert.equal(d0.num, 99, "num clamps to 0..99");
+  assert.equal(d1.name, "Your Name", "a non-string name falls back");
+  assert.equal(d1.code, "YOU");
+  assert.equal(d1.num, 0, "a negative num clamps to 0 as an integer");
+  assert.ok(Number.isInteger(d1.num));
 });
 
 test("customLogo accepts only data:image/(png|jpeg|webp);base64 with a length cap", () => {
