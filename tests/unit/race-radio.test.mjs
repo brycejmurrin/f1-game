@@ -597,3 +597,9 @@ test("a lap that ends green but ran under a VSC is not called slow", () => {
   r.step(60);                                      // the neutralised lap ends green
   assert.ok(!r.lines(t0).some((m) => /OFF\. RESET|LOST TIME|SLOW/.test(m)), r.lines(t0).join(" | "));
 });
+
+test("reset() forgets the last race's pit exit, so this race's pace rates are not muted", () => {
+  const src = readFileSync(new URL("../../js/race/race-facts.js", import.meta.url), "utf8");
+  const reset = src.slice(src.indexOf("function reset() {"), src.indexOf("function bag("));
+  assert.match(reset, /pitEndT = -1e9;/);
+});

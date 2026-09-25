@@ -46,6 +46,7 @@ const RaceFacts = (function () {
       t = 0; lapLen = 0; cars = null; nextId = 1;
       st.clear(); pairs.clear(); battles.clear(); hist.clear();
       order = []; fastest = { time: Infinity, car: null };
+      pitEndT = -1e9;   // last race's pit exit must not mute this race's pace calls
       pos = 0; pendPos = 0; pendT = 0; grid = null; started = false; caution = 0; playerHits = 0; playerSev = 0;
     }
 

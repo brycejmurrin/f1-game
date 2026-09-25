@@ -502,7 +502,9 @@ const Announcer = (function () {
       const w = order[0], s2 = order[1];
       const you = order.find((c) => c.isPlayer);
       let fast = null;
-      for (const c of order) if (c.best > 0 && Number.isFinite(c.best) && (!fast || c.best < fast.best)) fast = c;
+      // Among the cars that took the flag, as endRace and the badges award it:
+      // a retired car's quick lap is not the race's fastest lap.
+      for (const c of order) if (c.finished && !c.retired && c.best > 0 && Number.isFinite(c.best) && (!fast || c.best < fast.best)) fast = c;
       const sum = {
         event: info && info.sprint ? "the sprint" : t.gp ? "the " + t.gp : "", n: order.length,
         winner: { name: w.name || w.code || "" },
