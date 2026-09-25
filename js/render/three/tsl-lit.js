@@ -423,9 +423,12 @@
       const off = () => { U.lgOn.value = 0.0; return false; };
       if (!info || !info.lights || !info.table || !info.grid) return off();
       const L = info.lights, t = info.table, g = info.grid;
+      // The grid's concat: the table's plus the merged lists of shared cells
+      // (LampChunks.buildGrid) — its offsets point into THAT array.
+      const cat = g.concat || t.concat;
       const nLamps = (L.length / 15) | 0;
       if (!(nLamps > 0) || nLamps > LGRID.LAMPS) return off();
-      if (t.concat.length > LGRID.IDXW * LGRID.IDXW) return off();
+      if (cat.length > LGRID.IDXW * LGRID.IDXW) return off();
       if (!(g.gw > 0) || !(g.gh > 0) || g.gw > LGRID.G || g.gh > LGRID.G) return off();
 
       const lt = LGRID.lampTex.image.data;
@@ -440,7 +443,7 @@
       }
       const it = LGRID.idxTex.image.data;
       it.fill(0);
-      for (let k = 0; k < t.concat.length; k++) it[k] = t.concat[k];
+      for (let k = 0; k < cat.length; k++) it[k] = cat[k];
       const gt = LGRID.gridTex.image.data;
       gt.fill(0);
       // ROW BY ROW, through the shared helper. This used to be a linear copy

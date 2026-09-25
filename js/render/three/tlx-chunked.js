@@ -201,7 +201,13 @@
     packStats.small++;
     if (kind === "unit") {
       const a = new Int16Array(len);
-      for (let i = 0; i < len; i++) a[i] = Math.round(src[i] * 32767);
+      // CLAMP, like VertexPack.qs: the scan above admits |v| <= 1.0001, and
+      // round(1.0001 * 32767) = 32770 WRAPS in an Int16 to -32766 — a
+      // normal flipped to the opposite hemisphere. ±32767 keeps snorm symmetric.
+      for (let i = 0; i < len; i++) {
+        const q = Math.round(src[i] * 32767);
+        a[i] = q < -32767 ? -32767 : q > 32767 ? 32767 : q;
+      }
       packStats.savedMB += (len * 2) / 1048576;
       return new THREE.BufferAttribute(a, itemSize, true);            // normalized
     }

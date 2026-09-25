@@ -832,7 +832,11 @@ table below was measured, and this paragraph plus the comment inside
 than none: it sends the next reader looking for a lever that is already
 pulled.) Sound because the pack is a deterministic function of that set:
 `batch.cells` order and each cell's `idx` order are fixed at build time and
-never mutated. Measured A/B, same box, same instrument, flag the only change:
+never mutated. TLX (the default backend) had only the exact-plane key until
+2026-09-25, so every prop batch re-packed and re-uploaded its InstancedMesh
+every moving frame; it now uses the same shared `InstCells` key, camera cull
+only (`tests/unit/tlx-inst-cells.test.mjs`; not yet measured on TLX).
+Measured A/B (GLX), same box, same instrument, flag the only change:
 
 | | off | on |
 |---|---|---|

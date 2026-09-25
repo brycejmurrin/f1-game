@@ -106,7 +106,7 @@ _216 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `canvas-css-size.js` | `CanvasCssSize` | tag | one cached CSS-box reader for every renderer. |
 | `lamp-chunks.js` | `LampChunks` | tag | shared per-chunk lamp table bake (LampChunks). |
 | `frustum.js` | `Frustum` | tag | shared frustum cull math (Frustum). |
-| `inst-cells.js` | `InstCells` | tag | InstCells: shared cell-set key cache for GLX + WGX cullInstances. |
+| `inst-cells.js` | `InstCells` | tag | InstCells: shared cell-set key cache for GLX + WGX + TLX cullInstances. |
 | `vertex-pack.js` | `VertexPack` | tag | packed world vertex channels. |
 | `gltf.js` | `GLTF` | tag | Binary glTF (.glb) loader. |
 | `assets.js` | `Assets` | tag | Assets: the baked asset pack loader. |
