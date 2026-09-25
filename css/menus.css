@@ -466,6 +466,12 @@
    keeps the two 2-up columns on the same vertical tracks (measured 205 vs 203
    on 1280 before this). Color stays transparent on the red doors. */
 #menu-buttons :is(#menu-hero, #menu-primary) .bigbtn { border-color: transparent; }
+/* Long-form play is its own darker invitation; immediate sessions remain the
+   red actions. The contrast also separates the saved-career door at a glance. */
+#menu-buttons #mb-career {
+  background: var(--plate-opaque); border-color: var(--red);
+  box-shadow: var(--edge); color: var(--text);
+}
 /* width: 100% is REDUNDANT in the cascade (#menu-buttons .bigbtn at (1,1,0)
    already wins it on every branch) and KEPT on purpose: tests/unit/title-menu-even
    pins this exact declaration as the contract that 2-up cells fill, and
@@ -1045,6 +1051,9 @@ body { --compact-at: 600px; --wide-at: 620px; }
      and a content-sized sheet would collapse it to its min-height. */
   height: 100%;
 }
+#sel-car { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(var(--gap) * 0.15); }
+#sel-car small { font-size: var(--fs-micro); font-style: normal; color: var(--dim); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#sel-track-count { letter-spacing: var(--ls-2); }
 /* The body is a flex column that does NOT scroll: shelf, then hero section.
    The section is the vertical scroller when its caption does not fit. */
 #sel-body {
@@ -1292,18 +1301,20 @@ body { --compact-at: 600px; --wide-at: 620px; }
   flex-direction: row; align-items: center; flex-wrap: nowrap;
   gap: var(--gap);
   padding: 0 0 calc(var(--gap) * 0.2);
-  overflow-x: auto; overflow-y: hidden;
-  overscroll-behavior-x: contain;
-  touch-action: pan-x;
-  scrollbar-width: none;
+  overflow: hidden;
 }
-#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-info::-webkit-scrollbar { display: none; }
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta {
-  display: flex; flex: 0 0 auto; gap: var(--gap);
+  display: flex; flex: 1 1 auto; min-width: 0; gap: var(--gap);
 }
-#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta > div { flex: 0 0 auto; }
-#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-rec { flex: none; white-space: nowrap; }
-#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-detail-chip { flex: none; align-self: center; }
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta > div { display: none; }
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta > div:nth-child(2),
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta > div:nth-child(3) {
+  display: flex; flex: 0 1 auto; align-items: baseline; gap: calc(var(--gap) * 0.4);
+  white-space: nowrap; overflow: hidden;
+}
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta dd { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-rec { display: none; }
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-detail-chip { flex: 0 0 auto; align-self: center; }
 #sel-hero {
   position: relative; min-height: 0; min-width: 0;
   border-radius: var(--r-lg);
@@ -1747,6 +1758,11 @@ h3.sel-label {
   margin: 0;
 }
 #rs-presets > .preset-btn { min-height: var(--chip-h); }
+.session-summary {
+  margin: 0; min-width: 0; max-width: 100%;
+  color: var(--dim); font-size: var(--fs-micro); font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 /* THE FOLDS (2026-09-18). Twelve rows all at one weight was a wall: it fit the
    desktop sheet at 396px and SCROLLED on both phone shapes (373 into 295
    landscape, 743 into 685 portrait, measured on the deploy tip). The four rows

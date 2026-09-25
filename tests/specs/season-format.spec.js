@@ -121,7 +121,7 @@ test.describe("Season — a custom calendar", () => {
     expect((await saved(page)).round).toBe(1);
     // The last round is run, so the button offers to END the season rather than
     // to start round 2 of a calendar that has none.
-    await expect(page.locator("#res-next")).toHaveText("FINISH SEASON");
+    await expect(page.locator("#res-next")).toHaveText("VIEW CHAMPION");
     await page.locator("#res-next").click();
     // …and the FIRST click builds the champion panel in place rather than leaving
     // the results screen.
