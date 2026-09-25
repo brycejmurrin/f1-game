@@ -3473,7 +3473,7 @@ test("the flyby plays on the pre-race loading screen only; the picker pre-builds
   // so the settings rows are read against black rather than a moving world.
   // The gate runs before every early return, and a freshly built world still
   // gets its warm-up frames hidden.
-  assert.match(game, /const menuBlank = state === "menu" && !setupPreviewOn && \(!track \|\| !loadingScreen\.active\(\)\);/);
+  assert.match(game, /const menuBlank = state === "menu" && !setupPreviewOn && \(!track \|\| !loadingScreen\.active\(\) \|\| !menuWorld\(\)\);/);
   assert.match(raceSettings, /else if \(raceIntro\) raceIntro\(startRace\);/,
     "RACE! goes through the loading screen; the QUALIFYING branch above it does not (sheet to sheet)");
   assert.match(game, /function clearMenuScreens\(\) \{\s*loadingScreen\.stop\(\);/,
@@ -4781,7 +4781,7 @@ test("selector preparation waits for the player's hands before the build and the
   assert.equal((body.match(/await menuFinish\(current, key\);/g) || []).length, 2,
     "both paths finish through menuFinish (car assets, warm frames, lamp pre-bake, flyby plans)");
   const fin = src.match(/async function menuFinish\(current, key\) \{[\s\S]*?\n\}/)[0];
-  assert.match(fin, /await prepareMenuCarAssets\(current\);\s*if \(await menuIdle\(current\)\) _menuGate\.warm = 2;/,
+  assert.match(fin, /await prepareMenuCarAssets\(current\);\s*if \(await menuIdle\(current\)\) \{ FlybySeq\.reset\(\); _menuGate\.warm = 2; \}/,
     "the warm frames follow the paced car assets, on an idle menu");
   assert.ok(fin.indexOf("_menuGate.warm = 2") < fin.indexOf("menuLampBake(current)"),
     "…and come BEFORE the lamp pre-bake: a RACE! tap mid-bake met cold shaders");
@@ -4810,7 +4810,7 @@ test("selector preparation rejects stale requests, reuses the world, and waits f
   const menuLampBake = async () => {};   // the lamp prebake is LampBake.prebake's (lamp-bake.test.mjs)
   // The REAL menuFinish, with the flyby planning stubbed (flyby-shots.test.mjs covers it).
   let _menuFly = null;
-  const FlybySeq = { DEFAULT: [], vary: () => [], planSteps: () => () => true };
+  const FlybySeq = { DEFAULT: [], vary: () => [], planSteps: () => () => true, reset() {} };
   // The idle gate and the upload slice are module-level policy (tested below);
   // here the player is idle and a slice is immediate.
   const menuIdle = async (current) => current(), menuSlice = async () => {};

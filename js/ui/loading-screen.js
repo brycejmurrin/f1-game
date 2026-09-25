@@ -38,6 +38,7 @@ const LoadingScreen = (function () {
    * the streak — the long cut comes back for anyone who watched it again.
    * Stored as `apex26.flySkips` through the game's store. */
   const SHORT_FLY_MS = 12000;
+  const SKIP_GRACE_MS = 400;
   const SKIP_STREAK = 3;
   /** The flyby's budget for a stored streak. Pure; hostile input is no streak. */
   function flyMsFor(skips) {
@@ -476,7 +477,16 @@ const LoadingScreen = (function () {
     // RACE! used to skip the flyby on the first repeat.
     // Once per run: the listeners stay up until startRace lowers the screen, and a
     // triple tap counted three skips (the short flyby arrived a run early).
-    function onSkip(e) { if (e && e.type === "keydown" && e.repeat) return; if (phase && build) { noteFlyby(true); cutRadio(); fire(); } }
+    // SKIP_GRACE_MS: the second click of a double-click on RACE! (or a second
+    // Enter) is not a verdict on the flyby. A skip that DOES fire stops the event:
+    // the race starts inside this listener, so an Escape/P/Space let through
+    // bubbled on into the race and paused it (or latched a boost) on frame one.
+    function onSkip(e) {
+      if (e && e.type === "keydown" && e.repeat) return;
+      if (!(phase && build) || Date.now() - flyT0 < SKIP_GRACE_MS) return;
+      if (e) { if (e.cancelable && e.preventDefault) e.preventDefault(); if (e.stopPropagation) e.stopPropagation(); }
+      noteFlyby(true); cutRadio(); fire();
+    }
     /* THE PAD SKIPS TOO. No UI layer is open during the flyby, so the gamepad
      * walker sends no synthetic keydown and a controller-only player (TV, a
      * handheld) waited the full FLY_MS before every race. Poll the pads while
@@ -623,7 +633,7 @@ const LoadingScreen = (function () {
     };
   }
 
-  return { create, FLY_MS, SHORT_FLY_MS, SKIP_STREAK, flyMsFor, nextSkips, CARD_MS, CARD, CARD_KEYS, clampCard, cardPristine, cardVars,
+  return { create, FLY_MS, SHORT_FLY_MS, SKIP_GRACE_MS, SKIP_STREAK, flyMsFor, nextSkips, CARD_MS, CARD, CARD_KEYS, clampCard, cardPristine, cardVars,
     gridLayout, gridField, gridColour, isGridShot, GRID_ROW_MIN };
 })();
 Object.freeze(LoadingScreen);

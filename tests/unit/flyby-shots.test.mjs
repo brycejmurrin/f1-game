@@ -738,7 +738,7 @@ test("the menu build warms its shaders BEFORE the slow extras (lamp pre-bake, fl
   assert.ok(i > 0, "menuFinish exists");
   const warm = body.indexOf("_menuGate.warm = 2"), lamp = body.indexOf("menuLampBake(current)"), plan = body.indexOf("FlybySeq.planSteps(");
   assert.ok(warm > 0 && warm < lamp && lamp < plan, "car assets -> warm -> lamp bake -> flyby plans");
-  assert.match(body, /if \(lit && await menuIdle\(current\)\) _menuGate\.warm = 2;/, "and warm again once a baked (dark) world is in — only then");
+  assert.match(body, /if \(lit && await menuIdle\(current\)\) \{ FlybySeq\.reset\(\); _menuGate\.warm = 2; \}/, "and warm again once a baked (dark) world is in — only then");
   assert.match(game, /const planned = world && _menuFly && _menuFly\.track === track && _menuFly\.key === _menuGate\.ready/);
 });
 
@@ -752,4 +752,24 @@ test("RACE! before the menu's build: build under the card, then fly (never the b
   assert.match(ib, /_menuGate\.ready = key; _menuGate\.track = track;/, "the build is keyed like the menu's, so menuWorld() sees it");
   assert.match(ib, /_introKey = key; raceIntro\(go\)/, "the hand-over marks itself, so a failed build falls back to the card instead of looping");
   assert.match(ib, /prefers-reduced-motion/, "reduced motion has no flyby to build for");
+  const pa = ib.indexOf("prepareMenuCarAssets("), wa = ib.indexOf("_menuGate.warm = 2");
+  assert.ok(pa > l && wa > pa && p > wa, "under the card, like menuFinish: car assets, then hidden warm frames, then plans — the flyby's first frame compiles nothing");
+  assert.match(ib, /try \{ _introKey = key; raceIntro\(go\); \} catch \(e\) \{[^}]*loadingScreen\.stop\(\); go\(\); \}/, "a throw in raceIntro never strands the timer-less build card");
+  assert.match(ib, /gfx\.warming\(\)\) await menuSlice\(\)/, "never frees a scene a compile still owns");
+});
+
+test("every flyby run opens on a CUT: FlybySeq.reset() before the run and before hidden warm frames", () => {
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const i = game.indexOf("function raceIntro(go)"), body = game.slice(i, game.indexOf("\n}\n", i));
+  assert.ok(body.indexOf("FlybySeq.reset();") > 0 && body.indexOf("FlybySeq.reset();") < body.indexOf("loadingScreen.run("), "raceIntro resets the sequencer before run()");
+  const f = game.indexOf("async function menuFinish(current, key)"), fin = game.slice(f, game.indexOf("\n}\n", f));
+  assert.equal((fin.match(/FlybySeq\.reset\(\); _menuGate\.warm = 2;/g) || []).length, 2, "both of menuFinish's warm passes");
+});
+
+test("the world key includes the grid size, and a failed build does not keep the old id", () => {
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  assert.match(game, /const menuKey = \(idx\) => \[idx, raceTimeOfDay, raceWeather, fieldSize\(\)\]\.join\("\|"\);/);
+  assert.equal((game.match(/\[(trackIdx|want|idx), (raceTimeOfDay|tod), (raceWeather|weather)\]\.join\("\|"\)/g) || []).length, 0, "every menu key goes through menuKey()");
+  assert.match(game, /track = null; builtTrackId = null;/, "a build that throws must force the next loadTrack to rebuild");
+  assert.match(game, /const menuBlank = state === "menu" && !setupPreviewOn && \(!track \|\| !loadingScreen\.active\(\) \|\| !menuWorld\(\)\);/, "the no-world card shows no stale circuit");
 });
