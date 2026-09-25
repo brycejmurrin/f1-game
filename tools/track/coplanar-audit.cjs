@@ -33,6 +33,7 @@
 // Usage:
 //   node tools/track/coplanar-audit.cjs <trackId> [--why]
 //   node tools/track/coplanar-audit.cjs --all [--json] [--gate]
+//   node tools/track/coplanar-audit.cjs --all --json --both   # default + overhead, one build each
 //   flags: --gap <m>  --area <m2>  --fight <m>  --horizontal  --flat  --overhead
 //
 // --flat: horizontal faces ONLY (|n.y| >= 0.5) — the population --horizontal
@@ -389,6 +390,11 @@ function analyse(track, prims, opt) {
 // at all (the counts were right, the attribution was dead). Measured on vegas
 // 2026-09-22: 184 pairs, all `?  X  ?`; with the sink, `strut@circuits/scenery/
 // vegas.js:40 < ferrisWheel`.
+//
+// `opt` may be an ARRAY of option sets: the circuit is built ONCE and every set
+// is analysed over the same prims (analyse() only reads them — facesOf builds
+// fresh face records per call), returning one result per set in order. That is
+// --both: the default and --overhead sweeps on one Tracks.build per circuit.
 function run(env, id, opt, sink) {
   const Tracks = env.Tracks;
   const def = Tracks.LIST.find((d) => d.id === id);
@@ -401,12 +407,13 @@ function run(env, id, opt, sink) {
   // context accumulates every circuit's full mesh buffers for the life of the
   // sweep (measured 4157 MB -> 97 MB for the 40-circuit --all run).
   env.trim(from);
+  if (Array.isArray(opt)) return opt.map((o) => Object.assign({ id }, analyse(track, prims, o)));
   return Object.assign({ id }, analyse(track, prims, opt));
 }
 
-// ---------------------------------------------------------------------------
-function main() {
-  const argv = process.argv.slice(2);
+// The option set main() derives from argv; `overhead` forces that mode on (for
+// --both) with the same flag-override rules as a plain `--overhead` run.
+function optsFrom(argv, overhead) {
   const flag = (name, def) => {
     const i = argv.indexOf(`--${name}`);
     return i >= 0 && argv[i + 1] ? Number(argv[i + 1]) : def;
@@ -418,12 +425,19 @@ function main() {
     maxDim: flag("maxdim", MAX_DIM),
     horizontal: argv.includes("--horizontal") || argv.includes("--flat"),
     flat: argv.includes("--flat"),
-    overhead: argv.includes("--overhead"),
+    overhead: overhead || argv.includes("--overhead"),
   };
   if (opt.overhead) {
     if (!argv.includes("--gap")) opt.gap = OVERHEAD_GAP;
     if (!argv.includes("--area")) opt.area = OVERHEAD_AREA;
   }
+  return opt;
+}
+
+// ---------------------------------------------------------------------------
+function main() {
+  const argv = process.argv.slice(2);
+  const opt = optsFrom(argv, false);
   const wantJson = argv.includes("--json");
   const wantGate = argv.includes("--gate");
   const why = argv.includes("--why");
@@ -435,6 +449,25 @@ function main() {
     // is read as a track id.
     : argv.filter((a, i) => !a.startsWith("--") && isNaN(Number(a)) &&
                             !(i > 0 && argv[i - 1].startsWith("--")));
+
+  // --both --json: the default sweep AND the --overhead sweep from ONE build per
+  // circuit, as { default: [...], overhead: [...] } — each array exactly what
+  // the separate `--json` and `--json --overhead` runs print (the two passes
+  // share a build, nothing else). coplanar-faces.test.mjs reads it: the two
+  // sweeps used to rebuild the whole fleet twice.
+  if (argv.includes("--both")) {
+    if (!wantJson || wantGate || why || argv.includes("--overhead"))
+      throw new Error("--both is JSON-only: use it with --json, without --overhead/--gate/--why");
+    const both = { default: [], overhead: [] };
+    const opts = [optsFrom(argv, false), optsFrom(argv, true)];
+    for (const id of ids) {
+      const [r, o] = run(env, id, opts);
+      both.default.push({ id, pairs: r.pairs, spots: r.spots, stats: r.stats });
+      both.overhead.push({ id, pairs: o.pairs, spots: o.spots, stats: o.stats });
+    }
+    console.log(JSON.stringify(both, null, 1));
+    return;
+  }
 
   const out = [];
   for (const id of ids) {
