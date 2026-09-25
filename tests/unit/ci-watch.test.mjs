@@ -10,7 +10,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { latestPerWorkflow, verdict, newJobEvents, wantsAnnotations } from "../../tools/ci/ci-watch.mjs";
+import { latestPerWorkflow, verdict, newJobEvents, wantsAnnotations, pagesVerdictRun } from "../../tools/ci/ci-watch.mjs";
 
 const run = (id, name, status, conclusion, created) => ({ id, name, status, conclusion, created_at: created });
 const job = (id, name, status, conclusion, steps = []) => ({ id, name, status, conclusion, steps, html_url: `u/${id}` });
@@ -63,4 +63,19 @@ test("only a failed or timed-out job gets its annotations printed", () => {
   assert.equal(wantsAnnotations(job(2, "a", "completed", "timed_out")), true);
   assert.equal(wantsAnnotations(job(3, "a", "completed", "cancelled")), false);
   assert.equal(wantsAnnotations(job(4, "a", "completed", "success")), false);
+});
+
+test("--pages reads the NEWEST train run that contains the SHA", () => {
+  // Oldest-first returned on the first finished run: a waiting train run a
+  // later tick replaced (cancelled) or an older red read as the verdict while
+  // a newer run was about to ship the commit.
+  const runs = [   // newest first, as the API lists them
+    { id: 3, head_sha: "c", status: "in_progress", conclusion: null },
+    { id: 2, head_sha: "b", status: "completed", conclusion: "cancelled" },
+    { id: 1, head_sha: "a", status: "completed", conclusion: "failure" },
+  ];
+  const has = (set) => (h) => set.includes(h);
+  assert.equal(pagesVerdictRun(runs, has(["a", "b", "c"])).id, 3, "a newer containing run supersedes older verdicts");
+  assert.equal(pagesVerdictRun(runs, has(["a"])).id, 1, "only the old run contains it: that is the verdict");
+  assert.equal(pagesVerdictRun(runs, has([])), null, "no containing run yet");
 });

@@ -260,6 +260,40 @@ test("a timed-out API fetch releases the shared queue", async () => {
   await second;
 });
 
+test("a response whose BODY stalls still times out and releases the queue", async () => {
+  // 2026-09-24: the deadline covered only the headers; res.json() ran after the
+  // race settled, so a body stalled mid-transfer hung the queue for the session.
+  const timers = [];
+  const calls = [];
+  const context = vm.createContext({
+    fetch(url) {
+      calls.push(url);
+      if (calls.length === 1) return Promise.resolve({ ok: true, status: 200, json: () => new Promise(() => {}) });
+      return Promise.resolve(new Response("[]", { status: 200 }));
+    },
+    AbortController, Response,
+    localStorage: { length: 0, getItem: () => null, setItem() {}, key: () => null, removeItem() {} },
+    Date,
+    setTimeout(fn) { timers.push(fn); return timers.length; }, clearTimeout() {},
+  });
+  seedLog(context);
+  vm.runInContext(apiSource + ";globalThis.__api=F1API", context);
+  const first = context.__api.weather(1, 0).catch((e) => e);
+  const second = context.__api.positions(1, 0);
+  for (let i = 0; i < 4; i++) await Promise.resolve();
+  assert.equal(calls.length, 1);
+  timers.shift()(); // fetch deadline, with the body still unread
+  const firstError = await first;
+  await new Promise((resolve) => setImmediate(resolve));
+  while (calls.length < 2 && timers.length) {
+    timers.shift()();
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.match(firstError.message, /timed out/, "a stalled body is a timeout, not a hang");
+  assert.equal(calls.length, 2, "the next request is not stuck behind it");
+  await second;
+});
+
 test("API auth failures never fall back to stale cached data", async () => {
   const url = "https://api.openf1.org/v1/weather?session_key=7";
   const key = "apex26.api." + url;

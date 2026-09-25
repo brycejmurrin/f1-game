@@ -939,6 +939,13 @@ const WGX = (function () {
     // has persisted across three.
     const GPU_ERR_ESCALATE_FRAMES = 3;
     let _gpuErrFrames = 0, _gpuErrLastPresent = -1, _presentCount = 0;
+    // The flood counters are a RUN, not a session total: begin() clears them
+    // once GPU_ERR_QUIET_FRAMES presents pass with no error. As lifetime
+    // counters, eight one-off errors in three frames hours apart (a freed-decal
+    // bind, say) "persisted" and reloaded the phone a rung down mid-race
+    // (2026-09-24). _gpuErrors stays the lifetime total WGX.gpuErrors() reports.
+    const GPU_ERR_QUIET_FRAMES = 2;
+    let _gpuErrRun = 0;
     try {
       // addEventListener FIRST: iOS/Safari 26.0–26.5 never fire the property
       // form (WebKit 689ebe5, Apr 2026), and WebKit's silent draw drops — a
@@ -949,7 +956,7 @@ const WGX = (function () {
         const msg = (ev && ev.error && ev.error.message) || "gpu error";
         if (!_bootError) _bootError = msg;
         if (!_gpuFirstMsg) _gpuFirstMsg = msg;
-        _gpuErrors++;
+        _gpuErrors++; _gpuErrRun++;
         if (_gpuErrLastPresent !== _presentCount) { _gpuErrLastPresent = _presentCount; _gpuErrFrames++; }
         if (_gpuErrors <= GPU_ERR_LOG_CAP) {
           try { Log.warn("gfx", "WGX GPU error #" + _gpuErrors + ":", msg); } catch (_) { /* Log absent (node VM harness): _gpuErrors still counts, which is the load-bearing part */ }
@@ -960,9 +967,9 @@ const WGX = (function () {
         // After boot, a flood of uncaptured errors means the GPU is drawing
         // nothing while the UI still says WEBGPU. Climb the same ladder as
         // device.lost / JS-strike cap — do not keep presenting a dead backend.
-        if (_runtimeReady && !_lost && _gpuErrors >= GPU_ERR_ESCALATE_CAP
+        if (_runtimeReady && !_lost && _gpuErrRun >= GPU_ERR_ESCALATE_CAP
             && _gpuErrFrames >= GPU_ERR_ESCALATE_FRAMES) {
-          _wgxEscalate("runtime GPU errors (" + _gpuErrors + " over " + _gpuErrFrames + " frames)");
+          _wgxEscalate("runtime GPU errors (" + _gpuErrRun + " over " + _gpuErrFrames + " frames)");
         }
       };
       if (typeof device.addEventListener === "function") device.addEventListener("uncapturederror", onGpuErr);
@@ -3376,6 +3383,7 @@ const WGX = (function () {
     let encoder = null, litPass = null, currentView = null, _drawSlot = 0;
     function begin(frame) {
       _presentCount++;   // frame counter for the GPU-error cap (errors are attributed to the frame they arrive in)
+      if (_gpuErrLastPresent >= 0 && _presentCount - _gpuErrLastPresent > GPU_ERR_QUIET_FRAMES) { _gpuErrFrames = 0; _gpuErrRun = 0; }
       if (_lost) return false;
       try {
         // Before ANY of this frame's work: a pending capture that needs a
