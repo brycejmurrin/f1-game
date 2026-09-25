@@ -47,8 +47,9 @@ say() { echo "$*" >&2; }
 # fast_run: the FAST-tier ci.yml run (a deploy-branch push: guards, node
 # suites, sweeps-parts, driving-model, selection) that already passed on this
 # exact tree, when there is one. Never a reason to skip the gate — the train
-# still runs the browser smoke and the geometry sweeps — but the four tree-only
-# jobs it already passed give the same answer on the same bytes, so ci.yml's
+# still runs the browser smoke, the geometry sweeps and the parts census (whose
+# filter diffs a base, so it is not tree-only) — but the tree-only jobs it
+# already passed give the same answer on the same bytes, so ci.yml's
 # `fast_tier_run` input skips them (2026-09-16; a deploy push paid ~12 min of
 # fast tier and then ~14 min of full tier, serially, with no job shared).
 FAST_RUN=""

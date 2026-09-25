@@ -6056,7 +6056,7 @@ function updateCar(c, dt, ranked) {
     // The flag: the distance, or the leader already home (RaceControl.flagOut —
     // a lapped car is flagged at its next crossing, not after the full count).
     const flagged = lineCross.flagged;
-    if (c.lap > 1) {
+    if (c.lap > 1 && !lineCross.recross) {   // a re-crossing after a reverse was timed the first time
       const lapDone = lineCross.lapDone;
       if (lapValid) c.lastLap = lapDone;
       if (lapValid && lapDone < c.best) c.best = lapDone;
