@@ -13,7 +13,7 @@
 // tools/ci/assert-audit.mjs allow-lists this file by name. If it ever grows real
 // assertions, tests/unit/assert-audit.test.mjs fails and says so — the exemption is
 // not allowed to quietly cover a file that stopped being a harness.
-import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS, clickLive } from "../helpers/fixtures.js";
 import { setupApiMocks } from "../helpers/f1-api-mock.js";
 import { galleryPath } from "../helpers/output-paths.js";
 
@@ -112,6 +112,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
       await page.evaluate(() => window.__apex.park(0.1));
       await page.waitForTimeout(1000);
+      await page.evaluate(() => window.__apex.headless(true));   // freeze the settled frame: page.screenshot waits on frames a live SwiftShader race starves
       await shot(page, `${orient}-07-hud`);
     });
 
@@ -199,9 +200,9 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
         if (rd) rd.hidden = true;
         document.getElementById("pausemenu").hidden = false;
       });
-      await page.locator("#pm-settings").click();
+      await clickLive(page, "pm-settings");   // a race is live: locator.click() waits on frames SwiftShader starves
       await page.locator("#pmsettings").waitFor({ state: "visible" });
-      await page.locator("#pm-advanced").click();
+      await clickLive(page, "pm-advanced");   // a race is live: locator.click() waits on frames SwiftShader starves
       await page.locator("#advanced").waitFor({ state: "visible" });
       await shot(page, `${orient}-14-advanced-steering`);
     });
@@ -256,6 +257,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
       await page.evaluate(() => window.__apex.park(0.1));
       await page.waitForTimeout(1000);
+      await page.evaluate(() => window.__apex.headless(true));   // freeze the settled frame: page.screenshot waits on frames a live SwiftShader race starves
       await shot(page, `${orient}-18-hud-night`);
     });
 
@@ -315,11 +317,11 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
         if (rd) rd.hidden = true;
         document.getElementById("pausemenu").hidden = false;
       });
-      await page.locator("#pm-settings").click();
+      await clickLive(page, "pm-settings");   // a race is live: locator.click() waits on frames SwiftShader starves
       await page.locator("#pmsettings").waitFor({ state: "visible" });
-      await page.locator("#pm-advanced").click();
+      await clickLive(page, "pm-advanced");   // a race is live: locator.click() waits on frames SwiftShader starves
       await page.locator("#advanced").waitFor({ state: "visible" });
-      await page.locator("#adv-more").click();
+      await clickLive(page, "adv-more");   // a race is live: locator.click() waits on frames SwiftShader starves
       await page.locator("#adv-extra").waitFor({ state: "visible" });
       await page.waitForTimeout(300);
       await shot(page, `${orient}-22-advanced-expanded`);
@@ -491,6 +493,10 @@ async function raceParked(page) {
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => window.__apex.park(0.1));
   await page.waitForTimeout(800);
+  // Freeze the settled frame. With the loop live, page.screenshot and a
+  // locator click wait on animation frames SwiftShader starves (60 s timeouts,
+  // 2026-09-25; tests/helpers/fixtures.js clickLive has the measurements).
+  await page.evaluate(() => window.__apex.headless(true));
 }
 
 for (const [label, vp] of [["ipad", IPAD], ["desktop", DESKTOP]]) {
@@ -530,7 +536,7 @@ for (const [label, vp] of [["ipad", IPAD], ["desktop", DESKTOP]]) {
       await page.goto("/");
       await waitReady(page);
       await raceParked(page);
-      await page.locator("#pausebtn").click();
+      await clickLive(page, "pausebtn");
       await page.locator("#pausemenu").waitFor({ state: "visible" });
       await shot(page, `${label}-08-pause`);
     });

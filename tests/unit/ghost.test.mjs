@@ -51,6 +51,7 @@ function createHarness(opts = {}) {
   if (opts.idle) {
     sandbox.requestIdleCallback = (fn) => { idles.push(fn); return idles.length; };
     sandbox.addEventListener = (type, fn) => { (listeners[type] = listeners[type] || []).push(fn); };
+    sandbox.document = { hidden: false, addEventListener: (type, fn) => { (listeners["doc:" + type] = listeners["doc:" + type] || []).push(fn); } };
   }
   const ctx = vm.createContext(sandbox);
   seedLog(ctx);
@@ -67,6 +68,7 @@ function createHarness(opts = {}) {
     runIdle: (ms) => { const q = idles.splice(0); for (const f of q) f({ timeRemaining: () => ms, didTimeout: false }); },
     idleQueued: () => idles.length,
     fire: (type) => { for (const f of listeners[type] || []) f(); },
+    hide: () => { sandbox.document.hidden = true; for (const f of listeners["doc:visibilitychange"] || []) f(); },
     disk: store,
   };
 }
@@ -413,4 +415,31 @@ test("a record still pending when the page goes away is flushed on pagehide", ()
   assert.equal(ghostOnDisk(h), false);
   h.fire("pagehide");
   assert.equal(ghostOnDisk(h), true, "the new ghost must not die with the tab");
+});
+
+// The live render loop requests a frame every frame, so Chrome caps each idle
+// deadline at the next frame and a 25 ms slot never comes while the page is
+// visible (only 8 ms tails here). The record must still reach storage at the
+// race end / quit (Ghost.flush) or when the tab is hidden — a discarded tab
+// never sees pagehide.
+test("a pending record is written by flush() at the race end, with no long idle slot", () => {
+  const h = createHarness({ idle: true });
+  h.Ghost.setTrack("monza");
+  recordLap(h.Ghost, 1.0);
+  h.runIdle(8); h.runIdle(8);
+  assert.equal(ghostOnDisk(h), false, "precondition: short slots never write");
+  h.Ghost.flush();
+  assert.equal(ghostOnDisk(h), true);
+  h.Ghost.flush();   // nothing left pending: a second flush is a no-op
+  assert.equal(ghostOnDisk(h), true);
+});
+
+test("a pending record is written when the tab is hidden", () => {
+  const h = createHarness({ idle: true });
+  h.Ghost.setTrack("monza");
+  recordLap(h.Ghost, 1.0);
+  h.runIdle(8);
+  assert.equal(ghostOnDisk(h), false);
+  h.hide();
+  assert.equal(ghostOnDisk(h), true, "Memory Saver discards hidden tabs without pagehide");
 });

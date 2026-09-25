@@ -299,7 +299,10 @@ export function ratchetMetrics(json) {
     for (const [k, v] of Object.entries(m)) if (typeof v === "number") out[`${file}/${k}`] = v;
   }
   for (const [name, m] of Object.entries((json && json.tree) || {})) {
-    if (m && typeof m.ceiling === "number") out[`(tree)/${name}`] = m.ceiling;
+    // A tree entry is `{ ceiling, slack? }` or a bare number (waitForTimeout is
+    // stored that way); skipping the bare form left it unbounded on a merge.
+    const c = typeof m === "number" ? m : m && m.ceiling;
+    if (typeof c === "number") out[`(tree)/${name}`] = c;
   }
   return out;
 }
