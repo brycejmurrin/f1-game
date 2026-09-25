@@ -152,11 +152,13 @@ const STRIP = {
   // ship 293659/258313 → audit 287677/252433 → tip 287821/258089
   // → fix-top-counts 285112/256710 (yachts/pontoons under the quay land no
   // longer moored; buried harbour balconies skipped; ground-audit)
-  monaco: { before: 285112, after: 256710 },
+  // → merged follow-ups 286489/257979 (yachts moored in open water, not
+  // dropped; engine-helpers plinth sink)
+  monaco: { before: 286489, after: 257979 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)
-  monza: { before: 342563, after: 315709 },   // +30 kept: restoring place()'s SEP_SLOTS sequence (marshal board) shifts a few buried props back above grade
+  monza: { before: 342563, after: 315738 },   // merged follow-ups: +29 kept (engine-helpers)   // +30 kept: restoring place()'s SEP_SLOTS sequence (marshal board) shifts a few buried props back above grade
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {
