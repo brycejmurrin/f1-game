@@ -4777,9 +4777,13 @@ test("selector preparation waits for the player's hands before the build and the
   const body = fnBody(src, "scheduleFlybyTrack");
   assert.match(body, /if \(!\(await menuIdle\(current\)\)\) return;\s*loadTrack\(want\);/,
     "the build waits for an idle menu");
-  assert.equal((body.match(/if \(await menuIdle\(current\)\) _menuGate\.warm = 2;/g) || []).length, 2,
-    "both paths arm the warm frames only after the car assets, on an idle menu");
-  assert.doesNotMatch(body, /_menuGate\.warm = 2;\s*await prepareMenuCarAssets/, "warm frames never precede the paced car assets");
+  assert.equal((body.match(/await menuFinish\(current, key\);/g) || []).length, 2,
+    "both paths finish through menuFinish (car assets, warm frames, lamp pre-bake, flyby plans)");
+  const fin = src.match(/async function menuFinish\(current, key\) \{[\s\S]*?\n\}/)[0];
+  assert.match(fin, /await prepareMenuCarAssets\(current\);\s*if \(await menuIdle\(current\)\) _menuGate\.warm = 2;/,
+    "the warm frames follow the paced car assets, on an idle menu");
+  assert.ok(fin.indexOf("_menuGate.warm = 2") < fin.indexOf("menuLampBake(current)"),
+    "…and come BEFORE the lamp pre-bake: a RACE! tap mid-bake met cold shaders");
   const idle = eval("(function(){ let _menuInputAt = 0; const MENU_IDLE_MS = 1200; let now = 0;" +
     " const performance = { now: () => now }; const waits = [];" +
     " const setTimeout = (fn, ms) => { waits.push(ms); now += ms; fn(); };" +
@@ -4803,11 +4807,15 @@ test("selector preparation rejects stale requests, reuses the world, and waits f
   const gfx = { warming: () => compiling }, Log = { warn() {} };
   const prepareMenuCarAssets = async () => {};
   const menuLampBake = async () => {};   // the lamp prebake is LampBake.prebake's (lamp-bake.test.mjs)
+  // The REAL menuFinish, with the flyby planning stubbed (flyby-shots.test.mjs covers it).
+  let _menuFly = null;
+  const FlybySeq = { DEFAULT: [], vary: () => [], planSteps: () => () => true };
   // The idle gate and the upload slice are module-level policy (tested below);
   // here the player is idle and a slice is immediate.
   const menuIdle = async (current) => current(), menuSlice = async () => {};
   const ensureScenery = id => new Promise(resolve => requests.push({ id, resolve }));
   const loadTrack = id => { builds.push(id); track = { id }; };
+  const menuFinish = eval("(" + read("js/game.js").match(/async function menuFinish\(current, key\) \{[\s\S]*?\n\}/)[0] + ")");
   const schedule = eval("(function(settle){" + fnBody(read("js/game.js"), "scheduleFlybyTrack") + "})");
   const fire = () => { const [id, fn] = [...timers].pop(); timers.delete(id); return fn(); };
   schedule(true); const old = fire();
