@@ -15,6 +15,10 @@
     lengthKm: 5.47,   // official Madring length; the OSM trace builds 5.343 km
     baseHW: 7,
     terrainOuter: 56,
+    // grandstandEx(0.00,-1,…) owns the pit-straight stand. The generic 7-box
+    // fallback (build-props place@gap 14) fought itself at the start seam after
+    // the closing-chord centerline fix (SEP_SLOTS i=0/i=4, +1 coplanar spot).
+    ownPitStraight: true,
     banked: true,
     bankZones: [
       { frac: 0.75, angleDeg: 13.5, widthM: 180 }, // 24% grade = atan(0.24)
