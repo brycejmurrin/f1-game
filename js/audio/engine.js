@@ -280,6 +280,17 @@ const GameAudio = (function () {
     node.gain.setTargetAtTime(target, t, tau);
     node._apexAimTgt = target;
   }
+  // The same guard for a PITCH or CUTOFF param, RELATIVE to the target: setEngine
+  // re-aimed eight of these on every call (each a cross-thread timeline
+  // insertion) though a car at steady revs hands the identical value back.
+  // rel 1e-4 is ~0.17 cents on a pitch and 0.01% on a cutoff — far under any
+  // audible step — and a param restarts clean (a fresh node carries no cache).
+  function aimParam(p, target, t, tau, rel) {
+    const prev = p._apexAimTgt;
+    if (prev === target || (prev !== undefined && Math.abs(prev - target) <= Math.abs(target) * rel)) return;
+    p.setTargetAtTime(target, t, tau);
+    p._apexAimTgt = target;
+  }
   let engineOn = false;
   // Node batches from stopEngine() that still sit on sfxBus until their
   // 0.35 s fade ends — ONE ENTRY PER STOP. A resume that starts a new graph
@@ -1314,7 +1325,7 @@ const GameAudio = (function () {
       // sum — the decoupling TUNE_DEF explains.
       const rate = (0.25 * tune.idle + revC * 0.45 * tune.revRange) * (1 + 0.04 * b * tune.boostPitch) * gmul * voice.rateTrim * tune.pitch * (1 + 0.05 * revFlare);   // idle ~0.25x .. redline ~0.70x, lower in gears 1-3
       lastRate = rate;
-      engSrcIdle.playbackRate.setTargetAtTime(rate, t, 0.035);
+      aimParam(engSrcIdle.playbackRate, rate, t, 0.035, 1e-4);
       f0 = enginePeriod > 1 ? (ctx.sampleRate * rate) / enginePeriod : 0;
       // NOT a crossfade to the second recording: measured 2026-09-03 with
       // tools/check/audio-test.cjs, blending f1_rev.mp3 in under load read
@@ -1341,9 +1352,9 @@ const GameAudio = (function () {
     } else {
       // synth fallback: detuned saws + sub follow the per-gear frequency
       const base = (gIdle * tune.idle + revC * gSpan * tune.revRange) * (1 + 0.12 * b * tune.boostPitch) * voice.rateTrim * tune.pitch;
-      engA.frequency.setTargetAtTime(base * 0.994, t, 0.025);
-      engB.frequency.setTargetAtTime(base * (1 + (voice.synthSpread - 1) * tune.detune), t, 0.025);
-      engC.frequency.setTargetAtTime(base * 0.5, t, 0.025);
+      aimParam(engA.frequency, base * 0.994, t, 0.025, 1e-4);
+      aimParam(engB.frequency, base * (1 + (voice.synthSpread - 1) * tune.detune), t, 0.025, 1e-4);
+      aimParam(engC.frequency, base * 0.5, t, 0.025, 1e-4);
       f0 = base;
     }
 
@@ -1372,7 +1383,7 @@ const GameAudio = (function () {
       ? Math.min(11000, 2600 + s * 5800 + rev * 2400 + b * 1500 + slipLoad * 2000 + brakeLoad * 1200)
       : Math.min(7200,  600  + s * 4200 + rev * 700  + b * 1400 + slipLoad * 1000 + brakeLoad * 600))
       * voice.cutTrim * tune.brightness * (1 + 0.22 * loadLift));
-    engFilter.frequency.setTargetAtTime(cut * camMix.cut, t, 0.05);
+    aimParam(engFilter.frequency, cut * camMix.cut, t, 0.05, 1e-4);
     // Compensate the tape-speed tilt. lastRate is the pitch ratio the core was
     // just handed, ~0.25 idle to ~0.70 redline; resampling costs roughly
     // -20*log10(rate) dB of perceived top end, so put a fraction of that back.
@@ -1434,7 +1445,7 @@ const GameAudio = (function () {
     const pitDepth = Math.round(pitLimLvl * Math.max(0, Math.min(lvl * 0.22, lvl * 0.5 - limDepth)) * mult * 1000) / 1000;
     if (pitLimGain && pitLimGain._apexTgt !== pitDepth) { pitLimGain.gain.setTargetAtTime(pitDepth, t, 0.03); pitLimGain._apexTgt = pitDepth; }
     const engBase = (lvl - limDepth) * mult - pitDepth;
-    engGain.gain.setTargetAtTime(engBase, t, 0.03);
+    aimGain(engGain, engBase, t, 0.03);
 
     // GRAVEL (see startEngine). Rate is the CRANK rate: the recording's
     // fundamental is its firing rate, and a V6 fires three times a turn, so
@@ -1459,7 +1470,7 @@ const GameAudio = (function () {
     // Turbo whine: in low gears (1-3) mechanical supercharger character — the
     // frequency climbs faster but levels off earlier than at high speed.
     const lowGearFactor = g01 < 0.35 ? 0.85 + g01 * 0.43 : 1;   // compressed range in low gears
-    whineOsc.frequency.setTargetAtTime((voice.whineHz + rev * 2000) * lowGearFactor, t, 0.05);
+    aimParam(whineOsc.frequency, (voice.whineHz + rev * 2000) * lowGearFactor, t, 0.05, 1e-4);
     aimGain(whineGain,
       layers.whine ? (0.004 + rev * 0.013 + b * 0.008) * (s > 0.04 ? 1 : 0) * (usingSamples ? 0.50 : 1)
         * voice.whineLvl * tune.whine : 0, t, 0.08);
@@ -1520,7 +1531,7 @@ const GameAudio = (function () {
     // the sample path too but gated silent here — quieter over the recording,
     // which already carries some off-throttle character of its own.
     aimGain(harvGain, layers.harvest ? harvLevel * (usingSamples ? 0.035 : 0.06) * tune.harvest : 0, t, 0.06);
-    harvFilter.frequency.setTargetAtTime(700 + s * 1600, t, 0.08);
+    aimParam(harvFilter.frequency, 700 + s * 1600, t, 0.08, 1e-4);
 
     // ERS deploy whine: only while the battery is actually deploying (game.js
     // passes deploy/energy through the physics arg). Level scales with charge —
@@ -1555,7 +1566,7 @@ const GameAudio = (function () {
       ersGain._apexErsTgt = ersLvl;
     }
     if (deploy > 0)
-      ersOsc.frequency.setTargetAtTime((2400 + rev * 900) * (0.88 + 0.12 * low), t, 0.06);
+      aimParam(ersOsc.frequency, (2400 + rev * 900) * (0.88 + 0.12 * low), t, 0.06, 1e-4);
 
     // AIRFLOW. Quadratic in speed (drag goes with v^2, and it keeps the layer
     // out of the way at pit-lane pace while it swells down a straight), gated
@@ -1572,7 +1583,7 @@ const GameAudio = (function () {
     aimGain(windGain,
       layers.wind ? (0.006 + 0.030 * s * s) * (1 + 0.45 * rough + 0.30 * gust) * (wet ? 1.25 : 1) * (1 - 0.35 * tow) * windOpen * tune.wind * camMix.wind : 0,
       t, 0.10);
-    windFilter.frequency.setTargetAtTime(450 + s * 1450 + rough * 260, t, 0.12);
+    aimParam(windFilter.frequency, 450 + s * 1450 + rough * 260, t, 0.12, 1e-4);
 
     // BRAKES (see startEngine). Level follows how hard the car is stopping
     // (brakeFrac: 60 m/s² is the full pedal) and how fast it is going — the
@@ -1699,7 +1710,13 @@ const GameAudio = (function () {
   function setSkid(x, wet) {
     if (!engineOn || !skidGain) return;
     const v = clamp01(x || 0);
-    skidGain.gain.value = layers.screech ? v * (wet ? 0.10 : 0.16) * tune.screech : 0;   // wetter = quieter, sibilant
+    // A DIRECT write, kept (a setTargetAtTime would turn the step into a ramp),
+    // but only on a change: `.value =` is setValueAtTime(v, now) — a timeline
+    // insertion every physics step, 0 onto 0 on every step not sliding. An exact
+    // value (the hard 0) always lands; a sub-1e-4 wobble (~-80 dBFS) does not.
+    const sv = layers.screech ? v * (wet ? 0.10 : 0.16) * tune.screech : 0;   // wetter = quieter, sibilant
+    const sp = skidGain._apexSkidV;
+    if (sp !== sv && (sv === 0 || sp === undefined || Math.abs(sp - sv) >= 1e-4)) { skidGain.gain.value = sv; skidGain._apexSkidV = sv; }
     if (v > 0) {
       const base = wet ? 480 : 760;                    // wet: lower splash vs dry: screech
       skidFilter.frequency.value = base + v * 320 + Math.sin(now() * 30) * 60;

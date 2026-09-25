@@ -17,6 +17,7 @@ let minimapBgKey = "";        // cssW|cssH|ratio it was rendered for — NOT the
                               // derived (W,H): 140css@2x and 280css@1x share a
                               // bitmap size but need different path transforms
 let _mmKey = null, _mmCssW = 140, _mmCssH = 140, _mmRatio = 1;  // measure cache
+let _mmBgKey = "140|140|1";   // cssW|cssH|ratio of that cache, rebuilt only when it re-measures
 let _mmPitP = null, _mmYou = "#aeea00";   // the "P"'s local px + map node, and the resolved --you; set with the bg
 let _flagShown = false;       // B1 caution-flag visibility cache (avoid layout thrash)
 let _teamSkin = null;         // last team id pushed to <html data-team> (skins the HUD accent)
@@ -1083,6 +1084,7 @@ function drawMinimap() {
     _mmCssH = els.minimap.clientHeight || 140;
     _mmRatio = Math.min(3, Math.max(1,
       (els.minimap.currentCSSZoom || 1) * (window.devicePixelRatio || 1)));
+    _mmBgKey = _mmCssW + "|" + _mmCssH + "|" + _mmRatio;
   }
   const cssW = _mmCssW, cssH = _mmCssH, ratio = _mmRatio;
   const W = Math.round(cssW * ratio), H = Math.round(cssH * ratio);
@@ -1092,7 +1094,7 @@ function drawMinimap() {
     els.minimap.width = W; els.minimap.height = H;
   }
   // pre-render the static track outline once; reuse as a cheap blit every HUD frame
-  const bgKey = cssW + "|" + cssH + "|" + ratio;
+  const bgKey = _mmBgKey;   // no string built per HUD tick
   if (!minimapBg || minimapBgKey !== bgKey) {
     minimapBgKey = bgKey;
     minimapBg = document.createElement("canvas");
