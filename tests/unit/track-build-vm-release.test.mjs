@@ -143,9 +143,16 @@ test("trim(from) drops the primitive records and the live-buffer set", () => {
 // carve fix raised the terrain beside descents (buried counts moved), and
 // after T3 draped groundPatch over the terrain (monza +834 patch triangles),
 // and after merging landmark wave 3's Tribuna/podium densify on top.
+// Re-measured 2026-09-24 after the scenery ground-audit (nature/city stop
+// emitting never-visible palm stubs / underground facade detail) plus the
+// tip engine grounding (tyre footings, marshal boards, hoarding legs, cable
+// posts, pit exit signal): ship merge had restored the pre-audit STRIP
+// numbers; tip then moved both circuits again.
 const STRIP = {
-  monaco: { before: 293659, after: 258313 },
-  monza: { before: 342395, after: 315326 },
+  // ship 293659/258313 → audit 287677/252433 → tip 287821/258089
+  monaco: { before: 287821, after: 258089 },
+  // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
+  monza: { before: 342551, after: 315519 },   // +30 kept: restoring place()'s SEP_SLOTS sequence (marshal board) shifts a few buried props back above grade
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {

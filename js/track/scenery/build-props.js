@@ -1200,7 +1200,11 @@ const TrackBuildProps = (function () {
     };
     let placeSeq = 0;
     const THIN_PROP_H = 0.85;   // 0.8 m base sink + 5 cm: a shorter prop's top sits at or under the ground
-    const place = (k, side, dist, sz, col) => {
+    // `deeper` (m) moves the box's BURIED foot only (negative lifts it) — its
+    // top, jitter and driving limit stay those of `sz` — so two boxes placed
+    // on one spot do not share the 0.8 m-sunk underside plane: the retail
+    // block + skirt pair was 794 flat-coplanar pairs up to 63 m2.
+    const place = (k, side, dist, sz, col, deeper) => {
       const r = [track.rx[k], track.ry[k], track.rz[k]];
       const t = [track.tx[k], track.ty[k], track.tz[k]];
       const u = upOf(track, k);
@@ -1220,8 +1224,10 @@ const TrackBuildProps = (function () {
         return;
       }
       const gy = terrainYAt(cx, cz);
-      const c = [cx, (gy !== null ? gy : groundYAt(k, dist)) + sz[1] / 2 - 0.8, cz];
-      if (addBox(out, c, sz, col, [r, u, t]) === false) return;   // on-track: dropped, no phantom barrier
+      const dz = deeper || 0, hh = (sz[1] + dz) / 2;
+      const c = [cx, (gy !== null ? gy : groundYAt(k, dist)) + hh - dz - 0.8, cz];
+      if (addBox(out, c, dz ? [sz[0], sz[1] + dz, sz[2]] : sz, col, [r, u, t]) === false) return;   // on-track: dropped, no phantom barrier
+      const top = [c[0] + u[0] * hh, c[1] + u[1] * hh, c[2] + u[2] * hh];
       note("prop", c, sz, { k, side });
       // solid box → the car must stop before its inner face (sz[0] across, sz[2] long).
       // Not a box shorter than the 0.8 m sink + 5 cm: its top is at or under the
@@ -1232,6 +1238,7 @@ const TrackBuildProps = (function () {
       // which blockAt does NOT say — it only moves the driving limit. Without
       // this, roadside foliage happily grows straight through every placed prop.
       indexSolidAt(k, side, dist, sz[0] / 2, sz[2] / 2);
+      return { top, basis: [r, u, t] };   // what a fitting mounted on it needs
     };
     // One lighting family: "lamps" canonical; "floodlights"/"lighting" aliases.
     const LIGHTING_KINDS = { lamps: 1, floodlights: 1, lighting: 1 };
@@ -1492,15 +1499,41 @@ const TrackBuildProps = (function () {
           const k = ((c.k + i) + n) % n;
           const claim = k * 2 + (outside > 0 ? 1 : 0);
           if (stacked.has(claim)) continue;
+          // …and a stack a node or two off another corner's (it overlapped it
+          // by 90 %, every face nearly shared) is not built: the other covers
+          // it, and only its stretch of the driving limit is still marked.
+          let dup = false;
+          for (let d = 1; d < step && !dup; d++)
+            dup = stacked.has(((k - d + n) % n) * 2 + (claim & 1)) || stacked.has(((k + d) % n) * 2 + (claim & 1));
           stacked.add(claim);
+          if (dup) { for (let d = 0; d < step; d++) markBarrier((k + d) % n, outside, 2.2); continue; }
           const r = [track.rx[k], track.ry[k], track.rz[k]];
           const t = [track.tx[k], track.ty[k], track.tz[k]];
           const u = upOf(track, k);
           const o = outside * (hw[k] + 2.2);
           const wy = py[k] + bankOffsetAt(track, k, o);
           const slen = ds * step * 1.1;
+          // The stack's TOP stays 0.9 m over the road; its foot reaches down to
+          // the verge wherever the ground falls away past the edge — a stack
+          // cut at road height hung 0.2-1.7 m over the grass on 34 circuits.
+          let drop = 0;
+          for (const [dr, dt] of [[0, 0], [-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5]]) {
+            const qx = px[k] + r[0] * (o + dr) + t[0] * dt * slen, qz = pz[k] + r[2] * (o + dr) + t[2] * dt * slen;
+            const g = terrainYAt(qx, qz);
+            if (g !== null) drop = __M.max(drop, wy + r[1] * dr + t[1] * dt * slen - g);
+          }
+          // …as a narrow concrete footing under the stack, sunk 0.3 m, and
+          // shorter than the stride so neighbouring footings never overlap (the
+          // stacks do, 10 %, and a full-width foot shared their planes and
+          // cut through the verge's bushes and terraces).
           addBox(out, [px[k] + r[0] * o, wy + 0.45, pz[k] + r[2] * o],
                  [1.0, 0.9, slen], [0.24, 0.22, 0.20], [r, u, t]);
+          if (drop > 0.1) {
+            // Its top runs 0.1 m up inside the stack, off the verge's plane.
+            const fh = __M.min(drop, 3) + 0.4;
+            addBox(out, [px[k] + r[0] * o, wy + 0.1 - fh / 2, pz[k] + r[2] * o],
+                   [0.36, fh, ds * step * 0.9], [0.46, 0.45, 0.43], [r, u, t]);
+          }
           if (def.barrier) addBox(out, [px[k] + r[0] * o, wy + 0.94, pz[k] + r[2] * o],
                  [1.06, 0.18, slen], bt.tyre, [r, u, t]);
           // record the tyre barrier along its span so the car stops just short of it
@@ -1608,8 +1641,16 @@ const TrackBuildProps = (function () {
     if (!def.street) {
       every(270, (k) => {
         const side = hash(HK(k) * 7) < 0.5 ? -1 : 1;
-        place(k, side, 25, [0.55, 1.3, 0.55], [0.95, 0.55, 0.08]);
-        place(k, side, 25, [1.2, 0.75, 0.08], [0.95, 0.95, 0.97]);
+        const post = place(k, side, 25, [0.55, 1.3, 0.55], [0.95, 0.55, 0.08]);
+        placeSeq++;   // the board's old place() slot: keeps every later prop's SEP_SLOTS phase
+        // The signal board sits ON its post. Placed as its own box it took
+        // place()'s 0.8 m sink and its 0.75 m height ended 5 cm under the
+        // ground — 860 invisible boards on 50 circuits. Too short to block.
+        const bu = post && post.basis[1], bc = post && [post.top[0] + bu[0] * 0.375, post.top[1] + bu[1] * 0.375, post.top[2] + bu[2] * 0.375];
+        if (post && addBox(out, bc, [1.2, 0.75, 0.08], [0.95, 0.95, 0.97], post.basis) !== false) {
+          note("prop", bc, [1.2, 0.75, 0.08], { k, side });
+          indexSolidAt(k, side, 25, 0.6, 0.04);
+        }
       });
     }
 
@@ -1669,7 +1710,7 @@ const TrackBuildProps = (function () {
         if (dressingExcluded("city", k, side)) return;
         const lc = cn(HK(k) * 3.3, side);
         if (NIGHT && style.bias > 0.3 && hash(HK(k) * 19) < 0.5) neonSign(k, side, 8 + hash(HK(k)) * 4, 10 + hash(HK(k) * 2) * 10, lc);
-        else { const rc = toneFor(HK(k) * 2.7, side).d || [0.5, 0.5, 0.54]; place(k, side, 9, [9, 4 + hash(HK(k)) * 3, 7], NIGHT ? [0.13, 0.13, 0.16] : rc); place(k, side, 9, [9.3, 1.0, 7.3], NIGHT ? lc : [lc[0] * 0.4 + 0.3, lc[1] * 0.4 + 0.3, lc[2] * 0.4 + 0.3]); }
+        else { const rc = toneFor(HK(k) * 2.7, side).d || [0.5, 0.5, 0.54]; place(k, side, 9, [9, 4 + hash(HK(k)) * 3, 7], NIGHT ? [0.13, 0.13, 0.16] : rc); place(k, side, 9, [9.3, 1.0, 7.3], NIGHT ? lc : [lc[0] * 0.4 + 0.3, lc[1] * 0.4 + 0.3, lc[2] * 0.4 + 0.3], -0.45); }
       });
       // Occasional illuminated billboard accent (more on high-neon circuits).
       if (style.bias > 0.25) every(80, (k) => {

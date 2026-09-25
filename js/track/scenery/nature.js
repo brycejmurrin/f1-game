@@ -208,10 +208,31 @@ const SceneryNature = (function () {
         const usCol = [col[0] * 0.5, col[1] * 0.52, col[2] * 0.5];
         const uref = vadd(a.c, a.u, h * 0.7);
         const apex = vadd(a.c, a.u, apexY);
+        const ring = (ang) => vadd(vadd(vadd(a.c, a.u, ringY), a.r, Math.cos(ang) * usR), a.t, Math.sin(ang) * usR);
+        // A wedge whose whole rim is under the terrain is hidden: the trunk is
+        // seated at ONE point, and a tree at the foot of a cutting or bank has
+        // ground rising metres above its 5-6 m wide skirt (ground-audit: 219
+        // such wedges up to 15 m deep on cota/interlagos/kyalami/suzuka…).
+        // Drop those wedges instead of emitting buried triangles. A wedge is
+        // hidden when its TOP (the corners within 2 cm of its highest, and their
+        // centroid) is under the terrain; a tilted `u` can leave one rim corner
+        // alone at the top, so the rim is not assumed level.
+        const hidden = (tri) => {
+          const top = Math.max(tri[0][1], tri[1][1], tri[2][1]) - 0.02;
+          let sx = 0, sy = 0, sz = 0, m = 0, seen = 0;
+          const under = (x, y, z) => { const ty = terrainYAt(x, z); if (ty === null) return true; seen++; return ty > y; };
+          for (const p of tri) {
+            if (p[1] < top) continue;
+            if (!under(p[0], p[1], p[2])) return false;
+            sx += p[0]; sy += p[1]; sz += p[2]; m++;
+          }
+          return under(sx / m, sy / m, sz / m) && seen > 0;
+        };
         for (let i = 0; i < 9; i++) {
           const a0 = i / 9 * 6.2832, a1 = (i + 1) / 9 * 6.2832;
-          const ring = (ang) => vadd(vadd(vadd(a.c, a.u, ringY), a.r, Math.cos(ang) * usR), a.t, Math.sin(ang) * usR);
-          emit(out, [ring(a0), ring(a1), apex], usCol, uref);
+          const tri = [ring(a0), ring(a1), apex];
+          if (hidden(tri)) continue;
+          emit(out, tri, usCol, uref);
         }
       }
       if (crown === "vase") {
@@ -248,11 +269,13 @@ const SceneryNature = (function () {
       const lean = (hash(k * 3.3 + side * 2.1 + dist) - 0.5) * 0.5;
       const seg = h / 3;
       out._mat = MAT.WOOD;
-      // buried root stub: keeps the slim trunk grounded on sloped/uneven terrain
-      addCyl(out, vadd(a.c, a.u, -0.6), 0.38, 0.75, [0.42, 0.34, 0.21], 6, b);
+      // The first trunk segment starts 0.6 m BELOW the anchor, which keeps the
+      // slim trunk grounded on sloped/uneven terrain. (This used to be a
+      // separate 0.75 m root stub whose top sat 0.15 m under the ground at
+      // every palm — ground-audit: 2760 invisible prims across 10 circuits.)
       const joint = (t) => vadd(vadd(a.c, a.u, t * seg), a.r, lean * t * t * 0.4 * side);
       for (let t = 0; t < 3; t++) {
-        const p0 = joint(t), p1 = joint(t + 1);
+        const p0 = t ? joint(t) : vadd(a.c, a.u, -0.6), p1 = joint(t + 1);
         const d = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]];
         const L = Math.hypot(d[0], d[1], d[2]) || seg;
         addCyl(out, p0, 0.34 - t * 0.06, L, [0.45 - t * 0.03, 0.36, 0.22], 6,
@@ -382,25 +405,43 @@ const SceneryNature = (function () {
       const bark = opts.barkCol || [0.34, 0.26, 0.18];
       const layers = Math.max(1, Math.min(3, Math.round(opts.layers || 2)));
       const c2 = [col[0] * 0.82, col[1] * 0.86, col[2] * 0.80];
-      out._mat = MAT.WOOD;
-      if (addCyl(out, vadd(a.c, a.u, -0.5), 0.28, h * 0.62 + 0.5, bark, 5, b) === false) return;   // no trunk, no crown (the pit complex keeps footings out)
-      // Crown layer i is centred here. Its rise off the trunk is capped in
-      // METRES, not held at a fraction of h: at h*0.14 per layer a 12 m tree
-      // (the top of the 6 + hash*6 range) opened a 0.88 m step between slabs,
-      // past the 0.6 m the grounding audit will bridge, so the canopy of every
-      // TALL acacia read as floating clear of the tree carrying it — 22 of
-      // cota's clusters and 6 of kyalami's, all crown slabs, never the trunk.
+      // ONE CONNECTED STACK: trunk -> fork -> slab 0 -> slab 1 … each part
+      // starts where the one below ends. The old fixed fractions (fork at
+      // h*0.68, slabs h*0.14 / 1 m apart) left a 0.2-0.6 m air gap at every
+      // joint of a tall tree, so the crown hung detached from the tree
+      // carrying it (ground-audit: 215 prims on cota/kyalami). The slab TOPS
+      // stay where they were (they are what reads from above, and what the
+      // flat-coplanar audit compares); the parts under them grow DOWN:
+      //   - an upper slab's underside reaches 2 cm into the slab below it;
+      //   - the fork rises until its top meets slab 0's underside;
+      //   - the trunk rises until it meets the fork;
+      // each only across a real gap (> JOINT): a closed joint is untouched.
+      // Crown layer i's TOP is at layerY(i) + thick(i)/2. Its rise off the
+      // trunk is capped in METRES, not held at a fraction of h (a 12 m tree at
+      // h*0.14 per layer opened a 0.88 m step between slabs).
       const layerY = (i) => h * 0.80 + i * Math.min(h * 0.14, 1.0);
+      const thick = (i) => i === 0 ? Math.max(0.9, 2 * (h * 0.12 - 0.90)) : 0.9 - i * 0.2;
+      // A joint already closed to within JOINT (under the 0.15 m a grounding
+      // audit bridges) keeps its old geometry: moving faces that were fine
+      // only risks new coplanar coincidences with neighbouring trees.
+      const JOINT = 0.14;
+      const close = (lo, hi) => hi - lo <= JOINT ? lo : hi;   // `lo` rises to `hi` only across a real gap
+      const forkY = close(h * 0.68 + 0.35, layerY(0) - thick(0) / 2) - 0.35;   // fork top meets slab 0
+      const trunkTop = close(h * 0.62, forkY - 0.35);                         // trunk meets the fork
+      out._mat = MAT.WOOD;
+      if (addCyl(out, vadd(a.c, a.u, -0.5), 0.28, trunkTop + 0.5, bark, 5, b) === false) return;   // no trunk, no crown (the pit complex keeps footings out)
       for (const dr of [-1, 1])                                    // the low fork
-        addBox(out, vadd(vadd(a.c, a.u, h * 0.68), a.r, dr * spread * 0.22),
+        addBox(out, vadd(vadd(a.c, a.u, forkY), a.r, dr * spread * 0.22),
                [spread * 0.44, 0.7, 0.22], bark, b);
       out._mat = MAT.FOLIAGE;
       // Flat slabs, not cones: the crown's top and bottom are both near-planar.
       for (let i = 0; i < layers; i++) {
         const f = 1 - i * 0.4;
-        const t = i === 0 ? Math.max(0.9, 2 * (h * 0.12 - 0.90)) : 0.9 - i * 0.2;
-        addBox(out, vadd(a.c, a.u, layerY(i)),
-               [spread * f, t, spread * f], i % 2 ? c2 : col, b);
+        const top = layerY(i) + thick(i) / 2;
+        const bot0 = layerY(i) - thick(i) / 2, below = i ? layerY(i - 1) + thick(i - 1) / 2 : bot0;
+        const bot = bot0 - below <= JOINT ? bot0 : below - 0.02;
+        addBox(out, vadd(a.c, a.u, (top + bot) / 2),
+               [spread * f, top - bot, spread * f], i % 2 ? c2 : col, b);
       }
       out._mat = 0;
     };
