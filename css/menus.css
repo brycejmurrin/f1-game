@@ -1208,7 +1208,10 @@ body { --compact-at: 600px; --wide-at: 620px; }
 #sel-inner[data-density="compact"] #sel-tracks .track-row-name { display: none; }
 #sel-inner[data-density="compact"] #sel-tracks .track-row { min-width: 0; min-height: 0; padding-block: calc(var(--gap) * 0.2); }
 #sel-inner[data-density="compact"] #sel-tracks .track-row-meta { width: calc(var(--chip-h) * 1.2); }
-#sel-inner[data-density="compact"] #sel-tracks .track-group-head { max-height: calc(var(--chip-h) * 1.2); }
+/* No tracking and no cap in compact: CLASSICS needed 64px against a 1.2-chip
+   divider and lost its last letters (fit-audit 852x393; 52px on a mouse, where
+   --chip-h is smaller). Untracked it is 57px, inside the strip's own height. */
+#sel-inner[data-density="compact"] #sel-tracks .track-group-head { max-height: none; letter-spacing: 0; }
 #sel-inner[data-density="compact"] #sel-tracks { padding-block: calc(var(--gap) * 0.2); }
 #sel-inner[data-density="compact"] #sel-shelf { gap: calc(var(--gap) * 0.35); }
 

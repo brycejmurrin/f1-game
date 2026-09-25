@@ -376,7 +376,13 @@ self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
     const [name, urls] = await Promise.all([currentCacheName(), precacheAssetLists()]);
     const cache = await caches.open(name);
-    await pooled(urls.essential, 6, (u) => cacheRequiredAsset(cache, u));
+    const build = name.slice(CACHE_PREFIX.length);
+    // GLX is the fallback renderer every device can run: when TLX/WGX are not
+    // cached (or fail), an offline boot without it is "graphics unavailable".
+    // So its deferred files are ESSENTIAL, stamped as loadBackendScripts asks.
+    const isGlx = (u) => /^js\/render\/glx\//.test(u);
+    const required = urls.essential.concat(urls.optional.filter(isGlx).map((u) => u + "?v=" + build));
+    await pooled(required, 6, (u) => cacheRequiredAsset(cache, u));
     await cache.put(INSTALL_COMPLETE_URL, new Response("complete"));
     // The DEFERRED backends are the one group in `optional` that is NOT pinned
     // by path — js/game.js:loadBackendScripts injects them as `<path>?v=<build>`,
@@ -389,13 +395,12 @@ self.addEventListener("install", (event) => {
     // deletes every other generation, so a key inside this cache can only ever
     // be this build's. Everything else in the list stays bare — the vendored
     // three.js reaches the network through the importmap with no query at all.
-    const build = name.slice(CACHE_PREFIX.length);
     // Everything loadBackendScripts() injects is requested as `<path>?v=<build>`,
     // so it must be SEEDED under that key: the DEFERRED backends, and now the
     // race payload (light-presets + the per-circuit scenery closures) too.
     const stamped = urls.optional.map((u) =>
       /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/scenery\/|^js\/data\/|^js\/net\/|^js\/lighting\/presets\.js$/.test(u)
-        ? u + "?v=" + build : u);
+        ? u + "?v=" + build : u).filter((u) => !isGlx(u));   // GLX went in `required` above
     // SKIPWAITING STAYS LAST, deliberately. Hoisting it above this pool lets a
     // returning player's new worker activate — and `activate` both claims
     // clients and DELETES every other generation's cache — while the deferred

@@ -65,7 +65,7 @@ test("a queued INFO card older than ANN_STALE_MS is dropped at the drain; a warn
   const stale = game.match(/const ANN_STALE_MS = [^;]+;/)[0];
   const qmax = game.match(/const ANN_QUEUE_MAX = [^;]+;/)[0];
   const announce = game.match(/function announce\([^]*?\n\}/)[0];
-  const drain = game.match(/ {6}while \(_annQueue\.length && _annQueue\[0\]\.pri <= ANN_PRI\.info[^\n]*\n[^\n]*_annQueue\.shift\(\); showAnnounce[^\n]*/)[0];
+  const drain = game.match(/ {6}while \(_annQueue\.length\) \{\n[\s\S]*?showAnnounce\(q\.msg, q\.dur, q\.kind\); break;\n {6}\}/)[0];
   let now = 0;
   const shown = [];
   const ctx = vm.createContext({ hudProfile: "broadcast", CAM_MODES: [{ id: "chase" }], camMode: 0,

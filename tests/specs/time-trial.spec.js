@@ -97,6 +97,10 @@ test.describe("Time Trial — ghost delta HUD", () => {
 // Same shape as __apex.race() not awaiting startRace(): a deferred write read
 // synchronously. The product is right; the read has to wait for it.
 async function ghostSaved(page, trackId) {
+  // A record is written at an off-race moment (pause, race end, quit, a hidden
+  // tab — js/car/ghost.js flush()), never by an idle slot the live render loop
+  // leaves: a scripted lap reaches none of them, so flush as the game's next would.
+  await page.evaluate(() => Ghost.flush());
   await page.waitForFunction((id) => {
     try {
       const st = JSON.parse(localStorage.getItem("apex26.ghost.v1") || "null");
