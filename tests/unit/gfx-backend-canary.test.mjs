@@ -4799,6 +4799,7 @@ test("selector preparation waits for the player's hands before the build and the
 test("selector preparation rejects stale requests, reuses the world, and waits for compilation", async () => {
   const _menuGate = { warm: 0, generation: 0, ready: "", track: null };
   let flybyBuildTimer = 0, trackIdx = 0, raceTimeOfDay = "default", raceWeather = "dry";
+  const menuKey = (idx) => [idx, raceTimeOfDay, raceWeather, 22].join("|");   // the real one adds fieldSize()
   let state = "menu", setupPreviewOn = false, track = null, compiling = false;
   const els = { select: { hidden: false } }, settings = { hidden: true }, $ = () => settings;
   const timers = new Map(), requests = [], builds = [];

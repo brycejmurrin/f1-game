@@ -669,7 +669,7 @@ test("the loading screen flies only the world built for THIS selection", () => {
   // circuit in `track`: the flyby filmed it under the new circuit's card, and a
   // dark session baked its lamps twice. menuWorld() also checks the build's key.
   const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
-  assert.match(game, /const menuWorld = \(\) => !!track && _menuGate\.track === track && _menuGate\.ready === \[trackIdx, raceTimeOfDay, raceWeather\]\.join\("\|"\);/);
+  assert.match(game, /const menuWorld = \(\) => !!track && _menuGate\.track === track && _menuGate\.ready === menuKey\(trackIdx\);/);
   assert.match(game, /hasWorld: menuWorld\(\),/);
   const i = game.indexOf("function raceIntro(go)"), body = game.slice(i, game.indexOf("\n}\n", i));
   for (const call of ["menuGridCars()", "applyRaceSettings()", "FlybySeq.warm(track, flybyShots)"])
