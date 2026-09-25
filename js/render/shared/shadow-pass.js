@@ -385,12 +385,16 @@ const ShadowPass = (function () {
 
     // Nearest-floodlight spot shadow map (night only).
     // One lamp caster folded into the car key: position at 0.25 m (x, y, z) and
-    // heading at 1/8 rad, all from the column-major world matrix the cast uses.
+    // orientation (the forward axis at 1/8), all from the column-major world matrix the cast uses.
     function _lampCasterKey(k, m) {
       k = (k * 31 + Math.round(m[12] * 4)) | 0;
       k = (k * 31 + Math.round(m[13] * 4)) | 0;
       k = (k * 31 + Math.round(m[14] * 4)) | 0;
-      return (k * 31 + Math.round(Math.atan2(m[8], m[10]) * 8)) | 0;
+      // Orientation from the forward axis itself, not an angle: atan2 wraps at
+      // ±π (two keys for one heading) and carried no pitch. Components at 1/8.
+      k = (k * 31 + Math.round(m[8] * 8)) | 0;
+      k = (k * 31 + Math.round(m[9] * 8)) | 0;
+      return (k * 31 + Math.round(m[10] * 8)) | 0;
     }
     function lampPass(frame, _frameNo, _hasLivePlayerShadow) {
       // Night only: ONE lamp — the nearest/strongest to the camera — gets a real

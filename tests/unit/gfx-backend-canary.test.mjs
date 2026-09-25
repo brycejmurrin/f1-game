@@ -2153,7 +2153,13 @@ test("shadow-bug batch: lamp/car targets warmed, caster key from the cast matrix
   assert.match(begin, /if \(_passOpen\)/, "a thrown pass's casters must be hidden before the next target draws");
   const lamp = fnBody(code("js/render/shared/shadow-pass.js"), "lampPass");
   assert.match(lamp, /let _carKey = _playerIn \? _lampCasterKey\(1, _pm\) : 0;/, "the player is keyed from the matrix it is cast with");
-  assert.match(code("js/render/shared/shadow-pass.js"), /Math\.atan2\(m\[8\], m\[10\]\)/, "heading is part of the lamp caster key");
+  assert.match(code("js/render/shared/shadow-pass.js"), /Math\.round\(m\[8\] \* 8\)[\s\S]{0,80}Math\.round\(m\[9\] \* 8\)[\s\S]{0,80}Math\.round\(m\[10\] \* 8\)/,
+    "orientation (the forward axis: heading AND pitch) is part of the lamp caster key");
+  // warm() must show the hidden casters, or compileAsync skips them.
+  assert.match(warm, /m\.visible = true; shown\.push/, "warm() compiles hidden casters too");
+  // Each End renders only the pass its own Begin opened.
+  assert.match(sh, /function endPass\(rt\) \{[\s\S]{0,600}\(rt !== undefined && rt !== target\)\) return;/);
+  assert.match(sh, /shadowEnd: \(\) => endPass\(sunRT\),/);
   assert.match(code("js/render/three/tlx.js"), /if \(lim\.length\) _glMaxDim = Math\.min\(\.\.\.lim\);/, "a lost-context 0 must not latch");
 });
 
@@ -4607,7 +4613,7 @@ test("TLX defers resize during compilation and applies the latest requested size
   let cssW = 1136, cssH = 524, presentW = 1704, presentH = 786, W = 852, H = 393;
   let renderScale = 0.5, _softReadEpoch = 0, _softReadQueued = null;
   let _gpuLastResize = null, _gpuLastOperation = "compile-scene";
-  let _glMaxDim = -1;   // resize()'s once-per-device WebGL2 texture ceiling
+  let _glMaxDim = -1, _glMaxTries = 0;   // resize()'s once-per-device WebGL2 texture ceiling
   const DPR_CAP = 1.5;
   const window = { innerWidth: 1100, innerHeight: 500, devicePixelRatio: 3 };
   const _layoutCanvas = { clientWidth: 1100, clientHeight: 500 }, _displayCanvas = null;

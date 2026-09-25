@@ -2407,7 +2407,7 @@ const TLX = (function () {
       let _mirrorSweepOptIn = false;
       try { _mirrorSweepOptIn = localStorage.getItem("apex26.tlxMirrorSweep") === "1"; } catch (_) { /* no storage: off */ }
       // The WebGL2 driver's texture ceiling is a device constant: ask once.
-      let _glMaxDim = -1;
+      let _glMaxDim = -1, _glMaxTries = 0;
       const cssSizeCache = CanvasCssSize.create(_layoutCanvas, { settleFrames: 30 });
       function resize() {
         // Window/settings callbacks also reach here while the frame loop waits
@@ -2441,7 +2441,8 @@ const TLX = (function () {
               // A lost context answers null (-> 0): no clamp this frame, and ask
               // again next frame rather than latching "no limit" for the session.
               if (lim.length) _glMaxDim = Math.min(...lim);
-            } catch (_) { /* ask again next frame */ }
+              else if (++_glMaxTries >= 120) _glMaxDim = 0;   // a stub/lost context for ~2 s: stop asking
+            } catch (_) { if (++_glMaxTries >= 120) _glMaxDim = 0; }
           }
           maxDim = Math.max(0, _glMaxDim);
         }
