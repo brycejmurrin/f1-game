@@ -2367,7 +2367,8 @@ function _loadTrackBody(idx, def) {
     // (opts.gfx) instead of reaching the GLX global directly. On the explicit
     // or fallback WebGL2 path gfx===GLX; on TLX/WGX it is that backend
     // (descriptor-copied onto GLX, so object identity is preserved either way).
-    track = Tracks.build(def, { night: sessionDark, gfx, chunkRibbons: PerfGov.tier() < 3, gridSlots: wantSlots });
+    track = Tracks.build(def, { night: sessionDark, gfx, chunkRibbons: PerfGov.tier() < 3,
+      gridSlots: wantSlots, retainGraph: wantAgentSurface() });
     // Rapier debris side-world: register the circuit's near-apex clippable cones
     // (A3). Cheap pure derivation from track.def.turns; stores the list even when
     // the side-world is disabled/loading so it's ready once rapier is live.
@@ -2467,6 +2468,22 @@ async function menuIdle(current) {
 async function menuLampBake(current) {
   const step = current() && _atmo.prebakeLamps();
   while (step && current() && !step(8)) await new Promise((r) => setTimeout(r, 8));
+  return !!step;
+}
+// AFTER THE BUILD, in this order: car assets; the warm frames (shader compile —
+// before anything slow, or a RACE! tap mid-bake met cold shaders and the flyby
+// froze on its first frames); the lamp pre-bake and this load's flyby, PLANNED
+// here in slices so the loading screen plans nothing; then warm again for the lit
+// world. `_menuFly` is the planned list, keyed like the build.
+let _menuFly = null;
+async function menuFinish(current, key) {
+  await prepareMenuCarAssets(current);
+  if (await menuIdle(current)) _menuGate.warm = 2;
+  const lit = await menuLampBake(current);
+  const fly = { key, track, shots: FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0, false) }, step = FlybySeq.planSteps(track, fly.shots);
+  while (current() && !step()) await menuSlice();
+  if (current()) _menuFly = fly;
+  if (lit && await menuIdle(current)) _menuGate.warm = 2;   // only a baked (dark) world changed the shaders
 }
 function scheduleFlybyTrack(settle) {
   clearTimeout(flybyBuildTimer);
@@ -2491,7 +2508,7 @@ function scheduleFlybyTrack(settle) {
       // car's meshes and livery upload 32 ms apart; a warm frame drawn first
       // minted and uploaded all ~22 atlases in one 3-4 s task.
       if (_menuGate.ready === key && _menuGate.track === track) {
-        await prepareMenuCarAssets(current); await menuLampBake(current); if (await menuIdle(current)) _menuGate.warm = 2; return;
+        await menuFinish(current, key); return;
       }
       // The build holds the main thread for 1-3 s: never start it while the
       // player is still working the picker or RACE SETTINGS (a TIME OF DAY step
@@ -2503,9 +2520,7 @@ function scheduleFlybyTrack(settle) {
       await menuSlice();
       if (current() && track.meshes && track.meshes.pitSignTex && typeof gfx.uploadTexture === "function")
         gfx.uploadTexture(track.meshes.pitSignTex);
-      await prepareMenuCarAssets(current);
-      await menuLampBake(current);
-      if (await menuIdle(current)) _menuGate.warm = 2;
+      await menuFinish(current, key);
     } catch (e) { if (current()) Log.warn("gfx", "track preparation failed", e); }
   };
   flybyBuildTimer = setTimeout(prepare, settle ? 1500 : 120);
@@ -3695,7 +3710,9 @@ function raceIntro(go) {
   // And fly the shots the EDITOR saved, for the same reason: a list edited in
   // the pause menu is only read here, so every run picks up the latest one.
   reloadFlybyShots();
-  if (!flybyShots) flybyShots = FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0);   // a different flyby each load (never the sim RNG); an editor-saved list plays as authored
+  const planned = world && _menuFly && _menuFly.track === track && _menuFly.key === _menuGate.ready ? _menuFly.shots : null;   // planned in the menu (menuFinish)
+  _menuFly = null;   // one load's flyby: the next one varies again
+  if (!flybyShots) flybyShots = planned || FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0);   // a different flyby each load (never the sim RNG); an editor-saved list plays as authored
   if (flybyShots) flybyShots = FlybySeq.withoutSlot(flybyShots);   // nobody knows your slot on a random grid; a small grid has empty boxes
   if (world) FlybySeq.warm(track, flybyShots);   // plan the opening shots now, the rest in slices before their cuts
   loadingScreen.run(loadingInfo(), go);

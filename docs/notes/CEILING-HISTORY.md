@@ -3257,3 +3257,10 @@ instead of reading `career.obj` and the settlement cannot disagree with the hub.
 Buttons rather than rows, because a line you can press has to look like one; the
 chosen one keeps the `.cr-obj-line` weight so the card reads as it always did.
 No raw px: the vertical padding is `calc(var(--gap) / 2)`.
+## 2026-09-24 — track build-state release
+
+`js/game.js` 9232 → 9233 lines and 4847 → 4848 code lines; `js/track/tracks.js` 824 → 843 lines (post build-props peel). The new call-site flag releases the large scenery graph after upload in production, while dev/test sessions retain it. Track code finalizes prop counts instead of retaining build-local closures; ribbon source channels keep authored precision so late TLX chunking does not shift snorm16 normals by 1 LSB. The growth pays for a measured retained-heap reduction on Vegas (source-VM graph release: 62.41 → 38.00 MiB after explicit GC); no frame-time gain is claimed.
+
+## 2026-09-25 — closing-chord coplanar seam fixes
+
+Closing-chord centerline interpolation shifted start-seam props on indy/madrid/watkins (+1 coplanar spot each). Fixed at source: Indy outer-bay gap +MIN_SEP near s≈0 (city carve unmasked an intentional upper-tier shell floater), madrid `ownPitStraight` (bespoke grandstandEx owns the pit straight), watkins hoarding gap 6.5→6.0. Lowered stale caps that measured better (coplanar istanbul/jerez/silverstone; props-tris indy/madrid; monza hidden-face STRIP after count).
