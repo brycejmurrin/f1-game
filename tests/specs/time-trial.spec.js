@@ -129,6 +129,10 @@ async function ghostSaved(page, trackId) {
         window.__apex.step(1 / 60, frac === 0.999 ? 10 : 4);
       }
 
+      // The record is written at an off-race moment (pause, race end, quit, a
+      // hidden tab — js/car/ghost.js flush()), never inside a race frame, and a
+      // stepped lap reaches none of them: flush as the game's next one would.
+      Ghost.flush();
       return { total: window.__apex.info().total };
     });
     const ghost = await ghostSaved(page, "monza");
