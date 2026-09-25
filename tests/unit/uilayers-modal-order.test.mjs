@@ -125,3 +125,57 @@ test("menunav releases its per-press measurement cache (F11)", () => {
     "the box cache must be dropped across every early return, not just replaced next press");
   assert.match(src, /_boxes = new Map\(\);/, "still fresh per press");
 });
+
+// ── Escape in a NESTED dialog belongs to that dialog ────────────────────────
+// The Data Hub's telemetry popup is a showModal() <dialog> built INSIDE
+// #datahub (js/data/telemetry.js) and is not a UiLayers entry, so top() still
+// names #datahub. onEscape used to press the hub's data-esc-close door and the
+// whole hub closed under the popup. It now stands aside when the topmost
+// :modal sits inside the layer, so the popup's own cancel runs.
+function escHarness(modalIds) {
+  let clicks = 0;
+  const btn = { disabled: false, click() { clicks++; } };
+  const popup = { id: "popup" };
+  const layer = {
+    id: "datahub",
+    getAttribute: (a) => (a === "data-esc-close" ? "dh-close-btn" : null),
+    contains: (el) => el === layer || el === popup,
+  };
+  const byId = { datahub: layer, popup };
+  const context = {
+    window: { UiLayers: { top: () => layer } },
+    document: {
+      readyState: "loading",
+      addEventListener() {},
+      getElementById: (id) => (id === "dh-close-btn" ? btn : null),
+      querySelectorAll: (sel) => (sel === ":modal" ? modalIds.map((id) => byId[id]) : []),
+    },
+    WeakSet, WeakMap,
+    Log: { info() {}, warn() {} },
+  };
+  context.globalThis = context;
+  vm.createContext(context);
+  vm.runInContext(read("js/ui/modal.js"), context);
+  const ev = () => {
+    const e = { key: "Escape", defaultPrevented: false, stopped: false,
+      preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.stopped = true; } };
+    context.window.TopModal.onEscape(e);
+    return e;
+  };
+  return { ev, clicks: () => clicks };
+}
+
+test("Escape over the telemetry popup leaves the Data Hub open (the popup's cancel runs)", () => {
+  const h = escHarness(["datahub", "popup"]);
+  const e = h.ev();
+  assert.equal(h.clicks(), 0, "the hub's close door was not pressed");
+  assert.equal(e.defaultPrevented, false, "native cancel must still reach the popup");
+  assert.equal(e.stopped, false);
+});
+
+test("Escape on the Data Hub itself still presses its door", () => {
+  const h = escHarness(["datahub"]);
+  const e = h.ev();
+  assert.equal(h.clicks(), 1);
+  assert.equal(e.defaultPrevented, true);
+});

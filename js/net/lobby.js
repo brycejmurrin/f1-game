@@ -760,11 +760,13 @@ const NetLobby = (function () {
     function resolveSeatClash() {
       if (!session) return false;
       const mine = localProfile();
-      // A CUSTOM (MY TEAM) car exists only on the grid of the player who chose it
-      // (makeCars builds it for the local pick alone): no peer can pose us, and our
-      // wireId is one their grid does not hold — so it is a seat we cannot keep.
+      // A CUSTOM (MY TEAM) or LEGENDS car exists only on the grid of the player
+      // who chose it (makeCars builds it for the local pick alone): no peer can
+      // pose us, and our wireId is one their grid does not hold — so it is a seat
+      // we cannot keep. Teams.isReal is the one predicate for both: Legends
+      // carries `legends: true` and no `custom`, so a `custom` test let it stay.
       const mineTeam = Teams.LIST.find((t) => t.id === mine.team);
-      const onCustom = !!(mineTeam && mineTeam.custom);
+      const onCustom = !!mineTeam && !Teams.isReal(mineTeam);
       const blocked = onCustom ? peerSeats() : blockingSeats();
       if (!blocked.length && !onCustom) return false;
       if (!onCustom && !heldBy(blocked, mine.team, mine.driver)) return false;
@@ -787,7 +789,7 @@ const NetLobby = (function () {
       // aria-live="polite", so this reaches a screen reader too. A notice, not
       // an error: nothing failed, somebody was simply quicker.
       const seatTxt = now.driver + (now.team ? " (" + now.team + ")" : "");
-      say(onCustom ? "MY TEAM cars only exist on your own screen — you're driving " + seatTxt + " for this race."
+      say(onCustom ? (mineTeam.legends ? "LEGENDS" : "MY TEAM") + " cars only exist on your own screen — you're driving " + seatTxt + " for this race."
                    : was.driver + " was taken — you're driving " + seatTxt + ".");
       broadcast(NetPlay.EV.HELLO, localProfile());
       if (selfReady) setReady(false);
@@ -1657,13 +1659,39 @@ const NetLobby = (function () {
       if (si && !canShare()) si.textContent = "COPY LINK";
       const sa = $("vs-share-answer");
       if (sa && !canShare()) sa.hidden = true;
-      const fromUrl = NetHandshake.inviteFromUrl();
-      if (fromUrl) {
-        open();
-        join();
-        const box = $("vs-invite-in");
-        if (box) box.value = fromUrl;
+      openFromUrl();
+      // An invite link opened in a tab that is ALREADY running only changes the
+      // fragment — no reload, so the boot read above never sees it and the link
+      // did nothing. Same path, on hashchange; registered once per lobby.
+      if (!hashWired && typeof window !== "undefined" && window.addEventListener) {
+        hashWired = true;
+        window.addEventListener("hashchange", openFromUrl);
       }
+      return true;
+    }
+
+    // THE ONE WAY IN FROM A `#vs=` LINK, at boot and on hashchange. The fragment
+    // stays until the invite is accepted or the lobby closes (consumeInviteUrl
+    // in makeAnswer/close), exactly as at boot. Idempotent: the same code on an
+    // open lobby is not re-run, and a live room or a running race is never torn
+    // down by a link — the fragment waits for the player instead.
+    let hashWired = false;
+    let urlInvite = null;          // the code last opened from the URL
+    function openFromUrl() {
+      const code = NetHandshake.inviteFromUrl();
+      if (!code) return false;
+      const e = els();
+      if (code === urlInvite && e.screen && !e.screen.hidden) return false;
+      const racing = typeof UiLayers !== "undefined" && UiLayers && UiLayers.inRace && UiLayers.inRace();
+      if (racing || session || transports.size > 0) {
+        Log.info("net", "lobby invite link ignored: " + (racing ? "racing" : "in a room"));
+        return false;
+      }
+      urlInvite = code;
+      open();
+      join();
+      const box = $("vs-invite-in");
+      if (box) box.value = code;
       return true;
     }
 

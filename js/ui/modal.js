@@ -122,11 +122,24 @@ window.TopModal = (function () {
      `window` in the BUBBLE phase and therefore downstream of this. When no
      screen claims the key we return WITHOUT stopping anything, so the data
      hub's and the telemetry popup's own document-bubble handlers still work. */
+  function topModalInside(layer) {
+    let modals = null;
+    try { modals = document.querySelectorAll(":modal"); } catch (_) { return false; }
+    const m = modals && modals.length ? modals[modals.length - 1] : null;
+    return !!m && m !== layer && !!layer.contains && layer.contains(m);
+  }
+
   function onEscape(e) {
     if (e.key !== "Escape" || e.defaultPrevented) return;
     if (e.altKey || e.ctrlKey || e.metaKey) return;
     const layer = window.UiLayers && window.UiLayers.top();
     if (!layer) return;
+    // A NESTED DIALOG OWNS ITS OWN ESCAPE. The Data Hub's telemetry popup is a
+    // showModal() <dialog> built inside #datahub and not a UiLayers entry, so
+    // top() still names #datahub while the popup sits above it; pressing the
+    // hub's door here closed the whole hub. When the topmost :modal is inside
+    // the layer but is not the layer, stand aside and let its cancel run.
+    if (topModalInside(layer)) return;
     // Route keyboard Escape before native cancel. Repeated Escapes can make
     // cancel non-cancelable; its later close event would otherwise press BACK
     // a second time and skip a page in the Settings stack. Native close
