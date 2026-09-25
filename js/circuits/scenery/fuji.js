@@ -302,7 +302,9 @@
       for (const [s1, g, w, h1, d] of [[0.198, 114, 12, 5, 26], [0.216, 118, 14, 6, 30],
                                        [0.236, 112, 11, 5, 22], [0.254, 120, 13, 6, 28]])
         building(K(s1), -1, g, w, h1, d, { wall: CLAD_W, window: GLASS, lit: false });
-      groundPatch(K(0.222), -1, 138, [40, 0.16, 90], ASPH);
+      // 52 m long, not 90: it ran well into the 0.204 car park (same flat
+      // ground, same asphalt) and the two drapes shared a plane there.
+      groundPatch(K(0.222), -1, 138, [40, 0.16, 52], ASPH);
       cameraTower(K(0.244), -1, 30, { h: 14 });
       billboard(K(0.224), -1, 26, 22, 10, [0.06, 0.07, 0.09], { style: "monopole" });
       // Wide tarmac run-off, then gravel, then the bank.
@@ -361,7 +363,9 @@
       //    The trees pull back for run-off and the mountain reappears over the
       //    treeline on the western side: no tall rank inside 60 m here.
       for (const s of [0.690, 0.702, 0.714]) groundPatch(K(s), -1, 16, [30, 0.18, 34], GRAVEL);
-      for (const s of [0.686, 0.700, 0.716]) groundPatch(K(s), -1, 34, [36, 0.15, 40], TARMAC);
+      // Tarmac starts where the gravel ends (46 m; same 70 m outer edge): the
+      // 12 m band both drapes covered shared a plane.
+      for (const s of [0.686, 0.700, 0.716]) groundPatch(K(s), -1, 46.1, [23.9, 0.15, 40], TARMAC);
       spectatorHill(0.672, 0.724, -1, 28, { rows: 5, rise: 1.4, depth: 3.2, grass: SCRUB, density: 0.3 });
       forestEdge(0.640, 0.690, -1, 64, { hMin: 12, hMax: 20, col: SUGI_D, col2: SUGI, pineFrac: 0.9, density: 0.18 });
       forestEdge(0.726, 0.760, -1, 58, { hMin: 12, hMax: 20, col: SUGI_D, col2: SUGI, pineFrac: 0.9, density: 0.18 });
@@ -377,7 +381,7 @@
       tyreWall(0.728, 0.758, -1, 15, [0.86, 0.20, 0.16]);
       for (const s of [0.734, 0.746]) groundPatch(K(s), -1, 16, [22, 0.18, 26], GRAVEL);
       bleacher(0.726, 0.752, 1, 24, { rows: 6, rise: 1.35, density: 0.35 });
-      scaffoldStand(0.734, 0.756, -1, 30, { rows: 7, rise: 1.4, density: 0.3 });
+      scaffoldStand(0.734, 0.756, -1, 30, { rows: 7, rise: 1.4, density: 0.3, legEvery: 1 });
       billboard(K(0.742), 1, 20, 14, 5, [0.90, 0.74, 0.10], { style: "monopole" });
       gantry(0.732, 6.9, [0.90, 0.74, 0.10]);            // the corner's sponsor arch
       for (const [s1, g] of [[0.733, 17], [0.741, 16], [0.749, 17]])

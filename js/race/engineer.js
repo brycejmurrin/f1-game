@@ -107,7 +107,7 @@ const RaceEngineer = (function () {
         return ["RAIN IN " + s.rainInLaps + (s.rainInLaps === 1 ? " LAP" : " LAPS") + " — BE READY", "rain"];
       }
       if (s.blistering >= BLISTER_CALL) return ["BLISTERS — THAT SET IS DONE", "blister"];
-      if (s.wear >= 1) return ["TYRES ARE GONE — BOX WHEN YOU CAN", "gone"];
+      if (s.wear >= 1 && !s.noStop) return ["TYRES ARE GONE — BOX WHEN YOU CAN", "gone"];
       // THE PIT CALL IS THE REAL ONE. On a Formula 1 radio the word is "box",
       // not "pit": it is short for the German *Boxenstopp*, and one hard
       // syllable carries over engine noise where "pit" does not. It is said
@@ -156,9 +156,13 @@ const RaceEngineer = (function () {
       // drying track — read exactly as PitLane.think reads it for an AI car, so
       // the advice the player gets and the call the field makes cannot diverge.
       const wantTread = TyreModel.treadFor(G.raceWeather, G.roadWetness && G.roadWetness());
-      const caution = G.cautionInfo ? G.cautionInfo() : null;
+      const cautionLvl = G.cautionLevel ? G.cautionLevel() : 0;   // per step: the allocation-free read
       const pit = G.pits && G.pits.estimate(c);
       const armed = !!c.pitArmed || (c.pitState && c.pitState !== "none");
+      // …nor to one on the LAST lap (a qualifying lap is lapsTarget 1): a stop
+      // there costs a place for nothing, and "BOX FOR WETS" with the flag in
+      // sight is the one call that must not be obeyed.
+      const noStop = armed || (G.lapsTarget > 0 && (c.lap || 0) >= G.lapsTarget);
       // "Rain in N laps" needs a lap estimate and the arc is in SECONDS. The
       // driver's own last lap is the only honest converter: a fixed guess would
       // be wrong at both Monaco and Monza.
@@ -177,21 +181,24 @@ const RaceEngineer = (function () {
       for (const o of (G.cars || [])) {
         if (o === c) continue;
         const now = o.pitStops || 0, prev = b.stops.has(o) ? b.stops.get(o) : now;
-        if (now > prev && pit && pit.lossS != null && !armed) {
+        if (now > prev && pit && pit.lossS != null && !noStop) {
           // DIVIDED BY OUR OWN PACE, not theirs. This fires on the tick a rival's
           // pitStops increments — the tick that car is STOPPED in its box — so
           // `o.speed` is ~0, the clamp made the divisor 1, and the "gap in
           // seconds" was a gap in METRES compared against pit.lossS. The number
           // that matters is how long WE take to cover the gap to them.
           const gap = (c.prog - o.prog) / Math.max(1, c.speed || 1);
-          if (gap > 0 && gap < pit.lossS + 2) rivalBoxed = o.code || "RIVAL";
+          // LATCHED for a lap: the rise is one tick, and a call that lost that
+          // tick to the quiet gap or a full card queue was never said at all.
+          if (gap > 0 && gap < pit.lossS + 2) b.undercut = { code: o.code || "RIVAL", left: lapS || 90 };
         }
         b.stops.set(o, now);
       }
+      if (b.undercut && !noStop) rivalBoxed = b.undercut.code;
       return {
         wear, step,
         lap: c.lap || 0,
-        lapsToStop: !armed && nextAt != null ? nextAt - (c.lap || 0) : null,
+        lapsToStop: !noStop && nextAt != null ? nextAt - (c.lap || 0) : null,
         nextCode, rivalBoxed,
         marginS: pit ? pit.marginS : null,
         axle: Math.abs(ax.f - ax.r),
@@ -205,13 +212,14 @@ const RaceEngineer = (function () {
         outLap: (c.lap || 0) - (c.tyreLap0 || 0) <= OUTLAP_LAPS,
         // Nothing about stopping is worth saying to a driver who has already
         // called one — the banner said BOX THIS LAP when they pressed it.
-        wrongTread: !armed && (c.tyre.tread || 0) !== wantTread,
+        wrongTread: !noStop && (c.tyre.tread || 0) !== wantTread,
         // A discounted stop needs something to gain: a part-used set.
         // The estimate includes lane travel and stationary service time.
         pitLoss: pit ? pit.lossS : null,
-        freeStop: !armed && !!caution && caution.level >= 2 && caution.level < 4 && wear >= 0.35,
+        freeStop: !noStop && cautionLvl >= 2 && cautionLvl < 4 && wear >= 0.35,
         wet: wantTread > 0,
-        rainInLaps: !armed && arc && WET.indexOf(arc.to) >= 0 && lapS > 0 && left > 0
+        noStop,
+        rainInLaps: !noStop && arc && WET.indexOf(arc.to) >= 0 && lapS > 0 && left > 0
           ? Math.max(1, Math.round(left / lapS)) : null,
       };
     }
@@ -224,6 +232,7 @@ const RaceEngineer = (function () {
       const b = bag(c);
       b.t = Math.max(0, b.t - dt);
       for (const k in b.said) b.said[k] = Math.max(0, b.said[k] - dt);
+      if (b.undercut && (b.undercut.left -= dt) <= 0) b.undercut = null;
       const call = callFor(s);
       if (!call) return "";
       const cue = G.pits && G.pits.lastCue ? G.pits.lastCue() : null;
@@ -243,6 +252,7 @@ const RaceEngineer = (function () {
       // crossed while the banner was busy is still waiting on the next tick
       // rather than silently spent.
       if (key.indexOf("wear") === 0) b.step = s.step;
+      if (key === "undercut") b.undercut = null;
       b.t = QUIET_S; b.said[key] = REPEAT_S;
       return msg;
     }

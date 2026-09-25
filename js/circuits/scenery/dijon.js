@@ -79,6 +79,13 @@
         ridge(x, z, terrainYAt(x, z) - 1.5, ang, len, w, h, col);
       };
 
+      // DRAPE — terrain-fitted flat decals: api.drape / api.drapeRun (engine,
+      // js/track/scenery/models.js drapeKit). One-height boxes left Dijon's crop
+      // fields and vine rows up to 20 m under the hillside. Residue classes
+      // here: crop field 0 / 0.09 (alternating per field), vine earth 0.03,
+      // vine rows 0.06.
+      const { drape, drapeRun } = api;
+
       // --- guards ------------------------------------------------------
       // 3.8 km of lap means the far side of the circuit is only ~120 m away
       // across the infield. Anything placed past the front row is checked
@@ -110,18 +117,22 @@
       };
       // Crop field. w is across-track, d along it; the guard radius covers
       // the footprint so a field never lies over the far side of the road.
+      let fieldSeq = 0;
       const field = (s, side, gap, w, d, col) => {
         if (spotClear(s, side, gap, Math.max(w, d) * 0.5 + 8))
-          groundPatch(K(s), side, gap, [w, 0.13, d], col);
+          drapeRun(s, side, gap, [w, 0.13, d], col, (fieldSeq++ & 1) ? 0.09 : 0, null, { widen: 0.16 });
       };
       // Vine rows: thin strips stepping away up the slope, on their own
       // earth block, so the block reads as a planted parcel at distance.
+      // The rows STAND 0.9 m proud: as groundPatch slabs their 0.9 m ran from
+      // grade DOWN (a groundPatch top sits at the ground), so every row was a
+      // buried decal, 130 of them wholly under the slope. The earth block now
+      // spans the rows it carries (it began half a parcel out).
       const vineyard = (s, side, gap, rows, len, step) => {
         if (!spotClear(s, side, gap + (rows * step) / 2, len * 0.5 + 10)) return;
-        groundPatch(K(s), side, gap + (rows * step) / 2,
-          [rows * step + 6, 0.12, len + 8], VINE_E);
+        drapeRun(s, side, gap - 3, [rows * step + 6, 0.12, len + 8], VINE_E, 0.03);
         for (let i = 0; i < rows; i++)
-          groundPatch(K(s), side, gap + i * step, [2.6, 0.9, len], VINE);
+          drapeRun(s, side, gap + i * step, [2.6, 0.3, len], VINE, 0.06, len + 8, { h: 0.9 });
       };
       // A short line of poplars along a farm lane — five trees, never a rank.
       const poplarRow = (s, side, dist, count, step) => {
@@ -590,8 +601,10 @@
 
       // Rapeseed parcels: the one strong colour accent on the slope, used
       // sparingly so the patchwork still reads as dry summer Burgundy.
+      // 0.144 sits at gap 78: from 104 it lay over the 0.150 wheat field in the
+      // same drape residue, two tops in one plane (0.0 mm, coplanar-audit).
       for (const [s, side, gap, w, d] of [
-        [0.144, -1, 104, 42, 56], [0.330,  1,  86, 38, 50],
+        [0.144, -1,  78, 42, 56], [0.330,  1,  86, 38, 50],
         [0.520, -1, 118, 44, 58], [0.658,  1,  92, 40, 54],
         [0.882, -1, 112, 42, 56],
       ]) field(s, side, gap, w, d, RAPE);

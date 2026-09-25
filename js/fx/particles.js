@@ -193,7 +193,7 @@ const Particles = (function () {
     if (pb) _gfx.drawParticles(_vertB, pb, true);
   }
 
-  let _rainCanvas = null, _rainCtx = null, _rainDrops = [];
+  let _rainCanvas = null, _rainCtx = null, _rainDrops = [], _rainLastShown = 0;
 
   const _clamp01 = (v) => Math.max(0, Math.min(1, v));
   function _lt() {
@@ -244,6 +244,7 @@ const Particles = (function () {
       speed: (380 + Math.random() * 360) * (drizzle ? dzSpeed : 1) * (LT.rainSpeed != null ? LT.rainSpeed : 1),
       opacity: 0.16 + Math.random() * 0.34,
     }));
+    _rainLastShown = count;
   }
 
   // How many of the seeded drops this frame may draw. Rain is CPU-drawn over a
@@ -282,6 +283,13 @@ const Particles = (function () {
     const lenMul = 1 + vk * (LT.rainShearLen != null ? LT.rainShearLen : 2);
     _rainCtx.beginPath();
     const shown = _rainShown();
+    // Hidden drops do not advance while shedding; re-seed only the returning
+    // tail on a shed transition so old coordinates never pop into view.
+    for (let i = _rainLastShown; i < shown; i++) {
+      _rainDrops[i].x = Math.random() * w;
+      _rainDrops[i].y = Math.random() * h;
+    }
+    _rainLastShown = shown;
     for (let i = 0; i < shown; i++) {
       const d = _rainDrops[i];
       d.y += d.speed * dt;

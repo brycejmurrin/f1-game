@@ -104,9 +104,21 @@ async function precacheAssetLists() {
     "assets/fonts/saira-apex26-800-italic.woff2",
     // @gen-shell:sw-optional
     // DEFERRED renderer backends (no <script> tag; injected on opt-in)
+    "js/render/glx/shaders/glsl-chunks.js",
+    "js/render/glx/shaders/glsl-lit.js",
+    "js/render/glx/shaders/glsl-sky.js",
+    "js/render/glx/shaders/glsl-fx.js",
+    "js/render/glx/shaders/glsl-post.js",
+    "js/render/glx/post.js",
+    "js/render/glx/shadow.js",
+    "js/render/glx/chunked.js",
+    "js/render/glx/glx.js",
     "js/render/webgpu/wgsl-chunks.js",
     "js/render/webgpu/wgsl-post.js",
     "js/render/webgpu/wgsl-fx.js",
+    "js/render/webgpu/wgx-shadow.js",
+    "js/render/webgpu/wgx-chunked.js",
+    "js/render/webgpu/wgx-post.js",
     "js/render/webgpu/wgx.js",
     "js/render/three/tsl-chunks.js",
     "js/render/three/tsl-lit.js",
@@ -189,6 +201,7 @@ async function precacheAssetLists() {
     "js/net/scan.js",
     "js/net/transport.js",
     "js/net/handshake.js",
+    "js/net/lobby-codes.js",
     "js/net/snapshot.js",
     "js/net/session.js",
     "js/net/netplay.js",
@@ -299,7 +312,7 @@ self.addEventListener("install", (event) => {
     // so it must be SEEDED under that key: the DEFERRED backends, and now the
     // race payload (light-presets + the per-circuit scenery closures) too.
     const stamped = urls.optional.map((u) =>
-      /^js\/render\/(webgpu|three)\/|^js\/circuits\/scenery\/|^js\/data\/|^js\/net\/|^js\/lighting\/presets\.js$/.test(u)
+      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/scenery\/|^js\/data\/|^js\/net\/|^js\/lighting\/presets\.js$/.test(u)
         ? u + "?v=" + build : u);
     // SKIPWAITING STAYS LAST, deliberately. Hoisting it above this pool lets a
     // returning player's new worker activate — and `activate` both claims

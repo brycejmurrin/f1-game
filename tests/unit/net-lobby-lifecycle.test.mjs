@@ -3,8 +3,10 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { seedClipboard } from "../helpers/seed-clipboard.mjs";
 
 const SOURCE = await readFile(new URL("../../js/net/lobby.js", import.meta.url), "utf8");
+const LOBBY_CODES = await readFile(new URL("../../js/net/lobby-codes.js", import.meta.url), "utf8");
 // The REAL NetPlay: the lobby registers its QUALI/QLIVE receivers and senders
 // through NetPlay.bindQuali / qualiReporters (one validation site for both
 // phases), and a stub of those would only pin the stub.
@@ -90,6 +92,8 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
     Tracks: { LIST: [{ id: "track" }] },
   });
   seedLog(context);
+  seedClipboard(context);
+  vm.runInContext(LOBBY_CODES.replace(/^const\b/gm, "var"), context, { filename: "lobby-codes.js" });
   context.NetPlay = vm.runInContext(NETPLAY + ";NetPlay", context, { filename: "netplay.js" });
   const NetLobby = vm.runInContext(SOURCE + ";NetLobby", context, { filename: "lobby.js" });
   const G = {
@@ -413,8 +417,30 @@ async function connectedHost(extra = {}) {
   h.lobby.watchForOpen();
   for (let i = 0; i < 40 && !made.length; i++) await new Promise((r) => setTimeout(r, 50));
   assert.equal(made.length, 1, "the host's session was bound");
-  return { h, scanners };
+  return { h, scanners, made };
 }
+
+test("a host relays only validated guest qualifying laps to the other guest", async () => {
+  const { h, made } = await connectedHost();
+  try {
+    await h.lobby.inviteAnother();
+    await h.lobby.host();
+    h.lobby.watchForOpen();
+    for (let i = 0; i < 40 && made.length < 2; i++) await new Promise((r) => setTimeout(r, 50));
+    assert.equal(made.length, 2);
+    made[0].deliver("hello", { team: "beta", driver: 0 });
+    made[1].deliver("hello", { team: "beta", driver: 1 });
+    const before = made[1].sent.length;
+    made[0].deliver("quali", { driverId: "alpha:0", t: 70 });
+    made[0].deliver("quali", { driverId: "beta:0", t: "71.5" });
+    made[0].deliver("qlive", { driverId: "beta:0", t: 8, frac: 0.3 });
+    const relay = made[1].sent.slice(before).filter((m) => m.t === "quali" || m.t === "qlive");
+    assert.equal(relay.length, 2, "the spoof is dropped and both valid event types reach the other guest");
+    assert.deepEqual(relay.map((m) => [m.t, m.d.driverId, m.d.t]),
+      [["quali", "beta:0", 71.5], ["qlive", "beta:0", 8]]);
+    assert.equal(made[0].sent.filter((m) => m.t === "quali").length, 0, "never echo to the owner");
+  } finally { h.lobby.cancel(); }
+});
 
 test("X on a sub-step while in a room stops the scanner as well as keeping the room", async () => {
   const { h, scanners } = await connectedHost();

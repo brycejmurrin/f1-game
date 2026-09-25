@@ -1380,3 +1380,63 @@ test("the saved camera's mix is applied at boot, not only on the first camera ch
   const tail = src.slice(src.lastIndexOf("refreshCamBtn();"));
   assert.match(tail, /GameAudio\.setCameraMix\(CAM_MODES\[G\.camMode\]\.id\)/);
 });
+
+// STEADY STATE SCHEDULES NOTHING. setEngine re-aimed the core's pitch, the
+// lowpass, the level and four more params on every call, and setSkid wrote
+// skidGain.gain.value (= setValueAtTime) every physics step — 0 onto 0 on
+// every step not sliding. aimGain / aimParam and the skid write guard skip a
+// target within a hair of the last one issued: a car holding the same revs,
+// speed and slide must cost the audio thread nothing after its first frame,
+// and a change must still land.
+test("a steady setEngine and a quiet setSkid schedule nothing after the first frame", async () => {
+  for (const core of ["samples", "synth"]) {
+    const { GameAudio, release, ctx, ctxTime } = boot();
+    const made = [];
+    for (const k of Object.keys(ctx)) {
+      if (!k.startsWith("create") || typeof ctx[k] !== "function") continue;
+      const f = ctx[k];
+      ctx[k] = (...a) => { const n = f(...a); made.push(n); return n; };
+    }
+    GameAudio.init();
+    if (core === "samples") await release();
+    GameAudio.startEngine();
+    assert.equal(GameAudio.debug().usingSamples, core === "samples", "precondition: " + core);
+    let writes = 0;   // direct .value writes on a gain (setSkid's path)
+    for (const n of made) {
+      if (!n.gain) continue;
+      let v = n.gain.value;
+      Object.defineProperty(n.gain, "value", { get: () => v, set: (x) => { writes++; v = x; } });
+    }
+    const PARAMS = ["gain", "frequency", "detune", "Q", "playbackRate"];
+    const sets = () => made.reduce((s, n) => s + PARAMS.reduce((t, k) => t + ((n[k] && n[k].sets) || 0), 0), 0) + writes;
+    const ph = { slip: 1, ax: 0, onKerb: false, wet: false, tow: 0, deploy: 0, energy: 1, ersDeploy: 0.5 };
+    const frame = (skid) => { ctxTime(1 / 60); GameAudio.setEngine(0.6, 0, false, 0.6, 5, ph); GameAudio.setSkid(skid, false); };
+    for (let i = 0; i < 3; i++) frame(0);   // settle: first issues, harvest smoother, idle ramp
+    const s0 = sets();
+    for (let i = 0; i < 30; i++) frame(0);
+    assert.equal(sets(), s0, core + ": 30 identical frames re-scheduled " + (sets() - s0) + " param events");
+    frame(0.5);
+    assert.ok(sets() > s0, core + ": a slide must still reach the skid gain");
+    assert.ok(GameAudio.skidLevel() > 0, core + ": the slide is audible");
+    frame(0);
+    assert.equal(GameAudio.skidLevel(), 0, core + ": releasing the slide lands an exact 0");
+  }
+});
+
+test("on a TV camera the rev limiter's swing scales with the engine: the gain never inverts", async () => {
+  const A = await sampleEngine();
+  for (const cam of ["chase", "heli", "cockpit"]) {
+    A.setCameraMix(cam);
+    for (let i = 0; i < 6; i++) A.setEngine(1, 0, false, 0.9, 5, {});
+    const base = A.engineLevel(), swing = A.debug().limSwing;
+    assert.ok(swing != null, "limSwing is reported");
+    assert.ok(base - swing >= -1e-9, `${cam}: trough ${base - swing} (base ${base}, swing ${swing})`);
+  }
+});
+
+test("the off-road rumble's filter is not rescheduled every frame for a steady surface", async () => {
+  const A = await sampleEngine();
+  const before = A.debug().surfSched;
+  for (let i = 0; i < 120; i++) A.setCarSfx({ surface: 0.5 });
+  assert.ok(A.debug().surfSched - before <= 1, `rescheduled ${A.debug().surfSched - before} times`);
+});

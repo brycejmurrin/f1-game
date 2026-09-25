@@ -78,8 +78,12 @@
     kit: { marshal: "hut",       rail: "armco",       fence: "chainlink",  tyre: "tecpro",  board: "led",       gantry: "portal",     camera: "scaffold",  hoarding: "led" },
     standSet: ["navy", "concrete", "steel"],  // Foro Sol blue buckets
     // cityStyle: neon / dayPal name TrackSceneryData.NC / .DC colours
+    // "slab" holds the slot "cross" had (same hash picks for every other kind):
+    // neonTower's cross emits two full-height slabs sharing top AND underside
+    // planes (ground-audit flatCoplanar) — an engine defect in
+    // js/track/scenery/city.js (kind === "cross").
     cityStyle: { neon: ["pink", "green", "orange", "gold", "cyan"], bias: 0.34, fh: [12, 34], bh: [28, 64],
-                 kinds: ["setback", "slab", "podium", "cylinder", "tiered", "chevron", "cross", "ziggurat", "drum"], neonKinds: ["clad", "screen"], tone: { n: [0.16, 0.15, 0.16], d: [0.58, 0.56, 0.53] },
+                 kinds: ["setback", "slab", "podium", "cylinder", "tiered", "chevron", "slab", "ziggurat", "drum"], neonKinds: ["clad", "screen"], tone: { n: [0.16, 0.15, 0.16], d: [0.58, 0.56, 0.53] },
                  dayPal: ["terra", "ochre", "cream", "coral", "sand", "brick", "tan"] },
     // Real centreline: OSM trace (bacinger/f1-circuits, ODbL) — [x,z] metres,
     // recentred, one lap, open loop. tools/track/import-circuit-path.mjs regenerates it.

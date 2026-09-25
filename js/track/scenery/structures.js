@@ -229,7 +229,10 @@ const SceneryStructures = (function () {
         // A jersey barrier has no posts at all — it is a poured profile.
         if (st !== "jersey")
           ctx.instance(postKey, place,                                          // post, base sunk
-            (rec) => rec.cyl([0, -0.35, 0], 0.09, st === "doubleArmco" ? 1.45 : 1.05, postCol, 4),
+            // Tall enough to carry its top rail: the cable's upper rope runs at
+            // 0.95 m, and a 0.70 m post left it hanging 0.2 m clear of every
+            // post (978 floating rails, buenos_aires/jacarepagua/kyalami).
+            (rec) => rec.cyl([0, -0.35, 0], 0.09, st === "doubleArmco" ? 1.45 : st === "cable" ? 1.35 : 1.05, postCol, 4),
             { kind: "guardrail", k, side });
         ctx.instance(railKey,
           Object.assign({ s: [1, 1, spacing] }, place),
@@ -510,8 +513,10 @@ const SceneryStructures = (function () {
           out._mat = MAT.FABRIC;
           addBox(out, vadd(c, p.u, 0.35), [0.08, h * 1.15, panel * 0.94], col, b);
           out._mat = 0;
+          // Masts footed in the ground (sunk 0.3 m) up to the same h + 1.9 m
+          // top: they started 0.5 m up, so every banner floated (jacarepagua).
           for (const st of [-1, 1])
-            addCyl(out, vadd(vadd(p.c, p.t, st * panel * 0.47), p.u, 0.5), 0.07, h + 1.4, postCol, 4, b);
+            addCyl(out, vadd(vadd(p.c, p.t, st * panel * 0.47), p.u, -0.3), 0.07, h + 2.2, postCol, 4, b);
         } else if (hst === "barrierTop") {            // bolted to the armco, no posts
           addBox(out, vadd(c, p.u, 0.35), [0.14, h * 0.9, panel], col, b);
         } else if (hst === "double") {                // two-tier board
@@ -525,6 +530,11 @@ const SceneryStructures = (function () {
                                Math.min(1.4, col[2] * 1.35 + 0.1)] : col;
           addBox(out, c, [0.12, h, panel], lit, b);
           addBox(out, vadd(c, p.u, h * 0.56), [0.2, 0.12, panel], postCol, b);
+          // Two slim legs inside the ribbon's depth: it had none and floated
+          // 0.45 m up wherever it runs (sochi).
+          for (const st of [-1, 1])
+            addBox(out, vadd(vadd(p.c, p.t, st * panel * 0.36), p.u, 0.22),
+                   [0.07, 0.9, 0.10], postCol, b);
         } else {
           addBox(out, c, [0.16, h, panel], col, b);
           // Two stubby posts holding the board clear of the ground.
@@ -548,8 +558,18 @@ const SceneryStructures = (function () {
     // track (which is -side along r) rather than into the seating behind it.
     const CROWD_FALLBACK = [[0.86, 0.30, 0.24], [0.92, 0.90, 0.86],
                             [0.24, 0.36, 0.62], [0.72, 0.63, 0.30]];
+    // Per-call MIN_SEP slot (as nature.js's hillSeq): a band crossing another
+    // stand — fuji's terrace bays run through grandstandEx shells and rakes —
+    // landed 7-13 mm off their faces, a fight from ~190 m. Each band moves
+    // OUTWARD and ALONG by TrackGeom.SEP_SLOTS on two permutations, so
+    // consecutive bands differ by >= MIN_SEP on both axes and neither side
+    // faces nor end caps sit near the authored grid. <= 16.5 cm stays on its
+    // own tread (the next row's riser is further back than that).
+    let bandSeq = 0;
     const crowdBand = (c, b, side, thick, h, len, pal, dens, seed) => {
       if (len <= 0.5) return;
+      const slot = bandSeq++ % 4, SL = TrackGeom.SEP_SLOTS;
+      c = vadd(vadd(c, b[0], side * SL[slot]), b[2], SL[(slot * 3 + 1) % 4]);
       const cols = (pal && pal.length) ? pal : (CROWD_DAY && CROWD_DAY.length ? CROWD_DAY : CROWD_FALLBACK);
       const pick = (t) => NIGHT
         ? (t > 0.945 ? [2.5, 2.3, 1.9] : t > 0.55 ? [0.10, 0.11, 0.14] : [0.15, 0.16, 0.20])
@@ -610,7 +630,12 @@ const SceneryStructures = (function () {
         const backLat = side * (rows - 0.5) * setback;
         out._mat = timber ? MAT.WOOD : MAT.METAL;
         addCyl(out, vadd(a.c, a.u, -0.4), 0.14, 1.4, frameCol, 5, b);                    // front stub leg
-        addCyl(out, vadd(vadd(a.c, a.r, backLat), a.u, -0.4), 0.17, topH + 0.6, frameCol, 5, b);   // back leg
+        // Back leg: it carries the crest rail (centre topH + 0.55, 0.16 thick),
+        // so it runs up to the rail's mid-line. Stopping at topH + 0.2 left the
+        // rail's underside floating 0.27 m over it — unsupported once the rows
+        // rise past ~0.8 m and the top crowd band no longer bridges the gap.
+        const legH = opts.rail !== false ? topH + 0.95 : topH + 0.6;
+        addCyl(out, vadd(vadd(a.c, a.r, backLat), a.u, -0.4), 0.17, legH, frameCol, 5, b);   // back leg
         // Horizontal ledgers every ~2.2 m — what makes a frame read as a frame.
         for (let y = 1.6; y < topH; y += 2.2)
           addBox(out, vadd(vadd(a.c, a.r, backLat / 2), a.u, y),
@@ -814,8 +839,11 @@ const SceneryStructures = (function () {
         const R = 0.52, cc = vadd(p.c, p.u, postH + R);
         const fwd = [-side * p.r[0], -side * p.r[1], -side * p.r[2]];
         const db = [p.u, fwd, p.t];
-        addCyl(out, cc, R, 0.05, [0.85, 0.16, 0.14], 12, db);                             // red rim disc
-        addCyl(out, vadd(cc, fwd, 0.02), R * 0.80, 0.05, [0.95, 0.95, 0.93], 12, db);     // white face
+        // The digits hang on the face: where the road guard culls the disc
+        // (a pit or road footprint under it), they are skipped with it — 26
+        // digits floated 1.1-1.8 m up on a bare post (indianapolis, qatar).
+        if (addCyl(out, cc, R, 0.05, [0.85, 0.16, 0.14], 12, db) === false) return;       // red rim disc
+        if (addCyl(out, vadd(cc, fwd, 0.02), R * 0.80, 0.05, [0.95, 0.95, 0.93], 12, db) === false) return;   // white face
         const digs = String(Math.max(10, Math.min(99, value || 80))).split("").map(Number);
         digs.forEach((d, i) => {
           const dc = vadd(cc, p.t, (i - (digs.length - 1) / 2) * 0.36);
@@ -823,7 +851,7 @@ const SceneryStructures = (function () {
         });
       } else if (kind === "braking") {
         const w2 = 1.3, h2 = 0.9, cc = vadd(p.c, p.u, postH + h2 / 2);
-        addBox(out, cc, [0.05, h2, w2], [0.92, 0.92, 0.90], b);   // white panel face
+        if (addBox(out, cc, [0.05, h2, w2], [0.92, 0.92, 0.90], b) === false) return;   // white panel face
         const nStripes = Math.max(1, Math.min(3, value || 2));
         const diagU = norm([p.u[0] + p.t[0], p.u[1] + p.t[1], p.u[2] + p.t[2]]);
         for (let i = 0; i < nStripes; i++) {
@@ -833,7 +861,7 @@ const SceneryStructures = (function () {
         }
       } else {   // "corner" number board
         const w2 = 1.0, h2 = 0.85, cc = vadd(p.c, p.u, postH + h2 / 2);
-        addBox(out, cc, [0.05, h2, w2], [0.92, 0.92, 0.90], b);
+        if (addBox(out, cc, [0.05, h2, w2], [0.92, 0.92, 0.90], b) === false) return;
         const digs = String(Math.max(1, Math.min(99, value || 1))).split("").map(Number);
         digs.forEach((d, i) => {
           const dc = vadd(cc, p.t, (i - (digs.length - 1) / 2) * 0.38);

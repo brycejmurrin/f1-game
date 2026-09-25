@@ -69,8 +69,10 @@ test("gfx-debug reads only existing hooks and guards every one", () => {
 });
 
 test("gfx-debug can hand the reporter the text", () => {
-  assert.match(SRC, /navigator\.clipboard/, "one-click copy is the point of the overlay");
-  assert.match(SRC, /execCommand\("copy"\)/,
+  assert.match(SRC, /ApexClipboard\.write/, "one-click copy goes through ApexClipboard");
+  const clip = read("js/core/clipboard.js");
+  assert.match(clip, /navigator\.clipboard/, "ApexClipboard owns the clipboard API call");
+  assert.match(clip, /execCommand\("copy"\)/,
     "clipboard API needs a secure context — the textarea fallback is what makes it work on plain http");
 });
 

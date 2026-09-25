@@ -1722,7 +1722,7 @@
     <button id="mb-career" class="bigbtn" data-menu-default aria-label="Career modes — Driver Career and My Team"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg><span><span class="mb-label">CAREER</span><span id="mb-career-sub" class="mb-sub">DRIVER CAREER  ·  MY TEAM</span></span></button>
     <div id="menu-retention" class="balanced-row">
       <button id="mb-continue" class="bigbtn alt minibtn" hidden><span>CONTINUE</span><span id="mb-continue-sub" class="mb-sub"></span></button>
-      <button id="mb-daily" class="bigbtn alt minibtn"><span>DAILY</span><span id="mb-daily-sub" class="mb-sub">TODAY'S TIME TRIAL</span></button>
+      <button id="mb-daily" class="bigbtn alt minibtn"><span>DAILY TIME TRIAL</span><span id="mb-daily-sub" class="mb-sub">TODAY'S CHALLENGE</span></button>
     </div>
     </div>
     <!-- PLAY NOW: the four one-sitting modes, 2x2 so four entries cost two rows
@@ -1820,7 +1820,7 @@
 <div id="select" class="screen" role="region" aria-labelledby="select-title" data-esc-close="sel-back" hidden>
   <div id="sel-inner" class="sheet">
 
-    <div class="sheet-head"><h2 id="select-title">SELECT</h2></div>
+    <div class="sheet-head"><h2 id="select-title">SELECT</h2><span id="sel-track-count" class="session-summary"></span></div>
 
     <div class="sheet-body" id="sel-body">
       <!-- THE SHELF: filter + search toolbar (js builds #sel-track-filter into
@@ -1874,8 +1874,8 @@
 
     <div class="sheet-foot">
       <button id="sel-back" class="bigbtn alt">BACK</button>
-      <button id="sel-car" class="bigbtn alt">YOUR CAR</button>
-      <button id="sel-go" class="bigbtn">NEXT</button>
+      <button id="sel-car" class="bigbtn alt"><span>CHANGE CAR</span><small id="sel-car-current">CURRENT CAR</small></button>
+      <button id="sel-go" class="bigbtn">RACE SETUP</button>
     </div>
   </div>
 </div>
@@ -2168,7 +2168,7 @@
 <!-- race settings -->
 <dialog id="race-settings" class="screen dim" data-esc-close="rs-cancel" aria-labelledby="dlg-racesettings" hidden>
   <div class="sheet">
-    <div class="sheet-head"><h2 id="dlg-racesettings">RACE SETTINGS</h2></div>
+    <div class="sheet-head"><h2 id="dlg-racesettings">RACE SETTINGS</h2><p id="rs-summary" class="session-summary" aria-live="polite"></p></div>
     <!-- Twelve SETTING ROWS (js/ui/setting-row.js), the same control as pause >
          SETTINGS: LABEL ‹ VALUE ›. This screen was the last one on chips, and
          it needed ~130 lines of shape-and-density grid CSS to fit seven chip
@@ -2302,7 +2302,7 @@
     </div>
     <div class="sheet-foot">
       <button id="rs-cancel" autofocus class="bigbtn alt">BACK</button>
-      <button id="rs-go" class="bigbtn">RACE!</button>
+      <button id="rs-go" class="bigbtn">START RACE</button>
     </div>
   </div>
 </dialog>
@@ -2382,30 +2382,30 @@
     <details id="cz-paint">
     <summary class="cz-sep">EXTRA PAINT — OPTIONAL</summary>
     <div id="cz-paint-rows">
-    <div class="cz-row cz-liv-row"><label for="cz-stripe">BODY STRIPE</label><input id="cz-stripe" type="color"><button type="button" id="cz-stripe-none" class="cz-liv-none">NONE</button></div>
-    <div class="cz-row cz-liv-row"><label for="cz-nosestripe">NOSE STRIPE</label><input id="cz-nosestripe" type="color"><button type="button" id="cz-nosestripe-none" class="cz-liv-none">NONE</button></div>
-    <div class="cz-row cz-liv-row"><label for="cz-detail">DETAIL</label><input id="cz-detail" type="color"><button type="button" id="cz-detail-none" class="cz-liv-none">NONE</button></div>
-    <div class="cz-row cz-liv-row"><label for="cz-nose">NOSE CAP</label><input id="cz-nose" type="color"><button type="button" id="cz-nose-none" class="cz-liv-none">NONE</button></div>
-    <div class="cz-row cz-liv-row"><label for="cz-pod">SIDEPOD</label><input id="cz-pod" type="color"><button type="button" id="cz-pod-none" class="cz-liv-none">NONE</button></div>
-    <div class="cz-row cz-liv-row"><label for="cz-wing">WINGS</label><input id="cz-wing" type="color"><button type="button" id="cz-wing-none" class="cz-liv-none">NONE</button></div>
-    <div class="cz-row cz-liv-row"><label for="cz-fin">TAIL FIN</label><input id="cz-fin" type="color"><button type="button" id="cz-fin-none" class="cz-liv-none">NONE</button></div>
-    <div class="cz-row cz-liv-row"><label for="cz-finart">TAIL GRAPHIC</label><input id="cz-finart" type="color"><button type="button" id="cz-finart-none" class="cz-liv-none">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-stripe">BODY STRIPE</label><input id="cz-stripe" type="color"><button type="button" id="cz-stripe-none" class="cz-liv-none" aria-label="No body stripe">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-nosestripe">NOSE STRIPE</label><input id="cz-nosestripe" type="color"><button type="button" id="cz-nosestripe-none" class="cz-liv-none" aria-label="No nose stripe">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-detail">DETAIL</label><input id="cz-detail" type="color"><button type="button" id="cz-detail-none" class="cz-liv-none" aria-label="No detail">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-nose">NOSE CAP</label><input id="cz-nose" type="color"><button type="button" id="cz-nose-none" class="cz-liv-none" aria-label="No nose cap">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-pod">SIDEPOD</label><input id="cz-pod" type="color"><button type="button" id="cz-pod-none" class="cz-liv-none" aria-label="No sidepod">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-wing">WINGS</label><input id="cz-wing" type="color"><button type="button" id="cz-wing-none" class="cz-liv-none" aria-label="No wings">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-fin">TAIL FIN</label><input id="cz-fin" type="color"><button type="button" id="cz-fin-none" class="cz-liv-none" aria-label="No tail fin">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-finart">TAIL GRAPHIC</label><input id="cz-finart" type="color"><button type="button" id="cz-finart-none" class="cz-liv-none" aria-label="No tail graphic">NONE</button></div>
     <!-- Upload your own emblem. Downscaled and stored locally; CLEAR falls back
          to the generated monogram crest. -->
     <div class="cz-row cz-liv-row"><label for="cz-logofile">LOGO IMAGE</label>
       <span class="cz-logo-wrap">
         <img id="cz-logo-prev" alt="" hidden>
-        <label class="cz-liv-none" for="cz-logofile">UPLOAD</label>
+        <button type="button" id="cz-logo-up" class="cz-liv-none">UPLOAD</button>
         <input id="cz-logofile" type="file" accept="image/*" hidden>
         <button type="button" id="cz-logo-clear" class="cz-liv-none">CLEAR</button>
       </span></div>
-    <div class="cz-row cz-liv-row"><label for="cz-logo">LOGO TINT</label><input id="cz-logo" type="color"><button type="button" id="cz-logo-none" class="cz-liv-none">NONE</button></div>
-    <div class="cz-row cz-liv-row"><label for="cz-logo2">MONOGRAM BOX</label><input id="cz-logo2" type="color"><button type="button" id="cz-logo2-none" class="cz-liv-none">NONE</button></div>
-    <div class="cz-row cz-liv-row"><label for="cz-logo3">LOGO OUTLINE</label><input id="cz-logo3" type="color"><button type="button" id="cz-logo3-none" class="cz-liv-none">NONE</button></div>
-    <div class="cz-row cz-liv-row"><label for="cz-halo">HALO</label><input id="cz-halo" type="color"><button type="button" id="cz-halo-none" class="cz-liv-none">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-logo">LOGO TINT</label><input id="cz-logo" type="color"><button type="button" id="cz-logo-none" class="cz-liv-none" aria-label="No logo tint">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-logo2">MONOGRAM BOX</label><input id="cz-logo2" type="color"><button type="button" id="cz-logo2-none" class="cz-liv-none" aria-label="No monogram box">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-logo3">LOGO OUTLINE</label><input id="cz-logo3" type="color"><button type="button" id="cz-logo3-none" class="cz-liv-none" aria-label="No logo outline">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-halo">HALO</label><input id="cz-halo" type="color"><button type="button" id="cz-halo-none" class="cz-liv-none" aria-label="No halo">NONE</button></div>
     <!-- FINISH is the paint MATERIAL, not a colour, so it gets a 3-way choice
          instead of a swatch + NONE. Gloss is the default clearcoat car paint. -->
-    <div class="cz-row cz-liv-row"><label>FINISH</label><span class="cz-finish" id="cz-finish"><button type="button" data-cz-finish="gloss" class="cz-liv-none active">GLOSS</button><button type="button" data-cz-finish="satin" class="cz-liv-none">SATIN</button><button type="button" data-cz-finish="chrome" class="cz-liv-none">CHROME</button></span></div>
+    <div class="cz-row cz-liv-row"><label id="cz-finish-lbl">FINISH</label><span class="cz-finish" id="cz-finish" role="group" aria-labelledby="cz-finish-lbl"><button type="button" data-cz-finish="gloss" class="cz-liv-none active">GLOSS</button><button type="button" data-cz-finish="satin" class="cz-liv-none">SATIN</button><button type="button" data-cz-finish="chrome" class="cz-liv-none">CHROME</button></span></div>
     </div><!-- /#cz-paint-rows -->
     </details>
     <!-- The driver is not paint. These three used to sit inside EXTRA PAINT —
@@ -2949,29 +2949,19 @@
 <script defer crossorigin="anonymous" src="js/core/log.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/mat4.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/hash32.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/core/clipboard.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/roster.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/render/glx/shaders/glsl-chunks.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/render/glx/shaders/glsl-lit.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/render/glx/shaders/glsl-sky.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/render/glx/shaders/glsl-fx.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/render/glx/shaders/glsl-post.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/render/shared/glx-facade.js?v=dev"></script>
+<!-- GLX, TLX and WGX implementations have no script tags. game.js injects
+     only the selected backend, with GLX available as the lazy fallback. -->
+
 <script defer crossorigin="anonymous" src="js/render/shared/light-budget.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/post-common.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/canvas-css-size.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/render/glx/post.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/render/glx/shadow.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/lamp-chunks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/frustum.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/render/shared/inst-cells.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/vertex-pack.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/render/glx/chunked.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/render/glx/glx.js?v=dev"></script>
-<!-- js/render/webgpu/* (WGX) and js/render/three/* (TLX) have NO tags: they are the
-     two OPT-IN renderer backends and are injected by js/game.js only when
-     apex26.gfxBackend selects one (tools/manifest.cjs DEFERRED). ~532 KB that
-     every visitor used to parse for a backend almost nobody runs. sw.js seeds
-     them into its OPTIONAL precache set, since it discovers everything else by
-     parsing the tags below. -->
-
 <script defer crossorigin="anonymous" src="js/render/gfx.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/gltf.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/assets.js?v=dev"></script>
@@ -3003,6 +2993,7 @@
 <script defer crossorigin="anonymous" src="js/track/scenery/city.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/scenery/identity.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/scenery/pits.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/track/scenery/build-props.js?v=dev"></script>
 <!-- circuit definitions (data) — must load before the tracks engine -->
 <script defer crossorigin="anonymous" src="js/circuits/bahrain.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/circuits/monaco.js?v=dev"></script>
@@ -3057,6 +3048,7 @@
 <script defer crossorigin="anonymous" src="js/circuits/mont_tremblant.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/circuits/mosport.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/pit-lane.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/session-entry.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/circuit-elevations.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/tracks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/track-maps.js?v=dev"></script>
@@ -3075,6 +3067,7 @@
 <script defer crossorigin="anonymous" src="js/audio/panel.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/parts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/liveries.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/car/custom-liveries.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/crest-paths.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/liverytex.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/ghost.js?v=dev"></script>

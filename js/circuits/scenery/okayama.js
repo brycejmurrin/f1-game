@@ -76,6 +76,12 @@
 
       const { K } = api;            // the contract's frac -> node index (normalised, as this copy was)
 
+      // DRAPE — terrain-fitted flat decals: api.drape (engine,
+      // js/track/scenery/models.js drapeKit). A 26 m apron or a 7 m clay pad
+      // laid by place() sank its whole top under the slope. Residue classes
+      // here: paddock apron 0, club apron 0.03, clay pads 0.06 / 0.09.
+      const { drape } = api;
+
       // 1. PALETTE — warm humid green. Broadleaf canopies are heavy and dark,
       //    bamboo clumps are the light yellow-green, earth is pale clay. The
       //    canopy is a MIX, not one tone: camphor and evergreen oak read blue-
@@ -136,8 +142,17 @@
       };
       // Pale clay cut hard against the barrier — spectatorHill is the only
       // near-track earth-bank emitter that survives the guard at these gaps.
-      const clayCut = (s0, s1, side, gap, h, col) =>
-        spectatorHill(s0, s1, side, gap, { h: h, col: col || CLAY, steps: 1 });
+      // spectatorHill ignored both `h` and `col` then (it reads `col` as the
+      // tread colour now, never `h`): both layered calls of every
+      // cut emitted the SAME default ladder a few mm apart, and their treads
+      // were 400 flat-coplanar pairs (z-fight). ONE call per cut now, its
+      // two tones as tread / riser colours. The ladder keeps spectatorHill's
+      // default rise (1.15 m): h/4 raised it to ~1.7 m and pushed the terraces
+      // into the roadside trees (clip-audit severe 55 -> 59). `h` is kept for
+      // the call sites' record of the intended bank height.
+      const clayCut = (s0, s1, side, gap, h, col, col2) =>
+        spectatorHill(s0, s1, side, gap,
+          { grass: col || CLAY, riser: col2 || col || CLAY });
 
       // The lap folds back on itself inside 100 m in several places, so every
       // free-standing prop added by this pass is checked against the road
@@ -146,6 +161,15 @@
         const a = anchor(k, side, dist);
         return Number.isFinite(a.c[0]) && Number.isFinite(a.c[2]) &&
           !onTrack(a.c[0], a.c[2], pad == null ? 6 : pad);
+      };
+      // A flat pad `dims` = [w across, thick, d along] centred `dist` beyond the
+      // edge, as place() would put it — but draped, since place() sinks every
+      // box 0.8 m and a 0.06-0.3 m slab went wholly under grade (291/309/493/
+      // 495 and the paddock aprons: invisible). `h` raises a deck above grade.
+      const pad = (s, side, dist, dims, col, res, h) => {
+        const k = K(s);
+        if (!clear(k, side, dist, 5)) return;
+        drape(k, side, dist - dims[0] / 2, dims, col, { res, phase: 0, h });
       };
       const box = (s, side, dist, dims, col) => {
         const k = K(s);
@@ -224,11 +248,13 @@
       building(K(0.040), 1, 14, 16, 6.0, 10,
         { col: CLUB_WALL, roof: CLUB_ROOF, floors: 2 });
       for (let i = 0; i < 6; i++)                     // paddock apron slabs
-        place(K(0.006 + i * 0.010), 1, 20, [26, 0.08, 22], APRON);
+        pad(0.006 + i * 0.010, 1, 20, [26, 0.08, 22], APRON, 0);
       for (let i = 0; i < 6; i++) {                   // garage bays, one per shutter
         const s = 0.0165 + i * 0.0072;
         bld(s, 1, 9.5, 9.0, 4.4, 6.4, i & 1 ? WALL_CREAM : CLUB_WALL, ROOF_TIN, 1);
-        box(s, 1, 9.2, [0.5, 3.0, 4.2], SHUTTER[i % SHUTTER.length]);
+        // 9.3, not 9.2: place()'s slot (+0.035..0.165) put the shutter's back
+        // face 15 mm off the bay door's on two slots of four; now >= 5 cm on all.
+        box(s, 1, 9.3, [0.5, 3.0, 4.2], SHUTTER[i % SHUTTER.length]);
       }
       bld(0.0620, 1, 9.5, 8.0, 10.5, 5.0, WALL_GREY, ROOF_BLUE, 3);   // timing box
       cameraTower(K(0.0660), 1, 12);
@@ -255,7 +281,9 @@
       sponsorHoarding(0.996, 0.046, -1, 8, { h: 1.3 });
       bld(0.0330, -1, 26, 10.0, 9.0, 7.0, WALL_CREAM, ROOF_BLUE, 3);  // commentary
       bld(0.0080, -1, 24, 7.0, 4.0, 5.0, WALL_BEIGE, ROOF_GRN, 1);    // kiosk
-      box(0.0430, -1, 12, [0.6, 5.0, 9.0], [0.14, 0.15, 0.17]);       // scoreboard
+      // 12.1: at 12 its front face met the billboard's 15 mm away on two of
+      // place()'s four slots; 10 cm back it clears it on every slot.
+      box(0.0430, -1, 12.1, [0.6, 5.0, 9.0], [0.14, 0.15, 0.17]);     // scoreboard
       billboard(K(0.0430), -1, 12, 8, 3.4, [0.95, 0.95, 0.92]);
       spectatorHill(0.000, 0.014, -1, 10, { h: 3.6, col: GRASS, steps: 2 });
       spectatorHill(0.055, 0.070, -1, 10, { h: 3.6, col: GRASS_D, steps: 2 });
@@ -280,15 +308,14 @@
       //    now — a rust-coloured lower face, a pale bench above it — with the
       //    photographers' platform cut into the shoulder.
       tyreWall(0.104, 0.136, -1, 5, [0.84, 0.78, 0.22]);
-      clayCut(0.100, 0.140, -1, 9, 6.5, CLAY);
-      clayCut(0.102, 0.138, -1, 9, 3.0, CLAY_R);
+      clayCut(0.100, 0.140, -1, 9, 6.5, CLAY, CLAY_R);
       spectatorHill(0.098, 0.142, -1, 21, { h: 9.5, col: CLAY_L, steps: 2 });
       cameraTower(K(0.1172), -1, 15);
       cameraTower(K(0.1080), -1, 17);
       hill(0.1172, -1, 62, 120, 28, 16, [0.25, 0.37, 0.21]);
       forestEdge(0.096, 0.146, -1, 33, { col: LEAF_D, h: 18, rows: 3 });
       bld(0.1220, -1, 20, 5.5, 4.5, 4.0, WALL_GREY, ROOF_TIN, 1);   // photo platform
-      box(0.1220, -1, 18.5, [3.0, 0.3, 5.0], STEEL);                // its deck
+      pad(0.1220, -1, 18.5, [3.0, 0.3, 5.0], STEEL, 0, 0.3);         // its deck
       for (let i = 0; i < 6; i++)                     // spare tyre stacks, mixed
         box(0.1055 + i * 0.0055, -1, 11.5, [1.8, 1.2, 1.8],
           i % 3 === 0 ? [0.86, 0.30, 0.16] : (i & 1 ? [0.14, 0.14, 0.15] : [0.84, 0.78, 0.22]));
@@ -304,9 +331,9 @@
       marshalPost(K(0.1172), 1, 9);
       billboard(K(0.126), 1, 9, 8, 3.0, [0.16, 0.32, 0.62]);
       for (let i = 0; i < 5; i++)
-        groundPatch(K(0.110 + i * 0.004), 1, 9, [7, 0.07, 7], i & 1 ? CLAY : CLAY_D);
+        pad(0.110 + i * 0.004, 1, 12.5, [7, 0.07, 7], i & 1 ? CLAY : CLAY_D, 0.09);
       for (let i = 0; i < 3; i++)                     // the spill fades outward
-        box(0.1105 + i * 0.0060, 1, 15.5, [6.0, 0.06, 6.0], i & 1 ? CLAY_L : CLAY);
+        pad(0.1105 + i * 0.0060, 1, 15.5, [6.0, 0.06, 6.0], i & 1 ? CLAY_L : CLAY, 0.06);
       hut(0.1140, 1, 14, ROOF_BLUE);
       sponsorHoarding(0.112, 0.130, 1, 12, { h: 1.3 });
       hedge(0.106, 0.134, 1, 19, 1.5, SCRUB);
@@ -338,7 +365,7 @@
       building(K(0.2280), 1, 15, 17, 5.5, 11,
         { col: [0.80, 0.82, 0.80], roof: CLUB_ROOF, floors: 1 });
       for (let i = 0; i < 4; i++)
-        place(K(0.2000 + i * 0.008), 1, 26, [22, 0.08, 20], APRON);
+        pad(0.2000 + i * 0.008, 1, 26, [22, 0.08, 20], APRON, 0);
       for (let i = 0; i < 5; i++) {                   // team hauler row
         const k = K(0.1955 + i * 0.0090);
         motorhome(k, 1, 24, 11.5, 3.4, 3.1, {});
@@ -353,7 +380,7 @@
       for (let i = 0; i < 8; i++)                     // club car park
         box(0.2230 + (i >> 1) * 0.0090, 1, (i & 1) ? 33 : 38.5,
           [4.3, 1.4, 1.9], CAR[(i * 3) % CAR.length]);
-      place(K(0.2260), 1, 36, [26, 0.07, 22], APRON_L);
+      pad(0.2260, 1, 36, [26, 0.07, 22], APRON_L, 0.03);
       sponsorHoarding(0.196, 0.222, 1, 12, { h: 1.5 });
       billboard(K(0.2330), 1, 12, 8, 3.0, [0.90, 0.56, 0.16]);
       hedge(0.190, 0.252, 1, 30, 1.7, SCRUB_L);
@@ -405,8 +432,7 @@
       //     bamboo band rather than a scatter of clumps. No ridge survives
       //     here at any width (see header) — the terraces do that job.
       tyreWall(0.322, 0.356, -1, 6, [0.86, 0.30, 0.16]);
-      clayCut(0.320, 0.358, -1, 10, 7.0, CLAY);
-      clayCut(0.322, 0.356, -1, 10, 3.2, CLAY_R);
+      clayCut(0.320, 0.358, -1, 10, 7.0, CLAY, CLAY_R);
       spectatorHill(0.324, 0.354, -1, 18, { h: 8.0, col: GRASS, steps: 3 });
       spectatorHill(0.322, 0.356, -1, 28, { h: 11.5, col: SOIL, steps: 2 });
       forestEdge(0.318, 0.360, -1, 38, { col: BAMBOO_D, h: 14, rows: 3 });
@@ -474,8 +500,7 @@
       //     above it, camera tower beside. A second open terrace next to the
       //     covered bank, a terraced cut below, and a bamboo crest behind.
       tyreWall(0.618, 0.650, -1, 5, [0.84, 0.78, 0.22]);
-      clayCut(0.614, 0.654, -1, 9, 6.0, CLAY);
-      clayCut(0.616, 0.652, -1, 9, 2.8, CLAY_R);
+      clayCut(0.614, 0.654, -1, 9, 6.0, CLAY, CLAY_R);
       grandstandEx(0.6322, -1, 20, 55, null, null);
       grandstandEx(0.6560, -1, 18, 34, null, null);
       spectatorHill(0.604, 0.616, -1, 18, { h: 6.5, col: GRASS_D, steps: 2 });
@@ -490,9 +515,9 @@
       hut(0.6280, 1, 14, ROOF_RED);
       billboard(K(0.6400), 1, 10, 8, 3.0, [0.94, 0.94, 0.90]);
       for (let i = 0; i < 5; i++)
-        place(K(0.6280 + i * 0.004), 1, 9, [7, 0.07, 7], i & 1 ? CLAY_D : CLAY);
+        pad(0.6280 + i * 0.004, 1, 9, [7, 0.07, 7], i & 1 ? CLAY_D : CLAY, 0.09);
       for (let i = 0; i < 3; i++)
-        box(0.6300 + i * 0.0055, 1, 15.5, [6.0, 0.06, 6.0], i & 1 ? CLAY_L : CLAY);
+        pad(0.6300 + i * 0.0055, 1, 15.5, [6.0, 0.06, 6.0], i & 1 ? CLAY_L : CLAY, 0.06);
       for (let i = 0; i < 5; i++)                     // tyre bundles on the cut
         box(0.6210 + i * 0.0060, -1, 11.5, [1.8, 1.2, 1.8],
           i & 1 ? [0.14, 0.14, 0.15] : [0.84, 0.78, 0.22]);

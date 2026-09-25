@@ -36,9 +36,10 @@
                        27 - i * 5, 23 - i * 5, 2.6, [0.82 - i * 0.06, 0.82 - i * 0.06, 0.86], 18, bv);
           }
           stage._mat = 0;
-          // proscenium back wall + big glowing LED video wall
+          // proscenium back wall + big glowing LED video wall (wall base 4 cm
+          // under the deck's, so the two undersides are not one plane)
           stage._mat = MAT.CONCRETE;
-          addBox(stage, vadd(vadd(origin, a.u, 11), a.r, -8), [2.2, 22, 30], [0.14, 0.14, 0.16], bv);
+          addBox(stage, vadd(vadd(origin, a.u, 10.96), a.r, -8), [2.2, 22, 30], [0.14, 0.14, 0.16], bv);
           stage._mat = 0;
           addBox(stage, vadd(vadd(origin, a.u, 11), a.r, -6.8), [0.6, 13, 22], [0.32, 0.56, 0.88], bv);
           // PA line-array towers flanking the stage
@@ -89,6 +90,32 @@
                  [11.6, 0.5, 150 / segs_ + 0.8], [0.30, 0.32, 0.37], mb);
         }
       }
+      // Wave-4 hero: Main Grandstand red/white fascia — COTA's start/finish identity
+      // (research: permanent Main Grandstand under Big Red's shadow).
+      {
+        const a = anchor(K(0.00), 1, 10);
+        if (!onTrack(a.c[0], a.c[2], 16)) {
+          const b = [a.r, a.u, a.t];
+          modelGroup("cota-main-grandstand", {
+            center: vadd(a.c, a.u, 10), size: [14, 22, 140], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.METAL;
+            // Red leading-edge fascia under the cantilever lip.
+            addBox(stage, vadd(vadd(a.c, a.r, -5.8), a.u, 14.5),
+              [0.4, 1.2, 130], redSteel, b);
+            // White stripe below — stars-and-stripes cue without literal flags.
+            addBox(stage, vadd(vadd(a.c, a.r, -5.8), a.u, 13.0),
+              [0.35, 0.7, 128], white, b);
+            // Dark steel nose panels breaking the long face.
+            stage._mat = MAT.CONCRETE;
+            for (const tOff of [-45, -15, 15, 45]) {
+              addBox(stage, vadd(vadd(a.c, a.t, tOff), a.u, 8),
+                [10, 12, 8], darkSteel, b);
+            }
+            stage._mat = 0;
+          }, { required: true });
+        }
+      }
       // Opposite paddock-side stand on the main straight (s≈0.00, L)
       grandstandEx(0.985, -1, 16, 90, null, null, { livery: "darkSteel", endWalls: true });
       // Final-corner stepped stand leading onto the main straight (s≈0.95, R)
@@ -113,7 +140,14 @@
       grandstandEx(0.83, 1, 16, 64, null, null,
         { livery: "sandstone", roof: "truss", suites: true, endWalls: true, h: 11 });
       // Extra deep main-straight upper tier behind the front stand (s≈0.02, R far)
-      grandstandEx(0.02, 1, 30, 130, null, null, { livery: "darkSteel", roof: "flat" });
+      // Three 43 m bays, not one 130 m shell at gap 30: grandstandEx seats its
+      // crowd bank on ONE node's ground, and past ~25 m the SRTM-baked straight
+      // (up to 10 m over the lap's low point) falls away toward the terrain
+      // skirt, so the long stand straddled that drop and buried 67 crowd prims
+      // up to 3.9 m deep (ground-audit). Each bay now stands on the shelf; the
+      // middle one is 6 m nearer (clear of the main stand, which ends at 0.0136).
+      for (const [off, gap] of [[-43.4, 22], [0, 16], [43.4, 22]])
+        grandstandEx(0.02 + mFrac(off), 1, gap, 43, null, null, { livery: "darkSteel", roof: "flat" });
 
       // long low pit garage block flanking the main straight
       building(K(0.97), -1, 12, 24, 8, 120, { kind: "hall", wall: [0.84, 0.84, 0.86], window: glass, floor: 2 });
@@ -133,6 +167,10 @@
       // ACROSS the circuit, so every one of them overlapped the road and was
       // culled: Big Red and the esses mounds have never rendered. (The tent
       // ridges at :331 swap deliberately for variety — they are 2.6 m, and stay.)
+      //
+      // Wave-4: wrap Big Red as one required modelGroup so the Turn 1 climb
+      // (research: 133 ft hill, packed red-soil banks + crowd terraces OUTSIDE
+      // the left-hander — tower stays at T16–18) is a named identity landmark.
       {
         const k1 = K(0.10);
         const a1 = anchor(k1, 1, 16);
@@ -145,6 +183,27 @@
         // Sunk 2 m further (same 6 m crest): the T1 hill falls away under its
         // outer edge, which the 0.416 scenery shift hid (float-audit 2.06 m).
         addPrism(out, vadd(a1R.c, a1R.u, 0.5), [16, 11, 48], redSoil, [a1R.r, a1R.u, a1R.t]);
+        // Wave-4 hero marker: red lattice crest posts — compact required group
+        // set well clear of the road (gap 48) so footprint never rejects.
+        const aM = anchor(k1, -1, 48);
+        if (!onTrack(aM.c[0], aM.c[2], 12)) {
+          const bm = [aM.r, aM.u, aM.t];
+          modelGroup("cota-turn1-big-red", {
+            center: vadd(aM.c, aM.u, 6), size: [12, 14, 44], basis: bm,
+          }, (stage) => {
+            stage._mat = MAT.METAL;
+            for (const tOff of [-16, -5, 5, 16]) {
+              const p = vadd(aM.c, aM.t, tOff);
+              addCyl(stage, p, 0.4, 10, redSteel, 5, bm);
+              addBox(stage, vadd(p, aM.u, 10.2), [2.8, 0.45, 0.45], white, bm);
+              addBox(stage, vadd(p, aM.u, 5.0), [1.2, 0.3, 1.2], redSteel, bm);
+            }
+            // Red soil apron pad under the posts.
+            stage._mat = MAT.CONCRETE;
+            addPrism(stage, vadd(aM.c, aM.u, 1.2), [10, 4, 40], redSoil, bm);
+            stage._mat = 0;
+          }, { required: true });
+        }
       }
 
       const ke = K(0.18);
@@ -154,7 +213,9 @@
       addPrism(out, vadd(me2.c, me2.u, 2), [34, 6, 64], scrub, [me2.r, me2.u, me2.t]);
 
       const ALU_FRAME = [0.70, 0.71, 0.75], ALU_PLANK = [0.78, 0.79, 0.82];
-      const t1Rake = { rows: 8, rise: 1.45, setback: 2.1, step: 10,
+      // rail:false — bleacher()'s crest rail sits 0.27 m over its back leg and
+      // only touches the top crowd row at rise <= ~0.8; at 1.45 it floated.
+      const t1Rake = { rows: 8, rise: 1.45, setback: 2.1, step: 10, rail: false,
                        frameCol: ALU_FRAME, plankCol: ALU_PLANK,
                        crowd: crowdCols, density: 0.62 };
       bleacher(...span(0.095, 110), -1, 40, t1Rake);
@@ -264,11 +325,13 @@
       const redFramework = (k, side, dist) => {
         const af = anchor(k, side, dist), fb = [af.r, af.u, af.t];
         if (onTrack(af.c[0], af.c[2], 24)) return;
+        // Wings sit 4 cm lower and one slat 4 cm higher: their undersides / the
+        // two slats' faces were coplanar with their neighbours' (ground-audit).
         addBox(out, vadd(af.c, af.u, 16),              [4, 32, 30], redSteel, fb);
-        addBox(out, vadd(vadd(af.c, af.t,  14), af.u,  9), [4, 18, 22], redSteel, fb);
-        addBox(out, vadd(vadd(af.c, af.t, -14), af.u,  9), [4, 18, 22], redSteel, fb);
+        addBox(out, vadd(vadd(af.c, af.t,  14), af.u, 8.96), [4, 18, 22], redSteel, fb);
+        addBox(out, vadd(vadd(af.c, af.t, -14), af.u, 8.96), [4, 18, 22], redSteel, fb);
         addBox(out, vadd(vadd(af.c, af.t,   7), af.u, 12), [6,  1, 18], white,    fb);
-        addBox(out, vadd(vadd(af.c, af.t,  -7), af.u, 12), [6,  1, 18], white,    fb);
+        addBox(out, vadd(vadd(af.c, af.t,  -7), af.u, 12.04), [6,  1, 18], white,    fb);
       };
       redFramework(K(0.65), 1, 46);
       redFramework(K(0.65), 1, 78);    // second red stand behind the first
@@ -502,7 +565,9 @@
           if (onTrack(pa.c[0], pa.c[2], 1)) continue;
           addCyl(out, pa.c, 0.18, 10, lampPost, 5, [pa.r, pa.u, pa.t]);
           addBox(out, vadd(pa.c, pa.u, 9.5), [0.14, 0.14, 2.8], lampPost, [pa.r, pa.u, pa.t]);
-          addBox(out, vadd(vadd(pa.c, pa.t, -side * 1.2), pa.u, 9.0),
+          // Head hangs FROM the arm (arm underside 9.43): at 9.0 its top sat
+          // 0.29 m below it, a lamp head floating free (ground-audit).
+          addBox(out, vadd(vadd(pa.c, pa.t, -side * 1.2), pa.u, 9.32),
                  [0.6, 0.28, 1.2], lampHead, [pa.r, pa.u, pa.t]);
         }
       });

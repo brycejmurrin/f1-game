@@ -26,7 +26,12 @@
         const g = Math.floor(i * 12 / OUTER_BAYS);       // original 12-bay index — keeps the banding
         // Slight overlap closes the chord gap between independently oriented
         // bays, so the oval reads as one stadium wall through the corners.
-        grandstandEx(s % 1, 1, 13, OUTER_BAY_LEN * 1.035, null, null, {
+        // Near s≈0 the closing-chord centerline remapped neonTower onto the
+        // crowdBank (+1 coplanar). Nudge those bays out by MIN_SEP (3 cm).
+        const s01 = ((s % 1) + 1) % 1;
+        const nearStart = s01 < 0.04 || s01 > 0.96;
+        const gap = 13 + (nearStart ? 0.03 : 0);
+        grandstandEx(s01, 1, gap, OUTER_BAY_LEN * 1.035, null, null, {
           livery: g % 3 === 0 ? "alu" : (g % 3 === 1 ? "concrete" : "darkSteel"),
           tiers: 3, roof: g % 4 === 0 ? "cantilever" : null,
           endWalls: false, pylons: g % 4 === 0,
@@ -65,7 +70,11 @@
             const w = 17 - t * 2.2, d = 21 - t * 2.6;
             const y = 12 + t * 6.85;
             // Each storey steps inward beneath a shallow blue-glass band.
-            addBox(stage, vadd(a.c, a.u, y), [w - 1.2, 5.4, d - 1.2],
+            // Storey rises to the eave's underside (y + 3.15) from the eave
+            // below's top (y - 2.8): at 5.4 m centred on y each eave hung
+            // 0.45 m over its storey and the tower above rested on nothing
+            // (ground-audit unsupported, 14 prims).
+            addBox(stage, vadd(a.c, a.u, y + 0.175), [w - 1.2, 5.95, d - 1.2],
               [0.76, 0.77, 0.79], b);
             addBox(stage, vadd(vadd(a.c, a.r, w * 0.48), a.u, y + 0.2),
               [0.45, 2.2, d - 2.0], [0.26, 0.39, 0.52], b);
@@ -211,7 +220,7 @@
         crowd: [[0.30, 0.42, 0.66], [0.86, 0.86, 0.84], [0.72, 0.20, 0.18]],
       });
       scaffoldStand(0.512, 0.528, 1, 22, {
-        rows: 6, step: 9, density: 0.40,
+        rows: 6, step: 9, density: 0.40, legEvery: 1,   // every bay on its own legs: bays do not touch
         bench: [[0.30, 0.42, 0.66], [0.82, 0.80, 0.76]],
         crowd: [[0.86, 0.86, 0.84], [0.30, 0.42, 0.66], [0.72, 0.20, 0.18]],
       });
@@ -227,11 +236,13 @@
       ]) {
         groundPatch(K(s), side, gap, [26, 0.16, 30], [0.30, 0.52, 0.22],
           { id: `indy-green-${id}`, samples: 8 });
-        groundPatch(K(s), side, gap + 17, [11, 0.14, 14], [0.84, 0.79, 0.62],
+        // Bunker beside the green, not draped over it: overlapping patches
+        // sit one 2 cm lift slot apart (ground-audit flatCoplanar).
+        groundPatch(K(s), side, gap + 26.5, [11, 0.14, 14], [0.84, 0.79, 0.62],
           { id: `indy-bunker-${id}`, samples: 6 });
         const a = anchor(K(s), side, gap + 4);
         const b = [a.r, a.u, a.t];
-        addCyl(out, vadd(a.c, a.u, 1.1), 0.05, 2.4, [0.94, 0.94, 0.92], 4, b);
+        addCyl(out, vadd(a.c, a.u, -0.1), 0.05, 3.6, [0.94, 0.94, 0.92], 4, b);   // pin from grade (base at 1.1 hovered)
         addBox(out, vadd(vadd(a.c, a.u, 2.0), a.t, 0.5), [0.06, 0.5, 0.9],
           [0.90, 0.16, 0.14], b);
       }

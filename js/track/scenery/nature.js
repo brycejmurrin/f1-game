@@ -101,7 +101,7 @@ const SceneryNature = (function () {
     // apart — the separation has to be a property of the emitter, not luck.
     // Call order inside a circuit file is deterministic and layered calls are
     // always adjacent, so consecutive slots is exactly the guarantee needed.
-    let hillSeq = 0;
+    let hillSeq = 0, standSeq = 0;
     const spotTaken = (x, z) => {
       const cx = Math.floor(x / TREE_GAP), cz = Math.floor(z / TREE_GAP);
       for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
@@ -113,6 +113,23 @@ const SceneryNature = (function () {
       if (!planted.has(key)) planted.set(key, []);
       planted.get(key).push([x, z]);
       return false;
+    };
+    // Placed pines' tier-cone facet planes [nx, ny, nz, d], bucketed on a
+    // 10 m grid, for pine()'s coplanar guard.
+    const PINE_CELL = 10, pineFacetGrid = new Map();
+    const pineFacetsNear = (x, z, reach) => {
+      const res = [], cx = Math.floor(x / PINE_CELL), cz = Math.floor(z / PINE_CELL);
+      for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+        const cell = pineFacetGrid.get(`${cx + i}|${cz + j}`);
+        if (cell) for (const q of cell)
+          if (Math.hypot(q.x - x, q.z - z) < q.reach + reach) res.push(q.facets);
+      }
+      return res;
+    };
+    const pineFacetsAdd = (x, z, reach, facets) => {
+      const key = `${Math.floor(x / PINE_CELL)}|${Math.floor(z / PINE_CELL)}`;
+      if (!pineFacetGrid.has(key)) pineFacetGrid.set(key, []);
+      pineFacetGrid.get(key).push({ x, z, reach, facets });
     };
     const pine = (k, side, dist, h, col, opts) => {
       opts = opts || {};
@@ -143,6 +160,52 @@ const SceneryNature = (function () {
       const s = h / PINE_REF_H;
       const o = [a.c[0] - a.u[0] * 0.5, a.c[1] - a.u[1] * 0.5, a.c[2] - a.u[2] * 0.5];
       const r = side < 0 ? [-a.r[0], -a.r[1], -a.r[2]] : a.r;
+      // COPLANAR GUARD. Pines on neighbouring nodes share (nearly) one basis,
+      // so two trees' same-aspect tier cones have PARALLEL side facets
+      // (|n.y| ~0.57, inside ground-audit's flat check), and in a dense belt
+      // some pair lands within 2 cm of one plane by chance (nurburgring
+      // forestEdge, 5 spots). Every side facet passes through its cone's
+      // apex, so the plane offset is n . apex: sink this tree by the first
+      // SEP slot that keeps each of its facets >= MIN_SEP off every parallel
+      // facet of an overlapping neighbour. Nothing moves sideways (a yaw
+      // fixed it but swung leans and 7-gon corners into other props: +9
+      // clip-audit severe spots); a few cm more trunk embed is invisible.
+      const facets = [];
+      {
+        const H = PINE_REF_H, w0 = (sparse ? 2.3 : 2.7) * jQ, dy = H * (sparse ? 0.24 : 0.18) * jQ;
+        const W = (m) => [o[0] + s * (r[0] * m[0] + a.u[0] * m[1] + a.t[0] * m[2]),
+                          o[1] + s * (r[1] * m[0] + a.u[1] * m[1] + a.t[1] * m[2]),
+                          o[2] + s * (r[2] * m[0] + a.u[2] * m[1] + a.t[2] * m[2])];
+        let y = H * 0.3 + 0.5;
+        for (let i = 0; i < tiers; i++, y += dy) {
+          const w = w0 * (1 - i * (sparse ? 0.24 : 0.21)), lx = leanQ ? leanQ * (y / H) * 1.6 : 0;
+          const ap = W([lx, y + H * 0.32, 0]);
+          for (let f = 0; f < 7; f++) {
+            const a0 = f / 7 * 6.2832, a1 = (f + 1) / 7 * 6.2832;
+            const p0 = W([lx + Math.cos(a0) * w, y, Math.sin(a0) * w]);
+            const p1 = W([lx + Math.cos(a1) * w, y, Math.sin(a1) * w]);
+            const e1 = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]], e2 = [ap[0] - p0[0], ap[1] - p0[1], ap[2] - p0[2]];
+            const n = norm([e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]]);
+            facets.push([n[0], n[1], n[2], n[0] * ap[0] + n[1] * ap[1] + n[2] * ap[2]]);
+          }
+        }
+      }
+      const reach = ((sparse ? 2.3 : 2.7) * jQ + leanQ * 1.6) * s;
+      const near = pineFacetsNear(a.c[0], a.c[2], reach);
+      let dz = 0;
+      if (near.length) {
+        const clash = (d) => {
+          for (const q of near) for (const F of facets) for (const G of q) {
+            if (Math.abs(F[0] * G[0] + F[1] * G[1] + F[2] * G[2]) < 0.999) continue;
+            const dF = F[3] - d * F[1], sgn = F[0] * G[0] + F[1] * G[1] + F[2] * G[2] > 0 ? 1 : -1;
+            if (Math.abs(dF - sgn * G[3]) < TrackGeom.MIN_SEP) return true;
+          }
+          return false;
+        };
+        for (let i = 0; clash(dz) && i < 12; i++) dz = TrackGeom.SEP_SLOTS[i % 4] + Math.floor(i / 4) * 0.2;
+      }
+      if (dz) { o[1] -= dz; for (const F of facets) F[3] -= dz * F[1]; }
+      pineFacetsAdd(a.c[0], a.c[2], reach, facets);
       ctx.instance(
         `pine|${sparse ? 1 : 0}|${tiers}|${leanQ}|${jQ}`,
         { o, r, u: a.u, t: a.t, s: [s, s, s], col },
@@ -208,10 +271,31 @@ const SceneryNature = (function () {
         const usCol = [col[0] * 0.5, col[1] * 0.52, col[2] * 0.5];
         const uref = vadd(a.c, a.u, h * 0.7);
         const apex = vadd(a.c, a.u, apexY);
+        const ring = (ang) => vadd(vadd(vadd(a.c, a.u, ringY), a.r, Math.cos(ang) * usR), a.t, Math.sin(ang) * usR);
+        // A wedge whose whole rim is under the terrain is hidden: the trunk is
+        // seated at ONE point, and a tree at the foot of a cutting or bank has
+        // ground rising metres above its 5-6 m wide skirt (ground-audit: 219
+        // such wedges up to 15 m deep on cota/interlagos/kyalami/suzuka…).
+        // Drop those wedges instead of emitting buried triangles. A wedge is
+        // hidden when its TOP (the corners within 2 cm of its highest, and their
+        // centroid) is under the terrain; a tilted `u` can leave one rim corner
+        // alone at the top, so the rim is not assumed level.
+        const hidden = (tri) => {
+          const top = Math.max(tri[0][1], tri[1][1], tri[2][1]) - 0.02;
+          let sx = 0, sy = 0, sz = 0, m = 0, seen = 0;
+          const under = (x, y, z) => { const ty = terrainYAt(x, z); if (ty === null) return true; seen++; return ty > y; };
+          for (const p of tri) {
+            if (p[1] < top) continue;
+            if (!under(p[0], p[1], p[2])) return false;
+            sx += p[0]; sy += p[1]; sz += p[2]; m++;
+          }
+          return under(sx / m, sy / m, sz / m) && seen > 0;
+        };
         for (let i = 0; i < 9; i++) {
           const a0 = i / 9 * 6.2832, a1 = (i + 1) / 9 * 6.2832;
-          const ring = (ang) => vadd(vadd(vadd(a.c, a.u, ringY), a.r, Math.cos(ang) * usR), a.t, Math.sin(ang) * usR);
-          emit(out, [ring(a0), ring(a1), apex], usCol, uref);
+          const tri = [ring(a0), ring(a1), apex];
+          if (hidden(tri)) continue;
+          emit(out, tri, usCol, uref);
         }
       }
       if (crown === "vase") {
@@ -248,11 +332,13 @@ const SceneryNature = (function () {
       const lean = (hash(k * 3.3 + side * 2.1 + dist) - 0.5) * 0.5;
       const seg = h / 3;
       out._mat = MAT.WOOD;
-      // buried root stub: keeps the slim trunk grounded on sloped/uneven terrain
-      addCyl(out, vadd(a.c, a.u, -0.6), 0.38, 0.75, [0.42, 0.34, 0.21], 6, b);
+      // The first trunk segment starts 0.6 m BELOW the anchor, which keeps the
+      // slim trunk grounded on sloped/uneven terrain. (This used to be a
+      // separate 0.75 m root stub whose top sat 0.15 m under the ground at
+      // every palm — ground-audit: 2760 invisible prims across 10 circuits.)
       const joint = (t) => vadd(vadd(a.c, a.u, t * seg), a.r, lean * t * t * 0.4 * side);
       for (let t = 0; t < 3; t++) {
-        const p0 = joint(t), p1 = joint(t + 1);
+        const p0 = t ? joint(t) : vadd(a.c, a.u, -0.6), p1 = joint(t + 1);
         const d = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]];
         const L = Math.hypot(d[0], d[1], d[2]) || seg;
         addCyl(out, p0, 0.34 - t * 0.06, L, [0.45 - t * 0.03, 0.36, 0.22], 6,
@@ -382,25 +468,43 @@ const SceneryNature = (function () {
       const bark = opts.barkCol || [0.34, 0.26, 0.18];
       const layers = Math.max(1, Math.min(3, Math.round(opts.layers || 2)));
       const c2 = [col[0] * 0.82, col[1] * 0.86, col[2] * 0.80];
-      out._mat = MAT.WOOD;
-      if (addCyl(out, vadd(a.c, a.u, -0.5), 0.28, h * 0.62 + 0.5, bark, 5, b) === false) return;   // no trunk, no crown (the pit complex keeps footings out)
-      // Crown layer i is centred here. Its rise off the trunk is capped in
-      // METRES, not held at a fraction of h: at h*0.14 per layer a 12 m tree
-      // (the top of the 6 + hash*6 range) opened a 0.88 m step between slabs,
-      // past the 0.6 m the grounding audit will bridge, so the canopy of every
-      // TALL acacia read as floating clear of the tree carrying it — 22 of
-      // cota's clusters and 6 of kyalami's, all crown slabs, never the trunk.
+      // ONE CONNECTED STACK: trunk -> fork -> slab 0 -> slab 1 … each part
+      // starts where the one below ends. The old fixed fractions (fork at
+      // h*0.68, slabs h*0.14 / 1 m apart) left a 0.2-0.6 m air gap at every
+      // joint of a tall tree, so the crown hung detached from the tree
+      // carrying it (ground-audit: 215 prims on cota/kyalami). The slab TOPS
+      // stay where they were (they are what reads from above, and what the
+      // flat-coplanar audit compares); the parts under them grow DOWN:
+      //   - an upper slab's underside reaches 2 cm into the slab below it;
+      //   - the fork rises until its top meets slab 0's underside;
+      //   - the trunk rises until it meets the fork;
+      // each only across a real gap (> JOINT): a closed joint is untouched.
+      // Crown layer i's TOP is at layerY(i) + thick(i)/2. Its rise off the
+      // trunk is capped in METRES, not held at a fraction of h (a 12 m tree at
+      // h*0.14 per layer opened a 0.88 m step between slabs).
       const layerY = (i) => h * 0.80 + i * Math.min(h * 0.14, 1.0);
+      const thick = (i) => i === 0 ? Math.max(0.9, 2 * (h * 0.12 - 0.90)) : 0.9 - i * 0.2;
+      // A joint already closed to within JOINT (under the 0.15 m a grounding
+      // audit bridges) keeps its old geometry: moving faces that were fine
+      // only risks new coplanar coincidences with neighbouring trees.
+      const JOINT = 0.14;
+      const close = (lo, hi) => hi - lo <= JOINT ? lo : hi;   // `lo` rises to `hi` only across a real gap
+      const forkY = close(h * 0.68 + 0.35, layerY(0) - thick(0) / 2) - 0.35;   // fork top meets slab 0
+      const trunkTop = close(h * 0.62, forkY - 0.35);                         // trunk meets the fork
+      out._mat = MAT.WOOD;
+      if (addCyl(out, vadd(a.c, a.u, -0.5), 0.28, trunkTop + 0.5, bark, 5, b) === false) return;   // no trunk, no crown (the pit complex keeps footings out)
       for (const dr of [-1, 1])                                    // the low fork
-        addBox(out, vadd(vadd(a.c, a.u, h * 0.68), a.r, dr * spread * 0.22),
+        addBox(out, vadd(vadd(a.c, a.u, forkY), a.r, dr * spread * 0.22),
                [spread * 0.44, 0.7, 0.22], bark, b);
       out._mat = MAT.FOLIAGE;
       // Flat slabs, not cones: the crown's top and bottom are both near-planar.
       for (let i = 0; i < layers; i++) {
         const f = 1 - i * 0.4;
-        const t = i === 0 ? Math.max(0.9, 2 * (h * 0.12 - 0.90)) : 0.9 - i * 0.2;
-        addBox(out, vadd(a.c, a.u, layerY(i)),
-               [spread * f, t, spread * f], i % 2 ? c2 : col, b);
+        const top = layerY(i) + thick(i) / 2;
+        const bot0 = layerY(i) - thick(i) / 2, below = i ? layerY(i - 1) + thick(i - 1) / 2 : bot0;
+        const bot = bot0 - below <= JOINT ? bot0 : below - 0.02;
+        addBox(out, vadd(a.c, a.u, (top + bot) / 2),
+               [spread * f, top - bot, spread * f], i % 2 ? c2 : col, b);
       }
       out._mat = 0;
     };
@@ -589,44 +693,107 @@ const SceneryNature = (function () {
       }
       ctx.note("grandstand", [px[k] + r[0] * oInner, groundYAt(k, gap) + 6, pz[k] + r[2] * oInner],
                [10, 12, len], { k, side });
-      // Back shell — BEHIND the rake, gap+6 .. gap+12.5 beyond the road edge.
-      // The crowd bank below runs from gap+1.5 back 4.2 m (+ half a 1.3 m
-      // riser): its last row's back edge is at gap+5.93. The shell used to be
-      // 10 m deep from gap+2.5, so it swallowed four of the five seating rows
-      // — the stand read as a wall with one row of heads in front, and 10 %
-      // of all prop triangles were crowd nobody could see (P2,
+      // Per-call MIN_SEP slot, as spectatorHill's hillSeq: circuits lay stands
+      // end to end (fuji's run() of 150 m walls) and over each other, and on a
+      // curve two shells' faces landed 1.3 mm apart. Geometry only, and only
+      // OUTWARD — the barrier, solid index and on-track test above keep `gap`.
+      // Alternate 0 / MIN_SEP: consecutive stands differ by MIN_SEP and every
+      // other stand is where it was. Measured 2026-09-24 against the 4-slot
+      // TrackGeom.SEP_SLOTS nudge: fleet coplanar spots 259 vs 263 (a 3.5-16.5
+      // cm shift lands shells on city facades — mexico +10 pairs).
+      gap += (standSeq++ & 1) * TrackGeom.MIN_SEP;
+      // Back shell + upper tiers. The crowd bank below runs from gap+1.5 back
+      // 4.2 m (+ half a 1.3 m riser): its last row's back edge is at gap+5.93,
+      // so the single-tier shell sits BEHIND it, gap+6 .. gap+12.5 (it used to
+      // be 10 m deep from gap+2.5 and swallowed four of five rows — P2,
       // docs/notes/SCENERY-QA-PLAN.md). Same back face, same footprint.
-      const SHELL_IN = 6, SHELL_OUT = 12.5, shellD = SHELL_OUT - SHELL_IN, shellMid = (SHELL_IN + SHELL_OUT) / 2;
-      const oShell = side * (hw[k] + gap + shellMid);
-      const cShell = [px[k] + r[0] * oShell, groundYAt(k, gap + shellMid) + shellH / 2 - 0.8, pz[k] + r[2] * oShell];
-      addBox(out, cShell, [shellD, shellH, len], shell || [0.40, 0.41, 0.46], [r, u, t]);
+      //
+      // A MULTI-TIER stand stacks each upper rake 4.6 m further back and 7.6 m
+      // up, which puts tier 1 (gap+5.87 .. gap+10.53, from lift-0.05 up)
+      // straight over that shell: a full-height shell (top ~11.2 m, 16.7 m on
+      // fuji's 17.5 m walls) swallowed the upper tier's lower rows, and the
+      // 5.2 m concourse band (gap+3.5 .. 8.7, 5.8-7.6 m up) enclosed the ground
+      // tier's top two rows (2026-09-24, measured as enclosed FABRIC triangles
+      // fleet-wide). So the shell is STEPPED: under each built upper rake it is
+      // a section capped just below that rake's lowest riser, and only behind
+      // the last rake does it run to full height. The concourse band is a
+      // fascia stripe on the section's face, MIN_SEP clear of the rake in front
+      // of it and of the section behind it. Footprint and indexSolid are
+      // unchanged; no crowd row of the stand is inside any of these boxes.
+      const SHELL_IN = 6, SHELL_OUT = 12.5, SEP = TrackGeom.MIN_SEP;
+      const BANK_AT = 1.5, BANK_RISE = 7, BANK_DEPTH = 4.2, TIER_BACK = 4.6, TIER_LIFT = 7.6;
+      const bankRows = Math.max(3, Math.round(BANK_RISE / 1.4));   // crowdBank's own row count
+      // Back face of tier i's rake (last riser: row centre + half its 1.3 m
+      // depth), and a rake's floor above its anchor (row 0's riser bottom).
+      const rakeBack = (i) => BANK_AT + TIER_BACK * i + BANK_DEPTH * (bankRows - 0.5) / bankRows + 0.65;
+      const rakeFloor = (lift) => lift + BANK_RISE * 0.5 / bankRows - 0.75;
+      const shellCol = shell || [0.40, 0.41, 0.46];
+      const dotU = (p) => p[0] * u[0] + p[1] * u[1] + p[2] * u[2];
+      // One shell section from lateral a..b (metres past the road edge): full
+      // height, or capped at the u-coordinate capU just below a rake.
+      const shellSection = (a, b, capU) => {
+        if (b - a < 0.3) return null;
+        const mid = (a + b) / 2, o = side * (hw[k] + gap + mid);
+        const base = [px[k] + r[0] * o, groundYAt(k, gap + mid) - 0.8, pz[k] + r[2] * o];
+        if (capU == null) {
+          const c = [base[0], base[1] + shellH / 2, base[2]];
+          addBox(out, c, [b - a, shellH, len], shellCol, [r, u, t]);
+          return { top: c[1] + shellH / 2 };
+        }
+        const h = Math.min(shellH, capU - dotU(base));
+        if (h < 1) return null;
+        const c = vadd(base, u, h / 2);
+        addBox(out, c, [b - a, h, len], shellCol, [r, u, t]);
+        return { top: c[1] + h / 2 };
+      };
       const riserTint = crowd ? [crowd[0] * 0.4, crowd[1] * 0.4, crowd[2] * 0.4] : null;
-      crowdBank(k, side, gap + 1.5, len - 2, 7, 4.2, riserTint);
+      crowdBank(k, side, gap + BANK_AT, len - 2, BANK_RISE, BANK_DEPTH, riserTint);
       const tierLift = [];
+      let prevBack = rakeBack(0), shellFront = SHELL_IN;
       for (let ti = 1; ti < tiers; ti++) {
-        const lift = 7.6 * ti, back = 4.6 * ti, tl = len - 2 - ti * 4;
+        const lift = TIER_LIFT * ti, back = TIER_BACK * ti, tl = len - 2 - ti * 4;
         if (tl < 8) break;
-        const ca = anchor(k, side, gap + 1.5 + back);
+        const ca = anchor(k, side, gap + BANK_AT + back);
         const cb = [ca.r, ca.u, ca.t];
-        // concourse band under the deck — hides the gap between the rakes
-        const bandC = vadd(ca.c, ca.u, lift - 0.9);
-        if (!rejBox(bandC, [5.2, 1.8, tl], cb)) {
-          addBox(out, bandC, [5.2, 1.8, tl], fasciaCol, cb);
-          crowdBank(k, side, gap + 1.5 + back, tl, 7, 4.2, riserTint, lift);
+        // Concourse fascia stripe under the deck: 0.5 m deep, its face SEP
+        // behind the rake in front, its top 5 cm under the section's.
+        const capU = dotU(ca.c) + rakeFloor(lift) - 0.1;
+        const bandA = prevBack + SEP, bandO = side * (hw[k] + gap + bandA + 0.25);
+        const bandBase = [px[k] + r[0] * bandO, 0, pz[k] + r[2] * bandO];
+        const bandC = vadd(bandBase, u, capU - 0.05 - 0.9 - dotU(bandBase));
+        if (!rejBox(bandC, [0.5, 1.8, tl], cb)) {
+          addBox(out, bandC, [0.5, 1.8, tl], fasciaCol, cb);
+          crowdBank(k, side, gap + BANK_AT + back, tl, BANK_RISE, BANK_DEPTH, riserTint, lift);
+          // The shell under this rake, capped below its floor, 1.5 SEP behind
+          // the stripe's face so the two front faces never share a plane.
+          shellSection(Math.max(shellFront, bandA + 1.5 * SEP), Math.min(SHELL_OUT, rakeBack(ti)), capU);
+          prevBack = rakeBack(ti);
+          shellFront = prevBack + 2.5 * SEP;
           // Only a tier that actually BUILT raises the roof — a culled tier
           // used to lift the slab a full rake above the surviving stand.
           tierLift.push(lift);
         }
       }
+      // Full height behind the last rake (the whole shell of a one-tier stand).
+      const fullShell = shellSection(shellFront, SHELL_OUT, null);
       const topLift = tierLift.length ? tierLift[tierLift.length - 1] : 0;
       // Roof slab cantilevered over the crowd, lifted on the up axis
       const a = anchor(k, side, gap + 5);
       const roofY = 13 + topLift;
       const roofC = vadd(a.c, a.u, roofY);
       const roofW = roofKind === "truss" ? 12 : (roofKind === "flat" ? 10 : 12);
+      // The rear fascia's lateral span (see below) and how far the slab must
+      // reach back to sit on it: a three-tier stand's last rake ends at
+      // gap+15.13, past a 12 m slab's back edge (gap+11), so a fascia behind
+      // it would leave the slab floating (indianapolis). The slab grows back
+      // to cover it; one- and two-tier cantilevers are unchanged (<= 1.5 cm).
+      let f0 = 5 + roofW / 2 - 4.08, f1 = f0 + 4;
+      if (tierLift.length) { f0 = Math.max(f0, shellFront + SEP); f1 = Math.max(f1, f0 + 0.3); }
+      const roofExt = Math.max(0, f1 + 0.08 - (5 + roofW / 2));
+      const slabC = vadd(roofC, a.r, side * roofExt / 2);
       if (roofKind !== "none") {
         if (roofKind === "truss") {
-          addBox(out, roofC, [12, 0.35, len + 2], roofCol, [a.r, a.u, a.t]);
+          addBox(out, slabC, [12 + roofExt, 0.35, len + 2], roofCol, [a.r, a.u, a.t]);
           const bays = Math.max(2, Math.min(14, Math.round(len / 9)));
           for (let i = 0; i < bays; i++) {
             const off = ((i + 0.5) / bays - 0.5) * len;
@@ -635,7 +802,7 @@ const SceneryNature = (function () {
         } else {
           // "flat" sits tight over the shell; "cantilever" (default) overhangs.
           const rw = roofKind === "flat" ? 10 : 12;
-          addBox(out, roofC, [rw, 0.8, len + 2], roofCol, [a.r, a.u, a.t]);
+          addBox(out, slabC, [rw + roofExt, 0.8, len + 2], roofCol, [a.r, a.u, a.t]);
         }
         // Support columns under the roof's outer (trackside) edge.
         //
@@ -697,12 +864,18 @@ const SceneryNature = (function () {
       // ACTUAL world-space tops instead of a constant. Placed at the roof's
       // outer edge (over the shell, behind the crowd) so it never occludes the
       // under-roof night strip, and is itself hidden by the roof from trackside.
+      // On a multi-tier stand the fascia starts behind the LAST rake (one SEP
+      // behind the full-height shell's face) — at the roof's edge it stood
+      // over the upper tier and enclosed its rows. At least 0.3 m deep; the
+      // slab above was widened to reach it (f0/f1, roofExt). Past the shell's
+      // back face (three tiers) it stands on the ground.
       if (roofKind !== "none") {
-        const shellTop = cShell[1] + shellH / 2, roofUnder = roofC[1] - 0.4;
+        const fm = (f0 + f1) / 2, oF = side * (hw[k] + gap + fm);
+        const shellTop = fullShell && f1 <= SHELL_OUT ? fullShell.top : groundYAt(k, gap + fm) - 0.8;
+        const roofUnder = roofC[1] - 0.4;
         if (roofUnder > shellTop - 0.1) {
-          const oF = side * (hw[k] + gap + 5 + roofW / 2 - 0.08 - 2);
           addBox(out, [px[k] + r[0] * oF, (shellTop + roofUnder) / 2, pz[k] + r[2] * oF],
-                 [4, roofUnder - shellTop + 0.2, len], fasciaCol, [r, u, t]);
+                 [f1 - f0, roofUnder - shellTop + 0.2, len], fasciaCol, [r, u, t]);
         }
       }
       if (NIGHT && roofKind !== "none")
@@ -754,8 +927,18 @@ const SceneryNature = (function () {
       const sShift = 0.007 + ((slot * 2) % 5) * SEP;
       const rows = Math.max(2, Math.min(8, Math.round(opts.rows || 4)));
       const rise = opts.rise != null ? opts.rise : 1.15;      // per-row height gain
+      // `opts.h` (total bank height, passed by donington / mosport / okayama)
+      // is deliberately NOT honoured. Measured 2026-09-25 with rise = h / rows:
+      // clip-audit severe donington 20 -> 22, okayama 57 -> 60; coplanar
+      // donington 2 -> 3 spots; ground-audit flatCoplanar donington 23 -> 24,
+      // mosport 6 -> 7 — the taller banks push into the trees and terraces laid
+      // around the default ladder. Those call sites keep `h` as a record of the
+      // intended height; honouring it needs those circuits re-dressed first.
+      // (okayama's `steps` is likewise unread — `rows` is the knob.)
       const depth = opts.depth != null ? opts.depth : 2.0;    // per-row setback
-      const grass = opts.grass || [0.26, 0.42, 0.20];
+      // `col` is the older name some circuits pass for the tread colour
+      // (donington, mosport, okayama): honoured when `grass` is absent.
+      const grass = opts.grass || opts.col || [0.26, 0.42, 0.20];
       const riser = opts.riser || [0.30, 0.30, 0.28];
       const dens = opts.density != null ? Math.max(0.05, Math.min(1, opts.density)) : 0.65;
       const step = opts.step || 5;
@@ -827,7 +1010,10 @@ const SceneryNature = (function () {
       ctx.along(s0, s1, 4, (k, spacing) => {
         if (blocked.has(k)) return;
         const p = anchor(k, side, gap);
-        if (onTrack(p.c[0], p.c[2], 1.2)) {
+        // 5 m, not 1.2: a field hedge that the lap brings within a few metres of
+        // ANOTHER stretch of road sits over that road's terrain dip, grounded on
+        // its own node's height — magny_cours 0.405 hung 2.7 m in the air.
+        if (onTrack(p.c[0], p.c[2], 5)) {
           ctx.noteSuppressed("hedge", `hedge SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
           return;
         }

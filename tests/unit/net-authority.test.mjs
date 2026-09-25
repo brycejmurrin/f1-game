@@ -32,8 +32,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLogGlobal } from "../helpers/seed-log.mjs";
+import { fnSource } from "../helpers/fn-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 seedLogGlobal();
@@ -47,6 +49,29 @@ const NetSession = eval(src("js/net/session.js") + ";NetSession");
 globalThis.NetSnapshot = NetSnapshot;
 globalThis.NetSession = NetSession;
 const NetPlay = eval(src("js/net/netplay.js") + ";NetPlay");
+
+test("a host RESULT must be a bijection before its timing mutates any guest car", () => {
+  const netOrderSource = fnSource(src("js/game.js"), "function netOrder(order)");
+  const classify = (verdict) => {
+    const cars = [{ driverId: "a", finishT: 10 }, { driverId: "b", finishT: 20 }, { driverId: "c", finishT: 30 }];
+    const netPlay = { active: () => true, ownsClassification: () => false, peerResult: () => verdict };
+    const context = vm.createContext({ cars, netPlay, Map, Set, Number, Array });
+    vm.runInContext(netOrderSource, context);
+    return { cars, order: Array.from(vm.runInContext("netOrder(cars.slice())", context), (c) => c.driverId) };
+  };
+  for (const verdict of [
+    [{ d: "a", t: 111 }, { d: "a", t: 222 }, { d: "b", t: 333 }],
+    [{ d: "a", t: 111 }, { d: "b", t: 222 }, { d: "unknown", t: 333 }],
+    [{ d: "a", t: 111 }, { d: "b", t: 222 }, { d: "c", t: "bad" }],
+  ]) {
+    const { cars, order } = classify(verdict);
+    assert.deepEqual(order, ["a", "b", "c"]);
+    assert.deepEqual(cars.map((c) => c.finishT), [10, 20, 30]);
+  }
+  const accepted = classify([{ d: "c", t: 31 }, { d: "a", t: 11 }, { d: "b", t: 21 }]);
+  assert.deepEqual(accepted.order, ["c", "a", "b"]);
+  assert.deepEqual(accepted.cars.map((c) => c.finishT), [11, 21, 31]);
+});
 
 /** A session NetPlay can bind to, with a hand-fed inbound event channel. */
 function fakeSession() {
@@ -210,9 +235,16 @@ test("a HOST ignores a RESULT arriving from a guest", () => {
 
 test("a GUEST obeys a RESULT from the host", () => {
   const { net, s } = started("guest");
-  const rows = { rows: [{ pos: 1, name: "host order" }] };
+  const rows = [{ d: "drv1", t: 10, p: 0 }, { d: "drv0", t: 11, p: 0 }];
   s.deliver("result", rows);
   assert.deepEqual(net.peerResult(), rows);
+});
+
+test("a malformed host RESULT does not end the guest's classification wait", () => {
+  const { net, s } = started("guest");
+  s.deliver("result", [{ d: "drv0" }, { d: "drv0" }]);
+  assert.equal(net.peerResult(), null);
+  assert.equal(net.awaitingResult(1000), true);
 });
 
 test("the per-peer events a host DOES own are still accepted from a guest", () => {
@@ -266,6 +298,22 @@ test("a GUEST accepts the host's QUALI for any driver", () => {
   const { G, s } = started("guest");
   s.deliver("quali", { driverId: "anyone-at-all", t: 60.5 });
   assert.deepEqual(G.caughtQuali, [{ driverId: "anyone-at-all", t: 60.5 }]);
+});
+
+test("lobby relay hook sees only sender-bound, normalized qualifying events", () => {
+  const s = fakeSession();
+  const accepted = [];
+  const G = { onPeerQuali() {}, onPeerQualiLive() {} };
+  NetPlay.bindQuali(s, (d) => d.driverId === "bravo:1", G,
+    (type, d) => accepted.push({ type, driverId: d.driverId, t: d.t }));
+  s.deliver("quali", { driverId: "alpha:0", t: 71 });
+  s.deliver("quali", { driverId: "bravo:1", t: "71" });
+  s.deliver("quali", { driverId: "bravo:1", t: 9000 });
+  s.deliver("qlive", { driverId: "bravo:1", t: 10.5, frac: 0.3 });
+  assert.deepEqual(accepted, [
+    { type: "quali", driverId: "bravo:1", t: 71 },
+    { type: "qlive", driverId: "bravo:1", t: 10.5 },
+  ]);
 });
 
 // ---- QUALI t is COERCED and BOUNDED at one site (NetPlay.validQuali) -------
@@ -389,6 +437,13 @@ globalThis.Teams = {
   ],
 };
 globalThis.Tracks = { LIST: Array.from({ length: 6 }, (_, i) => ({ id: "track-" + i })) };
+// LobbyCodes peels paste/share/scan/QR from lobby; ApexClipboard is its write/read
+// home. Both must be eval'd before lobby.js — LOBBY-phase create() calls
+// LobbyCodes.create immediately (CI Pure-node fast went red without them).
+globalThis.ApexClipboard = eval(src("js/core/clipboard.js") + ";ApexClipboard");
+globalThis.NetQr = globalThis.NetQr || { draw: () => false };
+globalThis.NetScan = globalThis.NetScan || { supported: () => false, create: () => ({ start: async () => ({ ok: false }), stop() {} }) };
+globalThis.LobbyCodes = eval(src("js/net/lobby-codes.js") + ";LobbyCodes");
 const NetLobby = eval(src("js/net/lobby.js") + ";NetLobby");
 
 function lobbyG() {

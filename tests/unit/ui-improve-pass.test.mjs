@@ -28,6 +28,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { cssRules, decl, declares, ruleFor, rulesFor } from "../helpers/css-rules.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { seedClipboard } from "../helpers/seed-clipboard.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
@@ -852,6 +853,12 @@ test("gamepad menu nav seeds focus on open and uses a larger stick deadzone than
   assert.equal(wrap("HALO: OFF"), "HALO:\u00a0<span data-fold=\"off\">OFF</span>");
   assert.equal(wrap("♪ SOUND OFF"), "♪ SOUND <span data-fold=\"off\">OFF</span>");
   assert.equal(wrap("ON"), '<span data-fold="on">ON</span>');
+  // Stored XSS (2026-09-24): an imported custom-team driver name reaches a
+  // garage chip's text, and paintOnOff writes this result through innerHTML.
+  assert.equal(wrap('#7 ON <img src=x onerror="alert(1)">'),
+    '#7 <span data-fold="on">ON</span> &lt;img src=x onerror=&quot;alert(1)&quot;&gt;',
+    "button text is escaped before the ON/OFF spans are added");
+  assert.equal(wrap("R&D: ON"), 'R&amp;D:\u00a0<span data-fold="on">ON</span>', "a literal & survives the round trip");
   assert.equal(wrap("STYLE: STANDARD"), null, "named styles stay unpainted");
   assert.equal(wrap("LAYOUT: AUTO"), null, "AUTO on a named cycle is not agency");
   assert.equal(wrap("RESOLUTION: AUTO"), null);
@@ -890,6 +897,19 @@ test("gamepad menu nav seeds focus on open and uses a larger stick deadzone than
   hashSb.AriaState.sync();
   assert.equal(a1.getAttribute("aria-current"), "true");
   assert.equal(a2.getAttribute("aria-current"), null);
+  const toggleDom = makeDom({ readyState: "loading" });
+  const group = toggleDom.document.createElement("div");
+  const one = toggleDom.document.createElement("button"), two = toggleDom.document.createElement("button");
+  one.classList.add("active"); group.append(one, two); toggleDom.byId("overlay").appendChild(group);
+  const toggleSb = uiSandbox(toggleDom);
+  vm.runInNewContext(src("js/ui/aria-state.js"), toggleSb);
+  toggleSb.AriaState.sync();
+  assert.equal(one.getAttribute("aria-pressed"), "true");
+  assert.equal(two.getAttribute("aria-pressed"), "false");
+  one.classList.remove("active"); two.classList.add("active");
+  toggleSb.AriaState.sync();
+  assert.equal(one.getAttribute("aria-pressed"), "false", "managed toggle updates after first paint");
+  assert.equal(two.getAttribute("aria-pressed"), "true", "new selection is announced");
   assert.match(code("js/ui/scroll-fade.js"), /"#menu-buttons"/,
     "title chrome fade watches the zoomed #menu-buttons scroller");
   assert.match(code("js/ui/scroll-fade.js"), /\boverflowX\b/,
@@ -1336,8 +1356,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(shell, /id="ss-inner"[^>]*pair-foot-full/,
     "season-setup foot spans both pair columns like SELECT");
   assert.match(shell, /id="sel-car"[^>]*class="bigbtn alt"/, "YOUR CAR sits on the alt plate beside NEXT");
-  assert.match(shell, /id="sel-car"[^>]*>YOUR CAR</);
-  assert.match(shell, /id="sel-go"[^>]*>NEXT</);
+  assert.match(shell, /id="sel-car"[^>]*><span>CHANGE CAR<\/span>/);
+  assert.match(shell, /id="sel-go"[^>]*>RACE SETUP</);
   assert.match(shell, /id="htp-close"[^>]*class="bigbtn alt"/, "How to Play dismiss is CLOSE on the alt plate");
   assert.match(shell, /id="htp-close"[^>]*>CLOSE</, "How to Play overlay dismiss is CLOSE");
   assert.match(shell, /id="standings-close"[^>]*class="bigbtn alt"/, "Standings CLOSE is dismiss, not a red commit");
@@ -1421,6 +1441,7 @@ function bootCopyValues(opts = {}) {
   });
   sb.document.execCommand = (c) => { order.push("execCommand:" + c); return !!opts.execOk; };
   const ctx = vm.createContext(sb);
+  seedClipboard(ctx);
   vm.runInContext(src("js/lighting/tuner-panel.js"), ctx, { filename: "js/lighting/tuner-panel.js" });
   const G = {
     $: (id) => dom.byId(id), gfx: {}, els: { pmsettings: {} },

@@ -243,6 +243,37 @@ window.TopModal = (function () {
     return firstFocusable(layer, true);
   }
 
+  /* A REBUILD MUST NOT DROP FOCUS. Season Setup and the career hub repaint a
+     whole pane on every choice (`pane.textContent = ""`), which destroys the
+     button that was just pressed: focus fell to <body>, a keyboard or pad
+     player's next arrow started from nowhere, and the new aria-pressed was
+     never announced. This remembers the SLOT — the focused control's id, else
+     its index among the controls of its nearest ancestor with an id — runs the
+     rebuild, and puts focus back on the same slot in the new DOM. It stands
+     aside when the rebuild (or its caller) already placed focus somewhere. */
+  function keepFocus(scope, rebuild) {
+    const a = document.activeElement;
+    let key = null;
+    if (scope && inside(scope, a)) {
+      let g = a.parentElement;
+      while (g && g !== scope && !g.id) g = g.parentElement;
+      const pool = g ? [...g.querySelectorAll(focusableSel())] : [];
+      key = { id: a.id || null, group: g && g.id ? g.id : null, i: pool.indexOf(a) };
+    }
+    rebuild();
+    if (!key) return;
+    const now = document.activeElement;
+    if (connected(now) && now !== document.body) return;
+    let t = key.id ? document.getElementById(key.id) : null;
+    if (!usable(t)) {
+      const g = key.group ? document.getElementById(key.group) : null;
+      const pool = g ? [...g.querySelectorAll(focusableSel())].filter(usable) : [];
+      t = pool.length ? pool[Math.min(Math.max(key.i, 0), pool.length - 1)] : null;
+    }
+    if (!t) t = landing(scope);
+    if (t) focusQuiet(t);
+  }
+
   function onLayerShow(layer) {
     const a = document.activeElement;
     if (inside(layer, a)) return;                       // the app placed focus itself
@@ -297,5 +328,5 @@ window.TopModal = (function () {
     document.addEventListener("DOMContentLoaded", init, { once: true });
   else init();
 
-  return { scan, wire, onEscape, onFocusIn, wireLayer, scanLayers, landing, syncMenuIsolation };
+  return { scan, wire, onEscape, onFocusIn, wireLayer, scanLayers, landing, keepFocus, syncMenuIsolation };
 })();

@@ -6,10 +6,24 @@
   "use strict";
   self.ApexRoster = Object.freeze({
     DEFERRED: {
+    "webgl2": [
+      "js/render/glx/shaders/glsl-chunks.js",
+      "js/render/glx/shaders/glsl-lit.js",
+      "js/render/glx/shaders/glsl-sky.js",
+      "js/render/glx/shaders/glsl-fx.js",
+      "js/render/glx/shaders/glsl-post.js",
+      "js/render/glx/post.js",
+      "js/render/glx/shadow.js",
+      "js/render/glx/chunked.js",
+      "js/render/glx/glx.js"
+    ],
     "webgpu": [
       "js/render/webgpu/wgsl-chunks.js",
       "js/render/webgpu/wgsl-post.js",
       "js/render/webgpu/wgsl-fx.js",
+      "js/render/webgpu/wgx-shadow.js",
+      "js/render/webgpu/wgx-chunked.js",
+      "js/render/webgpu/wgx-post.js",
       "js/render/webgpu/wgx.js"
     ],
     "three": [
@@ -26,6 +40,50 @@
   },
     DEFERRED_EDGES: [
     [
+      "js/render/glx/shaders/glsl-chunks.js",
+      "js/render/glx/shaders/glsl-lit.js"
+    ],
+    [
+      "js/render/glx/shaders/glsl-chunks.js",
+      "js/render/glx/shaders/glsl-sky.js"
+    ],
+    [
+      "js/render/glx/shaders/glsl-chunks.js",
+      "js/render/glx/shaders/glsl-fx.js"
+    ],
+    [
+      "js/render/glx/shaders/glsl-chunks.js",
+      "js/render/glx/shaders/glsl-post.js"
+    ],
+    [
+      "js/render/glx/shaders/glsl-lit.js",
+      "js/render/glx/glx.js"
+    ],
+    [
+      "js/render/glx/shaders/glsl-sky.js",
+      "js/render/glx/glx.js"
+    ],
+    [
+      "js/render/glx/shaders/glsl-fx.js",
+      "js/render/glx/glx.js"
+    ],
+    [
+      "js/render/glx/shaders/glsl-post.js",
+      "js/render/glx/glx.js"
+    ],
+    [
+      "js/render/glx/post.js",
+      "js/render/glx/glx.js"
+    ],
+    [
+      "js/render/glx/shadow.js",
+      "js/render/glx/glx.js"
+    ],
+    [
+      "js/render/glx/chunked.js",
+      "js/render/glx/glx.js"
+    ],
+    [
       "js/render/webgpu/wgsl-chunks.js",
       "js/render/webgpu/wgsl-post.js"
     ],
@@ -35,10 +93,22 @@
     ],
     [
       "js/render/webgpu/wgsl-post.js",
-      "js/render/webgpu/wgx.js"
+      "js/render/webgpu/wgx-post.js"
     ],
     [
       "js/render/webgpu/wgsl-fx.js",
+      "js/render/webgpu/wgx.js"
+    ],
+    [
+      "js/render/webgpu/wgx-shadow.js",
+      "js/render/webgpu/wgx.js"
+    ],
+    [
+      "js/render/webgpu/wgx-chunked.js",
+      "js/render/webgpu/wgx.js"
+    ],
+    [
+      "js/render/webgpu/wgx-post.js",
       "js/render/webgpu/wgx.js"
     ],
     [
@@ -138,6 +208,7 @@
     "js/net/scan.js",
     "js/net/transport.js",
     "js/net/handshake.js",
+    "js/net/lobby-codes.js",
     "js/net/snapshot.js",
     "js/net/session.js",
     "js/net/netplay.js",
@@ -154,6 +225,10 @@
     ],
     [
       "js/net/qr.js",
+      "js/net/lobby-codes.js"
+    ],
+    [
+      "js/net/qr.js",
       "js/net/lobby.js"
     ],
     [
@@ -166,6 +241,18 @@
     ],
     [
       "js/net/scan.js",
+      "js/net/lobby-codes.js"
+    ],
+    [
+      "js/net/scan.js",
+      "js/net/lobby.js"
+    ],
+    [
+      "js/net/handshake.js",
+      "js/net/lobby-codes.js"
+    ],
+    [
+      "js/net/lobby-codes.js",
       "js/net/lobby.js"
     ]
   ],

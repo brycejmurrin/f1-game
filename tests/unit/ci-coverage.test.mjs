@@ -211,6 +211,87 @@ test("selection resolves the event-specific base and fails closed when it cannot
   assert.match(selectStep, /any=\$\{shards\.length \? "true" : "false"\}/);
 });
 
+/* A PAGES CALL WITH NO READABLE LIVE COMMIT SELECTS EVERYTHING (2026-09-25).
+ * pages.yml passes before_sha empty when the live apex-sha cannot be read and
+ * says "every filter in ci.yml reads empty as run everything" — true of the
+ * sweeps, parts and ship filters, false of this resolver, which answered HEAD~1
+ * and so planned specs for the tip's LAST COMMIT only. Run for real, in a
+ * throwaway repo, for every branch of the resolver. */
+test("the base resolver: a Pages call with no usable base selects everything, never HEAD~1", () => {
+  const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+  const script = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../../tools/ci/ci-resolve-before.sh");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-resolve-"));
+  const g = (...a) => cp.execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: "pipe" }).trim();
+  const resolve = (env) => cp.spawnSync("bash", [script],
+    { cwd: dir, encoding: "utf8", env: { PATH: process.env.PATH, HOME: process.env.HOME, ...env } });
+  try {
+    g("init", "-q", "-b", "main"); g("config", "user.email", "t@t"); g("config", "user.name", "t");
+    fs.writeFileSync(path.join(dir, "a"), "1\n"); g("add", "-A"); g("commit", "-qm", "one");
+    const first = g("rev-parse", "HEAD");
+    fs.writeFileSync(path.join(dir, "a"), "2\n"); g("add", "-A"); g("commit", "-qm", "two");
+    const bogus = "1234567890123456789012345678901234567890";
+
+    // The Pages call: empty, all-zero and unreachable bases all mean "everything".
+    for (const before of ["", "0000000000000000000000000000000000000000", bogus]) {
+      const r = resolve({ EVENT: "push", PUSH_BEFORE: before, CALLED: "true" });
+      assert.equal(r.status, 0, r.stderr);
+      assert.equal(r.stdout, EMPTY_TREE, `a Pages call with base '${before}' must diff against the empty tree, not HEAD~1`);
+      assert.match(r.stderr, /SELECTING EVERYTHING on a Pages call/);
+    }
+    // A usable live commit is used as-is.
+    assert.equal(resolve({ EVENT: "push", PUSH_BEFORE: first, CALLED: "true" }).stdout, first);
+    // A branch push keeps its documented HEAD~1 fallback and fails closed on an unreachable base.
+    assert.equal(resolve({ EVENT: "push", PUSH_BEFORE: "", CALLED: "false" }).stdout, first);
+    assert.equal(resolve({ EVENT: "push", PUSH_BEFORE: "" }).stdout, first, "CALLED unset is not a Pages call");
+    assert.notEqual(resolve({ EVENT: "push", PUSH_BEFORE: bogus }).status, 0);
+    assert.equal(resolve({ EVENT: "pull_request", PR_BASE: first }).stdout, first);
+    // The empty tree is a base the selector can diff against: every tracked file changed.
+    assert.equal(g("diff", "--name-only", EMPTY_TREE), "a");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+  // ...and the workflow actually tells the resolver it is on a Pages call.
+  assert.match(selectJob, /CALLED: \$\{\{ inputs\.concurrency_key != '' \}\}/);
+  assert.match(selectStep, /CALLED="\$\{CALLED:-false\}" bash tools\/ci\/ci-resolve-before\.sh/);
+});
+
+/* THE PROSE-ONLY PR HOLE (2026-09-25). ci.yml's paths-ignore means a PR that
+ * touches only docs/**, **\/*.md, .claude/**, .cursor/** or .codex/** starts no
+ * ci.yml run, while tooling-fast holds guards over exactly those trees.
+ * docs-guards.yml closes it by triggering on the SAME list as `paths:` — so the
+ * two lists must stay one list, and the job must run the group that holds them. */
+test("docs-guards.yml triggers on exactly ci.yml's paths-ignore list and runs the prose guards", () => {
+  const docsWorkflow = fs.readFileSync(new URL("../../.github/workflows/docs-guards.yml", import.meta.url), "utf8");
+  const listAfter = (text, key, from = 0) => {
+    const at = text.indexOf(`\n    ${key}:\n`, from);
+    assert.ok(at >= 0, `no \`${key}:\` list found`);
+    const lines = text.slice(at).split("\n").slice(2);
+    const out = [];
+    for (const l of lines) { const m = /^      - "([^"]+)"\s*$/.exec(l); if (!m) break; out.push(m[1]); }
+    return { list: out, at };
+  };
+  const onBlock = ciWorkflow.slice(ciWorkflow.indexOf("\non:\n"), ciWorkflow.indexOf("\njobs:\n"));
+  const pushIgnore = listAfter(onBlock, "paths-ignore");
+  const prIgnore = listAfter(onBlock, "paths-ignore", pushIgnore.at + 1);
+  assert.ok(pushIgnore.list.length >= 3, `ci.yml push paths-ignore parsed to ${pushIgnore.list.length} entries`);
+  assert.deepEqual(prIgnore.list, pushIgnore.list, "ci.yml's push and pull_request paths-ignore lists differ");
+  assert.match(onBlock.slice(onBlock.indexOf("pull_request:")), /paths-ignore:/, "the second list must be the pull_request one");
+  const docsPaths = listAfter(docsWorkflow, "paths");
+  assert.deepEqual(docsPaths.list, pushIgnore.list,
+    "docs-guards.yml `paths:` must equal ci.yml's `paths-ignore:` — otherwise some prose-only PR runs no guard at all");
+  assert.match(docsWorkflow, /^on:\n  pull_request:\n/m, "docs-guards runs on pull requests");
+  assert.match(docsWorkflow, /run: npm run test:docs-guards\s*$/m);
+
+  const groups = JSON.parse(fs.readFileSync(new URL("../groups.json", import.meta.url), "utf8"));
+  const files = groups.groups["test:docs-guards"]?.files || [];
+  for (const must of ["docs-integrity", "generated-docs", "agent-config", "skill-progressive", "hooks-documented"]) {
+    assert.ok(files.includes(`tests/unit/${must}.test.mjs`), `test:docs-guards must run ${must}`);
+  }
+  const fast = new Set(groups.toolingFast.filter((f) => !f.startsWith("//")));
+  const notFast = files.filter((f) => !fast.has(f) && f !== "tests/unit/environment-json.test.mjs");
+  assert.deepEqual(notFast, [], "docs-guards is a CI entry point for tooling-fast's prose guards, not a new home for files");
+});
+
 test("no workflow demotes the change-aware gate to advisory", () => {
   assert.doesNotMatch(pagesWorkflow, /^\s+advisory:/m);
   assert.doesNotMatch(ciWorkflow, /^\s+advisory:/m);
@@ -776,15 +857,16 @@ test("the renderer job proves the adapter before trusting the run, and uploads i
 
 test("the renderer job is path-filtered on a cheap runner and stays out of the deploy gate", () => {
   assert.match(rendererFilter, /^    runs-on: ubuntu-latest$/m, "the filter must not allocate a macOS runner to say no");
-  // 2026-09-02 (Actions minutes): the macOS runner bills at 10x Linux and
-  // gpu-census.yml already gives every renderer commit its real-GPU verdict,
-  // so the gfx specs on Metal are nightly or opt-in (`renderer_macos: true`)
-  // — a push must never allocate that runner. The `!inputs.concurrency_key`
-  // term is what tools/ci/ci-coverage.mjs reads to keep both jobs out of the
-  // deploy gate; it has to stay first.
-  assert.match(rendererFilter, /if: \$\{\{ !inputs\.concurrency_key && \(github\.event_name == 'schedule' \|\| github\.event_name == 'workflow_dispatch'\) \}\}/);
+  // 2026-09-02 (Actions minutes): the macOS runner bills at 10x Linux, so
+  // drafts and topic-branch pushes stay off it. Ready (non-draft) PRs that
+  // touch js/render/ MUST allocate it — otherwise a WGX/GLX rewrite can go
+  // "green" with Metal never running. Nightly + `renderer_macos: true`
+  // dispatch remain. The `!inputs.concurrency_key` term is what
+  // tools/ci/ci-coverage.mjs reads to keep both jobs out of the deploy gate;
+  // it has to stay first.
+  assert.match(rendererFilter, /if: \$\{\{ !inputs\.concurrency_key && \(github\.event_name == 'schedule' \|\| github\.event_name == 'workflow_dispatch' \|\| \(github\.event_name == 'pull_request' && !github\.event\.pull_request\.draft\)\) \}\}/);
   assert.match(rendererJob, /^    needs: renderer-filter$/m);
-  assert.match(rendererJob, /if: needs\.renderer-filter\.outputs\.renderer == 'true' && \(github\.event_name == 'schedule' \|\| inputs\.renderer_macos == true\)/);
+  assert.match(rendererJob, /if: needs\.renderer-filter\.outputs\.renderer == 'true' && \(github\.event_name == 'schedule' \|\| inputs\.renderer_macos == true \|\| \(github\.event_name == 'pull_request' && !github\.event\.pull_request\.draft\)\)/);
   assert.match(ciWorkflow, /workflow_dispatch:\n    inputs:\n(?:.*\n)*?      renderer_macos:\n(?:.*\n)*?        type: boolean\n(?:.*\n)*?        default: false\n/,
     "the dispatch must declare the renderer_macos opt-in, default off");
   assert.equal(report.rendererGate.deployGate, false,

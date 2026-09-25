@@ -92,18 +92,22 @@ even when speed-limited; ERS deploy adds on top. Full brake is still the bigger
 bill (`BRAKE` 22 / 34 ≈ 0.65). Each axle's `sqrt(1 − axFrac²)` scales its own
 `mu`; `physState()` exposes `axEstSm`, `axFrac` (the larger axle) and
 `slipFactor` (the rear's, which the engine audio reads).
-**Grass braking remains a measured design defect** (rechecked 2026-09-22).
-`axEstTarget` scales its braking estimate by `OFF_GRIP`, but the actual speed
-integration still applies the full `BRAKE`; the estimator and force therefore
-disagree. The larger effect is the run-off SCRUB (`20 + offDepth·28` m/s²): at
-Monza, 70 → 30 m/s measured 90.886 m on tarmac, 37.732 m in shallow grass and
-28.701 m in deep grass. A bounded trial that shared the surface multiplier and
-reduced scrub removed the stopping shortcut, but failed the sustained
-full-throttle grass deterrence (80 m/s still retained 67.267 m/s where the
-existing regression requires below 60). It was reverted. The follow-up must
-separate grass rolling resistance from surface-limited drive/brake forces,
-classify the surface before integration, and validate throttle/coast/brake with
-weak parts, tyre wear and every PACE setting before changing shipped behavior.
+**Grass longitudinal forces** classify road, kerb and the separate pit ribbon
+before integration. Grass limits drive and brake traction by the same surface
+multiplier used for lateral grip. Passive rolling resistance is a separate
+force: `min((1 - surfaceMu) * 24, roadBrake * .75)`, applied only above the
+pace-scaled crawl speed and never adding speed. Pedal braking uses the lesser
+of surface grip and the remaining `.95 * roadBrake` budget after this drag.
+The drag cap leaves pedal authority below crawl speed, and the combined budget
+keeps full braking below tarmac even with weak parts or worn tyres, while
+full-throttle excursions still bleed speed. The axle estimate uses
+the same surface-limited pedal force. The old `20 + offDepth*28` scrub plus full
+road braking made grass a stopping shortcut (70→30 m/s at Monza: 90.886 m road
+versus 37.732/28.701 m shallow/deep grass). That model is replaced, not its
+regression thresholds weakened. `player-dynamics-vm` compares actual braking at
+all 19 pace notches, two brake strengths and fresh/worn tyres; `offtrack-vm`
+retains the 80→below-60 m/s full-throttle excursion requirement. This remains a
+bounded game surface model rather than a soil simulation.
 
 **Brake bias** (the SETUP sheet,
 `js/garage/setup-tune.js`) splits that budget per axle UNDER BRAKING only:
@@ -393,8 +397,14 @@ ones were unmoved. That planner/actuator disagreement was CLOSED on
 (load ±8 %, grip, the 0.28 speed taper) that both the kinematic lateral step
 in `updateCar` and `brakeTarget` read, and `AiDrive.cornerSpeed` inverts the
 taper analytically so the planner's entry speed is one the actuator can turn
-at. `latMax` is no longer flat — it carries the aero-load term — but it still
-has no `aeroGrip` rise, on purpose: the actuator has none either. The 12 m
+at. 2026-09-24: the envelope now carries the car's downforce — `1 +
+DOWNFORCE·(v/vTop)²`, the player's own `aeroGrip` shape, minus the player-only
+`PLAYER_GRIP` headroom — in BOTH the lateral step and the planner, so they
+still agree and the AI finally corners fast corners like a car with wings
+(solo hard lap at Monza 127.1 → 120.8 s). The heading controller's yaw
+budget alone keeps the old 0.28 taper (`AiDrive.yawScale`): it is a
+smoothness budget, and letting it rise too took the solo-lap lateral-jerk
+figure past its 7.5 m/s² cap. The 12 m
 look-ahead floor that let every AI carry `sqrt(vC² + 449)` into an apex was
 removed on 2026-09-15 with the `corner` difficulty dimension
 (`docs/notes/AI-FIELD-RESEARCH.md`).
@@ -410,7 +420,11 @@ the numbers):
 
 - **Overtake want compares PACE with pace** (`AiDrive.otWant`). The pull fires
   when the follower is closing, OR its free-running target speed beats the
-  blocker's own ceiling by ~7% of the top speed (5.5% on a street circuit), OR
+  blocker's own ceiling by ~7% of the top speed (5.5% on a street circuit) —
+  falling to 30 % of that as QUEUE PRESSURE builds (`AiDrive.queuePress`:
+  seconds held by the queue cap behind the same car, over a craft-scaled
+  3.5–7 s patience), so evenly matched cars no longer queue for a whole race —
+  OR
   the blocker is crawling (under 12% of the top speed — an obstacle whatever
   its pace). So an AI blocker that is slow for a corner, but no slower over a
   lap, is left alone; a genuinely slower car is attacked even while both are
@@ -871,7 +885,8 @@ Still open:
 ## Curvature channels — the "arc must not reach the driver" table
 
 Every consumer of `Tracks.curvature()` (direct calls plus the two
-destructured aliases in `js/track/core/mesh.js` and `js/track/tracks.js`)
+destructured aliases in `js/track/core/mesh.js` and `js/track/tracks.js` /
+`js/track/scenery/build-props.js`)
 classified into its legitimate channel. Audited 2026-08-27 by the
 physics-contract-auditor: ZERO violations — every player-path read is
 behind an assist knob that defaults to 0, or reaches only render / audio /
@@ -898,7 +913,8 @@ it lands.
 | `js/agent/agentview.js` | state dump, corner table | **broadcast-only** | agent telemetry output |
 | `js/ui/track-maps.js` | measureApex/detectDRS/detectCorners | **broadcast-only** | 2D picker/popup/minimap outlines (menus + HUD drawing only) |
 | `js/track/core/mesh.js` | findCorners, bankingProfile, banked-corner pick | **surface** | build-time road-geometry decisions baked into the mesh — road shape itself |
-| `js/track/tracks.js` | build LUT bake, signboard side pick | **surface** | the producer itself, plus static scenery placement |
+| `js/track/tracks.js` | build LUT bake | **surface** | the producer itself (centreline curv[] bake) |
+| `js/track/scenery/build-props.js` | signboard side pick, pit-pass curvature | **surface** | static scenery placement (`TrackBuildProps.build`) |
 
 A module that consumes only REPORTS other code already produced is not in this
 table, because it has no curvature site to classify — the first-run coach marks

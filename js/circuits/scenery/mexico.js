@@ -13,7 +13,7 @@
               modelGroup, groundPatch, groundedSegments,
               cityFront, forestEdge, bush,
               terrace, tieredBowl, broadleafFall, plane, acacia, cypress,
-              cameraTower, sponsorHoarding, broadcastCompound, circuitKit } = api;
+              cameraTower, sponsorHoarding, broadcastCompound, circuitKit, terrainYAt } = api;
       const cityBand = (s) => (s > 0.14 && s < 0.60) || s > 0.94 || s < 0.02;
       // Pit straight sides. The engine's pit complex (garages, pit wall) takes
       // pit.side +1, the RIGHT: the infield of this clockwise lap, where the
@@ -64,8 +64,17 @@
             addBox(stage, vadd(vadd(p.c, p.u, h - 0.3), p.r, side * i * 1.5),
                    [1.1, 0.9, 1.0], [1.00, 0.97, 0.78], [p.r, p.u, p.t]);
           }
-          addBox(stage, vadd(p.c, p.u, 0.05),
-                 [10, 0.08, 10], [0.82, 0.76, 0.52], [p.r, p.u, p.t]);
+          // Pad top 2 cm over the HIGHEST ground under its 10 m square, its
+          // body reaching 5 cm under the lowest: at the anchor's height it lay
+          // under the sloping verge (ground-audit buried).
+          let hi = p.c[1], lo = p.c[1];
+          for (const fr of [-5, 0, 5]) for (const ft of [-5, 0, 5]) {
+            const q = vadd(vadd(p.c, p.r, fr), p.t, ft), g = terrainYAt(q[0], q[2]);
+            if (g != null) { hi = Math.max(hi, g); lo = Math.min(lo, g); }
+          }
+          const padH = hi + 0.02 - (lo - 0.05);
+          addBox(stage, [p.c[0], hi + 0.02 - padH / 2, p.c[2]],
+                 [10, padH, 10], [0.82, 0.76, 0.52], [p.r, p.u, p.t]);
         });
       };
 
@@ -123,8 +132,13 @@
       // ── Kerb accent strips ────────────────────────────────────────────────────
       const kerb = (s, side, len) => {
         const k = K(s);
-        place(k, side, 2, [0.5, 0.16, len], [0.82, 0.16, 0.16]);
-        place(k, side, 3.4, [2.6, 0.16, len], [0.94, 0.94, 0.94]);
+        // place() sinks 0.8 m (height = 0.8 + visible): at 0.16 every strip
+        // lay wholly underground (ground-audit buried, 29 prims). 0.84 = 4 cm
+        // proud and still under THIN_PROP_H, so they stay decals (no driving
+        // limit). The white strip starts clear of the red one: at 3.4 they
+        // overlapped 0.15 m with coplanar tops.
+        place(k, side, 2, [0.5, 0.84, len], [0.82, 0.16, 0.16]);
+        place(k, side, 3.6, [2.6, 0.84, len], [0.94, 0.94, 0.94]);
       };
 
       const BOWL_BLUE = [0.25, 0.35, 0.62];
@@ -152,7 +166,8 @@
           addBox(stage, vadd(vadd(a.c, a.r, -side * 4.7), a.u, 6.2),
                  [1.0, 7.8, len - 1.2], crowd, bv);
           // High roof: underside > 11 m, and its bounded footprint stays off-road.
-          addBox(stage, vadd(a.c, a.u, 11.8), [depth + 2, 0.8, len + 1], [0.84, 0.85, 0.87], bv);
+          // Underside 2 cm over the 11 m body: at 11.4 it hovered (ground-audit).
+          addBox(stage, vadd(a.c, a.u, 11.42), [depth + 2, 0.8, len + 1], [0.84, 0.85, 0.87], bv);
         }, { required: !!required });
       };
 
@@ -358,6 +373,40 @@
       groundPatch(K(0.785),  1, 28, [36, 0.6, 36], DIRT,
                   { id: "foro-infield-right", samples: 6 });
 
+      // ── Wave-4: Foro Sol entry/exit apertures — bright concrete portals so
+      // the stadium corridor reads as a baseball bowl the cars drive THROUGH
+      // (research: Foro Sol Norte/Sur, Turns 12–15). Gap 22 clears the tieredBowl
+      // at 9 and the boundedStand end-caps at 36. String-literal ids so the
+      // BATCH-01 requiredLandmark source gate can find them.
+      {
+        const a = anchor(K(0.72), -1, 22);
+        if (!onTrack(a.c[0], a.c[2], 10)) {
+          const b = [a.r, a.u, a.t];
+          modelGroup("mexico-foro-sol-entry", {
+            center: vadd(a.c, a.u, 10), size: [8, 22, 18], basis: b,
+          }, (stage) => {
+            addBox(stage, vadd(vadd(a.c, a.t, -6), a.u, 8), [3.5, 16, 2.2], [0.78, 0.76, 0.72], b);
+            addBox(stage, vadd(vadd(a.c, a.t,  6), a.u, 8), [3.5, 16, 2.2], [0.78, 0.76, 0.72], b);
+            addBox(stage, vadd(a.c, a.u, 17), [4.0, 2.2, 16], [0.88, 0.86, 0.80], b);
+            addBox(stage, vadd(a.c, a.u, 15.6), [3.6, 0.8, 14], BOWL_BLUE, b);
+          }, { required: true });
+        }
+      }
+      {
+        const a = anchor(K(0.875), -1, 22);
+        if (!onTrack(a.c[0], a.c[2], 10)) {
+          const b = [a.r, a.u, a.t];
+          modelGroup("mexico-foro-sol-exit", {
+            center: vadd(a.c, a.u, 10), size: [8, 22, 18], basis: b,
+          }, (stage) => {
+            addBox(stage, vadd(vadd(a.c, a.t, -6), a.u, 8), [3.5, 16, 2.2], [0.78, 0.76, 0.72], b);
+            addBox(stage, vadd(vadd(a.c, a.t,  6), a.u, 8), [3.5, 16, 2.2], [0.78, 0.76, 0.72], b);
+            addBox(stage, vadd(a.c, a.u, 17), [4.0, 2.2, 16], [0.88, 0.86, 0.80], b);
+            addBox(stage, vadd(a.c, a.u, 15.6), [3.6, 0.8, 14], BOWL_BLUE, b);
+          }, { required: true });
+        }
+      }
+
       // ── THE BOWL ITSELF ─────────────────────────────────────────────────
       // Foro Sol is a BASEBALL STADIUM the circuit drives through, and what
       // that means on camera is a steep stepped rake of navy bucket seats
@@ -450,6 +499,35 @@
       for (const s of [0.90, 0.92, 0.94]) {
         boundedStand(s, 1, 14, 24, SEATS, PINK, false);
         boundedStand(s, 1, 32, 26, CONCRETE, GREEN, false);
+      }
+      // Wave-4 hero: Peraltada / Estadio grandstand — long curved seating wall
+      // on the banked final sweep (research: Grandstand 14/15 view toward
+      // Peraltada; festive green/white/red fascia). Gap 40 sits behind the
+      // boundedStand rings at 14/32 so clip-audit stays within mexico's baseline.
+      {
+        // Far outer ring — gap 62 clears the terrace at 46 and any parallel
+        // stretch the banked Peraltada brings close.
+        const a = anchor(K(0.935), 1, 62);
+        if (!onTrack(a.c[0], a.c[2], 20)) {
+          const b = [a.r, a.u, a.t];
+          modelGroup("mexico-peraltada-stand", {
+            center: vadd(a.c, a.u, 8), size: [12, 18, 48], basis: b,
+          }, (stage) => {
+            for (let t = 0; t < 5; t++) {
+              const outLat = 1 * (1.2 + t * 1.5);
+              addBox(stage, vadd(vadd(a.c, a.r, outLat), a.u, t * 1.3 + 0.65),
+                [2.6, 1.3, 40 - t * 2], BOWL_BLUE, b);
+            }
+            addBox(stage, vadd(vadd(a.c, a.r, 1 * 2.0), a.u, 7.8),
+              [0.35, 1.0, 38], GREEN, b);
+            addBox(stage, vadd(vadd(a.c, a.r, 1 * 2.0), a.u, 9.0),
+              [0.35, 1.0, 38], [0.94, 0.94, 0.92], b);
+            addBox(stage, vadd(vadd(a.c, a.r, 1 * 2.0), a.u, 10.2),
+              [0.35, 1.0, 38], [0.86, 0.12, 0.16], b);
+            addBox(stage, vadd(vadd(a.c, a.r, 1 * 5.0), a.u, 11.8),
+              [7, 0.5, 36], [0.70, 0.70, 0.72], b);
+          }, { required: true });
+        }
       }
       terrace(0.892, 0.952, 1, 46, {
         rows: 6, rise: 1.7, depth: 2.7, crowd: crowdCols,

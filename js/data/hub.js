@@ -45,9 +45,13 @@ const DataHub = (function () {
 
   function fmtDate(iso) {
     if (!iso) return "—";
-    const d = new Date(iso.length === 10 ? iso + "T12:00:00Z" : iso);
+    // A DATE-ONLY string is a calendar day, not an instant: format it in UTC,
+    // or UTC+13/+14 (NZ summer, Kiribati) showed every race a day late.
+    const dateOnly = iso.length === 10;
+    const d = new Date(dateOnly ? iso + "T12:00:00Z" : iso);
     if (isNaN(d.getTime())) return iso;
-    return d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+    return d.toLocaleDateString(undefined, dateOnly ? { day: "numeric", month: "short", timeZone: "UTC" }
+                                                    : { day: "numeric", month: "short" });
   }
 
   function fmtDateTime(iso) {

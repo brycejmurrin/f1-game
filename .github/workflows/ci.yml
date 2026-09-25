@@ -91,13 +91,14 @@ name: CI
 #   macos     real GPU (Metal)     webgl-probes, lighting-ab, image-grade-
 #                                  visual, lighting-tuner-grade, tlx-probes)
 #                                  on macos-latest, the ONE runner image with a
-#                                  hardware adapter. Runs when the diff touches
-#                                  the renderer (js/render/**, the lighting and
-#                                  atmosphere modules) and nightly / on
-#                                  dispatch; NOT on the Pages deploy call — see
-#                                  the job for why. Added 2026-09-01, so the
-#                                  budget is a guess until the first run lands;
-#                                  re-time it and replace this line.
+#                                  hardware adapter. Runs when a READY PR's
+#                                  diff touches the renderer (js/render/**, the
+#                                  lighting modules), nightly, and on dispatch;
+#                                  NOT on drafts, topic pushes, or the Pages
+#                                  deploy call — see the job for why. Added
+#                                  2026-09-01, so the budget is a guess until
+#                                  the first run lands; re-time it and replace
+#                                  this line.
 #
 # Both figures above are MEASURED on run 31023778264 — the first run that ever
 # completed end to end — not estimated: sweeps 15m12s, smoke 14m24s, guards 25s.
@@ -203,11 +204,9 @@ on:
         required: false
         default: "tiny"
       # The macOS renderer job is the most expensive minute in this file
-      # (a macOS runner bills at 10x Linux). It ran on every push that
-      # touched js/render/ until 2026-09-02; gpu-census.yml already gives
-      # every renderer commit its real-GPU verdict, so the gfx SPECS on
-      # Metal are now nightly or opt-in here — pass true when a gfx spec or
-      # its launch config changed.
+      # (a macOS runner bills at 10x Linux). Ready PRs that touch js/render/
+      # already allocate it via renderer-filter; pass true here to force the
+      # gfx specs on Metal from a dispatch (nightly also runs them).
       renderer_macos:
         description: "also run the gfx specs on the macOS (Metal) runner"
         type: boolean
@@ -485,8 +484,13 @@ jobs:
   sweeps-parts:
     name: Parts option-resolution census
     runs-on: ubuntu-latest
-    # Tree-only: skipped when the train reuses a green fast tier (`fast_tier_run`).
-    if: ${{ inputs.fast_tier_run == '' }}
+    # NOT tree-only, so NOT skipped by `fast_tier_run` (2026-09-24). Its filter
+    # diffs a BASE (the push's `before`, or the train's live `before_sha`), so a
+    # green fast tier only proves the census for the LAST push's diff: push A
+    # edits js/car/ and its census goes red, push B (tests only) skips the
+    # census and goes green, and the train that reused B's run shipped A's car
+    # change never censused against what is live. On the train the filter diffs
+    # live..tip and skips cheaply when no parts path moved.
     # One subtest of parts-visual-distinctness ("every option resolves to
     # itself") measured 559 s of the 999 s sweeps run on 2026-09-01. Its own
     # runner, unconditional and in parallel, so the geometry sweeps finish in
@@ -1303,10 +1307,12 @@ jobs:
     # plan puts the gate at guards + driving-model + one smoke shard +
     # conditional sweeps (~5 min) with the GPU work on the nightly cron. So:
     # skipped on the Pages call (a skipped job does not fail the aggregate),
-    # run nightly and on dispatch. Branch pushes and PRs no longer reach it
-    # (2026-09-02, Actions minutes): the path filter below is kept for the
-    # day it is promoted, but a push skips this job outright, which skips
-    # renderer-macos with it through `needs:`.
+    # run nightly, on dispatch, and on READY (non-draft) PRs. Draft PRs stay
+    # on the fast tier without a macOS runner (2026-09-02 Actions-minutes cut
+    # still applies to drafts and branch pushes); a ready PR whose diff
+    # touches js/render/** must not claim green without Metal — the path
+    # filter below is what decides, and a skipped filter skips renderer-macos
+    # through `needs:`.
     #
     # The Pages call is recognised by `inputs.concurrency_key`, which pages.yml
     # ALWAYS forwards and nothing else sets — not by `github.event_name`, which
@@ -1314,7 +1320,7 @@ jobs:
     # the sweeps and smoke filters accept `push` alone. Promoting this
     # job into the gate once it has a measured green history is one line:
     # delete this `if:`.
-    if: ${{ !inputs.concurrency_key && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
+    if: ${{ !inputs.concurrency_key && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft)) }}
     outputs:
       renderer: ${{ steps.filter.outputs.renderer }}
     steps:
@@ -1376,9 +1382,10 @@ jobs:
     # (renderer-filter is skipped on the Pages call, so this is too). The
     # "skipped reads as passed" hazard the sweeps avoid is about a job whose
     # verdict the deploy consumes; nothing consumes this one but the checks list.
-    # Nightly, or a dispatch that asked for it (`renderer_macos: true`);
-    # never a push — see the filter's header and the dispatch input.
-    if: needs.renderer-filter.outputs.renderer == 'true' && (github.event_name == 'schedule' || inputs.renderer_macos == true)
+    # Nightly, a dispatch that asked for it (`renderer_macos: true`), or a
+    # ready PR whose filter said the diff touches the renderer. Never a
+    # draft PR or a bare topic-branch push — see the filter's header.
+    if: needs.renderer-filter.outputs.renderer == 'true' && (github.event_name == 'schedule' || inputs.renderer_macos == true || (github.event_name == 'pull_request' && !github.event.pull_request.draft))
     runs-on: macos-latest
     # 30 is a GUESS, and the header says what to do about that: the six specs
     # declare 240-480 s budgets measured under SwiftShader, where a boot is
@@ -1530,11 +1537,14 @@ jobs:
         id: sel
         env:
           # On a Pages call the resolver is handed the train's base as a push:
-          # EVENT=push with PUSH_BEFORE = the live commit (empty when the live
-          # site was unreadable, which falls back to HEAD~1 with a warning).
+          # EVENT=push with PUSH_BEFORE = the live commit. EMPTY when the live
+          # site was unreadable — and CALLED makes that select EVERYTHING (the
+          # empty tree), like the sweeps/parts/ship filters, never HEAD~1: a
+          # one-commit slice of a tip carrying every unpublished commit.
           EVENT: ${{ inputs.concurrency_key != '' && 'push' || github.event_name }}
           PUSH_BEFORE: ${{ inputs.concurrency_key != '' && inputs.before_sha || github.event.before }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
+          CALLED: ${{ inputs.concurrency_key != '' }}
         run: bash tools/ci/ci-select-specs-step.sh
       # WHOSE RED IS IT? A gate that goes red asks two different questions
       # depending on a fact nobody has to hand: was the base already red?
@@ -1641,7 +1651,13 @@ jobs:
           # the spec's own platform note), so that shard keeps the ANGLE default.
           APEX_GL: ${{ (inputs.gl != 'swiftshader' && !contains(matrix.specs, 'menu-baseline')) && 'llvmpipe' || '' }}
           LIBGL_ALWAYS_SOFTWARE: ${{ (inputs.gl != 'swiftshader' && !contains(matrix.specs, 'menu-baseline')) && '1' || '' }}
-        run: npm test -- ${{ matrix.specs }} --retries=0 --timeout=180000 --max-failures=3
+        run: |
+          # matrix.shard is set when shards() split a loop-expanded spec across
+          # Playwright --shard=i/n jobs (tracks-walls ~63 tests). Empty for the
+          # ordinary budgeted / single-file oversize rows.
+          SHARD_FLAG=""
+          if [ -n "${{ matrix.shard }}" ]; then SHARD_FLAG="--shard=${{ matrix.shard }}"; fi
+          npm test -- ${{ matrix.specs }} --retries=0 --timeout=180000 --max-failures=3 $SHARD_FLAG
       # Record what failed so the NEXT run hoists it to the front. junit.xml is
       # the machine-readable half of the reporter set playwright.config already
       # writes; parsing it here keeps the tool free of CI-specific formats.

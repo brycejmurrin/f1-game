@@ -1075,6 +1075,28 @@ body.lt-open:not(.pc-nopanel) .pc-look-wrap {
   /* 14px air + the climb/dive column (`--steer`) + 8px gap before LOOK. */
   left: auto; right: calc(var(--dock-px) / var(--ui-scale) + 14px + var(--steer) + 8px);
 }
+/* PORTRAIT: ONE COLUMN. With the tuner docked, an upright phone's free strip
+   is ~200px (the panel takes x 204-385 of 393), and three controls laid out
+   side by side against its edge put LOOK 20px off the left of the screen and
+   over MOVE (136px off at UI SIZE 150%; survey-ui-matrix, 2026-09-24). The
+   strip is tall, so they stack up the left edge instead: MOVE at the foot,
+   LOOK on it, the climb/dive pair as a row on top. 150px is one stick wrap
+   (label + gap + 118px pad) plus air, in the controls' own zoomed units. */
+@media (orientation: portrait) {
+  body.lt-open:not(.pc-nopanel) .pc-look-wrap {
+    left: calc(10px + var(--sal) / var(--ui-scale)); right: auto;
+    bottom: calc(20px + var(--sab) / var(--ui-scale) + 150px);
+  }
+  body.lt-open:not(.pc-nopanel) .pc-altcol {
+    left: calc(10px + var(--sal) / var(--ui-scale)); right: auto;
+    bottom: calc(20px + var(--sab) / var(--ui-scale) + 300px);
+    flex-direction: row;
+  }
+  /* The pair as a ROW has to fit the strip at UI SIZE 150% too: two --steer
+     pads (84px) came to 267px there against a 204px strip. 56px is 84 on
+     screen at 150%, still well over the tap floor. */
+  body.lt-open:not(.pc-nopanel) .pc-altcol .pc-btn { width: 56px; height: 56px; }
+}
 .pc-lbl { font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.14em; color: rgba(255,255,255,0.72); text-shadow: 0 1px 3px #000; }
 .pc-stick {
   position: relative; width: 118px; height: 118px; border-radius: 50%;

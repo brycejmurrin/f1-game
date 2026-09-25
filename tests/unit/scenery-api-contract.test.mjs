@@ -1,6 +1,6 @@
 // scenery-api-contract.test.mjs — freezes the shape of the `scenery(api)`
-// object that js/track/tracks.js buildProps hands to every circuit's bespoke
-// scenery callback (40 consumer files in js/circuits/).
+// object that TrackBuildProps.build (js/track/scenery/build-props.js) hands to
+// every circuit's bespoke scenery callback (40 consumer files in js/circuits/).
 //
 // The api members below are the de-facto public contract those files were
 // written against (docs/SCENERY-API.md). Any split/refactor of buildProps
@@ -29,7 +29,7 @@ const CONTRACT = [
   "billboard", "bleacher", "bowlSeatWall",
   "broadcastCompound", "broadleafFall", "building", "bush", "cameraTower", "cantilever", "circuitKit",
   "cityFront", "concreteCanyon", "conifer",
-  "cross", "cypress", "def", "ds", "every", "fence", "ferrisWheel", "floodMast",
+  "cross", "cypress", "def", "drape", "drapeRun", "ds", "every", "fence", "ferrisWheel", "floodMast",
   "floodMastRing", "forestEdge", "foundation", "frameAt", "gantry", "grandstand", "grandstandEx",
   "gridshellCanopy",
   "groundPatch", "groundPlane", "groundUnder", "groundYAt", "groundedSegments", "guardrail",
@@ -52,7 +52,10 @@ const CONTRACT = [
 // 111 -> 112 (2026-09-10): `bakedModels` dropped (no circuit ever called it);
 // `K` (frac -> un-shifted node) and `lapBounds()` (cached lap centroid +
 // radius) added — the two pieces of boilerplate 37 and 30 files carried.
-const CONTRACT_SIZE = 112;
+// 112 -> 114 (2026-09-25): `drape` + `drapeRun` (terrain-fitted flat decals,
+// TrackModels.drapeKit) — promoted from four identical ~100-line circuit-local
+// copies (paul_ricard, dijon, okayama, miami), vertex-identical to them.
+const CONTRACT_SIZE = 114;
 
 test("the frozen contract is the size it declares", () => {
   assert.equal(CONTRACT.length, CONTRACT_SIZE);
@@ -109,6 +112,11 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     monaco: ["monaco-tabac-shop", "monaco-mirabeau-apartments", "monaco-rascasse-bar"],
     singapore: ["singapore-parliament-house", "singapore-fullerton-hotel", "singapore-anderson-bridge"],
     suzuka: ["suzuka-crossover-portal", "suzuka-spoon-terrace", "suzuka-130r-bank"],
+    // Wave 4 — Interlagos / COTA / Mexico / Yas Marina
+    interlagos: ["interlagos-senna-s", "interlagos-main-tribuna", "interlagos-sp-skyline"],
+    cota: ["cota-amphitheater", "cota-turn1-big-red", "cota-main-grandstand"],
+    mexico: ["mexico-foro-sol-entry", "mexico-peraltada-stand", "foro-scoreboard"],
+    abudhabi: ["abudhabi-ferrari-world", "abudhabi-marina", "abudhabi:pit-exit-tunnel-portal"],
   };
   for (const [track, ids] of Object.entries(expected)) {
     const body = landmarkSource(track);

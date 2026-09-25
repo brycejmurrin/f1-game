@@ -7,7 +7,7 @@
  */
 "use strict";
 
-const GLX = (function () {
+const GLXBackend = (function () {
   // GLSL sources live in js/render/shaders/{lit,sky,fx,post}.js (loaded before this
   // file). The post/shadow sources are destructured by the split subsystem modules
   // (js/render/glx/post.js, js/render/glx/shadow.js) instead of here.
@@ -33,34 +33,17 @@ const GLX = (function () {
   // path — the only way Playwright/desktop DevTools can exercise and A/B the
   // phone-only downgrades (lamp budget, beams-off, atlas sizes, shadow sizes).
   //
-  // THIS IS THE ONE COPY. The sniff was reimplemented in four files and the
-  // copies had already drifted — js/game.js's omitted `_forceMobile` entirely,
-  // so the override that exists to make the phone tier testable did not reach
-  // the backend gate it most needed to (docs/ARCHITECTURE-REVIEW.md §8).
-  // Everything else reads GLX.isMobile / GLX.mobileTier (exported below):
-  // glx.js is the 11th <script> tag, ahead of every consumer, and the deferred
-  // backends load last, so the value is always there to read. Any new consumer
-  // does the same — do not re-sniff navigator.
-  let _forceMobile = false;
-  let _instCellCache = true;
-  try { _forceMobile = localStorage.getItem("apex26.forceMobileTier") === "1"; } catch (_) {}
-  const IS_MOBILE = _forceMobile ||
-    /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
-    (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent));
+  // The eager GLX facade owns the single device sniff, ahead of eval-time
+  // consumers and deferred renderers. Read that tier rather than re-sniffing.
   // A capable phone can opt into the desktop-quality tier (full DPR + MSAA +
   // full-res atlases + 2048 shadows) via the pause-menu GRAPHICS: HIGH setting.
   // Default OFF — the safe tier is what keeps memory-limited devices alive.
-  let _gfxHigh = false;
-  try { _gfxHigh = localStorage.getItem("apex26.gfxHigh") === "1"; } catch (_) {}
-  // INSTANCE CELL-SET CULL CACHE — ON; apex26.instCellCache=0 is the escape
-  // hatch, the shape __apex.matTex(0) gives the baked-material path. Keys the
-  // resident pack on the surviving CELL SET instead of the frustum, which the
-  // plane cache below cannot do while driving. -48% instance upload bytes in a
-  // pack; numbers, soundness and the real-GPU gate: docs/PERF-FINDINGS.md 2c.
-  try { if (localStorage.getItem("apex26.instCellCache") === "0") _instCellCache = false; } catch (_) {}
+  const IS_MOBILE = GLX.isMobile;
+  // INSTANCE CELL-SET CULL CACHE — owned by js/render/shared/inst-cells.js
+  // (apex26.instCellCache=0 escape hatch). Numbers: docs/PERF-FINDINGS.md 2c.
   // MOBILE TIER = a phone NOT opted into high quality. All the memory downgrades
   // key off this, so HIGH restores full quality (a reload re-runs init with it).
-  const MOBILE_TIER = IS_MOBILE && !_gfxHigh;
+  const MOBILE_TIER = GLX.mobileTier;
   let _ctxLost = false;   // true between webglcontextlost and the reload on restore
   // GPU error counter — WebGL has no onuncapturederror, so drain getError() once
   // per present. Exists because the real-GPU gate read null here and passed
@@ -2117,24 +2100,17 @@ const GLX = (function () {
     // CELL-SET KEY (ON; apex26.instCellCache=0 disables — docs/notes/PERF-FINDINGS 2c).
     // The pack is a deterministic function of the surviving cell set, so this
     // is a strictly stronger key than the frustum. Skips the copy loop and the
-    // upload, not the AABB sweep.
+    // upload, not the AABB sweep. Shared helper: js/render/shared/inst-cells.js.
     let cellKeyN = -1;
     const cs = batch.cells, cn = cs.length;
-    let ks = batch._cellKeyScratch;
-    if (_instCellCache || shadow) {
-      if (!ks || ks.length < cn) ks = batch._cellKeyScratch = new Int32Array(cn);
-      let k = 0;
-      for (let ci = 0; ci < cn; ci++) if (CHK.aabbInFrustum(planes, cs[ci].mn, cs[ci].mx)) ks[k++] = ci;
-      cellKeyN = k;
-      if (!shadow && _instCellCache) {
-        const res = batch._cellKey;
-        if (res && batch._cellKeyN === k) {
-          let same = true;
-          for (let i = 0; i < k; i++) if (res[i] !== ks[i]) { same = false; break; }
-          // NOT writing _cullPlanes here is load-bearing: it must keep describing
-          // whichever frustum physically wrote the buffer (canary-pinned).
-          if (same) { batch.visible = batch._cullN; return batch._cullN; }
-        }
+    let ks = null;
+    if (InstCells.enabled() || shadow) {
+      ks = InstCells.scratchKeys(batch, cn);
+      cellKeyN = InstCells.collectVisible(planes, cs, ks, (p, mn, mx) => CHK.aabbInFrustum(p, mn, mx));
+      if (!shadow && InstCells.enabled() && InstCells.sameKey(batch, ks, cellKeyN)) {
+        // NOT writing _cullPlanes here is load-bearing: it must keep describing
+        // whichever frustum physically wrote the buffer (canary-pinned).
+        batch.visible = batch._cullN; return batch._cullN;
       }
     }
     const src = batch.srcMatrices;
@@ -2203,12 +2179,8 @@ const GLX = (function () {
       for (let k = 0; k < 4; k++, po++) snap[po] = p[k];
     }
     batch._cullN = n;
-    if (_instCellCache && cellKeyN >= 0) {
-      // Record the cell set that produced the bytes now resident.
-      let res = batch._cellKey;
-      if (!res || res.length < cellKeyN) res = batch._cellKey = new Int32Array(batch.cells.length);
-      for (let i = 0; i < cellKeyN; i++) res[i] = ks[i];
-      batch._cellKeyN = cellKeyN;
+    if (InstCells.enabled() && cellKeyN >= 0 && ks) {
+      InstCells.recordKey(batch, ks, cellKeyN);
     }
     return n;
   }
@@ -2232,7 +2204,7 @@ const GLX = (function () {
     const v = Math.max(0, Math.min(cap, n | 0));
     batch.visible = v;
     batch._cullPlanes = null;
-    batch._cellKeyN = -1;
+    InstCells.invalidate(batch);
     if (v > 0) {
       gl.bindBuffer(gl.ARRAY_BUFFER, batch.ibo);
       gl.bufferSubData(gl.ARRAY_BUFFER, 0, matrices, 0, v * 16);
@@ -2729,3 +2701,4 @@ const GLX = (function () {
     mobileTier: MOBILE_TIER,   // phone NOT opted into GRAPHICS: HIGH → memory-safe caps apply
   };
 })();
+GLX.install(GLXBackend);

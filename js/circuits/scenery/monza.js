@@ -180,8 +180,14 @@
       grandstandEx(0.02, 1, 12, 120, null, null, { livery: "steel", endWalls: true });
       // Red trim band fronting the main stand (Italian colors).
       prop(K(0.01), -1, 8, [2, 1.6, 130], [0.80, 0.16, 0.14]);
-      // Accent green band (park integration) below red trim.
-      prop(K(0.00), -1, 8.3, [1.8, 0.8, 128], [0.30, 0.54, 0.28]);
+      // Accent green band (park integration) at the foot of the red trim,
+      // 0.4 m proud in front of it. It was a 0.8 m prop INSIDE the red band's
+      // footprint with its top exactly at grade (the 0.8 m sink): invisible.
+      // Raw box, no blockAt: it stands behind the 7.2 m driving limit here.
+      {
+        const a = anchor(K(0.00), -1, 7.7);
+        addBox(out, vadd(a.c, a.u, 0.25), [0.6, 0.9, 128], [0.30, 0.54, 0.28], [a.r, a.u, a.t]);
+      }
 
       {
         const winLit = [0.98, 0.88, 0.52];  // warm amber glow
@@ -282,9 +288,11 @@
           const ap = anchor(k, side, gap);
           // Pole — slender dark steel column, 10 m tall
           addCyl(out, ap.c, 0.12, 10, [0.18, 0.18, 0.20], 6, [ap.r, ap.u, ap.t]);
-          // Horizontal arm stub
-          addBox(out, vadd(ap.c, ap.u, 9.8), [1.8, 0.18, 0.18],
-                 [0.18, 0.18, 0.20], [ap.r, ap.u, ap.t]);
+          // Horizontal arm stub — reaching OUT to the head only. Centred on
+          // the pole it also reached 0.9 m trackward, where the road guard
+          // dropped it and left the head hanging (ground-audit unsupported).
+          if (addBox(out, vadd(vadd(ap.c, ap.u, 9.8), ap.r, side * 0.55), [1.1, 0.18, 0.18],
+                 [0.18, 0.18, 0.20], [ap.r, ap.u, ap.t]) === false) continue;
           // Lamp head — warm white, slightly yellow-tinted
           addBox(out, vadd(vadd(ap.c, ap.r, side * 0.9), ap.u, 9.65),
                  [1.0, 0.45, 0.55], [0.98, 0.94, 0.72], [ap.r, ap.u, ap.t]);
@@ -320,7 +328,15 @@
         [0.311, -1, 35, [5.0, 0.16, 14], [0.63, 0.70, 0.68]],
       ]) {
         const af = anchor(K(sf), side, dist);
-        addPrism(out, af.c, size, col, [af.r, af.u, af.t]);
+        // Rest on the HIGHEST ground under the wedge: at the anchor's height the
+        // ditch bank rose over all of it (ground-audit buried). Mist may hover.
+        let top = af.c[1];
+        for (const fr of [-0.5, 0, 0.5]) for (const ft of [-0.5, 0, 0.5]) {
+          const q = vadd(vadd(af.c, af.r, fr * size[0]), af.t, ft * size[2]);
+          const g = terrainYAt(q[0], q[2]);
+          if (g != null && g > top) top = g;
+        }
+        addPrism(out, [af.c[0], top - 0.03, af.c[2]], size, col, [af.r, af.u, af.t]);
       }
       out._mat = 0;
       marshalPost(K(0.31), -1, 9);
@@ -383,20 +399,25 @@
           }
           return points;
         };
+        // Tiers 7 m wide on a 7 m pitch so each ABUTS the next: at 8.5 m
+        // they overlapped 1.5 m and every pair shared its underside plane
+        // (ground-audit flatCoplanar). The moss band stood at 66.8, wholly
+        // inside the lower tier (its front face was at 63.75) — it now lines
+        // that face (64.5) as the foot-of-wall streak it was meant to be.
         groundedSegments({
           id: "monza-banking-lower", points: tierPoints(68),
-          width: 8.5, height: 4.5, color: concDk,
+          width: 7, height: 4.5, color: concDk,
         });
         groundedSegments({
           id: "monza-banking-middle", points: tierPoints(75),
-          width: 8.5, height: 8.5, color: conc,
+          width: 7, height: 8.5, color: conc,
         });
         groundedSegments({
           id: "monza-banking-upper", points: tierPoints(82),
-          width: 8.5, height: 12.5, color: concDk,
+          width: 7, height: 12.5, color: concDk,
         });
         groundedSegments({
-          id: "monza-banking-moss", points: tierPoints(66.8),
+          id: "monza-banking-moss", points: tierPoints(64.1),
           width: 0.8, height: 3.2, color: moss,
         });
         for (const p of tierPoints(80)) {

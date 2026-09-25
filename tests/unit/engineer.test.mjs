@@ -53,8 +53,9 @@ function sessionFor({ weather = "dry", cautionLevel = 0, arc = null, laps = 25, 
   });
   tyres.setLevel("real");
   const G = {
-    tyres, raceWeather: weather, weatherArc: arc,
+    tyres, raceWeather: weather, weatherArc: arc, lapsTarget: laps,
     cautionInfo: () => ({ level: cautionLevel }),
+    cautionLevel: () => cautionLevel,
     announce: (msg, dur, kind) => { said.push(msg); kinds.push(kind); return hear; },
   };
   return { eng: E.create(G), tyres, said, kinds, G, setHeard };
@@ -290,7 +291,11 @@ test("senseOf reads the plan and the field: the next stop lap, its compound, and
   s = eng.senseOf(c);
   assert.equal(s.rivalBoxed, "VER");
   s = eng.senseOf(c);
-  assert.equal(s.rivalBoxed, null, "…said once: the rise is consumed");
+  assert.equal(s.rivalBoxed, "VER", "the rise is one tick; the call is LATCHED until it is said");
+  eng.update(c, 0.05);
+  assert.ok(said.some((m) => /^VER HAS BOXED/.test(m)), `the undercut is called: ${said.join(" | ")}`);
+  assert.equal(eng.senseOf(c).rivalBoxed, null, "…said once: the latch is consumed");
+  quiet(eng, c);
   c.lap = 12;
   assert.equal(eng.senseOf(c).lapsToStop, 0);
   eng.update(c, 1);
@@ -324,4 +329,21 @@ test("the PIT CALL rides its own priority; every other line still yields", () =>
   assert.equal(kindOf({ wear: 0.2 }, { session: { weather: "rain" } }), "box");
   // The wear ladder is a REPORT and keeps yielding to flags and penalties.
   assert.equal(kindOf({ wear: 0.55 }), "info");
+});
+
+test("the last lap (and a one-lap qualifying run) gets no call to stop: the flag is closer than the box", () => {
+  const { eng, tyres, said, G } = sessionFor({ weather: "rain", cautionLevel: 3, laps: 10 });
+  const c = carOn(tyres, { wear: 1.2, lap: 7 });   // carOn adds the stint's three laps: lap 10 of 10
+  c.pitPlan = { stops: 1, seq: ["medium", "hard"], stints: [5, 5], lapsAt: [10] };
+  c.pitStops = 0;
+  G.cars = [c];
+  G.pits = { estimate: () => ({ lossS: 22, gapS: 2, marginS: 5, caution: true }), lastCue: () => null };
+  const s = eng.senseOf(c);
+  assert.equal(s.wrongTread, false, "BOX FOR WETS on the last lap");
+  assert.equal(s.freeStop, false, "a cheaper stop on the last lap");
+  assert.equal(s.lapsToStop, null, "BOX BOX BOX on the last lap");
+  eng.update(c, 1);
+  assert.ok(!said.some((m) => /BOX|STOP|GONE/.test(m)), said.join(" | "));
+  c.lap = 9;                                       // a lap earlier every one of them is live again
+  assert.equal(eng.senseOf(c).wrongTread, true);
 });

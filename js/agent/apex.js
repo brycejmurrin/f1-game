@@ -17,7 +17,11 @@ function create(G) {
 function settled(promise, out) {
   const value = Object.assign({}, out);
   return Object.assign({}, out, {
-    then: (res, rej) => Promise.resolve(promise).then(() => res(value), rej),
+    then: (res, rej) => Promise.resolve(promise).then((result) => {
+      if (result && result.kind === "canceled") return rej(new Error("Race start " + result.reason));
+      if (result === false) return rej(new Error("Race start did not reach the grid"));
+      return res(value);
+    }, rej),
   });
 }
 // The four audio hooks share one precondition. `null` when GameAudio is there,
@@ -31,7 +35,7 @@ function settled(promise, out) {
 // is the guard that keeps it honest.
 const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "onKerb",
   "wheelLock", "exhaustPop", "contactT", "_pushD", "_secIdx", "_secT0",
-  "_lapTimeAtLine", "incidentInvalidLap", "passSide", "passBest", "offroad",
+  "_lapTimeAtLine", "_recross", "incidentInvalidLap", "passSide", "passBest", "offroad", "queueT", "_qOf",
   "towing", "wake", "axFrac", "axFracF", "axFracR", "uslipDwell", "slipFactor", "flatSpot", "_aeroGrip", "_bandNow", "skidIntensity",
   "kerbSndT", "kerbHapT",
   // 2026-09-15: five the guard had been red on. The last three need a STREET
@@ -1365,7 +1369,7 @@ const api = {
     if (n != null) { c.money = Math.max(0, n | 0); Career.save(); }
     return c.money;
   },
-  careerReset() { Career.clear(); G.refreshCareerButton(); return true; },
+  careerReset() { const result = Career.clear(); if (result.ok) G.refreshCareerButton(); return result; },
   careerFreeMoney(on) { return Career.freeMoney(on); },
   // Hand the live career credits. No argument grants Career.GRANT.
   careerGrant(n) { return Career.grant(n); },
@@ -1407,7 +1411,8 @@ const api = {
     return c;
   },
   careerSlotDelete(flavour, i) {
-    Career.deleteSlot(flavour, i);
+    const result = Career.deleteSlot(flavour, i);
+    if (!result.ok) return null;
     Career.load();               // land on whatever is left, anywhere
     G.refreshCareerButton();
     return Career.slots();
@@ -2734,7 +2739,7 @@ const api = {
     G.player.x     = x     != null ? x     : 0;
     G.player.xVis  = G.player.x;
     G.player.vLat  = 0; G.player.yawRateCur = 0;
-    G.player.lap   = 0; G.player.axEstSm = 0;
+    G.player.lap   = 0; G.player.axEstSm = 0; G.player.corridorAccel = 0;
     // seed world-space position + heading from (s, x) immediately, same as jump()
     Tracks.sample(G.track, G.player.s, smp);
     placeFromTrack(G.player, smp);
@@ -2748,7 +2753,7 @@ const api = {
     // is exactly the uncontrolled variable seeding is meant to remove.
     for (const c of G.cars) {
       c.gear = 1; c.rpm = PhysicsConsts.IDLE_RPM; c.shiftT = 0;
-      c.steerSm = 0; c.brakeHeat = 0; c.axEstSm = 0; c.slipDeg = 0;
+      c.steerSm = 0; c.brakeHeat = 0; c.axEstSm = 0; c.corridorAccel = 0; c.slipDeg = 0;
       // The heading-state controller's own per-episode state (game.js
       // "--- lateral ---", 2026-09-08). Missed when that controller landed, and
       // it broke replay determinism outright rather than by a metre: `aiBias`

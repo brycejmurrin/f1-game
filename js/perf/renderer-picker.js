@@ -223,23 +223,7 @@ function unavailableDiagnostics() {
   }, null, 2);
 }
 async function copyUnavailableDiagnostics(text) {
-  try {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch (_) { /* permission denied: use the selection fallback */ }
-  try {
-    const out = document.createElement("textarea");
-    out.value = text;
-    out.setAttribute("readonly", "");
-    out.style.position = "fixed"; out.style.opacity = "0";
-    document.body.appendChild(out);
-    out.select();
-    const copied = document.execCommand("copy");
-    out.remove();
-    return copied !== false;
-  } catch (_) { return false; }
+  return ApexClipboard.write(text);
 }
 function closeUnavailableDialog(dialog) {
   if (!dialog) return;
@@ -715,10 +699,7 @@ function initPresentControls() {
   };
 }
 
-// __apex.diag({download:false}) → clipboard. clipboard.writeText needs a
-// secure context and can reject (iOS wants a user gesture, which this is);
-// the hidden-textarea execCommand fallback is what makes it work over plain
-// http and on older WebKit — the same two-step js/perf/gfx-debug-overlay.js uses.
+// __apex.diag({download:false}) → clipboard via ApexClipboard (API + textarea fallback).
 function copyDiag(btn) {
   const label = (t) => { if (btn) btn.textContent = t; };
   const reset = () => setTimeout(() => label("COPY DIAG"), 1600);
@@ -728,27 +709,10 @@ function copyDiag(btn) {
     text = d ? JSON.stringify(d, null, 1) : "";
   } catch (e) { text = ""; }
   if (!text) { label("COPY DIAG — NO DIAG"); reset(); return; }
-  const done = () => { label("COPY DIAG — COPIED"); reset(); };
-  const fallback = () => {
-    try {
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      ta.setAttribute("readonly", "");
-      ta.style.cssText = "position:fixed;left:-9999px;top:0";
-      document.body.appendChild(ta);
-      ta.select();
-      const ok = document.execCommand("copy");
-      document.body.removeChild(ta);
-      if (ok) done(); else { label("COPY DIAG — FAILED"); reset(); }
-    } catch (_) { label("COPY DIAG — FAILED"); reset(); }
-  };
-  try {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(done, fallback);
-      return;
-    }
-  } catch (_) { /* fall through */ }
-  fallback();
+  ApexClipboard.write(text).then((ok) => {
+    if (ok) { label("COPY DIAG — COPIED"); reset(); }
+    else { label("COPY DIAG — FAILED"); reset(); }
+  });
 }
 
 function initReset() {

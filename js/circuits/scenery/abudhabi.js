@@ -145,7 +145,8 @@
 
       for (let i = 0; i < 6; i++) {
         place(K(0.0 + i * 0.012), 1, 12, [9, 6, 30], [0.30, 0.31, 0.36]);   // pit garages
-        place(K(0.0 + i * 0.012), 1, 12, [9.4, 1.0, 30.4], FLOOD);          // lit fascia band
+        // deeper 0.1: its sunk foot shared the garage's underside (flat coplanar)
+        place(K(0.0 + i * 0.012), 1, 12, [9.4, 1.0, 30.4], FLOOD, 0.1);     // lit fascia band
       }
       grandstandEx(0.0, -1, 18, 90, null, null,
         { livery: "darkSteel", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
@@ -187,28 +188,35 @@
 
       {
         const k = K(0.18);
-        place(k, 1, 100, [180, 26, 150], FERRARI);               // vast red roof mass
-        if (landmarkKit) {
-          const ra = anchor(k, 1, 100);
-          const rb = [ra.r, ra.u, ra.t];
-          const fins = 6, finW = 180 / fins, finH = 4.5;
-          modelGroup("abudhabi:ferrari-world-fins", {
-            center: vadd(ra.c, ra.u, 25.5 + finH / 2), size: [180, finH, 150], basis: rb,
-          }, (stage) => {
+        // Wave-4 hero: Ferrari World — one required atomic roof + logo disc
+        // (research: vast red sawtooth roof + central white/yellow Ferrari disc
+        // on the desert side of the north loop). Was a bare place() + loose discs.
+        const aRoof = anchor(k, 1, 100);
+        const bRoof = [aRoof.r, aRoof.u, aRoof.t];
+        modelGroup("abudhabi-ferrari-world", {
+          center: vadd(aRoof.c, aRoof.u, 16), size: [190, 36, 160], basis: bRoof,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(aRoof.c, aRoof.u, 13), [180, 26, 150], FERRARI, bRoof);
+          if (landmarkKit) {
+            const fins = 6, finW = 180 / fins, finH = 4.5;
             for (let i = 0; i < fins; i++) {
               const off = (i + 0.5) / fins * 180 - 90;
               landmarkKit.roof(stage, {
-                center: vadd(vadd(ra.c, ra.r, off), ra.u, 25.5 + finH / 2),
-                size: [finW - 1.4, finH, 148], color: [0.62, 0.06, 0.08], basis: rb, kind: "sawtooth",
+                center: vadd(vadd(aRoof.c, aRoof.r, off), aRoof.u, 25.5 + finH / 2),
+                size: [finW - 1.4, finH, 148], color: [0.62, 0.06, 0.08], basis: bRoof, kind: "sawtooth",
               });
             }
-          }, { required: true });
-        } else {
-          place(k, 1, 103, [184, 5, 154], [0.55, 0.05, 0.06]);   // fallback: flat eave band
-        }
-        const a = anchor(k, 1, 70);
-        seat.cyl(out, vadd(a.c, a.u, 25.5), 22, 3, [0.95, 0.93, 0.85], 14, [a.r, a.u, a.t]);   // logo disc
-        seat.cyl(out, vadd(a.c, a.u, 28.5), 11, 2, [1.00, 0.85, 0.10], 12, [a.r, a.u, a.t]);   // yellow centre
+          } else {
+            addBox(stage, vadd(aRoof.c, aRoof.u, 26.5), [184, 5, 154], [0.55, 0.05, 0.06], bRoof);
+          }
+          // Logo disc — white ring + yellow centre (Ferrari World cue).
+          const aDisc = anchor(k, 1, 70);
+          const bd = [aDisc.r, aDisc.u, aDisc.t];
+          seat.cyl(stage, vadd(aDisc.c, aDisc.u, 25.5), 22, 3, [0.95, 0.93, 0.85], 14, bd);
+          seat.cyl(stage, vadd(aDisc.c, aDisc.u, 28.5), 11, 2, [1.00, 0.85, 0.10], 12, bd);
+          stage._mat = 0;
+        }, { required: true });
       }
 
       for (const side of [-1, 1]) {
@@ -262,25 +270,46 @@
 
       waterBand(0.52, 0.76, 1, 18, 200, 12, WATER, { id: "marina-water" });
 
-      // Yacht hierarchy — fewer, clearer sizes (slim → mid → mega at 0.66)
-      for (let i = 0; i < 14; i++) {
-        const k = K(0.53 + (i % 10) * 0.020);
-        const a = anchor(k, 1, 24 + (i % 3) * 12);
-        const off = ((i % 5) - 2) * 10.0;
-        const hc = vadd(a.c, a.t, off);
-        const big = (i % 7 === 0) ? 1.35 : (i % 3 === 1 ? 1.1 : 0.85);
-        addBox(out, vadd(hc, a.u, 1.1 * big), [4.2 * big, 2.2 * big, 11 * big], [0.94, 0.95, 0.96], [a.r, a.u, a.t]);
-        seat.cyl(out, vadd(hc, a.u, 2.2 * big), 0.18, 11 * big, [0.86, 0.88, 0.92], 4, [a.r, a.u, a.t]);
-        addBox(out, vadd(hc, a.u, 0.4), [4.6 * big, 0.35, 11.5 * big], [1.0, 0.85, 0.50], [a.r, a.u, a.t]);
-        if (big > 1.2)
-          addBox(out, vadd(hc, a.u, 2.3 * big), [2.2 * big, 1.3 * big, 4.2 * big], [0.82, 0.84, 0.90], [a.r, a.u, a.t]);
+      // Wave-4 hero: marina yacht basin — atomic hierarchy so the waterfront
+      // reads as Yas Marina, not scattered boxes (research: yachts moored along
+      // the second-half marina corridor opposite the hotel glow).
+      {
+        // All content relative to ONE far anchor — re-anchoring closer to the
+        // road made child prims fail "emitted footprint rejected".
+        const a0 = anchor(K(0.62), 1, 58);
+        if (!onTrack(a0.c[0], a0.c[2], 24)) {
+          const b0 = [a0.r, a0.u, a0.t];
+          modelGroup("abudhabi-marina", {
+            center: vadd(a0.c, a0.u, 4), size: [32, 14, 100], basis: b0,
+          }, (stage) => {
+            for (let i = 0; i < 8; i++) {
+              const tOff = (i - 3.5) * 11;
+              const rOff = (i % 3) * 6;
+              const hc = vadd(vadd(a0.c, a0.t, tOff), a0.r, rOff);
+              const big = (i % 5 === 0) ? 1.3 : (i % 2 === 0 ? 1.05 : 0.85);
+              addBox(stage, vadd(hc, a0.u, 1.1 * big), [4.0 * big, 2.0 * big, 10 * big],
+                [0.94, 0.95, 0.96], b0);
+              seat.cyl(stage, vadd(hc, a0.u, 2.1 * big), 0.16, 10 * big,
+                [0.86, 0.88, 0.92], 4, b0);
+              addBox(stage, vadd(hc, a0.u, 0.35), [4.4 * big, 0.3, 10.5 * big],
+                [1.0, 0.85, 0.50], b0);
+            }
+            for (let i = 0; i < 5; i++) {
+              const p = vadd(a0.c, a0.t, (i - 2) * 16);
+              addCyl(stage, p, 0.35, 3.0, [0.72, 0.54, 0.28], 6, b0);
+              addBox(stage, vadd(p, a0.u, 3.3), [1.4, 0.7, 1.4], [0.85, 0.22, 0.12], b0);
+            }
+          }, { required: true });
+        }
       }
-      // Mooring posts
-      for (let i = 0; i < 8; i++) {
-        const k = K(0.54 + i * 0.028);
-        const a = anchor(k, 1, 30 + (i % 2) * 8);
-        addCyl(out, a.c, 0.35, 3.2, [0.72, 0.54, 0.28], 6, [a.r, a.u, a.t]);
-        addBox(out, vadd(a.c, a.u, 3.5), [1.6, 0.8, 1.6], [0.85, 0.22, 0.12], [a.r, a.u, a.t]);
+
+      // Sparse outer yachts beyond the hero basin (kept light for perf).
+      for (let i = 0; i < 4; i++) {
+        const k = K(0.68 + i * 0.018);
+        const a = anchor(k, 1, 55);
+        if (onTrack(a.c[0], a.c[2], 8)) continue;
+        addBox(out, vadd(a.c, a.u, 1.0), [3.6, 1.8, 9], [0.94, 0.95, 0.96], [a.r, a.u, a.t]);
+        seat.cyl(out, vadd(a.c, a.u, 2.0), 0.16, 9, [0.86, 0.88, 0.92], 4, [a.r, a.u, a.t]);
       }
 
       building(K(0.62), 1, 28, 48, 52, 28, { kind: "cylinder", wall: [0.20, 0.22, 0.30], lit: true, windowCol: WIN_EMI, floor: 6 });
@@ -314,7 +343,9 @@
         const a = anchor(lampK, 1, 11);
         addCyl(out, a.c, 0.14, 5.5, [0.28, 0.24, 0.17], 4, [a.r, a.u, a.t]);
         addBox(out, vadd(a.c, a.u, 5.5), [1.4, 1.2, 1.4], WARM, [a.r, a.u, a.t]);
-        addCyl(out, vadd(a.c, a.u, 0.08), 3.5, 0.15, [0.96, 0.82, 0.44], 8, [a.r, a.u, a.t]);
+        // 0.25 thick (top 0.33): at 0.15 the verge's camber buried all ten
+        // light pools by 3-6 cm (ground-audit).
+        addCyl(out, vadd(a.c, a.u, 0.08), 3.5, 0.25, [0.96, 0.82, 0.44], 8, [a.r, a.u, a.t]);
       }
 
       // Water reflection streaks + dock glow (hotel approach reads from basin)
@@ -338,7 +369,7 @@
           // working lane (the engine builds the lane 14 m out on the pit side).
           const a = anchor(k, side, 33);
           const b = [a.r, a.u, a.t];
-          modelGroup(`yas-hotel-${side < 0 ? "left" : "right"}-tower`, {
+          modelGroup(side < 0 ? "yas-hotel-left-tower" : "yas-hotel-right-tower", {
             center: vadd(a.c, a.u, 54), size: [30, 108, 40], basis: b,
           }, (stage) => {
             stage._mat = MAT.GLASS;
@@ -353,13 +384,20 @@
               addBox(stage, vadd(a.c, a.u, fy), [24, 3.5, 32], (fl % 2 === 0) ? WIN_EMI : WIN_WARM, b);
             }
             stage._mat = MAT.METAL;
-            for (let gy = 0; gy < 6; gy++) {
-              const cc = vadd(a.c, a.u, 18 + gy * 12);
-              const col = LED_CYCLE[(gy + (side > 0 ? 1 : 0)) % 3];
-              addBox(stage, vadd(cc, a.r, -side * 12), [0.7, 4.0, 8.0], col, b);
+            // Wave-4: denser colour-cycle LED gridshell skin on the track-facing
+            // facade (research: Asymptote LED envelope). Same modelGroup as the
+            // tower so clip-audit treats panels as one assembly.
+            for (let gy = 0; gy < 8; gy++) {
+              for (let gz = 0; gz < 3; gz++) {
+                const cc = vadd(vadd(a.c, a.u, 14 + gy * 10), a.t, (gz - 1) * 6);
+                const col = LED_CYCLE[(gy + gz + (side > 0 ? 1 : 0)) % 3];
+                addBox(stage, vadd(cc, a.r, -side * 12), [0.55, 3.6, 4.5], col, b);
+              }
             }
             stage._mat = 0;
-            addBox(stage, vadd(a.c, a.u, H + 2), [16, 3.5, 20], [1.0, 0.98, 0.88], b);
+            // Roof plant seated on the shaft top (H): at H + 2 it and the crown
+            // above it hovered 0.25 m clear (ground-audit unsupported).
+            addBox(stage, vadd(a.c, a.u, H + 1.7), [16, 3.5, 20], [1.0, 0.98, 0.88], b);
             addBox(stage, vadd(a.c, a.u, H + 5.5), [4, 5, 4], LED_MAG, b);
             addBox(stage, vadd(a.c, a.u, H - 1.5), [28, 1.5, 38], [1.0, 0.88, 0.38], b);
           }, { required: true });
@@ -622,7 +660,7 @@
         // pit-lane back wall + garage roof line (more prominent)
         for (let i = 0; i < 7; i++) {
           place(K(0.0 + i * 0.011), 1, 22, [11, 9, 30], [0.24, 0.25, 0.30]);
-          place(K(0.0 + i * 0.011), 1, 22, [11.4, 1.4, 30.4], [1.0, 0.95, 0.80]); // roof fascia glow
+          place(K(0.0 + i * 0.011), 1, 22, [11.4, 1.4, 30.4], [1.0, 0.95, 0.80], 0.1); // roof fascia glow; foot 0.1 under the wall's
         }
         // Paddock floodlight masts — taller, with large light pools below
         for (let i = 0; i < 7; i++) {
@@ -630,7 +668,7 @@
           tower(tk, 1, 50, 5, 32, { col: DARK, seg: 4, cap: true, capCol: FLOOD });
           const pa = anchor(tk, 1, 50);
           addCyl(out, vadd(pa.c, pa.u, 0.1), 12, 0.30, POOL, 12, [pa.r, pa.u, pa.t]);
-          addCyl(out, vadd(pa.c, pa.u, 0.04), 22, 0.12, POOL_SOFT, 12, [pa.r, pa.u, pa.t]);
+          addCyl(out, vadd(pa.c, pa.u, 0.04), 22, 0.18, POOL_SOFT, 12, [pa.r, pa.u, pa.t]);   // 0.12 lay 2 cm under grade
         }
       }
 
@@ -658,7 +696,7 @@
         out._mat = 0;
         // Lit crown beacon
         addBox(out, vadd(a.c, a.u, 42), [10, 5, 10], FLOOD, [a.r, a.u, a.t]);
-        addBox(out, vadd(a.c, a.u, 47), [4, 4, 4], LED_TEAL, [a.r, a.u, a.t]);
+        addBox(out, vadd(a.c, a.u, 46.5), [4, 4, 4], LED_TEAL, [a.r, a.u, a.t]);   // on the beacon (top 44.5), not 0.5 m over it
         // Ground light pool at tower base
         addCyl(out, vadd(a.c, a.u, 0.10), 14, 0.20, POOL_SOFT, 10, [a.r, a.u, a.t]);
       }

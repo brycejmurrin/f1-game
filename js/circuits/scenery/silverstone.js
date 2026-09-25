@@ -14,7 +14,7 @@
               bleacher, broadleafFall, plane,
               groundedSegments, recordBarrier, circuitKit,
               signBoard, seat, bankedKerbStrip,
-              spectatorHill, cameraTower, sponsorHoarding, bakedModel, along } = api;
+              spectatorHill, cameraTower, sponsorHoarding, bakedModel, along, terrainYAt } = api;
       // backdrop() culls at its anchor point with onTrack(x, z, sz[0]/2 + 6).
       // Ask the same question first, so a hill that overlaps a parallel stretch
       // is skipped instead of staged and dropped (64 per build here,
@@ -580,7 +580,16 @@
         ]) {
           const a = anchor(k(sf), side, dist);
           if (onTrack(a.c[0], a.c[2], Math.max(w, ln) * 0.45 + 8)) continue;
-          addBox(out, vadd(a.c, a.u, 0.12), [w, 0.22, ln], col, [a.r, a.u, a.t]);
+          // Tiled, each tile seated on the ground under it: one 30 x 40 m slab
+          // at the anchor's height sank whole under the rising field (3 buried),
+          // and groundPatch only follows the ground ACROSS, not along.
+          const NX = 4, NZ = 5, tw = w / NX, tl = ln / NZ;
+          for (let ix = 0; ix < NX; ix++) for (let iz = 0; iz < NZ; iz++) {
+            const c = vadd(vadd(a.c, a.r, (ix + 0.5) * tw - w / 2), a.t, (iz + 0.5) * tl - ln / 2);
+            const gy = terrainYAt(c[0], c[2]);
+            if (gy != null) c[1] = gy;
+            addBox(out, vadd(c, a.u, -0.01), [tw, 0.22, tl], col, [a.r, a.u, a.t]);
+          }
         }
       }
 

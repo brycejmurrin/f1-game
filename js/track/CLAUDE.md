@@ -6,8 +6,8 @@ layout/palette/scenery edits go THERE, never here).
 Since the 2026-09-03 move window the engine is split: `core/` is the road
 itself (spline, mesh, geom, space, surface), `scenery/` is everything placed
 beside it (the emitter split, graph, models, themes, kits, the generic
-tables), and `tracks.js` at the root is the registry — `LIST`, `resolve`,
-`build`, palettes.
+tables, and `build-props.js` orchestration), and `tracks.js` at the root is
+the registry — `LIST`, `resolve`, `build`, palettes.
 
 - **The def is the single home of a circuit's data.** `path` (real
   centreline), `sectors`/`turns` (curated markings), `barrier`, `furniture`,
@@ -32,7 +32,7 @@ tables), and `tracks.js` at the root is the registry — `LIST`, `resolve`,
   `{ turn: N }` (1-based into `def.turns`, the curated FIA apex table,
   racing-space, no shift); frac zones that land on a straight >60 m from any
   apex are re-seated on the nearest one.
-- **scenery(api) is a frozen 112-member contract**
+- **scenery(api) is a frozen 114-member contract**
   (`tests/unit/scenery-api-contract.test.mjs`). Adding a member is a
   deliberate contract change: update the test in the same commit.
 - After ANY change here: `node tools/track/verify-track.cjs <id>` (2 s headless

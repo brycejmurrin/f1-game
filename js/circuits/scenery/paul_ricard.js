@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["paul_ricard"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
+      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack,
         pine, tree, bush, ridge, building, grandstandEx, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, modelGroup, prop, runoffApron,
@@ -27,6 +27,13 @@
       // helipad paint opposite its circle. Negating here puts them together.
       const groundPatch = (k, side, ...rest) => api.groundPatch(k, -side, ...rest);
 
+      // DRAPE — terrain-fitted flat decals: api.drape / api.drapeRun (engine,
+      // js/track/scenery/models.js drapeKit). A one-height box (runoffApron /
+      // groundPatch) put a 30 m band on the plateau relief wholly under grade.
+      // Residue classes here: apron 0, corner patch 0.03, vineyard soil 0.06,
+      // lane line 0.09.
+      const { drape, drapeRun } = api;
+
       // Keyed to THIS centreline's corners (Verrerie 0.087 L, Mistral chicane
       // 0.490 L / 0.502 R, Signes 0.713 R, Beausset 0.735-0.755 R, Village
       // 0.887-0.907 L): the old 0.44/0.565/0.72 were written for an earlier
@@ -46,12 +53,10 @@
         // one, far more abrasive, and it is what you hit if the blue did not
         // stop you. Shipped with red as the 9 m strip against the kerb and blue
         // filling the outfield, which reads as the opposite circuit.
-        groundPatch(K(s), side, 4, [w * 0.30, 0.18, l], BLUE,
-          { id: id + "-blue", samples: 8 });
-        groundPatch(K(s), side, 4 + w * 0.30, [w * 0.42, 0.18, l * 1.08], BLUE_D,
-          { id: id + "-blue-outer", samples: 8 });
-        groundPatch(K(s), side, 4 + w * 0.72, [w * 0.28, 0.18, l * 1.14], RED,
-          { id: id + "-red", samples: 8 });
+        // Draped (above), a lift clear of the continuous apron beneath.
+        drapeRun(s, side, 4, [w * 0.30, 0.18, l], BLUE, 0.03, l * 1.14);
+        drapeRun(s, side, 4 + w * 0.30, [w * 0.42, 0.18, l * 1.08], BLUE_D, 0.03, l * 1.14);
+        drapeRun(s, side, 4 + w * 0.72, [w * 0.28, 0.18, l * 1.14], RED, 0.03);
       }
 
       // The corner patches alone leave the rest of the lap green, which is the
@@ -67,20 +72,17 @@
           const seg = spacing * 1.05;   // slight overlap so the run reads unbroken
           // Same order as the corner patches above: blue from the kerb out, red
           // as the deep band before the barrier.
-          runoffApron(k, side, 2.5, [9, 0.16, seg], BLUE);
-          runoffApron(k, side, 11.5, [30, 0.14, seg], (i & 1) ? BLUE : BLUE_D);
-          runoffApron(k, side, 41.5, [26, 0.12, seg], (i & 1) ? RED : RED_D);
-          runoffApron(k, side, 67.5, [22, 0.10, seg], (i & 1) ? RED_D : [0.47, 0.21, 0.20]);
-          if (i % 3 === 0) {
-            const a = anchor(k, side, 26);
-            addBox(out, vadd(a.c, a.u, 0.22), [28, 0.10, 0.9], LINE, [a.r, a.u, a.t]);
-          }
+          // Draped, not runoffApron'd: one box at one anchor height across a
+          // 30 m band put 203 + 144 + 113 of these wholly under the plateau.
+          const ph = { phase: i };
+          drape(k, side, 2.5, [9, 0.16, seg], BLUE, ph);
+          drape(k, side, 11.5, [30, 0.14, seg], (i & 1) ? BLUE : BLUE_D, ph);
+          drape(k, side, 41.5, [26, 0.12, seg], (i & 1) ? RED : RED_D, ph);
+          drape(k, side, 67.5, [22, 0.10, seg], (i & 1) ? RED_D : [0.47, 0.21, 0.20], ph);
+          if (i % 3 === 0) drape(k, side, 12, [28, 0.10, 0.9], LINE, { res: 0.09, line: true });
           // A second lane-line further out, offset in phase, so the Blue Zone
           // reads as a marked run-off surface and never as open water.
-          if (i % 3 === 1) {
-            const a = anchor(k, side, 58);
-            addBox(out, vadd(a.c, a.u, 0.20), [20, 0.10, 0.9], LINE, [a.r, a.u, a.t]);
-          }
+          if (i % 3 === 1) drape(k, side, 48, [20, 0.10, 0.9], LINE, { res: 0.09, line: true });
           i++;
         });
       }
@@ -410,7 +412,10 @@
       for (let i = 0; i < 3; i++) signBoard(K(0.463 + i * 0.010), 1, 8, "braking", 3 - i);   // into the chicane
       signBoard(K(0.052), -1, 8, "corner", 1);
       signBoard(K(0.705), -1, 9, "corner", 8);
-      sponsorHoarding(0.935, 0.070, -1, 3.6, { h: 1.25, step: 10 });
+      // Posted panels, not the theme's LED ribbon: this run stands along the
+      // pit straight, where the pit complex rejects the apron, so a post-less
+      // ribbon hung 0.15 m over bare ground (24 unsupported prims).
+      sponsorHoarding(0.935, 0.070, -1, 3.6, { h: 1.25, step: 10, style: "panel" });
       sponsorHoarding(0.455, 0.520, 1, 3.6, { h: 1.25, step: 11 });
       cameraTower(K(0.030), -1, 26, { h: 17 });
       cameraTower(K(0.713), 1, 84, { h: 20 });
@@ -445,8 +450,9 @@
           // Bare tilled ground under the parcel, so rows sit on soil not grass.
           // Centred on the rows (gap ± rows·2.1): from `gap` outward it only
           // ever covered the outer half of the parcel.
-          groundPatch(K(s), side, gap - rows * 2.25, [rows * 4.5, 0.15, 120], SOIL,
-            { id: `paul-ricard-${id}-soil`, samples: 9 });   // 8 strips put a strip edge on a row face (12 and 18 rows)
+          // Draped: one groundPatch height per 120 m strip left 105 of these
+          // wholly under the rolling plateau (up to 6.4 m).
+          drapeRun(s, side, gap - rows * 2.25, [rows * 4.5, 0.15, 120], SOIL, 0.06);
           for (let r = 0; r < rows; r++) {
             const a = anchor(K(s), side, gap + (r - rows / 2) * 4.2);
             const b = [a.r, a.u, a.t];

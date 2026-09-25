@@ -94,18 +94,20 @@ const RaceFacts = (function () {
     // allocations a step (strings, arrays, Sets) before.
     const _seen = new Set(), _live = new Set();
     const pairKey = (x, y) => x * 1048576 + y;   // ids are small ints; exact below 2^53
+    const clockOf = (c) => (st.get(c).finT || 0) + (c.penalty || 0);
     const byRace = (a, b) => {
       // TWO FLAGGED CARS go by laps, then by who took the flag first — never
       // by distance: each froze wherever its last timestep left it past the
       // line, up to ~1.4 m at 85 m/s, and a car flagged 20 s behind the winner
       // could rank ahead of it and be told it won.
+      // A time penalty is served on that clock, as endRace classifies.
       if (a.finished && b.finished) {
-        return ((b.lap || 0) - (a.lap || 0)) || ((st.get(a).finT || 0) - (st.get(b).finT || 0));
+        return ((b.lap || 0) - (a.lap || 0)) || (clockOf(a) - clockOf(b));
       }
       const d = distOf(b) - distOf(a);
       if (Math.abs(d) > 1) return d;
       if (a.finished !== b.finished) return a.finished ? -1 : 1;
-      if (a.finished) return (st.get(a).finT || 0) - (st.get(b).finT || 0);
+      if (a.finished) return clockOf(a) - clockOf(b);
       return d;
     };
     function rank(list) {
@@ -163,8 +165,12 @@ const RaceFacts = (function () {
         }
         if ((c.lap || 0) > s.lap && c === p) ev.push({ type: "playerLap", lap: c.lap });
         s.lap = c.lap || 0; s.lastLap = c.lastLap || 0;
-        if (c.finished && !s.finished) { s.finProg = c.prog || 0; s.finT = t; finishers.push(c); }
+        if (c.finished && !s.finished) { s.finProg = c.prog || 0; s.finT = t; s.finDue = t + (c.penalty || 0); }
         s.finished = !!c.finished;
+        // A car flagged with a time penalty has no place until the penalty has
+        // run out: a rival crossing inside it still beats it, and "YOU WIN THE
+        // RACE" 3 s before the results say P2 is the one call that must not be wrong.
+        if (s.finDue != null && t >= s.finDue - 1e-9) { s.finDue = null; finishers.push(c); }
       }
 
       order = rank(cars);
@@ -214,8 +220,9 @@ const RaceFacts = (function () {
       } else { pendPos = 0; pendT = 0; }
 
       // ── flags and contact ───────────────────────────────────────────────
-      const lvl = G.cautionLevel ? G.cautionLevel() | 0
-        : (G.cautionInfo ? (G.cautionInfo() || { level: 0 }).level | 0 : 0);
+      // cautionLevel(), not cautionInfo(): this runs every physics step, and
+      // info() builds an 11-field object (with a toFixed string) to read one int.
+      const lvl = G.cautionLevel ? G.cautionLevel() | 0 : 0;
       // A lap under the safety car or VSC is not pace either: every gap closes.
       if (lvl !== caution) { ev.push({ type: "caution", level: lvl, prev: caution }); caution = lvl; hist.clear(); }
       const hits = p.hits | 0;
@@ -271,9 +278,15 @@ const RaceFacts = (function () {
       // When the leader will take the flag is estimated from both cars' average
       // pace; the player's laps to go are the crossings until just after that.
       let toGo = laps > 0 ? Math.max(0, laps - (p.lap || 0) + 1) : null;
-      if (toGo != null && leader && leader !== p && !p.finished && (leader.lap || 0) > (p.lap || 0) && t > 0) {
-        const vL = (leader.prog || 0) / t, vP = (p.prog || 0) / t;
-        if (vL > 0 && vP > 0) {
+      // LAPPED means a lap down ON THE ROAD, not a higher lap counter (the
+      // leader has simply crossed the line first), and pace is the last LAP
+      // TIME, not distance over race time — a red-flag restart re-grids the
+      // field without resetting the clock, and read a player on lap 1 as
+      // "ONE TO GO".
+      const lapped = leader && leader !== p && !p.finished && (leader.prog || 0) - (p.prog || 0) >= lapLen;
+      if (toGo != null && lapped && leader.lastLap > 0 && p.lastLap > 0) {
+        const vL = lapLen / leader.lastLap, vP = lapLen / p.lastLap;
+        {
           const tL = leader.finished ? 0 : Math.max(0, laps * lapLen - (leader.prog || 0)) / vL;
           const at = (p.prog || 0) + tL * vP;
           toGo = Math.max(1, Math.min(toGo, Math.floor(at / lapLen) - Math.floor((p.prog || 0) / lapLen) + 1));

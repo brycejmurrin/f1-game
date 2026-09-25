@@ -7,7 +7,7 @@
 (window.TrackScenery = window.TrackScenery || {})["miami"] =
   function (api) {
       const {
-        K, lapBounds, out, MAT, COL, n, px, pz, pyMin, place, prop, backdrop, grandstandEx,
+        K, lapBounds, out, MAT, COL, n, pyMin, place, prop, backdrop, grandstandEx,
         building, tower, billboard, palm, bush, fence, wall, guardrail, tyreWall,
         bankedKerbStrip, marshalPost, gantry, anchor, addBox, addCyl, addPrism, addPyramid,
         addCone, addFrustum, vadd, hash, onTrack, every, along, cityFront, forestEdge,
@@ -16,6 +16,12 @@
       } = api;
 
       const { cx, cz, radius: rad } = lapBounds();
+
+      // DRAPE — terrain-fitted flat decals: api.drape (engine,
+      // js/track/scenery/models.js drapeKit). place() sinks every box 0.8 m, so
+      // the marina's 5-6 cm paint went wholly under grade. Residue classes
+      // here: marina boundary paint 0 / 0.03.
+      const { drape } = api;
 
       const TEAL       = [0.20, 0.80, 0.78];
       const CORAL      = [1.0,  0.55, 0.45];
@@ -385,9 +391,11 @@
       }
       guardrail(0.26, 0.38, 1, 2.8, GREYWHITE);
 
+      // Draped paint (place() sank these 5-6 cm strips 0.74 m under grade:
+      // 148 invisible boxes), 0.2 m over grade so it reads on the pontoon.
       along(0.265, 0.375, 8, (k) => {
-        place(k, 1, 6.3, [0.45, 0.06, 8], WHITE);        // painted vinyl boundary
-        place(k, 1, 6.9, [0.7, 0.05, 8], [0.34, 0.34, 0.36]);  // asphalt showing through
+        drape(k, 1, 6.075, [0.45, 0.06, 8], WHITE, { res: 0, phase: 0, h: 0.2 });   // painted vinyl boundary
+        drape(k, 1, 6.55, [0.7, 0.05, 8], [0.34, 0.34, 0.36], { res: 0.03, phase: 0, h: 0.2 });  // asphalt showing through
       });
       // Moored rank — one hull repeated at a fixed berth pitch, bows all the
       // same way. A real harbour never looks this regular; a boat show does.

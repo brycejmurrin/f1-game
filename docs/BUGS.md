@@ -70,6 +70,15 @@ FL. `endRace` picks FL among classified finishers only.
 
 **Test:** `tests/unit/season-cal.test.mjs` — unfinished take no points/finishes/FL.
 
+**Correction (2026-09-24):** the `c.finished` half over-reached. `endRace`
+ends the session 2.2 s after the last human crosses the line
+(`RaceControl.finishDelay`) and classifies every running car by progress, so a
+car still on track at the flag is the normal case, not a time-cap corner — from
+this fix on, most of the field scored 0 in an ordinary season race while the
+results sheet still printed their points. `award()` now classifies every
+non-retired car by position; only the fastest-lap point requires
+`c.finished`. The test asserts that instead.
+
 ### B5 — Cross-tab + quota can overwrite a newer mirror-only save
 **Severity:** high · **Status:** FIXED here · **Confidence:** medium-high
 
@@ -126,7 +135,7 @@ phaseRoll/mistake hashes used bare `simSeed()` / `raceIndex`.
 
 Pipeline: [SCENERY-AND-TRACK-BUILD.md](SCENERY-AND-TRACK-BUILD.md). Helper
 catalogue: [SCENERY-API.md](SCENERY-API.md). `scenery(api)` surface frozen at
-**112 members** by `tests/unit/scenery-api-contract.test.mjs`.
+**114 members** by `tests/unit/scenery-api-contract.test.mjs`.
 
 ### S1 — `along()` + wrapped helpers double-apply `_sceneryShift`
 **Severity:** high · **Status:** FIXED here · **Confidence:** high

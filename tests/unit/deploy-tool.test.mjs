@@ -11,7 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DEPLOY_BRANCH, touchedCircuits, preflight, ratchetMetrics, ratchetOverruns, cureableConflicts,
-  LADDER_DOCS, figureOnlyConflict, takeOurs,
+  LADDER_DOCS, figureOnlyConflict, takeOurs, REGEN_MESSAGE,
   sweepSuites, touchesGeometry, targetedFor, notCovered, anyGeometry, proseOnly, changedPaths } from "../../tools/ci/deploy.mjs";
 import { DEPLOY_BRANCH as PICK_BRANCH } from "../../tools/ci/pick-tests.mjs";
 import { GEOMETRY_ERE, GEOMETRY_PATHS, namedPaths, fleetFiles, TARGETED, targetedSuites, PARTS_ERE, partsFiles } from "../../tools/ci/geometry-paths.mjs";
@@ -169,6 +169,66 @@ test("gate-ladder docs cure only when every conflict hunk differs in digits alon
   const { TARGET, SECONDARY } = await import("../../tools/gen/gen-ladder-figures.mjs");
   assert.deepEqual([...LADDER_DOCS].sort(), [TARGET, ...SECONDARY].sort(),
     "LADDER_DOCS must name exactly the docs gen-ladder-figures rewrites");
+});
+
+/* THE CLEAN MERGE THAT IS STILL STALE (2026-09-24: four red PRs in a day).
+ * Both sides add one unit file and regenerate, so both rewrite the ladder to
+ * the SAME "N of M+1"; git merges the identical hunks without a conflict, the
+ * union holds M+2 files, and nothing above ever ran because nothing conflicted.
+ * This builds exactly that history in a throwaway copy of the tree (text files
+ * only — no assets, no vendor) and runs the REAL mergeDeployTip() from the
+ * copy's own deploy.mjs, so ROOT, `npm run gen` and git all act on the copy. */
+test("a CLEAN merge whose base added a unit file ends with the ladder figures regenerated", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-regen-"));
+  const g = (...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: "pipe" }).trim();
+  const ladderCheck = () => spawnSync(process.execPath, ["tools/gen/gen-ladder-figures.mjs", "--check"],
+    { cwd: dir, encoding: "utf8" });
+  try {
+    const listed = execFileSync("git", ["ls-files", "-co", "--exclude-standard"], { cwd: ROOT, encoding: "utf8" })
+      .split("\n").filter(Boolean)
+      .filter((f) => !/^(assets|vendor|spike|artifacts|scratch)\//.test(f));
+    for (const f of listed) {
+      const src = path.join(ROOT, f);
+      let st;
+      try { st = fs.lstatSync(src); } catch { continue; }       // deleted in the working tree
+      // Binaries and symlinks: no generator reads them (docs/ alone is ~100 MB of images).
+      if (!st.isFile() || /\.(png|jpe?g|webp|gif|avif|glb|gltf|bin|ktx2|basis|hdr|exr|wasm|mp3|ogg|wav|m4a|mp4|webm|gz|zip|pdf|ttf|woff2?)$/i.test(f)) continue;
+      fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true });
+      fs.copyFileSync(src, path.join(dir, f));
+    }
+    fs.symlinkSync(path.join(ROOT, "node_modules"), path.join(dir, "node_modules"));
+    g("init", "-q", "-b", "base");
+    g("config", "user.email", "t@t"); g("config", "user.name", "t");
+    g("add", "-A"); g("commit", "-qm", "base");
+    assert.equal(ladderCheck().status, 0, "the copied tree must start with fresh figures: " + ladderCheck().stdout);
+
+    const addUnit = (name) => {
+      fs.writeFileSync(path.join(dir, "tests/unit", name), "// placeholder\n");
+      execFileSync(process.execPath, ["tools/gen/gen-ladder-figures.mjs"], { cwd: dir, stdio: "pipe" });
+      g("add", "-A"); g("commit", "-qm", `add ${name}`);
+    };
+    g("checkout", "-q", "-b", "tip"); addUnit("zz-regen-theirs.test.mjs");
+    g("update-ref", `refs/remotes/origin/${DEPLOY_BRANCH}`, "tip");
+    g("checkout", "-q", "-b", "ours", "base"); addUnit("zz-regen-ours.test.mjs");
+
+    const out = execFileSync(process.execPath, ["--input-type=module", "-e",
+      `const m = await import(${JSON.stringify(path.join(dir, "tools/ci/deploy.mjs"))}); console.log(m.mergeDeployTip());`],
+      { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    assert.match(out, /merged \(clean; regenerated .*AGENTS\.md/, "the clean merge must say what it re-derived");
+
+    const check = ladderCheck();
+    assert.equal(check.status, 0, "figures on the synced branch must match gen-ladder-figures --check:\n" + check.stdout + check.stderr);
+    assert.equal(g("status", "--porcelain"), "", "the regeneration is committed, not left in the tree");
+    assert.equal(g("log", "-1", "--format=%s"), REGEN_MESSAGE);
+    assert.equal(g("log", "-1", "--format=%P", "HEAD~1").split(" ").length, 2, "HEAD~1 is the merge itself");
+
+    // The history really is the clean-but-stale case: the bare merge had no
+    // conflict and its figures were one file short.
+    g("checkout", "-q", "HEAD~1");
+    assert.notEqual(ladderCheck().status, 0, "without the regeneration the clean merge is stale — the case under test");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 /* THE GATE THAT MEASURED NO GEOMETRY. deploy.mjs ran tooling-fast and every
@@ -374,6 +434,10 @@ test("the parts census derives its trigger, and every fail-safe branch RUNS it",
   // pages.yml has `needs: ci`, and both read the AGGREGATE of the jobs that ran.
   assert.ok(!/^    if: \$\{\{ inputs\.fast_tier_run == '' && /m.test(job),
     "the census must stay a job that runs and skips a step, not a job that skips");
+  // NOT skipped by a reused fast tier (2026-09-24): its filter diffs a base, so
+  // the last push's green census says nothing about the train's live..tip diff.
+  assert.ok(!/^    if: .*fast_tier_run/m.test(job),
+    "the train must census live..tip itself; a reused fast run only covered the last push's diff");
   assert.match(job, /- if: steps\.filter\.outputs\.parts == 'true'\n\s+run: npm run test:sweeps-parts/,
     "the expensive step is what the filter gates");
 });

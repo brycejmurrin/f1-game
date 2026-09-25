@@ -140,11 +140,25 @@ test("trim(from) drops the primitive records and the live-buffer set", () => {
 // buffer untouched, every surviving index in range. Measured 2026-09-24,
 // re-measured after P2 moved the grandstand shell out from behind the crowd
 // (fewer rows are enclosed, so fewer are stripped), and again after the verge
-// carve fix raised the terrain beside descents (buried counts moved).
+// carve fix raised the terrain beside descents (buried counts moved), and
+// after T3 draped groundPatch over the terrain (monza +834 patch triangles),
+// and after merging landmark wave 3's Tribuna/podium densify on top.
+// Re-measured 2026-09-24 after the scenery ground-audit (nature/city stop
+// emitting never-visible palm stubs / underground facade detail) plus the
+// tip engine grounding (tyre footings, marshal boards, hoarding legs, cable
+// posts, pit exit signal): ship merge had restored the pre-audit STRIP
+// numbers; tip then moved both circuits again.
 const STRIP = {
-  monaco: { before: 293515, after: 252651 },
-  // Re-measured 2026-09-24 after landmark wave 3 Tribuna/podium + mid densify.
-  monza: { before: 341693, after: 301774 },
+  // ship 293659/258313 → audit 287677/252433 → tip 287821/258089
+  // → fix-top-counts 285112/256710 (yachts/pontoons under the quay land no
+  // longer moored; buried harbour balconies skipped; ground-audit)
+  // → merged follow-ups 286489/257979 (yachts moored in open water, not
+  // dropped; engine-helpers plinth sink)
+  monaco: { before: 286489, after: 257979 },
+  // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
+  // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
+  // banking tiers abut, moss band out of the lower tier; ground-audit)
+  monza: { before: 342563, after: 315738 },   // merged follow-ups: +29 kept (engine-helpers)   // +30 kept: restoring place()'s SEP_SLOTS sequence (marshal board) shifts a few buried props back above grade
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {

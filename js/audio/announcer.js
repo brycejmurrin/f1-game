@@ -375,7 +375,7 @@ const Announcer = (function () {
   function inert() {
     return Object.freeze({
       play: () => false, stop: () => {}, preview: () => false, sample: () => false, wrapUp: () => false,
-      scriptFor: () => [], enabled: () => false, setEnabled: () => {}, available: () => false,
+      scriptFor: () => [], enabled: () => false, setEnabled: () => {}, available: () => false, speaking: () => false,
     });
   }
 
@@ -407,6 +407,7 @@ const Announcer = (function () {
     }
 
     function stop() {
+      wrapGen++;               // a wrap-up still waiting for the radio is retired too
       generation++;            // before cancel(): a queued onend must already see itself as stale
       speaking = null;
       try { synth.cancel(); } catch (e) { /* nothing queued, or a synth mid-teardown */ }
@@ -494,6 +495,7 @@ const Announcer = (function () {
     }
 
     /** The results screen's read: winner, margin, your race, fastest lap. */
+    let wrapGen = 0;   // a newer wrap-up (or a stop) retires a waiting one
     function wrapUp(order, info) {
       if (!on || !Array.isArray(order) || !order.length) return false;
       const t = (info && info.track) || {};
@@ -502,15 +504,35 @@ const Announcer = (function () {
       let fast = null;
       for (const c of order) if (c.best > 0 && Number.isFinite(c.best) && (!fast || c.best < fast.best)) fast = c;
       const sum = {
-        event: t.gp ? "the " + t.gp : "", n: order.length,
+        event: info && info.sprint ? "the sprint" : t.gp ? "the " + t.gp : "", n: order.length,
         winner: { name: w.name || w.code || "" },
         second: s2 && !s2.retired ? s2.name : "",
-        margin: s2 && !s2.retired && s2.finishT > 0 && w.finishT > 0 && (s2.lap | 0) >= (w.lap | 0) ? s2.finishT - w.finishT : 0,
+        // On the corrected clock, as the results sheet classifies: a +5 s penalty
+        // is part of the margin, not seven seconds of daylight.
+        margin: s2 && !s2.retired && s2.finishT > 0 && w.finishT > 0 && (s2.lap | 0) >= (w.lap | 0)
+          ? (s2.finishT + (s2.penalty || 0)) - (w.finishT + (w.penalty || 0)) : 0,
         you: you ? { pos: you.retired ? 0 : (you.finPos || order.indexOf(you) + 1), grid: you.gridPos || 0, dnf: !!you.retired } : null,
         fastest: fast ? { name: fast.name || "", time: fast.best, you: !!fast.isPlayer } : null,
       };
       const lines = wrapRows(sum);
-      return lines.length ? speak(lines, 16000, false) : false;
+      if (!lines.length) return false;
+      // AFTER THE ENGINEER, NOT OVER HIM. endRace runs 2.2 s after the flag and
+      // the engineer's result line ("P3, GREAT JOB") is often still on air:
+      // speaking now cut a synthesised line mid-word, or ran over a recorded
+      // one (the voice pack is WebAudio, which cancel() never touches). Wait
+      // for the radio to be quiet — at most 6 s, then read anyway.
+      const radio = G.radio;
+      const gen = ++wrapGen;
+      let waited = 0;
+      const go = () => {
+        if (gen !== wrapGen) return;
+        let busy = false;
+        try { busy = !!(radio && radio.busy && radio.busy()); } catch (_) { busy = false; }
+        if (busy && waited < 6000 && typeof setTimeout === "function") { waited += 250; setTimeout(go, 250); return; }
+        speak(lines, 16000, false);
+      };
+      go();
+      return true;
     }
 
     /** The budget is the loading screen's own window, so the read is CUT TO FIT
@@ -616,7 +638,7 @@ const Announcer = (function () {
       /** Called by the loading screen. Returns false when it said nothing, so
        *  the caller can tell "off" from "spoke" without reading storage. */
       play(info, budgetMs) {
-        if (!on) return false;
+        if (!on || (budgetMs != null && budgetMs < 0)) return false;   // a flyby with no room for it
         return speak(scriptFor(info, budgetMs), budgetMs, true);
       },
       /** The editor's PLAY button: speaks regardless of the player's toggle,
@@ -632,6 +654,10 @@ const Announcer = (function () {
       wrapUp,
       stop,
       enabled: () => on,
+      /** Is a read in progress — a line on air, or the hold before the last
+       *  one? The loading screen's radio check waits on this: the two share
+       *  one speechSynthesis, and RadioVoice's say() cancels it. */
+      speaking: () => !!speaking,
       setEnabled(b) { on = !!b; try { G.store.set("announcer", on); } catch (_) { /* storage refused */ } if (!on) stop(); },
       available: () => true,
     };

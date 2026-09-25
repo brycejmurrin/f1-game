@@ -474,17 +474,23 @@ const SceneryPits = (function () {
         }
       }
       if (p.v[kOut] >= 0.98) {
-        const c = at(kOut, sd * (hw[kOut] + v1 - 0.5), 0.35);
+        // The post is footed on the LANE FLOOR, through the 0.35 m platform
+        // slab, the way the entry posts stand on their own floor: a foot on
+        // the platform's top rested on a raw sweep no prim records, so the
+        // post and the three prims on it read as floating 0.38-4.2 m up on
+        // ~35 circuits (ground-audit, 2026-09-24). The head stays 4.1 m up.
+        const rise = 3.95;
+        const c = at(kOut, sd * (hw[kOut] + v1 - 0.5), 0);
         const bs = basisAt(kOut);
-        rawBox(out, [c[0], c[1] + 1.8, c[2]], [0.16, 3.6, 0.16], POST, bs);
-        rawBox(out, [c[0], c[1] + 3.75, c[2]], [0.5, 0.9, 0.34], DARK, bs);
+        rawBox(out, [c[0], c[1] + rise / 2, c[2]], [0.16, rise, 0.16], POST, bs);
+        rawBox(out, [c[0], c[1] + rise + 0.15, c[2]], [0.5, 0.9, 0.34], DARK, bs);
         // The exit signal. At night the lit aspect (green: the lane is open)
         // is over-white so the props draw blooms it, and the dead one is dark
         // glass, so it reads as a signal rather than two painted discs. No
         // light record: a halo would be 2 m wide on a 28 cm lamp.
         const go = night ? [0.30, 1.40, 0.45] : [0.2, 0.9, 0.3], stop = night ? [0.30, 0.06, 0.04] : [0.9, 0.15, 0.1];
-        rawBox(out, [c[0] + bs[0][0] * 0.2, c[1] + 3.95, c[2] + bs[0][2] * 0.2], [0.12, 0.28, 0.28], go, bs);
-        rawBox(out, [c[0] + bs[0][0] * 0.2, c[1] + 3.55, c[2] + bs[0][2] * 0.2], [0.12, 0.28, 0.28], stop, bs);
+        rawBox(out, [c[0] + bs[0][0] * 0.2, c[1] + rise + 0.35, c[2] + bs[0][2] * 0.2], [0.12, 0.28, 0.28], go, bs);
+        rawBox(out, [c[0] + bs[0][0] * 0.2, c[1] + rise - 0.05, c[2] + bs[0][2] * 0.2], [0.12, 0.28, 0.28], stop, bs);
       }
     }
 

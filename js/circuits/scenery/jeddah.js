@@ -180,7 +180,10 @@
         const s = 0.425 + i * 0.019;
         const k = K(s), col = (i % 3 === 0) ? WINTEAL : SPANGLE;
         place(k, 1, 12 + (i % 2) * 1.5, [0.34, 1.7, 0.34], col);
-        place(k, 1, 14.5 + (i % 2), [2.8, 0.12, 1.2], col);
+        // place() sinks 0.8 m (height = 0.8 + visible): at 0.12 the pad was
+        // laid wholly underground (ground-audit buried). 0.84 = 4 cm proud,
+        // still under THIN_PROP_H, so it stays a decal (no driving limit).
+        place(k, 1, 14.5 + (i % 2), [2.8, 0.84, 1.2], col);
       }
 
       // ── King Fahd's Fountain — offshore landmark ──────────────────────────
@@ -316,12 +319,15 @@
             put(stage, a.c, [8, H, 36], [0.14, 0.16, 0.22]);
             stage._mat = MAT.GLASS;
             // Continuous sail face (not mid-air LED strips — those float-audit).
-            put(stage, vadd(a.c, a.r, -4.2), [1.2, H * 0.92, 34], SAIL);
-            put(stage, vadd(a.c, a.r, -5.0), [0.6, H * 0.88, 28], SAIL_HI);
+            // Each layer's foot steps 0.1 m deeper than the one behind it: all
+            // grounded at a.c, their undersides shared one plane (ground-audit
+            // flatCoplanar). Tops are unchanged.
+            put(stage, vadd(vadd(a.c, a.r, -4.2), a.u, -0.1), [1.2, H * 0.92 + 0.1, 34], SAIL);
+            put(stage, vadd(vadd(a.c, a.r, -5.0), a.u, -0.2), [0.6, H * 0.88 + 0.2, 28], SAIL_HI);
             // Vertical LED fins proud of the face — grounded with the shaft.
             for (const z of [-12, -4, 4, 12]) {
-              put(stage, vadd(vadd(a.c, a.r, -5.5), a.t, z),
-                [0.4, H * 0.85, 1.2], (z < 0) ? SAIL_HI : SAIL);
+              put(stage, vadd(vadd(vadd(a.c, a.r, -5.5), a.t, z), a.u, -0.3),
+                [0.4, H * 0.85 + 0.3, 1.2], (z < 0) ? SAIL_HI : SAIL);
             }
             stage._mat = 0;
             // Helipad lip sitting ON the shaft top (base at H, not floating).
@@ -391,7 +397,7 @@
         const a = anchor(k, 1, 40 + (i % 3) * 12), b = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 9)) continue;
         const hl = 5.5 + (i % 3) * 1.5;
-        addBox(out, vadd(a.c, a.u, 1.3), [2.8, 2.0, hl], [0.94, 0.94, 0.96], b);
+        addBox(out, vadd(a.c, a.u, 1.0), [2.8, 2.6, hl], [0.94, 0.94, 0.96], b);   // keel 0.3 under the anchor: it hovered 0.27 m
         addBox(out, vadd(a.c, a.u, 2.3), [2.9, 0.3, hl], (i % 2) ? SPANGLE : WINCOOL, b);
         addCyl(out, vadd(a.c, a.u, 2.5), 0.18, 12, [0.88, 0.88, 0.92], 4, b);
       }
@@ -464,7 +470,7 @@
       // ── TIGHT TECHNICAL SECTOR — s 0.78–0.84 ─────────────────────────────
       for (const side of [-1, 1]) {
         for (let i = 0; i < 5; i++) {
-          place(K(0.78 + i * 0.010), side, 5, [5.5, 0.28, 2.8],
+          place(K(0.78 + i * 0.010), side, 5, [5.5, 0.84, 2.8],   // 4 cm proud of place()'s 0.8 m sink; < THIN_PROP_H: a decal, not a wall
                 (i % 2) ? [0.92, 0.08, 0.08] : [0.96, 0.96, 0.97]);
         }
       }
@@ -516,7 +522,9 @@
           center: vadd(base, a.u, 21), size: [34, 44, 30], basis: b,
         }, (stage) => {
           stage._mat = MAT.STONE;
-          addBox(stage, vadd(base, a.u, 2.0), [26, 4, 26], [0.90, 0.90, 0.86], b);
+          // Plinth reaches 0.6 m under the sea plane: its underside stood
+          // 0.38 m over the water, so the whole mosque hung (ground-audit).
+          addBox(stage, vadd(base, a.u, 1.7), [26, 4.6, 26], [0.90, 0.90, 0.86], b);
           addBox(stage, vadd(base, a.u, 4.3), [26.6, 0.6, 26.6], WINCOOL, b);
           addBox(stage, vadd(base, a.u, 7.5), [16, 7, 16], [0.93, 0.93, 0.90], b);
           addBox(stage, vadd(base, a.u, 8.0), [16.3, 3, 16.3], WINWARM, b);
@@ -584,7 +592,7 @@
         addPrism(out, vadd(vadd(mast, a.u, 4.5 * sc), a.t, 2.2 * sc),
           [0.3, 8 * sc, 7 * sc], [0.90, 0.88, 0.82], b);                                               // lateen sail
         out._mat = 0;
-        addBox(out, vadd(hull, a.u, 0.1), [3.0 * sc, 0.3, 9.6 * sc], SPANGLE, b);                      // water reflection
+        addBox(out, vadd(hull, a.u, 0.03), [3.0 * sc, 0.3, 9.6 * sc], SPANGLE, b);                     // water reflection (underside 7 cm below the hull's)
       };
       // dhow fleet alongside the marina + Corniche lagoon
       for (let i = 0; i < 5; i++) dhow(K(0.43 + i * 0.010), 56 + (i % 3) * 14, 1.0 + (i % 2) * 0.4);

@@ -456,9 +456,18 @@ const TyreModel = (function () {
   // race, so this is deliberately a small number that matters only cumulatively.
   const FUEL_ACCEL = 0.060;
   const FUEL_VMAX = 0.012;
+  // `c.lap` counts LINE CROSSINGS: the start crossing makes it 1 and the
+  // winner takes the flag on lapsTarget + 1 (RaceControl.finishOrder). Laps
+  // COMPLETED is one less. Reading the crossing count as laps done burned 1/n
+  // of the fuel at the start and ran the whole final lap on an empty tank
+  // (a 1-lap race was empty 14 m after the lights) — 2026-09-24.
+  const lapsDone = (lap) => Math.max(0, (lap || 0) - 1);
   function fuelFrac(c, lapsTarget) {
     const n = Math.max(1, lapsTarget || 1);
-    return clamp(1 - Math.max(0, c.lap || 0) / n, 0, 1);
+    // `fuelLap` (race-control / red-flag restart) is a crossing count too: the
+    // most crossings this car has physically driven, so a restart or a
+    // backward crossing never refills the tank. Both read through lapsDone.
+    return clamp(1 - lapsDone(c.fuelLap == null ? c.lap : c.fuelLap) / n, 0, 1);
   }
 
   // ── COMPOUND RECORDS ──────────────────────────────────────────────────────
@@ -626,11 +635,14 @@ const TyreModel = (function () {
     /** The stint strip for one car: [{code, colour, lap0, lap1, laps}, …]. */
     function stints(c) {
       if (!c || !c.tyreLog) return [];
-      const end = c.lap || 0;
+      // The log stores crossing counts (fit/closeStints stamp c.lap); the strip
+      // shows laps COMPLETED, or a no-stop 5-lap race read "M 6 laps".
+      const end = lapsDone(c.lap);
       return c.tyreLog.map(function (e) {
-        const lap1 = e.lap1 == null ? end : e.lap1;
+        const lap0 = lapsDone(e.lap0);
+        const lap1 = e.lap1 == null ? end : lapsDone(e.lap1);
         return { code: e.code, id: e.id, colour: e.colour,
-                 lap0: e.lap0, lap1, laps: Math.max(0, lap1 - e.lap0) };
+                 lap0, lap1, laps: Math.max(0, lap1 - lap0) };
       });
     }
 
@@ -723,7 +735,8 @@ const TyreModel = (function () {
     // Laps this set has run, and how far through its life that is. `wearOf` is
     // the raw state; `spent` is what the HUD bar and the engineer read, because
     // "80% through the stint" is the thing a driver can act on.
-    function lapsOn(c) { return c && c.tyre ? Math.max(0, (c.lap || 0) - (c.tyreLap0 || 0)) : 0; }
+    // Completed laps on this set: a grid set (tyreLap0 0) is not a lap old at the start crossing.
+    function lapsOn(c) { return c && c.tyre ? Math.max(0, lapsDone(c.lap) - lapsDone(c.tyreLap0)) : 0; }
     function spent(c) { return c ? clamp(c.tyreWear || 0, 0, 2) : 0; }
 
     function info(c) {

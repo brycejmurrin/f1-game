@@ -109,6 +109,7 @@ function race(opts = {}) {
     lapsTarget: opts.laps || 20, timeTrial: false, practice: false, camMode: opts.cam || 0, hudProfile: "standard",
     LAT_MAX: 30, vTop: () => 80, raceRound: 0, announceBusy: false,
     cautionInfo: () => ({ level: G._caution || 0 }),
+    cautionLevel: () => G._caution || 0,
     store: { get: (k, d) => (store.has(k) ? store.get(k) : d), set: (k, v) => store.set(k, v) },
     announce: (msg, dur, kind) => { said.push({ t: +G.raceT.toFixed(2), msg, kind }); return true; },
   };
@@ -134,7 +135,7 @@ function race(opts = {}) {
 test("the timing-loop gap is the time between two cars at the same line, not prog/speed", () => {
   const f = RF.create();
   const a = car("AAA", 1000, 80), b = car("BBB", 920, 80);
-  const G = { state: "race", raceT: 0, cars: [a, b], player: b, track: { total: LAP }, cautionInfo: () => ({ level: 0 }) };
+  const G = { state: "race", raceT: 0, cars: [a, b], player: b, track: { total: LAP }, cautionInfo: () => ({ level: 0 }), cautionLevel: () => 0 };
   let out;
   for (let i = 0; i < 600; i++) {
     G.raceT += 1 / 60;
@@ -149,7 +150,7 @@ test("the timing-loop gap is the time between two cars at the same line, not pro
 test("a pass counts only once the new order has HELD", () => {
   const f = RF.create();
   const a = car("AAA", 1000, 60), b = car("BBB", 999, 60), p = car("PLY", 500, 60, { isPlayer: true });
-  const G = { state: "race", raceT: 0, cars: [a, b, p], player: p, track: { total: LAP }, cautionInfo: () => ({ level: 0 }) };
+  const G = { state: "race", raceT: 0, cars: [a, b, p], player: p, track: { total: LAP }, cautionInfo: () => ({ level: 0 }), cautionLevel: () => 0 };
   const passes = [];
   const tick = () => { G.raceT += 0.1; for (const c of G.cars) c.prog += c.speed * 0.1; passes.push(...f.observe(G, 0.1).ev.filter((e) => e.type === "pass")); };
   for (let i = 0; i < 40; i++) tick();
@@ -187,7 +188,7 @@ test("the caution edge reads the allocation-free cautionLevel() when the facade 
 test("a car in the pit lane is not overtaken — that is a pit stop", () => {
   const f = RF.create();
   const a = car("AAA", 1000, 60), b = car("BBB", 950, 60), p = car("PLY", 500, 60, { isPlayer: true });
-  const G = { state: "race", raceT: 0, cars: [a, b, p], player: p, track: { total: LAP }, cautionInfo: () => ({ level: 0 }) };
+  const G = { state: "race", raceT: 0, cars: [a, b, p], player: p, track: { total: LAP }, cautionInfo: () => ({ level: 0 }), cautionLevel: () => 0 };
   const evs = [];
   const tick = () => { G.raceT += 0.1; for (const c of G.cars) c.prog += c.speed * 0.1; evs.push(...f.observe(G, 0.1).ev); };
   for (let i = 0; i < 40; i++) tick();
@@ -389,7 +390,7 @@ function sim(cars, laps = 20) {
   let lvl = 0;
   const G = { state: "race", raceT: 0, cars, player: cars.find((c) => c.isPlayer), track: { total: SIM_L }, lapsTarget: laps,
     timeTrial: false, practice: false, camMode: 0, hudProfile: "standard", LAT_MAX: 30, vTop: () => 80, raceRound: 0,
-    announceBusy: false, cautionInfo: () => ({ level: lvl }), store: null,
+    announceBusy: false, cautionInfo: () => ({ level: lvl }), cautionLevel: () => lvl, store: null,
     announce: (msg, dur, kind) => { said.push({ t: G.raceT, msg, kind }); return true; } };
   const radio = RR.create(G, { seed: 3 });
   const flagOut = () => G.cars.some((c) => c.finished && !c.retired);
@@ -473,4 +474,126 @@ test("a car that dropped three places at once does not fire a stale pass when it
 test("lap times round before they split: 119.97 s is 2:00.0", () => {
   assert.equal(RL.timeText(119.97), "2:00.0");
   assert.equal(RL.timeText(92.44), "1:32.4");
+});
+
+test("two cars swapping the lead again and again get one lead-change call per 30 s, not one per swap", () => {
+  const A = simCar("AAA", 2000, 60), B = simCar("BBB", 1990, 60);
+  const r = sim([A, B, simCar("PLY", 1000, 60, { isPlayer: true })], 30);
+  r.radio.setComm("on");
+  r.step(12);
+  const t0 = r.G.raceT;
+  for (let k = 0; k < 12; k++) {                // a swap every 5 s for a minute
+    const [lead, other] = A.prog > B.prog ? [A, B] : [B, A];
+    other.prog = lead.prog + 6;
+    r.step(5);
+  }
+  const leads = r.lines(t0).filter((m) => /LEAD|FRONT/.test(m));
+  assert.ok(leads.length <= 3, `lead calls in 60 s: ${leads.length} — ${leads.join(" | ")}`);
+  assert.ok(leads.length >= 1, "a lead change is still called");
+});
+
+
+test("'out of reach' is an end-of-race call: never on lap one of a short race", () => {
+  const A = simCar("AAA", 1500, 70), P = simCar("PLY", 1000, 60, { isPlayer: true }), B = simCar("BBB", 900, 55);
+  const r = sim([A, P, B], 3); r.radio.setChat("chatty");
+  r.step(60);
+  // eng.outOfReach: "{ahead} IS {gap} AHEAD. HOLD P{pos}" / "TOO FAR TO {ahead}. BRING HOME P{pos}"
+  assert.ok(!r.lines().some((m) => /AHEAD\. HOLD P|TOO FAR TO/.test(m)), r.lines().join(" | "));
+});
+
+test("commentary leaves room: at least 10 s between ordinary lines, and one pass call per pair per 40 s", () => {
+  const cars = [];
+  for (let i = 0; i < 8; i++) cars.push(simCar("C" + i, 2000 - i * 12, 60));
+  cars.push(simCar("PLY", 500, 60, { isPlayer: true }));
+  const r = sim(cars, 30);
+  r.radio.setComm("on");
+  r.step(15);
+  const t0 = r.G.raceT;
+  for (let k = 0; k < 20; k++) {                 // pairs trading places every 3 s
+    const i = 1 + (k % 5), a = cars[i], b = cars[i + 1];
+    const [front, back] = a.prog > b.prog ? [a, b] : [b, a];
+    back.prog = front.prog + 4;
+    r.step(3);
+  }
+  const comm = r.said.filter((s) => s.kind === "comm" && s.t >= t0 && !/LEAD|FRONT/.test(s.msg));
+  for (let i = 1; i < comm.length; i++) {
+    assert.ok(comm[i].t - comm[i - 1].t >= 10 - 1e-6, `lines ${comm[i - 1].t.toFixed(1)} -> ${comm[i].t.toFixed(1)}: ${comm.map((c) => c.msg).join(" | ")}`);
+  }
+  assert.ok(comm.length >= 2, "commentary still talks");
+});
+
+test("a driver who has finished hears nothing more but their result — not a safety car for the others", () => {
+  const P = simCar("PLY", 3 * SIM_L - 100, 60, { isPlayer: true });
+  const r = sim([P, simCar("AAA", 3 * SIM_L - 400, 60), simCar("BBB", 3 * SIM_L - 700, 60)], 3);
+  r.step(8);                                       // the player takes the flag
+  assert.ok(P.finished, "precondition: flagged");
+  const t0 = r.G.raceT;
+  r.caution(3); r.step(10);
+  // The COMMENTATOR may call it — a finished driver is watching the broadcast;
+  // the ENGINEER may not.
+  const eng = r.said.filter((x) => x.t >= t0 && x.kind !== "comm").map((x) => x.msg);
+  assert.ok(!eng.some((m) => /SAFETY CAR/.test(m)), eng.join(" | "));
+});
+
+test("paused (a VS FRIEND race keeps running under the menu), the radio holds its lines", () => {
+  const A = simCar("AAA", 1010, 60), P = simCar("PLY", 1000, 60, { isPlayer: true });
+  const r = sim([A, P], 30);
+  r.step(20);
+  r.G.paused = true;
+  const t0 = r.G.raceT;
+  P.prog = A.prog + 8; r.step(15);
+  assert.deepEqual(r.lines(t0), [], "nothing while paused");
+  r.G.paused = false; r.step(3);
+  assert.ok(r.lines(t0).length > 0, "and the queued line comes out after");
+});
+
+test("an urgent line refused by a full card queue is offered again, not lost", () => {
+  const P = simCar("PLY", 2 * SIM_L - 300, 60, { isPlayer: true });
+  const r = sim([P, simCar("AAA", 2 * SIM_L - 600, 60)], 3);
+  let refuse = 0;
+  const real = r.G.announce;
+  r.G.announce = (msg, dur, kind) => { if (kind === "race" && refuse < 3) { refuse++; return false; } return real(msg, dur, kind); };
+  r.step(12);                                      // crosses into the last lap
+  assert.ok(refuse > 0, "precondition: the card refused it");
+  assert.ok(r.lines().some((m) => /LAST LAP|ONE TO GO|ONE MORE/.test(m)), r.lines().join(" | "));
+});
+
+
+test("a player flagged first with a time penalty is not told they won when a rival crosses inside it", () => {
+  const P = car("PLY", 1000, 60, { isPlayer: true, local: true, penalty: 5 }), R = car("RIV", 820, 60), X = car("XXX", 500, 60), Y = car("YYY", 400, 60);
+  const r = race({ cars: [P, R, X, Y] });
+  r.step(0.05, 100);
+  P.finished = true; r.step(0.05, 60);         // 3 s: RIV is still running, inside the 5 s
+  assert.ok(!r.said.some((s) => /WIN|RACE WINNER|WHAT A DRIVE/.test(s.msg)), "called the win before the penalty ran out: " + JSON.stringify(r.said));
+  R.finished = true; r.step(0.05, 80);         // RIV crosses 3 s after: classified ahead on the corrected clock
+  const result = r.said.filter((s) => s.kind === "race" && /P\d|WIN/.test(s.msg));
+  assert.equal(result.length, 1, JSON.stringify(r.said));
+  assert.match(result[0].msg, /P2/);
+  assert.doesNotMatch(result[0].msg, /WIN|RACE WINNER|WHAT A DRIVE/);
+});
+
+test("under a safety car a place changing is not called as a move", () => {
+  const L = simCar("LLL", 2400, 60), A = simCar("AAA", 1300, 60), B = simCar("BBB", 1280, 60), P = simCar("PLY", 900, 60, { isPlayer: true });
+  const r = sim([L, A, B, P], 30);
+  r.radio.setComm("on");
+  r.step(30);
+  r.caution(3); for (const c of [L, A, B, P]) c.speed = 30;
+  r.step(20); const t0 = r.G.raceT;
+  B.prog = A.prog + 10; r.step(15);               // waved through, or A slowing with a problem
+  assert.ok(!r.lines(t0).some((m) => /MOVE|PAST|THROUGH|FAVOUR|BACK FROM|GREAT/.test(m)), r.lines(t0).join(" | "));
+});
+
+test("a lap that ends green but ran under a VSC is not called slow", () => {
+  const A = simCar("AAA", 1300, 60), P = simCar("PLY", 1000, 60, { isPlayer: true }), B = simCar("BBB", 700, 60);
+  const r = sim([A, P, B], 30);
+  const store = new Map([["radioChat", "chatty"]]);
+  r.G.store = { get: (k, d) => (store.has(k) ? store.get(k) : d), set: (k, v) => store.set(k, v) };
+  r.radio.setChat("chatty");
+  r.step(250);                                     // five green laps: a best to compare with
+  r.caution(2); for (const c of [A, P, B]) c.speed = 25;
+  r.step(40);
+  r.caution(0); for (const c of [A, P, B]) c.speed = 60;
+  const t0 = r.G.raceT;
+  r.step(60);                                      // the neutralised lap ends green
+  assert.ok(!r.lines(t0).some((m) => /OFF\. RESET|LOST TIME|SLOW/.test(m)), r.lines(t0).join(" | "));
 });

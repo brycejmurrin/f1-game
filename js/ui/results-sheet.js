@@ -34,6 +34,15 @@ function timingSummary(G, order, dnfOf, sourceOf) {
 // One POS / SWATCH / NAME / PTS row, the shape every ranking list on this
 // screen shares (results top-10, constructors, standings, the champion
 // panel). `extraClass` appends to "res-row" (e.g. " you").
+// ONE points label for every standings list. The lists are ORDERED by
+// SeasonCal.rank, which ranks the counting (net) total when scores are dropped;
+// two of them printed the gross, so a driver could show more points than the
+// one ranked above. The counting total, with the gross beside it when they differ.
+function ptsLabel(season, driverId) {
+  const pts = season.pts[driverId] || 0;
+  const net = SeasonCal.netPts(season, driverId);
+  return net === pts ? `${pts} pts` : `${net} (${pts}) pts`;
+}
 function rankRow(container, i, color, name, ptsText, extraClass) {
   const row = document.createElement("div");
   row.className = `res-row${extraClass || ""}`;
@@ -142,6 +151,26 @@ function buildResults(order) {
     box.setAttribute("role", "status");
     box.textContent = `OFFICIAL WINNER ELAPSED — ${timing.winner.code || "WINNER"}  ${timing.winner.name || ""}: ${timing.text}`;
     els.resultsTable.appendChild(box);
+  }
+  const playerPlace = order.findIndex((c) => c.isPlayer);
+  if (playerPlace >= 0) {
+    const self = order[playerPlace], verdict = sourceOf(self), elapsed = correctedFinish(verdict);
+    const card = document.createElement("div"); card.className = "res-personal";
+    const heading = document.createElement("strong"); heading.textContent = dnfOf(self) ? "YOUR RACE · DNF" : "YOUR RACE · P" + (playerPlace + 1);
+    const detail = document.createElement("span");
+    detail.textContent = elapsed == null ? self.name : self.name + " · " + raceClock(G, elapsed);
+    card.append(heading, detail); els.resultsTable.appendChild(card);
+  }
+  const coaching = G.coach && G.coach.feedback && G.coach.feedback();
+  if (coaching && coaching.enabled && coaching.latest) {
+    const card = document.createElement("div"); card.className = "res-personal";
+    const heading = document.createElement("strong"); heading.textContent = "COACH INSIGHT";
+    const detail = document.createElement("span");
+    detail.textContent = (coaching.latest.turn ? "Turn " + coaching.latest.turn + " · " : "") + coaching.latest.detail;
+    const more = document.createElement("button"); more.type = "button";
+    more.textContent = "VIEW IN DRIVING SETTINGS";
+    more.onclick = () => { if (G.openCoachDetails) G.openCoachDetails(); };
+    card.append(heading, detail, more); els.resultsTable.appendChild(card);
   }
   order.forEach((c, i) => {
     const dnf = dnfOf(c);
@@ -274,7 +303,7 @@ function buildResults(order) {
     const all = cars.slice().sort((a, b) => SeasonCal.rank(season, a.driverId, b.driverId)).slice(0, 10);
     all.forEach((c, i) => {
       rankRow(els.resultsTable, i, G.cssCol(c.team.color), `${c.code}  ${c.name}`,
-        `${season.pts[c.driverId] || 0} pts`, c.isPlayer ? " you" : "");
+        ptsLabel(season, c.driverId), c.isPlayer ? " you" : "");
     });
     // Team championship (top 5)
     const tmHead = document.createElement("div");
@@ -289,7 +318,7 @@ function buildResults(order) {
     // Never "MAIN MENU" for a sprint: the champion panel at the end of a season
     // uses that exact string as its first-click sentinel (js/game.js resNext).
     els.resNext.textContent = sprint ? "TO THE GRAND PRIX"
-      : season.round >= SeasonCal.rounds() ? "FINISH SEASON" : "NEXT ROUND";
+      : season.round >= SeasonCal.rounds() ? "VIEW CHAMPION" : "NEXT ROUND";
   } else {
     els.resNext.textContent = "RACE AGAIN";
   }
@@ -379,9 +408,9 @@ function buildTTResults() {
     btn.textContent = "COPY DAILY RESULT";
     btn.onclick = () => {
       const text = G.daily.shareText(Ghost.medal());
-      const ok = typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText;
-      if (ok) navigator.clipboard.writeText(text).then(() => { btn.textContent = "COPIED"; }, () => { btn.textContent = text; });
-      else btn.textContent = text;
+      ApexClipboard.write(text).then((ok) => {
+        btn.textContent = ok ? "COPIED" : text;
+      }, () => { btn.textContent = text; });
     };
     els.resultsTable.appendChild(btn);
   }
@@ -407,7 +436,7 @@ function buildTTResults() {
       btn.insertAdjacentElement ? btn.insertAdjacentElement("afterend", box) : els.resultsTable.appendChild(box);
       if (box.focus) box.focus();
       if (box.select) box.select();
-      try { if (document.execCommand) document.execCommand("copy"); } catch (_) { /* selection remains visible */ }
+      ApexClipboard.copySelection();
       btn.textContent = "SELECT & COPY";
     };
     const copy = async (btn, field, label) => {
@@ -417,11 +446,9 @@ function buildTTResults() {
         return;
       }
       const value = shared[field];
-      try {
-        if (!navigator.clipboard || !navigator.clipboard.writeText) throw new Error("clipboard unavailable");
-        await navigator.clipboard.writeText(value);
-        btn.textContent = "COPIED";
-      } catch (_) { fallback(btn, value, label); }
+      const ok = await ApexClipboard.write(value);
+      if (ok) btn.textContent = "COPIED";
+      else fallback(btn, value, label);
     };
     const action = (id, text) => {
       const btn = document.createElement("button");
@@ -507,11 +534,8 @@ function buildStandings() {
   drList.forEach(([driverId, pts], i) => {
     const c = cars.find((x) => x.driverId === driverId);
     const code = c ? c.code : ((season.driverCodes && season.driverCodes[driverId]) || driverId);
-    // Dropped scores: the COUNTING total, with the gross beside it.
-    const net = SeasonCal.netPts(season, driverId);
-    const ptsText = net === pts ? `${pts} pts` : `${net} (${pts}) pts`;
     rankRow(body, i, c ? G.cssCol(c.team.color) : "#555", `${code}${c ? `  ${c.name}` : ""}`,
-      ptsText, c && c.isPlayer ? " you" : "");
+      ptsLabel(season, driverId), c && c.isPlayer ? " you" : "");
   });
 
   // Team standings
@@ -563,7 +587,7 @@ function buildChampion() {
   head.textContent = "FINAL STANDINGS";
   els.resultsTable.appendChild(head);
   sorted.forEach((c, i) => {
-    rankRow(els.resultsTable, i, G.cssCol(c.team.color), c.code, `${season.pts[c.driverId] || 0} pts`);
+    rankRow(els.resultsTable, i, G.cssCol(c.team.color), c.code, ptsLabel(season, c.driverId));
   });
   els.resNext.textContent = "MAIN MENU";
   G.announce(`${champ.code} IS WORLD CHAMPION!`, 4);

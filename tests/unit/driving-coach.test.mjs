@@ -15,7 +15,7 @@ function fixture() {
   // sits just before the line so the wrap is exercised.
   const G = { player: c, track: { total: 1000, def: { turns: [0.10, 0.50, 0.98] } },
     state: 'race', raceT: 0, paused: false, announceBusy: false,
-    vTop: () => 100, roadWetness: () => 0, cautionInfo: () => ({ level: 0 }),
+    vTop: () => 100, roadWetness: () => 0, cautionInfo: () => ({ level: 0 }), cautionLevel: () => 0,
     fmtTime: t => { const m = Math.floor(t / 60), s = t - m * 60; return m + ':' + (s < 10 ? '0' : '') + s.toFixed(2); },
     store: { get: (key, fallback) => saved.get(key) ?? fallback, set: (key, value) => saved.set(key, value) },
     // practice, not timeTrial, is what gates checkpoints and rewind now — a
@@ -125,9 +125,14 @@ test('a track-limits warning is coached at once, but not the count the coach fir
   G.announceBusy = true; c.cutWarn = 1; tick(2); assert.equal(announcements.length, 1, 'held while a race message shows');
   G.announceBusy = false; tick(.1); assert.equal(announcements.length, 2);
   tick(31);
-  G.announceBusy = true; c.cutWarn = 2; tick(3.2); G.announceBusy = false; tick(.5);
-  assert.equal(announcements.length, 2, 'a warning older than three seconds is stale');
-  assert.equal(coach.feedback().counts.find(r => r.id === 'limits').count, 2);
+  // The game's own TRACK LIMITS n/4 card holds the channel ANN_MIN_S (3 s)
+  // from the same step: a window that ran under it never reached the player.
+  G.announceBusy = true; c.cutWarn = 2; tick(3.2); G.announceBusy = false; tick(.1);
+  assert.equal(announcements.length, 3, 'the tip waits out the card that announced the warning');
+  tick(31);
+  G.announceBusy = true; c.cutWarn = 3; tick(12.5); G.announceBusy = false; tick(.5);
+  assert.equal(announcements.length, 3, 'a warning a long hold swallowed is stale');
+  assert.equal(coach.feedback().counts.find(r => r.id === 'limits').count, 3);
 });
 
 test('a tip records the curated turn it happened at, wrapping across the start line', () => {
@@ -246,6 +251,24 @@ test('a teleport cannot invent a segment, and a faster lap reads as faster', () 
   assert.equal(announcements.filter(a => /COST/.test(a[0])).length, 0, 'nothing is announced when no corner cost 0.2s');
 });
 
+test('only a Time Trial lap is measured, and a caution lap is dropped rather than charged to a corner', () => {
+  // A race measures against whatever ghost the last Time Trial loaded.
+  { const { coach, c, G, tick, enable } = fixture(); enable(); G.timeTrial = false;
+    const at = lapDriver({ c, G, tick });
+    c.s = 0; tick(.05); at(105); at(505, 21); at(985, 20); at(105, 23);
+    assert.equal(coach.status().lapReport, null, 'a race lap was measured against a Time Trial ghost'); }
+  // A safety car mid-lap: its 20 s are the neutralisation, not turn 2.
+  { const { coach, c, G, tick, enable, announcements } = fixture(); enable();
+    const at = lapDriver({ c, G, tick });
+    c.s = 0; tick(.05); at(105); at(505, 21);
+    G.cautionLevel = () => 3; tick(.05); G.cautionLevel = () => 0;
+    at(985, 40); at(105, 23);
+    assert.equal(coach.status().lapReport, null, 'the caution lap produced a report');
+    assert.equal(announcements.filter(a => /COST/.test(a[0])).length, 0);
+    at(505, 20); at(985, 20); at(105, 20);
+    assert.ok(coach.status().lapReport, 'the next clean lap is measured'); }
+});
+
 test('checkpoint messages name the practice goal, and the pause menu lists attempts and the saved best', () => {
   const { coach, ins, announcements, nodes } = fixture();
   assert.equal(coach.mark(), true); assert.match(announcements.at(-1)[0], /^PRACTICE: FREE PRACTICE — LAPS NOT SAVED$/);
@@ -301,10 +324,10 @@ test('cautions and race messages discard pending evidence rather than queue a st
   for (const block of ['message', 'caution', 'contact']) {
     const { coach, G, c, tick, enable, announcements } = fixture(); enable(); tick(.4, braking);
     if (block === 'message') G.announceBusy = true;
-    if (block === 'caution') G.cautionInfo = () => ({ level: 1 });
+    if (block === 'caution') { G.cautionInfo = () => ({ level: 1 }); G.cautionLevel = () => 1; }
     if (block === 'contact') c.contactT = .5;
     tick(2); assert.equal(coach.feedback().state, 'waiting'); assert.equal(announcements.length, 0);
-    G.announceBusy = false; G.cautionInfo = () => ({ level: 0 }); c.contactT = 0;
+    G.announceBusy = false; G.cautionInfo = () => ({ level: 0 }); G.cautionLevel = () => 0; c.contactT = 0;
     tick(.2); assert.equal(announcements.length, 0);
     tick(.3); assert.equal(announcements.length, 1);
   }

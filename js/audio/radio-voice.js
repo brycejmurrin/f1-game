@@ -151,7 +151,10 @@ const RadioVoice = (function () {
     // The radio is about something happening NOW at 300 km/h. The title
     // screen's "SAVE CONFLICT — reload career" card is not radio and must not
     // be read aloud at somebody browsing menus.
-    if (o.state !== "race" && o.state !== "count") { out.reason = "not-racing"; return out; }
+    // `preRace` is the ONE exemption: the engineer's radio check over the
+    // loading flyby's last shot (js/ui/loading-screen.js), which is the race
+    // about to start, asked for by name through sayPreRace() below.
+    if (o.state !== "race" && o.state !== "count" && !o.preRace) { out.reason = "not-racing"; return out; }
     const speaker = SPEAKERS[kind] || "radio";
     const tone = toneFor(speaker, o.tune);
     const text = speakable(o.msg);
@@ -176,7 +179,7 @@ const RadioVoice = (function () {
   /** A live instance's shape, with every method a no-op. */
   function inert() {
     return Object.freeze({
-      say: () => false, stop: () => {}, unlock: () => {}, preview: () => false, pack: null, volume: () => 0,
+      say: () => false, sayPreRace: () => false, stop: () => {}, unlock: () => {}, preview: () => false, pack: null, volume: () => 0,
       setPackOn: () => {}, packOn: () => false, busy: () => false,
       voiceList: () => [], tuneFor: (sp) => Object.assign(toneFor(sp, null), { name: "" }), setTune: () => false,
       setEnabled: () => {}, setVolume: (v) => v, available: () => false,
@@ -237,8 +240,12 @@ const RadioVoice = (function () {
      * only when something is actually queued, resume() only straight after a
      * cancel (the Bugzilla 1522074 case it exists for), and each call is timed
      * so a player can see what their platform costs (debug().synth). */
-    let synthOurs = false;          // an utterance we handed over has not ended yet
-    let synthCancelT = null;        // a cancel scheduled for the next task
+    // Our utterances still on the platform's queue. A Set, not a flag: a
+    // cancelled line's LATE end must not clear the mark while its replacement
+    // speaks. The synth is shared with the announcer (js/audio/announcer.js),
+    // and speechSynthesis.cancel() is global — so this module cancels only
+    // when one of ITS lines is queued, never because something else is talking.
+    const ours = new Set();
     let synthStat = { calls: 0, maxMs: 0, slow: 0, lastWarn: -1e9 };
     const clock = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
     function timed(name, fn) {
@@ -253,17 +260,17 @@ const RadioVoice = (function () {
         }
       }
     }
-    const synthBusy = () => { try { return synthOurs || !!synth.speaking || !!synth.pending; } catch (e) { return synthOurs; } };
-    /** Cancel on the next task, not in this frame — and only if anything is queued. */
-    function synthCancelSoon() {
-      if (synthCancelT != null) return;
-      synthCancelT = setTimeout(() => {
-        synthCancelT = null;
-        if (!synthBusy()) return;
-        synthOurs = false;
-        timed("cancel", () => { try { synth.cancel(); } catch (e) { /* nothing queued, or a synth mid-teardown */ } });
-        justCancelled = true;
-      }, 0);
+    /** Cancel OUR line, now, if one is queued — and nothing otherwise. Synchronous
+     *  on purpose: a cancel deferred to a later task fired after whatever was
+     *  spoken in between (the settings TEST sample, the announcer's wrap-up) and
+     *  killed it. The frame cost that motivated deferring was the cancel on EVERY
+     *  line, idle or not; a preempt of our own line is rare, and that is all
+     *  that remains here. */
+    function cancelOurs() {
+      if (!ours.size) return;
+      ours.clear();
+      timed("cancel", () => { try { synth.cancel(); } catch (e) { /* nothing queued, or a synth mid-teardown */ } });
+      justCancelled = true;
     }
     let justCancelled = false;
     function readTune() {
@@ -316,28 +323,36 @@ const RadioVoice = (function () {
     function clearDeadline() { if (deadline != null) { clearTimeout(deadline); deadline = null; } }
     function clearPending() { if (pending != null) { clearTimeout(pending); pending = null; } }
     function stop() {
+      stopVoice();
+      // The hiss bed belongs to the line, so it goes when the line does —
+      // the card-hidden and paused observers below are what stop a
+      // transmission early for a player who never turned speech on.
+      if (GameAudio && GameAudio.radioStingStop) GameAudio.radioStingStop();
+    }
+    /** The words only: the hiss bed is the CARD's, and may already be the next one's. */
+    function stopVoice() {
       clearPending();
       clearDeadline();
       // Before cancel(): the callback it triggers must already see itself as
       // stale, whether the engine fires it synchronously or a turn later.
       current = null;
       if (pack) pack.stop("radio");   // the engineer's own line only — never a spotter call mid-word
-      synthCancelSoon();
+      cancelOurs();
       if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false);
-      // The hiss bed belongs to the line, so it goes when the line does —
-      // the card-hidden and paused observers below are what stop a
-      // transmission early for a player who never turned speech on.
-      if (GameAudio && GameAudio.radioStingStop) GameAudio.radioStingStop();
     }
-    function say(msg, life, kind, lead) {
+    function say(msg, life, kind, lead, preRace) {
       const on = kind === "comm" ? !!(G.announcer && G.announcer.enabled && G.announcer.enabled()) : enabled;
       // A spotter call on the air finishes first: the line waits it out as part
       // of its lead, and pays for the wait out of the card's budget like the cue.
       const hold = pack ? pack.remaining("spotter") : 0;
       if (hold > 0) lead = Math.max(+lead || 0, hold + 0.08);
-      const p = plan({ msg, life, kind, lead, enabled: on, soundOn: !!G.soundOn, state: G.state, api: true, volume, tune });
+      const p = plan({ msg, life, kind, lead, enabled: on, soundOn: !!G.soundOn, state: G.state, preRace: !!preRace, api: true, volume, tune });
       last = { text: p.text, reason: p.reason || "spoke", rate: p.rate, budgetMs: p.budgetMs, leadMs: p.leadMs };
-      if (!p.speak) return false;
+      // A card that will not be spoken still REPLACES the one on screen: its
+      // words stop with it (and its deadline, which would later cut this card's
+      // hiss bed). Not the words' sting — that is already the new card's.
+      if (!p.speak) { if (!preRace && (current || pending != null)) stopVoice(); return false; }
+      p.preRace = !!preRace;   // speakPlanned re-checks the session at speak time
       stop();
       if (speakPack(p)) return true;
       // AFTER THE CUE, NOT UNDER IT. Deferred rather than shortened: the words
@@ -373,12 +388,16 @@ const RadioVoice = (function () {
       return true;
     }
     function speakPlanned(p) {
+      // Re-checked at speak time: a line that waited out its cue across the
+      // flag must not be read over the results (and its deadline would then
+      // cancel the announcer's wrap-up). A pre-race line carries its own pass.
+      if (!p.preRace && G.state !== "race" && G.state !== "count") { current = null; return false; }
       const u = new Utter(p.text);
       u.voice = voiceFor(p.speaker, true);   // speakPlanned only ever carries a card line (say())
       u.rate = p.rate; u.pitch = p.pitch; u.volume = p.volume;
       // Only the LIVE line may release the duck and the deadline — see `current`.
       u.onend = u.onerror = () => {
-        synthOurs = false;
+        ours.delete(u);
         if (u !== current) return;
         current = null;
         clearDeadline();
@@ -395,10 +414,10 @@ const RadioVoice = (function () {
       if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(true);
       try {
         asked++;
-        synthOurs = true;
+        ours.add(u);
         timed("speak", () => synth.speak(u));
       } catch (e) {
-        synthOurs = false;
+        ours.delete(u);
         current = null;
         if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false);
         Log.info("audio", "RadioVoice speak failed");
@@ -504,6 +523,10 @@ const RadioVoice = (function () {
       const words = speakable(text || SAMPLE[sp] || SAMPLE.radio);
       if (!words) return false;
       stop();
+      // A TEST press is the player asking for THIS sample now, from a settings
+      // click, not a frame: whatever is speaking — an earlier sample, the
+      // announcer's own TEST — gives way, synchronously, before the speak.
+      try { synth.cancel(); } catch (e) { /* nothing queued */ }
       const u = new Utter(words);
       u.voice = voiceFor(sp);
       u.rate = t.rate; u.pitch = t.pitch; u.volume = volume;
@@ -514,6 +537,12 @@ const RadioVoice = (function () {
 
     return {
       say, stop, unlock, preview,
+      /** THE PRE-RACE RADIO CHECK: one engineer line over the loading flyby's
+       *  grid-mine shot. The same plan() as every race line — TEAM RADIO off,
+       *  master sound off, or a line that will not fit its budget all refuse it
+       *  — with only the session gate lifted. No card: the loading screen owns
+       *  the screen, so `life` is the time left in the shot. */
+      sayPreRace: (msg, life, lead) => say(msg, life, "race", lead, true),
       /** The installed voices a channel may be given, as plain rows for a <select>. */
       voiceList: (speaker) => voicesFor(!!REMOTE_OK[speaker]).map((v) => ({ name: v.name, lang: v.lang })),
       /** The stored tune, or the shipped default for a channel with none. */

@@ -45,7 +45,7 @@ const els = {
 // Renderer selection: an unset apex26.gfxBackend or ="three" uses TLX
 // (three.js); ="webgpu" uses WGX when the browser supports it; ="webgl2"
 // uses GLX. Any deferred-backend init failure also falls back to GLX. This
-// async IIFE awaits while loading TLX/WGX, or when the lazy __apex surface
+// async IIFE awaits while loading the selected renderer, or when the lazy __apex surface
 // loads (localhost / tests / ?apex=1). `gfx` is the handle every later
 // renderer call goes through.
 let gfx = null;
@@ -66,7 +66,7 @@ let _probeArmed = false;      // mirrors the stored probe, so the loop never rea
 let _backendBound = false;
 // The rosters below are ApexRoster (js/roster.js), GENERATED from
 // tools/manifest.cjs by tools/gen/gen-shell.mjs — one truth, no hand mirror.
-// The two DEFERRED renderer groups, in documented toposort order:
+// The three DEFERRED renderer groups, in documented toposort order:
 // loadBackendScripts starts a file once its edges' predecessors have evaluated.
 // Renderer/optional groups keep their graceful fallback; data's eval-time
 // dependencies request strict loading so a failed predecessor never executes
@@ -369,6 +369,10 @@ try {
   }
 } catch (_) { gfx = null; }
 if (!gfx) {
+  // Load GLX only when selected or needed after TLX/WGX refuses. A missing
+  // script must not trigger the claim-failure reload loop while offline.
+  if (typeof GLX.init !== "function") await loadBackendScripts(BACKEND_FILES.webgl2);
+  if (typeof GLX.init !== "function") { showGraphicsUnavailable(); return; }
   if (!GLX.init(canvas)) {
     // A failed backend opt-in (WGX or TLX) may have already claimed the
     // canvas (getContext "webgpu"/"webgl2" succeeded before init died), so
@@ -1123,6 +1127,7 @@ let duelMode = false;
 // The SETTING sticks (like difficulty), but a duel is a one-off practice race:
 // never a championship round, a time trial (Daily included) or a quali lap.
 const duelOn = () => duelMode && !isChampionship() && !isTimeTrial() && !isQuali();
+const duelSetting = () => duelMode;   // sticky race SETTING for session keys; gated use goes through duelOn()
 // WHICH legend the duel rival is, or "" for the ordinary fastest-car duel. A
 // race SETTING like duelMode itself, so it survives a restart the same way.
 let duelLegend = "";
@@ -1438,12 +1443,17 @@ function announce(msg, dur, kind) {
     // slot means the line still gets its turn, so that counts as accepted;
     // being pushed off the end means it is gone and the caller must offer it
     // again (RaceEngineer does, on its next tick).
-    const entry = { msg, dur, kind, pri };
+    // A slot once given is NEVER taken back: evicting an accepted line told its
+    // caller "said" for words nobody heard (RaceEngineer spends the wear step,
+    // race-radio its cooldowns and the told position). A full queue refuses a
+    // newcomer that outranks nothing waiting; one that does (a warning behind
+    // two reports) queues deeper instead of pushing an accepted line out.
+    const low = _annQueue.length ? _annQueue[_annQueue.length - 1].pri : 0;
+    if (_annQueue.length >= (pri > low ? ANN_QUEUE_MAX + 3 : ANN_QUEUE_MAX)) return false;
     let at = _annQueue.length;
     while (at > 0 && _annQueue[at - 1].pri < pri) at--;
-    _annQueue.splice(at, 0, entry);
-    const dropped = _annQueue.splice(ANN_QUEUE_MAX);
-    return dropped.indexOf(entry) < 0;
+    _annQueue.splice(at, 0, { msg, dur, kind, pri });
+    return true;
   }
   showAnnounce(msg, dur, kind);
   return true;
@@ -1606,86 +1616,14 @@ function saveTeamParts(teamId, parts) {
 }
 
 // ---------- liveries (custom paint jobs) ----------
-function getLiveryId(teamId) { return store.get("livery." + teamId, "default"); }
-function saveLiveryId(teamId, id) { store.set("livery." + teamId, id); }
-// Player-created liveries, stored per team as [{id,name,c1,c2,stripe?}].
-function getCustomLiveries(teamId) { return store.get("livery.custom." + teamId, []); }
-function setCustomLiveries(teamId, arr) { store.set("livery.custom." + teamId, arr); }
-// Full paint-job list for a team: catalog (default + specials + universal) + the
-// player's own creations.
-function getLiveries(team) { return Liveries.forTeam(team).concat(getCustomLiveries(team.id)); }
-// Resolve a team's chosen paint job -> { c1, c2, stripe } bodywork colours (its
-// own team colours for "default"). Everything that builds a car mesh paints with
-// these.
-// Transient un-saved paint job previewed live in the creator: { teamId, liv }.
-// Overrides the resolved livery for that one team while the creator is open.
-let livDraftOverride = null;
-// Memoized per team.id, invalidated by store.rev — during a race this resolves to
-// a cached object with zero localStorage access and zero per-frame allocation.
-const _livResolveCache = new Map();
-function resolveLivery(team) {
-  // The live creator draft wins while it is open — through the same field list
-  // as a saved livery, so no editor row can stop short of the atlas or mesh.
-  // migratePaint folds the retired keys (ridge, airbox) and drops the retired
-  // inks on the way in, so ONE list is still the only thing the atlas reads.
-  if (livDraftOverride && livDraftOverride.teamId === team.id) return pickLivery(migrateLivery(livDraftOverride.liv));
-  const c = _livResolveCache.get(team.id);
-  if (c && c.rev === store.rev) return c.val;
-  // A STORED ID THAT NO LONGER RESOLVES FALLS BACK TO THE TEAM'S OWN PAINT JOB.
-  // list[0] is Liveries.forTeam's "default", carrying the team's whole livery
-  // block; the bare `{ c1, c2 }` else-branch below dropped finShape/spineHeight/
-  // spineSide, so a dangling id grew a shark fin instead of the car the team
-  // races. Reachable via an imported garage file (js/ui/settings-export.js).
-  const list = getLiveries(team);
-  const liv = list.find((l) => l.id === getLiveryId(team.id)) || list[0];
-  const val = liv ? pickLivery(migrateLivery(liv)) : { id: "default", c1: team.color, c2: team.color2, stripe: null, accent: null };
-  _livResolveCache.set(team.id, { val, rev: store.rev });
-  return val;
-}
-// The resolved paint-job shape, from a catalog entry or the creator's draft.
-// Optional detail colours are additive. Every live LIV_DRAFT_COLORS tint must be
-// listed. Dead keys (crestInk / plateInk / ridgeTint / airboxTint) are stripped
-// by Liveries.migratePaint before this runs — do not put them back.
-// A COPY of `Liveries.FIELDS` that had drifted by one row: `bodySplit`
-// (Cadillac's L/R body) was published and painted but missing here, so every
-// resolveLivery came back single-colour. team-livery.test.mjs now asserts the
-// two lists are the same set — the only thing that keeps a copy honest.
-const LIVERY_FIELDS = ["stripe", "accent", "nose", "pod", "wing", "halo", "fin", "finArt", "logo", "logo2",
-  "logo3", "noseStripe", "finish", "numFont", "sponsors", "finStyle", "finBadge", "spineLogo", "finShape",
-  "tcam", "coverVents", "spineHeight", "spineSide", "rearWing", "wingCarbon", "cover", "spineTint", "sideTint",
-  "sunTint", "bandTint2", "plateTint",
-  "saddleTint", "coverBind", "finHandoff", "bodySplit"];
-// A stored garage file may still carry the four RETIRED keys, so every read
-// path folds them once, here, and the list above never mentions them again:
-// RIDGE was the crown's centreline only and is now the BAND it always fell
-// back to; CREST INK and PLATE INK are auto-inked (see Liveries.migratePaint).
-// AIRBOX is DROPPED rather than folded onto `cover`: it painted the roll hoop
-// and intake lips ALONE, while `cover` paints the whole loft AND is the surface
-// the atlas inks the crest and every spine design against — promoting it would
-// repaint the cover and flip the crown ink on any file that set it.
-function migrateLivery(l) {
-  return (typeof Liveries !== "undefined" && Liveries.migratePaint)
-    ? Liveries.migratePaint(Object.assign({}, l)) : l;
-}
-function pickLivery(l) {
-  const v = { id: l.id || null, c1: l.c1, c2: l.c2 };
-  for (let i = 0; i < LIVERY_FIELDS.length; i++) { const k = LIVERY_FIELDS[i]; v[k] = l[k] || null; }
-  return v;
-}
-
-// The colour a team's WING FLAP elements are painted — the same fallback chain
-// Car3D uses for `wingC` when it builds the baked front/rear wing planes, so the
-// moveable active-aero flap drawn over the crown matches the wing it belongs to
-// instead of being a differently-coloured bolt-on.
-function wingColorOf(team) {
-  const liv = resolveLivery(team);
-  // The moveable elements ARE the wing's own top flaps, so they take the wing's
-  // own colour — Car3D paints the baked cascade with exactly this fallback
-  // chain (`wingC`). Tinting them to stand out (an earlier attempt, back when
-  // they were extra parts laid over the wing) would now make the car two-tone
-  // at rest, which is a regression against a wing that used to be one colour.
-  return liv.wing || liv.c2 || team.color2;
-}
+// Persist / resolve / live-draft — js/car/custom-liveries.js (CustomLiveries.create).
+// Catalog entries stay in Liveries; drawAeroFlaps / partsVisualKey stay here and
+// call through the destructured helpers.
+const customLiv = CustomLiveries.create({ store });
+const {
+  getLiveryId, saveLiveryId, getCustomLiveries, setCustomLiveries,
+  getLiveries, resolveLivery, wingColorOf,
+} = customLiv;
 
 // Draw a car's two MOVEABLE wing elements (active aero) at flap blend `blend`
 // (0 = Z-mode, 1 = X-mode), given that car's world model matrix. Shared by the
@@ -2119,11 +2057,17 @@ function redFlagRestart() {
     // lap was classified finished 14 m after the lights. Same lap/prog
     // relation as gridUp (lap 0 ↔ prog just under 0).
     const progWas = c.prog;
-    if (c.lap > 0) c.lap--;
+    if (c.lap > 0) {
+      // Fuel follows laps actually driven, not the scoring lap we replay from
+      // the grid. A restart cannot put burned fuel back in the tank.
+      c.fuelLap = Math.max(c.fuelLap || 0, c.lap + (c.fuelRestartLaps || 0));
+      c.fuelRestartLaps = (c.fuelRestartLaps || 0) + 1;
+      c.lap--;
+    }
     c.prog = c.lap * L - (L - c.s);
     c._progGift = (c._progGift || 0) + (c.prog - progWas);
     c.head = 0; c.yawVis = 0; c.rPrevHead = 0; c.rPrevYawVis = 0;
-    c.speed = 0; c.accSm = 0; c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.lane = c.lanePref;   // as gridUp
+    c.speed = 0; c.accSm = 0; c.corridorAccel = 0; c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.lane = c.lanePref;   // as gridUp
     c.xOn = false; c.aeroX = 0; c.xArmed = false; c.towing = 0; c.wake = 0; c.wheelLock = 0;
     clearRacingScratch(c);
     // A CAR ON A GRID BOX IS STATIONARY, ALONE AND ON CLEAN TARMAC. This path
@@ -2204,7 +2148,7 @@ function gridUp(preOrder) {
       c.rPrevS = c.s; c.rPrevX = c.x;
     }
     c.head = 0; c.yawVis = 0;   // straight ahead on the grid (heading model)
-    c.speed = 0; c.accSm = 0; c.prog = -(14 + i * 8); c.lap = 0; c.energy = 1; c._progGift = 0;   // a car on the grid is pulling nothing — apex.js reset() has the full list and why
+    c.speed = 0; c.accSm = 0; c.corridorAccel = 0; c.prog = -(14 + i * 8); c.lap = 0; c.fuelLap = 0; c.fuelRestartLaps = 0; c.energy = 1; c._progGift = 0;   // a car on the grid is pulling nothing — apex.js reset() has the full list and why
     c.otT = 0; c.otCool = 0; c.lapTime = 0; c.best = Infinity; c.totalT = 0;
     c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
     c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.penalty = 0; c.offT = 0; c.hits = 0; c.hitSev = 0; c.wallHits = 0; c.errCount = 0;   // mistakes THIS race — the instrument's denominator, cleared only by a NEW race
@@ -2426,13 +2370,14 @@ function _loadTrackBody(idx, def) {
     // track's terrainGeo/_lights/mesh handles through it stacks old + new
     // resident at once. loadTrack is synchronous, so nothing can observe the
     // null between here and the assignment below.
-    track = null;
+    track = null; builtTrackId = null;   // a build that throws must not leave the old id claiming a freed world
     if (typeof LampBake !== "undefined") LampBake.reset();   // its cache holds the old track + atlas too
     // Pass the active backend so tracks.js builds its meshes through the façade
     // (opts.gfx) instead of reaching the GLX global directly. On the explicit
     // or fallback WebGL2 path gfx===GLX; on TLX/WGX it is that backend
     // (descriptor-copied onto GLX, so object identity is preserved either way).
-    track = Tracks.build(def, { night: sessionDark, gfx, chunkRibbons: PerfGov.tier() < 3, gridSlots: wantSlots });
+    track = Tracks.build(def, { night: sessionDark, gfx, chunkRibbons: PerfGov.tier() < 3,
+      gridSlots: wantSlots, retainGraph: wantAgentSurface() });
     // Rapier debris side-world: register the circuit's near-apex clippable cones
     // (A3). Cheap pure derivation from track.def.turns; stores the list even when
     // the side-world is disabled/loading so it's ready once rapier is live.
@@ -2510,7 +2455,10 @@ const _menuGate = { warm: 0, generation: 0, ready: "", track: null };
 // The menu finished building THIS selection (circuit, time, weather): only then is
 // `track` the world the loading screen may fly, light and grid. A fast tap to RACE!
 // before the idle build ran left the OLD circuit in `track`.
-const menuWorld = () => !!track && _menuGate.track === track && _menuGate.ready === [trackIdx, raceTimeOfDay, raceWeather].join("|");
+// The menu build's identity: circuit, time, weather AND grid size (a team change
+// to or from MY TEAM moves the grid slots, which loadTrack rebuilds for).
+const menuKey = (idx) => [idx, raceTimeOfDay, raceWeather, fieldSize()].join("|");
+const menuWorld = () => !!track && _menuGate.track === track && _menuGate.ready === menuKey(trackIdx);
 let flybyBuildTimer = 0;
 const MENU_IDLE_MS = 1200;
 let _menuInputAt = 0;
@@ -2532,6 +2480,23 @@ async function menuIdle(current) {
 async function menuLampBake(current) {
   const step = current() && _atmo.prebakeLamps();
   while (step && current() && !step(8)) await new Promise((r) => setTimeout(r, 8));
+  return !!step;
+}
+// AFTER THE BUILD, in this order: car assets; the warm frames (shader compile —
+// before anything slow, or a RACE! tap mid-bake met cold shaders and the flyby
+// froze on its first frames); the lamp pre-bake and this load's flyby, PLANNED
+// here in slices so the loading screen plans nothing; then warm again for the lit
+// world. `_menuFly` is the planned list, keyed like the build.
+let _menuFly = null;
+async function menuFinish(current, key) {
+  await prepareMenuCarAssets(current);
+  if (await menuIdle(current)) { FlybySeq.reset(); _menuGate.warm = 2; }   // reset: a new world's shot 0 snaps, never glides in from the last one
+  const lit = await menuLampBake(current);
+  FlybySeq.setDuration(loadingScreen.nextFlyMs());
+  const fly = { key, track, shots: FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0, false) }, step = FlybySeq.planSteps(track, fly.shots);
+  while (current() && !step()) await menuSlice();
+  if (current()) _menuFly = fly;
+  if (lit && await menuIdle(current)) { FlybySeq.reset(); _menuGate.warm = 2; }   // only a baked (dark) world changed the shaders
 }
 function scheduleFlybyTrack(settle) {
   clearTimeout(flybyBuildTimer);
@@ -2539,7 +2504,7 @@ function scheduleFlybyTrack(settle) {
   _menuGate.warm = 0;
   if (!(trackIdx >= 0)) return;
   const want = trackIdx, tod = raceTimeOfDay, weather = raceWeather;
-  const key = [want, tod, weather].join("|");
+  const key = menuKey(want);
   const current = () => generation === _menuGate.generation && state === "menu" &&
     !setupPreviewOn && trackIdx === want && raceTimeOfDay === tod && raceWeather === weather &&
     (!els.select.hidden || !$("race-settings").hidden);
@@ -2556,7 +2521,7 @@ function scheduleFlybyTrack(settle) {
       // car's meshes and livery upload 32 ms apart; a warm frame drawn first
       // minted and uploaded all ~22 atlases in one 3-4 s task.
       if (_menuGate.ready === key && _menuGate.track === track) {
-        await prepareMenuCarAssets(current); await menuLampBake(current); if (await menuIdle(current)) _menuGate.warm = 2; return;
+        await menuFinish(current, key); return;
       }
       // The build holds the main thread for 1-3 s: never start it while the
       // player is still working the picker or RACE SETTINGS (a TIME OF DAY step
@@ -2568,9 +2533,7 @@ function scheduleFlybyTrack(settle) {
       await menuSlice();
       if (current() && track.meshes && track.meshes.pitSignTex && typeof gfx.uploadTexture === "function")
         gfx.uploadTexture(track.meshes.pitSignTex);
-      await prepareMenuCarAssets(current);
-      await menuLampBake(current);
-      if (await menuIdle(current)) _menuGate.warm = 2;
+      await menuFinish(current, key);
     } catch (e) { if (current()) Log.warn("gfx", "track preparation failed", e); }
   };
   flybyBuildTimer = setTimeout(prepare, settle ? 1500 : 120);
@@ -2761,7 +2724,6 @@ function raceProfile() { return _raceProfile; }
 async function startRaceBody() {
   _raceProfile = []; let _rt = performance.now();
   const rlap = (n) => { const t = performance.now(); _raceProfile.push({ n, ms: +(t - _rt).toFixed(2) }); _rt = t; };
-  await ensureScenery(trackIdx);
   rlap("scenery");
   // Completed seasons are readable, never raceable (also guarded by award()).
   const careerSaveConflict = isCareer() && Career.conflicted();
@@ -2791,6 +2753,12 @@ async function startRaceBody() {
   // shards, marbles and knocked-over cones — visible on the grid, and
   // RaceControl can fly a caution for debris nobody produced this race.
   DebrisWorld.reset();
+  // …and the broadcast layer: queued cards ("RETIREMENT", "BOX BOX") and the
+  // results commentary were cleared only by quitToMenu, so RESTART and NEXT
+  // RACE played the last race's over this one's countdown.
+  announceT = 0; _annPri = 0; _annFloor = 0; _annQueue.length = 0; els.announce.hidden = true;
+  if (announcer.stop) announcer.stop();
+  if (hud.resetRace) hud.resetRace();
   rlap("resets");
   loadTrack(trackIdx);
   rlap("loadTrack");
@@ -2919,16 +2887,35 @@ async function startRaceBody() {
   // mashed on the title (navOpen() false) would fire at lights-out.
   Input.clearEdges();
   if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.setVenue(track.def); GameAudio.startEngine(); GameAudio.startMusic(trackIdx); }
-  if (soundOn && isRaining()) GameAudio.startRain();   // rain patter — a damp "wet" track is silent
+  // rain patter — a damp "wet" track is silent — and it must STOP too: a
+  // restart after a changeable race had arced into rain kept playing it dry.
+  if (soundOn) { if (isRaining()) GameAudio.startRain(); else GameAudio.stopRain(); }
   warmCarAssets();            // meshes + atlases HERE, not on the first countdown frame (see warmCarAssets)
   DebrisWorld.prime(); updateHud(true);   // prime: build the side-world HERE, not on the lights-out frame (see DebrisWorld.prime)
 }
-let _startRaceP = null;
+const sessionEntry = SessionEntry.create();
+const _seasonEntryIds = new WeakMap();
+let _nextSeasonEntryId = 0;
+function entrySettings() {
+  if (season && !_seasonEntryIds.has(season)) _seasonEntryIds.set(season, ++_nextSeasonEntryId);
+  return JSON.stringify([trackIdx, flow, session, raceWeather, raceTimeOfDay, raceLaps,
+    teamIdx, driverIdx, difficulty, raceGrid, duelSetting(), duelLegend, raceTyreWear,
+    raceReliability, raceAeroMode, simSeed(), raceIndex,
+    wxArc.changeable, wxArc.plan && [wxArc.plan.to, wxArc.plan.dur],
+    netPlay.active(), raceSettings && raceSettings.netRoom,
+    season ? _seasonEntryIds.get(season) : null, season && season.round,
+    season && season.stage, SeasonCal.quali()]);
+}
 function startRace() {
-  if (_startRaceP) return _startRaceP;   // a concurrent caller shares the in-flight start
-  // A throw after the scenery await (six callers never look at the promise) used to leave the quali sheet closed, session "race" and no HUD under the error overlay; the menu is the one coherent place to land.
-  _startRaceP = startRaceBody().catch((e) => { Log.error("game", "startRace failed", e); quitToMenu(); throw e; }).finally(() => { _startRaceP = null; });
-  return _startRaceP;
+  const key = entrySettings(), idx = trackIdx;
+  const request = sessionEntry.begin("race", key, () => ensureScenery(idx),
+    () => startRaceBody(), () => key === entrySettings(),
+    (e) => { if (e) Log.error("game", "startRace failed", e); quitToMenu(); });
+  // Menu buttons fire and forget. Observe rejection on a separate branch so
+  // those callers do not raise an unhandledrejection overlay; an awaiting agent
+  // still receives the original rejecting promise and its original error.
+  request.catch(() => {});
+  return request;
 }
 
 function showTouchControls(show) {
@@ -3037,11 +3024,18 @@ function netOrder(order) {
   // …and each ELEMENT, not only the container. The Array.isArray note above is
   // about the payload's shape; `[null]` and `[{}]` both pass it and then throw
   // on e.d — into the same error overlay, eating the same classification.
-  const sorted = verdict.filter((e) => e && e.d != null).map((e) => byId.get(e.d)).filter(Boolean);
-  // Only adopt an order accounting for the WHOLE grid; a partial one would
-  // silently drop cars off the results screen. An order we cannot fully resolve
-  // now fails this the same way a truncated one always did.
-  if (sorted.length !== cars.length) return order;
+  // Validate the complete bijection and timing fields BEFORE changing any car.
+  // A duplicated id previously passed the length check and drew the same car
+  // twice, omitting another; a malformed late row could partially mutate times.
+  if (verdict.length !== byId.size) return order;
+  const seen = new Set();
+  for (const e of verdict) {
+    if (!e || !byId.has(e.d) || seen.has(e.d) ||
+        (e.t != null && (!Number.isFinite(e.t) || e.t < 0)) ||
+        (e.p != null && (!Number.isFinite(e.p) || e.p < 0))) return order;
+    seen.add(e.d);
+  }
+  const sorted = verdict.map((e) => byId.get(e.d));
   verdict.forEach((e) => {
     const c = byId.get(e.d);
     if (!c) return;
@@ -3116,28 +3110,29 @@ function endRace(forcedOrder) {
   // block that used to live here, unchanged in behaviour.
   const order = netOrder(forcedOrder || fin.concat(run, out));
   order.forEach((c, i) => { c.finPos = i + 1; });
+  // Read BEFORE award() advances the stage, or the sprint is wrapped up as the Grand Prix.
+  const wasSprint = isChampionship() && SeasonCal.stage(season) === "sprint";
   if (isChampionship()) {
-    // POINTS, and whether the WEEKEND is over — js/career/season-cal.js owns both:
-    // a season may sprint before the Grand Prix, and only the second of those two
-    // scoring sessions closes the round. A career never sprints, so award() there
-    // is the old block verbatim.
+    // A standalone season may sprint before the Grand Prix. A career scores
+    // through its save owner, which checks the active slot revision before the
+    // aliased championship is changed and settles its economy in the same call.
     // The fastest lap among the CLASSIFIED finishers — award() pays the
     // 2019–2024 point only when the season format asks for it.
     let fastest = null, fastestT = Infinity;
     for (const c of fin) if (c.best < fastestT) { fastestT = c.best; fastest = c.driverId; }
-    const settles = SeasonCal.award(season, order, fastest) === "race";
+    const careerScoring = isCareer();
+    const scored = careerScoring
+      ? Career.scoreRound(order, player, fastest)
+      : SeasonCal.award(season, order, fastest);
+    const settles = careerScoring ? !!scored : scored === "race";
     // award() deletes season.qualiOrder when the round scores; the IN-MEMORY
     // classification is that same weekend and goes with it. Left behind, it kept
     // qualiResults() truthy for the rest of the championship, so rs-go never
     // offered the sheet again and every later grid came off round 1's times.
     if (settles) quali.clear();
-    // In career `season` IS career.season (same object, same shape — which is what
-    // lets buildResults/buildStandings/the HUD work in career untouched), so it
-    // persists through the career save or this would overwrite the standalone
-    // SEASON save with career's standings. KEEP the settlement: prize money,
-    // salary, the bonus, the brief and the wage bill all resolve here, and
-    // buildResults() is where the economy is legible as it moves.
-    if (isCareer()) { if (settles) careerSettlement = Career.settleRound(order, player); }
+    // The career owner persists points and settlement together; the standalone
+    // season saves its sprint stage or completed round here.
+    if (careerScoring) careerSettlement = scored;
     else SeasonCal.save(season);   // the sprint's points AND its stage, one guarded write
   }
   // A one-off GP's driven quali order stays persisted (quali-persist contract);
@@ -3145,7 +3140,7 @@ function endRace(forcedOrder) {
   dbgCam = null;
   buildResults(order);
   els.results.hidden = false;
-  announcer.wrapUp(order, loadingInfo());   // js/audio/announcer.js — the broadcaster's read over the results
+  announcer.wrapUp(order, Object.assign(loadingInfo(), { sprint: wasSprint }));   // js/audio/announcer.js — the broadcaster's read over the results
 }
 
 let ltStore = null;   // LightStore.create(G), assigned once G exists (below)
@@ -3195,6 +3190,7 @@ const G = {
   get ttSessionTs() { return ttSessionTs; },
   get records() { return records; },
   get coach() { return coach; },
+  openCoachDetails: () => { openSettings(); settingsNav.show("driving", true); },
   get radio() { return radioVoice; },   // js/audio/radio-voice.js — AudioPanel drives its toggle and volume
   get announcer() { return announcer; },   // js/audio/announcer.js — AudioPanel drives its switch and voice
   get raceRadio() { return raceRadio; },   // js/race/race-radio.js — AudioPanel drives chatter + commentary
@@ -3334,7 +3330,7 @@ const G = {
   get _ltFlash() { return _ltFlash; }, set _ltFlash(v) { _ltFlash = v; },
   get _ltNextT() { return _ltNextT; }, set _ltNextT(v) { _ltNextT = v; },
   // Mutable state consumed by js/garage/setup-sheet.js.
-  get livDraftOverride() { return livDraftOverride; }, set livDraftOverride(v) { livDraftOverride = v; },
+  get livDraftOverride() { return customLiv.livDraftOverride; }, set livDraftOverride(v) { customLiv.livDraftOverride = v; },
   get _spMeshKey() { return setupCam.meshKey; }, set _spMeshKey(v) { setupCam.meshKey = v; },
   get setupPreviewOn() { return setupPreviewOn; }, set setupPreviewOn(v) { setupPreviewOn = v; },
   // Read-only garage-camera state for __apex.garageCam().
@@ -3584,8 +3580,8 @@ const { buildSetup, openSetup } = SetupUI.create(G);
 const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch, vt } = Menus.create(G);
 // The car-drawing seam (js/car/car-draw.js): mesh / atlas caches, the player's
 // wheel spec, decal queue, cockpit rig, planted wheels, warm-ups, GLB body.
-// resolveLivery / partsVisualKey / drawAeroFlaps / damp stay here (the garage
-// and the setup preview share them); the module reads them through deps.
+// resolveLivery lives in CustomLiveries; partsVisualKey / drawAeroFlaps / damp
+// stay here (the garage and the setup preview share them via deps).
 const carDraw = CarDraw.create(G, { resolveLivery, partsVisualKey, drawAeroFlaps, damp, isTimeTrial, isQuali });
 const { teamMesh, teamBodyMesh, playerBodyMesh, cockpitBodyMesh, teamDecalState, carDecalNum,
         drawCarDecals, queueCarDecals, drawPlayerWheels, drawPitCrew, drawCockpitRig,
@@ -3608,8 +3604,8 @@ customTeam = CustomTeam.create({
   invalidateDecalTextures: (id) => carDraw.invalidateDecalTextures(id),
   invalidateCustomMeshCaches: () => carDraw.invalidateCustomMeshCaches(),
   spMeshBust,
-  getLivDraftOverride: () => livDraftOverride,
-  setLivDraftOverride: (v) => { livDraftOverride = v; },
+  getLivDraftOverride: () => customLiv.livDraftOverride,
+  setLivDraftOverride: (v) => { customLiv.livDraftOverride = v; },
   getSoundOn: () => soundOn,
   GameAudio,
   getEls: () => els,
@@ -3654,7 +3650,7 @@ raceSettings = RaceSettings.create(G, {
 // PRE-RACE LOADING SCREEN (js/ui/loading-screen.js). It plays the cinematic
 // over the world scheduleFlybyTrack() already warmed, then holds a static card
 // while the caller's build runs — see that file for why the split matters.
-const loadingScreen = LoadingScreen.create({ $, Tracks, TrackMaps, Flags, store, announcer: () => announcer });
+const loadingScreen = LoadingScreen.create({ $, Tracks, TrackMaps, Flags, store, announcer: () => announcer, radio: () => radioVoice });
 /** The RACE! button's route into a race. Not folded into startRace(): netplay
  *  and __apex.race() both AWAIT that function, and neither should gain two
  *  seconds of flourish. The button is the only place a human is watching. */
@@ -3678,7 +3674,7 @@ function menuGridCars() {
     makeCars();
     const order = flybyGridOrder();
     cars = order || cars;
-    FlybySeq.setPlayerSlot(order ? order.indexOf(player) : null);   // null: not knowable yet, so no grid-mine shot
+    FlybySeq.setPlayerSlot(order ? order.indexOf(player) : null, cars.length);   // null: not knowable yet, so no grid-mine shot
     for (let i = 0; i < cars.length; i++) {
       const c = cars[i], slot = TrackMesh.gridSlot(track, i);
       c.s = wrapS(slot.s); c.x = slot.x; c.xVis = c.x;
@@ -3714,7 +3710,50 @@ function flybyGridOrder() {
   return o;
 }
 
+// RACE! BEFORE THE MENU'S IDLE BUILD (a tap within ~2-4 s of picking): build it
+// now, under the held card, then fly. startRace pays the same 1-3 s anyway (its
+// loadTrack reuses this build), so this buys the cinematic, not a longer wait.
+let _introKey = "", _introRun = 0;
+function introBuild(go) {
+  const idx = trackIdx, key = menuKey(idx), n = ++_introRun;
+  if (!(idx >= 0) || (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches)) return false;
+  clearTimeout(flybyBuildTimer); _menuGate.generation++;   // the menu's own build stands down
+  loadingScreen.building(loadingInfo());
+  (async () => {
+    try {
+      await ensureScenery(idx);
+      await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));   // the card paints first
+      const live = () => n === _introRun && state === "menu" && key === menuKey(trackIdx);
+      while (live() && gfx.warming && gfx.warming()) await menuSlice();   // a compile owns its scene: never free it mid-warm
+      if (!live()) return;
+      loadTrack(idx); _menuGate.ready = key; _menuGate.track = track;
+      // What menuFinish does, under the card: car assets (bounded), then hidden warm
+      // frames — "build" is not active(), so they draw with the canvas hidden and
+      // the flyby's first frame is not the one that compiles every shader.
+      const t1 = performance.now();
+      await prepareMenuCarAssets(() => live() && performance.now() - t1 < 1500);
+      if (!live()) return;
+      FlybySeq.reset(); _menuGate.warm = 2;
+      for (let f = 0; f < 3 && _menuGate.warm > 0; f++) await new Promise((r) => requestAnimationFrame(r));
+      // Plan the flyby here too, up to a budget: whatever is left plans mid-flyby.
+      FlybySeq.setDuration(loadingScreen.nextFlyMs());
+      const fly = { key, track, shots: FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (idx * 2654435761)) >>> 0, false) }, step = FlybySeq.planSteps(track, fly.shots), t0 = performance.now();
+      while (!step() && performance.now() - t0 < 800) await menuSlice();
+      _menuFly = fly;
+    } catch (e) { Log.warn("gfx", "intro build failed", e); }
+    finally {
+      // Always hand over (a failed build falls back to the card), unless a newer tap or a quit owns the screen.
+      if (n === _introRun) {
+        if (state !== "menu") loadingScreen.stop();
+        else try { _introKey = key; raceIntro(go); } catch (e) { Log.warn("gfx", "loading screen failed", e); loadingScreen.stop(); go(); }   // "build" has no timer or skip: never leave it up
+      }
+    }
+  })();
+  return true;
+}
 function raceIntro(go) {
+  const built = _introKey; _introKey = "";
+  if (!built && !menuWorld() && introBuild(go)) return;
   const world = menuWorld();
   if (world) menuGridCars();
   // LIGHT THE FLYBY WITH WHAT THE MENU CHOSE, BEFORE IT STARTS. run() fires `go`
@@ -3729,9 +3768,13 @@ function raceIntro(go) {
   // And fly the shots the EDITOR saved, for the same reason: a list edited in
   // the pause menu is only read here, so every run picks up the latest one.
   reloadFlybyShots();
-  if (!flybyShots) flybyShots = FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0, FlybySeq.slotKnown());   // a different flyby each load (never the sim RNG); an editor-saved list plays as authored
-  if (flybyShots && !FlybySeq.slotKnown()) flybyShots = FlybySeq.withoutSlot(flybyShots);   // a random grid: nobody knows your slot yet
+  const planned = world && _menuFly && _menuFly.track === track && _menuFly.key === _menuGate.ready ? _menuFly.shots : null;   // planned in the menu (menuFinish)
+  _menuFly = null;   // one load's flyby: the next one varies again
+  if (!flybyShots) flybyShots = planned || FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0);   // a different flyby each load (never the sim RNG); an editor-saved list plays as authored
+  if (flybyShots) flybyShots = FlybySeq.withoutSlot(flybyShots);   // nobody knows your slot on a random grid; a small grid has empty boxes
+  FlybySeq.setDuration(loadingScreen.nextFlyMs());   // plan every pan for the seconds this run has
   if (world) FlybySeq.warm(track, flybyShots);   // plan the opening shots now, the rest in slices before their cuts
+  FlybySeq.reset();   // this run's shot 0 is a cut, not a glide from wherever the camera was
   loadingScreen.run(loadingInfo(), go);
 }
 /** WHAT THE LOADING SCREEN DESCRIBES: the circuit about to be raced, this
@@ -3751,7 +3794,7 @@ function loadingInfo() {
     // Only fly over a world that is actually built. A missed pre-build (a
     // circuit switched a moment ago, scenery still downloading) would put a
     // black hold where the cinematic should be, which reads as a hang.
-    hasWorld: menuWorld(),
+    hasWorld: menuWorld(), shots: flybyShots, grid: (cars || []).map((c) => ({ code: c.code, colour: c.color, isPlayer: c === player && FlybySeq.slotKnown() })),   // the card's grid graphic + radio check: menuGridCars() seated `cars` in grid order
   };
 }
 // ACTIVE AERO activation zones (js/physics/aero-zones.js) — pure circuit geometry.
@@ -3835,7 +3878,7 @@ let netLobby = {
   // correct: there is no #vsfriend handler to bind until the real lobby lands,
   // and ensureNet() calls the real wire() before it hands over.
   wire: () => {}, open: () => {}, close: () => {}, cancel: () => {},
-  abortQuali: () => {}, roomChanged: () => {}, setReady: () => {},
+  abortQuali: () => {}, qualifying: () => false, roomChanged: () => {}, setReady: () => {},
   peerSeats: () => [], roomState: () => ({ open: false, role: null, peers: [] }),
   status: () => ({ role: null, connected: false }),
   reportQuali: () => {}, reportQualiLive: () => {},
@@ -3860,14 +3903,19 @@ function arrToHex(a) { const f = (v) => ("0" + Math.round(Math.max(0, Math.min(1
 // the action. Returns true when the action ran. Disarm is the caller's rebuild
 // or any other click path replacing the node.
 function armConfirm(btn, armedText, action) {
+  // An aria-label outranks the text, so a labelled button (the livery ✕) was
+  // announced unchanged when armed; the armed state goes into the name too.
+  const name = btn.getAttribute("aria-label");
   if (!btn.dataset.armed) {
     btn.dataset.armed = "1";
     btn.textContent = armedText;
     btn.classList.add("armed");
+    if (name) { btn.dataset.name = name; btn.setAttribute("aria-label", "Confirm: " + name + ". Press again"); }
     return false;
   }
   delete btn.dataset.armed;
   btn.classList.remove("armed");
+  if (btn.dataset.name) { btn.setAttribute("aria-label", btn.dataset.name); delete btn.dataset.name; }
   action();
   return true;
 }
@@ -3884,6 +3932,7 @@ function clearMenuScreens() {
   // Disarm the loading screen BEFORE the sweep hides it: it holds a pending
   // timer that would otherwise fire its build callback into a running race.
   loadingScreen.stop();
+  FlybySeq.cancelWarm();   // and the flyby's unplanned shots: they would only stall the countdown
   for (const el of document.querySelectorAll(".screen")) el.hidden = true;
   for (const id of ["overlay", "lighting", "camtune", "flyby"]) { const el = $(id); if (el) el.hidden = true; }
   // The garage's 3D turntable keeps rendering while #carsetup is up; a race
@@ -3908,6 +3957,11 @@ function syncRotateBlocker(moveFocus) {
   // outside itself: the OPEN CONTROLS roundtrip landed on RESUME instead of
   // back on the blocker's button. `paused` survives; the card returns the
   // moment the blocker leaves (rotate to landscape mid-pause and it is there).
+  // A live race does not run on behind the blocker: turning the phone upright
+  // mid-race used to leave the field (and TOUCH's auto-throttle) racing on.
+  // rotateBlockMql as well as the box: a DOM with no stylesheet (the node
+  // game-vm harness) reads every display as shown, and would pause every race.
+  if (active && rotateBlockMql.matches && !paused && (state === "race" || state === "count") && !netPlay.active()) setPaused(true);
   if (paused) els.pausemenu.hidden = active;
   if (active && moveFocus) requestAnimationFrame(() => {
     const first = $("rotate-controls"); if (first && getComputedStyle(box).display !== "none") first.focus();
@@ -3917,7 +3971,10 @@ if (rotateBlockMql.addEventListener) rotateBlockMql.addEventListener("change", (
 else if (rotateBlockMql.addListener) rotateBlockMql.addListener(() => syncRotateBlocker(true));
 
 function quitToMenu() {
+  sessionEntry.cancel();
+  qualiSheet.close();
   _ltBase = null; _ltFlash = 0;   // the lightning's saved race base is not the menu's
+  if (announcer.stop) announcer.stop();   // the results commentary ran on over the title for up to 16 s
   shake = 0; hitStop = 0;
   PerfGov.sentinelArm(false); if (netPlay.active()) netPlay.stop("local"); hideCamPicker();
   closeLightTuner(false);
@@ -3982,7 +4039,7 @@ function quitToMenu() {
 // ---------- per-frame update ----------
 // Reusable rank buffer — refilled and sorted each physics step (up to 5x per
 // rendered frame) so we don't allocate a fresh array via cars.slice() each time.
-const ranked = [];
+const ranked = [], byProgDesc = (a, b) => b.prog - a.prog;   // hoisted: no comparator closure per step
 // Live weather (setWeatherLive/setTimeOfDay) and the dynamic weather arc live in
 // js/race/weather-arc.js — WeatherArc.create(G, deps), wired as `wxArc` above.
 
@@ -4104,7 +4161,7 @@ function update(dt) {
   // own `c.retired` check and one of them would eventually be forgotten.
   ranked.length = 0;
   for (const c of cars) if (!c.retired) ranked.push(c);
-  ranked.sort((a, b) => b.prog - a.prog);
+  ranked.sort(byProgDesc);
   for (let i = 0; i < ranked.length; i++) {
     ranked[i].rank = i + 1;
   }
@@ -4212,7 +4269,7 @@ const AI_BIAS_SLEW = 3.0;      // m/s: how fast a pass / defend / yield / separa
 const _aiBr = { traits: null, samples: null, latMax: 0, aeroLoad: 0, brake: 0, grip: 0, speed: 0, blocker: false, blockerGap: 0, blockerSpeed: 0, roomL: 0, roomR: 0, team: null, seat: 0, stats: null, errMul: 1 };
 const _aiLane = { traits: null, nearby: 0, roomL: 0, roomR: 0, street: false, baseLane: 0 };
 const _aiWantX = { armed: true, team: null, seat: 0, stats: null, energy: 0, catching: false, otActive: false };
-const _aiOtPull = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null, kAhead: 0, lane: 0, freeSpeed: 0, blockerVmax: 0, vTop: 0, blockerAccel: 0, attackQ: 0, toTurnIn: 0, roll: 0.5 };
+const _aiOtPull = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null, kAhead: 0, lane: 0, freeSpeed: 0, blockerVmax: 0, vTop: 0, blockerAccel: 0, attackQ: 0, toTurnIn: 0, roll: 0.5, queueT: 0 };
 const _aiDefend = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, chaser: false, chaserGap: 0, chaserSpeed: 0, kA: 0, roomL: 0, roomR: 0, other: null, blocker: null, x: 0 };
 const _aiBoxed = { contactT: 0, roomL: 0, roomR: 0, blocker: null, blockerGap: 0, street: false };
 const _aiDefOnce = { defend: 0, side: 0 };
@@ -4481,10 +4538,12 @@ function updateCar(c, dt, ranked) {
   // ahead"), not ranked[rank-2]: that is the classification neighbour — a
   // leader has none (a backmarker 0.5 s ahead could not be attacked), it can
   // sit a lap away, and a finished car coasting right ahead armed OT.
-  let ahead = null, gapAhead = Infinity;
+  // Only a car inside OT_GAP·speed can arm (`ahead` is read only then): the traffic scan's cheap reject, +1 m margin.
+  let ahead = null, gapAhead = Infinity; const otL = track.total, otW = OT_GAP * c.speed + 1;
   for (const o of ranked) {
     if (o === c || o.finished) continue;
-    const d = ((o.prog - c.prog + track.total / 2) % track.total + track.total) % track.total - track.total / 2;   // full wrap (a twice-lapped car is 2L back in prog)
+    const dp = o.prog - c.prog, adp = dp < 0 ? -dp : dp; if (adp > otW && adp < otL - otW) continue;
+    const d = ((dp + otL / 2) % otL + otL) % otL - otL / 2;   // full wrap (a twice-lapped car is 2L back in prog)
     if (d > 0.5 && d < gapAhead) { ahead = o; gapAhead = d; }
   }
   gapAhead = ahead && c.speed > 1 ? gapAhead / c.speed : Infinity;
@@ -4653,6 +4712,7 @@ function updateCar(c, dt, ranked) {
     const capBlocks = blocker && blockerGap < 16 &&
       !(blocker === c.passOf && Math.abs(c.x - blocker.x) >= 1.8);
     if (blocker && blockerGap < 16) aiFreeSpeed = vmax;   // our pace with this car gone (AiDrive.otWant)
+    c.queueT = AiDrive.queueTime(c.queueT, capBlocks && blocker === c._qOf, dt); c._qOf = capBlocks ? blocker : null;   // held behind the SAME car (AiDrive.queuePress)
     if (capBlocks) {
       // Held behind a car SERVING A STOP (or queued for one), not by the ground
       // — the pit-lane rescue reads this. Only a lane car: a car welded to
@@ -4770,6 +4830,21 @@ function updateCar(c, dt, ranked) {
     }
   }
 
+  // Classify the visible surface BEFORE applying longitudinal forces. Kerbs
+  // and the separate pit ribbon remain road, even outside the main half-width.
+  c.onKerb = Tracks.onKerb(track, c.s, c.x) > 0;
+  c.inPitLane = Math.abs(c.x) > hw && Tracks.inPitLane(track, c.s, c.x);
+  c.offroad = Math.abs(c.x) > hw && !c.onKerb && !c.inPitLane;
+  const surfaceMu = c.offroad ? lerp(1, OFF_GRIP, clamp((Math.abs(c.x) - hw) / 1.5, 0, 1)) : 1;
+  const roadBrake = BRAKE * tyres.tractionMul(c) * (c.human ? mods.braking : 1) * (gripMult(c) / gripMult());
+  // Rolling resistance and pedal braking share a budget below tarmac braking.
+  // Reserve drag first so a throttle-on excursion still slows; the remaining
+  // pedal force grows continuously with demand, even with weak or worn brakes.
+  const grassDrag = Math.min((1 - surfaceMu) * 24, roadBrake * .75);
+  const surfaceBrake = c.offroad
+    ? Math.min(roadBrake * surfaceMu, Math.max(0, roadBrake * .95 - grassDrag)) : roadBrake;
+  const longitudinalSpeed = c.speed;
+
   // --- integrate speed ---
   // AI always drives; the player holds GAS unless auto-throttle is on (then the
   // car accelerates on its own and braking still takes over below).
@@ -4783,11 +4858,11 @@ function updateCar(c, dt, ranked) {
     if (c.speed > 0) {
       // Tread pays braking back in the wet — the ratio is exactly 1 on slicks and in the dry (docs/PHYSICS.md). The AI earns it too: its
       // `tread: null` resolves to the right compound for cornering, and until 2026-09-22 it braked as if on slicks in the rain.
-      c.speed = Math.max(0, c.speed - BRAKE * tyres.tractionMul(c) * (c.human ? mods.braking * brakeLvl : brakeLvl) * (gripMult(c) / gripMult()) * dt);
+      c.speed = Math.max(0, c.speed - surfaceBrake * brakeLvl * dt);
     } else if (c.human && state === "race") {
       // Stopped and still braking: crawl backwards so the player can ease off a
       // wall or re-aim after a spin. Capped slow; throttle drives forward again.
-      c.speed = Math.max(REVERSE_MAX, c.speed - REVERSE_ACCEL * dt);
+      c.speed = Math.max(REVERSE_MAX, c.speed - REVERSE_ACCEL * surfaceMu * dt);
     }
     c.energy = Math.min(1, c.energy + regenFor(c) * 1.6 * dt);
   } else if (!onThrottle) {
@@ -4804,7 +4879,7 @@ function updateCar(c, dt, ranked) {
     // 8 m pitch to T1 — see the start test in ai-racecraft-vm.
     const launch = c.launchOn ? AiDrive.launchMul(raceT - launchT0, c.launch) : 1;
     if (c.launchOn && AiDrive.launchDone(raceT - launchT0, c.launch)) c.launchOn = false;
-    const a = (ACCEL * PACE * perfMul * (c.human ? mods.accel * throttleLvl : launch) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
+    const a = (ACCEL * PACE * perfMul * (c.human ? mods.accel * throttleLvl : launch) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy) * surfaceMu * (state === "race" ? 1 : 0);
     if (!c.human) c.accSm = damp(c.accSm ?? 0, a, 6, dt);   // what this car is pulling — AiDrive.otWant reads it on the blocker
     // A ceiling that drops under the car (VSC vmax cut, limiter downshift) bleeds
     // at coast drag; it used to scrub 25 m/s in one step.
@@ -4861,37 +4936,10 @@ function updateCar(c, dt, ranked) {
   } else if (!c.human) c.gear = naturalGear(gearSpeed);
   c.rpm = rpmFor(c.gear, gearSpeed);
 
-  // Kerb vs off-track: a kerb sits just outside the road edge and is DRIVABLE
-  // (rumble + a little grip loss), whereas going past the edge with no kerb is
-  // grass/run-off. So detect the kerb first and exclude it from "offroad".
-  c.onKerb = Tracks.onKerb(track, c.s, c.x) > 0;
-
-  // --- offroad ---
-  // THE PIT LANE IS ROAD. On the 34 circuits that have room for a separate
-  // ribbon it sits beyond `hw`, so without this every car that drove into it
-  // would pick up grass drag, a cut count and eventually a rescue — i.e. the
-  // lane would be paint you get penalised for using. Tracks.inPitLane is the
-  // same fit the ribbon is built from, so the surface a driver can see and the
-  // surface the physics grants are the same strip by construction.
-  c.inPitLane = Math.abs(c.x) > hw && Tracks.inPitLane(track, c.s, c.x);
-  c.offroad = Math.abs(c.x) > hw && !c.onKerb && !c.inPitLane;
+  // Passive resistance never raises speed to the crawl floor or prevents a stop.
   if (c.offroad) {
-    const offDepth = clamp((Math.abs(c.x) - hw) / 5, 0, 1);
-    // Grass DRAG: slows you toward a crawl, and never speeds you up. The floor
-    // used to be a bare Math.max, so any time you were off-track below 10.8 m/s
-    // it RAISED your speed to 10.8 — you could not brake below 39 km/h on the
-    // grass (BRAKE removes 0.37 m/s per frame and this put it straight back),
-    // could not stop at all, and crawling out of a gravel trap at 3 m/s snapped
-    // you to 10.8 in a single frame. It also runs after the accel/brake/slope
-    // integration, so it overrode all of them.
-    // The floor is a SPEED, so it rides the pace scale — otherwise the crawl sits
-    // at 24% of top speed at pace 2 and 15% at pace 5, i.e. the grass would let you
-    // off progressively lighter the faster the field runs. The scrub RATE is a
-    // force and stays absolute, like BRAKE.
     const grassFloor = GRASS_V * 0.6 * Math.max(PACE, 0.05);
-    if (c.speed > grassFloor) {
-      c.speed = Math.max(grassFloor, c.speed - (20 + offDepth * 28) * dt);
-    }
+    if (c.speed > grassFloor) c.speed = Math.max(grassFloor, c.speed - grassDrag * dt);
     c.offT += dt;
     if (c.offT > 1.2) {
       c.offT = -2;   // grace before next count
@@ -4959,6 +5007,10 @@ function updateCar(c, dt, ranked) {
     if (soundOn && c.kerbSndT <= 0) { GameAudio.rumble(); c.kerbSndT = 0.07; }
     if ((c.kerbHapT = (c.kerbHapT || 0) - dt) <= 0) { Input.vibrate(15); Input.rumble(0.25, 90); c.kerbHapT = 0.12; }
   }
+
+  // Signed observed acceleration, including braking/grass, for AI lane
+  // prediction. Keep the existing engine-pull accSm contract separate.
+  c.corridorAccel = damp(c.corridorAccel || 0, (c.speed - longitudinalSpeed) / Math.max(dt, 1e-6), 6, dt);
 
   // --- lateral ---
   let steer;
@@ -5064,7 +5116,7 @@ function updateCar(c, dt, ranked) {
           if (po.passOf === c) { po.passOf = null; po.passCool = po.passFailT; }
         }
       }
-      else if (sideRoom < WCAR) { c.passOf = null; c.passCool = AiDrive.passCooldown(aiT); }       // side closed
+      else if (AiDrive.passSideClosed(sideRoom, c.passSide * (AiDrive.passTarget(po.x, c.passSide, CLEAR, hw) - c.x), WCAR)) { c.passOf = null; c.passCool = AiDrive.passCooldown(aiT); }       // side closed: no room left to REACH the pass lane
       else if (squeezed) { c.passOf = null; c.passCool = AiDrive.passCooldown(aiT); }             // walked to the edge: abandon it
       // NOT ON: at the turn-in and still not half alongside — that is a lunge
       // (the FIA's inside-pass entitlement is the front axle past the mirror
@@ -5092,7 +5144,8 @@ function updateCar(c, dt, ranked) {
       // so a player doing 40 read as "pace 60" and was never attacked; their
       // speed is their pace, so the fallback (0 -> blockerSpeed) is the read.
       _aiOtPull.kAhead = kA; _aiOtPull.lane = c.lane; _aiOtPull.freeSpeed = aiFreeSpeed;
-      _aiOtPull.blockerVmax = blocker.human ? 0 : (blocker._vmaxNow || 0); _aiOtPull.vTop = vTop();
+      // ...and with the blocker's X-mode gain taken back out: freeSpeed is read before our own flap opens, so a raw _vmaxNow hid up to 15 % of pace
+      _aiOtPull.blockerVmax = blocker.human ? 0 : (blocker._vmaxNow || 0) / (1 + xVmaxGain(blocker) * (blocker.aeroX || 0)); _aiOtPull.vTop = vTop(); _aiOtPull.queueT = c.queueT || 0;
       _aiOtPull.blockerAccel = blocker.human ? (blocker.axEstSm || 0) : (blocker.accSm || 0);
       // Engage only with a reachable lane and no cooldown on this stretch.
       // ...and only where the move is ON (AiDrive.attackOK: a straight, or an
@@ -5251,7 +5304,7 @@ function updateCar(c, dt, ranked) {
       // full-lock authority, so every existing multiplier on the step below
       // (grip taper, kerb, contact give, off-track fade) still applies.
       const headWant = clamp(Math.atan(tanT) + Math.atan(AI_XTRACK_GAIN * err / Math.max(vAbs, 1)), -AI_HEAD_MAX, AI_HEAD_MAX);
-      const yawMax = Math.min(AI_YAW_MAX, AI_YAW_LAT * LAT_MAX * AiDrive.lateralScale(c.speed, c.aeroLoad, gripMult(c) * tyres.gripMul(c) * dirtyAirMul(c.wake || 0, c.speed), PACE, VMAX) / vAbs);
+      const yawMax = Math.min(AI_YAW_MAX, AI_YAW_LAT * LAT_MAX * AiDrive.yawScale(c.speed, c.aeroLoad, gripMult(c) * tyres.gripMul(c) * dirtyAirMul(c.wake || 0, c.speed), PACE, VMAX) / vAbs);   // no wings in the yaw budget (AiDrive.yawScale)
       const head0 = c.aiHead || 0;
       c.aiHead = head0 + clamp(headWant - head0, -yawMax * dt, yawMax * dt);
       steer = clamp(vAbs * Math.sin(c.aiHead) / Math.max(STEER_VMAX * clamp(vStd(vAbs) / 18, 0, 1) * AiDrive.lateralScale(c.speed, c.aeroLoad, gripMult(c) * tyres.gripMul(c) * dirtyAirMul(c.wake || 0, c.speed), PACE, VMAX), 1), -1, 1);
@@ -5407,9 +5460,9 @@ function updateCar(c, dt, ranked) {
     // this the friction ellipse would shave cornering grip (and add rear weight
     // transfer) for an acceleration that isn't actually happening.
     // The SURFACE brakes you too — surfMu below scaled LATERAL grip alone, so a tyre on grass retarded the car as hard as one on tarmac. Same lerp, same depth.
-    const axEstTarget = braking ? -BRAKE * tyres.tractionMul(c) * brakeLvl * (c.onKerb ? 1 : lerp(1, OFF_GRIP, clamp((Math.abs(c.x) - hw) / 1.5, 0, 1))) * (c.human ? (mods.braking || 1) : 1) * (gripMult(c) / gripMult())
+    const axEstTarget = braking ? -surfaceBrake * brakeLvl
       : (onThrottle
-          ? ACCEL * PACE * perfMul * (c.human ? mods.accel * throttleLvl : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy
+          ? (ACCEL * PACE * perfMul * (c.human ? mods.accel * throttleLvl : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy) * surfaceMu
           : -COAST_DRAG);
     c.axEstSm = damp(c.axEstSm ?? axEstTarget, axEstTarget, 10, dt);
     const wt = clamp(-c.axEstSm / LAT_MAX * WT_LONG, -0.16, 0.18);
@@ -5476,8 +5529,7 @@ function updateCar(c, dt, ranked) {
     const aeroGrip = (1 + DOWNFORCE * aeroDfMult(c) * Math.min(1, (Math.abs(c.speed) / vTop())) ** 2)
       * dirtyAirMul(c.wake || 0, c.speed);
     c._aeroGrip = aeroGrip;          // see c._vmaxNow — the other half of the trade
-    const offDepth = clamp((Math.abs(c.x) - hw) / 1.5, 0, 1);
-    const surfMu = c.onKerb ? 1 : lerp(1, OFF_GRIP, offDepth);
+    const surfMu = surfaceMu;
     // B3 (marbles-affect-grip, flag apex26.marbleGrip): an EXTERNAL grip scalar
     // for a player sitting on a settled off-line marble cluster, fed in ALONGSIDE
     // gripMult()/kerbGrip/bankMu here — the existing mu-scaling seam. It NEVER
@@ -5659,8 +5711,7 @@ function updateCar(c, dt, ranked) {
     // Same off-track lateral fade the player gets via surfMu — AI used to keep
     // full STEER_VMAX authority on grass, skating wide while the human path
     // was already grip-thinned. Continuous in |x| past the edge (player idiom).
-    const aiOffDepth = clamp((Math.abs(c.x) - hw) / 1.5, 0, 1);
-    const aiSurfMu = c.onKerb ? 1 : lerp(1, OFF_GRIP, aiOffDepth);
+    const aiSurfMu = surfaceMu;
     // latFac is zero at a standstill — the exact state the dig-out exists for,
     // so the pull it computes could never be applied. Floored while
     // unstuckActive ONLY (AiDrive.unstuckLatFloor); slow running is untouched.
@@ -6020,7 +6071,7 @@ function updateCar(c, dt, ranked) {
     // The flag: the distance, or the leader already home (RaceControl.flagOut —
     // a lapped car is flagged at its next crossing, not after the full count).
     const flagged = lineCross.flagged;
-    if (c.lap > 1) {
+    if (c.lap > 1 && !lineCross.recross) {   // a re-crossing after a reverse was timed the first time
       const lapDone = lineCross.lapDone;
       if (lapValid) c.lastLap = lapDone;
       if (lapValid && lapDone < c.best) c.best = lapDone;
@@ -6639,7 +6690,7 @@ function render(dt) {
   // moving, high-contrast backdrop to be read against. The world the picker warms is
   // still built — it is just not SHOWN until the player commits to the race, where
   // js/ui/loading-screen.js spends it as the cinematic it always wanted to be.
-  const menuBlank = state === "menu" && !setupPreviewOn && (!track || !loadingScreen.active());
+  const menuBlank = state === "menu" && !setupPreviewOn && (!track || !loadingScreen.active() || !menuWorld());   // the no-world card must not show the LAST circuit
   const vis = menuBlank ? "hidden" : "";
   if (canvas.style.visibility !== vis) canvas.style.visibility = vis;
   // Soft-present #game-soft is a sibling overlay (GLX HeadlessChrome / TLX). Keep
@@ -8430,8 +8481,8 @@ function openCareer() {
     driverIdx = c.seat;
     recomputePlayerMods();
   }
-  careerUi.openHub();
-  els.overlay.hidden = true;
+  // vt: the same crossfade RACE / SEASON / GARAGE already take off the title.
+  vt(() => { careerUi.openHub(); els.overlay.hidden = true; });
   if (soundOn) GameAudio.uiSelect();
   scheduleFlybyTrack(true);   // the hub's next round, pre-built behind it
 }
@@ -8439,8 +8490,7 @@ function openCareer() {
 // career flow: nothing has been chosen yet, so a save's rules must not be live —
 // the picker's own handler calls openCareer() once a slot is taken.
 function openCareerSlots() {
-  careerUi.openSlots();
-  els.overlay.hidden = true;
+  vt(() => { careerUi.openSlots(); els.overlay.hidden = true; });
   if (soundOn) GameAudio.uiSelect();
 }
 function refreshCareerButton() {
@@ -8562,16 +8612,14 @@ $("mb-settings").onclick = () => { if (soundOn) GameAudio.init(); openSettings()
 // Latched and caught like startRace, but never re-thrown: none of its callers
 // await it, so a rejection reached the global error overlay with the settings
 // screen already hidden and NO menu under it. The menu is where it lands.
-let _openQualiP = null;
 function openQuali(fresh, netDone) {
-  if (_openQualiP) return _openQualiP;
-  _openQualiP = openQualiBody(fresh, netDone)
-    .catch((e) => { Log.error("game", "openQuali failed", e); qualiSheet.close(); quitToMenu(); })
-    .finally(() => { _openQualiP = null; });
-  return _openQualiP;
+  const key = entrySettings() + "|" + !!fresh, idx = trackIdx;
+  return sessionEntry.begin("quali", key, () => ensureScenery(idx),
+    () => openQualiBody(fresh, netDone), () => key === entrySettings() + "|" + !!fresh,
+    (e) => { if (e) Log.error("game", "openQuali failed", e); qualiSheet.close(); quitToMenu(); })
+    .catch(() => {}); // menu callers fire and forget; recovery above already landed the failure
 }
-async function openQualiBody(fresh, netDone) {
-  await ensureScenery(trackIdx);
+function openQualiBody(fresh, netDone) {
   session = "quali";
   // Reached from race settings this is already "menu"; reached from the results
   // screen it would still say "results". No race is running while the sheet is
@@ -8606,6 +8654,8 @@ $("q-sim").onclick = () => {
   $("quali").classList.add("q-done");
   qualiSheet.build(quali.rows());
   qualiNet.refreshQualiGate();
+  // .q-done hides SIMULATE itself, which held focus; the next step is the grid.
+  if (!$("q-go").disabled) $("q-go").focus();
 };
 $("q-go").onclick = () => {
   // Guarded as well as disabled: the button is the only way out of this sheet,
@@ -8648,7 +8698,9 @@ $("q-back").onclick = () => {
   qualiSheet.close();
   quali.clear();          // nothing was run; the next visit draws its own sheet
   session = "race";
-  qualiNet.hasArmed() ? qualiNet.resetOnBackWithAbort() : ($("race-settings").hidden = false);
+  // Rebuilt on the way back (laps/weather kept): after NEXT ROUND it still
+  // held the previous circuit's lap chips and FULL value.
+  qualiNet.hasArmed() ? qualiNet.resetOnBackWithAbort() : (raceSettings.buildRaceSettings(), $("race-settings").hidden = false);
 };
 
 // MY TEAM customize dialog — js/career/custom-team.js (CustomTeam.create above).
@@ -8668,6 +8720,9 @@ function openGarage(from) {
   if (from === "menu" && soundOn) GameAudio.init();
   else if (soundOn) GameAudio.uiSelect();
   garageReturn = from;
+  $("cs-done").textContent = from === "select" ? "RACE SETUP" :
+    from === "pit" ? "RETURN TO RACE" : from === "career" ? "RETURN TO CAREER" :
+    from === "vsfriend" ? "RETURN TO LOBBY" : "CLOSE GARAGE";
   // Fresh camera every visit: a garage that reopened on the last angle someone
   // dragged to — nose-down, zoomed into a wheel — reads as broken rather than
   // as remembered. The turntable is the front door; the controls are there for
@@ -8766,7 +8821,7 @@ $("cs-done").onclick = () => {
   // away if you change your mind.
   if (garageReturn === "select") { raceSettings.openRaceSettings("select"); return; }
   buildSelect();
-  els.overlay.hidden = false;   // only the title screen's GARAGE button gets here
+  vt(() => { els.overlay.hidden = false; });   // only the title screen's GARAGE button gets here
 };
 $("cs-unlimited").onclick = () => {
   unlimitedBudget = !unlimitedBudget;
@@ -8815,6 +8870,11 @@ els.resNext.onclick = () => {
 
 function setPaused(p) {
   if (state !== "race" && state !== "count") return; hideCamPicker();
+  // THE PIT GARAGE HOLDS THE PAUSE. openPitWork freezes the race behind
+  // #carsetup; a Start/P press or RESUME on a pause card stacked over it
+  // (hidden tab) used to run the race UNDER the garage, the box timer expired,
+  // and DONE then charged nothing. Its own DONE/BACK are the only way out.
+  if (!p && garageReturn === "pit" && !$("carsetup").hidden) { els.pausemenu.hidden = true; return; }
   paused = p;
   if (!p) {
     closeLightTuner(false); closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();
@@ -8982,7 +9042,10 @@ if ($("pm-fullscreen")) {
   el.hidden = false;
   const x = $("ios-install-x");
   if (x) x.onclick = dismiss;
-  // It is a suggestion, not a gate: the first race dismisses it too.
+  // It is a suggestion, not a gate: the first title-menu choice dismisses it,
+  // or it sat over the next screen's BACK/DONE and the HUD's speed readout.
+  const ov = $("overlay");
+  if (ov) ov.addEventListener("click", (e) => { if (e.target.closest && e.target.closest(".bigbtn")) dismiss(); });
   setTimeout(dismiss, 15000);
 })();
 applyMirrorControls();
@@ -9082,6 +9145,12 @@ window.addEventListener("pagehide", () => { PerfGov.sentinelArm(false); _disarmP
 customTeam.init();
 raceSettings.wireButtons();
 customTeam.syncCustomTeam();   // inject "MY TEAM" so saved selections and chips resolve
+// LEGACY CODE-KEYED POINTS -> STABLE DRIVER IDS, here and not in SeasonCal.load
+// (which runs at eval, before MY TEAM is in Teams.LIST, so "YOU" matched no
+// roster entry). 6091fb859 dropped this call with the move to SeasonCal.load,
+// whose comment still promised it; from then on an old save's points stayed
+// under the display code and a custom-code edit split the player in two.
+if (season && store.get("season", null)) { season = GameStore.migrateSeasonPoints(season); SeasonCal.save(season); }
 teamIdx = idxOr(teamIdx, Teams.LIST.length, 2);
 clampDriverIdx();
 // Clamp a legacy positional selection before migrating it to stable identity.

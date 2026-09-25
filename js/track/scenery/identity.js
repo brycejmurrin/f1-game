@@ -258,12 +258,27 @@ const SceneryIdentity = (function () {
       else { depth = sz || 18; thick = 0.35; len = 24; }
       const dist = gap + depth / 2;
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
-      const box = [depth, thick, len];
-      if (rejBox(a.c, box, b)) {
-        ctx.noteSuppressed("runoffApron", `runoffApron SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
-        return;
+      // A painted surface, not a model: it must SHOW. anchor() sinks its point
+      // 0.3 m for flat-based models on a slope, which left a 0.16 m slab wholly
+      // under the ground once the run-off shelf flattened the first 12 m
+      // (paul_ricard's Blue Zone: 639 buried prims, was 203). Sample the ground
+      // at both edges and the centre; the top clears the highest by 3 cm and
+      // the slab reaches 5 cm under the lowest, so neither edge floats.
+      const gy = (d) => anchor(k, side, d).c[1] + 0.3;
+      const g0 = gy(gap), g1 = a.c[1] + 0.3, g2 = gy(gap + depth);
+      const top = Math.max(g0, g1, g2) + 0.03, h = Math.max(thick, top - Math.min(g0, g1, g2) + 0.05);
+      // Where the raised slab would reach over the tarmac (the inside of a
+      // corner, the pit straight), fall back to the slab and the guard test
+      // this helper always had.
+      let box = [depth, h, len], c = vadd(a.c, a.u, top - h / 2 - a.c[1]);
+      if (rejBox(c, box, b)) {
+        box = [depth, thick, len]; c = vadd(a.c, a.u, thick / 2);
+        if (rejBox(a.c, box, b)) {
+          ctx.noteSuppressed("runoffApron", `runoffApron SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
+          return;
+        }
       }
-      addBox(out, vadd(a.c, a.u, thick / 2), box, col || [0.42, 0.40, 0.38], b);
+      addBox(out, c, box, col || [0.42, 0.40, 0.38], b);
     };
 
     const bankedKerbStrip = (s0, s1, side, opts) => {
@@ -340,10 +355,29 @@ const SceneryIdentity = (function () {
         ctx.noteSuppressed("broadcastCompound", `broadcastCompound SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
         return;
       }
+      // Each truck, dish and the mast is seated on the terrain under ITS OWN
+      // spot (sunk 0.3 m, as anchor() sinks p.c) whenever that is BELOW the
+      // compound's one anchor point: the row spans 15-40 m, and on a hillside
+      // (interlagos, the nurburgring) the downhill end stood 1-10 m in the air,
+      // with the mast and its lamp head detached from any support. Dishes and
+      // the mast take the lowest of centre + corners; trucks their centre
+      // (at the corners a redbull truck sank 1.5 m into a hedge). Pieces are
+      // never raised, and off the terrain mesh keep the anchor height.
+      const seatAt = (c, hr, ht) => {
+        if (!ctx.terrainYAt) return c;
+        let lo = Infinity;
+        for (const q of [[0, 0], [-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+          const x = c[0] + p.r[0] * q[0] * hr + p.t[0] * q[1] * ht;
+          const z = c[2] + p.r[2] * q[0] * hr + p.t[2] * q[1] * ht;
+          const g = ctx.terrainYAt(x, z);
+          if (g != null && g < lo) lo = g;
+        }
+        return lo === Infinity ? c : [c[0], Math.min(c[1], lo - 0.3), c[2]];
+      };
       // OB truck row — box body on a darker chassis band, parked nose-in.
       for (let i = 0; i < vans; i++) {
         const off = (i - (vans - 1) / 2) * spacing;
-        const c = vadd(p.c, p.t, off);
+        const c = seatAt(vadd(p.c, p.t, off), 0, 0);   // centre only (see seatAt)
         addBox(out, vadd(c, p.u, 1.95), [7.2, 3.1, 2.5], vanCol, b);
         addBox(out, vadd(c, p.u, 0.42), [7.0, 0.7, 2.6], dark, b);
         // roof AC/cable box, so the row is not four identical bricks
@@ -353,18 +387,24 @@ const SceneryIdentity = (function () {
       // Uplink dishes, set behind the trucks.
       for (let i = 0; i < dishes; i++) {
         const off = (i - (dishes - 1) / 2) * 3.4 + (vans * spacing) / 2 + 2.2;
-        const base = vadd(vadd(p.c, p.t, off), p.r, side * 3.4);
+        const base = seatAt(vadd(vadd(p.c, p.t, off), p.r, side * 3.4), 1.0, 1.0);
         addBox(out, vadd(base, p.u, 0.5), [2.0, 1.0, 2.0], dark, b);          // skid
-        addCyl(out, vadd(base, p.u, 1.5), 0.18, 1.2, [0.42, 0.43, 0.46], 6, b); // pedestal
+        // Pedestal rises out of the skid (0.9 < its 1.0 top) to the dish at
+        // 2.7: it started 0.5 m above the skid, held up only by whatever the
+        // compound's single anchor height happened to touch.
+        addCyl(out, vadd(base, p.u, 0.9), 0.18, 1.8, [0.42, 0.43, 0.46], 6, b); // pedestal
         const dc = vadd(base, p.u, 2.5);
         const tilt = [p.u[0] * 0.72 + p.r[0] * side * 0.69,
                       p.u[1] * 0.72,
                       p.u[2] * 0.72 + p.r[2] * side * 0.69];
         addFrustum(out, dc, 1.45, 0.5, 0.55, dishCol, 9, [p.r, tilt, p.t]);
-        addCyl(out, vadd(dc, tilt, 0.9), 0.12, 0.5, dark, 5, [p.r, tilt, p.t]);  // feed horn
+        // Feed horn on a boom from inside the dish bowl out to the focus
+        // (0.9-1.4 along the axis): the bare horn floated 0.35 m off the
+        // 0.55 m-deep bowl, an unsupported prim at every dish.
+        addCyl(out, vadd(dc, tilt, 0.3), 0.12, 1.1, dark, 5, [p.r, tilt, p.t]);  // feed horn
       }
       // Link mast with a warning lamp — the compound's vertical accent.
-      const mast = vadd(vadd(p.c, p.t, -(vans * spacing) / 2 - 1.6), p.r, side * 2.6);
+      const mast = seatAt(vadd(vadd(p.c, p.t, -(vans * spacing) / 2 - 1.6), p.r, side * 2.6), 0.16, 0.16);
       addCyl(out, vadd(mast, p.u, -0.4), 0.16, mastH + 0.8, [0.46, 0.47, 0.50], 5, b);
       addBox(out, vadd(mast, p.u, mastH), [0.9, 0.35, 0.7], dark, b);
       addBox(out, vadd(mast, p.u, mastH + 0.4), [0.26, 0.26, 0.26],

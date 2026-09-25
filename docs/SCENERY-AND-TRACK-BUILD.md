@@ -83,7 +83,8 @@ not ride the flyover.
 
 ## 3. `buildProps` — two layers of dressing
 
-`buildProps(track)` (`js/track/tracks.js`) fills one shared props buffer (`out`)
+`buildProps(track)` (`js/track/scenery/build-props.js`, via `TrackBuildProps.build`) fills one shared props buffer (`out`)
+from `Tracks.build`.
 plus glass/water. Order matters:
 
 ### A. Setup
@@ -116,7 +117,7 @@ Runs for every circuit from def keys + theme fallbacks in
 
 ### C. Bespoke `scenery(api)`
 
-Builds the ~**112-member** API (frozen by
+Builds the ~**114-member** API (frozen by
 `tests/unit/scenery-api-contract.test.mjs`), optionally wraps it with
 `transformSceneryApi` (shift / reverse / source↔racing), then calls the circuit
 closure.
@@ -142,7 +143,7 @@ closure.
 | `scenery/data.js` | `TrackSceneryData` | `FURN_DEF`, `KIT_DEF`, `STAND_*`, `THEME_DEF`, colour packs |
 | `scenery/themes.js` | `SceneryThemes` | Theme palette / spacing / budgets |
 | `scenery/landmark-kit.js` / `circuit-kit.js` | kits | Bound as `landmarkKit` / `circuitKit` — circuits must **call** them |
-| `scenery/graph.js` | `TrackGraph` | Engine-internal instancing — **not** part of the 112-member contract |
+| `scenery/graph.js` | `TrackGraph` | Engine-internal instancing — **not** part of the 114-member contract |
 | `scenery/pits.js` | `SceneryPits` | After `scenery()` — not on `api` |
 | `core/geom.js` | `TrackGeom` | Primitives + `addMesh` for baked packs |
 

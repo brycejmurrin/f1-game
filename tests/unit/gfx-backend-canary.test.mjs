@@ -27,9 +27,11 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import vm from "node:vm";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { seedStore } from "../helpers/seed-store.mjs";   // gfx-quality.js persists through GameStore.store's raw lane
+import { seedClipboard } from "../helpers/seed-clipboard.mjs";
 import { bootGlx } from "../helpers/glx-mock.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -202,6 +204,27 @@ test("the shared Playwright fixture pins native GLX coverage", () => {
   const fixture = code("tests/helpers/fixtures.js");
   const install = fixture.slice(fixture.indexOf("async function installMocks"), fixture.indexOf("const consoleByPage"));
   assert.match(install, /localStorage\.setItem\(\s*"apex26\.gfxBackend"\s*,\s*"webgl2"\s*\)/);
+});
+
+// The pin above only reaches specs that import `test` from fixtures.js. Four
+// gfx specs used to import raw @playwright/test and silently measured TLX on
+// Metal after the three default (RENDERER-MACOS-RED-2026-09.md). Keep them on
+// the fixtures path — tlx-probes is the TLX product gate and pins "three"
+// itself.
+test("gfx specs that name GLX import Playwright test from fixtures", () => {
+  for (const rel of [
+    "tests/specs/webgl-probes.spec.js",
+    "tests/specs/image-grade-visual.spec.js",
+    "tests/specs/lighting-ab.spec.js",
+    "tests/specs/lighting-tuner-grade.spec.js",
+    "tests/specs/instanced-draw.spec.js",
+  ]) {
+    const src = code(rel);
+    assert.match(src, /from\s+["']\.\.\/helpers\/fixtures\.js["']/,
+      rel + " must import test from fixtures (webgl2 pin)");
+    assert.doesNotMatch(src, /from\s+["']@playwright\/test["']/,
+      rel + " must not import raw @playwright/test (skips the webgl2 pin)");
+  }
 });
 
 test("first world present re-arms the canary so a jetsam mid-frame still reverts", () => {
@@ -491,7 +514,9 @@ test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", ()
   // begin() strikes out…", "clean sessions heal the ladder") — not repeated
   // here as source text.
   assert.match(wgx, /_allocFail\(\s*"createMesh"/, "lazy mesh creation on the render path degrades to inert, not a throw");
-  assert.match(wgx, /_allocFail\(\s*"createChunkedMesh"/);
+  // createChunkedMesh moved to wgx-chunked.js (GLX-seam peel); it still routes
+  // through core.allocFail so a failed upload stays inert, not a throw.
+  assert.match(code("js/render/webgpu/wgx-chunked.js"), /allocFail\(\s*"createChunkedMesh"/);
   // A hand re-pick of WEBGPU resets the ladder so the player can retry full:
   // BEHAVIOUR through the picker.
   const a = bootPicker({
@@ -1369,12 +1394,14 @@ test("TLX shadow cull packs CPU-side without uploading the lit InstancedMesh", (
 
 test("WGX phone post targets use the slim GLX-equivalent formats", () => {
   const wgx = read("js/render/webgpu/wgx.js");
+  const post = read("js/render/webgpu/wgx-post.js");
   assert.match(wgx, /SSAO_FORMAT\s*=\s*"r8unorm"/);
   assert.match(wgx, /POST_HDR_FORMAT\s*=\s*"rg11b10ufloat"/);
-  // Blur pipelines use an explicit dynamic-offset layout (not fsPipe) so H/V
-  // passes do not share one writeBuffer slot before submit.
-  assert.match(wgx, /pBlurHDR\s*=\s*blurPipe\(POST_HDR_FORMAT\)/);
-  assert.match(wgx, /pBlur\s*=\s*blurPipe\(SSAO_FORMAT\)/);
+  // Blur pipelines live in wgx-post.js after the GLX-seam peel; they use an
+  // explicit dynamic-offset layout (not fsPipe) so H/V passes do not share one
+  // writeBuffer slot before submit.
+  assert.match(post, /pBlurHDR\s*=\s*blurPipe\((?:core\.)?POST_HDR_FORMAT\)/);
+  assert.match(post, /pBlur\s*=\s*blurPipe\((?:core\.)?SSAO_FORMAT\)/);
 });
 
 test("TLX present() records gfxBound when a fallback still paints", () => {
@@ -1703,6 +1730,7 @@ test("terminal graphics recovery works before the late menu wiring", async () =>
     },
     DataHub: { open() { dataOpens++; dataDialog.hidden = false; } },
   });
+  seedClipboard(ctx);
   vm.runInContext(read("js/perf/renderer-picker.js"), ctx, { filename: "js/perf/renderer-picker.js" });
   ctx.RendererPicker = vm.runInContext("RendererPicker", ctx);
   vm.runInContext(src.slice(from, to) + "\nglobalThis.__showGraphicsUnavailable = showGraphicsUnavailable;", ctx);
@@ -2839,7 +2867,7 @@ test("instanced cull cache only hits the transform pack resident in the GPU buff
     }
   }
   const glShadow = read("js/render/glx/shadow.js");
-  const wgx = read("js/render/webgpu/wgx.js");
+  const wgxSh = read("js/render/webgpu/wgx-shadow.js");
   assert.match(glShadow, /bufferSubData\([^]*?batch\._cullPlanes\s*=\s*null/,
     "GLX full-set shadow restore must invalidate the resident cull pack");
   // WGX (bug hunt 2026-09-02): the shadow pass packs into the batch's OWN
@@ -2847,13 +2875,15 @@ test("instanced cull cache only hits the transform pack resident in the GPU buff
   // writing instBuf here WAS the bug: the shadow encoder rides the frame
   // submit while the camera cull's writeBuffer is queue-ordered before it, so
   // every shadow pass drew the camera's pack. Pin the separation.
-  const wgxCast = wgx.slice(wgx.indexOf("function castShadowInstanced("), wgx.indexOf("function castShadowInstanced(") + 2200);
+  // castShadowInstanced lives in wgx-shadow.js after the GLX-seam peel.
+  const wgxCast = wgxSh.slice(wgxSh.indexOf("function castShadowInstanced("), wgxSh.indexOf("function castShadowInstanced(") + 2200);
   assert.doesNotMatch(wgxCast, /writeBuffer\(batch\.instBuf/,
     "WGX castShadowInstanced must never write instBuf (frame-order bug)");
   assert.match(wgxCast, /writeBuffer\(batch\.shadowInstBuf/,
     "WGX full-set cast packs into the batch's own shadow instance buffer");
-  assert.match(wgxCast, /_setVB1\(shadowPass, vb \|\| batch\.instBuf \|\| identInstanceBuf\)/,
+  assert.match(wgxCast, /(?:_setVB1|core\.setVB1)\(shadowPass, vb \|\| batch\.instBuf \|\| (?:core\.)?identInstanceBuf\)/,
     "the shadow draw binds the shadow buffer when it has one");
+  const wgx = read("js/render/webgpu/wgx.js");
   const wgxCull = wgx.slice(wgx.indexOf("function cullInstances(batch, planes, opts)"), wgx.indexOf("function cullInstances(batch, planes, opts)") + 4200);
   assert.match(wgxCull, /const shadow = !!\(opts && opts\.upload === false\);/,
     "cullInstances must recognise the shadow cull (upload:false)");
@@ -2878,7 +2908,7 @@ test("instanced cull cache only hits the transform pack resident in the GPU buff
   // _shadowEncoderBegin must therefore submit ANY pending encoder, not only one
   // whose model ring is nearly full — that ring threshold is a memory concern
   // and says nothing about which light packed the instance buffer.
-  const beginFn = fnBody(code("js/render/webgpu/wgx.js"), "_shadowEncoderBegin");
+  const beginFn = fnBody(code("js/render/webgpu/wgx-shadow.js"), "_shadowEncoderBegin");
   assert.match(beginFn, /if\s*\(\s*_pendingShadowEnc\s*\)\s*\{[^]*?queue\.submit/,
     "each shadow pass must submit the previous one — an unconditional submit, not a ring-threshold one");
   assert.doesNotMatch(beginFn, /_pendingShadowEnc\s*&&\s*_shadowSlot\s*>/,
@@ -2891,7 +2921,7 @@ test("instanced cull cache only hits the transform pack resident in the GPU buff
 test("all three backends take a shadow KEEP, and game.js says which skips are cadence", () => {
   for (const [file, fn] of [
     ["js/render/glx/shadow.js", "carShadowKeep"],
-    ["js/render/webgpu/wgx.js", "carShadowKeep"],
+    ["js/render/webgpu/wgx-shadow.js", "carShadowKeep"],
     ["js/render/three/tlx-shadow.js", "carShadowKeep"],
   ]) {
     const src = code(file);
@@ -2935,7 +2965,7 @@ test("all three backends take a shadow KEEP, and game.js says which skips are ca
   // so they share one bound rather than each computing their own.
   assert.equal((gsrc.match(/const _lsR = rad \+ 8/g) || []).length, 1,
     "the content key and the cast loop must share one radius bound, not compute two");
-  for (const file of ["js/render/glx/shadow.js", "js/render/webgpu/wgx.js",
+  for (const file of ["js/render/glx/shadow.js", "js/render/webgpu/wgx-shadow.js",
                       "js/render/three/tlx-shadow.js"]) {
     assert.ok(code(file).includes("lampShadowKeep"), `${file} must expose lampShadowKeep`);
   }
@@ -2952,12 +2982,11 @@ test("all three backends take a shadow KEEP, and game.js says which skips are ca
 // The flag the shader reads must be observable, or a strobe is invisible.
 test("shadow state reports the frame-live armed flag, not just a lifetime count", () => {
   // BOUND EACH WINDOW AT THE SIBLING. carShadowState and lampShadowState are
-  // adjacent one-liners — 211 stripped bytes apart in wgx.js, 269 in glx.js — so
-  // a flat 300-char window let the car assertion pass on the LAMP accessor's
-  // armed field, and deleting `armed: SHD.carArmed` stayed green on two of the
-  // three backends. This is the same defect the arms pin above documents,
-  // repeated in the same diff that documented it.
-  for (const file of ["js/render/glx/glx.js", "js/render/webgpu/wgx.js", "js/render/three/tlx.js"]) {
+  // adjacent one-liners in the owning module — GLX/TLX keep them in the main
+  // backend file; WGX peels them into wgx-shadow.js. A flat 300-char window
+  // let the car assertion pass on the LAMP accessor's armed field, and deleting
+  // `armed: …` stayed green on two of the three backends.
+  for (const file of ["js/render/glx/glx.js", "js/render/webgpu/wgx-shadow.js", "js/render/three/tlx.js"]) {
     const src = code(file);
     for (const [which, sib] of [["carShadowState", "lampShadowState"],
                                 ["lampShadowState", "carShadowState"]]) {
@@ -2969,6 +2998,10 @@ test("shadow state reports the frame-live armed flag, not just a lifetime count"
         `${file}: ${which} must expose armed — arms stays true straight through a strobe`);
     }
   }
+  // WGX still re-exports the accessors from wgx.js so game.js / surface parity
+  // keep calling through the backend façade.
+  assert.match(code("js/render/webgpu/wgx.js"), /carShadowState\s*=\s*\(\)\s*=>\s*SHD\.carShadowState/);
+  assert.match(code("js/render/webgpu/wgx.js"), /lampShadowState\s*=\s*\(\)\s*=>\s*SHD\.lampShadowState/);
 });
 
 // A hidden or closing tab is not a crash, and the canary must not read one as one.
@@ -3440,7 +3473,7 @@ test("the flyby plays on the pre-race loading screen only; the picker pre-builds
   // so the settings rows are read against black rather than a moving world.
   // The gate runs before every early return, and a freshly built world still
   // gets its warm-up frames hidden.
-  assert.match(game, /const menuBlank = state === "menu" && !setupPreviewOn && \(!track \|\| !loadingScreen\.active\(\)\);/);
+  assert.match(game, /const menuBlank = state === "menu" && !setupPreviewOn && \(!track \|\| !loadingScreen\.active\(\) \|\| !menuWorld\(\)\);/);
   assert.match(raceSettings, /else if \(raceIntro\) raceIntro\(startRace\);/,
     "RACE! goes through the loading screen; the QUALIFYING branch above it does not (sheet to sheet)");
   assert.match(game, /function clearMenuScreens\(\) \{\s*loadingScreen\.stop\(\);/,
@@ -4370,11 +4403,13 @@ test("UPSCALE SettingRow + TLX spatial API markers", () => {
   // Dawn/Naga reserves `std` — the shared SGSR port must use edgeStd (validate caught this).
   assert.match(wgsl, /fn weightY\([^)]*edgeStd/, "SGSR WGSL weightY must not use reserved std");
   const wgx = read("js/render/webgpu/wgx.js");
+  const wgxPost = read("js/render/webgpu/wgx-post.js");
   assert.match(wgx, /setSpatialUpscale/, "WGX must export setSpatialUpscale");
   assert.match(wgx, /wantSpatialUpscale/, "WGX must gate size split");
   assert.match(wgx, /!!pSGSR/, "WGX wantSpatialUpscale must require linked SGSR pipeline");
-  assert.match(wgx, /SGSR_GATHER/, "WGX must try the gather pipeline first");
-  assert.match(wgx, /spatialUpscaleGather/, "gather escape pin apex26.spatialUpscaleGather=0");
+  // SGSR pipeline link + gather escape live in wgx-post.js after the peel.
+  assert.match(wgxPost, /SGSR_GATHER/, "WGX must try the gather pipeline first");
+  assert.match(wgxPost, /spatialUpscaleGather/, "gather escape pin apex26.spatialUpscaleGather=0");
   assert.match(wgx, /getSpatialUpscaleGather/, "WGX must export gather active state");
 });
 
@@ -4743,9 +4778,13 @@ test("selector preparation waits for the player's hands before the build and the
   const body = fnBody(src, "scheduleFlybyTrack");
   assert.match(body, /if \(!\(await menuIdle\(current\)\)\) return;\s*loadTrack\(want\);/,
     "the build waits for an idle menu");
-  assert.equal((body.match(/if \(await menuIdle\(current\)\) _menuGate\.warm = 2;/g) || []).length, 2,
-    "both paths arm the warm frames only after the car assets, on an idle menu");
-  assert.doesNotMatch(body, /_menuGate\.warm = 2;\s*await prepareMenuCarAssets/, "warm frames never precede the paced car assets");
+  assert.equal((body.match(/await menuFinish\(current, key\);/g) || []).length, 2,
+    "both paths finish through menuFinish (car assets, warm frames, lamp pre-bake, flyby plans)");
+  const fin = src.match(/async function menuFinish\(current, key\) \{[\s\S]*?\n\}/)[0];
+  assert.match(fin, /await prepareMenuCarAssets\(current\);\s*if \(await menuIdle\(current\)\) \{ FlybySeq\.reset\(\); _menuGate\.warm = 2; \}/,
+    "the warm frames follow the paced car assets, on an idle menu");
+  assert.ok(fin.indexOf("_menuGate.warm = 2") < fin.indexOf("menuLampBake(current)"),
+    "…and come BEFORE the lamp pre-bake: a RACE! tap mid-bake met cold shaders");
   const idle = eval("(function(){ let _menuInputAt = 0; const MENU_IDLE_MS = 1200; let now = 0;" +
     " const performance = { now: () => now }; const waits = [];" +
     " const setTimeout = (fn, ms) => { waits.push(ms); now += ms; fn(); };" +
@@ -4760,6 +4799,7 @@ test("selector preparation waits for the player's hands before the build and the
 test("selector preparation rejects stale requests, reuses the world, and waits for compilation", async () => {
   const _menuGate = { warm: 0, generation: 0, ready: "", track: null };
   let flybyBuildTimer = 0, trackIdx = 0, raceTimeOfDay = "default", raceWeather = "dry";
+  const menuKey = (idx) => [idx, raceTimeOfDay, raceWeather, 22].join("|");   // the real one adds fieldSize()
   let state = "menu", setupPreviewOn = false, track = null, compiling = false;
   const els = { select: { hidden: false } }, settings = { hidden: true }, $ = () => settings;
   const timers = new Map(), requests = [], builds = [];
@@ -4769,11 +4809,16 @@ test("selector preparation rejects stale requests, reuses the world, and waits f
   const gfx = { warming: () => compiling }, Log = { warn() {} };
   const prepareMenuCarAssets = async () => {};
   const menuLampBake = async () => {};   // the lamp prebake is LampBake.prebake's (lamp-bake.test.mjs)
+  // The REAL menuFinish, with the flyby planning stubbed (flyby-shots.test.mjs covers it).
+  let _menuFly = null;
+  const FlybySeq = { DEFAULT: [], vary: () => [], planSteps: () => () => true, reset() {}, setDuration() {} };
+  const loadingScreen = { nextFlyMs: () => 24000 };
   // The idle gate and the upload slice are module-level policy (tested below);
   // here the player is idle and a slice is immediate.
   const menuIdle = async (current) => current(), menuSlice = async () => {};
   const ensureScenery = id => new Promise(resolve => requests.push({ id, resolve }));
   const loadTrack = id => { builds.push(id); track = { id }; };
+  const menuFinish = eval("(" + read("js/game.js").match(/async function menuFinish\(current, key\) \{[\s\S]*?\n\}/)[0] + ")");
   const schedule = eval("(function(settle){" + fnBody(read("js/game.js"), "scheduleFlybyTrack") + "})");
   const fire = () => { const [id, fn] = [...timers].pop(); timers.delete(id); return fn(); };
   schedule(true); const old = fire();
@@ -4921,6 +4966,114 @@ test("godray: lamp beams alone take one blur pair, sun shafts keep two, on TLX a
   }
 });
 
+// The boot fallback runs the actual game.js selection block against a stable
+// GLX facade and injected loader outcomes, without claiming a real canvas.
+{
+const lazyRequire = createRequire(import.meta.url);
+const LAZY_ROOT = new URL("../../", import.meta.url);
+const source = (path) => fs.readFileSync(new URL(path, LAZY_ROOT), "utf8");
+const manifest = lazyRequire("../../tools/manifest.cjs");
+const game = source("js/game.js");
+const begin = game.indexOf("\nif (!gfx) {");
+const end = game.indexOf("\n// Baked asset pack", begin);
+assert.ok(begin > 0 && end > begin, "boot's GLX fallback must remain identifiable");
+const fallback = `(async function () { let gfx = null; ${game.slice(begin, end)} return gfx; })()`;
+
+test("the eager GLX handle preserves eval-time mobile tier and live backend getters", () => {
+  const storage = new Map([["apex26.forceMobileTier", "1"]]);
+  const context = vm.createContext({
+    navigator: { userAgent: "Desktop Test", maxTouchPoints: 0 },
+    localStorage: { getItem: (k) => storage.get(k) || null },
+  });
+  context.window = context;
+  vm.runInContext(source("js/render/shared/glx-facade.js"), context);
+  const handle = context.GLX;
+  assert.equal(handle.isMobile, true);
+  assert.equal(handle.mobileTier, true);
+  assert.equal(typeof handle.init, "undefined", "GLX implementation should remain deferred");
+  const backend = { init: () => true, get width() { return 42; } };
+  handle.install(backend);
+  assert.equal(context.GLX, handle, "consumers must retain their GLX object identity");
+  assert.equal(handle.width, 42, "descriptor-copy must preserve live getters");
+  assert.equal(handle.init(), true);
+  storage.set("apex26.gfxHigh", "1");
+  const next = vm.createContext({
+    navigator: { userAgent: "iPad", maxTouchPoints: 5 },
+    localStorage: { getItem: (k) => storage.get(k) || null },
+  });
+  next.window = next;
+  vm.runInContext(source("js/render/shared/glx-facade.js"), next);
+  assert.equal(next.GLX.isMobile, true);
+  assert.equal(next.GLX.mobileTier, false, "high quality overrides only the safe tier");
+});
+
+test("GLX implementation is deferred and ordered, while the facade precedes its consumers", () => {
+  assert.ok(manifest.FULL.includes("js/render/shared/glx-facade.js"));
+  assert.ok(!manifest.FULL.includes("js/render/glx/glx.js"));
+  assert.equal(manifest.DEFERRED.webgl2.at(-1), "js/render/glx/glx.js");
+  assert.ok(manifest.HARD_EDGES.some(([a, b]) => a === "js/render/shared/glx-facade.js" && b === "js/car/liverytex.js"));
+  assert.ok(manifest.CARVIEW.includes("js/render/shared/glx-facade.js"));
+});
+
+function bootScenario({ install = true, init = true, pref = "webgl2", skip = false, blocked = false } = {}) {
+  const events = [], storage = new Map();
+  const context = vm.createContext({
+    navigator: { userAgent: "", maxTouchPoints: 0 },
+    localStorage: { getItem: () => null, removeItem: (k) => events.push(`remove:${k}`) },
+    sessionStorage: {
+      getItem: (k) => blocked ? null : storage.get(k) || null,
+      setItem(k, v) { if (blocked) throw new Error("blocked"); storage.set(k, v); },
+    },
+    Event: class { constructor(type) { this.type = type; } },
+    location: { reload: () => events.push("reload") },
+    BACKEND_FILES: { webgl2: ["glsl-chunks.js", "glx.js"] },
+    canvas: {}, _claimSkipped: skip,
+    backendPreference: () => pref,
+    showGraphicsUnavailable: () => events.push("unavailable"),
+    async loadBackendScripts(group) {
+      events.push(`load:${group.join(",")}`);
+      if (install) context.GLX.install({ init: () => { events.push("init"); return init; } });
+    },
+  });
+  context.window = context;
+  context.dispatchEvent = (event) => events.push(event.type);
+  vm.runInContext(source("js/render/shared/glx-facade.js"), context);
+  return { run: () => vm.runInContext(fallback, context), events, context, storage };
+}
+
+test("explicit GLX and refused opt-in backends load the implementation before context claim", async () => {
+  for (const pref of ["webgl2", "webgpu", "three"]) {
+    const h = bootScenario({ pref });
+    assert.equal(await h.run(), h.context.GLX);
+    assert.equal(h.events[0], "load:glsl-chunks.js,glx.js");
+    assert.ok(h.events.indexOf("init") > h.events.indexOf("load:glsl-chunks.js,glx.js"));
+    assert.equal(h.events.includes("reload"), false);
+    assert.equal(h.storage.get("apex26.gfxBound"), "webgl2");
+  }
+});
+
+test("missing GLX script shows an unavailable panel without reloading indefinitely", async () => {
+  const h = bootScenario({ install: false, pref: "webgpu" });
+  assert.equal(await h.run(), undefined);
+  assert.deepEqual(h.events, ["load:glsl-chunks.js,glx.js", "unavailable"]);
+});
+
+test("an already-claimed canvas reloads once only with a durable session skip", async () => {
+  const h = bootScenario({ pref: "webgpu", init: false });
+  await h.run();
+  assert.equal(h.events.includes("reload"), true);
+  assert.equal(h.events.includes("unavailable"), false);
+  assert.equal(h.storage.get("apex26.gfxClaimFail"), "1");
+  for (const opts of [{ pref: "webgpu", init: false, skip: true },
+                     { pref: "webgpu", init: false, blocked: true }]) {
+    const stopped = bootScenario(opts);
+    await stopped.run();
+    assert.equal(stopped.events.includes("reload"), false);
+    assert.equal(stopped.events.includes("unavailable"), true);
+  }
+});
+
+}
 test("godray: WGX takes the same one-pair lamp-only blur as TLX/GLX", () => {
   const src = code("js/render/webgpu/wgx.js");
   assert.match(src, /1 \/ halfW, 1 \/ halfH, \(!sunGR && _grLite\) \? 1 : 2\)/, "wgx: one pair only without sun shafts");

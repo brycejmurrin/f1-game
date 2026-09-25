@@ -94,6 +94,13 @@ export function newJobEvents(jobs, seen, wf) {
   return out;
 }
 
+/** The Pages run whose outcome is the verdict for a SHA: the NEWEST run (runs
+ *  newest-first, as the API lists them) whose head contains it. */
+export function pagesVerdictRun(runs, containsHead) {
+  for (const run of runs) if (containsHead(run.head_sha)) return run;
+  return null;
+}
+
 /** Only a failed or timed-out job carries a diagnosis worth printing. */
 export const wantsAnnotations = (job) => job.conclusion === "failure" || job.conclusion === "timed_out";
 
@@ -131,7 +138,9 @@ async function watchSha(sha, { interval, deadline, once }) {
     // A commit ci.yml's paths-ignore skips (docs / *.md / .claude/) starts no
     // run at all; after 3 min of nothing that is the answer, not "queued".
     if (v.state === "none" && Date.now() - start > 180_000) { say(`= ci none — no workflow run for ${sha.slice(0, 7)} after 3 min (docs/.md/.claude-only push, or a topic branch with no PR — ci.yml runs on the PR, draft = fast tier)`); return 0; }
-    if (v.done || once) { say(`= ci ${v.line} sha=${sha.slice(0, 7)}`); return { passed: 0, failed: 1, cancelled: 2 }[v.state] ?? 0; }
+    // `running` and `none` are NOT green: under --once a scripted `&& next`
+    // used to proceed on a run still in flight (2026-09-24).
+    if (v.done || once) { say(`= ci ${v.line} sha=${sha.slice(0, 7)}`); return { passed: 0, failed: 1, cancelled: 2, running: 124, none: 124 }[v.state] ?? 0; }
     if (Date.now() > deadline) { say(`= ci timeout — still ${v.line} sha=${sha.slice(0, 7)}; re-arm to keep watching`); return 124; }
     await sleep(interval);
   }
@@ -140,18 +149,26 @@ async function watchSha(sha, { interval, deadline, once }) {
 async function watchPages(sha, { interval, deadline }) {
   say(`pages: waiting for a pages.yml run on ${DEPLOY} whose head contains ${sha.slice(0, 7)}`);
   let announced = null;
+  const contains = new Map();   // head_sha -> does it contain `sha` (a compare per head, once)
   for (;;) {
     const r = api(`actions/workflows/${PAGES_WORKFLOW}/runs?branch=${encodeURIComponent(DEPLOY)}&per_page=10`);
     if (r.error) { say(`= pages unknown — API: ${r.error}`); return 3; }
-    for (const run of (r.json.workflow_runs || []).slice().reverse()) {
-      const c = api(`compare/${sha}...${run.head_sha}`);
-      if (!["ahead", "identical"].includes(c.json?.status)) continue;   // this run does not contain the SHA
+    // NEWEST containing run decides (the API lists newest first). Oldest-first
+    // returned on the first finished run, so a waiting train run a later tick
+    // replaced (GitHub cancels a pending run in the same concurrency group) or
+    // an older red read as the verdict while a newer run was about to ship the
+    // SHA (2026-09-24).
+    const run = pagesVerdictRun(r.json.workflow_runs || [], (h) => {
+      if (!contains.has(h)) contains.set(h, ["ahead", "identical"].includes(api(`compare/${sha}...${h}`).json?.status));
+      return contains.get(h);
+    });
+    if (run) {
       if (announced !== run.id) { announced = run.id; say(`pages #${run.id} (${run.event}) head=${run.head_sha.slice(0, 7)} ${run.status} ${run.html_url}`); }
-      if (run.status === "completed") {
+      if (run.status === "completed" && run.conclusion !== "cancelled") {
         say(`= pages ${run.conclusion} #${run.id} contains ${sha.slice(0, 7)} — live only once version.json's apex-sha confirms (deploy-research)`);
         return run.conclusion === "success" ? 0 : 1;
       }
-      break;
+      // cancelled = replaced by a later tick, or killed: wait for the next containing run
     }
     if (Date.now() > deadline) { say(`= pages timeout — no finished Pages run containing ${sha.slice(0, 7)} yet; re-arm`); return 124; }
     await sleep(interval);
