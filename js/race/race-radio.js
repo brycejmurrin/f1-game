@@ -91,6 +91,7 @@ const RaceRadio = (function () {
         toldPos: null,            // the position the driver was last told
         wasPit: false,            // the player was in the pit lane last tick
         pitLap: -9,               // the lap the player was last in the pit lane (in-lap / out-lap are not pace)
+        cautionLap: -9,           // …and last ran under a caution: a lap that ends green was mostly neutralised
         bestPos: 99,
         eng: -99, tv: -99,        // t of the last line on each channel
       };
@@ -209,7 +210,7 @@ const RaceRadio = (function () {
             offer({ id: "fastest", ch: "eng", tier: 3, chat: 1, cd: 45, key: "eng.fastest", vars: { time: timeT(e.time) }, ttl: 12 });
           } else if (e.pb && f.lap > 2) {
             offer({ id: "pb", ch: "eng", tier: 2, chat: 2, cd: 70, key: "eng.pb", vars: { time: timeT(e.time) }, ttl: 12 });
-          } else if (f.best > 0 && e.time > f.best + 1.5 && f.caution === 0 && f.lap > 3 && f.lap - m.pitLap > 1) {
+          } else if (f.best > 0 && e.time > f.best + 1.5 && f.caution === 0 && f.lap > 3 && f.lap - m.pitLap > 1 && f.lap - m.cautionLap > 1) {
             offer({ id: "slow", ch: "eng", tier: 2, chat: 3, cd: 120, key: "eng.slow",
               vars: { time: timeT(e.time), delta: gapT(e.time - f.best) }, ttl: 10 });
           } else if (m.laps.length >= 3) {
@@ -365,6 +366,9 @@ const RaceRadio = (function () {
         case "pass": {
           const pairKey = S(e.a) + ">" + S(e.b), back = m.tvPairs.has(S(e.b) + ">" + S(e.a));
           m.tvPairs.add(pairKey);
+          // Under a safety car or VSC a place changing is a pit stop, a
+          // retirement or a car waved through, never a "great move".
+          if (f.caution >= 2) break;
           const vars = { a: S(e.a), b: S(e.b), pos: e.pos };
           // One lead change per 30 s, and only if it is still true when said: two
           // cars swapping P1 corner after corner read as eight "CHANGE AT THE
@@ -470,6 +474,7 @@ const RaceRadio = (function () {
       if (m.wasPit && !f.pitting) { m.toldPos = f.rawPos || f.pos; queue.eng.delete("pos"); }
       m.wasPit = !!f.pitting;
       if (f.pitting) m.pitLap = f.lap;
+      if (f.caution > 0) m.cautionLap = f.lap;
       const tv = tvLive(f);
       for (const e of ev) {
         engineerEvent(e, f, p);

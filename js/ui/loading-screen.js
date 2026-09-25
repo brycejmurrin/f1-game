@@ -432,7 +432,10 @@ const LoadingScreen = (function () {
       let total = 0, before = -1;
       for (const sh of list) { if (sh.id === "grid-mine" && before < 0) before = total; total += sh.dur || 0; }
       if (before < 0 || !(total > 0)) return life;
-      return Math.max(0, Math.min(life, life * before / total - 150));
+      // No room at all (grid-mine opens the flyby) is -1, "say nothing": 0
+      // is the announcer's "no budget", which read the whole 26 s script.
+      const share = life * before / total - 150;
+      return share > 0 ? Math.min(life, share) : -1;
     }
     function radioCheck(field) {
       const r = radio();

@@ -3106,6 +3106,8 @@ function endRace(forcedOrder) {
   // block that used to live here, unchanged in behaviour.
   const order = netOrder(forcedOrder || fin.concat(run, out));
   order.forEach((c, i) => { c.finPos = i + 1; });
+  // Read BEFORE award() advances the stage, or the sprint is wrapped up as the Grand Prix.
+  const wasSprint = isChampionship() && SeasonCal.stage(season) === "sprint";
   if (isChampionship()) {
     // A standalone season may sprint before the Grand Prix. A career scores
     // through its save owner, which checks the active slot revision before the
@@ -3134,7 +3136,7 @@ function endRace(forcedOrder) {
   dbgCam = null;
   buildResults(order);
   els.results.hidden = false;
-  announcer.wrapUp(order, loadingInfo());   // js/audio/announcer.js — the broadcaster's read over the results
+  announcer.wrapUp(order, Object.assign(loadingInfo(), { sprint: wasSprint }));   // js/audio/announcer.js — the broadcaster's read over the results
 }
 
 let ltStore = null;   // LightStore.create(G), assigned once G exists (below)

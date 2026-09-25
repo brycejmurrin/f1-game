@@ -537,3 +537,42 @@ test("an urgent line refused by a full card queue is offered again, not lost", (
   assert.ok(r.lines().some((m) => /LAST LAP|ONE TO GO|ONE MORE/.test(m)), r.lines().join(" | "));
 });
 
+
+test("a player flagged first with a time penalty is not told they won when a rival crosses inside it", () => {
+  const P = car("PLY", 1000, 60, { isPlayer: true, local: true, penalty: 5 }), R = car("RIV", 820, 60), X = car("XXX", 500, 60), Y = car("YYY", 400, 60);
+  const r = race({ cars: [P, R, X, Y] });
+  r.step(0.05, 100);
+  P.finished = true; r.step(0.05, 60);         // 3 s: RIV is still running, inside the 5 s
+  assert.ok(!r.said.some((s) => /WIN|RACE WINNER|WHAT A DRIVE/.test(s.msg)), "called the win before the penalty ran out: " + JSON.stringify(r.said));
+  R.finished = true; r.step(0.05, 80);         // RIV crosses 3 s after: classified ahead on the corrected clock
+  const result = r.said.filter((s) => s.kind === "race" && /P\d|WIN/.test(s.msg));
+  assert.equal(result.length, 1, JSON.stringify(r.said));
+  assert.match(result[0].msg, /P2/);
+  assert.doesNotMatch(result[0].msg, /WIN|RACE WINNER|WHAT A DRIVE/);
+});
+
+test("under a safety car a place changing is not called as a move", () => {
+  const L = simCar("LLL", 2400, 60), A = simCar("AAA", 1300, 60), B = simCar("BBB", 1280, 60), P = simCar("PLY", 900, 60, { isPlayer: true });
+  const r = sim([L, A, B, P], 30);
+  r.radio.setComm("on");
+  r.step(30);
+  r.caution(3); for (const c of [L, A, B, P]) c.speed = 30;
+  r.step(20); const t0 = r.G.raceT;
+  B.prog = A.prog + 10; r.step(15);               // waved through, or A slowing with a problem
+  assert.ok(!r.lines(t0).some((m) => /MOVE|PAST|THROUGH|FAVOUR|BACK FROM|GREAT/.test(m)), r.lines(t0).join(" | "));
+});
+
+test("a lap that ends green but ran under a VSC is not called slow", () => {
+  const A = simCar("AAA", 1300, 60), P = simCar("PLY", 1000, 60, { isPlayer: true }), B = simCar("BBB", 700, 60);
+  const r = sim([A, P, B], 30);
+  const store = new Map([["radioChat", "chatty"]]);
+  r.G.store = { get: (k, d) => (store.has(k) ? store.get(k) : d), set: (k, v) => store.set(k, v) };
+  r.radio.setChat("chatty");
+  r.step(250);                                     // five green laps: a best to compare with
+  r.caution(2); for (const c of [A, P, B]) c.speed = 25;
+  r.step(40);
+  r.caution(0); for (const c of [A, P, B]) c.speed = 60;
+  const t0 = r.G.raceT;
+  r.step(60);                                      // the neutralised lap ends green
+  assert.ok(!r.lines(t0).some((m) => /OFF\. RESET|LOST TIME|SLOW/.test(m)), r.lines(t0).join(" | "));
+});

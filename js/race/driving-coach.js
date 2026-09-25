@@ -10,7 +10,7 @@ const DrivingCoach = (function () {
     front: { label: "Front grip", text: "FRONTS SLIDING — UNWIND SOME STEERING", detail: "The front tyres are near their grip limit. Ease some steering instead of turning harder.", dwell: 0.6 },
     xmode: { label: "X-mode in corners", text: "CLOSE THE WING — X-MODE LOSES GRIP IN CORNERS", detail: "The active aero was open while the car was cornering hard. X-mode trades downforce for straight-line speed; close it before you turn in.", dwell: 0.5 },
     coasting: { label: "Coasting", text: "COASTING — BE ON THE BRAKE OR THE THROTTLE", detail: "Neither pedal was used at speed for over a second. A racing car is either braking or accelerating; coasting gives time away.", dwell: 1.2 },
-    limits: { label: "Track limits", text: "TRACK LIMITS — KEEP THE CAR INSIDE THE WHITE LINES", detail: "A track-limits warning was recorded. Four warnings in a row add a five-second penalty; the count resets after a penalty.", dwell: 0 }
+    limits: { label: "Track limits", text: "TRACK LIMITS — KEEP THE CAR INSIDE THE WHITE LINES", detail: "A track-limits warning was recorded. In a race four warnings add a five-second penalty and the count resets after it; in a Time Trial the lap is deleted.", dwell: 0 }
   });
   // Braking effort against the brake ceiling, the same scalar the engine's own
   // brakeFade/brakeYawDamp use. NOT c.axFrac: that is the friction-circle share,
@@ -100,6 +100,9 @@ const DrivingCoach = (function () {
       // the arc without driving it. Forward-of-half-a-lap in one frame is that,
       // not a lap: measuring across it would invent a segment worth minutes.
       if ((((s - a) % total) + total) % total > total * 0.5) { lastMark = null; segs = []; return; }
+      // A lap with a caution, a pit stop or a red-flag hold in it is not a
+      // lap to coach: its "loss" is the neutralisation, charged to one corner.
+      if (G.cautionLevel() > 0 || (c.pitState && c.pitState !== "none")) { lastMark = null; segs = []; return; }
       for (const b of bs) {
         if (!crossed(a, s, b.s)) continue;
         const g = Ghost.timeAt(b.s), now = { turn: b.turn, t: G.raceT, g };
@@ -209,7 +212,9 @@ const DrivingCoach = (function () {
       clock += step; elapsed += step; quiet = Math.max(0, quiet - step);
       // Every frame, not every sample: a boundary crossing is an edge, and at
       // racing speed a 0.1 s sample step steps over 7 m of road.
-      if (G.state === "race" && G.player) trackLap(G.player); else prevS = null;
+      // The ghost a race happens to have loaded is whatever Time Trial ran
+      // last (other weather, tyres, setup), so only a Time Trial is measured.
+      if (G.state === "race" && G.player && G.timeTrial) trackLap(G.player); else prevS = null;
       // Sample for rewind only while a rewind is actually possible. A scored
       // session pays nothing for this feature — no capture, no clone, no array.
       if (canPractice()) {
@@ -236,8 +241,15 @@ const DrivingCoach = (function () {
       // the reset after a penalty (already announced) are not new warnings.
       const warn = G.player ? (G.player.cutWarn || 0) : 0;
       if (warnSeen == null || warn < warnSeen) warnSeen = warn;
-      else if (warn > warnSeen) { warnSeen = warn; edge = { id: "limits", t: 3 }; }
-      if (edge && (edge.t -= step) <= 0) edge = null;
+      else if (warn > warnSeen) { warnSeen = warn; edge = { id: "limits", t: 3, life: 12 }; }
+      // The game's own TRACK LIMITS card holds the channel for ANN_MIN_S (3 s)
+      // from the same step, so the window only runs while the coach could
+      // speak; `life` still retires a warning a long caution or pit swallowed.
+      if (edge) {
+        edge.life -= step;
+        if (coachState() === "watching") edge.t -= step;
+        if (edge.t <= 0 || edge.life <= 0) edge = null;
+      }
       if (coachState() !== "watching" || quiet) { clearCandidate(); return; }
       const id = edge ? edge.id : tipFor(G.player);
       if (!id || clock - (lastTip.get(id) ?? -Infinity) < 30) { clearCandidate(); edge = null; return; }
