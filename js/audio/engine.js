@@ -2245,8 +2245,19 @@ const GameAudio = (function () {
   }
 
   let musicResumeBuf = null, musicResumeAt = NaN, musicResumeOff = 0;
+  // A TRACK THAT CANNOT LOAD MOVES THE LIST ON. Only a source's onended
+  // advanced the playlist, and a failed fetch/decode (an upload in a format
+  // decodeAudioData refuses, a 404, offline) never made one: silence, with
+  // the UI naming the dead track. Skip it; a whole list that fails stops.
+  let _musicFails = 0;
+  function musicLoadFailed(token) {
+    if (!musicOn || token !== musicToken) return;   // superseded: not ours to skip
+    if (++_musicFails >= PLAYLIST.length) { _musicFails = 0; stopInternal(); return; }
+    nextTrack(1);
+  }
   function playMusicBuffer(buf, token) {
     if (!ctx || !musicOn || token !== musicToken) return;  // superseded
+    _musicFails = 0;
     ensureMusicGain();
     try { if (musicSrc) { musicSrc.onended = null; musicSrc.stop(); musicSrc.disconnect(); } } catch (e) { /* stop-before-start is a documented throw; the source is being replaced regardless */ }
     const src = ctx.createBufferSource();
@@ -2339,7 +2350,7 @@ const GameAudio = (function () {
     // full PCM before it resolves — two taps on NEXT put ~150 MB of decoded
     // audio in the air at once, three ~225 MB, none of it bounded by the
     // MUSIC_CACHE eviction that only runs afterwards.
-    if (_musicLoads[url]) { _musicLoads[url].then((b) => { if (b) playMusicBuffer(b, token); }, () => {}); return; }
+    if (_musicLoads[url]) { _musicLoads[url].then((b) => { if (b) playMusicBuffer(b, token); else musicLoadFailed(token); }, () => {}); return; }
     const _load = fetch(url)
       .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status + " for " + url); return r.arrayBuffer(); })
       .then((ab) => new Promise((res, rej) => { ctx.decodeAudioData(ab, res, rej); }))
@@ -2358,6 +2369,7 @@ const GameAudio = (function () {
         // Music is optional and the game plays on without it. Retained rather
         // than printed: a soundtrack that never starts is otherwise invisible.
         Log.warn("audio", "music load/decode failed for " + url + ": " + ((err && err.message) || err));
+        musicLoadFailed(token);
         return null;
       });
     _musicLoads[url] = _load;
@@ -2379,6 +2391,9 @@ const GameAudio = (function () {
   function setSfxEnabled(b) {
     sfxEnabled = !!b;
     if (sfxBus) sfxBus.gain.value = sfxEnabled ? sfxVol : 0;
+    // A race that started with SFX off wanted rain but built no nodes
+    // (startRain returns on !sfxOk()); turning SFX on must start it.
+    if (sfxEnabled && rainWanted && !rainSrc) startRain();
     // setEngine() owns the rev-keyed music duck and stops running the instant
     // SFX go off (sfxOk()), so release it here the way stopEngine() does.
     // musicGain hangs off master, not sfxBus: without this the music stayed up

@@ -324,8 +324,7 @@ function typeOk(v, def) {
 function applySettings(file, G) {
   if (!file || file.format !== FORMAT) return { ok: false, reason: `not an ${FORMAT} file`, applied: 0, skipped: 0 };
   const groups = file.settings || {};
-  let applied = 0;
-  let skipped = 0;
+  let applied = 0, skipped = 0, failed = 0;
   for (const row of SPEC) {
     // A migration VERSION is context in the file and must never be written
     // back: an older number would re-run migrations that have already run.
@@ -335,16 +334,19 @@ function applySettings(file, G) {
     const v = g[row.k];
     if (!typeOk(v, defaultOf(row, G)) || (row.oneOf && !row.oneOf.includes(v))) { skipped++; continue; }
     try {
+      // A write storage refused (full quota, private mode) is not APPLIED:
+      // counting it reloaded the page into the values it had lost.
+      let stored = true;
       if (row.lane === "raw") {
         if (v === null) GameStore.store.rawDel(`apex26.${row.k}`);
-        else GameStore.store.rawSet(`apex26.${row.k}`, String(v));
+        else stored = GameStore.store.rawSet(`apex26.${row.k}`, String(v)) !== false;
       } else {
-        GameStore.store.set(row.k, v);
+        stored = GameStore.store.set(row.k, v) !== false;
       }
-      applied++;
+      if (stored) applied++; else failed++;
     } catch (_) { skipped++; }
   }
-  return { ok: true, applied, skipped, reason: null };
+  return { ok: true, applied, skipped, failed, reason: null };
 }
 // A FILE IS PLAYER INPUT AND THE GARAGE DOES NOT DEFEND ITSELF. isGarageKey
 // checks the KEY; nothing checked the VALUE, so any JSON at a garage-shaped key
@@ -429,15 +431,14 @@ function garageValue(k, v) {
 function applyGarage(file) {
   if (!file || file.format !== GARAGE_FORMAT) return { ok: false, reason: `not an ${GARAGE_FORMAT} file`, applied: 0, skipped: 0 };
   const g = file.garage || {};
-  let applied = 0;
-  let skipped = 0;
+  let applied = 0, skipped = 0, failed = 0;
   for (const k of Object.keys(g)) {
     if (!isGarageKey(k)) { skipped++; continue; }
     const v = garageValue(k, g[k]);
     if (v === undefined) { skipped++; continue; }
-    try { GameStore.store.set(k, v); applied++; } catch (_) { skipped++; }
+    try { if (GameStore.store.set(k, v) !== false) applied++; else failed++; } catch (_) { skipped++; }
   }
-  return { ok: true, applied, skipped, reason: null };
+  return { ok: true, applied, skipped, failed, reason: null };
 }
 
 function download(obj, name) {
@@ -542,7 +543,9 @@ function create(G) {
         if (!obj) { flash(b, label, "NOT A JSON FILE", 2200); return; }
         const r = apply(obj);
         if (!r.ok) { flash(b, label, String(r.reason || "REFUSED").toUpperCase(), 2600); return; }
-        Log.info("ui", "file loaded", { id, applied: r.applied, skipped: r.skipped });
+        Log.info("ui", "file loaded", { id, applied: r.applied, skipped: r.skipped, failed: r.failed });
+        // Storage refused some writes: a reload would drop them, so say so and stay.
+        if (r.failed) { flash(b, label, `STORAGE FULL — ${r.failed} NOT SAVED`, 3200); return; }
         // A reload is the honest way to apply this: half these values are read
         // once at boot (the backend pick, the grid, every tuner's first
         // paint), so re-reading them without one would leave the page showing

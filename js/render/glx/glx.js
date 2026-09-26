@@ -737,7 +737,12 @@ const GLXBackend = (function () {
         if (_n <= 2) setTimeout(function () { try { location.reload(); } catch (_) { /* No location (harness/worker): nothing to reload, the latches above still took effect for the next real boot. */ } }, 1200);
       } catch (_) { /* No sessionStorage: skip the auto-recovery rather than risk an unbounded reload loop with no way to count attempts. */ }
     }, false);
-    canvas.addEventListener("webglcontextrestored", function () { try { location.reload(); } catch (_) {} }, false);
+    // The restore obeys the same two-reload budget as the loss: a device that
+    // loses the context every boot and gets it back reloaded without limit.
+    canvas.addEventListener("webglcontextrestored", function () {
+      try { if ((parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0) > 2) return; } catch (_) { return; }
+      try { location.reload(); } catch (_) {}
+    }, false);
 
     // FRAGMENT UNIFORM BUDGET. LIT_FS's default block is ~279 vec4 rows
     // (uLight 192 + uMatTexScale 17 + three mat4 + nine vec3 + ~47 scalars),

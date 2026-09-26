@@ -789,10 +789,17 @@ const Input = (function () {
   }
   // A wheel's pedal axis rests at -1 and travels to +1 (the common convention),
   // so map it to 0..1. Unmapped pedals return 0 and the trigger path wins.
+  // Chromium reports an axis as exactly 0 until it has once been seen near
+  // rest, so a pedal resting at -1 read 0 -> half throttle AND half brake on a
+  // fresh page. Until a pedal reports anything but exactly 0, it is at rest.
+  const padPedalSeen = { throttle: false, brake: false };
   function padPedalAxis(axes, which) {
     const i = padAxisMap[which];
     if (i == null) return 0;
-    const v = readPadAxis(axes, i) * padAxisMap.pedalInvert;
+    const raw = readPadAxis(axes, i);
+    if (raw !== 0) padPedalSeen[which] = true;
+    if (!padPedalSeen[which]) return 0;
+    const v = raw * padAxisMap.pedalInvert;
     return clamp((v + 1) / 2, 0, 1);
   }
   function padDpadSteer(pad) {
@@ -1134,11 +1141,13 @@ const Input = (function () {
     if (throttleLatch) el.setAttribute("aria-pressed", throttleLatched ? "true" : "false");
     else el.removeAttribute("aria-pressed");
   }
-  function holdReleaseAll() {
+  function holdReleaseAll(keepLatch) {
     // A LATCH DROPS HERE. This is the everything-off path (window blur, page
-    // hidden, last touch up, Input.reset), and a latched throttle surviving a
-    // blur means the car accelerates while the player is not looking at it.
-    throttleLatched = false;
+    // hidden, Input.reset), and a latched throttle surviving a blur means the
+    // car accelerates while the player is not looking at it. The LAST-TOUCH-UP
+    // net keeps it: every tap ends in a touchend with no touches, so dropping
+    // the latch there meant it never survived one (bug hunt 2026-09-26).
+    if (!keepLatch) throttleLatched = false;
     paintLatch();
     for (const h of holdBtns) {
       h.ids.clear();
@@ -1424,6 +1433,9 @@ const Input = (function () {
         padThrottle = padBrake = false;
         padThrottleVal = padBrakeVal = 0;
         padLookBack = false;
+        // ...and so does the steering: in a friend race the sim runs under the
+        // menu, and the d-pad/stick picking a row also steered the car.
+        padSteer = 0; padSteerAnalog = false; padDpadVal = 0;
         padNavPoll(pad);
       } else {
         padNavDir = null;   // fresh hold-timer the next time a menu opens
@@ -1525,7 +1537,10 @@ const Input = (function () {
     if (btnDown(pad, 13)) return "down";
     if (btnDown(pad, 14)) return "left";
     if (btnDown(pad, 15)) return "right";
-    const ax = pad.axes || [];
+    // A wheel's pedals rest at -1: read as a stick they held a direction and
+    // scrolled the menu on their own. The mapped pedal axes are not sticks.
+    const ped = (i) => i === padAxisMap.throttle || i === padAxisMap.brake;
+    const ax = (pad.axes || []).map((v, i) => (ped(i) ? 0 : v));
     const stick = (x, y) => {
       const mx = Math.abs(x) >= PAD_NAV_DEADZONE ? Math.abs(x) : 0;
       const my = Math.abs(y) >= PAD_NAV_DEADZONE ? Math.abs(y) : 0;
@@ -2076,10 +2091,10 @@ const Input = (function () {
     // release on the page (a non-passive window touch listener is a scroll
     // and tap-latency cost on Android Chrome). Capture stays.
     window.addEventListener("touchend", function (e) {
-      if (e.touches.length === 0) holdReleaseAll();
+      if (e.touches.length === 0) holdReleaseAll(true);
     }, { capture: true, passive: true });
     window.addEventListener("touchcancel", function (e) {
-      if (e.touches.length === 0) holdReleaseAll();
+      if (e.touches.length === 0) holdReleaseAll(true);
     }, { capture: true, passive: true });
 
     // Passive: it only READS positions and never calls preventDefault (the
@@ -2149,6 +2164,7 @@ const Input = (function () {
 
     window.addEventListener("gamepadconnected", function (e) {
       padConnected = true;
+      padPedalSeen.throttle = padPedalSeen.brake = false;   // a new connection re-reads its pedals from rest
       try { Log.info("input", `gamepad connected ${padLogId(e)}`); }
       catch (_) { /* Log absent */ }
     });

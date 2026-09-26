@@ -322,3 +322,47 @@ test("the quota purge evicts telemetry bodies largest-first before any small sch
   assert.equal(store.has(smallKeys[12]), true, "the second-freshest standings entry must survive");
   assert.equal(store.has("apex26.api.https://api.openf1.org/v1/weather?session_key=9"), true, "the new entry landed after the purge");
 });
+
+// THE DATA HUB'S CACHE MUST NOT COST THE GAME ITS SAVES. localStorage is one
+// ~5 MiB quota per origin (MDN: Storage quotas and eviction criteria); a
+// multi-MB /position body filled it and every career/settings/ghost write
+// after it failed. Oversized bodies are not cached, and a full quota drops the
+// disposable apex26.api.* cache so the save can land.
+async function quotaCtx() {
+  const { readFile } = await import("node:fs/promises");
+  const vmm = await import("node:vm");
+  const QUOTA = 5 * 1024 * 1024;
+  const m = new Map();
+  const used = () => { let n = 0; for (const [k, v] of m) n += k.length + v.length; return n; };
+  const localStorage = {
+    get length() { return m.size; }, key: (i) => [...m.keys()][i] ?? null,
+    getItem: (k) => (m.has(k) ? m.get(k) : null),
+    setItem(k, v) { v = String(v); const prev = m.has(k) ? k.length + m.get(k).length : 0;
+      if (used() - prev + k.length + v.length > QUOTA) { const e = new Error("quota"); e.name = "QuotaExceededError"; throw e; }
+      m.set(k, v); },
+    removeItem: (k) => { m.delete(k); },
+  };
+  const big = "x".repeat(4_900_000);
+  const fetch = async () => ({ ok: true, status: 200, headers: { get: () => null }, json: async () => [{ driver_number: 1, position: 1, pad: big }] });
+  const Log = { warn() {}, info() {}, debug() {}, error() {} };
+  const ctx = vmm.createContext({ localStorage, Log, fetch, setTimeout, clearTimeout, AbortController, SaveMigrate: {} });
+  for (const f of ["js/core/store.js", "js/data/api.js"]) vmm.runInContext(await readFile(f, "utf8"), ctx, { filename: f });
+  return { ctx, m, run: (src) => vmm.runInContext(src, ctx) };
+}
+
+test("a multi-MB data-hub body is not cached, so the next save stays durable", async () => {
+  const { m, run } = await quotaCtx();
+  await run("F1API.positions(9999, 7*24*3600e3)");
+  assert.equal([...m.keys()].filter((k) => k.startsWith("apex26.api.")).length, 0);
+  const r = run("GameStore.store.write('career', {money: 2e6, blob: 'y'.repeat(400000)})");
+  assert.equal(r.durable, true);
+});
+
+test("a full quota drops the disposable api cache and the save lands", async () => {
+  const { m, run } = await quotaCtx();
+  m.set("apex26.api.https://api.openf1.org/v1/position", "z".repeat(5_000_000));
+  const r = run("GameStore.store.write('career', {money: 3e6, blob: 'y'.repeat(400000)})");
+  assert.equal(r.durable, true);
+  assert.equal([...m.keys()].filter((k) => k.startsWith("apex26.api.")).length, 0);
+  assert.equal(run("GameStore.store.rawSet('apex26.x', 'y'.repeat(300000))"), true);
+});

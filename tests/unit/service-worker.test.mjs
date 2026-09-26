@@ -713,3 +713,34 @@ test("no fetch-path sweep while the current generation is incomplete", async () 
   await twoFetches(harness);
   assert.deepEqual(harness.deleted, [], "never strand a client on an unfinished cache");
 });
+
+test("a worker that outlived a deploy does not write the new build's shell into its old cache", async () => {
+  // currentCacheName() is remembered for the worker's life, so a query-less
+  // navigation after a deploy put build N+1's shell into apex26-N — and
+  // offline, that shell's ?v= scripts were in no settled cache (bug hunt
+  // 2026-09-26). The shell is written only where its apex-build matches.
+  let BUILD = 5, ONLINE = true;
+  const shell = (b) => `<meta name="apex-build" content="${b}"><script src="js/game.js?v=h${b}"></script>`;
+  const net = async (request) => {
+    if (!ONLINE) throw new TypeError("Failed to fetch");
+    const url = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
+    if (url.pathname.endsWith("/version.json")) return new Response(JSON.stringify({ build: BUILD }), { status: 200 });
+    if (url.pathname === "/" || url.pathname.endsWith("/index.html")) return new Response(shell(BUILD), { status: 200 });
+    if (url.pathname.endsWith("/js/game.js")) return new Response("game@" + url.search, { status: 200 });
+    return new Response("asset", { status: 200 });
+  };
+  const h = createHarness({ fetchImpl: net, navigator: { get onLine() { return ONLINE; } } });
+  await h.lifecycleEvent("install").done();
+  await h.lifecycleEvent("activate").done();
+  BUILD = 6;
+  const nav = h.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` });
+  await nav.responsePromise; await Promise.all(nav.lifetimes);
+  const stored = h.stores.get("apex26-5").get(`${ORIGIN}/`);
+  assert.ok(!stored || !(await stored.clone().text()).includes('content="6"'), "build 6's shell must not land in apex26-5");
+  ONLINE = false;
+  const off = h.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` });
+  const html = await (await off.responsePromise).text();
+  const src = html.match(/src="([^"]+)"/)[1];
+  const js = h.fetchEvent({ method: "GET", mode: "no-cors", url: `${ORIGIN}/${src}` });
+  assert.notEqual((await js.responsePromise).type, "error", "the offline shell's own scripts are cached");
+});

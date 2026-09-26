@@ -72,7 +72,8 @@ function boot() {
   const pedal = el("btn-throttle");
   const tap = () => { pedal.fire("pointerdown"); pedal.fire("pointerup"); };
   const blur = () => (listeners.blur || []).forEach((f) => f({}));
-  return { Input, pedal, tap, blur };
+  const touchUp = () => (listeners.touchend || []).forEach((f) => f({ touches: { length: 0 } }));
+  return { Input, pedal, tap, blur, touchUp };
 }
 
 test("HOLD is unchanged: the pedal follows the thumb", () => {
@@ -115,6 +116,19 @@ test("a latch drops on blur and on reset — it never outlives the window", () =
     assert.equal(h.Input.throttleLatched(), false, `a latch must not survive ${how}`);
     assert.equal(h.Input.throttleLevel(), 0);
   }
+});
+
+test("a latch survives the last finger leaving the glass (the tap's own touchend)", () => {
+  // Every tap ends in a touchend with touches.length 0 (Pointer Events 3 does
+  // not suppress Touch Events: https://w3c.github.io/pointerevents/); the
+  // stuck-hold net ran holdReleaseAll() there and dropped the latch on the
+  // very tap that set it, so LATCH did nothing on phones.
+  const h = boot();
+  h.Input.setThrottleLatch(true);
+  h.tap();
+  h.touchUp();
+  assert.equal(h.Input.throttleLatched(), true, "the last-touch-up net must keep a latch");
+  assert.equal(h.Input.throttle(), true);
 });
 
 test("leaving LATCH mode clears a live latch", () => {

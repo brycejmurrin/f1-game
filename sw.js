@@ -479,8 +479,16 @@ self.addEventListener("fetch", (event) => {
         // captive portal) or a quota-refused put was turning a SUCCESSFUL
         // navigation into Response.error() through the online check below.
         try {
-          const cache = await caches.open(await currentCacheName());
-          await cache.put(req, res.clone());
+          const name = await currentCacheName();
+          // The shell goes only into ITS OWN build's cache. A worker that
+          // outlived a deploy remembers the old name, and writing the new
+          // shell there served it offline beside the old build's scripts —
+          // whose ?v= hashes it no longer names, so the boot failed.
+          const m = /<meta name="apex-build" content="(\d+)"/.exec(await res.clone().text());
+          if (!m || CACHE_PREFIX + m[1] === name) {
+            const cache = await caches.open(name);
+            await cache.put(req, res.clone());
+          }
         } catch (_) { /* a failed cache write must not fail a good response */ }
       }
       return res;

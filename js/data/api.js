@@ -17,6 +17,7 @@ const F1API = (function () {
   // list — correct, and every caller already handles it.
   const season = () => String(new Date().getFullYear());
   const CACHE_PREFIX = "apex26.api.";
+  const CACHE_MAX_CHARS = 256 * 1024;
   const MIN_GAP_MS = 400;
   const MAX_RETRY = 2;         // retries on 429 / 5xx before giving up
   const RETRY_BASE_MS = 10000; // 10 s first retry — OpenF1 rate-limits hard; short
@@ -132,6 +133,9 @@ const F1API = (function () {
   function writeCache(url, data) {
     const key = CACHE_PREFIX + url;
     const payload = JSON.stringify({ t: Date.now(), data });
+    // A multi-MB body (/position, car_data) would take the origin's whole
+    // localStorage quota from the game's own saves: keep it in memory only.
+    if (payload.length > CACHE_MAX_CHARS) return;
     const now = Date.now();
     let swept = false;
     if (now - lastCacheSweepAt >= CACHE_SWEEP_MS) {
