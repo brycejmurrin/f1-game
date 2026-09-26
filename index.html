@@ -1320,6 +1320,19 @@
             <button id="as-radio-next" type="button" data-step="1" aria-label="Next team radio">&rsaquo;</button>
           </div>
         </div>
+        <!-- THE SPOTTER (js/race/spotter.js): car left / right / clear, recorded
+             voice only. Here, under TEAM RADIO, because that is where players look
+             for it — and its state is printed in the section's folded summary
+             (js/audio/panel.js), so a player who turned the radio OFF still sees
+             "SPOTTER ON" without opening a section that reads "TEAM RADIO · OFF". -->
+        <div id="as-spot" class="set-row" role="group" aria-labelledby="as-spot-label">
+          <span class="tune-label" id="as-spot-label">SPOTTER</span>
+          <div>
+            <button id="as-spot-prev" type="button" data-step="-1" aria-label="Previous spotter setting">&lsaquo;</button>
+            <select id="as-spot-sel" aria-labelledby="as-spot-label"></select>
+            <button id="as-spot-next" type="button" data-step="1" aria-label="Next spotter setting">&rsaquo;</button>
+          </div>
+        </div>
         <!-- ENGINEER CHATTER (js/race/race-radio.js): how much the engineer says
              about the RACE — places, gaps, laps to go, flags, the result — on the
              card, spoken or not. Not gated on TEAM RADIO above: that switch is
@@ -1372,20 +1385,6 @@
         </div>
         <p id="as-voices-note" class="as-note"></p>
       </details>
-      <!-- THE SPOTTER (js/race/spotter.js): car left / right / clear, recorded
-           voice only. ITS OWN ROW, NOT folded under TEAM RADIO: it speaks
-           whatever TEAM RADIO is set to, so a player who turned the radio off
-           heard "car left" with the only switch for it hidden in a collapsed
-           section reading "TEAM RADIO · OFF". -->
-      <div id="as-spot" class="set-row" role="group" aria-labelledby="as-spot-label">
-        <span class="tune-label" id="as-spot-label">SPOTTER</span>
-        <div>
-          <button id="as-spot-prev" type="button" data-step="-1" aria-label="Previous spotter setting">&lsaquo;</button>
-          <select id="as-spot-sel" aria-labelledby="as-spot-label"></select>
-          <button id="as-spot-next" type="button" data-step="1" aria-label="Next spotter setting">&rsaquo;</button>
-        </div>
-      </div>
-
       <!-- THE PRE-RACE ANNOUNCER (js/audio/announcer.js). "Welcome to Apex 26…",
            read over the loading screen's flyby, with the circuit described from
            the circuit's own numbers rather than 52 hand-written blurbs.
