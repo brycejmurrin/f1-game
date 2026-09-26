@@ -1430,9 +1430,6 @@ const Input = (function () {
         padThrottle = padBrake = false;
         padThrottleVal = padBrakeVal = 0;
         padLookBack = false;
-        // …and STEERING: the d-pad and stick walk the menu rows, and in a friend
-        // race the car under the menu kept swerving with every row change.
-        padSteer = 0; padSteerAnalog = false; padDpadVal = 0;
         padNavPoll(pad);
       } else {
         padNavDir = null;   // fresh hold-timer the next time a menu opens

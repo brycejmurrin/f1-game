@@ -155,8 +155,10 @@ test("the LAST FINGER LIFTING keeps the latch (touchend has touches.length 0 on 
 
 test("input hunt fixes: pad steer gated under a menu, rotation keeps the tilt zero, Ctrl/Alt reserved, lobby asks for tilt, a silent gyro falls back", () => {
   const input = fs.readFileSync(path.join(ROOT, "js/input/input.js"), "utf8");
-  const nav = input.slice(input.indexOf("if (window.UiLayers && window.UiLayers.navOpen()) {"), input.indexOf("padNavPoll(pad);"));
-  assert.match(nav, /padSteer = 0; padSteerAnalog = false; padDpadVal = 0;/, "a friend race's car does not swerve while the d-pad walks the pause menu");
+  // The d-pad walking a friend race's pause menu no longer steers the car: the
+  // PAUSED car reads PAUSED_NET_INPUT (game.js inputOf), so input.js keeps
+  // reading the stick under menus (ui-improve-pass pins that on purpose).
+  assert.match(fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8"), /if \(c\.local && paused && netPlay\.active\(\)\) return PAUSED_NET_INPUT;/);
   const rot = input.match(/function onScreenRotate\(\) \{[\s\S]*?\n  \}/)[0];
   assert.doesNotMatch(rot, /calibrate/, "a rotation must not re-sample the neutral mid-corner");
   for (const k of ["AltLeft", "AltRight", "ControlLeft", "ControlRight"])
