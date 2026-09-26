@@ -494,15 +494,19 @@ document.addEventListener("pointerdown", (e) => {
   if (!G.setupPreviewOn || !setupCamPanelOpen()) return;
   if (!e.target.closest || !e.target.closest("#cs-stack")) setSetupCamPanel(false);
 }, true);
-// AN INNER DISCLOSURE CLAIMS ESCAPE BEFORE ITS SCREEN DOES. This listener is on
-// document/capture and registers at script-eval time, i.e. before the generic
-// layer handler in js/ui/modal.js (which registers on DOMContentLoaded and
-// therefore runs second on the same node) — and that handler bails on an event
-// already marked handled. stopPropagation alone did NOT mark it: it stops the
+// AN INNER DISCLOSURE CLAIMS ESCAPE BEFORE ITS SCREEN DOES. The generic layer
+// handler in js/ui/modal.js is on document/capture and bails on an event
+// already marked handled; this one must run before it (see below). stopPropagation alone did NOT mark it: it stops the
 // event descending but says nothing to a sibling listener on this same node, so
 // preventDefault is what actually keeps Escape from ALSO pressing the GARAGE's
 // BACK button and closing the screen behind the panel.
-document.addEventListener("keydown", (e) => {
+// ON WINDOW, NOT DOCUMENT. Since the extraction this registers when game.js
+// calls create(), which can be after js/ui/modal.js has registered its own
+// document/capture Escape handler — and then modal ran FIRST and pressed the
+// garage's BACK (cs-back) with the panel open. Window capture precedes every
+// document listener whatever the registration order, so the inner disclosure
+// always claims the key first (parts-setup-ids.spec.js "the panel starts shut…").
+window.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && G.setupPreviewOn && setupCamPanelOpen()) {
     setSetupCamPanel(false);
     e.preventDefault();
