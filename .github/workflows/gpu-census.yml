@@ -151,10 +151,13 @@ jobs:
           allow = {"ubuntu-latest", "ubuntu-24.04", "macos-latest", "macos-15", "macos-14",
                    "macos-13", "windows-latest", "windows-2022"}
           raw = str(req.get("images") or os.environ.get("INPUT_IMAGES") or "ubuntu-latest,macos-latest,windows-latest")
+          # One line per key: a value carrying a newline (a pushed request file,
+          # a dispatch input) would add its own `key=` lines to GITHUB_OUTPUT.
+          one = lambda v: " ".join(str(v).splitlines()).strip()
           picked = [i.strip() for i in raw.split(",") if i.strip() in allow]
           print("images=" + json.dumps(picked or ["ubuntu-latest"]))
-          print("track=" + str(req.get("track") or os.environ.get("INPUT_TRACK") or "montreal"))
-          print("ls=" + str(req.get("ls") or os.environ.get("INPUT_LS") or ""))
+          print("track=" + one(req.get("track") or os.environ.get("INPUT_TRACK") or "montreal"))
+          print("ls=" + one(req.get("ls") or os.environ.get("INPUT_LS") or ""))
           # The HOUR the in-run A/B pins. 12 is noon, which has no lamps and so
           # measures the PLAIN draw branch; 2 is night, where the per-chunk lamp
           # branch runs. Census 146 showed every earlier run took the former
@@ -168,7 +171,7 @@ jobs:
           # was, so every earlier run stays comparable.
           td = str(req.get("tod") or os.environ.get("INPUT_TOD") or "")
           print("tod=" + (td if td in ("day", "night", "dawn", "dusk") else ""))
-          print("force=" + str(req.get("force") or os.environ.get("INPUT_FORCE") or ""))
+          print("force=" + one(req.get("force") or os.environ.get("INPUT_FORCE") or ""))
           co = req.get("census_only")
           if co is None:
             co = (os.environ.get("INPUT_CENSUS_ONLY") or "").lower() in ("true", "1")

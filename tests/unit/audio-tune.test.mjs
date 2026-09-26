@@ -54,7 +54,7 @@ function param(v) {
 const live = new Set();
 function node(kind, counts) {
   if (counts) counts[kind] = (counts[kind] || 0) + 1;
-  const self = { kind, connect: (t) => t, disconnect() { live.delete(self); }, start() {}, stop() {}, type: "", loop: false,
+  const self = { kind, connect: (t) => t, disconnect() { live.delete(self); }, start(t) { self.startAt = t; }, stop(t) { self.stopAt = t; }, type: "", loop: false,
            loopStart: 0, loopEnd: 0, buffer: null, onended: null, fftSize: 0, frequencyBinCount: 0,
            getFloatFrequencyData() {}, gain: param(1), frequency: param(440), detune: param(0),
            Q: param(1), playbackRate: param(1) };
@@ -1439,4 +1439,16 @@ test("the off-road rumble's filter is not rescheduled every frame for a steady s
   const before = A.debug().surfSched;
   for (let i = 0; i < 120; i++) A.setCarSfx({ surface: 0.5 });
   assert.ok(A.debug().surfSched - before <= 1, `rescheduled ${A.debug().surfSched - before} times`);
+});
+
+test("cutting a transmission short cuts its courtesy figure and squelch tail too, not just the hiss", async () => {
+  const { GameAudio, ctx } = boot();
+  GameAudio.init();
+  const before = new Set(live);
+  assert.equal(GameAudio.radioSting("radio", 3), true);
+  const mine = [...live].filter((n) => !before.has(n) && (n.kind === "src" || n.kind === "osc"));
+  ctx.currentTime = 1.0;                      // paused, quit or preempted 1 s in
+  GameAudio.radioStingStop();
+  const late = mine.filter((n) => !n.loop && n.startAt != null && n.startAt > 1.0 && !(n.stopAt <= 1.0 + 1e-9));
+  assert.deepEqual(late.map((n) => [n.kind, n.startAt]), [], "scheduled after the cut, still due to play");
 });

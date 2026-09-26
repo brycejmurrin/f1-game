@@ -796,3 +796,13 @@ test("a line still waiting out its cue when the race ends is dropped, not read o
   await new Promise((r) => setTimeout(r, 80));
   assert.equal(synth.calls.filter((c) => c.m === "speak").length, 0);
 });
+
+test("the SPOTTER row lives in the TEAM RADIO section, and the folded summary shows its state", () => {
+  const html = readFileSync(join(ROOT, "index.html"), "utf8");
+  const sec = html.slice(html.indexOf('<details id="as-radio-details"'), html.indexOf("</details>", html.indexOf('<details id="as-radio-details"')));
+  assert.ok(sec.includes('id="as-spot"'), "players look for the spotter under TEAM RADIO");
+  assert.equal((html.match(/id="as-spot"/g) || []).length, 1, "one spotter row");
+  const panel = readFileSync(join(ROOT, "js/audio/panel.js"), "utf8");
+  const fold = panel.slice(panel.indexOf('Dom.paintFold($("as-radio-sum")'), panel.indexOf("]);", panel.indexOf('Dom.paintFold($("as-radio-sum")')));
+  assert.match(fold, /"SPOTTER " \+/, "a radio switched OFF still shows SPOTTER ON/OFF without opening the section");
+});

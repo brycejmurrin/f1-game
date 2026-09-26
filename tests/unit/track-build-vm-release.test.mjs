@@ -154,7 +154,8 @@ const STRIP = {
   // longer moored; buried harbour balconies skipped; ground-audit)
   // → merged follow-ups 286489/257979 (yachts moored in open water, not
   // dropped; engine-helpers plinth sink)
-  monaco: { before: 286489, after: 257979 },
+  // → track limits 285994/257518 (two moored hulls over the road hole dropped)
+  monaco: { before: 285994, after: 257518 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)

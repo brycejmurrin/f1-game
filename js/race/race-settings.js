@@ -349,7 +349,10 @@ const RaceSettings = (function () {
       return true;
     }
 
-    function setNetRoom(on) { netRoom = !!on; }
+    // Another writer staged laps/weather/time of day (a room's host, the Daily):
+    // the next open re-stages rather than keep them as this track's draft.
+    function resetDraft() { draftKey = ""; }
+    function setNetRoom(on) { if (netRoom !== !!on) resetDraft(); netRoom = !!on; }
 
     function openRaceSetup() {
       $("vsfriend").hidden = true;
@@ -427,6 +430,7 @@ const RaceSettings = (function () {
       openRaceSettings,
       openRaceSetup,
       setNetRoom,
+      resetDraft,
       wireButtons,
       applyPreset,
       get netRoom() { return netRoom; },

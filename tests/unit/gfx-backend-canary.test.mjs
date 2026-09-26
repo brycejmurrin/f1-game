@@ -517,6 +517,10 @@ test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", ()
   // createChunkedMesh moved to wgx-chunked.js (GLX-seam peel); it still routes
   // through core.allocFail so a failed upload stays inert, not a throw.
   assert.match(code("js/render/webgpu/wgx-chunked.js"), /allocFail\(\s*"createChunkedMesh"/);
+  // allocDrawSlot() returns -1 when the draw ring is full: a chunk must drop
+  // its draw, not index the ring at -1 (RangeError mid-frame).
+  assert.match(code("js/render/webgpu/wgx-chunked.js"), /if \(slot < 0\) return;/);
+  assert.match(code("js/render/webgpu/wgx-chunked.js"), /if \(cslot < 0\) break;/);
   // A hand re-pick of WEBGPU resets the ladder so the player can retry full:
   // BEHAVIOUR through the picker.
   const a = bootPicker({

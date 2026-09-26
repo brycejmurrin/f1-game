@@ -311,6 +311,10 @@ const Tracks = (function () {
       TrackPit.openBoundary(track);
       const propsGeo = safe("props", TrackModels.sealGeometry(_props.out));
       track.propsGeo = propsGeo;
+      // The tallest prop above its own ground: what the sun shadow map's depth
+      // span must hold (js/render/shared/shadow-pass.js sunSpan). Measured before
+      // the upload may drop the positions.
+      track.propTop = propTop(track, propsGeo);
       propsGeo._keepPositions = propsGeo._keepFullGeometry = keepGeometry;
       lap("propsSeal", "geo");
       // Index-only strip of never-visible triangles (js/track/core/hidden-faces.js).
@@ -799,6 +803,25 @@ const Tracks = (function () {
     return track._terrGrid;
   }
 
+  // Height of the tallest prop above ITS OWN ground (terrainY): the car passing
+  // it is on that ground too, so this — not the altitude over the lowest road
+  // point, which read 1159 m at Monaco's cliffs — is how far up the sun axis a
+  // caster sits from the shadow anchor. Props off the terrain (far backdrop,
+  // outside every shadow box) are skipped. Pruned by the terrain's lowest point:
+  // terrainY runs only for a vertex that could still beat the best so far.
+  function propTop(track, propsGeo) {
+    const t = track.terrainGeo && track.terrainGeo.pos, p = propsGeo && propsGeo.pos;
+    if (!t || !t.length || !p || !p.length) return 0;
+    let lo = Infinity, best = 0;
+    for (let i = 1; i < t.length; i += 3) if (t[i] < lo) lo = t[i];
+    for (let i = 0; i < p.length; i += 3) {
+      const y = p[i + 1];
+      if (!(y - lo > best)) continue;
+      const g = terrainY(track, p[i], p[i + 2]);
+      if (g != null && y - g > best) best = y - g;
+    }
+    return best;
+  }
   function terrainY(track, x, z) {
     const g = track.terrainGeo; if (!g) return null;
     const pos = g.pos, idx = g.idx; let best = null;

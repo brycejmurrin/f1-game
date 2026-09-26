@@ -664,12 +664,14 @@ test("with the build still unknown, the newest generation answers first", async 
   assert.equal(await (await nav.responsePromise).text(), "newer shell");
 });
 
-function sweepHarness({ complete }) {
+function sweepHarness({ complete, settled = complete }) {
   const harness = createHarness({ fetchImpl: generationFetch({ offline: false }) });
   harness.stores.set("apex26-319", new Map([["a", new Response("x")]]));
   harness.stores.set("apex26-320", new Map([["a", new Response("x")]]));
-  harness.stores.set("apex26-321", new Map(complete
-    ? [[`${ORIGIN}/__apex_install_complete__`, new Response("complete")]] : []));
+  harness.stores.set("apex26-321", new Map([
+    ...(complete ? [[`${ORIGIN}/__apex_install_complete__`, new Response("complete")]] : []),
+    ...(settled ? [[`${ORIGIN}/__apex_install_settled__`, new Response("settled")]] : []),
+  ]));
   harness.stores.set("apex26-322", new Map([["a", new Response("x")]]));   // a newer, still-installing generation
   harness.stores.set("someone-else", new Map([["a", new Response("x")]]));
   return harness;
@@ -690,6 +692,20 @@ test("stale generations are swept from the fetch path once the current one is co
   assert.ok(harness.stores.has("apex26-321"));
   await twoFetches(harness);
   assert.equal(harness.deleted.length, 2, "one sweep per worker lifetime, not one per fetch");
+});
+
+test("no fetch-path sweep between the essential marker and the optional pool (SKIPWAITING STAYS LAST's window)", async () => {
+  const harness = sweepHarness({ complete: true, settled: false });
+  await twoFetches(harness);
+  assert.deepEqual(harness.deleted, [], "an old active worker must not delete its own cache while the new install is still seeding lazy assets");
+});
+
+test("offline, a FINISHED install outranks a newer half-written generation", async () => {
+  const src = await readFile(new URL("../../sw.js", import.meta.url), "utf8");
+  const fn = src.match(/async function matchPreferCurrent\(req\) \{[\s\S]*?\n\}/)[0];
+  assert.match(fn, /INSTALL_SETTLED_URL/);
+  assert.match(fn, /\(done\.get\(b\) - done\.get\(a\)\) \|\| \(rank\(b\) - rank\(a\)\)/, "completeness first, then current/newest");
+  assert.ok(src.indexOf('cache.put(INSTALL_SETTLED_URL') < src.indexOf("await self.skipWaiting()"), "settled is written after the optional pool, before skipWaiting");
 });
 
 test("no fetch-path sweep while the current generation is incomplete", async () => {

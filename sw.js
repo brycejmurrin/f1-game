@@ -26,6 +26,9 @@ const OPTIONAL_ASSET_MS = 4000;
 // exercises this branch; the deployed site never does.
 const DEV_HOST = /^(localhost|127\.0\.0\.1|\[::1\])$/.test((self.location && self.location.hostname) || "");
 const INSTALL_COMPLETE_URL = "__apex_install_complete__";
+// Written after the OPTIONAL pool too, right before skipWaiting: the cache holds
+// everything its build will ever precache. The opportunistic sweep waits for it.
+const INSTALL_SETTLED_URL = "__apex_install_settled__";
 
 let _cacheNamePromise = null;
 // The RESOLVED name, readable without awaiting: cache matching must never wait
@@ -75,8 +78,21 @@ async function matchPreferCurrent(req) {
   let names;
   try { names = await caches.keys(); } catch (_) { return caches.match(req); }
   const current = _cacheNameKnown;
+  // A FINISHED install outranks a newer name: a fetch mid-deploy opens the next
+  // build's cache and writes its shell before that build installs, and an app
+  // closed then and relaunched offline got the new shell with none of its lazy
+  // `?v=<new>` payloads — while the previous, complete generation sat unused.
+  const done = new Map();
+  await Promise.all(names.map(async (n) => {
+    let d = 0;
+    try {
+      if (await caches.match(INSTALL_SETTLED_URL, { cacheName: n })) d = 2;
+      else if (await caches.match(INSTALL_COMPLETE_URL, { cacheName: n })) d = 1;
+    } catch (_) { /* unreadable: rank it last */ }
+    done.set(n, d);
+  }));
   const rank = (n) => (n === current ? Infinity : (cacheBuild(n) || 0));
-  const ordered = names.slice().sort((a, b) => rank(b) - rank(a));
+  const ordered = names.slice().sort((a, b) => (done.get(b) - done.get(a)) || (rank(b) - rank(a)));
   for (const name of ordered) {
     const hit = await caches.match(req, { cacheName: name });
     if (hit) return hit;
@@ -101,7 +117,11 @@ async function sweepStaleCaches() {
   if (!(build > 0)) return;
   const keys = await caches.keys();
   if (!keys.includes(name)) return;
-  if (!(await caches.match(INSTALL_COMPLETE_URL, { cacheName: name }))) return;
+  // SETTLED, not just complete: the complete marker lands before the optional
+  // pool, and an OLD active worker that has learned the new name would sweep its
+  // own cache inside the window "SKIPWAITING STAYS LAST" protects (an old-shell
+  // tab offline then lost its lazy ?v=<old> assets).
+  if (!(await caches.match(INSTALL_SETTLED_URL, { cacheName: name }))) return;
   const stale = keys.filter((k) => cacheBuild(k) < build);
   await Promise.all(stale.map((k) => caches.delete(k)));
   _sweepDone = true;
@@ -356,7 +376,13 @@ self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
     const [name, urls] = await Promise.all([currentCacheName(), precacheAssetLists()]);
     const cache = await caches.open(name);
-    await pooled(urls.essential, 6, (u) => cacheRequiredAsset(cache, u));
+    const build = name.slice(CACHE_PREFIX.length);
+    // GLX is the fallback renderer every device can run: when TLX/WGX are not
+    // cached (or fail), an offline boot without it is "graphics unavailable".
+    // So its deferred files are ESSENTIAL, stamped as loadBackendScripts asks.
+    const isGlx = (u) => /^js\/render\/glx\//.test(u);
+    const required = urls.essential.concat(urls.optional.filter(isGlx).map((u) => u + "?v=" + build));
+    await pooled(required, 6, (u) => cacheRequiredAsset(cache, u));
     await cache.put(INSTALL_COMPLETE_URL, new Response("complete"));
     // The DEFERRED backends are the one group in `optional` that is NOT pinned
     // by path — js/game.js:loadBackendScripts injects them as `<path>?v=<build>`,
@@ -369,13 +395,12 @@ self.addEventListener("install", (event) => {
     // deletes every other generation, so a key inside this cache can only ever
     // be this build's. Everything else in the list stays bare — the vendored
     // three.js reaches the network through the importmap with no query at all.
-    const build = name.slice(CACHE_PREFIX.length);
     // Everything loadBackendScripts() injects is requested as `<path>?v=<build>`,
     // so it must be SEEDED under that key: the DEFERRED backends, and now the
     // race payload (light-presets + the per-circuit scenery closures) too.
     const stamped = urls.optional.map((u) =>
       /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/scenery\/|^js\/data\/|^js\/net\/|^js\/lighting\/presets\.js$/.test(u)
-        ? u + "?v=" + build : u);
+        ? u + "?v=" + build : u).filter((u) => !isGlx(u));   // GLX went in `required` above
     // SKIPWAITING STAYS LAST, deliberately. Hoisting it above this pool lets a
     // returning player's new worker activate — and `activate` both claims
     // clients and DELETES every other generation's cache — while the deferred
@@ -384,6 +409,7 @@ self.addEventListener("install", (event) => {
     // previous cache still held a moment earlier. The first-visit boot win
     // comes from deferring REGISTRATION (index.html), which costs nothing here.
     await pooled(stamped, 4, (u) => cacheOptionalAsset(cache, u));
+    await cache.put(INSTALL_SETTLED_URL, new Response("settled"));
     await self.skipWaiting();
   })());
 });

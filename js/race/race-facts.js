@@ -25,6 +25,7 @@ const RaceFacts = (function () {
   const K = 32;              // timing checkpoints per lap
   const RING = K * 2;        // two laps of crossing times per car
   const HOLD_S = 1.0;        // a changed order must hold this long to count
+  const NET_GRACE_S = 0.5;   // VS FRIEND: a remote car is drawn ~100 ms + latency behind
   const PAIR_SPAN = 2;       // each car is compared with the next two in order
   const BATTLE_GAP = 0.8;    // seconds — two cars this close are a fight
 
@@ -94,7 +95,9 @@ const RaceFacts = (function () {
     // allocations a step (strings, arrays, Sets) before.
     const _seen = new Set(), _live = new Set();
     const pairKey = (x, y) => x * 1048576 + y;   // ids are small ints; exact below 2^53
-    const clockOf = (c) => (st.get(c).finT || 0) + (c.penalty || 0);
+    // The car's own flag time when it has one: a VS FRIEND rival is drawn
+    // ~100 ms in the past, so the tick race-facts SAW it cross is late.
+    const clockOf = (c) => (c.finishT > 0 ? c.finishT : st.get(c).finT || 0) + (c.penalty || 0);
     const byRace = (a, b) => {
       // TWO FLAGGED CARS go by laps, then by who took the flag first — never
       // by distance: each froze wherever its last timestep left it past the
@@ -127,6 +130,7 @@ const RaceFacts = (function () {
       const seg = lapLen / K;
 
       // ── per car: timing loop and edges ──────────────────────────────────
+      let regrid = false;
       for (const c of cars) {
         const s = bag(c);
         const i = Math.floor((c.prog || 0) / seg);
@@ -135,6 +139,9 @@ const RaceFacts = (function () {
         if (s.fresh) { s.fresh = false; s.cp = i; }
         if (i < s.cp) {                             // shoved backwards: give the checkpoints back
           s.cp = i;
+          // …and who-is-ahead with them: a re-grid or a rescue is not a pass,
+          // so the order after it is the new baseline, not a flip to call.
+          regrid = true;
           // …and the player's gap history with them. A red-flag restart puts the
           // field back on the grid, bunched; comparing those gaps with the
           // pre-flag ones logged at the same checkpoints read as "6.5 quicker".
@@ -154,7 +161,9 @@ const RaceFacts = (function () {
         if (pit || s.pit) s.pitT = t;
         s.pit = pit;
         s.stops = c.pitStops || 0;
-        if ((c.lap || 0) > s.lap && c.lastLap > 0 && c.lastLap !== s.lastLap) {
+        // A new lap TIME, not a new lap count on the same tick: a VS FRIEND
+        // rival's pose bumps its lap before its lap time arrives over the wire.
+        if (c.lastLap > 0 && c.lastLap !== s.lastLap) {
           const lt = c.lastLap;
           ev.push({ type: "lap", car: c, time: lt, pb: lt <= (c.best || Infinity) + 1e-6 });
           if (lt < fastest.time) {
@@ -165,13 +174,18 @@ const RaceFacts = (function () {
         }
         if ((c.lap || 0) > s.lap && c === p) ev.push({ type: "playerLap", lap: c.lap });
         s.lap = c.lap || 0; s.lastLap = c.lastLap || 0;
-        if (c.finished && !s.finished) { s.finProg = c.prog || 0; s.finT = t; s.finDue = t + (c.penalty || 0); }
+        if (c.finished && !s.finished) { s.finProg = c.prog || 0; s.finT = t; s.finDue = t + (c.penalty || 0) + (G.netPlay && G.netPlay.active && G.netPlay.active() ? NET_GRACE_S : 0); }
         s.finished = !!c.finished;
         // A car flagged with a time penalty has no place until the penalty has
         // run out: a rival crossing inside it still beats it, and "YOU WIN THE
         // RACE" 3 s before the results say P2 is the one call that must not be wrong.
         if (s.finDue != null && t >= s.finDue - 1e-9) { s.finDue = null; finishers.push(c); }
       }
+      // EVERY CAR IN: the classification is final, and endRace (race-control's
+      // finishDelay) no longer waits on a penalty — release the held finishes now
+      // or the last car home with a +5 s never hears its result.
+      if (cars.every((c) => c.finished || c.retired))
+        for (const c of cars) { const s = bag(c); if (s.finDue != null) { s.finDue = null; finishers.push(c); } }
 
       order = rank(cars);
       // The finish position is the flagged car's place in the ranking — after
@@ -187,6 +201,7 @@ const RaceFacts = (function () {
       // Pairs not looked at this tick are forgotten: a car that fell three
       // places inside the hold left a stale "who is ahead", which fired as a
       // pass — a lead change twenty seconds late — when the two met again.
+      if (regrid) pairs.clear();
       const seen = _seen; seen.clear();
       for (let i = 0; i < order.length; i++) {
         for (let j = i + 1; j <= i + PAIR_SPAN && j < order.length; j++) {

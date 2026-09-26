@@ -83,6 +83,9 @@ const SettingsNav = (function () {
           const current = sel && sel.selectedOptions && sel.selectedOptions[0];
           if (small && current) small.textContent = prefix + ": " + current.textContent.trim();
         }
+        // DRIVING also holds LICENCE BADGES: keep the fold signposted on the index.
+        const drv = document.getElementById("pm-open-driving"), drvSmall = drv && drv.querySelector("small");
+        if (drvSmall && typeof Badges !== "undefined") { const b = Badges.summary(); drvSmall.textContent += ` · Badges ${b.held}/${b.total}`; }
       }
       // Capture the door before it is hidden. This also makes a programmatic
       // SettingsNav.show("audio") behave like a click when called from home.

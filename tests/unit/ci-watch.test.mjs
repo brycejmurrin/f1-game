@@ -10,7 +10,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { latestPerWorkflow, verdict, newJobEvents, wantsAnnotations, pagesVerdictRun } from "../../tools/ci/ci-watch.mjs";
+import { latestPerWorkflow, verdict, newJobEvents, wantsAnnotations, pagesVerdictRun, noneVerdict } from "../../tools/ci/ci-watch.mjs";
 
 const run = (id, name, status, conclusion, created) => ({ id, name, status, conclusion, created_at: created });
 const job = (id, name, status, conclusion, steps = []) => ({ id, name, status, conclusion, steps, html_url: `u/${id}` });
@@ -78,4 +78,15 @@ test("--pages reads the NEWEST train run that contains the SHA", () => {
   assert.equal(pagesVerdictRun(runs, has(["a", "b", "c"])).id, 3, "a newer containing run supersedes older verdicts");
   assert.equal(pagesVerdictRun(runs, has(["a"])).id, 1, "only the old run contains it: that is the verdict");
   assert.equal(pagesVerdictRun(runs, has([])), null, "no containing run yet");
+});
+
+test("no run yet: none only without a PR; a conflicting PR is blocked, never green", () => {
+  const MIN = 60_000;
+  assert.equal(noneVerdict(null, 2 * MIN), "wait", "give a docs-only push its 3 minutes");
+  assert.equal(noneVerdict(null, 4 * MIN), "none");
+  // GitHub starts no pull_request run while the PR conflicts (2026-09-25: read as green).
+  assert.equal(noneVerdict({ number: 321, mergeable_state: "dirty" }, 4 * MIN), "blocked");
+  // A PR's run can start minutes after the push while the merge ref builds.
+  assert.equal(noneVerdict({ number: 321, mergeable_state: "clean" }, 4 * MIN), "wait");
+  assert.equal(noneVerdict({ number: 321, mergeable_state: "unknown" }, 11 * MIN), "late");
 });

@@ -186,7 +186,7 @@ const Announcer = (function () {
     if (!info || typeof info !== "object") info = {};
     const t = info.track || {};
     const name = broadcast(t.name);
-    const gp = broadcast(t.gp);
+    const gp = broadcast(info.gp || t.gp);
     const km = +t.lengthKm || 0;
     const turns = +(info && info.turns) || 0;
     const laps = +(info && info.laps) || 0;
@@ -487,7 +487,10 @@ const Announcer = (function () {
       const plan = G.raceChangeable && G.wxArcPlan;
       if (plan && plan.to && race) st.forecast = { to: plan.to, inS: plan.dur };
       if (info.session === "tt" && typeof GameStore !== "undefined" && GameStore.ttBoard && info.track) {
-        const b = GameStore.ttBoard(info.track.id);
+        // This session's class only (car, weather, pace…), as the HUD's target
+        // is: another class's best can be unbeatable here. No class, no line.
+        const cls = G.records && G.records.current ? G.records.current() : undefined;
+        const b = cls ? GameStore.ttBoard(info.track.id, cls) : null;
         if (b && b[0] && b[0].t > 0) st.best = lapTime(b[0].t);
       }
       extra.story = st;
@@ -504,7 +507,7 @@ const Announcer = (function () {
       let fast = null;
       for (const c of order) if (c.best > 0 && Number.isFinite(c.best) && (!fast || c.best < fast.best)) fast = c;
       const sum = {
-        event: info && info.sprint ? "the sprint" : t.gp ? "the " + t.gp : "", n: order.length,
+        event: info && info.sprint ? "the sprint" : ((info && info.gp) || t.gp) ? "the " + ((info && info.gp) || t.gp) : "", n: order.length,
         winner: { name: w.name || w.code || "" },
         second: s2 && !s2.retired ? s2.name : "",
         // On the corrected clock, as the results sheet classifies: a +5 s penalty
