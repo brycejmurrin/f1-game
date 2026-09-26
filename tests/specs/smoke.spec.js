@@ -412,37 +412,19 @@ sharedTest.describe("Apex 26 — HUD", () => {
     // budget and turns one attempt into a 21-minute hang allowance.
     await raceOnBootedPage(page);
     await park(page, 0);
-    await page.evaluate(() => window.__apex.jump(0, 80, 0));
-    // Wait for the HUD tick to flush the new speed value into the DOM.
-    // `polling` IS LOAD-BEARING, not decoration. Playwright polls a predicate on
-    // requestAnimationFrame by default, and this page is running the game loop
-    // under SwiftShader — which starves that poll badly enough that the declared
-    // bound never gets to fire (AGENTS.md measures a 3 s wait running 109,665 ms).
-    // Measured here: solo on a quiet box this test took 102.7 s of a 120 s
-    // budget, i.e. 14% from failing with zero contention, and it is the test that
-    // failed first the moment anything else touched the CPU.
-    await page.waitForFunction(
-      () => parseInt(document.getElementById("hud-speed-n").textContent, 10) > 0,
-      // DERIVED from the test's own budget, not pinned. This wait has now been
-      // wrong twice: 3000 ms failed Pages #1849/#1850/#1851, and the 30000 that
-      // replaced it still failed #1855 — where the asset pack alone took 55 s
-      // and car builds landed at 165-182 s of page time, against seconds
-      // locally. Every one of those dumped `apex-state` showing speed: 80: the
-      // physics had the value and the HUD had not repainted yet. A constant
-      // here is a guess about a machine, and the machine keeps getting slower.
-      //
-      // test.info().timeout IS the budget CI hands this spec (900 s there, the
-      // 120 s default locally), so a quarter of it scales with whatever the
-      // workflow sets and needs no edit the next time that moves. The ASSERTION
-      // below is untouched, and this still cannot mask a hung HUD — the test
-      // budget itself remains the backstop, and a readout that never updates
-      // fails at 4x this wait.
-      null, { polling: 100, timeout: Math.max(30_000, Math.floor(test.info().timeout / 4)) }
-    );
-
-    const speed = await page.locator("#hud-speed-n").innerText();
+    // READ THE READOUT IN THE SAME evaluate THAT JUMPS. jump() repaints the HUD
+    // itself (js/agent/apex.js: G.refreshHud(true) in "race"/"count"), so the
+    // value is in the DOM when it returns and no frame is needed. This used to
+    // waitForFunction for it, and under a live SwiftShader race the page's main
+    // thread is blocked in 20-35 s stretches: the poll never ran inside its 30 s
+    // bound although error-context showed hud-speed-n = 343 (2026-09-25). A HUD
+    // that does not repaint on jump() still reads 0 here and fails.
+    const kph = await page.evaluate(() => {
+      window.__apex.jump(0, 80, 0);
+      return parseInt(document.getElementById("hud-speed-n").textContent, 10);
+    });
     // 80 m/s ≈ 288 km/h — should show a non-zero value
-    expect(parseInt(speed, 10)).toBeGreaterThan(0);
+    expect(kph).toBeGreaterThan(0);
   });
 
   sharedTest("minimap canvas has content after race starts", async ({ page }) => {

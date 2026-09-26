@@ -85,9 +85,10 @@ test("ratchetMetrics flattens both scopes and ignores non-numbers", () => {
   const m = ratchetMetrics({
     _doc: "prose, not a metric",
     files: { "js/game.js": { lines: 10, codeLines: 5, note: "skip me" } },
-    tree: { shellNodes: { ceiling: 100, slack: 25 }, other: { slack: 3 } },
+    // waitForTimeout is stored as a BARE number in the real file; it is a ceiling too.
+    tree: { shellNodes: { ceiling: 100, slack: 25 }, other: { slack: 3 }, waitForTimeout: 148 },
   });
-  assert.deepEqual(m, { "js/game.js/lines": 10, "js/game.js/codeLines": 5, "(tree)/shellNodes": 100 });
+  assert.deepEqual(m, { "js/game.js/lines": 10, "js/game.js/codeLines": 5, "(tree)/shellNodes": 100, "(tree)/waitForTimeout": 148 });
 });
 
 test("the ratchet budget passes a real two-sided raise and refuses a duplicated merge", () => {

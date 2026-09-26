@@ -89,6 +89,19 @@ test("select() stages a daily class without starting the countdown", () => {
   assert.equal(d.isActive(), true, "NEXT may carry the armed daily into race settings");
 });
 
+test("stop() hands the session seed back: a later one-off GP does not draw off the Daily's", () => {
+  const { d, G } = load();
+  G.seed = 777;
+  d.select("2026-09-03", "open");
+  const daySeed = G.seed;
+  assert.notEqual(daySeed, 777, "precondition: the Daily staged its own seed");
+  d.select("2026-09-04", "open");   // re-selecting keeps the ORIGINAL to restore, not the first day's
+  d.stop();
+  assert.equal(G.seed, 777);
+  d.stop();   // idempotent: a second stop (quitToMenu after a results exit) changes nothing
+  assert.equal(G.seed, 777);
+});
+
 test("record() keeps the day's best and counts a streak of consecutive UTC days", () => {
   const { d } = load();
   assert.equal(d.record(80), null, "no active session, nothing recorded");

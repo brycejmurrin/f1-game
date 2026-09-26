@@ -38,6 +38,7 @@ const DailyChallenge = (function () {
     Log.info("game", "DailyChallenge.create");
     const { store } = G;
     let active = null;   // the plan of the session being driven, else null
+    let savedSeed;   // G.seed from before the Daily took it over (restored by stop)
 
     function data() {
       const raw = store.get(KEY, null);
@@ -61,6 +62,10 @@ const DailyChallenge = (function () {
       G.trackIdx = idx;
       G.raceWeather = p.weather; G.raceTimeOfDay = p.tod;
       G.raceLaps = G.ttDistance;
+      // The day's seed replaces the session's for this run only: quali-model,
+      // reliability and the launch hash draw from G.simSeed(), so leaving it
+      // set made every later one-off GP grid depend on having played the Daily.
+      if (!active) savedSeed = G.seed;
       if (G.resetRaceDraft) G.resetRaceDraft();   // not a draft RACE SETTINGS should keep for this track
       G.seed = p.seed;
       active = p;
@@ -128,7 +133,11 @@ const DailyChallenge = (function () {
       return parts.join(" · ");
     }
 
-    function stop() { if (G.records) G.records.restoreDaily(); active = null; }
+    function stop() {
+      if (G.records) G.records.restoreDaily();
+      if (active && savedSeed !== undefined) G.seed = savedSeed;
+      savedSeed = undefined; active = null;
+    }
     function isActive() { return !!active; }
     function current() { return active; }
     return { plan, dayKey, select, open, record, shareText, stop, isActive, current, data, today };

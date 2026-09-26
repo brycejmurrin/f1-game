@@ -3146,7 +3146,7 @@ function endRace(forcedOrder) {
   // A one-off GP's driven quali order stays persisted (quali-persist contract);
   // quali's qualiTrack stamp refuses it on a different circuit.
   dbgCam = null;
-  buildResults(order);
+  buildResults(order, { sprint: wasSprint, duel: duelOn() });   // endRace's own read: scored() is stale after a season save conflict
   els.results.hidden = false;
   announcer.wrapUp(order, Object.assign(loadingInfo(), { sprint: wasSprint }));   // js/audio/announcer.js — the broadcaster's read over the results
 }
@@ -4966,7 +4966,8 @@ function updateCar(c, dt, ranked) {
       // run off-track replaced a 42 s record with 5 s, ghost and all. Reuse the
       // cut the engine already counted (1.2 s off, past the grace) and the latch
       // the crossing already clears, not a second definition of either.
-      if (c.isPlayer && isTimeTrial()) c.incidentInvalidLap = true;
+      // Qualifying too: its grid is the player's lap time, so a cut lap took pole.
+      if (c.isPlayer && (isTimeTrial() || isQuali())) c.incidentInvalidLap = true;
       // Penalty applies to EVERY car (it feeds race classification) so the AI
       // can't cut corners for free; only the player gets the on-screen cues.
       // THREE WARNINGS, ONE PENALTY, RESET — the real ladder. This used to add
@@ -4991,7 +4992,7 @@ function updateCar(c, dt, ranked) {
         }
       } else if (c.isPlayer) {
         // The n/4 count is the race ladder's; in a time trial the lap is simply gone.
-        announce(isTimeTrial() ? "LAP INVALIDATED" : "TRACK LIMITS " + c.cutWarn + "/4", 1.2, "penalty-warn");
+        announce(isTimeTrial() || isQuali() ? "LAP INVALIDATED" : "TRACK LIMITS " + c.cutWarn + "/4", 1.2, "penalty-warn");
         if (soundOn) GameAudio.offtrack();
       }
     }
