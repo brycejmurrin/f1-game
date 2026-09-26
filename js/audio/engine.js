@@ -588,6 +588,12 @@ const GameAudio = (function () {
     const p = ctx.resume();
     if (p && p.then) {
       p.then(() => {
+        // RESOLVED IS NOT RUNNING. WebKit resolves resume() on a context still
+        // "interrupted" (a call, Siri, an alarm — webkit LayoutTests
+        // audiocontext-state-interrupted.html; web-audio-api#2585): clearing
+        // lastFailedResume here meant the next tap never reached rebuildCtx and
+        // the game stayed silent until a reload.
+        if (!ctx || ctx.state !== "running") return;
         rebuildTries = 0;
         lastFailedResume = 0;
         Log.info("audio", "GameAudio.resume state=" + (ctx && ctx.state));

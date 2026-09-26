@@ -507,7 +507,11 @@ document.addEventListener("pointerdown", (e) => {
 // document listener whatever the registration order, so the inner disclosure
 // always claims the key first (parts-setup-ids.spec.js "the panel starts shut…").
 window.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && G.setupPreviewOn && setupCamPanelOpen()) {
+  // …but only when the GARAGE is the top layer: keyboard-opened EDIT MY TEAM
+  // (a <dialog> over the garage) left the panel open behind it, and Escape shut
+  // the hidden panel instead of the dialog the player was looking at.
+  if (e.key === "Escape" && G.setupPreviewOn && setupCamPanelOpen()
+      && !document.querySelector("dialog[open], dialog.screen:not([hidden])")) {
     setSetupCamPanel(false);
     e.preventDefault();
     e.stopPropagation();   // don't also close the GARAGE behind it

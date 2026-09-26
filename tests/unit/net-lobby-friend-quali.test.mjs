@@ -62,3 +62,16 @@ for (const [name, startRace] of [
     } finally { lobby.cancel(); }
   });
 }
+
+test("hunt fixes: SIMULATE / no valid lap still reports a time; tyres + reliability are race rules; a paused friend race brakes the car; no garage in MP", async () => {
+  const { readFileSync } = await import("node:fs");
+  const r = (f) => readFileSync(new URL("../../" + f, import.meta.url), "utf8");
+  const game = r("js/game.js");
+  assert.match(game, /quali\.simulate\(qualiNet\.driven\(0\)\);\s*reportModelQuali\(\);/, "SIMULATE sends the model's time");
+  assert.match(game, /if \(!\(myLap > 0\)\) reportModelQuali\(\);/, "a lap with no valid time sends the model's time");
+  assert.match(game, /if \(c\.local && paused && netPlay\.active\(\)\) return PAUSED_NET_INPUT;/);
+  const lobby = r("js/net/lobby.js");
+  assert.match(lobby, /tyres: G\.raceTyreWear, reliab: G\.raceReliability,/);
+  assert.match(lobby, /if \(own\(next, "tyres"\)\) G\.raceTyreWear = next\.tyres;/);
+  assert.match(r("js/ui/hud.js"), /workBtn\.hidden = [^\n]*G\.netPlay\.active\(\)/);
+});
