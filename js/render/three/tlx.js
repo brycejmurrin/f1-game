@@ -1720,6 +1720,11 @@ const TLX = (function () {
       let frameAllLights = null;    // frame.allLights — the full baked track set
       let framePerChunk = 0;        // frame.perChunkLights — the 0..1 knob
       let _lgKey = null, _lgSrc = null, _lgChunks = null;   // bake-once cache
+      // The flattened lamp-cell list handed to LampChunks.resolve. KEPT across
+      // rebakes: resolve() caches its full-cap bake in a WeakMap keyed on this
+      // ARRAY, so a fresh [] per rebake re-ran the O(chunks x lamps) bake on
+      // every PER-CHUNK LAMPS slider step. Rebuilt only when its inputs change.
+      let _lgChs = null, _lgChsFirst = null, _lgChsTotal = -1, _lgChsNrec = -1;
       let frameAllLightsGen = -1, _lgGen = -1;   // colour-only refresh (allLightsGen)
       // READ-BACK, not a log line. docs/ARCHITECTURE.md §Boot evidence: a unit
       // test of a renderer backend is not evidence that it RUNS, and no
@@ -3530,6 +3535,7 @@ const TLX = (function () {
             // grid. Refuse rather than build a silently wrong one.
             if (!AL || !(knob > 0) || !total || cellSplit) {
               if (_lgKey !== "off") { lit.setLampGrid(null); _lgKey = "off"; }
+              if (!total) _lgChs = _lgChsFirst = null;   // no chunked geometry: do not pin the old track's cells
               _lampGridState = { on: false, lamps: AL ? (AL.length / 15) | 0 : 0,
                                  chunks: total, idx: 0,
                                  why: cellSplit ? "chunked records disagree on cellSize"
@@ -3539,17 +3545,24 @@ const TLX = (function () {
               // `first` stands in for chunk-array identity; a track reload also
               // replaces frameAllLights, which _lgSrc already catches.
               // + the lamp bake gen: its LIVE-ONLY lane is packed into the lamp texture.
-              const key = knob + "|" + total + "|" + nrec + "|" + cell + "|" + (typeof LampBake !== "undefined" ? LampBake.gen() : 0);
+              // The knob enters as capFor(knob), the only way the bake depends on
+              // it: the slider is step 0.001, so keying the raw float rebuilt the
+              // grid on every drag step that mapped to the same cap.
+              const key = LampChunks.capFor(knob) + "|" + total + "|" + nrec + "|" + cell + "|" + (typeof LampBake !== "undefined" ? LampBake.gen() : 0);
               if (_lgKey !== key || _lgSrc !== AL || _lgChunks !== first) {
                 let note;
                 try {
-                  const chs = [];
-                  for (let k = 0; k < drawList.length; k++) {
-                    const ck = drawList[k].chunked;
-                    if (!ck || !ck.chunks || !ck.chunks.length) continue;
-                    const cells = ck.lampCells || ck.chunks;   // lamp cells, not merged draws
-                    for (let j = 0; j < cells.length; j++) chs.push(cells[j]);
+                  if (!_lgChs || _lgChsFirst !== first || _lgChsTotal !== total || _lgChsNrec !== nrec) {
+                    const fresh = [];
+                    for (let k = 0; k < drawList.length; k++) {
+                      const ck = drawList[k].chunked;
+                      if (!ck || !ck.chunks || !ck.chunks.length) continue;
+                      const cells = ck.lampCells || ck.chunks;   // lamp cells, not merged draws
+                      for (let j = 0; j < cells.length; j++) fresh.push(cells[j]);
+                    }
+                    _lgChs = fresh; _lgChsFirst = first; _lgChsTotal = total; _lgChsNrec = nrec;
                   }
+                  const chs = _lgChs;
                   const table = LampChunks.resolve(AL, chs, knob);
                   const grid = LampChunks.buildGrid(table, chs);
                   const okG = lit.setLampGrid({ lights: AL, table, grid, cell });
@@ -3595,28 +3608,22 @@ const TLX = (function () {
               _chunkFrame.total += rec.chunked.chunks.length;
               _chunkFrame.visible += n;
               // Hold the release until the env probe has LATCHED.
-              // History, because the gate reads as superstition without it:
-              // releaseMirrors() used to set attribute.array = null, on the
-              // premise that "nothing walks the arrays later" — true of the
-              // DRAW path, false of three's NODE BUILDER, which reads
-              // attribute.array.constructor to type an attribute every time it
-              // compiles a program for a pass it has not compiled for before.
-              // The env probe is such a pass, so freeing first made every
-              // probe face throw "Cannot read properties of null (reading
-              // 'constructor')": measured 2026-08-29 on macos-latest/Metal,
-              // 41 failed faces on WebGL2 and 81 on WebGPU in ~40 s — no
-              // environment reflections at all, and a thrown exception every
-              // frame forever. Invisible on a software adapter only because
-              // the probe skips chunks there.
-              // It now assigns a ZERO-LENGTH array of the same class instead,
-              // so .constructor still resolves and the node builder still
-              // types the attribute; .count is a plain property computed once
-              // in the BufferAttribute constructor (vendored r185:
-              // this.count = void 0 !== t ? t.length / e : 0), so swapping
-              // .array afterwards cannot zero a draw count either. That makes
-              // this gate belt-and-braces rather than load-bearing — it is
-              // KEPT because the failure it guards is real-GPU-only and the
-              // few frames of delay cost nothing.
+              // THIS GATE IS LOAD-BEARING. releaseMirrors() (tlx-chunked.js)
+              // sets every shared chunk attribute's .array = null — it does NOT
+              // swap in a zero-length array (an earlier version of this comment
+              // said it did; the code never matched). That breaks three's NODE
+              // BUILDER, which reads attribute.array.constructor to type an
+              // attribute every time it compiles a program for a pass it has
+              // not compiled for before. The env probe is such a pass, so
+              // freeing first made every probe face throw "Cannot read
+              // properties of null (reading 'constructor')": measured
+              // 2026-08-29 on macos-latest/Metal, 41 failed faces on WebGL2 and
+              // 81 on WebGPU in ~40 s — no environment reflections at all, and
+              // a thrown exception every frame forever. Invisible on a software
+              // adapter only because the probe skips chunks there. Releasing
+              // only after the probe has latched (or given up) is what keeps
+              // the probe's first compile off a null array; removing or
+              // loosening the gate brings that failure straight back.
               // apex26.tlxChunkRelease=1 forces this past the env gate for an
               // A/B ONLY. The gate is shut on a phone (probe tier-gated off),
               // so without an override the configuration that blanked a
