@@ -572,6 +572,10 @@ const NetLobby = (function () {
         laps: G.raceLaps, weather: G.raceWeather, tod: G.raceTimeOfDay,
         quali: !!G.raceQuali, grid: G.raceGrid,
         difficulty: G.difficulty,
+        // TYRE WEAR and RELIABILITY are race rules too, and each peer applied its
+        // own saved choice: the host's tyres wore while the guest's never did,
+        // and the guest's own car could DNF under a level nobody picked.
+        tyres: G.raceTyreWear, reliab: G.raceReliability,
         // The SIM seed and race counter every reproducible draw hashes on:
         // reliability DNFs (armReliability), the weather arc, the AI
         // restart/skill rolls and the AI qualifying times that set the grid.
@@ -642,6 +646,14 @@ const NetLobby = (function () {
         if (typeof d.difficulty !== "string" || !DIFFICULTY.has(d.difficulty)) return null;
         out.difficulty = d.difficulty;
       }
+      if (own(d, "tyres") && d.tyres != null) {   // absent from an older host: keep ours
+        if (typeof d.tyres !== "string" || (typeof TyreModel !== "undefined" && !TyreModel.isLevel(d.tyres))) return null;
+        out.tyres = d.tyres;
+      }
+      if (own(d, "reliab") && d.reliab != null) {
+        if (typeof d.reliab !== "string" || (typeof Reliability !== "undefined" && !Reliability.isLevel(d.reliab))) return null;
+        out.reliab = d.reliab;
+      }
       // simSeed() stores a uint32 and treats 0 as "unset" (game.js): accept
       // exactly the values the setter would keep.
       if (own(d, "seed")) {
@@ -670,6 +682,8 @@ const NetLobby = (function () {
       if (own(next, "weather")) G.raceWeather = next.weather;
       if (own(next, "tod")) G.raceTimeOfDay = next.tod;
       if (own(next, "difficulty")) G.difficulty = next.difficulty;
+      if (own(next, "tyres")) G.raceTyreWear = next.tyres;
+      if (own(next, "reliab")) G.raceReliability = next.reliab;
       if (own(next, "seed")) G.seed = next.seed;           // rewinds the sim stream: pre-race only, by construction
       if (own(next, "round")) G.raceRound = next.round;
       renderRoom();

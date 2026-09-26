@@ -1235,7 +1235,12 @@ const NEUTRAL_INPUT = Object.freeze({ steer: 0, throttle: false, brake: false })
 // owner sent us, same shape as _testInput so __apex.setInput()/act() can
 // drive either. Edge-triggered controls (shift, overtake) stay explicit at
 // their call sites because Input.consume*() may only be read once per frame.
+// A FRIEND RACE KEEPS RUNNING UNDER THE PAUSE MENU (the rival cannot be
+// frozen), and the local car kept reading live input: on TOUCH auto-throttle it
+// drove itself into the next wall behind the pause card. Paused, it brakes.
+const PAUSED_NET_INPUT = Object.freeze({ steer: 0, throttle: false, throttleLevel: 0, brake: true });
 function inputOf(c) {
+  if (c.local && paused && netPlay.active()) return PAUSED_NET_INPUT;
   if (c.local) return _testInput;              // null => live Input
   return c.netInput || NEUTRAL_INPUT;
 }
@@ -3053,7 +3058,8 @@ function netOrder(order) {
 }
 
 function endRace(forcedOrder) {
-  Ghost.flush();   // off-race: write a pending lap-record ghost now (js/car/ghost.js)
+  Ghost.flush();
+  try { sessionStorage.removeItem("apex26.ctxLostReloads"); } catch (_) { /* a clean race: the context-loss budget counts CONSECUTIVE losses, not the tab's lifetime */ }   // off-race: write a pending lap-record ghost now (js/car/ghost.js)
   PerfGov.cleanRace();   // finished cleanly — disarm + pay a crash strike down
   // raceCtl.update's own not-in-race reset is unreachable (update() only calls
   // it in state "race"), so without this a flying flag survives into results
@@ -3090,6 +3096,7 @@ function endRace(forcedOrder) {
     // needs it to draw the same classification ours will.
     if (myLap > 0) qualiNet.reportQuali(player.driverId, myLap);
     quali.simulate(qualiNet.driven(myLap));
+    if (!(myLap > 0)) reportModelQuali();   // no valid lap: the rival still needs OUR time, or their sheet waits forever
     $("quali").classList.add("q-done");   // the session is run: only TO THE GRID now
     qualiSheet.open(quali.rows());
     qualiNet.refreshQualiGate();
@@ -8681,11 +8688,19 @@ $("q-drive").onclick = () => {
   session = "quali";
   startRace();                    // one out-lap + one flying lap, alone
 };
+// FRIEND QUALIFYING WAITS FOR EVERY PLAYER'S TIME (qualiNet.waiting), and a
+// SIMULATE or a lap with no valid time sent none: the other sheet read "WAITING
+// FOR THEIR LAP…" forever with BACK blocked. The model's time is our time then.
+function reportModelQuali() {
+  const r = (quali.rows() || []).find((x) => x.driverId === player.driverId);
+  if (r && r.t > 0) qualiNet.reportQuali(player.driverId, r.t);
+}
 $("q-sim").onclick = () => {
   if (soundOn) GameAudio.uiSelect();
   // Keep the model's time for us — but a rival who has already driven theirs
   // does not lose it because we could not be bothered to drive ours.
   quali.simulate(qualiNet.driven(0));
+  reportModelQuali();
   $("quali").classList.add("q-done");
   qualiSheet.build(quali.rows());
   qualiNet.refreshQualiGate();

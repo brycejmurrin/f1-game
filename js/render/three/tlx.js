@@ -842,7 +842,13 @@ const TLX = (function () {
               // choice because of one context loss. The AUTO branch above keeps
               // its pick and game.js re-arms that one fresh at opt-in.
             }
-            setTimeout(function () { try { location.reload(); } catch (_) { /* harness */ } }, 1200);
+            // The fall-back reload is for the THIRD loss only. Every later one
+            // reloaded again, forever, on a device whose WebGL2 also dies on
+            // use (iOS 18.7.2 RC lost every context — model-viewer#5100):
+            // from the fourth, stop and say so instead.
+            if (n === 3) setTimeout(function () { try { location.reload(); } catch (_) { /* harness */ } }, 1200);
+            else if (typeof window.__apexReportError === "function")
+              window.__apexReportError("gfx", new Error("The graphics device keeps getting lost (" + n + " times) — reload to try again, or pick another RENDERER in settings."));
           }
         } catch (_) { /* no sessionStorage -> skip the auto-recovery rather than loop uncounted */ }
       };

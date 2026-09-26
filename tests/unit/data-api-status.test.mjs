@@ -322,3 +322,14 @@ test("the quota purge evicts telemetry bodies largest-first before any small sch
   assert.equal(store.has(smallKeys[12]), true, "the second-freshest standings entry must survive");
   assert.equal(store.has("apex26.api.https://api.openf1.org/v1/weather?session_key=9"), true, "the new entry landed after the purge");
 });
+
+test("hunt fixes: OpenF1 is held under 30 req/min, cancelled rounds never reach the picker, the default is a round that has started", async () => {
+  const { readFileSync } = await import("node:fs");
+  const api = readFileSync(new URL("../../js/data/api.js", import.meta.url), "utf8");
+  assert.match(api, /const OPENF1_PER_MIN = 28/);
+  assert.match(api, /if \(_of1Recent\.length >= OPENF1_PER_MIN\) wait = Math\.max\(wait, _of1Recent\[0\] \+ 60000 - now \+ 50\);/);
+  assert.match(api, /out\.cancelled = m\.is_cancelled === true;/);
+  assert.match(api, /return m\.meetingKey !== null && !m\.cancelled;/);
+  const hub = readFileSync(new URL("../../js/data/hub.js", import.meta.url), "utf8");
+  assert.match(hub, /started\.length \? started\[started\.length - 1\] : ms\[0\]/, "never December's unrun Abu Dhabi by default");
+});

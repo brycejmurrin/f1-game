@@ -1406,9 +1406,25 @@ function acceptOffer(i) {
   const team = o && teamOf(o.teamId);
   if (!team) return null;
   if (team.id !== career.team) {
+    const oldId = seasonDriverId(career.team, career.seat);
     career.team = team.id;
     career.seat = weakerSeat(team);
+    // DEVELOPMENT FOLLOWS THE DRIVER (docs/CAREER.md), as swapSeats() does: it is
+    // keyed by seat, and a move left the player's growth in the old seat for
+    // the AI who took it — and handed the player the displaced driver's.
+    const newId = seasonDriverId(career.team, career.seat);
+    if (career.dev && oldId !== newId) {
+      const mine = career.dev[oldId], theirs = career.dev[newId];
+      if (mine) career.dev[newId] = mine; else delete career.dev[newId];
+      if (theirs) career.dev[oldId] = theirs; else delete career.dev[oldId];
+    }
+    // THE WORKS BUILD IS READ OUTSIDE THE ERA, as start() does: rollover() has
+    // already installed the new season's bans, so a banned works part resolved
+    // to the DEFAULT and that fallback was written into owned/fitted — the team's
+    // own engine or floor lost for good (3x catalog to research it back).
+    if (Parts.setLegality) Parts.setLegality(null, "");
     const factory = Parts.getFactorySetup(team);
+    applyRegs();
     career.owned = Object.values(factory);
     career.fitted = Object.assign({}, factory);
   }
