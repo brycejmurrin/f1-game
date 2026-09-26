@@ -301,7 +301,7 @@ const NetHandshake = (function () {
   function inviteFromUrl(href) {
     try {
       const h = (href != null ? String(href) : location.hash) || "";
-      const m = h.match(/[#&]vs=([^&]+)/);
+      const m = h.match(/[#&]vs=([^&\s]+)/);   // a link ends at whitespace: "…#vs=CODE\nSent from my iPhone"
       return m ? m[1] : null;
     } catch (e) { return null; }
   }

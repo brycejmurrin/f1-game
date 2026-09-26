@@ -1284,6 +1284,11 @@ const ANN_MIN_S = 3;
 // under the floor above a third would arrive six seconds after the thing it
 // describes, by which time it is a lie, not a message.
 const ANN_QUEUE_MAX = 2;
+// …and when a burst of warnings or penalties queues ahead of them anyway (the
+// +3 depth below), an INFO-or-lower card that has waited ANN_STALE_MS is dropped
+// at the drain rather than read out as a lie ("UP TO P5" after losing it).
+// Warnings, box calls and penalties always play.
+const ANN_STALE_MS = 8000;
 // _annFloor is what is LEFT of the current card's floor, run down beside
 // announceT in tickBody. One `let` statement on purpose: the ratchet counts
 // column-0 declarations, so splitting these for a comment would raise it
@@ -1407,7 +1412,9 @@ const damp = (c, t, l, dt) => lerp(c, t, 1 - Math.exp(-l * dt));
 // timing-sheet style) is the other formatter on purpose; do not merge them.
 function fmtTime(t) {
   if (!isFinite(t) || t <= 0) return "-";
-  const m = Math.floor(t / 60), s = t - m * 60;
+  // ROUND FIRST, then split: 119.9996 split first read "1:60.00" (and 69.9996
+  // "1:010.00") — toFixed rounded the seconds up without carrying the minute.
+  const cs = Math.round(t * 100), m = Math.floor(cs / 6000), s = (cs - m * 6000) / 100;
   return m + ":" + (s < 10 ? "0" : "") + s.toFixed(2);
 }
 // RETURNS WHETHER THE MESSAGE REACHED THE SCREEN — true shown, false dropped
@@ -1417,7 +1424,7 @@ function fmtTime(t) {
 // still waiting on the next tick rather than silently spent". That promise was
 // unkeepable while this told it nothing. Both early returns below are silent
 // drops, and the camera one is permanent — see the note on it.
-function announce(msg, dur, kind) {
+function announce(msg, dur, kind, still) {   // still(): false once a queued line is no longer true
   kind = kind || "race";
   const pri = ANN_PRI[kind] || 2;
   if (hudProfile !== "broadcast") {
@@ -1452,7 +1459,7 @@ function announce(msg, dur, kind) {
     if (_annQueue.length >= (pri > low ? ANN_QUEUE_MAX + 3 : ANN_QUEUE_MAX)) return false;
     let at = _annQueue.length;
     while (at > 0 && _annQueue[at - 1].pri < pri) at--;
-    _annQueue.splice(at, 0, { msg, dur, kind, pri });
+    _annQueue.splice(at, 0, { msg, dur, kind, pri, still, t: performance.now() });
     return true;
   }
   showAnnounce(msg, dur, kind);
@@ -3046,8 +3053,8 @@ function netOrder(order) {
 }
 
 function endRace(forcedOrder) {
+  Ghost.flush();   // off-race: write a pending lap-record ghost now (js/car/ghost.js)
   PerfGov.cleanRace();   // finished cleanly — disarm + pay a crash strike down
-  Ghost.flush();   // a new PB ghost waits for an idle slot the live loop never leaves; the flag is a safe moment to write it
   // raceCtl.update's own not-in-race reset is unreachable (update() only calls
   // it in state "race"), so without this a flying flag survives into results
   // for anything reading raceCtl.info()/level between races.
@@ -3505,6 +3512,7 @@ const G = {
   refreshHud: (...a) => updateHud(...a),   // const initialised below — defer
   // The waiting room reuses the real menus rather than reimplementing them.
   setNetRoom: (...a) => raceSettings.setNetRoom(...a),
+  resetRaceDraft: () => raceSettings.resetDraft(),
   openRaceSetup: (...a) => raceSettings.openRaceSetup(...a),
   get netRoom() { return raceSettings.netRoom; },
   // Seats held by the OTHER players, so the garage can refuse to hand out one
@@ -3701,12 +3709,17 @@ function menuGridCars() {
 function flybyGridOrder() {
   if (!player) return null;
   if (isQuali() || isTimeTrial()) return [player];
-  if (duelOn()) { const r = Duel.pick(cars); cars = r ? [player, r] : [player]; }   // startRace's trim; the pair is then gridded like any field
+  if (duelOn()) {   // startRace's trim (and its legend swap); the pair is then gridded like any field
+    const r = Duel.pick(cars);
+    const lg = r && duelLegend && typeof Legends !== "undefined" ? Legends.byId(duelLegend) : null;
+    if (lg) Duel.asLegend(r, { id: lg.id, name: lg.name, code: lg.code, ratings: Legends.ratings(lg.id), team: Legends.raceTeam(lg.id) }, DriverRatings);
+    cars = r ? [player, r] : [player];
+  }
   const base = gridFromQuali() ? quali.order(cars) : SeasonCal.grid(cars, season);
   if (gridRule() === "random" && !base) return null;
   const pre = gridOrderFor(base);
   if (pre && pre.length === cars.length) return pre.slice();
-  const o = cars.filter((c) => c !== player);
+  const o = cars.filter((c) => c !== player).sort((a, b) => a.tier - b.tier);   // gridUp's tier order (its jitter is the race's draw)
   o.splice(Math.min(11, o.length), 0, player);
   return o;
 }
@@ -3787,6 +3800,7 @@ function raceIntro(go) {
 function loadingInfo() {
   return {
     track: Tracks.LIST[trackIdx], laps: raceLaps,
+    gp: SeasonCal.gpName ? SeasonCal.gpName(Tracks.LIST[trackIdx]) : undefined,   // the 2026 REAL calendar renames two rounds (season-cal.js)
     weather: raceWeather, tod: raceTimeOfDay,
     // WHAT SESSION THIS IS, for the announcer (js/audio/announcer.js). It read
     // the same paragraph before a qualifying hour, a duel with a legend and a
@@ -3972,8 +3986,8 @@ if (rotateBlockMql.addEventListener) rotateBlockMql.addEventListener("change", (
 else if (rotateBlockMql.addListener) rotateBlockMql.addListener(() => syncRotateBlocker(true));
 
 function quitToMenu() {
+  Ghost.flush();
   sessionEntry.cancel();
-  Ghost.flush();   // same as endRace: a time-trial PB is written before the menu, not left for pagehide
   qualiSheet.close();
   _ltBase = null; _ltFlash = 0;   // the lightning's saved race base is not the menu's
   if (announcer.stop) announcer.stop();   // the results commentary ran on over the title for up to 16 s
@@ -8286,7 +8300,12 @@ function tickBody(now) {
       _annPri = 0; _annFloor = 0;
       // showAnnounce re-arms both, so the card taken off the queue gets the
       // same floor the one before it did.
-      if (_annQueue.length) { const q = _annQueue.shift(); showAnnounce(q.msg, q.dur, q.kind); }
+      while (_annQueue.length) {
+        const q = _annQueue.shift();
+        if (q.still && !q.still()) continue;   // the caller says it is no longer true
+        if (q.pri <= ANN_PRI.info && performance.now() - q.t > ANN_STALE_MS) continue;   // no still(): too old to trust
+        showAnnounce(q.msg, q.dur, q.kind); break;
+      }
     }
   }
   // hit-stop: slow the simulation to a crawl for a few frames after a hard
@@ -8833,6 +8852,7 @@ $("cs-unlimited").onclick = () => {
 };
 els.resMenu.onclick = () => quitToMenu();
 els.resNext.onclick = () => {
+  if (announcer.stop) announcer.stop();   // a read-out still waiting on the radio must not start over the hub / quali sheet
   // Career never jumps straight into the next round: the weekend is one step of a
   // longer loop, and the hub is where you spend what you just earned.
   if (isCareer()) {
@@ -8873,6 +8893,7 @@ els.resNext.onclick = () => {
 
 function setPaused(p) {
   if (state !== "race" && state !== "count") return; hideCamPicker();
+  if (p) Ghost.flush();   // paused: the frame budget is free for the ghost write
   // THE PIT GARAGE HOLDS THE PAUSE. openPitWork freezes the race behind
   // #carsetup; a Start/P press or RESUME on a pause card stacked over it
   // (hidden tab) used to run the race UNDER the garage, the box timer expired,

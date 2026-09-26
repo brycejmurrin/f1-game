@@ -265,13 +265,14 @@ const Ghost = (function () {
       // A LONG idle slot only: the write (trim + 2-3 stringifies of a store of up
       // to 512 KB + setItem) is one 5-30 ms job on a phone. With a 2 s timeout it
       // ran mid-race — a frame's idle tail is < 16 ms, so it overran into the next
-      // frame. The render loop requests a frame every frame, so Chrome caps each
-      // idle deadline at the next frame and a 25 ms slot may never come while the
-      // page is visible: flush() (race end, quit to menu), a hidden tab and
-      // pagehide write whatever is still pending.
+      // frame. That slot rarely comes while the loop renders, so flush() (pause,
+      // results, quit, hidden, pagehide) is what actually writes it.
+      // …and a capped wait: a Time Trial driven lap after lap never pauses, so
+      // after IDLE_CAP_MS any idle slot will do (one short write per PB lap).
+      const since = Date.now();
       const idle = (dl) => {
-        if (pending.get(id) !== snap) { _flushes.delete(write); return; }   // superseded: drop its snapshot too
-        if (dl && typeof dl.timeRemaining === "function" && dl.timeRemaining() < 25) { requestIdleCallback(idle); return; }
+        if (pending.get(id) !== snap) { _flushes.delete(write); return; }   // superseded: do not pin its lap until pagehide
+        if (dl && typeof dl.timeRemaining === "function" && dl.timeRemaining() < 25 && Date.now() - since < IDLE_CAP_MS) { requestIdleCallback(idle); return; }
         write();
       };
       requestIdleCallback(idle);
@@ -283,17 +284,22 @@ const Ghost = (function () {
   // Leaving the page with a record still pending: write it now (synchronous
   // localStorage is allowed in pagehide), or the new ghost dies with the tab.
   const _flushes = new Set();
+  const IDLE_CAP_MS = 5000;    // one write per PB, so at worst one short hitch a lap
   let _flushArmed = false;
   function armFlush(fn) {
     _flushes.add(fn);
     if (_flushArmed || typeof addEventListener !== "function") return;
     _flushArmed = true;
     addEventListener("pagehide", flush);
-    // A tab discarded while hidden (Memory Saver) never sees pagehide.
-    if (typeof document !== "undefined") document.addEventListener("visibilitychange", () => { if (document.hidden) flush(); });
+    // A LONG idle slot never comes while the render loop runs (it asks for every
+    // frame, on menus too: the spec gives < 16 ms between frames), and pagehide is
+    // not fired when a phone swipes the app away or a tab is discarded — HIDDEN is
+    // the last reliable moment. flush() is also called at the game's own off-race
+    // moments (pause, results, quit), where a 5-30 ms write costs no race frame.
+    if (typeof document !== "undefined" && document.addEventListener)
+      document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flush(); });
   }
-  // Write every pending record now. Called where a short synchronous write
-  // cannot hitch driving: the race end, quit to menu, a hidden tab, pagehide.
+  /** Write every pending record now. */
   function flush() {
     const fns = Array.from(_flushes); _flushes.clear();
     for (const f of fns) { try { f(); } catch (_) { /* best effort on the way out */ } }

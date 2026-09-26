@@ -31,8 +31,8 @@ const Dom = (function () {
   // stays blank; telemetry.js wants "—").
   function fmtLap(t, empty = null) {
     if (typeof t !== "number" || !isFinite(t) || t <= 0) return empty;
-    const m = Math.floor(t / 60);
-    const r = t - m * 60;
+    const ms = Math.round(t * 1000), m = Math.floor(ms / 60000);   // round first: never "1:60.000"
+    const r = (ms - m * 60000) / 1000;
     const secs = `${r < 10 ? "0" : ""}${r.toFixed(3)}`;
     return m ? `${m}:${secs}` : r.toFixed(3);
   }

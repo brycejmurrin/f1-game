@@ -48,10 +48,11 @@ function createHarness(opts = {}) {
   };
   if (opts.deferWrites) sandbox.setTimeout = (fn) => { timers.push(fn); return timers.length; };
   const idles = [], listeners = {};
+  if (opts.clock) sandbox.Date = { now: () => opts.clock.t };
   if (opts.idle) {
     sandbox.requestIdleCallback = (fn) => { idles.push(fn); return idles.length; };
     sandbox.addEventListener = (type, fn) => { (listeners[type] = listeners[type] || []).push(fn); };
-    sandbox.document = { hidden: false, addEventListener: (type, fn) => { (listeners["doc:" + type] = listeners["doc:" + type] || []).push(fn); } };
+    sandbox.document = { visibilityState: "visible", addEventListener: (type, fn) => { (listeners["doc:" + type] = listeners["doc:" + type] || []).push(fn); } };
   }
   const ctx = vm.createContext(sandbox);
   seedLog(ctx);
@@ -68,7 +69,7 @@ function createHarness(opts = {}) {
     runIdle: (ms) => { const q = idles.splice(0); for (const f of q) f({ timeRemaining: () => ms, didTimeout: false }); },
     idleQueued: () => idles.length,
     fire: (type) => { for (const f of listeners[type] || []) f(); },
-    hide: () => { sandbox.document.hidden = true; for (const f of listeners["doc:visibilitychange"] || []) f(); },
+    hide: () => { sandbox.document.visibilityState = "hidden"; for (const f of listeners["doc:visibilitychange"] || []) f(); },
     disk: store,
   };
 }
@@ -407,6 +408,18 @@ test("a new record is written in a LONG idle slot only, never a short mid-race o
   assert.equal(h.idleQueued(), 0);
 });
 
+test("a record waits for a long idle slot, but not forever: a 60 Hz loop never offers one", () => {
+  const clock = { t: 1000 };
+  const h = createHarness({ idle: true, clock });
+  h.Ghost.setTrack("monza");
+  recordLap(h.Ghost, 1.0);
+  for (let i = 0; i < 50; i++) { clock.t += 16; h.runIdle(8); }
+  assert.equal(ghostOnDisk(h), false, "still preferring a long slot");
+  clock.t += 6000;
+  h.runIdle(8);
+  assert.equal(ghostOnDisk(h), true, "the PB only ever lived in memory");
+});
+
 test("a record still pending when the page goes away is flushed on pagehide", () => {
   const h = createHarness({ idle: true });
   h.Ghost.setTrack("monza");
@@ -417,29 +430,28 @@ test("a record still pending when the page goes away is flushed on pagehide", ()
   assert.equal(ghostOnDisk(h), true, "the new ghost must not die with the tab");
 });
 
-// The live render loop requests a frame every frame, so Chrome caps each idle
-// deadline at the next frame and a 25 ms slot never comes while the page is
-// visible (only 8 ms tails here). The record must still reach storage at the
-// race end / quit (Ghost.flush) or when the tab is hidden — a discarded tab
-// never sees pagehide.
-test("a pending record is written by flush() at the race end, with no long idle slot", () => {
+test("the render loop never leaves a long idle slot: flush() and a HIDDEN tab write the record", () => {
+  // requestAnimationFrame runs on menus too, so idle tails stay < 16 ms and the
+  // 25 ms slot the deferred write waits for never comes while the game is open.
   const h = createHarness({ idle: true });
   h.Ghost.setTrack("monza");
   recordLap(h.Ghost, 1.0);
-  h.runIdle(8); h.runIdle(8);
-  assert.equal(ghostOnDisk(h), false, "precondition: short slots never write");
-  h.Ghost.flush();
-  assert.equal(ghostOnDisk(h), true);
-  h.Ghost.flush();   // nothing left pending: a second flush is a no-op
-  assert.equal(ghostOnDisk(h), true);
+  for (let i = 0; i < 50; i++) h.runIdle(8);
+  assert.equal(ghostOnDisk(h), false, "fifty frames of short idle tails: still pending");
+  h.Ghost.flush();                               // pause / results / quit (js/game.js)
+  assert.equal(ghostOnDisk(h), true, "the game's off-race moments write it");
+
+  const h2 = createHarness({ idle: true });
+  h2.Ghost.setTrack("monza");
+  recordLap(h2.Ghost, 1.0);
+  h2.runIdle(8);
+  h2.hide();                                     // a phone swiping the app away fires this, not pagehide
+  assert.equal(ghostOnDisk(h2), true, "a hidden tab writes the record before it can be killed");
 });
 
-test("a pending record is written when the tab is hidden", () => {
-  const h = createHarness({ idle: true });
-  h.Ghost.setTrack("monza");
-  recordLap(h.Ghost, 1.0);
-  h.runIdle(8);
-  assert.equal(ghostOnDisk(h), false);
-  h.hide();
-  assert.equal(ghostOnDisk(h), true, "Memory Saver discards hidden tabs without pagehide");
+test("game.js flushes the ghost at its off-race moments", () => {
+  const game = readFileSync(join(ROOT, "js", "game.js"), "utf8");
+  assert.match(game, /function endRace\(forcedOrder\) \{\s*Ghost\.flush\(\);/);
+  assert.match(game, /function quitToMenu\(\) \{\s*Ghost\.flush\(\);/);
+  assert.match(game, /if \(p\) Ghost\.flush\(\);/, "pause writes it too");
 });

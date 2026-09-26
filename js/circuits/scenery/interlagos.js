@@ -339,7 +339,7 @@
       // over the generic grandstandEx (Monza Tribuna Centrale pattern).
       {
         const a = anchor(K(0.01), -1, 12);
-        if (!onTrack(a.c[0], a.c[2], 20)) {
+        if (!onTrack(a.c[0], a.c[2], 8)) {   // margin is past the road EDGE: under the 12 m gap, or the guard always hits
           const b = [a.r, a.u, a.t];
           modelGroup("interlagos-main-tribuna", {
             center: vadd(a.c, a.u, 9), size: [16, 18, 110], basis: b,

@@ -66,6 +66,7 @@ const DailyChallenge = (function () {
       // reliability and the launch hash draw from G.simSeed(), so leaving it
       // set made every later one-off GP grid depend on having played the Daily.
       if (!active) savedSeed = G.seed;
+      if (G.resetRaceDraft) G.resetRaceDraft();   // not a draft RACE SETTINGS should keep for this track
       G.seed = p.seed;
       active = p;
       p.class = mode === "standard" && G.records ? "standard" : "open";

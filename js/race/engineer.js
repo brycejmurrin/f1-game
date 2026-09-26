@@ -120,7 +120,8 @@ const RaceEngineer = (function () {
       if (s.lapsToStop === 0) return ["BOX BOX BOX" + (s.nextCode ? " — " + s.nextCode : ""), "plan0"];
       if (s.lapsToStop === 1) return ["BOX NEXT LAP" + (s.nextCode ? " — " + s.nextCode : ""), "plan1"];
       if (s.graining >= GRAIN_CALL) return ["GRAINING — EASE OFF AND CLEAN THEM UP", "grain"];
-      if (s.outLap && s.belowWindow >= COLD_CALL) return ["TYRES ARE COLD — TAKE A LAP", "cold"];
+      // Not on the only lap there is (a qualifying lap, a one-lap race).
+      if (s.outLap && !s.finalLap && s.belowWindow >= COLD_CALL) return ["TYRES ARE COLD — TAKE A LAP", "cold"];
       // THE AXLE CALL, and the one that would not exist without per-axle wear.
       // Deliberately below the defects: a grained front IS a front problem, and
       // "fronts going" when the real answer is "ease off" sends the driver the
@@ -162,7 +163,11 @@ const RaceEngineer = (function () {
       // …nor to one on the LAST lap (a qualifying lap is lapsTarget 1): a stop
       // there costs a place for nothing, and "BOX FOR WETS" with the flag in
       // sight is the one call that must not be obeyed.
-      const noStop = armed || (G.lapsTarget > 0 && (c.lap || 0) >= G.lapsTarget);
+      // A lapped car's last lap starts when the leader takes the flag, a lap
+      // before its own counter says so.
+      const finalLap = (G.lapsTarget > 0 && (c.lap || 0) >= G.lapsTarget) || (G.cars || []).some((o) => o.finished && !o.retired);
+      const noStop = armed || finalLap;
+      if (armed) b.undercut = null;   // our own stop answers the undercut: never "BOX NOW" on the out-lap
       // "Rain in N laps" needs a lap estimate and the arc is in SECONDS. The
       // driver's own last lap is the only honest converter: a fixed guess would
       // be wrong at both Monaco and Monza.
@@ -218,7 +223,7 @@ const RaceEngineer = (function () {
         pitLoss: pit ? pit.lossS : null,
         freeStop: !noStop && cautionLvl >= 2 && cautionLvl < 4 && wear >= 0.35,
         wet: wantTread > 0,
-        noStop,
+        noStop, finalLap,
         rainInLaps: !noStop && arc && WET.indexOf(arc.to) >= 0 && lapS > 0 && left > 0
           ? Math.max(1, Math.round(left / lapS)) : null,
       };
@@ -226,7 +231,7 @@ const RaceEngineer = (function () {
 
     /** One tick for ONE car — the local player only; nobody else has a banner. */
     function update(c, dt) {
-      if (!c || !c.local || !(dt > 0)) return "";
+      if (!c || !c.local || !(dt > 0) || G.paused) return "";   // VS FRIEND ticks under pause: no call on the pause menu (a wear step waits for resume)
       const s = senseOf(c);
       if (!s) return "";
       const b = bag(c);

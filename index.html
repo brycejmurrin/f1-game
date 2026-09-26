@@ -1337,23 +1337,13 @@
         <!-- RECORDED VOICE (js/audio/voice-pack.js): the engineer's lines spliced
              from recorded clips through the radio filter, speech synthesis for
              whatever the pack cannot cover. SYSTEM keeps every line on the voice
-             picked under VOICES. SPOTTER (js/race/spotter.js) is car left /
-             right / clear, recorded voice only, and speaks whatever TEAM RADIO
-             is set to. -->
+             picked under VOICES. -->
         <div id="as-rpack" class="set-row" role="group" aria-labelledby="as-rpack-label">
           <span class="tune-label" id="as-rpack-label">RADIO VOICE</span>
           <div>
             <button id="as-rpack-prev" type="button" data-step="-1" aria-label="Previous radio voice">&lsaquo;</button>
             <select id="as-rpack-sel" aria-labelledby="as-rpack-label"></select>
             <button id="as-rpack-next" type="button" data-step="1" aria-label="Next radio voice">&rsaquo;</button>
-          </div>
-        </div>
-        <div id="as-spot" class="set-row" role="group" aria-labelledby="as-spot-label">
-          <span class="tune-label" id="as-spot-label">SPOTTER</span>
-          <div>
-            <button id="as-spot-prev" type="button" data-step="-1" aria-label="Previous spotter setting">&lsaquo;</button>
-            <select id="as-spot-sel" aria-labelledby="as-spot-label"></select>
-            <button id="as-spot-next" type="button" data-step="1" aria-label="Next spotter setting">&rsaquo;</button>
           </div>
         </div>
         <label class="tune-row"><span class="tune-label">VOICE VOLUME <b id="as-rvol-v">8</b></span>
@@ -1382,6 +1372,19 @@
         </div>
         <p id="as-voices-note" class="as-note"></p>
       </details>
+      <!-- THE SPOTTER (js/race/spotter.js): car left / right / clear, recorded
+           voice only. ITS OWN ROW, NOT folded under TEAM RADIO: it speaks
+           whatever TEAM RADIO is set to, so a player who turned the radio off
+           heard "car left" with the only switch for it hidden in a collapsed
+           section reading "TEAM RADIO · OFF". -->
+      <div id="as-spot" class="set-row" role="group" aria-labelledby="as-spot-label">
+        <span class="tune-label" id="as-spot-label">SPOTTER</span>
+        <div>
+          <button id="as-spot-prev" type="button" data-step="-1" aria-label="Previous spotter setting">&lsaquo;</button>
+          <select id="as-spot-sel" aria-labelledby="as-spot-label"></select>
+          <button id="as-spot-next" type="button" data-step="1" aria-label="Next spotter setting">&rsaquo;</button>
+        </div>
+      </div>
 
       <!-- THE PRE-RACE ANNOUNCER (js/audio/announcer.js). "Welcome to Apex 26…",
            read over the loading screen's flyby, with the circuit described from
