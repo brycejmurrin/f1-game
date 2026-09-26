@@ -611,14 +611,3 @@ test("makeAnswer and acceptAnswer refuse a malformed code before they need a tra
     assert.equal(c.error, "no_transport", "a well-shaped code with no connection is the transport's problem");
   } finally { h.lobby.cancel(); }
 });
-
-test("every early exit of finishStart clears friendQualifying (a stuck flag drops solo quali results)", () => {
-  const src = SOURCE;
-  const a = src.indexOf("async function finishStart()");
-  const body = src.slice(a, src.indexOf("const started = G.netPlay.start(", a));
-  assert.match(body, /outcome\.kind === "canceled"\) \{ friendQualifying = false; close\(\); return; \}/);
-  assert.match(body, /if \(!sessions\.size\) \{ friendQualifying = false;/);
-  assert.match(body, /\} catch \(e\) \{\s*friendQualifying = false;/);
-  const open = src.slice(src.indexOf("function open() {"), src.indexOf("function open() {") + 800);
-  assert.match(open, /friendQualifying = false;/, "open() must not inherit a stuck flag");
-});

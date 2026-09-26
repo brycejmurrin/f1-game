@@ -153,6 +153,7 @@ const AudioPanel = (() => {
         ["k", "TEAM RADIO"],
         [radioOn ? "on" : "off", radioOn ? "ON" : "OFF"],
         ["val", label(CHAT_VALUES, chatNow())],
+        [spotNow() === "on" ? "on" : "off", "SPOTTER " + (spotNow() === "on" ? "ON" : "OFF")],   // it speaks with the radio OFF: never hide its state
       ]);
       Dom.paintFold($("as-ann-sum"), [
         ["k", "ANNOUNCER"],

@@ -17,7 +17,7 @@ function correctedFinish(c) {
 function raceClock(G, seconds) {
   if (!(typeof seconds === "number" && isFinite(seconds) && seconds > 0)) return null;
   if (G && typeof G.fmtTime === "function") return G.fmtTime(seconds);
-  const m = Math.floor(seconds / 60), s = seconds - m * 60;
+  const cs = Math.round(seconds * 100), m = Math.floor(cs / 6000), s = (cs - m * 6000) / 100;   // round first (see game.js fmtTime)
   return m + ":" + (s < 10 ? "0" : "") + s.toFixed(2);
 }
 
@@ -62,17 +62,30 @@ if (typeof Badges !== "undefined") Badges.setNotifier((labels) =>
   G.announce && G.announce((labels.length > 1 ? "BADGES UNLOCKED — " : "BADGE UNLOCKED — ") + labels.join(" · "), 3, "race"));
 
 // The player's classified result as Badges.forRace reads it. Never in a
-// practice (unscored) session; a retirement earns nothing there anyway.
-function awardBadges(order) {
+// practice (unscored) session or a DUEL (two cars: P2 of 2 is not a podium —
+// endRace passes its own duelOn(); fewer than three cars is the same race);
+// a retirement earns nothing there anyway.
+// Returns the newly unlocked ids — the toast is hidden behind this very sheet.
+function awardBadges(order, duel) {
   const p = G.player;
-  if (typeof Badges === "undefined" || !p || G.practice || G.timeTrial) return;
+  if (typeof Badges === "undefined" || !p || G.practice || G.timeTrial || duel || order.length < 3) return [];
   let best = Infinity;
   for (const c of order) if (c.finished && !c.retired && c.best < best) best = c.best;
-  Badges.onRace({
+  return Badges.onRace({
     pos: order.indexOf(p) + 1, retired: !!p.retired, finished: !!p.finished,
     cuts: p.cuts | 0, penalty: p.penalty || 0, trackId: G.track && G.track.def && G.track.def.id,
     fastest: isFinite(best) && p.best === best,
   });
+}
+
+// New LICENCE BADGES as a card on the sheet that hides the banner toast.
+function badgeCard(ids) {
+  const card = document.createElement("div"); card.className = "res-personal";
+  card.setAttribute("role", "status");
+  const heading = document.createElement("strong"); heading.textContent = ids.length > 1 ? "BADGES UNLOCKED" : "BADGE UNLOCKED";
+  const detail = document.createElement("span"); detail.textContent = ids.map(Badges.labelOf).join(" · ");
+  card.append(heading, detail);
+  return card;
 }
 
 // The car's race as a proportional bar: one segment per set, width = its share
@@ -110,7 +123,11 @@ function stintStrip(c) {
   return strip;
 }
 
-function buildResults(order) {
+// `race` is endRace's own read of the session ({ sprint, duel }). The sprint
+// flag must not come from SeasonCal.scored() alone: award() returns early on a
+// save conflict and leaves the weekend's sprint marker, so a Grand Prix read
+// back as a sprint. Callers without it fall back to scored().
+function buildResults(order, race) {
   Log.info("ui", `GameResults.buildResults n=${order && order.length}`);
   const els = G.els;
   const season = G.season;
@@ -118,11 +135,12 @@ function buildResults(order) {
   const cars = G.cars;
   els.resultsTable.textContent = "";
   els.resultsTitle.style.color = "";   // buildChampion tints it; #res-menu never reset it
-  const sprint = G.seasonMode && SeasonCal.scored() === "sprint";
+  const sprint = race && typeof race.sprint === "boolean" ? race.sprint
+    : G.seasonMode && SeasonCal.scored() === "sprint";
   els.resultsTitle.textContent = sprint ? `SPRINT — ${track.def.name}`
     : G.seasonMode ? `ROUND ${season.round} — ${track.def.name}`
     : `${track.def.name} RESULT`;
-  if (!sprint) awardBadges(order);   // a sprint is not a Grand Prix result
+  const badges = sprint ? [] : awardBadges(order, !!(race && race.duel));   // a sprint is not a Grand Prix result
   // On a GUEST the order is the host's (game.js netOrder) but `retired`/`dnf`
   // were still this peer's own: each peer arms reliability off its OWN seed
   // and race counter (game.js armReliability), so the guest parked different
@@ -179,6 +197,7 @@ function buildResults(order) {
     detail.textContent = elapsed == null ? self.name : self.name + " · " + raceClock(G, elapsed);
     card.append(heading, detail); els.resultsTable.appendChild(card);
   }
+  if (badges && badges.length) els.resultsTable.appendChild(badgeCard(badges));
   const coaching = G.coach && G.coach.feedback && G.coach.feedback();
   if (coaching && coaching.enabled && coaching.latest) {
     const card = document.createElement("div"); card.className = "res-personal";
@@ -577,7 +596,7 @@ function buildStandings() {
     // From the pause menu this round is the one being driven, not the next.
     const live = G.state === "race" || G.state === "count";
     const lead = live ? "IN PROGRESS: ROUND " : midWeekend ? "NEXT: GRAND PRIX, ROUND " : "NEXT: ROUND ";
-    info.textContent = `${lead}${round + 1} — ${nextTrack.name} (${nextTrack.gp})`;
+    info.textContent = `${lead}${round + 1} — ${nextTrack.name} (${SeasonCal.gpName ? SeasonCal.gpName(nextTrack) : nextTrack.gp})`;
     body.appendChild(info);
   }
 }

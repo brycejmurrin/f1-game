@@ -345,3 +345,26 @@ test("an engineer line waits for a spotter call on the air, and RadioVoice repor
   assert.equal(r.v.busy(), false);
   assert.equal(RadioVoice.inert().busy(), false);
 });
+
+test("an AudioContext rebuilt while a line decodes drops the line instead of scheduling it on the old clock", async () => {
+  const man = { clips: { "car left": [0, 4, 0.5] } };
+  let gen = 1, played = 0, decodeRes;
+  const GA = {
+    now: () => 0, ctxGen: () => gen,
+    decodeClip: () => new Promise((r) => { decodeRes = r; }),
+    radioVoice: () => { played++; return { end: 0.5, stop() {} }; },
+  };
+  const sb = sandbox(["js/audio/voice-pack.js"], {
+    GameAudio: GA,
+    fetch: () => Promise.resolve({ ok: true, json: () => Promise.resolve(man), arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }),
+  });
+  const P = sb.VoicePack.create({});
+  P.ensure("george");
+  await new Promise((r) => setImmediate(r)); await new Promise((r) => setImmediate(r));
+  assert.equal(P.speak("george", "car left", { channel: "spotter" }), true);
+  gen = 2;                                   // GameAudio.rebuildCtx() mid-decode
+  decodeRes({ duration: 0.5 });
+  await new Promise((r) => setImmediate(r)); await new Promise((r) => setImmediate(r));
+  assert.equal(played, 0, "the line was scheduled on the dead context's clock");
+  assert.equal(P.busy("spotter"), false, "the channel is held for a line that will never play");
+});

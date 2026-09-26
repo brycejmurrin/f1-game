@@ -249,7 +249,7 @@ const Ghost = (function () {
     pending.set(id, snap);
     loadStore()[id] = snap;   // immediately visible if another class is selected before idle
     const write = () => {
-      if (_writers.get(id) === write) _writers.delete(id);
+      _flushes.delete(write);
       if (pending.get(id) !== snap) return;   // cleared or superseded before the deferred write
       try {
         const store = loadStore();
@@ -261,37 +261,48 @@ const Ghost = (function () {
         else Log.warn("car", `ghost save ${id} is session-only`);
       } catch { Log.warn("car", "ghost save fail"); }
     };
-    // ONE writer per circuit: a newer record replaces the older closure (and
-    // the ~40 KB trace it held) instead of queueing beside it.
-    _writers.set(id, write);
-    armFlush();
-    // WHEN. The write (trim + 2-3 stringifies of a store of up to 512 KB +
-    // setItem) is one 5-30 ms job on a phone, so it must not land mid-lap.
-    // Idle slots cannot be waited for: the game keeps a rAF pending in every
-    // state, so Chrome caps each idle period at the next frame (<= 16.7 ms) —
-    // a ">= 25 ms slot" rule never fired and the record reached storage only
-    // on pagehide. Instead: Ghost.flush() at the natural breaks (pause, race
-    // end, quit to menu — game.js), on the tab going hidden or away, and a
-    // 60 s safety net for a long unbroken session (one hitch a minute, worst case).
-    if (typeof setTimeout === "function") setTimeout(() => { if (_writers.get(id) === write) write(); }, 60000);
+    if (typeof requestIdleCallback === "function") {
+      // A LONG idle slot only: the write (trim + 2-3 stringifies of a store of up
+      // to 512 KB + setItem) is one 5-30 ms job on a phone. With a 2 s timeout it
+      // ran mid-race — a frame's idle tail is < 16 ms, so it overran into the next
+      // frame. That slot rarely comes while the loop renders, so flush() (pause,
+      // results, quit, hidden, pagehide) is what actually writes it.
+      // …and a capped wait: a Time Trial driven lap after lap never pauses, so
+      // after IDLE_CAP_MS any idle slot will do (one short write per PB lap).
+      const since = Date.now();
+      const idle = (dl) => {
+        if (pending.get(id) !== snap) { _flushes.delete(write); return; }   // superseded: do not pin its lap until pagehide
+        if (dl && typeof dl.timeRemaining === "function" && dl.timeRemaining() < 25 && Date.now() - since < IDLE_CAP_MS) { requestIdleCallback(idle); return; }
+        write();
+      };
+      requestIdleCallback(idle);
+      armFlush(write);
+    }
+    else if (typeof setTimeout === "function") setTimeout(write, 0);
     else write();   // bare VM harness: no scheduler, write now
   }
-  // Write every pending record now. Cheap when nothing is pending.
-  const _writers = new Map();   // circuit id -> its pending write
-  function flush() {
-    if (!_writers.size) return;
-    for (const w of Array.from(_writers.values())) { try { w(); } catch (_) { /* best effort */ } }
-  }
+  // Leaving the page with a record still pending: write it now (synchronous
+  // localStorage is allowed in pagehide), or the new ghost dies with the tab.
+  const _flushes = new Set();
+  const IDLE_CAP_MS = 5000;    // one write per PB, so at worst one short hitch a lap
   let _flushArmed = false;
-  function armFlush() {
+  function armFlush(fn) {
+    _flushes.add(fn);
     if (_flushArmed || typeof addEventListener !== "function") return;
     _flushArmed = true;
-    // pagehide alone is not enough on mobile: a backgrounded tab is often
-    // killed without it. visibilitychange -> hidden is the reliable last call.
     addEventListener("pagehide", flush);
-    if (typeof document !== "undefined" && document && document.addEventListener) {
+    // A LONG idle slot never comes while the render loop runs (it asks for every
+    // frame, on menus too: the spec gives < 16 ms between frames), and pagehide is
+    // not fired when a phone swipes the app away or a tab is discarded — HIDDEN is
+    // the last reliable moment. flush() is also called at the game's own off-race
+    // moments (pause, results, quit), where a 5-30 ms write costs no race frame.
+    if (typeof document !== "undefined" && document.addEventListener)
       document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flush(); });
-    }
+  }
+  /** Write every pending record now. */
+  function flush() {
+    const fns = Array.from(_flushes); _flushes.clear();
+    for (const f of fns) { try { f(); } catch (_) { /* best effort on the way out */ } }
   }
 
   // `meta` (optional, a plain object — medal, pole, pace, weather) is stored

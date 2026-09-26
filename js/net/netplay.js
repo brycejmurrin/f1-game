@@ -505,6 +505,12 @@ const NetPlay = (function () {
             const fin = Number(d.fin);
             const fr = role === "host" ? remotes.get(remoteFor(id))
               : remoteList().find((x) => x.car.code === d.code);
+            // The lap time and best too: poseRemote only carries position, so
+            // the rival's car kept lastLap 0 and best Infinity all race — the
+            // radio handed YOU the fastest lap and never timed their laps.
+            const lt = Number(d.time), best = Number(d.best);
+            if (fr && !d.invalid && Number.isFinite(lt) && lt > 0) fr.car.lastLap = lt;
+            if (fr && Number.isFinite(best) && best > 0 && !(fr.car.best <= best)) fr.car.best = best;
             if (fr && Number.isFinite(fin) && fin > 0 && !fr.car.retired) {
               fr.car.finished = true; fr.car.finishT = fin;
             }

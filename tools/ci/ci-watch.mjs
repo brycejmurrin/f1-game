@@ -102,6 +102,17 @@ export function pagesVerdictRun(runs, containsHead) {
 }
 
 /** Only a failed or timed-out job carries a diagnosis worth printing. */
+// What "no run yet" means depends on whether a PR carries the SHA. GitHub
+// starts NO pull_request run for a PR with merge conflicts, and a PR's run can
+// start minutes after the push (the merge ref is built first), so "none after
+// 3 min" read as green on a conflicting PR (2026-09-25). Only a SHA with no
+// open PR (a docs-only push, a topic branch not yet PR'd) is a real "none".
+export function noneVerdict(pr, waitedMs) {
+  if (!pr) return waitedMs > 180_000 ? "none" : "wait";
+  if (pr.mergeable_state === "dirty") return "blocked";
+  return waitedMs > 600_000 ? "late" : "wait";
+}
+
 export const wantsAnnotations = (job) => job.conclusion === "failure" || job.conclusion === "timed_out";
 
 function annotations(jobId) {
@@ -113,6 +124,16 @@ function annotations(jobId) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const argv = process.argv.slice(2);
 const opt = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d; };
+
+// The open PR whose head is `sha`, with mergeable_state (only the single-PR
+// endpoint reports it), or null. Best effort: an API error reads as "no PR".
+function openPrFor(sha) {
+  const list = api(`pulls?state=open&per_page=100`);
+  const hit = (list.json || []).find((p) => p.head && typeof p.head.sha === "string" && p.head.sha.startsWith(sha));   // callers pass short SHAs
+  if (!hit) return null;
+  const one = api(`pulls/${hit.number}`);
+  return one.json && one.json.number ? one.json : hit;
+}
 
 async function watchSha(sha, { interval, deadline, once }) {
   const seen = new Set(), announced = new Set();
@@ -137,7 +158,13 @@ async function watchSha(sha, { interval, deadline, once }) {
     const v = verdict(runs, jobsByRun);
     // A commit ci.yml's paths-ignore skips (docs / *.md / .claude/) starts no
     // run at all; after 3 min of nothing that is the answer, not "queued".
-    if (v.state === "none" && Date.now() - start > 180_000) { say(`= ci none — no workflow run for ${sha.slice(0, 7)} after 3 min (docs/.md/.claude-only push, or a topic branch with no PR — ci.yml runs on the PR, draft = fast tier)`); return 0; }
+    if (v.state === "none" && Date.now() - start > 180_000) {
+      const pr = openPrFor(sha);
+      const nv = noneVerdict(pr, Date.now() - start);
+      if (nv === "none") { say(`= ci none — no workflow run for ${sha.slice(0, 7)} after 3 min and no open PR carries it (docs/.md/.claude-only push, or a topic branch with no PR — ci.yml runs on the PR, draft = fast tier)`); return 0; }
+      if (nv === "blocked") { say(`= ci blocked — PR #${pr.number} has merge conflicts, so GitHub starts no run for ${sha.slice(0, 7)}; merge the base (sync-pr.mjs) and push`); return 1; }
+      if (nv === "late") { say(`= ci none-yet — PR #${pr.number} carries ${sha.slice(0, 7)} but no run started in 10 min; re-arm, or check the Actions tab`); return 124; }
+    }
     // `running` and `none` are NOT green: under --once a scripted `&& next`
     // used to proceed on a run still in flight (2026-09-24).
     if (v.done || once) { say(`= ci ${v.line} sha=${sha.slice(0, 7)}`); return { passed: 0, failed: 1, cancelled: 2, running: 124, none: 124 }[v.state] ?? 0; }

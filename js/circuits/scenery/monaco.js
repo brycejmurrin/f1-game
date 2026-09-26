@@ -747,6 +747,11 @@
           const g = terrainYAt(c[0] + t[0] * f * halfL + r[0] * e * halfW,
                                c[2] + t[2] * f * halfL + r[2] * e * halfW);
           if (g != null && g > deckY) return false;
+          // The terrain has a HOLE under the road (null there too): a berth
+          // over the tarmac is land, not open water — two moored hulls shipped
+          // under the road at k395/k502.
+          if (onTrack(c[0] + t[0] * f * halfL + r[0] * e * halfW,
+                      c[2] + t[2] * f * halfL + r[2] * e * halfW, 2)) return false;
         }
         return true;
       };

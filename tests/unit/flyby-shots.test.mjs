@@ -636,9 +636,13 @@ test("the menu grid seats YOUR car where the race will start it, in every mode",
       cars, player, season: {}, raceGrid: o.rule || "tier", duelOn: () => !!o.duel,
       isQuali: () => !!o.quali, isTimeTrial: () => !!o.tt, isChampionship: () => !!o.champ, gridFromQuali: () => !!o.qorder,
       quali: { order: () => (o.qorder ? cars.slice().reverse() : null) }, SeasonCal: { grid: () => null, quali: () => false, rank: (a, b) => (a < b ? -1 : 1) },
-      Duel: { pick: (cs) => cs.filter((c) => !c.isPlayer).sort((a, b) => b.skill - a.skill)[0] },
+      Duel: { pick: (cs) => cs.filter((c) => !c.isPlayer).sort((a, b) => b.skill - a.skill)[0],
+              asLegend: (c, lg) => { c.code = lg.code; } },
+      duelLegend: o.legend || "", DriverRatings: {},
+      Legends: { byId: (id) => ({ id, name: "Legend", code: "LEG" }), ratings: () => ({}), raceTeam: () => null },
       netPlay: { active: () => false }, simRnd: () => { draws++; return 0.5; },
     };
+    if (o.tiers) for (const c of cars) c.tier = o.tiers(c);
     const order = vm.runInNewContext(src, ctx);
     return { order, slot: order ? order.indexOf(player) : null, n: order ? order.length : 0 };
   };
@@ -650,6 +654,9 @@ test("the menu grid seats YOUR car where the race will start it, in every mode",
   assert.equal(run({ qorder: true }).slot, 18, "a qualifying order seats you where you qualified (reversed stub: 22-1-3)");
   assert.equal(run({ qorder: true, rule: "rev10" }).slot, 18, "rev10 flips only the top ten");
   assert.equal(run({ rule: "random" }).order, null, "a random grid is the race's draw: not knowable, so no grid-mine");
+  assert.equal(run({ duel: true, legend: "senna" }).order[0].code, "LEG", "a legend duel shows the legend the race grids, not the real driver it replaces");
+  const t = run({ tiers: (c) => (c.id >= 18 ? 1 : 3) });   // gridUp sorts by tier: the fast cars go to the front
+  assert.deepEqual([t.slot, t.order.slice(0, 4).map((c) => c.id)], [11, [18, 19, 20, 21]], "pace order is gridUp's tier order, you at P12");
 });
 
 test("a random grid's flyby leaves out the shot of your car", async () => {

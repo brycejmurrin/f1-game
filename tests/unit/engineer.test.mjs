@@ -347,3 +347,71 @@ test("the last lap (and a one-lap qualifying run) gets no call to stop: the flag
   c.lap = 9;                                       // a lap earlier every one of them is live again
   assert.equal(eng.senseOf(c).wrongTread, true);
 });
+
+test("paused (a VS FRIEND race keeps running under the menu), the engineer holds its lines", () => {
+  const { eng, tyres, said, G } = sessionFor();
+  const c = carOn(tyres, { wear: 1.2 });
+  G.paused = true;
+  eng.update(c, 1);
+  assert.deepEqual(said, [], "spoke over the pause menu");
+  G.paused = false;
+  eng.update(c, 1);
+  assert.ok(said.some((m) => /GONE/.test(m)), "the line it owed is still owed: " + said.join(" | "));
+});
+
+test("a lapped car's last lap starts when the leader takes the flag: no stop calls from then on", () => {
+  const { eng, tyres, G } = sessionFor({ laps: 10 });
+  const c = carOn(tyres, { wear: 1.2, lap: 5 });   // lap 8 of 10: a lap down
+  G.cars = [c, { code: "LDR", finished: false, retired: false }];
+  assert.equal(eng.callFor(eng.senseOf(c))[1], "gone");
+  G.cars[1].finished = true;
+  const s = eng.senseOf(c);
+  assert.equal(s.finalLap, true);
+  assert.equal(eng.callFor(s)[1] === "gone", false, "TYRES ARE GONE — BOX with the flag already out");
+});
+
+test("no 'take a lap' for cold tyres on the only lap there is (qualifying, a one-lap race)", () => {
+  const { eng, tyres } = sessionFor({ laps: 1 });
+  const c = carOn(tyres, { lap: -2 });            // carOn adds three: lap 1 of 1, fresh set
+  c.tyreLap0 = 1; c.tyreTs = 70; c.tyreTb = 70;
+  const s = eng.senseOf(c);
+  assert.equal(s.outLap, true, "precondition: an out-lap by the stint count");
+  assert.notEqual((eng.callFor(s) || [])[1], "cold", eng.callFor(s));
+});
+
+test("our own stop answers a rival's latched undercut: no BOX NOW on the out-lap", () => {
+  const ctx = vm.createContext({ Math, console, Object, Array, Number, JSON, isFinite });
+  seedLog(ctx); ctx.window = ctx;
+  for (const f of ["js/core/mat4.js","js/physics/consts.js","js/data/teams.js","js/car/parts.js","js/physics/tyre-model.js","js/race/engineer.js"])
+    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
+  const E = vm.runInContext("RaceEngineer", ctx), T = vm.runInContext("TyreModel", ctx);
+  const said = [];
+  const tyres = T.create({ lapsTarget: 25, track: { total: 5386, def: {} }, LAT_MAX: 22, aTop: () => 7, vTop: () => 60, raceWeather: "dry" });
+  tyres.setLevel("real");
+  let hear = false; // the card queue is full / quiet gap on the tick VER boxes
+  const G = { tyres, raceWeather: "dry", lapsTarget: 25, cautionLevel: () => 0,
+    announce: (m) => { if (hear) said.push(m); return hear; } };
+  const eng = E.create(G);
+  const c = Object.assign({ human: true, local: true, speed: 60, lap: 8, consistency: 0.75, accSm: 0, lastLap: 90, prog: 5000 });
+  tyres.fit(c, { id: "t", code: "M", life: 0.88, off: 0, tread: 0, colour: [1,1,1] });
+  c.tyreTs = T.optTemp(0.88); c.tyreTb = T.optTemp(0.88); c.tyreWear = c.tyreWearF = c.tyreWearR = 0.2;
+  c.pitStops = 0;
+  const rival = { code: "VER", prog: 4900, speed: 50, pitStops: 0 };
+  G.cars = [c, rival];
+  G.pits = { estimate: () => ({ lossS: 22, gapS: 2, marginS: -20 }), lastCue: () => null };
+  eng.update(c, 0.05);
+  rival.pitStops = 1; eng.update(c, 0.05);   // VER boxes, call refused
+  c.pitArmed = true; eng.update(c, 1);        // player presses BOX
+  c.pitState = "entry"; for (let i = 0; i < 25; i++) eng.update(c, 1);  // 25 s in the lane
+  c.pitArmed = false; c.pitState = "none"; c.pitStops = 1;
+  tyres.fit(c, { id: "t2", code: "H", life: 0.88, off: 0, tread: 0, colour: [1,1,1] }); c.tyreStints = 1;
+  c.tyreTs = T.optTemp(0.88); c.tyreTb = T.optTemp(0.88); c.tyreWear = c.tyreWearF = c.tyreWearR = 0;
+  hear = true;
+  for (let i = 0; i < 20; i++) eng.update(c, 1);
+  assert.deepEqual(said, [], "no BOX NOW for a rival's undercut once we have stopped ourselves");
+});
+
+test("no engineer call under the pause menu (VS FRIEND keeps ticking)", () => {
+  const src = readFileSync(join(ROOT, "js/race/engineer.js"), "utf8");
+  assert.match(src, /if \(!c \|\| !c\.local \|\| !\(dt > 0\) \|\| G\.paused\) return "";/);
+});
