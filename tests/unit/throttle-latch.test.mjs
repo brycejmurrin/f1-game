@@ -72,7 +72,7 @@ function boot() {
   const pedal = el("btn-throttle");
   const tap = () => { pedal.fire("pointerdown"); pedal.fire("pointerup"); };
   const blur = () => (listeners.blur || []).forEach((f) => f({}));
-  return { Input, pedal, tap, blur };
+  return { Input, pedal, tap, blur, listeners };
 }
 
 test("HOLD is unchanged: the pedal follows the thumb", () => {
@@ -137,4 +137,33 @@ test("the pedal SHOWS the latch: :active follows the thumb, .on outlives it", ()
   assert.equal(pedal.classList.contains("on"), false);
   Input.setThrottleLatch(false);
   assert.equal(pedal.getAttribute("aria-pressed"), null, "in HOLD it is a plain button again");
+});
+
+test("the LAST FINGER LIFTING keeps the latch (touchend has touches.length 0 on every lift)", () => {
+  const h = boot();
+  h.Input.setThrottleLatch(true);
+  h.tap();
+  assert.equal(h.Input.throttleLatched(), true);
+  (h.listeners.touchend || []).forEach((f) => f({ touches: { length: 0 } }));
+  assert.equal(h.Input.throttleLatched(), true, "lifting the thumb off GAS is what LATCH is for");
+  assert.ok(h.Input.throttle() > 0.99, "still full throttle");
+  (h.listeners.touchcancel || []).forEach((f) => f({ touches: { length: 0 } }));
+  assert.equal(h.Input.throttleLatched(), true, "a touchcancel net releases the held buttons, not the latch");
+  h.blur();
+  assert.equal(h.Input.throttleLatched(), false, "…but a blur still drops it");
+});
+
+test("input hunt fixes: pad steer gated under a menu, rotation keeps the tilt zero, Ctrl/Alt reserved, lobby asks for tilt, a silent gyro falls back", () => {
+  const input = fs.readFileSync(path.join(ROOT, "js/input/input.js"), "utf8");
+  const nav = input.slice(input.indexOf("if (window.UiLayers && window.UiLayers.navOpen()) {"), input.indexOf("padNavPoll(pad);"));
+  assert.match(nav, /padSteer = 0; padSteerAnalog = false; padDpadVal = 0;/, "a friend race's car does not swerve while the d-pad walks the pause menu");
+  const rot = input.match(/function onScreenRotate\(\) \{[\s\S]*?\n  \}/)[0];
+  assert.doesNotMatch(rot, /calibrate/, "a rotation must not re-sample the neutral mid-corner");
+  for (const k of ["AltLeft", "AltRight", "ControlLeft", "ControlRight"])
+    assert.match(input, new RegExp(`KEY_RESERVED = \\{[^}]*${k}: 1`), `${k} cannot be bound`);
+  const lobby = fs.readFileSync(path.join(ROOT, "js/net/lobby.js"), "utf8");
+  for (const id of ["vs-host", "vs-join", "vs-ready", "vs-start", "vs-code-host", "vs-code-go"])
+    assert.match(lobby, new RegExp(`on\\("${id}", tiltToo\\(`), `${id} asks for tilt inside its click`);
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  assert.match(game, /if \(steerMode !== "tilt" \|\| Input\.gyroSeen \|\| headlessMode\) return;/, "no reading in 1.5 s: buttons, said");
 });

@@ -1586,8 +1586,18 @@ const NetLobby = (function () {
 
     function wire() {
       const on = (id, fn) => { const b = $(id); if (b) b.onclick = fn; };
-      on("vs-host", host);
-      on("vs-join", join);
+      // TILT NEEDS A TAP. A friend race starts from the NETWORK (startRace with
+      // no gesture), where iOS's motion permission cannot be asked
+      // (DeviceOrientationEvent.requestPermission needs transient activation —
+      // https://w3c.github.io/deviceorientation/) and the solo RACE! button's
+      // enableTilt() never runs: a tilt player raced with no steering. Every
+      // lobby button that leads to a race asks here, inside its own click.
+      const tiltToo = (fn) => (...a) => {
+        if (G.getSteerMode && G.getSteerMode() === "tilt" && G.enableTilt) G.enableTilt();
+        return fn(...a);
+      };
+      on("vs-host", tiltToo(host));
+      on("vs-join", tiltToo(join));
       // Called with NO argument on purpose. Both take an optional code so a
       // test can drive the handshake without scraping textareas — and wiring
       // them as bare handlers passes the CLICK EVENT as that code, which is not
@@ -1607,21 +1617,21 @@ const NetLobby = (function () {
       on("vs-scan-cancel", () => { stopScan(); say(""); });
       on("vs-edit-race", () => { if (role === "host" && G.openRaceSetup) G.openRaceSetup(); });
       on("vs-edit-car", () => { if (G.openGarageFrom) G.openGarageFrom("vsfriend"); });
-      on("vs-ready", () => setReady(!selfReady));
+      on("vs-ready", tiltToo(() => setReady(!selfReady)));
       on("vs-invite-more", inviteAnother);
-      on("vs-code-host", () => codeHost());   // never the click event as opts
+      on("vs-code-host", tiltToo(() => codeHost()));   // never the click event as opts
       on("vs-code-join", () => {
         showCodeStep("input", "Enter their code", "Six letters and numbers.");
         const box = $("vs-code-in");
         if (box) { box.value = ""; box.focus(); }
       });
-      on("vs-code-go", () => codeJoin());
+      on("vs-code-go", tiltToo(() => codeJoin()));
       on("vs-code-copy", () => copy(($("vs-code-value") || {}).textContent || ""));
       on("vs-code-share", () => {
         const c = ($("vs-code-value") || {}).textContent || "";
         return handOff({ title: "Apex 26", text: "Race me on Apex 26 — room code " + c }, c);
       });
-      on("vs-start", startFromRoom);
+      on("vs-start", tiltToo(startFromRoom));
       on("vs-close", () => {
         const e = els();
         const inRoom = transports.size > 0;

@@ -3514,6 +3514,10 @@ const G = {
   setNetRoom: (...a) => raceSettings.setNetRoom(...a),
   resetRaceDraft: () => raceSettings.resetDraft(),
   openRaceSetup: (...a) => raceSettings.openRaceSetup(...a),
+  // The lobby's buttons ask for TILT permission inside their own click: a
+  // friend race starts from the network, with no gesture to ask in.
+  enableTilt: () => enableTilt(),
+  getSteerMode: () => steerMode,
   get netRoom() { return raceSettings.netRoom; },
   // Seats held by the OTHER players, so the garage can refuse to hand out one
   // that is taken. An array today of at most one entry; up to three when the
@@ -8380,6 +8384,15 @@ function enableTilt() {
   Input.requestGyro().then((ok) => {
     if (ok) {
       Input.calibrate();
+      // GRANTED IS NOT READING. A device with no motion sensor (a touch laptop, a
+      // gyro-less tablet) fires deviceorientation with null angles, or never
+      // (https://w3c.github.io/deviceorientation/): tilt stayed selected with the
+      // steer at 0 and nothing said why. No reading in 1.5 s -> buttons, said.
+      setTimeout(() => {
+        if (steerMode !== "tilt" || Input.gyroSeen || headlessMode) return;
+        setSteerMode("buttons"); paintSteer();
+        els.audiostate.textContent = "no motion sensor — switched to buttons";
+      }, 1500);
     } else if (Input.gyroHardDenied) {   // a RESOLVED refusal, never a transient rejection (no user gesture)
       // Permission denied — fall back to buttons so the player can still steer.
       // (Staying in tilt mode with no sensor data leaves steer locked at 0 and
