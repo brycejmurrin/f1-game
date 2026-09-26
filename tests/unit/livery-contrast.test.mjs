@@ -530,3 +530,30 @@ test("an authored DETAIL is the number keyline, contrast or not", () => {
       `${t.id}: the derived keyline still paints the body colour on itself`);
   }
 });
+
+test("the Red Bull wrap's two bulls stand on the ridge: each side's top crosses the shoulder and they meet on the spine", () => {
+  const t = A.Teams.LIST.find((x) => x.id === "redbull");
+  const base = A.Liveries.forTeam(t)[0];
+  const bare = A.paint("redbull", Object.assign({}, base, { spineLogo: "none", spineSide: "none" }));
+  const wrap = A.paint("redbull", Object.assign({}, base, { spineLogo: "wrap", spineSide: "none" }));
+  const C = A.LT.REGIONS.crest;
+  // Along the crown (canvas y = z), the colours the wrap adds over the bare
+  // cover beside the centreline, left and right; the sun is one of them, so
+  // look for a colour on BOTH sides that is not the sun's majority.
+  const near = (fx) => {
+    const seen = new Map();
+    for (let j = 0; j < 60; j++) {
+      const x = C.x + C.w * fx, y = C.y + C.h * (j + 0.5) / 60;
+      const w = paintAt(wrap, x, y);
+      if (w && w !== paintAt(bare, x, y)) seen.set(w, (seen.get(w) || 0) + 1);
+    }
+    return seen;
+  };
+  const L = near(0.47), Rr = near(0.53);
+  const both = [...L.keys()].filter((c) => Rr.has(c));
+  assert.ok(both.length >= 2, "the crown beside the centreline carries the sun only, no bull: " + JSON.stringify([...L], null, 0));
+  // …and near the shoulders too: the bull runs over the edge, not a patch in the middle.
+  const edge = near(0.9), edgeL = near(0.1);
+  assert.ok([...edge.keys()].some((c) => both.includes(c)) && [...edgeL.keys()].some((c) => both.includes(c)),
+    "the bull does not reach the shoulders");
+});
