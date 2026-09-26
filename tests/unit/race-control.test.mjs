@@ -516,3 +516,20 @@ test("a guest mirrors the red phase from the host's payload", () => {
   rc.apply({ level: 0 });
   assert.equal(rc.info().phase, "");
 });
+
+test("classifyOrder: a lead-lap car still running is classified above a lapped car already flagged", () => {
+  const RC = load({ hazards: () => hazards(0, 0) });
+  // 2-lap race: the winner took the flag on lap 3 (crossings), a lapped car was
+  // flagged a lap short on 2, and a lead-lap car is still on its final lap (2).
+  const win = { code: "WIN", finished: true, lap: 3, finishT: 100, penalty: 0, prog: 11800 };
+  const lapped = { code: "LAP", finished: true, lap: 2, finishT: 101, penalty: 0, prog: 5800 };
+  const running = { code: "RUN", finished: false, lap: 2, finishT: 0, penalty: 0, prog: 10700 };
+  const behind = { code: "BEH", finished: false, lap: 2, finishT: 0, penalty: 0, prog: 9000 };
+  const order = [lapped, behind, running, win].sort(RC.classifyOrder).map((c) => c.code);
+  assert.deepEqual(order, ["WIN", "RUN", "BEH", "LAP"]);
+  // Equal effective laps: the flagged car first, flagged cars by clock + penalty.
+  const a = { finished: true, lap: 3, finishT: 100, penalty: 6, prog: 0 };
+  const b = { finished: true, lap: 3, finishT: 104, penalty: 0, prog: 0 };
+  assert.deepEqual([a, b].sort(RC.classifyOrder), [b, a], "penalty counts");
+  assert.ok(RC.classifyOrder(lapped, { finished: false, lap: 1, prog: 5900 }) < 0, "flagged beats running on the same effective lap");
+});

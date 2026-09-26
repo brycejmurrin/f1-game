@@ -226,7 +226,7 @@ function ensureNet() {
       return false;
     }
     netPlay = NetPlay.create(G);
-    netLobby = NetLobby.create(G);
+    netLobby = NetLobby.create(G, { armTilt: () => { if (steerMode === "tilt") enableTilt(); } });   // the READY/START click is the last user gesture before a friend race: iOS motion permission needs one
     // The real lobby binds #vsfriend here — the boot position the stub's inert
     // wire() stood in for. Once, because ensureNet() memoises on the promise.
     netLobby.wire();
@@ -2225,7 +2225,7 @@ function seedPlayerPose() {
 // grid box. Same list apex.js reset() clears.
 function clearRacingScratch(c) {
   c.stuckT = 0; c.letPassT = 0; c.passOf = null; c.passT = 0; c.passCool = 0; c.holdOff = null;
-  c.defendSide = 0; c.passFailOf = null; c.passFailT = 0; c.errT = 0; c.pressT = 0; c.zoneKey = -1;
+  c.defendSide = 0; c.passFailOf = null; c.passFailT = 0; c.errT = 0; c.pressT = 0; c.zoneKey = -1; c.queueT = 0; c._qOf = null;
   // errCount is NOT cleared here — a red-flag re-grid is the SAME race, so the
   // mistakes counted before the flag stay on the car (as energy and tyreClass
   // do). gridUp zeroes it beside c.hits/c.cuts, where a new race's counters live.
@@ -3111,12 +3111,12 @@ function endRace(forcedOrder) {
   // classification: finished by time(+penalty), still running by progress, and
   // RETIREMENTS below both — ordered among themselves by how far they got, which
   // is the only thing that separates two cars that never saw the flag.
-  const fin = cars.filter((c) => c.finished && !c.retired).sort(RaceControl.finishOrder);   // laps, then the clock
-  const run = cars.filter((c) => !c.finished && !c.retired).sort((a, b) => b.prog - a.prog);
+  const fin = cars.filter((c) => c.finished && !c.retired);   // the fastest-lap pool below
+  const cls = cars.filter((c) => !c.retired).sort(RaceControl.classifyOrder);   // flagged and running in ONE sort: a running car counts the lap it will be flagged on
   const out = cars.filter((c) => c.retired).sort((a, b) => b.prog - a.prog);
   // THE CLASSIFICATION IS THE HOST'S — see netOrder(), which is the inline
   // block that used to live here, unchanged in behaviour.
-  const order = netOrder(forcedOrder || fin.concat(run, out));
+  const order = netOrder(forcedOrder || cls.concat(out));
   order.forEach((c, i) => { c.finPos = i + 1; });
   // Read BEFORE award() advances the stage, or the sprint is wrapped up as the Grand Prix.
   const wasSprint = isChampionship() && SeasonCal.stage(season) === "sprint";
@@ -4728,7 +4728,7 @@ function updateCar(c, dt, ranked) {
     const capBlocks = blocker && blockerGap < 16 &&
       !(blocker === c.passOf && Math.abs(c.x - blocker.x) >= 1.8);
     if (blocker && blockerGap < 16) aiFreeSpeed = vmax;   // our pace with this car gone (AiDrive.otWant)
-    c.queueT = AiDrive.queueTime(c.queueT, capBlocks && blocker === c._qOf, dt); c._qOf = capBlocks ? blocker : null;   // held behind the SAME car (AiDrive.queuePress)
+    c.queueT = AiDrive.queueTime(c.queueT, capBlocks && blocker === c._qOf && cautionLevel() < 2, dt); c._qOf = capBlocks ? blocker : null;   // held behind the SAME car (AiDrive.queuePress)
     if (capBlocks) {
       // Held behind a car SERVING A STOP (or queued for one), not by the ground
       // — the pit-lane rescue reads this. Only a lane car: a car welded to
@@ -4919,7 +4919,9 @@ function updateCar(c, dt, ranked) {
       // Gravity may ADD up to the 6 % margin; it must not confiscate ERS/X
       // leftover already above it (that snap is what made hills clip).
       const cap = vmax * 1.06;
-      if (c.speed < cap) c.speed = Math.min(cap, c.speed + a * dt);
+      // ...but not into a car the BRAKES are holding: at a standstill gravity's a·dt re-took the
+      // `speed > 0` braking branch every step, so brake-to-reverse never engaged on any descent.
+      if (c.speed < cap && !(braking && c.speed <= a * dt)) c.speed = Math.min(cap, c.speed + a * dt);
     }
   }
   // CAUTION: a cut vmax is only an acceleration ceiling above, so a car above
@@ -5103,7 +5105,7 @@ function updateCar(c, dt, ranked) {
       let dp = po.prog - c.prog;
       dp = ((dp + track.total / 2) % track.total + track.total) % track.total - track.total / 2;
       const sideRoom = c.passSide > 0 ? Math.min(roomR, roadR) : Math.min(roomL, roadL);   // the ROAD's room, not the run-off's
-      if (po.finished || po.retired || dp > AI_PASS_LATCH_M || !Number.isFinite(dp)) { c.passOf = null; }   // lost it: no penalty
+      if (po.finished || po.retired || cautionLevel() >= 2 || dp > AI_PASS_LATCH_M || !Number.isFinite(dp)) { c.passOf = null; }   // lost it, or a VSC / safety car came out: no penalty
       // PAST: done. The pass is complete, and the car we just cleared does not
       // get to counter-attack us on the same stretch — it takes the SAME
       // "threshold endured" lockout an abandoned pass gives its own attacker,
@@ -5140,7 +5142,7 @@ function updateCar(c, dt, ranked) {
       // at the apex). Abandon it, and remember the car: the same car is not
       // re-attacked for twice the cooldown (rFactor 2's "threshold endured").
       // A car with 12 % of pace in hand keeps the move: it will be alongside under braking.
-      else if (_atk.toTurnIn < 6 && dp > AiDrive.sideLevel() && aiFreeSpeed < (po.human ? po.speed : (po._vmaxNow || 0)) + 0.12 * vTop()) { c.passOf = null; c.passCool = AiDrive.passCooldown(aiT); c.passFailOf = po; c.passFailT = 2 * AiDrive.passCooldown(aiT); }
+      else if (_atk.toTurnIn < 6 && dp > AiDrive.sideLevel() && Math.max(aiFreeSpeed, blocker === po ? 0 : vmax) < (po.human ? po.speed : (po._vmaxNow || 0)) + 0.12 * vTop()) { c.passOf = null; c.passCool = AiDrive.passCooldown(aiT); c.passFailOf = po; c.passFailT = 2 * AiDrive.passCooldown(aiT); }
       else {
         // Patience refreshes while we GAIN on the car; it runs down while we do not.
         if (dp < c.passBest - 0.3) { c.passBest = dp; c.passT = AiDrive.passHold(aiT); }
@@ -5169,7 +5171,9 @@ function updateCar(c, dt, ranked) {
       // attack zone at its baked quality), and not on a car we just gave up on.
       _aiOtPull.attackQ = _atk.q; _aiOtPull.toTurnIn = _atk.toTurnIn; _aiOtPull.roll = c.phaseRoll || 0.5;
       const sameCar = blocker === c.passFailOf && (c.passFailT || 0) > 0;
-      const moveOn = !sameCar && AiDrive.otWant(_aiOtPull) && AiDrive.attackOK(_aiOtPull);
+      // NO OVERTAKING UNDER VSC OR SAFETY CAR (the radio says so; FIA Sporting Regs). Only the OVERTAKE button
+      // was gated on caution — the pass latch itself kept firing: 17-24 places gained in a minute of SC, measured.
+      const moveOn = !sameCar && cautionLevel() < 2 && AiDrive.otWant(_aiOtPull) && AiDrive.attackOK(_aiOtPull);
       if (!c.passOf && c.passCool <= 0 && moveOn && blockerGap <= AI_PASS_LATCH_M) {
         const side = AiCorridor.choose(_aiOtPull, c, blocker, cars, track.total, CLEAR, c.passPlan || (c.passPlan = {})).side;
         if (side && (side > 0 ? Math.min(roomR, roadR) : Math.min(roomL, roadL)) >= CLEAR) {
@@ -5685,6 +5689,10 @@ function updateCar(c, dt, ranked) {
     const brakeYawDamp = 1 + 1.4 * clamp(-(c.axEstSm ?? 0) / BRAKE, 0, 1);
     const rdot = (af * Fyf * cosD - ar * Fyr) / kz2 - YAW_DAMP * brakeYawDamp * (c.yawRateCur || 0);
     c.vLat = clamp((c.vLat || 0) + (ay - c.speed * (c.yawRateCur || 0)) * dt, -40, 40);
+    // ...and a SLIDING tyre still has friction where the slip model fades out (sp): with both
+    // forces scaled to zero near a standstill, a spun or shunted stopped car skated sideways at
+    // constant speed into the wall (2.000 -> 1.999 m/s over 4 s, measured). Coulomb bleed only.
+    if (sp < 1 && c.vLat) c.vLat = Math.sign(c.vLat) * Math.max(0, Math.abs(c.vLat) - muBase * (1 - sp) * dt);
     c.yawRateCur = clamp((c.yawRateCur || 0) + rdot * dt, -4, 4);
     // Increasing head = CCW / left; +yaw rate = nose right, so SUBTRACT.
     c.head -= c.yawRateCur * dt;
@@ -8342,7 +8350,7 @@ function tickBody(now) {
     }
     _audioParamStep = true;   // any other update() caller (the __apex step hooks) sets them
     PerfGov.recordSimulation(steps, steps === 5 ? physAcc : 0);
-    if (steps === 5) physAcc = 0;             // fell badly behind — drop the backlog
+    if (steps === 5 && physAcc >= PHYS_DT) physAcc %= PHYS_DT;   // fell badly behind — drop the backlog, keep the sub-step remainder (a clean 5-step frame lost up to a step: Fix Your Timestep)
   }
   renderAlpha = clamp(physAcc / PHYS_DT, 0, 1);   // 0..1 leftover fraction for render interp
   render(Math.min(dt, 1 / 20));               // camera/visual damping at (clamped) frame dt

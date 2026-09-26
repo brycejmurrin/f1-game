@@ -862,7 +862,11 @@ const Input = (function () {
        Meta is in KEY_RESERVED so it can never be a binding, which makes
        treating it as "let go of everything" free of side effects. Alt gets the
        same treatment for Alt+Tab on Windows, for the same reason. */
-    if (down && (e.code === "MetaLeft" || e.code === "MetaRight" || e.code === "AltLeft" || e.code === "AltRight")) {
+    // ...unless the player BOUND Alt (it is not reserved, so it can be): then
+    // it is a control, and releasing W because SHIFT DOWN was pressed on Alt
+    // dropped the throttle mid-straight. Alt+Tab still reaches reset() via blur.
+    if (down && (e.code === "MetaLeft" || e.code === "MetaRight" ||
+        ((e.code === "AltLeft" || e.code === "AltRight") && !codeToAction[normCode(e.code)]))) {
       keyLeft = keyRight = keyThrottle = keyBrake = false;
     }
     /* PAUSE AND BACK ARE COMMANDS, NOT DRIVING CONTROLS, so they sit ABOVE the
@@ -1134,11 +1138,15 @@ const Input = (function () {
     if (throttleLatch) el.setAttribute("aria-pressed", throttleLatched ? "true" : "false");
     else el.removeAttribute("aria-pressed");
   }
-  function holdReleaseAll() {
+  function holdReleaseAll(keepLatch) {
     // A LATCH DROPS HERE. This is the everything-off path (window blur, page
-    // hidden, last touch up, Input.reset), and a latched throttle surviving a
-    // blur means the car accelerates while the player is not looking at it.
-    throttleLatched = false;
+    // hidden, Input.reset), and a latched throttle surviving a blur means the
+    // car accelerates while the player is not looking at it.
+    // EXCEPT the last-touch-up nets (keepLatch): the browser fires touchend
+    // after the pointerup of the very tap that SET the latch, so dropping it
+    // there made LATCH behave exactly like HOLD on every phone — the one place
+    // the on-screen pedals exist. Lifting a finger is not leaving the game.
+    if (!keepLatch) throttleLatched = false;
     paintLatch();
     for (const h of holdBtns) {
       h.ids.clear();
@@ -2076,10 +2084,10 @@ const Input = (function () {
     // release on the page (a non-passive window touch listener is a scroll
     // and tap-latency cost on Android Chrome). Capture stays.
     window.addEventListener("touchend", function (e) {
-      if (e.touches.length === 0) holdReleaseAll();
+      if (e.touches.length === 0) holdReleaseAll(true);
     }, { capture: true, passive: true });
     window.addEventListener("touchcancel", function (e) {
-      if (e.touches.length === 0) holdReleaseAll();
+      if (e.touches.length === 0) holdReleaseAll(true);
     }, { capture: true, passive: true });
 
     // Passive: it only READS positions and never calls preventDefault (the

@@ -4,7 +4,7 @@
 const NetLobby = (function () {
   const CONNECT_TIMEOUT_MS = 60000;
 
-  function create(G) {
+  function create(G, hooks) {
     Log.info("net", "lobby create");
     const $ = (id) => document.getElementById(id);
     const transports = new Map();
@@ -1607,7 +1607,13 @@ const NetLobby = (function () {
       on("vs-scan-cancel", () => { stopScan(); say(""); });
       on("vs-edit-race", () => { if (role === "host" && G.openRaceSetup) G.openRaceSetup(); });
       on("vs-edit-car", () => { if (G.openGarageFrom) G.openGarageFrom("vsfriend"); });
-      on("vs-ready", () => setReady(!selfReady));
+      // TILT NEEDS A GESTURE. A friend race never passes through the race
+      // settings GO button that arms it for a solo race (rs-go returns early for
+      // a room), and a guest's race starts on the host's GO event, not a click —
+      // so the gyro was never attached and a TILT player could not steer at all.
+      // READY (guest) and START (host) are the last clicks before the race.
+      const armTilt = () => { try { if (hooks && hooks.armTilt) hooks.armTilt(); } catch (_) { /* never block the room on a sensor */ } };
+      on("vs-ready", () => { armTilt(); setReady(!selfReady); });
       on("vs-invite-more", inviteAnother);
       on("vs-code-host", () => codeHost());   // never the click event as opts
       on("vs-code-join", () => {
@@ -1621,7 +1627,7 @@ const NetLobby = (function () {
         const c = ($("vs-code-value") || {}).textContent || "";
         return handOff({ title: "Apex 26", text: "Race me on Apex 26 — room code " + c }, c);
       });
-      on("vs-start", startFromRoom);
+      on("vs-start", () => { armTilt(); return startFromRoom(); });
       on("vs-close", () => {
         const e = els();
         const inRoom = transports.size > 0;

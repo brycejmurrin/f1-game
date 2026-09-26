@@ -72,7 +72,8 @@ function boot() {
   const pedal = el("btn-throttle");
   const tap = () => { pedal.fire("pointerdown"); pedal.fire("pointerup"); };
   const blur = () => (listeners.blur || []).forEach((f) => f({}));
-  return { Input, pedal, tap, blur };
+  const fireWin = (t, ev) => (listeners[t] || []).forEach((f) => f(ev));
+  return { Input, pedal, tap, blur, fireWin, listeners };
 }
 
 test("HOLD is unchanged: the pedal follows the thumb", () => {
@@ -137,4 +138,28 @@ test("the pedal SHOWS the latch: :active follows the thumb, .on outlives it", ()
   assert.equal(pedal.classList.contains("on"), false);
   Input.setThrottleLatch(false);
   assert.equal(pedal.getAttribute("aria-pressed"), null, "in HOLD it is a plain button again");
+});
+
+test("a latch survives the finger lifting — the window touchend net is not leaving the game", () => {
+  // The browser fires touchend AFTER the pointerup of the very tap that set the
+  // latch; the ghost-pointer net used to clear it there, so LATCH was HOLD on
+  // every phone (the one place the on-screen pedal exists).
+  const { Input, tap, fireWin } = boot();
+  Input.setThrottleLatch(true);
+  tap();
+  fireWin("touchend", { touches: { length: 0 } });
+  fireWin("touchcancel", { touches: { length: 0 } });
+  assert.equal(Input.throttleLatched(), true);
+  assert.equal(Input.throttle(), true);
+});
+
+test("Alt bound as a control does not release the keys still held", () => {
+  const { Input, listeners } = boot();
+  const key = (code, down) => (listeners[down ? "keydown" : "keyup"] || []).forEach((f) =>
+    f({ code, key: code, repeat: false, isTrusted: true, preventDefault() {}, target: {} }));
+  assert.equal(Input.setKeyBinding("shiftDown", 1, "AltLeft").ok, true);
+  key("KeyW", true);
+  assert.equal(Input.throttle(), true);
+  key("AltLeft", true);                 // a downshift mid-straight, W still held
+  assert.equal(Input.throttle(), true, "a BOUND Alt is a control, not a release-all");
 });
