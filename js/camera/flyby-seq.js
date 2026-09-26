@@ -1450,7 +1450,10 @@ const FlybySeq = (function () {
     // that dropped a shot gives every other shot more time). Keying every shot on
     // the slot and the exact fraction threw the menu's plans away on most races.
     const secs = frac * _flyS, slot = usesSlot(shot) ? _playerSlot : -1, rows = usesGrid(shot) ? Math.min(GRID_ROWS, _gridSize) : -1;
-    if (plan && plan.secs <= secs + 1e-6 && plan.slot === slot && plan.rows === rows) return plan;
+    // …but only a plan made for NEARLY this much time: a plan squeezed for a
+    // habitual skipper's 12 s flyby, reused once the flyby is 24 s again, played
+    // the whole long flyby near-static until the track was rebuilt.
+    if (plan && plan.secs <= secs + 1e-6 && plan.secs >= secs * 0.8 && plan.slot === slot && plan.rows === rows) return plan;
     const onRoad = onRoadPose(shot.eye[0]) && onRoadPose(shot.eye[1]);
     const noLift = new Float32Array(LIFT_N + 1);
     const baseLook = planLook(track, shot.eye, shot.look);

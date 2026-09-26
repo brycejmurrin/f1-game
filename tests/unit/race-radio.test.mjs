@@ -694,3 +694,9 @@ test("everyone in: a penalty-held finish is released before endRace, not lost", 
   assert.ok(ended != null, "the race ended");
   assert.ok(evs.some((e) => e.car === "You"), "the last car home with a penalty still gets its finish (and its engineer line) before endRace");
 });
+
+test("reset() forgets the last race's pit exit, so this race's pace rates are not muted", () => {
+  const src = readFileSync(new URL("../../js/race/race-facts.js", import.meta.url), "utf8");
+  const reset = src.slice(src.indexOf("function reset() {"), src.indexOf("function bag("));
+  assert.match(reset, /pitEndT = -1e9;/);
+});

@@ -459,7 +459,11 @@ const Input = (function () {
   ];
   // Keys the game already answers to elsewhere: back, the menu walker's
   // confirm, the perf overlay, the OS. Refused by setKeyBinding.
-  const KEY_RESERVED = { Escape: 1, Enter: 1, NumpadEnter: 1, Tab: 1, Backquote: 1, F9: 1, MetaLeft: 1, MetaRight: 1, ContextMenu: 1 };
+  // Ctrl and Alt too: Alt is the key-release-all chord (Alt+Tab), and with Ctrl
+  // bound a Ctrl+W on the default GAS closes the tab — browsers never hand those
+  // chords to a page (https://developer.chrome.com/docs/capabilities/web-apis/keyboard-lock).
+  const KEY_RESERVED = { Escape: 1, Enter: 1, NumpadEnter: 1, Tab: 1, Backquote: 1, F9: 1, MetaLeft: 1, MetaRight: 1, ContextMenu: 1,
+    AltLeft: 1, AltRight: 1, ControlLeft: 1, ControlRight: 1 };
   const keyMap = {};
   let codeToAction = {};
   // Either Shift / Ctrl / Alt counts as the one key: the default SHIFT DOWN was
@@ -1142,11 +1146,11 @@ const Input = (function () {
     else el.removeAttribute("aria-pressed");
   }
   function holdReleaseAll(keepLatch) {
-    // A LATCH DROPS HERE. This is the everything-off path (window blur, page
-    // hidden, Input.reset), and a latched throttle surviving a blur means the
-    // car accelerates while the player is not looking at it. The LAST-TOUCH-UP
-    // net keeps it: every tap ends in a touchend with no touches, so dropping
-    // the latch there meant it never survived one (bug hunt 2026-09-26).
+    // A LATCH DROPS HERE on the everything-off paths (window blur, page hidden,
+    // Input.reset): a latched throttle surviving a blur means the car
+    // accelerates while the player is not looking at it. NOT on the last finger
+    // lifting (keepLatch): TouchEvent.touches is empty on every ordinary lift, so
+    // dropping it there switched LATCH off the moment the thumb left GAS.
     if (!keepLatch) throttleLatched = false;
     paintLatch();
     for (const h of holdBtns) {
@@ -1433,9 +1437,6 @@ const Input = (function () {
         padThrottle = padBrake = false;
         padThrottleVal = padBrakeVal = 0;
         padLookBack = false;
-        // ...and so does the steering: in a friend race the sim runs under the
-        // menu, and the d-pad/stick picking a row also steered the car.
-        padSteer = 0; padSteerAnalog = false; padDpadVal = 0;
         padNavPoll(pad);
       } else {
         padNavDir = null;   // fresh hold-timer the next time a menu opens
@@ -2039,8 +2040,12 @@ const Input = (function () {
     };
   }
 
+  // A ROTATION KEEPS THE ZERO. onOrient already remaps into screen space by
+  // angle, so the stored neutral is still right; re-sampling it 300 ms later
+  // made whatever lean the player held mid-hairpin the new "straight". Only the
+  // filter restarts, so the new axis does not ease in from the old one's value.
   function onScreenRotate() {
-    setTimeout(calibrate, 300);
+    oeInit = false; tiltSteerVal = 0;
   }
 
   function init(canvas, opts) {

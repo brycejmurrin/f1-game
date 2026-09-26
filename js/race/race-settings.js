@@ -402,15 +402,12 @@ const RaceSettings = (function () {
         if (G.soundOn) GameAudio.uiSelect();
         $("race-settings").hidden = true;
         const netLobby = G.netLobby;
-        // Before the friend-race return: iOS grants the gyro only inside a
-        // user gesture, and the lobby's later start is not one — a tilt
-        // player's VS FRIEND race had no orientation listener and no steering.
-        if (getSteerMode() === "tilt") enableTilt();
         if (netRoom) {
           $("vsfriend").hidden = false;
           netLobby.roomChanged("race");
           return;
         }
+        if (getSteerMode() === "tilt") enableTilt();
         // Same gesture, same reason: Chromium needs user activation before
         // navigator.vibrate will fire and no longer accepts touchstart as one,
         // so arm it from this click or the first in-race brake cue is dropped.

@@ -842,7 +842,13 @@ const TLX = (function () {
               // choice because of one context loss. The AUTO branch above keeps
               // its pick and game.js re-arms that one fresh at opt-in.
             }
-            setTimeout(function () { try { location.reload(); } catch (_) { /* harness */ } }, 1200);
+            // The fall-back reload is for the THIRD loss only. Every later one
+            // reloaded again, forever, on a device whose WebGL2 also dies on
+            // use (iOS 18.7.2 RC lost every context — model-viewer#5100):
+            // from the fourth, stop and say so instead.
+            if (n === 3) setTimeout(function () { try { location.reload(); } catch (_) { /* harness */ } }, 1200);
+            else if (typeof window.__apexReportError === "function")
+              window.__apexReportError("gfx", new Error("The graphics device keeps getting lost (" + n + " times) — reload to try again, or pick another RENDERER in settings."));
           }
         } catch (_) { /* no sessionStorage -> skip the auto-recovery rather than loop uncounted */ }
       };
@@ -2412,7 +2418,7 @@ const TLX = (function () {
       let _mirrorSweepOptIn = false;
       try { _mirrorSweepOptIn = localStorage.getItem("apex26.tlxMirrorSweep") === "1"; } catch (_) { /* no storage: off */ }
       // The WebGL2 driver's texture ceiling is a device constant: ask once.
-      let _glMaxDim = -1;
+      let _glMaxDim = -1, _glMaxTries = 0;
       const cssSizeCache = CanvasCssSize.create(_layoutCanvas, { settleFrames: 30 });
       function resize() {
         // Window/settings callbacks also reach here while the frame loop waits
@@ -2446,7 +2452,8 @@ const TLX = (function () {
               // A lost context answers null (-> 0): no clamp this frame, and ask
               // again next frame rather than latching "no limit" for the session.
               if (lim.length) _glMaxDim = Math.min(...lim);
-            } catch (_) { /* ask again next frame */ }
+              else if (++_glMaxTries >= 120) _glMaxDim = 0;   // a stub/lost context for ~2 s: stop asking
+            } catch (_) { if (++_glMaxTries >= 120) _glMaxDim = 0; }
           }
           maxDim = Math.max(0, _glMaxDim);
         }
