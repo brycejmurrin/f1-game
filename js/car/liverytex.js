@@ -1258,6 +1258,30 @@ const LiveryTex = (function () {
     const b = bullPath(teamId);
     if (!b) return false;
     const { d, x0, y0, x1, y1 } = b, span = wrapMarkSpan(teamId);
+    // OVER THE SHOULDER: the bull is one shape in (z, metres down from the
+    // ridge), so its top — standing on the ridge — also crosses the crown.
+    // Each side's bull is laid on its half of the crest, down = outward, and
+    // the two meet on the centreline. A linear map from path to crest pixels
+    // (z along canvas y, depth across canvas x) — tracePath's per-axis f
+    // cannot swap axes, so the canvas transform does it. Which half is which
+    // side does not matter: the car is symmetric and so is the pair.
+    const C = REGIONS.crest;
+    if (C) {
+      const sH = BULL.h * FLANK.sLen, sTop = FLANK.sTop + BULL.top * FLANK.sLen;
+      const sPerPy = sH / (y1 - y0), uPerPx = span.uLen / (x1 - x0);
+      const ks = (C.w / 2) / FLANK.sTop, kz = C.h / 0.66, cx = C.x + C.w / 2;
+      for (const side of [1, -1]) {
+        ctx.save();
+        clipToRegion(ctx, C);
+        ctx.transform(0, -kz * FLANK.zLen * uPerPx, side * ks * sPerPy, 0,
+          cx + side * ks * (sTop - y0 * sPerPy),
+          C.y + kz * (FLANK.zF + 1.28 - (span.u0 - x0 * uPerPx) * FLANK.zLen));
+        ctx.fillStyle = css(colour);
+        tracePath(ctx, { X: (u) => u, Y: (v) => v, S: (q) => q }, d);
+        ctx.fill("evenodd");
+        ctx.restore();
+      }
+    }
     // The path's nose is at its low-x end, set just aft of the sun (span.u0).
     eachFlank((F) => {
       const bh = BULL.h * F.R.h, top = F.R.y + F.R.h * BULL.top;
@@ -1455,7 +1479,16 @@ const LiveryTex = (function () {
   // below the lettering strip (top), and its lowest hoof — at 0.96 of the bbox
   // — lands at v 0.81. Measured, not eyeballed: the `(crown)` row of
   // tools/car/spine-station.mjs --occlude reports 2 % of the ink hidden.
-  const BULL = { h: 0.52, u0: 0.05, top: 0.30 };
+  // …and then the RB22 look asked for more: a bigger bull whose TOP stands on
+  // the ridge, so each flank's bull runs up over the shoulder and the pair
+  // meet on the spine (flankBull paints the crown half). The top is the
+  // ridge itself (s 0), the bottom v 0.60 of the flank, which keeps the
+  // derived length (0.88 m at the path's 0.557 aspect) ending at z -1.60 —
+  // where the rear tyre starts to stand over the flank from a side camera.
+  const BULL = { h: (0.49) / FLANK.sLen, u0: 0.05, top: -FLANK.sTop / FLANK.sLen };
+  // A team with NO traced bull wears its lockup as a square badge where the
+  // bull used to hang (v 0.30 .. 0.82): a badge cannot cross the shoulder.
+  const WRAP_BADGE = { h: 0.52, top: 0.30 };
   // The team's ONE forward-facing traced path, with its bbox — Red Bull's crest
   // is two bulls charging at each other and the second faces canvas-left, which
   // every flank frame maps to the nose. Null for a crest that is not a single
@@ -1481,7 +1514,7 @@ const LiveryTex = (function () {
   function wrapMarkSpan(teamId) {
     const b = bullPath(teamId);
     const aspect = b ? (b.y1 - b.y0) / (b.x1 - b.x0) : 1;
-    return { u0: BULL.u0, uLen: (BULL.h * FLANK.sLen / aspect) / FLANK.zLen };
+    return { u0: BULL.u0, uLen: ((b ? BULL.h : WRAP_BADGE.h) * FLANK.sLen / aspect) / FLANK.zLen };
   }
   // FLANK FRAMES. Each flank is authored in its own OUTSIDE-VIEW frame: local
   // x runs 0 → 1 from the viewer's left to right standing beside that side,
@@ -2414,7 +2447,7 @@ const LiveryTex = (function () {
         // …and this badge is NOT the bull, so it does not get the bull's field.
         // `sunLockup` pairs the sun with the cover because a traced bull is a
         // metre-long silhouette that genuinely straddles the disc. This one is
-        // a badge spanning v BULL.top .. BULL.top + BULL.h = 0.30 .. 0.82, and
+        // a badge spanning v WRAP_BADGE.top .. + h = 0.30 .. 0.82, and
         // the sun's flank ellipse bottoms out at v = SUN.r / FLANK.sLen −
         // sTop/sLen = 0.277 on the flank's own centreline and less either side
         // of it — so the badge never reaches the sun at ANY u and lands
@@ -2438,9 +2471,9 @@ const LiveryTex = (function () {
         const badgeLockup = markPalette(teamId, colors, [coverPaint], false, { noPlate: true });
         eachFlank((F) => {
           ctx.save();
-          ctx.translate(F.fx(span.u0 + span.uLen / 2), F.R.y + F.R.h * (BULL.top + BULL.h / 2));
+          ctx.translate(F.fx(span.u0 + span.uLen / 2), F.R.y + F.R.h * (WRAP_BADGE.top + WRAP_BADGE.h / 2));
           ctx.scale(flankSquash(spineHeight, F.R), 1);
-          const s = BULL.h * F.R.h;   // square through the squash, so square in metres
+          const s = WRAP_BADGE.h * F.R.h;   // square through the squash, so square in metres
           const Rw = { x: -s / 2, y: -s / 2, w: s, h: s };
           if (LOGOS[teamId]) {
             drawLogoImage(ctx, LOGOS[teamId], Rw, logo,
