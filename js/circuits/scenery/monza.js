@@ -286,13 +286,14 @@
         for (const side of [-1, 1]) {
           const gap = side < 0 ? 6 : 5;   // left slightly further (stand side)
           const ap = anchor(k, side, gap);
-          // Pole — slender dark steel column, 10 m tall
-          addCyl(out, ap.c, 0.12, 10, [0.18, 0.18, 0.20], 6, [ap.r, ap.u, ap.t]);
           // Horizontal arm stub — reaching OUT to the head only. Centred on
           // the pole it also reached 0.9 m trackward, where the road guard
           // dropped it and left the head hanging (ground-audit unsupported).
+          // Placed FIRST: a culled arm drops the whole lamp, not a bare pole.
           if (addBox(out, vadd(vadd(ap.c, ap.u, 9.8), ap.r, side * 0.55), [1.1, 0.18, 0.18],
                  [0.18, 0.18, 0.20], [ap.r, ap.u, ap.t]) === false) continue;
+          // Pole — slender dark steel column, 10 m tall
+          addCyl(out, ap.c, 0.12, 10, [0.18, 0.18, 0.20], 6, [ap.r, ap.u, ap.t]);
           // Lamp head — warm white, slightly yellow-tinted
           addBox(out, vadd(vadd(ap.c, ap.r, side * 0.9), ap.u, 9.65),
                  [1.0, 0.45, 0.55], [0.98, 0.94, 0.72], [ap.r, ap.u, ap.t]);

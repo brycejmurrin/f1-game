@@ -1992,6 +1992,34 @@ test("GPU errors spread across a session are not a flood", async () => {
   assert.equal(session.get("apex26.gfxClaimFail"), "1", "a flood across consecutive frames still escalates");
 });
 
+test("a broken pass that errors every few frames still escalates; a recovered device resets", async () => {
+  // A pass that runs every ~6th frame (env faces, sun-snap rebuild) leaves
+  // quiet presents between failures, so the dense run resets every time —
+  // the sparse count must still climb the ladder while the defect persists.
+  const storage = new Map([["apex26.gfxWgxLevel", "2"]]);
+  const session = new Map();
+  let reloads = 0;
+  const h = makeGpuHarness({ storage, session, onReload: () => { reloads += 1; } });
+  const gfx = await h.create();
+  gfx.resize();
+  const quiet = (n) => { for (let i = 0; i < n; i++) { gfx.begin({}); gfx.present({}); } };
+  // Recovered: a few error frames, then a long clean stretch, repeatedly —
+  // never escalates, however long the session.
+  for (let r = 0; r < 4; r++) {
+    for (let k = 0; k < 10; k++) { h.device.onuncapturederror({ error: { message: "burst " + k } }); quiet(6); }
+    quiet(400);
+  }
+  assert.equal(session.get("apex26.gfxClaimFail"), undefined, "error clusters separated by a recovered stretch never surrender");
+  // Broken: one error every 6th frame, indefinitely.
+  for (let k = 0; k < 40 && session.get("apex26.gfxClaimFail") == null; k++) {
+    h.device.onuncapturederror({ error: { message: "every 6th " + k } });
+    quiet(6);
+  }
+  assert.equal(session.get("apex26.gfxClaimFail"), "1", "a pass failing every 6th frame escalates");
+  assert.match(storage.get("apex26.gfxWgxFail") || "", /recurring in \d+ frames/);
+  assert.equal(reloads, 1);
+});
+
 test("pipelines that share a shader module never use layout:'auto'", async () => {
   // Two `layout:"auto"` pipelines are NEVER bind-group compatible, even when
   // byte-identical — and a pair built from ONE module exists precisely to be
