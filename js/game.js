@@ -2057,6 +2057,7 @@ function redFlagRestart() {
   order.forEach((c, i) => {
     const slot = TrackMesh.gridSlot(track, i);
     c.s = wrapS(slot.s); c.x = slot.x; c.xVis = c.x;
+    c._recross = false;   // a reverse just before the flag must not leave the first real crossing untimed
     const w = worldFromTrack(c.s, c.x, smp);
     c.px = w.x; c.pz = w.z; c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevS = c.s; c.rPrevX = c.x; c._prevS = c.s;
     // The box sits BEHIND the line on the lap the car is on — the same prog

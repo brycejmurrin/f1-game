@@ -487,3 +487,20 @@ test("budget: phones keep the half-memory atlas, desktop spends it on resolution
   assert.equal(LB.budget(null), LB.DESKTOP_TEXELS);
   assert.ok(LB.DESKTOP_TEXELS > LB.MAX_TEXELS);
 });
+
+test("a sliced forTrack bake retires a pending menu prebake, so older lights never land over it", () => {
+  const LB = load({ Tracks: { terrainY: () => 0 }, performance });
+  const trk = {}, oldL = [], newL = [];
+  for (let i = 0; i < 30; i++) {
+    oldL.push(...LAMP_A.map((v, k) => k === 0 ? i * 9 : v));
+    newL.push(...LAMP_A.map((v, k) => k === 0 ? i * 9 + 3 : v));
+  }
+  const stepOld = LB.prebake(trk, oldL, 4.0, 300000);
+  stepOld(0.01);                                           // the menu starts the OLD set
+  let b = null, n = 0;
+  while (!(b = LB.forTrack(trk, newL, 4.0, 0, false, 300000)) && n++ < 50000);   // the race slices the NEW set
+  assert.ok(b, "the sliced bake installs");
+  const gen = LB.gen();
+  assert.equal(stepOld(1000), true, "the stale prebake reports done");
+  assert.equal(LB.gen(), gen, "…and installs nothing over the newer bake");
+});
