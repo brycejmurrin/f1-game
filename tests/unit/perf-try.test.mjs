@@ -299,7 +299,9 @@ test("SETTINGS still has GRAPHICS: HIGH and a door-index stack", () => {
   assert.doesNotMatch(html, /id="pm-category-tabs"|id="pm-tab-more"|id="pm-panel-more"/);
   const rules = cssRules(read("css/components.css"));
   assert.ok(ruleFor(rules, /^\.balanced-row\s*>\s*:not\(\[hidden\]\)$/), "the balanced-row child rule exists");
-  assert.ok(!rules.some((r) => r.decls.get("grid-template-columns") === "repeat(4, minmax(0, 1fr))"),
+  // Scoped to the settings TAB strip: Appearance's accent swatches are also a
+  // four-column grid (two even rows of four pills), which is not a tab row.
+  assert.ok(!rules.some((r) => /tab/i.test(r.selector) && r.decls.get("grid-template-columns") === "repeat(4, minmax(0, 1fr))"),
     "no four-column tab grid — the PERF tab's column is gone");
 });
 

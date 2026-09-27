@@ -961,11 +961,21 @@
         <section id="pm-panel-appearance" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>
           <h3 class="pm-group-h">APPEARANCE</h3>
-          <p class="adv-help">Theme, accents, title motion, wash and the background drawing. Selection rings stay on the menu accent; team identity can stay on the HUD.</p>
+          <p class="adv-help">Everything here applies straight away. The preview shows a menu and the race HUD with your choices.</p>
           <div id="pm-appearance-preview" class="pm-accent-preview" aria-hidden="true">
-            <button type="button" class="bigbtn pm-accent-preview-btn" tabindex="-1">PRIMARY</button>
-            <span class="pm-accent-preview-hud"><b>42</b></span>
+            <div class="pm-look-menu">
+              <span class="pm-look-kicker">GRAND PRIX</span>
+              <span class="pm-look-title">MONZA</span>
+              <span class="pm-look-chips"><span class="pm-look-chip" data-on="1">RACE</span><span class="pm-look-chip">QUALI</span></span>
+              <span class="bigbtn pm-accent-preview-btn">START</span>
+            </div>
+            <div class="pm-look-hud">
+              <span class="pm-accent-preview-hud"><b>P3</b></span>
+              <span class="pm-look-lap">LAP <b>4</b>/12</span>
+              <span class="pm-look-spd"><b id="pm-look-speed">287</b><span class="pm-look-unit">KM/H</span></span>
+            </div>
           </div>
+          <h4 class="pm-look-h">COLOURS</h4>
           <div id="pm-uitheme" class="set-row" role="group" aria-labelledby="pm-uitheme-label">
             <span class="tune-label" id="pm-uitheme-label">THEME</span>
             <div>
@@ -974,7 +984,7 @@
               <button id="pm-uitheme-next" type="button" data-step="1" aria-label="Next theme">&rsaquo;</button>
             </div>
           </div>
-          <p class="adv-help">DARK is the shipped look. LIGHT flips the surface ladder. SYSTEM follows the device.</p>
+          <p class="adv-help">DARK is the classic look. LIGHT is easier to read in bright sun. SYSTEM matches your phone.</p>
           <div id="pm-menuaccent" class="set-row" role="group" aria-labelledby="pm-menuaccent-label">
             <span class="tune-label" id="pm-menuaccent-label">MENU ACCENT</span>
             <div>
@@ -984,7 +994,7 @@
             </div>
           </div>
           <div id="pm-menuaccent-swatches" class="pm-accent-swatches" role="listbox" aria-label="Menu accent presets"></div>
-          <p class="adv-help">Primary buttons, selected chips and sheet highlights. BRAND is Formula red; TEAM follows your constructor. Tap a swatch or use the chevrons.</p>
+          <p class="adv-help">Buttons, selected options and highlights in the menus. TEAM uses your team&rsquo;s colour.</p>
           <div id="pm-menuaccent-custom" class="set-row pm-accent-custom" role="group" aria-labelledby="pm-menuaccent-hex-label" hidden>
             <span class="tune-label" id="pm-menuaccent-hex-label">CUSTOM MENU</span>
             <div>
@@ -1001,7 +1011,7 @@
             </div>
           </div>
           <div id="pm-hudaccent-swatches" class="pm-accent-swatches" role="listbox" aria-label="HUD accent presets"></div>
-          <p class="adv-help">HUD stripes and the radio number plate. TEAM is the default team skin.</p>
+          <p class="adv-help">The stripes on the race HUD and the radio number plate. TEAM uses your team&rsquo;s colour.</p>
           <div id="pm-hudaccent-custom" class="set-row pm-accent-custom" role="group" aria-labelledby="pm-hudaccent-hex-label" hidden>
             <span class="tune-label" id="pm-hudaccent-hex-label">CUSTOM HUD</span>
             <div>
@@ -1009,6 +1019,34 @@
               <input id="pm-hudaccent-hextext" class="pm-accent-hextext" type="text" inputmode="text" maxlength="7" spellcheck="false" autocomplete="off" aria-label="HUD accent hex" value="#e10600">
             </div>
           </div>
+          <h4 class="pm-look-h">READABILITY</h4>
+          <div id="pm-textsize" class="set-row" role="group" aria-labelledby="pm-textsize-label">
+            <span class="tune-label" id="pm-textsize-label">TEXT SIZE</span>
+            <div>
+              <button id="pm-textsize-prev" type="button" data-step="-1" aria-label="Previous text size">&lsaquo;</button>
+              <select id="pm-textsize-sel" aria-labelledby="pm-textsize-label" aria-describedby="pm-textsize-help"></select>
+              <button id="pm-textsize-next" type="button" data-step="1" aria-label="Next text size">&rsaquo;</button>
+            </div>
+          </div>
+          <p class="adv-help" id="pm-textsize-help">Bigger words in the menus and settings. The race HUD has its own size under DISPLAY.</p>
+          <div id="pm-contrast" class="set-row" role="group" aria-labelledby="pm-contrast-label">
+            <span class="tune-label" id="pm-contrast-label">HIGH CONTRAST</span>
+            <div>
+              <button id="pm-contrast-prev" type="button" data-step="-1" aria-label="Previous contrast setting">&lsaquo;</button>
+              <select id="pm-contrast-sel" aria-labelledby="pm-contrast-label" aria-describedby="pm-contrast-help"></select>
+              <button id="pm-contrast-next" type="button" data-step="1" aria-label="Next contrast setting">&rsaquo;</button>
+            </div>
+          </div>
+          <p class="adv-help" id="pm-contrast-help">Solid panels behind menus and the HUD, brighter labels and stronger outlines. Helps in sunlight.</p>
+          <div id="pm-units" class="set-row" role="group" aria-labelledby="pm-units-label">
+            <span class="tune-label" id="pm-units-label">SPEED UNITS</span>
+            <div>
+              <button id="pm-units-prev" type="button" data-step="-1" aria-label="Previous speed unit">&lsaquo;</button>
+              <select id="pm-units-sel" aria-labelledby="pm-units-label"></select>
+              <button id="pm-units-next" type="button" data-step="1" aria-label="Next speed unit">&rsaquo;</button>
+            </div>
+          </div>
+          <h4 class="pm-look-h">TITLE SCREEN &amp; MOTION</h4>
           <div id="pm-motion" class="set-row" role="group" aria-labelledby="pm-motion-label">
             <span class="tune-label" id="pm-motion-label">MENU ANIMATIONS</span>
             <div>
@@ -1017,7 +1055,7 @@
               <button id="pm-motion-next" type="button" data-step="1" aria-label="Next menu animations" aria-hidden="true" tabindex="-1">&rsaquo;</button>
             </div>
           </div>
-          <p class="adv-help" id="pm-motion-help">REDUCED stills menu reveals and screen transitions. If your device asks for reduced motion, that always wins.</p>
+          <p class="adv-help" id="pm-motion-help">REDUCED turns off sliding and fading between screens. If your phone is set to reduce motion, that always wins.</p>
           <div id="pm-titleintro" class="set-row" role="group" aria-labelledby="pm-titleintro-label">
             <span class="tune-label" id="pm-titleintro-label">TITLE INTRO</span>
             <div>
@@ -1026,7 +1064,7 @@
               <button id="pm-titleintro-next" type="button" data-step="1" aria-label="Next title intro" aria-hidden="true" tabindex="-1">&rsaquo;</button>
             </div>
           </div>
-          <p class="adv-help" id="pm-titleintro-help">The first-show title reveal. QUICK halves it; OFF skips straight to the resting board. REPLAY still previews once when OFF.</p>
+          <p class="adv-help" id="pm-titleintro-help">The animation when the game opens. QUICK is half as long; OFF goes straight to the menu.</p>
           <div id="pm-menuwash" class="set-row" role="group" aria-labelledby="pm-menuwash-label">
             <span class="tune-label" id="pm-menuwash-label">MENU WASH</span>
             <div>
@@ -1035,7 +1073,7 @@
               <button id="pm-menuwash-next" type="button" data-step="1" aria-label="Next menu wash" aria-hidden="true" tabindex="-1">&rsaquo;</button>
             </div>
           </div>
-          <p class="adv-help" id="pm-menuwash-help">The red radial and grain behind the title menu. SOFT eases both; OFF leaves a flat dark veil.</p>
+          <p class="adv-help" id="pm-menuwash-help">The coloured glow behind the main menu. SOFT tones it down; OFF leaves a plain dark background.</p>
           <div id="pm-titleart" class="set-row" role="group" aria-labelledby="pm-titleart-label">
             <span class="tune-label" id="pm-titleart-label">TITLE ART</span>
             <div>
@@ -1044,7 +1082,7 @@
               <button id="pm-titleart-next" type="button" data-step="1" aria-label="Next title art" aria-hidden="true" tabindex="-1">&rsaquo;</button>
             </div>
           </div>
-          <p class="adv-help" id="pm-titleart-help">The side-on line drawing behind the title menu. SOFT fades it; OFF removes it for a cleaner board.</p>
+          <p class="adv-help" id="pm-titleart-help">The car drawing behind the main menu. SOFT fades it; OFF removes it.</p>
           <button type="button" id="pm-replay-intro" class="pm-replay-intro">REPLAY INTRO<small>play the title reveal again</small></button>
         </section>
         <section id="advanced" class="pm-group" role="region"
