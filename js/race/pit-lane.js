@@ -1410,10 +1410,17 @@ const PitLane = (function () {
       const plan = AiDrive.stintPlan({
         laps: n,
         lifeLaps: (cls) => G.tyres.planLaps(TyreModel.AI_CLASS[cls].life, n),
-        pitLossLaps, roll, stops: pin,
+        pitLossLaps, roll, stops: pin, twoCompound: twoCompoundRule(n),
       });
       if (plan) { plan.pitLossLaps = pitLossLaps; plan.pin = pin; }
       return plan;
+    }
+    /** FIA B6.3.6: a DRY race uses two dry compounds. Not below
+     *  TWO_COMPOUND_MIN_LAPS — the game's short races (3-7 laps) would be
+     *  one forced stop and nothing else. */
+    const TWO_COMPOUND_MIN_LAPS = 8;
+    function twoCompoundRule(laps) {
+      return laps >= TWO_COMPOUND_MIN_LAPS && TyreModel.treadFor(G.raceWeather) === 0;
     }
     /** The STRATEGY row's pin for this circuit: a stop count, or null for AUTO. */
     function pinKey() { const t = G.track, d = t && t.def; return "pitPlan." + ((d && d.id) || (t && t.id) || "track"); }
@@ -1518,7 +1525,8 @@ const PitLane = (function () {
       const firstLife = Math.max(1, G.tyres.planLaps(fittedLife, G.lapsTarget) * (1 - G.tyres.spent(c)));
       const stops = plan.pin != null ? Math.max(0, plan.pin - done) : null;
       const rel = AiDrive.stintPlan({ laps: lapsLeft, lifeLaps, pitLossLaps: plan.pitLossLaps || AiDrive.STRAT.PIT_LOSS_FALLBACK, roll: 0.5,
-                                      start: cls, firstLife, stops });
+                                      start: cls, firstLife, stops,
+                                      twoCompound: twoCompoundRule(G.lapsTarget), used: plan.seq.slice(0, done) });
       if (!rel) return false;
       const newNext = rel.stops > 0 ? lap - 1 + rel.lapsAt[0] : null;
       if (newNext != null && Math.abs(newNext - oldNext) < 2) return false;
@@ -1543,6 +1551,9 @@ const PitLane = (function () {
       const plan = c && c.pitPlan;
       // A HUMAN's plan is advice (planFor): nothing here ever arms it.
       if (!plan || c.human || c.pitArmed || (c.pitState && c.pitState !== "none")) return "";
+      // The last lap, or the leader already flagged: no stop pays (the player's
+      // engineer has the same finalLap guard). A lapped AI still boxed for wets.
+      if ((G.lapsTarget > 0 && (c.lap || 0) >= G.lapsTarget) || (typeof RaceControl !== "undefined" && RaceControl.flagOut(G.cars))) return "";
       const stopsLeft = plan.stops - (c.pitStops || 0);
       const nextAt = plan.lapsAt[c.pitStops || 0];
       // WRONG TYRE FOR THE CONDITIONS, in either direction: slicks in the rain

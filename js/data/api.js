@@ -17,6 +17,7 @@ const F1API = (function () {
   // list — correct, and every caller already handles it.
   const season = () => String(new Date().getFullYear());
   const CACHE_PREFIX = "apex26.api.";
+  const CACHE_MAX_CHARS = 256 * 1024;
   const MIN_GAP_MS = 400;
   const MAX_RETRY = 2;         // retries on 429 / 5xx before giving up
   const RETRY_BASE_MS = 10000; // 10 s first retry — OpenF1 rate-limits hard; short
@@ -41,6 +42,12 @@ const F1API = (function () {
 
   let queue = Promise.resolve();        // promise chain serializing network hits
   let lastNetAt = 0;                    // time of last actual fetch start
+  // OPENF1'S FREE TIER IS 30 REQUESTS A MINUTE (and 3/s — https://openf1.org/).
+  // MIN_GAP_MS alone allowed ~150/min: a 4-lane TELEMETRY compare is ~18
+  // requests, two in a minute tripped 429s whose +10 s/+20 s retries landed in
+  // the same window, and the tab showed "Couldn't load telemetry." A sliding
+  // window holds OpenF1 under the cap instead.
+  const OPENF1_PER_MIN = 28, _of1Recent = [];
   let netGen = 0;                       // bumped by cancelAll(); a request born before it is stale
   const liveControllers = new Set();    // AbortControllers of fetches on the wire
   const inFlight = new Map();           // generation + cache policy + URL -> shared request Promise
@@ -132,6 +139,9 @@ const F1API = (function () {
   function writeCache(url, data) {
     const key = CACHE_PREFIX + url;
     const payload = JSON.stringify({ t: Date.now(), data });
+    // A multi-MB body (/position, car_data) would take the origin's whole
+    // localStorage quota from the game's own saves: keep it in memory only.
+    if (payload.length > CACHE_MAX_CHARS) return;
     const now = Date.now();
     let swept = false;
     if (now - lastCacheSweepAt >= CACHE_SWEEP_MS) {
@@ -305,7 +315,13 @@ const F1API = (function () {
       const slot = queue
         .then(function () {
           if (myGen !== netGen) throw cancelledError(url);
-          const wait = lastNetAt + MIN_GAP_MS - Date.now();
+          let wait = lastNetAt + MIN_GAP_MS - Date.now();
+          if (url.indexOf(OPENF1) === 0) {
+            const now = Date.now();
+            while (_of1Recent.length && now - _of1Recent[0] >= 60000) _of1Recent.shift();
+            if (_of1Recent.length >= OPENF1_PER_MIN) wait = Math.max(wait, _of1Recent[0] + 60000 - now + 50);
+            _of1Recent.push(now + Math.max(0, wait));
+          }
           if (wait > 0) return new Promise(function (res) { setTimeout(res, wait); });
           return null;
         })
@@ -488,8 +504,12 @@ const F1API = (function () {
           dateStart: str(m.date_start)
         };
         if (out.meetingKey !== null && out.dateStart) meetingDates[out.meetingKey] = out.dateStart;
+        // OpenF1 keeps CANCELLED rounds in the list (2026's Bahrain and Saudi
+        // Arabia: is_cancelled true, https://api.openf1.org/v1/meetings?year=2026);
+        // they have no sessions to show, so the picker never offers them.
+        out.cancelled = m.is_cancelled === true;
         return out;
-      }).filter(function (m) { return m.meetingKey !== null; });
+      }).filter(function (m) { return m.meetingKey !== null && !m.cancelled; });
     });
   }
 

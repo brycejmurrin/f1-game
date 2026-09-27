@@ -455,3 +455,14 @@ test("game.js flushes the ghost at its off-race moments", () => {
   assert.match(game, /function quitToMenu\(\) \{\s*Ghost\.flush\(\);/);
   assert.match(game, /if \(p\) Ghost\.flush\(\);/, "pause writes it too");
 });
+
+test("a same-circuit rebuild does not re-key the ghost (sameCircuit reads the id from BEFORE the reset)", () => {
+  // loadTrack nulls builtTrackId before the build (a throwing build must not
+  // leave the old id claiming a freed world), so comparing against it made
+  // sameCircuit always false and a day<->dark TIME preview dropped the lap.
+  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const a = src.indexOf("const prevTrackId = builtTrackId;");
+  const b = src.indexOf("track = null; builtTrackId = null;");
+  assert.ok(a > 0 && a < b, "prevTrackId is captured before the reset");
+  assert.match(src, /const sameCircuit = prevTrackId === def\.id;/);
+});

@@ -47,6 +47,7 @@ const RaceFacts = (function () {
       t = 0; lapLen = 0; cars = null; nextId = 1;
       st.clear(); pairs.clear(); battles.clear(); hist.clear();
       order = []; fastest = { time: Infinity, car: null };
+      pitEndT = -1e9;   // last race's pit exit must not mute this race's pace calls
       pos = 0; pendPos = 0; pendT = 0; grid = null; started = false; caution = 0; playerHits = 0; playerSev = 0;
     }
 
@@ -93,7 +94,7 @@ const RaceFacts = (function () {
     // the one `order` array in place with a hoisted comparator, pair / battle
     // keys are integers and the per-tick Sets are reused — this ran ~70
     // allocations a step (strings, arrays, Sets) before.
-    const _seen = new Set(), _live = new Set();
+    const _seen = new Set(), _live = new Set(), _shoved = new Set();
     const pairKey = (x, y) => x * 1048576 + y;   // ids are small ints; exact below 2^53
     // The car's own flag time when it has one: a VS FRIEND rival is drawn
     // ~100 ms in the past, so the tick race-facts SAW it cross is late.
@@ -130,7 +131,7 @@ const RaceFacts = (function () {
       const seg = lapLen / K;
 
       // ── per car: timing loop and edges ──────────────────────────────────
-      let regrid = false;
+      let regrid = false; _shoved.clear();
       for (const c of cars) {
         const s = bag(c);
         const i = Math.floor((c.prog || 0) / seg);
@@ -141,7 +142,7 @@ const RaceFacts = (function () {
           s.cp = i;
           // …and who-is-ahead with them: a re-grid or a rescue is not a pass,
           // so the order after it is the new baseline, not a flip to call.
-          regrid = true;
+          regrid = true; _shoved.add(s.id);
           // …and the player's gap history with them. A red-flag restart puts the
           // field back on the grid, bunched; comparing those gaps with the
           // pre-flag ones logged at the same checkpoints read as "6.5 quicker".
@@ -201,7 +202,14 @@ const RaceFacts = (function () {
       // Pairs not looked at this tick are forgotten: a car that fell three
       // places inside the hold left a stale "who is ahead", which fired as a
       // pass — a lead change twenty seconds late — when the two met again.
-      if (regrid) pairs.clear();
+      // Only the shoved cars' pairs: one car reversing off a wall re-baselined
+      // every pass still inside its hold across the field, and they were never
+      // called. Many at once is a re-grid (red flag), which resets the lot.
+      if (regrid) {
+        if (_shoved.size > 3) pairs.clear();
+        else for (const k of pairs.keys()) if (_shoved.has(Math.floor(k / 1048576)) || _shoved.has(k % 1048576)) pairs.delete(k);
+        _shoved.clear();
+      }
       const seen = _seen; seen.clear();
       for (let i = 0; i < order.length; i++) {
         for (let j = i + 1; j <= i + PAIR_SPAN && j < order.length; j++) {

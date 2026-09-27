@@ -488,7 +488,13 @@ const GameAudio = (function () {
     // iOS drops a VISIBLE page to "interrupted" for an alarm or Siri; a gamepad
     // player never makes the gesture the listeners below wait for. Our own
     // suspend() only runs while hidden, so a visible stop is never ours.
-    ctx.onstatechange = () => { if (ctx && ctx.state !== "running" && ctx.state !== "closed" && !document.hidden) resumeIfNeeded(); };
+    ctx.onstatechange = () => {
+      // "interrupted" is iOS taking the audio session — a call answered from the
+      // compact banner keeps Safari VISIBLE, so nothing else tells the game
+      // (support.apple.com/guide/iphone/answer-or-decline-incoming-calls-iph3c9947bf/ios).
+      if (ctx && ctx.state === "interrupted" && _onInterrupted) { try { _onInterrupted(); } catch (_) { /* a listener must not stop the resume below */ } }
+      if (ctx && ctx.state !== "running" && ctx.state !== "closed" && !document.hidden) resumeIfNeeded();
+    };
     master = ctx.createGain();
     master.gain.value = isEnabled ? 0.8 : 0;
     // MASTER LIMITER. Engine + wind + skid + rain + thunder + music summed
@@ -588,6 +594,12 @@ const GameAudio = (function () {
     const p = ctx.resume();
     if (p && p.then) {
       p.then(() => {
+        // RESOLVED IS NOT RUNNING. WebKit resolves resume() on a context still
+        // "interrupted" (a call, Siri, an alarm — webkit LayoutTests
+        // audiocontext-state-interrupted.html; web-audio-api#2585): clearing
+        // lastFailedResume here meant the next tap never reached rebuildCtx and
+        // the game stayed silent until a reload.
+        if (!ctx || ctx.state !== "running") return;
         rebuildTries = 0;
         lastFailedResume = 0;
         Log.info("audio", "GameAudio.resume state=" + (ctx && ctx.state));
@@ -2245,8 +2257,19 @@ const GameAudio = (function () {
   }
 
   let musicResumeBuf = null, musicResumeAt = NaN, musicResumeOff = 0;
+  // A TRACK THAT CANNOT LOAD MOVES THE LIST ON. Only a source's onended
+  // advanced the playlist, and a failed fetch/decode (an upload in a format
+  // decodeAudioData refuses, a 404, offline) never made one: silence, with
+  // the UI naming the dead track. Skip it; a whole list that fails stops.
+  let _musicFails = 0;
+  function musicLoadFailed(token) {
+    if (!musicOn || token !== musicToken) return;   // superseded: not ours to skip
+    if (++_musicFails >= PLAYLIST.length) { _musicFails = 0; stopInternal(); return; }
+    nextTrack(1);
+  }
   function playMusicBuffer(buf, token) {
     if (!ctx || !musicOn || token !== musicToken) return;  // superseded
+    _musicFails = 0;
     ensureMusicGain();
     try { if (musicSrc) { musicSrc.onended = null; musicSrc.stop(); musicSrc.disconnect(); } } catch (e) { /* stop-before-start is a documented throw; the source is being replaced regardless */ }
     const src = ctx.createBufferSource();
@@ -2339,7 +2362,7 @@ const GameAudio = (function () {
     // full PCM before it resolves — two taps on NEXT put ~150 MB of decoded
     // audio in the air at once, three ~225 MB, none of it bounded by the
     // MUSIC_CACHE eviction that only runs afterwards.
-    if (_musicLoads[url]) { _musicLoads[url].then((b) => { if (b) playMusicBuffer(b, token); }, () => {}); return; }
+    if (_musicLoads[url]) { _musicLoads[url].then((b) => { if (b) playMusicBuffer(b, token); else musicLoadFailed(token); }, () => {}); return; }
     const _load = fetch(url)
       .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status + " for " + url); return r.arrayBuffer(); })
       .then((ab) => new Promise((res, rej) => { ctx.decodeAudioData(ab, res, rej); }))
@@ -2358,6 +2381,7 @@ const GameAudio = (function () {
         // Music is optional and the game plays on without it. Retained rather
         // than printed: a soundtrack that never starts is otherwise invisible.
         Log.warn("audio", "music load/decode failed for " + url + ": " + ((err && err.message) || err));
+        musicLoadFailed(token);
         return null;
       });
     _musicLoads[url] = _load;
@@ -2379,6 +2403,9 @@ const GameAudio = (function () {
   function setSfxEnabled(b) {
     sfxEnabled = !!b;
     if (sfxBus) sfxBus.gain.value = sfxEnabled ? sfxVol : 0;
+    // A race that started with SFX off wanted rain but built no nodes
+    // (startRain returns on !sfxOk()); turning SFX on must start it.
+    if (sfxEnabled && rainWanted && !rainSrc) startRain();
     // setEngine() owns the rev-keyed music duck and stops running the instant
     // SFX go off (sfxOk()), so release it here the way stopEngine() does.
     // musicGain hangs off master, not sfxBus: without this the music stayed up
@@ -2858,7 +2885,11 @@ const GameAudio = (function () {
     if (backend) { try { backend.stop(); } catch (e) { /* a broken backend must not take the audio down */ } }
   }
 
+  let _onInterrupted = null;
+  /** fn() when the platform interrupts the audio session (an iOS call, Siri). */
+  function onInterrupted(fn) { _onInterrupted = typeof fn === "function" ? fn : null; }
   return {
+    onInterrupted,
     init,
     setRadioDuck,
     decodeClip,

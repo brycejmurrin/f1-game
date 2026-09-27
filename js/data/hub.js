@@ -512,7 +512,13 @@ const DataHub = (function () {
       F1API.meetings(sel.year).then(function (ms) {
         if (myGen !== pickerGen) return;
         if (!ms.length) { ph(gpSel, "no data"); return; }
-        if (sel.meetingKey === null) sel.meetingKey = ms[ms.length - 1].meetingKey;
+        // The LATEST MEETING THAT HAS STARTED, not the year's last entry: the
+        // current season lists every future round, and defaulting to December's
+        // Abu Dhabi showed "not published" in every tab.
+        if (sel.meetingKey === null) {
+          const now = Date.now(), started = ms.filter(function (m) { const t = Date.parse(m.dateStart); return !(t > now); });
+          sel.meetingKey = (started.length ? started[started.length - 1] : ms[0]).meetingKey;
+        }
         setSelectOptions(gpSel, meetingPickerOptions(ms), sel.meetingKey);
         loadSessions(userChanged);
       }, function () {

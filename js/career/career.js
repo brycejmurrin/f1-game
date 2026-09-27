@@ -1077,7 +1077,8 @@ function settleRound(order, player) {
   if (career.results.some((row) => row.r === raced)) return null;
   const pos = order.indexOf(player) + 1;
   const team = teamOf(career.team);
-  const pts = player.retired ? 0 : (Teams.POINTS[pos - 1] || 0);
+  const scored = (c) => (c.classified != null ? !!c.classified : !c.retired);   // a DNF past 90 % distance is classified (endRace)
+  const pts = scored(player) ? (Teams.POINTS[pos - 1] || 0) : 0;
   const prize = prizeFor(pos);
   const salary = career.deal ? career.deal.salary : 0;
   const bonus = career.deal ? career.deal.bonusPt * pts : 0;
@@ -1108,7 +1109,7 @@ function settleRound(order, player) {
                  + clamp((craft - CRAFT_BASE) * CRAFT_REP, CRAFT_REP_MIN, CRAFT_REP_MAX);
   career.rep = clamp(career.rep + repDelta, 0, 100);
   const dnf = player.retired ? (player.dnf || "mechanical") : null;
-  const matePts = mate && !mate.retired ? (Teams.POINTS[order.indexOf(mate)] || 0) : 0;
+  const matePts = mate && scored(mate) ? (Teams.POINTS[order.indexOf(mate)] || 0) : 0;
   const dbl = career.flavour === "myteam" && pts > 0 && matePts > 0;
   const cleanRun = !player.retired && !(player.cuts | 0) && !(player.penalty | 0);
   career.results.push({ r: raced, p: pos, pts, obj: obj.done, dnf,
@@ -1406,9 +1407,25 @@ function acceptOffer(i) {
   const team = o && teamOf(o.teamId);
   if (!team) return null;
   if (team.id !== career.team) {
+    const oldId = seasonDriverId(career.team, career.seat);
     career.team = team.id;
     career.seat = weakerSeat(team);
+    // DEVELOPMENT FOLLOWS THE DRIVER (docs/CAREER.md), as swapSeats() does: it is
+    // keyed by seat, and a move left the player's growth in the old seat for
+    // the AI who took it — and handed the player the displaced driver's.
+    const newId = seasonDriverId(career.team, career.seat);
+    if (career.dev && oldId !== newId) {
+      const mine = career.dev[oldId], theirs = career.dev[newId];
+      if (mine) career.dev[newId] = mine; else delete career.dev[newId];
+      if (theirs) career.dev[oldId] = theirs; else delete career.dev[oldId];
+    }
+    // THE WORKS BUILD IS READ OUTSIDE THE ERA, as start() does: rollover() has
+    // already installed the new season's bans, so a banned works part resolved
+    // to the DEFAULT and that fallback was written into owned/fitted — the team's
+    // own engine or floor lost for good (3x catalog to research it back).
+    if (Parts.setLegality) Parts.setLegality(null, "");
     const factory = Parts.getFactorySetup(team);
+    applyRegs();
     career.owned = Object.values(factory);
     career.fitted = Object.assign({}, factory);
   }

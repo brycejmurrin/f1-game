@@ -278,7 +278,7 @@ const CustomTeam = (function () {
           drivers: [{
             name: clean($("cz-driver").value, "Your Name", 22),
             code: clean($("cz-code").value, "YOU", 3).toUpperCase(),
-            num: clamp(parseInt($("cz-num").value, 10) || 99, 0, 99),
+            num: clamp(Number.isFinite(parseInt($("cz-num").value, 10)) ? parseInt($("cz-num").value, 10) : 99, 0, 99),   // #0 is a number, not "blank"
           }],
         };
         ct.livery = czLivFromDialog();

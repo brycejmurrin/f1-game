@@ -720,6 +720,9 @@ interface GameCtx {
   /** Forget RACE SETTINGS' per-track draft: another writer (the Daily) staged laps/weather/time of day. */
   readonly resetRaceDraft: () => void;
   readonly openRaceSetup: () => void;
+  /** Ask for motion permission (iOS) and attach tilt, inside a click. */
+  readonly enableTilt: () => void;
+  readonly getSteerMode: () => string;
   readonly netRoom: boolean;
   /** Seats held by the OTHER players; empty off-line. */
   readonly peerSeats: () => PeerSeat[];

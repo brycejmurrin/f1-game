@@ -40,7 +40,10 @@ const TrackModels = (function () {
         if (add > 4) data[n++] = e;
         if (add > 5) data[n++] = f;
       },
-      seal() { return n === data.length ? data : data.slice(0, n); },
+      // A view, not a copy: slice() of the fleet's biggest accumulator (vegas,
+      // ~150 MB of f64) was ~20 % of the build and doubled the peak for a moment.
+      // The spare capacity goes with the geometry once it is uploaded and freed.
+      seal() { return n === data.length ? data : data.subarray(0, n); },
     };
   }
   function scratch(verts) {

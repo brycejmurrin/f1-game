@@ -175,7 +175,7 @@ precision mediump float;
 in float vAcross;
 in float vSpeed;
 in float vZone;
-in float vAlong;
+in highp float vAlong;   // metres along the lap (to ~7 km): fp16 mediump steps 4 m there and broke the 5 m chevrons on phones
 uniform float uPlayerSpeed;   // m/s
 uniform float uCornersOnly;   // 1 = fade the straights out
 uniform float uPalette;       // 0 = F1 green/amber/red, 1 = colour-blind safe

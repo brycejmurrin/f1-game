@@ -241,7 +241,9 @@ const DrivingCoach = (function () {
       // the reset after a penalty (already announced) are not new warnings.
       const warn = G.player ? (G.player.cutWarn || 0) : 0;
       if (warnSeen == null || warn < warnSeen) warnSeen = warn;
-      else if (warn > warnSeen) { warnSeen = warn; edge = { id: "limits", t: 3, life: 12 }; }
+      // 4 is the count held after the +5 s penalty (the next cut costs +10 s):
+      // announced by the game already, not a new warning.
+      else if (warn > warnSeen) { warnSeen = warn; if (warn <= 3) edge = { id: "limits", t: 3, life: 12 }; }
       // The game's own TRACK LIMITS card holds the channel for ANN_MIN_S (3 s)
       // from the same step, so the window only runs while the coach could
       // speak; `life` still retires a warning a long caution or pit swallowed.
