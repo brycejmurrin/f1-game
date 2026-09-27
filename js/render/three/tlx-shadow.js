@@ -387,9 +387,13 @@
       S.depthPassOn = true;
     }
 
-    function endPass() {
+    function endPass(rt) {
       S.depthPassOn = false;
-      if (!target) return;
+      // Only the pass this End's Begin opened: after a throw between Begin and
+      // End the pool is left open, and a LATER End of another kind (a phone's
+      // carShadowEnd after a failed sun cast — its Begin was a no-op) would
+      // otherwise render that half-filled pool into the sun map.
+      if (!target || _passOpen !== cur || (rt !== undefined && rt !== target)) return;
       const wasSun = target === sunRT;
       // Park only what this target used last time and not now; slots past
       // prevUsed were parked when they went out of use.
@@ -484,7 +488,7 @@
 
     function lampShadowEnd() {
       S.castCullVP = null;
-      endPass();
+      endPass(lampRT);
     }
 
     // L1: the static half. Called on a LAMP change, after the full pass.
@@ -497,7 +501,7 @@
     }
     function lampStaticEnd() {
       S.castCullVP = null;
-      endPass();
+      endPass(lampStaticRT);
       // The static render's OWN result: S.enabled is sticky, so one earlier
       // sun/car failure used to disable L1 for the rest of the session.
       _lampStaticValid = _lastPassOk;
@@ -526,7 +530,7 @@
 
     function carShadowEnd() {
       S.castCullVP = null;   // before endPass's early return — a latched car VP would cull the SUN pass to the car box
-      endPass();
+      endPass(carRT);
     }
 
     /** Armed flags: set by the Begins above each frame game.js runs the pass,
@@ -574,6 +578,19 @@
       // already holds the grid's casters (sunPass runs before present()).
       async warm() {
         const prev = renderer.getRenderTarget();
+        // compileAsync skips INVISIBLE objects (three's _projectObject returns on
+        // visible === false), and beginPass hides the previous pass's pool and
+        // every instanced caster — so warm() compiled only the last pass's
+        // casters. Show every caster that holds real geometry for the compile,
+        // then restore. Pipelines key on material + layout + target, so one
+        // visible caster per layout is what each target needs.
+        const shown = [];
+        for (const pl of pools.values()) {
+          for (const m of pl.pool) if (m.geometry !== parkedGeo && !m.visible) { m.visible = true; shown.push([m, -1]); }
+        }
+        for (const m of iByBatch.values()) {
+          if (!m.visible || !(m.count > 0)) { shown.push([m, m.count]); m.visible = true; if (!(m.count > 0)) m.count = 1; }
+        }
         try {
           if (sunRT) { renderer.setRenderTarget(sunRT); await renderer.compileAsync(castScene, shadowCam); }
           // The lamp maps carry depth32float when L1 is on and the car map its own
@@ -584,7 +601,10 @@
             renderer.setRenderTarget(rt); await renderer.compileAsync(castScene, shadowCam);
           }
           if (blockerQuad && blockerRT) { renderer.setRenderTarget(blockerRT); await renderer.compileAsync(blockerQuad, blockerQuad.camera); }
-        } finally { try { renderer.setRenderTarget(prev); } catch (_) { /* already unbound */ } }
+        } finally {
+          for (const [m, count] of shown) { m.visible = false; if (count >= 0) m.count = count; }
+          try { renderer.setRenderTarget(prev); } catch (_) { /* already unbound */ }
+        }
       },
       carShadowKeep, lampShadowKeep,
       sunSize: SUN_SIZE,
@@ -611,7 +631,7 @@
       castInstanced,
       freeInstanced,
       castShadowChunked: cast,
-      shadowEnd: endPass,
+      shadowEnd: () => endPass(sunRT),
       carShadowEnd,
       lampShadowEnd,
       carShadowBegin,

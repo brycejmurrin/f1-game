@@ -784,6 +784,24 @@ test("the wrap-up reads the result the stewards gave: a penalty is part of the m
   assert.doesNotMatch(text, /7\.0|Grand Prix/, text);
 });
 
+test("the wrap-up credits the fastest lap among cars that took the flag, never a retired car", async () => {
+  const { A: An, G, synth } = load();
+  G.state = "results";
+  const a = An.create(G);
+  const ver = { name: "Max Verstappen", finished: true, finishT: 100, lap: 13, finPos: 1, best: 81 };
+  const you = { name: "You", isPlayer: true, finished: true, finishT: 104, lap: 13, gridPos: 3, finPos: 2, best: 80.5 };
+  const lec = { name: "Charles Leclerc", retired: true, lap: 9, finPos: 3, best: 79 };
+  assert.equal(a.wrapUp([ver, you, lec], info()), true);
+  // Lines are queued one utterance at a time: end each as it starts.
+  for (let i = 0; i < 40; i++) {
+    await new Promise((r) => setTimeout(r, 50));
+    for (const c of synth.calls) if (c.m === "speak" && c.u && c.u.onend && !c._ended) { c._ended = true; c.u.onend(); }
+  }
+  const text = synth.calls.filter((c) => c.m === "speak").map((c) => c.text).join(" ");
+  assert.doesNotMatch(text, /fastest lap to leclerc/i, text);
+  assert.match(text, /fastest lap to you/i, text);
+});
+
 test("a flyby with no room before the grid shot plays nothing — a zero budget used to mean 'no limit'", () => {
   const { A: An, G, synth } = load();
   const a = An.create(G);

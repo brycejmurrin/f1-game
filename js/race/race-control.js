@@ -94,20 +94,6 @@ const RaceControl = (function () {
   function finishOrder(a, b) {
     return (b.lap - a.lap) || ((a.finishT + a.penalty) - (b.finishT + b.penalty));
   }
-  // THE CLASSIFICATION, flagged and still-running cars in ONE sort. The results
-  // are built ~2 s after the last human finishes, so most of the field is still
-  // running — and endRace used to list every flagged car first, so a LAPPED car
-  // that crossed in that window (flagged a lap short, flagOut) was classified
-  // above lead-lap cars still on their final lap. A running car is flagged at
-  // its NEXT crossing, so it counts one lap more than it has; on equal laps the
-  // flagged car is ahead, flagged cars by the clock, running cars by distance.
-  // RaceFacts' live ranking (race-facts.js distOf) already orders them this way.
-  function classifyOrder(a, b) {
-    const la = a.lap + (a.finished ? 0 : 1), lb = b.lap + (b.finished ? 0 : 1);
-    if (la !== lb) return lb - la;
-    if (a.finished !== b.finished) return a.finished ? -1 : 1;
-    return a.finished ? finishOrder(a, b) : (b.prog || 0) - (a.prog || 0);
-  }
 
   const LABEL = ["GREEN", "YELLOW", "VSC", "SAFETY CAR", "RED FLAG"];
   const YELLOW_MIN = 3;    // settled hazards in ONE sector -> local yellow
@@ -361,6 +347,6 @@ const RaceControl = (function () {
       get enabled() { return enabled; },
     };
   }
-  return { create, finishDelay, flagOut, lineTransition, finishOrder, classifyOrder };
+  return { create, finishDelay, flagOut, lineTransition, finishOrder };
 })();
 Object.freeze(RaceControl);

@@ -459,7 +459,11 @@ const Input = (function () {
   ];
   // Keys the game already answers to elsewhere: back, the menu walker's
   // confirm, the perf overlay, the OS. Refused by setKeyBinding.
-  const KEY_RESERVED = { Escape: 1, Enter: 1, NumpadEnter: 1, Tab: 1, Backquote: 1, F9: 1, MetaLeft: 1, MetaRight: 1, ContextMenu: 1 };
+  // Ctrl and Alt too: Alt is the key-release-all chord (Alt+Tab), and with Ctrl
+  // bound a Ctrl+W on the default GAS closes the tab — browsers never hand those
+  // chords to a page (https://developer.chrome.com/docs/capabilities/web-apis/keyboard-lock).
+  const KEY_RESERVED = { Escape: 1, Enter: 1, NumpadEnter: 1, Tab: 1, Backquote: 1, F9: 1, MetaLeft: 1, MetaRight: 1, ContextMenu: 1,
+    AltLeft: 1, AltRight: 1, ControlLeft: 1, ControlRight: 1 };
   const keyMap = {};
   let codeToAction = {};
   // Either Shift / Ctrl / Alt counts as the one key: the default SHIFT DOWN was
@@ -789,10 +793,17 @@ const Input = (function () {
   }
   // A wheel's pedal axis rests at -1 and travels to +1 (the common convention),
   // so map it to 0..1. Unmapped pedals return 0 and the trigger path wins.
+  // Chromium reports an axis as exactly 0 until it has once been seen near
+  // rest, so a pedal resting at -1 read 0 -> half throttle AND half brake on a
+  // fresh page. Until a pedal reports anything but exactly 0, it is at rest.
+  const padPedalSeen = { throttle: false, brake: false };
   function padPedalAxis(axes, which) {
     const i = padAxisMap[which];
     if (i == null) return 0;
-    const v = readPadAxis(axes, i) * padAxisMap.pedalInvert;
+    const raw = readPadAxis(axes, i);
+    if (raw !== 0) padPedalSeen[which] = true;
+    if (!padPedalSeen[which]) return 0;
+    const v = raw * padAxisMap.pedalInvert;
     return clamp((v + 1) / 2, 0, 1);
   }
   function padDpadSteer(pad) {
@@ -862,11 +873,7 @@ const Input = (function () {
        Meta is in KEY_RESERVED so it can never be a binding, which makes
        treating it as "let go of everything" free of side effects. Alt gets the
        same treatment for Alt+Tab on Windows, for the same reason. */
-    // ...unless the player BOUND Alt (it is not reserved, so it can be): then
-    // it is a control, and releasing W because SHIFT DOWN was pressed on Alt
-    // dropped the throttle mid-straight. Alt+Tab still reaches reset() via blur.
-    if (down && (e.code === "MetaLeft" || e.code === "MetaRight" ||
-        ((e.code === "AltLeft" || e.code === "AltRight") && !codeToAction[normCode(e.code)]))) {
+    if (down && (e.code === "MetaLeft" || e.code === "MetaRight" || e.code === "AltLeft" || e.code === "AltRight")) {
       keyLeft = keyRight = keyThrottle = keyBrake = false;
     }
     /* PAUSE AND BACK ARE COMMANDS, NOT DRIVING CONTROLS, so they sit ABOVE the
@@ -1139,13 +1146,11 @@ const Input = (function () {
     else el.removeAttribute("aria-pressed");
   }
   function holdReleaseAll(keepLatch) {
-    // A LATCH DROPS HERE. This is the everything-off path (window blur, page
-    // hidden, Input.reset), and a latched throttle surviving a blur means the
-    // car accelerates while the player is not looking at it.
-    // EXCEPT the last-touch-up nets (keepLatch): the browser fires touchend
-    // after the pointerup of the very tap that SET the latch, so dropping it
-    // there made LATCH behave exactly like HOLD on every phone — the one place
-    // the on-screen pedals exist. Lifting a finger is not leaving the game.
+    // A LATCH DROPS HERE on the everything-off paths (window blur, page hidden,
+    // Input.reset): a latched throttle surviving a blur means the car
+    // accelerates while the player is not looking at it. NOT on the last finger
+    // lifting (keepLatch): TouchEvent.touches is empty on every ordinary lift, so
+    // dropping it there switched LATCH off the moment the thumb left GAS.
     if (!keepLatch) throttleLatched = false;
     paintLatch();
     for (const h of holdBtns) {
@@ -1533,7 +1538,10 @@ const Input = (function () {
     if (btnDown(pad, 13)) return "down";
     if (btnDown(pad, 14)) return "left";
     if (btnDown(pad, 15)) return "right";
-    const ax = pad.axes || [];
+    // A wheel's pedals rest at -1: read as a stick they held a direction and
+    // scrolled the menu on their own. The mapped pedal axes are not sticks.
+    const ped = (i) => i === padAxisMap.throttle || i === padAxisMap.brake;
+    const ax = (pad.axes || []).map((v, i) => (ped(i) ? 0 : v));
     const stick = (x, y) => {
       const mx = Math.abs(x) >= PAD_NAV_DEADZONE ? Math.abs(x) : 0;
       const my = Math.abs(y) >= PAD_NAV_DEADZONE ? Math.abs(y) : 0;
@@ -2032,8 +2040,12 @@ const Input = (function () {
     };
   }
 
+  // A ROTATION KEEPS THE ZERO. onOrient already remaps into screen space by
+  // angle, so the stored neutral is still right; re-sampling it 300 ms later
+  // made whatever lean the player held mid-hairpin the new "straight". Only the
+  // filter restarts, so the new axis does not ease in from the old one's value.
   function onScreenRotate() {
-    setTimeout(calibrate, 300);
+    oeInit = false; tiltSteerVal = 0;
   }
 
   function init(canvas, opts) {
@@ -2157,6 +2169,7 @@ const Input = (function () {
 
     window.addEventListener("gamepadconnected", function (e) {
       padConnected = true;
+      padPedalSeen.throttle = padPedalSeen.brake = false;   // a new connection re-reads its pedals from rest
       try { Log.info("input", `gamepad connected ${padLogId(e)}`); }
       catch (_) { /* Log absent */ }
     });

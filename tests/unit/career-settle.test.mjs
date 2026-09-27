@@ -1064,3 +1064,31 @@ test("the LAST sponsor window of a season ends at the finale, and asks pro rata"
     }
   }
 });
+
+test("a move takes the player's DEVELOPMENT along (it is keyed by seat); the displaced driver's goes to the old seat", () => {
+  for (const seed of [1, 7, 13, 21, 34]) {
+    const Career = loadDriver();
+    Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed });
+    Career.engage(true);
+    const c = Career.data();
+    c.rep = 95; c.deal.years = 1; c.deal.left = 1;   // a strong year: other teams call
+    Career.rollover();
+    const i = (c.offers || []).findIndex((o) => o.teamId !== "haas");
+    if (i < 0) continue;
+    const oldId = `haas:${c.seat}`;
+    c.dev[oldId] = { pace: 6, experience: 20 };
+    Career.acceptOffer(i);
+    const newId = `${c.team}:${c.seat}`;
+    assert.deepEqual(c.dev[newId], { pace: 6, experience: 20 }, `seed ${seed}: the player's growth moved to ${newId}`);
+    assert.notDeepEqual(c.dev[oldId], { pace: 6, experience: 20 }, "and the AI in the old seat did not inherit it");
+    return;
+  }
+  assert.fail("no seed drew an offer from another team");
+});
+
+test("a move resolves the new team's WORKS build outside the current era's bans (like start())", () => {
+  const src = readFileSync(join(ROOT, "js/career/career.js"), "utf8");
+  const fn = src.slice(src.indexOf("function acceptOffer("), src.indexOf("\n}\n", src.indexOf("function acceptOffer(")));
+  const clear = fn.indexOf('Parts.setLegality(null, "")'), fac = fn.indexOf("Parts.getFactorySetup(team)"), re = fn.indexOf("applyRegs()");
+  assert.ok(clear > 0 && fac > clear && re > fac, "clear the ruleset, read the factory, re-install the era");
+});

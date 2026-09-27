@@ -72,8 +72,7 @@ function boot() {
   const pedal = el("btn-throttle");
   const tap = () => { pedal.fire("pointerdown"); pedal.fire("pointerup"); };
   const blur = () => (listeners.blur || []).forEach((f) => f({}));
-  const fireWin = (t, ev) => (listeners[t] || []).forEach((f) => f(ev));
-  return { Input, pedal, tap, blur, fireWin, listeners };
+  return { Input, pedal, tap, blur, listeners };
 }
 
 test("HOLD is unchanged: the pedal follows the thumb", () => {
@@ -140,26 +139,33 @@ test("the pedal SHOWS the latch: :active follows the thumb, .on outlives it", ()
   assert.equal(pedal.getAttribute("aria-pressed"), null, "in HOLD it is a plain button again");
 });
 
-test("a latch survives the finger lifting — the window touchend net is not leaving the game", () => {
-  // The browser fires touchend AFTER the pointerup of the very tap that set the
-  // latch; the ghost-pointer net used to clear it there, so LATCH was HOLD on
-  // every phone (the one place the on-screen pedal exists).
-  const { Input, tap, fireWin } = boot();
-  Input.setThrottleLatch(true);
-  tap();
-  fireWin("touchend", { touches: { length: 0 } });
-  fireWin("touchcancel", { touches: { length: 0 } });
-  assert.equal(Input.throttleLatched(), true);
-  assert.equal(Input.throttle(), true);
+test("the LAST FINGER LIFTING keeps the latch (touchend has touches.length 0 on every lift)", () => {
+  const h = boot();
+  h.Input.setThrottleLatch(true);
+  h.tap();
+  assert.equal(h.Input.throttleLatched(), true);
+  (h.listeners.touchend || []).forEach((f) => f({ touches: { length: 0 } }));
+  assert.equal(h.Input.throttleLatched(), true, "lifting the thumb off GAS is what LATCH is for");
+  assert.ok(h.Input.throttle() > 0.99, "still full throttle");
+  (h.listeners.touchcancel || []).forEach((f) => f({ touches: { length: 0 } }));
+  assert.equal(h.Input.throttleLatched(), true, "a touchcancel net releases the held buttons, not the latch");
+  h.blur();
+  assert.equal(h.Input.throttleLatched(), false, "…but a blur still drops it");
 });
 
-test("Alt bound as a control does not release the keys still held", () => {
-  const { Input, listeners } = boot();
-  const key = (code, down) => (listeners[down ? "keydown" : "keyup"] || []).forEach((f) =>
-    f({ code, key: code, repeat: false, isTrusted: true, preventDefault() {}, target: {} }));
-  assert.equal(Input.setKeyBinding("shiftDown", 1, "AltLeft").ok, true);
-  key("KeyW", true);
-  assert.equal(Input.throttle(), true);
-  key("AltLeft", true);                 // a downshift mid-straight, W still held
-  assert.equal(Input.throttle(), true, "a BOUND Alt is a control, not a release-all");
+test("input hunt fixes: pad steer gated under a menu, rotation keeps the tilt zero, Ctrl/Alt reserved, lobby asks for tilt, a silent gyro falls back", () => {
+  const input = fs.readFileSync(path.join(ROOT, "js/input/input.js"), "utf8");
+  // The d-pad walking a friend race's pause menu no longer steers the car: the
+  // PAUSED car reads PAUSED_NET_INPUT (game.js inputOf), so input.js keeps
+  // reading the stick under menus (ui-improve-pass pins that on purpose).
+  assert.match(fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8"), /if \(c\.local && paused && netPlay\.active\(\)\) return PAUSED_NET_INPUT;/);
+  const rot = input.match(/function onScreenRotate\(\) \{[\s\S]*?\n  \}/)[0];
+  assert.doesNotMatch(rot, /calibrate/, "a rotation must not re-sample the neutral mid-corner");
+  for (const k of ["AltLeft", "AltRight", "ControlLeft", "ControlRight"])
+    assert.match(input, new RegExp(`KEY_RESERVED = \\{[^}]*${k}: 1`), `${k} cannot be bound`);
+  const lobby = fs.readFileSync(path.join(ROOT, "js/net/lobby.js"), "utf8");
+  for (const id of ["vs-host", "vs-join", "vs-ready", "vs-start", "vs-code-host", "vs-code-go"])
+    assert.match(lobby, new RegExp(`on\\("${id}", tiltToo\\(`), `${id} asks for tilt inside its click`);
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  assert.match(game, /if \(steerMode !== "tilt" \|\| Input\.gyroSeen \|\| headlessMode\) return;/, "no reading in 1.5 s: buttons, said");
 });
