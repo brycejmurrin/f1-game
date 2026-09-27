@@ -221,6 +221,7 @@ const FULL = [
   "js/physics/aero-zones.js",
   "js/fx/skidmarks.js",
   "js/race/race-control.js",
+  "js/race/real-race.js",      // RealRace.create(G): a real Grand Prix replayed from its timing script (after race-control: it holds its flags)
   "js/race/weather-arc.js",
   "js/camera/free-cam.js",
   "js/camera/photo-cam.js",
@@ -490,6 +491,8 @@ const HARD_EDGES = [
   ["js/physics/aero-zones.js", "js/game.js"],      // game.js calls AeroZones.create(G) at eval time
   ["js/fx/skidmarks.js", "js/game.js"],      // game.js calls SkidMarks.create() at eval time
   ["js/race/race-control.js", "js/game.js"],   // game.js calls RaceControl.create(G) at eval time
+  ["js/core/mat4.js", "js/race/real-race.js"],   // RealRace binds M4.clamp at eval
+  ["js/race/real-race.js", "js/game.js"],      // game.js calls RealRace.create(G) at eval time
   ["js/race/session-entry.js", "js/game.js"], // game.js creates the shared start/quali entry coordinator
   ["js/race/race-control.js", "js/physics/incident-sim.js"], // takeover line crossings share RaceControl semantics
   ["js/race/weather-arc.js", "js/game.js"],    // game.js calls WeatherArc.create(G, deps) at eval time
@@ -638,6 +641,7 @@ const LAZY_DATA = [
   "js/data/standings.js",
   "js/data/results.js",
   "js/data/live.js",
+  "js/data/real-race-tab.js",
   "js/data/hub.js",
 ];
 // hub.js calls Data*.create() at EVAL time, so every tab module must have
