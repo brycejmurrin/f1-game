@@ -18,7 +18,14 @@ In-race slip/grip/timing is **agent-view** (`references/state.md`), not this ove
 | results | `loadResults` | 60 min |
 | live | `loadLive` | 5 min |
 | telemetry | `loadTelemetry` | 15 min |
+| race | `loadRealRace` | 60 min |
 | export | `loadExport` | 24 h |
+
+RACE IT (`js/data/real-race-tab.js`) builds one Grand Prix's timing into the
+script `js/race/real-race.js` replays (grid, per-lap pace, stops, flags,
+retirements) and hands it to `RealRace.launch(script, {seat, laps})` — the one
+call from `js/data/` into the game. Design and the pace loop:
+`docs/notes/REAL-RACE-2026-09-27.md`.
 
 Lazy closures on `TABS` — a direct reference at IIFE init is a TDZ throw
 that kills DataHub.

@@ -220,6 +220,44 @@ test("cancel then reopen prevents the prior lobby generation from attaching", as
   h.lobby.cancel();
 });
 
+test("MAKE ANSWER during a join still fetching relay credentials waits for the transport", async () => {
+  // rtc-e2e / rtc-e2e-3p 2026-09-27: __apex.lobbyJoin fires join() and
+  // makeAnswer() back to back, and a guest who opened an invite link taps MAKE
+  // ANSWER on a pre-filled code just as fast. join() builds its transport only
+  // after readyIce() (up to ICE_WAIT_MS); makeAnswer read `transport` at once
+  // and answered {error:"no_transport"} — "That attempt has ended" on the
+  // first tap, with nothing wrong. It waits for the join in flight instead.
+  const ice = deferred();
+  const h = harness({
+    prefetchIce: () => ice.promise,
+    scanFactory: () => ({ stop() {}, start() {} }),
+    handshake: { acceptInvite: async () => ({ ok: true, code: "answer", peer: null }) },
+  });
+  try {
+    h.lobby.open();
+    const joining = h.lobby.join();
+    const answering = h.lobby.makeAnswer("invite");
+    let settled = false;
+    answering.then(() => { settled = true; });
+    await new Promise((r) => setTimeout(r, 20));
+    assert.equal(settled, false, "the answer must wait for the join, not fail at once");
+    assert.deepEqual(h.transports, [], "no transport yet: the relay fetch is still pending");
+    ice.resolve();
+    assert.equal((await joining).ok, true);
+    const res = await answering;
+    assert.equal(res.ok, true, JSON.stringify(res));
+    assert.equal(res.code, "answer");
+    assert.deepEqual(h.transports, ["guest"], "one guest transport, built by the join");
+    // Junk is still refused by SHAPE before anything waits on a connection.
+    const junk = harness({ prefetchIce: () => new Promise(() => {}), scanFactory: () => ({ stop() {}, start() {} }),
+      handshake: { peekCode: () => ({ ok: false, error: "corrupt", message: "junk" }) } });
+    try {
+      junk.lobby.join();
+      assert.equal((await junk.lobby.makeAnswer("not-a-code")).error, "corrupt");
+    } finally { junk.lobby.cancel(); }
+  } finally { h.lobby.cancel(); }
+});
+
 test("scanner completion is guarded by scanner identity and generation", async () => {
   const starts = [deferred(), deferred()];
   const scanners = starts.map((start) => ({

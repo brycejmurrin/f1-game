@@ -740,6 +740,8 @@ interface GameCtx {
   readonly redFlagRestart: () => boolean;
   /** The day's time-trial plan (js/race/daily-challenge.js). */
   readonly daily: any;
+  /** Fly a flag by script — level 1-3 holds it at least that high; 0 releases it (js/race/race-control.js hold). */
+  readonly holdCaution: (level: number, cause?: string) => number;
   /** TT_LAPS — the time-trial distance a daily session stages (ttLaps is the lap LIST). */
   readonly ttDistance: number;
   /** True while an #announce message is still on screen — a coach mark waits for it. */
@@ -820,6 +822,7 @@ declare const RaceControl: GameModuleFactory;
 // TypeScript keeps the two in separate declaration spaces.
 declare const WeatherArc: GameModuleFactory;
 declare const DailyChallenge: GameModuleFactory;
+declare const RealRace: GameModuleFactory;
 declare const TitleMenu: GameModuleFactory;
 declare const Onboard: GameModuleFactory;
 declare const SetupCamera: GameModuleFactory;

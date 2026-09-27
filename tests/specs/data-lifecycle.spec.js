@@ -43,6 +43,7 @@ async function dataReady(page) {
   await page.addScriptTag({ url: "/js/data/standings.js" });
   await page.addScriptTag({ url: "/js/data/results.js" });
   await page.addScriptTag({ url: "/js/data/live.js" });
+  await page.addScriptTag({ url: "/js/data/real-race-tab.js" });   // hub.js calls DataRealRace.create() at eval (manifest LAZY_DATA order)
   await page.addScriptTag({ url: "/js/data/hub.js" });
   await page.waitForFunction(() => typeof F1API !== "undefined" && typeof DataHub !== "undefined");
 }

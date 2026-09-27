@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Apex 26 — phone controller</title>
+<link rel="icon" type="image/png" href="icons/icon-180.png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<!--
+  PHONE AS CONTROLLER. Open this page on a phone (the game's Settings › CONTROLS
+  › PHONE AS CONTROLLER shows a QR code that lands here with the room code in
+  the fragment), tap CONNECT, and the phone's tilt steers the game running on
+  the other screen. GAS and BRAKE are the two big pedals; the rest are the
+  in-race buttons a pad has.
+
+  A separate ROOT page like bench.html, deliberately: the phone needs the
+  signalling and transport half of js/net plus two input modules — nine files,
+  no renderer, no game — and boots in under a second on any phone that has a
+  camera app. js/input/phone-pad.js owns the behaviour; this page owns the DOM
+  and hands every element in (the shell-id contract stays index.html's).
+
+  Why this is not Bluetooth: a web page cannot advertise as a Bluetooth
+  peripheral or an HID gamepad, on any phone, in any browser. The pairing
+  that IS available to a static site is the game's own WebRTC wire.
+-->
+<script type="importmap">
+{
+  "imports": {
+    "@trystero-p2p/core": "./vendor/trystero-0.25.4/core/index.js",
+    "@trystero-p2p/nostr": "./vendor/trystero-0.25.4/nostr/index.js"
+  }
+}
+</script>
+<style>
+  :root { color-scheme: dark; --bg:#0a0a0f; --fg:#e8e8ef; --dim:#8a8a99; --line:#23232e;
+          --accent:#39d0ff; --warn:#f6d200; --bad:#ff6b6b; --ok:#7ee787;
+          --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px);
+          --sal: env(safe-area-inset-left, 0px); --sar: env(safe-area-inset-right, 0px); }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; overflow: hidden; background: var(--bg); color: var(--fg);
+         font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+         touch-action: none; user-select: none; -webkit-user-select: none; overscroll-behavior: none; }
+  button { font: inherit; color: var(--fg); background: #16161f; border: 1px solid var(--line);
+           border-radius: 10px; padding: 10px 14px; touch-action: none; }
+  button:disabled { opacity: .45; }
+  /* PAIRING SCREEN — portrait or landscape, a short column. */
+  #pair { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 12px;
+          justify-content: center; align-items: center; padding: calc(16px + var(--sat)) 20px calc(16px + var(--sab)); text-align: center; }
+  #pair h1 { margin: 0; font-size: 20px; letter-spacing: .04em; }
+  #pair p { margin: 0; color: var(--dim); max-width: 34ch; }
+  #code { font: 700 28px/1 ui-monospace, Menlo, Consolas, monospace; letter-spacing: .28em; text-transform: uppercase;
+          text-align: center; width: 12ch; background: #16161f; color: var(--fg); border: 1px solid var(--line);
+          border-radius: 10px; padding: 12px 0 12px .28em; }
+  #connect { background: var(--accent); color: #051018; border-color: transparent; font-weight: 700; padding: 14px 32px; }
+  #status { min-height: 2.8em; color: var(--warn); }
+  #status.bad { color: var(--bad); }
+  body.linked #pair { display: none; }
+  /* CONTROLLER — only once linked. Landscape: BRAKE left, GAS right, the
+     tilt meter and the button column between. Portrait works too (the
+     pedals shrink), but the game's own tilt mode is landscape, so nudge. */
+  #ctl { position: absolute; inset: 0; display: none;
+         padding: calc(8px + var(--sat)) calc(8px + var(--sar)) calc(8px + var(--sab)) calc(8px + var(--sal));
+         grid-template-columns: 1fr minmax(120px, 1.2fr) 1fr; grid-template-rows: 1fr; gap: 8px; }
+  body.linked #ctl { display: grid; }
+  .pedal { border-radius: 18px; border: 2px solid var(--line); background: #12121a; font-weight: 800;
+           font-size: 22px; letter-spacing: .08em; display: flex; align-items: flex-end; justify-content: center;
+           padding-bottom: 24px; color: var(--dim); position: relative; overflow: hidden; }
+  .pedal.on { color: var(--fg); border-color: var(--accent); }
+  #brake.on { border-color: var(--bad); }
+  .pedal::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: rgba(57,208,255,.18); }
+  #brake::after { background: rgba(255,107,107,.18); }
+  .pedal.on::after { height: 100%; }
+  #mid { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  #meter { height: 14px; border-radius: 7px; background: #16161f; border: 1px solid var(--line); position: relative; overflow: hidden; }
+  #meter::before { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--line); }
+  #roll { position: absolute; left: 25%; width: 50%; top: 2px; bottom: 2px; }
+  #roll::after { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 6px; margin-left: -3px;
+                 border-radius: 3px; background: var(--accent); }
+  #mid .row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; flex: 1 1 0; min-height: 0; }
+  #mid .row button { padding: 0; font-weight: 700; font-size: 13px; letter-spacing: .06em; min-height: 40px; }
+  #mid .row button.on { border-color: var(--accent); color: var(--accent); }
+  #mid .wide { grid-column: 1 / -1; }
+  #link { font-size: 11px; color: var(--dim); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  @media (orientation: portrait) {
+    #ctl { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr auto; }
+    #mid { grid-column: 1 / -1; grid-row: 2; }
+    #mid .row { flex: none; }
+  }
+</style>
+</head>
+<body>
+<section id="pair">
+  <h1>APEX 26 · PHONE CONTROLLER</h1>
+  <p>Enter the room code the game shows under Settings › CONTROLS › PHONE AS CONTROLLER, then tap CONNECT. Hold the phone sideways and tilt it to steer.</p>
+  <input id="code" type="text" inputmode="latin" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="8" aria-label="Room code" placeholder="ABC123">
+  <button id="connect" type="button">CONNECT</button>
+  <p id="status" role="status"></p>
+</section>
+<section id="ctl" aria-label="Controller">
+  <div id="brake" class="pedal" role="button" aria-label="Brake">BRAKE</div>
+  <div id="mid">
+    <div id="meter" aria-hidden="true"><div id="roll"></div></div>
+    <div class="row">
+      <button id="b-shiftDown" type="button">▼ GEAR</button>
+      <button id="b-shiftUp" type="button">GEAR ▲</button>
+      <button id="b-overtake" type="button">OVERTAKE</button>
+      <button id="b-boost" type="button">BOOST</button>
+      <button id="b-aero" type="button">AERO</button>
+      <button id="b-camera" type="button">CAMERA</button>
+      <button id="b-look" type="button">LOOK BACK</button>
+      <button id="b-radio" type="button">RADIO</button>
+      <button id="b-recover" type="button">RESET CAR</button>
+      <button id="b-pause" type="button">PAUSE</button>
+      <button id="b-center" type="button" class="wide">CENTRE TILT</button>
+    </div>
+    <div id="link" role="status"></div>
+  </div>
+  <div id="gas" class="pedal" role="button" aria-label="Gas">GAS</div>
+</section>
+<!-- @gen-shell:controller -->
+<script defer crossorigin="anonymous" src="js/core/log.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/net/bytes.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/net/nostr.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/net/rendezvous.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/net/sdp.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/net/transport.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/net/handshake.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/input/tilt-roll.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/input/phone-pad.js?v=dev"></script>
+<!-- /@gen-shell:controller -->
+<script>
+// Every element is handed to the module here; it looks nothing up itself.
+window.addEventListener("DOMContentLoaded", function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var status = $("status");
+  if (typeof PhonePad === "undefined" || typeof NetTransport === "undefined") {
+    status.textContent = "The controller scripts did not load — reload the page.";
+    status.classList.add("bad");
+    return;
+  }
+  var ctl = PhonePad.pad({
+    body: document.body, status: status, codeIn: $("code"), connect: $("connect"),
+    gas: $("gas"), brake: $("brake"), lookBack: $("b-look"), center: $("b-center"), roll: $("roll"),
+    buttons: { shiftUp: $("b-shiftUp"), shiftDown: $("b-shiftDown"), overtake: $("b-overtake"),
+               boost: $("b-boost"), aero: $("b-aero"), camera: $("b-camera"), radio: $("b-radio"),
+               recover: $("b-recover"), pause: $("b-pause") },
+  }, {
+    onOpen: function () {
+      $("link").textContent = "Linked · tilt to steer";
+      // Landscape is where the pedals have room; the lock is best-effort
+      // (Safari has no screen.orientation.lock at all).
+      try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock("landscape").catch(function () {}); } catch (e) {}
+    },
+    onClose: function () { $("link").textContent = "Link closed"; },
+  });
+  window.__apexPad = ctl;   // the console/test handle, mirroring window.__apex on the game
+});
+</script>
+</body>
+</html>

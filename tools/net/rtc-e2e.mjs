@@ -94,6 +94,27 @@ if (!joinRes.ok) { await shutdown(); process.exit(1); }
 const accRes = await A.evaluate((c) => window.__apex.lobbyAccept(c), joinRes.code);
 log(el(), "host accepted:", JSON.stringify(accRes).slice(0, 120));
 
+// CONNECTED IS NOT STARTED. Since the waiting room (PR #200) a session goes
+// active only when the host presses START with everyone READY — this script
+// predated that and sat 90 s on a perfectly good connection reading "NO
+// SESSION" (2026-09-27). Do what the buttons do: wait until the guest is IN,
+// say READY on both sides, wait for the host to have HEARD it (a real round
+// trip, so pressing at once is a silent refusal), then START.
+const inRoom = async () => ((await A.evaluate(() => window.__apex.lobby())).guests || 0) >= 1;
+for (let i = 0; i < 30 && !(await inRoom()); i++) await new Promise((r) => setTimeout(r, 2000));
+if (!(await inRoom())) { log(`\n*** the guest never reached the room ***`); await shutdown(); process.exit(1); }
+log(el(), "guest is in the room");
+await Promise.all([A, B].map((p) => p.evaluate(() => window.__apex.lobbyReady(true))));
+let readyAll = false;
+for (let i = 0; i < 20 && !readyAll; i++) {
+  const r = await A.evaluate(() => window.__apex.lobbyRoom());
+  readyAll = !!(r && r.selfReady && r.peerReady);
+  if (!readyAll) { log(`${el()} READY? A=${JSON.stringify(r)}`); await new Promise((z) => setTimeout(z, 2000)); }
+}
+if (!readyAll) { log(`\n*** the host never saw the guest READY ***`); await shutdown(); process.exit(1); }
+const started = await A.evaluate(() => window.__apex.lobbyStart());
+log(el(), "start pressed ->", started);
+
 const deadline = Date.now() + 90000;
 let ok = false;
 while (Date.now() < deadline) {
