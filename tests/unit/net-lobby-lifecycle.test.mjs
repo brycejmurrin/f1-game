@@ -506,6 +506,31 @@ test("a host relays only validated guest qualifying laps to the other guest", as
   } finally { h.lobby.cancel(); }
 });
 
+// The host relayed each READY once, when it happened. HELLO is replayed to a
+// new arrival; READY was not, so a guest who joined after another guest (or
+// the host) pressed READY showed them unready for the rest of the lobby.
+test("a later guest is told who is already READY, the host included", async () => {
+  const { h, made } = await connectedHost();
+  try {
+    await h.lobby.inviteAnother();
+    await h.lobby.host();
+    h.lobby.watchForOpen();
+    for (let i = 0; i < 40 && made.length < 2; i++) await new Promise((r) => setTimeout(r, 50));
+    assert.equal(made.length, 2);
+    made[0].deliver("hello", { team: "beta", driver: 0 });
+    made[0].deliver("ready", { ready: true });
+    h.lobby.setReady(true);
+    const before = made[1].sent.length;
+    made[1].deliver("hello", { team: "beta", driver: 1 });
+    const readies = made[1].sent.slice(before).filter((m) => m.t === "ready").map((m) => JSON.parse(JSON.stringify(m.d)));
+    const helloFrom = made[1].sent.slice(before).find((m) => m.t === "hello" && m.d.from != null);
+    assert.ok(helloFrom, "the earlier guest's HELLO is replayed (baseline)");
+    assert.deepEqual(readies.filter((d) => d.from != null), [{ ready: true, from: helloFrom.d.from }],
+      "the earlier guest's READY is replayed under its id");
+    assert.deepEqual(readies.filter((d) => d.from == null), [{ ready: true }], "and the host's own");
+  } finally { h.lobby.cancel(); }
+});
+
 test("X on a sub-step while in a room stops the scanner as well as keeping the room", async () => {
   const { h, scanners } = await connectedHost();
   try {
@@ -602,6 +627,17 @@ test("openRoom resets READY only for a FRESH room, not on every connection", () 
     "the READY of every guest already in a 3-4 player room each time another one connects");
   assert.doesNotMatch(body, /^\s*_ready\.clear\(\);\s*$/m,
     "no unconditional _ready.clear() may remain in openRoom");
+});
+
+test("open() unhides the lobby BEFORE show() focuses into it, and forces focus off the menu", () => {
+  // focus() on an element inside a hidden #vsfriend is a no-op (TopModal.landing
+  // skips boxless nodes), and focusInto's outside-the-lobby guard kept focus on
+  // the menu button that opened it — a keyboard/pad player drove the menu behind.
+  const open = SOURCE.slice(SOURCE.indexOf("    function open() {"));
+  const body = open.slice(0, open.indexOf("\n    }"));
+  const unhide = body.indexOf("e.screen.hidden = false;"), shown = body.indexOf('show("pick", true);');
+  assert.ok(unhide > 0 && shown > unhide, "e.screen.hidden = false precedes show(\"pick\", true)");
+  assert.match(SOURCE, /if \(!host \|\| host\.hidden \|\| \(!enter && a && /, "open's show() bypasses the outside-focus guard");
 });
 
 test("READY is host-relayed with from, and guests key _ready by from||id", () => {

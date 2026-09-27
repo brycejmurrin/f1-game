@@ -75,18 +75,20 @@ const NetLobby = (function () {
     // Focus follows the step: hiding the section that held the pressed button
     // (HOST A RACE -> #vs-hosting, …) left a keyboard or pad player on <body>.
     const has = (box, el) => !!(box && el && typeof box.contains === "function" && box.contains(el));
-    const focusInto = (host) => {
+    // `enter` is open(): focus is still on the menu button that opened us,
+    // which the outside-the-lobby guard would otherwise leave it on.
+    const focusInto = (host, enter) => {
       const a = document.activeElement;
       const lobby = document.getElementById("vsfriend");
-      if (!host || host.hidden || (a && a !== document.body && lobby && !has(lobby, a))) return;
+      if (!host || host.hidden || (!enter && a && a !== document.body && lobby && !has(lobby, a))) return;
       if (has(host, a)) return;
       const t = typeof TopModal !== "undefined" && TopModal.landing ? TopModal.landing(host) : null;
       if (t) { try { t.focus({ preventScroll: true }); } catch (_) { t.focus(); } }
     };
-    function show(step) {
+    function show(step, enter) {
       const e = els();
       for (const k of ["pick", "hosting", "joining", "room", "code"]) if (e[k]) e[k].hidden = (k !== step);
-      focusInto(e[step]);
+      focusInto(e[step], enter);
     }
     const shownStep = (e) => ["pick", "hosting", "joining", "room", "code"].map((k) => e[k]).find((x) => x && !x.hidden);
 
@@ -456,6 +458,14 @@ const NetLobby = (function () {
             if (k === id || !prof) continue;
             try { made.sendEvent(NetPlay.EV.HELLO, Object.assign({}, prof, { from: k, rank: joinRank(k) })); } catch (e) { /* a dead session must not stop the relay */ }
           }
+          // ...and which of them are already READY: that relay went out once,
+          // when it happened, so a later arrival never heard it and its room
+          // showed them unready for good. The host's own flag too.
+          for (const [k, r] of _ready) {
+            if (k === id || !r) continue;
+            try { made.sendEvent(NetPlay.EV.READY, { ready: true, from: k }); } catch (e) { /* dead session */ }
+          }
+          if (selfReady) { try { made.sendEvent(NetPlay.EV.READY, { ready: true }); } catch (e) { /* dead session */ } }
         } else if (p.from == null && p.rank != null) myRank = p.rank;   // the host told us where we stand
         // Learning what they picked is the moment a clash becomes knowable.
         resolveSeatClash();
@@ -1056,7 +1066,10 @@ const NetLobby = (function () {
         // or a time trial. flow/session are the authority (js/game.js).
         G.flow = "gp";
         G.session = "race";
-        G.duel = false;   // the room's grid is every peer's; a duel would trim the host's to two cars
+        // The room's grid is every peer's; a duel would trim the host's to two
+        // cars. SUSPEND it for this race (quitToMenu lifts it) — never write
+        // G.duel, which is the player's sticky solo SETTING.
+        G.duelNetOff = true;
         // startRace is ASYNC (it awaits ensureScenery) — without the await,
         // netPlay.start() below ran before makeCars()/gridUp(): on a fresh
         // page G.cars was [] (no_slot → cancel → quitToMenu, the friend race
@@ -1065,12 +1078,14 @@ const NetLobby = (function () {
         // and the rival's slot ran as AI while our own pose parked on the
         // old grid.
         const outcome = await G.startRace();
+        if ((outcome && outcome.kind === "canceled") || !sessions.size) G.duelNetOff = false;   // no friend race after all
         // Every failed exit ends the lobby's hold on qualifying: left true,
         // Quali.persistOrder skipped saving for the rest of the page session.
         if (outcome && outcome.kind === "canceled") { friendQualifying = false; close(); return; }
         if (!sessions.size) { friendQualifying = false; clearInterval(pumpTimer); pumpTimer = null; close(); return; }
       } catch (e) {
         say("Could not start the race: " + (e && e.message), true);
+        G.duelNetOff = false;
         friendQualifying = false;   // keep the room and its message up, but stop gating quali saves
         return;
       }
@@ -1543,7 +1558,11 @@ const NetLobby = (function () {
       const e = els();
       if (!e.screen) return false;
       _peers.clear(); _ready.clear(); clashClear(); myRank = Infinity;
-      show("pick");
+      // UNHIDE FIRST: show() focuses into the step, and focus() on an element
+      // inside a hidden #vsfriend is a no-op — the keyboard/pad player stayed
+      // on the menu behind the lobby.
+      e.screen.hidden = false;
+      show("pick", true);
       // inviteAnother() hides these; a fresh open must always offer all four
       // routes again, or a player who once invited a second guest can never
       // JOIN anybody afterwards.
@@ -1562,7 +1581,6 @@ const NetLobby = (function () {
       const raw = document.querySelector("#vs-hosting .vs-raw");
       if (raw) raw.open = false;
       say("");
-      e.screen.hidden = false;
       return true;
     }
 

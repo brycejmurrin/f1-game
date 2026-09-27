@@ -66,14 +66,24 @@ if (typeof Badges !== "undefined") Badges.setNotifier((labels) =>
 // endRace passes its own duelOn(); fewer than three cars is the same race);
 // a retirement earns nothing there anyway.
 // Returns the newly unlocked ids — the toast is hidden behind this very sheet.
-function awardBadges(order, duel) {
+// CLASSIFIED BY THE SHEET'S OWN dnfOf/sourceOf: on a friend-race guest the
+// order is the host's, and this peer's own retired/finished/penalty came off
+// its own reliability plan — badges were earned (or missed) against a result
+// the rows beside them contradicted. A host-timed car (finishT > 0) finished.
+function awardBadges(order, duel, dnfOf, sourceOf) {
   const p = G.player;
   if (typeof Badges === "undefined" || !p || G.practice || G.timeTrial || duel || order.length < 3) return [];
+  const cls = (c) => {
+    const src = sourceOf(c), out = !!dnfOf(c);
+    const fin = !out && !!src && (src === c ? !!c.finished : src.finishT > 0);
+    return { out, fin, pen: (src && src.penalty) || 0 };
+  };
   let best = Infinity;
-  for (const c of order) if (c.finished && !c.retired && c.best < best) best = c.best;
+  for (const c of order) if (c.best < best && cls(c).fin) best = c.best;
+  const me = cls(p);
   return Badges.onRace({
-    pos: order.indexOf(p) + 1, retired: !!p.retired, finished: !!p.finished,
-    cuts: p.cuts | 0, penalty: p.penalty || 0, trackId: G.track && G.track.def && G.track.def.id,
+    pos: order.indexOf(p) + 1, retired: me.out, finished: me.fin,
+    cuts: p.cuts | 0, penalty: me.pen, trackId: G.track && G.track.def && G.track.def.id,
     fastest: isFinite(best) && p.best === best,
   });
 }
@@ -140,7 +150,6 @@ function buildResults(order, race) {
   els.resultsTitle.textContent = sprint ? `SPRINT — ${track.def.name}`
     : G.seasonMode ? `ROUND ${season.round} — ${track.def.name}`
     : `${track.def.name} RESULT`;
-  const badges = sprint ? [] : awardBadges(order, !!(race && race.duel));   // a sprint is not a Grand Prix result
   // On a GUEST the order is the host's (game.js netOrder) but `retired`/`dnf`
   // were still this peer's own: each peer arms reliability off its OWN seed
   // and race counter (game.js armReliability), so the guest parked different
@@ -180,6 +189,7 @@ function buildResults(order, race) {
     data.retired = !!e.r;
     return data;
   };
+  const badges = sprint ? [] : awardBadges(order, !!(race && race.duel), dnfOf, sourceOf);   // a sprint is not a Grand Prix result
   const timing = guest && !hasCanonicalHost ? null : timingSummary(G, order, dnfOf, sourceOf);
   if (timing) {
     const box = document.createElement("div");
