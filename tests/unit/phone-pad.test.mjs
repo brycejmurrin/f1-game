@@ -460,7 +460,9 @@ test("pad(): the page's pedals, paddles and LCD are wired through to the wire an
   // Tilt: setRoll() stands in for the sensor; the rim turns, the desktop steers.
   ctl.setRoll(30);
   for (let i = 0; i < 60; i++) { frame(); ctl.setRoll(30); }
-  assert.equal(dom.rim.style.transform, "rotate(30.0deg)");
+  assert.equal(dom.rim.style.transform, "rotate(18.0deg)", "the rim leans at 0.6 of the roll");
+  ctl.setRoll(80); assert.equal(dom.rim.style.transform, "rotate(25.0deg)", "and never past 25°");
+  ctl.setRoll(30);
   assert.ok(desk.Input.steer() > 0.6, `the phone's 30° steers, got ${desk.Input.steer()}`);
   // The dash came back and painted the LCD: gear 7, redline, one LED short of all fifteen.
   assert.equal(dom.hud.gear.textContent, "7");
