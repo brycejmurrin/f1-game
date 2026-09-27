@@ -8754,7 +8754,7 @@ $("q-drive").onclick = () => {
 // FOR THEIR LAP…" forever with BACK blocked. The model's time is our time then.
 function reportModelQuali() {
   const r = (quali.rows() || []).find((x) => x.driverId === player.driverId);
-  if (r && r.t > 0) qualiNet.reportQuali(player.driverId, r.t);
+  if (r && r.t > 0) qualiNet.reportQuali(player.driverId, r.noTime ? Infinity : r.t);   // NO TIME crosses as a marker
 }
 $("q-sim").onclick = () => {
   if (soundOn) GameAudio.uiSelect();

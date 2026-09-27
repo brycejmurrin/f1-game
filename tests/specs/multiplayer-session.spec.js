@@ -123,7 +123,10 @@ test.describe("multiplayer session", () => {
     // Quantisation is 1 cm; anything larger means the pose did not land.
     expect(Math.abs(out.s - out.s0)).toBeLessThan(0.05);
     expect(Math.abs(out.x - 2.5)).toBeLessThan(0.05);
-    expect(out.lap).toBe(1);
+    // The pose lands, the lap CLAIM does not: this side is the host, and a
+    // guest's lap only rises by one per driven crossing (netplay.js gateLap).
+    // The packet teleported the car from the grid to 42 % with no crossing.
+    expect(out.lap).toBe(0);
   });
 
   test("a rival's world position is rebuilt from its road position", async ({ page }) => {
@@ -358,7 +361,7 @@ test.describe("multiplayer session", () => {
       A.netStartArm(1000);
       A.netHostStart();
       let named = null, t = 1000;
-      for (; t <= 45000; t += 250) {
+      for (; t <= 70000; t += 250) {
         A.netTick(t); A.step(1 / 60, 1);
         if (named == null && A.net().startPending) named = t;
         if (A.info().state === "race") break;
@@ -366,9 +369,10 @@ test.describe("multiplayer session", () => {
       return { named, state: A.info().state };
     });
 
-    // Waited out the full ARM_WAIT (20 s from the first tick) and no longer.
-    expect(out.named).toBeGreaterThanOrEqual(21000);
-    expect(out.named).toBeLessThan(22000);
+    // Waited out the full ARM_WAIT (45 s from the first tick, b1946941b: a guest
+    // in another app cannot arm until it is back) and no longer.
+    expect(out.named).toBeGreaterThanOrEqual(46000);
+    expect(out.named).toBeLessThan(47000);
     expect(out.state).toBe("race");             // and the race did eventually start
   });
 

@@ -56,6 +56,41 @@ const NetPlay = (function () {
     return out;
   }
 
+  // A GUEST MUST NOT BE ABLE TO DECLARE ITSELF THE WINNER. clampWire bounds lap
+  // to lapsTarget+1, which is exactly "finished": one packet with that lap and
+  // the host's poseRemote latched `finished`, and a LAP `fin` of the guest's
+  // choosing then set its finishT. On the HOST a remote car's lap now only
+  // rises by ONE per line crossing — s wrapping from the end of the lap to its
+  // start — and only after the car was seen in the middle of the lap since the
+  // last rise (so toggling s across the line does not count laps). The grid
+  // (lap 0, s just short of the line) crosses once without the mid-lap sight.
+  // A lower wire lap is taken as is: it only ranks the sender lower.
+  const MID_LO = 0.25, MID_HI = 0.75;
+  function gateLap(c, st, total) {
+    const prev = Math.max(0, Math.floor(Number(c.lap) || 0));
+    let lap = prev;
+    if (!(total > 0)) lap = Math.min(st.lap, prev);
+    else if (st.lap === prev) lap = prev;
+    // A fall re-arms the next rise, so it nets zero: needed when an
+    // extrapolated sample crossed early and the next real packet is short.
+    else if (st.lap < prev) { lap = st.lap; c._nMid = true; }
+    else if (Number.isFinite(c.s) && c.s - st.s > total * 0.5 && (prev === 0 || c._nMid)) {
+      lap = prev + 1;
+      c._nMid = false;
+    }
+    if (total > 0 && st.s > total * MID_LO && st.s < total * MID_HI) c._nMid = true;
+    return lap;
+  }
+  // `fin` (the owner's finishT) is accepted only near the receiver's own race
+  // clock (raceT is shared through netStart) and only once the POSED lap is
+  // past the target; one that arrives before the pose crosses waits in _nFin.
+  const FIN_SLACK_S = 5;
+  // A reported lap time must be drivable: no faster than the whole lap at the
+  // wire's own speed ceiling, no slower than the qualifying bound.
+  function lapTimeOk(t, total) {
+    return Number.isFinite(t) && t > (total > 0 ? total / SPEED_LIMIT : 0) && t < QUALI_MAX_S;
+  }
+
   // ONE VALIDATION SITE for a peer's qualifying time. Both receivers — the
   // lobby's (qualifying runs while the LOBBY still holds the connection) and
   // this file's bindSession — used to gate on a bare `d.t > 0`, which "70"
@@ -63,8 +98,12 @@ const NetPlay = (function () {
   // threw on `.toFixed`. Coerced here, bounded to a lap a human can drive
   // (20 s .. 1 h), and handed on as a NUMBER.
   const QUALI_MIN_S = 20, QUALI_MAX_S = 3600;
+  // NO TIME (every lap deleted for track limits) crosses as {noTime: true}
+  // and arrives as t = Infinity — quali-model's own "drove, no valid lap"
+  // value — never as the synthetic back-of-grid time the local sheet made.
   function validQuali(d) {
     if (!d || typeof d !== "object" || d.driverId == null) return null;
+    if (d.noTime === true) return Object.assign({}, d, { t: Infinity, noTime: true });
     const t = Number(d.t);
     if (!(Number.isFinite(t) && t > QUALI_MIN_S && t < QUALI_MAX_S)) return null;
     return Object.assign({}, d, { t });
@@ -120,6 +159,7 @@ const NetPlay = (function () {
     return {
       reportQuali(driverId, t) {
         if (!live() || !(t > 0)) return false;
+        if (t === Infinity) return broadcast(EV.QUALI, { driverId, t: null, noTime: true });
         return broadcast(EV.QUALI, { driverId, t: +Number(t).toFixed(3) });
       },
       reportQualiLive(driverId, t, frac) {
@@ -276,6 +316,8 @@ const NetPlay = (function () {
     function poseRemote(c, st) {
       // clampWire (module scope) — the same clamp the predicted sample gets.
       st = clampWire(st, (G.track && G.track.total) || 0, G.lapsTarget, _clamped);
+      // HOST: a guest's lap is EARNED, not declared (gateLap, module scope).
+      if (role === "host") st.lap = gateLap(c, st, (G.track && G.track.total) || 0);
       c.s = st.s;
       c.x = st.x;
       c.xVis = st.x;
@@ -309,7 +351,11 @@ const NetPlay = (function () {
       // the FALLBACK (~100 ms of interp delay late); the owner's own finishT
       // arrives in its LAP event (`fin`, bindSession) and overrides it.
       if (!c.finished && !c.retired && G.lapsTarget > 0 && c.lap > G.lapsTarget && !st.extrapolated) {
-        c.finished = true; c.finishT = G.raceT;
+        // A `fin` that arrived before this pose crossed (LAP handler) is used now.
+        const pf = c._nFin;
+        c.finished = true;
+        c.finishT = Number.isFinite(pf) && Math.abs(pf - G.raceT) <= FIN_SLACK_S ? pf : G.raceT;
+        c._nFin = null;
       }
 
       if (G.track) {
@@ -508,11 +554,29 @@ const NetPlay = (function () {
             // The lap time and best too: poseRemote only carries position, so
             // the rival's car kept lastLap 0 and best Infinity all race — the
             // radio handed YOU the fastest lap and never timed their laps.
+            // Bounded (lapTimeOk): a 0.001 s "best" took fastest lap for good.
+            const total = (G.track && G.track.total) || 0;
             const lt = Number(d.time), best = Number(d.best);
-            if (fr && !d.invalid && Number.isFinite(lt) && lt > 0) fr.car.lastLap = lt;
-            if (fr && Number.isFinite(best) && best > 0 && !(fr.car.best <= best)) fr.car.best = best;
-            if (fr && Number.isFinite(fin) && fin > 0 && !fr.car.retired) {
-              fr.car.finished = true; fr.car.finishT = fin;
+            const ltOk = !d.invalid && lapTimeOk(lt, total), bestOk = lapTimeOk(best, total);
+            const finOk = Number.isFinite(fin) && fin > 0 && Math.abs(fin - (G.raceT || 0)) <= FIN_SLACK_S;
+            if (fr && ltOk) fr.car.lastLap = lt;
+            if (fr && bestOk && !(fr.car.best <= best)) fr.car.best = best;
+            if (fr && finOk && !fr.car.retired) {
+              // Only a car whose POSE is past the target may finish; earlier
+              // (the pose trails the crossing by the interp delay) it waits.
+              if (G.lapsTarget > 0 && fr.car.lap > G.lapsTarget) { fr.car.finished = true; fr.car.finishT = fin; }
+              else fr.car._nFin = fin;
+            }
+            // STAR RELAY: guests only hear the host, so without this guest B
+            // never saw guest A's lap times (3+ players). Mirrors
+            // broadcastStrategy: the host's checked copy, to everyone but the
+            // sender, named by the car the host seated for that connection.
+            if (role === "host" && fr) {
+              const out = { lap: fr.car.lap, time: ltOk ? lt : null, best: bestOk ? best : null,
+                code: fr.car.code, driverId: fr.car.driverId, fin: finOk ? fin : undefined, invalid: !!d.invalid };
+              for (const [sid, os] of sessions) {
+                if (sid !== id) { try { os.sendEvent(EV.LAP, out); } catch (e) { /* peer closed */ } }
+              }
             }
           }
           if (name === EV.RESULT && !ownsClassification() && validClassification(d, G.cars)) peerResult = d;
@@ -605,6 +669,7 @@ const NetPlay = (function () {
         if (!car) continue;
         peerCar.set(j.id != null ? j.id : PEER_ONE, G.wireId(car));
         G.setCarRole(car, true, false);
+        car._nFin = null; car._nMid = false;     // gateLap / pending-fin state, per race
         car.mods = j.mods || car.mods || null;
         remotes.set(G.wireId(car), {
           car,
@@ -878,6 +943,7 @@ const NetPlay = (function () {
         if (raw) {
           const total = (G.track && G.track.total) || 0;
           const pred = clampWire(raw, total, G.lapsTarget, r._smpClamp || (r._smpClamp = {}));
+          if (role === "host" && pred.lap > (c.lap || 0) + 1) pred.lap = (c.lap || 0) + 1;   // gateLap's bound
           c._nOk = true;
           c._nProg = (pred.lap - 1) * total + pred.s;   // same convention as poseRemote
           c._nX = pred.x;

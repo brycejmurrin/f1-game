@@ -133,7 +133,7 @@ const NetRendezvous = (function () {
         "raw", enc().encode(norm), "PBKDF2", false, ["deriveBits"]);
       const bits = await crypto.subtle.deriveBits(
         { name: "PBKDF2", salt: PBKDF2_SALT, iterations: 120000, hash: "SHA-256" }, base, 256);
-      return crypto.subtle.importKey("raw", bits, "HKDF", false, ["deriveKey"]);
+      return crypto.subtle.importKey("raw", bits, "HKDF", false, ["deriveKey", "deriveBits"]);
     })();
     const p = _keyP;
     p.catch(() => { if (_keyP === p) { _keyP = null; _keyCode = null; } });   // a failed derive must not stick
@@ -144,6 +144,24 @@ const NetRendezvous = (function () {
     return crypto.subtle.deriveKey(
       { name: "HKDF", hash: "SHA-256", salt, info: HKDF_INFO },
       await keyFor(code), { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+  }
+
+  // THE PUBLIC TOPIC comes from the STRETCHED key, never from the code. The
+  // Nostr `x` tag is plaintext on every relay (NIP-01), and it used to be a
+  // bare SHA-256 of the code: one guess = one hash over ~30 bits, so a reader
+  // of public traffic recovered a live code in minutes and could then open its
+  // envelopes. Now each guess pays the 120 000-round PBKDF2 in keyFor().
+  // PROTOCOL rides in the info string: a build on another protocol meets on a
+  // different topic and never half-talks to this one (the handshake's build
+  // check is the loud refusal once a link is up).
+  const PROTOCOL = 3;
+  const TOPIC_BYTES = 10;
+  async function topic(code, slot) {
+    const bits = await crypto.subtle.deriveBits(
+      { name: "HKDF", hash: "SHA-256", salt: new Uint8Array(0),
+        info: enc().encode("apex26-rendezvous-v" + PROTOCOL + "/topic|" + String(slot || "")) },
+      await keyFor(code), TOPIC_BYTES * 8);
+    return [...new Uint8Array(bits)].map((b) => b.toString(16).padStart(2, "0")).join("");
   }
 
   const aad = (slot) => enc().encode(String(slot || ""));
@@ -315,7 +333,7 @@ const NetRendezvous = (function () {
   }
 
   return {
-    ALPHABET, CODE_LEN, POLL_TIMEOUT_MS, STORE_KEY, DEFAULT_URL, ENVELOPE_TAG,
+    ALPHABET, CODE_LEN, POLL_TIMEOUT_MS, PROTOCOL, topic, STORE_KEY, DEFAULT_URL, ENVELOPE_TAG,
     configured, usingPrivateRelay, setUrl, baseUrl, swap, hostRoom,
     seal, open, sealPrivate, openPrivate,
     makeCode, normalise, valid,
