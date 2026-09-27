@@ -204,6 +204,13 @@ test.describe("Season — sprint weekends", () => {
     expect(await page.evaluate(() => window.__apex.info().track)).toEqual(circuit);
     expect(await page.evaluate(() => window.__apex.info().lapsTarget), "full distance now").toBe(10);
 
+    // A 10-lap dry Grand Prix needs two dry compounds (FIA 2026 SR B6.3.6) or
+    // the winner is disqualified: change sets as a stop would before the flag.
+    const fitted = await page.evaluate(() => {
+      const now = window.__apex.tyres().code;
+      return window.__apex.tyres({ fit: now === "H" ? "medium" : "hard" }).code;
+    });
+    expect(fitted, "a second dry compound is on").toMatch(/^[SMH]$/);
     await winAndFinish(page);
     const s = await saved(page);
     expect(myPts(s), "8 for the sprint plus 25 for the Grand Prix").toBe(33);
