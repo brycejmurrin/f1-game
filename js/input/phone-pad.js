@@ -454,10 +454,12 @@ const PhonePad = (function () {
     const src = { roll: () => roll, thr: () => thr, brk: () => brk, held: () => held };
 
     // The rim turns with the phone: the wheel the player sees is the wheel
-    // they are holding. Clamped so a phone put down flat does not spin it.
+    // they are holding. Geared down and clamped — the controls on top stay
+    // put, so a rim turned as far as the phone reads as the face bending
+    // rather than the wheel moving; 0.6 of the roll, ±25°, is a lean.
     function paintRoll() {
       if (!dom.rim || !dom.rim.style) return;
-      const r = roll == null ? 0 : Math.max(-90, Math.min(90, roll));
+      const r = roll == null ? 0 : Math.max(-25, Math.min(25, roll * 0.6));
       dom.rim.style.transform = "rotate(" + r.toFixed(1) + "deg)";
     }
     function onOrient(e) {

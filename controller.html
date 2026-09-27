@@ -71,8 +71,10 @@
          padding: calc(6px + var(--sat)) calc(6px + var(--sar)) calc(6px + var(--sab)) calc(6px + var(--sal));
          grid-template-columns: minmax(84px, 1fr) minmax(200px, 2.4fr) minmax(84px, 1fr); grid-template-rows: 1fr; gap: 8px; }
   body.linked #ctl { display: grid; }
+  /* The rim sits BEHIND opaque controls and shows only in the gaps, so its
+     turn reads as the wheel moving, never as the face bending. */
   #rim { position: absolute; left: 50%; top: 50%; width: min(96vw, 190vh); height: auto; aspect-ratio: 2 / 1;
-         transform-origin: center; translate: -50% -50%; pointer-events: none; opacity: .9;
+         transform-origin: center; translate: -50% -50%; pointer-events: none; opacity: .7;
          transition: transform 60ms linear; }
   #rim svg { width: 100%; height: 100%; display: block; overflow: visible; }
   #rim .body { fill: url(#carbon); stroke: #3a3a46; stroke-width: 3; }
@@ -97,9 +99,10 @@
      removed, so the button grid keeps its shape under the thumb. */
   .pedal small { display: none; font-size: 11px; letter-spacing: .14em; color: var(--dim); margin-top: 4px; }
   body.gears-auto .paddle { display: none; }
-  body.throttle-auto #gas { pointer-events: none; opacity: .4; flex-direction: column; }
-  body.throttle-auto #gas small { display: block; }
-  body.aero-auto #b-aero, body.aero-none #b-aero { opacity: .35; pointer-events: none; }
+  body.throttle-auto #gas { pointer-events: none; flex-direction: column; background: #0d0d13; color: #3d3d4a; border-color: #26262f; }
+  body.throttle-auto #gas::before { border-color: #1d1d26; }
+  body.throttle-auto #gas small { display: block; color: #3d3d4a; }
+  body.aero-auto #b-aero, body.aero-none #b-aero { pointer-events: none; background: #0d0d13; color: #3d3d4a; border-color: #26262f; }
 
   /* THE FACE: rev lights, the LCD, the button clusters. */
   #face { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 0; }
@@ -134,7 +137,7 @@
   #screen .last { justify-content: center; font-size: 12px; color: var(--dim); letter-spacing: .06em; min-height: 1.2em; }
   #screen.idle #h-gear, #screen.idle #h-speed { color: #4a4a58; text-shadow: none; }
   #keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-  #keys button { padding: 0; min-height: 40px; font-weight: 800; font-size: 11px; letter-spacing: .08em; border-radius: 50%/40%;
+  #keys button { padding: 0; min-height: 40px; font-weight: 800; font-size: 11px; letter-spacing: .08em; border-radius: 14px;
                  background: radial-gradient(circle at 35% 30%, #2a2a35, #14141b); border: 1px solid #3a3a46; color: #d0d0da; }
   #keys button.on { border-color: var(--team); color: var(--team); }
   #keys .wide { grid-column: 1 / -1; border-radius: 10px; min-height: 30px; color: var(--dim); }
@@ -248,13 +251,14 @@ window.addEventListener("DOMContentLoaded", function () {
     document.body.classList.add("linked");
     $("link").textContent = "DEMO · NOT LINKED";
     var auto = /[?&]demo=auto\b/.test(location.search) ? (PhonePad.DASH.gearsAuto | PhonePad.DASH.throttleAuto | PhonePad.DASH.aeroAuto) : 0;
+    var still = /[?&]still\b/.test(location.search);   // &still: rim level, for a screenshot
     var t0 = performance.now();
     var demo = function () {
       var t = (performance.now() - t0) / 1000, rev = (Math.sin(t * 1.7) + 1) / 2;
       ctl.paintHud({ gear: 3 + Math.floor(t % 5), kmh: 140 + Math.round(rev * 170), rpm: 0.35 + rev * 0.65, lap: 4, laps: 12,
         pos: 6, cars: 20, ers: (Math.cos(t / 3) + 1) / 2, flags: auto | (rev > 0.9 ? PhonePad.DASH.redline : PhonePad.DASH.otArmed),
         caution: 0, lastLapMs: 91234, state: "race", team: "#00b4ab" });
-      ctl.setRoll(Math.sin(t / 2) * 25);
+      if (!still) ctl.setRoll(Math.sin(t / 2) * 25);
       requestAnimationFrame(demo);
     };
     requestAnimationFrame(demo);
