@@ -674,7 +674,6 @@ interface GameCtx {
   readonly drainFor: (c: CarState) => number;
   readonly regenFor: (c: CarState) => number;
   readonly otTimeFor: (c: CarState) => number;
-  readonly otCoolFor: (c: CarState) => number;
   readonly setCautionEnabled: (on: boolean) => void;
   readonly otEnabled: () => boolean;
 

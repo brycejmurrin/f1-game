@@ -221,6 +221,7 @@ const FULL = [
   "js/physics/aero-zones.js",
   "js/fx/skidmarks.js",
   "js/race/race-control.js",
+  "js/race/overtake-mode.js",
   "js/race/weather-arc.js",
   "js/camera/free-cam.js",
   "js/camera/photo-cam.js",

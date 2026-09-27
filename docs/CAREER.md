@@ -974,11 +974,11 @@ all twelve have real spread — but ERS's options *describe* battery behaviour
 deployment") and for a long time did none of it. `Parts.ersProfile(setup, team)`
 returns two 0..1 axes read from the bias the catalog already encodes
 (`deploy` ← the option's `accel`, `regen` ← its `speed`), and they drive
-`drainFor`/`regenFor`/`otTimeFor`/`otCoolFor` in game.js. Deriving rather than
+`drainFor`/`regenFor`/`otTimeFor` in game.js. Deriving rather than
 authoring new fields keeps the SIGNATURE clones consistent for free, since they
 copy those stats. Measured:
 
-| ERS part | deploy / regen | boost lasts | recharge | OT push / cooldown |
+| ERS part | deploy / regen | boost lasts | recharge | OT push (0.5 MJ) / cooldown (until 2026 rules) |
 |---|---|---|---|---|
 | `harvest` | 0.00 / 0.43 | 3.8 s | 5.4 s | 3.2 s / 14.0 s |
 | `standard` | 0.22 / 0.29 | 4.3 s | 5.9 s | 3.6 s / 12.9 s |
@@ -987,7 +987,8 @@ copy those stats. Measured:
 AI cars use the team's `FACTORY_PRESETS` aero/ERS (SIGNATURE equivalents
 already differ). A car with no resolved setup still sits at the midpoint.
 `physState()` reports `ersDeploy`, `ersRegen`, `drain`, `regen`, `otTime`,
-`otCool`.
+`otMJ`. (The cooldown column is historical: since the 2026 Overtake rule there is
+no lockout — one 0.5 MJ allowance per earned lap, js/race/overtake-mode.js.)
 
 `Parts.CATALOG` — an **array** of 12 category objects (ordered, not keyed by id):
 `engine`, `aero`, `suspension`, `brakes`, `tyres`, `ers`, `gearbox`, `fuel`,

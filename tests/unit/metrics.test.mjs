@@ -487,7 +487,8 @@ test("the wide/narrow choice reads the granted width, never the painted one", ()
 
 // physState() RETURNED THESE AND THE PANEL DROPPED THEM. Eight fields came back
 // on every PHYS paint and none reached the screen: towing, xVmaxGain, xDfLoss,
-// drain, regen, brakeBias, otTime, otCool. No new data path was needed — the
+// drain, regen, brakeBias, otTime, otMJ (was otCool until Overtake became the
+// 2026 0.5 MJ allowance — js/race/overtake-mode.js). No new data path was needed — the
 // fetch was already happening. MEASURED rendering, Monza at 72 m/s:
 //   x cost:  vmax +0.096   df -0.567
 //   tow:     0.00   brakeBias 0.560
@@ -496,7 +497,7 @@ test("the wide/narrow choice reads the granted width, never the painted one", ()
 // Names match the __apex hook so a player's screenshot maps onto physState().
 test("the PHYS page renders every physState field it fetches", () => {
   const src = readFileSync(join(ROOT, "js/perf/metrics-overlay.js"), "utf8");
-  const carried = ["towing", "xVmaxGain", "xDfLoss", "drain", "regen", "brakeBias", "otTime", "otCool"];
+  const carried = ["towing", "xVmaxGain", "xDfLoss", "drain", "regen", "brakeBias", "otTime", "otMJ"];
   const snap = src.slice(src.indexOf("function snapshot()"), src.indexOf("function ensurePanel()"));
   for (const f of carried) {
     assert.match(snap, new RegExp(`if \\(p\\.${f} != null\\) out\\.${f} = p\\.${f};`),

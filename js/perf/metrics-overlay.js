@@ -241,7 +241,7 @@ function snapshot() {
     // the __apex hook on purpose: a player's screenshot then maps straight onto
     // physState() when they report something.
     towing: null, xVmaxGain: null, xDfLoss: null,
-    drain: null, regen: null, brakeBias: null, otTime: null, otCool: null,
+    drain: null, regen: null, brakeBias: null, otTime: null, otMJ: null,
     logConsole: "", logBuffer: "", logN: 0, logShown: 0,
     logs: [],
   };
@@ -393,7 +393,7 @@ function snapshot() {
         if (p.regen != null) out.regen = p.regen;
         if (p.brakeBias != null) out.brakeBias = p.brakeBias;
         if (p.otTime != null) out.otTime = p.otTime;
-        if (p.otCool != null) out.otCool = p.otCool;
+        if (p.otMJ != null) out.otMJ = p.otMJ;
         if (out.aeroX == null && p.aeroX != null) out.aeroX = p.aeroX;
       }
     }
@@ -618,7 +618,7 @@ function paintOverlay() {
         pair("tow", fmt(s.towing, 2), "bb", fmt(s.brakeBias, 2)),
         pair("xdv", fmt(s.xVmaxGain, 3), "xdf", fmt(s.xDfLoss, 3)),
         pair("drn", fmt(s.drain, 3), "rgn", fmt(s.regen, 3)),
-        pair("ot", fmt(s.otTime, 1), "cool", fmt(s.otCool, 1)),
+        pair("ot", fmt(s.otTime, 1), "mj", fmt(s.otMJ, 2)),
       ];
     } else {
       lines = [
@@ -641,7 +641,7 @@ function paintOverlay() {
         row("tow",    fmt(s.towing, 2) + "   brakeBias " + fmt(s.brakeBias, 3)),
         // ERS FLOW rather than the level the HUD bar already shows.
         row("ers",    "drain " + fmt(s.drain, 3) + "   regen " + fmt(s.regen, 3)),
-        row("ot",     fmt(s.otTime, 1) + " s   cooldown " + fmt(s.otCool, 1) + " s"),
+        row("ot",     fmt(s.otTime, 1) + " s   left " + fmt(s.otMJ, 2) + " MJ"),
       ];
     }
   } else if (s.page === "log") {
