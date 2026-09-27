@@ -878,7 +878,7 @@ const WGX = (function () {
     let _shownAt = -1e9;
     try {
       document.addEventListener("visibilitychange", function () { if (!document.hidden) _shownAt = _nowMs(); });
-      window.addEventListener("pageshow", function () { _shownAt = _nowMs(); });
+      window.addEventListener("pageshow", function (e) { if (e && e.persisted) _shownAt = _nowMs(); });   // bfcache return only: the FIRST load fires pageshow too
     } catch (_) { /* no document events (harness) */ }
     device.lost.then(function (info) {
       if (info && info.reason === "destroyed") return;

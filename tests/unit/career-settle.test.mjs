@@ -1065,7 +1065,7 @@ test("the LAST sponsor window of a season ends at the finale, and asks pro rata"
   }
 });
 
-test("a move takes the player's DEVELOPMENT along (it is keyed by seat); the displaced driver's goes to the old seat", () => {
+test("a move takes the player's DEVELOPMENT along (it is keyed by seat); the old seat's AI starts clean", () => {
   for (const seed of [1, 7, 13, 21, 34]) {
     const Career = loadDriver();
     Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed });
@@ -1077,10 +1077,17 @@ test("a move takes the player's DEVELOPMENT along (it is keyed by seat); the dis
     if (i < 0) continue;
     const oldId = `haas:${c.seat}`;
     c.dev[oldId] = { pace: 6, experience: 20 };
+    // The displaced driver's growth in the seat the player is about to take.
+    const target = c.offers[i].teamId;
+    for (const s of [0, 1]) c.dev[`${target}:${s}`] = { pace: 3, experience: 9 };
+    const seatsBefore = JSON.stringify(c.seats);
     Career.acceptOffer(i);
     const newId = `${c.team}:${c.seat}`;
     assert.deepEqual(c.dev[newId], { pace: 6, experience: 20 }, `seed ${seed}: the player's growth moved to ${newId}`);
-    assert.notDeepEqual(c.dev[oldId], { pace: 6, experience: 20 }, "and the AI in the old seat did not inherit it");
+    // The seats do not trade, so whoever now drives the old seat is not the
+    // displaced driver: neither the player's growth nor theirs lands there.
+    assert.equal(c.dev[oldId], undefined, "the AI in the old seat inherits nobody's development");
+    assert.equal(JSON.stringify(c.seats), seatsBefore, "a move re-keys development only; seats are untouched");
     return;
   }
   assert.fail("no seed drew an offer from another team");

@@ -67,6 +67,20 @@ test("a playlist where nothing decodes stops rather than spinning", async () => 
   assert.equal(fetched.filter((u) => /music/.test(u)).length, n, "no further fetches once every track has failed");
 });
 
+test("a dead MY TRACKS list stops after one pass over ITS tracks, not the whole library", async () => {
+  // The failure cap was PLAYLIST.length (6 builtins + uploads) while nextTrack
+  // cycles only the selected source: two dead uploads were re-fetched and
+  // re-decoded four times each before the player went silent.
+  const { A, fetched } = boot({ badDecode: (ab) => /dead/.test(ab._url || "") });
+  A.init(); await flush();
+  assert.equal(A.addTracks([{ id: "user:a", name: "a", url: "blob:dead-a" }, { id: "user:b", name: "b", url: "blob:dead-b" }]), 2);
+  assert.equal(A.setMusicSource("user"), "user");
+  A.playTrackId("user:a"); await flush(); await flush();
+  const dead = fetched.filter((u) => /dead/.test(u));
+  assert.equal(dead.length, 2, "each dead upload is tried once: " + dead.join(", "));
+  assert.equal(A.currentTrackId(), null, "and the music stops");
+});
+
 test("a race started in a HIDDEN tab never wakes the context the hide path suspended", async () => {
   // The flyby timer (js/ui/loading-screen.js) can land startRaceBody in a
   // background tab: createCtx and playIndex used to ctx.resume() regardless.

@@ -1413,11 +1413,15 @@ function acceptOffer(i) {
     // DEVELOPMENT FOLLOWS THE DRIVER (docs/CAREER.md), as swapSeats() does: it is
     // keyed by seat, and a move left the player's growth in the old seat for
     // the AI who took it — and handed the player the displaced driver's.
+    // Unlike swapSeats() the seats do NOT trade: the displaced driver leaves
+    // the grid and the old seat falls to whoever career.seats / the roster
+    // names, so that AI starts clean rather than inheriting the displaced
+    // driver's growth (which it never earned).
     const newId = seasonDriverId(career.team, career.seat);
     if (career.dev && oldId !== newId) {
-      const mine = career.dev[oldId], theirs = career.dev[newId];
+      const mine = career.dev[oldId];
       if (mine) career.dev[newId] = mine; else delete career.dev[newId];
-      if (theirs) career.dev[oldId] = theirs; else delete career.dev[oldId];
+      delete career.dev[oldId];
     }
     // THE WORKS BUILD IS READ OUTSIDE THE ERA, as start() does: rollover() has
     // already installed the new season's bans, so a banned works part resolved

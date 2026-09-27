@@ -346,6 +346,10 @@ const Tracks = (function () {
       track.meshes.propBatches = null;
       if (track.graph && G.createInstancedBatch) {
         const { batches } = track.graph.batches({ instancedOnly: true });   // uploading the plain (capability) set ships glassBuf's panes twice — graph.js batches()
+        // These placements' triangles were WITHHELD from propsGeo (city masses,
+        // walls, risers), yet they cast into the sun map: fold them into the
+        // span. A VM with no createInstancedBatch fused them all — unchanged.
+        track.propTop = Math.max(track.propTop, instTop(track, batches));
         if (batches.length) {
           track.meshes.propBatches = batches.map((b) =>
             G.createInstancedBatch(b.geo, b.matrices, b.colors, { cellSize: 72 }));
@@ -819,6 +823,33 @@ const Tracks = (function () {
       if (!(y - lo > best)) continue;
       const g = terrainY(track, p[i], p[i + 2]);
       if (g != null && y - g > best) best = y - g;
+    }
+    return best;
+  }
+  // The same measure for instanced batches (graph.batches(): column-major
+  // placement matrices over one model geo): each instance's top is its origin
+  // height plus the model's local AABB through the matrix's Y row (exact for
+  // an upright placement, an upper bound when tilted), above the ground at the
+  // instance origin. 8 corners per instance: Vegas alone has ~22k.
+  function instTop(track, batches) {
+    const t = track.terrainGeo && track.terrainGeo.pos;
+    if (!t || !t.length || !batches) return 0;
+    let lo = Infinity, best = 0;
+    for (let i = 1; i < t.length; i += 3) if (t[i] < lo) lo = t[i];
+    for (const b of batches) {
+      const p = b && b.geo && b.geo.pos, M = b && b.matrices;
+      if (!p || !p.length || !M) continue;
+      const mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
+      for (let i = 0; i < p.length; i++) { const a = i % 3; if (p[i] < mn[a]) mn[a] = p[i]; if (p[i] > mx[a]) mx[a] = p[i]; }
+      for (let k = 0; k + 15 < M.length; k += 16) {
+        // Per axis, the larger of the two extents' contributions is the corner max.
+        let hi = 0;
+        for (let a = 0; a < 3; a++) hi += __M.max(M[k + 1 + 4 * a] * mn[a], M[k + 1 + 4 * a] * mx[a]);
+        const y = M[k + 13] + hi;
+        if (!(y - lo > best)) continue;
+        const g = terrainY(track, M[k + 12], M[k + 14]);
+        if (g != null && y - g > best) best = y - g;
+      }
     }
     return best;
   }

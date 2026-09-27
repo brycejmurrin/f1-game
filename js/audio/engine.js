@@ -2264,7 +2264,9 @@ const GameAudio = (function () {
   let _musicFails = 0;
   function musicLoadFailed(token) {
     if (!musicOn || token !== musicToken) return;   // superseded: not ours to skip
-    if (++_musicFails >= PLAYLIST.length) { _musicFails = 0; stopInternal(); return; }
+    // Capped at the ELIGIBLE count: nextTrack only cycles the selected source,
+    // so a PLAYLIST.length cap re-fetched one dead upload up to that many times.
+    if (++_musicFails >= Math.max(1, eligibleCount())) { _musicFails = 0; stopInternal(); return; }
     nextTrack(1);
   }
   function playMusicBuffer(buf, token) {
@@ -2303,6 +2305,11 @@ const GameAudio = (function () {
   function anyEligible() {
     for (let i = 0; i < PLAYLIST.length; i++) if (eligible(i)) return true;
     return false;
+  }
+  function eligibleCount() {
+    let n = 0;
+    for (let i = 0; i < PLAYLIST.length; i++) if (eligible(i)) n++;
+    return n;
   }
   function seekEligible(from, step) {
     const n = PLAYLIST.length;
