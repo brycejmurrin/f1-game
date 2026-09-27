@@ -60,6 +60,11 @@ export const KNOWN = {
   "ot-on": "controller.html <style> (#screen.ot-on) — the phone page's LCD, not css/",
   "ot-ready": "controller.html <style> (#screen.ot-ready) — the phone page's LCD, not css/",
   "x-open": "controller.html <style> (#screen.x-open) — the phone page's LCD, not css/",
+  // …and the CONTROL-MODE layout classes it toggles on the phone page's body.
+  "gears-auto": "controller.html <style> (body.gears-auto .paddle) — the phone page, not css/",
+  "throttle-auto": "controller.html <style> (body.throttle-auto #gas) — the phone page, not css/",
+  "aero-auto": "controller.html <style> (body.aero-auto #b-aero) — the phone page, not css/",
+  "aero-none": "controller.html <style> (body.aero-none #b-aero) — the phone page, not css/",
   // Audio sheet. Both wrap rows that style themselves; every sibling group on
   // the sheet stacks with the same zero margins, so nothing is missing.
   "as-sub": "wrapper for #as-voices / #as-ann-voice; .set-row / .tune-row / .as-note style themselves",

@@ -42,7 +42,12 @@ const PhonePad = (function () {
     "camera", "recover", "radio", "calib", "pause"]);
   // Dash flag bits (desktop → phone).
   const DASH = Object.freeze({ boost: 1, otArmed: 2, otActive: 4, xArmed: 8, xOpen: 16,
-    retired: 32, timeTrial: 64, paused: 128, redline: 256 });
+    retired: 32, timeTrial: 64, paused: 128, redline: 256,
+    // The desktop's CONTROL MODES: what the wheel should not offer. Gears on
+    // AUTO have no paddles, throttle on AUTO has no GAS zone, aero on AUTO (or
+    // a circuit with no zones) has no AERO button. Sent with every dash so a
+    // setting changed mid-session reaches the phone within a frame.
+    gearsAuto: 512, throttleAuto: 1024, aeroAuto: 2048, aeroNone: 4096 });
   const round2 = (v) => Math.round((+v || 0) * 100) / 100;
   const num = (v, lo, hi) => (typeof v === "number" && isFinite(v)) ? Math.min(hi, Math.max(lo, v)) : 0;
 
@@ -379,7 +384,9 @@ const PhonePad = (function () {
 
   // ── phone: the wheel's LCD ────────────────────────────────────────────────
   // Paints one dash packet into the elements controller.html hands over:
-  //   { gear, speed, lap, pos, ers, flag, ot, aero, last, leds, screen, team }.
+  //   { gear, speed, lap, pos, ers, flag, ot, aero, last, leds, screen, team, body }.
+  // `body` takes the LAYOUT classes (gears-auto / throttle-auto / aero-auto /
+  // aero-none) that hide or disable the controls the game is driving itself.
   // Pure DOM writes on a mini-DOM-friendly surface (textContent, style,
   // classList), so tests/unit/phone-pad.test.mjs can drive it too.
   const CAUTION = ["", "YELLOW", "VSC", "SAFETY CAR", "RED FLAG"];
@@ -393,7 +400,8 @@ const PhonePad = (function () {
     text("pos", h.flags & DASH.retired ? "DNF" : h.flags & DASH.timeTrial ? "" : h.pos ? "P" + h.pos + "/" + h.cars : "");
     text("last", h.lastLapMs ? "LAST " + fmtLap(h.lastLapMs) : "");
     text("ot", h.flags & DASH.otActive ? "OVERTAKE" : h.flags & DASH.otArmed ? "OT READY" : "OT");
-    text("aero", h.flags & DASH.xOpen ? "X-MODE" : h.flags & DASH.xArmed ? "AERO ARMED" : "AERO");
+    text("aero", h.flags & DASH.aeroNone ? "NO ZONES" : h.flags & DASH.aeroAuto ? (h.flags & DASH.xOpen ? "AUTO X-MODE" : "AERO AUTO")
+      : h.flags & DASH.xOpen ? "X-MODE" : h.flags & DASH.xArmed ? "AERO ARMED" : "AERO");
     text("flag", h.state === "count" ? "LIGHTS" : h.flags & DASH.paused ? "PAUSED" : !inRace ? "PIT LANE" : CAUTION[h.caution] || "");
     if (el.ers && el.ers.style) el.ers.style.width = (h.ers * 100).toFixed(0) + "%";
     if (el.leds && el.leds.children) {
@@ -410,6 +418,12 @@ const PhonePad = (function () {
       el.screen.classList.toggle("idle", !inRace);
     }
     if (el.team && el.team.style && h.team) el.team.style.setProperty("--team", h.team);
+    if (el.body && el.body.classList) {
+      el.body.classList.toggle("gears-auto", !!(h.flags & DASH.gearsAuto));
+      el.body.classList.toggle("throttle-auto", !!(h.flags & DASH.throttleAuto));
+      el.body.classList.toggle("aero-auto", !!(h.flags & DASH.aeroAuto));
+      el.body.classList.toggle("aero-none", !!(h.flags & DASH.aeroNone));
+    }
   }
 
   // ── phone: the whole page ─────────────────────────────────────────────────
