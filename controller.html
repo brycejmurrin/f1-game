@@ -90,6 +90,16 @@
   .pedal.on { color: var(--fg); }
   #gas.on { border-color: var(--ok); }   #gas.on::after { height: 100%; background: rgba(94,240,138,.16); }
   #brake.on { border-color: var(--bad); } #brake.on::after { height: 100%; background: rgba(255,77,77,.16); }
+  /* CONTROL MODES from the dash (PhonePad.paintHud → body classes): what the
+     game drives itself the wheel does not offer. Gears AUTO: no paddles, the
+     pedal takes the whole grip. Throttle AUTO: the GAS zone is an inert plate
+     that says so. Aero AUTO or a circuit with no zones: AERO is greyed, not
+     removed, so the button grid keeps its shape under the thumb. */
+  .pedal small { display: none; font-size: 11px; letter-spacing: .14em; color: var(--dim); margin-top: 4px; }
+  body.gears-auto .paddle { display: none; }
+  body.throttle-auto #gas { pointer-events: none; opacity: .4; flex-direction: column; }
+  body.throttle-auto #gas small { display: block; }
+  body.aero-auto #b-aero, body.aero-none #b-aero { opacity: .35; pointer-events: none; }
 
   /* THE FACE: rev lights, the LCD, the button clusters. */
   #face { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 0; }
@@ -189,7 +199,7 @@
   </div>
   <div id="right" class="grip">
     <button id="b-shiftUp" class="paddle" type="button" aria-label="Shift up">GEAR ►</button>
-    <div id="gas" class="pedal" role="button" aria-label="Gas">GAS</div>
+    <div id="gas" class="pedal" role="button" aria-label="Gas">GAS<small>AUTO</small></div>
   </div>
 </section>
 <!-- @gen-shell:controller -->
@@ -220,7 +230,8 @@ window.addEventListener("DOMContentLoaded", function () {
                boost: $("b-boost"), aero: $("b-aero"), camera: $("b-camera"), radio: $("b-radio"),
                recover: $("b-recover"), pause: $("b-pause") },
     hud: { gear: $("h-gear"), speed: $("h-speed"), lap: $("h-lap"), pos: $("h-pos"), ers: $("h-ers"), flag: $("h-flag"),
-           ot: $("h-ot"), aero: $("h-aero"), last: $("h-last"), leds: $("leds"), screen: $("screen"), team: document.documentElement },
+           ot: $("h-ot"), aero: $("h-aero"), last: $("h-last"), leds: $("leds"), screen: $("screen"), team: document.documentElement,
+           body: document.body },
   }, {
     onOpen: function () {
       $("link").textContent = "LINKED · TILT TO STEER";
@@ -231,15 +242,17 @@ window.addEventListener("DOMContentLoaded", function () {
     onClose: function () { $("link").textContent = "LINK CLOSED"; },
   });
   window.__apexPad = ctl;   // the console/test handle, mirroring window.__apex on the game
-  // ?demo — the wheel with a moving sample dash and no link, for a look at the layout.
+  // ?demo — the wheel with a moving sample dash and no link, for a look at the
+  // layout; ?demo=auto shows it with gears, throttle and aero on AUTO.
   if (/[?&]demo\b/.test(location.search)) {
     document.body.classList.add("linked");
     $("link").textContent = "DEMO · NOT LINKED";
+    var auto = /[?&]demo=auto\b/.test(location.search) ? (PhonePad.DASH.gearsAuto | PhonePad.DASH.throttleAuto | PhonePad.DASH.aeroAuto) : 0;
     var t0 = performance.now();
     var demo = function () {
       var t = (performance.now() - t0) / 1000, rev = (Math.sin(t * 1.7) + 1) / 2;
       ctl.paintHud({ gear: 3 + Math.floor(t % 5), kmh: 140 + Math.round(rev * 170), rpm: 0.35 + rev * 0.65, lap: 4, laps: 12,
-        pos: 6, cars: 20, ers: (Math.cos(t / 3) + 1) / 2, flags: rev > 0.9 ? PhonePad.DASH.redline : PhonePad.DASH.otArmed,
+        pos: 6, cars: 20, ers: (Math.cos(t / 3) + 1) / 2, flags: auto | (rev > 0.9 ? PhonePad.DASH.redline : PhonePad.DASH.otArmed),
         caution: 0, lastLapMs: 91234, state: "race", team: "#00b4ab" });
       ctl.setRoll(Math.sin(t / 2) * 25);
       requestAnimationFrame(demo);

@@ -239,7 +239,7 @@ hosts the room exactly as VS FRIEND does (`NetTransport.rtc` → `NetHandshake.c
 |---|---|---|
 | `state` (unreliable) | phone → desktop | `[1, seq, rollDeg\|null, thr, brk, heldBits]` on every `deviceorientation` (≤ ~66 Hz) and a 100 ms heartbeat; the desktop drops any `seq` older than the last applied |
 | `event` (reliable) | phone → desktop | `{t:"ev", k}` — `shiftUp shiftDown overtake boost aero camera recover radio calib pause` |
-| `state` (unreliable) | desktop → phone | the DASH, `["H", gear, kmh, rpmFrac, lap, laps, pos, cars, ers, flagBits, caution, lastLapMs, state, teamHex]` at ~15 Hz (`HUD_MS`), sampled by `phonePadDash()` in js/game.js from the fields js/ui/hud.js reads; `PhonePad.paintHud()` draws it on the wheel's LCD (gear, speed, 15 rev LEDs, lap, position, ERS bar, OT/aero state, flag) |
+| `state` (unreliable) | desktop → phone | the DASH, `["H", gear, kmh, rpmFrac, lap, laps, pos, cars, ers, flagBits, caution, lastLapMs, state, teamHex]` at ~15 Hz (`HUD_MS`), sampled by `phonePadDash()` in js/game.js from the fields js/ui/hud.js reads; `PhonePad.paintHud()` draws it on the wheel's LCD (gear, speed, 15 rev LEDs, lap, position, ERS bar, OT/aero state, flag); its flag bits also carry the CONTROL MODES (`gearsAuto`, `throttleAuto`, `aeroAuto`, `aeroNone`), which the wheel turns into layout — no paddles on AUTO gears, an inert GAS plate on AUTO throttle, AERO greyed on AUTO or a circuit without zones (`controller.html?demo=auto`) |
 | `event` (reliable) | desktop → phone | `{t:"hap", ms}` — every `Input.vibrate()` while the phone is the live source |
 
 `PhonePad.link()` hands each sample to `Input.remoteSample()`, which writes the

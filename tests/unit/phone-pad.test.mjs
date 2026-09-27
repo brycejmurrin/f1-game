@@ -108,7 +108,7 @@ function lcd() {
     classes: new Set(), classList: { toggle(c, on) { on ? this.owner.classes.add(c) : this.owner.classes.delete(c); } } });
   const mk = () => { const n = node(); n.classList.owner = n; return n; };
   const leds = { children: Array.from({ length: 15 }, mk) };
-  const el = { gear: mk(), speed: mk(), lap: mk(), pos: mk(), ers: mk(), flag: mk(), ot: mk(), aero: mk(), last: mk(), leds, screen: mk(), team: mk() };
+  const el = { gear: mk(), speed: mk(), lap: mk(), pos: mk(), ers: mk(), flag: mk(), ot: mk(), aero: mk(), last: mk(), leds, screen: mk(), team: mk(), body: mk() };
   return el;
 }
 
@@ -344,6 +344,32 @@ test("the dash reaches the phone ~15 Hz on the unreliable channel and paints the
   assert.equal(el.flag.textContent, "LIGHTS"); assert.equal(el.lap.textContent, "TT"); assert.equal(el.pos.textContent, "");
   PhonePad.paintHud(el, { ...phone.huds[0], flags: PhonePad.DASH.retired });
   assert.equal(el.pos.textContent, "DNF");
+});
+
+test("the control modes reach the wheel's layout: no paddles on AUTO gears, no GAS zone on AUTO throttle, AERO greyed on AUTO or no zones", () => {
+  const D = PhonePad.DASH, el = lcd();
+  const base = { gear: 3, kmh: 100, rpm: 0.5, lap: 1, laps: 5, pos: 2, cars: 20, ers: 0.5, flags: 0, caution: 0, lastLapMs: 0, state: "race", team: "" };
+  PhonePad.paintHud(el, base);
+  assert.deepEqual([...el.body.classes].sort(), [], "everything manual: no layout class");
+  assert.equal(el.aero.textContent, "AERO");
+  PhonePad.paintHud(el, { ...base, flags: D.gearsAuto | D.throttleAuto });
+  assert.deepEqual([...el.body.classes].sort(), ["gears-auto", "throttle-auto"]);
+  PhonePad.paintHud(el, { ...base, flags: D.aeroAuto | D.xOpen });
+  assert.deepEqual([...el.body.classes].sort(), ["aero-auto"], "a mode change clears the classes it no longer needs");
+  assert.equal(el.aero.textContent, "AUTO X-MODE");
+  PhonePad.paintHud(el, { ...base, flags: D.aeroAuto });
+  assert.equal(el.aero.textContent, "AERO AUTO");
+  PhonePad.paintHud(el, { ...base, flags: D.aeroNone | D.xArmed });
+  assert.deepEqual([...el.body.classes].sort(), ["aero-none"]);
+  assert.equal(el.aero.textContent, "NO ZONES", "a circuit with no zones says so whatever the arming");
+  const back = PhonePad.decodeHud(PhonePad.encodeHud({ ...base, flags: D.gearsAuto | D.throttleAuto | D.aeroAuto | D.aeroNone }));
+  assert.equal(back.flags, D.gearsAuto | D.throttleAuto | D.aeroAuto | D.aeroNone, "the mode bits survive the wire");
+  const page = read("controller.html");
+  for (const rule of ["body.gears-auto .paddle", "body.throttle-auto #gas", "body.aero-auto #b-aero, body.aero-none #b-aero"]) {
+    assert.ok(page.includes(rule), `controller.html styles ${rule}`);
+  }
+  assert.match(read("js/game.js"), /gearsManual\(\) \? 0 : D\.gearsAuto[\s\S]*autoThrottle\(\) \? D\.throttleAuto[\s\S]*raceAeroMode === "auto" \? D\.aeroAuto[\s\S]*D\.aeroNone/,
+    "the sampler reads the game's own mode functions");
 });
 
 test("closing the link drops the pedals and the source at once and unhooks the haptics", () => {
