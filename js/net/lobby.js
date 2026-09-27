@@ -58,7 +58,9 @@ const NetLobby = (function () {
     // connect counter): aria-busy holds the announcement until the state
     // settles, instead of a screen reader reading "Connecting… 7s" every second.
     // Unchanged text is not rewritten — the 4 Hz polls re-said the same line.
+    let sayGen = 0;   // bumps per say(): a late prompt checks nothing was said since it began
     function say(msg, isError, busy) {
+      sayGen++;
       statusText = msg || "";
       // Direct lookup: els() rebuilds a 35-element map per call, and say()
       // fires from 4 Hz polls and 1 Hz relay ticks during every connect.
@@ -187,6 +189,7 @@ const NetLobby = (function () {
         // released itself, but close it BEFORE the map delete so a future
         // close-emitter that does not self-release cannot leak past
         // teardown()'s sweep.
+        const wasIn = transports.has(id) || sessions.has(id);
         const tGone = transports.get(id);
         if (tGone) { try { tGone.close(); } catch (e) { /* already gone */ } }
         transports.delete(id);
@@ -195,13 +198,21 @@ const NetLobby = (function () {
         sessions.delete(id);
         _peers.delete(id); _ready.delete(id);
         clashDrop(id);
+        // Never connected: waitForOpen() just said which failure it was; this ran inside its dropPending() and overwrote it.
+        if (!wasIn) { Log.info("net", "pending transport closed " + id); return; }
         Log.info("net", "peer leave " + id);
         session = [...sessions.values()][0] || null;
         if (!sessions.size) {
           clearInterval(pumpTimer); pumpTimer = null;
-          say(role === "guest"
-            ? "Host left — rivals are now AI. Keep racing."
-            : "Connection closed.", true);
+          // In the race (finishStart emptied this map) the rival is now AI; in the ROOM the room is simply over.
+          const racing = friendQualifying || (typeof UiLayers !== "undefined" && UiLayers && UiLayers.inRace && UiLayers.inRace());
+          if (racing) {
+            say(role === "guest" ? "Host left — rivals are now AI. Keep racing." : "Connection closed.", true);
+          } else {
+            if (G.setNetRoom) G.setNetRoom(false);
+            show("pick");
+            say(role === "guest" ? "The host left the room." : "Your friend left the room.", true);
+          }
         } else {
           say("A player left. The rest of you are still in.");
           // Guests learned of each other only through this host's relay, so
@@ -355,7 +366,8 @@ const NetLobby = (function () {
         const secs = Math.round((Date.now() - started) / 1000);
         if (st) say("Connecting… " + secs + "s (" + (st.ice || "?") + "/" + (st.connection || "?") + ")" + relayNote, false, true);
 
-        const dead = st && (st.ice === "failed" || st.connection === "failed");
+        // "closed" too: the close handler above says nothing for a pending transport.
+        const dead = watched.status === "closed" || (st && (st.ice === "failed" || st.connection === "failed"));
         if (dead || Date.now() - started > CONNECT_TIMEOUT_MS) {
           clearInterval(pollTimer);
           Log.warn("net", "connect fail " + secs + "s");
@@ -731,6 +743,8 @@ const NetLobby = (function () {
 
     function peerSeats(keep) {
       const out = [];
+      // Only while a room is live: finishStart() keeps _peers, and after a 3+ player race they marked SOLO seats TAKEN.
+      if (!sessions.size) return out;
       for (const [k, p] of _peers) {
         if (p && p.team && (!keep || keep(k))) out.push({ team: p.team, driver: p.driver || 0 });
       }
@@ -1134,7 +1148,10 @@ const NetLobby = (function () {
       if (!newTransport("host")) return { ok: false, error: "no_transport", message: noConnectionMsg() };
       const pending = transport;
       say("Preparing invite… (this can take a few seconds)");
-      const res = await NetHandshake.createInvite(pending, localProfile());
+      // createInvite rethrows (createOffer on a connection CLOSE tore down): typed, as makeAnswer, not the shell's rejection overlay.
+      let res;
+      try { res = await NetHandshake.createInvite(pending, localProfile()); }
+      catch (err) { res = { ok: false, error: "invite_failed", message: "Could not create an invite (" + ((err && err.message) || err) + "). Tap HOST A RACE to try again." }; }
       if (!operationCurrent(gen) || transport !== pending) return cancelledResult();
       if (!res.ok) { say(res.message || "Could not create an invite.", true); return res; }
       const e = els();
@@ -1170,13 +1187,15 @@ const NetLobby = (function () {
     async function join() {
       const gen = beginOperation();
       show("joining");
+      const said = sayGen;
       const p = (async () => {
         await readyIce();
         if (!operationCurrent(gen)) return cancelledResult();
         // Typed, like every sibling: a bare `return` handed an awaiting caller
         // `undefined` where host()/codeHost()/codeJoin() all return a result.
         if (!newTransport("guest")) return { ok: false, error: "no_transport", message: noConnectionMsg() };
-        say("Paste the invite code they sent you.");
+        // Not over something said meanwhile: a MAKE ANSWER error inside the ICE wait was wiped by this prompt.
+        if (sayGen === said) say("Paste the invite code they sent you.");
         return { ok: true };
       })();
       joinP = p;
@@ -1322,7 +1341,9 @@ const NetLobby = (function () {
         say("Preparing… (this can take a few seconds)");
       }
 
-      const invite = await NetHandshake.createInvite(initialTransport, localProfile());
+      let invite;   // typed on a throw, as host()
+      try { invite = await NetHandshake.createInvite(initialTransport, localProfile()); }
+      catch (err) { invite = { ok: false, error: "invite_failed", message: "Could not create an invite (" + ((err && err.message) || err) + "). Tap NEW CODE to try again." }; }
       if (!operationCurrent(gen) || transport !== initialTransport) return cancelledResult();
       if (!invite.ok) { say(invite.message || "Could not create an invite.", true); return invite; }
 
@@ -1348,6 +1369,12 @@ const NetLobby = (function () {
             // has nothing to act on and the code silently stops working.
             if (r.advisory) { say(r.message, true); return; }
             codeRoom = null;
+            // onConnected() reopens the code for the next arrival; its expiry two minutes
+            // later is not a failure of a room that is already full.
+            if (r.error === "expired" && sessions.size) {
+              say("The room code has expired — INVITE ANOTHER makes a new one.");
+              return;
+            }
             say(r.message || "The room service went away. Use the invite link or QR instead.", true);
           },
           onTick: () => {
@@ -1462,6 +1489,11 @@ const NetLobby = (function () {
       say("Looking for that room…");
       codeWait = { cancelled: false };
       let answered = null;
+      // BIND THE SESSION WHEN THE ANSWER IS POSTED, not after swap()'s 5.2 s of re-posts: the host
+      // closes after 6 s of silence (session.js timeoutMs) — ~0.5 s of margin, lost to a phone's GC.
+      let watching = false;
+      const watch = () => { if (!watching) { watching = true; waitForOpen(); } };
+      const pid = pendingId;   // onConnected() nulls pendingId once it adopts the transport
       const done = await NetRendezvous.swap({
         code, slot: "answer", want: "offer", token: codeWait,
         onTick: () => { if (operationCurrent(gen)) say("Looking for that room… (code " + code + ")"); },
@@ -1489,17 +1521,20 @@ const NetLobby = (function () {
           if (!res.ok) { answered = res; return null; }
           if (res.peer) _peers.set(PEER_ONE, res.peer);
           answered = res;
+          watch();
           return res.code;
         },
       });
-      if (!operationCurrent(gen) || transport !== pending) return cancelledResult();
+      // `transport !== pending` is also SUCCESS now: onConnected() may have adopted it.
+      if (!operationCurrent(gen)) return cancelledResult();
+      if (transport !== pending && !transports.has(pid)) return cancelledResult();
       if (!done.ok) {
         const why = (done.error === "reply_failed" && answered && !answered.ok) ? answered : done;
         if (why.error !== "cancelled") say(why.message || "Could not join that room.", true);
         return why;
       }
-      waitForOpen();
-      say("Joining…");
+      watch();
+      if (transport === pending) say("Joining…");   // not over a "Connected." that already landed
       return { ok: true, code };
     }
 
@@ -1640,6 +1675,8 @@ const NetLobby = (function () {
       teardown();
       role = null;
       _peers.clear(); _ready.clear(); clashClear(); myRank = Infinity;
+      // THE ROOM FLAG DIES WITH THE ROOM: only a race start cleared netRoom, so after CLOSE a solo START re-showed this dialog.
+      if (G.setNetRoom) G.setNetRoom(false);
       close();
     }
 

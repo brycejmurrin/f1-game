@@ -8985,6 +8985,12 @@ els.resNext.onclick = () => {
   // that classification has since been dropped. quitToMenu() clears it, so a
   // resumed weekend re-qualifies instead of silently gridding the player P12 out
   // of gridUp()'s tier fallback.
+  // RACE AGAIN after a FRIEND race is a solo race: end the session first (BYE to
+  // the rival, remotes handed back), or the new race ran with the old one's
+  // NetPlay live — the guest adopted the PREVIOUS race's RESULT rows onto the
+  // new cars (netOrder), LAP/STRATEGY kept going to the peer for cars no longer
+  // in the grid, and pause no longer stopped the world (the netPlay.active() gates).
+  if (netPlay.active()) netPlay.stop("local");
   if (isChampionship() && (SeasonCal.qualiNext(season) || (SeasonCal.quali() && !quali.results()))) openQuali();
   else startRace();
 };
