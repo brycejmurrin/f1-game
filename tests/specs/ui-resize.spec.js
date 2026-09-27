@@ -222,18 +222,27 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
     // classifier answers to `zoom` alone. 50 was SCALE_MIN when this was
     // written; the floor is now 40 (js/ui/scale.js), and 50 keeps the
     // same normal-vs-compact contrast, so the value stays.
+    // Wait for the settled class — same pattern as the 150% step and the
+    // return trip below. A fixed 400 ms sleep raced SheetShape: watchScale
+    // reclassifies on --ui-scale, but roomOwn used to trust currentCSSZoom,
+    // which can still read 1 on that turn, and ResizeObserver often skips
+    // zoom-only box changes, so density stayed "compact" while panelW was
+    // already the scaled width (CI scheduled Smoke shard 2 on ce3ec4db).
     await page.evaluate(() => window.__apex.uiScale(50));
-    await page.waitForTimeout(400);
-    const at100 = await readState(page);
+    await page.waitForFunction(() => {
+      const el = document.getElementById("cs-inner");
+      return el.dataset.density === "normal";
+    }, null, { polling: 50, timeout: 15_000 });
+    const at50 = await readState(page);
+    expect(at50.density, "not compact at UI SIZE 50% on this viewport").toBe("normal");
 
     await page.evaluate(() => window.__apex.uiScale(150));
     await page.waitForFunction(() => {
       const el = document.getElementById("cs-inner");
       return el.dataset.density === "compact";
-    }, null, { polling: 50, timeout: 5_000 });
+    }, null, { polling: 50, timeout: 15_000 });
     const at150 = await readState(page);
 
-    expect(at100.density, "not compact at UI SIZE 50% on this viewport").toBe("normal");
     expect(at150.density, "compact once the sheet is short in its own units").toBe("compact");
     expect(at150.hOverflow, "no horizontal overflow at 150%").toBe(false);
     expect(at150.doneOnScreen, "DONE reachable at 150%").toBe(true);
@@ -243,7 +252,7 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
     await page.waitForFunction(() => {
       const el = document.getElementById("cs-inner");
       return el.dataset.density === "normal";
-    }, null, { polling: 50, timeout: 5_000 });
+    }, null, { polling: 50, timeout: 15_000 });
     expect((await readState(page)).density, "back to normal when the scale drops").toBe("normal");
   });
 
