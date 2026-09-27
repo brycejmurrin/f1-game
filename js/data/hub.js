@@ -11,7 +11,7 @@ const DataHub = (function () {
 
   const MINUTE = 60 * 1000;
   // re-fetch a tab if its rendered content is older than this when shown again
-  const MAX_AGE = { schedule: 6 * 60 * MINUTE, standings: 60 * MINUTE, results: 60 * MINUTE, live: 5 * MINUTE, telemetry: 15 * MINUTE, export: 24 * 60 * MINUTE };
+  const MAX_AGE = { schedule: 6 * 60 * MINUTE, standings: 60 * MINUTE, results: 60 * MINUTE, live: 5 * MINUTE, telemetry: 15 * MINUTE, race: 60 * MINUTE, export: 24 * 60 * MINUTE };
 
   // tyre compound colors
   const COMPOUND = {
@@ -25,6 +25,7 @@ const DataHub = (function () {
     { id: "results", label: "RESULTS", load: function () { return loadResults(); } },
     { id: "live", label: "LIVE", load: function () { return loadLive(); } },
     { id: "telemetry", label: "TELEMETRY", load: function () { return loadTelemetry(); } },
+    { id: "race", label: "RACE IT", load: function () { return loadRealRace(); } },
     { id: "export", label: "EXPORT", load: function () { return loadExport(); } }
   ];
 
@@ -223,6 +224,7 @@ const DataHub = (function () {
     state.live = null;
     state.telemetry = null;
     state.results = null;
+    state.race = null;
     root.hidden = true;
     openFlag = false;
     if (returnFocus && returnFocus.isConnected && returnFocus.focus) returnFocus.focus();
@@ -571,6 +573,12 @@ const DataHub = (function () {
   const { loadTelemetry, closeTelemPopup } = DataTelemetry.create({
     el, clear, emptyMsg, spinner, sel, ensureSession, buildPicker,
     invalidateOther, COMPOUND, findTeam, cssColor, textColorOn, NO_TELEM_MSG
+  });
+  // Implementation: js/data/real-race-tab.js — the RACE IT tab: one real Grand
+  // Prix's timing as a script, and every real driver's seat as a JUMP IN.
+  const { loadRealRace } = DataRealRace.create({
+    el, clear, emptyMsg, spinner, sel, ensureSession, buildPicker,
+    teamChip, fmtDateTime, findTeam, close
   });
   // Implementation: js/data/export.js.
   const { loadExport } = DataExport.create({ el, clear, isOpen });

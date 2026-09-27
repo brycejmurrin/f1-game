@@ -74,6 +74,12 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // grid does not converge on one plan, strategies mix, and the reactive
   // rules (free stop, weather, spent set) fire in the right order. ~0.1 s.
   "tests/unit/ai-strategy.test.mjs",
+  // ...and the REAL RACE: the OpenF1 timing of the 2026 Azerbaijan GP
+  // (tests/fixtures/openf1-baku-2026-race.json) becomes a race script, and the
+  // director lays it over a stub field — grid, plans, the pace loop, the
+  // flag windows. Pure rules in a VM, ~0.3 s together.
+  "tests/unit/real-race-script.test.mjs",
+  "tests/unit/real-race.test.mjs",
   // ...and the race engineer's ladder: it ADVISES and never arms a stop,
   // graining and blistering say different things (one heals, one does not),
   // the axle call names an end of the car, and it does not nag. ~0.1 s.

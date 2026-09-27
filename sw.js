@@ -273,6 +273,7 @@ async function precacheAssetLists() {
     "js/data/standings.js",
     "js/data/results.js",
     "js/data/live.js",
+    "js/data/real-race-tab.js",
     "js/data/hub.js",
     // LAZY_NET — the multiplayer stack behind VS FRIEND
     "js/net/bytes.js",
