@@ -415,14 +415,20 @@ const RaceRadio = (function () {
               vars: { a: S(e.car), gap: gapT(g) }, ttl: 10 });
           }
           break;
-        case "playerLap":
+        case "leaderLap": {
+          // A driver still racing on the leader's lap hears their own last lap
+          // from the engineer (and the FINAL LAP card) at their own crossing a
+          // moment later — the commentator saying it too was the same news twice.
+          const p = G.player, len = (G.track && G.track.total) || 0;
+          const onLeadLap = p && !p.finished && !p.retired && len > 0 && (f.leader.prog || 0) - (p.prog || 0) < len;
           if (f.leaderToGo === 1 && f.laps > 1) {
-            offer({ id: "arc", ch: "tv", tier: 3, once: "tvLast", key: "tv.lastLap", vars: { a: S(f.leader), gap: gapT(f.leadGap) }, ttl: 10 });
+            if (!onLeadLap) offer({ id: "arc", ch: "tv", tier: 3, once: "tvLast", key: "tv.lastLap", vars: { a: S(f.leader), gap: gapT(f.leadGap) }, ttl: 10 });
           } else if ([10, 5, 3].indexOf(f.leaderToGo) >= 0 && f.leaderToGo < f.laps) {
             offer({ id: "arc", ch: "tv", tier: 2, once: "tvToGo" + f.leaderToGo, key: "tv.toGo",
               vars: { left: f.leaderToGo, a: S(f.leader), gap: gapT(f.leadGap) }, ttl: 12 });
           }
           break;
+        }
       }
     }
 
@@ -548,6 +554,9 @@ const RaceRadio = (function () {
     return {
       update, request, reset, setChat, setComm,
       chat: () => chat, comm: () => comm,
+      /** The engineer will call the player's last lap (any chat level but OFF,
+       *  in a race): game.js's plain FINAL LAP card stands down for it. */
+      callsLastLap: () => live && lvl() >= 1,
       spotter: () => !!(store && store.get && store.get("spotter", true) !== false),
       setSpotter(b) { if (store && store.set) store.set("spotter", !!b); return !!b; },
       spotterDebug: () => (spotter ? spotter.debug() : null),

@@ -933,6 +933,10 @@ function gripMult(c) { return TyreModel.weatherGrip(c ? (c.tread == null ? 2 : c
 // presentation still belongs here. Core lap/clock/finish state is advanced by
 // RaceControl.lineTransition for both callers; this hook handles only the local
 // side effects that cannot live in a physics module.
+// THE TWO-COMPOUND RULE at the flag (js/race/pit-lane.js serveCompoundRule).
+function serveCompound(c) {
+  if (pits.serveCompoundRule(c) && c.isPlayer) announce("+" + pits.compoundPenS + "s — ONE DRY COMPOUND ONLY", 3, "penalty-hit");
+}
 function onIncidentLineCross(c, cross, newS) {
   if (!c || !cross) return;
   if (cross.direction < 0) {
@@ -944,8 +948,9 @@ function onIncidentLineCross(c, cross, newS) {
   }
   c._secT0 = 0;
   if (c.isPlayer) { sectorIdx = 0; sectorStartT = 0; }
-  if (c.isPlayer && c.lap === lapsTarget && lapsTarget > 1) announce("FINAL LAP", 1.6, "race");
+  if (c.isPlayer && c.lap === lapsTarget && lapsTarget > 1 && !raceRadio.callsLastLap()) announce("FINAL LAP", 1.6, "race");
   if (cross.flagged) {
+    serveCompound(c);
     // The lap is incident-invalid, so do not publish it as a timed lap. A
     // finish stamp is still authoritative and must reach the other peer; null
     // time/best keep the invalid lap out of timing comparisons.
@@ -2164,7 +2169,7 @@ function gridUp(preOrder) {
     c.speed = 0; c.accSm = 0; c.corridorAccel = 0; c.prog = -(14 + i * 8); c.lap = 0; c.fuelLap = 0; c.fuelRestartLaps = 0; c.energy = 1; c._progGift = 0;   // a car on the grid is pulling nothing — apex.js reset() has the full list and why
     c.otT = 0; c.otCool = 0; c.lapTime = 0; c.best = Infinity; c.totalT = 0;
     c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
-    c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.qualiCut = false; c.penalty = 0; c.offT = 0; c.hits = 0; c.hitSev = 0; c.wallHits = 0; c.errCount = 0;   // mistakes THIS race — the instrument's denominator, cleared only by a NEW race
+    c.finished = false; c.compoundPen = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.qualiCut = false; c.penalty = 0; c.offT = 0; c.hits = 0; c.hitSev = 0; c.wallHits = 0; c.errCount = 0;   // mistakes THIS race — the instrument's denominator, cleared only by a NEW race
     c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.wallT = 0; c.wasOnWall = false;
     c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.contactT = 0; c.lane = c.lanePref;   // BOTH sides of a real conflict: lane is damped state, not a constant, and contactT DECAYS — unlike the towing/wheelLock beside it, a re-grid is the only thing that clears it
     c.rPrevHead = 0;
@@ -6170,7 +6175,8 @@ function updateCar(c, dt, ranked) {
     c._secT0 = 0;   // …and the FIELD's S1 reference, or it measures across the reset
     if (c.isPlayer) { sectorIdx = 0; sectorStartT = 0; }
     // Never on a 1-lap session: that crossing is the START crossing, and a qualifying flying lap is not a final lap.
-    if (c.isPlayer && c.lap === lapsTarget && lapsTarget > 1) announce("FINAL LAP", 1.6, "race");
+    if (c.isPlayer && c.lap === lapsTarget && lapsTarget > 1 && !raceRadio.callsLastLap()) announce("FINAL LAP", 1.6, "race");
+    if (flagged) serveCompound(c);
     if (flagged && c.isPlayer) announce("FINISH!", 2, "race");
   } else if (lineCross && lineCross.direction < 0) {
     // Backward over the line: give the lap back and put the clock where it was,

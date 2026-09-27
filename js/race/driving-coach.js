@@ -279,7 +279,10 @@ const DrivingCoach = (function () {
     // checks and do not move with it — a daily challenge is scored against a
     // shared standard, and a netplay car's laps are already mirrored to peers
     // by netPlay.reportLap(), so neither can be made unscored from this side.
-    function canPractice() { return !!(G.practice && !G.daily.isActive() && !G.netPlay.active() && G.player && G.state === "race"); }
+    // "count" too: the START drill's own instructions say to set it on the grid,
+    // before the lights, and the pause menu opens during the countdown.
+    const onTrack = () => G.state === "race" || G.state === "count";
+    function canPractice() { return !!(G.practice && !G.daily.isActive() && !G.netPlay.active() && G.player && onTrack()); }
     // ---- capture / restore: ONE pair, three callers -------------------------
     // mark() (a checkpoint the player places), rewind() (the rolling buffer)
     // and retry() all move the SAME state, so they share these rather than
@@ -620,7 +623,7 @@ const DrivingCoach = (function () {
     // and netplay laps are already mirrored to peers.
     function armPractice() {
       if (G.timeTrial || G.daily.isActive() || G.netPlay.active()) return false;
-      if (G.state !== "race" || !G.player) return false;
+      if (!onTrack() || !G.player) return false;
       if (G.practice) return true;
       G.practice = true; G.records.invalidate();
       G.announce("PRACTICE ARMED — THIS SESSION IS NOT SCORED", 3, "practice");
@@ -629,7 +632,7 @@ const DrivingCoach = (function () {
     // Not in a championship: practice promises "THIS SESSION IS NOT SCORED" and
     // unlocks rewind, but a season or career round is always scored — a rewound
     // P1 took full points and prize money. Practice those in a one-off race.
-    function canArm() { return !!(!G.timeTrial && !G.daily.isActive() && !G.netPlay.active() && G.state === "race" && G.player && !G.practice && G.flow !== "season" && G.flow !== "career"); }
+    function canArm() { return !!(!G.timeTrial && !G.daily.isActive() && !G.netPlay.active() && onTrack() && G.player && !G.practice && G.flow !== "season" && G.flow !== "career"); }
     return { update, status, feedback, advice, mark, retry, rewind, reset, toggle, paint, armPractice, canArm,
       canPractice, rewindReady: () => canPractice() && rewindBuf.length > 0,
       practiceActive: () => practice,

@@ -649,3 +649,17 @@ test("with the radio check coming, the announcer's read is budgeted to end befor
   assert.ok(on.plays[0] <= full * 0.88, `announcer budget ${on.plays[0]} of ${full}`);
   assert.ok(on.plays[0] >= full * 0.8, "and it still gets nearly all of it");
 });
+
+test("the radio check's hiss is held for the line, not for the rest of the flyby", () => {
+  const h = gridHarness({ radioOn: 1.9 });   // sayPreRace -> the line's length, cue included
+  h.run();
+  h.tickTo(0.885);
+  assert.equal(h.said.length, 1);
+  assert.equal(h.stings.length, 1);
+  assert.ok(Math.abs(h.stings[0] - 2.5) < 1e-9, `bed ${h.stings[0]} s: the words plus a beat`);
+  assert.ok(h.stings[0] < h.said[0].life, "shorter than the shot it plays over");
+  // …and the real RadioVoice reports that length: plan() carries the words' own seconds.
+  const sb = modules(["js/audio/radio-voice.js"]);
+  const p = sb.RadioVoice.plan({ msg: "P12. RADIO CHECK", life: 6, kind: "race", lead: 0.43, enabled: true, soundOn: true, api: true, state: "menu", preRace: true });
+  assert.ok(p.speak && p.secs > 0 && p.secs < 3, `secs ${p.secs}`);
+});

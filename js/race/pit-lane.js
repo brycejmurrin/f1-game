@@ -1419,14 +1419,35 @@ const PitLane = (function () {
      *  TWO_COMPOUND_MIN_LAPS — the game's short races (3-7 laps) would be
      *  one forced stop and nothing else — and never in a SPRINT: the article
      *  names the Race only, so a sprint leg of a season weekend forced a stop
-     *  no real team makes. (The player is never disqualified for one compound;
-     *  that is an owner's design call, not enforced here.) */
+     *  no real team makes. The player is held to it too, with a time
+     *  penalty rather than a disqualification (serveCompoundRule below). */
     const TWO_COMPOUND_MIN_LAPS = 8;
     function sprintLeg() {
       return !!G.seasonMode && typeof SeasonCal !== "undefined" && SeasonCal.stage(G.season) === "sprint";
     }
     function twoCompoundRule(laps) {
       return laps >= TWO_COMPOUND_MIN_LAPS && TyreModel.treadFor(G.raceWeather) === 0 && !sprintLeg();
+    }
+    /** Does this car still owe B6.3.6's second dry compound? The stint log's
+     *  letters (TyreModel.fit writes one per set fitted, the grid set
+     *  included), so a catalog tyre counts by what it IS, not by its row name.
+     *  Any intermediate or wet set lifts the rule, as the article does. */
+    function owesCompound(c) {
+      if (!c || !c.tyreLog || !twoCompoundRule(G.lapsTarget) || !(G.tyres && G.tyres.on && G.tyres.on())) return false;
+      const dry = new Set();
+      for (const e of c.tyreLog) { if (e.code === "I" || e.code === "W") return false; dry.add(e.code); }
+      return dry.size < 2;
+    }
+    /** At the flag: +COMPOUND_PEN_S for a car that never ran the second
+     *  compound. The FIA disqualifies (Art. 30.5); the owner chose a time
+     *  penalty, so a player who forgot still has a result. Once per car, and
+     *  never for a VS FRIEND rival — its own peer serves its penalties. */
+    const COMPOUND_PEN_S = 30;
+    function serveCompoundRule(c) {
+      if (!c || c.compoundPen || (G.netPlay && G.netPlay.active() && !c.local) || !owesCompound(c)) return false;
+      c.compoundPen = true;
+      c.penalty = (c.penalty || 0) + COMPOUND_PEN_S;
+      return true;
     }
     /** The STRATEGY row's pin for this circuit: a stop count, or null for AUTO. */
     function pinKey() { const t = G.track, d = t && t.def; return "pitPlan." + ((d && d.id) || (t && t.id) || "track"); }
@@ -1710,7 +1731,7 @@ const PitLane = (function () {
     }
 
     return { zoneOf: () => z(), limit, toBox, approachV, entryV, exitV, stopAnim, inLane, held, roadOf, inWindow: inWindowOf,
-             arm, update, reset, clearArm, info, setNext, serviceCar, planFor, think,
+             arm, update, reset, clearArm, info, setNext, serviceCar, planFor, think, owesCompound, serveCompoundRule, compoundPenS: COMPOUND_PEN_S,
              pickFor, ownedTyres, choices, selectNext, estimate, committing, commitFrac, toEntry, cue,
              worthStopping, canWork, addWork, workS: WORK_S, boxBusy,
              cueM: CUE_M, boxCueM: BOX_CUE_M, moveM: MOVE_M,
