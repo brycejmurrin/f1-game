@@ -625,3 +625,41 @@ test("hold(): a held flag flies with the CAUTIONS setting OFF, and release drops
   rc.hold(0);
   assert.equal(rc.info().level, 0, "nothing else would ever lower it with the loop off");
 });
+
+test("hold(): release and lowering take effect at once — with debris off, and with the switch off", () => {
+  // Debris inactive, switch on: the hazard loop never lowers a flag; hold(0) must.
+  const rc = load({ active: () => false, hazards: () => hazards(0, 0) }).create(makeCtx());
+  rc.hold(3, "SAFETY CAR"); run(rc, 1);
+  assert.equal(rc.info().level, 3);
+  rc.hold(0);
+  assert.equal(rc.info().level, 0, "released: green now, not after the 90 s cap");
+  // SC -> VSC steps down at once.
+  rc.hold(3, "SAFETY CAR"); run(rc, 1);
+  rc.hold(2, "VSC");
+  assert.equal(rc.info().level, 2); assert.equal(rc.info().cause, "VSC");
+  // A flag ABOVE the hold (a real pile-up) is never lowered by the hold's release.
+  const pile = load({ active: () => true, hazards: () => hazards(12, 3) }).create(makeCtx());
+  pile.hold(2, "VSC"); run(pile, 1);
+  assert.equal(pile.info().level, 3);
+  pile.hold(0);
+  assert.equal(pile.info().level, 3, "the safety car for twelve hazards outlives the released hold");
+  // Switch off: SC -> VSC -> green, all immediate.
+  const off = load({ active: () => true, hazards: () => hazards(0, 0) }).create(makeCtx({}, false));
+  off.hold(3, "SAFETY CAR"); run(off, 1);
+  off.hold(2, "VSC"); assert.equal(off.info().level, 2);
+  off.hold(0); assert.equal(off.info().level, 0);
+});
+
+test("a red flag applied with the CAUTIONS switch off still runs its procedure and asks for the restart", () => {
+  const rc = load({ active: () => true, hazards: () => hazards(0, 0) }).create(makeCtx({}, false));
+  rc.apply({ level: 4, cause: "RED FLAG", phase: "stopping" });
+  assert.equal(rc.info().level, 4);
+  run(rc, 5);
+  assert.equal(rc.info().phase, "stopping");
+  run(rc, 4);
+  assert.equal(rc.info().phase, "held", "the field has stopped; the flag holds");
+  run(rc, 7);
+  assert.equal(rc.takeRestart(), true, "exactly one restart request at the end of the procedure");
+  assert.equal(rc.info().level, 0);
+  assert.equal(rc.info().enabled, false, "the switch stayed off throughout");
+});
