@@ -50,7 +50,7 @@ function stubStore() {
 }
 
 /* ── RESULTS / STANDINGS on the real SeasonCal ─────────────────────────── */
-function bootResults({ state = "menu", season, cars, netPlay, seasonMode = true }) {
+function bootResults({ state = "menu", season, cars, netPlay, seasonMode = true, globals = {} }) {
   const dom = makeDom();
   const tracks = ["bahrain", "jeddah", "melbourne"].map((id) => ({ id, name: id.toUpperCase(), gp: id + " GP", classic: false }));
   const sb = {
@@ -63,6 +63,7 @@ function bootResults({ state = "menu", season, cars, netPlay, seasonMode = true 
     Career: { objectiveLabel: () => "", OBJ_BONUS: 0 },
     GameAudio: { finish() {} },
   };
+  Object.assign(sb, globals);
   sb.window = sb;
   const ctx = vm.createContext(sb);
   seedLog(ctx);
@@ -196,6 +197,42 @@ test("race RESULTS shows host-corrected elapsed and same-lap gaps only when fiel
     assert.equal(unclassified.els.resultsTable.children.some((e) => e.classList.contains("sel-label")), false,
       "partial or mismatched host classification cannot label a local order official");
   }
+});
+
+test("a GUEST's LICENCE BADGES are judged on the host's classification, not its own flags", () => {
+  // The rows already read dnfOf/sourceOf; awardBadges read p.retired /
+  // p.finished / p.penalty, which on a guest come off its OWN reliability plan.
+  const team = (id, color) => ({ id, name: id.toUpperCase(), color });
+  const mk = () => [
+    { driverId: "w", code: "WIN", name: "Winner", team: team("red", [1, 0, 0]), lap: 5, finishT: 100, penalty: 0, finished: true, best: 20 },
+    { driverId: "me", code: "YOU", name: "You", team: team("blue", [0, 0, 1]), lap: 3, retired: true, dnf: "gearbox", penalty: 0, best: 19 },
+    { driverId: "x", code: "XXX", name: "Third", team: team("red", [1, 0, 0]), lap: 5, finishT: 120, penalty: 0, finished: true, best: 21 },
+  ];
+  const run = (host, carsIn) => {
+    const seen = [];
+    const Badges = { onRace: (r) => { seen.push(r); return []; }, setNotifier() {}, labelOf: (id) => id };
+    const netPlay = { active: () => true, ownsClassification: () => false, peerResult: () => host };
+    const h = bootResults({ season: null, cars: carsIn, netPlay, seasonMode: false, globals: { Badges } });
+    h.G.player = carsIn[1];
+    h.api.buildResults(carsIn.slice());
+    assert.equal(seen.length, 1, "awarded once");
+    return seen[0];
+  };
+  // Parked HERE by this peer's own plan, but the host timed it with a penalty.
+  const timed = run([
+    { d: "w", t: 100, p: 0, lap: 5, r: 0 }, { d: "me", t: 101, p: 5, lap: 5, r: 0 }, { d: "x", t: 120, p: 0, lap: 5, r: 0 },
+  ], mk());
+  assert.equal(timed.retired, false, "the host timed the player: not retired");
+  assert.equal(timed.finished, true, "a host-timed car finished");
+  assert.equal(timed.penalty, 5, "the host's penalty, not the local 0");
+  assert.equal(timed.fastest, true, "best lap among the host's finishers");
+  // Finished HERE, retired by the host.
+  const cars = mk(); cars[1].retired = false; cars[1].dnf = null; cars[1].finished = true; cars[1].finishT = 101;
+  const out = run([
+    { d: "w", t: 100, p: 0, lap: 5, r: 0 }, { d: "me", t: 0, p: 0, lap: 3, r: "engine" }, { d: "x", t: 120, p: 0, lap: 5, r: 0 },
+  ], cars);
+  assert.equal(out.retired, true, "the host's retirement stands");
+  assert.equal(out.finished, false);
 });
 
 test("STANDINGS title says which half of a sprint weekend it stands on, and the pause menu's NEXT line is the race in progress", () => {

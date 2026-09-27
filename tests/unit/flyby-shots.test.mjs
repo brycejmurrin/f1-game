@@ -680,12 +680,17 @@ test("a duel never leaks into a championship round, a time trial or a quali lap"
   // with no championship guard, so after one duel a time trial ran with an AI
   // rival and a season round scored a 2-car race. Every consumer goes through duelOn().
   const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
-  assert.match(game, /const duelOn = \(\) => duelMode && !isChampionship\(\) && !isTimeTrial\(\) && !isQuali\(\);/);
+  assert.match(game, /const duelOn = \(\) => duelMode && !duelNetOff && !isChampionship\(\) && !isTimeTrial\(\) && !isQuali\(\);/);
   const uses = game.split("\n").filter((l) => /\bduelMode\b/.test(l) && !/^\s*\/\//.test(l));
   const bad = uses.filter((l) => !/let duelMode|const duelOn|const duelSetting|set duel\(v\)|get duel\(\)/.test(l));
   assert.deepEqual(bad, [], "duelMode is read only through duelOn(): " + bad.join(" | "));
   const lobby = fs.readFileSync(path.join(ROOT, "js/net/lobby.js"), "utf8");
-  assert.match(lobby, /G\.duel = false;/, "a friend race clears duel: the room's grid is every peer's");
+  // A friend race SUSPENDS the duel (the room's grid is every peer's) but must
+  // never write G.duel: that is the player's sticky solo setting, and writing
+  // it lost their duel choice after every friend race. quitToMenu lifts it.
+  assert.match(lobby, /G\.duelNetOff = true;/, "a friend race suspends duel");
+  assert.doesNotMatch(lobby, /G\.duel = /, "the lobby never writes the solo duel setting");
+  assert.match(game, /setFlow\("gp"\); session = "race"; duelNetOff = false;/, "quitToMenu lifts the suspension");
 });
 
 test("the loading screen flies only the world built for THIS selection", () => {

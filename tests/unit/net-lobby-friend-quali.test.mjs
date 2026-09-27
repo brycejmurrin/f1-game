@@ -63,6 +63,19 @@ for (const [name, startRace] of [
   });
 }
 
+test("a friend race suspends the duel for its own grid but keeps the player's solo duel SETTING", async () => {
+  let seen = null;
+  const { G, lobby } = await hostUp(async () => { seen = { duel: G.duel, off: G.duelNetOff }; return { kind: "canceled" }; });
+  G.duel = true;
+  try {
+    lobby.startFromRoom();
+    await G._done();
+    assert.deepEqual(seen, { duel: true, off: true }, "startRace sees the duel suspended, not cleared");
+    assert.equal(G.duel, true, "the sticky solo setting survives the friend race");
+    assert.equal(G.duelNetOff, false, "a cancelled start lifts the suspension");
+  } finally { lobby.cancel(); }
+});
+
 test("hunt fixes: SIMULATE / no valid lap still reports a time; tyres + reliability are race rules; a paused friend race brakes the car; no garage in MP", async () => {
   const { readFileSync } = await import("node:fs");
   const r = (f) => readFileSync(new URL("../../" + f, import.meta.url), "utf8");

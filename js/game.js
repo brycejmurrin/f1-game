@@ -1123,10 +1123,10 @@ const isPractice = () => practiceMode || isTimeTrial();
 // A DUEL is a practice race against ONE bumped rival. Same trim that Time Trial
 // and Quali already do to `cars` after makeCars(); the rival's stats come from
 // the deltas argument DriverRatings.get() already takes for career development.
-let duelMode = false;
+let duelMode = false, duelNetOff = false;   // duelNetOff: a friend race keeps the room's grid (NetLobby sets it, quitToMenu clears it)
 // The SETTING sticks (like difficulty), but a duel is a one-off practice race:
 // never a championship round, a time trial (Daily included) or a quali lap.
-const duelOn = () => duelMode && !isChampionship() && !isTimeTrial() && !isQuali();
+const duelOn = () => duelMode && !duelNetOff && !isChampionship() && !isTimeTrial() && !isQuali();
 const duelSetting = () => duelMode;   // sticky race SETTING for session keys; gated use goes through duelOn()
 // WHICH legend the duel rival is, or "" for the ordinary fastest-car duel. A
 // race SETTING like duelMode itself, so it survives a restart the same way.
@@ -3240,7 +3240,7 @@ const G = {
   // a Time Trial OFF — there is no scored state for it to return to.
   get practice() { return isPractice(); },
   set practice(v) { practiceMode = !!v; },
-  get duel() { return duelMode; }, set duel(v) { duelMode = !!v; },
+  get duel() { return duelMode; }, set duel(v) { duelMode = !!v; }, get duelNetOff() { return duelNetOff; }, set duelNetOff(v) { duelNetOff = !!v; },
   get duelLegend() { return duelLegend; }, set duelLegend(v) { duelLegend = v || ""; },
   get lapsTarget() { return lapsTarget; },
   // RELIABILITY: the race setting, the shared arming path (so a simulated career
@@ -4066,7 +4066,7 @@ function quitToMenu() {
   // session for itself, so this only stops a half-finished career leaking into the
   // next thing the player presses. The championship SAVES are untouched — what
   // makes the CONTINUE buttons appear is `season`/`career`, not the mode.
-  setFlow("gp"); session = "race";
+  setFlow("gp"); session = "race"; duelNetOff = false;   // the friend race is over: the solo duel SETTING applies again
   quali.clear();   // memory only — persist stays until award/abort so CONTINUE keeps the grid
   qualiNet.clearPeers();
   // Title QUIT leaves the session: cancel() tears RTC down; q-back keeps abortQuali().
