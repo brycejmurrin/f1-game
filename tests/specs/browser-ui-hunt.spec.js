@@ -22,7 +22,7 @@ async function dataReady(page) {
     "/js/core/log.js", "/js/ui/modal.js", "/js/core/mat4.js", "/js/ui/dom.js",
     "/js/data/api.js", "/js/data/telemetry.js", "/js/data/export.js",
     "/js/data/schedule.js", "/js/data/standings.js", "/js/data/results.js",
-    "/js/data/live.js", "/js/data/hub.js",
+    "/js/data/live.js", "/js/data/real-race-tab.js", "/js/data/hub.js",
   ]) await page.addScriptTag({ url });
   await page.evaluate(() => {
     const meta = {
