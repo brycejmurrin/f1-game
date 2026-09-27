@@ -17,8 +17,8 @@ function boot(opts = {}) {
     navigator: opts.share ? { share: async () => {} } : {},
     NetHandshake: {
       inviteFromUrl: (raw) => {
-        if (String(raw).includes("#vs=")) return String(raw).split("#vs=")[1];
-        return null;
+        const m = String(raw).match(/[#&]vs=([^&\s]+)/);   // as js/net/handshake.js: a link ends at whitespace
+        return m ? m[1] : null;
       },
       inviteUrl: (code) => "https://x.test/#vs=" + code,
     },
@@ -39,6 +39,29 @@ test("codeFrom trims and unwraps invite URLs", () => {
   assert.equal(LobbyCodes.codeFrom(""), "");
   assert.equal(LobbyCodes.codeFrom("  APEX1.z.abc  "), "APEX1.z.abc");
   assert.equal(LobbyCodes.codeFrom("https://x.test/play#vs=INVITE"), "INVITE");
+});
+
+test("codeFrom lifts a code out of a message and re-joins one a mail client hard-wrapped", () => {
+  // 2026-09-27: peekCode strips whitespace, so a code copied with the sender's
+  // words around it became body+prose — "corrupt" for a code that was fine —
+  // and the MAKE ANSWER / ACCEPT buttons read the raw box, so a link that got
+  // there without a paste event (keyboard clipboard chip) was "not a code".
+  const { LobbyCodes } = boot();
+  const body = "Q".repeat(60) + "_-" + "z".repeat(58);
+  const code = "APEX1.s." + body;
+  assert.equal(LobbyCodes.codeFrom("here you go: " + code + " thanks!"), code, "prose on both sides");
+  assert.equal(LobbyCodes.codeFrom(code + "\nSent from my iPhone"), code, "a signature after the code");
+  assert.equal(LobbyCodes.codeFrom(code + " thanks"), code, "one short word after an unwrapped code is not a fragment");
+  // A 76-column hard wrap: long fragments, then a short tail as the LAST token.
+  const wrapped = code.slice(0, 76) + "\n" + code.slice(76, 152) + "\n" + code.slice(152);
+  assert.ok(code.slice(152).length < 20, "the fixture's tail is short on purpose");
+  assert.equal(LobbyCodes.codeFrom(wrapped), code, "re-joined");
+  assert.equal(LobbyCodes.codeFrom("code:\n" + wrapped), code, "wrapped, with a word before it");
+  // Text with no code at all is handed on as-is for peekCode's verdict.
+  assert.equal(LobbyCodes.codeFrom("not a code at all"), "not a code at all");
+  assert.equal(LobbyCodes.codeFrom("nocode"), "nocode");
+  // A link inside a message still wins as a link.
+  assert.equal(LobbyCodes.codeFrom("join me https://x.test/play#vs=" + code + " now"), code);
 });
 
 test("paintQr hides the wrap when encoding fails", () => {
