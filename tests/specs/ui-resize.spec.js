@@ -232,7 +232,7 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
     await page.waitForFunction(() => {
       const el = document.getElementById("cs-inner");
       return el.dataset.density === "normal";
-    }, null, { polling: 50, timeout: 15_000 });
+    }, null, { polling: 50, timeout: 5_000 });
     const at50 = await readState(page);
     expect(at50.density, "not compact at UI SIZE 50% on this viewport").toBe("normal");
 
@@ -240,7 +240,7 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
     await page.waitForFunction(() => {
       const el = document.getElementById("cs-inner");
       return el.dataset.density === "compact";
-    }, null, { polling: 50, timeout: 15_000 });
+    }, null, { polling: 50, timeout: 5_000 });
     const at150 = await readState(page);
 
     expect(at150.density, "compact once the sheet is short in its own units").toBe("compact");
@@ -252,7 +252,7 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
     await page.waitForFunction(() => {
       const el = document.getElementById("cs-inner");
       return el.dataset.density === "normal";
-    }, null, { polling: 50, timeout: 15_000 });
+    }, null, { polling: 50, timeout: 5_000 });
     expect((await readState(page)).density, "back to normal when the scale drops").toBe("normal");
   });
 
