@@ -806,3 +806,14 @@ test("the SPOTTER row lives in the TEAM RADIO section, and the folded summary sh
   const fold = panel.slice(panel.indexOf('Dom.paintFold($("as-radio-sum")'), panel.indexOf("]);", panel.indexOf('Dom.paintFold($("as-radio-sum")')));
   assert.match(fold, /"SPOTTER " \+/, "a radio switched OFF still shows SPOTTER ON/OFF without opening the section");
 });
+
+test("hunt fixes: an 'interrupted' resume() never counts as recovered; TLX stops reloading after the fallback; Escape in the garage yields to a dialog", () => {
+  const eng = readFileSync(join(ROOT, "js/audio/engine.js"), "utf8");
+  assert.match(eng, /if \(!ctx \|\| ctx\.state !== "running"\) return;\s*rebuildTries = 0;/);
+  const tlx = readFileSync(join(ROOT, "js/render/three/tlx.js"), "utf8");
+  assert.match(tlx, /if \(n === 3\) setTimeout\(function \(\) \{ try \{ location\.reload\(\); \}/);
+  const game = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  assert.match(game, /function endRace\(forcedOrder\) \{[\s\S]{0,200}sessionStorage\.removeItem\("apex26\.ctxLostReloads"\)/);
+  const cam = readFileSync(join(ROOT, "js/garage/setup-camera.js"), "utf8");
+  assert.match(cam, /!document\.querySelector\("dialog\[open\], dialog\.screen:not\(\[hidden\]\)"\)/);
+});

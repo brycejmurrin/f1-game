@@ -15,6 +15,7 @@ const NetLobby = (function () {
     // reopen once that connection is up (see onJoiner: one negotiation in
     // flight at a time). Null when we are not hosting a room.
     let codeReopen = null;
+    let _answersSeen = null;   // {code, set}: answers already taken for this room code (see codeHost)
     let codeReopenTimer = null;        // the pending 250 ms reopen — owned, cancellable
     const mintGuestId = () => "g" + (++nextGuestId);
     let pendingId = null;
@@ -572,6 +573,10 @@ const NetLobby = (function () {
         laps: G.raceLaps, weather: G.raceWeather, tod: G.raceTimeOfDay,
         quali: !!G.raceQuali, grid: G.raceGrid,
         difficulty: G.difficulty,
+        // TYRE WEAR and RELIABILITY are race rules too, and each peer applied its
+        // own saved choice: the host's tyres wore while the guest's never did,
+        // and the guest's own car could DNF under a level nobody picked.
+        tyres: G.raceTyreWear, reliab: G.raceReliability,
         // The SIM seed and race counter every reproducible draw hashes on:
         // reliability DNFs (armReliability), the weather arc, the AI
         // restart/skill rolls and the AI qualifying times that set the grid.
@@ -642,6 +647,14 @@ const NetLobby = (function () {
         if (typeof d.difficulty !== "string" || !DIFFICULTY.has(d.difficulty)) return null;
         out.difficulty = d.difficulty;
       }
+      if (own(d, "tyres") && d.tyres != null) {   // absent from an older host: keep ours
+        if (typeof d.tyres !== "string" || (typeof TyreModel !== "undefined" && !TyreModel.isLevel(d.tyres))) return null;
+        out.tyres = d.tyres;
+      }
+      if (own(d, "reliab") && d.reliab != null) {
+        if (typeof d.reliab !== "string" || (typeof Reliability !== "undefined" && !Reliability.isLevel(d.reliab))) return null;
+        out.reliab = d.reliab;
+      }
       // simSeed() stores a uint32 and treats 0 as "unset" (game.js): accept
       // exactly the values the setter would keep.
       if (own(d, "seed")) {
@@ -670,6 +683,8 @@ const NetLobby = (function () {
       if (own(next, "weather")) G.raceWeather = next.weather;
       if (own(next, "tod")) G.raceTimeOfDay = next.tod;
       if (own(next, "difficulty")) G.difficulty = next.difficulty;
+      if (own(next, "tyres")) G.raceTyreWear = next.tyres;
+      if (own(next, "reliab")) G.raceReliability = next.reliab;
       if (own(next, "seed")) G.seed = next.seed;           // rewinds the sim stream: pre-race only, by construction
       if (own(next, "round")) G.raceRound = next.round;
       renderRoom();
@@ -1277,7 +1292,13 @@ const NetLobby = (function () {
       codeWait = { cancelled: false };
 
       if (!NetRendezvous.usingPrivateRelay()) {
-        const answersSeen = new Set();
+        // SURVIVES A REOPEN of the same code. A guest re-posts its sealed answer
+        // 3x over ~3.6 s (nostr.js), and a room reopened 250 ms after that guest
+        // connected started with an empty set — it took the repost against the
+        // NEW offer, closed the room for an attempt that could never connect,
+        // and the next friend with the code found nothing. A fresh room starts clean.
+        if (!opts.quiet || !_answersSeen || _answersSeen.code !== code) _answersSeen = { code, set: new Set() };
+        const answersSeen = _answersSeen.set;
         const sub = await NetRendezvous.hostRoom({
           code, token: codeWait,
           mine: invite.code,
@@ -1586,8 +1607,18 @@ const NetLobby = (function () {
 
     function wire() {
       const on = (id, fn) => { const b = $(id); if (b) b.onclick = fn; };
-      on("vs-host", host);
-      on("vs-join", join);
+      // TILT NEEDS A TAP. A friend race starts from the NETWORK (startRace with
+      // no gesture), where iOS's motion permission cannot be asked
+      // (DeviceOrientationEvent.requestPermission needs transient activation —
+      // https://w3c.github.io/deviceorientation/) and the solo RACE! button's
+      // enableTilt() never runs: a tilt player raced with no steering. Every
+      // lobby button that leads to a race asks here, inside its own click.
+      const tiltToo = (fn) => (...a) => {
+        if (G.getSteerMode && G.getSteerMode() === "tilt" && G.enableTilt) G.enableTilt();
+        return fn(...a);
+      };
+      on("vs-host", tiltToo(host));
+      on("vs-join", tiltToo(join));
       // Called with NO argument on purpose. Both take an optional code so a
       // test can drive the handshake without scraping textareas — and wiring
       // them as bare handlers passes the CLICK EVENT as that code, which is not
@@ -1607,21 +1638,21 @@ const NetLobby = (function () {
       on("vs-scan-cancel", () => { stopScan(); say(""); });
       on("vs-edit-race", () => { if (role === "host" && G.openRaceSetup) G.openRaceSetup(); });
       on("vs-edit-car", () => { if (G.openGarageFrom) G.openGarageFrom("vsfriend"); });
-      on("vs-ready", () => setReady(!selfReady));
+      on("vs-ready", tiltToo(() => setReady(!selfReady)));
       on("vs-invite-more", inviteAnother);
-      on("vs-code-host", () => codeHost());   // never the click event as opts
+      on("vs-code-host", tiltToo(() => codeHost()));   // never the click event as opts
       on("vs-code-join", () => {
         showCodeStep("input", "Enter their code", "Six letters and numbers.");
         const box = $("vs-code-in");
         if (box) { box.value = ""; box.focus(); }
       });
-      on("vs-code-go", () => codeJoin());
+      on("vs-code-go", tiltToo(() => codeJoin()));
       on("vs-code-copy", () => copy(($("vs-code-value") || {}).textContent || ""));
       on("vs-code-share", () => {
         const c = ($("vs-code-value") || {}).textContent || "";
         return handOff({ title: "Apex 26", text: "Race me on Apex 26 — room code " + c }, c);
       });
-      on("vs-start", startFromRoom);
+      on("vs-start", tiltToo(startFromRoom));
       on("vs-close", () => {
         const e = els();
         const inRoom = transports.size > 0;

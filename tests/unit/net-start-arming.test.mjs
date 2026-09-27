@@ -71,3 +71,11 @@ test("the snapshot interpolator reports the time it last posed", () => {
   interp.sample(1200, {});
   assert.equal(interp.presentedAt(), 1100, "sample(now) poses now - delayMs, and a relay must stamp that time");
 });
+
+test("the host holds the grid 45 s for a guest that cannot arm yet, and says so (a split start was the 20 s alternative)", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("../../js/net/netplay.js", import.meta.url), "utf8");
+  assert.match(src, /const ARM_WAIT_MS = 45000;/);
+  assert.match(src, /const HOLD_MAX_MS = ARM_WAIT_MS \+ 10000;/, "the guest's own backstop still outlasts the host's wait");
+  assert.match(src, /G\.announce\("WAITING FOR RIVAL — "/);
+});

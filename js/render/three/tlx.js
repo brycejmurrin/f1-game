@@ -789,9 +789,22 @@ const TLX = (function () {
       // null from create() and silently demote the player to GLX.
       const _threeOnLost = (typeof renderer.onDeviceLost === "function")
         ? renderer.onDeviceLost.bind(renderer) : null;
+      // iOS reports a background loss on the way BACK (webkit bug 261331), with
+      // document.hidden already false: within 3 s of becoming visible it is the
+      // background loss, not a crash — same rule as GLX webglcontextlost.
+      const _nowMs = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
+      let _shownAt = -1e9;
+      try {
+        document.addEventListener("visibilitychange", function () { if (!document.hidden) _shownAt = _nowMs(); });
+        window.addEventListener("pageshow", function () { _shownAt = _nowMs(); });
+      } catch (_) { /* no document events (harness) */ }
       renderer.onDeviceLost = function (info) {
         try { if (_threeOnLost) _threeOnLost(info); } catch (_) { /* three's own bookkeeping; ours must run regardless */ }
         try {
+          if (!document.hidden && _nowMs() - _shownAt < 3000) {   // seen on the way back: reload now, uncounted, nothing latched
+            setTimeout(function () { try { location.reload(); } catch (_) { /* harness */ } }, 300);
+            return;
+          }
           if (!document.hidden) {
             try { localStorage.setItem("apex26.envProbeOff", "1"); } catch (_) { /* no storage: the knob stays as-is and the tier gate is the only defence left */ }
             try { localStorage.setItem("apex26.perChunkOff", "1"); } catch (_) { /* ditto — nothing in this handler may throw */ }
@@ -842,13 +855,24 @@ const TLX = (function () {
               // choice because of one context loss. The AUTO branch above keeps
               // its pick and game.js re-arms that one fresh at opt-in.
             }
-            setTimeout(function () { try { location.reload(); } catch (_) { /* harness */ } }, 1200);
+            // The fall-back reload is for the THIRD loss only. Every later one
+            // reloaded again, forever, on a device whose WebGL2 also dies on
+            // use (iOS 18.7.2 RC lost every context — model-viewer#5100):
+            // from the fourth, stop and say so instead.
+            if (n === 3) setTimeout(function () { try { location.reload(); } catch (_) { /* harness */ } }, 1200);
+            else if (typeof window.__apexReportError === "function")
+              window.__apexReportError("gfx", new Error("The graphics device keeps getting lost (" + n + " times) — reload to try again, or pick another RENDERER in settings."));
           }
         } catch (_) { /* no sessionStorage -> skip the auto-recovery rather than loop uncounted */ }
       };
       try {
         canvas.addEventListener("webglcontextrestored",
-          function () { try { location.reload(); } catch (_) { /* same: nothing to reload, and the loss latches already landed */ } }, false);
+          function () {
+            // Same two-reload budget as the loss handler: an unguarded restore
+            // reload looped on a device that loses the context every boot.
+            try { if ((parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0) > 2) return; } catch (_) { return; }
+            try { location.reload(); } catch (_) { /* same: nothing to reload, and the loss latches already landed */ }
+          }, false);
       } catch (_) { /* detached/synthetic canvas in a harness: the timer above still covers it */ }
 
       // lifecycle state

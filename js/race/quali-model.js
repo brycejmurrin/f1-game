@@ -208,6 +208,11 @@ const Quali = (function () {
         t: (real && real.get(c.driverId) > 0) ? real.get(c.driverId) : simLap(c, track, G.gripMult(c), round, seed),
         car: c,
       }));
+      // NO TIME (driven = Infinity: every lap deleted for track limits) sits
+      // behind the whole field, a second per row apart, and says so.
+      let slow = 0;
+      for (const r of rows) if (Number.isFinite(r.t) && r.t > slow) slow = r.t;
+      for (const r of rows) if (!Number.isFinite(r.t)) { slow += 1; r.t = slow; r.noTime = true; }
       rows.sort((a, b) => a.t - b.t);
       const pole = rows[0].t;
       rows.forEach((r, i) => { r.pos = i + 1; r.gap = +(r.t - pole).toFixed(3); r.t = +r.t.toFixed(3); });
