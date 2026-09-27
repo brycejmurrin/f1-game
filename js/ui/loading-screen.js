@@ -489,7 +489,28 @@ const LoadingScreen = (function () {
       if (e && e.type === "keydown" && e.repeat) return;
       if (!(phase && build) || Date.now() - flyT0 < SKIP_GRACE_MS) return;
       if (e) { if (e.cancelable && e.preventDefault) e.preventDefault(); if (e.stopPropagation) e.stopPropagation(); }
+      if (e && e.type === "pointerdown") eatNextClick();
       noteFlyby(true); cutRadio(); fire();
+    }
+    /* THE TAP'S CLICK. preventDefault on pointerdown does not cancel the click
+     * that follows it, and by then the card is gone: the click landed on
+     * whatever race control sat under the finger. Swallow exactly one click in
+     * the capture phase; the listener outlives stop() on purpose and drops
+     * itself after use or CLICK_EAT_MS, so a later real tap is never eaten. */
+    const CLICK_EAT_MS = 500;
+    function eatNextClick() {
+      if (typeof addEventListener !== "function") return;
+      let t = 0;
+      const done = () => { removeEventListener("click", eat, true); clearTimeout(t); };
+      const eat = (ev) => {
+        if (ev) {
+          if (ev.preventDefault) ev.preventDefault();
+          if (ev.stopImmediatePropagation) ev.stopImmediatePropagation(); else if (ev.stopPropagation) ev.stopPropagation();
+        }
+        done();
+      };
+      addEventListener("click", eat, true);
+      t = setTimeout(done, CLICK_EAT_MS);
     }
     /* THE PAD SKIPS TOO. No UI layer is open during the flyby, so the gamepad
      * walker sends no synthetic keydown and a controller-only player (TV, a

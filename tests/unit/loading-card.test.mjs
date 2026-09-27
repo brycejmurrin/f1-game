@@ -243,6 +243,7 @@ function harness(stored = {}, storeOverride = null) {
   const info = { track: { id: "monza", name: "MONZA", country: "Italy" }, laps: 5, hasWorld: true };
   return {
     screen, saved, plays, races, els,
+    fire: (type, ev = {}) => { for (const fn of Array.from(listeners[type] || [])) fn(Object.assign({ type }, ev)); },
     run: (over = {}) => screen.run(Object.assign({}, info, over), () => races.push(now)),
     skip: (ev = {}) => { for (const fn of listeners.keydown || []) fn(Object.assign({ type: "keydown", repeat: false }, ev)); },
     tick(ms) {
@@ -305,6 +306,28 @@ test("a skip inside SKIP_GRACE_MS is ignored (a double-click on RACE!), and a re
   h.skip({ stopPropagation() { stopped++; }, preventDefault() { prevented++; }, cancelable: true });
   assert.equal(h.races.length, 1, "after the grace a skip starts the race");
   assert.equal(stopped + prevented, 2, "…and swallows the key, or Escape/P reach the race's pause handler on frame one");
+});
+
+test("a tap that skips also eats its own click — once, and only for CLICK_EAT_MS", () => {
+  const h = harness();
+  const click = () => { let n = 0; h.fire("click", { preventDefault() { n++; }, stopImmediatePropagation() {} }); return n; };
+  h.run();
+  h.tick(LS.SKIP_GRACE_MS);
+  h.fire("pointerdown", { cancelable: true, preventDefault() {}, stopPropagation() {} });
+  assert.equal(h.races.length, 1, "the tap skips to the race");
+  assert.equal(click(), 1, "the click that follows the tap never reaches the control under the finger");
+  assert.equal(click(), 0, "…and the NEXT click is the player's own");
+  h.screen.stop();
+  h.run();
+  h.tick(LS.SKIP_GRACE_MS);
+  h.fire("pointerdown", { cancelable: true, preventDefault() {}, stopPropagation() {} });
+  h.tick(600);
+  assert.equal(click(), 0, "a tap whose click never came does not eat a later one");
+  h.screen.stop();
+  h.run();
+  h.tick(LS.SKIP_GRACE_MS);
+  h.skip();
+  assert.equal(click(), 0, "a key skip has no click to eat");
 });
 
 test("a flyby that plays out resets the streak, and the full cut comes back", () => {
@@ -648,4 +671,8 @@ test("with the radio check coming, the announcer's read is budgeted to end befor
   // or its landing hold keeps speaking() true until the check has no time left.
   assert.ok(on.plays[0] <= full * 0.88, `announcer budget ${on.plays[0]} of ${full}`);
   assert.ok(on.plays[0] >= full * 0.8, "and it still gets nearly all of it");
+  // A one-car field (quali, time trial) has no radio check to make room for.
+  const solo = gridHarness({ radioOn: true, grid: [{ code: "YOU", isPlayer: true }] });
+  solo.run();
+  assert.equal(solo.plays[0], full, "no grid field: the announcer keeps the whole flyby");
 });

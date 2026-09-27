@@ -49,7 +49,7 @@ const FlybySeq = (function () {
   // constants rather than imported because TrackMesh is not loaded in the node
   // tests that check these shots, and a wrong number here is a framing bug, not
   // a crash — the unit test pins them against mesh.js.
-  const POLE_BACK = 14, GRID_SPACING = 8, GRID_ROWS = 20;
+  const POLE_BACK = 14, GRID_SPACING = 8;
   /* THE PLAYER'S OWN SLOT. gridUp() (js/game.js) seats the local player at P12
      (slot 11) unless a qualifying order exists, and menuGridCars() seats the
      flyby's field the same way and tells us here — so `{ at: "slot", n:
@@ -543,8 +543,9 @@ const FlybySeq = (function () {
     switch (pose.at) {
       case "pole": return wrapS(track, total - POLE_BACK + off);
       // The BACK of the grid that is there: a time trial seats one car and a duel
-      // two, and a fixed 20th row filmed 19 empty boxes 160 m from them.
-      case "grid": return wrapS(track, total - POLE_BACK - (Math.min(GRID_ROWS, _gridSize) - 1) * GRID_SPACING + off);
+      // two, and a fixed 20th row filmed 19 empty boxes 160 m from them. No cap
+      // either: a cap of 20 left cars 21-22 of a full field behind "the back".
+      case "grid": return wrapS(track, total - POLE_BACK - (_gridSize - 1) * GRID_SPACING + off);
       case "corner": return wrapS(track, cornerS(track, pose.n || 1) + off);
       case "slot": return wrapS(track, total - POLE_BACK - slotIndex(pose) * GRID_SPACING + off);
       default: return wrapS(track, off);          // "start" — the line is s = 0 by construction
@@ -1449,7 +1450,7 @@ const FlybySeq = (function () {
     // for LESS screen time is squeezed at least as hard as this one needs (a list
     // that dropped a shot gives every other shot more time). Keying every shot on
     // the slot and the exact fraction threw the menu's plans away on most races.
-    const secs = frac * _flyS, slot = usesSlot(shot) ? _playerSlot : -1, rows = usesGrid(shot) ? Math.min(GRID_ROWS, _gridSize) : -1;
+    const secs = frac * _flyS, slot = usesSlot(shot) ? _playerSlot : -1, rows = usesGrid(shot) ? _gridSize : -1;
     // …but only a plan made for NEARLY this much time: a plan squeezed for a
     // habitual skipper's 12 s flyby, reused once the flyby is 24 s again, played
     // the whole long flyby near-static until the track was rebuilt.
@@ -1535,7 +1536,7 @@ const FlybySeq = (function () {
     anchorS, posePoint, cornerS, cornerSide, cornerTurn, lmFace,
     poseFromWorld, shotFromView, nearestCorner, vary, setPlayerSlot, slotIndex, slotKnown, withoutSlot, bindCorners, warm, cancelWarm, setDuration, planSteps,
     DEFAULT, EASE,
-    POLE_BACK, GRID_SPACING, GRID_ROWS, MIN_FILL, MIN_H, FAR, FOG, NEAR, FENCE, REF_S, PAN_MAX,
+    POLE_BACK, GRID_SPACING, MIN_FILL, MIN_H, FAR, FOG, NEAR, FENCE, REF_S, PAN_MAX,
   };
 })();
 Object.freeze(FlybySeq);

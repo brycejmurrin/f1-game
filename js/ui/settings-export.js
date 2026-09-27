@@ -235,10 +235,15 @@ function collect(mode, G) {
   const defaults = {};
   const where = {};
   const changed = [];
+  // ALL mode spells out keys this device never set at THIS device's default; they
+  // are named in `unset` so an import skips them (a desktop file must not write
+  // desktop defaults — resMode, carWeight, gfxPreset — over a phone's own).
+  const unset = [];
   for (const row of SPEC) {
     const stored = readStored(row);
     const def = defaultOf(row, G);
     const has = stored !== null;
+    if (all && !has) unset.push(`${row.group}.${row.k}`);
     let diff = has && !row.info && (row.changed ? row.changed(stored) : !same(stored, def));
     let value = has ? stored : def;
     if (diff && isObj(stored) && isObj(def) && Object.keys(def).length) {
@@ -263,7 +268,7 @@ function collect(mode, G) {
     device: { desktop, userAgent: (typeof navigator !== "undefined" && navigator.userAgent) || null },
     keys: { json: "went through store.set (JSON)", raw: "bare strings from store.rawSet; null = unset" },
     excluded: EXCLUDED,
-    changed, settings, defaults, where,
+    changed, unset, settings, defaults, where,
   };
 }
 
@@ -324,6 +329,7 @@ function typeOk(v, def) {
 function applySettings(file, G) {
   if (!file || file.format !== FORMAT) return { ok: false, reason: `not an ${FORMAT} file`, applied: 0, skipped: 0 };
   const groups = file.settings || {};
+  const unset = Array.isArray(file.unset) ? file.unset : [];
   let applied = 0, skipped = 0, failed = 0;
   for (const row of SPEC) {
     // A migration VERSION is context in the file and must never be written
@@ -331,8 +337,16 @@ function applySettings(file, G) {
     if (row.info) continue;
     const g = groups[row.group];
     if (!g || !Object.prototype.hasOwnProperty.call(g, row.k)) continue;
-    const v = g[row.k];
-    if (!typeOk(v, defaultOf(row, G)) || (row.oneOf && !row.oneOf.includes(v))) { skipped++; continue; }
+    // Never set on the exporting device: its default there is not a choice.
+    if (unset.includes(`${row.group}.${row.k}`)) continue;
+    let v = g[row.k];
+    const def = defaultOf(row, G);
+    if (!typeOk(v, def) || (row.oneOf && !row.oneOf.includes(v))) { skipped++; continue; }
+    // A whole-table tuner (sndTune, sndLayers) is exported as objDiff's partial.
+    // Stored partial, the engine would fill the omitted fields from the sound
+    // PROFILE (setProfile, then setTune) — a field the player moved back to the
+    // shipped value would come back as the profile's. Spell out the table.
+    if (isObj(v) && isObj(def) && Object.keys(def).length) v = Object.assign({}, def, v);
     try {
       // A write storage refused (full quota, private mode) is not APPLIED:
       // counting it reloaded the page into the values it had lost.

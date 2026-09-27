@@ -830,11 +830,14 @@ test("the grid's back is the grid that is there: a time trial is not filmed from
     F.setPlayerSlot(11, 22);
     if (full === null) {
       const src = fs.readFileSync(path.join(ROOT, "js/camera/flyby-seq.js"), "utf8");
-      assert.match(src, /case "grid": return wrapS\(track, total - POLE_BACK - \(Math\.min\(GRID_ROWS, _gridSize\) - 1\) \* GRID_SPACING \+ off\);/);
+      assert.match(src, /case "grid": return wrapS\(track, total - POLE_BACK - \(_gridSize - 1\) \* GRID_SPACING \+ off\);/);
       return;
     }
     const d = ((full - solo) % track.total + track.total) % track.total;
     assert.ok(d > track.total / 2, `a one-car grid's back sits ahead of a 22-car one (Δs ${d.toFixed(0)} of ${track.total.toFixed(0)})`);
+    // …and a FULL field's back is its LAST car (slot 21), not a capped 20th row.
+    const last = ((track.total - F.POLE_BACK - 21 * F.GRID_SPACING) % track.total + track.total) % track.total;
+    assert.ok(Math.abs(full - last) < 1e-6, `22-car grid back at s=${full.toFixed(1)}, last slot at s=${last.toFixed(1)}`);
   });
 });
 

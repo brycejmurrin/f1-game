@@ -554,3 +554,31 @@ test("steerMode / hudProfile / drivingLine rows carry oneOf allowlists", () => {
   assert.deepEqual(Array.from(byK.hudProfile.oneOf), ["minimal", "standard", "broadcast"]);
   assert.deepEqual(Array.from(byK.drivingLine.oneOf), ["off", "corner", "full"]);
 });
+
+test("a whole-table tuner round-trips whole: an omitted field comes back as the shipped default, not the profile's", () => {
+  // bass moved, gain and air left at TUNE_DEF: CHANGED writes only { bass }.
+  const saved = boot({ disk: {
+    "apex26.sndProfile": JSON.stringify("broadcast"),
+    "apex26.sndTune": JSON.stringify({ gain: 1, bass: 0.9, air: 0.2 }),
+  } }).collect("changes");
+  assert.deepEqual(saved.settings.audio.sndTune, { bass: 0.9 });
+  const b2 = boot();
+  b2.loadSettings(saved);
+  // Stored partial, applyStoredTone (setProfile then setTune) would let the
+  // broadcast preset's gain/air stand in for the player's shipped values.
+  assert.deepEqual(JSON.parse(b2.disk.get("apex26.sndTune")), { gain: 1, bass: 0.9, air: 0.2 });
+  assert.equal(JSON.parse(b2.disk.get("apex26.sndProfile")), "broadcast");
+});
+
+test("an ALL file does not write the exporting device's defaults over the importer's", () => {
+  const saved = boot({ disk: { "apex26.pace": "14" } }).collect("all");   // a desktop, nothing else set
+  assert.equal(saved.settings.display.resMode, "auto", "ALL still lists every key");
+  assert.ok(saved.unset.includes("display.resMode") && saved.unset.includes("steering.carWeight"));
+  assert.ok(!saved.unset.includes("steering.pace"), "a stored key is not unset");
+  const phone = boot({ mobile: true });
+  phone.loadSettings(saved);
+  assert.equal(phone.disk.get("apex26.pace"), "14", "what the player set is carried");
+  for (const k of ["resMode", "carWeight", "gfxPreset"]) {
+    assert.equal(phone.disk.get("apex26." + k), undefined, `${k}: the phone keeps its own default`);
+  }
+});
