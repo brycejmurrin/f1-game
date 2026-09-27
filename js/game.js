@@ -4110,6 +4110,7 @@ function update(dt) {
   // Camera cycling works during the countdown and the race (set your view before
   // lights-out). Edge-triggered via the C key or the CAM button.
   if ((state === "race" || state === "count") && Input.consumeCameraCycle()) cycleCam();
+  realRace.update(dt);   // every state: it arms in the countdown, places a mid-race jump-in on the first green frame, steps the script in the race, and stands down at the results
   /* MANUAL RECOVER. The auto-rescue only fires on its own terms (held throttle
      and no movement, wrong way, off-track for long enough), so a car wedged
      somewhere it considers fine — nose-in against a barrier, facing the right
@@ -4265,7 +4266,7 @@ function update(dt) {
 
   // B1 — debris caution: consume hazards() and drive the local-yellow / VSC / SC
   // flag state (READ-ONLY; never slows or moves a car). Self-guarding + throttled.
-  realRace.update(dt); updateCaution(dt); coach.update(dt); raceRadio.update(dt);   // the script's flags go in before race control reads the picture
+  updateCaution(dt); coach.update(dt); raceRadio.update(dt);
 
   // Race-control owns the finish policy as well as neutralisation rules. In a
   // human race an AI/other player crossing first must NOT start a 3.5 s result
