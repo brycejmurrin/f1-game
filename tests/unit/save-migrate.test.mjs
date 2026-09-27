@@ -110,3 +110,13 @@ test("junk in, null out: a non-object save is refused rather than repaired", () 
     else assert.equal(r, null, `${JSON.stringify(bad)} should be refused`);
   }
 });
+
+test("a malformed season (number, string, array) is replaced, never thrown on — Career.load runs at boot", () => {
+  const SM = load();
+  for (const bad of [5, "x", true, []]) {
+    const c = SM.migrateCareer({ v: 1, flavour: "driver", team: "haas", money: 1, season: bad });
+    assert.equal(typeof c.season, "object");
+    assert.ok(!Array.isArray(c.season));
+    assert.equal(c.season.round, 0);
+  }
+});
