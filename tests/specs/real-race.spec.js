@@ -46,7 +46,7 @@ test.describe("real race", () => {
       // eslint-disable-next-line no-undef
       return RealRace.launch(script, { seat: "LEC", laps: 3 });
     }, SCRIPT);
-    expect(staged).toEqual({ trackId: "baku", laps: 3, seat: "LEC" });
+    expect(staged).toEqual({ trackId: "baku", laps: 3, seat: "LEC", startLap: 1 });
     await page.waitForFunction(() => window.__apex.info().track === "baku" && window.__apex.info().state !== "menu", null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => window.__apex.go());
     await page.evaluate(() => window.__apex.step(1 / 60, 6));   // a few frames: the director arms on the first
@@ -91,5 +91,60 @@ test.describe("real race", () => {
     await page.evaluate(() => window.__apex.setLap(2));
     await page.evaluate(() => window.__apex.step(1 / 30, 240));
     expect((await page.evaluate(() => window.__apex.caution())).level).toBe(0);
+  });
+});
+
+test.describe("real race, mid-race", () => {
+  test("launch() at a later lap arms in the countdown and drops the field in where it stood on the first green frame", async ({ page }) => {
+    test.setTimeout(BOOT_MS + 90000);
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => window.__apex.headless(true));
+    const staged = await page.evaluate((script) => {
+      // eslint-disable-next-line no-undef
+      return RealRace.launch(script, { seat: "LEC", laps: 6, startLap: 3 });
+    }, SCRIPT);
+    expect(staged).toEqual({ trackId: "baku", laps: 6, seat: "LEC", startLap: 3 });
+    // The director's hook runs in EVERY state (game.js update() top): the countdown frame arms it.
+    await page.waitForFunction(() => window.__apex.info().track === "baku" && window.__apex.info().state === "count", null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => window.__apex.step(1 / 60, 2));
+    // eslint-disable-next-line no-undef
+    const armed = await page.evaluate(() => RealRace.status());
+    expect(armed.armed).toBe(true);
+    expect(armed.placed).toBe(false);
+    expect(armed.cars.slice().sort((a, b) => a.grid - b.grid).slice(0, 2).map((c) => c.code)).toEqual(["RUS", "LEC"]);
+    await page.evaluate(() => window.__apex.go());
+    await page.evaluate(() => window.__apex.step(1 / 60, 3));
+    const st = await page.evaluate(() => {
+      // eslint-disable-next-line no-undef
+      const rr = RealRace.status();
+      const info = window.__apex.info();
+      return { rr, state: info.state, total: info.total };
+    });
+    expect(st.state).toBe("race");
+    expect(st.rr.placed).toBe(true);
+    expect(st.rr.K).toBeGreaterThan(0.5);
+    const by = (code) => st.rr.cars.find((c) => c.code === code);
+    // At the start of real lap 3 Russell is on the line beginning lap 3; the others are inside lap 2 or 3 by time.
+    expect(by("RUS").lap).toBe(3);
+    expect(by("RUS").s).toBeLessThan(10);   // dropped on the line, then two frames at cruise speed
+    expect(by("LEC").lap).toBeGreaterThanOrEqual(2);
+    expect(by("LEC").s).toBeGreaterThan(0);
+    expect(by("VER").lap).toBeGreaterThanOrEqual(2);
+    // Stroll (two laps done, out on lap 3) is still running lap 2 at that instant — his retirement is ahead of him; the seats with no data are parked.
+    expect(by("STR").retired).toBe(false);
+    expect(by("STR").lap).toBe(2);
+    expect(by("STR").dnfAt).toBeCloseTo(2.5 / 6, 6);
+    expect(by("HAM").retired).toBe(true);
+    // The sets: Russell mid-stint on the mediums he started on; the lap-2 safety car is held at once.
+    expect(by("RUS").tyre).toBe("M");   // the live tyre record carries the HUD letter, not the class key
+    expect(by("RUS").pitStops).toBe(0);
+    expect(st.rr.caution).toBe(0);   // the lap-2 window closed at the end of lap 2: green at the start of lap 3
+    // Every car keeps moving from where it was dropped: a few more frames, nobody back on the grid.
+    await page.evaluate(() => window.__apex.step(1 / 30, 30));
+    // eslint-disable-next-line no-undef
+    const later = await page.evaluate(() => RealRace.status());
+    expect(later.cars.find((c) => c.code === "RUS").s).toBeGreaterThan(20);
+    expect(later.cars.find((c) => c.code === "RUS").lap).toBe(3);
   });
 });

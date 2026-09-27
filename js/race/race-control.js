@@ -238,8 +238,12 @@ const RaceControl = (function () {
         flag(prev, held);
         publish();
       }
-      if (!enabled) return;
       if (caution.level !== 0) caution.sinceT += dt;
+      // A RED FLAG RUNS ITS PROCEDURE WHATEVER THE SWITCH SAYS. The hazard loop
+      // can only raise one while enabled, but apply() (a scripted red, a host's)
+      // can land one with CAUTIONS off — and a red that never ages never asks
+      // for its restart, which held the whole field at 2 % of top speed until
+      // the player quit. The switch gates the hazard loop below, not this.
       if (caution.level === 4) {
         // The red procedure: no hazard query, no cap — it ends in exactly ONE
         // restart request. The re-arm hold then keeps the same (not yet
@@ -254,6 +258,7 @@ const RaceControl = (function () {
         publish();
         return;
       }
+      if (!enabled) return;
       if (!DebrisWorld.active()) {
         // Debris inactive mid-flag: the LEVEL freezes (test-asserted — see
         // "debris going inactive mid-race freezes a flying flag") but it keeps
@@ -351,12 +356,25 @@ const RaceControl = (function () {
     }
 
     // Fly a flag by script (level 1-3; 0 releases). Returns the held level.
+    // Lowering or releasing takes effect NOW: the script's windows are laps,
+    // not hazard flicker, so a flag the hold itself raised (level <= the old
+    // hold) steps straight down to the new level rather than waiting on the
+    // hazard loop — which with debris off, or the switch off, never lowers it.
     function hold(level, cause) {
+      const prevHeld = held;
       held = Math.max(0, Math.min(3, level | 0));
       heldCause = held ? (typeof cause === "string" && cause ? cause.slice(0, 64) : LABEL[held]) : "";
       if (held) Log.info("game", "RaceControl hold " + LABEL[held] + " (" + heldCause + ")");
-      // Released with the hazard loop OFF: nothing else would ever lower it.
-      else if (!enabled && caution.level > 0 && caution.level < 4) { dropToGreen(); publish(); }
+      if (held < caution.level && caution.level <= prevHeld && caution.level < 4) {
+        if (held === 0) dropToGreen();
+        else {
+          const prev = caution.level;
+          caution.level = held; caution.sector = -1; caution.frac = 0;
+          caution.cause = heldCause; caution.sinceT = 0; caution.phase = "";
+          flag(prev, held);
+        }
+        publish();
+      }
       return held;
     }
 

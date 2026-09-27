@@ -5,11 +5,13 @@ const DataRealRace = (function () {
   const OPENF1 = "https://api.openf1.org/v1";
   const TTL = 7 * 24 * 60 * 60 * 1000;   // a finished race never changes; the same TTL api.js gives a historic session
   const CACHE_KEY = "apex26.realrace.v1.";   // one compact script per session key (the raw laps body is 480 KB and never cached)
-  const SCRIPT_V = 1;
+  const SCRIPT_V = 2;   // 2: stint ages, rain by lap, the complete flag
   const DATA_CREDIT = "Timing data: OpenF1 (CC BY-NC-SA 4.0) · pace, stops, flags and the grid are the real ones; the racing is yours.";
   const NO_TRACK_MSG = "This circuit is not in Apex 26 yet — pick another Grand Prix.";
   const NO_RACE_MSG = "No race timing published for this weekend yet.";
   const FETCH_FAIL_MSG = "Could not fetch the race timing — try again in a minute.";
+  const INCOMPLETE_MSG = "Timing is still coming in for this race — it plays as far as the data goes.";
+  const NO_SEAT_MSG = "no seat in this roster";
   const DISTANCES = [1, 0.5, 0.2, 0.1];   // FULL, half, a fifth, a tenth of the real distance
 
   const num = (v) => (typeof v === "number" && isFinite(v) ? v : (v != null && v !== "" && isFinite(+v) ? +v : null));
@@ -130,7 +132,7 @@ const DataRealRace = (function () {
     for (const st of arr(raw.stints)) {
       const d = byNum[num(st && st.driver_number)];
       if (!d) continue;
-      d.stints.push({ c: String(st.compound || "").toUpperCase(), from: num(st.lap_start) || 1, to: num(st.lap_end) || totalLaps });
+      d.stints.push({ c: String(st.compound || "").toUpperCase(), from: num(st.lap_start) || 1, to: num(st.lap_end) || totalLaps, age: num(st.tyre_age_at_start) || 0 });
     }
     for (const p of arr(raw.pits)) {
       const d = byNum[num(p && p.driver_number)];
@@ -152,6 +154,10 @@ const DataRealRace = (function () {
     }
     // Grid order first (a driver with no snapshot goes to the back, by number), so the table reads like the grid.
     drivers.sort((a, b) => (a.grid || 99) - (b.grid || 99) || a.num - b.num);
+    // COMPLETE means a classification with a winner and every driver's laps in:
+    // a race still running (or one OpenF1 has not finished publishing) builds,
+    // and can be played, but is never cached — the next open fetches it again.
+    const complete = totalLaps > 0 && arr(raw.result).some((r) => r && num(r.position) === 1) && drivers.some((d) => d.laps.filter((t) => t > 0).length === totalLaps);
     return {
       v: SCRIPT_V, source: "openf1",
       sessionKey: num(s.session_key), meetingKey: num(s.meeting_key), year: num(s.year),
@@ -159,9 +165,34 @@ const DataRealRace = (function () {
       session: String(s.session_name || "Race"),
       circuit: String(s.circuit_short_name || ""), country: String(s.country_name || ""),
       trackId: trackIdFor(s, tracks), dateStart: String(s.date_start || ""),
-      tod: todFor(s), weather: weatherFor(raw.weather),
-      laps: totalLaps, drivers, cautions: cautionsFor(raw.raceControl),
+      tod: todFor(s), weather: weatherFor(raw.weather), rain: rainByLap(laps, raw.weather, totalLaps),
+      laps: totalLaps, drivers, cautions: cautionsFor(raw.raceControl), complete,
     };
+  }
+
+  /** Rain lap by lap (index = real lap, true when any weather sample inside that
+   *  lap's window — the leader's lap start to the next — reports rainfall), or
+   *  null when the lap rows carry no timestamps to align the samples to. */
+  function rainByLap(laps, weatherRows, totalLaps) {
+    const starts = new Array(totalLaps + 2).fill(Infinity);
+    let any = false;
+    for (const l of arr(laps)) {
+      const n = num(l && l.lap_number), t = Date.parse(l && l.date_start || "");
+      if (n >= 1 && n <= totalLaps && isFinite(t) && t < starts[n]) { starts[n] = t; any = true; }
+    }
+    if (!any) return null;
+    for (let n = 2; n <= totalLaps; n++) if (!isFinite(starts[n])) starts[n] = starts[n - 1];   // a lap nobody timed inherits the previous start
+    const out = new Array(totalLaps + 1).fill(false);
+    for (const w of arr(weatherRows)) {
+      if (!(num(w && w.rainfall) > 0)) continue;
+      const t = Date.parse(w.date || "");
+      if (!isFinite(t)) continue;
+      for (let n = 1; n <= totalLaps; n++) {
+        const end = n < totalLaps && isFinite(starts[n + 1]) ? starts[n + 1] : Infinity;
+        if (t >= starts[n] && t < end) { out[n] = true; break; }
+      }
+    }
+    return out;
   }
 
   // ── Fetching: one script per session, through F1API's queue and rate window ──
@@ -187,7 +218,7 @@ const DataRealRace = (function () {
     try {
       const raw = localStorage.getItem(CACHE_KEY + sessionKey);
       const s = raw ? JSON.parse(raw) : null;
-      return s && s.v === SCRIPT_V && s.laps > 0 && Array.isArray(s.drivers) ? s : null;
+      return s && s.v === SCRIPT_V && s.complete === true && s.laps > 0 && Array.isArray(s.drivers) ? s : null;
     } catch (e) { return null; }
   }
   function remember(script) {
@@ -198,6 +229,7 @@ const DataRealRace = (function () {
     const { el, clear, emptyMsg, spinner, sel, ensureSession, buildPicker, teamChip, fmtDateTime, findTeam, close } = deps;
     let bodyGen = 0;
     let distance = 1;   // the fraction of the real distance the player races (DISTANCES)
+    let startLap = 1;   // the REAL lap the player drops into (1 = the grid)
 
     function tracks() { return typeof Tracks !== "undefined" && Tracks.LIST ? Tracks.LIST : []; }
 
@@ -207,7 +239,7 @@ const DataRealRace = (function () {
       if (hit) return Promise.resolve(hit);
       return fetchRaw(sessionKey).then((raw) => {
         const script = build(raw, findTeam, tracks());
-        if (script.laps > 0 && script.drivers.length) remember(script);
+        if (script.complete && script.drivers.length) remember(script);
         return script;
       });
     }
@@ -261,6 +293,40 @@ const DataRealRace = (function () {
 
     function simLaps(script) { return Math.max(1, Math.round(script.laps * distance)); }
 
+    /** What each real lap is remembered for — the labels of the JUMP IN AT picker. */
+    function lapEvents(script) {
+      const ev = {};
+      const add = (lap, text) => { if (lap >= 1 && lap <= script.laps) (ev[lap] = ev[lap] || []).push(text); };
+      for (const w of script.cautions || []) add(w.from, w.level >= 4 ? "RED FLAG" : w.level === 3 ? "SAFETY CAR" : "VSC");
+      for (const d of script.drivers || []) { if (d.dnf && d.lapsDone >= 0) add(d.lapsDone + 1, d.code + " out"); }
+      const rain = Array.isArray(script.rain) ? script.rain : [];
+      for (let n = 1; n <= script.laps; n++) if (rain[n] && !rain[n - 1]) add(n, "rain");
+      return ev;
+    }
+
+    function lapPicker(script) {
+      const field = el("label", "dh-pick-field");
+      field.appendChild(el("span", "dh-pick-label", "JUMP IN AT"));
+      const sel = el("select", "dh-pick-select");
+      const ev = lapEvents(script);
+      for (let n = 1; n <= script.laps; n++) {
+        const op = el("option", null, n === 1 ? "Lap 1 · the grid" : "Lap " + n + (ev[n] ? " · " + ev[n].join(", ") : ""));
+        op.value = String(n);
+        if (n === startLap) op.selected = true;
+        sel.appendChild(op);
+      }
+      sel.addEventListener("change", () => { startLap = Math.max(1, Math.min(script.laps, +sel.value || 1)); });
+      field.appendChild(sel);
+      return field;
+    }
+
+    /** The roster seats this script's drivers take (RealRace.mapField), or null before the game is up. */
+    function seatsFor(script) {
+      if (typeof RealRace === "undefined" || !RealRace.mapField || typeof Teams === "undefined") return null;
+      const nums = new Set(RealRace.mapField(script, Teams.LIST).map((s) => s.num));
+      return nums;
+    }
+
     function paint(script, slot) {
       const head = el("div");
       head.appendChild(el("div", "dh-lr-name", (script.year ? script.year + " " : "") + script.name + (script.session !== "Race" ? " · " + script.session : "")));
@@ -271,6 +337,9 @@ const DataRealRace = (function () {
       slot.appendChild(head);
       const playable = !!script.trackId && tracks().some((t) => t.id === script.trackId);
       if (!playable) { slot.appendChild(emptyMsg(NO_TRACK_MSG)); return; }
+      if (!script.complete) slot.appendChild(el("div", "dh-lr-meta", INCOMPLETE_MSG));
+      if (startLap > script.laps) startLap = 1;
+      const seats = seatsFor(script);
 
       // Distance pills — the whole race, or a condensed one that keeps every stop and flag in proportion.
       const pills = el("div", "dh-rounds");
@@ -283,6 +352,9 @@ const DataRealRace = (function () {
         pills.appendChild(b);
       });
       slot.appendChild(pills);
+      const pickRow = el("div", "dh-pick-fields");
+      pickRow.appendChild(lapPicker(script));
+      slot.appendChild(pickRow);
 
       const table = el("table", "dh-table");
       const thead = el("thead"), hr = el("tr");
@@ -300,10 +372,12 @@ const DataRealRace = (function () {
         tr.appendChild(el("td", null, d.stints.map((s) => (s.c[0] || "?") + (s.to - s.from + 1)).join(" ") || "—"));
         tr.appendChild(el("td", null, d.dnf ? "DNF L" + d.lapsDone : d.pos != null ? "P" + d.pos : "—"));
         const cell = el("td");
-        const go = el("button", "dh-pill", "JUMP IN");
+        const seated = !seats || seats.has(d.num);
+        const go = el("button", "dh-pill", seated ? "JUMP IN" : NO_SEAT_MSG);
         go.type = "button";
-        go.setAttribute("aria-label", "Race as " + d.name);
-        go.addEventListener("click", () => jumpIn(script, d.code));
+        go.disabled = !seated;
+        go.setAttribute("aria-label", seated ? "Race as " + d.name : d.name + ": " + NO_SEAT_MSG);
+        if (seated) go.addEventListener("click", () => jumpIn(script, d.code));
         cell.appendChild(go);
         tr.appendChild(cell);
         tbody.appendChild(tr);
@@ -315,14 +389,16 @@ const DataRealRace = (function () {
 
     function jumpIn(script, code) {
       if (typeof RealRace === "undefined" || !RealRace.launch) { Log.warn("data", "RealRace is not loaded"); return false; }
-      Log.info("data", "real race jump in " + script.sessionKey + " as " + code + " laps=" + simLaps(script));
+      Log.info("data", "real race jump in " + script.sessionKey + " as " + code + " laps=" + simLaps(script) + " from=" + startLap);
       if (close) close();
-      return !!RealRace.launch(script, { seat: code, laps: simLaps(script) });
+      return !!RealRace.launch(script, { seat: code, laps: simLaps(script), startLap });
     }
 
-    return { loadRealRace, scriptFor, jumpIn, setDistance: (f) => { distance = DISTANCES.includes(f) ? f : 1; return distance; } };
+    return { loadRealRace, scriptFor, jumpIn, lapEvents,
+             setDistance: (f) => { distance = DISTANCES.includes(f) ? f : 1; return distance; },
+             setStartLap: (n) => { startLap = Math.max(1, n | 0); return startLap; } };
   }
 
-  return { create, build, trackIdFor, todFor, weatherFor, cautionsFor, gridFor, fetchRaw, cached, SCRIPT_V, DISTANCES, CACHE_KEY };
+  return { create, build, trackIdFor, todFor, weatherFor, rainByLap, cautionsFor, gridFor, fetchRaw, cached, SCRIPT_V, DISTANCES, CACHE_KEY };
 })();
 Object.freeze(DataRealRace);

@@ -81,7 +81,10 @@ test("the 2026 Baku race builds into a 22-driver, 51-lap script with the pre-sta
   assert.equal(rus.dnf, false);
   assert.equal(rus.laps.length, 51);
   assert.equal(rus.laps[0], 112.263);
-  assert.deepEqual(rus.stints, [{ c: "MEDIUM", from: 1, to: 31 }, { c: "SOFT", from: 32, to: 36 }, { c: "SOFT", from: 37, to: 51 }]);
+  assert.deepEqual(rus.stints, [{ c: "MEDIUM", from: 1, to: 31, age: 2 }, { c: "SOFT", from: 32, to: 36, age: 0 }, { c: "SOFT", from: 37, to: 51, age: 0 }], "the mediums were two laps old from qualifying");
+  assert.equal(s.complete, true, "a classified race with every lap in");
+  assert.equal(s.rain.length, 52, "rain flag per real lap");
+  assert.ok(s.rain.every((r) => r === false), "Baku 2026 was dry throughout");
   assert.deepEqual(rus.pits, [31, 36]);
   // Every real team lands on a roster team — the 2026 grid is the game's grid.
   assert.ok(s.drivers.every((d) => d.teamId), "every driver has a roster team");
@@ -138,6 +141,29 @@ test("the circuit resolves by name before country, and the weather and hour read
   assert.deepEqual(host(D.gridFor([{ driver_number: 1, position: 5, date: "b" }, { driver_number: 1, position: 2, date: "a" }, { driver_number: 4, position: 1, date: "c" }])), { 1: 2, 4: 1 });
 });
 
+test("rain by lap aligns the weather samples to the leader's lap windows; an unfinished race is not complete", () => {
+  const { D, findTeam } = load();
+  const laps = [
+    { driver_number: 1, lap_number: 1, date_start: "2026-01-01T10:00:00Z" }, { driver_number: 1, lap_number: 2, date_start: "2026-01-01T10:02:00Z" },
+    { driver_number: 1, lap_number: 3, date_start: "2026-01-01T10:04:00Z" }, { driver_number: 2, lap_number: 3, date_start: "2026-01-01T10:04:30Z" },
+  ];
+  const wx = [{ date: "2026-01-01T09:50:00Z", rainfall: 1 }, { date: "2026-01-01T10:02:30Z", rainfall: 1 }, { date: "2026-01-01T10:05:00Z", rainfall: 0 }, { date: "bad", rainfall: 1 }];
+  assert.deepEqual(host(D.rainByLap(laps, wx, 4)), [false, false, true, false, false], "only lap 2's window saw rain (the pre-race sample is before lap 1)");
+  assert.equal(D.rainByLap([{ driver_number: 1, lap_number: 1 }], wx, 4), null, "no lap timestamps: no alignment");
+  // A race still running: laps partial, no classification -> plays as far as it goes, never cached.
+  const raw = rawBaku();
+  raw.result = [];
+  raw.laps = raw.laps.filter((l) => l.lap_number <= 20);
+  const s = host(D.build(raw, findTeam, TRACKS));
+  assert.equal(s.laps, 20);
+  assert.equal(s.complete, false);
+  const store = new Map();
+  const localStorage = { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, v) };
+  const { D: D2 } = load({ localStorage });
+  store.set(D2.CACHE_KEY + "11377", JSON.stringify(s));
+  assert.equal(D2.cached(11377), null, "an incomplete script is never served from the cache");
+});
+
 test("the script cache round-trips through localStorage and rejects a stale shape", () => {
   const store = new Map();
   const localStorage = { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, v) };
@@ -146,7 +172,7 @@ test("the script cache round-trips through localStorage and rejects a stale shap
   const s = D.build(rawBaku(), findTeam, TRACKS);
   store.set(D.CACHE_KEY + "11377", JSON.stringify(s));
   assert.equal(host(D.cached(11377)).laps, 51);
-  store.set(D.CACHE_KEY + "11377", JSON.stringify({ v: 0, laps: 51, drivers: [] }));
+  store.set(D.CACHE_KEY + "11377", JSON.stringify({ v: 1, laps: 51, drivers: [], complete: true }));
   assert.equal(D.cached(11377), null, "an older script version is refetched");
   store.set(D.CACHE_KEY + "11377", "{not json");
   assert.equal(D.cached(11377), null);
@@ -191,9 +217,12 @@ test("the RACE IT tab lists every seat and JUMP IN hands RealRace the script, th
     meetings: () => Promise.resolve([{ meetingKey: 1295, name: "Azerbaijan Grand Prix" }]),
     sessionsForMeeting: () => Promise.resolve([{ sessionKey: 11373, meetingKey: 1295, name: "Qualifying", type: "Qualifying" }, { sessionKey: 11377, meetingKey: 1295, name: "Race", type: "Race" }]),
   };
-  const RealRace = { launch: (script, opts) => { launches.push({ script, opts }); return { ok: true }; } };
+  const RealRace = { launch: (script, opts) => { launches.push({ script, opts }); return { ok: true }; },
+    // Two seats for the test: Russell and Leclerc; every other driver has no roster seat.
+    mapField: (script) => script.drivers.filter((d) => d.num === 63 || d.num === 16).map((d) => ({ driverId: d.teamId + ":0", num: d.num, teamId: d.teamId, di: 0 })) };
+  const Teams = { LIST: [] };
   const Tracks = { LIST: TRACKS };
-  const { D, findTeam } = load({ localStorage, F1API, RealRace, Tracks });
+  const { D, findTeam } = load({ localStorage, F1API, RealRace, Teams, Tracks });
   const dom = makeDom();
   let closed = 0;
   const deps = {
@@ -217,19 +246,32 @@ test("the RACE IT tab lists every seat and JUMP IN hands RealRace the script, th
   const pills = find(tree, (n) => n.tag === "button" && /LAPS/.test(n.text || ""));
   assert.deepEqual(pills.map((p) => p.text), ["51 LAPS (FULL)", "26 LAPS", "10 LAPS", "5 LAPS"]);
   const buttons = find(tree, (n) => n.tag === "button" && n.text === "JUMP IN");
-  assert.equal(buttons.length, 22);
+  assert.equal(buttons.length, 2, "only the drivers with a roster seat can be raced");
+  const noSeat = find(tree, (n) => n.tag === "button" && n.disabled === true);
+  assert.equal(noSeat.length, 20);
+  assert.equal(noSeat[0].text, "no seat in this roster");
   assert.equal(buttons[1]["aria-label"], "Race as Charles LECLERC");
+  // The JUMP IN AT picker: every lap, the eventful ones labelled.
+  const picker = find(tree, (n) => n.tag === "select")[0];
+  assert.equal(picker.children.length, 51);
+  assert.equal(picker.children[0].text, "Lap 1 · the grid");
+  assert.equal(picker.children[7].text, "Lap 8 · STR out");
+  assert.equal(picker.children[30].text, "Lap 31 · SAFETY CAR");
+  assert.equal(picker.children[35].text, "Lap 36 · SAFETY CAR, NOR out, GAS out");
   buttons[1].fire("click");
   assert.equal(closed, 1, "the hub closes before the race starts");
   assert.equal(launches.length, 1);
   assert.equal(launches[0].opts.seat, "LEC");
   assert.equal(launches[0].opts.laps, 51);
+  assert.equal(launches[0].opts.startLap, 1);
   assert.equal(launches[0].script.trackId, "baku");
   assert.ok(store.has(D.CACHE_KEY + "11377"), "the compact script is remembered");
-  // A condensed distance keeps the script and changes only the lap count.
+  // A condensed distance and a later lap keep the script and change only the numbers handed over.
   tab.setDistance(0.2);
+  tab.setStartLap(31);
   const buttons2 = find(tree, (n) => n.tag === "button" && n.text === "JUMP IN");
   buttons2[0].fire("click");
   assert.equal(launches[1].opts.laps, 10);
+  assert.equal(launches[1].opts.startLap, 31);
   assert.equal(launches[1].opts.seat, "RUS");
 });
