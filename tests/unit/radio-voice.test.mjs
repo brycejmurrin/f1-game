@@ -817,3 +817,29 @@ test("hunt fixes: an 'interrupted' resume() never counts as recovered; TLX stops
   const cam = readFileSync(join(ROOT, "js/garage/setup-camera.js"), "utf8");
   assert.match(cam, /!document\.querySelector\("dialog\[open\], dialog\.screen:not\(\[hidden\]\)"\)/);
 });
+
+test("the pause card and a hidden tab cut the SPOTTER channel too, not only the engineer's", () => {
+  const packStops = [], listeners = {}, observers = [];
+  const pause = { hidden: true };
+  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout: unrefTimeout, clearTimeout });
+  seedLog(ctx);
+  ctx.window = { speechSynthesis: synthStub(), SpeechSynthesisUtterance: function (t) { this.text = t; } };
+  ctx.GameAudio = { setRadioDuck() {} };
+  ctx.VoicePack = { create: () => ({ stop: (ch) => packStops.push(ch == null ? "*" : ch), remaining: () => 0, ensure() {} }) };
+  ctx.document = {
+    hidden: false,
+    getElementById: (id) => (id === "pausemenu" ? pause : null),
+    addEventListener: (t, fn) => { listeners[t] = fn; },
+  };
+  ctx.MutationObserver = function (fn) { this.observe = (el) => observers.push({ el, fn }); };
+  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: "js/audio/radio-voice.js" });
+  const G = { soundOn: true, state: "race", store: { get: (k, d) => d, set() {} } };
+  vm.runInContext("RadioVoice", ctx).create(G);
+  const onPause = observers.find((o) => o.el === pause);
+  assert.ok(onPause, "the pause card is observed");
+  pause.hidden = false; onPause.fn();
+  assert.ok(packStops.includes("*"), "pause stops every pack channel (a spotter clip mid-word included)");
+  packStops.length = 0;
+  ctx.document.hidden = true; listeners.visibilitychange();
+  assert.ok(packStops.includes("*"), "hiding the tab stops every pack channel");
+});

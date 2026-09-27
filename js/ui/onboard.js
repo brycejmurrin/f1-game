@@ -104,7 +104,8 @@ const Onboard = (function () {
         if (G.state === "race" && lastState === "count" && !(G.raceT > 1)) races++;
         lastState = G.state;
       }
-      if (G.state !== "race" || done()) return false;
+      // PAUSED is not racing: a mark fired under the pause card is consumed unseen.
+      if (G.state !== "race" || G.paused || done()) return false;
       // Spend the gap and keep going in the SAME tick when it runs out — a
       // frame with a 9 s dt (a resumed tab) must not eat the mark as well.
       if (cool > 0) cool = Math.max(0, cool - (dt || 0));
