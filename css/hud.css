@@ -1269,12 +1269,10 @@ body.lt-open #campicker,
 body.lt-open #btn-cam,
 body.lt-open #pausebtn,
 body.lt-open .touchbtn { display: none !important; }
-} /* @layer hud */
-
 /* HIGH CONTRAST (Settings › Appearance): the see-through boxes go solid and
    take a real outline, so the readouts hold against a sunlit track. */
 :root[data-ui-contrast="high"] :is(.hud-box, #announce) {
   background: var(--hc-hud-plate);
   outline: 1px solid var(--hc-hud-line);   /* outline, not border: the team stripe is border-left */
 }
-
+} /* @layer hud */
