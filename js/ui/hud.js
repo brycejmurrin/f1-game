@@ -804,7 +804,8 @@ function updateHud(force, dtMs) {
   hText(els.lap, Math.min(player.lap || 1, G.lapsTarget) + "/" + G.lapsTarget);
   hText(els.time, G.fmtTime(player.lapTime));
   hText(els.best, isFinite(player.best) ? G.fmtTime(player.best) : "-");
-  hText(els.speed, "" + Math.round(G.dashKph(player.speed)));
+  const kph = G.dashKph(player.speed);   // SPEED UNITS is display-only (js/ui/appearance-opts.js)
+  hText(els.speed, "" + (typeof AppearanceOpts !== "undefined" ? AppearanceOpts.speed(kph) : Math.round(kph)));
   hStyle(els.energy, "width", (player.energy * 100).toFixed(0) + "%");
   // TYRES (js/physics/tyre-model.js). The widget is hidden entirely while the
   // setting is off — the shipped default — so a player who never turns it on

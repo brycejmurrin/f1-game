@@ -56,7 +56,9 @@ const RaceInsights = (function () {
   const HOLD_CAP = 30;         // seconds of pressure that count as a full defence
   const SLOW = 0.06, TRAFFIC_N = 3;   // a "backmarker" is 6% down on your own _vmaxNow; three of them is a stint through traffic
   const CLEAR_S = 1.5;         // held clear before a pass is a pass
-  const kmh = v => Math.round(Math.abs(v) * 3.6);
+  // SPEED UNITS (js/ui/appearance-opts.js) is display-only; the drills still measure in m/s.
+  const kmh = v => (typeof AppearanceOpts !== "undefined" ? AppearanceOpts.speed(Math.abs(v) * 3.6) : Math.round(Math.abs(v) * 3.6));
+  const unit = () => (typeof AppearanceOpts !== "undefined" && AppearanceOpts.units() === "mph" ? " mph" : " km/h");
   const median = (a) => { const s = a.slice().sort((x, y) => x - y); return s.length ? s[s.length >> 1] : null; };
   const boundedPush = (a, v, n) => { a.push(v); if (a.length > n) a.shift(); };
   function create(G) {
@@ -224,11 +226,11 @@ const RaceInsights = (function () {
       const limit = mode === "braking" && drill.peakDecel > 1 && drill.brakeSpeed > 1
         ? (drill.brakeSpeed * drill.brakeSpeed) / (2 * drill.peakDecel) : null;
       const slack = limit == null ? null : Math.max(0, stop - limit);
-      const text = mode === "braking" ? "stopped " + stop.toFixed(0) + " m after braking from " + kmh(drill.brakeSpeed) + " km/h"
+      const text = mode === "braking" ? "stopped " + stop.toFixed(0) + " m after braking from " + kmh(drill.brakeSpeed) + unit()
           + (slack >= 1 ? " · " + slack.toFixed(0) + " m of it below your hardest braking" : "")
         : mode === "slalom" ? seconds.toFixed(1) + "s · " + drill.changes + " direction changes"
-        : mode === "corner" ? seconds.toFixed(1) + "s · min " + kmh(drill.minSpeed) + " km/h · exit " + kmh(drill.exitSpeed) + " km/h"
-        : mode === "launch" ? "0 to " + kmh(G.vTop() * .5) + " km/h in " + score.toFixed(2) + "s"
+        : mode === "corner" ? seconds.toFixed(1) + "s · min " + kmh(drill.minSpeed) + unit() + " · exit " + kmh(drill.exitSpeed) + unit()
+        : mode === "launch" ? "0 to " + kmh(G.vTop() * .5) + unit() + " in " + score.toFixed(2) + "s"
         : mode === "start" ? (placed > 0 ? "gained " + placed + (placed === 1 ? " place" : " places") : placed < 0 ? "lost " + (-placed) + (placed === -1 ? " place" : " places") : "held position")
           + " — P" + drill.place0 + " to P" + drill.placeNow
         // SLIPSTREAM reports tow-seconds beside the metres rather than scoring

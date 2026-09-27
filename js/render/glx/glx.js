@@ -677,7 +677,7 @@ const GLXBackend = (function () {
     var _shownAt = -1e9;
     try {
       document.addEventListener("visibilitychange", function () { if (!document.hidden) _shownAt = _nowMs(); });
-      window.addEventListener("pageshow", function () { _shownAt = _nowMs(); });
+      window.addEventListener("pageshow", function (e) { if (e && e.persisted) _shownAt = _nowMs(); });   // bfcache return only: the FIRST load fires pageshow too
     } catch (_) { /* no document events (harness) */ }
     var _bgLoss = function () { return document.hidden || _nowMs() - _shownAt < 3000; };
     canvas.addEventListener("webglcontextlost", function (e) {

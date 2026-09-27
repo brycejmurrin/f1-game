@@ -15,8 +15,19 @@ const AppearanceOpts = (function () {
   const K_HUD = "hudAccent";
   const K_MENU_HEX = "menuAccentHex";
   const K_HUD_HEX = "hudAccentHex";
+  const K_TEXT = "textSize";
+  const K_CONTRAST = "uiContrast";
+  const K_UNITS = "speedUnits";
 
   const THEMES = [["dark", "DARK"], ["light", "LIGHT"], ["system", "SYSTEM"]];
+  // READABILITY. Text size scales the --fs-* type ladder (tokens.css); the HUD
+  // keeps its own HUD SIZE slider. High contrast swaps see-through plates for
+  // solid ones and brightens secondary text. Units are display-only: physics
+  // and every stored number stay in km/h.
+  const TEXT_SIZES = [["normal", "NORMAL"], ["large", "LARGE"], ["larger", "LARGER"]];
+  const CONTRASTS = [["off", "OFF"], ["high", "HIGH"]];
+  const UNITS = [["kmh", "KM/H"], ["mph", "MPH"]];
+  const KPH_PER_MPH = 1.609344;
   const ACCENTS = [
     ["brand", "BRAND"],
     ["team", "TEAM"],
@@ -57,6 +68,16 @@ const AppearanceOpts = (function () {
   let hudAccent = oneOf(store.get(K_HUD, "team"), ACCENTS, "team");
   let menuHex = normHex(store.get(K_MENU_HEX, PRESET_HEX.brand), PRESET_HEX.brand);
   let hudHex = normHex(store.get(K_HUD_HEX, PRESET_HEX.brand), PRESET_HEX.brand);
+  let textSize = oneOf(store.get(K_TEXT, "normal"), TEXT_SIZES, "normal");
+  let contrast = oneOf(store.get(K_CONTRAST, "off"), CONTRASTS, "off");
+  let units = oneOf(store.get(K_UNITS, "kmh"), UNITS, "kmh");
+
+  /** A km/h reading in the player's unit, rounded for display. */
+  function speed(kph) {
+    const v = Number(kph) || 0;
+    return Math.round(units === "mph" ? v / KPH_PER_MPH : v);
+  }
+  function unitLabel() { return units === "mph" ? "MPH" : "KM/H"; }
 
   function hexRgb(hex) {
     const n = parseInt(String(hex).slice(1), 16);
@@ -188,7 +209,10 @@ const AppearanceOpts = (function () {
       btn.setAttribute("role", "option");
       btn.setAttribute("aria-label", label);
       btn.title = label;
-      if (id !== "custom") btn.style.setProperty("--chip", chipHex(id, which));
+      // A NAMED pill, not a bare square: BRAND, TEAM and CUSTOM can all be red,
+      // and three identical red squares read as one choice.
+      btn.textContent = label;
+      paintChip(btn, id, which, false);
       btn.addEventListener("click", () => {
         if (which === "menu") setMenuAccent(id);
         else setHudAccent(id);
@@ -205,15 +229,39 @@ const AppearanceOpts = (function () {
       const id = btn.dataset.accent;
       const on = id === selected;
       btn.setAttribute("aria-selected", on ? "true" : "false");
-      if (id === "team" || id === "custom") {
-        if (id === "custom") continue;
-        btn.style.setProperty("--chip", chipHex(id, which));
-      }
+      if (id === "team" || id === "custom") paintChip(btn, id, which, on);
+    }
+  }
+
+  // CUSTOM shows the player's colour only once it is the pick; until then it is
+  // a plain plate, so an untouched custom (brand red by default) is not a 3rd red.
+  function paintChip(btn, id, which, on) {
+    if (id === "custom" && !on) {
+      btn.style.removeProperty("--chip");
+      btn.style.removeProperty("--chip-ink");
+      return;
+    }
+    const hex = chipHex(id, which);
+    btn.style.setProperty("--chip", hex);
+    btn.style.setProperty("--chip-ink", pickInk(hex));
+  }
+
+  function applyReadability() {
+    const el = root();
+    if (!el) return;
+    if (textSize === "normal") delete el.dataset.textSize; else el.dataset.textSize = textSize;
+    if (contrast === "high") el.dataset.uiContrast = "high"; else delete el.dataset.uiContrast;
+    // The speedo's unit label and the preview's; the number follows on the next HUD tick.
+    if (typeof document !== "undefined" && document.querySelectorAll) {
+      for (const u of document.querySelectorAll("#hud-speed .hud-unit, .pm-look-unit")) u.textContent = unitLabel();
+      const n = byId("pm-look-speed");
+      if (n) n.textContent = String(speed(287));
     }
   }
 
   function applyAll() {
     applyTheme();
+    applyReadability();
     applyMenuAccent();
     applyHudAccent();
     syncCustomRows();
@@ -268,6 +316,28 @@ const AppearanceOpts = (function () {
     return hudHex;
   }
 
+  function setTextSize(v) {
+    textSize = oneOf(v, TEXT_SIZES, "normal");
+    store.set(K_TEXT, textSize);
+    applyAll();
+    paintRow("pm-textsize", textSize);
+    return textSize;
+  }
+  function setContrast(v) {
+    contrast = oneOf(v, CONTRASTS, "off");
+    store.set(K_CONTRAST, contrast);
+    applyAll();
+    paintRow("pm-contrast", contrast);
+    return contrast;
+  }
+  function setUnits(v) {
+    units = oneOf(v, UNITS, "kmh");
+    store.set(K_UNITS, units);
+    applyAll();
+    paintRow("pm-units", units);
+    return units;
+  }
+
   function wireHexPair(colorId, textId, write) {
     const color = byId(colorId);
     const text = byId(textId);
@@ -307,11 +377,15 @@ const AppearanceOpts = (function () {
       read: () => hudAccent,
       write: (v) => setHudAccent(v),
     });
+    SettingRow.wire("pm-textsize", { values: TEXT_SIZES, read: () => textSize, write: (v) => setTextSize(v) });
+    SettingRow.wire("pm-contrast", { values: CONTRASTS, read: () => contrast, write: (v) => setContrast(v) });
+    SettingRow.wire("pm-units", { values: UNITS, read: () => units, write: (v) => setUnits(v) });
     buildSwatches("pm-menuaccent-swatches", "menu");
     buildSwatches("pm-hudaccent-swatches", "hud");
     wireHexPair("pm-menuaccent-hex", "pm-menuaccent-hextext", setMenuHex);
     wireHexPair("pm-hudaccent-hex", "pm-hudaccent-hextext", setHudHex);
     syncCustomRows();
+    applyReadability();   // the eval-time apply ran before #hud-speed's unit label existed
   }
 
   // Apply before first paint when possible.
@@ -329,8 +403,12 @@ const AppearanceOpts = (function () {
   }
 
   return {
-    K_THEME, K_MENU, K_HUD, K_MENU_HEX, K_HUD_HEX,
-    THEMES, ACCENTS, PRESET_HEX, CSS_MENU_PRESETS,
+    K_THEME, K_MENU, K_HUD, K_MENU_HEX, K_HUD_HEX, K_TEXT, K_CONTRAST, K_UNITS,
+    THEMES, ACCENTS, PRESET_HEX, CSS_MENU_PRESETS, TEXT_SIZES, CONTRASTS, UNITS,
+    textSize: () => textSize,
+    contrast: () => contrast,
+    units: () => units,
+    speed, unitLabel, setTextSize, setContrast, setUnits,
     theme: () => theme,
     menuAccent: () => menuAccent,
     hudAccent: () => hudAccent,
