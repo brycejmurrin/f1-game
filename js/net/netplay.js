@@ -670,7 +670,15 @@ const NetPlay = (function () {
     // puts the deadline on wall time, where no test can reach it. That is why
     // the ARM_WAIT backstop has never had one.
     const nowMs = () => (G.netNow != null ? G.netNow : performance.now());
-    const ARM_WAIT_MS = 20000;
+    // 45 s, not 20: a guest in ANOTHER APP when START is pressed cannot arm —
+    // its build waits on requestAnimationFrame, which a hidden tab never gets
+    // (developer.chrome.com/blog/timer-throttling-in-chrome-88) — and at 20 s
+    // the host raced a frozen car while the guest, back a minute later, counted
+    // down alone: a split start. The host now holds the grid longer and SAYS
+    // who it is waiting for; HOLD_MAX_MS (the guest's own backstop) follows.
+    const ARM_WAIT_MS = 45000;
+    const ARM_SAY_AFTER_MS = 4000, ARM_SAY_EVERY_MS = 6000;
+    let armSince = 0, armSaidAt = 0;
     // NOBODY WAITS ON THE GRID FOR EVER. Holding the gantry unlit until the
     // moment is named is right, but it is a wait on somebody else, and a peer
     // that has gone silent without its session formally closing would otherwise
@@ -721,7 +729,7 @@ const NetPlay = (function () {
     // reached, instead of from one side's optimism.
     function hostStart() {
       if (role !== "host" || !session) return false;
-      if (!allArmed()) { armDeadline = nowMs() + ARM_WAIT_MS; return true; }
+      if (!allArmed()) { armSince = nowMs(); armSaidAt = 0; armDeadline = armSince + ARM_WAIT_MS; return true; }
       return nameTheMoment();
     }
 
@@ -820,6 +828,10 @@ const NetPlay = (function () {
       session = sessions.values().next().value;
 
       if (armDeadline && now >= armDeadline) nameTheMoment();
+      else if (armDeadline && now - armSince >= ARM_SAY_AFTER_MS && now - armSaidAt >= ARM_SAY_EVERY_MS && G.announce) {
+        armSaidAt = now;
+        G.announce("WAITING FOR RIVAL — " + Math.ceil((armDeadline - now) / 1000) + " s", 2, "info");
+      }
       // A guest whose circuit built FIRST sent its one ARMED while the host was
       // still inside `await G.startRace()`: the host's LOBBY session pumped it,
       // had no ARMED handler, and dropped it — a 20 s ARM_WAIT stall every

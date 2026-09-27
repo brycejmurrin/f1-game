@@ -1001,7 +1001,7 @@ let gridPreOrdered = false;   // set by gridUp(); read by js/net/netplay.js — 
 // without changing either of the other two, and the paint would be stale.
 let builtGridSlots = null;
 let cars = [], player = null;
-let raceT = 0, countT = 0, lightsLit = 0, resultT = 0;
+let raceT = 0, countT = 0, lightsLit = 0, resultT = 0, netGreen = null;
 // THE LIGHTS-OUT INSTANT ON THE RACE CLOCK. AiDrive.launchMul/launchDone read
 // their time as seconds since green, and raceT is that only for a first
 // start — a red-flag restart resumes the clock the flag stopped, so without
@@ -4151,6 +4151,14 @@ function update(dt) {
       state = "race";
       if (!restartPending) raceT = 0;   // a red-flag restart resumes the clock the flag stopped
       launchT0 = raceT;   // …so the launch model measures from THIS green, not the first one
+      // A NETWORKED RACE KEEPS WALL TIME from the shared green (netStart.at is
+      // that instant on OUR clock), offset by the clock a red-flag restart resumes
+      // from. raceT only summed simulated dt, which loses time to a backgrounded
+      // tab (no frames — developer.chrome.com/blog/timer-throttling-in-chrome-88),
+      // the 0.25 s dt clamp and the 5-step cap: a guest who switched apps for 5 s
+      // crossed the line 5 s behind on the road and was classified 5 s AHEAD,
+      // because finish times from two drifting clocks were compared as one.
+      netGreen = netStart ? { base: netStart.at - raceT * 1000, now: netStart.now } : null;
       els.lights.hidden = true;
       for (const l of els.lights.children) l.classList.remove("on");
       netStart = null;              // consumed; never carry it into the next race
@@ -4175,6 +4183,10 @@ function update(dt) {
   }
   if (state !== "race") return;
   raceT += dt;
+  if (netGreen) {   // never runs BEHIND the shared clock; never ahead of it (the sim cannot outrun wall time)
+    const w = (netGreen.now() - netGreen.base) / 1000;
+    if (Number.isFinite(w) && w > raceT) raceT = w;
+  }
   // THE RED PROCEDURE ENDS EXACTLY ONCE, so its clean-up cannot ride on the
   // re-grid alone: takeRestart() consumes the request either way, and
   // redFlagRestart() declines once any car has finished — ordinary, not exotic.
@@ -9199,6 +9211,22 @@ document.addEventListener("visibilitychange", () => {
   if (!document.hidden && raceWakeWanted) holdRaceWake();
 });
 window.addEventListener("pagehide", () => { PerfGov.sentinelArm(false); _disarmProbeOnLeave(); });
+// LOSING FOCUS WHILE STILL VISIBLE pauses too. visibilitychange only fires when
+// the page is HIDDEN (MDN, Page Visibility API): an Alt-Tab to a second monitor,
+// or an overlay taking focus, left the car coasting off-line while the field
+// lapped. Settled for 250 ms (a focus hop inside the page is not a leave), never
+// in a friend race (the rival cannot be paused) and never under automation.
+window.addEventListener("blur", () => {
+  setTimeout(() => {
+    if (document.hidden || document.hasFocus() || navigator.webdriver || netPlay.active()) return;
+    if (state === "race" || state === "count") setPaused(true);
+  }, 250);
+});
+// …and the platform taking the AUDIO (an iOS call answered from the compact
+// banner keeps the page visible and focused): the race stops with the sound.
+if (GameAudio.onInterrupted) GameAudio.onInterrupted(() => {
+  if ((state === "race" || state === "count") && !netPlay.active()) setPaused(true);
+});
 
 // ---------- boot ----------
 // (A `window.__APEX` bridge lived here, gated on a `window.__APEX_DEBUG` flag

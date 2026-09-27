@@ -246,7 +246,7 @@ test("host: an ARMED that lands after the moment was named is answered with STAR
   sA.deliver("armed", {});
   const starts = (s) => s.sent.filter((m) => m.t === "start");
   assert.equal(starts(sA).length, 0, "b has not armed: nothing is named yet");
-  net.tick(1000 + 20000 + 1);           // ARM_WAIT expires: the moment is named without b
+  net.tick(1000 + 45000 + 1);           // ARM_WAIT expires: the moment is named without b
   assert.equal(starts(sA).length, 1);
   assert.equal(starts(sB).length, 1, "b was told too — but it was still inside startRace()");
   sB.deliver("armed", {});              // b's netplay is up now, its lobby session ate the first START
