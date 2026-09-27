@@ -43,26 +43,11 @@ const DataHub = (function () {
     while (node.firstChild) node.removeChild(node.firstChild);
   }
 
-  function fmtDate(iso) {
-    if (!iso) return "—";
-    // A DATE-ONLY string is a calendar day, not an instant: format it in UTC,
-    // or UTC+13/+14 (NZ summer, Kiribati) showed every race a day late.
-    const dateOnly = iso.length === 10;
-    const d = new Date(dateOnly ? iso + "T12:00:00Z" : iso);
-    if (isNaN(d.getTime())) return iso;
-    return d.toLocaleDateString(undefined, dateOnly ? { day: "numeric", month: "short", timeZone: "UTC" }
-                                                    : { day: "numeric", month: "short" });
-  }
-
   function fmtDateTime(iso) {
     if (!iso) return "—";
     const d = new Date(iso);
     if (isNaN(d.getTime())) return iso;
     return d.toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-  }
-
-  function todayISO() {
-    return new Date().toISOString().slice(0, 10);
   }
 
   const TEAM_KEYS = [
@@ -389,7 +374,7 @@ const DataHub = (function () {
   }
 
   // Implementation: js/data/schedule.js.
-  const { loadSchedule } = DataSchedule.create({ el, emptyMsg, fmtDate, fmtDateTime, todayISO });
+  const { loadSchedule } = DataSchedule.create({ el, emptyMsg });
 
   const { loadStandings } = DataStandings.create({ el, emptyMsg, teamChip, findTeam, cssColor });
 
