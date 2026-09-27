@@ -644,6 +644,21 @@
           </div>
           <p class="adv-help">Swaps the two on-screen thumb groups, so the pedals and the steering change hands.</p>
           <button id="pm-calib">RECALIBRATE TILT</button>
+          <!-- PHONE AS CONTROLLER (js/input/phone-pad.js). The button loads the
+               multiplayer stack the pairing rides on and mints a room; the QR
+               carries controller.html#pad=CODE for the phone's own camera app.
+               Everything below is disabled-or-hidden by the module, never
+               reflowed under a finger, like #pm-calib above. -->
+          <button id="pm-phonepad" type="button">PHONE AS CONTROLLER&hellip;<small>Tilt your phone to steer this screen</small></button>
+          <div id="pm-phonepad-box" hidden>
+            <p id="pm-phonepad-status" class="adv-help" role="status"></p>
+            <figure class="vs-qr-wrap" id="pm-phonepad-qr-wrap" hidden>
+              <canvas id="pm-phonepad-qr" width="320" height="320" role="img"
+                      aria-label="QR code containing the phone controller link"></canvas>
+              <figcaption class="vs-hint">Room code <b id="pm-phonepad-code"></b></figcaption>
+            </figure>
+            <p class="adv-help">Point the phone's camera at the code, or open <span id="pm-phonepad-url"></span> on the phone and type the room code. Both need internet to pair; the same Wi&#8209;Fi gives the quickest steering. Web pages cannot pair over Bluetooth.</p>
+          </div>
           <div id="pm-gears" class="set-row" role="group" aria-labelledby="pm-gears-label">
             <span class="tune-label" id="pm-gears-label">GEARS</span>
             <div>
@@ -3100,6 +3115,7 @@
 <script defer crossorigin="anonymous" src="js/ui/track-maps.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/helmets.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/car3d.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/input/tilt-roll.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/input.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/audio/engine.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/audio/music-lib.js?v=dev"></script>

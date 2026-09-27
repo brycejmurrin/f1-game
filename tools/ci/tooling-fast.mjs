@@ -140,6 +140,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // in 0.1 s: the pedal is the one control that can be left ON, so the drop on
   // blur/reset belongs in the edit loop rather than in a browser group.
   "tests/unit/throttle-latch.test.mjs",
+  // ...and PHONE AS CONTROLLER: the wire codec, the shared roll math, and a
+  // phone sample reaching Input's tilt pipeline over the in-process loopback
+  // transport — same VM harness, no browser, ~0.3 s.
+  "tests/unit/phone-pad.test.mjs",
   // ...and the two steer-tuning tables that MUST agree: every PRESET bundle
   // lands exactly on its FEEL level, or clicking RELAX reads CUSTOM. Stated
   // in comments and checked by nothing until it drifted for a week. ~0.05 s.
