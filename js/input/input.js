@@ -1284,11 +1284,28 @@ const Input = (function () {
       }
       return null;
     }
+    return pickPad(pads);
+  }
+  /* WHICH PAD DRIVES. getGamepads() lists pads in connection-slot order, and
+     the first connected one used to win outright — so a wheel base, a flight
+     stick or an idle second controller that happened to hold slot 0 ignored the
+     pad in the player's hands. A "standard" mapping is the layout every button
+     index in this file assumes, so it ranks first; among equals the most
+     recently USED one wins (Gamepad.timestamp advances on each state change),
+     and slot order breaks exact ties so an idle pair stays stable.
+     https://developer.mozilla.org/en-US/docs/Web/API/Gamepad/mapping
+     https://developer.mozilla.org/en-US/docs/Web/API/Gamepad/timestamp */
+  function pickPad(pads) {
     if (!pads) return null;
+    let best = null, bestStd = false, bestT = -Infinity;
     for (let i = 0; i < pads.length; i++) {
-      if (pads[i] && pads[i].connected) return pads[i];
+      const p = pads[i];
+      if (!p || !p.connected) continue;
+      const std = p.mapping === "standard";
+      const t = Number.isFinite(p.timestamp) ? p.timestamp : 0;
+      if (!best || (std && !bestStd) || (std === bestStd && t > bestT)) { best = p; bestStd = std; bestT = t; }
     }
-    return null;
+    return best;
   }
 
   // Buttons may be GamepadButton objects or bare numbers depending on browser.
@@ -1904,6 +1921,27 @@ const Input = (function () {
     const kb = typeof navigator !== "undefined" && navigator.keyboard;
     if (kb && typeof kb.unlock === "function") { try { kb.unlock(); } catch (_) { /* not locked */ } }
   }
+  /* LANDSCAPE LOCK, the touch half of the same fullscreen request. Android
+     Chrome honours screen.orientation.lock() only while the document is in
+     fullscreen (or an installed fullscreen PWA), so a race entered through the
+     pause menu's FULLSCREEN row stops rotating into portrait when the phone
+     tilts — tilt steering tips the device exactly that way. Touch-only: a
+     desktop has no orientation to lock. iPhone Safari has neither element
+     fullscreen nor lock() and keeps its rotate prompt; the rejection there (and
+     anywhere unsupported) is swallowed.
+     https://developer.mozilla.org/en-US/docs/Web/API/ScreenOrientation/lock */
+  let _landscapeLocked = false;
+  function lockLandscape() {
+    const o = typeof screen !== "undefined" && screen.orientation;
+    if (!o || typeof o.lock !== "function" || !touchControlsNeeded()) return Promise.resolve(false);
+    return Promise.resolve(o.lock("landscape")).then(() => (_landscapeLocked = true)).catch(() => false);
+  }
+  function unlockLandscape() {
+    if (!_landscapeLocked) return;
+    _landscapeLocked = false;
+    const o = typeof screen !== "undefined" && screen.orientation;
+    if (o && typeof o.unlock === "function") { try { o.unlock(); } catch (_) { /* not locked */ } }
+  }
 
   function setSteerMode(m) {
     steerMode = (m === "buttons" || m === "touch") ? m : "tilt";
@@ -2328,7 +2366,7 @@ const Input = (function () {
     consumeRecover,
     consumeRadio,
     lookingBack,
-    lockEscape, unlockEscape,
+    lockEscape, unlockEscape, lockLandscape, unlockLandscape,
     tiltActive,
     simTilt,
     simTiltReset,
@@ -2359,6 +2397,7 @@ const Input = (function () {
     setPadLabelMode, padLabelMode: padLabelModeOf,
     setPadAxisMap, getPadAxisMap, padAxesAreDefault, beginAxisCapture, calibratePad, padRest,
     touchControlsNeeded,
+    pickPad,
     onPointerKindChange,
     clearEdges,
     get padConnected() { return padConnected; },

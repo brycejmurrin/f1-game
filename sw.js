@@ -74,10 +74,21 @@ function cacheBuild(name) {
 // first, then anything else, which is `caches.match()`'s own last resort.
 // Per-cache matches use the `cacheName` option, so a lookup never CREATES a
 // cache the way `caches.open()` would.
-async function matchPreferCurrent(req) {
-  let names;
-  try { names = await caches.keys(); } catch (_) { return caches.match(req); }
-  const current = _cacheNameKnown;
+//
+// THE ORDER IS COMPUTED ONCE PER WORKER, not per request: `caches.keys()` plus
+// two marker lookups per generation ran on EVERY cache-first fetch — a boot's
+// ~150 script requests paid for ~150 identical sorts. The order changes only
+// when this worker changes the cache set or a marker (install, activate, the
+// sweep, a fetch opening a generation it has not seen) or learns the current
+// name, so `_cacheOrder` is keyed on `_cacheNameKnown` and dropped by
+// invalidateCacheOrder() at exactly those points. A cache another worker
+// creates later is still reached: a miss across the ordered list falls back to
+// `caches.match()`'s own all-caches walk, so a stale order costs preference,
+// never a hit.
+let _cacheOrder = null;   // { current, names: string[] | null, promise }
+function invalidateCacheOrder() { _cacheOrder = null; }
+async function computeCacheOrder(current) {
+  const names = await caches.keys();
   // A FINISHED install outranks a newer name: a fetch mid-deploy opens the next
   // build's cache and writes its shell before that build installs, and an app
   // closed then and relaunched offline got the new shell with none of its lazy
@@ -92,12 +103,34 @@ async function matchPreferCurrent(req) {
     done.set(n, d);
   }));
   const rank = (n) => (n === current ? Infinity : (cacheBuild(n) || 0));
-  const ordered = names.slice().sort((a, b) => (done.get(b) - done.get(a)) || (rank(b) - rank(a)));
+  return names.slice().sort((a, b) => (done.get(b) - done.get(a)) || (rank(b) - rank(a)));
+}
+function cacheOrder() {
+  const current = _cacheNameKnown;
+  if (_cacheOrder && _cacheOrder.current === current) return _cacheOrder.promise;
+  const memo = { current, names: null, promise: null };
+  memo.promise = computeCacheOrder(current).then(
+    (names) => { memo.names = names; return names; },
+    (e) => { if (_cacheOrder === memo) _cacheOrder = null; throw e; });   // never memoize a rejection
+  _cacheOrder = memo;
+  return memo.promise;
+}
+// caches.open() CREATES a missing cache, so opening a name the memoised order
+// has not seen changes the cache set: drop the order before it is written to.
+async function openCache(name) {
+  const known = _cacheOrder && _cacheOrder.names;
+  if (!known || !known.includes(name)) invalidateCacheOrder();
+  return caches.open(name);
+}
+async function matchPreferCurrent(req) {
+  let ordered;
+  try { ordered = await cacheOrder(); } catch (_) { return caches.match(req); }
   for (const name of ordered) {
     const hit = await caches.match(req, { cacheName: name });
     if (hit) return hit;
   }
-  return undefined;
+  // Only a cache the memoised order never listed can answer here.
+  try { return await caches.match(req); } catch (_) { return undefined; }
 }
 
 // OPPORTUNISTIC SWEEP. `activate` deletes older generations once, but a worker
@@ -124,6 +157,7 @@ async function sweepStaleCaches() {
   if (!(await caches.match(INSTALL_SETTLED_URL, { cacheName: name }))) return;
   const stale = keys.filter((k) => cacheBuild(k) < build);
   await Promise.all(stale.map((k) => caches.delete(k)));
+  if (stale.length) invalidateCacheOrder();
   _sweepDone = true;
 }
 function maybeSweep(event) {
@@ -375,7 +409,7 @@ async function pooled(items, limit, fn) {
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
     const [name, urls] = await Promise.all([currentCacheName(), precacheAssetLists()]);
-    const cache = await caches.open(name);
+    const cache = await openCache(name);
     const build = name.slice(CACHE_PREFIX.length);
     // GLX is the fallback renderer every device can run: when TLX/WGX are not
     // cached (or fail), an offline boot without it is "graphics unavailable".
@@ -384,6 +418,7 @@ self.addEventListener("install", (event) => {
     const required = urls.essential.concat(urls.optional.filter(isGlx).map((u) => u + "?v=" + build));
     await pooled(required, 6, (u) => cacheRequiredAsset(cache, u));
     await cache.put(INSTALL_COMPLETE_URL, new Response("complete"));
+    invalidateCacheOrder();   // a marker is a rank input (computeCacheOrder)
     // The DEFERRED backends are the one group in `optional` that is NOT pinned
     // by path — js/game.js:loadBackendScripts injects them as `<path>?v=<build>`,
     // mirroring the shell's tags. Seeded bare they were cached under a key
@@ -410,20 +445,33 @@ self.addEventListener("install", (event) => {
     // comes from deferring REGISTRATION (index.html), which costs nothing here.
     await pooled(stamped, 4, (u) => cacheOptionalAsset(cache, u));
     await cache.put(INSTALL_SETTLED_URL, new Response("settled"));
+    invalidateCacheOrder();
     await self.skipWaiting();
   })());
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
+    // NAVIGATION PRELOAD: the browser starts the navigation request in
+    // parallel with booting this worker, and the fetch handler below consumes
+    // it as event.preloadResponse — a cold worker no longer delays the shell's
+    // network leg by its own start-up. Enabled before the completeness gate:
+    // it is a registration setting, harmless on any generation, and a failure
+    // (unsupported browser) must not block activation.
+    // https://developer.mozilla.org/en-US/docs/Web/API/NavigationPreloadManager
+    try {
+      const np = self.registration && self.registration.navigationPreload;
+      if (np) await np.enable();
+    } catch (_) { /* unsupported or refused: navigations fetch as before */ }
     const name = await currentCacheName();
-    const cache = await caches.open(name);
+    const cache = await openCache(name);
     // No claim and no sweep for an incomplete generation — deliberate, and
     // test-asserted (service-worker.test.mjs "activation preserves prior
     // caches…"): don't seize clients onto a cache that never finished.
     if (!(await cache.match(INSTALL_COMPLETE_URL))) return;
     const keys = await caches.keys();
     await Promise.all(keys.filter((k) => k.startsWith(CACHE_PREFIX) && k !== name).map((k) => caches.delete(k)));
+    invalidateCacheOrder();
     await self.clients.claim();
   })());
 });
@@ -472,7 +520,18 @@ self.addEventListener("fetch", (event) => {
     // which caches.match(req) ever hit again from the fallback below, which
     // reads "index.html". A query navigation is served from the network and,
     // offline, from the precached shell like everything else.
-    const network = fetch(req, { cache: "no-store" }).then(async (res) => {
+    // A PLAIN navigation takes the navigation-preload response (enabled in
+    // activate) when there is one: the browser already has that request in
+    // flight, and ignoring it would fetch the shell twice. It is undefined when
+    // preload is off or unsupported, and a rejected preload falls back to the
+    // same no-store fetch as before. The `?b=` shell bust and version.json keep
+    // their own no-store fetch untouched; an unused preload is still settled so
+    // the browser does not cancel it with a console warning.
+    const fresh = () => fetch(req, { cache: "no-store" });
+    const preload = req.mode === "navigate" && event.preloadResponse ? Promise.resolve(event.preloadResponse) : null;
+    if (preload && isShellBust) event.waitUntil(preload.catch(() => undefined));
+    const first = preload && !isShellBust ? preload.then((r) => r || fresh(), () => fresh()) : fresh();
+    const network = first.then(async (res) => {
       if (res && res.ok && !isVersion && url.search === "") {
         // The write is awaited (the waitUntil below depends on that) but must
         // never reject the chain: a version.json hiccup (deploy window,
@@ -486,7 +545,7 @@ self.addEventListener("fetch", (event) => {
           // whose ?v= hashes it no longer names, so the boot failed.
           const m = /<meta name="apex-build" content="(\d+)"/.exec(await res.clone().text());
           if (!m || CACHE_PREFIX + m[1] === name) {
-            const cache = await caches.open(name);
+            const cache = await openCache(name);
             await cache.put(req, res.clone());
           }
         } catch (_) { /* a failed cache write must not fail a good response */ }
@@ -543,7 +602,7 @@ self.addEventListener("fetch", (event) => {
         const res = await fetch(req);
         if (res && res.ok) {
           try {
-            const cache = await caches.open(await currentCacheName());
+            const cache = await openCache(await currentCacheName());
             await cache.put(req, res.clone());
           } catch (_) { /* a failed cache write must not fail a good response */ }
           return res;
@@ -559,7 +618,7 @@ self.addEventListener("fetch", (event) => {
       const res = await fetch(req);
       if (res && res.ok) {
         try {
-          const cache = await caches.open(await currentCacheName());
+          const cache = await openCache(await currentCacheName());
           await cache.put(req, res.clone());
         } catch (_) { /* a failed cache write must not fail a good response */ }
       }

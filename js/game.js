@@ -4025,7 +4025,7 @@ function quitToMenu() {
   _ltBase = null; _ltFlash = 0;   // the lightning's saved race base is not the menu's
   if (announcer.stop) announcer.stop();   // the results commentary ran on over the title for up to 16 s
   shake = 0; hitStop = 0;
-  PerfGov.sentinelArm(false); if (netPlay.active()) netPlay.stop("local"); hideCamPicker();
+  PerfGov.sentinelArm(false); if (netPlay.active()) netPlay.stop("local"); hideCamPicker(); Input.unlockLandscape();
   closeLightTuner(false);
   closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();
   // THE PRE-RACE SCREEN OUTLIVES A FAILED START without this: its only other
@@ -9127,15 +9127,15 @@ if ($("pm-fullscreen")) {
       if (v === "on") {
         const el = document.documentElement;
         const req = el.requestFullscreen || el.webkitRequestFullscreen;
-        if (req) Promise.resolve(req.call(el)).then(() => Input.lockEscape()).catch(() => paintFullscreenRow());
+        if (req) Promise.resolve(req.call(el)).then(() => { Input.lockEscape(); if (state === "race" || state === "count") Input.lockLandscape(); }).catch(() => paintFullscreenRow());
       } else if (document.fullscreenElement) {
-        Input.unlockEscape();
+        Input.unlockEscape(); Input.unlockLandscape();
         if (document.exitFullscreen) document.exitFullscreen().catch(() => { /* already gone */ });
       }
     } });
   // The player can leave fullscreen without us (Esc, F11, the OS), so the row
   // follows the DOCUMENT rather than remembering what it last asked for.
-  document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement) Input.unlockEscape(); paintFullscreenRow(); });
+  document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement) { Input.unlockEscape(); Input.unlockLandscape(); } paintFullscreenRow(); });
   paintFullscreenRow();
 }
 /* ADD TO HOME SCREEN IS THE ONLY FULLSCREEN AN iPHONE HAS. Element fullscreen

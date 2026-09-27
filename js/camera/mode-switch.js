@@ -28,7 +28,11 @@ window.CamModes = (function () {
 
     function refreshCamBtn() {
       const b = $("btn-cam");
-      if (b) b.textContent = CAM_MODES[G.camMode].label;
+      // The NAME starts with the visible word (WCAG 2.5.3 Label in Name): a
+      // fixed "Camera" left a voice-control user saying "click CHASE" to a
+      // button whose name had no CHASE in it.
+      // https://www.w3.org/WAI/WCAG22/Understanding/label-in-name.html
+      if (b) { b.textContent = CAM_MODES[G.camMode].label; b.setAttribute("aria-label", `${CAM_MODES[G.camMode].label} camera`); }
       document.body.classList.toggle("cockpit-cam", CAM_MODES[G.camMode].id === "cockpit");
     }
     function setCamMode(m) {
