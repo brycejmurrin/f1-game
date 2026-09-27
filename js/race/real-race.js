@@ -17,7 +17,7 @@ const RealRace = (function () {
   const DNS_AT = 0.002;   // a game seat with no real driver retires on the first metres: "did not start"
 
   // ── Pure helpers (test-frozen in tests/unit/real-race.test.mjs) ──────────
-  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const clamp = M4.clamp;   // js/core/mat4.js — bound at eval (HARD_EDGES pair in tools/manifest.cjs)
 
   /** The real lap a condensed sim lap stands for (both 1-based; identity when the distances match). */
   function realLapFor(simLap, simLaps, realLaps) {

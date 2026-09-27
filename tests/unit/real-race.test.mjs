@@ -33,6 +33,7 @@ function load() {
   const sb = { Math, Array, Object, Number, String, Boolean, Date, isFinite, isNaN, console, JSON, Set, Map, RegExp, Infinity };
   const ctx = vm.createContext(sb);
   seedLog(ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "mat4.js" });   // M4.clamp, bound at eval
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/teams.js"), "utf8"), ctx, { filename: "teams.js" });
   vm.runInContext("var Tracks = " + JSON.stringify({ LIST: TRACKS }) + ";", ctx);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/real-race-tab.js"), "utf8"), ctx, { filename: "real-race-tab.js" });
