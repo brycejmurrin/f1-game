@@ -2170,6 +2170,7 @@ function gridUp(preOrder) {
     c.speed = 0; c.accSm = 0; c.corridorAccel = 0; c.prog = -(14 + i * 8); c.lap = 0; c.fuelLap = 0; c.fuelRestartLaps = 0; c.energy = 1; c._progGift = 0;   // a car on the grid is pulling nothing — apex.js reset() has the full list and why
     c.otT = 0; c.otCool = 0; c.lapTime = 0; c.best = Infinity; c.totalT = 0;
     c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
+    c.finPos = 0; c.retired = false; c.dnf = null; c.dnfAt = null; c.dnfWhy = null; delete c._coastHeld;   // last race's classification: makeCars' values; a race re-arms via armReliability
     c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.qualiCut = false; c.penalty = 0; c.offT = 0; c.hits = 0; c.hitSev = 0; c.wallHits = 0; c.errCount = 0;   // mistakes THIS race — the instrument's denominator, cleared only by a NEW race
     c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.wallT = 0; c.wasOnWall = false;
     c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.contactT = 0; c.lane = c.lanePref;   // BOTH sides of a real conflict: lane is damped state, not a constant, and contactT DECAYS — unlike the towing/wheelLock beside it, a re-grid is the only thing that clears it
@@ -3179,7 +3180,7 @@ function endRace(forcedOrder) {
     else SeasonCal.save(season);   // the sprint's points AND its stage, one guarded write
   }
   // A one-off GP's driven quali order stays persisted (quali-persist contract);
-  // quali's qualiTrack stamp refuses it on a different circuit.
+  // quali's qualiTrack + qualiMode stamps refuse it on another circuit or mode.
   dbgCam = null;
   buildResults(order, { sprint: wasSprint, duel: duelOn() });   // endRace's own read: scored() is stale after a season save conflict
   els.results.hidden = false;
@@ -4088,6 +4089,7 @@ function quitToMenu() {
   const hasSeason = SeasonCal.hasProgress(season) && season.round < SeasonCal.rounds();
   $("mb-standings").hidden = !hasSeason;
   refreshCareerButton();
+  consumeGhostHash();   // a #ghost= link deferred while racing lands now (no-op without one)
 }
 
 
@@ -8538,6 +8540,8 @@ function openTimeTrial(selectDaily) {
 }
 $("mb-tt").onclick = () => openTimeTrial(false);
 async function consumeGhostHash() {
+  // A ghost link landing MID-RACE waits, fragment intact, for the menu (quitToMenu re-reads it) — as #353's invite link does.
+  if (UiLayers.inRace()) { Log.info("game", "ghost link deferred: racing"); return null; }
   const shared = await GhostShare.consumeHash({
     notify: (message, result) => announce(message, result && result.ok ? 3 : 4, result && result.ok ? "info" : "warning"),
   });

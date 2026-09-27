@@ -85,7 +85,7 @@ function loadQuali(opts = {}) {
   vm.createContext(ctx);
   seedLog(ctx);
   vm.runInContext(SRC.replace(/^const\b/gm, "var"), ctx, { filename: "js/race/quali-model.js" });
-  return { q: ctx.Quali.create(G), G, saved };
+  return { q: ctx.Quali.create(G), G, saved, ctx };
 }
 
 test("clear() keeps a driven persist; clear(true) forgets it", () => {
@@ -405,4 +405,42 @@ test("a player whose every lap was deleted (driven = Infinity) is NO TIME, last 
   assert.equal(me.noTime, true);
   assert.ok(Number.isFinite(me.t) && Number.isFinite(me.gap), "the sheet still gets finite numbers");
   for (const r of rows) if (!r.isPlayer) assert.ok(r.t < me.t);
+});
+
+// ── THE ORDER BELONGS TO ITS MODE, not just its circuit ─────────────────────
+// Bug hunt 2026-09-27: a one-off GP and the standalone championship share ONE
+// season object, so a one-off GP's driven order at Monza passed the qualiTrack
+// check and gridded season round 1 at Monza. The one-off contract above still
+// holds — the order persists for THAT one-off GP — but it is stamped with its
+// mode and refused by any other (championship, or another career slot).
+test("a one-off GP's driven order persists for the one-off GP but not season round 1 at the same circuit", () => {
+  const { q, G } = loadQuali({ season: { round: 0 } });
+  G.seasonMode = false;                              // one-off Grand Prix
+  q.simulate(new Map([["p1", 68.5]]));
+  assert.equal(G.season.qualiMode, "gp", "the persist is stamped with its mode");
+  q.clear();                                         // memory only (reopen / reload)
+  assert.ok(q.results(), "same one-off GP: the driven order comes back");
+  assert.equal(q.results().find((r) => r.human).t, 68.5);
+  G.seasonMode = true;                               // season round 1, same circuit
+  assert.equal(q.results(), null, "the championship must not read the one-off's order");
+  assert.equal(q.order(G.cars), null, "and must not grid off it either");
+  G.seasonMode = false;
+  assert.ok(q.order(G.cars), "back in the one-off: still its own order");
+});
+
+test("a career slot's order is refused by another slot, the championship and the one-off GP", () => {
+  const { q, G, ctx } = loadQuali({ season: { round: 0 }, inCareer: true });
+  ctx.Career.slot = () => ({ flavour: "driver", i: 0 });
+  q.simulate(new Map([["p1", 68.5]]));
+  assert.equal(G.season.qualiMode, "career:driver:0");
+  q.clear();
+  assert.ok(q.results(), "same slot: restored");
+  ctx.Career.slot = () => ({ flavour: "driver", i: 1 });
+  assert.equal(q.results(), null, "another career slot must not read it");
+  ctx.Career.inCareer = () => false;
+  assert.equal(q.results(), null, "nor the standalone championship");
+  G.seasonMode = false;
+  assert.equal(q.results(), null, "nor a one-off GP");
+  delete G.season.qualiMode;
+  assert.ok(q.results(), "an unstamped (older) persist is still accepted");
 });
