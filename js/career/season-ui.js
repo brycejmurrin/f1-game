@@ -229,7 +229,7 @@ function create(G) {
 
   function refreshTitle() {
     const btn = $("mb-season");
-    if (!btn) return;
+    if (!btn || !btn.childNodes) return;
     let textNode = null;
     for (let i = 0; i < btn.childNodes.length; i++) {
       const n = btn.childNodes[i];
@@ -249,10 +249,18 @@ function create(G) {
       Log.info("ui", "SeasonUI.apply");
       const result = SeasonCal.applyConfig(draft);
       if (!result.ok) {
+        // A foreign write moved the save under us. "Reopen setup" never cured
+        // it — open() does not reload, so APPLY failed for ever. Adopt the other
+        // tab's season here (load() re-arms the revision guard), and repaint so
+        // the APPLY label / RESTART confirm reflect ITS progress; the player's
+        // draft is kept for them to review and apply again.
+        G.season = SeasonCal.load();
+        build();
+        refreshTitle();
         const note = $("ss-note");
         if (note) {
           note.setAttribute("role", "status");
-          note.textContent = "Season changed in another tab. Reopen setup to review the latest save.";
+          note.textContent = "Season changed in another tab — loaded the latest save. Review, then APPLY again.";
         }
         return;
       }
