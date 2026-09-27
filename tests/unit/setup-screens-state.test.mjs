@@ -322,7 +322,7 @@ function loadSeasonUi(trackIds = ["a", "b"], cal = {}) {
   });
   vm.runInNewContext(DOM_SOURCE, sb, { filename: "js/ui/dom.js" });   // Dom.el, over this sandbox's document
   vm.runInNewContext(src("js/career/season-ui.js"), sb, { filename: "js/career/season-ui.js" });
-  return { dom, ui: sb.SeasonUI.create(G), $: G.$ };
+  return { dom, ui: sb.SeasonUI.create(G), $: G.$, G };
 }
 
 test("season setup: RACE DISTANCE chips carry a unit and none claims FULL", () => {
@@ -460,4 +460,25 @@ test("career hub: once the weekend is under way the brief is one line again", ()
   ui.openHub();
   assert.equal($("cr-left").querySelectorAll(".cr-obj-pick").length, 0, "no choosing");
   assert.equal(texts($("cr-left"), ".cr-obj-line").length, 1, "the chosen brief, stated");
+});
+
+test("season setup: an APPLY that hits another tab's save reloads it, so the next APPLY can succeed", () => {
+  // The conflict note said "Reopen setup", but open() never reloads — the
+  // revision guard stayed tripped and every APPLY failed for ever.
+  let loads = 0;
+  let conflict = true;
+  const { ui, $, G } = loadSeasonUi(["a", "b"], {
+    applyConfig: () => (conflict ? { ok: false, season: null, reason: "conflict" }
+                                 : { ok: true, durable: true, season: { round: 0 } }),
+    load: () => { loads++; conflict = false; return { round: 3 }; },
+    hasProgress: (season) => !!(season && season.round),
+  });
+  ui.open();
+  $("ss-apply").onclick();
+  assert.equal(loads, 1, "the other tab's season was loaded");
+  assert.deepEqual({ ...G.season }, { round: 3 }, "…and adopted");
+  assert.match($("ss-note").textContent, /another tab — loaded the latest save/);
+  assert.equal($("ss-apply").textContent, "APPLY — RESTART SEASON", "repainted against ITS progress");
+  $("ss-apply").onclick();                       // armConfirm stub applies at once
+  assert.deepEqual({ ...G.season }, { round: 0 }, "the retry applies");
 });

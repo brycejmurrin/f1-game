@@ -120,7 +120,11 @@ const SaveMigrate = (function () {
     career.team = typeof career.team === "string" && career.team ? career.team : null;
     career.deal = cleanDeal(career.deal);
     career.seed = career.seed | 0;
-    career.season = remapPoints(career.season || { round: 0, pts: {}, teamPts: {}, driverCodes: {} });
+    // A plain object or the empty season: a number or string here (a hand edit,
+    // a partial write) made remapPoints' `season.round =` throw in strict mode,
+    // and Career.load() runs at boot uncaught — one bad slot stopped the game.
+    const sz = career.season;
+    career.season = remapPoints(sz && typeof sz === "object" && !Array.isArray(sz) ? sz : { round: 0, pts: {}, teamPts: {}, driverCodes: {} });
     career.owned = Array.isArray(career.owned) ? career.owned : [];
     career.fitted = career.fitted && typeof career.fitted === "object" ? career.fitted : {};
     // Only object rows: a null or a number in the ledger threw on the first
