@@ -70,7 +70,7 @@ function makeG(Teams, cars) {
   const G = {
     state: "menu", cars, ranked: cars, teamIdx: 2, driverIdx: 1, raceLaps: 3, raceWeather: "wet", raceTimeOfDay: "night", duel: true,
     raceTyreWear: "off", raceChangeable: true, flow: "career", session: "tt", timeTrial: true, trackIdx: 0,
-    track: { total: 6000 }, raceT: 0, raceWeather: "wet",
+    track: { total: 6000 }, raceT: 0,
     wrapS: (v) => ((v % 6000) + 6000) % 6000, vTop: () => 80, referencePole: () => 140, refreshHud: () => calls.push(["refreshHud"]),
     startWeatherArc: (from, to, dur) => calls.push(["arc", from, to, dur]),
     resetRaceDraft: () => calls.push(["resetRaceDraft"]),

@@ -46,7 +46,7 @@ test.describe("real race", () => {
       // eslint-disable-next-line no-undef
       return RealRace.launch(script, { seat: "LEC", laps: 3 });
     }, SCRIPT);
-    expect(staged).toEqual({ trackId: "baku", laps: 3, seat: "LEC" });
+    expect(staged).toEqual({ trackId: "baku", laps: 3, seat: "LEC", startLap: 1 });
     await page.waitForFunction(() => window.__apex.info().track === "baku" && window.__apex.info().state !== "menu", null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => window.__apex.go());
     await page.evaluate(() => window.__apex.step(1 / 60, 6));   // a few frames: the director arms on the first
@@ -127,7 +127,7 @@ test.describe("real race, mid-race", () => {
     const by = (code) => st.rr.cars.find((c) => c.code === code);
     // At the start of real lap 3 Russell is on the line beginning lap 3; the others are inside lap 2 or 3 by time.
     expect(by("RUS").lap).toBe(3);
-    expect(by("RUS").s).toBeLessThan(1);
+    expect(by("RUS").s).toBeLessThan(10);   // dropped on the line, then two frames at cruise speed
     expect(by("LEC").lap).toBeGreaterThanOrEqual(2);
     expect(by("LEC").s).toBeGreaterThan(0);
     expect(by("VER").lap).toBeGreaterThanOrEqual(2);
@@ -137,7 +137,7 @@ test.describe("real race, mid-race", () => {
     expect(by("STR").dnfAt).toBeCloseTo(2.5 / 6, 6);
     expect(by("HAM").retired).toBe(true);
     // The sets: Russell mid-stint on the mediums he started on; the lap-2 safety car is held at once.
-    expect(by("RUS").tyre).toBe("medium");
+    expect(by("RUS").tyre).toBe("M");   // the live tyre record carries the HUD letter, not the class key
     expect(by("RUS").pitStops).toBe(0);
     expect(st.rr.caution).toBe(0);   // the lap-2 window closed at the end of lap 2: green at the start of lap 3
     // Every car keeps moving from where it was dropped: a few more frames, nobody back on the grid.
