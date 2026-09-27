@@ -1563,7 +1563,7 @@ function rollover() {
   // index kept summing across years, and objPick is keyed by round alone, so
   // last season's round-1 brief was pre-selected for the new round 1.
   s.roundPts = {}; delete s.lastFl;
-  delete s.stage; delete s.sprintOrder; delete s.qualiOrder; delete s.qualiTrack;
+  delete s.stage; delete s.sprintOrder; delete s.qualiOrder; delete s.qualiTrack; delete s.qualiMode;
   career.results = [];
   career.obj = null;
   career.objPick = null;

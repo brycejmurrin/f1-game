@@ -62,10 +62,24 @@ const Quali = (function () {
     // memory survived, so from round 2 on qualiResults() stayed truthy, the sheet
     // was never offered, and every grid came off round 1's times.
     let classTrack = null;
+    // The MODE `classification` belongs to — the same stamp as s.qualiMode. A
+    // one-off GP and a standalone championship share ONE season object, so a
+    // one-off GP's driven order at Monza passed the circuit check and gridded
+    // season round 1 at Monza (bug hunt 2026-09-27).
+    let classMode = null;
     let _kCache = new Float64Array(0), _kCacheTrack = null;   // |curvature| per sample; _kCacheTrack is a def ID, never the track (see below)
 
     // The circuit now loaded, in the same form persistOrder() stamps.
     function hereId() { return (G.track && G.track.def && G.track.def.id) || null; }
+    // The session mode, in the same form persistOrder() stamps: "gp" (one-off),
+    // "season" (standalone championship) or "career:<flavour>:<slot>".
+    function modeId() {
+      if (typeof Career !== "undefined" && Career.inCareer && Career.inCareer()) {
+        const sl = Career.slot ? Career.slot() : null;
+        return "career:" + (sl ? sl.flavour + ":" + sl.i : "?");
+      }
+      return G.seasonMode ? "season" : "gp";
+    }
 
     function lapTime(track, vCap, grip) {
       const n = track.n, total = track.total;
@@ -248,6 +262,7 @@ const Quali = (function () {
       // Stamp the circuit: an order restored onto a different track is a
       // grid drawn from the wrong lap times.
       s.qualiTrack = hereId();
+      s.qualiMode = modeId();   // and the mode — see classMode
       persistSeason(s);
     }
 
@@ -256,13 +271,17 @@ const Quali = (function () {
       // from the wrong lap times — the same rule qualiTrack applies to the persist
       // three lines up. Drop it before the short-circuit below, so results(),
       // order() and begin() all inherit the check.
-      if (classification && classTrack && hereId() && classTrack !== hereId()) {
-        classification = null; classTrack = null;
+      const mode = modeId();
+      if (classification && ((classTrack && hereId() && classTrack !== hereId()) ||
+                             (classMode && classMode !== mode))) {
+        classification = null; classTrack = null; classMode = null;
       }
       const raw = G.season && G.season.qualiOrder;
       if (classification || !Array.isArray(raw) || !raw.length) return !!classification;
       const here = hereId();
       if (G.season.qualiTrack && here && G.season.qualiTrack !== here) return false;
+      // An unstamped (pre-2026-09-27) order is accepted as before.
+      if (G.season.qualiMode && G.season.qualiMode !== mode) return false;
       const byId = new Map();
       if (G.cars) for (const c of G.cars) byId.set(c.driverId, c);
       // An imported/older save may name a driver twice or one no longer in
@@ -288,6 +307,7 @@ const Quali = (function () {
         };
       });
       classTrack = G.season.qualiTrack || here;
+      classMode = G.season.qualiMode || mode;
       const pole = classification[0] && classification[0].t > 0 ? classification[0].t : 0;
       for (const r of classification) r.gap = pole && r.t > 0 ? +(r.t - pole).toFixed(3) : 0;
       return true;
@@ -295,7 +315,7 @@ const Quali = (function () {
 
     function simulate(driven) {
       const rows = compute(driven);
-      if (rows) { classification = rows; classTrack = hereId(); persistOrder(); }
+      if (rows) { classification = rows; classTrack = hereId(); classMode = modeId(); persistOrder(); }
       Log.info("game", "Quali.simulate n=" + (rows ? rows.length : 0));
       return rows;
     }
@@ -340,11 +360,12 @@ const Quali = (function () {
       if (!s || !s.qualiOrder) return;
       delete s.qualiOrder;
       delete s.qualiTrack;
+      delete s.qualiMode;
       persistSeason(s);
     }
     function clear(forget) {
       classification = null;
-      classTrack = null;
+      classTrack = null; classMode = null;
       if (forget) forgetOrder();
     }
 
