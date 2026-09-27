@@ -218,9 +218,26 @@ window.SheetShape = (function () {
     const avail = host.clientHeight
       - (parseFloat(hs.paddingTop) || 0) - (parseFloat(hs.paddingBottom) || 0);
     if (!(avail > 0)) return hOwn;
-    /* currentCSSZoom is cumulative; the host is normally unzoomed, but divide
-       by its own zoom so a zoomed ancestor cannot double-count. */
-    const z = (window.CssZoom ? CssZoom.of(el) / CssZoom.of(host) : 1) || 1;
+    /* Host CSS px → sheet-local units. classifyBody() divides by the declared
+       --ui-scale; sheets must use the same source. currentCSSZoom can still
+       read 1 on the same turn a --ui-scale write lands (style flush / zoom
+       bookkeeping lag), and ResizeObserver often skips zoom-driven box
+       changes — so a stale z=1 left avail unscaled, hysteresis kept
+       data-density="compact", and the answer stuck. Measured on CI tip
+       ce3ec4db (ui-resize.spec, scheduled Smoke shard 2): after uiScale(50)
+       body was already "normal" while #cs-inner stayed "compact" with
+       panelW already 210. Prefer --sheet-scale (fit cap) then --ui-scale;
+       fall back to CssZoom only when neither is set. */
+    const sheetScale = parseFloat(getComputedStyle(el).getPropertyValue("--sheet-scale"));
+    const uiScale = parseFloat(getComputedStyle(document.documentElement)
+      .getPropertyValue("--ui-scale"));
+    let z = sheetScale > 0 ? sheetScale : (uiScale > 0 ? uiScale : 0);
+    if (!(z > 0)) {
+      z = (window.CssZoom ? CssZoom.of(el) / CssZoom.of(host) : 1) || 1;
+    } else {
+      const hostZ = (window.CssZoom ? CssZoom.of(host) : 1) || 1;
+      z = z / (hostZ || 1);
+    }
     return Math.max(hOwn, avail / z);
   }
 
@@ -448,11 +465,18 @@ window.SheetShape = (function () {
   function watchScale() {
     if (typeof MutationObserver !== "function") return;
     let lastScale = document.documentElement.style.getPropertyValue("--ui-scale");
+    let raf = 0;
     new MutationObserver(() => {
       const s = document.documentElement.style.getPropertyValue("--ui-scale");
       if (s === lastScale) return;
       lastScale = s;
-      reclassify();
+      /* AFTER LAYOUT. A sync reclassify can still see the pre-scale client
+         box even when --ui-scale has updated (roomOwn now reads the declared
+         scale, but shape/pair still use clientWidth/Height). One rAF is the
+         first frame with the new zoom applied; coalescing matches
+         watchKeyboard. */
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => { raf = 0; reclassify(); });
     }).observe(document.documentElement,
       { attributes: true, attributeFilter: ["style"] });
   }

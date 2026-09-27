@@ -454,3 +454,47 @@ test("waitFor() still gives up on a relay that is refusing every poll", async ()
     assert.equal(got.error, "rate_limited", "the last transient error is what comes back after the streak cap");
   } finally { await r.close(); }
 });
+
+// ── the public Nostr topic is derived from the STRETCHED key ─────────────────
+test("the Nostr topic costs a PBKDF2 per guessed code, not one SHA-256", async () => {
+  // The `x` tag is plaintext on public relays. A topic that is a cheap hash of
+  // the code turns ~30 bits of code into a minutes-long brute force; this
+  // proves each topic is HKDF over the 120 000-round PBKDF2 output.
+  const code = NetRendezvous.makeCode();
+  const offer = await NetRendezvous.topic(code, "offer");
+  const answer = await NetRendezvous.topic(code, "answer");
+  assert.match(offer, /^[0-9a-f]{20}$/, "80-bit hex topic");
+  assert.notEqual(offer, answer, "offers and answers meet on separate topics");
+  assert.equal(await NetRendezvous.topic(code.toLowerCase(), "offer"), offer, "deterministic over the normalised code");
+
+  // The old derivation must be gone.
+  const sha = new Uint8Array(await crypto.subtle.digest("SHA-256",
+    new TextEncoder().encode("room|" + code + "|offer")));
+  const oldTopic = [...sha.slice(0, 10)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  assert.notEqual(offer, oldTopic, "no longer SHA-256(room|code|slot)");
+
+  // Recompute independently: PBKDF2(code) -> HKDF(info=v<PROTOCOL>/topic|slot).
+  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(code), "PBKDF2", false, ["deriveBits"]);
+  const stretched = await crypto.subtle.deriveBits({ name: "PBKDF2",
+    salt: new TextEncoder().encode("apex26-rendezvous-v2"), iterations: 120000, hash: "SHA-256" }, base, 256);
+  const hk = await crypto.subtle.importKey("raw", stretched, "HKDF", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({ name: "HKDF", hash: "SHA-256", salt: new Uint8Array(0),
+    info: new TextEncoder().encode("apex26-rendezvous-v" + NetRendezvous.PROTOCOL + "/topic|offer") }, hk, 80);
+  assert.equal(offer, [...new Uint8Array(bits)].map((b) => b.toString(16).padStart(2, "0")).join(""),
+    "topic = HKDF over the PBKDF2-stretched key");
+  assert.ok(NetRendezvous.PROTOCOL >= 3, "protocol bumped with the topic change");
+
+  // And a fresh code's topic runs PBKDF2 (the cost an attacker pays per guess).
+  const orig = crypto.subtle.deriveBits.bind(crypto.subtle);
+  let derives = 0;
+  Object.defineProperty(crypto.subtle, "deriveBits", {
+    configurable: true,
+    value: (...args) => { if (args[0] && args[0].name === "PBKDF2") derives++; return orig(...args); },
+  });
+  try {
+    let other = NetRendezvous.makeCode();
+    while (other === code) other = NetRendezvous.makeCode();
+    await NetRendezvous.topic(other, "offer");
+    assert.equal(derives, 1, "one PBKDF2 per new code");
+  } finally { delete crypto.subtle.deriveBits; }
+});

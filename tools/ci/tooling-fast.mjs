@@ -222,6 +222,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/sheet-per-screen.test.mjs",
   "tests/unit/sheetshape-registry.test.mjs",
   "tests/unit/sheetshape-keyboard.test.mjs",
+  "tests/unit/sheetshape-density-scale.test.mjs",
   "tests/unit/nontext-contrast.test.mjs",
   "tests/unit/scale-defaults.test.mjs",
   "tests/unit/font-digits.test.mjs",

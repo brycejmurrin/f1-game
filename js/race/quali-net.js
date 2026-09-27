@@ -89,18 +89,24 @@ const QualiNet = (function () {
     }
 
     function onPeerQualiLive(d) {
-      if (!d || d.driverId == null) return;
+      if (!d || d.driverId == null || isMine(d.driverId)) return;
       qualiLive.set(d.driverId, { t: +d.t || 0, frac: +d.frac || 0, at: performance.now() });
       refreshQualiGate();
     }
 
+    // A peer entry never speaks for THIS player's driverId (belt to the
+    // lobby's sender binding): the local lap is the only source of our time.
+    const isMine = (id) => { const p = getPlayer(); return !!(p && id != null && id === p.driverId); };
+
     function onPeerQuali(d) {
+      if (d && isMine(d.driverId)) return;
       if (d && d.driverId != null) qualiLive.delete(d.driverId);
       // NetPlay.validQuali is the wire's single validation site; this is the
       // belt to that braces, because a stored t reaches toFixed() in
       // quali-model.js and a string or boolean there throws mid-sheet.
       const t = d ? Number(d.t) : NaN;
-      if (d && d.driverId != null && Number.isFinite(t) && t > 0) qualiPeers.set(d.driverId, t);
+      // Infinity = NO TIME (validQuali's noTime marker): drove, no valid lap.
+      if (d && d.driverId != null && (t === Infinity || (Number.isFinite(t) && t > 0))) qualiPeers.set(d.driverId, t);
       if (!isQuali()) return;
       const player = getPlayer();
       const mine = player && player.lastLap > 0 ? player.lastLap
@@ -113,7 +119,7 @@ const QualiNet = (function () {
       const m = new Map();
       const player = getPlayer();
       if (myTime > 0 && player) m.set(player.driverId, myTime);
-      for (const [id, t] of qualiPeers) if (t > 0) m.set(id, t);
+      for (const [id, t] of qualiPeers) if (t > 0 && !(player && id === player.driverId)) m.set(id, t);
       return m.size ? m : 0;
     }
 
