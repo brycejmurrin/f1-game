@@ -2382,6 +2382,7 @@ function _loadTrackBody(idx, def) {
     // track's terrainGeo/_lights/mesh handles through it stacks old + new
     // resident at once. loadTrack is synchronous, so nothing can observe the
     // null between here and the assignment below.
+    const prevTrackId = builtTrackId;   // read before the reset below: sameCircuit compares against it
     track = null; builtTrackId = null;   // a build that throws must not leave the old id claiming a freed world
     if (typeof LampBake !== "undefined") LampBake.reset();   // its cache holds the old track + atlas too
     // Pass the active backend so tracks.js builds its meshes through the façade
@@ -2394,7 +2395,7 @@ function _loadTrackBody(idx, def) {
     // (A3). Cheap pure derivation from track.def.turns; stores the list even when
     // the side-world is disabled/loading so it's ready once rapier is live.
     DebrisWorld.registerFurniture(track);
-    const sameCircuit = builtTrackId === def.id;   // a day<->dark rebuild of the SAME circuit
+    const sameCircuit = prevTrackId === def.id;   // a day<->dark rebuild of the SAME circuit
     builtTrackId = def.id;
     builtTrackNight = sessionDark;
     builtGridSlots = wantSlots;
@@ -3121,9 +3122,16 @@ function endRace(forcedOrder) {
   const fin = cars.filter((c) => c.finished && !c.retired).sort(RaceControl.finishOrder);   // laps, then the clock
   const run = cars.filter((c) => !c.finished && !c.retired).sort((a, b) => b.prog - a.prog);
   const out = cars.filter((c) => c.retired).sort((a, b) => b.prog - a.prog);
+  // LAPS FIRST (FIA Sporting Regs B2.5): a car still running when the race
+  // ends takes the flag on its next crossing, so it counts one more lap. A
+  // lapped car that crossed was put ahead of every lead-lap car still on its
+  // last lap (P2 and 18 points for a car a lap down). Stable sort: within a
+  // lap count, finishers keep the clock order and runners their progress.
+  const lapsAt = (c) => (c.lap || 0) + (c.finished ? 0 : 1);
+  const live = fin.concat(run).sort((a, b) => lapsAt(b) - lapsAt(a));
   // THE CLASSIFICATION IS THE HOST'S — see netOrder(), which is the inline
   // block that used to live here, unchanged in behaviour.
-  const order = netOrder(forcedOrder || fin.concat(run, out));
+  const order = netOrder(forcedOrder || live.concat(out));
   order.forEach((c, i) => { c.finPos = i + 1; });
   // Read BEFORE award() advances the stage, or the sprint is wrapped up as the Grand Prix.
   const wasSprint = isChampionship() && SeasonCal.stage(season) === "sprint";
@@ -5180,7 +5188,9 @@ function updateCar(c, dt, ranked) {
       // attack zone at its baked quality), and not on a car we just gave up on.
       _aiOtPull.attackQ = _atk.q; _aiOtPull.toTurnIn = _atk.toTurnIn; _aiOtPull.roll = c.phaseRoll || 0.5;
       const sameCar = blocker === c.passFailOf && (c.passFailT || 0) > 0;
-      const moveOn = !sameCar && AiDrive.otWant(_aiOtPull) && AiDrive.attackOK(_aiOtPull);
+      // No passing under the safety car or VSC (FIA Sporting Regs): the
+      // caution capped speed but the pass logic ran on, 27 moves in 60 s.
+      const moveOn = raceCtl.level < 2 && !sameCar && AiDrive.otWant(_aiOtPull) && AiDrive.attackOK(_aiOtPull);
       if (!c.passOf && c.passCool <= 0 && moveOn && blockerGap <= AI_PASS_LATCH_M) {
         const side = AiCorridor.choose(_aiOtPull, c, blocker, cars, track.total, CLEAR, c.passPlan || (c.passPlan = {})).side;
         if (side && (side > 0 ? Math.min(roomR, roadR) : Math.min(roomL, roadL)) >= CLEAR) {
@@ -5192,6 +5202,7 @@ function updateCar(c, dt, ranked) {
       // 0 -> 6 in the bench with the zone gate alone).
       if (!c.passOf) overtake = moveOn && (!c.passPlan || c.passPlan.side) ? AiDrive.otPull(_aiOtPull) : 0;
     }
+    if (c.passOf && raceCtl.level >= 2) c.passOf = null;   // a move under way when the SC/VSC comes out is abandoned
     if (c.passOf) overtake = AiDrive.passTarget(c.passOf.x, c.passSide, CLEAR, hw) - targetX;
     // LET PASS moves aside instead of defending; the `!letPass` below is what
     // stops the AI covering a line it has already decided to concede.

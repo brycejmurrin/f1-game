@@ -5123,3 +5123,17 @@ test("TLX draw records are pooled, one fixed shape, reset through resetRecs (TLX
   assert.equal(slot.em, undefined); assert.equal(slot.al, undefined); assert.equal(slot.lg, 0);
   assert.deepEqual(Object.keys(slot), ["geo", "m", "mat", "em", "al", "lg", "chunked", "instanced"], "one fixed shape");
 });
+
+test("GLX racing-line chevrons keep vAlong at highp, and a restored context obeys the reload budget", () => {
+  // vAlong is metres along the lap (to ~7 km); ESSL mediump is fp16 on mobile
+  // GPUs (MDN WebGL best practices), which steps 4 m there and broke the 5 m
+  // chevrons. A restore handler reloading without the loss handler's counter
+  // looped on a device that loses the context every boot.
+  assert.match(code("js/render/glx/shaders/glsl-fx.js"), /in highp float vAlong;/);
+  for (const f of ["js/render/glx/glx.js", "js/render/three/tlx.js"]) {
+    const src = code(f);
+    const i = src.indexOf('"webglcontextrestored"');
+    assert.ok(i > 0, f);
+    assert.match(src.slice(i, i + 600), /ctxLostReloads[\s\S]*> 2\) return;/, f + ": the restore reload checks the counter");
+  }
+});

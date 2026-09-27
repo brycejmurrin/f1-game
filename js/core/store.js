@@ -58,7 +58,7 @@ const GameStore = (function () {
     write(k, v) {
       const key = "apex26." + k;
       let durable = true;
-      try { localStorage.setItem(key, JSON.stringify(v)); }
+      try { setRoomy(key, JSON.stringify(v)); }
       catch (e) { durable = false; noteBroken(e, "write " + k); }
       this._cache.set(key, v);
       this._keyRev.set(key, (this._keyRev.get(key) || 0) + 1);
@@ -97,7 +97,7 @@ const GameStore = (function () {
     rawSet(k, v) {
       const key = fullKey(k);
       this._cache.delete(key);   // a key lives in one lane; if one ever strays, the disk wins
-      try { localStorage.setItem(key, v); return true; }
+      try { setRoomy(key, v); return true; }
       catch (e) { noteBroken(e, "write " + k); return false; }
     },
     rawDel(k) {
@@ -158,6 +158,23 @@ const GameStore = (function () {
 
   function shortKey(k) { return k.indexOf("apex26.") === 0 ? k.slice("apex26.".length) : k; }
   function fullKey(k) { return "apex26." + shortKey(k); }
+  // A FULL QUOTA MUST NOT COST A SAVE: the data hub's response cache
+  // (apex26.api.*, js/data/api.js) is disposable and could fill the whole
+  // 5 MiB origin quota, after which every career/settings/ghost write failed.
+  // On a failed write, drop that cache and try once more.
+  function setRoomy(key, str) {
+    try { localStorage.setItem(key, str); return; } catch (e) {
+      let freed = 0;
+      try {
+        for (let i = localStorage.length - 1; i >= 0; i--) {
+          const k = localStorage.key(i);
+          if (k && k.indexOf("apex26.api.") === 0) { localStorage.removeItem(k); freed++; }
+        }
+      } catch (_) { /* storage unreadable: nothing to free */ }
+      if (!freed) throw e;
+      localStorage.setItem(key, str);
+    }
+  }
 
   // THE DURABLE MIRROR:
   // localStorage stays the synchronous source of truth and the cache above is

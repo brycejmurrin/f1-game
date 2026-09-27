@@ -854,7 +854,12 @@ const TLX = (function () {
       };
       try {
         canvas.addEventListener("webglcontextrestored",
-          function () { try { location.reload(); } catch (_) { /* same: nothing to reload, and the loss latches already landed */ } }, false);
+          function () {
+            // Same two-reload budget as the loss handler: an unguarded restore
+            // reload looped on a device that loses the context every boot.
+            try { if ((parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0) > 2) return; } catch (_) { return; }
+            try { location.reload(); } catch (_) { /* same: nothing to reload, and the loss latches already landed */ }
+          }, false);
       } catch (_) { /* detached/synthetic canvas in a harness: the timer above still covers it */ }
 
       // lifecycle state
