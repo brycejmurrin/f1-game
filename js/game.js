@@ -9211,6 +9211,22 @@ document.addEventListener("visibilitychange", () => {
   if (!document.hidden && raceWakeWanted) holdRaceWake();
 });
 window.addEventListener("pagehide", () => { PerfGov.sentinelArm(false); _disarmProbeOnLeave(); });
+// LOSING FOCUS WHILE STILL VISIBLE pauses too. visibilitychange only fires when
+// the page is HIDDEN (MDN, Page Visibility API): an Alt-Tab to a second monitor,
+// or an overlay taking focus, left the car coasting off-line while the field
+// lapped. Settled for 250 ms (a focus hop inside the page is not a leave), never
+// in a friend race (the rival cannot be paused) and never under automation.
+window.addEventListener("blur", () => {
+  setTimeout(() => {
+    if (document.hidden || document.hasFocus() || navigator.webdriver || netPlay.active()) return;
+    if (state === "race" || state === "count") setPaused(true);
+  }, 250);
+});
+// …and the platform taking the AUDIO (an iOS call answered from the compact
+// banner keeps the page visible and focused): the race stops with the sound.
+if (GameAudio.onInterrupted) GameAudio.onInterrupted(() => {
+  if ((state === "race" || state === "count") && !netPlay.active()) setPaused(true);
+});
 
 // ---------- boot ----------
 // (A `window.__APEX` bridge lived here, gated on a `window.__APEX_DEBUG` flag

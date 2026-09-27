@@ -871,6 +871,15 @@ const WGX = (function () {
       } catch (_) { /* info withheld */ }
       return d;
     }
+    // iOS reports a background loss on the way BACK (webkit bug 261331), with
+    // document.hidden already false: within 3 s of becoming visible it is the
+    // background loss — reload, rung and pick untouched, same as hidden.
+    const _nowMs = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
+    let _shownAt = -1e9;
+    try {
+      document.addEventListener("visibilitychange", function () { if (!document.hidden) _shownAt = _nowMs(); });
+      window.addEventListener("pageshow", function () { _shownAt = _nowMs(); });
+    } catch (_) { /* no document events (harness) */ }
     device.lost.then(function (info) {
       if (info && info.reason === "destroyed") return;
       // Crash latches, mirroring GLX webglcontextlost / TLX onDeviceLost: a
@@ -880,6 +889,11 @@ const WGX = (function () {
       // disable a feature the player deliberately turned on.
       let hidden = false;
       try { hidden = !!(typeof document !== "undefined" && document.hidden); } catch (_) { /* no document (harness) */ }
+      if (!hidden && _nowMs() - _shownAt < 3000) {
+        _lost = true;
+        setTimeout(function () { try { location.reload(); } catch (_) { /* harness */ } }, 300);
+        return;
+      }
       if (!hidden) {
         // BOTH opt-ins, not one. GLX's webglcontextlost (js/render/glx/glx.js) and
         // TLX's onDeviceLost each disarm envProbeOff AND perChunkOff; WGX wrote
