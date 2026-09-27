@@ -3128,10 +3128,19 @@ function endRace(forcedOrder) {
   // last lap (P2 and 18 points for a car a lap down). Stable sort: within a
   // lap count, finishers keep the clock order and runners their progress.
   const lapsAt = (c) => (c.lap || 0) + (c.finished ? 0 : 1);
-  const live = fin.concat(run).sort((a, b) => lapsAt(b) - lapsAt(a));
+  // 90 % OF THE WINNER'S LAPS IS CLASSIFIED (FIA B2.5 b), retired or not: a
+  // car that failed on the last lap scores where it stopped, not behind the
+  // field with nothing. Below that it is not classified. c.classified carries
+  // the verdict to the points tables (SeasonCal.award, career settlement).
+  // c.lap is the lap a car is ON (the winner's reads laps+1 at the flag), so
+  // laps COMPLETED is c.lap - 1 for every car.
+  const winDone = fin.length ? Math.max(...fin.map((c) => c.lap || 0)) - 1 : 0;
+  const lateOut = winDone > 0 ? out.filter((c) => (c.lap || 0) - 1 >= Math.floor(0.9 * winDone)) : [];
+  for (const c of cars) c.classified = !c.retired || lateOut.includes(c);
+  const live = fin.concat(run, lateOut).sort((a, b) => lapsAt(b) - lapsAt(a));
   // THE CLASSIFICATION IS THE HOST'S — see netOrder(), which is the inline
   // block that used to live here, unchanged in behaviour.
-  const order = netOrder(forcedOrder || live.concat(out));
+  const order = netOrder(forcedOrder || live.concat(out.filter((c) => !lateOut.includes(c))));
   order.forEach((c, i) => { c.finPos = i + 1; });
   // Read BEFORE award() advances the stage, or the sprint is wrapped up as the Grand Prix.
   const wasSprint = isChampionship() && SeasonCal.stage(season) === "sprint";
@@ -4996,16 +5005,21 @@ function updateCar(c, dt, ranked) {
       // LIFETIME total because the career `clean` objective and the archive read
       // it (js/career/career.js) and "no cuts at all" must not become satisfiable
       // by cutting four more times.
+      // ESCALATING: the 4th breach is +5 s, the 5th +10 s, then the count
+      // starts over (https://racingnews365.com/track-limits,
+      // https://www.formuladream.app/blog/f1-track-limits-explained). A time
+      // trial has no classification to penalise: it resets at the 4th as before.
       c.cutWarn = (c.cutWarn | 0) + 1;
       if (c.cutWarn >= 4) {
-        c.cutWarn = 0;
+        const secs = c.cutWarn >= 5 ? 10 : 5;
+        if (secs === 10 || isTimeTrial()) c.cutWarn = 0;
         // Time trial already invalidated the lap on the first counted cut; the
-        // +5s ladder is race classification only (docs/BUGS.md B2 / defect ledger).
+        // ladder is race classification only (docs/BUGS.md B2 / defect ledger).
         if (!isTimeTrial()) {
-          c.penalty += 5;
+          c.penalty += secs;
           if (c.isPlayer) {
             const pk = hudProfile === "broadcast" ? "race" : "penalty-hit";
-            announce("+5s TRACK LIMITS PENALTY", 2, pk);
+            announce("+" + secs + "s TRACK LIMITS PENALTY", 2, pk);
             if (soundOn) GameAudio.penalty();
           }
         }

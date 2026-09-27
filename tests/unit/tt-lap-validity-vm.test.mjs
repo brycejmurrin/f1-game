@@ -133,3 +133,28 @@ test("time trial never applies the +5s track-limits ladder", async () => {
   assert.equal(p.cutWarn, 0, "the ladder still resets after the fourth cut");
   assert.ok((p.cuts | 0) >= 4, "lifetime cuts still accumulate");
 });
+
+test("a race ladder escalates: the 4th cut is +5 s, the 5th +10 s, then the count starts over", async () => {
+  // Real practice: 4th breach +5 s, 5th +10 s, then reset
+  // (https://racingnews365.com/track-limits). It re-ran +5 s every fourth cut.
+  const g = await createGame({ track: "monza" });
+  try {
+    g.G.daily.stop();
+    g.G.timeTrial = false;
+    g.G.raceWeather = "dry";
+    await g.apex.race("monza", "day", "dry");
+    g.apex.go();
+    g.apex.headless(true);
+    const p = g.G.player;
+    p.penalty = 0; p.cutWarn = 0;
+    const seen = [];
+    for (let n = 0; n < 5; n++) {
+      assert.ok(cutOffTrack(g, 200).counted, "cut " + (n + 1) + " must count");
+      seen.push(p.penalty);
+      g.apex.jump(0.5, 60, 0);
+      for (let i = 0; i < 180 && p.offT < 0; i++) g.apex.step(1 / 60, 1);
+    }
+    assert.deepEqual(seen, [0, 0, 0, 5, 15]);
+    assert.equal(p.cutWarn, 0, "after the +10 s the count starts over");
+  } finally { g.close(); }
+});

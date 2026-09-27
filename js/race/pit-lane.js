@@ -1410,10 +1410,17 @@ const PitLane = (function () {
       const plan = AiDrive.stintPlan({
         laps: n,
         lifeLaps: (cls) => G.tyres.planLaps(TyreModel.AI_CLASS[cls].life, n),
-        pitLossLaps, roll, stops: pin,
+        pitLossLaps, roll, stops: pin, twoCompound: twoCompoundRule(n),
       });
       if (plan) { plan.pitLossLaps = pitLossLaps; plan.pin = pin; }
       return plan;
+    }
+    /** FIA B6.3.6: a DRY race uses two dry compounds. Not below
+     *  TWO_COMPOUND_MIN_LAPS — the game's short races (3-7 laps) would be
+     *  one forced stop and nothing else. */
+    const TWO_COMPOUND_MIN_LAPS = 8;
+    function twoCompoundRule(laps) {
+      return laps >= TWO_COMPOUND_MIN_LAPS && TyreModel.treadFor(G.raceWeather) === 0;
     }
     /** The STRATEGY row's pin for this circuit: a stop count, or null for AUTO. */
     function pinKey() { const t = G.track, d = t && t.def; return "pitPlan." + ((d && d.id) || (t && t.id) || "track"); }
@@ -1518,7 +1525,8 @@ const PitLane = (function () {
       const firstLife = Math.max(1, G.tyres.planLaps(fittedLife, G.lapsTarget) * (1 - G.tyres.spent(c)));
       const stops = plan.pin != null ? Math.max(0, plan.pin - done) : null;
       const rel = AiDrive.stintPlan({ laps: lapsLeft, lifeLaps, pitLossLaps: plan.pitLossLaps || AiDrive.STRAT.PIT_LOSS_FALLBACK, roll: 0.5,
-                                      start: cls, firstLife, stops });
+                                      start: cls, firstLife, stops,
+                                      twoCompound: twoCompoundRule(G.lapsTarget), used: plan.seq.slice(0, done) });
       if (!rel) return false;
       const newNext = rel.stops > 0 ? lap - 1 + rel.lapsAt[0] : null;
       if (newNext != null && Math.abs(newNext - oldNext) < 2) return false;
