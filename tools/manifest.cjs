@@ -141,6 +141,7 @@ const FULL = [
   "js/ui/track-maps.js",
   "js/car/helmets.js",
   "js/car/car3d.js",
+  "js/input/tilt-roll.js",  // TiltRoll: the one roll-from-orientation function; input.js and controller.html both call it
   "js/input/input.js",
   "js/audio/engine.js",
   "js/audio/music-lib.js",
@@ -677,6 +678,25 @@ const LAZY_NET = [
   "js/net/session.js",
   "js/net/netplay.js",
   "js/net/lobby.js",
+  // PHONE AS CONTROLLER rides the same wire (rtc + handshake + rendezvous), so
+  // it loads with the stack and ships in the same precache group. Call-time
+  // binding only; controller.html's CONTROLLER subset below also carries it.
+  "js/input/phone-pad.js",
+];
+
+// controller.html (the PHONE AS CONTROLLER page, a root page like bench.html)
+// <script> subset, in order: the signalling + transport half of js/net, the
+// shared roll math, and the pad module. No game, no renderer, no store.
+const CONTROLLER = [
+  "js/core/log.js",
+  "js/net/bytes.js",
+  "js/net/nostr.js",
+  "js/net/rendezvous.js",
+  "js/net/sdp.js",
+  "js/net/transport.js",
+  "js/net/handshake.js",
+  "js/input/tilt-roll.js",
+  "js/input/phone-pad.js",
 ];
 // Eval-time pairs, moved verbatim from HARD_EDGES. Listed, not derived: unlike
 // the data hub these are a real graph (rendezvous needs nostr, handshake needs
@@ -999,7 +1019,7 @@ const MOVED = {
 
 module.exports = {
   MOVED,
-  CIRCUITS, CIRCUITS_DIR, FULL, CSS, CSS_PRELOAD, CSS_DEFERRED, SHELL_NOTES, CARVIEW, TRACK_VM, HARD_EDGES,
+  CIRCUITS, CIRCUITS_DIR, FULL, CSS, CSS_PRELOAD, CSS_DEFERRED, SHELL_NOTES, CARVIEW, CONTROLLER, TRACK_VM, HARD_EDGES,
   DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES, LAZY_RACE,
   LAZY_DATA, LAZY_DATA_EDGES, LAZY_NET, LAZY_NET_EDGES,
   SCENERY_DIR, LAZY_SCENERY, sceneryPath,

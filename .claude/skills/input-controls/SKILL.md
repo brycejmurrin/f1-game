@@ -12,8 +12,12 @@ Mixing the two is the usual miss: a sticky gamepad is not understeer.
 ## Source priority (`Input.steer()`)
 
 keyboard (held or returning to centre) > gamepad (deflected stick) >
-on-screen buttons (`steerMode "buttons"`) > tilt (fresh gyro) > canvas
-touch (drag from touch-down). Digital sources share `KEY_RAMP_IN` /
+PHONE AS CONTROLLER (`Input.remoteActive()`: a paired phone's sample under
+700 ms old, `js/input/phone-pad.js`) > on-screen buttons (`steerMode
+"buttons"`) > tilt (fresh gyro) > canvas touch (drag from touch-down). The
+phone's roll enters the SAME tilt pipeline (`remoteSample` writes what
+`onOrient` writes), so the TILT sliders and RECALIBRATE act on it; the roll
+math itself is `js/input/tilt-roll.js`, shared with `controller.html`. Digital sources share `KEY_RAMP_IN` /
 `KEY_RAMP_OUT` so arrows and finger-up are not a light switch.
 
 ## Assists
@@ -34,7 +38,11 @@ migration are different acts — both are usually needed. See
 ## Sharp edges
 
 - Gamepad has **no change events** — `Input.poll()` once per frame.
-- iOS tilt: `requestGyro()` only from a user gesture (the start tap).
+- iOS tilt: `requestGyro()` only from a user gesture (the start tap); the
+  phone page asks inside its CONNECT tap for the same reason.
+- A phone cannot pair over Bluetooth from a web page (no peripheral/HID role
+  in any browser): PHONE AS CONTROLLER rides the VS FRIEND wire — room code
+  on Nostr, WebRTC DataChannel — see `docs/MULTIPLAYER.md` §Phone as controller.
 - `UiLayers` must eat keys while a menu is up; a leak is this skill, a
   missing Escape path is **ui-menu-a11y**.
 - Escape that opens a `<dialog>` must `preventDefault()` on that keydown

@@ -217,7 +217,8 @@
     "js/net/snapshot.js",
     "js/net/session.js",
     "js/net/netplay.js",
-    "js/net/lobby.js"
+    "js/net/lobby.js",
+    "js/input/phone-pad.js"
   ],
     LAZY_NET_EDGES: [
     [

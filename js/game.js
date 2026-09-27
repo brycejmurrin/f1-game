@@ -9173,6 +9173,25 @@ if ($("pm-fullscreen")) {
 })();
 applyMirrorControls();
 $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
+// PHONE AS CONTROLLER (js/input/phone-pad.js, LAZY_NET): the button loads the
+// multiplayer stack the pairing rides on, then the module owns the pairing and
+// feeds Input.remoteSample(). A second press cancels; a lost phone re-arms it.
+let phonePad = null;
+$("pm-phonepad").onclick = () => {
+  const box = $("pm-phonepad-box"), status = $("pm-phonepad-status"), btn = $("pm-phonepad");
+  if (phonePad) { phonePad.cancel(); phonePad = null; box.hidden = true; btn.textContent = "PHONE AS CONTROLLER…"; return; }
+  box.hidden = false; btn.textContent = "STOP PAIRING"; status.textContent = "Loading…";
+  ensureNet().then((ok) => {
+    if (!ok) { status.textContent = "Could not load the pairing stack — check the connection."; return; }
+    $("pm-phonepad-url").textContent = PhonePad.padUrl("").replace(/#.*$/, "");
+    phonePad = PhonePad.host({
+      say: (t) => { status.textContent = t; },
+      qr: (url, code) => { LobbyCodes.paintQr($("pm-phonepad-qr-wrap"), $("pm-phonepad-qr"), url); $("pm-phonepad-code").textContent = code || ""; },
+      linked: () => { btn.textContent = "UNPAIR PHONE"; announce("PHONE CONNECTED — TILT TO STEER", 3, "info"); },
+      lost: () => { btn.textContent = "PHONE AS CONTROLLER…"; phonePad = null; announce("PHONE DISCONNECTED", 3, "warn"); },
+    });
+  });
+};
 keyBinds = KeyBinds.create(G);   // the KEYBOARD rows: rebindable driving keys (js/ui/key-binds.js)
 SettingsExport.create(G);   // SETTINGS FILE: download preferences as JSON (js/ui/settings-export.js)
 
