@@ -19,7 +19,7 @@ const els = {
   hudLimits: $("hud-limits"),
   flag: $("hud-flag"), minimap: $("minimap"),
   lights: $("lights"), announce: $("announce"), announceNum: $("announce-num"),
-  announceWho: $("announce-who"), announceText: $("announce-text"),
+  announceWho: $("announce-who"), announceText: $("announce-text"), announceLive: $("announce-live"),
   overlay: $("overlay"), audiostate: $("audiostate"),
   lighting: $("lighting"), camtune: $("camtune"), flyby: $("flyby"),
   select: $("select"), selTitle: $("select-title"), selTeams: $("sel-teams"),
@@ -1327,6 +1327,12 @@ function showAnnounce(msg, dur, kind) {
   if (kind && kind !== "race") els.announce.dataset.kind = kind;
   else delete els.announce.dataset.kind;
   els.announce.hidden = false;
+  // SCREEN READERS hear the card through #announce-live, an always-present,
+  // empty polite region: a region filled while hidden and unhidden in the same
+  // step is not announced by NVDA, JAWS or macOS VoiceOver. Cleared, then set a
+  // beat later so a repeated line is still a change (tetralogical.com/blog/2024/05/01).
+  const live = els.announceLive, said = els.announceWho.textContent + ": " + msg;
+  if (live) { live.textContent = ""; clearTimeout(showAnnounce._t); showAnnounce._t = setTimeout(() => { live.textContent = said; }, 60); }
   // A card of small type takes a beat longer to read than a billboard did, and
   // ANN_MIN_S is the floor under every caller's number — the shortest asked for
   // was 1.4 s, which nobody reads at racing speed.

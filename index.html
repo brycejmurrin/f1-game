@@ -501,8 +501,14 @@
      way a broadcast shows team radio. js/game.js showAnnounce fills all three.
      The plate is the car and never moves; the WHO line is the speaker. The number leads the
      status text on purpose: "63 · RUSSELL · RADIO · <words>" is how the card
-     reads aloud, which is how it reads by eye. -->
-<div id="announce" role="status" hidden><span id="announce-num"></span><span id="announce-body"><span id="announce-who"></span><span id="announce-text"></span></span></div>
+     reads aloud, which is how it reads by eye.
+     #announce-live is the SPOKEN twin: present and empty from boot, visually
+     hidden (css/hud.css), written by showAnnounce with the same WHO + words.
+     A region filled while hidden and unhidden in one step is not announced by
+     NVDA, JAWS or macOS VoiceOver
+     (tetralogical.com/blog/2024/05/01/why-are-my-live-regions-not-working/). -->
+<div id="announce-live" role="status" aria-live="polite" aria-atomic="true"></div>
+<div id="announce" aria-hidden="true" hidden><span id="announce-num"></span><span id="announce-body"><span id="announce-who"></span><span id="announce-text"></span></span></div>
 
 <!-- TOUCH-mode drag affordance: a ring at the point the finger went down, so
      the anchor of an otherwise invisible control is visible for a moment.
@@ -532,7 +538,7 @@
 </div>
 <div id="grp-shifts" class="dock-grp col">
   <button id="shift-up" class="touchbtn shiftbtn" hidden aria-label="Shift up">&#9650;<small>UP</small></button>
-  <button id="shift-down" class="touchbtn shiftbtn" hidden aria-label="Shift down">&#9660;<small>DN</small></button>
+  <button id="shift-down" class="touchbtn shiftbtn" hidden aria-label="DN, shift down">&#9660;<small>DN</small></button>
 </div>
 <div id="grp-steer" class="dock-grp row">
   <button id="btn-steer-left" class="touchbtn steerbtn" hidden aria-label="Steer left">&#9664;</button>
@@ -544,7 +550,7 @@
   <button id="btn-aero" class="touchbtn" hidden aria-label="Active aero">AERO</button>
 </div>
 
-<button id="btn-cam" hidden aria-label="Camera">CHASE</button>
+<button id="btn-cam" hidden aria-label="CHASE camera">CHASE</button>
 <button id="pausebtn" hidden aria-label="Pause">&#10074;&#10074;</button>
 <!-- Shown only while the HUD is hidden (body.hud-hidden): the one control that
      brings the HUD + buttons back. Tiny, top-right, out of the way. -->

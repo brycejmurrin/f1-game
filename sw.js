@@ -452,17 +452,6 @@ self.addEventListener("install", (event) => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
-    // NAVIGATION PRELOAD: the browser starts the navigation request in
-    // parallel with booting this worker, and the fetch handler below consumes
-    // it as event.preloadResponse — a cold worker no longer delays the shell's
-    // network leg by its own start-up. Enabled before the completeness gate:
-    // it is a registration setting, harmless on any generation, and a failure
-    // (unsupported browser) must not block activation.
-    // https://developer.mozilla.org/en-US/docs/Web/API/NavigationPreloadManager
-    try {
-      const np = self.registration && self.registration.navigationPreload;
-      if (np) await np.enable();
-    } catch (_) { /* unsupported or refused: navigations fetch as before */ }
     const name = await currentCacheName();
     const cache = await openCache(name);
     // No claim and no sweep for an incomplete generation — deliberate, and
@@ -520,18 +509,7 @@ self.addEventListener("fetch", (event) => {
     // which caches.match(req) ever hit again from the fallback below, which
     // reads "index.html". A query navigation is served from the network and,
     // offline, from the precached shell like everything else.
-    // A PLAIN navigation takes the navigation-preload response (enabled in
-    // activate) when there is one: the browser already has that request in
-    // flight, and ignoring it would fetch the shell twice. It is undefined when
-    // preload is off or unsupported, and a rejected preload falls back to the
-    // same no-store fetch as before. The `?b=` shell bust and version.json keep
-    // their own no-store fetch untouched; an unused preload is still settled so
-    // the browser does not cancel it with a console warning.
-    const fresh = () => fetch(req, { cache: "no-store" });
-    const preload = req.mode === "navigate" && event.preloadResponse ? Promise.resolve(event.preloadResponse) : null;
-    if (preload && isShellBust) event.waitUntil(preload.catch(() => undefined));
-    const first = preload && !isShellBust ? preload.then((r) => r || fresh(), () => fresh()) : fresh();
-    const network = first.then(async (res) => {
+    const network = fetch(req, { cache: "no-store" }).then(async (res) => {
       if (res && res.ok && !isVersion && url.search === "") {
         // The write is awaited (the waitUntil below depends on that) but must
         // never reject the chain: a version.json hiccup (deploy window,

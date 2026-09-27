@@ -791,32 +791,26 @@ test("activation drops the memoised order, and a cache the order never listed st
   assert.equal(await (await late.responsePromise).text(), "late");
 });
 
-// Navigation preload: https://developer.mozilla.org/en-US/docs/Web/API/NavigationPreloadManager
-test("activate enables navigation preload and a plain navigation consumes preloadResponse", async () => {
-  let enabled = 0;
-  const registration = { navigationPreload: { async enable() { enabled += 1; } } };
-  const fetched = [];
-  const net = async (request) => {
+// No navigation preload: a preloaded navigation goes through the HTTP cache, so a
+// just-deployed shell could come back stale. The shell keeps its no-store fetch.
+// https://developer.mozilla.org/en-US/docs/Web/API/NavigationPreloadManager
+test("the worker never enables navigation preload and a plain navigation keeps its no-store fetch", async () => {
+  assert.doesNotMatch(SW_SOURCE, /navigationPreload|preloadResponse/);
+  const seen = [];
+  const net = async (request, init) => {
     const url = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
-    fetched.push(url.pathname + url.search);
     if (url.pathname.endsWith("/version.json")) return new Response('{"build":321}', { status: 200 });
+    seen.push(init && init.cache);
     return new Response("network shell", { status: 200 });
   };
-  const h = createHarness({ fetchImpl: net, registration });
+  const h = createHarness({ fetchImpl: net });
   await h.lifecycleEvent("activate").done();
-  assert.equal(enabled, 1, "navigationPreload.enable() runs in activate");
-  fetched.length = 0;
+  seen.length = 0;
   const nav = h.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` },
     { preloadResponse: Promise.resolve(new Response("preloaded shell", { status: 200 })) });
-  assert.equal(await (await nav.responsePromise).text(), "preloaded shell");
+  assert.equal(await (await nav.responsePromise).text(), "network shell");
   await Promise.all(nav.lifetimes);
-  assert.ok(!fetched.includes("/"), "the shell is not fetched a second time beside the preload");
-  const plain = h.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` }, { preloadResponse: Promise.resolve(undefined) });
-  assert.equal(await (await plain.responsePromise).text(), "network shell", "no preload → the no-store fetch");
-  await Promise.all(plain.lifetimes);
-  const rej = h.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` }, { preloadResponse: Promise.reject(new Error("preload failed")) });
-  assert.equal(await (await rej.responsePromise).text(), "network shell", "a rejected preload falls back to the network");
-  await Promise.all(rej.lifetimes);
+  assert.deepEqual(seen, ["no-store"]);
 });
 
 test("the ?b= shell bust ignores the preload and keeps its own no-store fetch", async () => {
