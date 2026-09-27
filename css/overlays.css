@@ -1064,14 +1064,15 @@ body[data-density="compact"] #campicker {
 /* The QR is the one element on this screen whose job is to be machine-read, so
    it keeps its white quiet zone whatever the page theme is doing. An inverted
    QR is unreadable to a large share of scanners. */
-#vsfriend .vs-qr-wrap {
+#pm-phonepad-qr-wrap[hidden] { display: none; }
+#vsfriend .vs-qr-wrap, #pm-phonepad-qr-wrap {
   margin: calc(var(--gap) / 3) 0 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: calc(var(--gap) * 0.5);
 }
-#vsfriend .vs-qr-wrap canvas {
+#vsfriend .vs-qr-wrap canvas, #pm-phonepad-qr-wrap canvas {
   /* Sized to the SMALLER of three limits, because each one is real:
        320px — the raster NetQr.draw is asked for. It rounds DOWN to a whole
                number of canvas px per module, so a real invite lands near 276;

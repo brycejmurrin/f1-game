@@ -167,6 +167,7 @@
     "js/data/standings.js",
     "js/data/results.js",
     "js/data/live.js",
+    "js/data/real-race-tab.js",
     "js/data/hub.js"
   ],
     LAZY_DATA_EDGES: [
@@ -197,6 +198,10 @@
     [
       "js/data/live.js",
       "js/data/hub.js"
+    ],
+    [
+      "js/data/real-race-tab.js",
+      "js/data/hub.js"
     ]
   ],
     LAZY_NET: [
@@ -212,7 +217,8 @@
     "js/net/snapshot.js",
     "js/net/session.js",
     "js/net/netplay.js",
-    "js/net/lobby.js"
+    "js/net/lobby.js",
+    "js/input/phone-pad.js"
   ],
     LAZY_NET_EDGES: [
     [

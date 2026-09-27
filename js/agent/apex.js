@@ -65,7 +65,12 @@ const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "on
   // last episode's `.side`, which can be 0 (a previous "no lane" verdict) and
   // flip the same read to false — an AI overtake decision that depends on
   // which episode number it is.
-  "passPlan"];
+  "passPlan",
+  // 2026-09-27: the race-END state. `_coastHeld` (coast() after the flag) and
+  // `lastLap` (the lap-line write) are absent on a cold car; a car classified
+  // in episode 1 started episode 2 with both. finPos/retired/dnf* are DECLARED
+  // by makeCars, so gridUp() restores their declared values instead.
+  "_coastHeld", "lastLap"];
 // openf1()/jolpica() — F1API.request: the Data Hub's queued, 15 s-timed, retried GET with caching
 // off, so a console probe cannot bypass the rate-limit queue. api.js is LAZY_DATA — hence the refusal.
 function apiHook(base, path, fix) {
@@ -2735,7 +2740,12 @@ const api = {
     if (!G.track || !G.player) return false;
     IncidentSim.reset();   // else a live takeover re-imposes its crash pose over the teleport below, every tick
     if (seed !== undefined) G.seed = seed;
-    gridUp();
+    gridUp();   // also clears finPos / retired / dnf / dnfAt / dnfWhy
+    // RE-ARM retirements exactly as startRaceBody does, minus its raceIndex++:
+    // the round stays put, so the (seed, round, driver) hash replans the SAME
+    // failure every episode of one seed — a car retired in episode 1 is not
+    // still parked in episode 2, and a planned failure recurs deterministically.
+    if (G.session === "race") G.armReliability(G.cars);
     G.state = "race"; G.raceT = 0;
     resetStartLights(true);
     G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade

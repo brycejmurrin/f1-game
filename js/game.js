@@ -176,6 +176,7 @@ const DATA_READY = {
   "js/data/standings.js": () => typeof DataStandings !== "undefined",
   "js/data/results.js": () => typeof DataResults !== "undefined",
   "js/data/live.js": () => typeof DataLive !== "undefined",
+  "js/data/real-race-tab.js": () => typeof DataRealRace !== "undefined",
   "js/data/hub.js": () => typeof DataHub !== "undefined",
 };
 // Memoised on the PROMISE, not on a boolean: two fast taps on DATA must not
@@ -2185,6 +2186,7 @@ function gridUp(preOrder) {
     c.speed = 0; c.accSm = 0; c.corridorAccel = 0; c.prog = -(14 + i * 8); c.lap = 0; c.fuelLap = 0; c.fuelRestartLaps = 0; c.energy = 1; c._progGift = 0;   // a car on the grid is pulling nothing — apex.js reset() has the full list and why
     c.otT = 0; c.otCool = 0; c.lapTime = 0; c.best = Infinity; c.totalT = 0;
     c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
+    c.finPos = 0; c.retired = false; c.dnf = null; c.dnfAt = null; c.dnfWhy = null; delete c._coastHeld;   // last race's classification: makeCars' values; a race re-arms via armReliability
     c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.qualiCut = false; c.penalty = 0; c.offT = 0; c.hits = 0; c.hitSev = 0; c.wallHits = 0; c.errCount = 0;   // mistakes THIS race — the instrument's denominator, cleared only by a NEW race
     c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.wallT = 0; c.wasOnWall = false;
     c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.contactT = 0; c.lane = c.lanePref;   // BOTH sides of a real conflict: lane is damped state, not a constant, and contactT DECAYS — unlike the towing/wheelLock beside it, a re-grid is the only thing that clears it
@@ -3201,7 +3203,7 @@ function endRace(forcedOrder) {
     else SeasonCal.save(season);   // the sprint's points AND its stage, one guarded write
   }
   // A one-off GP's driven quali order stays persisted (quali-persist contract);
-  // quali's qualiTrack stamp refuses it on a different circuit.
+  // quali's qualiTrack + qualiMode stamps refuse it on another circuit or mode.
   dbgCam = null;
   buildResults(order, { sprint: wasSprint, duel: duelOn() });   // endRace's own read: scored() is stale after a season save conflict
   els.results.hidden = false;
@@ -3594,6 +3596,7 @@ const G = {
   referencePole: () => quali.referencePole(),
   redFlagRestart,
   get daily() { return daily; },
+  holdCaution: (level, cause) => raceCtl.hold(level, cause),   // a scripted flag (js/race/real-race.js); 0 releases it
   get ttDistance() { return TT_LAPS; },   // the time-trial distance a daily session stages (ttLaps is the session's lap list)
   // CHANGEABLE conditions: the weather walks from the chip's start to a
   // target the host decides (wxArcPlan) — see startRace / WeatherArc.planFor.
@@ -3636,6 +3639,7 @@ const records = SessionRecords.create(G);
 const coach = DrivingCoach.create(G);
 const raceRadio = RaceRadio.create(G);    // the engineer's race awareness + TV commentary (js/race/race-radio.js)
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
+const realRace = RealRace.create(G);      // a real Grand Prix replayed from its timing script (js/race/real-race.js)
 titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js/ui/title-menu.js)
 const onboard = Onboard.create(G);        // first-run coach marks (js/ui/onboard.js)
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
@@ -4063,7 +4067,7 @@ function quitToMenu() {
   // left the flyby active() for the session — capture listeners attached, and
   // menuBlank and the per-car draw break both gate on !active(). Idempotent.
   loadingScreen.stop();
-  state = "menu"; paused = false; raceCtl.reset(); wxArc.endSession(); daily.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
+  state = "menu"; paused = false; raceCtl.reset(); wxArc.endSession(); daily.stop(); realRace.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
   // A netplay lights-out instant is consumed by the countdown (the
   // `netStart = null` at its end). Quitting BEFORE that consumption stranded
   // it, and the next SOLO race read an `at` already in the past: countT
@@ -4111,6 +4115,7 @@ function quitToMenu() {
   const hasSeason = SeasonCal.hasProgress(season) && season.round < SeasonCal.rounds();
   $("mb-standings").hidden = !hasSeason;
   refreshCareerButton();
+  consumeGhostHash();   // a #ghost= link deferred while racing lands now (no-op without one)
 }
 
 
@@ -4128,6 +4133,7 @@ function update(dt) {
   // Camera cycling works during the countdown and the race (set your view before
   // lights-out). Edge-triggered via the C key or the CAM button.
   if ((state === "race" || state === "count") && Input.consumeCameraCycle()) cycleCam();
+  realRace.update(dt);   // every state: it arms in the countdown, places a mid-race jump-in on the first green frame, steps the script in the race, and stands down at the results
   /* MANUAL RECOVER. The auto-rescue only fires on its own terms (held throttle
      and no movement, wrong way, off-track for long enough), so a car wedged
      somewhere it considers fine — nose-in against a barrier, facing the right
@@ -8562,6 +8568,8 @@ function openTimeTrial(selectDaily) {
 }
 $("mb-tt").onclick = () => openTimeTrial(false);
 async function consumeGhostHash() {
+  // A ghost link landing MID-RACE waits, fragment intact, for the menu (quitToMenu re-reads it) — as #353's invite link does.
+  if (UiLayers.inRace()) { Log.info("game", "ghost link deferred: racing"); return null; }
   const shared = await GhostShare.consumeHash({
     notify: (message, result) => announce(message, result && result.ok ? 3 : 4, result && result.ok ? "info" : "warning"),
   });
@@ -9193,6 +9201,25 @@ if ($("pm-fullscreen")) {
 })();
 applyMirrorControls();
 $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
+// PHONE AS CONTROLLER (js/input/phone-pad.js, LAZY_NET): the button loads the
+// multiplayer stack the pairing rides on, then the module owns the pairing and
+// feeds Input.remoteSample(). A second press cancels; a lost phone re-arms it.
+let phonePad = null;
+$("pm-phonepad").onclick = () => {
+  const box = $("pm-phonepad-box"), status = $("pm-phonepad-status"), btn = $("pm-phonepad");
+  if (phonePad) { phonePad.cancel(); phonePad = null; box.hidden = true; btn.textContent = "PHONE AS CONTROLLER…"; return; }
+  box.hidden = false; btn.textContent = "STOP PAIRING"; status.textContent = "Loading…";
+  ensureNet().then((ok) => {
+    if (!ok) { status.textContent = "Could not load the pairing stack — check the connection."; return; }
+    $("pm-phonepad-url").textContent = PhonePad.padUrl("").replace(/#.*$/, "");
+    phonePad = PhonePad.host({
+      say: (t) => { status.textContent = t; },
+      qr: (url, code) => { LobbyCodes.paintQr($("pm-phonepad-qr-wrap"), $("pm-phonepad-qr"), url); $("pm-phonepad-code").textContent = code || ""; },
+      linked: () => { btn.textContent = "UNPAIR PHONE"; announce("PHONE CONNECTED — TILT TO STEER", 3, "info"); },
+      lost: () => { btn.textContent = "PHONE AS CONTROLLER…"; phonePad = null; announce("PHONE DISCONNECTED", 3, "warn"); },
+    });
+  });
+};
 keyBinds = KeyBinds.create(G);   // the KEYBOARD rows: rebindable driving keys (js/ui/key-binds.js)
 SettingsExport.create(G);   // SETTINGS FILE: download preferences as JSON (js/ui/settings-export.js)
 

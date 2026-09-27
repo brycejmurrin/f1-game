@@ -74,6 +74,12 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // grid does not converge on one plan, strategies mix, and the reactive
   // rules (free stop, weather, spent set) fire in the right order. ~0.1 s.
   "tests/unit/ai-strategy.test.mjs",
+  // ...and the REAL RACE: the OpenF1 timing of the 2026 Azerbaijan GP
+  // (tests/fixtures/openf1-baku-2026-race.json) becomes a race script, and the
+  // director lays it over a stub field — grid, plans, the pace loop, the
+  // flag windows. Pure rules in a VM, ~0.3 s together.
+  "tests/unit/real-race-script.test.mjs",
+  "tests/unit/real-race.test.mjs",
   // ...and the race engineer's ladder: it ADVISES and never arms a stop,
   // graining and blistering say different things (one heals, one does not),
   // the axle call names an end of the car, and it does not nag. ~0.1 s.
@@ -140,6 +146,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // in 0.1 s: the pedal is the one control that can be left ON, so the drop on
   // blur/reset belongs in the edit loop rather than in a browser group.
   "tests/unit/throttle-latch.test.mjs",
+  // ...and PHONE AS CONTROLLER: the wire codec, the shared roll math, and a
+  // phone sample reaching Input's tilt pipeline over the in-process loopback
+  // transport — same VM harness, no browser, ~0.3 s.
+  "tests/unit/phone-pad.test.mjs",
   // ...and the two steer-tuning tables that MUST agree: every PRESET bundle
   // lands exactly on its FEEL level, or clicking RELAX reads CUSTOM. Stated
   // in comments and checked by nothing until it drifted for a week. ~0.05 s.

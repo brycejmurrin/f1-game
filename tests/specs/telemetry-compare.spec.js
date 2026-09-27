@@ -28,7 +28,9 @@ async function dataReady(page) {
   await page.addScriptTag({ url: "/js/core/mat4.js" });
   // hub.js binds Dom.el at evaluation time, just as the app does.
   await page.addScriptTag({ url: "/js/ui/dom.js" });
-  for (const u of ["api", "telemetry", "export", "schedule", "standings", "results", "live", "hub"])
+  // The manifest's LAZY_DATA in order — every tab module, then the hub, which
+  // calls each Data*.create() at evaluation time (tools/manifest.cjs LAZY_DATA_EDGES).
+  for (const u of ["api", "telemetry", "export", "schedule", "standings", "results", "live", "real-race-tab", "hub"])
     await page.addScriptTag({ url: "/js/data/" + u + ".js" });
   page.off("pageerror", onPageError);
   expect(scriptErrors, "standalone data scripts initialize without errors").toEqual([]);

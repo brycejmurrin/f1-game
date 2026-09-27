@@ -226,3 +226,33 @@ READY are rate-limited per connection (five a second each; the rest are
 dropped). Its transport factory is
 injectable: an RTCPeerConnection whose ICE never completes spins forever, so a
 test that builds one HANGS rather than fails (__apex.lobbyFake)
+
+## Phone as controller (`js/input/phone-pad.js`, `controller.html`)
+
+The same wire, one seat, no race state: Settings › CONTROLS › PHONE AS
+CONTROLLER mints a room code, paints a QR for `controller.html#pad=CODE`, and
+hosts the room exactly as VS FRIEND does (`NetTransport.rtc` → `NetHandshake.createInvite`
+→ `NetRendezvous.hostRoom`). The phone page joins with `swap` + `acceptInvite`
+(2.5 s gather, like the lobby's room-code guest). Once the DataChannels open:
+
+| Channel | Direction | Payload |
+|---|---|---|
+| `state` (unreliable) | phone → desktop | `[1, seq, rollDeg\|null, thr, brk, heldBits]` on every `deviceorientation` (≤ ~66 Hz) and a 100 ms heartbeat; the desktop drops any `seq` older than the last applied |
+| `event` (reliable) | phone → desktop | `{t:"ev", k}` — `shiftUp shiftDown overtake boost aero camera recover radio calib pause` |
+| `event` (reliable) | desktop → phone | `{t:"hap", ms}` — every `Input.vibrate()` while the phone is the live source |
+
+`PhonePad.link()` hands each sample to `Input.remoteSample()`, which writes the
+same `tiltRaw`/`tiltSmoothed` the local sensor does, so the One-Euro filter,
+dead zone, `MAX_TILT` and slew — every TILT slider — and RECALIBRATE act on the
+phone. The source is freshness-gated (`REMOTE_STALE_MS` 700): it sits between
+the gamepad and the on-screen modes in `Input.steer()` and simply falls out
+when the phone stops sending. Roll on both ends is `TiltRoll.rollDeg()`
+(`js/input/tilt-roll.js`). Bluetooth is not an option for a web page: no
+browser lets a phone advertise as a peripheral or an HID gamepad.
+
+Deploy notes: `controller.html` is a ROOT page (`pages.yml` stages it by name;
+`ci-coverage.test.mjs` pins that) whose tags are hashed by `bump-cache.mjs`
+like the shell's; its script list is `CONTROLLER` in `tools/manifest.cjs`,
+written by `gen-shell.mjs`. The phone runs no service worker and no store.
+Tests: `tests/unit/phone-pad.test.mjs` (both halves over the loopback transport).
+

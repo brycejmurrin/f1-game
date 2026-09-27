@@ -138,6 +138,13 @@ const RaceControl = (function () {
     // the standing restart (redFlagRestart), so its hold is one lap lower and
     // the first crossing after the resumption re-enables it (B7.2.2b).
     let otHoldLap = null;
+    // A SCRIPTED flag (js/race/real-race.js replays a real race's safety-car
+    // windows): while `held` is above GREEN the flag flies at least that high
+    // regardless of the hazard picture, exempt from the SC cap and the MIN_HOLD
+    // drop. Escalations above it (a real pile-up going RED) still fly; releasing
+    // it (hold(0)) hands the flag back to the hazard loop, which lowers it at
+    // its next query. Never the red flag: that runs its own procedure.
+    let held = 0, heldCause = "";
     // Last state broadcast to a guest, so only CHANGES are sent.
     let sent = "";
     const savedCaution = store.get("caution", false);
@@ -145,6 +152,7 @@ const RaceControl = (function () {
 
     function reset() {
       caution = blank();
+      held = 0; heldCause = "";
       queryT = 0;
       capHoldT = 0; capHoldLevel = 0;
       restartWanted = false;
@@ -221,8 +229,21 @@ const RaceControl = (function () {
         return;
       }
       if (!G.netPlay.ownsRaceControl()) return;
-      if (!enabled) return;
+      // A held flag flies whether or not the hazard loop is switched on: the
+      // player's CAUTIONS setting governs debris, not a race replayed by script.
+      if (held > caution.level && caution.level !== 4) {
+        const prev = caution.level;
+        caution.level = held; caution.sector = -1; caution.frac = 0;
+        caution.cause = heldCause; caution.sinceT = 0; caution.phase = "";
+        flag(prev, held);
+        publish();
+      }
       if (caution.level !== 0) caution.sinceT += dt;
+      // A RED FLAG RUNS ITS PROCEDURE WHATEVER THE SWITCH SAYS. The hazard loop
+      // can only raise one while enabled, but apply() (a scripted red, a host's)
+      // can land one with CAUTIONS off — and a red that never ages never asks
+      // for its restart, which held the whole field at 2 % of top speed until
+      // the player quit. The switch gates the hazard loop below, not this.
       if (caution.level === 4) {
         // The red procedure: no hazard query, no cap — it ends in exactly ONE
         // restart request. The re-arm hold then keeps the same (not yet
@@ -237,13 +258,14 @@ const RaceControl = (function () {
         publish();
         return;
       }
+      if (!enabled) return;
       if (!DebrisWorld.active()) {
         // Debris inactive mid-flag: the LEVEL freezes (test-asserted — see
         // "debris going inactive mid-race freezes a flying flag") but it keeps
         // AGEING, so the hard cap still fires. Before this, a trapped Rapier
         // world (debrisworld sets _active=false permanently) pinned a safety
         // car — and disabled OVERTAKE — for the rest of the race.
-        capDropIfExpired();
+        if (!(held && caution.level <= held)) capDropIfExpired();
         return;
       }
       queryT += dt;
@@ -279,7 +301,8 @@ const RaceControl = (function () {
       // piece of debris held a safety car for the rest of the race.
       // capHold suppresses an instant re-raise from the SAME stale picture;
       // genuinely new hazards re-arm after it expires.
-      if (capDropIfExpired()) return;
+      if (held && desired < held) { desired = held; dsector = -1; dfrac = 0; dcause = heldCause; }
+      if (!(held && caution.level <= held) && capDropIfExpired()) return;
       if (capHoldT > 0) {
         capHoldT = Math.max(0, capHoldT - QUERY_EVERY);
         if (capHoldT === 0) capHoldLevel = 0;
@@ -290,7 +313,7 @@ const RaceControl = (function () {
         // never mask an ESCALATION: debris growing from a local yellow into a
         // safety-car pile has to fly, or the race runs green through a real
         // SC-worthy event for the length of the hold.
-        if (capHoldT > 0 && desired <= capHoldLevel) { publish(); return; }
+        if (capHoldT > 0 && desired <= capHoldLevel && desired !== held) { publish(); return; }
         const prev = caution.level;
         caution.level = desired; caution.sector = dsector; caution.frac = dfrac;
         caution.cause = dcause; caution.sinceT = 0;
@@ -332,6 +355,29 @@ const RaceControl = (function () {
       return true;
     }
 
+    // Fly a flag by script (level 1-3; 0 releases). Returns the held level.
+    // Lowering or releasing takes effect NOW: the script's windows are laps,
+    // not hazard flicker, so a flag the hold itself raised (level <= the old
+    // hold) steps straight down to the new level rather than waiting on the
+    // hazard loop — which with debris off, or the switch off, never lowers it.
+    function hold(level, cause) {
+      const prevHeld = held;
+      held = Math.max(0, Math.min(3, level | 0));
+      heldCause = held ? (typeof cause === "string" && cause ? cause.slice(0, 64) : LABEL[held]) : "";
+      if (held) Log.info("game", "RaceControl hold " + LABEL[held] + " (" + heldCause + ")");
+      if (held < caution.level && caution.level <= prevHeld && caution.level < 4) {
+        if (held === 0) dropToGreen();
+        else {
+          const prev = caution.level;
+          caution.level = held; caution.sector = -1; caution.frac = 0;
+          caution.cause = heldCause; caution.sinceT = 0; caution.phase = "";
+          flag(prev, held);
+        }
+        publish();
+      }
+      return held;
+    }
+
     // The one-shot restart request at the end of a red-flag procedure.
     function takeRestart() { const r = restartWanted; restartWanted = false; return r; }
 
@@ -366,7 +412,7 @@ const RaceControl = (function () {
     }
 
     return {
-      update, apply, reset, setEnabled, otEnabled, info,
+      update, apply, reset, setEnabled, otEnabled, info, hold,
       get level() { return caution.level; },
       takeRestart, clearHold,
       get enabled() { return enabled; },
