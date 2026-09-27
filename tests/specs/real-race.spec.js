@@ -76,9 +76,11 @@ test.describe("real race", () => {
     expect(by("RUS").stops).toEqual([2]);   // the lap-3 stop of a 6-lap race lands on lap 2 of 3
     expect(by("VER").start).toBe("hard");
     expect(by("LEC").start).toBe("soft");
-    // The scripted safety car: the leader reaches lap 2 -> SC held; lap 3 -> released. Drive the
-    // clock by moving the leader rather than racing: setLap moves the player, who sits P2.
-    await page.evaluate(() => window.__apex.setLap(2));
+    // The scripted safety car: real lap 2 of 6 is sim lap 1 of 3 (the windows map in
+    // proportion), so the field reaching lap 1 -> SC held; lap 2 -> released. Drive the
+    // clock by moving a car's lap counter rather than racing: setLap moves the player, and
+    // the director reads the HIGHEST lap any running car is on.
+    await page.evaluate(() => window.__apex.setLap(1));
     await page.evaluate(() => window.__apex.step(1 / 60, 3));
     const flag = await page.evaluate(() => window.__apex.caution());
     expect(flag.level).toBe(3);
@@ -86,7 +88,7 @@ test.describe("real race", () => {
     // The hazard loop would drop an applied flag after its MIN_HOLD; a held one survives 8 s of green picture.
     await page.evaluate(() => window.__apex.step(1 / 30, 240));
     expect((await page.evaluate(() => window.__apex.caution())).level).toBe(3);
-    await page.evaluate(() => window.__apex.setLap(3));
+    await page.evaluate(() => window.__apex.setLap(2));
     await page.evaluate(() => window.__apex.step(1 / 30, 240));
     expect((await page.evaluate(() => window.__apex.caution())).level).toBe(0);
   });
