@@ -15,6 +15,7 @@ const NetLobby = (function () {
     // reopen once that connection is up (see onJoiner: one negotiation in
     // flight at a time). Null when we are not hosting a room.
     let codeReopen = null;
+    let _answersSeen = null;   // {code, set}: answers already taken for this room code (see codeHost)
     let codeReopenTimer = null;        // the pending 250 ms reopen — owned, cancellable
     const mintGuestId = () => "g" + (++nextGuestId);
     let pendingId = null;
@@ -1291,7 +1292,13 @@ const NetLobby = (function () {
       codeWait = { cancelled: false };
 
       if (!NetRendezvous.usingPrivateRelay()) {
-        const answersSeen = new Set();
+        // SURVIVES A REOPEN of the same code. A guest re-posts its sealed answer
+        // 3x over ~3.6 s (nostr.js), and a room reopened 250 ms after that guest
+        // connected started with an empty set — it took the repost against the
+        // NEW offer, closed the room for an attempt that could never connect,
+        // and the next friend with the code found nothing. A fresh room starts clean.
+        if (!opts.quiet || !_answersSeen || _answersSeen.code !== code) _answersSeen = { code, set: new Set() };
+        const answersSeen = _answersSeen.set;
         const sub = await NetRendezvous.hostRoom({
           code, token: codeWait,
           mine: invite.code,
