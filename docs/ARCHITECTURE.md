@@ -272,7 +272,7 @@ _221 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `tilt-roll.js` | `TiltRoll` | tag | TiltRoll — the one roll-from-orientation function, in degrees, shared by input.js and controller.html. deviceorientation reports beta (front-back) and gamma… |
 | `input.js` | `Input` | tag | Input: keyboard / gamepad / tilt / touch for Apex 26. |
 | `steer-tuning.js` | `SteerTuning` | tag | steering-tuning sliders, presets and macro levels for js/game.js (the ADVANCED pause-menu page). |
-| `phone-pad.js` | `PhonePad` | LAZY_NET | PhonePad — PHONE AS CONTROLLER: a phone on the sofa steers the game on the screen by tilting, over the multiplayer wire. |
+| `phone-pad.js` | `PhonePad` | LAZY_NET | PhonePad — PHONE AS CONTROLLER: a phone on the sofa steers the game on the screen by tilting, over the multiplayer wire, and shows a steering-wheel dash fed… |
 
 **`js/audio/`**
 
