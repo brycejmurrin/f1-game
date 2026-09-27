@@ -361,7 +361,7 @@ test.describe("multiplayer session", () => {
       A.netStartArm(1000);
       A.netHostStart();
       let named = null, t = 1000;
-      for (; t <= 45000; t += 250) {
+      for (; t <= 70000; t += 250) {
         A.netTick(t); A.step(1 / 60, 1);
         if (named == null && A.net().startPending) named = t;
         if (A.info().state === "race") break;
@@ -369,9 +369,10 @@ test.describe("multiplayer session", () => {
       return { named, state: A.info().state };
     });
 
-    // Waited out the full ARM_WAIT (20 s from the first tick) and no longer.
-    expect(out.named).toBeGreaterThanOrEqual(21000);
-    expect(out.named).toBeLessThan(22000);
+    // Waited out the full ARM_WAIT (45 s from the first tick, b1946941b: a guest
+    // in another app cannot arm until it is back) and no longer.
+    expect(out.named).toBeGreaterThanOrEqual(46000);
+    expect(out.named).toBeLessThan(47000);
     expect(out.state).toBe("race");             // and the race did eventually start
   });
 
