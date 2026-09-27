@@ -713,3 +713,74 @@ test("makeAnswer and acceptAnswer refuse a malformed code before they need a tra
     assert.equal(c.error, "no_transport", "a well-shaped code with no connection is the transport's problem");
   } finally { h.lobby.cancel(); }
 });
+
+// ── 2026-09-27 audit: the room flag, the room's close message, a pending close, a throwing invite ──
+function closableHarness(extra = {}) {
+  const made = [], closers = [], flags = [];
+  const h = harness(Object.assign({
+    scanFactory: () => ({ stop() {}, start() {} }), teams: TWO_TEAMS,
+    netSession: fakeNetSession(made), transportStatus: "open",
+  }, extra));
+  h.lobby.setTransportFactory(() => {
+    const t = { status: "open", onClose(fn) { closers.push(fn); }, close() { t.status = "closed"; } };
+    return t;
+  });
+  h.G.setNetRoom = (v) => flags.push(!!v);
+  return { h, made, closers, flags };
+}
+
+test("CLOSE from the waiting room clears the race-settings room flag", async () => {
+  // openRoom() set netRoom; only a race start cleared it. CLOSE left it set, so
+  // the next solo RACE → START re-showed the hidden lobby ("CONFIRM FOR LOBBY").
+  const { h, made, flags } = closableHarness();
+  try {
+    await h.lobby.join();
+    h.lobby.watchForOpen();
+    for (let i = 0; i < 40 && !made.length; i++) await new Promise((r) => setTimeout(r, 50));
+    assert.equal(made.length, 1);
+    assert.equal(flags[flags.length - 1], true, "the room set the flag");
+  } finally { h.lobby.cancel(); }
+  assert.equal(flags[flags.length - 1], false, "cancel() cleared it");
+});
+
+test("the host leaving the ROOM says so, drops the room flag and shows the pick — not 'rivals are now AI'", async () => {
+  const { h, made, closers, flags } = closableHarness();
+  try {
+    await h.lobby.join();
+    h.lobby.watchForOpen();
+    for (let i = 0; i < 40 && !made.length; i++) await new Promise((r) => setTimeout(r, 50));
+    assert.equal(closers.length, 1, "the connected transport registered its close handler");
+    closers[0]("transport");
+    assert.match(h.status.textContent, /left the room/i);
+    assert.doesNotMatch(h.status.textContent, /rivals are now AI/i, "there is no race to keep racing");
+    assert.equal(flags[flags.length - 1], false, "the room is over: the flag is dropped");
+    assert.equal(h.elements.get("vs-pick").hidden, false, "back to HOST / JOIN");
+  } finally { h.lobby.cancel(); }
+});
+
+test("a transport that never connected closes silently: the watcher's diagnosis is not overwritten", async () => {
+  // waitForOpen() said WHICH failure it was, then dropPending() closed the
+  // transport, whose close event ran the peer-leave handler synchronously and
+  // replaced that line with "Connection closed." before a frame showed it.
+  const { h, closers } = closableHarness();
+  try {
+    await h.lobby.join();                          // a pending guest transport, never connected
+    assert.equal(closers.length, 1);
+    h.status.textContent = "Could not connect after 60s. The invite probably went stale.";
+    closers[0]("local");
+    assert.match(h.status.textContent, /went stale/, "the diagnosis stands");
+  } finally { h.lobby.cancel(); }
+});
+
+test("createInvite throwing becomes a typed result, not an unhandled rejection", async () => {
+  const h = harness({
+    scanFactory: () => ({ stop() {}, start() {} }),
+    handshake: { createInvite: async () => { throw new Error("InvalidStateError: closed"); } },
+  });
+  try {
+    const res = await h.lobby.host();
+    assert.equal(res.ok, false);
+    assert.equal(res.error, "invite_failed");
+    assert.match(h.status.textContent, /Could not create an invite/);
+  } finally { h.lobby.cancel(); }
+});
