@@ -167,6 +167,7 @@
     "js/data/standings.js",
     "js/data/results.js",
     "js/data/live.js",
+    "js/data/real-race-tab.js",
     "js/data/hub.js"
   ],
     LAZY_DATA_EDGES: [
@@ -196,6 +197,10 @@
     ],
     [
       "js/data/live.js",
+      "js/data/hub.js"
+    ],
+    [
+      "js/data/real-race-tab.js",
       "js/data/hub.js"
     ]
   ],
