@@ -1300,28 +1300,79 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
    preview + preset swatches sit above/beside the selects so dual accents are
    obvious without leaving the sheet. */
 #pm-panel-appearance .pm-accent-preview {
-  display: flex;
-  align-items: center;
+  /* A MOCK of the two places the choices land: a menu card on the left, the
+     race HUD's plate/lap/speed on the right. Stacked on a narrow sheet. */
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
   gap: calc(var(--gap) * 0.75);
   margin: 0 0 calc(var(--gap) * 0.75);
   padding: calc(var(--gap) * 0.65) calc(var(--gap) * 0.75);
   border-radius: var(--r-md);
-  background: var(--plate);
+  background: var(--surf-1);
   border: 1px solid var(--plate-line);
-}
-#pm-panel-appearance .pm-accent-preview-btn {
-  flex: 1 1 auto;
-  min-width: 0;
   pointer-events: none;
 }
+body[data-width="narrow"] #pm-panel-appearance .pm-accent-preview { grid-template-columns: minmax(0, 1fr); }
+#pm-panel-appearance .pm-look-menu {
+  display: flex; flex-direction: column; gap: calc(var(--gap) * 0.35);
+  padding: calc(var(--gap) * 0.5);
+  border-radius: var(--r-sm);
+  background: var(--panel);
+  border: 1px solid var(--card-line);
+  border-top: 2px solid var(--red);
+}
+#pm-panel-appearance .pm-look-kicker { font-size: var(--fs-1); font-weight: 800; letter-spacing: var(--ls-4); color: var(--red); }
+#pm-panel-appearance .pm-look-title { font-size: var(--fs-5); font-weight: 800; font-style: italic; color: var(--text); }
+#pm-panel-appearance .pm-look-chips { display: flex; gap: calc(var(--gap) * 0.4); }
+#pm-panel-appearance .pm-look-chip {
+  font-size: var(--fs-1); font-weight: 700; letter-spacing: var(--ls-3);
+  padding: calc(var(--gap) * 0.2) calc(var(--gap) * 0.6);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--plate-line);
+  color: var(--dim);
+  background: var(--plate);
+}
+#pm-panel-appearance .pm-look-chip[data-on] { color: var(--text); border-color: var(--red); background: var(--plate-on); }
+#pm-panel-appearance .pm-accent-preview-btn {
+  /* The real .bigbtn fill and skew, sized to the card: its own width, margin
+     and red bloom belong to a full menu, not a thumbnail of one. */
+  width: auto;
+  min-width: 0;
+  min-height: 0;
+  height: var(--chip-h);
+  margin: calc(var(--gap) * 0.25) 0 0;
+  padding: 0 calc(var(--gap) * 0.8);
+  display: flex;
+  align-items: center;
+  font-size: var(--fs-3);
+  box-shadow: var(--edge);
+}
+#pm-panel-appearance .pm-look-hud {
+  display: flex; flex-wrap: wrap; align-items: center; align-content: center;
+  gap: calc(var(--gap) * 0.5);
+  padding: calc(var(--gap) * 0.5);
+  border-radius: var(--r-sm);
+  background: var(--look-hud-bg);
+}
+#pm-panel-appearance .pm-look-lap,
+#pm-panel-appearance .pm-look-spd {
+  font-family: var(--font-hud);
+  font-style: italic;
+  color: var(--look-hud-ink);
+  text-shadow: var(--look-hud-halo);
+  font-variant-numeric: tabular-nums;
+}
+#pm-panel-appearance .pm-look-lap { font-size: var(--fs-2); border-left: 3px solid var(--accent); padding-inline-start: calc(var(--gap) * 0.4); }
+#pm-panel-appearance .pm-look-spd { font-size: var(--fs-6); font-weight: 800; margin-inline-start: auto; }
+#pm-panel-appearance .pm-look-unit { font-size: var(--fs-1); font-weight: 700; margin-inline-start: calc(var(--gap) * 0.25); color: var(--look-hud-dim); }
 #pm-panel-appearance .pm-accent-preview-hud {
   flex: 0 0 auto;
-  min-width: calc(var(--chip-h) * 1.6);
+  min-width: calc(var(--chip-h) * 1.1);
   height: var(--chip-h);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0 calc(var(--gap) * 0.75);
+  padding: 0 calc(var(--gap) * 0.6);
   border-radius: var(--r-sm);
   background: var(--accent);
   color: var(--accent-ink);
@@ -1330,39 +1381,49 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   letter-spacing: var(--ls-2);
   border: 1px solid color-mix(in oklab, var(--accent-ink) 28%, transparent);
 }
+#pm-panel-appearance .pm-look-h {
+  margin: calc(var(--gap) * 1.1) 0 calc(var(--gap) * 0.4);
+  padding-bottom: calc(var(--gap) * 0.25);
+  border-bottom: 1px solid var(--card-line);
+  font-size: var(--fs-1); font-weight: 800; letter-spacing: var(--ls-4);
+  color: var(--dim);
+}
 #pm-panel-appearance .pm-accent-swatches {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  align-items: center;
+  /* Two even rows of four, every width: 5+3 with a ragged, right-pushed second
+     row read as two different pickers (portrait survey, 2026-09-26). */
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: calc(var(--gap) * 0.5);
   margin: calc(var(--gap) * -0.25) 0 calc(var(--gap) * 0.35);
 }
 /* Beat `.pm-group button { width:100%; height:var(--tap) }` — chips are
-   colour samples, not full-row actions (same carve-out as `.as-tbtn`). */
+   colour samples, not full-row actions (same carve-out as `.as-tbtn`). A NAMED
+   pill: BRAND, TEAM and CUSTOM can all be red, so the name tells them apart. */
 #pmsettings-inner #pm-panel-appearance .pm-accent-chip {
-  flex: 0 0 auto;
-  width: max(var(--chip-h), calc(var(--tap-min) * 0.72));
-  height: max(var(--chip-h), calc(var(--tap-min) * 0.72));
+  width: 100%;
+  height: var(--chip-h);
   min-width: 0;
   min-height: 0;
-  padding: 0;
+  padding: 0 calc(var(--gap) * 0.25);
   border-radius: var(--r-sm);
   border: 1px solid var(--plate-line);
-  background: var(--chip, var(--red));
+  background: var(--chip, var(--plate));
+  color: var(--chip-ink, var(--text));
   cursor: pointer;
-  font-size: 0;
-  line-height: 0;
+  font-size: var(--fs-1);
+  font-weight: 800;
+  letter-spacing: var(--ls-2);
+  text-align: center;
   white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 #pmsettings-inner #pm-panel-appearance .pm-accent-chip[aria-selected="true"] {
   border-color: var(--text);
-  box-shadow: var(--edge);
+  box-shadow: var(--edge), 0 0 0 2px var(--text);
 }
-#pmsettings-inner #pm-panel-appearance .pm-accent-chip-custom {
-  /* Token-only rainbow so CUSTOM reads as "picker" without raw palette literals. */
-  background: conic-gradient(from 0.25turn, var(--red), var(--accent), var(--red));
+#pmsettings-inner #pm-panel-appearance .pm-accent-chip-custom:not([aria-selected="true"]) {
+  border-style: dashed;
 }
 #pm-panel-appearance .pm-accent-custom > div {
   display: flex; align-items: center; justify-content: flex-end; gap: calc(var(--gap) * 0.5);
@@ -1731,6 +1792,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pmsettings-inner[data-shape="wide"] .pm-group :is(.tune-row, .pm-group-h) { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] .pm-group :is(.set-row, .adv-help, #pm-steer-item, #pm-gfx-status) { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display > details { grid-column: 1 / -1; }
+#pmsettings-inner[data-shape="wide"] #pm-panel-appearance :is(.pm-accent-preview, .pm-look-h, .pm-accent-swatches, .pm-replay-intro) { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] .pm-group :is(#pm-keys-section, #pm-pad-section) { grid-column: 1 / -1; }
 /* DISPLAY: UI SIZE, then HUD / METRICS / RENDERER each on their own row.
    Named areas so an open fold cannot steal the hole. */

@@ -298,7 +298,7 @@ test("bad store values at load fall to shipped defaults", () => {
 
 test("DOM ready wires SettingRows and builds both swatch rows", () => {
   const { rows, byId } = load({ readyState: "complete" });
-  assert.deepEqual([...rows.keys()].sort(), ["pm-hudaccent", "pm-menuaccent", "pm-uitheme"]);
+  assert.deepEqual([...rows.keys()].sort(), ["pm-contrast", "pm-hudaccent", "pm-menuaccent", "pm-textsize", "pm-uitheme", "pm-units"]);
   const menuChips = byId("pm-menuaccent-swatches").children;
   const hudChips = byId("pm-hudaccent-swatches").children;
   assert.equal(menuChips.length, 8);
@@ -354,4 +354,41 @@ test("tokens.css defines every named menu preset AppearanceOpts ships", () => {
 test("forced-colors opts the appearance chips out with the swatch family", () => {
   assert.match(TOKENS, /\.pm-accent-chip/);
   assert.match(TOKENS, /forced-color-adjust:\s*none/);
+});
+
+test("READABILITY: text size, high contrast and speed units persist and apply", () => {
+  const { M, dataset, written } = load();
+  assert.equal(M.textSize(), "normal");
+  assert.equal(dataset.textSize, undefined, "NORMAL leaves the ladder alone");
+  M.setTextSize("larger");
+  assert.equal(written.textSize, "larger");
+  assert.equal(dataset.textSize, "larger");
+  M.setTextSize("huge");
+  assert.equal(M.textSize(), "normal", "an unknown size falls back");
+  M.setContrast("high");
+  assert.equal(written.uiContrast, "high");
+  assert.equal(dataset.uiContrast, "high");
+  M.setContrast("off");
+  assert.equal(dataset.uiContrast, undefined);
+});
+
+test("SPEED UNITS is display-only: km/h by default, mph converts and rounds", () => {
+  const { M } = load();
+  assert.equal(M.units(), "kmh");
+  assert.equal(M.speed(287.4), 287);
+  assert.equal(M.unitLabel(), "KM/H");
+  M.setUnits("mph");
+  assert.equal(M.speed(287.4), 179, "287.4 km/h = 178.6 mph");
+  assert.equal(M.speed(0), 0);
+  assert.equal(M.unitLabel(), "MPH");
+  const { M: M2 } = load({ stored: { speedUnits: "mph", textSize: "large", uiContrast: "high" } });
+  assert.equal(M2.units(), "mph");
+  assert.equal(M2.textSize(), "large");
+  assert.equal(M2.contrast(), "high");
+});
+
+test("tokens.css defines both text sizes and the high-contrast block", () => {
+  for (const sel of ['[data-text-size="large"]', '[data-text-size="larger"]', '[data-ui-contrast="high"]'])
+    assert.ok(TOKENS.includes(":root" + sel), sel);
+  for (const id of ["pm-textsize", "pm-contrast", "pm-units"]) assert.ok(SHELL.includes(`id="${id}-sel"`), id);
 });

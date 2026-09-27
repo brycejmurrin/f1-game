@@ -451,7 +451,8 @@ const CarDraw = (function () {
       // Clamp to 0: a negative c.speed (e.g. hard braking to a near-stop, or a
       // reversing glitch) would otherwise stringify with a "-" character that
       // getSpeedDigit can't parse (+"-" is NaN -> SEG7[NaN] -> crash every frame).
-      const kmh = Math.max(0, Math.min(999, Math.round(G.dashKph(c.speed || 0))));
+      const dash = G.dashKph(c.speed || 0);   // the wheel LCD follows SPEED UNITS like the HUD
+      const kmh = Math.max(0, Math.min(999, typeof AppearanceOpts !== "undefined" ? AppearanceOpts.speed(dash) : Math.round(dash)));
       const ds = String(kmh);
       for (let i = 0; i < ds.length; i++) {
         _digT[12] = -0.034 + (i - (ds.length - 1) / 2) * 0.0135; _digT[13] = 0.022; _digT[14] = -0.0335;

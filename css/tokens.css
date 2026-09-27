@@ -987,6 +987,41 @@ body:not(.desktop) {
   }
 }
 
+/* ---- APPEARANCE: text size + high contrast (js/ui/appearance-opts.js) ----
+   TEXT SIZE re-states the --fs-* ladder, so every token consumer grows and the
+   bare-px HUD (its own HUD SIZE) does not. --fs-micro stays the floor the
+   token-adoption guard reads from the :root block above. */
+/* The Appearance preview's HUD sample paints like the real HUD (css/hud.css:
+   near-black plate, white ink) in EVERY theme — the race HUD does not follow
+   LIGHT, so a light-ink sample would preview something the player never sees. */
+:root {
+  --look-hud-bg: rgba(8, 8, 14, 0.78);
+  --look-hud-ink: #fff;
+  --look-hud-dim: rgba(255, 255, 255, 0.7);
+  --look-hud-halo: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+:root[data-text-size="large"] {
+  --fs-micro: 16px; --fs-2: 17px; --fs-3: 18px; --fs-4: 20px; --fs-5: 21px; --fs-6: 23px;
+}
+:root[data-text-size="larger"] {
+  --fs-micro: 18px; --fs-2: 20px; --fs-3: 21px; --fs-4: 22px; --fs-5: 23px; --fs-6: 26px;
+}
+/* HIGH CONTRAST: solid plates instead of see-through ones, secondary text near
+   full strength, lines that read as lines. Theme-relative, so LIGHT + HIGH
+   darkens where DARK + HIGH brightens. */
+:root[data-ui-contrast="high"] {
+  --dim: color-mix(in oklab, var(--text) 86%, var(--bg));
+  --plate: color-mix(in oklab, var(--carbon) 96%, transparent);
+  --plate-opaque: color-mix(in oklab, var(--carbon) 98%, transparent);
+  --plate-line: color-mix(in oklab, var(--text) 55%, transparent);
+  --card-line: color-mix(in oklab, var(--text) 40%, transparent);
+  --hc-hud-plate: color-mix(in oklab, #000 92%, transparent);
+  --hc-hud-line: rgba(255, 255, 255, 0.55);
+  --hud-halo: 0 0 2px #000, 0 1px 3px #000;
+  --look-hud-bg: var(--hc-hud-plate);
+  --look-hud-dim: var(--look-hud-ink);
+}
+
 * { margin: 0; padding: 0; box-sizing: border-box;
   /* iPhone home-screen / Safari: kill the gray tap flash, the blue text
      selection, the long-press Copy/Look Up sheet, and image-drag ghosts.
