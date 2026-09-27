@@ -1160,16 +1160,27 @@ const NetLobby = (function () {
       return { ok: true, step: "pick" };
     }
 
+    // THE JOIN IN FLIGHT, so makeAnswer() can wait for its transport. join()
+    // builds nothing until readyIce() settles (up to ICE_WAIT_MS), and a guest
+    // who opened an invite link has the code pre-filled — one tap on MAKE
+    // ANSWER inside that window found `transport` null and was told "That
+    // attempt has ended" with nothing wrong (rtc-e2e / rtc-e2e-3p, 2026-09-27:
+    // __apex.lobbyJoin fires the two back to back and failed every run).
+    let joinP = null;
     async function join() {
       const gen = beginOperation();
       show("joining");
-      await readyIce();
-      if (!operationCurrent(gen)) return cancelledResult();
-      // Typed, like every sibling: a bare `return` handed an awaiting caller
-      // `undefined` where host()/codeHost()/codeJoin() all return a result.
-      if (!newTransport("guest")) return { ok: false, error: "no_transport", message: noConnectionMsg() };
-      say("Paste the invite code they sent you.");
-      return { ok: true };
+      const p = (async () => {
+        await readyIce();
+        if (!operationCurrent(gen)) return cancelledResult();
+        // Typed, like every sibling: a bare `return` handed an awaiting caller
+        // `undefined` where host()/codeHost()/codeJoin() all return a result.
+        if (!newTransport("guest")) return { ok: false, error: "no_transport", message: noConnectionMsg() };
+        say("Paste the invite code they sent you.");
+        return { ok: true };
+      })();
+      joinP = p;
+      try { return await p; } finally { if (joinP === p) joinP = null; }
     }
 
     // ONE ANSWER PER INVITE. The paste event and the MAKE ANSWER button both
@@ -1190,6 +1201,9 @@ const NetLobby = (function () {
       // has ended" for junk and raced every slow network.
       const peek = NetHandshake.peekCode ? NetHandshake.peekCode(code) : { ok: true };
       if (!peek.ok) { say(peek.message, true); return { ok: false, error: peek.error, message: peek.message }; }
+      // A join still waiting on the relay credentials is not "no connection":
+      // wait for the transport it is about to build (joinP, above join()).
+      if (!transport && joinP) { say("Preparing your answer…", false, true); await joinP; }
       if (!transport) { say(noConnectionMsg(), true); return { ok: false, error: "no_transport" }; }
       const pending = transport;
       const pc = pending.pc;
