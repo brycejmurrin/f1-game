@@ -1,5 +1,6 @@
 /* PhonePad — PHONE AS CONTROLLER: a phone on the sofa steers the game on the
-   screen by tilting, over the multiplayer wire.
+   screen by tilting, over the multiplayer wire, and shows a steering-wheel
+   dash fed live from the race.
 
    WHY NOT BLUETOOTH. A web page can only ever be the CENTRAL end of Web
    Bluetooth (Chrome, desktop): it connects to a peripheral that advertises.
@@ -18,28 +19,36 @@
                      controller.html#pad=CODE, accepts the phone's answer and
                      feeds every sample to Input.remoteSample() — the SAME tilt
                      pipeline the local sensor uses, so RECALIBRATE and the TILT
-                     sliders act on the phone.
+                     sliders act on the phone. It streams the dash back: gear,
+                     speed, revs, lap, position, ERS, overtake/aero state, flag.
      pad(dom, opts) — the PHONE side (controller.html): joins the room, streams
                      TiltRoll.rollDeg() plus the pedals at the sensor rate on
                      the unreliable channel, sends button EDGES on the reliable
-                     one, and vibrates when the desktop forwards a haptic.
+                     one, paints the wheel's LCD from the dash packets, and
+                     vibrates when the desktop forwards a haptic.
    link()/padSession() are the transport-level halves, with the signalling
    left out, so tests/unit/phone-pad.test.mjs drives both over
-   NetTransport.loopback() and asserts what reaches Input. */
+   NetTransport.loopback() and asserts what reaches Input and the LCD. */
 "use strict";
 
 const PhonePad = (function () {
   const PROTO = 1;
   const HEARTBEAT_MS = 100;        // a sample at least this often, moving or not
   const MIN_SAMPLE_GAP_MS = 15;    // and at most ~66 Hz — the sensor's own rate
+  const HUD_MS = 66;               // the dash refreshes ~15 Hz, like the game's own HUD tick
   const HELD = Object.freeze({ lookBack: 1 });
   // The edges the phone may send; each is a name Input.remoteEvent knows.
   const EVENTS = Object.freeze(["shiftUp", "shiftDown", "overtake", "boost", "aero",
     "camera", "recover", "radio", "calib", "pause"]);
+  // Dash flag bits (desktop → phone).
+  const DASH = Object.freeze({ boost: 1, otArmed: 2, otActive: 4, xArmed: 8, xOpen: 16,
+    retired: 32, timeTrial: 64, paused: 128, redline: 256 });
   const round2 = (v) => Math.round((+v || 0) * 100) / 100;
+  const num = (v, lo, hi) => (typeof v === "number" && isFinite(v)) ? Math.min(hi, Math.max(lo, v)) : 0;
 
   // ── wire ──────────────────────────────────────────────────────────────────
-  // STATE channel: one JSON array per sample, [proto, seq, roll|null, thr, brk, held].
+  // STATE channel, phone → desktop: one JSON array per sample,
+  // [proto, seq, roll|null, thr, brk, held].
   function encodeSample(s) {
     const roll = (typeof s.roll === "number" && isFinite(s.roll)) ? round2(s.roll) : null;
     return JSON.stringify([PROTO, s.seq | 0, roll, round2(s.thr), round2(s.brk), s.held | 0]);
@@ -48,11 +57,31 @@ const PhonePad = (function () {
     let a;
     try { a = JSON.parse(typeof text === "string" ? text : ""); } catch (e) { return null; }
     if (!Array.isArray(a) || a.length !== 6 || a[0] !== PROTO) return null;
-    const num = (v, lo, hi) => (typeof v === "number" && isFinite(v)) ? Math.min(hi, Math.max(lo, v)) : 0;
     return {
       seq: a[1] | 0,
       roll: (typeof a[2] === "number" && isFinite(a[2])) ? num(a[2], -180, 180) : null,
       thr: num(a[3], 0, 1), brk: num(a[4], 0, 1), held: a[5] | 0,
+    };
+  }
+  // STATE channel, desktop → phone: the dash, ["H", gear, kmh, rpmFrac, lap,
+  // laps, pos, cars, ers, flags, caution, lastLapMs, state, teamHex]. Tagged
+  // "H" so decodeSample's `a[0] !== PROTO` refuses it and vice versa.
+  function encodeHud(h) {
+    if (!h) return null;
+    return JSON.stringify(["H", h.gear | 0, Math.round(+h.kmh || 0), round2(h.rpm), h.lap | 0, h.laps | 0,
+      h.pos | 0, h.cars | 0, round2(h.ers), h.flags | 0, h.caution | 0, Math.round(+h.lastLapMs || 0),
+      String(h.state || "").slice(0, 8), /^#[0-9a-f]{6}$/i.test(h.team || "") ? h.team : ""]);
+  }
+  function decodeHud(text) {
+    let a;
+    try { a = JSON.parse(typeof text === "string" ? text : ""); } catch (e) { return null; }
+    if (!Array.isArray(a) || a.length !== 14 || a[0] !== "H") return null;
+    return {
+      gear: num(a[1], -1, 9) | 0, kmh: num(a[2], 0, 999) | 0, rpm: num(a[3], 0, 1),
+      lap: num(a[4], 0, 999) | 0, laps: num(a[5], 0, 999) | 0, pos: num(a[6], 0, 99) | 0, cars: num(a[7], 0, 99) | 0,
+      ers: num(a[8], 0, 1), flags: num(a[9], 0, 65535) | 0, caution: num(a[10], 0, 4) | 0,
+      lastLapMs: num(a[11], 0, 3.6e6) | 0, state: String(a[12] || "").slice(0, 8),
+      team: /^#[0-9a-f]{6}$/i.test(a[13] || "") ? a[13] : "",
     };
   }
   // EVENT channel: {t:"ev", k} phone→desktop; {t:"hap", ms} desktop→phone;
@@ -68,6 +97,18 @@ const PhonePad = (function () {
     if (o.t === "hap") return { t: "hap", ms: Math.max(0, Math.min(1000, o.ms | 0)) };
     if (o.t === "hi") return { t: "hi", side: String(o.side || ""), p: o.p | 0 };
     return null;
+  }
+  // A TeamDef colour (three 0..1 floats) as the CSS hex the phone's LCD tints with.
+  function teamHex(c) {
+    if (!Array.isArray(c) || c.length < 3) return "";
+    const h = (v) => Math.round(num(v, 0, 1) * 255).toString(16).padStart(2, "0");
+    return "#" + h(c[0]) + h(c[1]) + h(c[2]);
+  }
+  // mm:ss.mmm for the LAST lap readout; "" for no lap yet.
+  function fmtLap(ms) {
+    if (!(ms > 0)) return "";
+    const m = Math.floor(ms / 60000), s = (ms - m * 60000) / 1000;
+    return m + ":" + (s < 10 ? "0" : "") + s.toFixed(3);
   }
 
   // The URL the QR carries. The code is a FRAGMENT: it never reaches a server log.
@@ -88,17 +129,22 @@ const PhonePad = (function () {
   }
 
   // ── desktop: the transport-level half ────────────────────────────────────
-  // Wires an OPEN (or opening) transport to Input. `opts.input` and `opts.now`
-  // are the test seams; `opts.pump` false leaves pumping to the caller.
+  // Wires an OPEN (or opening) transport to Input and streams the dash back.
+  // `opts.input`, `opts.now` and `opts.pump: false` are the test seams;
+  // `opts.hud` is a sampler returning the dash fields (null = nothing to show).
   function link(transport, opts) {
     opts = opts || {};
     const input = opts.input || (typeof Input !== "undefined" ? Input : null);
     if (!transport || !input) return null;
     const T = NetTransport;
+    // A clock on every pump: the rtc transport ignores it, loopback (the test
+    // wire) schedules by it, and an undefined `now` there delivers nothing.
+    const now = opts.now || (() => (typeof performance !== "undefined" ? performance.now() : Date.now()));
     let lastSeq = -1;
-    let samples = 0, events = 0, stale = 0, junk = 0;
+    let samples = 0, events = 0, stale = 0, junk = 0, huds = 0;
     let closed = false;
     let raf = 0;
+    let hudAt = -1e9;
 
     transport.onMessage((channel, data) => {
       if (closed) return;
@@ -134,14 +180,21 @@ const PhonePad = (function () {
     };
     if (transport.status === "open") armed(); else transport.onOpen(armed);
 
+    // The dash: sampled and sent from the same pump, ~15 Hz, unreliable — a
+    // dropped frame is replaced 66 ms later, so nothing is worth a retransmit.
+    function sendHud(t) {
+      if (!opts.hud || transport.status !== "open" || t - hudAt < HUD_MS) return;
+      hudAt = t;
+      let h = null;
+      try { h = opts.hud(); } catch (e) { h = null; }
+      const text = encodeHud(h);
+      if (text && transport.send(T.STATE, text)) huds++;
+    }
     // Samples land in the transport's inbox and reach Input only on pump(): once
     // a frame, ahead of the game loop's own Input.poll(). The frame loop is not
     // this module's to edit (js/game.js is ratcheted), so an rAF of its own
     // does the pumping; a test pumps by hand with pump: false.
-    // A clock on every pump: the rtc transport ignores it, loopback (the test
-    // wire) schedules by it, and an undefined `now` there delivers nothing.
-    const now = opts.now || (() => (typeof performance !== "undefined" ? performance.now() : Date.now()));
-    const pump = () => transport.pump(now());
+    const pump = () => { const t = now(); const n = transport.pump(t); sendHud(t); return n; };
     if (opts.pump !== false && typeof requestAnimationFrame === "function") {
       const tick = () => { if (closed) return; pump(); raf = requestAnimationFrame(tick); };
       raf = requestAnimationFrame(tick);
@@ -149,12 +202,13 @@ const PhonePad = (function () {
     return {
       pump,
       close() { try { transport.close(); } catch (e) { /* already closed */ } onClose(); },
-      stats: () => ({ samples, events, stale, junk, lastSeq, open: !closed && transport.status === "open" }),
+      stats: () => ({ samples, events, stale, junk, huds, lastSeq, open: !closed && transport.status === "open" }),
     };
   }
 
   // ── desktop: the whole pairing flow, with signalling ─────────────────────
-  // ui: { say(text, isError), qr(url, code) — null hides it, linked(), lost() }.
+  // ui: { say(text, isError), qr(url, code) — null hides it, linked(), lost(),
+  //       hud() — the dash sampler handed to link() }.
   // Returns the controller: cancel(), state().
   function host(ui, deps) {
     ui = ui || {};
@@ -223,6 +277,7 @@ const PhonePad = (function () {
             const acc = await deps.acceptAnswer(transport, answer);
             if (!acc.ok) { accepted = false; phase = "waiting"; say(acc.message || "That answer could not be read.", true); return; }
             active = link(transport, {
+              hud: ui.hud || null,
               onOpen: () => {
                 phase = "linked";
                 dropRoom();
@@ -260,11 +315,12 @@ const PhonePad = (function () {
   // button state the page keeps: { roll(), thr(), brk(), held() }. Returns
   // { sample(), event(k), pump(), close(), stats() }; the page calls sample()
   // from deviceorientation and on every pedal change, and pump() each frame.
+  // `opts.onHud(h)` receives every dash packet.
   function padSession(transport, src, opts) {
     opts = opts || {};
     const T = NetTransport;
     const now = opts.now || (() => (typeof performance !== "undefined" ? performance.now() : Date.now()));
-    let seq = 0, lastSent = -1e9, sent = 0, haptics = 0, closed = false;
+    let seq = 0, lastSent = -1e9, sent = 0, haptics = 0, huds = 0, closed = false;
     let beat = 0;
     const vibrate = opts.vibrate || ((ms) => {
       try { if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(ms); } catch (e) { /* advisory */ }
@@ -286,7 +342,11 @@ const PhonePad = (function () {
       return transport.send(T.EVENT, encodeEvent(k));
     }
     transport.onMessage((channel, data) => {
-      if (channel !== T.EVENT) return;
+      if (channel === T.STATE) {
+        const h = decodeHud(data);
+        if (h && opts.onHud) { huds++; try { opts.onHud(h); } catch (e) { /* page's problem */ } }
+        return;
+      }
       const ev = decodeEvent(data);
       if (ev && ev.t === "hap" && ev.ms > 0) { haptics++; vibrate(ev.ms); }
     });
@@ -299,22 +359,62 @@ const PhonePad = (function () {
     transport.onClose(close);
     const armed = () => {
       transport.send(T.EVENT, encodeHello("pad"));
-      if (opts.heartbeat !== false) beat = setInterval(() => send(true), HEARTBEAT_MS);
+      if (opts.heartbeat !== false) {
+        beat = setInterval(() => send(true), HEARTBEAT_MS);
+        if (beat && typeof beat.unref === "function") beat.unref();   // node harness: never the thing keeping the process alive
+      }
       if (opts.onOpen) { try { opts.onOpen(); } catch (e) { /* page's problem */ } }
     };
     if (transport.status === "open") armed(); else transport.onOpen(armed);
     return {
-      sample: () => send(false),
+      // A pedal or button CHANGE is sent at once (force); the sensor stream
+      // keeps the 15 ms gap, since the next reading is a frame away anyway.
+      sample: (force) => send(!!force),
       event,
       pump: () => transport.pump(now()),
       close() { try { transport.close(); } catch (e) { /* already closed */ } close("local"); },
-      stats: () => ({ sent, haptics, seq, open: !closed && transport.status === "open" }),
+      stats: () => ({ sent, haptics, huds, seq, open: !closed && transport.status === "open" }),
     };
   }
 
+  // ── phone: the wheel's LCD ────────────────────────────────────────────────
+  // Paints one dash packet into the elements controller.html hands over:
+  //   { gear, speed, lap, pos, ers, flag, ot, aero, last, leds, screen, team }.
+  // Pure DOM writes on a mini-DOM-friendly surface (textContent, style,
+  // classList), so tests/unit/phone-pad.test.mjs can drive it too.
+  const CAUTION = ["", "YELLOW", "VSC", "SAFETY CAR", "RED FLAG"];
+  function paintHud(el, h) {
+    if (!el || !h) return;
+    const text = (n, v) => { if (el[n] && el[n].textContent !== v) el[n].textContent = v; };
+    const inRace = h.state === "race" || h.state === "count";
+    text("gear", h.gear === 0 ? "N" : h.gear < 0 ? "R" : String(h.gear));
+    text("speed", inRace ? String(h.kmh) : "---");
+    text("lap", h.flags & DASH.timeTrial ? "TT" : h.laps ? "LAP " + Math.min(Math.max(h.lap, 1), h.laps) + "/" + h.laps : "");
+    text("pos", h.flags & DASH.retired ? "DNF" : h.flags & DASH.timeTrial ? "" : h.pos ? "P" + h.pos + "/" + h.cars : "");
+    text("last", h.lastLapMs ? "LAST " + fmtLap(h.lastLapMs) : "");
+    text("ot", h.flags & DASH.otActive ? "OVERTAKE" : h.flags & DASH.otArmed ? "OT READY" : "OT");
+    text("aero", h.flags & DASH.xOpen ? "X-MODE" : h.flags & DASH.xArmed ? "AERO ARMED" : "AERO");
+    text("flag", h.state === "count" ? "LIGHTS" : h.flags & DASH.paused ? "PAUSED" : !inRace ? "PIT LANE" : CAUTION[h.caution] || "");
+    if (el.ers && el.ers.style) el.ers.style.width = (h.ers * 100).toFixed(0) + "%";
+    if (el.leds && el.leds.children) {
+      const n = el.leds.children.length, lit = Math.round(h.rpm * n);
+      for (let i = 0; i < n; i++) el.leds.children[i].classList.toggle("on", inRace && i < lit);
+    }
+    if (el.screen && el.screen.classList) {
+      el.screen.classList.toggle("redline", !!(h.flags & DASH.redline));
+      el.screen.classList.toggle("boost", !!(h.flags & DASH.boost));
+      el.screen.classList.toggle("ot-on", !!(h.flags & DASH.otActive));
+      el.screen.classList.toggle("ot-ready", !!(h.flags & DASH.otArmed) && !(h.flags & DASH.otActive));
+      el.screen.classList.toggle("x-open", !!(h.flags & DASH.xOpen));
+      el.screen.classList.toggle("caution", inRace && h.caution > 0);
+      el.screen.classList.toggle("idle", !inRace);
+    }
+    if (el.team && el.team.style && h.team) el.team.style.setProperty("--team", h.team);
+  }
+
   // ── phone: the whole page ─────────────────────────────────────────────────
-  // dom: { status, gas, brake, buttons: {shiftUp, shiftDown, …}, lookBack,
-  //        center, roll (a meter element), connect, codeIn, start }.
+  // dom: { body, status, codeIn, connect, gas, brake, lookBack, center, rim,
+  //        buttons: {shiftUp, shiftDown, …}, hud: {gear, speed, …} }.
   // Every element is passed in by controller.html (this module never looks an
   // id up), so the shell-id contract stays index.html's alone.
   function pad(dom, opts) {
@@ -336,12 +436,15 @@ const PhonePad = (function () {
     let roll = null, thr = 0, brk = 0, held = 0;
     let session = null;
     let sensorOn = false;
+    let lastHud = null;
     const src = { roll: () => roll, thr: () => thr, brk: () => brk, held: () => held };
 
+    // The rim turns with the phone: the wheel the player sees is the wheel
+    // they are holding. Clamped so a phone put down flat does not spin it.
     function paintRoll() {
-      if (!dom.roll) return;
-      const r = roll == null ? 0 : Math.max(-45, Math.min(45, roll));
-      dom.roll.style.transform = "translateX(" + (r / 45 * 50).toFixed(1) + "%)";
+      if (!dom.rim || !dom.rim.style) return;
+      const r = roll == null ? 0 : Math.max(-90, Math.min(90, roll));
+      dom.rim.style.transform = "rotate(" + r.toFixed(1) + "deg)";
     }
     function onOrient(e) {
       const r = TiltRoll.rollDeg(e.beta, e.gamma, TiltRoll.screenAngle());
@@ -394,16 +497,26 @@ const PhonePad = (function () {
       // Bottom of the pedal is 1, the top edge ~0.3: a thumb never rests at zero.
       return Math.max(0.3, Math.min(1, (e.clientY - r.top) / r.height));
     }
-    const push = () => { if (session) session.sample(); };
+    const push = () => { if (session) session.sample(true); };
     hold(dom.gas, (v) => { thr = v; push(); }, () => { thr = 0; push(); }, true);
     hold(dom.brake, (v) => { brk = v; push(); }, () => { brk = 0; push(); }, true);
     hold(dom.lookBack, () => { held |= HELD.lookBack; push(); }, () => { held &= ~HELD.lookBack; push(); });
-    for (const k of EVENTS) {
-      const el = dom.buttons && dom.buttons[k];
-      if (!el) continue;
-      el.addEventListener("click", () => { if (session) session.event(k); });
+    // Edges fire on the DOWN, not the click: a paddle on a wheel answers the
+    // finger, and a click waits for the release (and can be lost to a drag).
+    function edge(el, k) {
+      if (!el) return;
+      el.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        el.classList.add("on");
+        if (session) session.event(k);
+      });
+      const up = () => el.classList.remove("on");
+      el.addEventListener("pointerup", up);
+      el.addEventListener("pointercancel", up);
+      el.addEventListener("contextmenu", (e) => e.preventDefault());
     }
-    if (dom.center) dom.center.addEventListener("click", () => { if (session) session.event("calib"); });
+    for (const k of EVENTS) edge(dom.buttons && dom.buttons[k], k);
+    edge(dom.center, "calib");
 
     let wake = null;
     async function keepAwake() {
@@ -453,6 +566,8 @@ const PhonePad = (function () {
         }
         say("Connecting…");
         session = padSession(transport, src, {
+          now: opts.now || null,   // test seam: the harness's stepped clock, so both wire ends agree
+          onHud: (h) => { lastHud = h; paintHud(dom.hud, h); },
           onOpen: () => {
             say(sensorOn || sensor ? "Connected — tilt to steer." : "Connected — pedals and buttons only.");
             if (dom.body) dom.body.classList.add("linked");
@@ -481,13 +596,19 @@ const PhonePad = (function () {
 
     return {
       connect,
-      state: () => ({ linked: !!session, roll, thr, brk, held, sensorOn, stats: session ? session.stats() : null }),
+      // The test/console handle: what the page holds, and a way to paint a
+      // dash without a link (controller.html?demo drives the LCD from it).
+      paintHud: (h) => { lastHud = h; paintHud(dom.hud, h); },
+      setRoll: (r) => { roll = r; paintRoll(); if (session) session.sample(); },   // stands in for the sensor
+      pump: () => (session ? session.pump() : 0),   // the frame tick, for a harness with no rAF
+      state: () => ({ linked: !!session, roll, thr, brk, held, sensorOn, hud: lastHud, stats: session ? session.stats() : null }),
     };
   }
 
   return {
-    PROTO, HELD, EVENTS, HEARTBEAT_MS,
-    encodeSample, decodeSample, encodeEvent, encodeHaptic, encodeHello, decodeEvent,
+    PROTO, HELD, EVENTS, DASH, HEARTBEAT_MS, HUD_MS,
+    encodeSample, decodeSample, encodeHud, decodeHud, encodeEvent, encodeHaptic, encodeHello, decodeEvent,
+    teamHex, fmtLap, paintHud,
     padUrl, codeFromUrl,
     link, host, padSession, pad,
   };

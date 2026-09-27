@@ -9205,6 +9205,18 @@ $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
 // multiplayer stack the pairing rides on, then the module owns the pairing and
 // feeds Input.remoteSample(). A second press cancels; a lost phone re-arms it.
 let phonePad = null;
+// The dash the paired phone paints: the fields js/ui/hud.js reads, ~15 Hz.
+function phonePadDash() {
+  const p = player;
+  if (!p) return null;
+  const D = PhonePad.DASH, xOpen = (p.aeroX || 0) > 0.05;
+  const flags = (p.boostOn ? D.boost : 0) | (p.otT > 0 ? D.otActive : p.otArmed ? D.otArmed : 0)
+    | (xOpen ? D.xOpen : p.xArmed ? D.xArmed : 0) | (p.retired ? D.retired : 0) | (isTimeTrial() ? D.timeTrial : 0)
+    | (paused ? D.paused : 0) | (p.rpm > MAX_RPM * 0.92 ? D.redline : 0);
+  return { gear: p.gear, kmh: dashKph(p.speed), rpm: (p.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), lap: p.lap, laps: lapsTarget,
+    pos: p.rank, cars: cars.length, ers: p.energy, flags, caution: cautionLevel(), lastLapMs: (p.lastLap || 0) * 1000,
+    state, team: PhonePad.teamHex(p.team && p.team.color) };
+}
 $("pm-phonepad").onclick = () => {
   const box = $("pm-phonepad-box"), status = $("pm-phonepad-status"), btn = $("pm-phonepad");
   if (phonePad) { phonePad.cancel(); phonePad = null; box.hidden = true; btn.textContent = "PHONE AS CONTROLLER…"; return; }
@@ -9213,6 +9225,7 @@ $("pm-phonepad").onclick = () => {
     if (!ok) { status.textContent = "Could not load the pairing stack — check the connection."; return; }
     $("pm-phonepad-url").textContent = PhonePad.padUrl("").replace(/#.*$/, "");
     phonePad = PhonePad.host({
+      hud: phonePadDash,
       say: (t) => { status.textContent = t; },
       qr: (url, code) => { LobbyCodes.paintQr($("pm-phonepad-qr-wrap"), $("pm-phonepad-qr"), url); $("pm-phonepad-code").textContent = code || ""; },
       linked: () => { btn.textContent = "UNPAIR PHONE"; announce("PHONE CONNECTED — TILT TO STEER", 3, "info"); },
