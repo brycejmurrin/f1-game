@@ -133,7 +133,24 @@ log(el(), "B is in — guests =", await guests());
 // ---- guest 2: the part that could not happen before ----------------------
 // If this drops B, the whole C.2a change is wrong: newTransport() used to call
 // teardown() on every mint, which closed the connection already made.
-const inv2 = await A.evaluate(() => window.__apex.lobbyInviteAnother());
+// inviteAnother() now shows the PICK step (a link or a room code, whichever
+// suits) and mints nothing itself; the second invite comes from HOST A RACE,
+// which calls host() WITHOUT open() — open() would wipe the room's peers, which
+// is why __apex.lobbyHost() is the wrong hook here. Read the code the way a
+// player does: from the invite box the moment host() fills it.
+const more = await A.evaluate(() => window.__apex.lobbyInviteAnother());
+if (!more.ok) await die(`invite-another refused: ${JSON.stringify(more)}`);
+const inv2 = await A.evaluate(async () => {
+  const box = () => (document.getElementById("vs-invite") || {}).value || "";
+  const before = box();
+  document.getElementById("vs-host").click();
+  for (let i = 0; i < 300; i++) {                    // the invite alone can take 60 s here
+    const v = box();
+    if (v && v !== before) return { ok: true, code: v };
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  return { ok: false, error: "no_second_invite", status: window.__apex.lobby().statusText };
+});
 if (!inv2.ok) await die(`second invite failed: ${JSON.stringify(inv2)}`);
 log(el(), "invite 2 len=", inv2.code.length);
 if ((await guests()) < 1) await die("minting a second invite DROPPED the first guest");

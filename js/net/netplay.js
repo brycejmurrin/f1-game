@@ -717,6 +717,7 @@ const NetPlay = (function () {
       armedPeers.clear();
       armDeadline = 0;
       armedSentAt = -Infinity;
+      startSeen = false;
       named = null;
       holdUntil = 0;
       G.netNow = null;
@@ -755,6 +756,16 @@ const NetPlay = (function () {
     let armDeadline = 0;                  // host: when to stop waiting for ARMED
     let armedSentAt = -Infinity;          // guest: when ARMED last went out (re-sent until START lands)
     const ARMED_RESEND_MS = 1000;
+    // Guest: a START has been ACCEPTED this race. The re-send below keyed on
+    // `!G.netStart` alone — but the countdown CONSUMES netStart at lights-out
+    // (game.js: "consumed; never carry it into the next race"), so from green
+    // onward the guest said ARMED every second for the whole race, the host
+    // answered each with the named moment (the late-ARMED rule), and the guest
+    // held a past-dated netStart all race (rtc-e2e 2026-09-27: startPending
+    // true on the guest at lap 1, false on the host). A red-flag restart then
+    // read that stale instant: countT already past the lamps, the guest's
+    // restart began at once and its raceT re-based to the ORIGINAL green.
+    let startSeen = false;
     let named = null;                     // host: the START already sent ({at, hold}), for late ARMEDs
     const armedPeers = new Set();
     const allArmed = () => armedPeers.size >= Math.max(1, remotes.size);
@@ -775,6 +786,7 @@ const NetPlay = (function () {
       // and a late ARMED is told a moment already up to ARM_WAIT_MS past.
       if (!Number.isFinite(at) || Math.abs(at - nowMs()) > HOLD_MAX_MS) return;
       G.netStart = { at, hold, now: nowMs };
+      startSeen = true;
     }
 
     // The moment cannot be named until BOTH sides can act on it.
@@ -868,6 +880,7 @@ const NetPlay = (function () {
       // lamps in one frame and skipped its countdown entirely.
       G.netStart = null;
       armedPeers.clear();
+      startSeen = false;
       return true;
     }
 
@@ -903,7 +916,7 @@ const NetPlay = (function () {
       // time, and a split start once the guest's HOLD_MAX_MS ran out (bug hunt
       // 2026-09-22). Say it again each second until the moment is named;
       // armedPeers.add is idempotent and a late one just re-sends START.
-      if (role === "guest" && !G.netStart && now - armedSentAt >= ARMED_RESEND_MS) {
+      if (role === "guest" && !G.netStart && !startSeen && now - armedSentAt >= ARMED_RESEND_MS) {
         armedSentAt = now;
         try { broadcast(EV.ARMED, {}); } catch (e) { /* a dead session must not stop the tick */ }
       }

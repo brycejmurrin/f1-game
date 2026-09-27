@@ -272,6 +272,39 @@ test("host: an ARMED that lands after the moment was named is answered with STAR
   assert.equal(starts(s2).length, 1, "all armed: named once, sent once");
 });
 
+// ── round 3: the guest stops saying ARMED once a START was accepted ─────────
+test("guest: ARMED is re-sent until a START lands, and never again once the countdown consumed it", () => {
+  // rtc-e2e 2026-09-27: the guest showed startPending=true at lap 1 while the
+  // host showed false. The re-send keyed on `!G.netStart` alone, the countdown
+  // nulls netStart at lights-out, so the guest said ARMED every second all
+  // race, the host answered each with the named moment, and the guest carried
+  // a past-dated netStart into any red-flag restart (instant lights, raceT
+  // re-based to the original green).
+  const G = stubG(2);
+  const net = NetPlay.create(G);
+  const s = fakeSession();
+  assert.equal(net.start({ role: "guest", session: s }).ok, true);
+  const armed = () => s.sent.filter((m) => m.t === "armed").length;
+  assert.equal(armed(), 1, "one ARMED from start()");
+  net.tick(1000); net.tick(2100); net.tick(3200);
+  const beforeStart = armed();
+  assert.ok(beforeStart >= 3, `re-sent while no START has landed (${beforeStart})`);
+  G.netNow = 3200;
+  s.deliver("start", { at: 3200 + 4000, hold: 0.5 });
+  assert.ok(G.netStart, "the START was accepted");
+  G.netStart = null;                     // lights-out: game.js consumes it
+  for (let t = 4300; t < 30000; t += 1000) net.tick(t);
+  assert.equal(armed(), beforeStart, "no ARMED after the START was accepted — not even with netStart consumed");
+  assert.equal(G.netStart, null, "and nothing re-armed a stale moment");
+  // A NEW race (start() again) arms afresh.
+  net.stop("local");
+  const s2 = fakeSession();
+  assert.equal(net.start({ role: "guest", session: s2 }).ok, true);
+  net.tick(40000); net.tick(41100);
+  assert.ok(s2.sent.filter((m) => m.t === "armed").length >= 2, "the next race re-sends until its own START");
+  net.stop("local");
+});
+
 // ── predict() output is clamped exactly like the posed sample (NetPlay.clampWire)
 // The contact solver reads c._nProg/_nX/_nSpd from predict(); they used to be
 // the raw interp values while poseRemote clamped its copy, so one packet was
