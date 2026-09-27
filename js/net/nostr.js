@@ -34,16 +34,10 @@ const NetNostr = (function () {
     return r;
   }
 
-  // The room id must not be the code: room ids are visible to relays, and a
-  // room id that contained the code would hand the codes out. Hash it, and use
-  // a different salt from the topic hash elsewhere so the two cannot be
-  // correlated.
-  async function roomId(code) {
-    const bytes = new TextEncoder().encode("room|" + code);
-    const h = await crypto.subtle.digest("SHA-256", bytes);
-    return [...new Uint8Array(h).slice(0, 10)]
-      .map((b) => b.toString(16).padStart(2, "0")).join("");
-  }
+  // The topic must not be the code, NOR anything cheap to test a guessed code
+  // against: topics are plaintext `x` tags on public relays, and a bare
+  // SHA-256 of a ~30-bit code fell to brute force in minutes. The topic is
+  // NetRendezvous.topic() — HKDF over the PBKDF2-stretched room key.
 
   /*
    * Meet in a room named by the code and trade one string for another.
@@ -208,7 +202,7 @@ const NetNostr = (function () {
    *
    * WHAT THE RELAYS SEE. The payload is sealed with AES-GCM under a key
    * derived from the room code (NetRendezvous.seal/open, v2 envelope: random
-   * salt, slot name as AAD) and the topic is a hash of it. Offers and answers
+   * salt, slot name as AAD) and the topic is HKDF'd from the same stretched key. Offers and answers
    * use SEPARATE topics, so neither side ever reads its own message back.
    */
   async function directExchange(opts) {
@@ -233,8 +227,14 @@ const NetNostr = (function () {
     // mistaken for one.
     const mineSlot = hosting ? "offer" : "answer";
     const theirSlot = hosting ? "answer" : "offer";
-    const mineTopic  = await roomId(code + "|" + mineSlot);
-    const theirTopic = await roomId(code + "|" + theirSlot);
+    let mineTopic, theirTopic;
+    try {
+      mineTopic  = await NetRendezvous.topic(code, mineSlot);
+      theirTopic = await NetRendezvous.topic(code, theirSlot);
+    } catch (e) {
+      return nostrLog({ ok: false, error: "crypto",
+               message: "This browser could not protect the room code. Use the invite link instead." });
+    }
 
     const sockets = [];
     const socketUrl = new Map();
@@ -333,7 +333,10 @@ const NetNostr = (function () {
       const repost = setInterval(() => { if (!done && current) publish(current); }, REPOST_MS);
 
       later(() => finish({ ok: false, error: "expired",
-        message: "Nobody joined that code. Codes only last a couple of minutes." }),
+        // Also what a build on another NetRendezvous.PROTOCOL sees: its topics
+        // differ, so the two never meet — say what fixes that too.
+        message: "Nobody joined that code. Codes only last a couple of minutes —"
+               + " if it keeps happening, both reload the game and try a new code." }),
         JOIN_TIMEOUT_MS);
 
       let opened = 0;
@@ -440,7 +443,7 @@ const NetNostr = (function () {
   // createEvent/subscribe is reached any more.
   const exchange = directExchange;
 
-  return { JOIN_TIMEOUT_MS, RELAY_CHECK_MS, available, roomId, exchange, directExchange, load,
+  return { JOIN_TIMEOUT_MS, RELAY_CHECK_MS, available, exchange, directExchange, load,
     RELAYS, relayUrls, validRelay,
     MAX_CONTENT_CHARS, MAX_FRAME_CHARS, MAX_SEEN, MAX_SEEN_CHARS, MAX_HEARD_ACTIVE,
     readRelayFrame, createBoundedInbox };

@@ -123,7 +123,10 @@ test.describe("multiplayer session", () => {
     // Quantisation is 1 cm; anything larger means the pose did not land.
     expect(Math.abs(out.s - out.s0)).toBeLessThan(0.05);
     expect(Math.abs(out.x - 2.5)).toBeLessThan(0.05);
-    expect(out.lap).toBe(1);
+    // The pose lands, the lap CLAIM does not: this side is the host, and a
+    // guest's lap only rises by one per driven crossing (netplay.js gateLap).
+    // The packet teleported the car from the grid to 42 % with no crossing.
+    expect(out.lap).toBe(0);
   });
 
   test("a rival's world position is rebuilt from its road position", async ({ page }) => {

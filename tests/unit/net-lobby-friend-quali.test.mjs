@@ -73,7 +73,9 @@ test("hunt fixes: SIMULATE / no valid lap still reports a time; tyres + reliabil
   assert.match(game, /if \(c\.local && paused && netPlay\.active\(\)\) return PAUSED_NET_INPUT;/);
   const lobby = r("js/net/lobby.js");
   assert.match(lobby, /tyres: G\.raceTyreWear, reliab: G\.raceReliability,/);
-  assert.match(lobby, /if \(own\(next, "tyres"\)\) G\.raceTyreWear = next\.tyres;/);
+  // Applied in memory only (roomOnly puts the guest's save back) — behaviour
+  // pinned in net-authority.test.mjs "never overwrite the guest's SAVED choice".
+  assert.match(lobby, /if \(own\(next, "tyres"\)\) roomOnly\("tyreWear", \(\) => \{ G\.raceTyreWear = next\.tyres; \}\);/);
   assert.match(r("js/ui/hud.js"), /workBtn\.hidden = [^\n]*G\.netPlay\.active\(\)/);
 });
 

@@ -58,8 +58,12 @@ own WebSockets straight to the relays, reusing exactly two of Trystero's
 framing helpers (createEvent/subscribe) so the events are well-formed Nostr —
 the payload sealed with AES-GCM under a key derived from the room code
 (`NetRendezvous.seal`/`open`, v2 envelope, the slot name as AAD, called on
-every exchange), offers and answers on SEPARATE hashed topics so neither side
-reads its own message back. The full Trystero room join (its own
+every exchange), offers and answers on SEPARATE topics so neither side
+reads its own message back. The topic (the plaintext NIP-01 `x` tag) is
+`NetRendezvous.topic()` — HKDF over the PBKDF2-stretched room key, info
+`apex26-rendezvous-v<PROTOCOL>/topic|<slot>` — never a bare hash of the code:
+SHA-256 of a ~30-bit code let anyone reading public relay traffic brute-force
+live codes in minutes; now every guess costs the 120 000-round PBKDF2. The full Trystero room join (its own
 RTCPeerConnection carrying the answer, which died exactly when ours started;
 its only failure signal a console.warn we had to intercept) was an opt-in
 legacy branch behind apex26.nostrTrystero and was deleted 2026-09-10 — the

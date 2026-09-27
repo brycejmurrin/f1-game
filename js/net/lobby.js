@@ -501,7 +501,12 @@ const NetLobby = (function () {
       // HELLO is sent at connect, long before anyone can drive a lap. On a
       // guest there is nothing to narrow to: its one connection is the host's,
       // and the host legitimately speaks for the whole field.
+      // NEVER THE LOCAL SEAT, either role: a peer whose HELLO claimed this
+      // player's team:seat (or a relay naming it) must not post a time over
+      // the one this player drives — qualiDriven() would take it as theirs.
       function sendersOwnDriver(d) {
+        const me = Teams.LIST[G.teamIdx] || Teams.LIST[0];
+        if (me && d.driverId === me.id + ":" + (G.driverIdx || 0)) return false;
         if (role !== "host") return true;
         const p = _peers.get(id);
         return !!(p && p.team && d.driverId != null
@@ -668,6 +673,20 @@ const NetLobby = (function () {
       return out;
     }
 
+    // ROOM RULES ARE IN MEMORY ONLY. G.raceTyreWear / G.raceReliability are
+    // the PERSISTING setters (store "tyreWear" / "reliability"), so a guest's
+    // own saved choice was overwritten for good by any room it joined. The
+    // race reads the in-memory value; the save is put back exactly as it was
+    // (unset stays unset). The other rules' G setters do not touch the store.
+    function roomOnly(key, apply) {
+      const st = G.store;
+      const before = st && st.get ? st.get(key, undefined) : undefined;
+      apply();
+      if (!st) return;
+      if (before === undefined) { if (st.rawDel) st.rawDel(key); }
+      else if (st.set) st.set(key, before);
+    }
+
     function applySettings(d) {
       const next = normaliseSettings(d);
       if (!next) {
@@ -683,8 +702,8 @@ const NetLobby = (function () {
       if (own(next, "weather")) G.raceWeather = next.weather;
       if (own(next, "tod")) G.raceTimeOfDay = next.tod;
       if (own(next, "difficulty")) G.difficulty = next.difficulty;
-      if (own(next, "tyres")) G.raceTyreWear = next.tyres;
-      if (own(next, "reliab")) G.raceReliability = next.reliab;
+      if (own(next, "tyres")) roomOnly("tyreWear", () => { G.raceTyreWear = next.tyres; });
+      if (own(next, "reliab")) roomOnly("reliability", () => { G.raceReliability = next.reliab; });
       if (own(next, "seed")) G.seed = next.seed;           // rewinds the sim stream: pre-race only, by construction
       if (own(next, "round")) G.raceRound = next.round;
       renderRoom();

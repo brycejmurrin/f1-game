@@ -635,6 +635,88 @@ test("LOBBY phase: SETTINGS is validated atomically before guest state changes",
   } finally { lobby.cancel(); }
 });
 
+// ── netplay hardening: the local seat, room rules, NO TIME ──────────────────
+
+test("LOBBY phase: a guest whose HELLO claims the HOST's seat cannot post the host's time", async () => {
+  // The sender binding keys on the HELLO profile, and a HELLO can name any
+  // seat — so a guest claiming alpha:0 (the host's) passed it and overwrote
+  // the host's own driven lap. The local seat is never a peer's to post.
+  const { G, lobby, peerSays, settle } = await lobbyUp("host");
+  try {
+    peerSays("hello", { team: "alpha", driver: 0 });
+    await settle();
+    peerSays("quali", { driverId: "alpha:0", t: 21.5 });
+    await settle();
+    assert.deepEqual(G.caughtQuali, [], "the host's own seat is only ever the host's lap");
+  } finally { lobby.cancel(); }
+});
+
+test("LOBBY phase: a guest drops a relayed QUALI naming its OWN seat", async () => {
+  const { G, lobby, peerSays, settle } = await lobbyUp("guest");   // local seat alpha:0
+  try {
+    peerSays("quali", { driverId: "alpha:0", t: 61.0 });
+    peerSays("quali", { driverId: "bravo:1", t: 62.0 });
+    await settle();
+    assert.deepEqual(G.caughtQuali, [{ driverId: "bravo:1", t: 62.0 }]);
+  } finally { lobby.cancel(); }
+});
+
+test("LOBBY phase: room tyre-wear / reliability rules never overwrite the guest's SAVED choice", async () => {
+  const { G, lobby, peerSays, settle } = await lobbyUp("guest");
+  // game.js's setters persist (store "tyreWear" / "reliability"); mirror that.
+  const saved = new Map([["tyreWear", "off"]]);   // "reliability" never saved
+  G.store = {
+    get: (k, d) => (saved.has(k) ? saved.get(k) : d),
+    set: (k, v) => { saved.set(k, v); return true; },
+    rawDel: (k) => { saved.delete(k); return true; },
+  };
+  let tyres = "off", reliab = "off";
+  Object.defineProperty(G, "raceTyreWear", { get: () => tyres, set: (v) => { tyres = v; saved.set("tyreWear", v); } });
+  Object.defineProperty(G, "raceReliability", { get: () => reliab, set: (v) => { reliab = v; saved.set("reliability", v); } });
+  try {
+    peerSays("settings", { tyres: "real", reliab: "real" });
+    await settle();
+    assert.equal(G.raceTyreWear, "real", "the room's rule applies to this race");
+    assert.equal(G.raceReliability, "real");
+    assert.equal(saved.get("tyreWear"), "off", "the guest's saved tyre wear is untouched");
+    assert.equal(saved.has("reliability"), false, "an unset save stays unset");
+  } finally { lobby.cancel(); }
+});
+
+test("NO TIME crosses as a marker, never as the synthetic back-of-grid time", () => {
+  // A lap deleted for track limits is Infinity locally (quali-model's NO
+  // TIME); the old sender posted the sheet's slow+1 filler as a real time.
+  const sent = [];
+  const rep = NetPlay.qualiReporters((type, d) => { sent.push(JSON.parse(JSON.stringify({ type, d }))); return true; }, () => true);
+  assert.equal(rep.reportQuali("bravo:1", Infinity), true);
+  assert.deepEqual(sent[0], { type: NetPlay.EV.QUALI, d: { driverId: "bravo:1", t: null, noTime: true } });
+  const q = NetPlay.validQuali(sent[0].d);
+  assert.equal(q.t, Infinity, "received as quali-model's own NO TIME value");
+  assert.equal(q.noTime, true);
+  // Without the marker an Infinity/null t is still junk.
+  assert.equal(NetPlay.validQuali({ driverId: "x", t: null }), null);
+  // End to end on a host: the guest's NO TIME lands as Infinity for its seat.
+  const { G, s } = started("host");
+  s.deliver("quali", { driverId: "drv1", t: null, noTime: true });
+  assert.deepEqual(G.caughtQuali, [{ driverId: "drv1", t: Infinity, noTime: true }]);
+});
+
+test("QualiNet: a peer entry never replaces the local player's time; NO TIME is kept", () => {
+  const QualiNet = eval(src("js/race/quali-net.js") + ";QualiNet");
+  const player = { driverId: "alpha:0", lastLap: 0, best: Infinity };
+  const q = QualiNet.create({
+    $: () => null, fmtTime: String, isQuali: () => false, getPlayer: () => player, getCars: () => [],
+    openQuali: () => {}, applyPeerQuali: () => {}, getNetPlay: () => ({ rivalDriverIds: () => [] }), getNetLobby: () => null,
+  });
+  q.onPeerQuali({ driverId: "alpha:0", t: 30 });          // a spoof of OUR seat
+  q.onPeerQuali({ driverId: "bravo:1", t: Infinity });    // a rival's NO TIME
+  q.onPeerQuali({ driverId: "chase:0", t: 70 });
+  const m = q.driven(80);
+  assert.equal(m.get("alpha:0"), 80, "our own lap, never the peer's");
+  assert.equal(m.get("bravo:1"), Infinity, "NO TIME reaches quali-model as Infinity");
+  assert.equal(m.get("chase:0"), 70);
+});
+
 // ── round 8: session-scoped state and the arming population ─────────────────
 
 test("stop() clears the armed start — a quit mid-countdown must not leak into the next race", () => {
