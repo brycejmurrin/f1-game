@@ -447,6 +447,7 @@ const LampBake = (function () {
       do { r = _job.next(); } while (!r.done && _now() < end);
       if (!r.done) return null;
       _job = null;
+      _pre = null;   // a menu pre-bake still running would later install OLDER lights over this one
       _install(r.value, track, lights, nearClamp, budget);
       return _bake;
     }
@@ -466,6 +467,7 @@ const LampBake = (function () {
       do { r = _job.next(); } while (!r.done && _now() < end);
       if (!r.done) return _bake;
       _job = null;
+      _pre = null;   // as above: the rebake is newer than any pending menu pre-bake
       _install(r.value, track, lights, nearClamp, budget);
       return _bake;
     }
