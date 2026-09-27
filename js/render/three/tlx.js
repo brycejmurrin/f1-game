@@ -12,6 +12,37 @@ const TLX = (function () {
     return null;
   }
 
+  // RELEASE A createTexture() SOURCE AFTER UPLOAD. three keeps texture.image
+  // for the texture's life and Texture.dispose() frees only the GPU copy
+  // (https://threejs.org/docs/#api/en/textures/Texture.dispose,
+  // mrdoob/three.js#23953), so every cached livery atlas pinned its 1024x1280
+  // canvas — ~5 MB each, 48 cached plus the decal-material cache: 130-250 MB.
+  // three r186 re-reads .image only when .version moves (Textures.updateTexture
+  // returns early on initialized && same version), so after the upload the
+  // image can be swapped for a 1x1 stand-in: a stray re-upload (e.g. a texture
+  // drawn after its dispose) then yields a blank decal, not a TypeError from a
+  // detached source. The image setter does not bump the version. ImageBitmap
+  // sources are left alone: three's flipY uniform tests `image instanceof
+  // ImageBitmap`, so swapping one would flip the texture.
+  let _texStandIn = null;
+  function texStandIn() {
+    if (!_texStandIn && typeof document !== "undefined" && document.createElement) {
+      _texStandIn = document.createElement("canvas");
+      _texStandIn.width = _texStandIn.height = 1;
+    }
+    return _texStandIn;
+  }
+  function releaseTexSource(t) {
+    if (!t) return false;
+    t.onUpdate = null;
+    const img = t.image;
+    if (!img || (typeof ImageBitmap !== "undefined" && img instanceof ImageBitmap)) return false;
+    const stand = texStandIn();
+    if (!stand || img === stand) return false;
+    t.image = stand;
+    return true;
+  }
+
   /** create(canvas, opts) -> Promise<backend|null>. Never throws. */
   async function create(canvas /*, opts */) {
     // Hoisted so the outer catch can tear down a half-booted soft overlay /
@@ -796,7 +827,7 @@ const TLX = (function () {
       let _shownAt = -1e9;
       try {
         document.addEventListener("visibilitychange", function () { if (!document.hidden) _shownAt = _nowMs(); });
-        window.addEventListener("pageshow", function () { _shownAt = _nowMs(); });
+        window.addEventListener("pageshow", function (e) { if (e && e.persisted) _shownAt = _nowMs(); });   // bfcache return only: the FIRST load fires pageshow too
       } catch (_) { /* no document events (harness) */ }
       renderer.onDeviceLost = function (info) {
         try { if (_threeOnLost) _threeOnLost(info); } catch (_) { /* three's own bookkeeping; ours must run regardless */ }
@@ -2789,7 +2820,17 @@ const TLX = (function () {
           t.flipY = true;                       // GLX uploads UNPACK_FLIP_Y
           t.anisotropy = 4;
           t.colorSpace = THREE.NoColorSpace;    // no-sRGB calibration invariant
+          // Drop the CPU source once three has copied it to the GPU (see
+          // releaseTexSource). onUpdate fires inside three's updateTexture after
+          // the upload and mip generation, on both the WebGPU and WebGL backends,
+          // whether the upload came from uploadTexture() or the first draw.
+          t.onUpdate = releaseTexSource;
           t.needsUpdate = true;
+          // Phones: LiveryTex paints EVERY atlas on ONE scratch canvas
+          // (liverytex.js scratchAtlas) and GLX/WGX copy it inside createTexture.
+          // three defers, so two atlas misses in one frame both uploaded the
+          // second car's paint. Upload now, as GLX does, so the reuse is safe.
+          if (mobileTier) { try { renderer.initTexture(t); } catch (_) { /* first draw uploads it */ } }
           return { __tlx: true, tex: t };
         },
         // Upload a createTexture() handle NOW instead of at the first frame that
@@ -2806,7 +2847,13 @@ const TLX = (function () {
           if (m && m.geo) { disposeGeometry(m.geo); m.geo = null; }
         },
         freeTexture(t) {
-          if (t && t.tex) { t.tex.dispose(); t.tex = null; return; }
+          if (t && t.tex) {
+            // The decal material cache keys on the texture: without this its
+            // entries kept the freed texture (and, before releaseTexSource, its
+            // 5 MB canvas) alive until LRU pressure happened to evict them.
+            if (fx && fx.releaseTexture) { try { fx.releaseTexture(t.tex); } catch (_) { /* cache bookkeeping only */ } }
+            t.tex.dispose(); t.tex = null; return;
+          }
           if (t && t.isTexture) t.dispose();          // a material array (createTextureArray)
         },
         // texCensus: GLX-only. Declared ABSENT rather than left off, because
