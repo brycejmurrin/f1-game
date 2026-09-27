@@ -239,7 +239,8 @@ function onboardAttitude(mode, eye, tgt, extra, s, spN) {
   const a = extra.att;
   if (!a) return;
   const heave = a.baHeave || 0, pitch = a.baPitch || 0;
-  const kerb = a.onKerb ? Math.sin(s * (2 * Math.PI / KERB_RIB_M)) * KERB_AMP * spN : 0;
+  // REDUCE MOTION drops the rib shiver (a high-frequency oscillation); heave/pitch are the car's own motion.
+  const kerb = a.onKerb && !extra.reduceMotion ? Math.sin(s * (2 * Math.PI / KERB_RIB_M)) * KERB_AMP * spN : 0;
   eye[1] += heave + kerb;
   tgt[1] += heave + pitch * 24;
 }

@@ -82,16 +82,23 @@ test("a networked race clock is anchored to the SHARED green, so a peer that los
   const game = readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
   assert.match(game, /netGreen = netStart \? \{ base: netStart\.at - raceT \* 1000, now: netStart\.now \} : null;/,
     "set at EVERY green (a red-flag restart re-bases on the clock it resumes from); a solo green clears it");
-  const body = game.match(/ {2}raceT \+= dt;\n {2}if \(netGreen\) \{[\s\S]*?\n {2}\}/)[0];
+  const body = game.match(/ {2}raceT \+= dt;\n {2}if \(netGreen && !netPlay\.active\(\)\) netGreen = null;[^\n]*\n {2}if \(netGreen\) \{[\s\S]*?\n {2}\}/)[0];
   // Run the real catch-up: 5 s in a background tab -> the local sim summed only
   // 0.25 s (the dt clamp); wall time since green is 65 s.
-  let raceT = 60, dt = 0.25, now = 1000 + 65000;
-  const netGreen = { base: 1000, now: () => now };
+  let raceT = 60, dt = 0.25, now = 1000 + 65000, live = true;
+  const netPlay = { active: () => live };
+  let netGreen = { base: 1000, now: () => now };
   eval(body.replace(/^ {2}/gm, ""));
   assert.equal(raceT, 65, "the clock carries the time the tab was away");
   now = 1000 + 64000; raceT = 64.9; dt = 0.016;
   eval(body.replace(/^ {2}/gm, ""));
   assert.ok(Math.abs(raceT - 64.916) < 1e-9, "never pulled BACK: the sim clock only ever catches up");
+  // THE RIVAL LEFT, then the player paused 30 s: the race is solo now, and a
+  // solo pause must not come back as 30 s of race clock.
+  live = false; now += 30000; raceT = 70; dt = 0.016;
+  eval(body.replace(/^ {2}/gm, ""));
+  assert.ok(Math.abs(raceT - 70.016) < 1e-9, "no wall-clock catch-up once netPlay stopped");
+  assert.equal(netGreen, null, "the shared anchor is dropped for good");
 });
 
 test("a reopened room code remembers the answers it already took (a guest's reposts are not a new joiner)", async () => {

@@ -513,7 +513,7 @@ const GameAudio = (function () {
     // iOS Safari starts contexts suspended; resume inside the gesture.
     // Guard the promise: resume() rejects (NotAllowed/InvalidState) on mobile at
     // the edge of a gesture — an unhandled rejection would surface as a crash.
-    if (ctx.state !== "running") { const p = ctx.resume(); if (p && p.catch) p.catch(() => {}); }
+    if (ctx.state !== "running" && !document.hidden) { const p = ctx.resume(); if (p && p.catch) p.catch(() => {}); }
     loadEngineSamples();
     return true;
   }
@@ -2355,7 +2355,8 @@ const GameAudio = (function () {
     musicOn = true;
     const token = ++musicToken;
     const builtin = !!PLAYLIST[musicIndex].builtin;
-    if (ctx.state !== "running") { const p = ctx.resume(); if (p && p.catch) p.catch(() => {}); }
+    // Never wake a context the hide path suspended: onVisibility's show branch resumes it.
+    if (ctx.state !== "running" && !document.hidden) { const p = ctx.resume(); if (p && p.catch) p.catch(() => {}); }
     if (musicBuffers[url]) { playMusicBuffer(musicBuffers[url], token); return; }
     // ONE DECODE IN FLIGHT PER URL. musicToken suppresses stale PLAYBACK but
     // never cancelled the fetch or the decode, and decodeAudioData allocates the

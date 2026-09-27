@@ -2262,7 +2262,7 @@ const _marbleArg = { lock: 0, slip: 0, speed: 0 };
 const _bankScratchCam = { dy: 0, roll: 0 };
 // Pooled camVantage extras + damp anchors — vantage() reads synchronously, keeps no reference.
 const _vantCarPos = [0, 0];
-const _vantExtra = { bankDy: 0, deploy: false, slipLat: 0, att: null, carPos: null, carHead: 0 };
+const _vantExtra = { bankDy: 0, deploy: false, slipLat: 0, att: null, carPos: null, carHead: 0, reduceMotion: false };
 const _camAP = [0, 0, 0], _camAN = [0, 0, 0];
 
 function cameraFollowsBank(mode) {
@@ -2905,6 +2905,9 @@ async function startRaceBody() {
   if (soundOn) { if (isRaining()) GameAudio.startRain(); else GameAudio.stopRain(); }
   warmCarAssets();            // meshes + atlases HERE, not on the first countdown frame (see warmCarAssets)
   DebrisWorld.prime(); updateHud(true);   // prime: build the side-world HERE, not on the lights-out frame (see DebrisWorld.prime)
+
+  // A flyby timer can land this in a BACKGROUND tab, after the hide handler ran in "menu" state.
+  if (document.hidden) setPaused(true);
 }
 const sessionEntry = SessionEntry.create();
 const _seasonEntryIds = new WeakMap();
@@ -4193,6 +4196,7 @@ function update(dt) {
   }
   if (state !== "race") return;
   raceT += dt;
+  if (netGreen && !netPlay.active()) netGreen = null;   // the rival left: a solo pause must not add its wall time on resume
   if (netGreen) {   // never runs BEHIND the shared clock; never ahead of it (the sim cannot outrun wall time)
     const w = (netGreen.now() - netGreen.base) / 1000;
     if (Number.isFinite(w) && w > raceT) raceT = w;
@@ -6843,7 +6847,7 @@ function render(dt) {
     // interpolation the car body and playerAnchor already use.
     const rpCam = renderPosOf(player);
     camAncNX = rpCam.world ? rpCam.x : null; camAncNZ = rpCam.world ? rpCam.z : 0;   // anchor for the car-frame camera damping below
-    _vantExtra.bankDy = bankDy; _vantExtra.deploy = player.deploying;
+    _vantExtra.bankDy = bankDy; _vantExtra.deploy = player.deploying; _vantExtra.reduceMotion = motionReduced;   // kerb shiver off (js/camera/vantage.js)
     _vantExtra.slipLat = player.vLat || 0; _vantExtra.att = player;
     // the car's real world pose, so the chase rig can follow the CAR
     _vantExtra.carPos = rpCam.world ? (_vantCarPos[0] = rpCam.x, _vantCarPos[1] = rpCam.z, _vantCarPos) : null;
@@ -6867,9 +6871,9 @@ function render(dt) {
     // hit/miss pattern each frame and the wet road FLICKERED in patches from
     // the cockpit. On a dry road there's no such reflection, so the buzz stays
     // for feel; on a wet road we drop it to keep the reflection stable. Also
-    // fades in with speed so it never jitters a slow/standing car.
+    // fades in with speed so it never jitters a slow/standing car. REDUCE MOTION drops it.
     const _buzzWet = 1.0 - clamp((frame.wetness || 0) * 2.0, 0.0, 1.0);
-    if (state === "race" && _buzzWet > 0.01 && (mode === "cockpit" || mode === "hood" || mode === "tcam")) {
+    if (state === "race" && !motionReduced && _buzzWet > 0.01 && (mode === "cockpit" || mode === "hood" || mode === "tcam")) {
       const spV = clamp(player.speed / vTop(), 0, 1);
       const vAmp = (spV * spV * 0.022 + (player.deploying ? 0.008 : 0)) * _buzzWet;
       if (vAmp > 0.001) {
@@ -8441,7 +8445,7 @@ function enableTilt() {
       setTimeout(() => {
         if (steerMode !== "tilt" || Input.gyroSeen || headlessMode) return;
         setSteerMode("buttons"); paintSteer();
-        els.audiostate.textContent = "no motion sensor — switched to buttons";
+        tiltSay("no motion sensor — switched to buttons");
       }, 1500);
     } else if (Input.gyroHardDenied) {   // a RESOLVED refusal, never a transient rejection (no user gesture)
       // Permission denied — fall back to buttons so the player can still steer.
@@ -8450,10 +8454,13 @@ function enableTilt() {
       setSteerMode("buttons");
     }
     paintSteer();
-    els.audiostate.textContent = ok && Input.tiltActive() ? "tilt steering ready"
-      : (Input.gyroDenied ? "motion access denied — switched to buttons" : "");
+    if (ok && Input.tiltActive()) els.audiostate.textContent = "tilt steering ready";   // the title line only: not worth a card every race
+    else tiltSay(Input.gyroDenied ? "motion access denied — switched to buttons" : "");
   });
 }
+// #audiostate is a TITLE-screen line, invisible from RACE!/lobby/pause — a steering
+// fallback the player did not choose must also reach the banner.
+function tiltSay(msg) { els.audiostate.textContent = msg; if (msg) announce(msg.toUpperCase(), 3, "info"); }
 
 function firstGesture() {
   GameAudio.setEnabled(soundOn);
@@ -8466,10 +8473,18 @@ function firstGesture() {
   // pause menu never gets the priming gesture iOS wants.
   radioVoice.unlock();
 }
+// A keyboard-only player never sends pointerdown: keydown (bar Escape, which is not
+// activation-triggering — html.spec.whatwg.org/#activation-triggering-input-event) and
+// click unlock audio too. One shared one-shot flag; all three unhook together.
 let gestured = false;
-document.addEventListener("pointerdown", () => {
-  if (gestured) return; gestured = true; firstGesture();
-}, { once: true, capture: true });
+const GESTURE_EVTS = ["pointerdown", "keydown", "click"];
+function onFirstGesture(e) {
+  if (gestured || (e.type === "keydown" && e.key === "Escape")) return;
+  gestured = true;
+  for (const t of GESTURE_EVTS) document.removeEventListener(t, onFirstGesture, true);
+  firstGesture();
+}
+for (const t of GESTURE_EVTS) document.addEventListener(t, onFirstGesture, true);
 
 
 // UI SIZE / HUD SIZE + RESOLUTION live in js/ui/scale.js (UiScale.create(G)
@@ -8772,6 +8787,7 @@ $("q-go").onclick = () => {
 // `session` has to come back with it. openQuali() set it to "quali", and leaving
 // the sheet without undoing that would leave the flow claiming a qualifying
 // session is running while the player sits in a menu.
+function qGoShakeEnd(e) { e.currentTarget.classList.remove("budget-reject"); }
 $("q-back").onclick = () => {
   // After the session ran (.q-done) this button is CSS-hidden and only TO THE
   // GRID shows — but Escape still routes here via data-esc-close="q-back", and
@@ -8783,7 +8799,7 @@ $("q-back").onclick = () => {
     const go = $("q-go");
     if (go) {
       go.classList.add("budget-reject");
-      go.addEventListener("animationend", () => go.classList.remove("budget-reject"), { once: true });
+      go.addEventListener("animationend", qGoShakeEnd, { once: true });   // ONE reference: a re-add is a no-op (dom.spec.whatwg.org), never one listener per press
     }
     return;
   }
@@ -8984,7 +9000,9 @@ function setPaused(p) {
   // never leave an overlay up after resume
   if (!p) { $("advanced").hidden = true; els.howtoplay.hidden = true; $("audioset").hidden = true; $("standings").hidden = true; $("track-detail").hidden = true; $("quali").hidden = true; els.results.hidden = true; }
   if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); $("pm-restart").disabled = !!(netPlay.active() || qualiNet.hasArmed()); }
-  else if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.startEngine(); }
+  // Music + rain too, as startRaceBody does: SOUND turned ON under the pause card defers
+  // all of it here (js/audio/panel.js). Both starts are no-ops when already playing.
+  else if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.startEngine(); GameAudio.startMusic(trackIdx); if (isRaining()) GameAudio.startRain(); }
   lastFrame = performance.now(); syncRotateBlocker(false);   // the pause card yields to an active rotate blocker on EVERY entry
 }
 els.pausebtn.onclick = () => setPaused(true);
