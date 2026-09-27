@@ -641,8 +641,20 @@ const TrackMesh = (function () {
         trk.push(k * ds, o, w);
       }
     }
+    // SEAM RING: node 0's columns again, with s = total. The last quad used to
+    // close onto node 0 itself, so trk.s ran (n-1)·ds → 0 across ~4 m and
+    // roadMarkings()' fract(s/7) cycled ~800 times there: a grey smear (and the
+    // pit-box paint) right on the grid, every circuit. Same positions, no crack.
+    const seam = n * V;
+    for (let v = 0; v < V; v++) {
+      pos.push(pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2]);
+      nrm.push(nrm[v * 3], nrm[v * 3 + 1], nrm[v * 3 + 2]);
+      col.push(col[v * 3], col[v * 3 + 1], col[v * 3 + 2]);
+      mat.push(mat[v]);
+      trk.push(track.total, trk[v * 3 + 1], trk[v * 3 + 2]);
+    }
     for (let k = 0; k < n; k++) {
-      const a = k * V, b = ((k + 1) % n) * V;
+      const a = k * V, b = k === n - 1 ? seam : (k + 1) * V;
       for (let v = 0; v < V - 1; v++) {
         idxArr.push(a + v, a + v + 1, b + v, a + v + 1, b + v + 1, b + v);
       }

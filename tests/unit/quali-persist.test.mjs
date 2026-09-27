@@ -389,3 +389,20 @@ test("equal seeds give identical AI qualifying rows; a different seed does not",
   assert.deepEqual(a, b, "the same seed on two peers must classify the field identically");
   assert.notDeepEqual(a, c, "a different seed must move at least one AI time");
 });
+
+test("a player whose every lap was deleted (driven = Infinity) is NO TIME, last — not handed the model's lap", () => {
+  // Bug hunt 2026-09-26: a cut quali lap left myLap 0, so compute() gave the
+  // player simLap() — a time that could be pole. Infinity means "drove, no time".
+  const { q } = loadQuali({ cars: [
+    car("p1", "VER", "Verstappen", "rb", true),
+    car("p2", "HAM", "Hamilton", "me", false),
+    car("p3", "LEC", "Leclerc", "rb", false),
+  ] });
+  q.simulate(new Map([["p1", Infinity]]));
+  const rows = q.rows();
+  const me = rows.find((r) => r.isPlayer);
+  assert.equal(me.pos, rows.length, "NO TIME starts from the back");
+  assert.equal(me.noTime, true);
+  assert.ok(Number.isFinite(me.t) && Number.isFinite(me.gap), "the sheet still gets finite numbers");
+  for (const r of rows) if (!r.isPlayer) assert.ok(r.t < me.t);
+});
