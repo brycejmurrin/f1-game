@@ -259,6 +259,22 @@
       for (let i = 0; i < _evicted.length; i++) { try { _evicted[i].dispose(); } catch (_) { /* already disposed */ } }
       _evicted.length = 0;
     }
+    // tlx.js freeTexture: retire every decal material bound to a freed
+    // texture. Same deferred dispose as the LRU eviction below (the material
+    // may still sit in this frame's drawList); returns how many were dropped.
+    function releaseTexture(tex) {
+      let n = 0;
+      if (!tex) return n;
+      for (const [k, v] of decalCache) {
+        if (!v || v.map !== tex) continue;
+        decalCache.delete(k);
+        _evicted.push(v);
+        const fi = _fxMats.indexOf(v);
+        if (fi >= 0) _fxMats.splice(fi, 1);
+        n++;
+      }
+      return n;
+    }
     function decalMaterialFor(tex, glow) {
       const key = tex.id + "|" + glow;
       let m = decalCache.get(key);
@@ -314,7 +330,7 @@
     }
 
     return { shadowMat, markMat, skidMat, glowMat, glowStr, lineMat, lineSpeed, lineCorners, lineStr, linePalette, lineOpacity,
-             particleMats, setSsrMrt, decalMaterialFor, updateFrame, flushEvicted };
+             particleMats, setSsrMrt, decalMaterialFor, releaseTexture, updateFrame, flushEvicted };
   }
 
   window.TLXShaders = Object.assign(window.TLXShaders || {}, { fx });

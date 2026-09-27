@@ -103,3 +103,23 @@ test("Tracks measures the tallest prop above its OWN ground, before the upload",
   assert.match(src, /track\.propTop = propTop\(track, propsGeo\);/);
   assert.match(src, /const g = terrainY\(track, p\[i\], p\[i \+ 2\]\);/, "height above the prop's own terrain, not the lowest road point");
 });
+
+// Every real backend has createInstancedBatch, so TrackGraph WITHHOLDS the
+// instanced placements' triangles from propsGeo (city masses, walls, crowd
+// risers) and they cast from track.meshes.propBatches instead. propTop read
+// propsGeo alone, so in a browser it came out short: zolder 15.6 m against
+// 36.6 m fused, anderstorp 17.3 against 35.1, watkins_glen 27.6 against 44.2
+// (VM sweep, 2026-09-27). Build the same circuit both ways in the node VM:
+// the instanced build must now measure what the fused build measures, and the
+// fused (headless) number must be the unchanged propsGeo scan.
+test("propTop counts the instanced placements a real backend withholds from propsGeo", async () => {
+  const { createRequire } = await import("node:module");
+  const { buildContext } = createRequire(import.meta.url)("../../tools/track/verify-track.cjs");
+  const top = (instancing, id) => {
+    const T = buildContext(null, { instancing, quiet: true });
+    return T.build(T.LIST.find(d => d.id === id)).propTop;
+  };
+  const fused = top(false, "zolder"), inst = top(true, "zolder");
+  assert.ok(fused > 30, `zolder's fused prop top ${fused.toFixed(2)} m — the fixture moved; re-measure`);
+  assert.ok(Math.abs(inst - fused) < 1, `instanced build ${inst.toFixed(2)} m vs fused ${fused.toFixed(2)} m`);
+});

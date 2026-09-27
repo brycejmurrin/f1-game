@@ -390,7 +390,11 @@ function getCompoundRing(col) {
 // x +/-0.79 / z 1.7 and -1.6), drawn only while the car is held in its box
 // (car-draw drawPitCrew). Built from GaragePrims' blocks; a VM without them
 // draws nothing.
+// FIFO-capped like getAeroFlap: the key is the team colour, and a livery
+// editor or custom team mints a new colour per edit, so an uncapped map kept
+// every one's GPU buffers for the page's life. Map order IS insertion order.
 const _crewMeshes = new Map();
+const CREW_CACHE_MAX = 32;   // one per team colour on the grid, with room for custom liveries
 function getCrewMesh(col) {
   const key = col[0].toFixed(2) + "," + col[1].toFixed(2) + "," + col[2].toFixed(2);
   let m = _crewMeshes.get(key);
@@ -419,6 +423,12 @@ function getCrewMesh(col) {
   }
   m = _gfx.createMesh(out);
   _crewMeshes.set(key, m);
+  if (_crewMeshes.size > CREW_CACHE_MAX) {
+    const old = _crewMeshes.keys().next().value;
+    const om = _crewMeshes.get(old);
+    _crewMeshes.delete(old);
+    if (om && _gfx.freeMesh) _gfx.freeMesh(om);
+  }
   return m;
 }
 
