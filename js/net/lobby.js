@@ -1192,7 +1192,10 @@ const NetLobby = (function () {
     let answering = null;        // the transport an answer is being built for
     async function makeAnswer(codeIn) {
       const e = els();
-      const code = codeIn != null ? codeIn : (e.inviteIn ? e.inviteIn.value : "");
+      // The button reads the box, and the box holds whatever got there — a
+      // link, or a code inside a message — when no paste event ran (a keyboard
+      // clipboard chip, drag-drop). codeFrom: the same unwrapping deliver() does.
+      const code = codeFrom(codeIn != null ? codeIn : (e.inviteIn ? e.inviteIn.value : ""));
       if (codeIn != null && e.inviteIn) e.inviteIn.value = codeIn;
       if (!code.trim()) { say("Paste their invite code first.", true); return { ok: false, error: "empty" }; }
       // Shape first, connection second: a typo is refused as a typo even while
@@ -1241,7 +1244,7 @@ const NetLobby = (function () {
     async function acceptAnswer(codeIn) {
       const gen = beginOperation();
       const e = els();
-      const code = codeIn != null ? codeIn : (e.answerIn ? e.answerIn.value : "");
+      const code = codeFrom(codeIn != null ? codeIn : (e.answerIn ? e.answerIn.value : ""));   // as makeAnswer
       if (codeIn != null && e.answerIn) e.answerIn.value = codeIn;
       if (!code.trim()) { say("Paste their answer code first.", true); return { ok: false, error: "empty" }; }
       const peek = NetHandshake.peekCode ? NetHandshake.peekCode(code) : { ok: true };   // shape before connection, as makeAnswer
