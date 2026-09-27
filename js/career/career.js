@@ -1077,7 +1077,8 @@ function settleRound(order, player) {
   if (career.results.some((row) => row.r === raced)) return null;
   const pos = order.indexOf(player) + 1;
   const team = teamOf(career.team);
-  const pts = player.retired ? 0 : (Teams.POINTS[pos - 1] || 0);
+  const scored = (c) => (c.classified != null ? !!c.classified : !c.retired);   // a DNF past 90 % distance is classified (endRace)
+  const pts = scored(player) ? (Teams.POINTS[pos - 1] || 0) : 0;
   const prize = prizeFor(pos);
   const salary = career.deal ? career.deal.salary : 0;
   const bonus = career.deal ? career.deal.bonusPt * pts : 0;
@@ -1108,7 +1109,7 @@ function settleRound(order, player) {
                  + clamp((craft - CRAFT_BASE) * CRAFT_REP, CRAFT_REP_MIN, CRAFT_REP_MAX);
   career.rep = clamp(career.rep + repDelta, 0, 100);
   const dnf = player.retired ? (player.dnf || "mechanical") : null;
-  const matePts = mate && !mate.retired ? (Teams.POINTS[order.indexOf(mate)] || 0) : 0;
+  const matePts = mate && scored(mate) ? (Teams.POINTS[order.indexOf(mate)] || 0) : 0;
   const dbl = career.flavour === "myteam" && pts > 0 && matePts > 0;
   const cleanRun = !player.retired && !(player.cuts | 0) && !(player.penalty | 0);
   career.results.push({ r: raced, p: pos, pts, obj: obj.done, dnf,

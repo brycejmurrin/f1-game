@@ -849,10 +849,16 @@ const AiDrive = (function () {
     // not on a fresh set's life. An AI passes none of them.
     const pinStops = ctx.stops != null && ctx.stops >= 0 ? Math.min(MAX_STOPS, ctx.stops | 0) : null;
     let pinStart = ctx.start && TYRE[ctx.start] ? ctx.start : null;
+    // TWO DRY SPECIFICATIONS (FIA Sporting Regulations B6.3.6): a dry race
+    // must use at least two different compounds. `used` is what a mid-race
+    // re-cut has already run; a plan that ends on one compound is refused.
+    let twoCompound = !!ctx.twoCompound;
+    const used = ctx.used || [];
     let best = null;
     const walk = (seq) => {
       const stops = seq.length - 1;
       if (pinStops != null && stops !== pinStops) return;
+      if (twoCompound && new Set(used.concat(seq)).size < 2) return;
       if (pinStart && seq[0] !== pinStart) return;
       const lives = seq.map((cls, i) => (i === 0 && ctx.firstLife > 0 ? ctx.firstLife : lifeLaps(cls)));
       const stints = splitStints(laps, lives, FUEL_WEAR);
@@ -891,6 +897,8 @@ const AiDrive = (function () {
     // A start pinned to a compound the planner does not enumerate (a wet on a
     // drying track) matches no sequence: plan from the classes instead.
     if (!best && pinStart) { pinStart = null; for (const cls of CLASSES) rec([cls]); }
+    // A pinned 0-stop cannot satisfy the rule: honour the pin, not the rule.
+    if (!best && twoCompound) { twoCompound = false; for (const cls of CLASSES) rec([cls]); }
     // Stop laps are the running totals of the stint lengths — STAGGERED by the
     // roll, a lap either way in thirds of the field. Without it a field on one
     // plan stopped on ONE lap: 22 cars into a twelve-box lane at once (Bahrain,

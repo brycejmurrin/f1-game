@@ -380,7 +380,7 @@ function award(season, order, fastestId) {
     // `c.finished` as well, and from then on most of the field scored 0 while
     // the results sheet still showed their points. Only retirements score
     // nothing; the fastest-lap bonus alone needs a lap actually completed.
-    const classified = !c.retired;
+    const classified = c.classified != null ? !!c.classified : !c.retired;   // endRace sets it: a DNF past 90 % of the winner's laps is classified (FIA B2.5 b)
     let pts = classified ? (table[i] || 0) : 0;
     if (fl && classified && c.finished && c.driverId === fastestId && i < 10) { pts += 1; season.lastFl = fastestId; }
     const row = rp[c.driverId] || (rp[c.driverId] = []);
