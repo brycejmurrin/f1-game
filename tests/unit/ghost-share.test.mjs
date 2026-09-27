@@ -289,6 +289,16 @@ test("Phase 1 wires sharing into load order, results, boot/hashchange, HUD, and 
   assert.match(results, /res-ghost-download/);
   assert.match(game, /GhostShare\.consumeHash/);
   assert.match(game, /addEventListener\("hashchange"/);
+  // Bug hunt 2026-09-27: a ghost link arriving MID-RACE yanked the player to the
+  // time-trial select. It must bail BEFORE consumeHash strips the fragment, and
+  // quitToMenu must pick the deferred link up (the #353 invite-link rule).
+  const ghostFn = game.slice(game.indexOf("async function consumeGhostHash()"));
+  assert.ok(ghostFn.indexOf("UiLayers.inRace()") >= 0 &&
+            ghostFn.indexOf("UiLayers.inRace()") < ghostFn.indexOf("GhostShare.consumeHash"),
+    "the race guard must run before the fragment is consumed");
+  const quit = game.slice(game.indexOf("function quitToMenu()"));
+  assert.match(quit.slice(0, quit.indexOf("\n}\n")), /consumeGhostHash\(\)/,
+    "returning to the menu lands a ghost link deferred while racing");
   assert.match(game, /GhostShare\.hasGuest\(\)\s*\?\s*GhostShare\s*:\s*Ghost/);
   assert.match(hud, /GhostShare\.hasGuest\(\)\s*\?\s*GhostShare\s*:\s*Ghost/);
   assert.match(hud, /RIVAL GHOST/);

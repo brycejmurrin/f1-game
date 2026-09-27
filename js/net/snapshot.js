@@ -8,6 +8,7 @@ const NetSnapshot = (function () {
   const SNAP_HEADER = 6;             // type u8 + tick u32 + count u8
 
   const TAU = Math.PI * 2;
+  const MAX_AHEAD_MS = 3000;         // createInterp().push refuses a tick further ahead than this
   const U16 = 65536;
 
   // Flags packed above the gear nibble.
@@ -116,8 +117,17 @@ const NetSnapshot = (function () {
     const keep = opts.keep || 32;
     let samples = [];                      // ascending by t
 
+    // A tick this far AHEAD of the local clock at arrival is not latency or
+    // clock-sync error (the offset is bounded by half the 4 s RTT cap in
+    // session.js) — it is a bad or hostile peer. Accepted, one such packet
+    // became the buffer's newest sample for good (nothing newer ever arrives)
+    // and pinned lastTick, so every honest packet after it skipped the
+    // adaptive-delay update: the rival froze and the delay stopped adapting.
+    const maxAheadMs = opts.maxAheadMs != null ? opts.maxAheadMs : MAX_AHEAD_MS;
+
     function push(t, st, arrivalMs) {
       if (!Number.isFinite(t)) return false;
+      if (Number.isFinite(arrivalMs) && t - arrivalMs > maxAheadMs) return false;
       if (opts.adaptive && Number.isFinite(arrivalMs) && (lastTick == null || t > lastTick)) {
         if (lastArrival != null) {
           const deviation = Math.min(200, Math.abs((arrivalMs - lastArrival) - (t - lastTick)));
@@ -270,7 +280,7 @@ const NetSnapshot = (function () {
   }
 
   return {
-    TYPE_SNAPSHOT, CAR_BYTES,
+    TYPE_SNAPSHOT, CAR_BYTES, MAX_AHEAD_MS,
     encodeSnapshot, decodeSnapshot,
     // Shared with session.js, which decodes off the same channel.
     toView,

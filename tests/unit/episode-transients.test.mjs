@@ -42,3 +42,32 @@ for (const track of TRACKS) {
     }
   });
 }
+
+// ── RACE-END STATE (bug hunt 2026-09-27) ─────────────────────────────────────
+// A 4 s rollout never retires or classifies a car, so the diff above cannot see
+// this class: a car retired in episode 1 stayed PARKED (retired/dnf) through
+// every later reset(), finPos/_coastHeld/lastLap survived, and reset() never
+// re-armed reliability, so a seed's planned failure did not recur.
+test("reset() clears retirements and classification and re-arms the same reliability plan", async () => {
+  const { createRequire } = await import("node:module");
+  const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
+  const g = await createGame({ track: "monza" });
+  try {
+    await g.race("monza");
+    const A = g.apex, G = g.G;
+    A.reliability("real");
+    A.headless(true);
+    A.reset(0.02, 55, 0, 42);
+    const plan = JSON.stringify(A.retirements());
+    assert.ok(A.retirements().length > 0, "seed 42 at 'real' plans at least one failure (else this proves nothing)");
+    A.retire(3, "engine");
+    Object.assign(G.cars[5], { finPos: 7, _coastHeld: true, lastLap: 91.2 });
+    A.reset(0.02, 55, 0, 42);
+    assert.equal(G.cars[3].retired, false, "a car retired last episode is back on the grid");
+    assert.equal(G.cars[3].dnf, null);
+    assert.equal(G.cars[5].finPos, 0, "finPos restored to makeCars' 0");
+    assert.equal("_coastHeld" in G.cars[5], false, "absent on a cold car");
+    assert.equal("lastLap" in G.cars[5], false, "absent on a cold car");
+    assert.equal(JSON.stringify(A.retirements()), plan, "the same seed replans the same failures");
+  } finally { g.close(); }
+});
