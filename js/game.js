@@ -176,6 +176,7 @@ const DATA_READY = {
   "js/data/standings.js": () => typeof DataStandings !== "undefined",
   "js/data/results.js": () => typeof DataResults !== "undefined",
   "js/data/live.js": () => typeof DataLive !== "undefined",
+  "js/data/real-race-tab.js": () => typeof DataRealRace !== "undefined",
   "js/data/hub.js": () => typeof DataHub !== "undefined",
 };
 // Memoised on the PROMISE, not on a boolean: two fast taps on DATA must not
@@ -3565,6 +3566,7 @@ const G = {
   referencePole: () => quali.referencePole(),
   redFlagRestart,
   get daily() { return daily; },
+  holdCaution: (level, cause) => raceCtl.hold(level, cause),   // a scripted flag (js/race/real-race.js); 0 releases it
   get ttDistance() { return TT_LAPS; },   // the time-trial distance a daily session stages (ttLaps is the session's lap list)
   // CHANGEABLE conditions: the weather walks from the chip's start to a
   // target the host decides (wxArcPlan) — see startRace / WeatherArc.planFor.
@@ -3607,6 +3609,7 @@ const records = SessionRecords.create(G);
 const coach = DrivingCoach.create(G);
 const raceRadio = RaceRadio.create(G);    // the engineer's race awareness + TV commentary (js/race/race-radio.js)
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
+const realRace = RealRace.create(G);      // a real Grand Prix replayed from its timing script (js/race/real-race.js)
 titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js/ui/title-menu.js)
 const onboard = Onboard.create(G);        // first-run coach marks (js/ui/onboard.js)
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
@@ -4034,7 +4037,7 @@ function quitToMenu() {
   // left the flyby active() for the session — capture listeners attached, and
   // menuBlank and the per-car draw break both gate on !active(). Idempotent.
   loadingScreen.stop();
-  state = "menu"; paused = false; raceCtl.reset(); wxArc.endSession(); daily.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
+  state = "menu"; paused = false; raceCtl.reset(); wxArc.endSession(); daily.stop(); realRace.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
   // A netplay lights-out instant is consumed by the countdown (the
   // `netStart = null` at its end). Quitting BEFORE that consumption stranded
   // it, and the next SOLO race read an `at` already in the past: countT
@@ -4254,7 +4257,7 @@ function update(dt) {
 
   // B1 — debris caution: consume hazards() and drive the local-yellow / VSC / SC
   // flag state (READ-ONLY; never slows or moves a car). Self-guarding + throttled.
-  updateCaution(dt); coach.update(dt); raceRadio.update(dt);
+  realRace.update(dt); updateCaution(dt); coach.update(dt); raceRadio.update(dt);   // the script's flags go in before race control reads the picture
 
   // Race-control owns the finish policy as well as neutralisation rules. In a
   // human race an AI/other player crossing first must NOT start a 3.5 s result
