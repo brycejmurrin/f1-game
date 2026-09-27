@@ -205,7 +205,12 @@ async function watchPages(sha, { interval, deadline }) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const ref = opt("--sha", "HEAD");
   const g = spawnSync("git", ["rev-parse", ref], { cwd: ROOT, encoding: "utf8" });
-  const sha = (g.stdout || "").trim() || ref;
+  // actions/runs?head_sha= matches a FULL sha only. A commit made on GitHub
+  // (a PR's merge commit) is not in this clone until the next fetch, so
+  // rev-parse fails and a short sha reached the API: "no run" and then a false
+  // "= ci none" on a deploy push whose run was in progress (2026-09-27).
+  let sha = (g.stdout || "").trim();
+  if (!/^[0-9a-f]{40}$/.test(sha)) sha = (/^[0-9a-f]{4,39}$/.test(ref) && api(`commits/${ref}`).json?.sha) || ref;
   const interval = Math.max(10, +opt("--interval", 30)) * 1000;
   const tmin = +opt("--timeout", 0);
   const deadline = tmin > 0 ? Date.now() + tmin * 60_000 : Infinity;
