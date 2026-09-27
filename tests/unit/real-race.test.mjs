@@ -35,7 +35,9 @@ function load() {
   seedLog(ctx);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "mat4.js" });   // M4.clamp, bound at eval
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/teams.js"), "utf8"), ctx, { filename: "teams.js" });
-  vm.runInContext("var Tracks = " + JSON.stringify({ LIST: TRACKS }) + ";", ctx);
+  // Tracks: the list, plus the two geometry reads a mid-race drop-in makes (a straight 6 km ring, 7 m half-width).
+  vm.runInContext("var TyreModel = { AI_CLASS: { soft: { life: 0.48 }, medium: { life: 0.74 }, hard: { life: 1.05 }, inter: { life: 1 }, wet: { life: 1 } } };", ctx);   // the compound lives place() reads
+  vm.runInContext("var Tracks = " + JSON.stringify({ LIST: TRACKS }) + "; Tracks.sample = function (t, s, o) { o.p[0] = s; o.p[1] = 0; o.p[2] = 0; o.t[0] = 1; o.t[1] = 0; o.t[2] = 0; o.r[0] = 0; o.r[1] = 0; o.r[2] = 1; o.hw = 7; }; Tracks.wallAt = function () { return 9; };", ctx);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/real-race-tab.js"), "utf8"), ctx, { filename: "real-race-tab.js" });
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race.js"), "utf8"), ctx, { filename: "real-race.js" });
   const Teams = vm.runInContext("Teams", ctx);
@@ -56,7 +58,8 @@ function makeCars(Teams, playerSeat = "mercedes:0") {
       const id = t.id + ":" + di;
       cars.push({ team: t, code: d.code, name: d.name, driverId: id, human: id === playerSeat, isPlayer: id === playerSeat,
         tierV: Teams.TIER_V[t.tier], skill: 0.95 + di * 0.01, lap: 0, totalT: 0, lastLap: 0, retired: false, finished: false,
-        pitPlan: { pitLossLaps: 0.2, lapsAt: [2], seq: ["soft", "hard"], start: "soft", stops: 1 }, tyreClass: "soft", gridPos: 0, dnfAt: null, dnfWhy: null });
+        pitPlan: { pitLossLaps: 0.2, lapsAt: [2], seq: ["soft", "hard"], start: "soft", stops: 1 }, tyreClass: "soft", gridPos: 0, dnfAt: null, dnfWhy: null,
+        s: 0, x: 0, prog: -20, speed: 0, tyreWear: 0, tyreLap0: 0, pitStops: 0, tyreStints: 0 });
     });
   }
   return cars;
@@ -67,11 +70,15 @@ function makeG(Teams, cars) {
   const G = {
     state: "menu", cars, ranked: cars, teamIdx: 2, driverIdx: 1, raceLaps: 3, raceWeather: "wet", raceTimeOfDay: "night", duel: true,
     raceTyreWear: "off", raceChangeable: true, flow: "career", session: "tt", timeTrial: true, trackIdx: 0,
+    track: { total: 6000 }, raceT: 0, raceWeather: "wet",
+    wrapS: (v) => ((v % 6000) + 6000) % 6000, vTop: () => 80, referencePole: () => 140, refreshHud: () => calls.push(["refreshHud"]),
+    startWeatherArc: (from, to, dur) => calls.push(["arc", from, to, dur]),
     resetRaceDraft: () => calls.push(["resetRaceDraft"]),
     startRace: () => calls.push(["startRace"]),
     gridUp: (order) => { calls.push(["gridUp", order.map((c) => c.code)]); order.forEach((c, i) => { c.gridPos = i + 1; }); },
     snapGameCam: () => calls.push(["snapGameCam"]),
-    tyres: { on: () => true, classRecord: (cls) => ({ cls }), fit: (c, rec) => { c.tyre = rec; } },
+    tyres: { on: () => true, classRecord: (cls) => ({ cls }), fit: (c, rec) => { c.tyre = rec; c.tyreWear = 0; c.tyreLap0 = c.lap || 0; c.tyreStints = (c.tyreStints || 0) + 1; },
+             planLaps: (life, n) => life * n },
     announce: (m) => calls.push(["announce", m]),
     holdCaution: (level, cause) => calls.push(["hold", level, cause]),
     applyCaution: (d) => calls.push(["apply", d.level]),
@@ -114,7 +121,7 @@ test("the real strategy becomes the pit plan the pit lane executes, at full and 
   const { R, script } = load();
   const rus = script.drivers.find((d) => d.num === 63);
   const full = R.planFor(rus, 51, 51, 0.2);
-  assert.deepEqual(host(full), { start: "medium", seq: ["medium", "soft", "soft"], stints: [31, 5, 15], stops: 2, lapsAt: [31, 36], cost: 0, pitLossLaps: 0.2, real: true });
+  assert.deepEqual(host(full), { start: "medium", seq: ["medium", "soft", "soft"], stints: [31, 5, 15], stops: 2, lapsAt: [31, 36], cost: 0, pitLossLaps: 0.2 });
   const short = R.planFor(rus, 10, 51, 0);
   assert.deepEqual(host(short.lapsAt), [6, 7]);
   assert.equal(short.stints.reduce((a, b) => a + b, 0), 10, "the stints cover the distance exactly");
@@ -166,7 +173,7 @@ test("stage() seats the player, sets the session, and stop() restores every sett
   const rr = R.create(G);
   assert.equal(rr.isActive(), false);
   const p = rr.stage(script, { seat: "LEC", laps: 10 });
-  assert.deepEqual(host(p), { trackId: "baku", laps: 10, seat: "LEC" });
+  assert.deepEqual(host(p), { trackId: "baku", laps: 10, seat: "LEC", startLap: 1 });
   assert.equal(G.trackIdx, 1);
   assert.equal(G.teamIdx, Teams.LIST.findIndex((t) => t.id === "ferrari"));
   assert.equal(G.driverIdx, 0);
@@ -179,9 +186,13 @@ test("stage() seats the player, sets the session, and stop() restores every sett
   assert.ok(calls.some((c) => c[0] === "resetRaceDraft"));
   assert.equal(rr.isActive(), true);
   assert.equal(rr.current(), script);
-  // An unknown seat falls back to the first driver; an unknown circuit refuses.
-  assert.equal(rr.stage(script, { seat: "ZZZ" }).seat, "RUS");
+  // An unknown seat is REFUSED (never someone else's car); no seat asked for takes the first seated driver; an unknown circuit refuses.
+  assert.equal(rr.stage(script, { seat: "ZZZ" }), null);
+  assert.equal(rr.stage(script, {}).seat, "RUS");
   assert.equal(rr.stage({ ...script, trackId: "spa" }), null);
+  // A start lap is kept inside the race.
+  assert.equal(rr.stage(script, { seat: "RUS", startLap: 31 }).startLap, 31);
+  assert.equal(rr.stage(script, { seat: "RUS", startLap: 99 }).startLap, 51);
   assert.equal(rr.launch(script, { seat: "RUS" }).seat, "RUS");
   assert.ok(calls.some((c) => c[0] === "startRace"));
   rr.stop();
@@ -263,7 +274,7 @@ test("the closed loop: the field on its real timeline gets open-loop pace; a car
   };
   cross(1); cross(2); cross(3);
   const st = rr.status();
-  assert.ok(Math.abs(st.K - K0) < 1e-6, "the scale is read off the reference car: " + st.K);
+  assert.ok(Math.abs(st.K - K0) < 1e-6, "the scale is read off the reference car (Russell, the best-classified AI seat): " + st.K);
   const ver = st.cars.find((c) => c.code === "VER");
   assert.ok(Math.abs(ver.err) < 1e-6, "on the real timeline the gap error is zero");
   assert.ok(Math.abs(ver.mul - 1 / pace.rel[3][4]) < 1e-4, "open loop only: the real lap-4 pace relative to the field (status rounds to 4 places)");
@@ -320,4 +331,141 @@ test("safety-car windows fly on the leader's lap and hand back at the window's e
   G.state = "count"; rr.update(1 / 60); G.state = "race"; calls.length = 0;
   leader.lap = 3; rr.update(1 / 60); rr.update(1 / 60);
   assert.deepEqual(host(calls.filter((c) => c[0] === "apply")), [["apply", 4]]);
+});
+
+test("fieldAt(): the race as it stood at the start of a lap — who was where, on what, and who was already out", () => {
+  const { R, script } = load();
+  assert.equal(R.fieldAt(script, 1), null, "lap 1 is the grid");
+  const at = R.fieldAt(script, 31);
+  const cum = R.cumTable(script);
+  assert.equal(at.lap, 31);
+  assert.ok(Math.abs(at.t0 - Math.min(...script.drivers.filter((d) => cum[d.num].length > 30).map((d) => cum[d.num][30]))) < 1e-9, "t0 is the leader's crossing that completes lap 30");
+  const rus = at.by[63];
+  assert.equal(rus.lap, 31); assert.equal(rus.frac, 0, "the leader is on the line"); assert.equal(rus.retired, false);
+  assert.equal(rus.compound, "medium"); assert.equal(rus.age, 30 + script.drivers.find((d) => d.num === 63).stints[0].age, "30 laps run plus the set's age when it was fitted"); assert.equal(rus.stint, 0);
+  const str = at.by[18];
+  assert.equal(str.retired, true, "Stroll stopped on lap 8");
+  const alo = at.by[14];
+  assert.equal(alo.retired, true, "Alonso stopped on lap 21");
+  // Everyone still running is somewhere inside the lap they were on, by TIME.
+  for (const d of script.drivers) {
+    const a = at.by[d.num];
+    if (a.retired) continue;
+    assert.ok(a.lap >= 1 && a.lap <= 31, d.code + " lap " + a.lap);
+    assert.ok(a.frac >= 0 && a.frac <= 0.98, d.code + " frac " + a.frac);
+    assert.ok(Math.abs(a.into - a.frac * d.laps[a.lap - 1]) < 1e-6 || a.frac === 0.98, d.code + " time into the lap");
+  }
+  // A lapped car is a lap down at t0.
+  const lapsDown = script.drivers.filter((d) => !at.by[d.num].retired && at.by[d.num].lap < 31);
+  assert.ok(lapsDown.length >= 0);
+  // A set that came into the race used carries its quali age.
+  const aged = { ...script, drivers: [{ ...script.drivers[0], stints: [{ c: "SOFT", from: 1, to: 51, age: 3 }] }] };
+  assert.equal(R.fieldAt(aged, 5).by[63].age, 7, "4 laps run plus 3 laps old at the start");
+});
+
+test("a mid-race jump-in drops every car where it was, on its set, with the clock and the reference seeded", () => {
+  const { R, script, Teams } = load();
+  const cars = makeCars(Teams, "ferrari:0");
+  const { G, calls } = makeG(Teams, cars);
+  const rr = R.create(G);
+  rr.stage(script, { seat: "LEC", startLap: 31 });
+  assert.equal(G.raceWeather, "dry", "no rain flags: the race's one weather");
+  G.state = "count"; rr.update(1 / 60);
+  assert.equal(rr.status().placed, false, "the countdown shows the grid; the drop happens on the green");
+  G.state = "race"; rr.update(1 / 60);
+  const st = rr.status();
+  assert.equal(st.placed, true);
+  assert.equal(st.startLap, 31);
+  const at = R.fieldAt(script, 31);
+  const K0 = 140 / R.paceTable(script).best;
+  assert.ok(Math.abs(st.K - K0) < 1e-4, "K seeded from the model's reference lap over the race's best clean lap");
+  assert.ok(Math.abs(G.raceT - K0 * at.t0) < 1e-6, "the race clock stands at the jump instant");
+  const by = (code) => cars.find((c) => c.code === code);
+  assert.equal(by("RUS").lap, 31); assert.equal(by("RUS").s, 0);
+  assert.ok(Math.abs(by("RUS").prog - 30 * 6000) < 1e-6);
+  assert.ok(Math.abs(by("RUS").totalT - K0 * at.t0) < 1e-6);
+  assert.equal(by("RUS").speed, 0.55 * 80);
+  assert.equal(by("RUS").tyre.cls, "medium");
+  assert.ok(by("RUS").tyreWear > 0.5, "a 30-lap-old medium is well worn: " + by("RUS").tyreWear);
+  assert.ok(by("RUS").tyreWear <= 0.9);
+  assert.equal(by("RUS").pitStops, 0);
+  assert.equal(by("LEC").lap, at.by[16].lap, "the player is dropped in too, on the lap he was really on (30: Russell had just lapped him onto it)");
+  assert.equal(at.by[16].lap, 30);
+  assert.ok(by("LEC").tyre.cls === "soft");
+  // Stroll (out on lap 8) and Alonso (out on lap 21) are parked at the wall, quietly.
+  assert.equal(by("STR").retired, true); assert.equal(by("STR").speed, 0); assert.equal(by("STR").dnf, "accident");
+  assert.equal(by("ALO").retired, true);
+  assert.ok(!calls.some((c) => c[0] === "announce" && /RETIREMENT/.test(c[1])), "no retirement broadcast for cars that were already out");
+  assert.ok(calls.some((c) => c[0] === "announce" && /LAP 31/.test(c[1])), "the banner names the lap");
+  assert.ok(calls.some((c) => c[0] === "refreshHud"));
+  // A car running at t0 sits inside the lap it was on, by time.
+  const sai = by("SAI"); const a = at.by[55];
+  assert.equal(sai.lap, a.lap);
+  assert.ok(Math.abs(sai.s - a.frac * 6000) < 1e-6);
+  // The safety car deployed on lap 31 is held from the first frame.
+  assert.deepEqual(calls.filter((c) => c[0] === "hold").map((c) => [c[1], c[2]]), [[3, "SAFETY CAR"]]);
+  // Condensed: the same jump lands on the proportional sim lap.
+  rr.stop();
+  rr.stage(script, { seat: "LEC", startLap: 31, laps: 10 });
+  G.state = "count"; rr.update(1 / 60); G.state = "race"; rr.update(1 / 60);
+  assert.equal(by("RUS").lap, 6);
+  assert.ok(Math.abs(by("RUS").prog - 5 * 6000) < 1e-6);
+});
+
+test("the gain is per sim lap at a condensed distance, and a red-flag lap rewind is followed, not measured", () => {
+  const { R, script, Teams } = load();
+  const cars = makeCars(Teams, "ferrari:0");
+  const { G } = makeG(Teams, cars);
+  const rr = R.create(G);
+  rr.stage(script, { seat: "LEC", laps: 10 });
+  G.state = "count"; rr.update(1 / 60); G.state = "race";
+  const cum = R.cumTable(script), pace = R.paceTable(script);
+  const numOf = (c) => script.drivers.find((d) => d.code === c.code).num;
+  const K0 = 1.4 / 5.1;   // a tenth-distance race: sim time per real time is compressed by the lap ratio
+  const cross = (lap, tweak = {}) => {
+    const order = cars.filter((c) => !c.human && cum[numOf(c)].length > R.realLapFor(lap, 10, 51)).sort((a, b) => cum[numOf(a)][R.realLapFor(lap, 10, 51)] - cum[numOf(b)][R.realLapFor(lap, 10, 51)]);
+    for (const c of order) { const rl = R.realLapFor(lap, 10, 51); c.lap = lap + 1; c.totalT = K0 * cum[numOf(c)][rl] + (tweak[c.code] || 0); rr.update(1 / 60); }
+  };
+  cross(1); cross(2); cross(3, { VER: 3 });
+  const ver = rr.status().cars.find((c) => c.code === "VER");
+  assert.ok(Math.abs(ver.err - 3) < 1e-6);
+  // Three seconds behind on a ~140 s sim lap is a ~1.3 % push, not the 13 % a compressed-time lap would give.
+  const rl = R.realLapFor(3, 10, 51);
+  const lapS = K0 * pace.ref[rl] * 51 / 10;
+  const expected = R.paceMul(3, lapS, pace.rel[3][R.realLapFor(4, 10, 51)] || 1);
+  assert.ok(Math.abs(ver.mul - expected) < 1e-4, ver.mul + " vs " + expected);
+  assert.ok(ver.mul < 1.03, "a small correction: " + ver.mul);
+  // Red flag: the lap counters go back one; the director follows without re-measuring.
+  const before = rr.status().K;
+  for (const c of cars) if (!c.human) c.lap -= 1;
+  rr.update(1 / 60);
+  assert.equal(rr.status().K, before, "K is not re-pinned on a rewound lap");
+  assert.equal(rr.status().cars.find((c) => c.code === "VER").lap, 3);
+});
+
+test("rain in the real race turns the sky here: the start lap's weather, then an arc when it starts or stops", () => {
+  const { R, script, Teams } = load();
+  const wet = { ...script, rain: new Array(52).fill(false) };
+  for (let n = 20; n <= 30; n++) wet.rain[n] = true;
+  const cars = makeCars(Teams);
+  const { G, calls } = makeG(Teams, cars);
+  const rr = R.create(G);
+  rr.stage(wet, { seat: "RUS" });
+  assert.equal(G.raceWeather, "dry", "dry at the start");
+  rr.stop();
+  rr.stage(wet, { seat: "RUS", startLap: 25 });
+  assert.equal(G.raceWeather, "rain", "raining at lap 25");
+  rr.stop();
+  rr.stage(wet, { seat: "RUS" });
+  G.state = "count"; rr.update(1 / 60); G.state = "race";
+  const leader = cars.find((c) => c.code === "RUS");
+  const arcs = () => calls.filter((c) => c[0] === "arc").map((c) => c.slice(1, 3));
+  leader.lap = 10; rr.update(1 / 60);
+  assert.deepEqual(arcs(), []);
+  leader.lap = 20; G.raceWeather = "dry"; rr.update(1 / 60);
+  assert.deepEqual(arcs(), [["dry", "rain"]]);
+  leader.lap = 25; rr.update(1 / 60);
+  assert.equal(arcs().length, 1, "one arc per change");
+  leader.lap = 31; G.raceWeather = "rain"; rr.update(1 / 60);
+  assert.deepEqual(arcs(), [["dry", "rain"], ["rain", "dry"]]);
 });
