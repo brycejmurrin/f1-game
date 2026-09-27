@@ -153,6 +153,7 @@ const SPEC = [
   { k: "throttleLatch", lane: "json", group: "driving", def: false, src: "js/game.js" },
   { k: "tyreWear", lane: "json", group: "driving", def: "real", src: "js/game.js" },
   { k: "raceGrid", lane: "json", group: "driving", def: "random", src: "js/game.js" },
+  { k: "champGrid", lane: "json", group: "driving", def: "champ", src: "js/game.js", oneOf: ["champ", "tier", "revchamp", "random"] },
   { k: "reliability", lane: "json", group: "driving", def: "off", src: "js/game.js" },
   { k: "caution", lane: "json", group: "driving", def: false, src: "js/race/race-control.js" },
   { k: "unlimitedBudget", lane: "json", group: "driving", def: false, src: "js/game.js",

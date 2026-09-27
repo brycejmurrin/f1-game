@@ -138,6 +138,12 @@ test("the wrong tread outranks everything — it is the one that costs whole sec
   assert.match(line({ wrongTread: true, wet: false }), /BOX FOR SLICKS/);
 });
 
+test("ONE COMPOUND with five laps left is called after the tread and before everything else (FIA 2026 SR B6.3.6)", () => {
+  assert.match(line({ oneCompound: true, freeStop: true, wear: 1.5, lapsToStop: 0 }), /ONE COMPOUND ONLY .* DISQUALIFIED/);
+  assert.match(line({ oneCompound: true, wrongTread: true, wet: true }), /BOX FOR WETS/, "the weather still comes first");
+  assert.equal(E.create({}).callFor(sense({ oneCompound: true }))[1], "compound");
+});
+
 test("a reduced-cost stop under caution outranks tyre complaints without promising a free stop", () => {
   assert.match(line({ freeStop: true, wear: 0.9, graining: 1, axle: 1 }), /CHEAPER STOP/);
 });
@@ -314,7 +320,7 @@ test("the PIT CALL rides its own priority; every other line still yields", () =>
   // untouched, and a report is still a report.
   // join, not deepEqual: the array is built in the module's VM realm, so its
   // prototype is not the host's and strict deepEqual refuses it.
-  assert.equal(Array.prototype.join.call(E.BOX_CALLS, ","), "plan0,plan1,tread");
+  assert.equal(Array.prototype.join.call(E.BOX_CALLS, ","), "plan0,plan1,tread,compound");
   const kindOf = (car, over = {}) => {
     const { eng, tyres, kinds } = sessionFor(over.session || {});
     const c = carOn(tyres, car);

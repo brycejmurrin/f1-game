@@ -221,6 +221,7 @@ const FULL = [
   "js/physics/aero-zones.js",
   "js/fx/skidmarks.js",
   "js/race/race-control.js",
+  "js/race/sporting-regs.js",  // pure 2026 SR rules (two compounds, SC passes, champ grid); game.js creates its pass watch at eval
   "js/race/weather-arc.js",
   "js/camera/free-cam.js",
   "js/camera/photo-cam.js",
@@ -490,6 +491,7 @@ const HARD_EDGES = [
   ["js/physics/aero-zones.js", "js/game.js"],      // game.js calls AeroZones.create(G) at eval time
   ["js/fx/skidmarks.js", "js/game.js"],      // game.js calls SkidMarks.create() at eval time
   ["js/race/race-control.js", "js/game.js"],   // game.js calls RaceControl.create(G) at eval time
+  ["js/race/sporting-regs.js", "js/game.js"],  // game.js calls SportingRegs.createPassWatch() at eval time
   ["js/race/session-entry.js", "js/game.js"], // game.js creates the shared start/quali entry coordinator
   ["js/race/race-control.js", "js/physics/incident-sim.js"], // takeover line crossings share RaceControl semantics
   ["js/race/weather-arc.js", "js/game.js"],    // game.js calls WeatherArc.create(G, deps) at eval time
