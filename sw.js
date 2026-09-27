@@ -289,6 +289,7 @@ async function precacheAssetLists() {
     "js/net/session.js",
     "js/net/netplay.js",
     "js/net/lobby.js",
+    "js/input/phone-pad.js",
     // /@gen-shell:sw-optional
   ]);
   const shell = await fetch("index.html", { cache: "no-store" });
@@ -400,7 +401,7 @@ self.addEventListener("install", (event) => {
     // so it must be SEEDED under that key: the DEFERRED backends, and now the
     // race payload (light-presets + the per-circuit scenery closures) too.
     const stamped = urls.optional.map((u) =>
-      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/scenery\/|^js\/data\/|^js\/net\/|^js\/lighting\/presets\.js$/.test(u)
+      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/scenery\/|^js\/data\/|^js\/net\/|^js\/input\/phone-pad\.js$|^js\/lighting\/presets\.js$/.test(u)
         ? u + "?v=" + build : u).filter((u) => !isGlx(u));   // GLX went in `required` above
     // SKIPWAITING STAYS LAST, deliberately. Hoisting it above this pool lets a
     // returning player's new worker activate — and `activate` both claims
