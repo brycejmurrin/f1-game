@@ -887,7 +887,9 @@ function updateHud(force, dtMs) {
     // RaceControl has two independent gates. Keep the reason in the HUD so a
     // player knows whether to wait for green or for the opening lap to pass;
     // do not alter the input path, which still checks c.otArmed in game.js.
-    otReason = caution && caution.level > 0 ? "caution"
+    // Only the Safety Car / red flag close it (Art. B7.2.2c); a yellow or VSC
+    // flying on lap 1 must not be named as the reason.
+    otReason = caution && caution.level >= 3 ? "caution"
       : leader && leader.lap > 1 ? "race-control"
       : leader ? "opening-lap" : "waiting-for-leader";
   }
@@ -1036,7 +1038,10 @@ function updateHud(force, dtMs) {
     if (_limitsDots == null) _limitsDots = els.hudLimits.querySelector("span");
     if (cw > 0) {
       if (els.hudLimits.hidden) els.hudLimits.hidden = false;
-      hText(_limitsDots, "\u25cf".repeat(cw) + "\u25cb".repeat(4 - cw));
+      // Strikes no longer reset (4th and each additional = +5 s), so four dots
+      // are a cap: repeat() of a negative count throws.
+      const shown = Math.min(cw, 4);
+      hText(_limitsDots, "\u25cf".repeat(shown) + "\u25cb".repeat(4 - shown));
       hToggle(els.hudLimits, "limits-warn", cw >= 2 && cw < 3);
       hToggle(els.hudLimits, "limits-hot", cw >= 3);
     } else if (!els.hudLimits.hidden) {

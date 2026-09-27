@@ -105,7 +105,7 @@ track edge), a 1.6 m platform (FIM ≥ 1.5), fast ≤ 3.5, corridor ≥ 1 (FIM),
 exactly this pair (corridor/work split is cosmetic for the keep-out).
 Mode `"street"` = these bands, `painted: false`, `hasWall: true`,
 `hasBays: bays !== false`; `"narrow"` stays as the explicit painted opt-out.
-`limitKph` for `"street"` defaults to 80 (F1 SR B1.7.3(a)); 60 is authored.
+`limitKph` for `"street"` defaults to 80 (F1 SR B1.6.3(a)); 60 is authored.
 
 ```
      racing road (2·hw)        |<------------ STREET complex, 10.6 m ------------>|<- bay 12.8 ->|<3>|

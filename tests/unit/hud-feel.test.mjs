@@ -164,6 +164,8 @@ test("the OVERTAKE chip spells all four states differently — the lockout count
   assert.equal(els.btnOT.getAttribute("data-state"), "opening-lap");
 
   G.cautionInfo = () => ({ level: 1 }); tick();
+  assert.equal(els.ot.textContent, "OT · LAP 1", "a local yellow is not what closes Overtake (Art. B7.2.2)");
+  G.cautionInfo = () => ({ level: 3 }); tick();
   assert.equal(els.ot.textContent, "OT · CAUTION", "caution explains the same unavailable control");
   assert.equal(els.btnOT.getAttribute("data-state"), "caution");
 });

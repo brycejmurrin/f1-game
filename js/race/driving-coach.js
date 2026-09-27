@@ -10,7 +10,7 @@ const DrivingCoach = (function () {
     front: { label: "Front grip", text: "FRONTS SLIDING — UNWIND SOME STEERING", detail: "The front tyres are near their grip limit. Ease some steering instead of turning harder.", dwell: 0.6 },
     xmode: { label: "X-mode in corners", text: "CLOSE THE WING — X-MODE LOSES GRIP IN CORNERS", detail: "The active aero was open while the car was cornering hard. X-mode trades downforce for straight-line speed; close it before you turn in.", dwell: 0.5 },
     coasting: { label: "Coasting", text: "COASTING — BE ON THE BRAKE OR THE THROTTLE", detail: "Neither pedal was used at speed for over a second. A racing car is either braking or accelerating; coasting gives time away.", dwell: 1.2 },
-    limits: { label: "Track limits", text: "TRACK LIMITS — KEEP THE CAR INSIDE THE WHITE LINES", detail: "A track-limits warning was recorded. In a race four warnings add a five-second penalty and the count resets after it; in a Time Trial the lap is deleted.", dwell: 0 }
+    limits: { label: "Track limits", text: "TRACK LIMITS — KEEP THE CAR INSIDE THE WHITE LINES", detail: "A track-limits strike was recorded and the lap time deleted. In a race the third strike brings the black-and-white flag and the fourth and every one after it add five seconds; in a Time Trial or qualifying the lap is simply deleted.", dwell: 0 }
   });
   // Braking effort against the brake ceiling, the same scalar the engine's own
   // brakeFade/brakeYawDamp use. NOT c.axFrac: that is the friction-circle share,
@@ -241,8 +241,8 @@ const DrivingCoach = (function () {
       // the reset after a penalty (already announced) are not new warnings.
       const warn = G.player ? (G.player.cutWarn || 0) : 0;
       if (warnSeen == null || warn < warnSeen) warnSeen = warn;
-      // 4 is the count held after the +5 s penalty (the next cut costs +10 s):
-      // announced by the game already, not a new warning.
+      // 4 and up are +5 s penalties (FIA 2026: the 4th and each additional
+      // strike): announced by the game already, not a new warning.
       else if (warn > warnSeen) { warnSeen = warn; if (warn <= 3) edge = { id: "limits", t: 3, life: 12 }; }
       // The game's own TRACK LIMITS card holds the channel for ANN_MIN_S (3 s)
       // from the same step, so the window only runs while the coach could

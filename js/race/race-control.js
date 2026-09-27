@@ -131,6 +131,13 @@ const RaceControl = (function () {
     let capHoldT = 0;       // remaining re-arm suppression after a cap-forced drop
     let capHoldLevel = 0;   // the level that capped; escalations ABOVE it still fly
     let restartWanted = false;   // one-shot: the red procedure has run its course
+    // OVERTAKE after a neutralisation (Art. B7.2.2c): disabled while the Safety
+    // Car is out, re-enabled only once the field has crossed the Line after it
+    // comes in — approximated by the LEADER's next crossing. The leader's lap
+    // at the hand-back; null = no hold. A red flag rewinds every lap by one at
+    // the standing restart (redFlagRestart), so its hold is one lap lower and
+    // the first crossing after the resumption re-enables it (B7.2.2b).
+    let otHoldLap = null;
     // Last state broadcast to a guest, so only CHANGES are sent.
     let sent = "";
     const savedCaution = store.get("caution", false);
@@ -141,9 +148,20 @@ const RaceControl = (function () {
       queryT = 0;
       capHoldT = 0; capHoldLevel = 0;
       restartWanted = false;
+      otHoldLap = null;
       // Clear the change-detector too, or the next race's first flag looks like
       // a repeat of the last one's and is never sent.
       sent = "";
+    }
+
+    // Every level change inside the machine goes through here: the log line,
+    // and the Overtake hold when a Safety Car (3) or red flag (4) ends.
+    function flag(prev, next) {
+      logFlag(prev, next);
+      if (prev >= 3 && next < 3) {
+        const leader = G.ranked && G.ranked[0];
+        otHoldLap = leader ? (leader.lap | 0) - (prev === 4 ? 1 : 0) : null;
+      }
     }
 
     // Turning it OFF must also DROP a flag already flying — otherwise the HUD
@@ -178,7 +196,7 @@ const RaceControl = (function () {
       const prev = caution.level;
       caution.level = 0; caution.sector = -1; caution.frac = 0;
       caution.cause = ""; caution.sinceT = 0; caution.phase = "";
-      logFlag(prev, 0);
+      flag(prev, 0);
     }
 
     // The hard-cap drop, shared by the live-query path and the debris-inactive
@@ -277,7 +295,7 @@ const RaceControl = (function () {
         caution.level = desired; caution.sector = dsector; caution.frac = dfrac;
         caution.cause = dcause; caution.sinceT = 0;
         caution.phase = desired === 4 ? "stopping" : "";
-        logFlag(prev, desired);
+        flag(prev, desired);
       } else if (desired < caution.level) {
         if (caution.sinceT >= MIN_HOLD) {
           const prev = caution.level;
@@ -287,7 +305,7 @@ const RaceControl = (function () {
           else if (hz.worst && hz.worst.sector >= 0) caution.sector = hz.worst.sector;
           else caution.sector = 0;
           caution.frac = dfrac; caution.cause = dcause; caution.sinceT = 0;
-          logFlag(prev, desired);
+          flag(prev, desired);
         }
       } else if (desired === 1 && dsector >= 0) {
         caution.sector = dsector; caution.frac = dfrac;   // track the worst sector
@@ -310,7 +328,7 @@ const RaceControl = (function () {
       if (Array.isArray(d.sectors)) caution.sectors = d.sectors.slice(0, 3).map(num);
       caution.sinceT = Math.max(0, num(d.sinceT));
       caution.phase = typeof d.phase === "string" ? d.phase.slice(0, 16) : "";
-      logFlag(prev, caution.level);
+      flag(prev, caution.level);
       return true;
     }
 
@@ -325,10 +343,17 @@ const RaceControl = (function () {
     // restart, where a lap-1 pile-up got no yellow, VSC or SC.
     function clearHold() { capHoldT = 0; capHoldLevel = 0; }
 
+    // OVERTAKE (Art. B7.2.2): enabled once the leader has crossed the Line after
+    // the start (b), disabled only by the SAFETY CAR or a red flag (c) — a local
+    // yellow or a VSC does not take it away — and held off after either until
+    // the leader's next crossing (otHoldLap, set in flag()).
     function otEnabled() {
-      if (caution.level !== 0) return false;
+      if (caution.level >= 3) return false;
       const leader = G.ranked[0];
-      return !!leader && leader.lap > 1;
+      if (!leader || !(leader.lap > 1)) return false;
+      // Never cleared here: a red flag's regrid rewinds the lap AFTER the drop,
+      // so a read in between must not spend the hold. Laps only rise otherwise.
+      return otHoldLap == null || leader.lap > otHoldLap;
     }
 
     function info() {

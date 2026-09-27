@@ -2164,7 +2164,7 @@ function gridUp(preOrder) {
     c.speed = 0; c.accSm = 0; c.corridorAccel = 0; c.prog = -(14 + i * 8); c.lap = 0; c.fuelLap = 0; c.fuelRestartLaps = 0; c.energy = 1; c._progGift = 0;   // a car on the grid is pulling nothing — apex.js reset() has the full list and why
     c.otT = 0; c.otCool = 0; c.lapTime = 0; c.best = Infinity; c.totalT = 0;
     c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
-    c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.tlArmed = false; c.qualiCut = false; c.penalty = 0; c.offT = 0; c.hits = 0; c.hitSev = 0; c.wallHits = 0; c.errCount = 0;   // mistakes THIS race — the instrument's denominator, cleared only by a NEW race
+    c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.qualiCut = false; c.penalty = 0; c.offT = 0; c.hits = 0; c.hitSev = 0; c.wallHits = 0; c.errCount = 0;   // mistakes THIS race — the instrument's denominator, cleared only by a NEW race
     c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.wallT = 0; c.wasOnWall = false;
     c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.contactT = 0; c.lane = c.lanePref;   // BOTH sides of a real conflict: lane is damped state, not a constant, and contactT DECAYS — unlike the towing/wheelLock beside it, a re-grid is the only thing that clears it
     c.rPrevHead = 0;
@@ -3127,13 +3127,13 @@ function endRace(forcedOrder) {
   const fin = cars.filter((c) => c.finished && !c.retired).sort(RaceControl.finishOrder);   // laps, then the clock
   const run = cars.filter((c) => !c.finished && !c.retired).sort((a, b) => b.prog - a.prog);
   const out = cars.filter((c) => c.retired).sort((a, b) => b.prog - a.prog);
-  // LAPS FIRST (FIA Sporting Regs B2.5): a car still running when the race
+  // LAPS FIRST (FIA 2026 SR B2.5.5(a)): a car still running when the race
   // ends takes the flag on its next crossing, so it counts one more lap. A
   // lapped car that crossed was put ahead of every lead-lap car still on its
   // last lap (P2 and 18 points for a car a lap down). Stable sort: within a
   // lap count, finishers keep the clock order and runners their progress.
   const lapsAt = (c) => (c.lap || 0) + (c.finished ? 0 : 1);
-  // 90 % OF THE WINNER'S LAPS IS CLASSIFIED (FIA B2.5 b), retired or not: a
+  // 90 % OF THE WINNER'S LAPS IS CLASSIFIED (FIA 2026 SR B2.5.5(b)), retired or not: a
   // car that failed on the last lap scores where it stopped, not behind the
   // field with nothing. Below that it is not classified. c.classified carries
   // the verdict to the points tables (SeasonCal.award, career settlement).
@@ -5008,49 +5008,40 @@ function updateCar(c, dt, ranked) {
     if (c.offT > 1.2) {
       c.offT = -2;   // grace before next count
       c.cuts++;
-      // A TIME TRIAL IS A LEADERBOARD, AND A LAP WITH A COUNTED CUT IS NOT A LAP.
-      // The +5s ladder below prices a cut against the race CLASSIFICATION; a
-      // time trial has none, so nothing priced one — measured 2026-09-22, a lap
-      // run off-track replaced a 42 s record with 5 s, ghost and all. Reuse the
-      // cut the engine already counted (1.2 s off, past the grace) and the latch
-      // the crossing already clears, not a second definition of either.
-      // Qualifying too: its grid is the player's lap time, so a cut lap took pole.
-      if (c.isPlayer && (isTimeTrial() || isQuali())) c.incidentInvalidLap = true;
+      // A LAP WITH A COUNTED CUT IS NOT A TIMED LAP — in ANY session. A time
+      // trial is a leaderboard (a lap run off-track replaced a 42 s record with
+      // 5 s, 2026-09-22), qualifying grids on it, and in the race the FIA
+      // deletes it too ("Lap Deleted / Strike", 2026 Penalty Guidelines): every
+      // car, so a cut lap cannot be anyone's best or the fastest lap. Only the
+      // TIME goes — the lap still counts for distance (lineTransition bumps
+      // c.lap regardless). Reuses the cut the engine already counted (1.2 s off,
+      // past the grace) and the latch the crossing already clears.
+      c.incidentInvalidLap = true;
       // A cut quali lap is DELETED, not replaced: with no valid lap the sheet
       // gave the player the model's time, which could be pole (endRace).
       if (c.isPlayer && isQuali()) c.qualiCut = true;
-      // Penalty applies to EVERY car (it feeds race classification) so the AI
-      // can't cut corners for free; only the player gets the on-screen cues.
-      // THREE WARNINGS, ONE PENALTY, RESET — the real ladder. This used to add
-      // +5s for EVERY cut from the fourth on and stop announcing the count past
-      // three, so a driver who cut eight times paid 25s having been told nothing
-      // since the third. `cutWarn` is the counter that resets; `cuts` stays the
-      // LIFETIME total because the career `clean` objective and the archive read
-      // it (js/career/career.js) and "no cuts at all" must not become satisfiable
-      // by cutting four more times.
-      // The FIA ladder prices the 5th offence at +10s, not a fresh warning: the
-      // cut after a +5s is armed (tlArmed) and costs +10s, then the ladder restarts
-      // (https://www.planetf1.com/news/explained-f1-track-limits-rules).
-      // Time trial and qualifying already invalidated the lap; the seconds are
-      // race classification only (docs/BUGS.md B2 / defect ledger).
+      // THE RACE LADDER (FIA 2026 Penalty Guidelines): strikes 1-2 are
+      // warnings, the 3rd is the black-and-white flag, the 4th AND EACH
+      // ADDITIONAL one is +5 s — no reset, no +10 s step (that was a pre-2026
+      // reading). EVERY car pays (it feeds classification) so the AI cannot cut
+      // for free; only the player gets the cues. `cutWarn` is the race's strike
+      // count (HUD dots, coach, agentview); `cuts` stays the LIFETIME total the
+      // career `clean` objective and the archive read (js/career/career.js).
+      // Time trial and qualifying have no classification to price, so their
+      // count simply cycles (docs/BUGS.md B2 / defect ledger).
       const priced = !isTimeTrial() && !isQuali();
-      const tenner = priced && c.tlArmed;
-      c.cutWarn = tenner ? 0 : (c.cutWarn | 0) + 1;
-      if (tenner || c.cutWarn >= 4) {
-        c.cutWarn = 0;
-        c.tlArmed = !tenner && priced;
-        if (priced) {
-          const sec = tenner ? 10 : 5;
-          c.penalty += sec;
-          if (c.isPlayer) {
-            const pk = hudProfile === "broadcast" ? "race" : "penalty-hit";
-            announce("+" + sec + "s TRACK LIMITS PENALTY", 2, pk);
-            if (soundOn) GameAudio.penalty();
-          }
-        } else if (c.isPlayer) announce("LAP INVALIDATED", 1.2, "penalty-warn");
+      c.cutWarn = (c.cutWarn | 0) + 1;
+      if (!priced) {
+        if (c.cutWarn >= 4) c.cutWarn = 0;
+        if (c.isPlayer) { announce("LAP INVALIDATED", 1.2, "penalty-warn"); if (soundOn) GameAudio.offtrack(); }
+      } else if (c.cutWarn >= 4) {
+        c.penalty += 5;
+        if (c.isPlayer) {
+          announce("+5s TRACK LIMITS PENALTY", 2, hudProfile === "broadcast" ? "race" : "penalty-hit");
+          if (soundOn) GameAudio.penalty();
+        }
       } else if (c.isPlayer) {
-        // The n/4 count is the race ladder's; in a time trial the lap is simply gone.
-        announce(isTimeTrial() || isQuali() ? "LAP INVALIDATED" : "TRACK LIMITS " + c.cutWarn + "/4", 1.2, "penalty-warn");
+        announce("TRACK LIMITS " + c.cutWarn + "/4" + (c.cutWarn === 3 ? " — BLACK & WHITE FLAG" : ""), 1.2, "penalty-warn");
         if (soundOn) GameAudio.offtrack();
       }
     }
@@ -6163,8 +6154,13 @@ function updateCar(c, dt, ranked) {
       // because a dropped lap time is a wrong RESULT, not a momentary glitch.
       // `fin` is OUR finishT at the crossing that ends the race: the remote's
       // pose-time stamp is one interp delay late (netplay.js poseRemote).
-      if (lapValid && c.local && netPlay.active()) {
-        netPlay.reportLap({ lap: c.lap, time: lapDone, best: isFinite(c.best) ? c.best : null, code: c.code, fin: flagged ? c.finishT : undefined });   // finishT: the in-step crossing, as classified locally
+      // A DELETED lap (a track-limits strike now deletes race laps too) still
+      // carries the finish stamp when it is the flag lap — as the incident path
+      // does — with a null time so the rival's timing never adopts it.
+      if ((lapValid || flagged) && c.local && netPlay.active()) {
+        netPlay.reportLap(lapValid
+          ? { lap: c.lap, time: lapDone, best: isFinite(c.best) ? c.best : null, code: c.code, fin: flagged ? c.finishT : undefined }   // finishT: the in-step crossing, as classified locally
+          : { lap: c.lap, time: null, best: isFinite(c.best) ? c.best : null, code: c.code, fin: c.finishT, invalid: true });
       }
       if (c.isPlayer && isTimeTrial()) { if (lapValid) onTTLap(lapDone); else Ghost.startLap(); }
     } else if (c.isPlayer && isTimeTrial()) {

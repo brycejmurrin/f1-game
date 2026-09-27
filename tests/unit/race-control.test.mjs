@@ -382,7 +382,7 @@ test("the host broadcasts on CHANGE only", () => {
   assert.equal(sent[0].level, 3);
 });
 
-test("OVERTAKE is off on lap 1 and under any caution", () => {
+test("OVERTAKE is off on lap 1 and under the SAFETY CAR, not a yellow or a VSC (Art. B7.2.2)", () => {
   // The LEADER's lap, not each car's own — a field-wide switch is what race
   // control actually throws, and gating per-car would hand a lapped driver the
   // push while the leader still had none.
@@ -395,13 +395,74 @@ test("OVERTAKE is off on lap 1 and under any caution", () => {
   ctx.ranked = [{ lap: 2 }];
   assert.equal(rc.otEnabled(), true, "leader past the opening lap, track green");
 
+  // FIA 2026 Sporting Regulations Section B Iss. 07, Art. B7.2.2: only the
+  // Safety Car (c), low grip (d) and the Race Director (e) disable Overtake.
   hz = hazards(3, 3);
   run(rc, 1);
   assert.equal(rc.info().level, 1);
-  assert.equal(rc.otEnabled(), false, "a local yellow is enough to take it away");
+  assert.equal(rc.otEnabled(), true, "a local yellow does not take it away");
+
+  hz = hazards(6, 2);
+  run(rc, 1);
+  assert.equal(rc.info().level, 2);
+  assert.equal(rc.otEnabled(), true, "nor does a VSC");
+
+  hz = hazards(10, 2);
+  run(rc, 1);
+  assert.equal(rc.info().level, 3);
+  assert.equal(rc.otEnabled(), false, "the Safety Car does");
 
   ctx.ranked = [];
   assert.equal(rc.otEnabled(), false, "and an empty grid is not a leader on lap 2");
+});
+
+test("OVERTAKE stays off after the Safety Car comes in until the leader next crosses the Line (Art. B7.2.2c)", () => {
+  let hz = hazards(10, 2);
+  const leader = { lap: 5 };
+  const ctx = makeCtx({ ranked: [leader] });
+  const rc = load({ active: () => true, hazards: () => hz }).create(ctx);
+  run(rc, 1);
+  assert.equal(rc.info().level, 3);
+  assert.equal(rc.otEnabled(), false, "disabled under the Safety Car");
+
+  hz = hazards(0, 0);
+  run(rc, 7);   // past MIN_HOLD: the Safety Car comes in
+  assert.equal(rc.info().level, 0);
+  assert.equal(rc.otEnabled(), false, "green, but the field has not crossed the Line since");
+  leader.lap = 6;
+  assert.equal(rc.otEnabled(), true, "re-enabled at the leader's next crossing");
+
+  // A VSC ending holds nothing back.
+  hz = hazards(6, 2);
+  run(rc, 1);
+  assert.equal(rc.info().level, 2);
+  hz = hazards(0, 0);
+  run(rc, 7);
+  assert.equal(rc.info().level, 0);
+  assert.equal(rc.otEnabled(), true, "no hold after a VSC");
+
+  // reset() drops a pending hold with the rest of the race's state.
+  hz = hazards(10, 2); run(rc, 1); hz = hazards(0, 0); run(rc, 7);
+  assert.equal(rc.otEnabled(), false);
+  rc.reset();
+  assert.equal(rc.otEnabled(), true, "a new race starts without the last one's hold");
+});
+
+test("after a red flag OVERTAKE returns at the leader's first crossing after the standing restart (Art. B7.2.2b)", () => {
+  let hz = hazards(16, 2);
+  const leader = { lap: 10 };
+  const rc = load({ active: () => true, hazards: () => hz }).create(makeCtx({ ranked: [leader] }));
+  run(rc, 1);
+  assert.equal(rc.otEnabled(), false, "off under red");
+  hz = hazards(0, 0);
+  run(rc, 14);
+  assert.equal(rc.info().level, 0);
+  assert.equal(rc.takeRestart(), true);
+  rc.otEnabled();   // a read BEFORE the regrid must not spend the hold
+  leader.lap = 9;   // redFlagRestart rewinds the classification lap
+  assert.equal(rc.otEnabled(), false, "held off from the grid");
+  leader.lap = 10;
+  assert.equal(rc.otEnabled(), true, "re-enabled once the leader crosses the Line");
 });
 
 test("it is inert when the side-world is down or the race is not running", () => {

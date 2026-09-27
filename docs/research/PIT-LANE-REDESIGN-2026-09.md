@@ -91,8 +91,8 @@ sites; treat those figures as ranges.
 | Entry line | continuous **10 cm** white line across the lane at the first speed loop; limit boards both sides | FIM §4.11.10.1 / §9.4 (primary) |
 | Exit line | continuous 10 cm white line across the lane at the exit lights; crossed-out boards | FIM §4.11.10.2 / §9.5 (primary) |
 | Where the limit applies | "between the entry line and exit line" | formula1.com explainer (secondary) |
-| Speed limit | **80 km/h** for the whole Competition, Race Director may amend; **60** at Monaco (and Melbourne before its 2021 widening) | F1 SR 2026 B1.7.3(a) (primary); formula1.com, GPFans (secondary) |
-| Pit exit control | green/red light at the end of the lane; flashing blue in the Pit Exit Road when cars approach on track | F1 SR 2026 B1.7.3(e) (primary) |
+| Speed limit | **80 km/h** for the whole Competition, Race Director may amend; **60** at Monaco (and Melbourne before its 2021 widening) | F1 SR 2026 B1.6.3(a) (primary); formula1.com, GPFans (secondary) |
+| Pit exit control | green/red light at the end of the lane; flashing blue in the Pit Exit Road when cars approach on track | F1 SR 2026 B1.6.3(e) (primary) |
 | Entry-line rule | the dashed white line at the pit entry defines the track edge; nobody continuing on track may cross it; a whole tyre must not go beyond the entry/exit lines | FIA event notes via motorsport.com, Baku 2024 (secondary) |
 | Signalling platform | verge **2 m** trackside, platform **≥ 1.5 m**, **+35 cm** above the lane, concrete wall **25 cm** thick, **1 m** above the platform; **65 cm** barrier between platform and lane; platform extends **25 m** beyond the boxes at each end | FIM §9.2 (primary) |
 | Starter's rostrum | **20–50 m** after the start line, ≥ 2 m above the platform | FIM §9.6 (primary) |

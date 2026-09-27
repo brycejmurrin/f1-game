@@ -1415,12 +1415,18 @@ const PitLane = (function () {
       if (plan) { plan.pitLossLaps = pitLossLaps; plan.pin = pin; }
       return plan;
     }
-    /** FIA B6.3.6: a DRY race uses two dry compounds. Not below
+    /** FIA 2026 SR B6.3.6: a DRY *Race* uses two dry compounds. Not below
      *  TWO_COMPOUND_MIN_LAPS — the game's short races (3-7 laps) would be
-     *  one forced stop and nothing else. */
+     *  one forced stop and nothing else — and never in a SPRINT: the article
+     *  names the Race only, so a sprint leg of a season weekend forced a stop
+     *  no real team makes. (The player is never disqualified for one compound;
+     *  that is an owner's design call, not enforced here.) */
     const TWO_COMPOUND_MIN_LAPS = 8;
+    function sprintLeg() {
+      return !!G.seasonMode && typeof SeasonCal !== "undefined" && SeasonCal.stage(G.season) === "sprint";
+    }
     function twoCompoundRule(laps) {
-      return laps >= TWO_COMPOUND_MIN_LAPS && TyreModel.treadFor(G.raceWeather) === 0;
+      return laps >= TWO_COMPOUND_MIN_LAPS && TyreModel.treadFor(G.raceWeather) === 0 && !sprintLeg();
     }
     /** The STRATEGY row's pin for this circuit: a stop count, or null for AUTO. */
     function pinKey() { const t = G.track, d = t && t.def; return "pitPlan." + ((d && d.id) || (t && t.id) || "track"); }
