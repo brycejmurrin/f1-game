@@ -133,3 +133,27 @@ test("time trial never applies the +5s track-limits ladder", async () => {
   assert.equal(p.cutWarn, 0, "the ladder still resets after the fourth cut");
   assert.ok((p.cuts | 0) >= 4, "lifetime cuts still accumulate");
 });
+
+test("a race prices the fifth counted cut at +10s, then the ladder restarts (FIA)", async () => {
+  // Bug hunt 2026-09-26: the reset after the fourth cut turned the 5th offence
+  // into a fresh warning; the real ladder is 4th +5s, 5th +10s
+  // (https://www.planetf1.com/news/explained-f1-track-limits-rules).
+  const g = await createGame({ track: "monza" });
+  g.G.daily.stop();
+  g.G.raceWeather = "dry";
+  await g.G.startRace();
+  g.apex.go();
+  g.apex.headless(true);
+  const p = g.G.player;
+  p.penalty = 0; p.cutWarn = 0; p.tlArmed = false;
+  const pens = [];
+  for (let n = 0; n < 6; n++) {
+    const cut = cutOffTrack(g, 200);
+    assert.ok(cut.counted, "cut " + (n + 1) + " must count");
+    pens.push(p.penalty);
+    g.apex.jump(0.5, 60, 0);
+    for (let i = 0; i < 180 && p.offT < 0; i++) g.apex.step(1 / 60, 1);
+  }
+  assert.deepEqual(pens, [0, 0, 0, 5, 15, 15], "warnings, +5s on the 4th, +10s on the 5th, then warnings again");
+  assert.equal(p.cutWarn, 1, "the ladder restarted after the +10s");
+});

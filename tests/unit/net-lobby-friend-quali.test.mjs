@@ -67,7 +67,8 @@ test("hunt fixes: SIMULATE / no valid lap still reports a time; tyres + reliabil
   const { readFileSync } = await import("node:fs");
   const r = (f) => readFileSync(new URL("../../" + f, import.meta.url), "utf8");
   const game = r("js/game.js");
-  assert.match(game, /quali\.simulate\(qualiNet\.driven\(0\)\);\s*reportModelQuali\(\);/, "SIMULATE sends the model's time");
+  // driven(Infinity) when every lap was deleted for track limits (NO TIME), else 0.
+  assert.match(game, /quali\.simulate\(qualiNet\.driven\([^\n]*\? Infinity : 0\)\);[^\n]*\s*reportModelQuali\(\);/, "SIMULATE sends the model's time");
   assert.match(game, /if \(!\(myLap > 0\)\) reportModelQuali\(\);/, "a lap with no valid time sends the model's time");
   assert.match(game, /if \(c\.local && paused && netPlay\.active\(\)\) return PAUSED_NET_INPUT;/);
   const lobby = r("js/net/lobby.js");

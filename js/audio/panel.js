@@ -33,7 +33,9 @@ const AudioPanel = (() => {
       els.soundbtn.setAttribute("aria-pressed", b ? "true" : "false");
       if (!b) { GameAudio.stopMusic(); GameAudio.stopEngine(); GameAudio.stopRain(); }
       else if (G.state === "menu") GameAudio.startMusic(-1);
-      else if (G.state === "race" || G.state === "count") {   // the countdown is the race's first seconds
+      // Not under the pause menu: resume starts the engine, and in a friend race
+      // the loop keeps driving an engine started here, audibly.
+      else if ((G.state === "race" || G.state === "count") && !G.paused) {   // the countdown is the race's first seconds
         GameAudio.startMusic(G.trackIdx);
         GameAudio.startEngine();
         if (G.raceWeather === "rain") GameAudio.startRain();
