@@ -198,15 +198,13 @@ const NetLobby = (function () {
         sessions.delete(id);
         _peers.delete(id); _ready.delete(id);
         clashDrop(id);
-        // Never connected: waitForOpen() just said which failure it was, and this runs
-        // synchronously inside its dropPending() — "Connection closed." overwrote that.
+        // Never connected: waitForOpen() just said which failure it was; this ran inside its dropPending() and overwrote it.
         if (!wasIn) { Log.info("net", "pending transport closed " + id); return; }
         Log.info("net", "peer leave " + id);
         session = [...sessions.values()][0] || null;
         if (!sessions.size) {
           clearInterval(pumpTimer); pumpTimer = null;
-          // In the race (finishStart emptied this map) the rival is now AI; in the ROOM
-          // there is no race — the room is over: pick step back, room flag dropped.
+          // In the race (finishStart emptied this map) the rival is now AI; in the ROOM the room is simply over.
           const racing = friendQualifying || (typeof UiLayers !== "undefined" && UiLayers && UiLayers.inRace && UiLayers.inRace());
           if (racing) {
             say(role === "guest" ? "Host left — rivals are now AI. Keep racing." : "Connection closed.", true);
@@ -745,8 +743,7 @@ const NetLobby = (function () {
 
     function peerSeats(keep) {
       const out = [];
-      // Only while a room is live: finishStart() keeps _peers, and after a 3+ player
-      // race the relayed profiles marked those seats TAKEN in the SOLO garage/picker.
+      // Only while a room is live: finishStart() keeps _peers, and after a 3+ player race they marked SOLO seats TAKEN.
       if (!sessions.size) return out;
       for (const [k, p] of _peers) {
         if (p && p.team && (!keep || keep(k))) out.push({ team: p.team, driver: p.driver || 0 });
@@ -1151,8 +1148,7 @@ const NetLobby = (function () {
       if (!newTransport("host")) return { ok: false, error: "no_transport", message: noConnectionMsg() };
       const pending = transport;
       say("Preparing invite… (this can take a few seconds)");
-      // createInvite rethrows (createOffer on a connection CLOSE just tore down): typed,
-      // as makeAnswer, or it was the shell's "Promise rejection" overlay over the lobby.
+      // createInvite rethrows (createOffer on a connection CLOSE tore down): typed, as makeAnswer, not the shell's rejection overlay.
       let res;
       try { res = await NetHandshake.createInvite(pending, localProfile()); }
       catch (err) { res = { ok: false, error: "invite_failed", message: "Could not create an invite (" + ((err && err.message) || err) + "). Tap HOST A RACE to try again." }; }
@@ -1198,9 +1194,7 @@ const NetLobby = (function () {
         // Typed, like every sibling: a bare `return` handed an awaiting caller
         // `undefined` where host()/codeHost()/codeJoin() all return a result.
         if (!newTransport("guest")) return { ok: false, error: "no_transport", message: noConnectionMsg() };
-        // Not over something said meanwhile: a tap on MAKE ANSWER inside the
-        // ICE wait had its error ("Paste their invite code first.", a bad code)
-        // wiped by this prompt landing up to 2.5 s later.
+        // Not over something said meanwhile: a MAKE ANSWER error inside the ICE wait was wiped by this prompt.
         if (sayGen === said) say("Paste the invite code they sent you.");
         return { ok: true };
       })();
@@ -1495,9 +1489,8 @@ const NetLobby = (function () {
       say("Looking for that room…");
       codeWait = { cancelled: false };
       let answered = null;
-      // BIND THE SESSION WHEN THE ANSWER IS POSTED, not when swap() resolves 5.2 s of
-      // re-posts later: the host pings from the moment its side opens and closes after
-      // 6 s of silence (session.js timeoutMs) — ~0.5 s of margin, lost to a phone's GC.
+      // BIND THE SESSION WHEN THE ANSWER IS POSTED, not after swap()'s 5.2 s of re-posts: the host
+      // closes after 6 s of silence (session.js timeoutMs) — ~0.5 s of margin, lost to a phone's GC.
       let watching = false;
       const watch = () => { if (!watching) { watching = true; waitForOpen(); } };
       const pid = pendingId;   // onConnected() nulls pendingId once it adopts the transport
@@ -1682,8 +1675,7 @@ const NetLobby = (function () {
       teardown();
       role = null;
       _peers.clear(); _ready.clear(); clashClear(); myRank = Infinity;
-      // THE ROOM FLAG DIES WITH THE ROOM: only a race start cleared netRoom, so after
-      // CLOSE the next solo RACE → START re-showed this hidden dialog instead of starting.
+      // THE ROOM FLAG DIES WITH THE ROOM: only a race start cleared netRoom, so after CLOSE a solo START re-showed this dialog.
       if (G.setNetRoom) G.setNetRoom(false);
       close();
     }
