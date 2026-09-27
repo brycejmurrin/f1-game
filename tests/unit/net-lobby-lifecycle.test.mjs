@@ -57,8 +57,16 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
       location.hash = location.href.includes("#") ? location.href.slice(location.href.indexOf("#")) : "";
     },
   };
+  const winListeners = new Map();
+  const window = {
+    addEventListener(type, fn) {
+      if (!winListeners.has(type)) winListeners.set(type, []);
+      winListeners.get(type).push(fn);
+    },
+  };
   const context = vm.createContext({
     console,
+    window,
     document,
     history,
     location,
@@ -88,7 +96,9 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
     NetRendezvous: {},
     NetSession: { create: netSession || (() => { throw new Error("no NetSession in this harness"); }) },
     NetPlay: null,
-    Teams: { LIST: teams || [{ id: "alpha", short: "ALP", name: "Alpha", color: [1, 0, 0], drivers: [] }] },
+    // isReal mirrors js/data/teams.js (pinned by the Legends test below).
+    Teams: { LIST: teams || [{ id: "alpha", short: "ALP", name: "Alpha", color: [1, 0, 0], drivers: [] }],
+             isReal: (t) => !!t && !t.custom && !t.legends },
     Tracks: { LIST: [{ id: "track" }] },
   });
   seedLog(context);
@@ -110,6 +120,8 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
     lobby, elements, scan, video, transports, replacements, location, G, room, status,
     click(id) { const el = elements.get(id); return el && el.onclick ? el.onclick() : undefined; },
     emit(type) { for (const fn of listeners.get(type) || []) fn(); },
+    emitWindow(type) { for (const fn of winListeners.get(type) || []) fn(); },
+    winListeners,
   };
 }
 
@@ -141,6 +153,38 @@ test("a consumed or cancelled URL invite is removed without losing unrelated URL
   await new Promise((resolve) => setImmediate(resolve));
   cancelled.click("vs-close");
   assert.ok(consumed >= 1, "cancelling the URL-opened lobby consumes the invite");
+});
+
+test("an invite link opened in a RUNNING tab opens the lobby on hashchange, once", async () => {
+  // #vs= was read only at boot (wire()), and a link opened into a live tab
+  // changes only the fragment — no reload — so it did nothing at all.
+  let hash = null;
+  let consumed = 0;
+  const handshake = {
+    inviteFromUrl: () => hash,
+    consumeInviteUrl: () => { if (!hash) return false; consumed++; hash = null; return true; },
+  };
+  const h = harness({ handshake, scanFactory: () => ({ stop() {}, start() {} }), href: "https://x.test/play" });
+  try {
+    h.lobby.wire();
+    h.lobby.wire();                                   // a second wire must not stack listeners
+    assert.equal((h.winListeners.get("hashchange") || []).length, 1, "one hashchange listener");
+    assert.equal(h.elements.get("vsfriend").hidden, true, "no fragment at boot: nothing opens");
+
+    hash = "abc";
+    h.emitWindow("hashchange");
+    await new Promise((r) => setImmediate(r));
+    assert.equal(h.elements.get("vsfriend").hidden, false, "the lobby opened from the link");
+    assert.deepEqual(h.transports, ["guest"], "…on the JOIN path, as at boot");
+
+    h.emitWindow("hashchange");                       // same code, lobby already up
+    await new Promise((r) => setImmediate(r));
+    assert.deepEqual(h.transports, ["guest"], "idempotent: the same invite is not re-run");
+
+    h.click("vs-close");
+    assert.equal(consumed, 1, "closing removes the fragment, as the boot path does");
+    assert.equal(h.elements.get("vsfriend").hidden, true);
+  } finally { h.lobby.cancel(); }
 });
 
 test("host-leave copy is honest about the AI takeover", () => {
@@ -293,12 +337,12 @@ test("a MY TEAM (custom) car is moved off in the room, whatever the player's ran
   // makeCars() builds the custom car only for the local player who picked it,
   // so a peer's grid holds no slot (and no wireId) for it: every snapshot from
   // a custom-team player was dropped and the rival sat frozen on the grid.
-  assert.match(SOURCE, /const onCustom = !!\(mineTeam && mineTeam\.custom\);/);
+  assert.match(SOURCE, /const onCustom = !!mineTeam && !Teams\.isReal\(mineTeam\);/);
   assert.match(SOURCE, /const blocked = onCustom \? peerSeats\(\) : blockingSeats\(\);/,
     "a custom host must move too — blockingSeats() is empty for rank 0");
   assert.match(SOURCE, /firstFreeSeat\(onCustom \? null : mine\.team, blocked\)/,
     "never prefer the custom team itself when choosing where to move");
-  assert.match(SOURCE, /MY TEAM cars only exist on your own screen/);
+  assert.match(SOURCE, /\(mineTeam\.legends \? "LEGENDS" : "MY TEAM"\) \+ " cars only exist on your own screen/);
 });
 
 // ── round 2 (bug hunt 2026-09-02): two guests on one seat must SETTLE ───────
@@ -326,10 +370,11 @@ const TWO_TEAMS = [
   { id: "alpha", short: "ALP", name: "Alpha", color: [1, 0, 0], drivers: [{ name: "A1" }, { name: "A2" }] },
   { id: "beta", short: "BET", name: "Beta", color: [0, 0, 1], drivers: [{ name: "B1" }, { name: "B2" }] },
 ];
-async function connectedGuest() {
+async function connectedGuest({ teams = TWO_TEAMS, teamIdx = 0 } = {}) {
   const made = [];
-  const h = harness({ scanFactory: () => ({ stop() {}, start() {} }), teams: TWO_TEAMS,
+  const h = harness({ scanFactory: () => ({ stop() {}, start() {} }), teams,
     netSession: fakeNetSession(made), transportStatus: "open" });
+  h.G.teamIdx = teamIdx;
   await h.lobby.join();
   h.lobby.watchForOpen();                     // the 250 ms poll sees "open" and binds the session
   for (let i = 0; i < 40 && !made.length; i++) await new Promise((r) => setTimeout(r, 50));
@@ -376,6 +421,25 @@ test("a guest yields its seat to the host and to an EARLIER guest", async () => 
     h.G.driverIdx = 0;
     s.deliver("hello", { team: "alpha", driver: 0 });
     assert.equal(h.G.driverIdx, 1, "the host outranks every guest");
+  } finally { h.lobby.cancel(); }
+});
+
+test("a LEGENDS car is moved off in the room like MY TEAM (legends: true, no custom)", async () => {
+  // The Legends entry exists only on the grid of the player who picked it, the
+  // same as MY TEAM — but it carries `legends: true` and no `custom`, so the
+  // old `mineTeam.custom` test let a Legends player keep a seat no peer holds.
+  const teamsSrc = await readFile(new URL("../../js/data/teams.js", import.meta.url), "utf8");
+  assert.match(teamsSrc, /const isReal = \(t\) => !!t && !t\.custom && !t\.legends;/,
+    "the harness's isReal stub mirrors js/data/teams.js");
+  const LEGENDS = { id: "legends", legends: true, short: "LEG", name: "Legends", color: [1, 1, 1],
+    drivers: [{ name: "L1" }, { name: "L2" }] };
+  const { h, s, hellos } = await connectedGuest({ teams: [...TWO_TEAMS, LEGENDS], teamIdx: 2 });
+  try {
+    s.deliver("hello", { team: "beta", driver: 0, rank: 1 });     // the host, on another car
+    assert.notEqual(h.G.teamIdx, 2, "moved off the Legends car");
+    assert.equal(h.G.teamIdx, 0, "…onto the first free REAL seat");
+    assert.equal(hellos().at(-1).d.team, "alpha", "…and announced it");
+    assert.match(h.status.textContent, /^LEGENDS cars only exist on your own screen/);
   } finally { h.lobby.cancel(); }
 });
 
