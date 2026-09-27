@@ -1227,9 +1227,10 @@ const TrackBuildProps = (function () {
       const gy = terrainYAt(cx, cz);
       const dz = deeper || 0, hh = (sz[1] + dz) / 2;
       const c = [cx, (gy !== null ? gy : groundYAt(k, dist)) + hh - dz - 0.8, cz];
-      if (addBox(out, c, dz ? [sz[0], sz[1] + dz, sz[2]] : sz, col, [r, u, t]) === false) return;   // on-track: dropped, no phantom barrier
+      const esz = dz ? [sz[0], sz[1] + dz, sz[2]] : sz;   // the EMITTED box — the registry records it, not the authored sz around the sunk centre
+      if (addBox(out, c, esz, col, [r, u, t]) === false) return;   // on-track: dropped, no phantom barrier
       const top = [c[0] + u[0] * hh, c[1] + u[1] * hh, c[2] + u[2] * hh];
-      note("prop", c, sz, { k, side });
+      note("prop", c, esz, { k, side });
       // solid box → the car must stop before its inner face (sz[0] across, sz[2] long).
       // Not a box shorter than the 0.8 m sink + 5 cm: its top is at or under the
       // ground, so it is a buried kerb flash / paint decal — a wall there was an
@@ -1501,25 +1502,35 @@ const TrackBuildProps = (function () {
           const claim = k * 2 + (outside > 0 ? 1 : 0);
           if (stacked.has(claim)) continue;
           // …and a stack a node or two off another corner's (it overlapped it
-          // by 90 %, every face nearly shared) is not built: the other covers
-          // it, and only its stretch of the driving limit is still marked.
-          let dup = false;
-          for (let d = 1; d < step && !dup; d++)
-            dup = stacked.has(((k - d + n) % n) * 2 + (claim & 1)) || stacked.has(((k + d) % n) * 2 + (claim & 1));
+          // by 90 %, every face nearly shared) is not built whole: only the
+          // part the other does not cover is, butted to it. Dropping it outright
+          // still marked its full stretch of the driving limit, so a partial
+          // overlap (step 2, d 1: ~50 %) left an invisible wall with no tyres.
+          let back = 0, fwd = 0;
+          for (let d = step - 1; d >= 1; d--) {
+            if (stacked.has(((k - d + n) % n) * 2 + (claim & 1))) back = d;
+            if (stacked.has(((k + d) % n) * 2 + (claim & 1))) fwd = d;
+          }
           stacked.add(claim);
-          if (dup) { for (let d = 0; d < step; d++) markBarrier((k + d) % n, outside, 2.2); continue; }
+          let sh = 0, span = step * 1.1;   // centre shift along t, and length, in nodes
+          if (back || fwd) {
+            span = back && fwd ? 0 : (back || fwd);
+            sh = back ? (step * 1.1 - back) / 2 : -(step * 1.1 - fwd) / 2;
+          }
+          if (span < 0.25) { for (let d = 0; d < step; d++) markBarrier((k + d) % n, outside, 2.2); continue; }
           const r = [track.rx[k], track.ry[k], track.rz[k]];
           const t = [track.tx[k], track.ty[k], track.tz[k]];
           const u = upOf(track, k);
           const o = outside * (hw[k] + 2.2);
-          const wy = py[k] + bankOffsetAt(track, k, o);
-          const slen = ds * step * 1.1;
+          const slen = ds * span;
+          const cx = px[k] + t[0] * sh * ds, cz = pz[k] + t[2] * sh * ds;
+          const wy = py[k] + t[1] * sh * ds + bankOffsetAt(track, k, o);
           // The stack's TOP stays 0.9 m over the road; its foot reaches down to
           // the verge wherever the ground falls away past the edge — a stack
           // cut at road height hung 0.2-1.7 m over the grass on 34 circuits.
           let drop = 0;
           for (const [dr, dt] of [[0, 0], [-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5]]) {
-            const qx = px[k] + r[0] * (o + dr) + t[0] * dt * slen, qz = pz[k] + r[2] * (o + dr) + t[2] * dt * slen;
+            const qx = cx + r[0] * (o + dr) + t[0] * dt * slen, qz = cz + r[2] * (o + dr) + t[2] * dt * slen;
             const g = terrainYAt(qx, qz);
             if (g !== null) drop = __M.max(drop, wy + r[1] * dr + t[1] * dt * slen - g);
           }
@@ -1527,15 +1538,15 @@ const TrackBuildProps = (function () {
           // shorter than the stride so neighbouring footings never overlap (the
           // stacks do, 10 %, and a full-width foot shared their planes and
           // cut through the verge's bushes and terraces).
-          addBox(out, [px[k] + r[0] * o, wy + 0.45, pz[k] + r[2] * o],
+          addBox(out, [cx + r[0] * o, wy + 0.45, cz + r[2] * o],
                  [1.0, 0.9, slen], [0.24, 0.22, 0.20], [r, u, t]);
           if (drop > 0.1) {
             // Its top runs 0.1 m up inside the stack, off the verge's plane.
             const fh = __M.min(drop, 3) + 0.4;
-            addBox(out, [px[k] + r[0] * o, wy + 0.1 - fh / 2, pz[k] + r[2] * o],
-                   [0.36, fh, ds * step * 0.9], [0.46, 0.45, 0.43], [r, u, t]);
+            addBox(out, [cx + r[0] * o, wy + 0.1 - fh / 2, cz + r[2] * o],
+                   [0.36, fh, slen * 0.82], [0.46, 0.45, 0.43], [r, u, t]);
           }
-          if (def.barrier) addBox(out, [px[k] + r[0] * o, wy + 0.94, pz[k] + r[2] * o],
+          if (def.barrier) addBox(out, [cx + r[0] * o, wy + 0.94, cz + r[2] * o],
                  [1.06, 0.18, slen], bt.tyre, [r, u, t]);
           // record the tyre barrier along its span so the car stops just short of it
           for (let d = 0; d < step; d++) markBarrier((k + d) % n, outside, 2.2);
