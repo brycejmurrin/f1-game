@@ -45,6 +45,12 @@ const NAME = /^-?[_a-zA-Z][\w-]*$/;
 // that reads as a hook and is in fact decoration, with the selector that does
 // the real work. Adding a row is a decision; leaving one out is a test failure.
 export const KNOWN = {
+  // PHONE AS CONTROLLER page state (js/input/phone-pad.js pad()): both are
+  // defined in controller.html's own <style>, which is a root page like
+  // bench.html and not under css/ — `body.linked` swaps the pairing screen
+  // for the pedals, `#status.bad` colours a refusal.
+  "bad": "controller.html <style> (#status.bad) — the phone page, not css/",
+  "linked": "controller.html <style> (body.linked) — the phone page, not css/",
   // Audio sheet. Both wrap rows that style themselves; every sibling group on
   // the sheet stacks with the same zero margins, so nothing is missing.
   "as-sub": "wrapper for #as-voices / #as-ann-voice; .set-row / .tune-row / .as-note style themselves",
