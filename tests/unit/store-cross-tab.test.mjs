@@ -468,3 +468,18 @@ test("the time-trial board caps classes but keeps the record and the class in us
   assert.equal(after[0].t, 80);
 });
 
+
+test("BLOCKED storage: a read that throws is remembered, not retried (and re-logged) every frame", () => {
+  let logs = 0, touches = 0;
+  const ctx = {
+    Log: { info() { logs++; }, warn() { logs++; } }, setTimeout, clearTimeout,
+    get localStorage() { touches++; const e = new Error("The operation is insecure."); e.name = "SecurityError"; throw e; },
+  };
+  vm.createContext(ctx);
+  seedSaveMigrate(ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/core/store.js"), "utf8") + ";this.GS=GameStore;", ctx);
+  const s = ctx.GS.store; logs = 0; touches = 0;
+  for (let i = 0; i < 600; i++) assert.equal(s.get("hudProfile", "standard"), "standard");
+  assert.equal(touches, 1, "one storage access, then memory");
+  assert.equal(logs, 1, "one log line, not one per frame");
+});

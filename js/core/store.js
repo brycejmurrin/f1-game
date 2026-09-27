@@ -28,6 +28,10 @@ const GameStore = (function () {
           // — but say so once, because "your settings reset themselves" is otherwise
           // reported as a game bug with nothing in the console to go on.
           noteBroken(e, "read " + k);
+          // Remember the miss: with storage BLOCKED every read throws, and a key
+          // read per frame (spotter) re-threw and re-logged 60 times a second,
+          // flooding the log buffer __apex.diag reads. Served from memory now.
+          this._cache.set(key, undefined);
           return this._def(k, d);
         }
         this._cache.set(key, v);
