@@ -1001,7 +1001,7 @@ let gridPreOrdered = false;   // set by gridUp(); read by js/net/netplay.js — 
 // without changing either of the other two, and the paint would be stale.
 let builtGridSlots = null;
 let cars = [], player = null;
-let raceT = 0, countT = 0, lightsLit = 0, resultT = 0;
+let raceT = 0, countT = 0, lightsLit = 0, resultT = 0, netGreen = null;
 // THE LIGHTS-OUT INSTANT ON THE RACE CLOCK. AiDrive.launchMul/launchDone read
 // their time as seconds since green, and raceT is that only for a first
 // start — a red-flag restart resumes the clock the flag stopped, so without
@@ -2163,7 +2163,7 @@ function gridUp(preOrder) {
     c.speed = 0; c.accSm = 0; c.corridorAccel = 0; c.prog = -(14 + i * 8); c.lap = 0; c.fuelLap = 0; c.fuelRestartLaps = 0; c.energy = 1; c._progGift = 0;   // a car on the grid is pulling nothing — apex.js reset() has the full list and why
     c.otT = 0; c.otCool = 0; c.lapTime = 0; c.best = Infinity; c.totalT = 0;
     c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
-    c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.penalty = 0; c.offT = 0; c.hits = 0; c.hitSev = 0; c.wallHits = 0; c.errCount = 0;   // mistakes THIS race — the instrument's denominator, cleared only by a NEW race
+    c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.tlArmed = false; c.qualiCut = false; c.penalty = 0; c.offT = 0; c.hits = 0; c.hitSev = 0; c.wallHits = 0; c.errCount = 0;   // mistakes THIS race — the instrument's denominator, cleared only by a NEW race
     c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.wallT = 0; c.wasOnWall = false;
     c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.contactT = 0; c.lane = c.lanePref;   // BOTH sides of a real conflict: lane is damped state, not a constant, and contactT DECAYS — unlike the towing/wheelLock beside it, a re-grid is the only thing that clears it
     c.rPrevHead = 0;
@@ -3096,7 +3096,8 @@ function endRace(forcedOrder) {
     // Tell the other player what we set BEFORE building the sheet: their side
     // needs it to draw the same classification ours will.
     if (myLap > 0) qualiNet.reportQuali(player.driverId, myLap);
-    quali.simulate(qualiNet.driven(myLap));
+    // Infinity = drove, but every lap was deleted: NO TIME, the back of the grid.
+    quali.simulate(qualiNet.driven(myLap > 0 ? myLap : player.qualiCut ? Infinity : 0));
     if (!(myLap > 0)) reportModelQuali();   // no valid lap: the rival still needs OUR time, or their sheet waits forever
     $("quali").classList.add("q-done");   // the session is run: only TO THE GRID now
     qualiSheet.open(quali.rows());
@@ -4160,6 +4161,14 @@ function update(dt) {
       state = "race";
       if (!restartPending) raceT = 0;   // a red-flag restart resumes the clock the flag stopped
       launchT0 = raceT;   // …so the launch model measures from THIS green, not the first one
+      // A NETWORKED RACE KEEPS WALL TIME from the shared green (netStart.at is
+      // that instant on OUR clock), offset by the clock a red-flag restart resumes
+      // from. raceT only summed simulated dt, which loses time to a backgrounded
+      // tab (no frames — developer.chrome.com/blog/timer-throttling-in-chrome-88),
+      // the 0.25 s dt clamp and the 5-step cap: a guest who switched apps for 5 s
+      // crossed the line 5 s behind on the road and was classified 5 s AHEAD,
+      // because finish times from two drifting clocks were compared as one.
+      netGreen = netStart ? { base: netStart.at - raceT * 1000, now: netStart.now } : null;
       els.lights.hidden = true;
       for (const l of els.lights.children) l.classList.remove("on");
       netStart = null;              // consumed; never carry it into the next race
@@ -4184,6 +4193,10 @@ function update(dt) {
   }
   if (state !== "race") return;
   raceT += dt;
+  if (netGreen) {   // never runs BEHIND the shared clock; never ahead of it (the sim cannot outrun wall time)
+    const w = (netGreen.now() - netGreen.base) / 1000;
+    if (Number.isFinite(w) && w > raceT) raceT = w;
+  }
   // THE RED PROCEDURE ENDS EXACTLY ONCE, so its clean-up cannot ride on the
   // re-grid alone: takeRestart() consumes the request either way, and
   // redFlagRestart() declines once any car has finished — ordinary, not exotic.
@@ -4996,6 +5009,9 @@ function updateCar(c, dt, ranked) {
       // the crossing already clears, not a second definition of either.
       // Qualifying too: its grid is the player's lap time, so a cut lap took pole.
       if (c.isPlayer && (isTimeTrial() || isQuali())) c.incidentInvalidLap = true;
+      // A cut quali lap is DELETED, not replaced: with no valid lap the sheet
+      // gave the player the model's time, which could be pole (endRace).
+      if (c.isPlayer && isQuali()) c.qualiCut = true;
       // Penalty applies to EVERY car (it feeds race classification) so the AI
       // can't cut corners for free; only the player gets the on-screen cues.
       // THREE WARNINGS, ONE PENALTY, RESET — the real ladder. This used to add
@@ -5005,24 +5021,26 @@ function updateCar(c, dt, ranked) {
       // LIFETIME total because the career `clean` objective and the archive read
       // it (js/career/career.js) and "no cuts at all" must not become satisfiable
       // by cutting four more times.
-      // ESCALATING: the 4th breach is +5 s, the 5th +10 s, then the count
-      // starts over (https://racingnews365.com/track-limits,
-      // https://www.formuladream.app/blog/f1-track-limits-explained). A time
-      // trial has no classification to penalise: it resets at the 4th as before.
-      c.cutWarn = (c.cutWarn | 0) + 1;
-      if (c.cutWarn >= 4) {
-        const secs = c.cutWarn >= 5 ? 10 : 5;
-        if (secs === 10 || isTimeTrial()) c.cutWarn = 0;
-        // Time trial already invalidated the lap on the first counted cut; the
-        // ladder is race classification only (docs/BUGS.md B2 / defect ledger).
-        if (!isTimeTrial()) {
-          c.penalty += secs;
+      // The FIA ladder prices the 5th offence at +10s, not a fresh warning: the
+      // cut after a +5s is armed (tlArmed) and costs +10s, then the ladder restarts
+      // (https://www.planetf1.com/news/explained-f1-track-limits-rules).
+      // Time trial and qualifying already invalidated the lap; the seconds are
+      // race classification only (docs/BUGS.md B2 / defect ledger).
+      const priced = !isTimeTrial() && !isQuali();
+      const tenner = priced && c.tlArmed;
+      c.cutWarn = tenner ? 0 : (c.cutWarn | 0) + 1;
+      if (tenner || c.cutWarn >= 4) {
+        c.cutWarn = 0;
+        c.tlArmed = !tenner && priced;
+        if (priced) {
+          const sec = tenner ? 10 : 5;
+          c.penalty += sec;
           if (c.isPlayer) {
             const pk = hudProfile === "broadcast" ? "race" : "penalty-hit";
-            announce("+" + secs + "s TRACK LIMITS PENALTY", 2, pk);
+            announce("+" + sec + "s TRACK LIMITS PENALTY", 2, pk);
             if (soundOn) GameAudio.penalty();
           }
-        }
+        } else if (c.isPlayer) announce("LAP INVALIDATED", 1.2, "penalty-warn");
       } else if (c.isPlayer) {
         // The n/4 count is the race ladder's; in a time trial the lap is simply gone.
         announce(isTimeTrial() || isQuali() ? "LAP INVALIDATED" : "TRACK LIMITS " + c.cutWarn + "/4", 1.2, "penalty-warn");
@@ -8724,7 +8742,7 @@ $("q-sim").onclick = () => {
   if (soundOn) GameAudio.uiSelect();
   // Keep the model's time for us — but a rival who has already driven theirs
   // does not lose it because we could not be bothered to drive ours.
-  quali.simulate(qualiNet.driven(0));
+  quali.simulate(qualiNet.driven(player && player.qualiCut ? Infinity : 0));   // a deleted lap is not traded for the model's
   reportModelQuali();
   $("quali").classList.add("q-done");
   qualiSheet.build(quali.rows());
@@ -9211,8 +9229,31 @@ document.addEventListener("visibilitychange", () => {
   // The platform releases a wake lock on every hide and does not give it
   // back — re-request it here rather than a fourth listener elsewhere.
   if (!document.hidden && raceWakeWanted) holdRaceWake();
+  // VS FRIEND: netPlay.tick runs only from rAF, which a hidden tab stops, so the
+  // rival timed us out after 6 s. Hidden timers still fire ~1 Hz (and WebRTC
+  // pages are exempt from intensive throttling): keep pinging while hidden.
+  // https://developer.chrome.com/blog/timer-throttling-in-chrome-88
+  clearInterval(_netHiddenPump); _netHiddenPump = 0;
+  if (document.hidden && netPlay.active()) _netHiddenPump = setInterval(() => netPlay.tick(performance.now()), 500);
 });
+let _netHiddenPump = 0;
 window.addEventListener("pagehide", () => { PerfGov.sentinelArm(false); _disarmProbeOnLeave(); });
+// LOSING FOCUS WHILE STILL VISIBLE pauses too. visibilitychange only fires when
+// the page is HIDDEN (MDN, Page Visibility API): an Alt-Tab to a second monitor,
+// or an overlay taking focus, left the car coasting off-line while the field
+// lapped. Settled for 250 ms (a focus hop inside the page is not a leave), never
+// in a friend race (the rival cannot be paused) and never under automation.
+window.addEventListener("blur", () => {
+  setTimeout(() => {
+    if (document.hidden || document.hasFocus() || navigator.webdriver || netPlay.active()) return;
+    if (state === "race" || state === "count") setPaused(true);
+  }, 250);
+});
+// …and the platform taking the AUDIO (an iOS call answered from the compact
+// banner keeps the page visible and focused): the race stops with the sound.
+if (GameAudio.onInterrupted) GameAudio.onInterrupted(() => {
+  if ((state === "race" || state === "count") && !netPlay.active()) setPaused(true);
+});
 
 // ---------- boot ----------
 // (A `window.__APEX` bridge lived here, gated on a `window.__APEX_DEBUG` flag

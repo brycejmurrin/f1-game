@@ -789,9 +789,22 @@ const TLX = (function () {
       // null from create() and silently demote the player to GLX.
       const _threeOnLost = (typeof renderer.onDeviceLost === "function")
         ? renderer.onDeviceLost.bind(renderer) : null;
+      // iOS reports a background loss on the way BACK (webkit bug 261331), with
+      // document.hidden already false: within 3 s of becoming visible it is the
+      // background loss, not a crash — same rule as GLX webglcontextlost.
+      const _nowMs = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
+      let _shownAt = -1e9;
+      try {
+        document.addEventListener("visibilitychange", function () { if (!document.hidden) _shownAt = _nowMs(); });
+        window.addEventListener("pageshow", function () { _shownAt = _nowMs(); });
+      } catch (_) { /* no document events (harness) */ }
       renderer.onDeviceLost = function (info) {
         try { if (_threeOnLost) _threeOnLost(info); } catch (_) { /* three's own bookkeeping; ours must run regardless */ }
         try {
+          if (!document.hidden && _nowMs() - _shownAt < 3000) {   // seen on the way back: reload now, uncounted, nothing latched
+            setTimeout(function () { try { location.reload(); } catch (_) { /* harness */ } }, 300);
+            return;
+          }
           if (!document.hidden) {
             try { localStorage.setItem("apex26.envProbeOff", "1"); } catch (_) { /* no storage: the knob stays as-is and the tier gate is the only defence left */ }
             try { localStorage.setItem("apex26.perChunkOff", "1"); } catch (_) { /* ditto — nothing in this handler may throw */ }

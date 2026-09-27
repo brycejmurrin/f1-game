@@ -84,3 +84,21 @@ test("a queued INFO card older than ANN_STALE_MS is dropped at the drain; a warn
   vm.runInContext("drain()", ctx);
   assert.deepEqual(shown.map((s) => s[0]), ["TYRES AT 50%"], "a fresh info card still plays");
 });
+
+test("losing focus while visible pauses a solo race; an iOS audio interruption does too; neither in a friend race", () => {
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const blur = game.match(/window\.addEventListener\("blur", \(\) => \{[\s\S]*?\n\}\);/)[0];
+  assert.match(blur, /document\.hidden \|\| document\.hasFocus\(\) \|\| navigator\.webdriver \|\| netPlay\.active\(\)/, "settled, visible-only, never under automation or in MP");
+  assert.match(blur, /if \(state === "race" \|\| state === "count"\) setPaused\(true\);/);
+  assert.match(game, /GameAudio\.onInterrupted\(\(\) => \{\s*if \(\(state === "race" \|\| state === "count"\) && !netPlay\.active\(\)\) setPaused\(true\);/);
+  const eng = fs.readFileSync(path.join(ROOT, "js/audio/engine.js"), "utf8");
+  assert.match(eng, /ctx\.state === "interrupted" && _onInterrupted/);
+});
+
+test("a context lost within 3 s of becoming visible is iOS's late-reported BACKGROUND loss on every backend", () => {
+  for (const f of ["js/render/glx/glx.js", "js/render/three/tlx.js", "js/render/webgpu/wgx.js"]) {
+    const src = fs.readFileSync(path.join(ROOT, f), "utf8");
+    assert.match(src, /addEventListener\("pageshow", function \(\) \{ _shownAt = _nowMs\(\); \}\)/, f + " tracks when the page came back");
+    assert.match(src, /_nowMs\(\) - _shownAt < 3000/, f + " treats a loss inside that window as the background loss");
+  }
+});

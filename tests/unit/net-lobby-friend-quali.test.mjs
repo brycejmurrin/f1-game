@@ -67,11 +67,36 @@ test("hunt fixes: SIMULATE / no valid lap still reports a time; tyres + reliabil
   const { readFileSync } = await import("node:fs");
   const r = (f) => readFileSync(new URL("../../" + f, import.meta.url), "utf8");
   const game = r("js/game.js");
-  assert.match(game, /quali\.simulate\(qualiNet\.driven\(0\)\);\s*reportModelQuali\(\);/, "SIMULATE sends the model's time");
+  // driven(Infinity) when every lap was deleted for track limits (NO TIME), else 0.
+  assert.match(game, /quali\.simulate\(qualiNet\.driven\([^\n]*\? Infinity : 0\)\);[^\n]*\s*reportModelQuali\(\);/, "SIMULATE sends the model's time");
   assert.match(game, /if \(!\(myLap > 0\)\) reportModelQuali\(\);/, "a lap with no valid time sends the model's time");
   assert.match(game, /if \(c\.local && paused && netPlay\.active\(\)\) return PAUSED_NET_INPUT;/);
   const lobby = r("js/net/lobby.js");
   assert.match(lobby, /tyres: G\.raceTyreWear, reliab: G\.raceReliability,/);
   assert.match(lobby, /if \(own\(next, "tyres"\)\) G\.raceTyreWear = next\.tyres;/);
   assert.match(r("js/ui/hud.js"), /workBtn\.hidden = [^\n]*G\.netPlay\.active\(\)/);
+});
+
+test("a networked race clock is anchored to the SHARED green, so a peer that lost frames is not classified ahead", async () => {
+  const { readFileSync } = await import("node:fs");
+  const game = readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
+  assert.match(game, /netGreen = netStart \? \{ base: netStart\.at - raceT \* 1000, now: netStart\.now \} : null;/,
+    "set at EVERY green (a red-flag restart re-bases on the clock it resumes from); a solo green clears it");
+  const body = game.match(/ {2}raceT \+= dt;\n {2}if \(netGreen\) \{[\s\S]*?\n {2}\}/)[0];
+  // Run the real catch-up: 5 s in a background tab -> the local sim summed only
+  // 0.25 s (the dt clamp); wall time since green is 65 s.
+  let raceT = 60, dt = 0.25, now = 1000 + 65000;
+  const netGreen = { base: 1000, now: () => now };
+  eval(body.replace(/^ {2}/gm, ""));
+  assert.equal(raceT, 65, "the clock carries the time the tab was away");
+  now = 1000 + 64000; raceT = 64.9; dt = 0.016;
+  eval(body.replace(/^ {2}/gm, ""));
+  assert.ok(Math.abs(raceT - 64.916) < 1e-9, "never pulled BACK: the sim clock only ever catches up");
+});
+
+test("a reopened room code remembers the answers it already took (a guest's reposts are not a new joiner)", async () => {
+  const { readFileSync } = await import("node:fs");
+  const lobby = readFileSync(new URL("../../js/net/lobby.js", import.meta.url), "utf8");
+  assert.match(lobby, /if \(!opts\.quiet \|\| !_answersSeen \|\| _answersSeen\.code !== code\) _answersSeen = \{ code, set: new Set\(\) \};/);
+  assert.match(lobby, /const answersSeen = _answersSeen\.set;/);
 });

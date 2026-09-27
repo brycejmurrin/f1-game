@@ -488,7 +488,13 @@ const GameAudio = (function () {
     // iOS drops a VISIBLE page to "interrupted" for an alarm or Siri; a gamepad
     // player never makes the gesture the listeners below wait for. Our own
     // suspend() only runs while hidden, so a visible stop is never ours.
-    ctx.onstatechange = () => { if (ctx && ctx.state !== "running" && ctx.state !== "closed" && !document.hidden) resumeIfNeeded(); };
+    ctx.onstatechange = () => {
+      // "interrupted" is iOS taking the audio session — a call answered from the
+      // compact banner keeps Safari VISIBLE, so nothing else tells the game
+      // (support.apple.com/guide/iphone/answer-or-decline-incoming-calls-iph3c9947bf/ios).
+      if (ctx && ctx.state === "interrupted" && _onInterrupted) { try { _onInterrupted(); } catch (_) { /* a listener must not stop the resume below */ } }
+      if (ctx && ctx.state !== "running" && ctx.state !== "closed" && !document.hidden) resumeIfNeeded();
+    };
     master = ctx.createGain();
     master.gain.value = isEnabled ? 0.8 : 0;
     // MASTER LIMITER. Engine + wind + skid + rain + thunder + music summed
@@ -2879,7 +2885,11 @@ const GameAudio = (function () {
     if (backend) { try { backend.stop(); } catch (e) { /* a broken backend must not take the audio down */ } }
   }
 
+  let _onInterrupted = null;
+  /** fn() when the platform interrupts the audio session (an iOS call, Siri). */
+  function onInterrupted(fn) { _onInterrupted = typeof fn === "function" ? fn : null; }
   return {
+    onInterrupted,
     init,
     setRadioDuck,
     decodeClip,

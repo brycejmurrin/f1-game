@@ -667,6 +667,19 @@ const GLXBackend = (function () {
     // the loss is permanent and later gl calls cascade into errors. preventDefault
     // lets the GPU restore; on restore we reload to cleanly rebuild every GL
     // resource (programs, FBOs, textures, meshes) rather than track them all.
+    // A BACKGROUND LOSS IS SEEN LATE ON iOS: WebKit reports the dropped context
+    // when Safari comes back (bugs.webkit.org/show_bug.cgi?id=261331), i.e. with
+    // document.hidden already false, so the hidden-only test below read almost
+    // every iOS background loss as a crash — latches set, a counted reload, the
+    // race lost to the title screen. A loss within 3 s of becoming visible is
+    // treated as the background loss it is.
+    const _nowMs = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
+    var _shownAt = -1e9;
+    try {
+      document.addEventListener("visibilitychange", function () { if (!document.hidden) _shownAt = _nowMs(); });
+      window.addEventListener("pageshow", function () { _shownAt = _nowMs(); });
+    } catch (_) { /* no document events (harness) */ }
+    var _bgLoss = function () { return document.hidden || _nowMs() - _shownAt < 3000; };
     canvas.addEventListener("webglcontextlost", function (e) {
       e.preventDefault(); _ctxLost = true;
       // Only downgrade quality on a loss that happened while VISIBLE — that's the
@@ -689,7 +702,7 @@ const GLXBackend = (function () {
       // Same visibility condition as the probe: iOS drops the context on
       // backgrounding, and that benign transient must not disable a feature the
       // player deliberately turned on.
-      if (!document.hidden) {
+      if (!_bgLoss()) {
         try { localStorage.setItem("apex26.envProbeOff", "1"); } catch (_) { /* No storage (Safari private mode) or quota full: the probe simply stays on next boot, which is the pre-existing behaviour — a failed latch must not also break the loss handler. */ }
         try { localStorage.setItem("apex26.perChunkOff", "1"); } catch (_) { /* Same: without storage the knob stays as the player left it and the tier gate is the only defence left. Nothing here may throw — this runs inside webglcontextlost. */ }
       }
@@ -719,6 +732,10 @@ const GLXBackend = (function () {
       // the title screen mid-race when they came back, and spent one of the
       // two bounded retries on a loss that was never a crash. Defer the
       // reload to the moment the tab is visible again, uncounted.
+      if (_bgLoss() && !document.hidden) {   // seen on the way back: reload now, uncounted
+        setTimeout(function () { try { location.reload(); } catch (_) { /* harness */ } }, 300);
+        return;
+      }
       if (document.hidden) {
         try {
           var _onVis = function () {
