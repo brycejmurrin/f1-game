@@ -784,3 +784,31 @@ test("createInvite throwing becomes a typed result, not an unhandled rejection",
     assert.match(h.status.textContent, /Could not create an invite/);
   } finally { h.lobby.cancel(); }
 });
+
+test("join()'s late prompt does not wipe an error said during its ICE wait", async () => {
+  // multiplayer-lobby.spec "an empty box asks for the code": JOIN, then MAKE
+  // ANSWER on an empty box said "Paste their invite code first." (error) —
+  // and join(), finishing its relay-credentials wait ~0.5 s later, replaced it
+  // with "Paste the invite code they sent you." (no error).
+  const ice = deferred();
+  const h = harness({ prefetchIce: () => ice.promise, scanFactory: () => ({ stop() {}, start() {} }) });
+  try {
+    const joining = h.lobby.join();
+    const empty = await h.lobby.makeAnswer("");
+    assert.equal(empty.error, "empty");
+    assert.match(h.status.textContent, /Paste their invite code first/);
+    ice.resolve();
+    assert.equal((await joining).ok, true);
+    assert.match(h.status.textContent, /Paste their invite code first/, "the error stands; the prompt stayed quiet");
+    // With nothing said meanwhile the prompt still lands.
+    h.lobby.cancel();
+    const ice2 = deferred();
+    const q = harness({ prefetchIce: () => ice2.promise, scanFactory: () => ({ stop() {}, start() {} }) });
+    try {
+      const j2 = q.lobby.join();
+      ice2.resolve();
+      assert.equal((await j2).ok, true);
+      assert.match(q.status.textContent, /Paste the invite code they sent you/);
+    } finally { q.lobby.cancel(); }
+  } finally { h.lobby.cancel(); }
+});

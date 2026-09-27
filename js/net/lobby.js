@@ -58,7 +58,9 @@ const NetLobby = (function () {
     // connect counter): aria-busy holds the announcement until the state
     // settles, instead of a screen reader reading "Connecting… 7s" every second.
     // Unchanged text is not rewritten — the 4 Hz polls re-said the same line.
+    let sayGen = 0;   // bumps per say(): a late prompt checks nothing was said since it began
     function say(msg, isError, busy) {
+      sayGen++;
       statusText = msg || "";
       // Direct lookup: els() rebuilds a 35-element map per call, and say()
       // fires from 4 Hz polls and 1 Hz relay ticks during every connect.
@@ -1189,13 +1191,17 @@ const NetLobby = (function () {
     async function join() {
       const gen = beginOperation();
       show("joining");
+      const said = sayGen;
       const p = (async () => {
         await readyIce();
         if (!operationCurrent(gen)) return cancelledResult();
         // Typed, like every sibling: a bare `return` handed an awaiting caller
         // `undefined` where host()/codeHost()/codeJoin() all return a result.
         if (!newTransport("guest")) return { ok: false, error: "no_transport", message: noConnectionMsg() };
-        say("Paste the invite code they sent you.");
+        // Not over something said meanwhile: a tap on MAKE ANSWER inside the
+        // ICE wait had its error ("Paste their invite code first.", a bad code)
+        // wiped by this prompt landing up to 2.5 s later.
+        if (sayGen === said) say("Paste the invite code they sent you.");
         return { ok: true };
       })();
       joinP = p;
