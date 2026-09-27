@@ -343,3 +343,23 @@ test("a fuel-aware split gives the early stints less of the race", () => {
   // A single stint has nothing to trade against, and must not be disturbed.
   assert.deepEqual([...A.splitStints(30, [40], A.STRAT.FUEL_WEAR)], [30], "a no-stop plan is one stint");
 });
+
+// ── Two dry compounds (FIA Sporting Regulations B6.3.6) ───────────────────
+test("twoCompound: every plan runs at least two different dry compounds", () => {
+  // A dry race must use two specifications; the planner enumerated
+  // single-compound and no-stop plans, and 20 of 21 AI cars ran one compound.
+  for (const laps of [10, 25, 53]) {
+    for (let i = 0; i < 20; i++) {
+      const p = A.stintPlan({ laps, lifeLaps: lifeFor(laps), pitLossLaps: PIT_LOSS_LAPS, roll: (i + 0.5) / 20, twoCompound: true });
+      assert.ok(new Set(p.seq).size >= 2, `${laps} laps, roll ${i}: ${p.seq.join(">")}`);
+    }
+  }
+});
+
+test("twoCompound: a re-cut counts the compounds already run, and a pinned 0-stop keeps its pin", () => {
+  const recut = A.stintPlan({ laps: 12, lifeLaps: lifeFor(12), pitLossLaps: PIT_LOSS_LAPS, roll: 0.5,
+                              start: "hard", twoCompound: true, used: ["medium"] });
+  assert.ok(recut, "a plan exists");
+  const pinned = A.stintPlan({ laps: 20, lifeLaps: lifeFor(20), pitLossLaps: PIT_LOSS_LAPS, roll: 0.5, stops: 0, twoCompound: true });
+  assert.equal(pinned.stops, 0, "the STRATEGY row's pin wins over the rule");
+});
