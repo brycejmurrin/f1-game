@@ -36,7 +36,7 @@ function create(G) {
       sw.style.background = G.cssCol(team ? team.color : [0.5, 0.5, 0.5]);
       const nm = span("res-name", `${r.code}  ${r.name}`);
       if (driven) nm.appendChild(span("q-real-tag", " DRIVEN"));
-      const tm = span("res-pts q-time", r.pos === 1 ? G.fmtTime(r.t) : `+${r.gap.toFixed(3)}`);
+      const tm = span("res-pts q-time", r.noTime ? "NO TIME" : r.pos === 1 ? G.fmtTime(r.t) : `+${r.gap.toFixed(3)}`);
       row.append(span("res-pos", r.pos), sw, nm, tm);
       body.appendChild(row);
     }

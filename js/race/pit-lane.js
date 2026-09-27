@@ -1543,6 +1543,9 @@ const PitLane = (function () {
       const plan = c && c.pitPlan;
       // A HUMAN's plan is advice (planFor): nothing here ever arms it.
       if (!plan || c.human || c.pitArmed || (c.pitState && c.pitState !== "none")) return "";
+      // The last lap, or the leader already flagged: no stop pays (the player's
+      // engineer has the same finalLap guard). A lapped AI still boxed for wets.
+      if ((G.lapsTarget > 0 && (c.lap || 0) >= G.lapsTarget) || (typeof RaceControl !== "undefined" && RaceControl.flagOut(G.cars))) return "";
       const stopsLeft = plan.stops - (c.pitStops || 0);
       const nextAt = plan.lapsAt[c.pitStops || 0];
       // WRONG TYRE FOR THE CONDITIONS, in either direction: slicks in the rain
