@@ -404,9 +404,10 @@ missing it costs **2 rep**.
 | `clean` | no track-limits cuts, no penalty | — |
 
 `clean` reads `car.cuts`, the **lifetime** cut count. The penalty ladder in
-`game.js` counts on a separate `cutWarn` that RESETS — three warnings, one +5 s
-penalty, reset — precisely so that "no cuts at all" cannot become satisfiable by
-cutting four more times. Do not merge the two counters.
+`game.js` counts on a separate `cutWarn` — the race's strike count (FIA 2026:
+two warnings, black-and-white flag on the 3rd, +5 s for the 4th and each
+additional; it cycles in time trial and qualifying, which price nothing) — so
+"no cuts at all" never depends on the ladder's shape. Do not merge the two counters.
 
 ### Choosing the brief
 

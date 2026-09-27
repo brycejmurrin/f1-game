@@ -1669,7 +1669,7 @@ const api = {
       // has been here since active aero landed but its older sibling never was,
       // so "can this car use overtake right now, and why not" could only be
       // answered by reading game.js. otEnabled is the RACE-WIDE gate (lap 1,
-      // and any caution) and is the same for every car; otArmed folds that
+      // the Safety Car / red flag and the lap after either) and is the same for every car; otArmed folds that
       // together with this car's own proximity and cooldown.
       otArmed: !!c.otArmed, otT: +(c.otT || 0).toFixed(2),
       otCool: +(c.otCool || 0).toFixed(2), otEnabled: !!G.otEnabled(),

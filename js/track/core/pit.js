@@ -103,7 +103,7 @@ const TrackPit = (function () {
   // limiter has no room to dodge, so the exit may not deliver it into a bend —
   // see window(), which buys this out of the bay row's own slack.
   const MERGE_RUN = 40;
-  const LIMIT_KPH = 80, LIMIT_KPH_STREET = 60;   // F1 SR 2026 B1.7.3(a); Monaco / Melbourne
+  const LIMIT_KPH = 80, LIMIT_KPH_STREET = 60;   // F1 SR 2026 B1.6.3(a); Monaco
   // The row starts past POLE's grid slot (14 m before the line, TrackMesh.gridSlot)
   // plus the run-up a commitment needs, and ends ROW_END short of the exit line.
   // Race control stands ROW_TAIL past the last bay (SceneryPits), inside the
@@ -131,8 +131,8 @@ const TrackPit = (function () {
     // (PitLane.laneUniform): no ribbon, no wall, no garages, and nothing kept
     // out of a complex that is not there. A street circuit builds the STREET
     // complex — a lane beside the road behind a real pit wall — unless its
-    // def opts out; 80 km/h (F1 SR B1.7.3(a)) unless authored (Monaco and
-    // Singapore run 60), the painted lane keeps the old street 60.
+    // def opts out; 80 km/h (F1 SR 2026 B1.6.3(a)) unless authored (Monaco
+    // runs 60; Singapore has run 80 since 2025), the painted lane keeps the old street 60.
     const painted = mode === "narrow";
     return {
       side: p.side === -1 ? -1 : 1,

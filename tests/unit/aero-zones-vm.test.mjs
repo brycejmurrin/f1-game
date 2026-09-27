@@ -136,7 +136,7 @@ test("outside a zone, zoneAhead counts down a real distance", async () => {
 // ── overtake mode — the rules active aero does NOT share ────────────────────
 
 test("overtake stays disabled for the whole opening lap, then arms when the LEADER starts lap 2", async () => {
-  // otEnabled() is `caution.level === 0 && leader.lap > 1` (js/race/race-control.js):
+  // otEnabled() is `caution.level < 3 && leader.lap > 1` (+ the post-SC hold; js/race/race-control.js):
   // a pure function of the leader's lap count, so the 220 s the browser spec
   // drives to get the leader round (~16 s of VM here) buys nothing a line
   // crossing does not. The SAME invariant — on === (leaderLap > 1) on every
