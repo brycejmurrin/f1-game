@@ -169,13 +169,19 @@ const DataRealRace = (function () {
       circuit: String(s.circuit_short_name || ""), country: String(s.country_name || ""),
       trackId: trackIdFor(s, tracks), dateStart: String(s.date_start || ""),
       tod: todFor(s), weather: weatherFor(raw.weather), rain: rainByLap(laps, raw.weather, totalLaps),
-      laps: totalLaps, drivers, cautions: cautionsFor(raw.raceControl), passes: passesFor(raw.overtakes, laps, totalLaps), complete,
+      laps: totalLaps, drivers, cautions: cautionsFor(raw.raceControl), passes: passesFor(raw.overtakes, laps, totalLaps, drivers), complete,
     };
   }
 
   /** Every pass, on the lap the overtaking car was on: [{lap, by, over, pos}] —
    *  OpenF1's /overtakes rows dated against that driver's lap start times. */
-  function passesFor(overtakes, laps, totalLaps) {
+  function passesFor(overtakes, laps, totalLaps, drivers) {
+    // A car that stopped on lap L is "passed" by the whole field as it drops
+    // down the order (the feed logged 24 passes on Norris and Gasly the lap
+    // they retired at Baku 2026): a pass on either side of a retiring car is
+    // the retirement, not an overtake.
+    const ends = {};   // num -> the lap the car's race ended on (dnf only)
+    for (const d of arr(drivers)) if (d && d.dnf && d.num != null) ends[d.num] = (d.lapsDone | 0) + 1;
     const starts = {};   // num -> [lap start ms by lap]
     for (const l of arr(laps)) {
       const n = num(l && l.driver_number), k = num(l && l.lap_number), t = Date.parse(l && l.date_start || "");
@@ -195,6 +201,7 @@ const DataRealRace = (function () {
       if (by == null || over == null || !isFinite(t)) continue;
       const lap = lapOf(by, t) || lapOf(over, t) || 1;
       if (lap > totalLaps) continue;
+      if (ends[by] <= lap || ends[over] <= lap) continue;
       out.push({ lap, by, over, pos });
     }
     out.sort((a, b) => a.lap - b.lap);

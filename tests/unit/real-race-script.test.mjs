@@ -316,11 +316,12 @@ test("the passes, the lap board and the race book read straight off the real tim
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "mat4.js" });
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race.js"), "utf8"), ctx, { filename: "real-race.js" });
   const s = D.build(rawBaku(), findTeam, TRACKS);
-  assert.equal(s.passes.length, 160, "OpenF1's overtakes, every one dated onto a lap");
+  assert.equal(s.passes.length, 128, "OpenF1's 160 overtakes dated onto laps, minus the 32 on either side of a car retiring that lap");
+  assert.ok(!s.passes.some((p) => p.lap === 36 && (p.over === 4 || p.over === 10)), "the field streaming past Norris and Gasly as they stopped is not passing them");
   const l1 = s.passes.filter((p) => p.lap === 1);
   assert.equal(l1.length, 18, "eighteen passes on the opening lap");
   assert.deepEqual(host(l1[0]), { lap: 1, by: 81, over: 16, pos: 2 });
-  assert.equal(s.passes.filter((p) => p.lap === 36).length, 51, "the restart lap after the second safety car");
+  assert.equal(s.passes.filter((p) => p.lap === 36).length, 26, "the restart lap after the second safety car, without the two stopped cars");
   const board = host(D.lapBoard(s, 51));
   assert.equal(board[0].code, "RUS"); assert.equal(board[0].pos, 1); assert.equal(board[0].gap, 0);
   assert.equal(board[1].code, "VER");
