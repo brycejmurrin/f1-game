@@ -89,13 +89,21 @@ const NetNostr = (function () {
   // They will all rot eventually — free infrastructure does — which is why the
   // list is overridable at runtime and why room codes are the BACKUP way in.
   // The invite link and QR need no third party and have worked throughout.
+  //
+  // Re-measured 2026-09-27 with tools/net/nostr-probe.mjs (the only criterion
+  // that decides this: does the relay OK an ephemeral kind-22222 event from an
+  // unknown pubkey?): nos.lol answered 502 and relay.mostr.pub a 301 on the
+  // WebSocket upgrade — two of the six shipped relays were dead, so a room
+  // code's publish and subscribe ran on four. Both dropped; the three others
+  // that said OK that day are added (relay.damus.io is back after its 503s).
   const RELAYS = [
-    "wss://nos.lol",
     "wss://relay.primal.net",
     "wss://nostr.mom",
     "wss://relay.snort.social",
     "wss://nostr-pub.wellorder.net",
-    "wss://relay.mostr.pub",
+    "wss://relay.damus.io",
+    "wss://nostr.bitcoiner.social",
+    "wss://nostr.oxtr.dev",
   ];
 
   // localStorage apex26.nostrRelays = ["wss://…", …] overrides the list above,

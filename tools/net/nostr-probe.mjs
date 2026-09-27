@@ -61,8 +61,13 @@ const KIND = 22222;
 let WebSocket, schnorr;
 try { ({ WebSocket } = await import("ws")); }
 catch { console.error("ws is not installed. Run:  npm i --no-save ws"); process.exit(2); }
-try { ({ schnorr } = await import("@noble/curves/secp256k1")); }
+// @noble/curves 2.x exports only ".js"-suffixed subpaths (1.x took the bare
+// name); try both so `npm i --no-save @noble/curves` works whichever it lands.
+try { ({ schnorr } = await import("@noble/curves/secp256k1.js")); }
 catch {
+  try { ({ schnorr } = await import("@noble/curves/secp256k1")); } catch { schnorr = null; }
+}
+if (!schnorr) {
   console.error("@noble/curves is not installed. Run:  npm i --no-save @noble/curves");
   console.error("(it is what signs the event — an unsigned one is refused by everyone,");
   console.error(" which would make every relay look hostile.)");
@@ -86,8 +91,9 @@ async function makeEvent() {
     content: "apex26 relay probe",
   };
   const serial = JSON.stringify([0, ev.pubkey, ev.created_at, ev.kind, ev.tags, ev.content]);
-  ev.id = createHash("sha256").update(serial).digest("hex");
-  ev.sig = hex(await schnorr.sign(ev.id, sk));
+  const idBytes = createHash("sha256").update(serial).digest();
+  ev.id = idBytes.toString("hex");
+  ev.sig = hex(await schnorr.sign(new Uint8Array(idBytes), sk));   // 2.x signs BYTES only (1.x took hex too)
   return ev;
 }
 
