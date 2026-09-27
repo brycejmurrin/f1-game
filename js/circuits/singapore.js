@@ -4,7 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "singapore",
-    pit: { mode: "street", side: -1, limitKph: 60 },   // the pit complex (TrackPit): the STREET one, left of the main straight by the permanent Pit Building, 60 km/h
+    pit: { mode: "street", side: -1 },   // the pit complex (TrackPit): the STREET one, left of the main straight by the permanent Pit Building; 80 km/h since 2025 (lane widened 1 m, FIA raised it from 60 — autosport.com/f1/news/how-faster-pitlane-speeds-could-spice-up-f1-singapore-gp/10763990/), the default
     name: "SINGAPORE",
     // Start/finish line. Snapped to the real one: coord 6.8 m off centreline; = trace vertex 0.
     // Was 0.5075, which put the line inside a corner — a start line is

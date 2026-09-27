@@ -1813,8 +1813,9 @@ race-logic layer over `DebrisWorld.hazards()` that never slows or moves a car.
   stale against it, and switching it **off drops any flag already flying** —
   a caution left up with nothing maintaining it is worse than no flag layer.
 
-A caution also disables OVERTAKE (see `carAt()`'s `otEnabled`). It does **not**
-disable active aero.
+A Safety Car or red flag also disables OVERTAKE (see `carAt()`'s `otEnabled`)
+until the leader next crosses the Line after it ends (Art. B7.2.2); a local
+yellow or VSC does not. None of them disables active aero.
 
 ### `setLap(n) → {lap} | false`
 Override the player's lap counter (integer ≥ 0) without resetting lap time or

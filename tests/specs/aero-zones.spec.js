@@ -185,7 +185,7 @@ test.describe("overtake mode — the rules active aero does NOT share", () => {
       // rule is race-control.spec.js's; here it would only hide the gate.
       window.__apex.caution(false);
       window.__apex.go();
-      // NO RACE CONTROL. otEnabled() is `caution.level === 0 && leader.lap > 1`,
+      // NO RACE CONTROL. otEnabled() is `caution.level < 3 && leader.lap > 1` (+ post-SC hold),
       // and this test is about the second half only. It holds the throttle with
       // no steering for 220 s, so the player leaves the road, and the debris
       // layer answered with VSC -> SAFETY CAR -> RED FLAG (apex-logs, 2026-09-08):

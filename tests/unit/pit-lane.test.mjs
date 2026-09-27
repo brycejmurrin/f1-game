@@ -281,7 +281,7 @@ function commitSession({ hw = 7, vTop = 60, total = 5386, weather = "dry" } = {}
     x: hw * over * zone.side, offroad: false, wrongWay: false, rescueT: 0,
     tyre: { code: "M", tread: 0 }, pitState: "none",
   });
-  return { Pl, pits, zone, car, said, fitted, records, hw, G, samples: () => samples };
+  return { Pl, pits, zone, car, said, fitted, records, hw, G, ctx, samples: () => samples };
 }
 
 test("holding the line into the pits calls the stop", () => {
@@ -1144,6 +1144,25 @@ test("planInfo reads the plan for the HUD: the stops, the next box lap, and the 
   c.pitPlan = { stops: 0, seq: ["hard"], stints: [25], lapsAt: [] }; c.pitStops = 0;
   assert.match(pits.planInfo(c).text, /NO STOP/);
   assert.equal(pits.planInfo({ local: true }), null, "no plan, nothing to paint");
+});
+
+// FIA 2026 SR Section B Iss. 07, Art. B6.3.6: "each driver must use at least
+// two (2) different specifications of dry-weather tyres during the Race" — the
+// Race, not the Sprint. The planner forced the rule onto a season's sprint leg.
+test("the two-compound rule binds a dry Race, never a Sprint (B6.3.6)", () => {
+  const { pits, G, ctx } = commitSession();
+  const asked = [];
+  ctx.AiDrive.stintPlan = (o) => { asked.push(o.twoCompound); return { stops: 1, seq: ["medium", "hard"], stints: [12, 13], lapsAt: [12] }; };
+  let stage = "sprint";
+  ctx.SeasonCal = { stage: () => stage };
+  pits.planFor(0.5, false, 25);                     // not a championship: a plain race
+  G.seasonMode = true; G.season = { round: 0 };
+  pits.planFor(0.5, false, 25);                     // the sprint leg of a weekend
+  stage = "race";
+  pits.planFor(0.5, false, 25);                     // the Grand Prix of the same weekend
+  G.raceWeather = "rain";
+  pits.planFor(0.5, false, 25);                     // a wet race is exempt anyway
+  assert.deepEqual(asked, [true, false, true, false]);
 });
 
 test("windowOf names a rival's window for the gap chips: P<lap> within three laps, IN while stopping", () => {

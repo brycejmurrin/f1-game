@@ -839,12 +839,12 @@ const AgentView = (function () {
         energy: r2(p.energy || 0),
         penalties: {
           cuts: p.cuts || 0,
-          // Off the RESETTING warning counter, not the lifetime `cuts` total —
-          // after a penalty the ladder starts again, so a report derived from
-          // `cuts` went to 0 and stayed there for the rest of the race.
+          // Off the race's strike counter, not the lifetime `cuts` total (which
+          // time-trial / qualifying cuts also feed). No reset: from the 4th
+          // strike on every cut is +5 s (FIA 2026 Penalty Guidelines).
           freeCutsLeft: Math.max(0, 3 - (p.cutWarn || 0)),
           timePenaltyS: p.penalty || 0,
-          note: "cuts 1-3 warn; each cut from the 4th adds +5 s to your race time",
+          note: "cuts 1-2 warn, the 3rd is the black-and-white flag; each cut from the 4th adds +5 s to your race time and every cut deletes that lap's time",
         },
         ers: {
           charge: r2(p.energy || 0),

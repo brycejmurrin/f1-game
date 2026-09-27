@@ -30,7 +30,7 @@ Load from the SKILL.md index when the task needs this detail.
    - It raises caution immediately but lowers with hysteresis/minimum hold and
      hard caps to avoid flicker or permanent neutralization.
    - In multiplayer, only the host computes; guests adopt host `apply()` state.
-   - Caution disables OVERTAKE, not active aero.
+   - The Safety Car / red flag disables OVERTAKE (until the leader's next crossing after it ends; Art. B7.2.2), not active aero; a yellow or VSC disables neither.
 
 5. **Preserve determinism.**
    - No `Date.now()` or `Math.random()` in debris, incident, caution, or

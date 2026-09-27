@@ -486,9 +486,13 @@ const RadioVoice = (function () {
       // The paused gate in tickBody returns BEFORE announceT is decremented, so
       // a card frozen by a pause never ages out. Without this, Escape mid-line
       // leaves the voice talking over a stopped game.
-      observe(pause, () => { if (!pause.hidden) stop(); });
+      // EVERY channel here: stop() spares a spotter call mid-word on purpose (the
+      // next engineer line waits it out), but a spotter clip over a pause card or
+      // into a hidden tab talks over a stopped game.
+      const haltAll = () => { stop(); if (pack) pack.stop(); };
+      observe(pause, () => { if (!pause.hidden) haltAll(); });
       // iOS bricks the synthesiser until reload if it is backgrounded mid-line.
-      document.addEventListener("visibilitychange", () => { if (document.hidden) stop(); });
+      document.addEventListener("visibilitychange", () => { if (document.hidden) haltAll(); });
       try { synth.onvoiceschanged = () => { voices = voicesAny = null; }; } catch (e) { /* not every engine exposes it */ }
     }
     Log.info("audio", "RadioVoice.create enabled=" + enabled);

@@ -399,3 +399,18 @@ test("the cockpit viewmodel yaws with heading, not the road tangent", () => {
   assert.match(src, /cockpitRigOnly[\s\S]{0,400}cockpitViewmodelAxes\(smp2\.r, smp2\.t, yv, camEye/,
     "the live cockpit draw must consume heading yaw, not a raw tangent basis");
 });
+
+test("REDUCE MOTION drops the cockpit kerb shiver, and only that", () => {
+  const track = makeTrack(() => 0);
+  const cams = loadGameCams(makeTracksStub(track));
+  const s = 1.0;   // mid-rib: sin(2π·s/KERB_RIB_M) is far from zero
+  const eyeY = (att, reduceMotion) =>
+    cams.vantage(track, "cockpit", s, 0, 60, 0, { carPos: [0, s], carHead: 0, att, reduceMotion }).eye[1];
+  const flat = eyeY({ onKerb: false }, false);
+  const shiver = eyeY({ onKerb: true }, false);
+  assert.notEqual(+shiver.toFixed(6), +flat.toFixed(6), "a kerb shivers the onboard eye by default");
+  assert.equal(+eyeY({ onKerb: true }, true).toFixed(9), +flat.toFixed(9),
+    "prefers-reduced-motion: no rib oscillation (developer.mozilla.org/docs/Web/CSS/@media/prefers-reduced-motion)");
+  assert.equal(+eyeY({ onKerb: false, baHeave: 0.01 }, true).toFixed(9), +(flat + 0.01).toFixed(9),
+    "the car's own heave still rides through");
+});

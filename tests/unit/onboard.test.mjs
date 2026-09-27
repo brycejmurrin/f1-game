@@ -116,6 +116,17 @@ test("a coach mark never stomps a race message, and never speaks outside a race"
   assert.deepEqual(menu.said, [], "not during the countdown either");
 });
 
+test("a paused race shows no mark, and the mark survives to the resume", () => {
+  const a = load({ urgency: 0.9 });
+  a.G.paused = true;
+  step(a.on, 60, 1);
+  assert.deepEqual(a.said, [], "the pause card hides #announce; a mark here is burnt unseen");
+  assert.equal(a.stored.get("onboarded") || 0, 0, "nothing consumed while paused");
+  a.G.paused = false;
+  step(a.on, 1);
+  assert.equal(a.said.length, 1, "fires on the first unpaused frame");
+});
+
 test("the wording names the control the player actually has", () => {
   const touch = load({ urgency: 0.9, touch: true });
   step(touch.on, 1);

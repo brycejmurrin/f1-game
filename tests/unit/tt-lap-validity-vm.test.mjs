@@ -134,26 +134,62 @@ test("time trial never applies the +5s track-limits ladder", async () => {
   assert.ok((p.cuts | 0) >= 4, "lifetime cuts still accumulate");
 });
 
-test("a race prices the fifth counted cut at +10s, then the ladder restarts (FIA)", async () => {
-  // Bug hunt 2026-09-26: the reset after the fourth cut turned the 5th offence
-  // into a fresh warning; the real ladder is 4th +5s, 5th +10s
-  // (https://www.planetf1.com/news/explained-f1-track-limits-rules).
+async function race() {
   const g = await createGame({ track: "monza" });
   g.G.daily.stop();
   g.G.raceWeather = "dry";
   await g.G.startRace();
   g.apex.go();
   g.apex.headless(true);
+  return g;
+}
+
+test("a race: 3rd strike is the black-and-white flag, 4th AND EACH ADDITIONAL +5s, no reset (FIA 2026)", async () => {
+  // FIA 2026 F1 Penalty Guidelines, track limits (Race): "Lap Deleted /
+  // Strike; 3rd offence – B/W; 4th and each additional – 5s"
+  // (https://www.fia.com/sites/default/files/2026_f1_penalty_guidelines.pdf).
+  // The ladder this replaced gave +10s on the 5th and then reset to warnings
+  // (a pre-2026 reading), so the 6th cut was free.
+  const g = await race();
   const p = g.G.player;
-  p.penalty = 0; p.cutWarn = 0; p.tlArmed = false;
-  const pens = [];
+  p.penalty = 0; p.cutWarn = 0;
+  const pens = [], warns = [];
   for (let n = 0; n < 6; n++) {
     const cut = cutOffTrack(g, 200);
     assert.ok(cut.counted, "cut " + (n + 1) + " must count");
-    pens.push(p.penalty);
+    assert.equal(p.incidentInvalidLap, true, "cut " + (n + 1) + " deletes the race lap");
+    pens.push(p.penalty); warns.push(p.cutWarn);
     g.apex.jump(0.5, 60, 0);
     for (let i = 0; i < 180 && p.offT < 0; i++) g.apex.step(1 / 60, 1);
   }
-  assert.deepEqual(pens, [0, 0, 0, 5, 15, 15], "warnings, +5s on the 4th, +10s on the 5th, then warnings again");
-  assert.equal(p.cutWarn, 1, "the ladder restarted after the +10s");
+  assert.deepEqual(pens, [0, 0, 0, 5, 10, 15], "warnings, B/W on the 3rd, then +5s for every strike from the 4th");
+  assert.deepEqual(warns, [1, 2, 3, 4, 5, 6], "the strike count never resets inside a race");
+  assert.ok((p.cuts | 0) >= 6, "lifetime cuts still accumulate");
 });
+
+test("a race lap with a counted cut is DELETED — no best/last lap — but still counts for distance", async () => {
+  // Same guidelines: "Lap Deleted / Strike". Before, only time trial and
+  // qualifying invalidated a cut lap, so a race lap run off-track could be the
+  // player's best and the fastest lap of the race.
+  const g = await race();
+  const { G } = g;
+  armLap(g, 90);
+  crossLine(g);
+  const p = G.player;
+  armLap(g, 88);
+  crossLine(g);
+  assert.ok(isFinite(p.best), "a clean race lap is timed");
+  const cleanBest = p.best, cleanLast = p.lastLap;
+
+  const cut = cutOffTrack(g, 200);
+  assert.ok(cut.counted, "the engine never counted a cut");
+  assert.equal(p.incidentInvalidLap, true, "a counted cut deletes the race lap");
+  armLap(g, 5);   // a time no clean lap could touch
+  const lapBefore = p.lap;
+  crossLine(g);
+  assert.equal(p.lap, lapBefore + 1, "the deleted lap still counts toward race distance");
+  assert.equal(p.best, cleanBest, "a deleted lap is not the best lap");
+  assert.equal(p.lastLap, cleanLast, "…nor a timed last lap");
+  assert.equal(p.incidentInvalidLap, false, "the next lap starts clean");
+});
+
