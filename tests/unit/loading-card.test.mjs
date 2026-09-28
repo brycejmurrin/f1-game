@@ -294,6 +294,36 @@ test("building(): the card over the scrim, no timer, no skip, not active — the
   assert.match(read("css/overlays.css"), /#loading\[data-phase="build"\] #ld-card/, "the build phase shows the card");
 });
 
+test("handoff(): the card stays up, disarmed, until render() lowers it with the race's first PRESENTED frame", () => {
+  const h = harness();
+  h.run();
+  h.tick(LS.FLY_MS);   // the flyby played out: the race is on its way
+  assert.equal(h.races.length, 1);
+  assert.equal(h.screen.active(), true, "until the race lowers it, the flyby's last frame is the picture");
+  h.screen.stop();     // clearMenuScreens' sweep
+  assert.equal(h.screen.handoff(), true);
+  assert.equal(h.els.loading.hidden, false, "the card is up again over the frame the backend has yet to paint");
+  assert.equal(h.els.loading.dataset.phase, "handoff");
+  assert.equal(h.screen.active(), false, "not active: the race, not the screen, decides what the canvas shows");
+  h.skip();
+  h.tick(LS.FLY_MS * 2);
+  assert.equal(h.races.length, 1, "no timer and no skip listener: nothing is left to start");
+  h.screen.stop();
+  assert.equal(h.els.loading.hidden, true);
+  // The two ends in game.js. startRaceBody reads active() BEFORE the sweep (a
+  // race started with no screen up — netplay, __apex.race(), pm-restart — raises
+  // no stale card) and render() lowers it only after a present that painted: the
+  // first countdown present on TLX starts the program warm and paints nothing.
+  const game = read("js/game.js");
+  const body = game.slice(game.indexOf("async function startRaceBody()"), game.indexOf("const sessionEntry ="));
+  assert.match(body, /const handoff = loadingScreen\.active\(\) && !!player;\s*clearMenuScreens\(\);\s*if \(handoff\) loadingScreen\.handoff\(\);/,
+    "startRaceBody raises the handoff card right after the sweep, only when the screen was up");
+  const render = game.slice(game.indexOf("function render(dt) {"));
+  assert.match(render, /gfx\.present\(po\);[\s\S]{0,400}?if \(loadingScreen\.phase\(\) === "handoff" && !\(gfx\.warming && gfx\.warming\(\)\)\) loadingScreen\.stop\(\);/,
+    "render() lowers it after a present that painted, never one that only started the warm");
+  assert.match(read("css/overlays.css"), /#loading\[data-phase="handoff"\] #ld-card/, "the handoff phase shows the card");
+});
+
 test("a skip inside SKIP_GRACE_MS is ignored (a double-click on RACE!), and a real skip stops the event", () => {
   const h = harness();
   h.run();

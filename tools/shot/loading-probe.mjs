@@ -3,10 +3,11 @@
 /*
  * loading-probe.mjs — DID THE PLAYER GET THE FLYBY?
  *
- * The loading screen (js/ui/loading-screen.js) has four phases: "build" (the
+ * The loading screen (js/ui/loading-screen.js) has five phases: "build" (the
  * world is being built under the card — RACE! beat the menu's idle build),
- * "run" (the flyby), "card" (the no-world / reduced-motion fallback) and
- * "hold" (the flyby editor's preview). This taps RACE! the way a player does
+ * "run" (the flyby), "card" (the no-world / reduced-motion fallback), "handoff"
+ * (the card held after either until the backend presents the race's first
+ * frame) and "hold" (the flyby editor's preview). This taps RACE! the way a player does
  * and records every phase change with its time, plus the page's own frame
  * gaps, until the race owns the screen.
  *

@@ -2882,7 +2882,12 @@ async function startRaceBody() {
   try { if (gfx.warm) gfx.warm(); } catch (_) { /* TLX links programs synchronously on first draw — warm them during the LIGHTS. Optimisation only; GLX/WGX have no warm and no-op. */ }
   skids.reset();
   Particles.clear();   // no stale smoke/spray teleporting into the new session
+  // THE PRE-RACE SCREEN OUTLIVES THE SWEEP when it was up: the warm above paints
+  // nothing until it is done, so it is raised again, disarmed, and render()
+  // lowers it with the first frame the backend presents (LoadingScreen.handoff).
+  const handoff = loadingScreen.active() && !!player;
   clearMenuScreens();
+  if (handoff) loadingScreen.handoff();
   els.hud.hidden = false; els.lights.hidden = false; els.pausebtn.hidden = false;
   if (els.btnCam) els.btnCam.hidden = false;
   setHudUserHidden(false);   // start every race with the HUD shown (+ resets the toggle label)
@@ -3694,8 +3699,8 @@ raceSettings = RaceSettings.create(G, {
   getSteerMode: () => steerMode, buildStandings, raceIntro,
 });
 // PRE-RACE LOADING SCREEN (js/ui/loading-screen.js). It plays the cinematic
-// over the world scheduleFlybyTrack() already warmed, then holds a static card
-// while the caller's build runs — see that file for why the split matters.
+// over the world scheduleFlybyTrack() already warmed, and startRaceBody keeps
+// its card up until the backend presents the grid — see that file for why.
 const loadingScreen = LoadingScreen.create({ $, Tracks, TrackMaps, Flags, store, announcer: () => announcer, radio: () => radioVoice });
 /** The RACE! button's route into a race. Not folded into startRace(): netplay
  *  and __apex.race() both AWAIT that function, and neither should gain two
@@ -6764,7 +6769,9 @@ function armBackendProbe() {
   }
 }
 function render(dt) {
-  if (headlessMode || (gfx.warming && gfx.warming())) return;
+  // Headless presents nothing, so the handoff card (below, after present) would wait forever: down at once, as before it existed.
+  if (headlessMode) { if (loadingScreen.phase() === "handoff") loadingScreen.stop(); return; }
+  if (gfx.warming && gfx.warming()) return;
   // THE CANVAS SHOWS ONLY WHEN SOMETHING IS DRAWN ON IT (2026-09): a race, the
   // PRE-RACE LOADING SCREEN's flyby, or the garage's car preview; under every other
   // menu it is HIDDEN (an undrawn canvas keeps its LAST frame — the garage car sat
@@ -8260,6 +8267,9 @@ function render(dt) {
   }
   armBackendProbe();
   gfx.present(po);
+  // The pre-race screen comes down with the race's FIRST PRESENTED frame
+  // (LoadingScreen.handoff): a present that only started the warm painted nothing.
+  if (loadingScreen.phase() === "handoff" && !(gfx.warming && gfx.warming())) loadingScreen.stop();
   // Boot canary disarmed once the backend has presented a RUN of world frames,
   // not one. Until then the probe stays armed in storage and a load that dies
   // reverts on the next boot, which is the whole point of it.
