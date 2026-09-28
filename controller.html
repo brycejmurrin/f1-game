@@ -83,14 +83,12 @@
   #rim .accent { fill: none; stroke: var(--team); stroke-width: 4; opacity: .8; }
   .grip { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
   /* The left grip: UP over DN, each half the column — the game's shift dock. */
-  .shift, .tap, .grip-nav { flex: 1 1 0; min-height: 48px; border-radius: 22px; background: linear-gradient(#22222c, #14141b);
+  .shift, .tap { flex: 1 1 0; min-height: 48px; border-radius: 22px; background: linear-gradient(#22222c, #14141b);
             border: 2px solid #3a3a46; font-weight: 800; font-size: 26px; line-height: 1; color: #d0d0da;
             display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; }
   .shift small { font-size: 12px; letter-spacing: .14em; color: var(--dim); }
   .tap { font-size: 16px; letter-spacing: .1em; display: none; }
-  .shift.on, .tap.on, .grip-nav.on { color: var(--fg); border-color: var(--team); box-shadow: inset 0 0 0 2px var(--team); }
-  .grip-nav small { font-size: 12px; letter-spacing: .14em; color: var(--dim); }
-  .grip-nav.word { font-size: 20px; letter-spacing: .12em; }
+  .shift.on, .tap.on { color: var(--fg); border-color: var(--team); box-shadow: inset 0 0 0 2px var(--team); }
   .pedal { flex: 1 1 0; border-radius: 26px; border: 2px solid #3a3a46; background: var(--carbon);
            font-weight: 800; font-size: 18px; letter-spacing: .1em; display: flex; align-items: flex-end; justify-content: center;
            padding-bottom: 22px; color: var(--dim); position: relative; overflow: hidden; }
@@ -112,19 +110,38 @@
   body.throttle-auto #gas::before { border-color: #1d1d26; }
   body.throttle-auto #gas small { display: block; color: #3d3d4a; }
   body.aero-auto #b-aero, body.aero-none #b-aero { pointer-events: none; background: #0d0d13; color: #3d3d4a; border-color: #26262f; }
-  /* THE MENU PAD (PhonePad.paintHud → body.menu: out of a race, or paused).
-     The wheel becomes the game's pad: ▲ ▼ on the left grip, BACK over SELECT
-     on the right, ◀ ▶ SELECT BACK on the face, PAUSE across the row (it is
-     RESUME on the pause menu). Every nav button is hidden until then, and the
-     race controls go the other way, so a thumb never finds a pedal in a menu. */
-  .nav { display: none; }
-  body.menu .shift, body.menu .tap, body.menu .pedal { display: none; }
-  body.menu .grip-nav { display: flex; }
-  body.menu #keys button:not(.nav):not(#b-pause) { display: none; }
-  body.menu #keys .nav { display: block; }
-  body.menu #b-pause { grid-column: 1 / -1; order: 1; }   /* under the arrows */
-  body.menu #rim { opacity: .25; }
-  body.menu #leds { visibility: hidden; }
+  /* THE MENU PAD (PhonePad.paintHud → body.menu: out of a race, or paused) is
+     A CONTROLLER, NOT A WHEEL: the wheel hides and #menupad takes the screen —
+     a D-pad under the left thumb, BACK and SELECT under the right, the title
+     and PAUSE (RESUME on the pause menu) between them. Same events, same
+     desktop seam; only the shape changes, so nothing race-like is under a
+     thumb in a menu. */
+  #menupad { position: absolute; inset: 0; display: none; z-index: 1;
+             padding: calc(10px + var(--sat)) calc(12px + var(--sar)) calc(10px + var(--sab)) calc(12px + var(--sal));
+             grid-template-columns: 1fr minmax(150px, 1.1fr) 1fr; align-items: center; gap: 14px; }
+  body.linked.menu #menupad { display: grid; }
+  body.menu #ctl { display: none; }
+  #dpad { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 6px;
+          width: min(100%, 76vh); aspect-ratio: 1; margin: 0 auto; }
+  #dpad button { padding: 0; min-height: 0; border-radius: 16px; font-size: clamp(22px, 7vh, 36px); font-weight: 800; line-height: 1;
+                 background: linear-gradient(#22222c, #14141b); border: 2px solid #3a3a46; color: #d0d0da; }
+  #dpad button.on { color: var(--fg); border-color: var(--team); box-shadow: inset 0 0 0 2px var(--team); }
+  #b-navUp { grid-column: 2; grid-row: 1; } #b-navLeft { grid-column: 1; grid-row: 2; }
+  #b-navRight { grid-column: 3; grid-row: 2; } #b-navDown { grid-column: 2; grid-row: 3; }
+  #dpad-hub { grid-column: 2; grid-row: 2; border-radius: 50%; background: #0d0d13; border: 2px solid #26262f; }
+  #mp-mid { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; min-width: 0; }
+  #mp-title { font-size: clamp(22px, 6.5vh, 36px); font-weight: 800; letter-spacing: .14em; color: var(--team); }
+  #mp-sub { font-size: 11px; letter-spacing: .12em; color: var(--dim); }
+  #b-pause-menu { width: 100%; min-height: clamp(48px, 14vh, 72px); padding: 0 16px; font-weight: 800; font-size: clamp(12px, 3vh, 16px);
+                  letter-spacing: .1em; border-radius: 14px; background: radial-gradient(circle at 35% 30%, #2a2a35, #14141b); border: 1px solid #3a3a46; color: #d0d0da; }
+  #b-pause-menu.on { border-color: var(--team); color: var(--team); }
+  #ab { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 8px; width: min(100%, 76vh); aspect-ratio: 1; margin: 0 auto; }
+  #ab button { padding: 0; min-height: 0; border-radius: 50%; font-weight: 800; font-size: clamp(13px, 3.4vh, 20px); letter-spacing: .12em;
+               background: linear-gradient(#22222c, #14141b); border: 3px solid #3a3a46; color: #d0d0da; }
+  #b-navBack { grid-column: 1; grid-row: 1; border-color: var(--bad); }
+  #b-navSelect { grid-column: 2; grid-row: 2; border-color: var(--ok); }
+  #b-navBack.on { background: rgba(255,77,77,.2); color: var(--fg); }
+  #b-navSelect.on { background: rgba(94,240,138,.2); color: var(--fg); }
 
   /* THE FACE: rev lights, the LCD, the button clusters. */
   #face { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 0; }
@@ -171,7 +188,7 @@
   /* touch-action is NOT inherited: body's `none` does not reach the pedal
      divs, and Safari decides double-tap zoom on the touched element. Every
      part of the wheel owns its touches. */
-  #ctl, #ctl * { touch-action: none; }
+  #ctl, #ctl *, #menupad, #menupad * { touch-action: none; }
   /* LANDSCAPE ONLY. The wheel is a landscape object — two thumbs on the
      grips, the phone held like a rim — so portrait gets no squeezed layout,
      it gets a card that says which way to turn. The tilt maths follows the
@@ -222,6 +239,24 @@
   <p id="status" role="status"></p>
 </section>
 <div id="rotate" role="status"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>TURN THE PHONE SIDEWAYS<small>The wheel works in landscape only.</small></div>
+<section id="menupad" aria-label="Menu pad">
+  <div id="dpad">
+    <button id="b-navUp" type="button" aria-label="Menu up">&#9650;</button>
+    <button id="b-navLeft" type="button" aria-label="Menu left">&#9664;</button>
+    <div id="dpad-hub" aria-hidden="true"></div>
+    <button id="b-navRight" type="button" aria-label="Menu right">&#9654;</button>
+    <button id="b-navDown" type="button" aria-label="Menu down">&#9660;</button>
+  </div>
+  <div id="mp-mid">
+    <div id="mp-title" role="status">MENU</div>
+    <div id="mp-sub">D-PAD TO MOVE &middot; SELECT &middot; BACK</div>
+    <button id="b-pause-menu" type="button">PAUSE / RESUME</button>
+  </div>
+  <div id="ab">
+    <button id="b-navBack" type="button" aria-label="Back">BACK</button>
+    <button id="b-navSelect" type="button" aria-label="Select">SELECT</button>
+  </div>
+</section>
 <section id="ctl" aria-label="Steering wheel controller">
   <div id="rim" aria-hidden="true">
     <svg viewBox="0 0 400 200" preserveAspectRatio="xMidYMid meet">
@@ -246,8 +281,6 @@
     <button id="b-shiftDown" class="shift" type="button" aria-label="Shift down">&#9660;<small>DN</small></button>
     <button id="b-ot-big" class="tap" type="button" aria-label="Overtake">OT</button>
     <button id="b-boost-big" class="tap" type="button" aria-label="Boost">BOOST</button>
-    <button id="b-navUp" class="nav grip-nav" type="button" aria-label="Menu up">&#9650;<small>MENU</small></button>
-    <button id="b-navDown" class="nav grip-nav" type="button" aria-label="Menu down">&#9660;<small>MENU</small></button>
   </div>
   <div id="face">
     <div id="screen" aria-live="off">
@@ -266,10 +299,6 @@
       <button id="b-look" type="button">LOOK</button>
       <button id="b-recover" type="button">RESET</button>
       <button id="b-pause" type="button">PAUSE</button>
-      <button id="b-navLeft" class="nav" type="button" aria-label="Menu left">&#9664;</button>
-      <button id="b-navRight" class="nav" type="button" aria-label="Menu right">&#9654;</button>
-      <button id="b-navSelect-key" class="nav" type="button" aria-label="Select">SELECT</button>
-      <button id="b-navBack-key" class="nav" type="button" aria-label="Back">BACK</button>
       <button id="b-center" type="button" class="wide">CENTRE TILT</button>
     </div>
     <div id="link" role="status"></div>
@@ -277,8 +306,6 @@
   <div id="right" class="grip">
     <div id="brake" class="pedal" role="button" aria-label="Brake">BRAKE</div>
     <div id="gas" class="pedal" role="button" aria-label="Gas">GAS<small>AUTO</small></div>
-    <button id="b-navBack" class="nav grip-nav word" type="button" aria-label="Back">BACK</button>
-    <button id="b-navSelect" class="nav grip-nav word" type="button" aria-label="Select">SELECT</button>
   </div>
 </section>
 <!-- @gen-shell:controller -->
@@ -307,11 +334,12 @@ window.addEventListener("DOMContentLoaded", function () {
     gas: $("gas"), brake: $("brake"), lookBack: $("b-look"), center: $("b-center"), rim: $("rim"),
     buttons: { shiftUp: $("b-shiftUp"), shiftDown: $("b-shiftDown"), overtake: [$("b-overtake"), $("b-ot-big")],
                boost: [$("b-boost"), $("b-boost-big")], aero: $("b-aero"), camera: $("b-camera"), radio: $("b-radio"),
-               recover: $("b-recover"), pause: $("b-pause"),
+               recover: $("b-recover"), pause: [$("b-pause"), $("b-pause-menu")],
                navUp: $("b-navUp"), navDown: $("b-navDown"), navLeft: $("b-navLeft"), navRight: $("b-navRight"),
-               navSelect: [$("b-navSelect"), $("b-navSelect-key")], navBack: [$("b-navBack"), $("b-navBack-key")] },
+               navSelect: $("b-navSelect"), navBack: $("b-navBack") },
     hud: { gear: $("h-gear"), speed: $("h-speed"), lap: $("h-lap"), pos: $("h-pos"), ers: $("h-ers"), flag: $("h-flag"),
            ot: $("h-ot"), aero: $("h-aero"), last: $("h-last"), leds: $("leds"), screen: $("screen"), team: document.documentElement,
+           mtitle: $("mp-title"),
            body: document.body },
   }, {
     onOpen: function () {

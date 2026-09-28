@@ -412,6 +412,7 @@ const PhonePad = (function () {
     text("aero", h.flags & DASH.aeroNone ? "NO ZONES" : h.flags & DASH.aeroAuto ? (h.flags & DASH.xOpen ? "AUTO X-MODE" : "AERO AUTO")
       : h.flags & DASH.xOpen ? "X-MODE" : h.flags & DASH.xArmed ? "AERO ARMED" : "AERO");
     text("flag", h.state === "count" ? "LIGHTS" : h.flags & DASH.paused ? "PAUSED" : !inRace ? "MENU" : CAUTION[h.caution] || "");
+    text("mtitle", h.flags & DASH.paused ? "PAUSED" : "MENU");   // the pad screen's title (controller.html #mp-title)
     if (el.ers && el.ers.style) el.ers.style.width = (h.ers * 100).toFixed(0) + "%";
     if (el.leds && el.leds.children) {
       const n = el.leds.children.length, lit = Math.round(h.rpm * n);
@@ -432,8 +433,8 @@ const PhonePad = (function () {
       el.body.classList.toggle("throttle-auto", !!(h.flags & DASH.throttleAuto));
       el.body.classList.toggle("aero-auto", !!(h.flags & DASH.aeroAuto));
       el.body.classList.toggle("aero-none", !!(h.flags & DASH.aeroNone));
-      // THE MENU PAD: out of a race, or paused inside one, the wheel's grips
-      // and keys become arrows, SELECT and BACK for the game's menus.
+      // THE MENU PAD: out of a race, or paused inside one, the page swaps the
+      // wheel for a D-pad, SELECT and BACK (controller.html #menupad).
       el.body.classList.toggle("menu", !inRace || !!(h.flags & DASH.paused));
     }
   }

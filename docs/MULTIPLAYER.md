@@ -243,11 +243,12 @@ LANDSCAPE ONLY (portrait shows a TURN THE PHONE card; Android locks the
 orientation behind fullscreen on the CONNECT tap, iOS has no lock) and refuses
 double-tap and pinch zoom the way index.html does (`touch-action: none` on
 every wheel element, a touchend/dblclick/GestureEvent canceller). Once the
-DataChannels open (out of a race, or paused, the dash's `state`/`paused` turn the
-wheel into a MENU PAD — `body.menu`: ▲▼ on the left grip, BACK/SELECT on the
-right, ◀▶ SELECT BACK on the face — whose events land on the gamepad's menu
-seam in js/input/input.js, `padNavKey` / `padActivate` / `padEscape`, so the
-phone walks every menu the pad can):
+DataChannels open (out of a race, or paused, the dash's `state`/`paused` swap the
+wheel for a MENU PAD screen — `body.menu` shows `#menupad`: a D-pad under the
+left thumb, BACK and SELECT under the right, the title and PAUSE/RESUME between
+— whose events land on the gamepad's menu seam in js/input/input.js,
+`padNavKey` / `padActivate` / `padEscape`, so the phone walks every menu the pad
+can):
 
 | Channel | Direction | Payload |
 |---|---|---|

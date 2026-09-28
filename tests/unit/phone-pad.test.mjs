@@ -362,7 +362,7 @@ test("the dash reaches the phone ~15 Hz on the unreliable channel and paints the
   assert.equal(el.gear.textContent, "N"); assert.equal(el.speed.textContent, "---"); assert.equal(el.flag.textContent, "MENU");
   assert.equal(el.leds.children.filter((s) => s.classes.has("on")).length, 0, "no rev lights out of the race");
   assert.ok(el.screen.classes.has("idle"));
-  assert.ok(el.body.classes.has("menu"), "out of a race the wheel is the MENU PAD");
+  assert.ok(el.body.classes.has("menu"), "out of a race the page shows the MENU PAD");
   PhonePad.paintHud(el, { ...phone.huds[0], state: "race", flags: PhonePad.DASH.paused });
   assert.ok(el.body.classes.has("menu") && el.flag.textContent === "PAUSED", "paused inside a race: the pad, for the pause menu");
   PhonePad.paintHud(el, { ...phone.huds[0], state: "race", flags: 0 });
@@ -683,19 +683,21 @@ test("controller.html carries exactly the manifest's CONTROLLER subset and both 
   assert.match(page, /#keys button \{ padding: 0; min-height: clamp\(48px, 14vh, 80px\); font-weight: 800; font-size: clamp\(12px, 3\.2vh, 18px\);/, "thumb-sized keys");
   assert.match(page, /#keys \.wide \{[^}]*min-height: clamp\(36px, 9vh, 52px\)/, "the CENTRE TILT bar grows too");
   assert.match(page, /#screen \{ flex: 1 1 0; min-height: 0;/, "the screen gives way, the keys do not");
-  // The MENU PAD: every nav button hidden until body.menu, then the race
-  // controls hidden instead; SELECT and BACK on the grip AND the face.
-  assert.match(page, /\.nav \{ display: none; \}/, "nav buttons hidden on the wheel");
-  assert.match(page, /body\.menu \.shift, body\.menu \.tap, body\.menu \.pedal \{ display: none; \}/, "no pedal under a thumb in a menu");
-  assert.match(page, /body\.menu \.grip-nav \{ display: flex; \}/, "the grip arrows show");
-  assert.match(page, /body\.menu #keys button:not\(\.nav\):not\(#b-pause\) \{ display: none; \}/, "the race keys go, PAUSE stays (it is RESUME)");
-  assert.match(page, /navSelect: \[\$\("b-navSelect"\), \$\("b-navSelect-key"\)\], navBack: \[\$\("b-navBack"\), \$\("b-navBack-key"\)\]/, "both SELECT and BACK buttons wired");
+  // The MENU PAD is its own screen: hidden until body.menu, when the wheel
+  // hides instead; the D-pad, SELECT/BACK and both PAUSE buttons are wired.
+  assert.match(page, /#menupad \{ position: absolute; inset: 0; display: none;/, "the pad screen is hidden on the wheel");
+  assert.match(page, /body\.linked\.menu #menupad \{ display: grid; \}/, "and shows, linked, in a menu");
+  assert.match(page, /body\.menu #ctl \{ display: none; \}/, "while the wheel goes");
+  assert.match(page, /#ctl, #ctl \*, #menupad, #menupad \* \{ touch-action: none; \}/, "the pad refuses browser gestures too");
+  assert.match(page, /pause: \[\$\("b-pause"\), \$\("b-pause-menu"\)\]/, "PAUSE on the wheel and on the pad");
+  assert.match(page, /navSelect: \$\("b-navSelect"\), navBack: \$\("b-navBack"\)/, "SELECT and BACK wired");
+  assert.match(page, /mtitle: \$\("mp-title"\)/, "the pad's title is painted from the dash");
   assert.match(page, /demo=menu/, "the menu pad has a demo");
   // Zoom off on the wheel, landscape only: touch-action is not inherited, so
   // every wheel element owns its touches; the canceller mirrors index.html's;
   // portrait shows the TURN card instead of a squeezed grid; the lock rides
   // the CONNECT tap behind fullscreen (Android), best effort.
-  assert.match(page, /#ctl, #ctl \* \{ touch-action: none; \}/, "every wheel element refuses browser gestures");
+  assert.match(page, /#ctl, #ctl \*, #menupad, #menupad \* \{ touch-action: none; \}/, "every wheel and pad element refuses browser gestures");
   for (const ev of ["gesturestart", "gesturechange", "gestureend", "dblclick", "touchend"]) {
     assert.match(page, new RegExp(`document\\.addEventListener\\("${ev}"`), `the ${ev} canceller`);
   }
@@ -715,7 +717,7 @@ test("controller.html carries exactly the manifest's CONTROLLER subset and both 
   assert.doesNotMatch(read("js/input/phone-pad.js"), /getElementById|querySelector\(/, "the module never looks an id up — controller.html hands elements in");
   for (const id of ["h-gear", "h-speed", "h-lap", "h-pos", "h-ers", "h-flag", "h-ot", "h-aero", "h-last", "leds", "screen", "rim",
                     "b-shiftUp", "b-shiftDown", "b-ot-big", "b-boost-big", "b-overtake", "b-boost", "b-aero", "b-camera", "b-radio", "b-look", "b-recover", "b-pause", "b-center", "gas", "brake",
-                    "b-navUp", "b-navDown", "b-navLeft", "b-navRight", "b-navSelect", "b-navSelect-key", "b-navBack", "b-navBack-key"]) {
+                    "menupad", "dpad", "dpad-hub", "b-navUp", "b-navDown", "b-navLeft", "b-navRight", "mp-mid", "mp-title", "b-pause-menu", "ab", "b-navSelect", "b-navBack"]) {
     assert.ok(page.includes(`id="${id}"`), `controller.html declares #${id}, which its inline script hands to PhonePad.pad`);
   }
   assert.equal((page.match(/<div id="leds"[^>]*>((?:<span><\/span>)+)/) || [])[1]?.length, 15 * "<span></span>".length, "fifteen rev LEDs");
