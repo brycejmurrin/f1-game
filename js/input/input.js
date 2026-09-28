@@ -160,6 +160,7 @@ const Input = (function () {
   let remoteMs = 0;              // nowMs() of the last sample; 0 = never
   let remThr = 0, remBrk = 0;    // 0..1 pedal travel from the phone
   let remHeld = 0;               // REMOTE_HELD bits
+  let remRoll = false;           // the last sample carried a roll: a phone with no sensor sends null
   let remoteHaptics = null;      // (ms) => void, forwards vibrate() to the phone
 
   let onPauseCb = null;
@@ -289,11 +290,16 @@ const Input = (function () {
   function remoteActive() {
     return remoteMs > 0 && (nowMs() - remoteMs) < REMOTE_STALE_MS;
   }
+  // STEERS, not merely active: a phone with no motion sensor (a tablet with
+  // none, a permission refused) is pedals and buttons only, and must not sit
+  // in steer() ahead of the on-screen arrows or a drag on the glass.
+  function remoteSteers() { return remoteActive() && remRoll; }
   // One sample from the phone: {roll (deg, may be null), thr, brk, held}.
   function remoteSample(s) {
     if (!s) return false;
     const n = nowMs();
-    if (typeof s.roll === "number" && isFinite(s.roll)) {
+    remRoll = typeof s.roll === "number" && isFinite(s.roll);
+    if (remRoll) {
       tiltRaw = s.roll;
       const odt = lastOrientMs ? Math.min(0.1, (n - lastOrientMs) / 1000) : 0.016;
       lastOrientMs = n;
@@ -328,7 +334,7 @@ const Input = (function () {
   // The link dropped: pedals off at once, and a phone-fed tilt reading must not
   // keep steering a device whose own sensor is not attached.
   function remoteLost() {
-    remoteMs = 0; remThr = remBrk = 0; remHeld = 0;
+    remoteMs = 0; remThr = remBrk = 0; remHeld = 0; remRoll = false;
     if (!gyroAttached) tiltSeen = false;
   }
   function setRemoteHaptics(fn) { remoteHaptics = typeof fn === "function" ? fn : null; }
@@ -1862,8 +1868,9 @@ const Input = (function () {
     // The d-pad half of padSteer is digital and already ramped — it must not
     // also be curved and speed-scaled as if it were a deflection.
     if (padSteerActive()) return padSteerAnalog ? analogShape(padSteer, "pad") : padSteer;
-    // A paired phone: the tilt pipeline fed by remoteSample, whatever the local mode.
-    if (remoteActive()) return analogShape(tiltSteering(), "tilt");
+    // A paired phone WITH a sensor: the tilt pipeline fed by remoteSample,
+    // whatever the local mode. Pedals-only phones fall through to it.
+    if (remoteSteers()) return analogShape(tiltSteering(), "tilt");
     if (steerMode === "buttons") return buttonSteering();
     if (tiltActive()) return analogShape(tiltSteering(), "tilt");
     return analogShape(touchSteering(), "touch");
@@ -2386,7 +2393,7 @@ const Input = (function () {
       padAxisMap: getPadAxisMap(),
       hapticScale,
       lookingBack: lookingBack(),
-      remote: { active: remoteActive(), roll: tiltRaw, thr: remThr, brk: remBrk, held: remHeld,
+      remote: { active: remoteActive(), steers: remoteSteers(), roll: tiltRaw, thr: remThr, brk: remBrk, held: remHeld,
                 ageMs: remoteMs ? Math.round(nowMs() - remoteMs) : null },
       canvasTouches: touches.size,
       holdPointers: holdBtns.map((h) => h.ids.size),   // pressed-pointer count per hold button
@@ -2423,7 +2430,7 @@ const Input = (function () {
     lookingBack,
     lockEscape, unlockEscape, lockLandscape, unlockLandscape,
     tiltActive,
-    remoteSample, remoteEvent, remoteLost, remoteActive, setRemoteHaptics,
+    remoteSample, remoteEvent, remoteLost, remoteActive, remoteSteers, setRemoteHaptics,
     simTilt,
     simTiltReset,
     steerToTilt,

@@ -12,8 +12,9 @@ Mixing the two is the usual miss: a sticky gamepad is not understeer.
 ## Source priority (`Input.steer()`)
 
 keyboard (held or returning to centre) > gamepad (deflected stick) >
-PHONE AS CONTROLLER (`Input.remoteActive()`: a paired phone's sample under
-700 ms old, `js/input/phone-pad.js`) > on-screen buttons (`steerMode
+PHONE AS CONTROLLER (`Input.remoteSteers()`: a paired phone's sample under
+700 ms old that CARRIED a roll — a sensorless phone is pedals and buttons only
+and never sits here, `js/input/phone-pad.js`) > on-screen buttons (`steerMode
 "buttons"`) > tilt (fresh gyro) > canvas touch (drag from touch-down). The
 phone's roll enters the SAME tilt pipeline (`remoteSample` writes what
 `onOrient` writes), so the TILT sliders and RECALIBRATE act on it; the roll

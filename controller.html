@@ -44,7 +44,7 @@
           --carbon: repeating-linear-gradient(45deg, #15151c 0 2px, #101017 2px 4px);
           --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px);
           --sal: env(safe-area-inset-left, 0px); --sar: env(safe-area-inset-right, 0px); }
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
   html, body { height: 100%; margin: 0; overflow: hidden; background: var(--bg); color: var(--fg);
          font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
          touch-action: none; user-select: none; -webkit-user-select: none; overscroll-behavior: none; }
@@ -155,7 +155,7 @@
 <section id="pair">
   <h1>APEX 26 · PHONE CONTROLLER</h1>
   <p>Enter the room code the game shows under Settings › CONTROLS › PHONE AS CONTROLLER, then tap CONNECT. Hold the phone sideways like a wheel and tilt it to steer.</p>
-  <input id="code" type="text" inputmode="latin" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="8" aria-label="Room code" placeholder="ABC123">
+  <input id="code" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="8" aria-label="Room code" placeholder="ABC123">
   <button id="connect" type="button">CONNECT</button>
   <p id="status" role="status"></p>
 </section>
@@ -252,13 +252,20 @@ window.addEventListener("DOMContentLoaded", function () {
     $("link").textContent = "DEMO · NOT LINKED";
     var auto = /[?&]demo=auto\b/.test(location.search) ? (PhonePad.DASH.gearsAuto | PhonePad.DASH.throttleAuto | PhonePad.DASH.aeroAuto) : 0;
     var still = /[?&]still\b/.test(location.search);   // &still: rim level, for a screenshot
+    // A tap arms the real sensor (iOS asks inside the tap): the demo rim then
+    // follows the phone in the hand instead of the sine wave.
+    var live = false;
+    document.addEventListener("pointerdown", function () {
+      if (live) return;
+      ctl.armSensor().then(function (ok) { live = ok; if (ok) $("link").textContent = "DEMO · TILT THE PHONE"; });
+    }, { once: false });
     var t0 = performance.now();
     var demo = function () {
       var t = (performance.now() - t0) / 1000, rev = (Math.sin(t * 1.7) + 1) / 2;
       ctl.paintHud({ gear: 3 + Math.floor(t % 5), kmh: 140 + Math.round(rev * 170), rpm: 0.35 + rev * 0.65, lap: 4, laps: 12,
         pos: 6, cars: 20, ers: (Math.cos(t / 3) + 1) / 2, flags: auto | (rev > 0.9 ? PhonePad.DASH.redline : PhonePad.DASH.otArmed),
         caution: 0, lastLapMs: 91234, state: "race", team: "#00b4ab" });
-      if (!still) ctl.setRoll(Math.sin(t / 2) * 25);
+      if (!still && !live) ctl.setRoll(Math.sin(t / 2) * 25);
       requestAnimationFrame(demo);
     };
     requestAnimationFrame(demo);
