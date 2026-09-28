@@ -260,12 +260,14 @@ const NetNostr = (function () {
       const shut = () => {
         for (const w of sockets) { try { w.close(); } catch (e) { /* already closing */ } }
         sockets.length = 0;
+        if (unlisten) { unlisten(); unlisten = null; }
       };
       // Every deadline goes through later() so finish() can reclaim it — an
       // orphaned 2-min expiry timer otherwise retains this whole closure
       // (sockets, module, payloads) long after the exchange settled.
       const timers = [];
       const later = (fn, ms) => timers.push(setTimeout(fn, ms));
+      let unlisten = null;   // the visibility listener's teardown (set once the sockets exist)
       let again = null;   // the reply's re-publish interval (heard, below)
       const finish = (r) => {
         if (done) return;
@@ -348,16 +350,42 @@ const NetNostr = (function () {
         JOIN_TIMEOUT_MS);
 
       let opened = 0;
-      for (const url of relayUrls()) {
+      // ONE SOCKET PER RELAY, REOPENED WHEN IT DIES. A phone host switches to
+      // a messaging app to send the code; the browser suspends the page and
+      // closes its WebSockets; nothing here ever reopened them, so the room
+      // was deaf for the rest of its two minutes and the host was told
+      // "Nobody joined" — for a socket that died, not a friend who did not
+      // come. onclose reopens with backoff (onopen re-subscribes and
+      // re-publishes), and a return to the foreground reopens at once.
+      const RECONNECT_MS = [1000, 2000, 4000, 8000, 15000];
+      const connect = (url, attempt) => {
+        if (done) return;
         let w;
-        try { w = new WebSocket(url); } catch (e) { continue; }
+        try { w = new WebSocket(url); } catch (e) { return; }
         sockets.push(w);
         socketUrl.set(w, url);
         w.onopen = () => {
           opened++;
           if (!subId) subId = "s" + Math.floor(Date.now() % 1e6);
-          try { w.send(mod.subscribe(subId, theirTopic)); } catch (e) { /* socket died between open and send */ }
+          try {
+            // Trystero stamps the REQ with `since: now()` — THIS device's clock,
+            // and a relay applies it to live events too, so a phone a few
+            // minutes fast never heard an offer a correct host stamped. The
+            // kind is ephemeral: nothing old can arrive, `since` filters
+            // nothing but our friend.
+            const req = JSON.parse(mod.subscribe(subId, theirTopic));
+            if (req[2]) delete req[2].since;
+            w.send(JSON.stringify(req));
+          } catch (e) { /* socket died between open and send */ }
           if (current) publish(current);
+        };
+        w.onclose = () => {
+          const i = sockets.indexOf(w);
+          if (i >= 0) sockets.splice(i, 1);
+          socketUrl.delete(w);
+          if (done) return;
+          const n = Math.min(attempt, RECONNECT_MS.length - 1);
+          later(() => { if (!done && !sockets.some((s) => socketUrl.get(s) === url)) connect(url, attempt + 1); }, RECONNECT_MS[n]);
         };
         w.onmessage = (ev) => {
           const frame = readRelayFrame(ev.data);
@@ -386,7 +414,14 @@ const NetNostr = (function () {
           }
         };
         w.onerror = () => {};
-      }
+      };
+      for (const url of relayUrls()) connect(url, 0);
+      const onVisible = () => {
+        if (done || typeof document === "undefined" || document.hidden) return;
+        for (const url of relayUrls()) if (!sockets.some((s) => socketUrl.get(s) === url)) connect(url, 0);
+      };
+      if (typeof document !== "undefined" && document.addEventListener) document.addEventListener("visibilitychange", onVisible);
+      unlisten = () => { try { if (typeof document !== "undefined" && document.removeEventListener) document.removeEventListener("visibilitychange", onVisible); } catch (e) { /* no document */ } };
 
       // "Every live relay refused us" — advisory, once. Evaluated on every
       // refusal AND at RELAY_CHECK_MS: the one-shot check alone ran at 6 s,

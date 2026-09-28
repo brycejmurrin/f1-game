@@ -252,8 +252,17 @@ const NetLobby = (function () {
         : "This browser cannot do WebRTC, so it cannot race a friend.";
     }
 
+    // The fragment is consumed by the lobby that HANDLED it. A link that arrived
+    // while this one was busy (racing, in a room) was deferred, not handled —
+    // consuming it on close threw away the invite the player is about to open.
+    function consumeHandledInvite() {
+      const now = NetHandshake.inviteFromUrl();
+      if (now && now !== urlInvite) return false;   // a boot-time link always set urlInvite (wire → openFromUrl)
+      return NetHandshake.consumeInviteUrl();
+    }
+
     function teardown() {
-      NetHandshake.consumeInviteUrl(); clearInterval(pollTimer);
+      consumeHandledInvite(); clearInterval(pollTimer);
       clearInterval(pumpTimer);
       pumpTimer = null;
       clearTimeout(codeReopenTimer); codeReopenTimer = null;
@@ -1655,7 +1664,7 @@ const NetLobby = (function () {
     }
 
     function close() {
-      invalidateOperations(); NetHandshake.consumeInviteUrl();
+      invalidateOperations(); consumeHandledInvite();
       clearInterval(pollTimer);
       Log.info("net", "lobby close");
       stopScan();
@@ -1790,7 +1799,13 @@ const NetLobby = (function () {
       const e = els();
       if (code === urlInvite && e.screen && !e.screen.hidden) return false;
       const racing = typeof UiLayers !== "undefined" && UiLayers && UiLayers.inRace && UiLayers.inRace();
-      if (racing || session || transports.size > 0) {
+      // A HOST with an offer out (or a room code posted) is "in a room" too: a
+      // link tapped into the running app (Android link capture, or the host
+      // checking their own copied link) used to join() through it, and
+      // newTransport dropped the pending offer — the friend's answer then
+      // failed as "too late".
+      const hosting = role === "host" && (!!transport || !!codeRoom);
+      if (racing || session || transports.size > 0 || hosting) {
         Log.info("net", "lobby invite link ignored: " + (racing ? "racing" : "in a room"));
         return false;
       }
@@ -1804,7 +1819,7 @@ const NetLobby = (function () {
 
     return {
       wire, open, close, cancel, abortQuali, host, join, makeAnswer, acceptAnswer,
-      shareInvite, shareAnswer, canShare,
+      shareInvite, shareAnswer, canShare, openFromUrl,
       scan, stopScan, pasteInto, deliver,
       codeHost, codeJoin, stopCodeWait,
       watchForOpen: waitForOpen,
