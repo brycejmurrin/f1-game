@@ -17,11 +17,13 @@ const RealRace = (function () {
   const CLASSES = new Set(Object.keys(COMPOUND).map((k) => COMPOUND[k]));
   const DNS_AT = 0.002;   // a game seat with no real driver retires on the first metres: "did not start"
   const K_FALLBACK = 1.4;   // sim seconds per real second when no reference lap can be modelled (measured: this box runs ~1.5x real)
-  const JUMP_SPEED = 0.55;  // of vTop(): the speed a car is dropped in at mid-race, below any corner it can meet
+  const LOOK_M = 220;       // m: how far ahead a mid-race drop-in reads the road for the speed it can carry (AiDrive.brakeTarget's budget)
+  const LOOK_STEP = 10;
   const JUMP_MAX_WEAR = 0.9;   // a set older than its life is fitted worn, never past the cliff
   const RAIN_ARC_S = 60;    // s the sky takes to turn when the real race's rain starts or stops
   const FEED_PER_LAP = 4;   // narration lines a lap at most (lap 1 at Baku held 18 passes)
   const HANDOVER_S = 4;     // a mid-race jump-in: the car is driven for you this long at racing speed before the wheel is yours
+  const V_DROP_MIN = 0.3;   // of vTop(): the least a car is ever dropped in at (a hairpin), the most is vTop() itself
   const REAL_VMAX = 95;     // m/s: a real top speed; the real trace's speed scales onto vTop() through it
 
   // ── Pure helpers (test-frozen in tests/unit/real-race.test.mjs) ──────────
@@ -220,6 +222,22 @@ const RealRace = (function () {
 
   let live = null;   // the instance game.js created — the hub and the dev hooks reach it through the statics below
 
+  /** The speed the AI would carry at `s` — a mid-race drop-in without a real trace starts at FULL speed
+   *  for that piece of road, not a cruise. AI-ONLY (docs/PHYSICS.md §Curvature channels): the car it
+   *  places is the AI's (the seat car too, until the hand-over), and it is the AI's own corner model,
+   *  entry budget and braking credit (AiDrive.brakeTarget), read once at the drop, never per frame. */
+  function dropSpeed(track, s, vTop, wrapS) {
+    const AD = typeof AiDrive !== "undefined" ? AiDrive : null, PC = typeof PhysicsConsts !== "undefined" ? PhysicsConsts : null;
+    if (!AD || !PC || !track || !Tracks.curvature) return V_DROP_MIN * vTop;
+    let v = vTop;
+    for (let d = 0; d <= LOOK_M; d += LOOK_STEP) {
+      const k = Math.abs(Tracks.curvature(track, wrapS(s + d)));
+      const vC = AD.cornerSpeed(k, PC.LAT_MAX, 1, vTop);
+      v = Math.min(v, Math.sqrt(vC * vC + 2 * PC.BRAKE * 0.85 * d));   // what can still be shed before that node
+    }
+    return clamp(v, V_DROP_MIN * vTop, vTop);
+  }
+
   function create(G) {
     Log.info("game", "RealRace.create");
     let active = null;    // {script, laps, startLap, seat, seatMap, saved}
@@ -372,10 +390,11 @@ const RealRace = (function () {
       // The seat car is driven for the player for HANDOVER_S (a flying lap into the wheel),
       // then control passes; tickHandover says when.
       if (!active.watch && active.startLap > 1 && tables.at && G.goRolling && G.setCarRole) {
-        place();
         const me = cars.find((c) => c.human && c.local);
+        // The seat is the AI's BEFORE the drop (its speed is the AI's read of the road);
         // said: the banner already names HANDOVER_S, so the spoken count starts one below it.
         if (me) { G.setCarRole(me, false, true); me.launch = null; me.launchOn = false; handover = { c: me, t: HANDOVER_S, said: HANDOVER_S }; }
+        place();
         G.goRolling();
       }
       if (active.watch) {
@@ -442,7 +461,7 @@ const RealRace = (function () {
       for (let n = 1; n < Ls; n++) { const rl = realLapFor(n, simLaps, realLaps); if (refRow[rl] != null) simRef[n] = K0 * refRow[rl]; }
       G.raceT = K0 * at.t0;
       const wearOn = G.tyres && G.tyres.on && G.tyres.on();
-      const speed = JUMP_SPEED * (G.vTop ? G.vTop() : 80);
+      const vTop = G.vTop ? G.vTop() : 80;
       // The real positions, when loaded and the distance is real: each car exactly where it was at t0.
       const built = active.traces && simLaps === realLaps && typeof RealReplay !== "undefined" ? RealReplay.buildTraces(G.track, script, active.traces) : null;
       const real = {};
@@ -461,8 +480,10 @@ const RealRace = (function () {
         c.lap = ls; c.prog = (ls - 1) * total + s;
         c.fuelLap = ls;   // crossings driven: the tank is ls - 1 laps down (js/physics/tyre-model.js fuelFrac)
         c.totalT = K0 * at.t0; c.lapTime = K0 * a.into;
-        const vf = onTrace ? real.speed / REAL_VMAX : 0;   // the real car's pace as a fraction of a real top speed (vstd: never an absolute m/s)
-        placeCar(c, s, onTrace ? clamp(real.x, -5, 5) : (side++ % 2 ? 1.5 : -1.5), vf > 0 ? clamp(vf, 0.3, 0.9) * (G.vTop ? G.vTop() : 80) : speed);
+        // FULL speed: the real car's when its trace says (as a fraction of a real top speed — vstd: never
+        // an absolute m/s), else the speed the AI would carry through this piece of road (dropSpeed).
+        const vf = onTrace ? real.speed / REAL_VMAX : 0;
+        placeCar(c, s, onTrace ? clamp(real.x, -5, 5) : (side++ % 2 ? 1.5 : -1.5), vf > 0 ? clamp(vf, V_DROP_MIN, 1) * vTop : dropSpeed(G.track, s, vTop, G.wrapS));
         c.gear = 5; c.energy = 0.7;
         if (wearOn && a.compound) {
           // The plan's arrays hold only the stops that fit the sim distance, so
@@ -639,6 +660,6 @@ const RealRace = (function () {
   const status = () => (live ? live.status() : { active: false });
   const replay = () => (live ? live.replay : null);   // the replay's controls (follow / setSpeed / seek / skip) for page probes
 
-  return { create, launch, status, replay, realLapFor, simLapFor, paceTable, cumTable, planFor, dnfAtFor, cautionsFor, mapField, fieldAt, paceMul, COMPOUND, KP, MUL_MIN, MUL_MAX };
+  return { create, launch, status, replay, realLapFor, simLapFor, paceTable, cumTable, planFor, dnfAtFor, cautionsFor, mapField, fieldAt, paceMul, dropSpeed, COMPOUND, KP, MUL_MIN, MUL_MAX };
 })();
 Object.freeze(RealRace);

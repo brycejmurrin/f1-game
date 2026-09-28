@@ -2676,6 +2676,11 @@ function snapGameCam() {
   camTgt[0] = v.tgt[0]; camTgt[1] = v.tgt[1]; camTgt[2] = v.tgt[2];
   camFov = v.fov;
   camRoll = bankCam && cameraFollowsBank(mode) ? -bankCam.roll : 0;
+  // Re-anchor too: render() damps the eye and target in the CAR's frame, from last frame's
+  // anchor to this one. A car that was just moved (a mid-race JUMP IN drops it half a lap
+  // from the grid) would otherwise carry the grid's look OFFSET across, so the cockpit
+  // opened facing the way the grid faced and swung round over the next half second.
+  camAncX = null;
   try { if (gfx && gfx.invalidateSoftPresent) gfx.invalidateSoftPresent(); } catch (_) { /* GLX */ }
 }
 

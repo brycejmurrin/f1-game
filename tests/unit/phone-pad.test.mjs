@@ -611,6 +611,12 @@ test("controller.html carries exactly the manifest's CONTROLLER subset and both 
     "both doors flip with the live pointer kind");
   assert.match(gameJs, /location\.assign\(new URL\("controller\.html", location\.href\)\.href\)/, "the door is a navigation beside index.html");
   assert.match(gameJs, /\$\("mb-phonepad"\)\.onclick = goPhonePad;[\s\S]*?\$\("pm-phonepad-go"\)\.onclick = goPhonePad;/, "both doors wired");
+  // The face keys (OT/BOOST/AERO/CAM/RADIO/LOOK/RESET/PAUSE) are thumb-sized:
+  // never under a 48px tap target, growing with the phone's height; the
+  // screen is the flex child that gives way.
+  assert.match(page, /#keys button \{ padding: 0; min-height: clamp\(48px, 14vh, 80px\); font-weight: 800; font-size: clamp\(12px, 3\.2vh, 18px\);/, "thumb-sized keys");
+  assert.match(page, /#keys \.wide \{[^}]*min-height: clamp\(36px, 9vh, 52px\)/, "the CENTRE TILT bar grows too");
+  assert.match(page, /#screen \{ flex: 1 1 0; min-height: 0;/, "the screen gives way, the keys do not");
   // Zoom off on the wheel, landscape only: touch-action is not inherited, so
   // every wheel element owns its touches; the canceller mirrors index.html's;
   // portrait shows the TURN card instead of a squeezed grid; the lock rides
