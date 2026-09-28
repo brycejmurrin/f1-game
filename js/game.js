@@ -3977,7 +3977,7 @@ let netLobby = {
   abortQuali: () => {}, qualifying: () => false, roomChanged: () => {}, setReady: () => {},
   peerSeats: () => [], roomState: () => ({ open: false, role: null, peers: [] }),
   status: () => ({ role: null, connected: false }),
-  reportQuali: () => {}, reportQualiLive: () => {},
+  reportQuali: () => {}, reportQualiLive: () => {}, openFromUrl: () => false,
 };
 // C2 visual suspension (js/physics/body-attitude.js) — render-only cosmetic chassis
 // pitch/roll/heave springs; DEFAULT ON, disable via apex26.bodyAttitude/__apex.bodyAttitude.
@@ -4131,6 +4131,8 @@ function quitToMenu() {
   $("mb-standings").hidden = !hasSeason;
   refreshCareerButton();
   consumeGhostHash();   // a #ghost= link deferred while racing lands now (no-op without one)
+  // ...and so does a #vs= invite link the lobby deferred (racing / in a room).
+  if (/[#&]vs=/.test(location.hash)) ensureNet().then((ok) => { if (ok) netLobby.openFromUrl(); });
 }
 
 
@@ -9552,5 +9554,9 @@ netLobby.wire();
 // A #vs= invite link is the one way into multiplayer that is NOT a button
 // press, so it has to pull the bundle itself — the stub's wire() cannot see it.
 if (typeof location !== "undefined" && /[#&]vs=/.test(location.hash)) ensureNet();
+// ...and a link pasted into a tab that is ALREADY running only fires
+// hashchange. The lobby's own listener exists once the bundle is up; until
+// then this is the only thing awake to pull it (wire() re-reads the fragment).
+if (typeof window !== "undefined") window.addEventListener("hashchange", () => { if (/[#&]vs=/.test(location.hash)) ensureNet(); });
 
 })();

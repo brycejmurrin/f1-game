@@ -708,6 +708,7 @@
         "tests/unit/net-rendezvous.test.mjs",
         "tests/unit/rendezvous-worker.test.mjs",
         "tests/unit/net-trystero-api.test.mjs",
+        "tests/unit/net-nostr-sockets.test.mjs",
         "tests/unit/net-sdp.test.mjs",
         "tests/unit/net-qr.test.mjs",
         "tests/unit/net-snapshot.test.mjs",

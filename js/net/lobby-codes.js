@@ -17,17 +17,24 @@ const LobbyCodes = (function () {
   // long one). English words are short; a base64url fragment is not.
   const CODE_CHARS = /^[A-Za-z0-9_-]+$/;
   const FRAGMENT_MIN = 20;
+  // A LINK gets the same treatment as a bare code: its code is lifted out of
+  // the token that carries it (inviteFromUrl drops the "." or ")" a sentence
+  // puts after it) and the wrap re-join below runs on what follows — a link a
+  // plain-text mail client folded used to stop at the fold and read "corrupt".
+  const INVISIBLE = /[\u200B-\u200D\u2060\uFEFF\u00AD]/g;   // \s matches none of these
   function codeFrom(text) {
-    const raw = String(text || "").trim();
+    const raw = String(text || "").replace(INVISIBLE, "").trim();
     if (!raw) return "";
-    const fromUrl = NetHandshake.inviteFromUrl(raw);
-    if (fromUrl) return fromUrl;
     const tokens = raw.split(/\s+/);
-    if (tokens.length === 1) return raw;
     const magic = (NetHandshake.MAGIC || "APEX1") + ".";
-    const at = tokens.findIndex((t) => t.startsWith(magic));
+    let at = -1, code = "";
+    for (let i = 0; i < tokens.length && at < 0; i++) {
+      const lifted = NetHandshake.inviteFromUrl(tokens[i]);
+      if (lifted) { at = i; code = lifted; }
+      else if (tokens[i].startsWith(magic)) { at = i; code = tokens[i]; }
+    }
     if (at < 0) return raw;                       // peekCode says "not an invite code"
-    let code = tokens[at], long = false;
+    let long = false;
     for (let i = at + 1; i < tokens.length; i++) {
       const t = tokens[i];
       if (!CODE_CHARS.test(t)) break;
