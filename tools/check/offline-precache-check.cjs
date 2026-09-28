@@ -22,9 +22,12 @@ const TY = { ".html":"text/html", ".js":"text/javascript", ".css":"text/css", ".
 // the SW's fetch-miss handler cache its scenery — so it can never prove
 // anything about the precache. COLD is never touched until we are offline.
 // The first cut of this test used one circuit for both and PASSED with the
-// precache deleted; the runtime cache had already saved it. cota is the cold
-// one because Node and the browser agree exactly there (8665), so the expected
-// number needs no tolerance.
+// precache deleted; the runtime cache had already saved it. The COLD circuit's
+// reference is a BROWSER build of it online, in a second context with service
+// workers blocked (its own storage, so it cannot warm the offline one): Node
+// and the browser agreed on cota once (8665) but not since (2026-09-28: Node
+// 6536, browser 6685), and browser-vs-browser needs no tolerance. The Node
+// number is still printed, as information.
 const WARM = process.argv[2] || "spa";
 const TRACK = process.argv[3] || "cota";
 const TRACK_ARG = WARM;
@@ -51,7 +54,21 @@ srv.listen(0, "127.0.0.1", async () => {
   const ctx = await browser.newContext({ viewport: { width: 640, height: 360 } });
   const bad = [];
   let serverDown = false;
+  let ref = null;   // the COLD circuit built ONLINE in a separate, SW-blocked context
   try {
+    const refCtx = await browser.newContext({ viewport: { width: 640, height: 360 }, serviceWorkers: "block" });
+    const pr = await refCtx.newPage();
+    await pr.goto(base + "/", { waitUntil: "domcontentloaded" });
+    await pr.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 90000 });
+    await pr.evaluate((t) => window.__apex.race(t), TRACK);
+    await pr.waitForFunction(() => window.__apex.info().track != null, null, { polling: 200, timeout: 180000 });
+    ref = await pr.evaluate(() => {
+      const tg = window.__apex.trackGraph ? window.__apex.trackGraph() : null;
+      return tg && Array.isArray(tg.nodes) ? tg.nodes.length : null;
+    });
+    await refCtx.close();
+    console.log(`reference ${TRACK}: instanced=${ref} online, no service worker (Node ${want})`);
+    if (!ref) bad.push(`could not measure ${TRACK} online for the reference`);
     // ---- 1. online: register + let the install precache finish --------------
     const p1 = await ctx.newPage();
     await p1.goto(base + "/", { waitUntil: "domcontentloaded" });
@@ -167,9 +184,9 @@ srv.listen(0, "127.0.0.1", async () => {
       }).catch(() => got);
     }
     console.log(`offline ${TRACK}: instanced=${got.instanced} (Node ${want})  TrackScenery=${got.hasScenery}  LightPresets=${got.presets}  pageErrors=${errs.length}`);
-    // COLD circuit vs Node: a bare build loses most of its props, so this is a
-    // large, unambiguous gap, not a one-node judgement call.
-    if (got.instanced !== want) bad.push(`OFFLINE BARE BUILD: ${TRACK} ${got.instanced} instanced offline vs ${want} expected`);
+    // COLD circuit offline vs the same circuit online: a bare build loses most
+    // of its props, so this is a large, unambiguous gap, not a judgement call.
+    if (got.instanced !== ref) bad.push(`OFFLINE BARE BUILD: ${TRACK} ${got.instanced} instanced offline vs ${ref} online`);
     if (!got.hasScenery) bad.push("window.TrackScenery empty offline — the closure never arrived");
     if (!got.presets) bad.push("window.LightPresets empty offline");
   } finally { await browser.close().catch(() => {}); if (!serverDown) srv.close(); }
