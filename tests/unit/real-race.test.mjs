@@ -133,8 +133,8 @@ test("the real strategy becomes the pit plan the pit lane executes, at full and 
   const str = script.drivers.find((d) => d.num === 18);
   assert.ok(Math.abs(R.dnfAtFor(str, 51) - 7.5 / 51) < 1e-9);
   assert.equal(R.dnfAtFor(rus, 51), null, "a finisher never retires");
-  assert.deepEqual(host(R.cautionsFor(script, 51)), [{ level: 3, from: 31, to: 35, cause: "SAFETY CAR" }, { level: 3, from: 36, to: 38, cause: "SAFETY CAR" }]);
-  assert.deepEqual(host(R.cautionsFor(script, 10)), [{ level: 3, from: 6, to: 7, cause: "SAFETY CAR" }, { level: 3, from: 7, to: 7, cause: "SAFETY CAR" }]);
+  assert.deepEqual(host(R.cautionsFor(script, 51)), [{ level: 3, from: 31, to: 35, cause: "SAFETY CAR", done: false }, { level: 3, from: 36, to: 38, cause: "SAFETY CAR", done: false }]);
+  assert.deepEqual(host(R.cautionsFor(script, 10)), [{ level: 3, from: 6, to: 7, cause: "SAFETY CAR", done: false }, { level: 3, from: 7, to: 7, cause: "SAFETY CAR", done: false }]);
 });
 
 test("every 2026 driver takes a roster seat by code; a stranger takes a free seat of their team", () => {
@@ -197,8 +197,8 @@ test("stage() seats the player, sets the session, and stop() restores every sett
   assert.ok(calls.some((c) => c[0] === "startRace"));
   rr.stop();
   assert.equal(rr.isActive(), false);
-  assert.deepEqual([G.teamIdx, G.driverIdx, G.raceLaps, G.raceWeather, G.raceTimeOfDay, G.duel, G.raceTyreWear, G.raceChangeable],
-    [2, 1, 3, "wet", "night", true, "off", true]);
+  assert.deepEqual([G.teamIdx, G.driverIdx, G.raceLaps, G.raceWeather, G.raceTimeOfDay, G.duel, G.raceTyreWear, G.raceChangeable, G.trackIdx, G.flow],
+    [2, 1, 3, "wet", "night", true, "off", true, 0, "career"], "the circuit and the flow the player had are back too");
 });
 
 test("arming lays the real grid, plans, compounds and retirements over the field on the first countdown frame", () => {
@@ -468,4 +468,58 @@ test("rain in the real race turns the sky here: the start lap's weather, then an
   assert.equal(arcs().length, 1, "one arc per change");
   leader.lap = 31; G.raceWeather = "rain"; rr.update(1 / 60);
   assert.deepEqual(arcs(), [["dry", "rain"], ["rain", "dry"]]);
+});
+
+test("the review's fixes: a filled cum row, a DSQ that saw the flag, the kept stops, the fuel lap, a done window, one stint log", () => {
+  const { R, script, Teams } = load();
+  // cumTable fills an untimed mid-race lap of a finisher with the field median and runs to the flag.
+  const odd = host(script);
+  const rus = odd.drivers.find((d) => d.num === 63);
+  rus.laps[19] = null;   // lap 20 untimed (a red-flag lap, say)
+  const cum = R.cumTable(odd), ref = R.paceTable(odd).ref;
+  assert.equal(cum[63].length, 52, "the row still reaches the flag");
+  assert.ok(Math.abs((cum[63][20] - cum[63][19]) - ref[20]) < 1e-9, "the gap is the field's lap-20 median");
+  assert.equal(R.fieldAt(odd, 31).by[63].retired, false, "an untimed lap is not a retirement");
+  // A driver classified with every lap but disqualified never retires by distance; Stroll still does on lap 8.
+  const dsq = { ...rus, dnf: true, dsq: true, pos: null, lapsDone: 51 };
+  assert.equal(R.dnfAtFor(dsq, 51), null);
+  assert.ok(Math.abs(R.dnfAtFor(odd.drivers.find((d) => d.num === 18), 51) - 7.5 / 51) < 1e-9);
+  // Kept stops, the fuel lap and the stint log at a condensed mid-race drop-in.
+  const cars = makeCars(Teams, "ferrari:0");
+  const { G } = makeG(Teams, cars);
+  const rr = R.create(G);
+  rr.stage(script, { seat: "LEC", startLap: 40, laps: 10 });   // Russell's stops at real 31 and 36 both land on sim lap 6..7 -> one kept
+  G.state = "count"; rr.update(1 / 60); G.state = "race"; rr.update(1 / 60);
+  const by = (code) => cars.find((c) => c.code === code);
+  const plan = by("RUS").pitPlan;
+  assert.equal(plan.lapsAt.length, 2, JSON.stringify(host(plan.lapsAt)));
+  assert.equal(by("RUS").lap, 8);
+  assert.equal(by("RUS").pitStops, plan.lapsAt.filter((l) => l < 8).length, "the stops made are the KEPT stops before this lap, not the real stint index");
+  assert.equal(by("RUS").fuelLap, 8, "eight crossings driven: the tank is seven laps down (fuelFrac reads crossings)");
+  assert.equal(by("RUS").tyreStints, by("RUS").pitStops + 1);
+  // A retiree parked at the jump sits on the lap it stopped on, so retirements classify in order.
+  assert.equal(by("STR").retired, true); assert.equal(by("STR").lap, R.simLapFor(8, 10, 51));
+  assert.ok(by("STR").prog > 0);
+  assert.ok(by("ALO").prog > by("STR").prog, "Alonso (lap 21) stopped after Stroll (lap 8)");
+  // A window the race has left is done: a red-flag rewind of the lap counter never re-raises it.
+  const wins = R.cautionsFor(script, 51);
+  assert.equal(wins[0].done, false);
+});
+
+test("a RESTART from the results puts the start lap's weather back before the grid", () => {
+  const { R, script, Teams } = load();
+  const wet = { ...script, rain: new Array(52).fill(false) };
+  for (let n = 20; n <= 51; n++) wet.rain[n] = true;
+  const cars = makeCars(Teams);
+  const { G, calls } = makeG(Teams, cars);
+  G.setWeatherLive = (w) => { G.raceWeather = w; calls.push(["live", w]); };
+  const rr = R.create(G);
+  rr.stage(wet, { seat: "RUS" });
+  G.state = "count"; rr.update(1 / 60); G.state = "race";
+  const leader = cars.find((c) => c.code === "RUS");
+  leader.lap = 25; G.raceWeather = "rain"; rr.update(1 / 60);   // the arc has turned the sky
+  G.state = "results"; rr.update(1 / 60);
+  G.state = "count"; rr.update(1 / 60);   // RESTART: startRace again, no stage()
+  assert.equal(G.raceWeather, "dry", "lap 1 is dry in this race");
+  assert.deepEqual(calls.filter((c) => c[0] === "live").map((c) => c[1]), ["dry"]);
 });

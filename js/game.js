@@ -9011,8 +9011,17 @@ els.resNext.onclick = () => {
   // a sprint weekend twice: SPRINT QUALIFYING, then qualifying again for the
   // Grand Prix (FIA 2026 SR B2.2.1, B2.4.1(b)); endRace dropped the sprint's
   // classification. openQuali() also clears the previous round's, which is what
-  // stops this grid being last week's. Only a season with qualifying off skips it.
-  if (isChampionship() && SeasonCal.qualiNext(season)) openQuali();
+  // stops this grid being last week's. Only a season with qualifying off skips
+  // it — and a qualified weekend whose classification has since been dropped
+  // (quitToMenu() clears it) re-qualifies instead of gridding the player P12
+  // out of gridUp()'s tier fallback.
+  // RACE AGAIN after a FRIEND race is a solo race: end the session first (BYE to
+  // the rival, remotes handed back), or the new race ran with the old one's
+  // NetPlay live — the guest adopted the PREVIOUS race's RESULT rows onto the
+  // new cars (netOrder), LAP/STRATEGY kept going to the peer for cars no longer
+  // in the grid, and pause no longer stopped the world (the netPlay.active() gates).
+  if (netPlay.active()) netPlay.stop("local");
+  if (isChampionship() && (SeasonCal.qualiNext(season) || (SeasonCal.quali() && !quali.results()))) openQuali();
   else startRace();
 };
 
@@ -9212,14 +9221,17 @@ function phonePadDash() {
   const D = PhonePad.DASH, xOpen = (p.aeroX || 0) > 0.05;
   const flags = (p.boostOn ? D.boost : 0) | (p.otT > 0 ? D.otActive : p.otArmed ? D.otArmed : 0)
     | (xOpen ? D.xOpen : p.xArmed ? D.xArmed : 0) | (p.retired ? D.retired : 0) | (isTimeTrial() ? D.timeTrial : 0)
-    | (paused ? D.paused : 0) | (p.rpm > MAX_RPM * 0.92 ? D.redline : 0);
+    | (paused ? D.paused : 0) | (p.rpm > MAX_RPM * 0.92 ? D.redline : 0)
+    // The control modes, so the wheel offers only what the driver operates.
+    | (gearsManual() ? 0 : D.gearsAuto) | (autoThrottle() ? D.throttleAuto : 0)
+    | (raceAeroMode === "auto" ? D.aeroAuto : 0) | (aeroZ && aeroZ.zones && aeroZ.zones.length ? 0 : D.aeroNone);
   return { gear: p.gear, kmh: dashKph(p.speed), rpm: (p.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), lap: p.lap, laps: lapsTarget,
     pos: p.rank, cars: cars.length, ers: p.energy, flags, caution: cautionLevel(), lastLapMs: (p.lastLap || 0) * 1000,
     state, team: PhonePad.teamHex(p.team && p.team.color) };
 }
 $("pm-phonepad").onclick = () => {
   const box = $("pm-phonepad-box"), status = $("pm-phonepad-status"), btn = $("pm-phonepad");
-  if (phonePad) { phonePad.cancel(); phonePad = null; box.hidden = true; btn.textContent = "PHONE AS CONTROLLER…"; return; }
+  if (phonePad) { phonePad.cancel(); phonePad = null; box.hidden = true; btn.textContent = "PHONE AS CONTROLLER"; return; }
   box.hidden = false; btn.textContent = "STOP PAIRING"; status.textContent = "Loading…";
   ensureNet().then((ok) => {
     if (!ok) { status.textContent = "Could not load the pairing stack — check the connection."; return; }
@@ -9227,9 +9239,16 @@ $("pm-phonepad").onclick = () => {
     phonePad = PhonePad.host({
       hud: phonePadDash,
       say: (t) => { status.textContent = t; },
-      qr: (url, code) => { LobbyCodes.paintQr($("pm-phonepad-qr-wrap"), $("pm-phonepad-qr"), url); $("pm-phonepad-code").textContent = code || ""; },
+      qr: (url, code) => {
+        LobbyCodes.paintQr($("pm-phonepad-qr-wrap"), $("pm-phonepad-qr"), url);
+        $("pm-phonepad-code").textContent = code || "";
+        $("pm-phonepad-pair").hidden = !code;
+        // The code appears below the button: bring it into view on the sheet,
+        // or a short screen shows "scan the code" with nothing to scan.
+        if (code && box.scrollIntoView) box.scrollIntoView({ block: "nearest" });
+      },
       linked: () => { btn.textContent = "UNPAIR PHONE"; announce("PHONE CONNECTED — TILT TO STEER", 3, "info"); },
-      lost: () => { btn.textContent = "PHONE AS CONTROLLER…"; phonePad = null; announce("PHONE DISCONNECTED", 3, "warn"); },
+      lost: () => { btn.textContent = "PHONE AS CONTROLLER"; phonePad = null; announce("PHONE DISCONNECTED", 3, "warn"); },
     });
   });
 };

@@ -23,7 +23,8 @@ In-race slip/grip/timing is **agent-view** (`references/state.md`), not this ove
 
 RACE IT (`js/data/real-race-tab.js`) builds one Grand Prix's timing into the
 script `js/race/real-race.js` replays (grid, per-lap pace, stops, flags,
-retirements, rain) and hands it to `RealRace.launch(script, {seat, laps,
+retirements, rain, passes), shows the race LAP BY LAP (`raceBook` / `lapBoard`,
+both pure) with a JUMP IN on every lap, and hands it to `RealRace.launch(script, {seat, laps,
 startLap})` — the one call from `js/data/` into the game. A script is cached
 only when `complete` (a winner classified, every lap in). Design and the pace loop:
 `docs/notes/REAL-RACE-2026-09-27.md`.
