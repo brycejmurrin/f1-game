@@ -404,6 +404,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/store-cross-tab.test.mjs",
   "tests/unit/comment-citations.test.mjs",
   "tests/unit/race-control.test.mjs",
+  "tests/unit/sporting-regs.test.mjs",
   "tests/unit/ai-drive.test.mjs",
   "tests/unit/brake-cue.test.mjs",
   "tests/unit/factory-ai-setup.test.mjs",

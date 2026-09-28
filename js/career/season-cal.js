@@ -172,14 +172,13 @@ function trackIndex(round) {
 }
 
 let lastScored = "race";
-let sprintOrder = null;   // driverIds, for a no-qualifying sprint weekend's grid
 
 function blank() {
   const snap = frozenConfig(flow === "season" && activeCfg ? activeCfg : config());
   if (flow === "season") activeCfg = snap;
   return { round: 0, pts: {}, teamPts: {}, driverCodes: {}, finishes: {}, roundPts: {}, config: snap };
 }
-function resetWeekend() { lastScored = "race"; sprintOrder = null; }
+function resetWeekend() { lastScored = "race"; }
 function restart() {
   activeCfg = frozenConfig(config());
   resolved = null;
@@ -258,12 +257,10 @@ function resume(saved) {
   s.finishes = finishMap(s.finishes);
   s.roundPts = roundMap(s.roundPts);
   if (typeof s.lastFl !== "string") delete s.lastFl;
-  if (s.stage === "race" && Array.isArray(s.sprintOrder) && s.sprintOrder.length) {
-    sprintOrder = s.sprintOrder.slice();
-  } else {
-    sprintOrder = null;
-    if (s.sprintOrder) delete s.sprintOrder;
-  }
+  // A save from before separate sprint qualifying carries the sprint RESULT as
+  // the GP grid. The GP no longer copies it (qualifying, or the championship
+  // order: B2.5.4(a)), so the field is dropped; its stage and points stand.
+  if (s.sprintOrder) delete s.sprintOrder;
   return s;
 }
 function load() {
@@ -342,7 +339,12 @@ function stage(season) {
 function midWeekend(season) { return sprintOn(season) && !!season && season.stage === "race"; }
 
 function quali() { return !fmtActive() || rulesConfig().quali; }
-function qualiNext(season) { return quali() && !midWeekend(season); }
+// SEPARATE SPRINT QUALIFYING (FIA 2026 SR B2.2.1, B2.4.1(b)): a sprint weekend
+// qualifies for the sprint, then again for the Grand Prix. It used to run once
+// and grid both. Every racing session now qualifies (callers still pass `season`).
+function qualiNext() { return quali(); }
+/** The session's name on the sheet and the GO button. */
+function qualiLabel(season) { return stage(season) === "sprint" ? "SPRINT QUALIFYING" : "QUALIFYING"; }
 
 // The distance THIS session runs. `fallback` is the player's #rs-laps choice and
 // is returned untouched for every race the format does not own — the format's
@@ -396,16 +398,15 @@ function award(season, order, fastestId) {
       row[i] = (row[i] || 0) + 1;
     }
   });
+  // Either leg spends its qualifying: the Grand Prix runs its own session.
+  delete season.qualiOrder;
+  delete season.qualiTrack;
   if (scoring === "sprint") {
     season.stage = "race";
-    sprintOrder = order.map((c) => c.driverId);
-    season.sprintOrder = sprintOrder.slice();
   } else {
     season.round++;
     delete season.stage;
     delete season.sprintOrder;
-    delete season.qualiOrder;
-    sprintOrder = null;
   }
   lastScored = scoring;
   Log.info("game", `SeasonCal.award ${scoring} round=${season.round}`);
@@ -450,17 +451,6 @@ function rank(season, a, b) {
   if (sa < sb) return -1;
   if (sa > sb) return 1;
   return 0;
-}
-
-function grid(cars, season) {
-  // fmtActive() as well as the two obvious guards: sprintOrder is module state
-  // that outlives the season it was set in, and a plain Grand Prix reaching this
-  // line must never be gridded off a race it was not part of.
-  if (!fmtActive() || !midWeekend(season) || !sprintOrder || quali()) return null;
-  const byId = new Map(cars.map((c) => [c.driverId, c]));
-  const out = [];
-  for (const id of sprintOrder) { const c = byId.get(id); if (c) out.push(c); }
-  return out.length === cars.length ? out : null;
 }
 
 const SPRINT_SEED_OFFSET = 1000;
@@ -545,8 +535,8 @@ return {
   engage, list, rounds, track, trackIndex,
   load, save, clear, conflicted, saveStatus,
   resume, blank, restart, resetWeekend, canRace, hasProgress,
-  quali, qualiNext, stage, midWeekend, sprintOn, lapsFor, formatLaps, pointsTable,
-  award, scored, rank, netPts, grid, drawRound,
+  quali, qualiNext, qualiLabel, stage, midWeekend, sprintOn, lapsFor, formatLaps, pointsTable,
+  award, scored, rank, netPts, drawRound,
   presetIds, preset, shuffled, gpName,
 };
 })();

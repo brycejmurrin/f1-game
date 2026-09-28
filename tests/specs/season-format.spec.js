@@ -172,6 +172,7 @@ test.describe("Season — sprint weekends", () => {
   test("a sprint scores its own table and leaves the round open", async ({ page }) => {
     await boot(page, { trackIds: ["monza", "monaco"], sprint: true, laps: 10 });
     await toRaceSettings(page);
+    await expect(page.locator("#rs-go")).toHaveText("START SPRINT QUALIFYING");
     await toTheGrid(page);
     // A third of the distance, and the results sheet says which session this was.
     expect(await page.evaluate(() => window.__apex.info().lapsTarget)).toBe(3);
@@ -191,14 +192,25 @@ test.describe("Season — sprint weekends", () => {
     const circuit = await page.evaluate(() => window.__apex.info().track);
     await winAndFinish(page);
 
-    // No second qualifying session: one per weekend, exactly as in the real
-    // thing. res-next goes straight to the grid.
+    // A SECOND qualifying session: the sprint ran off SPRINT QUALIFYING, and
+    // the Grand Prix qualifies again (FIA 2026 SR B2.2.1, B2.4.1(b)).
     await page.locator("#res-next").click();
+    await expect(page.locator("#quali")).toBeVisible({ timeout: 20_000 });
+    await page.locator("#q-sim").click();
+    await expect(page.locator("#q-title")).not.toContainText("SPRINT");
+    await page.locator("#q-go").click();
     await page.waitForFunction(() => window.__apex.info().state === "count"
       || window.__apex.info().state === "race", undefined, { timeout: 20_000, polling: 100 });
     expect(await page.evaluate(() => window.__apex.info().track)).toEqual(circuit);
     expect(await page.evaluate(() => window.__apex.info().lapsTarget), "full distance now").toBe(10);
 
+    // A 10-lap dry Grand Prix needs two dry compounds (FIA 2026 SR B6.3.6) or
+    // the winner is disqualified: change sets as a stop would before the flag.
+    const fitted = await page.evaluate(() => {
+      const now = window.__apex.tyres().code;
+      return window.__apex.tyres({ fit: now === "H" ? "medium" : "hard" }).code;
+    });
+    expect(fitted, "a second dry compound is on").toMatch(/^[SMH]$/);
     await winAndFinish(page);
     const s = await saved(page);
     expect(myPts(s), "8 for the sprint plus 25 for the Grand Prix").toBe(33);

@@ -43,7 +43,8 @@ function create(G) {
     const title = $("q-title");
     if (title) {
       const you = rows.find((r) => r.isPlayer);
-      title.textContent = you ? `QUALIFYING — P${you.pos}` : "QUALIFYING";
+      const name = G.seasonMode && typeof SeasonCal !== "undefined" && SeasonCal.qualiLabel ? SeasonCal.qualiLabel(G.season) : "QUALIFYING";
+      title.textContent = you ? `${name} — P${you.pos}` : name;
     }
     // LICENCE BADGES: a DRIVEN pole only — a simulated time for a player who
     // never ran a lap is not one (js/career/badges.js).

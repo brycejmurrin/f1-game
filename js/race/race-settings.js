@@ -61,7 +61,7 @@ const RaceSettings = (function () {
     } = deps;
     const isTimeTrial = () => G.session === "tt";
     const isChampionship = () => G.flow === "season" || G.flow === "career";
-    const gridFromQuali = () => (isChampionship() && SeasonCal.quali()) || (G.raceQuali && !isTimeTrial());
+    const gridFromQuali = () => (isChampionship() ? SeasonCal.quali() : (G.raceQuali && !isTimeTrial()));
 
     let rsReturn = "select";
     let draftKey = "";
@@ -72,7 +72,8 @@ const RaceSettings = (function () {
     function buildRaceSettings() {
       const qualifies = !isTimeTrial() && !qualiResults() &&
         (isChampionship() ? SeasonCal.qualiNext(G.season) : gridFromQuali());
-      $("rs-go").textContent = netRoom ? "CONFIRM FOR LOBBY" : qualifies ? "START QUALIFYING" : "START RACE";
+      const qName = isChampionship() && SeasonCal.qualiLabel ? SeasonCal.qualiLabel(G.season) : "QUALIFYING";
+      $("rs-go").textContent = netRoom ? "CONFIRM FOR LOBBY" : qualifies ? "START " + qName : "START RACE";
       wireRaceSettings();
       const tt = isTimeTrial();
       const daily = tt && G.daily ? G.daily.current() : null;
@@ -111,10 +112,12 @@ const RaceSettings = (function () {
       $("rs-quali").hidden = tt;
       const qForced = champ ? SeasonCal.quali() : null;
       const rules = qForced ? [["quali", "QUALIFYING"]]
-        : champ ? [["tier", "PACE ORDER"], ["revchamp", "REVERSED"], ["random", "RANDOM"]]
+        : champ ? [["champ", "STANDINGS"], ["tier", "PACE ORDER"], ["revchamp", "REVERSED"], ["random", "RANDOM"]]
         : [["tier", "PACE ORDER"], ["quali", "QUALIFYING"], ["rev10", "REVERSE 10"], ["random", "RANDOM"]];
-      const raceGrid = G.raceGrid;
-      const cur = qForced ? "quali" : rules.some(([r]) => r === raceGrid) ? raceGrid : "tier";
+      // A championship keeps its own rule (G.champGrid, default STANDINGS: FIA 2026
+      // SR B2.5.4(a)); the one-off's choice is left alone.
+      const raceGrid = champ ? G.champGrid : G.raceGrid;
+      const cur = qForced ? "quali" : rules.some(([r]) => r === raceGrid) ? raceGrid : rules[0][0];
       SettingRow.paint("rs-quali", cur, rules);
       SettingRow.disable("rs-quali", !!qForced);
       $("rs-caution").hidden = tt;
@@ -231,7 +234,9 @@ const RaceSettings = (function () {
       });
       wire("rs-time", () => G.raceTimeOfDay, (v) => { G.raceTimeOfDay = v; scheduleFlybyTrack(); });
       wire("rs-diff", () => G.difficulty, (v) => { G.difficulty = v; store.set("difficulty", v); });
-      wire("rs-quali", () => G.raceGrid, (v) => { G.raceGrid = v; store.set("raceGrid", v); });
+      wire("rs-quali", () => (isChampionship() ? G.champGrid : G.raceGrid), (v) => {
+        if (isChampionship()) { G.champGrid = v; store.set("champGrid", v); } else { G.raceGrid = v; store.set("raceGrid", v); }
+      });
       wire("rs-caution", () => (G.cautionInfo().enabled ? "on" : "off"), (v) => setCautionEnabled(v === "on"));
       wire("rs-reliab", () => G.raceReliability, (v) => { G.raceReliability = v; store.set("reliability", v); });
       wire("rs-tyres", () => G.raceTyreWear, (v) => { G.raceTyreWear = v; });
