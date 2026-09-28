@@ -238,7 +238,11 @@ by QR, by typing the URL, or by its own door: on a coarse pointer the title
 screen shows USE AS CONTROLLER and CONTROLS shows USE THIS PHONE AS THE
 CONTROLLER (`#mb-phonepad`, `#pm-phonepad-go`), a plain navigation to
 `controller.html` where the code is typed — `syncPointerKind()` in js/game.js
-flips both live with `body.desktop`, so a mouse never sees them. Once the
+flips both live with `body.desktop`, so a mouse never sees them. The wheel is
+LANDSCAPE ONLY (portrait shows a TURN THE PHONE card; Android locks the
+orientation behind fullscreen on the CONNECT tap, iOS has no lock) and refuses
+double-tap and pinch zoom the way index.html does (`touch-action: none` on
+every wheel element, a touchend/dblclick/GestureEvent canceller). Once the
 DataChannels open:
 
 | Channel | Direction | Payload |

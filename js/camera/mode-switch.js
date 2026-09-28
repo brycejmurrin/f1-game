@@ -19,6 +19,7 @@ window.CamModes = (function () {
     { id: "low",       label: "LOW",       cut: 0.4 },
     { id: "tcam",      label: "T-CAM",     cut: 0 },
     { id: "rear",      label: "REAR CAM",  cut: 0.15 },
+    { id: "visor",     label: "VISOR",     cut: 0 },        // cockpit eye, forward of the wheel, no rig
   ];
   const HOLD_MS = 340;   // CAM button hold before the picker opens
 
