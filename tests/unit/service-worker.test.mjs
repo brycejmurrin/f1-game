@@ -21,10 +21,11 @@ function requestKey(value) {
   return value.url;
 }
 
-function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediateTimeoutMs = null, navigator, hostname = "apex.test" } = {}) {
+function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediateTimeoutMs = null, navigator, hostname = "apex.test", registration } = {}) {
   const listeners = new Map();
   const stores = new Map();
   const deleted = [];
+  let keysCalls = 0;
   let skipped = 0;
   let claimed = 0;
 
@@ -61,6 +62,7 @@ function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediate
       return undefined;
     },
     async keys() {
+      keysCalls += 1;
       return Array.from(stores.keys());
     },
     async delete(name) {
@@ -71,6 +73,7 @@ function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediate
 
   const self = {
     location: { origin: ORIGIN, hostname },
+    ...(registration ? { registration } : {}),
     clients: {
       async claim() {
         claimed += 1;
@@ -121,10 +124,11 @@ function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediate
     };
   }
 
-  function fetchEvent(request) {
+  function fetchEvent(request, extra = {}) {
     const lifetimes = [];
     let responsePromise;
     listeners.get("fetch")({
+      ...extra,
       request,
       respondWith(promise) {
         responsePromise = Promise.resolve(promise);
@@ -144,6 +148,9 @@ function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediate
     },
     get claimed() {
       return claimed;
+    },
+    get keysCalls() {
+      return keysCalls;
     },
     lifecycleEvent,
     fetchEvent,
@@ -702,7 +709,7 @@ test("no fetch-path sweep between the essential marker and the optional pool (SK
 
 test("offline, a FINISHED install outranks a newer half-written generation", async () => {
   const src = await readFile(new URL("../../sw.js", import.meta.url), "utf8");
-  const fn = src.match(/async function matchPreferCurrent\(req\) \{[\s\S]*?\n\}/)[0];
+  const fn = src.match(/async function computeCacheOrder\(current\) \{[\s\S]*?\n\}/)[0];
   assert.match(fn, /INSTALL_SETTLED_URL/);
   assert.match(fn, /\(done\.get\(b\) - done\.get\(a\)\) \|\| \(rank\(b\) - rank\(a\)\)/, "completeness first, then current/newest");
   assert.ok(src.indexOf('cache.put(INSTALL_SETTLED_URL') < src.indexOf("await self.skipWaiting()"), "settled is written after the optional pool, before skipWaiting");
@@ -743,4 +750,81 @@ test("a worker that outlived a deploy does not write the new build's shell into 
   const src = html.match(/src="([^"]+)"/)[1];
   const js = h.fetchEvent({ method: "GET", mode: "no-cors", url: `${ORIGIN}/${src}` });
   assert.notEqual((await js.responsePromise).type, "error", "the offline shell's own scripts are cached");
+});
+
+// Cache-order memo (sw.js cacheOrder): caches.keys() + two marker lookups per
+// generation used to run on every cache-first request.
+test("the cache order is computed once per worker, not once per request", async () => {
+  const h = createHarness({ fetchImpl: generationFetch({ offline: true }) });
+  h.stores.set("apex26-320", new Map([[`${ORIGIN}/a.js`, new Response("old", { status: 200 })]]));
+  h.stores.set("apex26-321", new Map([[`${ORIGIN}/a.js`, new Response("new", { status: 200 })]]));
+  for (let i = 0; i < 5; i++) {
+    const ev = h.fetchEvent(new Request(`${ORIGIN}/a.js`));
+    assert.equal(await (await ev.responsePromise).text(), "new", "newest generation still answers first");
+    await Promise.all(ev.lifetimes);
+  }
+  assert.equal(h.keysCalls, 1, "five cache-first hits share one caches.keys() walk");
+});
+
+test("the memoised cache order is dropped when the sweep deletes generations", async () => {
+  const h = sweepHarness({ complete: true });
+  await twoFetches(h);   // resolves the name, then sweeps 319/320
+  assert.equal(h.deleted.length, 2);
+  const before = h.keysCalls;
+  const ev = h.fetchEvent(new Request(`${ORIGIN}/assets/sfx-0.ogg`));
+  await ev.responsePromise; await Promise.all(ev.lifetimes);
+  assert.ok(h.keysCalls > before, "the lookup after a sweep re-reads the cache set");
+});
+
+test("activation drops the memoised order, and a cache the order never listed still answers", async () => {
+  const h = createHarness({ fetchImpl: installFetch() });
+  await h.lifecycleEvent("install").done();
+  const warm = h.fetchEvent(new Request(`${ORIGIN}/js/game.js?v=321`));
+  assert.equal(await (await warm.responsePromise).text(), "asset");
+  const before = h.keysCalls;
+  await h.lifecycleEvent("activate").done();
+  const again = h.fetchEvent(new Request(`${ORIGIN}/js/game.js?v=321`));
+  assert.equal(await (await again.responsePromise).text(), "asset");
+  assert.ok(h.keysCalls > before + 1, "activate reads keys once itself, and the next lookup recomputes the order");
+  h.stores.set("elsewhere", new Map([[`${ORIGIN}/late.js`, new Response("late", { status: 200 })]]));
+  const late = h.fetchEvent(new Request(`${ORIGIN}/late.js`));
+  assert.equal(await (await late.responsePromise).text(), "late");
+});
+
+// No navigation preload: a preloaded navigation goes through the HTTP cache, so a
+// just-deployed shell could come back stale. The shell keeps its no-store fetch.
+// https://developer.mozilla.org/en-US/docs/Web/API/NavigationPreloadManager
+test("the worker never enables navigation preload and a plain navigation keeps its no-store fetch", async () => {
+  assert.doesNotMatch(SW_SOURCE, /navigationPreload|preloadResponse/);
+  const seen = [];
+  const net = async (request, init) => {
+    const url = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
+    if (url.pathname.endsWith("/version.json")) return new Response('{"build":321}', { status: 200 });
+    seen.push(init && init.cache);
+    return new Response("network shell", { status: 200 });
+  };
+  const h = createHarness({ fetchImpl: net });
+  await h.lifecycleEvent("activate").done();
+  seen.length = 0;
+  const nav = h.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` },
+    { preloadResponse: Promise.resolve(new Response("preloaded shell", { status: 200 })) });
+  assert.equal(await (await nav.responsePromise).text(), "network shell");
+  await Promise.all(nav.lifetimes);
+  assert.deepEqual(seen, ["no-store"]);
+});
+
+test("the ?b= shell bust ignores the preload and keeps its own no-store fetch", async () => {
+  const seen = [];
+  const net = async (request, init) => {
+    const url = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
+    if (url.pathname.endsWith("/version.json")) return new Response('{"build":321}', { status: 200 });
+    seen.push(init && init.cache);
+    return new Response("fresh shell", { status: 200 });
+  };
+  const h = createHarness({ fetchImpl: net });
+  const nav = h.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/?b=9` },
+    { preloadResponse: Promise.resolve(new Response("preloaded shell", { status: 200 })) });
+  assert.equal(await (await nav.responsePromise).text(), "fresh shell");
+  await Promise.all(nav.lifetimes);
+  assert.deepEqual(seen, ["no-store"]);
 });

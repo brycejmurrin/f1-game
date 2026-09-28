@@ -525,7 +525,11 @@ test("every layer in the shell is a named region or dialog, and #announce is a l
     assert.ok(by || label, `#${id} has an accessible name`);
     if (by) for (const ref of by[1].split(/\s+/)) assert.ok(ids.has(ref), `#${id} aria-labelledby → #${ref} exists`);
   }
-  assert.match(openTag("announce"), /role="status"/, "#announce (LIGHTS OUT, FINAL LAP, SAVE RESTORED…) is a polite live region");
+  // #announce (LIGHTS OUT, FINAL LAP, SAVE RESTORED…) is visual only; its spoken twin
+  // #announce-live is the one polite live region, so nothing is read twice.
+  assert.match(openTag("announce-live"), /role="status"[^>]*aria-live="polite"/, "#announce-live is the polite live region");
+  assert.match(openTag("announce"), /aria-hidden="true"/, "#announce is hidden from AT");
+  assert.doesNotMatch(openTag("announce"), /role="status"/, "#announce is not a second live region");
   // Source-integrity's rule stands: no <div> claims role=dialog / aria-modal.
   for (const id of ["select", "career", "carsetup", "lighting", "camtune"]) {
     assert.doesNotMatch(openTag(id), /role="dialog"|aria-modal/, `#${id} is a region, not a fake modal`);
