@@ -202,7 +202,7 @@ const RealReplay = (function () {
     const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
     const at = {};
 
-    /** start({script, traces, seats: Map car->driver, startLap, follow, speed, reel}) — false when no trace fits. */
+    /** start({script, traces, seats: Map car->driver, startLap, follow, rate, reel}) — false when no trace fits. */
     function start(o) {
       const script = o.script, track = G.track;
       if (!script || !track || !o.traces) return false;
@@ -220,7 +220,7 @@ const RealReplay = (function () {
       const lead = (script.drivers || []).find((d) => d.pos === 1) || (script.drivers || [])[0];
       if (o.startLap > 1 && lead && Array.isArray(lead.lapStart) && lead.lapStart[o.startLap - 1] != null) T = lead.lapStart[o.startLap - 1];
       if (reel && reel.length) T = reel[0].t - LEAD_S;
-      run = { script, cars, T, speed: o.speed > 0 ? o.speed : 1, follow: null, reel, reelIdx: 0, list, fired: new Set(), fit: built.fit, finished: false, onKey: null, audio: null };
+      run = { script, cars, T, speed: o.rate > 0 ? o.rate : 1, follow: null, reel, reelIdx: 0, list, fired: new Set(), fit: built.fit, finished: false, onKey: null, audio: null };
       // Every car is a puppet — the seat too: the camera and HUD follow it, nobody drives it.
       let follow = null;
       for (const [c, f] of cars) if (f.d && f.d.code === o.follow) follow = c;
@@ -312,7 +312,8 @@ const RealReplay = (function () {
         c.head = Math.atan2(smp.t[0], smp.t[2]);
         if (c.rPrevPx === undefined) { c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevS = c.s; c.rPrevX = c.x; c.rPrevHead = c.head; }
         c.retired = false; c.finished = false;
-        c.gear = at.speed > 60 ? 8 : at.speed > 40 ? 6 : at.speed > 20 ? 4 : 2;
+        const v = at.speed / (G.vTop ? G.vTop() : 90);   // a fraction of the top speed: the tacho reads the real car's pace, whatever PACE the sim runs at
+        c.gear = v > 0.7 ? 8 : v > 0.45 ? 6 : v > 0.2 ? 4 : 2;
         c.braking = false;
       }
     }
