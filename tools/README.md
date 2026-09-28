@@ -289,6 +289,7 @@ WebRTC and Nostr end-to-end harnesses plus the local relay and TURN servers.
 | **net/rtc-e2e-3p.mjs** | THREE peers over real WebRTC in one room, end to end. | multiplayer-debug |
 | **net/rtc-e2e-room.mjs** | The ROOM CODE path end to end, against a relay we run (`nostr-local.cjs`). | multiplayer-debug |
 | **net/rtc-e2e.mjs** | A REAL WebRTC handshake between two pages (`npm run rtc:e2e`) — the one path the loopback transport cannot cover. | multiplayer-debug |
+| **net/rtc-sync-probe.mjs** | Two real peers: the lights-out skew between them and the race-clock drift, in ms (`node tools/net/rtc-sync-probe.mjs`). | multiplayer-debug |
 
 ### `tools/env/`
 
