@@ -233,7 +233,13 @@ The same wire, one seat, no race state: Settings › CONTROLS › PHONE AS
 CONTROLLER mints a room code, paints a QR for `controller.html#pad=CODE`, and
 hosts the room exactly as VS FRIEND does (`NetTransport.rtc` → `NetHandshake.createInvite`
 → `NetRendezvous.hostRoom`). The phone page joins with `swap` + `acceptInvite`
-(2.5 s gather, like the lobby's room-code guest). Once the DataChannels open:
+(2.5 s gather, like the lobby's room-code guest). The phone reaches that page
+by QR, by typing the URL, or by its own door: on a coarse pointer the title
+screen shows USE AS CONTROLLER and CONTROLS shows USE THIS PHONE AS THE
+CONTROLLER (`#mb-phonepad`, `#pm-phonepad-go`), a plain navigation to
+`controller.html` where the code is typed — `syncPointerKind()` in js/game.js
+flips both live with `body.desktop`, so a mouse never sees them. Once the
+DataChannels open:
 
 | Channel | Direction | Payload |
 |---|---|---|
