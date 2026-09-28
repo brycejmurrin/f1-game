@@ -294,15 +294,32 @@ test("the Grand Prix leg then scores the full table and closes the round", () =>
   assert.equal(season.teamPts.t0, 8 + 25);
 });
 
-test("qualifying runs once a weekend — the GP grids off the sprint's own session", () => {
+test("a sprint weekend qualifies TWICE: SPRINT QUALIFYING, then again for the GP (FIA 2026 SR B2.2.1)", () => {
   const { S } = load({ seasonCfg: { sprint: true } });
   S.engage("season");
   const season = S.blank();
-  assert.equal(S.qualiNext(season), true, "the weekend opens with qualifying");
+  assert.equal(S.qualiNext(season), true, "the weekend opens with sprint qualifying");
+  assert.equal(S.qualiLabel(season), "SPRINT QUALIFYING");
+  season.qualiOrder = [{ id: "d0", t: 80 }]; season.qualiTrack = "bahrain";   // what quali-model persists
   S.award(season, field(4));
-  assert.equal(S.qualiNext(season), false, "…and does not re-run it before the GP");
+  assert.equal(season.qualiOrder, undefined, "the sprint spends its session: the GP cannot grid off it");
+  assert.equal(season.qualiTrack, undefined);
+  assert.equal(S.qualiNext(season), true, "...so the Grand Prix qualifies again");
+  assert.equal(S.qualiLabel(season), "QUALIFYING");
   S.award(season, field(4));
   assert.equal(S.qualiNext(season), true, "the next weekend qualifies again");
+  assert.equal(S.qualiLabel(season), "SPRINT QUALIFYING");
+});
+
+test("a season with qualifying off never qualifies, sprint or not; outside a season the label is plain", () => {
+  const { S } = load({ seasonCfg: { sprint: true, quali: false } });
+  S.engage("season");
+  const season = S.blank();
+  assert.equal(S.qualiNext(season), false);
+  S.award(season, field(3));
+  assert.equal(S.qualiNext(season), false, "the GP leg does not qualify either");
+  S.engage("gp");
+  assert.equal(S.qualiLabel(season), "QUALIFYING", "outside a season there is no sprint session");
 });
 
 test("a retirement scores nothing while the cars above keep their points", () => {
@@ -346,47 +363,18 @@ test("the sprint leg draws retirements on a different key from the Grand Prix", 
   assert.equal(S.drawRound(season), 4);
 });
 
-test("a no-qualifying sprint weekend grids the GP off the sprint result", () => {
+test("a no-qualifying sprint weekend no longer grids the GP off the sprint result", () => {
+  // The grid is the championship order now (js/race/sporting-regs.js champOrder,
+  // FIA 2026 SR B2.5.4(a)); the sprint result is not written for it any more.
   const { S } = load({ seasonCfg: { sprint: true, quali: false } });
   S.engage("season");
   const season = S.blank();
   const sprintResult = field(3);
   S.award(season, [sprintResult[2], sprintResult[0], sprintResult[1]]);
-  // Joined, not deep-compared: `grid` is built inside the VM, so its array has
-  // the VM realm's prototype and assert/strict's deepEqual rejects it against a
-  // host literal that has the same contents. Same trap for teamPts below.
-  const grid = S.grid(sprintResult, season);
-  assert.equal(grid.map((c) => c.driverId).join(","), "d2,d0,d1");
-});
-
-test("restarting a season clears the prior weekend's sprint grid", () => {
-  const { S } = load({ seasonCfg: { sprint: true, quali: false } });
-  S.engage("season");
-  const cars = field(3);
-  const old = S.blank();
-  S.award(old, [cars[2], cars[0], cars[1]]);
-  const fresh = S.restart();
-  assert.equal(S.stage(fresh), "sprint");
-  assert.equal(S.grid(cars, fresh), null, "an opening sprint cannot inherit the prior season's result");
-});
-
-test("grid() is null whenever qualifying has already decided the order", () => {
-  const { S } = load({ seasonCfg: { sprint: true, quali: true } });
-  S.engage("season");
-  const season = S.blank();
-  S.award(season, field(3));
-  assert.equal(S.grid(field(3), season), null, "gridUp must fall through to quali.order()");
-});
-
-test("a sprint order recorded in a season cannot grid a later Grand Prix", () => {
-  // sprintOrder is module state that outlives the season it was set in, and
-  // startRace() calls grid() for any race that is not coming out of qualifying.
-  const { S } = load({ seasonCfg: { sprint: true, quali: false } });
-  S.engage("season");
-  const season = S.blank();
-  S.award(season, field(3));
-  S.engage("gp");
-  assert.equal(S.grid(field(3), season), null, "a one-off must not inherit a season's grid");
+  assert.equal(season.stage, "race");
+  assert.equal(season.sprintOrder, undefined, "no sprint grid is persisted");
+  assert.equal(S.grid, undefined, "the sprint-result grid is gone from the API");
+  assert.equal(season.pts.d2, 8, "...and the sprint's points (which the championship grid reads) are paid");
 });
 
 // ── the save ──────────────────────────────────────────────────────────────────
@@ -428,24 +416,29 @@ test("resume rejects non-integer rounds and normalises score-map shapes", () => 
   assert.equal(Object.keys(repaired.driverCodes).length, 0);
 });
 
-test("sprintOrder persists on the season save and restores on resume", () => {
+test("an OLD mid-weekend save (sprint result as the GP grid) still loads, and its sprintOrder is dropped", () => {
   const { S } = load({ seasonCfg: { sprint: true, quali: false } });
   S.engage("season");
-  const season = S.blank();
-  S.award(season, field(3));
-  assert.deepEqual(season.sprintOrder, ["d0", "d1", "d2"], "award writes sprintOrder onto the save");
-  assert.ok(S.grid(field(3), season), "live module state grids the GP");
-  // Simulate a reload: wipe module state by blanking via an out-of-range resume,
-  // then restore the mid-weekend save.
-  S.resume({ round: 99 });
-  assert.equal(S.grid(field(3), season), null, "module state alone is gone after a blanking resume");
-  const back = S.resume(season);
-  assert.equal(back.stage, "race");
-  assert.deepEqual(back.sprintOrder, ["d0", "d1", "d2"]);
-  assert.ok(S.grid(field(3), back), "restored sprintOrder rebuilds the GP grid");
+  const old = { round: 0, stage: "race", sprintOrder: ["d2", "d0", "d1"], pts: { d2: 8, d0: 7, d1: 6 },
+    teamPts: {}, driverCodes: {} };
+  const back = S.resume(old);
+  assert.equal(back.stage, "race", "the Grand Prix is still what is owed");
+  assert.equal(S.stage(back), "race");
+  assert.equal(back.sprintOrder, undefined, "the legacy grid field is dropped, nothing reads it");
+  assert.equal(back.pts.d2, 8, "...and the sprint's points stand");
   S.award(back, field(3));
-  assert.equal(back.sprintOrder, undefined, "GP score clears the persisted order");
-  assert.equal(S.grid(field(3), back), null, "…and the module state");
+  assert.equal(back.round, 1, "the weekend closes normally");
+});
+
+test("an OLD mid-weekend save that qualified once keeps its order for the GP (no forced re-quali)", () => {
+  // quali-model restores season.qualiOrder; resume must not strip it, or an
+  // old weekend would silently lose the grid it already qualified for.
+  const { S } = load({ seasonCfg: { sprint: true } });
+  S.engage("season");
+  const back = S.resume({ round: 0, stage: "race", qualiOrder: [{ id: "d0", t: 80 }], qualiTrack: "bahrain",
+    pts: { d0: 8 }, teamPts: {}, driverCodes: {} });
+  assert.equal(back.qualiOrder.length, 1);
+  assert.equal(back.qualiTrack, "bahrain");
 });
 
 test("resume keeps a mid-weekend stage, so a reload cannot re-pay a sprint", () => {

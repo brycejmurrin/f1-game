@@ -782,6 +782,13 @@ const api = {
     // can turn wear on without the settings sheet and have it survive the next
     // gridUp (which re-reads the setting, not the model).
     if (o.level != null && TyreModel.isLevel(o.level)) { G.raceTyreWear = o.level; G.tyres.setLevel(o.level); }
+    // `fit` ("soft"/"medium"/"hard") changes the set exactly as a pit stop does
+    // (TyreModel.fit, which writes the stint log), so a spec that ends a race
+    // with finishRace() can meet the two-compound rule (js/race/sporting-regs.js).
+    if (o.fit && !o.field) {
+      const fc = o.car != null ? (G.cars || [])[o.car] : G.player;
+      if (fc) G.tyres.fit(fc, G.tyres.classRecord(o.fit));
+    }
     if (o.field) {
       return (G.cars || []).map((c) => Object.assign({ driver: c.driverId, code: c.code }, G.tyres.info(c)));
     }

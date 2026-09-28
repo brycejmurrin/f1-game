@@ -77,7 +77,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_222 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_223 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -236,6 +236,7 @@ _222 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `race-radio.js` | `RaceRadio` | tag | RACE RADIO: the race engineer's situational awareness and the TV commentator, on the one radio card (js/game.js announce()). |
 | `race-control.js` | `RaceControl` | tag | RACE CONTROL (RaceControl.create(G)) The flag state: green / local yellow / VSC / safety car, and the one rule that reads off it (whether OVERTAKE is … |
 | `overtake-mode.js` | `OvertakeMode` | tag | OVERTAKE MODE (FIA 2026 Sporting Regs B7.2.3(c)): one Detection Line per circuit, the 1 s check there, and the 0.5 MJ allowance granted at the Activation Line… |
+| `sporting-regs.js` | `SportingRegs` | tag | SPORTING REGULATIONS the player is held to, as pure rules. |
 | `real-race.js` | `RealRace` | tag | REAL RACE (RealRace.create(G)) Replays a real Grand Prix from a timing script (js/data/real-race-tab.js builds one from OpenF1): the real grid, every AI car… |
 | `weather-arc.js` | `WeatherArc` | tag | LIVE WEATHER + the DYNAMIC WEATHER ARC (WeatherArc.create(G, deps)): the one path a session's weather changes through, and the optional per-race progression… |
 | `quali-model.js` | `Quali` | tag | QUALIFYING: one flying lap, and the simulated times it is measured against. |

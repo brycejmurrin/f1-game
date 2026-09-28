@@ -72,11 +72,14 @@ function awardBadges(order, duel) {
   let best = Infinity;
   for (const c of order) if (c.finished && !c.retired && c.best < best) best = c.best;
   return Badges.onRace({
-    pos: order.indexOf(p) + 1, retired: !!p.retired, finished: !!p.finished,
+    pos: order.indexOf(p) + 1, retired: !!p.retired || !!p.dsq, finished: !!p.finished,
     cuts: p.cuts | 0, penalty: p.penalty || 0, trackId: G.track && G.track.def && G.track.def.id,
     fastest: isFinite(best) && p.best === best,
   });
 }
+
+// The points column for a car that scored nothing: DSQ or DNF.
+const outLabel = (why) => (String(why).indexOf("DSQ") === 0 ? "DSQ" : "DNF");
 
 // New LICENCE BADGES as a card on the sheet that hides the banner toast.
 function badgeCard(ids) {
@@ -161,7 +164,8 @@ function buildResults(order, race) {
     && hostRow.size === order.length && order.every((c, i) => verdict[i] && verdict[i].d === c.driverId);
   const dnfOf = (c) => {
     const e = hostRow.get(c.driverId);
-    const local = c.retired ? (c.dnf || "dnf") : null;
+    // A DISQUALIFICATION says why in the same place (FIA 2026 SR B6.3.6: one dry compound).
+    const local = c.retired ? (c.dnf || "dnf") : c.dsq ? "DSQ — " + c.dsq : null;
     if (!e) return local;
     if (e.r != null) return e.r || null;
     return e.t > 0 ? null : local;
@@ -192,7 +196,7 @@ function buildResults(order, race) {
   if (playerPlace >= 0) {
     const self = order[playerPlace], verdict = sourceOf(self), elapsed = correctedFinish(verdict);
     const card = document.createElement("div"); card.className = "res-personal";
-    const heading = document.createElement("strong"); heading.textContent = dnfOf(self) ? "YOUR RACE · DNF" : "YOUR RACE · P" + (playerPlace + 1);
+    const heading = document.createElement("strong"); heading.textContent = dnfOf(self) ? "YOUR RACE · " + outLabel(dnfOf(self)) : "YOUR RACE · P" + (playerPlace + 1);
     const detail = document.createElement("span");
     detail.textContent = elapsed == null ? self.name : self.name + " · " + raceClock(G, elapsed);
     card.append(heading, detail); els.resultsTable.appendChild(card);
@@ -246,7 +250,7 @@ function buildResults(order, race) {
     // "+FL": this round's fastest-lap point (SeasonCal.award sets lastFl only
     // when the format pays it, and only to a top-ten finisher).
     const fl = !sprint && G.seasonMode && season && season.lastFl === c.driverId && !dnf ? 1 : 0;
-    pt.textContent = dnf ? "DNF" : `${(table[i] || 0) + fl} pts${fl ? " +FL" : ""}`;
+    pt.textContent = dnf ? outLabel(dnf) : `${(table[i] || 0) + fl} pts${fl ? " +FL" : ""}`;
     row.append(pos, sw, nm);
     if (timing && !dnf && c !== timing.winner && typeof carData.lap === "number" &&
         isFinite(carData.lap) && carData.lap === timing.winnerLap) {

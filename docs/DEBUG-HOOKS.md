@@ -2465,7 +2465,7 @@ __apex.race("albert_park"); __apex.pitSigns();
 // → { cells: 12, mesh: true, tex: true, drawn: 41, calls: 41 }
 ```
 
-### `tyres({car, field, level}?) → tyreInfo | tyreInfo[] | null`
+### `tyres({car, field, level, fit}?) → tyreInfo | tyreInfo[] | null`
 
 The whole tyre picture for one car (default: the player), or for the entire
 field with `{field: true}`. This is the assertable surface for
@@ -2517,6 +2517,7 @@ __apex.race("monza", null, null, {laps: 25});
 __apex.step(1 / 60, 60 * 60);
 __apex.tyres();                            // {compound, wear, grip, …}
 __apex.tyres({ field: true });             // the same record for all 20 cars
+__apex.tyres({ fit: "hard" });             // change sets as a pit stop does (writes the stint log)
 ```
 
 ### `fieldState() → [{pos, id, name, code, team, isPlayer, lap, frac, speed, gap, finished, finishT}, …] | null`

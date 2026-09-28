@@ -1022,6 +1022,17 @@ let wxArc = null;     // WeatherArc.create(G, deps), same deferral — live weat
                       // and the dynamic arc (js/race/weather-arc.js)
 let tyres = null;     // TyreModel.create(G), same deferral
 let pits = null;      // PitLane.create(G), same deferral
+// NO PASSING UNDER THE SC / VSC, for the player (the AI holds station by
+// construction): a place gained must go back inside the window, or it is priced
+// at the flag (js/race/sporting-regs.js; FIA 2026 SR B5.12.2(c), B5.13.2(c)).
+const scWatch = SportingRegs.createPassWatch();
+function scPassCall(ev) {
+  if (!ev || !player || ev.type === "cleared") return;
+  if (ev.type === "warn") { announce("GIVE THE POSITION BACK" + (ev.n > 1 ? " — " + ev.n + " PLACES" : ""), 2.5, "penalty-warn"); return; }
+  player.penalty += ev.sec;
+  announce("+" + ev.sec + "s PENALTY — OVERTAKING UNDER CAUTION", 3, "penalty-hit");
+  if (soundOn) GameAudio.penalty();
+}
 // The cue phases that turn the pit ENTRANCE lamps green (SceneryPits): you are
 // called in and still on your way to the box. Not `out`/`served`/`merge` — by
 // then you are leaving, and not `missed`.
@@ -1103,7 +1114,7 @@ const isChampionship = () => flow === "season" || flow === "career";
 // GO button ask this, and they must agree — a race that qualified and then
 // gridded up P12 would throw the session away, and one that gridded from a
 // classification it never ran would read a stale one.
-const gridFromQuali = () => (isChampionship() && SeasonCal.quali()) || (qualiGrid() && !isTimeTrial());
+const gridFromQuali = () => (isChampionship() ? SeasonCal.quali() : (qualiGrid() && !isTimeTrial()));   // a one-off's rule never reaches a championship
 // The ONE way `flow` is written. Career's save is loaded at boot and stays loaded,
 // so js/career/career.js has to be told whether its rules apply to the session that
 // is running — otherwise a Grand Prix would quietly inherit the career's team
@@ -1155,6 +1166,12 @@ const GRID_RULES = ["tier", "quali", "rev10", "revchamp", "random"];
 let raceGrid = store.get("raceGrid", store.get("raceQuali", false) ? "quali" : "tier");
 if (GRID_RULES.indexOf(raceGrid) < 0) raceGrid = "tier";
 const qualiGrid = () => raceGrid === "quali" || raceGrid === "rev10";
+// A CHAMPIONSHIP with qualifying off grids in championship order (FIA 2026 SR
+// B2.5.4(a), B2.3.4(a)) — its own rule, apart from the one-off's. A saved
+// REVERSED (championship-only) carries over; the rest was the one-off's.
+const CHAMP_GRID_RULES = ["champ", "tier", "revchamp", "random"];
+let champGrid = store.get("champGrid", raceGrid === "revchamp" ? "revchamp" : "champ");
+if (CHAMP_GRID_RULES.indexOf(champGrid) < 0) champGrid = "champ";
 // A friend race has TWO humans on the grid, and both of their qualifying laps
 // are real. The rival's arrives over the wire (NetPlay EV.QUALI) as
 // driverId -> seconds; quali.simulate() takes the map and stops caring which of
@@ -2020,7 +2037,7 @@ function makeCars() {
 // the stream position after the grid is identical whichever rule ran
 // (makeCars' stream contract).
 function gridRule() {
-  const rule0 = isTimeTrial() ? "tier" : (isChampionship() && SeasonCal.quali()) ? "quali" : raceGrid;
+  const rule0 = isTimeTrial() ? "tier" : isChampionship() ? (SeasonCal.quali() ? "quali" : champGrid) : raceGrid;
   return (rule0 === "random" && netPlay.active()) ? "tier" : rule0;
 }
 function gridOrderFor(base) {
@@ -2043,6 +2060,9 @@ function gridOrderFor(base) {
     for (let i = 0; i < cars.length; i++) simRnd();
     return cars.slice().sort((a, b) => SeasonCal.rank(season, a.driverId, b.driverId)).reverse();
   }
+  const champ = rule === "champ" && isChampionship() && season && !base
+    ? SportingRegs.champOrder(cars, (a, b) => SeasonCal.rank(season, a, b), (id) => season.pts[id] || 0) : null;
+  if (champ) { for (let i = 0; i < cars.length; i++) simRnd(); return champ; }   // round 1 (nobody scored): gridUp's default
   if (rule === "random" && !base) {
     const jit = new Map(cars.map((c) => [c, simRnd()]));
     return cars.slice().sort((a, b) => jit.get(a) - jit.get(b));
@@ -2138,6 +2158,7 @@ function gridUp(preOrder) {
   // same slot everywhere. js/net/netplay.js's separateGrid() has to know which
   // it is: the collision it exists to fix can only happen on the P12 branch.
   gridPreOrdered = !!(preOrder && preOrder.length === cars.length);
+  scWatch.reset();
   const order = preOrder && preOrder.length === cars.length ? preOrder.slice() : (() => {
     // grid jitter: ONE simRnd() draw per car, BEFORE the sort — a random
     // comparator is inconsistent and its draw count engine-defined.
@@ -2835,7 +2856,7 @@ async function startRaceBody() {
   // the scrim. Lower it anyway rather than rely on that.
   // Awaited so startRace's latch spans the sheet's build; openQuali lands its own failure on the menu.
   if (!isQuali() && gridFromQuali() && !quali.order(cars)) { loadingScreen.stop(); await openQuali(); return false; }
-  gridUp(gridOrderFor(gridFromQuali() ? quali.order(cars) : SeasonCal.grid(cars, season)));
+  gridUp(gridOrderFor(gridFromQuali() ? quali.order(cars) : null));
   rlap("gridUp");
   wxArc.startChangeable();
   recomputePlayerMods();
@@ -2926,7 +2947,7 @@ let _nextSeasonEntryId = 0;
 function entrySettings() {
   if (season && !_seasonEntryIds.has(season)) _seasonEntryIds.set(season, ++_nextSeasonEntryId);
   return JSON.stringify([trackIdx, flow, session, raceWeather, raceTimeOfDay, raceLaps,
-    teamIdx, driverIdx, difficulty, raceGrid, duelSetting(), duelLegend, raceTyreWear,
+    teamIdx, driverIdx, difficulty, raceGrid, champGrid, duelSetting(), duelLegend, raceTyreWear,
     raceReliability, raceAeroMode, simSeed(), raceIndex,
     wxArc.changeable, wxArc.plan && [wxArc.plan.to, wxArc.plan.dur],
     netPlay.active(), raceSettings && raceSettings.netRoom,
@@ -3037,7 +3058,7 @@ function netOrder(order) {
     netPlay.reportResult(order.map((c) => ({
       // `r`: the DNF reason (0 = not retired) — each peer draws its reliability
       // plan off its own seed, so a guest's labels must be the host's verdict.
-      d: c.driverId, t: c.finishT, p: c.penalty, lap: c.lap, r: c.retired ? (c.dnf || "dnf") : 0,
+      d: c.driverId, t: c.finishT, p: c.penalty, lap: c.lap, r: c.retired ? (c.dnf || "dnf") : c.dsq ? "DSQ — " + c.dsq : 0,
     })));
     return order;
   }
@@ -3079,6 +3100,7 @@ function endRace(forcedOrder) {
   // raceCtl.update's own not-in-race reset is unreachable (update() only calls
   // it in state "race"), so without this a flying flag survives into results
   // for anything reading raceCtl.info()/level between races.
+  const suspended = raceCtl.level === 4;   // ended under a red flag, never resumed: B6.3.6's 30 s, not a DSQ
   raceCtl.reset(); wxArc.endSession();   // an arc that outlives the race would override the next race's weather
   // Close every car's open stint so the results strip has an end lap. Done here
   // rather than in the sheet: a retired car stopped laps ago and its last stint
@@ -3134,8 +3156,13 @@ function endRace(forcedOrder) {
   // classification: finished by time(+penalty), still running by progress, and
   // RETIREMENTS below both — ordered among themselves by how far they got, which
   // is the only thing that separates two cars that never saw the flag.
-  const fin = cars.filter((c) => c.finished && !c.retired).sort(RaceControl.finishOrder);   // laps, then the clock
-  const run = cars.filter((c) => !c.finished && !c.retired).sort((a, b) => b.prog - a.prog);
+  // TWO DRY COMPOUNDS (FIA 2026 SR B6.3.6), every car: a finished Grand Prix the
+  // rule covers (PitLane.twoCompoundApplies — the AI planner's own test). Not in
+  // a room: a remote car's compound is not replicated.
+  const cmpOn = !netPlay.active() && !isPractice() && !duelOn() && cars.some((c) => c.finished && !c.retired) && pits.twoCompoundApplies();
+  const dsq = SportingRegs.applyCompoundRule(cars, { applies: cmpOn, suspended });
+  const fin = cars.filter((c) => c.finished && !c.retired && !c.dsq).sort(RaceControl.finishOrder);   // laps, then the clock
+  const run = cars.filter((c) => !c.finished && !c.retired && !c.dsq).sort((a, b) => b.prog - a.prog);
   const out = cars.filter((c) => c.retired).sort((a, b) => b.prog - a.prog);
   // LAPS FIRST (FIA 2026 SR B2.5.5(a)): a car still running when the race
   // ends takes the flag on its next crossing, so it counts one more lap. A
@@ -3151,11 +3178,11 @@ function endRace(forcedOrder) {
   // laps COMPLETED is c.lap - 1 for every car.
   const winDone = fin.length ? Math.max(...fin.map((c) => c.lap || 0)) - 1 : 0;
   const lateOut = winDone > 0 ? out.filter((c) => (c.lap || 0) - 1 >= Math.floor(0.9 * winDone)) : [];
-  for (const c of cars) c.classified = !c.retired || lateOut.includes(c);
+  for (const c of cars) c.classified = (!c.retired && !c.dsq) || lateOut.includes(c);
   const live = fin.concat(run, lateOut).sort((a, b) => lapsAt(b) - lapsAt(a));
   // THE CLASSIFICATION IS THE HOST'S — see netOrder(), which is the inline
   // block that used to live here, unchanged in behaviour.
-  const order = netOrder(forcedOrder || live.concat(out.filter((c) => !lateOut.includes(c))));
+  const order = netOrder(forcedOrder || live.concat(out.filter((c) => !lateOut.includes(c)), dsq));   // DSQ: last, no points
   order.forEach((c, i) => { c.finPos = i + 1; });
   // Read BEFORE award() advances the stage, or the sprint is wrapped up as the Grand Prix.
   const wasSprint = isChampionship() && SeasonCal.stage(season) === "sprint";
@@ -3177,6 +3204,7 @@ function endRace(forcedOrder) {
     // qualiResults() truthy for the rest of the championship, so rs-go never
     // offered the sheet again and every later grid came off round 1's times.
     if (settles) quali.clear();
+    else if (scored === "sprint") quali.clear();   // SPRINT QUALIFYING is spent too: the GP qualifies again (B2.2.1)
     // The career owner persists points and settlement together; the standalone
     // season saves its sprint stage or completed round here.
     if (careerScoring) careerSettlement = scored;
@@ -3572,6 +3600,7 @@ const G = {
   // qualifying line, never off a finer rule that already agrees with it.
   get raceQuali() { return qualiGrid(); }, set raceQuali(v) { if (!!v !== qualiGrid()) raceGrid = v ? "quali" : "tier"; },
   get raceGrid() { return raceGrid; }, set raceGrid(v) { if (GRID_RULES.indexOf(v) >= 0) raceGrid = v; },
+  get champGrid() { return champGrid; }, set champGrid(v) { if (CHAMP_GRID_RULES.indexOf(v) >= 0) champGrid = v; },
   referencePole: () => quali.referencePole(),
   redFlagRestart,
   get daily() { return daily; },
@@ -3760,7 +3789,7 @@ function flybyGridOrder() {
     if (lg) Duel.asLegend(r, { id: lg.id, name: lg.name, code: lg.code, ratings: Legends.ratings(lg.id), team: Legends.raceTeam(lg.id) }, DriverRatings);
     cars = r ? [player, r] : [player];
   }
-  const base = gridFromQuali() ? quali.order(cars) : SeasonCal.grid(cars, season);
+  const base = gridFromQuali() ? quali.order(cars) : null;
   if (gridRule() === "random" && !base) return null;
   const pre = gridOrderFor(base);
   if (pre && pre.length === cars.length) return pre.slice();
@@ -4241,6 +4270,7 @@ function update(dt) {
   for (let i = 0; i < ranked.length; i++) {
     ranked[i].rank = i + 1;
   }
+  if (!isPractice() && !isQuali()) scPassCall(scWatch.tick(player, ranked, raceCtl.level, dt));
 
   // Leading human, for the AI rubber-band. Once per step, not once per AI car.
   _leadHuman = null;
@@ -8977,14 +9007,14 @@ els.resNext.onclick = () => {
     trackIdx = SeasonCal.trackIndex(season.round);
   }
   els.results.hidden = true;
-  // A championship weekend qualifies ONCE, at its start — every round, not just
-  // the one entered through race settings. openQuali() also clears the previous
-  // round's classification, which is what stops this grid being last week's. Two
-  // things skip it: a season with qualifying off, and the GP leg of a sprint
-  // weekend (which grids off the session the sprint already ran) — but NOT if
-  // that classification has since been dropped. quitToMenu() clears it, so a
-  // resumed weekend re-qualifies instead of silently gridding the player P12 out
-  // of gridUp()'s tier fallback.
+  // Every championship SESSION that races qualifies first — every round, and on
+  // a sprint weekend twice: SPRINT QUALIFYING, then qualifying again for the
+  // Grand Prix (FIA 2026 SR B2.2.1, B2.4.1(b)); endRace dropped the sprint's
+  // classification. openQuali() also clears the previous round's, which is what
+  // stops this grid being last week's. Only a season with qualifying off skips
+  // it — and a qualified weekend whose classification has since been dropped
+  // (quitToMenu() clears it) re-qualifies instead of gridding the player P12
+  // out of gridUp()'s tier fallback.
   // RACE AGAIN after a FRIEND race is a solo race: end the session first (BYE to
   // the rival, remotes handed back), or the new race ran with the old one's
   // NetPlay live — the guest adopted the PREVIOUS race's RESULT rows onto the
