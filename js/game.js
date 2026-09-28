@@ -2597,7 +2597,14 @@ function scheduleFlybyTrack(settle) {
       await menuFinish(current, key);
     } catch (e) { if (current()) Log.warn("gfx", "track preparation failed", e); }
   };
-  flybyBuildTimer = setTimeout(prepare, settle ? 1500 : 120);
+  // THE SETTLE IS FOR THE SCENERY FETCH, NOT THE BUILD. The build itself waits
+  // for MENU_IDLE_MS of quiet inside prepare (menuIdle, 2026-09-24), which is
+  // what keeps the 1-3 s main-thread build off a player still tapping. This
+  // delay predates that gate at 1.5 s and by then only held back the scenery
+  // download — and with it the build, the car assets and the program warm
+  // behind it — so a RACE! tap within ~5 s of the picker met the build card.
+  // 400 ms: a tile browsed past in under half a second still fetches nothing.
+  flybyBuildTimer = setTimeout(prepare, settle ? 400 : 120);
 }
 
 // Night ambient band: floor/cap the (up-facing-dominant) hemisphere ambient into
