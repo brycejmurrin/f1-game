@@ -74,6 +74,11 @@ function _vAheadPt(d, h, lat) {
 // re-checked with docs/OCCLUSION-PROBE.md — the wheel rig (game.js _rigT), the
 // ckpt monocoque cap and the coaming are all positioned against this number.
 const COCKPIT_EYE_FWD = -0.20, COCKPIT_EYE_UP = 0.82;
+// VISOR: the same driver's eye slid 0.55 m forward — past the wheel and the
+// halo's centre strut, level with the cockpit opening's front — so the view
+// is the cockpit's with nothing of the rig in it (game.js draws no rig and no
+// player body for it). Same height, same aim, same turn chasing as cockpit.
+const VISOR_EYE_FWD = COCKPIT_EYE_FWD + 0.55;
 
 // Cockpit viewmodel basis: same yawVis as the drawn body (heading vs road
 // tangent), origin subtracted along those axes so the eye stays at
@@ -270,7 +275,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
   // with the chassis by even a centimetre would float in the cockpit — matching
   // the car matters more there than smoothness, and riding the car's own bumps
   // is what an onboard camera is FOR.
-  const onboard = _vOnboard = mode === "cockpit" || mode === "hood";
+  const onboard = _vOnboard = mode === "cockpit" || mode === "hood" || mode === "visor";
   const p = _vantP;
   p[0] = cvA.p[0] + cvA.r[0] * x;
   p[1] = (onboard ? cvA.p[1] : centreY(track, s)) + bankDy;
@@ -299,9 +304,10 @@ function vantage(track, mode, s, x, spd, now, extra) {
   // height — a crane-over-the-circuit shot. Open circuits keep the full framing.
   const corr = track.def && track.def.street ? Math.max(cvA.hw - 1.0, 4) : Infinity;
   let eye = _vantEyeW, tgt = _vantTgtW, fov;   // pooled; every branch below writes IN PLACE
-  if (mode === "cockpit" || mode === "hood") {
-    const eyeFwd = mode === "cockpit" ? COCKPIT_EYE_FWD : 0.55;
-    const eyeUp  = mode === "cockpit" ? COCKPIT_EYE_UP : 0.95;
+  if (mode === "cockpit" || mode === "hood" || mode === "visor") {
+    const driver = mode === "cockpit" || mode === "visor";   // a driver's eye (visor = cockpit, further forward)
+    const eyeFwd = mode === "cockpit" ? COCKPIT_EYE_FWD : mode === "visor" ? VISOR_EYE_FWD : 0.55;
+    const eyeUp  = driver ? COCKPIT_EYE_UP : 0.95;
     if (extra.carPos) {
       // FREE-WORLD ONBOARD. These are bolted to the CAR, so they must sit at the
       // car and look down the CAR's nose. They used to be built from the road:
@@ -316,12 +322,12 @@ function vantage(track, mode, s, x, spd, now, extra) {
       // with (t[1]) — surface, not line.
       const hx = Math.sin(extra.carHead || 0), hz = Math.cos(extra.carHead || 0);
       eye[0] = extra.carPos[0] + hx * eyeFwd; eye[1] = p[1] + eyeUp; eye[2] = extra.carPos[1] + hz * eyeFwd;
-      const aimUp = mode === "cockpit" ? eyeUp - 0.15 : eyeUp + 1.2;
+      const aimUp = driver ? eyeUp - 0.15 : eyeUp + 1.2;
       // TURN CHASING (SETTINGS > COCKPIT slider, js/camera/cockpit-opts.js).
       // 0 = the car's heading and NOTHING else — AGENTS.md's "the arc must not
       // reach the driver" state. The player opts in with the slider (shipped
       // 0.35, the old ON blend). This moves where the camera looks, never the car.
-      const tcL = mode === "cockpit" && typeof CockpitOpts !== "undefined"
+      const tcL = driver && typeof CockpitOpts !== "undefined"
         ? CockpitOpts.turnChaseLead() : 0;
       let aimX = extra.carPos[0] + hx * 30, aimZ = extra.carPos[1] + hz * 30;
       if (tcL > 0) {
@@ -333,7 +339,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
       fov = lerp(64, 78, spN) + dep * 3;
     } else {
       eye[0] = p[0] + t[0] * eyeFwd; eye[1] = p[1] + eyeUp; eye[2] = p[2] + t[2] * eyeFwd;
-      if (mode === "cockpit") {
+      if (driver) {
         const straight = _straightScr;
         straight[0] = p[0] + t[0] * 30; straight[1] = p[1] + eyeUp - 0.15 + t[1] * 30; straight[2] = p[2] + t[2] * 30;
         const w = typeof CockpitOpts !== "undefined" ? CockpitOpts.turnChaseLead() : 0; // 0 = nose-locked; shipped 0.35
@@ -513,7 +519,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
   // corner's banking, so this agrees with what is actually drawn. Cockpit and
   // hood are exempt — they ride the car, and their eye is already on the
   // surface by construction.
-  if (mode !== "cockpit" && mode !== "hood" && track.surface) {
+  if (mode !== "cockpit" && mode !== "hood" && mode !== "visor" && track.surface) {
     const n = track.n;
     // INTERPOLATE THE FLOOR BETWEEN NODES. surface.heightAt() rounds its node
     // index and reads py at that node, so asking it once at Math.round(s) makes

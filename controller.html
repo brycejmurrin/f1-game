@@ -149,14 +149,50 @@
   #keys button.on { border-color: var(--team); color: var(--team); }
   #keys .wide { grid-column: 1 / -1; border-radius: 10px; min-height: 30px; color: var(--dim); }
   #link { font-size: 10px; color: var(--dim); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: .08em; }
-  @media (orientation: portrait) {
-    #ctl { grid-template-columns: 1fr 1fr; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
-    #face { grid-column: 1 / -1; grid-row: 1; }
-    #left { grid-row: 2; } #right { grid-row: 2; }
-    #rim { width: 96vw; }
-    #h-gear { font-size: 64px; } #h-speed { font-size: 32px; }
-  }
+  /* touch-action is NOT inherited: body's `none` does not reach the pedal
+     divs, and Safari decides double-tap zoom on the touched element. Every
+     part of the wheel owns its touches. */
+  #ctl, #ctl * { touch-action: none; }
+  /* LANDSCAPE ONLY. The wheel is a landscape object — two thumbs on the
+     grips, the phone held like a rim — so portrait gets no squeezed layout,
+     it gets a card that says which way to turn. The tilt maths follows the
+     screen angle already, so the moment the phone turns the wheel is there. */
+  #rotate { display: none; position: absolute; inset: 0; z-index: 5; background: var(--bg); color: var(--fg);
+            flex-direction: column; justify-content: center; align-items: center; gap: 14px; text-align: center;
+            padding: 24px; font-weight: 700; letter-spacing: .06em; }
+  #rotate svg { width: 72px; height: 72px; color: var(--team); animation: turn 1.4s ease-in-out infinite alternate; }
+  #rotate small { display: block; font-weight: 400; color: var(--dim); letter-spacing: 0; margin-top: 4px; }
+  @keyframes turn { from { transform: rotate(0deg); } to { transform: rotate(90deg); } }
+  @media (prefers-reduced-motion: reduce) { #rotate svg { animation: none; transform: rotate(90deg); } }
+  @media (orientation: portrait) { body.linked #rotate { display: flex; } }
 </style>
+<script>
+// DOUBLE-TAP AND PINCH ZOOM, OFF. A wheel is tapped fast and by two thumbs, and
+// a second tap on a pedal zoomed the page. Mirrors index.html's canceller:
+// here the whole linked page is the driving surface, so iOS GestureEvents die
+// page-wide once linked. Native buttons and the code field keep every
+// activation (cancelling their touchend would eat the click); the pedals are
+// pointer-driven divs, so cancelling theirs costs nothing.
+(function () {
+  var lastT = 0, lastX = 0, lastY = 0, TAP_MS = 350, TAP_PX2 = 900;
+  function kill(e) { e.preventDefault(); }
+  function linked() { return !!(document.body && document.body.classList.contains("linked")); }
+  function killGesture(e) { if (linked()) kill(e); }
+  document.addEventListener("gesturestart", killGesture, { capture: true, passive: false });
+  document.addEventListener("gesturechange", killGesture, { capture: true, passive: false });
+  document.addEventListener("gestureend", killGesture, { capture: true, passive: false });
+  document.addEventListener("dblclick", kill, { capture: true });
+  document.addEventListener("touchend", function (e) {
+    if (e.touches && e.touches.length) return;
+    if (e.target && e.target.closest && e.target.closest("button,input")) { lastT = 0; return; }
+    var t = e.changedTouches && e.changedTouches[0];
+    if (!t) return;
+    var now = Date.now(), dx = t.clientX - lastX, dy = t.clientY - lastY;
+    if (now - lastT <= TAP_MS && dx * dx + dy * dy <= TAP_PX2) kill(e);
+    lastT = now; lastX = t.clientX; lastY = t.clientY;
+  }, { capture: true, passive: false });
+})();
+</script>
 </head>
 <body>
 <section id="pair">
@@ -166,6 +202,7 @@
   <button id="connect" type="button">CONNECT</button>
   <p id="status" role="status"></p>
 </section>
+<div id="rotate" role="status"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>TURN THE PHONE SIDEWAYS<small>The wheel works in landscape only.</small></div>
 <section id="ctl" aria-label="Steering wheel controller">
   <div id="rim" aria-hidden="true">
     <svg viewBox="0 0 400 200" preserveAspectRatio="xMidYMid meet">
@@ -257,6 +294,17 @@ window.addEventListener("DOMContentLoaded", function () {
     onClose: function () { $("link").textContent = "LINK CLOSED"; },
   });
   window.__apexPad = ctl;   // the console/test handle, mirroring window.__apex on the game
+  // LANDSCAPE LOCK where the platform has one. Android needs fullscreen before
+  // screen.orientation.lock, and both need a user gesture, so they ride the
+  // CONNECT tap. iOS has neither: the #rotate card above is what it gets.
+  $("connect").addEventListener("click", function () {
+    try {
+      if (!(screen.orientation && screen.orientation.lock) || !matchMedia("(pointer: coarse)").matches) return;
+      var el = document.documentElement;
+      var fs = el.requestFullscreen ? el.requestFullscreen({ navigationUI: "hide" }) : Promise.resolve();
+      fs.then(function () { return screen.orientation.lock("landscape"); }).catch(function () {});
+    } catch (e) {}
+  }, { capture: true });
   // ?demo — the wheel with a moving sample dash and no link, for a look at the
   // layout; ?demo=auto shows it with gears, throttle and aero on AUTO.
   if (/[?&]demo\b/.test(location.search)) {

@@ -789,7 +789,7 @@ test("pacenotes render the road ahead as a rally-style callout", async () => {
 
 // ── frame() cameras and edges ───────────────────────────────────────────────
 
-test("renders any of the 13 camera modes without a live frame", async () => {
+test("renders any of the 14 camera modes without a live frame", async () => {
   await load("monza", 0.05, 60);
   const cock = g.apex.render({ what: "view", cols: 32, camera: "cockpit" });
   const heli = g.apex.render({ what: "view", cols: 32, camera: "heli" });
