@@ -253,9 +253,11 @@ wheel (`Input.remoteSteers()`), so the local arrows or a drag still steer. Roll 
 (`js/input/tilt-roll.js`). Bluetooth is not an option for a web page: no
 browser lets a phone advertise as a peripheral or an HID gamepad.
 
-The phone page is drawn as an F1 wheel: the rim (an inline SVG) rotates with the
-phone's roll, paddles behind the grips shift, the grips' thumb zones are GAS and
-BRAKE (travel along the zone), the face buttons are the pad's in-race controls,
+The phone page is drawn as an F1 wheel laid out like the game's own tilt docks
+(`layoutDocks` in js/game.js): the LEFT grip is the gears, UP over DN (with
+gears on AUTO, OT and BOOST instead), the RIGHT grip the pedals, BRAKE over GAS
+(travel along the zone); the rim (an inline SVG) rotates with the phone's roll
+and the face buttons are the pad's remaining in-race controls,
 and `controller.html?demo` animates a sample dash with no link.
 
 Deploy notes: `controller.html` is a ROOT page (`pages.yml` stages it by name;

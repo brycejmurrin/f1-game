@@ -15,9 +15,9 @@
   the other screen. The page is drawn as a Formula 1 steering wheel: the rim
   turns with the phone, the LCD in the middle shows the live dash the game
   streams back (gear, speed, rev lights, lap, position, ERS, overtake and aero
-  state, the flag), the paddles behind the grips shift, the thumb zones on the
-  grips are the GAS and BRAKE, and the wheel-face buttons are the in-race
-  controls a pad has.
+  state, the flag), the left grip is the gears (UP over DN, like the game's own touch
+  dock) and the right grip the pedals (BRAKE over GAS), and the wheel-face
+  buttons are the in-race controls a pad has.
 
   A separate ROOT page like bench.html, deliberately: the phone needs the
   signalling and transport half of js/net plus two input modules — nine files,
@@ -81,9 +81,13 @@
   #rim .grip { fill: #1c1c24; stroke: #3a3a46; stroke-width: 3; }
   #rim .accent { fill: none; stroke: var(--team); stroke-width: 4; opacity: .8; }
   .grip { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-  .paddle { flex: 0 0 22%; min-height: 48px; border-radius: 14px 14px 6px 6px; background: linear-gradient(#2a2a35, #17171f);
-            border: 1px solid #3a3a46; font-weight: 800; font-size: 13px; letter-spacing: .1em; color: var(--dim); }
-  .paddle.on { color: var(--fg); border-color: var(--team); box-shadow: inset 0 0 0 2px var(--team); }
+  /* The left grip: UP over DN, each half the column — the game's shift dock. */
+  .shift, .tap { flex: 1 1 0; min-height: 48px; border-radius: 22px; background: linear-gradient(#22222c, #14141b);
+            border: 2px solid #3a3a46; font-weight: 800; font-size: 26px; line-height: 1; color: #d0d0da;
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; }
+  .shift small { font-size: 12px; letter-spacing: .14em; color: var(--dim); }
+  .tap { font-size: 16px; letter-spacing: .1em; display: none; }
+  .shift.on, .tap.on { color: var(--fg); border-color: var(--team); box-shadow: inset 0 0 0 2px var(--team); }
   .pedal { flex: 1 1 0; border-radius: 26px; border: 2px solid #3a3a46; background: var(--carbon);
            font-weight: 800; font-size: 18px; letter-spacing: .1em; display: flex; align-items: flex-end; justify-content: center;
            padding-bottom: 22px; color: var(--dim); position: relative; overflow: hidden; }
@@ -98,7 +102,9 @@
      that says so. Aero AUTO or a circuit with no zones: AERO is greyed, not
      removed, so the button grid keeps its shape under the thumb. */
   .pedal small { display: none; font-size: 11px; letter-spacing: .14em; color: var(--dim); margin-top: 4px; }
-  body.gears-auto .paddle { display: none; }
+  body.gears-auto .shift { display: none; }
+  body.gears-auto .tap { display: flex; }
+  body.gears-auto #keys #b-overtake, body.gears-auto #keys #b-boost { display: none; }   /* on the grip instead */
   body.throttle-auto #gas { pointer-events: none; flex-direction: column; background: #0d0d13; color: #3d3d4a; border-color: #26262f; }
   body.throttle-auto #gas::before { border-color: #1d1d26; }
   body.throttle-auto #gas small { display: block; color: #3d3d4a; }
@@ -175,9 +181,14 @@
       <path class="accent" d="M200 150 L200 170"/>
     </svg>
   </div>
+  <!-- The game's own tilt docks (js/game.js layoutDocks): the LEFT thumb has
+       the gears (UP over DN) and, with gears on AUTO, the taps instead; the
+       RIGHT thumb has the pedals, BRAKE over GAS. -->
   <div id="left" class="grip">
-    <button id="b-shiftDown" class="paddle" type="button" aria-label="Shift down">◄ GEAR</button>
-    <div id="brake" class="pedal" role="button" aria-label="Brake">BRAKE</div>
+    <button id="b-shiftUp" class="shift" type="button" aria-label="Shift up">&#9650;<small>UP</small></button>
+    <button id="b-shiftDown" class="shift" type="button" aria-label="Shift down">&#9660;<small>DN</small></button>
+    <button id="b-ot-big" class="tap" type="button" aria-label="Overtake">OT</button>
+    <button id="b-boost-big" class="tap" type="button" aria-label="Boost">BOOST</button>
   </div>
   <div id="face">
     <div id="screen" aria-live="off">
@@ -201,7 +212,7 @@
     <div id="link" role="status"></div>
   </div>
   <div id="right" class="grip">
-    <button id="b-shiftUp" class="paddle" type="button" aria-label="Shift up">GEAR ►</button>
+    <div id="brake" class="pedal" role="button" aria-label="Brake">BRAKE</div>
     <div id="gas" class="pedal" role="button" aria-label="Gas">GAS<small>AUTO</small></div>
   </div>
 </section>
@@ -229,8 +240,8 @@ window.addEventListener("DOMContentLoaded", function () {
   var ctl = PhonePad.pad({
     body: document.body, status: status, codeIn: $("code"), connect: $("connect"),
     gas: $("gas"), brake: $("brake"), lookBack: $("b-look"), center: $("b-center"), rim: $("rim"),
-    buttons: { shiftUp: $("b-shiftUp"), shiftDown: $("b-shiftDown"), overtake: $("b-overtake"),
-               boost: $("b-boost"), aero: $("b-aero"), camera: $("b-camera"), radio: $("b-radio"),
+    buttons: { shiftUp: $("b-shiftUp"), shiftDown: $("b-shiftDown"), overtake: [$("b-overtake"), $("b-ot-big")],
+               boost: [$("b-boost"), $("b-boost-big")], aero: $("b-aero"), camera: $("b-camera"), radio: $("b-radio"),
                recover: $("b-recover"), pause: $("b-pause") },
     hud: { gear: $("h-gear"), speed: $("h-speed"), lap: $("h-lap"), pos: $("h-pos"), ers: $("h-ers"), flag: $("h-flag"),
            ot: $("h-ot"), aero: $("h-aero"), last: $("h-last"), leds: $("leds"), screen: $("screen"), team: document.documentElement,
