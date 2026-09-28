@@ -77,6 +77,8 @@ function makeG(Teams, cars) {
     startRace: () => calls.push(["startRace"]),
     gridUp: (order) => { calls.push(["gridUp", order.map((c) => c.code)]); order.forEach((c, i) => { c.gridPos = i + 1; }); },
     snapGameCam: () => calls.push(["snapGameCam"]),
+    goRolling: () => { if (G.state !== "count") return false; G.state = "race"; calls.push(["goRolling"]); return true; },
+    setCarRole: (c, human, local) => { c.human = !!human; c.local = !!local; c.isPlayer = !!local; calls.push(["setCarRole", c.code, !!human, !!local]); },
     tyres: { on: () => true, classRecord: (cls) => ({ cls }), fit: (c, rec) => { c.tyre = rec; c.tyreWear = 0; c.tyreLap0 = c.lap || 0; c.tyreStints = (c.tyreStints || 0) + 1; },
              planLaps: (life, n) => life * n },
     announce: (m) => calls.push(["announce", m]),
@@ -121,7 +123,7 @@ test("the real strategy becomes the pit plan the pit lane executes, at full and 
   const { R, script } = load();
   const rus = script.drivers.find((d) => d.num === 63);
   const full = R.planFor(rus, 51, 51, 0.2);
-  assert.deepEqual(host(full), { start: "medium", seq: ["medium", "soft", "soft"], stints: [31, 5, 15], stops: 2, lapsAt: [31, 36], cost: 0, pitLossLaps: 0.2 });
+  assert.deepEqual(host(full), { start: "medium", seq: ["medium", "soft", "soft"], stints: [31, 5, 15], stops: 2, lapsAt: [31, 36], cost: 0, pitLossLaps: 0.2, scripted: true });
   const short = R.planFor(rus, 10, 51, 0);
   assert.deepEqual(host(short.lapsAt), [6, 7]);
   assert.equal(short.stints.reduce((a, b) => a + b, 0), 10, "the stints cover the distance exactly");
@@ -225,9 +227,15 @@ test("arming lays the real grid, plans, compounds and retirements over the field
   assert.ok(Math.abs(by("STR").dnfAt - 7.5 / 51) < 1e-9);
   assert.equal(by("RUS").dnfAt, null, "a finisher: no random reliability failure either");
   assert.equal(by("LEC").dnfAt, null, "never the human");
-  // One base pace for the whole field: the differences are the data's.
+  // One base pace for the whole field: the differences are the data's — lap 1 already at each
+  // car's real pace relative to the field (the run to turn 1 is the data's, not the launch draw's).
   const ai = cars.filter((c) => !c.human);
-  assert.equal(new Set(ai.map((c) => (c.tierV * c.skill).toFixed(6))).size, 1);
+  const st0 = rr.status();
+  const base = new Set(ai.map((c) => { const f = st0.cars.find((x) => x.code === c.code); return (c.tierV * c.skill / f.mul).toFixed(3); }));   // status rounds mul to 4 places
+  assert.equal(base.size, 1, "one base");
+  const mulOf = (code) => st0.cars.find((x) => x.code === code).mul;
+  assert.ok(mulOf("PIA") > mulOf("HAM"), "Piastri's lap 1 (P3 -> P2) was quicker than Hamilton's (P6 -> P8): " + mulOf("PIA") + " vs " + mulOf("HAM"));
+  assert.ok(ai.every((c) => { const m = mulOf(c.code); return m >= 0.9 && m <= 1.1; }), "clamped");
   assert.ok(calls.some((c) => c[0] === "announce" && /REAL RACE/.test(c[1])));
   const st = rr.status();
   assert.equal(st.armed, true); assert.equal(st.laps, 51); assert.equal(st.seat, "LEC");
@@ -371,10 +379,11 @@ test("a mid-race jump-in drops every car where it was, on its set, with the cloc
   rr.stage(script, { seat: "LEC", startLap: 31 });
   assert.equal(G.raceWeather, "dry", "no rain flags: the race's one weather");
   G.state = "count"; rr.update(1 / 60);
-  assert.equal(rr.status().placed, false, "the countdown shows the grid; the drop happens on the green");
-  G.state = "race"; rr.update(1 / 60);
+  // A ROLLING start: the field is dropped in on the countdown frame and the race goes green at once.
+  assert.equal(rr.status().placed, true, "the drop happens on the countdown frame");
+  assert.equal(G.state, "race", "green at once: no gantry over a standing grid");
+  assert.ok(calls.some((c) => c[0] === "goRolling"));
   const st = rr.status();
-  assert.equal(st.placed, true);
   assert.equal(st.startLap, 31);
   const at = R.fieldAt(script, 31);
   const K0 = 140 / R.paceTable(script).best;
@@ -402,7 +411,8 @@ test("a mid-race jump-in drops every car where it was, on its set, with the cloc
   const sai = by("SAI"); const a = at.by[55];
   assert.equal(sai.lap, a.lap);
   assert.ok(Math.abs(sai.s - a.frac * 6000) < 1e-6);
-  // The safety car deployed on lap 31 is held from the first frame.
+  // The safety car deployed on lap 31 is held from the first race frame.
+  rr.update(1 / 60);
   assert.deepEqual(calls.filter((c) => c[0] === "hold").map((c) => [c[1], c[2]]), [[3, "SAFETY CAR"]]);
   // Condensed: the same jump lands on the proportional sim lap.
   rr.stop();
@@ -522,4 +532,38 @@ test("a RESTART from the results puts the start lap's weather back before the gr
   G.state = "count"; rr.update(1 / 60);   // RESTART: startRace again, no stage()
   assert.equal(G.raceWeather, "dry", "lap 1 is dry in this race");
   assert.deepEqual(calls.filter((c) => c[0] === "live").map((c) => c[1]), ["dry"]);
+});
+
+test("a mid-race jump-in is a ROLLING start: the seat car is driven for four seconds at speed, the count is spoken, then control passes", () => {
+  const { R, script, Teams } = load();
+  const cars = makeCars(Teams, "ferrari:0");
+  const { G, calls } = makeG(Teams, cars);
+  const rr = R.create(G);
+  rr.stage(script, { seat: "LEC", startLap: 31 });
+  const me = cars.find((c) => c.code === "LEC");
+  me.local = true; me.isPlayer = true;
+  G.state = "count"; rr.update(1 / 60);
+  assert.equal(G.state, "race");
+  assert.equal(me.human, false, "the AI has the wheel"); assert.equal(me.local, true, "the camera, HUD and audio stay on the seat");
+  assert.ok(me.speed > 0, "at speed, not on the grid: " + me.speed);
+  assert.ok(calls.some((c) => c[0] === "announce" && /ROLLING · YOU HAVE CONTROL IN 4/.test(c[1])));
+  assert.ok(rr.status().handover > 3.9);
+  for (let i = 0; i < 60 * 3.5; i++) rr.update(1 / 60);
+  assert.equal(me.human, false, "still the AI's inside the hand-over");
+  const said = calls.filter((c) => c[0] === "announce" && /^YOU HAVE CONTROL IN \d$/.test(c[1])).map((c) => c[1]);
+  assert.deepEqual(said, ["YOU HAVE CONTROL IN 3", "YOU HAVE CONTROL IN 2", "YOU HAVE CONTROL IN 1"], "one call a second, no repeats");
+  for (let i = 0; i < 60 * 0.6; i++) rr.update(1 / 60);
+  assert.equal(me.human, true, "the wheel is the player's"); assert.equal(me.local, true);
+  assert.ok(calls.some((c) => c[0] === "announce" && c[1] === "YOU HAVE CONTROL"));
+  assert.equal(rr.status().handover, 0);
+  assert.equal(calls.filter((c) => c[0] === "setCarRole").length, 2, "one hand-over: AI, then the player");
+  // From the grid (lap 1) the start is the real standing start: no hand-over, no rolling green.
+  const cars2 = makeCars(Teams, "ferrari:0");
+  const g2 = makeG(Teams, cars2);
+  const rr2 = R.create(g2.G);
+  rr2.stage(script, { seat: "LEC", startLap: 1 });
+  g2.G.state = "count"; rr2.update(1 / 60);
+  assert.equal(g2.G.state, "count", "the lights run");
+  assert.equal(rr2.status().handover, 0);
+  assert.ok(!g2.calls.some((c) => c[0] === "goRolling"));
 });

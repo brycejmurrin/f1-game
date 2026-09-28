@@ -338,6 +338,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/start-race-latch.test.mjs",
   "tests/unit/session-entry-vm.test.mjs",
   "tests/unit/red-flag-fuel-vm.test.mjs",
+  // ...and the REAL REPLAY on the real Baku build: OpenF1's x/y fitted onto the
+  // centreline, the highlights list, the field as puppets (follow, speed, a car
+  // whose data ends, the flag) and the exact JUMP IN. Four game boots, ~12 s.
+  "tests/unit/real-replay-vm.test.mjs",
   "tests/unit/gfx-debug-overlay.test.mjs",
   "tests/unit/car-presentation-canary.test.mjs",
   "tests/unit/car-wing-foil.test.mjs",

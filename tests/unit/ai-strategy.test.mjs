@@ -168,6 +168,18 @@ test("splitStints shares the distance in proportion to life", () => {
 const now = (o) => A.pitNow(Object.assign(
   { stopsLeft: 1, lapsToStop: 20, cautionLevel: 0, wear: 0, wrongTread: false }, o));
 
+test("a SCRIPTED plan (a real race replayed) stops on its real laps and nowhere else", () => {
+  // The caution reach double-stopped a car whose next real stop sat inside a
+  // held safety car (Baku 2026: stops on L31 and L36, SC L31-35), and the worn
+  // rule added stops the real race never made. Only the useless-tyre rule stays.
+  assert.equal(now({ scripted: true, cautionLevel: 3, lapsToStop: 4 }), "");
+  assert.equal(now({ scripted: true, wear: 1.4, lapsToStop: 9 }), "");
+  assert.equal(now({ scripted: true, lapsToStop: 0 }), "plan");
+  assert.equal(now({ scripted: true, lapsToStop: -1 }), "plan");
+  assert.equal(now({ scripted: true, stopsLeft: 0, lapsToStop: -1 }), "");
+  assert.equal(now({ scripted: true, stopsLeft: 0, wrongTread: true }), "weather");
+});
+
 test("a car with no stops left still ignores the plan for a tyre that cannot do its job", () => {
   // Two rules are about a tyre that is USELESS, not about strategy, so neither
   // is gated on the plan's budget. Gating them left every 0-stop car in the

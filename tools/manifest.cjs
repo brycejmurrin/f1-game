@@ -224,6 +224,7 @@ const FULL = [
   "js/race/race-control.js",
   "js/race/overtake-mode.js",
   "js/race/sporting-regs.js",  // pure 2026 SR rules (two compounds, SC passes, champ grid); game.js creates its pass watch at eval
+  "js/race/real-replay.js",    // RealReplay.create(G): the field posed from OpenF1 positions — WATCH / HIGHLIGHTS (the director starts it)
   "js/race/real-race.js",      // RealRace.create(G): a real Grand Prix replayed from its timing script (after race-control: it holds its flags)
   "js/race/weather-arc.js",
   "js/camera/free-cam.js",
@@ -495,6 +496,8 @@ const HARD_EDGES = [
   ["js/fx/skidmarks.js", "js/game.js"],      // game.js calls SkidMarks.create() at eval time
   ["js/race/race-control.js", "js/game.js"],   // game.js calls RaceControl.create(G) at eval time
   ["js/race/sporting-regs.js", "js/game.js"],  // game.js calls SportingRegs.createPassWatch() at eval time
+  ["js/core/mat4.js", "js/race/real-replay.js"],   // RealReplay binds M4.clamp at eval
+  ["js/race/real-replay.js", "js/race/real-race.js"],   // RealRace.create(G) calls RealReplay.create(G) (game.js eval time)
   ["js/core/mat4.js", "js/race/real-race.js"],   // RealRace binds M4.clamp at eval
   ["js/race/real-race.js", "js/game.js"],      // game.js calls RealRace.create(G) at eval time
   ["js/race/session-entry.js", "js/game.js"], // game.js creates the shared start/quali entry coordinator
