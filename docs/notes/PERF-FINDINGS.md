@@ -5491,3 +5491,36 @@ Braking compile probe on this tree: lap sync compiles 0, warm failed 0.
 tooling-fast 244/244. Remaining §2aj items (lamp-shadow static/dynamic split,
 draw-record pooling, godray rate, post ping-pong materials, SSR MRT loop skip)
 each change more than a line and want their own A/B.
+
+## 2al. The warm at the lights linked nothing after a flyby: it now runs in the menu (2026-09-28)
+
+The pre-race screen since PR #376 holds its card until the race's first PRESENTED
+frame, which made the countdown warm's cost visible as a held card after the
+flyby. Measured on this box (three.js/WebGL2 on SwiftShader, RACE SETTINGS
+left for 60 s so the menu built and warmed, then RACE! and the full flyby;
+`scratch/ld-transition-probe.mjs`):
+
+| tree | held card after the flyby | warm at the lights (`memState().warm`) |
+|---|---|---|
+| deploy tip (#376) | 17.0 s | scene 8147 ms, fx 46, post 2, shadow 2 |
+| warm requested with the menu's hidden frames | 23.3 s | scene 7840 ms — the same again |
+| …and skipped at the lights when the menu's ran | 9.2 s = ONE race frame (SwiftShader) | 33 ms, all in the menu |
+
+Attribution (`scratch/ld-link-probe.mjs`, `linkProgram` hooked before boot): 23
+programs linked in the whole run — 20 under the picker's hidden warm frames, 3 in
+the flyby's grid shots — and ZERO in the countdown. The 7.5-8 s "scene" stage of
+the warm at the lights was `compileAsync(scene)` rebuilding render objects and
+node graphs for the race scene against the warm's own render context, finding
+every program already built. Census 243/244's ~7 s scene warm on Metal is the COLD
+number: `gpu-game-check` boots through `__apex.race()`, never the menu, so the
+menu warm this change adds is not on that leg.
+
+What changed (`js/game.js`): `warmPrograms()` requests `gfx.warm()` right before
+the menu's hidden warm frames (`menuFinish`, both pairs; `introBuild`, which also
+waits for it under the build card, bounded 15 s) and remembers the `menuKey`; the
+request in `startRaceBody` is skipped when the key matches. `startRaceBody`'s own
+CPU is 18 ms (`__apex.raceProfile()`); the frame after it is a normal race frame.
+Not measured: the real-GPU cost of the menu-time `compileAsync` (it runs hidden,
+while the sheet is read) and the three flyby-time links, which seat no cars in the
+hidden frame (the car loop breaks in the menu) — the remaining lever if a hitch is
+seen on the grid shots.
