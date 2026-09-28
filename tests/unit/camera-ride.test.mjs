@@ -302,6 +302,25 @@ test("the camera path is C1 — no node-rate or clamp-handover acceleration spik
   }
 });
 
+test("VISOR is the cockpit eye 0.55 m forward: same height, same aim, no ground clamp", () => {
+  // The user asked for "cockpit but slightly more forward, without the
+  // steering wheel". The rig is what game.js skips; the EYE is pinned here so
+  // a tuning pass on cockpit moves visor with it and the two never drift apart.
+  const track = makeTrack((s) => HILL(s) + RIPPLE(s));
+  const cams = loadGameCams(makeTracksStub(track));
+  for (const s of [200, 1100, 1210]) {
+    // vantage() writes pooled arrays IN PLACE: copy the first sample before taking the second.
+    const c0 = chaseAt(cams, track, s, "cockpit");
+    const c = { eye: [...c0.eye], tgt: [...c0.tgt], fov: c0.fov };
+    const v = chaseAt(cams, track, s, "visor");
+    assert.ok(Math.abs((v.eye[2] - c.eye[2]) - 0.55) < 1e-9, `eye slid forward by 0.55 at s=${s}: ${v.eye[2] - c.eye[2]}`);
+    assert.ok(Math.abs(v.eye[1] - c.eye[1]) < 1e-9, `same eye height at s=${s}`);
+    assert.ok(Math.abs(v.eye[0] - c.eye[0]) < 1e-9, `no lateral offset at s=${s}`);
+    assert.ok(Math.abs(pitchOf(v) - pitchOf(c)) < 0.05, `same aim pitch at s=${s}: ${pitchOf(v)} vs ${pitchOf(c)}`);
+    assert.ok(Math.abs(v.fov - c.fov) < 1e-9, "same speed-scaled FOV");
+  }
+});
+
 test("EVERY world-facing camera mode is C1 on a gradient", () => {
   // chase/far were fixed first, and the rest were left on the raw sample. That
   // was worse, not better: MEASURED at stock framing on Monaco's climb, drift

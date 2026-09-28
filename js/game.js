@@ -2299,7 +2299,7 @@ const _camAP = [0, 0, 0], _camAN = [0, 0, 0];
 
 function cameraFollowsBank(mode) {
   return mode === "chase" || mode === "far" || mode === "drift" ||
-         mode === "cockpit" || mode === "hood" || mode === "reverse" ||
+         mode === "cockpit" || mode === "hood" || mode === "visor" || mode === "reverse" ||
          mode === "low" || mode === "tcam" || mode === "rear";
 }
 
@@ -2533,15 +2533,31 @@ async function menuLampBake(current) {
 // here in slices so the loading screen plans nothing; then warm again for the lit
 // world. `_menuFly` is the planned list, keyed like the build.
 let _menuFly = null;
+// THE PROGRAM WARM RUNS HERE, HIDDEN — not first at the lights. TLX compiles
+// the race's programs when warm() has been requested and the next present()
+// starts (tlx.js startProgramWarm), and it paints nothing until that is done.
+// Requested only in startRaceBody, that was the held card AFTER the flyby:
+// 17 s under SwiftShader with the world built and the flyby played
+// (scratch/ld-transition-probe.mjs, 2026-09-28), ~7 s on Metal cold (census
+// 243). Requested before the hidden warm frames, the first of them starts it
+// while the player is still reading the sheet, and the warm at the lights
+// finds its programs built. GLX and WGX have no warm(): nothing to request.
+// `_warmKey` is the world (menuKey) the request was for: startRaceBody skips
+// its own request when it matches, because with every program already built
+// the warm at the lights still walked the race scene's node graphs for 7.5 s
+// (SwiftShader) and linked NOTHING — a held card for nothing
+// (scratch/ld-link-probe.mjs: 23 links, all in the menu and the flyby).
+let _warmKey = "";
+const warmPrograms = () => { try { if (gfx.warm) { gfx.warm(); _warmKey = menuKey(trackIdx); } } catch (_) { /* optimisation only */ } };
 async function menuFinish(current, key) {
   await prepareMenuCarAssets(current);
-  if (await menuIdle(current)) { FlybySeq.reset(); _menuGate.warm = 2; }   // reset: a new world's shot 0 snaps, never glides in from the last one
+  if (await menuIdle(current)) { warmPrograms(); FlybySeq.reset(); _menuGate.warm = 2; }   // reset: a new world's shot 0 snaps, never glides in from the last one
   const lit = await menuLampBake(current);
   FlybySeq.setDuration(loadingScreen.nextFlyMs());
   const fly = { key, track, shots: FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0, false) }, step = FlybySeq.planSteps(track, fly.shots);
   while (current() && !step()) await menuSlice();
   if (current()) _menuFly = fly;
-  if (lit && await menuIdle(current)) { FlybySeq.reset(); _menuGate.warm = 2; }   // only a baked (dark) world changed the shaders
+  if (lit && await menuIdle(current)) { warmPrograms(); FlybySeq.reset(); _menuGate.warm = 2; }   // only a baked (dark) world changed the shaders
 }
 function scheduleFlybyTrack(settle) {
   clearTimeout(flybyBuildTimer);
@@ -2653,6 +2669,11 @@ function snapGameCam() {
   camTgt[0] = v.tgt[0]; camTgt[1] = v.tgt[1]; camTgt[2] = v.tgt[2];
   camFov = v.fov;
   camRoll = bankCam && cameraFollowsBank(mode) ? -bankCam.roll : 0;
+  // Re-anchor too: render() damps the eye and target in the CAR's frame, from last frame's
+  // anchor to this one. A car that was just moved (a mid-race JUMP IN drops it half a lap
+  // from the grid) would otherwise carry the grid's look OFFSET across, so the cockpit
+  // opened facing the way the grid faced and swung round over the next half second.
+  camAncX = null;
   try { if (gfx && gfx.invalidateSoftPresent) gfx.invalidateSoftPresent(); } catch (_) { /* GLX */ }
 }
 
@@ -2908,7 +2929,10 @@ async function startRaceBody() {
   if (PerfGov.strikes() > 0 && PerfGov.autoRes() && gfx.setRenderScale && gfx.getRenderScale)
     gfx.setRenderScale(Math.min(gfx.getRenderScale(), PerfGov.strikes() >= 2 ? 0.7 : 0.85));
   state = "count"; countT = 0; lightsLit = 0; raceT = 0; startHold = 0; restartPending = false; paused = false; frozen = false; skyViewOverride = null;
-  try { if (gfx.warm) gfx.warm(); } catch (_) { /* TLX links programs synchronously on first draw — warm them during the LIGHTS. Optimisation only; GLX/WGX have no warm and no-op. */ }
+  // TLX links programs synchronously on first draw — warm them during the LIGHTS,
+  // unless the menu's warm already ran for this world (warmPrograms, _warmKey).
+  // Optimisation only; GLX/WGX have no warm and no-op.
+  try { if (gfx.warm && _warmKey !== menuKey(trackIdx)) gfx.warm(); } catch (_) { /* as above */ }
   skids.reset();
   Particles.clear();   // no stale smoke/spray teleporting into the new session
   // THE PRE-RACE SCREEN OUTLIVES THE SWEEP when it was up: the warm above paints
@@ -3828,8 +3852,13 @@ function introBuild(go) {
       const t1 = performance.now();
       await prepareMenuCarAssets(() => live() && performance.now() - t1 < 1500);
       if (!live()) return;
-      FlybySeq.reset(); _menuGate.warm = 2;
+      FlybySeq.reset(); warmPrograms(); _menuGate.warm = 2;
       for (let f = 0; f < 3 && _menuGate.warm > 0; f++) await new Promise((r) => requestAnimationFrame(r));
+      // The warm the first hidden frame started finishes under this card too
+      // (bounded): a flyby begun over a pending warm draws nothing until it ends
+      // (render() waits on warming()), so its opening shots would be lost to it.
+      const t2 = performance.now();
+      while (live() && gfx.warming && gfx.warming() && performance.now() - t2 < 15000) await menuSlice();
       // Plan the flyby here too, up to a budget: whatever is left plans mid-flyby.
       FlybySeq.setDuration(loadingScreen.nextFlyMs());
       const fly = { key, track, shots: FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (idx * 2654435761)) >>> 0, false) }, step = FlybySeq.planSteps(track, fly.shots), t0 = performance.now();
@@ -6932,7 +6961,7 @@ function render(dt) {
     // for feel; on a wet road we drop it to keep the reflection stable. Also
     // fades in with speed so it never jitters a slow/standing car. REDUCE MOTION drops it.
     const _buzzWet = 1.0 - clamp((frame.wetness || 0) * 2.0, 0.0, 1.0);
-    if (state === "race" && !motionReduced && _buzzWet > 0.01 && (mode === "cockpit" || mode === "hood" || mode === "tcam")) {
+    if (state === "race" && !motionReduced && _buzzWet > 0.01 && (mode === "cockpit" || mode === "hood" || mode === "visor" || mode === "tcam")) {
       const spV = clamp(player.speed / vTop(), 0, 1);
       const vAmp = (spV * spV * 0.022 + (player.deploying ? 0.008 : 0)) * _buzzWet;
       if (vAmp > 0.001) {
@@ -6958,7 +6987,7 @@ function render(dt) {
   // lambda or the eye lags behind/into the bodywork at speed.
   const racing = state === "race" || state === "count";
   const camId = CAM_MODES[camMode].id;
-  const onboard = racing && (camId === "cockpit" || camId === "hood" || camId === "tcam");
+  const onboard = racing && (camId === "cockpit" || camId === "hood" || camId === "visor" || camId === "tcam");
   // Just after a cut, ease the external cams in with a gentler lambda so the angle
   // sweeps to its new vantage instead of snapping. Onboard cams ignore it (must lock).
   const cutEase = camCutT > 0 ? (camCutT = Math.max(0, camCutT - dt), 0.4) : 1;
@@ -6971,7 +7000,7 @@ function render(dt) {
   // panning — cockpit/hood ease the target gently, like a driver's eyes
   // leading into a corner rather than their whole head whipping around.
   const lE = onboard ? 400 : (racing ? 14 : 1.6) * cutEase;
-  const gentleHead = onboard && (camId === "cockpit" || camId === "hood") && (typeof CockpitOpts === "undefined" || CockpitOpts.turnChase());   // gentle easing is ONLY for a curved aim; a nose-locked aim must not lag
+  const gentleHead = onboard && (camId === "cockpit" || camId === "hood" || camId === "visor") && (typeof CockpitOpts === "undefined" || CockpitOpts.turnChase());   // gentle easing is ONLY for a curved aim; a nose-locked aim must not lag
   const lT = gentleHead ? 7 : onboard ? 400 : (racing ? 16 : 10) * cutEase;
   // Damp HORIZONTALLY in the CAR's frame, not the world's. Damping toward a
   // MOVING target lags ~v/lambda - v*dt/2, so the car-to-camera distance
@@ -7073,7 +7102,7 @@ function render(dt) {
   // they keep 0.3 and every other view takes a near plane that buys back a lot
   // of depth resolution for free.
   const _projMode = CAM_MODES[camMode] ? CAM_MODES[camMode].id : "chase";
-  const _nearM = (_projMode === "cockpit" || _projMode === "hood") ? 0.3 : 0.9;
+  const _nearM = (_projMode === "cockpit" || _projMode === "hood" || _projMode === "visor") ? 0.3 : 0.9;
   const _near = cine ? FlybySeq.NEAR : (dbgCam ? 0.3 : _nearM);
   M4.perspectiveTo(_mProj, fovY, gfx.aspect, _near, farPlane);
   // Tilt the up vector by camRoll to roll the camera into corners. Inlined into
@@ -7655,6 +7684,10 @@ function render(dt) {
   // (wheel/halo/mirrors) + the car's shadow instead, body mesh skipped. Was two
   // always-equal booleans, so the `hide && !rig` skip they guarded never fired.
   const cockpitRigOnly = !dbgCam && (state === "race" || state === "count") && CAM_MODES[camMode].id === "cockpit";
+  // VISOR sits INSIDE the monocoque ahead of the wheel: the body mesh would be
+  // a black box across the frame, and the rig would be behind the eye. Neither
+  // is drawn — the road from a driver's eye, and the car's shadow as in cockpit.
+  const visorEye = !dbgCam && (state === "race" || state === "count") && CAM_MODES[camMode].id === "visor";
   // Camera forward (horizontal) for the behind-camera AI cull below.
   let _camFwdX = camTgt[0] - camEye[0], _camFwdZ = camTgt[2] - camEye[2];
   { const l = Math.hypot(_camFwdX, _camFwdZ) || 1; _camFwdX /= l; _camFwdZ /= l; }
@@ -7935,10 +7968,12 @@ function render(dt) {
         }
       }
     }
-    if (c.isPlayer && cockpitRigOnly) {
-      GameCams.cockpitViewmodelAxes(smp2.r, smp2.t, yv, camEye, tmpR, _cockU, tmpF, _cockP);
-      basisMat(tmpR, _cockU, tmpF, _cockP, _cockMat);
-      drawCockpitRig(c, _cockMat, dt, paint);
+    if (c.isPlayer && (cockpitRigOnly || visorEye)) {
+      if (cockpitRigOnly) {
+        GameCams.cockpitViewmodelAxes(smp2.r, smp2.t, yv, camEye, tmpR, _cockU, tmpF, _cockP);
+        basisMat(tmpR, _cockU, tmpF, _cockP, _cockMat);
+        drawCockpitRig(c, _cockMat, dt, paint);
+      }
       continue;
     }
     // Body-only mesh + planted wheels for every procedural car. Attitude
@@ -8670,6 +8705,12 @@ $("mb-data").onclick = () => {
   ensureDataHub().then((ok) => { if (ok) DataHub.open(); });
 };
 $("mb-help").onclick = () => { els.howtoplay.hidden = false; if (soundOn) GameAudio.uiSelect(); };
+// USE AS CONTROLLER (this phone): a plain navigation to the wheel page beside
+// index.html — no net stack, no room; the code is typed there (or arrives by
+// QR as controller.html#pad=CODE). Same door from Settings › CONTROLS.
+const goPhonePad = () => { if (soundOn) GameAudio.uiSelect(); location.assign(new URL("controller.html", location.href).href); };
+$("mb-phonepad").onclick = goPhonePad;
+$("pm-phonepad-go").onclick = goPhonePad;
 // Same sheet from the pause stack — the controls reference is most wanted
 // mid-session. #howtoplay outranks #pausemenu in z-index, so CLOSE returns
 // to the pause menu with nothing else to restore.
@@ -9457,7 +9498,12 @@ onPadLost: () => {
    #pm-calib hidden by css/responsive.css so there was no way back either.
    Re-run everything that reads the query, in the order boot does. */
 function syncPointerKind() {
-  document.body.classList.toggle("desktop", !Input.touchControlsNeeded());
+  const touch = Input.touchControlsNeeded();
+  document.body.classList.toggle("desktop", !touch);
+  // The phone's own door to the wheel page: a coarse pointer is the device
+  // that can BE the controller, so only it gets the buttons (title + CONTROLS).
+  $("mb-phonepad").hidden = !touch;
+  $("pm-phonepad-go").hidden = !touch;
   if (state === "race" || state === "count") showTouchControls(true);
   refreshGearsBtn();   // GEARS is enabled by thumbs being free, i.e. by this
 }
