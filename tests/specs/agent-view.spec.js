@@ -693,7 +693,7 @@ test.describe("world() previously-invisible state", () => {
     const e = await page.evaluate(() => window.__apex.world({ detail: "drive" }).ego.ers);
     expect(e).toBeTruthy();
     // charge alone never said whether the energy was going anywhere
-    for (const k of ["charge", "deploying", "overtakeArmed", "boostRemainingS", "cooldownS"]) {
+    for (const k of ["charge", "deploying", "overtakeArmed", "boostRemainingS", "overtakeEarned", "overtakeMJ"]) {
       expect(e, k + " missing from ers").toHaveProperty(k);
     }
     expect(e.charge).toBeGreaterThanOrEqual(0);

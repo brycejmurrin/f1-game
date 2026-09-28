@@ -741,7 +741,7 @@ const api = {
       drain: +G.drainFor(G.player).toFixed(4),
       regen: +G.regenFor(G.player).toFixed(4),
       otTime: +G.otTimeFor(G.player).toFixed(2),
-      otCool: +G.otCoolFor(G.player).toFixed(2),
+      otMJ: +OvertakeMode.mj(G.player).toFixed(3),   // Overtake allowance left this lap (0.5 MJ when granted)
       // TYRES (js/physics/tyre-model.js). All four are exactly at their fresh
       // values while TYRE WEAR is off, so a spec can assert the no-op.
       tyreCompound: G.player.tyre ? G.player.tyre.id : null,
@@ -1681,10 +1681,10 @@ const api = {
       // has been here since active aero landed but its older sibling never was,
       // so "can this car use overtake right now, and why not" could only be
       // answered by reading game.js. otEnabled is the RACE-WIDE gate (lap 1,
-      // the Safety Car / red flag and the lap after either) and is the same for every car; otArmed folds that
-      // together with this car's own proximity and cooldown.
-      otArmed: !!c.otArmed, otT: +(c.otT || 0).toFixed(2),
-      otCool: +(c.otCool || 0).toFixed(2), otEnabled: !!G.otEnabled(),
+      // the Safety Car / red flag and the lap after either, low grip) and is the same for every car; otArmed folds that
+      // with this car's allowance (otMJ; otEarned = under 1 s at the detection line, js/race/overtake-mode.js).
+      otArmed: !!c.otArmed, otT: +(c.otT || 0).toFixed(2), otEarned: !!c.otEarned,
+      otMJ: +OvertakeMode.mj(c).toFixed(3), otEnabled: !!G.otEnabled(),
       aeroX: +(c.aeroX || 0).toFixed(3), xOn: !!c.xOn, xArmed: !!c.xArmed,
       brakeHeat: +(c.brakeHeat || 0).toFixed(2), gear: c.gear || 1,
     };
@@ -2779,7 +2779,7 @@ const api = {
       // agent-determinism caught it; the block above is the reason this file
       // has such a block at all.
       c.aiHead = 0; c.aiBias = null; c.aiFam = 0;
-      c.stuckT = 0; c.letPassT = 0; c.passOf = null; c.passT = 0; c.passCool = 0; c.holdOff = null; c.defendSide = 0; c.passFailOf = null; c.passFailT = 0; c.errT = 0; c.pressT = 0; c.zoneKey = -1; c.deploying = false; c.boostOn = false; c.otArmed = false;
+      c.stuckT = 0; c.letPassT = 0; c.passOf = null; c.passT = 0; c.passCool = 0; c.holdOff = null; c.defendSide = 0; c.passFailOf = null; c.passFailT = 0; c.errT = 0; c.pressT = 0; c.zoneKey = -1; c.deploying = false; c.boostOn = false; OvertakeMode.reset(c);
       c.xOn = false; c.aeroX = 0; c.xArmed = false;
       c.wasOnThrottle = false;
       delete c.vertLoad;

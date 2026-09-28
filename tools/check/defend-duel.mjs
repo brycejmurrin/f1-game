@@ -78,7 +78,7 @@ g.sandbox.AiDrive.defendPull = function (ctx) {
 function reset(c) {   // clear everything the previous cell could have left behind
   c.defendSide = 0; c.aiBias = null; c.aiFam = 0; c.aiHead = 0; c.contactT = 0;
   c.letPassT = 0; c.stuckT = 0; c.rescueT = 0; c.offT = 0; c.errT = 0; c.holdOff = null;
-  c.passOf = null; c.passT = 0; c.passCool = 0; c.passFailT = 0; c.otT = 0; c.otCool = 0;
+  c.passOf = null; c.passT = 0; c.passCool = 0; c.passFailT = 0; g.sandbox.OvertakeMode.reset(c);
   c.lane = c.lanePref != null ? c.lanePref : 0; c.vLat = 0; c.steerVis = 0; c.yawVis = 0;
 }
 

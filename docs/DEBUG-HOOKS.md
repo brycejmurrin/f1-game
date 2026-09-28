@@ -1333,7 +1333,7 @@ Six more cover the ERS part's grip on the battery and the overtake window:
 | `ersDeploy` / `ersRegen` | the ERS option's two axes, 0..1 (`Parts.ersProfile`); 0.5 for a car with no parts |
 | `drain` | energy/s while boosting — LOWER with better deployment, so the press lasts longer |
 | `regen` | energy/s recovered — higher with better recovery |
-| `otTime` / `otCool` | the overtake push and its lockout, both scaled by deployment |
+| `otTime` / `otMJ` | the push a full Overtake allowance buys (scaled by deployment) and the allowance left this lap in MJ (0.5 when granted; js/race/overtake-mode.js) |
 
 Measured end to end: boost lasts 3.8 s on `harvest` and 7.1 s on `overcharge`;
 recharge runs 5.4 s down to 4.0 s. Note BOOST is a TOGGLE — `setBoost(true)`,
@@ -1487,10 +1487,11 @@ OVERTAKE fields, alongside the aero ones:
 
 | Field | Meaning |
 |---|---|
-| `otEnabled` | the RACE-WIDE gate, identical for every car: false on the opening lap (until the LEADER starts lap 2) and false under any caution |
-| `otArmed` | that gate AND this car's own gap (<1 s) and cooldown — i.e. can it actually be fired now |
-| `otT` | seconds of push remaining, 0 when not deployed |
-| `otCool` | seconds until it can arm again |
+| `otEnabled` | the RACE-WIDE gate, identical for every car: false on the opening lap (until the LEADER starts lap 2), under the Safety Car / red flag and the lap after, and in LOW GRIP (wet) |
+| `otArmed` | that gate AND an allowance left AND not already deploying — i.e. can it actually be fired now |
+| `otEarned` | under 1 s behind at this lap's detection line; granted at the timing line |
+| `otMJ` | the allowance left this lap, MJ (0.5 when granted) |
+| `otT` | seconds of push remaining while deploying, 0 otherwise |
 
 ### `camState() → {eye, tgt, fov, roll, debug}`
 Raw camera geometry: `eye` `[x,y,z]`, `tgt` `[x,y,z]` (look-at point), `fov`
@@ -2851,9 +2852,9 @@ lists the sides that carry one. The same facts appear as rally mutators in
 **Previously-invisible state, now exposed.** `ego.penalties` gives `{cuts,
 freeCutsLeft, timePenaltyS}` — cuts 1-3 warn, every cut from the 4th adds +5 s.
 An agent that cannot see this is scored on a rule it cannot perceive.
-`ego.ers` gives `{charge, deploying, overtakeArmed, boostRemainingS, cooldownS}`
+`ego.ers` gives `{charge, deploying, overtakeArmed, boostRemainingS, overtakeEarned, overtakeMJ}`
 — charge alone never said whether the energy was going anywhere, or whether the
-overtake window (~1 s behind, 4 s boost, 9–14 s cooldown) was open.
+overtake allowance (under 1 s at the detection line earns 0.5 MJ for the next lap) was there.
 `rivals[].pace` (and `field()` rows at `full`) expose AI skill, so one rival is
 distinguishable from another. `detail:"full"` adds `physics.{rpm, offroad,
 stuckS, wallContactS, vertLoad}` and a `tunables` block — `setPhysics()` can

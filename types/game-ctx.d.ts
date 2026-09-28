@@ -426,7 +426,7 @@ interface GameCtx {
   /** What the loading card describes — the flyby editor previews the same object. */
   readonly loadingInfo: () => Record<string, unknown>;
   /** js/ui/loading-screen.js, so the flyby editor can hold the card up and move it. */
-  readonly loadingScreen: { run(info: Record<string, unknown>, go: () => void): void; stop(): void; hold(info: Record<string, unknown>): boolean; card(): Record<string, number>; setCard(patch: Record<string, number>): Record<string, number>; resetCard(): Record<string, number>; progress(): number; active(): boolean; phase(): string };
+  readonly loadingScreen: { run(info: Record<string, unknown>, go: () => void): void; stop(): void; hold(info: Record<string, unknown>): boolean; handoff(): boolean; card(): Record<string, number>; setCard(patch: Record<string, number>): Record<string, number>; resetCard(): Record<string, number>; progress(): number; active(): boolean; phase(): string };
 
   readonly retireCar: (c: CarState, reason?: string) => void;
   readonly ranked: CarState[];
@@ -674,7 +674,6 @@ interface GameCtx {
   readonly drainFor: (c: CarState) => number;
   readonly regenFor: (c: CarState) => number;
   readonly otTimeFor: (c: CarState) => number;
-  readonly otCoolFor: (c: CarState) => number;
   readonly setCautionEnabled: (on: boolean) => void;
   readonly otEnabled: () => boolean;
 

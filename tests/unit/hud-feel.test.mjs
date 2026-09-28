@@ -93,6 +93,8 @@ function boot(opts = {}) {
   };
   sb.window = sb;
   vm.runInNewContext(src("js/ui/hud.js"), sb, { filename: "js/ui/hud.js" });
+  // The OVERTAKE chip converts the allowance to MJ through the real module.
+  vm.runInNewContext(src("js/race/overtake-mode.js"), sb, { filename: "js/race/overtake-mode.js" });
 
   const $ = (id) => dom.byId(id);
   const minimap = $("minimap");
@@ -107,7 +109,7 @@ function boot(opts = {}) {
   const player = {
     team: { id: "t1", color: [1, 0, 0] }, code: "YOU", rank: 1, lap: 1, lapTime: 12, best: Infinity,
     speed: 50, energy: 0.5, gear: 3, rpm: IDLE_RPM, boostOn: false,
-    otT: 0, otArmed: false, otCool: 0, aeroX: 0, xArmed: false, s: 10, prog: 10, retired: false,
+    otT: 0, otArmed: false, otE: 0, otEarned: false, aeroX: 0, xArmed: false, s: 10, prog: 10, retired: false,
   };
   const G = {
     els, player, cars: [player], ranked: [player], timeTrial: false, state: "race",
@@ -133,7 +135,7 @@ test("the tach redline latches with hysteresis instead of flickering on the 92 %
   player.rpm = MAX_RPM * 0.905; tick(); assert.equal(on(), false, "and re-entry needs 92 % again, so the band is dead in both directions");
 });
 
-test("the OVERTAKE chip spells all four states differently — the lockout counts down", () => {
+test("the OVERTAKE chip spells every state differently and reads the 2026 allowance in MJ", () => {
   const { els, player, G, tick } = boot();
   tick();
   assert.equal(els.ot.textContent, "OT · CLOSE IN");
@@ -141,30 +143,37 @@ test("the OVERTAKE chip spells all four states differently — the lockout count
   assert.equal(els.btnOT.getAttribute("aria-disabled"), "true");
   assert.equal(els.btnOT.getAttribute("data-state"), "pending");
 
-  player.otCool = 11.2; tick();
+  // EARNED at the detection line, granted only at the timing line (B7.2.3(c)).
+  player.otEarned = true; tick();
   assert.equal(els.ot.className, "ot-cool");
-  assert.equal(els.ot.textContent, "COOLDOWN 12", "whole seconds — this is a 9..14 s wait, not a tenths readout");
+  assert.equal(els.ot.textContent, "OT · NEXT LAP");
   assert.equal(els.btnOT.getAttribute("aria-disabled"), "true");
-  assert.equal(els.btnOT.getAttribute("data-state"), "cooldown");
-  player.otCool = 0.3; tick();
-  assert.equal(els.ot.textContent, "COOLDOWN 1");
+  assert.equal(els.btnOT.getAttribute("data-state"), "earned");
 
-  player.otCool = 0; player.otArmed = true; tick();
+  // Granted: 0.125 battery units = 0.5 MJ of the 4 MJ store.
+  player.otEarned = false; player.otE = 0.125; player.otArmed = true; tick();
   assert.equal(els.ot.className, "ot-armed");
-  assert.equal(els.ot.textContent, "OVERTAKE READY");
-  assert.equal(els.ot.getAttribute("aria-label"), "Overtake ready — press to deploy");
+  assert.equal(els.ot.textContent, "OT READY 0.50 MJ");
+  assert.equal(els.ot.getAttribute("aria-label"), "Overtake ready, 0.50 MJ — press to deploy");
+  assert.equal(els.btnOT.getAttribute("aria-disabled"), "false");
 
-  player.otT = 3.2; player.otCool = 12.2; tick();
+  player.otArmed = false; player.otE = 0.0775; player.otT = 3.2; tick();
   assert.equal(els.ot.className, "ot-active");
-  assert.equal(els.ot.textContent, "OVERTAKE 3.2", "the push keeps its tenths and never reads as a cooldown while active");
+  assert.equal(els.ot.textContent, "OVERTAKE 0.31 MJ", "the push reads what is LEFT of the allowance");
 
-  player.otT = 0; player.otArmed = false; G.otEnabled = () => false; tick();
+  player.otT = 0; tick();
+  assert.equal(els.ot.textContent, "OT READY 0.31 MJ", "paused below the speed floor is still an allowance, not a lockout");
+
+  player.otE = 0; G.otEnabled = () => false; tick();
   assert.equal(els.ot.textContent, "OT · LAP 1", "opening lap explains the race-wide gate");
   assert.equal(els.btnOT.getAttribute("aria-disabled"), "true");
   assert.equal(els.btnOT.getAttribute("data-state"), "opening-lap");
 
   G.cautionInfo = () => ({ level: 1 }); tick();
   assert.equal(els.ot.textContent, "OT · LAP 1", "a local yellow is not what closes Overtake (Art. B7.2.2)");
+  G.cautionInfo = () => ({ level: 0, lowGrip: true }); tick();
+  assert.equal(els.ot.textContent, "OT · LOW GRIP", "low grip conditions switch Overtake off (Art. B7.2.2(d))");
+  assert.equal(els.btnOT.getAttribute("data-state"), "low-grip");
   G.cautionInfo = () => ({ level: 3 }); tick();
   assert.equal(els.ot.textContent, "OT · CAUTION", "caution explains the same unavailable control");
   assert.equal(els.btnOT.getAttribute("data-state"), "caution");
