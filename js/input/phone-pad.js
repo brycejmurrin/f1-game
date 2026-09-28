@@ -294,7 +294,10 @@ const PhonePad = (function () {
               onClose: () => {
                 if (phase === "cancelled") return;
                 phase = "lost";
-                say("Phone disconnected.", true);
+                // A link that died before it opened (ICE failed) still holds
+                // the room's relay sockets; nothing will use them now.
+                dropRoom();
+                say("Phone disconnected — press PHONE AS CONTROLLER for a new code.", true);
                 Log.info("input", "phone pad lost");
                 if (ui.lost) { try { ui.lost(); } catch (e) { /* ui's problem */ } }
               },
@@ -576,7 +579,11 @@ const PhonePad = (function () {
         });
         if (!done.ok) {
           const why = (done.error === "reply_failed" && answered && !answered.ok) ? answered : done;
-          say(why.message || "Could not reach the game. Make a new code there and try again.", true);
+          // The handshake's own words are for two friends racing; here the
+          // other end is the game on the big screen.
+          say(why.error === "build_mismatch" ? "The game and this page are on different versions — reload both and try again."
+            : why.error === "expired" ? "The game is not offering that code any more — press PHONE AS CONTROLLER there for a new one."
+            : why.message || "Could not reach the game. Make a new code there and try again.", true);
           try { transport.close(); } catch (e) { /* never opened */ }
           return why;
         }
@@ -615,6 +622,7 @@ const PhonePad = (function () {
       // The test/console handle: what the page holds, and a way to paint a
       // dash without a link (controller.html?demo drives the LCD from it).
       paintHud: (h) => { lastHud = h; paintHud(dom.hud, h); },
+      armSensor: requestSensor,   // the demo turns the rim with a real phone's tilt, unlinked
       setRoll: (r) => { roll = r; paintRoll(); if (session) session.sample(); },   // stands in for the sensor
       pump: () => (session ? session.pump() : 0),   // the frame tick, for a harness with no rAF
       state: () => ({ linked: !!session, roll, thr, brk, held, sensorOn, hud: lastHud, stats: session ? session.stats() : null }),

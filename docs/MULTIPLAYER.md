@@ -247,7 +247,9 @@ same `tiltRaw`/`tiltSmoothed` the local sensor does, so the One-Euro filter,
 dead zone, `MAX_TILT` and slew — every TILT slider — and RECALIBRATE act on the
 phone. The source is freshness-gated (`REMOTE_STALE_MS` 700): it sits between
 the gamepad and the on-screen modes in `Input.steer()` and simply falls out
-when the phone stops sending. Roll on both ends is `TiltRoll.rollDeg()`
+when the phone stops sending; a phone whose samples carry no roll (no motion
+sensor, permission refused) keeps its pedals and buttons but never takes the
+wheel (`Input.remoteSteers()`), so the local arrows or a drag still steer. Roll on both ends is `TiltRoll.rollDeg()`
 (`js/input/tilt-roll.js`). Bluetooth is not an option for a web page: no
 browser lets a phone advertise as a peripheral or an HID gamepad.
 

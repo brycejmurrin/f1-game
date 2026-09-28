@@ -482,6 +482,107 @@ test("pad(): the page's pedals, paddles and LCD are wired through to the wire an
 });
 
 // ---------------------------------------------------------------------------
+// The desktop's pairing flow: host() with the signalling stood in for, onto the
+// loopback wire — the phase machine, the QR hand-off, the lost-link cleanup.
+// ---------------------------------------------------------------------------
+
+const tick = () => new Promise((r) => setImmediate(r));
+async function settle(n = 6) { for (let i = 0; i < n; i++) await tick(); }
+
+function hostHarness(over = {}) {
+  const desk = bootInput();
+  const [padEnd, hostEnd] = NetTransport.loopback({ latencyMs: 1, rnd: NetTransport.seededRnd(5) });
+  padEnd.pump(0); hostEnd.pump(0);
+  const ui = { said: [], qrs: [], linkedN: 0, lostN: 0,
+    say: (t, bad) => ui.said.push((bad ? "!" : "") + t), qr: (url, code) => ui.qrs.push({ url, code }),
+    linked: () => ui.linkedN++, lost: () => ui.lostN++, hud: () => null };
+  const room = { stopped: 0, onJoiner: null, stop() { room.stopped++; } };
+  const deps = Object.assign({
+    rtc: () => hostEnd, prefetchIce: async () => null, makeCode: () => "ABC234",
+    createInvite: async () => ({ ok: true, code: "OFFER" }),
+    acceptAnswer: async () => ({ ok: true }),
+    hostRoom: async (o) => { room.onJoiner = o.onJoiner; room.onFail = o.onFail; room.token = o.token; return { ok: true, stop: room.stop }; },
+  }, over);
+  // host() reads the page's Input; the harness's is handed through the global.
+  globalThis.Input = desk.Input;
+  const ctl = PhonePad.host(ui, deps);
+  return { ...desk, ui, room, ctl, padEnd, hostEnd };
+}
+
+test("host(): prepares, mints a code, paints the QR, waits, links on the phone's answer, then closes the room", async () => {
+  const h = hostHarness();
+  await settle();
+  assert.equal(h.ctl.state().phase, "waiting");
+  assert.equal(h.ctl.state().code, "ABC234");
+  assert.deepEqual(h.ui.qrs, [{ url: PhonePad.padUrl("ABC234"), code: "ABC234" }], "the QR carries controller.html#pad=CODE");
+  assert.match(h.ui.said.at(-1), /Scan the code/);
+  assert.ok(h.room.onJoiner, "the room is hosted");
+  await h.room.onJoiner(null, "ANSWER");
+  await settle();
+  assert.equal(h.ctl.state().phase, "linked", "the loopback end is already open, so the link opens at once");
+  assert.equal(h.ui.linkedN, 1);
+  assert.equal(h.room.stopped, 1, "the room closes once the phone is on");
+  assert.ok(h.room.token.cancelled);
+  assert.deepEqual(h.ui.qrs.at(-1), { url: null, code: null }, "the QR is taken down");
+  assert.match(h.ui.said.at(-1), /connected/i);
+  // A second answer (another scan of the same code) is ignored.
+  await h.room.onJoiner(null, "ANSWER-2"); await settle();
+  assert.equal(h.ui.linkedN, 1);
+  // The phone drops: lost, said, and the page told to re-press.
+  h.padEnd.close(); await settle();
+  assert.equal(h.ctl.state().phase, "lost");
+  assert.equal(h.ui.lostN, 1);
+  assert.match(h.ui.said.at(-1), /^!Phone disconnected/);
+  assert.equal(h.Input.remoteActive(), false);
+  h.ctl.cancel();   // idempotent after lost
+  assert.equal(h.ctl.state().phase, "cancelled");
+});
+
+test("host(): an unreadable answer goes back to waiting; a room that will not open fails; cancel while waiting tears down", async () => {
+  const bad = hostHarness({ acceptAnswer: async () => ({ ok: false, error: "corrupt_code", message: "That code is incomplete." }) });
+  await settle();
+  await bad.room.onJoiner(null, "JUNK"); await settle();
+  assert.equal(bad.ctl.state().phase, "waiting", "back to waiting for a readable answer");
+  assert.match(bad.ui.said.at(-1), /^!That code is incomplete/);
+  bad.ctl.cancel();
+  assert.equal(bad.room.stopped, 1); assert.equal(bad.hostEnd.status, "closed");
+
+  const noRoom = hostHarness({ hostRoom: async () => ({ ok: false, error: "no_relay", message: "Could not reach any room service." }) });
+  await settle();
+  assert.equal(noRoom.ctl.state().phase, "failed");
+  assert.match(noRoom.ui.said.at(-1), /^!Could not reach any room service/);
+
+  const noRtc = hostHarness({ rtc: () => null });
+  await settle();
+  assert.equal(noRtc.ctl.state().phase, "failed");
+  assert.match(noRtc.ui.said.at(-1), /WebRTC is unavailable/);
+
+  const lostEarly = hostHarness();
+  await settle();
+  await lostEarly.room.onJoiner(null, "ANSWER");
+  // ICE never completes: the wire dies before/after opening — the room must not linger.
+  lostEarly.padEnd.close(); await settle();
+  assert.equal(lostEarly.ctl.state().phase, "lost");
+  assert.equal(lostEarly.room.stopped, 1, "a lost link drops the room's relay sockets");
+});
+
+test("a phone with no motion sensor is pedals and buttons only: it never blocks the local steering", () => {
+  const { Input, phone, frame } = pair();
+  Input.setSteerMode("buttons");
+  phone.roll = null; phone.thr = 0.5;
+  for (let i = 0; i < 10; i++) frame();
+  assert.ok(Input.remoteActive(), "the link is live");
+  assert.equal(Input.remoteSteers(), false, "but it does not steer");
+  assert.equal(Input.throttle(), true, "its pedal still works");
+  assert.equal(Input.debugState().remote.steers, false);
+  // The local on-screen arrows reach steer(): the remote is not sitting in front of them.
+  assert.equal(Input.steer(), 0);
+  phone.roll = 20;
+  for (let i = 0; i < 60; i++) frame();
+  assert.ok(Input.remoteSteers() && Input.steer() > 0.3, "a roll appearing later takes the wheel");
+});
+
+// ---------------------------------------------------------------------------
 // The two shells agree
 // ---------------------------------------------------------------------------
 
