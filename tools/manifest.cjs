@@ -141,6 +141,7 @@ const FULL = [
   "js/ui/track-maps.js",
   "js/car/helmets.js",
   "js/car/car3d.js",
+  "js/input/tilt-roll.js",  // TiltRoll: the one roll-from-orientation function; input.js and controller.html both call it
   "js/input/input.js",
   "js/audio/engine.js",
   "js/audio/music-lib.js",
@@ -222,6 +223,7 @@ const FULL = [
   "js/fx/skidmarks.js",
   "js/race/race-control.js",
   "js/race/overtake-mode.js",
+  "js/race/real-race.js",      // RealRace.create(G): a real Grand Prix replayed from its timing script (after race-control: it holds its flags)
   "js/race/weather-arc.js",
   "js/camera/free-cam.js",
   "js/camera/photo-cam.js",
@@ -491,6 +493,8 @@ const HARD_EDGES = [
   ["js/physics/aero-zones.js", "js/game.js"],      // game.js calls AeroZones.create(G) at eval time
   ["js/fx/skidmarks.js", "js/game.js"],      // game.js calls SkidMarks.create() at eval time
   ["js/race/race-control.js", "js/game.js"],   // game.js calls RaceControl.create(G) at eval time
+  ["js/core/mat4.js", "js/race/real-race.js"],   // RealRace binds M4.clamp at eval
+  ["js/race/real-race.js", "js/game.js"],      // game.js calls RealRace.create(G) at eval time
   ["js/race/session-entry.js", "js/game.js"], // game.js creates the shared start/quali entry coordinator
   ["js/race/race-control.js", "js/physics/incident-sim.js"], // takeover line crossings share RaceControl semantics
   ["js/race/weather-arc.js", "js/game.js"],    // game.js calls WeatherArc.create(G, deps) at eval time
@@ -639,6 +643,7 @@ const LAZY_DATA = [
   "js/data/standings.js",
   "js/data/results.js",
   "js/data/live.js",
+  "js/data/real-race-tab.js",
   "js/data/hub.js",
 ];
 // hub.js calls Data*.create() at EVAL time, so every tab module must have
@@ -674,6 +679,25 @@ const LAZY_NET = [
   "js/net/session.js",
   "js/net/netplay.js",
   "js/net/lobby.js",
+  // PHONE AS CONTROLLER rides the same wire (rtc + handshake + rendezvous), so
+  // it loads with the stack and ships in the same precache group. Call-time
+  // binding only; controller.html's CONTROLLER subset below also carries it.
+  "js/input/phone-pad.js",
+];
+
+// controller.html (the PHONE AS CONTROLLER page, a root page like bench.html)
+// <script> subset, in order: the signalling + transport half of js/net, the
+// shared roll math, and the pad module. No game, no renderer, no store.
+const CONTROLLER = [
+  "js/core/log.js",
+  "js/net/bytes.js",
+  "js/net/nostr.js",
+  "js/net/rendezvous.js",
+  "js/net/sdp.js",
+  "js/net/transport.js",
+  "js/net/handshake.js",
+  "js/input/tilt-roll.js",
+  "js/input/phone-pad.js",
 ];
 // Eval-time pairs, moved verbatim from HARD_EDGES. Listed, not derived: unlike
 // the data hub these are a real graph (rendezvous needs nostr, handshake needs
@@ -996,7 +1020,7 @@ const MOVED = {
 
 module.exports = {
   MOVED,
-  CIRCUITS, CIRCUITS_DIR, FULL, CSS, CSS_PRELOAD, CSS_DEFERRED, SHELL_NOTES, CARVIEW, TRACK_VM, HARD_EDGES,
+  CIRCUITS, CIRCUITS_DIR, FULL, CSS, CSS_PRELOAD, CSS_DEFERRED, SHELL_NOTES, CARVIEW, CONTROLLER, TRACK_VM, HARD_EDGES,
   DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES, LAZY_RACE,
   LAZY_DATA, LAZY_DATA_EDGES, LAZY_NET, LAZY_NET_EDGES,
   SCENERY_DIR, LAZY_SCENERY, sceneryPath,

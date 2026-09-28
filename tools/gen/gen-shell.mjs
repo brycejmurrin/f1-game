@@ -17,6 +17,7 @@
  *                      <!-- @gen-shell:css --> … <!-- /@gen-shell:css -->
  *                      <!-- @gen-shell:scripts --> … <!-- /@gen-shell:scripts -->
  *   tools/carview.html <!-- @gen-shell:carview --> … <!-- /@gen-shell:carview -->
+ *   controller.html    <!-- @gen-shell:controller --> … <!-- /@gen-shell:controller -->
  *   sw.js              // @gen-shell:sw-optional … // /@gen-shell:sw-optional
  *                      // @gen-shell:sw-lazy-agent … // /@gen-shell:sw-lazy-agent
  *   js/roster.js       the whole file (one global, ApexRoster)
@@ -39,7 +40,7 @@ import { ROOT, isMain, firstDiff } from "./gen-lib.mjs";
 const require = createRequire(import.meta.url);
 const MANIFEST = require("../manifest.cjs");
 
-export const TARGETS = Object.freeze(["index.html", "tools/carview.html", "sw.js", "js/roster.js"]);
+export const TARGETS = Object.freeze(["index.html", "tools/carview.html", "controller.html", "sw.js", "js/roster.js"]);
 /** The `?v=` token written into the repo's shell. Real hashes exist only in
  *  the deploy's staged copy. */
 export const DEV_TOKEN = "dev";
@@ -91,6 +92,13 @@ function scriptsBlock() {
 
 function carviewBlock() {
   return MANIFEST.CARVIEW.map((f) => `<script src="../${f}"></script>`).join("\n") + "\n";
+}
+
+/** controller.html is a ROOT page like index.html: same `?v=dev` token, hashed
+ *  by the same deploy step (bump-cache rewrites every root page it finds). */
+function controllerBlock() {
+  return MANIFEST.CONTROLLER.map((f) =>
+    `<script defer crossorigin="anonymous" src="${f}?v=${DEV_TOKEN}"></script>`).join("\n") + "\n";
 }
 
 /** Every tagless file sw.js must seed: loadBackendScripts() injects each one as
@@ -157,10 +165,12 @@ export function generate() {
   html = replaceMarked(html, "<!-- @gen-shell:scripts -->", "<!-- /@gen-shell:scripts -->", scriptsBlock());
   let carview = read("tools/carview.html");
   carview = replaceMarked(carview, "<!-- @gen-shell:carview -->", "<!-- /@gen-shell:carview -->", carviewBlock());
+  let controller = read("controller.html");
+  controller = replaceMarked(controller, "<!-- @gen-shell:controller -->", "<!-- /@gen-shell:controller -->", controllerBlock());
   let sw = read("sw.js");
   sw = replaceMarked(sw, "// @gen-shell:sw-optional", "// /@gen-shell:sw-optional", swOptionalBlock());
   sw = replaceMarked(sw, "// @gen-shell:sw-lazy-agent", "// /@gen-shell:sw-lazy-agent", swLazyAgentBlock());
-  return { "index.html": html, "tools/carview.html": carview, "sw.js": sw, "js/roster.js": rosterSource() };
+  return { "index.html": html, "tools/carview.html": carview, "controller.html": controller, "sw.js": sw, "js/roster.js": rosterSource() };
 }
 
 /** Targets whose committed bytes differ from a fresh generation. */

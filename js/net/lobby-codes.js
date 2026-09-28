@@ -6,10 +6,36 @@
 
 const LobbyCodes = (function () {
 
+  // THE CODE OUT OF WHATEVER WAS PASTED. A link (the QR / SHARE form) gives up
+  // its fragment. Anything else arrives from a messaging app, so it may carry
+  // the sender's words around it ("here you go: APEX1.s.… thanks") or a hard
+  // wrap from a plain-text mail client (newlines INSIDE the body). peekCode
+  // strips whitespace, which cures the wrap but glues the prose onto the
+  // body — "corrupt", for a code that was fine. So: the token that starts with
+  // the magic, plus any following tokens that are plainly wrapped fragments
+  // (long, code-charset only; a short one only as the very last token after a
+  // long one). English words are short; a base64url fragment is not.
+  const CODE_CHARS = /^[A-Za-z0-9_-]+$/;
+  const FRAGMENT_MIN = 20;
   function codeFrom(text) {
     const raw = String(text || "").trim();
     if (!raw) return "";
-    return NetHandshake.inviteFromUrl(raw) || raw;
+    const fromUrl = NetHandshake.inviteFromUrl(raw);
+    if (fromUrl) return fromUrl;
+    const tokens = raw.split(/\s+/);
+    if (tokens.length === 1) return raw;
+    const magic = (NetHandshake.MAGIC || "APEX1") + ".";
+    const at = tokens.findIndex((t) => t.startsWith(magic));
+    if (at < 0) return raw;                       // peekCode says "not an invite code"
+    let code = tokens[at], long = false;
+    for (let i = at + 1; i < tokens.length; i++) {
+      const t = tokens[i];
+      if (!CODE_CHARS.test(t)) break;
+      if (t.length >= FRAGMENT_MIN) { code += t; long = true; continue; }
+      if (long && i === tokens.length - 1) code += t;   // a wrapped code's short tail
+      break;
+    }
+    return code;
   }
 
   // The QR carries the invite LINK, not the code: a link scanned by the

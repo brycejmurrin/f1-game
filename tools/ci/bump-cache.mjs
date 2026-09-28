@@ -38,6 +38,11 @@ const STAGED = !!opt("--root");
 const ROOT = STAGED ? path.resolve(opt("--root")) : path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const INDEX = path.join(ROOT, "index.html");
 const VERSION = path.join(ROOT, "version.json");
+// Every other ROOT page whose tags carry `?v=` — hashed like the shell, no
+// generation meta of its own. Optional: a staged copy that lacks one is a
+// pages.yml `cp` omission tests/unit/ci-coverage.test.mjs reports, not this
+// tool's failure.
+const EXTRA_PAGES = ["controller.html"].map((f) => path.join(ROOT, f)).filter((f) => fs.existsSync(f));
 export const DEV_TOKEN = "dev";
 const TAG_RE = /\b(src|href)="([^"?#]+)\?v=([A-Za-z0-9._-]+)"/g;
 const META_RE = /(<meta\s+name="apex-build"\s+content=")([1-9][0-9]*)("\s*\/?>)/;
@@ -54,6 +59,9 @@ function digest(rel) {
 function readState() {
   const html = fs.readFileSync(INDEX, "utf8");
   const tags = [...html.matchAll(TAG_RE)].map((m) => ({ rel: m[2], actual: m[3] }));
+  for (const page of EXTRA_PAGES) {
+    for (const m of fs.readFileSync(page, "utf8").matchAll(TAG_RE)) tags.push({ rel: m[2], actual: m[3], page: path.basename(page) });
+  }
   let build = null;
   try { build = JSON.parse(fs.readFileSync(VERSION, "utf8")).build; } catch (_) { /* verdict reports it */ }
   const meta = html.match(META_RE);
@@ -108,10 +116,12 @@ function apply() {
     : current;
   if (!Number.isInteger(next) || next < 1) throw new Error("--at must be a positive integer");
   let tagCount = 0;
-  let output = html.replace(TAG_RE, (_all, attr, rel) => {
+  const hashTags = (text) => text.replace(TAG_RE, (_all, attr, rel) => {
     tagCount++;
     return `${attr}="${rel}?v=${digest(rel)}"`;
   });
+  for (const page of EXTRA_PAGES) fs.writeFileSync(page, hashTags(fs.readFileSync(page, "utf8")));
+  let output = hashTags(html);
   if (!META_RE.test(output)) throw new Error('index.html is missing <meta name="apex-build" content="N">');
   output = output.replace(META_RE, `$1${next}$3`);
   fs.writeFileSync(INDEX, output);

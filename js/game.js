@@ -19,7 +19,7 @@ const els = {
   hudLimits: $("hud-limits"),
   flag: $("hud-flag"), minimap: $("minimap"),
   lights: $("lights"), announce: $("announce"), announceNum: $("announce-num"),
-  announceWho: $("announce-who"), announceText: $("announce-text"),
+  announceWho: $("announce-who"), announceText: $("announce-text"), announceLive: $("announce-live"),
   overlay: $("overlay"), audiostate: $("audiostate"),
   lighting: $("lighting"), camtune: $("camtune"), flyby: $("flyby"),
   select: $("select"), selTitle: $("select-title"), selTeams: $("sel-teams"),
@@ -176,6 +176,7 @@ const DATA_READY = {
   "js/data/standings.js": () => typeof DataStandings !== "undefined",
   "js/data/results.js": () => typeof DataResults !== "undefined",
   "js/data/live.js": () => typeof DataLive !== "undefined",
+  "js/data/real-race-tab.js": () => typeof DataRealRace !== "undefined",
   "js/data/hub.js": () => typeof DataHub !== "undefined",
 };
 // Memoised on the PROMISE, not on a boolean: two fast taps on DATA must not
@@ -1329,6 +1330,12 @@ function showAnnounce(msg, dur, kind) {
   if (kind && kind !== "race") els.announce.dataset.kind = kind;
   else delete els.announce.dataset.kind;
   els.announce.hidden = false;
+  // SCREEN READERS hear the card through #announce-live, an always-present,
+  // empty polite region: a region filled while hidden and unhidden in the same
+  // step is not announced by NVDA, JAWS or macOS VoiceOver. Cleared, then set a
+  // beat later so a repeated line is still a change (tetralogical.com/blog/2024/05/01).
+  const live = els.announceLive, said = els.announceWho.textContent + ": " + msg;
+  if (live) { live.textContent = ""; clearTimeout(showAnnounce._t); showAnnounce._t = setTimeout(() => { live.textContent = said; }, 60); }
   // A card of small type takes a beat longer to read than a billboard did, and
   // ANN_MIN_S is the floor under every caller's number — the shortest asked for
   // was 1.4 s, which nobody reads at racing speed.
@@ -2166,6 +2173,7 @@ function gridUp(preOrder) {
     c.speed = 0; c.accSm = 0; c.corridorAccel = 0; c.prog = -(14 + i * 8); c.lap = 0; c.fuelLap = 0; c.fuelRestartLaps = 0; c.energy = 1; c._progGift = 0;   // a car on the grid is pulling nothing — apex.js reset() has the full list and why
     OvertakeMode.reset(c); c.lapTime = 0; c.best = Infinity; c.totalT = 0;
     c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
+    c.finPos = 0; c.retired = false; c.dnf = null; c.dnfAt = null; c.dnfWhy = null; delete c._coastHeld;   // last race's classification: makeCars' values; a race re-arms via armReliability
     c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.qualiCut = false; c.penalty = 0; c.offT = 0; c.hits = 0; c.hitSev = 0; c.wallHits = 0; c.errCount = 0;   // mistakes THIS race — the instrument's denominator, cleared only by a NEW race
     c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.wallT = 0; c.wasOnWall = false;
     c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.contactT = 0; c.lane = c.lanePref;   // BOTH sides of a real conflict: lane is damped state, not a constant, and contactT DECAYS — unlike the towing/wheelLock beside it, a re-grid is the only thing that clears it
@@ -3175,7 +3183,7 @@ function endRace(forcedOrder) {
     else SeasonCal.save(season);   // the sprint's points AND its stage, one guarded write
   }
   // A one-off GP's driven quali order stays persisted (quali-persist contract);
-  // quali's qualiTrack stamp refuses it on a different circuit.
+  // quali's qualiTrack + qualiMode stamps refuse it on another circuit or mode.
   dbgCam = null;
   buildResults(order, { sprint: wasSprint, duel: duelOn() });   // endRace's own read: scored() is stale after a season save conflict
   els.results.hidden = false;
@@ -3567,6 +3575,7 @@ const G = {
   referencePole: () => quali.referencePole(),
   redFlagRestart,
   get daily() { return daily; },
+  holdCaution: (level, cause) => raceCtl.hold(level, cause),   // a scripted flag (js/race/real-race.js); 0 releases it
   get ttDistance() { return TT_LAPS; },   // the time-trial distance a daily session stages (ttLaps is the session's lap list)
   // CHANGEABLE conditions: the weather walks from the chip's start to a
   // target the host decides (wxArcPlan) — see startRace / WeatherArc.planFor.
@@ -3609,6 +3618,7 @@ const records = SessionRecords.create(G);
 const coach = DrivingCoach.create(G);
 const raceRadio = RaceRadio.create(G);    // the engineer's race awareness + TV commentary (js/race/race-radio.js)
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
+const realRace = RealRace.create(G);      // a real Grand Prix replayed from its timing script (js/race/real-race.js)
 titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js/ui/title-menu.js)
 const onboard = Onboard.create(G);        // first-run coach marks (js/ui/onboard.js)
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
@@ -4027,7 +4037,7 @@ function quitToMenu() {
   _ltBase = null; _ltFlash = 0;   // the lightning's saved race base is not the menu's
   if (announcer.stop) announcer.stop();   // the results commentary ran on over the title for up to 16 s
   shake = 0; hitStop = 0;
-  PerfGov.sentinelArm(false); if (netPlay.active()) netPlay.stop("local"); hideCamPicker();
+  PerfGov.sentinelArm(false); if (netPlay.active()) netPlay.stop("local"); hideCamPicker(); Input.unlockLandscape();
   closeLightTuner(false);
   closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();
   // THE PRE-RACE SCREEN OUTLIVES A FAILED START without this: its only other
@@ -4036,7 +4046,7 @@ function quitToMenu() {
   // left the flyby active() for the session — capture listeners attached, and
   // menuBlank and the per-car draw break both gate on !active(). Idempotent.
   loadingScreen.stop();
-  state = "menu"; paused = false; raceCtl.reset(); wxArc.endSession(); daily.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
+  state = "menu"; paused = false; raceCtl.reset(); wxArc.endSession(); daily.stop(); realRace.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
   // A netplay lights-out instant is consumed by the countdown (the
   // `netStart = null` at its end). Quitting BEFORE that consumption stranded
   // it, and the next SOLO race read an `at` already in the past: countT
@@ -4084,6 +4094,7 @@ function quitToMenu() {
   const hasSeason = SeasonCal.hasProgress(season) && season.round < SeasonCal.rounds();
   $("mb-standings").hidden = !hasSeason;
   refreshCareerButton();
+  consumeGhostHash();   // a #ghost= link deferred while racing lands now (no-op without one)
 }
 
 
@@ -4101,6 +4112,7 @@ function update(dt) {
   // Camera cycling works during the countdown and the race (set your view before
   // lights-out). Edge-triggered via the C key or the CAM button.
   if ((state === "race" || state === "count") && Input.consumeCameraCycle()) cycleCam();
+  realRace.update(dt);   // every state: it arms in the countdown, places a mid-race jump-in on the first green frame, steps the script in the race, and stands down at the results
   /* MANUAL RECOVER. The auto-rescue only fires on its own terms (held throttle
      and no movement, wrong way, off-track for long enough), so a car wedged
      somewhere it considers fine — nose-in against a barrier, facing the right
@@ -8526,6 +8538,8 @@ function openTimeTrial(selectDaily) {
 }
 $("mb-tt").onclick = () => openTimeTrial(false);
 async function consumeGhostHash() {
+  // A ghost link landing MID-RACE waits, fragment intact, for the menu (quitToMenu re-reads it) — as #353's invite link does.
+  if (UiLayers.inRace()) { Log.info("game", "ghost link deferred: racing"); return null; }
   const shared = await GhostShare.consumeHash({
     notify: (message, result) => announce(message, result && result.ok ? 3 : 4, result && result.ok ? "info" : "warning"),
   });
@@ -8971,6 +8985,12 @@ els.resNext.onclick = () => {
   // that classification has since been dropped. quitToMenu() clears it, so a
   // resumed weekend re-qualifies instead of silently gridding the player P12 out
   // of gridUp()'s tier fallback.
+  // RACE AGAIN after a FRIEND race is a solo race: end the session first (BYE to
+  // the rival, remotes handed back), or the new race ran with the old one's
+  // NetPlay live — the guest adopted the PREVIOUS race's RESULT rows onto the
+  // new cars (netOrder), LAP/STRATEGY kept going to the peer for cars no longer
+  // in the grid, and pause no longer stopped the world (the netPlay.active() gates).
+  if (netPlay.active()) netPlay.stop("local");
   if (isChampionship() && (SeasonCal.qualiNext(season) || (SeasonCal.quali() && !quali.results()))) openQuali();
   else startRace();
 };
@@ -9121,15 +9141,15 @@ if ($("pm-fullscreen")) {
       if (v === "on") {
         const el = document.documentElement;
         const req = el.requestFullscreen || el.webkitRequestFullscreen;
-        if (req) Promise.resolve(req.call(el)).then(() => Input.lockEscape()).catch(() => paintFullscreenRow());
+        if (req) Promise.resolve(req.call(el)).then(() => { Input.lockEscape(); if (state === "race" || state === "count") Input.lockLandscape(); }).catch(() => paintFullscreenRow());
       } else if (document.fullscreenElement) {
-        Input.unlockEscape();
+        Input.unlockEscape(); Input.unlockLandscape();
         if (document.exitFullscreen) document.exitFullscreen().catch(() => { /* already gone */ });
       }
     } });
   // The player can leave fullscreen without us (Esc, F11, the OS), so the row
   // follows the DOCUMENT rather than remembering what it last asked for.
-  document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement) Input.unlockEscape(); paintFullscreenRow(); });
+  document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement) { Input.unlockEscape(); Input.unlockLandscape(); } paintFullscreenRow(); });
   paintFullscreenRow();
 }
 /* ADD TO HOME SCREEN IS THE ONLY FULLSCREEN AN iPHONE HAS. Element fullscreen
@@ -9160,6 +9180,48 @@ if ($("pm-fullscreen")) {
 })();
 applyMirrorControls();
 $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
+// PHONE AS CONTROLLER (js/input/phone-pad.js, LAZY_NET): the button loads the
+// multiplayer stack the pairing rides on, then the module owns the pairing and
+// feeds Input.remoteSample(). A second press cancels; a lost phone re-arms it.
+let phonePad = null;
+// The dash the paired phone paints: the fields js/ui/hud.js reads, ~15 Hz.
+function phonePadDash() {
+  const p = player;
+  if (!p) return null;
+  const D = PhonePad.DASH, xOpen = (p.aeroX || 0) > 0.05;
+  const flags = (p.boostOn ? D.boost : 0) | (p.otT > 0 ? D.otActive : p.otArmed ? D.otArmed : 0)
+    | (xOpen ? D.xOpen : p.xArmed ? D.xArmed : 0) | (p.retired ? D.retired : 0) | (isTimeTrial() ? D.timeTrial : 0)
+    | (paused ? D.paused : 0) | (p.rpm > MAX_RPM * 0.92 ? D.redline : 0)
+    // The control modes, so the wheel offers only what the driver operates.
+    | (gearsManual() ? 0 : D.gearsAuto) | (autoThrottle() ? D.throttleAuto : 0)
+    | (raceAeroMode === "auto" ? D.aeroAuto : 0) | (aeroZ && aeroZ.zones && aeroZ.zones.length ? 0 : D.aeroNone);
+  return { gear: p.gear, kmh: dashKph(p.speed), rpm: (p.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), lap: p.lap, laps: lapsTarget,
+    pos: p.rank, cars: cars.length, ers: p.energy, flags, caution: cautionLevel(), lastLapMs: (p.lastLap || 0) * 1000,
+    state, team: PhonePad.teamHex(p.team && p.team.color) };
+}
+$("pm-phonepad").onclick = () => {
+  const box = $("pm-phonepad-box"), status = $("pm-phonepad-status"), btn = $("pm-phonepad");
+  if (phonePad) { phonePad.cancel(); phonePad = null; box.hidden = true; btn.textContent = "PHONE AS CONTROLLER"; return; }
+  box.hidden = false; btn.textContent = "STOP PAIRING"; status.textContent = "Loading…";
+  ensureNet().then((ok) => {
+    if (!ok) { status.textContent = "Could not load the pairing stack — check the connection."; return; }
+    $("pm-phonepad-url").textContent = PhonePad.padUrl("").replace(/#.*$/, "");
+    phonePad = PhonePad.host({
+      hud: phonePadDash,
+      say: (t) => { status.textContent = t; },
+      qr: (url, code) => {
+        LobbyCodes.paintQr($("pm-phonepad-qr-wrap"), $("pm-phonepad-qr"), url);
+        $("pm-phonepad-code").textContent = code || "";
+        $("pm-phonepad-pair").hidden = !code;
+        // The code appears below the button: bring it into view on the sheet,
+        // or a short screen shows "scan the code" with nothing to scan.
+        if (code && box.scrollIntoView) box.scrollIntoView({ block: "nearest" });
+      },
+      linked: () => { btn.textContent = "UNPAIR PHONE"; announce("PHONE CONNECTED — TILT TO STEER", 3, "info"); },
+      lost: () => { btn.textContent = "PHONE AS CONTROLLER"; phonePad = null; announce("PHONE DISCONNECTED", 3, "warn"); },
+    });
+  });
+};
 keyBinds = KeyBinds.create(G);   // the KEYBOARD rows: rebindable driving keys (js/ui/key-binds.js)
 SettingsExport.create(G);   // SETTINGS FILE: download preferences as JSON (js/ui/settings-export.js)
 

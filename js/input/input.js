@@ -22,7 +22,6 @@ const Input = (function () {
   let steerSpeedRef = 41.7;   // default SPEED STEER v5; pushed from steer-tuning
   let speedStdOverride = null;
   let speedProvider = null;
-  const DEG = Math.PI / 180;
 
   let keyLeft = false;
   let keyRight = false;
@@ -147,6 +146,21 @@ const Input = (function () {
   let oePrev = 0, oeDPrev = 0, oeInit = false;
   let tiltSteerVal = 0;       // last steer command emitted (-1..1)
   let tiltSteerT = 0;         // timestamp of the last tiltSteering() call (ms)
+  /* PHONE AS CONTROLLER (js/input/phone-pad.js). A paired phone streams its
+     roll in degrees plus its pedals; the roll enters the SAME One-Euro filter,
+     dead zone, MAX_TILT map and slew as the local sensor (remoteSample writes
+     tiltRaw/tiltSmoothed exactly as onOrient does), so every TILT slider and
+     RECALIBRATE act on the phone too. Freshness, not a mode: the source is
+     live while samples keep arriving and simply falls out of steer() when
+     they stop, so the keyboard or a pad still work with a phone paired. Edges
+     (shift, overtake, …) come on the RELIABLE channel via remoteEvent; the
+     held look-back bit rides the sample. */
+  const REMOTE_STALE_MS = 700;   // the phone heartbeats every 100 ms; six misses = gone
+  const REMOTE_HELD = Object.freeze({ lookBack: 1 });
+  let remoteMs = 0;              // nowMs() of the last sample; 0 = never
+  let remThr = 0, remBrk = 0;    // 0..1 pedal travel from the phone
+  let remHeld = 0;               // REMOTE_HELD bits
+  let remoteHaptics = null;      // (ms) => void, forwards vibrate() to the phone
 
   let onPauseCb = null;
   let onPadLostCb = null;      // fired when the LAST pad disconnects (game.js pauses)
@@ -194,32 +208,13 @@ const Input = (function () {
     return xHat;
   }
 
-  function screenAngle() {
-    if (typeof screen !== "undefined" && screen.orientation &&
-        typeof screen.orientation.angle === "number") {
-      return screen.orientation.angle;
-    }
-    if (typeof window.orientation === "number") return window.orientation;
-    return 0;
-  }
-
   function onOrient(e) {
-    if (e.beta === null && e.gamma === null) return;
-    const beta = (e.beta ?? 0) * DEG;     // front-back (X)
-    const gamma = (e.gamma ?? 0) * DEG;  // left-right (Y)
-    const cb = Math.cos(beta), sb = Math.sin(beta);
-    const cg = Math.cos(gamma), sg = Math.sin(gamma);
-    const gx = sg * cb;   // gravity along device right
-    const gy = -sb;       // gravity along device top
-    const gz = -cg * cb;  // gravity along device out-of-screen
-    let h, v;             // gravity along screen-right (h) vs the rest (v)
-    switch (((screenAngle() % 360) + 360) % 360) {
-      case 90:  h = -gy; v = Math.hypot(gx, gz); break;
-      case 180: h = -gx; v = Math.hypot(gy, gz); break;
-      case 270: h =  gy; v = Math.hypot(gx, gz); break;
-      default:  h =  gx; v = Math.hypot(gy, gz); break;
-    }
-    tiltRaw = Math.atan2(h, v) / DEG;   // signed roll in degrees
+    // The roll math is TiltRoll.rollDeg (js/input/tilt-roll.js): the same
+    // function the PHONE AS CONTROLLER page runs on the phone, so a remote
+    // sample and a local reading agree by construction.
+    const roll = TiltRoll.rollDeg(e.beta, e.gamma, TiltRoll.screenAngle());
+    if (roll === null) return;
+    tiltRaw = roll;
     const n = nowMs();
     const odt = lastOrientMs ? Math.min(0.1, (n - lastOrientMs) / 1000) : 0.016;
     lastOrientMs = n;
@@ -290,6 +285,53 @@ const Input = (function () {
   function tiltActive() {
     return steerMode === "tilt" && tiltSeen;
   }
+
+  function remoteActive() {
+    return remoteMs > 0 && (nowMs() - remoteMs) < REMOTE_STALE_MS;
+  }
+  // One sample from the phone: {roll (deg, may be null), thr, brk, held}.
+  function remoteSample(s) {
+    if (!s) return false;
+    const n = nowMs();
+    if (typeof s.roll === "number" && isFinite(s.roll)) {
+      tiltRaw = s.roll;
+      const odt = lastOrientMs ? Math.min(0.1, (n - lastOrientMs) / 1000) : 0.016;
+      lastOrientMs = n;
+      tiltSmoothed = oneEuro(tiltRaw, odt);
+      tiltSeen = true;
+    }
+    remThr = clamp(+s.thr || 0, 0, 1);
+    remBrk = clamp(+s.brk || 0, 0, 1);
+    remHeld = s.held | 0;
+    remoteMs = n;
+    return true;
+  }
+  // A button EDGE from the phone; the names are the pad's own action names.
+  const REMOTE_EDGES = {
+    shiftUp: () => { shiftUpPressed = true; },
+    shiftDown: () => { shiftDownPressed = true; },
+    overtake: () => { overtakePressed = true; },
+    boost: () => { boostTogglePressed = true; },
+    aero: () => { aeroTogglePressed = true; },
+    camera: () => { cameraCyclePressed = true; },
+    recover: () => { recoverPressed = true; },
+    radio: () => { radioPressed = true; },
+    calib: () => { calibrate(); },
+    pause: () => { if (onPauseCb) onPauseCb(); },
+  };
+  function remoteEvent(kind) {
+    const fn = REMOTE_EDGES[kind];
+    if (!fn) return false;
+    fn();
+    return true;
+  }
+  // The link dropped: pedals off at once, and a phone-fed tilt reading must not
+  // keep steering a device whose own sensor is not attached.
+  function remoteLost() {
+    remoteMs = 0; remThr = remBrk = 0; remHeld = 0;
+    if (!gyroAttached) tiltSeen = false;
+  }
+  function setRemoteHaptics(fn) { remoteHaptics = typeof fn === "function" ? fn : null; }
 
   // Drive the FULL tilt pipeline with an explicit timestep instead of wall-clock:
   // feed a raw tilt angle (deg) and dt (s), get back the steer command (-1..1)
@@ -1284,11 +1326,28 @@ const Input = (function () {
       }
       return null;
     }
+    return pickPad(pads);
+  }
+  /* WHICH PAD DRIVES. getGamepads() lists pads in connection-slot order, and
+     the first connected one used to win outright — so a wheel base, a flight
+     stick or an idle second controller that happened to hold slot 0 ignored the
+     pad in the player's hands. A "standard" mapping is the layout every button
+     index in this file assumes, so it ranks first; among equals the most
+     recently USED one wins (Gamepad.timestamp advances on each state change),
+     and slot order breaks exact ties so an idle pair stays stable.
+     https://developer.mozilla.org/en-US/docs/Web/API/Gamepad/mapping
+     https://developer.mozilla.org/en-US/docs/Web/API/Gamepad/timestamp */
+  function pickPad(pads) {
     if (!pads) return null;
+    let best = null, bestStd = false, bestT = -Infinity;
     for (let i = 0; i < pads.length; i++) {
-      if (pads[i] && pads[i].connected) return pads[i];
+      const p = pads[i];
+      if (!p || !p.connected) continue;
+      const std = p.mapping === "standard";
+      const t = Number.isFinite(p.timestamp) ? p.timestamp : 0;
+      if (!best || (std && !bestStd) || (std === bestStd && t > bestT)) { best = p; bestStd = std; bestT = t; }
     }
-    return null;
+    return best;
   }
 
   // Buttons may be GamepadButton objects or bare numbers depending on browser.
@@ -1702,9 +1761,11 @@ const Input = (function () {
 
   function vibrate(ms) {
     if (hapticScale <= 0) return;
-    if (typeof navigator === "undefined" || !navigator.vibrate) return;
     const d = Math.round(ms * hapticScale);
     if (d <= 0) return;
+    // The phone that is steering feels the kerb, not the desk the laptop sits on.
+    if (remoteHaptics && remoteActive()) { try { remoteHaptics(d); } catch (_) { /* the link's problem */ } }
+    if (typeof navigator === "undefined" || !navigator.vibrate) return;
     try { navigator.vibrate(d); } catch (_) { /* advisory only */ }
   }
   // Best-effort rumble on the active pad (dual-rumble or generic actuator).
@@ -1801,17 +1862,23 @@ const Input = (function () {
     // The d-pad half of padSteer is digital and already ramped — it must not
     // also be curved and speed-scaled as if it were a deflection.
     if (padSteerActive()) return padSteerAnalog ? analogShape(padSteer, "pad") : padSteer;
+    // A paired phone: the tilt pipeline fed by remoteSample, whatever the local mode.
+    if (remoteActive()) return analogShape(tiltSteering(), "tilt");
     if (steerMode === "buttons") return buttonSteering();
     if (tiltActive()) return analogShape(tiltSteering(), "tilt");
     return analogShape(touchSteering(), "touch");
   }
 
+  const REMOTE_PEDAL_ON = 0.1;   // travel below this is a resting thumb, not a press
+  function remoteThrottle() { return remoteActive() && remThr > REMOTE_PEDAL_ON; }
+  function remoteBrake() { return remoteActive() && remBrk > REMOTE_PEDAL_ON; }
+
   function throttle() {
-    return keyThrottle || btnThrottle || padThrottle;
+    return keyThrottle || btnThrottle || padThrottle || remoteThrottle();
   }
 
   function braking() {
-    return keyBrake || btnBrake || padBrake;
+    return keyBrake || btnBrake || padBrake || remoteBrake();
   }
 
   // 0..1 pedal travel. A KEY is digital and is therefore always full travel; an
@@ -1822,11 +1889,13 @@ const Input = (function () {
   function throttleLevel() {
     if (keyThrottle) return 1;
     if (btnThrottle) return throttleLatch && throttleLatched ? 1 : btnThrottleVal;
+    if (remoteThrottle()) return remThr;
     return padThrottleVal > 0.12 ? padThrottleVal : 0;
   }
   function brakeLevel() {
     if (keyBrake) return 1;
     if (btnBrake) return btnBrakeVal;
+    if (remoteBrake()) return remBrk;
     return padBrakeVal > 0.12 ? padBrakeVal : 0;
   }
 
@@ -1882,7 +1951,7 @@ const Input = (function () {
      it was removed on request — the dock had grown to five buttons in one thumb
      column once PIT landed beside it, and a glance over the shoulder is the
      control that least deserves a permanent seat there. */
-  function lookingBack() { return keyLookBack || padLookBack; }
+  function lookingBack() { return keyLookBack || padLookBack || (remoteActive() && !!(remHeld & REMOTE_HELD.lookBack)); }
 
   /* ESCAPE IS SPENT ON LEAVING FULLSCREEN unless we ask for it. In fullscreen
      the UA takes Escape to exit, so our pause handler never sees the key —
@@ -1903,6 +1972,27 @@ const Input = (function () {
   function unlockEscape() {
     const kb = typeof navigator !== "undefined" && navigator.keyboard;
     if (kb && typeof kb.unlock === "function") { try { kb.unlock(); } catch (_) { /* not locked */ } }
+  }
+  /* LANDSCAPE LOCK, the touch half of the same fullscreen request. Android
+     Chrome honours screen.orientation.lock() only while the document is in
+     fullscreen (or an installed fullscreen PWA), so a race entered through the
+     pause menu's FULLSCREEN row stops rotating into portrait when the phone
+     tilts — tilt steering tips the device exactly that way. Touch-only: a
+     desktop has no orientation to lock. iPhone Safari has neither element
+     fullscreen nor lock() and keeps its rotate prompt; the rejection there (and
+     anywhere unsupported) is swallowed.
+     https://developer.mozilla.org/en-US/docs/Web/API/ScreenOrientation/lock */
+  let _landscapeLocked = false;
+  function lockLandscape() {
+    const o = typeof screen !== "undefined" && screen.orientation;
+    if (!o || typeof o.lock !== "function" || !touchControlsNeeded()) return Promise.resolve(false);
+    return Promise.resolve(o.lock("landscape")).then(() => (_landscapeLocked = true)).catch(() => false);
+  }
+  function unlockLandscape() {
+    if (!_landscapeLocked) return;
+    _landscapeLocked = false;
+    const o = typeof screen !== "undefined" && screen.orientation;
+    if (o && typeof o.unlock === "function") { try { o.unlock(); } catch (_) { /* not locked */ } }
   }
 
   function setSteerMode(m) {
@@ -2235,6 +2325,7 @@ const Input = (function () {
     padDpadVal = 0;
     padDpadT = 0;
     keyLookBack = false;
+    remThr = remBrk = 0; remHeld = 0;   // the phone re-sends within 100 ms if still held
     recoverPressed = false;
     radioPressed = false;
     // padPrevButtons is deliberately KEPT: emptying it on a window blur made
@@ -2295,6 +2386,8 @@ const Input = (function () {
       padAxisMap: getPadAxisMap(),
       hapticScale,
       lookingBack: lookingBack(),
+      remote: { active: remoteActive(), roll: tiltRaw, thr: remThr, brk: remBrk, held: remHeld,
+                ageMs: remoteMs ? Math.round(nowMs() - remoteMs) : null },
       canvasTouches: touches.size,
       holdPointers: holdBtns.map((h) => h.ids.size),   // pressed-pointer count per hold button
       throttle: throttle(),
@@ -2328,8 +2421,9 @@ const Input = (function () {
     consumeRecover,
     consumeRadio,
     lookingBack,
-    lockEscape, unlockEscape,
+    lockEscape, unlockEscape, lockLandscape, unlockLandscape,
     tiltActive,
+    remoteSample, remoteEvent, remoteLost, remoteActive, setRemoteHaptics,
     simTilt,
     simTiltReset,
     steerToTilt,
@@ -2359,6 +2453,7 @@ const Input = (function () {
     setPadLabelMode, padLabelMode: padLabelModeOf,
     setPadAxisMap, getPadAxisMap, padAxesAreDefault, beginAxisCapture, calibratePad, padRest,
     touchControlsNeeded,
+    pickPad,
     onPointerKindChange,
     clearEdges,
     get padConnected() { return padConnected; },

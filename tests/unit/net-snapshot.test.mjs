@@ -199,6 +199,27 @@ test("predict() leads sample() by exactly the interpolation delay", () => {
   assert.ok(buf.predict(1200).s > buf.sample(1200).s, "predict must LEAD sample");
 });
 
+test("a far-future tick is refused: it cannot pin newest or freeze the adaptive delay", () => {
+  // Bug hunt 2026-09-27: one packet stamped hours ahead stuck as the newest
+  // sample forever and pinned lastTick, so no honest packet ever updated the
+  // jitter/delay estimate again and the rival froze on extrapolation.
+  const buf = NetSnapshot.createInterp({ total: TOTAL, delayMs: 100, adaptive: true });
+  buf.push(1000, car({ s: 100, speed: 50 }), 1030);
+  assert.equal(buf.push(1000 + 3600e3, car({ s: 999, speed: 50 }), 1040), false,
+    "a tick an hour ahead of arrival must be refused");
+  assert.equal(buf.push(1000 + NetSnapshot.MAX_AHEAD_MS + 50, car({ s: 998 }), 1045), false,
+    "just past the cap is refused too");
+  assert.equal(buf.newest().s, 100, "the refused tick never became the newest sample");
+  // Honest packets with jittery arrival still drive the adaptive delay.
+  const d0 = buf.timing().delayMs;
+  for (let i = 1; i <= 20; i++) assert.equal(buf.push(1000 + i * 50, car({ s: 100 + i }), 1030 + i * 50 + (i % 2) * 40), true);
+  assert.ok(buf.timing().delayMs > d0, "the delay still adapts after the bad packet");
+  assert.equal(buf.newest().s, 120);
+  // A modest lead (clock-offset error) is still accepted, and no arrival = no check.
+  assert.equal(buf.push(3000, car({ s: 130 }), 1500), true);
+  assert.equal(buf.push(1e9, car({ s: 131 })), true, "without an arrival time there is nothing to compare");
+});
+
 test("an empty buffer reports nothing rather than inventing a car", () => {
   const buf = NetSnapshot.createInterp({ total: TOTAL });
   assert.equal(buf.sample(0), null);
