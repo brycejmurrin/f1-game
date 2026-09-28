@@ -9207,7 +9207,7 @@ function phonePadDash() {
 }
 $("pm-phonepad").onclick = () => {
   const box = $("pm-phonepad-box"), status = $("pm-phonepad-status"), btn = $("pm-phonepad");
-  if (phonePad) { phonePad.cancel(); phonePad = null; box.hidden = true; btn.textContent = "PHONE AS CONTROLLER…"; return; }
+  if (phonePad) { phonePad.cancel(); phonePad = null; box.hidden = true; btn.textContent = "PHONE AS CONTROLLER"; return; }
   box.hidden = false; btn.textContent = "STOP PAIRING"; status.textContent = "Loading…";
   ensureNet().then((ok) => {
     if (!ok) { status.textContent = "Could not load the pairing stack — check the connection."; return; }
@@ -9215,9 +9215,16 @@ $("pm-phonepad").onclick = () => {
     phonePad = PhonePad.host({
       hud: phonePadDash,
       say: (t) => { status.textContent = t; },
-      qr: (url, code) => { LobbyCodes.paintQr($("pm-phonepad-qr-wrap"), $("pm-phonepad-qr"), url); $("pm-phonepad-code").textContent = code || ""; },
+      qr: (url, code) => {
+        LobbyCodes.paintQr($("pm-phonepad-qr-wrap"), $("pm-phonepad-qr"), url);
+        $("pm-phonepad-code").textContent = code || "";
+        $("pm-phonepad-pair").hidden = !code;
+        // The code appears below the button: bring it into view on the sheet,
+        // or a short screen shows "scan the code" with nothing to scan.
+        if (code && box.scrollIntoView) box.scrollIntoView({ block: "nearest" });
+      },
       linked: () => { btn.textContent = "UNPAIR PHONE"; announce("PHONE CONNECTED — TILT TO STEER", 3, "info"); },
-      lost: () => { btn.textContent = "PHONE AS CONTROLLER…"; phonePad = null; announce("PHONE DISCONNECTED", 3, "warn"); },
+      lost: () => { btn.textContent = "PHONE AS CONTROLLER"; phonePad = null; announce("PHONE DISCONNECTED", 3, "warn"); },
     });
   });
 };
