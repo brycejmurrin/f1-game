@@ -493,10 +493,9 @@ function hostHarness(over = {}) {
   const desk = bootInput();
   const [padEnd, hostEnd] = NetTransport.loopback({ latencyMs: 1, rnd: NetTransport.seededRnd(5) });
   padEnd.pump(0); hostEnd.pump(0);
-  const ui = { said: [], qrs: [], linked: 0, lost: 0,
+  const ui = { said: [], qrs: [], linkedN: 0, lostN: 0,
     say: (t, bad) => ui.said.push((bad ? "!" : "") + t), qr: (url, code) => ui.qrs.push({ url, code }),
     linked: () => ui.linkedN++, lost: () => ui.lostN++, hud: () => null };
-  ui.linkedN = 0; ui.lostN = 0;
   const room = { stopped: 0, onJoiner: null, stop() { room.stopped++; } };
   const deps = Object.assign({
     rtc: () => hostEnd, prefetchIce: async () => null, makeCode: () => "ABC234",
