@@ -762,7 +762,18 @@ test("the menu build warms its shaders BEFORE the slow extras (lamp pre-bake, fl
   assert.ok(i > 0, "menuFinish exists");
   const warm = body.indexOf("_menuGate.warm = 2"), lamp = body.indexOf("menuLampBake(current)"), plan = body.indexOf("FlybySeq.planSteps(");
   assert.ok(warm > 0 && warm < lamp && lamp < plan, "car assets -> warm -> lamp bake -> flyby plans");
-  assert.match(body, /if \(lit && await menuIdle\(current\)\) \{ FlybySeq\.reset\(\); _menuGate\.warm = 2; \}/, "and warm again once a baked (dark) world is in — only then");
+  assert.match(body, /if \(lit && await menuIdle\(current\)\) \{ warmPrograms\(\); FlybySeq\.reset\(\); _menuGate\.warm = 2; \}/, "and warm again once a baked (dark) world is in — only then");
+  // THE PROGRAM WARM IS REQUESTED WITH THE HIDDEN FRAMES, both times: the first
+  // hidden present starts it while the player reads the sheet, so the warm at
+  // the lights finds its programs built (17 s of held card after the flyby
+  // under SwiftShader before this; see warmPrograms).
+  assert.match(body, /if \(await menuIdle\(current\)\) \{ warmPrograms\(\); FlybySeq\.reset\(\); _menuGate\.warm = 2; \}/, "the first warm pair requests the program warm first");
+  assert.match(game, /const warmPrograms = \(\) => \{ try \{ if \(gfx\.warm\) \{ gfx\.warm\(\); _warmKey = menuKey\(trackIdx\); \} \}/, "warmPrograms is the guarded request (GLX/WGX have no warm), and remembers the world it was for");
+  // …and the lights skip their own request for that world: with every program
+  // built, compileAsync(scene) still walked the race scene for 7.5 s and linked
+  // nothing (scratch/ld-link-probe.mjs, 2026-09-28).
+  const srb = game.slice(game.indexOf("async function startRaceBody()"), game.indexOf("const sessionEntry ="));
+  assert.match(srb, /if \(gfx\.warm && _warmKey !== menuKey\(trackIdx\)\) gfx\.warm\(\);/, "startRaceBody warms only a world the menu did not");
   assert.match(game, /const planned = world && _menuFly && _menuFly\.track === track && _menuFly\.key === _menuGate\.ready/);
 });
 
