@@ -1064,7 +1064,26 @@ body[data-density="compact"] #campicker {
 /* The QR is the one element on this screen whose job is to be machine-read, so
    it keeps its white quiet zone whatever the page theme is doing. An inverted
    QR is unreadable to a large share of scanners. */
-#pm-phonepad-qr-wrap[hidden] { display: none; }
+/* PHONE AS CONTROLLER pairing block (Settings › CONTROLS, index.html): the
+   room code big and first, the QR beside it. A player read "scan the code"
+   with the code out of sight below a 320px QR (2026-09-28); now the code is
+   the first thing after the status and the QR is 200px. */
+#pm-phonepad-qr-wrap[hidden], #pm-phonepad-pair[hidden] { display: none; }
+#pm-phonepad-pair { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--gap) * 0.75); }
+#pm-phonepad-text { flex: 1 1 14rem; min-width: 0; }
+#pm-phonepad-text > .adv-help { margin: 0 0 calc(var(--gap) * 0.25); }
+#pm-phonepad-code {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: clamp(28px, calc(8 * var(--vwz)), 46px);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  line-height: 1.1;
+  margin: 0 0 calc(var(--gap) * 0.5);
+  user-select: all;
+}
+#pm-phonepad-qr-wrap { flex: 0 0 auto; margin: 0; }
+#pm-phonepad-pair #pm-phonepad-qr-wrap canvas { width: min(200px, calc(60 * var(--vwz))); }   /* beats the shared 320px rule below */
 #vsfriend .vs-qr-wrap, #pm-phonepad-qr-wrap {
   margin: calc(var(--gap) / 3) 0 0;
   display: flex;

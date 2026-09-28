@@ -55,9 +55,9 @@ const RaceEngineer = (function () {
   // in because the wrong tyre for the weather costs whole seconds a lap and the
   // answer is the same one: box, now. "gone" and "undercut" are NOT — they say
   // box when you can and box or push, which is a decision, not a lap.
+  // "compound" too: with five laps left and one dry compound run, the stop is
+  // what stands between the player and a disqualification (FIA 2026 SR B6.3.6).
   const BOX_CALLS = ["plan0", "plan1", "tread", "compound"];
-  // The two-compound warning opens this many laps from the flag.
-  const COMPOUND_WARN_LAPS = 3;
 
   function create(G) {
     Log.info("race", "RaceEngineer.create");
@@ -94,9 +94,8 @@ const RaceEngineer = (function () {
       // §11 "live, not pre-planned" call made good. So nothing below arms a
       // stop — every one of these is a sentence.
       if (s.wrongTread) return [s.wet ? "RAIN — BOX FOR WETS" : "TRACK IS DRY — BOX FOR SLICKS", "tread"];
-      // THE TWO-COMPOUND RULE (js/race/pit-lane.js owesCompound): the closing
-      // laps of a dry race run on one compound only — a stop, or 30 s at the flag.
-      if (s.owesCompound) return ["SECOND COMPOUND STILL TO RUN — BOX, OR 30s PENALTY", "compound"];
+      // SAID ONCE per set (update() spends the key for good): a warning, not a nag.
+      if (s.oneCompound) return ["ONE COMPOUND ONLY — BOX FOR A DIFFERENT TYRE OR BE DISQUALIFIED", "compound"];
       // THE PLAN-AWARE LINES (the player's reference plan, PitLane.planFor),
       // between the tread and the tyre complaints: a caution that fits the plan
       // with margin to spare, a rival's undercut, rain arriving before the
@@ -223,14 +222,13 @@ const RaceEngineer = (function () {
         // Nothing about stopping is worth saying to a driver who has already
         // called one — the banner said BOX THIS LAP when they pressed it.
         wrongTread: !noStop && (c.tyre.tread || 0) !== wantTread,
+        oneCompound: !noStop && !!(G.pits && G.pits.compoundDue && G.pits.compoundDue(c)),
         // A discounted stop needs something to gain: a part-used set.
         // The estimate includes lane travel and stationary service time.
         pitLoss: pit ? pit.lossS : null,
         freeStop: !noStop && cautionLvl >= 2 && cautionLvl < 4 && wear >= 0.35,
         wet: wantTread > 0,
         noStop, finalLap,
-        owesCompound: !noStop && G.lapsTarget > 0 && G.lapsTarget - (c.lap || 0) + 1 <= COMPOUND_WARN_LAPS
-          && !!(G.pits && G.pits.owesCompound && G.pits.owesCompound(c)),
         rainInLaps: !noStop && arc && WET.indexOf(arc.to) >= 0 && lapS > 0 && left > 0
           ? Math.max(1, Math.round(left / lapS)) : null,
       };
@@ -265,7 +263,7 @@ const RaceEngineer = (function () {
       // rather than silently spent.
       if (key.indexOf("wear") === 0) b.step = s.step;
       if (key === "undercut") b.undercut = null;
-      b.t = QUIET_S; b.said[key] = REPEAT_S;
+      b.t = QUIET_S; b.said[key] = key === "compound" ? Infinity : REPEAT_S;
       return msg;
     }
 

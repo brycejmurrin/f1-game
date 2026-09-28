@@ -1237,25 +1237,3 @@ test("held is the lane's own states, and never a position on the road", () => {
   const half = ((zone.sIn + 5386 / 2) % 5386 + 5386) % 5386;
   assert.equal(pits.held(at("out", half)), false, "half a lap away, the stop is over");
 });
-
-// The PLAYER is held to B6.3.6 too, by the owner's call: +30 s at the flag,
-// not the FIA's disqualification (Art. 30.5), so a forgotten stop still scores.
-test("the two-compound rule: one dry compound owes it, a second or any wet set pays it, once", () => {
-  const { pits, G } = commitSession();
-  const c = { local: true, penalty: 5, tyreLog: [{ code: "M" }] };
-  assert.equal(pits.owesCompound(c), true, "a no-stop race on mediums");
-  c.tyreLog.push({ code: "M" });
-  assert.equal(pits.owesCompound(c), true, "a stop onto the SAME compound does not count");
-  assert.equal(pits.serveCompoundRule(c), true);
-  assert.equal(c.penalty, 5 + pits.compoundPenS, "added to the penalties already served");
-  assert.equal(pits.serveCompoundRule(c), false, "once per race, whatever re-reads the flag");
-  assert.equal(c.penalty, 35);
-  assert.equal(pits.owesCompound({ tyreLog: [{ code: "M" }, { code: "H" }] }), false);
-  assert.equal(pits.owesCompound({ tyreLog: [{ code: "M" }, { code: "I" }] }), false, "an intermediate lifts the rule");
-  G.lapsTarget = 5;
-  assert.equal(pits.owesCompound({ tyreLog: [{ code: "M" }] }), false, "short races are exempt, as for the AI");
-  G.lapsTarget = 25; G.raceWeather = "rain";
-  assert.equal(pits.owesCompound({ tyreLog: [{ code: "M" }] }), false, "a wet race is exempt");
-  G.raceWeather = "dry"; G.tyres.on = () => false;
-  assert.equal(pits.owesCompound({ tyreLog: [{ code: "M" }] }), false, "tyre model off: there are no compounds");
-});

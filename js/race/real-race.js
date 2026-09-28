@@ -75,16 +75,26 @@ const RealRace = (function () {
     return { ref, rel, best: isFinite(best) ? best : 0 };
   }
 
-  /** Cumulative real race time per driver per lap (index = laps completed; 0 at the start).
-   *  A missing lap duration ends the row — nothing after it is trusted. */
+  /** Cumulative real race time per driver per lap (index = laps completed; 0 at
+   *  the start). A lap OpenF1 left untimed (a red-flag lap, a pit-lane quirk)
+   *  for a driver who went on is filled with the field's median for that lap;
+   *  the row ends only where the driver's race did — the last lap they are
+   *  classified with, or the last lap they have a time for. */
   function cumTable(script) {
     const out = {};
+    const ref = paceTable(script).ref;
     for (const d of script.drivers || []) {
+      const laps = d.laps || [];
+      let last = -1;
+      for (let i = 0; i < laps.length; i++) if (laps[i] > 0) last = i;
+      const end = Math.max(last + 1, Math.min(laps.length, d.dnf ? d.lapsDone | 0 : laps.length));
       const row = [0];
-      let t = 0;
-      for (let i = 0; i < (d.laps || []).length; i++) {
-        const v = d.laps[i];
+      let t = 0, fill = 0;
+      for (let i = 0; i < laps.length; i++) if (laps[i] > 0) { fill = laps[i]; break; }
+      for (let i = 0; i < end; i++) {
+        const v = laps[i] > 0 ? laps[i] : (ref[i + 1] > 0 ? ref[i + 1] : fill);
         if (!(v > 0)) break;
+        if (laps[i] > 0) fill = laps[i];
         t += v; row.push(t);
       }
       out[d.num] = row;
@@ -121,6 +131,7 @@ const RealRace = (function () {
   function dnfAtFor(driver, realLaps) {
     if (!driver || !driver.dnf || !(realLaps > 0)) return null;
     const done = Math.max(0, driver.lapsDone | 0);
+    if (done >= realLaps) return null;   // saw the flag: a DSQ, or a car classified as running
     return clamp((done + 0.5) / realLaps, 0.001, 0.999);
   }
 
@@ -132,7 +143,7 @@ const RealRace = (function () {
       if (!w || !(w.level >= 2)) continue;
       const from = simLapFor(w.from, simLaps, realLaps);
       const to = Math.max(from, simLapFor(w.to != null ? w.to : w.from, simLaps, realLaps));
-      out.push({ level: Math.min(4, w.level | 0), from, to, cause: w.cause || (w.level >= 4 ? "RED FLAG" : w.level === 3 ? "SAFETY CAR" : "VSC") });
+      out.push({ level: Math.min(4, w.level | 0), from, to, cause: w.cause || (w.level >= 4 ? "RED FLAG" : w.level === 3 ? "SAFETY CAR" : "VSC"), done: false });
     }
     return out;
   }
@@ -178,8 +189,10 @@ const RealRace = (function () {
       const row = cum[d.num];
       let k = 0;
       while (k + 1 < row.length && row[k + 1] <= t0) k++;   // laps completed by t0
-      const dur = d.laps && d.laps[k];   // the lap in progress: its full duration
-      const retired = !(dur > 0);         // no time for the lap after the last completed one: the car had stopped
+      // The car had stopped when its row ends before t0 (cumTable fills a
+      // finisher's untimed laps, so a short row is a retirement, not a gap).
+      const retired = row.length <= k + 1 || (d.dnf && k >= (d.lapsDone | 0));
+      const dur = retired ? 0 : row[k + 1] - row[k];   // the lap in progress: its full duration
       const frac = retired ? 0 : clamp((t0 - row[k]) / dur, 0, 0.98);
       const lap = k + 1;
       let stint = 0;
@@ -232,7 +245,8 @@ const RealRace = (function () {
       const startLap = clamp(opts.startLap | 0 || 1, 1, script.laps | 0 || 1);
       if (!active) {
         active = { saved: { teamIdx: G.teamIdx, driverIdx: G.driverIdx, raceLaps: G.raceLaps, raceWeather: G.raceWeather,
-                            raceTimeOfDay: G.raceTimeOfDay, duel: G.duel, raceTyreWear: G.raceTyreWear, raceChangeable: G.raceChangeable } };
+                            raceTimeOfDay: G.raceTimeOfDay, duel: G.duel, raceTyreWear: G.raceTyreWear, raceChangeable: G.raceChangeable,
+                            trackIdx: G.trackIdx, flow: G.flow } };
       }
       active.script = script; active.laps = laps; active.startLap = startLap; active.seat = seat; active.seatCode = want.code; active.seatMap = seatMap;
       G.flow = "gp"; G.session = "race"; G.timeTrial = false; G.duel = false;
@@ -269,6 +283,7 @@ const RealRace = (function () {
       G.teamIdx = s.teamIdx; G.driverIdx = s.driverIdx; G.raceLaps = s.raceLaps;
       G.raceWeather = s.raceWeather; G.raceTimeOfDay = s.raceTimeOfDay; G.duel = s.duel;
       G.raceTyreWear = s.raceTyreWear; G.raceChangeable = s.raceChangeable;
+      G.trackIdx = s.trackIdx; if (s.flow && G.flow !== s.flow) G.flow = s.flow;
       disarm();
       active = null;
       Log.info("game", "RealRace.stop");
@@ -295,6 +310,10 @@ const RealRace = (function () {
       }
       const gridOf = (c) => { const f = field.get(c); return f.d && f.d.grid > 0 ? f.d.grid : 99; };
       const order = cars.slice().sort((a, b) => gridOf(a) - gridOf(b));
+      // A RESTART from the results re-enters here with the sky wherever a rain
+      // arc left it: the start lap's weather is the script's, not the last frame's.
+      const wx = weatherAt(script, active.startLap);
+      if (G.raceWeather !== wx && G.setWeatherLive) G.setWeatherLive(wx);
       G.gridUp(order);
       if (G.snapGameCam) G.snapGameCam();
       // Pace: one base for the whole field; the data supplies the differences.
@@ -329,13 +348,22 @@ const RealRace = (function () {
           if (plan) {
             c.pitPlan = plan;
             if (!c.human) c.tyreClass = plan.start;
-            if (G.tyres.classRecord && G.tyres.fit) G.tyres.fit(c, G.tyres.classRecord(plan.start));
+            refit(c, plan.start, 1);
           }
         }
       }
       armed = true;
       if (G.announce) G.announce("REAL RACE · " + String(script.name || script.circuit || "").toUpperCase() + (active.startLap > 1 ? " · LAP " + active.startLap : ""), 2.5, "info");
       Log.info("game", "RealRace.arm field=" + field.size + " mapped=" + byId.size + " ref=" + refNum + " from=" + active.startLap);
+    }
+
+    // The real set on the car, in place of the one gridUp fitted: one entry in
+    // the stint log (the results strip draws it), never a phantom lap-0 stint.
+    function refit(c, cls, stints) {
+      if (!cls || !G.tyres.classRecord || !G.tyres.fit) return;
+      G.tyres.fit(c, G.tyres.classRecord(cls));
+      if (Array.isArray(c.tyreLog) && c.tyreLog.length) { c.tyreLog = c.tyreLog.slice(-1); c.tyreLog[0].lap0 = c.lap || 0; c.tyreLog[0].lap1 = null; }
+      c.tyreStints = stints;
     }
 
     // A car dropped in mid-race: js/agent/apex.js aiPlace()/jump() field for
@@ -353,9 +381,12 @@ const RealRace = (function () {
     }
     // A car that had already retired: parked at the wall the way js/game.js
     // retireCar() parks one, without the broadcast (seven of them at once said nothing).
-    function parkCar(c, why) {
+    function parkCar(c, why, lap) {
       const track = G.track;
       c.retired = true; c.dnf = why || "accident"; c.dnfAt = null;
+      // Where it stopped: half way round the lap it was on, so the retirements
+      // classify in the order they happened and line the wall out on the circuit.
+      if (lap > 0) { c.lap = lap; c.s = G.wrapS(0.5 * track.total); c.prog = (lap - 1) * track.total + 0.5 * track.total; }
       Tracks.sample(track, c.s, smp);
       const side = c.x >= 0 ? 1 : -1;
       const wall = Tracks.wallAt(track, c.s, side);
@@ -382,17 +413,22 @@ const RealRace = (function () {
       for (const c of G.cars) {
         const f = field.get(c);
         const a = f && f.d ? at.by[f.d.num] : null;
-        if (!a) { if (!c.human) { parkCar(c, "dns"); parked++; } continue; }
-        if (a.retired) { parkCar(c, "accident"); parked++; f.lap = c.lap; continue; }
+        if (!a) { if (!c.human) { parkCar(c, "dns", 0); parked++; } continue; }
+        if (a.retired) { parkCar(c, "accident", simLapFor(a.lap, simLaps, realLaps)); parked++; f.lap = c.lap; continue; }
         const ls = simLapFor(a.lap, simLaps, realLaps);
         const s = a.frac * total;
         c.lap = ls; c.prog = (ls - 1) * total + s;
+        c.fuelLap = ls;   // crossings driven: the tank is ls - 1 laps down (js/physics/tyre-model.js fuelFrac)
         c.totalT = K0 * at.t0; c.lapTime = K0 * a.into;
         placeCar(c, s, (side++ % 2 ? 1.5 : -1.5), speed);
         c.gear = 5; c.energy = 0.7;
-        if (wearOn && a.compound && G.tyres.classRecord && G.tyres.fit) {
-          G.tyres.fit(c, G.tyres.classRecord(a.compound));
-          c.pitStops = a.stint; c.tyreStints = a.stint + 1;
+        if (wearOn && a.compound) {
+          // The plan's arrays hold only the stops that fit the sim distance, so
+          // the stops "made" are the kept stops before this lap — never the real
+          // stint index, which the dropped stops would put out of step.
+          const made = c.pitPlan && Array.isArray(c.pitPlan.lapsAt) ? c.pitPlan.lapsAt.filter((l) => l < ls).length : a.stint;
+          refit(c, a.compound, made + 1);
+          c.pitStops = made;
           const ageSim = a.age * simLaps / realLaps;
           const life = typeof TyreModel !== "undefined" && TyreModel.AI_CLASS[a.compound] && G.tyres.planLaps
             ? G.tyres.planLaps(TyreModel.AI_CLASS[a.compound].life, simLaps) : 0;
@@ -459,7 +495,9 @@ const RealRace = (function () {
       if (!wins.length) return;
       let want = 0, cause = "";
       for (const w of wins) {
-        if (lap < w.from || lap > w.to) continue;
+        if (w.done) continue;
+        if (lap > w.to) { w.done = true; continue; }   // left behind: a red-flag rewind of the lap counter must not fly it again
+        if (lap < w.from) continue;
         if (w.level >= 4) {
           const key = w.from;
           if (!redFired.has(key) && G.applyCaution) { redFired.add(key); G.applyCaution({ level: 4, cause: w.cause, phase: "stopping" }); }

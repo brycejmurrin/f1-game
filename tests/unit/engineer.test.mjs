@@ -138,6 +138,12 @@ test("the wrong tread outranks everything — it is the one that costs whole sec
   assert.match(line({ wrongTread: true, wet: false }), /BOX FOR SLICKS/);
 });
 
+test("ONE COMPOUND with five laps left is called after the tread and before everything else (FIA 2026 SR B6.3.6)", () => {
+  assert.match(line({ oneCompound: true, freeStop: true, wear: 1.5, lapsToStop: 0 }), /ONE COMPOUND ONLY .* DISQUALIFIED/);
+  assert.match(line({ oneCompound: true, wrongTread: true, wet: true }), /BOX FOR WETS/, "the weather still comes first");
+  assert.equal(E.create({}).callFor(sense({ oneCompound: true }))[1], "compound");
+});
+
 test("a reduced-cost stop under caution outranks tyre complaints without promising a free stop", () => {
   assert.match(line({ freeStop: true, wear: 0.9, graining: 1, axle: 1 }), /CHEAPER STOP/);
 });
@@ -314,7 +320,6 @@ test("the PIT CALL rides its own priority; every other line still yields", () =>
   // untouched, and a report is still a report.
   // join, not deepEqual: the array is built in the module's VM realm, so its
   // prototype is not the host's and strict deepEqual refuses it.
-  // "compound" joined them: the two-compound warning is a box-or-30-s call.
   assert.equal(Array.prototype.join.call(E.BOX_CALLS, ","), "plan0,plan1,tread,compound");
   const kindOf = (car, over = {}) => {
     const { eng, tyres, kinds } = sessionFor(over.session || {});
@@ -415,23 +420,4 @@ test("our own stop answers a rival's latched undercut: no BOX NOW on the out-lap
 test("no engineer call under the pause menu (VS FRIEND keeps ticking)", () => {
   const src = readFileSync(join(ROOT, "js/race/engineer.js"), "utf8");
   assert.match(src, /if \(!c \|\| !c\.local \|\| !\(dt > 0\) \|\| G\.paused\) return "";/);
-});
-
-test("the two-compound warning: the closing laps of a one-compound race, as a box call", () => {
-  assert.match(line({ owesCompound: true, wear: 1.5, graining: 1 }), /SECOND COMPOUND.*30s/);
-  assert.match(line({ owesCompound: true, wrongTread: true, wet: true }), /BOX FOR WETS/, "the wrong tread still comes first");
-  const { eng, tyres, kinds, said, G } = sessionFor({ laps: 20 });
-  let owes = true;
-  G.pits = { estimate: () => null, lastCue: () => null, owesCompound: () => owes };
-  const c = carOn(tyres, { lap: 14 });          // carOn adds three: lap 17, four to go
-  assert.equal(eng.senseOf(c).owesCompound, false, "not yet: the plan's own stop calls have that");
-  c.lap = 18;                                    // three to go
-  assert.equal(eng.senseOf(c).owesCompound, true);
-  eng.update(c, 0.05);
-  assert.match(said.at(-1), /SECOND COMPOUND/);
-  assert.equal(kinds.at(-1), "box", "an instruction with a lap to act on, like BOX NEXT LAP");
-  c.lap = 20;
-  assert.equal(eng.senseOf(c).owesCompound, false, "the last lap: the flag is closer than the box");
-  c.lap = 18; owes = false;
-  assert.equal(eng.senseOf(c).owesCompound, false, "a second compound run: nothing owed");
 });

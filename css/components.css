@@ -1790,7 +1790,7 @@ body[data-width="narrow"] #pm-panel-appearance .pm-accent-preview { grid-templat
    so folding the ids in with the classes would silently promote .tune-row
    rules here to id weight. Classes with classes, ids with ids. */
 #pmsettings-inner[data-shape="wide"] .pm-group :is(.tune-row, .pm-group-h) { grid-column: 1 / -1; }
-#pmsettings-inner[data-shape="wide"] .pm-group :is(.set-row, .adv-help, #pm-steer-item, #pm-gfx-status) { grid-column: 1 / -1; }
+#pmsettings-inner[data-shape="wide"] .pm-group :is(.set-row, .adv-help, #pm-steer-item, #pm-gfx-status, #pm-phonepad-box) { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display > details { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] #pm-panel-appearance :is(.pm-accent-preview, .pm-look-h, .pm-accent-swatches, .pm-replay-intro) { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] .pm-group :is(#pm-keys-section, #pm-pad-section) { grid-column: 1 / -1; }

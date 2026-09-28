@@ -501,8 +501,14 @@
      way a broadcast shows team radio. js/game.js showAnnounce fills all three.
      The plate is the car and never moves; the WHO line is the speaker. The number leads the
      status text on purpose: "63 · RUSSELL · RADIO · <words>" is how the card
-     reads aloud, which is how it reads by eye. -->
-<div id="announce" role="status" hidden><span id="announce-num"></span><span id="announce-body"><span id="announce-who"></span><span id="announce-text"></span></span></div>
+     reads aloud, which is how it reads by eye.
+     #announce-live is the SPOKEN twin: present and empty from boot, visually
+     hidden (css/hud.css), written by showAnnounce with the same WHO + words.
+     A region filled while hidden and unhidden in one step is not announced by
+     NVDA, JAWS or macOS VoiceOver
+     (tetralogical.com/blog/2024/05/01/why-are-my-live-regions-not-working/). -->
+<div id="announce-live" role="status" aria-live="polite" aria-atomic="true"></div>
+<div id="announce" aria-hidden="true" hidden><span id="announce-num"></span><span id="announce-body"><span id="announce-who"></span><span id="announce-text"></span></span></div>
 
 <!-- TOUCH-mode drag affordance: a ring at the point the finger went down, so
      the anchor of an otherwise invisible control is visible for a moment.
@@ -532,7 +538,7 @@
 </div>
 <div id="grp-shifts" class="dock-grp col">
   <button id="shift-up" class="touchbtn shiftbtn" hidden aria-label="Shift up">&#9650;<small>UP</small></button>
-  <button id="shift-down" class="touchbtn shiftbtn" hidden aria-label="Shift down">&#9660;<small>DN</small></button>
+  <button id="shift-down" class="touchbtn shiftbtn" hidden aria-label="DN, shift down">&#9660;<small>DN</small></button>
 </div>
 <div id="grp-steer" class="dock-grp row">
   <button id="btn-steer-left" class="touchbtn steerbtn" hidden aria-label="Steer left">&#9664;</button>
@@ -544,7 +550,7 @@
   <button id="btn-aero" class="touchbtn" hidden aria-label="Active aero">AERO</button>
 </div>
 
-<button id="btn-cam" hidden aria-label="Camera">CHASE</button>
+<button id="btn-cam" hidden aria-label="CHASE camera">CHASE</button>
 <button id="pausebtn" hidden aria-label="Pause">&#10074;&#10074;</button>
 <!-- Shown only while the HUD is hidden (body.hud-hidden): the one control that
      brings the HUD + buttons back. Tiny, top-right, out of the way. -->
@@ -649,15 +655,25 @@
                carries controller.html#pad=CODE for the phone's own camera app.
                Everything below is disabled-or-hidden by the module, never
                reflowed under a finger, like #pm-calib above. -->
-          <button id="pm-phonepad" type="button">PHONE AS CONTROLLER&hellip;<small>Tilt your phone to steer this screen</small></button>
+          <button id="pm-phonepad" type="button">PHONE AS CONTROLLER</button>
+          <!-- The pairing block spans the sheet (the wide shape's rule in
+               css/components.css names it): the ROOM CODE first and big, so it
+               is the first thing after the status and never below the fold;
+               the QR beside it, smaller than the lobby's. -->
           <div id="pm-phonepad-box" hidden>
             <p id="pm-phonepad-status" class="adv-help" role="status"></p>
-            <figure class="vs-qr-wrap" id="pm-phonepad-qr-wrap" hidden>
-              <canvas id="pm-phonepad-qr" width="320" height="320" role="img"
-                      aria-label="QR code containing the phone controller link"></canvas>
-              <figcaption class="vs-hint">Room code <b id="pm-phonepad-code"></b></figcaption>
-            </figure>
-            <p class="adv-help">Point the phone's camera at the code, or open <span id="pm-phonepad-url"></span> on the phone and type the room code. Both need internet to pair; the same Wi&#8209;Fi gives the quickest steering. Web pages cannot pair over Bluetooth.</p>
+            <div id="pm-phonepad-pair" hidden>
+              <div id="pm-phonepad-text">
+                <p class="adv-help">ROOM CODE</p>
+                <output id="pm-phonepad-code" aria-live="polite"></output>
+                <p class="adv-help">On the phone: scan the code with the camera, or open <span id="pm-phonepad-url"></span> and type the room code. Both devices need internet to pair; the same Wi&#8209;Fi gives the quickest steering.</p>
+              </div>
+              <figure class="vs-qr-wrap" id="pm-phonepad-qr-wrap" hidden>
+                <canvas id="pm-phonepad-qr" width="320" height="320" role="img"
+                        aria-label="QR code containing the phone controller link"></canvas>
+              </figure>
+            </div>
+            <p class="adv-help">Press this on the screen you play on; the phone becomes the wheel. Web pages cannot pair over Bluetooth.</p>
           </div>
           <div id="pm-gears" class="set-row" role="group" aria-labelledby="pm-gears-label">
             <span class="tune-label" id="pm-gears-label">GEARS</span>
@@ -3192,6 +3208,7 @@
 <script defer crossorigin="anonymous" src="js/physics/aero-zones.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/fx/skidmarks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/race-control.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/sporting-regs.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/real-race.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/weather-arc.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/free-cam.js?v=dev"></script>
