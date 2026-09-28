@@ -534,7 +534,11 @@ const PhonePad = (function () {
       el.addEventListener("pointercancel", up);
       el.addEventListener("contextmenu", (e) => e.preventDefault());
     }
-    for (const k of EVENTS) edge(dom.buttons && dom.buttons[k], k);
+    // An action may have more than one button (OT on the grip AND on the face).
+    for (const k of EVENTS) {
+      const b = dom.buttons && dom.buttons[k];
+      for (const el of (Array.isArray(b) ? b : [b])) edge(el, k);
+    }
     edge(dom.center, "calib");
 
     let wake = null;

@@ -365,7 +365,7 @@ test("the control modes reach the wheel's layout: no paddles on AUTO gears, no G
   const back = PhonePad.decodeHud(PhonePad.encodeHud({ ...base, flags: D.gearsAuto | D.throttleAuto | D.aeroAuto | D.aeroNone }));
   assert.equal(back.flags, D.gearsAuto | D.throttleAuto | D.aeroAuto | D.aeroNone, "the mode bits survive the wire");
   const page = read("controller.html");
-  for (const rule of ["body.gears-auto .paddle", "body.throttle-auto #gas", "body.aero-auto #b-aero, body.aero-none #b-aero"]) {
+  for (const rule of ["body.gears-auto .shift", "body.gears-auto .tap { display: flex; }", "body.throttle-auto #gas", "body.aero-auto #b-aero, body.aero-none #b-aero"]) {
     assert.ok(page.includes(rule), `controller.html styles ${rule}`);
   }
   assert.match(read("js/game.js"), /gearsManual\(\) \? 0 : D\.gearsAuto[\s\S]*autoThrottle\(\) \? D\.throttleAuto[\s\S]*raceAeroMode === "auto" \? D\.aeroAuto[\s\S]*D\.aeroNone/,
@@ -427,6 +427,7 @@ test("pad(): the page's pedals, paddles and LCD are wired through to the wire an
   const link = PhonePad.link(hostEnd, { input: desk.Input, pump: false, now: () => clock.t, hud: () => dash.value });
   const dom = { body: fakeEl(), status: fakeEl(), codeIn: fakeEl(), connect: fakeEl(), gas: fakeEl(), brake: fakeEl(), lookBack: fakeEl(),
     center: fakeEl(), rim: fakeEl(), buttons: Object.fromEntries(PhonePad.EVENTS.map((k) => [k, fakeEl()])), hud: lcd() };
+  dom.buttons.overtake = [fakeEl(), fakeEl()];   // OT lives on the grip AND the face
   const seen = [];
   const ctl = PhonePad.pad(dom, { now: () => clock.t, deps: {
     rtc: () => padEnd, prefetchIce: async () => null, normalise: (c) => String(c).toUpperCase(), valid: (c) => c.length === 6,
@@ -457,6 +458,9 @@ test("pad(): the page's pedals, paddles and LCD are wired through to the wire an
   assert.equal(desk.Input.consumeShiftUp(), true); assert.equal(desk.Input.consumeShiftUp(), false);
   dom.center.dispatch("pointerdown", {});
   for (let i = 0; i < 3; i++) frame();   // CENTRE TILT → Input.calibrate() on the desktop (no throw, no edge)
+  dom.buttons.overtake[1].dispatch("pointerdown", {});
+  for (let i = 0; i < 3; i++) frame();
+  assert.equal(desk.Input.consumeOvertake(), true, "the second OT button (the grip's) fires the same edge");
   // Tilt: setRoll() stands in for the sensor; the rim turns, the desktop steers.
   ctl.setRoll(30);
   for (let i = 0; i < 60; i++) { frame(); ctl.setRoll(30); }
@@ -600,7 +604,7 @@ test("controller.html carries exactly the manifest's CONTROLLER subset and both 
   assert.match(page, /<script type="importmap">[\s\S]*@trystero-p2p\/nostr/, "the room-code courier needs the importmap");
   assert.doesNotMatch(read("js/input/phone-pad.js"), /getElementById|querySelector\(/, "the module never looks an id up — controller.html hands elements in");
   for (const id of ["h-gear", "h-speed", "h-lap", "h-pos", "h-ers", "h-flag", "h-ot", "h-aero", "h-last", "leds", "screen", "rim",
-                    "b-shiftUp", "b-shiftDown", "b-overtake", "b-boost", "b-aero", "b-camera", "b-radio", "b-look", "b-recover", "b-pause", "b-center", "gas", "brake"]) {
+                    "b-shiftUp", "b-shiftDown", "b-ot-big", "b-boost-big", "b-overtake", "b-boost", "b-aero", "b-camera", "b-radio", "b-look", "b-recover", "b-pause", "b-center", "gas", "brake"]) {
     assert.ok(page.includes(`id="${id}"`), `controller.html declares #${id}, which its inline script hands to PhonePad.pad`);
   }
   assert.equal((page.match(/<div id="leds"[^>]*>((?:<span><\/span>)+)/) || [])[1]?.length, 15 * "<span></span>".length, "fifteen rev LEDs");
