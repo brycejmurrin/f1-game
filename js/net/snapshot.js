@@ -107,12 +107,17 @@ const NetSnapshot = (function () {
     return ((v % period) + period) % period;
   }
 
+  // Adaptive-delay bounds: the delay never exceeds MAX_DELAY_MS (a rival drawn
+  // further in the past than that is a different game), a single lag reading
+  // is capped at MAX_LAG_MS (a stall is not a latency), and the margin keeps
+  // the target behind the newest packet's arrival.
+  const MAX_DELAY_MS = 400, MAX_LAG_MS = 400, LAG_MARGIN_MS = 20;
   function createInterp(opts) {
     opts = opts || {};
     const total = opts.total || 1;         // track length, for wrap-aware s
     let delayMs = opts.delayMs != null ? opts.delayMs : 100;
     const baseDelay = delayMs;
-    let jitter = 0, lastArrival = null, lastTick = null, presentedAt = -Infinity;
+    let jitter = 0, lag = 0, interval = 0, lastArrival = null, lastTick = null, presentedAt = -Infinity;
     const maxExtrapMs = opts.maxExtrapMs != null ? opts.maxExtrapMs : 250;
     const keep = opts.keep || 32;
     let samples = [];                      // ascending by t
@@ -129,10 +134,23 @@ const NetSnapshot = (function () {
       if (!Number.isFinite(t)) return false;
       if (Number.isFinite(arrivalMs) && t - arrivalMs > maxAheadMs) return false;
       if (opts.adaptive && Number.isFinite(arrivalMs) && (lastTick == null || t > lastTick)) {
+        // LAG IS LATENCY, NOT ONLY JITTER. sample() aims at `now − delayMs` on
+        // the synced clock, so a packet interpolates only if it arrived at
+        // least delayMs after its tick. Tracking jitter alone left every link
+        // slower than the base delay one way — and the host RELAY, whose
+        // stamp is already a delay old — extrapolating EVERY frame: x, heading
+        // and speed frozen between packets, the rival stepping sideways at the
+        // publish rate. Follow the observed lag up at once and down slowly,
+        // and cover the PUBLISH INTERVAL too: between two packets the target
+        // keeps moving while the newest sample does not, so the delay has to
+        // exceed lag + interval for the whole gap to interpolate.
+        const lagNow = Math.max(0, Math.min(MAX_LAG_MS, arrivalMs - t));
+        lag = lagNow > lag ? lagNow : lag + (lagNow - lag) * 0.02;
         if (lastArrival != null) {
           const deviation = Math.min(200, Math.abs((arrivalMs - lastArrival) - (t - lastTick)));
           jitter += (deviation - jitter) * 0.1;
-          const target = Math.min(180, baseDelay + jitter * 2);
+          interval += (Math.min(200, Math.max(0, t - lastTick)) - interval) * 0.1;
+          const target = Math.min(MAX_DELAY_MS, Math.max(baseDelay, lag + interval + LAG_MARGIN_MS) + jitter * 2);
           delayMs += (target - delayMs) * 0.08;
         }
         lastArrival = arrivalMs; lastTick = t;
@@ -272,10 +290,10 @@ const NetSnapshot = (function () {
       size: () => samples.length,
       newest: () => (samples.length ? samples[samples.length - 1] : null),
       oldest: () => (samples.length ? samples[0] : null),
-      timing: () => ({ delayMs, jitterMs: jitter, adaptive: !!opts.adaptive }),
+      timing: () => ({ delayMs, jitterMs: jitter, lagMs: lag, adaptive: !!opts.adaptive }),
       // The time the last sample() posed — what a relay must stamp that pose with.
       presentedAt: () => presentedAt,
-      clear: () => { samples = []; delayMs = baseDelay; jitter = 0; lastArrival = null; lastTick = null; presentedAt = -Infinity; },
+      clear: () => { samples = []; delayMs = baseDelay; jitter = 0; lag = 0; interval = 0; lastArrival = null; lastTick = null; presentedAt = -Infinity; },
     };
   }
 

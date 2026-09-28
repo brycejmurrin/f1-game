@@ -92,7 +92,12 @@ const NetRendezvous = (function () {
       if (res.status === 429) return ERR("rate_limited", "The room service is busy. Wait a minute or use the invite link.");
       if (!res.ok) return ERR("relay", "The room service is not answering. Use the invite link instead.");
       const text = await res.text();
-      return { ok: true, body: text ? JSON.parse(text) : null };
+      let body = null;
+      // A captive portal or proxy answers 200 with HTML: that is not "offline"
+      // (which spends the poll's retries on it) — this network is intercepting.
+      try { body = text ? JSON.parse(text) : null; }
+      catch (e) { return ERR("relay", "The room service answered with something unexpected — this network may be intercepting it. Use the invite link instead."); }
+      return { ok: true, body };
     } catch (e) {
       const aborted = e && e.name === "AbortError";
       return ERR(aborted ? "timeout" : "offline",

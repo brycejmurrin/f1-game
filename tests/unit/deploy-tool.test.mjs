@@ -17,6 +17,13 @@ import { DEPLOY_BRANCH as PICK_BRANCH } from "../../tools/ci/pick-tests.mjs";
 import { GEOMETRY_ERE, GEOMETRY_PATHS, namedPaths, fleetFiles, TARGETED, targetedSuites, PARTS_ERE, partsFiles } from "../../tools/ci/geometry-paths.mjs";
 import { createRequire } from "node:module";
 
+// The throwaway repos' cleanup: `git commit` can leave a gc / maintenance
+// child still writing .git/objects when the test's `finally` runs, and a bare
+// rmSync then threw ENOTEMPTY out of a test whose every assertion had passed
+// (PR #387's Structural guards job, runner at loadavg 4.25). Retry, as node's
+// own docs recommend for a busy directory.
+const rmTemp = (dir) => fs.rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 150 });
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 test("deploy.mjs and pick-tests name the same deploy branch", () => {
@@ -64,7 +71,7 @@ test("touchedCircuits reports OUR side only on a diverged history", () => {
     assert.ok(!ids.includes("theirside"),
       "a circuit only the OTHER side touched must NOT be reported as ours — that is the two-dot bug");
   } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
+    rmTemp(dir);
   }
 });
 
@@ -228,7 +235,7 @@ test("a CLEAN merge whose base added a unit file ends with the ladder figures re
     g("checkout", "-q", "HEAD~1");
     assert.notEqual(ladderCheck().status, 0, "without the regeneration the clean merge is stale — the case under test");
   } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
+    rmTemp(dir);
   }
 });
 
@@ -251,7 +258,7 @@ function geomRepo() {
   g("config", "user.email", "t@t"); g("config", "user.name", "t");
   write("README.md", "# base\n"); g("add", "-A"); g("commit", "-qm", "base");
   g("branch", "-q", "base");
-  return { dir, g, write, rm: () => fs.rmSync(dir, { recursive: true, force: true }) };
+  return { dir, g, write, rm: () => rmTemp(dir) };
 }
 
 test("a circuit edit routes the sweeps; a docs-only union does not", () => {
@@ -663,7 +670,7 @@ test("--targeted prints the suites for a change list, and nothing for a game.js-
     fs.writeFileSync(list, "js/game.js\n");
     assert.equal(execFileSync(process.execPath, ["tools/ci/geometry-paths.mjs", "--targeted", list], { cwd: ROOT, encoding: "utf8" }), "",
       "an empty print is ci.yml's 'no targeted sweep reads this diff'");
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  } finally { rmTemp(dir); }
   const yml = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
   assert.match(yml, /node tools\/ci\/geometry-paths\.mjs --targeted "\$CHANGED_FILE"/,
     "ci.yml's sweeps filter must read the targeted table, not retype it");

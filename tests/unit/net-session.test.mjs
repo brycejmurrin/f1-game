@@ -489,3 +489,59 @@ test("a PONG for a ping we never sent, or with a forged t0, is not a clock sampl
   assert.equal(session.synced(), true, "the genuine echo syncs");
   assert.equal(session.stats().samples, 1, "and a replay of it is not a second sample");
 });
+
+// ── round 9: the PONG's hold is not path, and a local close() is "local" ─────
+test("a reply held by the peer for a frame does not bias the clock offset", () => {
+  // The PONG used to carry only t1 (the PING's arrival); the reply left at
+  // the peer's next pump, and that hold was counted as path and split
+  // evenly — an offset error of half the hold (a 30 fps peer: −10 ms; a
+  // hidden tab pumping at 1 Hz: hundreds). NTP's four stamps remove it.
+  const { near, far, T0 } = bareFarEnd();
+  const session = NetSession.create({ transport: near });
+  const pong = (id, t0, t1, t2) => {
+    const dv = new DataView(new ArrayBuffer(29));
+    dv.setUint8(0, NetSession.PONG); dv.setUint32(1, id >>> 0);
+    dv.setFloat64(5, t0); dv.setFloat64(13, t1); dv.setFloat64(21, t2);
+    return new Uint8Array(dv.buffer);
+  };
+  session.pump(T0);                                // PING id 1 at t0 = T0
+  far.pump(T0);
+  // Peer clock = ours (true offset 0). The PING arrived at T0+50 (50 ms one
+  // way), the peer held it 100 ms, the PONG lands at T0+200.
+  far.send(NetTransport.STATE, pong(1, T0, T0 + 50, T0 + 150));
+  session.pump(T0 + 200);
+  assert.equal(session.synced(), true);
+  assert.equal(session.rtt(), 100, "the hold leaves the round trip");
+  assert.equal(session.offset(), 0, "and the offset is the truth, not −50");
+});
+
+test("a PONG without t2 (21 bytes) is still a sample, read as if unheld", () => {
+  const { near, far, T0 } = bareFarEnd();
+  const session = NetSession.create({ transport: near });
+  const dv = new DataView(new ArrayBuffer(21));
+  session.pump(T0); far.pump(T0);
+  dv.setUint8(0, NetSession.PONG); dv.setUint32(1, 1); dv.setFloat64(5, T0); dv.setFloat64(13, T0 + 50);
+  far.send(NetTransport.STATE, new Uint8Array(dv.buffer));
+  session.pump(T0 + 100);
+  assert.equal(session.synced(), true);
+  assert.equal(session.offset(), 0);
+});
+
+test("session.close() reports 'local' to its own handlers and 'transport' to the peer's", () => {
+  // release() closes the transport, whose close event fires synchronously,
+  // and the handler saw `alive` still true: our own close() was reported as
+  // "transport" — the host dropping a wrong-build guest announced LEFT
+  // {why: "transport"} and handBackToAI("transport").
+  const [ta, tb] = NetTransport.loopback({ latencyMs: 0, rnd: seededRnd(21) });
+  const a = NetSession.create({ transport: ta });
+  const b = NetSession.create({ transport: tb });
+  const whysA = [], whysB = [];
+  a.onClose((w) => whysA.push(w)); b.onClose((w) => whysB.push(w));
+  a.pump(0); b.pump(0);
+  a.close();
+  b.pump(1);
+  assert.deepEqual(whysA, ["local"]);
+  assert.deepEqual(whysB, ["transport"]);
+  a.close();
+  assert.deepEqual(whysA, ["local"], "a second close() fires nothing");
+});
