@@ -2533,15 +2533,31 @@ async function menuLampBake(current) {
 // here in slices so the loading screen plans nothing; then warm again for the lit
 // world. `_menuFly` is the planned list, keyed like the build.
 let _menuFly = null;
+// THE PROGRAM WARM RUNS HERE, HIDDEN — not first at the lights. TLX compiles
+// the race's programs when warm() has been requested and the next present()
+// starts (tlx.js startProgramWarm), and it paints nothing until that is done.
+// Requested only in startRaceBody, that was the held card AFTER the flyby:
+// 17 s under SwiftShader with the world built and the flyby played
+// (scratch/ld-transition-probe.mjs, 2026-09-28), ~7 s on Metal cold (census
+// 243). Requested before the hidden warm frames, the first of them starts it
+// while the player is still reading the sheet, and the warm at the lights
+// finds its programs built. GLX and WGX have no warm(): nothing to request.
+// `_warmKey` is the world (menuKey) the request was for: startRaceBody skips
+// its own request when it matches, because with every program already built
+// the warm at the lights still walked the race scene's node graphs for 7.5 s
+// (SwiftShader) and linked NOTHING — a held card for nothing
+// (scratch/ld-link-probe.mjs: 23 links, all in the menu and the flyby).
+let _warmKey = "";
+const warmPrograms = () => { try { if (gfx.warm) { gfx.warm(); _warmKey = menuKey(trackIdx); } } catch (_) { /* optimisation only */ } };
 async function menuFinish(current, key) {
   await prepareMenuCarAssets(current);
-  if (await menuIdle(current)) { FlybySeq.reset(); _menuGate.warm = 2; }   // reset: a new world's shot 0 snaps, never glides in from the last one
+  if (await menuIdle(current)) { warmPrograms(); FlybySeq.reset(); _menuGate.warm = 2; }   // reset: a new world's shot 0 snaps, never glides in from the last one
   const lit = await menuLampBake(current);
   FlybySeq.setDuration(loadingScreen.nextFlyMs());
   const fly = { key, track, shots: FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0, false) }, step = FlybySeq.planSteps(track, fly.shots);
   while (current() && !step()) await menuSlice();
   if (current()) _menuFly = fly;
-  if (lit && await menuIdle(current)) { FlybySeq.reset(); _menuGate.warm = 2; }   // only a baked (dark) world changed the shaders
+  if (lit && await menuIdle(current)) { warmPrograms(); FlybySeq.reset(); _menuGate.warm = 2; }   // only a baked (dark) world changed the shaders
 }
 function scheduleFlybyTrack(settle) {
   clearTimeout(flybyBuildTimer);
@@ -2908,7 +2924,10 @@ async function startRaceBody() {
   if (PerfGov.strikes() > 0 && PerfGov.autoRes() && gfx.setRenderScale && gfx.getRenderScale)
     gfx.setRenderScale(Math.min(gfx.getRenderScale(), PerfGov.strikes() >= 2 ? 0.7 : 0.85));
   state = "count"; countT = 0; lightsLit = 0; raceT = 0; startHold = 0; restartPending = false; paused = false; frozen = false; skyViewOverride = null;
-  try { if (gfx.warm) gfx.warm(); } catch (_) { /* TLX links programs synchronously on first draw — warm them during the LIGHTS. Optimisation only; GLX/WGX have no warm and no-op. */ }
+  // TLX links programs synchronously on first draw — warm them during the LIGHTS,
+  // unless the menu's warm already ran for this world (warmPrograms, _warmKey).
+  // Optimisation only; GLX/WGX have no warm and no-op.
+  try { if (gfx.warm && _warmKey !== menuKey(trackIdx)) gfx.warm(); } catch (_) { /* as above */ }
   skids.reset();
   Particles.clear();   // no stale smoke/spray teleporting into the new session
   // THE PRE-RACE SCREEN OUTLIVES THE SWEEP when it was up: the warm above paints
@@ -3828,8 +3847,13 @@ function introBuild(go) {
       const t1 = performance.now();
       await prepareMenuCarAssets(() => live() && performance.now() - t1 < 1500);
       if (!live()) return;
-      FlybySeq.reset(); _menuGate.warm = 2;
+      FlybySeq.reset(); warmPrograms(); _menuGate.warm = 2;
       for (let f = 0; f < 3 && _menuGate.warm > 0; f++) await new Promise((r) => requestAnimationFrame(r));
+      // The warm the first hidden frame started finishes under this card too
+      // (bounded): a flyby begun over a pending warm draws nothing until it ends
+      // (render() waits on warming()), so its opening shots would be lost to it.
+      const t2 = performance.now();
+      while (live() && gfx.warming && gfx.warming() && performance.now() - t2 < 15000) await menuSlice();
       // Plan the flyby here too, up to a budget: whatever is left plans mid-flyby.
       FlybySeq.setDuration(loadingScreen.nextFlyMs());
       const fly = { key, track, shots: FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (idx * 2654435761)) >>> 0, false) }, step = FlybySeq.planSteps(track, fly.shots), t0 = performance.now();
