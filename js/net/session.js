@@ -4,7 +4,8 @@
 const NetSession = (function () {
   const PING = 3, PONG = 4;           // 1 belongs to NetSnapshot (TYPE_SNAPSHOT)
   const PING_BYTES = 13;              // type u8 + id u32 + t0 f64
-  const PONG_BYTES = 21;              // + t1 f64
+  const PONG_MIN_BYTES = 21;          // + t1 f64 (the PING's arrival)
+  const PONG_BYTES = 29;              // + t2 f64 (the PONG's departure — the hold between them is not path)
 
   const DEFAULTS = {
     pingEveryMs: 500,
@@ -20,7 +21,11 @@ const NetSession = (function () {
     syncPingEveryMs: 100,
     timeoutMs: 6000,
     stallForgiveMs: 400,
-    clockSamples: 8,
+    // Lowest RTT over this many samples (pingEveryMs apart) is the offset. At
+    // 8 the window was 4 s: every jitter burst re-picked a best and the
+    // offset STEPPED by up to ~15 ms, a metre of rival at speed, ~20 times a
+    // minute on a jittery link. 40 is 20 s — clocks drift microseconds in that.
+    clockSamples: 40,
   };
 
   function encodePing(id, t0) {
@@ -28,10 +33,10 @@ const NetSession = (function () {
     dv.setUint8(0, PING); dv.setUint32(1, id >>> 0); dv.setFloat64(5, t0);
     return new Uint8Array(dv.buffer);
   }
-  function encodePong(id, t0, t1) {
+  function encodePong(id, t0, t1, t2) {
     const dv = new DataView(new ArrayBuffer(PONG_BYTES));
     dv.setUint8(0, PONG); dv.setUint32(1, id >>> 0);
-    dv.setFloat64(5, t0); dv.setFloat64(13, t1);
+    dv.setFloat64(5, t0); dv.setFloat64(13, t1); dv.setFloat64(21, Number.isFinite(t2) ? t2 : t1);
     return new Uint8Array(dv.buffer);
   }
   function create(opts) {
@@ -109,18 +114,25 @@ const NetSession = (function () {
 
       if (type === PING) {
         if (dv.byteLength >= PING_BYTES) {
-          transport.send(CH_STATE, encodePong(dv.getUint32(1), dv.getFloat64(5), now));
+          // t1 = when the PING arrived (the transport's stamp), t2 = now, as
+          // this reply leaves — pump time. A reply held for a frame used to
+          // count as path, biasing the offset by half the hold.
+          transport.send(CH_STATE, encodePong(dv.getUint32(1), dv.getFloat64(5), now, lastNow));
           return true;
         }
         return false;
       }
       if (type === PONG) {
-        if (dv.byteLength >= PONG_BYTES) {
+        if (dv.byteLength >= PONG_MIN_BYTES) {
           const id = dv.getUint32(1), t0 = dv.getFloat64(5), t1 = dv.getFloat64(13);
+          const t2raw = dv.byteLength >= PONG_BYTES ? dv.getFloat64(21) : t1;
           if (!takePing(id, t0)) return false;   // not a ping of ours, or already answered
-          const roundTrip = now - t0;
-          // Assume a symmetric path: their t1 lines up with our midpoint.
-          addSample(roundTrip, t1 - (t0 + roundTrip / 2));
+          // NTP's four stamps: the peer's hold (t2 − t1) is not path, so it
+          // leaves the round trip; the offset is the mean of the two legs.
+          const hold = Number.isFinite(t2raw) && t2raw >= t1 ? Math.min(t2raw - t1, MAX_PLAUSIBLE_RTT_MS) : 0;
+          const t2 = t1 + hold;
+          const roundTrip = now - t0 - hold;
+          addSample(roundTrip, ((t1 - t0) + (t2 - now)) / 2);   // hold 0: t1 − (t0 + rtt/2), as before
         }
         if (synced() && heldState) {
           const held = heldState;
@@ -249,12 +261,17 @@ const NetSession = (function () {
       alive: () => alive,
       lastHeard: () => lastHeardAt,
       close() {
-        // Release BEFORE the alive check: a path that flipped `alive` first
+        // Release whatever `alive` says: a path that flipped `alive` first
         // (transport-close event, timeout) used to make close() a no-op and
-        // netplay.stop() could never reach transport.close().
-        release();
-        if (!alive) return;
+        // netplay.stop() could never reach transport.close(). And flip
+        // `alive` BEFORE releasing: the transport's close event fires
+        // synchronously (rtc and loopback both) and the handler above
+        // reported our own close() as "transport" — the host dropping a
+        // wrong-build guest announced LEFT {why: "transport"}.
+        const was = alive;
         alive = false;
+        release();
+        if (!was) return;
         Log.info("net", "session close");
         fire(closeHandlers, "local");
       },

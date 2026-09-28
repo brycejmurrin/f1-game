@@ -750,3 +750,27 @@ test("peekCode refuses the shapes decodeCode refuses, synchronously, and accepts
     assert.equal((await NetHandshake.decodeCode(bad)).error, NetHandshake.peekCode(bad).error, `decodeCode and peekCode agree on ${bad}`);
   }
 });
+
+test("loopback jitter never reorders the EVENT channel: it is reliable AND ordered on the real wire", () => {
+  const [a, b] = NetTransport.loopback({ latencyMs: 40, jitterMs: 30, rnd: (() => { let s = 7; return () => (s = (s * 16807) % 2147483647) / 2147483647; })() });
+  const got = [];
+  b.onMessage((ch, data) => { if (ch === NetTransport.EVENT) got.push(data); });
+  a.pump(0); b.pump(0);
+  for (let i = 0; i < 40; i++) a.send(NetTransport.EVENT, i);
+  for (let t = 1; t < 400; t += 5) b.pump(t);
+  assert.deepEqual(got, Array.from({ length: 40 }, (_, i) => i), "events arrive in send order under jitter");
+});
+
+test("a handler that closes the endpoint mid-pump stops the rest of that batch", () => {
+  // rtc: EV.BYE → stop() → shutdown() inside one pump; the trailing MODEL /
+  // LAP events in the same batch still reached handlers that do not check
+  // `active` — "GAME VERSIONS DIFFER" for a peer that had already left.
+  const [a, b] = NetTransport.loopback({ latencyMs: 0, rnd: () => 0.5 });
+  let seen = 0;
+  b.onMessage(() => { seen++; b.close(); });
+  a.pump(0); b.pump(0);
+  for (let i = 0; i < 5; i++) a.send(NetTransport.EVENT, i);
+  b.pump(1);
+  assert.equal(seen, 1, "nothing after the close is delivered");
+  assert.equal(b.status, "closed");
+});

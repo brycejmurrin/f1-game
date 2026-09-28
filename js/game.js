@@ -4073,7 +4073,7 @@ function quitToMenu() {
   _ltBase = null; _ltFlash = 0;   // the lightning's saved race base is not the menu's
   if (announcer.stop) announcer.stop();   // the results commentary ran on over the title for up to 16 s
   shake = 0; hitStop = 0;
-  PerfGov.sentinelArm(false); if (netPlay.active()) netPlay.stop("local"); hideCamPicker(); Input.unlockLandscape();
+  PerfGov.sentinelArm(false); netPlay.stop("local"); hideCamPicker(); Input.unlockLandscape();   // inactive: forgets a stale disconnect reason
   closeLightTuner(false);
   closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();
   // THE PRE-RACE SCREEN OUTLIVES A FAILED START without this: its only other
@@ -4315,6 +4315,11 @@ function update(dt) {
   // bounded escape hatch for an unfinished or stale participant.
   if (resultT === 0) {
     resultT = RaceControl.finishDelay(cars, raceT, lapsTarget);
+    // A GUEST holding the host's classification is done once ITS car is: its
+    // view of the host's car can lag or disagree (a finish still in flight, a
+    // pose lost to extrapolation), and waiting on that view meant the host's
+    // race ended while the guest drove on to the 360 s/lap hard cap.
+    if (resultT === 0 && netPlay.active() && !netPlay.ownsClassification() && player && (player.finished || player.retired) && netPlay.peerResult()) resultT = 0.5;
   }
   if (resultT > 0) {
     resultT -= dt;
@@ -6424,6 +6429,9 @@ function retireCar(c, reason) {
   c.retired = true;
   c.dnf = reason || "mechanical";
   c.dnfAt = null;
+  // The owner's word, on the reliable channel: nothing else carries it and a
+  // rival left "running" holds the other screen's result to the hard cap.
+  if (c.local && netPlay.active()) netPlay.reportLap({ lap: c.lap, time: null, best: null, code: c.code, retired: c.dnf, invalid: true });
   Tracks.sample(track, c.s, smp);
   const side = c.x >= 0 ? 1 : -1;
   const wall = Tracks.wallAt(track, c.s, side);
@@ -9035,7 +9043,10 @@ els.resNext.onclick = () => {
   // NetPlay live — the guest adopted the PREVIOUS race's RESULT rows onto the
   // new cars (netOrder), LAP/STRATEGY kept going to the peer for cars no longer
   // in the grid, and pause no longer stopped the world (the netPlay.active() gates).
-  if (netPlay.active()) netPlay.stop("local");
+  netPlay.stop("local");   // inactive after a mid-race drop: forgets the stale reason
+  // endRace ran with NetPlay still live, so endChangeable() KEPT the host's
+  // weather plan — this solo race would have replayed the host's {to, dur}.
+  wxArc.endSession();
   if (isChampionship() && (SeasonCal.qualiNext(season) || (SeasonCal.quali() && !quali.results()))) openQuali();
   else startRace();
 };

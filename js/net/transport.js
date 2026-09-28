@@ -71,7 +71,11 @@ const NetTransport = (function () {
       if (channel === STATE) {
         if (loss > 0 && rnd() < loss) { dropped++; return; }
       }
-      const at = (from._wire || 0) + latency + (jitter ? (rnd() * 2 - 1) * jitter : 0);
+      let at = (from._wire || 0) + latency + (jitter ? (rnd() * 2 - 1) * jitter : 0);
+      // The EVENT channel is reliable AND ordered on the real wire (SCTP
+      // ordered): jitter must not reorder it here, or a test passes or fails
+      // on an order production never produces.
+      if (channel === EVENT) { at = Math.max(at, to._lastEventAt || 0); to._lastEventAt = at; }
       queue.push({ at, to, channel, data, seq: seq++ });
     }
 
@@ -82,6 +86,9 @@ const NetTransport = (function () {
       const held = [];
       let n = 0;
       for (const m of queue) {
+        // A handler may close this endpoint mid-walk (EV.BYE → stop): what is
+        // left for a closed endpoint is dropped, as the real wire drops it.
+        if (m.to.status === "closed") continue;
         if (m.to === self && m.at <= t) { m.to._emit("message", m.channel, m.data); delivered++; n++; }
         else held.push(m);
       }
@@ -574,6 +581,10 @@ const NetTransport = (function () {
       queuedState = queuedEvents = queuedBytes = 0;
       for (let i = 0; i < batch.length; i++) {
         const m = batch[i];
+        // A handler shut us down (EV.BYE → stop → shutdown): the rest of the
+        // batch is a closed connection's mail — a trailing MODEL mismatch
+        // announced "GAME VERSIONS DIFFER" for a peer that had already left.
+        if (ep.status === "closed") break;
         // m.at is the arrival stamp taken at inbox push — session.js does the
         // PONG clock math on it rather than on handler-run time.
         ep._emit("message", m.channel, m.data, m.at);

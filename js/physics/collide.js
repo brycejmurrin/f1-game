@@ -408,7 +408,7 @@ const Collide = (() => {
           // candidate. Only clears the R3 threshold for a real shunt (see
           // incidentsim); below it the cheap (prog,x) plane above stays the
           // resolver — THAT event-scoping is C3. Self-guarding no-op otherwise.
-          if (last) incidentSim.notifyCar(a, b, relV);
+          if (last && !netPlay.owns(a) && !netPlay.owns(b)) incidentSim.notifyCar(a, b, relV);   // as the oriented path: a rival is POSED, never simulated here
         }
       }
     }
