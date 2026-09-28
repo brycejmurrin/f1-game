@@ -65,6 +65,11 @@ export const KNOWN = {
   "throttle-auto": "controller.html <style> (body.throttle-auto #gas) — the phone page, not css/",
   "aero-auto": "controller.html <style> (body.aero-auto #b-aero) — the phone page, not css/",
   "aero-none": "controller.html <style> (body.aero-none #b-aero) — the phone page, not css/",
+  // …and the MENU PAD it becomes out of a race (body.menu; .nav / .grip-nav buttons).
+  "menu": "controller.html <style> (body.menu .grip-nav) — the phone page, not css/",
+  "nav": "controller.html <style> (.nav, body.menu #keys .nav) — the phone page, not css/",
+  "grip-nav": "controller.html <style> (.grip-nav) — the phone page, not css/",
+  "word": "controller.html <style> (.grip-nav.word) — the phone page, not css/",
   // Audio sheet. Both wrap rows that style themselves; every sibling group on
   // the sheet stacks with the same zero margins, so nothing is missing.
   "as-sub": "wrapper for #as-voices / #as-ann-voice; .set-row / .tune-row / .as-note style themselves",

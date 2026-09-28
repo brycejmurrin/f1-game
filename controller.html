@@ -83,12 +83,14 @@
   #rim .accent { fill: none; stroke: var(--team); stroke-width: 4; opacity: .8; }
   .grip { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
   /* The left grip: UP over DN, each half the column — the game's shift dock. */
-  .shift, .tap { flex: 1 1 0; min-height: 48px; border-radius: 22px; background: linear-gradient(#22222c, #14141b);
+  .shift, .tap, .grip-nav { flex: 1 1 0; min-height: 48px; border-radius: 22px; background: linear-gradient(#22222c, #14141b);
             border: 2px solid #3a3a46; font-weight: 800; font-size: 26px; line-height: 1; color: #d0d0da;
             display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; }
   .shift small { font-size: 12px; letter-spacing: .14em; color: var(--dim); }
   .tap { font-size: 16px; letter-spacing: .1em; display: none; }
-  .shift.on, .tap.on { color: var(--fg); border-color: var(--team); box-shadow: inset 0 0 0 2px var(--team); }
+  .shift.on, .tap.on, .grip-nav.on { color: var(--fg); border-color: var(--team); box-shadow: inset 0 0 0 2px var(--team); }
+  .grip-nav small { font-size: 12px; letter-spacing: .14em; color: var(--dim); }
+  .grip-nav.word { font-size: 20px; letter-spacing: .12em; }
   .pedal { flex: 1 1 0; border-radius: 26px; border: 2px solid #3a3a46; background: var(--carbon);
            font-weight: 800; font-size: 18px; letter-spacing: .1em; display: flex; align-items: flex-end; justify-content: center;
            padding-bottom: 22px; color: var(--dim); position: relative; overflow: hidden; }
@@ -110,6 +112,19 @@
   body.throttle-auto #gas::before { border-color: #1d1d26; }
   body.throttle-auto #gas small { display: block; color: #3d3d4a; }
   body.aero-auto #b-aero, body.aero-none #b-aero { pointer-events: none; background: #0d0d13; color: #3d3d4a; border-color: #26262f; }
+  /* THE MENU PAD (PhonePad.paintHud → body.menu: out of a race, or paused).
+     The wheel becomes the game's pad: ▲ ▼ on the left grip, BACK over SELECT
+     on the right, ◀ ▶ SELECT BACK on the face, PAUSE across the row (it is
+     RESUME on the pause menu). Every nav button is hidden until then, and the
+     race controls go the other way, so a thumb never finds a pedal in a menu. */
+  .nav { display: none; }
+  body.menu .shift, body.menu .tap, body.menu .pedal { display: none; }
+  body.menu .grip-nav { display: flex; }
+  body.menu #keys button:not(.nav):not(#b-pause) { display: none; }
+  body.menu #keys .nav { display: block; }
+  body.menu #b-pause { grid-column: 1 / -1; order: 1; }   /* under the arrows */
+  body.menu #rim { opacity: .25; }
+  body.menu #leds { visibility: hidden; }
 
   /* THE FACE: rev lights, the LCD, the button clusters. */
   #face { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 0; }
@@ -231,6 +246,8 @@
     <button id="b-shiftDown" class="shift" type="button" aria-label="Shift down">&#9660;<small>DN</small></button>
     <button id="b-ot-big" class="tap" type="button" aria-label="Overtake">OT</button>
     <button id="b-boost-big" class="tap" type="button" aria-label="Boost">BOOST</button>
+    <button id="b-navUp" class="nav grip-nav" type="button" aria-label="Menu up">&#9650;<small>MENU</small></button>
+    <button id="b-navDown" class="nav grip-nav" type="button" aria-label="Menu down">&#9660;<small>MENU</small></button>
   </div>
   <div id="face">
     <div id="screen" aria-live="off">
@@ -249,6 +266,10 @@
       <button id="b-look" type="button">LOOK</button>
       <button id="b-recover" type="button">RESET</button>
       <button id="b-pause" type="button">PAUSE</button>
+      <button id="b-navLeft" class="nav" type="button" aria-label="Menu left">&#9664;</button>
+      <button id="b-navRight" class="nav" type="button" aria-label="Menu right">&#9654;</button>
+      <button id="b-navSelect-key" class="nav" type="button" aria-label="Select">SELECT</button>
+      <button id="b-navBack-key" class="nav" type="button" aria-label="Back">BACK</button>
       <button id="b-center" type="button" class="wide">CENTRE TILT</button>
     </div>
     <div id="link" role="status"></div>
@@ -256,6 +277,8 @@
   <div id="right" class="grip">
     <div id="brake" class="pedal" role="button" aria-label="Brake">BRAKE</div>
     <div id="gas" class="pedal" role="button" aria-label="Gas">GAS<small>AUTO</small></div>
+    <button id="b-navBack" class="nav grip-nav word" type="button" aria-label="Back">BACK</button>
+    <button id="b-navSelect" class="nav grip-nav word" type="button" aria-label="Select">SELECT</button>
   </div>
 </section>
 <!-- @gen-shell:controller -->
@@ -284,7 +307,9 @@ window.addEventListener("DOMContentLoaded", function () {
     gas: $("gas"), brake: $("brake"), lookBack: $("b-look"), center: $("b-center"), rim: $("rim"),
     buttons: { shiftUp: $("b-shiftUp"), shiftDown: $("b-shiftDown"), overtake: [$("b-overtake"), $("b-ot-big")],
                boost: [$("b-boost"), $("b-boost-big")], aero: $("b-aero"), camera: $("b-camera"), radio: $("b-radio"),
-               recover: $("b-recover"), pause: $("b-pause") },
+               recover: $("b-recover"), pause: $("b-pause"),
+               navUp: $("b-navUp"), navDown: $("b-navDown"), navLeft: $("b-navLeft"), navRight: $("b-navRight"),
+               navSelect: [$("b-navSelect"), $("b-navSelect-key")], navBack: [$("b-navBack"), $("b-navBack-key")] },
     hud: { gear: $("h-gear"), speed: $("h-speed"), lap: $("h-lap"), pos: $("h-pos"), ers: $("h-ers"), flag: $("h-flag"),
            ot: $("h-ot"), aero: $("h-aero"), last: $("h-last"), leds: $("leds"), screen: $("screen"), team: document.documentElement,
            body: document.body },
@@ -310,12 +335,14 @@ window.addEventListener("DOMContentLoaded", function () {
     } catch (e) {}
   }, { capture: true });
   // ?demo — the wheel with a moving sample dash and no link, for a look at the
-  // layout; ?demo=auto shows it with gears, throttle and aero on AUTO.
+  // layout; ?demo=auto shows it with gears, throttle and aero on AUTO;
+  // ?demo=menu shows the menu pad (the game out of a race).
   if (/[?&]demo\b/.test(location.search)) {
     document.body.classList.add("linked");
     $("link").textContent = "DEMO · NOT LINKED";
     var auto = /[?&]demo=auto\b/.test(location.search) ? (PhonePad.DASH.gearsAuto | PhonePad.DASH.throttleAuto | PhonePad.DASH.aeroAuto) : 0;
     var still = /[?&]still\b/.test(location.search);   // &still: rim level, for a screenshot
+    var menu = /[?&]demo=menu\b/.test(location.search);
     // A tap arms the real sensor (iOS asks inside the tap): the demo rim then
     // follows the phone in the hand instead of the sine wave.
     var live = false;
@@ -328,7 +355,7 @@ window.addEventListener("DOMContentLoaded", function () {
       var t = (performance.now() - t0) / 1000, rev = (Math.sin(t * 1.7) + 1) / 2;
       ctl.paintHud({ gear: 3 + Math.floor(t % 5), kmh: 140 + Math.round(rev * 170), rpm: 0.35 + rev * 0.65, lap: 4, laps: 12,
         pos: 6, cars: 20, ers: (Math.cos(t / 3) + 1) / 2, flags: auto | (rev > 0.9 ? PhonePad.DASH.redline : PhonePad.DASH.otArmed),
-        caution: 0, lastLapMs: 91234, state: "race", team: "#00b4ab" });
+        caution: 0, lastLapMs: 91234, state: menu ? "menu" : "race", team: "#00b4ab" });
       if (!still && !live) ctl.setRoll(Math.sin(t / 2) * 25);
       requestAnimationFrame(demo);
     };

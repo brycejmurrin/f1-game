@@ -324,7 +324,22 @@ const Input = (function () {
     radio: () => { radioPressed = true; },
     calib: () => { calibrate(); },
     pause: () => { if (onPauseCb) onPauseCb(); },
+    // THE PHONE AS A MENU PAD. Its wheel shows arrows, SELECT and BACK while
+    // the game is not racing (or is paused), and each press lands on the SAME
+    // seam the gamepad's d-pad, A and B use while a menu is open: padNavKey /
+    // padActivate / padEscape — synthetic keys at the focused control, one
+    // mover, never a second focus model. A direction with nothing focused
+    // yet seeds focus, exactly as the pad's first press does.
+    navUp: () => remoteNav("up"), navDown: () => remoteNav("down"),
+    navLeft: () => remoteNav("left"), navRight: () => remoteNav("right"),
+    navSelect: () => { padActivate(); },
+    navBack: () => { padEscape(); },
   };
+  function remoteNav(dir) {
+    if (!(window.MenuNav && window.MenuNav.activeLayer())) return;   // no menu on top: nothing to move
+    if (!padFocusableInLayer()) { padSeedFocus(); return; }
+    padNavKey(dir);
+  }
   function remoteEvent(kind) {
     const fn = REMOTE_EDGES[kind];
     if (!fn) return false;
