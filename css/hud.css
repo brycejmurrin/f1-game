@@ -759,6 +759,13 @@ body[data-density="compact"]:has(#hud-flag:not([hidden])) #announce { top: calc(
    With no number to show (the menus, a car with none) :empty collapses the
    plate back to exactly the 3px stripe this card used to carry. */
 #announce[hidden] { display: none; }   /* the author `display` below would beat the UA's [hidden] */
+/* The card's SPOKEN twin (js/game.js showAnnounce): always rendered, so a
+   screen reader has watched it since boot, and visually hidden the standard
+   way — display:none or visibility:hidden would take it out of the tree. */
+#announce-live {
+  position: absolute; width: 1px; height: 1px; padding: 0; border: 0;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
 #announce {
   position: fixed;
   top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 10px);

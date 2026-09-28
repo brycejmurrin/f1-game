@@ -861,8 +861,18 @@ The rule is applied by `gridOrderFor()` to whatever order the session produced:
 Formula 2's sprint rule, never an F1 one), `revchamp` (the standings inverted,
 championship only) and `random` (one `simRnd()` per car, the same single draw
 `gridUp()` would have spent). A championship weekend that qualifies ignores the
-rule, and a sprint result still grids the Grand Prix. SEASON quali is
-format-gated — a weekend format can turn quali off or add a sprint.
+rule. A championship with qualifying OFF has its own rule, `champGrid`
+(`apex26.champGrid`, default `champ` = STANDINGS: the drivers' championship order,
+FIA 2026 SR B2.5.4(a) / B2.3.4(a); round 1, before anyone has scored, keeps the
+default pace order, and drivers on zero sit behind every scorer in pace order —
+`SportingRegs.champOrder`). A saved `revchamp` carries over; the one-off's rule
+is untouched. SEASON quali is format-gated — a weekend format can turn quali off
+or add a sprint. A SPRINT weekend with qualifying on qualifies TWICE: SPRINT
+QUALIFYING grids the sprint, and the Grand Prix runs its own session
+(B2.2.1, B2.4.1(b)); `SeasonCal.award()` drops `qualiOrder` after either leg. With
+qualifying off the GP no longer copies the sprint result (the old `sprintOrder`
+save field is dropped on load; an old mid-weekend save that already qualified
+keeps that order for its GP).
 
 **Every round qualifies, and the classification never outlives its weekend.** Two
 bugs came out of getting that wrong, and both looked like working grids:

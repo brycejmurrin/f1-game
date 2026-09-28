@@ -354,7 +354,7 @@ test("every banner is the SAME small radio card — no kind gets billboard type 
   assert.match(hud, /body\[data-density="compact"\] #announce \{[\s\S]*?font-size:\s*var\(--fs-2\)/);
   // …and the shell carries the plate and the two lines beside it.
   const shell = read("index.html");
-  assert.match(shell, /<div id="announce" role="status" hidden><span id="announce-num"><\/span><span id="announce-body"><span id="announce-who"><\/span><span id="announce-text"><\/span><\/span><\/div>/);
+  assert.match(shell, /<div id="announce" aria-hidden="true" hidden><span id="announce-num"><\/span><span id="announce-body"><span id="announce-who"><\/span><span id="announce-text"><\/span><\/span><\/div>/);
 });
 
 test("the number plate is the card's identity anchor, and it collapses to a stripe with no number", () => {

@@ -79,3 +79,35 @@ test("the host holds the grid 45 s for a guest that cannot arm yet, and says so 
   assert.match(src, /const HOLD_MAX_MS = ARM_WAIT_MS \+ 10000;/, "the guest's own backstop still outlasts the host's wait");
   assert.match(src, /G\.announce\("WAITING FOR RIVAL — "/);
 });
+
+test("the named moment lands at the SAME instant on a guest whose clock is 5 s off the host's", () => {
+  // rtc-sync-probe 2026-09-28: the guest went green 3.3 s before the host —
+  // exactly the two pages' clock offset. START went out pre-converted to the
+  // guest's clock (localToPeer) and armStart converted it AGAIN (peerToLocal).
+  // Loopback peers share one clock, so no spec saw it. Here the guest's clock
+  // runs SKEW ahead of the host's: each side pumps with its own time, the
+  // sessions measure the offset from PING/PONG, and the instant must agree.
+  const SKEW = 5000;
+  const [ta, tb] = NetTransport.loopback({ latencyMs: 20 });
+  const hs = NetSession.create({ transport: ta }), gs = NetSession.create({ transport: tb });
+  let t = 1000;
+  const pump = () => { t += 25; hs.pump(t); gs.pump(t + SKEW); };
+  for (let i = 0; i < 40; i++) pump();
+  assert.ok(hs.synced() && gs.synced(), "both clocks synced over the loopback");
+  assert.ok(Math.abs(hs.offset() - SKEW) < 30, `host sees the guest ${hs.offset()} ms ahead`);
+  const Gh = stubG(2), nh = NetPlay.create(Gh);
+  const Gg = stubG(2), ng = NetPlay.create(Gg);
+  assert.equal(ng.start({ role: "guest", session: gs }).ok, true);
+  nh.start({ role: "host", session: hs, sessions: [{ id: 1, session: hs }], peers: [{ id: 1, profile: null }] });
+  Gh.netNow = t; Gg.netNow = t + SKEW;
+  nh.hostStart();
+  for (let i = 0; i < 200 && !(Gh.netStart && Gg.netStart); i++) {
+    pump(); Gh.netNow = t; Gg.netNow = t + SKEW;
+    nh.tick(t); ng.tick(t + SKEW);
+  }
+  assert.ok(Gh.netStart && Gg.netStart, "both sides hold a start");
+  // The same physical instant: the guest's `at` is the host's `at` plus the skew.
+  const err = Gg.netStart.at - (Gh.netStart.at + SKEW);
+  assert.ok(Math.abs(err) < 40, `guest at − (host at + skew) = ${err} ms (was −${SKEW} with the double conversion)`);
+  assert.equal(Gg.netStart.hold, Gh.netStart.hold, "one hold for both");
+});

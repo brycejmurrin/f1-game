@@ -1419,14 +1419,24 @@ const PitLane = (function () {
      *  TWO_COMPOUND_MIN_LAPS — the game's short races (3-7 laps) would be
      *  one forced stop and nothing else — and never in a SPRINT: the article
      *  names the Race only, so a sprint leg of a season weekend forced a stop
-     *  no real team makes. (The player is never disqualified for one compound;
-     *  that is an owner's design call, not enforced here.) */
+     *  no real team makes. The PLAYER is held to it too: endRace disqualifies
+     *  a car that ran one dry compound (js/race/sporting-regs.js), and
+     *  compoundDue() is the engineer's warning with COMPOUND_WARN_LAPS left.
+     *  Only where a stop is possible at all (enabled(): a lane and wear on). */
     const TWO_COMPOUND_MIN_LAPS = 8;
     function sprintLeg() {
       return !!G.seasonMode && typeof SeasonCal !== "undefined" && SeasonCal.stage(G.season) === "sprint";
     }
     function twoCompoundRule(laps) {
       return laps >= TWO_COMPOUND_MIN_LAPS && TyreModel.treadFor(G.raceWeather) === 0 && !sprintLeg();
+    }
+    const COMPOUND_WARN_LAPS = 5;
+    function twoCompoundApplies() { return enabled() && twoCompoundRule(G.lapsTarget); }
+    /** The player still owes the second compound with the race nearly run. */
+    function compoundDue(c) {
+      if (!c || !twoCompoundApplies() || typeof SportingRegs === "undefined") return false;
+      const left = (G.lapsTarget || 0) - (c.lap || 0) + 1;   // c.lap is the lap the car is ON
+      return left <= COMPOUND_WARN_LAPS && SportingRegs.compoundShort(c.tyreLog);
     }
     /** The STRATEGY row's pin for this circuit: a stop count, or null for AUTO. */
     function pinKey() { const t = G.track, d = t && t.def; return "pitPlan." + ((d && d.id) || (t && t.id) || "track"); }
@@ -1716,7 +1726,7 @@ const PitLane = (function () {
              cueM: CUE_M, boxCueM: BOX_CUE_M, moveM: MOVE_M,
              boxTol: BOX_TOL, squareByM: SQUARE_BY_M, squareLat: BOX_SQUARE_LAT,
              servedS: SERVED_S, mergeS: MERGE_S, lastCue: () => _lastCue,
-             planInfo, windowOf, replan, lossS, pinnedStops, setPinnedStops,
+             planInfo, windowOf, replan, lossS, pinnedStops, setPinnedStops, twoCompoundApplies, compoundDue,
              laneEdge, laneCentre, laneDrive, laneUniform, boxUniform, laneX, inLaneLat, inBoxLat,
              boxSquare: (c) => { const zz = z(); if (!zz || !c || !G.track) return false;
                                  Tracks.sample(G.track, c.s, _smp); return boxSquare(c, _smp, zz.side); },

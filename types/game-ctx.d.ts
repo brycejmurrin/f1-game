@@ -261,7 +261,7 @@ interface GameEls {
   hudSectors: HTMLElement; hudLimits: HTMLElement;
   flag: HTMLElement; minimap: HTMLElement;
   lights: HTMLElement; announce: HTMLElement;
-  announceNum: HTMLElement; announceWho: HTMLElement; announceText: HTMLElement;
+  announceNum: HTMLElement; announceWho: HTMLElement; announceText: HTMLElement; announceLive: HTMLElement;
   overlay: HTMLElement; audiostate: HTMLElement;
   lighting: HTMLElement; camtune: HTMLElement; flyby: HTMLElement;
   select: HTMLElement; selTitle: HTMLElement; selTeams: HTMLElement;
@@ -734,6 +734,8 @@ interface GameCtx {
   raceQuali: boolean;
   /** "tier" pace order | "quali" | "rev10" (F2 sprint rule) | "revchamp" | "random". */
   raceGrid: "tier" | "quali" | "rev10" | "revchamp" | "random";
+  /** A championship's grid with qualifying off: "champ" (standings, FIA 2026 SR B2.5.4(a)) | "tier" | "revchamp" | "random". */
+  champGrid: "champ" | "tier" | "revchamp" | "random";
   /** Time-trial medal reference: the modelled pole for this circuit (Quali.referencePole). */
   readonly referencePole: () => number;
   /** RED FLAG → standing restart: clears the surface, re-grids in race order, re-arms the lights. */
