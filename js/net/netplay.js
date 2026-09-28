@@ -533,7 +533,7 @@ const NetPlay = (function () {
             // LOBBY session, which has no handler for it — so it sat on the
             // grid until HOLD_MAX_MS and counted down alone. The moment is kept
             // and told again to whoever arms after it was named.
-            else if (named) { try { s.sendEvent(EV.START, { at: s.localToPeer(named.at), hold: named.hold }); } catch (e) { /* a dead session must not stop naming it for the rest */ } }
+            else if (named) { try { s.sendEvent(EV.START, { at: named.at, hold: named.hold }); } catch (e) { /* a dead session must not stop naming it for the rest */ } }   // host clock; the guest converts (nameTheMoment)
           }
           // QUALI / QLIVE: bindQuali below — the one validation site, shared
           // with the lobby phase. (QLIVE never reaches the classification, but
@@ -815,8 +815,16 @@ const NetPlay = (function () {
       armDeadline = 0;
       const hold = 0.2 + Math.random() * 1.8;
       const at = nowMs() + (G.COUNTDOWN_S + hold) * 1000 + SETTLE_MS;
+      // `at` goes out in THE HOST'S OWN CLOCK, as every snapshot tick does, and
+      // the guest converts ONCE (armStart -> peerToLocal). It used to go out
+      // pre-converted (localToPeer) AND be converted again on arrival: the
+      // guest's instant was off by the whole page-age difference — measured
+      // 3.3 s early with a page opened 3.3 s later (rtc-sync-probe, 2026-09-28)
+      // — and past HOLD_MAX_MS (a friend opening the link a minute after the
+      // host) armStart refused it and the guest counted down alone, 55 s late.
+      // Loopback peers share a clock, so no spec could see it.
       for (const s of sessionList()) {
-        try { s.sendEvent(EV.START, { at: s.localToPeer(at), hold }); } catch (e) { /* a dead session must not stop naming it for the rest */ }
+        try { s.sendEvent(EV.START, { at, hold }); } catch (e) { /* a dead session must not stop naming it for the rest */ }
       }
       named = { at, hold };
       G.netStart = { at, hold, now: nowMs };
