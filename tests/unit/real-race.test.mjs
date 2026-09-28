@@ -37,7 +37,11 @@ function load() {
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/teams.js"), "utf8"), ctx, { filename: "teams.js" });
   // Tracks: the list, plus the two geometry reads a mid-race drop-in makes (a straight 6 km ring, 7 m half-width).
   vm.runInContext("var TyreModel = { AI_CLASS: { soft: { life: 0.48 }, medium: { life: 0.74 }, hard: { life: 1.05 }, inter: { life: 1 }, wet: { life: 1 } } };", ctx);   // the compound lives place() reads
-  vm.runInContext("var Tracks = " + JSON.stringify({ LIST: TRACKS }) + "; Tracks.sample = function (t, s, o) { o.p[0] = s; o.p[1] = 0; o.p[2] = 0; o.t[0] = 1; o.t[1] = 0; o.t[2] = 0; o.r[0] = 0; o.r[1] = 0; o.r[2] = 1; o.hw = 7; }; Tracks.wallAt = function () { return 9; };", ctx);
+  vm.runInContext("var Tracks = " + JSON.stringify({ LIST: TRACKS }) + "; Tracks.sample = function (t, s, o) { o.p[0] = s; o.p[1] = 0; o.p[2] = 0; o.t[0] = 1; o.t[1] = 0; o.t[2] = 0; o.r[0] = 0; o.r[1] = 0; o.r[2] = 1; o.hw = 7; }; Tracks.wallAt = function () { return 9; }; Tracks.curvature = function (t, s) { return Tracks.kAt ? Tracks.kAt(s) : 0; };", ctx);
+  // The drop-in speed is the AI's read of the road: the real corner model and the real constants.
+  vm.runInContext("var window = globalThis;", ctx);   // consts.js publishes on window
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/physics/consts.js"), "utf8"), ctx, { filename: "consts.js" });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/physics/ai-drive.js"), "utf8"), ctx, { filename: "ai-drive.js" });
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/real-race-tab.js"), "utf8"), ctx, { filename: "real-race-tab.js" });
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race.js"), "utf8"), ctx, { filename: "real-race.js" });
   const Teams = vm.runInContext("Teams", ctx);
@@ -393,7 +397,7 @@ test("a mid-race jump-in drops every car where it was, on its set, with the cloc
   assert.equal(by("RUS").lap, 31); assert.equal(by("RUS").s, 0);
   assert.ok(Math.abs(by("RUS").prog - 30 * 6000) < 1e-6);
   assert.ok(Math.abs(by("RUS").totalT - K0 * at.t0) < 1e-6);
-  assert.equal(by("RUS").speed, 0.55 * 80);
+  assert.equal(by("RUS").speed, 80, "FULL speed: a straight ring ahead, so the AI's drop-in speed is vTop itself");
   assert.equal(by("RUS").tyre.cls, "medium");
   assert.ok(by("RUS").tyreWear > 0.5, "a 30-lap-old medium is well worn: " + by("RUS").tyreWear);
   assert.ok(by("RUS").tyreWear <= 0.9);
@@ -548,6 +552,8 @@ test("a mid-race jump-in is a ROLLING start: the seat car is driven for four sec
   assert.ok(me.speed > 0, "at speed, not on the grid: " + me.speed);
   assert.ok(calls.some((c) => c[0] === "announce" && /ROLLING · YOU HAVE CONTROL IN 4/.test(c[1])));
   assert.ok(rr.status().handover > 3.9);
+  const names = calls.map((c) => c[0]);
+  assert.ok(names.indexOf("setCarRole") < names.lastIndexOf("snapGameCam"), "the seat is the AI's before the drop, and the camera is re-framed on the dropped-in car after it");
   for (let i = 0; i < 60 * 3.5; i++) rr.update(1 / 60);
   assert.equal(me.human, false, "still the AI's inside the hand-over");
   const said = calls.filter((c) => c[0] === "announce" && /^YOU HAVE CONTROL IN \d$/.test(c[1])).map((c) => c[1]);
@@ -566,4 +572,23 @@ test("a mid-race jump-in is a ROLLING start: the seat car is driven for four sec
   assert.equal(g2.G.state, "count", "the lights run");
   assert.equal(rr2.status().handover, 0);
   assert.ok(!g2.calls.some((c) => c[0] === "goRolling"));
+});
+
+test("dropSpeed: FULL speed for the road ahead — vTop on a straight, the AI's entry budget before a hairpin, never below the floor", () => {
+  const { R, ctx } = load();
+  const Tracks = vm.runInContext("Tracks", ctx), AD = vm.runInContext("AiDrive", ctx), PC = vm.runInContext("PhysicsConsts", ctx);
+  const track = { total: 6000 }, wrap = (v) => ((v % 6000) + 6000) % 6000;
+  assert.equal(R.dropSpeed(track, 0, 80, wrap), 80, "a straight: vTop");
+  // A 20 m radius hairpin 100 m ahead: the drop is what AiDrive.brakeTarget would allow at that distance.
+  Tracks.kAt = (s) => s >= 100 && s < 300 ? 0.05 : 0;
+  const vC = AD.cornerSpeed(0.05, PC.LAT_MAX, 1, 80);
+  const want = Math.sqrt(vC * vC + 2 * PC.BRAKE * 0.85 * 100);
+  const v = R.dropSpeed(track, 0, 80, wrap);
+  assert.ok(Math.abs(v - want) < 1e-9, "the entry budget 100 m out: " + v + " vs " + want);
+  assert.ok(v < 80 && v > vC, "between the corner's speed and the straight's");
+  // Dropped INSIDE the hairpin: the corner speed itself, held at the floor if the corner is slower than that.
+  const inside = R.dropSpeed(track, 150, 80, wrap);
+  assert.ok(Math.abs(inside - Math.max(vC, 0.3 * 80)) < 1e-9, "inside the corner: " + inside);
+  assert.ok(R.dropSpeed(track, 5990, 80, wrap) > 0.3 * 80, "the look-ahead wraps the lap");
+  Tracks.kAt = null;
 });

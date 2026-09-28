@@ -126,7 +126,7 @@ test.describe("real race, mid-race", () => {
     const by = (code) => st.rr.cars.find((c) => c.code === code);
     // At the start of real lap 3 Russell is on the line beginning lap 3; the others are inside lap 2 or 3 by time.
     expect(by("RUS").lap).toBe(3);
-    expect(by("RUS").s).toBeLessThan(10);   // dropped on the line, then two frames at cruise speed
+    expect(by("RUS").s).toBeLessThan(25);   // dropped on the line, then a few frames at FULL speed (the AI's for the road ahead)
     expect(by("LEC").lap).toBeGreaterThanOrEqual(2);
     expect(by("LEC").s).toBeGreaterThan(0);
     expect(by("VER").lap).toBeGreaterThanOrEqual(2);
