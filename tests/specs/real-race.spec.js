@@ -148,3 +148,52 @@ test.describe("real race, mid-race", () => {
     expect(later.cars.find((c) => c.code === "RUS").lap).toBe(3);
   });
 });
+
+test.describe("real race, watched", () => {
+  test("launch() with the positions loaded recreates the field as puppets: the camera on the seat, follow and speed keys, nobody driving", async ({ page }) => {
+    test.setTimeout(BOOT_MS + 90000);
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => window.__apex.headless(true));
+    // Two synthetic track-frame traces (2 Hz): Russell 50 m/s from 14 m behind the line, Leclerc 48 m/s a metre right.
+    const staged = await page.evaluate((script) => {
+      const line = (p0, v, x) => { const t = [], prog = [], xs = []; for (let tt = -5; tt <= 120; tt += 0.5) { t.push(tt); prog.push(tt < 0 ? p0 : p0 + v * tt); xs.push(x); } return { t, prog, x: xs }; };
+      const traces = { frame: "track", cars: { 63: line(-14, 50, 0), 16: line(-22, 48, 1) } };
+      // eslint-disable-next-line no-undef
+      return RealRace.launch(script, { seat: "LEC", watch: true, traces, startLap: 1 });
+    }, Object.assign({}, SCRIPT, { t0: 1, drivers: SCRIPT.drivers.map((d) => Object.assign({}, d, { lapStart: [0, 112, 222, 331, 440, 549] })) }));
+    expect(staged).toEqual({ trackId: "baku", laps: 6, seat: "LEC", startLap: 1, watch: true, reel: false });
+    await page.waitForFunction(() => window.__apex.info().track === "baku" && window.__apex.info().state === "count", null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => window.__apex.step(1 / 60, 2));
+    // eslint-disable-next-line no-undef
+    const armed = await page.evaluate(() => RealRace.status());
+    expect(armed.watch).toBe(true);
+    expect(armed.replay.follow).toBe("LEC");
+    expect(armed.replay.cars).toBe(2);
+    await page.evaluate(() => window.__apex.go());
+    await page.evaluate(() => window.__apex.step(1 / 60, 60));
+    const st = await page.evaluate(() => {
+      // eslint-disable-next-line no-undef
+      const rr = RealRace.status();
+      const info = window.__apex.info();
+      return { rr, state: info.state, cars: window.__apex.cars().map((c) => ({ code: c.code, human: c.human, s: c.s, lap: c.lap, retired: c.retired, speed: c.speed })) };
+    });
+    expect(st.state).toBe("race");
+    expect(Math.abs(st.rr.replay.T - 1)).toBeLessThan(0.05);
+    const by = (code) => st.cars.find((c) => c.code === code);
+    expect(Math.abs(by("RUS").s - 36)).toBeLessThan(2);
+    expect(by("RUS").lap).toBe(1);
+    expect(Math.abs(by("RUS").speed - 50)).toBeLessThan(1);
+    expect(by("LEC").human).toBe(false);
+    expect(by("HAM").retired).toBe(true);   // no data for that seat: parked
+    // The keys: period = up the order (Leclerc -> Russell), equal = the next speed.
+    await page.keyboard.press("Period");
+    await page.keyboard.press("Equal");
+    await page.evaluate(() => window.__apex.step(1 / 60, 60));
+    // eslint-disable-next-line no-undef
+    const later = await page.evaluate(() => RealRace.status());
+    expect(later.replay.follow).toBe("RUS");
+    expect(later.replay.speed).toBe(2);
+    expect(Math.abs(later.replay.T - 3)).toBeLessThan(0.1);
+  });
+});

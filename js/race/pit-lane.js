@@ -1577,6 +1577,7 @@ const PitLane = (function () {
         // itself (AiDrive.wornPays).
         lapsLeft: Math.max(0, (G.lapsTarget || 0) - (c.lap || 0)),
         pitLossLaps: plan.pitLossLaps,
+        scripted: !!plan.scripted,   // a real race's plan (js/race/real-race.js planFor)
       });
       if (!why) return "";
       // A weather stop fits what the WEATHER wants; any other stop follows the

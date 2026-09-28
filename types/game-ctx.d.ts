@@ -700,6 +700,8 @@ interface GameCtx {
   readonly onIncidentLineCross: (c: CarState, cross: LineTransition, newS: number) => void;
   readonly setLightTune: (id: string, v: unknown) => void;
   readonly setWeatherLive: (w: Weather) => void;
+  /** A real replay: every car AI-flagged, this one local (camera, HUD, audio); nobody drives. */
+  readonly followCar: (c: CarState) => void;
   /** Live time-of-day (read with no arg, write with tod). Rebuilds track when day/night flips. */
   readonly setTimeOfDay: (tod?: TimeOfDay) => TimeOfDay;
   /** Live weather (read with no arg, write with w). Same path as __apex.weather(). */
@@ -823,6 +825,7 @@ declare const RaceControl: GameModuleFactory;
 declare const WeatherArc: GameModuleFactory;
 declare const DailyChallenge: GameModuleFactory;
 declare const RealRace: GameModuleFactory;
+declare const RealReplay: GameModuleFactory;
 declare const TitleMenu: GameModuleFactory;
 declare const Onboard: GameModuleFactory;
 declare const SetupCamera: GameModuleFactory;

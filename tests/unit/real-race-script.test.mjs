@@ -320,7 +320,8 @@ test("the passes, the lap board and the race book read straight off the real tim
   assert.ok(!s.passes.some((p) => p.lap === 36 && (p.over === 4 || p.over === 10)), "the field streaming past Norris and Gasly as they stopped is not passing them");
   const l1 = s.passes.filter((p) => p.lap === 1);
   assert.equal(l1.length, 18, "eighteen passes on the opening lap");
-  assert.deepEqual(host(l1[0]), { lap: 1, by: 81, over: 16, pos: 2 });
+  assert.deepEqual([l1[0].lap, l1[0].by, l1[0].over, l1[0].pos], [1, 81, 16, 2]);
+  assert.ok(l1[0].t > 10 && l1[0].t < 20 && l1[0].frac > 0.1 && l1[0].frac < 0.15, "Piastri took P2 thirteen seconds after the lights, an eighth of the way round: " + JSON.stringify(l1[0]));
   assert.equal(s.passes.filter((p) => p.lap === 36).length, 26, "the restart lap after the second safety car, without the two stopped cars");
   const board = host(D.lapBoard(s, 51));
   assert.equal(board[0].code, "RUS"); assert.equal(board[0].pos, 1); assert.equal(board[0].gap, 0);

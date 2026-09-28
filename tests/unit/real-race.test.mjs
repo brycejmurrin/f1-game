@@ -121,7 +121,7 @@ test("the real strategy becomes the pit plan the pit lane executes, at full and 
   const { R, script } = load();
   const rus = script.drivers.find((d) => d.num === 63);
   const full = R.planFor(rus, 51, 51, 0.2);
-  assert.deepEqual(host(full), { start: "medium", seq: ["medium", "soft", "soft"], stints: [31, 5, 15], stops: 2, lapsAt: [31, 36], cost: 0, pitLossLaps: 0.2 });
+  assert.deepEqual(host(full), { start: "medium", seq: ["medium", "soft", "soft"], stints: [31, 5, 15], stops: 2, lapsAt: [31, 36], cost: 0, pitLossLaps: 0.2, scripted: true });
   const short = R.planFor(rus, 10, 51, 0);
   assert.deepEqual(host(short.lapsAt), [6, 7]);
   assert.equal(short.stints.reduce((a, b) => a + b, 0), 10, "the stints cover the distance exactly");
@@ -225,9 +225,15 @@ test("arming lays the real grid, plans, compounds and retirements over the field
   assert.ok(Math.abs(by("STR").dnfAt - 7.5 / 51) < 1e-9);
   assert.equal(by("RUS").dnfAt, null, "a finisher: no random reliability failure either");
   assert.equal(by("LEC").dnfAt, null, "never the human");
-  // One base pace for the whole field: the differences are the data's.
+  // One base pace for the whole field: the differences are the data's — lap 1 already at each
+  // car's real pace relative to the field (the run to turn 1 is the data's, not the launch draw's).
   const ai = cars.filter((c) => !c.human);
-  assert.equal(new Set(ai.map((c) => (c.tierV * c.skill).toFixed(6))).size, 1);
+  const st0 = rr.status();
+  const base = new Set(ai.map((c) => { const f = st0.cars.find((x) => x.code === c.code); return (c.tierV * c.skill / f.mul).toFixed(3); }));   // status rounds mul to 4 places
+  assert.equal(base.size, 1, "one base");
+  const mulOf = (code) => st0.cars.find((x) => x.code === code).mul;
+  assert.ok(mulOf("PIA") > mulOf("HAM"), "Piastri's lap 1 (P3 -> P2) was quicker than Hamilton's (P6 -> P8): " + mulOf("PIA") + " vs " + mulOf("HAM"));
+  assert.ok(ai.every((c) => { const m = mulOf(c.code); return m >= 0.9 && m <= 1.1; }), "clamped");
   assert.ok(calls.some((c) => c[0] === "announce" && /REAL RACE/.test(c[1])));
   const st = rr.status();
   assert.equal(st.armed, true); assert.equal(st.laps, 51); assert.equal(st.seat, "LEC");

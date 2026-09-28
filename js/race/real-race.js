@@ -1,4 +1,4 @@
-/* Apex 26 — REAL RACE (RealRace.create(G)) Replays a real Grand Prix from a timing script (js/data/real-race-tab.js builds one from OpenF1): the real grid, every AI car steered lap by lap to its real pace and gaps, its real stops and compounds, its retirement lap, the race's safety-car windows and its rain — with the player in one real driver's seat, from the start or dropped into any lap of the race as it stood. */
+/* Apex 26 — REAL RACE (RealRace.create(G)) Replays a real Grand Prix from a timing script (js/data/real-race-tab.js builds one from OpenF1): the real grid, every AI car steered lap by lap to its real pace and gaps, its real stops and compounds, its retirement lap, the race's safety-car windows and its rain — with the player in one real driver's seat, from the start or dropped into any lap of the race as it stood — or WATCHED: with the real positions loaded the director hands the field to js/race/real-replay.js (every car where it really was, any lap, or the highlights cut together). */
 const RealRace = (function () {
   "use strict";
 
@@ -20,6 +20,7 @@ const RealRace = (function () {
   const JUMP_SPEED = 0.55;  // of vTop(): the speed a car is dropped in at mid-race, below any corner it can meet
   const JUMP_MAX_WEAR = 0.9;   // a set older than its life is fitted worn, never past the cliff
   const RAIN_ARC_S = 60;    // s the sky takes to turn when the real race's rain starts or stops
+  const FEED_PER_LAP = 4;   // narration lines a lap at most (lap 1 at Baku held 18 passes)
 
   // ── Pure helpers (test-frozen in tests/unit/real-race.test.mjs) ──────────
   const clamp = M4.clamp;   // js/core/mat4.js — bound at eval (HARD_EDGES pair in tools/manifest.cjs)
@@ -124,7 +125,7 @@ const RealRace = (function () {
     for (const at of lapsAt) { stintLens.push(at - prev); prev = at; }
     stintLens.push(simLaps - prev);
     return { start: seq[0], seq, stints: stintLens, stops: lapsAt.length, lapsAt, cost: 0,
-             pitLossLaps: pitLossLaps > 0 ? pitLossLaps : 0.18 };
+             pitLossLaps: pitLossLaps > 0 ? pitLossLaps : 0.18, scripted: true };   // scripted: js/physics/ai-drive.js pitNow stops on these laps and no other
   }
 
   /** The retirement fraction js/game.js checkRetirements reads: half a lap into the lap after the last one completed. */
@@ -228,13 +229,16 @@ const RealRace = (function () {
     let redFired = new Set();
     let simRef = [];      // sim race time of the reference car at each completed lap
     let rainWant = null;  // the weather the script last asked for (mid-race rain)
+    let fed = null;       // the narration lines already said (feed keys)
+    const replay = typeof RealReplay !== "undefined" ? RealReplay.create(G) : null;   // WATCH / HIGHLIGHTS: the field posed from real positions
     const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };   // a reusable Tracks.sample slot
 
     function stage(script, opts = {}) {
       if (!script || !Array.isArray(script.drivers) || !script.drivers.length) return null;
       const idx = Tracks.LIST.findIndex((t) => t.id === script.trackId);
       if (idx < 0) { Log.warn("game", "RealRace.stage: no circuit for " + script.trackId); return null; }
-      const laps = clamp(opts.laps | 0 || script.laps | 0, 1, 99);
+      const watch = !!opts.watch && !!opts.traces && !!replay;
+      const laps = watch ? clamp(script.laps | 0, 1, 99) : clamp(opts.laps | 0 || script.laps | 0, 1, 99);   // a replay is always the full distance
       // The seat: a real driver's code -> the roster seat mapField gives it. A
       // driver with no seat is refused rather than seated in someone else's car.
       const seatMap = mapField(script, Teams.LIST);
@@ -249,6 +253,7 @@ const RealRace = (function () {
                             trackIdx: G.trackIdx, flow: G.flow } };
       }
       active.script = script; active.laps = laps; active.startLap = startLap; active.seat = seat; active.seatCode = want.code; active.seatMap = seatMap;
+      active.watch = watch; active.reel = watch && !!opts.reel; active.traces = opts.traces || null;
       G.flow = "gp"; G.session = "race"; G.timeTrial = false; G.duel = false;
       G.trackIdx = idx;
       G.teamIdx = ti; G.driverIdx = seat.di;
@@ -259,8 +264,8 @@ const RealRace = (function () {
       if (G.raceTyreWear === "off") G.raceTyreWear = "real";   // the stops are the story
       if (G.resetRaceDraft) G.resetRaceDraft();
       armed = false; placed = false;
-      Log.info("game", "RealRace.stage " + script.name + " " + script.trackId + " laps=" + laps + "/" + script.laps + " from=" + startLap + " seat=" + want.code);
-      return { trackId: script.trackId, laps, seat: want.code, startLap };
+      Log.info("game", "RealRace.stage " + script.name + " " + script.trackId + " laps=" + laps + "/" + script.laps + " from=" + startLap + " seat=" + want.code + (watch ? (active.reel ? " HIGHLIGHTS" : " WATCH") : ""));
+      return watch ? { trackId: script.trackId, laps, seat: want.code, startLap, watch: true, reel: active.reel } : { trackId: script.trackId, laps, seat: want.code, startLap };
     }
 
     /** The chip for a real lap: the rain flags when the script has them (lap by lap), else the race's one weather. */
@@ -291,7 +296,8 @@ const RealRace = (function () {
 
     function disarm() {
       if (heldLevel && G.holdCaution) G.holdCaution(0);
-      heldLevel = 0; armed = false; placed = false; field = null; tables = null; K = 0; simRef = []; redFired = new Set(); rainWant = null;
+      heldLevel = 0; armed = false; placed = false; field = null; tables = null; K = 0; simRef = []; redFired = new Set(); rainWant = null; fed = null;
+      if (replay) replay.stop();
     }
 
     // The first frame of the countdown: the field is gridded and armed (the
@@ -339,8 +345,13 @@ const RealRace = (function () {
         const f = field.get(c);
         if (!c.human) {
           c.tierV = tierV; c.skill = base / tierV; f.base = c.skill;
-          c.dnfAt = f.d ? dnfAtFor(f.d, realLaps) : DNS_AT;
-          c.dnfWhy = f.d ? "accident" : "dns";
+          // A real did-not-start is parked on the first metres like an empty seat, not half a lap out.
+          c.dnfAt = !f.d || f.d.dns ? DNS_AT : dnfAtFor(f.d, realLaps);
+          c.dnfWhy = !f.d || f.d.dns ? "dns" : "accident";
+          // Lap 1 at its real pace: the open loop starts at the line (the closed loop cannot measure
+          // before the first crossing), so the run to turn 1 is the data's, not the launch draw's.
+          const rel1 = f.d && tables.pace.rel[f.d.num] ? tables.pace.rel[f.d.num][realLapFor(1, simLaps, realLaps)] : null;
+          if (rel1 > 0) { f.mul = paceMul(0, 0, rel1); c.skill = f.base * f.mul; }
         }
         if (!f.d) continue;
         if (wearOn) {
@@ -352,8 +363,16 @@ const RealRace = (function () {
           }
         }
       }
-      armed = true;
-      if (G.announce) G.announce("REAL RACE · " + String(script.name || script.circuit || "").toUpperCase() + (active.startLap > 1 ? " · LAP " + active.startLap : ""), 2.5, "info");
+      armed = true; fed = new Set();
+      if (active.watch) {
+        // WATCH: the whole field, the seat included, becomes the replay's puppets; nothing here steers.
+        const seats = new Map();
+        for (const [c2, f2] of field) seats.set(c2, f2.d);
+        const ok = replay.start({ script, traces: active.traces, seats, startLap: active.startLap, follow: active.seatCode, reel: active.reel });
+        if (!ok) { active.watch = false; Log.warn("game", "RealRace.arm: the replay did not start — racing it instead"); }
+        else placed = true;
+      }
+      if (G.announce) G.announce((active.watch ? (active.reel ? "HIGHLIGHTS · " : "REAL REPLAY · ") : "REAL RACE · ") + String(script.name || script.circuit || "").toUpperCase() + (active.startLap > 1 && !active.reel ? " · LAP " + active.startLap : ""), 2.5, "info");
       Log.info("game", "RealRace.arm field=" + field.size + " mapped=" + byId.size + " ref=" + refNum + " from=" + active.startLap);
     }
 
@@ -409,18 +428,25 @@ const RealRace = (function () {
       G.raceT = K0 * at.t0;
       const wearOn = G.tyres && G.tyres.on && G.tyres.on();
       const speed = JUMP_SPEED * (G.vTop ? G.vTop() : 80);
-      let side = 0, parked = 0, dropped = 0;
+      // The real positions, when loaded and the distance is real: each car exactly where it was at t0.
+      const built = active.traces && simLaps === realLaps && typeof RealReplay !== "undefined" ? RealReplay.buildTraces(G.track, script, active.traces) : null;
+      const real = {};
+      let side = 0, parked = 0, dropped = 0, exact = 0;
       for (const c of G.cars) {
         const f = field.get(c);
         const a = f && f.d ? at.by[f.d.num] : null;
         if (!a) { if (!c.human) { parkCar(c, "dns", 0); parked++; } continue; }
         if (a.retired) { parkCar(c, "accident", simLapFor(a.lap, simLaps, realLaps)); parked++; f.lap = c.lap; continue; }
-        const ls = simLapFor(a.lap, simLaps, realLaps);
-        const s = a.frac * total;
+        const tr = built ? built.byNum.get(f.d.num) : null;
+        const r = tr ? RealReplay.sampleAt(tr, at.t0, real) : null;
+        const onTrace = r && !r.before && !r.ended && r.prog > 0;
+        const ls = onTrace ? Math.floor(r.prog / total) + 1 : simLapFor(a.lap, simLaps, realLaps);
+        const s = onTrace ? r.prog - (ls - 1) * total : a.frac * total;
+        if (onTrace) exact++;
         c.lap = ls; c.prog = (ls - 1) * total + s;
         c.fuelLap = ls;   // crossings driven: the tank is ls - 1 laps down (js/physics/tyre-model.js fuelFrac)
         c.totalT = K0 * at.t0; c.lapTime = K0 * a.into;
-        placeCar(c, s, (side++ % 2 ? 1.5 : -1.5), speed);
+        placeCar(c, s, onTrace ? clamp(real.x, -5, 5) : (side++ % 2 ? 1.5 : -1.5), speed);
         c.gear = 5; c.energy = 0.7;
         if (wearOn && a.compound) {
           // The plan's arrays hold only the stops that fit the sim distance, so
@@ -440,7 +466,7 @@ const RealRace = (function () {
       if (G.snapGameCam) G.snapGameCam();
       if (G.refreshHud) G.refreshHud(true);
       placed = true;
-      Log.info("game", "RealRace.place lap=" + at.lap + " simLap=" + Ls + " K0=" + K0.toFixed(3) + " t0=" + at.t0.toFixed(1) + " dropped=" + dropped + " parked=" + parked);
+      Log.info("game", "RealRace.place lap=" + at.lap + " simLap=" + Ls + " K0=" + K0.toFixed(3) + " t0=" + at.t0.toFixed(1) + " dropped=" + dropped + " parked=" + parked + " exact=" + exact);
     }
 
     function tickPace() {
@@ -458,8 +484,10 @@ const RealRace = (function () {
         if (done < 1) continue;
         const rl = realLapFor(done, simLaps, realLaps);
         const realCum = cum[f.d.num];
-        // The reference car's own FIRST crossing of a lap pins the scale: sim seconds per real second.
-        if (refNum === f.d.num && refCum && refCum[rl] > 0 && simRef[done] == null) { simRef[done] = c.totalT; K = c.totalT / refCum[rl]; }
+        // The reference car's own FIRST crossing of a lap pins the scale: sim seconds per real second —
+        // on a GREEN lap: a caution lap runs at the sim's cap against the real train's crawl, and the
+        // ratio it gives would stretch every gap target in the field until the next clean crossing.
+        if (refNum === f.d.num && refCum && refCum[rl] > 0 && simRef[done] == null) { simRef[done] = c.totalT; if (!(K > 0) || !cautionLap(rl)) K = c.totalT / refCum[rl]; }
         let err = 0;
         if (refCum && realCum && realCum.length > rl && refCum.length > rl && done >= 2) {
           let sRef = simRef[done];
@@ -481,6 +509,31 @@ const RealRace = (function () {
         f.mul = paceMul(err, lapS, rel);
         c.skill = f.base * f.mul;
       }
+    }
+
+    /** True when real lap rl ran inside a caution window. */
+    function cautionLap(rl) {
+      for (const w of active.script.cautions || []) if (w.level >= 2 && rl >= w.from && rl <= (w.to != null ? w.to : w.from)) return true;
+      return false;
+    }
+
+    /** The narration: what the real race did on the lap the leader just reached — the passes for the
+     *  places that matter, the stops (with the set), the retirements (with where), the fastest lap. */
+    function tickFeed(lap) {
+      if (!G.announce || !fed || lap < 1 || fed.has("L" + lap)) return;
+      fed.add("L" + lap);
+      const script = active.script, realLaps = script.laps | 0, simLaps = active.laps;
+      const rl = realLapFor(lap, simLaps, realLaps), rlPrev = lap > 1 ? realLapFor(lap - 1, simLaps, realLaps) : 0;
+      const lines = [];
+      const code = (num) => { const d = script.drivers.find((x) => x.num === num); return d ? d.code : "#" + num; };
+      for (const d of script.drivers) {
+        if (d.dnf && !d.dns && (d.lapsDone | 0) < realLaps && (d.lapsDone | 0) + 1 > rlPrev && (d.lapsDone | 0) + 1 <= rl) lines.push({ p: 0, text: d.code + " OUT" + (d.outWhere ? " · " + d.outWhere : "") });
+        (d.pits || []).forEach((pl) => { if (pl > rlPrev && pl <= rl) { const st = (d.stints || []).find((x) => x.from === pl + 1); lines.push({ p: 2, text: d.code + " PITS" + (st ? " · " + st.c : "") }); } });
+      }
+      for (const p of script.passes || []) if (p.lap > rlPrev && p.lap <= rl) lines.push({ p: 1 + (p.pos || 20) / 100, text: code(p.by) + " PASSES " + code(p.over) + (p.pos ? " FOR P" + p.pos : "") });
+      if (script.fastest && script.fastest.lap > rlPrev && script.fastest.lap <= rl) lines.push({ p: 0.5, text: "FASTEST LAP · " + code(script.fastest.num) + " " + (RealReplay ? RealReplay.fmtLap(script.fastest.dur) : "") });
+      lines.sort((a, b) => a.p - b.p);
+      for (const l of lines.slice(0, FEED_PER_LAP)) G.announce("L" + rl + " · " + l.text, 2.5, "race");
     }
 
     // The leader's lap is the highest lap any running car is on (ranked[] is by progress, which a red-flag re-grid rewinds).
@@ -523,12 +576,14 @@ const RealRace = (function () {
       const st = G.state;
       if (st === "menu" || st === "results") { if (armed) disarm(); return; }
       if (!armed) { if ((st === "count" || st === "race") && G.cars && G.cars.length && G.track) arm(); return; }
+      if (active.watch) { replay.tick(dt); if (st !== "race") return; const wl = leaderLap(); tickCautions(wl); tickWeather(wl); return; }
       if (st !== "race") return;
       if (!placed) { placed = true; if (tables.at) place(); }
       tickPace();
       const lap = leaderLap();
       tickCautions(lap);
       tickWeather(lap);
+      tickFeed(lap);
     }
 
     function status() {
@@ -538,17 +593,20 @@ const RealRace = (function () {
         s: c.s != null ? +c.s.toFixed(1) : null, mul: +f.mul.toFixed(4), err: +f.err.toFixed(2), dnfAt: c.dnfAt, stops: c.pitPlan ? c.pitPlan.lapsAt : null,
         start: c.pitPlan ? c.pitPlan.start : null, tyre: c.tyre ? c.tyre.cls || c.tyre.code || null : null, wear: c.tyreWear != null ? +c.tyreWear.toFixed(3) : null, pitStops: c.pitStops | 0 });
       return { active: true, armed, placed, name: active.script.name, trackId: active.script.trackId, laps: active.laps, realLaps: active.script.laps,
-               startLap: active.startLap, seat: active.seatCode, K: +K.toFixed(4), caution: heldLevel, weather: rainWant, cars };
+               startLap: active.startLap, seat: active.seatCode, K: +K.toFixed(4), caution: heldLevel, weather: rainWant, cars,
+               watch: !!active.watch, reel: !!active.reel, replay: replay ? replay.status() : null };
     }
 
-    live = { stage, launch, stop, update, status, isActive: () => !!active, current: () => active && active.script };
+    live = { stage, launch, stop, update, status, isActive: () => !!active, current: () => active && active.script,
+             owns: (c) => !!replay && replay.owns(c), replay };
     return live;
   }
 
   // Call-time delegates for code with no G (js/data/real-race-tab.js, page probes).
   const launch = (script, opts) => (live ? live.launch(script, opts) : null);
   const status = () => (live ? live.status() : { active: false });
+  const replay = () => (live ? live.replay : null);   // the replay's controls (follow / setSpeed / seek / skip) for page probes
 
-  return { create, launch, status, realLapFor, simLapFor, paceTable, cumTable, planFor, dnfAtFor, cautionsFor, mapField, fieldAt, paceMul, COMPOUND, KP, MUL_MIN, MUL_MAX };
+  return { create, launch, status, replay, realLapFor, simLapFor, paceTable, cumTable, planFor, dnfAtFor, cautionsFor, mapField, fieldAt, paceMul, COMPOUND, KP, MUL_MIN, MUL_MAX };
 })();
 Object.freeze(RealRace);

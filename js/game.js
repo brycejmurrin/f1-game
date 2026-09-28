@@ -3536,6 +3536,7 @@ const G = {
   loadingInfo,                          // what the loading card describes — the flyby editor previews it
   get loadingScreen() { return loadingScreen; },   // js/ui/loading-screen.js — the editor drives the card's geometry
   setCarRole, modsFor, swapGridSlots,   // multiplayer seam — see setCarRole
+  followCar: (c) => { cars.forEach((o) => setCarRole(o, false, o === c)); player = c; },   // a replay: the camera, HUD and audio move to this car; nobody drives (js/race/real-replay.js)
   wireId,                               // stable cross-peer car identity
   setScale: (...a) => setScale(...a),   // const from UiScale.create(G) below — defer
   // Debug teleports can run while a headless/SwiftShader frame is starved.
@@ -4386,6 +4387,7 @@ function updateCar(c, dt, ranked) {
   // machine and we replicate the result, so running the driving model here
   // would only fight the pose NetPlay writes. See js/net/netplay.js.
   if (netPlay.owns(c)) { c._prevS = c.s; return; }
+  if (realRace.owns(c)) { c._prevS = c.s; return; }   // a REAL REPLAY puppet: posed from the real positions (js/race/real-replay.js)
   Tracks.sample(track, c.s, smp);
   const hw = smp.hw;
   const slopeSin = smp.t[1] || 0;   // road pitch at the car (+uphill / -downhill)
@@ -6418,7 +6420,7 @@ function checkRetirements() {
     // The remote human's slot was still an AI when armReliability drew its
     // dnfAt (netPlay.start() re-roles it afterwards) — never park a car
     // another person is driving.
-    if (netPlay.owns(c)) continue;
+    if (netPlay.owns(c) || realRace.owns(c)) continue;
     if ((c.prog - (c._progGift || 0)) / dist >= c.dnfAt) retireCar(c, c.dnfWhy);
   }
 }
