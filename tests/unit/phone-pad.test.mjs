@@ -610,6 +610,11 @@ test("controller.html carries exactly the manifest's CONTROLLER subset and both 
   assert.match(gameJs, /function syncPointerKind\(\) \{[\s\S]*?\$\("mb-phonepad"\)\.hidden = !touch;[\s\S]*?\$\("pm-phonepad-go"\)\.hidden = !touch;/,
     "both doors flip with the live pointer kind");
   assert.match(gameJs, /location\.assign\(new URL\("controller\.html", location\.href\)\.href\)/, "the door is a navigation beside index.html");
+  // A linked phone is the wheel, so the screen shows VISOR (the cockpit eye past the drawn wheel)
+  // while it drives, and the player's own camera comes back when the phone is gone.
+  assert.match(gameJs, /const VISOR_CAM = CAM_MODES\.findIndex\(\(c\) => c\.id === "visor"\)/, "the visor mode is looked up by id, never by index");
+  assert.match(gameJs, /linked: \(\) => \{[\s\S]*?if \(VISOR_CAM >= 0 && camMode !== VISOR_CAM\) \{ phonePadCam = camMode; setCamMode\(VISOR_CAM\); \}/, "linking switches to VISOR and remembers the camera it left");
+  assert.match(gameJs, /lost: \(\) => \{[\s\S]*?if \(phonePadCam >= 0 && camMode === VISOR_CAM\) setCamMode\(phonePadCam\);/, "losing the phone restores that camera, unless the player cycled away");
   assert.match(gameJs, /\$\("mb-phonepad"\)\.onclick = goPhonePad;[\s\S]*?\$\("pm-phonepad-go"\)\.onclick = goPhonePad;/, "both doors wired");
   // The face keys (OT/BOOST/AERO/CAM/RADIO/LOOK/RESET/PAUSE) are thumb-sized:
   // never under a 48px tap target, growing with the phone's height; the
