@@ -143,11 +143,15 @@
   #screen.boost #h-ers { background: linear-gradient(90deg, #ff6a00, var(--warn)); animation: strobe .3s steps(2) infinite; }
   #screen .last { justify-content: center; font-size: 12px; color: var(--dim); letter-spacing: .06em; min-height: 1.2em; }
   #screen.idle #h-gear, #screen.idle #h-speed { color: #4a4a58; text-shadow: none; }
-  #keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-  #keys button { padding: 0; min-height: 40px; font-weight: 800; font-size: 11px; letter-spacing: .08em; border-radius: 14px;
+  /* THE KEYS ARE THUMB-SIZED, the screen takes what is left. They sat at 40px
+     under a screen that ate the face; on a phone that was a strip of slivers
+     under two thumbs' worth of gear digit. Sized on the viewport height so a
+     taller phone gets taller keys, never smaller than a 48px tap target. */
+  #keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  #keys button { padding: 0; min-height: clamp(48px, 14vh, 80px); font-weight: 800; font-size: clamp(12px, 3.2vh, 18px); letter-spacing: .08em; border-radius: 14px;
                  background: radial-gradient(circle at 35% 30%, #2a2a35, #14141b); border: 1px solid #3a3a46; color: #d0d0da; }
   #keys button.on { border-color: var(--team); color: var(--team); }
-  #keys .wide { grid-column: 1 / -1; border-radius: 10px; min-height: 30px; color: var(--dim); }
+  #keys .wide { grid-column: 1 / -1; border-radius: 10px; min-height: clamp(36px, 9vh, 52px); font-size: clamp(11px, 2.6vh, 14px); color: var(--dim); }
   #link { font-size: 10px; color: var(--dim); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: .08em; }
   /* touch-action is NOT inherited: body's `none` does not reach the pedal
      divs, and Safari decides double-tap zoom on the touched element. Every
