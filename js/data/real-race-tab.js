@@ -1,17 +1,19 @@
-/* Apex 26 — DATA HUB RACE IT tab (DataRealRace.create(deps)) Turns one real Grand Prix's OpenF1 timing (drivers, laps, stints, pits, race control, weather, classification, the pre-start position snapshot) into the compact race SCRIPT js/race/real-race.js replays, and offers every real driver's seat as a JUMP IN button. */
+/* Apex 26 — DATA HUB RACE IT tab (DataRealRace.create(deps)) Turns one real Grand Prix's OpenF1 timing (drivers, laps, stints, pits, overtakes, race control, weather, classification, the pre-start position snapshot) into the compact race SCRIPT js/race/real-race.js replays, shows the race lap by lap (the order, the gaps, every pass, stop, flag and retirement), and offers a JUMP IN at any lap in any real driver's seat. */
 const DataRealRace = (function () {
   "use strict";
 
   const OPENF1 = "https://api.openf1.org/v1";
   const TTL = 7 * 24 * 60 * 60 * 1000;   // a finished race never changes; the same TTL api.js gives a historic session
   const CACHE_KEY = "apex26.realrace.v1.";   // one compact script per session key (the raw laps body is 480 KB and never cached)
-  const SCRIPT_V = 2;   // 2: stint ages, rain by lap, the complete flag
+  const SCRIPT_V = 3;   // 2: stint ages, rain by lap, the complete flag; 3: the passes
   const DATA_CREDIT = "Timing data: OpenF1 (CC BY-NC-SA 4.0) · pace, stops, flags and the grid are the real ones; the racing is yours.";
   const NO_TRACK_MSG = "This circuit is not in Apex 26 yet — pick another Grand Prix.";
   const NO_RACE_MSG = "No race timing published for this weekend yet.";
   const FETCH_FAIL_MSG = "Could not fetch the race timing — try again in a minute.";
   const INCOMPLETE_MSG = "Timing is still coming in for this race — it plays as far as the data goes.";
   const NO_SEAT_MSG = "no seat in this roster";
+  const API_CACHE_PREFIX = "apex26.api.";   // js/data/api.js CACHE_PREFIX — the bodies of an unfinished race are dropped so the next open refetches them
+  const RAW_PATHS = ["/sessions?", "/drivers?", "/laps?", "/stints?", "/pit?", "/overtakes?", "/race_control?", "/weather?", "/session_result?", "/position?"];
   const DISTANCES = [1, 0.5, 0.2, 0.1];   // FULL, half, a fifth, a tenth of the real distance
 
   const num = (v) => (typeof v === "number" && isFinite(v) ? v : (v != null && v !== "" && isFinite(+v) ? +v : null));
@@ -145,6 +147,7 @@ const DataRealRace = (function () {
       d.pos = num(r.position);
       d.lapsDone = num(r.number_of_laps) || 0;
       d.dnf = !!(r.dnf || r.dns || r.dsq) || d.pos == null;
+      d.dsq = !!r.dsq;
     }
     const drivers = Object.keys(byNum).map((k) => byNum[k]);
     for (const d of drivers) {
@@ -166,9 +169,106 @@ const DataRealRace = (function () {
       circuit: String(s.circuit_short_name || ""), country: String(s.country_name || ""),
       trackId: trackIdFor(s, tracks), dateStart: String(s.date_start || ""),
       tod: todFor(s), weather: weatherFor(raw.weather), rain: rainByLap(laps, raw.weather, totalLaps),
-      laps: totalLaps, drivers, cautions: cautionsFor(raw.raceControl), complete,
+      laps: totalLaps, drivers, cautions: cautionsFor(raw.raceControl), passes: passesFor(raw.overtakes, laps, totalLaps, drivers), complete,
     };
   }
+
+  /** Every pass, on the lap the overtaking car was on: [{lap, by, over, pos}] —
+   *  OpenF1's /overtakes rows dated against that driver's lap start times. */
+  function passesFor(overtakes, laps, totalLaps, drivers) {
+    // A car that stopped on lap L is "passed" by the whole field as it drops
+    // down the order (the feed logged 24 passes on Norris and Gasly the lap
+    // they retired at Baku 2026): a pass on either side of a retiring car is
+    // the retirement, not an overtake.
+    const ends = {};   // num -> the lap the car's race ended on (dnf only)
+    for (const d of arr(drivers)) if (d && d.dnf && d.num != null) ends[d.num] = (d.lapsDone | 0) + 1;
+    const starts = {};   // num -> [lap start ms by lap]
+    for (const l of arr(laps)) {
+      const n = num(l && l.driver_number), k = num(l && l.lap_number), t = Date.parse(l && l.date_start || "");
+      if (n == null || !(k >= 1) || !isFinite(t)) continue;
+      (starts[n] = starts[n] || [])[k] = t;
+    }
+    const lapOf = (n, t) => {
+      const row = starts[n];
+      let lap = 0;
+      if (row) for (let k = 1; k < row.length; k++) if (row[k] != null && row[k] <= t && k > lap) lap = k;
+      return lap;
+    };
+    const out = [];
+    for (const o of arr(overtakes)) {
+      const by = num(o && o.overtaking_driver_number), over = num(o && o.overtaken_driver_number), pos = num(o && o.position);
+      const t = Date.parse(o && o.date || "");
+      if (by == null || over == null || !isFinite(t)) continue;
+      const lap = lapOf(by, t) || lapOf(over, t) || 1;
+      if (lap > totalLaps) continue;
+      if (ends[by] <= lap || ends[over] <= lap) continue;
+      out.push({ lap, by, over, pos });
+    }
+    out.sort((a, b) => a.lap - b.lap);
+    return out;
+  }
+
+  // ── The race book (pure): the order at every lap, and what each lap held ──
+
+  /** The classification at the end of real lap L, from the crossing times:
+   *  [{num, t (lap time), cum, gap, interval, pitIn, pitOut, out}] fastest
+   *  crossing first, then the cars that had stopped by then (last lap first). */
+  function lapBoard(script, lap) {
+    const cum = typeof RealRace !== "undefined" && RealRace.cumTable ? RealRace.cumTable(script) : null;
+    if (!cum) return [];
+    const running = [], stopped = [];
+    for (const d of script.drivers || []) {
+      const row = cum[d.num];
+      const pits = d.pits || [];
+      if (row.length > lap) running.push({ num: d.num, code: d.code, t: d.laps[lap - 1] > 0 ? d.laps[lap - 1] : null, cum: row[lap], pitIn: pits.indexOf(lap) >= 0, pitOut: pits.indexOf(lap - 1) >= 0, tyre: compoundAt(d, lap), out: false });
+      else stopped.push({ num: d.num, code: d.code, t: null, cum: null, done: row.length - 1, pitIn: false, pitOut: false, tyre: compoundAt(d, row.length - 1), out: true });
+    }
+    running.sort((a, b) => a.cum - b.cum);
+    stopped.sort((a, b) => b.done - a.done);
+    const lead = running.length ? running[0].cum : 0;
+    running.forEach((r, i) => { r.pos = i + 1; r.gap = +(r.cum - lead).toFixed(3); r.interval = i ? +(r.cum - running[i - 1].cum).toFixed(3) : 0; });
+    stopped.forEach((r, i) => { r.pos = running.length + i + 1; r.gap = null; r.interval = null; });
+    return running.concat(stopped);
+  }
+  function compoundAt(d, lap) {
+    let c = null;
+    for (const st of d.stints || []) if (st.from <= lap) c = st.c;
+    return c ? c[0] : null;
+  }
+
+  /** One entry per real lap: who led, the passes, the stops, who went out, the
+   *  flag flying, the rain, the lap's fastest. The picker and the lap list read it. */
+  function raceBook(script) {
+    const laps = script.laps | 0;
+    const byNum = {};
+    for (const d of script.drivers || []) byNum[d.num] = d;
+    const code = (n) => (byNum[n] ? byNum[n].code : String(n));
+    const book = [];
+    for (let lap = 1; lap <= laps; lap++) {
+      const board = lapBoard(script, lap);
+      const lead = board.find((r) => !r.out);
+      const flags = (script.cautions || []).filter((w) => lap >= w.from && lap <= (w.to != null ? w.to : w.from));
+      const flag = flags.some((w) => w.level >= 4) ? "RED FLAG" : flags.some((w) => w.level === 3) ? "SAFETY CAR" : flags.some((w) => w.level === 2) ? "VSC" : "";
+      let fastest = null;
+      for (const r of board) if (r.t != null && (!fastest || r.t < fastest.t)) fastest = r;
+      book.push({
+        lap, leader: lead ? lead.code : "", flag,
+        rain: !!(Array.isArray(script.rain) && script.rain[lap]),
+        passes: (script.passes || []).filter((p) => p.lap === lap).map((p) => ({ by: code(p.by), over: code(p.over), pos: p.pos })),
+        pits: board.filter((r) => r.pitIn).map((r) => r.code),
+        out: (script.drivers || []).filter((d) => d.dnf && (d.lapsDone | 0) + 1 === lap && (d.lapsDone | 0) < laps).map((d) => d.code),
+        fastest: fastest ? { code: fastest.code, t: fastest.t } : null,
+      });
+    }
+    return book;
+  }
+
+  function fmtLap(t) {
+    if (!(t > 0)) return "—";
+    const m = Math.floor(t / 60), sec = t - m * 60;
+    return m + ":" + (sec < 10 ? "0" : "") + sec.toFixed(3);
+  }
+  function fmtGap(v) { return v == null ? "—" : v === 0 ? "" : "+" + v.toFixed(3); }
 
   /** Rain lap by lap (index = real lap, true when any weather sample inside that
    *  lap's window — the leader's lap start to the next — reports rainfall), or
@@ -199,11 +299,11 @@ const DataRealRace = (function () {
   function fetchRaw(sessionKey) {
     const q = (path, opts) => F1API.request(OPENF1 + path + "session_key=" + encodeURIComponent(sessionKey), TTL, opts);
     return Promise.all([
-      q("/sessions?"), q("/drivers?"), q("/laps?", { cache: false }), q("/stints?"), q("/pit?"),
+      q("/sessions?"), q("/drivers?"), q("/laps?", { cache: false }), q("/stints?"), q("/pit?"), q("/overtakes?"),
       q("/race_control?"), q("/weather?"), q("/session_result?"), q("/position?"),
     ]).then((r) => {
       const session = arr(r[0])[0] || { session_key: sessionKey };
-      const raw = { session, drivers: r[1], laps: r[2], stints: r[3], pits: r[4], raceControl: r[5], weather: r[6], result: r[7], positions: r[8] };
+      const raw = { session, drivers: r[1], laps: r[2], stints: r[3], pits: r[4], overtakes: r[5], raceControl: r[6], weather: r[7], result: r[8], positions: r[9] };
       // The weekend's NAME lives on the meeting, not the session (F1API.meetings is the picker's cached list).
       if (session.meeting_key == null || !session.year) return raw;
       return F1API.meetings(session.year).then((ms) => {
@@ -212,6 +312,15 @@ const DataRealRace = (function () {
         return raw;
       }, () => raw);
     });
+  }
+
+  /** Drop the cached bodies of a race that was not complete, so the next open
+   *  refetches them: api.js caches each for seven days, which would otherwise
+   *  freeze an unfinished classification for a week. */
+  function forgetRaw(sessionKey) {
+    try {
+      for (const path of RAW_PATHS) localStorage.removeItem(API_CACHE_PREFIX + OPENF1 + path + "session_key=" + encodeURIComponent(sessionKey));
+    } catch (e) { /* no storage: nothing was cached */ }
   }
 
   function cached(sessionKey) {
@@ -230,6 +339,7 @@ const DataRealRace = (function () {
     let bodyGen = 0;
     let distance = 1;   // the fraction of the real distance the player races (DISTANCES)
     let startLap = 1;   // the REAL lap the player drops into (1 = the grid)
+    let seatCode = null;   // the DRIVE AS pick, a driver code (null: the first seated driver)
 
     function tracks() { return typeof Tracks !== "undefined" && Tracks.LIST ? Tracks.LIST : []; }
 
@@ -239,7 +349,7 @@ const DataRealRace = (function () {
       if (hit) return Promise.resolve(hit);
       return fetchRaw(sessionKey).then((raw) => {
         const script = build(raw, findTeam, tracks());
-        if (script.complete && script.drivers.length) remember(script);
+        if (script.complete && script.drivers.length) remember(script); else forgetRaw(sessionKey);
         return script;
       });
     }
@@ -304,20 +414,100 @@ const DataRealRace = (function () {
       return ev;
     }
 
-    function lapPicker(script) {
+    /** DRIVE AS: the seat every JUMP IN uses — the drivers with a roster seat, in grid order. */
+    function seatPicker(script, seats) {
       const field = el("label", "dh-pick-field");
-      field.appendChild(el("span", "dh-pick-label", "JUMP IN AT"));
-      const sel = el("select", "dh-pick-select");
-      const ev = lapEvents(script);
-      for (let n = 1; n <= script.laps; n++) {
-        const op = el("option", null, n === 1 ? "Lap 1 · the grid" : "Lap " + n + (ev[n] ? " · " + ev[n].join(", ") : ""));
-        op.value = String(n);
-        if (n === startLap) op.selected = true;
-        sel.appendChild(op);
-      }
-      sel.addEventListener("change", () => { startLap = Math.max(1, Math.min(script.laps, +sel.value || 1)); });
-      field.appendChild(sel);
+      field.appendChild(el("span", "dh-pick-label", "DRIVE AS"));
+      const pick = el("select", "dh-pick-select");
+      const seated = script.drivers.filter((d) => !seats || seats.has(d.num));
+      if (!seated.some((d) => d.code === seatCode)) seatCode = seated.length ? seated[0].code : null;
+      seated.forEach((d) => {
+        const op = el("option", null, (d.grid != null ? "P" + d.grid + " · " : "") + d.code + " · " + d.name);
+        op.value = d.code;
+        if (d.code === seatCode) op.selected = true;
+        pick.appendChild(op);
+      });
+      pick.addEventListener("change", () => { seatCode = pick.value || seatCode; });
+      field.appendChild(pick);
       return field;
+    }
+
+    /** The race lap by lap: one row per lap with what it held and a JUMP IN; a
+     *  click on the lap opens its classification (gaps, intervals, lap times, sets). */
+    function lapList(script) {
+      const book = raceBook(script);
+      const wrap = el("div");
+      wrap.appendChild(el("div", "dh-lr-name", "LAP BY LAP"));
+      wrap.appendChild(el("div", "dh-lr-meta", "Every pass, stop, flag and retirement as it happened. Open a lap for the order and the gaps; JUMP IN drops you into the race as it stood at the start of that lap."));
+      const table = el("table", "dh-table");
+      const thead = el("thead"), hr = el("tr");
+      ["LAP", "LEADER", "WHAT HAPPENED", "FASTEST", ""].forEach((h) => hr.appendChild(el("th", null, h)));
+      thead.appendChild(hr); table.appendChild(thead);
+      const tbody = el("tbody");
+      book.forEach((b) => {
+        const tr = el("tr");
+        tr.appendChild(el("td", null, "L" + b.lap));
+        tr.appendChild(el("td", null, b.leader || "—"));
+        const bits = [];
+        if (b.flag) bits.push(b.flag);
+        if (b.rain) bits.push("RAIN");
+        b.passes.forEach((p) => bits.push(p.by + " passed " + p.over + (p.pos ? " for P" + p.pos : "")));
+        if (b.pits.length) bits.push("pit: " + b.pits.join(", "));
+        b.out.forEach((c) => bits.push(c + " OUT"));
+        tr.appendChild(el("td", null, bits.length ? bits.join(" · ") : (b.lap === 1 ? "lights out" : "")));
+        tr.appendChild(el("td", null, b.fastest ? b.fastest.code + " " + fmtLap(b.fastest.t) : "—"));
+        const cell = el("td");
+        const go = el("button", "dh-pill", b.lap === 1 ? "START" : "JUMP IN");
+        go.type = "button";
+        go.setAttribute("aria-label", "Jump in at lap " + b.lap);
+        go.addEventListener("click", (e) => { if (e && e.stopPropagation) e.stopPropagation(); startLap = b.lap; jumpIn(script, seatCode); });
+        cell.appendChild(go);
+        tr.appendChild(cell);
+        tr.setAttribute("role", "button");
+        tr.tabIndex = 0;
+        tr.setAttribute("aria-expanded", "false");
+        let open = null;
+        const toggle = () => {
+          if (open) { open.hidden = !open.hidden; tr.setAttribute("aria-expanded", open.hidden ? "false" : "true"); return; }
+          open = boardRow(script, b.lap);
+          tr.setAttribute("aria-expanded", "true");
+          if (tr.nextSibling) tbody.insertBefore(open, tr.nextSibling); else tbody.appendChild(open);
+        };
+        tr.addEventListener("click", toggle);
+        tr.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      wrap.appendChild(table);
+      return wrap;
+    }
+
+    /** The classification at the end of a lap, as one full-width row of the lap list. */
+    function boardRow(script, lap) {
+      const tr = el("tr");
+      const td = el("td");
+      td.colSpan = 5;
+      const table = el("table", "dh-table");
+      const thead = el("thead"), hr = el("tr");
+      ["POS", "DRIVER", "GAP", "INT", "LAP", "TYRE", ""].forEach((h) => hr.appendChild(el("th", null, h)));
+      thead.appendChild(hr); table.appendChild(thead);
+      const tbody = el("tbody");
+      lapBoard(script, lap).forEach((r) => {
+        const row = el("tr");
+        if (r.pos <= 3 && !r.out) row.className = r.pos === 1 ? "dh-lr-p1" : r.pos === 2 ? "dh-lr-p2" : "dh-lr-p3";
+        row.appendChild(el("td", null, r.out ? "OUT" : "P" + r.pos));
+        row.appendChild(el("td", null, r.code));
+        row.appendChild(el("td", null, r.out ? "L" + r.done : fmtGap(r.gap)));
+        row.appendChild(el("td", null, r.out ? "" : fmtGap(r.interval)));
+        row.appendChild(el("td", null, fmtLap(r.t)));
+        row.appendChild(el("td", null, r.tyre || "—"));
+        row.appendChild(el("td", null, r.pitIn ? "IN" : r.pitOut ? "OUT LAP" : ""));
+        tbody.appendChild(row);
+      });
+      table.appendChild(tbody);
+      td.appendChild(table);
+      tr.appendChild(td);
+      return tr;
     }
 
     /** The roster seats this script's drivers take (RealRace.mapField), or null before the game is up. */
@@ -353,9 +543,11 @@ const DataRealRace = (function () {
       });
       slot.appendChild(pills);
       const pickRow = el("div", "dh-pick-fields");
-      pickRow.appendChild(lapPicker(script));
+      pickRow.appendChild(seatPicker(script, seats));
       slot.appendChild(pickRow);
+      slot.appendChild(lapList(script));
 
+      slot.appendChild(el("div", "dh-lr-name", "ENTRY LIST"));
       const table = el("table", "dh-table");
       const thead = el("thead"), hr = el("tr");
       ["GRID", "DRIVER", "TEAM", "TYRES", "RESULT", ""].forEach((h) => hr.appendChild(el("th", null, h)));
@@ -377,7 +569,7 @@ const DataRealRace = (function () {
         go.type = "button";
         go.disabled = !seated;
         go.setAttribute("aria-label", seated ? "Race as " + d.name : d.name + ": " + NO_SEAT_MSG);
-        if (seated) go.addEventListener("click", () => jumpIn(script, d.code));
+        if (seated) go.addEventListener("click", () => { seatCode = d.code; jumpIn(script, d.code); });
         cell.appendChild(go);
         tr.appendChild(cell);
         tbody.appendChild(tr);
@@ -396,9 +588,10 @@ const DataRealRace = (function () {
 
     return { loadRealRace, scriptFor, jumpIn, lapEvents,
              setDistance: (f) => { distance = DISTANCES.includes(f) ? f : 1; return distance; },
-             setStartLap: (n) => { startLap = Math.max(1, n | 0); return startLap; } };
+             setStartLap: (n) => { startLap = Math.max(1, n | 0); return startLap; },
+             setSeat: (code) => { seatCode = code || null; return seatCode; } };
   }
 
-  return { create, build, trackIdFor, todFor, weatherFor, rainByLap, cautionsFor, gridFor, fetchRaw, cached, SCRIPT_V, DISTANCES, CACHE_KEY };
+  return { create, build, trackIdFor, todFor, weatherFor, rainByLap, cautionsFor, passesFor, gridFor, lapBoard, raceBook, fmtLap, fetchRaw, forgetRaw, cached, SCRIPT_V, DISTANCES, CACHE_KEY };
 })();
 Object.freeze(DataRealRace);

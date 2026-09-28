@@ -51,6 +51,20 @@ export const KNOWN = {
   // for the pedals, `#status.bad` colours a refusal.
   "bad": "controller.html <style> (#status.bad) — the phone page, not css/",
   "linked": "controller.html <style> (body.linked) — the phone page, not css/",
+  // …and the wheel's LCD states PhonePad.paintHud() toggles on #screen, every
+  // one styled in that same <style> (#screen.redline / .boost / .ot-on /
+  // .ot-ready / .x-open / .caution / .idle); `redline` also has a css/ rule.
+  "boost": "controller.html <style> (#screen.boost) — the phone page's LCD, not css/",
+  "caution": "controller.html <style> (#screen.caution) — the phone page's LCD, not css/",
+  "idle": "controller.html <style> (#screen.idle) — the phone page's LCD, not css/",
+  "ot-on": "controller.html <style> (#screen.ot-on) — the phone page's LCD, not css/",
+  "ot-ready": "controller.html <style> (#screen.ot-ready) — the phone page's LCD, not css/",
+  "x-open": "controller.html <style> (#screen.x-open) — the phone page's LCD, not css/",
+  // …and the CONTROL-MODE layout classes it toggles on the phone page's body.
+  "gears-auto": "controller.html <style> (body.gears-auto .paddle) — the phone page, not css/",
+  "throttle-auto": "controller.html <style> (body.throttle-auto #gas) — the phone page, not css/",
+  "aero-auto": "controller.html <style> (body.aero-auto #b-aero) — the phone page, not css/",
+  "aero-none": "controller.html <style> (body.aero-none #b-aero) — the phone page, not css/",
   // Audio sheet. Both wrap rows that style themselves; every sibling group on
   // the sheet stacks with the same zero margins, so nothing is missing.
   "as-sub": "wrapper for #as-voices / #as-ann-voice; .set-row / .tune-row / .as-note style themselves",

@@ -12,14 +12,19 @@
   PHONE AS CONTROLLER. Open this page on a phone (the game's Settings › CONTROLS
   › PHONE AS CONTROLLER shows a QR code that lands here with the room code in
   the fragment), tap CONNECT, and the phone's tilt steers the game running on
-  the other screen. GAS and BRAKE are the two big pedals; the rest are the
-  in-race buttons a pad has.
+  the other screen. The page is drawn as a Formula 1 steering wheel: the rim
+  turns with the phone, the LCD in the middle shows the live dash the game
+  streams back (gear, speed, rev lights, lap, position, ERS, overtake and aero
+  state, the flag), the paddles behind the grips shift, the thumb zones on the
+  grips are the GAS and BRAKE, and the wheel-face buttons are the in-race
+  controls a pad has.
 
   A separate ROOT page like bench.html, deliberately: the phone needs the
   signalling and transport half of js/net plus two input modules — nine files,
   no renderer, no game — and boots in under a second on any phone that has a
   camera app. js/input/phone-pad.js owns the behaviour; this page owns the DOM
   and hands every element in (the shell-id contract stays index.html's).
+  `controller.html?demo` paints a sample dash without a link, for a look.
 
   Why this is not Bluetooth: a web page cannot advertise as a Bluetooth
   peripheral or an HID gamepad, on any phone, in any browser. The pairing
@@ -34,8 +39,9 @@
 }
 </script>
 <style>
-  :root { color-scheme: dark; --bg:#0a0a0f; --fg:#e8e8ef; --dim:#8a8a99; --line:#23232e;
-          --accent:#39d0ff; --warn:#f6d200; --bad:#ff6b6b; --ok:#7ee787;
+  :root { color-scheme: dark; --bg:#07070b; --fg:#e8e8ef; --dim:#8a8a99; --line:#26262f;
+          --team:#39d0ff; --warn:#f6d200; --bad:#ff4d4d; --ok:#5ef08a; --blue:#4c8dff;
+          --carbon: repeating-linear-gradient(45deg, #15151c 0 2px, #101017 2px 4px);
           --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px);
           --sal: env(safe-area-inset-left, 0px); --sar: env(safe-area-inset-right, 0px); }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -53,71 +59,151 @@
   #code { font: 700 28px/1 ui-monospace, Menlo, Consolas, monospace; letter-spacing: .28em; text-transform: uppercase;
           text-align: center; width: 12ch; background: #16161f; color: var(--fg); border: 1px solid var(--line);
           border-radius: 10px; padding: 12px 0 12px .28em; }
-  #connect { background: var(--accent); color: #051018; border-color: transparent; font-weight: 700; padding: 14px 32px; }
+  #connect { background: var(--team); color: #051018; border-color: transparent; font-weight: 700; padding: 14px 32px; }
   #status { min-height: 2.8em; color: var(--warn); }
   #status.bad { color: var(--bad); }
   body.linked #pair { display: none; }
-  /* CONTROLLER — only once linked. Landscape: BRAKE left, GAS right, the
-     tilt meter and the button column between. Portrait works too (the
-     pedals shrink), but the game's own tilt mode is landscape, so nudge. */
-  #ctl { position: absolute; inset: 0; display: none;
-         padding: calc(8px + var(--sat)) calc(8px + var(--sar)) calc(8px + var(--sab)) calc(8px + var(--sal));
-         grid-template-columns: 1fr minmax(120px, 1.2fr) 1fr; grid-template-rows: 1fr; gap: 8px; }
+
+  /* THE WHEEL — only once linked. Landscape: left grip | face | right grip.
+     The rim (an SVG outline) sits behind everything and rotates with the
+     phone's roll; the controls stay put under the thumbs. */
+  #ctl { position: absolute; inset: 0; display: none; perspective: 900px;
+         padding: calc(6px + var(--sat)) calc(6px + var(--sar)) calc(6px + var(--sab)) calc(6px + var(--sal));
+         grid-template-columns: minmax(84px, 1fr) minmax(200px, 2.4fr) minmax(84px, 1fr); grid-template-rows: 1fr; gap: 8px; }
   body.linked #ctl { display: grid; }
-  .pedal { border-radius: 18px; border: 2px solid var(--line); background: #12121a; font-weight: 800;
-           font-size: 22px; letter-spacing: .08em; display: flex; align-items: flex-end; justify-content: center;
-           padding-bottom: 24px; color: var(--dim); position: relative; overflow: hidden; }
-  .pedal.on { color: var(--fg); border-color: var(--accent); }
-  #brake.on { border-color: var(--bad); }
-  .pedal::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: rgba(57,208,255,.18); }
-  #brake::after { background: rgba(255,107,107,.18); }
-  .pedal.on::after { height: 100%; }
-  #mid { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-  #meter { height: 14px; border-radius: 7px; background: #16161f; border: 1px solid var(--line); position: relative; overflow: hidden; }
-  #meter::before { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--line); }
-  #roll { position: absolute; left: 25%; width: 50%; top: 2px; bottom: 2px; }
-  #roll::after { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 6px; margin-left: -3px;
-                 border-radius: 3px; background: var(--accent); }
-  #mid .row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; flex: 1 1 0; min-height: 0; }
-  #mid .row button { padding: 0; font-weight: 700; font-size: 13px; letter-spacing: .06em; min-height: 40px; }
-  #mid .row button.on { border-color: var(--accent); color: var(--accent); }
-  #mid .wide { grid-column: 1 / -1; }
-  #link { font-size: 11px; color: var(--dim); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* The rim sits BEHIND opaque controls and shows only in the gaps, so its
+     turn reads as the wheel moving, never as the face bending. */
+  #rim { position: absolute; left: 50%; top: 50%; width: min(96vw, 190vh); height: auto; aspect-ratio: 2 / 1;
+         transform-origin: center; translate: -50% -50%; pointer-events: none; opacity: .7;
+         transition: transform 60ms linear; }
+  #rim svg { width: 100%; height: 100%; display: block; overflow: visible; }
+  #rim .body { fill: url(#carbon); stroke: #3a3a46; stroke-width: 3; }
+  #rim .grip { fill: #1c1c24; stroke: #3a3a46; stroke-width: 3; }
+  #rim .accent { fill: none; stroke: var(--team); stroke-width: 4; opacity: .8; }
+  .grip { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .paddle { flex: 0 0 22%; min-height: 48px; border-radius: 14px 14px 6px 6px; background: linear-gradient(#2a2a35, #17171f);
+            border: 1px solid #3a3a46; font-weight: 800; font-size: 13px; letter-spacing: .1em; color: var(--dim); }
+  .paddle.on { color: var(--fg); border-color: var(--team); box-shadow: inset 0 0 0 2px var(--team); }
+  .pedal { flex: 1 1 0; border-radius: 26px; border: 2px solid #3a3a46; background: var(--carbon);
+           font-weight: 800; font-size: 18px; letter-spacing: .1em; display: flex; align-items: flex-end; justify-content: center;
+           padding-bottom: 22px; color: var(--dim); position: relative; overflow: hidden; }
+  .pedal::before { content: ""; position: absolute; inset: 14px; border-radius: 18px; border: 1px dashed #2f2f3a; }
+  .pedal::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 0; transition: height 80ms; }
+  .pedal.on { color: var(--fg); }
+  #gas.on { border-color: var(--ok); }   #gas.on::after { height: 100%; background: rgba(94,240,138,.16); }
+  #brake.on { border-color: var(--bad); } #brake.on::after { height: 100%; background: rgba(255,77,77,.16); }
+  /* CONTROL MODES from the dash (PhonePad.paintHud → body classes): what the
+     game drives itself the wheel does not offer. Gears AUTO: no paddles, the
+     pedal takes the whole grip. Throttle AUTO: the GAS zone is an inert plate
+     that says so. Aero AUTO or a circuit with no zones: AERO is greyed, not
+     removed, so the button grid keeps its shape under the thumb. */
+  .pedal small { display: none; font-size: 11px; letter-spacing: .14em; color: var(--dim); margin-top: 4px; }
+  body.gears-auto .paddle { display: none; }
+  body.throttle-auto #gas { pointer-events: none; flex-direction: column; background: #0d0d13; color: #3d3d4a; border-color: #26262f; }
+  body.throttle-auto #gas::before { border-color: #1d1d26; }
+  body.throttle-auto #gas small { display: block; color: #3d3d4a; }
+  body.aero-auto #b-aero, body.aero-none #b-aero { pointer-events: none; background: #0d0d13; color: #3d3d4a; border-color: #26262f; }
+
+  /* THE FACE: rev lights, the LCD, the button clusters. */
+  #face { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 0; }
+  #leds { display: grid; grid-template-columns: repeat(15, 1fr); gap: 3px; padding: 0 6%; }
+  #leds span { height: 12px; border-radius: 3px; background: #1a1a22; border: 1px solid #262630; }
+  #leds span:nth-child(-n+5).on { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+  #leds span:nth-child(n+6):nth-child(-n+10).on { background: var(--bad); box-shadow: 0 0 8px var(--bad); }
+  #leds span:nth-child(n+11).on { background: var(--blue); box-shadow: 0 0 8px var(--blue); }
+  #screen.redline ~ #leds span, #screen.redline + #leds span { animation: strobe .12s steps(2) infinite; }
+  @keyframes strobe { to { opacity: .25; } }
+  #screen { flex: 1 1 0; min-height: 0; border-radius: 12px; border: 3px solid #2b2b36; background: #05060a;
+            box-shadow: inset 0 0 24px rgba(0,0,0,.9), 0 0 0 1px #000; padding: 6px 10px;
+            display: grid; grid-template-rows: auto 1fr auto auto; gap: 2px; overflow: hidden;
+            font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  #screen .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+  #screen .top span { font-size: 13px; font-weight: 700; letter-spacing: .08em; color: var(--team); white-space: nowrap; }
+  #h-flag { color: var(--dim); }
+  #screen.caution #h-flag { color: var(--warn); background: rgba(246,210,0,.14); padding: 0 6px; border-radius: 4px; animation: strobe .5s steps(2) infinite; }
+  #screen .mid { justify-content: center; gap: 6%; }
+  #h-gear { font-size: clamp(48px, 22vh, 120px); line-height: .9; font-weight: 800; color: #fff; min-width: 1ch; text-align: center;
+            text-shadow: 0 0 18px rgba(255,255,255,.25); }
+  #screen.redline #h-gear { color: var(--bad); }
+  .spd { display: flex; flex-direction: column; align-items: flex-end; line-height: 1; }
+  #h-speed { font-size: clamp(28px, 11vh, 60px); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .spd small { font-size: 11px; letter-spacing: .14em; color: var(--dim); }
+  #screen .bot span { font-size: 12px; font-weight: 700; letter-spacing: .08em; color: var(--dim); white-space: nowrap; }
+  #screen.ot-ready #h-ot { color: var(--ok); }  #screen.ot-on #h-ot { color: #fff; background: var(--ok); padding: 0 6px; border-radius: 4px; }
+  #screen.x-open #h-aero { color: var(--blue); }
+  #ers { flex: 1 1 0; height: 10px; border-radius: 5px; background: #14141c; border: 1px solid #262630; overflow: hidden; }
+  #h-ers { height: 100%; width: 0; background: linear-gradient(90deg, var(--warn), #ffb347); transition: width 120ms linear; }
+  #screen.boost #h-ers { background: linear-gradient(90deg, #ff6a00, var(--warn)); animation: strobe .3s steps(2) infinite; }
+  #screen .last { justify-content: center; font-size: 12px; color: var(--dim); letter-spacing: .06em; min-height: 1.2em; }
+  #screen.idle #h-gear, #screen.idle #h-speed { color: #4a4a58; text-shadow: none; }
+  #keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  #keys button { padding: 0; min-height: 40px; font-weight: 800; font-size: 11px; letter-spacing: .08em; border-radius: 14px;
+                 background: radial-gradient(circle at 35% 30%, #2a2a35, #14141b); border: 1px solid #3a3a46; color: #d0d0da; }
+  #keys button.on { border-color: var(--team); color: var(--team); }
+  #keys .wide { grid-column: 1 / -1; border-radius: 10px; min-height: 30px; color: var(--dim); }
+  #link { font-size: 10px; color: var(--dim); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: .08em; }
   @media (orientation: portrait) {
-    #ctl { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr auto; }
-    #mid { grid-column: 1 / -1; grid-row: 2; }
-    #mid .row { flex: none; }
+    #ctl { grid-template-columns: 1fr 1fr; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
+    #face { grid-column: 1 / -1; grid-row: 1; }
+    #left { grid-row: 2; } #right { grid-row: 2; }
+    #rim { width: 96vw; }
+    #h-gear { font-size: 64px; } #h-speed { font-size: 32px; }
   }
 </style>
 </head>
 <body>
 <section id="pair">
   <h1>APEX 26 · PHONE CONTROLLER</h1>
-  <p>Enter the room code the game shows under Settings › CONTROLS › PHONE AS CONTROLLER, then tap CONNECT. Hold the phone sideways and tilt it to steer.</p>
+  <p>Enter the room code the game shows under Settings › CONTROLS › PHONE AS CONTROLLER, then tap CONNECT. Hold the phone sideways like a wheel and tilt it to steer.</p>
   <input id="code" type="text" inputmode="latin" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="8" aria-label="Room code" placeholder="ABC123">
   <button id="connect" type="button">CONNECT</button>
   <p id="status" role="status"></p>
 </section>
-<section id="ctl" aria-label="Controller">
-  <div id="brake" class="pedal" role="button" aria-label="Brake">BRAKE</div>
-  <div id="mid">
-    <div id="meter" aria-hidden="true"><div id="roll"></div></div>
-    <div class="row">
-      <button id="b-shiftDown" type="button">▼ GEAR</button>
-      <button id="b-shiftUp" type="button">GEAR ▲</button>
-      <button id="b-overtake" type="button">OVERTAKE</button>
+<section id="ctl" aria-label="Steering wheel controller">
+  <div id="rim" aria-hidden="true">
+    <svg viewBox="0 0 400 200" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <pattern id="carbon" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <rect width="6" height="6" fill="#111118"/><rect width="3" height="6" fill="#171720"/>
+        </pattern>
+      </defs>
+      <!-- an F1 wheel: a wide body, two grips, a cut-out bottom -->
+      <path class="body" d="M62 40 Q60 12 90 12 L310 12 Q340 12 338 40 L332 92 Q330 118 300 122 L262 126 L238 158 Q200 172 162 158 L138 126 L100 122 Q70 118 68 92 Z"/>
+      <path class="grip" d="M18 70 Q10 70 10 82 L14 150 Q16 168 34 168 L62 168 Q80 168 80 150 L76 96 Q74 84 62 82 Z"/>
+      <path class="grip" d="M382 70 Q390 70 390 82 L386 150 Q384 168 366 168 L338 168 Q320 168 320 150 L324 96 Q326 84 338 82 Z"/>
+      <path class="accent" d="M92 22 L308 22"/>
+      <path class="accent" d="M200 150 L200 170"/>
+    </svg>
+  </div>
+  <div id="left" class="grip">
+    <button id="b-shiftDown" class="paddle" type="button" aria-label="Shift down">◄ GEAR</button>
+    <div id="brake" class="pedal" role="button" aria-label="Brake">BRAKE</div>
+  </div>
+  <div id="face">
+    <div id="screen" aria-live="off">
+      <div class="row top"><span id="h-pos"></span><span id="h-lap"></span><span id="h-flag">PIT LANE</span></div>
+      <div class="row mid"><div id="h-gear">N</div><div class="spd"><span id="h-speed">---</span><small>KM/H</small></div></div>
+      <div class="row bot"><span id="h-ot">OT</span><div id="ers" aria-label="ERS"><div id="h-ers"></div></div><span id="h-aero">AERO</span></div>
+      <div id="h-last" class="row last"></div>
+    </div>
+    <div id="leds" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+    <div id="keys">
+      <button id="b-overtake" type="button">OT</button>
       <button id="b-boost" type="button">BOOST</button>
       <button id="b-aero" type="button">AERO</button>
-      <button id="b-camera" type="button">CAMERA</button>
-      <button id="b-look" type="button">LOOK BACK</button>
+      <button id="b-camera" type="button">CAM</button>
       <button id="b-radio" type="button">RADIO</button>
-      <button id="b-recover" type="button">RESET CAR</button>
+      <button id="b-look" type="button">LOOK</button>
+      <button id="b-recover" type="button">RESET</button>
       <button id="b-pause" type="button">PAUSE</button>
       <button id="b-center" type="button" class="wide">CENTRE TILT</button>
     </div>
     <div id="link" role="status"></div>
   </div>
-  <div id="gas" class="pedal" role="button" aria-label="Gas">GAS</div>
+  <div id="right" class="grip">
+    <button id="b-shiftUp" class="paddle" type="button" aria-label="Shift up">GEAR ►</button>
+    <div id="gas" class="pedal" role="button" aria-label="Gas">GAS<small>AUTO</small></div>
+  </div>
 </section>
 <!-- @gen-shell:controller -->
 <script defer crossorigin="anonymous" src="js/core/log.js?v=dev"></script>
@@ -142,20 +228,41 @@ window.addEventListener("DOMContentLoaded", function () {
   }
   var ctl = PhonePad.pad({
     body: document.body, status: status, codeIn: $("code"), connect: $("connect"),
-    gas: $("gas"), brake: $("brake"), lookBack: $("b-look"), center: $("b-center"), roll: $("roll"),
+    gas: $("gas"), brake: $("brake"), lookBack: $("b-look"), center: $("b-center"), rim: $("rim"),
     buttons: { shiftUp: $("b-shiftUp"), shiftDown: $("b-shiftDown"), overtake: $("b-overtake"),
                boost: $("b-boost"), aero: $("b-aero"), camera: $("b-camera"), radio: $("b-radio"),
                recover: $("b-recover"), pause: $("b-pause") },
+    hud: { gear: $("h-gear"), speed: $("h-speed"), lap: $("h-lap"), pos: $("h-pos"), ers: $("h-ers"), flag: $("h-flag"),
+           ot: $("h-ot"), aero: $("h-aero"), last: $("h-last"), leds: $("leds"), screen: $("screen"), team: document.documentElement,
+           body: document.body },
   }, {
     onOpen: function () {
-      $("link").textContent = "Linked · tilt to steer";
-      // Landscape is where the pedals have room; the lock is best-effort
+      $("link").textContent = "LINKED · TILT TO STEER";
+      // Landscape is where the wheel has room; the lock is best-effort
       // (Safari has no screen.orientation.lock at all).
       try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock("landscape").catch(function () {}); } catch (e) {}
     },
-    onClose: function () { $("link").textContent = "Link closed"; },
+    onClose: function () { $("link").textContent = "LINK CLOSED"; },
   });
   window.__apexPad = ctl;   // the console/test handle, mirroring window.__apex on the game
+  // ?demo — the wheel with a moving sample dash and no link, for a look at the
+  // layout; ?demo=auto shows it with gears, throttle and aero on AUTO.
+  if (/[?&]demo\b/.test(location.search)) {
+    document.body.classList.add("linked");
+    $("link").textContent = "DEMO · NOT LINKED";
+    var auto = /[?&]demo=auto\b/.test(location.search) ? (PhonePad.DASH.gearsAuto | PhonePad.DASH.throttleAuto | PhonePad.DASH.aeroAuto) : 0;
+    var still = /[?&]still\b/.test(location.search);   // &still: rim level, for a screenshot
+    var t0 = performance.now();
+    var demo = function () {
+      var t = (performance.now() - t0) / 1000, rev = (Math.sin(t * 1.7) + 1) / 2;
+      ctl.paintHud({ gear: 3 + Math.floor(t % 5), kmh: 140 + Math.round(rev * 170), rpm: 0.35 + rev * 0.65, lap: 4, laps: 12,
+        pos: 6, cars: 20, ers: (Math.cos(t / 3) + 1) / 2, flags: auto | (rev > 0.9 ? PhonePad.DASH.redline : PhonePad.DASH.otArmed),
+        caution: 0, lastLapMs: 91234, state: "race", team: "#00b4ab" });
+      if (!still) ctl.setRoll(Math.sin(t / 2) * 25);
+      requestAnimationFrame(demo);
+    };
+    requestAnimationFrame(demo);
+  }
 });
 </script>
 </body>
