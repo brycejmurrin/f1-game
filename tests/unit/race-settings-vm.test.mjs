@@ -87,10 +87,12 @@ const GAME = readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
 function gridRule(rule, o = {}) {
   const src = fnSource(GAME, "function gridRule()") + fnSource(GAME, "function gridOrderFor(base)");
   const rank = (season, a, b) => (season.pts[b] || 0) - (season.pts[a] || 0) || (a < b ? -1 : 1);
-  return new Function("isTimeTrial", "isChampionship", "SeasonCal", "raceGrid", "season", "cars", "simRnd", "netPlay",
+  // A championship reads its OWN rule (champGrid); a one-off reads raceGrid.
+  return new Function("isTimeTrial", "isChampionship", "SeasonCal", "raceGrid", "champGrid", "season", "cars", "simRnd", "netPlay", "SportingRegs",
     src + ";return gridOrderFor;")(() => !!o.tt, () => !!o.champ, { quali: () => !!o.squali, rank },
-    rule, o.season || { pts: {} }, o.cars, o.rnd || (() => 0.5), { active: () => !!o.net });
+    o.champ ? "tier" : rule, o.champ ? rule : "champ", o.season || { pts: {} }, o.cars, o.rnd || (() => 0.5), { active: () => !!o.net }, REGS);
 }
+const REGS = new Function(readFileSync(new URL("../../js/race/sporting-regs.js", import.meta.url), "utf8") + ";return SportingRegs;")();
 const carsOf = (n) => Array.from({ length: n }, (_, i) => ({ driverId: "d" + i }));
 
 test("REVERSE TOP 10 flips the qualifying top ten and leaves 11+ as they qualified", () => {
@@ -107,6 +109,22 @@ test("REVERSE STANDINGS grids the last-placed driver first, championship only", 
   assert.equal(gridRule("revchamp", { cars, season })(null), null, "a one-off Grand Prix has no standings");
   const sprint = cars.slice().reverse();
   assert.equal(gridRule("revchamp", { cars, champ: true, season })(sprint), sprint, "a sprint result still grids the GP");
+});
+
+test("STANDINGS (champ) grids a no-qualifying championship in points order (FIA 2026 SR B2.5.4(a))", () => {
+  const cars = carsOf(4).map((c, i) => Object.assign(c, { tier: [3, 1, 2, 0][i] }));
+  const season = { pts: { d0: 10, d1: 40, d2: 25 } };
+  let draws = 0;
+  const out = gridRule("champ", { cars, champ: true, season, rnd: () => { draws++; return 0.5; } })(null);
+  assert.deepEqual(out.map((c) => c.driverId), ["d1", "d2", "d0", "d3"], "scorers by points, the pointless behind");
+  assert.equal(draws, cars.length, "one draw per car, discarded: the stream does not shift");
+  draws = 0;
+  assert.equal(gridRule("champ", { cars, champ: true, season: { pts: {} }, rnd: () => { draws++; return 0.5; } })(null), null,
+    "round 1 (nobody scored): gridUp's own default grid");
+  assert.equal(draws, 0, "...which draws its own jitter");
+  const q = cars.slice().reverse();
+  assert.equal(gridRule("champ", { cars, champ: true, squali: true, season })(q), q, "a qualifying championship grids off the session");
+  assert.equal(gridRule("champ", { cars, season })(null), null, "a one-off never reaches the championship rule");
 });
 
 test("a qualifying championship and a time trial ignore the rule; RANDOM spends one draw per car", () => {
