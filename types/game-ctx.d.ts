@@ -702,6 +702,8 @@ interface GameCtx {
   readonly setWeatherLive: (w: Weather) => void;
   /** A real replay: every car AI-flagged, this one local (camera, HUD, audio); nobody drives. */
   readonly followCar: (c: CarState) => void;
+  /** A mid-race jump-in: the countdown becomes the race at once (no gantry, no launch model); false outside the countdown. */
+  readonly goRolling: () => boolean;
   /** Live time-of-day (read with no arg, write with tod). Rebuilds track when day/night flips. */
   readonly setTimeOfDay: (tod?: TimeOfDay) => TimeOfDay;
   /** Live weather (read with no arg, write with w). Same path as __apex.weather(). */

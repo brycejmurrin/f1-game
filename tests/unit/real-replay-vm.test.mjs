@@ -172,18 +172,23 @@ test("JUMP IN with the positions loaded drops each car exactly where its trace s
     const traces = { frame: "track", cars: { 63: line(-14, 50, 0.5, -5, 400), 16: line(-22, 48, -1.5, -5, 400) } };
     RR.launch(script, { seat: "HAM", traces, startLap: 3 });
     await g.settle(() => G.track && G.track.def && G.track.def.id === "baku" && (G.state === "count" || G.state === "race"), 8000);
-    g.step(2);
-    g.apex.go();
-    g.step(1);
+    g.step(2);   // the countdown frame: a ROLLING start — the field is dropped in and the race is green at once
     const st = RR.status();
     assert.equal(st.watch, false); assert.equal(st.placed, true);
+    assert.equal(G.state, "race", "green at once");
+    assert.ok(st.handover > 3.5 && st.handover <= 4, "the seat car is the AI's for four seconds: " + st.handover);
     const by = (code) => G.cars.find((c) => c.code === code);
     const want = -14 + 50 * t0;
-    assert.ok(Math.abs(by("RUS").prog - want) < 60, "Russell at his trace's progress (one frame on): " + by("RUS").prog + " vs " + want);
+    assert.ok(Math.abs(by("RUS").prog - want) < 60, "Russell at his trace's progress (a frame on): " + by("RUS").prog + " vs " + want);
     assert.equal(by("RUS").lap, Math.floor(want / G.track.total) + 1);
-    assert.ok(Math.abs(by("RUS").x - 0.5) < 0.1 && Math.abs(by("LEC").x + 1.5) < 0.1, "on their real lines (one driven frame on): " + by("RUS").x + " " + by("LEC").x);
-    assert.equal(G.cars.filter((c) => c.human).length, 1, "the player drives (the VM seats its stored team, so not by code)");
-    assert.equal(G.player.human, true);
+    assert.ok(Math.abs(by("RUS").x - 0.5) < 0.1 && Math.abs(by("LEC").x + 1.5) < 0.1, "on their real lines (a driven frame on): " + by("RUS").x + " " + by("LEC").x);
+    assert.equal(G.cars.filter((c) => c.human).length, 0, "nobody is human yet: the seat car is driven for the player");
+    assert.equal(G.player.local, true, "but the camera and HUD are on it");
+    assert.ok(G.player.speed > 0.3 * 80, "at speed: " + G.player.speed);
+    g.step(60 * 4.2);
+    assert.equal(RR.status().handover, 0);
+    assert.equal(G.player.human, true, "the wheel is the player's after the hand-over");
+    assert.equal(G.cars.filter((c) => c.human).length, 1);
     assert.ok(G.track.total > total - 10 && G.track.total < total + 10);
   } finally { g.close(); }
 });

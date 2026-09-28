@@ -21,6 +21,8 @@ const RealRace = (function () {
   const JUMP_MAX_WEAR = 0.9;   // a set older than its life is fitted worn, never past the cliff
   const RAIN_ARC_S = 60;    // s the sky takes to turn when the real race's rain starts or stops
   const FEED_PER_LAP = 4;   // narration lines a lap at most (lap 1 at Baku held 18 passes)
+  const HANDOVER_S = 4;     // a mid-race jump-in: the car is driven for you this long at racing speed before the wheel is yours
+  const REAL_VMAX = 95;     // m/s: a real top speed; the real trace's speed scales onto vTop() through it
 
   // ── Pure helpers (test-frozen in tests/unit/real-race.test.mjs) ──────────
   const clamp = M4.clamp;   // js/core/mat4.js — bound at eval (HARD_EDGES pair in tools/manifest.cjs)
@@ -230,6 +232,7 @@ const RealRace = (function () {
     let simRef = [];      // sim race time of the reference car at each completed lap
     let rainWant = null;  // the weather the script last asked for (mid-race rain)
     let fed = null;       // the narration lines already said (feed keys)
+    let handover = null;  // {c, t, said}: the seat car driven by the AI until t runs out, then the player's
     const replay = typeof RealReplay !== "undefined" ? RealReplay.create(G) : null;   // WATCH / HIGHLIGHTS: the field posed from real positions
     const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };   // a reusable Tracks.sample slot
 
@@ -296,7 +299,7 @@ const RealRace = (function () {
 
     function disarm() {
       if (heldLevel && G.holdCaution) G.holdCaution(0);
-      heldLevel = 0; armed = false; placed = false; field = null; tables = null; K = 0; simRef = []; redFired = new Set(); rainWant = null; fed = null;
+      heldLevel = 0; armed = false; placed = false; field = null; tables = null; K = 0; simRef = []; redFired = new Set(); rainWant = null; fed = null; handover = null;
       if (replay) replay.stop();
     }
 
@@ -364,6 +367,17 @@ const RealRace = (function () {
         }
       }
       armed = true; fed = new Set();
+      // A JUMP IN mid-race is a ROLLING start: the field is dropped in at speed on this
+      // countdown frame and the race goes green at once — no gantry over a standing grid.
+      // The seat car is driven for the player for HANDOVER_S (a flying lap into the wheel),
+      // then control passes; tickHandover says when.
+      if (!active.watch && active.startLap > 1 && tables.at && G.goRolling && G.setCarRole) {
+        place();
+        const me = cars.find((c) => c.human && c.local);
+        // said: the banner already names HANDOVER_S, so the spoken count starts one below it.
+        if (me) { G.setCarRole(me, false, true); me.launch = null; me.launchOn = false; handover = { c: me, t: HANDOVER_S, said: HANDOVER_S }; }
+        G.goRolling();
+      }
       if (active.watch) {
         // WATCH: the whole field, the seat included, becomes the replay's puppets; nothing here steers.
         const seats = new Map();
@@ -373,6 +387,7 @@ const RealRace = (function () {
         else placed = true;
       }
       if (G.announce) G.announce((active.watch ? (active.reel ? "HIGHLIGHTS · " : "REAL REPLAY · ") : "REAL RACE · ") + String(script.name || script.circuit || "").toUpperCase() + (active.startLap > 1 && !active.reel ? " · LAP " + active.startLap : ""), 2.5, "info");
+      if (handover && G.announce) G.announce("ROLLING · YOU HAVE CONTROL IN " + HANDOVER_S, 1.2, "race");
       Log.info("game", "RealRace.arm field=" + field.size + " mapped=" + byId.size + " ref=" + refNum + " from=" + active.startLap);
     }
 
@@ -446,7 +461,7 @@ const RealRace = (function () {
         c.lap = ls; c.prog = (ls - 1) * total + s;
         c.fuelLap = ls;   // crossings driven: the tank is ls - 1 laps down (js/physics/tyre-model.js fuelFrac)
         c.totalT = K0 * at.t0; c.lapTime = K0 * a.into;
-        placeCar(c, s, onTrace ? clamp(real.x, -5, 5) : (side++ % 2 ? 1.5 : -1.5), speed);
+        placeCar(c, s, onTrace ? clamp(real.x, -5, 5) : (side++ % 2 ? 1.5 : -1.5), onTrace && real.speed > 0 ? clamp(real.speed / REAL_VMAX, 0.3, 0.9) * (G.vTop ? G.vTop() : 80) : speed);
         c.gear = 5; c.energy = 0.7;
         if (wearOn && a.compound) {
           // The plan's arrays hold only the stops that fit the sim distance, so
@@ -536,6 +551,21 @@ const RealRace = (function () {
       for (const l of lines.slice(0, FEED_PER_LAP)) G.announce("L" + rl + " · " + l.text, 2.5, "race");
     }
 
+    /** The rolling hand-over: the seat car is the AI's for HANDOVER_S, with a spoken count, then the player's. */
+    function tickHandover(dt) {
+      if (!handover) return;
+      handover.t -= dt;
+      const left = Math.ceil(handover.t);
+      if (left < handover.said && left > 0 && G.announce) { handover.said = left; G.announce("YOU HAVE CONTROL IN " + left, 0.9, "race"); }
+      if (handover.t > 0) return;
+      const c = handover.c;
+      G.setCarRole(c, true, true);
+      c.launch = null; c.launchOn = false;
+      if (G.announce) G.announce("YOU HAVE CONTROL", 1.5, "race");
+      Log.info("game", "RealRace.handover " + c.code + " lap=" + c.lap + " speed=" + (c.speed || 0).toFixed(1));
+      handover = null;
+    }
+
     // The leader's lap is the highest lap any running car is on (ranked[] is by progress, which a red-flag re-grid rewinds).
     function leaderLap() {
       let lap = 0;
@@ -579,6 +609,7 @@ const RealRace = (function () {
       if (active.watch) { replay.tick(dt); if (st !== "race") return; const wl = leaderLap(); tickCautions(wl); tickWeather(wl); return; }
       if (st !== "race") return;
       if (!placed) { placed = true; if (tables.at) place(); }
+      tickHandover(dt);
       tickPace();
       const lap = leaderLap();
       tickCautions(lap);
@@ -594,7 +625,7 @@ const RealRace = (function () {
         start: c.pitPlan ? c.pitPlan.start : null, tyre: c.tyre ? c.tyre.cls || c.tyre.code || null : null, wear: c.tyreWear != null ? +c.tyreWear.toFixed(3) : null, pitStops: c.pitStops | 0 });
       return { active: true, armed, placed, name: active.script.name, trackId: active.script.trackId, laps: active.laps, realLaps: active.script.laps,
                startLap: active.startLap, seat: active.seatCode, K: +K.toFixed(4), caution: heldLevel, weather: rainWant, cars,
-               watch: !!active.watch, reel: !!active.reel, replay: replay ? replay.status() : null };
+               watch: !!active.watch, reel: !!active.reel, replay: replay ? replay.status() : null, handover: handover ? +handover.t.toFixed(2) : 0 };
     }
 
     live = { stage, launch, stop, update, status, isActive: () => !!active, current: () => active && active.script,

@@ -105,24 +105,23 @@ test.describe("real race, mid-race", () => {
       return RealRace.launch(script, { seat: "LEC", laps: 6, startLap: 3 });
     }, SCRIPT);
     expect(staged).toEqual({ trackId: "baku", laps: 6, seat: "LEC", startLap: 3 });
-    // The director's hook runs in EVERY state (game.js update() top): the countdown frame arms it.
-    await page.waitForFunction(() => window.__apex.info().track === "baku" && window.__apex.info().state === "count", null, { polling: 100, timeout: BOOT_MS });
-    await page.evaluate(() => window.__apex.step(1 / 60, 2));
-    // eslint-disable-next-line no-undef
-    const armed = await page.evaluate(() => RealRace.status());
-    expect(armed.armed).toBe(true);
-    expect(armed.placed).toBe(false);
-    expect(armed.cars.slice().sort((a, b) => a.grid - b.grid).slice(0, 2).map((c) => c.code)).toEqual(["RUS", "LEC"]);
-    await page.evaluate(() => window.__apex.go());
+    // The director's hook runs in EVERY state (game.js update() top): the countdown frame arms it — and a
+    // mid-race jump-in is a ROLLING start: the field is dropped in at speed on that frame and the race is
+    // green at once (no gantry), the seat car driven for the player until the hand-over.
+    await page.waitForFunction(() => window.__apex.info().track === "baku" && window.__apex.info().state !== "menu", null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => window.__apex.step(1 / 60, 3));
     const st = await page.evaluate(() => {
       // eslint-disable-next-line no-undef
       const rr = RealRace.status();
       const info = window.__apex.info();
-      return { rr, state: info.state, total: info.total };
+      return { rr, state: info.state, total: info.total, lights: document.getElementById("lights") ? document.getElementById("lights").hidden : null };
     });
     expect(st.state).toBe("race");
+    expect(st.rr.armed).toBe(true);
     expect(st.rr.placed).toBe(true);
+    expect(st.rr.handover).toBeGreaterThan(3.5);
+    expect(st.rr.cars.slice().sort((a, b) => a.grid - b.grid).slice(0, 2).map((c) => c.code)).toEqual(["RUS", "LEC"]);
+    expect(st.rr.cars.find((c) => c.code === "LEC").human).toBe(false);   // driven for the player, for now
     expect(st.rr.K).toBeGreaterThan(0.5);
     const by = (code) => st.rr.cars.find((c) => c.code === code);
     // At the start of real lap 3 Russell is on the line beginning lap 3; the others are inside lap 2 or 3 by time.
@@ -146,6 +145,13 @@ test.describe("real race, mid-race", () => {
     const later = await page.evaluate(() => RealRace.status());
     expect(later.cars.find((c) => c.code === "RUS").s).toBeGreaterThan(20);
     expect(later.cars.find((c) => c.code === "RUS").lap).toBe(3);
+    // The hand-over: four seconds in, the wheel is the player's and the car is still at speed.
+    await page.evaluate(() => window.__apex.step(1 / 60, 60 * 3.5));
+    // eslint-disable-next-line no-undef
+    const handed = await page.evaluate(() => RealRace.status());
+    expect(handed.handover).toBe(0);
+    expect(handed.cars.find((c) => c.code === "LEC").human).toBe(true);
+    expect(handed.cars.find((c) => c.code === "LEC").speed).toBeGreaterThan(15);
   });
 });
 
