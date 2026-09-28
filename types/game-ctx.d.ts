@@ -261,7 +261,7 @@ interface GameEls {
   hudSectors: HTMLElement; hudLimits: HTMLElement;
   flag: HTMLElement; minimap: HTMLElement;
   lights: HTMLElement; announce: HTMLElement;
-  announceNum: HTMLElement; announceWho: HTMLElement; announceText: HTMLElement;
+  announceNum: HTMLElement; announceWho: HTMLElement; announceText: HTMLElement; announceLive: HTMLElement;
   overlay: HTMLElement; audiostate: HTMLElement;
   lighting: HTMLElement; camtune: HTMLElement; flyby: HTMLElement;
   select: HTMLElement; selTitle: HTMLElement; selTeams: HTMLElement;
