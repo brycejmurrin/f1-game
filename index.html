@@ -656,6 +656,10 @@
                Everything below is disabled-or-hidden by the module, never
                reflowed under a finger, like #pm-calib above. -->
           <button id="pm-phonepad" type="button">PHONE AS CONTROLLER</button>
+          <!-- The other end, for the phone in hand: opens controller.html, where
+               the room code the OTHER screen shows is typed. Touch only, live
+               with the pointer kind (syncPointerKind). -->
+          <button id="pm-phonepad-go" type="button" hidden>USE THIS PHONE AS THE CONTROLLER</button>
           <!-- The pairing block spans the sheet (the wide shape's rule in
                css/components.css names it): the ROOM CODE first and big, so it
                is the first thing after the status and never below the fold;
@@ -1821,6 +1825,10 @@
     <!-- Unhidden (2026-08): the handler was live the whole time while the
          button carried a permanent `hidden` — the only tutorial door a
          first-time player could find was SETTINGS ▸ MORE ▸ HOW TO PLAY. -->
+    <!-- USE AS CONTROLLER: the PHONE'S door to controller.html (type the room
+         code there, or arrive by QR). Coarse pointers only — syncPointerKind()
+         in js/game.js flips `hidden` live; a mouse never sees it. -->
+    <button id="mb-phonepad" class="bigbtn alt minibtn" hidden aria-label="Use this phone as the controller for a game on another screen"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>USE AS CONTROLLER</button>
     <button id="mb-help" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>HOW TO PLAY</button>
     </div>
   </div>

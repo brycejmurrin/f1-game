@@ -601,6 +601,29 @@ test("controller.html carries exactly the manifest's CONTROLLER subset and both 
     "tilt-roll loads before input.js, which calls it");
   assert.ok(MANIFEST.LAZY_NET.includes("js/input/phone-pad.js"), "the desktop half loads with the net stack");
   assert.match(read(".github/workflows/pages.yml"), /cp index\.html bench\.html controller\.html /, "the page is staged by name");
+  // The phone's own door: a touch device opens controller.html from the title
+  // and from CONTROLS; a mouse never sees either button (live with the pointer
+  // kind, next to body.desktop). Plain navigation — no net stack on the phone.
+  const idx = read("index.html"), gameJs = read("js/game.js");
+  assert.match(idx, /<button id="mb-phonepad" class="bigbtn alt minibtn" hidden /, "title door, hidden until the pointer is coarse");
+  assert.match(idx, /<button id="pm-phonepad-go" type="button" hidden>/, "CONTROLS door, hidden until the pointer is coarse");
+  assert.match(gameJs, /function syncPointerKind\(\) \{[\s\S]*?\$\("mb-phonepad"\)\.hidden = !touch;[\s\S]*?\$\("pm-phonepad-go"\)\.hidden = !touch;/,
+    "both doors flip with the live pointer kind");
+  assert.match(gameJs, /location\.assign\(new URL\("controller\.html", location\.href\)\.href\)/, "the door is a navigation beside index.html");
+  assert.match(gameJs, /\$\("mb-phonepad"\)\.onclick = goPhonePad;[\s\S]*?\$\("pm-phonepad-go"\)\.onclick = goPhonePad;/, "both doors wired");
+  // Zoom off on the wheel, landscape only: touch-action is not inherited, so
+  // every wheel element owns its touches; the canceller mirrors index.html's;
+  // portrait shows the TURN card instead of a squeezed grid; the lock rides
+  // the CONNECT tap behind fullscreen (Android), best effort.
+  assert.match(page, /#ctl, #ctl \* \{ touch-action: none; \}/, "every wheel element refuses browser gestures");
+  for (const ev of ["gesturestart", "gesturechange", "gestureend", "dblclick", "touchend"]) {
+    assert.match(page, new RegExp(`document\\.addEventListener\\("${ev}"`), `the ${ev} canceller`);
+  }
+  assert.match(page, /closest\("button,input"\)\) \{ lastT = 0; return; \}/, "native controls keep every tap");
+  assert.match(page, /<div id="rotate" role="status">[\s\S]*TURN THE PHONE SIDEWAYS/, "the portrait card");
+  assert.match(page, /@media \(orientation: portrait\) \{ body\.linked #rotate \{ display: flex; \} \}/, "portrait shows the card once linked");
+  assert.doesNotMatch(page, /#face \{ grid-column: 1 \/ -1; grid-row: 1; \}/, "no portrait wheel layout any more");
+  assert.match(page, /requestFullscreen\(\{ navigationUI: "hide" \}\)[\s\S]*?screen\.orientation\.lock\("landscape"\)/, "fullscreen then lock, on the CONNECT tap");
   // The room service and its schnorr dependency resolve only through the page's
   // own importmap: every non-three entry of the game's map must be here too.
   const mapOf = (html) => JSON.parse(html.match(/<script type="importmap">([\s\S]*?)<\/script>/)[1]).imports;
