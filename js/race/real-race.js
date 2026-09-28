@@ -461,7 +461,8 @@ const RealRace = (function () {
         c.lap = ls; c.prog = (ls - 1) * total + s;
         c.fuelLap = ls;   // crossings driven: the tank is ls - 1 laps down (js/physics/tyre-model.js fuelFrac)
         c.totalT = K0 * at.t0; c.lapTime = K0 * a.into;
-        placeCar(c, s, onTrace ? clamp(real.x, -5, 5) : (side++ % 2 ? 1.5 : -1.5), onTrace && real.speed > 0 ? clamp(real.speed / REAL_VMAX, 0.3, 0.9) * (G.vTop ? G.vTop() : 80) : speed);
+        const vf = onTrace ? real.speed / REAL_VMAX : 0;   // the real car's pace as a fraction of a real top speed (vstd: never an absolute m/s)
+        placeCar(c, s, onTrace ? clamp(real.x, -5, 5) : (side++ % 2 ? 1.5 : -1.5), vf > 0 ? clamp(vf, 0.3, 0.9) * (G.vTop ? G.vTop() : 80) : speed);
         c.gear = 5; c.energy = 0.7;
         if (wearOn && a.compound) {
           // The plan's arrays hold only the stops that fit the sim distance, so
