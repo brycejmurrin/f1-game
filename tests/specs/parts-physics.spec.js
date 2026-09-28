@@ -1645,7 +1645,7 @@ test.describe("ERS parts drive the battery and overtake", () => {
         const perSec = e0 - A.carAt().energy;
         A.setBoost(false); A.clearInput();
         return { deploy: ps.ersDeploy, regen: ps.ersRegen, drain: ps.drain,
-                 rgn: ps.regen, otTime: ps.otTime, otCool: ps.otCool, perSec };
+                 rgn: ps.regen, otTime: ps.otTime, perSec };
       }));
     }
     const [harvest, standard, over] = rows;
@@ -1654,11 +1654,11 @@ test.describe("ERS parts drive the battery and overtake", () => {
     expect(harvest.deploy).toBeLessThan(standard.deploy);
     expect(standard.deploy).toBeLessThan(over.deploy);
 
-    // DEPLOYMENT buys a longer press (lower drain) and a longer, sooner overtake.
+    // DEPLOYMENT buys a longer press (lower drain) and a longer overtake push
+    // from the same 0.5 MJ allowance (js/race/overtake-mode.js; no lockout since 2026 rules).
     expect(over.drain).toBeLessThan(standard.drain);
     expect(standard.drain).toBeLessThan(harvest.drain);
     expect(over.otTime).toBeGreaterThan(harvest.otTime);
-    expect(over.otCool).toBeLessThan(harvest.otCool);
     // and it shows up in the battery actually draining slower while boosting
     expect(over.perSec).toBeLessThan(harvest.perSec);
     expect(over.perSec).toBeGreaterThan(0);      // boost engaged at all

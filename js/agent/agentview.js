@@ -851,8 +851,8 @@ const AgentView = (function () {
           deploying: !!p.deploying,
           overtakeArmed: !!p.otArmed,
           boostRemainingS: r1(p.otT || 0),
-          cooldownS: r1(p.otCool || 0),
-          note: "overtake arms within ~1 s of the car ahead; 4 s boost, then 16 s cooldown",
+          overtakeEarned: !!p.otEarned, overtakeMJ: typeof OvertakeMode !== "undefined" ? +OvertakeMode.mj(p).toFixed(2) : 0,
+          note: "overtake: under 1 s behind at the detection line (~90% of the lap) earns 0.5 MJ for the next lap; the button toggles it; off under SC and in low grip",
         },
         aero: {
           mode: (p.aeroX || 0) > 0.05 ? "X" : "Z",

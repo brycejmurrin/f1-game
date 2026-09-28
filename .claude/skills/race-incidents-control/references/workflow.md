@@ -30,7 +30,8 @@ Load from the SKILL.md index when the task needs this detail.
    - It raises caution immediately but lowers with hysteresis/minimum hold and
      hard caps to avoid flicker or permanent neutralization.
    - In multiplayer, only the host computes; guests adopt host `apply()` state.
-   - The Safety Car / red flag disables OVERTAKE (until the leader's next crossing after it ends; Art. B7.2.2), not active aero; a yellow or VSC disables neither.
+   - The Safety Car / red flag disables OVERTAKE (until the leader's next crossing after it ends; Art. B7.2.2), not active aero; a yellow or VSC disables neither. LOW GRIP (wet: `TyreModel.treadFor` > 0) also disables it (B7.2.2(d)) and halves the active-aero trade (`aeroWetK` in game.js).
+   - Under the Safety Car the field QUEUES (B5.13): `RaceControl.scQueueFrac` gives the leader the SC pace (0.45 × vTop) and a car > 1 s adrift of the car ahead on the road up to 0.6 × vTop until it closes — so a stop under the SC is genuinely cheaper. Overtake itself is `js/race/overtake-mode.js` (detection line, 0.5 MJ allowance).
 
 5. **Preserve determinism.**
    - No `Date.now()` or `Math.random()` in debris, incident, caution, or

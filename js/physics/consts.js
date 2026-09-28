@@ -136,9 +136,10 @@ window.PhysicsConsts = {
 
   DRAIN_LO: 0.14, DRAIN_HI: 0.26,    // energy/s while boosting: best -> worst deploy
   REGEN_LO: 0.085, REGEN_HI: 0.155,  // energy/s recovered: worst -> best regen
-  OT_TIME_LO: 3.2, OT_TIME_HI: 5.2,  // overtake push, seconds
-  OT_COOL_LO: 9, OT_COOL_HI: 14,     // ...and its lockout, best -> worst deploy
-  OT_GAP: 1.0,
+  OT_TIME_LO: 3.2, OT_TIME_HI: 5.2,  // seconds of push a full Overtake allowance buys: worst -> best deploy
+  OT_GAP: 1.0,         // s behind the car ahead AT THE DETECTION LINE (B7.2.3(c))
+  OT_MJ: 0.5,          // the Overtake allowance, MJ, spent over the following lap
+  ES_MJ: 4,            // the Energy Store window c.energy 0..1 stands for (js/race/overtake-mode.js)
   // The slipstream window, shared by the AI scan, the player scan and
   // game.js wakeOf(): a car 0.5–TOW_RANGE m ahead and within TOW_HALF_W m
   // laterally; the wake fades over the last TOW_FADE m of that range.

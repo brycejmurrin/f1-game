@@ -877,43 +877,53 @@ function updateHud(force, dtMs) {
   hStyle(els.btnBoost, "--e", (Math.round((player.energy || 0) * 20) / 20).toFixed(2));
   hToggle(els.btnOT, "on", player.otT > 0);
   hToggle(els.btnOT, "armed", player.otArmed && player.otT <= 0);
-  const ot = player.otT > 0 ? "ot-active" : player.otArmed ? "ot-armed" : player.otCool > 0 ? "ot-cool" : "ot-off";
+  // OVERTAKE (FIA 2026 B7.2.3(c), js/race/overtake-mode.js): EARNED under 1 s at
+  // the detection line, granted at the timing line as a 0.5 MJ allowance for
+  // that lap. The chip reads the allowance in MJ, the rule's own unit.
+  const otMJ = typeof OvertakeMode !== "undefined" ? OvertakeMode.mj(player) : 0;
+  const otHeld = otMJ > 0 && !player.otArmed && !(player.otT > 0);   // granted, paused (below OT_MIN_SPEED)
+  const ot = player.otT > 0 ? "ot-active" : player.otArmed || otHeld ? "ot-armed" : player.otEarned ? "ot-cool" : "ot-off";
   hClass(els.ot, ot);
   const caution = G.cautionInfo ? G.cautionInfo() : null;
   const gateOpen = typeof G.otEnabled === "function" ? !!G.otEnabled() : true;
-  const otOff = G.state === "race" && !gateOpen && player.otT <= 0;
+  const otOff = G.state === "race" && !gateOpen && !(player.otT > 0);
   const leader = G.ranked && G.ranked[0];
   let otReason = "";
   if (otOff) {
-    // RaceControl has two independent gates. Keep the reason in the HUD so a
-    // player knows whether to wait for green or for the opening lap to pass;
-    // do not alter the input path, which still checks c.otArmed in game.js.
-    // Only the Safety Car / red flag close it (Art. B7.2.2c); a yellow or VSC
-    // flying on lap 1 must not be named as the reason.
+    // RaceControl has independent gates. Keep the reason in the HUD so a
+    // player knows whether to wait for green, a dry track or the opening lap
+    // to pass; the input path still checks c.otArmed in game.js. Only the
+    // Safety Car / red flag (B7.2.2c) and LOW GRIP (B7.2.2d) close it; a
+    // yellow or VSC flying on lap 1 must not be named as the reason.
     otReason = caution && caution.level >= 3 ? "caution"
+      : caution && caution.lowGrip ? "low-grip"
       : leader && leader.lap > 1 ? "race-control"
       : leader ? "opening-lap" : "waiting-for-leader";
   }
-  const otPending = player.otT <= 0 && !player.otArmed;
-  const otUnavailable = otPending || otOff;
-  const otText = player.otT > 0 ? "OVERTAKE " + player.otT.toFixed(1)
+  const mjTxt = otMJ.toFixed(2) + " MJ";
+  const otReady = !!player.otArmed || otHeld;
+  const otUnavailable = (!(player.otT > 0) && !otReady) || otOff;
+  const otText = player.otT > 0 ? "OVERTAKE " + mjTxt
                 : otOff ? (otReason === "caution" ? "OT · CAUTION"
+                  : otReason === "low-grip" ? "OT · LOW GRIP"
                   : otReason === "opening-lap" ? "OT · LAP 1"
                   : otReason === "waiting-for-leader" ? "OT · GRID"
                   : "NO OVERTAKE")
-                : player.otCool > 0 && !player.otArmed ? "COOLDOWN " + Math.ceil(player.otCool)
-                : player.otArmed ? "OVERTAKE READY" : "OT · CLOSE IN";
+                : otReady ? "OT READY " + mjTxt
+                : player.otEarned ? "OT · NEXT LAP" : "OT · CLOSE IN";
   hText(els.ot, otText);
-  hAttr(els.ot, "aria-label", player.otT > 0 ? "Overtake active"
+  hAttr(els.ot, "aria-label", player.otT > 0 ? "Overtake active, " + mjTxt + " left"
     : otOff ? (otReason === "caution" ? "Overtake unavailable under caution"
+      : otReason === "low-grip" ? "Overtake off in low grip conditions"
       : otReason === "opening-lap" ? "Overtake unavailable on lap 1"
       : otReason === "waiting-for-leader" ? "Overtake waiting for the leader"
       : "Overtake unavailable")
-    : player.otCool > 0 && !player.otArmed ? "Overtake cooldown"
-    : player.otArmed ? "Overtake ready — press to deploy" : "Overtake unavailable — close on the car ahead");
+    : otReady ? "Overtake ready, " + mjTxt + " — press to deploy"
+    : player.otEarned ? "Overtake earned — available from the start line"
+    : "Overtake unavailable — be within one second at the detection line");
   hAttr(els.btnOT, "aria-disabled", otUnavailable ? "true" : "false");
   hAttr(els.btnOT, "data-state", otOff ? otReason : player.otT > 0 ? "active"
-    : player.otCool > 0 && !player.otArmed ? "cooldown" : player.otArmed ? "ready" : "pending");
+    : otReady ? "ready" : player.otEarned ? "earned" : "pending");
   hToggle(els.btnOT, "dead", otOff);
   const xOpen = (player.aeroX || 0) > 0.05;
   const dz = G.aeroZoneAhead ? G.aeroZoneAhead(player.s || 0) : Infinity;

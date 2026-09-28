@@ -704,7 +704,7 @@ test("ERS reports deployment and the overtake window, not just charge", async ()
   await load();
   const e = g.apex.world({ detail: "drive" }).ego.ers;
   truthy(e);
-  for (const k of ["charge", "deploying", "overtakeArmed", "boostRemainingS", "cooldownS"]) {
+  for (const k of ["charge", "deploying", "overtakeArmed", "boostRemainingS", "overtakeEarned", "overtakeMJ"]) {
     hasProp(e, k, k + " missing from ers");
   }
   gte(e.charge, 0);

@@ -619,7 +619,7 @@ const { VMAX, ACCEL, BRAKE, REVERSE_MAX, REVERSE_ACCEL, COAST_DRAG,
         X_MIN_SPEED, OT_MIN_SPEED, OFF_GRIP, ASSIST_KUS, LINE_PURSUIT,
         LONG_GRIP, THR_FLOOR, THR_CAP, THR_VK, WHEEL_R, WHEEL_STEER_VIS, GRASS_V, KERB_SHAKE, KERB_CUE_HOLD,
         DEPLOY_A, TAPER_LO, TAPER_HI, TAPER_FLOOR, DRAIN_LO, DRAIN_HI,
-        REGEN_LO, REGEN_HI, OT_TIME_LO, OT_TIME_HI, OT_COOL_LO, OT_COOL_HI,
+        REGEN_LO, REGEN_HI, OT_TIME_LO, OT_TIME_HI,
         OT_GAP, WET_GRIP, GEARS, GEAR_TOP, IDLE_RPM, MAX_RPM, DIFF, BAND_CEIL,
         TOW_RANGE, TOW_FADE, TOW_HALF_W, BLOCKER_HALF_W } = PhysicsConsts;
 // Global pace multiplier on top speed AND acceleration, applied to EVERY car
@@ -688,9 +688,12 @@ let DRIFT = 0;             // rear looseness 0..1: 0 = planted (no oversteer). S
 // Where THIS car sits on those spans, 0..1. Defaults to the midpoint so a car
 // that never had parts resolved behaves like the old single constant did.
 function aeroLoadOf(c) { return c && c.aeroLoad != null ? c.aeroLoad : 0.5; }
-function xVmaxGain(c) { return lerp(X_VMAX_GAIN_LO, X_VMAX_GAIN_HI, aeroLoadOf(c)); }
-function xDfLoss(c) { return lerp(X_DF_LOSS_LO, X_DF_LOSS_HI, aeroLoadOf(c)); }
-function xCoastCut(c) { return lerp(X_COAST_CUT_LO, X_COAST_CUT_HI, aeroLoadOf(c)); }
+// LOW GRIP (FIA 2026 B7.1.2(b)): active aero is PARTIAL in the wet — half the
+// trade each way. Exactly 1 on a slick track, so the dry car is untouched.
+function aeroWetK() { return raceCtl && raceCtl.lowGrip() ? 0.5 : 1; }
+function xVmaxGain(c) { return aeroWetK() * lerp(X_VMAX_GAIN_LO, X_VMAX_GAIN_HI, aeroLoadOf(c)); }
+function xDfLoss(c) { return aeroWetK() * lerp(X_DF_LOSS_LO, X_DF_LOSS_HI, aeroLoadOf(c)); }
+function xCoastCut(c) { return aeroWetK() * lerp(X_COAST_CUT_LO, X_COAST_CUT_HI, aeroLoadOf(c)); }
 // These four are `let` so the emulation/tuning harness (setPhysics) can sweep them
 // — they are the core feel levers found by emulating real drivers, not pause-menu
 // sliders. FRONT_GRIP: front friction bias (<1) for an understeer-safe default.
@@ -839,8 +842,7 @@ function ersRegenOf(c) { return c && c.ersRegen != null ? c.ersRegen : 0.5; }
 // pushing harder, because the push itself is what BOOST already scales.
 function drainFor(c) { return lerp(DRAIN_HI, DRAIN_LO, ersDeployOf(c)); }
 function regenFor(c) { return lerp(REGEN_LO, REGEN_HI, ersRegenOf(c)); }
-function otTimeFor(c) { return lerp(OT_TIME_LO, OT_TIME_HI, ersDeployOf(c)); }
-function otCoolFor(c) { return lerp(OT_COOL_HI, OT_COOL_LO, ersDeployOf(c)); }
+function otTimeFor(c) { return lerp(OT_TIME_LO, OT_TIME_HI, ersDeployOf(c)); }   // push a full Overtake allowance buys (js/race/overtake-mode.js)
 
 let aeroZ = null;   // AeroZones.create(G), assigned once G exists (below)
 // -- ACTIVE AERO: ACTIVATION ZONES -------------------------------------------
@@ -2004,7 +2006,7 @@ function makeCars() {
         fuelVisual: resolvedParts.visual.fuel,
         s: 0, x: 0, speed: 0, prog: 0, lap: 0,
         gear: 1, rpm: IDLE_RPM, shiftT: 0, boostOn: false,
-        energy: 1, otT: 0, otCool: 0, deploying: false,
+        energy: 1, otT: 0, otE: 0, deploying: false,
         // active aero: commanded mode, the 0..1 flap blend, and whether the
         // road ahead currently allows X-mode at all (see inAeroZone).
         xOn: false, aeroX: 0, xArmed: false,
@@ -2115,11 +2117,11 @@ function redFlagRestart() {
     // re-run), so anything the racing wrote survived onto the box: contactT
     // decays rather than being recomputed, so the AI ran its contact branch
     // from a standing start; wrongWay/rescue/off/wall said the car was in a
-    // gravel trap; otT/otCool held a move that ended when the flag flew.
+    // gravel trap; otT/otE held a move that ended when the flag flew.
     // Energy, tyreClass and phaseRoll are NOT cleared — same race, and the
     // strategy and the ERS state legitimately carry through a red flag.
     c.contactT = 0; c.wrongWay = false; c.wrongT = 0; c.rescueT = 0; c.rescueLastT = null;
-    c.offT = 0; c.wallT = 0; c.wasOnWall = false; c.otT = 0; c.otCool = 0;
+    c.offT = 0; c.wallT = 0; c.wasOnWall = false; OvertakeMode.reset(c);
     c.kerbGripSm = 1; c.kerbCueT = 0;
     // A STOP IN FLIGHT IS SCRATCH, not strategy, and it was the kind this list
     // missed: the grid boxes sit INSIDE the pit window on most circuits, so a
@@ -2190,7 +2192,7 @@ function gridUp(preOrder) {
     }
     c.head = 0; c.yawVis = 0;   // straight ahead on the grid (heading model)
     c.speed = 0; c.accSm = 0; c.corridorAccel = 0; c.prog = -(14 + i * 8); c.lap = 0; c.fuelLap = 0; c.fuelRestartLaps = 0; c.energy = 1; c._progGift = 0;   // a car on the grid is pulling nothing — apex.js reset() has the full list and why
-    c.otT = 0; c.otCool = 0; c.lapTime = 0; c.best = Infinity; c.totalT = 0;
+    OvertakeMode.reset(c); c.lapTime = 0; c.best = Infinity; c.totalT = 0;
     c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
     c.finPos = 0; c.retired = false; c.dnf = null; c.dnfAt = null; c.dnfWhy = null; delete c._coastHeld;   // last race's classification: makeCars' values; a race re-arms via armReliability
     c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.qualiCut = false; c.penalty = 0; c.offT = 0; c.hits = 0; c.hitSev = 0; c.wallHits = 0; c.errCount = 0;   // mistakes THIS race — the instrument's denominator, cleared only by a NEW race
@@ -3534,7 +3536,7 @@ const G = {
   aTop: () => aTop(),
   applyRaceSettings: () => applyRaceSettings(),   // const initialised below — defer
   announce, applyCaution, camVantage, endRace, gridUp, gripMult, roadWetness, isErsDeploying, cautionInfo, cautionLevel,
-  aeroDfMult, xVmaxGain, xDfLoss, drainFor, regenFor, otTimeFor, otCoolFor,
+  aeroDfMult, xVmaxGain, xDfLoss, drainFor, regenFor, otTimeFor,
   setCautionEnabled, otEnabled,
   get netPlay() { return netPlay; },
   get netStart() { return netStart; }, set netStart(v) { netStart = v; },
@@ -4499,7 +4501,10 @@ function updateCar(c, dt, ranked) {
     const lvl = raceCtl.level;   // cheap getter, no per-frame allocation
     // RED: the field stops. A walking-pace floor rather than 0 keeps every
     // "approaches vmax" fade finite.
-    if (lvl >= 2) cautionV = vmax = Math.min(vmax, vTop() * (lvl >= 4 ? 0.02 : lvl === 3 ? 0.45 : 0.6));
+    // SC (3): the field QUEUES — RaceControl.scQueueFrac lets a car > 1 s off
+    // the one ahead close up at a higher cap; the leader runs the SC pace.
+    if (lvl >= 2) cautionV = vmax = Math.min(vmax, vTop() * (lvl >= 4 ? 0.02
+      : lvl === 3 ? RaceControl.scQueueFrac(c, cars, track.total, ranked[0], vTop(), pits.inLane) : 0.6));
   }
 
   // --- AI traffic awareness: clearance on each side, the nearest blocker ahead
@@ -4601,8 +4606,6 @@ function updateCar(c, dt, ranked) {
 
   // --- electric deploy ---
   let deploy = 0;
-  c.otCool = Math.max(0, c.otCool - dt);
-  if (c.otT > 0) c.otT -= dt;
   if (c.isPlayer && Input.consumeBoostToggle()) c.boostOn = !c.boostOn;   // BOOST is a toggle
   // Short-circuit empty battery before the LUT sample AiDrive would ignore anyway.
   let aiWantsBoost = false;
@@ -4619,7 +4622,7 @@ function updateCar(c, dt, ranked) {
     || c.otT > 0;   // OVERTAKE deploys on its own — even with BOOST toggled off
   // OVERTAKE IS FREE. Its push does not come out of the battery, so an OT burst
   // costs nothing, fires on a flat ERS, and never competes with BOOST for charge.
-  // It is already rationed by its own OT_GAP / cooldown window, which is what
+  // It is already rationed by its own 0.5 MJ allowance per earned lap, which is what
   // makes it a tactical move rather than a second BOOST — the energy bar was a
   // second, redundant limiter, and at a ~0.2/s drain over a ~4 s push a single
   // press emptied 80% of the battery, so using the overtake button left you
@@ -4637,12 +4640,13 @@ function updateCar(c, dt, ranked) {
     c.deploying = deploy > 0.4;
   } else c.deploying = false;
 
-  // --- overtake mode ---
-  // The car ahead ON THE ROAD (docs/PHYSICS.md: "within OT_GAP of the car
-  // ahead"), not ranked[rank-2]: that is the classification neighbour — a
-  // leader has none (a backmarker 0.5 s ahead could not be attacked), it can
-  // sit a lap away, and a finished car coasting right ahead armed OT.
-  // Only a car inside OT_GAP·speed can arm (`ahead` is read only then): the traffic scan's cheap reject, +1 m margin.
+  // --- overtake mode --- (FIA 2026 B7.2.3(c), js/race/overtake-mode.js)
+  // Under 1 s behind the car ahead AT THE DETECTION LINE earns a 0.5 MJ
+  // allowance, granted at the timing line and spent at will over that lap.
+  // The car ahead ON THE ROAD (docs/PHYSICS.md), not ranked[rank-2]: that is the
+  // classification neighbour — a leader has none, it can sit a lap away, and a
+  // finished car coasting right ahead would count.
+  // Only a car inside OT_GAP·speed can earn (`ahead` is read only then): the traffic scan's cheap reject, +1 m margin.
   let ahead = null, gapAhead = Infinity; const otL = track.total, otW = OT_GAP * c.speed + 1;
   for (const o of ranked) {
     if (o === c || o.finished) continue;
@@ -4652,22 +4656,15 @@ function updateCar(c, dt, ranked) {
   }
   gapAhead = ahead && c.speed > 1 ? gapAhead / c.speed : Infinity;
   // vStd, not a bare c.speed: a THRESHOLD in real m/s means something different
-  // at every OVERALL SPEED setting (the active-aero floor below gets this right).
-  // Measured: X-mode armed at 35 % of the envelope at every pace while overtake
-  // armed at 42 % at pace 0.5 and 16 % at pace 1.3 — the slower you set the
-  // game, the less of the lap had overtake. Same class as the beached gate (A5).
-  // …and never while the pit limiter holds the car (pits.held: entry line to
-  // exit). A queue puts a car inside OT_GAP and the limit is over
-  // OT_MIN_SPEED, so overtake armed AND fired in the lane, AI and player alike
-  // (measured: docs/research/PIT-NEXT-STEPS-2026-09.md §4e). An active
-  // deployment ends at the line; its cooldown was charged in full when it
-  // fired, so nothing is banked.
+  // at every OVERALL SPEED setting (vstd-invariant A13). Never while the pit
+  // limiter holds the car (pits.held: entry line to exit) — a queue in the lane
+  // is inside OT_GAP (docs/research/PIT-NEXT-STEPS-2026-09.md §4e).
   const pitHeld = pits.held(c);
-  if (pitHeld) c.otT = 0;
-  c.otArmed = otEnabled() && gapAhead < OT_GAP && c.otCool <= 0 && c.otT <= 0
-              && !c.finished && !pitHeld && vStd(c.speed) > OT_MIN_SPEED;
+  OvertakeMode.lines(c, track, gapAhead, raceCtl.otDetectOpen());
+  const otGate = otEnabled() && !c.finished && !pitHeld, otFast = vStd(c.speed) > OT_MIN_SPEED;
+  OvertakeMode.arm(c, otGate, otFast);
   const fire = c.human ? (c.local ? Input.consumeOvertake() : !!inp.overtake)
-                      : (c.otArmed && (_aiOtFire.traits = aiT,
+                      : (c.otArmed && gapAhead < OT_GAP && (_aiOtFire.traits = aiT,   // the AI spends it on a car it can attack
                           _aiOtFire.blockerGap = blocker ? blockerGap : gapAhead * (c.speed || 1),
                           _aiOtFire.gapAhead = gapAhead * (c.speed || 1),
                           _aiOtFire.roomL = roomL, _aiOtFire.roomR = roomR, _aiOtFire.speed = c.speed, _aiOtFire.vTop = vTop(),
@@ -4676,10 +4673,7 @@ function updateCar(c, dt, ranked) {
                           _aiOtFire.street = !!track.street, _aiOtFire.team = c.team, _aiOtFire.seat = c.seat,
                           _aiOtFire.stats = c.houseStats, _aiOtFire.other = blocker,
                           AiDrive.otShouldFire(simRnd(), dt, _aiOtFire)));
-  if (fire && c.otArmed) {
-    c.otT = otTimeFor(c); c.otCool = otCoolFor(c) + c.otT;
-    if (c.isPlayer && soundOn) GameAudio.deployBoost();
-  }
+  if (OvertakeMode.spend(c, dt, fire, otGate, otFast, otTimeFor(c)) && c.isPlayer && soundOn) GameAudio.deployBoost();
   if (c.isPlayer && c.otArmed && !c.wasArmed && soundOn) GameAudio.overtakeReady();
   c.wasArmed = c.otArmed;
 
@@ -6436,7 +6430,7 @@ function retireCar(c, reason) {
   c.rPrevHead = c.head; c.rPrevYawVis = 0;
   c.speed = 0; c.vLat = 0; c.yawRateCur = 0; c.yawVis = 0; c.steerVis = 0;
   c.gear = 1; c.rpm = IDLE_RPM;
-  c.boostOn = false; c.deploying = false; c.otT = 0; c.otArmed = false;
+  c.boostOn = false; c.deploying = false; OvertakeMode.reset(c);
   // The broadcast call. Every retirement is announced, not only the player's:
   // losing a rival is race information, and it is the only way a DNF that
   // happened half a lap away is visible at all.
