@@ -68,7 +68,7 @@ srv.listen(0, "127.0.0.1", async () => {
             const keys = await c.keys();
             return { ok: true, cache: n, entries: keys.length,
                      scenery: keys.filter((k) => k.url.includes("/js/circuits/scenery/")).length,
-                     presets: keys.some((k) => k.url.includes("light-presets")) };
+                     presets: keys.some((k) => k.url.includes("/js/lighting/presets.js")) };
           }
         }
         await new Promise((r) => setTimeout(r, 500));
@@ -79,7 +79,7 @@ srv.listen(0, "127.0.0.1", async () => {
     if (!installed.ok) bad.push("service worker install: " + installed.why);
     else {
       if (installed.scenery !== 52) bad.push(`only ${installed.scenery}/52 scenery files precached`);
-      if (!installed.presets) bad.push("light-presets.js not precached");
+      if (!installed.presets) bad.push("js/lighting/presets.js not precached");
     }
     // Race it ONLINE first and keep the count. That, not the Node number, is
     // the reference: verify-track builds in a different harness and spa is
@@ -103,6 +103,14 @@ srv.listen(0, "127.0.0.1", async () => {
     const controlled = await p1.evaluate(() => !!navigator.serviceWorker.controller);
     console.log("controlled after reload:", controlled);
     if (!controlled) bad.push("page is not controlled by the service worker after a reload");
+    // The agent surface (js/agent/*.js, window.__apex) is LAZY: the install
+    // leaves it out and only a CONTROLLED page's own fetch caches it (sw.js's
+    // LAZY_AGENT block, js/game.js loadAgentSurface). Closing this page at
+    // domcontentloaded, before the boot got there, meant step 3 could never
+    // find __apex offline and read a booted game as "did not boot at all".
+    // Real players never load it; this harness needs it to measure anything.
+    await p1.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 90000 })
+      .catch(() => bad.push("__apex never loaded on the controlled page, so it was never cached"));
     await p1.close();
 
     // ---- 3. OFFLINE: race a circuit never raced in this session -------------
