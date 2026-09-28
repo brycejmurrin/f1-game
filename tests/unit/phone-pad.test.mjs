@@ -601,6 +601,16 @@ test("controller.html carries exactly the manifest's CONTROLLER subset and both 
     "tilt-roll loads before input.js, which calls it");
   assert.ok(MANIFEST.LAZY_NET.includes("js/input/phone-pad.js"), "the desktop half loads with the net stack");
   assert.match(read(".github/workflows/pages.yml"), /cp index\.html bench\.html controller\.html /, "the page is staged by name");
+  // The phone's own door: a touch device opens controller.html from the title
+  // and from CONTROLS; a mouse never sees either button (live with the pointer
+  // kind, next to body.desktop). Plain navigation — no net stack on the phone.
+  const idx = read("index.html"), gameJs = read("js/game.js");
+  assert.match(idx, /<button id="mb-phonepad" class="bigbtn alt minibtn" hidden /, "title door, hidden until the pointer is coarse");
+  assert.match(idx, /<button id="pm-phonepad-go" type="button" hidden>/, "CONTROLS door, hidden until the pointer is coarse");
+  assert.match(gameJs, /function syncPointerKind\(\) \{[\s\S]*?\$\("mb-phonepad"\)\.hidden = !touch;[\s\S]*?\$\("pm-phonepad-go"\)\.hidden = !touch;/,
+    "both doors flip with the live pointer kind");
+  assert.match(gameJs, /location\.assign\(new URL\("controller\.html", location\.href\)\.href\)/, "the door is a navigation beside index.html");
+  assert.match(gameJs, /\$\("mb-phonepad"\)\.onclick = goPhonePad;[\s\S]*?\$\("pm-phonepad-go"\)\.onclick = goPhonePad;/, "both doors wired");
   // The room service and its schnorr dependency resolve only through the page's
   // own importmap: every non-three entry of the game's map must be here too.
   const mapOf = (html) => JSON.parse(html.match(/<script type="importmap">([\s\S]*?)<\/script>/)[1]).imports;

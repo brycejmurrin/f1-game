@@ -8684,6 +8684,12 @@ $("mb-data").onclick = () => {
   ensureDataHub().then((ok) => { if (ok) DataHub.open(); });
 };
 $("mb-help").onclick = () => { els.howtoplay.hidden = false; if (soundOn) GameAudio.uiSelect(); };
+// USE AS CONTROLLER (this phone): a plain navigation to the wheel page beside
+// index.html — no net stack, no room; the code is typed there (or arrives by
+// QR as controller.html#pad=CODE). Same door from Settings › CONTROLS.
+const goPhonePad = () => { if (soundOn) GameAudio.uiSelect(); location.assign(new URL("controller.html", location.href).href); };
+$("mb-phonepad").onclick = goPhonePad;
+$("pm-phonepad-go").onclick = goPhonePad;
 // Same sheet from the pause stack — the controls reference is most wanted
 // mid-session. #howtoplay outranks #pausemenu in z-index, so CLOSE returns
 // to the pause menu with nothing else to restore.
@@ -9468,7 +9474,12 @@ onPadLost: () => {
    #pm-calib hidden by css/responsive.css so there was no way back either.
    Re-run everything that reads the query, in the order boot does. */
 function syncPointerKind() {
-  document.body.classList.toggle("desktop", !Input.touchControlsNeeded());
+  const touch = Input.touchControlsNeeded();
+  document.body.classList.toggle("desktop", !touch);
+  // The phone's own door to the wheel page: a coarse pointer is the device
+  // that can BE the controller, so only it gets the buttons (title + CONTROLS).
+  $("mb-phonepad").hidden = !touch;
+  $("pm-phonepad-go").hidden = !touch;
   if (state === "race" || state === "count") showTouchControls(true);
   refreshGearsBtn();   // GEARS is enabled by thumbs being free, i.e. by this
 }
