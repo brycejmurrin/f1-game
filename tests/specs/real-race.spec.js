@@ -176,11 +176,11 @@ test.describe("real race, watched", () => {
       // eslint-disable-next-line no-undef
       const rr = RealRace.status();
       const info = window.__apex.info();
-      return { rr, state: info.state, cars: window.__apex.cars().map((c) => ({ code: c.code, human: c.human, s: c.s, lap: c.lap, retired: c.retired, speed: c.speed })) };
+      return { rr, state: info.state };
     });
     expect(st.state).toBe("race");
     expect(Math.abs(st.rr.replay.T - 1)).toBeLessThan(0.05);
-    const by = (code) => st.cars.find((c) => c.code === code);
+    const by = (code) => st.rr.cars.find((c) => c.code === code);   // the director's per-car view (code, lap, s, speed, human, retired)
     expect(Math.abs(by("RUS").s - 36)).toBeLessThan(2);
     expect(by("RUS").lap).toBe(1);
     expect(Math.abs(by("RUS").speed - 50)).toBeLessThan(1);

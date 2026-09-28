@@ -590,7 +590,7 @@ const RealRace = (function () {
       if (!active) return { active: false };
       const cars = [];
       if (field) for (const [c, f] of field) cars.push({ code: c.code, num: f.d ? f.d.num : null, human: !!c.human, grid: c.gridPos, lap: c.lap, retired: !!c.retired,
-        s: c.s != null ? +c.s.toFixed(1) : null, mul: +f.mul.toFixed(4), err: +f.err.toFixed(2), dnfAt: c.dnfAt, stops: c.pitPlan ? c.pitPlan.lapsAt : null,
+        s: c.s != null ? +c.s.toFixed(1) : null, speed: c.speed != null ? +c.speed.toFixed(1) : null, mul: +f.mul.toFixed(4), err: +f.err.toFixed(2), dnfAt: c.dnfAt, stops: c.pitPlan ? c.pitPlan.lapsAt : null,
         start: c.pitPlan ? c.pitPlan.start : null, tyre: c.tyre ? c.tyre.cls || c.tyre.code || null : null, wear: c.tyreWear != null ? +c.tyreWear.toFixed(3) : null, pitStops: c.pitStops | 0 });
       return { active: true, armed, placed, name: active.script.name, trackId: active.script.trackId, laps: active.laps, realLaps: active.script.laps,
                startLap: active.startLap, seat: active.seatCode, K: +K.toFixed(4), caution: heldLevel, weather: rainWant, cars,
