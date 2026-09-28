@@ -601,7 +601,14 @@ test("controller.html carries exactly the manifest's CONTROLLER subset and both 
     "tilt-roll loads before input.js, which calls it");
   assert.ok(MANIFEST.LAZY_NET.includes("js/input/phone-pad.js"), "the desktop half loads with the net stack");
   assert.match(read(".github/workflows/pages.yml"), /cp index\.html bench\.html controller\.html /, "the page is staged by name");
-  assert.match(page, /<script type="importmap">[\s\S]*@trystero-p2p\/nostr/, "the room-code courier needs the importmap");
+  // The room service and its schnorr dependency resolve only through the page's
+  // own importmap: every non-three entry of the game's map must be here too.
+  const mapOf = (html) => JSON.parse(html.match(/<script type="importmap">([\s\S]*?)<\/script>/)[1]).imports;
+  const gameMap = mapOf(read("index.html")), padMap = mapOf(page);
+  for (const [spec, target] of Object.entries(gameMap)) {
+    if (spec.startsWith("three")) continue;
+    assert.equal(padMap[spec], target, `controller.html's importmap must carry "${spec}" exactly as index.html does`);
+  }
   assert.doesNotMatch(read("js/input/phone-pad.js"), /getElementById|querySelector\(/, "the module never looks an id up — controller.html hands elements in");
   for (const id of ["h-gear", "h-speed", "h-lap", "h-pos", "h-ers", "h-flag", "h-ot", "h-aero", "h-last", "leds", "screen", "rim",
                     "b-shiftUp", "b-shiftDown", "b-ot-big", "b-boost-big", "b-overtake", "b-boost", "b-aero", "b-camera", "b-radio", "b-look", "b-recover", "b-pause", "b-center", "gas", "brake"]) {
