@@ -226,7 +226,11 @@ test("openQuali restores via begin(); quit-to-menu keeps persist; friend-race us
   // the call — pin the three-way shape and that SC routes through the queue.
   assert.match(GAME, /vTop\(\) \* \(lvl >= 4 \? 0\.02[\s\S]*?lvl === 3 \? RaceControl\.scQueueFrac\([\s\S]*?\)\s*:\s*0\.6\)/);
   assert.match(GAME, /RaceControl\.scQueueFrac\(c, cars, track\.total, ranked\[0\], vTop\(\), pits\.inLane\)/);
-  assert.match(GAME, /if \(netPlay\.active\(\)\) netPlay\.stop\("local"\)/);
+  // RACE AGAIN / quit-to-menu end the session first. Unguarded since
+  // 2026-09-28: stop() on an INACTIVE session forgets a stale disconnect
+  // reason (a mid-race drop otherwise read "Disconnected" in every later solo
+  // race's pause menu), so the `if (netPlay.active())` guard went.
+  assert.match(GAME, /netPlay\.stop\("local"\);   \/\/ inactive after a mid-race drop/);
   assert.match(GAME, /if \(netPlay\.active\(\) \|\| qualiNet\.hasArmed\(\)\) return/);
   assert.match(SRC, /if \(!classification\.some\(\(r\) => r\.human\)\) return/);
 });
