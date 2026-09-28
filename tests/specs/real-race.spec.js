@@ -176,7 +176,10 @@ test.describe("real race, watched", () => {
     expect(armed.watch).toBe(true);
     expect(armed.replay.follow).toBe("LEC");
     expect(armed.replay.cars).toBe(2);
-    await page.evaluate(() => window.__apex.go());
+    // FROZEN from here: the page's own loop must not advance the replay clock between the scripted
+    // frames (on the CI runner it added 0.08 s to a one-second step). startRace() resets the flag, so
+    // it is set once the race exists; step() drives update() directly, frozen or not.
+    await page.evaluate(() => { window.__apex.freeze(true); window.__apex.go(); });
     await page.evaluate(() => window.__apex.step(1 / 60, 60));
     const st = await page.evaluate(() => {
       // eslint-disable-next-line no-undef
@@ -192,14 +195,22 @@ test.describe("real race, watched", () => {
     expect(Math.abs(by("RUS").speed - 50)).toBeLessThan(1);
     expect(by("LEC").human).toBe(false);
     expect(by("HAM").retired).toBe(true);   // no data for that seat: parked
-    // The keys: period = up the order (Leclerc -> Russell), equal = the next speed.
-    await page.keyboard.press("Period");
+    // The keys: equal = the next speed (2x: sixty frames advance the clock two seconds, exactly)...
     await page.keyboard.press("Equal");
+    // eslint-disable-next-line no-undef
+    const t0 = await page.evaluate(() => RealRace.status().replay.T);
     await page.evaluate(() => window.__apex.step(1 / 60, 60));
+    // eslint-disable-next-line no-undef
+    const faster = await page.evaluate(() => RealRace.status());
+    expect(faster.replay.speed).toBe(2);
+    expect(Math.abs(faster.replay.T - t0 - 2)).toBeLessThan(0.02);
+    // ...period = up the order (Leclerc -> Russell): the camera moves to the car it names (a cut settles
+    // the camera with a few sim frames of its own, so no clock assertion rides on it).
+    await page.keyboard.press("Period");
     // eslint-disable-next-line no-undef
     const later = await page.evaluate(() => RealRace.status());
     expect(later.replay.follow).toBe("RUS");
     expect(later.replay.speed).toBe(2);
-    expect(Math.abs(later.replay.T - 3)).toBeLessThan(0.1);
+    expect(later.replay.T).toBeGreaterThanOrEqual(faster.replay.T);
   });
 });
