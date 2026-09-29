@@ -36,7 +36,7 @@ function load() {
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "mat4.js" });   // M4.clamp, bound at eval
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/teams.js"), "utf8"), ctx, { filename: "teams.js" });
   // Tracks: the list, plus the two geometry reads a mid-race drop-in makes (a straight 6 km ring, 7 m half-width).
-  vm.runInContext("var TyreModel = { AI_CLASS: { soft: { life: 0.48 }, medium: { life: 0.74 }, hard: { life: 1.05 }, inter: { life: 1 }, wet: { life: 1 } } };", ctx);   // the compound lives place() reads
+  vm.runInContext("var TyreModel = { AI_CLASS: { soft: { code: 'S', life: 0.48 }, medium: { code: 'M', life: 0.74 }, hard: { code: 'H', life: 1.05 }, inter: { code: 'I', life: 1 }, wet: { code: 'W', life: 1 } } };", ctx);   // the compound lives place() reads
   vm.runInContext("var Tracks = " + JSON.stringify({ LIST: TRACKS }) + "; Tracks.sample = function (t, s, o) { o.p[0] = s; o.p[1] = 0; o.p[2] = 0; o.t[0] = 1; o.t[1] = 0; o.t[2] = 0; o.r[0] = 0; o.r[1] = 0; o.r[2] = 1; o.hw = 7; }; Tracks.wallAt = function () { return 9; }; Tracks.curvature = function (t, s) { return Tracks.kAt ? Tracks.kAt(s) : 0; };", ctx);
   // The drop-in speed is the AI's read of the road: the real corner model and the real constants.
   vm.runInContext("var window = globalThis;", ctx);   // consts.js publishes on window
@@ -136,6 +136,16 @@ test("the real strategy becomes the pit plan the pit lane executes, at full and 
   assert.deepEqual(host(tiny.lapsAt), [2], "one stop fits in three laps; the second would be on the last lap or double up");
   assert.deepEqual(host(tiny.seq), ["medium", "soft"]);
   assert.equal(R.planFor({ stints: [] }, 51, 51, 0.2), null);
+  // Stops that collapse onto one sim lap, or onto the last, are SLID rather
+  // than dropped: dropping one lost the compound it fitted, and a car that
+  // really ran M→M→H (or stopped on lap 55 of 57) was replayed on one dry
+  // compound and disqualified at the flag.
+  const mmh = R.planFor({ stints: [{ c: "MEDIUM", from: 1 }, { c: "MEDIUM", from: 21 }, { c: "HARD", from: 24 }] }, 10, 57, 0.2);
+  assert.equal(host(mmh.seq).at(-1), "hard", `the car finishes on its real last compound: ${host(mmh.seq)}`);
+  assert.equal(mmh.stints.reduce((a, b) => a + b, 0), 10);
+  const late = R.planFor({ stints: [{ c: "MEDIUM", from: 1 }, { c: "HARD", from: 56 }] }, 20, 57, 0.2);
+  assert.deepEqual(host(late.seq), ["medium", "hard"], "a stop on the real last laps still happens");
+  assert.ok(late.lapsAt[0] < 20);
   const str = script.drivers.find((d) => d.num === 18);
   assert.ok(Math.abs(R.dnfAtFor(str, 51) - 7.5 / 51) < 1e-9);
   assert.equal(R.dnfAtFor(rus, 51), null, "a finisher never retires");
@@ -502,9 +512,22 @@ test("the review's fixes: a filled cum row, a DSQ that saw the flag, the kept st
   const cars = makeCars(Teams, "ferrari:0");
   const { G } = makeG(Teams, cars);
   const rr = R.create(G);
+  // A fit that keeps the stint log, as TyreModel.fit does: the log is what
+  // SportingRegs judges at the flag.
+  const fit0 = G.tyres.fit;
+  G.tyres.fit = (c, rec) => { fit0(c, rec); (c.tyreLog || (c.tyreLog = [])).push({ code: rec.cls[0].toUpperCase(), id: rec.cls, lap0: c.lap || 0, lap1: null }); c.tyreWearF = 0; c.tyreWearR = 0; };
   rr.stage(script, { seat: "LEC", startLap: 40, laps: 10 });   // Russell's stops at real 31 and 36 both land on sim lap 6..7 -> one kept
   G.state = "count"; rr.update(1 / 60); G.state = "race"; rr.update(1 / 60);
   const by = (code) => cars.find((c) => c.code === code);
+  // THE SETS ALREADY RUN survive the drop: the log was trimmed to the current
+  // set, and a car that had really run two dry compounds was disqualified.
+  const russell = by("RUS");
+  assert.deepEqual(host(russell.tyreLog.map((e) => e.code)), ["M", "S", "S"], JSON.stringify(host(russell.tyreLog)));
+  assert.equal(russell.tyreLog.at(-1).lap1, null, "the set on the car is the open stint");
+  // …and a worn set is worn on BOTH axles: zeroed per-axle wear cancelled the
+  // whole grip loss through axleSplit.
+  assert.ok(russell.tyreWear > 0 && russell.tyreWearF === russell.tyreWear && russell.tyreWearR === russell.tyreWear,
+    `axles ${russell.tyreWearF}/${russell.tyreWearR} vs ${russell.tyreWear}`);
   const plan = by("RUS").pitPlan;
   assert.equal(plan.lapsAt.length, 2, JSON.stringify(host(plan.lapsAt)));
   assert.equal(by("RUS").lap, 8);
