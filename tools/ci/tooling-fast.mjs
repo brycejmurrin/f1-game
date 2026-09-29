@@ -156,6 +156,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ...and WebXR Phase 0: seated-rig compose, controller→remoteSample mapping,
   // sessionInit feature flags, vendored XRButton/WebGLXRFallback presence. ~0.1 s.
   "tests/unit/xr-phase0.test.mjs",
+  // ...and XRPlan / XROpts (task 20): pure path selection table + bootPick
+  // never writes apex26.gfxBackend. ~0.1 s.
+  "tests/unit/xr-plan.test.mjs",
+  "tests/unit/xr-opts.test.mjs",
   // ...and the two steer-tuning tables that MUST agree: every PRESET bundle
   // lands exactly on its FEEL level, or clicking RELAX reads CUSTOM. Stated
   // in comments and checked by nothing until it drifted for a week. ~0.05 s.

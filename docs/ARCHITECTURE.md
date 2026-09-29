@@ -77,7 +77,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_234 rows over 29 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_237 rows over 29 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -378,6 +378,9 @@ _234 rows over 29 directories, in load order. `tag` = a `<script>` in index.html
 | `xr-rig.js` | `XrRig` | tag | XR seated-rig math (pure). |
 | `xr-input.js` | `XrInput` | tag | XR controller → Input.remoteSample / remoteEvent. |
 | `xr-session.js` | `XrSession` | tag | WebXR immersive-vr session owner (Phase 0 spike). |
+| `xr-plan.js` | `XRPlan` | tag | XRPlan: pure boot-time VR renderer path selection. |
+| `xr-opts.js` | `XROpts` | tag | XROpts: SETTINGS › DISPLAY rows for VR MODE + VR RENDERER. |
+| `apex-xr.js` | `ApexXR` | tag | ApexXR: thin façade over XRPlan + XrSession for boot / settings. |
 | `xr-ui.js` | `XrUi` | tag | ENTER VR button (Phase 0). |
 | `xr-boot.js` | `XrBoot` | tag | WebXR boot wiring (Phase 0). |
 
@@ -1382,6 +1385,24 @@ TSL post chain; stamps `renderOrder` for FX/glass.
 | `apex26.gfxTlxFail`, `apex26.tlxForceGL` | TLX fail / THREE PATH (`1`=WebGL2, `0`=WebGPU, unset=AUTO) |
 | `apex26.wgxCapture` | SCREENSHOTS: `1`=2D blit, `0`=native swapchain, unset=AUTO (session overrides local) |
 | `apex26.tlxForceBatches`, `apex26.tlxForceHw` | DEBUG: run the code a real GPU runs, on a software adapter. `tlxForceHw` is a comma list — `sky\|env\|chunked\|batches\|shadow`, or `1`/`all`. Every software skip in TLX is a BUDGET guard, so an unforced CI run never executes the player's path; `env` is how the black-frame Dawn defect was found. Presentation stays soft. Set them with `gfx-probe --ls key=value` |
+
+### VR renderer selection (task 20)
+
+When `apex26.xr=1` **and** the device reports immersive-vr (cached in
+`apex26.xrCaps` for the sync boot read; refreshed by `ApexXR.detect()`),
+`backendPreference()` in `js/game.js` takes a **non-persisted** override from
+`ApexXR.bootPick()` / `XRPlan.resolve`:
+
+| `apex26.xrBackend` | Path | Boot override | Notes |
+|---|---|---|---|
+| unset / `webgl2` | WebGL2 (GLX) | `"webgl2"` | Default shippable Quest path. GLX `getContext("webgl2")` sets `xrCompatible:true` only when `navigator.xr` exists. |
+| `webgpu` | WebGPU experimental (TLX) | `"three"` | Requires `navigator.gpu` **and** `XRGPUBinding`; otherwise falls back to WebGL2 with a reason in `ApexXR.stats().fallbacks`. Session feature negotiation is task 45. |
+
+The override **never writes** `apex26.gfxBackend`. Disarming VR restores the
+player's 2D RENDERER pick. A post-boot WebGPU failure latches
+`sessionStorage apex26.xrFallback=webgl2` (honoured on the next resolve).
+SETTINGS › DISPLAY › VR rows (`XROpts`) stay hidden unless `caps.vr`.
+Stereo presentation is tasks 40/45 — this module only plans the path.
 
 Canary + session claim-fail recover from claim-and-die / jetsam by falling
 back to WebGL2 without always wiping the user’s pick. WGX climbs

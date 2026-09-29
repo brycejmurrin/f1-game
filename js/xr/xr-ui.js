@@ -47,8 +47,35 @@ const XrUi = (function () {
       await XrSession.end();
       return;
     }
-    // Cockpit is forced ephemerally in XrBoot.onStart (does not persist camMode).
-    if (typeof XrBoot !== "undefined") {
+    // Armed VR plan (task 20): if the bound renderer ≠ the plan, ask for a
+    // reload instead of writing apex26.gfxBackend (ensureXrBackend must not
+    // clobber the 2D pick while XR is armed).
+    if (typeof ApexXR !== "undefined" && ApexXR.plan) {
+      const plan = ApexXR.plan();
+      if (plan.xrMode === "armed") {
+        const label = (plan.path || "webgl2").toUpperCase();
+        if (typeof ApexXR.rendererMatchesPlan === "function" && !ApexXR.rendererMatchesPlan()) {
+          flashMessage("Reload to enter VR with " + label);
+          return;
+        }
+        if (typeof XrBoot !== "undefined" && !XrBoot.canAttach()) {
+          flashMessage("Reload to enter VR with " + label);
+          return;
+        }
+      } else if (typeof XrBoot !== "undefined") {
+        // Spontaneous ENTER VR with VR mode off — legacy Phase 0 TLX pin.
+        const gate = XrBoot.ensureXrBackend();
+        if (gate.reloading) {
+          flashMessage("SWITCHING…");
+          return;
+        }
+        if (!gate.ok) {
+          flashMessage(gate.message || "VR UNAVAILABLE");
+          return;
+        }
+      }
+    } else if (typeof XrBoot !== "undefined") {
+      // Cockpit is forced ephemerally in XrBoot.onStart (does not persist camMode).
       const gate = XrBoot.ensureXrBackend();
       if (gate.reloading) {
         flashMessage("SWITCHING…");
