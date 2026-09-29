@@ -571,8 +571,15 @@ const TyreModel = (function () {
 
   // An AI strategy owns its starting compound when wear is enabled. In
   // particular, a MY TEAM mate's saved garage tyre must not override the plan.
-  function startRecord(c) {
-    if (c && c.pitPlan && !c.human) return classRecord(c.pitPlan.start);
+  // `tread` is what the weather wants at the lights (treadFor): the planner
+  // sequences DRY classes only, so a wet race put the whole AI field on slicks
+  // and every car was armed for the weather on the first tick — 21 cars into
+  // the lane at the end of lap 1. The player's own set is theirs to choose.
+  function startRecord(c, tread) {
+    if (c && c.pitPlan && !c.human) {
+      const wet = tread > 0 ? classForTread(tread) : null;
+      return classRecord(wet || c.pitPlan.start);
+    }
     return c && c.tyreOpt ? optionRecord(c.tyreOpt) : classRecord(c && c.tyreClass);
   }
 

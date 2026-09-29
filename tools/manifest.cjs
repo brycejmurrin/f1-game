@@ -178,6 +178,7 @@ const FULL = [
   "js/garage/scene-equipment.js",
   "js/garage/scene-live.js",
   "js/garage/scene.js",
+  "js/garage/arrival.js",
   "js/garage/setup-camera.js",
   "js/garage/pit-signs.js",
   "js/physics/body-attitude.js",
