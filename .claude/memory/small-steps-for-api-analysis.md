@@ -1,6 +1,7 @@
 ---
 name: small-steps-for-api-analysis
 description: When analyzing GitHub Actions/API data, work in small incremental queries, not one big bulk-fetch script
+type: feedback
 metadata:
   type: feedback
 ---
