@@ -119,13 +119,16 @@ const SportingRegs = (function () {
       }
       if (level < CAUTION_MIN) lostTo.length = 0;
       if (owed.length) {
-        for (let i = owed.length - 1; i >= 0; i--) if (now.has(owed[i]) || owed[i].retired) owed.splice(i, 1);
+        if (!p.finished) for (let i = owed.length - 1; i >= 0; i--) if (now.has(owed[i]) || owed[i].retired) owed.splice(i, 1);
         if (gained) {
           if (!(t > 0)) t = WIN;
           ev = { type: "warn", n: owed.length };
         }
         if (!owed.length) { t = 0; ev = { type: "cleared" }; }
-        else if ((t -= dt) <= 0) {
+        // FINISHED WITH PLACES OWED: the give-back window can no longer run
+        // (the result countdown is shorter than it), and a passed car coasting
+        // by the finished player must not clear the debt. Charge it now.
+        else if (p.finished || (t -= dt) <= 0) {
           const n = owed.length;
           owed.length = 0; t = 0;
           ev = { type: "penalty", n, sec: passPenaltyS(n) };

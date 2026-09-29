@@ -250,7 +250,11 @@ function buildResults(order, race) {
     // "+FL": this round's fastest-lap point (SeasonCal.award sets lastFl only
     // when the format pays it, and only to a top-ten finisher).
     const fl = !sprint && G.seasonMode && season && season.lastFl === c.driverId && !dnf ? 1 : 0;
-    pt.textContent = dnf ? outLabel(dnf) : `${(table[i] || 0) + fl} pts${fl ? " +FL" : ""}`;
+    // A CLASSIFIED retirement (past 90 % of the winner's laps, endRace sets
+    // c.classified) is paid by SeasonCal.award / Career.settleRound: the row
+    // shows those points, and its reason stays in the name suffix above.
+    const paid = !dnf || (c.classified && !c.dsq);
+    pt.textContent = paid ? `${(table[i] || 0) + fl} pts${fl ? " +FL" : ""}` : outLabel(dnf);
     row.append(pos, sw, nm);
     if (timing && !dnf && c !== timing.winner && typeof carData.lap === "number" &&
         isFinite(carData.lap) && carData.lap === timing.winnerLap) {
