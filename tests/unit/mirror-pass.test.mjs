@@ -19,7 +19,7 @@ import { seedLog } from "../helpers/seed-log.mjs";
 
 const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 
-function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, throwInWorld = false } = {}) {
+function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, throwInWorld = false, mobile = false } = {}) {
   const stored = {};
   if (mode) stored.hudMirror = mode;
   let mirrorPressed = false;
@@ -48,7 +48,7 @@ function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, t
   const calls = [];
   let st = { dead: false, ready: false };
   const gfx = {
-    width: 1280, height: 720, mobileTier: false,
+    width: 1280, height: 720, mobileTier: mobile,
     softPresent: () => soft,
     mirrorBegin: (frame, w, h) => { calls.push(["begin", w, h, frame.viewProj, frame.eye.slice(), frame.cullDist]); return true; },
     mirrorEnd: () => { calls.push(["end"]); st = { dead: false, ready: true }; },
@@ -58,14 +58,14 @@ function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, t
     drawSky: (sky) => { calls.push(["sky", sky.invViewProj]); },
   };
   const player = { isPlayer: true, s: 100, team: "p" };
-  const behind = { s: 80, team: "b" }, ahead = { s: 130, team: "a" };
+  const behind = { s: 80, team: "b" }, ahead = { s: 130, team: "a" }, far = { s: -100, team: "f" };   // far: 200 m back
   const G = {
-    gfx, state, player, cars: [player, behind, ahead], track: { total: 5000 }, camMode: ["chase", "far", "drift", "cockpit"].indexOf(cam),
+    gfx, state, player, cars: [player, behind, ahead, far], track: { total: 5000 }, camMode: ["chase", "far", "drift", "cockpit"].indexOf(cam),
     dbgCam: null, hideMeshes: {}, frozen: false,
     store: { get: (k, d) => (k in stored ? stored[k] : d), set: (k, v) => { stored[k] = v; } },
   };
   const deps = {
-    drawWorldMeshes: (frame) => { calls.push(["world", frame.viewProj]); if (throwInWorld) throw new Error("boom"); },
+    drawWorldMeshes: (frame) => { calls.push(["world", frame.viewProj, frame.mirrorLite]); if (throwInWorld) throw new Error("boom"); },
     teamMesh: (team) => "mesh:" + team,
     renderPosOf: (c) => ({ world: true, x: 0, z: c.s }),
     playerAnchor: (c) => ({ cS: c.s, cX: 0 }),
@@ -133,7 +133,7 @@ test("the pass order, the rect, and the frame handed back untouched", () => {
   const h = boot({ mode: "on" });
   h.render();
   const kinds = h.calls.map((c) => c[0]);
-  assert.deepEqual(kinds, ["rect", "begin", "world", "draw", "sky", "end"],
+  assert.deepEqual(kinds, ["rect", "begin", "world", "draw", "draw", "sky", "end"],
     "rect, then begin → world → cars → sky → end (opaque before sky)");
   const [, rect] = h.calls[0];
   assert.deepEqual(Array.from(rect, (v) => +v.toFixed(4)), [0.3438, 0.0972, 0.3125, 0.1583]);
@@ -158,7 +158,7 @@ test("it looks BACK: the rival behind is drawn, the one ahead is not, the player
   const h = boot({ mode: "on" });
   h.render();
   const draws = h.calls.filter((c) => c[0] === "draw");
-  assert.deepEqual(draws.map((c) => c[1]), ["mesh:b"]);
+  assert.deepEqual(draws.map((c) => c[1]), ["mesh:b", "mesh:f"]);
   assert.equal(draws[0][2][14], 80, "at the rival's own place on the road");
   // The mirror camera's view matrix maps a point 20 m behind the car to −Z (in
   // front of a GL camera) and one 20 m ahead to +Z (behind it).
@@ -175,4 +175,37 @@ test("a draw that throws still ends the pass and hands the main camera back", ()
   assert.equal(h.frame.viewProj, h.mainVP);
   assert.equal(h.frameSky.invViewProj, h.mainInv);
   assert.deepEqual(h.frame.eye, [0, 5, 90]);
+});
+
+test("a phone gets the LITE pass: no prop batches, a short radius, fewer rivals, a smaller target, every frame", () => {
+  const full = boot({ mode: "on" });
+  full.render();
+  const fw = full.calls.find((c) => c[0] === "world");
+  assert.equal(fw[2], false, "desktop: the full world");
+  assert.equal(full.mp.state().lite, false);
+  const h = boot({ mode: "on", mobile: true });
+  h.render();
+  const [, w, ht, , , cull] = h.calls.find((c) => c[0] === "begin");
+  assert.equal(w, 240); assert.equal(ht, 68);   // 60% of the 400x114 frame
+  assert.ok(cull > 0 && cull <= 180, "the 180 m lite radius");
+  assert.equal(h.calls.find((c) => c[0] === "world")[2], true, "drawWorldMeshes sees frame.mirrorLite");
+  assert.equal(h.frame.mirrorLite, undefined, "and the flag comes off with the mirror camera");
+  assert.equal(h.mp.state().lite, true);
+  // The rival 200 m back is inside the full reach (260) and outside the lite one (140).
+  assert.deepEqual(full.calls.filter((c) => c[0] === "draw").map((c) => c[1]).sort(), ["mesh:b", "mesh:f"]);
+  assert.deepEqual(h.calls.filter((c) => c[0] === "draw").map((c) => c[1]), ["mesh:b"]);
+  // Every frame — the half cadence was the lag. Governor tier 1 is lite too.
+  h.render(); h.render();
+  assert.equal(h.calls.filter((c) => c[0] === "begin").length, 3);
+  const t1 = boot({ mode: "on", tier: 1 });
+  t1.render(); t1.render(); t1.render();
+  assert.equal(t1.calls.filter((c) => c[0] === "begin").length, 3, "tier 1: every frame");
+  assert.equal(t1.mp.state().lite, true);
+});
+
+test("only governor tier 2 halves the cadence", () => {
+  const h = boot({ mode: "on", tier: 2 });
+  for (let i = 0; i < 4; i++) h.render();
+  // Frame 1 always draws (nothing to show yet); after that every other frame.
+  assert.equal(h.calls.filter((c) => c[0] === "begin").length, 3);
 });
