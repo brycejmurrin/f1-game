@@ -341,4 +341,144 @@ test.describe("pit lane", () => {
       `only ${out.laneIn}/${out.laneIn + out.laneOut} of the lane run was actually in the lane`)
       .toBeGreaterThan(0.7);
   });
+
+  test("during a stop the crew draws and the tyres visibly swap", async ({ page }) => {
+    // Root cause this pins: cockpit/visor skipped drawPitCrew, the kit had no
+    // people, and serviceCar fitted at latch so the axle slide never showed a
+    // compound change. Chase cam + a real render path (not headless) + the
+    // stop's own anim clock prove the crew mesh submitted and the wheels came
+    // off with the old set still fitted, then the new set landed mid-hold.
+    await armedAt(page, { track: "bahrain", solo: true });
+    const out = await page.evaluate(async () => {
+      const A = window.__apex;
+      A.tyres({ fit: "hard" });
+      const before = A.tyres();
+      // Find the working-lane box.
+      let boxF = null, boxX = null;
+      for (let f = 0.88; f < 1.0; f += 0.001) {
+        A.jump(f, 0, 0); A.aim(0);
+        const p = A.pit();
+        if (!(p && p.inWindow && p.laneX != null)) continue;
+        A.jump(f, 0, p.laneX); A.aim(0);
+        const p2 = A.pit();
+        if (p2 && p2.inBoxLat) { boxF = f; boxX = p2.laneX; break; }
+      }
+      if (boxF == null) return { error: "no box found" };
+      A.jump(boxF, 0, boxX); A.aim(0);
+      A.pit({ arm: true });
+      let latched = false;
+      for (let i = 0; i < 60 * 40; i++) {
+        const ps = A.physState(), p = A.pit();
+        const target = p.laneX != null ? p.laneX : boxX;
+        const dist = (p.boxM != null && p.atM != null) ? (p.boxM - p.atM) : 99;
+        const want = dist > 0 ? Math.min(p.limitKph / 3.6, Math.sqrt(2 * 5 * Math.max(dist, 0.5))) : 0;
+        A.setInput({
+          steer: Math.max(-1, Math.min(1, (target - ps.x) * 0.35)),
+          throttle: ps.speed < want, brake: ps.speed > want * 1.05 || dist < 8,
+        });
+        A.step(1 / 60, 1);
+        if (A.pit().state === "box") { latched = true; break; }
+      }
+      if (!latched) return { error: "never latched", pit: A.pit() };
+
+      // Early hold: wheels may still be on, set not yet fitted.
+      const early = [];
+      for (let i = 0; i < 20; i++) {
+        A.step(1 / 60, 1);
+        const p = A.pit();
+        if (p.state !== "box") break;
+        early.push({
+          u: p.anim && p.anim.u, off: p.anim && p.anim.off, fitted: p.anim && p.anim.fitted,
+          code: (A.tyres() || {}).code || (A.tyres() || {}).id,
+        });
+      }
+
+      // Drive the hold to mid-stop (wheels fully off, fit due at u>=0.5).
+      let mid = null;
+      for (let i = 0; i < 60 * 3; i++) {
+        A.step(1 / 60, 1);
+        const p = A.pit();
+        if (p.state !== "box") break;
+        if (p.anim && p.anim.u >= 0.35 && p.anim.u <= 0.65) {
+          mid = {
+            u: p.anim.u, off: p.anim.off, lift: p.anim.lift, fitted: p.anim.fitted,
+            code: (A.tyres() || {}).code || (A.tyres() || {}).id,
+            colour: (A.tyres() || {}).colour,
+            crew: p.crew,
+          };
+          if (p.anim.u >= 0.50) break;
+        }
+      }
+      if (!mid) {
+        // One more peek at whatever the hold currently is.
+        const p = A.pit();
+        mid = { u: p.anim && p.anim.u, off: p.anim && p.anim.off, fitted: p.anim && p.anim.fitted,
+                code: (A.tyres() || {}).code, crew: p.crew, state: p.state };
+      }
+
+      // Render path: chase cam, not headless, so drawPitCrew actually runs.
+      A.headless(false);
+      A.camera("chase");
+      if (A.snapCam) A.snapCam();
+      A.pit(); // clear the draw counter
+      await new Promise((r) => {
+        let n = 0;
+        const tick = () => { if (++n >= 12) r(); else requestAnimationFrame(tick); };
+        requestAnimationFrame(tick);
+      });
+      const afterFrames = A.pit();
+
+      // Cockpit must also submit the crew (the regression that skipped it).
+      A.camera("cockpit");
+      if (A.snapCam) A.snapCam();
+      A.pit();
+      await new Promise((r) => {
+        let n = 0;
+        const tick = () => { if (++n >= 8) r(); else requestAnimationFrame(tick); };
+        requestAnimationFrame(tick);
+      });
+      const cockpitFrames = A.pit();
+
+      // Finish the stop so the car is released with a fresh set.
+      for (let i = 0; i < 60 * 5; i++) {
+        A.step(1 / 60, 1);
+        if (A.pit().state === "out" || A.pit().state === "none") break;
+      }
+      const after = A.tyres();
+      return {
+        before: { code: before.code || before.id, colour: before.colour, wear: before.wear },
+        early,
+        mid,
+        chaseDrawn: afterFrames.crewDrawn,
+        chaseCrew: afterFrames.crew,
+        cockpitDrawn: cockpitFrames.crewDrawn,
+        after: { code: after.code || after.id, wear: after.wear, stints: after.stints },
+        stops: A.pit().stops,
+        people: typeof CarMesh !== "undefined" ? CarMesh.CREW_PEOPLE : null,
+      };
+    });
+
+    expect(out.error, out.error ? `${out.error} ${JSON.stringify(out.pit || {})}` : "").toBeUndefined();
+    expect(out.people, "CarMesh.CREW_PEOPLE must name the six figures").toBe(6);
+    expect(out.mid.crew, "crew mesh must build during the stop").toBeTruthy();
+    expect(out.mid.crew.people, "the kit must include the six crew figures").toBeGreaterThanOrEqual(6);
+    expect(out.mid.crew.verts, "crew mesh must have geometry").toBeGreaterThan(100);
+    // Wheels off in the middle of the hold.
+    expect(out.mid.off, `wheels not off at mid-stop (u=${out.mid.u})`).toBeGreaterThan(0.4);
+    expect(out.mid.lift, "car not on the jacks at mid-stop").toBeGreaterThan(0.15);
+    // Fit lands mid-hold, not at latch: early samples are unfitted / old code.
+    const earlyUnfitted = (out.early || []).filter((s) => s.u != null && s.u < 0.45);
+    expect(earlyUnfitted.length, "need early-hold samples before the fit").toBeGreaterThan(0);
+    expect(earlyUnfitted.every((s) => !s.fitted),
+      `set was fitted before the wheels came off: ${JSON.stringify(earlyUnfitted.slice(0, 3))}`)
+      .toBe(true);
+    expect(out.mid.fitted || out.after.stints >= 2,
+      "fresh set must land by mid-hold or by release").toBe(true);
+    // Chase and cockpit both submit the crew mesh on a live frame.
+    expect(out.chaseDrawn, "chase cam never drew the pit crew").toBeGreaterThan(0);
+    expect(out.cockpitDrawn, "cockpit cam never drew the pit crew").toBeGreaterThan(0);
+    expect(out.stops).toBe(1);
+    expect(out.after.wear, "set must be fresh after the stop").toBeLessThan(0.02);
+    expect(out.after.stints).toBeGreaterThanOrEqual(2);
+  });
 });

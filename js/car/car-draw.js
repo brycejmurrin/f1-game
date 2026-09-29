@@ -591,11 +591,14 @@ const CarDraw = (function () {
     }
     const _cq = [], _cqMesh = [];
     let _cqN = 0;
-    // THE STOP'S KIT at a car held in its box (CarMesh.getCrewMesh): the two
-    // jacks and a wheel gun at each wheel, on the ground in the grounded
-    // basis (the jacks lift the car, not themselves). Within 90 m of the
-    // camera; nothing for a car that is not stopped.
-    const _crewOpts = { emissive: 0 };
+    // THE STOP'S CREW at a car held in its box (CarMesh.getCrewMesh): the two
+    // jacks, a wheel gun at each wheel, and the six people who work them, on
+    // the ground in the grounded basis (the jacks lift the car, not
+    // themselves). Within 90 m of the camera; nothing for a car that is not
+    // stopped. doubleSided: the car basis is a reflection (det −1), and
+    // FrontSide alone culls the kit.
+    const _crewOpts = { emissive: 0, doubleSided: true };
+    let _crewDrawn = 0;   // frames that actually submitted the crew mesh (spec / __apex.pit)
     function drawPitCrew(c, base, opt) {
       if (!c || c.pitState !== "box") return false;
       const dx = base[12] - G.camEye[0], dy = base[13] - G.camEye[1], dz = base[14] - G.camEye[2];
@@ -604,8 +607,10 @@ const CarDraw = (function () {
       const m = getCrewMesh(col);
       if (!m) return false;
       G.gfx.draw(m, base, opt || _crewOpts);
+      _crewDrawn++;
       return true;
     }
+    function pitCrewDrawn() { const n = _crewDrawn; _crewDrawn = 0; return n; }
     function drawPlayerWheels(c, base, dt, opt, frontsOnly, fwdOffset, wScale) {
       const wm = c.isPlayer ? getPlayerWheelMeshes() : getFieldWheelMeshes(c.team);
       c.wheelSpin = ((c.wheelSpin || 0) + (c.speed / PhysicsConsts.WHEEL_R) * dt) % (Math.PI * 2);
@@ -773,7 +778,7 @@ const CarDraw = (function () {
       teamMesh, teamBodyMesh, playerBodyMesh, cockpitBodyMesh,
       teamDecalState, carDecalNum, getCarDecalTexture, invalidateDecalTextures,
       drawCarDecals, queueCarDecals, beginDecals, flushDecals,
-      drawPlayerWheels, drawPitCrew, drawCockpitRig,
+      drawPlayerWheels, drawPitCrew, pitCrewDrawn, drawCockpitRig,
       warmCarAssets, prepareMenuCarAssets, loadCarModel, buildCarData,
       setPlayerParts, invalidateCustomMeshCaches,
       WHEELS,

@@ -401,6 +401,8 @@ interface GameCtx {
   raceTyreWear: TyreLevel;
   readonly tyres: TyreSession;
   readonly pits: PitSession;
+  /** Frames that submitted the pit-crew mesh since the last read; __apex.pit() drains it. */
+  readonly pitCrewDrawn: () => number;
   readonly roadWetness: () => number;
   readonly recordControls: () => Record<string, unknown>;
   readonly records: { key(): string | null; current(): string; config(): Record<string, unknown>; invalidate(): void; prepareDaily(): void; restoreDaily(): void; board(id: string): TTBoardRow[] };
