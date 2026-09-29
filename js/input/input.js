@@ -2174,7 +2174,7 @@ const Input = (function () {
     oeInit = false; tiltSteerVal = 0;
   }
 
-  // Specs must wait for this — NOT for Input.steer / Input.simTilt existing.
+  // Specs must wait for ready() — NOT for Input.steer / Input.simTilt existing.
   // Those are on the IIFE return value the moment input.js evaluates, which is
   // BEFORE game.js reaches Input.init() (and the boot Input.setSteerMode that
   // follows it in the same sync stretch). Waiting only for the API object is
@@ -2184,7 +2184,9 @@ const Input = (function () {
   // CI run 36638762096 (#6199) failed three assertions with exactly that shape
   // (live-vs-sim diff = the default map at 12°, button pumps at 0). ready flips
   // at the END of init; by the time a Playwright poll can observe it, the sync
-  // boot setSteerMode after init has also run.
+  // boot setSteerMode after init has also run. Exported as ready() (a function,
+  // not a getter) so a bare `Input.ready` truthiness check cannot pass on the
+  // unbound method before init — same contract as the concurrent touch-pedals fix.
   let ready = false;
 
   function init(canvas, opts) {
@@ -2513,9 +2515,9 @@ const Input = (function () {
     get gyroSeen() { return tiltSeen; },
     get gyroDenied() { return gyroDenied; },
     get gyroHardDenied() { return gyroHardDenied; },
-    // True once init() has finished wiring listeners. Specs wait on this — see
-    // the ready declaration. Not cleared by reset(); a page load is one init.
-    get ready() { return ready; },
+    // True once init() has finished wiring listeners. Specs wait on ready() —
+    // see the ready declaration. Not cleared by reset(); a page load is one init.
+    ready: () => ready,
     // Exported for js/camera/photo-cam.js, whose hold buttons capture the pointer
     // the same way and need the same "was the button taken away?" test.
     holdTargetGone,

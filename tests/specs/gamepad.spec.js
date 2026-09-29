@@ -63,9 +63,15 @@ test.describe.configure({ timeout: 300_000 });
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
-  // Input.ready, not Input.poll: the API object exists before Input.init() wires
-  // listeners (same race as touch-buttons / tilt-pipeline — see Input.ready).
-  await page.waitForFunction(() => typeof Input !== "undefined" && Input.ready, null, { polling: 100, timeout: BOOT_MS });
+  // Input.ready() alone is not enough here: several cases call __apex.race
+  // immediately, and bootAgentSurface fills __apex AFTER Input.init (the
+  // await that follows the sync stretch). Waiting only for ready() left
+  // startRaceForPad reading null on CI's selected-specs shard.
+  await page.waitForFunction(
+    () => typeof Input !== "undefined" && Input.ready && Input.ready() && window.__apex != null,
+    null,
+    { polling: 100, timeout: BOOT_MS },
+  );
   // clear any latched edges / held keys between cases
   await page.evaluate(() => Input.reset());
 });
