@@ -167,6 +167,24 @@ test("the axle call names an END of the car and what to do about it", () => {
   assert.equal(line({ axle: E.AXLE_SPLIT - 0.01, step: -1 }), "");
 });
 
+test("the axle call is reachable on a real stint: it reads the WEAR split, not the grip ratio", () => {
+  // It measured |gripF/grip - gripR/grip|, and grip falls only 5 % across a
+  // whole stint before the cliff: the gap peaked near 0.016 against a 0.18
+  // threshold, and past the cliff "GONE" outranks it. It never fired.
+  const { eng, tyres } = sessionFor();
+  const c = carOn(tyres, { wear: 0.7 });
+  c.tyreWearF = 0.84; c.tyreWearR = 0.56;             // a stint that leaned on the fronts
+  let s = eng.senseOf(c);
+  assert.ok(s.axle >= E.AXLE_SPLIT, `a 0.4 wear split must reach the call: ${s.axle}`);
+  assert.equal(s.front, true);
+  c.tyreWearF = 0.742; c.tyreWearR = 0.658;           // the neutral tilt (AXLE_REST 0.06): nothing to say
+  s = eng.senseOf(c);
+  assert.ok(s.axle < E.AXLE_SPLIT, `a neutral lap's split is not a call: ${s.axle}`);
+  const early = carOn(tyres, { wear: 0.3 });
+  early.tyreWearF = 0.4; early.tyreWearR = 0.2;
+  assert.equal(eng.senseOf(early).axle, 0, "too early in the stint to name an end");
+});
+
 test("a defect outranks the axle call — 'brake earlier' is the wrong answer to graining", () => {
   assert.match(line({ graining: 1, axle: 1, front: true }), /GRAINING/);
 });
