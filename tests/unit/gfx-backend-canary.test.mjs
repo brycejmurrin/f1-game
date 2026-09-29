@@ -4628,6 +4628,7 @@ test("TLX defers resize during compilation and applies the latest requested size
   let renderScale = 0.5, _softReadEpoch = 0, _softReadQueued = null;
   let _gpuLastResize = null, _gpuLastOperation = "compile-scene";
   let _glMaxDim = -1, _glMaxTries = 0;   // resize()'s once-per-device WebGL2 texture ceiling
+  let _xrActive = false;                 // immersive-vr skip (tlx.js attachXrSession)
   const DPR_CAP = 1.5;
   const window = { innerWidth: 1100, innerHeight: 500, devicePixelRatio: 3 };
   const _layoutCanvas = { clientWidth: 1100, clientHeight: 500 }, _displayCanvas = null;
