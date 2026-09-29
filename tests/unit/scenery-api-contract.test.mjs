@@ -191,6 +191,17 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
       "paul-ricard-cabanon",
       "paul-ricard-drywall",
     ],
+    // Wave 6 — Buenos Aires (Gálvez): classic pit/tower/portico + Curvón
+    // terrace, Confitería café, 27 de Febrero talud gate. Flag avenue is
+    // UNCERTAIN — generic poles only, no required modelGroup.
+    buenos_aires: [
+      "baires-pit-block",
+      "baires-control-tower",
+      "baires-portico",
+      "baires-terrace-curvon",
+      "baires-confiteria",
+      "baires-talud-gate",
+    ],
   };
   for (const [track, ids] of Object.entries(expected)) {
     const body = landmarkSource(track);
