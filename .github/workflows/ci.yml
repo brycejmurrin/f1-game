@@ -480,6 +480,7 @@ jobs:
               # livery rasters (7-10 s each) run only here.
               npm run test:garage-unit
               npm run test:steering-unit
+              npm run test:desktop-unit
               # The CLI-only MCP wrappers were here as test:mcp until 2026-09-10;
               # those suites (tinyfish-mcp, probe-mcp) moved to tests/manual/ and
               # their fast-gate half is mcp-cli. environment-json stays gated below.

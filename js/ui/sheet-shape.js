@@ -403,7 +403,20 @@ window.SheetShape = (function () {
     const onB = tallOn(), offB = onB - TALL_HYST;
     const nowShape = wasShape === "tall" ? (ratio <= offB ? "wide" : "tall")
       : (ratio >= onB ? "tall" : "wide");
-    if (nowShape !== wasShape) b.dataset.shape = nowShape;
+    if (nowShape !== wasShape) {
+      b.dataset.shape = nowShape;
+      /* TITLE SCROLLERS SWAP ROLES across the flip. Tall phones scroll
+         #overlay (or grow #menu-buttons to content); wide+compact scrolls
+         #menu-buttons in its side column. A leftover scrollTop from the
+         previous shape parks doors above/below the new scrollport after a
+         rotation — CAREER above the fold on landscape, HELP unreachable
+         until the player finds the other scroller. Zero both whenever the
+         shape answer changes; ScrollFade's next paint refreshes the fades. */
+      const ov = document.getElementById("overlay");
+      const mb = document.getElementById("menu-buttons");
+      if (ov) ov.scrollTop = 0;
+      if (mb) mb.scrollTop = 0;
+    }
   }
 
   /* THE REGISTRY MUST FORGET. `seen` is a STRONG Set and `ro.observe` is a
@@ -505,6 +518,13 @@ window.SheetShape = (function () {
          so resize alone misses the occlusion changing.
        - rAF coalescing: iOS fires resize storms during the keyboard
          animation; one write per frame is plenty. */
+  /* Keyboard apply is shared with the rotation-settle path below. Declared
+     here so onViewport can re-ask after iOS's late size settle; assigned
+     inside watchKeyboard once visualViewport is confirmed present. A
+     no-op stub keeps settle safe when vv is missing (desktop / unit harness
+     without a shim). */
+  let applyKeyboard = () => {};
+
   function watchKeyboard() {
     const vv = window.visualViewport;
     if (!vv) return;
@@ -537,6 +557,7 @@ window.SheetShape = (function () {
         ae.scrollIntoView({ block: "nearest" });
       }
     };
+    applyKeyboard = apply;
     const onvv = () => { if (!raf) raf = requestAnimationFrame(apply); };
     vv.addEventListener("resize", onvv, { passive: true });
     vv.addEventListener("scroll", onvv, { passive: true });
@@ -572,13 +593,31 @@ window.SheetShape = (function () {
      2026-09-29, iPhone landscape). So every viewport event answers now AND
      re-asks after the rotation has had time to land; classifyBody() is
      idempotent, so the extra asks cost nothing when the first was right.
-     https://bugs.webkit.org/show_bug.cgi?id=170595 */
+     https://bugs.webkit.org/show_bug.cgi?id=170595
+
+     THE KEYBOARD BAND MUST RE-ASK ON THE SAME TIMERS. #427's settle path
+     only reclassified shape/density. watchKeyboard's window listeners fix
+     the case where a resize DOES fire after sizes land, but the same iOS
+     "no event on settle" hole left --kb latched at the mismatched mid-
+     rotation value (844-390=454) forever — every .screen opened from the
+     title then carried 454px of padding-bottom in a 390px viewport. The
+     settle ask below is what closes that half; the unit test pins it. */
   const SETTLE_MS = [250, 700, 1500];
   let settleTimers = [];
-  function onViewport() {
+  function settleViewport() {
     reclassify();
+    applyKeyboard();
+    /* ScrollFade's own settle is 120/400 ms — shorter than iOS's rotation
+       animation — so a late shape flip would leave sf-* / thumb tokens on
+       the pre-rotation boxes. Poke it whenever we re-ask. */
+    if (window.ScrollFade && typeof window.ScrollFade.refresh === "function") {
+      window.ScrollFade.refresh();
+    }
+  }
+  function onViewport() {
+    settleViewport();
     settleTimers.forEach(clearTimeout);
-    settleTimers = SETTLE_MS.map((ms) => setTimeout(reclassify, ms));
+    settleTimers = SETTLE_MS.map((ms) => setTimeout(settleViewport, ms));
   }
 
   function init() {
