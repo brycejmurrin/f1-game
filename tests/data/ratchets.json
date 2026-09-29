@@ -68,7 +68,7 @@
       "slack": 0
     },
     "rawColorDistinct": {
-      "ceiling": 180,
+      "ceiling": 179,
       "slack": 0
     },
     "zeroRefModules": {

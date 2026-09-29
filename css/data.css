@@ -361,8 +361,8 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 .dh-table tbody tr[aria-expanded] { cursor: pointer; }
 .dh-table tbody tr[aria-expanded] > td:first-child::before { content: "\25B8"; display: inline-block; width: 1.1em; opacity: 0.7; transition: transform 0.15s; }
 .dh-table tbody tr[aria-expanded="true"] > td:first-child::before { transform: rotate(90deg); opacity: 1; }
-.dh-table tbody tr[aria-expanded="true"] { background: rgba(255,255,255,0.04); }
-.dh-table tbody tr.dh-lap-board > td { padding: 0 0 calc(var(--gap) * 0.5) calc(var(--gap) * 1.2); background: rgba(0,0,0,0.18); }
+.dh-table tbody tr[aria-expanded="true"] { background: rgba(255,255,255,0.05); }
+.dh-table tbody tr.dh-lap-board > td { padding: 0 0 calc(var(--gap) * 0.5) calc(var(--gap) * 1.2); background: rgba(255,255,255,0.03); }
 @media (prefers-reduced-motion: reduce) { .dh-table tbody tr[aria-expanded] > td:first-child::before { transition: none; } }
 .dh-td-pos { width: 26px; text-align: right; color: var(--dim); }
 /* chip + driver name side by side in the driver cell */
