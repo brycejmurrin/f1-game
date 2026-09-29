@@ -836,3 +836,16 @@ test("a real race's story is the script's driver, never the roster seat's name, 
   assert.match(body, /const race = [^;]*&& !info\.real;/, "the seat / championship / goal / forecast rows stand down for a real race");
   assert.match(body, /if \(info\.real\) st\.real = info\.real;/);
 });
+
+test('turning off an idle announcer does not cancel a different speaker', () => {
+  const {A: An,G,synth}=load(); const ann=An.create(G);
+  const before=synth.calls.filter(c=>c.m==='cancel').length;
+  ann.stop(); ann.setEnabled(false);
+  assert.equal(synth.calls.filter(c=>c.m==='cancel').length,before);
+});
+
+test('starting an announcer audition releases the radio owner and pending cue', () => {
+  const {A: An,G}=load(); let stops=0;
+  G.radio.stop=()=>{stops++;};
+  const ann=An.create(G); assert.equal(ann.sample(),true); assert.equal(stops,1); ann.stop();
+});

@@ -610,6 +610,27 @@ function getCockpitWheel(liv) {
   cockpitWheelMesh = _gfx.createMesh(out);
   return cockpitWheelMesh;
 }
+// The COLUMN AND BULKHEAD a wheel clips onto, for VISOR — the cockpit with the
+// wheel taken off (js/camera/vantage.js). Without them the view looked down
+// onto a bare deck with the halo pillar hanging in the air. Wheel-local like
+// getCockpitWheel and drawn at the same _rigT, never rolled: the quick-release
+// boss sits where the wheel's hub was, the column runs forward (+z, away from
+// the driver) into a carbon front bulkhead that closes the front of the opening
+// wall to wall (0.76 local = x ±0.30 world, the tub's inner walls are at ±0.315).
+// Neutral carbon, so it needs no livery key.
+let cockpitDashMesh = null;
+function getCockpitDash() {
+  if (cockpitDashMesh) return cockpitDashMesh;
+  const out = { pos: [], nrm: [], col: [], idx: [] };
+  const CARB = [0.04, 0.04, 0.05], DARK = [0.015, 0.015, 0.02], MET = [0.30, 0.30, 0.33];
+  _rigBox(out, 0, -0.012, 0.17, 0.062, 0.062, 0.30, CARB);        // steering column into the bulkhead
+  _rigBox(out, 0, 0, 0.020, 0.085, 0.085, 0.034, MET);             // quick-release boss where the hub clips on
+  _rigBox(out, 0, 0, 0.001, 0.040, 0.040, 0.006, DARK);            // its spline socket, facing the driver
+  _rigBox(out, 0, -0.090, 0.32, 0.76, 0.32, 0.035, CARB);          // front bulkhead, down to the coaming (world y 0.43..0.69)
+  _rigBox(out, 0, 0.068, 0.305, 0.74, 0.012, 0.030, [0.10, 0.10, 0.12]); // its top lip
+  cockpitDashMesh = _gfx.createMesh(out);
+  return cockpitDashMesh;
+}
 const _ledMeshes = {};
 // `lit` 0-8 lights that many LEDs left-to-right. 9 is the SHIFT FLASH: a real
 // wheel does not just fill the strip and stop — at the shift point the whole
@@ -882,6 +903,6 @@ function getOtLamp(active) {
   return m;
 }
 
-  return { init, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getCompoundRing, getCrewMesh, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRearLights, drawTailGlow, drawMirrorLights, ersLightCode, gridStrobe };
+  return { init, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getCompoundRing, getCrewMesh, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getCockpitDash, getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRearLights, drawTailGlow, drawMirrorLights, ersLightCode, gridStrobe };
 })();
 Object.freeze(CarMesh);

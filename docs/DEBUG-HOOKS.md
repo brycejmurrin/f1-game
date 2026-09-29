@@ -325,7 +325,11 @@ setting); `weather` is `"dry" | "wet" | "rain" | "overcast" | "fog"` (`"wet"` =
 damp road no rain; `"rain"` = wet road + falling rain). `opts.laps` (integer > 0)
 sets the race distance for this session instead of the game default — the
 AI draws its tyre compound from the distance at grid-up, so a strategy
-bench needs it. The recommended entry point for any harness.
+bench needs it. `opts.grid` (`"tier" | "quali" | "rev10" | "revchamp" |
+"random"`) pins the one-off's grid rule; it is in-memory state, and a guest in a
+friend room takes the HOST's, so on a shared page a later solo start inherited
+`"quali"`, opened qualifying and rejected with "did not reach the grid".
+The recommended entry point for any harness.
 
 ### `tt(trackRef, timeOfDay?) → {track, timeTrial} | false`
 Load a circuit and start a **Time Trial** session (solo, no AI, `timeTrial: true`).
@@ -439,7 +443,7 @@ display label such as `"TV SIDE"` — returns `false`.
 | `low` | LOW | Low-angle drama: eye skims the track surface 10 m behind, looking up at the car silhouetted against the sky |
 | `tcam` | T-CAM | Broadcast roll-hoop (airbox) camera — narrow telephoto mounted 1.3 m above the car, looking forward |
 | `rear` | REAR CAM | Rear-mounted onboard at the car's tail looking back down the track (unlike `reverse` which floats ahead) |
-| `visor` | VISOR | The cockpit eye slid 0.55 m forward, past the wheel and halo: the same height, aim and turn chasing as `cockpit`, with no rig and no player body drawn. PHONE AS CONTROLLER selects it when the phone links (the phone is the wheel) and restores the camera it left when the phone is gone, unless you cycled away meanwhile |
+| `visor` | VISOR | The cockpit without its steering wheel: the same eye, tub, halo, mirrors and front wheels as `cockpit`, with the wheel and its dash left out; a linked phone wheel switches to it |
 
 ```js
 __apex.camera();            // → { mode:"chase", index:0, modes:["chase","far","drift","cockpit","hood","overhead","heli","reverse","side","cinematic","low","tcam","rear","visor"] }

@@ -291,7 +291,10 @@ test("senseOf reads the plan and the field: the next stop lap, its compound, and
   G.pits = { estimate: () => ({ lossS: 22, gapS: 2, marginS: -20, caution: false }), lastCue: () => null };
   let s = eng.senseOf(c);
   assert.equal(s.lapsToStop, 3, "12 - 9");
-  assert.equal(s.nextCode, "H");
+  assert.equal(s.nextCode, null, "three laps out, no call names a set: it is resolved only for one");
+  c.pitPlan.lapsAt = [10];
+  assert.equal(eng.senseOf(c).nextCode, "H", "the lap before the stop, the call names it");
+  c.pitPlan.lapsAt = [12];
   assert.equal(s.rivalBoxed, null, "nobody has boxed yet");
   rival.pitStops = 1;                          // VER boxed this tick, 2 s behind: the undercut is on
   s = eng.senseOf(c);

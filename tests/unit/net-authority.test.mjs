@@ -894,3 +894,23 @@ test("a stale disconnect reason does not outlive the race: stop() on an inactive
   assert.equal(net.stop("local"), false, "nothing to stop…");
   assert.equal(net.status().reason, null, "…but the next solo race must not read 'Disconnected'");
 });
+
+// ---- the own-car snapshot is stamped when its POSE is, not when the frame is ----
+// netPlay.tick runs BEFORE the frame's physics steps, so the pose it publishes
+// is last frame's. Stamped `now`, every rival drew us 16–33 ms (a metre or more
+// at speed) behind where we actually were (bug hunt 2026-09-28).
+test("the published snapshot carries the pose time the game loop hands in", () => {
+  const G = stubG();
+  const net = NetPlay.create(G);
+  const s = fakeSession();
+  const ticks = [];
+  s.sendState = (bytes) => { const d = NetSnapshot.decodeSnapshot(bytes); if (d) ticks.push(d.tick); return true; };
+  assert.equal(net.start({ role: "guest", session: s }).ok, true);
+  net.tick(10000, 9978);                         // pose 22 ms old: last frame's physics
+  assert.deepEqual(ticks, [9978], "stamped with the pose time");
+  net.tick(20000);                               // a test pumping by hand: the pose is `now`
+  assert.deepEqual(ticks.slice(1), [20000]);
+  net.tick(30000, 30050);                        // from the future: not a clock we trust
+  net.tick(40000, 39000);                        // a second old: a stall, not last frame
+  assert.deepEqual(ticks.slice(2), [30000, 40000], "out-of-bounds pose times fall back to the frame");
+});

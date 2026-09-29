@@ -18,7 +18,7 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
-function audioPanelHarness() {
+function audioPanelHarness({ voiceUI = false } = {}) {
   const nodes = new Map();
   const element = () => ({
     hidden: false, disabled: false, value: "", textContent: "", innerHTML: "",
@@ -79,11 +79,34 @@ function audioPanelHarness() {
     },
     soundOn: false, musicEnabled: true, state: "menu",
   };
-  const context = vm.createContext({ GameAudio, SettingRow, Log: { info() {} } });
+  const voices = [{ name: "First", lang: "en-GB" }], tunes = {};
+  let recorded = true;
+  const makeNode = (tag) => {
+    const e = element(); e.tagName = tag; e.children = [];
+    e.appendChild = child => { e.children.push(child); return child; };
+    e.append = (...children) => children.forEach(e.appendChild);
+    e.removeChild = child => { e.children.splice(e.children.indexOf(child), 1); };
+    Object.defineProperty(e, "lastChild", {get: () => e.children.at(-1)});
+    Object.defineProperty(e, "id", {set: id => nodes.set(id, e)});
+    e.querySelectorAll = () => e.children.flatMap(c => [c, ...(c.querySelectorAll ? c.querySelectorAll() : [])]).filter(c => ['select','input','button'].includes(c.tagName));
+    return e;
+  };
+  const extras = voiceUI ? {
+    document: { createElement: makeNode, createTextNode: textContent => ({textContent}) },
+    RadioVoice: {PITCH_MIN:.5,PITCH_MAX:1.6,RATE_MIN:.6,RATE_MAX:1.35},
+  } : {};
+  if (voiceUI) {
+    for (const id of ['as-voices','as-ann-voice']) { const host = makeNode('div'); host.appendChild(makeNode('p')); nodes.set(id,host); }
+    G.radio = { available:()=>true, voiceList:()=>voices, tuneFor:ch=>({name:'',pitch:1,rate:1,...tunes[ch]}),
+      setTune:(ch,patch)=>{tunes[ch]={...tunes[ch],...patch};}, setPackOn:v=>{recorded=v;}, packOn:()=>recorded,
+      setEnabled(){}, unlock(){}, stop(){}, setVolume:v=>v, preview:ch=>{calls.push('preview:'+ch);} };
+    G.announcer = {available:()=>true,enabled:()=>false,stop(){},setEnabled(){},sample(){calls.push('ann-sample');}};
+  }
+  const context = vm.createContext({ GameAudio, SettingRow, Log: { info() {} }, ...extras });
   seedDom(context);   // the closed-fold summaries paint through Dom.paintFold
   vm.runInContext(`${audioPanelSource}\nglobalThis.__panel = AudioPanel;`, context,
     { filename: "js/audio/panel.js" });
-  return { panel: context.__panel.create(G), G, nodes, calls, writes, wired };
+  return { panel: context.__panel.create(G), G, nodes, calls, writes, wired, voices, tunes };
 }
 
 test("audio boot restore keeps saved master sound off when music is on", () => {
@@ -424,4 +447,30 @@ test("ordinary API writes sweep the cache at most once per five-minute window", 
   await h.api.weather(2, 0);
   assert.equal(afterFirst, 1, "first write should perform one age sweep");
   assert.equal(h.keyCalls(), afterFirst, "second response in the same batch must not rescan storage");
+});
+
+test('voice volume and auditions remain available with automatic radio and announcer off', () => {
+  const {G,nodes,wired,calls}=audioPanelHarness({voiceUI:true});
+  G.soundOn=true; wired.get('as-radio').write('off');
+  assert.equal(nodes.get('as-rvol').disabled,false);
+  assert.equal(nodes.get('as-v-coach-test').disabled,false);
+  assert.equal(nodes.get('as-v-announcer-test').disabled,false);
+  nodes.get('as-v-coach-test').onclick(); assert.ok(calls.includes('preview:coach'));
+});
+
+test('choosing an engineer system voice switches source, but coach tuning leaves it alone', () => {
+  const {G,nodes,wired,tunes}=audioPanelHarness({voiceUI:true});
+  G.soundOn=true; wired.get('as-radio').write('off');
+  const coach=nodes.get('as-v-coach');coach.value='First';coach.onchange();
+  assert.equal(G.radio.packOn(),true);
+  const engineer=nodes.get('as-v-radio');engineer.value='First';engineer.onchange();
+  assert.equal(G.radio.packOn(),false); assert.equal(tunes.radio.name,'First');
+});
+
+test('same-size voice-list replacements refresh both settings selectors', () => {
+  const {G,nodes,wired,voices}=audioPanelHarness({voiceUI:true});
+  G.soundOn=true; wired.get('as-radio').write('off');
+  voices[0]={name:'Replacement',lang:'en-GB'};
+  wired.get('as-radio').write('off');
+  for(const id of ['as-v-radio','as-v-announcer']) assert.ok(nodes.get(id).children.some(o=>o.value==='Replacement'),id);
 });

@@ -185,6 +185,7 @@ const PhonePad = (function () {
     transport.onClose(onClose);
 
     const armed = () => {
+      if (closed) return;
       input.setRemoteHaptics((ms) => { transport.send(T.EVENT, encodeHaptic(ms)); });
       transport.send(T.EVENT, encodeHello("host"));
       if (opts.onOpen) { try { opts.onOpen(); } catch (e) { /* caller's problem */ } }
@@ -275,7 +276,7 @@ const PhonePad = (function () {
           code, mine: invite.code, token,
           onTick: () => { if (phase === "waiting") say("Waiting for your phone… (room code " + code + ")"); },
           onFail: (r) => {
-            if (!r || r.error === "cancelled" || r.error === "stopped" || phase === "linked") return;
+            if (!r || r.error === "cancelled" || r.error === "stopped" || !["waiting", "connecting"].includes(phase)) return;
             if (r.advisory) { say(r.message, true); return; }
             phase = "failed"; say(r.message || "The room service went away — try again.", true);
           },
@@ -286,6 +287,7 @@ const PhonePad = (function () {
             phase = "connecting";
             say("Phone found — connecting…");
             const acc = await deps.acceptAnswer(transport, answer);
+            if (phase !== "connecting") return;
             if (!acc.ok) { accepted = false; phase = "waiting"; say(acc.message || "That answer could not be read.", true); return; }
             active = link(transport, {
               hud: ui.hud || null,
@@ -310,6 +312,10 @@ const PhonePad = (function () {
             });
           },
         });
+        if (!["waiting", "connecting"].includes(phase)) {
+          if (sub && sub.stop) { try { sub.stop(); } catch (e) { /* already stopped */ } }
+          return;
+        }
         if (!sub || !sub.ok) {
           if (phase === "waiting") { phase = "failed"; say((sub && sub.message) || "Could not open a room — check the connection.", true); }
           return;
@@ -356,6 +362,7 @@ const PhonePad = (function () {
       return transport.send(T.EVENT, encodeEvent(k));
     }
     transport.onMessage((channel, data) => {
+      if (closed) return;
       if (channel === T.STATE) {
         const h = decodeHud(data);
         if (h && opts.onHud) { huds++; try { opts.onHud(h); } catch (e) { /* page's problem */ } }
@@ -372,6 +379,7 @@ const PhonePad = (function () {
     };
     transport.onClose(close);
     const armed = () => {
+      if (closed) return;
       transport.send(T.EVENT, encodeHello("pad"));
       if (opts.heartbeat !== false) {
         beat = setInterval(() => send(true), HEARTBEAT_MS);
