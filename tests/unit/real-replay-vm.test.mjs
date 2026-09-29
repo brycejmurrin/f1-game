@@ -114,7 +114,8 @@ test("WATCH: the field becomes puppets on the countdown frame, the camera on the
     const RR = vm.runInContext("RealRace", g.ctx);
     const { script } = scriptIn(g);
     const traces = { frame: "track", cars: { 63: line(-14, 50, 0, -5, 200), 16: line(-22, 48, 1, -5, 200), 18: line(-30, 45, -1, -5, 60) } };
-    const staged = RR.launch(script, { seat: "LEC", watch: true, traces, startLap: 1 });
+    const savedCamera = G.camMode;
+    const staged = RR.launch(script, { seat: "LEC", watch: true, camera: "heli", traces, startLap: 1 });
     assert.deepEqual(host(staged), { trackId: "baku", laps: 51, seat: "LEC", startLap: 1, watch: true, reel: false });
     await g.settle(() => G.track && G.track.def && G.track.def.id === "baku" && (G.state === "count" || G.state === "race"), 8000);
     g.step(2);   // the countdown frame arms the director, which starts the replay
@@ -122,6 +123,10 @@ test("WATCH: the field becomes puppets on the countdown frame, the camera on the
     assert.equal(st.watch, true); assert.equal(st.armed, true);
     assert.ok(st.replay && st.replay.follow === "LEC" && st.replay.cars === 3, JSON.stringify(st.replay));
     assert.equal(G.player.code, "LEC", "the camera and HUD are on the seat");
+    assert.equal(G.camMode, 6, "WATCH uses the requested aerial camera");
+    assert.equal(G.store.get("camMode", savedCamera), savedCamera, "WATCH does not overwrite the driving camera");
+    G.setCamMode(11);
+    assert.equal(G.store.get("camMode", savedCamera), savedCamera, "manual WATCH camera changes also stay session-only");
     assert.ok(G.cars.every((c) => !c.human), "nobody drives");
     const by = (code) => G.cars.find((c) => c.code === code);
     assert.ok(RR.replay().owns(by("RUS")) && RR.replay().owns(by("LEC")) && RR.replay().owns(by("HAM")), "every car is the replay's");
@@ -157,6 +162,7 @@ test("WATCH: the field becomes puppets on the countdown frame, the camera on the
     g.step(1);
     assert.equal(RR.replay().isRunning(), false, "the replay stopped with the director at the results");
     assert.equal(RR.status().armed, false);
+    assert.equal(G.camMode, savedCamera, "leaving WATCH restores the driving camera");
   } finally { g.close(); }
 });
 
@@ -191,4 +197,32 @@ test("JUMP IN with the positions loaded drops each car exactly where its trace s
     assert.equal(G.cars.filter((c) => c.human).length, 1);
     assert.ok(G.track.total > total - 10 && G.track.total < total + 10);
   } finally { g.close(); }
+});
+
+test("WATCH snaps after posing on mid-race entry and seek, and releases camera ownership on restart", () => {
+  const ctx = vm.createContext({ M4: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) },
+    Log: { info() {}, warn() {} },
+    CamModes: { CAM_MODES: [{ id: "cockpit" }, { id: "heli" }] },
+    Tracks: { sample: (_track, s, out) => { out.p = [s, 0, 0]; out.t = [1, 0, 0]; out.r = [0, 0, 1]; out.hw = 7; } } });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-replay.js"), "utf8"), ctx);
+  const R = vm.runInContext("RealReplay", ctx), snaps = [], writes = [];
+  const car = { code: "RUS" }, driver = { code: "RUS", num: 63, pos: 1, lapStart: [0, 10] };
+  const G = { track: { total: 1000 }, cars: [car], state: "race", camMode: 0,
+    followCar: (c) => { G.player = c; }, snapGameCam: () => snaps.push(G.player.prog),
+    setCamMode: (m, opts) => { G.camMode = m; writes.push(opts.persist); } };
+  const replay = R.create(G);
+  const options = { script: { drivers: [driver] }, traces: { frame: "track", cars: { 63: line(0, 50, 0, 0, 30) } },
+    seats: new Map([[car, driver]]), startLap: 2, camera: "heli" };
+  assert.equal(replay.start(options), true);
+  assert.equal(snaps.at(-1), 500, "entry snap sees lap 2, not the grid");
+  replay.seek(20);
+  assert.equal(snaps.at(-1), 1000, "seek snap sees the new pose");
+  assert.equal(car.rPrevPx, car.px, "seek clears render interpolation from the previous position");
+  replay.start(options);
+  replay.stop();
+  assert.equal(G.camMode, 0, "re-entry retains the original driving camera");
+  assert.ok(writes.every((persist) => persist === false), "temporary camera writes never persist");
+  assert.equal(replay.start({ ...options, camera: "unknown" }), true);
+  assert.equal(G.camMode, 0, "unknown camera leaves the driving view usable");
+  replay.stop();
 });
