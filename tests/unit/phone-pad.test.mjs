@@ -730,3 +730,55 @@ test("controller.html carries exactly the manifest's CONTROLLER subset and both 
   assert.match(game, /hud: phonePadDash/, "game.js hands the dash sampler to PhonePad.host");
   assert.match(game, /function phonePadDash\(\)[\s\S]*dashKph\(p\.speed\)[\s\S]*cautionLevel\(\)/, "the sampler reads the HUD's own fields");
 });
+
+test('host cancellation wins over a late answer, successful or rejected', async () => {
+  for (const ok of [true, false]) {
+    let resolve;
+    const h = hostHarness({acceptAnswer: () => new Promise(r => { resolve = r; })});
+    await settle();
+    const answer = h.room.onJoiner(null, 'ANSWER');
+    h.ctl.cancel();
+    resolve({ok}); await answer; await settle();
+    assert.equal(h.ctl.state().phase, 'cancelled');
+    assert.equal(h.ctl.state().stats, null, 'a cancelled attempt cannot create a new input link');
+    assert.equal(h.ui.linkedN, 0);
+  }
+});
+
+test('host closes a room that arrives after cancellation and ignores its late failure', async () => {
+  let resolve, callbacks, stopped = 0;
+  const h = hostHarness({hostRoom: o => { callbacks = o; return new Promise(r => { resolve = r; }); }});
+  await settle(); h.ctl.cancel();
+  resolve({ok:true, stop(){stopped++;}}); await settle();
+  assert.equal(stopped, 1, 'the late room handle must not leak relay subscriptions');
+  const said = h.ui.said.length;
+  callbacks.onFail({error:'offline',message:'Old attempt failed'});
+  assert.equal(h.ctl.state().phase,'cancelled');
+  assert.equal(h.ui.said.length,said);
+});
+
+test('closed phone sessions ignore late packets and open callbacks', () => {
+  for (const side of ['host', 'pad']) {
+    const cb = {}, calls = [];
+    const transport = {status:'connecting', onMessage:f=>{cb.message=f;}, onClose:f=>{cb.close=f;}, onOpen:f=>{cb.open=f;},
+      send(){calls.push('send');return true;}, pump(){}, close(){cb.close();}};
+    const input = {remoteSample(){calls.push('sample');},remoteEvent(){calls.push('event');},remoteLost(){},setRemoteHaptics(h){if(h)calls.push('haptics');}};
+    const session = side === 'host' ? PhonePad.link(transport,{input,pump:false,onOpen(){calls.push('open');}})
+      : PhonePad.padSession(transport,{roll:()=>0,thr:()=>0,brk:()=>0,held:()=>0},
+          {heartbeat:false,onOpen(){calls.push('open');},onHud(){calls.push('hud');},vibrate(){calls.push('buzz');}});
+    session.close(); cb.open();
+    cb.message(NetTransport.STATE,side === 'host' ? PhonePad.encodeSample({seq:1,roll:10,thr:1,brk:0,held:0}) : PhonePad.encodeHud({state:'race'}));
+    cb.message(NetTransport.EVENT,PhonePad.encodeHaptic(50));
+    assert.deepEqual(calls,[],side);
+  }
+});
+
+test('a phone connecting before hostRoom returns still closes the late room without losing the link', async () => {
+  let resolve, callbacks, stopped = 0;
+  const h = hostHarness({hostRoom: o => {callbacks=o;return new Promise(r=>{resolve=r;});}});
+  await settle(); await callbacks.onJoiner(null,'ANSWER');
+  assert.equal(h.ctl.state().phase,'linked');
+  resolve({ok:true,stop(){stopped++;}}); await settle();
+  assert.equal(stopped,1); assert.equal(h.ctl.state().phase,'linked');
+  assert.equal(h.ui.linkedN,1); h.ctl.cancel();
+});

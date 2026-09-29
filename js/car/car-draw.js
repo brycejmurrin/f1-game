@@ -14,7 +14,7 @@
 const CarDraw = (function () {
   function create(G, deps) {
     Log.info("game", "CarDraw.create");
-    const { getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getCompoundRing, getCrewMesh, getCockpitWheel,
+    const { getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getCompoundRing, getCrewMesh, getCockpitWheel, getCockpitDash,
             getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras } = CarMesh;
 
     // ── cache-helpers ───────────────────────────────────────────────
@@ -402,7 +402,7 @@ const CarDraw = (function () {
     const _digT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
     const _digM = new Float32Array(16);
     const _rigFx = { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true }, _rigFxA = { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 1 };
-    function drawCockpitRig(c, base, dt, paint) {
+    function drawCockpitRig(c, base, dt, paint, noWheel) {
       const nite = G.raceTimeOfDay === "night" || (G.raceTimeOfDay === "default" && G.track.def.night);
       _cockpitOpts.emissive = nite ? 0.16 : 0;
       const opt = _cockpitOpts;
@@ -428,6 +428,15 @@ const CarDraw = (function () {
       queueCarDecals(c.team, base, carDecalNum(c.team, c), true, true);
       _cockpitWheelOpts.emissive = nite ? 0.12 : 0;
       drawPlayerWheels(c, base, dt, _cockpitWheelOpts, true, 0.30, 1.4);
+      // VISOR: the phone in the hand is the wheel — the bodywork stays, the
+      // steering wheel and the dash on it do not. What a car with its wheel
+      // unclipped shows instead: the column, its quick-release boss and the
+      // front bulkhead, fixed where the wheel mounts (no steering roll).
+      if (noWheel) {
+        M4.mulTo(_rigA, base, _rigT);
+        G.gfx.draw(getCockpitDash(), _rigA, opt);
+        return;
+      }
       // Roll the wheel about the (car-local) column axis by the smoothed steering —
       // works identically for tilt / buttons / touch (steerVis is the resolved,
       // damped steering whatever the input mode). A second, slower damping stage
