@@ -514,6 +514,9 @@
        so the HUD scale and the safe-area insets place it like any other widget.
        Decorative to assistive tech — it shows what the gap strip already says. -->
   <div id="hud-mirror" aria-hidden="true" hidden></div>
+  <!-- The mirror tapped away (js/render/shared/mirror-pass.js): a small chip in
+       its place brings it back. A phone has no MIRROR key. -->
+  <button id="hud-mirror-chip" type="button" hidden aria-label="Show the rear-view mirror">MIRROR</button>
   <canvas id="minimap" width="140" height="140" role="img" aria-label="Track map"></canvas>
   <div id="hud-sectors"></div>
   <div id="hud-limits" hidden>LIMITS <span class="limits-dots"></span></div>
@@ -934,7 +937,7 @@
                   <button id="pm-hudmirror-next" type="button" data-step="1" aria-label="Next mirror">&rsaquo;</button>
                 </div>
               </div>
-              <p class="adv-help">The rear-view mirror at the top of the screen. AUTO shows it in the onboard cameras; ON in every camera. A slower device gets a simpler, lower-rate mirror rather than none. The MIRROR key (M) flips it mid-race.</p>
+              <p class="adv-help">The rear-view mirror at the top of the screen. AUTO shows it in the onboard cameras; ON in every camera. A slower device gets a simpler, lower-rate mirror rather than none. Mid-race, tap the mirror to tuck it away (tap the chip to bring it back), or press the MIRROR key (M).</p>
               <div id="pm-linecolor" class="set-row" role="group" aria-labelledby="pm-linecolor-label">
                 <span class="tune-label" id="pm-linecolor-label">LINE COLOUR</span>
                 <div>
