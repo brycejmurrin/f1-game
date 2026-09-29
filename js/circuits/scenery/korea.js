@@ -48,11 +48,11 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["korea"] =
   function (api) {
-      const { n, hash, every, anchor, onTrack,
+      const { n, hash, every, anchor, onTrack, terrainYAt,
         bush, guardrail, tyreWall, marshalPost, cameraTower, broadcastCompound,
         grandstandEx, sponsorHoarding, billboard, building, motorhome, tower,
-        groundPatch, runoffApron, cityFront, waterBand, gantry, fence,
-        place, prop, backdrop } = api;
+        groundPatch, runoffApron, cityFront, waterBand, fence,
+        place, prop, backdrop, modelGroup, overheadSpan, vadd, seat, MAT } = api;
 
       const { K } = api;            // the contract's frac -> node index (normalised for negatives)
 
@@ -82,14 +82,20 @@
       // it reads as patchy reclamation rather than a lawn. The mix is biased by
       // lap position — grass survives on the seaward outfield of the front half,
       // while the back half around the marina site is scraped fill.
+      // Skip dedicated groundPatch footprints (wave-6 flatCoplanar cluster at
+      // :91 overlapping :192 / :229 / :246 / :377 — 26 spots / 60 m²).
       every(64, (k) => {
         const h = hash(k * 17 + 3);
         if (h < 0.42) return;
         const f = k / n;
         const side = h < 0.71 ? -1 : 1;
+        if (side === 1 && f > 0.15 && f < 0.24) return;   // mid back straight
+        if (side === -1 && f > 0.28 && f < 0.34) return;  // T3 broadcast fill
+        if (side === -1 && f > 0.38 && f < 0.49) return;  // T4–6 scrub
+        if (side === 1 && f > 0.87 && f < 0.94) return;   // final-turn forecourt
         const bare = f > 0.60 && f < 0.95 ? h < 0.80 : h < 0.58;
-        groundPatch(k, side, 16 + h * 26, [26 + h * 30, 0.30, 34 + h * 40],
-          bare ? FILL : SALT);
+        groundPatch(k, side, 16 + h * 26, [26 + h * 30, 0.28, 34 + h * 40],
+          bare ? FILL : SALT, { samples: 4 });
       });
 
       // ---------------------------------------------------------------------
@@ -105,21 +111,47 @@
 
       // ---------------------------------------------------------------------
       // 3. s=0.005 / -1 / 12 — PIT AND PADDOCK COMPLEX.
-      //    One long low flat-roofed building with a pale fascia, a motorhome
-      //    row racked behind it, a camera tower on the start line. The only
-      //    finished architecture on the lap: permanent and tidy — and the only
-      //    place on the lap with anything BEHIND the front row, so it is built
-      //    in four ranks: pit wall, garages, motorhome paddock, freight yard.
+      //    F1-standard permanent pit/paddock on the harbour-side half
+      //    (RacingCircuits.info; Wikipedia). Pale fascia garage run, motorhome
+      //    row, camera tower. Four ranks: pit wall, garages, paddock, freight.
+      //    Named hotels / yacht clubs are UNCERTAIN — not modelled.
       // ---------------------------------------------------------------------
       guardrail(0.000, 0.040, -1, 5.5, RAIL);          // pit wall, start->exit
       guardrail(0.962, 1.000, -1, 5.5, RAIL);
-      building(K(0.005), -1, 12, 20, 9.5, 190, { wall: PALE });
+      {
+        // Segmented bays — one 190 m slab self-coplanared and reached the road.
+        const a = anchor(K(0.005), -1, 12);
+        const b = [a.r, a.u, a.t];
+        const gy = typeof terrainYAt === "function" ? terrainYAt(a.c[0], a.c[2]) : null;
+        const pad = [a.c[0], (gy == null ? a.c[1] : gy) + 0.12, a.c[2]];
+        const emitPit = (stage) => {
+          const BAYS = 8, PITCH = 22, LEN = BAYS * PITCH;
+          stage._mat = MAT.CONCRETE;
+          seat.box(stage, pad, [18, 0.45, LEN + 4], LOT, b);
+          for (let i = 0; i < BAYS; i++) {
+            const foot = vadd(pad, a.t, (i - (BAYS - 1) / 2) * PITCH);
+            // Garage sits ON the pad (foot at 0.45) so bottoms are not coplanar.
+            stage._mat = MAT.CONCRETE;
+            seat.box(stage, vadd(foot, a.u, 0.45), [16, 6.4, PITCH - 1.2], PALE, b);
+            stage._mat = MAT.METAL;
+            seat.box(stage, vadd(foot, a.u, 6.95), [17.2, 0.35, PITCH - 0.4], STEEL, b);
+            // Dark shutter face toward the lane (proud — avoids flatCoplanar).
+            seat.box(stage, vadd(vadd(foot, a.r, 8.4), a.u, 1.0),
+              [0.28, 5.0, PITCH - 3.0], [0.28, 0.30, 0.32], b);
+          }
+          stage._mat = 0;
+        };
+        modelGroup("korea-pit-complex", {
+          center: vadd(pad, a.u, 5), size: [22, 14, 190], basis: b,
+        }, emitPit, { required: true });
+      }
       // Pit-exit block, split in two 30 m halves: one 60 m block's flat cap
       // (radius = half its length) reached the road, was culled whole, and
       // left its roof plant hanging 8 m up (float-audit, 2026-09-23).
-      building(K(0.0524), -1, 12, 16, 7.0, 30, { wall: PALE });
-      building(K(0.0577), -1, 12, 16, 7.0, 30, { wall: PALE });
-      groundPatch(K(0.010), -1, 44, [56, 0.30, 230], LOT);   // paddock apron
+      // Nudge heights apart so the two caps do not share a plane.
+      building(K(0.0524), -1, 12, 16, 7.0, 28, { wall: PALE });
+      building(K(0.0577), -1, 14, 15, 6.4, 28, { wall: STEEL });
+      groundPatch(K(0.010), -1, 44, [56, 0.28, 230], LOT, { samples: 4 });
       for (let i = 0; i < 6; i++) motorhome(K(0.968 + i * 0.011), -1, 40, 9, 4.2, 16);
       building(K(0.020), -1, 68, 18, 6.0, 74, { wall: STEEL });  // team units, 2nd rank
       building(K(0.985), -1, 66, 16, 5.5, 52, { wall: STEEL });
@@ -135,14 +167,51 @@
 
       // ---------------------------------------------------------------------
       // 4. s=0.020 / +1 / 22 — MAIN GRANDSTAND facing the pit straight.
-      //    Single permanent covered stand, sparsely filled, pale grey steel;
-      //    sponsor hoarding along its base and flat estuary water behind the
-      //    roofline. shell/crowd are COLOUR ARRAYS — null lets the emitter
-      //    pick from def.standSet (a number there ships the mesh empty).
-      //    Depth behind the roofline: concourse units, boundary fence, then
-      //    the flat grey coach park on made ground, then water.
+      //    Permanent covered stand (RacingCircuits.info permanent facilities;
+      //    venue capacity 135k — Wikipedia). Pale grey steel canopy + sparse
+      //    seating; estuary water behind the roofline. Named harbour hotels
+      //    are UNCERTAIN and omitted.
       // ---------------------------------------------------------------------
-      grandstandEx(0.020, 1, 22, 180, null, null);
+      {
+        const a = anchor(K(0.020), 1, 22);
+        const b = [a.r, a.u, a.t];
+        const gy = typeof terrainYAt === "function" ? terrainYAt(a.c[0], a.c[2]) : null;
+        const pad = [a.c[0], (gy == null ? a.c[1] : gy) + 0.12, a.c[2]];
+        const LEN = 160, ROWS = 5;
+        const emitStand = (stage) => {
+          stage._mat = MAT.CONCRETE;
+          seat.box(stage, pad, [14, 0.4, LEN + 4], LOT, b);
+          for (let t = 0; t < ROWS; t++) {
+            // Rows rise AWAY from the track (+r on side +1 = outboard).
+            const lat = 1.2 + t * 1.55;
+            const y = 0.55 + t * 1.15;
+            stage._mat = MAT.CONCRETE;
+            seat.box(stage, vadd(vadd(pad, a.r, lat), a.u, y),
+              [1.4, 0.18, LEN - t * 1.2], STEEL, b);
+            stage._mat = MAT.FABRIC;
+            for (let j = 0; j < 14; j++) {
+              const hj = hash(t * 41 + j * 13 + 7);
+              if (hj < 0.55) continue;
+              seat.box(stage, vadd(vadd(vadd(pad, a.r, lat), a.t,
+                (j / 13 - 0.5) * (LEN - 10)), a.u, y + 0.2),
+                [0.5, 0.9, 1.2],
+                hj < 0.7 ? PALE : [0.22, 0.28, 0.40], b);
+            }
+          }
+          // Cantilever steel roof — Tilke permanent canopy.
+          stage._mat = MAT.METAL;
+          seat.box(stage, vadd(vadd(pad, a.r, 5.5), a.u, 8.2),
+            [12, 0.45, LEN + 2], STEEL, b);
+          for (let i = 0; i <= 8; i++) {
+            const p = vadd(pad, a.t, (i / 8 - 0.5) * LEN);
+            seat.cyl(stage, vadd(p, a.r, 10.5), 0.22, 8.2, STEEL, 6, b);
+          }
+          stage._mat = 0;
+        };
+        modelGroup("korea-main-grandstand", {
+          center: vadd(pad, a.u, 5), size: [18, 14, LEN + 8], basis: b,
+        }, emitStand, { required: true });
+      }
       sponsorHoarding(0.002, 0.050, 1, 18);
       waterBand(0.0, 0.10, 1, 300, 640, 26, ESTUARY);
       place(K(0.020), 1, 70, [40, 6, 14], STEEL);   // low support shed behind
@@ -151,8 +220,8 @@
         place(K(0.002 + i * 0.012), 1, 82 + h * 8, [7, 3.2, 9], h < 0.5 ? PALE : STEEL);
       }
       fence(0.000, 0.058, 1, 96, 3.0, MESH);        // spectator boundary
-      groundPatch(K(0.026), 1, 132, [150, 0.30, 190], LOT);  // coach / car park
-      groundPatch(K(0.026), 1, 210, [110, 0.30, 160], FILL); // unmade overflow
+      groundPatch(K(0.026), 1, 132, [150, 0.28, 190], LOT, { samples: 4 });
+      groundPatch(K(0.026), 1, 210, [110, 0.28, 160], FILL, { samples: 4 });
 
       // ---------------------------------------------------------------------
       // 5. s=0.065 / +1 / 30 — TURN 1 EXIT. A wide grey asphalt apron rather
@@ -174,8 +243,8 @@
       // ---------------------------------------------------------------------
       marshalPost(K(0.083), -1, 15);
       billboard(K(0.092), -1, 20, 14, 6, [0.86, 0.86, 0.84]);
-      groundPatch(K(0.086), -1, 22, [70, 0.30, 90], SALT);
-      groundPatch(K(0.104), -1, 40, [90, 0.30, 110], FILL);
+      groundPatch(K(0.086), -1, 22, [70, 0.28, 90], SALT, { samples: 4 });
+      groundPatch(K(0.104), -1, 40, [90, 0.28, 110], FILL, { samples: 4 });
       for (let i = 0; i < 5; i++) {
         const h = hash(i * 53 + 7);
         bush(K(0.070 + i * 0.009), -1, 17 + h * 16, SCRUB);
@@ -189,8 +258,8 @@
       //    site boundary fence 85 m out, which measures the emptiness instead
       //    of filling it.
       // ---------------------------------------------------------------------
-      groundPatch(K(0.175), 1, 45, [130, 0.30, 150], SALT);
-      groundPatch(K(0.205), 1, 45, [120, 0.30, 140], FILL);
+      groundPatch(K(0.175), 1, 45, [130, 0.28, 150], SALT, { samples: 4 });
+      groundPatch(K(0.205), 1, 48, [110, 0.28, 130], FILL, { samples: 4 });
       fence(0.130, 0.270, 1, 85, 2.4, MESH);
       tower(K(0.190), 1, 150, 3.2, 58);
       waterBand(0.13, 0.27, 1, 280, 640, 26, ESTUARY);
@@ -226,8 +295,8 @@
       // ---------------------------------------------------------------------
       broadcastCompound(K(0.306), -1, 18);
       marshalPost(K(0.316), -1, 16);
-      groundPatch(K(0.306), -1, 26, [60, 0.30, 70], FILL);
-      groundPatch(K(0.300), -1, 54, [70, 0.30, 90], LOT);
+      groundPatch(K(0.306), -1, 26, [60, 0.28, 70], FILL, { samples: 4 });
+      groundPatch(K(0.300), -1, 58, [64, 0.28, 80], LOT, { samples: 4 });
       for (let i = 0; i < 4; i++) {                  // support trucks, second rank
         const h = hash(i * 41 + 13);
         place(K(0.288 + i * 0.012), -1, 50 + h * 12, [11, 3.4, 5], h < 0.5 ? PALE : STEEL);
@@ -243,7 +312,7 @@
       // ---------------------------------------------------------------------
       for (const s of [0.395, 0.430, 0.468]) {
         marshalPost(K(s), -1, 18);
-        groundPatch(K(s), -1, 24, [66, 0.30, 80], SALT);
+        groundPatch(K(s), -1, 24, [66, 0.28, 80], SALT, { samples: 4 });
       }
       for (let i = 0; i < 8; i++) {
         const h = hash(i * 71 + 19);
@@ -262,13 +331,15 @@
       // ---------------------------------------------------------------------
       guardrail(0.510, 0.600, 1, 33, RAIL);
       // Segmented so the embankment follows the curve instead of cutting it.
+      // Stagger height slightly so adjacent crest faces are not coplanar.
       for (let i = 0; i < 8; i++) {
-        prop(K(0.513 + i * 0.011), 1, 36, [10, 3.0, 62], SEAWALL);
+        const h = hash(i * 23 + 5);
+        prop(K(0.513 + i * 0.011), 1, 36, [10, 2.6 + h * 0.8, 58], SEAWALL);
       }
       fence(0.512, 0.598, 1, 41, 1.4, MESH);            // crest handrail
       for (let i = 0; i < 8; i++) {                     // rock armour below it
         const h = hash(i * 23 + 31);
-        prop(K(0.514 + i * 0.011), 1, 50 + h * 4, [9, 1.5, 60], RIPRAP);
+        prop(K(0.514 + i * 0.011), 1, 52 + h * 4, [9, 1.3 + (h < 0.5 ? 0.4 : 0), 56], RIPRAP);
       }
       tower(K(0.560), 1, 190, 1.8, 16);                 // channel beacon offshore
       waterBand(0.49, 0.63, 1, 70, 460, 24, ESTUARY);
@@ -281,34 +352,63 @@
       grandstandEx(0.589, -1, 16, 58, null, null);
       sponsorHoarding(0.576, 0.604, -1, 13);
       marshalPost(K(0.600), -1, 17);
-      groundPatch(K(0.589), -1, 40, [70, 0.30, 90], LOT);
+      groundPatch(K(0.589), -1, 40, [70, 0.28, 90], LOT, { samples: 4 });
       place(K(0.578), -1, 38, [6, 3.0, 8], STEEL);      // stand plant / cabins
       place(K(0.600), -1, 38, [6, 2.6, 7], PALE);
       fence(0.570, 0.612, -1, 48, 2.6, MESH);
 
       // ---------------------------------------------------------------------
-      // 13. s=0.663 / -1 / 22 — TURN 10: first close view of the marina that
-      //     never happened. Blank apartment shells, unglazed, unlit, grey
-      //     concrete, with a shuttered podium-level building at street height.
-      //     THE landmark of the circuit, so it gets real depth: podium at the
-      //     kerb, the front rank of slabs, a second rank stepped back and
-      //     taller, two bare lift cores left standing above them, and the far
-      //     edge of the development hazed out behind.
+      // 13. s=0.663 / -1 / 22 — TURN 10: marina that never happened.
+      //    Planned hotels / restaurants / marina (RacingCircuits.info,
+      //    Wikipedia, NYT 2015) were never finished — blank unglazed concrete
+      //    shells. Do NOT invent named towers or yacht clubs (UNCERTAIN).
       // ---------------------------------------------------------------------
       cityFront(0.630, 0.700, -1, 22);
-      building(K(0.663), -1, 20, 14, 6.5, 70, { wall: SHELL });   // shuttered podium
-      building(K(0.690), -1, 20, 12, 5.5, 44, { wall: SHELL_D }); // second podium unit
-      place(K(0.645), -1, 46, [22, 34, 20], SHELL);     // blank shell slab
-      place(K(0.680), -1, 52, [18, 40, 18], SHELL_D);
-      for (let i = 0; i < 5; i++) {                     // second rank, stepped back
-        const h = hash(i * 61 + 23);
-        place(K(0.628 + i * 0.019), -1, 78 + h * 34,
-          [16 + h * 8, 30 + h * 18, 16 + h * 6], h < 0.5 ? SHELL_D : SHELL_F);
+      {
+        // Gap 52 keeps the declared footprint clear of the ribbon (gap 22 with
+        // size[0]=110 reached the road → required model rejected).
+        const a = anchor(K(0.663), -1, 52);
+        const b = [a.r, a.u, a.t];
+        const gy = typeof terrainYAt === "function" ? terrainYAt(a.c[0], a.c[2]) : null;
+        const pad = [a.c[0], (gy == null ? a.c[1] : gy) + 0.1, a.c[2]];
+        const emitShells = (stage) => {
+          // seat.box takes the FOOT (bottom). Sample terrain under each slab.
+          // Podiums kept short in `t` so they do not share a face with the
+          // tower slabs (coplanar-audit was red at 12.8 m²).
+          const grounded = (offR, offT) => {
+            const p = vadd(vadd(pad, a.r, offR), a.t, offT);
+            const y = typeof terrainYAt === "function" ? terrainYAt(p[0], p[2]) : null;
+            return [p[0], (y == null ? pad[1] : y), p[2]];
+          };
+          stage._mat = MAT.CONCRETE;
+          seat.box(stage, grounded(-20, 8), [12, 6.4, 28], SHELL, b);
+          seat.box(stage, grounded(-18, 40), [11, 5.4, 24], SHELL_D, b);
+          // Staggered heights / offsets so adjacent slab faces are not coplanar.
+          const slabs = [
+            { t: -28, r: 6,  w: 16, h: 30, d: 14, col: SHELL },
+            { t: 4,   r: 12, w: 15, h: 36, d: 13, col: SHELL_D },
+            { t: 32,  r: 8,  w: 14, h: 32, d: 13, col: SHELL },
+          ];
+          for (const s of slabs) {
+            const foot = grounded(s.r, s.t);
+            seat.box(stage, foot, [s.w, s.h, s.d], s.col, b);
+          }
+          stage._mat = MAT.METAL;
+          seat.cyl(stage, grounded(26, -12), 2.2, 44, SHELL_F, 6, b);
+          seat.cyl(stage, grounded(30, 20), 2.0, 40, SHELL_D, 6, b);
+          stage._mat = 0;
+        };
+        modelGroup("korea-marina-shells", {
+          center: vadd(pad, a.u, 20), size: [56, 52, 100], basis: b,
+        }, emitShells, { required: true });
       }
-      tower(K(0.657), -1, 96, 5.0, 52);                 // bare lift core
-      tower(K(0.686), -1, 112, 4.4, 46);
+      for (let i = 0; i < 4; i++) {                     // second rank, stepped back
+        const h = hash(i * 61 + 23);
+        place(K(0.632 + i * 0.022), -1, 96 + h * 28,
+          [14 + h * 6, 28 + h * 14, 14 + h * 5], h < 0.5 ? SHELL_D : SHELL_F);
+      }
       backdrop(K(0.665), -1, 260, [220, 38, 28], SHELL_F);
-      groundPatch(K(0.663), -1, 64, [110, 0.30, 150], FILL);  // undeveloped plot
+      groundPatch(K(0.663), -1, 64, [110, 0.28, 150], FILL, { samples: 4 });
       marshalPost(K(0.663), -1, 15);
 
       // ---------------------------------------------------------------------
@@ -354,27 +454,51 @@
 
       // ---------------------------------------------------------------------
       // 17. s=0.864 / -1 / 10 — TURN 17, where the wall was moved back for
-      //     visibility: armco set back behind a narrow apron strip, with a
-      //     marshal post and camera tower in the gap.
+      //     visibility (Wikipedia 2011 pit-entry visibility change): armco set
+      //     back behind a narrow apron strip, marshal post + camera tower.
       // ---------------------------------------------------------------------
-      runoffApron(K(0.858), -1, 7, 30, APRON);
-      runoffApron(K(0.870), -1, 7, 34, APRON);
+      // Split aprons with a gap so their tops are not one flatCoplanar pair.
+      runoffApron(K(0.854), -1, 7, 26, APRON);
+      runoffApron(K(0.874), -1, 8, 28, APRON);
       guardrail(0.846, 0.882, -1, 26, RAIL);
       fence(0.844, 0.884, -1, 31, 3.4, MESH);
       marshalPost(K(0.858), -1, 14);
       cameraTower(K(0.870), -1, 16);
 
       // ---------------------------------------------------------------------
-      // 18. s=0.885 / +1 / 18 — FINAL TURN: the pedestrian footbridge over the
-      //     track, a gantry-form structure carrying the circuit's one piece of
-      //     local-architecture styling, with a billboard on its face, then the
-      //     run back to the pit straight.
+      // 18. s=0.885 / +1 / 18 — FINAL TURN footbridge.
+      //    Tilke footbridge drawing inspiration from local architecture
+      //    (RacingCircuits.info). Required modelGroup = stair/lift tower;
+      //    overheadSpan carries the deck over the ribbon.
       // ---------------------------------------------------------------------
-      gantry(0.885, 8.5, [0.78, 0.79, 0.80]);
-      building(K(0.885), 1, 18, 12, 13, 16, { wall: PALE });   // stair/lift tower
+      overheadSpan({
+        id: "korea-final-span", frac: 0.885, clearance: 8.0,
+        thickness: 1.1, depth: 4.2, supportGap: 2.6, supportWidth: 1.2,
+        color: [0.78, 0.79, 0.80], required: true,
+      });
+      {
+        const a = anchor(K(0.885), 1, 18);
+        const b = [a.r, a.u, a.t];
+        const gy = typeof terrainYAt === "function" ? terrainYAt(a.c[0], a.c[2]) : null;
+        const pad = [a.c[0], (gy == null ? a.c[1] : gy) + 0.1, a.c[2]];
+        const emitBridge = (stage) => {
+          stage._mat = MAT.CONCRETE;
+          seat.box(stage, pad, [10, 12, 14], PALE, b);
+          stage._mat = MAT.METAL;
+          seat.box(stage, vadd(pad, a.u, 12), [11, 0.4, 15], STEEL, b);
+          seat.box(stage, vadd(vadd(pad, a.r, -5.2), a.u, 6),
+            [0.3, 4.5, 8], [0.22, 0.24, 0.28], b);
+          seat.box(stage, vadd(vadd(pad, a.r, -8), a.u, 8.2),
+            [6, 0.35, 10], [0.78, 0.79, 0.80], b);
+          stage._mat = 0;
+        };
+        modelGroup("korea-final-footbridge", {
+          center: vadd(pad, a.u, 7), size: [18, 16, 20], basis: b,
+        }, emitBridge, { required: true });
+      }
       building(K(0.885), -1, 16, 11, 12, 14, { wall: PALE });
       billboard(K(0.890), 1, 20, 16, 6, PALE);
-      groundPatch(K(0.900), 1, 38, [60, 0.30, 80], LOT);       // bridge forecourt
+      groundPatch(K(0.900), 1, 38, [60, 0.28, 80], LOT, { samples: 4 });
 
       // ---------------------------------------------------------------------
       // 19. LAP-WIDE MARSHAL POSTS — filling the gaps the brief rows leave, on
