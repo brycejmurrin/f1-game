@@ -402,7 +402,7 @@ tools directly.)
 | `baseline` | six blessed pixel baselines for menu IDENTITY — colour, type, spacing (fast) |
 | `shimmer` | does baked tarmac crawl under motion |
 | `gallery` | `ui-audit.spec.js` alone — a CAPTURE HARNESS whose product is a PNG gallery, run **on demand**. It asserts nothing beyond "the screen appeared", so its 39 green ticks were being counted as `ui` coverage while dominating that group's wall time (13-108 s per shot). No `pick-tests` rule routes to it: galleries are run on purpose, like `tests/manual/`. `test:audit` still sees it, so it cannot go orphan |
-| `xr` | Immersive Web Emulation Runtime (IWER) emulated-VR suite — Playwright project `xr-emulated`, pinned `tests/vendor/iwer-2.5.0.min.js`, `forceInstall` metaQuest3. Spec-level only (not Quest GPU). Run `npm run test:xr`. On-device checklist: `docs/notes/XR-QUEST-ON-DEVICE.md` |
+| `xr` | Immersive Web Emulation Runtime (IWER) emulated-VR suite — Playwright project `xr-emulated`, pinned `tests/vendor/iwer-2.5.0.min.js`, `forceInstall` metaQuest3. Spec-level only (not Quest GPU). Run `npm run test:xr`. Path-gated CI job (`xr-filter` → `xr`) when the diff touches `js/xr/`, IWER, or `vr-emulated.spec.js`. On-device checklist: `docs/notes/XR-QUEST-ON-DEVICE.md` |
 
 ### Node groups (`node --test`, no browser)
 

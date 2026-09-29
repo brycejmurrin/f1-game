@@ -1561,6 +1561,80 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  # EMULATED-VR (IWER) — path-gated. The xr-emulated Playwright project and
+  # `npm run test:xr` existed but sat in no CI job; a js/xr/ change only ran
+  # the Node xr-phase0 suite under steering-unit. Two jobs like renderer-*:
+  # a cheap ubuntu filter, then the IWER suite only when the diff reaches XR
+  # (or on dispatch). Skipped on the Pages call and on the nightly schedule
+  # (the rotation excludes test:xr for the same reason gfx is excluded).
+  xr-filter:
+    name: Does this diff touch WebXR?
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: ${{ !inputs.concurrency_key && (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch') }}
+    outputs:
+      xr: ${{ steps.filter.outputs.xr }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Does this diff touch WebXR?
+        id: filter
+        env:
+          BEFORE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -u
+          run_all() { echo "xr=true" >> "$GITHUB_OUTPUT"; echo "RUNNING test:xr: $1"; exit 0; }
+          case "$EVENT" in
+            push|pull_request) ;;
+            *) run_all "event is '$EVENT' (dispatch forces the suite)" ;;
+          esac
+          case "${BEFORE:-}" in
+            ""|0000000000000000000000000000000000000000) run_all "no before-sha (new branch, first push)" ;;
+          esac
+          git cat-file -e "${BEFORE}^{commit}" 2>/dev/null || run_all "before-sha $BEFORE unreachable"
+          CHANGED=$(git diff --name-only "$BEFORE" "$GITHUB_SHA") || run_all "git diff failed"
+          echo "--- changed files ---"; echo "$CHANGED"; echo "---------------------"
+          if printf '%s\n' "$CHANGED" | grep -qE '^(js/xr/|tests/specs/vr-emulated\.spec\.js$|tests/helpers/iwer-install\.mjs$|tests/vendor/iwer-2\.5\.0\.min\.js$|playwright\.config\.js$|\.github/workflows/ci\.yml$)'; then
+            echo "xr=true" >> "$GITHUB_OUTPUT"
+            echo "RUNNING test:xr: the diff touches WebXR, IWER, or the xr-emulated project"
+          else
+            echo "xr=false" >> "$GITHUB_OUTPUT"
+            echo "SKIPPING test:xr: nothing in this diff reaches WebXR"
+          fi
+
+  xr:
+    name: Emulated VR (IWER / xr-emulated)
+    needs: xr-filter
+    if: needs.xr-filter.outputs.xr == 'true'
+    runs-on: ubuntu-latest
+    # Unmeasured on CI; local IWER suite is minutes. Cap generously.
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-apex
+      - name: Playwright Chromium (cached)
+        uses: ./.github/actions/playwright-chromium
+      - name: Emulated VR (test:xr)
+        env:
+          APEX_WORKERS: 1
+          APEX_FAIL_ON_FLAKY: 1
+        run: npm run test:xr -- --timeout=600000
+      - name: Failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-artifacts-xr
+          path: |
+            artifacts/test-results-*/
+            artifacts/report-*/
+          retention-days: 7
+          if-no-files-found: ignore
+
   # THE CHANGE-AWARE GATE, in two jobs (2026-09-10): `select` plans, `selected`
   # runs the plan as a matrix. It used to be one job that ran on branch pushes
   # and PRs only. Three things about it were wrong, all fixed here:
@@ -1999,6 +2073,8 @@ jobs:
       - driving-model
       - renderer-filter
       - renderer-macos
+      - xr-filter
+      - xr
       - select
       - selected
       - baseline-trial

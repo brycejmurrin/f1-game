@@ -320,6 +320,22 @@ test("unit-plan feeds the node-suites matrix and can skip unused slices", () => 
   assert.match(driving, /needs\.unit-plan\.outputs\.driving == 'true'/);
 });
 
+test("test:xr is path-gated (xr-filter → xr) and feeds ci-verdict", () => {
+  const filter = (ciWorkflow.split("\n  xr-filter:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
+  assert.ok(filter, "xr-filter job missing");
+  assert.match(filter, /js\/xr\//);
+  assert.match(filter, /vr-emulated/);
+  assert.match(filter, /outputs:\s*\n\s*xr:/);
+  const xr = (ciWorkflow.split("\n  xr:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
+  assert.ok(xr, "xr job missing");
+  assert.match(xr, /needs: xr-filter/);
+  assert.match(xr, /needs\.xr-filter\.outputs\.xr == 'true'/);
+  assert.match(xr, /npm run test:xr/);
+  const body = (ciWorkflow.split("\n  ci-verdict:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
+  assert.match(body, /- xr-filter\b/);
+  assert.match(body, /- xr\b/);
+});
+
 test("no workflow demotes the change-aware gate to advisory", () => {
   assert.doesNotMatch(pagesWorkflow, /^\s+advisory:/m);
   assert.doesNotMatch(ciWorkflow, /^\s+advisory:/m);
@@ -899,7 +915,9 @@ test("the renderer job is path-filtered on a cheap runner and stays out of the d
     "the dispatch must declare the renderer_macos opt-in, default off");
   assert.equal(report.rendererGate.deployGate, false,
     "renderer-macos joined the deploy gate — pages.yml aggregates every job in ci.yml, so this must be deliberate");
-  assert.deepEqual(report.jobs.filter((j) => !j.deployGate).map((j) => j.name).sort(), ["renderer-filter", "renderer-macos"]);
+  assert.deepEqual(report.jobs.filter((j) => !j.deployGate).map((j) => j.name).sort(),
+    ["renderer-filter", "renderer-macos", "xr", "xr-filter"],
+    "jobs outside the deploy gate: renderer-* and the path-gated xr suite");
   // The path filter: every renderer backend plus the lighting modules the
   // gfx specs pin, the spec list DERIVED from package.json, fail-safe to run.
   // js/lighting/ as a DIRECTORY, not the six filenames this listed until
