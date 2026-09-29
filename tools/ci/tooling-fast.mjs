@@ -364,6 +364,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // only useful if they run right after the edit that would break them.
   "tests/unit/setup-preview-hull.test.mjs",
   "tests/unit/garage-interior-gate.test.mjs",
+  "tests/unit/garage-arrival.test.mjs",
   "tests/unit/car-multi-shot-tools.test.mjs",
   "tests/unit/harness-display.test.mjs",
   "tests/unit/track-night-override.test.mjs",

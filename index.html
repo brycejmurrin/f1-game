@@ -608,12 +608,13 @@
         <button id="pm-open-display" type="button">DISPLAY&hellip;<small>UI, HUD &amp; graphics</small></button>
         <button id="pm-open-appearance" type="button">APPEARANCE&hellip;<small>Theme, menu &amp; HUD colours</small></button>
         <button id="pm-advanced">STEERING &amp; ASSISTS&hellip;<small>Presets, response &amp; aids</small></button>
-        <button id="pm-audio">MUSIC &amp; SOUND&hellip;<small>Playback, effects &amp; volume</small></button>
+        <button id="pm-audio">MUSIC &amp; SOUND&hellip;<small>Music, radio, spotter &amp; voices</small></button>
+        <button id="pm-open-files" type="button">BACKUP &amp; RESTORE&hellip;<small>Save or load your preferences</small></button>
       </nav>
       <div class="pm-groups">
+        <section id="pm-panel-files" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden></section>
         <section id="pm-panel-controls" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>
-          <h3 class="pm-group-h">DRIVING CONTROLS</h3>
           <!-- Every preference on this sheet is a SETTING ROW (js/ui/setting-row.js):
                LABEL on the left, ‹ VALUE › on the right, one line at every UI
                SIZE. The value is a native select (tap = the platform picker with
@@ -755,6 +756,23 @@
           <p id="pm-coach-status" class="adv-help" role="status">Turn on the coach to get driving tips.</p>
           <p id="pm-coach-tip">Your next tip will appear here after you drive.</p>
           <p id="pm-lap-report" class="adv-help">Drive a lap with a saved best on this circuit to see where the time went.</p>
+          <details id="pm-braking-cues">
+            <summary class="adv-more-btn">BRAKING CUES</summary>
+            <div role="group" aria-label="Braking cues">
+              <label class="tune-row"><span class="tune-label">PREDICTIVE CUE <b id="pm-brakecue-v">OFF</b></span>
+                <input id="pm-brakecue" type="range" min="1" max="10" step="1" value="1" aria-label="Predictive braking cue"></label>
+              <p class="adv-help">Warns before a braking point with sound and haptics. 1 is OFF; higher means earlier warning. While enabled, this takes priority over the line-speed cue below. Neither cue steers or brakes for you.</p>
+              <div id="pm-linebrakecue" class="set-row" role="group" aria-labelledby="pm-linebrakecue-label">
+                <span class="tune-label" id="pm-linebrakecue-label">LINE-SPEED CUE</span>
+                <div>
+                  <button id="pm-linebrakecue-prev" type="button" data-step="-1" aria-label="Previous line-speed cue setting">&lsaquo;</button>
+                  <select id="pm-linebrakecue-sel" aria-labelledby="pm-linebrakecue-label"></select>
+                  <button id="pm-linebrakecue-next" type="button" data-step="1" aria-label="Next line-speed cue setting">&rsaquo;</button>
+                </div>
+              </div>
+              <p class="adv-help">Beeps when you exceed the visual line’s target speed, even when the line is hidden. Used only while PREDICTIVE CUE is OFF. Turn both cues OFF for no braking beeps.</p>
+            </div>
+          </details>
           <details id="pm-practice-panel">
             <summary class="adv-more-btn">PRACTICE A SECTION</summary>
             <p id="pm-practice-help" class="adv-help">Choose a goal, save your starting point, then resume. TRY AGAIN restores that point and goal. REWIND 10s steps the car back without one. A Time Trial is always practice; in a race or qualifying, ARM PRACTICE first — that makes the session unscored and cannot be undone.</p>
@@ -810,7 +828,6 @@
         </section>
         <section id="pm-panel-display" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>
-          <h3 class="pm-group-h">DISPLAY</h3>
           <!-- step 0.5 — layout tiers (`--pair-at` / `--compact-at` via
                SheetShape) sit INSIDE this range, so a notch can flip arrangement
                not just size. MEASURED garage portrait: two columns at 80%,
@@ -889,15 +906,6 @@
                 </div>
               </div>
               <p class="adv-help">How strongly the DRIVING LINE reads against the road. SUBTLE for cockpit view, SOLID when it disappears into a bright surface.</p>
-              <div id="pm-linebrakecue" class="set-row" role="group" aria-labelledby="pm-linebrakecue-label">
-                <span class="tune-label" id="pm-linebrakecue-label">BRAKE CUE</span>
-                <div>
-                  <button id="pm-linebrakecue-prev" type="button" data-step="-1" aria-label="Previous brake cue setting">&lsaquo;</button>
-                  <select id="pm-linebrakecue-sel" aria-labelledby="pm-linebrakecue-label"></select>
-                  <button id="pm-linebrakecue-next" type="button" data-step="1" aria-label="Next brake cue setting">&rsaquo;</button>
-                </div>
-              </div>
-              <p class="adv-help">A click that repeats faster the further over the line's speed you are, and becomes continuous when it turns red. The rate is the signal, not the pitch. Works with the DRIVING LINE off.</p>
               <label class="tune-row"><span class="tune-label">HUD SIZE <b id="pm-hudscale-v">100%</b><button type="button" id="pm-hudscale-r" class="tune-revert" hidden>reset</button></span>
                 <input id="pm-hudscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="HUD size"></label>
               <!-- BUTTON SIZE is its own knob because the dock and the readouts
@@ -983,19 +991,33 @@
             </div>
           </details>
           <details id="pm-visual-tuners" class="pm-renderer-sub">
-            <summary class="adv-more-btn" id="pm-visual-tuners-sum">ADVANCED VISUALS · 4 TOOLS</summary>
+            <summary class="adv-more-btn" id="pm-visual-tuners-sum">ADVANCED VISUALS · 5 TOOLS</summary>
             <div id="pm-visual-tuners-body" role="group" aria-label="Advanced visual tools">
               <p id="pm-visual-tuners-help" class="adv-help">Start a race, then pause to preview lighting and camera changes on track.</p>
               <button id="pm-lighting" aria-describedby="pm-visual-tuners-help">LIGHTING TUNER&hellip;</button>
               <button id="pm-camtune" aria-describedby="pm-visual-tuners-help">CAMERA TUNER&hellip;</button>
               <button id="pm-flyby" aria-describedby="pm-visual-tuners-help">FLYBY SHOT EDITOR&hellip;</button>
+              <details id="ga-settings" class="pm-renderer-sub">
+                <summary class="adv-more-btn">GARAGE ARRIVAL TUNER</summary>
+                <p class="adv-help">Saved for WORK ON CAR pit visits. Reduced motion skips the animation.</p>
+                <div class="set-row"><label class="tune-label" for="ga-enabled">PLAY ARRIVAL</label><div><input id="ga-enabled" type="checkbox" checked></div></div>
+                <div class="set-row"><label class="tune-label" for="ga-speed">PLAYBACK SPEED</label><div>
+                  <select id="ga-speed"><option value="0.5">SLOW · 12.8s</option><option value="1" selected>NORMAL · 6.4s</option><option value="2">FAST · 3.2s</option></select>
+                </div></div>
+                <div class="set-row"><label class="tune-label" for="ga-angle">GARAGE ANGLE</label><div>
+                  <select id="ga-angle"><option value="cut">TWO CAMERA CUT</option><option value="left">LEFT BAY</option><option value="right">RIGHT BAY</option></select>
+                </div></div>
+                <div class="set-row"><label class="tune-label" for="ga-fov">FIELD OF VIEW</label><div>
+                  <input id="ga-fov" type="number" min="40" max="75" step="1" value="54">
+                </div></div>
+                <button id="ga-reset" type="button">RESET ARRIVAL DEFAULTS</button>
+              </details>
               <button id="pm-freecam" aria-describedby="pm-visual-tuners-help">FREE CAMERA&hellip;</button>
             </div>
           </details>
         </section>
         <section id="pm-panel-appearance" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>
-          <h3 class="pm-group-h">APPEARANCE</h3>
           <p class="adv-help">Everything here applies straight away. The preview shows a menu and the race HUD with your choices.</p>
           <div id="pm-appearance-preview" class="pm-accent-preview" aria-hidden="true">
             <div class="pm-look-menu">
@@ -1122,7 +1144,6 @@
         </section>
         <section id="advanced" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>
-          <h3 class="pm-group-h">STEERING &amp; ASSISTS</h3>
           <div id="advanced-inner">
     <!-- Same shape as DISPLAY: one always-visible primary (presets + pace),
          then closed folds whose summaries carry the live choice. -->
@@ -1175,24 +1196,19 @@
     </div>
     <div class="adv-item">
       <div id="pm-linemode" class="set-row" role="group" aria-labelledby="pm-linemode-label">
-        <span class="tune-label" id="pm-linemode-label">RACING LINE</span>
+        <span class="tune-label" id="pm-linemode-label">LINE STEERING ASSIST</span>
         <div>
-          <button id="pm-linemode-prev" type="button" data-step="-1" aria-label="Previous racing line">&lsaquo;</button>
+          <button id="pm-linemode-prev" type="button" data-step="-1" aria-label="Previous line steering assist">&lsaquo;</button>
           <select id="pm-linemode-sel" aria-labelledby="pm-linemode-label"></select>
-          <button id="pm-linemode-next" type="button" data-step="1" aria-label="Next racing line">&rsaquo;</button>
+          <button id="pm-linemode-next" type="button" data-step="1" aria-label="Next line steering assist">&rsaquo;</button>
         </div>
       </div>
-      <p class="adv-help">Optional gentle pull toward the ideal line. Never overrides your steering.</p>
+      <p class="adv-help">Gently steers toward the ideal line. This changes the car’s steering; the visual DRIVING LINE is separate, in RACE SETTINGS.</p>
     </div>
     <div class="adv-item">
       <label class="tune-row"><span class="tune-label">ADAPTIVE BUTTONS <b id="pm-adaptbtn-v">6</b></span>
         <input id="pm-adaptbtn" type="range" min="1" max="10" step="1" value="6" aria-label="Adaptive buttons"></label>
       <p class="adv-help">Slows the keys and on-screen arrows at speed so a tap is a smaller correction. OFF (1) is the old snap. Does not change the stick, tilt, or a drag on the track. SPEED STEER still picks the speed that feels heavy.</p>
-    </div>
-    <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">BRAKE CUE <b id="pm-brakecue-v">OFF</b></span>
-        <input id="pm-brakecue" type="range" min="1" max="10" step="1" value="1" aria-label="Brake cue"></label>
-      <p class="adv-help">A tick that speeds up when you need to brake for a corner. 1 is OFF. Higher = earlier warning (more lookahead). Takes over nothing.</p>
     </div>
     <div class="adv-item" id="pm-haptics-item">
       <label class="tune-row"><span class="tune-label">HAPTICS <b id="pm-haptics-v">6</b></span>
@@ -1316,7 +1332,6 @@
         </section>
         <section id="audioset" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>
-          <h3 class="pm-group-h">MUSIC &amp; SOUND</h3>
           <div id="audioset-inner">
       <!-- Closed like DISPLAY: the summary is the label and carries ON / source.
            ON/OFF live in the body so a summary tap only opens the fold. -->
@@ -2513,6 +2528,10 @@
      else is the shared vocabulary: sheet-head / sheet-body / sheet-foot, and
      the two scroll regions are .pane. -->
 <div id="carsetup" class="screen" role="region" aria-label="Garage" data-esc-close="cs-back" hidden>
+  <div id="cs-arrival" hidden>
+    <span id="cs-arrival-label" role="status" aria-live="polite">OPENING GARAGE</span>
+    <button id="cs-arrival-skip" type="button">SKIP TO WORK</button>
+  </div>
   <!-- Preview controls for the live car. Sits OUTSIDE #cs-inner, over the
        region of the canvas the sheet leaves for the car. #carsetup is
        pointer-events:none so the canvas still gets the orbit drag; the controls
@@ -2716,7 +2735,7 @@
       <dt id="htp-driving">DRIVING COACH</dt>
       <dd>Open <b>SETTINGS &rarr; DRIVING</b> and turn the coach ON. Short text tips appear in the race-message area while you drive. The coach watches sustained braking, steering and tyre-slip conditions; it never changes your controls. Your ON/OFF choice is saved.
         <br><b>Where the lap went.</b> Once you have a saved best lap on a circuit, each completed lap is compared with it corner by corner, and the corner that cost the most time is named when you cross the line. The DRIVING page shows the lap total and the two worst corners. Each figure covers a corner and the straight after it, because a slow straight is usually paid for at the apex before it, and the comparison only exists against your own best lap in the same car.
-        <br>It waits during flags, other race messages and pit stops, and spaces tips out so brief corrections do not cause a stream of messages. Reopen DRIVING to read the latest tip and its explanation. SESSION REVIEW counts the tips recorded this session; those counts are not a driving score.</dd>
+        <br>It waits during flags, other race messages and pit stops, and spaces tips out so brief corrections do not cause a stream of messages. Reopen DRIVING to read the latest tip and its explanation. BRAKING CUES groups the predictive warning and line-speed beep; the predictive cue takes priority, and both must be OFF to silence braking cues. SESSION REVIEW counts the tips recorded this session; those counts are not a driving score.</dd>
       <dt>WHAT THE TIPS MEAN</dt>
       <dd><b>Braking into a turn:</b> release the brake gradually as you add steering.
         <br><b>Front tyres sliding:</b> reduce steering angle to help the tyres regain grip.
@@ -2741,11 +2760,11 @@
         <dt id="htp-setup">CAMERA</dt>
         <dd>Tap the camera button or press your camera binding (keyboard <span data-help-keys="camera">C</span>, controller <span data-help-pad="camera">View</span>) to cycle views. Hold the on-screen button briefly, or right-click it, to open the picker. Your choice is saved.</dd>
         <dt>SETTINGS</dt>
-        <dd>Pause with your binding (keyboard <span data-help-keys="pause">P</span>, controller <span data-help-pad="pause">Menu / Start</span>) or the pause button, then open SETTINGS. You can also open it from the title menu. BACK returns to the previous page.</dd>
+        <dd>Pause with your binding (keyboard <span data-help-keys="pause">P</span>, controller <span data-help-pad="pause">Menu / Start</span>) or the pause button, then open SETTINGS. You can also open it from the title menu. BACK returns to the previous page. BACKUP &amp; RESTORE saves your preferences; garage files stay in GARAGE › TEAM, and career progress is separate.</dd>
         <dt>CONTROLS</dt>
         <dd>Choose input, pedals, gears and active aero here. Rebind keyboard and controller actions, calibrate a controller, or set up a wheel. A keyboard or connected controller can be used alongside touch controls.</dd>
         <dt>STEERING &amp; ASSISTS</dt>
-        <dd>Choose response presets, driving aids and the racing line here. ADAPTIVE BUTTONS changes keys and on-screen arrows at speed; it does not alter the analog stick. BRAKE CUE is an audio hint. Expand ADVANCED for detailed steering adjustments.</dd>
+        <dd>Choose response presets and steering aids here. LINE STEERING ASSIST helps steer the car; the visual DRIVING LINE is in RACE SETTINGS. ADAPTIVE BUTTONS changes keys and on-screen arrows at speed, not the analog stick. Find BRAKING CUES in SETTINGS › DRIVING. Expand ADVANCED for detailed steering adjustments.</dd>
         <dt>DISPLAY</dt>
         <dd>Adjust UI, HUD and button sizes separately. HUD settings control layout, map and visibility; the eye icon restores a hidden HUD. During a race, ADVANCED VISUALS opens the lighting and camera tuners with a live preview.</dd>
         <dt>MUSIC &amp; SOUND</dt>
@@ -3176,6 +3195,7 @@
 <script defer crossorigin="anonymous" src="js/garage/scene-equipment.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/scene-live.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/scene.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/garage/arrival.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/setup-camera.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/pit-signs.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/body-attitude.js?v=dev"></script>

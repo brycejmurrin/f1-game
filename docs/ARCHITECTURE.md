@@ -77,7 +77,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_229 rows over 29 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_230 rows over 29 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -171,7 +171,7 @@ _229 rows over 29 directories, in load order. `tag` = a `<script>` in index.html
 | `setting-row.js` | `SettingRow` | tag | SettingRow — the ONE control for an enumerated preference on a settings sheet: LABEL ‹ VALUE › One line at every UI SIZE and orientation. |
 | `settings-tabs.js` | `SettingsNav` | tag | SettingsNav — page stack for the pause/title Settings sheet. |
 | `key-binds.js` | `KeyBinds` | tag | the KEYBOARD and CONTROLLER sections of the CONTROLS settings page: one row per driving action with two slots, tap a slot then press a key (or a controller… |
-| `settings-export.js` | `SettingsExport` | tag | SettingsExport: the FILES section of SETTINGS › DISPLAY › RENDERER, which carries a player's state OUT of the browser and back IN. |
+| `settings-export.js` | `SettingsExport` | tag | SettingsExport: SETTINGS › BACKUP & RESTORE, which carries a player's state OUT of the browser and back IN. |
 | `scale.js` | `UiScale` | tag | UI SIZE / HUD SIZE / BUTTON SIZE sliders + RESOLUTION pin. |
 | `driving-line-opts.js` | `DrivingLineOpts` | tag | DrivingLineOpts: the DRIVING LINE's player PREFERENCES — LINE COLOUR, LINE OPACITY and BRAKE CUE, the three that persist per player rather than per race. |
 | `appearance-opts.js` | `AppearanceOpts` | tag | AppearanceOpts: THEME + MENU ACCENT + HUD ACCENT preferences. |
@@ -329,6 +329,7 @@ _229 rows over 29 directories, in load order. `tag` = a `<script>` in index.html
 | `scene-equipment.js` | `GarageEquipment` | tag | GarageEquipment: the pit equipment standing in the bay. |
 | `scene-live.js` | `GarageLive` | tag | GarageLive: the garage's LIVE atlas. |
 | `scene.js` | `GarageScene` | tag | GarageScene: the room the setup preview happens in. |
+| `arrival.js` | `GarageArrival` | tag | Pit-work arrival: a render-clock sequence, independent of race simulation. |
 | `setup-camera.js` | `SetupCamera` | tag | the GARAGE SETUP-PREVIEW CAMERA for js/game.js (#carsetup): the turntable/orbit rig, its presets, pan and zoom, the active-aero demo, the preview mesh cache… |
 | `pit-signs.js` | `PitSigns` | tag | PitSigns: each team's identity on the OUTSIDE of its pit garage. |
 | `setup-tune.js` | `SetupTune` | tag | the SETUP SHEET: the car's mechanical set-up — anti-roll bars, ride height / rake, brake bias — per team, persisted, folded into the parts contract… |

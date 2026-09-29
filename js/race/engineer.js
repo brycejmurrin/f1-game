@@ -29,7 +29,15 @@ const RaceEngineer = (function () {
   const WEAR_STEPS = [0.5, 0.75, 0.9, 1.0];
   // How far apart the axles must be before it is worth naming an end of the
   // car. Below this the split is noise and "fronts going" would be a lie.
-  const AXLE_SPLIT = 0.18;
+  // Measured on WEAR, as (wearF - wearR) / wear, once the set is half gone.
+  // It was the gap between the axles' GRIP ratios, and grip only falls 5 %
+  // across a whole stint before the cliff: the gap peaked at ~0.016 on a
+  // normal stint against this 0.18, and past the cliff "GONE" outranks it, so
+  // the call the per-axle model exists for never fired. A neutral lap tilts
+  // the front 0.06 (TyreModel AXLE_REST), a 0.12 split; 0.30 is a stint that
+  // leaned on one end — heavy braking or a lot of wheelspin — for real.
+  const AXLE_SPLIT = 0.30;
+  const AXLE_MIN_WEAR = 0.5;
   // Defect thresholds. Graining is called EARLY because the advice works — ease
   // off and it cleans up. Blistering is called late because there is nothing to
   // do about it and an early call would just be nagging.
@@ -216,8 +224,8 @@ const RaceEngineer = (function () {
         lapsToStop: !noStop && nextAt != null ? nextAt - (c.lap || 0) : null,
         nextCode, rivalBoxed,
         marginS: pit ? pit.marginS : null,
-        axle: Math.abs(ax.f - ax.r),
-        front: ax.f < ax.r,
+        axle: wear >= AXLE_MIN_WEAR && c.tyreWearF != null ? Math.abs(c.tyreWearF - c.tyreWearR) / wear : 0,
+        front: c.tyreWearF != null ? c.tyreWearF > c.tyreWearR : ax.f < ax.r,
         // `graining`/`blistering`, not `grain`/`blister`: a property access
         // named `.grain` is how tools/gen/gen-slider-doc.mjs finds the readers
         // of the FILM GRAIN lighting slider, and this module reads no sliders.

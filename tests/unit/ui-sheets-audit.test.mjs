@@ -482,8 +482,8 @@ test("the pause → settings → sub-sheet Escape ladder presses each sheet's ow
   assert.deepEqual(ids, ["pm-resume", "pm-restart", "pm-settings", "pm-howto", "pm-standings", "pm-quit"]);
   const settingsIndex = html.slice(html.indexOf('id="pm-settings-index"'), html.indexOf("</nav>", html.indexOf('id="pm-settings-index"')));
   const doors = [...settingsIndex.matchAll(/<button id="([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(doors, ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-advanced", "pm-audio"],
-    "SETTINGS has the five top-level doors in task order");
+  assert.deepEqual(doors, ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-advanced", "pm-audio", "pm-open-files"],
+    "SETTINGS has the seven top-level doors in task order");
   assert.match(settingsIndex, /id="pm-advanced"[^>]*>STEERING &amp; ASSISTS/);
   const driving = html.slice(html.indexOf('id="pm-panel-driving"'), html.indexOf("</section>", html.indexOf('id="pm-panel-driving"')));
   const practiceIds = ["pm-coach", "pm-practice-panel", "pm-practice-set", "pm-practice-retry", "pm-session-review"];

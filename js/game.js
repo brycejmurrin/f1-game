@@ -1214,8 +1214,7 @@ const _mq = (typeof window !== "undefined" && window.matchMedia)
   ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
 let motionReduced = !!(_mq && _mq.matches);
 if (_mq && _mq.addEventListener) _mq.addEventListener("change", (e) => { motionReduced = !!e.matches; });
-// XR comfort mirrors reduce-motion while immersive-vr is presenting.
-function camComfort() { return XrBoot.camComfort(motionReduced); }
+function camComfort() { return XrBoot.camComfort(motionReduced); }   // XR presenting ≡ reduce-motion
 let camRoll = 0;        // radians; lean into corners (decays back to 0)
 let camSlipSm = 0;      // smoothed slip input for camRoll (raw vLat/speed is 60 Hz-stepped)
 let camCutT = 0;        // s; >0 just after a camera-mode cut → eased glide to the new vantage
@@ -2229,7 +2228,7 @@ function gridUp(preOrder) {
     // (PitLane.think never executes a human's; the HUD and the engineer read it).
     c.pitPlan = tyres.on() ? pits.planFor(c.human ? 0.5 : (h >>> 24) / 256, !!c.human, 0, c) : null;
     if (c.pitPlan && !c.human) c.tyreClass = c.pitPlan.start;
-    tyres.fit(c, tyres.startRecord(c));
+    tyres.fit(c, tyres.startRecord(c, TyreModel.treadFor(raceWeather, roadWetness())));
   });
   // Seed the PLAYER's world pose HERE rather than leaving it to the first
   // physics tick (the `c.px == null` init in update()). The chase rig has two
@@ -4615,6 +4614,8 @@ function updateCar(c, dt, ranked) {
     // The O(n) pass is the price of seeing lapped traffic.
     const L = track.total;
     // sep (consumer below) is fused into this scan — its window is a subset of [-13,+34].
+    // BACK: the mirrors reach (AiDrive.mirrorReach — a time behind, not a flat 13 m).
+    const BACK = AiDrive.mirrorReach(aiT, c.speed), REJ = Math.max(34.1, BACK + 0.1);
     const MIN_GAP = AiDrive.minLatGap(hw, !!track.street);
     for (let i = 0; i < ranked.length; i++) {
       const o = ranked[i];
@@ -4623,9 +4624,9 @@ function updateCar(c, dt, ranked) {
       if (!Number.isFinite(dprog)) continue;
       // Cheap reject before wrap — same pattern as pairContact (PERF-FINDINGS Δprog 5.01%).
       const ad = dprog < 0 ? -dprog : dprog;
-      if (ad > 34.1 && ad < L - 34.1) continue;
+      if (ad > REJ && ad < L - REJ) continue;
       dprog = ((dprog + L / 2) % L + L) % L - L / 2;
-      if (dprog < -13 || dprog > 34) continue;   // extended both ways: slipstream ahead, chaser behind
+      if (dprog < -BACK || dprog > 34) continue;   // extended both ways: slipstream ahead, chaser behind
       const dx = o.x - c.x;
       const adp = dprog < 0 ? -dprog : dprog;
       if (adp < 5.5) {            // alongside: eats the room on its side
@@ -4658,8 +4659,9 @@ function updateCar(c, dt, ranked) {
     // ahead of US holding it up is getting through whatever we do, and
     // defendPull was the only answer the AI had. Speeds compare to each other,
     // never to a literal, so the window holds at every OVERALL SPEED.
-    const letPassCase = state === "race" && !blocker && chaser
-      && chaserGap < 9 && chaser.speed > c.speed + 2.5 * (vTop() / VMAX);   // a closing RATE rides the pace scale too
+    // BLUE FLAGS ONLY (AiDrive.letPassCase): the chaser must be LAPPING us — a lap or more ahead in progress.
+    const letPassCase = AiDrive.letPassCase(state === "race", blocker, chaser, chaserGap, chaser ? chaser.speed : 0,
+      c.speed, vTop() / VMAX, !!chaser && chaser.prog - c.prog > track.total * 0.5);
     if (letPassCase) c.letPassT = (c.letPassT || 0) + dt;
     else c.letPassT = Math.max(0, (c.letPassT || 0) - dt * 1.5);
     letPass = (c.letPassT || 0) > AiDrive.letPassDelay(aiT);
@@ -7191,8 +7193,7 @@ function render(dt) {
   frame.sunViewDir = _sunVS;
   frame.upViewDir = _upVS;
   frame.eye = camEye;
-  // WebXR Phase 0: seated stereo (null when not presenting).
-  const _xrEyes = XrBoot.applyEyes(frame, camEye, camTgt, _camUp);
+  const _xrEyes = XrBoot.applyEyes(frame, camEye, camTgt, _camUp);   // null when flat
   // Radial draw-distance cull for chunked scenery.
   // Free/debug camera: mobile caps at 700 m (the pushed-out photo-mode far
   // plane can frame a whole ~5 M-vert city and jetsam-kill the tab); desktop
@@ -7271,8 +7272,7 @@ function render(dt) {
 
   // Sun / car shadow maps: js/render/shared/shadow-pass.js (snap-cached static map,
   // per-frame car map). The live player matrix was resolved above.
-  // Phase 0 XR skips shadow maps (Meta draw-call budget; spike scope).
-  if (!XrBoot.comfort()) shadowPass.sunPass(frame, _frameNo, _hasLivePlayerShadow);
+  if (!XrBoot.comfort()) shadowPass.sunPass(frame, _frameNo, _hasLivePlayerShadow);   // XR: skip maps
 
   // ── Sky animation & weather FX ──────────────────────────────────────────
   // Advance the render clock regardless of physics freeze so the sky always
@@ -7777,8 +7777,10 @@ function render(dt) {
       tmpP[2] = rp.world ? rp.z : smp2.p[2] + smp2.r[2] * renderX;
       tmpP[1] = smp2.p[1];
       // Behind-camera cull: AI cars strictly behind the view are never visible
-      // (no mirrors). Near-eye: origin within ~3.4 m fills the near plane — skip.
-      // Local player is never culled. Y without bank is fine for the near-eye test.
+      // (no mirrors). Near-eye: only an eye INSIDE the body box (GameCams.eyeInsideCar,
+      // grown by the near plane) — a 3.4 m radius hid a rival ALONGSIDE in the onboard
+      // views as the player drew level. Local player is never culled. Y without bank is
+      // fine for the near-eye test.
       // Side frustum is applied AFTER the car is queued for the shadow map —
       // a rival just off a ~60° chase FOV can still throw a sun/car shadow
       // onto the visible road (the car map is a ±42 m ortho around the player).
@@ -7786,7 +7788,7 @@ function render(dt) {
         const dx = tmpP[0] - camEye[0], dz = tmpP[2] - camEye[2];
         if (dx * _camFwdX + dz * _camFwdZ < -6) continue;   // 6 m grace behind the eye
         const dy = tmpP[1] - camEye[1];
-        if (dx * dx + dy * dy + dz * dz < 3.4 * 3.4) continue;
+        if (GameCams.eyeInsideCar(-(dx * smp2.t[0] + dz * smp2.t[2]), -(dx * smp2.r[0] + dz * smp2.r[2]), -dy, _nearM + 0.3)) continue;
       }
       bankC = Tracks.banking(track, cS, renderX, _bankScratch);
       tmpP[1] = smp2.p[1] + (bankC ? bankC.dy : 0);   // road SURFACE height: legit
@@ -8412,8 +8414,7 @@ const PHYS_DT = PhysicsConsts.FIXED_DT;   // fixed physics step — js/physics/c
 function tick(now) {
   try {
     tickBody(now); LoopHealth.clean();
-    // Immersive-vr owns the frame clock; XrBoot dedupes window rAF on EXIT VR.
-    XrBoot.afterTick(tick);
+    XrBoot.afterTick(tick);   // no-op while immersive-vr owns session.rAF; deduped on EXIT
   }
   catch (e) {
     // BOUNDED tolerance, policy in js/perf/loop-health.js: a transient fault
@@ -8423,10 +8424,7 @@ function tick(now) {
     // and used to take the whole game down. At the cap this falls through to
     // exactly the old behaviour, so a DETERMINISTIC fault still stops instead
     // of repainting the error overlay 60x/s.
-    if (LoopHealth.fault(e)) {
-      XrBoot.afterTick(tick);
-      return;
-    }
+    if (LoopHealth.fault(e)) { XrBoot.afterTick(tick); return; }
     // Report the REAL error once (cross-origin window.onerror shows only a bare
     // "Script error.").
     if (!tick._reported && typeof window.__apexReportError === "function") {
@@ -8467,8 +8465,8 @@ function tickBody(now) {
     // the pause menu, and its placements publish one zero-dt frame. Resuming tears
     // it down (setPaused -> exitPhotoMode -> FreeCam.onPhotoExit), so no unpaused
     // state in which it should still be flying.
-    if ((state === "race" || state === "count") &&
-        (!els.lighting.hidden || !els.camtune.hidden || !els.flyby.hidden || photoMode)) {   // photoMode: the FREE CAMERA panel docks with no tuner open
+    if (setupPreviewOn || ((state === "race" || state === "count") &&
+        (!els.lighting.hidden || !els.camtune.hidden || !els.flyby.hidden || photoMode))) {   // photoMode: the FREE CAMERA panel docks with no tuner open
       // NO governor here: paused preview frames are vsync-cheap, so the governor
       // only ever stepped the scale UP toward full res — each step a complete
       // render-target reallocation. The scale simply stays where the race left it
@@ -8984,7 +8982,8 @@ function openGarage(from) {
   // the module cannot hold the helper itself. The build runs inside the
   // transition callback — vt's 60 ms drop-safety applies it directly if the
   // page is not compositing.
-  vt(openSetup);
+  if (from === "pit") { openSetup(); setupCam.startArrival(); }
+  else vt(openSetup);
 }
 $("mb-garage").onclick = () => openGarage("menu");
 // ── WORK ON CAR, from inside a pit stop ────────────────────────────────────
@@ -9025,6 +9024,7 @@ function closePitWork() {
 // Leaving the GARAGE, shared by DONE and BACK: the screen's own teardown plus
 // the part maths, which both exits owe the rest of the game.
 function leaveGarage() {
+  setupCam.cancelArrival();
   $("carsetup").hidden = true;
   setupPreviewOn = false;
   recomputePlayerMods();
@@ -9573,12 +9573,8 @@ audioPanel.init();
 // (openRaceSettings), and __apex forces a build on first use (lazyTrackEnsure).
 window.addEventListener("resize", () => gfx.resize());
 lastFrame = performance.now();
-// WebXR Phase 0: bind + ENTER VR (hidden until immersive-vr is supported).
-XrBoot.bind({
-  gfx, tickBody, windowTick: tick,
-  getCamMode: () => camMode,
-  setCamMode: (i, opts) => { if (typeof setCamMode === "function") setCamMode(i, opts); },
-});
+XrBoot.bind({ gfx, tickBody, windowTick: tick, getCamMode: () => camMode,
+  setCamMode: (i, opts) => { if (typeof setCamMode === "function") setCamMode(i, opts); } });
 XrBoot.mountUi();
 requestAnimationFrame(tick);
 

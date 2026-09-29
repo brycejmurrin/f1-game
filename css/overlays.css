@@ -1508,7 +1508,7 @@ body[data-density="compact"] #campicker {
 }
 
 /* ---------- WebXR ENTER VR (Phase 0) ---------- */
-/* Hidden until XrSession.probe() reports immersive-vr support. Fixed corner
+/* Hidden until XrSession probe() reports immersive-vr support. Fixed corner
    affordance — Quest Browser / Immersive Web Emulator; not a HUD overlay. */
 #xr-enter {
   position: fixed;
