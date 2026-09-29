@@ -141,7 +141,7 @@ window.ScrollFade = (function () {
     // row AFTER them and its box hangs below the content: a thumb drawn while
     // the title screen briefly overflowed mid-rotation (280px tall) kept
     // scrollHeight at 654 in a 430px landscape screen by itself — scrollable
-    // forever, measured 2026-09-29. `.sf-measure` hides it for this one read
+    // forever, measured 2026-09-29. `[data-sf-measure]` hides it for this one read
     // (one layout for the batch, as before), so the answer is the content's.
     const els = document.querySelectorAll(SEL);
     const live = [];
@@ -150,9 +150,9 @@ window.ScrollFade = (function () {
       watch(el);
       live.push(el);
     });
-    for (const el of live) if (el.classList.contains("sf-scroll")) el.classList.add("sf-measure");
+    for (const el of live) if (el.classList.contains("sf-scroll")) el.setAttribute("data-sf-measure", "");
     const measured = live.map(measure);
-    for (const el of live) el.classList.remove("sf-measure");
+    for (const el of live) el.removeAttribute("data-sf-measure");
     for (const m of measured) write(m);
   }
 
