@@ -63,7 +63,9 @@ const SPEC = [
   { k: "volMusic", lane: "json", group: "audio", def: 0.6, src: "js/audio/panel.js" },
   { k: "volSfx", lane: "json", group: "audio", def: 0.2, src: "js/audio/panel.js" },
   { k: "radioVoice", lane: "json", group: "audio", def: false, src: "js/audio/panel.js" },
+  { k: "announcer", lane: "json", group: "audio", def: true, src: "js/audio/announcer.js" },
   { k: "volRadio", lane: "json", group: "audio", def: 0.8, src: "js/audio/panel.js" },
+  { k: "radioFx", lane: "json", group: "audio", def: 1, src: "js/audio/panel.js" },
   { k: "voiceTune", lane: "json", group: "audio", def: {}, src: "js/audio/radio-voice.js" },
   { k: "radioChat", lane: "json", group: "audio", def: "normal", src: "js/race/race-radio.js", oneOf: ["off", "key", "normal", "chatty"] },
   { k: "radioPack", lane: "json", group: "audio", def: true, src: "js/audio/radio-voice.js" },
@@ -333,19 +335,21 @@ function applySettings(file, G) {
     const g = groups[row.group];
     if (!g || !Object.prototype.hasOwnProperty.call(g, row.k)) continue;
     const v = g[row.k];
-    if (!typeOk(v, defaultOf(row, G)) || (row.oneOf && !row.oneOf.includes(v))) { skipped++; continue; }
+    const def = defaultOf(row, G);
+    // null restores OS-following motion; it is not an unknown enum member.
+    if (!typeOk(v, def) || (row.oneOf && !(v === null && def === null) && !row.oneOf.includes(v))) { skipped++; continue; }
     try {
       // A write storage refused (full quota, private mode) is not APPLIED:
       // counting it reloaded the page into the values it had lost.
       let stored = true;
       if (row.lane === "raw") {
-        if (v === null) GameStore.store.rawDel(`apex26.${row.k}`);
+        if (v === null) stored = GameStore.store.rawDel(`apex26.${row.k}`) !== false;
         else stored = GameStore.store.rawSet(`apex26.${row.k}`, String(v)) !== false;
       } else {
         stored = GameStore.store.set(row.k, v) !== false;
       }
       if (stored) applied++; else failed++;
-    } catch (_) { skipped++; }
+    } catch (_) { failed++; }
   }
   return { ok: true, applied, skipped, failed, reason: null };
 }
@@ -437,7 +441,7 @@ function applyGarage(file) {
     if (!isGarageKey(k)) { skipped++; continue; }
     const v = garageValue(k, g[k]);
     if (v === undefined) { skipped++; continue; }
-    try { if (GameStore.store.set(k, v) !== false) applied++; else failed++; } catch (_) { skipped++; }
+    try { if (GameStore.store.set(k, v) !== false) applied++; else failed++; } catch (_) { failed++; }
   }
   return { ok: true, applied, skipped, failed, reason: null };
 }
