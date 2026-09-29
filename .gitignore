@@ -38,4 +38,9 @@ assets/pack/src/
 # became TRACKED — which then blocked two deploys as a dirty tree.
 **/__pycache__/
 
+# Electron desktop spike — staged site + builder output (never commit)
+desktop/dist/
+desktop/dist-site/
+desktop/node_modules/
+
 # Codex skill mirror (bash tools/env/mirror-skills.sh) — a copy, never the source

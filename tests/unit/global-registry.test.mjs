@@ -90,6 +90,7 @@ const KNOWN_EXTERNAL_READS = {
   "js/audio/spotify.js": [
     "Spotify",                      // the Spotify Web Playback SDK, injected at connect time
     "onSpotifyWebPlaybackSDKReady", // the SDK's own window callback contract
+    "__APEX_NATIVE__",              // Electron preload (desktop/preload.js); absent in the browser
   ],
   "js/ui/select-screen.js": ["__APEX_BUILD"],          // exportRecovery stamps the shell build id
   "js/perf/governor.js": ["__APEX_BUILD"],            // index.html inline shell script sets these —

@@ -1,0 +1,79 @@
+{
+  "name": "apex26-desktop",
+  "productName": "Apex 26",
+  "description": "Unofficial fan racing game \u2014 desktop shell for the Apex 26 static WebGL2 site.",
+  "author": "Apex 26 contributors",
+  "private": true,
+  "main": "main.js",
+  "version": "0.0.0",
+  "scripts": {
+    "stage": "node ../tools/desktop/stage.mjs --out desktop/dist-site --stamp",
+    "sync-version": "node sync-version.mjs",
+    "prestart": "npm run sync-version && npm run stage",
+    "start": "electron .",
+    "smoke": "npm run sync-version && npm run stage && electron . --smoke",
+    "pack": "npm run sync-version && npm run stage && electron-builder --dir",
+    "dist": "npm run sync-version && npm run stage && electron-builder",
+    "dist:linux": "npm run sync-version && npm run stage && electron-builder --linux",
+    "dist:win": "npm run sync-version && npm run stage && electron-builder --win",
+    "dist:mac": "npm run sync-version && npm run stage && electron-builder --mac"
+  },
+  "devDependencies": {
+    "electron": "36.4.0",
+    "electron-builder": "26.0.12"
+  },
+  "build": {
+    "appId": "io.github.brycejmurrin.apex26",
+    "productName": "Apex 26",
+    "copyright": "Copyright \u00a9 Apex 26 contributors",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "dist-site",
+        "to": "site",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "asar": true,
+    "linux": {
+      "target": [
+        "AppImage",
+        "dir"
+      ],
+      "category": "Game",
+      "artifactName": "Apex26-${version}-${arch}.${ext}"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "signAndEditExecutable": false,
+      "artifactName": "Apex26-${version}-${arch}.${ext}"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.games",
+      "identity": null,
+      "artifactName": "Apex26-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "icon": "../icons/icon-512.png"
+  }
+}

@@ -1,0 +1,75 @@
+# Desktop packaging (Electron)
+#
+# Manual / tag-triggered builds of unsigned Windows, macOS and Linux installers
+# for the Apex 26 desktop spike. Stages the same runtime tree Pages publishes,
+# then packages it with electron-builder.
+#
+# Does NOT run on push to the ship branch and does not compete with pages.yml.
+
+name: Desktop packages
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "desktop-v*"
+
+# Isolate from ci.yml / pages.yml concurrency groups.
+concurrency:
+  group: desktop-${{ github.ref }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Package (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            dist_script: dist:linux
+          - os: windows-latest
+            dist_script: dist:win
+          - os: macos-latest
+            dist_script: dist:mac
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install desktop deps
+        working-directory: desktop
+        run: npm ci
+
+      - name: Sync version from version.json + package
+        working-directory: desktop
+        # CSC_IDENTITY_AUTO_DISCOVERY=false — unsigned spike; never wait on certs.
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npm run ${{ matrix.dist_script }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: apex26-desktop-${{ matrix.os }}-b${{ github.run_number }}
+          path: |
+            desktop/dist/*.AppImage
+            desktop/dist/*.dmg
+            desktop/dist/*.zip
+            desktop/dist/*.exe
+            desktop/dist/*.yml
+            desktop/dist/*.yaml
+          if-no-files-found: warn
+          retention-days: 14
