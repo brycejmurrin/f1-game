@@ -256,6 +256,16 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
       "mosport-whites-tunnel",
       "mosport-event-centre",
     ],
+    // Wave 6 — Estoril: 30-bay pit terrace (official boxes 17×6.70 m) +
+    // existing timing tower / aldeia / depósito / moinho made required.
+    // Moinho kept but UNCERTAIN as an on-site feature (leave, do not extend).
+    estoril: [
+      "estoril-pit-terrace",
+      "estoril-timing-tower",
+      "estoril-aldeia",
+      "estoril-deposito",
+      "estoril-moinho",
+    ],
     // Wave 6 — Brands Hatch Indy amphitheatre stands + Kentagon
     brands_hatch: [
       "brands-pit-straight-stand",
@@ -273,6 +283,14 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
       "tremblant-bridge",
       "tremblant-namerow-bank",
       "tremblant-paddock-bend-stand",
+    ],
+    // Wave 6 — Jerez: El Ovni VIP deck on the finish line, Tío Pepe control
+    // tower, Dani Pedrosa (Dry Sack) + Jorge Lorenzo corner markers.
+    jerez: [
+      "jerez-ovni",
+      "jerez-control-tower",
+      "jerez-lorenzo-corner",
+      "jerez-dani-pedrosa",
     ],
   };
   for (const [track, ids] of Object.entries(expected)) {
