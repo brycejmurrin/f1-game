@@ -587,7 +587,7 @@ Levelled, namespaced logging with a retained ring buffer. Loads FIRST in
 `tools/manifest.cjs`, so any module can log at evaluation time.
 
 ```
-Log.error/warn/info/debug(ns, ...args)   ns from Log.NAMESPACES
+Log.error/warn/info/debug(ns, ...args)   ns from Log.NAMESPACES (tests/unit/log-namespaces.test.mjs)
 Log.enabled(ns, level)                -> bool   (guard hot-path debug calls)
 Log.level(spec?)                      -> resolved thresholds; a string applies one
 Log.persist(spec|null)                -> remember it across reloads

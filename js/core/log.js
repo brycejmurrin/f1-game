@@ -6,6 +6,11 @@ const Log = (function () {
   const NAMES = ["silent", "error", "warn", "info", "debug", "trace"];
   const CONSOLE_FN = [null, "error", "warn", "info", "log", "debug"];
 
+  // Every literal ns a `Log.<level>("ns", …)` call uses must be listed here —
+  // tests/unit/log-namespaces.test.mjs scans js/ and index.html for it.
+  // "sw" is the service-worker lifecycle (index.html's registration listener,
+  // which also relays sw.js's own install/cache failures); it is not "net",
+  // which is multiplayer signalling and would drown it.
   const NAMESPACES = [
     "scenery",
     "track",
@@ -19,6 +24,9 @@ const Log = (function () {
     "car",
     "ui",
     "input",
+    "race",
+    "xr",
+    "sw",
   ];
 
   const RING = 500;
