@@ -107,6 +107,6 @@ test("game.js wiring: keyboard unlocks audio, a hidden-tab start pauses, resume 
     "SOUND turned on under the pause card (js/audio/panel.js defers) gets music and rain back on RESUME");
   assert.match(g, /go\.addEventListener\("animationend", qGoShakeEnd, \{ once: true \}\)/, "one named handler, not a closure per rejected press");
   assert.match(g, /function tiltSay\(msg\) \{ els\.audiostate\.textContent = msg; if \(msg\) announce\(/, "tilt fallbacks reach the banner, not only the title line");
-  assert.match(g, /if \(state === "race" && !motionReduced && _buzzWet > 0\.01/, "REDUCE MOTION drops the onboard speed buzz");
-  assert.match(g, /_vantExtra\.reduceMotion = motionReduced;/, "…and the kerb shiver (js/camera/vantage.js)");
+  assert.match(g, /if \(state === "race" && !camComfort\(\) && _buzzWet > 0\.01/, "REDUCE MOTION / XR comfort drops the onboard speed buzz");
+  assert.match(g, /_vantExtra\.reduceMotion = camComfort\(\);/, "…and the kerb shiver (js/camera/vantage.js)");
 });
