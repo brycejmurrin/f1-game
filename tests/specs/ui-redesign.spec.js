@@ -339,8 +339,8 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   // relocated, not removed — tests/unit/ui-sheets-audit.test.mjs asserts both
   // ids still exist nested under #pm-panel-display, and this list is the same
   // one it pins, so the two files cannot drift apart.
-  // SEVEN with BACKUP & RESTORE (#424); the unit-side copy moved with it and
-  // this one did not.
+  // BACKUP & RESTORE (#pm-open-files) became its own door when the settings
+  // pages were consolidated — the unit list in ui-sheets-audit.test.mjs has it.
   expect(settings.doorIds).toEqual([
     "pm-open-controls", "pm-open-driving", "pm-open-display",
     "pm-open-appearance", "pm-advanced", "pm-audio", "pm-open-files",
@@ -765,21 +765,21 @@ test("balanced control rows derive their shape from local room", async ({ page }
     };
   }, selector);
 
-  // Runtime visibility changes the title group from four to five actions.
+  // Runtime visibility changes the title group: STANDINGS unhidden here, and on
+  // this hasTouch page USE AS CONTROLLER (#mb-phonepad) is shown too — a coarse
+  // pointer is the device that can BE the controller (js/game.js syncPointerKind).
   await page.setViewportSize({ width: 860, height: 560 });
   await page.evaluate(() => { document.getElementById("mb-standings").hidden = false; });
   const title = await report("#menu-secondary");
   expect(title.display).toBe("flex");
-  // Five rooms (STANDINGS unhidden). Wrap count is flex + overlay zoom's
-  // business — 860×560 currently packs 4+1 after --balance-basis: 5.5rem
-  // and min-width:0 on the doors. What this guards is no leftover sliver:
-  // every visible door is present, and a lone last row fills the track.
-  // USE AS CONTROLLER (12ef98a) shows on a coarse pointer only, and whether
-  // this project's headless page reads as one is Input's call, not the
-  // spec's. Count the door by name from the same live state: six with it,
-  // five without.
-  const phonepad = await page.evaluate(() => !document.getElementById("mb-phonepad").hidden);
-  expect(title.rowCounts.reduce((n, c) => n + c, 0)).toBe(phonepad ? 6 : 5);
+  // Six rooms: DATA HUB, GARAGE, SETTINGS, HOW TO PLAY, STANDINGS, USE AS
+  // CONTROLLER. Wrap count is flex + overlay zoom's business. What this guards
+  // is no leftover sliver: every visible door is present, and a lone last row
+  // fills the track.
+  const shownTitleDoors = await page.evaluate(() => ["mb-standings", "mb-data", "mb-garage", "mb-settings", "mb-phonepad", "mb-help"]
+    .filter((id) => !document.getElementById(id).hidden).length);
+  expect(shownTitleDoors, "the touch page shows the controller door").toBe(6);
+  expect(title.rowCounts.reduce((n, c) => n + c, 0)).toBe(shownTitleDoors);
   expect(title.lastFill).toBeGreaterThan(0.9);
 
   // Settings home is a .pm-doors list. The guard this test keeps is full
