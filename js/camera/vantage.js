@@ -74,6 +74,18 @@ function _vAheadPt(d, h, lat) {
 // re-checked with docs/OCCLUSION-PROBE.md — the wheel rig (game.js _rigT), the
 // ckpt monocoque cap and the coaming are all positioned against this number.
 const COCKPIT_EYE_FWD = -0.20, COCKPIT_EYE_UP = 0.82;
+// NEAR-EYE CULL for a RIVAL: hidden only when the camera eye sits INSIDE its body
+// (the drawn car, a little over the 4.8 x 2.0 m collider, grown by `pad` = the near
+// plane plus a margin). The old test was a 3.4 m RADIUS from the car's origin, sized
+// for the chase cam (an eye inside a tailgating car). From the cockpit, visor or hood
+// a rival ALONGSIDE is 2-3 m from the eye, so it vanished just as the player drew
+// level ("as I get almost fully ahead they disappear"). along / lat / up are the eye
+// MINUS the car in the car's own frame (tangent, right, up), metres.
+const CAR_BOX_HALF_L = 2.9, CAR_BOX_HALF_W = 1.0, CAR_BOX_H = 1.2;
+function eyeInsideCar(along, lat, up, pad) {
+  const p = pad > 0 ? pad : 0;
+  return Math.abs(along) < CAR_BOX_HALF_L + p && Math.abs(lat) < CAR_BOX_HALF_W + p && up > -p && up < CAR_BOX_H + p;
+}
 // VISOR: the same driver's eye slid 0.55 m forward — past the wheel and the
 // halo's centre strut, level with the cockpit opening's front — so the view
 // is the cockpit's with nothing of the rig in it (game.js draws no rig and no
@@ -600,5 +612,5 @@ function vantage(track, mode, s, x, spd, now, extra) {
   return _vantOut;
 }
 
-return { init, vantage, cockpitViewmodelAxes, COCKPIT_EYE_FWD, COCKPIT_EYE_UP, CHASE_CORNER_LEAD_DEFAULT };
+return { init, vantage, cockpitViewmodelAxes, eyeInsideCar, COCKPIT_EYE_FWD, COCKPIT_EYE_UP, CHASE_CORNER_LEAD_DEFAULT };
 })();

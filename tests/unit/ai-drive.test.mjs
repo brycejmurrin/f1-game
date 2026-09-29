@@ -863,8 +863,8 @@ test("a straight cover is a lane move, not a corner chop", () => {
 });
 
 test("the straight branch respects the gates the corner branch already had", () => {
-  // too far back
-  assert.equal(A.defendPull({ ...onStraight, chaserGap: 20, other: { x: 1.4 } }), 0);
+  // too far back — in TIME: past the cover window (0.7 s at the most aware), not a flat 12 m
+  assert.equal(A.defendPull({ ...onStraight, chaserGap: 0.72 * 62, other: { x: 1.4 } }), 0);
   // not actually closing
   assert.equal(A.defendPull({ ...onStraight, chaserSpeed: 55, other: { x: 1.4 } }), 0);
   // a blocker ahead means this car is not the one defending
@@ -1115,4 +1115,30 @@ test("the overtake car-ahead pre-reject is result-identical to the full wrap sca
     }
   }
   assert.ok(armed > 500 && rejected > 500, `the field exercised both sides (armed ${armed}, rejected ${rejected})`);
+});
+
+/* MIRRORS. The traffic scan used to stop at a flat 13 m behind, which at 60 m/s is
+ * 0.2 s: the attacker was on the gearbox before the defender knew it was there, and
+ * the two rules written in TIME (holdLineGap, a second behind; the pressure timer,
+ * 0.6 s) could never see past it. The reach and the cover window are times now, and
+ * awareness is how far back a driver looks. */
+test("mirrorReach is a time behind scaled by awareness, floored at the old 13 m and capped", () => {
+  const dull = { ...mid, awareness: 0 }, sharp = { ...mid, awareness: 1 };
+  assert.ok(Math.abs(A.mirrorReach(sharp, 60) - 60 * 1.05) < 1e-9, "a sharp driver watches a second back");
+  assert.ok(Math.abs(A.mirrorReach(dull, 60) - 60 * 0.6) < 1e-9, "a dull one about 0.6 s");
+  assert.ok(A.mirrorReach(ace, 60) > A.mirrorReach(mid, 60), "awareness is the reach");
+  assert.equal(A.mirrorReach(mid, 5), 13, "never shorter than the old flat window, even crawling");
+  assert.equal(A.mirrorReach(sharp, 200), 72, "and capped: a long scan is paid per car per frame");
+  assert.ok(A.mirrorReach(mid, 60) >= A.holdLineGap(60) * 0.8, "the scan now reaches most of holdLineGap's second");
+});
+
+test("the cover starts a time behind, grows as the attacker closes, and awareness widens it", () => {
+  const at = (gap, traits = ace) => Math.abs(A.defendPull({ ...onStraight, traits, chaserGap: gap, other: { x: 1.4 } }));
+  const v = onStraight.speed;
+  // 0.4 s back at 62 m/s = 25 m: covered now (the flat 12 m gate said nothing until 0.19 s)
+  assert.ok(at(0.4 * v) > 0, "0.4 s back is inside an aware driver's window");
+  assert.ok(at(0.1 * v) > at(0.4 * v), "the cover grows as the attacker closes");
+  assert.equal(at(0.5 * v, { ...ace, awareness: 0 }), 0, "a dull driver's window is shorter");
+  assert.ok(at(0.5 * v, { ...ace, awareness: 1 }) > 0, "a sharp one's reaches it");
+  assert.ok(Math.abs(A.defendWindowT({ awareness: 0 }) - 0.35) < 1e-9 && Math.abs(A.defendWindowT({ awareness: 1 }) - 0.7) < 1e-9);
 });
