@@ -37,6 +37,8 @@ function bootInput() {
   const listeners = {};
   const clock = { t: 0 };
   const vibrated = [];
+  const keys = [];   // every synthetic key the menu seam dispatches at document
+  class FakeEvent { constructor(type, init) { this.type = type; Object.assign(this, init || {}); } }
   const el = () => ({
     addEventListener() {}, removeEventListener() {}, style: {}, dataset: {},
     classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
@@ -52,10 +54,13 @@ function bootInput() {
     removeEventListener() {}, setTimeout: () => 0, clearTimeout() {},
     navigator: { vibrate: (ms) => { vibrated.push(ms); return true; } },
     screen: {}, matchMedia: () => ({ matches: false, addEventListener() {} }),
+    KeyboardEvent: FakeEvent, Event: FakeEvent,
     document: {
       addEventListener: (t, f) => { (listeners[t] ||= []).push(f); }, removeEventListener() {},
       getElementById: el, querySelector: el, querySelectorAll: () => [], hidden: false,
       body: { classList: { add() {}, remove() {}, toggle() {} } },
+      activeElement: null,
+      dispatchEvent(e) { keys.push("doc:" + (e.key || e.type)); return true; },
     },
   };
   sb.window = sb;
@@ -70,7 +75,26 @@ function bootInput() {
   Input.reset();
   const key = (k, down) => (listeners[down ? "keydown" : "keyup"] || [])
     .forEach((f) => f({ key: k, code: k, repeat: false, preventDefault() {}, target: { tagName: "BODY" } }));
-  return { Input, key, clock, vibrated, pausedCount: () => paused };
+  return { Input, key, clock, vibrated, pausedCount: () => paused, sb, keys };
+}
+
+// Timers pad() can be handed instead of the wall clock (its `timers` seam).
+function fakeTimers() {
+  const q = []; let id = 0;
+  const t = {
+    setTimeout: (f, ms) => { q.push({ id: ++id, f, ms, every: 0 }); return id; },
+    setInterval: (f, ms) => { q.push({ id: ++id, f, ms, every: ms }); return id; },
+    clearTimeout: (i) => { const k = q.findIndex((e) => e.id === i); if (k >= 0) q.splice(k, 1); },
+    clearInterval: (i) => t.clearTimeout(i),
+    advance(ms) {
+      for (const e of [...q]) {
+        e.ms -= ms;
+        while (e.ms <= 0 && q.includes(e)) { if (e.every) { e.f(); e.ms += e.every; } else { t.clearTimeout(e.id); e.f(); } }
+      }
+    },
+    pending: () => q.length,
+  };
+  return t;
 }
 
 const STEP = 1000 / 60;
@@ -335,9 +359,14 @@ test("the dash reaches the phone ~15 Hz on the unreliable channel and paints the
   assert.equal(el.team.style["--team"], "#dc0000", "the LCD tints with the team");
   // Neutral in the pit lane, a caution on track, the lights before the start.
   PhonePad.paintHud(el, { ...phone.huds[0], gear: 0, kmh: 0, rpm: 0.2, state: "menu", flags: 0 });
-  assert.equal(el.gear.textContent, "N"); assert.equal(el.speed.textContent, "---"); assert.equal(el.flag.textContent, "PIT LANE");
+  assert.equal(el.gear.textContent, "N"); assert.equal(el.speed.textContent, "---"); assert.equal(el.flag.textContent, "MENU");
   assert.equal(el.leds.children.filter((s) => s.classes.has("on")).length, 0, "no rev lights out of the race");
   assert.ok(el.screen.classes.has("idle"));
+  assert.ok(el.body.classes.has("menu"), "out of a race the page shows the MENU PAD");
+  PhonePad.paintHud(el, { ...phone.huds[0], state: "race", flags: PhonePad.DASH.paused });
+  assert.ok(el.body.classes.has("menu") && el.flag.textContent === "PAUSED", "paused inside a race: the pad, for the pause menu");
+  PhonePad.paintHud(el, { ...phone.huds[0], state: "race", flags: 0 });
+  assert.ok(!el.body.classes.has("menu"), "racing again: the wheel");
   PhonePad.paintHud(el, { ...phone.huds[0], state: "race", caution: 3 });
   assert.equal(el.flag.textContent, "SAFETY CAR"); assert.ok(el.screen.classes.has("caution"));
   PhonePad.paintHud(el, { ...phone.huds[0], state: "count", flags: PhonePad.DASH.timeTrial });
@@ -398,6 +427,27 @@ test("Input.reset() (blur / everything-off) clears the phone's pedals until it r
   assert.equal(Input.throttle(), true, "the next sample restores it — the phone is still pressing");
 });
 
+test("menu pad: the phone's nav events land on the gamepad's menu seam (arrows, activate, back)", () => {
+  const { Input, sb, keys } = bootInput();
+  // No menu on top: a direction is a no-op, not a stray key into the race.
+  assert.equal(Input.remoteEvent("navDown"), true); assert.deepEqual(keys, []);
+  // A menu with nothing focused: the first press SEEDS focus (ArrowDown), as the pad's first press does.
+  const btn = { tagName: "BUTTON", disabled: false, clicks: 0, click() { this.clicks++; }, matches: () => true,
+    dispatchEvent: (e) => { keys.push("btn:" + (e.key || e.type)); return true; } };
+  const layer = { tagName: "DIV", contains: (n) => n === btn, dispatchEvent: (e) => { keys.push("layer:" + e.type); return true; } };
+  sb.MenuNav = { activeLayer: () => layer, FOCUSABLE: "button" };
+  sb.UiLayers = { top: () => layer };
+  Input.remoteEvent("navRight");
+  assert.deepEqual(keys, ["doc:ArrowDown"], "seeded, not moved");
+  sb.document.activeElement = btn;
+  Input.remoteEvent("navRight"); Input.remoteEvent("navUp"); Input.remoteEvent("navLeft"); Input.remoteEvent("navDown");
+  assert.deepEqual(keys.slice(1), ["btn:ArrowRight", "btn:ArrowUp", "btn:ArrowLeft", "btn:ArrowDown"], "arrows at the focused control");
+  Input.remoteEvent("navSelect"); assert.equal(btn.clicks, 1, "SELECT clicks the focused control (a synthetic Enter would not)");
+  Input.remoteEvent("navBack"); assert.equal(keys.at(-1), "btn:Escape", "BACK is Escape on a plain layer");
+  layer.tagName = "DIALOG"; Input.remoteEvent("navBack"); assert.equal(keys.at(-1), "layer:cancel", "and the cancel seam on a <dialog>");
+  assert.equal(Input.remoteEvent("navSideways"), false, "an unknown nav name is refused");
+});
+
 // ---------------------------------------------------------------------------
 // The phone page's wiring: pad() over a mini DOM, connected through injected
 // signalling onto the loopback wire, so a pointer on the fake GAS zone and a
@@ -429,7 +479,8 @@ test("pad(): the page's pedals, paddles and LCD are wired through to the wire an
     center: fakeEl(), rim: fakeEl(), buttons: Object.fromEntries(PhonePad.EVENTS.map((k) => [k, fakeEl()])), hud: lcd() };
   dom.buttons.overtake = [fakeEl(), fakeEl()];   // OT lives on the grip AND the face
   const seen = [];
-  const ctl = PhonePad.pad(dom, { now: () => clock.t, deps: {
+  const timers = fakeTimers();
+  const ctl = PhonePad.pad(dom, { now: () => clock.t, timers, deps: {
     rtc: () => padEnd, prefetchIce: async () => null, normalise: (c) => String(c).toUpperCase(), valid: (c) => c.length === 6,
     // The courier, stood in for: hand the page an "offer", take its answer.
     swap: async (o) => { seen.push("swap:" + o.code); const ans = await o.reply("OFFER"); return ans ? { ok: true } : { ok: false, error: "reply_failed" }; },
@@ -461,6 +512,21 @@ test("pad(): the page's pedals, paddles and LCD are wired through to the wire an
   dom.buttons.overtake[1].dispatch("pointerdown", {});
   for (let i = 0; i < 3; i++) frame();
   assert.equal(desk.Input.consumeOvertake(), true, "the second OT button (the grip's) fires the same edge");
+  // MENU PAD: a held direction repeats at a keyboard's cadence (380 ms, then every 110 ms); the release stops it.
+  const e0 = link.stats().events;
+  dom.buttons.navDown.dispatch("pointerdown", {});
+  for (let i = 0; i < 3; i++) frame();
+  assert.equal(link.stats().events, e0 + 1, "one edge on the down");
+  timers.advance(379); for (let i = 0; i < 3; i++) frame();
+  assert.equal(link.stats().events, e0 + 1, "nothing before the delay");
+  timers.advance(1); timers.advance(220); for (let i = 0; i < 3; i++) frame();
+  assert.equal(link.stats().events, e0 + 3, "then two repeats in 220 ms");
+  dom.buttons.navDown.dispatch("pointerup", {});
+  timers.advance(1000); for (let i = 0; i < 3; i++) frame();
+  assert.equal(link.stats().events, e0 + 3, "released: no more"); assert.equal(timers.pending(), 0, "and no timer left behind");
+  dom.buttons.navSelect.dispatch("pointerdown", {}); dom.buttons.navSelect.dispatch("pointerup", {});
+  for (let i = 0; i < 3; i++) frame();
+  assert.equal(link.stats().events, e0 + 4, "SELECT is one edge"); assert.equal(timers.pending(), 0, "and never repeats");
   // Tilt: setRoll() stands in for the sensor; the rim turns, the desktop steers.
   ctl.setRoll(30);
   for (let i = 0; i < 60; i++) { frame(); ctl.setRoll(30); }
@@ -622,11 +688,21 @@ test("controller.html carries exactly the manifest's CONTROLLER subset and both 
   assert.match(page, /#keys button \{ padding: 0; min-height: clamp\(48px, 14vh, 80px\); font-weight: 800; font-size: clamp\(12px, 3\.2vh, 18px\);/, "thumb-sized keys");
   assert.match(page, /#keys \.wide \{[^}]*min-height: clamp\(36px, 9vh, 52px\)/, "the CENTRE TILT bar grows too");
   assert.match(page, /#screen \{ flex: 1 1 0; min-height: 0;/, "the screen gives way, the keys do not");
+  // The MENU PAD is its own screen: hidden until body.menu, when the wheel
+  // hides instead; the D-pad, SELECT/BACK and both PAUSE buttons are wired.
+  assert.match(page, /#menupad \{ position: absolute; inset: 0; display: none;/, "the pad screen is hidden on the wheel");
+  assert.match(page, /body\.linked\.menu #menupad \{ display: grid; \}/, "and shows, linked, in a menu");
+  assert.match(page, /body\.menu #ctl \{ display: none; \}/, "while the wheel goes");
+  assert.match(page, /#ctl, #ctl \*, #menupad, #menupad \* \{ touch-action: none; \}/, "the pad refuses browser gestures too");
+  assert.match(page, /pause: \[\$\("b-pause"\), \$\("b-pause-menu"\)\]/, "PAUSE on the wheel and on the pad");
+  assert.match(page, /navSelect: \$\("b-navSelect"\), navBack: \$\("b-navBack"\)/, "SELECT and BACK wired");
+  assert.match(page, /mtitle: \$\("mp-title"\)/, "the pad's title is painted from the dash");
+  assert.match(page, /demo=menu/, "the menu pad has a demo");
   // Zoom off on the wheel, landscape only: touch-action is not inherited, so
   // every wheel element owns its touches; the canceller mirrors index.html's;
   // portrait shows the TURN card instead of a squeezed grid; the lock rides
   // the CONNECT tap behind fullscreen (Android), best effort.
-  assert.match(page, /#ctl, #ctl \* \{ touch-action: none; \}/, "every wheel element refuses browser gestures");
+  assert.match(page, /#ctl, #ctl \*, #menupad, #menupad \* \{ touch-action: none; \}/, "every wheel and pad element refuses browser gestures");
   for (const ev of ["gesturestart", "gesturechange", "gestureend", "dblclick", "touchend"]) {
     assert.match(page, new RegExp(`document\\.addEventListener\\("${ev}"`), `the ${ev} canceller`);
   }
@@ -645,7 +721,8 @@ test("controller.html carries exactly the manifest's CONTROLLER subset and both 
   }
   assert.doesNotMatch(read("js/input/phone-pad.js"), /getElementById|querySelector\(/, "the module never looks an id up — controller.html hands elements in");
   for (const id of ["h-gear", "h-speed", "h-lap", "h-pos", "h-ers", "h-flag", "h-ot", "h-aero", "h-last", "leds", "screen", "rim",
-                    "b-shiftUp", "b-shiftDown", "b-ot-big", "b-boost-big", "b-overtake", "b-boost", "b-aero", "b-camera", "b-radio", "b-look", "b-recover", "b-pause", "b-center", "gas", "brake"]) {
+                    "b-shiftUp", "b-shiftDown", "b-ot-big", "b-boost-big", "b-overtake", "b-boost", "b-aero", "b-camera", "b-radio", "b-look", "b-recover", "b-pause", "b-center", "gas", "brake",
+                    "menupad", "dpad", "dpad-hub", "b-navUp", "b-navDown", "b-navLeft", "b-navRight", "mp-mid", "mp-title", "b-pause-menu", "ab", "b-navSelect", "b-navBack"]) {
     assert.ok(page.includes(`id="${id}"`), `controller.html declares #${id}, which its inline script hands to PhonePad.pad`);
   }
   assert.equal((page.match(/<div id="leds"[^>]*>((?:<span><\/span>)+)/) || [])[1]?.length, 15 * "<span></span>".length, "fifteen rev LEDs");

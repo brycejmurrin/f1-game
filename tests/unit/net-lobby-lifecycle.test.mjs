@@ -187,6 +187,39 @@ test("an invite link opened in a RUNNING tab opens the lobby on hashchange, once
   } finally { h.lobby.cancel(); }
 });
 
+test("a link tapped while the host has an offer out is deferred, and close() keeps an unhandled invite", async () => {
+  // Android link capture routes the host's own tapped link into the running
+  // app, or the host pastes their copied link to check it: openFromUrl used to
+  // join() through it and newTransport dropped the pending offer, so the
+  // friend's answer failed as "too late". And close() consumed WHATEVER
+  // fragment was there — a link deferred while the lobby was busy included.
+  let hash = null;
+  let consumed = 0;
+  const handshake = {
+    inviteFromUrl: () => hash,
+    consumeInviteUrl: () => { if (!hash) return false; consumed++; hash = null; return true; },
+  };
+  const h = harness({ handshake, scanFactory: () => ({ stop() {}, start() {} }), href: "https://x.test/play" });
+  try {
+    h.lobby.wire();
+    assert.equal((await h.lobby.host()).ok, true);
+    assert.deepEqual(h.transports, ["host"], "an offer is out");
+    hash = "friend";
+    h.emitWindow("hashchange");
+    await new Promise((r) => setImmediate(r));
+    assert.deepEqual(h.transports, ["host"], "the pending offer is not torn down by a link");
+    h.click("vs-close");
+    assert.equal(consumed, 0, "a link this lobby never handled survives close()");
+    assert.equal(hash, "friend");
+    // Opened from that link now — handled, so THIS close consumes it.
+    h.emitWindow("hashchange");
+    await new Promise((r) => setImmediate(r));
+    assert.deepEqual(h.transports, ["host", "guest"], "the deferred link opens the JOIN path once the host is done");
+    h.click("vs-close");
+    assert.equal(consumed, 1);
+  } finally { h.lobby.cancel(); }
+});
+
 test("host-leave copy is honest about the AI takeover", () => {
   assert.doesNotMatch(SOURCE, /host left[^"\n]*race is over/i);
   assert.match(SOURCE, /host left[^"\n]*rivals (?:are )?now AI/i);

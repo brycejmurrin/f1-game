@@ -243,12 +243,17 @@ LANDSCAPE ONLY (portrait shows a TURN THE PHONE card; Android locks the
 orientation behind fullscreen on the CONNECT tap, iOS has no lock) and refuses
 double-tap and pinch zoom the way index.html does (`touch-action: none` on
 every wheel element, a touchend/dblclick/GestureEvent canceller). Once the
-DataChannels open:
+DataChannels open (out of a race, or paused, the dash's `state`/`paused` swap the
+wheel for a MENU PAD screen — `body.menu` shows `#menupad`: a D-pad under the
+left thumb, BACK and SELECT under the right, the title and PAUSE/RESUME between
+— whose events land on the gamepad's menu seam in js/input/input.js,
+`padNavKey` / `padActivate` / `padEscape`, so the phone walks every menu the pad
+can):
 
 | Channel | Direction | Payload |
 |---|---|---|
 | `state` (unreliable) | phone → desktop | `[1, seq, rollDeg\|null, thr, brk, heldBits]` on every `deviceorientation` (≤ ~66 Hz) and a 100 ms heartbeat; the desktop drops any `seq` older than the last applied |
-| `event` (reliable) | phone → desktop | `{t:"ev", k}` — `shiftUp shiftDown overtake boost aero camera recover radio calib pause` |
+| `event` (reliable) | phone → desktop | `{t:"ev", k}` — `shiftUp shiftDown overtake boost aero camera recover radio calib pause`, and the MENU PAD's `navUp navDown navLeft navRight navSelect navBack` (a held direction repeats at 380 ms then 110 ms) |
 | `state` (unreliable) | desktop → phone | the DASH, `["H", gear, kmh, rpmFrac, lap, laps, pos, cars, ers, flagBits, caution, lastLapMs, state, teamHex]` at ~15 Hz (`HUD_MS`), sampled by `phonePadDash()` in js/game.js from the fields js/ui/hud.js reads; `PhonePad.paintHud()` draws it on the wheel's LCD (gear, speed, 15 rev LEDs, lap, position, ERS bar, OT/aero state, flag); its flag bits also carry the CONTROL MODES (`gearsAuto`, `throttleAuto`, `aeroAuto`, `aeroNone`), which the wheel turns into layout — no paddles on AUTO gears, an inert GAS plate on AUTO throttle, AERO greyed on AUTO or a circuit without zones (`controller.html?demo=auto`) |
 | `event` (reliable) | desktop → phone | `{t:"hap", ms}` — every `Input.vibrate()` while the phone is the live source |
 

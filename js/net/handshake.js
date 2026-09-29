@@ -91,10 +91,15 @@ const NetHandshake = (function () {
   // credential fetch — the transport check used to come first and reported
   // "That attempt has ended" for a typo, and the answer-step spec raced the
   // fetch on every slow network (the sandbox proxy fails it after ~2 s).
+  // Whitespace AND the invisible characters mail and chat clients slip into a
+  // long unbroken string (zero-width space/joiners, word joiner, soft hyphen,
+  // BOM): `\s` matches none of those, and one of them turns a good code into
+  // "corrupt" after atob.
+  const INVISIBLE = /[\s\u200B-\u200D\u2060\uFEFF\u00AD]+/g;
   function peekCode(code) {
     const input = String(code || "");
     if (input.length > MAX_CODE_CHARS) return CORRUPT;
-    const trimmed = input.trim().replace(/\s+/g, "");
+    const trimmed = input.trim().replace(INVISIBLE, "");
     if (trimmed.length > MAX_CODE_CHARS) return CORRUPT;
     const parts = trimmed.split(".");
     if (parts.length !== 3 || parts[0] !== MAGIC) {
@@ -210,8 +215,8 @@ const NetHandshake = (function () {
       ok: false,
       error: "build_mismatch",
       message: theirs > mine
-        ? "Your friend is on a newer version. Reload the page to update, then try again."
-        : "Your friend is on an older version. Ask them to reload the page, then try again.",
+        ? "Your friend is on a newer version. Reload the page to update (an installed app: close it fully and reopen), then try again."
+        : "Your friend is on an older version. Ask them to reload the page and send a new invite, then try again.",
       mine, theirs,
     };
   }
@@ -302,7 +307,10 @@ const NetHandshake = (function () {
     try {
       const h = (href != null ? String(href) : location.hash) || "";
       const m = h.match(/[#&]vs=([^&\s]+)/);   // a link ends at whitespace: "…#vs=CODE\nSent from my iPhone"
-      return m ? m[1] : null;
+      // A code ends in a base64url character, never in the "." or ")" a
+      // sentence puts after the link — "Race me: …#vs=CODE." read as four
+      // dot-separated parts and was refused as not an Apex code.
+      return m ? m[1].replace(/[^A-Za-z0-9_-]+$/, "") : null;
     } catch (e) { return null; }
   }
 
@@ -335,6 +343,7 @@ const NetHandshake = (function () {
     localBuild, metaBuild, checkBuild, waitForIce,
     createInvite, acceptInvite, acceptAnswer,
     inviteUrl, inviteFromUrl, withoutInviteUrl, consumeInviteUrl,
+    INVISIBLE,
   };
 })();
 Object.freeze(NetHandshake);

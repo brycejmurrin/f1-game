@@ -816,3 +816,81 @@ test("strategy events require this race epoch and the sender's own car", () => {
   assert.equal(G.cars[1].tyreWear,.7,"same-track stale events are ignored");
   net.stop();
 });
+
+// ---- a finish is the OWNER's crossing, a retirement the owner's word -------
+// Bug hunt 2026-09-28. A LAPPED car is flagged out at a lap BELOW lapsTarget
+// (RaceControl.lineTransition) and reports its `fin` with that lap; the
+// receiver gated the finish on `lap > lapsTarget`, so the fin sat in _nFin
+// for good and finishDelay held the other screen to the 360 s/lap hard cap.
+test("a lapped rival's finish (fin at a lap below the target) finishes it on the other peer", () => {
+  const { G, s } = started("host");
+  G.lapsTarget = 3; G.raceT = 100;
+  const rival = G.cars[1];
+  rival.lap = 2;                                       // its pose: on lap 2, flagged out at this crossing
+  s.deliver("lap", { lap: 2, time: null, best: null, code: "D1", fin: 99.5, invalid: true });
+  assert.equal(rival.finished, true, "the owner's crossing lap is the finishing crossing");
+  assert.equal(rival.finishT, 99.5);
+  assert.equal(rival._nFin, null);
+});
+
+test("a fin ahead of the pose waits for the pose to reach THAT lap, not the target", () => {
+  const { G, s } = started("host");
+  G.lapsTarget = 3; G.raceT = 100;
+  const rival = G.cars[1];
+  rival.lap = 1;                                       // the pose trails the crossing by the interp delay
+  s.deliver("lap", { lap: 2, time: null, best: null, code: "D1", fin: 99.5, invalid: true });
+  assert.equal(!!rival.finished, false, "not yet: the drawn car has not crossed");
+  assert.equal(rival._nFin, 99.5);
+  assert.equal(rival._nFinLap, 2, "…and it is lap 2 it waits for, not lapsTarget + 1");
+});
+
+test("a full-distance finish still needs the pose past the target, as before", () => {
+  const { G, s } = started("host");
+  G.lapsTarget = 3; G.raceT = 200;
+  const rival = G.cars[1];
+  rival.lap = 3;
+  s.deliver("lap", { lap: 4, time: 90, best: 90, code: "D1", fin: 199.8 });
+  assert.equal(!!rival.finished, false);
+  assert.equal(rival._nFinLap, 4);
+  rival.lap = 4;
+  s.deliver("lap", { lap: 4, time: null, best: null, code: "D1", fin: 199.8, invalid: true });
+  assert.equal(rival.finished, true);
+});
+
+test("a rival's retirement arrives on the LAP event and parks it as retired, once", () => {
+  // Nothing carried it: the 13 B snapshot has no flag, so a retired rival
+  // stood "still running" and the other screen waited for the hard cap.
+  const { G, s } = started("host");
+  G.lapsTarget = 3; G.raceT = 50;
+  const rival = G.cars[1];
+  s.deliver("lap", { lap: 1, time: null, best: null, code: "D1", retired: "engine", invalid: true });
+  assert.equal(rival.retired, true);
+  assert.equal(rival.dnf, "engine");
+  s.deliver("lap", { lap: 1, time: null, best: null, code: "D1", fin: 49.9, invalid: true });
+  assert.equal(!!rival.finished, false, "a retired car does not also finish");
+  const other = started("host");
+  other.G.lapsTarget = 3;
+  other.s.deliver("lap", { lap: 1, code: "D1", retired: 12, invalid: true });
+  assert.equal(!!other.G.cars[1].retired, false, "a retirement is a reason string, nothing else");
+});
+
+test("a rival handed back to the AI does not time the rest of its lap as a whole one", () => {
+  // While net-owned the car skipped updateCar, so lapTime never ran: the AI's
+  // first crossing after a handback timed the REMAINING part of the lap as a
+  // whole one — a 25 s "fastest lap" for a rival that had left.
+  const { G, s } = started("guest");
+  const rival = G.cars[1];
+  rival.lapTime = 0; rival._secT0 = 0;
+  s.disconnect("transport");
+  assert.equal(rival.incidentInvalidLap, true, "the lap in progress is untimed");
+  assert.equal(rival.lapTime, 0);
+  assert.equal(rival._secT0, null);
+});
+
+test("a stale disconnect reason does not outlive the race: stop() on an inactive session forgets it", () => {
+  const { net, s } = started("guest");
+  s.disconnect("transport");
+  assert.equal(net.status().reason, "transport", "during THIS race the pause menu may say so");
+  assert.equal(net.stop("local"), false, "nothing to stop…");
+  assert.equal(net.status().reason, null, "…but the next solo race must not read 'Disconnected'");
+});
