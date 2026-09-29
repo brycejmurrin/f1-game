@@ -200,6 +200,14 @@ function initUI() {
     }
   }
   place(head);
+  // The row titles are hover-only, which a phone never shows: each row also
+  // gets the same sentence as a visible help line under it.
+  const help = (text) => {
+    const p = document.createElement("p");
+    p.className = "adv-help";
+    p.textContent = text;
+    place(p);
+  };
 
   function row(id, label, values, labels, title, read, write) {
     const r = SettingRow.build(id, label, values.map((v) => [v, labels[v]]));
@@ -210,6 +218,7 @@ function initUI() {
       catch (_) { /* audio is optional here */ }
     } });
     place(r.row);
+    help(title);   // the visible help line under the row (a phone never shows a title)
   }
   const C = CHOICES;
   row("pm-ckwheel", "WHEEL", C.wheel.values, C.wheel.labels,
@@ -244,6 +253,7 @@ function initUI() {
   lab.appendChild(span);
   lab.appendChild(inp);
   place(lab);
+  help(lab.title);
   paintLead(inp, out);
 }
 

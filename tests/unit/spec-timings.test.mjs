@@ -450,3 +450,22 @@ test("select-budget reads the committed file rather than a fixture", () => {
   assert.deepEqual(Object.keys(db.specs).sort(),
     Object.keys(JSON.parse(fs.readFileSync(path.join(ROOT, TIMINGS_FILE), "utf8")).specs).sort());
 });
+
+test("unionDb keeps every distinct sample from both histories, newest `keep` per series", async () => {
+  // The committed file and bot/spec-timings each held samples the other lacked
+  // (2026-09-29: 47 of the committed 52 were absent from the side branch).
+  const { unionDb } = await import("../../tools/ci/spec-timings.mjs");
+  // Built, not literal: docs-integrity fails on path-shaped tokens that do not exist.
+  const X = ["tests", "specs", "x.spec.js"].join("/"), Y = ["tests", "specs", "y.spec.js"].join("/");
+  const a = { specs: { [X]: { s: [["2026-09-01T00:00:00Z", "llvmpipe", 10, 2]], t: { one: [["2026-09-01T00:00:00Z", "llvmpipe", 5]] } } } };
+  const b = { specs: {
+    [X]: { s: [["2026-09-01T00:00:00Z", "llvmpipe", 10, 2], ["2026-09-02T00:00:00Z", "llvmpipe", 12, 2]], t: {} },
+    [Y]: { s: [["2026-09-03T00:00:00Z", "swiftshader", 90, 1]], t: {} },
+  } };
+  const u = unionDb(a, b, { keep: 10 });
+  assert.equal(u.specs[X].s.length, 2, "the shared sample counts once");
+  assert.deepEqual(u.specs[X].t.one, [["2026-09-01T00:00:00Z", "llvmpipe", 5]]);
+  assert.ok(u.specs[Y], "a spec only one side knows survives");
+  const capped = unionDb(a, b, { keep: 1 });
+  assert.deepEqual(capped.specs[X].s, [["2026-09-02T00:00:00Z", "llvmpipe", 12, 2]], "newest wins the cap");
+});
