@@ -7,8 +7,8 @@
 (window.TrackScenery = window.TrackScenery || {})["madrid"] =
   function (api) {
       const {
-        lapBounds, out, MAT, seat, n, px, pz, hw, pyMin, night, hash, anchor, vadd,
-        modelGroup, overheadSpan, groundPatch, groundedSegments,
+        K, lapBounds, out, MAT, seat, n, px, pz, hw, pyMin, night, hash, anchor, vadd,
+        onTrack, modelGroup, overheadSpan, groundPatch, groundedSegments,
         addBox, addCyl, addPrism, addFrustum,
         ridge, floodMast, tree, bush, hedge,
         billboard, marshalPost, wall, fence, guardrail, tyreWall,
@@ -104,8 +104,12 @@
             [18, 3.2, 33], WHITE, b);
           const wall = vadd(a.c, a.r, -side * 7.5);
           addBox(stage, vadd(wall, a.u, 5.0), [1.0, 10, 33], OFFWHITE, b);
-          addBox(stage, vadd(wall, a.u, 9.45), [1.15, 1.2, 33], MADRID_RED, b);  // capping band, 5 cm proud of the wall top (was coplanar)
-          addBox(stage, vadd(wall, a.u, 8.5), [1.2, 0.3, 33], GOLD, b);          // pinstripe
+          // Band + pinstripe: shorter, thicker, and 18 cm proud so neither
+          // shares the shell's lateral plane (was 2.3 m² coplanar on end-caps).
+          addBox(stage, vadd(vadd(wall, a.r, -side * 0.22), a.u, 9.6),
+            [0.7, 1.0, 28], MADRID_RED, b);
+          addBox(stage, vadd(vadd(wall, a.r, -side * 0.28), a.u, 8.55),
+            [0.5, 0.22, 26], GOLD, b);
           for (let gate = -1; gate <= 1; gate++) {
             addBox(stage, vadd(vadd(wall, a.t, gate * 10.5), a.u, 2.4),
               [1.25, 4.6, 3.0], ARCADE_DARK, b);                                  // callejón gate
@@ -288,8 +292,17 @@
             }
           }
           stage._mat = 0;
-          addBox(stage, vadd(vadd(a.c, a.r, IN * 5.6), a.u, 1.3), [0.22, 2.0, len], banner, b);
-          addBox(stage, vadd(vadd(a.c, a.r, IN * 5.68), a.u, 0.6), [0.14, 0.44, len], GOLD, b);
+          // Track-facing fascia hung off the front row (not a ground panel — the
+          // rising verge buried a footed 2 m board by up to 0.62 m). Short,
+          // staggered lengths so the band and gold stripe do not share a plane.
+          {
+            const frontLat = IN * 5.35;
+            const row0y = 1.5;
+            addBox(stage, vadd(vadd(a.c, a.r, frontLat), a.u, row0y + 0.9),
+              [0.18, 1.5, len - 2.4], banner, b);
+            addBox(stage, vadd(vadd(a.c, a.r, frontLat + IN * 0.14), a.u, row0y + 1.55),
+              [0.12, 0.28, len - 5.0], GOLD, b);
+          }
           if (opts.canopy !== false) {
             stage._mat = MAT.FABRIC;
             for (let i = 0; i <= bays; i++)
@@ -342,14 +355,16 @@
       venueGroup("madrid-ifema-south-entrance", 0.055, -1, 24,
         [30, 22, 50], false, (stage, a) => {
           const b = basis(a);
-          addBox(stage, vadd(a.c, a.u, 6.5), [26, 13, 46], GLASS, b);
-          addBox(stage, vadd(vadd(a.c, a.r, 8), a.u, 9.0), [9, 18, 44], WHITE, b);
+          // Hall mass + tower fully separated in lateral + height so the glass
+          // hall no longer shares a face with the white tower (~396 m² fight).
+          addBox(stage, vadd(a.c, a.u, 6.5), [24, 13, 44], GLASS, b);
+          addBox(stage, vadd(vadd(a.c, a.r, 14.5), a.u, 10.5), [7.0, 16, 36], WHITE, b);
           for (let i = -2; i <= 2; i++) {
-            addPrism(stage, vadd(vadd(a.c, a.t, i * 8.5), a.u, 14.5),
-              [25, 2.4, 7.2], i % 2 ? STEEL : WHITE, b);
+            addPrism(stage, vadd(vadd(a.c, a.t, i * 8.5), a.u, 13.2),
+              [23, 2.4, 7.0], i % 2 ? STEEL : WHITE, b);
           }
-          addBox(stage, vadd(vadd(a.c, a.r, 14.0), a.u, 7.0),
-            [3.0, 1.0, 34], MADRID_RED, b);
+          addBox(stage, vadd(vadd(a.c, a.r, 18.2), a.u, 8.0),
+            [2.4, 1.0, 28], MADRID_RED, b);
         });
 
       // Barajas backdrop — the venue's single most distinctive real-world fact
@@ -417,13 +432,93 @@
         seat.cyl(stage, vadd(a.c, a.u, 22.5), 0.16, 7, STEEL, 5, b);        // aerial mast
       });
 
+      // ── La Monumental hero stand (INSIDE of the banked bowl) ─────────────
+      // Sources: formula1.com circuit guide (550 m, 24% gradient, ~45,000 at
+      // La Monumental); madring.com Curve 12 (547.82 m, 24% banking, 45,000);
+      // motorsportmagazine.com (hospitality inside, grandstand wrapped around
+      // the outside — we still put the raked hero on the INSIDE per wave-6
+      // brief, with positive rake so rows rise away from the track). Ticket
+      // grandstand numbers (9/9A/10/…) are UNCERTAIN vs turn mapping — place
+      // by the banked sector only, no numbered labels.
+      //
+      // Inside of the mid-bowl arc is side −1 (centroid probe). Thin the old
+      // inside ring below so props-tris stays under the ratchet.
+      function emitMonumentalStands(stage, a, side) {
+        const b = basis(a);
+        const IN = -side; // +a.r * IN faces the track
+        for (let i = -2; i <= 2; i++) {
+          stage._mat = MAT.CONCRETE;
+          seat.box(stage, vadd(a.c, a.t, i * 13), [14, 0.4, 11], CONCRETE, b);
+        }
+        // Positive rake: each tier steps AWAY from the track and rises.
+        for (let tier = 0; tier < 5; tier++) {
+          const lat = side * (1.2 + tier * 2.2);
+          const y = 1.1 + tier * 2.0;
+          const len = 64 - tier * 2.4;
+          stage._mat = MAT.CONCRETE;
+          seat.box(stage, vadd(vadd(a.c, a.r, lat), a.u, y),
+            [2.0, 0.22, len], [0.74, 0.75, 0.78], b);
+          seat.box(stage, vadd(vadd(a.c, a.r, lat), a.u, y + 0.22),
+            [1.6, 1.15, len - 1.4], SEAT_COL[tier % SEAT_COL.length], b);
+          stage._mat = MAT.FABRIC;
+          for (let j = 0; j * 1.1 < len - 4; j++) {
+            const h2 = hash(760 + tier * 41 + j * 17);
+            if (h2 < 0.38) continue;
+            seat.box(stage,
+              vadd(vadd(vadd(a.c, a.r, lat), a.t, -len / 2 + 2.2 + j * 1.1),
+                a.u, y + 1.0),
+              [0.55, 0.95, 0.48], FANS[Math.floor(h2 * 83) % FANS.length], b);
+          }
+        }
+        // Rear spine + short canopy lip (GS11 is the only covered Monumental
+        // stand on ticket maps — lip only, not a full-roof claim).
+        stage._mat = MAT.CONCRETE;
+        addBox(stage, vadd(vadd(a.c, a.r, side * 12.4), a.u, 7.2),
+          [1.0, 14.0, 66], OFFWHITE, b);
+        stage._mat = MAT.METAL;
+        addBox(stage, vadd(vadd(a.c, a.r, side * 6.0), a.u, 14.6),
+          [14, 0.45, 68], WHITE, b);
+        addBox(stage, vadd(vadd(a.c, a.r, IN * 1.0), a.u, 14.1),
+          [0.4, 0.7, 66], STEEL, b);
+        addBox(stage, vadd(vadd(a.c, a.r, IN * 0.2), a.u, 2.4),
+          [0.28, 2.6, 62], MADRID_RED, b);
+        addBox(stage, vadd(vadd(a.c, a.r, IN * 0.28), a.u, 1.4),
+          [0.16, 0.4, 62], GOLD, b);
+        // Flood masts on the rim (brief s≈0.80 — cool-white dual-arm).
+        for (const along of [-24, 0, 24]) {
+          const foot = vadd(vadd(a.c, a.t, along), a.r, side * 13.2);
+          seat.cyl(stage, foot, 0.28, 28, STEEL, 5, b);
+          addBox(stage, vadd(vadd(foot, a.u, 27.2), a.r, IN * 3.2),
+            [7.2, 0.35, 0.35], STEEL, b);
+          addBox(stage, vadd(vadd(foot, a.u, 26.6), a.r, IN * 5.6),
+            [1.4, 0.55, 0.9], night ? [1.4, 1.5, 1.6] : [0.92, 0.94, 0.98], b);
+        }
+        stage._mat = 0;
+      }
+      {
+        const side = -1;
+        const a = anchor(at(0.76), side, 18);
+        if (a && !onTrack(a.c[0], a.c[2], 12)) {
+          const b = basis(a);
+          modelGroup("madrid-monumental-stands", {
+            center: vadd(a.c, a.u, 10), size: [22, 22, 72], basis: b,
+          }, (stage) => emitMonumentalStands(stage, a, side), { required: true });
+        }
+      }
+
+      // Outside (+1) bowl ring stays dense (Motor Sport: ~45k grandstand on the
+      // outside). Inside (−1) is thinned — the hero modelGroup above owns the
+      // mid-bowl; keep entry/exit shoulders only so tris stay under the ratchet.
       for (const side of [-1, 1]) {
         let i = 0;
-        for (let f = 0.680; f <= 0.845; f += 0.0062, i++) {
+        const step = side === -1 ? 0.014 : 0.0062;
+        for (let f = 0.680; f <= 0.845; f += step, i++) {
+          // Skip the inside mid-bowl where madrid-monumental-stands sits.
+          if (side === -1 && f >= 0.725 && f <= 0.800) continue;
           const id = side === 1 && i === 11
             ? "madrid-monumental"
             : `madrid-monumental-${side < 0 ? "l" : "r"}-${i}`;
-          monumentalStand(id, f, side, 16, side === 1 && i === 11);
+          monumentalStand(id, f, side, 16, false);
         }
       }
       for (let i = 0; i < 3; i++) {
@@ -432,7 +527,10 @@
       for (const frac of [0.70, 0.74, 0.78, 0.82]) {
         const k = at(frac);
         floodMast(k, 1, 44, { h: 34, cool: true, pool: false });
-        floodMast(k, -1, 44, { h: 34, cool: true, pool: false });
+        // Inside masts near the hero are part of the modelGroup; keep only the
+        // entry/exit rim lights on −1 so we do not double-stack.
+        if (frac <= 0.70 || frac >= 0.82)
+          floodMast(k, -1, 44, { h: 34, cool: true, pool: false });
       }
 
       // ── THE BANKING, MADE VISIBLE ───────────────────────────────────────
@@ -499,6 +597,7 @@
         depth: 1.8,
         supportGap: 2.0,
         color: STEEL,
+        required: true,
         // Legs of its own: it used to rest on the pit building the engine's
         // pit complex has since replaced, and hung in the air without them.
       });
@@ -511,6 +610,7 @@
         supportGap: 2.8,
         supportWidth: 0.9,
         color: GLASS,
+        required: true,
         // Its own legs (supportGap/Width were already specified for them):
         // with supports: false the deck hung 6.4 m up on nothing (ground-audit).
         soffit: { color: TUNNEL_DARK },
@@ -651,7 +751,9 @@
           }
           addBox(stage, vadd(vadd(a.c, a.r, side * 7.6), a.u, 6.2),
             [0.8, 12.4, 28.2], STEEL, b);
-          addPrism(stage, vadd(vadd(a.c, a.r, side * 3.2), a.u, 13.0),
+          // Prism is base-anchored: seat it on the spine top (was u=13.0 with
+          // spine top at 12.4 → 0.6 m AABB gap → 11.4 m unsupported vs terrain).
+          seat.prism(stage, vadd(vadd(a.c, a.r, side * 3.2), a.u, 12.35),
             [16, 2.6, 29], WHITE, b);
         });
       }
@@ -671,7 +773,12 @@
       }
 
       for (const side of [-1, 1]) {
-        wall(0.86, 0.54, side, 1.8, 1.25, CONCRETE, 0.48);
+        // Split the wrap-around wall so it does not sit on the same plane as
+        // the engine's corner tyre-cap barriers (build-props:1538 × wall slab
+        // — 22 coplanar pairs). Leave gaps at the main turn clusters.
+        wall(0.88, 0.98, side, 2.6, 1.25, CONCRETE, 0.48);
+        wall(0.06, 0.20, side, 2.6, 1.25, CONCRETE, 0.48);
+        wall(0.22, 0.48, side, 2.6, 1.25, CONCRETE, 0.48);
         guardrail(0.54, 0.86, side, 4.8, [0.80, 0.81, 0.83]);
         fence(0.02, 0.50, side, 3.2, 2.7, [0.58, 0.60, 0.63]);
       }
