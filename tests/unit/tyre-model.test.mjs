@@ -217,6 +217,39 @@ test("circuit severity scales wear, and is clamped either side", () => {
   assert.equal(ctxFor({ severity: null }).severity(), 1, "a circuit with no severity must be the neutral 1.0");
 });
 
+test("a set that is GONE costs real grip: the cliff bites, and the floor is a car you nurse home", () => {
+  // Reported: "if my tyres give out nothing happens". At a 0.25 cliff and a
+  // 0.70 floor, a whole life past the end still gripped at 70 %.
+  assert.ok(T.gripFor(1.5) <= 0.72, `half a life over must cost a quarter of the grip: ${T.gripFor(1.5)}`);
+  assert.equal(T.gripFor(2), T.GRIP_FLOOR);
+  assert.ok(T.GRIP_FLOOR <= 0.6, "a destroyed set is a crawl, not a mild handicap");
+  assert.ok(T.gripFor(1.05) > 0.9, "…while a lap or so over is still survivable");
+});
+
+test("qualifying runs light, on a set its out-lap has warmed", () => {
+  // Quali is one standing lap (lapsTarget 1): the race formula read a FULL
+  // tank for the whole timed lap and fitted the set off the blankets.
+  const s = T.create({ lapsTarget: 1, session: "quali", track: { total: 5386, def: {} }, LAT_MAX: 22,
+                       aTop: () => 7, vTop: () => 60, raceWeather: "dry" });
+  s.setLevel("real");
+  const c = freshCar(s, 0.74, { lap: 1 });
+  assert.equal(s.fuelAccelMul(c), 1, "no fuel penalty on a qualifying lap");
+  assert.equal(s.fuelVmaxMul(c), 1);
+  assert.equal(c.tyreTs, T.optTemp(0.74), "the set is in its window");
+  const race = ctxFor({ laps: 1 }); race.setLevel("real");
+  const r = freshCar(race, 0.74, { lap: 1 });
+  assert.ok(race.fuelAccelMul(r) < 1, "a 1-lap RACE still starts on its fuel");
+  assert.equal(r.tyreTs, T.T_BLANKET, "…and off the blankets");
+});
+
+test("the player's top speed pays for worn rubber, as the AI's does", () => {
+  // The AI's vmax took tractionMul; the player's took none, and perfMul only
+  // slows the climb to vmax (ACCEL·perfMul·(1 − v/vmax)), never the cap.
+  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  assert.match(src, /else if \(c\.human\) vmax \*= tyres\.tractionMul\(c\)/,
+    "the human branch of the speed target must carry the tyre's traction");
+});
+
 test("planLaps plans against the circuit's severity, as the wear does", () => {
   // update() charges wear at severity() and planLaps ignored it, so at Austria
   // (1.97) every plan believed a set lasted twice as long as it did — a

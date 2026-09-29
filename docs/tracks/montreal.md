@@ -16,7 +16,7 @@ Bright early-summer day, clear sky, soft greens of mid-June foliage, calm water.
 - Concrete walls/barriers: `[0.78, 0.79, 0.80]` pale grey
 
 ## 3. Elevation
-Essentially **flat** — a reclaimed island with no real gradient. Keep the ground plane level across the whole lap; convey speed and rhythm through corner spacing and wall proximity, not hills. Optional faint rise onto bridges near s≈0.55.
+Essentially **flat** — a reclaimed island with no real gradient. Keep the ground plane level across the whole lap; convey speed and rhythm through corner spacing and wall proximity, not hills. Optional faint rise onto bridges near s≈0.55. The def still carries three gentle cosine bumps (≤ ~3.3 m peak-to-trough); do not add knife-edge steps.
 
 ## 4. Landmarks & surroundings by lap position
 Clockwise; s=0.0 at start/finish on the main straight.
@@ -27,31 +27,46 @@ Clockwise; s=0.0 at start/finish on the main straight.
 | 0.10 | L | mid | Olympic Basin rowing lake — wide flat teal plane behind low wall |
 | 0.15 | both | mid | Parkland trees — clusters of green cube canopies on brown trunk boxes |
 | 0.25 | R | far | Casino de Montréal (Expo pavilion) — ~30 m pale finned mass, not a glass tower |
-| 0.30 | L | far | Biosphère dome — big light-grey hemisphere approximated as stacked boxes |
+| 0.30 | L | far | **Biosphère** (`montreal-biosphere`) — 76 m Ø / 62 m high geodesic dome on Île Sainte-Hélène |
 | 0.38 | L | far | Montreal skyline across river — distant grey tower boxes of varied height |
 | 0.45 | R | close | Casino corner (T8–9) + footbridge — grey box spanning over the track |
-| 0.55 | both | close | L'Épingle hairpin (T10) — tight U of wall boxes, grandstand backdrop |
+| 0.52–0.58 | both | close | **L'Épingle** (`montreal-hairpin-grandstands`) — 3 outside stands + GS 34 inside |
 | 0.60 | L | mid | Casino Straight flanked by Olympic Basin — long teal water plane to left |
 | 0.92 | both | close | Final chicane (T13–14) — red/white kerb boxes, tight wall funnel |
-| 0.96 | R | close | **Wall of Champions** — taller pale concrete wall + Bienvenue/Bonjour Québec panel |
+| 0.97 | both | close | **Wall of Champions** (`montreal-wall-of-champions-stand`) — GS 16 + Bienvenue panel |
 | all | both | close | Continuous concrete walls — thin pale-grey boxes lining both edges |
 
 ## 5. Track features
 - Long flat-out straights (main + Casino Straight) broken by sharp chicanes — a stop-go rhythm.
-- **Wall of Champions**: taller pale concrete wall on the final-chicane exit with a Bienvenue/Bonjour Québec panel.
+- **Wall of Champions**: taller pale concrete wall on the final-chicane exit with a Bienvenue/Québec panel (no lettering at this scale).
 - Tight concrete walls everywhere — minimal run-off, walls define the racing corridor.
 - Aggressive red-and-white kerbs at every chicane and the hairpin.
+- Hairpin spectator rank: outside GS 15 / 21 / 24 (Lance Stroll = **GS 24**, not 21) + inside GS 34.
 
 ## 6. Modelling notes
 - Lead with the contrast of **grey tarmac + pale walls against green park and blue water** — that read says Montreal instantly.
 - Place the long flat **teal Olympic Basin plane** (`COL.basinTeal`) along the Casino Straight and as the river surround.
 - Keep the whole island dead flat; use wall proximity and chicane kerbs, not elevation, for drama.
 - Dot green cube-canopy trees and grass strips between walls to sell the island-park setting.
-- Make the **Wall of Champions** a tall pale hero wall at s≈0.955–0.99 R with Bienvenue/Bonjour Québec signage.
-- Casino = short Expo pavilion (~25–35 m) with vertical fins — not a glass skyscraper.
+- Make the **Wall of Champions** a tall pale hero wall at s≈0.955–0.99 R with a Québec-blue painted panel (no glyphs).
+- Casino = short Expo pavilion (~25–35 m) with vertical fins — not a glass skyscraper. Fins must sit clear of the façade (flatCoplanar).
 - Background skyline (distant grey tower boxes) and the Biosphère hemisphere across the water give the island scale and identity.
 
-## Research pass — findings (not yet built)
+## Wave 6 — sourced vs uncertain (2026-09-29)
+
+**Sourced / built as fact**
+- Circuit: 4.361 km, 14 turns, Île Notre-Dame, L'Épingle (T10), Casino Straight, Wall of Champions on final-chicane exit — [Wikipedia: Circuit Gilles Villeneuve](https://en.wikipedia.org/wiki/Circuit_Gilles_Villeneuve), [formula1.com circuit guide](https://www.formula1.com/en/latest/article/circuit-guide-everything-you-need-to-know-about-the-circuit-gilles-villeneuve.5RUqO9YE80jmCiuODWNX9g).
+- Hairpin stands GS 15/21/24 outside + GS 34 inside — [grandprixgrandtours.com Canada guide](https://www.grandprixgrandtours.com/canada-circuit-guide/), [motorsporttickets.com grandstand guide](https://motorsporttickets.com/blog/where-to-sit-for-canadian-grand-prix/).
+- GS 24 is the Lance Stroll Grandstand (named opposite GS 21) — same guides; [canada.gp Grandstand 21](https://www.canada.gp/en/ticket-info/grandstand-21) lists "Grandstand 24 (Lance Stroll Grandstand)" in the neighbouring-stands nav.
+- GS 16 opposite Main = Wall of Champions / pit entry — grandprixgrandtours.com.
+- Biosphère: 76 m diameter, 62 m high geodesic dome on Île Sainte-Hélène — [Wikipedia: Montreal Biosphere](https://en.wikipedia.org/wiki/Montreal_Biosphere), [ArchDaily](https://www.archdaily.com/572135/ad-classics-montreal-biosphere-buckminster-fuller), [Canadian Encyclopedia](https://thecanadianencyclopedia.ca/en/article/montreal-biosphere).
+
+**Uncertain / not asserted as fact**
+- Biosphère bearing from the hairpin is a **sight-line**, not adjacency — the dome is on the neighbouring island; placement stays on the far-bank strip at s≈0.30.
+- Exact 2026 seat counts / roof coverage per GS number — stands are stepped open banks, not surveyed bay-for-bay replicas.
+- Whether any stand is still marketed under a sponsor name in a given season — we use the published GS numbers above, not ephemeral sponsor titles.
+
+## Research pass — Expo setting
 
 The circuit is on **Île Notre-Dame**, an artificial island in the St Lawrence
 built for **Expo 67**, inside Parc Jean-Drapeau. That origin is the key to the
@@ -69,13 +84,11 @@ venue, not a normal paddock landscape:
 - Parc Jean-Drapeau is **lush gardens and public artworks**, so the infield
   should read as landscaped parkland rather than service compound.
 
-
 ## Outcome
 
-Most of the banked list was **already built**: the Biosphère geodesic dome, the
-Olympic Rowing Basin, the Casino pavilions, the downtown skyline and Habitat 67.
-
-Two Expo-67 things were missing.
+Built required landmarks: `montreal-hairpin-grandstands`, `montreal-wall-of-champions-stand`,
+`montreal-biosphere`, plus earlier `montreal-calder-trois-disques`, `montreal-habitat67`,
+and the casino footbridge pair.
 
 **Calder's *Trois disques* (1967)** — commissioned for Expo 67, formally
 *Trois disques*, universally called *L'Homme*. Parc Jean-Drapeau is full of

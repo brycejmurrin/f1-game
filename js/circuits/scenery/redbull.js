@@ -254,12 +254,55 @@
       grandstandEx(0.04, -1, 17, 30, shell, rbRed, { roof: "cantilever", h: 11 });
       grandstandEx(0.07, -1, 14, 26, shell, rbNavy, { roof: "flat", h: 11 });
 
+      // Steiermark / Niki Lauda Kurve stand — uncovered multi-tier OUTSIDE T1
+      // (apex ≈ 0.085). Official name Tribüne Steiermark; T1 renamed for Lauda
+      // (redbullring.com; formula1.com 2019 rename). Seat rows rise away from
+      // the track (positive rake); no roof — Steiermark is uncovered
+      // (oversteer48.com/steiermark-grandstand-red-bull-ring-austria/).
+      {
+        // Just past T1 apex (0.085): at the apex itself every +1 footprint hits
+        // the parallel climb (modelGroup "footprint rejected"). Steiermark
+        // extends past the apex toward the runoff (oversteer48).
+        const sLauda = 0.096;
+        const a0 = anchor(K(sLauda), 1, 30);
+        if (!onTrack(a0.c[0], a0.c[2], 8)) {
+          modelGroup("redbull-lauda-kurve-stand", {
+            center: vadd(a0.c, a0.u, 7),
+            size: [12, 14, 40],
+            basis: [a0.r, a0.u, a0.t],
+          }, (stage) => {
+            const len = 36;
+            for (let t = 0; t < 5; t++) {
+              const ai = anchor(K(sLauda), 1, 22 + t * 2.6);
+              const bi = [ai.r, ai.u, ai.t];
+              const h = 1.5 + t * 1.8;
+              const tierLen = len - t * 1.2;
+              const shellCol = t % 2 ? [0.42, 0.43, 0.48] : [0.38, 0.39, 0.44];
+              addBox(stage, vadd(ai.c, ai.u, h * 0.5), [3.2, h, tierLen], shellCol, bi);
+              // Track-facing seat strip: stand is on +1, so track is toward -r.
+              addBox(stage, vadd(vadd(ai.c, ai.r, -(3.2 * 0.5 + 0.5)), ai.u, h * 0.55),
+                [0.9, h * 0.62, tierLen * 0.92], t % 2 ? rbRed : rbNavy, bi);
+            }
+            const aB = anchor(K(sLauda), 1, 36);
+            addBox(stage, vadd(aB.c, aB.u, 6), [2.0, 12, len - 4], [0.40, 0.41, 0.46],
+              [aB.r, aB.u, aB.t]);
+            // Brand fascia only — Steiermark has no roof canopy.
+            const aT = anchor(K(sLauda), 1, 28);
+            addBox(stage, vadd(aT.c, aT.u, 10.6), [6.0, 0.65, len - 8], rbNavy,
+              [aT.r, aT.u, aT.t]);
+            addBox(stage, vadd(aT.c, aT.u, 11.2), [4.5, 0.4, len - 14], rbRed,
+              [aT.r, aT.u, aT.t]);
+          }, { required: true });
+        }
+      }
+
       {
         const total = ds * n; // metres per lap (== track.total)
         const mToFrac = (m) => m / total;
         const segs = [
-          { len: 95,  gap: 9.5, h: 11, tiers: 1, roof: "cantilever", shell: rbRed,  crowd: rbRed },
-          { len: 110, gap: 9.0, h: 12, tiers: 2, roof: "cantilever", suites: true, livery: "crimson" },
+          // Red Bull climb stand (largest permanent stand after T1 exit) —
+          // Steiermark / Lauda Kurve owns the T1 apex as a named modelGroup above.
+          { len: 100, gap: 9.0, h: 12, tiers: 2, roof: "cantilever", suites: true, livery: "crimson" },
           { len: 115, gap: 8.5, h: 13, tiers: 2, roof: "truss",      suites: true, pylons: true, shell: rbNavy, crowd: rbNavy },
           // Remus crest — tallest point. Was roof:"truss": measured via
           // float-audit, one bay of the truss's per-bay cross-braces lost
@@ -270,7 +313,7 @@
           { len: 110, gap: 8.5, h: 12, tiers: 2, roof: "cantilever", suites: true, shell: rbNavy, crowd: rbNavy },
           { len: 80,  gap: 9.5, h: 11, tiers: 1, roof: "cantilever", livery: "crimson" },
         ];
-        let sCursor = 0.107; // leading edge of the old T1 stand
+        let sCursor = 0.135; // after Steiermark / Lauda Kurve just past T1 apex
         segs.forEach((seg, i) => {
           const halfFrac = mToFrac(seg.len) / 2;
           const sCenter = sCursor + halfFrac;
@@ -306,27 +349,24 @@
           frameCol: [0.70, 0.71, 0.75], plankCol: [0.78, 0.79, 0.82],
           crowd: RB_HILL_CROWD, density: 0.58 });
 
-      // [s, side, gap, y]: y is the strip's height, just under the stand's roof
-      // (h - 0.4). The two 11 m stands (0.04, 0.07) carried the 13 m stands'
-      // 12.6, which left 0.04's strip hanging 12 m over the ground (float-audit).
-      for (const [s, side, gap, y = 12.6] of [
-        [0.985, -1, 24], [0.005, -1, 24], [0.04, -1, 17, 10.6], [0.07, -1, 14, 10.6],
-        [0.467, -1, 13], [0.487, -1, 13], [0.507, -1, 13],
-        [0.70, 1, 13], [0.72, -1, 13], [0.76, -1, 13], [0.88, 1, 13], [0.92, 1, 13], [0.95, 1, 13],
-      ]) {
-        const k = Math.round(n * s) % n;
-        const a = anchor(k, side, gap);
-        // Slim bright strip just below the roof edge — warm amber/white.
-        addBox(out, vadd(a.c, a.u, y), [0.22, 0.16, 28], [1.0, 0.92, 0.70], [a.r, a.u, a.t]);
-      }
+      // Roof-edge light strips removed: several hung unsupported when gap/y
+      // drifted from the stand fascia (ground-audit gap ~9–12 m). Stands keep
+      // their own under-roof warm strips from grandstandEx.
 
-      every(36, (k) => {
+      // Wider step + shorter runs: coincident hedge caps (flatCoplanar) at the
+      // old every(36) / 0.004 span sat on the same plane.
+      every(52, (k) => {
         for (const side of [-1, 1]) {
-          if (hash(k * 113 + side) > 0.68) continue;
-          const d = 22 + hash(k * 127 + side) * 18;
+          if (hash(k * 113 + side) > 0.55) continue;
+          const frac = k / n;
+          // Keep hedges off the Remus / Schlossgold spectator banks — hedge ×
+          // spectatorHill tread pairs were the new severe clips (0.22 / 0.24).
+          if (frac > 0.18 && frac < 0.40) continue;
+          if (frac > 0.48 && frac < 0.56) continue;
+          const d = 28 + hash(k * 127 + side) * 14;
           const p = anchor(k, side, d);
           if (onTrack(p.c[0], p.c[2], 10)) continue;   // per-side reject, not per-node (see above)
-          hedge(k / n, k / n + 0.004, side, d, 0.9 + hash(k * 131 + side) * 0.3, [0.20, 0.44, 0.18]);
+          hedge(k / n, k / n + 0.0025, side, d, 0.85 + hash(k * 131 + side) * 0.25, [0.20, 0.44, 0.18]);
         }
       });
 
@@ -365,10 +405,10 @@
         backdrop(K(0.33), -1, 34, [85, 20, 55], GN);
         backdrop(K(0.35), -1, 50, [105, 28, 68], GM);
         backdrop(K(0.37), -1, 68, [120, 34, 78], GF);
-        spectatorHill(0.195, 0.285, 1, 24, { rows: 4, rise: 1.3, depth: 2.2, step: 7,
-          density: 0.45, crowd: RB_HILL_CROWD, grass: [0.30, 0.54, 0.24] });
-        spectatorHill(0.305, 0.385, -1, 26, { rows: 4, rise: 1.3, depth: 2.2, step: 7,
-          density: 0.42, crowd: RB_HILL_CROWD, grass: [0.28, 0.50, 0.22] });
+        spectatorHill(0.195, 0.285, 1, 24, { rows: 3, rise: 1.2, depth: 2.0, step: 9,
+          density: 0.34, crowd: RB_HILL_CROWD, grass: [0.30, 0.54, 0.24] });
+        spectatorHill(0.305, 0.385, -1, 26, { rows: 3, rise: 1.2, depth: 2.0, step: 9,
+          density: 0.32, crowd: RB_HILL_CROWD, grass: [0.28, 0.50, 0.22] });
         // Sparse pines crowning the Remus amphitheatre rim (keep bull clear at s≈0.10).
         forestEdge(0.21, 0.36, 1, 72, { density: 0.32, hMin: 9, hMax: 15,
           col: [0.10, 0.24, 0.12], col2: [0.16, 0.34, 0.15], pineFrac: 0.80 });
@@ -381,8 +421,8 @@
         backdrop(kBank, 1, 32, [80, 18, 55], [0.28, 0.52, 0.22]);   // near bank face
         backdrop(kBank, 1, 55, [95, 24, 65], [0.22, 0.44, 0.18]);   // mid slope
         backdrop(kBank, 1, 80, [110, 30, 75], [0.18, 0.38, 0.15]);  // upper hillside
-        spectatorHill(0.495, 0.545, 1, 24, { rows: 4, rise: 1.2, depth: 2.0, step: 6,
-          density: 0.45, crowd: RB_HILL_CROWD, grass: [0.30, 0.54, 0.24] });
+        spectatorHill(0.495, 0.545, 1, 24, { rows: 3, rise: 1.1, depth: 1.9, step: 8,
+          density: 0.34, crowd: RB_HILL_CROWD, grass: [0.30, 0.54, 0.24] });
         // Sparse pines crowning the hilltop behind the bank.
         forestEdge(0.49, 0.56, 1, 78, { density: 0.35, hMin: 10, hMax: 16,
           col: [0.10, 0.24, 0.12], col2: [0.16, 0.32, 0.14], pineFrac: 0.78 });
@@ -390,13 +430,14 @@
 
       billboard(Math.round(n * 0.87) % n, -1, 12, 8, 4, [1.0, 0.65, 0.0]);
 
-      // Reduced depth to avoid over-wide building warning (w=12, d=15 → 12<15*2.5).
-      building(Math.round(n * 0.55) % n, -1, 18, 12, 6, 15,
+      // Farther out on the meadow: at gap 18 the slab sat 0.5 m into the SRTM
+      // bowl (ground-audit buried @ :394).
+      building(Math.round(n * 0.55) % n, -1, 28, 12, 6, 15,
         { wall: [0.48, 0.50, 0.52], window: [0.30, 0.35, 0.40], floor: 2 });
       // Alpine farmhouse roof (A-frame prism above the building).
       {
         const kFarm = Math.round(n * 0.55) % n;
-        const aFarm = anchor(kFarm, -1, 24);
+        const aFarm = anchor(kFarm, -1, 34);
         addPrism(out, vadd(aFarm.c, aFarm.u, 6), [14, 4, 16], [0.36, 0.20, 0.14], [aFarm.r, aFarm.u, aFarm.t]);
       }
 
@@ -495,14 +536,12 @@
       }
 
       function pastureFence(s0, s1, side, dist) {
-        along(s0, s1, 14, (k, spacing) => {
+        // Post-only on the SRTM bowl — long rails bury midspan even at 9 m bays
+        // (ground-audit still flagged 5 rails @ 0.78 m after the steep skip).
+        along(s0, s1, 8, (k) => {
           const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
           if (onTrack(a.c[0], a.c[2], 2)) return;
-          const half = spacing * 0.46;
-          for (const off of [-half, half])
-            addCyl(out, vadd(a.c, a.t, off), 0.09, 1.05, [0.42, 0.30, 0.18], 5, b);
-          for (const ry of [0.42, 0.82])
-            addBox(out, vadd(a.c, a.u, ry), [0.06, 0.05, spacing * 0.94], [0.46, 0.34, 0.20], b);
+          addCyl(out, a.c, 0.09, 1.15, [0.42, 0.30, 0.18], 5, b);
         });
       }
 
@@ -522,17 +561,19 @@
       // Remus crest lift still reads the ski-resort cue.
       chairlift(K(0.30), 1, 44, 150, 5);
       // Styrian chalets scattered on the surrounding meadows.
-      alpineChalet(K(0.18), -1, 60, 10, 6, 12);
-      alpineChalet(K(0.34),  1, 66, 9, 6, 11);
-      alpineChalet(K(0.60), -1, 58, 10, 6, 12);
-      alpineChalet(K(0.78),  1, 70, 9, 6, 10);
+      // Farther setbacks: balcony/window prims at 58–66 m sat 6+ m into the
+      // hillside bank on the SRTM bowl (ground-audit alpineChalet).
+      alpineChalet(K(0.18), -1, 78, 10, 6, 12);
+      alpineChalet(K(0.34),  1, 82, 9, 6, 11);
+      alpineChalet(K(0.60), -1, 74, 10, 6, 12);
+      alpineChalet(K(0.78),  1, 86, 9, 6, 10);
       // Spielberg camping terraces packed on the hillsides.
       campTerrace(K(0.15),  1, 46, 8);
       campTerrace(K(0.25), -1, 50, 7);
       campTerrace(K(0.85), -1, 44, 8);
-      alpineChalet(K(0.505), -1, 42, 9, 5, 11);
-      pastureFence(0.41, 0.62, 1, 16);
-      pastureFence(0.42, 0.605, -1, 15);
+      alpineChalet(K(0.505), -1, 56, 9, 5, 11);
+      pastureFence(0.45, 0.55, 1, 20);
+      pastureFence(0.46, 0.545, -1, 19);
       hayBale(K(0.435), 1, 22);
       hayBale(K(0.47), -1, 22);
       hayBale(K(0.565), 1, 24);
@@ -564,9 +605,11 @@
         }, (stage) => {
           addBox(stage, vadd(a.c, a.u, 4.5), [18, 9, 24], [0.52, 0.32, 0.18], b);
           addPrism(stage, vadd(a.c, a.u, 9), [22, 5.5, 27], [0.34, 0.18, 0.12], b);
-          const silo = vadd(vadd(a.c, a.r, 14), a.t, -5);
-          addCyl(stage, silo, 3.2, 14, [0.68, 0.70, 0.68], 8, b);
-          addCone(stage, vadd(silo, a.u, 14), 3.4, 2.8, [0.40, 0.42, 0.40], 8, b);
+          // Silo clear of the barn eaves — was clipping the roof prism (clip-audit
+          // severe 3.78 m at frac 0.55).
+          const silo = vadd(vadd(a.c, a.r, 18), a.t, -8);
+          addCyl(stage, silo, 3.0, 14, [0.68, 0.70, 0.68], 8, b);
+          addCone(stage, vadd(silo, a.u, 14), 3.1, 2.6, [0.40, 0.42, 0.40], 8, b);
           addBox(stage, vadd(vadd(vadd(a.c, a.r, -13), a.t, 5), a.u, 2.5),
                  [8, 5, 12], [0.64, 0.48, 0.28], b);
         });

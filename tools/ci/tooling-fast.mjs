@@ -200,6 +200,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/data-api-status.test.mjs",
   "tests/unit/scenery-api-contract.test.mjs",
   "tests/unit/scenery-guards.test.mjs",
+  "tests/unit/bahrain-grandstand-rake.test.mjs",
   // Suzuka figure-8 green span must sit flush on the lifted ribbon (clearance ≤ 0.5 m) — a prior overheadSpan at clearance 8.6 hung ~8 m above the SRTM-baked back-straight. Pure verify-track diagnostics, ~2 s.
   "tests/unit/suzuka-crossover-span.test.mjs",
   "tests/unit/track-build-vm-release.test.mjs",

@@ -162,6 +162,117 @@ const RealRace = (function () {
     return out;
   }
 
+  /* ── THE RACE SO FAR ────────────────────────────────────────────────────────
+   * What has happened by the lap you join, for the pre-race screen: the card's
+   * facts and the announcer's read (intro() below). PURE and STRICTLY CAUSAL:
+   * nothing from lap `lap` onward is read — no lap time, stop, pass, flag or
+   * retirement — so the screen never spoils the race it is about to hand you.
+   * `lap` is the REAL lap you join; `simLaps` the distance you will drive.
+   * From lap 1 it is the grid instead: pole, the front row, your slot, your
+   * tyres. Names come title-cased ("Charles LECLERC" -> "Charles Leclerc"). */
+  const nameCase = (w) => (w.length > 1 && w === w.toUpperCase() && /[A-Z]/.test(w) ? w.charAt(0) + w.slice(1).toLowerCase() : w);
+  const properName = (n) => String(n || "").trim().split(/\s+/).filter(Boolean).map(nameCase).join(" ");
+  function surnameOf(n) {
+    const words = String(n || "").trim().split(/\s+/).filter(Boolean);
+    const caps = words.find((w) => w.length > 1 && w === w.toUpperCase() && /[A-Z]/.test(w));   // OpenF1 caps the family name
+    return nameCase(caps || words[words.length - 1] || "");
+  }
+  const COMPOUND_NAME = { SOFT: "soft", MEDIUM: "medium", HARD: "hard", INTERMEDIATE: "intermediate", WET: "full wet" };
+  function situation(script, lap, seatCode, simLaps) {
+    const realLaps = script && script.laps | 0;
+    if (!(realLaps > 0)) return null;
+    const L = clamp(lap | 0 || 1, 1, realLaps);
+    const drivers = (script.drivers || []).filter((d) => d && d.num != null);
+    const who = (d) => ({ code: d.code, name: properName(d.name) || d.code, surname: surnameOf(d.name) || d.code, team: d.team || "" });
+    const tyreAt = (d, lp) => {
+      let s = null;
+      for (const st of d.stints || []) if (st && st.from <= lp) s = st;
+      return s ? { compound: COMPOUND_NAME[String(s.c || "").toUpperCase()] || String(s.c || "").toLowerCase(), age: Math.max(0, lp - s.from) + (s.age | 0), used: (s.age | 0) > 0 && lp === s.from } : null;
+    };
+    const me = drivers.find((d) => d.code === seatCode) || null;
+    const sim = simLaps > 0 ? simLaps | 0 : realLaps;
+    const out = { lap: L, realLaps, toGo: Math.max(1, sim - simLapFor(L, sim, realLaps) + 1), condensed: sim !== realLaps, grid: L <= 1 };
+    if (L <= 1) {
+      // THE GRID: who is on pole, who is alongside, where you start and on what.
+      const grid = drivers.filter((d) => d.grid > 0 && !d.dns).sort((a, b) => a.grid - b.grid);
+      out.pole = grid[0] ? who(grid[0]) : null;
+      out.front = grid[1] ? who(grid[1]) : null;
+      out.starters = grid.length;
+      if (me) {
+        const k = grid.indexOf(me);
+        out.you = Object.assign(who(me), { pos: me.grid | 0, gridPos: me.grid | 0, running: !me.dns, tyre: tyreAt(me, 1),
+          ahead: k > 0 ? who(grid[k - 1]) : null, behind: k >= 0 && grid[k + 1] ? who(grid[k + 1]) : null });
+      }
+      out.weather = Array.isArray(script.rain) && script.rain[1] ? "rain" : script.weather || "dry";
+      return out;
+    }
+    const done = L - 1;   // laps the leader has completed when you take over
+    const cum = cumTable(script);
+    const rowOf = (d) => cum[d.num] || [0];
+    const orderAt = (k) => drivers.filter((d) => rowOf(d).length > k).sort((a, b) => rowOf(a)[k] - rowOf(b)[k]);
+    const board = orderAt(done);
+    const lead = board[0] || null;
+    const t0 = lead ? rowOf(lead)[done] : 0;
+    const lapT = lead && done >= 1 ? rowOf(lead)[done] - rowOf(lead)[done - 1] : 0;
+    // A gap in seconds, or laps down once it is more than one of the leader's laps.
+    const gapOf = (d) => { const g = rowOf(d)[done] - t0; return lapT > 0 && g >= lapT ? { s: +g.toFixed(1), lapsDown: Math.floor(g / lapT) } : { s: +g.toFixed(1), lapsDown: 0 }; };
+    out.leader = lead ? who(lead) : null;
+    out.top = board.slice(0, 3).map((d, i) => Object.assign(who(d), { pos: i + 1, gap: gapOf(d) }));
+    out.running = board.length;
+    // Out before you join: a row that ends short of `done` laps (cumTable fills a finisher's untimed laps).
+    out.out = drivers.filter((d) => !d.dns && rowOf(d).length <= done).map((d) => Object.assign(who(d), { lap: Math.max(1, rowOf(d).length) }))
+      .sort((a, b) => a.lap - b.lap);
+    out.dns = drivers.filter((d) => d.dns).map(who);
+    // The lead, lap by lap: who led each completed lap, and where it changed hands.
+    const leaders = [];
+    for (let k = 1; k <= done; k++) { const o = orderAt(k); if (o[0]) leaders.push(o[0]); }
+    const changes = [];
+    for (let k = 1; k < leaders.length; k++) if (leaders[k] !== leaders[k - 1]) changes.push({ lap: k + 1, to: who(leaders[k]), from: who(leaders[k - 1]) });
+    out.lead = { changes, from: leaders[0] ? who(leaders[0]) : null, allTheWay: leaders.length > 0 && changes.length === 0 };
+    // Flags already flown; `now` when the one you join under is still out.
+    out.cautions = (script.cautions || []).filter((w) => w && w.level >= 2 && w.from < L).map((w) => {
+      const to = w.to != null ? w.to : w.from;
+      return { kind: w.level >= 4 ? "red flag" : w.level === 3 ? "safety car" : "virtual safety car", from: w.from, to: Math.min(to, done), now: to >= L };
+    });
+    // The fastest lap of the race so far (laps before the one you join).
+    let fastest = null;
+    for (const d of drivers) (d.laps || []).slice(0, done).forEach((t, i) => { if (t > 0 && (!fastest || t < fastest.time)) fastest = Object.assign(who(d), { time: t, lap: i + 1 }); });
+    out.fastest = fastest;
+    // Rain: since when, and whether it is still falling on the lap you join.
+    const rain = Array.isArray(script.rain) ? script.rain : null;
+    if (rain) {
+      let since = 0, last = 0;
+      for (let k = 1; k <= done; k++) if (rain[k]) { if (!since) since = k; last = k; }
+      out.rain = { now: !!rain[L], since, last };
+    }
+    out.passes = (script.passes || []).filter((p) => p && p.lap < L).length;
+    if (me) {
+      const at = board.indexOf(me);
+      const you = Object.assign(who(me), { running: at >= 0, gridPos: me.grid | 0 });
+      if (at >= 0) {
+        you.pos = at + 1;
+        you.gap = gapOf(me);
+        const ahead = board[at - 1], behind = board[at + 1];
+        if (ahead) you.ahead = Object.assign(who(ahead), { gap: +(rowOf(me)[done] - rowOf(ahead)[done]).toFixed(1) });
+        if (behind) you.behind = Object.assign(who(behind), { gap: +(rowOf(behind)[done] - rowOf(me)[done]).toFixed(1) });
+      }
+      you.tyre = tyreAt(me, L);
+      you.stops = (me.pits || []).filter((p) => p < L);
+      you.passesMade = (script.passes || []).filter((p) => p && p.lap < L && p.by === me.num).length;
+      you.passesLost = (script.passes || []).filter((p) => p && p.lap < L && p.over === me.num).length;
+      let best = null;
+      (me.laps || []).slice(0, done).forEach((t, i) => { if (t > 0 && (!best || t < best.time)) best = { time: t, lap: i + 1 }; });
+      you.best = best;
+      // Penalties race control has already handed this driver.
+      you.penalties = (script.incidents || []).filter((m) => m && m.lap < L && /PENALTY/i.test(m.text) && m.text.indexOf("(" + me.code + ")") >= 0 && !/NO FURTHER|UNDER INVESTIGATION|NOTED/i.test(m.text))
+        .map((m) => { const s = /(\d+)\s*SECOND/i.exec(m.text); return { lap: m.lap, seconds: s ? +s[1] : 0, driveThrough: /DRIVE.?THROUGH/i.test(m.text), stopGo: /STOP.?(AND|&)?.?GO/i.test(m.text) }; });
+      out.you = you;
+    }
+    // Leader's stops, for "the leaders have all stopped" / "yet to stop".
+    out.leaderStops = lead ? (lead.pits || []).filter((p) => p < L).length : 0;
+    return out;
+  }
+
   /** Which game seat each real driver takes: by driver code first, then any
    *  free seat of the real driver's team. Returns [{driverId, num}] for every
    *  seat that has a real driver; a seat left out has none (did not start). */
@@ -254,6 +365,7 @@ const RealRace = (function () {
     let field = null;     // Map car -> {d, lap, mul, err, base}
     let tables = null;    // {pace, cum, refNum, wins, at}
     let K = 0;            // sim seconds per real second, measured off the reference car
+    let raceT0 = 0;       // the race clock a jump-in is seeded to: RaceControl.finishDelay's hard cap counts from here
     let heldLevel = 0;
     let redFired = new Set();
     let simRef = [];      // sim race time of the reference car at each completed lap
@@ -326,8 +438,9 @@ const RealRace = (function () {
     function intro() {
       if (!active || armed) return null;
       const s = active.script, d = Array.isArray(s.drivers) ? s.drivers.find((x) => x.code === active.seatCode) : null;
-      return { title: ((s.year ? s.year + " " : "") + String(s.name || "")).trim(), driver: (d && d.name) || active.seatCode || "",
-               startLap: active.startLap, realLaps: s.laps | 0, watch: !!active.watch, reel: !!active.reel };
+      return { title: ((s.year ? s.year + " " : "") + String(s.name || "")).trim(), driver: properName(d && d.name) || active.seatCode || "",
+               startLap: active.startLap, realLaps: s.laps | 0, watch: !!active.watch, reel: !!active.reel,
+               story: situation(s, active.startLap, active.seatCode, active.laps) };   // the race so far, for the card and the announcer
     }
 
     function stop() {
@@ -344,7 +457,7 @@ const RealRace = (function () {
 
     function disarm() {
       if (heldLevel && G.holdCaution) G.holdCaution(0);
-      heldLevel = 0; armed = false; placed = false; field = null; tables = null; K = 0; simRef = []; redFired = new Set(); rainWant = null; fed = null; handover = null;
+      heldLevel = 0; armed = false; placed = false; raceT0 = 0; field = null; tables = null; K = 0; simRef = []; redFired = new Set(); rainWant = null; fed = null; handover = null;
       if (replay) replay.stop();
     }
 
@@ -501,7 +614,7 @@ const RealRace = (function () {
       const Ls = simLapFor(at.lap, simLaps, realLaps);
       const refRow = tables.cum[tables.refNum] || [];
       for (let n = 1; n < Ls; n++) { const rl = realLapFor(n, simLaps, realLaps); if (refRow[rl] != null) simRef[n] = K0 * refRow[rl]; }
-      G.raceT = K0 * at.t0;
+      G.raceT = K0 * at.t0; raceT0 = G.raceT;
       const wearOn = G.tyres && G.tyres.on && G.tyres.on();
       const vTop = G.vTop ? G.vTop() : 80;
       // The real positions, when loaded and the distance is real: each car exactly where it was at t0.
@@ -695,7 +808,7 @@ const RealRace = (function () {
                watch: !!active.watch, reel: !!active.reel, replay: replay ? replay.status() : null, handover: handover ? +handover.t.toFixed(2) : 0 };
     }
 
-    live = { stage, launch, stop, update, status, intro, isActive: () => !!active, current: () => active && active.script,
+    live = { stage, launch, stop, update, status, intro, raceT0: () => raceT0, isActive: () => !!active, current: () => active && active.script,
              owns: (c) => !!replay && replay.owns(c), replay };
     return live;
   }
@@ -705,6 +818,6 @@ const RealRace = (function () {
   const status = () => (live ? live.status() : { active: false });
   const replay = () => (live ? live.replay : null);   // the replay's controls (follow / setSpeed / seek / skip) for page probes
 
-  return { create, launch, status, replay, realLapFor, simLapFor, paceTable, cumTable, planFor, dnfAtFor, cautionsFor, mapField, fieldAt, paceMul, dropSpeed, COMPOUND, KP, MUL_MIN, MUL_MAX };
+  return { create, launch, status, replay, realLapFor, simLapFor, paceTable, cumTable, planFor, dnfAtFor, cautionsFor, mapField, fieldAt, situation, properName, paceMul, dropSpeed, COMPOUND, KP, MUL_MIN, MUL_MAX };
 })();
 Object.freeze(RealRace);

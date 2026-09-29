@@ -610,12 +610,17 @@ const SceneryNature = (function () {
         [w * 0.7, h * (0.42 + jr * 0.22) + SINK + dY, len * 0.4],
         col, [r2, [0, 1, 0], f2]);
     };
+    // Returns the number of riser slabs that cleared rejBox. Callers that need
+    // a whole stand (grandstandEx) use this to refuse a hollow shell: when every
+    // riser lands on the fold of a neighbouring leg, seating is gone and the
+    // roof/shell alone read as a backwards/empty box (bahrain T1, 2026-09).
     const crowdBank = (k, side, gap, len, rise, depth, riserCol, lift) => {
       const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
       const rows = Math.max(3, Math.round(rise / 1.4));
       const perRow = Math.max(6, Math.round(len / 1.15));
       const riser = riserCol || (NIGHT ? [0.10, 0.10, 0.13] : [0.28, 0.26, 0.27]);
       const y0 = lift || 0;
+      let placed = 0;
       for (let r = 0; r < rows; r++) {
         const f = (r + 0.5) / rows, up = y0 + f * rise, back = f * depth;
         // dark step riser behind each seating row (blocks sky/ground show-through).
@@ -628,6 +633,7 @@ const SceneryNature = (function () {
         out._mat = MAT.CONCRETE;
         const riserC = vadd(vadd(a.c, a.u, up), a.r, side * back);
         if (rejBox(riserC, [1.3, 1.5, len], b)) continue;
+        placed++;
         ctx.instance(`crowd-riser|${riser.join(",")}`,
           { o: riserC, r: a.r, u: a.u, t: a.t, s: [1, 1, len] },
           (rec) => { rec.mat(MAT.CONCRETE); rec.box([0, 0, 0], [1.3, 1.5, 1], riser); },
@@ -655,6 +661,7 @@ const SceneryNature = (function () {
         }
       }
       out._mat = 0;
+      return placed;
     };
     const grandstandEx = (s, side, gap, len, shell, crowd, opts) => {
       opts = opts || {};
@@ -747,7 +754,17 @@ const SceneryNature = (function () {
         return { top: c[1] + h / 2 };
       };
       const riserTint = crowd ? [crowd[0] * 0.4, crowd[1] * 0.4, crowd[2] * 0.4] : null;
-      crowdBank(k, side, gap + BANK_AT, len - 2, BANK_RISE, BANK_DEPTH, riserTint);
+      // Seat first. A shell/roof with no rows is a hollow box that reads as a
+      // backwards grandstand (bahrain T1 at the 0.20 fold: gap 24 cleared the
+      // shell but every riser hit the neighbouring leg). If seating cannot
+      // emit, suppress the whole stand rather than ship a rowless shell —
+      // call sites that want the stand must move gap/s until crowdBank clears.
+      const bankPlaced = crowdBank(k, side, gap + BANK_AT, len - 2, BANK_RISE, BANK_DEPTH, riserTint);
+      if (bankPlaced === 0) {
+        ctx.noteSuppressed("grandstand",
+          `grandstand SUPPRESSED at s=${s} side=${side}: gap=${gap} (no seating rows cleared rejBox)`);
+        return;
+      }
       const tierLift = [];
       let prevBack = rakeBack(0), shellFront = SHELL_IN;
       for (let ti = 1; ti < tiers; ti++) {
