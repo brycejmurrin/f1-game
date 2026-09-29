@@ -9,6 +9,9 @@
     "In `toolingFast`, an entry beginning `//` is a comment line emitted verbatim into the generated block — the notes explaining why a given file earns a place in the edit loop live here, not in the generated file."
   ],
   "toolingFast": [
+    "// The HUD rear-view mirror's game side (js/render/shared/mirror-pass.js) in a VM:",
+    "// when it shows, the pass order, and the main camera handed back. ~0.1 s.",
+    "tests/unit/mirror-pass.test.mjs",
     "tests/unit/ghost.test.mjs",
     "tests/unit/ghost-share.test.mjs",
     "// The three suites the feature batches added. Each is pure rules over a",
@@ -502,7 +505,8 @@
         "tests/specs/lighting-ab.spec.js",
         "tests/specs/image-grade-visual.spec.js",
         "tests/specs/lighting-tuner-grade.spec.js",
-        "tests/specs/tlx-probes.spec.js"
+        "tests/specs/tlx-probes.spec.js",
+    "tests/specs/hud-mirror.spec.js"
       ]
     },
     "test:hooks": {
