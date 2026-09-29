@@ -191,6 +191,26 @@ test("a car with no stops left still ignores the plan for a tyre that cannot do 
   assert.equal(now({ stopsLeft: 0, lapsToStop: -5 }), "");
 });
 
+test("the stop stagger never shifts a stop LATER past the set's life", () => {
+  // Austria, 10 laps: severity 1.97 cuts a medium to ~3.8 laps. The optimum
+  // stops on lap 4; the +1 stagger put a third of the field in on lap 5 — a
+  // lap past the cliff (measured in a full VM race: 8 of 21 cars over 100 %
+  // wear before their stop, 3 forced in by the worn rule). Earlier is still
+  // allowed, so the field still spreads over the lane.
+  const sev = 1.97, life = (c) => Math.max(4, { soft: 0.48, medium: 0.74, hard: 1.05 }[c] * 10) / sev;
+  const at = (roll) => A.stintPlan({ laps: 10, lifeLaps: life, pitLossLaps: 0.2, roll, twoCompound: true });
+  const mid = at(0.5), late = at(1), early = at(0);
+  assert.equal(late.seq.join(), mid.seq.join(), "same plan, only the stagger differs");
+  assert.ok(late.lapsAt[0] <= mid.lapsAt[0], `a late roll must not stop after the optimum here: L${late.lapsAt[0]} vs L${mid.lapsAt[0]}`);
+  assert.ok(early.lapsAt[0] < mid.lapsAt[0], "the early third still stops a lap sooner");
+  assert.equal(late.stints.reduce((a, v) => a + v, 0), 10);
+  // …and where the life allows it, the late shift is untouched.
+  const roomy = (c) => ({ soft: 12, medium: 18, hard: 26 })[c];
+  const r5 = A.stintPlan({ laps: 25, lifeLaps: roomy, pitLossLaps: 0.2, roll: 0.5, twoCompound: true });
+  const r1 = A.stintPlan({ laps: 25, lifeLaps: roomy, pitLossLaps: 0.2, roll: 1, twoCompound: true });
+  if (r1.seq.join() === r5.seq.join()) assert.ok(r1.lapsAt[0] >= r5.lapsAt[0], "a set with laps to spare still staggers late");
+});
+
 test("the planner's cliff IS the sim's cliff", () => {
   // Two copies of one number: when the sim's cliff steepened and the planner's
   // did not, every plan would price a dead set at the old, cheap rate.
