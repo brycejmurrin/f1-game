@@ -129,7 +129,7 @@ document.body.classList.remove('in-race');
 ```
 
 **The screen-root inventory DRIFTS — enumerate it, don't trust this list.**
-The authoritative enumeration is `SCREENS` in `tools/ui/layout-audit.mjs` (48
+The authoritative enumeration is `SCREENS` in `tools/ui/menu-screens.mjs` (48
 cells at 2026-09-18 — `node tools/ui/layout-audit.mjs --list` prints them and
 starts no browser); `index.html` currently holds 20 `<dialog>` roots (re-run
 `grep -c '<dialog' index.html`). Sweeping

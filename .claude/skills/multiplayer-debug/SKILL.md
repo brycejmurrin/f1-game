@@ -33,7 +33,7 @@ Do **not** use this for:
 | Module | Role |
 |---|---|
 | `js/net/transport.js` | Two channels: `state` unreliable/unordered, `event` reliable/ordered; `loopback()` is deterministic and in-page |
-| `js/net/sdp.js` | Packs gathered SDP facts into a scannable invite code; retains relay candidates first |
+| `js/net/sdp.js` | Packs gathered SDP facts into a scannable invite code; round-robins candidates by kind so a relay survives the cap |
 | `js/net/handshake.js` | ICE -> slim SDP -> deflate -> base64url invite; refuses mismatched `version.json` builds |
 | `js/net/nostr.js` | Public Nostr rendezvous, signalling only |
 | `js/net/rendezvous.js` | Backup room-code courier; typed errors, never throws |

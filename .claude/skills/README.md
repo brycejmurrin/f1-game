@@ -4,8 +4,8 @@ Project skills for recurring agent workflows. Each is a `SKILL.md` (auto-matched
 from its `description`, or via `/<name>`), grounded in `__apex`,
 `tools/track/verify-track.cjs`, and `npm run test:*` groups.
 
-**A skill is when/how, not the command.** The CLI lives under `tools/`. Ten
-CLIs are pinned as `apex_*` MCP tools (eleven tools — `apex_garage` is a
+**A skill is when/how, not the command.** The CLI lives under `tools/`. Eleven
+CLIs are pinned as `apex_*` MCP tools (twelve tools — `apex_garage` is a
 session over one of them); most are not. Full map (three MCP
 servers, wrap table, never-wrap): [`docs/AGENT-SURFACE.md`](../../docs/AGENT-SURFACE.md).
 
@@ -23,7 +23,7 @@ stayed separate in the 2026-09-03 pass.
 |---|---|
 | **agent-view** | Drive Apex 26 without screenshots — `world()`, `field()`, `rollout()`, headless lap, deterministic runs; telemetry / slip-grip / field gaps / sector timing / `lightState` / the headless `reset`-`act` loop (`references/state.md`); track geometry, corners, elevation, curvature, map/bounds, wall audits, `groundY` (`references/track-geometry.md`). |
 | **ai-racecraft** | AI overtakes too aggressive/passive, brake targets, preferred lane, ERS deploy, stuck/unstuck, `js/physics/ai-drive.js`. |
-| **asset-pack** | Baking or verifying `assets/pack`, `js/render/shared/assets.js`, `matTexMix`/baked PBR blend, MAT layer mismatches. |
+| **asset-pack** | Missing/wrong/garbled baked PBR materials in `assets/pack`, MAT-layer mismatches, `js/render/shared/assets.js` / `tools/gen/assets.mjs`, `matTexMix` / `__apex.assets()` / `matTex()`. |
 | **audio-debug** | Engine sounds flat at high speed, sfx not triggering, gear-shift audio wrong, music cuts out, WebAudio debugging. |
 | **career-mode** | DRIVER CAREER, MY TEAM, career saves, contracts, sponsors, R&D economy, career qualifying, reliability/DNFs. |
 | **check-changes** | Pre-push validation — `verify-change.mjs --fast` / `--plan` + batched `test-bg`; the cache bump (`references/bump.md`), a Playwright timeout triage (`references/triage.md`), merging with / pushing to the deploy branch (`references/deploy.md`). |
@@ -66,7 +66,7 @@ parity.
 Subagents (`../agents/`) take the noisy jobs a skill hands off: **verify-agent**
 (a read-only `verify-change --fast` verdict; `--base <ref>` answers "was it
 already red?"), **bloat-auditor** (BLOAT rows for slim-bloat),
-**deploy-research** (public web / live `version.json`), **track-surveyor** (one
+**ci-red-triage** (a red ci.yml / pages.yml run: which test, assertion, lane; was the base already red), **deploy-research** (public web / live `version.json`), **track-surveyor** (one
 circuit's def + scenery pair), **physics-contract-auditor** (curvature columns).
 
 See individual `SKILL.md` files under this directory for full workflows.

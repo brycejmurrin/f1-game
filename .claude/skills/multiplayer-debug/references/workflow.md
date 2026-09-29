@@ -32,8 +32,9 @@ Load from the SKILL.md index when the task needs this detail.
    - `lobbySdp().remoteTypes` answers what the peer actually received.
    - If remote SDP has no `relay`, inspect SDP packing/truncation and make sure
      ICE prefetch completed before `RTCPeerConnection` construction.
-   - **Relay candidates arrive last** — if the invite/answer string is truncated,
-     relay entries are the ones dropped. Symptom: desktop host gathers fine,
+   - **Relay candidates arrive last** — historically the invite/answer cap dropped
+     them (`sdp.js` now round-robins by kind, so >=1 relay survives; still check
+     `remoteTypes` before blaming ICE). Symptom: desktop host gathers fine,
      mobile guest never finishes ICE (`checking`/`connecting` forever). Probe ICE
      on the **stuck peer** (usually the guest), not only the host.
 

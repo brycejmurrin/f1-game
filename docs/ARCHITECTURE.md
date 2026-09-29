@@ -5,7 +5,7 @@ dependencies**; every `devDependency` is test- or tooling-only (Playwright the
 harness, jsQR to verify the QR encoder in tests, espree/eslint-scope for the
 source audits, sharp and typescript for tooling — never shipped). Four vendored
 libraries DO ship, under `vendor/`, each loaded only by the feature that needs
-it: three.js r185.1 (TLX backend), Rapier (`debrisworld.js`), Trystero (the
+it: three.js r186 (TLX backend), Rapier (`debrisworld.js`), Trystero (the
 Nostr room-code rendezvous) and jsQR (the answer-code camera scan). Served as
 static files (GitHub Pages). Every JS file is an IIFE that assigns ONE global.
 
@@ -41,10 +41,10 @@ consult the manifest for the full, current order:
 ```
 js/core/log.js                -> Log        (levelled logging; loads FIRST)
 js/core/mat4.js               -> M4, V3
-js/render/shaders/*      -> GLXChunks, GLXShaders   (pure data, before glx.js)
+js/render/glx/shaders/*  -> GLXChunks, GLXShaders   (pure data, before glx.js)
 js/render/glx/glx.js + glx/* -> GLX        (explicit WebGL2 renderer + fallback passes)
-js/render/gfx.js         -> Gfx        (renderer selection seam; the WGX and
-                                        TLX backends are DEFERRED — no script
+js/render/gfx.js         -> Gfx        (renderer selection seam; the GLX, WGX
+                                        and TLX backends are DEFERRED — no script
                                         tag, injected at boot for the resolved pick)
 js/data/teams.js          -> Teams      (2026 grid data + TIER_V pace ladder + the MY TEAM seed)
 js/track/*               -> the track engine (spline, mesh, scenery, markings…)
@@ -472,7 +472,7 @@ The July 2026 architecture reorg moved every module into a domain directory
 `buildProps` → four scenery modules).
 
 **That 4,700 is a historical measurement, not a current one.** `game.js` grew
-back to its ceiling (8,885 as of 2026-09) — extraction moved code out once and nothing stopped it
+back to its ceiling (9,759 lines at the 2026-09-29 ratchet) — extraction moved code out once and nothing stopped it
 accumulating again until the size ratchet (`tests/data/ratchets.json`, checked by `tools/check/ratchets.mjs`) put a ceiling on
 the file (lowered with each extraction). Treat the number as a record of what
 the reorg achieved, and `wc -l js/game.js` against the current ceiling as the
@@ -574,10 +574,10 @@ The mechanisms that keep a no-build, script-tag codebase coherent after the spli
   detection lives in `glx.js`.
 - **`TUNE_DEFS` mirror-comment invariants** in `glx.js`/`gfx.js` — comments that
   must track the registry by hand; replace with a checked mapping.
-- **~~WebGPU lazy-load~~ (done, then SPIKED OUT)** — both backends became
-  DEFERRED (no `<script>` tag, injected by `js/game.js` on the pick), and
-  Phase 2b then moved them to `spike/backends/` outright. `DEFERRED` is `{}`
-  now, so the injection has nothing to fetch and every pick resolves to GLX.
+- **~~WebGPU lazy-load~~ (done; the 2026-09 spike-out was reversed)** — the
+  backends (GLX, WGX, TLX) are DEFERRED (no `<script>` tag, injected by
+  `js/game.js` on the pick). Phase 2b briefly moved WGX/TLX to `spike/backends/`;
+  they are back in `js/render/webgpu/` and `js/render/three/`.
   See `tools/manifest.cjs`'s `DEFERRED` map;
   `tests/unit/load-order.test.mjs` pins the manifest, game.js's loader table and
   `sw.js`'s optional precache seed to each other.
@@ -632,15 +632,14 @@ M4.invertTo(out, m)                     -> out (general 4x4 inverse; identity on
 V3.norm(a)                              -> [x,y,z]
 ```
 
-## js/render/shaders/ — `GLXChunks`, `GLXShaders`
+## js/render/glx/shaders/ — `GLXChunks`, `GLXShaders`
 
 All GLSL sources for the renderer as template-literal strings with no
-interpolation — pure data. `chunks.js` (`GLXChunks`) holds the shared leaves
-(noise/hash, GGX BRDF trio, tonemap/grade) authored once; `lit.js`, `sky.js`,
-`fx.js`, and `post.js` compose them into the program sources
-(LIT/SKY/SHADOW/MARK/DECAL/GLOW, the post chain, SSAO/GODRAY/COMPOSITE/FXAA/
-DEPTH) on the shared `GLXShaders` global. Replaces the old monolithic
-`js/render/glx/shaders/glsl-lit.js`. `glx.js` destructures `GLXShaders` at the top of
+interpolation — pure data. `glsl-chunks.js` (`GLXChunks`) holds the shared leaves
+(noise/hash, GGX BRDF trio, tonemap/grade) authored once; `glsl-lit.js`,
+`glsl-sky.js`, `glsl-fx.js`, and `glsl-post.js` compose them into the program
+sources (LIT/SKY/SHADOW/MARK/DECAL/GLOW, the post chain, SSAO/GODRAY/COMPOSITE/
+FXAA/DEPTH) on the shared `GLXShaders` global. `glx.js` destructures `GLXShaders` at the top of
 its IIFE, so these files must load first (a manifest `HARD_EDGES` entry).
 
 ## js/render/glx/glx.js (+ js/render/glx/) / js/render/gfx.js — renderers
@@ -660,7 +659,7 @@ resolves the localStorage key `apex26.gfxBackend` to a backend and returns it
 
 | `apex26.gfxBackend` | Backend | Notes |
 |---|---|---|
-| unset / `"three"` | **TLX** | three.js r185.1 + TSL — the shipped default; WebGPU with automatic WebGL2 fallback inside three |
+| unset / `"three"` | **TLX** | three.js r186 + TSL — the shipped default; WebGPU with automatic WebGL2 fallback inside three |
 | `"webgl2"` | **GLX** | Explicit WebGL2 pick and fallback backend |
 | `"webgpu"` | **WGX** | native WebGPU; requires `navigator.gpu`; opt-in. Parity recipes: [../docs/research/WEBGPU-PARITY.md](../docs/research/WEBGPU-PARITY.md) |
 
@@ -720,7 +719,7 @@ function. The 2026-08 parity pass (recipes in
 `import("three/webgpu")` inside `TLX.create()`. The `import` never touches
 `THREE` at script-eval (three doesn't exist until `create()`), so there is no
 deferred-ordering problem — the handshake IS the existing `await Gfx.create` in
-game.js. Vendored three r185.1 lives OUTSIDE `js/` at top-level
+game.js. Vendored three r186 lives OUTSIDE `js/` at top-level
 `vendor/three-0.186.0/` (the load-order test walks `js/**`; an un-versioned
 transitive `three.core` import would break the uniform-`?v=` rule otherwise);
 an inline `<script type="importmap">` in `index.html` maps the `three`/`three/*`
@@ -754,7 +753,7 @@ context object so the public `GLX` surface is unchanged. WGX is selected
 through the active Gfx seam only when `apex26.gfxBackend=webgpu` opts in and
 WebGPU initializes successfully; otherwise game.js uses GLX. One standard lit
 shader handles everything except the sky on the GLX path. Shader source
-strings live in `js/render/shaders/` (globals `GLXChunks`/`GLXShaders`).
+strings live in `js/render/glx/shaders/` (globals `GLXChunks`/`GLXShaders`).
 
 ```
 GLX.init(canvasEl) -> boolean         // false if no WebGL2
@@ -806,9 +805,9 @@ Teams.LIST -> [ { id:"mercedes", name:"Mercedes-AMG Petronas", short:"MER",
                   drivers:[ {name:"George Russell", code:"RUS", num:63},
                             {name:"Kimi Antonelli", code:"ANT", num:12} ] }, ... ]
 // 11 teams in 2026 spec: Mercedes(t0), Ferrari(t1), McLaren(t1, Norris num:1),
-// Red Bull(t2, Verstappen num:33), Alpine(t3), Racing Bulls(t3), Haas(t3),
+// Red Bull(t2, Verstappen num:3), Alpine(t3), Racing Bulls(t3), Haas(t3),
 // Williams(t3), Audi(t4), Aston Martin(t4), Cadillac(t4, Perez 11 / Bottas 77)
-Teams.TIER_V -> [1.0, 0.988, 0.973, 0.958, 0.942]   // ground-speed scale per tier
+Teams.TIER_V -> [0.9695, 0.9674, 0.9648, 0.9622, 0.9594]   // ground-speed scale per tier
 Teams.DEFAULT_CUSTOM -> the MY TEAM seed record (id "custom", tier 2)
 Teams.POINTS  -> [25,18,15,12,10,8,6,4,2,1]   // top 10, no fastest-lap point
 ```
@@ -836,7 +835,7 @@ anything PER-CIRCUIT is a key of the def (below), never an id-keyed table here.
 
 ## js/track/ — the rest of the engine
 
-One concern per file, all loaded before `tracks.js`:
+One concern per file, all loaded before `tracks.js`, under `js/track/core/` (`pit`, `spline`, `mesh`, `space`, `surface`, plus `line` and `hidden-faces`) and `js/track/scenery/` (the rest; `maps.js` is `js/ui/track-maps.js`):
 
 | File | Global | Owns |
 |---|---|---|
@@ -849,8 +848,8 @@ One concern per file, all loaded before `tracks.js`:
 | `models.js` | `TrackModels` | composite prop models shared across circuits |
 | `themes.js` | `SceneryThemes` | theme tables for the city generator |
 | `landmark-kit.js` / `circuit-kit.js` | `LandmarkKit` / `CircuitKit` | landmark & circuit composite kits for `scenery(api)` |
-| `maps.js` | `TrackMaps` | offline 2D picker outlines from the spline engine — was `trackmaps.js` |
-| `scenery-nature.js` / `scenery-city.js` / `scenery-structures.js` / `scenery-identity.js` | `Scenery*` | the buildProps split (below) |
+| `js/ui/track-maps.js` | `TrackMaps` | offline 2D picker outlines from the spline engine |
+| `nature.js` / `city.js` / `structures.js` / `identity.js` | `Scenery*` | the buildProps split (below) |
 | `scenery/build-props.js` | `TrackBuildProps` | `buildProps` orchestration (guards nested pending a later peel); `Tracks.build` calls `TrackBuildProps.build` |
 | `scenery/pits.js` | `SceneryPits` | the pit complex's 3D furniture, last in `buildProps` and every position `track.pit`'s: the signalling platform, wall and barrier swept along the lane, the entry boards and exit lights, and the garages — `GarageScene.buildStatic` (the setup screen's own bay) placed once per team with `TrackGeom.addMesh` under a per-bay roof, hospitality storey and race control. Emits with the RAW emitters; every other prop is kept out of the complex by `onRoadHit` / `onTrack`, and a circuit's superseded pit block is recorded as such rather than as a required failure |
 
@@ -878,7 +877,7 @@ reads every one of them off the BUILT def (`tests/unit/circuit-def-fields.test.m
 pins that they survive the copy).
 The bespoke `scenery(api)` closure lives in `js/circuits/scenery/<id>.js`
 (registered on `window.TrackScenery[id]`, no `<script>` tag: `game.js` fetches
-the one it is about to build, ~27 KB each, so a session does not parse all 40). Loaded *before* `js/track/tracks.js`, in the order their
+the one it is about to build, ~27 KB each, so a session does not parse all 52). Loaded *before* `js/track/tracks.js`, in the order their
 `<script>` tags appear in `index.html` (this is **not** the real-world F1
 calendar order). **Tag order == `Tracks.LIST` order == picker/season order.**
 
@@ -1353,14 +1352,14 @@ would keep GLX’s dead closure).
 
 | Backend | Role | Entry | Shaders |
 |---|---|---|---|
-| **GLX** | Explicit/fallback always-tagged WebGL2 | `js/render/glx/glx.js` + `glx/{shadow,post,chunked}.js` | GLSL strings in `js/render/shaders/` |
-| **WGX** | Opt-in WebGPU, hand-ported WGSL | `js/render/webgpu/wgx.js` | `spike/backends/webgpu/wgsl-{chunks,post,fx}.js` |
+| **GLX** | Explicit/fallback WebGL2 (DEFERRED like the others) | `js/render/glx/glx.js` + `glx/{shadow,post,chunked}.js` | GLSL strings in `js/render/glx/shaders/` |
+| **WGX** | Opt-in WebGPU, hand-ported WGSL | `js/render/webgpu/wgx.js` | `js/render/webgpu/wgsl-{chunks,post,fx}.js` |
 | **TLX** | Default Three `WebGPURenderer` (`forceWebGL` when `tlxForceGL=1`, or on AUTO when `navigator.gpu` is absent / `tlxAutoGL` is set; WebKit (Safari/iOS) takes three WebGL2 on AUTO since 2026-09-03; THREE PATH: WEBGPU pins the lite WebGPU path) | `js/render/three/tlx.js` | TSL factories on `TLXShaders`; vendor `vendor/three-0.186.0/` |
 
 **Shared always-on:** `js/render/gfx.js` (`create` only), `js/render/shared/gltf.js`,
 `js/render/shared/assets.js` (MAT `TEXTURE_2D_ARRAY`). Deferred lists live in
 `tools/manifest.cjs` `DEFERRED`, mirrored into `js/roster.js` by `tools/gen/gen-shell.mjs`; no `<script>` tags for
-WGX/TLX.
+GLX/WGX/TLX.
 
 ### Frame pipeline (all three)
 

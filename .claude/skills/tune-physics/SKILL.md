@@ -13,20 +13,21 @@ absolute magnitudes.
 
 | Param | Effect | Bigger = |
 |---|---|---|
-| `wheelbase` (`WHEELBASE` 3.60 m) | turn-in | lazier |
-| `expo` (`STEER_EXPO` 2.4) | input curve | gentler near centre |
-| `maxSlip` (`STEER_MAX_SLIP` ≈0.29 rad) | max steer lock | sharper low-speed |
-| `speedRef` (`STEER_SPEED_REF` ≈41.7 m/s) | lock taper | keeps lock at speed |
+| `wheelbase` (`WHEELBASE` 4.2 m) | turn-in | lazier |
+| `expo` (`STEER_EXPO` ≈2.11) | input curve | gentler near centre |
+| `maxSlip` (`STEER_MAX_SLIP` ≈0.34 rad) | max steer lock | sharper low-speed |
+| `speedRef` (`STEER_SPEED_REF` 55 m/s) | lock taper | keeps lock at speed |
 | `drift` (`DRIFT` 0) | rear looseness | more tail-out (debug) |
 | `roadFollow` (`ROAD_FOLLOW` **0**, ships OFF) | curvature assist | more auto-drive |
 | `frontGrip` (`FRONT_GRIP` 0.94) | front friction bias | less understeer |
 | `playerGrip` (`PLAYER_GRIP` 1.15) | player vs AI headroom | more forgiving |
 | `yawDamp` (`YAW_DAMP` 1.0) | yaw damping | calmer |
-| `yawInertia` (`YAW_INERTIA` 0.58) | rotational inertia | lazier (`<1` snappier) |
+| `yawInertia` (`YAW_INERTIA` 0.58; 1.0 on a coarse pointer) | rotational inertia | lazier (`<1` snappier) |
 | `pace` (`PACE` 0.840) | ground-speed scale | faster everywhere |
 
 Boot-effective defaults come from `js/input/steer-tuning.js`
-`applySteerTuning()` — game.js literals (`3.2 m` / `PACE 1.0`) are dead.
+`applySteerTuning()` (slider defaults in `js/ui/settings-export.js`) — game.js
+literals (`3.2 m` / `PACE 1.0`) are dead.
 `PACE` is a scale, not a cap; compare speeds via `vTop()`/`vStd()`/`aStd()`.
 
 **The arc must not reach the driver.** With assists off, nothing derived from
@@ -39,7 +40,7 @@ by feeding path curvature into steer/throttle when assists are off.
 notch 1..10 to `0..0.70` (notch 1 = off). Recommending a raised default is a
 design reversal, not a tweak — flag it.
 
-Fixed in `js/game.js` (not `setPhysics`): `LONG_GRIP`, `CS_FRONT/CS_REAR`,
+Fixed in `js/physics/consts.js` (`PhysicsConsts`, not `setPhysics`): `LONG_GRIP`, `CS_FRONT/CS_REAR`,
 `FRONT_WEIGHT`, `LAT_MAX`, `VMAX`.
 
 ```sh
