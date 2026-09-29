@@ -8,11 +8,11 @@
   function (api) {
       const { K, lapBounds, out, MAT, n, px, pz, hw, pyMin, hash, every, place, prop, backdrop,
               groundPatch, waterSurface, modelGroup,
-              groundYAt, onTrack, addBox, addCyl, addPrism, addFrustum, vadd, anchor,
+              groundYAt, terrainYAt, onTrack, addBox, addCyl, addPrism, addFrustum, vadd, anchor,
               seat, foundation,
               along, mountain, tree, pine, hedge, bush,
               cypress, stonePine, plane, tieredBowl, terrace,
-              grandstand, spectatorHill, building, motorhome, tower, billboard, marshalPost, gantry,
+              grandstandEx, spectatorHill, building, motorhome, tower, billboard, marshalPost, gantry,
               fence, guardrail, tyreWall, wall, lampPost,
               forestEdge } = api;
       const terrainPatch = (id, s, side, gap, size, col, opts) =>
@@ -221,9 +221,43 @@
                  { kind: "slab", wall: [0.58, 0.60, 0.63], window: WIN_LIT, floor: 5, lit: true });
       }
       prop(K(0.01), -1, 7, [2.5, 1.6, 120], RED);
-      grandstand(0.965, -1, 10, 90, [0.55, 0.58, 0.62], RED);
-      grandstand(0.02,  1, 22, 80, [0.52, 0.55, 0.60], [0.78, 0.30, 0.22]);
-      grandstand(0.93, -1, 10, 70, [0.55, 0.58, 0.62], RED);
+      // Pit-side stands (Tilke 2006–07 complex). Rows rise away from the track
+      // via grandstandEx; legacy grandstand() already delegated, but the opts
+      // keep crimson / concrete liveries on the Ferrari-home palette.
+      // Sources: wikipedia.org/wiki/Imola_Circuit (pit rebuild); autodromoimola.it
+      // WEC 2024 grandstand map (Partenza opposite the pits).
+      grandstandEx(0.965, -1, 10, 90, null, null,
+        { livery: "crimson", roof: "cantilever", endWalls: true });
+      grandstandEx(0.93, -1, 10, 70, null, null,
+        { livery: "concrete", roof: "flat" });
+      // Partenza rank — opposite the pit building (+1). Long covered main stand
+      // plus a shorter neighbour toward Tamburello.
+      grandstandEx(0.02,  1, 22, 80, null, null,
+        { livery: "crimson", roof: "cantilever" });
+      grandstandEx(0.05,  1, 20, 70, null, null,
+        { livery: "sandstone", roof: "cantilever" });
+      // Wave-6 hero: Partenza fascia marker facing the Tilke pit building.
+      // Compact identity only — live seating is grandstandEx above.
+      {
+        const a = anchor(K(0.025), 1, 28);
+        if (!onTrack(a.c[0], a.c[2], 10)) {
+          const b = [a.r, a.u, a.t];
+          const SHELL = [0.54, 0.56, 0.60];
+          const gy = terrainYAt(a.c[0], a.c[2]);
+          const base = [a.c[0], Number.isFinite(gy) ? gy : a.c[1], a.c[2]];
+          modelGroup("imola-partenza-stands", {
+            center: vadd(base, a.u, 8), size: [6, 12, 36], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.CONCRETE;
+            seat.box(stage, [base[0], base[1] - 0.3, base[2]], [4, 0.7, 32], SHELL, b);
+            addBox(stage, vadd(vadd(base, a.r, 3.0), a.u, 6.5), [4, 7, 30], SHELL, b);
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(vadd(base, a.r, -2.2), a.u, 9.5),
+                   [0.25, 0.7, 28], RED, b);
+            stage._mat = 0;
+          }, { required: true });
+        }
+      }
 
       terrainPatch("tamburello-lawn", 0.05, -1, 12, [18, 20], BANK);
       place(K(0.05), -1, 14, [2, 3.2, 2], [0.45, 0.40, 0.30]);
@@ -240,9 +274,16 @@
       spectatorHill(0.113, 0.138, -1, 20, { rows: 3, rise: 1.1, depth: 2.0,
         density: 0.5, grass: BANK, crowd: [CROWD_A, CROWD_B, CROWD_C, WHITE] });
 
-      grandstand(0.28, -1, 12, 60, [0.52, 0.55, 0.60], RED);
-      grandstand(0.31, -1, 12, 50, [0.54, 0.57, 0.61], [0.20, 0.42, 0.72]);
+      // Tosa hairpin stands + Prato grass bank (outside the left-hander).
+      // Source: autodromoimola.it WEC 2024 map — Tosa T1–2 + PRATO lawn.
+      grandstandEx(0.28, -1, 12, 60, null, null,
+        { livery: "crimson", roof: "cantilever" });
+      grandstandEx(0.31, -1, 14, 50, null, null,
+        { livery: "sandstone", roof: "flat" });
       terrainPatch("tosa-gravel", 0.28, -1, 6, [34, 40], GRAVEL);
+      // Prato Tosa: the tieredBowl at 0.279–0.291 (below) is the built Tosa
+      // stand; grassy Prato character is the BANK terrain patches + existing
+      // Rivazza spectatorHills. A second spectatorHill here blew the tris ratchet.
 
       for (const side of [-1, 1]) {
         place(K(0.645), side, 2.2, [1.0, 1.35, 9], RED);
@@ -256,12 +297,15 @@
       bush(K(0.64), -1, 8, [0.14, 0.32, 0.15]);
       bush(K(0.68),  1, 9, [0.15, 0.34, 0.16]);
 
-      grandstand(0.80, -1, 12, 55, [0.52, 0.55, 0.60], RED);
+      grandstandEx(0.80, -1, 14, 55, null, null,
+        { livery: "crimson", roof: "cantilever" });
       terrainPatch("rivazza-gravel-0", 0.79, -1, 6, [32, 55], GRAVEL);
       terrainPatch("rivazza-gravel-1", 0.81, -1, 7, [34, 58], GRAVEL);
       terrainPatch("rivazza-bank-0", 0.80, -1, 18, [40, 62], BANK);
       terrainPatch("rivazza-bank-1", 0.83, -1, 22, [38, 58], BANK);
       terrainPatch("rivazza-bank-2", 0.82,  1, 16, [28, 40], BANK);
+      // Prato Rivazza already has spectatorHill(0.788…) / (0.830…) below —
+      // do not stack another bank on the same verge (clip + coplanar).
 
       const TOWN_POS = [
         [0.60, -1, 85,  14, 18, 12, "flat",    STONE3],
@@ -335,42 +379,62 @@
         const aB = anchor(K(0.92), -1, 63);
         addCyl(out, aB.c, 1.6, 11, [0.78, 0.74, 0.60], 8, [aB.r, aB.u, aB.t]);
       }
-      (function raceControlTower() {
+      (function racetrackTower() {
+        // Official "The Tower" — 7 floors over the Tilke pit building, Ferrari
+        // prancing-horse façade, view of start straight / Variante Bassa / pit exit.
+        // Source: https://www.autodromoimola.it/en/business/the-tower/
+        // Replaces the prior imola-race-control-tower whose floor boxes floated
+        // 22–33 m (gaps between floor slabs tripped ground-audit's unsupported
+        // BFS). One continuous shaft + flush glass + roof cabin that touch.
         const rcSide = -1;
-        const a = anchor(K(0.99), rcSide, 16);
-        const b = [a.r, a.u, a.t], base = a.c;
-        const floors = 7, floorH = 3.85, shaftH = floors * floorH; // ~27 m
+        const a = anchor(K(0.99), rcSide, 18);
+        if (onTrack(a.c[0], a.c[2], 8)) return;
+        const b = [a.r, a.u, a.t];
+        // Seat the pad on sampled terrain — anchor raycast can sit slightly
+        // proud on the pit apron; terrainYAt matches ground-audit's sampler.
+        const gy = terrainYAt(a.c[0], a.c[2]);
+        const baseY = Number.isFinite(gy) ? gy : a.c[1];
+        const base = [a.c[0], baseY, a.c[2]];
+        const floors = 7, floorH = 3.7, shaftH = floors * floorH; // ~26 m
         const w = 9, d = 9;
-        modelGroup("imola-race-control-tower", {
-          center: vadd(base, a.u, 17), size: [13, 34, 13], basis: b,
+        modelGroup("imola-racetrack-tower", {
+          center: vadd(base, a.u, shaftH * 0.5 + 2), size: [14, shaftH + 12, 14], basis: b,
         }, (stage) => {
-          for (let f = 0; f < floors; f++) {
+          // Foundation pad — sinks into grade so the stack is grounded.
+          stage._mat = MAT.CONCRETE;
+          seat.box(stage, [base[0], baseY - 0.4, base[2]], [w + 2.4, 1.0, d + 2.4],
+                   [0.62, 0.64, 0.68], b);
+          // Continuous shaft (no inter-floor air gap — ground-audit BFS).
+          // No flush overlay bands — those shared faces with the shaft and
+          // raised coplanar spots (baseline 3 → 6).
+          addBox(stage, vadd(base, a.u, shaftH / 2), [w, shaftH, d],
+                 [0.68, 0.70, 0.74], b);
+          // Track-facing glass — every other floor only (tris budget).
+          for (let f = 0; f < floors; f += 2) {
             const y0 = f * floorH;
-            stage._mat = MAT.CONCRETE;
-            addBox(stage, vadd(base, a.u, y0 + floorH * 0.5), [w, floorH - 0.5, d],
-                   f % 2 ? [0.72, 0.74, 0.77] : [0.66, 0.68, 0.72], b);
             stage._mat = MAT.GLASS;
-            addBox(stage, vadd(vadd(base, a.u, y0 + floorH * 0.62), a.r, rcSide * (w / 2 + 0.02)),
-                   [0.06, floorH * 0.42, d * 0.86],
+            addBox(stage, vadd(vadd(base, a.u, y0 + floorH * 0.55), a.r, rcSide * (w / 2 - 0.06)),
+                   [0.22, floorH * 0.9, d * 0.78],
                    [0.32, 0.42, 0.54], b);
+            stage._mat = MAT.CONCRETE;
           }
-          stage._mat = MAT.CONCRETE;
+          // Terrace + cabin (compact).
           const terraceY = shaftH;
-          addBox(stage, vadd(base, a.u, terraceY + 0.5), [w + 2.4, 1.0, d + 2.4], [0.70, 0.72, 0.75], b);
-          stage._mat = MAT.GLASS;
-          addBox(stage, vadd(vadd(base, a.u, terraceY + 1.9), a.r, rcSide * (w / 2 + 1.1)),
-                 [0.08, 2.2, d + 2.0], [0.34, 0.45, 0.58], b);
-          stage._mat = MAT.METAL;
-          addBox(stage, vadd(base, a.u, terraceY + 2.95), [w + 2.4, 0.12, d + 2.4], [0.30, 0.30, 0.32], b);
-          // Rooftop race-director's cabin + antenna mast.
+          addBox(stage, vadd(base, a.u, terraceY + 0.3),
+                 [w + 1.2, 0.6, d + 1.2], [0.70, 0.72, 0.75], b);
           stage._mat = MAT.CONCRETE;
-          const cabH = 3.4;
-          addBox(stage, vadd(base, a.u, terraceY + 3.0 + cabH / 2), [6.2, cabH, 6.2], [0.78, 0.80, 0.82], b);
+          const cabH = 2.8;
+          addBox(stage, vadd(base, a.u, terraceY + 0.6 + cabH / 2),
+                 [5.2, cabH, 5.2], [0.78, 0.80, 0.82], b);
           stage._mat = MAT.GLASS;
-          addBox(stage, vadd(vadd(base, a.u, terraceY + 3.0 + cabH * 0.55), a.r, rcSide * 3.05),
-                 [0.06, cabH * 0.55, 5.6], [0.30, 0.38, 0.50], b);
+          addBox(stage, vadd(vadd(base, a.u, terraceY + 0.6 + cabH * 0.5), a.r, rcSide * 2.5),
+                 [0.14, cabH * 0.45, 4.6], [0.30, 0.38, 0.50], b);
           stage._mat = MAT.METAL;
-          addCyl(stage, vadd(base, a.u, terraceY + 3.0 + cabH), 0.16, 6.5, [0.30, 0.30, 0.32], 4, b);
+          addCyl(stage, vadd(base, a.u, terraceY + 0.6 + cabH - 0.15),
+                 0.14, 5.0, [0.30, 0.30, 0.32], 4, b);
+          // Single crimson façade panel (Ferrari-home cue).
+          addBox(stage, vadd(vadd(base, a.u, 12), a.r, rcSide * (w / 2 - 0.05)),
+                 [0.14, 1.6, 2.4], RED, b);
           stage._mat = 0;
         }, { required: true });
       })();
@@ -437,13 +501,21 @@
         }
       }
 
-      grandstand(0.99, -1, 11, 60, [0.50, 0.53, 0.58], CROWD_C);
-      grandstand(0.05,  1, 20, 70, [0.52, 0.55, 0.60], CROWD_B);
-      grandstand(0.07, -1, 16, 56, [0.54, 0.56, 0.60], CROWD_A);
-      grandstand(0.27,  1, 16, 44, [0.52, 0.55, 0.60], CROWD_B);
-      grandstand(0.51,  1, 16, 60, [0.52, 0.55, 0.60], CROWD_A);
-      grandstand(0.54,  1, 18, 46, [0.54, 0.57, 0.61], CROWD_C);
-      grandstand(0.82, -1, 14, 64, [0.52, 0.55, 0.60], CROWD_B);
+      grandstandEx(0.99, -1, 12, 60, null, null,
+        { livery: "concrete", roof: "cantilever" });
+      grandstandEx(0.07, -1, 16, 56, null, null,
+        { livery: "crimson", roof: "flat" });
+      // Villeneuve outside stand (WEC map V).
+      grandstandEx(0.27,  1, 18, 44, null, null,
+        { livery: "sandstone", roof: "cantilever" });
+      // Acque Minerali: prior grandstand(0.51, +1, 16) was fully suppressed
+      // (onTrack fold). Restored as a grass Prato-style bank at gap 32 — a
+      // full grandstandEx here blows the props-tris ratchet (~+2.5k tris).
+      // Lettered AM1–5 sides remain UNCERTAIN.
+      spectatorHill(0.530, 0.555, 1, 32, { rows: 4, rise: 1.2, depth: 2.0,
+        density: 0.4, step: 16, grass: BANK, crowd: [CROWD_A, RED, CROWD_C, WHITE] });
+      grandstandEx(0.82, -1, 14, 64, null, null,
+        { livery: "crimson", roof: "cantilever" });
 
       fence(0.96, 0.10, -1, 4, 4, [0.62, 0.64, 0.66]);
       fence(0.49, 0.56,  1, 4, 4, [0.62, 0.64, 0.66]);
@@ -466,6 +538,8 @@
       billboard(K(0.82), -1, 18, 12, 5, [0.86, 0.16, 0.14]);
       billboard(K(0.95),  1, 16, 12, 5, [0.90, 0.80, 0.20]);
 
+      // Keep original hospitality gaps — pushing them out buried city detail
+      // worse than the motorhomes themselves. Mild bury (~0.7 m) stays ≤ baseline.
       const HOSPITALITY_POS = [
         [0.944, 34, [0.86, 0.16, 0.14]],
         [0.951, 37, [0.20, 0.40, 0.72]],
@@ -620,9 +694,9 @@
       });
 
       spectatorHill(0.788, 0.802, -1, 14, { rows: 5, rise: 1.3, depth: 2.2,
-        density: 0.6, grass: BANK, crowd: [CROWD_A, CROWD_B, CROWD_C, WHITE] });
+        density: 0.6, grass: BANK, crowd: [CROWD_A, CROWD_B, RED, WHITE] });
       spectatorHill(0.830, 0.840, -1, 18, { rows: 4, rise: 1.2, depth: 2.0,
-        density: 0.55, grass: BANK, crowd: [CROWD_A, CROWD_B, CROWD_C, WHITE] });
+        density: 0.55, grass: BANK, crowd: [RED, CROWD_B, CROWD_C, WHITE] });
       spectatorHill(0.505, 0.515, 1, 22, { rows: 3, rise: 1.1, depth: 1.8,
         density: 0.45, grass: BANK, crowd: [CROWD_A, CROWD_B, CROWD_C, WHITE] }); // Acque Minerali — kept lighter, the hollow is the hero
 
