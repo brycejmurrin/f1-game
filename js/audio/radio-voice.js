@@ -173,6 +173,7 @@ const RadioVoice = (function () {
     if (estimate(text, rate) > budget) { out.reason = "too-long"; out.text = text; return out; }
     out.speak = true; out.text = text; out.speaker = speaker;
     out.rate = rate; out.pitch = tone.pitch; out.budgetMs = Math.max(0, budget) * 1000;
+    out.secs = estimate(text, rate);   // the words' own length, for a caller that holds a bed under them
     return out;
   }
 
@@ -351,7 +352,7 @@ const RadioVoice = (function () {
       const hold = pack ? pack.remaining("spotter") : 0;
       if (hold > 0) lead = Math.max(+lead || 0, hold + 0.08);
       const p = plan({ msg, life, kind, lead, enabled: on, soundOn: !!G.soundOn, state: G.state, preRace: !!preRace, api: true, volume, tune });
-      last = { text: p.text, reason: p.reason || "spoke", rate: p.rate, budgetMs: p.budgetMs, leadMs: p.leadMs };
+      last = { text: p.text, reason: p.reason || "spoke", rate: p.rate, budgetMs: p.budgetMs, leadMs: p.leadMs, secs: p.secs || 0 };
       // A card that will not be spoken still REPLACES the one on screen: its
       // words stop with it (and its deadline, which would later cut this card's
       // hiss bed). Not the words' sting — that is already the new card's.
@@ -561,8 +562,10 @@ const RadioVoice = (function () {
        *  grid-mine shot. The same plan() as every race line — TEAM RADIO off,
        *  master sound off, or a line that will not fit its budget all refuse it
        *  — with only the session gate lifted. No card: the loading screen owns
-       *  the screen, so `life` is the time left in the shot. */
-      sayPreRace: (msg, life, lead) => say(msg, life, "race", lead, true),
+       *  the screen, so `life` is the time left in the shot. Returns the line's
+       *  length in seconds, cue included (false if refused): the hiss bed is
+       *  held for the words, not for whatever is left of the flyby. */
+      sayPreRace: (msg, life, lead) => (say(msg, life, "race", lead, true) ? last.leadMs / 1000 + last.secs : false),
       /** The installed voices a channel may be given, as plain rows for a <select>. */
       voiceList: (speaker) => voicesFor(!!REMOTE_OK[speaker]).map((v) => ({ name: v.name, lang: v.lang })),
       /** The stored tune, or the shipped default for a channel with none. */

@@ -238,6 +238,31 @@ test("the driving boundary is opened across the complex, on the pit side only", 
   void other; void raw;
 });
 
+test("…and never PAST the outer wall: where the lane is wider than the car, the wall is the limit", () => {
+  // The other half of the bound above (ff0867010 + 5776e36b4). openBoundary
+  // once only RAISED the limit, so wherever the entry or exit road narrows the
+  // default run-off (hw + 9) stood past the outer wall and cars drove through
+  // it on 51 of 52 circuits. Where the lane is more than 1.2 m past the road
+  // edge its wall line is the limit exactly; the taper (a lane centimetres
+  // wide) is the one place it may stay at the run-off.
+  const P = ctxOnce().TrackPit;
+  for (const id of [FULL, CORRIDOR, LEFT, STREET]) {
+    const t = buildOnce(id), p = t.pit;
+    if (!p) continue;
+    const bar = p.side > 0 ? t.barR : t.barL;
+    let walled = 0;
+    for (let k = 0; k < t.n; k++) {
+      if (!(p.keep[k] > 0)) continue;
+      const lim = t.hw[k] + P.outerAt(p, k) - 0.9;
+      if (!(lim > t.hw[k] + 1.2)) continue;
+      walled++;
+      assert.ok(bar[k] <= lim + 1e-6,
+        `${id} node ${k}: boundary ${bar[k].toFixed(2)} is past the outer wall line ${lim.toFixed(2)}`);
+    }
+    assert.ok(walled > 20, `${id}: the lane has a walled stretch to check (${walled} nodes)`);
+  }
+});
+
 test("paint, stop and door are the SAME positions — one row, from the grid, plus MY TEAM", () => {
   const ctx = ctxOnce();
   const Teams = ctx.Tracks && typeof ctx.TrackPit !== "undefined" ? null : null;
