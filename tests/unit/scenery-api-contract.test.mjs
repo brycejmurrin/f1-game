@@ -152,6 +152,19 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
       "montreal-wall-of-champions-stand",
       "montreal-biosphere",
     ],
+    // Wave 6 — Sochi Olympic Park venues + Ice Cube + Olympic Park station
+    sochi: [
+      "sochi-fisht-stadium",
+      "sochi-bolshoy-dome",
+      "sochi-adler-arena",
+      "sochi-flame-tower",
+      "sochi-iceberg-palace",
+      "sochi-olympic-rings",
+      "sochi-race-control",
+      "sochi-shayba-arena",
+      "sochi-ice-cube",
+      "sochi-olympic-park-station",
+    ],
   };
   for (const [track, ids] of Object.entries(expected)) {
     const body = landmarkSource(track);

@@ -590,11 +590,15 @@ const SceneryCity = (function () {
         }
       } else if (kind === "cross") {                             // two perpendicular slabs (+ footprint)
         if (sec(0, w, h, d * 0.5, k * 3.7 + side * 1.9) === false) return;   // body rejected -> drop its dependents // arm along tangent
-        const cen2 = vadd(a.c, a.u, h * 0.5);
+        // Lift the crossing arm by MIN_SEP so its top/bottom faces are not the
+        // same horizontal planes as sec()'s body (sochi flatCoplanar: 45 spots
+        // from neonTower@594 × sec@475). Cap rides with the arm.
+        const SEP = (typeof TrackGeom !== "undefined" && TrackGeom.MIN_SEP) || 0.03;
+        const cen2 = vadd(a.c, a.u, h * 0.5 + SEP);
         addBox(out, cen2, [w * 0.5, h, d], bodyCol, b);                                                       // arm along width
         if (NIGHT) neonFacade(cen2, b, side, w * 0.5, h, d, neon, k * 6.1 + side, na);
         else dayGridAt(cen2, w * 0.5, h, d);
-        addBox(out, vadd(a.c, a.u, h + 0.5), [w * 0.6, 1.0, d * 0.6], cap, b);
+        addBox(out, vadd(a.c, a.u, h + 0.5 + SEP), [w * 0.6, 1.0, d * 0.6], cap, b);
       } else if (kind === "arch") {                              // portal / gateway — two legs + spanning lintel
         // Legs split along the street (d), as notch's towers: sized across w and
         // offset along d with the full d each, they overlapped whenever d > 0.72 w.
