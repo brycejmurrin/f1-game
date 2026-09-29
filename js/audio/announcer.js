@@ -424,8 +424,8 @@ const Announcer = (function () {
     function stop() {
       wrapGen++;               // a wrap-up still waiting for the radio is retired too
       generation++;            // before cancel(): a queued onend must already see itself as stale
-      speaking = null;
-      try { synth.cancel(); } catch (e) { /* nothing queued, or a synth mid-teardown */ }
+      const owned = !!speaking; speaking = null;
+      if (owned) try { synth.cancel(); } catch (e) { /* already ended */ }
     }
     // Hidden tab: stop the read ourselves. Speaking into a background tab is
     // what RadioVoice's own notes say bricks the iOS synthesiser until reload.
@@ -599,7 +599,11 @@ const Announcer = (function () {
         .map((l) => { const t = String(l == null ? "" : l); return RadioVoice.speakable ? RadioVoice.speakable(t) : t; })
         .filter(Boolean);
       if (!parts.length) return false;
-      stop();
+      // Starting a read takes the channel deliberately; merely turning this
+      // speaker off must never cancel somebody else's radio transmission.
+      if (G.radio && G.radio.stop) G.radio.stop();
+      const owned = !!speaking; stop();
+      if (!owned) try { synth.cancel(); } catch (e) { /* already idle */ }
       const tune = (G.radio && G.radio.tuneFor && G.radio.tuneFor(CHANNEL)) || { pitch: 1, rate: 1, name: "" };
       // The ANNOUNCER's list, which includes network voices — this channel has no
       // card to miss, and the good voices are all remote (RadioVoice.REMOTE_OK).
@@ -669,9 +673,8 @@ const Announcer = (function () {
        *  sound still gates it — that switch means silence. */
       preview(info) { return speak(scriptFor(info), 0); },
       /** The settings panel's TEST button, where there is no circuit to
-       *  describe: one real line at the tune you just set. It cannot go through
-       *  RadioVoice.preview(), which is gated on the TEAM RADIO switch — and
-       *  this channel is on when that one is off. */
+       *  describe: one real line at the tune you just set, through the same
+       *  speech path as the welcome, including its voice-selection ladder. */
       sample() { return speak([(RadioVoice.SAMPLE && RadioVoice.SAMPLE[CHANNEL]) || "Welcome to Apex 26."], 0); },
       scriptFor,
       wrapUp,
