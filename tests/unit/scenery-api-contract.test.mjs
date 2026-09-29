@@ -244,6 +244,14 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     fuji: ["fuji-speedway-hotel"],
     // Wave 6 — Sepang hibiscus main canopy + K1/F corner stands
     sepang: ["sepang-main-grandstand-canopy", "sepang-t1-grandstand", "sepang-t7-grandstand"],
+    // Wave 6 — Brands Hatch Indy amphitheatre stands + Kentagon
+    brands_hatch: [
+      "brands-pit-straight-stand",
+      "brands-desire-wilson-stand",
+      "brands-paddock-hill-stand",
+      "brands-hailwoods-stand",
+      "brands-kentagon",
+    ],
     // Wave 6 — Mont-Tremblant (Laurentians): control tower, The Hump crest,
     // service bridge, Namerow bank, Paddock Bend fascia. Devil's Elbow /
     // Casino / Le Nordique are Montreal names — deliberately omitted.

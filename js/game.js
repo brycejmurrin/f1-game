@@ -951,7 +951,7 @@ function onIncidentLineCross(c, cross, newS) {
   }
   c._secT0 = 0;
   if (c.isPlayer) { sectorIdx = 0; sectorStartT = 0; }
-  if (c.isPlayer && c.lap === lapsTarget && lapsTarget > 1) announce("FINAL LAP", 1.6, "race");
+  if (c.isPlayer && c.lap === lapsTarget && lapsTarget > 1 && !raceRadio.callsLastLap()) announce("FINAL LAP", 1.6, "race");
   if (cross.flagged) {
     // The lap is incident-invalid, so do not publish it as a timed lap. A
     // finish stamp is still authoritative and must reach the other peer; null
@@ -6294,7 +6294,7 @@ function updateCar(c, dt, ranked) {
     c._secT0 = 0;   // …and the FIELD's S1 reference, or it measures across the reset
     if (c.isPlayer) { sectorIdx = 0; sectorStartT = 0; }
     // Never on a 1-lap session: that crossing is the START crossing, and a qualifying flying lap is not a final lap.
-    if (c.isPlayer && c.lap === lapsTarget && lapsTarget > 1) announce("FINAL LAP", 1.6, "race");
+    if (c.isPlayer && c.lap === lapsTarget && lapsTarget > 1 && !raceRadio.callsLastLap()) announce("FINAL LAP", 1.6, "race");
     if (flagged && c.isPlayer) announce("FINISH!", 2, "race");
   } else if (lineCross && lineCross.direction < 0) {
     // Backward over the line: give the lap back and put the clock where it was,
