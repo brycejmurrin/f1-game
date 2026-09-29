@@ -346,6 +346,15 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
       "anderstorp-stations-1968",
       "anderstorp-flight-hangars",
     ],
+    // Wave 6 — Zolder (Limburg): permanent S/F tribune + museum behind it
+    // (circuit-zolder.be), Bongaerts paddock poles (not the chicane plaque),
+    // Sterrenwacht corner building. Frame debt — startFrac untouched.
+    zolder: [
+      "zolder-main-grandstand",
+      "zolder-sf-museum",
+      "zolder-villeneuve-poles",
+      "zolder-sterrenwacht",
+    ],
   };
   for (const [track, ids] of Object.entries(expected)) {
     const body = landmarkSource(track);
