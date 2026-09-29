@@ -7,11 +7,11 @@
 (window.TrackScenery = window.TrackScenery || {})["jacarepagua"] =
   function (api) {
       const { K, lapBounds, out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack, px, pz,
-        bush, ridge, mountain, spectatorHill,
+        bush, ridge, mountain,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         floodMast, cameraTower, sponsorHoarding, palm, terrace,
         fence, guardrail, tyreWall, groundPatch, modelGroup, waterSurface,
-        addBox, addCyl, addCone, addPrism } = api;
+        addBox, addCyl, addCone, addPrism, addFrustum } = api;
 
       const PALM = [0.18, 0.44, 0.20], PALM_D = [0.14, 0.36, 0.17];
       const RESTINGA = [0.34, 0.44, 0.24];   // low sandy coastal scrub
@@ -90,8 +90,10 @@
         }
       }
 
-      // 2. THE LAGOON — Jacarepaguá sat on the edge of the Lagoa de Jacarepaguá,
-      //    and the water was visible from the long back sweep.
+      // 2. THE LAGOON — Jacarepaguá sat on Cabo Pombeba on the Lagoa de
+      //    Jacarepaguá (demolished Nov 2012 for the Olympic Park). Reflective
+      //    sheet stays on waterSurface; the required modelGroup is the near
+      //    shore hardscape so BATCH-01 can pin a literal id.
       // A water body is centred on its anchor, so its SETBACK has to exceed its
       // own half-width or the footprint swallows the road. The lap also folds
       // back close on this side, so the engine only accepts a fairly compact
@@ -102,6 +104,40 @@
       // Sandy restinga shoreline between the track and the water.
       groundPatch(K(0.470), -1, 55, [60, 0.18, 300], SAND,
         { id: "jacarepagua-shoreline", samples: 10 });
+      {
+        // Lagoon shore hardscape: low concrete edge + jetty stub + shade
+        // canopy, reading as the marshland waterfront without inventing a
+        // modern marina (site is historic / demolished — 1980s photos only).
+        const a = anchor(K(0.470), -1, 78);
+        const b = [a.r, a.u, a.t];
+        const WATER = [0.26, 0.46, 0.60], EDGE = [0.72, 0.70, 0.64];
+        modelGroup("jacarepagua-lagoon-shore", {
+          center: vadd(a.c, a.u, 2.4), size: [36, 8, 90], basis: b,
+        }, (stage) => {
+          // Shallow near-shore water slab (sits under the reflective sheet).
+          addBox(stage, vadd(vadd(a.c, a.r, -14), a.u, 0.12),
+            [28, 0.22, 84], WATER, b);
+          // Restinga sand apron + concrete edge beam facing the track.
+          addBox(stage, vadd(vadd(a.c, a.r, 6), a.u, 0.18),
+            [14, 0.28, 80], SAND, b);
+          addBox(stage, vadd(vadd(a.c, a.r, 0.5), a.u, 0.55),
+            [1.2, 0.9, 78], EDGE, b);
+          // Short timber jetty stub (generic; exact pier layout UNCERTAIN).
+          for (let p = 0; p < 5; p++) {
+            const foot = vadd(vadd(a.c, a.t, (p - 2) * 4.2), a.r, -4);
+            addCyl(stage, foot, 0.18, 1.6, [0.42, 0.34, 0.24], 6, b);
+          }
+          addBox(stage, vadd(vadd(a.c, a.r, -8), a.u, 1.55),
+            [10, 0.28, 18], [0.48, 0.40, 0.28], b);
+          // Low brise-soleil shade roof for marshland marshals / media.
+          addBox(stage, vadd(vadd(a.c, a.r, 8), a.u, 3.6),
+            [10, 0.35, 22], [0.86, 0.84, 0.78], b);
+          for (let c = 0; c < 4; c++) {
+            const col = vadd(vadd(a.c, a.t, (c - 1.5) * 6), a.r, 8);
+            addCyl(stage, col, 0.22, 3.4, EDGE, 6, b);
+          }
+        }, { required: true });
+      }
       every(20, (k) => {
         const s = k / n;
         if (s < 0.36 || s > 0.60) return;
@@ -112,6 +148,51 @@
         palm(k, -1, 28 + h * 12, 13 + h * 5, h < 0.5 ? PALM : PALM_D);
         if (h > 0.5) palm(k, -1, 40 + h * 8, 12 + h * 5, PALM_D);
       });
+
+      // TIJUCA MASSIF silhouette — the district sits between Maciço da Tijuca
+      // and Serra da Pedra Branca (Wikipedia Jacarepaguá). Pedra Branca already
+      // fills the far mountain arc above; this required group is a compact
+      // forested ridge on a separate bearing. Exact peak alignment from the
+      // GP layout is UNCERTAIN (site demolished) — silhouette only.
+      // World-space placement (not track-relative): a track-anchored OBB at
+      // 260–380 m still clipped the folded lap and verify-track rejected it.
+      {
+        const ang = 0.28;                         // NE-ish of Cabo Pombeba
+        const r = rad + 440;
+        const wx = cx + Math.cos(ang) * r, wz = cz + Math.sin(ang) * r;
+        if (!onTrack(wx, wz, 90)) {
+          const toCx = cx - wx, toCz = cz - wz;
+          const len = Math.hypot(toCx, toCz) || 1;
+          const rAxis = [toCx / len, 0, toCz / len];
+          const uAxis = [0, 1, 0];
+          const tAxis = [-rAxis[2], 0, rAxis[0]];
+          const b = [rAxis, uAxis, tAxis];
+          const foot = [wx, pyMin, wz];
+          const FOREST = [0.12, 0.32, 0.16], ROCK = [0.46, 0.44, 0.42];
+          modelGroup("jacarepagua-tijuca-ridge", {
+            center: [wx, pyMin + 42, wz], size: [70, 100, 120], basis: b,
+          }, (stage) => {
+            const peaks = [
+              [-40, 68, 32], [-10, 90, 28], [24, 76, 30], [46, 56, 26],
+            ];
+            for (let i = 0; i < peaks.length; i++) {
+              const [tOff, h, w] = peaks[i];
+              const p = [
+                foot[0] + tAxis[0] * tOff,
+                foot[1],
+                foot[2] + tAxis[2] * tOff,
+              ];
+              addFrustum(stage, p, w * 1.1, w * 0.22, h * 0.9, ROCK, 8, b);
+              addFrustum(stage, [p[0], p[1] + h * 0.16, p[2]],
+                w * 1.0, w * 0.5, h * 0.4, FOREST, 8, b);
+            }
+            addBox(stage, [wx, pyMin + 22, wz], [26, 16, 90], FOREST, b);
+            addBox(stage, [
+              wx + rAxis[0] * 12, pyMin + 14, wz + rAxis[2] * 12,
+            ], [14, 10, 100], [0.14, 0.34, 0.18], b);
+          }, { required: true });
+        }
+      }
 
       const openArea = (s) => (s >= 0.92 || s <= 0.10) || (s >= 0.36 && s <= 0.50);
       every(18, (k) => {
@@ -166,7 +247,7 @@
           addBox(stage, vadd(a.c, a.u, 19), [9, 4.4, 13], [0.86, 0.85, 0.80], b);
           addBox(stage, vadd(a.c, a.u, 19.4), [9.4, 2.0, 13.4], [0.30, 0.42, 0.52], b);
           addBox(stage, vadd(a.c, a.u, 21.6), [10, 0.5, 14], [0.70, 0.69, 0.66], b);
-        });
+        }, { required: true });
       }
       gantry(0.0, 8.5, [0.15, 0.15, 0.18]);
       gantry(0.955, 8.0, [0.15, 0.15, 0.18]);
@@ -221,7 +302,7 @@
       groundPatch(K(0.075), 1, 6, [34, 0.18, 46], SAND,
         { id: "jacarepagua-t1-sand", samples: 8 });
       tyreWall(0.058, 0.094, 1, 5, [0.86, 0.20, 0.18]);
-      terrace(0.066, 0.085, -1, 18, {
+      terrace(0.066, 0.085, -1, 36, {
         rows: 7, rise: 1.4, depth: 2.5, step: 9, density: 0.42,
         conc: [0.80, 0.78, 0.72], concAlt: [0.71, 0.69, 0.64],
         crowd: [[0.94, 0.86, 0.20], [0.10, 0.44, 0.24], [0.92, 0.90, 0.86]],
@@ -235,7 +316,7 @@
       groundPatch(K(0.622), 1, 5, [26, 0.18, 34], SAND,
         { id: "jacarepagua-t9-sand", samples: 6 });
       tyreWall(0.608, 0.638, 1, 4, [0.20, 0.40, 0.85]);
-      terrace(0.615, 0.630, -1, 20, {
+      terrace(0.615, 0.630, -1, 38, {
         rows: 5, rise: 1.4, depth: 2.5, step: 9, density: 0.34,
         conc: [0.78, 0.76, 0.70], concAlt: [0.69, 0.67, 0.62],
         crowd: [[0.10, 0.44, 0.24], [0.94, 0.86, 0.20], [0.92, 0.90, 0.86]],
@@ -247,8 +328,9 @@
       tyreWall(0.866, 0.900, 1, 4, [0.85, 0.78, 0.20]);
       marshalPost(K(0.876), -1, 9);
 
-      spectatorHill(0.14, 0.24, -1, 15, { rows: 3, rise: 1.0, depth: 1.8, density: 0.36, step: 9 });
-      spectatorHill(0.66, 0.76, -1, 15, { rows: 3, rise: 1.0, depth: 1.8, density: 0.36, step: 9 });
+      // Wave 6: removed the two spectatorHill banks that shared planes with
+      // the city pack and with their own risers (flatCoplanar). Concrete
+      // terraces at T1 / T9 remain for near-track crowd.
 
       for (const [s0, s1] of [[0.11, 0.34], [0.52, 0.60], [0.65, 0.85]]) {
         guardrail(s0, s1, -1, 8, [0.80, 0.81, 0.83]);
@@ -261,7 +343,7 @@
       }
 
       for (const [s, side, gap] of [
-        [0.030, -1, 26], [0.075, -1, 34], [0.470, 1, 40], [0.622, -1, 30], [0.882, -1, 26],
+        [0.030, -1, 28], [0.075, -1, 36], [0.470, 1, 42], [0.622, -1, 32], [0.882, -1, 28],
       ]) {
         floodMast(K(s), side, gap, { h: 30, cool: false, arms: 2, light: false });
       }
