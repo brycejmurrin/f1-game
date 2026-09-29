@@ -81,6 +81,17 @@ test("an AI plan overrides a MY TEAM mate's saved starting tyre", () => {
   assert.equal(T.startRecord(player).id, "wet_full", "a player's reference plan must not choose their set");
 });
 
+test("an AI car starts a WET race on the tread the weather wants, not the plan's slick", () => {
+  // The planner sequences dry classes only; with no tread the whole field
+  // lined up on slicks and was armed for the weather on the first tick.
+  const ai = { human: false, pitPlan: { start: "hard" } };
+  assert.equal(T.startRecord(ai, 0).id, "hard", "dry: the plan's class");
+  assert.equal(T.startRecord(ai, 1).tread, 1, "damp: intermediates");
+  assert.equal(T.startRecord(ai, 2).tread, 2, "rain: full wets");
+  const player = { human: true, tyreOpt: TYRES.find((o) => o.id !== "wet_full" && !o.wetTread), pitPlan: { start: "hard" } };
+  assert.equal(T.startRecord(player, 2).tread, 0, "the player's own set is theirs, whatever the sky");
+});
+
 // A minimal G stand-in: the model only reads lapsTarget, track.total, the two
 // physics constants and (through severity) the circuit def.
 function ctxFor({ laps = 25, total = 5386, severity = null } = {}) {

@@ -117,10 +117,22 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     cota: ["cota-amphitheater", "cota-turn1-big-red", "cota-main-grandstand"],
     mexico: ["mexico-foro-sol-entry", "mexico-peraltada-stand", "foro-scoreboard"],
     abudhabi: ["abudhabi-ferrari-world", "abudhabi-marina", "abudhabi:pit-exit-tunnel-portal"],
+    // Wave 5 — Lusail (Qatar): record pit slab, Lusail Hill GA mound, T1 VVIP,
+    // paddock media, city backdrops (no mosque / Aspire / oasis — deliberate).
+    qatar: [
+      "qatar-pit-slab",
+      "qatar-paddock-media-centre",
+      "qatar-t1-vvip-canopy",
+      "qatar-lusail-hill",
+      "qatar-katara-towers",
+      "qatar-lusail-stadium",
+    ],
     // Wave 5 — Hungaroring 2024–25 paddock / main tribune
     hungaroring: ["hungaroring-pit-complex", "hungaroring-main-tribune"],
     // Wave 5 — Catalunya landmarks (Tilke main stand + pit-end scoreboard)
     catalunya: ["catalunya-main-grandstand", "catalunya-pit-end-scoreboard", "catalunya-race-control"],
+    // Wave 6 — Madring / La Monumental inside rake + masts
+    madrid: ["madrid-monumental-stands"],
     // Wave 6 — Istanbul Park (T8 hospitality + race control + stone portal)
     istanbul: ["istanbul-turn8-hospitality", "istanbul-race-control", "istanbul-stone-portal"],
   };
