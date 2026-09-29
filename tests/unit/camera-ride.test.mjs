@@ -468,3 +468,26 @@ test("REDUCE MOTION drops the cockpit kerb shiver, and only that", () => {
   assert.equal(+eyeY({ onKerb: false, baHeave: 0.01 }, true).toFixed(9), +(flat + 0.01).toFixed(9),
     "the car's own heave still rides through");
 });
+
+// NEAR-EYE CULL. A rival is hidden only when the eye is INSIDE its body box (grown by
+// the near plane), never merely NEAR it: from the cockpit a car alongside is 2-3 m from
+// the eye, and the old 3.4 m radius made it vanish as the player drew level.
+test("near-eye cull: a rival alongside an onboard eye stays drawn; an eye inside a car hides it", () => {
+  const cams = loadGameCams(makeTracksStub(makeTrack(() => 7.5)));
+  const inside = (along, lat, up, pad) => cams.eyeInsideCar(along, lat, up, pad);
+  const onboardPad = 0.3 + 0.3, chasePad = 0.9 + 0.3;
+  // Cockpit eye (0.82 m up) beside a rival 2.5 m across, at every stage of the pass.
+  for (const along of [-3, -1.5, 0, 1.5, 3]) {
+    assert.equal(inside(along, 2.5, 0.82, onboardPad), false, "alongside at " + along + " m: drawn");
+  }
+  assert.equal(inside(1.2, 2.2, 0.82, onboardPad), false, "wheel to wheel, almost past: drawn");
+  // The chase camera's case the radius was for: the eye inside a tailgating car.
+  assert.equal(inside(0.5, 0.2, 0.9, chasePad), true, "eye inside the body: hidden");
+  assert.equal(inside(3.6, 0.4, 1.9, chasePad), true, "eye just off the nose, inside the near plane: hidden");
+  assert.equal(inside(6, 0, 2.4, chasePad), false, "chase eye 6 m back and up: drawn");
+  assert.equal(inside(0, 0, 3.0, chasePad), false, "eye above the roof: drawn");
+  // game.js uses the box, not a radius.
+  const game = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  assert.match(game, /GameCams\.eyeInsideCar\(/, "the car loop's near-eye cull is the box test");
+  assert.doesNotMatch(game, /< 3\.4 \* 3\.4\) continue/, "the 3.4 m radius is gone");
+});

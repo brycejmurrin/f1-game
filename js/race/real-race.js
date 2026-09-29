@@ -118,10 +118,19 @@ const RealRace = (function () {
     const seq = [classOf(stints[0])];
     const lapsAt = [];
     for (let i = 1; i < stints.length; i++) {
-      const inLap = simLapFor(stints[i].from - 1, simLaps, realLaps);
       const prev = lapsAt.length ? lapsAt[lapsAt.length - 1] : 0;
-      // No stop on the last lap and never two in one lap: drop the stop, keep the compound sequence honest.
-      if (inLap <= prev || inLap >= simLaps) continue;
+      // No stop on the last lap and never two in one lap — so a stop that maps
+      // onto either is SLID to the next free lap, not dropped. Dropping it lost
+      // the compound it fitted, and a car that really ran M→M→H or stopped on
+      // lap 55 of 57 was replayed on one dry compound and disqualified at the
+      // flag (SportingRegs), which the real race never did.
+      const inLap = Math.min(Math.max(simLapFor(stints[i].from - 1, simLaps, realLaps), prev + 1), simLaps - 1);
+      if (inLap <= prev) {
+        // No lap left to put it on: the car finishes on the LATER compound,
+        // which is the one it really took the flag on.
+        seq[seq.length - 1] = classOf(stints[i]);
+        continue;
+      }
       lapsAt.push(inLap); seq.push(classOf(stints[i]));
     }
     const stintLens = [];
@@ -430,10 +439,25 @@ const RealRace = (function () {
 
     // The real set on the car, in place of the one gridUp fitted: one entry in
     // the stint log (the results strip draws it), never a phantom lap-0 stint.
-    function refit(c, cls, stints) {
+    // A car dropped in MID-RACE also carries the sets it already ran (`plan`,
+    // `made`): the stint log is the one record SportingRegs judges, and
+    // trimming it to the current set disqualified every car that had really
+    // run two dry compounds before the jump-in lap.
+    function refit(c, cls, stints, plan, made) {
       if (!cls || !G.tyres.classRecord || !G.tyres.fit) return;
       G.tyres.fit(c, G.tyres.classRecord(cls));
-      if (Array.isArray(c.tyreLog) && c.tyreLog.length) { c.tyreLog = c.tyreLog.slice(-1); c.tyreLog[0].lap0 = c.lap || 0; c.tyreLog[0].lap1 = null; }
+      if (Array.isArray(c.tyreLog) && c.tyreLog.length) {
+        const cur = c.tyreLog[c.tyreLog.length - 1];
+        const past = [];
+        for (let i = 0; plan && i < (made || 0); i++) {
+          const rec = typeof TyreModel !== "undefined" && TyreModel.AI_CLASS[plan.seq[i]];
+          if (!rec) continue;
+          const lap0 = i ? plan.lapsAt[i - 1] : 0, lap1 = plan.lapsAt[i];
+          past.push({ code: rec.code, id: plan.seq[i], colour: rec.colour, lap0, lap1 });
+        }
+        cur.lap0 = past.length ? past[past.length - 1].lap1 : (c.lap || 0); cur.lap1 = null;
+        c.tyreLog = past.concat(cur);
+      }
       c.tyreStints = stints;
     }
 
@@ -508,12 +532,15 @@ const RealRace = (function () {
           // the stops "made" are the kept stops before this lap — never the real
           // stint index, which the dropped stops would put out of step.
           const made = c.pitPlan && Array.isArray(c.pitPlan.lapsAt) ? c.pitPlan.lapsAt.filter((l) => l < ls).length : a.stint;
-          refit(c, a.compound, made + 1);
+          refit(c, a.compound, made + 1, c.pitPlan, made);
           c.pitStops = made;
           const ageSim = a.age * simLaps / realLaps;
           const life = typeof TyreModel !== "undefined" && TyreModel.AI_CLASS[a.compound] && G.tyres.planLaps
             ? G.tyres.planLaps(TyreModel.AI_CLASS[a.compound].life, simLaps) : 0;
-          if (life > 0) c.tyreWear = clamp(ageSim / life, 0, JUMP_MAX_WEAR);
+          // BOTH AXLES TOO. fit() zeroed tyreWearF/R, and axleSplit reads them
+          // as a ratio against tyreWear — 1/gripFor(wear) each, which cancelled
+          // the worn set's whole grip loss for a dropped-in player.
+          if (life > 0) { c.tyreWear = clamp(ageSim / life, 0, JUMP_MAX_WEAR); c.tyreWearF = c.tyreWear; c.tyreWearR = c.tyreWear; }
           c.tyreLap0 = ls - Math.round(ageSim);
         }
         f.lap = c.lap; dropped++;
