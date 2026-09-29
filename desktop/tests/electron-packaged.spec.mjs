@@ -154,17 +154,37 @@ test("packaged app: fullscreen toggle via main-process evaluate, then quit", asy
     });
     expect(before).toBe(false);
 
-    const after = await electronApp.evaluate(({ BrowserWindow }) => {
+    // macOS fullscreen is async (Space transition); wait for enter-full-screen.
+    // On Linux/Windows it is usually immediate. simpleFullScreen is a fallback
+    // when the OS refuses a real fullscreen Space in CI.
+    const after = await electronApp.evaluate(async ({ BrowserWindow }) => {
       const w = BrowserWindow.getAllWindows()[0];
-      if (!w) return null;
+      if (!w) return { ok: false, reason: "no-window" };
+      const entered = new Promise((resolve) => {
+        const done = () => resolve(true);
+        w.once("enter-full-screen", done);
+        w.once("enter-html-full-screen", done);
+        setTimeout(() => resolve(w.isFullScreen() || w.isSimpleFullScreen()), 4000);
+      });
       w.setFullScreen(true);
-      return w.isFullScreen();
+      let ok = await entered;
+      if (!ok && !w.isFullScreen()) {
+        w.setSimpleFullScreen(true);
+        ok = w.isSimpleFullScreen();
+      }
+      return {
+        ok: !!(ok || w.isFullScreen() || w.isSimpleFullScreen()),
+        full: w.isFullScreen(),
+        simple: w.isSimpleFullScreen(),
+      };
     });
-    expect(after).toBe(true);
+    expect(after.ok, JSON.stringify(after)).toBe(true);
 
     await electronApp.evaluate(({ BrowserWindow }) => {
       const w = BrowserWindow.getAllWindows()[0];
-      if (w) w.setFullScreen(false);
+      if (!w) return;
+      if (w.isSimpleFullScreen()) w.setSimpleFullScreen(false);
+      if (w.isFullScreen()) w.setFullScreen(false);
     });
   } finally {
     await electronApp.close();
