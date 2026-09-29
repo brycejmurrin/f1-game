@@ -10,7 +10,7 @@
  * mock) because the route is in present()/begin(), not a string we can pin.
  *
  * Run: node --test tests/unit/glx-output-target.test.mjs
- * (CI: a non-docs path touch is required to re-fire pull_request after ready_for_review.)
+ * (CI: re-fire after concurrency cancel on tip 0d3458069; still no XR.)
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
