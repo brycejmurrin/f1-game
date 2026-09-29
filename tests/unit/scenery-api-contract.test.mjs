@@ -152,6 +152,16 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
       "montreal-wall-of-champions-stand",
       "montreal-biosphere",
     ],
+    // Wave 6 — Kyalami Highveld landmarks (pit/race-control already required;
+    // main GS + headgear/windpump/clubhouse made explicit this wave).
+    kyalami: [
+      "kyalami-pit-block",
+      "kyalami-race-control",
+      "kyalami-main-grandstand",
+      "kyalami-headgear",
+      "kyalami-windpump",
+      "kyalami-clubhouse",
+    ],
   };
   for (const [track, ids] of Object.entries(expected)) {
     const body = landmarkSource(track);
