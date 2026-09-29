@@ -202,8 +202,9 @@ const RealReplay = (function () {
     const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
     const at = {};
 
-    /** start({script, traces, seats: Map car->driver, startLap, follow, rate, reel}) — false when no trace fits. */
+    /** start({script, traces, seats: Map car->driver, startLap, follow, rate, reel, camera}) — false when no trace fits. */
     function start(o) {
+      stop();   // release the previous replay camera before taking ownership again
       const script = o.script, track = G.track;
       if (!script || !track || !o.traces) return false;
       const built = buildTraces(track, script, o.traces);
@@ -221,6 +222,12 @@ const RealReplay = (function () {
       if (o.startLap > 1 && lead && Array.isArray(lead.lapStart) && lead.lapStart[o.startLap - 1] != null) T = lead.lapStart[o.startLap - 1];
       if (reel && reel.length) T = reel[0].t - LEAD_S;
       run = { script, cars, T, speed: o.rate > 0 ? o.rate : 1, follow: null, reel, reelIdx: 0, list, fired: new Set(), fit: built.fit, finished: false, onKey: null, audio: null };
+      run.savedCamera = G.camMode;
+      const modes = typeof CamModes !== "undefined" ? CamModes.CAM_MODES : [];
+      const camera = modes.findIndex((m) => m.id === o.camera);
+      if (camera >= 0 && G.setCamMode) G.setCamMode(camera, { persist: false });
+      // Pose before snapping: a mid-race start must frame the new position, not the grid.
+      pose(true);
       // Every car is a puppet — the seat too: the camera and HUD follow it, nobody drives it.
       let follow = null;
       for (const [c, f] of cars) if (f.d && f.d.code === o.follow) follow = c;
@@ -238,6 +245,7 @@ const RealReplay = (function () {
       if (!run) return;
       try { if (run.onKey) window.removeEventListener("keydown", run.onKey, true); } catch (e) { /* no window */ }
       if (run.audio) { try { run.audio.pause(); } catch (e) { /* already gone */ } run.audio = null; }
+      if (G.setCamMode && run.savedCamera != null) G.setCamMode(run.savedCamera, { persist: false });
       run = null;
       Log.info("game", "RealReplay.stop");
     }
@@ -268,14 +276,14 @@ const RealReplay = (function () {
       let i = SPEEDS.findIndex((s) => s >= run.speed - 1e-6); if (i < 0) i = SPEEDS.length - 1;
       return setSpeed(SPEEDS[clamp(i + dir, 0, SPEEDS.length - 1)]);
     }
-    function seek(t) { if (!run) return; run.T = Math.max(-30, t); run.fired = new Set(); pose(); }
+    function seek(t) { if (!run) return; run.T = Math.max(-30, t); run.fired = new Set(); pose(true); if (G.snapGameCam) G.snapGameCam(); }
 
     function cutTo(h) {
       run.T = h.t - LEAD_S;
       run.fired = new Set();
       const c = h.num != null ? [...run.cars.keys()].find((x) => run.cars.get(x).num === h.num) : null;
-      pose();
-      if (c && !c.retired) setFollow(c); else if (!run.follow) follow(+1);
+      pose(true);
+      if (c && !c.retired) setFollow(c); else if (!run.follow) follow(+1); else if (G.snapGameCam) G.snapGameCam();
     }
     function skip() { if (!run || !run.reel) return; run.reelIdx++; if (run.reelIdx < run.reel.length) cutTo(run.reel[run.reelIdx]); else finish(); }
 
@@ -294,7 +302,7 @@ const RealReplay = (function () {
     }
 
     /** Pose every car at the clock. */
-    function pose() {
+    function pose(discontinuous) {
       const track = G.track, total = track.total;
       for (const [c, f] of run.cars) {
         if (!f.tr) { if (!f.parked) { f.parked = true; c.retired = true; c.dnf = c.dnf || "dns"; c.speed = 0; } continue; }
@@ -310,7 +318,7 @@ const RealReplay = (function () {
         const rl = Math.hypot(smp.r[0], smp.r[2]) || 1;
         c.px = smp.p[0] + smp.r[0] / rl * x; c.pz = smp.p[2] + smp.r[2] / rl * x;
         c.head = Math.atan2(smp.t[0], smp.t[2]);
-        if (c.rPrevPx === undefined) { c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevS = c.s; c.rPrevX = c.x; c.rPrevHead = c.head; }
+        if (discontinuous || c.rPrevPx === undefined) { c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevS = c.s; c.rPrevX = c.x; c.rPrevHead = c.head; }
         c.retired = false; c.finished = false;
         const v = at.speed / (G.vTop ? G.vTop() : 90);   // a fraction of the top speed: the tacho reads the real car's pace, whatever PACE the sim runs at
         c.gear = v > 0.7 ? 8 : v > 0.45 ? 6 : v > 0.2 ? 4 : 2;

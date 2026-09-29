@@ -667,10 +667,18 @@ const TyreModel = (function () {
     // The circuit's own tyre severity, 1.0 at the median. Authored per circuit
     // in js/circuits/<id>.js beside the other per-circuit tables; the real
     // spread is 0.022-0.097 s/lap (Austria highest, China lowest), normalised.
-    /** Track/air temperature for the current conditions. */
+    /** Track/air temperature for the current conditions. While a weather arc
+     *  runs it moves WITH the arc, as the road's wetness does (TyreModel
+     *  wetness): read off raceWeather alone it jumped 30 -> 13 C on the tick
+     *  the weather flipped, minutes before the road was wet. */
+    function tAmb(w) { const t = T_AMBIENT[w]; return t == null ? T_AMBIENT.dry : t; }
     function ambient() {
-      const t = T_AMBIENT[G.raceWeather];
-      return t == null ? T_AMBIENT.dry : t;
+      const arc = G.weatherArc;
+      if (arc && arc.dur > 0 && arc.from && arc.to) {
+        const f = clamp(arc.t / arc.dur, 0, 1);
+        return tAmb(arc.from) + (tAmb(arc.to) - tAmb(arc.from)) * f;
+      }
+      return tAmb(G.raceWeather);
     }
 
     function severity() {
