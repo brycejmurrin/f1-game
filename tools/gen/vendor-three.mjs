@@ -20,7 +20,8 @@
  * Outputs: three.webgpu.min.js, three.core.min.js, three.tsl.min.js (the internal
  * `./three.core.js` import rewritten to `./three.core.min.js`, exactly as upstream's
  * min build did), LICENSE.txt, addons/tsl/display/BloomNode.js (from
- * examples/jsm/tsl/display/, the one addon TLX uses), and MANIFEST.json — the three
+ * examples/jsm/tsl/display/, the one addon TLX uses), addons/webxr/{XR,VR}Button.js
+ * + WebGLXRFallback.js (Phase 0 immersive-vr), and MANIFEST.json — the three
  * version, the terser version, the tarball's sha256, the patch ids applied, and a
  * sha256 per written file. `--check` recomputes the file hashes; it needs no network
  * and is what the guard suite runs.
@@ -35,7 +36,13 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const VENDOR = path.join(ROOT, "vendor");
 const SCRATCH = path.join(ROOT, "scratch");
 const OUTPUTS = ["three.webgpu", "three.core", "three.tsl"];
-const ADDONS = [["examples/jsm/tsl/display/BloomNode.js", "addons/tsl/display/BloomNode.js"]];
+const ADDONS = [
+  ["examples/jsm/tsl/display/BloomNode.js", "addons/tsl/display/BloomNode.js"],
+  // WebXR Phase 0: ENTER VR UI + WebGPU→WebGL session fallback (Quest / Immersive Web).
+  ["examples/jsm/webxr/XRButton.js", "addons/webxr/XRButton.js"],
+  ["examples/jsm/webxr/VRButton.js", "addons/webxr/VRButton.js"],
+  ["examples/jsm/webxr/WebGLXRFallback.js", "addons/webxr/WebGLXRFallback.js"],
+];
 
 const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
 const rel = (p) => path.relative(ROOT, p);
@@ -114,6 +121,7 @@ async function generate(version, tarballArg) {
   const outDir = path.join(VENDOR, `three-${version}`);
   fs.rmSync(outDir, { recursive: true, force: true });
   fs.mkdirSync(path.join(outDir, "addons/tsl/display"), { recursive: true });
+  fs.mkdirSync(path.join(outDir, "addons/webxr"), { recursive: true });
   const files = {};
   const put = (name, buf) => {
     fs.writeFileSync(path.join(outDir, name), buf);

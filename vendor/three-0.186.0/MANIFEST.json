@@ -45,6 +45,18 @@
     "addons/tsl/display/BloomNode.js": {
       "sha256": "f28a279656a37cf44bc09e45fd2de5df93a17cffad77f6da0a5bcd979cfd6525",
       "bytes": 17242
+    },
+    "addons/webxr/XRButton.js": {
+      "sha256": "13ceb022e450bfc8ff48e7af8e39faceacf08fea84a844fb82858a126c4e0249",
+      "bytes": 4959
+    },
+    "addons/webxr/VRButton.js": {
+      "sha256": "35a7621bbbe776203dad04cddc79c8e1b166dc3b6757d8b907f97df86d8a9d48",
+      "bytes": 5866
+    },
+    "addons/webxr/WebGLXRFallback.js": {
+      "sha256": "73d71e8c4aff1c3173d0ba20147311ee8cfb66e7e7203185c677559d00eeb1d0",
+      "bytes": 2162
     }
   }
 }

@@ -117,6 +117,14 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     // Wave 6 — Imola (Partenza opposite pits + Racetrack Tower over Tilke pit)
     imola: ["imola-partenza-stands", "imola-racetrack-tower"],
     cota: ["cota-amphitheater", "cota-turn1-big-red", "cota-main-grandstand"],
+    // Wave 6 — Portimão / Algarve: six independent paddock blocks (Dimeconsult
+    // A–F) + Grandstand Norte at the T1 downhill; race-control + moinho kept.
+    portimao: [
+      "portimao-pit-blocks",
+      "portimao-t1-stands",
+      "portimao-race-control",
+      "portimao-moinho",
+    ],
     mexico: ["mexico-foro-sol-entry", "mexico-peraltada-stand", "foro-scoreboard"],
     // Wave 6 — Sochi Olympic Park venues + Ice Cube + Olympic Park station
     sochi: [

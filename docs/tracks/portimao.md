@@ -3,7 +3,7 @@
 **Setting:** DAY, green theme (Algarve hillside above Portimão). ~4.65 km, 15 turns, clockwise.
 
 ## 1. Setting
-A rollercoaster cut into a steep hillside in the Algarve interior, opened 2008. It has more blind brows than anything else in this set: the pit straight plunges downhill into Turn 1, the middle sector falls off a cliff, and half the corners arrive over a crest with no view of the exit. The soil is **red Algarve earth** and it is everywhere — in the run-off, on the cut banks, on the car after any off. Spectators are not in stands but in broad concrete terraces cut straight into the slope, with the raw red escarpment showing above the top row.
+A rollercoaster cut into a steep hillside in the Algarve interior, opened 2008. It has more blind brows than anything else in this set: the pit straight plunges downhill into Turn 1, the middle sector falls off a cliff, and half the corners arrive over a crest with no view of the exit. The soil is **red Algarve earth** and it is everywhere — in the run-off, on the cut banks, on the car after any off. Spectators sit in broad concrete terraces cut straight into the slope (raw red escarpment above the top row) and in freestanding stands at the pit straight and the Turn 1 downhill.
 
 ## 2. Atmosphere & palette
 Dry, bright, faintly dusty. Whitewash and terracotta against red earth and thin dark pine.
@@ -24,12 +24,12 @@ jolts from the old sparse cosine bumps, not the hills themselves.
 ## 4. Landmarks & surroundings by lap position
 | s | Side | Distance | Box description |
 |------|------|----------|-----------------|
-| 0.95–1.00 | R | near | **Pit building on the ridge**: whitewashed render, deep-shaded openings, and a continuous white roof that RIDES UP AND DOWN along its own length in one undulating wave, carried out over the lane on slim raking struts |
+| 0.938–0.998 | R | near | **Six independent paddock blocks (A–F)** — whitewashed masses with separate wave-roof slices and dilatation joints (Dimeconsult). Continuous roof phase across all six. Blocks A–D boxes+VIP; F taller media; race-control tower stays its own landmark |
 | 0.992 | R | near | Race control: slim white shaft, dark cantilevered cab, Portuguese green/red band beneath it, standing proud of the ridge |
-| 0.005 | L | near | Main grandstand (140 m) — one of very few freestanding stands here |
+| 0.005 | L | near | Main grandstand (140 m) — covered, opposite the paddock (real AIA main stand is four dilatation blocks) |
+| 0.055 | R | mid | **Grandstand Norte / T1 stands** — uncovered multi-tier outside the Turn 1 downhill braking zone; rows rise away from the track, past the amphitheatre terraces |
 | 0.050 | L | near | **Turn 1** red-earth gravel apron (34×46) + red tyre wall, at the foot of the plunge |
-| 0.055 | R | mid | Camera tower on the high ground |
-| 0.28–0.36 | R | near | **Hillside terraces**: low retaining wall at the track edge, then broad concrete steps climbing the slope, raw red cut face above the top row |
+| 0.035–0.095 | R | near | Hillside amphitheatre terraces cut into the slope (retaining wall + concrete steps + red escarpment) |
 | 0.300 | R | near | Gravel apron + blue tyre wall at the Turn 3 crest |
 | 0.30–0.42 | both | mid | Sparse pine and bare red banks only — no treeline; the crests ARE the view |
 | 0.415 | R | far | **Moinho**: whitewashed drum windmill, conical cap, four bare sail arms on the skyline |
@@ -51,9 +51,9 @@ jolts from the old sparse cosine bumps, not the hills themselves.
 ## 6. Modelling notes
 - Exaggerate the vertical. Every crest should visibly hide the road beyond it — this circuit is unreadable if it plays flat.
 - Keep planting deliberately thin. A wall of trees would hide every brow, which is the one thing that must not happen here.
-- Run a bare earth shoulder the whole lap and step raw earth cut faces away from the road on the uphill sides. That colour is why an off here paints the car orange.
-- Spectator terracing is cut INTO the hill, with the escarpment as its back shell — no roofs, no back walls, no freestanding stands except at the line.
-- Carry the pit roof's wave phase across all bays so it reads as one continuous undulation, not four identical humps.
+- Corner gravel `groundPatch` + cut-bank `groundedSegments` carry the red earth; a continuous `runoffApron` loop buried into the terraces and was removed in wave 6.
+- Spectator terracing is cut INTO the hill, with the escarpment as its back shell — plus freestanding stands at the line and Grandstand Norte at T1.
+- Carry the pit roof's wave phase across all six blocks so it reads as one continuous undulation, not six identical humps.
 - The moinho and the whitewashed hamlet belong on the skyline above the crests, not in the trackside dressing — they place the circuit in the Algarve at a glance.
 
 ## Research pass — montado
@@ -73,11 +73,28 @@ but not *these* trees.
   above. That two-tone trunk exists nowhere else on the calendar and reads at
   distance. Scattered, never in rows: montado is grazed woodland, so spacing is
   wide and irregular and the ground between stays open.
-- **Olive terraces**, which unlike the oaks *are* ordered — planted on the grid,
-  over tilled soil. **The contrast between scattered montado and regimented
-  olive is what makes the hillside read as farmed rather than wild.**
+- **Olive terraces**, which unlike the oaks *are* ordered — planted on the grid.
+  Tilled soil pads under each tree were dropped when they buried into the
+  hillside cut banks (wave 6 ground-audit); the trunks still seat on grade.
 
-Measured clean first time: coplanar 0 (cap 0), clip 31 (cap 31). Crowns are
-built as **abutting** stacked frusta rather than merged cones — the lesson from
-Mugello, where two cypress cones overlapping by ~2 m tripped the severe
-interpenetration threshold.
+## Landmark wave 6 — sourced vs uncertain
+
+**Sourced (built):**
+- Six structurally independent paddock blocks A–F with dilatation joints —
+  Dimeconsult project notes for the 2008 AIA paddock
+  (https://dimeconsult.pt/projectos_desenv2.php?ano=2008&id=9&m=3).
+- Grandstands concentrated on the pit straight and Turn 1 downhill —
+  https://3ddigitalvenue.com/3dmap/clients/f1/algarve-international-circuit/ ;
+  seating plans list Grandstand Norte / MEO at T1–T2.
+- Main stand as four dilatation blocks (same Dimeconsult page) — modelled as
+  one long `grandstandEx` opposite the paddock (block subdivision not split).
+- Capacity ~90k seated (official AIA event guide) / ~100k often cited
+  (Wikipedia / Autosport).
+- Craig Jones corner naming is real; the roundabout statue was removed in 2009
+  (portugalresident.com) — **not built**.
+
+**Uncertain / not built as fact:**
+- Exact per-block height / VIP floor counts beyond Dimeconsult's "2–4 storeys"
+  and A–D / E / F programme labels — proportions are interpretive.
+- Precise GPS footprint of Grandstand Norte vs amphitheatre terraces — stands
+  are placed outside the terrace belt so they do not coplanar-fight the steps.
