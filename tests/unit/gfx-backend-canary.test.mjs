@@ -3475,7 +3475,10 @@ test("the flyby plays on the pre-race loading screen only; the picker pre-builds
     "a time-of-day pick re-lights the race-settings flyby (memoised build, so GO pays nothing twice)");
   assert.match(menus, /scheduleFlybyTrack\(true\)/,
     "a circuit tile pre-builds after the settle delay, never on the tap itself");
-  assert.match(game, /settle \? 1500 : 120/);
+  // 400 ms, not the old 1.5 s: the idle gate (menuIdle) is what keeps the build
+  // off a tapping player; the settle only holds back the scenery fetch, and at
+  // 1.5 s it made a RACE! tap within ~5 s of the picker meet the build card.
+  assert.match(game, /settle \? 400 : 120/);
   // Under a menu that draws nothing the canvas is hidden — so neither a finished
   // race's last frame nor the garage's car sits behind the title. Since
   // 2026-09-16 RACE SETTINGS is no longer an exception: the warmed world is

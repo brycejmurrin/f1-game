@@ -757,6 +757,8 @@ interface GameCtx {
   wxArcPlan: { to: Weather; dur: number } | null;
   readonly openGarageFrom: (from?: string) => void;
   readonly startRace: () => void;
+  /** The pre-race screen (card, flyby, announcer) before `go` — js/race/real-race.js routes the Data Hub's JUMP IN through it. */
+  readonly raceIntro: (go: () => void) => void;
   readonly startWeatherArc: (from: Weather, to: Weather, dur?: number) => void;
   readonly update: (dt: number) => void;
   /** Arc position wrapped into [0, track.total). */

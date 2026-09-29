@@ -857,3 +857,24 @@ test("warm() can be retired, and the race start retires it", () => {
   const i = game.indexOf("function raceIntro(go)"), body = game.slice(i, game.indexOf("\n}\n", i));
   assert.ok(body.indexOf("FlybySeq.setDuration(loadingScreen.nextFlyMs())") < body.indexOf("FlybySeq.warm("), "the run's real length is set before its shots are planned");
 });
+
+test("withoutGrid: a real race joined mid-race or watched back films no standing grid", async () => {
+  await withTrack("monza", (track, g) => {
+    const F = g.sandbox.FlybySeq, ids = (l) => l.map((s) => s.id);
+    const out = ids(F.withoutGrid(F.DEFAULT));
+    assert.ok(out.length > 0 && out.length < F.DEFAULT.length);
+    assert.ok(!out.some((id) => id.indexOf("grid") === 0), `no grid shot survives: ${out.join(",")}`);
+    assert.ok(out.includes("wide") && out.includes("turn-first"), "the circuit shots stay");
+    // raceIntro wires it: the slot is forgotten for any real race, the grid shots go for a join or a replay.
+    const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+    const body = game.slice(game.indexOf("function raceIntro(go)"), game.indexOf("function loadingInfo()"));
+    assert.match(body, /const real = realRace\.intro\(\);\s*if \(real\) FlybySeq\.setPlayerSlot\(null, \(cars \|\| \[\]\)\.length\);/);
+    assert.match(body, /if \(flybyShots && real && \(real\.watch \|\| real\.startLap > 1\)\) flybyShots = FlybySeq\.withoutGrid\(flybyShots\);/);
+    assert.ok(body.indexOf("FlybySeq.withoutGrid(") > body.indexOf("FlybySeq.withoutSlot("), "after the slot fit, so a saved list is trimmed too");
+    const li = game.slice(game.indexOf("function loadingInfo()"), game.indexOf("function loadingInfo()") + 1400);
+    assert.match(li, /const real = realRace\.intro\(\);/);
+    assert.match(li, /gp: real \? real\.title :/, "the card names the real event");
+    assert.match(li, /\n\s*real,/, "and the announcer is handed the descriptor");
+    return null;
+  });
+});

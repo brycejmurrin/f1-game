@@ -592,3 +592,33 @@ test("dropSpeed: FULL speed for the road ahead — vTop on a straight, the AI's 
   assert.ok(R.dropSpeed(track, 5990, 80, wrap) > 0.3 * 80, "the look-ahead wraps the lap");
   Tracks.kAt = null;
 });
+
+test("launch({intro}) goes through the pre-race screen; intro() describes the event and the seat until the lights", () => {
+  const { R, script, Teams } = load();
+  const cars = makeCars(Teams, "ferrari:0");   // the player is LEC
+  const { G, calls } = makeG(Teams, cars);
+  // The Data Hub's JUMP IN: raceIntro runs the card, the flyby and the announcer, then startRace itself.
+  G.raceIntro = (go) => calls.push(["raceIntro", go === G.startRace]);
+  const rr = R.create(G);
+  assert.equal(rr.intro(), null, "nothing staged, nothing to describe");
+  assert.equal(rr.launch(script, { seat: "LEC", startLap: 12, intro: true }).seat, "LEC");
+  assert.deepEqual(calls.filter((c) => c[0] === "raceIntro" || c[0] === "startRace"), [["raceIntro", true]],
+    "the screen, handed startRace — never a second, synchronous start");
+  const d = script.drivers.find((x) => x.code === "LEC");
+  assert.deepEqual({ ...rr.intro() }, { title: ((script.year ? script.year + " " : "") + script.name).trim(), driver: (d && d.name) || "LEC",
+    startLap: 12, realLaps: script.laps | 0, watch: false, reel: false });
+  G.state = "count"; rr.update(1 / 60);   // the lights: armed, so the card's description is done
+  assert.equal(rr.intro(), null);
+  // A page probe or a spec calling launch() plainly keeps the synchronous start.
+  calls.length = 0; rr.stop();
+  rr.launch(script, { seat: "LEC" });
+  assert.deepEqual(calls.filter((c) => c[0] === "raceIntro" || c[0] === "startRace"), [["startRace"]]);
+  // A screen that throws still starts the race.
+  calls.length = 0; rr.stop(); G.state = "menu";
+  G.raceIntro = () => { throw new Error("no screen"); };
+  rr.launch(script, { seat: "LEC", intro: true });
+  assert.ok(calls.some((c) => c[0] === "startRace"), "the fallback is a plain start");
+  // The tab's two buttons opt in.
+  const tab = fs.readFileSync(path.join(ROOT, "js/data/real-race-tab.js"), "utf8");
+  assert.equal(tab.split("\n").filter((l) => l.includes("RealRace.launch(") && l.includes("intro: true")).length, 2, "JUMP IN and WATCH both open the screen");
+});

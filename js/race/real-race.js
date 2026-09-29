@@ -296,11 +296,29 @@ const RealRace = (function () {
       return rain[realLap] ? "rain" : "dry";
     }
 
+    /* THE DATA HUB'S BUTTONS GO THROUGH THE PRE-RACE SCREEN (opts.intro): the
+     * card, the flyby and the announcer, as RACE! does (G.raceIntro, which
+     * builds the circuit under the card when the menu never pre-built it). The
+     * screen runs startRace itself. Opt-in, so a page probe or a spec calling
+     * launch() still gets the synchronous start it was written against. */
     function launch(script, opts) {
       const p = stage(script, opts);
       if (!p) return null;
-      G.startRace();
+      if (opts && opts.intro && G.raceIntro) {
+        try { G.raceIntro(G.startRace); }
+        catch (e) { Log.warn("game", "RealRace: the pre-race screen failed — starting straight away", e); G.startRace(); }
+      } else G.startRace();
       return p;
+    }
+
+    /** What the pre-race screen says about this launch (js/game.js loadingInfo):
+     *  the real event's title, whose car the player takes and from which lap.
+     *  Null when nothing is staged or the race is already running. */
+    function intro() {
+      if (!active || armed) return null;
+      const s = active.script, d = Array.isArray(s.drivers) ? s.drivers.find((x) => x.code === active.seatCode) : null;
+      return { title: ((s.year ? s.year + " " : "") + String(s.name || "")).trim(), driver: (d && d.name) || active.seatCode || "",
+               startLap: active.startLap, realLaps: s.laps | 0, watch: !!active.watch, reel: !!active.reel };
     }
 
     function stop() {
@@ -650,7 +668,7 @@ const RealRace = (function () {
                watch: !!active.watch, reel: !!active.reel, replay: replay ? replay.status() : null, handover: handover ? +handover.t.toFixed(2) : 0 };
     }
 
-    live = { stage, launch, stop, update, status, isActive: () => !!active, current: () => active && active.script,
+    live = { stage, launch, stop, update, status, intro, isActive: () => !!active, current: () => active && active.script,
              owns: (c) => !!replay && replay.owns(c), replay };
     return live;
   }

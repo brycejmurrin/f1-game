@@ -213,4 +213,35 @@ test.describe("real race, watched", () => {
     expect(later.replay.speed).toBe(2);
     expect(later.replay.T).toBeGreaterThanOrEqual(faster.replay.T);
   });
+
+  // THE DATA HUB'S JUMP IN goes through the pre-race screen (launch's `intro`),
+  // as RACE! does. The suite pins reduced motion, so this is the screen's card
+  // path (no flyby, no voice): the card names the REAL event, the race starts
+  // behind it with the seat asked for, and the screen is gone once it has. The
+  // spoken script is tests/unit/announcer.test.mjs; the flyby is loading-card's.
+  test("launch({intro}) — the Data Hub's JUMP IN — shows the pre-race card naming the real event, then starts the race", async ({ page }) => {
+    test.setTimeout(BOOT_MS + 90000);
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => window.__apex.headless(true));
+    const staged = await page.evaluate((script) => {
+      const L = document.getElementById("loading");
+      window.__ldSeen = [];
+      new MutationObserver(() => window.__ldSeen.push({ phase: L.dataset.phase || "", hidden: L.hidden, gp: (document.getElementById("ld-gp") || {}).textContent || "" }))
+        .observe(L, { attributes: true, attributeFilter: ["data-phase", "hidden"] });
+      // eslint-disable-next-line no-undef
+      return RealRace.launch(script, { seat: "LEC", laps: 3, intro: true });
+    }, SCRIPT);
+    expect(staged).toEqual({ trackId: "baku", laps: 3, seat: "LEC", startLap: 1 });
+    await page.waitForFunction(() => window.__apex.info().track === "baku" && window.__apex.info().state !== "menu", null, { polling: 100, timeout: BOOT_MS });
+    await page.waitForFunction(() => document.getElementById("loading").hidden, null, { polling: 100, timeout: 30000 });
+    const seen = await page.evaluate(() => window.__ldSeen);
+    const card = seen.find((s) => s.phase === "card" && !s.hidden);
+    expect(card, JSON.stringify(seen)).toBeTruthy();
+    expect(card.gp).toBe("2026 Azerbaijan Grand Prix");
+    // eslint-disable-next-line no-undef
+    const rr = await page.evaluate(() => RealRace.status());
+    expect(rr.active).toBe(true);
+    expect(rr.seat).toBe("LEC");
+  });
 });
