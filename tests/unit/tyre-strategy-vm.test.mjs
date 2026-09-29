@@ -84,3 +84,36 @@ test("a wet race puts the AI field on the tread the weather wants, and nobody pi
   const armed = ai.filter((c) => c.pitArmed || (c.pitState && c.pitState !== "none"));
   assert.equal(armed.length, 0, "no weather stop on lap 1: " + armed.map((c) => c.code + ":" + c.pitWhy).join(" "));
 });
+
+// THE FIELD'S PLANS, audited at the grid on three circuits that span the
+// severity range. A full race per circuit is ~5 min in the VM
+// (tools/check/ai-strategy-census.mjs measures that); the plan audit is the
+// cheap half and catches what broke before: the severity-blind planner
+// (#403) planned Austria's mediums for 7.4 laps against a real 3.8.
+test("every AI plan covers the race, meets the two-compound rule, and no stint outlives its set by more than a lap", async () => {
+  const T = vm.runInContext("TyreModel", g.ctx);
+  const A = vm.runInContext("AiDrive", g.ctx);
+  const LAPS = 10;
+  for (const id of ["bahrain", "redbull", "monaco"]) {
+    await g.race(id, "day", "dry", { laps: LAPS });
+    const { G } = g;
+    const rule = G.pits.twoCompoundApplies();
+    const ai = G.cars.filter((c) => !c.human && c.pitPlan);
+    assert.ok(ai.length > 5, `${id}: a planned field`);
+    for (const c of ai) {
+      const p = c.pitPlan;
+      assert.equal(p.stints.reduce((a, v) => a + v, 0), LAPS, `${id} ${c.code}: stints ${p.stints} cover the race`);
+      if (rule) assert.ok(new Set(p.seq).size >= 2, `${id} ${c.code}: ${p.seq} runs one dry compound (DSQ)`);
+      let from = 0;
+      for (let i = 0; i < p.stints.length - 1; i++) {
+        const len = p.stints[i];
+        // The life the WEAR gives (update(): lifeLaps / severity at REAL), not
+        // planLaps — the planner's own number cannot audit the planner.
+        const life = T.lifeLaps(T.AI_CLASS[p.seq[i]].life, LAPS) / G.tyres.severity()
+          / (1 + A.STRAT.FUEL_WEAR * (1 - (from + len / 2) / LAPS));
+        assert.ok(len <= life + 1, `${id} ${c.code}: stint ${i + 1} (${p.seq[i]}) is ${len} laps on a ${life.toFixed(2)}-lap set`);
+        from += len;
+      }
+    }
+  }
+});
