@@ -694,7 +694,7 @@ interface GameCtx {
   readonly copyLightTune: (mode?: string) => unknown;
   readonly restoreLightTune: (undo?: unknown) => unknown;
   readonly refreshLightTunePanel: () => void;
-  readonly setCamMode: (m: number) => void;
+  readonly setCamMode: (m: number, opts?: { persist?: boolean }) => void;
   readonly rescuePlayer: (c: CarState) => void;
   readonly onIncidentLineCross: (c: CarState, cross: LineTransition, newS: number) => void;
   readonly setLightTune: (id: string, v: unknown) => void;
@@ -831,6 +831,7 @@ declare const RaceControl: GameModuleFactory;
 declare const WeatherArc: GameModuleFactory;
 declare const DailyChallenge: GameModuleFactory;
 declare const RealRace: GameModuleFactory;
+declare const DriveOut: GameModuleFactory;
 declare const RealReplay: GameModuleFactory;
 declare const TitleMenu: GameModuleFactory;
 declare const Onboard: GameModuleFactory;

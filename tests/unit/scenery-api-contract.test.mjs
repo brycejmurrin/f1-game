@@ -305,6 +305,26 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
       "magny-cours-ferme",
       "magny-cours-bourg",
     ],
+    // Wave 6 — Okayama / TI Circuit Aida: 4-storey control tower (OIRC),
+    // pit garage run (superseded by engine pit complex — same as mosport/
+    // estoril), A/B paddock club block. Dunlop bridge is overheadSpan
+    // (required at runtime; not a modelGroup so not listed here).
+    okayama: [
+      "okayama-pit-garages",
+      "okayama-control-tower",
+      "okayama-paddock-block",
+    ],
+    // Wave 6 — Dijon-Prenois: pit garages + race-control (official 2015–16
+    // pitbuilding), Combe limestone cut (Virage de la Combe), Parabolique
+    // spectator bank (1976 extension; 14% max slope), Burgundy ferme.
+    // Modern grandstand map UNCERTAIN — keep docs §4 grandstandEx only.
+    dijon: [
+      "dijon-pit-garages",
+      "dijon-race-control",
+      "dijon-combe-cut",
+      "dijon-parabolique-bank",
+      "dijon-prenois-ferme",
+    ],
     // Wave 6 — Korea International Circuit (Yeongam): permanent pit complex +
     // main grandstand, unfinished marina shells (hotels/yachts NOT named —
     // UNCERTAIN), Tilke final-turn footbridge (RacingCircuits.info).
@@ -326,7 +346,27 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     // Wave 6 — Buddh International Circuit: sea-wave aluminium cantilever
     // main grandstand opposite the pits (ENR 2011; slideshare dims UNCERTAIN).
     buddh: ["buddh-main-grandstand"],
+    // Wave 6 — Anderstorp / Scandinavian Raceway: concrete pressläktare,
+    // original speakertorn, 1968 stationsbyggnad, Flight Straight hangars.
+    // Historical F1 pits halfway round NOT built (game startFrac 0 + modern
+    // pit straight; see docs/tracks/anderstorp.md UNCERTAIN).
+    anderstorp: [
+      "anderstorp-press-stand",
+      "anderstorp-speaker-tower",
+      "anderstorp-stations-1968",
+      "anderstorp-flight-hangars",
+    ],
+    // Wave 6 — Zolder (Limburg): permanent S/F tribune + museum behind it
+    // (circuit-zolder.be), Bongaerts paddock poles (not the chicane plaque),
+    // Sterrenwacht corner building. Frame debt — startFrac untouched.
+    zolder: [
+      "zolder-main-grandstand",
+      "zolder-sf-museum",
+      "zolder-villeneuve-poles",
+      "zolder-sterrenwacht",
+    ],
   };
+
   for (const [track, ids] of Object.entries(expected)) {
     const body = landmarkSource(track);
     for (const id of ids) requiredLandmark(body, id);
