@@ -13,7 +13,7 @@ const RadioVoice = (function () {
   // line: reading "RACE CONTROL. Plus five second penalty" spends a second of a
   // three-second card on something the card already shows in colour.
   const SPEAKERS = Object.freeze({
-    warning: "control", "penalty-warn": "control", "penalty-hit": "control",
+    warning: "control", warn: "control", "penalty-warn": "control", "penalty-hit": "control",
     coach: "coach", practice: "coach",
     info: "radio", box: "radio", race: "radio",
     // IN-RACE COMMENTARY (js/race/race-radio.js) speaks in the ANNOUNCER's
@@ -165,7 +165,7 @@ const RadioVoice = (function () {
     // which is what happened while the two started together. `lead` is that
     // figure's real length, handed in by the caller rather than duplicated
     // here, and the line has the card MINUS it to fit in.
-    const lead = Math.max(0, Math.min(1, +o.lead || 0));
+    const lead = Math.max(0, +o.lead || 0);
     out.leadMs = lead * 1000;
     const budget = (o.life || 0) - LEAD_RESERVE_S - lead;
     let rate = tone.rate;
@@ -180,7 +180,7 @@ const RadioVoice = (function () {
   function inert() {
     return Object.freeze({
       say: () => false, sayPreRace: () => false, stop: () => {}, unlock: () => {}, preview: () => false, pack: null, volume: () => 0,
-      setPackOn: () => {}, packOn: () => false, busy: () => false,
+      setPackOn: () => {}, packOn: () => false, busy: () => false, yieldToSpotter: () => false,
       voiceList: () => [], tuneFor: (sp) => Object.assign(toneFor(sp, null), { name: "" }), setTune: () => false,
       setEnabled: () => {}, setVolume: (v) => v, available: () => false,
       debug: () => ({ available: false, enabled: false, voices: 0, last: null, asked: 0, started: 0 }),
@@ -191,7 +191,8 @@ const RadioVoice = (function () {
     const synth = typeof window !== "undefined" && window.speechSynthesis;
     const Utter = typeof window !== "undefined" && window.SpeechSynthesisUtterance;
     const api = !!(synth && typeof Utter === "function");
-    if (!api) { Log.info("audio", "RadioVoice: no speechSynthesis — the radio stays written"); return inert(); }
+    const pack = typeof VoicePack !== "undefined" && typeof GameAudio !== "undefined" ? VoicePack.create(G) : null;
+    if (!api && !pack) { Log.info("audio", "RadioVoice: no speechSynthesis — the radio stays written"); return inert(); }
     let enabled = !!G.store.get("radioVoice", false);
     let volume = G.store.get("volRadio", 0.8);
     // ONE store key holding all three channels, not nine flat ones: the repo
@@ -202,7 +203,6 @@ const RadioVoice = (function () {
     // The recorded voice. RECORDED (the default) tries the pack first; SYSTEM
     // keeps every line on speech synthesis, for a player who prefers the
     // voice they picked below.
-    const pack = typeof VoicePack !== "undefined" && typeof GameAudio !== "undefined" ? VoicePack.create(G) : null;
     let packOn = G.store.get("radioPack", true) !== false;
     // `current` is the utterance THIS instance is speaking, and it exists because
     // every utterance shares one handler over module state (`deadline`, the music
@@ -216,7 +216,7 @@ const RadioVoice = (function () {
     // must cancel it, or the line it interrupted arrives on top of the line
     // that interrupted it — the exact inversion `current` exists to prevent,
     // one step earlier in the chain.
-    let pending = null;
+    let pending = null, activeKind = "";
     /* DID THE ENGINE ACTUALLY START? `asked` counts the speaks we HANDED to the
      * platform; `started` counts the ones it actually began (onstart).
      *
@@ -280,6 +280,7 @@ const RadioVoice = (function () {
     // NEVER called from create(): boot must not wait on a voice list, and on
     // Chrome the first read is empty anyway.
     function voicesFor(remoteOk) {
+      if (!api) return [];
       const cached = remoteOk ? voicesAny : voices;
       if (cached) return cached;
       let all = [];
@@ -317,6 +318,9 @@ const RadioVoice = (function () {
         const hit = v.find((x) => x && x.name === want);
         if (hit) return hit;
       }
+      if (speaker === "announcer" && typeof Announcer !== "undefined") {
+        const pick = Announcer.pickVoice(v, want); if (pick) return v.find(x => x.name === pick.name) || null;
+      }
       const i = { control: 0, coach: 1, radio: 2 }[speaker] || 0;
       return v[i % v.length];
     }
@@ -335,7 +339,7 @@ const RadioVoice = (function () {
       clearDeadline();
       // Before cancel(): the callback it triggers must already see itself as
       // stale, whether the engine fires it synchronously or a turn later.
-      current = null;
+      current = null; activeKind = "";
       if (pack) pack.stop("radio");   // the engineer's own line only — never a spotter call mid-word
       cancelOurs();
       if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false);
@@ -354,7 +358,9 @@ const RadioVoice = (function () {
       if (!p.speak) { if (!preRace && (current || pending != null)) stopVoice(); return false; }
       p.preRace = !!preRace;   // speakPlanned re-checks the session at speak time
       stop();
+      activeKind = kind || "race";
       if (speakPack(p)) return true;
+      if (!api) { last.reason = "no-api"; return false; }
       // AFTER THE CUE, NOT UNDER IT. Deferred rather than shortened: the words
       // keep their own rate and simply start when the figure has finished.
       // Always deferred, even with no cue: the synth is never touched in the
@@ -435,7 +441,7 @@ const RadioVoice = (function () {
       // The hard stop, armed from the card's ACTUAL remaining life rather than a
       // second copy of showAnnounce's expression. A duplicated constant is how
       // "spoken after it left the screen" gets reintroduced by a later edit.
-      deadline = setTimeout(stop, p.budgetMs);
+      if (current === u) deadline = setTimeout(stop, p.budgetMs);
       return true;
     }
     /* THE ONE GESTURE iOS GIVES US, AND IT WAS BEING THROWN AWAY.
@@ -459,6 +465,7 @@ const RadioVoice = (function () {
      * — the utterance ends in milliseconds by itself, and say() clears the queue
      * with its own cancel() before it speaks anyway. */
     function unlock() {
+      if (!api) return;
       try { const u = new Utter(" "); u.volume = 0.01; synth.speak(u); }
       catch (e) { /* a browser that refuses the priming utterance simply does not get primed */ }
     }
@@ -526,7 +533,13 @@ const RadioVoice = (function () {
       const t = toneFor(sp, tune);
       const words = speakable(text || SAMPLE[sp] || SAMPLE.radio);
       if (!words) return false;
+      if (G.announcer && G.announcer.stop) G.announcer.stop();
       stop();
+      // Preview the actual engineer source. Its tuning rows select SYSTEM;
+      // with RECORDED selected, TEST must not promise a different voice.
+      activeKind = sp === "coach" ? "coach" : sp === "control" ? "warning" : "info";
+      if (speakPack({ speaker: sp, text: words, leadMs: 0, budgetMs: 8000 })) return true;
+      if (!api) return false;
       // A TEST press is the player asking for THIS sample now, from a settings
       // click, not a frame: whatever is speaking — an earlier sample, the
       // announcer's own TEST — gives way, synchronously, before the speak.
@@ -535,7 +548,10 @@ const RadioVoice = (function () {
       u.voice = voiceFor(sp);
       u.rate = t.rate; u.pitch = t.pitch; u.volume = volume;
       u.onstart = () => { started++; };
-      try { asked++; synth.speak(u); synth.resume(); } catch (e) { return false; }
+      current = u;
+      u.onend = u.onerror = () => { ours.delete(u); if (current === u) current = null; };
+      try { asked++; ours.add(u); synth.speak(u); synth.resume(); }
+      catch (e) { ours.delete(u); if (current === u) current = null; return false; }
       return true;
     }
 
@@ -566,6 +582,13 @@ const RadioVoice = (function () {
       packOn: () => !!(pack && packOn),
       /** Is the radio talking, or about to (a line waiting out its cue)? The spotter asks before it keys up. */
       busy: () => !!(current || pending != null),
+      // Close-range safety can cut routine chatter, never a flag, penalty or
+      // pit instruction. Cancel both live speech and a line waiting for its cue.
+      yieldToSpotter() {
+        if (!(current || pending != null)) return true;
+        if (!["info", "coach", "comm"].includes(activeKind)) return false;
+        stop(); return true;
+      },
       setVolume(v) { volume = Math.max(0, Math.min(1, +v || 0)); return volume; },
       available: () => true,
       debug: () => ({ available: true, enabled, voices: voicesFor(false).length, voicesAny: voicesFor(true).length, last, asked, started,

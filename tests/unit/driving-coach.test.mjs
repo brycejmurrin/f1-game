@@ -354,3 +354,58 @@ test('feedback snapshots cannot corrupt session counts; reset clears history but
   coach.reset(); assert.equal(coach.feedback().total, 0); assert.equal(coach.feedback().latest, null);
   assert.equal(coach.feedback().enabled, true);
 });
+
+test('coasting advice allows cornering and a deliberate lift behind traffic, including over the line', () => {
+  const { coach, G, c } = fixture();
+  Object.assign(c, { s: 980, x: 0, throttleDemand: 0, speed: 60 });
+  assert.match(coach.advice(c), /COASTING/);
+  c.lateralAccel = 8; assert.equal(coach.advice(c), '');
+  c.lateralAccel = 0; c.steerAngle = .1; assert.equal(coach.advice(c), '');
+  c.steerAngle = 0;
+  G.cars = [c, { s: 10, x: 0 }]; assert.equal(coach.advice(c), '');
+  G.cars[1].s = 200; assert.match(coach.advice(c), /COASTING/);
+});
+
+test('coach yields to alongside traffic and does not accumulate evidence while paused', () => {
+  const { coach, G, tick, enable } = fixture(); enable();
+  G.raceRadio = { trafficBusy: () => true };
+  tick(2, braking); assert.equal(coach.feedback().total, 0);
+  assert.equal(coach.feedback().state, 'waiting');
+  G.raceRadio.trafficBusy = () => false;
+  tick(.3); G.paused = true; tick(30); G.paused = false;
+  tick(.1); assert.equal(coach.feedback().total, 0, 'pause is not sustained braking evidence');
+  tick(.15); assert.equal(coach.feedback().total, 1);
+});
+
+test('repeated corner mistakes earn a next-lap approach reminder without adding mistakes', () => {
+  const { coach, G, c, tick, enable, announcements } = fixture(); enable();
+  G.timeTrial = false;
+  Object.assign(c, { s: 500, lap: 1 });
+  tick(.6, braking);
+  tick(31, { brakeDemand: 0, steerAngle: 0, axEstSm: 0 });
+  c.lap = 2; tick(.6, braking);
+  assert.equal(coach.feedback().total, 2);
+  tick(9, { brakeDemand: 0, steerAngle: 0, axEstSm: 0 });
+  Object.assign(c, { lap: 3, s: 300 });
+  tick(.6);
+  assert.match(announcements.at(-1)[0], /TURN 2 — RELEASE THE BRAKE AS YOU TURN/);
+  assert.equal(coach.feedback().latest.reminder, true);
+  assert.equal(coach.feedback().reminders, 1);
+  assert.equal(coach.feedback().total, 2);
+  tick(31); assert.equal(coach.feedback().reminders, 1, 'one reminder per turn per lap');
+  coach.reset(); assert.equal(coach.feedback().reminders, 0);
+});
+
+test('lap-loss feedback waits for traffic and braking to clear', () => {
+  const { coach, G, c, tick, enable, announcements } = fixture(); enable();
+  const at = lapDriver({ c, G, tick });
+  c.s = 0; tick(.05); at(105); at(505, 21); at(985, 20);
+  G.raceRadio = { trafficBusy: () => true };
+  at(105, 23);
+  assert.ok(coach.status().lapReport);
+  assert.equal(announcements.length, 0);
+  G.raceRadio.trafficBusy = () => false; c.brakeDemand = .2;
+  tick(.5); assert.equal(announcements.length, 0);
+  c.brakeDemand = 0; tick(.1);
+  assert.match(announcements.at(-1)[0], /^TURN 3 COST/);
+});

@@ -394,8 +394,9 @@ test("coach and practice keep their own channel and priority, and practice is it
   // WHO line), never a bigger or smaller card.
   assert.match(hud, /#announce\[data-kind="coach"\] #announce-who,\n#announce\[data-kind="practice"\] #announce-who \{ color: var\(--faster\); \}/);
   const g0 = read("js/game.js");
-  assert.match(g0, /if \(kind === "coach" \|\| kind === "practice"\) return "COACH";/, "radioWho names the coach's channel");
-  assert.match(g0, /if \(kind === "penalty-hit" \|\| kind === "penalty-warn" \|\| kind === "warning"\) return "RACE CONTROL";/, "…and race control's");
+  const who = vm.runInNewContext(read("js/audio/radio-voice.js") + "\n(" + g0.match(/function radioWho\(kind\) \{[\s\S]*?\n\}/)[0] + ")", { player: null });
+  for (const kind of ["coach", "practice"]) assert.equal(who(kind), "COACH", kind);
+  for (const kind of ["penalty-hit", "penalty-warn", "warning", "warn"]) assert.equal(who(kind), "RACE CONTROL", kind);
   // …and the channel is ALL a kind may recolour. The number plate is the
   // team's, on every kind: the card belongs to one car for a whole session, so
   // a plate that changed with the message would be the loudest thing on screen
