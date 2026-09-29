@@ -362,7 +362,11 @@ test.describe("Apex 26 — steering", () => {
 test.describe("Apex 26 — keyboard latch", () => {
   test("keyup clears throttle even when focus moved to a non-HUD control", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null && typeof Input !== "undefined", null, { polling: 100, timeout: BOOT_MS });
+    // Input.ready(), not bare Input: the façade exists at input.js eval, before
+    // init() wires onKey. Same boot-race class as CI #6199 / touch-pedals.
+    await page.waitForFunction(
+      () => window.__apex != null && typeof Input !== "undefined" && Input.ready && Input.ready(),
+      null, { polling: 100, timeout: BOOT_MS });
     const r = await page.evaluate(() => {
       const el = document.createElement("input");   // interactive, NOT a HUD control
       el.type = "text";
@@ -401,7 +405,10 @@ test.describe("Apex 26 — keyboard latch", () => {
   // off-track auto-rescue. Verify lostpointercapture releases the hold.
   test("on-screen GAS releases when pointer capture is lost mid-hold", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null && typeof Input !== "undefined", null, { polling: 100, timeout: BOOT_MS });
+    // wireHold attaches in init(); Input.ready() is the gate (CI #6199 class).
+    await page.waitForFunction(
+      () => window.__apex != null && typeof Input !== "undefined" && Input.ready && Input.ready(),
+      null, { polling: 100, timeout: BOOT_MS });
     const r = await page.evaluate(() => {
       const el = document.getElementById("btn-throttle");   // wired via wireHold at init
       const pe = (type) => el.dispatchEvent(new PointerEvent(type, { pointerId: 1, bubbles: true, cancelable: true }));
@@ -434,7 +441,9 @@ test.describe("Apex 26 — keyboard latch", () => {
   // then endlessly re-trips the off-track auto-rescue.
   test("hold survives an OS interruption without latching (ghost pointerId)", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null && typeof Input !== "undefined", null, { polling: 100, timeout: BOOT_MS });
+    await page.waitForFunction(
+      () => window.__apex != null && typeof Input !== "undefined" && Input.ready && Input.ready(),
+      null, { polling: 100, timeout: BOOT_MS });
     const r = await page.evaluate(() => {
       const el = document.getElementById("btn-throttle");
       const pe = (type, id, target) => (target || el).dispatchEvent(
@@ -463,7 +472,9 @@ test.describe("Apex 26 — keyboard latch", () => {
   // pointer that lifted ANYWHERE as no longer holding any button.
   test("a pointerup landing on another element still releases the pedal", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null && typeof Input !== "undefined", null, { polling: 100, timeout: BOOT_MS });
+    await page.waitForFunction(
+      () => window.__apex != null && typeof Input !== "undefined" && Input.ready && Input.ready(),
+      null, { polling: 100, timeout: BOOT_MS });
     const r = await page.evaluate(() => {
       const el = document.getElementById("btn-throttle");
       el.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 5, bubbles: true, cancelable: true }));
