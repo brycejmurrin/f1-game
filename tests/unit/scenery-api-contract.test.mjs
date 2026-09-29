@@ -305,6 +305,15 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
       "magny-cours-ferme",
       "magny-cours-bourg",
     ],
+    // Wave 6 — Jacarepaguá / Autódromo Nelson Piquet (demolished 2012):
+    // pit grandstand + timing box already authored; Tijuca ridge + lagoon
+    // shore hardscape added this wave. Exact peak/pier layout UNCERTAIN.
+    jacarepagua: [
+      "jacarepagua-pit-grandstand",
+      "jacarepagua-timing-box",
+      "jacarepagua-tijuca-ridge",
+      "jacarepagua-lagoon-shore",
+    ],
   };
   for (const [track, ids] of Object.entries(expected)) {
     const body = landmarkSource(track);
