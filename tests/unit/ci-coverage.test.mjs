@@ -292,6 +292,18 @@ test("docs-guards.yml triggers on exactly ci.yml's paths-ignore list and runs th
   assert.deepEqual(notFast, [], "docs-guards is a CI entry point for tooling-fast's prose guards, not a new home for files");
 });
 
+test("ci-verdict is the always-run aggregator every other job feeds", () => {
+  const body = (ciWorkflow.split("\n  ci-verdict:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
+  assert.ok(body, "ci-verdict job missing");
+  assert.match(body, /^    name: CI$/m, "the required-check display name must be the stable `CI`");
+  assert.match(body, /if: \$\{\{ !cancelled\(\) \}\}/);
+  assert.match(body, /run: node tools\/ci\/ci-verdict\.mjs/);
+  assert.match(body, /NEEDS: \$\{\{ toJSON\(needs\) \}\}/);
+  for (const j of ["guards", "node-suites", "smoke", "selected", "baseline-trial", "poke-train"]) {
+    assert.match(body, new RegExp(`- ${j}\\b`), `ci-verdict must need ${j}`);
+  }
+});
+
 test("no workflow demotes the change-aware gate to advisory", () => {
   assert.doesNotMatch(pagesWorkflow, /^\s+advisory:/m);
   assert.doesNotMatch(ciWorkflow, /^\s+advisory:/m);

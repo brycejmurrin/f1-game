@@ -1905,3 +1905,37 @@ jobs:
         run: |
           gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"
           echo "Poked pages.yml on \`$GITHUB_REF_NAME\` for \`$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"
+
+  # ONE STABLE REQUIRED CHECK. GitHub treats a skipped required check as
+  # blocking, so path-filtered jobs cannot be required by name. This job
+  # always runs when the workflow was not cancelled, and fails if any needed
+  # job failed or was cancelled. A needed job skipped by its `if:` is a pass.
+  # Make branch protection require only this job's name (`CI`).
+  # tools/ci/ci-verdict.mjs — land this BEFORE any node-slice `if:` skips.
+  ci-verdict:
+    name: CI
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs:
+      - guards
+      - node-suites
+      - sweeps-parts
+      - sweeps
+      - ship-filter
+      - smoke
+      - driving-model
+      - renderer-filter
+      - renderer-macos
+      - select
+      - selected
+      - baseline-trial
+      - poke-train
+    if: ${{ !cancelled() }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Aggregate job results
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: node tools/ci/ci-verdict.mjs
