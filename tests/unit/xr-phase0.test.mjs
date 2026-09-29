@@ -166,3 +166,58 @@ test("XrBoot façade: comfort off until presenting; applyEyes null outside XR", 
   assert.equal(ctx.XrBoot.applyEyes({}, [0, 1, 0], [0, 1, 1], [0, 1, 0]), null);
   assert.equal(ctx.XrBoot.present(null, null, null), false);
 });
+
+test("XrUi.mount creates hidden #xr-enter until capability probe says yes", () => {
+  // Minimal DOM so ensureButton can append without a real browser.
+  const kids = [];
+  const body = {
+    appendChild(n) { kids.push(n); return n; },
+  };
+  const btnStore = { attrs: Object.create(null), text: "", hidden: true, parentNode: null };
+  const document = {
+    body,
+    createElement(tag) {
+      assert.equal(tag, "button");
+      const el = {
+        id: "",
+        type: "",
+        hidden: true,
+        textContent: "",
+        parentNode: null,
+        setAttribute(k, v) { btnStore.attrs[k] = v; },
+        addEventListener() { /* */ },
+      };
+      Object.defineProperty(el, "textContent", {
+        get() { return btnStore.text; },
+        set(v) { btnStore.text = v; },
+      });
+      Object.defineProperty(el, "hidden", {
+        get() { return btnStore.hidden; },
+        set(v) { btnStore.hidden = !!v; },
+      });
+      btnStore.el = el;
+      return el;
+    },
+  };
+  const ctx = bootXr();
+  ctx.document = document;
+  // Stub XrSession so mount's probe path resolves unsupported (button stays hidden).
+  ctx.XrSession = {
+    isPresenting: () => false,
+    isSupported: () => false,
+    probe: async () => false,
+    start: async () => null,
+    end: async () => {},
+    on: () => () => {},
+  };
+  vm.runInContext(read("js/xr/xr-ui.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-ui.js" });
+  const btn = ctx.XrUi.mount(body);
+  assert.equal(btn.id, "xr-enter");
+  assert.equal(kids.length, 1);
+  assert.equal(btnStore.hidden, true);
+  ctx.XrUi.show(true);
+  assert.equal(btnStore.hidden, false);
+  assert.match(btnStore.text, /ENTER VR/i);
+  ctx.XrUi.unmount();
+  assert.equal(kids.length, 1); // removed from parent, not from our push list
+});

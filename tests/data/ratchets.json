@@ -72,7 +72,7 @@
       "slack": 0
     },
     "zeroRefModules": {
-      "ceiling": 1,
+      "ceiling": 0,
       "slack": 0
     },
     "implicitAsserts": {
