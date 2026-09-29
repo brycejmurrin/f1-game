@@ -294,7 +294,11 @@ test("SETTINGS still has GRAPHICS: HIGH and a door-index stack", () => {
   for (const id of ["pm-open-controls", "pm-open-display", "pm-advanced", "pm-lighting"]) {
     assert.match(html, new RegExp(`id="${id}"`));
   }
-  assert.match(read("js/ui/settings-tabs.js"), /if \(openControls\) openControls\.onclick/);
+  // The door index is a page stack since #424 (SettingsNav): CONTROLS is one
+  // entry of its door table, and every door gets its handler in one loop.
+  const nav = read("js/ui/settings-tabs.js");
+  assert.match(nav, /controls: document\.getElementById\("pm-open-controls"\)/, "CONTROLS is a door of the index");
+  assert.match(nav, /for \(const \[id, door\] of Object\.entries\(doors\)\) if \(door\) door\.onclick = /, "every door opens its page");
   assert.match(read("js/ui/scale.js"), /if \(uiEl\) uiEl\.oninput/);
   assert.doesNotMatch(html, /id="pm-category-tabs"|id="pm-tab-more"|id="pm-panel-more"/);
   const rules = cssRules(read("css/components.css"));
