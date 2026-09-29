@@ -253,6 +253,14 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
       "mosport-whites-tunnel",
       "mosport-event-centre",
     ],
+    // Wave 6 — Brands Hatch Indy amphitheatre stands + Kentagon
+    brands_hatch: [
+      "brands-pit-straight-stand",
+      "brands-desire-wilson-stand",
+      "brands-paddock-hill-stand",
+      "brands-hailwoods-stand",
+      "brands-kentagon",
+    ],
   };
   for (const [track, ids] of Object.entries(expected)) {
     const body = landmarkSource(track);
