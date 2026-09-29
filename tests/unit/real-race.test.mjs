@@ -195,7 +195,7 @@ test("stage() seats the player, sets the session, and stop() restores every sett
   assert.equal(G.driverIdx, 0);
   assert.equal(G.raceLaps, 10);
   assert.equal(G.raceWeather, "dry");
-  assert.equal(G.raceTimeOfDay, "day");
+  assert.equal(G.raceTimeOfDay, "dawn", "a JUMP IN into a day race runs at dawn");
   assert.equal(G.flow, "gp"); assert.equal(G.session, "race"); assert.equal(G.timeTrial, false); assert.equal(G.duel, false);
   assert.equal(G.raceTyreWear, "real", "wear OFF would mean no stops — the stops are the story");
   assert.equal(G.raceChangeable, false);
@@ -206,6 +206,10 @@ test("stage() seats the player, sets the session, and stop() restores every sett
   assert.equal(rr.stage(script, { seat: "ZZZ" }), null);
   assert.equal(rr.stage(script, {}).seat, "RUS");
   assert.equal(rr.stage({ ...script, trackId: "spa" }), null);
+  // A night race keeps its night; an unknown hour is dawn too.
+  rr.stage({ ...script, tod: "night" }, { seat: "RUS" }); assert.equal(G.raceTimeOfDay, "night");
+  rr.stage({ ...script, tod: "default" }, { seat: "RUS" }); assert.equal(G.raceTimeOfDay, "dawn");
+  rr.stage({ ...script, tod: "dusk" }, { seat: "RUS" }); assert.equal(G.raceTimeOfDay, "dusk");
   // A start lap is kept inside the race.
   assert.equal(rr.stage(script, { seat: "RUS", startLap: 31 }).startLap, 31);
   assert.equal(rr.stage(script, { seat: "RUS", startLap: 99 }).startLap, 51);

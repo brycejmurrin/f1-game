@@ -611,7 +611,7 @@ const DataRealRace = (function () {
       const book = raceBook(script);
       const wrap = el("div");
       wrap.appendChild(el("div", "dh-lr-name", "LAP BY LAP"));
-      wrap.appendChild(el("div", "dh-lr-meta", "Every pass, stop, flag and retirement as it happened. Open a lap for the order and the gaps; JUMP IN drops you into the race as it stood at the start of that lap."));
+      wrap.appendChild(el("div", "dh-lr-meta", "Every pass, stop, flag and retirement as it happened. Open a lap for the order and the gaps; JUMP IN drops you into the race as it stood at the start of that lap (at dawn, unless it ran at night)."));
       const table = el("table", "dh-table");
       const thead = el("thead"), hr = el("tr");
       ["LAP", "LEADER", "WHAT HAPPENED", "FASTEST", ""].forEach((h) => hr.appendChild(el("th", null, h)));
@@ -664,7 +664,7 @@ const DataRealRace = (function () {
 
     /** The classification at the end of a lap, as one full-width row of the lap list. */
     function boardRow(script, lap) {
-      const tr = el("tr");
+      const tr = el("tr", "dh-lap-board");
       const td = el("td");
       td.colSpan = 5;
       const table = el("table", "dh-table");
