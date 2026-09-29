@@ -7,7 +7,10 @@ const RaceControl = (function () {
   // multiplayer humans can be separated by much more than 3.5 seconds. The
   // hard cap remains the bounded escape hatch for an unfinished/stale human.
   // AI-only harnesses retain the old "shortly after the winner" behaviour.
-  function finishDelay(cars, raceT, lapsTarget) {
+  // `raceT0`: where the clock started — a Data Hub JUMP IN seeds it to the real
+  // race's time at the lap you join, which alone could pass the cap at once.
+  function finishDelay(cars, raceT, lapsTarget, raceT0) {
+    const ran = raceT - (raceT0 > 0 ? raceT0 : 0);
     let anyHuman = false, allHumansDone = true, anyFinished = false, running = false, pend = 0;
     for (const c of cars || []) {
       if (!c) continue;
@@ -24,10 +27,10 @@ const RaceControl = (function () {
     // rival 3 s back with a +5 s penalty against it was filed as "still
     // running" — behind, on a result it had won. Bounded by the penalty
     // itself; the hard cap below still wins.
-    if (running && raceT < pend && raceT <= 360 * lapsTarget) return 0;
+    if (running && raceT < pend && ran <= 360 * lapsTarget) return 0;
     if (anyHuman && allHumansDone) return 2.2;
     if (!anyHuman && anyFinished) return 3.5;
-    if (raceT > 360 * lapsTarget) return 0.1;
+    if (ran > 360 * lapsTarget) return 0.1;
     return 0;
   }
 
@@ -158,6 +161,7 @@ const RaceControl = (function () {
       capHoldT = 0; capHoldLevel = 0;
       restartWanted = false;
       otHoldLap = null;
+      lowGripNoted = false;   // update() only runs in a race, so its not-in-race clear never fired: RACE AGAIN in the wet lost the note
       // Clear the change-detector too, or the next race's first flag looks like
       // a repeat of the last one's and is never sent.
       sent = "";

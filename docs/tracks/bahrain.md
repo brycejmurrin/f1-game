@@ -30,8 +30,11 @@ Near-flat overall (only a few metres). Notable: a gentle **downhill braking zone
 | 0.00 | L | close | Pit/control building: long low white box, ~12 m, glass-grey top stripe |
 | 0.00 | R | close | Main Grandstand: stepped grey slab, ~20 m, dark seating face |
 | 0.05 | L | far | **Sakhir Tower**: ~10-storey shaft over the Turn 1 braking zone, wrapped full-height in bright LED video bands, flat capped roofline (no sail canopy) |
-| 0.05 | R | mid | Turn 1 Grandstand: angled stepped box, ~18 m, blue trim |
+| 0.05 | R | mid | **Turn 1 Grandstand**: covered single-tier cream shell with blue seating (~72 m), truss roof — outside of the Michael Schumacher Corner overtaking zone |
+| 0.048 | L | mid | **Schumacher Corner marker**: trackside board naming T1 (renamed 2014); design of the real plaque is UNCERTAIN — naming only |
 | 0.18 | R | mid | University Grandstand (triple): three stacked grey slabs, ~16 m |
+| 0.52 | R | mid | T9–10 Beyon (ex-Batelco) complex marked by lightBanks only — covered stand deferred to stay ≤ ship props-tris (ticket-compare / 3ddigitalvenue) |
+| 0.97 | R | mid | Victory-approach stand: covered seating (~48 m) near final corner / pit entry |
 | 0.20 | both | mid | Floodlight masts: tall dual-arm cool-white poles + lens banks, **~36–42 m** |
 | 0.30 | L | far | Sculpted dunes: low rounded tan wedges, 3–6 m |
 | 0.42 | R | mid | Turn 8 hairpin grandstand: low grey arc, ~12 m |

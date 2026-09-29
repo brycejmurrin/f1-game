@@ -567,6 +567,9 @@ function paintHudDetailsSummary() {
   SettingRow.paint($("pm-hudmetrics"), hudMetricsLayout);
   SettingRow.paint($("pm-hudmap"), hudMapVis);
   SettingRow.paint($("pm-hudgaps"), hudGapsVis);
+  // HUD > MIRROR is owned by js/render/shared/mirror-pass.js; the fold reads it back from the store.
+  const hudMirror = MirrorPass.MODES.indexOf(store.get("hudMirror", "auto")) < 0 ? "auto" : store.get("hudMirror", "auto");
+  SettingRow.paint($("pm-hudmirror"), hudMirror);
   const note = $("pm-hudmetrics-note");
   if (note) note.textContent = hudLayoutNote();
   const sum = $("pm-hud-details-sum");
@@ -574,7 +577,8 @@ function paintHudDetailsSummary() {
   const bits = [["k", "HUD"], [on ? "on" : "off", on ? "ON" : "OFF"],
     ["val", hudProfile.toUpperCase()], ["val", hudMetricsLayout.toUpperCase()],
     [hudMapVis === "off" ? "off" : "on", hudMapVis === "off" ? "NO MAP" : "MAP"],
-    [hudGapsVis === "off" ? "off" : "on", hudGapsVis === "off" ? "NO GAPS" : "GAPS"]];
+    [hudGapsVis === "off" ? "off" : "on", hudGapsVis === "off" ? "NO GAPS" : "GAPS"],
+    [hudMirror === "off" ? "off" : "on", hudMirror === "off" ? "NO MIRROR" : "MIRROR"]];
   sum.innerHTML = bits.map((p, i) => (i ? '<span data-fold="sep"> · </span>' : "") +
     '<span data-fold="' + p[0] + '">' + p[1] + "</span>").join("");
 }
@@ -1030,6 +1034,9 @@ function scPassCall(ev) {
   if (!ev || !player || ev.type === "cleared") return;
   if (ev.type === "warn") { announce("GIVE THE POSITION BACK" + (ev.n > 1 ? " — " + ev.n + " PLACES" : ""), 2.5, "penalty-warn"); return; }
   player.penalty += ev.sec;
+  // The results countdown may already be running (the player just finished):
+  // re-read it so a time penalty that reorders the finish is served first.
+  resultT = 0;
   announce("+" + ev.sec + "s PENALTY — OVERTAKING UNDER CAUTION", 3, "penalty-hit");
   if (soundOn) GameAudio.penalty();
 }
@@ -2082,6 +2089,13 @@ function redFlagRestart() {
   IncidentSim.reset(); DebrisWorld.reset(); DebrisWorld.prime();
   const L = track.total;
   const order = cars.filter((c) => !c.retired).sort((a, b) => b.prog - a.prog);
+  // THE REWIND IS THE LEADER'S. Each car used to step back its OWN lap, so a
+  // car 150 m behind a leader that had just crossed (one lap number lower,
+  // not lapped) came out of the restart a full lap down: "+1 LAP" on the
+  // sheet and no way to win. The leader re-runs its lap; every other car
+  // keeps the laps it was actually down at the flag, by distance.
+  const lead = order[0];
+  const leadProg = lead ? lead.prog : 0, leadLap = lead ? Math.max(0, lead.lap - 1) : 0;
   order.forEach((c, i) => {
     const slot = TrackMesh.gridSlot(track, i);
     c.s = wrapS(slot.s); c.x = slot.x; c.xVis = c.x;
@@ -2097,14 +2111,16 @@ function redFlagRestart() {
     // so keeping it made the restart crossing lap n+1 — a leader on its last
     // lap was classified finished 14 m after the lights. Same lap/prog
     // relation as gridUp (lap 0 ↔ prog just under 0).
-    const progWas = c.prog;
-    if (c.lap > 0) {
+    const progWas = c.prog, lapWas = c.lap;
+    const down = Math.max(0, Math.floor((leadProg - progWas) / L));
+    const lapNew = c === lead ? leadLap : Math.min(lapWas, Math.max(0, leadLap - down));
+    if (lapNew < lapWas) {
       // Fuel follows laps actually driven, not the scoring lap we replay from
       // the grid. A restart cannot put burned fuel back in the tank.
-      c.fuelLap = Math.max(c.fuelLap || 0, c.lap + (c.fuelRestartLaps || 0));
-      c.fuelRestartLaps = (c.fuelRestartLaps || 0) + 1;
-      c.lap--;
+      c.fuelLap = Math.max(c.fuelLap || 0, lapWas + (c.fuelRestartLaps || 0));
+      c.fuelRestartLaps = (c.fuelRestartLaps || 0) + (lapWas - lapNew);
     }
+    c.lap = lapNew;
     c.prog = c.lap * L - (L - c.s);
     c._progGift = (c._progGift || 0) + (c.prog - progWas);
     c.head = 0; c.yawVis = 0; c.rPrevHead = 0; c.rPrevYawVis = 0;
@@ -3719,6 +3735,10 @@ const { renderSetupPreview, resetSetupCam, setSetupCamPanel, spMeshBust } = setu
 // The three shadow-map passes (js/render/shared/shadow-pass.js): sun snap cache,
 // per-frame car map, night lamp map, the caster pools and the blob flush.
 const shadowPass = ShadowPass.create(G, { teamMesh, vStd });
+// The HUD rear-view mirror (js/render/shared/mirror-pass.js): a second camera, rendered in the env probe's slot below.
+const mirrorPass = MirrorPass.create(G, { drawWorldMeshes, teamMesh, renderPosOf, playerAnchor, yawVisInterp, basisMat,
+  carPaint: (wet, night) => carPaintMat(wet ? (night ? PAINT_WET_NIGHT : PAINT_WET_DAY) : (night ? PAINT_DRY_NIGHT : PAINT_DRY_DAY)),
+  onModeChange: () => paintHudDetailsSummary() });
 
 // MY TEAM load/sync + customize dialog (js/career/custom-team.js).
 customTeam = CustomTeam.create({
@@ -3910,10 +3930,11 @@ function raceIntro(go) {
   if (!flybyShots) flybyShots = planned || FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0);   // a different flyby each load (never the sim RNG); an editor-saved list plays as authored
   if (flybyShots) flybyShots = FlybySeq.withoutSlot(flybyShots);   // nobody knows your slot on a random grid; a small grid has empty boxes
   if (flybyShots && real && (real.watch || real.startLap > 1)) flybyShots = FlybySeq.withoutGrid(flybyShots);
-  FlybySeq.setDuration(loadingScreen.nextFlyMs());   // plan every pan for the seconds this run has
+  const info = loadingInfo();   // before the duration: a real race's read (info.readMs) may stretch the flyby
+  FlybySeq.setDuration(loadingScreen.nextFlyMs(info.readMs));   // plan every pan for the seconds this run has
   if (world) FlybySeq.warm(track, flybyShots);   // plan the opening shots now, the rest in slices before their cuts
   FlybySeq.reset();   // this run's shot 0 is a cut, not a glide from wherever the camera was
-  loadingScreen.run(loadingInfo(), go);
+  loadingScreen.run(info, go);
 }
 /** WHAT THE LOADING SCREEN DESCRIBES: the circuit about to be raced, this
  *  session's settings, and whether there is a built world to fly over. Named
@@ -3923,7 +3944,7 @@ function raceIntro(go) {
  *  the next time a row is added to the card. */
 function loadingInfo() {
   const real = realRace.intro();
-  return {
+  const out = {
     track: Tracks.LIST[trackIdx], laps: raceLaps,
     gp: real ? real.title : SeasonCal.gpName ? SeasonCal.gpName(Tracks.LIST[trackIdx]) : undefined,   // the 2026 REAL calendar renames two rounds (season-cal.js); a real race is its own event
     real,   // the Data Hub's real race (RealRace.intro): the event, whose car, from which lap — the announcer reads it
@@ -3936,7 +3957,10 @@ function loadingInfo() {
     // circuit switched a moment ago, scenery still downloading) would put a
     // black hold where the cinematic should be, which reads as a hang.
     hasWorld: menuWorld(), shots: flybyShots, grid: (cars || []).map((c) => ({ code: c.code, colour: c.color, isPlayer: c === player && FlybySeq.slotKnown() })),   // the card's grid graphic + radio check: menuGridCars() seated `cars` in grid order
+    readMs: 0,
   };
+  if (real && announcer.readMs) out.readMs = announcer.readMs(out);   // the race-so-far read: the flyby stretches to it (LoadingScreen.flyMsFor)
+  return out;
 }
 // ACTIVE AERO activation zones (js/physics/aero-zones.js) — pure circuit geometry.
 aeroZ = AeroZones.create(G);
@@ -4359,7 +4383,7 @@ function update(dt) {
   // countdown while somebody is still driving. The hard time cap remains the
   // bounded escape hatch for an unfinished or stale participant.
   if (resultT === 0) {
-    resultT = RaceControl.finishDelay(cars, raceT, lapsTarget);
+    resultT = RaceControl.finishDelay(cars, raceT, lapsTarget, realRace.raceT0());
     // A GUEST holding the host's classification is done once ITS car is: its
     // view of the host's car can lag or disagree (a finish still in flight, a
     // pose lost to extrapolation), and waiting on that view meant the host's
@@ -4590,7 +4614,7 @@ function updateCar(c, dt, ranked) {
   if (!c.human && c.tyreClass) {
     vmax *= tyres.on() ? (1 + (c.tyre ? c.tyre.off : 0)) * tyres.tractionMul(c)
                        : AiDrive.tyrePace(c.tyreClass, c.lap);
-  }
+  } else if (c.human) vmax *= tyres.tractionMul(c);   // the same curve for the player: perfMul only slows the climb to vmax, never the cap (exactly 1 with wear off)
   // FUEL BURN, the counterweight that gives a stint its shape: the car gets
   // lighter and faster while the tyre goes off and gets slower, and where those
   // two cross is the pit window. Exactly 1 when the setting is off.
@@ -7647,6 +7671,8 @@ function render(dt) {
       }
     }
   } else if (PerfGov.tier() >= 1 && gfx.envProbeReady && gfx.envProbeReady()) gfx.envProbeReset();   // tier 1 sheds the PRODUCER, but envReady LATCHES — without this the paint mirrors a frozen cube. See glx.js envProbeReset.
+  // REAR-VIEW MIRROR: its own camera and target, BEFORE the main begin() like the probe above.
+  mirrorPass.render(frame, frameSky, night, wet, _floodEmit);
   let _b;
   if (_fogMul != null) {
     // Restored immediately: frame.fogDensity is the SESSION's value, which
@@ -8656,7 +8682,7 @@ $("mb-tt").onclick = () => openTimeTrial(false);
 async function consumeGhostHash() {
   // A ghost link landing MID-RACE waits, fragment intact, for the menu (quitToMenu re-reads it) — as #353's invite link does.
   if (UiLayers.inRace()) { Log.info("game", "ghost link deferred: racing"); return null; }
-  const shared = await GhostShare.consumeHash({
+  const shared = await GhostShare.consumeHash({ valid: () => !UiLayers.inRace(),
     notify: (message, result) => announce(message, result && result.ok ? 3 : 4, result && result.ok ? "info" : "warning"),
   });
   if (!shared || !shared.ok) return shared;
@@ -9397,6 +9423,7 @@ wireHudChips("pm-hudmetrics", HUD_MET_LAYOUTS, () => hudMetricsLayout,
   (v) => { hudMetricsLayout = v; store.set("hudMetricsLayout", hudMetricsLayout); }, syncMetricsOverlayCompact);
 wireHudChips("pm-hudmap", HUD_VIS_MODES, () => hudMapVis, (v) => { hudMapVis = v; store.set("hudMapVis", hudMapVis); });
 wireHudChips("pm-hudgaps", HUD_VIS_MODES, () => hudGapsVis, (v) => { hudGapsVis = v; store.set("hudGapsVis", hudGapsVis); });
+wireHudChips("pm-hudmirror", MirrorPass.MODES, () => mirrorPass.mode(), (v) => mirrorPass.setMode(v));
 
 // ACTIVE AERO: MANUAL / AUTO. Same shape as GEARS and for the same reason —
 // both answer "how much of the car do you operate yourself?". Takes effect

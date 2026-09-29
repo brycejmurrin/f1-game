@@ -191,6 +191,13 @@ test("a car with no stops left still ignores the plan for a tyre that cannot do 
   assert.equal(now({ stopsLeft: 0, lapsToStop: -5 }), "");
 });
 
+test("the planner's cliff IS the sim's cliff", () => {
+  // Two copies of one number: when the sim's cliff steepened and the planner's
+  // did not, every plan would price a dead set at the old, cheap rate.
+  assert.equal(A.STRAT.DEG_CLIFF, T.DROP_CLIFF);
+  assert.equal(A.STRAT.DEG_LIN, T.DROP_LIN);
+});
+
 test("a worn stop needs laps left to pay for itself", () => {
   // Rule 3 fired on wear alone, with no regard for how much race was left, so a
   // set that went over its life near the flag sent the car down the lane to
@@ -203,8 +210,10 @@ test("a worn stop needs laps left to pay for itself", () => {
   // The deeper past its life the set is, the sooner the stop pays back — a
   // rag is worth changing with fewer laps left than a set just over the line.
   const rag = (left) => now({ wear: 2.0, pitLossLaps: 0.13, lapsLeft: left });
-  assert.equal(rag(6), "worn", "a destroyed set is worth it with six to go");
-  assert.ok(worn({ lapsLeft: 6 }) === "", "…where one barely over its life is not");
+  // (Four to go: with the cliff at DEG_CLIFF 0.50 a set 0.1 over its life
+  // pays back in ~4.7 laps, a destroyed one in under one.)
+  assert.equal(rag(4), "worn", "a destroyed set is worth it with four to go");
+  assert.ok(worn({ lapsLeft: 4 }) === "", "…where one barely over its life is not");
   // A caller that does not say how many laps are left behaves exactly as before,
   // so nothing that never knew about this rule silently changes.
   assert.equal(now({ wear: 1.4 }), "worn", "no lapsLeft, no new gate");

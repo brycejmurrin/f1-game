@@ -177,9 +177,16 @@
         id: "bahrain-start-gantry", frac: 0.005, clearance: 8.5,
         thickness: 0.9, depth: 1.6, supportGap: 2, color: STEEL, required: true,
       });
-      grandstandEx(0.00,   1, 18, 140, STAND_CREAM, SEAT_BLUE,
+      // Main Grandstand length held at 118 m (was 140) so restoring T1 seating
+      // and the Victory approach stand stays inside the props-tris ratchet.
+      grandstandEx(0.00,   1, 18, 118, STAND_CREAM, SEAT_BLUE,
         { tiers: 2, roof: "truss", suites: true, endWalls: true });
-      grandstandEx(0.985,  1, 90,  80, STAND_CREAM, SEAT_BLUE,
+      // Victory approach stand — covered seating near the final corner / pit
+      // entry. Was at s=0.985 gap=90 where every seating riser hit the T1 fold
+      // (hollow roof-only shell). Moved onto the straight at a clearance that
+      // clears rejBox. Named for the Victory grandstands that overlook the
+      // closing sequence (ticket-compare / oversteer48 seating guides).
+      grandstandEx(0.97,   1, 36,  48, STAND_CREAM, SEAT_BLUE,
         { roof: "cantilever", endWalls: true, pylons: true });
       // Second pit-side building: timing/media centre with cool lit windows
       building(K(0.01), -1, 2, 10, 9, 40,
@@ -245,12 +252,37 @@
       backdrop(K(0.00), 1, 160, [280, 16, 14], SAND_DARK);
       backdrop(K(0.97), 1, 180, [240, 18, 14], SAND);
 
-      grandstandEx(0.05,   1, 24, 90, STAND_CREAM, SEAT_BLUE,
+      // Turn 1 Grandstand — covered single-tier on the outside of the main
+      // overtaking / heavy-braking hairpin (bahrain.gp map; oversteer48). Gap
+      // was 24 m: the 0.20 fold put every crowdBank riser on the next leg's
+      // tarmac (rejBox), so only the shell/roof emitted — a hollow box. 30 m
+      // clears the fold; engine grandstandEx suppresses a shell when seating
+      // cannot clear. Length 72 m (was 90) keeps props-tris ≤ ship ratchet.
+      grandstandEx(0.05,   1, 30, 72, STAND_CREAM, SEAT_BLUE,
         { roof: "truss", suites: true, endWalls: true });
       grandstandEx(0.025,  1, 24, 60, null, null, { livery: "steel", roof: "flat", endWalls: true });
       grandstandEx(0.065,  1, 28, 72, null, null, { livery: "sandstone", roof: "cantilever", pylons: true });
       cameraTower(K(0.045), -1, 46, { h: 22 });
-      // Inside of T1: access road + small pit buildings
+      // Michael Schumacher Corner marker (T1 renamed 2014 — circuit brief /
+      // Wikipedia). Small trackside board facing the braking zone; not a
+      // claim about exact signage design (UNCERTAIN), only the naming.
+      {
+        const a = anchor(K(0.048), -1, 14), b = [a.r, a.u, a.t];
+        if (!onTrack(a.c[0], a.c[2], 6)) {
+          modelGroup("bahrain-schumacher-corner", {
+            center: vadd(a.c, a.u, 2.4), size: [0.8, 5.2, 4.2], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(a.c, a.u, 2.2), [0.35, 4.4, 0.35], STEEL, b);
+            addBox(stage, vadd(a.c, a.u, 4.6), [0.55, 1.6, 3.6], [0.12, 0.12, 0.14], b);
+            // Face toward the track (stand is on side -1 → track is +r).
+            stage._mat = MAT.GLASS;
+            addBox(stage, vadd(vadd(a.c, a.r, 0.35), a.u, 4.6),
+              [0.12, 1.2, 3.2], [0.85, 0.12, 0.12], b);
+            stage._mat = 0;
+          }, { required: true });
+        }
+      }      // Inside of T1: access road + small pit buildings
       accessBox(K(0.03), -1, 36, 10, 6, 16);
       lightBank(K(0.06), 1, 36);
       floodMast(K(0.05), 1, 32, 40);
@@ -292,7 +324,7 @@
         }
       }
       for (const [i, ds, dGap, seLen, seatC] of [
-        [0, -0.040, 26, 44, SEAT_BLUE],
+        [0, -0.040, 26, 32, SEAT_BLUE],
         [1, -0.010, 24, 38, SEAT],
         [2,  0.025, 24, 42, SEAT_BLUE],
         [3,  0.060, 28, 38, SEAT],
@@ -385,13 +417,13 @@
           duneWedge(k, side, 52 + i * 20, 34 + hash(k * 3 + side) * 22, 3.6 + hash(k * 5) * 2.0);
         }
       }
-      grandstandEx(0.52,  1, 28, 52, null, null, { livery: "steel", roof: "flat" });
+      // Beyon (ex-Batelco) sits at T9–10 on the real map (ticket-compare /
+      // 3ddigitalvenue). A full truss stand + the prior steel bay blew the
+      // props-tris ratchet after T1 seating was restored; lightBanks +
+      // marshal posts still mark the complex until a cheaper mesh fits.
       lightBank(K(0.51), 1, 38);
       lightBank(K(0.54), -1, 38);
       marshalPost(K(0.50), -1, 26);
-      // Desert accessory buildings: sandy compound structures (e.g. TV compound)
-      building(K(0.50), -1, 44, 16, 8, 22,
-        { kind: "hall", wall: [0.72, 0.67, 0.56], window: WIN_WARM, lit: true, floor: 2 });
       // Desert backdrop slab behind open section — fills the distant horizon
       backdrop(K(0.50), -1, 140, [260, 15, 12], SAND);
 
@@ -711,7 +743,7 @@
 
       // ── General-admission terracing behind the main straight ─────────────
       // Poured mass-concrete steps in the sandstone family, sitting between the
-      // 140 m hero stand at gap 18 and the far pit-straight stand at gap 90. No
+      // 118 m hero stand at gap 18 and the Victory-approach stand at gap 36. No
       // roof and no back shell: the form the venue actually uses for GA, and
       // the one open-seating silhouette Sakhir was missing between its cream
       // shells and its bare desert.
