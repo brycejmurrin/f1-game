@@ -359,7 +359,7 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 .dh-table td { padding: 7px calc(var(--gap) * 0.5); vertical-align: middle; }
 /* RACE IT's lap list: each lap row is a disclosure — a caret says it opens, the opened board hangs under it. */
 .dh-table tbody tr[aria-expanded] { cursor: pointer; }
-.dh-table tbody tr[aria-expanded] > td:first-child::before { content: "\25B8"; display: inline-block; width: 1.1em; opacity: 0.7; transition: transform 0.15s; }
+.dh-table tbody tr[aria-expanded] > td:first-child::before { content: "\25B8"; display: inline-block; width: 1.1em; text-align: center; vertical-align: middle; line-height: 1; opacity: 0.7; transition: transform 0.15s; }
 .dh-table tbody tr[aria-expanded="true"] > td:first-child::before { transform: rotate(90deg); opacity: 1; }
 .dh-table tbody tr[aria-expanded="true"] { background: rgba(255,255,255,0.05); }
 .dh-table tbody tr.dh-lap-board > td { padding: 0 0 calc(var(--gap) * 0.5) calc(var(--gap) * 1.2); background: rgba(255,255,255,0.03); }

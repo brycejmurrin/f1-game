@@ -401,7 +401,7 @@ const RealRace = (function () {
       G.teamIdx = ti; G.driverIdx = seat.di;
       G.raceLaps = laps;
       G.raceWeather = weatherAt(script, startLap);
-      G.raceTimeOfDay = watch ? script.tod || "default" : jumpTod(script.tod, Tracks.LIST[idx]);
+      G.raceTimeOfDay = raceTod(script.tod, Tracks.LIST[idx]);
       G.raceChangeable = false;
       if (G.raceTyreWear === "off") G.raceTyreWear = "real";   // the stops are the story
       if (G.resetRaceDraft) G.resetRaceDraft();
@@ -410,9 +410,9 @@ const RealRace = (function () {
       return watch ? { trackId: script.trackId, laps, seat: want.code, startLap, watch: true, reel: active.reel } : { trackId: script.trackId, laps, seat: want.code, startLap };
     }
 
-    /** A JUMP IN races at DAWN when the real race ran by day (or its hour is
-     *  unknown): a night race — or a night circuit's default — keeps its night. WATCH keeps the real light. */
-    function jumpTod(tod, def) {
+    /** A real race — JUMP IN, WATCH or HIGHLIGHTS — runs at DAWN when it ran by day (or its hour
+     *  is unknown): a night race — or a night circuit's default — keeps its night, a dusk race its dusk. */
+    function raceTod(tod, def) {
       if (tod === "day" || ((!tod || tod === "default") && !(def && def.night))) return "dawn";
       return tod || "default";
     }
