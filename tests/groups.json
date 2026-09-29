@@ -816,6 +816,7 @@
         "tests/unit/race-flow-fixes-vm.test.mjs",
         "tests/unit/red-flag-pit-vm.test.mjs",
         "tests/unit/tt-lap-validity-vm.test.mjs",
+        "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/mechanics-integration-vm.test.mjs"
       ]
     },
@@ -865,6 +866,7 @@
         "tests/unit/race-flow-fixes-vm.test.mjs",
         "tests/unit/red-flag-pit-vm.test.mjs",
         "tests/unit/tt-lap-validity-vm.test.mjs",
+        "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/mechanics-integration-vm.test.mjs"
       ]
     },
