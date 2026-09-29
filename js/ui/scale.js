@@ -41,6 +41,11 @@ const UiScale = (() => {
     // than from whenever this module runs.
     const SCALE_MIN = 40;
     const SCALE_MAX = 200;
+    // BUTTON SIZE alone goes on to 300 %: at 200 % the dock was still small in the hand on a
+    // tall landscape phone (owner, 2026-09-28), and fitHud's --hud-z-dock cap already stops
+    // the columns at whatever the screen has room for — the slider is a wish, the cap the fit.
+    const BTN_MAX = 300;
+    const maxFor = (k) => (k === "hudBtnScale" ? BTN_MAX : SCALE_MAX);
     const SCALE_STEP = 0.25;
     // Touch defaults live in the `(pointer: coarse)` block of css/tokens.css and
     // are mirrored here — CSS owns FIRST paint, this owns every write after it,
@@ -54,8 +59,8 @@ const UiScale = (() => {
     const BTN_OVER_HUD = 1.25;
     const coarseUi = () => { try { return !!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches); } catch (_) { return false; } };
     const scaleDefault = (k) => (coarseUi() ? (k === "hudScale" ? 100 : 109) : 100);
-    const scaleSnap = (v) => {
-      const n = Math.max(SCALE_MIN, Math.min(SCALE_MAX, +v));
+    const scaleSnap = (v, k) => {
+      const n = Math.max(SCALE_MIN, Math.min(maxFor(k), +v));
       return Math.round(n / SCALE_STEP) * SCALE_STEP;
     };
     // BUTTON SIZE's default is not a number, it is ANOTHER SLIDER: unset, the
@@ -69,10 +74,10 @@ const UiScale = (() => {
       : scaleDefault(k));
     const scalePct = (k) => {
       const v = store.get(k, null);
-      return typeof v === "number" ? scaleSnap(v) : scaleDefaultFor(k);
+      return typeof v === "number" ? scaleSnap(v, k) : scaleDefaultFor(k);
     };
-    const scaleLabel = (pct) => {
-      const t = scaleSnap(pct);
+    const scaleLabel = (pct, k) => {
+      const t = scaleSnap(pct, k);
       return `${Math.abs(t % 1) < 1e-9 ? String(Math.round(t)) : t.toFixed(1)}%`;
     };
     function applyScale(key, prop, inputId) {
@@ -87,7 +92,7 @@ const UiScale = (() => {
       if (typeof stored === "number") document.documentElement.style.setProperty(prop, pct / 100);
       else document.documentElement.style.removeProperty(prop);
       const input = $(inputId); if (input) input.value = String(pct);
-      const out = $(`${inputId}-v`); if (out) out.textContent = scaleLabel(pct);
+      const out = $(`${inputId}-v`); if (out) out.textContent = scaleLabel(pct, key);
       // IS THIS VALUE MINE OR INHERITED? `stored` has always known — null means
       // "following" — and nothing on screen said so, which is the whole bug class
       // behind BUTTON SIZE: unset it tracks HUD SIZE, and a player who had never
@@ -154,18 +159,18 @@ const UiScale = (() => {
     }
     const uiEl = $("pm-uiscale");
     if (uiEl) uiEl.oninput = (e) => {
-      store.set("uiScale", scaleSnap(+e.target.value || scaleDefaultFor("uiScale")));
+      store.set("uiScale", scaleSnap(+e.target.value || scaleDefaultFor("uiScale"), "uiScale"));
       applyUiScale();
     };
     const hudEl = $("pm-hudscale");
     if (hudEl) hudEl.oninput = (e) => {
-      store.set("hudScale", scaleSnap(+e.target.value || scaleDefaultFor("hudScale")));
+      store.set("hudScale", scaleSnap(+e.target.value || scaleDefaultFor("hudScale"), "hudScale"));
       applyHudScale();
     };
     applyBtnOpacity();
     const btnEl = $("pm-btnscale");
     if (btnEl) btnEl.oninput = (e) => {
-      store.set("hudBtnScale", scaleSnap(+e.target.value || scaleDefaultFor("hudBtnScale")));
+      store.set("hudBtnScale", scaleSnap(+e.target.value || scaleDefaultFor("hudBtnScale"), "hudBtnScale"));
       applyBtnScale();
     };
     // REVERT IS PER-SETTING, and it is the same `store.set(key, null)` that
@@ -189,12 +194,12 @@ const UiScale = (() => {
     function setScale(key, prop, v) {
       if (v !== undefined) {
         if (v === null) store.set(key, null);
-        else store.set(key, scaleSnap(+v || scaleDefaultFor(key)));
+        else store.set(key, scaleSnap(+v || scaleDefaultFor(key), key));
         if (key === "uiScale") applyUiScale();
         else if (key === "hudBtnScale") applyBtnScale();
         else applyHudScale();
       }
-      return { pct: scalePct(key), stored: store.get(key, null), min: SCALE_MIN, max: SCALE_MAX, step: SCALE_STEP };
+      return { pct: scalePct(key), stored: store.get(key, null), min: SCALE_MIN, max: maxFor(key), step: SCALE_STEP };
     }
 
     const RES_MODES = [

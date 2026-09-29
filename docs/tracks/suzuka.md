@@ -37,11 +37,13 @@ Figure-8 **crossover** (underpass at s≈0.37, bridge at s≈0.82); the high-spe
 
 ## 6. Modelling notes
 - Lean green: layered hill boxes at three haze-depths sell the forested Mie backdrop more than any single object.
-- Make the **Ferris wheel** the hero skyline landmark on the main straight (s≈0.02) — Motopia behind it stays sparse (no coaster/swing clutter).
-- Model the two **crossover** events distinctly: a dark enlarged underpass portal at s≈0.37, then a bold green bridge span at s≈0.81.
+- Make the **Ferris wheel** the hero skyline landmark on the main straight (s≈0.02) — Motopia behind it stays sparse (no coaster/swing clutter). Circuit Wheel ~50 m tall per Motopia visitor notes (ikidane-nippon); in-game radius 38 m keeps the silhouette without crowding.
+- Model the two **crossover** events distinctly: a dark enlarged underpass portal at s≈0.37, then green parapets / cheek piers on the lifted upper ribbon at s≈0.845 (the upper road IS the deck — do not hang a second slab above it).
 - Use the **undulation**: Esses climb rise is punched so grandstands sit on a visible hill, not a flat plane.
 - Sprinkle small pink cherry-box clusters sparsely on the Esses climb only (s≈0.18–0.22 L).
 - Keep kerb boxes thin, bright red/white, and tightly hugging the S-Curves and chicane to read the rhythm.
+- Pavilion roofs at Motopia seat on their `place()` box tops (terrainY), not a ribbon-relative `anchor()` height — the Motopia drop left of S/F disagrees by ~10 m.
+- Giant screens at Casio Triangle + main straight are representative (Japan.gp grandstand map cites large TVs); exact LED dimensions are UNCERTAIN.
 
 ## 7. Research pass — the Mie landscape
 

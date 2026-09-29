@@ -15,9 +15,9 @@
   the other screen. The page is drawn as a Formula 1 steering wheel: the rim
   turns with the phone, the LCD in the middle shows the live dash the game
   streams back (gear, speed, rev lights, lap, position, ERS, overtake and aero
-  state, the flag), the paddles behind the grips shift, the thumb zones on the
-  grips are the GAS and BRAKE, and the wheel-face buttons are the in-race
-  controls a pad has.
+  state, the flag), the left grip is the gears (UP over DN, like the game's own touch
+  dock) and the right grip the pedals (BRAKE over GAS), and the wheel-face
+  buttons are the in-race controls a pad has.
 
   A separate ROOT page like bench.html, deliberately: the phone needs the
   signalling and transport half of js/net plus two input modules — nine files,
@@ -34,7 +34,8 @@
 {
   "imports": {
     "@trystero-p2p/core": "./vendor/trystero-0.25.4/core/index.js",
-    "@trystero-p2p/nostr": "./vendor/trystero-0.25.4/nostr/index.js"
+    "@trystero-p2p/nostr": "./vendor/trystero-0.25.4/nostr/index.js",
+    "@noble/secp256k1": "./vendor/trystero-0.25.4/noble-secp256k1.js"
   }
 }
 </script>
@@ -44,7 +45,7 @@
           --carbon: repeating-linear-gradient(45deg, #15151c 0 2px, #101017 2px 4px);
           --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px);
           --sal: env(safe-area-inset-left, 0px); --sar: env(safe-area-inset-right, 0px); }
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
   html, body { height: 100%; margin: 0; overflow: hidden; background: var(--bg); color: var(--fg);
          font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
          touch-action: none; user-select: none; -webkit-user-select: none; overscroll-behavior: none; }
@@ -81,9 +82,13 @@
   #rim .grip { fill: #1c1c24; stroke: #3a3a46; stroke-width: 3; }
   #rim .accent { fill: none; stroke: var(--team); stroke-width: 4; opacity: .8; }
   .grip { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-  .paddle { flex: 0 0 22%; min-height: 48px; border-radius: 14px 14px 6px 6px; background: linear-gradient(#2a2a35, #17171f);
-            border: 1px solid #3a3a46; font-weight: 800; font-size: 13px; letter-spacing: .1em; color: var(--dim); }
-  .paddle.on { color: var(--fg); border-color: var(--team); box-shadow: inset 0 0 0 2px var(--team); }
+  /* The left grip: UP over DN, each half the column — the game's shift dock. */
+  .shift, .tap { flex: 1 1 0; min-height: 48px; border-radius: 22px; background: linear-gradient(#22222c, #14141b);
+            border: 2px solid #3a3a46; font-weight: 800; font-size: 26px; line-height: 1; color: #d0d0da;
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; }
+  .shift small { font-size: 12px; letter-spacing: .14em; color: var(--dim); }
+  .tap { font-size: 16px; letter-spacing: .1em; display: none; }
+  .shift.on, .tap.on { color: var(--fg); border-color: var(--team); box-shadow: inset 0 0 0 2px var(--team); }
   .pedal { flex: 1 1 0; border-radius: 26px; border: 2px solid #3a3a46; background: var(--carbon);
            font-weight: 800; font-size: 18px; letter-spacing: .1em; display: flex; align-items: flex-end; justify-content: center;
            padding-bottom: 22px; color: var(--dim); position: relative; overflow: hidden; }
@@ -98,11 +103,45 @@
      that says so. Aero AUTO or a circuit with no zones: AERO is greyed, not
      removed, so the button grid keeps its shape under the thumb. */
   .pedal small { display: none; font-size: 11px; letter-spacing: .14em; color: var(--dim); margin-top: 4px; }
-  body.gears-auto .paddle { display: none; }
+  body.gears-auto .shift { display: none; }
+  body.gears-auto .tap { display: flex; }
+  body.gears-auto #keys #b-overtake, body.gears-auto #keys #b-boost { display: none; }   /* on the grip instead */
   body.throttle-auto #gas { pointer-events: none; flex-direction: column; background: #0d0d13; color: #3d3d4a; border-color: #26262f; }
   body.throttle-auto #gas::before { border-color: #1d1d26; }
   body.throttle-auto #gas small { display: block; color: #3d3d4a; }
   body.aero-auto #b-aero, body.aero-none #b-aero { pointer-events: none; background: #0d0d13; color: #3d3d4a; border-color: #26262f; }
+  /* THE MENU PAD (PhonePad.paintHud → body.menu: out of a race, or paused) is
+     A CONTROLLER, NOT A WHEEL: the wheel hides and #menupad takes the screen —
+     a D-pad under the left thumb, BACK and SELECT under the right, the title
+     and PAUSE (RESUME on the pause menu) between them. Same events, same
+     desktop seam; only the shape changes, so nothing race-like is under a
+     thumb in a menu. */
+  #menupad { position: absolute; inset: 0; display: none; z-index: 1;
+             padding: calc(10px + var(--sat)) calc(12px + var(--sar)) calc(10px + var(--sab)) calc(12px + var(--sal));
+             grid-template-columns: 1fr minmax(150px, 1.1fr) 1fr; align-items: center; gap: 14px; }
+  body.linked.menu #menupad { display: grid; }
+  body.menu #ctl { display: none; }
+  #dpad { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 6px;
+          width: min(100%, 76vh); aspect-ratio: 1; margin: 0 auto; }
+  #dpad button { padding: 0; min-height: 0; border-radius: 16px; font-size: clamp(22px, 7vh, 36px); font-weight: 800; line-height: 1;
+                 background: linear-gradient(#22222c, #14141b); border: 2px solid #3a3a46; color: #d0d0da; }
+  #dpad button.on { color: var(--fg); border-color: var(--team); box-shadow: inset 0 0 0 2px var(--team); }
+  #b-navUp { grid-column: 2; grid-row: 1; } #b-navLeft { grid-column: 1; grid-row: 2; }
+  #b-navRight { grid-column: 3; grid-row: 2; } #b-navDown { grid-column: 2; grid-row: 3; }
+  #dpad-hub { grid-column: 2; grid-row: 2; border-radius: 50%; background: #0d0d13; border: 2px solid #26262f; }
+  #mp-mid { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; min-width: 0; }
+  #mp-title { font-size: clamp(22px, 6.5vh, 36px); font-weight: 800; letter-spacing: .14em; color: var(--team); }
+  #mp-sub { font-size: 11px; letter-spacing: .12em; color: var(--dim); }
+  #b-pause-menu { width: 100%; min-height: clamp(48px, 14vh, 72px); padding: 0 16px; font-weight: 800; font-size: clamp(12px, 3vh, 16px);
+                  letter-spacing: .1em; border-radius: 14px; background: radial-gradient(circle at 35% 30%, #2a2a35, #14141b); border: 1px solid #3a3a46; color: #d0d0da; }
+  #b-pause-menu.on { border-color: var(--team); color: var(--team); }
+  #ab { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 8px; width: min(100%, 76vh); aspect-ratio: 1; margin: 0 auto; }
+  #ab button { padding: 0; min-height: 0; border-radius: 50%; font-weight: 800; font-size: clamp(13px, 3.4vh, 20px); letter-spacing: .12em;
+               background: linear-gradient(#22222c, #14141b); border: 3px solid #3a3a46; color: #d0d0da; }
+  #b-navBack { grid-column: 1; grid-row: 1; border-color: var(--bad); }
+  #b-navSelect { grid-column: 2; grid-row: 2; border-color: var(--ok); }
+  #b-navBack.on { background: rgba(255,77,77,.2); color: var(--fg); }
+  #b-navSelect.on { background: rgba(94,240,138,.2); color: var(--fg); }
 
   /* THE FACE: rev lights, the LCD, the button clusters. */
   #face { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 0; }
@@ -136,28 +175,87 @@
   #screen.boost #h-ers { background: linear-gradient(90deg, #ff6a00, var(--warn)); animation: strobe .3s steps(2) infinite; }
   #screen .last { justify-content: center; font-size: 12px; color: var(--dim); letter-spacing: .06em; min-height: 1.2em; }
   #screen.idle #h-gear, #screen.idle #h-speed { color: #4a4a58; text-shadow: none; }
-  #keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-  #keys button { padding: 0; min-height: 40px; font-weight: 800; font-size: 11px; letter-spacing: .08em; border-radius: 14px;
+  /* THE KEYS ARE THUMB-SIZED, the screen takes what is left. They sat at 40px
+     under a screen that ate the face; on a phone that was a strip of slivers
+     under two thumbs' worth of gear digit. Sized on the viewport height so a
+     taller phone gets taller keys, never smaller than a 48px tap target. */
+  #keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  #keys button { padding: 0; min-height: clamp(48px, 14vh, 80px); font-weight: 800; font-size: clamp(12px, 3.2vh, 18px); letter-spacing: .08em; border-radius: 14px;
                  background: radial-gradient(circle at 35% 30%, #2a2a35, #14141b); border: 1px solid #3a3a46; color: #d0d0da; }
   #keys button.on { border-color: var(--team); color: var(--team); }
-  #keys .wide { grid-column: 1 / -1; border-radius: 10px; min-height: 30px; color: var(--dim); }
+  #keys .wide { grid-column: 1 / -1; border-radius: 10px; min-height: clamp(36px, 9vh, 52px); font-size: clamp(11px, 2.6vh, 14px); color: var(--dim); }
   #link { font-size: 10px; color: var(--dim); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: .08em; }
-  @media (orientation: portrait) {
-    #ctl { grid-template-columns: 1fr 1fr; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
-    #face { grid-column: 1 / -1; grid-row: 1; }
-    #left { grid-row: 2; } #right { grid-row: 2; }
-    #rim { width: 96vw; }
-    #h-gear { font-size: 64px; } #h-speed { font-size: 32px; }
-  }
+  /* touch-action is NOT inherited: body's `none` does not reach the pedal
+     divs, and Safari decides double-tap zoom on the touched element. Every
+     part of the wheel owns its touches. */
+  #ctl, #ctl *, #menupad, #menupad * { touch-action: none; }
+  /* LANDSCAPE ONLY. The wheel is a landscape object — two thumbs on the
+     grips, the phone held like a rim — so portrait gets no squeezed layout,
+     it gets a card that says which way to turn. The tilt maths follows the
+     screen angle already, so the moment the phone turns the wheel is there. */
+  #rotate { display: none; position: absolute; inset: 0; z-index: 5; background: var(--bg); color: var(--fg);
+            flex-direction: column; justify-content: center; align-items: center; gap: 14px; text-align: center;
+            padding: 24px; font-weight: 700; letter-spacing: .06em; }
+  #rotate svg { width: 72px; height: 72px; color: var(--team); animation: turn 1.4s ease-in-out infinite alternate; }
+  #rotate small { display: block; font-weight: 400; color: var(--dim); letter-spacing: 0; margin-top: 4px; }
+  @keyframes turn { from { transform: rotate(0deg); } to { transform: rotate(90deg); } }
+  @media (prefers-reduced-motion: reduce) { #rotate svg { animation: none; transform: rotate(90deg); } }
+  @media (orientation: portrait) { body.linked #rotate { display: flex; } }
 </style>
+<script>
+// DOUBLE-TAP AND PINCH ZOOM, OFF. A wheel is tapped fast and by two thumbs, and
+// a second tap on a pedal zoomed the page. Mirrors index.html's canceller:
+// here the whole linked page is the driving surface, so iOS GestureEvents die
+// page-wide once linked. Native buttons and the code field keep every
+// activation (cancelling their touchend would eat the click); the pedals are
+// pointer-driven divs, so cancelling theirs costs nothing.
+(function () {
+  var lastT = 0, lastX = 0, lastY = 0, TAP_MS = 350, TAP_PX2 = 900;
+  function kill(e) { e.preventDefault(); }
+  function linked() { return !!(document.body && document.body.classList.contains("linked")); }
+  function killGesture(e) { if (linked()) kill(e); }
+  document.addEventListener("gesturestart", killGesture, { capture: true, passive: false });
+  document.addEventListener("gesturechange", killGesture, { capture: true, passive: false });
+  document.addEventListener("gestureend", killGesture, { capture: true, passive: false });
+  document.addEventListener("dblclick", kill, { capture: true });
+  document.addEventListener("touchend", function (e) {
+    if (e.touches && e.touches.length) return;
+    if (e.target && e.target.closest && e.target.closest("button,input")) { lastT = 0; return; }
+    var t = e.changedTouches && e.changedTouches[0];
+    if (!t) return;
+    var now = Date.now(), dx = t.clientX - lastX, dy = t.clientY - lastY;
+    if (now - lastT <= TAP_MS && dx * dx + dy * dy <= TAP_PX2) kill(e);
+    lastT = now; lastX = t.clientX; lastY = t.clientY;
+  }, { capture: true, passive: false });
+})();
+</script>
 </head>
 <body>
 <section id="pair">
   <h1>APEX 26 · PHONE CONTROLLER</h1>
   <p>Enter the room code the game shows under Settings › CONTROLS › PHONE AS CONTROLLER, then tap CONNECT. Hold the phone sideways like a wheel and tilt it to steer.</p>
-  <input id="code" type="text" inputmode="latin" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="8" aria-label="Room code" placeholder="ABC123">
+  <input id="code" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="8" aria-label="Room code" placeholder="ABC123">
   <button id="connect" type="button">CONNECT</button>
   <p id="status" role="status"></p>
+</section>
+<div id="rotate" role="status"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>TURN THE PHONE SIDEWAYS<small>The wheel works in landscape only.</small></div>
+<section id="menupad" aria-label="Menu pad">
+  <div id="dpad">
+    <button id="b-navUp" type="button" aria-label="Menu up">&#9650;</button>
+    <button id="b-navLeft" type="button" aria-label="Menu left">&#9664;</button>
+    <div id="dpad-hub" aria-hidden="true"></div>
+    <button id="b-navRight" type="button" aria-label="Menu right">&#9654;</button>
+    <button id="b-navDown" type="button" aria-label="Menu down">&#9660;</button>
+  </div>
+  <div id="mp-mid">
+    <div id="mp-title" role="status">MENU</div>
+    <div id="mp-sub">D-PAD TO MOVE &middot; SELECT &middot; BACK</div>
+    <button id="b-pause-menu" type="button">PAUSE / RESUME</button>
+  </div>
+  <div id="ab">
+    <button id="b-navBack" type="button" aria-label="Back">BACK</button>
+    <button id="b-navSelect" type="button" aria-label="Select">SELECT</button>
+  </div>
 </section>
 <section id="ctl" aria-label="Steering wheel controller">
   <div id="rim" aria-hidden="true">
@@ -175,9 +273,14 @@
       <path class="accent" d="M200 150 L200 170"/>
     </svg>
   </div>
+  <!-- The game's own tilt docks (js/game.js layoutDocks): the LEFT thumb has
+       the gears (UP over DN) and, with gears on AUTO, the taps instead; the
+       RIGHT thumb has the pedals, BRAKE over GAS. -->
   <div id="left" class="grip">
-    <button id="b-shiftDown" class="paddle" type="button" aria-label="Shift down">◄ GEAR</button>
-    <div id="brake" class="pedal" role="button" aria-label="Brake">BRAKE</div>
+    <button id="b-shiftUp" class="shift" type="button" aria-label="Shift up">&#9650;<small>UP</small></button>
+    <button id="b-shiftDown" class="shift" type="button" aria-label="Shift down">&#9660;<small>DN</small></button>
+    <button id="b-ot-big" class="tap" type="button" aria-label="Overtake">OT</button>
+    <button id="b-boost-big" class="tap" type="button" aria-label="Boost">BOOST</button>
   </div>
   <div id="face">
     <div id="screen" aria-live="off">
@@ -201,7 +304,7 @@
     <div id="link" role="status"></div>
   </div>
   <div id="right" class="grip">
-    <button id="b-shiftUp" class="paddle" type="button" aria-label="Shift up">GEAR ►</button>
+    <div id="brake" class="pedal" role="button" aria-label="Brake">BRAKE</div>
     <div id="gas" class="pedal" role="button" aria-label="Gas">GAS<small>AUTO</small></div>
   </div>
 </section>
@@ -229,11 +332,14 @@ window.addEventListener("DOMContentLoaded", function () {
   var ctl = PhonePad.pad({
     body: document.body, status: status, codeIn: $("code"), connect: $("connect"),
     gas: $("gas"), brake: $("brake"), lookBack: $("b-look"), center: $("b-center"), rim: $("rim"),
-    buttons: { shiftUp: $("b-shiftUp"), shiftDown: $("b-shiftDown"), overtake: $("b-overtake"),
-               boost: $("b-boost"), aero: $("b-aero"), camera: $("b-camera"), radio: $("b-radio"),
-               recover: $("b-recover"), pause: $("b-pause") },
+    buttons: { shiftUp: $("b-shiftUp"), shiftDown: $("b-shiftDown"), overtake: [$("b-overtake"), $("b-ot-big")],
+               boost: [$("b-boost"), $("b-boost-big")], aero: $("b-aero"), camera: $("b-camera"), radio: $("b-radio"),
+               recover: $("b-recover"), pause: [$("b-pause"), $("b-pause-menu")],
+               navUp: $("b-navUp"), navDown: $("b-navDown"), navLeft: $("b-navLeft"), navRight: $("b-navRight"),
+               navSelect: $("b-navSelect"), navBack: $("b-navBack") },
     hud: { gear: $("h-gear"), speed: $("h-speed"), lap: $("h-lap"), pos: $("h-pos"), ers: $("h-ers"), flag: $("h-flag"),
            ot: $("h-ot"), aero: $("h-aero"), last: $("h-last"), leds: $("leds"), screen: $("screen"), team: document.documentElement,
+           mtitle: $("mp-title"),
            body: document.body },
   }, {
     onOpen: function () {
@@ -245,20 +351,40 @@ window.addEventListener("DOMContentLoaded", function () {
     onClose: function () { $("link").textContent = "LINK CLOSED"; },
   });
   window.__apexPad = ctl;   // the console/test handle, mirroring window.__apex on the game
+  // LANDSCAPE LOCK where the platform has one. Android needs fullscreen before
+  // screen.orientation.lock, and both need a user gesture, so they ride the
+  // CONNECT tap. iOS has neither: the #rotate card above is what it gets.
+  $("connect").addEventListener("click", function () {
+    try {
+      if (!(screen.orientation && screen.orientation.lock) || !matchMedia("(pointer: coarse)").matches) return;
+      var el = document.documentElement;
+      var fs = el.requestFullscreen ? el.requestFullscreen({ navigationUI: "hide" }) : Promise.resolve();
+      fs.then(function () { return screen.orientation.lock("landscape"); }).catch(function () {});
+    } catch (e) {}
+  }, { capture: true });
   // ?demo — the wheel with a moving sample dash and no link, for a look at the
-  // layout; ?demo=auto shows it with gears, throttle and aero on AUTO.
+  // layout; ?demo=auto shows it with gears, throttle and aero on AUTO;
+  // ?demo=menu shows the menu pad (the game out of a race).
   if (/[?&]demo\b/.test(location.search)) {
     document.body.classList.add("linked");
     $("link").textContent = "DEMO · NOT LINKED";
     var auto = /[?&]demo=auto\b/.test(location.search) ? (PhonePad.DASH.gearsAuto | PhonePad.DASH.throttleAuto | PhonePad.DASH.aeroAuto) : 0;
     var still = /[?&]still\b/.test(location.search);   // &still: rim level, for a screenshot
+    var menu = /[?&]demo=menu\b/.test(location.search);
+    // A tap arms the real sensor (iOS asks inside the tap): the demo rim then
+    // follows the phone in the hand instead of the sine wave.
+    var live = false;
+    document.addEventListener("pointerdown", function () {
+      if (live) return;
+      ctl.armSensor().then(function (ok) { live = ok; if (ok) $("link").textContent = "DEMO · TILT THE PHONE"; });
+    }, { once: false });
     var t0 = performance.now();
     var demo = function () {
       var t = (performance.now() - t0) / 1000, rev = (Math.sin(t * 1.7) + 1) / 2;
       ctl.paintHud({ gear: 3 + Math.floor(t % 5), kmh: 140 + Math.round(rev * 170), rpm: 0.35 + rev * 0.65, lap: 4, laps: 12,
         pos: 6, cars: 20, ers: (Math.cos(t / 3) + 1) / 2, flags: auto | (rev > 0.9 ? PhonePad.DASH.redline : PhonePad.DASH.otArmed),
-        caution: 0, lastLapMs: 91234, state: "race", team: "#00b4ab" });
-      if (!still) ctl.setRoll(Math.sin(t / 2) * 25);
+        caution: 0, lastLapMs: 91234, state: menu ? "menu" : "race", team: "#00b4ab" });
+      if (!still && !live) ctl.setRoll(Math.sin(t / 2) * 25);
       requestAnimationFrame(demo);
     };
     requestAnimationFrame(demo);

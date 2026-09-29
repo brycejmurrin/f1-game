@@ -233,12 +233,27 @@ The same wire, one seat, no race state: Settings › CONTROLS › PHONE AS
 CONTROLLER mints a room code, paints a QR for `controller.html#pad=CODE`, and
 hosts the room exactly as VS FRIEND does (`NetTransport.rtc` → `NetHandshake.createInvite`
 → `NetRendezvous.hostRoom`). The phone page joins with `swap` + `acceptInvite`
-(2.5 s gather, like the lobby's room-code guest). Once the DataChannels open:
+(2.5 s gather, like the lobby's room-code guest). The phone reaches that page
+by QR, by typing the URL, or by its own door: on a coarse pointer the title
+screen shows USE AS CONTROLLER and CONTROLS shows USE THIS PHONE AS THE
+CONTROLLER (`#mb-phonepad`, `#pm-phonepad-go`), a plain navigation to
+`controller.html` where the code is typed — `syncPointerKind()` in js/game.js
+flips both live with `body.desktop`, so a mouse never sees them. The wheel is
+LANDSCAPE ONLY (portrait shows a TURN THE PHONE card; Android locks the
+orientation behind fullscreen on the CONNECT tap, iOS has no lock) and refuses
+double-tap and pinch zoom the way index.html does (`touch-action: none` on
+every wheel element, a touchend/dblclick/GestureEvent canceller). Once the
+DataChannels open (out of a race, or paused, the dash's `state`/`paused` swap the
+wheel for a MENU PAD screen — `body.menu` shows `#menupad`: a D-pad under the
+left thumb, BACK and SELECT under the right, the title and PAUSE/RESUME between
+— whose events land on the gamepad's menu seam in js/input/input.js,
+`padNavKey` / `padActivate` / `padEscape`, so the phone walks every menu the pad
+can):
 
 | Channel | Direction | Payload |
 |---|---|---|
 | `state` (unreliable) | phone → desktop | `[1, seq, rollDeg\|null, thr, brk, heldBits]` on every `deviceorientation` (≤ ~66 Hz) and a 100 ms heartbeat; the desktop drops any `seq` older than the last applied |
-| `event` (reliable) | phone → desktop | `{t:"ev", k}` — `shiftUp shiftDown overtake boost aero camera recover radio calib pause` |
+| `event` (reliable) | phone → desktop | `{t:"ev", k}` — `shiftUp shiftDown overtake boost aero camera recover radio calib pause`, and the MENU PAD's `navUp navDown navLeft navRight navSelect navBack` (a held direction repeats at 380 ms then 110 ms) |
 | `state` (unreliable) | desktop → phone | the DASH, `["H", gear, kmh, rpmFrac, lap, laps, pos, cars, ers, flagBits, caution, lastLapMs, state, teamHex]` at ~15 Hz (`HUD_MS`), sampled by `phonePadDash()` in js/game.js from the fields js/ui/hud.js reads; `PhonePad.paintHud()` draws it on the wheel's LCD (gear, speed, 15 rev LEDs, lap, position, ERS bar, OT/aero state, flag); its flag bits also carry the CONTROL MODES (`gearsAuto`, `throttleAuto`, `aeroAuto`, `aeroNone`), which the wheel turns into layout — no paddles on AUTO gears, an inert GAS plate on AUTO throttle, AERO greyed on AUTO or a circuit without zones (`controller.html?demo=auto`) |
 | `event` (reliable) | desktop → phone | `{t:"hap", ms}` — every `Input.vibrate()` while the phone is the live source |
 
@@ -247,13 +262,17 @@ same `tiltRaw`/`tiltSmoothed` the local sensor does, so the One-Euro filter,
 dead zone, `MAX_TILT` and slew — every TILT slider — and RECALIBRATE act on the
 phone. The source is freshness-gated (`REMOTE_STALE_MS` 700): it sits between
 the gamepad and the on-screen modes in `Input.steer()` and simply falls out
-when the phone stops sending. Roll on both ends is `TiltRoll.rollDeg()`
+when the phone stops sending; a phone whose samples carry no roll (no motion
+sensor, permission refused) keeps its pedals and buttons but never takes the
+wheel (`Input.remoteSteers()`), so the local arrows or a drag still steer. Roll on both ends is `TiltRoll.rollDeg()`
 (`js/input/tilt-roll.js`). Bluetooth is not an option for a web page: no
 browser lets a phone advertise as a peripheral or an HID gamepad.
 
-The phone page is drawn as an F1 wheel: the rim (an inline SVG) rotates with the
-phone's roll, paddles behind the grips shift, the grips' thumb zones are GAS and
-BRAKE (travel along the zone), the face buttons are the pad's in-race controls,
+The phone page is drawn as an F1 wheel laid out like the game's own tilt docks
+(`layoutDocks` in js/game.js): the LEFT grip is the gears, UP over DN (with
+gears on AUTO, OT and BOOST instead), the RIGHT grip the pedals, BRAKE over GAS
+(travel along the zone); the rim (an inline SVG) rotates with the phone's roll
+and the face buttons are the pad's remaining in-race controls,
 and `controller.html?demo` animates a sample dash with no link.
 
 Deploy notes: `controller.html` is a ROOT page (`pages.yml` stages it by name;

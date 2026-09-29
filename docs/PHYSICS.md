@@ -130,7 +130,7 @@ above in the same day's merge; `tests/unit/physics-rows-vm.test.mjs` pins
 both.)
 
 **ACTIVE AERO (X-mode / Z-mode)** is the THIRD straight-line lever, next to
-BOOST (spends the battery) and OVERTAKE (a free, proximity-gated push). It adds
+BOOST (spends the battery) and OVERTAKE (an extra 0.5 MJ allowance earned at the detection line). It adds
 NO thrust and spends NO energy — it trades **downforce for drag**, the 2026
 moveable-wing rules. Z-mode (the default) is flaps shut and full downforce;
 X-mode is flaps open, `xVmaxGain(c)` on top speed and `xCoastCut(c)` off the
@@ -225,20 +225,51 @@ so it inherits DRS's safety restrictions; active aero inherits none of them.
 
 | | ACTIVE AERO (X-mode) | OVERTAKE |
 |---|---|---|
-| proximity to the car ahead | **none** — leader and backmarker alike | within `OT_GAP` (1 s) |
-| where | inside an ACTIVATION ZONE only | anywhere |
+| proximity to the car ahead | **none** — leader and backmarker alike | under `OT_GAP` (1 s) AT THE DETECTION LINE |
+| where | inside an ACTIVATION ZONE only | anywhere on the lap after it was earned |
 | opening lap | **available** | disabled until the LEADER completes lap 1 |
-| under a caution | available | disabled |
+| under the Safety Car / red | available | disabled (and not earned) |
+| LOW GRIP (wet: treaded tyres) | **partial** — half the trade | disabled |
 | circuit with no zones | unavailable (Monaco) | available |
+
+**THE 2026 OVERTAKE RULE** (FIA 2026 F1 Sporting Regulations Section B Iss. 07,
+B7.2.3(c); `js/race/overtake-mode.js`). One DETECTION LINE per circuit — 90 % of
+the lap from the timing line unless the circuit def sets `otDetectFrac` (authored
+like every frac-keyed table, so it goes through `TrackSpace.sceneryFrac` and
+honours `def._sceneryShift`). A car under 1 s behind the car ahead ON THE ROAD
+when it crosses that line is EARNED (`c.otEarned`); at the Activation Line (the
+timing line, the lap counter ticking) it is GRANTED an allowance for that one
+lap (`c.otE`), which lapses unspent at the next line. Energy: `c.energy` is the
+battery as 0..1 of the Energy Store's 4 MJ window (`ES_MJ`), so the 0.5 MJ
+(`OT_MJ`) allowance is 0.125 of the same unit — held SEPARATELY (it is an extra
+allowance, not a battery draw) and spent at the rate that empties it over
+`otTimeFor(c)` seconds of push (3.2–5.2 s by the ERS part), because Overtake's
+push is the profile ABOVE the normal taper, not a second full deploy. So a full
+allowance is exactly the push the game was tuned to; what changed is where it is
+earned and that there is no lockout. The player's button TOGGLES it (the input is
+an edge, like BOOST; a second press stops and keeps the rest); the AI's existing
+fire roll (`AiDrive.otShouldFire`, only while a car is within 1 s) switches it on
+and it runs out. Below `OT_MIN_SPEED` the push pauses rather than cancels.
+Sources: formula1.com "All you need to know about F1's new power units" (detection
+point nominally the final corner, +0.5 MJ, following lap only); the-race.com
+"Boost, overtake mode, active aero — key 2026 F1 terms explained".
 
 `otEnabled()` (a game.js delegate to `RaceControl`, `js/race/race-control.js`) is the race-wide gate — it reads `ranked[0].lap` (the
 LEADER's, because a field-wide switch is what race control throws, and it is
-O(1) since `ranked` is already sorted) and `caution.level`. `c.otArmed` folds
-that together with the car's own gap and cooldown. The HUD says `NO OVERTAKE`
-and fades the button while the gate is shut, because "not armed yet" (keep
-closing) and "switched off" (nothing you do will arm it) are different messages;
-the lockout after a push is a third one, `COOLDOWN 12` counting down in whole
-seconds (it used to read `OVERTAKE` at half opacity, which is not a message).
+O(1) since `ranked` is already sorted), `caution.level` and `lowGrip()`.
+`RaceControl.otDetectOpen()` is the earning gate at the detection line (no SC /
+red / low grip — a queue bunched under the SC would otherwise all earn it for the
+restart lap). `c.otArmed` folds the race gate together with the car's own
+allowance, speed and pit limiter. The HUD says `OT · CAUTION` / `OT · LOW GRIP` /
+`OT · LAP 1` and fades the button while the gate is shut, because "not armed yet"
+and "switched off" are different messages; `OT · NEXT LAP` is earned-not-granted,
+`OT READY 0.50 MJ` the allowance, `OVERTAKE 0.31 MJ` what is left mid-push.
+
+**LOW GRIP** (B7.1.2(b), B7.2.2(d)): when `TyreModel.treadFor(raceWeather,
+roadWetness())` asks for treaded tyres, `aeroWetK()` halves `xVmaxGain`,
+`xDfLoss` and `xCoastCut` (partial active aero: half the top-speed gain for half
+the downforce and drag change), Overtake is off, and race control shows
+`LOW GRIP — OVERTAKE OFF` once a race. On slicks the factor is exactly 1.
 `tests/specs/aero-zones.spec.js` pins both halves, driving a REAL opening lap —
 `setLap()` moves only the player's counter, so a teleport cannot exercise a
 leader-based gate.
@@ -902,6 +933,7 @@ it lands.
 | `js/game.js` | `drivingLineApi` (feeds `js/render/shared/driving-line.js`) | **surface** | the DRIVING LINE ribbon: the adapter hands the builder the static curvature LUT, read once per circuit to place the line and shade its braking zones; a picture on the road, no car reads it. Same lateral formula as the assist-gated `lineX` so the two agree. The builder it feeds ALSO derives an audible cue — see the `driving-line.js` row |
 | `js/render/shared/driving-line.js` | ribbon `build`/`speedAt`, plus `cue()` | **assist-gated** | the ribbon itself is surface; `cue()` turns the LUT's cornering speed into a brake-urgency ramp that `js/game.js:4062` hands to `GameAudio.brakeCue` — AUDIBLE TO THE PLAYER, but gated by `DrivingLineOpts.brakeCue()` and audio-only: no force, torque or steer path. Escaped this table until 2026-09-22 because it reads an INJECTED `api.curvature(s)`, which the guard's alias test could not see |
 | `js/track/scenery/pits.js` | `ctx.curvature(box.s)` at the pit-box rows | **surface** | static dressing: each box's yaw follows the pit-lane arc, resolved once per circuit at build time and never read back by a car |
+| `js/race/real-race.js` | `dropSpeed()` at a mid-race JUMP IN | **AI-only** | the speed a car is DROPPED IN at without a real trace: the AI's own corner model and entry budget (`AiDrive.cornerSpeed`, `BRAKE`) over the next 220 m, read once at the drop for cars the AI drives — the seat car is handed to the AI (`setCarRole(me, false)`) BEFORE the drop and stays its for the 4 s hand-over, so no player-driven car ever takes the value; with the positions loaded the speed is the real car's instead |
 | `js/game.js` | `coast` | **broadcast-only** | runs only on `c.finished` cars — driving control is already disconnected. Any future reuse of `coast()` on a live car is a BLOCKER |
 | `js/race/pit-lane.js` | `entryRunM` | **surface** | where the pit lane OPENS, walked back from the start/finish line once per circuit to find where the last corner lets go. The aero-zones row below is the precedent and this is the same shape: a fixed zone computed from the static arc, gating a driver-INITIATED action (calling a stop) identically for every car, no force path, nothing read per frame. Replaced a flat 320 m that landed Monza's entry inside Parabolica — where the commit gesture (hold the pit side) asks a driver to hold a line mid-corner. Threshold 0.0035 (r ~= 285 m) is deliberately looser than a DRS zone's 0.0014: an entry needs "not actively cornering", not a proper straight |
 | `js/physics/aero-zones.js` | `build` | **surface** | fixed FIA-style activation zones computed once per circuit; gates the driver-INITIATED X-mode button identically for all cars; no steer torque |

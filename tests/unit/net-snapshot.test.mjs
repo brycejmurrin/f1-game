@@ -388,3 +388,35 @@ test("a car that is speeding up while flagged braking is not accelerated further
   assert.equal(o.s, 104 + 45 * 0.1, "no negative deceleration");
   assert.equal(o.speed, 45);
 });
+
+test("the adaptive delay follows one-way LATENCY, so a slow link interpolates instead of extrapolating every frame", () => {
+  // Bug hunt 2026-09-28: the delay tracked jitter only, capped at 180 ms.
+  // sample() aims at now − delayMs on the synced clock, so on a link slower
+  // than the delay one way (or through the host RELAY, whose stamp is already
+  // a delay old) every frame was past the newest packet: x, heading and speed
+  // frozen between packets, the rival stepping sideways at the publish rate.
+  const buf = NetSnapshot.createInterp({ total: TOTAL, delayMs: 100, adaptive: true });
+  const LAG = 160;                                   // one-way, on the synced clock
+  let extrapolatedLate = 0, framesLate = 0;
+  for (let i = 0; i < 400; i++) {
+    const t = 1000 + i * 50, arrival = t + LAG;
+    buf.push(t, car({ s: (i * 2) % TOTAL, speed: 40 }), arrival);
+    // Frames between this packet and the next, as the game draws them.
+    for (let f = 1; f <= 3; f++) {
+      const out = buf.sample(arrival + f * 16);
+      if (i >= 200) { framesLate++; if (out.extrapolated) extrapolatedLate++; }
+    }
+  }
+  const timing = buf.timing();
+  assert.ok(timing.delayMs > LAG, "the delay settles above the observed lag: " + JSON.stringify(timing));
+  assert.ok(timing.delayMs <= 400, "…and under the cap");
+  assert.equal(extrapolatedLate, 0, "once settled, no frame extrapolates on a steady link (" + extrapolatedLate + "/" + framesLate + ")");
+  // A stall is not a latency: one packet arriving a second late does not
+  // drag the delay to a second.
+  buf.push(1000 + 400 * 50, car({ s: 0, speed: 40 }), 1000 + 400 * 50 + 1000);
+  assert.ok(buf.timing().lagMs <= 400);
+  // And the base delay is the floor: a fast link is not slowed down.
+  const fast = NetSnapshot.createInterp({ total: TOTAL, delayMs: 100, adaptive: true });
+  for (let i = 0; i < 100; i++) fast.push(1000 + i * 50, car({ s: i }), 1000 + i * 50 + 20);
+  assert.ok(Math.abs(fast.timing().delayMs - 100) < 5, "a 20 ms link keeps the base delay: " + fast.timing().delayMs);
+});

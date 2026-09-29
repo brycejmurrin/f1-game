@@ -200,6 +200,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/data-api-status.test.mjs",
   "tests/unit/scenery-api-contract.test.mjs",
   "tests/unit/scenery-guards.test.mjs",
+  // Suzuka figure-8 green span must sit flush on the lifted ribbon (clearance ≤ 0.5 m) — a prior overheadSpan at clearance 8.6 hung ~8 m above the SRTM-baked back-straight. Pure verify-track diagnostics, ~2 s.
+  "tests/unit/suzuka-crossover-span.test.mjs",
   "tests/unit/track-build-vm-release.test.mjs",
   "tests/unit/baked-model-road-guard.test.mjs",
   "tests/unit/floodmast-lamp-register.test.mjs",
@@ -338,6 +340,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/start-race-latch.test.mjs",
   "tests/unit/session-entry-vm.test.mjs",
   "tests/unit/red-flag-fuel-vm.test.mjs",
+  // ...and the REAL REPLAY on the real Baku build: OpenF1's x/y fitted onto the
+  // centreline, the highlights list, the field as puppets (follow, speed, a car
+  // whose data ends, the flag) and the exact JUMP IN. Four game boots, ~12 s.
+  "tests/unit/real-replay-vm.test.mjs",
   "tests/unit/gfx-debug-overlay.test.mjs",
   "tests/unit/car-presentation-canary.test.mjs",
   "tests/unit/car-wing-foil.test.mjs",
@@ -404,6 +410,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/store-cross-tab.test.mjs",
   "tests/unit/comment-citations.test.mjs",
   "tests/unit/race-control.test.mjs",
+  "tests/unit/overtake-mode.test.mjs",
   "tests/unit/sporting-regs.test.mjs",
   "tests/unit/ai-drive.test.mjs",
   "tests/unit/brake-cue.test.mjs",

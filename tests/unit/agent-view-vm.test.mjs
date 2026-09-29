@@ -704,7 +704,7 @@ test("ERS reports deployment and the overtake window, not just charge", async ()
   await load();
   const e = g.apex.world({ detail: "drive" }).ego.ers;
   truthy(e);
-  for (const k of ["charge", "deploying", "overtakeArmed", "boostRemainingS", "cooldownS"]) {
+  for (const k of ["charge", "deploying", "overtakeArmed", "boostRemainingS", "overtakeEarned", "overtakeMJ"]) {
     hasProp(e, k, k + " missing from ers");
   }
   gte(e.charge, 0);
@@ -789,7 +789,7 @@ test("pacenotes render the road ahead as a rally-style callout", async () => {
 
 // ── frame() cameras and edges ───────────────────────────────────────────────
 
-test("renders any of the 13 camera modes without a live frame", async () => {
+test("renders any of the 14 camera modes without a live frame", async () => {
   await load("monza", 0.05, 60);
   const cock = g.apex.render({ what: "view", cols: 32, camera: "cockpit" });
   const heli = g.apex.render({ what: "view", cols: 32, camera: "heli" });

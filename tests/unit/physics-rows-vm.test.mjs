@@ -158,31 +158,44 @@ test("touch steering has no pedal to release, so auto gas rescues a wedged car �
 
 // ---------------------------------------------------------------------------
 // Row 4 — js/game.js overtake proximity: the car ahead ON THE ROAD (docs/
-// PHYSICS.md "within OT_GAP of the car ahead"), not ranked[rank-2].
+// PHYSICS.md "within OT_GAP of the car ahead"), not ranked[rank-2]. Since the
+// 2026 Overtake rule (B7.2.3(c), js/race/overtake-mode.js) that proximity is
+// judged AT THE DETECTION LINE and the allowance is granted at the timing line.
 // ---------------------------------------------------------------------------
-test("overtake arms on the car ahead on the road: a backmarker 0.55 s ahead arms it, a finished car ahead in classification does not", async () => {
+test("overtake is earned on the car ahead on the road at the detection line: a backmarker 0.55 s ahead earns it, a finished car ahead in classification does not", async () => {
   await startRace();
   const a = g.apex, p = g.G.player, L = g.G.track.total;
-  a.jump(0.0, 55, 0); a.setInput({ steer: 0, throttle: true });
+  const det = 0.9;   // OvertakeMode.DETECT_FRAC (monza sets no otDetectFrac)
+  const before = (m) => det - m / L;
+  a.jump(before(40), 55, 0); a.setInput({ steer: 0, throttle: true });
   for (let i = 0; i < 5; i++) a.step(1 / 60, 1);
   const [ri] = a.rivals([{ dProg: 30, dx: 0, speed: 55 }]);
   const r = g.G.cars[ri];
   // The player LEADS on lap 3; the rival is a lap down, 30 m ahead on the road.
   p.lap = 3; p.prog = 3 * L + p.s;
   r.lap = 2; r.prog = p.prog + 30 - L;
-  p.otCool = 0; p.otT = 0;
-  a.step(1 / 60, 1);
+  for (let i = 0; i < 120 && !(p.s > det * L + 2); i++) a.step(1 / 60, 1);
+  assert.ok(p.s > det * L, `the player crossed the detection line (s=${p.s.toFixed(0)} of ${(det * L).toFixed(0)})`);
   assert.equal(p.rank, 1, "the player leads the classification");
   assert.ok(g.G.otEnabled(), "race-wide overtake gate open (leader past lap 1)");
-  assert.ok(p.speed > 40, `at speed (${p.speed.toFixed(1)} m/s)`);
-  assert.equal(p.otArmed, true, "a backmarker 30 m (0.55 s) ahead on the road arms OVERTAKE for the leader");
-  // Same rival, now the car directly ahead in classification AND on the road —
-  // but finished and coasting. Nothing to attack.
-  r.prog += L; r.lap = 3; r.finished = true; r.speed = 0;
-  p.otCool = 0; p.otT = 0;
+  assert.equal(p.otEarned, true, "a backmarker ~0.55 s ahead on the road at the detection line earns OVERTAKE for the leader");
+  assert.equal(p.otArmed, false, "not usable yet: the allowance is granted at the timing line");
+  // The timing line: the lap counter ticks and the allowance lands.
+  p.lap = 4; p.prog += L; r.prog += L;
   a.step(1 / 60, 1);
+  assert.ok(Math.abs(p.otE - 0.125) < 1e-9, `0.5 MJ = 0.125 of the 4 MJ battery unit granted (otE=${p.otE})`);
+  assert.equal(p.otArmed, true, "and armed for the lap");
+  assert.equal(p.otEarned, false, "the earn is spent by the grant");
+
+  // Same rival, now the car directly ahead in classification AND on the road —
+  // but finished and coasting. Nothing to attack, so nothing is earned.
+  a.jump(before(40), 55, 0);
+  p.lap = 4; p.prog = 4 * L + p.s;
+  r.prog = p.prog + 30; r.lap = 4; r.finished = true; r.speed = 0;
+  for (let i = 0; i < 120 && !(p.s > det * L + 2); i++) a.step(1 / 60, 1);
+  assert.ok(p.s > det * L, "crossed the detection line again");
   assert.equal(r.rank, 1, "the finished car is one place up");
-  assert.equal(p.otArmed, false, "a finished car ahead does not arm OVERTAKE");
+  assert.equal(p.otEarned, false, "a finished car ahead does not earn OVERTAKE");
   a.clearInput();
 });
 
@@ -401,4 +414,27 @@ test("load sensitivity: both axles carry the LOAD_SENS factor, static balance is
   assert.equal(grip(0), 1, "at rest the factor is 1 on both axles");
   const braking = grip(0.18);   // the WT_LONG clamp's braking end (game.js: clamp(..., -0.16, 0.18))
   assert.ok(braking < 0.995 && braking > 0.975, `full braking should cost ~1.3 % of lateral grip, got ${(100 * (1 - braking)).toFixed(2)} %`);
+});
+
+// ---------------------------------------------------------------------------
+// LOW GRIP (FIA 2026 B7.1.2(b) / B7.2.2(d)): in treaded-tyre conditions active
+// aero is PARTIAL — half the straight-mode top-speed gain, half the downforce
+// given up, half the coast-drag cut — and Overtake is off. The dry car's
+// numbers are untouched (aeroWetK is exactly 1 on slicks).
+// ---------------------------------------------------------------------------
+test("low grip halves the active-aero trade and switches Overtake off; the dry car is untouched", async () => {
+  const a = g.apex;
+  a.setPhysics(PHYS0); a.headless(false);
+  await g.race("monza", "day", "dry");
+  a.go(); a.jump(0.1, 60, 0); a.step(1 / 60, 1);
+  const dry = a.physState();
+  assert.equal(g.G.cautionInfo().lowGrip, false);
+  await g.race("monza", "day", "wet");
+  a.go(); a.jump(0.1, 60, 0); a.step(1 / 60, 1);
+  const wet = a.physState();
+  assert.equal(g.G.cautionInfo().lowGrip, true, "a wet race is a low-grip race");
+  assert.ok(Math.abs(wet.xVmaxGain - dry.xVmaxGain / 2) < 1e-4, `top-speed gain halved (${dry.xVmaxGain} -> ${wet.xVmaxGain})`);
+  assert.ok(Math.abs(wet.xDfLoss - dry.xDfLoss / 2) < 1e-4, `downforce loss halved (${dry.xDfLoss} -> ${wet.xDfLoss})`);
+  assert.equal(g.G.otEnabled(), false, "Overtake is disabled in low grip");
+  await g.race("monza", "day", "dry");
 });

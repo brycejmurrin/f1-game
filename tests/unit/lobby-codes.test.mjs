@@ -17,8 +17,8 @@ function boot(opts = {}) {
     navigator: opts.share ? { share: async () => {} } : {},
     NetHandshake: {
       inviteFromUrl: (raw) => {
-        const m = String(raw).match(/[#&]vs=([^&\s]+)/);   // as js/net/handshake.js: a link ends at whitespace
-        return m ? m[1] : null;
+        const m = String(raw).match(/[#&]vs=([^&\s]+)/);   // as js/net/handshake.js: a link ends at whitespace...
+        return m ? m[1].replace(/[^A-Za-z0-9_-]+$/, "") : null;   // ...and a code never ends in punctuation
       },
       inviteUrl: (code) => "https://x.test/#vs=" + code,
     },
@@ -87,4 +87,23 @@ test("lobby-codes is on the lazy net roster ahead of lobby", () => {
   const iCodes = man.indexOf('"js/net/lobby-codes.js"');
   const iLobby = man.indexOf('"js/net/lobby.js"');
   assert.ok(iCodes > 0 && iLobby > iCodes, "lobby-codes.js must load before lobby.js");
+});
+
+test("codeFrom lifts a code out of a LINK inside a sentence, wrapped or followed by punctuation", () => {
+  const { LobbyCodes } = boot();
+  const body = "s." + "Q".repeat(60);
+  const code = "APEX1." + body;
+  // A sentence ends after the link: "…#vs=CODE." read as four dot-separated
+  // parts and was refused as not an Apex code; "(…#vs=CODE)" as corrupt.
+  assert.equal(LobbyCodes.codeFrom("Race me: https://x.test/#vs=" + code + "."), code);
+  assert.equal(LobbyCodes.codeFrom("(https://x.test/#vs=" + code + ")"), code);
+  // A plain-text mail client folds the link: the fragment after the fold is
+  // re-joined exactly as a bare code's is (2026-09-27), instead of stopping
+  // at the fold and handing on a truncated code.
+  const head = code.slice(0, 40), tail = code.slice(40);
+  assert.equal(LobbyCodes.codeFrom("https://x.test/#vs=" + head + "\n" + tail + "\nSent from my phone"), code);
+  // Zero-width characters a chat client slips into a long string are not
+  // whitespace to \s, and one of them made a good code "corrupt".
+  assert.equal(LobbyCodes.codeFrom(code.slice(0, 20) + "\u200B" + code.slice(20) + "\u00AD"), code);
+  assert.equal(LobbyCodes.codeFrom("https://x.test/#vs=" + code.slice(0, 20) + "\u2060" + code.slice(20)), code);
 });

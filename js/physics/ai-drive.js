@@ -971,6 +971,10 @@ const AiDrive = (function () {
     // change a set it has run off the cliff — gating these on `stopsLeft` left
     // every 0-stop car circulating on the wrong rubber, measured.
     if (ctx.wrongTread) return "weather";
+    // A SCRIPTED plan (a real race replayed) stops on its real laps and nowhere
+    // else: the caution reach would double-stop a car whose next real stop sat
+    // inside a held safety car, and the worn rule would add one the real race never made.
+    if (ctx.scripted) return ctx.stopsLeft > 0 && ctx.lapsToStop <= 0 ? "plan" : "";
     if (ctx.wear >= 1 && wornPays(ctx)) return "worn";
     if (ctx.stopsLeft <= 0) return "";
     if (ctx.cautionLevel >= 2 && ctx.lapsToStop <= CAUTION_REACH) return "caution";

@@ -77,7 +77,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_222 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_224 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -235,7 +235,9 @@ _222 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `spotter.js` | `Spotter` | tag | Spotter — "car left", "car right", "clear": the call a driver gets when a car is alongside, which a mirror at 300 km/h does not give you. |
 | `race-radio.js` | `RaceRadio` | tag | RACE RADIO: the race engineer's situational awareness and the TV commentator, on the one radio card (js/game.js announce()). |
 | `race-control.js` | `RaceControl` | tag | RACE CONTROL (RaceControl.create(G)) The flag state: green / local yellow / VSC / safety car, and the one rule that reads off it (whether OVERTAKE is … |
+| `overtake-mode.js` | `OvertakeMode` | tag | OVERTAKE MODE (FIA 2026 Sporting Regs B7.2.3(c)): one Detection Line per circuit, the 1 s check there, and the 0.5 MJ allowance granted at the Activation Line… |
 | `sporting-regs.js` | `SportingRegs` | tag | SPORTING REGULATIONS the player is held to, as pure rules. |
+| `real-replay.js` | `RealReplay` | tag | REAL REPLAY (RealReplay.create(G)) Recreates a real Grand Prix from OpenF1's car positions: every car posed each frame where it really was (x/y traces fitted… |
 | `real-race.js` | `RealRace` | tag | REAL RACE (RealRace.create(G)) Replays a real Grand Prix from a timing script (js/data/real-race-tab.js builds one from OpenF1): the real grid, every AI car… |
 | `weather-arc.js` | `WeatherArc` | tag | LIVE WEATHER + the DYNAMIC WEATHER ARC (WeatherArc.create(G, deps)): the one path a session's weather changes through, and the optional per-race progression… |
 | `quali-model.js` | `Quali` | tag | QUALIFYING: one flying lap, and the simulated times it is measured against. |
@@ -1222,12 +1224,12 @@ heading, `px/pz` world position); `s` (metres along centreline, wraps) and `x`
 arcade — vmax base `VMAX = 72` m/s scaled by tier (player = tier1 equivalent),
 electric deploy (`DEPLOY_A = 3.0` m/s²) tapers to 0 across the `TAPER_LO..TAPER_HI`
 = 41–53 m/s band, boost drains energy bar (recharges under braking + slow
-corners), OVERTAKE: when gap to car ahead < 1.0 s, OT light on; activating gives
-a full-taper-free deploy sized by the fitted ERS part — 3.2–5.2 s push, then a
-9–14 s cooldown (`OT_TIME_LO/HI` / `OT_COOL_LO/HI` in
+corners), OVERTAKE (2026 B7.2.3(c), `js/race/overtake-mode.js`): under 1.0 s
+behind at the circuit's detection line earns a 0.5 MJ allowance for the next lap,
+spent as a full-taper-free deploy while toggled on — a full allowance lasts
+3.2–5.2 s by the fitted ERS part (`OT_TIME_LO/HI`, `OT_MJ`/`ES_MJ` in
 `js/physics/consts.js`; a no-parts car sits at the midpoint). OT is FREE — it draws nothing
-from the battery and fires on a flat one; its OT_GAP/OT_COOL window is the only
-limiter. Grass (|x| > hw) = heavy drag.
+from the battery and fires on a flat one; the allowance is the only limiter. Grass (|x| > hw) = heavy drag.
 Walls sit at the per-node barrier limit from `Tracks.wallAt`: soft push back.
 Cars collide as ~4.8 × 2.0 m oriented boxes: lateral push + small speed loss.
 AI: follow racing-line offset = -curvatureAhead * k, brake by curvature, tier

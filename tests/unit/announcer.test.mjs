@@ -164,7 +164,10 @@ test("relief is only mentioned when there is some, and the figure is rounded DOW
 });
 
 test("night and weather are stated, and only one of them", () => {
-  assert.match(said(info({ track: { name: "Singapore", gp: "Singapore Grand Prix", lengthKm: 4.94, night: true } })), /under the lights/);
+  const sgp = { name: "Singapore", gp: "Singapore Grand Prix", lengthKm: 4.94, night: true };
+  assert.match(said(info({ track: sgp, tod: "default" })), /under the lights/, "a night circuit at its own time is a night race");
+  assert.doesNotMatch(said(info({ track: sgp, tod: "day" })), /under the lights/,
+    "TIME set to DAY (or a real race run in daylight) is lit by day: no floodlights in the read");
   assert.match(said(info({ tod: "night" })), /under the lights/);
   const wet = said(info({ weather: "rain" }));
   assert.ok(!/under the lights/.test(wet), "a wet night is about the water, not the floodlights");
@@ -807,4 +810,42 @@ test("a flyby with no room before the grid shot plays nothing — a zero budget 
   const a = An.create(G);
   assert.equal(a.play(info(), -1), false);
   assert.equal(synth.calls.filter((c) => c.m === "speak").length, 0);
+});
+
+// ── A REAL RACE from the Data Hub (js/race/real-race.js intro()) ──────────────
+test("a real race says whose car you took and from which lap, and a rolling join is not a grid", () => {
+  const real = { title: "2024 Italian Grand Prix", driver: "Charles Leclerc", startLap: 12, realLaps: 53, watch: false, reel: false };
+  const join = said(info({ gp: real.title, real, story: { real } }));
+  assert.match(join, /You take over Charles Leclerc's car on lap 12 of 53, with the field racing as it really ran\./);
+  assert.match(join, /A rolling start\. The car is yours in a few seconds\.$/, "a mid-race join is a rolling start, not 'N laps'");
+  assert.doesNotMatch(join, /12 laps\. Let's go racing/);
+  const r1 = { ...real, startLap: 1 };
+  const grid = said(info({ real: r1, story: { real: r1 } }));
+  assert.match(grid, /You start from Charles Leclerc's grid slot/);
+  assert.match(grid, /12 laps\. Let's go racing\.$/, "from lap 1 it is a race of the staged distance");
+  const w = { ...real, watch: true, reel: true };
+  const watch = said(info({ real: w, story: { real: w } }));
+  assert.match(watch, /Your camera follows Charles Leclerc\./);
+  assert.match(watch, /The highlights\. Sit back and watch it unfold\.$/);
+  assert.doesNotMatch(watch, /You take over|Let's go racing/, "a replay is watched, not raced");
+});
+
+test("a real race's story is the script's driver, never the roster seat's name, season or contract", () => {
+  const src = read("js/audio/announcer.js");
+  const body = src.slice(src.indexOf("function storyFor(info)"), src.indexOf("/** The results screen's read"));
+  assert.match(body, /const race = [^;]*&& !info\.real;/, "the seat / championship / goal / forecast rows stand down for a real race");
+  assert.match(body, /if \(info\.real\) st\.real = info\.real;/);
+});
+
+test('turning off an idle announcer does not cancel a different speaker', () => {
+  const {A: An,G,synth}=load(); const ann=An.create(G);
+  const before=synth.calls.filter(c=>c.m==='cancel').length;
+  ann.stop(); ann.setEnabled(false);
+  assert.equal(synth.calls.filter(c=>c.m==='cancel').length,before);
+});
+
+test('starting an announcer audition releases the radio owner and pending cue', () => {
+  const {A: An,G}=load(); let stops=0;
+  G.radio.stop=()=>{stops++;};
+  const ann=An.create(G); assert.equal(ann.sample(),true); assert.equal(stops,1); ann.stop();
 });

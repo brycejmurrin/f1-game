@@ -317,6 +317,28 @@ test("a dead relay is reported, never thrown", async () => {
   } finally { await r.close(); }
 });
 
+test("a captive portal answering 200 with HTML is 'relay', not 'offline'", async () => {
+  // A hotel network intercepts the request and returns its login page with a
+  // 200. That is not the service being unreachable — "offline" spent the
+  // poll's transient retries on it — it is this network intercepting traffic.
+  const server = http.createServer((req, res) => {
+    res.writeHead(200, { "content-type": "text/html" });
+    res.end("<html><body>Welcome to the hotel Wi-Fi</body></html>");
+  });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  NetRendezvous.setUrl("http://127.0.0.1:" + server.address().port);
+  try {
+    const res = await NetRendezvous.get("ABCDEF", "offer");
+    assert.equal(res.ok, false);
+    assert.equal(res.error, "relay");
+    assert.match(res.message, /intercepting/i);
+    assert.match(res.message, /invite link/i, "should point at the path that still works");
+  } finally {
+    NetRendezvous.setUrl(null);
+    await new Promise((r) => server.close(r));
+  }
+});
+
 test("an unreachable relay is reported, never thrown", async () => {
   const r = await relay();
   await r.close();                                  // nothing is listening now

@@ -112,13 +112,13 @@ test("the vendored tree is complete and self-contained", () => {
   assert.ok(fs.existsSync(path.join(VENDOR, "LICENSE-noble-secp256k1")));
 });
 
-test("every bare import in the vendored tree is covered by the importmap", () => {
+test("every bare import in the vendored tree is covered by EVERY page's importmap", () => {
   // The tree uses bare specifiers (@noble/secp256k1, @trystero-p2p/core). A
-  // browser resolves those ONLY through the importmap in index.html — miss one
-  // and the module fails to load with nothing in the console but a bad URL.
-  const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
-  const map = JSON.parse(html.match(/<script type="importmap">([\s\S]*?)<\/script>/)[1]).imports;
-
+  // browser resolves those ONLY through the page's importmap — miss one and
+  // the module fails to load with nothing in the console but a bad URL. Each
+  // page that imports the room service carries its own map, so each is
+  // checked: controller.html shipped without the schnorr entry on 2026-09-28
+  // and the phone's CONNECT failed with "'@noble/secp256k1' does not resolve".
   const bare = new Set();
   const walk = (dir) => {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -134,10 +134,15 @@ test("every bare import in the vendored tree is covered by the importmap", () =>
   walk(VENDOR);
 
   assert.ok(bare.size, "expected the vendored tree to use bare specifiers");
-  for (const spec of bare) {
-    assert.ok(map[spec], `importmap is missing "${spec}" — the module will not load`);
-    assert.ok(fs.existsSync(path.join(ROOT, map[spec].replace(/^\.\//, ""))),
-      `importmap points "${spec}" at a file that is not there`);
+  const pages = ["index.html", "controller.html"];
+  for (const page of pages) {
+    const html = fs.readFileSync(path.join(ROOT, page), "utf8");
+    const map = JSON.parse(html.match(/<script type="importmap">([\s\S]*?)<\/script>/)[1]).imports;
+    for (const spec of bare) {
+      assert.ok(map[spec], `${page}'s importmap is missing "${spec}" — the module will not load there`);
+      assert.ok(fs.existsSync(path.join(ROOT, map[spec].replace(/^\.\//, ""))),
+        `${page}'s importmap points "${spec}" at a file that is not there`);
+    }
   }
 });
 

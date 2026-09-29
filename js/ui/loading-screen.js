@@ -21,6 +21,11 @@
  *
  * Any pointer or key ends the screen early: it is a flourish, and a flourish
  * that cannot be skipped is a wait.
+ *
+ * THE SCREEN OUTLIVES THE FLYBY BY ONE MORE WAIT it did not use to cover: the
+ * backend compiles the race's programs on the first countdown frame and paints
+ * nothing until it is done. startRace raises the card again for exactly that
+ * window (handoff(), below) and lowers it with the first presented race frame.
  */
 const LoadingScreen = (function () {
   // The whole sequence's budget. js/camera/flyby-seq.js spends it across eight
@@ -618,8 +623,32 @@ const LoadingScreen = (function () {
       return true;
     }
 
+    /* THE HANDOFF. run() fires `go` (startRace) and the race owns the screen
+     * from then on — but not yet the CANVAS. The backend compiles the race's
+     * programs on the first countdown frame (gfx.warm(), spent inside present())
+     * and paints nothing until it is done, and the countdown waits with it: one
+     * to four seconds on a real GPU. Lowering the screen at once therefore put
+     * the HUD and an unlit gantry over whatever the canvas held — the flyby's
+     * last frame, or after the no-world card nothing at all — until the grid
+     * appeared. So startRace raises the screen again in this phase, DISARMED:
+     * the timer, the skip, the announcer and the radio went with the flyby they
+     * belonged to (clearMenuScreens' stop() ran), only the card and the vignette
+     * stay, and game.js lowers it from render() on the frame the backend
+     * actually presents the race — so the card gives way to the grid, never to
+     * a wait. Not active(): the race, not this screen, now decides what the
+     * canvas shows; and a `.screen` that is up keeps the HUD clusters hidden
+     * (css/hud.css) for exactly as long as there is nothing behind them. */
+    function handoff() {
+      stop();
+      const r = root();
+      if (!r) return false;
+      r.hidden = false;
+      setPhase("handoff");
+      return true;
+    }
+
     return {
-      run, stop, hold, building,
+      run, stop, hold, building, handoff,
       /** The next flyby's length (the short cut for a habitual skipper), so its
        *  shots are planned for the seconds they will actually have. */
       nextFlyMs: () => flyMsFor(readSkips()),

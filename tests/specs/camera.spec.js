@@ -17,7 +17,7 @@ test.describe("Apex 26 — player camera modes", () => {
       const bad = window.__apex.camera("banana");
       return { init, byId, byIdx, bad };
     });
-    expect(r.init.modes).toEqual(["chase", "far", "drift", "cockpit", "hood", "overhead", "heli", "reverse", "side", "cinematic", "low", "tcam", "rear"]);
+    expect(r.init.modes).toEqual(["chase", "far", "drift", "cockpit", "hood", "overhead", "heli", "reverse", "side", "cinematic", "low", "tcam", "rear", "visor"]);
     expect(r.byId.mode).toBe("cockpit");
     expect(r.byIdx.mode).toBe("chase");
     expect(r.bad).toBe(false);            // unknown mode is rejected, not crashed
@@ -36,7 +36,7 @@ test.describe("Apex 26 — player camera modes", () => {
       }
       return out;
     });
-    expect(seq).toEqual(["chase", "far", "drift", "cockpit", "hood", "overhead", "heli", "reverse", "side", "cinematic", "low", "tcam", "rear", "chase"]);
+    expect(seq).toEqual(["chase", "far", "drift", "cockpit", "hood", "overhead", "heli", "reverse", "side", "cinematic", "low", "tcam", "rear", "visor", "chase"]);
   });
 
   test("camera choice persists across a reload", async ({ page, loadTrack }) => {
@@ -54,7 +54,7 @@ test.describe("Apex 26 — player camera modes", () => {
     await loadTrack();
     await page.evaluate(() => { window.__apex.jump(0.0, 50, 0); window.__apex.snapCam(); });
     const MODES = ["chase", "far", "drift", "cockpit", "hood", "overhead", "heli",
-                   "reverse", "side", "cinematic", "low", "tcam", "rear"];
+                   "reverse", "side", "cinematic", "low", "tcam", "rear", "visor"];
     // MEASURED: locator.screenshot() costs ~21.9 s per call on this SwiftShader
     // box (camera switch 4 ms, 30 physics steps 32 ms). Capturing all 13 modes was
     // ~284 s of screenshots alone, which is what pushed this past its 120 s budget

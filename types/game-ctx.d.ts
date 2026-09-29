@@ -408,10 +408,10 @@ interface GameCtx {
   readonly openCoachDetails: () => void;
   /**
    * The radio's VOICE — js/audio/radio-voice.js. Always an object: create()
-   * hands back a frozen no-op (RadioVoice.inert) where speechSynthesis is
-   * missing, so no caller needs a guard. AudioPanel owns the toggle.
+   * hands back a frozen no-op when neither synthesis nor a recorded pack is
+   * available, so no caller needs a guard. AudioPanel owns the toggle.
    */
-  readonly radio: { setEnabled(b: boolean): void; setVolume(v: number): number; available(): boolean; unlock(): void; stop(): void };
+  readonly radio: { setEnabled(b: boolean): void; setVolume(v: number): number; available(): boolean; unlock(): void; stop(): void; yieldToSpotter(): boolean };
   /**
    * The PRE-RACE ANNOUNCER — js/audio/announcer.js. Always an object, on the
    * same inert() deal as `radio`. AudioPanel owns its switch and voice row;
@@ -422,11 +422,11 @@ interface GameCtx {
    * The RACE RADIO — js/race/race-radio.js: the engineer's race calls and the
    * in-race commentary. AudioPanel drives its two settings (chatter, commentary).
    */
-  readonly raceRadio: { update(dt: number): void; request(): string; reset(): void; setChat(v: string): string; setComm(v: string): string; chat(): string; comm(): string; debug(): Record<string, unknown> };
+  readonly raceRadio: { update(dt: number): void; request(): string; reset(): void; setChat(v: string): string; setComm(v: string): string; chat(): string; comm(): string; trafficBusy(): boolean; debug(): Record<string, unknown> };
   /** What the loading card describes — the flyby editor previews the same object. */
   readonly loadingInfo: () => Record<string, unknown>;
   /** js/ui/loading-screen.js, so the flyby editor can hold the card up and move it. */
-  readonly loadingScreen: { run(info: Record<string, unknown>, go: () => void): void; stop(): void; hold(info: Record<string, unknown>): boolean; card(): Record<string, number>; setCard(patch: Record<string, number>): Record<string, number>; resetCard(): Record<string, number>; progress(): number; active(): boolean; phase(): string };
+  readonly loadingScreen: { run(info: Record<string, unknown>, go: () => void): void; stop(): void; hold(info: Record<string, unknown>): boolean; handoff(): boolean; card(): Record<string, number>; setCard(patch: Record<string, number>): Record<string, number>; resetCard(): Record<string, number>; progress(): number; active(): boolean; phase(): string };
 
   readonly retireCar: (c: CarState, reason?: string) => void;
   readonly ranked: CarState[];
@@ -674,7 +674,6 @@ interface GameCtx {
   readonly drainFor: (c: CarState) => number;
   readonly regenFor: (c: CarState) => number;
   readonly otTimeFor: (c: CarState) => number;
-  readonly otCoolFor: (c: CarState) => number;
   readonly setCautionEnabled: (on: boolean) => void;
   readonly otEnabled: () => boolean;
 
@@ -700,6 +699,10 @@ interface GameCtx {
   readonly onIncidentLineCross: (c: CarState, cross: LineTransition, newS: number) => void;
   readonly setLightTune: (id: string, v: unknown) => void;
   readonly setWeatherLive: (w: Weather) => void;
+  /** A real replay: every car AI-flagged, this one local (camera, HUD, audio); nobody drives. */
+  readonly followCar: (c: CarState) => void;
+  /** A mid-race jump-in: the countdown becomes the race at once (no gantry, no launch model); false outside the countdown. */
+  readonly goRolling: () => boolean;
   /** Live time-of-day (read with no arg, write with tod). Rebuilds track when day/night flips. */
   readonly setTimeOfDay: (tod?: TimeOfDay) => TimeOfDay;
   /** Live weather (read with no arg, write with w). Same path as __apex.weather(). */
@@ -754,6 +757,8 @@ interface GameCtx {
   wxArcPlan: { to: Weather; dur: number } | null;
   readonly openGarageFrom: (from?: string) => void;
   readonly startRace: () => void;
+  /** The pre-race screen (card, flyby, announcer) before `go` — js/race/real-race.js routes the Data Hub's JUMP IN through it. */
+  readonly raceIntro: (go: () => void) => void;
   readonly startWeatherArc: (from: Weather, to: Weather, dur?: number) => void;
   readonly update: (dt: number) => void;
   /** Arc position wrapped into [0, track.total). */
@@ -825,6 +830,7 @@ declare const RaceControl: GameModuleFactory;
 declare const WeatherArc: GameModuleFactory;
 declare const DailyChallenge: GameModuleFactory;
 declare const RealRace: GameModuleFactory;
+declare const RealReplay: GameModuleFactory;
 declare const TitleMenu: GameModuleFactory;
 declare const Onboard: GameModuleFactory;
 declare const SetupCamera: GameModuleFactory;

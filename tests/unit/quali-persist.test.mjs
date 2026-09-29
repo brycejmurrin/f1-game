@@ -219,9 +219,18 @@ test("openQuali restores via begin(); quit-to-menu keeps persist; friend-race us
   assert.match(GAME, /isCareer\(\) && Career\.conflicted\(\)/);
   // The caution pace cap, now four levels deep: RED (4) stops the field at a
   // walking-pace floor rather than 0, so every "approaches vmax" fade stays
-  // finite; SC (3) and VSC (2) are the delta paces they always were.
-  assert.match(GAME, /vTop\(\) \* \(lvl >= 4 \? 0\.02 : lvl === 3 \? 0\.45 : 0\.6\)/);
-  assert.match(GAME, /if \(netPlay\.active\(\)\) netPlay\.stop\("local"\)/);
+  // finite; VSC (2) is the flat 0.6× delta; SC (3) queues via
+  // RaceControl.scQueueFrac (leader 0.45×, catch-up to 0.6× when > 1 s adrift)
+  // so a stop under the SC can close the train (B5.13) instead of freezing gaps.
+  // Nested vTop() inside scQueueFrac's args means a flat [^)]* needle cannot pin
+  // the call — pin the three-way shape and that SC routes through the queue.
+  assert.match(GAME, /vTop\(\) \* \(lvl >= 4 \? 0\.02[\s\S]*?lvl === 3 \? RaceControl\.scQueueFrac\([\s\S]*?\)\s*:\s*0\.6\)/);
+  assert.match(GAME, /RaceControl\.scQueueFrac\(c, cars, track\.total, ranked\[0\], vTop\(\), pits\.inLane\)/);
+  // RACE AGAIN / quit-to-menu end the session first. Unguarded since
+  // 2026-09-28: stop() on an INACTIVE session forgets a stale disconnect
+  // reason (a mid-race drop otherwise read "Disconnected" in every later solo
+  // race's pause menu), so the `if (netPlay.active())` guard went.
+  assert.match(GAME, /netPlay\.stop\("local"\);   \/\/ inactive after a mid-race drop/);
   assert.match(GAME, /if \(netPlay\.active\(\) \|\| qualiNet\.hasArmed\(\)\) return/);
   assert.match(SRC, /if \(!classification\.some\(\(r\) => r\.human\)\) return/);
 });

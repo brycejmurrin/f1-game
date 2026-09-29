@@ -501,7 +501,7 @@ const RaceInsights = (function () {
     function network() {
       const n = G.netPlay && G.netPlay.status ? G.netPlay.status() : null;
       if (!n) return null;
-      if (!n.active) return n.reason ? { text: "Disconnected — return to the lobby to reconnect", connected: false } : null;
+      if (!n.active) return n.reason && n.reason !== "local" ? { text: "Disconnected — return to the lobby to reconnect", connected: false } : null;
       const timing = (n.remotes || []).map(r=>r.timing).filter(Boolean);
       const delay = timing.length ? Math.max(...timing.map(t=>t.delayMs || 0)) : null;
       const rtt = n.net && n.net.rtt;

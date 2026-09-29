@@ -37,6 +37,8 @@ function bootInput() {
   const listeners = {};
   const clock = { t: 0 };
   const vibrated = [];
+  const keys = [];   // every synthetic key the menu seam dispatches at document
+  class FakeEvent { constructor(type, init) { this.type = type; Object.assign(this, init || {}); } }
   const el = () => ({
     addEventListener() {}, removeEventListener() {}, style: {}, dataset: {},
     classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
@@ -52,10 +54,13 @@ function bootInput() {
     removeEventListener() {}, setTimeout: () => 0, clearTimeout() {},
     navigator: { vibrate: (ms) => { vibrated.push(ms); return true; } },
     screen: {}, matchMedia: () => ({ matches: false, addEventListener() {} }),
+    KeyboardEvent: FakeEvent, Event: FakeEvent,
     document: {
       addEventListener: (t, f) => { (listeners[t] ||= []).push(f); }, removeEventListener() {},
       getElementById: el, querySelector: el, querySelectorAll: () => [], hidden: false,
       body: { classList: { add() {}, remove() {}, toggle() {} } },
+      activeElement: null,
+      dispatchEvent(e) { keys.push("doc:" + (e.key || e.type)); return true; },
     },
   };
   sb.window = sb;
@@ -70,7 +75,26 @@ function bootInput() {
   Input.reset();
   const key = (k, down) => (listeners[down ? "keydown" : "keyup"] || [])
     .forEach((f) => f({ key: k, code: k, repeat: false, preventDefault() {}, target: { tagName: "BODY" } }));
-  return { Input, key, clock, vibrated, pausedCount: () => paused };
+  return { Input, key, clock, vibrated, pausedCount: () => paused, sb, keys };
+}
+
+// Timers pad() can be handed instead of the wall clock (its `timers` seam).
+function fakeTimers() {
+  const q = []; let id = 0;
+  const t = {
+    setTimeout: (f, ms) => { q.push({ id: ++id, f, ms, every: 0 }); return id; },
+    setInterval: (f, ms) => { q.push({ id: ++id, f, ms, every: ms }); return id; },
+    clearTimeout: (i) => { const k = q.findIndex((e) => e.id === i); if (k >= 0) q.splice(k, 1); },
+    clearInterval: (i) => t.clearTimeout(i),
+    advance(ms) {
+      for (const e of [...q]) {
+        e.ms -= ms;
+        while (e.ms <= 0 && q.includes(e)) { if (e.every) { e.f(); e.ms += e.every; } else { t.clearTimeout(e.id); e.f(); } }
+      }
+    },
+    pending: () => q.length,
+  };
+  return t;
 }
 
 const STEP = 1000 / 60;
@@ -335,9 +359,14 @@ test("the dash reaches the phone ~15 Hz on the unreliable channel and paints the
   assert.equal(el.team.style["--team"], "#dc0000", "the LCD tints with the team");
   // Neutral in the pit lane, a caution on track, the lights before the start.
   PhonePad.paintHud(el, { ...phone.huds[0], gear: 0, kmh: 0, rpm: 0.2, state: "menu", flags: 0 });
-  assert.equal(el.gear.textContent, "N"); assert.equal(el.speed.textContent, "---"); assert.equal(el.flag.textContent, "PIT LANE");
+  assert.equal(el.gear.textContent, "N"); assert.equal(el.speed.textContent, "---"); assert.equal(el.flag.textContent, "MENU");
   assert.equal(el.leds.children.filter((s) => s.classes.has("on")).length, 0, "no rev lights out of the race");
   assert.ok(el.screen.classes.has("idle"));
+  assert.ok(el.body.classes.has("menu"), "out of a race the page shows the MENU PAD");
+  PhonePad.paintHud(el, { ...phone.huds[0], state: "race", flags: PhonePad.DASH.paused });
+  assert.ok(el.body.classes.has("menu") && el.flag.textContent === "PAUSED", "paused inside a race: the pad, for the pause menu");
+  PhonePad.paintHud(el, { ...phone.huds[0], state: "race", flags: 0 });
+  assert.ok(!el.body.classes.has("menu"), "racing again: the wheel");
   PhonePad.paintHud(el, { ...phone.huds[0], state: "race", caution: 3 });
   assert.equal(el.flag.textContent, "SAFETY CAR"); assert.ok(el.screen.classes.has("caution"));
   PhonePad.paintHud(el, { ...phone.huds[0], state: "count", flags: PhonePad.DASH.timeTrial });
@@ -365,7 +394,7 @@ test("the control modes reach the wheel's layout: no paddles on AUTO gears, no G
   const back = PhonePad.decodeHud(PhonePad.encodeHud({ ...base, flags: D.gearsAuto | D.throttleAuto | D.aeroAuto | D.aeroNone }));
   assert.equal(back.flags, D.gearsAuto | D.throttleAuto | D.aeroAuto | D.aeroNone, "the mode bits survive the wire");
   const page = read("controller.html");
-  for (const rule of ["body.gears-auto .paddle", "body.throttle-auto #gas", "body.aero-auto #b-aero, body.aero-none #b-aero"]) {
+  for (const rule of ["body.gears-auto .shift", "body.gears-auto .tap { display: flex; }", "body.throttle-auto #gas", "body.aero-auto #b-aero, body.aero-none #b-aero"]) {
     assert.ok(page.includes(rule), `controller.html styles ${rule}`);
   }
   assert.match(read("js/game.js"), /gearsManual\(\) \? 0 : D\.gearsAuto[\s\S]*autoThrottle\(\) \? D\.throttleAuto[\s\S]*raceAeroMode === "auto" \? D\.aeroAuto[\s\S]*D\.aeroNone/,
@@ -398,6 +427,27 @@ test("Input.reset() (blur / everything-off) clears the phone's pedals until it r
   assert.equal(Input.throttle(), true, "the next sample restores it — the phone is still pressing");
 });
 
+test("menu pad: the phone's nav events land on the gamepad's menu seam (arrows, activate, back)", () => {
+  const { Input, sb, keys } = bootInput();
+  // No menu on top: a direction is a no-op, not a stray key into the race.
+  assert.equal(Input.remoteEvent("navDown"), true); assert.deepEqual(keys, []);
+  // A menu with nothing focused: the first press SEEDS focus (ArrowDown), as the pad's first press does.
+  const btn = { tagName: "BUTTON", disabled: false, clicks: 0, click() { this.clicks++; }, matches: () => true,
+    dispatchEvent: (e) => { keys.push("btn:" + (e.key || e.type)); return true; } };
+  const layer = { tagName: "DIV", contains: (n) => n === btn, dispatchEvent: (e) => { keys.push("layer:" + e.type); return true; } };
+  sb.MenuNav = { activeLayer: () => layer, FOCUSABLE: "button" };
+  sb.UiLayers = { top: () => layer };
+  Input.remoteEvent("navRight");
+  assert.deepEqual(keys, ["doc:ArrowDown"], "seeded, not moved");
+  sb.document.activeElement = btn;
+  Input.remoteEvent("navRight"); Input.remoteEvent("navUp"); Input.remoteEvent("navLeft"); Input.remoteEvent("navDown");
+  assert.deepEqual(keys.slice(1), ["btn:ArrowRight", "btn:ArrowUp", "btn:ArrowLeft", "btn:ArrowDown"], "arrows at the focused control");
+  Input.remoteEvent("navSelect"); assert.equal(btn.clicks, 1, "SELECT clicks the focused control (a synthetic Enter would not)");
+  Input.remoteEvent("navBack"); assert.equal(keys.at(-1), "btn:Escape", "BACK is Escape on a plain layer");
+  layer.tagName = "DIALOG"; Input.remoteEvent("navBack"); assert.equal(keys.at(-1), "layer:cancel", "and the cancel seam on a <dialog>");
+  assert.equal(Input.remoteEvent("navSideways"), false, "an unknown nav name is refused");
+});
+
 // ---------------------------------------------------------------------------
 // The phone page's wiring: pad() over a mini DOM, connected through injected
 // signalling onto the loopback wire, so a pointer on the fake GAS zone and a
@@ -427,8 +477,10 @@ test("pad(): the page's pedals, paddles and LCD are wired through to the wire an
   const link = PhonePad.link(hostEnd, { input: desk.Input, pump: false, now: () => clock.t, hud: () => dash.value });
   const dom = { body: fakeEl(), status: fakeEl(), codeIn: fakeEl(), connect: fakeEl(), gas: fakeEl(), brake: fakeEl(), lookBack: fakeEl(),
     center: fakeEl(), rim: fakeEl(), buttons: Object.fromEntries(PhonePad.EVENTS.map((k) => [k, fakeEl()])), hud: lcd() };
+  dom.buttons.overtake = [fakeEl(), fakeEl()];   // OT lives on the grip AND the face
   const seen = [];
-  const ctl = PhonePad.pad(dom, { now: () => clock.t, deps: {
+  const timers = fakeTimers();
+  const ctl = PhonePad.pad(dom, { now: () => clock.t, timers, deps: {
     rtc: () => padEnd, prefetchIce: async () => null, normalise: (c) => String(c).toUpperCase(), valid: (c) => c.length === 6,
     // The courier, stood in for: hand the page an "offer", take its answer.
     swap: async (o) => { seen.push("swap:" + o.code); const ans = await o.reply("OFFER"); return ans ? { ok: true } : { ok: false, error: "reply_failed" }; },
@@ -457,6 +509,24 @@ test("pad(): the page's pedals, paddles and LCD are wired through to the wire an
   assert.equal(desk.Input.consumeShiftUp(), true); assert.equal(desk.Input.consumeShiftUp(), false);
   dom.center.dispatch("pointerdown", {});
   for (let i = 0; i < 3; i++) frame();   // CENTRE TILT → Input.calibrate() on the desktop (no throw, no edge)
+  dom.buttons.overtake[1].dispatch("pointerdown", {});
+  for (let i = 0; i < 3; i++) frame();
+  assert.equal(desk.Input.consumeOvertake(), true, "the second OT button (the grip's) fires the same edge");
+  // MENU PAD: a held direction repeats at a keyboard's cadence (380 ms, then every 110 ms); the release stops it.
+  const e0 = link.stats().events;
+  dom.buttons.navDown.dispatch("pointerdown", {});
+  for (let i = 0; i < 3; i++) frame();
+  assert.equal(link.stats().events, e0 + 1, "one edge on the down");
+  timers.advance(379); for (let i = 0; i < 3; i++) frame();
+  assert.equal(link.stats().events, e0 + 1, "nothing before the delay");
+  timers.advance(1); timers.advance(220); for (let i = 0; i < 3; i++) frame();
+  assert.equal(link.stats().events, e0 + 3, "then two repeats in 220 ms");
+  dom.buttons.navDown.dispatch("pointerup", {});
+  timers.advance(1000); for (let i = 0; i < 3; i++) frame();
+  assert.equal(link.stats().events, e0 + 3, "released: no more"); assert.equal(timers.pending(), 0, "and no timer left behind");
+  dom.buttons.navSelect.dispatch("pointerdown", {}); dom.buttons.navSelect.dispatch("pointerup", {});
+  for (let i = 0; i < 3; i++) frame();
+  assert.equal(link.stats().events, e0 + 4, "SELECT is one edge"); assert.equal(timers.pending(), 0, "and never repeats");
   // Tilt: setRoll() stands in for the sensor; the rim turns, the desktop steers.
   ctl.setRoll(30);
   for (let i = 0; i < 60; i++) { frame(); ctl.setRoll(30); }
@@ -482,6 +552,107 @@ test("pad(): the page's pedals, paddles and LCD are wired through to the wire an
 });
 
 // ---------------------------------------------------------------------------
+// The desktop's pairing flow: host() with the signalling stood in for, onto the
+// loopback wire — the phase machine, the QR hand-off, the lost-link cleanup.
+// ---------------------------------------------------------------------------
+
+const tick = () => new Promise((r) => setImmediate(r));
+async function settle(n = 6) { for (let i = 0; i < n; i++) await tick(); }
+
+function hostHarness(over = {}) {
+  const desk = bootInput();
+  const [padEnd, hostEnd] = NetTransport.loopback({ latencyMs: 1, rnd: NetTransport.seededRnd(5) });
+  padEnd.pump(0); hostEnd.pump(0);
+  const ui = { said: [], qrs: [], linkedN: 0, lostN: 0,
+    say: (t, bad) => ui.said.push((bad ? "!" : "") + t), qr: (url, code) => ui.qrs.push({ url, code }),
+    linked: () => ui.linkedN++, lost: () => ui.lostN++, hud: () => null };
+  const room = { stopped: 0, onJoiner: null, stop() { room.stopped++; } };
+  const deps = Object.assign({
+    rtc: () => hostEnd, prefetchIce: async () => null, makeCode: () => "ABC234",
+    createInvite: async () => ({ ok: true, code: "OFFER" }),
+    acceptAnswer: async () => ({ ok: true }),
+    hostRoom: async (o) => { room.onJoiner = o.onJoiner; room.onFail = o.onFail; room.token = o.token; return { ok: true, stop: room.stop }; },
+  }, over);
+  // host() reads the page's Input; the harness's is handed through the global.
+  globalThis.Input = desk.Input;
+  const ctl = PhonePad.host(ui, deps);
+  return { ...desk, ui, room, ctl, padEnd, hostEnd };
+}
+
+test("host(): prepares, mints a code, paints the QR, waits, links on the phone's answer, then closes the room", async () => {
+  const h = hostHarness();
+  await settle();
+  assert.equal(h.ctl.state().phase, "waiting");
+  assert.equal(h.ctl.state().code, "ABC234");
+  assert.deepEqual(h.ui.qrs, [{ url: PhonePad.padUrl("ABC234"), code: "ABC234" }], "the QR carries controller.html#pad=CODE");
+  assert.match(h.ui.said.at(-1), /Scan the code/);
+  assert.ok(h.room.onJoiner, "the room is hosted");
+  await h.room.onJoiner(null, "ANSWER");
+  await settle();
+  assert.equal(h.ctl.state().phase, "linked", "the loopback end is already open, so the link opens at once");
+  assert.equal(h.ui.linkedN, 1);
+  assert.equal(h.room.stopped, 1, "the room closes once the phone is on");
+  assert.ok(h.room.token.cancelled);
+  assert.deepEqual(h.ui.qrs.at(-1), { url: null, code: null }, "the QR is taken down");
+  assert.match(h.ui.said.at(-1), /connected/i);
+  // A second answer (another scan of the same code) is ignored.
+  await h.room.onJoiner(null, "ANSWER-2"); await settle();
+  assert.equal(h.ui.linkedN, 1);
+  // The phone drops: lost, said, and the page told to re-press.
+  h.padEnd.close(); await settle();
+  assert.equal(h.ctl.state().phase, "lost");
+  assert.equal(h.ui.lostN, 1);
+  assert.match(h.ui.said.at(-1), /^!Phone disconnected/);
+  assert.equal(h.Input.remoteActive(), false);
+  h.ctl.cancel();   // idempotent after lost
+  assert.equal(h.ctl.state().phase, "cancelled");
+});
+
+test("host(): an unreadable answer goes back to waiting; a room that will not open fails; cancel while waiting tears down", async () => {
+  const bad = hostHarness({ acceptAnswer: async () => ({ ok: false, error: "corrupt_code", message: "That code is incomplete." }) });
+  await settle();
+  await bad.room.onJoiner(null, "JUNK"); await settle();
+  assert.equal(bad.ctl.state().phase, "waiting", "back to waiting for a readable answer");
+  assert.match(bad.ui.said.at(-1), /^!That code is incomplete/);
+  bad.ctl.cancel();
+  assert.equal(bad.room.stopped, 1); assert.equal(bad.hostEnd.status, "closed");
+
+  const noRoom = hostHarness({ hostRoom: async () => ({ ok: false, error: "no_relay", message: "Could not reach any room service." }) });
+  await settle();
+  assert.equal(noRoom.ctl.state().phase, "failed");
+  assert.match(noRoom.ui.said.at(-1), /^!Could not reach any room service/);
+
+  const noRtc = hostHarness({ rtc: () => null });
+  await settle();
+  assert.equal(noRtc.ctl.state().phase, "failed");
+  assert.match(noRtc.ui.said.at(-1), /WebRTC is unavailable/);
+
+  const lostEarly = hostHarness();
+  await settle();
+  await lostEarly.room.onJoiner(null, "ANSWER");
+  // ICE never completes: the wire dies before/after opening — the room must not linger.
+  lostEarly.padEnd.close(); await settle();
+  assert.equal(lostEarly.ctl.state().phase, "lost");
+  assert.equal(lostEarly.room.stopped, 1, "a lost link drops the room's relay sockets");
+});
+
+test("a phone with no motion sensor is pedals and buttons only: it never blocks the local steering", () => {
+  const { Input, phone, frame } = pair();
+  Input.setSteerMode("buttons");
+  phone.roll = null; phone.thr = 0.5;
+  for (let i = 0; i < 10; i++) frame();
+  assert.ok(Input.remoteActive(), "the link is live");
+  assert.equal(Input.remoteSteers(), false, "but it does not steer");
+  assert.equal(Input.throttle(), true, "its pedal still works");
+  assert.equal(Input.debugState().remote.steers, false);
+  // The local on-screen arrows reach steer(): the remote is not sitting in front of them.
+  assert.equal(Input.steer(), 0);
+  phone.roll = 20;
+  for (let i = 0; i < 60; i++) frame();
+  assert.ok(Input.remoteSteers() && Input.steer() > 0.3, "a roll appearing later takes the wheel");
+});
+
+// ---------------------------------------------------------------------------
 // The two shells agree
 // ---------------------------------------------------------------------------
 
@@ -496,14 +667,118 @@ test("controller.html carries exactly the manifest's CONTROLLER subset and both 
     "tilt-roll loads before input.js, which calls it");
   assert.ok(MANIFEST.LAZY_NET.includes("js/input/phone-pad.js"), "the desktop half loads with the net stack");
   assert.match(read(".github/workflows/pages.yml"), /cp index\.html bench\.html controller\.html /, "the page is staged by name");
-  assert.match(page, /<script type="importmap">[\s\S]*@trystero-p2p\/nostr/, "the room-code courier needs the importmap");
+  // The phone's own door: a touch device opens controller.html from the title
+  // and from CONTROLS; a mouse never sees either button (live with the pointer
+  // kind, next to body.desktop). Plain navigation — no net stack on the phone.
+  const idx = read("index.html"), gameJs = read("js/game.js");
+  assert.match(idx, /<button id="mb-phonepad" class="bigbtn alt minibtn" hidden /, "title door, hidden until the pointer is coarse");
+  assert.match(idx, /<button id="pm-phonepad-go" type="button" hidden>/, "CONTROLS door, hidden until the pointer is coarse");
+  assert.match(gameJs, /function syncPointerKind\(\) \{[\s\S]*?\$\("mb-phonepad"\)\.hidden = !touch;[\s\S]*?\$\("pm-phonepad-go"\)\.hidden = !touch;/,
+    "both doors flip with the live pointer kind");
+  assert.match(gameJs, /location\.assign\(new URL\("controller\.html", location\.href\)\.href\)/, "the door is a navigation beside index.html");
+  // A linked phone is the wheel, so the screen shows VISOR (the cockpit eye past the drawn wheel)
+  // while it drives, and the player's own camera comes back when the phone is gone.
+  assert.match(gameJs, /const VISOR_CAM = CAM_MODES\.findIndex\(\(c\) => c\.id === "visor"\)/, "the visor mode is looked up by id, never by index");
+  assert.match(gameJs, /linked: \(\) => \{[\s\S]*?if \(VISOR_CAM >= 0 && camMode !== VISOR_CAM\) \{ phonePadCam = camMode; setCamMode\(VISOR_CAM\); \}/, "linking switches to VISOR and remembers the camera it left");
+  assert.match(gameJs, /lost: \(\) => \{[\s\S]*?if \(phonePadCam >= 0 && camMode === VISOR_CAM\) setCamMode\(phonePadCam\);/, "losing the phone restores that camera, unless the player cycled away");
+  assert.match(gameJs, /\$\("mb-phonepad"\)\.onclick = goPhonePad;[\s\S]*?\$\("pm-phonepad-go"\)\.onclick = goPhonePad;/, "both doors wired");
+  // The face keys (OT/BOOST/AERO/CAM/RADIO/LOOK/RESET/PAUSE) are thumb-sized:
+  // never under a 48px tap target, growing with the phone's height; the
+  // screen is the flex child that gives way.
+  assert.match(page, /#keys button \{ padding: 0; min-height: clamp\(48px, 14vh, 80px\); font-weight: 800; font-size: clamp\(12px, 3\.2vh, 18px\);/, "thumb-sized keys");
+  assert.match(page, /#keys \.wide \{[^}]*min-height: clamp\(36px, 9vh, 52px\)/, "the CENTRE TILT bar grows too");
+  assert.match(page, /#screen \{ flex: 1 1 0; min-height: 0;/, "the screen gives way, the keys do not");
+  // The MENU PAD is its own screen: hidden until body.menu, when the wheel
+  // hides instead; the D-pad, SELECT/BACK and both PAUSE buttons are wired.
+  assert.match(page, /#menupad \{ position: absolute; inset: 0; display: none;/, "the pad screen is hidden on the wheel");
+  assert.match(page, /body\.linked\.menu #menupad \{ display: grid; \}/, "and shows, linked, in a menu");
+  assert.match(page, /body\.menu #ctl \{ display: none; \}/, "while the wheel goes");
+  assert.match(page, /#ctl, #ctl \*, #menupad, #menupad \* \{ touch-action: none; \}/, "the pad refuses browser gestures too");
+  assert.match(page, /pause: \[\$\("b-pause"\), \$\("b-pause-menu"\)\]/, "PAUSE on the wheel and on the pad");
+  assert.match(page, /navSelect: \$\("b-navSelect"\), navBack: \$\("b-navBack"\)/, "SELECT and BACK wired");
+  assert.match(page, /mtitle: \$\("mp-title"\)/, "the pad's title is painted from the dash");
+  assert.match(page, /demo=menu/, "the menu pad has a demo");
+  // Zoom off on the wheel, landscape only: touch-action is not inherited, so
+  // every wheel element owns its touches; the canceller mirrors index.html's;
+  // portrait shows the TURN card instead of a squeezed grid; the lock rides
+  // the CONNECT tap behind fullscreen (Android), best effort.
+  assert.match(page, /#ctl, #ctl \*, #menupad, #menupad \* \{ touch-action: none; \}/, "every wheel and pad element refuses browser gestures");
+  for (const ev of ["gesturestart", "gesturechange", "gestureend", "dblclick", "touchend"]) {
+    assert.match(page, new RegExp(`document\\.addEventListener\\("${ev}"`), `the ${ev} canceller`);
+  }
+  assert.match(page, /closest\("button,input"\)\) \{ lastT = 0; return; \}/, "native controls keep every tap");
+  assert.match(page, /<div id="rotate" role="status">[\s\S]*TURN THE PHONE SIDEWAYS/, "the portrait card");
+  assert.match(page, /@media \(orientation: portrait\) \{ body\.linked #rotate \{ display: flex; \} \}/, "portrait shows the card once linked");
+  assert.doesNotMatch(page, /#face \{ grid-column: 1 \/ -1; grid-row: 1; \}/, "no portrait wheel layout any more");
+  assert.match(page, /requestFullscreen\(\{ navigationUI: "hide" \}\)[\s\S]*?screen\.orientation\.lock\("landscape"\)/, "fullscreen then lock, on the CONNECT tap");
+  // The room service and its schnorr dependency resolve only through the page's
+  // own importmap: every non-three entry of the game's map must be here too.
+  const mapOf = (html) => JSON.parse(html.match(/<script type="importmap">([\s\S]*?)<\/script>/)[1]).imports;
+  const gameMap = mapOf(read("index.html")), padMap = mapOf(page);
+  for (const [spec, target] of Object.entries(gameMap)) {
+    if (spec.startsWith("three")) continue;
+    assert.equal(padMap[spec], target, `controller.html's importmap must carry "${spec}" exactly as index.html does`);
+  }
   assert.doesNotMatch(read("js/input/phone-pad.js"), /getElementById|querySelector\(/, "the module never looks an id up — controller.html hands elements in");
   for (const id of ["h-gear", "h-speed", "h-lap", "h-pos", "h-ers", "h-flag", "h-ot", "h-aero", "h-last", "leds", "screen", "rim",
-                    "b-shiftUp", "b-shiftDown", "b-overtake", "b-boost", "b-aero", "b-camera", "b-radio", "b-look", "b-recover", "b-pause", "b-center", "gas", "brake"]) {
+                    "b-shiftUp", "b-shiftDown", "b-ot-big", "b-boost-big", "b-overtake", "b-boost", "b-aero", "b-camera", "b-radio", "b-look", "b-recover", "b-pause", "b-center", "gas", "brake",
+                    "menupad", "dpad", "dpad-hub", "b-navUp", "b-navDown", "b-navLeft", "b-navRight", "mp-mid", "mp-title", "b-pause-menu", "ab", "b-navSelect", "b-navBack"]) {
     assert.ok(page.includes(`id="${id}"`), `controller.html declares #${id}, which its inline script hands to PhonePad.pad`);
   }
   assert.equal((page.match(/<div id="leds"[^>]*>((?:<span><\/span>)+)/) || [])[1]?.length, 15 * "<span></span>".length, "fifteen rev LEDs");
   const game = read("js/game.js");
   assert.match(game, /hud: phonePadDash/, "game.js hands the dash sampler to PhonePad.host");
   assert.match(game, /function phonePadDash\(\)[\s\S]*dashKph\(p\.speed\)[\s\S]*cautionLevel\(\)/, "the sampler reads the HUD's own fields");
+});
+
+test('host cancellation wins over a late answer, successful or rejected', async () => {
+  for (const ok of [true, false]) {
+    let resolve;
+    const h = hostHarness({acceptAnswer: () => new Promise(r => { resolve = r; })});
+    await settle();
+    const answer = h.room.onJoiner(null, 'ANSWER');
+    h.ctl.cancel();
+    resolve({ok}); await answer; await settle();
+    assert.equal(h.ctl.state().phase, 'cancelled');
+    assert.equal(h.ctl.state().stats, null, 'a cancelled attempt cannot create a new input link');
+    assert.equal(h.ui.linkedN, 0);
+  }
+});
+
+test('host closes a room that arrives after cancellation and ignores its late failure', async () => {
+  let resolve, callbacks, stopped = 0;
+  const h = hostHarness({hostRoom: o => { callbacks = o; return new Promise(r => { resolve = r; }); }});
+  await settle(); h.ctl.cancel();
+  resolve({ok:true, stop(){stopped++;}}); await settle();
+  assert.equal(stopped, 1, 'the late room handle must not leak relay subscriptions');
+  const said = h.ui.said.length;
+  callbacks.onFail({error:'offline',message:'Old attempt failed'});
+  assert.equal(h.ctl.state().phase,'cancelled');
+  assert.equal(h.ui.said.length,said);
+});
+
+test('closed phone sessions ignore late packets and open callbacks', () => {
+  for (const side of ['host', 'pad']) {
+    const cb = {}, calls = [];
+    const transport = {status:'connecting', onMessage:f=>{cb.message=f;}, onClose:f=>{cb.close=f;}, onOpen:f=>{cb.open=f;},
+      send(){calls.push('send');return true;}, pump(){}, close(){cb.close();}};
+    const input = {remoteSample(){calls.push('sample');},remoteEvent(){calls.push('event');},remoteLost(){},setRemoteHaptics(h){if(h)calls.push('haptics');}};
+    const session = side === 'host' ? PhonePad.link(transport,{input,pump:false,onOpen(){calls.push('open');}})
+      : PhonePad.padSession(transport,{roll:()=>0,thr:()=>0,brk:()=>0,held:()=>0},
+          {heartbeat:false,onOpen(){calls.push('open');},onHud(){calls.push('hud');},vibrate(){calls.push('buzz');}});
+    session.close(); cb.open();
+    cb.message(NetTransport.STATE,side === 'host' ? PhonePad.encodeSample({seq:1,roll:10,thr:1,brk:0,held:0}) : PhonePad.encodeHud({state:'race'}));
+    cb.message(NetTransport.EVENT,PhonePad.encodeHaptic(50));
+    assert.deepEqual(calls,[],side);
+  }
+});
+
+test('a phone connecting before hostRoom returns still closes the late room without losing the link', async () => {
+  let resolve, callbacks, stopped = 0;
+  const h = hostHarness({hostRoom: o => {callbacks=o;return new Promise(r=>{resolve=r;});}});
+  await settle(); await callbacks.onJoiner(null,'ANSWER');
+  assert.equal(h.ctl.state().phase,'linked');
+  resolve({ok:true,stop(){stopped++;}}); await settle();
+  assert.equal(stopped,1); assert.equal(h.ctl.state().phase,'linked');
+  assert.equal(h.ui.linkedN,1); h.ctl.cancel();
 });

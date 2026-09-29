@@ -39,7 +39,13 @@ const PhonePad = (function () {
   const HELD = Object.freeze({ lookBack: 1 });
   // The edges the phone may send; each is a name Input.remoteEvent knows.
   const EVENTS = Object.freeze(["shiftUp", "shiftDown", "overtake", "boost", "aero",
-    "camera", "recover", "radio", "calib", "pause"]);
+    "camera", "recover", "radio", "calib", "pause",
+    // The menu pad (desktop: input.js REMOTE_EDGES → the gamepad's nav seam).
+    "navUp", "navDown", "navLeft", "navRight", "navSelect", "navBack"]);
+  // A held direction repeats like a keyboard's (OS-style delay, then rate) so a
+  // long list is walked with a thumb held down, not tapped twenty times.
+  const NAV_REPEAT = Object.freeze({ navUp: 1, navDown: 1, navLeft: 1, navRight: 1 });
+  const REPEAT_DELAY_MS = 380, REPEAT_RATE_MS = 110;
   // Dash flag bits (desktop → phone).
   const DASH = Object.freeze({ boost: 1, otArmed: 2, otActive: 4, xArmed: 8, xOpen: 16,
     retired: 32, timeTrial: 64, paused: 128, redline: 256,
@@ -179,6 +185,7 @@ const PhonePad = (function () {
     transport.onClose(onClose);
 
     const armed = () => {
+      if (closed) return;
       input.setRemoteHaptics((ms) => { transport.send(T.EVENT, encodeHaptic(ms)); });
       transport.send(T.EVENT, encodeHello("host"));
       if (opts.onOpen) { try { opts.onOpen(); } catch (e) { /* caller's problem */ } }
@@ -269,7 +276,7 @@ const PhonePad = (function () {
           code, mine: invite.code, token,
           onTick: () => { if (phase === "waiting") say("Waiting for your phone… (room code " + code + ")"); },
           onFail: (r) => {
-            if (!r || r.error === "cancelled" || r.error === "stopped" || phase === "linked") return;
+            if (!r || r.error === "cancelled" || r.error === "stopped" || !["waiting", "connecting"].includes(phase)) return;
             if (r.advisory) { say(r.message, true); return; }
             phase = "failed"; say(r.message || "The room service went away — try again.", true);
           },
@@ -280,6 +287,7 @@ const PhonePad = (function () {
             phase = "connecting";
             say("Phone found — connecting…");
             const acc = await deps.acceptAnswer(transport, answer);
+            if (phase !== "connecting") return;
             if (!acc.ok) { accepted = false; phase = "waiting"; say(acc.message || "That answer could not be read.", true); return; }
             active = link(transport, {
               hud: ui.hud || null,
@@ -294,13 +302,20 @@ const PhonePad = (function () {
               onClose: () => {
                 if (phase === "cancelled") return;
                 phase = "lost";
-                say("Phone disconnected.", true);
+                // A link that died before it opened (ICE failed) still holds
+                // the room's relay sockets; nothing will use them now.
+                dropRoom();
+                say("Phone disconnected — press PHONE AS CONTROLLER for a new code.", true);
                 Log.info("input", "phone pad lost");
                 if (ui.lost) { try { ui.lost(); } catch (e) { /* ui's problem */ } }
               },
             });
           },
         });
+        if (!["waiting", "connecting"].includes(phase)) {
+          if (sub && sub.stop) { try { sub.stop(); } catch (e) { /* already stopped */ } }
+          return;
+        }
         if (!sub || !sub.ok) {
           if (phase === "waiting") { phase = "failed"; say((sub && sub.message) || "Could not open a room — check the connection.", true); }
           return;
@@ -347,6 +362,7 @@ const PhonePad = (function () {
       return transport.send(T.EVENT, encodeEvent(k));
     }
     transport.onMessage((channel, data) => {
+      if (closed) return;
       if (channel === T.STATE) {
         const h = decodeHud(data);
         if (h && opts.onHud) { huds++; try { opts.onHud(h); } catch (e) { /* page's problem */ } }
@@ -363,6 +379,7 @@ const PhonePad = (function () {
     };
     transport.onClose(close);
     const armed = () => {
+      if (closed) return;
       transport.send(T.EVENT, encodeHello("pad"));
       if (opts.heartbeat !== false) {
         beat = setInterval(() => send(true), HEARTBEAT_MS);
@@ -402,7 +419,8 @@ const PhonePad = (function () {
     text("ot", h.flags & DASH.otActive ? "OVERTAKE" : h.flags & DASH.otArmed ? "OT READY" : "OT");
     text("aero", h.flags & DASH.aeroNone ? "NO ZONES" : h.flags & DASH.aeroAuto ? (h.flags & DASH.xOpen ? "AUTO X-MODE" : "AERO AUTO")
       : h.flags & DASH.xOpen ? "X-MODE" : h.flags & DASH.xArmed ? "AERO ARMED" : "AERO");
-    text("flag", h.state === "count" ? "LIGHTS" : h.flags & DASH.paused ? "PAUSED" : !inRace ? "PIT LANE" : CAUTION[h.caution] || "");
+    text("flag", h.state === "count" ? "LIGHTS" : h.flags & DASH.paused ? "PAUSED" : !inRace ? "MENU" : CAUTION[h.caution] || "");
+    text("mtitle", h.flags & DASH.paused ? "PAUSED" : "MENU");   // the pad screen's title (controller.html #mp-title)
     if (el.ers && el.ers.style) el.ers.style.width = (h.ers * 100).toFixed(0) + "%";
     if (el.leds && el.leds.children) {
       const n = el.leds.children.length, lit = Math.round(h.rpm * n);
@@ -423,6 +441,9 @@ const PhonePad = (function () {
       el.body.classList.toggle("throttle-auto", !!(h.flags & DASH.throttleAuto));
       el.body.classList.toggle("aero-auto", !!(h.flags & DASH.aeroAuto));
       el.body.classList.toggle("aero-none", !!(h.flags & DASH.aeroNone));
+      // THE MENU PAD: out of a race, or paused inside one, the page swaps the
+      // wheel for a D-pad, SELECT and BACK (controller.html #menupad).
+      el.body.classList.toggle("menu", !inRace || !!(h.flags & DASH.paused));
     }
   }
 
@@ -519,19 +540,36 @@ const PhonePad = (function () {
     hold(dom.lookBack, () => { held |= HELD.lookBack; push(); }, () => { held &= ~HELD.lookBack; push(); });
     // Edges fire on the DOWN, not the click: a paddle on a wheel answers the
     // finger, and a click waits for the release (and can be lost to a drag).
-    function edge(el, k) {
+    // A menu direction held down repeats (`timers` is the test seam).
+    const timers = opts.timers || { setTimeout, clearTimeout, setInterval, clearInterval };
+    function edge(el, k, repeat) {
       if (!el) return;
+      let rep = null;
+      const stop = () => { if (rep) { timers.clearTimeout(rep); timers.clearInterval(rep); rep = null; } };
       el.addEventListener("pointerdown", (e) => {
         e.preventDefault();
         el.classList.add("on");
         if (session) session.event(k);
+        if (repeat) {
+          stop();
+          rep = timers.setTimeout(() => {
+            rep = timers.setInterval(() => { if (session) session.event(k); else stop(); }, REPEAT_RATE_MS);
+            if (rep && rep.unref) rep.unref();
+          }, REPEAT_DELAY_MS);
+          if (rep && rep.unref) rep.unref();
+        }
       });
-      const up = () => el.classList.remove("on");
+      const up = () => { el.classList.remove("on"); stop(); };
       el.addEventListener("pointerup", up);
       el.addEventListener("pointercancel", up);
+      el.addEventListener("pointerleave", up);
       el.addEventListener("contextmenu", (e) => e.preventDefault());
     }
-    for (const k of EVENTS) edge(dom.buttons && dom.buttons[k], k);
+    // An action may have more than one button (OT on the grip AND on the face).
+    for (const k of EVENTS) {
+      const b = dom.buttons && dom.buttons[k];
+      for (const el of (Array.isArray(b) ? b : [b])) edge(el, k, !!NAV_REPEAT[k]);
+    }
     edge(dom.center, "calib");
 
     let wake = null;
@@ -576,7 +614,11 @@ const PhonePad = (function () {
         });
         if (!done.ok) {
           const why = (done.error === "reply_failed" && answered && !answered.ok) ? answered : done;
-          say(why.message || "Could not reach the game. Make a new code there and try again.", true);
+          // The handshake's own words are for two friends racing; here the
+          // other end is the game on the big screen.
+          say(why.error === "build_mismatch" ? "The game and this page are on different versions — reload both and try again."
+            : why.error === "expired" ? "The game is not offering that code any more — press PHONE AS CONTROLLER there for a new one."
+            : why.message || "Could not reach the game. Make a new code there and try again.", true);
           try { transport.close(); } catch (e) { /* never opened */ }
           return why;
         }
@@ -615,6 +657,7 @@ const PhonePad = (function () {
       // The test/console handle: what the page holds, and a way to paint a
       // dash without a link (controller.html?demo drives the LCD from it).
       paintHud: (h) => { lastHud = h; paintHud(dom.hud, h); },
+      armSensor: requestSensor,   // the demo turns the rim with a real phone's tilt, unlinked
       setRoll: (r) => { roll = r; paintRoll(); if (session) session.sample(); },   // stands in for the sensor
       pump: () => (session ? session.pump() : 0),   // the frame tick, for a harness with no rAF
       state: () => ({ linked: !!session, roll, thr, brk, held, sensorOn, hud: lastHud, stats: session ? session.stats() : null }),

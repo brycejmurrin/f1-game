@@ -138,6 +138,7 @@ const RaceControl = (function () {
     // the standing restart (redFlagRestart), so its hold is one lap lower and
     // the first crossing after the resumption re-enables it (B7.2.2b).
     let otHoldLap = null;
+    let lowGripNoted = false;   // the "LOW GRIP — OVERTAKE OFF" banner has run this race
     // A SCRIPTED flag (js/race/real-race.js replays a real race's safety-car
     // windows): while `held` is above GREEN the flag flies at least that high
     // regardless of the hazard picture, exempt from the SC cap and the MIN_HOLD
@@ -226,8 +227,14 @@ const RaceControl = (function () {
       // on its HUD after the race ended (reset() is local-only, safe for all).
       if (G.state !== "race") {
         if (caution.level !== 0 || capHoldT) reset();
+        lowGripNoted = false;
         return;
       }
+      // The LOW GRIP note, once a race, on every peer (it is read off the
+      // shared weather, not the flag): the one place the player is told why the
+      // Overtake button went dead in the wet. Retried until the banner takes it.
+      if (!lowGripNoted && lowGrip() && typeof G.announce === "function")
+        lowGripNoted = G.announce("LOW GRIP — OVERTAKE OFF", 3, "warning") !== false;
       if (!G.netPlay.ownsRaceControl()) return;
       // A held flag flies whether or not the hazard loop is switched on: the
       // player's CAUTIONS setting governs debris, not a race replayed by script.
@@ -393,8 +400,19 @@ const RaceControl = (function () {
     // the start (b), disabled only by the SAFETY CAR or a red flag (c) — a local
     // yellow or a VSC does not take it away — and held off after either until
     // the leader's next crossing (otHoldLap, set in flag()).
+    // LOW GRIP (B7.1.2(b) / B7.2.2(d)): the conditions call for treaded tyres.
+    // Overtake is off and active aero only partial (game.js aeroWetK). Read
+    // live, so a weather arc that dries the track hands both back.
+    function lowGrip() {
+      if (typeof TyreModel === "undefined" || G.raceWeather == null) return false;
+      return TyreModel.treadFor(G.raceWeather, typeof G.roadWetness === "function" ? G.roadWetness() : undefined) > 0;
+    }
+    // May a car EARN Overtake at the Detection Line now? Not under the Safety
+    // Car or red flag (a bunched queue would all earn it for the restart lap),
+    // nor in low grip. The lap-1 / after-SC line hold is otEnabled's, at use.
+    function otDetectOpen() { return caution.level < 3 && !lowGrip(); }
     function otEnabled() {
-      if (caution.level >= 3) return false;
+      if (caution.level >= 3 || lowGrip()) return false;
       const leader = G.ranked[0];
       if (!leader || !(leader.lap > 1)) return false;
       // Never cleared here: a red flag's regrid rewinds the lap AFTER the drop,
@@ -407,17 +425,39 @@ const RaceControl = (function () {
         level: caution.level, label: LABEL[caution.level] || "GREEN",
         sector: caution.sector, frac: caution.frac, total: caution.total,
         sectors: caution.sectors, sinceT: +caution.sinceT.toFixed(2),
-        cause: caution.cause, phase: caution.phase, enabled,
+        cause: caution.cause, phase: caution.phase, enabled, lowGrip: lowGrip(),
       };
     }
 
     return {
-      update, apply, reset, setEnabled, otEnabled, info, hold,
+      update, apply, reset, setEnabled, otEnabled, otDetectOpen, lowGrip, info, hold,
       get level() { return caution.level; },
       takeRestart, clearHold,
       get enabled() { return enabled; },
     };
   }
-  return { create, finishDelay, flagOut, lineTransition, finishOrder };
+  // SAFETY CAR QUEUE (B5.13: every car queues up behind the Safety Car, no
+  // more than ten car lengths apart). The cap used to be one flat 0.45 × vTop
+  // for all, which FROZE the gaps — so a stop under the SC saved nothing. Now
+  // the LEADER runs the SC pace, and a car more than SC_QUEUE_GAP s (measured
+  // at that pace) behind the car ahead ON THE ROAD may run up to SC_CATCH until
+  // it has closed, blended over the next second so the cap never chatters.
+  // Returns a FRACTION of vTop() — the caller multiplies, so it rides PACE.
+  const SC_PACE = 0.45, SC_CATCH = 0.6, SC_QUEUE_GAP = 1.0;
+  function scQueueFrac(c, cars, total, leader, vTop, skip) {
+    if (!c || c === leader || !(total > 0)) return SC_PACE;
+    let gap = Infinity;
+    for (const o of cars) {
+      if (o === c || o.finished || o.retired || (skip && skip(o))) continue;
+      const d = ((o.prog - c.prog) % total + total) % total;   // forward, on the road
+      if (d > 0.5 && d < gap) gap = d;
+    }
+    if (!Number.isFinite(gap)) return SC_PACE;
+    const gapS = gap / Math.max(1, SC_PACE * vTop);   // seconds at the SC pace
+    const t = Math.min(1, Math.max(0, gapS - SC_QUEUE_GAP));
+    return SC_PACE + (SC_CATCH - SC_PACE) * t;
+  }
+
+  return { create, finishDelay, flagOut, lineTransition, finishOrder, scQueueFrac, SC_PACE, SC_CATCH, SC_QUEUE_GAP };
 })();
 Object.freeze(RaceControl);

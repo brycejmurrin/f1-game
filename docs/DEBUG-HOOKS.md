@@ -325,7 +325,11 @@ setting); `weather` is `"dry" | "wet" | "rain" | "overcast" | "fog"` (`"wet"` =
 damp road no rain; `"rain"` = wet road + falling rain). `opts.laps` (integer > 0)
 sets the race distance for this session instead of the game default — the
 AI draws its tyre compound from the distance at grid-up, so a strategy
-bench needs it. The recommended entry point for any harness.
+bench needs it. `opts.grid` (`"tier" | "quali" | "rev10" | "revchamp" |
+"random"`) pins the one-off's grid rule; it is in-memory state, and a guest in a
+friend room takes the HOST's, so on a shared page a later solo start inherited
+`"quali"`, opened qualifying and rejected with "did not reach the grid".
+The recommended entry point for any harness.
 
 ### `tt(trackRef, timeOfDay?) → {track, timeTrial} | false`
 Load a circuit and start a **Time Trial** session (solo, no AI, `timeTrial: true`).
@@ -439,9 +443,10 @@ display label such as `"TV SIDE"` — returns `false`.
 | `low` | LOW | Low-angle drama: eye skims the track surface 10 m behind, looking up at the car silhouetted against the sky |
 | `tcam` | T-CAM | Broadcast roll-hoop (airbox) camera — narrow telephoto mounted 1.3 m above the car, looking forward |
 | `rear` | REAR CAM | Rear-mounted onboard at the car's tail looking back down the track (unlike `reverse` which floats ahead) |
+| `visor` | VISOR | The cockpit without its steering wheel: the same eye, tub, halo, mirrors and front wheels as `cockpit`, with the wheel and its dash left out; a linked phone wheel switches to it |
 
 ```js
-__apex.camera();            // → { mode:"chase", index:0, modes:["chase","far","drift","cockpit","hood","overhead","heli","reverse","side","cinematic","low","tcam","rear"] }
+__apex.camera();            // → { mode:"chase", index:0, modes:["chase","far","drift","cockpit","hood","overhead","heli","reverse","side","cinematic","low","tcam","rear","visor"] }
 __apex.camera("hood");      // → { mode:"hood", index:4 }
 __apex.camera("tcam");      // → { mode:"tcam", index:11 }
 __apex.camera(3);           // switch by index → cockpit
@@ -1333,7 +1338,7 @@ Six more cover the ERS part's grip on the battery and the overtake window:
 | `ersDeploy` / `ersRegen` | the ERS option's two axes, 0..1 (`Parts.ersProfile`); 0.5 for a car with no parts |
 | `drain` | energy/s while boosting — LOWER with better deployment, so the press lasts longer |
 | `regen` | energy/s recovered — higher with better recovery |
-| `otTime` / `otCool` | the overtake push and its lockout, both scaled by deployment |
+| `otTime` / `otMJ` | the push a full Overtake allowance buys (scaled by deployment) and the allowance left this lap in MJ (0.5 when granted; js/race/overtake-mode.js) |
 
 Measured end to end: boost lasts 3.8 s on `harvest` and 7.1 s on `overcharge`;
 recharge runs 5.4 s down to 4.0 s. Note BOOST is a TOGGLE — `setBoost(true)`,
@@ -1487,10 +1492,11 @@ OVERTAKE fields, alongside the aero ones:
 
 | Field | Meaning |
 |---|---|
-| `otEnabled` | the RACE-WIDE gate, identical for every car: false on the opening lap (until the LEADER starts lap 2) and false under any caution |
-| `otArmed` | that gate AND this car's own gap (<1 s) and cooldown — i.e. can it actually be fired now |
-| `otT` | seconds of push remaining, 0 when not deployed |
-| `otCool` | seconds until it can arm again |
+| `otEnabled` | the RACE-WIDE gate, identical for every car: false on the opening lap (until the LEADER starts lap 2), under the Safety Car / red flag and the lap after, and in LOW GRIP (wet) |
+| `otArmed` | that gate AND an allowance left AND not already deploying — i.e. can it actually be fired now |
+| `otEarned` | under 1 s behind at this lap's detection line; granted at the timing line |
+| `otMJ` | the allowance left this lap, MJ (0.5 when granted) |
+| `otT` | seconds of push remaining while deploying, 0 otherwise |
 
 ### `camState() → {eye, tgt, fov, roll, debug}`
 Raw camera geometry: `eye` `[x,y,z]`, `tgt` `[x,y,z]` (look-at point), `fov`
@@ -1940,7 +1946,9 @@ HUD overlay and returns the new state.
 
 ### `uiScale(v?)` · `hudScale(v?)` · `btnScale(v?)` → `{pct, stored, min, max, step}`
 The three size sliders (pause ▸ SETTINGS ▸ DISPLAY ▸ HUD), as **percentages**,
-40–200. `uiScale` drives `--ui-scale`, which the menu sheets and the overlay
+40–200 (`btnScale` alone runs on to 300: a 200 % dock was still small in the hand on
+a tall landscape phone, and `fitHud`'s `--hud-z-dock` cap stops the columns wherever
+the screen runs out of room, so the slider is the wish and the cap the fit). `uiScale` drives `--ui-scale`, which the menu sheets and the overlay
 children `zoom`; `hudScale` drives `--hud-scale`, which the in-race HUD readout
 clusters `zoom`; `btnScale` drives `--hud-btn-scale`, which the touch dock
 `zoom`s and which sizes its `--tap` / `--hold` pads. **They are independent and
@@ -2851,9 +2859,9 @@ lists the sides that carry one. The same facts appear as rally mutators in
 **Previously-invisible state, now exposed.** `ego.penalties` gives `{cuts,
 freeCutsLeft, timePenaltyS}` — cuts 1-3 warn, every cut from the 4th adds +5 s.
 An agent that cannot see this is scored on a rule it cannot perceive.
-`ego.ers` gives `{charge, deploying, overtakeArmed, boostRemainingS, cooldownS}`
+`ego.ers` gives `{charge, deploying, overtakeArmed, boostRemainingS, overtakeEarned, overtakeMJ}`
 — charge alone never said whether the energy was going anywhere, or whether the
-overtake window (~1 s behind, 4 s boost, 9–14 s cooldown) was open.
+overtake allowance (under 1 s at the detection line earns 0.5 MJ for the next lap) was there.
 `rivals[].pace` (and `field()` rows at `full`) expose AI skill, so one rival is
 distinguishable from another. `detail:"full"` adds `physics.{rpm, offroad,
 stuckS, wallContactS, vertLoad}` and a `tunables` block — `setPhysics()` can

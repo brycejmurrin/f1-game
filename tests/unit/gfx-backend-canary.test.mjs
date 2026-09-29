@@ -3475,7 +3475,10 @@ test("the flyby plays on the pre-race loading screen only; the picker pre-builds
     "a time-of-day pick re-lights the race-settings flyby (memoised build, so GO pays nothing twice)");
   assert.match(menus, /scheduleFlybyTrack\(true\)/,
     "a circuit tile pre-builds after the settle delay, never on the tap itself");
-  assert.match(game, /settle \? 1500 : 120/);
+  // 400 ms, not the old 1.5 s: the idle gate (menuIdle) is what keeps the build
+  // off a tapping player; the settle only holds back the scenery fetch, and at
+  // 1.5 s it made a RACE! tap within ~5 s of the picker meet the build card.
+  assert.match(game, /settle \? 400 : 120/);
   // Under a menu that draws nothing the canvas is hidden — so neither a finished
   // race's last frame nor the garage's car sits behind the title. Since
   // 2026-09-16 RACE SETTINGS is no longer an exception: the warmed world is
@@ -4791,8 +4794,10 @@ test("selector preparation waits for the player's hands before the build and the
   assert.equal((body.match(/await menuFinish\(current, key\);/g) || []).length, 2,
     "both paths finish through menuFinish (car assets, warm frames, lamp pre-bake, flyby plans)");
   const fin = src.match(/async function menuFinish\(current, key\) \{[\s\S]*?\n\}/)[0];
-  assert.match(fin, /await prepareMenuCarAssets\(current\);\s*if \(await menuIdle\(current\)\) \{ FlybySeq\.reset\(\); _menuGate\.warm = 2; \}/,
-    "the warm frames follow the paced car assets, on an idle menu");
+  // warmPrograms() first: the hidden frame that follows starts TLX's program
+  // warm, so it runs here instead of holding the card at the lights.
+  assert.match(fin, /await prepareMenuCarAssets\(current\);\s*if \(await menuIdle\(current\)\) \{ warmPrograms\(\); FlybySeq\.reset\(\); _menuGate\.warm = 2; \}/,
+    "the warm frames follow the paced car assets, on an idle menu, with the program warm requested first");
   assert.ok(fin.indexOf("_menuGate.warm = 2") < fin.indexOf("menuLampBake(current)"),
     "…and come BEFORE the lamp pre-bake: a RACE! tap mid-bake met cold shaders");
   const idle = eval("(function(){ let _menuInputAt = 0; const MENU_IDLE_MS = 1200; let now = 0;" +
@@ -4817,6 +4822,7 @@ test("selector preparation rejects stale requests, reuses the world, and waits f
   const setTimeout = (fn) => { timers.set(++timerId, fn); return timerId; };
   const clearTimeout = id => timers.delete(id);
   const gfx = { warming: () => compiling }, Log = { warn() {} };
+  const warmed = []; const warmPrograms = () => warmed.push(_menuGate.warm);   // the real one asks gfx.warm() (GLX here: none)
   const prepareMenuCarAssets = async () => {};
   const menuLampBake = async () => {};   // the lamp prebake is LampBake.prebake's (lamp-bake.test.mjs)
   // The REAL menuFinish, with the flyby planning stubbed (flyby-shots.test.mjs covers it).
@@ -4838,6 +4844,7 @@ test("selector preparation rejects stale requests, reuses the world, and waits f
   schedule(); const reuse = fire(); requests.shift().resolve(); await reuse;
   assert.deepEqual(builds, [0], "NEXT reuses the prepared world");
   assert.equal(_menuGate.warm, 2, "NEXT resumes hidden warming interrupted by rescheduling");
+  assert.ok(warmed.length >= 1 && warmed.every((w) => w !== 2), "the program warm is requested BEFORE the hidden frames are armed, every time");
   raceTimeOfDay = "night"; compiling = true; schedule(); await fire();
   assert.equal(requests.length, 0, "no scene replacement during compilation");
   compiling = false; const night = fire(); requests.shift().resolve(); await night;

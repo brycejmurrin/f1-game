@@ -1319,11 +1319,28 @@ const PitLane = (function () {
       // owns no wet tyre still gets one, from the class ladder: the alternative
       // is a player who literally cannot respond to the weather, which is the
       // "no recourse" docs/PHYSICS.md warned about, reintroduced by an economy.
-      const right = list.filter(function (r) { return (r.tread || 0) === want; });
+      let right = list.filter(function (r) { return (r.tread || 0) === want; });
       if (!right.length) {
         const cls = TyreModel.classForTread(want);
         return cls ? tyres.classRecord(cls) : (list[0] || null);
       }
+      // THE RULE BEFORE THE STOPWATCH. A car that still owes its second dry
+      // compound must not be refitted with the letter it has run: "the fastest
+      // set that reaches the flag" picked a Super Soft off a Soft — "S" twice —
+      // and endRace disqualified the player for obeying AUTO. Only when a set
+      // of another letter is owned; a garage of one letter cannot comply.
+      const log = c.tyreLog;
+      if (want === 0 && twoCompoundApplies() && typeof SportingRegs !== "undefined" && SportingRegs.compoundShort(log)) {
+        const ran = new Set((log || []).map(function (e) { return e && e.code; }));
+        const fresh = right.filter(function (r) { return !ran.has(r.code); });
+        if (fresh.length) right = fresh;
+      }
+      // …and THE PLAN'S LETTER, when it names one: the HUD and the engineer say
+      // "BOX L12 H", so the crew fits an H unless the rule above forbids it.
+      const plan = c.pitPlan, cls = plan && plan.seq ? plan.seq[(c.pitStops || 0) + 1] : null;
+      const code = cls && TyreModel.AI_CLASS[cls] ? TyreModel.AI_CLASS[cls].code : null;
+      const planned = code ? right.filter(function (r) { return r.code === code; }) : [];
+      if (planned.length) right = planned;
       // Then the strategist's rule: the FASTEST set that still reaches the
       // flag. Softer is faster and shorter-lived, so among the sets that go the
       // distance take the shortest-lived one; if nothing reaches, take the set
@@ -1392,7 +1409,12 @@ const PitLane = (function () {
       return t && t.total > 0 ? t.total / Math.max(1, G.vTop() * 0.6) : 100;
     }
 
-    function planFor(roll, player, laps) {
+    /** The planner's class for a dry HUD letter (S/M/H), else null. A catalog
+     *  set is not an AI_CLASS key, but its letter is its class (codeForLife). */
+    const CLASS_OF_CODE = { S: "soft", M: "medium", H: "hard" };
+    function classOfCode(code) { return CLASS_OF_CODE[code] || null; }
+
+    function planFor(roll, player, laps, car) {
       const zz = z();
       if (!zz) return null;
       // ONE loss, the same one the STRATEGY row shows. This used to carry its
@@ -1407,10 +1429,18 @@ const PitLane = (function () {
       // never executed (think() keeps its human guard): it honours the stop
       // count the STRATEGY row pinned for this circuit, if any.
       const pin = player ? pinnedStops() : null;
+      // …and it starts on THE SET THE PLAYER IS ON. With no `start` every player
+      // got one plan whatever was fitted — "hard, BOX L11" for a hypersoft that
+      // is gone by lap 4 — and its two-compound guarantee was about a tyre the
+      // car was not on. A wet set or no car: the planner picks, as before.
+      const rec = player && car ? TyreModel.startRecord(car) : null;   // what gridUp is about to fit (c.tyre is last race's)
+      const start = rec && !(rec.tread > 0) ? classOfCode(rec.code) : null;
       const plan = AiDrive.stintPlan({
         laps: n,
         lifeLaps: (cls) => G.tyres.planLaps(TyreModel.AI_CLASS[cls].life, n),
         pitLossLaps, roll, stops: pin, twoCompound: twoCompoundRule(n),
+        start: start || undefined,
+        firstLife: start && Number.isFinite(rec.life) ? G.tyres.planLaps(rec.life, n) : undefined,
       });
       if (plan) { plan.pitLossLaps = pitLossLaps; plan.pin = pin; }
       return plan;
@@ -1481,7 +1511,7 @@ const PitLane = (function () {
       if (!plan || !enabled()) return null;
       const done = c.pitStops || 0, lap = c.lap || 0, stops = plan.stops || 0;
       const next = plan.lapsAt[done];
-      const cls = plan.seq[done + 1], code = cls && TyreModel.AI_CLASS[cls] ? TyreModel.AI_CLASS[cls].code : "";
+      const code = nextCode(c);
       const label = stops ? stops + "-STOP" : "NO STOP";
       if (next == null) return { text: "PLAN " + label + (stops ? " · DONE" : ""), state: "", stops, next: null, lapsToStop: null, code };
       const lapsToStop = next - lap;
@@ -1494,6 +1524,16 @@ const PitLane = (function () {
       else if (lapsToStop <= 0) { state = "now"; text = "BOX BOX BOX" + (code ? " · " + code : ""); }
       else if (lapsToStop === 1) { state = "soon"; text = "BOX NEXT LAP" + (code ? " · " + code : ""); }
       return { text, state, stops, next, lapsToStop, code };
+    }
+    /** The letter the next stop fits. For the local car that is what the crew
+     *  WILL fit (nextFor — a selection, or AUTO's pick, which honours the plan
+     *  and the two-compound rule); the plan's own letter otherwise. The HUD
+     *  said "BOX L12 H" while AUTO bolted on an M. */
+    function nextCode(c) {
+      const plan = c && c.pitPlan;
+      if (c && c.local) { const r = nextFor(c); if (r && r.code) return r.code; }
+      const cls = plan && plan.seq ? plan.seq[(c.pitStops || 0) + 1] : null;
+      return cls && TyreModel.AI_CLASS[cls] ? TyreModel.AI_CLASS[cls].code : "";
     }
     /** A rival's window, for the gap chips: "IN" while it is stopping, "P<lap>"
      *  when its planned stop is within three laps, else "". */
@@ -1516,38 +1556,46 @@ const PitLane = (function () {
       const done = c.pitStops || 0, lap = Math.max(1, c.lap || 1);
       const lapsLeft = G.lapsTarget - lap + 1;
       const oldNext = plan.lapsAt[done];
-      if (lapsLeft < 2 || oldNext == null) return false;
-      // planLaps, not lifeLaps: the level-free nominal is only right at `real`
-      // (1.0), the shipped default; at `light` (0.55) a set lasts
-      // 1.82x longer. The first plan (plan(), above) and the pit-now compound
-      // pick both learned this; the per-lap re-cut did not, so every replan
-      // argued against the plan it was revising and pulled the next stop
-      // earlier on tyres the car had not used. See TyreModel.planLaps.
-      const lifeLaps = (cls) => G.tyres.planLaps(TyreModel.AI_CLASS[cls].life, G.lapsTarget);
-      // `start` must be one of the planner's THREE classes — that is the
-      // alphabet AiDrive.stintPlan sequences future stints in — so a player's
-      // catalog compound still rounds to the nearest of them here.
-      const cls = c.tyre.id && TyreModel.AI_CLASS[c.tyre.id] ? c.tyre.id : (c.tyreClass || "medium");
-      /* firstLife DOES NOT ROUND. stintPlan's own contract calls it "the laps
-         that set has left — the first stint is run on what is on the car, not
-         on a fresh set's life", and it was being derived from `cls`, which for
-         every human is the "medium" fallback: a catalog id is not an AI_CLASS
-         key and c.tyreClass is null for humans. So a player on any compound had
-         the re-cut priced on 0.74 life. A hypersoft (0.30) was planned for
-         2.47x the laps it has, and every per-lap replan argued the stop later
-         than the tyre could reach. The fitted record carries its own life —
-         read that. */
-      const fittedLife = Number.isFinite(c.tyre.life) ? c.tyre.life : TyreModel.AI_CLASS[cls].life;
-      const firstLife = Math.max(1, G.tyres.planLaps(fittedLife, G.lapsTarget) * (1 - G.tyres.spent(c)));
+      // NO `oldNext == null` EXIT. It sat here, so a plan that said NO STOP —
+      // or whose stops were all served — could never be revised: tyres going
+      // at twice the planned rate, the HUD still said "PLAN NO STOP".
+      if (lapsLeft < 2) return false;
+      /* THE RATE THIS DRIVER IS ACTUALLY WEARING THE SET AT. planLaps is a clean
+         lap at load 1.0; kerbs, slides and a heavy right foot run well past it,
+         and a plan priced at 1.0 told a player whose set was gone in 3 laps
+         there was no stop. Measured wear per completed lap on this set gives
+         the laps it has left; the ratio to the nominal is carried to the sets
+         still to come (plan.loadK), and survives a stop, where the new set has
+         no laps of its own to measure yet. */
+      const fittedLife = Number.isFinite(c.tyre.life) ? c.tyre.life : TyreModel.AI_CLASS.medium.life;
+      const nominal = G.tyres.planLaps(fittedLife, G.lapsTarget);
+      const spent = G.tyres.spent(c);
+      const onSet = G.tyres.lapsOn ? G.tyres.lapsOn(c) : 0;
+      if (onSet >= 1 && spent > 0) plan.loadK = clamp(nominal * spent / onSet, 0.6, 2.5);
+      const loadK = plan.loadK || 1;
+      const lifeLaps = (cls) => G.tyres.planLaps(TyreModel.AI_CLASS[cls].life, G.lapsTarget) / loadK;
+      // `start` must be one of the planner's THREE classes — the alphabet
+      // stintPlan sequences in — and a catalog set's letter IS its class. A
+      // wet set on the car leaves it unpinned (the planner picks), and its life
+      // with it: firstLife is only meaningful for the class it pins.
+      const cls = c.tyre.tread > 0 ? null : classOfCode(c.tyre.code);
+      const firstLife = cls ? Math.max(1, nominal / loadK * (1 - spent)) : undefined;
       const stops = plan.pin != null ? Math.max(0, plan.pin - done) : null;
+      // WHAT WAS RUN, not what was planned: the stint log. `used` was the plan's
+      // own history, so a player who refitted the same letter was told "NO MORE
+      // STOPS" by a re-cut that believed the rule already met. And a car that
+      // has met it (or run a wet set) owes nothing: no constraint at all.
+      const log = Array.isArray(c.tyreLog) ? c.tyreLog : [];
+      const used = log.slice(0, -1).map((e) => classOfCode(e && e.code)).filter(Boolean);
+      const owes = typeof SportingRegs === "undefined" || SportingRegs.compoundShort(log);
       const rel = AiDrive.stintPlan({ laps: lapsLeft, lifeLaps, pitLossLaps: plan.pitLossLaps || AiDrive.STRAT.PIT_LOSS_FALLBACK, roll: 0.5,
-                                      start: cls, firstLife, stops,
-                                      twoCompound: twoCompoundRule(G.lapsTarget), used: plan.seq.slice(0, done) });
+                                      start: cls || undefined, firstLife, stops,
+                                      twoCompound: twoCompoundRule(G.lapsTarget) && owes, used });
       if (!rel) return false;
       const newNext = rel.stops > 0 ? lap - 1 + rel.lapsAt[0] : null;
-      if (newNext != null && Math.abs(newNext - oldNext) < 2) return false;
-      if (newNext == null && rel.stops === 0 && plan.stops - done === 0) return false;
-      plan.seq = plan.seq.slice(0, done + 1).concat(rel.seq.slice(1));
+      if (newNext != null && oldNext != null && Math.abs(newNext - oldNext) < 2) return false;
+      if (newNext == null && oldNext == null) return false;
+      plan.seq = plan.seq.slice(0, done).concat(cls ? [cls] : plan.seq.slice(done, done + 1)).concat(rel.seq.slice(1));
       plan.stints = plan.stints.slice(0, done).concat(rel.stints);
       plan.stops = done + rel.stops;
       plan.lapsAt = plan.lapsAt.slice(0, done).concat(rel.lapsAt.map((k) => lap - 1 + k));
@@ -1587,6 +1635,7 @@ const PitLane = (function () {
         // itself (AiDrive.wornPays).
         lapsLeft: Math.max(0, (G.lapsTarget || 0) - (c.lap || 0)),
         pitLossLaps: plan.pitLossLaps,
+        scripted: !!plan.scripted,   // a real race's plan (js/race/real-race.js planFor)
       });
       if (!why) return "";
       // A weather stop fits what the WEATHER wants; any other stop follows the
@@ -1726,7 +1775,7 @@ const PitLane = (function () {
              cueM: CUE_M, boxCueM: BOX_CUE_M, moveM: MOVE_M,
              boxTol: BOX_TOL, squareByM: SQUARE_BY_M, squareLat: BOX_SQUARE_LAT,
              servedS: SERVED_S, mergeS: MERGE_S, lastCue: () => _lastCue,
-             planInfo, windowOf, replan, lossS, pinnedStops, setPinnedStops, twoCompoundApplies, compoundDue,
+             planInfo, nextCode, nextFor, windowOf, replan, lossS, pinnedStops, setPinnedStops, twoCompoundApplies, compoundDue,
              laneEdge, laneCentre, laneDrive, laneUniform, boxUniform, laneX, inLaneLat, inBoxLat,
              boxSquare: (c) => { const zz = z(); if (!zz || !c || !G.track) return false;
                                  Tracks.sample(G.track, c.s, _smp); return boxSquare(c, _smp, zz.side); },
