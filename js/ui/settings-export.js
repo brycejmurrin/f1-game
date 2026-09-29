@@ -1,4 +1,4 @@
-/* Apex 26 — SettingsExport: the FILES section of SETTINGS › DISPLAY › RENDERER,
+/* Apex 26 — SettingsExport: SETTINGS › BACKUP & RESTORE,
    which carries a player's state OUT of the browser and back IN. TWO files,
    deliberately separate:
 
@@ -63,7 +63,9 @@ const SPEC = [
   { k: "volMusic", lane: "json", group: "audio", def: 0.6, src: "js/audio/panel.js" },
   { k: "volSfx", lane: "json", group: "audio", def: 0.2, src: "js/audio/panel.js" },
   { k: "radioVoice", lane: "json", group: "audio", def: false, src: "js/audio/panel.js" },
+  { k: "announcer", lane: "json", group: "audio", def: true, src: "js/audio/announcer.js" },
   { k: "volRadio", lane: "json", group: "audio", def: 0.8, src: "js/audio/panel.js" },
+  { k: "radioFx", lane: "json", group: "audio", def: 1, src: "js/audio/panel.js" },
   { k: "voiceTune", lane: "json", group: "audio", def: {}, src: "js/audio/radio-voice.js" },
   { k: "radioChat", lane: "json", group: "audio", def: "normal", src: "js/race/race-radio.js", oneOf: ["off", "key", "normal", "chatty"] },
   { k: "radioPack", lane: "json", group: "audio", def: true, src: "js/audio/radio-voice.js" },
@@ -100,10 +102,12 @@ const SPEC = [
   { k: "hudMetricsLayout", lane: "json", group: "hud", def: "full", src: "js/game.js" },
   { k: "hudMapVis", lane: "json", group: "hud", def: "on", src: "js/game.js" },
   { k: "hudGapsVis", lane: "json", group: "hud", def: "on", src: "js/game.js" },
+  { k: "garageArrival", lane: "json", group: "camera", def: null, src: "js/garage/arrival.js (null = shipped arrival settings)" },
   // CAMERA (js/camera/mode-switch.js, offsets.js, cockpit-opts.js)
   { k: "camMode", lane: "json", group: "camera", def: 3, src: "js/camera/mode-switch.js (index into CAM_MODES)" },
   { k: "camTune", lane: "json", group: "camera", def: {}, src: "js/camera/offsets.js CAM_TUNE_DEFS (every def 0; the file holds {mode:{knob:value}} edits)" },
   { k: "cockpitHalo", lane: "raw", group: "camera", def: "1", src: "js/camera/cockpit-opts.js" },
+  { k: "cockpitWheel", lane: "raw", group: "camera", def: "f1", src: "js/camera/cockpit-opts.js WHEELS", oneOf: ["f1", "gt", "round", "none"] },
   { k: "cockpitTurnChaseLead", lane: "raw", group: "camera", def: "0.4", src: "js/camera/cockpit-opts.js LEAD_DEFAULT" },
   // LIGHTING TUNER (js/lighting)
   { k: "lightTune", lane: "json", group: "lighting", def: {}, src: "js/lighting/knobs.js TUNE_DEFS (the file holds {\"track|tod|weather\":{knob:value}} edits)" },
@@ -333,19 +337,21 @@ function applySettings(file, G) {
     const g = groups[row.group];
     if (!g || !Object.prototype.hasOwnProperty.call(g, row.k)) continue;
     const v = g[row.k];
-    if (!typeOk(v, defaultOf(row, G)) || (row.oneOf && !row.oneOf.includes(v))) { skipped++; continue; }
+    const def = defaultOf(row, G);
+    // null restores OS-following motion; it is not an unknown enum member.
+    if (!typeOk(v, def) || (row.oneOf && !(v === null && def === null) && !row.oneOf.includes(v))) { skipped++; continue; }
     try {
       // A write storage refused (full quota, private mode) is not APPLIED:
       // counting it reloaded the page into the values it had lost.
       let stored = true;
       if (row.lane === "raw") {
-        if (v === null) GameStore.store.rawDel(`apex26.${row.k}`);
+        if (v === null) stored = GameStore.store.rawDel(`apex26.${row.k}`) !== false;
         else stored = GameStore.store.rawSet(`apex26.${row.k}`, String(v)) !== false;
       } else {
         stored = GameStore.store.set(row.k, v) !== false;
       }
       if (stored) applied++; else failed++;
-    } catch (_) { skipped++; }
+    } catch (_) { failed++; }
   }
   return { ok: true, applied, skipped, failed, reason: null };
 }
@@ -437,7 +443,7 @@ function applyGarage(file) {
     if (!isGarageKey(k)) { skipped++; continue; }
     const v = garageValue(k, g[k]);
     if (v === undefined) { skipped++; continue; }
-    try { if (GameStore.store.set(k, v) !== false) applied++; else failed++; } catch (_) { skipped++; }
+    try { if (GameStore.store.set(k, v) !== false) applied++; else failed++; } catch (_) { failed++; }
   }
   return { ok: true, applied, skipped, failed, reason: null };
 }
@@ -458,10 +464,7 @@ function stamp() {
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
 }
 
-// The buttons join the RENDERER fold (#pm-display-adv-body), after the controls
-// RendererPicker injects there — the fold that already holds SAVE SCREENSHOT
-// and COPY DIAG, the other "hand a file out" buttons. Injected on
-// DOMContentLoaded like those, so the order in the fold is stable.
+// Settings backups have their own page; renderer diagnostics stay in DISPLAY.
 //
 // FIVE buttons, two files. Saving is one tap. LOADING IS TWO: it overwrites
 // what is already stored and then reloads the page, which is not something a
@@ -478,11 +481,14 @@ function create(G) {
   let picker = null;
   let armed = null;
   let armT = 0;
+  let pickVersion = 0;
+  let reloading = false;
 
   // ONE hidden <input type="file">, retargeted per use: iOS re-uses the sheet
   // and a second input would open a second one. `value = ""` before every click so
   // choosing the SAME file twice still fires change.
   function pick(onJson) {
+    ++pickVersion;   // a new chooser supersedes pending reads
     if (!picker) {
       picker = document.createElement("input");
       picker.type = "file";
@@ -491,15 +497,19 @@ function create(G) {
       document.body.appendChild(picker);
     }
     picker.onchange = () => {
+      if (reloading) return;
+      const version = ++pickVersion;
       const f = picker.files && picker.files[0];
       if (!f) return;
       const done = (text) => {
+        if (version !== pickVersion) return;
         let obj = null;
         try { obj = JSON.parse(text); } catch (_) { obj = null; }
         onJson(obj);
       };
-      if (typeof f.text === "function") f.text().then(done, () => onJson(null));
-      else { const r = new FileReader(); r.onload = () => done(String(r.result || "")); r.onerror = () => onJson(null); r.readAsText(f); }
+      const fail = () => { if (version === pickVersion) onJson(null); };
+      if (typeof f.text === "function") f.text().then(done, fail);
+      else { const r = new FileReader(); r.onload = () => done(String(r.result || "")); r.onerror = fail; r.readAsText(f); }
     };
     picker.value = "";
     picker.click();
@@ -531,6 +541,7 @@ function create(G) {
     const b = document.createElement("button");
     b.id = id; b.type = "button"; b.textContent = label; b.title = title;
     b.onclick = () => {
+      if (reloading) return;
       if (!armed || armed.el !== b) {
         disarm();
         armed = { el: b, label };
@@ -552,6 +563,7 @@ function create(G) {
         // paint), so re-reading them without one would leave the page showing
         // a mix of old and new.
         b.textContent = `${label} — ${r.applied} APPLIED, RELOADING…`;
+        reloading = true; b.disabled = true;
         setTimeout(() => { try { location.reload(); } catch (_) { /* file:// */ } }, 600);
       });
       tick();
@@ -560,7 +572,7 @@ function create(G) {
   };
 
   function mount() {
-    const host = document.getElementById("pm-display-adv-body");
+    const host = document.getElementById("pm-panel-files");
     if (!host || document.getElementById("pm-settings-file")) return;
     const h = document.createElement("h3");
     h.className = "pm-group-h";
@@ -568,7 +580,7 @@ function create(G) {
     h.textContent = "SETTINGS FILE";
     const note = document.createElement("p");
     note.className = "adv-help";
-    note.textContent = "Your preferences, tuners and control bindings — nothing from the garage, career or accounts. CHANGED lists only what differs from the shipped defaults, with the default each one replaced. LOAD asks twice, then reloads. The GARAGE has its own file, in the garage's TEAM tab.";
+    note.textContent = "Back up preferences, tuners and control bindings with SAVE ALL. SAVE CHANGED exports only differences from the defaults. LOAD asks twice, then reloads. Career progress and accounts are not included. For cars, setups and liveries, use the file buttons in GARAGE › TEAM.";
 
     host.append(h,
       saveBtn("pm-settings-changed", "SAVE CHANGED SETTINGS",

@@ -34,7 +34,12 @@ test("red flag: laps step back one, prog sits behind the line, the player faces 
   const player = G.player;
   assert.equal(player.lap, lap0 + 1, "the player should be on the lap after the crossing");
   const L = G.track.total;
-  const before = G.cars.map((c) => ({ c, lap: c.lap }));
+  const before = G.cars.map((c) => ({ c, lap: c.lap, prog: c.prog }));
+  // The rewind is the LEADER's (2026-09-29): it re-runs its lap, and every
+  // other car keeps the laps it was down at the flag, by distance.
+  const lead = before.filter((b) => !b.c.retired).sort((x, y) => y.prog - x.prog)[0];
+  const leadLap = Math.max(0, lead.lap - 1);
+  const lapWant = (b) => b === lead ? leadLap : Math.min(b.lap, Math.max(0, leadLap - Math.max(0, Math.floor((lead.prog - b.prog) / L))));
   // Leave something a re-grid must clear on an AI car.
   const ai = G.cars.find((c) => !c.human && !c.retired);
   ai.passOf = player; ai.defendSide = 1; ai.zoneKey = 3; ai.errT = 1.5;
@@ -44,9 +49,10 @@ test("red flag: laps step back one, prog sits behind the line, the player faces 
 
   const r = a.redFlag();
   assert.ok(r && r.state === "count", "redFlag() should re-arm the lights");
-  for (const { c, lap } of before) {
+  for (const b of before) {
+    const { c } = b;
     if (c.retired) continue;
-    assert.equal(c.lap, Math.max(0, lap - 1), `${c.code}: the lap it was on is re-run`);
+    assert.equal(c.lap, lapWant(b), `${c.code}: the leader re-runs its lap; the rest keep their laps down`);
     assert.ok(c.prog < c.lap * L && c.prog > c.lap * L - 200,
       `${c.code}: prog ${c.prog.toFixed(1)} must sit just behind the line of lap ${c.lap}`);
     assert.equal(c.speed, 0, `${c.code}: stationary on the box`);
@@ -80,4 +86,22 @@ test("a fresh grid-up still zeroes errCount — only a NEW race resets the instr
   for (const c of G.cars) c.errCount = 7;
   G.gridUp();
   for (const c of G.cars) assert.equal(c.errCount, 0, `${c.code}: a new race starts at zero mistakes`);
+});
+
+test("a car just behind a leader that has crossed is NOT a lap down after the restart", () => {
+  // Bug hunt 2026-09-29: each car stepped back its OWN lap. The leader 100 m
+  // past the line (lap 6) and a car 150 m behind it, still on lap 5, came
+  // out of the restart a full lap apart — "+1 LAP" and no way to win.
+  const G = g.G, L = G.track.total;
+  const live = G.cars.filter((c) => !c.retired);
+  const [a, b] = live;
+  for (const c of live) { c.lap = 1; c.s = 10; c.prog = 10; }            // the rest of the field, far back
+  a.lap = 6; a.s = 100; a.prog = 5 * L + 100;                            // leader, just crossed
+  b.lap = 5; b.s = L - 50; b.prog = 4 * L + (L - 50);                    // 150 m behind, not lapped
+  G.state = "race";
+  assert.equal(G.redFlagRestart(), true);
+  assert.equal(a.lap, 5, "the leader re-runs its lap");
+  assert.equal(b.lap, 5, "the car behind is on the leader's lap, not one down");
+  const lapped = live[2];
+  assert.equal(a.lap - lapped.lap, 5, "a car genuinely laps down keeps them (5 laps and 90 m behind at the flag)");
 });

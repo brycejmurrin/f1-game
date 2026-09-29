@@ -158,3 +158,19 @@ test("it reaches nothing from game.js — the reason it could leave the entry fi
       `the module must not reference ${forbidden} — it depends only on DrivingLine, SettingRow and the store`);
   }
 });
+
+
+test("braking cues share one Driving fold and distinguish steering from the visual line", () => {
+  const driving = SHELL.slice(SHELL.indexOf('id="pm-panel-driving"'), SHELL.indexOf('</section>', SHELL.indexOf('id="pm-panel-driving"')));
+  const cues = driving.slice(driving.indexOf('id="pm-braking-cues"'), driving.indexOf('</details>', driving.indexOf('id="pm-braking-cues"')));
+  for (const id of ["pm-brakecue", "pm-linebrakecue"]) {
+    assert.ok(cues.includes(`id="${id}"`), id + " belongs in the braking cues fold");
+    assert.equal([...SHELL.matchAll(new RegExp(`id="${id}"`, "g"))].length, 1, "no duplicate control");
+  }
+  assert.match(cues, /PREDICTIVE CUE/);
+  assert.match(cues, /LINE-SPEED CUE/);
+  assert.match(cues, /takes priority/);
+  assert.match(cues, /both cues OFF/);
+  assert.match(SHELL, /id="pm-linemode-label">LINE STEERING ASSIST/);
+  assert.match(SHELL, /visual DRIVING LINE is separate/);
+});

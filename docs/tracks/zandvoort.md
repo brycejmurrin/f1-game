@@ -27,6 +27,7 @@ Continuous dune undulation — short rises and dips throughout, plus two heavily
 | 0.00 | L | near | Pit building: long low white-grey box, repeated garage bays |
 | 0.00 | R | mid | Main grandstand: tall tiered slab box, dense orange crowd-tint top rows |
 | 0.04 | R | near | Tarzan hairpin: gravel apron + grandstand wrapping the turn |
+| 0.05 | L | far | **F1 Fanzone Ferris wheel** (`zandvoort-ferris-wheel`, ≈45 m approx) + stage |
 | 0.06 | both | far | Sand dunes: low rolling tan/green box ridges hemming the track |
 | 0.14 | L | near | Hugenholtz banked bowl: tilted R/W kerbs + SAFER outer rail, orange stand behind |
 | 0.20–0.55 | both | near | Closer dune shoulders + thin hedges/pines — sand dominates mid-lap |
@@ -82,14 +83,31 @@ entertainment attached, it is a festival that happens to contain a race —
 dutchgp.com, F1.com and visitzandvoort.com all lead with it. Two things carry
 that on sight:
 
-- **The Ferris wheel** (confirmed on dutchgp.com and visitzandvoort.com's
-  Racefestival page), behind the paddock side at gap 128.
-- **The Fanzone Main Stage**, where the DJ sets run between sessions. A
-  festival stage is a box of scaffolding with a roof, so the exposed **truss**
-  is the silhouette: deck, LED screen face, four legs, cross-truss roof, PA
-  stacks, and a lighting bar of orange cans.
+- **The Ferris wheel** — required id `zandvoort-ferris-wheel`. The on-circuit
+  F1 Fanzone wheel near Gate 2 / behind the final corner
+  ([gpdestinations.com trackside guide](https://gpdestinations.com/trackside-zandvoort-dutch-grand-prix/),
+  [scuderiafans 2025 guide](https://scuderiafans.com/f1-dutch-grand-prix-trackside-guide-schedule-fan-zones-and-live-entertainment/),
+  dutchgp.com 2026 wayfinding map). Seated beside the Fanzone stage on side −1
+  near S/F (T14 exit), ~120 m out. Height ≈45 m (radius 20) is **approximate** —
+  on-circuit diameter is not sourced. Distinct from the village Racefestival
+  wheel (Badhuisplein / town fair —
+  [dutchgp.com Racefestival](https://www.dutchgp.com/en/zandvoort-racefestival/)),
+  which is NOT built here.
+- **The Fanzone Main Stage** (`zandvoort-fanzone-stage`), where the DJ sets run
+  between sessions. A festival stage is a box of scaffolding with a roof, so
+  the exposed **truss** is the silhouette: deck, LED screen face, four legs,
+  cross-truss roof, PA stacks, and a lighting bar of orange cans.
 
-Both sit behind the paddock so they read on the main-straight skyline above the
-deliberately modest pit building without crowding it. **The stage crowd is one
-colour on purpose** — Zandvoort's is the most monochrome crowd in F1, so the
-usual speckle would be wrong here.
+Both sit behind the paddock-side outfield so they read on the main-straight
+skyline above the deliberately modest pit building without crowding it. **The
+stage crowd is one colour on purpose** — Zandvoort's is the most monochrome
+crowd in F1, so the usual speckle would be wrong here.
+
+### Also required (unchanged)
+- `zandvoort-lighthouse`, `zandvoort-watertoren` — coastal skyline markers.
+
+### UNCERTAIN (not built as fact)
+- Exact on-circuit Ferris-wheel height/diameter.
+- Exact Fanzone footprint vs game turn indices — placement is by Gate-2 /
+  Fanzone-stage proximity, stated as an assumption.
+- Village Badhuisplein wheel — intentionally omitted (off-circuit).

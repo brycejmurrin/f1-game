@@ -1030,6 +1030,9 @@ function scPassCall(ev) {
   if (!ev || !player || ev.type === "cleared") return;
   if (ev.type === "warn") { announce("GIVE THE POSITION BACK" + (ev.n > 1 ? " — " + ev.n + " PLACES" : ""), 2.5, "penalty-warn"); return; }
   player.penalty += ev.sec;
+  // The results countdown may already be running (the player just finished):
+  // re-read it so a time penalty that reorders the finish is served first.
+  resultT = 0;
   announce("+" + ev.sec + "s PENALTY — OVERTAKING UNDER CAUTION", 3, "penalty-hit");
   if (soundOn) GameAudio.penalty();
 }
@@ -2082,6 +2085,13 @@ function redFlagRestart() {
   IncidentSim.reset(); DebrisWorld.reset(); DebrisWorld.prime();
   const L = track.total;
   const order = cars.filter((c) => !c.retired).sort((a, b) => b.prog - a.prog);
+  // THE REWIND IS THE LEADER'S. Each car used to step back its OWN lap, so a
+  // car 150 m behind a leader that had just crossed (one lap number lower,
+  // not lapped) came out of the restart a full lap down: "+1 LAP" on the
+  // sheet and no way to win. The leader re-runs its lap; every other car
+  // keeps the laps it was actually down at the flag, by distance.
+  const lead = order[0];
+  const leadProg = lead ? lead.prog : 0, leadLap = lead ? Math.max(0, lead.lap - 1) : 0;
   order.forEach((c, i) => {
     const slot = TrackMesh.gridSlot(track, i);
     c.s = wrapS(slot.s); c.x = slot.x; c.xVis = c.x;
@@ -2097,14 +2107,16 @@ function redFlagRestart() {
     // so keeping it made the restart crossing lap n+1 — a leader on its last
     // lap was classified finished 14 m after the lights. Same lap/prog
     // relation as gridUp (lap 0 ↔ prog just under 0).
-    const progWas = c.prog;
-    if (c.lap > 0) {
+    const progWas = c.prog, lapWas = c.lap;
+    const down = Math.max(0, Math.floor((leadProg - progWas) / L));
+    const lapNew = c === lead ? leadLap : Math.min(lapWas, Math.max(0, leadLap - down));
+    if (lapNew < lapWas) {
       // Fuel follows laps actually driven, not the scoring lap we replay from
       // the grid. A restart cannot put burned fuel back in the tank.
-      c.fuelLap = Math.max(c.fuelLap || 0, c.lap + (c.fuelRestartLaps || 0));
-      c.fuelRestartLaps = (c.fuelRestartLaps || 0) + 1;
-      c.lap--;
+      c.fuelLap = Math.max(c.fuelLap || 0, lapWas + (c.fuelRestartLaps || 0));
+      c.fuelRestartLaps = (c.fuelRestartLaps || 0) + (lapWas - lapNew);
     }
+    c.lap = lapNew;
     c.prog = c.lap * L - (L - c.s);
     c._progGift = (c._progGift || 0) + (c.prog - progWas);
     c.head = 0; c.yawVis = 0; c.rPrevHead = 0; c.rPrevYawVis = 0;
@@ -2227,7 +2239,7 @@ function gridUp(preOrder) {
     // (PitLane.think never executes a human's; the HUD and the engineer read it).
     c.pitPlan = tyres.on() ? pits.planFor(c.human ? 0.5 : (h >>> 24) / 256, !!c.human, 0, c) : null;
     if (c.pitPlan && !c.human) c.tyreClass = c.pitPlan.start;
-    tyres.fit(c, tyres.startRecord(c));
+    tyres.fit(c, tyres.startRecord(c, TyreModel.treadFor(raceWeather, roadWetness())));
   });
   // Seed the PLAYER's world pose HERE rather than leaving it to the first
   // physics tick (the `c.px == null` init in update()). The chase rig has two
@@ -3909,10 +3921,11 @@ function raceIntro(go) {
   if (!flybyShots) flybyShots = planned || FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0);   // a different flyby each load (never the sim RNG); an editor-saved list plays as authored
   if (flybyShots) flybyShots = FlybySeq.withoutSlot(flybyShots);   // nobody knows your slot on a random grid; a small grid has empty boxes
   if (flybyShots && real && (real.watch || real.startLap > 1)) flybyShots = FlybySeq.withoutGrid(flybyShots);
-  FlybySeq.setDuration(loadingScreen.nextFlyMs());   // plan every pan for the seconds this run has
+  const info = loadingInfo();   // before the duration: a real race's read (info.readMs) may stretch the flyby
+  FlybySeq.setDuration(loadingScreen.nextFlyMs(info.readMs));   // plan every pan for the seconds this run has
   if (world) FlybySeq.warm(track, flybyShots);   // plan the opening shots now, the rest in slices before their cuts
   FlybySeq.reset();   // this run's shot 0 is a cut, not a glide from wherever the camera was
-  loadingScreen.run(loadingInfo(), go);
+  loadingScreen.run(info, go);
 }
 /** WHAT THE LOADING SCREEN DESCRIBES: the circuit about to be raced, this
  *  session's settings, and whether there is a built world to fly over. Named
@@ -3922,7 +3935,7 @@ function raceIntro(go) {
  *  the next time a row is added to the card. */
 function loadingInfo() {
   const real = realRace.intro();
-  return {
+  const out = {
     track: Tracks.LIST[trackIdx], laps: raceLaps,
     gp: real ? real.title : SeasonCal.gpName ? SeasonCal.gpName(Tracks.LIST[trackIdx]) : undefined,   // the 2026 REAL calendar renames two rounds (season-cal.js); a real race is its own event
     real,   // the Data Hub's real race (RealRace.intro): the event, whose car, from which lap — the announcer reads it
@@ -3935,7 +3948,10 @@ function loadingInfo() {
     // circuit switched a moment ago, scenery still downloading) would put a
     // black hold where the cinematic should be, which reads as a hang.
     hasWorld: menuWorld(), shots: flybyShots, grid: (cars || []).map((c) => ({ code: c.code, colour: c.color, isPlayer: c === player && FlybySeq.slotKnown() })),   // the card's grid graphic + radio check: menuGridCars() seated `cars` in grid order
+    readMs: 0,
   };
+  if (real && announcer.readMs) out.readMs = announcer.readMs(out);   // the race-so-far read: the flyby stretches to it (LoadingScreen.flyMsFor)
+  return out;
 }
 // ACTIVE AERO activation zones (js/physics/aero-zones.js) — pure circuit geometry.
 aeroZ = AeroZones.create(G);
@@ -4358,7 +4374,7 @@ function update(dt) {
   // countdown while somebody is still driving. The hard time cap remains the
   // bounded escape hatch for an unfinished or stale participant.
   if (resultT === 0) {
-    resultT = RaceControl.finishDelay(cars, raceT, lapsTarget);
+    resultT = RaceControl.finishDelay(cars, raceT, lapsTarget, realRace.raceT0());
     // A GUEST holding the host's classification is done once ITS car is: its
     // view of the host's car can lag or disagree (a finish still in flight, a
     // pose lost to extrapolation), and waiting on that view meant the host's
@@ -4589,7 +4605,7 @@ function updateCar(c, dt, ranked) {
   if (!c.human && c.tyreClass) {
     vmax *= tyres.on() ? (1 + (c.tyre ? c.tyre.off : 0)) * tyres.tractionMul(c)
                        : AiDrive.tyrePace(c.tyreClass, c.lap);
-  }
+  } else if (c.human) vmax *= tyres.tractionMul(c);   // the same curve for the player: perfMul only slows the climb to vmax, never the cap (exactly 1 with wear off)
   // FUEL BURN, the counterweight that gives a stint its shape: the car gets
   // lighter and faster while the tyre goes off and gets slower, and where those
   // two cross is the pit window. Exactly 1 when the setting is off.
@@ -4613,6 +4629,8 @@ function updateCar(c, dt, ranked) {
     // The O(n) pass is the price of seeing lapped traffic.
     const L = track.total;
     // sep (consumer below) is fused into this scan — its window is a subset of [-13,+34].
+    // BACK: the mirrors reach (AiDrive.mirrorReach — a time behind, not a flat 13 m).
+    const BACK = AiDrive.mirrorReach(aiT, c.speed), REJ = Math.max(34.1, BACK + 0.1);
     const MIN_GAP = AiDrive.minLatGap(hw, !!track.street);
     for (let i = 0; i < ranked.length; i++) {
       const o = ranked[i];
@@ -4621,9 +4639,9 @@ function updateCar(c, dt, ranked) {
       if (!Number.isFinite(dprog)) continue;
       // Cheap reject before wrap — same pattern as pairContact (PERF-FINDINGS Δprog 5.01%).
       const ad = dprog < 0 ? -dprog : dprog;
-      if (ad > 34.1 && ad < L - 34.1) continue;
+      if (ad > REJ && ad < L - REJ) continue;
       dprog = ((dprog + L / 2) % L + L) % L - L / 2;
-      if (dprog < -13 || dprog > 34) continue;   // extended both ways: slipstream ahead, chaser behind
+      if (dprog < -BACK || dprog > 34) continue;   // extended both ways: slipstream ahead, chaser behind
       const dx = o.x - c.x;
       const adp = dprog < 0 ? -dprog : dprog;
       if (adp < 5.5) {            // alongside: eats the room on its side
@@ -4656,8 +4674,9 @@ function updateCar(c, dt, ranked) {
     // ahead of US holding it up is getting through whatever we do, and
     // defendPull was the only answer the AI had. Speeds compare to each other,
     // never to a literal, so the window holds at every OVERALL SPEED.
-    const letPassCase = state === "race" && !blocker && chaser
-      && chaserGap < 9 && chaser.speed > c.speed + 2.5 * (vTop() / VMAX);   // a closing RATE rides the pace scale too
+    // BLUE FLAGS ONLY (AiDrive.letPassCase): the chaser must be LAPPING us — a lap or more ahead in progress.
+    const letPassCase = AiDrive.letPassCase(state === "race", blocker, chaser, chaserGap, chaser ? chaser.speed : 0,
+      c.speed, vTop() / VMAX, !!chaser && chaser.prog - c.prog > track.total * 0.5);
     if (letPassCase) c.letPassT = (c.letPassT || 0) + dt;
     else c.letPassT = Math.max(0, (c.letPassT || 0) - dt * 1.5);
     letPass = (c.letPassT || 0) > AiDrive.letPassDelay(aiT);
@@ -7772,8 +7791,10 @@ function render(dt) {
       tmpP[2] = rp.world ? rp.z : smp2.p[2] + smp2.r[2] * renderX;
       tmpP[1] = smp2.p[1];
       // Behind-camera cull: AI cars strictly behind the view are never visible
-      // (no mirrors). Near-eye: origin within ~3.4 m fills the near plane — skip.
-      // Local player is never culled. Y without bank is fine for the near-eye test.
+      // (no mirrors). Near-eye: only an eye INSIDE the body box (GameCams.eyeInsideCar,
+      // grown by the near plane) — a 3.4 m radius hid a rival ALONGSIDE in the onboard
+      // views as the player drew level. Local player is never culled. Y without bank is
+      // fine for the near-eye test.
       // Side frustum is applied AFTER the car is queued for the shadow map —
       // a rival just off a ~60° chase FOV can still throw a sun/car shadow
       // onto the visible road (the car map is a ±42 m ortho around the player).
@@ -7781,7 +7802,7 @@ function render(dt) {
         const dx = tmpP[0] - camEye[0], dz = tmpP[2] - camEye[2];
         if (dx * _camFwdX + dz * _camFwdZ < -6) continue;   // 6 m grace behind the eye
         const dy = tmpP[1] - camEye[1];
-        if (dx * dx + dy * dy + dz * dz < 3.4 * 3.4) continue;
+        if (GameCams.eyeInsideCar(-(dx * smp2.t[0] + dz * smp2.t[2]), -(dx * smp2.r[0] + dz * smp2.r[2]), -dy, _nearM + 0.3)) continue;
       }
       bankC = Tracks.banking(track, cS, renderX, _bankScratch);
       tmpP[1] = smp2.p[1] + (bankC ? bankC.dy : 0);   // road SURFACE height: legit
@@ -8455,8 +8476,8 @@ function tickBody(now) {
     // the pause menu, and its placements publish one zero-dt frame. Resuming tears
     // it down (setPaused -> exitPhotoMode -> FreeCam.onPhotoExit), so no unpaused
     // state in which it should still be flying.
-    if ((state === "race" || state === "count") &&
-        (!els.lighting.hidden || !els.camtune.hidden || !els.flyby.hidden || photoMode)) {   // photoMode: the FREE CAMERA panel docks with no tuner open
+    if (setupPreviewOn || ((state === "race" || state === "count") &&
+        (!els.lighting.hidden || !els.camtune.hidden || !els.flyby.hidden || photoMode))) {   // photoMode: the FREE CAMERA panel docks with no tuner open
       // NO governor here: paused preview frames are vsync-cheap, so the governor
       // only ever stepped the scale UP toward full res — each step a complete
       // render-target reallocation. The scale simply stays where the race left it
@@ -8972,7 +8993,8 @@ function openGarage(from) {
   // the module cannot hold the helper itself. The build runs inside the
   // transition callback — vt's 60 ms drop-safety applies it directly if the
   // page is not compositing.
-  vt(openSetup);
+  if (from === "pit") { openSetup(); setupCam.startArrival(); }
+  else vt(openSetup);
 }
 $("mb-garage").onclick = () => openGarage("menu");
 // ── WORK ON CAR, from inside a pit stop ────────────────────────────────────
@@ -9013,6 +9035,7 @@ function closePitWork() {
 // Leaving the GARAGE, shared by DONE and BACK: the screen's own teardown plus
 // the part maths, which both exits owe the rest of the game.
 function leaveGarage() {
+  setupCam.cancelArrival();
   $("carsetup").hidden = true;
   setupPreviewOn = false;
   recomputePlayerMods();

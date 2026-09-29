@@ -149,3 +149,19 @@ test("invalid driver points and overflowing legacy aliases stay finite and idemp
   SM.remapPoints(overflow);
   assert.equal(JSON.stringify(overflow), snap);
 });
+
+test("a stored display code is never overwritten from the shipped roster on load", () => {
+  // award() files the player's seat as "YOU" (and market moves / MY TEAM hires
+  // re-label seats); remapPoints reset it to the shipped seat code on every
+  // load, so the hub named the player's row after the AI and a boot re-save
+  // diverged from disk (a spurious cross-tab conflict).
+  const SM = load();
+  const save = { v: 1, flavour: "driver", team: "haas", money: 100, year: 2026,
+    season: { round: 2, pts: { "haas:0": 25 }, teamPts: { haas: 25 }, driverCodes: { "haas:0": "YOU" } } };
+  const c = SM.migrateCareer(save);
+  assert.equal(c.season.driverCodes["haas:0"], "YOU");
+  assert.equal(SM.migrateCareer(c).season.driverCodes["haas:0"], "YOU", "and on every later load");
+  const fresh = SM.migrateCareer({ v: 1, flavour: "driver", team: "haas", money: 1, year: 2026,
+    season: { round: 1, pts: { AAA: 25 }, teamPts: {}, driverCodes: {} } });
+  assert.equal(fresh.season.driverCodes["haas:0"], "AAA", "a missing code is still filled from the roster");
+});

@@ -242,7 +242,7 @@ test("the flyby editor keeps the world rendering while it is open", () => {
   const i = game.indexOf("if (paused && !netPlay.active())");
   assert.ok(i > 0, "tickBody still parks on a paused frame");
   const branch = game.slice(i, i + 2400);
-  const gate = branch.match(/if \(\(state === "race" \|\| state === "count"\) &&[\s\S]{0,200}?\) \{/);
+  const gate = branch.match(/if \(setupPreviewOn \|\| \(\(state === "race" \|\| state === "count"\) &&[\s\S]{0,200}?\) \{/);
   assert.ok(gate, "the paused branch still gates its preview render");
   for (const panel of ["lighting", "camtune", "flyby"]) {
     assert.match(gate[0], new RegExp("!els\\." + panel + "\\.hidden"),
@@ -614,7 +614,7 @@ test("the clearance grid index finds exactly what a full scan finds", async () =
 
 test("the flyby's plans are made before it plays, not at each cut", () => {
   const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
-  const warm = game.indexOf("FlybySeq.warm(track, flybyShots)"), run = game.indexOf("loadingScreen.run(loadingInfo(), go)");
+  const warm = game.indexOf("FlybySeq.warm(track, flybyShots)"), run = game.indexOf("loadingScreen.run(info, go)");   // info: built once, before the duration (a real race's read stretches it)
   assert.ok(warm > 0 && run > warm, "raceIntro warms the flyby's plans before the loading screen runs it");
 });
 
