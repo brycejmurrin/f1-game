@@ -27,12 +27,13 @@ const Duel = (function () {
   // AWARENESS IS DELIBERATELY NOT BUMPED, and this was a bug in the first cut of
   // this table. It reads as "sharper driver", but in ai-drive.js it is the
   // CAUTION axis and it runs the wrong way for a benchmark:
-  //     letPassDelay = lerp(4.2, 1.8, awareness)   -> raising it makes the
-  //         rival CONCEDE SOONER once a faster car is behind
   //     awareMul     = lerp(1.25, 0.7, awareness)  -> raising it makes the
   //         rival PULL THE TRIGGER LESS on its own overtakes
-  // So +10 awareness bought a rival that yields quicker and attacks less —
-  // the opposite of the intent. Left at 0: lowering it instead would buy a
+  // So +10 awareness bought a rival that attacks less — the opposite of the
+  // intent. (It also used to CONCEDE sooner through letPassDelay; since
+  // 2026-09-29 that timer is a blue flag only, for a car LAPPING it, and
+  // awareness now also widens the mirrors and the cover window — which a
+  // defending rival would gain — but the attack cost stands.) Left at 0: lowering it instead would buy a
   // stubborn rival at the cost of its box-exit, launch reaction and
   // pressure-error handling, which is a worse car rather than a harder one.
   //
@@ -48,10 +49,10 @@ const Duel = (function () {
    * The weighting is BUMP's, for BUMP's reasons: craft is the axis that raises
    * both halves of racecraft, consistency removes mistakes under pressure,
    * experience shortens the overtake cooldown — and AWARENESS STAYS 0, because
-   * in ai-drive.js it is the CAUTION axis and runs backwards (letPassDelay
-   * 4.2 -> 1.8, awareMul 1.25 -> 0.7), so lifting it buys a rival that conceds
-   * sooner and attacks less. Raising it to "sharpen" him is the one change here
-   * that would make him EASIER.
+   * in ai-drive.js it is the CAUTION axis on attack (awareMul 1.25 -> 0.7), so
+   * lifting it buys a rival that attacks less (letPassDelay is a blue flag only
+   * since 2026-09-29, so it no longer concedes a position fight). Raising it to
+   * "sharpen" him would make his attack EASIER to live with.
    *
    * Pace stays the smallest, and barely matters anyway: skill() spans only
    * SKILL_SPAN 0.0232 across the whole 0..100 pace range, so +3 pace moves top
