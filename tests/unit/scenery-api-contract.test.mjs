@@ -152,6 +152,18 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
       "montreal-wall-of-champions-stand",
       "montreal-biosphere",
     ],
+    // Wave 6 — Paul Ricard F1-era landmarks (Blue Zone already draped;
+    // main stand / Beausset hill / 2019 pit entry / aerodrome / Provençal hut)
+    paul_ricard: [
+      "paul-ricard-main-grandstand",
+      "paul-ricard-beausset-hill",
+      "paul-ricard-pit-entry-2019",
+      "paul-ricard-race-control",
+      "paul-ricard-aerodrome",
+      "paul-ricard-airfield-tower",
+      "paul-ricard-cabanon",
+      "paul-ricard-drywall",
+    ],
   };
   for (const [track, ids] of Object.entries(expected)) {
     const body = landmarkSource(track);
