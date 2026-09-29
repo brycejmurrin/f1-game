@@ -127,6 +127,10 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
       "qatar-katara-towers",
       "qatar-lusail-stadium",
     ],
+    // Wave 5 — Hungaroring 2024–25 paddock / main tribune
+    hungaroring: ["hungaroring-pit-complex", "hungaroring-main-tribune"],
+    // Wave 5 — Catalunya landmarks (Tilke main stand + pit-end scoreboard)
+    catalunya: ["catalunya-main-grandstand", "catalunya-pit-end-scoreboard", "catalunya-race-control"],
   };
   for (const [track, ids] of Object.entries(expected)) {
     const body = landmarkSource(track);

@@ -302,23 +302,56 @@ test("the camera path is C1 — no node-rate or clamp-handover acceleration spik
   }
 });
 
-test("VISOR is the cockpit eye 0.55 m forward: same height, same aim, no ground clamp", () => {
-  // The user asked for "cockpit but slightly more forward, without the
-  // steering wheel". The rig is what game.js skips; the EYE is pinned here so
-  // a tuning pass on cockpit moves visor with it and the two never drift apart.
+test("VISOR is the cockpit eye, same aim, and the rig is anchored on the same car point", () => {
+  // The owner (2026-09-29): "start with exact cockpit bodywork, just remove
+  // the wheel first". The eye is pinned RELATIVE to cockpit's so a tuning pass
+  // on cockpit moves visor with it; the rig's origin (cockpitViewmodelAxes with
+  // visor's own offsets) must land on the SAME car point as cockpit's, so a
+  // later move of the visor eye moves the eye, never the tub.
   const track = makeTrack((s) => HILL(s) + RIPPLE(s));
   const cams = loadGameCams(makeTracksStub(track));
+  assert.equal(cams.VISOR_EYE_FWD, cams.COCKPIT_EYE_FWD, "the cockpit's fore/aft seat");
+  assert.equal(cams.VISOR_EYE_UP, cams.COCKPIT_EYE_UP, "the cockpit's eye height");
+  // The game's frame is right-handed with +Y up: facing +Z (carHead 0), right is -X, so R × F = +Y.
+  const R = [-1, 0, 0], F = [0, 0, 1];
   for (const s of [200, 1100, 1210]) {
     // vantage() writes pooled arrays IN PLACE: copy the first sample before taking the second.
     const c0 = chaseAt(cams, track, s, "cockpit");
     const c = { eye: [...c0.eye], tgt: [...c0.tgt], fov: c0.fov };
     const v = chaseAt(cams, track, s, "visor");
-    assert.ok(Math.abs((v.eye[2] - c.eye[2]) - 0.55) < 1e-9, `eye slid forward by 0.55 at s=${s}: ${v.eye[2] - c.eye[2]}`);
-    assert.ok(Math.abs(v.eye[1] - c.eye[1]) < 1e-9, `same eye height at s=${s}`);
+    assert.ok(Math.abs(v.eye[2] - c.eye[2]) < 1e-9, `same eye fore/aft at s=${s}: ${v.eye[2] - c.eye[2]}`);
+    assert.ok(Math.abs(v.eye[1] - c.eye[1]) < 1e-9, `same eye height at s=${s}: ${v.eye[1] - c.eye[1]}`);
     assert.ok(Math.abs(v.eye[0] - c.eye[0]) < 1e-9, `no lateral offset at s=${s}`);
     assert.ok(Math.abs(pitchOf(v) - pitchOf(c)) < 0.05, `same aim pitch at s=${s}: ${pitchOf(v)} vs ${pitchOf(c)}`);
     assert.ok(Math.abs(v.fov - c.fov) < 1e-9, "same speed-scaled FOV");
+    const oR = [0, 0, 0], oU = [0, 0, 0], oF = [0, 0, 0], pC = [0, 0, 0], pV = [0, 0, 0];
+    cams.cockpitViewmodelAxes(R, F, 0, c.eye, oR, oU, oF, pC);
+    cams.cockpitViewmodelAxes(R, F, 0, v.eye, oR, oU, oF, pV, cams.VISOR_EYE_FWD, cams.VISOR_EYE_UP);
+    for (let i = 0; i < 3; i++) assert.ok(Math.abs(pC[i] - pV[i]) < 1e-9, `rig origin on the same car point at s=${s} (axis ${i}): ${pC[i]} vs ${pV[i]}`);
+    // And when the visor eye moves (the planned closer/lower seat), the anchor
+    // still lands on the car: an eye 0.30 forward and 0.10 down, with offsets to match.
+    const moved = [v.eye[0], v.eye[1] - 0.10, v.eye[2] + 0.30], pM = [0, 0, 0];
+    cams.cockpitViewmodelAxes(R, F, 0, moved, oR, oU, oF, pM, cams.COCKPIT_EYE_FWD + 0.30, cams.COCKPIT_EYE_UP - 0.10);
+    for (let i = 0; i < 3; i++) assert.ok(Math.abs(pC[i] - pM[i]) < 1e-9, `a moved eye keeps the rig on the car (axis ${i})`);
   }
+});
+
+test("VISOR draws the cockpit rig without the steering wheel, and the column and bulkhead it unclips from", () => {
+  const game = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const draw = readFileSync(join(ROOT, "js/car/car-draw.js"), "utf8");
+  assert.match(game, /GameCams\.cockpitViewmodelAxes\([^;]*visorEye \? GameCams\.VISOR_EYE_FWD : null, visorEye \? GameCams\.VISOR_EYE_UP : null\);/,
+    "the rig is anchored with visor's own eye offsets");
+  assert.match(game, /drawCockpitRig\(c, _cockMat, dt, paint, visorEye\);/, "the same rig is drawn for visor, flagged wheel-less");
+  const rig = draw.slice(draw.indexOf("function drawCockpitRig("));
+  const cut = rig.indexOf("if (noWheel) {");
+  assert.ok(cut > 0, "the no-wheel branch exists");
+  assert.ok(rig.indexOf("cockpitBodyMesh(c.team, c)") < cut && rig.indexOf("drawPlayerWheels(") < cut, "the body and the front wheels are drawn before it");
+  const branch = rig.slice(cut, rig.indexOf("return;", cut) + 7);
+  assert.match(branch, /G\.gfx\.draw\(getCockpitDash\(\), _rigA, opt\);/, "visor draws the column, boss and bulkhead, unrolled at the wheel mount");
+  assert.ok(rig.indexOf("getCockpitWheel(") > cut + branch.length, "the steering wheel is drawn after the branch returns, so visor never draws it");
+  // The bulkhead closes the opening wall to wall: 0.76 local x 0.80 scale = ±0.304 m against inner walls at ±0.315.
+  const mesh = readFileSync(join(ROOT, "js/car/car-mesh.js"), "utf8");
+  assert.match(mesh, /_rigBox\(out, 0, -0\.090, 0\.32, 0\.76, 0\.32, 0\.035, CARB\);/, "the front bulkhead spans the tub and meets the coaming");
 });
 
 test("EVERY world-facing camera mode is C1 on a gradient", () => {

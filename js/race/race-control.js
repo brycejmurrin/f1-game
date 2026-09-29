@@ -234,7 +234,7 @@ const RaceControl = (function () {
       // shared weather, not the flag): the one place the player is told why the
       // Overtake button went dead in the wet. Retried until the banner takes it.
       if (!lowGripNoted && lowGrip() && typeof G.announce === "function")
-        lowGripNoted = G.announce("LOW GRIP — OVERTAKE OFF", 3, "race") !== false;
+        lowGripNoted = G.announce("LOW GRIP — OVERTAKE OFF", 3, "warning") !== false;
       if (!G.netPlay.ownsRaceControl()) return;
       // A held flag flies whether or not the hazard loop is switched on: the
       // player's CAUTIONS setting governs debris, not a race replayed by script.

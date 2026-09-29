@@ -19,7 +19,7 @@ window.CamModes = (function () {
     { id: "low",       label: "LOW",       cut: 0.4 },
     { id: "tcam",      label: "T-CAM",     cut: 0 },
     { id: "rear",      label: "REAR CAM",  cut: 0.15 },
-    { id: "visor",     label: "VISOR",     cut: 0 },        // cockpit eye, forward of the wheel, no rig
+    { id: "visor",     label: "VISOR",     cut: 0 },        // the cockpit without its steering wheel (a linked phone is the wheel)
   ];
   const HOLD_MS = 340;   // CAM button hold before the picker opens
 

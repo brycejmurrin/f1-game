@@ -33,7 +33,21 @@ const LANDSCAPE = { width: 844, height: 390 };
 async function race(page, trackId = "monza") {
   await toMenu(page);
   await page.evaluate(() => window.__apex.netStop());
-  await pinFreePlay(page, { race: [trackId] });
+  await pinFreePlay(page);
+  // AWAIT THE START'S OWN VERDICT. __apex.race() returns a thenable that
+  // rejects with the reason a start was dropped ("Race start canceled:
+  // settings changed", "…superseded"); created inside pinFreePlay it was never
+  // awaited, so a dropped start read only as a 45 s wait for a track that was
+  // never coming. Same bound, now with a cause.
+  const verdict = await page.evaluate(([id, ms]) => Promise.race([
+    // grid: "tier" — straight to the grid. The rule is in-memory, and the room
+    // spec's guest took the host's "quali" on this same worker page: the first
+    // solo start here then opened qualifying and never reached the grid (the
+    // flake that read as a 45 s boot timeout after the whole net group).
+    Promise.resolve(window.__apex.race(id, null, null, { grid: "tier" })).then(() => "ok", (e) => "rejected: " + (e && e.message)),
+    new Promise((r) => setTimeout(() => r("still pending after " + ms + " ms"), ms)),
+  ]), [trackId, BOOT_MS]);
+  expect(verdict, "the race start").toBe("ok");
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => {
     const A = window.__apex;

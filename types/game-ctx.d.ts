@@ -408,10 +408,10 @@ interface GameCtx {
   readonly openCoachDetails: () => void;
   /**
    * The radio's VOICE — js/audio/radio-voice.js. Always an object: create()
-   * hands back a frozen no-op (RadioVoice.inert) where speechSynthesis is
-   * missing, so no caller needs a guard. AudioPanel owns the toggle.
+   * hands back a frozen no-op when neither synthesis nor a recorded pack is
+   * available, so no caller needs a guard. AudioPanel owns the toggle.
    */
-  readonly radio: { setEnabled(b: boolean): void; setVolume(v: number): number; available(): boolean; unlock(): void; stop(): void };
+  readonly radio: { setEnabled(b: boolean): void; setVolume(v: number): number; available(): boolean; unlock(): void; stop(): void; yieldToSpotter(): boolean };
   /**
    * The PRE-RACE ANNOUNCER — js/audio/announcer.js. Always an object, on the
    * same inert() deal as `radio`. AudioPanel owns its switch and voice row;
@@ -422,7 +422,7 @@ interface GameCtx {
    * The RACE RADIO — js/race/race-radio.js: the engineer's race calls and the
    * in-race commentary. AudioPanel drives its two settings (chatter, commentary).
    */
-  readonly raceRadio: { update(dt: number): void; request(): string; reset(): void; setChat(v: string): string; setComm(v: string): string; chat(): string; comm(): string; debug(): Record<string, unknown> };
+  readonly raceRadio: { update(dt: number): void; request(): string; reset(): void; setChat(v: string): string; setComm(v: string): string; chat(): string; comm(): string; trafficBusy(): boolean; debug(): Record<string, unknown> };
   /** What the loading card describes — the flyby editor previews the same object. */
   readonly loadingInfo: () => Record<string, unknown>;
   /** js/ui/loading-screen.js, so the flyby editor can hold the card up and move it. */
