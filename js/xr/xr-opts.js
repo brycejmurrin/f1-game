@@ -159,7 +159,7 @@ const XROpts = (function () {
 
     const hint = document.createElement("p");
     hint.id = "pm-xr-reload";
-    hint.className = "pm-hint";
+    hint.className = "tune-label";
     hint.hidden = true;
     hint.textContent = "Reload to apply";
     wrap.appendChild(hint);
