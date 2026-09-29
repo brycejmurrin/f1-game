@@ -2567,8 +2567,10 @@ let _warmKey = "";
 const warmPrograms = () => { try { if (gfx.warm) { gfx.warm(); _warmKey = menuKey(trackIdx); } } catch (_) { /* optimisation only */ } };
 async function menuFinish(current, key) {
   await prepareMenuCarAssets(current);
+  if (!current()) return;
   if (await menuIdle(current)) { warmPrograms(); FlybySeq.reset(); _menuGate.warm = 2; }   // reset: a new world's shot 0 snaps, never glides in from the last one
   const lit = await menuLampBake(current);
+  if (!current()) return;   // a RACE! tap or a new selection owns the sequencer now
   FlybySeq.setDuration(loadingScreen.nextFlyMs());
   const fly = { key, track, shots: FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0, false) }, step = FlybySeq.planSteps(track, fly.shots);
   while (current() && !step()) await menuSlice();
@@ -2587,10 +2589,9 @@ function scheduleFlybyTrack(settle) {
     (!els.select.hidden || !$("race-settings").hidden);
   const prepare = async () => {
     if (!current()) return;
-    // Compilation owns its scene/targets until it settles; never free them
-    // to service a newer selection in the middle of an asynchronous warm-up.
-    if (gfx.warming && gfx.warming()) { flybyBuildTimer = setTimeout(prepare, 100); return; }
     try {
+      // Download independently of the old world's compilation; only replacing
+      // its scene/targets must wait. ensureScenery shares in-flight requests.
       await ensureScenery(want);
       if (!current()) return;
       if (gfx.warming && gfx.warming()) { flybyBuildTimer = setTimeout(prepare, 100); return; }
