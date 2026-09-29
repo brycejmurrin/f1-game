@@ -40,10 +40,11 @@
      contract and silverstone.js was already using `overheadSpan` directly.
      The two crossings (§4, 0.1483 and 0.7930) had abutment towers either side
      and open sky between them. They now span.
-   - The Whites spectator TUNNEL is likewise a pair of `place()` portal
-     headwalls plus a sunken `groundPatch` approach; nothing bores terrain.
-   - `grandstandEx` crowd/shell are colour arrays, so the Moss "crowd" of §4
-     row 0.4817 is a `spectatorHill` with a `terrace` on it, not a crowd flag.
+   - The Whites spectator TUNNEL is a required Whites-tunnel modelGroup of
+     portal headwalls plus a sunken `groundPatch` approach; nothing bores terrain.
+   - Moss Corner's crowd bank is a required Moss-corner-bank modelGroup with
+     positive-rake seat tiers (wave 6) — the old spectatorHill+terrace pair
+     coplanar-clipped.
 
    Emitter note (measured on this tree, not assumed): forestEdge's opts
    `spacing` is INERT — changing it 20 -> 200 moved the vertex count by zero.
@@ -55,10 +56,10 @@
 (window.TrackScenery = window.TrackScenery || {})["mosport"] =
   function (api) {
       const { mountain, n, hash, every, anchor, onTrack, out, terrainYAt,
-        tree, bush, hedge, forestEdge,
-        building, grandstandEx, spectatorHill, terrace,
+        tree, bush, hedge, forestEdge, vadd, MAT, modelGroup, seat,
+        grandstandEx, spectatorHill, indexSolid,
         guardrail, fence, tyreWall, marshalPost, cameraTower, broadcastCompound,
-        billboard, sponsorHoarding, gantry, motorhome, groundPatch,
+        billboard, sponsorHoarding, gantry, groundPatch,
         place, ridge, circuitKit } = api;
 
       // ---------------------------------------------------------------------
@@ -148,19 +149,40 @@
       // 2. s 0.005 +1 13 — PIT BLOCK, PADDOCK, BROADCAST, CAMERA TOWER
       //    §4: ONE long low flat-roofed garage run, club scale, NO tower
       //    stack. A short motorhome row behind it. Highest point of the lap.
-      //    building(k, side, gap, w, h, d, opts): w is ACROSS-track depth,
-      //    d is the run ALONG the track, wall tint goes in opts.
+      //    Wave-6: pit run is a required modelGroup (club-scale CTMP paddock).
       // ---------------------------------------------------------------------
-      building(K(0.9890), 1, 13, 13, 5.6, 132, { col: WALL, roof: ROOF, flat: true });
-      building(K(0.0320), 1, 17, 10, 4.4, 22, { col: WALL_2, roof: ROOF, flat: true });
+      {
+        const a = anchor(K(0.0000), 1, 18);
+        const foot = a.c.slice();
+        const gy = terrainYAt(foot[0], foot[2]);
+        if (gy != null) foot[1] = Math.max(foot[1], gy - 0.12);
+        const b = [a.r, a.u, a.t];
+        modelGroup("mosport-pit-garages", {
+          center: vadd(foot, a.u, 4.0), size: [18, 12, 140], basis: b,
+        }, (stage) => {
+          // One continuous flat-roofed garage run — club scale, no tower stack.
+          seat.box(stage, vadd(foot, a.u, 2.7), [12, 5.4, 128], WALL, b);
+          seat.box(stage, vadd(foot, a.u, 5.55), [13.2, 0.35, 130], ROOF, b);
+          // Door bays along the track face (open stalls reading as garages).
+          for (let i = 0; i < 14; i++) {
+            const p = vadd(vadd(foot, a.t, (i - 6.5) * 8.8), a.r, -6.1);
+            seat.box(stage, vadd(p, a.u, 2.2), [0.25, 4.0, 6.4],
+              i & 1 ? WALL_2 : [0.22, 0.23, 0.24], b);
+          }
+          // Short annex at the north end of the block (race admin / tech).
+          const annex = vadd(foot, a.t, 72);
+          seat.box(stage, vadd(annex, a.u, 2.1), [9, 4.2, 18], WALL_2, b);
+          seat.box(stage, vadd(annex, a.u, 4.35), [9.8, 0.3, 19], ROOF, b);
+        }, { required: true });
+      }
       // Paddock apron behind the garages — gravel-grey club tarmac.
       groundPatch(K(0.0000), 1, 32, [36, 0.18, 104], TARMACISH);
-      for (let i = 0; i < 4; i++)
-        motorhome(K(0.9760 + i * 0.0125), 1, 28, 3.0, 3.2, 10.5, { wall: WALL });
-      broadcastCompound(K(0.0180), 1, 27, { col: WALL_2 });
-      cameraTower(K(0.0040), 1, 19, { h: 10.5 });
+      // Motorhome row omitted: awning posts bury on the paddock verge slope
+      // (ground-audit 0.26–0.56 m). Club garages + broadcast already carry mass.
+      broadcastCompound(K(0.0180), 1, 30, { col: WALL_2 });
+      cameraTower(K(0.0040), 1, 22, { h: 10.5 });
       // Paddock perimeter, not a spectator debris fence.
-      fence(0.9500, 0.0540, 1, 28, 2.4, FENCE_C);
+      fence(0.9500, 0.0540, 1, 30, 2.4, FENCE_C);
       marshalPost(K(0.0050), 1, 16);
 
       // ---------------------------------------------------------------------
@@ -216,10 +238,11 @@
       // ---------------------------------------------------------------------
       guardrail(0.1700, 0.2300, -1, 11, ARMCO);
       tyreWall(0.1740, 0.1930, -1, 12.0, TYRE_R);
-      spectatorHill(0.1660, 0.2100, -1, 26, { h: 8.5, col: GRASS });
+      // Bank pushed well past the tyre wall (clip was 1.56–1.59 m @ 0.188).
+      spectatorHill(0.1700, 0.2050, -1, 42, { rows: 2, col: GRASS });
       marshalPost(K(0.1817), -1, 15);
-      mixedWood(0.1780, 0.2450, -1, 17, 24, 11);
-      fence(0.1680, 0.2150, -1, 15, 2.8, FENCE_C);
+      mixedWood(0.1780, 0.2450, -1, 28, 24, 11);
+      fence(0.1680, 0.2150, -1, 20, 2.8, FENCE_C);
 
       // ---------------------------------------------------------------------
       // 8. s 0.2800 +1 18 — CLAYTON -> QUEBEC: dark and enclosed
@@ -228,8 +251,10 @@
       // ---------------------------------------------------------------------
       guardrail(0.2300, 0.3250, 1, 12, ARMCO);
       guardrail(0.2300, 0.3050, -1, 11, ARMCO);
-      spectatorHill(0.2680, 0.2960, 1, 22, { h: 5.5, col: GRASS });
-      mixedWood(0.2350, 0.3200, 1, 30, 22, 13);
+      // Shorter bank, fewer rows — self-coplanar end-caps at gap 22 (flatCoplanar
+      // 2.37 m²). Kept as a low inside knoll, not a full terrace.
+      spectatorHill(0.2720, 0.2920, 1, 28, { rows: 2, col: GRASS });
+      mixedWood(0.2350, 0.3200, 1, 36, 22, 13);
       mixedWood(0.2250, 0.3050, -1, 15, 24, 11);
       marshalPost(K(0.2800), 1, 16);
 
@@ -258,28 +283,74 @@
       // loop near the end of this file used to lay under it on one plane.
       groundPatch(K(0.4400), -1, 12, [10, 0.16, 56], SAND);
       marshalPost(K(0.4200), -1, 16);
-      // Infield stays OPEN here too — §6: the drop must read.
-      for (let i = 0; i < 5; i++) specimen(K(0.3800 + i * 0.0190), 1, 40 + (i % 2) * 16, 200 + i * 9);
+      // Infield stays OPEN here too — §6: the drop must read. Specimens stop
+      // short of the Moss bank (0.4865) so crowns cannot fold into it.
+      for (let i = 0; i < 4; i++) specimen(K(0.3750 + i * 0.0180), 1, 44 + (i % 2) * 16, 200 + i * 9);
       slopeRidge(K(0.4150), 1, 82, 72, 20, 5.0, ROUGH);
 
       // ---------------------------------------------------------------------
       // 11. s 0.4817 +1 15 — MOSS CORNER (T5a/5b), THE SIGNATURE
-      //     The double-apex left Stirling Moss asked for when he saw the
-      //     original single hairpin. Tyres on BOTH apexes, a spectator bank
-      //     on the inside with a terrace standing in for the crowd, and a
-      //     marshal post between the two apexes. The lowest point of the lap:
-      //     45 m below the start line.
+      //     Double-apex complex Stirling Moss asked for (Wikipedia / IMSA).
+      //     Repo turns[] names it T5a/5b — some maps say "T5" (UNCERTAIN label
+      //     only; geometry follows the def). Tyres on both apexes; a required
+      //     modelGroup bank on the inside replaces the old spectatorHill+terrace
+      //     pair that coplanar-clipped for 1.8 m / 8 m².
       // ---------------------------------------------------------------------
       tyreWall(0.4700, 0.4830, 1, 12.5, TYRE_R);
       tyreWall(0.4900, 0.5030, 1, 12.5, TYRE_R);
-      spectatorHill(0.4640, 0.5120, 1, 20, { h: 9.0, col: GRASS });
-      terrace(0.4750, 0.4990, 1, 21, { h: 5.5, col: CONCRETE });
+      // Book the Moss bank + hairpin fold so deferred plantTree crowns cannot
+      // grow through the required modelGroup (clip was 2.6 m). Both sides: the
+      // hairpin folds -1 trees into the +1 bank in world XZ.
+      indexSolid(0.465, 0.510, 1, 22, 28);
+      indexSolid(0.465, 0.510, -1, 18, 24);
+      {
+        // Inside of Moss (+1). Short along-run: a 50 m AABB at the hairpin
+        // cuts the opposite arm (footprint rejected). Rows rise away from track.
+        const sMoss = 0.4865;
+        const gap0 = 30;
+        const a0 = anchor(K(sMoss), 1, gap0);
+        if (!onTrack(a0.c[0], a0.c[2], 10)) {
+          const b0 = [a0.r, a0.u, a0.t];
+          modelGroup("mosport-moss-corner-bank", {
+            center: vadd(a0.c, a0.u, 4.5), size: [14, 12, 28], basis: b0,
+          }, (stage) => {
+            const SEAT_C = [[0.78, 0.28, 0.22], [0.86, 0.86, 0.84], [0.22, 0.34, 0.56]];
+            const len = 22;
+            for (let t = 0; t < 4; t++) {
+              const ai = anchor(K(sMoss), 1, gap0 + t * 2.6);
+              const bi = [ai.r, ai.u, ai.t];
+              // Stagger riser heights so consecutive tops are never coplanar.
+              const h = 1.35 + t * 1.85 + (t % 2) * 0.12;
+              const tierLen = len - t * 1.2;
+              stage._mat = MAT.CONCRETE;
+              seat.box(stage, vadd(ai.c, ai.u, h * 0.5),
+                [2.6, h, tierLen], t % 2 ? CONCRETE : WALL_2, bi);
+              // Seats ON the tread (not flush on the track face — that coplanared
+              // 64 m² of shell vs fabric). Small lift clears the concrete top.
+              stage._mat = MAT.FABRIC;
+              seat.box(stage, vadd(ai.c, ai.u, h + 0.48 + t * 0.05),
+                [2.0, 0.85, tierLen * 0.88], SEAT_C[t % 3], bi);
+              stage._mat = 0;
+            }
+            // Grass berm behind the top row — set back so it cannot share a
+            // face with the uppermost tread.
+            const aB = anchor(K(sMoss), 1, gap0 + 14);
+            stage._mat = MAT.CONCRETE;
+            seat.box(stage, vadd(aB.c, aB.u, 2.4), [4.5, 4.4, len - 8], GRASS,
+              [aB.r, aB.u, aB.t]);
+            stage._mat = 0;
+          }, { required: true });
+        }
+      }
       marshalPost(K(0.4865), 1, 15);
-      fence(0.4620, 0.5150, 1, 15, 3.0, FENCE_C);
-      sponsorHoarding(0.4700, 0.5050, 1, 13);
+      fence(0.4620, 0.5150, 1, 20, 3.0, FENCE_C);
+      sponsorHoarding(0.4700, 0.5050, 1, 18);
       guardrail(0.4640, 0.5200, -1, 11, ARMCO);
       tyreWall(0.4780, 0.4960, -1, 12.0, TYRE_Y);
-      mixedWood(0.4600, 0.5250, -1, 18, 22, 12);
+      // No near mixedWood at Moss: the hairpin folds -1 trees into the +1 bank
+      // in world space (clip 2.6 m). Far belt only, well outside the fold.
+      forestEdge(0.4600, 0.5250, -1, 72, { col: LEAF_D, spacing: 22 });
+      forestEdge(0.4700, 0.5150, -1, 92, { col: CONIF, spacing: 26 });
 
       // ---------------------------------------------------------------------
       // 12. s 0.5400 -1 20 — MOSS EXIT: THE CLIMB STARTS
@@ -356,30 +427,84 @@
       //     two portal headwalls and a sunken approach apron.
       // ---------------------------------------------------------------------
       tyreWall(0.9100, 0.9270, 1, 12.5, TYRE_R);
-      grandstandEx(0.9380, 1, 20, 54, null, null);
-      sponsorHoarding(0.9250, 0.9600, 1, 14);
+      // Exit stand pushed past the tunnel portals (was clipping 1.65 m @ 0.922).
+      grandstandEx(0.9480, 1, 32, 44, null, null);
+      sponsorHoarding(0.9300, 0.9650, 1, 18);
       marshalPost(K(0.9183), 1, 14);
-      spectatorHill(0.9050, 0.9450, 1, 26, { h: 6.5, col: GRASS });
-      fence(0.9000, 0.9600, 1, 16, 3.0, FENCE_C);
-      // Tunnel portals, infield and outside.
-      place(K(0.9183), 1, 15, [5.0, 3.2, 7.0], CONCRETE);
-      place(K(0.9183), -1, 15, [5.0, 3.2, 7.0], CONCRETE);
-      groundPatch(K(0.9183), 1, 24, [14, 0.18, 22], TARMACISH);
-      // Outside of Whites is still wood, and still no run-off.
+      // No spectatorHill here — hill treads self-clipped at frac 0.911.
+      fence(0.9000, 0.9600, 1, 20, 3.0, FENCE_C);
+      // Spectator tunnel under Whites — INFIELD portal only inside the group
+      // (a dual-side AABB covers the road → emitted footprint rejected).
+      // Outside headwall is a separate place() beyond the barrier.
+      // Book Whites portals so deferred roadside trees clear them.
+      indexSolid(0.908, 0.930, 1, 18, 16);
+      indexSolid(0.908, 0.930, -1, 16, 14);
+      {
+        const a = anchor(K(0.9183), 1, 24);
+        if (!onTrack(a.c[0], a.c[2], 8)) {
+          const b = [a.r, a.u, a.t];
+          modelGroup("mosport-whites-tunnel", {
+            center: vadd(a.c, a.u, 1.8), size: [10, 6, 12], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.CONCRETE;
+            seat.box(stage, vadd(a.c, a.u, 1.4), [3.6, 2.8, 5.2], CONCRETE, b);
+            seat.box(stage, vadd(vadd(a.c, a.t, 2.9), a.u, 0.95),
+              [3.2, 1.9, 0.4], WALL_2, b);
+            seat.box(stage, vadd(vadd(a.c, a.t, -2.9), a.u, 0.95),
+              [3.2, 1.9, 0.4], WALL_2, b);
+            stage._mat = 0;
+          }, { required: true });
+        }
+      }
+      place(K(0.9183), -1, 22, [3.6, 2.8, 5.2], CONCRETE);
+      groundPatch(K(0.9183), 1, 30, [12, 0.18, 20], TARMACISH);
+      // Outside of Whites — wood beyond the outside portal (clip @ 0.916).
       guardrail(0.8950, 0.9700, -1, 11, ARMCO);
-      mixedWood(0.8950, 0.9650, -1, 16, 20, 12);
+      mixedWood(0.8950, 0.9100, -1, 36, 20, 12);
+      mixedWood(0.9300, 0.9650, -1, 36, 20, 12);
+      forestEdge(0.9050, 0.9350, -1, 70, { col: CONIF, spacing: 24 });
 
       // ---------------------------------------------------------------------
       // 18. s 0.9600 +1 34 — THE EVENT CENTRE
-      //     The site's ONE substantial public building (§6: nothing else is
-      //     built). Long, low, flat-roofed hall set back inside the loop,
-      //     visitor apron in front, hedge screening it from the track.
+      //     Grand Prix Track Event Centre: ~23,000 sq ft multi-level hall with
+      //     open-air rooftop overlooking the circuit (official CTMP facilities
+      //     page; canadianracer: built 2013 outside turn 10 / front straight).
       // ---------------------------------------------------------------------
-      building(K(0.9600), 1, 34, 22, 7.0, 58, { col: WALL, roof: ROOF, flat: true });
-      building(K(0.9760), 1, 30, 10, 4.2, 16, { col: WALL_2, roof: ROOF, flat: true });
-      groundPatch(K(0.9620), 1, 22, [22, 0.18, 52], TARMACISH);
-      hedge(0.9440, 0.9860, 1, 17, 2.2, HEDGE_C);
-      for (let i = 0; i < 4; i++) specimen(K(0.9500 + i * 0.0110), 1, 62, 400 + i * 7);
+      {
+        const a = anchor(K(0.9600), 1, 38);
+        const foot = a.c.slice();
+        const gy = terrainYAt(foot[0], foot[2]);
+        if (gy != null) foot[1] = Math.max(foot[1], gy - 0.15);
+        const b = [a.r, a.u, a.t];
+        modelGroup("mosport-event-centre", {
+          center: vadd(foot, a.u, 6.5), size: [28, 18, 64], basis: b,
+        }, (stage) => {
+          // Long low hall — contemporary cladding, not a GP palace.
+          seat.box(stage, vadd(foot, a.u, 3.4), [20, 6.8, 52], WALL, b);
+          // Floor-to-ceiling glass band facing the track (−r).
+          stage._mat = MAT.GLASS;
+          seat.box(stage, vadd(vadd(foot, a.r, -10.1), a.u, 3.6),
+            [0.35, 5.2, 46], [0.28, 0.38, 0.48], b);
+          stage._mat = MAT.CONCRETE;
+          // Flat roof deck + open-air rooftop parapet (1,200 sq ft rooftop).
+          seat.box(stage, vadd(foot, a.u, 7.0), [21.2, 0.45, 54], ROOF, b);
+          seat.box(stage, vadd(vadd(foot, a.r, -9.5), a.u, 7.55),
+            [0.35, 0.9, 48], WALL_2, b);
+          seat.box(stage, vadd(vadd(foot, a.r, 9.5), a.u, 7.55),
+            [0.35, 0.9, 48], WALL_2, b);
+          // Stone fireplace mass on the far flank (official: double-sided stone).
+          seat.box(stage, vadd(vadd(foot, a.r, 6.5), a.u, 3.2),
+            [4.5, 6.0, 5.5], [0.48, 0.44, 0.40], b);
+          // Annex / kitchen wing.
+          const wing = vadd(foot, a.t, 32);
+          seat.box(stage, vadd(wing, a.u, 2.1), [12, 4.2, 16], WALL_2, b);
+          seat.box(stage, vadd(wing, a.u, 4.35), [12.8, 0.3, 17], ROOF, b);
+          stage._mat = 0;
+        }, { required: true });
+      }
+      groundPatch(K(0.9620), 1, 24, [22, 0.18, 52], TARMACISH);
+      hedge(0.9440, 0.9860, 1, 20, 2.2, HEDGE_C);
+      for (let i = 0; i < 4; i++) specimen(K(0.9500 + i * 0.0110), 1, 68, 400 + i * 7);
 
       // ---------------------------------------------------------------------
       // 19. WHOLE LAP — mixed-woodland scatter, base armco, marshal posts
@@ -395,9 +520,13 @@
         for (const side of [-1, 1]) {
           // Infield stays OPEN where the descent has to read (§6).
           if (side > 0 && s > 0.015 && s < 0.145) continue;   // Turn 1 fall
-          if (side > 0 && s > 0.345 && s < 0.465) continue;   // run to Moss
+          if (side > 0 && s > 0.345 && s < 0.530) continue;   // run to Moss + bank
           if (side > 0 && s > 0.630 && s < 0.800) continue;   // farmland
+          if (side > 0 && s > 0.900 && s < 0.940) continue;   // Whites tunnel
           if (side > 0 && (s > 0.930 || s < 0.070)) continue; // paddock side
+          // Outside wood clears the Whites outside portal / Moss armco.
+          if (side < 0 && s > 0.455 && s < 0.520) continue;
+          if (side < 0 && s > 0.900 && s < 0.940) continue;
           const g = hash(k * 53 + (side > 0 ? 11 : 3));
           if (g < 0.26) continue;
           const dist = 22 + g * 24 + (side < 0 ? 4 : 12);
@@ -412,8 +541,10 @@
       // horizon of trees rather than a single planted line.
       forestEdge(0.0150, 0.1000, -1, 58, { col: CONIF, spacing: 24 });
       forestEdge(0.1700, 0.2800, -1, 58, { col: CONIF, spacing: 24 });
-      forestEdge(0.3800, 0.4800, -1, 52, { col: LEAF_D, spacing: 23 });
-      forestEdge(0.8300, 0.9400, -1, 56, { col: CONIF, spacing: 25 });
+      // Skip 0.38–0.48 Moss fold — near wood lives in the Moss block above.
+      forestEdge(0.5250, 0.6000, -1, 52, { col: LEAF_D, spacing: 23 });
+      forestEdge(0.8300, 0.9000, -1, 56, { col: CONIF, spacing: 25 });
+      forestEdge(0.9400, 0.9900, -1, 56, { col: CONIF, spacing: 25 });
       forestEdge(0.2300, 0.3300, 1, 54, { col: CONIF, spacing: 26 });
       forestEdge(0.8500, 0.9000, 1, 46, { col: LEAF_D, spacing: 24 });
 

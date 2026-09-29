@@ -244,6 +244,15 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     fuji: ["fuji-speedway-hotel"],
     // Wave 6 — Sepang hibiscus main canopy + K1/F corner stands
     sepang: ["sepang-main-grandstand-canopy", "sepang-t1-grandstand", "sepang-t7-grandstand"],
+    // Wave 6 — Mosport / CTMP: club pit run, Moss Corner bank, Whites tunnel,
+    // Grand Prix Event Centre (rooftop). Speedway oval NOT built — closed /
+    // outside the road course (Wikipedia).
+    mosport: [
+      "mosport-pit-garages",
+      "mosport-moss-corner-bank",
+      "mosport-whites-tunnel",
+      "mosport-event-centre",
+    ],
   };
   for (const [track, ids] of Object.entries(expected)) {
     const body = landmarkSource(track);
