@@ -304,6 +304,9 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
       "jacarepagua-tijuca-ridge",
       "jacarepagua-lagoon-shore",
     ],
+    // Wave 6 — Buddh International Circuit: sea-wave aluminium cantilever
+    // main grandstand opposite the pits (ENR 2011; slideshare dims UNCERTAIN).
+    buddh: ["buddh-main-grandstand"],
   };
   for (const [track, ids] of Object.entries(expected)) {
     const body = landmarkSource(track);
