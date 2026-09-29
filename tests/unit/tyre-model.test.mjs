@@ -250,6 +250,23 @@ test("the player's top speed pays for worn rubber, as the AI's does", () => {
     "the human branch of the speed target must carry the tyre's traction");
 });
 
+test("ambient temperature follows a weather arc, not the flip of raceWeather", () => {
+  // It read T_AMBIENT[raceWeather] alone, so the tyres saw 30 C -> 13 C on the
+  // tick the weather changed, minutes before the road was wet.
+  const G = { lapsTarget: 20, track: { total: 5386, def: {} }, LAT_MAX: 22, aTop: () => 7, vTop: () => 60,
+              raceWeather: "rain", weatherArc: { from: "dry", to: "rain", t: 0, dur: 300 } };
+  const s = T.create(G); s.setLevel("real");
+  const c = freshCar(s, 0.74);
+  assert.equal(s.info(c).ambient, T.T_AMBIENT.dry, "the arc has not started: still the dry track");
+  G.weatherArc.t = 150;
+  const mid = s.info(c).ambient;
+  assert.ok(Math.abs(mid - (T.T_AMBIENT.dry + T.T_AMBIENT.rain) / 2) < 1e-9, `half way: ${mid}`);
+  G.weatherArc.t = 300;
+  assert.equal(s.info(c).ambient, T.T_AMBIENT.rain);
+  G.weatherArc = null;
+  assert.equal(s.info(c).ambient, T.T_AMBIENT.rain, "no arc: the race's weather");
+});
+
 test("planLaps plans against the circuit's severity, as the wear does", () => {
   // update() charges wear at severity() and planLaps ignored it, so at Austria
   // (1.97) every plan believed a set lasted twice as long as it did — a
