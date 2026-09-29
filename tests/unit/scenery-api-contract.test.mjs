@@ -152,6 +152,14 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
       "montreal-wall-of-champions-stand",
       "montreal-biosphere",
     ],
+    // Wave 6 — Portimão / Algarve: six independent paddock blocks (Dimeconsult
+    // A–F) + Grandstand Norte at the T1 downhill; race-control + moinho kept.
+    portimao: [
+      "portimao-pit-blocks",
+      "portimao-t1-stands",
+      "portimao-race-control",
+      "portimao-moinho",
+    ],
   };
   for (const [track, ids] of Object.entries(expected)) {
     const body = landmarkSource(track);
