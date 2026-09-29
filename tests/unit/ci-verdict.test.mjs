@@ -1,4 +1,5 @@
 // ci-verdict — the required-check aggregator for path-skipped CI jobs.
+// Cancelled needed jobs fail the aggregator (same as failure) — do not treat cancel as green.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
