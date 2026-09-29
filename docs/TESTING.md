@@ -1,6 +1,6 @@
 # Testing reference
 
-125 root Playwright spec files (`tests/specs/*.spec.js`) + 350+ `node --test` unit suites
+126 root Playwright spec files (`tests/specs/*.spec.js`) + 350+ `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -116,14 +116,18 @@ run-start second), so merging the same junit twice, or a run's junit alongside
 its log, adds nothing; buckets are never averaged together, because a move
 between GPU stacks would otherwise read as a regression.
 `tools/ci/select-budget.mjs` bills a spec at the median of its own CI-bucket
-samples once it has three of them and falls back to the measured 79.7 s constant
-otherwise — `--json` reports `source: "measured" | "constant"` per spec, so a
+samples once it has three of them and falls back to a 7.5 s/test constant otherwise
+(the llvmpipe p75 of the measured specs, 2026-09-29; it was a 79.7 s SwiftShader
+figure) — `--json` reports `source: "measured" | "constant"` per spec, so a
 default can never be mistaken for a measurement. `select-specs.mjs`' cut spends
-that rate: a spec costs `tests x its own rate` against the budget in seconds, so
-an unmeasured selection cuts exactly where the old 10-test cap did and a measured
-one fits what it actually costs (2026-09-24; before, the cut counted tests and the
-medians moved nothing). CI merges into `bot/spec-timings`, never the deploy
-branch; adopt it with `git show origin/bot/spec-timings:tests/data/spec-timings.json`
+that rate: a spec costs `tests x its own rate` against the budget in seconds
+(2026-09-24; before, the cut counted tests and the medians moved nothing). The
+plan then packs every selected spec into jobs of at most ~8 min EXPECTED work,
+each capped at 2x that plus three per-test timeouts (`--max-failures=3`), and a
+circuit-only diff runs its own foundation spec with `APEX_CIRCUITS` narrowing the
+per-circuit loops (docs/notes/CI-CAPACITY-2026-09-29.md). CI merges into
+`bot/spec-timings`, never the deploy branch — the select job UNIONS that branch's
+copy in at selection time (`APEX_SPEC_TIMINGS`); adopt it into the committed file with `git show origin/bot/spec-timings:tests/data/spec-timings.json`
 in a reviewed PR. `node tools/ci/spec-timings.mjs
 --check` prints every spec or test whose latest sample is more than twice its own
 median and **exits 0 either way**: a busy box and a slow test look identical from
@@ -168,7 +172,7 @@ serializes the agent behind SwiftShader several times over.
 
 | When | Run |
 |---|---|
-| in the edit loop | `npm run test:tooling-fast` (structural, no browser; 289 of 377 unit files — ~5 min one at a time, ~2 min via `node tools/ci/tooling-fast.mjs --jobs=3`, which is what `verify-change` runs on a quiet box; MEASURED 2026-09-16) |
+| in the edit loop | `npm run test:tooling-fast` (structural, no browser; 295 of 383 unit files — ~5 min one at a time, ~2 min via `node tools/ci/tooling-fast.mjs --jobs=3`, which is what `verify-change` runs on a quiet box; MEASURED 2026-09-16) |
 | track/scenery edit | `node tools/track/verify-track.cjs <id>` (2 s, headless) FIRST |
 | once, when the edits are done | `node tools/ci/test-bg.mjs tiny` — page loads, `__apex` responds; if red, nothing else is worth running — then the groups `pick-tests` named (capped at two) |
 | before pushing | + `npm run test:sweeps` if you touched the fleet build's inputs (`node tools/ci/geometry-paths.mjs --ere` prints them: `js/track/`, `js/circuits/`, `tools/track|lib`, the `TRACK_VM` modules); a lighting, car, debris-world or driving-line edit needs only the suite that reads it (`--targeted <list>` names it) — `deploy.mjs` and ci.yml's sweeps job make both calls for you |
@@ -404,8 +408,8 @@ tools directly.)
 
 | Group | What it runs |
 |---|---|
-| `guards` | the 23 CROSS-FILE guards in ~12 s — every one asserts a relationship BETWEEN files (or, for `no-bare-console`, `html-sink-lint` and `lexical-window-guard`, a rule across all of `js/`; `test-coverage-audit` and `prepush-gate-coverage` put every test file in a group the gate runs) (a registry against the tree, a generated file against its source, a ceiling against what it measures), and `global-registry` parses every manifest file so a syntax error cannot reach a commit. Run it BEFORE EVERY COMMIT (AGENTS.md rule 3): four failures in one session — a suite registered in none of its registries, `tools/README.md` and `package.json` hand-edited when both are generated, and a missing comma that would have broken the game's boot — were all inside this group and all found instead by a ~10-minute deploy. `deploy.mjs` reads the same group for its post-rejection re-verify, so the two cannot drift apart. |
-| `tooling-fast` | the structural half — 289 files, ~5 min one at a time (317 s measured 2026-09-16), ~2 min at `--jobs=3` — via `tools/ci/tooling-fast.mjs` (`--test-concurrency=1` inside each file; `--jobs=N` files at once, LONGEST FIRST by `tests/data/tooling-fast-timings.json` — refresh it with `--record` — each child under `--test-timeout` plus a per-file wall that fails a hung file by name) with START/PASS/FAIL + `not ok` names on stdout and `artifacts/logs/tooling-fast-suite.log`. Load order, docs integrity, test groups, api contracts, css layer discipline, graph, validators. The full-fleet sweeps dominate `tooling`; this is everything else, for the edit loop |
+| `guards` | the 24 CROSS-FILE guards in ~12 s — every one asserts a relationship BETWEEN files (or, for `no-bare-console`, `log-namespaces`, `html-sink-lint` and `lexical-window-guard`, a rule across all of `js/`; `test-coverage-audit` and `prepush-gate-coverage` put every test file in a group the gate runs) (a registry against the tree, a generated file against its source, a ceiling against what it measures), and `global-registry` parses every manifest file so a syntax error cannot reach a commit. Run it BEFORE EVERY COMMIT (AGENTS.md rule 3): four failures in one session — a suite registered in none of its registries, `tools/README.md` and `package.json` hand-edited when both are generated, and a missing comma that would have broken the game's boot — were all inside this group and all found instead by a ~10-minute deploy. `deploy.mjs` reads the same group for its post-rejection re-verify, so the two cannot drift apart. |
+| `tooling-fast` | the structural half — 295 files, ~5 min one at a time (317 s measured 2026-09-16), ~2 min at `--jobs=3` — via `tools/ci/tooling-fast.mjs` (`--test-concurrency=1` inside each file; `--jobs=N` files at once, LONGEST FIRST by `tests/data/tooling-fast-timings.json` — refresh it with `--record` — each child under `--test-timeout` plus a per-file wall that fails a hung file by name) with START/PASS/FAIL + `not ok` names on stdout and `artifacts/logs/tooling-fast-suite.log`. Load order, docs integrity, test groups, api contracts, css layer discipline, graph, validators. The full-fleet sweeps dominate `tooling`; this is everything else, for the edit loop |
 | `tooling` | every Node contract suite — chains `test:tooling-fast` then `test:sweeps` (the sweeps run `--test-concurrency=1`, see below) |
 | `game-vm` | the Node VM game harness (`game-vm.test.mjs`), the friend-race quali handoff (`quali-handoff-vm`), physics parity (`physics-characterization-vm`) and the thirteen `*-vm.test.mjs` TWINS of the JSON-only browser specs — `headless-api`, `obs-act-edge`, `longitudinal`, `world-physics`, `drift`, `active-aero`, `aero-zones`, `offtrack`, `elevation-tracks`, `collisions`, `collisions-deep`, `collision-ai-fixes`, `new-hooks` — same assertions and thresholds, one boot per file, ~1 s a circuit build. ~3 min for the set (elevation-tracks builds 40 circuits and is the bulk of it, ~3 min through the worker pool; the rest are 2–30 s each), plus `game-vm-pool` — the pool's own parity suite; in CI's node suites, which the Pages gate runs unconditionally. **Twelve of those browser specs no longer run on the blocking gate** — `tools/ci/twinned-specs.mjs` lists the pairs and holds the drift check that keeps the substitution honest (equal declared test counts, and the twin's group must still be gated, derived from ci.yml). They still run in their own group on the nightly. `new-hooks` is NOT among them: its Madrid foundation test is deliberately unported |
 | `game-vm-a` | `elevation-tracks-vm.test.mjs` ALONE, on its own CI runner (`node-suites` matrix slice `vm-a`, 2026-09-16): it builds 40 circuits and was 399-400 s on this box, the floor of any split of `game-vm` — until the same day's `tools/lib/game-vm-pool.cjs` put the 42 per-circuit races in four worker VMs: 191-210 s, 47/47 green every run (`APEX_VM_POOL=0`, the serial path, still measures 400 s; this box was shared with other agents' suites throughout, the 210 s run at mean load 5.1 of four cores). As one slice the whole group measured 9.2-9.4 min and set the job's wall; with this file alone the slice was ~6.5 min on a runner and the pool should take it to ~2. Partition — `game-vm` is still the full list locally |
@@ -418,6 +422,7 @@ tools directly.)
 | `sweeps-parts` | the parts option-resolution census (`parts-visual-distinctness`) alone — all 297 options built and compared across worker threads, ~70 s on four cores (559 s single-threaded before the integer grid, the bounding-sphere prefilter and the per-category workers); split out of `sweeps` so the geometry sweeps finish in ~7 min; its own CI job |
 | `garage-unit` | the garage and livery files in Node (39 s): the bay's per-vertex material column, sign occlusion, fin design, the front-wing decal, livery decal surfaces + contrast, team livery, setup tune, body split, cover legibility, the 297-option mesh census, helmets. In CI's node step since 2026-09-10 — five of these files had been in NO gate; the sub-5 s ones are in `tooling-fast` too |
 | `steering-unit` | braking CUE math, the DIGITAL steer ramp, the PHONE AS CONTROLLER wire, key binds, onboard and settings export in Node (0.5 s) — slider 1 is OFF, urgency is 0..1 never a brake command; counter-steering unwinds as fast as letting go. Gated by CI's node step since 2026-09-10 |
+| `mobile-unit` | Capacitor Android sideload: frozen `appId`/`androidScheme`, config shape (no `server.url`, minWebView ≥ 100), manifest permissions, Gradle `APEX_VERSION_*` wiring, `sync-web` stamp gate, `Native`/`NativeDownload` against a fake `Capacitor.Plugins` proxy. In `tooling-fast`. **Not device evidence.** |
 | `audio-unit` | Spotify token refresh ownership, rotation races, and retryable failures in a Node VM |
 | `agent-contract` | freezes the shape of the agent-view API |
 | `net-unit` | the `js/net` wire as pure logic, no browser: loopback transport, invite codec, snapshot quantisation, clock sync. Under a second |
@@ -763,7 +768,7 @@ carries `if: !inputs.concurrency_key && github.event_name != 'workflow_call'`
 (pages.yml always forwards `concurrency_key`; a reusable workflow reports the
 CALLER's `event_name`, so the key is the reliable signal) and both jobs are
 skipped on a Pages call, which does not fail the aggregate. The gate stays
-guards + conditional sweeps + smoke.spec.js in four shards + driving-model
+guards + conditional sweeps + smoke.spec.js in one shard (four until 2026-09-29, on SwiftShader) + driving-model
 (`notes/PROCESS-SPEEDUP-2026-09.md` §4.5); promoting the renderer job into it once it
 has a measured green history is deleting that one `if:`. `gpu-census.yml` now
 also runs on the same nightly cron (`17 3 * * *`), full check, dispatch
@@ -1213,6 +1218,7 @@ what it covers.
 | `storage-key-prefix.test.mjs` | every literal localStorage/sessionStorage key is apex26.-prefixed (GameStore-routed keys exempt by construction; allowlist entries need a written reason) |
 | `store-key-types.test.mjs` | one storage key, one value type — resolves `const K = "literal"` aliases and reads get-DEFAULTS as well as writes, which is how `apex26.brakeCue` hid two owners (a 1-10 slider notch and an "on"/"off" flag) from a literal grep |
 | `no-bare-console.test.mjs` | logging goes through Log — no bare console.* in js/ outside log.js (the nostr interception seam allowlisted with its reason) |
+| `log-namespaces.test.mjs` | every literal `Log.<level>("ns", …)` namespace in js/ and index.html's inline scripts is declared in `Log.NAMESPACES` (read by evaluating log.js) |
 | `lexical-window-guard.test.mjs` | no `window.X` guard reads a top-level `const`/`let`/`class` global that is never assigned onto window — such a guard is always false in a browser while the VM's const→var rewrite makes it true in every node test (the brake cue, menu sounds and haptics priming shipped dead this way) |
 | `lamp-chunks.test.mjs` | the shared per-chunk lamp bake (LampChunks): nearest-first reach-filtered selection, the knob→cap formula (floor 8, CAP 24), concat/offsets/counts ≡ the per-chunk lists, and the bake-once invalidation contract (lights array identity + knob value) |
 | `frustum-buckets.test.mjs` | the shared instanced-prop cell builder (`Frustum.bucketInstances`, used by GLX/WGX/TLX): every vertex of a ROTATED, scaled instance lies inside its cell's culling box (the reach is the mesh's bounding radius, not its largest coordinate — the sqrt(3) gap popped props at screen and shadow edges), and an explicit radius still wins |
@@ -1619,6 +1625,12 @@ what it covers.
 | `desktop-native.test.mjs` | Electron preload `__APEX_NATIVE__.desktop` skips SW registration and disables Spotify OAuth; desktop.yml is PR pack-smoke + tag/dispatch; main wires `app-protocol` (no autoplay CLI flag) |
 | `desktop-app-protocol.test.mjs` | `desktop/app-protocol.js` MIME table, Range 206/suffix/416 parse, path-traversal reject; Electron 44.4.5 pin + `app-protocol.js` in builder `files` |
 | `desktop-unpacked-bin.test.mjs` | `desktop/scripts/unpacked-bin.mjs` resolves electron-builder `--dir` binaries; desktop.yml pack-smoke matrix + soft-GL + optional signed-verify skips |
+| `mobile-config.test.mjs` | Capacitor `identity.json` freeze, config shape, AndroidManifest (INTERNET/CAMERA/cleartext/fullSensor), Gradle env version + keystore, SW skip on Capacitor |
+| `mobile-sync-web.test.mjs` | `mobile/scripts/sync-web.mjs` reuses `tools/desktop/stage.mjs`, refuses `?v=dev` unless `--dev` |
+| `mobile-native-download.test.mjs` | `Native` platform detect; `NativeDownload` Filesystem+Share proxy; Spotify off under Capacitor |
+| `xr-plan.test.mjs` | `XRPlan.resolve` table (≥15 rows): armed/off, webgpu caps ladder, `xrFallback` latch, garbage prefs — pure, no DOM |
+| `xr-opts.test.mjs` | `XROpts` defaults + `ApexXR.bootPick` never writes `apex26.gfxBackend`; `noteFallback` latches sessionStorage |
+| `xr-plan.spec.js` | IWER (`npm run test:xr`): armed webgl2 ⇒ `ApexXR.stats().path` + GL `xrCompatible`; armed webgpu without `XRGPUBinding` falls back. Not Quest evidence |
 | `ship-filter-paths.test.mjs` | ci.yml ship-filter reads staged paths from `tools/desktop/stage-files.mjs` (non-empty; same set pages.yml stages via `stage.mjs`) |
 | `service-worker.test.mjs` | the SW's install/fetch/version-guard behaviour |
 | `perf-sentinel.test.mjs` | the crash sentinel's memory must not outlive the crash |

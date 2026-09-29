@@ -258,6 +258,12 @@ function preloadThreeVendor() {
 }
 function backendPreference() {
   try {
+    if (typeof ApexXR !== "undefined" && ApexXR.bootPick) {
+      const xrPick = ApexXR.bootPick();
+      if (xrPick) return xrPick; // VR arm: non-persisted; never writes gfxBackend
+    }
+  } catch (_) { /* plan advisory */ }
+  try {
     const pref = localStorage.getItem("apex26.gfxBackend");
     const normalized = pref == null ? "three" : pref;
     if (normalized === "webgl2" || normalized === "three" || normalized === "webgpu") return normalized;
@@ -277,6 +283,10 @@ function showGraphicsUnavailable() {
 }
 let _claimSkipped = false;   // this boot consumed a claim-fail latch
 try {
+  // Refresh apex26.xrCaps before sync bootPick (ms); first armed boot may still be 2D.
+  if (typeof ApexXR !== "undefined" && ApexXR.detect) {
+    try { await ApexXR.detect(); } catch (_) { /* caps stay cached */ }
+  }
   let pref = backendPreference();
   // Unset means THREE on every device; the boot canary below protects the
   // default as well as stored THREE/WEBGPU picks.
