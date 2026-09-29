@@ -34,7 +34,8 @@
       const { mountain, n, hash, every, anchor, onTrack, terrainYAt,
         tree, bush, hedge, building, grandstandEx, spectatorHill,
         guardrail, fence, tyreWall, marshalPost, cameraTower,
-        billboard, sponsorHoarding, motorhome, groundPatch, ridge } = api;
+        billboard, sponsorHoarding, groundPatch, ridge,
+        modelGroup, seat, vadd, MAT, addPrism } = api;
 
       // 1. PALETTE — dry summer Burgundy. Pale limestone, bleached grass,
       //    hedgerow much darker than the open slope. Nothing here is glossy:
@@ -144,37 +145,107 @@
       const outcrop = (s, side, dist, ang, len, w, h, col) => {
         if (spotClear(s, side, dist, len * 0.45)) ridgeAt(s, side, dist, ang, len, w, h, col);
       };
-      // Burgundy farmstead: house, barn, a yard and its shelter trees.
-      const farmstead = (s, side, dist, seed) => {
+      // Burgundy farmstead: house + barn + shelter trees, each mass seated on
+      // its own terrainYAt sample. No yard pad — a 24 m slab on this hillside
+      // buried up to 5.5 m (ground-audit) and shared a bottom plane with the
+      // house/barn (flatCoplanar). Barn is gapped along t so walls never kiss.
+      const farmstead = (s, side, dist, seed, opts) => {
         const h = hash(seed), h2 = hash(seed * 7 + 3);
         if (!spotClear(s, side, dist, 26)) return;
-        groundPatch(K(s), side, dist, [26, 0.13, 30], GRAVEL);
-        building(K(s), side, dist, 9 + h * 4, 5.0 + h * 1.8, 8 + h2 * 4,
-          { wall: FARMW[Math.floor(h * 4) & 3], window: GLASS });
-        buildAt(s + 0.005, side, dist + 11, 7 + h2 * 3, 4.2, 15 + h * 6,
-          { kind: "hall", wall: FARMW[(Math.floor(h2 * 4) + 2) & 3], window: GLASS });
+        const a = anchor(K(s), side, dist);
+        const foot = a.c.slice();
+        const gy = terrainYAt(foot[0], foot[2]);
+        if (gy != null) foot[1] = gy + 0.05;
+        const b = [a.r, a.u, a.t];
+        const wall = FARMW[Math.floor(h * 4) & 3];
+        const barnW = FARMW[(Math.floor(h2 * 4) + 2) & 3];
+        const hw = 8 + h * 3, hh = 4.6 + h * 1.4, hd = 7 + h2 * 3;
+        const bw = 6 + h2 * 2.5, bh = 3.8, bd = 12 + h * 4;
+        const id = (opts && opts.id) || ("dijon-farm-" + seed);
+        const req = !!(opts && opts.required);
+        // Barn offset along-track with a clear air gap (half-depths + 2 m).
+        const barn = vadd(foot, a.t, (hd + bd) * 0.5 + 2.2);
+        const barnGy = terrainYAt(barn[0], barn[2]);
+        if (barnGy != null) barn[1] = barnGy + 0.05;
+        modelGroup(id, {
+          center: vadd(foot, a.u, Math.max(hh, bh) * 0.55),
+          size: [Math.max(hw, bw) + 8, Math.max(hh, bh) + 6, hd + bd + 14],
+          basis: b,
+        }, (stage) => {
+          stage._mat = MAT.STONE;
+          seat.box(stage, foot, [hw, hh, hd], wall, b);
+          seat.box(stage, barn, [bw, bh, bd], barnW, b);
+          stage._mat = MAT.ROOF;
+          // Roof prism sits ON the body top (addPrism at absolute height).
+          addPrism(stage, vadd(foot, a.u, hh), [hw + 0.3, 1.4, hd + 0.3],
+            [0.42, 0.28, 0.22], b);
+          addPrism(stage, vadd(barn, a.u, bh), [bw + 0.3, 1.2, bd + 0.3],
+            [0.38, 0.26, 0.20], b);
+          stage._mat = 0;
+        }, req ? { required: true } : undefined);
         treeAt(s - 0.005, side, dist - 4, 8.4 + h * 3.0, FOLS[Math.floor(h * 4) & 3]);
         treeAt(s + 0.009, side, dist + 3, 7.2 + h2 * 3.4, FOLS[(Math.floor(h2 * 4) + 1) & 3]);
         bushAt(s + 0.002, side, dist - 8, FOL_D);
       };
 
-      // 2. PIT LANE INFIELD (s 0.005, +1, 14) — a long, low open-front garage
-      //    row under one flat roof, modelled as a rank of shallow bays. No
-      //    grandstand above it: this is a permanent but spartan facility.
-      //    Race control sits at the exit end; tyre and fuel stores behind.
-      for (let i = 0; i < 9; i++) {
-        building(K(0.002 + i * 0.0052), 1, 14, 10, 4.8, 13,
-          { kind: "hall", wall: WALL, window: GLASS, floor: 1 });
+      // 2. PIT LANE INFIELD (s 0.005, +1, 14) — long low open-front garage
+      //    row under one flat roof. Official circuit history: new pitbuilding
+      //    phases 2015–16 (video control, medical, boxes / reception).
+      //    Docs §4: spartan permanent facility, no grandstand above it.
+      //    Wave-6: required modelGroup seated on terrain (building() bays
+      //    buried into the pit-straight fold).
+      {
+        const a = anchor(K(0.028), 1, 14);
+        const foot = a.c.slice();
+        const gy = terrainYAt(foot[0], foot[2]);
+        if (gy != null) foot[1] = Math.max(foot[1], gy - 0.12);
+        const b = [a.r, a.u, a.t];
+        modelGroup("dijon-pit-garages", {
+          center: vadd(foot, a.u, 3.0), size: [16, 10, 100], basis: b,
+        }, (stage) => {
+          // Continuous flat-roofed garage mass — nine bays as one run.
+          seat.box(stage, foot, [13, 4.8, 92], WALL, b);
+          seat.box(stage, vadd(foot, a.u, 4.95), [14.2, 0.32, 94],
+            [0.55, 0.56, 0.58], b);
+          // Door panels inset 0.35 m so they are not coplanar with the mass face.
+          for (let i = 0; i < 9; i++) {
+            const p = vadd(vadd(foot, a.t, (i - 4) * 10), a.r, -6.15);
+            seat.box(stage, vadd(p, a.u, 2.0), [0.28, 3.8, 7.2],
+              i & 1 ? STONE : [0.22, 0.23, 0.24], b);
+          }
+        }, { required: true });
+      }
+      {
+        // Race control / video-control annex at the pit-exit end (official
+        // 2015 phase-1 priorities: video control room + medical + reception).
+        const a = anchor(K(0.0475), 1, 16);
+        const foot = a.c.slice();
+        const gy = terrainYAt(foot[0], foot[2]);
+        if (gy != null) foot[1] = Math.max(foot[1], gy - 0.12);
+        const b = [a.r, a.u, a.t];
+        modelGroup("dijon-race-control", {
+          center: vadd(foot, a.u, 5.0), size: [14, 14, 16], basis: b,
+        }, (stage) => {
+          seat.box(stage, foot, [9, 7.6, 10], WALL, b);
+          stage._mat = MAT.GLASS;
+          // Glass band inset so it is not coplanar with the track face.
+          seat.box(stage, vadd(vadd(foot, a.r, -4.35), a.u, 5.2),
+            [0.3, 3.6, 7.2], GLASS, b);
+          stage._mat = MAT.METAL;
+          seat.box(stage, vadd(foot, a.u, 7.75), [10.2, 0.35, 11],
+            [0.52, 0.54, 0.56], b);
+          seat.box(stage, vadd(vadd(foot, a.r, -5.15), a.u, 8.15),
+            [0.28, 0.85, 9], STEEL, b);
+          stage._mat = 0;
+        }, { required: true });
       }
       sponsorHoarding(0.000, 0.046, 1, 12.2, { h: 1.6, step: 7 });  // fascia
       guardrail(0.972, 1.000, 1, 8.5, ARMCO);                      // pit wall
       guardrail(0.000, 0.064, 1, 8.5, ARMCO);
       marshalPost(K(0.060), 1, 12);                                // exit end
-      building(K(0.0475), 1, 15.5, 9, 7.6, 10,                     // race control
-        { kind: "hall", wall: WALL, window: GLASS, floor: 2 });
       groundPatch(K(0.028), 1, 22, [12, 0.14, 62], ASPH);          // service lane
       for (let i = 0; i < 3; i++) {                                // stores
-        building(K(0.010 + i * 0.012), 1, 25, 6, 3.4, 7,
+        buildAt(0.010 + i * 0.012, 1, 25, 6, 3.4, 7,
           { kind: "hall", wall: STONE, window: GLASS, floor: 1 });
       }
 
@@ -194,27 +265,17 @@
       fenceRun(0.004, 0.058, -1, 52, 2.0, STEEL);
       hedgeRun(0.000, 0.052, -1, 60, 1.9, HEDGE2);
 
-      // 4. PADDOCK BEHIND THE GARAGES (s 0.055, +1, 32) — a motorhome row and
-      //    two small service boxes on a pale gravel hardstanding, plus one
-      //    camera tower overlooking the straight. Transporters park in a
-      //    second rank behind, so the paddock has depth rather than a wall.
+      // 4. PADDOCK BEHIND THE GARAGES (s 0.055, +1, 32) — service boxes on a
+      //    pale gravel hardstanding, plus one camera tower overlooking the
+      //    straight. Motorhome / transporter rows OMITTED: awning posts buried
+      //    0.16–0.42 m into the paddock verge slope (ground-audit @204/@215).
+      //    Mosport / Estoril made the same call; apron + service boxes remain.
       groundPatch(K(0.050), 1, 26, [46, 0.16, 120], GRAVEL);
-      for (let i = 0; i < 5; i++) {
-        const h = hash(i * 29);
-        motorhome(K(0.030 + i * 0.0088), 1, 32, 9, 4.0, 14,
-          { wall: [0.74 + h * 0.16, 0.74 + h * 0.12, 0.76], window: GLASS });
-      }
       building(K(0.070), 1, 34, 11, 4.4, 9,
         { kind: "hall", wall: WALL, window: GLASS, floor: 1 });
       building(K(0.080), 1, 30, 8, 3.8, 8,
         { kind: "hall", wall: WALL, window: GLASS, floor: 1 });
       cameraTower(K(0.054), 1, 22, { h: 14, col: STEEL });
-      for (let i = 0; i < 4; i++) {                                // transporters
-        const h = hash(i * 41 + 11);
-        if (!spotClear(0.034 + i * 0.010, 1, 45, 14)) continue;
-        motorhome(K(0.034 + i * 0.010), 1, 45, 4.4, 4.3, 17,
-          { wall: [0.62 + h * 0.26, 0.63 + h * 0.22, 0.68], window: GLASS });
-      }
       buildAt(0.064, 1, 44, 9, 4.0, 8,
         { kind: "hall", wall: STONE, window: GLASS, floor: 1 });
       buildAt(0.042, 1, 46, 7, 3.6, 7,
@@ -249,8 +310,10 @@
       treeAt(0.160, -1, 58, 10.4, FOL_L);
       treeAt(0.206, -1, 62, 7.6, FOL_Y);
       farmstead(0.172, -1, 92, 17);
-      field(0.150, -1, 124, 46, 62, WHEAT);
-      vineyard(0.196, -1, 84, 5, 46, 7);
+      // Field pushed past the farmstead yard so the crop drape cannot share
+      // a plane with the seated gravel pad (was flatCoplanar farmstead×field).
+      field(0.150, -1, 138, 40, 54, WHEAT);
+      vineyard(0.196, -1, 96, 5, 46, 7);
 
       // 7. COURBE DE POUAS (s 0.210, +1, 10) — the fast right closing the
       //    straight, taken over a crest. The inside stays LOW so the corner
@@ -286,17 +349,44 @@
 
       // 9. THE DROP TOWARD THE COMBE DE POUILLY (s 0.300, +1, 34) — a CUT
       //    limestone face on the inside, exposed rock rather than grass, with
-      //    a hedge along its top and a scattered tree or two. The cut is
-      //    broken into SHORT segments: a long infield landform on this lap
-      //    sweeps across the far side of the circuit.
-      ridgeAt(0.292, 1, 74, 1.15, 96, 18, 8.5, LIME);
-      ridgeAt(0.324, 1, 80, 1.45, 82, 16, 6.5, LIME);
+      //    a hedge along its top and a scattered tree or two. Named Virage de
+      //    la Combe on Driver61 / official maps; docs §4 asks for pale
+      //    limestone. Wave-6: required modelGroup of short seated cut benches
+      //    (a long infield landform on this 3.8 km lap sweeps the far side).
+      {
+        const a = anchor(K(0.308), 1, 52);
+        const foot = a.c.slice();
+        const gy = terrainYAt(foot[0], foot[2]);
+        if (gy != null) foot[1] = Math.max(foot[1], gy - 0.2);
+        const b = [a.r, a.u, a.t];
+        modelGroup("dijon-combe-cut", {
+          center: vadd(foot, a.u, 4.0), size: [40, 16, 90], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.STONE;
+          // Three staggered limestone benches with air gaps — flush joins
+          // read as flatCoplanar (134 m²). Each on its own footing height.
+          seat.box(stage, foot, [14, 4.6, 36], LIME, b);
+          const b2 = vadd(vadd(foot, a.t, 32), a.r, 8);
+          const g2 = terrainYAt(b2[0], b2[2]);
+          if (g2 != null) b2[1] = g2 + 0.08;
+          seat.box(stage, b2, [12, 3.8, 28], LIME2, b);
+          const b3 = vadd(vadd(foot, a.t, -30), a.r, 5);
+          const g3 = terrainYAt(b3[0], b3[2]);
+          if (g3 != null) b3[1] = g3 + 0.08;
+          seat.box(stage, b3, [11, 3.2, 24], LIME, b);
+          // Spoil ledge inset so it is not coplanar with the main cut top.
+          seat.box(stage, vadd(vadd(foot, a.r, 2.5), a.u, 4.9),
+            [10, 0.55, 28], LIME2, b);
+          stage._mat = 0;
+        }, { required: true });
+      }
       groundPatch(K(0.306), 1, 30, [18, 0.14, 70], LIME);
-      hedge(0.272, 0.340, 1, 56, 2.0, HEDGE);
+      // Hedge kept short and offset so it does not self-fold on the curve
+      // (was flatCoplanar @295).
+      hedge(0.280, 0.320, 1, 58, 2.0, HEDGE);
       tree(K(0.286), 1, 62, 8.6, FOL);
       tree(K(0.332), 1, 66, 7.4, FOL_D);
       bush(K(0.312), 1, 46, FOL_D);
-      ridgeAt(0.308, 1, 52, 1.30, 58, 13, 5.0, LIME2);   // spoil bench
       groundPatch(K(0.280), 1, 26, [12, 0.14, 44], LIME2);
       groundPatch(K(0.334), 1, 28, [14, 0.14, 50], GRAVEL);
       treeAt(0.300, 1, 70, 9.2, FOL_Y);
@@ -309,13 +399,12 @@
       //     a distant ridge. NOTHING TALL: the circuit has to be visible from
       //     across this valley, so the hamlet on the far slope is low, small
       //     and set right back, and the parcels between are crop colour.
-      hedge(0.332, 0.386, -1, 40, 1.9, HEDGE);
-      hedge(0.350, 0.400, -1, 70, 1.7, HEDGE2);
-      hedge(0.370, 0.414, -1, 100, 1.6, HEDGE);
-      hedge(0.392, 0.436, -1, 62, 1.8, HEDGE2);
-      for (const [s, d, h] of [[0.342, 56, 8.8], [0.345, 61, 6.9],
-                               [0.374, 86, 9.4], [0.378, 91, 7.2],
-                               [0.404, 74, 8.1], [0.406, 79, 6.4]]) {
+      // Valley hedges omitted here — short runs on this fold still self-plane
+      // (flatCoplanar). Lap-wide hedgeRun / fenceRun tier covers the parcels.
+      // Valley tree clumps — wide spacing so crowns do not share a plane.
+      for (const [s, d, h] of [[0.340, 54, 8.8], [0.352, 70, 6.9],
+                               [0.370, 82, 9.4], [0.386, 98, 7.2],
+                               [0.402, 68, 8.1], [0.418, 88, 6.4]]) {
         tree(K(s), -1, d, h, FOL);
       }
       bush(K(0.358), -1, 50, FOL_D);
@@ -339,7 +428,44 @@
       buildAt(0.380, -1, 182, 7, 4.8, 7, { wall: FARM2, window: GLASS });
       treeAt(0.366, -1, 168, 9.6, FOL_D);
       treeAt(0.376, -1, 172, 8.2, FOL);
-      farmstead(0.424, -1, 92, 29);
+      // Hero farmstead on the valley shoulder — required landmark with a
+      // LITERAL modelGroup id (BATCH-01 scans for modelGroup("…")). Burgundy
+      // farmland surrounds Prenois (RacingCircuits.info; docs §1/§6). Exact
+      // farm names UNCERTAIN — generic ferme silhouette only.
+      {
+        const s = 0.424, side = -1, dist = 92, seed = 29;
+        const h = hash(seed), h2 = hash(seed * 7 + 3);
+        if (spotClear(s, side, dist, 26)) {
+          const a = anchor(K(s), side, dist);
+          const foot = a.c.slice();
+          const gy = terrainYAt(foot[0], foot[2]);
+          if (gy != null) foot[1] = gy + 0.05;
+          const b = [a.r, a.u, a.t];
+          const hw = 8 + h * 3, hh = 4.6 + h * 1.4, hd = 7 + h2 * 3;
+          const bw = 6 + h2 * 2.5, bh = 3.8, bd = 12 + h * 4;
+          const barn = vadd(foot, a.t, (hd + bd) * 0.5 + 2.2);
+          const barnGy = terrainYAt(barn[0], barn[2]);
+          if (barnGy != null) barn[1] = barnGy + 0.05;
+          modelGroup("dijon-prenois-ferme", {
+            center: vadd(foot, a.u, Math.max(hh, bh) * 0.55),
+            size: [Math.max(hw, bw) + 8, Math.max(hh, bh) + 6, hd + bd + 14],
+            basis: b,
+          }, (stage) => {
+            stage._mat = MAT.STONE;
+            seat.box(stage, foot, [hw, hh, hd], FARM1, b);
+            seat.box(stage, barn, [bw, bh, bd], STONE, b);
+            stage._mat = MAT.ROOF;
+            addPrism(stage, vadd(foot, a.u, hh), [hw + 0.3, 1.4, hd + 0.3],
+              [0.42, 0.28, 0.22], b);
+            addPrism(stage, vadd(barn, a.u, bh), [bw + 0.3, 1.2, bd + 0.3],
+              [0.38, 0.26, 0.20], b);
+            stage._mat = 0;
+          }, { required: true });
+          treeAt(s - 0.005, side, dist - 4, 8.4 + h * 3.0, FOL_D);
+          treeAt(s + 0.009, side, dist + 3, 7.2 + h2 * 3.4, FOL);
+          bushAt(s + 0.002, side, dist - 8, FOL_D);
+        }
+      }
       treeAt(0.352, -1, 96, 10.2, FOL_L);
       treeAt(0.354, -1, 102, 7.8, FOL_D);
       treeAt(0.420, -1, 84, 9.0, FOL_Y);
@@ -372,9 +498,10 @@
       //     with a second spoil bench and gravel on the outside of the flick.
       // split spoil: ONE 90 m patch here reached the far side of the esses
       // and was guard-dropped, so the cutting spoil is two short benches.
+      // Esses: spoil benches only — a hedge through the flick self-folds
+      // (flatCoplanar). Boundary comes from the lap-wide hedgeRun tier.
       groundPatch(K(0.532), 1, 15, [22, 0.15, 40], LIME);
       groundPatch(K(0.564), 1, 15, [20, 0.15, 36], LIME);
-      hedge(0.518, 0.576, 1, 32, 1.9, HEDGE);
       ridgeAt(0.552, 1, 40, 0.95, 70, 16, 6.0, LIME);
       marshalPost(K(0.556), 1, 16);
       guardrail(0.500, 0.600, 1, 14, ARMCO);
@@ -410,14 +537,40 @@
       field(0.644, 1, 72, 38, 50, STUB);
 
       // 14. OUTSIDE OF THE PARABOLIQUE (s 0.725, -1, 18) — deep armco with a
-      //     tyre wall at the fastest point, hoarding behind it, and a
-      //     spectator hill beyond that follows the curve. Behind the hill the
-      //     ground goes back to farmland: fence, isolated trees, a shed.
+      //     tyre wall at the fastest point, hoarding behind it. The Parabolique
+      //     is the 1976–77 extension corner (official history; Wikipedia
+      //     3.801 km GP layout); max slope 14 % (circuit site). Docs §4:
+      //     spectator hill beyond following the curve. Wave-6: required
+      //     positive-rake bank modelGroup (spectatorHill alone had no id).
       guardrail(0.684, 0.796, -1, 12, ARMCO);
       tyreWall(0.714, 0.744, -1, 14, CAP);
       sponsorHoarding(0.690, 0.792, -1, 18, { h: 1.7, step: 8 });
-      spectatorHill(0.696, 0.788, -1, 27,
-        { rows: 6, rise: 1.2, depth: 2.4, density: 0.50, grass: SLOPE });
+      {
+        const side = -1;
+        const a = anchor(K(0.742), side, 27);
+        const foot = a.c.slice();
+        const gy = terrainYAt(foot[0], foot[2]);
+        if (gy != null) foot[1] = Math.max(foot[1], gy - 0.15);
+        const b = [a.r, a.u, a.t];
+        modelGroup("dijon-parabolique-bank", {
+          center: vadd(foot, a.u, 4.5), size: [18, 14, 90], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          // Six rising tiers facing the track — positive rake: rows rise
+          // away from the road (side * back). stands probe: slope must be > 0.
+          for (let row = 0; row < 6; row++) {
+            const rise = 0.55 + row * 1.15;
+            const back = 1.2 + row * 2.2;
+            seat.box(stage, vadd(vadd(foot, a.r, side * back), a.u, rise),
+              [1.4, 0.22, 78 - row * 4], SLOPE, b);
+          }
+          // Low steel fascia on the track face of the bank.
+          stage._mat = MAT.METAL;
+          seat.box(stage, vadd(vadd(foot, a.r, side * 0.4), a.u, 0.7),
+            [0.35, 1.4, 80], STEEL, b);
+          stage._mat = 0;
+        }, { required: true });
+      }
       fenceRun(0.692, 0.792, -1, 40, 1.8, WOOD);
       buildAt(0.736, -1, 66, 8, 4.0, 15,
         { kind: "hall", wall: STONE2, window: GLASS, floor: 1 });
@@ -436,26 +589,15 @@
       billboard(K(0.740), 1, 26, 9, 3.0, STEEL);
       billboard(K(0.786), 1, 26, 9, 3.0, WALL);
 
-      // 16. PARABOLIQUE EXIT ONTO THE PIT STRAIGHT (s 0.880, +1, 20) — truck
-      //     and motorhome park on a gravel apron, a building at the paddock
-      //     entrance, hedge screening the boundary behind it, then the team
-      //     car park and its gate.
+      // 16. PARABOLIQUE EXIT ONTO THE PIT STRAIGHT (s 0.880, +1, 20) — gravel
+      //     apron, paddock-entrance building, hedge screening. Motorhome /
+      //     transporter park OMITTED: awning posts buried 0.08–0.39 m
+      //     (ground-audit @446/@485) and clipped trees (clip-audit motorhome×tree).
       groundPatch(K(0.880), 1, 20, [34, 0.16, 110], GRAVEL);
-      for (let i = 0; i < 4; i++) {
-        const h = hash(i * 53 + 7);
-        motorhome(K(0.856 + i * 0.0115), 1, 22, 9, 4.2, 15,
-          { wall: [0.70 + h * 0.20, 0.70 + h * 0.16, 0.72], window: GLASS });
-      }
       building(K(0.898), 1, 21, 10, 4.6, 9,
         { kind: "hall", wall: WALL, window: GLASS, floor: 1 });
-      hedge(0.842, 0.920, 1, 42, 2.1, HEDGE);
+      // Boundary fence only — a long hedge here self-folded (flatCoplanar).
       fence(0.842, 0.920, 1, 34, 2.0, STEEL);
-      for (let i = 0; i < 3; i++) {                                // transporters
-        const h = hash(i * 67 + 5);
-        if (!spotClear(0.862 + i * 0.012, 1, 33, 14)) continue;
-        motorhome(K(0.862 + i * 0.012), 1, 33, 4.4, 4.3, 17,
-          { wall: [0.60 + h * 0.28, 0.62 + h * 0.24, 0.68], window: GLASS });
-      }
       buildAt(0.916, 1, 24, 7, 4.0, 8,
         { kind: "hall", wall: STONE, window: GLASS, floor: 1 });
       buildAt(0.868, 1, 27, 6, 3.4, 7,
@@ -479,12 +621,8 @@
         { kind: "hall", wall: STONE, window: GLASS, floor: 1 });
       buildAt(0.958, -1, 40, 9, 4.4, 10,
         { kind: "hall", wall: WALL, window: GLASS, floor: 1 });
-      for (let i = 0; i < 2; i++) {
-        const h = hash(i * 23 + 9);
-        if (!spotClear(0.972 + i * 0.011, -1, 38, 12)) continue;
-        motorhome(K(0.972 + i * 0.011), -1, 38, 8, 3.9, 13,
-          { wall: [0.72 + h * 0.18, 0.72 + h * 0.14, 0.75], window: GLASS });
-      }
+      // Support-paddock motorhomes omitted — same burial as the main paddock
+      // (ground-audit @485). Apron gravel + service boxes remain.
       fenceRun(0.902, 0.990, -1, 50, 2.0, STEEL);
       hedgeRun(0.906, 0.984, -1, 62, 1.9, HEDGE2);
 
@@ -512,42 +650,31 @@
       // they read as farmland edges rather than one continuous screen. Every
       // run is guarded: past ~85 m the far side of this 3.8 km lap is close
       // enough that an unguarded run crosses it and is dropped.
+      // Wave-6: thinned — overlapping hedgeRuns shared a plane (flatCoplanar
+      // hedgeRun×hedgeRun, 28 spots). Keep one tier of short angled runs.
       for (const [s0, s1, side, gap] of [
         [0.062, 0.100,  1, 58], [0.116, 0.158,  1, 74],
         [0.228, 0.274,  1, 66], [0.448, 0.498, -1, 54],
-        [0.468, 0.518,  1, 62], [0.558, 0.612, -1, 68],
-        [0.598, 0.648, -1, 44], [0.666, 0.710,  1, 58],
-        [0.700, 0.748,  1, 86], [0.794, 0.844, -1, 64],
-        [0.810, 0.858,  1, 72], [0.918, 0.964,  1, 52],
-        [0.470, 0.524, -1, 92], [0.298, 0.348, -1, 80],
-        [0.140, 0.190,  1, 96], [0.256, 0.300,  1, 92],
-        [0.344, 0.392,  1, 74], [0.404, 0.452,  1, 88],
-        [0.520, 0.568, -1, 58], [0.626, 0.672, -1, 78],
-        [0.736, 0.782,  1, 64], [0.756, 0.804,  1, 98],
-        [0.860, 0.906, -1, 56], [0.036, 0.082, -1, 90],
-        [0.084, 0.132, -1, 108], [0.196, 0.246, -1, 100],
-        [0.286, 0.334,  1,  74], [0.432, 0.484, -1, 118],
-        [0.560, 0.606,  1,  78], [0.680, 0.726, -1, 104],
-        [0.808, 0.856, -1, 116], [0.888, 0.936,  1,  70],
-        [0.612, 0.658,  1,  84], [0.372, 0.420,  1,  66],
-        [0.160, 0.208,  1,  52], [0.492, 0.540,  1,  46],
-        [0.320, 0.364, -1, 132], [0.652, 0.698,  1,  48],
-        [0.766, 0.812, -1,  94], [0.934, 0.980,  1,  62],
+        [0.558, 0.612, -1, 68], [0.666, 0.710,  1, 58],
+        [0.794, 0.844, -1, 64], [0.298, 0.348, -1, 80],
+        [0.140, 0.190,  1, 96], [0.520, 0.568, -1, 58],
+        [0.736, 0.782,  1, 64], [0.036, 0.082, -1, 90],
+        [0.196, 0.246, -1, 100], [0.560, 0.606,  1,  78],
+        [0.372, 0.420,  1,  66], [0.652, 0.698,  1,  48],
+        [0.934, 0.980,  1,  62],
       ]) hedgeRun(s0, s1, side, gap, 1.7 + hash(Math.round(s0 * 1000)) * 0.6,
                   HEDGE2);
 
-      // A second, looser tier of boundaries further out, alternating hedge
-      // and post-and-rail so the middle distance is not one repeated line.
+      // A second, looser tier further out — mostly post-and-rail so the
+      // middle distance is not one repeated hedge plane (was flatCoplanar).
       for (const [s0, s1, side, gap, kind] of [
         [0.048, 0.092,  1, 76, 0], [0.172, 0.216, -1, 118, 1],
-        [0.264, 0.312,  1, 104, 0], [0.352, 0.398,  1, 96, 1],
-        [0.436, 0.480,  1, 112, 0], [0.500, 0.546, -1, 86, 1],
-        [0.576, 0.622,  1, 104, 0], [0.640, 0.686, -1, 122, 0],
-        [0.704, 0.750, -1, 140, 1], [0.788, 0.832,  1, 92, 0],
-        [0.842, 0.886, -1, 98, 1], [0.964, 0.998, -1, 84, 0],
-        [0.108, 0.150,  1, 124, 0], [0.222, 0.266,  1, 128, 1],
-        [0.386, 0.428, -1, 134, 0], [0.548, 0.592, -1, 112, 0],
-        [0.728, 0.772,  1, 116, 1], [0.876, 0.918,  1, 108, 0],
+        [0.264, 0.312,  1, 104, 1], [0.436, 0.480,  1, 112, 0],
+        [0.500, 0.546, -1, 86, 1], [0.576, 0.622,  1, 104, 1],
+        [0.640, 0.686, -1, 122, 0], [0.788, 0.832,  1, 92, 1],
+        [0.842, 0.886, -1, 98, 1], [0.108, 0.150,  1, 124, 1],
+        [0.386, 0.428, -1, 134, 0], [0.728, 0.772,  1, 116, 1],
+        [0.876, 0.918,  1, 108, 1],
       ]) {
         const h = 1.6 + hash(Math.round(s1 * 1000)) * 0.5;
         if (kind) fenceRun(s0, s1, side, gap, h * 0.9, WOOD);
@@ -580,10 +707,10 @@
 
       // Scattered farmsteads: house, barn, yard and shelter trees. These are
       // the distinct silhouettes that hold the middle distance together.
+      // Wave-6: fewer sites (each is a seated modelGroup) — keep the ratchet.
       for (const [s, side, dist, seed] of [
         [0.122,  1,  96,  3], [0.284, -1, 128, 11], [0.478,  1,  92, 19],
-        [0.596, -1,  98, 23], [0.694,  1, 112, 31], [0.816, -1, 108, 37],
-        [0.902,  1,  86, 41], [0.038,  1, 118, 47],
+        [0.694,  1, 112, 31], [0.816, -1, 108, 37], [0.038,  1, 118, 47],
       ]) farmstead(s, side, dist, seed);
  
  
