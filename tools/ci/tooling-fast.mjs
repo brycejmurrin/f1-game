@@ -354,6 +354,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/move-tree.test.mjs",
   "tests/unit/nightly-group.test.mjs",
   "tests/unit/no-bare-console.test.mjs",
+  "tests/unit/node-plan.test.mjs",
   "tests/unit/nontext-contrast.test.mjs",
   "tests/unit/onboard.test.mjs",
   "tests/unit/overtake-mode.test.mjs",
