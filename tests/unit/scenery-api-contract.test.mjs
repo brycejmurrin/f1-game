@@ -295,6 +295,16 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     // Wave 6 — Watkins Glen: 2006 control-tower booths, Nazareth pit terrace,
     // Sahlen Esses hillside (positive-slope GA bank + timber stand)
     watkins_glen: ["glen-pit-terrace", "glen-esses-hill", "glen-timing-tower"],
+    // Wave 6 — Magny-Cours: pit control + conference wing, Conservatoire at the
+    // main entrance, Château d'Eau water tower (T14), Nivernais ferme + bourg.
+    // Grandstand names UNCERTAIN (operator lists 14 tribunes; not scraped).
+    magny_cours: [
+      "magny-cours-control-block",
+      "magny-cours-conservatoire",
+      "magny-cours-chateau-deau",
+      "magny-cours-ferme",
+      "magny-cours-bourg",
+    ],
   };
   for (const [track, ids] of Object.entries(expected)) {
     const body = landmarkSource(track);

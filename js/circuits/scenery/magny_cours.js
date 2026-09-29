@@ -8,8 +8,8 @@
   function (api) {
       const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
         pine, tree, bush, hedge, ridge, building, grandstandEx, spectatorHill,
-        broadcastCompound, billboard, gantry, marshalPost, motorhome,
-        fence, guardrail, tyreWall, groundPatch, modelGroup,
+        broadcastCompound, billboard, gantry, marshalPost,
+        fence, guardrail, tyreWall, groundPatch, modelGroup, seat, terrainYAt,
         cameraTower, sponsorHoarding, signBoard,
         addBox, addCyl, addCone, addPrism, addFrustum, forestEdge } = api;
 
@@ -46,6 +46,9 @@
       every(30, (k) => {
         const s = k / n;
         if (openArea(s)) return;
+        // Keep the ferme yard (s≈0.34) clear of random trees — silo cones were
+        // clipping forestEdge/plantTree (clip severe 12 → 13).
+        if (s > 0.30 && s < 0.38) return;
         const h = hash(k * 31);
         if (h < 0.40) return;
         tree(k, h < 0.5 ? -1 : 1, 12 + h * 10, 11 + h * 7, h < 0.5 ? LEAF_D : LEAF);
@@ -57,27 +60,39 @@
         if (h < 0.55) return;
         pine(k, h < 0.5 ? -1 : 1, 46 + h * 24, 16 + h * 8, [0.12, 0.30, 0.15]);
       });
-      // Field hedges banding the outfield.
-      hedge(0.12, 0.30, -1, 34, 3.4, [0.16, 0.34, 0.17]);
-      hedge(0.34, 0.52, 1, 36, 3.4, [0.16, 0.34, 0.17]);
-      hedge(0.62, 0.84, -1, 34, 3.4, [0.16, 0.34, 0.17]);
-      for (const [id, s, side, gap, w, l, col] of [
-        ["magny-field-plough-n", 0.20, -1, 74, 130, 190, PLOUGH],
-        ["magny-field-wheat-n", 0.26, -1, 210, 150, 210, WHEAT],
-        ["magny-field-colza-e", 0.44, 1, 76, 120, 200, COLZA],
-        ["magny-field-stubble-e", 0.50, 1, 200, 160, 180, STUBBLE],
-        ["magny-field-pasture-s", 0.72, -1, 72, 110, 190, PASTURE],
-        ["magny-field-plough-s", 0.78, -1, 190, 150, 220, PLOUGH],
-        ["magny-field-wheat-w", 0.90, 1, 96, 120, 170, WHEAT],
-        ["magny-field-stubble-w", 0.14, 1, 190, 140, 200, STUBBLE],
-        ["magny-field-colza-mid", 0.60, 1, 86, 100, 160, COLZA],
+      // Field hedges banding the outfield. One long run per side; the old
+      // three-run layout left consecutive segments coplanar with themselves.
+      hedge(0.12, 0.28, -1, 36, 3.1, [0.16, 0.34, 0.17]);
+      hedge(0.64, 0.82, -1, 38, 3.4, [0.17, 0.35, 0.18]);
+      // Right-side field edge as spaced bushes (avoids hedge self-coplanar).
+      along(0.36, 0.50, 10, (k) => {
+        bush(k, 1, 40 + hash(k) * 4, [0.15, 0.33, 0.16]);
+      });
+      // Field patches: keep worked-land colour, but shrink / push so neighbours
+      // do not share a coplanar top (was 4 flatCoplanar spots, two from overlap).
+      for (const [id, s, side, gap, w, l, thick, col] of [
+        ["magny-field-plough-n", 0.20, -1, 78, 110, 160, 0.16, PLOUGH],
+        ["magny-field-wheat-n", 0.28, -1, 230, 120, 160, 0.22, WHEAT],
+        ["magny-field-colza-e", 0.44, 1, 90, 90, 140, 0.17, COLZA],
+        ["magny-field-stubble-e", 0.54, 1, 220, 120, 140, 0.24, STUBBLE],
+        ["magny-field-pasture-s", 0.72, -1, 85, 90, 140, 0.18, PASTURE],
+        ["magny-field-plough-s", 0.82, -1, 210, 120, 160, 0.21, PLOUGH],
+        ["magny-field-wheat-w", 0.90, 1, 120, 90, 120, 0.15, WHEAT],
+        ["magny-field-stubble-w", 0.10, 1, 210, 110, 140, 0.23, STUBBLE],
+        ["magny-field-colza-mid", 0.58, 1, 115, 75, 110, 0.19, COLZA],
       ]) {
-        groundPatch(K(s), side, gap, [w, 0.18, l], col, { id, samples: 9 });
+        groundPatch(K(s), side, gap, [w, thick, l], col, { id, samples: 9 });
       }
-      for (const [s, side, gap] of [[0.20, -1, 84], [0.78, -1, 200]]) {
+      // Plough furrows: short terrain-seated strips (was one 110 m slab whose
+      // top dipped under terrain swells — 12 buried @ 0.04 m).
+      for (const [s, side, gap] of [[0.20, -1, 88], [0.80, -1, 210]]) {
         for (let i = 0; i < 12; i++) {
           const a = anchor(K(s + (i - 6) * 0.004), side, gap);
-          addBox(out, vadd(a.c, a.u, 0.22), [110, 0.09, 1.1],
+          const foot = a.c.slice();
+          const ty = terrainYAt(foot[0], foot[2]);
+          if (ty != null) foot[1] = Math.max(foot[1], ty) + 0.06;
+          else foot[1] += 0.06;
+          seat.box(out, foot, [36, 0.12, 1.0],
             [0.30, 0.23, 0.16], [a.r, a.u, a.t]);
         }
       }
@@ -93,10 +108,8 @@
       copse(K(0.36), -1, 60, 7);
       copse(K(0.66), -1, 54, 6);
       copse(K(0.86), 1, 58, 6);
-      groundPatch(K(0.34), -1, 96, [120, 0.18, 170], COLZA,
-        { id: "magny-field-colza-n2", samples: 9 });
-      groundPatch(K(0.64), -1, 92, [110, 0.18, 160], STUBBLE,
-        { id: "magny-field-stubble-e2", samples: 9 });
+      // (No second-band groundPatches — they shared tops with the furrow strips
+      // and raised flatCoplanar above the ratchet.)
 
       // 2. PIT COMPLEX — Magny-Cours was rebuilt in 1991 as the centrepiece of
       //    the Technopôle, a publicly funded motorsport industrial park, and it
@@ -117,37 +130,46 @@
           stage._mat = MAT.CONCRETE;
           addBox(stage, vadd(a.c, a.u, 3.6), [14, 7.2, 38], RENDER, b);
           stage._mat = 0;
-          addBox(stage, vadd(vadd(a.c, a.r, -7.0), a.u, 2.8), [0.3, 5.0, 34],
+          addBox(stage, vadd(vadd(a.c, a.r, -7.05), a.u, 2.8), [0.3, 5.0, 34],
             [0.22, 0.23, 0.26], b);                        // garage door band
           stage._mat = MAT.METAL;
-          addCyl(stage, vadd(vadd(a.c, a.u, 7.2), a.t, -19), 8.2, 38,
+          // Vault seated 0.2 m above the garage roof so the barrel is not
+          // coplanar with the box top (coplanar-audit).
+          addCyl(stage, vadd(vadd(a.c, a.u, 7.4), a.t, -19), 8.2, 38,
             [0.72, 0.74, 0.78], 10, [a.r, a.t, a.u]);
           for (let rIdx = 0; rIdx < 5; rIdx++) {
-            addCyl(stage, vadd(vadd(a.c, a.u, 7.2), a.t, (rIdx - 2) * 9.2),
+            addCyl(stage, vadd(vadd(a.c, a.u, 7.4), a.t, (rIdx - 2) * 9.2),
               8.5, 0.35, [0.30, 0.42, 0.66], 10, [a.r, a.t, a.u]);
           }
           // Blue eaves gutter running the full length on the pit-lane side.
-          addBox(stage, vadd(vadd(a.c, a.r, -8.2), a.u, 7.4), [0.6, 0.6, 38],
+          addBox(stage, vadd(vadd(a.c, a.r, -8.2), a.u, 7.55), [0.6, 0.5, 38],
             [0.24, 0.38, 0.62], b);
           stage._mat = 0;
         }, { required: true });
       }
       // Control block: two low storeys with a flat roof and a blue fascia. No
       // tower — Magny-Cours never had one, and adding one would make it look
-      // like every other circuit in this batch.
+      // like every other circuit in this batch. A short conference wing sits
+      // behind (Business Center / Centre de Conférence on the operator site).
       {
         const a = anchor(K(0.996), 1, 30);
         const b = [a.r, a.u, a.t];
         modelGroup("magny-cours-control-block", {
-          center: vadd(a.c, a.u, 6), size: [18, 16, 30], basis: b,
+          center: vadd(a.c, a.u, 6), size: [22, 16, 36], basis: b,
         }, (stage) => {
           stage._mat = MAT.CONCRETE;
           addBox(stage, vadd(a.c, a.u, 4.5), [12, 9, 26], RENDER, b);
+          // Conference wing (operator Business Center) — pale render, same trim.
+          const wing = vadd(a.c, a.t, -18);
+          addBox(stage, vadd(wing, a.u, 3.6), [10, 7.2, 14], RENDER, b);
           stage._mat = MAT.GLASS;
           addBox(stage, vadd(vadd(a.c, a.r, -6.1), a.u, 6.6), [0.35, 2.8, 24],
             [0.20, 0.28, 0.38], b);
+          addBox(stage, vadd(vadd(wing, a.r, -5.1), a.u, 4.8), [0.3, 2.4, 12],
+            [0.20, 0.28, 0.38], b);
           stage._mat = MAT.METAL;
           addBox(stage, vadd(a.c, a.u, 9.4), [13.5, 0.6, 27], SLATE, b);
+          addBox(stage, vadd(wing, a.u, 7.5), [11, 0.5, 15], SLATE, b);
           addBox(stage, vadd(vadd(a.c, a.r, -6.6), a.u, 8.9), [0.5, 0.7, 27],
             [0.24, 0.38, 0.62], b);
           // addCyl is BASE-anchored; the roof cap above tops out at 9.4+0.3=
@@ -166,13 +188,40 @@
         building(K(0.925 + i * 0.013), 1, 40, 27, 10, 17,
           { kind: "podium", wall: RENDER, window: [0.32, 0.36, 0.44], floor: 4.5 });
       }
-      every(46, (k) => {
-        const s = k / n, h = hash(k * 71 + 31);
-        if (!(s > 0.90 || s < 0.05) || h < 0.52) return;
-        motorhome(k, 1, 56 + h * 10, 10, 4, 6, { wall: [0.64 + h * 0.26, 0.64, 0.66] });
-      });
+      // Paddock vans omitted this pass — motorhome() awning/accent prims bury
+      // under apron swells (was 7 buried @ 0.20 m). Technopôle sheds +
+      // broadcast compound already fill the paddock read.
       broadcastCompound(K(0.916), 1, 72, { vans: 3, dishes: 2, mastH: 9 });
       for (const s of [0.975, 0.01, 0.03]) billboard(K(s), -1, 8, 12, 4.5, [0.20, 0.32, 0.66]);
+
+      // Conservatoire de la Monoplace Française — museum at the main entrance
+      // (operator site + fr.wikipedia; inaugurated 1 May 2015, ~1 400 m²).
+      {
+        const a = anchor(K(0.055), 1, 52);
+        const b = [a.r, a.u, a.t];
+        modelGroup("magny-cours-conservatoire", {
+          center: vadd(a.c, a.u, 6), size: [28, 16, 48], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(a.c, a.u, 4.2), [16, 8.4, 36], RENDER, b);
+          // Glass lobby band facing the approach.
+          stage._mat = MAT.GLASS;
+          addBox(stage, vadd(vadd(a.c, a.r, -8.2), a.u, 3.8), [0.35, 5.5, 20],
+            [0.22, 0.30, 0.40], b);
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(a.c, a.u, 8.8), [17.5, 0.55, 38], SLATE, b);
+          addBox(stage, vadd(vadd(a.c, a.r, -8.6), a.u, 8.3), [0.5, 0.6, 38],
+            [0.24, 0.38, 0.62], b);
+          // Low entrance canopy.
+          addBox(stage, vadd(vadd(a.c, a.r, -10), a.u, 5.2), [4.5, 0.35, 14],
+            [0.70, 0.72, 0.76], b);
+          for (const st of [-5, 5]) {
+            addCyl(stage, vadd(vadd(vadd(a.c, a.r, -11.5), a.t, st), a.u, 0),
+              0.18, 5.2, [0.55, 0.56, 0.58], 6, b);
+          }
+          stage._mat = 0;
+        }, { required: true });
+      }
 
       const vaultStand = (s0, s1, side, gap, opts) => {
         opts = opts || {};
@@ -224,19 +273,19 @@
       groundPatch(K(0.580), 1, 6, [34, 0.18, 44], GRAVEL,
         { id: "magny-adelaide-gravel", samples: 8 });
       tyreWall(0.564, 0.598, 1, 5, [0.86, 0.20, 0.18]);
-      vaultStand(0.556, 0.606, -1, 18, { rows: 8 });        // Adelaide hairpin
+      vaultStand(0.556, 0.606, -1, 20, { rows: 8, step: 9 });        // Adelaide hairpin
       marshalPost(K(0.574), -1, 10);
 
       groundPatch(K(0.172), -1, 5, [26, 0.18, 34], GRAVEL,
         { id: "magny-estoril-gravel", samples: 6 });
       tyreWall(0.158, 0.188, -1, 4, [0.20, 0.40, 0.85]);
-      vaultStand(0.152, 0.194, 1, 18, { rows: 6, span: 5.6 });   // Estoril
+      vaultStand(0.152, 0.194, 1, 20, { rows: 6, span: 5.6, step: 9 });   // Estoril
       marshalPost(K(0.166), 1, 9);
 
       groundPatch(K(0.920), 1, 5, [24, 0.18, 32], GRAVEL,
         { id: "magny-lycee-gravel", samples: 6 });
       tyreWall(0.906, 0.936, 1, 4, [0.85, 0.78, 0.20]);
-      vaultStand(0.902, 0.942, -1, 17, { rows: 7 });        // Lycée, onto the pits
+      vaultStand(0.902, 0.942, -1, 19, { rows: 7, step: 9 });        // Lycée, onto the pits
       marshalPost(K(0.914), -1, 9);
 
       spectatorHill(0.24, 0.34, 1, 15, { rows: 3, rise: 1.0, depth: 1.8, density: 0.38, step: 9 });
@@ -268,10 +317,10 @@
       }
 
       {
-        const a = anchor(K(0.34), 1, 46);
+        const a = anchor(K(0.34), 1, 58);
         const b = [a.r, a.u, a.t];
         modelGroup("magny-cours-ferme", {
-          center: vadd(a.c, a.u, 8), size: [36, 20, 62], basis: b, required: true,
+          center: vadd(a.c, a.u, 8), size: [36, 20, 62], basis: b,
         }, (stage) => {
           const stone = [0.80, 0.78, 0.70];
           stage._mat = MAT.STONE;
@@ -304,7 +353,7 @@
             addCyl(stage, vadd(p, a.u, 0.8), 0.85, 1.5, [0.76, 0.70, 0.44], 8,
               [a.r, a.t, a.u]);
           }
-        });
+        }, { required: true });
       }
       {
         const a = anchor(K(0.62), 1, 235);
@@ -327,11 +376,29 @@
           // Nave and tower foot 4 / 8 cm deeper (same tops): their undersides
           // were one plane with each other and the houses' (ground-audit).
           addBox(stage, vadd(ch, a.u, 4.48), [10, 9.04, 18], RENDER, b);
-          addBox(stage, vadd(vadd(ch, a.t, -11), a.u, 8.96), [7, 18.08, 7], RENDER, b);
+          // Tower nudged back so its front face is not coplanar with the nave.
+          addBox(stage, vadd(vadd(ch, a.t, -11.4), a.u, 8.96), [6.6, 18.08, 6.6], RENDER, b);
           stage._mat = 0;
-          addPrism(stage, vadd(ch, a.u, 9), [10.5, 3.0, 18.5], SLATE, b);
-          addCone(stage, vadd(vadd(ch, a.t, -11), a.u, 18), 4.6, 13, SLATE, 4, b);
-        });
+          addPrism(stage, vadd(ch, a.u, 9.15), [10.5, 3.0, 18.5], SLATE, b);
+          addCone(stage, vadd(vadd(ch, a.t, -11.4), a.u, 18), 4.4, 13, SLATE, 4, b);
+        }, { required: true });
+      }
+      // Château d'Eau — concrete water tower that names turn 14 (apex ~0.817).
+      // Corner re-profiled 2003 (racingcircuits.info / operator historic page).
+      {
+        const a = anchor(K(0.817), -1, 28);
+        const b = [a.r, a.u, a.t];
+        modelGroup("magny-cours-chateau-deau", {
+          center: vadd(a.c, a.u, 12), size: [14, 28, 14], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          addCyl(stage, a.c, 1.4, 14, RENDER, 10, b);
+          addCyl(stage, vadd(a.c, a.u, 14), 4.2, 5.5, RENDER, 12, b);
+          stage._mat = MAT.METAL;
+          addCone(stage, vadd(a.c, a.u, 19.5), 4.6, 2.4, SLATE, 12, b);
+          addCyl(stage, vadd(a.c, a.u, 21.5), 0.12, 4.5, [0.70, 0.72, 0.74], 5, b);
+          stage._mat = 0;
+        }, { required: true });
       }
       for (let i = 0; i < 4; i++) {
         const a = anchor(K(0.062 + i * 0.016), 1, 30 + (i % 2) * 16);
@@ -355,13 +422,19 @@
       signBoard(K(0.580), -1, 8, "corner", 12);
       signBoard(K(0.920), -1, 8, "corner", 16);
       for (let i = 0; i < 3; i++) signBoard(K(0.530 + i * 0.011), 1, 7.5, "braking", 3 - i);
-      sponsorHoarding(0.940, 0.055, -1, 3.4, { h: 1.15, step: 10 });
+      // Hoarding behind the main-straight stand (gap 14) so panels do not share
+      // a plane with the crowdBand (gap raised 3.4→7.5 had added a coplanar spot).
+      sponsorHoarding(0.948, 0.995, -1, 14, { h: 1.15, step: 12 });
+      sponsorHoarding(0.018, 0.048, -1, 14, { h: 1.15, step: 12 });
       cameraTower(K(0.030), -1, 26, { h: 16 });
       cameraTower(K(0.172), 1, 28, { h: 15 });
       cameraTower(K(0.580), -1, 30, { h: 17 });
       cameraTower(K(0.920), -1, 26, { h: 15 });
-      for (const [s0, s1] of [[0.1, 0.38], [0.52, 0.91]]) {
-        for (const side of [-1, 1])
-          forestEdge(s0, s1, side, 26, { density: 0.44, hMin: 9, hMax: 16, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
-      }
+      // Split forestEdge so the ferme (s≈0.34 R) and Adelaide stands stay clear.
+      forestEdge(0.10, 0.28, -1, 32, { density: 0.38, hMin: 9, hMax: 16, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
+      forestEdge(0.10, 0.28, 1, 34, { density: 0.36, hMin: 9, hMax: 16, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
+      forestEdge(0.38, 0.50, -1, 32, { density: 0.36, hMin: 9, hMax: 15, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
+      forestEdge(0.38, 0.50, 1, 36, { density: 0.34, hMin: 9, hMax: 15, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
+      forestEdge(0.62, 0.88, -1, 34, { density: 0.36, hMin: 9, hMax: 16, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
+      forestEdge(0.62, 0.88, 1, 36, { density: 0.34, hMin: 9, hMax: 16, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
     };
