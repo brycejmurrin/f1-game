@@ -759,7 +759,7 @@ const AiDrive = (function () {
      that has none yet, and 0.18 is the planner's own long-standing figure. */
   const PIT_LOSS_FALLBACK = 0.18;
   const DEG_LIN = 0.05;      // lateral grip lost across a full stint (TyreModel.DROP_LIN)
-  const DEG_CLIFF = 0.25;    // ...and per unit of wear past it
+  const DEG_CLIFF = 0.50;    // ...and per unit of wear past it (TyreModel.DROP_CLIFF)
   const GRIP_TO_LAP = 0.55;  // a fraction of grip is worth this much of a lap — sub-linear
   function degCost(n, life) {
     const L = Math.max(0.5, life);
