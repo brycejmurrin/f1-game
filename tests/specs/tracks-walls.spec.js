@@ -46,9 +46,14 @@ const ALL = fs.readdirSync(path.join(ROOT, "js/circuits"))
   .sort();
 
 const ONLY_TRACK = process.env.TRACK;
-const IDS = ONLY_TRACK ? ALL.filter((id) => id === ONLY_TRACK) : ALL;
-const STREET = ["monaco", "singapore", "vegas", "baku", "jeddah"]
-  .filter((id) => !ONLY_TRACK || id === ONLY_TRACK);
+// APEX_CIRCUITS: CI's circuit lane (tools/ci/select-specs.mjs) sets it to the
+// circuits a circuit-only diff touched, so the per-circuit tests below run for
+// those and skip the other ~50. Unset = every circuit; the list-matches-game
+// test always checks the whole fleet.
+const SCOPE = (process.env.APEX_CIRCUITS || "").split(",").map((s) => s.trim()).filter(Boolean);
+const inScope = (id) => (!ONLY_TRACK || id === ONLY_TRACK) && (!SCOPE.length || SCOPE.includes(id));
+const IDS = ALL.filter(inScope);
+const STREET = ["monaco", "singapore", "vegas", "baku", "jeddah"].filter(inScope);
 
 test.describe("Apex 26 — track boundaries", () => {
   test("the swept circuit list matches what the game actually loads", async ({ page }) => {

@@ -423,7 +423,16 @@ jobs:
         # tests/helpers/vm-page.js (tools/ci/twinned-specs.mjs ADAPTED), one
         # child process per spec. Its own slice because a spec that builds a
         # circuit costs seconds to minutes each and the `fast` slice is seconds.
-        slice: [vm-a, vm-b, slow, fast, vm-page]
+        # THREE SLICES, NOT FIVE (2026-09-29). Every job holds one of the
+        # account's 20 concurrent slots, and on 2026-09-29 200-290 jobs sat
+        # queued behind them for seven hours (docs/notes/CI-CAPACITY-2026-09-29.md).
+        # Five slices measured 5.6 / 4.0 / 2.2 / 1.8 / 2.6 min of work; packed by
+        # that into three, each is within ~15 s of vm-a, which was already the
+        # longest — same wall, two fewer runners per run.
+        #   vm-a       game-vm-a                         5.6 min
+        #   vm-b       game-vm-b + the fast scripts      4.0 + 1.8
+        #   page-slow  vm-page + node-slow               2.6 + 2.2
+        slice: [vm-a, vm-b, page-slow]
     # MEASURED locally 2026-09-03, warm: net 12s, service-worker 4s, lifecycle
     # 0s, state 1s, agent-contract 0s, audio 0s, mcp 12s, node-slow 115s,
     # game-vm 161s = 305s total (+ garage-unit 39s, steering-unit 1s, 2026-09-10). Plus npm ci, which cost 3m32s and 5m02s on the
@@ -446,18 +455,15 @@ jobs:
               # Two partitions of test:game-vm on two runners (see the matrix).
               npm run test:game-vm-a
               ;;
-            vm-b)
-              npm run test:game-vm-b
-              ;;
-            vm-page)
+            page-slow)
               npm run test:vm-page
-              ;;
-            slow)
               # The three raster/spawn-heavy car files, out of the edit loop
               # (152 s of the old 315 s tooling-fast; 2026-09-01) and into the gate.
               npm run test:node-slow
               ;;
-            fast)
+            vm-b)
+              npm run test:game-vm-b
+              # The former `fast` slice: seconds each, so they ride with vm-b.
               npm run test:net-unit
               npm run test:service-worker
               npm run test:lifecycle-unit
@@ -943,7 +949,17 @@ jobs:
         # cap. The 2026-09-01 slimming collapsed the push gate to ONE shard by
         # mistake; the nightly's four shards are the boot group, the push gate's
         # four are smoke.spec.js (~8 min wall). Shards are separate runners.
-        shard: [1, 2, 3, 4]
+        #
+        # ONE SHARD FOR smoke.spec.js ON LLVMPIPE (2026-09-29). The 30-37 min
+        # above was SwiftShader. On llvmpipe (2026-09-16) the four shards
+        # measured 0.3-0.9 min of test work each against ~0.5 min of setup
+        # apiece, and smoke.spec.js as a whole medians 67 s for 10 tests
+        # (tests/data/spec-timings.json) — four runners for about a minute of
+        # work, each holding one of the account's 20 concurrent slots
+        # (docs/notes/CI-CAPACITY-2026-09-29.md). PRs and the Pages call now run
+        # it as one shard (`--shard=1/1`); the nightly and dispatched WIDE run
+        # — a whole browser group, 70-150 tests — keeps four.
+        shard: ${{ fromJSON((inputs.concurrency_key == '' && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')) && '[1, 2, 3, 4]' || '[1]') }}
     # 30, not 20. MEASURED on run 31023778264, the first green one: 14m24s.
     # That fit the old cap, but with 5.5 minutes to spare on a SHARED runner
     # whose per-test cost is the very thing that varies — and the last time a
@@ -1104,7 +1120,9 @@ jobs:
         # --shard splits smoke.spec.js's tests across the four matrix VMs; the
         # flag passes through tools/ci/run-playwright.mjs verbatim (it forwards
         # argv to `playwright test`). Unsharded this step took 30-37 min.
-        run: npm run test:smoke -- --timeout=900000 --shard=${{ matrix.shard }}/4
+        # --shard=1/1 on PRs and the Pages call (one runner, see the matrix);
+        # the flag stays so a return to more shards is one number.
+        run: npm run test:smoke -- --timeout=900000 --shard=${{ matrix.shard }}/1
       # The wide run: the whole boot group, 4 shards, nightly — or, on dispatch,
       # whichever browser group the `group` input names (default tiny). On
       # llvmpipe since 2026-09-16, for the smoke numbers measured above (corner
@@ -1579,8 +1597,9 @@ jobs:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(needs.select.outputs.shards) }}
-    # The budget maths is tools/ci/select-budget.mjs (measured: 79.7 s/test at one
-    # worker on a shared runner; a TIMING-OUT test costs timeout x (1+retries)).
+    # The budget maths is tools/ci/select-budget.mjs (each spec at its own measured
+    # llvmpipe rate, else a 7.5 s/test fallback since 2026-09-29 — it was a 79.7 s
+    # SwiftShader figure; a TIMING-OUT test costs timeout x (1+retries)).
     # Hence retries 0 and --timeout=180000 here — the selector's settings, not
     # smoke's gate settings (420 s, one retry): a retry only doubles the cost
     # of the news this job exists to deliver. The fixed smoke and driving-model
@@ -1588,10 +1607,12 @@ jobs:
     # measured timeout policies; duplicating smoke here caused run 32103664606
     # to turn four green 420 s shards into a false red at exactly 120 s.
     #
-    # THE CAP IS DERIVED PER SHARD by select-specs' shardTimeoutMin: every test
-    # in the shard at the per-test timeout, plus ~4 min of setup (npm ci +
-    # chromium) and margin — 36 min for the 10-test budgeted shard, more for an
-    # oversize spec billed at its own count. Both 20 and 26 were once wrong
+    # THE CAP IS DERIVED PER JOB by select-specs' shardCapMin: twice the job's
+    # expected work (measured per spec in tests/data/spec-timings.json), plus
+    # --max-failures (3) per-test timeouts at the slowest timeout it carries,
+    # plus setup and margin. It was "every test at the per-test timeout" until
+    # 2026-09-29, a worst case --max-failures makes unreachable, and it split
+    # tracks-walls (~3.5 min measured) across three runners to stay under 90. Both 20 and 26 were once wrong
     # here, and this workflow's header records that a job killed by its cap
     # reads as "0 failures" and hid a dead deploy; a gate that dies of its own
     # cap teaches nothing. The cap is a ceiling for a case that essentially
@@ -1655,6 +1676,11 @@ jobs:
           # the spec's own platform note), so that shard keeps the ANGLE default.
           APEX_GL: ${{ (inputs.gl != 'swiftshader' && !contains(matrix.specs, 'menu-baseline')) && 'llvmpipe' || '' }}
           LIBGL_ALWAYS_SOFTWARE: ${{ (inputs.gl != 'swiftshader' && !contains(matrix.specs, 'menu-baseline')) && '1' || '' }}
+          # THE CIRCUIT LANE: the plan sets this only when EVERY changed path
+          # is one circuit's (tools/ci/select-specs.mjs circuitsTouched), and
+          # the per-circuit loops (CIRCUIT_FILTERED_TESTS) then run just those.
+          # Empty = the whole fleet, which is every other diff.
+          APEX_CIRCUITS: ${{ matrix.circuits }}
         run: |
           # matrix.shard is set when shards() split a loop-expanded spec across
           # Playwright --shard=i/n jobs (tracks-walls ~63 tests). Empty for the
@@ -1746,8 +1772,8 @@ jobs:
   # renderer or lighting paths here expecting cover they cannot give.
   baseline-trial:
     name: Golden menus on a runner (trial, non-blocking)
-    # PRs and dispatches only: never a push, and never the Pages call, whose
-    # conclusion gates the deploy.
+    # Nightly and dispatches only (PRs until 2026-09-29, below): never a push,
+    # and never the Pages call, whose conclusion gates the deploy.
     #
     # THE COMMENT ABOVE WAS FALSE FOR SIX DAYS. A called workflow reports the
     # CALLER's event, so a "deploy now" train — pages.yml dispatched, calling
@@ -1758,7 +1784,14 @@ jobs:
     # advisory job becomes a blocking one by accident. concurrency_key is the
     # only signal a Pages call always carries — the same tell the smoke, sweeps
     # and select jobs use — so it leads the condition here too.
-    if: ${{ inputs.concurrency_key == '' && (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch') }}
+    #
+    # OFF PULL REQUESTS (2026-09-29). It ran on every PR push for three weeks
+    # (237 runs in the two days measured) and answered its question on the
+    # first: the goldens are portable and stale (above). What is left is
+    # "re-bless, then confirm across a few runs", which a nightly and a
+    # dispatch answer without a runner slot on every push while 200-290 jobs
+    # queue (docs/notes/CI-CAPACITY-2026-09-29.md).
+    if: ${{ inputs.concurrency_key == '' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
     continue-on-error: true
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -1840,7 +1873,27 @@ jobs:
       actions: write
       contents: read
     steps:
+      # ONLY THE TIP POKES (2026-09-29). A burst of merges gave 57 train
+      # dispatches in 41 h (14 in one hour), 22 of them cancelled while
+      # waiting (docs/notes/CI-CAPACITY-2026-09-29.md). A train gates the TIP,
+      # not this commit, so a poke from a commit that is no longer the tip buys
+      # a gate the newer push's own fast tier will ask for anyway. If that
+      # newer run goes red it pokes nothing, and pages.yml's cron backstop
+      # still gates the tip. Any doubt (API error, empty answer) pokes.
+      - name: Is this commit still the tip?
+        id: tip
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TIP=$(gh api "repos/$GITHUB_REPOSITORY/branches/$GITHUB_REF_NAME" --jq .commit.sha 2>/dev/null || true)
+          if [ -n "$TIP" ] && [ "$TIP" != "$GITHUB_SHA" ]; then
+            echo "poke=false" >> "$GITHUB_OUTPUT"
+            echo "NOT POKING: the tip moved to $TIP; its own fast tier pokes the train" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "poke=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Dispatch pages.yml on this branch
+        if: steps.tip.outputs.poke == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

@@ -897,14 +897,25 @@ test("the deploy-gate count excludes what the renderer job runs", () => {
   assert.equal(gfx.deployGate, false);
 });
 
-test("the push-gate smoke spec is sharded four ways on separate runners (unsharded it hits the 30-minute cap)", () => {
+test("smoke.spec.js is ONE shard on PRs and the Pages call; the wide nightly/dispatch run keeps four", () => {
   // Pages runs 1873/1876 measured smoke.spec.js at 30-37 min on one shared
-  // runner — the job's own cap. The matrix must be a constant four (never a
-  // one-shard fallback on push) and the Smoke step must pass --shard.
+  // runner — on SwiftShader. On llvmpipe (2026-09-16) the four shards did
+  // 0.3-0.9 min of work each, and every job holds one of the account's 20
+  // concurrent slots (docs/notes/CI-CAPACITY-2026-09-29.md). So the matrix is
+  // one shard unless the run is the WIDE one (a whole browser group), which is
+  // a schedule or dispatch with no Pages caller key.
   const smokeJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  smoke:\n"), ciWorkflow.indexOf("\n  driving-model:\n"));
-  assert.match(smokeJob, /^\s+shard: \[1, 2, 3, 4\]\s*$/m, "the smoke matrix must be a constant four shards");
-  assert.doesNotMatch(smokeJob, /fromJSON\([^)]*'\[1\]'/, "no one-shard fallback on push");
-  assert.match(smokeJob, /run: npm run test:smoke -- --timeout=\d+ --shard=\$\{\{ matrix\.shard \}\}\/4/);
+  assert.match(smokeJob, /^\s+shard: \$\{\{ fromJSON\(\(inputs\.concurrency_key == '' && \(github\.event_name == 'workflow_dispatch' \|\| github\.event_name == 'schedule'\)\) && '\[1, 2, 3, 4\]' \|\| '\[1\]'\) \}\}\s*$/m,
+    "four shards exactly when the wide run can happen, one otherwise");
+  assert.match(smokeJob, /run: npm run test:smoke -- --timeout=\d+ --shard=\$\{\{ matrix\.shard \}\}\/1/);
+  // The one-shard claim rests on a measurement; keep it measured. llvmpipe
+  // samples of smoke.spec.js must fit a single runner's cap with room to spare.
+  const t = JSON.parse(fs.readFileSync(new URL("../data/spec-timings.json", import.meta.url), "utf8"));
+  const walls = (t.specs["tests/specs/smoke.spec.js"]?.s || []).filter((x) => x[1] === "llvmpipe").map((x) => x[2]).sort((a, b) => a - b);
+  assert.ok(walls.length >= 3, "smoke.spec.js has no llvmpipe history — the one-shard decision has no evidence");
+  const capMin = Number(/timeout-minutes: \$\{\{ [^}]*\|\| (\d+) \}\}/.exec(smokeJob)?.[1]);
+  assert.ok(walls.at(-1) * 5 < capMin * 60,
+    `slowest llvmpipe smoke.spec.js run ${walls.at(-1)} s x5 must stay under the ${capMin}-min job cap on one runner`);
   // The nightly / dispatch step: a dispatch runs whichever browser group the
   // `group` input names, and a SCHEDULED run takes tonight's ROTATING group —
   // the runner-side verification for specs the SwiftShader dev box cannot time.
@@ -936,8 +947,11 @@ test("gpu-census runs nightly beside the boot group, with the full check and its
   assert.match(gpuWorkflow, /if: \$\{\{ needs\.plan\.outputs\.census_only != 'true' \}\}/);
   assert.match(gpuWorkflow, /if: \$\{\{ always\(\) && needs\.plan\.outputs\.census_only != 'true' \}\}/,
     "the Verdict must still gate a scheduled run");
-  assert.match(gpuWorkflow, /INPUT_IMAGES: \$\{\{ inputs\.images \|\| 'ubuntu-latest,macos-latest,windows-latest' \}\}/);
-  assert.match(gpuWorkflow, /inputs\.images \|\| '[^']*macos-latest[^']*'/, "the nightly must include the one image with a real GPU");
+  // The NIGHTLY is macOS only (2026-09-29): ubuntu/windows have no hardware
+  // adapter and their software game checks were cancelled at the 30-min cap
+  // every night. A dispatch keeps the three default images.
+  assert.match(gpuWorkflow, /INPUT_IMAGES: \$\{\{ inputs\.images \|\| \(github\.event_name == 'schedule' && 'macos-latest'\) \|\| 'ubuntu-latest,macos-latest,windows-latest' \}\}/);
+  assert.match(gpuWorkflow, /github\.event_name == 'schedule' && '[^']*macos-latest[^']*'/, "the nightly must include the one image with a real GPU");
   const trackUses = gpuWorkflow.match(/gpu-game-check\.mjs "\$\{CENSUS_TRACK\}"/g) || [];
   assert.equal(trackUses.length, 4, "every game check (three/webgpu, three/webgl2, glx, wgx) must use the plan-resolved track");
   assert.match(gpuWorkflow, /paths: \["\.github\/gpu-census-request\.json"\]/,

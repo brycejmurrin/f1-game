@@ -31,6 +31,14 @@ on:
     # one gate that runs the whole smoke suite on the deploy tip every time.
     workflows: ["CI", "Deploy to GitHub Pages"]
     types: [completed]
+    # FILTERED AT THE TRIGGER, not only by the job's `if:` (2026-09-29). Every
+    # PR's CI run fired this workflow and the job then skipped: 354 runs in
+    # 41 h, 208 skipped and 79 cancelled in this workflow's one-at-a-time
+    # queue (docs/notes/CI-CAPACITY-2026-09-29.md). `branches` on a
+    # workflow_run matches the triggering run's head branch, the same test as
+    # the `if:` below, which stays as the dispatch-aware guard.
+    # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#running-a-workflow-based-on-the-branch-of-another-workflow
+    branches: [claude/f1-game-project-26h3ng]
   workflow_dispatch:
 
 # Read the triggering run's artifacts; write only the side branch below.

@@ -180,7 +180,14 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
           # Dispatch/schedule defaults — schedule leaves inputs empty.
-          INPUT_IMAGES: ${{ inputs.images || 'ubuntu-latest,macos-latest,windows-latest' }}
+          # THE NIGHTLY IS macOS ONLY (2026-09-29). ubuntu-latest and
+          # windows-latest have no hardware adapter, so their game checks run
+          # four 20-minute software boots inside this job's 30-minute cap: both
+          # lanes ended `cancelled` at 30.3 min on every night measured
+          # (2026-09-28/29), ~60 runner-minutes a night with no verdict, and a
+          # cancelled nightly hides a failed one. The adapter answer for those
+          # images is a dispatch away (default images, or census_only).
+          INPUT_IMAGES: ${{ inputs.images || (github.event_name == 'schedule' && 'macos-latest') || 'ubuntu-latest,macos-latest,windows-latest' }}
           INPUT_TRACK: ${{ inputs.track || 'montreal' }}
           INPUT_LS: ${{ inputs.ls || '' }}
           INPUT_CLOCK: ${{ inputs.clock || '' }}

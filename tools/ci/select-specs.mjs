@@ -5,10 +5,10 @@
 //
 // tools/ci/pick-tests.mjs answers "which GROUPS does this change need" for a
 // human with a 4-core box and no deadline. A CI job has a budget, and
-// tools/ci/select-budget.mjs measured what fits: at 79.7 s/test (one worker,
-// shared runner) a 15-minute budget surviving one failure holds ~10 tests at
-// retries 0 / 120 s per-test — and per-GROUP selection (71-193 tests) does
-// not fit at any budget worth spending. So this selects SPECS: the groups
+// tools/ci/select-budget.mjs measured what fits: first at 79.7 s/test
+// (SwiftShader, 2026-08-07), now at each spec's own llvmpipe rate or a 7.5 s
+// fallback — and per-GROUP selection (71-193 tests) does not fit the gate's
+// 10-minute budget (DEFAULT_BUDGET_MIN). So this selects SPECS: the groups
 // pick-tests names, decomposed into their spec files, ordered smallest
 // declared-test-count first (more distinct specs covered before the budget
 // runs out), and cut off when the next spec's declared tests would blow the
@@ -20,7 +20,7 @@
 //
 //   node tools/ci/select-specs.mjs --since <ref>            # spec list, one per line
 //   node tools/ci/select-specs.mjs --since <ref> --json
-//   node tools/ci/select-specs.mjs --since <ref> --budget-min 15
+//   node tools/ci/select-specs.mjs --since <ref> --budget-min 10
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
@@ -125,31 +125,50 @@ export function specsOf(scriptNames, scripts) {
 }
 
 // A spec the change AFFECTS (edited, previously failed, or importing a changed
-// helper) that does not fit the main budget is not dropped: it runs alone in
-// its own matrix shard, billed at its own declared test count. Bounded, so a
-// helper edit that touches 59 specs cannot fan out into 59 runners — the rest
-// are named as skipped, which is the honesty contract this file has always had.
+// helper) that does not fit the main budget is not dropped: it runs outside the
+// budgeted set, packed with the rest by measured time (shards(), below). Bounded,
+// so a helper edit that touches 59 specs cannot fan out into 59 runners — the
+// rest are named as skipped, which is the honesty contract this file has always had.
 export const MAX_OVERSIZE_SHARDS = 3;
-// Minutes a shard may take before the runner kills it: every test at the gate's
-// per-test timeout, plus setup (npm ci + chromium, ~4 min) and margin. A killed
-// job reads as "0 failures" in the aggregate, which this file's history shows
-// hiding a dead deploy, so the cap is derived, never guessed.
-// `perTestSec` defaults to the gate's budget, but an OVER-BUDGET spec running
-// in its own shard is billed at ITS OWN declared timeout — billing a 420 s spec
-// at 180 s derives a cap below what the spec already said it needs, and a
-// killed job reads as "0 failures", which is the exact hiding this cap exists
-// to prevent.
-export const shardTimeoutMin = (tests, perTestSec = SELECTED_GATE.perTestTimeoutSec) =>
-  Math.min(90, Math.ceil((tests * perTestSec) / 60) + 6);
 
-/** Max tests one selected-gate matrix job may carry before the derived
- *  timeout hits the 90-minute hard cap. shardTimeoutMin(n) = min(90,
- *  ceil(n * perTestSec / 60) + 6); solving for n under the uncapped branch
- *  keeps every shard's kill timer ABOVE its worst-case spend — the undercount
- *  that packed tracks-walls (~63 expanded tests) into a 39-minute selected
- *  shard cancelled the job with 0 failures (CI run 36057109364). */
-export const maxTestsPerShard = (perTestSec = SELECTED_GATE.perTestTimeoutSec) =>
-  Math.max(1, Math.floor((90 - 6) * 60 / perTestSec));
+// THE JOB'S WORST CASE IS BOUNDED BY --max-failures, NOT BY "EVERY TEST TIMES
+// OUT" (2026-09-29). ci.yml runs the selection with --max-failures=3, so a job
+// can spend at most its expected run plus three per-test timeouts before
+// Playwright stops it GRACEFULLY (reporters finalise, junit carries the
+// failures). The old cap assumed all N tests would time out (N x 180 s), which
+// sharded tracks-walls — 63 tests, ~3.5 min measured on llvmpipe — across three
+// runners to keep a kill timer under 90 minutes that no run could reach.
+// Every job costs one of the account's 20 concurrent slots (docs/notes/
+// CI-CAPACITY-2026-09-29.md: 200-290 jobs queued for 7 h on 2026-09-29), so a
+// split that buys nothing is paid for in queue time by every other PR.
+export const MAX_FAILURES = 3;
+// A job's EXPECTED work before shards() splits or stops packing: close to the
+// fixed gate's own critical path (vm-a, ~6 min), so the selection is rarely
+// the last job to finish.
+export const TARGET_SHARD_SEC = 480;
+// Minutes a job may take before the runner kills it: twice its expected work
+// (runner variance), plus MAX_FAILURES timeouts at the slowest per-test
+// timeout in it, plus setup (npm ci + chromium + Mesa) and margin. A ceiling,
+// not the spend: a passing run never approaches it. A killed job reads as
+// "0 failures", which this file's history shows hiding a dead deploy, so the
+// cap is derived from the plan, never guessed.
+export const shardCapMin = (expectedSec, perTestSec = SELECTED_GATE.perTestTimeoutSec) =>
+  Math.min(90, Math.ceil((2 * expectedSec + MAX_FAILURES * perTestSec) / 60) + 6);
+
+/** Seconds one row of the plan is expected to take: its tests at the spec's
+ *  own measured rate, or the fallback (select-budget's MEASURED). */
+export const expectedSec = (r, db = timings()) => r.tests * specSecPerTest(r.file, db).sec;
+
+/** A spec may bypass its declared per-test budget when CI has MEASURED it at a
+ *  third of the gate's timeout or less (3+ samples, a CI bucket). The
+ *  declaration is a ceiling its author wrote for the slowest box; the
+ *  measurement is what the gate's own runner does. The declared figure still
+ *  sets the job's kill timer (shardCapMin reads ownTimeoutSec), because
+ *  test.setTimeout overrides --timeout. */
+export function measuredCheap(file, db = timings()) {
+  const m = specSecPerTest(file, db);
+  return m.source === "measured" && m.sec * 3 <= SELECTED_GATE.perTestTimeoutSec;
+}
 
 /** Cut the spec list to what fits `budgetMin` surviving one timeout.
  *  `rank(file)` orders the cut: lower ranks fill the budget first (prioritise()
@@ -164,8 +183,9 @@ export const maxTestsPerShard = (perTestSec = SELECTED_GATE.perTestTimeoutSec) =
  *  test cost the budget as much as two boot-heavy ones. Now a spec costs
  *  `tests x its own rate`, and the allowance is the same budget expressed in
  *  seconds: `(budget - one failure) + one test at the fallback rate`, which
- *  is exactly `cap.tests` x 79.7 s's boundary — an UNMEASURED selection cuts
- *  where it always did. `db` pins the timing history (tests pass an empty one). */
+ *  is exactly `cap.tests` x the fallback's boundary — an UNMEASURED selection
+ *  cuts where the fallback says (7.5 s/test since 2026-09-29, the llvmpipe
+ *  p75). `db` pins the timing history (tests pass an empty one). */
 export function fit(specs, budgetMin, { rank = () => 3, db = timings() } = {}) {
   const m = { ...MEASURED, ...SELECTED_GATE };
   const cap = capacity(budgetMin, 1, m);
@@ -221,7 +241,16 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings() } = {}) {
     // raising the gate must never enrol it. What it may not do is opt out of
     // running when you just edited it — that case has its own shard already
     // (oversize), and it is billed at the spec's own declared figure.
+    //
+    // MEASURED BEATS DECLARED (2026-09-29). The declaration is only a proxy for
+    // "this spec is slow"; 30 specs now have llvmpipe history, and the proxy
+    // was wrong in the direction that hid them — imola-foundation declares
+    // 420 s and runs in ~30 s, bahrain-foundation 300 s and ~20 s. A spec CI
+    // has measured at a third of the gate's timeout or less joins the budget
+    // like any other, carrying its declared figure so its job's kill timer
+    // still clears it. Unmeasured, the declaration stands, as above.
     if (own >= SELECTED_GATE.perTestTimeoutSec * 1000) {
+      if (measuredCheap(file, db)) { counted.push({ file, tests, ownTimeoutSec: own / 1000 }); continue; }
       counted.push({ file, tests, overBudget: true, ownTimeoutSec: own / 1000 });
       continue;
     }
@@ -232,47 +261,41 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings() } = {}) {
   // 10-test spec was omitted whenever smaller routed specs had already filled
   // the 10-test cap — the one spec the change most needed was the one dropped.
   // A budget that cannot afford the spec you just edited is not "change-aware".
-  for (const r of counted) r.rank = rank(r.file);
+  for (const r of counted) { r.rank = rank(r.file); r.sec = Math.round(expectedSec(r, db)); }
   counted.sort((a, b) => a.rank - b.rank || a.tests - b.tests);
   const selected = [], skipped = [], unreachable = [], oversize = [];
   let used = 0, usedSec = 0;
   for (const r of counted) {
-    // An over-budget spec never joins the budgeted shard. Affected (rank < 3)
-    // it runs alone, billed at its own declared timeout; merely routed, it is
-    // reported as over budget exactly as before.
+    // An over-budget spec never joins the budgeted set. Affected (rank < 3)
+    // it runs outside it, its job's cap derived from its own declared timeout;
+    // merely routed, it is reported as over budget exactly as before.
     if (r.overBudget) {
       if (r.rank < 3) oversize.push(r);
       else overBudgetSpecs.push({ file: r.file, tests: r.tests, ownTimeoutSec: r.ownTimeoutSec });
       continue;
     }
-    // A spec bigger than the packed budget still RUNS: alone (oversize), and
-    // shards() further splits it across Playwright `--shard=i/n` jobs when its
-    // expanded count exceeds maxTestsPerShard. Naming it unreachable is what
-    // the undercount used to avoid for tracks-walls — billed as 4, packed into
-    // the selected shard, then cancelled at 63/76 with 0 failures. Skipping or
-    // "unreachable"-reporting a per-circuit expansion the change selected is
-    // the same hole from the other side. MAX_OVERSIZE_SHARDS still bounds the
-    // fan-out; overflow is skipped BY NAME below.
-    //
-    // `unreachable` remains for the rare case a single expanded count cannot
-    // be split into MAX_OVERSIZE_SHARDS jobs that each fit the 90-minute cap
-    // (see the push after this loop). Ordinary "bigger than the pack" is
-    // oversize for every rank — affected or merely routed.
+    // A spec bigger than the budget still RUNS (oversize): shards() packs it
+    // with the rest by expected seconds and splits it across Playwright
+    // `--shard=i/n` jobs only when its own expected run exceeds
+    // TARGET_SHARD_SEC. Naming it unreachable is what the undercount used to
+    // avoid for tracks-walls — billed as 4, packed, then cancelled at 63/76
+    // with 0 failures. MAX_OVERSIZE_SHARDS still bounds the fan-out; overflow
+    // is skipped BY NAME below. Ordinary "bigger than the budget" is oversize
+    // for every rank — affected or merely routed.
     const cost = costOf(r);
     if (usedSec + cost <= allowanceSec) { selected.push(r); used += r.tests; usedSec += cost; continue; }
     if (r.rank < 3 || cost > allowanceSec) oversize.push(r);
     else skipped.push(r);
   }
-  // A single oversize entry that cannot be split into jobs under the 90-minute
-  // cap is unreachable for real — no amount of --shard fits it. Move those
-  // out of oversize so the matrix never schedules a job that the runner will
-  // cancel with 0 failures.
+  // A single oversize entry whose expected run needs more than eight
+  // TARGET_SHARD_SEC jobs is unreachable for real: the fan-out guard. Nothing
+  // measured in the tree is within an order of magnitude of it (the largest
+  // whole spec measures ~3.5 min on llvmpipe); it exists so a mis-billed
+  // expansion cannot schedule dozens of runners.
   {
     const keep = [], tooBig = [];
     for (const r of oversize) {
-      const per = maxTestsPerShard(r.ownTimeoutSec || SELECTED_GATE.perTestTimeoutSec);
-      const need = Math.ceil(r.tests / per);
-      if (need > MAX_OVERSIZE_SHARDS * 8) tooBig.push(r); // absurd fan-out guard
+      if (Math.ceil(expectedSec(r, db) / TARGET_SHARD_SEC) > MAX_OVERSIZE_SHARDS * 8) tooBig.push(r);
       else keep.push(r);
     }
     oversize.length = 0;
@@ -280,14 +303,10 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings() } = {}) {
     unreachable.push(...tooBig);
   }
   // The oversize list is bounded; the overflow is skipped BY NAME, never silently.
-  // Prefer specs that NEED Playwright sharding (expanded count > one job's cap)
-  // over smaller ones that used to sit in `unreachable` — otherwise
-  // tracks-walls (~63) loses its slot to three 11-test specs and the fleet
-  // sweep the change selected never runs (the other face of CI run 36057109364).
-  oversize.sort((a, b) => {
-    const need = (r) => r.tests > maxTestsPerShard(r.ownTimeoutSec || SELECTED_GATE.perTestTimeoutSec) ? 0 : 1;
-    return need(a) - need(b) || a.rank - b.rank || b.tests - a.tests;
-  });
+  // Affected first, then the most expensive: a big spec the change reaches is
+  // the one a small routed spec must not displace (tracks-walls losing its
+  // slot to three 11-test specs was CI run 36057109364).
+  oversize.sort((a, b) => a.rank - b.rank || expectedSec(b, db) - expectedSec(a, db));
   const oversizeRun = oversize.slice(0, MAX_OVERSIZE_SHARDS);
   for (const r of oversize.slice(MAX_OVERSIZE_SHARDS)) skipped.push(r);
   return { selected, skipped, unreachable, oversize: oversizeRun, overBudgetSpecs, coveredByFixedGates, coveredByVmTwin,
@@ -295,56 +314,67 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings() } = {}) {
     testsSelected: used, testsFit: cap.tests, secSelected: Math.round(usedSec), secFit: Math.round(allowanceSec), cap };
 }
 
-/** Split one oversize spec into Playwright `--shard=i/n` matrix rows so each
- *  job's derived timeout stays under the 90-minute hard cap. */
-function oversizeShards(s) {
-  const perSec = s.ownTimeoutSec || SELECTED_GATE.perTestTimeoutSec;
-  const per = maxTestsPerShard(perSec);
-  const n = Math.max(1, Math.ceil(s.tests / per));
-  const base = path.basename(s.file, ".spec.js");
-  const out = [];
-  for (let i = 1; i <= n; i++) {
-    // Playwright splits by test index; ceil keeps every shard's billed count
-    // at least the largest piece (last shard may be smaller at runtime).
-    const testsHere = Math.ceil(s.tests / n);
-    out.push({
-      name: n === 1 ? `oversize-${base}` : `oversize-${base}-${i}of${n}`,
-      specs: s.file,
-      shard: n === 1 ? "" : `${i}/${n}`,
-      tests: testsHere,
-      timeout: shardTimeoutMin(testsHere, perSec),
-    });
-  }
-  return out;
-}
-
-/** The matrix the CI gate runs: one shard for the budgeted selection, then
- *  one or more Playwright shards per oversize spec (split when the expanded
- *  test count would blow the 90-minute job cap). */
-export function shards(r) {
-  const out = [];
-  if (r.selected.length) {
-    // A budgeted selection can still contain one loop-expanded file that
-    // alone exceeds maxTestsPerShard if its measured rate is cheap enough to
-    // pack by seconds. Peel those into their own oversize rows first.
-    const packed = [], peeled = [];
-    for (const s of r.selected) {
-      const per = maxTestsPerShard(s.ownTimeoutSec || SELECTED_GATE.perTestTimeoutSec);
-      if (s.tests > per) peeled.push(s);
-      else packed.push(s);
+/** The matrix the CI gate runs, PACKED BY EXPECTED SECONDS (2026-09-29).
+ *
+ *  Every row the plan carries — the budgeted selection and each oversize spec —
+ *  becomes one item costed at its measured (or fallback) rate. An item whose
+ *  own expected run exceeds TARGET_SHARD_SEC is split across Playwright
+ *  `--shard=i/n` jobs; everything else is packed first-fit-decreasing into as
+ *  few jobs as fit TARGET_SHARD_SEC each. Before this, each oversize spec was
+ *  its own job and a loop-expanded one was split by a worst case no run could
+ *  reach: a typical circuit PR asked for 3-7 selected jobs doing 0.2-1.5 min
+ *  of work apiece, each holding one of 20 slots behind a 26-minute queue.
+ *
+ *  Two kinds of item never share a job: a `--shard` piece (the flag applies to
+ *  the whole command) and a spec carrying menu-baseline (its goldens are
+ *  SwiftShader captures, so ci.yml drops llvmpipe for any job naming it).
+ *  The job holding the budgeted specs is named `selected` — ci.yml's
+ *  carry-forward of failing specs keys on that name. */
+export function shards(r, db = timings()) {
+  const items = [];
+  const cost = (x) => (x.sec != null ? x.sec : expectedSec(x, db));
+  for (const s of [...(r.selected || []).map((x) => ({ ...x, budgeted: true })), ...(r.oversize || [])]) {
+    const sec = cost(s);
+    const perTest = Math.max(SELECTED_GATE.perTestTimeoutSec, s.ownTimeoutSec || 0);
+    const base = path.basename(s.file, ".spec.js");
+    const n = Math.max(1, Math.ceil(sec / TARGET_SHARD_SEC));
+    if (n > 1) {
+      for (let i = 1; i <= n; i++) {
+        items.push({ solo: true, name: `oversize-${base}-${i}of${n}`, files: [s.file], shard: `${i}/${n}`,
+          tests: Math.ceil(s.tests / n), sec: sec / n, perTest });
+      }
+      continue;
     }
-    if (packed.length) {
-      const tests = packed.reduce((n, s) => n + s.tests, 0);
-      out.push({ name: "selected", specs: packed.map((s) => s.file).join(" "),
-        shard: "",
-        // max(): measured-cheap specs can put MORE tests in the shard than the
-        // 79.7 s cap counts, and the cap must still clear every one timing out.
-        tests, timeout: shardTimeoutMin(Math.max(r.testsFit, tests)) });
-    }
-    for (const s of peeled) out.push(...oversizeShards(s));
+    items.push({ solo: /menu-baseline/.test(s.file), budgeted: !!s.budgeted, name: `oversize-${base}`,
+      files: [s.file], shard: "", tests: s.tests, sec, perTest });
   }
-  for (const s of r.oversize || []) out.push(...oversizeShards(s));
-  return out;
+  const bins = [];
+  for (const it of items.filter((x) => x.solo)) bins.push({ ...it, items: [it] });
+  const packable = items.filter((x) => !x.solo).sort((a, b) => b.sec - a.sec);
+  const open = [];
+  for (const it of packable) {
+    const bin = open.find((b) => b.sec + it.sec <= TARGET_SHARD_SEC);
+    if (bin) { bin.items.push(it); bin.sec += it.sec; continue; }
+    const fresh = { items: [it], sec: it.sec };
+    open.push(fresh); bins.push(fresh);
+  }
+  let k = 0;
+  const out = bins.map((b) => {
+    const files = b.items.flatMap((x) => x.files);
+    const budgeted = b.items.some((x) => x.budgeted);
+    const name = b.solo ? b.name
+      : budgeted ? "selected"
+      : b.items.length === 1 ? b.items[0].name : `packed-${++k}`;
+    const perTest = Math.max(...b.items.map((x) => x.perTest));
+    const sec = Math.round(b.sec);
+    return { name, specs: files.join(" "), shard: b.solo ? b.shard : "",
+      tests: b.items.reduce((n, x) => n + x.tests, 0), sec, perTest,
+      timeout: shardCapMin(sec, perTest),
+      // APEX_CIRCUITS for the job: empty = every circuit (see select()).
+      circuits: (r.circuits || []).join(",") };
+  });
+  // `selected` first: the job a reader looks for, and the carry-forward's.
+  return out.sort((a, b) => (a.name === "selected" ? -1 : b.name === "selected" ? 1 : 0));
 }
 
 // TRACKED (infra) PATHS — a change here makes the SELECTION ITSELF untrustworthy,
@@ -376,6 +406,85 @@ export const TRACKED = [
   /^(index\.html|sw\.js|version\.json)$/,   // the shell, its precache, its cache key
   /^tests\/data\//,                   // data-driven inputs: no import graph sees these
 ];
+
+// A CIRCUIT-SCOPED CHANGE (2026-09-29). Most of the branches racing for the
+// 20 runner slots on 2026-09-29 were circuit waves: every file they touched
+// was one circuit's def, its scenery callback, or that circuit's rows in a
+// per-circuit baseline. The routing saw `test:circuits` — 25 specs across 52
+// circuits — plus, for the baseline, an "infra" warning, and then EXCLUDED
+// the one spec about the circuit that changed (imola-foundation, for its
+// declared 420 s) while running other circuits' foundations. These name the
+// circuit instead: its own foundation spec becomes AFFECTED (it always runs),
+// other circuits' foundation specs are not candidates, and the plan carries
+// the ids so per-circuit loops (APEX_CIRCUITS) test only what moved.
+export const CIRCUIT_FILE = /^js\/circuits\/(?:scenery\/)?([a-z0-9_]+)\.js$/;
+// Data files keyed `{ <category>: { <circuit id>: … } }`: a change here is
+// scoped to the ids whose rows differ. Reading them needs the base, so a
+// base git cannot show leaves the file TRACKED, exactly as before.
+// Also `{ <circuit id>: <number> }` (flat), e.g. the props triangle budget.
+export const PER_CIRCUIT_DATA = new Set([
+  "tests/data/scenery-audit-baseline.json",
+  "tools/track/props-tris-baseline.json",
+]);
+// Tests that read APEX_CIRCUITS to narrow their per-circuit loop. Editing one
+// of THESE is not circuit-scoped: the edit is to the loop, so it runs whole.
+export const CIRCUIT_FILTERED_TESTS = new Set([
+  "tests/specs/tracks-walls.spec.js",
+  "tests/unit/elevation-tracks-vm.test.mjs",
+]);
+// Paths that cannot change what a browser spec or a per-circuit loop sees, so
+// they do not break a circuit scope: prose, and node unit files other than
+// the filtered ones (the node gate runs every one of them regardless).
+const scopeNeutral = (f) => DOCS_ONLY.some((re) => re.test(f))
+  || (/^tests\/unit\//.test(f) && !CIRCUIT_FILTERED_TESTS.has(f));
+export const foundationSpec = (id) => `tests/specs/${id.replace(/_/g, "-")}-foundation.spec.js`;
+const FOUNDATION = /^tests\/specs\/(.+)-foundation\.spec\.js$/;
+
+/** Circuit ids a per-circuit data file's rows changed for, or null when the
+ *  diff cannot be read (then the file stays infra). */
+export function dataCircuits(file, ref, root = ROOT) {
+  const read = (txt) => { try { return JSON.parse(txt); } catch { return null; } };
+  let before, after;
+  try { before = read(execFileSync("git", ["show", `${ref}:${file}`], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] })); }
+  catch { before = {}; }
+  try { after = read(fs.readFileSync(path.join(root, file), "utf8")); } catch { after = {}; }
+  if (!before || !after) return null;
+  const ids = new Set();
+  const flat = [before, after].every((o) => Object.entries(o)
+    .every(([k, v]) => k.startsWith("//") || v === null || typeof v !== "object"));
+  if (flat) {
+    for (const id of new Set([...Object.keys(before), ...Object.keys(after)]))
+      if (!id.startsWith("//") && JSON.stringify(before[id]) !== JSON.stringify(after[id])) ids.add(id);
+    return ids;
+  }
+  for (const cat of new Set([...Object.keys(before), ...Object.keys(after)])) {
+    if (cat.startsWith("//")) continue;
+    const a = before[cat] || {}, b = after[cat] || {};
+    if (typeof a !== "object" || typeof b !== "object" || Array.isArray(a) || Array.isArray(b)) return null;
+    for (const id of new Set([...Object.keys(a), ...Object.keys(b)]))
+      if (JSON.stringify(a[id]) !== JSON.stringify(b[id])) ids.add(id);
+  }
+  return ids;
+}
+
+/** `{ ids, scoped, dataResolved }`: the circuits a diff touches, whether EVERY
+ *  changed path is one of them, and the per-circuit data files resolved to ids
+ *  (the caller stops calling those infra). */
+export function circuitsTouched(changed, ref, root = ROOT) {
+  const ids = new Set(), dataResolved = [];
+  let scoped = changed.length > 0;
+  for (const f of changed) {
+    const m = CIRCUIT_FILE.exec(f);
+    if (m) { ids.add(m[1]); continue; }
+    if (PER_CIRCUIT_DATA.has(f)) {
+      const d = ref ? dataCircuits(f, ref, root) : null;
+      if (d) { d.forEach((id) => ids.add(id)); dataResolved.push(f); continue; }
+    }
+    if (scopeNeutral(f)) continue;
+    scoped = false;
+  }
+  return { ids: [...ids].sort(), scoped: scoped && ids.size > 0, dataResolved };
+}
 
 // DOCS-ONLY IS "NOTHING TO SELECT", NOT "UNMATCHED". ci.yml's own push trigger
 // already ignores these paths, so a docs commit never reaches the selected gate
@@ -453,7 +562,7 @@ export function scopeCarryForward(failed, routed) {
 // The boot group reaches this gate only through pick-tests' two blanket
 // rules ("any source edit: does the page still boot", "script tags + DOM
 // shell"). That question is already answered on every push and every deploy
-// by the FIXED smoke gate (smoke.spec.js, four shards), so routing it here
+// by the FIXED smoke gate (smoke.spec.js, one shard on llvmpipe), so routing it here
 // too selected the boot group's cheapest-by-count specs — boot-guard (two
 // reload cycles) and logging (a Monaco build) — for EVERY source edit, the two
 // slowest-per-test specs in the tree, and they timed out the deploy gate twice
@@ -471,7 +580,14 @@ export function dropBootFallback(groups) {
   return true;
 }
 
-export function select(changedRef, budgetMin = 15, opts = {}) {
+// THE BUDGETED SELECTION'S MINUTES (2026-09-29: 15 -> 10). At the old 79.7 s
+// fallback, "15 minutes" bought ~1 minute of real llvmpipe work; billed at
+// measured rates the same figure would buy ~12 minutes and make this job the
+// slowest in the run. Ten minutes surviving one 180 s timeout leaves ~7
+// minutes of expected work, inside the fixed gate's own ~6-minute wall.
+export const DEFAULT_BUDGET_MIN = 10;
+
+export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   const changed = execFileSync("git", ["diff", "--name-only", changedRef], { cwd: ROOT, encoding: "utf8" })
     .split("\n").filter(Boolean);
   const g = pick(changed);   // Map: group -> reasons (pick-tests' native shape)
@@ -483,7 +599,8 @@ export function select(changedRef, budgetMin = 15, opts = {}) {
   // Same three-way contract as pick-tests --json: "unmatched" means files
   // changed but no rule claimed them — the selection is NOT trustworthy and
   // the caller must fall back to a full run, not to running nothing.
-  const tracked = changed.filter((f) => TRACKED.some((re) => re.test(f)));
+  const circ = circuitsTouched(changed, changedRef);
+  const tracked = changed.filter((f) => TRACKED.some((re) => re.test(f)) && !circ.dataResolved.includes(f));
   const docsOnly = isDocsOnly(changed);
   // The three always-run inputs, unioned into the candidate set BEFORE the cut
   // so they compete for the budget on merit rather than being bolted on after.
@@ -491,7 +608,15 @@ export function select(changedRef, budgetMin = 15, opts = {}) {
     && fs.existsSync(path.join(ROOT, f)));
   const imported = specsImporting(changed);
   const failed = (opts.failed || []).filter((f) => fs.existsSync(path.join(ROOT, f)));
-  const routed = [...new Set([...changedSpecs, ...imported, ...specs])];
+  // The touched circuits' own foundation specs are AFFECTED, like an import;
+  // on a circuit-scoped diff another circuit's foundation is not a candidate.
+  const ownFoundations = circ.ids.map(foundationSpec).filter((f) => fs.existsSync(path.join(ROOT, f)));
+  const otherCircuit = (f) => {
+    const m = FOUNDATION.exec(f);
+    return circ.scoped && m && !ownFoundations.includes(f) && !changedSpecs.includes(f);
+  };
+  const routed = [...new Set([...changedSpecs, ...imported, ...ownFoundations, ...specs])]
+    .filter((f) => !otherCircuit(f));
   const { inScope: failedInScope, dropped: failedDropped } = scopeCarryForward(failed, routed);
   const candidates = routed;
   const reason = !changed.length ? "none"
@@ -499,7 +624,7 @@ export function select(changedRef, budgetMin = 15, opts = {}) {
     : tracked.length ? "infra"
     : (g.size || candidates.length ? "matched" : "unmatched");
   const rank = (f) => changedSpecs.includes(f) ? 0 : failedInScope.includes(f) ? 1
-    : imported.includes(f) ? 2 : 3;
+    : (imported.includes(f) || ownFoundations.includes(f)) ? 2 : 3;
   const cut = fit(candidates, budgetMin, { rank });
   // "infra" no longer EMPTIES the selection. A tracked-path change (the shell,
   // a fixture every spec imports, this selector) can affect any spec, which is
@@ -507,7 +632,11 @@ export function select(changedRef, budgetMin = 15, opts = {}) {
   // this diff edited or imports are still the best-evidenced ones to run, and
   // the fixed gates still own the rest. The warning stays so the log says why
   // the selection is narrower than the change.
+  // `circuits` is set only when EVERY changed path is circuit-scoped: it is
+  // what lets a per-circuit loop skip the other 51 circuits, so a diff that
+  // also touches the engine must leave it empty (the whole fleet runs).
   const r = { reason, changed: changed.length, tracked, groups: browserGroups, bootCoveredBySmoke,
+              circuits: circ.scoped ? circ.ids : [], circuitsTouched: circ.ids,
               changedSpecs, imported, failed: failedInScope, failedDropped, ...cut,
               selected: prioritise(cut.selected, { changedSpecs, failed: failedInScope, imported }) };
   r.shards = shards(r);
@@ -530,7 +659,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     try { failed = fs.readFileSync(argv[fi + 1], "utf8").split("\n").map((s) => s.trim()).filter(Boolean); }
     catch { /* absent on the first run, and on any run after a cache miss */ }
   }
-  const r = select(argv[si + 1], bi >= 0 ? Number(argv[bi + 1]) : 15, { failed });
+  const r = select(argv[si + 1], bi >= 0 ? Number(argv[bi + 1]) : DEFAULT_BUDGET_MIN, { failed });
   if (argv.includes("--json")) { console.log(JSON.stringify(r, null, 2)); process.exit(0); }
   console.error(`${r.changed} changed file(s) [${r.reason}] -> groups: ${r.groups.join(", ") || "(none)"}`);
   if (r.reason === "infra") console.error(
@@ -555,9 +684,10 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     `NEVER run it): ${s.file}`);
   for (const s of r.skipped) console.error(`SKIPPED (over budget): ${s.file} (${s.tests} tests)`);
   for (const s of r.oversize) console.error(
-    `OVERSIZE (affected by this change, runs in its own shard, ` +
-    `${shardTimeoutMin(s.tests, s.ownTimeoutSec || SELECTED_GATE.perTestTimeoutSec)} min cap` +
-    `${s.overBudget ? `, billed at its own ${s.ownTimeoutSec}s/test` : ""}): ${s.file} (${s.tests} tests)`);
+    `OVERSIZE (outside the budget, packed by expected time, ~${s.sec} s` +
+    `${s.overBudget ? `, cap from its own ${s.ownTimeoutSec}s/test` : ""}): ${s.file} (${s.tests} tests)`);
+  for (const j of r.shards) console.error(
+    `JOB ${j.name}: ${j.tests} tests, ~${j.sec} s expected, ${j.timeout} min cap${j.shard ? `, --shard=${j.shard}` : ""}: ${j.specs}`);
   // Printed LAST and loudly: this is the bucket that means the tool could not
   // read a candidate at all, which is the one state its report must never omit.
   for (const s of r.unreadable || []) console.error(

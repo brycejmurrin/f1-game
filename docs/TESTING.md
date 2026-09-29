@@ -116,14 +116,18 @@ run-start second), so merging the same junit twice, or a run's junit alongside
 its log, adds nothing; buckets are never averaged together, because a move
 between GPU stacks would otherwise read as a regression.
 `tools/ci/select-budget.mjs` bills a spec at the median of its own CI-bucket
-samples once it has three of them and falls back to the measured 79.7 s constant
-otherwise — `--json` reports `source: "measured" | "constant"` per spec, so a
+samples once it has three of them and falls back to a 7.5 s/test constant otherwise
+(the llvmpipe p75 of the measured specs, 2026-09-29; it was a 79.7 s SwiftShader
+figure) — `--json` reports `source: "measured" | "constant"` per spec, so a
 default can never be mistaken for a measurement. `select-specs.mjs`' cut spends
-that rate: a spec costs `tests x its own rate` against the budget in seconds, so
-an unmeasured selection cuts exactly where the old 10-test cap did and a measured
-one fits what it actually costs (2026-09-24; before, the cut counted tests and the
-medians moved nothing). CI merges into `bot/spec-timings`, never the deploy
-branch; adopt it with `git show origin/bot/spec-timings:tests/data/spec-timings.json`
+that rate: a spec costs `tests x its own rate` against the budget in seconds
+(2026-09-24; before, the cut counted tests and the medians moved nothing). The
+plan then packs every selected spec into jobs of at most ~8 min EXPECTED work,
+each capped at 2x that plus three per-test timeouts (`--max-failures=3`), and a
+circuit-only diff runs its own foundation spec with `APEX_CIRCUITS` narrowing the
+per-circuit loops (docs/notes/CI-CAPACITY-2026-09-29.md). CI merges into
+`bot/spec-timings`, never the deploy branch — the select job UNIONS that branch's
+copy in at selection time (`APEX_SPEC_TIMINGS`); adopt it into the committed file with `git show origin/bot/spec-timings:tests/data/spec-timings.json`
 in a reviewed PR. `node tools/ci/spec-timings.mjs
 --check` prints every spec or test whose latest sample is more than twice its own
 median and **exits 0 either way**: a busy box and a slow test look identical from
@@ -763,7 +767,7 @@ carries `if: !inputs.concurrency_key && github.event_name != 'workflow_call'`
 (pages.yml always forwards `concurrency_key`; a reusable workflow reports the
 CALLER's `event_name`, so the key is the reliable signal) and both jobs are
 skipped on a Pages call, which does not fail the aggregate. The gate stays
-guards + conditional sweeps + smoke.spec.js in four shards + driving-model
+guards + conditional sweeps + smoke.spec.js in one shard (four until 2026-09-29, on SwiftShader) + driving-model
 (`notes/PROCESS-SPEEDUP-2026-09.md` §4.5); promoting the renderer job into it once it
 has a measured green history is deleting that one `if:`. `gpu-census.yml` now
 also runs on the same nightly cron (`17 3 * * *`), full check, dispatch

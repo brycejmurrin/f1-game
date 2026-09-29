@@ -1,12 +1,12 @@
 // Change-aware CI budget derivation. See docs/archive/research/TEST-AUDIT-2026-08.md §3.
-// @doc Can a change-aware CI job run what it selects? Bills each spec from `spec-timings.json`, else the 79.7 s constant.
+// @doc Can a change-aware CI job run what it selects? Bills each spec from `spec-timings.json`, else the measured llvmpipe fallback (7.5 s/test).
 // @section runner
 // Measures per-spec runtime from CI and accounts for retries/timeouts.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as espree from "espree";
-import { loadDb, median, inBuckets, TIMINGS_FILE } from "./spec-timings.mjs";
+import { loadDb, unionDb, median, inBuckets, TIMINGS_FILE } from "./spec-timings.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -15,9 +15,19 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 // samples in tests/data/spec-timings.json is billed at its own median (see
 // specSecPerTest below). One tree-wide mean was always a compromise — smoke's
 // cheapest test is 2.4 s and its dearest 100.6 s on the same box, same run.
+//
+// THE FALLBACK WAS A SWIFTSHADER NUMBER ON AN LLVMPIPE GATE (2026-09-29).
+// 79.7 s came from smoke on SwiftShader (CI run 31197770813, 2026-08-07); the
+// browser jobs moved to Mesa llvmpipe on 2026-09-16 (8-12x faster), and 95 of
+// 125 specs still had no history, so almost every spec was billed ~10x its
+// cost. That one number sharded tracks-walls (63 tests, ~3.5 min measured)
+// into three jobs and shut routed specs out of the budget. The replacement is
+// the p75 of the per-test medians of every llvmpipe spec with 3+ samples in
+// tests/data/spec-timings.json (30 specs; p50 5.5, p75 7.5, p90 12.5 s) — p75,
+// not p50, because an unmeasured spec is more often a boot-heavy one.
 export const MEASURED = {
-  source: "CI run 31197770813, 2026-08-07",
-  secPerTest: 79.7,          // smoke: 9 declared tests in 11m57s, one worker
+  source: "tests/data/spec-timings.json llvmpipe p75 of 30 specs, 2026-09-29 (was 79.7 s SwiftShader, CI run 31197770813)",
+  secPerTest: 7.5,           // per test, one worker, llvmpipe runner
   perTestTimeoutSec: 240,    // ci.yml's --timeout=240000
   retries: 1,                // ci.yml: retries: process.env.CI ? 1 : 0
 };
@@ -33,9 +43,22 @@ export const CI_BUCKETS = ["swiftshader", "llvmpipe"];
 export const MIN_SAMPLES = 3;
 
 let TIMINGS = null;
-/** The rolling history, loaded once. Absent file -> empty history -> constant. */
+/** The rolling history, loaded once. Absent file -> empty history -> constant.
+ *
+ *  APEX_SPEC_TIMINGS names a second history to UNION in — ci.yml's select job
+ *  points it at the `bot/spec-timings` side branch's copy (2026-09-29). That
+ *  branch is where spec-timings.yml accumulates every deploy-branch run, and
+ *  it is merged into the committed file only by hand: on 2026-09-29 it held
+ *  68 specs (30 measured) while the committed file billed from 12, so the gate
+ *  priced 95 specs at a SwiftShader-era constant. Reading it here keeps the
+ *  committed file a reviewed record while the budget uses the freshest one.
+ *  An absent or unreadable overlay is an empty one. */
 export function timings(reload = false) {
-  if (reload || !TIMINGS) TIMINGS = loadDb(path.join(ROOT, TIMINGS_FILE));
+  if (reload || !TIMINGS) {
+    TIMINGS = loadDb(path.join(ROOT, TIMINGS_FILE));
+    const extra = process.env.APEX_SPEC_TIMINGS;
+    if (extra) TIMINGS = unionDb(TIMINGS, loadDb(path.resolve(extra)));
+  }
   return TIMINGS;
 }
 
@@ -89,7 +112,7 @@ export const VARIANTS = [
 ];
 
 // A CAVEAT THIS MODEL CANNOT SEE, and it cost three deploys. `secPerTest` is a
-// MEAN (79.7 s), which is the right input for "how many fit"; it is the wrong
+// typical cost (was a 79.7 s mean, now a 7.5 s p75), which is the right input for "how many fit"; it is the wrong
 // input for choosing the per-test TIMEOUT, which has to clear the slowest spec
 // rather than the average one. At 120 s it did not: physics-fixes' Monaco test
 // measures 124.2 s and albert-park-foundation 110.1 s on an idle box

@@ -5,6 +5,7 @@
 // calculation, because the design decision (per-spec not per-group; a selector
 // must not inherit a gate's retry settings) rests on it.
 import test from "node:test";
+import { DEFAULT_BUDGET_MIN } from "../../tools/ci/select-specs.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -77,9 +78,12 @@ test("the spec census is real — anti-vacuity", () => {
 });
 
 test("per-GROUP selection does not fit, which is why the design changed", () => {
-  // parts is 167 declared tests, modes 140. Both measured 2026-08-07.
-  const at30 = capacity(30, 1).tests;
-  assert.ok(at30 < 100,
-    `a 30-minute budget holds ${at30} tests; a 167-test group cannot be the unit ` +
-    "of selection at any budget worth spending");
+  // parts is 167 declared tests, modes 140. Both measured 2026-08-07. The
+  // argument was first made at 79.7 s/test and 30 minutes; at the measured
+  // llvmpipe rate (7.5 s, 2026-09-29) it holds at the budget the gate
+  // actually spends, which is the one that matters.
+  const atGate = capacity(DEFAULT_BUDGET_MIN, 1).tests;
+  assert.ok(atGate < 140,
+    `a ${DEFAULT_BUDGET_MIN}-minute budget holds ${atGate} tests; a 140-167-test group cannot be the unit ` +
+    "of selection at the budget the gate spends");
 });
