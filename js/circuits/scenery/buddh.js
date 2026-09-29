@@ -51,8 +51,8 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["buddh"] =
   function (api) {
-      const { n, hash, every, anchor, onTrack,
-        tree, bush, building, place, ridge,
+      const { n, hash, every, anchor, onTrack, out, MAT, vadd,
+        tree, bush, building, place, ridge, addBox, addCyl, modelGroup,
         guardrail, tyreWall, marshalPost, cameraTower, broadcastCompound,
         billboard, sponsorHoarding, runoffApron,
         grandstandEx, scaffoldStand, spectatorHill } = api;
@@ -123,26 +123,35 @@
 
       // A Uttar Pradesh brick kiln: hard dust apron, a long low firing body,
       // the tapered chimney that is the only vertical on this plain, and two
-      // stacks of green brick drying beside it. Six boxes, ~170 verts, and the
-      // single most recognisable object in the landscape around Greater Noida.
+      // stacks of green brick drying beside it. Chimney mast sits ON the base
+      // (addBox) so the nested place() boxes do not share a ground plane.
       const kiln = (s, dist, h) => {
         const k = K(s);
         if (!clear(k, dist, 56)) return;
         runoffApron(k, -1, dist, 74, DUST);
         place(k, -1, dist, [15, 4.6, 46], KILN);
-        place(K(s + 0.004), -1, dist + 2, [7.5, 5.0, 7.5], KILN);
-        place(K(s + 0.004), -1, dist + 2, [3.3, h, 3.3], KILN);
+        const kc = K(s + 0.004);
+        const a = anchor(kc, -1, dist + 2);
+        if (!onTrack(a.c[0], a.c[2], 8)) {
+          const b = [a.r, a.u, a.t];
+          addBox(out, vadd(a.c, a.u, 2.5), [7.5, 5.0, 7.5], KILN, b);
+          addBox(out, vadd(a.c, a.u, 5.0 + h * 0.5), [3.3, h, 3.3], KILN, b);
+        }
         place(K(s - 0.006), -1, dist - 13, [6.5, 2.4, 11], BRICK);
         place(K(s + 0.010), -1, dist - 10, [5.5, 2.0, 9], BRICK);
       };
-      // Transmission pylon: a wide footing and a thin mast. Two boxes read as
-      // a tapered lattice at 300 m and cost 48 verts; a line of them is the
-      // rhythm every photograph of this plain has behind the track.
+      // Transmission pylon: thin pad + mast stacked with addBox so the footing
+      // and shaft do not share a coplanar ground face (wave-6 flatCoplanar fix).
       const pylon = (s, dist, h) => {
         const k = K(s);
         if (!clear(k, dist, 26)) return;
-        place(k, -1, dist, [6.0, 5.5, 6.0], PYLON);
-        place(k, -1, dist, [2.3, h, 2.3], PYLON);
+        const a = anchor(k, -1, dist);
+        if (onTrack(a.c[0], a.c[2], 8)) return;
+        const b = [a.r, a.u, a.t];
+        addBox(out, vadd(a.c, a.u, 0.45), [6.0, 0.9, 6.0], PYLON, b);
+        addBox(out, vadd(a.c, a.u, 0.9 + h * 0.5), [2.2, h, 2.2], PYLON, b);
+        addBox(out, vadd(vadd(a.c, a.u, 0.9 + h * 0.72), a.t, 0),
+          [7.5, 0.35, 0.45], PYLON, b);
       };
 
       // 0. LAP SPINE — a barrier line all the way round each side plus the
@@ -182,9 +191,73 @@
       marshalPost(K(0.082), 1, 12);
 
       // 2. MAIN GRANDSTAND (0.022 / -1 / 24) — the only substantial structure
-      //    on the circuit: pale canopy, camera tower off its northern end, and
-      //    a sponsor band along the base of the seating.
-      grandstandEx(0.022, -1, 24, 150, null, null);
+      //    on the circuit. Real roof is a sea-wave aluminium cantilever over
+      //    steel trusses (ENR 2011-05-23; slideshare material deck — exact
+      //    30 vs 50 m height / 138 m length / 40 m cantilever / 56 trusses /
+      //    41 garages remain UNCERTAIN single-source figures, so the model
+      //    is a game-scale silhouette: ~14 truss bays, undulating roof height,
+      //    pale aluminium sheeting, cantilever lip toward the pit straight).
+      //    Seating rises away from the track (−1 outfield → +r = rear).
+      {
+        const a = anchor(K(0.022), -1, 24);
+        if (!onTrack(a.c[0], a.c[2], 12)) {
+          const b = [a.r, a.u, a.t];
+          const ALU = [0.78, 0.79, 0.80], ALU_D = [0.68, 0.69, 0.70];
+          const STEEL = [0.42, 0.44, 0.48], CONC = [0.72, 0.71, 0.68];
+          const SEAT = [0.55, 0.22, 0.20], SEAT_D = [0.48, 0.20, 0.18];
+          // Emit in a local fn so BATCH-01's 2200-char required window fits.
+          const emitMainGS = (stage) => {
+            stage._mat = MAT.CONCRETE;
+            // Plinth + seating tiers that STACK (each bottom clears the
+            // previous top) so tier boxes do not share a ground plane.
+            addBox(stage, vadd(a.c, a.u, 0.4), [16, 0.8, 138], CONC, b);
+            for (let t = 0; t < 4; t++) {
+              const lat = 1.5 + t * 2.4, h = 1.8, y0 = 0.9 + t * 2.05;
+              addBox(stage, vadd(vadd(a.c, a.r, lat), a.u, y0 + h * 0.5),
+                [2.6, h, 132 - t * 4], t & 1 ? SEAT : SEAT_D, b);
+            }
+            // Rear concrete shell under the wave roof.
+            addBox(stage, vadd(vadd(a.c, a.r, 11.5), a.u, 9.0),
+              [6, 16, 136], CONC, b);
+            stage._mat = MAT.METAL;
+            // Sea-wave roof: 14 truss bays at different elevations along the
+            // stand length (ENR: "56 trusses… at different elevations"; game
+            // uses fewer bays for the vertex budget).
+            const bays = 14, pitch = 9.4, half = (bays - 1) * pitch * 0.5;
+            for (let i = 0; i < bays; i++) {
+              const tOff = -half + i * pitch;
+              const wave = Math.sin((i / (bays - 1)) * Math.PI * 2) * 3.2;
+              const roofY = 17.5 + wave;
+              const p = vadd(a.c, a.t, tOff);
+              // Rear post
+              addCyl(stage, vadd(p, a.r, 12.5), 0.28, roofY + 0.4, STEEL, 5, b);
+              // Cantilever beam toward the track (−r)
+              addBox(stage, vadd(vadd(p, a.r, 2.0), a.u, roofY),
+                [18.5, 0.35, 0.45], STEEL, b);
+              // Nose strut under the lip
+              addCyl(stage, vadd(vadd(p, a.r, -6.5), a.u, roofY - 4.5),
+                0.16, 4.6, STEEL, 4, b);
+            }
+            // Aluminium sheeting panels between bays (wave follows truss tops).
+            stage._mat = MAT.METAL;
+            for (let i = 0; i < bays - 1; i++) {
+              const tOff = -half + i * pitch + pitch * 0.5;
+              const wave = Math.sin(((i + 0.5) / (bays - 1)) * Math.PI * 2) * 3.2;
+              const roofY = 17.8 + wave;
+              const p = vadd(a.c, a.t, tOff);
+              addBox(stage, vadd(vadd(p, a.r, 2.5), a.u, roofY),
+                [17.5, 0.28, pitch * 0.92], i & 1 ? ALU : ALU_D, b);
+            }
+            // Trackside fascia under the cantilever nose.
+            addBox(stage, vadd(vadd(a.c, a.r, -6.8), a.u, 16.2),
+              [0.4, 1.0, 130], [0.88, 0.88, 0.86], b);
+            stage._mat = 0;
+          };
+          modelGroup("buddh-main-grandstand", {
+            center: vadd(a.c, a.u, 12), size: [22, 28, 148], basis: b,
+          }, emitMainGS, { required: true });
+        }
+      }
       sponsorHoarding(0.004, 0.042, -1, 21);
       cameraTower(K(0.050), -1, 27);
       //    ...and the depth BEHIND it, which is the giveaway that this stand
@@ -193,10 +266,12 @@
       runoffApron(K(0.012), -1, 62, 96, CONCRETE);
       runoffApron(K(0.034), -1, 62, 96, CONCRETE);
       for (let i = 0; i < 3; i++)
-        runoffApron(K(0.006 + i * 0.018), -1, 104 + i * 26, 86, DUST);
+        runoffApron(K(0.006 + i * 0.018), -1, 118 + i * 28, 86, DUST);
+      // Cars sit past the dust aprons so their footprints do not share a
+      // ground plane with the apron quads (flatCoplanar 196×199).
       for (let i = 0; i < 22; i++) {
         const h = hash(i * 23);
-        place(K(0.000 + i * 0.0026), -1, 96 + (i % 4) * 13 + h * 4,
+        place(K(0.000 + i * 0.0026), -1, 210 + (i % 4) * 14 + h * 4,
           [1.9, 1.5, 4.4], CARS[i % 3]);
       }
 
@@ -230,9 +305,9 @@
       //    circuit in every reference photograph: grass worn off to reddish
       //    earth, a marshal post, low bush clumps, and the unmade service track
       //    that cuts across the infield and keeps the dust moving.
-      runoffApron(K(0.125), 1, 15, 44, DUST);
-      runoffApron(K(0.140), 1, 19, 38, DUST);
-      runoffApron(K(0.133), 1, 34, 56, DIRTRD);
+      runoffApron(K(0.125), 1, 18, 40, DUST);
+      runoffApron(K(0.140), 1, 22, 36, DUST);
+      runoffApron(K(0.133), 1, 36, 52, DIRTRD);
       marshalPost(K(0.129), 1, 21);
       for (let i = 0; i < 5; i++) bush(K(0.114 + i * 0.006), 1, 24 + hash(i * 7) * 9, SCRUB);
 
@@ -258,10 +333,10 @@
       building(K(0.202), -1, 168, 18, 4.0, 26);
       //    A mud-walled farmstead behind the sheds: three flat-roofed blocks
       //    around a swept yard, whitewash on one of them.
-      runoffApron(K(0.192), -1, 206, 44, DUST);
-      place(K(0.188), -1, 202, [9, 3.4, 13], MUD);
-      place(K(0.196), -1, 210, [7, 3.0, 10], LIME);
-      place(K(0.199), -1, 198, [6, 2.6, 8], MUD_D);
+      runoffApron(K(0.192), -1, 212, 40, DUST);
+      place(K(0.188), -1, 208, [9, 3.4, 13], MUD);
+      place(K(0.196), -1, 216, [7, 3.0, 10], LIME);
+      place(K(0.199), -1, 204, [6, 2.6, 8], MUD_D);
 
       // 7. INFIELD THROUGH TURN 2-3 (0.235 / +1 / 26) — marshal post, sponsor
       //    hoarding on the apex side, dry patchy grass between kerb and rail.
@@ -275,13 +350,16 @@
       //    wide run-off apron between that and the track edge. Behind it there
       //    is nothing but a dust walkway and the fields: no back structure at
       //    all, which is exactly how this stand reads in photographs.
-      runoffApron(K(0.296), -1, 7, 48, PALE);
-      runoffApron(K(0.308), -1, 7, 48, PALE);
+      //    Scaffold gap bumped 30→38 and dust apron pulled back so the stand
+      //    deck no longer shares a plane with the pale runoff (278×structures /
+      //    279×281 / self-281 flatCoplanars).
+      runoffApron(K(0.296), -1, 7, [14, 0.35, 44], PALE);
+      runoffApron(K(0.308), -1, 7, [14, 0.35, 44], PALE);
       tyreWall(0.284, 0.320, -1, 24, TYRECAP);
-      scaffoldStand(0.288, 0.316, -1, 30);
-      runoffApron(K(0.302), -1, 46, 60, DUST);
+      scaffoldStand(0.288, 0.316, -1, 38);
+      runoffApron(K(0.302), -1, 58, [28, 0.35, 52], DUST);
       for (let i = 0; i < 4; i++)
-        runoffApron(K(0.286 + i * 0.016), -1, 78 + i * 24, 70, i % 2 ? FIELD_B : STUBBLE);
+        runoffApron(K(0.286 + i * 0.016), -1, 88 + i * 24, 70, i % 2 ? FIELD_B : STUBBLE);
 
       // 9. INFIELD AT TURN 6-7 (0.372 / +1 / 38) — marshal post, billboard, and
       //    the first hint of the constructed elevation: a shallow chain of
@@ -315,15 +393,15 @@
       //     dust apron and an access track along its back, and then the fields
       //     and a field-boundary tree line, so the bank reads as a thing built
       //     ON farmland rather than as a wall closing the view.
-      runoffApron(K(0.480), -1, 74, 84, DUST);
-      runoffApron(K(0.512), -1, 74, 84, DUST);
-      runoffApron(K(0.496), -1, 96, 90, DIRTRD);
+      runoffApron(K(0.480), -1, 78, 80, DUST);
+      runoffApron(K(0.512), -1, 78, 80, DUST);
+      runoffApron(K(0.496), -1, 102, 86, DIRTRD);
       for (let i = 0; i < 5; i++)
-        runoffApron(K(0.466 + i * 0.018), -1, 128 + i * 27, 82, i % 2 ? FIELD_B : FIELD_A);
-      for (let i = 0; i < 4; i++) bund(0.470 + i * 0.022, 150 + i * 30, 62);
+        runoffApron(K(0.466 + i * 0.018), -1, 140 + i * 28, 74, i % 2 ? FIELD_B : FIELD_A);
+      for (let i = 0; i < 4; i++) bund(0.470 + i * 0.022, 160 + i * 30, 62);
       for (let i = 0; i < 5; i++) {
         const h = hash(i * 19);
-        tree(K(0.470 + i * 0.016), -1, 142 + h * 20, 6 + h * 3.5, DRYFOL);
+        tree(K(0.470 + i * 0.016), -1, 155 + h * 20, 6 + h * 3.5, DRYFOL);
       }
 
       // 12. INSIDE THE DOUBLE APEX (0.515 / +1 / 24) — tyre wall tight to the
