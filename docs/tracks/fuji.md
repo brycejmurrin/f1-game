@@ -34,7 +34,7 @@ ridge line, and remember it is hidden by cloud as often as not.
 | 0.005 | -1 | 20 | Main grandstand, the biggest structure at the circuit — capacity here is 110,000, so this reads as a wall of seating, not a stand. |
 | 0.060 | -1 | 26 | Grandstand run continues; start gantry and big screens over the straight. |
 | 0.120 | — | 900 | **Mount Fuji** on the western skyline, dominating the view back down the straight. One `mountain`, snow-capped, very large and very distant. |
-| 0.150 | +1 | 40 | Paddock and team structures behind the pits, then the Fuji Speedway Hotel and Motorsports Museum on the west side of the complex (opened 2022) as a distant built mass. |
+| 0.150 | +1 | 40 | Paddock and team structures behind the pits, then the **Fuji Speedway Hotel** (Hyatt Unbound Collection; opened 2022-10-07) on the west side beyond the West Gate. The Fuji Motorsports Museum occupies hotel floors 1–2 — not a separate building. |
 | 0.230 | -1 | 18 | First-corner grandstand overlooking the braking zone at the end of the straight — the prime overtaking spot and the most-photographed corner after the mountain. |
 | 0.250 | -1 | 14 | TGR Corner (27R): wide tarmac run-off, then a low bank and the first cedar rank beyond. |
 | 0.282 | 1 | 16 | 75R, dropping away from the stands; cedar closes in on the outside. |
@@ -61,3 +61,5 @@ ridge line, and remember it is hidden by cloud as often as not.
 - Mount Fuji is the single most identifying object. It belongs on the WESTERN skyline as a large, low-frequency cone, snow-capped, never a generic ridge. Bearing 266.1 deg at 18.2 km, measured from the circuit (35.3714 N 138.9267 E) to the summit (35.3581 N 138.7311 E) — this brief said "north" for months and the scenery placed the cone at 321 deg to match.
 - Cedar (sugi) is the tree: tall, narrow, dark. Plant in dense ranks, not scattered.
 - The grandstands along the pit straight are modern, dark-clad and continuous.
+- **Fuji Speedway Hotel** (`fuji-speedway-hotel` required modelGroup): mid-rise curved block west of the paddock. Sourced 9 floors above ground + basement (Toyota Fudosan / Fujitec / Hyatt), museum inside floors 1–2. Approximate footprint — exact hotel height/footprint not pinned to a surveyed CAD box; do not invent a Hilton (none on site). Sources: https://global.toyota/en/newsroom/corporate/37094898.html ; https://newsroom.hyatt.com/news-releases?item=124297 ; https://www.toyotafudosan.com/new2024/wp-content/uploads/2024/06/10ec98e489446127b278fb35e7e173e7-1.pdf ; https://en.wikipedia.org/wiki/Fuji_Motorsports_Museum
+- Circuit length: Wikipedia 4.563 km; game `lengthKm` 4.554 (small authored delta — do not change frame keys).

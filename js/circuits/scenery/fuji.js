@@ -37,7 +37,8 @@
         grandstandEx, terrace, bleacher, spectatorHill, scaffoldStand,
         guardrail, fence, tyreWall, marshalPost, gantry,
         billboard, sponsorHoarding, groundPatch, prop, backdrop,
-        mountain } = api;
+        mountain, modelGroup, MAT, seat, vadd,
+        terrainYAt } = api;
 
       // ── palette ──────────────────────────────────────────────────────────
       // Sugi cedar: dark and blue-shifted, not European park green. Four
@@ -155,9 +156,11 @@
         grandstandEx(t, -1, 78, 146, null, null,
           { tiers: 2, h: 17, roof: "cantilever", roofCol: ROOF_D, fasciaCol: CLAD_W });
       }
-      // Back-of-house behind the seating wall: dark sheds and a service road.
-      run(0.98, 1200, 150, (s, i) => {
-        building(K(s), -1, 106, 16, 9 + hash(i * 3.1) * 3, 74,
+      // Back-of-house behind the seating wall: short dark sheds on the flatter
+      // apron (was gap 106 / h≈12 / d=74 — 24 buried prims, worst 4.78 m into the
+      // outfield hill). Closer + shorter keeps them above terrainY.
+      run(0.98, 1200, 160, (s, i) => {
+        building(K(s), -1, 86, 11, 5.5 + hash(i * 3.1) * 1.8, 42,
           { wall: i % 2 ? CLAD_L : [0.34, 0.35, 0.37], window: GLASS, lit: false });
       });
       // Spectator car parks and the cedar edge closing off the outfield.
@@ -259,27 +262,90 @@
       }
 
       // 5. PADDOCK, THEN THE HOTEL AND MOTORSPORTS MUSEUM  [0.150 +1 40]
-      run(0.030, 700, 52, (s, i) => {
-        motorhome(K(s), 1, 44, 9, 4.6, 16,
-          { accent: i % 3 === 0 ? [0.72, 0.16, 0.16] : CLAD_L, roof: true });
-      });
-      // A second row of team transporters parked behind the first.
-      run(0.044, 560, 58, (s, i) => {
-        motorhome(K(s), 1, 66, 8, 4.2, 15,
-          { accent: i % 2 ? [0.20, 0.26, 0.52] : CLAD_W, roof: true });
-      });
+      //    Team transporters: sparse near-apron only (a dense double row here
+      //    buried 23 prims into the infield rise; leave the hotel mass clear).
+      for (const [s, accent] of [
+        [0.048, [0.72, 0.16, 0.16]], [0.078, CLAD_L], [0.108, [0.20, 0.26, 0.52]],
+      ]) {
+        motorhome(K(s), 1, 32, 6.5, 3.6, 11, { accent, roof: true });
+      }
       broadcastCompound(K(0.088), 1, 62, { vans: 6, dishes: 3, spacing: 9 });
-      // The 2022 hotel + museum block on the west side of the complex: a
-      // distant built mass, not roadside detail.
-      building(K(0.150), 1, 118, 34, 26, 96, { wall: CLAD, window: GLASS, floor: 3.8, lit: false });
-      building(K(0.178), 1, 124, 30, 20, 74, { wall: CLAD_L, window: GLASS, floor: 3.8, lit: false });
-      building(K(0.196), 1, 150, 26, 15, 60, { wall: [0.38, 0.39, 0.41], window: GLASS, lit: false });
-      building(K(0.214), 1, 164, 22, 11, 54, { wall: CLAD_W, window: GLASS, floor: 3.8, lit: false });
-      groundPatch(K(0.166), 1, 96, [38, 0.16, 74], ASPH);              // hotel car park
+      // Fuji Speedway Hotel (Hyatt Unbound Collection) + Fuji Motorsports
+      // Museum — west side beyond the paddock, opened 2022-10-07 as part of
+      // Fuji Motorsports Forest (Toyota). Museum occupies hotel floors 1–2
+      // (do NOT model as a separate building). Sourced: 地上9階地下1階,
+      // building area 26,771 m²; curved facade echoes the racetrack
+      // (HBA / Obayashi). Footprint placement is approximate (satellite /
+      // official access: west of West Gate, 645 Omika).
+      {
+        const HOTEL_WALL = [0.78, 0.79, 0.80];
+        const HOTEL_TRIM = [0.88, 0.89, 0.90];
+        const HOTEL_POD  = [0.42, 0.44, 0.48];
+        const HOTEL_GLASS = [0.38, 0.52, 0.62];
+        const HOTEL_DARK = [0.22, 0.24, 0.28];
+        const a0 = anchor(K(0.168), 1, 132);
+        const gy = terrainYAt(a0.c[0], a0.c[2]);
+        const a = {
+          c: [a0.c[0], (gy == null ? a0.c[1] : gy), a0.c[2]],
+          r: a0.r, u: a0.u, t: a0.t,
+        };
+        const b = [a.r, a.u, a.t];
+        // 9 storeys × ~3.55 m ≈ 32 m. Three NON-overlapping curved bays.
+        const FLOOR_H = 3.55, BODY_H = 9 * FLOOR_H, POD_H = 7.2;
+        const BAYS = [
+          { t: -28, r: 3.5, w: 20, d: 24 },
+          { t: 0,   r: 0,   w: 24, d: 28 },
+          { t: 28,  r: 3.5, w: 20, d: 24 },
+        ];
+        // Emit extracted so `{ required: true }` stays inside the BATCH-01
+        // 2200-char window after modelGroup("fuji-speedway-hotel".
+        const emitHotel = (stage) => {
+          stage._mat = MAT.CONCRETE;
+          seat.box(stage, a.c, [36, 0.55, 76], HOTEL_DARK, b);
+          stage._mat = MAT.GLASS;
+          seat.box(stage, vadd(a.c, a.u, 0.55), [34, POD_H - 0.55, 72], HOTEL_POD, b);
+          stage._mat = MAT.METAL;
+          seat.box(stage, vadd(a.c, a.u, POD_H), [35, 0.4, 73], HOTEL_TRIM, b);
+          for (let i = 0; i < BAYS.length; i++) {
+            const bay = BAYS[i];
+            const foot = vadd(vadd(a.c, a.t, bay.t), a.r, bay.r);
+            const roomH = BODY_H - POD_H - 0.4;
+            stage._mat = MAT.STONE;
+            seat.box(stage, vadd(foot, a.u, POD_H + 0.4),
+              [bay.w, roomH, bay.d], HOTEL_WALL, b);
+            stage._mat = MAT.GLASS;
+            for (let f = 0; f < 3; f++) {
+              const y = POD_H + 0.4 + (f * 2 + 1.2) * FLOOR_H;
+              if (y + FLOOR_H * 0.5 > BODY_H) break;
+              seat.box(stage, vadd(vadd(foot, a.r, -(bay.w * 0.5 + 0.22)), a.u, y),
+                [0.28, FLOOR_H * 0.7, bay.d * 0.72], HOTEL_GLASS, b);
+            }
+          }
+          stage._mat = MAT.METAL;
+          seat.box(stage, vadd(a.c, a.u, BODY_H), [28, 0.45, 78], HOTEL_TRIM, b);
+          stage._mat = MAT.CONCRETE;
+          seat.box(stage, vadd(a.c, a.u, BODY_H + 0.45), [9, 2.8, 12], HOTEL_DARK, b);
+          // Omikami wellness wing (2 storeys) — clear of the main block.
+          const wing = vadd(vadd(a.c, a.t, -54), a.r, 12);
+          stage._mat = MAT.STONE;
+          seat.box(stage, wing, [12, 7.2, 18], HOTEL_WALL, b);
+          stage._mat = MAT.GLASS;
+          seat.box(stage, vadd(vadd(wing, a.r, -(12 * 0.5 + 0.22)), a.u, 1.6),
+            [0.28, 4.0, 14], HOTEL_GLASS, b);
+          stage._mat = MAT.METAL;
+          seat.box(stage, vadd(wing, a.u, 7.2), [12.5, 0.35, 18.5], HOTEL_TRIM, b);
+          stage._mat = 0;
+        };
+        modelGroup("fuji-speedway-hotel", {
+          center: vadd(a.c, a.u, BODY_H * 0.5 + 1.5),
+          size: [44, BODY_H + 8, 88], basis: b,
+        }, emitHotel, { required: true });
+      }
+      groundPatch(K(0.166), 1, 108, [38, 0.16, 74], ASPH);              // hotel car park
       for (const s of [0.058, 0.112, 0.168])
         groundPatch(K(s), 1, 40, [34, 0.16, 46], [0.30, 0.31, 0.33]);   // paddock tarmac
-      // Ornamental cedar around the hotel forecourt.
-      for (const [s, d] of [[0.140, 92], [0.158, 88], [0.186, 100], [0.206, 112]]) {
+      // Ornamental cedar around the hotel forecourt (clear of the modelGroup).
+      for (const [s, d] of [[0.140, 108], [0.158, 118], [0.186, 120], [0.206, 124]]) {
         tree(K(s), 1, d, 11, SUGI_L);
         pine(K(s), 1, d + 14, 17, SUGI_D, { slim: true });
       }
@@ -326,7 +392,12 @@
       sponsorHoarding(0.345, 0.400, -1, 12, { h: 1.3, step: 8 });
       sponsorHoarding(0.398, 0.446, 1, 14, { h: 1.2, step: 8 });
       terrace(0.358, 0.392, -1, 20, { rows: 7, rise: 1.5, depth: 2.7, density: 0.42, conc: CONC });
-      bleacher(0.398, 0.418, -1, 22, { rows: 6, rise: 1.35, density: 0.32 });
+      // Coca-Cola / Toyopet bank — was bleacher(0.398..) with BACKWARDS slope
+      // −0.616 (rows fell into the outboard drop). spectatorHill follows the
+      // grade and still rises each row away from the ribbon.
+      spectatorHill(0.398, 0.422, -1, 24, {
+        rows: 6, rise: 1.5, depth: 2.8, grass: SCRUB, density: 0.36,
+      });
       // Small spectator terrace service block and the corner's own screen.
       building(K(0.366), -1, 54, 14, 7, 34, { wall: CLAD_W, window: GLASS, lit: false });
       billboard(K(0.380), -1, 40, 16, 7, [0.72, 0.13, 0.14], { style: "monopole" });
@@ -386,9 +457,10 @@
       gantry(0.732, 6.9, [0.90, 0.74, 0.10]);            // the corner's sponsor arch
       for (const [s1, g] of [[0.733, 17], [0.741, 16], [0.749, 17]])
         prop(K(s1), 1, g, [1.7, 1.2, 4.2], [0.09, 0.09, 0.10]);   // stacked spares
-      // Marshal hut and a tyre store behind the hairpin bank.
-      building(K(0.744), 1, 38, 10, 5, 22, { wall: CLAD_W, window: GLASS, lit: false });
-      prop(K(0.750), 1, 34, [3.4, 1.9, 9], [0.10, 0.10, 0.11]);
+      // Marshal hut and a tyre store behind the hairpin bank (was buried 0.32 m
+      // at gap 38 — seat on the flatter near apron).
+      building(K(0.744), 1, 28, 9, 4.5, 18, { wall: CLAD_W, window: GLASS, lit: false });
+      prop(K(0.750), 1, 30, [3.4, 1.9, 9], [0.10, 0.10, 0.11]);
       // Starts at 0.724, not 0.716: across the 300R fold a tall cedar from
       // 0.716-0.724 lands ~12 m off the 0.690 road, where the guard culls its
       // trunk and lower tier and leaves the crown floating 15 m up
