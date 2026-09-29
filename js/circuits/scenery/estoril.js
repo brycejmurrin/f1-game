@@ -125,9 +125,9 @@
       gantry(0.0, 8, [0.15, 0.15, 0.18]);
       gantry(0.968, 7.5, [0.15, 0.15, 0.18]);
       // Motorhome row omitted — every() at gap 52–62 buried posts up to 5.6 m
-      // into the Alcabideche hillside (ground-audit:estoril.js:165). Hungaroring
-      // made the same call; seated paddock boxes deferred to keep the tris
-      // ratchet after the 30-bay terrace.
+      // into the Alcabideche hillside (was the sole ground-audit buried line).
+      // Hungaroring made the same call; seated paddock boxes deferred to keep
+      // the tris ratchet after the 30-bay terrace.
       broadcastCompound(K(0.918), 1, 68, { vans: 2, dishes: 2, mastH: 9 });
       sponsorHoarding(0.955, 0.045, -1, 6.5, { h: 2.2, step: 11,
         palette: [[0.14, 0.36, 0.22], [0.86, 0.22, 0.18], [0.94, 0.86, 0.24], LIME] });
