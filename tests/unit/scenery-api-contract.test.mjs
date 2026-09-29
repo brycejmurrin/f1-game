@@ -117,6 +117,8 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     cota: ["cota-amphitheater", "cota-turn1-big-red", "cota-main-grandstand"],
     mexico: ["mexico-foro-sol-entry", "mexico-peraltada-stand", "foro-scoreboard"],
     abudhabi: ["abudhabi-ferrari-world", "abudhabi-marina", "abudhabi:pit-exit-tunnel-portal"],
+    // Bahrain hollow-stand fix — T1 naming marker (Michael Schumacher Corner, 2014)
+    bahrain: ["bahrain-sakhir-tower", "bahrain-university-grandstand", "bahrain-schumacher-corner"],
   };
   for (const [track, ids] of Object.entries(expected)) {
     const body = landmarkSource(track);
