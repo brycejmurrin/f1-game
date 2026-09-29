@@ -783,6 +783,17 @@ offscreen and resolves its own MSAA (`glx/post.js`), so browser MSAA on the
 default framebuffer would be pure waste. The lit fragment shader fades to `fogColor` with
 `1-exp(-(d*fogDensity)^2)`.
 
+**Output target.** Final colour lands on the canvas backbuffer (`bindFramebuffer(..., null)`,
+viewport `(0,0,w,h)`) unless an override is set: `GLX.setOutputTarget(fbo, {x,y,w,h})`
+stores `core.outputFBO()` / `core.outputViewport()`. Composite, FXAA, SGSR, the
+post-off `bindSceneTarget` path, and the mirror HUD composite all bind that
+target. `clearOutputTarget()` restores the 2D default. `setRenderSizeOverride({width,height}|null)`
+sizes scene/bloom FBOs independently of the CSS canvas (eye-buffer allocation).
+With no override the calls are the same `null` / `(0,0,w,h)` as before. A clipped
+output viewport scissors `begin()`'s clear on the direct path so a shared XR
+layer framebuffer does not wipe the sibling eye. Soft-present is skipped while
+an output FBO is set. Guard: `tests/unit/glx-output-target.test.mjs`.
+
 ## js/render/shared/gltf.js — `GLTF`
 
 Self-contained binary glTF 2.0 (`.glb`) parser that bakes a model down to the

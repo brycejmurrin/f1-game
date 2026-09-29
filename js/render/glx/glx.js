@@ -117,6 +117,20 @@ const GLXBackend = (function () {
   let skyVAO = null;     // empty VAO (WebGL2 still needs one bound)
   let shadowVAO = null;
   let width = 0, height = 0, aspect = 1;
+  let outFBO = null, outVP = null, renderSizeOverride = null;
+  function outputFBO() { return outFBO; }
+  function outputViewport(w, h) { return outVP ? [outVP.x, outVP.y, outVP.w, outVP.h] : [0, 0, w, h]; }
+  function setOutput(fbo, vp) {
+    outFBO = fbo || null;
+    outVP = vp && vp.w > 0 && vp.h > 0 ? { x: vp.x | 0, y: vp.y | 0, w: vp.w | 0, h: vp.h | 0 } : null;
+  }
+  function clearOutput() { outFBO = null; outVP = null; }
+  function setRenderSizeOverride(sz) {
+    renderSizeOverride = sz && sz.width > 0 && sz.height > 0 ? { width: sz.width | 0, height: sz.height | 0 } : null;
+  }
+  function outputTargetState() {
+    return { fbo: !!outFBO, vp: outVP ? [outVP.x, outVP.y, outVP.w, outVP.h] : null };
+  }
   let maxDim = 0;        // the driver's drawing-buffer ceiling (init); 0 = unknown, no clamp
   // ── Live environment probe ──────────────────────────────────────────────────
   // A small cubemap rendered around the player car (one face per frame — full
@@ -501,7 +515,7 @@ const GLXBackend = (function () {
   }
 
   function softBlit() {
-    if (!_softPresent || !_displayCtx || !gl || ctxGone()) return;
+    if (outFBO || !_softPresent || !_displayCtx || !gl || ctxGone()) return;
     // A synchronous GPU readback plus two full-frame CPU copies is capture
     // work, not presentation work. Capture tools call awaitSoftPresent(), and
     // snapCam()/invalidateSoftPresent() arms one explicit blit on the next
@@ -846,6 +860,9 @@ const GLXBackend = (function () {
       setLampShadowSlot: (i) => { gl.uniform1i(litU.uLampShadowIdx, i | 0); },
       getSize: () => ({ width, height }),
       getPresentSize: () => ({ width: presentW || width, height: presentH || height }),
+      outputFBO, outputViewport, setOutput, clearOutput,
+      outputClipped: () => !!outVP,
+      setRenderSizeOverride,
       wantSpatialUpscale,
       gpuTimerEnd: _gpuTimerEnd,
       get skyVAO() { return skyVAO; },
@@ -1046,6 +1063,14 @@ const GLXBackend = (function () {
   }
   function resize() {
     if (ctxGone()) return;
+    let rw, rh, cw, ch;
+    if (renderSizeOverride) {
+      rw = Math.max(1, renderSizeOverride.width);
+      rh = Math.max(1, renderSizeOverride.height);
+      presentW = rw; presentH = rh;
+      const up = wantSpatialUpscale();
+      cw = up ? presentW : rw; ch = up ? presentH : rh;
+    } else {
     // Mobile: cap DPR at 1.5 (was 2) — every full-screen target scales with the
     // square of this; 1.5 is 56% of the pixels of 2 with little visible loss on
     // a ~6" screen, and it multiplies with every other saving.
@@ -1064,13 +1089,14 @@ const GLXBackend = (function () {
       presentW = Math.max(1, Math.floor(presentW * k));
       presentH = Math.max(1, Math.floor(presentH * k));
     }
-    const rw = Math.max(1, Math.round(presentW * renderScale));
-    const rh = Math.max(1, Math.round(presentH * renderScale));
+    rw = Math.max(1, Math.round(presentW * renderScale));
+    rh = Math.max(1, Math.round(presentH * renderScale));
     // Upscale path: canvas = present (full), scene FBOs = render (scaled).
     // Off or scale≈1: canvas = render (legacy browser bilinear stretch).
     const up = wantSpatialUpscale();
-    const cw = up ? presentW : rw;
-    const ch = up ? presentH : rh;
+    cw = up ? presentW : rw;
+    ch = up ? presentH : rh;
+    }
     const changed = canvas.width !== cw || canvas.height !== ch || width !== rw || height !== rh;
     if (canvas.width !== cw || canvas.height !== ch) {
       canvas.width = cw;
@@ -1475,7 +1501,7 @@ const GLXBackend = (function () {
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_CUBE_MAP_POSITIVE_X, envTex, 0);
     const _envStatus = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_CUBE_MAP_POSITIVE_X, null, 0);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null); /* glx-default-fb: reset only */
     if (_envStatus !== gl.FRAMEBUFFER_COMPLETE) {
       try { Log.warn("gfx", "GLX env probe framebuffer incomplete (0x" + _envStatus.toString(16) + ") — analytic reflections only"); } catch (_) { /* Log optional */ }
       gl.deleteFramebuffer(envFBO); gl.deleteRenderbuffer(envDepthRB); gl.deleteTexture(envTex);
@@ -1557,8 +1583,9 @@ const GLXBackend = (function () {
     // drivers, though SwiftShader silently tolerates it. Detaching + unbinding
     // before the mip pass removes the hazard.
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_CUBE_MAP_POSITIVE_X + face, null, 0);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0, 0, width, height);  // restore for the (non-post) main pass
+    gl.bindFramebuffer(gl.FRAMEBUFFER, outputFBO());
+    const _envRest = outputViewport(width, height);
+    gl.viewport(_envRest[0], _envRest[1], _envRest[2], _envRest[3]);
     if (envFacesMask === 63) {         // full cycle → refresh mips, probe is live
       envFacesMask = 0; envReady = true;
       gl.activeTexture(gl.TEXTURE6);
@@ -1581,8 +1608,9 @@ const GLXBackend = (function () {
   function mirrorEnd() {
     if (!PST || !PST.mirror.active()) return;
     PST.mirror.end();
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);   // post-off main pass draws here
-    gl.viewport(0, 0, width, height);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, outputFBO());
+    const _mirRest = outputViewport(width, height);
+    gl.viewport(_mirRest[0], _mirRest[1], _mirRest[2], _mirRest[3]);
   }
 
   // Open a GPU timer query for this frame (if timing is on and none is already
@@ -1681,7 +1709,7 @@ const GLXBackend = (function () {
       gl.viewport(0, 0, ENV_SIZE, ENV_SIZE);
     } else if (PST.mirror.active()) {
       PST.mirror.bindTarget();   // rear-view mirror pass (mirrorBegin below)
-    } else if (PST.enabled()) {
+    } else {
       PST.bindSceneTarget();
     }
     // Resync cached render state to GL defaults — depthMask must be on for the
@@ -1703,7 +1731,15 @@ const GLXBackend = (function () {
     resetDrawState();
     const fc = frame.fogColor;
     gl.clearColor(fc[0], fc[1], fc[2], 1);
+    // Direct path + output viewport: gl.clear ignores viewport and would wipe
+    // the sibling eye on a shared XR layer framebuffer.
+    const clipClear = !!(outVP && !_envActive && !PST.mirror.active() && !PST.enabled());
+    if (clipClear) {
+      gl.enable(gl.SCISSOR_TEST);
+      gl.scissor(outVP.x, outVP.y, outVP.w, outVP.h);
+    }
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    if (clipClear) gl.disable(gl.SCISSOR_TEST);
 
     useProg(litProg);
     // Sampler units are program state: point uEnvCube at unit 6 ONCE per link
@@ -2635,6 +2671,10 @@ const GLXBackend = (function () {
     drawDrivingLine,
     drawGlow,
     drawParticles,
+    setOutputTarget: (fbo, vp) => setOutput(fbo, vp),
+    clearOutputTarget: () => clearOutput(),
+    outputTargetState,
+    setRenderSizeOverride,
     present: (opts) => {
       if (ctxGone()) return;
       // Occlusion queries go LAST and before post, which is the only moment in
@@ -2653,7 +2693,7 @@ const GLXBackend = (function () {
       let r;
       try { r = PST.present(opts); PST.mirror.composite(opts); }
       catch (e) { try { gl.enable(gl.DEPTH_TEST); } catch (_) { /* context lost: nothing to restore into */ } throw e; }
-      if (_softPresentWaiters.length || _softCaptureDue) softBlit();
+      if (!outFBO && (_softPresentWaiters.length || _softCaptureDue)) softBlit();
       if (_glDrainAlways || _drainLeft > 0) { _drainLeft--; drainGlErrors("present"); }
       return r;
     },

@@ -188,6 +188,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/image-grade-shaders.test.mjs",
   "tests/unit/chunked-index-ranges.test.mjs",
   "tests/unit/glx-occlusion.test.mjs",
+  // GLX output-target (VR task 30): source-scan of bindFramebuffer(null) plus a recording-mock proof that setOutputTarget routes the final pass.
+  "tests/unit/glx-output-target.test.mjs",
   "tests/unit/tlx-chunked-lifecycle.test.mjs",
   "tests/unit/glx-multidraw.test.mjs",
   "tests/unit/vertex-pack.test.mjs",
