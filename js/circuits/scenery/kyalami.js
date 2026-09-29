@@ -7,7 +7,7 @@
 (window.TrackScenery = window.TrackScenery || {})["kyalami"] =
   function (api) {
       const { K, lapBounds, out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack, px, pz, seat,
-        tree, bush, ridge, building, grandstandEx, spectatorHill, sponsorHoarding,
+        tree, bush, ridge, building, spectatorHill, sponsorHoarding,
         broadcastCompound, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
         addBox, addCyl, addFrustum, forestEdge } = api;
@@ -32,30 +32,37 @@
       // 1. HIGHVELD VELD — flat-topped acacia thorn trees scattered over open
       //    golden grass, plus the ranks of imported blue-gum along the
       //    boundary. Sparse and low: the veld reads as open, never wooded.
+      //    Crown / fork AABBs must overlap the trunk (ground-audit BFS) — a
+      //    0.15 m Y gap on a slope used to leave the umbrella unsupported.
       const openArea = (s) => (s >= 0.92 || s <= 0.10) || (s >= 0.36 && s <= 0.48);
       every(30, (k) => {
         const s = k / n;
         if (openArea(s)) return;
         const h = hash(k * 31);
         if (h < 0.42) return;
-        const a = anchor(k, h < 0.5 ? -1 : 1, 14 + h * 12);
+        const a = anchor(k, h < 0.5 ? -1 : 1, 16 + h * 14);
+        if (onTrack(a.c[0], a.c[2], 8)) return;
         const b = [a.r, a.u, a.t];
         const ht = 5 + h * 3, spread = 7 + h * 3;
         out._mat = MAT.WOOD;
-        seat.cyl(out, a.c, 0.28, ht * 0.62, [0.34, 0.26, 0.18], 5, b);
-        for (const dr of [-1, 1])                    // the low fork
-          addBox(out, vadd(vadd(a.c, a.u, ht * 0.68), a.r, dr * spread * 0.22),
-            [spread * 0.44, 0.7, 0.22], [0.34, 0.26, 0.18], b);
+        seat.cyl(out, a.c, 0.28, ht * 0.72, [0.34, 0.26, 0.18], 5, b);
+        for (const dr of [-1, 1])                    // the low fork — overlaps trunk
+          addBox(out, vadd(vadd(a.c, a.u, ht * 0.55), a.r, dr * spread * 0.22),
+            [spread * 0.44, 1.1, 0.28], [0.34, 0.26, 0.18], b);
         out._mat = MAT.FOLIAGE;
         // One broad, shallow umbrella: the crown must read horizontally,
         // never as the stacked round canopy of a European parkland tree.
-        addBox(out, vadd(a.c, a.u, ht * 0.82), [spread, 0.65, spread * 0.48],
+        // Centre sits on the trunk top so AABBs touch through the BFS.
+        addBox(out, vadd(a.c, a.u, ht * 0.70), [spread, 0.9, spread * 0.48],
           h < 0.6 ? THORN : THORN_D, b);
         out._mat = 0;
       });
       every(24, (k) => {
         const h = hash(k * 97 + 23);
         if (h < 0.48) return;
+        const s = k / n;
+        // Clear of spectator banks and the main-GS bowl (clip-audit).
+        if ((s >= 0.22 && s <= 0.30) || (s >= 0.42 && s <= 0.52) || (s >= 0.93 || s <= 0.02)) return;
         bush(k, h < 0.72 ? -1 : 1, 7 + h * 6, h < 0.6 ? SCRUB : SCRUB_D);
       });
       // Blue-gum windbreak rows on the boundary — tall, narrow, in lines.
@@ -141,11 +148,12 @@
         building(K(0.925 + i * 0.013), 1, 38, 25, 9, 19,
           { kind: "chevron", wall: [0.84, 0.80, 0.72], window: [0.32, 0.34, 0.38], floor: 4.5 });
       }
-      every(46, (k) => {
-        const s = k / n, h = hash(k * 71 + 31);
-        if (!(s > 0.90 || s < 0.05) || h < 0.54) return;
-        motorhome(k, 1, 54 + h * 10, 10, 4, 6, { wall: [0.68 + h * 0.22, 0.68, 0.68] });
-      });
+      // Paddock hospitality — sparse, far out. Closer pads buried into the
+      // pit-straight grade (ground-audit).
+      for (const [s, gap, w] of [[0.935, 78, 10], [0.948, 82, 9], [0.012, 80, 10]]) {
+        const h = hash(K(s) * 71);
+        motorhome(K(s), 1, gap, w, 4, 6, { wall: [0.68 + h * 0.22, 0.68, 0.68] });
+      }
       broadcastCompound(K(0.916), 1, 70, { vans: 3, dishes: 2, mastH: 9 });
       sponsorHoarding(0.950, 0.050, -1, 7, { h: 2.4, step: 12,
         palette: [[0.94, 0.72, 0.14], [0.16, 0.44, 0.26], [0.86, 0.22, 0.16], [0.20, 0.20, 0.22]] });
@@ -197,20 +205,74 @@
       ironTerrace("kyalami-terrace-main", K(0.005), -1, 13, 15, { rows: 7 });
       ironTerrace("kyalami-terrace-crowthorne", K(0.078), -1, 20, 10, { rows: 6 });
       ironTerrace("kyalami-terrace-leeukop", K(0.565), -1, 22, 8, { rows: 5 });
-      grandstandEx(0.950, -1, 12, 80, null, null,
-        { livery: "sandstone", roof: "flat", endWalls: true, h: 9 });
+      // Main grandstand opposite the pits on the S/F straight — face-brick /
+      // sandstone bowl under a corrugated lean-to (Highveld vernacular; not a
+      // Tilke cantilever). Sources: circuit visual brief; SAHO / official site
+      // place the main spectator bank on the pit-straight (exact bay count and
+      // seat total not surveyed — length kept modest ~80 m).
+      // Emit body lives in a local fn so BATCH-01's 2200-char required window fits.
+      {
+        const side = -1, dist = 14;
+        const a = anchor(K(0.950), side, dist);
+        if (!onTrack(a.c[0], a.c[2], 10)) {
+          const b = [a.r, a.u, a.t], inw = IN(side);
+          const bays = 12, pitch = 6.6, len = bays * pitch, rows = 6;
+          const backH = 2.0 + rows * 1.15;
+          const SAND = [0.78, 0.72, 0.58], SAND_D = [0.70, 0.64, 0.52];
+          const emitMainGS = (stage) => {
+            stage._mat = MAT.CONCRETE;
+            seat.box(stage, a.c, [14, 0.5, len + 2], SAND_D, b);
+            for (let t = 0; t < rows; t++) {
+              const lat = inw * (5.6 - t * 1.4), y = 0.5 + t * 1.15;
+              seat.box(stage, vadd(vadd(a.c, a.r, lat), a.u, y),
+                [1.4, 1.15, len], t % 2 ? SAND : SAND_D, b);
+              seat.box(stage, vadd(vadd(a.c, a.r, lat), a.u, y + 1.15),
+                [1.2, 0.4, len - 1.5], [0.66, 0.62, 0.54], b);
+              stage._mat = MAT.FABRIC;
+              for (let j = 0; j * 1.2 < len - 2; j++) {
+                const h2 = hash(K(0.950) * 31 + t * 97 + j * 13);
+                if (h2 < 0.48) continue;
+                seat.box(stage, vadd(vadd(vadd(a.c, a.r, lat), a.t, -len / 2 + 1 + j * 1.2), a.u, y + 1.55),
+                  [0.5, 0.85, 0.42], CROWD[Math.floor(h2 * 97) % CROWD.length], b);
+              }
+              stage._mat = MAT.CONCRETE;
+            }
+            for (const dt of [-len / 2 - 0.4, len / 2 + 0.4])
+              seat.box(stage, vadd(vadd(a.c, a.t, dt), a.r, -inw * 0.4),
+                [12, backH + 1.2, 0.7], SAND_D, b);
+            stage._mat = MAT.METAL;
+            for (let i = 0; i <= bays; i++) {
+              const p = vadd(a.c, a.t, (i - bays / 2) * pitch);
+              seat.cyl(stage, vadd(p, a.r, -inw * 6.2), 0.18, backH + 4.8, OXIDE, 5, b);
+              seat.cyl(stage, vadd(p, a.r, inw * 5.6), 0.15, backH + 1.6, OXIDE, 5, b);
+              addBox(stage, vadd(vadd(p, a.r, -inw * 0.3), a.u, backH + 3.2),
+                [12.2, 0.18, 0.18], OXIDE, b);
+            }
+            for (let i = 0; i * 1.4 < len; i++) {
+              const p = vadd(a.c, a.t, -len / 2 + i * 1.4 + 0.7);
+              addBox(stage, vadd(vadd(p, a.r, -inw * 0.3), a.u, backH + 3.8),
+                [12.8, 0.28, 0.75], (i % 2) ? IRON : [0.65, 0.64, 0.61], b);
+            }
+            stage._mat = 0;
+          };
+          modelGroup("kyalami-main-grandstand", {
+            center: vadd(a.c, a.u, (backH + 5) / 2), size: [18, backH + 8, len + 4], basis: b,
+          }, emitMainGS, { required: true });
+        }
+      }
 
       groundPatch(K(0.078), 1, 6, [40, 0.18, 54], EARTH,
         { id: "kyalami-crowthorne-gravel", samples: 8 });
       tyreWall(0.060, 0.098, 1, 5, [0.86, 0.20, 0.18]);
-      spectatorHill(0.10, 0.18, -1, 16, { rows: 4, rise: 1.2, depth: 1.9, density: 0.44, step: 8 });
+      // No spectatorHill on the Crowthorne drop — ironTerrace covers seating;
+      // a bank here clipped bushes and hung unsupported over the grade.
       marshalPost(K(0.072), -1, 10);
 
       groundPatch(K(0.255), -1, 5, [26, 0.18, 34], EARTH,
         { id: "kyalami-barbecue-gravel", samples: 6 });
       tyreWall(0.240, 0.272, -1, 4, [0.20, 0.40, 0.85]);
       marshalPost(K(0.250), 1, 9);
-      spectatorHill(0.230, 0.290, 1, 16, { rows: 3, rise: 1.0, depth: 1.8, density: 0.34, step: 9 });
+      spectatorHill(0.235, 0.285, 1, 30, { rows: 2, rise: 0.95, depth: 1.6, density: 0.28, step: 11 });
 
       groundPatch(K(0.565), 1, 5, [26, 0.18, 34], EARTH,
         { id: "kyalami-leeukop-gravel", samples: 6 });
@@ -222,7 +284,7 @@
       ironTerrace("kyalami-terrace-final", K(0.885), 1, 18, 9, { rows: 5 });
       marshalPost(K(0.880), 1, 9);
 
-      spectatorHill(0.42, 0.52, 1, 16, { rows: 3, rise: 1.0, depth: 1.8, density: 0.36, step: 9 });
+      spectatorHill(0.43, 0.51, 1, 32, { rows: 2, rise: 0.95, depth: 1.6, density: 0.30, step: 11 });
       ironTerrace("kyalami-terrace-climb", K(0.470), 1, 30, 10, { rows: 6 });
 
       for (const [s0, s1] of [[0.11, 0.23], [0.28, 0.40], [0.46, 0.55], [0.60, 0.86]]) {
@@ -279,22 +341,24 @@
           center: vadd(a.c, a.u, 20), size: [26, 48, 68], basis: b,
         }, (stage) => {
           stage._mat = MAT.METAL;
+          // Winder-house mass is the ground pad (BFS root for the lattice).
+          stage._mat = MAT.CONCRETE;
+          seat.box(stage, a.c, [16, 10, 16], [0.56, 0.46, 0.38], b);
+          stage._mat = MAT.METAL;
           const legs = [[-6, -6], [6, -6], [-6, 6], [6, 6]];
           for (const [dx, dz] of legs)
             seat.cyl(stage, vadd(vadd(a.c, a.r, dx), a.t, dz), 0.5, 30, [0.42, 0.38, 0.34], 6, b);
           for (let i = 1; i <= 5; i++) {
             const y = i * 5;
-            addBox(stage, vadd(a.c, a.u, y), [12.6, 0.24, 0.24], [0.44, 0.40, 0.36], b);
-            addBox(stage, vadd(a.c, a.u, y), [0.24, 0.24, 12.6], [0.44, 0.40, 0.36], b);
-            addBox(stage, vadd(a.c, a.u, y - 2.5), [13.6, 0.20, 0.20], [0.40, 0.36, 0.33], b);
+            addBox(stage, vadd(a.c, a.u, y), [12.6, 0.28, 0.28], [0.44, 0.40, 0.36], b);
+            addBox(stage, vadd(a.c, a.u, y), [0.28, 0.28, 12.6], [0.44, 0.40, 0.36], b);
+            addBox(stage, vadd(a.c, a.u, y - 2.5), [13.6, 0.24, 0.24], [0.40, 0.36, 0.33], b);
           }
           seat.box(stage, vadd(a.c, a.u, 30), [14, 4.5, 14], [0.48, 0.44, 0.40], b);
           // Two sheave wheels side by side, axles across the frame.
           for (const dz of [-3.2, 3.2])
             addCyl(stage, vadd(vadd(a.c, a.u, 36.6), a.t, dz), 4.2, 0.9,
               [0.34, 0.31, 0.28], 12, [a.r, a.t, a.u]);
-          stage._mat = MAT.CONCRETE;
-          seat.box(stage, a.c, [16, 10, 16], [0.56, 0.46, 0.38], b);   // winder house
           stage._mat = MAT.RUST;
           // Conveyor incline out to the dump: a leaning gantry on trestles.
           for (let i = 0; i < 5; i++) {
@@ -303,36 +367,46 @@
             addBox(stage, vadd(p, a.u, 6.6 + i * 1.6), [2.4, 1.0, 4.6], [0.50, 0.38, 0.28], b);
           }
           stage._mat = 0;
-        });
+        }, { required: true });
       }
       {
+        // Windpump — dam shares the tower's terrain sample via a short trough
+        // so it cannot hang off a different grade sample 10 m out.
         const a = anchor(K(0.70), 1, 96), b = [a.r, a.u, a.t];
         modelGroup("kyalami-windpump", {
-          center: vadd(a.c, a.u, 9), size: [34, 22, 24], basis: b,
+          center: vadd(a.c, a.u, 9), size: [28, 22, 20], basis: b,
         }, (stage) => {
-          stage._mat = MAT.METAL;
-          for (const [dr, dt] of [[-1.9, -1.9], [1.9, -1.9], [-1.9, 1.9], [1.9, 1.9]])
-            seat.cyl(stage, vadd(vadd(a.c, a.r, dr), a.t, dt), 0.11, 12.5, [0.55, 0.54, 0.52], 5, b);
-          for (let i = 1; i <= 4; i++) {
-            addBox(stage, vadd(a.c, a.u, i * 2.6), [4.0, 0.10, 0.10], [0.55, 0.54, 0.52], b);
-            addBox(stage, vadd(a.c, a.u, i * 2.6), [0.10, 0.10, 4.0], [0.55, 0.54, 0.52], b);
-          }
-          const hub = vadd(vadd(a.c, a.u, 13.4), a.t, -1.4);
-          addCyl(stage, hub, 0.55, 0.4, [0.60, 0.58, 0.55], 10, [a.r, a.t, a.u]);
-          for (let i = 0; i < 12; i++) {
-            const ang = i * 0.5236;
-            const mid = vadd(vadd(hub, a.r, Math.cos(ang) * 1.8), a.u, Math.sin(ang) * 1.8);
-            addBox(stage, mid, [Math.abs(Math.cos(ang)) * 2.6 + 0.5,
-              Math.abs(Math.sin(ang)) * 2.6 + 0.5, 0.14], [0.72, 0.71, 0.68], b);
-          }
-          addBox(stage, vadd(vadd(a.c, a.u, 13.4), a.t, 3.4), [0.12, 2.2, 3.6], [0.70, 0.68, 0.64], b);
-          stage._mat = MAT.RUST;
-          // Corrugated dam — ribs around the drum, the way the panels bolt up.
-          seat.cyl(stage, vadd(a.c, a.r, 9.5), 5.2, 2.6, [0.52, 0.44, 0.34], 12, b);
           stage._mat = MAT.CONCRETE;
-          seat.cyl(stage, vadd(vadd(a.c, a.r, 9.5), a.u, 2.6), 5.0, 0.2, [0.30, 0.36, 0.34], 12, b);
+          seat.box(stage, a.c, [8.0, 0.5, 8.0], [0.62, 0.58, 0.50], b);
+          stage._mat = MAT.METAL;
+          // Central mast is the BFS spine through the head.
+          seat.cyl(stage, a.c, 0.28, 14.0, [0.55, 0.54, 0.52], 6, b);
+          for (const [dr, dt] of [[-1.9, -1.9], [1.9, -1.9], [-1.9, 1.9], [1.9, 1.9]])
+            seat.cyl(stage, vadd(vadd(a.c, a.r, dr), a.t, dt), 0.12, 12.8, [0.55, 0.54, 0.52], 5, b);
+          for (let i = 1; i <= 4; i++) {
+            addBox(stage, vadd(a.c, a.u, i * 2.6), [4.2, 0.4, 0.4], [0.55, 0.54, 0.52], b);
+            addBox(stage, vadd(a.c, a.u, i * 2.6), [0.4, 0.4, 4.2], [0.55, 0.54, 0.52], b);
+          }
+          // Hub / vane sit on the mast crown (overlap mast AABB).
+          const hub = vadd(a.c, a.u, 13.5);
+          addCyl(stage, hub, 0.7, 0.55, [0.60, 0.58, 0.55], 10, [a.r, a.t, a.u]);
+          for (let i = 0; i < 8; i++) {
+            const ang = i * 0.7854;
+            const mid = vadd(vadd(hub, a.r, Math.cos(ang) * 1.5), a.u, Math.sin(ang) * 1.5);
+            addBox(stage, mid, [Math.abs(Math.cos(ang)) * 2.2 + 0.55,
+              Math.abs(Math.sin(ang)) * 2.2 + 0.55, 0.18], [0.72, 0.71, 0.68], b);
+          }
+          addBox(stage, vadd(vadd(hub, a.t, 2.4), a.u, 0.1), [0.14, 1.6, 2.8], [0.70, 0.68, 0.64], b);
+          stage._mat = MAT.RUST;
+          // Dam beside the pad — raised trough so pad/trough are not flat-coplanar;
+          // dam foot sits slightly proud of the pad (was 0.33 m buried).
+          const damFoot = vadd(vadd(a.c, a.r, 7.5), a.u, 0.35);
+          seat.box(stage, vadd(vadd(a.c, a.r, 4.0), a.u, 0.3), [4.0, 0.35, 1.0], [0.50, 0.42, 0.32], b);
+          seat.cyl(stage, damFoot, 4.6, 2.4, [0.52, 0.44, 0.34], 12, b);
+          stage._mat = MAT.CONCRETE;
+          seat.cyl(stage, vadd(damFoot, a.u, 2.4), 4.4, 0.2, [0.30, 0.36, 0.34], 12, b);
           stage._mat = 0;
-        });
+        }, { required: true });
       }
       {
         const a = anchor(K(0.965), 1, 66);
@@ -342,29 +416,35 @@
         }, (stage) => {
           stage._mat = MAT.BRICK;
           seat.box(stage, a.c, [14, 7.5, 38], BRICK, b);
-          seat.box(stage, vadd(vadd(a.c, a.r, -inw * 9), a.t, -14), [5, 3.2, 10], BRICK_D, b);
+          // Wing offset in Y so it is not flat-coplanar with the main mass.
+          seat.box(stage, vadd(vadd(vadd(a.c, a.r, -inw * 9), a.t, -14), a.u, 0.35),
+            [5, 3.2, 10], BRICK_D, b);
           stage._mat = MAT.ROOF;
           seat.prism(stage, vadd(a.c, a.u, 7.5), [15.2, 2.6, 39], [0.50, 0.28, 0.22], b);
           stage._mat = MAT.CONCRETE;
           // Stoep: raised floor, square brick piers, and a shading lean-to.
-          seat.box(stage, vadd(a.c, a.r, inw * 10.5), [7.5, 0.6, 38], [0.78, 0.75, 0.70], b);
+          // Lift 0.25 m vs the main pad so the floor is not coplanar with it.
+          seat.box(stage, vadd(vadd(a.c, a.r, inw * 10.5), a.u, 0.25),
+            [7.5, 0.6, 38], [0.78, 0.75, 0.70], b);
           for (let i = 0; i < 8; i++) {
-            const p = vadd(vadd(vadd(a.c, a.t, (i - 3.5) * 5.2), a.r, inw * 13.4), a.u, 0.6);
+            const p = vadd(vadd(vadd(a.c, a.t, (i - 3.5) * 5.2), a.r, inw * 13.4), a.u, 0.85);
             seat.box(stage, p, [0.7, 3.4, 0.7], BRICK_D, b);
           }
           stage._mat = MAT.METAL;
-          addBox(stage, vadd(vadd(a.c, a.u, 4.4), a.r, inw * 10.5), [8.0, 0.3, 38], IRON, b);
+          addBox(stage, vadd(vadd(a.c, a.u, 4.65), a.r, inw * 10.5), [8.0, 0.3, 38], IRON, b);
           stage._mat = 0;
-        });
+        }, { required: true });
       }
-      // Camera masts.
+      // Camera masts — seat the pole so the head stays BFS-grounded.
       for (const [s, side, gap] of [[0.030, -1, 26], [0.078, -1, 40], [0.565, -1, 28], [0.885, 1, 26]]) {
         const a = anchor(K(s), side, gap);
-        addCyl(out, a.c, 0.20, 17, [0.22, 0.22, 0.25], 6, [a.r, a.u, a.t]);
-        addBox(out, vadd(a.c, a.u, 17.4), [1.4, 0.6, 2.8], [0.94, 0.92, 0.82], [a.r, a.u, a.t]);
+        const b = [a.r, a.u, a.t];
+        seat.cyl(out, a.c, 0.20, 17, [0.22, 0.22, 0.25], 6, b);
+        addBox(out, vadd(a.c, a.u, 17.4), [1.4, 0.6, 2.8], [0.94, 0.92, 0.82], b);
       }
+      // Blue-gum / thorn treeline further out than spectator banks.
       for (const [s0, s1] of [[0.12, 0.34], [0.5, 0.9]]) {
         for (const side of [-1, 1])
-          forestEdge(s0, s1, side, 18, { density: 0.30, hMin: 6, hMax: 11, pineFrac: 0.08, col: GUM, col2: THORN });
+          forestEdge(s0, s1, side, 40, { density: 0.22, hMin: 6, hMax: 10, pineFrac: 0.08, col: GUM, col2: THORN });
       }
     };
