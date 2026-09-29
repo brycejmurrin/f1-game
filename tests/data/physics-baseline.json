@@ -128,7 +128,7 @@
       1635.3507,
       0.7342,
       63.6525,
-      -1.7519,
+      -1.752,
       -1.5717,
       1635.3507
     ],
@@ -136,7 +136,7 @@
       1650.388,
       2.9456,
       58.2366,
-      -2.6396,
+      -2.6397,
       -1.649,
       1650.388
     ],
@@ -144,22 +144,22 @@
       1663.8749,
       6.1173,
       53.1897,
-      -2.7875,
+      -2.7876,
       -1.7267,
       1663.8749
     ],
     [
       1676.5916,
-      9.7003,
-      51.7231,
+      9.7004,
+      51.723,
       -1.3452,
       -1.7569,
       1676.5916
     ],
     [
       1688.5795,
-      13.1315,
-      48.3268,
+      13.1317,
+      48.3267,
       -0.73,
       -1.7792,
       1688.5795
@@ -216,9 +216,9 @@
     ]
   ],
   "_blessed": {
-    "sha": "2cc4ce0a7d7d0565f70e81d20459b77da6930fb4",
-    "reason": "BRAKE_STAB: a stamp on the brakes at the cornering limit no longer spins the car toward the apex (owner report 2026-09-29); only the trail-brake scenario moves",
-    "at": "2026-09-29T15:37:50.761Z",
-    "hash": "311320951379beeb0e07d1c547fd86ad125a4eb3aa1d2db11a65524b7a291abe"
+    "sha": "09ffe00acb85bffd613f58c3f727e54e8f453cee",
+    "reason": "BRAKE_STAB: a stamp on the brakes at the cornering limit no longer spins the car toward the apex (owner report 2026-09-29); reset() clears the new brakeStab damper; only the trail-brake scenario moves",
+    "at": "2026-09-29T16:13:01.587Z",
+    "hash": "cc81005d6db3e63eb50c8b1c8a832b1229cc61e9421dc83300d3906d5814a29f"
   }
 }
