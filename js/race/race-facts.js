@@ -42,6 +42,7 @@ const RaceFacts = (function () {
     let fastest = { time: Infinity, car: null };
     let pos = 0, pendPos = 0, pendT = 0;
     let grid = null, started = false, caution = 0, playerHits = 0, playerSev = 0;
+    let leadLap = 0;               // the highest lap any leader has started (the leaderLap edge)
 
     function reset() {
       t = 0; lapLen = 0; cars = null; nextId = 1;
@@ -49,6 +50,7 @@ const RaceFacts = (function () {
       order = []; fastest = { time: Infinity, car: null };
       pitEndT = -1e9;   // last race's pit exit must not mute this race's pace calls
       pos = 0; pendPos = 0; pendT = 0; grid = null; started = false; caution = 0; playerHits = 0; playerSev = 0;
+      leadLap = 0;
     }
 
     function bag(c) {
@@ -293,6 +295,15 @@ const RaceFacts = (function () {
       for (const k of battles.keys()) if (!live.has(k)) battles.delete(k);
 
       const leader = order[0] || null, second = order[1] || null;
+      // THE RACE'S LAP COUNT is the leader's, not the player's: the TV lap
+      // calls rode "playerLap", so a retired player never heard "LAST LAP!"
+      // and a lapped one heard it as the leader was taking the flag. The
+      // highest lap started, so a lead change on the same lap is not a new lap;
+      // first sight only sets the baseline.
+      if (leader && (leader.lap || 0) > leadLap) {
+        if (leadLap > 0) ev.push({ type: "leaderLap", car: leader, lap: leader.lap });
+        leadLap = leader.lap || 0;
+      }
       const laps = G.lapsTarget || 0;
       const leaderToGo = laps > 0 && leader ? Math.max(0, laps - (leader.lap || 0) + 1) : null;
       // A LAPPED car is flagged at its first crossing after the leader's, so its
