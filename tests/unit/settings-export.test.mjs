@@ -27,6 +27,7 @@ function boot(opts = {}) {
     rawSet(k, v) { disk.set(full(k), String(v)); return true; },
     rawDel(k) { disk.delete(full(k)); return true; },
   };
+  if (opts.store) Object.assign(store, opts.store);
   const sb = {
     Math, Object, Array, Number, JSON, Map, Set, Date, String, Blob: class {},
     setTimeout: () => 0,
@@ -282,6 +283,57 @@ test("a settings file of the wrong shape is refused whole, and a bad value skipp
   assert.equal(r.skipped, 1, "a string where a number belongs is skipped, not written");
   assert.equal(b.disk.has("apex26.pace"), false);
   assert.equal(b.disk.get("apex26.volMusic"), "0.3", "and the rest of the file still applies");
+});
+
+test("settings backups preserve the announcer switch and radio effects in both modes", () => {
+  for (const mode of ["all", "changes"]) {
+    const source = boot({ disk: { "apex26.announcer": "false", "apex26.radioFx": "0.35" } });
+    const saved = source.collect(mode);
+    assert.equal(saved.settings.audio.announcer, false);
+    assert.equal(saved.settings.audio.radioFx, 0.35);
+    const target = boot();
+    target.loadSettings(saved);
+    assert.equal(target.disk.get("apex26.announcer"), "false");
+    assert.equal(target.disk.get("apex26.radioFx"), "0.35");
+  }
+  const defaults = boot().collect("all").settings.audio;
+  assert.equal(defaults.announcer, true);
+  assert.equal(defaults.radioFx, 1);
+});
+
+test("restoring default motion restores OS preference following", () => {
+  const saved = boot().collect("all");
+  assert.equal(saved.settings.appearance.motion, null);
+  const target = boot({ disk: { "apex26.motion": '"reduce"' } });
+  target.loadSettings(saved);
+  assert.equal(target.disk.get("apex26.motion"), "null");
+  const bad = target.loadSettings({ format: "apex26-settings-v1", settings: {
+    appearance: { motion: "unknown" }, driving: { steerMode: null },
+  } });
+  assert.equal(bad.skipped, 2, "only a nullable setting accepts null");
+});
+
+test("a refused raw reset is a storage failure, not an applied setting", () => {
+  const target = boot({ disk: { "apex26.gfxBackend": "glx" }, store: { rawDel: () => false } });
+  const result = target.loadSettings({ format: "apex26-settings-v1", settings: {
+    display: { gfxBackend: null }, audio: { volMusic: 0.4 },
+  } });
+  assert.equal(result.failed, 1, "the UI must stay open instead of reloading");
+  assert.equal(result.applied, 1, "only the successful volume write counts");
+  assert.equal(result.skipped, 0);
+  assert.equal(target.disk.get("apex26.gfxBackend"), "glx");
+  assert.equal(target.disk.get("apex26.volMusic"), "0.4");
+});
+
+test("throwing storage is reported as failed for settings and garage imports", () => {
+  const fail = () => { throw new Error("storage unavailable"); };
+  const target = boot({ store: { set: fail, rawSet: fail, rawDel: fail } });
+  const settings = target.loadSettings({ format: "apex26-settings-v1", settings: {
+    audio: { volMusic: 0.4 }, camera: { cockpitHalo: "0" }, display: { gfxBackend: null },
+  } });
+  assert.deepEqual(settings, { ok: true, applied: 0, skipped: 0, failed: 3, reason: null });
+  const garage = target.loadGarage({ format: "apex26-garage-v1", garage: { "parts.mercedes": { wing: 3 } } });
+  assert.deepEqual(garage, { ok: true, applied: 0, skipped: 0, failed: 1, reason: null });
 });
 
 test("a difficulty the ladder does not name is skipped, not stored", () => {

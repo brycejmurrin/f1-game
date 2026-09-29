@@ -119,6 +119,18 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     abudhabi: ["abudhabi-ferrari-world", "abudhabi-marina", "abudhabi:pit-exit-tunnel-portal"],
     // Nürburgring GP-Strecke — Burg + Coca-Cola Kurve + race control
     nurburgring: ["nurburgring-burg-nurburg", "nurburgring-coca-cola-kurve", "nurburgring-race-control"],
+    // Wave 5 — Lusail (Qatar): record pit slab, Lusail Hill GA mound, T1 VVIP,
+    // paddock media, city backdrops (no mosque / Aspire / oasis — deliberate).
+    qatar: [
+      "qatar-pit-slab",
+      "qatar-paddock-media-centre",
+      "qatar-t1-vvip-canopy",
+      "qatar-lusail-hill",
+      "qatar-katara-towers",
+      "qatar-lusail-stadium",
+    ],
+    // Wave 5 — Hungaroring 2024–25 paddock / main tribune
+    hungaroring: ["hungaroring-pit-complex", "hungaroring-main-tribune"],
     // Wave 5 — Catalunya landmarks (Tilke main stand + pit-end scoreboard)
     catalunya: ["catalunya-main-grandstand", "catalunya-pit-end-scoreboard", "catalunya-race-control"],
   };
