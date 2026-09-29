@@ -39,7 +39,7 @@
       "slack": 15
     },
     "cssClasses": {
-      "ceiling": 591,
+      "ceiling": 592,
       "slack": 5
     },
     "dynamicIdReads": {
@@ -51,7 +51,7 @@
       "slack": 0
     },
     "rawColor": {
-      "ceiling": 326,
+      "ceiling": 328,
       "slack": 0
     },
     "rawColorDistinct": {
@@ -63,7 +63,7 @@
       "slack": 0
     },
     "shellNodes": {
-      "ceiling": 1949,
+      "ceiling": 1984,
       "slack": 25
     },
     "subFloorFontSize": {
