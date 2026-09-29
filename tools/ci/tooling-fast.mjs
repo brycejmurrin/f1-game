@@ -53,6 +53,9 @@ const LOGFILE = path.join(LOGDIR, "tooling-fast-suite.log");
 /** @type {readonly string[]} */
 export const TOOLING_FAST_FILES = Object.freeze([
   // @gen-test-groups:begin — generated from tests/groups.json; do not hand-edit
+  // The HUD rear-view mirror's game side (js/render/shared/mirror-pass.js) in a VM:
+  // when it shows, the pass order, and the main camera handed back. ~0.1 s.
+  "tests/unit/mirror-pass.test.mjs",
   "tests/unit/ghost.test.mjs",
   "tests/unit/ghost-share.test.mjs",
   // The three suites the feature batches added. Each is pure rules over a
@@ -199,6 +202,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/meeting-picker-labels.test.mjs",
   "tests/unit/data-api-status.test.mjs",
   "tests/unit/scenery-api-contract.test.mjs",
+  "tests/unit/elevation-smoothness.test.mjs",
   "tests/unit/scenery-guards.test.mjs",
   "tests/unit/bahrain-grandstand-rake.test.mjs",
   // Suzuka figure-8 green span must sit flush on the lifted ribbon (clearance ≤ 0.5 m) — a prior overheadSpan at clearance 8.6 hung ~8 m above the SRTM-baked back-straight. Pure verify-track diagnostics, ~2 s.

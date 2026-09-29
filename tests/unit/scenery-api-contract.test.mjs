@@ -117,6 +117,8 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     cota: ["cota-amphitheater", "cota-turn1-big-red", "cota-main-grandstand"],
     mexico: ["mexico-foro-sol-entry", "mexico-peraltada-stand", "foro-scoreboard"],
     abudhabi: ["abudhabi-ferrari-world", "abudhabi-marina", "abudhabi:pit-exit-tunnel-portal"],
+    // Nürburgring GP-Strecke — Burg + Coca-Cola Kurve + race control
+    nurburgring: ["nurburgring-burg-nurburg", "nurburgring-coca-cola-kurve", "nurburgring-race-control"],
     // Wave 5 — Shanghai International Circuit (wing piers are literal
     // modelGroups; decks stay on overheadSpan. pudong/boardwalk stay required
     // at runtime but their emit bodies exceed the 2200-char BATCH-01 window).
@@ -140,10 +142,18 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     catalunya: ["catalunya-main-grandstand", "catalunya-pit-end-scoreboard", "catalunya-race-control"],
     // Bahrain hollow-stand fix — T1 naming marker (Michael Schumacher Corner, 2014)
     bahrain: ["bahrain-sakhir-tower", "bahrain-university-grandstand", "bahrain-schumacher-corner"],
+    // Wave 6 — Red Bull Ring (Steiermark / Niki Lauda Kurve stand at T1)
+    redbull: ["redbull-lauda-kurve-stand"],
     // Wave 6 — Madring / La Monumental inside rake + masts
     madrid: ["madrid-monumental-stands"],
     // Wave 6 — Zandvoort F1 Fanzone Ferris wheel (festival landmark)
     zandvoort: ["zandvoort-ferris-wheel"],
+    // Wave 6 — Montreal hairpin / Wall of Champions / Biosphère
+    montreal: [
+      "montreal-hairpin-grandstands",
+      "montreal-wall-of-champions-stand",
+      "montreal-biosphere",
+    ],
     // Wave 6 — Imola (Partenza opposite pits + Racetrack Tower over Tilke pit)
     imola: ["imola-partenza-stands", "imola-racetrack-tower"],
   };
