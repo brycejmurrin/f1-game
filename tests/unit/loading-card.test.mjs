@@ -674,7 +674,7 @@ test("game.js hands the card its field in grid order, the flyby's shots, and the
   assert.match(game, /LoadingScreen\.create\(\{[^}]*radio: \(\) => radioVoice/);
   const at = game.indexOf("function loadingInfo()");
   const li = game.slice(at, at + 2500);
-  assert.match(li, /shots: flybyShots/);
+  assert.match(li, /shots: flybyPlay \|\| flybyShots/, "the list the screen plays: an opening shot (the garage drive-out) prepended, or the flyby as it is");
   assert.match(li, /isPlayer: c === player && FlybySeq\.slotKnown\(\)/, "an unknown slot (random grid) must flag no player");
 });
 
@@ -718,7 +718,7 @@ test("flyMsFor(skips, wantMs): a real race's read stretches the flyby up to FLY_
   // game.js asks with the read, before the shots are planned, and the screen runs the same budget.
   const game = read("js/game.js");
   const intro = game.slice(game.indexOf("function raceIntro(go)"), game.indexOf("function loadingInfo()"));
-  assert.match(intro, /const info = loadingInfo\(\);[^\n]*\n\s*FlybySeq\.setDuration\(loadingScreen\.nextFlyMs\(info\.readMs\)\);/);
+  assert.match(intro, /const info = loadingInfo\(\);[^\n]*\n\s*const flyMs = loadingScreen\.nextFlyMs\(info\.readMs\);[\s\S]{0,300}FlybySeq\.setDuration\(flyMs \+ info\.leadMs\);/);
   assert.match(intro, /loadingScreen\.run\(info, go\);/);
   const li = game.slice(game.indexOf("function loadingInfo()"), game.indexOf("function loadingInfo()") + 2000);
   assert.match(li, /if \(real && announcer\.readMs\) out\.readMs = announcer\.readMs\(out\);/, "only a real race stretches it");
@@ -793,4 +793,22 @@ test("the card over the scene: black bars and a light hint in every theme, an un
   assert.match(css, /@starting-style\s*\{\s*#loading\[data-phase\] #ld-card\s*\{[^}]*opacity:\s*0/, "a transition cannot start from display: none");
   assert.match(css, /:root\[data-motion="reduce"\] #loading::before,\s*:root\[data-motion="reduce"\] #loading::after\s*\{\s*content:\s*none;/);
   assert.match(css.match(/#ld-wordmark\s*\{([^}]*)\}/)[1], /font-size:\s*clamp\([^;]*\b3\.4vw\b/, "#loading is not zoomed: --vwz shrank the wordmark as UI SIZE grew");
+});
+
+test("an opening shot's own seconds (info.leadMs, the garage drive-out) are ADDED to the flyby, letterbox and voice included", () => {
+  const h = gridHarness({ radioOn: false });
+  h.run({ leadMs: 5500 });
+  assert.equal(h.plays[0], LS.FLY_MS + 5500, "the announcer's budget is the whole run");
+  assert.equal(h.els.loading.style.props["--ld-fly"], (LS.FLY_MS + 5500) + "ms", "the letterbox opens on the run's own last beat");
+  for (const bad of [NaN, -3000, "x", undefined]) {
+    const b = gridHarness({ radioOn: false });
+    b.run({ leadMs: bad });
+    assert.equal(b.plays[0], LS.FLY_MS, `leadMs ${String(bad)} adds nothing`);
+  }
+  const game = read("js/game.js");
+  const intro = game.slice(game.indexOf("function raceIntro(go)"), game.indexOf("function loadingInfo()"));
+  assert.match(intro, /driveOut\.lead\(\)/, "raceIntro asks for the drive-out");
+  assert.match(intro, /!\(real && \(real\.watch \|\| real\.startLap > 1\)\)/, "never over a race joined mid-way or watched");
+  assert.match(intro, /loadingScreen\.nextFlyMs\(\) !== LoadingScreen\.SHORT_FLY_MS/, "never in a habitual skipper's short cut");
+  assert.match(intro, /lead\.dur = lead\.ms \/ flyMs \* flybyShots\.reduce/, "exactly its own seconds on top of the flyby's");
 });

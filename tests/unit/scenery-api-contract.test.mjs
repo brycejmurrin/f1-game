@@ -295,6 +295,26 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     // Wave 6 — Watkins Glen: 2006 control-tower booths, Nazareth pit terrace,
     // Sahlen Esses hillside (positive-slope GA bank + timber stand)
     watkins_glen: ["glen-pit-terrace", "glen-esses-hill", "glen-timing-tower"],
+    // Wave 6 — Dijon-Prenois: pit garages + race-control (official 2015–16
+    // pitbuilding), Combe limestone cut (Virage de la Combe), Parabolique
+    // spectator bank (1976 extension; 14% max slope), Burgundy ferme.
+    // Modern grandstand map UNCERTAIN — keep docs §4 grandstandEx only.
+    dijon: [
+      "dijon-pit-garages",
+      "dijon-race-control",
+      "dijon-combe-cut",
+      "dijon-parabolique-bank",
+      "dijon-prenois-ferme",
+    ],
+    // Wave 6 — Korea International Circuit (Yeongam): permanent pit complex +
+    // main grandstand, unfinished marina shells (hotels/yachts NOT named —
+    // UNCERTAIN), Tilke final-turn footbridge (RacingCircuits.info).
+    korea: [
+      "korea-pit-complex",
+      "korea-main-grandstand",
+      "korea-marina-shells",
+      "korea-final-footbridge",
+    ],
     // Wave 6 — Jacarepaguá / Autódromo Nelson Piquet (demolished 2012):
     // pit grandstand + timing box already authored; Tijuca ridge + lagoon
     // shore hardscape added this wave. Exact peak/pier layout UNCERTAIN.
@@ -303,6 +323,19 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
       "jacarepagua-timing-box",
       "jacarepagua-tijuca-ridge",
       "jacarepagua-lagoon-shore",
+    ],
+    // Wave 6 — Buddh International Circuit: sea-wave aluminium cantilever
+    // main grandstand opposite the pits (ENR 2011; slideshare dims UNCERTAIN).
+    buddh: ["buddh-main-grandstand"],
+    // Wave 6 — Anderstorp / Scandinavian Raceway: concrete pressläktare,
+    // original speakertorn, 1968 stationsbyggnad, Flight Straight hangars.
+    // Historical F1 pits halfway round NOT built (game startFrac 0 + modern
+    // pit straight; see docs/tracks/anderstorp.md UNCERTAIN).
+    anderstorp: [
+      "anderstorp-press-stand",
+      "anderstorp-speaker-tower",
+      "anderstorp-stations-1968",
+      "anderstorp-flight-hangars",
     ],
   };
   for (const [track, ids] of Object.entries(expected)) {
