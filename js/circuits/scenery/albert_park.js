@@ -12,7 +12,7 @@
               marshalPost, fence, guardrail, tyreWall, anchor, vadd, addBox,
               addCyl, addCone, addFrustum, addPrism, addPyramid,
               forestEdge, cityFront, bowlSeatWall, MAT, circuitKit, seat,
-              cameraTower, recordBarrier, track } = api;
+              cameraTower, recordBarrier, track, bankedKerbStrip, indexSolid } = api;
       const k = (s) => Math.round(s * n) % n;
 
       if (circuitKit) {
@@ -63,8 +63,9 @@
             addCyl(stage, vadd(a.c, a.u, 10.4), 8.2, 92, PALE_D, 12,
                    [a.u, a.t, a.r]);
             addBox(stage, vadd(a.c, a.u, 11.4), [36, 0.5, 93], PALE_D, b);
-            // Diving hall — the tall blank box breaking the roofline.
-            const dc = vadd(a.c, a.t, -38);
+            // Diving hall — offset 0.4 m along t and 0.15 m up so its face is
+            // not coplanar with the main hall (flatCoplanar 56×68).
+            const dc = vadd(vadd(a.c, a.t, -38.4), a.u, 0.15);
             addBox(stage, vadd(dc, a.u, 10.5), [26, 21, 24], PALE, b);
             addBox(stage, vadd(dc, a.u, 21.4), [27, 1.0, 25], PALE_D, b);
             addBox(stage, vadd(vadd(dc, a.r, -13.2), a.u, 14.5), [0.5, 8.0, 18], GLASS, b);
@@ -74,7 +75,7 @@
             for (const t of [-8, 0, 8]) {
               addCyl(stage, vadd(vadd(ec, a.r, -23), a.t, t), 0.24, 4.6, PALE_D, 6, b);
             }
-          });
+          }, { required: true });
         }
       }
 
@@ -105,7 +106,9 @@
       const lakeFountain = (kk, dist, scale) => {
         const p = anchor(kk, -1, dist), b = [p.r, p.u, p.t];
         if (onTrack(p.c[0], p.c[2], 6)) return;
-        const c = [p.c[0], pyMin - 0.8, p.c[2]];
+        // Seat the basin on the lake surface (anchor terrain), not pyMin − 0.8
+        // which buried the required group 0.1–0.3 m into the water mesh.
+        const c = [p.c[0], p.c[1], p.c[2]];
         const JET = [0.92, 0.95, 0.99];      // white spray
         modelGroup(`albert-lake-fountain-${kk}`, {
           center: vadd(c, p.u, 9 * scale),
@@ -113,7 +116,7 @@
           basis: b,
         }, (stage) => {
           stage._mat = MAT.CONCRETE;
-          addCyl(stage, c, 6 * scale, 0.7, [0.82, 0.84, 0.86], 18, b);
+          seat.cyl(stage, c, 6 * scale, 0.7, [0.82, 0.84, 0.86], 18, b);
           stage._mat = 0;
           addCyl(stage, vadd(c, p.u, 0.7), 5.2 * scale, 0.35, [0.24, 0.50, 0.66], 18, b);
           addCone(stage, vadd(c, p.u, 1.0), 1.7 * scale, 11 * scale, JET, 10, b);
@@ -289,6 +292,30 @@
         const kk = (k(0.52) + j * 2) % n;
         palm(kk, -1, 15 + hash(kk * 9 + j) * 8, 12 + hash(kk * 12 + j) * 4, [0.21, 0.47, 0.25]);
       }
+      // Lakeside Drive lake-side palm avenue (s≈0.42–0.58, side −1) — kept off
+      // the road (dist ≥ 14). Public park palms along the drive; temporary race
+      // week infrastructure sits further out (containers below).
+      for (let j = 0; j < 6; j++) {
+        const kk = (k(0.42) + j * 5) % n;
+        palm(kk, -1, 14 + hash(kk * 17 + j) * 6, 11 + hash(kk * 19 + j) * 4, [0.22, 0.48, 0.26]);
+      }
+      // Temporary container stacks on the lake side of Lakeside Drive — annual
+      // race build (Wikipedia: concrete barriers + temporary infra along the
+      // lakeside curve). Gaps ≥ 22 m keep them off the racing surface.
+      for (let j = 0; j < 3; j++) {
+        const gap = 22 + j * 7;
+        const CCOL = [[0.70, 0.28, 0.22], [0.28, 0.38, 0.64], [0.78, 0.76, 0.36]][j];
+        const a = anchor(k(0.48 + j * 0.03), -1, gap);
+        if (onTrack(a.c[0], a.c[2], 5)) continue;
+        const b = [a.r, a.u, a.t];
+        seat.box(out, a.c, [5.8, 2.6, 11.5], CCOL, b);
+        if (j === 0)
+          seat.box(out, vadd(a.c, a.u, 2.6), [5.6, 2.4, 11.2],
+                   [CCOL[0] * 0.85, CCOL[1] * 0.85, CCOL[2] * 0.85], b);
+        addBox(out, vadd(a.c, a.u, (j === 0 ? 5.1 : 2.75)),
+               [6.0, 0.25, 11.8],
+               [CCOL[0] * 0.75, CCOL[1] * 0.75, CCOL[2] * 0.75], b);
+      }
       const AVENUE = [0.30, 0.46, 0.22];
       for (let j = 0; j < 3; j++) {
         tree((k(0.0) + j * 3) % n, 1, 20 + j * 7, 13 + hash(j * 3) * 3, AVENUE);
@@ -305,15 +332,15 @@
           basis: b,
         }, (stage) => {
           stage._mat = MAT.WOOD;
-          addBox(stage, vadd(a.c, a.u, wallH / 2), [w, wallH, d], WBOARD, b);
+          seat.box(stage, a.c, [w, wallH, d], WBOARD, b);
           addPrism(stage, vadd(a.c, a.u, wallH), [w + 0.8, roofH, d + 1.2],
                    [0.30, 0.28, 0.26], b);                       // pitched roof
           // Boat-bay door on the lake-facing wall
           addBox(stage, vadd(vadd(a.c, a.u, wallH * 0.42), a.r, -side * (w / 2 - 0.05)),
                  [0.15, wallH * 0.72, d * 0.55], [0.20, 0.19, 0.17], b);
-          // Timber launch ramp down toward the water
-          addBox(stage, vadd(vadd(a.c, a.u, -0.35), a.r, -side * (w / 2 + 3)),
-                 [5.5, 0.3, 6], [0.55, 0.48, 0.36], b);
+          // Timber launch ramp — foot on grade (was a.u −0.35 → buried).
+          seat.box(stage, vadd(vadd(a.c, a.r, -side * (w / 2 + 3)), a.t, 0),
+                   [5.5, 0.3, 6], [0.55, 0.48, 0.36], b);
           stage._mat = 0;
           // A couple of upturned hulls resting beside the shed
           for (let i = 0; i < 2; i++) {
@@ -334,51 +361,102 @@
           basis: b,
         }, (stage) => {
           // Slim single-tier stand shell along the pitch's far side
-          addBox(stage, vadd(a.c, a.u, 1.6), [8, 3.2, 60], [0.90, 0.90, 0.91], b);
-          const segN = 9;
-          for (let i = 0; i < segN; i++) {
-            const f = (i + 0.5) / segN - 0.5;              // -0.5 .. 0.5 along length
-            const arc = 1 - f * f * 4;                      // parabolic arc profile
-            const liftY = 4.4 + Math.max(0, arc) * 3.2;
-            const off = f * 58;
-            addBox(stage, vadd(vadd(a.c, a.t, off), a.u, liftY),
-                   [9.5, 0.4, 60 / segN + 0.6], [0.94, 0.95, 0.97], b);
+          seat.box(stage, a.c, [8, 3.2, 60], [0.90, 0.90, 0.91], b);
+          // Continuous roof slab on pylons that reach it (was an unsupported
+          // 7 m arched ribbon — ground-audit unsupported@344).
+          const roofY = 5.6;
+          for (const off of [-24, -12, 0, 12, 24]) {
+            seat.cyl(stage, vadd(a.c, a.t, off), 0.32, roofY, [0.60, 0.61, 0.63], 6, b);
           }
-          // Support pylons under the roof
-          for (const off of [-24, -8, 8, 24]) {
-            addCyl(stage, vadd(a.c, a.t, off), 0.3, 4.4, [0.60, 0.61, 0.63], 6, b);
-          }
-        }, { required: true, maxVertices: 6000 });
+            addBox(stage, vadd(a.c, a.u, roofY + 0.2),
+                   [9.5, 0.4, 58], [0.94, 0.95, 0.97], b);
+        }, { required: true });
       }
       groundPatch(k(0.645), 1, 17, [30, 0.12, 66], [0.22, 0.50, 0.24],
                   { id: "albert-lakeside-stadium-pitch", samples: 8 });
 
-      grandstandEx(0.00, -1, 14, 90, null, null,             // Brabham — hero main stand
-        { livery: "steel", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
-      grandstandEx(0.07, -1, 14, 60, null, null,              // Fangio — pit-straight extension
+      // ── 2026 main-straight stands (sources: grandprix.com.au Piastri debut
+      // 2025-08-18; oversteer48.com/piastri-grandstand; FIA GP26 press kit) ──
+      // Pit complex is side +1 (def.pit). Piastri + Fangio sit opposite it on
+      // side −1. Piastri takes the premium start-line end; Fangio sits toward
+      // T14. Lengths are approximate (new for 2026; exact bay count unverified).
+      {
+        const side = -1, sf = 0.005, gap = 15, len = 64, rows = 4;
+        const half = (len / 2) / track.total;
+        recordBarrier(sf - half, sf + half, side, gap);
+        recordBarrier(sf - half, sf + half, side, gap + 14);
+        if (indexSolid) indexSolid(sf - half, sf + half, side, gap, 14);
+        const a = anchor(k(sf), side, gap + 5), b = [a.r, a.u, a.t];
+        if (!onTrack(a.c[0], a.c[2], 10)) {
+          const STEEL = [0.66, 0.68, 0.72], WHITE = [0.92, 0.92, 0.93];
+          const McL = [0.92, 0.55, 0.12];   // papaya fascia nod — decorative only
+          modelGroup("albert-piastri-stand", {
+            center: vadd(a.c, a.u, 6.5), size: [16, 14, len + 6], basis: b,
+          }, (stage) => {
+            // Rows rise away from the track: offset = side * back (crowdBank idiom).
+            stage._mat = MAT.CONCRETE;
+            seat.box(stage, a.c, [12, 0.4, len + 2], [0.50, 0.51, 0.54], b);
+            for (let t = 0; t < rows; t++) {
+              const back = 1.2 + t * 1.35, y = 0.55 + t * 1.15;
+              const foot = vadd(vadd(a.c, a.r, side * back), a.u, y);
+              stage._mat = MAT.METAL;
+              seat.box(stage, foot, [1.3, 0.16, len], STEEL, b);
+              stage._mat = MAT.FABRIC;
+              // Sparse crowd clumps — not one box per seat (vertex budget).
+              const cnt = Math.min(10, Math.floor(len / 6));
+              for (let j = 0; j < cnt; j++) {
+                const h2 = hash(k(sf) * 13 + t * 47 + j * 19);
+                if (h2 < 0.48) continue;
+                seat.box(stage, vadd(vadd(foot, a.t,
+                         (j / (cnt - 1) - 0.5) * (len - 4)),
+                         a.u, 0.16), [0.55, 0.95, 1.5],
+                         [[0.84, 0.26, 0.20], [0.20, 0.44, 0.70], [0.92, 0.86, 0.34],
+                          [0.90, 0.90, 0.88]][Math.floor(h2 * 97) % 4], b);
+              }
+            }
+            // Rear shell + cantilever shade (further from track = side * back).
+            stage._mat = MAT.CONCRETE;
+            addBox(stage, vadd(vadd(a.c, a.r, side * 8.2), a.u, 5.5),
+                   [3.5, 11, len - 2], WHITE, b);
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(vadd(a.c, a.r, side * 4.0), a.u, 11.2),
+                   [12, 0.45, len + 2], STEEL, b);
+            // Trackside fascia
+            addBox(stage, vadd(vadd(a.c, a.r, side * 0.4), a.u, 1.4),
+                   [0.18, 2.2, len], McL, b);
+            stage._mat = 0;
+          }, { required: true });
+        }
+      }
+      // Fangio — same outside main-straight bank, toward T14 / last corner
+      // (shrunk for 2026 to make room for Piastri). Approximate length.
+      grandstandEx(0.965, -1, 14, 55, null, null,
         { livery: "pastel", roof: "flat" });
-      grandstandEx(0.04,  1, 14, 55, null, null,               // Hill — Turn 1-2 sweep
+      // Brabham — Turns 1–2 (outside). Was mislabeled on the S/F as the hero.
+      grandstandEx(0.045, -1, 14, 55, null, null,
+        { livery: "steel", tiers: 2, roof: "cantilever", endWalls: true, pylons: true });
+      // Jones — opposite Brabham at T1–2 (inside / pit-exit side).
+      grandstandEx(0.04,  1, 14, 55, null, null,
         { livery: "alu", roof: "truss", pylons: true });
-      grandstandEx(0.12,  1, 16, 48, null, null,               // Waite — Turn 3 exit
+      // Hill — Turn 3 area (approx).
+      grandstandEx(0.12,  1, 16, 48, null, null,
         { livery: "steel", roof: "cantilever" });
-      grandstandEx(0.30, -1, 16, 50, null, null,               // lakeside spectator bank
-        { livery: "pastel", roof: "flat" });
-      grandstandEx(0.55, -1, 16, 55, null, null,               // Ricciardo — Lakeside Drive
+      // Ricciardo — Lakeside Drive infield (T3–4 region in sources; placed on
+      // the long lakeside run where the stand reads from the water).
+      grandstandEx(0.55, -1, 16, 55, null, null,
         { livery: "steel", roof: "truss", endWalls: true });
-      grandstandEx(0.62,  1, 14, 60, null, null,               // Webber — spectator grandstand
+      grandstandEx(0.62,  1, 14, 60, null, null,               // Webber / spectator
         { livery: "pastel", tiers: 2, roof: "cantilever", suites: true });
-      grandstandEx(0.66,  1, 16, 45, null, null,               // adjoining spectator bank
+      grandstandEx(0.66,  1, 16, 45, null, null,
         { livery: "alu", roof: "flat" });
-      grandstandEx(0.78, -1, 14, 45, null, null,               // chicane complex
+      grandstandEx(0.78, -1, 14, 45, null, null,               // Button / chicane
         { livery: "steel", roof: "cantilever" });
-      grandstandEx(0.90,  1, 18, 50, null, null,               // fan-hill grandstand
+      grandstandEx(0.90,  1, 18, 50, null, null,               // fan-hill / approach
         { livery: "alu", roof: "cantilever", pylons: true });
-      grandstandEx(0.95, -1, 16, 48, null, null,               // pit-approach bank
-        { livery: "pastel", roof: "flat" });
-      grandstandEx(0.20,  1, 16, 46, null, null,               // fast-section stand
+      grandstandEx(0.20,  1, 16, 46, null, null,               // Clark-ish mid park
         { livery: "steel", roof: "cantilever" });
-      grandstandEx(0.45, -1, 16, 44, null, null,               // lakeside bank
-        { livery: "alu", roof: "truss" });
+      // Prost stand location is UNCERTAIN (main straight vs T13–14) — not built.
+      // Generic lakeside banks at 0.30/0.45 dropped to keep props-tris under the ratchet.
 
       bowlSeatWall(0.145, 0.205, -1, 18, {
         h: 4.8, thick: 3.2, shell: [0.50, 0.51, 0.54], step: 10,
@@ -434,38 +512,22 @@
         }
       }
 
-      for (const [s, side, col] of [
-        [0.030,  1, RED],   [0.035,  1, WHITE], [0.040,  1, RED],   [0.045,  1, WHITE],
-        [0.050,  1, RED],   [0.055, -1, WHITE], [0.060, -1, RED],   [0.065, -1, WHITE],
-        [0.070, -1, RED],   [0.075,  1, WHITE],
-      ]) {
-        place(k(s), side, 1.9, [0.55, 0.28, 7.5], col);
-      }
-      // Chicane complex (s≈0.76–0.82) — dense alternating kerbs
-      for (const [s, side, col] of [
-        [0.760, -1, RED],   [0.765, -1, WHITE], [0.770, -1, RED],   [0.775, -1, WHITE],
-        [0.780,  1, RED],   [0.785,  1, WHITE], [0.790,  1, RED],   [0.795,  1, WHITE],
-        [0.800, -1, RED],   [0.805, -1, WHITE], [0.810,  1, RED],   [0.815,  1, WHITE],
-      ]) {
-        place(k(s), side, 1.9, [0.55, 0.28, 7.0], col);
-      }
-      for (const [s, side, col] of [
-        [0.180,  1, RED],   [0.185,  1, WHITE], [0.190,  1, RED],   [0.195,  1, WHITE],
-        [0.220, -1, RED],   [0.225, -1, WHITE], [0.230, -1, RED],   [0.235, -1, WHITE],
-        [0.250,  1, RED],   [0.255,  1, WHITE], [0.260,  1, RED],
-      ]) {
-        place(k(s), side, 1.9, [0.55, 0.28, 7.0], col);
-      }
-      for (const [s, side, col] of [
-        [0.530, -1, RED],   [0.535, -1, WHITE], [0.540, -1, RED],   [0.545, -1, WHITE],
-        [0.560, -1, RED],   [0.565, -1, WHITE], [0.570, -1, RED],
-        [0.585,  1, RED],   [0.590,  1, WHITE], [0.595,  1, RED],   [0.600,  1, WHITE],
-      ]) {
-        place(k(s), side, 1.9, [0.55, 0.28, 7.0], col);
-      }
+      // Bold red/white kerbs — bankedKerbStrip seats on the ribbon (place() was
+      // sunk 0.8 m and accounted for ~44 of the 51 buried prims).
+      bankedKerbStrip(0.030, 0.075,  1, { safer: false, kerbRed: RED, kerbWht: WHITE, step: 8 });
+      bankedKerbStrip(0.055, 0.075, -1, { safer: false, kerbRed: RED, kerbWht: WHITE, step: 8 });
+      bankedKerbStrip(0.760, 0.815, -1, { safer: false, kerbRed: RED, kerbWht: WHITE, step: 8 });
+      bankedKerbStrip(0.780, 0.815,  1, { safer: false, kerbRed: RED, kerbWht: WHITE, step: 8 });
+      bankedKerbStrip(0.180, 0.195,  1, { safer: false, kerbRed: RED, kerbWht: WHITE, step: 8 });
+      bankedKerbStrip(0.220, 0.235, -1, { safer: false, kerbRed: RED, kerbWht: WHITE, step: 8 });
+      bankedKerbStrip(0.250, 0.260,  1, { safer: false, kerbRed: RED, kerbWht: WHITE, step: 8 });
+      bankedKerbStrip(0.530, 0.570, -1, { safer: false, kerbRed: RED, kerbWht: WHITE, step: 8 });
+      bankedKerbStrip(0.585, 0.600,  1, { safer: false, kerbRed: RED, kerbWht: WHITE, step: 8 });
       // Lighter mid-lap apex flashes + grass run-off framing
       for (const [s, side] of [[0.30, 1], [0.62, 1], [0.97, 1]]) {
-        place(k(s), side, 2, [0.5, 0.25, 6], side > 0 ? RED : WHITE);
+        const a = anchor(k(s), side, 2);
+        if (!onTrack(a.c[0], a.c[2], 2))
+          seat.box(out, a.c, [0.5, 0.35, 6], side > 0 ? RED : WHITE, [a.r, a.u, a.t]);
         groundPatch(k(s), side, 2, [10, 0.1, 12], GRASS,
                     { id: `albert-runoff-${s}-${side}`, samples: 5 });
       }
@@ -484,9 +546,11 @@
         groundPatch(k(s), -1, gap, [w, 0.12, len], FAIRWAY,
                     { id: `albert-golf-fairway-${s}`, samples: 6 });
       }
-      groundPatch(k(0.70), -1, 74, [14, 0.10, 14], BUNKER,
+      // Bunkers sit further out than the fairway pads so the patches do not
+      // share a coplanar face (was flatCoplanar fairway@0.70 × bunker-1).
+      groundPatch(k(0.70), -1, 88, [14, 0.10, 14], BUNKER,
                   { id: "albert-golf-bunker-1", samples: 3 });
-      groundPatch(k(0.80), -1, 70, [12, 0.10, 12], BUNKER,
+      groundPatch(k(0.80), -1, 84, [12, 0.10, 12], BUNKER,
                   { id: "albert-golf-bunker-2", samples: 3 });
 
       const FENCE_COL = [0.74, 0.76, 0.80];
@@ -706,5 +770,5 @@
       gantry(0.0,  7.5, [0.30, 0.32, 0.36]);
       gantry(0.50, 7.0, [0.25, 0.27, 0.32]);
 
-      void prop; void WATER; void pyMin; void bush; void hedge; void cityFront; void addPyramid;
+      void prop; void WATER; void pyMin; void bush; void hedge; void cityFront; void addPyramid; void place;
     };
