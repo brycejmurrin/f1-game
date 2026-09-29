@@ -2595,8 +2595,8 @@ function scheduleFlybyTrack(settle) {
       await ensureScenery(want);
       if (!current()) return;
       if (gfx.warming && gfx.warming()) { flybyBuildTimer = setTimeout(prepare, 100); return; }
-      // Car assets BEFORE the warm frames: prepareMenuCarAssets paces each
-      // car's meshes and livery upload 32 ms apart; a warm frame drawn first
+      // Car assets BEFORE the warm frames: prepareMenuCarAssets slices the
+      // mesh/livery work; a warm frame drawn first
       // minted and uploaded all ~22 atlases in one 3-4 s task.
       if (_menuGate.ready === key && _menuGate.track === track) {
         await menuFinish(current, key); return;
@@ -3862,8 +3862,18 @@ function flybyGridOrder() {
 // now, under the held card, then fly. startRace pays the same 1-3 s anyway (its
 // loadTrack reuses this build), so this buys the cinematic, not a longer wait.
 let _introKey = "", _introRun = 0;
+function cancelIntro() { _introRun++; _introKey = ""; }
+async function introWarm(current) {
+  const at = performance.now();
+  while (current() && gfx.warming && gfx.warming()) {
+    if (performance.now() - at >= 30000) throw new Error("Shader preparation timed out");
+    await menuSlice();
+  }
+  return current();
+}
 function introBuild(go) {
   const idx = trackIdx, key = menuKey(idx), n = ++_introRun;
+  const settings = entrySettings(), live = () => n === _introRun && state === "menu" && settings === entrySettings();
   if (!(idx >= 0) || (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches)) return false;
   clearTimeout(flybyBuildTimer); _menuGate.generation++;   // the menu's own build stands down
   loadingScreen.building(loadingInfo());
@@ -3871,9 +3881,7 @@ function introBuild(go) {
     try {
       await ensureScenery(idx);
       await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));   // the card paints first
-      const live = () => n === _introRun && state === "menu" && key === menuKey(trackIdx);
-      while (live() && gfx.warming && gfx.warming()) await menuSlice();   // a compile owns its scene: never free it mid-warm
-      if (!live()) return;
+      if (!(await introWarm(live)) || !live()) return;   // compilation retains ownership of its scene
       loadTrack(idx); _menuGate.ready = key; _menuGate.track = track;
       // What menuFinish does, under the card: car assets (bounded), then hidden warm
       // frames — "build" is not active(), so they draw with the canvas hidden and
@@ -3883,21 +3891,20 @@ function introBuild(go) {
       if (!live()) return;
       FlybySeq.reset(); warmPrograms(); _menuGate.warm = 2;
       for (let f = 0; f < 3 && _menuGate.warm > 0; f++) await new Promise((r) => requestAnimationFrame(r));
-      // The warm the first hidden frame started finishes under this card too
-      // (bounded): a flyby begun over a pending warm draws nothing until it ends
-      // (render() waits on warming()), so its opening shots would be lost to it.
-      const t2 = performance.now();
-      while (live() && gfx.warming && gfx.warming() && performance.now() - t2 < 15000) await menuSlice();
+      // Never start the cinematic clock while render() is blocked on compilation.
+      if (!(await introWarm(live)) || !live()) return;
       // Plan the flyby here too, up to a budget: whatever is left plans mid-flyby.
       FlybySeq.setDuration(loadingScreen.nextFlyMs());
       const fly = { key, track, shots: FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (idx * 2654435761)) >>> 0, false) }, step = FlybySeq.planSteps(track, fly.shots), t0 = performance.now();
-      while (!step() && performance.now() - t0 < 800) await menuSlice();
-      _menuFly = fly;
-    } catch (e) { Log.warn("gfx", "intro build failed", e); }
+      while (live() && !step() && performance.now() - t0 < 800) await menuSlice();
+      if (live()) _menuFly = fly;
+    } catch (e) {
+      if (live()) { Log.warn("gfx", "intro build failed", e); quitToMenu(); announce("PREPARATION FAILED — please retry", 5, "info"); }
+    }
     finally {
-      // Always hand over (a failed build falls back to the card), unless a newer tap or a quit owns the screen.
+      // Only this request may hand over; a quit or newer request owns its own screen.
       if (n === _introRun) {
-        if (state !== "menu") loadingScreen.stop();
+        if (!live()) loadingScreen.stop();
         else try { _introKey = key; raceIntro(go); } catch (e) { Log.warn("gfx", "loading screen failed", e); loadingScreen.stop(); go(); }   // "build" has no timer or skip: never leave it up
       }
     }
@@ -4095,6 +4102,7 @@ function armConfirm(btn, armedText, action) {
 // title screen) and the two tuner panels predate the class and are named
 // individually.
 function clearMenuScreens() {
+  cancelIntro();
   // Disarm the loading screen BEFORE the sweep hides it: it holds a pending
   // timer that would otherwise fire its build callback into a running race.
   loadingScreen.stop();
@@ -4138,6 +4146,7 @@ else if (rotateBlockMql.addListener) rotateBlockMql.addListener(() => syncRotate
 
 function quitToMenu() {
   Ghost.flush();
+  cancelIntro();
   sessionEntry.cancel();
   qualiSheet.close();
   _ltBase = null; _ltFlash = 0;   // the lightning's saved race base is not the menu's

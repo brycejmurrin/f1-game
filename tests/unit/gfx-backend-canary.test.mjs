@@ -3497,7 +3497,7 @@ test("the flyby plays on the pre-race loading screen only; the picker pre-builds
   assert.match(game, /const menuBlank = state === "menu" && !setupPreviewOn && \(!track \|\| !loadingScreen\.active\(\) \|\| !menuWorld\(\)\);/);
   assert.match(raceSettings, /else if \(raceIntro\) raceIntro\(startRace\);/,
     "RACE! goes through the loading screen; the QUALIFYING branch above it does not (sheet to sheet)");
-  assert.match(game, /function clearMenuScreens\(\) \{\s*loadingScreen\.stop\(\);/,
+  assert.match(game, /function clearMenuScreens\(\) \{\s*cancelIntro\(\);\s*loadingScreen\.stop\(\);/,
     "the screen is disarmed before the sweep hides it, or its pending timer fires into a running race");
   assert.match(game, /if \(menuBlank && !\(track && _menuGate\.warm > 0\)\) return;/);
   assert.match(game, /if \(state === "results"\) return;/,
@@ -4742,7 +4742,7 @@ test("menu player and cockpit preparation reuse the real race mesh keys", () => 
   assert.equal(builds, 2, "race reuses both prepared meshes instead of rebuilding");
 });
 
-test("selector car assets yield per driver, preserve simulation, and cancel stale settings", async () => {
+test("selector car assets yield for costly work, skip cached waits, and cancel stale settings", async () => {
   for (const cancel of ["none", "screen", "store", "team", "driver", "compile", "model", "solo", "headless"]) {
     let carModelBuf = null;
     let active = true, compiling = false, solo = false, yields = 0;
@@ -4758,7 +4758,8 @@ test("selector car assets yield per driver, preserve simulation, and cancel stal
     ], isReal: (t) => !!t && !t.custom && !t.legends };   // mirrors js/data/teams.js
     const Career = { gridDrivers: t => t.drivers, driverOverride: (id, di) => id === "a" && di === 1 ? { num: 99 } : null };
     const calls = [], CamModes = { CAM_MODES: [{ id: "cockpit" }] };
-    const Log = { info() {}, warn() {} }, performance = { now: () => 0 };
+    let clock = 0;
+    const Log = { info() {}, warn() {} }, performance = { now: () => (clock += 8) };
     const current = () => active;
     const deps = { isTimeTrial: () => solo, isQuali: () => false, partsVisualKey: id => "parts:" + id };
     const carDecalNum = (t, c) => c.num;
@@ -4790,6 +4791,11 @@ test("selector car assets yield per driver, preserve simulation, and cancel stal
     G.teamIdx = 0; G.driverIdx = 1; solo = true; yields = 10;
     await prepare(current);
     assert.equal(calls.length, 3, "solo sessions prepare only their player");
+    performance.now = () => 0;
+    calls.length = 0; yields = 0; solo = false;
+    await prepare(current);
+    assert.equal(calls.length, 7, "cheap cache lookups still consult current assets");
+    assert.equal(yields, 0, "cache hits do not pay one timer per driver");
   }
 });
 
