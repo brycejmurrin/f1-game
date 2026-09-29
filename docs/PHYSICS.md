@@ -79,7 +79,14 @@ locked by `tests/unit/player-dynamics-vm.test.mjs`.
 longitudinal axis of the traction circle and each axle pays for what IT does.
 Braking charges both axles from the smoothed deceleration `axEstSm` (split by
 brake bias below; 1/1 at `BB_REF`), so easing off the pedal hands grip back
-continuously and trail-braking rotates the car. Engine braking — the coast
+continuously and trail-braking rotates the car. **Brake stability**
+(`BRAKE_STAB*` in `js/physics/consts.js`, the rear brake-by-wire): once the
+rear is loaded past 0.55 of its tyre peak, the pedal's rear share eases toward
+0.2 by 0.8 and the front takes on half of that relief. A straight-line stop
+never engages it. Without it a stamp on the brakes at the cornering limit took
+the rear's grip twice (the pedal AND the load moving forward) and spun the car
+toward the apex (owner report 2026-09-29; `player-dyn.mjs` `midCorner_*`: 22°
+of rear slip against 4.5° coasting, now 5.8°). Engine braking — the coast
 part of a deceleration, `brakeMix` ramps the pedal's share in from coast drag
 to 1.5× it — and the THROTTLE charge the driven rear only: the undriven front
 spends nothing on the pedal, so a planted throttle at the limit of a slow exit

@@ -618,7 +618,7 @@ let season = SeasonCal.load();      // standalone owner adds score maps, config 
 // here. Everything slider- or harness-tunable stays a `let` below.
 const { VMAX, ACCEL, BRAKE, REVERSE_MAX, REVERSE_ACCEL, COAST_DRAG,
         GRAVITY_SLOPE, LAT_MAX, STEER_VMAX, FRONT_WEIGHT, CS_FRONT, CS_REAR,
-        WT_LONG, LOAD_SENS, DOWNFORCE, X_VMAX_GAIN_LO, X_VMAX_GAIN_HI, X_DF_LOSS_LO,
+        WT_LONG, LOAD_SENS, BRAKE_STAB, BRAKE_STAB_LO, BRAKE_STAB_HI, BRAKE_STAB_SHIFT, DOWNFORCE, X_VMAX_GAIN_LO, X_VMAX_GAIN_HI, X_DF_LOSS_LO,
         X_DF_LOSS_HI, X_COAST_CUT_LO, X_COAST_CUT_HI, X_OPEN_RATE, X_CLOSE_RATE,
         X_MIN_SPEED, OT_MIN_SPEED, OFF_GRIP, ASSIST_KUS, LINE_PURSUIT,
         LONG_GRIP, THR_FLOOR, THR_CAP, THR_VK, WHEEL_R, WHEEL_STEER_VIS, GRASS_V, KERB_SHAKE, KERB_CUE_HOLD,
@@ -5697,8 +5697,16 @@ function updateCar(c, dt, ranked) {
     // only), 1 from 1.5× coast drag up. Continuous, so a brush of the brake
     // never steps the front's grip.
     const brakeMix = clamp((decel - cdNow) / (0.5 * cdNow), 0, 1);
-    const axFracF = Math.min(1, decel * brakeMix / longBudget);
-    const axFracR = Math.min(1, Math.max(decel / longBudget, axThrDemand));
+    // BRAKE STABILITY (PhysicsConsts.BRAKE_STAB): with the rear near its
+    // cornering limit (last step's rearUtil), the pedal's rear share falls to
+    // `beta` and the front takes on BRAKE_STAB_SHIFT of that relief (load
+    // weighted). beta = 1 (every straight-line stop) is the old equal split
+    // exactly. Damped so a slide cannot flip it tick to tick.
+    const pedal = decel * brakeMix / longBudget, engine = (decel - decel * brakeMix) / longBudget;
+    const betaT = 1 - BRAKE_STAB * clamp(((c.rearUtil || 0) - BRAKE_STAB_LO) / (BRAKE_STAB_HI - BRAKE_STAB_LO), 0, 1);
+    const beta = (c.brakeStab = damp(c.brakeStab ?? betaT, betaT, 12, dt));
+    const axFracF = Math.min(1, pedal * (1 + BRAKE_STAB_SHIFT * (1 / (loadF + beta * loadR) - 1)));
+    const axFracR = Math.min(1, Math.max(pedal * beta + engine, axThrDemand));
     const axFrac = Math.max(axFracF, axFracR);
     c.axFrac = axFrac;
     c.axFracF = axFracF; c.axFracR = axFracR;
@@ -5746,7 +5754,7 @@ function updateCar(c, dt, ranked) {
     const bb = bbOn ? SetupTune.bbScales(c.brakeBias) : null;
     // (bbSlip*, not slipF/slipR — those names are the axles' SLIP ANGLES below.)
     const afF = bb ? Math.min(1, axFracF * bb.f) : axFracF;
-    const afR = bb ? Math.min(1, Math.max(axFracR - axFracF + axFracF * bb.r, axThrDemand)) : axFracR;
+    const afR = bb ? Math.min(1, Math.max(engine + pedal * beta * bb.r, axThrDemand)) : axFracR;
     const bbSlipF = Math.sqrt(Math.max(0, 1 - afF * afF));
     const bbSlipR = Math.sqrt(Math.max(0, 1 - afR * afR));
     c.slipFactor = bbSlipR;   // the DRIVEN axle's circle: setEngine() reads it for slip01; unassigned it read a constant 1
