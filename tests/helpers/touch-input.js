@@ -22,6 +22,8 @@
 // Re-exporting playwright's raw `expect` from here would have quietly undone
 // that for all three parts at once.
 
+import { BOOT_MS } from "./fixtures.js";
+
 /** An iPad-ish landscape viewport with touch on. The steering path under test
  *  is the one aimed squarely at a tablet, so the viewport is part of the
  *  fixture rather than a detail. */
@@ -29,14 +31,21 @@ export const TOUCH = { hasTouch: true, viewport: { width: 844, height: 390 } };
 
 /** Install the viewport and the per-test reset on a spec's `test` object.
  *
- *  Called at module scope by each part. `Input.init()` wires the listeners at
- *  load, so no race has to start; what does have to happen is the reset, or a
- *  latched ramp from the previous test reads as this test's steering. */
+ *  Called at module scope by each part. Wait for Input.ready (init finished),
+ *  NOT for Input.steer existing — the API object is live the moment input.js
+ *  evaluates, which is before game.js reaches Input.init(). Pressing a hold
+ *  button in that window is a no-op (no listeners yet), and a setSteerMode the
+ *  test issues can be stomped by the boot setSteerMode that follows init in
+ *  the same sync stretch. CI #6199 (run 36638762096) failed touch-buttons that
+ *  way. reset() still has to run so a latched ramp from the previous test is
+ *  not this test's steering. */
 export function useTouchCanvas(test) {
   test.use(TOUCH);
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => typeof Input !== "undefined" && !!Input.steer);
+    await page.waitForFunction(() => typeof Input !== "undefined" && Input.ready, null, {
+      polling: 100, timeout: BOOT_MS,
+    });
     await page.evaluate(() => { Input.reset(); Input.setSteerMode("touch"); });
   });
 }
