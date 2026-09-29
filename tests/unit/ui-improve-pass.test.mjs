@@ -544,7 +544,7 @@ test("How to Play names every input and drops the retired screen-half lie", () =
     assert.match(htp, new RegExp(`<details[^>]+data-input="${mode}"`), `Help has a ${mode} disclosure`);
   assert.match(htp, /data-help-keys="(?:aero|camera|pause)"/);
   assert.match(htp, /data-help-pad="(?:aero|camera|pause)"/);
-  for (const phrase of ["SETTINGS › CONTROLS › STEERING INPUT", "ADAPTIVE BUTTONS", "BRAKE CUE", "STEERING &amp; ASSISTS", "drag from where your finger lands"]) {
+  for (const phrase of ["SETTINGS › CONTROLS › STEERING INPUT", "ADAPTIVE BUTTONS", "BRAKING CUES", "STEERING &amp; ASSISTS", "drag from where your finger lands"]) {
     assert.ok(htp.includes(phrase), `How to Play must say: ${phrase}`);
   }
   assert.doesNotMatch(htp, /SETTINGS[^<]{0,80}>\s*STEER\b/, "Help must not name the retired STEER door");
@@ -992,7 +992,7 @@ function bootSettingsNav() {
   const sb = uiSandbox(dom, { ResizeObserver: class { observe() {} }, ScrollFade: { refresh() {} } });
   vm.runInNewContext(src("js/ui/settings-tabs.js"), sb, { filename: "js/ui/settings-tabs.js" });
   const index = dom.byId("pm-settings-index");
-  for (const id of ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-advanced", "pm-audio"])
+  for (const id of ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-advanced", "pm-audio", "pm-open-files"])
     index.appendChild(dom.byId(id));
   const stale = dom.document.createElement("button");
   stale.hidden = true;
@@ -1004,17 +1004,35 @@ function bootSettingsNav() {
   driving.appendChild(drivingFirst);
   const audioFirst = dom.document.createElement("summary");
   dom.byId("audioset").appendChild(audioFirst);
+  const filesFirst = dom.document.createElement("button");
+  dom.byId("pm-panel-files").appendChild(filesFirst);
   let selected = 0;
   const nav = sb.SettingsNav.create({ get: (_k, d) => d, set() {} }, () => selected++);
   return {
     dom, nav, selected: () => selected,
-    firstControl: steer, drivingFirst, audioFirst,
+    firstControl: steer, drivingFirst, audioFirst, filesFirst,
     index: () => dom.byId("pm-settings-index"),
     panel: (id) => dom.byId(({ advanced: "advanced", audio: "audioset" })[id] || ("pm-panel-" + id)),
     door: (id) => dom.byId("pm-open-" + id),
     title: () => dom.byId("dlg-settings"),
   };
 }
+
+test("backup settings use the same page, focus and BACK behavior as other settings", () => {
+  const h = bootSettingsNav();
+  h.door("files").click();
+  assert.equal(h.title().textContent, "BACKUP & RESTORE");
+  assert.equal(h.panel("files").hidden, false);
+  assert.equal(h.panel("display").hidden, true);
+  assert.equal(h.dom.document.activeElement, h.filesFirst);
+  assert.equal(h.selected(), 1);
+  assert.equal(h.nav.back(), false);
+  assert.equal(h.panel("files").hidden, true);
+  assert.equal(h.dom.document.activeElement, h.door("files"));
+  h.door("files").click();
+  h.nav.showCurrent();
+  assert.equal(h.panel("files").hidden, true, "reopening settings starts at home");
+});
 
 test("title settings, pause standings, and career modes stay reachable", () => {
   // SettingsNav BEHAVIOUR: always land on the door index. A stored
@@ -1122,8 +1140,14 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(decl(css("css/components.css"), "#pm-hud-sample::before", "content") || "",
     /SIZE PREVIEW/,
     "SPEED 312 keeps its preview caption — compact used to hide it and the box read as a live readout");
-  assert.match(read("index.html"), /id="pm-hud-details"[\s\S]*id="pm-hud-sample"/,
-    "HUD SIZE preview lives in the HUD fold, not on the DISPLAY sheet");
+  // Inside the fold's OWN <details>…</details>: unbounded, the match passed
+  // with the preview moved anywhere later in index.html (audit 2026-09-29).
+  {
+    const html = read("index.html"), at = html.indexOf('id="pm-hud-details"');
+    const fold = html.slice(at, html.indexOf("</details>", at));
+    assert.ok(at >= 0 && fold.includes('id="pm-hud-sample"'),
+      "HUD SIZE preview lives in the HUD fold, not on the DISPLAY sheet");
+  }
   // DISPLAY had its own byte-identical copy of this block until 2026-09-18;
   // it now shares the merged one, so the selector to ask is the merged one.
   assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display,[^)]*\) details > summary,/, "min-height"), "var(--chip-h)",
@@ -1177,8 +1201,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "SCREENSHOTS / SAVE / COPY DIAG are secondary rows, not peer plates of RESET");
   assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-display-adv-body > :is(#pm-screenshots, #pm-save-shot, #pm-copy-diag, #pm-gfx-status, .set-row, .adv-help)", "grid-column"), "1 / -1",
     "capture rows always span so SAVE cannot sit in the empty THREE PATH cell");
-  assert.equal(decl(css("css/components.css"), "#pm-panel-controls > .pm-group-h:first-child, #pm-panel-display > .pm-group-h:first-child, #pm-panel-appearance > .pm-group-h:first-child, #advanced > .pm-group-h:first-child, #audioset > .pm-group-h:first-child", "display"), "none",
-    "sheet title already names CONTROLS / DISPLAY / APPEARANCE / STEERING & ASSISTS / MUSIC; do not reprint the heading");
+  assert.doesNotMatch(read("index.html"), /<h3 class="pm-group-h">(?:DRIVING CONTROLS|DISPLAY|APPEARANCE|STEERING &amp; ASSISTS|MUSIC &amp; SOUND)<\/h3>/,
+    "page titles are not duplicated by hidden headings");
   assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display,[^)]*\) details > summary,/, "color"), "var(--steel)",
     "HUD / METRICS / RENDERER names are disclosure headings, not button plates");
   assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #advanced-inner, #pm-panel-driving\) details > summary/, "opacity"), "1",
@@ -1365,9 +1389,9 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(shell, /id="sp-close"[^>]*>CLOSE</, "sp-close overlay dismiss is CLOSE");
   assert.match(shell, /id="pm-advanced">STEERING &amp; ASSISTS/, "settings door is STEERING & ASSISTS");
   const settingsIndex = shell.slice(shell.indexOf('id="pm-settings-index"'), shell.indexOf("</nav>", shell.indexOf('id="pm-settings-index"')));
-  assert.deepEqual([...settingsIndex.matchAll(/<button id="(pm-(?:open-controls|open-driving|open-display|open-appearance|advanced|audio))"/g)].map((m) => m[1]),
-    ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-advanced", "pm-audio"],
-    "Settings home has the six primary doors in order");
+  assert.deepEqual([...settingsIndex.matchAll(/<button id="(pm-(?:open-controls|open-driving|open-display|open-appearance|advanced|audio|open-files))"/g)].map((m) => m[1]),
+    ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-advanced", "pm-audio", "pm-open-files"],
+    "Settings home has the seven primary doors in order");
   const pause = shell.slice(shell.indexOf('id="pausemenu"'), shell.indexOf("</dialog>", shell.indexOf('id="pausemenu"')));
   assert.doesNotMatch(pause, /<button id="pm-driving"/, "DRIVING is a Settings page, not a pause shortcut");
   assert.match(shell, /id="pm-panel-driving"/, "DRIVING has a dedicated Settings page");

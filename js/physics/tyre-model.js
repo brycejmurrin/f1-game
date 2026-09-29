@@ -273,9 +273,14 @@ const TyreModel = (function () {
   // fresh-vs-worn delta at the 1-2 s/lap the real sport measures. DROP_CLIFF is
   // per unit of wear PAST life, so a lap or two over is survivable and five is
   // not. GRIP_FLOOR stops a forgotten set from turning the car into a boat.
+  //
+  // The cliff was 0.25 with a 0.70 floor, and a set run a whole life past its
+  // end still had 70 % grip — "the tyres are gone" and nothing happened, which
+  // is what players reported. 0.50 costs a quarter of the grip half a life
+  // over, and the floor at 0.55 is a car that can still be nursed to the pits.
   const DROP_LIN = 0.05;
-  const DROP_CLIFF = 0.25;
-  const GRIP_FLOOR = 0.70;
+  const DROP_CLIFF = 0.50;
+  const GRIP_FLOOR = 0.55;
   // A tyre that lost only CORNERING grip reads as a handling bug rather than a
   // worn tyre, so traction and braking take a share of the same drop — smaller,
   // because degradation really is mostly lateral.
@@ -571,8 +576,15 @@ const TyreModel = (function () {
 
   // An AI strategy owns its starting compound when wear is enabled. In
   // particular, a MY TEAM mate's saved garage tyre must not override the plan.
-  function startRecord(c) {
-    if (c && c.pitPlan && !c.human) return classRecord(c.pitPlan.start);
+  // `tread` is what the weather wants at the lights (treadFor): the planner
+  // sequences DRY classes only, so a wet race put the whole AI field on slicks
+  // and every car was armed for the weather on the first tick — 21 cars into
+  // the lane at the end of lap 1. The player's own set is theirs to choose.
+  function startRecord(c, tread) {
+    if (c && c.pitPlan && !c.human) {
+      const wet = tread > 0 ? classForTread(tread) : null;
+      return classRecord(wet || c.pitPlan.start);
+    }
     return c && c.tyreOpt ? optionRecord(c.tyreOpt) : classRecord(c && c.tyreClass);
   }
 
@@ -614,6 +626,7 @@ const TyreModel = (function () {
       // ~0.4-0.6 s less, which is the counterweight that stops an undercut from
       // being free and therefore always correct.
       c.tyreTs = T_BLANKET; c.tyreTb = T_BLANKET;
+      if (quali()) { c.tyreTs = optTemp(c.tyre.life); c.tyreTb = c.tyreTs; }   // …except a qualifying set: warmed on the out-lap
       c.tyreGrain = 0; c.tyreBlister = 0;
       c.tyreLap0 = c.lap || 0;
       c.tyreStints = (c.tyreStints || 0) + 1;
@@ -675,7 +688,7 @@ const TyreModel = (function () {
       if (!track || !(track.total > 0) || !(dt > 0)) return;
       if (!c.tyre) fit(c, classRecord("medium"));
       const load = (c.human ? humanLoad(c, G.LAT_MAX) : aiLoad(c, G.aTop()))
-        * fuelLoadMul(c, G.lapsTarget);
+        * (1 + FUEL_LOAD * fuelOf(c));
       c._tyreLoad = load;    // debug/telemetry only — see __apex.tyres()
       // TEMPERATURE FIRST, and on the CLOCK rather than on distance. Heat is a
       // rate: a car held in its pit box at zero speed must cool, and a car
@@ -730,11 +743,18 @@ const TyreModel = (function () {
       const base = gripFor(c.tyreWear);
       return { f: gripFor(c.tyreWearF) / base, r: gripFor(c.tyreWearR) / base };
     }
+    // QUALIFYING runs light and on a set its out-lap has brought into the
+    // window. The session is one standing lap (lapsTarget 1), so the race's
+    // fuel formula read a FULL tank for the whole timed lap and the set came
+    // off the blankets cold, against a simulated field (QualiModel) that pays
+    // for neither.
+    function quali() { return G.session === "quali"; }
+    function fuelOf(c) { return quali() ? 0 : fuelFrac(c, G.lapsTarget); }
     function fuelAccelMul(c) {
-      return on() && c ? 1 / (1 + FUEL_ACCEL * fuelFrac(c, G.lapsTarget)) : 1;
+      return on() && c ? 1 / (1 + FUEL_ACCEL * fuelOf(c)) : 1;
     }
     function fuelVmaxMul(c) {
-      return on() && c ? 1 / (1 + FUEL_VMAX * fuelFrac(c, G.lapsTarget)) : 1;
+      return on() && c ? 1 / (1 + FUEL_VMAX * fuelOf(c)) : 1;
     }
 
     // Laps this set has run, and how far through its life that is. `wearOf` is
@@ -774,7 +794,7 @@ const TyreModel = (function () {
         traction: +tractionMul(c).toFixed(4),
         axleF: +axleSplit(c).f.toFixed(4),
         axleR: +axleSplit(c).r.toFixed(4),
-        fuel: +fuelFrac(c, G.lapsTarget).toFixed(3),
+        fuel: +fuelOf(c).toFixed(3),
       };
     }
 

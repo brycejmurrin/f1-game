@@ -95,7 +95,10 @@ if (store.subscribe) store.subscribe((change) => {
     else {
       activeSeason = null;
       activeCfg = null;
-      seasonRevision = null;
+      // seasonRevision is KEPT: nulling it switched off save()'s guard, so a
+      // stale season object this tab still held (persistSeason from a GP's
+      // qualifying, retrySave) overwrote the other tab's newer rounds.
+      // load() re-arms it whenever this tab re-enters the championship.
       seasonConflict = false;
       resolved = null;
     }
@@ -265,11 +268,16 @@ function resume(saved) {
 }
 function load() {
   const raw = store.get(SAVE_KEY, null);
+  const rawIds = raw && raw.config && Array.isArray(raw.config.trackIds) ? raw.config.trackIds.length : null;
   const season = resume(raw);
   armRevision(season);
   // Existing saves were rewritten at boot by migrateSeasonPoints(). Keep that
-  // migration contract while adding the config snapshot and the stricter maps.
-  if (raw) save(season);
+  // migration contract while adding the config snapshot and the stricter maps —
+  // but NOT for a season this build could not read whole: a circuit id it does
+  // not know (a stale cached shell, a renamed circuit) shrank the calendar, and
+  // writing that back erased the circuit for good, or blanked a finished season.
+  const lossy = raw && (season !== raw || (rawIds != null && season.config.trackIds.length !== rawIds));
+  if (raw && !lossy) save(season);
   return season;
 }
 function save(season) {
@@ -421,13 +429,24 @@ function scored() { return lastScored; }
 // (rounds − drop) results count, and only once a driver has more scoring
 // rounds than that — early in the season the gross total stands, as it did
 // in the dropped-score years. Gross for a save with no per-round record.
+// The season's OWN frozen rules when it carries them: the title-menu STANDINGS
+// reads a saved championship in flow "gp", where fmtActive() is false, and so
+// ranked by GROSS points — a driver ahead on counting points shown behind.
+function sprintMid(c, season) {
+  if (!c || !season || season.stage !== "race") return false;
+  if (c.sprint === true) return true;
+  if (c.sprint !== "rounds" || !c.sprintIds || !c.trackIds) return false;
+  const id = c.trackIds[Number.isInteger(season.round) ? season.round : 0];
+  return !!id && c.sprintIds.indexOf(id) >= 0;
+}
 function netPts(season, id) {
   const gross = (season && season.pts && season.pts[id]) || 0;
-  const drop = fmtActive() ? rulesConfig().drop : 0;
+  const c = season && season.config ? season.config : (fmtActive() ? rulesConfig() : null);
+  const drop = c ? c.drop || 0 : 0;
   if (!drop || !season) return gross;   // rank() has always tolerated a null season; so must this
   const row = (season.roundPts && season.roundPts[id]) || [];
-  const played = (season.round || 0) + (midWeekend(season) ? 1 : 0);
-  const keep = Math.max(1, rounds() - drop);
+  const played = (season.round || 0) + (sprintMid(c, season) ? 1 : 0);
+  const keep = Math.max(1, (c.trackIds ? c.trackIds.length : rounds()) - drop);
   if (played <= keep || !row.length) return gross;
   const vals = [];
   for (let r = 0; r < played; r++) vals.push(row[r] || 0);

@@ -136,7 +136,7 @@
     {
       "id": "m-tyre-cliff-flat",
       "file": "js/physics/tyre-model.js",
-      "find": "const DROP_CLIFF = 0.25;",
+      "find": "const DROP_CLIFF = 0.50;",
       "replace": "const DROP_CLIFF = 0.05;",
       "why": "Flattens the past-life cliff to the in-life slope, so a set five laps over its life costs the same per lap as a fresh one — the strategy pressure the model exists to create disappears while every in-life number stays exactly right.",
       "spec": "tests/unit/tyre-model.test.mjs",

@@ -482,8 +482,8 @@ test("the pause → settings → sub-sheet Escape ladder presses each sheet's ow
   assert.deepEqual(ids, ["pm-resume", "pm-restart", "pm-settings", "pm-howto", "pm-standings", "pm-quit"]);
   const settingsIndex = html.slice(html.indexOf('id="pm-settings-index"'), html.indexOf("</nav>", html.indexOf('id="pm-settings-index"')));
   const doors = [...settingsIndex.matchAll(/<button id="([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(doors, ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-advanced", "pm-audio"],
-    "SETTINGS has the five top-level doors in task order");
+  assert.deepEqual(doors, ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-advanced", "pm-audio", "pm-open-files"],
+    "SETTINGS has the seven top-level doors in task order");
   assert.match(settingsIndex, /id="pm-advanced"[^>]*>STEERING &amp; ASSISTS/);
   const driving = html.slice(html.indexOf('id="pm-panel-driving"'), html.indexOf("</section>", html.indexOf('id="pm-panel-driving"')));
   const practiceIds = ["pm-coach", "pm-practice-panel", "pm-practice-set", "pm-practice-retry", "pm-session-review"];
@@ -520,4 +520,22 @@ test("pause, settings, results and standings all scroll inside the sheet on a sh
   assert.equal(decl(comp, /#pm-hud-details > \[role="group"\]/, "display"), "flex");
   assert.equal(decl(comp, /#pm-metrics-details > \[role="group"\]/, "max-height"), null,
     "METRICS body does not own a height cage");
+});
+
+test("a CLASSIFIED late retirement shows the points award() paid, with its reason in the name", () => {
+  // Bug hunt 2026-09-29: endRace classifies a DNF past 90 % of the winner's
+  // laps (c.classified) and SeasonCal.award / Career.settleRound pay it, but
+  // the row read "DNF" with no points — the sheet and the standings disagreed.
+  const { season, cars } = tiedSeason();
+  cars[1].retired = true; cars[1].dnf = "engine"; cars[1].classified = true;
+  const h = bootResults({ season, cars });
+  h.api.buildResults([cars[0], cars[1]]);
+  const rows = rowsOf(h.els.resultsTable).slice(0, 2);
+  const pts = (row) => row.children.find((c) => c.classList.contains("res-pts")).textContent;
+  assert.match(nameOf(rows[1]), /\(engine\)/, "the reason stays in the name");
+  assert.match(pts(rows[1]), /^\d+ pts/, "and the points it was paid are shown: " + pts(rows[1]));
+  cars[1].classified = false;
+  const un = bootResults({ season, cars });
+  un.api.buildResults([cars[0], cars[1]]);
+  assert.equal(rowsOf(un.els.resultsTable)[1].children.find((c) => c.classList.contains("res-pts")).textContent, "DNF", "an unclassified retirement still reads DNF");
 });
