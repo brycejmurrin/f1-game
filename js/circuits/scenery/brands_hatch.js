@@ -35,8 +35,8 @@
   function (api) {
       const { n, hash, every, anchor, onTrack, out, terrainYAt, mountain,
         tree, pine, bush, hedge, forestEdge, conifer, broadleafFall,
-        building, house, motorhome, tower, grandstandEx, spectatorHill,
-        terrace, bleacher,
+        building, house, motorhome, tower, spectatorHill,
+        terrace, bleacher, modelGroup, vadd, MAT, indexSolid,
         guardrail, fence, wall, tyreWall, marshalPost, cameraTower,
         broadcastCompound,
         billboard, signBoard, sponsorHoarding, gantry,
@@ -97,6 +97,8 @@
       // Spectator parking: ranks of cars nose-to-tail along the track, stepped
       // back in rows. This is what is actually behind the banking at a British
       // club circuit, and it is what gives the bowl its depth from the far rim.
+      // Skip pads where the ribbon anchor sits >0.8 m above/below terrainY —
+      // on the bowl's steep banks those cars buried or floated (ground-audit).
       function carPark(key, s0, s1, side, d0, rows, step, seed) {
         for (let s = s0; s < s1; s += step / n) {
           const k = K(key(s));
@@ -105,6 +107,9 @@
             if (h < 0.26) continue;             // gaps, aisles, half-full rows
             const d = d0 + r * 7.2;
             if (!clear(k, side, d, 11)) continue;
+            const a = anchor(k, side, d);
+            const gy = terrainYAt(a.c[0], a.c[2]);
+            if (gy != null && Math.abs(a.c[1] - gy) > 0.35) continue;
             place(k, side, d, [1.85, 1.45, 4.3],
               CAR_COLS[(k + r * 3) % CAR_COLS.length]);
           }
@@ -138,30 +143,32 @@
       /* ---------------------------------------------------------------- */
 
       // Paddock Hill: the bank falls with the track into the bottom of the dip.
-      spectatorHill(0.008, 0.062, -1, 10, {});
-      // The climb out and up to Druids — the amphitheatre's high point.
-      spectatorHill(0.055, 0.105, -1, 14, {});
+      // Trimmed clear of Hailwoods stand footprint (sl-frame hero below).
+      spectatorHill(0.008, 0.026, -1, 10, { rows: 4, density: 0.45, step: 10 });
+      // The climb out and up to Druids — past the Druids terrace (0.064..0.094)
+      // so risers are not coplanar with spectatorHill steps.
+      spectatorHill(0.096, 0.108, -1, 14, { rows: 4, density: 0.4, step: 11 });
       // Graham Hill Bend, looking back up the hill at Druids.
-      spectatorHill(0.168, 0.220, -1, 16, {});
+      spectatorHill(0.210, 0.222, -1, 16, { rows: 4, density: 0.4, step: 11 });
       // Cooper Straight side of the bowl, then the run to Surtees: last of the
       // open banking before the loop escapes into the trees.
       spectatorHill(0.300, 0.395, -1, 20, {});
       // Stirlings: the trees give out and the bowl reopens.
       spectatorHill(0.826, 0.888, -1, 20, {});
-      // Clark Curve, long right back onto the pit straight.
-      spectatorHill(0.892, 0.948, -1, 16, {});
+      // Clark Curve, long right back onto the pit straight — GA bank only
+      // (the floating terrace here was unsupported ~2.1 m / flat-coplanar).
+      spectatorHill(0.892, 0.948, -1, 16, { rows: 5, density: 0.42, step: 9 });
 
-      // Terracing where the banks are steepest — Druids and Clark (rows
-      // 0.076/-1 "terraced grass banking" and 0.914/-1 "terraced banking").
-      terrace(0.064, 0.094, -1, 14, {});
-      terrace(0.900, 0.940, -1, 16, {});
-      terrace(0.180, 0.208, -1, 16, {});
-      // Druids is the high point of the amphitheatre, so the terracing there
-      // takes a second, higher step set further back up the bank.
-      terrace(0.068, 0.088, -1, 26, {});
-      // A low bleacher run at the bottom of the Paddock Hill bank.
-      bleacher(0.028, 0.050, -1, 12, {});
-      bleacher(0.836, 0.868, -1, 21, {});
+      // Terracing where the banks are steepest — Druids and Graham Hill.
+      // Clark no longer gets a terrace (unsupported on the downhill bank).
+      // Single Druids flight only (two overlapping flights were coplanar).
+      terrace(0.066, 0.090, -1, 16, { rows: 7, rise: 0.9 });
+      terrace(0.180, 0.205, -1, 16, {});
+      // Hailwoods is a required modelGroup in the dip (block 2); no bleacher
+      // shell here — a bolted run on this grade measured BACKWARDS on older
+      // ship tips and fought the hero footprint.
+      // Stirlings open seating: positive rise on the reopened bowl bank.
+      bleacher(0.836, 0.868, -1, 21, { rows: 6, rise: 0.55, setback: 1.05, lift: 0.35 });
 
       // Chalk showing through the turf (§2) — bare scrapes on the banks, cut
       // by feet on the steep bits. groundPatch so they follow the bank instead
@@ -288,13 +295,113 @@
       const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
       const sl = (f) => (f + SL) % 1;
 
-      // Main grandstand run down Brabham Straight.
-      grandstandEx(sl(0.988), -1, 18, 118, null, null);
-      // Paddock Hill Grandstand — end of the row, on the lip of the drop.
-      // The single most-photographed viewpoint at the circuit.
-      grandstandEx(sl(0.016), -1, 12, 62, null, null);
-      // Temporary stand bolted on at the top of the straight for a big meeting.
-      grandstandEx(sl(0.952), -1, 20, 44, null, null);
+      // Open-rake stand emitter — rows rise AWAY from the track (positive
+      // lateral slope). Compact vs grandstandEx so the four named Indy stands
+      // fit the props-tris ratchet. Optional short roof for Desire Wilson's
+      // covered bays (oversteer48 / brandshatch.co.uk BTCC tickets).
+      const SEAT_COLS = [
+        [0.78, 0.16, 0.14], [0.88, 0.88, 0.86], [0.22, 0.24, 0.28],
+      ];
+      function emitOpenStand(stage, a, side, opts) {
+        const depth = opts.depth || 11;
+        const h = opts.h || 12;
+        const len = opts.len || 40;
+        const tiers = opts.tiers || 4;
+        const shell = opts.shell || CHALK;
+        const roof = opts.roof;
+        const b = [a.r, a.u, a.t];
+        // Seat the plinth on terrain — bowl banks bury a ribbon-only anchor.
+        const gy = terrainYAt(a.c[0], a.c[2]);
+        const dy = gy != null ? (gy - a.c[1]) : 0;
+        stage._mat = MAT.CONCRETE;
+        // Back shell only — no full-depth slab that shares a top with risers.
+        addBox(stage, vadd(vadd(a.c, a.r, side * (depth * 0.48)), a.u, dy + h * 0.40),
+          [depth * 0.28, h * 0.80, len], shell, b);
+        for (let t = 0; t < tiers; t++) {
+          // Away-from-track = −side·(front − t·step): side −1 matches the
+          // sepang T1 pattern (lat starts +r toward the road, falls with t).
+          // yh grows with t → positive seating rake. yOff avoids coplanar tops.
+          const lat = -side * (depth * 0.34 - t * 1.55);
+          const yh = 1.65 + t * 2.35;
+          const yOff = t * 0.14;
+          addBox(stage, vadd(vadd(a.c, a.r, lat), a.u, dy + yh * 0.5 - 0.12 + yOff),
+            [1.45, yh + 0.2, len - t * 2.4],
+            t & 1 ? RENDER : shell, b);
+          stage._mat = MAT.FABRIC;
+          addBox(stage, vadd(vadd(a.c, a.r, lat + side * 0.18), a.u, dy + yh + 0.55 + yOff),
+            [1.05, 0.65, len - t * 2.4 - 2.5], SEAT_COLS[t % 3], b);
+          stage._mat = MAT.CONCRETE;
+        }
+        if (roof) {
+          stage._mat = MAT.METAL;
+          const top = dy + h * 0.80 + 0.35;
+          addBox(stage, vadd(vadd(a.c, a.r, -side * 0.6), a.u, top),
+            [depth + 0.8, 0.85, len * 0.52], ROOF, b);
+          addBox(stage, vadd(vadd(a.c, a.r, -side * depth * 0.46), a.u, top - 0.7),
+            [0.32, 1.1, len * 0.48], DKGREY, b);
+        }
+        stage._mat = 0;
+      }
+
+      // Named Indy-circuit stands (MSV Viewing Guide / BTCC maps / oversteer48):
+      // Pit Straight → Desire Wilson → Paddock Hill on the rim → Hailwoods in the dip.
+      // All use sl() — they sit on the start-line complex (frame debt; probe OK).
+      {
+        const depth = 12, h = 13, len = 72;
+        const a0 = anchor(K(sl(0.978)), -1, 18 + depth / 2);
+        modelGroup("brands-pit-straight-stand", {
+          center: vadd(a0.c, a0.u, (h + 1) / 2),
+          size: [depth + 4, h + 2, len + 4],
+          basis: [a0.r, a0.u, a0.t],
+        }, (stage) => {
+          emitOpenStand(stage, a0, -1, { depth, h, len, tiers: 5, shell: RENDER });
+          if (typeof indexSolid === "function")
+            indexSolid(sl(0.960), sl(0.995), -1, 16, 14);
+        }, { required: true });
+      }
+      {
+        // Desire Wilson — right of Paddock Hill toward the line; partial cover.
+        const depth = 11, h = 11, len = 48;
+        const a0 = anchor(K(sl(0.998)), -1, 16 + depth / 2);
+        modelGroup("brands-desire-wilson-stand", {
+          center: vadd(a0.c, a0.u, (h + 1) / 2),
+          size: [depth + 4, h + 2, len + 4],
+          basis: [a0.r, a0.u, a0.t],
+        }, (stage) => {
+          emitOpenStand(stage, a0, -1,
+            { depth, h, len, tiers: 4, shell: CHALK, roof: true });
+          if (typeof indexSolid === "function")
+            indexSolid(sl(0.988), sl(0.012), -1, 14, 12);
+        }, { required: true });
+      }
+      {
+        // Paddock Hill Grandstand — lip of the drop; best amphitheatre view.
+        const depth = 13, h = 14, len = 56;
+        const a0 = anchor(K(sl(0.016)), -1, 12 + depth / 2);
+        modelGroup("brands-paddock-hill-stand", {
+          center: vadd(a0.c, a0.u, (h + 1) / 2),
+          size: [depth + 4, h + 2, len + 4],
+          basis: [a0.r, a0.u, a0.t],
+        }, (stage) => {
+          emitOpenStand(stage, a0, -1, { depth, h, len, tiers: 5, shell: STEEL });
+          if (typeof indexSolid === "function")
+            indexSolid(sl(0.004), sl(0.030), -1, 10, 14);
+        }, { required: true });
+      }
+      {
+        // Hailwoods — in the dip at the bottom of Paddock Hill (oversteer48).
+        const depth = 10, h = 10, len = 44;
+        const a0 = anchor(K(sl(0.038)), -1, 14 + depth / 2);
+        modelGroup("brands-hailwoods-stand", {
+          center: vadd(a0.c, a0.u, (h + 1) / 2),
+          size: [depth + 4, h + 2, len + 4],
+          basis: [a0.r, a0.u, a0.t],
+        }, (stage) => {
+          emitOpenStand(stage, a0, -1, { depth, h, len, tiers: 4, shell: RENDER });
+          if (typeof indexSolid === "function")
+            indexSolid(sl(0.028), sl(0.050), -1, 12, 12);
+        }, { required: true });
+      }
 
       // Merchandise / retail units BEHIND the stands: a solid frontage, not
       // isolated boxes. Shallow units butted together along the straight.
@@ -332,6 +439,9 @@
         if (!clear(k, -1, 92, 11)) continue;
         const h = hash(k * 67);
         if (h < 0.35) continue;
+        const a = anchor(k, -1, 92);
+        const gy = terrainYAt(a.c[0], a.c[2]);
+        if (gy != null && a.c[1] < gy - 0.15) continue;
         motorhome(k, -1, 92, 4.5 + h * 1.5, 3.6, 12 + h * 4, {});
       }
       // Hardstanding: the concourse between the stands and the retail row, and
@@ -346,7 +456,7 @@
       }
 
       // Main spectator car park, then the coach and trade park behind it.
-      carPark(sl, 0.952, 1.032, -1, 104, 6, 2, 71);
+      carPark(sl, 0.952, 1.032, -1, 108, 4, 2, 71);
       for (let s = 0.964; s < 1.020; s += 0.0090) {
         const k = K(sl(s));
         if (!clear(k, -1, 152, 12)) continue;
@@ -409,11 +519,37 @@
         house(K(sl(0.942)), 1, 38, 10, 4.5, 9, {});
       }
 
-      // The KENTAGON — the circuit's bar/clubhouse, directly opposite the
-      // Paddock Hill grandstand. A named landmark in its own right, so it gets
-      // a real footprint and a roof lantern rather than a generic box.
-      building(K(sl(0.014)), 1, 20, 19, 8.5, 19, {});
-      tower(K(sl(0.014)), 1, 20, 4.0, 12.5, {});
+      // The KENTAGON — circuit bar/clubhouse opposite Paddock Hill Grandstand
+      // (docs/tracks brief; historical fan name). MSV 2022 venue doc lists
+      // "Hailwoods Restaurant" separately — see PR UNCERTAIN note.
+      // Gap 38 (not 20): modelGroup preflight treats the pit-complex band as
+      // superseded, so a required group at the old building gap is dropped.
+      {
+        const a = anchor(K(sl(0.018)), 1, 38);
+        const b = [a.r, a.u, a.t];
+        const gy = terrainYAt(a.c[0], a.c[2]);
+        const dy = gy != null ? (gy - a.c[1]) : 0;
+        modelGroup("brands-kentagon", {
+          center: vadd(a.c, a.u, dy + 6.0),
+          size: [22, 16, 22],
+          basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(a.c, a.u, dy + 4.0), [18, 8.0, 18], CHALK, b);
+          stage._mat = MAT.BRICK;
+          addBox(stage, vadd(vadd(a.c, a.r, 2.0), a.u, dy + 4.2),
+            [14, 7.2, 14], BRICK, b);
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(a.c, a.u, dy + 8.6), [19.5, 0.7, 19.5], ROOF, b);
+          // Roof lantern / glazed lantern tower — the Kentagon's silhouette.
+          stage._mat = MAT.GLASS;
+          addBox(stage, vadd(a.c, a.u, dy + 11.2), [5.5, 4.5, 5.5],
+            [0.55, 0.62, 0.70], b);
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(a.c, a.u, dy + 13.8), [6.2, 0.45, 6.2], DKGREY, b);
+          stage._mat = 0;
+        }, { required: true });
+      }
       building(K(0.024), 1, 22, 13, 5.0, 12, {});
       // Its terrace, which looks straight down into Paddock Hill.
       groundPatch(K(sl(0.016)), 1, 33, [14, 0.24, 18], ASPH);
@@ -442,7 +578,12 @@
         const k = K(s);
         const h = hash(k * 89);
         if (h > 0.34 && clear(k, 1, 56, 10)) {
-          motorhome(k, 1, 56, 4.6 + h * 1.4, 3.8, 13 + h * 4, {});
+          const a = anchor(k, 1, 56);
+          const gy = terrainYAt(a.c[0], a.c[2]);
+          // Skip pads that sit below grade on the paddock berm (was buried).
+          if (gy == null || a.c[1] >= gy - 0.2) {
+            motorhome(k, 1, 56, 4.6 + h * 1.4, 3.8, 13 + h * 4, {});
+          }
         }
         if (h < 0.42 && clear(k, 1, 66, 10)) {
           house(k, 1, 66, 9, 4.0, 8, {});
