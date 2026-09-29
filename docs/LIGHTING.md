@@ -317,15 +317,13 @@ node tools/lighting/ab-lighting.mjs apply lamp.radius 40         # adopt the win
 per candidate and writes a side-by-side strip plus the watched metric for
 each. Structural knobs take `try` with a full replacement string instead.
 
-`apply` is the write step, and it does three things atomically: swaps the
-value into the real source file (only if the find-string is still unique),
+`apply` is the write step, and it does two things atomically: swaps the
+value into the real source file (only if the find-string is still unique) and
 self-syncs this catalog (the applied value becomes the new `find`, the old
 value becomes the new `b`, edits confined to that knob's own entry — so the
-catalog-integrity test stays green and the knob now A/Bs the reverse), and
-still runs a legacy `?v=N` bump of index.html / version.json (tools/lighting/ab-lighting.mjs
-`apply`). The shell reads `?v=dev` and the deploy owns cache busting, so
-`git checkout index.html version.json` after an apply. After applying: re-render the
-knob to confirm, `npm test -- tests/specs/lighting-ab.spec.js`, commit.
+catalog-integrity test stays green and the knob now A/Bs the reverse). No
+cache bump: the shell reads `?v=dev` and the deploy owns cache busting. After
+applying: re-render the knob to confirm, `npm test -- tests/specs/lighting-ab.spec.js`, commit.
 
 The harness serves the repo through an in-memory server and swaps the knob's
 source string for variant B — the working tree is never modified, and the same

@@ -4,13 +4,17 @@
 #
 #  1. §Verification 11 — a GENERATED file is never hand-edited, in any
 #     checkout: version.json, js/roster.js, tools/carview.html, tools/README.md
-#     outright; index.html and sw.js only inside their @gen-shell blocks;
+#     outright (tests/data/ratchets.json too — moved by ratchets.mjs, not by
+#     hand); index.html and sw.js only inside their @gen-shell blocks;
 #     package.json only on a test:* script line (source: tests/groups.json).
+#     Other generated docs (ladder figures, DEBUG-HOOKS/ARCHITECTURE tables)
+#     are NOT blocked here; `npm run gen:check` names their drift.
 #  2. §Verification 2 — no js/, css/ or index.html edit while a `playwright
 #     test` process is live (tests serve the working tree).
 #  3. Inside a LINKED worktree (fixer agents) the shared-contract files stay
-#     the main session's: index.html, manifest.cjs, sw.js, gen-shell.mjs,
-#     package.json, package-lock.json, playwright.config.js.
+#     the main session's: index.html, manifest.cjs, version.json, sw.js,
+#     roster.js, gen-shell.mjs, package.json, package-lock.json,
+#     playwright.config.js.
 #
 # Escape hatch for a deliberately assigned edit: `touch .claude/allow-protected`
 # at the repo root and retry (remove it when done). It lifts rules 1 and 3

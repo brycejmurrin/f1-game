@@ -26,8 +26,8 @@ same-red on tip → `verify-agent --base <ref>`. One circuit →
 (parent applies via **slim-bloat**). A red Actions run → `ci-red-triage`. Parent keeps edits, cache bump, and deploy FF.
 
 **One prohibition line, not five blocks.** Every agent body ends with:
-"Flat prohibitions: AGENTS.md §Verification 10, 6 and 7 (no
-Playwright/test-bg/test-solo/chrome-start, no --wait, no bump); the
+"Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no
+Playwright/test-bg/test-solo/chrome-start, no --wait); the
 js/css/index.html write ban is hook-enforced." Agent-specific scope rules stay
 short and sit above it.
 

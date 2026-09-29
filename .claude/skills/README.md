@@ -46,7 +46,7 @@ stayed separate in the 2026-09-03 pass.
 | **survey-ui-matrix** | (forked) Reviewing the whole UI across orientations, viewport shapes, UI/HUD scale and pointer type — `playwright-official` `browser_*` resize/DOM/CSS or `layout-audit.mjs`; enumerate screens from source, measure each cell, capture. |
 | **tune-physics** | A/B testing or tuning driving physics via headless `obs/act/reset`; game feel / juice — shake, hit-stop, kerb and collision feedback that must not touch determinism (`references/game-feel.md`). |
 | **ui-menu-a11y** | Menus, dialogs, Escape/back behavior, keyboard navigation, selected-state announcements, scroll affordances, touch layout. |
-| **webgl-debug** | Blank/dark GLX canvas, shadow acne, bloom, HDR, shader/uniform bugs, GLX renderer artifacts. |
+| **webgl-debug** | Blank/dark GLX canvas (GLX is the explicit/fallback backend, not the default), shadow acne, bloom, HDR, shader/uniform bugs, GLX renderer artifacts. |
 | **webgpu-debug** | WGX black screen, NaN-white road, WGSL compile/validation failures, device lost, silent fallback to WebGL2. |
 
 The committed shell reads `?v=dev` on every tag and the deploy stamps content
