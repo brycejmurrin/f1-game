@@ -1,9 +1,16 @@
 # Madring — IFEMA Madrid Circuit — Visual Design Brief
 
-**Theme:** `street_modern_day` (hybrid street/permanent) · **Time:** DAY · **Render:** procedural colored boxes, no textures
+**Theme:** `modern` (hybrid street/permanent) · **Time:** DAY · **Render:** procedural colored boxes, no textures
 
 ## 1. Setting
-A hybrid street/permanent circuit (5.47 km, ~20–22 corners) wrapping the IFEMA Madrid exhibition grounds in the Barajas/Valdebebas district, north-east Madrid. The lap mixes wide public-road urban sections with a purpose-built northern loop. Pit and paddock sit inside IFEMA's large rectangular exhibition halls. The defining structure is **La Monumental**, a 550 m, ~270° banked stadium curve ringed by tall grandstands, evoking the city's Las Ventas bullring. Beyond the venue lie open dry Castilian plains and, on the horizon, the **Sierra de Guadarrama** mountain range.
+A hybrid street/permanent circuit (`lengthKm` 5.47 in the def; official **5.414 km**
+per F1.com — do not “fix” the def length) with 22 corners wrapping the IFEMA
+Madrid exhibition grounds in the Barajas/Valdebebas district, north-east Madrid.
+The lap mixes wide public-road urban sections with a purpose-built northern loop.
+Pit and paddock sit inside IFEMA's large rectangular exhibition halls. The defining
+structure is **La Monumental**, a ~550 m, ~270° banked stadium curve ringed by tall
+grandstands, evoking the city's Las Ventas bullring. Beyond the venue lie open dry
+Castilian plains and, on the horizon, the **Sierra de Guadarrama** mountain range.
 
 ## 2. Atmosphere & palette
 Bright, dry Spanish midday — hard sun, crisp shadows, minimal fog (a faint dusty haze low on the plains/Sierra for depth only).
@@ -54,12 +61,36 @@ Bright, dry Spanish midday — hard sun, crisp shadows, minimal fog (a faint dus
 Checked against madring.com, F1.com and racingcircuits.info. The Madring is a
 hybrid: public roads around the **IFEMA** halls joined to permanent sections
 built on adjacent **Valdebebas** land, with **two short tunnels** linking the
-Recinto Ferial to the Valdebebas expansion and back. 5.416 km, main straight
-523 m, 12 m wide except the main straight and Turn 1 (15 m). Its single most
-distinctive real-world fact is that it sits minutes from **Adolfo Suárez
-Madrid-Barajas** airport.
+Recinto Ferial to the Valdebebas expansion and back. Official length is
+**5.414 km** (F1.com / Wikipedia); the game def keeps `lengthKm` 5.47 and the
+OSM trace builds ~5.343 km — **UNCERTAIN / do not “fix” length here**.
+Main straight ~523 m; 12 m wide except the main straight and Turn 1 (15 m).
+Its single most distinctive real-world fact is that it sits minutes from
+**Adolfo Suárez Madrid-Barajas** airport. Designer: Studio Dromo (Jarno
+Zaffelli). First GP weekend: 11–13 Sep 2026.
 
-All of that is already modelled — the IFEMA halls, La Monumental banked bowl,
-both tunnel portals, and a Barajas control tower with an airliner on approach.
-**Nothing added.** The one absent nearby landmark is the Estadio Metropolitano,
-~3 km south; judged too far to belong on this skyline.
+Already modelled: IFEMA halls, La Monumental banked bowl, both tunnel portals,
+and a Barajas control tower with an airliner on approach. The Estadio
+Metropolitano (~3 km south) stays off the skyline — too far.
+
+## Wave 6 scenery (landmark)
+
+- **`madrid-monumental-stands`** (required `modelGroup`): raked seating on the
+  **inside** of the banked curve (positive slope — rows rise away from the
+  track) with rim flood masts. Capacity context: ~45,000 across the Monumental
+  sector (madring.com Curve 12; F1.com guide). Banking 24% / ~13.5°, ~550 m
+  (F1.com; madring.com lists 547.82 m).
+- Outside bowl ring retained denser (Motor Sport Magazine: hospitality inside,
+  grandstand mass on the outside). Ticket grandstand numbers 9 / 9A / 10 / 10A /
+  11 / 12 are from seating guides, **not** the organiser — place by the
+  Monumental sector only; do not label as fact.
+- Geometry: IFEMA stand roof prism seated on its spine (was 11.4 m unsupported);
+  madringDeck fascia hung off the front row (was buried on the rising verge);
+  wrap-around wall split away from engine corner tyre-caps (coplanar fights).
+
+### Sources
+- https://www.formula1.com/en/latest/article/circuit-guide-everything-you-need-to-know-about-the-madring.NF7Mh3iag3w9GUPlihwJA
+- https://en.wikipedia.org/wiki/Madring
+- https://www.madring.com/en/circuit
+- https://www.motorsportmagazine.com/articles/single-seaters/f1/madrings-la-monumental-the-banked-corner-thats-unlike-anything-else-in-f1/
+- https://www.tracksideseats.com/f1/guides/madring-grandstand-guide (grandstand numbering — UNCERTAIN vs turns)
