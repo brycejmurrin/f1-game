@@ -1029,7 +1029,9 @@ let pits = null;      // PitLane.create(G), same deferral
 // NO PASSING UNDER THE SC / VSC, for the player (the AI holds station by
 // construction): a place gained must go back inside the window, or it is priced
 // at the flag (js/race/sporting-regs.js; FIA 2026 SR B5.12.2(c), B5.13.2(c)).
-const scWatch = SportingRegs.createPassWatch();
+// A car slowed by an obvious problem may be passed under a caution
+// mid-incident, being rescued as stuck, or beached in the run-off.
+const scWatch = SportingRegs.createPassWatch(0, (o) => incidentSim.owns(o) || (o.rescueT || 0) > 0.25 || (!!o.offroad && (o.offT || 0) > 0.5));
 function scPassCall(ev) {
   if (!ev || !player || ev.type === "cleared") return;
   if (ev.type === "warn") { announce("GIVE THE POSITION BACK" + (ev.n > 1 ? " — " + ev.n + " PLACES" : ""), 2.5, "penalty-warn"); return; }
