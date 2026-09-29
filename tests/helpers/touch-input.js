@@ -29,14 +29,17 @@ export const TOUCH = { hasTouch: true, viewport: { width: 844, height: 390 } };
 
 /** Install the viewport and the per-test reset on a spec's `test` object.
  *
- *  Called at module scope by each part. `Input.init()` wires the listeners at
- *  load, so no race has to start; what does have to happen is the reset, or a
- *  latched ramp from the previous test reads as this test's steering. */
+ *  Called at module scope by each part. `Input.init()` wires the pedal /
+ *  arrow listeners at load — but the façade (`Input.steer`, …) exists as soon
+ *  as `js/input/input.js` evaluates, which is BEFORE game.js calls init. A
+ *  wait on `!!Input.steer` alone can win that race, dispatch a press into a
+ *  button with no listener yet, and read travel 0 (the flake that red'd
+ *  touch-pedals on the change-aware gate). Wait on `Input.ready()` instead. */
 export function useTouchCanvas(test) {
   test.use(TOUCH);
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => typeof Input !== "undefined" && !!Input.steer);
+    await page.waitForFunction(() => typeof Input !== "undefined" && Input.ready && Input.ready());
     await page.evaluate(() => { Input.reset(); Input.setSteerMode("touch"); });
   });
 }
