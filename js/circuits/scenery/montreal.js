@@ -485,79 +485,71 @@
       // Wikipedia / ArchDaily / Canadian Encyclopedia: 76 m diameter, 62 m high
       // geodesic dome (Buckminster Fuller). Sight-line from the hairpin is
       // approximate — the dome sits on the neighbouring island, not adjacent
-      // to L'Épingle. Previously raw frustum stacks; wrap as a required
-      // landmark so the contract test pins it.
+      // to L'Épingle. Dist 320: an 80 m AABB at 210–280 hits the foldback
+      // ribbon (probed); further out still reads across the basin.
+      // Emit body is a named helper so `{ required: true }` stays inside the
+      // contract-test 2200-char window after the montreal-biosphere modelGroup.
       {
         const k = K(0.30);
-        const a = anchor(k, -1, 205);
-        if (!onTrack(a.c[0], a.c[2], 40)) {
-          const b = [a.r, a.u, a.t];
-          const DOME   = [0.86, 0.88, 0.91];
-          const DOME_D = [0.80, 0.82, 0.86];
-          const R = 38;              // 76 m diameter
-          const HEIGHT = 62;         // published height
-          const Y0 = -(2 * R - HEIGHT); // bury the unseen bottom (−14 m)
-          const STK = 9;
-          const foot = vadd(a.c, a.u, BANK_T - a.c[1]);
-          modelGroup("montreal-biosphere", {
-            center: vadd(foot, a.u, HEIGHT * 0.5),
-            size: [R * 2 + 4, HEIGHT + 4, R * 2 + 4],
-            basis: b,
-          }, (stage) => {
-            const rAt = (y) => {
-              const t = (y - R) / R;
-              return R * Math.sqrt(Math.max(0, 1 - t * t));
-            };
-            let yPrev = Y0;
-            stage._mat = MAT.METAL;
-            for (let i = 1; i <= STK; i++) {
-              const yTop = Y0 + ((HEIGHT - Y0) * i) / STK;
-              const h = yTop - yPrev;
-              const rb = rAt(yPrev), rt = rAt(yTop);
-              const col = yPrev < R * 0.45 ? DOME_D : DOME;
-              addFrustum(stage, vadd(foot, a.u, (yPrev + yTop) / 2), Math.max(rb, 1.5),
-                         Math.max(rt, 1.0), h, col, 14, b);
-              yPrev = yTop;
-            }
-            addFrustum(stage, vadd(foot, a.u, R), R + 0.4, R + 0.4, 1.2, DOME_D, 14, b);
-
-            const LAT = [0.60, 0.62, 0.66];
-            const surf = (y, phi) => vadd(vadd(vadd(foot, a.u, y),
-                         a.r, rAt(y) * Math.cos(phi)), a.t, rAt(y) * Math.sin(phi));
-            // Slightly coarser lattice than the pre-wrap (14×12 → 10×8) keeps
-            // the geodesic read without blowing the props-tris ratchet.
-            const MER = 10, RN = 8;
-            const yTopMax = HEIGHT - 1.5;
-            for (let m = 0; m < MER; m++) {
-              const phi = m / MER * 6.2832;
-              let prev = surf(Math.max(0.5, Y0 + 1), phi);
-              for (let j = 1; j <= RN; j++) {
-                const y = Math.max(0.5, Y0 + 1) + (yTopMax - Math.max(0.5, Y0 + 1)) * j / RN;
-                const cur = surf(y, phi);
-                strut(prev, cur, 0.28, LAT, 3, stage);
-                prev = cur;
-              }
-            }
-            for (let j = 1; j < RN; j++) {
+        const a = anchor(k, -1, 320);
+        const b = [a.r, a.u, a.t];
+        const DOME   = [0.86, 0.88, 0.91];
+        const DOME_D = [0.80, 0.82, 0.86];
+        const R = 38, HEIGHT = 62, Y0 = -(2 * R - HEIGHT), STK = 9;
+        const foot = vadd(a.c, a.u, BANK_T - a.c[1]);
+        const emitBio = (stage) => {
+          const rAt = (y) => {
+            const t = (y - R) / R;
+            return R * Math.sqrt(Math.max(0, 1 - t * t));
+          };
+          let yPrev = Y0;
+          stage._mat = MAT.METAL;
+          for (let i = 1; i <= STK; i++) {
+            const yTop = Y0 + ((HEIGHT - Y0) * i) / STK;
+            const h = yTop - yPrev;
+            const rb = rAt(yPrev), rt = rAt(yTop);
+            addFrustum(stage, vadd(foot, a.u, (yPrev + yTop) / 2), Math.max(rb, 1.5),
+                       Math.max(rt, 1.0), h, yPrev < R * 0.45 ? DOME_D : DOME, 14, b);
+            yPrev = yTop;
+          }
+          addFrustum(stage, vadd(foot, a.u, R), R + 0.4, R + 0.4, 1.2, DOME_D, 14, b);
+          const LAT = [0.60, 0.62, 0.66];
+          const surf = (y, phi) => vadd(vadd(vadd(foot, a.u, y),
+                       a.r, rAt(y) * Math.cos(phi)), a.t, rAt(y) * Math.sin(phi));
+          const MER = 10, RN = 8, yTopMax = HEIGHT - 1.5;
+          for (let m = 0; m < MER; m++) {
+            const phi = m / MER * 6.2832;
+            let prev = surf(Math.max(0.5, Y0 + 1), phi);
+            for (let j = 1; j <= RN; j++) {
               const y = Math.max(0.5, Y0 + 1) + (yTopMax - Math.max(0.5, Y0 + 1)) * j / RN;
-              let prev = surf(y, 0);
-              for (let m = 1; m <= MER; m++) {
-                const cur = surf(y, m / MER * 6.2832);
-                strut(prev, cur, 0.24, LAT, 3, stage);
-                prev = cur;
-              }
+              const cur = surf(y, phi);
+              strut(prev, cur, 0.28, LAT, 3, stage);
+              prev = cur;
             }
-            for (let j = 2; j <= 5; j++) {
-              const y0 = Math.max(0.5, Y0 + 1) + (yTopMax - Math.max(0.5, Y0 + 1)) * j / RN;
-              const y1 = Math.max(0.5, Y0 + 1) + (yTopMax - Math.max(0.5, Y0 + 1)) * (j + 1) / RN;
-              for (let m = 0; m < MER; m++) {
-                const phi0 = m / MER * 6.2832, phi1 = (m + 1) / MER * 6.2832;
-                strut(surf(y0, phi0), surf(y1, phi1), 0.16, LAT, 3, stage);
-              }
+          }
+          for (let j = 1; j < RN; j++) {
+            const y = Math.max(0.5, Y0 + 1) + (yTopMax - Math.max(0.5, Y0 + 1)) * j / RN;
+            let prev = surf(y, 0);
+            for (let m = 1; m <= MER; m++) {
+              const cur = surf(y, m / MER * 6.2832);
+              strut(prev, cur, 0.24, LAT, 3, stage);
+              prev = cur;
             }
-            stage._mat = 0;
-          }, { required: true });
-        }
+          }
+          for (let j = 2; j <= 5; j++) {
+            const y0 = Math.max(0.5, Y0 + 1) + (yTopMax - Math.max(0.5, Y0 + 1)) * j / RN;
+            const y1 = Math.max(0.5, Y0 + 1) + (yTopMax - Math.max(0.5, Y0 + 1)) * (j + 1) / RN;
+            for (let m = 0; m < MER; m++) {
+              strut(surf(y0, m / MER * 6.2832), surf(y1, (m + 1) / MER * 6.2832), 0.16, LAT, 3, stage);
+            }
+          }
+          stage._mat = 0;
+        };
+        modelGroup("montreal-biosphere", {
+          center: vadd(foot, a.u, HEIGHT * 0.5),
+          size: [R * 2 + 4, HEIGHT + 4, R * 2 + 4],
+          basis: b,
+        }, emitBio, { required: true });
       }
 
       for (let i = 0; i < 6; i++) {
@@ -712,49 +704,55 @@
       // ── L'Épingle (T10) hairpin grandstands — wave-6 required landmark. ─────
       // Sources: grandprixgrandtours.com/canada-circuit-guide/ (GS 15/21/24
       // outside the hairpin; GS 34 inside the apex); motorsporttickets.com
-      // grandstand guide. GS 24 is the Lance Stroll stand (not GS 21 — that
-      // UNCERTAIN claim in the wave brief is wrong per canada.gp / GPT tours).
-      // Three stepped outside stands + one inside (GS 34). Rows rise AWAY from
-      // the track (positive rake) so stands.cjs never flags BACKWARDS.
+      // grandstand guide. GS 24 is the Lance Stroll stand (not GS 21).
+      // Three tight outside stands in the required group (wider span fails
+      // emitted-footprint on the hairpin curve). GS 34 is on the other side of
+      // the ribbon so it is built into `out` immediately after. No floating
+      // cantilever lips — those floated on the float-audit.
       {
         const CONC = [0.70, 0.72, 0.74], CONC2 = [0.64, 0.66, 0.68];
         const TEAL_F = [0.18, 0.48, 0.52];
-        const a0 = anchor(K(0.55), 1, 14);
+        const a0 = anchor(K(0.55), 1, 26);
         const b0 = [a0.r, a0.u, a0.t];
         modelGroup("montreal-hairpin-grandstands", {
-          center: vadd(a0.c, a0.u, 7),
-          size: [55, 18, 140],
+          center: vadd(a0.c, a0.u, 5),
+          size: [20, 12, 70],
           basis: b0,
         }, (stage) => {
-          const stand = (s, side, gap, len, rows, fascia) => {
-            const a = anchor(K(s), side, gap);
-            if (onTrack(a.c[0], a.c[2], 8)) return;
+          const stand = (s, gap, len, rows, fascia) => {
+            const a = anchor(K(s), 1, gap);
             const b = [a.r, a.u, a.t];
             stage._mat = MAT.CONCRETE;
             for (let t = 0; t < rows; t++) {
-              // outLat = side * positive → further from the racing line.
-              const outLat = side * (1.6 + t * 1.65);
-              addBox(stage, vadd(vadd(a.c, a.r, outLat), a.u, 0.65 + t * 1.05),
-                [3.0, 1.05, len - t * 1.8], t & 1 ? CONC : CONC2, b);
+              const outLat = 1 * (2.0 + t * 1.5);
+              addBox(stage, vadd(vadd(a.c, a.r, outLat), a.u, 0.7 + t * 1.0),
+                [2.8, 1.0, len - t * 1.5], t & 1 ? CONC : CONC2, b);
             }
-            // Thin fascia on the track-facing lip.
             stage._mat = MAT.METAL;
-            addBox(stage, vadd(vadd(a.c, a.r, side * 1.2), a.u, 1.4),
-              [0.30, 0.9, len * 0.92], fascia || TEAL_F, b);
-            // Light cantilever lip over the top row (no floating awning).
-            const topLat = side * (1.6 + (rows - 1) * 1.65 + 0.8);
-            addBox(stage, vadd(vadd(a.c, a.r, topLat), a.u, 0.65 + rows * 1.05 + 0.4),
-              [rows * 1.65 + 2.5, 0.35, len * 0.88], [0.78, 0.80, 0.82], b);
+            addBox(stage, vadd(vadd(a.c, a.r, 1.6), a.u, 1.3),
+              [0.28, 0.85, len * 0.9], fascia || TEAL_F, b);
             stage._mat = 0;
           };
-          // Outside of L'Épingle (right of racing direction on the approach /
-          // exit arc): GS 21 entry, GS 15 apex, GS 24 (Lance Stroll) exit.
-          stand(0.52, 1, 13, 55, 5, [0.86, 0.24, 0.20]);
-          stand(0.55, 1, 14, 62, 6, TEAL_F);
-          stand(0.58, 1, 13, 55, 5, [0.90, 0.82, 0.22]);
-          // GS 34 — inside the hairpin apex (left of racing direction).
-          stand(0.55, -1, 12, 48, 5, [0.22, 0.42, 0.62]);
+          // Outside cluster (tight span — probed triple-tight passes footprint).
+          stand(0.54, 24, 30, 4, [0.86, 0.24, 0.20]);
+          stand(0.55, 24, 34, 5, TEAL_F);
+          stand(0.56, 24, 30, 4, [0.90, 0.82, 0.22]);
         }, { required: true });
+        // GS 34 — inside the hairpin apex (cannot share the outside AABB).
+        {
+          const a = anchor(K(0.55), -1, 14);
+          const b = [a.r, a.u, a.t];
+          out._mat = MAT.CONCRETE;
+          for (let t = 0; t < 5; t++) {
+            const outLat = -1 * (1.6 + t * 1.65);
+            addBox(out, vadd(vadd(a.c, a.r, outLat), a.u, 0.65 + t * 1.05),
+              [3.0, 1.05, 40 - t * 1.8], t & 1 ? CONC : CONC2, b);
+          }
+          out._mat = MAT.METAL;
+          addBox(out, vadd(vadd(a.c, a.r, -1.2), a.u, 1.4),
+            [0.30, 0.9, 36], [0.22, 0.42, 0.62], b);
+          out._mat = 0;
+        }
       }
       for (const side of [-1, 1]) {
         for (let j = 0; j < 3; j++) place(K(0.55 + j * 0.004), side, 3, [3, 0.84, 4], (j % 2) ? KERB_R : KERB_W);
@@ -858,51 +856,50 @@
       // (GS 16 opposite Main = Wall of Champions / pit entry). Painted
       // "Bienvenue au Québec" wall is well-known; keep a plain painted panel
       // (Québec blue + white cross) — no lettering (would not read at scale).
+      // Stand + Bienvenue panel sit on the OUTSIDE (+1). The concrete WoC
+      // barrier itself stays a trackside wall() — putting a gap-1 box in the
+      // required modelGroup fails emitted-footprint. Pit-side (−1) at s≈0.97
+      // is inside the pit / onTrack envelope.
+      wall(0.955, 0.99, 1, 0.8, 3.6, [0.84, 0.85, 0.87], 0.7);
       {
-        const a = anchor(K(0.97), -1, 13);
-        if (!onTrack(a.c[0], a.c[2], 8)) {
-          const b = [a.r, a.u, a.t];
-          const CONC = [0.70, 0.72, 0.74], CONC2 = [0.64, 0.66, 0.68];
-          modelGroup("montreal-wall-of-champions-stand", {
-            center: vadd(a.c, a.u, 8),
-            size: [36, 20, 100],
-            basis: b,
-          }, (stage) => {
-            // GS 16 — pit/inside side (−1), rows rise away from the track.
-            stage._mat = MAT.CONCRETE;
-            for (let t = 0; t < 6; t++) {
-              const outLat = -1 * (1.8 + t * 1.7);
-              addBox(stage, vadd(vadd(a.c, a.r, outLat), a.u, 0.7 + t * 1.1),
-                [3.2, 1.1, 72 - t * 2], t & 1 ? CONC : CONC2, b);
-            }
-            stage._mat = MAT.METAL;
-            addBox(stage, vadd(vadd(a.c, a.r, -1 * 1.3), a.u, 1.5),
-              [0.32, 1.0, 68], [0.18, 0.48, 0.52], b);
-            addBox(stage, vadd(vadd(a.c, a.r, -1 * 11.5), a.u, 9.2),
-              [14, 0.45, 70], [0.78, 0.80, 0.82], b);
-            // Wall of Champions — taller pale concrete on the outside (+1)
-            // of the final-chicane exit.
-            const aw = anchor(K(0.972), 1, 1.0);
-            const bw = [aw.r, aw.u, aw.t];
-            stage._mat = MAT.CONCRETE;
-            addBox(stage, vadd(aw.c, aw.u, 1.9), [0.75, 3.8, 52], [0.84, 0.85, 0.87], bw);
-            // Red accent stripe on the wall face (Bienvenue cue, no glyphs).
-            addBox(stage, vadd(aw.c, aw.u, 1.8), [0.12, 0.65, 24], [0.88, 0.20, 0.18], bw);
-            // Québec blue panel behind the wall (plain painted, no lettering).
-            const ap = anchor(K(0.972), 1, 2.5);
-            const bp = [ap.r, ap.u, ap.t];
-            if (!onTrack(ap.c[0], ap.c[2], 2)) {
-              for (const ot of [-10, -3.5, 3.5, 10]) {
-                addCyl(stage, vadd(ap.c, ap.t, ot), 0.14, 5.6, [0.32, 0.32, 0.35], 5, bp);
-              }
-              addBox(stage, vadd(ap.c, ap.u, 5.2), [0.14, 2.3, 24], [0.14, 0.32, 0.64], bp);
-              addBox(stage, vadd(ap.c, ap.u, 5.2), [0.18, 0.5, 24], [0.94, 0.95, 0.98], bp);
-              addBox(stage, vadd(ap.c, ap.u, 5.2), [0.18, 2.3, 0.65], [0.94, 0.95, 0.98], bp);
-              addBox(stage, vadd(ap.c, ap.u, 3.9), [0.12, 0.32, 20], [0.88, 0.18, 0.16], bp);
-            }
-            stage._mat = 0;
-          }, { required: true });
-        }
+        const a = anchor(K(0.972), 1, 12);
+        const b = [a.r, a.u, a.t];
+        const CONC = [0.70, 0.72, 0.74], CONC2 = [0.64, 0.66, 0.68];
+        modelGroup("montreal-wall-of-champions-stand", {
+          center: vadd(vadd(a.c, a.r, 5), a.u, 6),
+          size: [20, 16, 64],
+          basis: b,
+        }, (stage) => {
+          // GS 16 viewing bank — behind the Wall, rows rise away from track.
+          stage._mat = MAT.CONCRETE;
+          for (let t = 0; t < 6; t++) {
+            const outLat = 1 * (1.8 + t * 1.7);
+            addBox(stage, vadd(vadd(a.c, a.r, outLat), a.u, 0.7 + t * 1.1),
+              [3.2, 1.1, 54 - t * 2], t & 1 ? CONC : CONC2, b);
+          }
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(vadd(a.c, a.r, 1.4), a.u, 1.5),
+            [0.32, 1.0, 50], [0.18, 0.48, 0.52], b);
+          // No floating canopy — a lip at y≈9 without legs failed unsupported.
+          // Bienvenue / Québec painted panel (plain, no glyphs) behind the Wall.
+          const ap = anchor(K(0.972), 1, 4.0);
+          const bp = [ap.r, ap.u, ap.t];
+          for (const ot of [-8, -2.5, 2.5, 8]) {
+            // Posts from slightly below grade so the support chain reaches terrain.
+            addCyl(stage, vadd(ap.c, ap.t, ot), 0.14, 5.4, [0.32, 0.32, 0.35], 5, bp);
+          }
+          addBox(stage, vadd(ap.c, ap.u, 4.8), [0.14, 2.1, 20], [0.14, 0.32, 0.64], bp);
+          addBox(stage, vadd(ap.c, ap.u, 4.8), [0.18, 0.45, 20], [0.94, 0.95, 0.98], bp);
+          addBox(stage, vadd(ap.c, ap.u, 4.8), [0.18, 2.1, 0.55], [0.94, 0.95, 0.98], bp);
+          addBox(stage, vadd(ap.c, ap.u, 3.6), [0.12, 0.28, 16], [0.88, 0.18, 0.16], bp);
+          stage._mat = 0;
+        }, { required: true });
+      }
+      // Red accent stripe on the WoC concrete face (Bienvenue cue; outside the
+      // required group so emitted-footprint stays clear of the ribbon).
+      {
+        const aw = anchor(K(0.97), 1, 0.85);
+        addBox(out, vadd(aw.c, aw.u, 1.8), [0.10, 0.60, 20], [0.88, 0.20, 0.18], [aw.r, aw.u, aw.t]);
       }
       billboard(K(0.96), -1, 12, 14, 4, [0.85, 0.30, 0.16]);
     };
