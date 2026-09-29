@@ -2,7 +2,7 @@
   "buried": {
     "abudhabi": 8,
     "albert_park": 3,
-    "anderstorp": 125,
+    "anderstorp": 2,
     "bahrain": 46,
     "baku": 1,
     "brands_hatch": 3,
@@ -70,7 +70,7 @@
   },
   "flatCoplanar": {
     "abudhabi": 5,
-    "anderstorp": 31,
+    "anderstorp": 5,
     "bahrain": 6,
     "baku": 5,
     "brands_hatch": 7,
