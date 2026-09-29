@@ -85,6 +85,7 @@ const NetPlay = (function () {
   // clock (raceT is shared through netStart) and only once the POSED lap is
   // past the target; one that arrives before the pose crosses waits in _nFin.
   const FIN_SLACK_S = 5;
+  const POSE_AGE_MAX_MS = 100;   // tick(now, poseAt): a pose older than this is not "last frame's"
   // A reported lap time must be drivable: no faster than the whole lap at the
   // wire's own speed ceiling, no slower than the qualifying bound.
   // The lap an owner reports at its finishing crossing, bounded to the race:
@@ -930,7 +931,10 @@ const NetPlay = (function () {
     }
 
     const _pubOwn = { id: -1, car: null }, _pubOne = [_pubOwn];   // publish scratch: one entry per packet
-    function tick(now) {
+    // `poseAt` (optional): when the local car's pose is, on the same clock as
+    // `now` — the game loop publishes last frame's physics, which is older
+    // than the frame. Absent (a test pumping by hand), the pose is `now`.
+    function tick(now, poseAt) {
       if (!active || !sessions.size) return;
       G.netNow = now;
       if (!holdUntil) holdUntil = now + HOLD_MAX_MS;
@@ -1025,7 +1029,10 @@ const NetPlay = (function () {
       if (localCar && now - lastPublish >= PUBLISH_MS) {
         lastPublish = now;
         _pubOne[0] = _pubOwn; _pubOwn.id = G.wireId(localCar); _pubOwn.car = localCar;
-        const bytes = NetSnapshot.encodeSnapshot(Math.round(now), _pubOne);
+        // Bounded: a pose from the future, or one older than a stall's worth,
+        // is a clock we cannot trust — stamp the frame instead.
+        const at = Number.isFinite(poseAt) && poseAt <= now && now - poseAt <= POSE_AGE_MAX_MS ? poseAt : now;
+        const bytes = NetSnapshot.encodeSnapshot(Math.round(at), _pubOne);
         // Live map is safe here: sendState delivers nothing (Map iterators
         // tolerate a removal, and only pump() can run onClose).
         for (const s of sessions.values()) { try { s.sendState(bytes); } catch (e) { /* a dead session must not stop the others' publish */ } }
