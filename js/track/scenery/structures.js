@@ -6,7 +6,7 @@ const SceneryStructures = (function () {
     const { out, track, def, n, ds, hw, px, py, pz, NIGHT, MAT,
             indexBarrier,
             addBox, addCyl, addFrustum, addPrism, RAW, blockAt, recordBarrier,
-            groundYAt, onTrack, overheadSpan, hash, cross, norm, vadd,
+            groundYAt, terrainYAt, onTrack, overheadSpan, hash, cross, norm, vadd,
             anchor, rejBox } = ctx;
     Log.info("scenery", "scenery-structures dress " + (def && def.id));
     const { SIGN_SEG, SIGN_DIGIT, CROWD_DAY } = TrackSceneryData;
@@ -875,7 +875,11 @@ const SceneryStructures = (function () {
       const tn = [track.tx[k] / tl, 0, track.tz[k] / tl];   // horizontal tangent
       const o = side * (hw[k] + dist);
       const cx = px[k] + r[0] * o, cz = pz[k] + r[2] * o;
-      const gy = groundYAt(k, dist);
+      // Prefer the rendered terrain ribbon: closed-form groundYAt on Suzuka's
+      // Motopia drop left the Circuit Wheel legs ~2.2 m clear of terrain while
+      // the 38 m silhouette stayed correct. Silhouette unchanged — only the foot.
+      const ty = typeof terrainYAt === "function" ? terrainYAt(cx, cz) : null;
+      const gy = ty != null ? ty : groundYAt(k, dist);
       const hubY = gy + radius + 5;
       const hub = [cx, hubY, cz];
       for (const lo of [-3, 3]) {                            // support legs

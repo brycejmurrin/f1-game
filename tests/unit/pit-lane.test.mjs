@@ -1176,6 +1176,89 @@ test("windowOf names a rival's window for the gap chips: P<lap> within three lap
   assert.equal(pits.windowOf({ lap: 3 }), "", "no plan, no window");
 });
 
+// ── The plan against the tyres actually worn ─────────────────────────────────
+// A session with the REAL planner (AiDrive.stintPlan) and the REAL rule
+// (SportingRegs), because every bug below lived in the seam between them and
+// this module — a stubbed planner would agree with anything.
+function strategySession(laps) {
+  const s = commitSession();
+  const { ctx, G } = s;
+  vm.runInContext(readFileSync(join(ROOT, "js/physics/ai-drive.js"), "utf8") + "\n;globalThis.AiDrive = AiDrive;", ctx, { filename: "ai-drive.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/race/sporting-regs.js"), "utf8") + "\n;globalThis.SportingRegs = SportingRegs;", ctx, { filename: "sporting-regs.js" });
+  ctx.TyreModel.AI_CLASS = {
+    soft: { code: "S", life: 0.48 }, medium: { code: "M", life: 0.74 }, hard: { code: "H", life: 1.05 }, wet: { code: "W", life: 0.72 },
+  };
+  ctx.TyreModel.startRecord = (car) => car.rec;
+  G.lapsTarget = laps;
+  G.tyres.lapsOn = (car) => car.lapsOnSet || 0;
+  return s;
+}
+
+test("a NO STOP plan is re-cut when the set is wearing faster than planned", () => {
+  // THE REPORTED BUG: the replan returned early when the plan had no next stop,
+  // so "PLAN NO STOP" stood while the set was gone in three laps.
+  const { pits, car } = strategySession(10);
+  const c = car(0);
+  c.lap = 4; c.lapsOnSet = 3; c.tyreWear = 0.9;          // 90 % gone after 3 of 10 laps
+  c.tyre = { code: "M", life: 0.74, tread: 0 };
+  c.tyreLog = [{ code: "M", lap0: 0, lap1: null }];
+  c.pitPlan = { stops: 0, seq: ["medium"], stints: [10], lapsAt: [], pitLossLaps: 0.2 };
+  assert.equal(pits.replan(c), true, "a set that will not reach the flag must change the plan");
+  assert.ok(c.pitPlan.stops >= 1, `the new plan must stop: ${JSON.stringify(c.pitPlan)}`);
+  assert.ok(c.pitPlan.lapsAt[0] >= 4 && c.pitPlan.lapsAt[0] <= 6, `…soon, not at the flag: BOX L${c.pitPlan.lapsAt[0]}`);
+  assert.notEqual(c.pitPlan.seq[1], "medium", "…and onto a second dry compound, which a 10-lap Race owes");
+});
+
+test("the re-cut counts the compounds the car RAN, not the ones the plan named", () => {
+  // Stopped once already from S onto S: the rule is still owed, whatever the
+  // plan thought it had done. The old re-cut passed the plan's history and
+  // announced NO MORE STOPS into a disqualification.
+  const { pits, car } = strategySession(20);
+  const c = car(0);
+  c.lap = 12; c.pitStops = 1; c.lapsOnSet = 1; c.tyreWear = 0.05;
+  c.tyre = { code: "S", life: 0.5, tread: 0 };
+  c.tyreLog = [{ code: "S", lap0: 0, lap1: 11 }, { code: "S", lap0: 11, lap1: null }];
+  c.pitPlan = { stops: 1, seq: ["hard", "medium"], stints: [10, 10], lapsAt: [11], pitLossLaps: 0.2 };
+  pits.replan(c);
+  assert.ok(c.pitPlan.stops >= 2, `one dry compound run, so another stop is owed: ${JSON.stringify(c.pitPlan)}`);
+  assert.ok(new Set(c.pitPlan.seq.slice(2).concat("soft")).size >= 2, `…onto a different letter: ${c.pitPlan.seq}`);
+});
+
+test("AUTO never refits the letter a car that owes its second compound has run", () => {
+  const { pits, car } = strategySession(25);
+  const c = car(0);
+  c.lap = 13; c.pitStops = 0; c.pitPlan = null;
+  c.tyreLog = [{ code: "S", lap0: 0, lap1: null }];
+  // Both sets reach the flag; the fastest is the soft — which is the DSQ.
+  assert.equal(pits.pickFor(c).code, "M", "AUTO must fit the second compound the Race requires");
+  c.tyreLog = [{ code: "M", lap0: 0, lap1: 6 }, { code: "S", lap0: 6, lap1: null }];
+  assert.equal(pits.pickFor(c).code, "S", "with the rule met, the fastest set that lasts is fine");
+});
+
+test("AUTO fits the plan's letter, and the HUD names the set the crew will fit", () => {
+  const { pits, car } = strategySession(5);                // under the rule's minimum: no rule
+  const c = car(0);
+  c.lap = 2; c.pitStops = 0;
+  c.tyreLog = [{ code: "S", lap0: 0, lap1: null }];
+  c.pitPlan = { stops: 1, seq: ["soft", "medium"], stints: [2, 3], lapsAt: [2], pitLossLaps: 0.2 };
+  assert.equal(pits.pickFor(c).code, "M", "the plan says M; the soft would also last, but the plan is what the HUD promised");
+  assert.match(pits.planInfo(c).text, / M$/, "the HUD's letter is the one fitted");
+  c.pitNext = { id: "soft", code: "S", life: 0.55, tread: 0 };
+  assert.match(pits.planInfo(c).text, / S$/, "…and a selected set overrides it on the HUD too");
+});
+
+test("the player's plan starts on the set the player is on", () => {
+  // No `start` was passed: every player got the planner's own choice — "hard,
+  // BOX L11" for a hypersoft gone by lap 4.
+  const { pits } = strategySession(20);
+  const hyper = pits.planFor(0.5, true, 20, { human: true, rec: { code: "S", life: 0.30, tread: 0 } });
+  const hard = pits.planFor(0.5, true, 20, { human: true, rec: { code: "H", life: 1.05, tread: 0 } });
+  assert.equal(hyper.seq[0], "soft");
+  assert.equal(hard.seq[0], "hard");
+  assert.ok(hyper.lapsAt[0] < hard.lapsAt[0], `a hypersoft stops before a hard: L${hyper.lapsAt[0]} vs L${hard.lapsAt[0]}`);
+  assert.ok(hyper.lapsAt[0] <= 7, `a 6-lap set cannot be planned to lap ${hyper.lapsAt[0]}`);
+});
+
 test("lossS is the lane's net cost in seconds, and estimate agrees with it off a caution", () => {
   const { pits, car } = commitSession();
   const s = pits.lossS();
