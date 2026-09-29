@@ -614,7 +614,7 @@ test("the clearance grid index finds exactly what a full scan finds", async () =
 
 test("the flyby's plans are made before it plays, not at each cut", () => {
   const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
-  const warm = game.indexOf("FlybySeq.warm(track, flybyShots)"), run = game.indexOf("loadingScreen.run(loadingInfo(), go)");
+  const warm = game.indexOf("FlybySeq.warm(track, flybyShots)"), run = game.indexOf("loadingScreen.run(info, go)");   // info: built once, before the duration (a real race's read stretches it)
   assert.ok(warm > 0 && run > warm, "raceIntro warms the flyby's plans before the loading screen runs it");
 });
 
