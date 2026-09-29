@@ -4659,8 +4659,9 @@ function updateCar(c, dt, ranked) {
     // ahead of US holding it up is getting through whatever we do, and
     // defendPull was the only answer the AI had. Speeds compare to each other,
     // never to a literal, so the window holds at every OVERALL SPEED.
-    const letPassCase = state === "race" && !blocker && chaser
-      && chaserGap < 9 && chaser.speed > c.speed + 2.5 * (vTop() / VMAX);   // a closing RATE rides the pace scale too
+    // BLUE FLAGS ONLY (AiDrive.letPassCase): the chaser must be LAPPING us — a lap or more ahead in progress.
+    const letPassCase = AiDrive.letPassCase(state === "race", blocker, chaser, chaserGap, chaser ? chaser.speed : 0,
+      c.speed, vTop() / VMAX, !!chaser && chaser.prog - c.prog > track.total * 0.5);
     if (letPassCase) c.letPassT = (c.letPassT || 0) + dt;
     else c.letPassT = Math.max(0, (c.letPassT || 0) - dt * 1.5);
     letPass = (c.letPassT || 0) > AiDrive.letPassDelay(aiT);

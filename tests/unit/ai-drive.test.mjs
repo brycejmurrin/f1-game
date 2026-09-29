@@ -1142,3 +1142,22 @@ test("the cover starts a time behind, grows as the attacker closes, and awarenes
   assert.ok(at(0.5 * v, { ...ace, awareness: 1 }) > 0, "a sharp one's reaches it");
   assert.ok(Math.abs(A.defendWindowT({ awareness: 0 }) - 0.35) < 1e-9 && Math.abs(A.defendWindowT({ awareness: 1 }) - 0.7) < 1e-9);
 });
+
+/* LET PASS IS A BLUE FLAG. The move-aside used to wave ANY quicker car through after a
+ * few seconds on the gearbox, so a same-lap rival (the player included) was handed the
+ * place instead of having to take it. Only a car LAPPING us is waved through now. */
+test("letPassCase: a lapping car closing on the gearbox is waved through; a same-lap rival never is", () => {
+  const on = (o = {}) => A.letPassCase(o.racing ?? true, o.blocker ?? null, "chaser" in o ? o.chaser : {}, o.gap ?? 6,
+    o.vC ?? 60, o.v ?? 55, o.vs ?? 1, o.lapping ?? true);
+  assert.equal(on(), true, "lapping, 6 m back, 5 m/s quicker: blue flag");
+  assert.equal(on({ lapping: false }), false, "the same car on the SAME lap is raced, not waved through");
+  assert.equal(on({ gap: 12 }), false, "not yet on the gearbox");
+  assert.equal(on({ vC: 57 }), false, "not closing fast enough (under 2.5 m/s at pace 5)");
+  assert.equal(on({ vC: 57, vs: 0.5 }), true, "the closing band rides the pace scale");
+  assert.equal(on({ blocker: {} }), false, "a car ahead of US is holding it up anyway");
+  assert.equal(on({ racing: false }), false, "only in the race");
+  assert.equal(on({ chaser: null }), false);
+  const game = readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
+  assert.match(game, /AiDrive\.letPassCase\([\s\S]{0,200}chaser\.prog - c\.prog > track\.total \* 0\.5\)/,
+    "game.js asks the rule with LAPPING = a lap or more ahead in progress");
+});

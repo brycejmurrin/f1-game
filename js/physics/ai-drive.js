@@ -1194,6 +1194,15 @@ const AiDrive = (function () {
   // laps and is where the "AI welded to my bumper" pile-ups start. After a
   // patience window (awareness commits earlier) the AI moves toward its free
   // side and stops accelerating away — TORCS' OPP_LETPASS, minus the blue flag.
+  // LET PASS IS A BLUE FLAG (2026-09-29): a quicker car inside 9 m on our gearbox, closing,
+  // with nothing ahead of US holding it up — and LAPPING us. It used to wave a same-lap
+  // rival through too (the player included) after letPassDelay on the gearbox, which read
+  // as "the AI doesn't defend": a racer makes the faster car pass; a backmarker moves over.
+  // The closing rate rides the pace scale (vScale = vTop()/VMAX), like queueBrake's bands.
+  function letPassCase(racing, blocker, chaser, chaserGap, chaserSpeed, speed, vScale, lapping) {
+    if (!racing || blocker || !chaser || !lapping || !(chaserGap < 9)) return false;
+    return (chaserSpeed || 0) > (speed || 0) + 2.5 * (vScale > 0 ? vScale : 1);
+  }
   function letPassDelay(t) {
     return lerp(4.2, 1.8, t.awareness);
   }
@@ -1229,7 +1238,7 @@ const AiDrive = (function () {
     otShouldFire, wantBoost, wantX, brakeTarget, brakeDecision, adaptLane, otPull,
     defendPull, mirrorReach, defendWindowT, isBoxed, minLatGap, wallHitLoss, wallSteerScrub,
     wallAiScrub, beginLook, pushLook, endLook, aiRescueDelay, otSide,
-    letPassDelay, letPassPull, letPassEase, queueFloor, laneFollow, unstuckLatFloor,
+    letPassCase, letPassDelay, letPassPull, letPassEase, queueFloor, laneFollow, unstuckLatFloor,
     otWant, queueTime, queuePatience, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes,
     launchPlan, launchMul, launchDone, pacePhase, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
