@@ -701,6 +701,28 @@ test("reset() forgets the last race's pit exit, so this race's pace rates are no
   assert.match(reset, /pitEndT = -1e9;/);
 });
 
+test("the TV last lap follows the LEADER's laps: a retired player still hears it", () => {
+  const r = race({ laps: 3, store: { commentary: "on" } });
+  r.step(0.05, 100);
+  r.G.player.retired = true;
+  r.step(0.05, 2400);   // past the leader starting lap 3 (~107 s at 60 m/s)
+  const comm = r.said.filter((s) => s.kind === "comm").map((s) => s.msg);
+  assert.ok(comm.some((m) => /LAST LAP!|FINAL LAP\./.test(m)), `the leader's last lap is called: ${comm.join(" | ")}`);
+});
+
+test("a player racing on the lead lap hears the last lap once — the engineer's, not the commentator's too", () => {
+  const r = race({ laps: 3, store: { commentary: "on" } });
+  assert.equal(r.radio.callsLastLap(), false, "not live before the first tick");
+  r.step(0.05, 2400);
+  assert.equal(r.radio.callsLastLap(), true, "so game.js's plain FINAL LAP card stands down");
+  const comm = r.said.filter((s) => s.kind === "comm").map((s) => s.msg);
+  assert.ok(!comm.some((m) => /LAST LAP!|FINAL LAP\./.test(m)), `no TV last lap on the player's own lap: ${comm.join(" | ")}`);
+  assert.ok(r.said.some((s) => s.kind !== "comm" && /LAST LAP|LAST ONE|ONE TO GO|ONE MORE|EVERYTHING YOU'VE GOT|HOLD .* OFF/.test(s.msg)),
+    `the engineer calls it: ${r.said.map((s) => s.msg).join(" | ")}`);
+  r.radio.setChat("off");
+  assert.equal(r.radio.callsLastLap(), false, "chatter OFF: the FINAL LAP card is the only call, so it stays");
+});
+
 test('queued driving advice is discarded when a caution starts, the driver retires, or a pit stop begins', () => {
   for (const change of ['caution', 'retired', 'pit']) {
     const r = race();
