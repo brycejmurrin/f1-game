@@ -22,6 +22,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { fnSource } from "../helpers/fn-source.mjs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -3494,7 +3495,9 @@ test("the flyby plays on the pre-race loading screen only; the picker pre-builds
   assert.match(game, /if \(menuBlank && !\(track && _menuGate\.warm > 0\)\) return;/);
   assert.match(game, /if \(state === "results"\) return;/,
     "results keeps the last race present — physics already stopped, re-drawing is unpaid");
-  assert.match(game, /Particles\.rainShow\(false\);[\s\S]*?if \(soundOn\) GameAudio\.finish\(\);/,
+  // endRace's OWN call: over all of game.js the match began at startRaceBody's
+  // rainShow(false), so deleting endRace's still passed (audit 2026-09-29).
+  assert.match(fnSource(game, "function endRace(forcedOrder)"), /Particles\.rainShow\(false\);\s*if \(soundOn\) GameAudio\.finish\(\);/,
     "endRace clears the 2D rain overlay the way quitToMenu already did");
   const renderBody = game.slice(game.indexOf("function render(dt) {"), game.indexOf("function render(dt) {") + 1600);
   assert.ok(renderBody.indexOf("const menuBlank") < renderBody.indexOf("if (setupPreviewOn) { renderSetupPreview(dt); return; }"),

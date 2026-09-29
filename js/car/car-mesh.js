@@ -527,41 +527,46 @@ function _rigBox(out, cx, cy, cz, sx, sy, sz, col) {
     out.idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
   }
 }
-// Keyed like _cockpitDecalMesh: the player's livery colours join the key, so
-// a garage livery edit (resolveLivery is store.rev-invalidated upstream)
-// frees and rebuilds the wheel with the new accents. liv may be null — the
-// wheel then falls back to the neutral carbon look.
-let cockpitWheelMesh = null, _cockpitWheelKey = "";
-const _wheelTint = (c, k) => c ? [c[0] * k, c[1] * k, c[2] * k] : null;
-function getCockpitWheel(liv) {
-  // Livery colours are display-range; against the near-black rig they glare,
-  // so team colour lands at ~45% (grips/straps) and ~55% (the 12-o'clock
-  // stripe, which is SUPPOSED to pop).
-  const c1 = _wheelTint(liv && liv.c1, 0.45);
-  const acc = _wheelTint(liv && (liv.accent || liv.c2), 0.55);
-  const c2 = _wheelTint(liv && liv.c2, 0.40);
-  const kc = (c) => c ? c.map((v) => v.toFixed(2)).join(",") : "-";
-  const wantKey = kc(c1) + "|" + kc(acc) + "|" + kc(c2);
-  if (cockpitWheelMesh && _cockpitWheelKey !== wantKey) {
-    if (_gfx.freeMesh) _gfx.freeMesh(cockpitWheelMesh);
-    cockpitWheelMesh = null;
+// A bar from (x0,y0) to (x1,y1) in the wheel plane, w across and d deep (z):
+// the one shape _rigBox cannot lie along — round rims and angled spokes. The
+// faces wind like _rigBox's (a rotation of it), so culling treats them alike.
+function _rigBar(out, x0, y0, x1, y1, z, w, d, col) {
+  const L = Math.hypot(x1 - x0, y1 - y0) || 1, ux = (x1 - x0) / L, uy = (y1 - y0) / L;
+  const nx = -uy * w / 2, ny = ux * w / 2, za = z - d / 2, zb = z + d / 2;
+  const P = [[x0 - nx, y0 - ny], [x1 - nx, y1 - ny], [x1 + nx, y1 + ny], [x0 + nx, y0 + ny]];
+  const v = (i, zz) => [P[i][0], P[i][1], zz];
+  const F = [
+    [v(0, zb), v(1, zb), v(2, zb), v(3, zb), [0, 0, 1]],
+    [v(1, za), v(0, za), v(3, za), v(2, za), [0, 0, -1]],
+    [v(3, zb), v(2, zb), v(2, za), v(3, za), [-uy, ux, 0]],
+    [v(0, za), v(1, za), v(1, zb), v(0, zb), [uy, -ux, 0]],
+    [v(1, zb), v(1, za), v(2, za), v(2, zb), [ux, uy, 0]],
+    [v(0, za), v(0, zb), v(3, zb), v(3, za), [-ux, -uy, 0]],
+  ];
+  for (const f of F) {
+    const b = out.pos.length / 3, n = f[4];
+    for (let i = 0; i < 4; i++) { const q = f[i]; out.pos.push(q[0], q[1], q[2]); out.nrm.push(n[0], n[1], n[2]); out.col.push(col[0], col[1], col[2]); }
+    out.idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
   }
-  if (cockpitWheelMesh) return cockpitWheelMesh;
-  _cockpitWheelKey = wantKey;
-  const out = { pos: [], nrm: [], col: [], idx: [] };
-  const CARB = [0.04, 0.04, 0.05], RUB = [0.085, 0.085, 0.095], KNOB = [0.75, 0.72, 0.15];
-  const GRIP = c1 || RUB;
-  _rigBox(out, -0.165, 0.0, 0, 0.05, 0.20, 0.062, RUB);        // hand grips
-  _rigBox(out,  0.165, 0.0, 0, 0.05, 0.20, 0.062, RUB);
-  _rigBox(out, -0.165, 0.0, -0.002, 0.054, 0.09, 0.062, GRIP); // grip sleeves, team c1
-  _rigBox(out,  0.165, 0.0, -0.002, 0.054, 0.09, 0.062, GRIP);
-  _rigBox(out, -0.118, 0.112, 0, 0.06, 0.045, 0.05, CARB);     // upper corners
-  _rigBox(out,  0.118, 0.112, 0, 0.06, 0.045, 0.05, CARB);
-  _rigBox(out, 0, 0.128, 0, 0.18, 0.038, 0.05, CARB);          // top bar
-  if (acc) _rigBox(out, 0, 0.130, -0.004, 0.05, 0.040, 0.05, acc); // 12-o'clock marker stripe
-  _rigBox(out, -0.122, -0.118, 0, 0.055, 0.045, 0.05, CARB);   // lower corners
-  _rigBox(out,  0.122, -0.118, 0, 0.055, 0.045, 0.05, CARB);
-  _rigBox(out, 0, -0.138, 0, 0.17, 0.038, 0.05, CARB);         // bottom bar
+}
+// A rim arc of radius r from angle a0 to a1 (radians, 0 = 3 o'clock, CCW), in
+// n straight segments each stretched past its ends so the joins leave no gap.
+function _rigArc(out, r, a0, a1, n, w, d, col) {
+  const ext = w * 0.18;
+  for (let i = 0; i < n; i++) {
+    const t0 = a0 + (a1 - a0) * i / n, t1 = a0 + (a1 - a0) * (i + 1) / n;
+    const x0 = r * Math.cos(t0), y0 = r * Math.sin(t0), x1 = r * Math.cos(t1), y1 = r * Math.sin(t1);
+    const L = Math.hypot(x1 - x0, y1 - y0) || 1, ex = (x1 - x0) / L * ext, ey = (y1 - y0) / L * ext;
+    _rigBar(out, x0 - ex, y0 - ey, x1 + ex, y1 + ey, 0, w, d, col);
+  }
+}
+// The centre DISPLAY BLOCK of a wheel with a screen: fascia, LCD with its speed
+// and gear cells, ERS slot, OT lamp, buttons and knobs. Every live readout
+// (car-draw.js drawCockpitRig: gear, LEDs, speed digits, ERS bar, OT lamp,
+// aero lamp) is placed against THESE offsets, so a wheel that has a screen
+// carries exactly this block and the telemetry lands on it unchanged.
+function _wheelScreen(out, c2) {
+  const CARB = [0.04, 0.04, 0.05], KNOB = [0.75, 0.72, 0.15];
   _rigBox(out, 0, 0.0, 0.014, 0.215, 0.16, 0.042, CARB);       // fascia plate
   if (c2) {
     _rigBox(out, -0.104, 0.0, 0.010, 0.010, 0.155, 0.044, c2); // fascia edge trim
@@ -588,15 +593,17 @@ function getCockpitWheel(liv) {
   const PADL = [0.11, 0.11, 0.125];
   _rigBox(out, -0.150, -0.01, 0.052, 0.085, 0.135, 0.015, PADL);
   _rigBox(out,  0.150, -0.01, 0.052, 0.085, 0.135, 0.015, PADL);
-  // DRIVER HANDS at 9-and-3, gripping the rim. They live in THIS mesh so they
-  // ride _rigB and turn 1:1 with the wheel for free — no extra draw, and the
-  // 1500-tri cockpit ceiling never sees them (it measures the body build
-  // only). Driver side is -z (the LCD faces that way); fingers wrap the +z
-  // far side, thumbs sit inboard, and a short wrist stub angles down toward
-  // the driver — kept shallow so it never nears the 0.3 m cockpit near plane.
-  // Base glove is a clear grey so hands read as hands against the dark rig;
-  // knuckle pads take the team accent and the wrist strap takes team c1, so
-  // the gloves also say WHOSE hands they are.
+}
+// DRIVER HANDS at 9-and-3, gripping the rim at x ±0.165. They live in the wheel
+// mesh so they ride _rigB and turn 1:1 with the wheel for free — no extra draw,
+// and the 1500-tri cockpit ceiling never sees them (it measures the body build
+// only). Driver side is -z (the LCD faces that way); fingers wrap the +z far
+// side, thumbs sit inboard, and a short wrist stub angles down toward the
+// driver — kept shallow so it never nears the 0.3 m cockpit near plane. Base
+// glove is a clear grey so hands read as hands against the dark rig; knuckle
+// pads take the team accent and the wrist strap takes team c1, so the gloves
+// also say WHOSE hands they are.
+function _wheelHands(out, acc, c1) {
   const GLOVE = [0.17, 0.16, 0.16], PAD = acc || [0.24, 0.23, 0.23];
   const STRAP = c1 || [0.12, 0.11, 0.11];
   for (const s of [-1, 1]) {
@@ -607,11 +614,92 @@ function getCockpitWheel(liv) {
     _rigBox(out, s * 0.196, -0.100, -0.042, 0.052, 0.115, 0.055, GLOVE); // wrist stub
     _rigBox(out, s * 0.196, -0.052, -0.043, 0.054, 0.020, 0.057, STRAP); // wrist strap
   }
+}
+// The COCKPIT INTERIORS (js/camera/cockpit-opts.js WHEEL). All share the hub
+// point, the 9-and-3 grip line (x ±0.165) and the hands, so the eye, the rig
+// transform and the steering roll are the same whichever is fitted:
+//   f1    — the 2026 wheel: squared rim around the display block.
+//   gt    — a flat-bottomed round rim around the same display block.
+//   round — CLASSIC: a full round rim, three metal spokes, a horn boss; no screen.
+const COCKPIT_WHEELS = ["f1", "gt", "round"];
+function _wheelRimF1(out, CARB, RUB, GRIP, acc) {
+  _rigBox(out, -0.165, 0.0, 0, 0.05, 0.20, 0.062, RUB);        // hand grips
+  _rigBox(out,  0.165, 0.0, 0, 0.05, 0.20, 0.062, RUB);
+  _rigBox(out, -0.165, 0.0, -0.002, 0.054, 0.09, 0.062, GRIP); // grip sleeves, team c1
+  _rigBox(out,  0.165, 0.0, -0.002, 0.054, 0.09, 0.062, GRIP);
+  _rigBox(out, -0.118, 0.112, 0, 0.06, 0.045, 0.05, CARB);     // upper corners
+  _rigBox(out,  0.118, 0.112, 0, 0.06, 0.045, 0.05, CARB);
+  _rigBox(out, 0, 0.128, 0, 0.18, 0.038, 0.05, CARB);          // top bar
+  if (acc) _rigBox(out, 0, 0.130, -0.004, 0.05, 0.040, 0.05, acc); // 12-o'clock marker stripe
+  _rigBox(out, -0.122, -0.118, 0, 0.055, 0.045, 0.05, CARB);   // lower corners
+  _rigBox(out,  0.122, -0.118, 0, 0.055, 0.045, 0.05, CARB);
+  _rigBox(out, 0, -0.138, 0, 0.17, 0.038, 0.05, CARB);         // bottom bar
+}
+function _wheelRimGT(out, CARB, RUB, GRIP, acc) {
+  const R = 0.165, FLAT = -Math.PI / 3;                          // the flat starts 60° below 3 o'clock
+  _rigArc(out, R, FLAT, Math.PI - FLAT, 20, 0.034, 0.040, RUB);  // round rim over the top
+  const fx = R * Math.cos(FLAT), fy = R * Math.sin(FLAT);
+  _rigBar(out, -fx, fy, fx, fy, 0, 0.034, 0.040, RUB);           // the flat bottom
+  _rigBox(out, -R, 0.0, -0.002, 0.040, 0.09, 0.046, GRIP);       // grip sleeves, team c1
+  _rigBox(out,  R, 0.0, -0.002, 0.040, 0.09, 0.046, GRIP);
+  if (acc) _rigBox(out, 0, R, -0.004, 0.036, 0.040, 0.046, acc); // 12-o'clock marker
+  _rigBox(out, -0.130, 0.0, 0.016, 0.060, 0.050, 0.030, CARB);   // spokes to the display block
+  _rigBox(out,  0.130, 0.0, 0.016, 0.060, 0.050, 0.030, CARB);
+  _rigBox(out, 0, -0.112, 0.016, 0.060, 0.050, 0.030, CARB);
+  _rigBox(out, 0, 0.086, 0.004, 0.17, 0.024, 0.036, CARB);        // shift-light pod over the screen
+}
+function _wheelRimRound(out, GRIP, acc) {
+  // Polished alloy spokes and a leather rim: the rig's 0.30 grey read as black
+  // in the cockpit's shade (measured 2026-09-29), and spokes you cannot see
+  // make the classic wheel look like a bare hoop.
+  const R = 0.165, MET = [0.62, 0.62, 0.66], LEATHER = [0.11, 0.075, 0.05], HORN = acc || [0.20, 0.20, 0.22];
+  _rigArc(out, R, 0, Math.PI * 2, 28, 0.030, 0.034, LEATHER);    // the rim
+  _rigBox(out, -R, 0.0, -0.002, 0.036, 0.09, 0.040, GRIP);       // grip wraps, team c1
+  _rigBox(out,  R, 0.0, -0.002, 0.036, 0.09, 0.040, GRIP);
+  _rigBox(out, 0, R, -0.004, 0.030, 0.036, 0.040, [0.85, 0.85, 0.82]); // 12-o'clock marker
+  _rigBar(out, 0.030, -0.006, R - 0.010, -0.016, 0.018, 0.036, 0.008, MET);   // three spokes, dished away from the driver
+  _rigBar(out, -0.030, -0.006, -(R - 0.010), -0.016, 0.018, 0.036, 0.008, MET);
+  _rigBar(out, 0, -0.034, 0, -(R - 0.010), 0.018, 0.036, 0.008, MET);
+  _rigBox(out, 0, 0, 0.024, 0.074, 0.074, 0.024, [0.04, 0.04, 0.05]);    // boss
+  _rigBox(out, 0, 0, 0.008, 0.050, 0.050, 0.010, HORN);                  // horn push, team accent
+}
+// Keyed like _cockpitDecalMesh: the chosen wheel and the player's livery colours
+// join the key, so a garage livery edit (resolveLivery is store.rev-invalidated
+// upstream) or a WHEEL change frees and rebuilds it. liv may be null — the
+// wheel then falls back to the neutral carbon look.
+let cockpitWheelMesh = null, _cockpitWheelKey = "";
+const _wheelTint = (c, k) => c ? [c[0] * k, c[1] * k, c[2] * k] : null;
+function getCockpitWheel(liv, style) {
+  const st = COCKPIT_WHEELS.includes(style) ? style : COCKPIT_WHEELS[0];
+  // Livery colours are display-range; against the near-black rig they glare,
+  // so team colour lands at ~45% (grips/straps) and ~55% (the 12-o'clock
+  // stripe, which is SUPPOSED to pop).
+  const c1 = _wheelTint(liv && liv.c1, 0.45);
+  const acc = _wheelTint(liv && (liv.accent || liv.c2), 0.55);
+  const c2 = _wheelTint(liv && liv.c2, 0.40);
+  const kc = (c) => c ? c.map((v) => v.toFixed(2)).join(",") : "-";
+  const wantKey = st + "|" + kc(c1) + "|" + kc(acc) + "|" + kc(c2);
+  if (cockpitWheelMesh && _cockpitWheelKey !== wantKey) {
+    if (_gfx.freeMesh) _gfx.freeMesh(cockpitWheelMesh);
+    cockpitWheelMesh = null;
+  }
+  if (cockpitWheelMesh) return cockpitWheelMesh;
+  _cockpitWheelKey = wantKey;
+  const out = { pos: [], nrm: [], col: [], idx: [] };
+  const CARB = [0.04, 0.04, 0.05], RUB = [0.085, 0.085, 0.095];
+  const GRIP = c1 || RUB;
+  if (st === "round") _wheelRimRound(out, GRIP, acc);
+  else {
+    if (st === "gt") _wheelRimGT(out, CARB, RUB, GRIP, acc);
+    else _wheelRimF1(out, CARB, RUB, GRIP, acc);
+    _wheelScreen(out, c2);
+  }
+  _wheelHands(out, acc, c1);
   cockpitWheelMesh = _gfx.createMesh(out);
   return cockpitWheelMesh;
 }
 // The COLUMN AND BULKHEAD a wheel clips onto, for VISOR — the cockpit with the
-// wheel taken off (js/camera/vantage.js). Without them the view looked down
+// wheel taken off (js/camera/vantage.js) — and for the NONE cockpit interior. Without them the view looked down
 // onto a bare deck with the halo pillar hanging in the air. Wheel-local like
 // getCockpitWheel and drawn at the same _rigT, never rolled: the quick-release
 // boss sits where the wheel's hub was, the column runs forward (+z, away from
@@ -903,6 +991,6 @@ function getOtLamp(active) {
   return m;
 }
 
-  return { init, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getCompoundRing, getCrewMesh, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getCockpitDash, getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRearLights, drawTailGlow, drawMirrorLights, ersLightCode, gridStrobe };
+  return { init, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getCompoundRing, getCrewMesh, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getCockpitDash, COCKPIT_WHEELS, getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRearLights, drawTailGlow, drawMirrorLights, ersLightCode, gridStrobe };
 })();
 Object.freeze(CarMesh);
