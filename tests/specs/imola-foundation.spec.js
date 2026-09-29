@@ -14,18 +14,12 @@ test.describe("Imola track-owned foundation", () => {
       const profile = window.__apex.trackProfile(500);
       const at = (frac) => profile[Math.round(frac * (profile.length - 1))].y;
       const ys = profile.map((point) => point.y);
-      // Shoulder probe: use overRoad (terrain − banked road surface), NOT gap
-      // (terrain − centreline). Same banking reference trap as monza-foundation:
-      // inside a bankZone the outer verge correctly rises with the tarmac, so
-      // raw gap reads +0.2..0.4 while overRoad stays ~−0.09 (terrain under the
-      // banked edge). Measured 2026-09-29 on this tip: 9 "gap>0.18" samples,
-      // all inside bankZones; max overRoad −0.03. Budget stays 0.18.
-      const shoulderProbes = [];
+      const shoulderGaps = [];
       for (let i = 0; i < 240; i++) {
         const frac = i / 240;
         for (const lat of [-10, 10]) {
-          const g = window.__apex.groundY(frac, lat);
-          if (g.terrainY != null) shoulderProbes.push({ frac, lat, overRoad: g.overRoad, gap: g.gap });
+          const gap = window.__apex.groundY(frac, lat).gap;
+          if (gap != null) shoulderGaps.push({ frac, lat, gap });
         }
       }
       return {
@@ -33,7 +27,7 @@ test.describe("Imola track-owned foundation", () => {
         geometry: window.__apex.geometryDiagnostics(),
         models: window.__apex.modelDiagnostics(),
         walls: window.__apex.wallStats(),
-        shoulderProbes,
+        shoulderGaps,
         elevation: {
           // 7a173519 moved the start line (startFrac 0.495 -> 0.0), rotating
           // racing fractions by the arc shift (+0.5094); the corners themselves
@@ -93,10 +87,7 @@ test.describe("Imola track-owned foundation", () => {
     expect(result.elevation.varianteAlta).toBeGreaterThan(12);
     expect(result.elevation.rivazza).toBeLessThan(-10);
     expect(result.elevation.range).toBeGreaterThan(25);
-    expect(result.shoulderProbes.length).toBeGreaterThan(0);
-    for (const probe of result.shoulderProbes) {
-      expect(probe.overRoad, `terrain above banked road at ${probe.frac}:${probe.lat}`).toBeLessThanOrEqual(0.18);
-    }
+    expect(result.shoulderGaps.filter((sample) => sample.gap > 0.18)).toEqual([]);
 
     await loadImola(racePage, "night");
     const night = await racePage.evaluate(() => ({
