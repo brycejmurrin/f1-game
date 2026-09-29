@@ -140,6 +140,7 @@
     "// ribbon flag to lineBrakeCue); this still asks that one key means one type.",
     "tests/unit/store-key-types.test.mjs",
     "tests/unit/no-bare-console.test.mjs",
+    "tests/unit/log-namespaces.test.mjs",
     "tests/unit/lexical-window-guard.test.mjs",
     "tests/unit/light-store-cond-layer.test.mjs",
     "tests/unit/scenery-kits.test.mjs",
@@ -167,6 +168,9 @@
     "tests/unit/desktop-native.test.mjs",
     "tests/unit/desktop-app-protocol.test.mjs",
     "tests/unit/desktop-unpacked-bin.test.mjs",
+    "tests/unit/desktop-builder-config.test.mjs",
+    "tests/unit/desktop-version.test.mjs",
+    "tests/unit/desktop-notices.test.mjs",
     "tests/unit/ship-filter-paths.test.mjs",
     "// Capacitor Android (task 45): frozen identity, config shape, manifest,",
     "// Gradle version wiring, sync-web stamp gate, NativeDownload via Plugins.",
@@ -656,6 +660,18 @@
         "tests/unit/helmets.test.mjs"
       ]
     },
+    "test:desktop-unit": {
+      "kind": "node",
+      "files": [
+        "tests/unit/desktop-stage.test.mjs",
+        "tests/unit/desktop-native.test.mjs",
+        "tests/unit/desktop-app-protocol.test.mjs",
+        "tests/unit/desktop-unpacked-bin.test.mjs",
+        "tests/unit/desktop-builder-config.test.mjs",
+        "tests/unit/desktop-version.test.mjs",
+        "tests/unit/desktop-notices.test.mjs"
+      ]
+    },
     "test:mobile-unit": {
       "kind": "node",
       "files": [
@@ -687,6 +703,7 @@
         "tests/specs/ui-resize.spec.js",
         "tests/specs/ui-scale.spec.js",
         "tests/specs/ui-redesign.spec.js",
+        "tests/specs/title-menu-rotation.spec.js",
         "tests/specs/browser-ui-hunt.spec.js",
         "tests/specs/hud-layout.spec.js",
         "tests/specs/hud-audit.spec.js",
@@ -1049,6 +1066,7 @@
         "tests/unit/twinned-specs.test.mjs",
         "tests/unit/ratchets.test.mjs",
         "tests/unit/no-bare-console.test.mjs",
+        "tests/unit/log-namespaces.test.mjs",
         "tests/unit/html-sink-lint.test.mjs",
         "tests/unit/lexical-window-guard.test.mjs",
         "tests/unit/test-coverage-audit.test.mjs",

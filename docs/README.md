@@ -37,7 +37,7 @@ drives it.
 | [COMPONENTS.md](COMPONENTS.md) | Every class family in `css/`, the file that owns it, which classes are defined in more than one file — plus the screen x viewport layout axes and what the layout probe measures. |
 | [CODE-STANDARDS.md](CODE-STANDARDS.md) | The JavaScript house style: module shape, naming, declarations, functions, duplication, and the comment policy — plus the frozen surfaces a style pass must never rename. |
 | [PLATFORM.md](PLATFORM.md) | iOS/Safari quirks, controller support, and what a static GitHub Pages host does and does not give you. |
-| [PACKAGING.md](PACKAGING.md) | Desktop (Electron) and Android (Capacitor) shells around the stamped Pages site; sideload APK loop; Android WebView unknowns. |
+| [PACKAGING.md](PACKAGING.md) | Desktop (Electron) packaging — frozen appId, version `1.0.<build>`, electron-builder — and Android (Capacitor) sideload APK loop / WebView unknowns. |
 | [BUGS.md](BUGS.md) | Current verified open/fixed shortlist from architecture/bug-hunt passes (not the full chronological ledger). |
 | [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) | Contributor orientation: boot, layers, data flow, edit map (complements the full contract in ARCHITECTURE.md). |
 
@@ -68,6 +68,7 @@ anything in here.
 | [notes/UPSTREAM-THREE-ISSUES.md](notes/UPSTREAM-THREE-ISSUES.md) | Draft issue bodies for the three local three.js patches (swizzle gate, WGSL `var<private>` scope, `yieldToMain` fallback) — none is filed upstream as of 2026-09-22; post, then put the URLs in `vendor/three-0.186.0/PATCHES.md` and `patches.mjs`. |
 | [notes/DEFECT-LEDGER.md](notes/DEFECT-LEDGER.md) | The open-defect register and the backlog behind it (was `ARCHITECTURE-REVIEW.md` §7-8). |
 | [notes/ARCHITECTURE-REVIEW.md](notes/ARCHITECTURE-REVIEW.md) | The standing assessment: what the no-build-step bet costs, why asserted invariants hold where prose ones drift, and the lessons. |
+| [notes/CI-CAPACITY-2026-09-29.md](notes/CI-CAPACITY-2026-09-29.md) | The 20-concurrent-job jam of 2026-09-29 (200-290 jobs queued for 7 h): where PR runs spent their slots, why the selector over-sharded and excluded the circuit's own spec, what changed, what did not, and how to re-measure. |
 | [notes/CI-RENDERING-PERFORMANCE.md](notes/CI-RENDERING-PERFORMANCE.md) | SwiftShader vs Lavapipe vs llvmpipe (measured canvas colours + wall-clock), WGX soft-present / `wgx-capture`, Cursor Cloud `mesa-vulkan-drivers` persist, why sharding is the wrong first speedup, and **§There IS a real GPU** — `macos-latest`. |
 | [notes/CEILING-HISTORY.md](notes/CEILING-HISTORY.md) | Why every size-ratchet number moved, 2026-08 → 2026-09-03; the live numbers are `tests/data/ratchets.json`. |
 | [notes/SPIKE-BACKENDS-CHECKLIST.md](notes/SPIKE-BACKENDS-CHECKLIST.md) | The WGX/TLX spike-out inventory: the move map, every non-move edit with file:line evidence, the tests that go red and their fixes. |

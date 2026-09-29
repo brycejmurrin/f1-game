@@ -154,6 +154,14 @@ function initUI() {
     }
   }
   place(head);
+  // The row titles are hover-only, which a phone never shows: each row also
+  // gets the same sentence as a visible help line under it.
+  const help = (text) => {
+    const p = document.createElement("p");
+    p.className = "adv-help";
+    p.textContent = text;
+    place(p);
+  };
 
   const haloRow = SettingRow.build("pm-halo", "HALO", [["on", "ON"], ["off", "OFF"]]);
   haloRow.row.title = "Draw the halo (secondary roll structure) in the cockpit view.";
@@ -163,6 +171,7 @@ function initUI() {
     catch (_) { /* audio is optional here */ }
   } });
   place(haloRow.row);
+  help(haloRow.row.title);
 
   const wheelRow = SettingRow.build("pm-ckwheel", "WHEEL", WHEELS.map((w) => [w, WHEEL_LABELS[w]]));
   wheelRow.row.title = "The steering wheel in the cockpit view. CLASSIC and NONE have no screen, so the HUD shows gear and speed.";
@@ -172,6 +181,7 @@ function initUI() {
     catch (_) { /* audio is optional here */ }
   } });
   place(wheelRow.row);
+  help(wheelRow.row.title);
 
   const lab = document.createElement("label");
   lab.className = "tune-row";
@@ -196,6 +206,7 @@ function initUI() {
   lab.appendChild(span);
   lab.appendChild(inp);
   place(lab);
+  help(lab.title);
   paintLead(inp, out);
 }
 

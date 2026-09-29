@@ -1095,6 +1095,12 @@ function buildSubmenu() {
   body.className = "pm-metrics-sub-body";
   body.setAttribute("role", "group");
   body.setAttribute("aria-label", "Metrics controls");
+  // The rows' own explanations are hover-only titles; this line is the one a
+  // phone can read.
+  const help = document.createElement("p");
+  help.className = "adv-help";
+  help.textContent = "A live readout over the race for testing and tuning. OVERLAY turns it on (` or F9 in a race); PAGE picks GOV for performance, CAR for timing and speed, PHYS for grip and forces, LOG for the event log; SIDE and SIZE place it.";
+  body.appendChild(help);
 
   [onBtn, pageBtn, posBtn, sizeBtn, ns, lvl].forEach((btn) => {
     if (!btn) return;

@@ -35,11 +35,11 @@
   },
   "tree": {
     "cssClasses": {
-      "ceiling": 591,
+      "ceiling": 592,
       "slack": 5
     },
     "shellNodes": {
-      "ceiling": 1949,
+      "ceiling": 1984,
       "slack": 25
     },
     "bareCatches": {
@@ -50,7 +50,7 @@
       "ceiling": 49,
       "slack": 39
     },
-    "waitForTimeout": 147,
+    "waitForTimeout": 151,
     "dynamicIdReads": {
       "ceiling": 66,
       "slack": 5
@@ -64,7 +64,7 @@
       "slack": 0
     },
     "rawColor": {
-      "ceiling": 326,
+      "ceiling": 328,
       "slack": 0
     },
     "rawColorDistinct": {

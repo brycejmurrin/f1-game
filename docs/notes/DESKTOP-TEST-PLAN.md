@@ -78,7 +78,7 @@ Source: [electron-builder auto-update](https://www.electron.build/docs/features/
 
 **Event sequence to assert (mock server + unsigned `--dir` / installed build):**
 
-1. Install vN (`0.<build>.0`).
+1. Install vN (`1.0.<build>` as of the packaging pass; the spike used `0.<build>.0`).
 2. Publish vN+1 artifacts + `latest-*.yml`.
 3. Expect: `checking-for-update` → `update-available` → `download-progress` →
    `update-downloaded`.
