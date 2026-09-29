@@ -500,8 +500,9 @@
     },
     "test:xr": {
       "kind": "browser",
+      "flags": ["--project=xr-emulated"],
       "files": [
-        "tests/specs/xr-iwer.spec.js"
+        "tests/specs/vr-emulated.spec.js"
       ]
     },
     "test:gfx": {

@@ -36,7 +36,7 @@ const XrInput = (function () {
    * Input.steerToTilt before remoteSample.
    */
   function mapFrame(sources, prev) {
-    let thr = 0, brk = 0, stickX = 0;
+    let thr = 0, brk = 0, stickX = 0, held = 0;
     let primaryDown = false, secondaryDown = false;
     const list = sources || [];
     for (let i = 0; i < list.length; i++) {
@@ -58,9 +58,9 @@ const XrInput = (function () {
       else if (hand === "right" && !list.some((s) => s && s.handedness === "left")) stickX = sx;
       if (btn(gp, BTN_PRIMARY) > 0.5) primaryDown = true;
       if (btn(gp, BTN_SECONDARY) > 0.5) secondaryDown = true;
-      // Squeeze on either hand is look-back (held bit).
-      // Thumbstick press unused in Phase 0.
-      void BTN_SQUEEZE; void BTN_STICK; void AXIS_STICK_Y;
+      // Squeeze on either hand = look-back hold bit (Input.remoteSample.held).
+      if (btn(gp, BTN_SQUEEZE) > 0.5) held = 1;
+      void BTN_STICK; void AXIS_STICK_Y;
     }
     const latch = prev || { primary: false, secondary: false };
     const events = [];
@@ -72,7 +72,7 @@ const XrInput = (function () {
 
     const steer = XrRig.stickToSteer(stickX);
     return {
-      sample: { roll: steer, thr: thr, brk: brk, held: 0 },
+      sample: { roll: steer, thr: thr, brk: brk, held: held },
       events,
       recenter,
       latch,

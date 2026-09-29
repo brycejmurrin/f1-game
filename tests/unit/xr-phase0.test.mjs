@@ -61,7 +61,7 @@ test("XrRig.recenterOffsetFromPose zeroes XZ translation", () => {
   assert.ok(typeof off.orientation.w === "number");
 });
 
-test("XrInput.mapFrame: right trigger thr, left brake, stick steer, edges", () => {
+test("XrInput.mapFrame: right trigger thr, left brake, stick steer, squeeze held, edges", () => {
   const { XrInput } = bootXr();
   const latch = { primary: false, secondary: false };
   const sources = [
@@ -70,7 +70,7 @@ test("XrInput.mapFrame: right trigger thr, left brake, stick steer, edges", () =
       gamepad: {
         buttons: [
           { value: 0.8 }, // trigger
-          { value: 0 },
+          { value: 1 },   // squeeze → held
           { value: 0 },
           { value: 0 },
           { value: 0 }, // A
@@ -98,6 +98,7 @@ test("XrInput.mapFrame: right trigger thr, left brake, stick steer, edges", () =
   assert.ok(m.sample.thr > 0.7);
   assert.ok(m.sample.brk > 0.5);
   assert.ok(m.sample.roll > 0.5);
+  assert.equal(m.sample.held, 1);
   assert.equal(m.recenter, false);
   assert.equal(m.events.length, 0);
 
@@ -133,21 +134,26 @@ test("XrInput.inject feeds Input.remoteSample / remoteEvent", () => {
   assert.deepEqual(events, ["pause"]);
 });
 
-test("XrSession.sessionInit lists webgpu only when preferred", () => {
+test("XrSession.sessionInit lists webgpu only when preferred; featureGranted reads enabledFeatures", () => {
   // sessionInit is pure — reuse the XR VM (no navigator.xr required).
+  // Feature detection must NOT trust typeof XRGPUBinding alone (three.js #33497).
   const ctx = bootXr();
   vm.runInContext(read("js/xr/xr-session.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-session.js" });
   const a = ctx.XrSession.sessionInit(false);
   assert.ok(!a.optionalFeatures.includes("webgpu"));
   const b = ctx.XrSession.sessionInit(true);
   assert.ok(b.optionalFeatures.includes("webgpu"));
+  assert.equal(ctx.XrSession.featureGranted({ enabledFeatures: ["local-floor"] }, "webgpu"), false);
+  assert.equal(ctx.XrSession.featureGranted({ enabledFeatures: ["local-floor", "webgpu"] }, "webgpu"), true);
+  assert.equal(ctx.XrSession.featureGranted({ enabledFeatures: new Set(["webgpu"]) }, "webgpu"), true);
 });
 
-test("vendor ships XRButton / VRButton / WebGLXRFallback", () => {
+test("vendor ships XRButton / VRButton / WebGLXRFallback and pinned IWER under tests/vendor", () => {
   for (const f of [
     "vendor/three-0.186.0/addons/webxr/XRButton.js",
     "vendor/three-0.186.0/addons/webxr/VRButton.js",
     "vendor/three-0.186.0/addons/webxr/WebGLXRFallback.js",
+    "tests/vendor/iwer-2.5.0.min.js",
   ]) {
     assert.ok(fs.existsSync(path.join(ROOT, f)), f);
   }
@@ -155,6 +161,11 @@ test("vendor ships XRButton / VRButton / WebGLXRFallback", () => {
   assert.ok(m.files["addons/webxr/XRButton.js"]);
   assert.ok(m.files["addons/webxr/VRButton.js"]);
   assert.ok(m.files["addons/webxr/WebGLXRFallback.js"]);
+  const iwer = read("tests/vendor/iwer-2.5.0.min.js");
+  assert.match(iwer, /XRDevice/);
+  assert.match(iwer, /metaQuest3/);
+  // Never referenced from the production shell.
+  assert.doesNotMatch(read("index.html"), /tests\/vendor\/iwer/);
 });
 
 test("XrBoot façade: comfort off until presenting; applyEyes null outside XR", () => {

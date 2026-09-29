@@ -79,6 +79,13 @@ const XrBoot = (function () {
 
   function mountUi() {
     if (typeof XrUi !== "undefined") XrUi.mount(document.body);
+    // chrome://inspect convenience (Quest remote debug) — same as XrBoot.diag().
+    if (typeof window !== "undefined") {
+      window.__apexXr = {
+        diag: () => diag(),
+        setFoveation: (v) => setFoveation(v),
+      };
+    }
   }
 
   /**
@@ -119,7 +126,36 @@ const XrBoot = (function () {
     return false;
   }
 
-  return { bind, mountUi, comfort, loopByXr, applyEyes, present, findCockpit,
+  /**
+   * On-device / chrome://inspect hook. Read draw calls and foveation while
+   * presenting. IWER cannot prove real foveation or frame times — device only.
+   */
+  function diag() {
+    const gfx = _boundGfx;
+    const presenting = comfort();
+    const session = (typeof XrSession !== "undefined") ? XrSession : null;
+    const info = (gfx && typeof gfx.xrInfo === "function") ? gfx.xrInfo() : null;
+    const fov = (gfx && typeof gfx.getFoveation === "function") ? gfx.getFoveation() : null;
+    return {
+      presenting: presenting,
+      loopByXr: _loopByXr,
+      backend: session && session.backend ? session.backend() : null,
+      features: session && session.enabledFeatures ? session.enabledFeatures() : [],
+      frameCount: session && session.frameCount ? session.frameCount() : 0,
+      visible: session && session.isVisible ? session.isVisible() : null,
+      foveation: fov,
+      draw: info,
+      layer: !!(gfx && typeof gfx.xrLayer === "function" && gfx.xrLayer()),
+    };
+  }
+
+  function setFoveation(v) {
+    const gfx = _boundGfx;
+    if (gfx && typeof gfx.setFoveation === "function") return gfx.setFoveation(v);
+    return false;
+  }
+
+  return { bind, mountUi, comfort, loopByXr, applyEyes, present, findCockpit, diag, setFoveation,
     // XrUi ENTER click uses this instead of the G façade.
     setCamMode: (...a) => { if (typeof _setCamMode === "function") return _setCamMode(...a); },
   };

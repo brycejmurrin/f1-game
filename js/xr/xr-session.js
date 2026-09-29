@@ -8,8 +8,10 @@
  * IIFE / no bundler.
  *
  * Default VR path is WebGL2 (forceWebGL / tlxForceGL). Experimental WebGPU
- * XR is opt-in via localStorage apex26.xrBackend=webgpu and falls back to
- * WebGL2 when XRGPUBinding is missing or requestSession fails.
+ * XR is opt-in via localStorage apex26.xrBackend=webgpu. Quest Browser can
+ * expose `XRGPUBinding` even when WebGPU-in-XR is unsupported (three.js
+ * #33497) — decide by requesting the `webgpu` session feature and reading
+ * `session.enabledFeatures`, then fall back to WebGL2 when absent.
  */
 "use strict";
 
@@ -24,10 +26,12 @@ const XrSession = (function () {
   let _baseRefSpace = null;
   let _xrFrame = null;
   let _xrTime = 0;
+  let _xrFrameCount = 0;
   let _running = false;
   let _visible = true;
-  let _backend = "webgl2";          // active session backend preference result
+  let _backend = "webgl2";          // active session backend after feature negotiation
   let _wantWebgpu = false;
+  let _enabledFeatures = [];
   let _bindings = null;             // { getRenderer, onFrame, onStart, onEnd, setCamCockpit, motionLock }
   let _inputLatch = { primary: false, secondary: false };
   let _anchor = { eye: [0, 1.2, 0], fwd: [0, 0, 1], up: [0, 1, 0] };
@@ -56,6 +60,28 @@ const XrSession = (function () {
     return typeof globalThis.XRGPUBinding !== "undefined";
   }
 
+  /** True when session.enabledFeatures grants `name` (FrozenArray or Set). */
+  function featureGranted(session, name) {
+    const f = session && session.enabledFeatures;
+    if (!f) return false;
+    if (typeof f.has === "function") return !!f.has(name);
+    if (typeof f.includes === "function") return f.includes(name);
+    try {
+      for (let i = 0; i < f.length; i++) if (f[i] === name) return true;
+    } catch (_) { /* */ }
+    return false;
+  }
+
+  function listEnabledFeatures(session) {
+    const f = session && session.enabledFeatures;
+    if (!f) return [];
+    try { return Array.from(f); } catch (_) {
+      const out = [];
+      try { for (let i = 0; i < f.length; i++) out.push(f[i]); } catch (_) { /* */ }
+      return out;
+    }
+  }
+
   async function probe() {
     _probed = true;
     _supported = false;
@@ -81,6 +107,8 @@ const XrSession = (function () {
   function isVisible() { return _visible; }
   function lastError() { return _lastError; }
   function backend() { return _backend; }
+  function enabledFeatures() { return _enabledFeatures.slice(); }
+  function frameCount() { return _xrFrameCount; }
   function getFrame() { return _xrFrame; }
   function getTime() { return _xrTime; }
   function getSession() { return _session; }
@@ -115,21 +143,21 @@ const XrSession = (function () {
       emit("error", { error: _lastError });
       return null;
     }
+    // Opt-in preference only — do NOT gate on typeof XRGPUBinding (Quest Browser
+    // exposes the interface where WebGPU-in-XR is still unsupported; three.js PR
+    // #33497). Request the feature, then trust session.enabledFeatures.
     _wantWebgpu = xrBackendPref() === "webgpu";
-    let preferGpu = _wantWebgpu && webgpuXrAvailable();
+    let preferGpu = _wantWebgpu;
     let session = null;
     try {
       session = await navigator.xr.requestSession(MODE, sessionInit(preferGpu));
-      _backend = preferGpu ? "webgpu" : "webgl2";
     } catch (e) {
       if (preferGpu) {
-        // Automatic fallback: retry without the webgpu feature.
         try {
-          Log.info("xr", "WebGPU XR session failed; falling back to WebGL2", e && e.message);
+          Log.info("xr", "WebGPU XR session request failed; falling back to WebGL2", e && e.message);
         } catch (_) { /* Log optional in harness */ }
         try {
           session = await navigator.xr.requestSession(MODE, sessionInit(false));
-          _backend = "webgl2";
           preferGpu = false;
         } catch (e2) {
           _lastError = e2;
@@ -143,8 +171,18 @@ const XrSession = (function () {
       }
     }
 
+    _enabledFeatures = listEnabledFeatures(session);
+    const gotWebgpu = preferGpu && featureGranted(session, "webgpu") && webgpuXrAvailable();
+    _backend = gotWebgpu ? "webgpu" : "webgl2";
+    if (preferGpu && _backend !== "webgpu") {
+      try {
+        Log.info("xr", "webgpu feature not in enabledFeatures (or XRGPUBinding missing); WebGL2 XR path");
+      } catch (_) { /* */ }
+    }
+
     _session = session;
     _running = true;
+    _xrFrameCount = 0;
     _visible = session.visibilityState !== "hidden";
     _inputLatch = { primary: false, secondary: false };
 
@@ -188,6 +226,7 @@ const XrSession = (function () {
       _session.requestAnimationFrame(onXRFrame);
       _xrTime = time;
       _xrFrame = frame;
+      _xrFrameCount++;
       pollInput(frame);
       if (b && typeof b.onFrame === "function") {
         try { b.onFrame(time, frame); } catch (e) {
@@ -196,7 +235,7 @@ const XrSession = (function () {
       }
     };
     session.requestAnimationFrame(onXRFrame);
-    emit("start", { backend: _backend });
+    emit("start", { backend: _backend, features: _enabledFeatures.slice() });
     try { Log.info("xr", "immersive-vr started backend=" + _backend); } catch (_) { /* */ }
     return session;
   }
@@ -287,6 +326,7 @@ const XrSession = (function () {
     _refSpace = null;
     _baseRefSpace = null;
     _xrFrame = null;
+    _enabledFeatures = [];
     _running = false;
     if (typeof Input !== "undefined" && Input.remoteLost) {
       try { Input.remoteLost(); } catch (_) { /* */ }
@@ -313,6 +353,7 @@ const XrSession = (function () {
     probe, isSupported, isProbed, isPresenting, isVisible,
     start, end, bind, on, recenter, setAnchor, getAnchor, eyeFrames,
     getFrame, getTime, getSession, getRefSpace, backend, lastError,
+    frameCount, enabledFeatures, featureGranted, listEnabledFeatures,
     webgpuXrAvailable, xrBackendPref, sessionInit,
   };
 })();

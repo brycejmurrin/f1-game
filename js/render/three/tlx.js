@@ -3373,6 +3373,22 @@ const TLX = (function () {
           this._xrSession = null;
           this._pendingXrEyes = null;
         },
+        /** XRWebGLLayer.fixedFoveation (0 = full res, 1 = max). Device-only effect. */
+        setFoveation(v) {
+          if (!this._xrLayer || !("fixedFoveation" in this._xrLayer)) return false;
+          const n = Math.max(0, Math.min(1, +v || 0));
+          try { this._xrLayer.fixedFoveation = n; return true; } catch (_) { return false; }
+        },
+        getFoveation() {
+          if (!this._xrLayer || !("fixedFoveation" in this._xrLayer)) return null;
+          try { return this._xrLayer.fixedFoveation; } catch (_) { return null; }
+        },
+        /** three.js renderer.info.render snapshot for chrome://inspect / OVR Metrics pairing. */
+        xrInfo() {
+          const r = renderer && renderer.info && renderer.info.render;
+          if (!r) return { calls: null, triangles: null, points: null, lines: null };
+          return { calls: r.calls, triangles: r.triangles, points: r.points, lines: r.lines };
+        },
         /** Apply one eye's matrices to the three camera (same path as begin). */
         _applyXrEye(eye) {
           if (!eye) return;
