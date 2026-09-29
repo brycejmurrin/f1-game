@@ -10,7 +10,7 @@
         pine, tree, bush, ridge, building, grandstandEx, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, modelGroup, prop, runoffApron,
-        cameraTower, sponsorHoarding, signBoard, terrainYAt,
+        cameraTower, sponsorHoarding, signBoard, terrainYAt, recordBarrier,
         addBox, addCyl, addCone, addFrustum, addPrism } = api;
 
       const PINE = [0.14, 0.30, 0.16], PINE_D = [0.11, 0.24, 0.14];
@@ -176,8 +176,45 @@
       // on is clear, and 4 m along a 5.8 km lap is invisible.
       gantry(0.004, 9, [0.15, 0.15, 0.18]);
       gantry(0.965, 8.5, [0.15, 0.15, 0.18]);
-      grandstandEx(0.005, 1, 12, 150, null, null,
-        { livery: "alu", tiers: 2, roof: "flat", suites: true, endWalls: true, pylons: true });
+      // ── Start-straight main grandstand (4,400 seats, permanent, 2009) ─────
+      // Sources: circuitpaulricard.com/en/the-circuit/history ("construction of
+      // a 4,400-seat grandstand in the start straight"); racingcircuits.info
+      // (same). Facing the pits on the LEFT of the racing direction (infield
+      // pits are RIGHT — see pit-straight note above).
+      // UNCERTAIN: length vs capacity — 150 m kept as a plausible span for
+      // ~4400 seats at ~20 rows / ~0.5 m pitch (~110 m of seating + aisles);
+      // not resized without a survey. F1-era temporary stands reached ~350 m
+      // (GL Events 2018–19) and are NOT this permanent structure.
+      // modelGroup only (no grandstandEx twin) — keeps props-tris under the
+      // ratchet while still emitting a positive-rake hero.
+      {
+        const a = anchor(K(0.005), 1, 14);
+        if (!onTrack(a.c[0], a.c[2], 10)) {
+          const b = [a.r, a.u, a.t];
+          const ALU2 = [0.70, 0.72, 0.76], GLASS_S = [0.28, 0.40, 0.48];
+          recordBarrier(0.0, 0.02, 1, 14);
+          modelGroup("paul-ricard-main-grandstand", {
+            center: vadd(a.c, a.u, 10), size: [18, 22, 148], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.CONCRETE;
+            for (let t = 0; t < 4; t++) {
+              const outLat = -(2.0 + t * 1.6);
+              const h = 1.4 + t * 2.1;
+              addBox(stage, vadd(vadd(a.c, a.r, outLat), a.u, h * 0.5 + t * 0.04),
+                [2.85, h, 136 - t * 5], t & 1 ? WHITE : ALU, b);
+            }
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(vadd(a.c, a.r, -6.5), a.u, 11.6),
+              [12, 0.55, 142], ALU2, b);
+            addBox(stage, vadd(vadd(a.c, a.r, 0.4), a.u, 10.9),
+              [0.4, 0.9, 138], [0.20, 0.34, 0.62], b);
+            stage._mat = MAT.GLASS;
+            addBox(stage, vadd(vadd(a.c, a.r, -9.2), a.u, 9.4),
+              [0.35, 2.8, 110], GLASS_S, b);
+            stage._mat = 0;
+          }, { required: true });
+        }
+      }
       for (let i = 0; i < 4; i++) {
         building(K(0.944 + i * 0.013), -1, 40, 30, 9, 15,
           { kind: "slab", wall: [0.87, 0.87, 0.86], window: [0.30, 0.34, 0.42], floor: 4.5 });
@@ -186,7 +223,8 @@
         const s = k / n, h = hash(k * 71 + 31);
         // From 0.94: on the right, 0.90-0.94 is the inside of the Tour hairpin.
         if (!(s > 0.94 || s < 0.05) || h < 0.52) return;
-        motorhome(k, -1, 58 + h * 10, 10, 4, 6, { wall: [0.66 + h * 0.24, 0.66, 0.68] });
+        // Gap bumped 58→66: at 58 eight motorhomes sat 0.04 m under grade.
+        motorhome(k, -1, 66 + h * 10, 10, 4, 6, { wall: [0.66 + h * 0.24, 0.66, 0.68] });
       });
       broadcastCompound(K(0.908), -1, 76, { vans: 3, dishes: 2, mastH: 9 });
       for (const s of [0.975, 0.01, 0.03]) billboard(K(s), 1, 8, 12, 4.5, [0.20, 0.34, 0.70]);
@@ -231,7 +269,30 @@
       bleacher(0.700, 0.740, -1, 54, { rows: 6, step: 7 });
       bleacher(0.115, 0.150, -1, 52, { rows: 6, step: 8 });   // exit of the Verrerie esses
       bleacher(0.480, 0.515, -1, 56, { rows: 6, step: 8 });   // opposite the Mistral chicane
-      spectatorHill(0.68, 0.76, 1, 60, { rows: 3, rise: 1.0, depth: 1.8, density: 0.34, step: 9 });
+      // ── Beausset public hill (summer 2009 public area) ───────────────────
+      // Sources: circuitpaulricard.com history — "hill over the Double Droite
+      // du Beausset"; racingcircuits.info (same; capacity >10,000 with the
+      // new start-straight stand). Natural berm / GA bank, not a roofed stand.
+      {
+        const a = anchor(K(0.745), 1, 68);
+        const b = [a.r, a.u, a.t];
+        const GRASS = [0.34, 0.40, 0.21], DIRT = [0.52, 0.46, 0.34];
+        modelGroup("paul-ricard-beausset-hill", {
+          center: vadd(a.c, a.u, 4.5), size: [32, 12, 80], basis: b,
+        }, (stage) => {
+          addFrustum(stage, a.c, 28, 16, 4.2, DIRT, 7, b);
+          for (let row = 0; row < 3; row++) {
+            const y = 1.0 + row * 1.4;
+            const outR = -(6 + row * 2.6);
+            addBox(stage, vadd(vadd(a.c, a.u, y), a.r, outR),
+              [13 - row * 1.4, 0.4, 64 - row * 8], GRASS, b);
+          }
+          // Crest rail sits on the top terrace (was at 6.4 m and floated).
+          addBox(stage, vadd(vadd(a.c, a.u, 4.15), a.r, -11.2),
+            [0.2, 0.85, 40], [0.62, 0.64, 0.68], b);
+        }, { required: true });
+      }
+      spectatorHill(0.68, 0.76, 1, 78, { rows: 2, rise: 1.0, depth: 1.8, density: 0.28, step: 11 });
       for (const s of [0.070, 0.713, 0.905]) marshalPost(K(s), -1, 12);
       for (const s of [0.496, 0.745]) marshalPost(K(s), 1, 12);
 
@@ -281,6 +342,9 @@
           center: vadd(a.c, a.u, 8), size: [46, 20, 150], basis: b,
         }, (stage) => {
           // Three curved-roof hangars in a row, doors facing the apron.
+          // Le Castellet International Airport sits beside the circuit
+          // (aeroportducastellet.com; racingcircuits.info — private airfield
+          // built by Ricard; five hangars / 12,000 m² today).
           for (let i = 0; i < 3; i++) {
             const p = vadd(a.c, a.t, (i - 1) * 42);
             stage._mat = MAT.CONCRETE;
@@ -294,7 +358,7 @@
               [0.40, 0.43, 0.48], b);
           }
           stage._mat = 0;
-        });
+        }, { required: true });
       }
       {
         const a = anchor(K(0.545), 1, 128);
@@ -326,9 +390,11 @@
         const a = anchor(K(0.465 + i * 0.022), 1, 118);
         const b = [a.r, a.u, a.t];
         modelGroup(`paul-ricard-lightplane-${i + 1}`, {
-          center: vadd(a.c, a.u, 1.8), size: [12, 4, 9], basis: b,
+          center: vadd(a.c, a.u, 1.2), size: [12, 4, 9], basis: b,
         }, (stage) => {
-          const body = vadd(a.c, a.u, 1.5);
+          // Body rides low with gear that touches the apron so the airframe
+          // BFS-grounds (unsupported wings used to float the whole plane).
+          const body = vadd(a.c, a.u, 0.95);
           stage._mat = MAT.METAL;
           addBox(stage, body, [1.1, 1.1, 7], WHITE, b);
           addBox(stage, body, [10, 0.3, 1.5], WHITE, b);                       // high wing
@@ -337,6 +403,11 @@
           addBox(stage, vadd(body, a.t, -3.0), [3.2, 0.22, 1.0], WHITE, b);    // tailplane
           addCone(stage, vadd(body, a.t, 3.6), 0.5, 1.2, [0.30, 0.32, 0.36], 6,
             [a.r, a.t, a.u]);                                                  // spinner
+          // Tricycle gear — bottoms within GAP of ground so the graph roots.
+          for (const [toff, roff] of [[2.2, 0.55], [2.2, -0.55], [-2.8, 0]]) {
+            addCyl(stage, vadd(vadd(a.c, a.t, toff), a.r, roff),
+              0.07, 0.85, [0.22, 0.22, 0.24], 5, b);
+          }
           stage._mat = MAT.GLASS;
           addBox(stage, vadd(body, a.u, 0.55), [0.9, 0.5, 1.8], [0.28, 0.38, 0.46], b);
           stage._mat = 0;
@@ -396,7 +467,40 @@
         { id: "paul-ricard-paddock-apron", samples: 10 });
       for (let i = 0; i < 14; i++) {
         const a = anchor(K(0.925 + i * 0.008), -1, 82);
-        addBox(out, vadd(a.c, a.u, 0.22), [64, 0.09, 0.5], LINE, [a.r, a.u, a.t]);
+        // Reseat each stripe on the ground under it — a single anchor height
+        // across the paddock apron buried three of these (line 399).
+        const p = [a.c[0], a.c[1], a.c[2]];
+        const py = terrainYAt(p[0], p[2]);
+        if (py != null) p[1] = py;
+        addBox(out, vadd(p, a.u, 0.22), [64, 0.09, 0.5], LINE, [a.r, a.u, a.t]);
+      }
+      // ── 2019 pit entry at exit of Virage de la Tour (T14) ────────────────
+      // Sources: racingcircuits.info ("from 2019 the pits were now entered at
+      // the exit of the Virage de la Tour"); motorsportweek.com 2019-06-20;
+      // gptoday / RaceFans same weekend. Outside of Tour → right of racing
+      // (paddock side = side −1 in this file's convention). Channel length /
+      // wall height approximate — no FIA drawing scaled here.
+      // Placed just past Tour apex (0.940) at gap 22 with a short bay — mid-
+      // corner spans at gap 14–28 were footprint-rejected on the ribbon fold.
+      {
+        const a = anchor(K(0.940), -1, 22);
+        const b = [a.r, a.u, a.t];
+        modelGroup("paul-ricard-pit-entry-2019", {
+          center: vadd(a.c, a.u, 1.8), size: [7, 4.5, 22], basis: b,
+        }, (stage) => {
+          // Walls + mast only — a concrete apron slab fought the paddock
+          // groundPatch as flatCoplanar.
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(vadd(a.c, a.r, -2.8), a.u, 0.95),
+            [0.3, 1.7, 16], [0.78, 0.80, 0.82], b);
+          addBox(stage, vadd(vadd(a.c, a.r, 2.4), a.u, 0.3),
+            [0.35, 0.45, 15], [0.90, 0.90, 0.88], b);
+          addCyl(stage, vadd(vadd(a.c, a.t, -6), a.u, 2.0),
+            0.11, 3.8, [0.70, 0.72, 0.74], 5, b);
+          addBox(stage, vadd(vadd(a.c, a.t, -6), a.u, 4.2),
+            [0.14, 0.9, 1.1], [0.88, 0.18, 0.16], b);
+          stage._mat = 0;
+        }, { required: true });
       }
       groundPatch(K(0.885), 1, 92, [40, 0.16, 40], [0.50, 0.50, 0.50],
         { id: "paul-ricard-helipad", samples: 6 });
@@ -459,24 +563,33 @@
             if (onTrack(a.c[0], a.c[2], 4)) continue;
             const alt = (r & 1);
             if (kind === 0) {
-              addBox(out, vadd(a.c, a.u, 0.95), [0.85, 1.5, 112],
+              // Single vine row at the anchor — segmented offsets were reading
+              // terrainYAt on a different skirt and burying prims 5+ m deep.
+              addBox(out, vadd(a.c, a.u, 1.05), [0.85, 1.5, 112],
                 alt ? VINE : VINE_D, b);
               // TRAP B (docs/SCENERY-GROUNDING.md §2): the posts walk up to
               // 54 m along the tangent from a.c's single ground sample —
               // reusing that height stranded them up to ~2 m in the air on
               // this rolling plateau. Re-seat each post on the ground
-              // actually under it; terrainYAt is null off the rendered
-              // ribbon, where a.c's height is the best guess left.
+              // actually under it; clamp to ±2.5 m of the row anchor so a
+              // far sample cannot drop a post under the plateau.
               for (const t of [-54, -18, 18, 54]) {
                 const pbase = vadd(a.c, a.t, t);
                 const py_ = terrainYAt(pbase[0], pbase[2]);
-                if (py_ != null) pbase[1] = py_;
+                if (py_ != null && Math.abs(py_ - a.c[1]) < 2.5) pbase[1] = py_;
                 addCyl(out, vadd(pbase, a.u, 0.1), 0.07, 2.0,
                   [0.52, 0.44, 0.32], 4, b);
               }
             } else {
-              addBox(out, vadd(a.c, a.u, 0.42), [1.5, 0.85, 108],
-                alt ? LAV : LAV_D, b);
+              // Lavender: two mid-length segments (was four — props-tris budget).
+              for (const t of [-22, 22]) {
+                const pbase = vadd(a.c, a.t, t);
+                const py_ = terrainYAt(pbase[0], pbase[2]);
+                if (py_ != null && Math.abs(py_ - a.c[1]) < 2.5) pbase[1] = py_;
+                else pbase[1] = a.c[1];
+                addBox(out, vadd(pbase, a.u, 0.65), [1.5, 0.85, 40],
+                  alt ? LAV : LAV_D, b);
+              }
             }
           }
         }
@@ -493,7 +606,7 @@
           addPrism(stage, vadd(a.c, a.u, 4.2), [6.6, 1.8, 8.6], [0.58, 0.40, 0.30], b);
           addBox(stage, vadd(vadd(a.c, a.r, -3.2), a.u, 1.5), [0.25, 2.2, 1.1],
             [0.34, 0.28, 0.22], b);                              // door
-        });
+        }, { required: true });
         // The wall running off the cabanon, in irregular courses — its OWN
         // guarded run, not part of the cabanon group. The 14-course version
         // reached t≈48, i.e. ~34 m past the hut group's ±7 m bounds, so most
@@ -508,6 +621,6 @@
           for (let i = 0; i < 7; i++)
             addBox(stage, vadd(vadd(a.c, a.t, 8 + i * 3.1), a.u, 0.6 + (i & 1) * 0.1),
               [0.7, 1.2 + (i % 3) * 0.15, 3.0], (i & 1) ? DRY_D : DRY, b);
-        });
+        }, { required: true });
       }
     };
