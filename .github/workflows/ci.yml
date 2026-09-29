@@ -186,6 +186,21 @@ on:
       - ".claude/**"
       - ".cursor/**"
       - ".codex/**"
+  # MERGE QUEUE (2026-09-30). On 2026-09-29 the deploy branch's log was ~80 %
+  # `sync-pr` base merges: fifteen open PRs each re-merged the tip every time
+  # it moved, every re-merge bought a fresh PR run (122 green, 39 cancelled by
+  # the next re-merge in one afternoon), and two PRs regenerating the ladder
+  # figures against different bases merged cleanly and reddened the branch 14
+  # times. A merge queue tests the MERGED result once and lands it; the
+  # per-PR sync loop stops. This event is what the queue fires; the heavy
+  # jobs' tier expression reads it as the full tier (it is neither a deploy
+  # push nor a draft PR), the filters fail safe on an event they do not know,
+  # and `select`/`poke-train` stay on push and pull_request. Enabling it is a
+  # repository setting (branch protection on the deploy branch: require the
+  # fast-tier jobs, require the queue); this trigger is the half in code.
+  # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#merge_group
+  merge_group:
+    types: [checks_requested]
   # NIGHTLY (2026-09-01): the wide browser run — the boot group (73 tests)
   # across 4 shards — moved here from every push. Its whole recorded failure
   # history in this file's header is timeouts on starved runners, never an
@@ -516,26 +531,63 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # The plan step below diffs a pull request against its base sha,
+          # which a depth-1 clone cannot show. Same trade as sweeps-parts.
+          fetch-depth: 0
       - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
+      # WHICH SCRIPTS DOES THIS PR NEED? (2026-09-30) On a pull request the
+      # four multi-minute scripts (game-vm-a, game-vm-b, vm-page, node-slow)
+      # run only when tools/ci/pick-tests.mjs routes the PR's diff to a group
+      # they replay, and a circuit-only diff narrows elevation-tracks-vm to the
+      # circuits that moved (APEX_CIRCUITS). The seconds-long scripts always
+      # run. A deploy-branch push, a Pages call, a dispatch or the nightly run
+      # EVERYTHING, exactly as before: a merge is gated whole before the train
+      # ships it, so the `fast_tier_run` reuse contract is unchanged. Anything
+      # the planner cannot route runs everything (tools/ci/node-plan.mjs).
+      - name: Plan the slices for this diff
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -u
+          PLAN="${RUNNER_TEMP:-.}/node-plan.sh"
+          if [ "$EVENT" = "pull_request" ] && [ -n "${PR_BASE:-}" ] && git cat-file -e "${PR_BASE}^{commit}" 2>/dev/null; then
+            node tools/ci/node-plan.mjs --since "$PR_BASE" --sh > "$PLAN"
+            node tools/ci/node-plan.mjs --since "$PR_BASE"
+          else
+            node tools/ci/node-plan.mjs --all --sh > "$PLAN"
+            echo "not a pull request (or no base): every script runs"
+          fi
       - name: Pure-node unit suites
         run: |
           # ONE SLICE PER RUNNER (matrix.slice). Every script stays on its own
           # line: deploy.mjs and twinned-specs.mjs read this step's text.
+          # `planned <script>` is the plan step's predicate (true on every
+          # non-PR event); a skip prints SKIPPED <script> and the reason.
+          . "${RUNNER_TEMP:-.}/node-plan.sh"
           case "${{ matrix.slice }}" in
             vm-a)
               # The Node VM harness: js/game.js headless, exact parity with the
               # physics baseline (tests/unit/physics-characterization-vm.test.mjs).
               # Two partitions of test:game-vm on two runners (see the matrix).
+              if planned test:game-vm-a; then
               npm run test:game-vm-a
+              fi
               ;;
             page-slow)
+              if planned test:vm-page; then
               npm run test:vm-page
+              fi
               # The three raster/spawn-heavy car files, out of the edit loop
               # (152 s of the old 315 s tooling-fast; 2026-09-01) and into the gate.
+              if planned test:node-slow; then
               npm run test:node-slow
+              fi
               ;;
             vm-b)
+              if planned test:game-vm-b; then
               npm run test:game-vm-b
+              fi
               # The former `fast` slice: seconds each, so they ride with vm-b.
               npm run test:net-unit
               npm run test:service-worker
