@@ -112,6 +112,10 @@
     "// ...and WebXR Phase 0: seated-rig compose, controller→remoteSample mapping,",
     "// sessionInit feature flags, vendored XRButton/WebGLXRFallback presence. ~0.1 s.",
     "tests/unit/xr-phase0.test.mjs",
+    "// ...and XRPlan / XROpts (task 20): pure path selection table + bootPick",
+    "// never writes apex26.gfxBackend. ~0.1 s.",
+    "tests/unit/xr-plan.test.mjs",
+    "tests/unit/xr-opts.test.mjs",
     "// ...and the two steer-tuning tables that MUST agree: every PRESET bundle",
     "// lands exactly on its FEEL level, or clicking RELAX reads CUSTOM. Stated",
     "// in comments and checked by nothing until it drifted for a week. ~0.05 s.",
@@ -527,7 +531,8 @@
       "kind": "browser",
       "flags": ["--project=xr-emulated"],
       "files": [
-        "tests/specs/vr-emulated.spec.js"
+        "tests/specs/vr-emulated.spec.js",
+        "tests/specs/xr-plan.spec.js"
       ]
     },
     "test:gfx": {
@@ -668,6 +673,8 @@
         "tests/unit/throttle-latch.test.mjs",
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/xr-phase0.test.mjs",
+        "tests/unit/xr-plan.test.mjs",
+        "tests/unit/xr-opts.test.mjs",
         "tests/unit/key-binds.test.mjs",
         "tests/unit/onboard.test.mjs",
         "tests/unit/settings-export.test.mjs",
