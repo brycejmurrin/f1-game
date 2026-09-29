@@ -44,7 +44,7 @@
     "vegas": 4,
     "watkins_glen": 1,
     "zandvoort": 4,
-    "zolder": 28
+    "zolder": 7
   },
   "unsupported": {
     "bahrain": 5,
@@ -109,6 +109,6 @@
     "suzuka": 1,
     "vegas": 6,
     "zandvoort": 7,
-    "zolder": 18
+    "zolder": 4
   }
 }
