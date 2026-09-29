@@ -8394,6 +8394,11 @@ function render(dt) {
 
 // ---------- main loop ----------
 let physAcc = 0;                 // leftover sim time carried between frames
+// When the local car's pose IS, on the frame clock: the end of the last physics
+// step. netPlay.tick runs BEFORE this frame's steps, so the pose it publishes is
+// last frame's — stamping it `now` made every rival draw us 16–33 ms (a metre or
+// more at speed) behind where we were. null = no race stepping: stamp `now`.
+let _poseAt = null;
 let renderAlpha = 1;             // leftover-step fraction (0..1) for render interpolation
 // Adaptive-resolution governor + feature-shedding tiers + mobile crash
 // sentinel live in js/perf/governor.js (PerfGov, initialised at boot with gfx).
@@ -8433,7 +8438,7 @@ function tickBody(now) {
   // Multiplayer runs BEFORE the paused gate, and the gate below lets it through,
   // because a shared world cannot be stopped by one player opening a menu: the
   // rival keeps driving whatever this screen is doing. Inert solo.
-  netPlay.tick(now); if (gfx.warming && gfx.warming()) { Input.clearEdges(); return; }
+  netPlay.tick(now, _poseAt); if (gfx.warming && gfx.warming()) { Input.clearEdges(); return; }
   if (paused && !netPlay.active()) {
     // Nothing downstream reads the pad's edge latches while we are parked here,
     // so drop them rather than let a pause-menu button-mash queue up and fire
@@ -8515,7 +8520,8 @@ function tickBody(now) {
     _audioParamStep = true;   // any other update() caller (the __apex step hooks) sets them
     PerfGov.recordSimulation(steps, steps === 5 ? physAcc : 0);
     if (steps === 5 && physAcc >= PHYS_DT) physAcc %= PHYS_DT;   // fell badly behind — drop the backlog, keep the sub-step remainder (a clean 5-step frame lost up to a step: Fix Your Timestep)
-  }
+    _poseAt = now - physAcc * 1000;   // the stepped pose lags this frame by the unspent remainder
+  } else _poseAt = null;
   renderAlpha = clamp(physAcc / PHYS_DT, 0, 1);   // 0..1 leftover fraction for render interp
   render(Math.min(dt, 1 / 20));               // camera/visual damping at (clamped) frame dt
   if (state === "race" || state === "count") updateHud(false, _dtMs);
