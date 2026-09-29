@@ -150,32 +150,44 @@ test("packaged app: fullscreen toggle via main-process evaluate, then quit", asy
     await electronApp.firstWindow();
     const before = await electronApp.evaluate(({ BrowserWindow }) => {
       const w = BrowserWindow.getAllWindows()[0];
-      return w ? w.isFullScreen() : null;
+      return w ? { full: w.isFullScreen(), simple: w.isSimpleFullScreen() } : null;
     });
-    expect(before).toBe(false);
+    expect(before).not.toBeNull();
+    expect(before.full || before.simple).toBe(false);
 
-    // macOS fullscreen is async (Space transition); wait for enter-full-screen.
-    // On Linux/Windows it is usually immediate. simpleFullScreen is a fallback
-    // when the OS refuses a real fullscreen Space in CI.
+    // macOS setFullScreen() can BLOCK the main process waiting for a Space
+    // transition that never finishes on GitHub-hosted runners (test timeout
+    // 180s with no evaluate return). Prefer simpleFullScreen there; elsewhere
+    // try setFullScreen with a short poll, then fall back.
     const after = await electronApp.evaluate(async ({ BrowserWindow }) => {
       const w = BrowserWindow.getAllWindows()[0];
       if (!w) return { ok: false, reason: "no-window" };
-      const entered = new Promise((resolve) => {
-        const done = () => resolve(true);
-        w.once("enter-full-screen", done);
-        w.once("enter-html-full-screen", done);
-        setTimeout(() => resolve(w.isFullScreen() || w.isSimpleFullScreen()), 4000);
-      });
-      w.setFullScreen(true);
-      let ok = await entered;
-      if (!ok && !w.isFullScreen()) {
+      const plat = process.platform;
+      if (plat === "darwin") {
         w.setSimpleFullScreen(true);
-        ok = w.isSimpleFullScreen();
+        return {
+          ok: w.isSimpleFullScreen(),
+          full: w.isFullScreen(),
+          simple: w.isSimpleFullScreen(),
+          via: "simple",
+        };
+      }
+      w.setFullScreen(true);
+      const deadline = Date.now() + 3000;
+      while (Date.now() < deadline) {
+        if (w.isFullScreen()) break;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      let via = "full";
+      if (!w.isFullScreen()) {
+        w.setSimpleFullScreen(true);
+        via = "simple-fallback";
       }
       return {
-        ok: !!(ok || w.isFullScreen() || w.isSimpleFullScreen()),
+        ok: !!(w.isFullScreen() || w.isSimpleFullScreen()),
         full: w.isFullScreen(),
         simple: w.isSimpleFullScreen(),
+        via,
       };
     });
     expect(after.ok, JSON.stringify(after)).toBe(true);

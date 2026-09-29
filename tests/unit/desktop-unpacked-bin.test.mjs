@@ -47,6 +47,26 @@ test("findUnpackedBinary throws a helpful error when pack was not run", () => {
   }
 });
 
+test("findUnpackedBinary resolves win-unpacked productName.exe (builder default)", () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "apex-unpacked-win-"));
+  try {
+    fs.writeFileSync(
+      path.join(tmp, "package.json"),
+      JSON.stringify({ name: "apex26-desktop", productName: "Apex 26" }),
+    );
+    const binDir = path.join(tmp, "dist", "win-unpacked");
+    fs.mkdirSync(binDir, { recursive: true });
+    // electron-builder names the Windows exe from productName, not package.name
+    const bin = path.join(binDir, "Apex 26.exe");
+    fs.writeFileSync(bin, "MZ");
+    const hit = findUnpackedBinary({ desktopRoot: tmp, platform: "win32" });
+    assert.equal(hit.path, bin);
+    assert.equal(hit.platform, "win32");
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 test("desktop workflow runs pack-smoke on pull_request and keeps ship-branch push out", () => {
   const yml = fs.readFileSync(path.join(ROOT, ".github/workflows/desktop.yml"), "utf8");
   assert.match(yml, /pull_request:/);

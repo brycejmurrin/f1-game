@@ -34,7 +34,20 @@ export function findUnpackedBinary(opts = {}) {
   if (platform === "linux") {
     candidate = path.join(dist, "linux-unpacked", name);
   } else if (platform === "win32") {
-    candidate = path.join(dist, "win-unpacked", `${name}.exe`);
+    const winDir = path.join(dist, "win-unpacked");
+    const candidates = [
+      path.join(winDir, `${name}.exe`),
+      path.join(winDir, `${product}.exe`),
+      // electron-builder sometimes sanitizes spaces in the exe stem
+      path.join(winDir, `${String(product).replace(/\s+/g, "")}.exe`),
+      path.join(winDir, `${String(product).replace(/\s+/g, "-")}.exe`),
+    ];
+    candidate = candidates.find((p) => fs.existsSync(p));
+    if (!candidate && fs.existsSync(winDir)) {
+      const hit = fs.readdirSync(winDir).find((f) => f.toLowerCase().endsWith(".exe"));
+      if (hit) candidate = path.join(winDir, hit);
+    }
+    if (!candidate) candidate = candidates[0];
   } else if (platform === "darwin") {
     // arm64 → mac-arm64 or mac; x64 → mac or mac-x64 depending on builder version
     const macDirs = fs.existsSync(dist)
