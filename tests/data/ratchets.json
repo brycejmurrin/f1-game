@@ -35,7 +35,7 @@
   },
   "tree": {
     "cssClasses": {
-      "ceiling": 591,
+      "ceiling": 592,
       "slack": 5
     },
     "shellNodes": {
@@ -64,7 +64,7 @@
       "slack": 0
     },
     "rawColor": {
-      "ceiling": 326,
+      "ceiling": 328,
       "slack": 0
     },
     "rawColorDistinct": {
