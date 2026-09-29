@@ -94,7 +94,17 @@ Expected shape per PR push: ~8–12 jobs (ready) and ~6–9 (draft), down from
   `branches:` filter did not stop), `docs-guards.yml` exits before `npm ci`
   on a mixed PR (its files all run in ci.yml's guards job there), and
   `ci.yml` accepts `merge_group` so a merge queue can replace the per-PR
-  `sync-pr` loop (the repository setting is the other half).
+  `sync-pr` loop (the repository setting is the other half). Later the same
+  day: GitHub offers the merge queue only to organisation-owned repositories,
+  so classic branch protection landed instead — a PR required, the eight
+  fast-tier checks required, no bypass — and with it `ci.yml`'s
+  `pull_request` trigger lost its `paths-ignore` (a required check that never
+  reports blocks a prose-only PR for good; the node plan keeps such a run to
+  guards plus seconds), `docs-guards.yml` runs on every PR with its early
+  exit, and every PR diff resolves its base through `tools/ci/ci-pr-base.sh`
+  (`pull_request.base.sha` lags one sync behind the merge under test, which
+  had the plan — and the sweeps, parts and renderer filters — reading the
+  base's own recent commits as the PR's diff).
 - **49 unit files run twice per PR** (in tooling-fast under guards, and in
   the `vm-b` slice's topical groups). The rebalanced slices keep that off the
   wall clock. Removing it means changing what the topical groups mean.

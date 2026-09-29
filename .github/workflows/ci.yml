@@ -177,12 +177,14 @@ on:
     # `ready_for_review` is not a default type; the other three are.
     # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request
     types: [opened, synchronize, reopened, ready_for_review]
-    paths-ignore:
-      - "docs/**"
-      - "**/*.md"
-      - ".claude/**"
-      - ".cursor/**"
-      - ".codex/**"
+    # NO paths-ignore HERE (2026-09-30). Branch protection on the deploy
+    # branch requires this workflow's fast-tier jobs, and a required check
+    # that never reports blocks the merge for good — so a prose-only PR,
+    # which the old filter kept out of this workflow entirely, could never
+    # merge. Every PR runs the fast tier now; the per-PR node plan
+    # (tools/ci/node-plan.mjs) skips the multi-minute scripts on a diff that
+    # reaches none of them, so a docs PR costs guards plus seconds. The push
+    # filter above stays: a docs push to the deploy branch buys no gate.
   # MERGE QUEUE (2026-09-30). On 2026-09-29 the deploy branch's log was ~80 %
   # `sync-pr` base merges: fifteen open PRs each re-merged the tip every time
   # it moved, every re-merge bought a fresh PR run (122 green, 39 cancelled by
