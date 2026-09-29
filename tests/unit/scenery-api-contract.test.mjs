@@ -152,6 +152,13 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
       "montreal-wall-of-champions-stand",
       "montreal-biosphere",
     ],
+    // Wave 6 — Mugello Centrale + Poggio Secco + Materassi (hillside GA at
+    // Arrabbiata / San Donato is spectatorHill, not a required modelGroup).
+    mugello: [
+      "mugello-centrale-stand",
+      "mugello-poggio-secco-stand",
+      "mugello-materassi-stand",
+    ],
   };
   for (const [track, ids] of Object.entries(expected)) {
     const body = landmarkSource(track);
