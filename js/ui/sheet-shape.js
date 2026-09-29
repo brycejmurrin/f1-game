@@ -563,6 +563,24 @@ window.SheetShape = (function () {
     addEventListener("orientationchange", onvv, { passive: true });
   }
 
+  /* ROTATION SETTLES LATE ON iOS. Safari (and the home-screen PWA most of all)
+     fires resize/orientationchange while innerWidth/innerHeight still hold the
+     PORTRAIT numbers, and may send no event once they settle — the rotation
+     animation alone is ~500 ms on iOS 17+. A landscape phone then kept
+     body[data-density="normal"] from its portrait answer: the full-size title
+     doors with their subtitles in a 430px screen, scrolling (reported
+     2026-09-29, iPhone landscape). So every viewport event answers now AND
+     re-asks after the rotation has had time to land; classifyBody() is
+     idempotent, so the extra asks cost nothing when the first was right.
+     https://bugs.webkit.org/show_bug.cgi?id=170595 */
+  const SETTLE_MS = [250, 700, 1500];
+  let settleTimers = [];
+  function onViewport() {
+    reclassify();
+    settleTimers.forEach(clearTimeout);
+    settleTimers = SETTLE_MS.map((ms) => setTimeout(reclassify, ms));
+  }
+
   function init() {
     Log.info("ui", "SheetShape.init");
     if (typeof ResizeObserver === "function") {
@@ -623,8 +641,8 @@ window.SheetShape = (function () {
        question, costs nothing on an event that fires rarely, and is the same
        argument watchScale() already makes two functions up for the same class
        of gap. Kept for that reason, not for the incident that prompted it. */
-    addEventListener("resize", reclassify, { passive: true });
-    addEventListener("orientationchange", reclassify, { passive: true });
+    addEventListener("resize", onViewport, { passive: true });
+    addEventListener("orientationchange", onViewport, { passive: true });
     watchVisibility();
     watchScale();
     watchKeyboard();
