@@ -1,20 +1,22 @@
 /* deploy-staging.test.mjs — everything the browser fetches must be DEPLOYED.
  *
  * WHY THIS EXISTS. .github/workflows/pages.yml does not upload the repo root
- * (that shipped a ~174 MB artifact and timed out the Pages deploy). It copies
- * an ALLOW-LIST of runtime directories instead. An allow-list edited by hand is
- * a list that goes stale, and this one did: `vendor/` was never in it, so every
- * dynamically imported library — trystero, rapier, jsQR, three.js — 404'd on
- * the deployed site while working in every local run and every test, because
- * those serve the repo root.
+ * (that shipped a ~174 MB artifact and timed out the Pages deploy). It stages
+ * an ALLOW-LIST of runtime directories via tools/desktop/stage.mjs (shared with
+ * the Electron packager). An allow-list edited by hand is a list that goes
+ * stale, and this one did: `vendor/` was never in it, so every dynamically
+ * imported library — trystero, rapier, jsQR, three.js — 404'd on the deployed
+ * site while working in every local run and every test, because those serve
+ * the repo root.
  *
  * The failure mode is what makes it worth a test. A missing <script> tag breaks
  * the page instantly and loudly. A missing DYNAMIC import breaks one feature,
  * on one screen, only in production, and only for whoever taps that button —
  * it reached a real player as "could not load the room service".
  *
- * So: read the workflow's staging commands, read what the shipped code can
- * fetch, and assert the second is covered by the first.
+ * So: read the stage allow-list, read what the shipped code can fetch, and
+ * assert the second is covered by the first. Also pin that pages.yml calls the
+ * shared stage script (not a forked inline cp list).
  *
  * Run: node --test tests/unit/deploy-staging.test.mjs   (npm run test:tooling-fast)
  */
@@ -23,6 +25,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { STAGE_DIRS, STAGE_ROOT_FILES, stagedNames } from "../../tools/desktop/stage-files.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -31,15 +34,8 @@ const workflow = read(".github/workflows/pages.yml");
 const html = read("index.html");
 const sw = read("sw.js");
 
-/* What the workflow actually puts in _site. Parsed from the `cp` lines rather
- * than from a duplicated list here — a copy of the list would drift from the
- * workflow exactly as the workflow drifted from reality. */
 function staged() {
-  const out = new Set();
-  for (const m of workflow.matchAll(/^\s*cp (?:-r )?(.+?) _site\/$/gm)) {
-    for (const w of m[1].trim().split(/\s+/)) out.add(w.replace(/\/$/, ""));
-  }
-  return out;
+  return stagedNames();
 }
 
 /* Every same-origin path the shipped code can request, as its top-level entry
@@ -86,6 +82,19 @@ function walk(dir, out = []) {
   return out;
 }
 
+test("pages.yml stages via the shared tools/desktop/stage.mjs (no forked cp list)", () => {
+  const from = workflow.indexOf("- name: Stage site");
+  assert.ok(from >= 0, "Stage site step missing");
+  const rest = workflow.slice(from + 1);
+  const nextStep = rest.indexOf("- name:");
+  const stage = (nextStep >= 0 ? rest.slice(0, nextStep) : rest)
+    .split("\n").map((l) => l.replace(/#.*$/, "")).join("\n");
+  assert.match(stage, /tools\/desktop\/stage\.mjs/,
+    "pages.yml must call tools/desktop/stage.mjs so Pages and Electron share one allow-list");
+  assert.doesNotMatch(stage, /^\s*cp\b/m,
+    "do not re-introduce an inline cp allow-list; edit tools/desktop/stage-files.mjs");
+});
+
 test("the Pages workflow stages every directory the shipped code can fetch", () => {
   const have = staged();
   const missing = [];
@@ -103,12 +112,9 @@ test("vendor/ is staged, because every dynamic import lives there", () => {
   assert.ok(staged().has("vendor"), "vendor/ must be copied into _site");
 });
 
-test("everything the workflow stages actually exists in the repo", () => {
-  // The other direction. `cp` of a missing path fails the step outright, which
-  // is at least loud — but it fails AFTER checkout on a runner, minutes later,
-  // for something knowable here in milliseconds.
-  for (const p of staged()) {
-    assert.ok(fs.existsSync(path.join(ROOT, p)), `pages.yml stages "${p}", which is not in the repo`);
+test("everything the stage allow-list names actually exists in the repo", () => {
+  for (const p of [...STAGE_ROOT_FILES, ...STAGE_DIRS]) {
+    assert.ok(fs.existsSync(path.join(ROOT, p)), `stage-files names "${p}", which is not in the repo`);
   }
 });
 

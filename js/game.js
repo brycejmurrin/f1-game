@@ -951,7 +951,7 @@ function onIncidentLineCross(c, cross, newS) {
   }
   c._secT0 = 0;
   if (c.isPlayer) { sectorIdx = 0; sectorStartT = 0; }
-  if (c.isPlayer && c.lap === lapsTarget && lapsTarget > 1) announce("FINAL LAP", 1.6, "race");
+  if (c.isPlayer && c.lap === lapsTarget && lapsTarget > 1 && !raceRadio.callsLastLap()) announce("FINAL LAP", 1.6, "race");
   if (cross.flagged) {
     // The lap is incident-invalid, so do not publish it as a timed lap. A
     // finish stamp is still authoritative and must reach the other peer; null
@@ -2567,8 +2567,10 @@ let _warmKey = "";
 const warmPrograms = () => { try { if (gfx.warm) { gfx.warm(); _warmKey = menuKey(trackIdx); } } catch (_) { /* optimisation only */ } };
 async function menuFinish(current, key) {
   await prepareMenuCarAssets(current);
+  if (!current()) return;
   if (await menuIdle(current)) { warmPrograms(); FlybySeq.reset(); _menuGate.warm = 2; }   // reset: a new world's shot 0 snaps, never glides in from the last one
   const lit = await menuLampBake(current);
+  if (!current()) return;   // a RACE! tap or a new selection owns the sequencer now
   FlybySeq.setDuration(loadingScreen.nextFlyMs());
   const fly = { key, track, shots: FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0, false) }, step = FlybySeq.planSteps(track, fly.shots);
   while (current() && !step()) await menuSlice();
@@ -2587,10 +2589,9 @@ function scheduleFlybyTrack(settle) {
     (!els.select.hidden || !$("race-settings").hidden);
   const prepare = async () => {
     if (!current()) return;
-    // Compilation owns its scene/targets until it settles; never free them
-    // to service a newer selection in the middle of an asynchronous warm-up.
-    if (gfx.warming && gfx.warming()) { flybyBuildTimer = setTimeout(prepare, 100); return; }
     try {
+      // Download independently of the old world's compilation; only replacing
+      // its scene/targets must wait. ensureScenery shares in-flight requests.
       await ensureScenery(want);
       if (!current()) return;
       if (gfx.warming && gfx.warming()) { flybyBuildTimer = setTimeout(prepare, 100); return; }
@@ -6329,7 +6330,7 @@ function updateCar(c, dt, ranked) {
     c._secT0 = 0;   // …and the FIELD's S1 reference, or it measures across the reset
     if (c.isPlayer) { sectorIdx = 0; sectorStartT = 0; }
     // Never on a 1-lap session: that crossing is the START crossing, and a qualifying flying lap is not a final lap.
-    if (c.isPlayer && c.lap === lapsTarget && lapsTarget > 1) announce("FINAL LAP", 1.6, "race");
+    if (c.isPlayer && c.lap === lapsTarget && lapsTarget > 1 && !raceRadio.callsLastLap()) announce("FINAL LAP", 1.6, "race");
     if (flagged && c.isPlayer) announce("FINISH!", 2, "race");
   } else if (lineCross && lineCross.direction < 0) {
     // Backward over the line: give the lap back and put the clock where it was,

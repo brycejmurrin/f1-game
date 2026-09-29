@@ -301,6 +301,15 @@ Container bootstrap: browsers and the Cursor Cloud install.
 | **env/install-browsers.sh** | Idempotent Playwright Chromium install into `/opt/pw-browsers`; skips `npm install` when node_modules is usable. | — |
 | **env/mirror-skills.sh** | Repair the tracked .agents/skills/ Codex mirror: one symlink per skill dir (--check drift, --copy fallback). | check-changes |
 
+### `tools/desktop/`
+
+Electron desktop packaging: stage the Pages allow-list into a site folder the shell serves over app://.
+
+| Tool | Does | Paired skill |
+|---|---|---|
+| **desktop/stage-files.mjs** | Shared allow-list of runtime files/dirs staged for Pages and Electron packaging. | check-changes |
+| **desktop/stage.mjs** | Stage the deployable site folder (Pages / Electron) from the shared allow-list; optional content-hash stamp. | check-changes |
+
 ## Test runner & coverage
 
 | Tool | Does |

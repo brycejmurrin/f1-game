@@ -508,10 +508,14 @@ const LoadingScreen = (function () {
       if (!text) return;
       const lead = typeof GameAudio !== "undefined" && GameAudio.radioLeadS ? GameAudio.radioLeadS("radio") : 0;
       try {
-        if (!r.sayPreRace(text, left, lead)) return;
+        const secs = r.sayPreRace(text, left, lead);
+        if (!secs) return;
         radioState = "live";
-        // The click-hiss-squelch around it, as showAnnounce plays for a race line.
-        if (typeof GameAudio !== "undefined" && GameAudio.radioSting) GameAudio.radioSting("radio", left);
+        // The click-hiss-squelch around it, as showAnnounce plays for a race
+        // line — held for the LINE (plus a beat for a slow voice), not the rest
+        // of the flyby: seconds of open-mic hiss after "P5, RADIO CHECK" ended.
+        const hold = typeof secs === "number" ? Math.min(left, secs + 0.6) : left;
+        if (typeof GameAudio !== "undefined" && GameAudio.radioSting) GameAudio.radioSting("radio", hold);
       } catch (e) { Log.warn("audio", "radio check failed", e); }
     }
 
