@@ -231,24 +231,21 @@
         // both stay neutral "wings". Repo fracs 0.004 / 0.022 retained.
         // https://en.wikipedia.org/wiki/Shanghai_International_Circuit
         // https://www.grandprix.com/news/shanghai-shaping-up.html
-        const placeWing = (id, frac, hgt, deckD, col) => {
-          const aL = anchor(K(frac), -1, 20), bL = [aL.r, aL.u, aL.t];
-          const aR = anchor(K(frac),  1, 20), bR = [aR.r, aR.u, aR.t];
+        //
+        // BATCH-01 registers the main-stand pier as a literal modelGroup
+        // (off-road; the deck itself cannot be a modelGroup — it crosses the
+        // racing line). Clearance-checked deck stays on overheadSpan.
+        const wingDeck = (deckId, frac, hgt, deckD, col) => {
+          const aL = anchor(K(frac), -1, 20), aR = anchor(K(frac), 1, 20);
           const span = Math.hypot(
             aR.c[0] - aL.c[0], aR.c[1] - aL.c[1], aR.c[2] - aL.c[2]
           );
-
-          // End pylons sit OFF the road (supportGap 20).
+          const bR = [aR.r, aR.u, aR.t];
           const deckTopY = frameAt(frac).c[1] + hgt + 0.5;
-          for (const tOff of [-2.4, 2.4]) {
-            seat.cyl(out, vadd(aL.c, aL.t, tOff), 0.45, deckTopY - aL.c[1], STEEL, 6, bL);
+          for (const tOff of [-2.4, 2.4])
             seat.cyl(out, vadd(aR.c, aR.t, tOff), 0.45, deckTopY - aR.c[1], STEEL, 6, bR);
-          }
-
           overheadSpan({
-            // Ternary keeps BOTH literal ids next to overheadSpan + required
-            // for scenery-api-contract BATCH-01 (variable `id` alone fails it).
-            id: id === "shanghai-wing-west" ? "shanghai-wing-west" : "shanghai-wing-east",
+            id: deckId,
             frac,
             clearance: hgt,
             thickness: 1.15,
@@ -262,8 +259,28 @@
             required: true,
           });
         };
-        placeWing("shanghai-wing-east", 0.004, 38, 8.0, WHITE);
-        placeWing("shanghai-wing-west", 0.022, 36, 7.0, [0.86, 0.88, 0.90]);
+        const wingPier = (frac, hgt, emit) => {
+          const aL = anchor(K(frac), -1, 20), bL = [aL.r, aL.u, aL.t];
+          const pierH = (frameAt(frac).c[1] + hgt + 0.5) - aL.c[1];
+          emit({
+            center: vadd(aL.c, aL.u, pierH / 2),
+            size: [3.5, pierH + 0.6, 7],
+            basis: bL,
+          }, (stage) => {
+            // Same twin pier cylinders as before (moved into the required
+            // modelGroup so BATCH-01 stays on literal modelGroup + required).
+            for (const tOff of [-2.4, 2.4])
+              seat.cyl(stage, vadd(aL.c, aL.t, tOff), 0.45, pierH, STEEL, 6, bL);
+          });
+        };
+        wingPier(0.004, 38, (bounds, emit) => {
+          modelGroup("shanghai-wing-east", bounds, emit, { required: true });
+        });
+        wingDeck("shanghai-wing-east-deck", 0.004, 38, 8.0, WHITE);
+        wingPier(0.022, 36, (bounds, emit) => {
+          modelGroup("shanghai-wing-west", bounds, emit, { required: true });
+        });
+        wingDeck("shanghai-wing-west-deck", 0.022, 36, 7.0, [0.86, 0.88, 0.90]);
       })();
 
       building(K(0.042), -1, 70, 20, 28, 34, {
