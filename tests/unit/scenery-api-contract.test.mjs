@@ -154,6 +154,15 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
       "montreal-wall-of-champions-stand",
       "montreal-biosphere",
     ],
+    // Wave 6 — Hockenheim Motodrom ring (Süd + Nord permanent stands)
+    hockenheim: [
+      "hockenheim-motodrom-screen",
+      "hockenheim-mercedes-tribune",
+      "hockenheim-sued-tribune",
+      "hockenheim-nord-tribune",
+      "hockenheim-race-control",
+      "hockenheim-infield-compound",
+    ],
   };
   for (const [track, ids] of Object.entries(expected)) {
     const body = landmarkSource(track);
