@@ -38,12 +38,12 @@ import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
-  // Input.ready, not Input.simTilt: the API exists as soon as input.js evaluates,
+  // Input.ready(), not Input.simTilt: the API exists as soon as input.js evaluates,
   // which is before game.js reaches Input.init() and the boot setSteerMode that
   // follows it. The live-path test set tilt, then boot stomped mode back to
   // buttons mid-settle — CI #6199 (run 36638762096) saw |live-sim| = the default
   // map at 12° (0.28358…) with live stuck at 0.
-  await page.waitForFunction(() => typeof Input !== "undefined" && Input.ready, null, {
+  await page.waitForFunction(() => typeof Input !== "undefined" && Input.ready && Input.ready(), null, {
     polling: 100, timeout: BOOT_MS,
   });
   await page.evaluate(() => {
