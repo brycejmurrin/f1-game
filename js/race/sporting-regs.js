@@ -14,7 +14,9 @@
  *     price one kept place at 10 s. Two and more are priced here at a
  *     drive-through and a stop-and-go equivalent (20 s / 30 s) — the game has
  *     no served penalties, only time added at the flag. A car that is retired,
- *     finished or in the pit lane is fair game (the regs' own exceptions), and
+ *     finished or in the pit lane is fair game (the regs' own exceptions), so
+ *     is one slowed or stopped by an obvious problem (the caller's `troubled`
+ *     predicate: an incident takeover, a car stuck or beached), and
  *     a place TAKEN BACK from a car that passed you under the caution is not a
  *     new offence. A lapped car never changes places here: order is by
  *     cumulative progress, so lapping is not a position change.
@@ -94,9 +96,12 @@ const SportingRegs = (function () {
   /** One watcher per race, for ONE car (the local player). tick() returns an
    *  event or null: {type:"warn", n} when a place is gained (the window
    *  opens), {type:"cleared"} when every place is back, {type:"penalty", n,
-   *  sec} when the window runs out. Allocation-free per tick. */
-  function createPassWatch(windowS) {
+   *  sec} when the window runs out. Allocation-free per tick. `troubled(o)`,
+   *  optional, names a car slowed by an obvious problem — passing it is legal,
+   *  and it is read at the moment of the pass. */
+  function createPassWatch(windowS, troubled) {
     const WIN = windowS > 0 ? windowS : GIVE_BACK_S;
+    const fair = typeof troubled === "function" ? (o) => exempt(o) || !!troubled(o) : exempt;
     let ahead = new Set(), now = new Set(), primed = false;
     const owed = [], lostTo = [];
     let t = 0;
@@ -110,12 +115,12 @@ const SportingRegs = (function () {
       const caution = level >= CAUTION_MIN && !p.finished && !p.retired && !inPit(p);
       if (primed && caution) {
         for (const o of ahead) {
-          if (now.has(o) || exempt(o)) continue;
+          if (now.has(o) || fair(o)) continue;
           if (lostTo.indexOf(o) >= 0) { drop(lostTo, o); continue; }   // taking back what was taken
           if (owed.indexOf(o) < 0) { owed.push(o); gained = true; }
         }
         // A car that came past US under the caution: re-passing it is not an offence.
-        for (const o of now) if (!ahead.has(o) && !exempt(o) && owed.indexOf(o) < 0 && lostTo.indexOf(o) < 0) lostTo.push(o);
+        for (const o of now) if (!ahead.has(o) && !fair(o) && owed.indexOf(o) < 0 && lostTo.indexOf(o) < 0) lostTo.push(o);
       }
       if (level < CAUTION_MIN) lostTo.length = 0;
       if (owed.length) {
