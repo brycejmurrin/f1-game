@@ -7,7 +7,7 @@
   ],
   "buried": {
     "abudhabi": 8,
-    "albert_park": 51,
+    "albert_park": 3,
     "anderstorp": 125,
     "bahrain": 46,
     "baku": 113,
@@ -56,7 +56,6 @@
     "zolder": 28
   },
   "unsupported": {
-    "albert_park": 7,
     "bahrain": 5,
     "baku": 3,
     "brands_hatch": 5,
@@ -91,7 +90,6 @@
   },
   "flatCoplanar": {
     "abudhabi": 5,
-    "albert_park": 2,
     "anderstorp": 31,
     "bahrain": 6,
     "baku": 5,
