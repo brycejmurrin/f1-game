@@ -404,6 +404,7 @@ jobs:
         run: node tools/ci/ci-coverage.mjs
 
 # pick-unit-slices github-output: assert via temp GITHUB_OUTPUT (2026-09-29)
+  # retrigger: prior run 36644334828 was cancel-in-progress mid-guards (zero failures)
   # WHICH NODE SLICES DOES THIS DIFF NEED? (2026-09-29 follow-up). Browser
   # selection is change-aware; the node matrix was not — every PR paid for all
   # three packed slices + driving-model (~17 runner-min). tools/ci/pick-unit-
