@@ -262,6 +262,16 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
       "brands-hailwoods-stand",
       "brands-kentagon",
     ],
+    // Wave 6 — Mont-Tremblant (Laurentians): control tower, The Hump crest,
+    // service bridge, Namerow bank, Paddock Bend fascia. Devil's Elbow /
+    // Casino / Le Nordique are Montreal names — deliberately omitted.
+    mont_tremblant: [
+      "tremblant-control-tower",
+      "tremblant-hump-crest",
+      "tremblant-bridge",
+      "tremblant-namerow-bank",
+      "tremblant-paddock-bend-stand",
+    ],
   };
   for (const [track, ids] of Object.entries(expected)) {
     const body = landmarkSource(track);
