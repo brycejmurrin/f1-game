@@ -485,6 +485,9 @@ const LoadingScreen = (function () {
       let total = 0, before = -1;
       for (const sh of list) { if (sh.id === "grid-mine" && before < 0) before = total; total += sh.dur || 0; }
       if (before < 0 || !(total > 0)) return life;
+      // A grid-mine window too short for any line (the 12 s cut: 1.4 s) means
+      // radioCheck will refuse it, so the read keeps the whole flyby.
+      if (life * (total - before) / total < RADIO_MIN_S * 1000) return life;
       // No room at all (grid-mine opens the flyby) is -1, "say nothing": 0
       // is the announcer's "no budget", which read the whole 26 s script.
       const share = life * before / total - 150;
@@ -505,10 +508,14 @@ const LoadingScreen = (function () {
       if (!text) return;
       const lead = typeof GameAudio !== "undefined" && GameAudio.radioLeadS ? GameAudio.radioLeadS("radio") : 0;
       try {
-        if (!r.sayPreRace(text, left, lead)) return;
+        const secs = r.sayPreRace(text, left, lead);
+        if (!secs) return;
         radioState = "live";
-        // The click-hiss-squelch around it, as showAnnounce plays for a race line.
-        if (typeof GameAudio !== "undefined" && GameAudio.radioSting) GameAudio.radioSting("radio", left);
+        // The click-hiss-squelch around it, as showAnnounce plays for a race
+        // line — held for the LINE (plus a beat for a slow voice), not the rest
+        // of the flyby: seconds of open-mic hiss after "P5, RADIO CHECK" ended.
+        const hold = typeof secs === "number" ? Math.min(left, secs + 0.6) : left;
+        if (typeof GameAudio !== "undefined" && GameAudio.radioSting) GameAudio.radioSting("radio", hold);
       } catch (e) { Log.warn("audio", "radio check failed", e); }
     }
 
@@ -540,7 +547,12 @@ const LoadingScreen = (function () {
       if (e && e.type === "keydown" && e.repeat) return;
       if (!(phase && build) || Date.now() - flyT0 < SKIP_GRACE_MS) return;
       if (e) { if (e.cancelable && e.preventDefault) e.preventDefault(); if (e.stopPropagation) e.stopPropagation(); }
-      noteFlyby(true); cutRadio(); fire();
+      noteFlyby(true); cutRadio();
+      // The voice ends with the flyby it was fitted to, not when startRace
+      // reaches clearMenuScreens() after its setup work.
+      const a = ann();
+      if (a) { try { a.stop(); } catch (_) { /* a synth mid-teardown */ } }
+      fire();
     }
     /* THE PAD SKIPS TOO. No UI layer is open during the flyby, so the gamepad
      * walker sends no synthetic keydown and a controller-only player (TV, a
@@ -706,7 +718,8 @@ const LoadingScreen = (function () {
        *  driven by this rather than by the wall clock, so the sequence keeps its
        *  shape when FLY_MS is retuned (or shortened for a habitual skipper),
        *  and a phase skipped by a keypress does not
-       *  leave the camera mid-move. 1 once the card is up, 0 when nothing runs. */
+       *  leave the camera mid-move. 1 once the flyby has run its length; 0 when
+       *  no flyby runs (the card, build, handoff and hold phases). */
       progress: () => flyU(),
       /** True while the screen owns the canvas — game.js keeps the world
        *  drawn for exactly this window and blanks every other menu. */

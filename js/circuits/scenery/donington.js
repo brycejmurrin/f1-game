@@ -9,9 +9,9 @@
      1  palette + local helpers            (§2 atmosphere, §6 modelling notes)
      2  s 0.005  +1  pits / paddock / broadcast / camera tower
      3  s 0.022  -1  start-finish grandstand + hoarding + gantry
-     4  s 0.048  +1  Donington Collection, apron, screening hedge
+     4  s 0.048  +1  ex-Donington Collection (closed 2018), apron, hedge
      5  s 0.0663 -1  Redgate
-     6  s 0.1698 -1  Hollywood, top of the drop
+     6  s 0.1698 -1  Hollywood — 2017–18 MSV grandstand + Garage 39
      7  s 0.2500 +1  mid-Craner infield, deliberately empty
      8  s 0.3212 -1  Craner Curves, enclosed and dark
      9  s 0.3342 +1  Old Hairpin bank
@@ -44,7 +44,7 @@
         building, grandstandEx, spectatorHill, terrace,
         guardrail, fence, tyreWall, marshalPost, cameraTower, broadcastCompound,
         billboard, sponsorHoarding, gantry, motorhome, groundPatch,
-        place, ridge, circuitKit } = api;
+        place, ridge, circuitKit, modelGroup, vadd, addBox, seat, MAT } = api;
 
       // ---------------------------------------------------------------------
       // 1. PALETTE + LOCAL HELPERS
@@ -174,16 +174,21 @@
       building(K(sl(0.032)), 1, 19, 12, 5.5, 34, { col: WALL_2, roof: ROOF });
       // Race control / timing over the end of the garage run — still club scale.
       building(K(sl(0.004)), 1, 25, 10, 7.0, 16, { col: CREAM, roof: ROOF_D });
-      // Paddock apron behind the garages.
-      groundPatch(K(sl(0.000)), 1, 34, [40, 0.18, 96], TARMACISH);
-      for (let i = 0; i < 5; i++) motorhome(K(sl(0.975 + i * 0.012)), 1, 30, 3.0, 3.2, 11, { wall: WALL });
-      broadcastCompound(K(sl(0.020)), 1, 30, { col: WALL_2 });
+      // Paddock apron behind the garages — keep patches apart so tops do not
+      // share a plane (was flatCoplanar 42 m² between the two hardstandings).
+      groundPatch(K(sl(0.000)), 1, 34, [32, 0.16, 70], TARMACISH);
+      // Soft trailers as safeBoxes — motorhome() kept burying ≤0.15 m into the
+      // paddock berm even at gap 46 (ground-audit); tents read the same from afar.
+      for (let i = 0; i < 4; i++)
+        safeBox(K(sl(0.978 + i * 0.012)), 1, 48 + (i % 2) * 4, [3.2, 3.0, 10], TRUCKS[i % 5]);
+      broadcastCompound(K(sl(0.020)), 1, 32, { col: WALL_2 });
       cameraTower(K(sl(0.004)), 1, 20, { h: 11 });
       // --- paddock DEPTH: transporter row, workshops, tyre bay, team awnings.
-      for (let i = 0; i < 7; i++) safeBox(K(sl(0.966 + i * 0.009)), 1, 47, [3.4, 3.9, 13], TRUCKS[i % 5]);
-      building(K(sl(0.040)), 1, 46, 11, 5.0, 24, { col: BRICK, roof: ROOF_R });
-      building(K(sl(0.984)), 1, 50, 14, 5.4, 26, { col: STEEL, roof: ROOF_D, flat: true });
-      groundPatch(K(sl(0.994)), 1, 60, [34, 0.18, 88], TARMACISH);
+      for (let i = 0; i < 7; i++) safeBox(K(sl(0.966 + i * 0.009)), 1, 52, [3.4, 3.9, 13], TRUCKS[i % 5]);
+      // Drop the brick workshop that kept burying into the paddock berm; steel
+      // shed further out covers the depth rank.
+      building(K(sl(0.984)), 1, 58, 14, 5.4, 26, { col: STEEL, roof: ROOF_D, flat: true });
+      groundPatch(K(sl(0.994)), 1, 76, [22, 0.22, 54], GRAVEL);
       for (let i = 0; i < 3; i++) safeBox(K(sl(0.030 + i * 0.013)), 1, 62, [9, 4.0, 12], TENT);
       // Team/competitor parking behind the workshops, then the estate treeline.
       carPark(sl(0.950), sl(0.020), 1, 70, 7, 3, 61);
@@ -198,8 +203,11 @@
       //    shell/crowd are COLOUR ARRAYS; null lets the emitter pick a livery.
       //    Re-keyed with the pits — the stand and gantry face the line.
       // ---------------------------------------------------------------------
-      grandstandEx(sl(0.014), -1, 21, 76, null, null);
-      grandstandEx(sl(0.040), -1, 21, 58, null, null);
+      grandstandEx(sl(0.014), -1, 32, 64, null, null,
+        { roof: "cantilever", tiers: 1 });
+      // Second S/F bank: gap 30 restores positive rake (was BACKWARDS at 21).
+      grandstandEx(sl(0.040), -1, 32, 42, null, null,
+        { roof: "cantilever", tiers: 1, endWalls: true });
       sponsorHoarding(sl(0.995), sl(0.062), -1, 13);
       fence(sl(0.990), sl(0.070), -1, 12, 3.0, FENCE_C);
       gantry(sl(0.002), 7.2, [0.80, 0.80, 0.78]);
@@ -214,18 +222,19 @@
       rank(sl(0.938), sl(0.088), -1, 86, 22, 720, 9.0, 15.0);
 
       // ---------------------------------------------------------------------
-      // 4. s 0.048 +1 34 — THE DONINGTON COLLECTION
-      //    Long, low, flat-roofed exhibition hall set back behind the paddock,
-      //    coach apron in front, hedge screening it from the track.
+      // 4. s 0.048 +1 34 — EX-DONINGTON COLLECTION (disused)
+      //    The Donington Grand Prix Exhibition closed permanently on
+      //    5 Nov 2018 (Derby Telegraph / Wikipedia). Keep the long hall as a
+      //    disused exhibition block — do not present it as an open museum.
+      //    gap 58, not the brief's 34: closer than ~55 the hall overlaps tarmac.
       // ---------------------------------------------------------------------
-      // gap 58, not the brief's 34: closer than ~55 the hall overlaps tarmac.
       building(K(0.048), 1, 58, 24, 7.5, 64, { col: WALL, roof: ROOF, flat: true });
       building(K(0.072), 1, 28, 12, 4.8, 18, { col: WALL_2, roof: ROOF, flat: true });
       groundPatch(K(0.046), 1, 24, [26, 0.18, 54], TARMACISH);
       hedge(0.034, 0.078, 1, 17, 2.2, HEDGE_C);
       for (let i = 0; i < 4; i++) specimen(K(0.040 + i * 0.011), 1, 60, i * 7);
-      // --- the museum reads as a SITE, not one shed: a second exhibition wing
-      //     set back, an entrance block, the coach apron and visitor parking.
+      // --- the closed museum still reads as a SITE: second wing, entrance
+      //     block, coach apron and visitor parking (empty hardstanding).
       building(K(0.062), 1, 62, 18, 6.2, 34, { col: CREAM, roof: ROOF_D, flat: true });
       building(K(0.030), 1, 54, 12, 5.0, 20, { col: BRICK, roof: ROOF_R });
       safeBox(K(0.050), 1, 40, [11, 3.8, 9], CONCRETE);          // entrance canopy
@@ -256,28 +265,89 @@
       rank(0.040, 0.120, -1, 70, 18, 940, 9.5, 16.0);
 
       // ---------------------------------------------------------------------
-      // 6. s 0.1698 -1 16 — HOLLYWOOD, the top of the Craner drop
-      //    Wide bank looking down the whole fall; wood behind it, not in front.
+      // 6. s ~0.19 -1 — HOLLYWOOD, top of the Craner drop
+      //    2017–18 MSV works: large permanent grandstand (Wikipedia; MSV GP
+      //    map "Hollywood Grandstand"). grandstandEx suppressed on this fold;
+      //    hero is modelGroup with positive rake. Frame debt: authored fracs
+      //    only — do not edit startFrac/sceneryStartFrac.
       // ---------------------------------------------------------------------
-      grandstandEx(0.163, -1, 17, 64, null, null);
-      spectatorHill(0.130, 0.230, -1, 20, { h: 9.0, col: GRASS });
-      terrace(0.178, 0.215, -1, 20, { h: 6.0, col: CONCRETE });
+      {
+        const side = -1;
+        // Footprint probe: s≈0.188 gap≥20 clears; s=0.17 rejects at any gap
+        // (Craner fold). Authored frame — do not pre-shift.
+        const sHollywood = 0.188;
+        const a = anchor(K(sHollywood), side, 24);
+        if (!onTrack(a.c[0], a.c[2], 10)) {
+          const b = [a.r, a.u, a.t];
+          const STEEL = [0.58, 0.59, 0.60], WHITE = [0.82, 0.81, 0.78];
+          const SHELL = [0.74, 0.73, 0.70], FASCIA = [0.18, 0.42, 0.28]; // MSV green nod
+          const CROWD = [[0.78, 0.22, 0.18], [0.22, 0.40, 0.62], [0.88, 0.86, 0.82],
+                         [0.90, 0.78, 0.22], [0.30, 0.32, 0.34]];
+          modelGroup("donington-hollywood-stand", {
+            center: vadd(a.c, a.u, 7.0), size: [14, 14, 52], basis: b,
+          }, (stage) => {
+            const len = 46;
+            const rows = 5;
+            // Pad on terrain (anchor sinks ~0.3 m; seat.box at a.c was buried).
+            const pad = [a.c[0], terrainYAt(a.c[0], a.c[2]) + 0.15, a.c[2]];
+            stage._mat = MAT.CONCRETE;
+            seat.box(stage, pad, [8, 0.4, len + 2], [0.52, 0.52, 0.50], b);
+            for (let t = 0; t < rows; t++) {
+              const back = 1.1 + t * 1.4;
+              const y = 0.55 + t * 1.15;
+              const foot = vadd(vadd(pad, a.r, side * back), a.u, y);
+              stage._mat = MAT.CONCRETE;
+              seat.box(stage, foot, [1.3, 0.18, len - t * 0.6],
+                t & 1 ? [0.70, 0.69, 0.66] : [0.66, 0.65, 0.62], b);
+              stage._mat = MAT.FABRIC;
+              const cnt = Math.min(8, Math.floor(len / 7));
+              for (let j = 0; j < cnt; j++) {
+                const h2 = hash(K(sHollywood) * 17 + t * 41 + j * 13);
+                if (h2 < 0.45) continue;
+                seat.box(stage, vadd(vadd(foot, a.t, (j / Math.max(1, cnt - 1) - 0.5) * (len - 6)),
+                                     a.u, 0.2),
+                  [0.55, 0.95, 1.3], CROWD[Math.floor(h2 * 97) % CROWD.length], b);
+              }
+            }
+            stage._mat = MAT.CONCRETE;
+            addBox(stage, vadd(vadd(pad, a.r, side * 8.8), a.u, 6.2),
+              [2.8, 11.5, len - 2], SHELL, b);
+            for (const dt of [-(len / 2 + 0.3), len / 2 + 0.3]) {
+              addBox(stage, vadd(vadd(pad, a.t, dt), a.r, side * 4.5),
+                [10, 11, 0.65], WHITE, b);
+            }
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(vadd(pad, a.r, side * 4.5), a.u, 11.6),
+              [11, 0.4, len + 2], STEEL, b);
+            addBox(stage, vadd(vadd(pad, a.r, side * 0.35), a.u, 1.4),
+              [0.18, 1.9, len - 4], FASCIA, b);
+            stage._mat = 0;
+          }, { required: true });
+        }
+        // Garage 39 restaurant & bar — 2017–18 MSV works (Wikipedia; MSV map).
+        // gap 58: at 48 the hall buried into the Hollywood bank grade.
+        building(K(0.198), side, 58, 14, 5.5, 26, { col: CREAM, roof: ROOF_D, flat: true });
+        building(K(0.208), side, 60, 8, 4.0, 14, { col: WALL_2, roof: ROOF, flat: true });
+      }
+      // Grass banks clear of the Hollywood stand footprint (was coplanar with
+      // the modelGroup pad when the hill ran under s≈0.16–0.19).
+      spectatorHill(0.118, 0.148, -1, 30, { h: 6.5, col: GRASS });
+      spectatorHill(0.220, 0.255, -1, 30, { h: 7.0, col: GRASS });
       forestEdge(0.120, 0.250, -1, 52, { col: LEAF, spacing: 15 });
       guardrail(0.120, 0.250, -1, 11, ARMCO);
       fence(0.130, 0.235, -1, 14, 3.2, FENCE_C);
       marshalPost(K(0.1698), -1, 14);
       sponsorHoarding(0.150, 0.200, -1, 13);
-      // --- the crowd's own depth: catering row on the concourse behind the
-      //     bank, a toilet/store block, the spectator car park, back treeline.
+      // --- the crowd's own depth: catering row, store block, car park, treeline.
       for (let i = 0; i < 5; i++)
-        safeBox(K(0.142 + i * 0.015), -1, 36, [5.4, 3.3, 8], i % 2 ? TENT : CREAM);
-      building(K(0.208), -1, 40, 9, 4.2, 18, { col: STEEL, roof: ROOF_D, flat: true });
-      building(K(0.134), -1, 42, 8, 4.0, 14, { col: BRICK_D, roof: ROOF_R });
-      groundPatch(K(0.176), -1, 46, [20, 0.16, 70], GRAVEL);
-      carPark(0.136, 0.226, -1, 62, 9, 4, 407);
-      hut(K(0.190), -1, 30, CREAM);
-      billboard(K(0.222), -1, 17, 8, 3.0, [0.68, 0.70, 0.68]);
-      rank(0.112, 0.258, -1, 78, 26, 1050, 10.0, 16.5);
+        safeBox(K(0.142 + i * 0.015), -1, 44, [5.4, 3.3, 8], i % 2 ? TENT : CREAM);
+      building(K(0.225), -1, 50, 9, 4.2, 18, { col: STEEL, roof: ROOF_D, flat: true });
+      building(K(0.134), -1, 48, 8, 4.0, 14, { col: BRICK_D, roof: ROOF_R });
+      groundPatch(K(0.190), -1, 54, [18, 0.16, 56], GRAVEL);
+      carPark(0.150, 0.230, -1, 70, 8, 4, 407);
+      hut(K(0.200), -1, 38, CREAM);
+      billboard(K(0.230), -1, 18, 8, 3.0, [0.68, 0.70, 0.68]);
+      rank(0.112, 0.258, -1, 82, 22, 1050, 10.0, 16.5);
 
       // ---------------------------------------------------------------------
       // 7. s 0.2500 +1 26 — MID-CRANER INFIELD: KEEP IT EMPTY
@@ -320,7 +390,7 @@
       for (let i = 0; i < 4; i++) specimen(K(0.330 + i * 0.016), 1, 46, 200 + i * 9);
       // --- behind the viewing bank: a small terrace, the marshals' hut and a
       //     field boundary with a rank of hedgerow oaks beyond it.
-      terrace(0.328, 0.356, 1, 30, { h: 3.5, col: CONCRETE });
+      terrace(0.328, 0.356, 1, 32, { rows: 3, rise: 0.9, depth: 2.0, conc: CONCRETE });
       hut(K(0.3342), 1, 28, CREAM);
       safeBox(K(0.350), 1, 32, [4.0, 2.8, 5], WALL_2);
       groundPatch(K(0.340), 1, 36, [20, 0.16, 56], ROUGH);
@@ -406,7 +476,8 @@
       // ---------------------------------------------------------------------
       guardrail(0.735, 0.782, -1, 11, ARMCO);
       tyreWall(0.750, 0.768, -1, 12, TW_R);
-      grandstandEx(0.756, -1, 18, 44, null, null);
+      grandstandEx(0.756, -1, 24, 40, null, null,
+        { roof: "cantilever", tiers: 1, endWalls: true });
       billboard(K(0.744), -1, 15, 8, 3.0, [0.72, 0.72, 0.70]);
       sponsorHoarding(0.730, 0.752, -1, 12.5);
       sponsorHoarding(0.766, 0.790, -1, 12.5);
@@ -465,23 +536,22 @@
       // 17. s 0.9437 +1 13 — GODDARDS, the last corner onto the pit straight
       // ---------------------------------------------------------------------
       tyreWall(0.936, 0.954, 1, 13, TW_R);
-      grandstandEx(0.948, -1, 19, 58, null, null);
+      // No grandstandEx here — at every gap the crowdBank buried into the
+      // Goddards exit berm (ground-audit). Viewing is the spectatorHill below
+      // plus the S/F stands; Hollywood is the required landmark this wave.
       sponsorHoarding(0.930, 0.972, -1, 13);
       marshalPost(K(0.9437), 1, 14);
       building(K(0.962), 1, 24, 9, 5.0, 14, { col: WALL_2, roof: ROOF });
       guardrail(0.925, 0.985, -1, 11.5, ARMCO);
-      // --- pit-exit end wall and its service yard on the inside, concourse
-      //     units and a back treeline behind the outside stand.
-      safeBox(K(0.970), 1, 17, [3.0, 3.4, 12], CONCRETE);        // pit-exit wall
-      // gap 26 (was 30): at 30 the roof cap frustum was refused and the plant
-      // housing hung 5.6 m over the ground (the baselined float cluster).
+      safeBox(K(0.970), 1, 17, [3.0, 3.4, 12], CONCRETE);
       building(K(0.978), 1, 26, 10, 4.6, 18, { col: BRICK, roof: ROOF_R });
       groundPatch(K(0.968), 1, 38, [22, 0.16, 54], TARMACISH);
       hut(K(0.9437), 1, 20, CREAM);
       for (let i = 0; i < 4; i++)
-        safeBox(K(0.932 + i * 0.013), -1, 36, [5.2, 3.2, 8], i % 2 ? TENT : CREAM);
-      terrace(0.956, 0.980, -1, 28, { h: 3.5, col: CONCRETE });
-      rank(0.924, 0.992, -1, 62, 16, 2170, 9.0, 15.5);
+        safeBox(K(0.932 + i * 0.013), -1, 44, [5.2, 3.2, 8], i % 2 ? TENT : CREAM);
+      // Dropped the floating Goddards terrace (unsupported 1.83 m / 0.54 m);
+      // the grandstandEx + spectatorHill below cover viewing.
+      rank(0.924, 0.992, -1, 66, 14, 2170, 9.0, 15.5);
 
       // ---------------------------------------------------------------------
       // 18. WHOLE LAP — parkland scatter, base armco, marshal posts
@@ -535,10 +605,10 @@
       fence(0.545, 0.700, 1, 15, 2.8, FENCE_C);
       fence(0.780, 0.930, -1, 15, 2.8, FENCE_C);
 
-      // Modest standing banks where the crowd actually gathers.
+      // Modest standing banks where the crowd actually gathers — keep clear of
+      // the Goddards grandstandEx (was coplanar with its crowdBank).
       spectatorHill(0.660, 0.700, -1, 20, { h: 5.0, col: GRASS });
-      spectatorHill(0.930, 0.985, -1, 24, { h: 6.5, col: GRASS });
-      terrace(0.940, 0.972, -1, 22, { h: 4.5, col: CONCRETE });
+      spectatorHill(0.910, 0.935, -1, 28, { h: 5.5, col: GRASS });
 
       // Continuous armco so the whole edge reads as a circuit, not a lane.
       guardrail(0.0, 1.0, -1, 13.5, ARMCO);
