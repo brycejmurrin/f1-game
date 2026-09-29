@@ -356,6 +356,7 @@ const RealRace = (function () {
     let field = null;     // Map car -> {d, lap, mul, err, base}
     let tables = null;    // {pace, cum, refNum, wins, at}
     let K = 0;            // sim seconds per real second, measured off the reference car
+    let raceT0 = 0;       // the race clock a jump-in is seeded to: RaceControl.finishDelay's hard cap counts from here
     let heldLevel = 0;
     let redFired = new Set();
     let simRef = [];      // sim race time of the reference car at each completed lap
@@ -447,7 +448,7 @@ const RealRace = (function () {
 
     function disarm() {
       if (heldLevel && G.holdCaution) G.holdCaution(0);
-      heldLevel = 0; armed = false; placed = false; field = null; tables = null; K = 0; simRef = []; redFired = new Set(); rainWant = null; fed = null; handover = null;
+      heldLevel = 0; armed = false; placed = false; raceT0 = 0; field = null; tables = null; K = 0; simRef = []; redFired = new Set(); rainWant = null; fed = null; handover = null;
       if (replay) replay.stop();
     }
 
@@ -589,7 +590,7 @@ const RealRace = (function () {
       const Ls = simLapFor(at.lap, simLaps, realLaps);
       const refRow = tables.cum[tables.refNum] || [];
       for (let n = 1; n < Ls; n++) { const rl = realLapFor(n, simLaps, realLaps); if (refRow[rl] != null) simRef[n] = K0 * refRow[rl]; }
-      G.raceT = K0 * at.t0;
+      G.raceT = K0 * at.t0; raceT0 = G.raceT;
       const wearOn = G.tyres && G.tyres.on && G.tyres.on();
       const vTop = G.vTop ? G.vTop() : 80;
       // The real positions, when loaded and the distance is real: each car exactly where it was at t0.
@@ -780,7 +781,7 @@ const RealRace = (function () {
                watch: !!active.watch, reel: !!active.reel, replay: replay ? replay.status() : null, handover: handover ? +handover.t.toFixed(2) : 0 };
     }
 
-    live = { stage, launch, stop, update, status, intro, isActive: () => !!active, current: () => active && active.script,
+    live = { stage, launch, stop, update, status, intro, raceT0: () => raceT0, isActive: () => !!active, current: () => active && active.script,
              owns: (c) => !!replay && replay.owns(c), replay };
     return live;
   }

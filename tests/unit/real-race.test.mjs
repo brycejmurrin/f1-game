@@ -520,6 +520,26 @@ test("the review's fixes: a filled cum row, a DSQ that saw the flag, the kept st
   assert.equal(wins[0].done, false);
 });
 
+test("a JUMP IN records the clock it seeded, so the race's hard cap counts from the join (RaceControl.finishDelay)", () => {
+  // PR #402 audit: place() seeds raceT to the real race's time at the join
+  // lap; the 360 s/lap cap read that as time raced and ended a short race at once.
+  const { R, script, Teams } = load();
+  const cars = makeCars(Teams, "ferrari:0");
+  const { G } = makeG(Teams, cars);
+  const rr = R.create(G);
+  assert.equal(rr.raceT0(), 0, "no jump-in: the clock starts at zero");
+  rr.stage(script, { seat: "LEC", startLap: 40, laps: 3 });
+  G.state = "count"; rr.update(1 / 60);
+  const K0 = 140 / R.paceTable(script).best, at = R.fieldAt(script, 40);
+  assert.ok(Math.abs(rr.raceT0() - K0 * at.t0) < 1e-6, "the origin is the seeded jump instant");
+  assert.ok(rr.raceT0() > 360 * 3, "…which alone is past a 3-lap race's hard cap: " + rr.raceT0().toFixed(0));
+  rr.stop();
+  assert.equal(rr.raceT0(), 0, "stop() clears it for the next race");
+  rr.stage(script, { seat: "LEC" });
+  G.state = "count"; rr.update(1 / 60);
+  assert.equal(rr.raceT0(), 0, "a race from the grid has no origin to subtract");
+});
+
 test("a RESTART from the results puts the start lap's weather back before the grid", () => {
   const { R, script, Teams } = load();
   const wet = { ...script, rain: new Array(52).fill(false) };
