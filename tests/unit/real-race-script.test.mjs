@@ -220,7 +220,7 @@ test("the RACE IT tab: the entry list, DRIVE AS, the race lap by lap, and JUMP I
     meetings: () => Promise.resolve([{ meetingKey: 1295, name: "Azerbaijan Grand Prix" }]),
     sessionsForMeeting: () => Promise.resolve([{ sessionKey: 11373, meetingKey: 1295, name: "Qualifying", type: "Qualifying" }, { sessionKey: 11377, meetingKey: 1295, name: "Race", type: "Race" }]),
   };
-  const RealRace = { launch: (script, opts) => { launches.push({ script, opts }); return { ok: true }; },
+  const RealRace = { replay: () => null, launch: (script, opts) => { launches.push({ script, opts }); return { ok: true }; },
     // Two seats for the test: Russell and Leclerc; every other driver has no roster seat.
     mapField: (script) => script.drivers.filter((d) => d.num === 63 || d.num === 16).map((d) => ({ driverId: d.teamId + ":0", num: d.num, teamId: d.teamId, di: 0 })) };
   const Teams = { LIST: [] };
@@ -263,6 +263,10 @@ test("the RACE IT tab: the entry list, DRIVE AS, the race lap by lap, and JUMP I
   // DRIVE AS: the seated drivers, grid order.
   const picker = find(tree, (n) => n.tag === "select")[0];
   assert.deepEqual(picker.children.map((o) => o.text), ["P1 · RUS · George RUSSELL", "P2 · LEC · Charles LECLERC"]);
+  const camera = find(tree, (n) => n.tag === "select" && n["aria-label"] === "WATCH CAMERA")[0];
+  assert.ok(camera, "WATCH camera has an accessible label");
+  assert.deepEqual(camera.children.map((o) => o.value), ["side", "heli", "tcam", "chase"]);
+  assert.equal(camera.children.find((o) => o.selected).value, "side", "TV is the opening WATCH shot");
   // LAP BY LAP (the first table): 51 rows naming the leader, what happened, the fastest, with a JUMP IN (START on lap 1).
   const lapTable = tables[0];
   const lapRows = find(lapTable, (n) => n.tag === "tr" && n.children.some((c) => c.tag === "td"));

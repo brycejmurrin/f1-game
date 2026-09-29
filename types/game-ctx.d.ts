@@ -694,7 +694,7 @@ interface GameCtx {
   readonly copyLightTune: (mode?: string) => unknown;
   readonly restoreLightTune: (undo?: unknown) => unknown;
   readonly refreshLightTunePanel: () => void;
-  readonly setCamMode: (m: number) => void;
+  readonly setCamMode: (m: number, opts?: { persist?: boolean }) => void;
   readonly rescuePlayer: (c: CarState) => void;
   readonly onIncidentLineCross: (c: CarState, cross: LineTransition, newS: number) => void;
   readonly setLightTune: (id: string, v: unknown) => void;

@@ -395,6 +395,7 @@ const RealRace = (function () {
                             trackIdx: G.trackIdx, flow: G.flow } };
       }
       active.script = script; active.laps = laps; active.startLap = startLap; active.seat = seat; active.seatCode = want.code; active.seatMap = seatMap;
+      active.camera = opts.camera;
       active.watch = watch; active.reel = watch && !!opts.reel; active.traces = opts.traces || null;
       G.flow = "gp"; G.session = "race"; G.timeTrial = false; G.duel = false;
       G.trackIdx = idx;
@@ -541,7 +542,7 @@ const RealRace = (function () {
         // WATCH: the whole field, the seat included, becomes the replay's puppets; nothing here steers.
         const seats = new Map();
         for (const [c2, f2] of field) seats.set(c2, f2.d);
-        const ok = replay.start({ script, traces: active.traces, seats, startLap: active.startLap, follow: active.seatCode, reel: active.reel });
+        const ok = replay.start({ script, traces: active.traces, seats, startLap: active.startLap, follow: active.seatCode, camera: active.camera, reel: active.reel });
         if (!ok) { active.watch = false; Log.warn("game", "RealRace.arm: the replay did not start — racing it instead"); }
         else placed = true;
       }
