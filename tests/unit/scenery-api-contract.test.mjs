@@ -244,6 +244,16 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     fuji: ["fuji-speedway-hotel"],
     // Wave 6 — Sepang hibiscus main canopy + K1/F corner stands
     sepang: ["sepang-main-grandstand-canopy", "sepang-t1-grandstand", "sepang-t7-grandstand"],
+    // Wave 6 — Estoril: 30-bay pit terrace (official boxes 17×6.70 m) +
+    // existing timing tower / aldeia / depósito / moinho made required.
+    // Moinho kept but UNCERTAIN as an on-site feature (leave, do not extend).
+    estoril: [
+      "estoril-pit-terrace",
+      "estoril-timing-tower",
+      "estoril-aldeia",
+      "estoril-deposito",
+      "estoril-moinho",
+    ],
   };
   for (const [track, ids] of Object.entries(expected)) {
     const body = landmarkSource(track);

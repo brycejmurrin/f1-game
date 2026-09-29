@@ -8,7 +8,7 @@
   function (api) {
       const { K, lapBounds, out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack, px, pz, seat,
         tree, bush, ridge, mountain, grandstandEx, spectatorHill, sponsorHoarding,
-        broadcastCompound, billboard, gantry, marshalPost, motorhome,
+        broadcastCompound, billboard, gantry, marshalPost,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
         addBox, addCyl, addFrustum, forestEdge } = api;
 
@@ -55,77 +55,51 @@
         tree(k, h < 0.5 ? -1 : 1, 48 + h * 20, 8 + h * 4, [0.29, 0.34, 0.20]);
       });
 
-      // 2. PIT COMPLEX — one long masonry terrace under one continuous
-      //    pantile roof, with an open first-floor balcony over the garages.
-      //    Estoril never had a glazed paddock: the building is limewash, tile
-      //    and shade, so it is modelled as a single hero rather than assembled
-      //    from repeated office blocks.
-      const pitBlock = (id, frac, bays) => {
-        const a = anchor(K(frac), 1, 18), b = [a.r, a.u, a.t];
-        const pitch = 7.8, len = bays * pitch;
-        modelGroup(id, {
-          center: vadd(a.c, a.u, 7), size: [16, 15, len + 4], basis: b,
+      // ── SCENERY FRACS ARE ENGINE FRACS HERE ───────────────────────────────
+      // `sceneryStartFrac: 0.96` was removed 2026-09-22 (the Estoril lesson —
+      // docs/BUGS.md). Do not reintroduce a frame key here. Fracs below are
+      // engine fracs, same space as `def.turns`.
+      //
+      // 2. PIT TERRACE — official Autódromo Fernanda Pires da Silva pit
+      //    building: 30 boxes 17×6.70 m with a terrace roof (three stair
+      //    accesses). Limewash + pantile + azulejo band; no glazed modern
+      //    paddock. Dist 34 seats the mass behind the engine pit complex so
+      //    a required modelGroup actually emits (dist 18 was superseded).
+      //    https://www.circuito-estoril.pt/en/technical-data/
+      {
+        const BAYS = 30, PITCH = 6.7, LEN = BAYS * PITCH;
+        const a = anchor(K(0.978), 1, 34), b = [a.r, a.u, a.t];
+        modelGroup("estoril-pit-terrace", {
+          center: vadd(a.c, a.u, 7), size: [22, 16, LEN + 6], basis: b,
         }, (stage) => {
           stage._mat = MAT.CONCRETE;
-          seat.box(stage, a.c, [13, 7.0, len], LIME, b);
-          for (let i = 0; i < bays; i++) {
-            const p = vadd(vadd(a.c, a.t, (i - (bays - 1) / 2) * pitch), a.r, -6.3);
-            seat.box(stage, p, [0.4, 4.4, 5.4], [0.19, 0.21, 0.23], b);
+          // 17 m deep garage mass (official box depth), open to the pit lane.
+          seat.box(stage, a.c, [17, 7.0, LEN], LIME, b);
+          for (let i = 0; i < BAYS; i++) {
+            const p = vadd(vadd(a.c, a.t, (i - (BAYS - 1) / 2) * PITCH), a.r, -8.2);
+            seat.box(stage, p, [0.35, 4.4, 5.2], [0.19, 0.21, 0.23], b);
           }
           // Azulejo band at first-floor level — the one piece of colour on it.
-          seat.box(stage, vadd(vadd(a.c, a.u, 4.6), a.r, -6.55), [0.3, 0.7, len], AZUL, b);
-          // Balcony deck, balustrade and the posts carrying the roof over it.
-          seat.box(stage, vadd(a.c, a.u, 7.0), [15, 0.4, len], LIME_D, b);
-          seat.box(stage, vadd(vadd(a.c, a.u, 7.4), a.r, -7.2), [0.3, 1.05, len], LIME, b);
-          for (let i = 0; i <= bays; i++) {
-            const p = vadd(vadd(vadd(a.c, a.t, (i - bays / 2) * pitch), a.r, -6.4), a.u, 7.4);
+          seat.box(stage, vadd(vadd(a.c, a.u, 4.6), a.r, -8.55), [0.3, 0.7, LEN], AZUL, b);
+          // Terrace deck (official roof terrace), balustrade, posts, pantile.
+          seat.box(stage, vadd(a.c, a.u, 7.0), [18.5, 0.4, LEN], LIME_D, b);
+          seat.box(stage, vadd(vadd(a.c, a.u, 7.4), a.r, -9.0), [0.3, 1.05, LEN], LIME, b);
+          for (let i = 0; i <= BAYS; i++) {
+            const p = vadd(vadd(vadd(a.c, a.t, (i - BAYS / 2) * PITCH), a.r, -8.4), a.u, 7.4);
             seat.cyl(stage, p, 0.15, 3.4, LIME, 6, b);
           }
-          // Each block carries its own pantile roof, anchored with the block.
-          // EST-M1 asked for ONE 208 m ridge over both blocks as a single mesh;
-          // the blocks are 7 bays (54.6 m) each and their centres 149 m apart
-          // (0.960 -> 0.996 of a 4140 m lap), so a single-basis ridge spans
-          // 94 m of open air between them and modelGroup rejects its footprint
-          // at every length down to 150 m (required -> the circuit fails to
-          // build). A roof over nothing is not a continuous ridge either; the
-          // per-block roofs stay until the terrace itself is made continuous.
+          // Three stair towers on the Paddock (+r) face — inset so their
+          // track-facing wall is not coplanar with the garage mass face
+          // (flatCoplanar flagged stair×body at 9 m² when flush at r+7.5).
+          for (const ti of [-12, 0, 12]) {
+            const st = vadd(vadd(a.c, a.t, ti * PITCH), a.r, 10.2);
+            seat.box(stage, st, [2.2, 7.2, 3.2], LIME_D, b);
+          }
           stage._mat = MAT.ROOF;
-          seat.prism(stage, vadd(a.c, a.u, 10.8), [15.4, 2.1, len + 2], TILE, b);
+          seat.prism(stage, vadd(a.c, a.u, 10.8), [19.2, 2.1, LEN + 2], TILE, b);
           stage._mat = 0;
         }, { required: true });
-      };
-      // ── SCENERY FRACS ARE ENGINE FRACS HERE ───────────────────────────────
-      // `sceneryStartFrac: 0.96` was removed 2026-09-22. It asserted an origin
-      // this file was never authored against: it gave `_sceneryShift` 0.85616,
-      // and under it the paddock stood on the PARABOLICA while the pit straight
-      // was a pine forest — `agent.mjs estoril scene --at 0.82` read 14
-      // structures, a gantry, a grandstand and five motorhomes on a fast corner,
-      // and `--at 0.97` read 11 trees and 22 pines. Both now read the right way
-      // round (28 pines on the corner, 22 structures on the straight), and the
-      // two hand-placed pit terraces are superseded by the engine's pit complex,
-      // which is what a circuit's own pit block is for.
-      //
-      // So a frac here means what it says: engine frac, same space as
-      // `def.turns`. `K(s)` and the (s0, s1) range helpers now agree with the
-      // `s = k / n` guards inside `every()` callbacks, which always tested
-      // engine fracs — that mismatch is why the motorhome row and the tree loop
-      // landed a corner away from the ground their guards had chosen.
-      //
-      // Two fixes came with it, both caused by emitters finally landing where
-      // their guards intended: `estoril-aldeia` moved K(0.30) -> K(0.26) (its
-      // footprint reached a parallel stretch of road and was rejected whole),
-      // and the tree loop's inner lateral bound went 44 -> 48 m (one tree
-      // grounded 6.5 m in the air at frac 0.219).
-      //
-      // Baselines moved because the placement did, in both directions:
-      // coplanar 5 -> 0 (the z-fighting was the mis-seated dressing) and clip
-      // 1 -> 3 severe. The clip number is not a regression this change caused —
-      // `place` has no prop-vs-prop check, so ANY shift re-rolls every
-      // procedural placement. Measured across six values of sceneryStartFrac,
-      // 0.96 was the outlier at 1 severe; 0.80, 0.60, 0.40 and 0.00 all give 3
-      // and 0.20 gives 4. Three is this circuit's normal draw.
-      pitBlock("estoril-parabolica-terrace-a", 0.960, 7);
-      pitBlock("estoril-parabolica-terrace-b", 0.996, 7);
+      }
       {
         const a = anchor(K(0.978), 1, 22), b = [a.r, a.u, a.t];
         modelGroup("estoril-timing-tower", {
@@ -143,27 +117,17 @@
           // External stair — a leaning slab, which is how it reads at speed.
           seat.box(stage, vadd(vadd(a.c, a.r, 4.6), a.u, 0), [1.6, 19, 1.6], LIME_D, b);
           stage._mat = MAT.ROOF;
-          // Base was 22.4, flush with the four corner posts' own top (base
-          // 19.4 + height 3.0 = 22.4) — measured via float-audit as still
-          // unsupported at that exact touch. 0.2 m overlap into the posts.
-          // Base was flush with the four corner posts' own top (22.4) —
-          // measured via float-audit as still unsupported there even at
-          // 0.2 m overlap into the posts. The posts (thin, 0.16 r) aren't a
-          // reliable support in the audit's own accounting; based on the
-          // main tower shaft's top (19, `seat.box(stage, a.c, [8, 19, 8]...`
-          // above) instead — the one primitive here with real footprint and
-          // direct ground contact. Widens through the deck/railing zone (a
-          // stone roof genuinely oversails its walls), unchanged top (26).
+          // Based on the main tower shaft's top (19) — thin corner posts are
+          // not a reliable float-audit support. Widens through the deck zone.
           addFrustum(stage, vadd(a.c, a.u, 18.8), 6.4, 1.0, 7.2, TILE, 4, b);
         }, { required: true });
       }
       gantry(0.0, 8, [0.15, 0.15, 0.18]);
       gantry(0.968, 7.5, [0.15, 0.15, 0.18]);
-      every(48, (k) => {
-        const s = k / n, h = hash(k * 71 + 31);
-        if (!(s > 0.90 || s < 0.05) || h < 0.55) return;
-        motorhome(k, 1, 52 + h * 10, 10, 4, 6, { wall: [0.70 + h * 0.2, 0.70, 0.72] });
-      });
+      // Motorhome row omitted — every() at gap 52–62 buried posts up to 5.6 m
+      // into the Alcabideche hillside (ground-audit:estoril.js:165). Hungaroring
+      // made the same call; seated paddock boxes deferred to keep the tris
+      // ratchet after the 30-bay terrace.
       broadcastCompound(K(0.918), 1, 68, { vans: 2, dishes: 2, mastH: 9 });
       sponsorHoarding(0.955, 0.045, -1, 6.5, { h: 2.2, step: 11,
         palette: [[0.14, 0.36, 0.22], [0.86, 0.22, 0.18], [0.94, 0.86, 0.24], LIME] });
@@ -321,30 +285,42 @@
       }
 
       {
+        // Aldeia silhouette inland of the back section — limewashed cubes
+        // around a church with a square campanile. Houses stay on the
+        // downslope (−r) so they never share a face with the church mass
+        // (was 20.8 m² flatCoplanar). Dist/size match the pre-wave emit that
+        // cleared the parallel stretch; only the house lateral sign flipped.
         const a = anchor(K(0.26), -1, 96), b = [a.r, a.u, a.t];
         modelGroup("estoril-aldeia", {
           center: vadd(a.c, a.u, 11), size: [32, 26, 64], basis: b,
         }, (stage) => {
           stage._mat = MAT.CONCRETE;
-          for (let i = 0; i < 7; i++) {
+          for (let i = 0; i < 6; i++) {
             const h = hash(i * 29 + 5);
-            const p = vadd(vadd(a.c, a.t, (i - 3) * 8.6), a.r, (h - 0.5) * 11);
-            const w = 7 + h * 3, ht = 4.5 + h * 2.5, d = 7 + hash(i * 41) * 3;
+            // Always −r (downslope): (h-0.5)*11 let cubes land on the church.
+            // Pitch 11 clears neighbouring roof prisms (8.6 left 2.09 m² coplanar).
+            const p = vadd(vadd(a.c, a.t, (i - 2.5) * 11), a.r, -(4 + h * 8));
+            const w = 6.5 + h * 2.5, ht = 4.5 + h * 2.5, d = 6 + hash(i * 41) * 2.5;
             seat.box(stage, p, [w, ht, d], h < 0.4 ? LIME_D : LIME, b);
             stage._mat = MAT.ROOF;
-            seat.prism(stage, vadd(p, a.u, ht), [w + 0.5, 1.6, d + 0.5], h < 0.5 ? TILE : TILE_D, b);
+            seat.prism(stage, vadd(p, a.u, ht), [w + 0.4, 1.5, d + 0.4], h < 0.5 ? TILE : TILE_D, b);
             stage._mat = MAT.CONCRETE;
           }
-          const c = vadd(a.c, a.r, 9);
-          seat.box(stage, c, [11, 8, 20], LIME, b);
-          seat.box(stage, vadd(vadd(c, a.t, -12), a.u, 0), [6, 17, 6], LIME, b);
-          seat.box(stage, vadd(vadd(vadd(c, a.t, -12), a.u, 12.5), a.r, -3.1),
+          // Church on the uphill (+r) spine, clear of the house row.
+          const c = vadd(a.c, a.r, 10);
+          seat.box(stage, c, [11, 8, 18], LIME, b);
+          // Campanile separated by a 2 m gap along t (church ends at t−9,
+          // camp half-depth 3 → centre at t−14) — a flush/overlapping join
+          // still read as flatCoplanar.
+          const camp = vadd(c, a.t, -14);
+          seat.box(stage, camp, [6, 17, 6], LIME, b);
+          seat.box(stage, vadd(vadd(camp, a.u, 12.5), a.r, -3.1),
             [0.3, 3.2, 3.0], [0.16, 0.16, 0.18], b);        // belfry opening
           stage._mat = MAT.ROOF;
-          seat.prism(stage, vadd(c, a.u, 8), [11.5, 2.6, 20.5], TILE, b);
-          addFrustum(stage, vadd(vadd(c, a.t, -12), a.u, 17), 4.4, 0.5, 3.2, TILE_D, 4, b);
+          seat.prism(stage, vadd(c, a.u, 8), [11.5, 2.6, 18.5], TILE, b);
+          addFrustum(stage, vadd(camp, a.u, 17), 4.4, 0.5, 3.2, TILE_D, 4, b);
           stage._mat = 0;
-        });
+        }, { required: true });
       }
       {
         // A DEPÓSITO DE ÁGUA, not the lighthouse that used to stand here.
@@ -374,9 +350,13 @@
           stage._mat = MAT.ROOF;
           seat.prism(stage, vadd(cot, a.u, 4.2), [9.5, 1.5, 12.5], TILE, b);
           stage._mat = 0;
-        });
+        }, { required: true });
       }
       {
+        // Moinho kept as an existing landmark. UNCERTAIN as a circuit feature:
+        // web search found no windmill on the Autódromo itself (Alcabideche
+        // has historic mills a few km away). Leave prior model as-is; do not
+        // extend. Brief wave-6.
         const a = anchor(K(0.44), 1, 118), b = [a.r, a.u, a.t];
         modelGroup("estoril-moinho", {
           center: vadd(a.c, a.u, 8), size: [18, 20, 18], basis: b,
@@ -396,7 +376,7 @@
               [0.62, 0.55, 0.44], b);
           }
           stage._mat = 0;
-        });
+        }, { required: true });
       }
       // Camera masts.
       for (const [s, side, gap] of [[0.030, -1, 24], [0.078, -1, 40], [0.900, 1, 34]]) {
