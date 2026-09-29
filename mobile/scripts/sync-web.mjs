@@ -4,6 +4,8 @@
  *
  * Reuses tools/desktop/stage.mjs (the Electron/Pages stager) — do not add a
  * second allow-list. Unstamped `?v=dev` shells are refused unless --dev.
+ * A ship-sync merge alone may not start draft CI (paths-ignore); keep this
+ * script among the non-docs paths that force a synchronize gate.
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
