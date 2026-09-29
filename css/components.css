@@ -1214,15 +1214,6 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   margin: 0; padding-bottom: 4px;
   background: var(--grad-rule) bottom left / 100% 1px no-repeat;
 }
-/* Sheet title names CONTROLS / DISPLAY / APPEARANCE. Later DISPLAY headings
-   (HUD / RENDERER / COCKPIT) stay. */
-#pm-panel-controls > .pm-group-h:first-child,
-#pm-panel-display > .pm-group-h:first-child,
-#pm-panel-appearance > .pm-group-h:first-child,
-#advanced > .pm-group-h:first-child,
-#audioset > .pm-group-h:first-child {
-  display: none;
-}
 .pm-group button { margin: 0; width: 100%; }
 /* Every interactive settings row is exactly --tap tall. The label overlays
    the top of the track (pointer-events: none) so the grab target stays the
@@ -1870,7 +1861,8 @@ body[data-width="narrow"] #pm-panel-appearance .pm-accent-preview { grid-templat
    each its own role=group — hence the child combinator: a descendant match
    would stack every chip row into a column too. */
 #pm-metrics-details > [role="group"],
-#pm-hud-details > [role="group"] {
+#pm-hud-details > [role="group"],
+#pm-braking-cues > [role="group"] {
   display: flex;
   flex-direction: column;
   gap: 0;

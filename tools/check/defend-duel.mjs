@@ -19,8 +19,11 @@
  */
 import { createRequire } from "node:module";
 import { writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 const require = createRequire(import.meta.url);
-const ROOT = "/home/user/f1-game";
+// From this file, never a literal checkout path: a literal made an A/B run in a second
+// worktree (the base arm) load the FIRST checkout's code, so both arms measured one tree.
+const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 const { createGame } = require(ROOT + "/tools/lib/game-vm.cjs");
 
 const argv = process.argv.slice(2);
