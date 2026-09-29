@@ -265,6 +265,14 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
       "tremblant-namerow-bank",
       "tremblant-paddock-bend-stand",
     ],
+    // Wave 6 — Jerez: El Ovni VIP deck on the finish line, Tío Pepe control
+    // tower, Dani Pedrosa (Dry Sack) + Jorge Lorenzo corner markers.
+    jerez: [
+      "jerez-ovni",
+      "jerez-control-tower",
+      "jerez-lorenzo-corner",
+      "jerez-dani-pedrosa",
+    ],
     // Wave 6 — Jacarepaguá / Autódromo Nelson Piquet (demolished 2012):
     // pit grandstand + timing box already authored; Tijuca ridge + lagoon
     // shore hardscape added this wave. Exact peak/pier layout UNCERTAIN.
