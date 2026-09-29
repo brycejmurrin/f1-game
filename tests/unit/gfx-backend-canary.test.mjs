@@ -4796,7 +4796,7 @@ test("selector preparation waits for the player's hands before the build and the
   const fin = src.match(/async function menuFinish\(current, key\) \{[\s\S]*?\n\}/)[0];
   // warmPrograms() first: the hidden frame that follows starts TLX's program
   // warm, so it runs here instead of holding the card at the lights.
-  assert.match(fin, /await prepareMenuCarAssets\(current\);\s*if \(await menuIdle\(current\)\) \{ warmPrograms\(\); FlybySeq\.reset\(\); _menuGate\.warm = 2; \}/,
+  assert.match(fin, /await prepareMenuCarAssets\(current\);\s*if \(!current\(\)\) return;\s*if \(await menuIdle\(current\)\) \{ warmPrograms\(\); FlybySeq\.reset\(\); _menuGate\.warm = 2; \}/,
     "the warm frames follow the paced car assets, on an idle menu, with the program warm requested first");
   assert.ok(fin.indexOf("_menuGate.warm = 2") < fin.indexOf("menuLampBake(current)"),
     "…and come BEFORE the lamp pre-bake: a RACE! tap mid-bake met cold shaders");
@@ -4845,8 +4845,10 @@ test("selector preparation rejects stale requests, reuses the world, and waits f
   assert.deepEqual(builds, [0], "NEXT reuses the prepared world");
   assert.equal(_menuGate.warm, 2, "NEXT resumes hidden warming interrupted by rescheduling");
   assert.ok(warmed.length >= 1 && warmed.every((w) => w !== 2), "the program warm is requested BEFORE the hidden frames are armed, every time");
-  raceTimeOfDay = "night"; compiling = true; schedule(); await fire();
-  assert.equal(requests.length, 0, "no scene replacement during compilation");
+  raceTimeOfDay = "night"; compiling = true; schedule(); const downloading = fire();
+  assert.equal(requests.length, 1, "scenery downloads while the previous world compiles");
+  requests.shift().resolve(); await downloading;
+  assert.deepEqual(builds, [0], "no scene replacement during compilation");
   compiling = false; const night = fire(); requests.shift().resolve(); await night;
   assert.deepEqual(builds, [0, 0], "time-of-day changes prepare again");
   trackIdx = 1; schedule(); const leaving = fire(); els.select.hidden = true;
@@ -5142,5 +5144,25 @@ test("GLX racing-line chevrons keep vAlong at highp, and a restored context obey
     const i = src.indexOf('"webglcontextrestored"');
     assert.ok(i > 0, f);
     assert.match(src.slice(i, i + 600), /ctxLostReloads[\s\S]*> 2\) return;/, f + ": the restore reload checks the counter");
+  }
+});
+
+
+test("cancelled menu finishing cannot change the active montage", async () => {
+  for (const cancelAt of ["assets", "idle", "lamps"]) {
+    let active = true, _menuFly = null;
+    const current = () => active, calls = [];
+    const track = {}, trackIdx = 0, _menuGate = { warm: 0 };
+    const prepareMenuCarAssets = async () => { if (cancelAt === "assets") active = false; };
+    const menuIdle = async () => { if (cancelAt === "idle") active = false; return active; };
+    const menuLampBake = async () => { if (cancelAt === "lamps") active = false; return false; };
+    const warmPrograms = () => {}, menuSlice = async () => {};
+    const loadingScreen = { nextFlyMs: () => 24000 };
+    const FlybySeq = { DEFAULT: [], reset() {}, setDuration() { calls.push("duration"); },
+      vary() { calls.push("vary"); return []; }, planSteps() { calls.push("plan"); return () => true; } };
+    const finish = eval("(" + read("js/game.js").match(/async function menuFinish\(current, key\) \{[\s\S]*?\n\}/)[0] + ")");
+    await finish(current, "old");
+    assert.deepEqual(calls, [], cancelAt + ": stale work must not touch shared flyby state");
+    assert.equal(_menuFly, null);
   }
 });
