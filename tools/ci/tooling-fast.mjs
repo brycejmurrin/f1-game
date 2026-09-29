@@ -197,6 +197,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Electron desktop spike: stage allow-list + stamp, native SW/Spotify gates.
   "tests/unit/desktop-stage.test.mjs",
   "tests/unit/desktop-native.test.mjs",
+  "tests/unit/desktop-unpacked-bin.test.mjs",
   "tests/unit/perf-sentinel.test.mjs",
   "tests/unit/telemetry-trace.test.mjs",
   "tests/unit/meeting-picker-labels.test.mjs",

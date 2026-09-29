@@ -30,6 +30,11 @@ npm start
 # headless smoke (CI / cloud VM): stages, boots under xvfb, exits 0/1
 cd desktop && npm install
 xvfb-run -a npm run smoke
+
+# Packaged Playwright _electron suite (research B7 / docs/notes/DESKTOP-TEST-PLAN.md)
+npm run pack
+APEX_DESKTOP_SOFT_GL=1 xvfb-run -a npm run test:electron
+npm run fuses:read
 ```
 
 `npm start` / `npm run smoke` both:

@@ -44,3 +44,6 @@ desktop/dist-site/
 desktop/node_modules/
 
 # Codex skill mirror (bash tools/env/mirror-skills.sh) — a copy, never the source
+
+desktop/test-results/
+desktop/playwright-report/

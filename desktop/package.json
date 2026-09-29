@@ -16,11 +16,17 @@
     "dist": "npm run sync-version && npm run stage && electron-builder",
     "dist:linux": "npm run sync-version && npm run stage && electron-builder --linux",
     "dist:win": "npm run sync-version && npm run stage && electron-builder --win",
-    "dist:mac": "npm run sync-version && npm run stage && electron-builder --mac"
+    "dist:mac": "npm run sync-version && npm run stage && electron-builder --mac",
+    "test:electron": "playwright test -c playwright.config.mjs",
+    "test:electron:pack": "npm run pack && npm run test:electron",
+    "fuses:read": "node scripts/read-fuses.mjs"
   },
   "devDependencies": {
     "electron": "36.4.0",
-    "electron-builder": "26.0.12"
+    "electron-builder": "26.0.12",
+    "@playwright/test": "1.63.0",
+    "playwright": "1.63.0",
+    "@electron/fuses": "1.8.0"
   },
   "build": {
     "appId": "io.github.brycejmurrin.apex26",
@@ -74,6 +80,14 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
     },
-    "icon": "../icons/icon-512.png"
+    "icon": "../icons/icon-512.png",
+    "electronFuses": {
+      "runAsNode": false,
+      "enableCookieEncryption": true,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": true,
+      "onlyLoadAppFromAsar": true,
+      "grantFileProtocolExtraPrivileges": true
+    }
   }
 }

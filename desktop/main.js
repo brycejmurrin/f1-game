@@ -46,8 +46,22 @@ protocol.registerSchemesAsPrivileged([
 // Autoplay + WebGPU where Chromium can; WebGL2 remains the game's fallback.
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 app.commandLine.appendSwitch("enable-features", "Vulkan,WebGPU");
-// Do not force SwiftShader here — a real GPU should win when present. Software
-// CI still falls back through the game's existing GLX path.
+// Soft-GL for headless CI / xvfb (Playwright _electron). Real GPU wins otherwise.
+// Flag set mirrors Chromium software paths used by the web suite; WebGPU under
+// SwiftShader is a community-reported combo (Electron #38189, 2023) — we try it
+// and assert only that the app boots/renders, never GPU performance.
+const softGl = process.env.APEX_DESKTOP_SOFT_GL === "1"
+  || process.env.APEX_DESKTOP_SOFT_GL === "true"
+  || (process.env.CI === "true" && process.platform === "linux");
+if (softGl) {
+  app.commandLine.appendSwitch("use-gl", "angle");
+  app.commandLine.appendSwitch("use-angle", "swiftshader");
+  app.commandLine.appendSwitch("enable-unsafe-swiftshader");
+  app.commandLine.appendSwitch("enable-unsafe-webgpu");
+  app.commandLine.appendSwitch("use-vulkan", "swiftshader");
+  app.commandLine.appendSwitch("use-webgpu-adapter", "swiftshader");
+  app.commandLine.appendSwitch("no-sandbox");
+}
 
 function mimeFor(filePath) {
   const ext = path.extname(filePath).toLowerCase();

@@ -1,0 +1,125 @@
+# Desktop (Electron) test plan
+
+Spike verification for the installable shell in `desktop/`. The game itself stays
+a static IIFE site (no bundler); packaging stages via `tools/desktop/stage.mjs`.
+
+Research basis (2026-09-29): Playwright `_electron`, electron-builder `--dir`,
+fuses, signing verify commands, auto-update — see session research note B1–B7
+and upstream docs linked below.
+
+**CI proves "boots and renders something", not GPU performance.** Hosted runners
+have no real GPU ([GitHub-hosted runners](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)).
+
+## Automated (every PR — `desktop.yml` pack-smoke job)
+
+Matrix: `ubuntu-latest` (under `xvfb-run`) / `windows-latest` / `macos-latest`.
+
+1. `npm ci` in `desktop/` (Node ≥ 22.12 recommended; electron-builder v27 requires it).
+2. `npm run pack` → `electron-builder --dir` (unsigned; `CSC_IDENTITY_AUTO_DISCOVERY=false`).
+3. Soft-GL env: `APEX_DESKTOP_SOFT_GL=1` → main process appends
+   `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`
+   (plus a best-effort WebGPU SwiftShader set from the 2023 community report on
+   [electron#38189](https://github.com/electron/electron/issues/38189) — try and
+   log the `WEBGL_debug_renderer_info` string; do not gate on WebGPU).
+4. Playwright `_electron` against the unpacked binary
+   (`desktop/tests/electron-packaged.spec.js`):
+   - window opens; `app.isPackaged === true`
+   - title / `app.getVersion()` matches `0.<version.json build>.0`
+   - `#game` canvas present; ≥ 30 rAF frames advance
+   - no serious `pageerror`
+   - fullscreen toggle via `electronApp.evaluate`
+   - clean `electronApp.close()`
+   - offline reload still serves `app://apex/` (assets in `extraResources`)
+5. `npx @electron/fuses read --app <path>` — assert
+   `EnableNodeCliInspectArguments is Enabled` (required for Playwright attach;
+   [Playwright Electron docs](https://playwright.dev/docs/api/class-electron)).
+
+The root web Playwright suite continues to cover game behaviour; Electron adds
+only shell-specific tests.
+
+### Fuses (build under test)
+
+`desktop/package.json` → `build.electronFuses.enableNodeCliInspectArguments: true`
+for CI/dev packs. **Production hardening** should flip inspect off *before*
+signing ([electron-builder fuses](https://www.electron.build/docs/tutorials/adding-electron-fuses));
+not done in this spike so `_electron` keeps working.
+
+## Tags / manual dispatch — signed verification (secrets optional)
+
+On `desktop-v*` tags and `workflow_dispatch` only (never ship-branch push):
+
+- Full installers (`npm run dist:*`) remain unsigned unless secrets exist.
+- macOS (when `CSC_LINK` / Apple notarize secrets present):
+  - `codesign -vvv --deep --strict App.app`
+  - `spctl --assess --type execute --verbose App.app`
+  - `xcrun stapler validate App.app`
+- Windows (when Authenticode / Azure signing secrets present):
+  - `signtool verify /pa /v app.exe`
+- If secrets are absent, those steps print a skip notice and succeed (fork PRs
+  and unsigned spikes must stay green).
+
+## Auto-update — test plan (not automated end-to-end yet)
+
+Source: [electron-builder auto-update](https://www.electron.build/docs/features/auto-update).
+
+**Dev without packaging:** add `desktop/dev-app-update.yml` matching a future
+`publish` block and set `autoUpdater.forceDevUpdateConfig = true` in main
+(behind a flag). Prefer testing on an *installed* build, especially Windows.
+
+**Recommended local feed:** MinIO or a plain static HTTP server hosting
+`latest*.yml` + artifacts.
+
+**Event sequence to assert (mock server + unsigned `--dir` / installed build):**
+
+1. Install vN (`0.<build>.0`).
+2. Publish vN+1 artifacts + `latest-*.yml`.
+3. Expect: `checking-for-update` → `update-available` → `download-progress` →
+   `update-downloaded`.
+4. Also: no-update, bad `sha512`, network error, `stagingPercentage`, downgrade.
+5. Set `autoUpdater.logger` (e.g. electron-log).
+
+**macOS:** Squirrel.Mac / autoUpdater requires a signed app. Unsigned CI can only
+cover metadata/event mocks.
+
+**Manual dispatch job:** `desktop.yml` `auto-update-plan` step prints this
+checklist; a future job can spin MinIO + two `--dir` builds.
+
+## Manual per-OS checklist (B7)
+
+Run on a clean machine/VM after a tag build (Windows, macOS Intel + Apple Silicon
+if shipped, Ubuntu):
+
+- [ ] Install from the real installer / DMG / AppImage; note Gatekeeper /
+      SmartScreen on first launch (quarantined download).
+- [ ] Hardware GPU: WebGL2 works; if WebGPU is opted in, confirm adapter identity
+      in-app (`chrome://gpu` / `__apex` gfx hooks). Target frame rate, fullscreen,
+      multi-monitor, HiDPI, gamepad / wheel.
+- [ ] Audio, window state restore, no crash on quit. Uninstall cleanly.
+- [ ] Update from N−1 → N over a real feed; relaunch; settings / career saves
+      persist under the stable `app://apex/` origin.
+- [ ] Spotify remains degraded (OAuth redirect is `app://…`); built-in music works.
+- [ ] Service worker stays unregistered (`__APEX_NATIVE__.desktop`).
+
+## Local commands
+
+```sh
+cd desktop
+npm ci
+npm run pack
+# Linux:
+APEX_DESKTOP_SOFT_GL=1 xvfb-run -a npm run test:electron
+# macOS / Windows (display available):
+set APEX_DESKTOP_SOFT_GL=1   # optional soft GL
+npm run test:electron
+npm run fuses:read
+```
+
+## Refs
+
+- https://playwright.dev/docs/api/class-electron
+- https://www.electronjs.org/docs/latest/tutorial/automated-testing
+- https://www.electronjs.org/docs/latest/tutorial/testing-on-headless-ci
+- https://www.electron.build/docs/cli/
+- https://www.electron.build/docs/features/auto-update
+- https://www.electron.build/docs/tutorials/adding-electron-fuses
+- https://www.electronjs.org/docs/latest/tutorial/code-signing

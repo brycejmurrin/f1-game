@@ -93,10 +93,12 @@ test("Spotify copy under native names the redirect-URI limitation", () => {
   assert.match(st.message, /browser redirect|web build/i);
 });
 
-test("desktop workflow is dispatch/tag only (not ship-branch push)", () => {
+test("desktop workflow is PR pack-smoke + tag/dispatch release (not ship-branch push)", () => {
   const yml = readFileSync(join(ROOT, ".github/workflows/desktop.yml"), "utf8");
   assert.match(yml, /workflow_dispatch:/);
   assert.match(yml, /desktop-v\*/);
+  assert.match(yml, /pull_request:/);
+  assert.match(yml, /pack-smoke:/);
   assert.doesNotMatch(yml, /branches:\s*\n\s*-\s*claude\/f1-game-project-26h3ng/);
   // Must not share the pages concurrency group.
   assert.doesNotMatch(yml, /group:\s*pages\b/);
