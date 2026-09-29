@@ -36,10 +36,12 @@ window.CamModes = (function () {
       if (b) { b.textContent = CAM_MODES[G.camMode].label; b.setAttribute("aria-label", `${CAM_MODES[G.camMode].label} camera`); }
       document.body.classList.toggle("cockpit-cam", CAM_MODES[G.camMode].id === "cockpit");
     }
-    function setCamMode(m) {
+    function setCamMode(m, opts) {
       const prev = G.camMode;
       G.camMode = ((m % CAM_MODES.length) + CAM_MODES.length) % CAM_MODES.length;
-      G.store.set("camMode", G.camMode);
+      // opts.persist === false: ephemeral override (WebXR cockpit) — do not
+      // write apex26.camMode so EXIT VR restores the player's saved choice.
+      if (!(opts && opts.persist === false)) G.store.set("camMode", G.camMode);
       if (G.camMode !== prev) {
         G.camCutT = (CAM_MODES[G.camMode] || CAM_MODES[0]).cut || 0.35;
         Log.info("game", `CamModes.setCamMode ${CAM_MODES[prev].id} -> ${CAM_MODES[G.camMode].id}`);

@@ -1,11 +1,9 @@
 /* Apex 26 — ENTER VR button (Phase 0).
  *
  * Shown only after navigator.xr.isSessionSupported('immersive-vr') resolves
- * true. Styled to match the HUD chrome; clicks call XrSession.start/end.
- * The vendored three.js XRButton/VRButton addons remain available for the
- * three.xr path — this UI is the Apex-owned affordance so we can gate on
- * race state and hide when unsupported without importing ESM into the IIFE
- * shell.
+ * true. A visible button always either starts VR, switches the renderer to the
+ * XR-capable TLX+WebGL2 path (reload once), or shows a clear error — never a
+ * silent no-op on GLX / WGX / default TLX-WebGPU.
  */
 "use strict";
 
@@ -13,6 +11,7 @@ const XrUi = (function () {
   let _btn = null;
   let _mounted = false;
   let _unsub = null;
+  let _msgTimer = 0;
 
   function ensureButton() {
     if (_btn) return _btn;
@@ -28,26 +27,51 @@ const XrUi = (function () {
     return b;
   }
 
+  function flashMessage(msg) {
+    ensureButton();
+    _btn.textContent = msg;
+    _btn.disabled = true;
+    if (_msgTimer) clearTimeout(_msgTimer);
+    _msgTimer = setTimeout(() => {
+      _msgTimer = 0;
+      _btn.disabled = false;
+      syncLabel();
+    }, 3500);
+  }
+
   async function onClick(e) {
     if (e) { e.preventDefault(); e.stopPropagation(); }
     if (typeof XrSession === "undefined") return;
+    if (_btn && _btn.disabled) return;
     if (XrSession.isPresenting()) {
       await XrSession.end();
       return;
     }
-    // Prefer cockpit before the session starts so the seated origin is right.
-    try {
-      const modes = (typeof CamModes !== "undefined" && CamModes.CAM_MODES) || null;
-      if (modes && typeof XrBoot !== "undefined" && typeof XrBoot.setCamMode === "function") {
-        const i = modes.findIndex((c) => c.id === "cockpit");
-        if (i >= 0) XrBoot.setCamMode(i);
+    // Cockpit is forced ephemerally in XrBoot.onStart (does not persist camMode).
+    if (typeof XrBoot !== "undefined") {
+      const gate = XrBoot.ensureXrBackend();
+      if (gate.reloading) {
+        flashMessage("SWITCHING…");
+        return;
       }
-    } catch (_) { /* cam switch best-effort */ }
-    await XrSession.start();
+      if (!gate.ok) {
+        flashMessage(gate.message || "VR UNAVAILABLE");
+        return;
+      }
+    }
+    try {
+      const s = await XrSession.start();
+      if (!s) {
+        const err = XrSession.lastError && XrSession.lastError();
+        flashMessage((err && (err.message || String(err))) || "VR FAILED");
+      }
+    } catch (err) {
+      flashMessage((err && err.message) || "VR FAILED");
+    }
   }
 
   function syncLabel() {
-    if (!_btn) return;
+    if (!_btn || _btn.disabled) return;
     const on = typeof XrSession !== "undefined" && XrSession.isPresenting();
     _btn.textContent = on ? "EXIT VR" : "ENTER VR";
     _btn.setAttribute("aria-label", on ? "Exit VR" : "Enter VR");
@@ -76,6 +100,8 @@ const XrUi = (function () {
         }
       });
       // Kick the probe; button stays hidden until capability fires true.
+      // Visible ⇒ immersive-vr is supported; click path always acts (attach,
+      // backend switch+reload, or flashMessage) — never a silent no-op.
       Promise.resolve(XrSession.probe()).then((ok) => show(!!ok));
     }
     return _btn;
@@ -83,10 +109,11 @@ const XrUi = (function () {
 
   function unmount() {
     if (_unsub) { try { _unsub(); } catch (_) { /* */ } _unsub = null; }
+    if (_msgTimer) { clearTimeout(_msgTimer); _msgTimer = 0; }
     if (_btn && _btn.parentNode) _btn.parentNode.removeChild(_btn);
     _mounted = false;
   }
 
-  return { mount, unmount, show, syncLabel, ensureButton, onClick };
+  return { mount, unmount, show, syncLabel, ensureButton, onClick, flashMessage };
 })();
 Object.freeze(XrUi);

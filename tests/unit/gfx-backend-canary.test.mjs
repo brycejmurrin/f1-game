@@ -240,7 +240,7 @@ test("first world present re-arms the canary so a jetsam mid-frame still reverts
   // XR Phase 0: present goes through XrBoot.present(…) || gfx.present(po). The
   // canary must still arm immediately before that gate — nothing else may sit
   // between armBackendProbe() and the present call.
-  assert.match(before, /armBackendProbe\(\)\s*;\s*(?:\n\s*if \(!\(typeof XrBoot !== "undefined" && XrBoot\.present\(gfx, _xrEyes, po\)\)\) )?$/,
+  assert.match(before, /armBackendProbe\(\)\s*;\s*(?:\n\s*if \(!XrBoot\.present\(gfx, _xrEyes, po\)\) )?$/,
     "the last statement before gfx.present(po) must arm the canary");
   assert.match(after, /removeItem\(\s*"apex26\.gfxBackendProbe"\s*\)/);
   const helper = fnBody(game, "armBackendProbe");

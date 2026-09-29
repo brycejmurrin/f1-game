@@ -380,11 +380,10 @@ test("the audio block cannot deref a null player, and a lone throw no longer kil
   // tolerance is the old bug, and unbounded tolerance repaints the error
   // overlay 60x/s for a deterministic fault.
   // XR Phase 0: while immersive-vr owns session.rAF, window.rAF must not also
-  // schedule — but a tolerated fault and a clean frame still re-schedule when
-  // the mono loop is driving (XrBoot.loopByXr() false).
-  assert.match(src, /if \(LoopHealth\.fault\(e\)\) \{\s*\n\s*if \(!\(typeof XrBoot !== "undefined" && XrBoot\.loopByXr\(\)\)\) requestAnimationFrame\(tick\);\s*\n\s*return;\s*\n\s*\}/,
+  // schedule — XrBoot.afterTick(tick) dedupes so EXIT VR cannot spawn a second loop.
+  assert.match(src, /if \(LoopHealth\.fault\(e\)\) \{\s*\n\s*XrBoot\.afterTick\(tick\);\s*\n\s*return;\s*\n\s*\}/,
     "a tolerated fault must re-schedule the frame (unless XR owns the loop)");
-  assert.match(src, /tickBody\(now\); LoopHealth\.clean\(\);\s*\n\s*\/\/ Immersive-vr owns the frame clock[\s\S]*?if \(!\(typeof XrBoot !== "undefined" && XrBoot\.loopByXr\(\)\)\) requestAnimationFrame\(tick\);/,
+  assert.match(src, /tickBody\(now\); LoopHealth\.clean\(\);\s*\n\s*\/\/ Immersive-vr owns the frame clock[\s\S]*?XrBoot\.afterTick\(tick\);/,
     "a clean frame must pay the fault run back, or unrelated faults reach the cap");
   // Between the report and the rethrow, the fatal branch also arms the boot
   // canary (armBackendProbe(), gfx-backend-canary.test.mjs) when render()

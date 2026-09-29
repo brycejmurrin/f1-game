@@ -326,16 +326,16 @@ const TLX = (function () {
         let glCtx = null;
         if (forceWebGL) {
           try {
+            // Flat players (iOS / mobile / CI): do NOT set xrCompatible here —
+            // it reaches every forceWebGL boot. attachXrSession calls
+            // gl.makeXRCompatible() when ENTER VR actually runs (three's
+            // XRManager does the same before setSession).
             glCtx = canvas.getContext("webgl2", {
               antialias: !isMobile,        // must agree with the renderer's own antialias
               alpha: false,
               depth: true,
               stencil: false,
               powerPreference: "high-performance",
-              // WebXR immersive-vr needs an xrCompatible context (or a later
-              // makeXRCompatible()). Phase 0 seated VR uses XRWebGLLayer on
-              // this GL; without the flag Quest Browser rejects the layer.
-              xrCompatible: true,
             });
           } catch (_) { glCtx = null; }    // null -> three makes its own, as before
         }
@@ -3370,12 +3370,15 @@ const TLX = (function () {
         _xrSession: null,
         xrPresenting() { return !!(this._xrSession); },
         xrLayer() { return this._xrLayer; },
+        /** True when this TLX instance owns a WebGL2 context usable for XRWebGLLayer. */
+        xrCapable() {
+          return !!(ownGL || (renderer && renderer.backend && renderer.backend.gl));
+        },
         async attachXrSession(session) {
           const gl = ownGL || (renderer.backend && renderer.backend.gl) || null;
           if (!gl) throw new Error("TLX XR needs the WebGL2 backend (apex26.tlxForceGL=1)");
-          // Context was created with xrCompatible:true under forceWebGL; still
-          // call makeXRCompatible when the attribute is missing (three XRManager
-          // does the same before setSession).
+          // Flat boot omits xrCompatible; make the context XR-ready only here
+          // (same as three XRManager.setSession → backend.makeXRCompatible).
           if (typeof gl.makeXRCompatible === "function") {
             try { await gl.makeXRCompatible(); } catch (_) { /* already compatible */ }
           }

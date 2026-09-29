@@ -1214,11 +1214,8 @@ const _mq = (typeof window !== "undefined" && window.matchMedia)
   ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
 let motionReduced = !!(_mq && _mq.matches);
 if (_mq && _mq.addEventListener) _mq.addEventListener("change", (e) => { motionReduced = !!e.matches; });
-// XR comfort mirrors reduce-motion while an immersive session is presenting
-// (shake / buzz / kerb shiver off). js/xr/xr-boot.js owns the flag.
-function camComfort() {
-  return motionReduced || (typeof XrBoot !== "undefined" && XrBoot.comfort());
-}
+// XR comfort mirrors reduce-motion while immersive-vr is presenting.
+function camComfort() { return XrBoot.camComfort(motionReduced); }
 let camRoll = 0;        // radians; lean into corners (decays back to 0)
 let camSlipSm = 0;      // smoothed slip input for camRoll (raw vLat/speed is 60 Hz-stepped)
 let camCutT = 0;        // s; >0 just after a camera-mode cut → eased glide to the new vantage
@@ -7194,12 +7191,8 @@ function render(dt) {
   frame.sunViewDir = _sunVS;
   frame.upViewDir = _upVS;
   frame.eye = camEye;
-  // WebXR Phase 0: seated stereo — overwrite frame with the left-eye compose
-  // and keep the full eye list for presentXR (js/xr/xr-boot.js).
-  let _xrEyes = null;
-  if (typeof XrBoot !== "undefined" && XrBoot.comfort()) {
-    _xrEyes = XrBoot.applyEyes(frame, camEye, camTgt, _camUp);
-  }
+  // WebXR Phase 0: seated stereo (null when not presenting).
+  const _xrEyes = XrBoot.applyEyes(frame, camEye, camTgt, _camUp);
   // Radial draw-distance cull for chunked scenery.
   // Free/debug camera: mobile caps at 700 m (the pushed-out photo-mode far
   // plane can frame a whole ~5 M-vert city and jetsam-kill the tab); desktop
@@ -7279,7 +7272,7 @@ function render(dt) {
   // Sun / car shadow maps: js/render/shared/shadow-pass.js (snap-cached static map,
   // per-frame car map). The live player matrix was resolved above.
   // Phase 0 XR skips shadow maps (Meta draw-call budget; spike scope).
-  if (!(typeof XrBoot !== "undefined" && XrBoot.comfort())) shadowPass.sunPass(frame, _frameNo, _hasLivePlayerShadow);
+  if (!XrBoot.comfort()) shadowPass.sunPass(frame, _frameNo, _hasLivePlayerShadow);
 
   // ── Sky animation & weather FX ──────────────────────────────────────────
   // Advance the render clock regardless of physics freeze so the sky always
@@ -7576,7 +7569,7 @@ function render(dt) {
   }
   // ── Nearest-floodlight SPOT shadow pass ─────────────────────────────────
   // Nearest-floodlight spot shadow map (night): js/render/shared/shadow-pass.js.
-  if (!(typeof XrBoot !== "undefined" && XrBoot.comfort())) shadowPass.lampPass(frame, _frameNo, _hasLivePlayerShadow);
+  if (!XrBoot.comfort()) shadowPass.lampPass(frame, _frameNo, _hasLivePlayerShadow);
   // GLOWING FOG driver: on whenever lamps are lit, swelling with haze so a
   // fog-weather night is the money shot while a clear night keeps only a hint.
   // Day / lights-off => 0, so daytime fog stays a pure sun tint. Faded by SUN
@@ -8372,7 +8365,7 @@ function render(dt) {
     }
   }
   armBackendProbe();
-  if (!(typeof XrBoot !== "undefined" && XrBoot.present(gfx, _xrEyes, po))) gfx.present(po);
+  if (!XrBoot.present(gfx, _xrEyes, po)) gfx.present(po);
   // The pre-race screen comes down with the race's FIRST PRESENTED frame
   // (LoadingScreen.handoff): a present that only started the warm painted nothing.
   if (loadingScreen.phase() === "handoff" && !(gfx.warming && gfx.warming())) loadingScreen.stop();
@@ -8419,9 +8412,8 @@ const PHYS_DT = PhysicsConsts.FIXED_DT;   // fixed physics step — js/physics/c
 function tick(now) {
   try {
     tickBody(now); LoopHealth.clean();
-    // Immersive-vr owns the frame clock via session.requestAnimationFrame
-    // (window.rAF is unreliable inside a presenting session).
-    if (!(typeof XrBoot !== "undefined" && XrBoot.loopByXr())) requestAnimationFrame(tick);
+    // Immersive-vr owns the frame clock; XrBoot dedupes window rAF on EXIT VR.
+    XrBoot.afterTick(tick);
   }
   catch (e) {
     // BOUNDED tolerance, policy in js/perf/loop-health.js: a transient fault
@@ -8432,7 +8424,7 @@ function tick(now) {
     // exactly the old behaviour, so a DETERMINISTIC fault still stops instead
     // of repainting the error overlay 60x/s.
     if (LoopHealth.fault(e)) {
-      if (!(typeof XrBoot !== "undefined" && XrBoot.loopByXr())) requestAnimationFrame(tick);
+      XrBoot.afterTick(tick);
       return;
     }
     // Report the REAL error once (cross-origin window.onerror shows only a bare
@@ -9581,18 +9573,13 @@ audioPanel.init();
 // (openRaceSettings), and __apex forces a build on first use (lazyTrackEnsure).
 window.addEventListener("resize", () => gfx.resize());
 lastFrame = performance.now();
-// WebXR Phase 0: mount ENTER VR (hidden until immersive-vr is supported) and
-// bind the session to the live gfx backend + the mono tick handoff.
-if (typeof XrBoot !== "undefined") {
-  XrBoot.bind({
-    gfx,
-    tickBody,
-    resumeRaf: () => requestAnimationFrame(tick),
-    getCamMode: () => camMode,
-    setCamMode: (i) => { if (typeof setCamMode === "function") setCamMode(i); },
-  });
-  XrBoot.mountUi();
-}
+// WebXR Phase 0: bind + ENTER VR (hidden until immersive-vr is supported).
+XrBoot.bind({
+  gfx, tickBody, windowTick: tick,
+  getCamMode: () => camMode,
+  setCamMode: (i, opts) => { if (typeof setCamMode === "function") setCamMode(i, opts); },
+});
+XrBoot.mountUi();
 requestAnimationFrame(tick);
 
 // --- debug / test hook (no effect unless explicitly called) ---

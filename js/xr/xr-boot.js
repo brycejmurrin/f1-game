@@ -7,17 +7,26 @@
 "use strict";
 
 const XrBoot = (function () {
+  const LS_XR_PENDING = "apex26.xrEnterPending";
+
   let _loopByXr = false;
   let _tickBody = null;
-  let _resumeRaf = null;
+  let _windowRaf = null;       // schedule one window.rAF(tick) — deduped
+  let _windowPending = false;  // true while a window tick is queued
   let _cockpitIdx = -1;
   let _savedCam = -1;
   let _bound = false;
   let _boundGfx = null;
-  let _setCamMode = null;
+  let _getCamMode = null;
+  let _setCamMode = null;      // (idx, opts?) — opts.persist === false skips store
 
   function comfort() {
     return typeof XrSession !== "undefined" && XrSession.isPresenting();
+  }
+
+  /** Reduce-motion OR immersive presenting — shake / buzz / kerb shiver off. */
+  function camComfort(motionReduced) {
+    return !!motionReduced || comfort();
   }
 
   // Frame ownership while presenting: XrSession.requestAnimationFrame →
@@ -28,6 +37,46 @@ const XrBoot = (function () {
   /** True after bind() — tests must wait for this before XrSession.start(). */
   function isBound() { return _bound; }
 
+  /**
+   * True when the live gfx backend can attach an XRWebGLLayer now
+   * (TLX + WebGL2 / tlxForceGL). GLX / WGX / default TLX-WebGPU need a reload
+   * switch — see ensureXrBackend().
+   */
+  function canAttach() {
+    const gfx = _boundGfx;
+    if (!gfx || typeof gfx.attachXrSession !== "function") return false;
+    if (typeof gfx.xrCapable === "function") {
+      try { return !!gfx.xrCapable(); } catch (_) { return false; }
+    }
+    return false;
+  }
+
+  /**
+   * If the active backend cannot attach, pin TLX + forceWebGL and reload once
+   * (design: backend switch via setting; flat players who never click are
+   * untouched). Returns { ok, reloading?, message? }.
+   */
+  function ensureXrBackend() {
+    if (canAttach()) return { ok: true };
+    try {
+      localStorage.setItem("apex26.gfxBackend", "three");
+      localStorage.setItem("apex26.tlxForceGL", "1");
+      localStorage.setItem(LS_XR_PENDING, "1");
+    } catch (e) {
+      return { ok: false, message: "VR needs WebGL2 (allow site storage)" };
+    }
+    try { location.reload(); } catch (_) { /* */ }
+    return { ok: false, reloading: true };
+  }
+
+  function consumePendingEnter() {
+    try {
+      if (localStorage.getItem(LS_XR_PENDING) !== "1") return false;
+      localStorage.removeItem(LS_XR_PENDING);
+      return true;
+    } catch (_) { return false; }
+  }
+
   function findCockpit() {
     if (_cockpitIdx >= 0) return _cockpitIdx;
     try {
@@ -37,21 +86,58 @@ const XrBoot = (function () {
     return _cockpitIdx;
   }
 
+  /** Switch camera without writing apex26.camMode (VR override is ephemeral). */
+  function setCamTransient(idx) {
+    if (typeof _setCamMode === "function") return _setCamMode(idx, { persist: false });
+  }
+
+  function saveAndForceCockpit() {
+    const ci = findCockpit();
+    if (ci < 0 || typeof _getCamMode !== "function") return;
+    _savedCam = _getCamMode();
+    if (_savedCam !== ci) setCamTransient(ci);
+  }
+
+  function restoreSavedCam() {
+    if (_savedCam < 0) return;
+    try { setCamTransient(_savedCam); } catch (_) { /* */ }
+    _savedCam = -1;
+  }
+
+  /**
+   * Schedule exactly one window.rAF for the game tick. Dedupes concurrent
+   * resumeRaf + tick-chain so EXIT VR cannot spawn a second loop.
+   */
+  function chainWindowRaf(tickFn) {
+    if (_loopByXr) return false;
+    if (_windowPending) return false;
+    const fn = tickFn || _windowRaf;
+    if (typeof fn !== "function") return false;
+    _windowPending = true;
+    requestAnimationFrame((t) => {
+      _windowPending = false;
+      fn(t);
+    });
+    return true;
+  }
+
+  /** Call at the end of tick(): chain window rAF unless XR owns the clock. */
+  function afterTick(tickFn) {
+    return chainWindowRaf(tickFn);
+  }
+
   function bind(api) {
     if (_bound || typeof XrSession === "undefined") return;
     _tickBody = api && api.tickBody;
-    _resumeRaf = api && api.resumeRaf;
+    _windowRaf = api && api.windowTick;
     _boundGfx = api && api.gfx;
+    _getCamMode = api && api.getCamMode;
     _setCamMode = api && api.setCamMode;
     XrSession.bind({
       attachSession: async (session, info) => {
-        // Prefer TLX WebGL2 XRWebGLLayer. If the live backend has no attach,
-        // surface a clear error — GLX attach lands in a follow-up.
-        if (!api.gfx || typeof api.gfx.attachXrSession !== "function") {
-          throw new Error("Active renderer has no attachXrSession (need TLX + tlxForceGL)");
+        if (!canAttach()) {
+          throw new Error("Active renderer cannot attach XR (need TLX + WebGL2)");
         }
-        // WebGPU experimental: only when the session actually got the feature
-        // and XRGPUBinding exists. Otherwise the layer path needs WebGL2.
         if (info && info.backend === "webgpu" && typeof globalThis.XRGPUBinding === "undefined") {
           throw new Error("WebGPU XR unavailable; session should have fallen back");
         }
@@ -62,19 +148,15 @@ const XrBoot = (function () {
       },
       onStart: () => {
         _loopByXr = true;
-        const ci = findCockpit();
-        if (ci >= 0 && api.getCamMode && api.setCamMode) {
-          _savedCam = api.getCamMode();
-          if (_savedCam !== ci) api.setCamMode(ci);
-        }
+        // Drop any queued window tick — XR owns the clock until end.
+        _windowPending = false;
+        saveAndForceCockpit();
       },
       onEnd: () => {
         _loopByXr = false;
-        if (_savedCam >= 0 && api.setCamMode) {
-          try { api.setCamMode(_savedCam); } catch (_) { /* */ }
-          _savedCam = -1;
-        }
-        if (typeof _resumeRaf === "function") _resumeRaf();
+        restoreSavedCam();
+        // Resume exactly one window loop (deduped).
+        chainWindowRaf(_windowRaf);
       },
       onFrame: (time) => {
         if (typeof _tickBody === "function") _tickBody(time);
@@ -85,12 +167,19 @@ const XrBoot = (function () {
 
   function mountUi() {
     if (typeof XrUi !== "undefined") XrUi.mount(document.body);
-    // chrome://inspect convenience (Quest remote debug) — same as XrBoot.diag().
     if (typeof window !== "undefined") {
       window.__apexXr = {
         diag: () => diag(),
         setFoveation: (v) => setFoveation(v),
+        canAttach: () => canAttach(),
       };
+    }
+    // After a backend-switch reload, auto-enter once XR is attachable.
+    if (consumePendingEnter() && typeof XrSession !== "undefined") {
+      Promise.resolve(XrSession.probe()).then((ok) => {
+        if (!ok || !canAttach()) return;
+        return XrSession.start();
+      }).catch(() => { /* auto-enter best-effort */ });
     }
   }
 
@@ -132,10 +221,6 @@ const XrBoot = (function () {
     return false;
   }
 
-  /**
-   * On-device / chrome://inspect hook. Read draw calls and foveation while
-   * presenting. IWER cannot prove real foveation or frame times — device only.
-   */
   function diag() {
     const gfx = _boundGfx;
     const presenting = comfort();
@@ -145,6 +230,8 @@ const XrBoot = (function () {
     return {
       presenting: presenting,
       loopByXr: _loopByXr,
+      windowPending: _windowPending,
+      canAttach: canAttach(),
       backend: session && session.backend ? session.backend() : null,
       features: session && session.enabledFeatures ? session.enabledFeatures() : [],
       frameCount: session && session.frameCount ? session.frameCount() : 0,
@@ -152,6 +239,7 @@ const XrBoot = (function () {
       foveation: fov,
       draw: info,
       layer: !!(gfx && typeof gfx.xrLayer === "function" && gfx.xrLayer()),
+      savedCam: _savedCam,
     };
   }
 
@@ -161,9 +249,13 @@ const XrBoot = (function () {
     return false;
   }
 
-  return { bind, mountUi, comfort, loopByXr, isBound, applyEyes, present, findCockpit, diag, setFoveation,
-    // XrUi ENTER click uses this instead of the G façade.
-    setCamMode: (...a) => { if (typeof _setCamMode === "function") return _setCamMode(...a); },
+  return {
+    bind, mountUi, comfort, camComfort, loopByXr, isBound, canAttach,
+    ensureXrBackend, applyEyes, present, afterTick, chainWindowRaf,
+    findCockpit, diag, setFoveation, saveAndForceCockpit, restoreSavedCam,
+    // Test / UI helpers
+    setCamMode: (...a) => setCamTransient(...a),
+    LS_XR_PENDING,
   };
 })();
 Object.freeze(XrBoot);

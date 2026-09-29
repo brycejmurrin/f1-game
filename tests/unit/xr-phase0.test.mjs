@@ -174,8 +174,122 @@ test("XrBoot façade: comfort off until presenting; applyEyes null outside XR", 
   vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-boot.js" });
   assert.equal(ctx.XrBoot.comfort(), false);
   assert.equal(ctx.XrBoot.loopByXr(), false);
+  assert.equal(ctx.XrBoot.camComfort(false), false);
+  assert.equal(ctx.XrBoot.camComfort(true), true);
   assert.equal(ctx.XrBoot.applyEyes({}, [0, 1, 0], [0, 1, 1], [0, 1, 0]), null);
   assert.equal(ctx.XrBoot.present(null, null, null), false);
+  assert.equal(ctx.XrBoot.canAttach(), false);
+});
+
+test("B4: XrBoot.afterTick dedupes window rAF so EXIT VR cannot double-loop", () => {
+  const ctx = bootXr();
+  const rafCalls = [];
+  ctx.requestAnimationFrame = (fn) => { rafCalls.push(fn); return rafCalls.length; };
+  vm.runInContext(read("js/xr/xr-session.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-session.js" });
+  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-boot.js" });
+  let ticks = 0;
+  const tick = () => { ticks++; };
+  ctx.XrBoot.bind({
+    gfx: { attachXrSession: async () => ({}), xrCapable: () => true },
+    tickBody: () => {},
+    windowTick: tick,
+    getCamMode: () => 0,
+    setCamMode: () => {},
+  });
+  // Two afterTick calls before the rAF fires → only one scheduled.
+  assert.equal(ctx.XrBoot.afterTick(tick), true);
+  assert.equal(ctx.XrBoot.afterTick(tick), false);
+  assert.equal(rafCalls.length, 1);
+  rafCalls[0](0);
+  assert.equal(ticks, 1);
+  // Simulate EXIT VR: onEnd chains once more (via chainWindowRaf).
+  assert.equal(ctx.XrBoot.chainWindowRaf(tick), true);
+  assert.equal(ctx.XrBoot.chainWindowRaf(tick), false);
+  assert.equal(rafCalls.length, 2);
+});
+
+test("B5: VR cockpit cam override does not persist; restore returns to saved mode", () => {
+  const ctx = bootXr();
+  vm.runInContext(read("js/xr/xr-session.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-session.js" });
+  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-boot.js" });
+  let cam = 1; // chase-ish
+  const store = [];
+  ctx.CamModes = { CAM_MODES: [{ id: "chase" }, { id: "far" }, { id: "drift" }, { id: "cockpit" }] };
+  ctx.XrBoot.bind({
+    gfx: { attachXrSession: async () => ({}), xrCapable: () => true },
+    tickBody: () => {},
+    windowTick: () => {},
+    getCamMode: () => cam,
+    setCamMode: (i, opts) => {
+      cam = i;
+      if (!(opts && opts.persist === false)) store.push(i);
+    },
+  });
+  ctx.XrBoot.saveAndForceCockpit();
+  assert.equal(cam, 3, "forced to cockpit");
+  assert.equal(store.length, 0, "must not persist VR override");
+  assert.equal(ctx.XrBoot.diag().savedCam, 1);
+  ctx.XrBoot.restoreSavedCam();
+  assert.equal(cam, 1, "restored pre-VR mode");
+  assert.equal(store.length, 0, "restore is also ephemeral (store still holds player choice)");
+  assert.equal(ctx.XrBoot.diag().savedCam, -1);
+});
+
+test("B3: ensureXrBackend refuses silently only when storage is blocked; else pins TLX+forceGL", () => {
+  const ctx = bootXr();
+  const store = Object.create(null);
+  ctx.localStorage = {
+    setItem(k, v) { store[k] = String(v); },
+    getItem(k) { return store[k] == null ? null : store[k]; },
+    removeItem(k) { delete store[k]; },
+  };
+  let reloaded = 0;
+  ctx.location = { reload() { reloaded++; } };
+  vm.runInContext(read("js/xr/xr-session.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-session.js" });
+  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-boot.js" });
+  // No gfx bound → cannot attach → pin + reload.
+  const r = ctx.XrBoot.ensureXrBackend();
+  assert.equal(r.ok, false);
+  assert.equal(r.reloading, true);
+  assert.equal(store["apex26.gfxBackend"], "three");
+  assert.equal(store["apex26.tlxForceGL"], "1");
+  assert.equal(store["apex26.xrEnterPending"], "1");
+  assert.equal(reloaded, 1);
+  // With an attachable gfx, ensure is a no-op.
+  ctx.XrBoot.bind({
+    gfx: { attachXrSession: async () => ({}), xrCapable: () => true },
+    tickBody: () => {},
+    windowTick: () => {},
+    getCamMode: () => 0,
+    setCamMode: () => {},
+  });
+  assert.equal(ctx.XrBoot.canAttach(), true);
+  assert.equal(ctx.XrBoot.ensureXrBackend().ok, true);
+});
+
+test("CamModes.setCamMode({persist:false}) skips store.write", () => {
+  const writes = [];
+  const G = {
+    $: () => null,
+    camMode: 0,
+    camCutT: 0,
+    store: { set(k, v) { writes.push([k, v]); } },
+  };
+  const ctx = vm.createContext({ console, Math, document: { body: { classList: { toggle() {} } }, getElementById: () => null } });
+  seedLog(ctx);
+  ctx.window = ctx;
+  ctx.CamTunerPanel = { refresh() {} };
+  ctx.GameAudio = undefined;
+  vm.runInContext(read("js/camera/mode-switch.js").replace(/^window\.CamModes/, "var CamModes").replace(/^const\b/gm, "var"), ctx, { filename: "mode-switch.js" });
+  // mode-switch assigns window.CamModes — pull it off the sandbox.
+  const CamModes = ctx.CamModes || ctx.window.CamModes;
+  const api = CamModes.create(G);
+  api.setCamMode(3, { persist: false });
+  assert.equal(G.camMode, 3);
+  assert.equal(writes.length, 0);
+  api.setCamMode(1);
+  assert.equal(G.camMode, 1);
+  assert.deepEqual(writes, [["camMode", 1]]);
 });
 
 test("XrUi.mount creates hidden #xr-enter until capability probe says yes", () => {
