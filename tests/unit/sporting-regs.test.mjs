@@ -185,3 +185,20 @@ test("champOrder: scorers by the standings comparator, the pointless behind in p
   assert.equal(R.champOrder(cars, cmp, () => 0), null, "round 1: nobody has scored, the caller's default stands");
   assert.equal(cars.map((c) => c.driverId).join(","), "a,b,c,d", "the input is not reordered");
 });
+
+test("a place gained under a caution and still owed at the FINISH is charged at once, and the passed car cannot clear it", () => {
+  // Bug hunt 2026-09-29: after the flag `caution` is false but the window
+  // still counted down its 5 s, and the result countdown (2.2 s) ended the
+  // race first — no penalty. A passed car coasting by the finished player
+  // also "gave the place back" and cleared the debt.
+  const w = R.createPassWatch(5), f = field(2);
+  w.tick(f.p, f.all, 3, DT);                      // primes the order
+  f.p.prog = 115;                                 // past r0 under the Safety Car
+  assert.equal(w.tick(f.p, f.all, 3, DT).type, "warn");
+  f.p.finished = true;                            // crosses the line with the place kept
+  f.rivals[0].prog = 130;                         // r0 then goes by the coasting, finished car
+  const e = w.tick(f.p, f.all, 0, DT);
+  assert.ok(e && e.type === "penalty", "charged on the first finished tick: " + JSON.stringify(e));
+  assert.equal(e.sec, 10);
+  assert.equal(w.info().owed, 0);
+});
