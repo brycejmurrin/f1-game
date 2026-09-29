@@ -254,6 +254,9 @@ const FULL = [
   "js/xr/xr-rig.js",
   "js/xr/xr-input.js",
   "js/xr/xr-session.js",
+  "js/xr/xr-plan.js",   // pure path selection (task 20); before ApexXR / XROpts
+  "js/xr/xr-opts.js",   // SETTINGS › VR rows; call-time GameStore / SettingRow
+  "js/xr/apex-xr.js",   // bootPick / detect / noteFallback façade
   "js/xr/xr-ui.js",
   "js/xr/xr-boot.js",
   "js/ui/hud.js",
