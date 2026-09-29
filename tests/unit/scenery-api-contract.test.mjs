@@ -118,6 +118,19 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     imola: ["imola-partenza-stands", "imola-racetrack-tower"],
     cota: ["cota-amphitheater", "cota-turn1-big-red", "cota-main-grandstand"],
     mexico: ["mexico-foro-sol-entry", "mexico-peraltada-stand", "foro-scoreboard"],
+    // Wave 6 — Sochi Olympic Park venues + Ice Cube + Olympic Park station
+    sochi: [
+      "sochi-fisht-stadium",
+      "sochi-bolshoy-dome",
+      "sochi-adler-arena",
+      "sochi-flame-tower",
+      "sochi-iceberg-palace",
+      "sochi-olympic-rings",
+      "sochi-race-control",
+      "sochi-shayba-arena",
+      "sochi-ice-cube",
+      "sochi-olympic-park-station",
+    ],
     abudhabi: ["abudhabi-ferrari-world", "abudhabi-marina", "abudhabi:pit-exit-tunnel-portal"],
     // Wave 6 — Albert Park (Piastri stand 2026, MSAC, Lakeside Stadium)
     albert_park: ["albert-piastri-stand", "albert-msac", "albert-lakeside-stadium"],
