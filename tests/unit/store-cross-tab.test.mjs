@@ -396,13 +396,16 @@ test("a quota-refused save to an EXISTING slot wins at the next boot, over the s
 test("a peer tab cannot replace an lsOk:false mirror row with an older lsOk:true value", async () => {
   // BUGS.md B5: Tab A quota-refused V2 (mirror lsOk:false). Tab B never saw
   // storage, still holds V1, and a successful save queues lsOk:true with V1.
+  // THIS tab never restored V2 (it booted before the refusal; the row appears
+  // afterwards, written by the peer). A tab that DID restore it owns the key
+  // and may supersede it — that is the next test's case, and the 2026-09-29
+  // restore test's. Seeding the row at this tab's boot used to stand in for
+  // the peer, which stopped being equivalent once restore marks ownership.
   const key = "apex26.career.driver.0";
   const v2 = JSON.stringify({ money: 2 });
-  const { store, idb } = loadMirrored({ seed: [[key, v2, false]] });
+  const { store, idb } = loadMirrored();
   await store.mirror.ready;
-  await store.mirrorFlush();   // clear any same-value lsOk upgrade from restore
-  // Re-assert the quota-refused durable row (as if disk filled again / peer lag).
-  idb.rows.set(key, v2);
+  idb.rows.set(key, v2);         // the peer's quota-refused save lands in the mirror
   idb.lsOk.set(key, false);
   store.write("career.driver.0", { money: 1 });   // disk accepts (no writeError)
   await store.mirrorFlush();
@@ -482,4 +485,23 @@ test("BLOCKED storage: a read that throws is remembered, not retried (and re-log
   for (let i = 0; i < 600; i++) assert.equal(s.get("hudProfile", "standard"), "standard");
   assert.equal(touches, 1, "one storage access, then memory");
   assert.equal(logs, 1, "one log line, not one per frame");
+});
+
+test("a restored newer row that LANDED makes this session its owner: its later saves replace the row, no rollback next boot", async () => {
+  // Bug hunt 2026-09-29: the restore wrote the quota-refused row back to disk
+  // but did not mark this session as its owner, so the flush guard refused
+  // every later save over the lsOk:false row — and the NEXT boot restored that
+  // stale value over all of this session's progress, every boot after.
+  const key = "apex26.career.driver.0";
+  const disk = new Map([[key, JSON.stringify({ money: 1 })]]);
+  const { store, idb } = loadMirrored({ disk, seed: [[key, JSON.stringify({ money: 2 }), false]] });
+  await store.mirror.ready;
+  assert.equal(store.get("career.driver.0").money, 2, "the refused save is restored onto the disk");
+  store.set("career.driver.0", { money: 3 });   // the session plays on
+  await store.mirrorFlush();
+  assert.equal(JSON.parse(idb.rows.get(key)).money, 3, "this session's save replaced the row");
+  assert.equal(idb.lsOk.get(key), true);
+  const next = loadMirrored({ disk, seed: [[key, idb.rows.get(key), idb.lsOk.get(key)]] });
+  await next.store.mirror.ready;
+  assert.equal(next.store.get("career.driver.0").money, 3, "the next boot keeps the progress");
 });
