@@ -8472,8 +8472,8 @@ function tickBody(now) {
     // the pause menu, and its placements publish one zero-dt frame. Resuming tears
     // it down (setPaused -> exitPhotoMode -> FreeCam.onPhotoExit), so no unpaused
     // state in which it should still be flying.
-    if ((state === "race" || state === "count") &&
-        (!els.lighting.hidden || !els.camtune.hidden || !els.flyby.hidden || photoMode)) {   // photoMode: the FREE CAMERA panel docks with no tuner open
+    if (setupPreviewOn || ((state === "race" || state === "count") &&
+        (!els.lighting.hidden || !els.camtune.hidden || !els.flyby.hidden || photoMode))) {   // photoMode: the FREE CAMERA panel docks with no tuner open
       // NO governor here: paused preview frames are vsync-cheap, so the governor
       // only ever stepped the scale UP toward full res — each step a complete
       // render-target reallocation. The scale simply stays where the race left it
@@ -8989,7 +8989,8 @@ function openGarage(from) {
   // the module cannot hold the helper itself. The build runs inside the
   // transition callback — vt's 60 ms drop-safety applies it directly if the
   // page is not compositing.
-  vt(openSetup);
+  if (from === "pit") { openSetup(); setupCam.startArrival(); }
+  else vt(openSetup);
 }
 $("mb-garage").onclick = () => openGarage("menu");
 // ── WORK ON CAR, from inside a pit stop ────────────────────────────────────
@@ -9030,6 +9031,7 @@ function closePitWork() {
 // Leaving the GARAGE, shared by DONE and BACK: the screen's own teardown plus
 // the part maths, which both exits owe the rest of the game.
 function leaveGarage() {
+  setupCam.cancelArrival();
   $("carsetup").hidden = true;
   setupPreviewOn = false;
   recomputePlayerMods();
