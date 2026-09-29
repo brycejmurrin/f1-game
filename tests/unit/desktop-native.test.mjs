@@ -7,10 +7,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import vm from "node:vm";
 import { seedStore } from "../helpers/seed-store.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const require = createRequire(import.meta.url);
 const HTML = readFileSync(join(ROOT, "index.html"), "utf8");
 const SPOTIFY = readFileSync(join(ROOT, "js/audio/spotify.js"), "utf8");
 const PRELOAD = readFileSync(join(ROOT, "desktop/preload.js"), "utf8");
@@ -59,9 +61,10 @@ test("app-protocol keeps allowServiceWorkers false (cache.addAll fails on app:)"
 });
 
 test("desktop package.json release fuses keep inspect and file-protocol extras off", () => {
+  const cfg = require("../../desktop/electron-builder.config.cjs");
   const pkg = JSON.parse(readFileSync(join(ROOT, "desktop/package.json"), "utf8"));
-  assert.equal(pkg.build.electronFuses.enableNodeCliInspectArguments, false);
-  assert.equal(pkg.build.electronFuses.grantFileProtocolExtraPrivileges, false);
+  assert.equal(cfg.electronFuses.enableNodeCliInspectArguments, false);
+  assert.equal(cfg.electronFuses.grantFileProtocolExtraPrivileges, false);
   assert.match(pkg.scripts["pack:test"], /enableNodeCliInspectArguments=true/);
 });
 

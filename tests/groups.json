@@ -163,6 +163,9 @@
     "tests/unit/desktop-native.test.mjs",
     "tests/unit/desktop-app-protocol.test.mjs",
     "tests/unit/desktop-unpacked-bin.test.mjs",
+    "tests/unit/desktop-builder-config.test.mjs",
+    "tests/unit/desktop-version.test.mjs",
+    "tests/unit/desktop-notices.test.mjs",
     "tests/unit/ship-filter-paths.test.mjs",
     "tests/unit/perf-sentinel.test.mjs",
     "tests/unit/telemetry-trace.test.mjs",
@@ -644,6 +647,18 @@
         "tests/unit/fill-gating.test.mjs",
         "tests/unit/parts-distinct-mesh.test.mjs",
         "tests/unit/helmets.test.mjs"
+      ]
+    },
+    "test:desktop-unit": {
+      "kind": "node",
+      "files": [
+        "tests/unit/desktop-stage.test.mjs",
+        "tests/unit/desktop-native.test.mjs",
+        "tests/unit/desktop-app-protocol.test.mjs",
+        "tests/unit/desktop-unpacked-bin.test.mjs",
+        "tests/unit/desktop-builder-config.test.mjs",
+        "tests/unit/desktop-version.test.mjs",
+        "tests/unit/desktop-notices.test.mjs"
       ]
     },
     "test:steering-unit": {

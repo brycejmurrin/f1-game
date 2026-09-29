@@ -77,9 +77,8 @@ test("packaged app: window opens, isPackaged, title/version, canvas, frames, no 
     expect(packaged).toBe(true);
 
     const version = await electronApp.evaluate(async ({ app }) => app.getVersion());
-    // sync-version stamps 0.<version.json build>.0 into package.json at pack time.
     const build = JSON.parse(fs.readFileSync(path.join(DESKTOP, "..", "version.json"), "utf8")).build;
-    expect(version).toBe(`0.${build}.0`);
+    expect(version).toBe(`1.0.${build}`);
 
     const window = await electronApp.firstWindow();
     window.on("pageerror", (err) => pageErrors.push(String(err)));
