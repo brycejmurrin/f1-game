@@ -242,8 +242,80 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     ],
     // Wave 6 — Fuji Speedway Hotel + Motorsports Museum (west side, 2022)
     fuji: ["fuji-speedway-hotel"],
+    // Wave 6 — Donington Park: 2017–18 MSV Hollywood grandstand (grandstandEx
+    // suppressed on the Craner fold; bespoke positive-rake modelGroup).
+    donington: ["donington-hollywood-stand"],
     // Wave 6 — Sepang hibiscus main canopy + K1/F corner stands
     sepang: ["sepang-main-grandstand-canopy", "sepang-t1-grandstand", "sepang-t7-grandstand"],
+    // Wave 6 — Mosport / CTMP: club pit run, Moss Corner bank, Whites tunnel,
+    // Grand Prix Event Centre (rooftop). Speedway oval NOT built — closed /
+    // outside the road course (Wikipedia).
+    mosport: [
+      "mosport-pit-garages",
+      "mosport-moss-corner-bank",
+      "mosport-whites-tunnel",
+      "mosport-event-centre",
+    ],
+    // Wave 6 — Estoril: 30-bay pit terrace (official boxes 17×6.70 m) +
+    // existing timing tower / aldeia / depósito / moinho made required.
+    // Moinho kept but UNCERTAIN as an on-site feature (leave, do not extend).
+    estoril: [
+      "estoril-pit-terrace",
+      "estoril-timing-tower",
+      "estoril-aldeia",
+      "estoril-deposito",
+      "estoril-moinho",
+    ],
+    // Wave 6 — Brands Hatch Indy amphitheatre stands + Kentagon
+    brands_hatch: [
+      "brands-pit-straight-stand",
+      "brands-desire-wilson-stand",
+      "brands-paddock-hill-stand",
+      "brands-hailwoods-stand",
+      "brands-kentagon",
+    ],
+    // Wave 6 — Mont-Tremblant (Laurentians): control tower, The Hump crest,
+    // service bridge, Namerow bank, Paddock Bend fascia. Devil's Elbow /
+    // Casino / Le Nordique are Montreal names — deliberately omitted.
+    mont_tremblant: [
+      "tremblant-control-tower",
+      "tremblant-hump-crest",
+      "tremblant-bridge",
+      "tremblant-namerow-bank",
+      "tremblant-paddock-bend-stand",
+    ],
+    // Wave 6 — Jerez: El Ovni VIP deck on the finish line, Tío Pepe control
+    // tower, Dani Pedrosa (Dry Sack) + Jorge Lorenzo corner markers.
+    jerez: [
+      "jerez-ovni",
+      "jerez-control-tower",
+      "jerez-lorenzo-corner",
+      "jerez-dani-pedrosa",
+    ],
+    // Wave 6 — Watkins Glen: 2006 control-tower booths, Nazareth pit terrace,
+    // Sahlen Esses hillside (positive-slope GA bank + timber stand)
+    watkins_glen: ["glen-pit-terrace", "glen-esses-hill", "glen-timing-tower"],
+    // Wave 6 — Korea International Circuit (Yeongam): permanent pit complex +
+    // main grandstand, unfinished marina shells (hotels/yachts NOT named —
+    // UNCERTAIN), Tilke final-turn footbridge (RacingCircuits.info).
+    korea: [
+      "korea-pit-complex",
+      "korea-main-grandstand",
+      "korea-marina-shells",
+      "korea-final-footbridge",
+    ],
+    // Wave 6 — Jacarepaguá / Autódromo Nelson Piquet (demolished 2012):
+    // pit grandstand + timing box already authored; Tijuca ridge + lagoon
+    // shore hardscape added this wave. Exact peak/pier layout UNCERTAIN.
+    jacarepagua: [
+      "jacarepagua-pit-grandstand",
+      "jacarepagua-timing-box",
+      "jacarepagua-tijuca-ridge",
+      "jacarepagua-lagoon-shore",
+    ],
+    // Wave 6 — Buddh International Circuit: sea-wave aluminium cantilever
+    // main grandstand opposite the pits (ENR 2011; slideshare dims UNCERTAIN).
+    buddh: ["buddh-main-grandstand"],
   };
   for (const [track, ids] of Object.entries(expected)) {
     const body = landmarkSource(track);
