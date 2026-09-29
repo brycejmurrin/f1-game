@@ -175,6 +175,7 @@ const VoicePack = (() => {
           // the old one and would schedule the line minutes ahead, holding the
           // channel (and the spotter) for all of it.
           if ((GameAudio.ctxGen ? GameAudio.ctxGen() : 0) !== gen0) { release(); return; }
+          if (opt.valid && !opt.valid()) { release(); return; }
           const h = GameAudio.radioVoice(parts, Math.max(at, GameAudio.now() + 0.02), {
             channel: ch, volume: opt.volume == null ? 1 : opt.volume });
           if (!h) { release(); return; }

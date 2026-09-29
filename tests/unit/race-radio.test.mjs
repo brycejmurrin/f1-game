@@ -700,3 +700,67 @@ test("reset() forgets the last race's pit exit, so this race's pace rates are no
   const reset = src.slice(src.indexOf("function reset() {"), src.indexOf("function bag("));
   assert.match(reset, /pitEndT = -1e9;/);
 });
+
+test('queued driving advice is discarded when a caution starts, the driver retires, or a pit stop begins', () => {
+  for (const change of ['caution', 'retired', 'pit']) {
+    const r = race();
+    r.G.announceBusy = true;
+    r.step(.1, 130);
+    assert.ok(r.radio.debug().pending.eng.includes('attack'), 'attack waits behind the card');
+    if (change === 'caution') r.G._caution = 2;
+    if (change === 'retired') r.G.player.retired = true;
+    if (change === 'pit') r.G.player.pitState = 'lane';
+    r.step(.1);
+    assert.ok(!r.radio.debug().pending.eng.includes('attack'), change + ' invalidates the advice');
+  }
+});
+
+test('a queued low-battery warning is dropped after the battery recovers', () => {
+  const r = race(); r.G.announceBusy = true; r.G.player.energy = .05;
+  r.step(.1, 130);
+  assert.ok(r.radio.debug().pending.eng.includes('batt'));
+  r.G.player.energy = .6; r.step(.1);
+  assert.ok(!r.radio.debug().pending.eng.includes('batt'));
+});
+
+test('a flag accepted into the card queue retains a live validity check', () => {
+  const r = race(), pending = [];
+  r.G.announce = (msg, dur, kind, still) => { pending.push({ msg, still }); return true; };
+  r.step(.1, 2);
+  r.G._caution = 2; r.step(.1);
+  const flag = pending.find(row => /VIRTUAL|VSC/.test(row.msg));
+  assert.ok(flag); assert.equal(flag.still(), true);
+  r.G._caution = 0; r.step(.1);
+  assert.equal(flag.still(), false);
+});
+
+test('reset removes old facts and prevents a status reply from the previous session', () => {
+  const r = race(); r.step(.1, 150);
+  assert.ok(r.radio.debug().facts);
+  r.radio.reset();
+  assert.equal(r.radio.debug().facts, null);
+  assert.equal(r.radio.request(), '');
+  assert.equal(r.radio.debug().log.length, 0);
+  r.step(.1); assert.ok(r.radio.debug().facts);
+});
+
+test('alongside traffic holds routine radio but a safety-car instruction still goes through', () => {
+  let alongside = true;
+  ctx.Spotter = { create: () => ({ update() {}, occupied: () => alongside, debug: () => ({}) }) };
+  try {
+    const r = race();
+    r.step(.1, 140);
+    assert.equal(r.radio.trafficBusy(), true);
+    assert.equal(r.said.length, 0);
+    r.G._caution = 3; r.step(.1);
+    assert.ok(r.said.some(row => /SAFETY CAR/.test(row.msg)));
+    alongside = false; r.G._caution = 0; r.step(.1);
+    assert.equal(r.radio.trafficBusy(), false);
+  } finally { delete ctx.Spotter; }
+});
+
+test('local yellow instructions use the protected race channel', () => {
+  const r = race(); r.step(.1, 2); r.G._caution = 1; r.step(.1);
+  const flag = r.said.find(row => /YELLOW/.test(row.msg));
+  assert.ok(flag); assert.equal(flag.kind, 'race');
+});

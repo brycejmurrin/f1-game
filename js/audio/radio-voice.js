@@ -180,7 +180,7 @@ const RadioVoice = (function () {
   function inert() {
     return Object.freeze({
       say: () => false, sayPreRace: () => false, stop: () => {}, unlock: () => {}, preview: () => false, pack: null, volume: () => 0,
-      setPackOn: () => {}, packOn: () => false, busy: () => false,
+      setPackOn: () => {}, packOn: () => false, busy: () => false, yieldToSpotter: () => false,
       voiceList: () => [], tuneFor: (sp) => Object.assign(toneFor(sp, null), { name: "" }), setTune: () => false,
       setEnabled: () => {}, setVolume: (v) => v, available: () => false,
       debug: () => ({ available: false, enabled: false, voices: 0, last: null, asked: 0, started: 0 }),
@@ -191,7 +191,8 @@ const RadioVoice = (function () {
     const synth = typeof window !== "undefined" && window.speechSynthesis;
     const Utter = typeof window !== "undefined" && window.SpeechSynthesisUtterance;
     const api = !!(synth && typeof Utter === "function");
-    if (!api) { Log.info("audio", "RadioVoice: no speechSynthesis — the radio stays written"); return inert(); }
+    const pack = typeof VoicePack !== "undefined" && typeof GameAudio !== "undefined" ? VoicePack.create(G) : null;
+    if (!api && !pack) { Log.info("audio", "RadioVoice: no speechSynthesis — the radio stays written"); return inert(); }
     let enabled = !!G.store.get("radioVoice", false);
     let volume = G.store.get("volRadio", 0.8);
     // ONE store key holding all three channels, not nine flat ones: the repo
@@ -202,7 +203,6 @@ const RadioVoice = (function () {
     // The recorded voice. RECORDED (the default) tries the pack first; SYSTEM
     // keeps every line on speech synthesis, for a player who prefers the
     // voice they picked below.
-    const pack = typeof VoicePack !== "undefined" && typeof GameAudio !== "undefined" ? VoicePack.create(G) : null;
     let packOn = G.store.get("radioPack", true) !== false;
     // `current` is the utterance THIS instance is speaking, and it exists because
     // every utterance shares one handler over module state (`deadline`, the music
@@ -216,7 +216,7 @@ const RadioVoice = (function () {
     // must cancel it, or the line it interrupted arrives on top of the line
     // that interrupted it — the exact inversion `current` exists to prevent,
     // one step earlier in the chain.
-    let pending = null;
+    let pending = null, activeKind = "";
     /* DID THE ENGINE ACTUALLY START? `asked` counts the speaks we HANDED to the
      * platform; `started` counts the ones it actually began (onstart).
      *
@@ -280,6 +280,7 @@ const RadioVoice = (function () {
     // NEVER called from create(): boot must not wait on a voice list, and on
     // Chrome the first read is empty anyway.
     function voicesFor(remoteOk) {
+      if (!api) return [];
       const cached = remoteOk ? voicesAny : voices;
       if (cached) return cached;
       let all = [];
@@ -335,7 +336,7 @@ const RadioVoice = (function () {
       clearDeadline();
       // Before cancel(): the callback it triggers must already see itself as
       // stale, whether the engine fires it synchronously or a turn later.
-      current = null;
+      current = null; activeKind = "";
       if (pack) pack.stop("radio");   // the engineer's own line only — never a spotter call mid-word
       cancelOurs();
       if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false);
@@ -354,7 +355,9 @@ const RadioVoice = (function () {
       if (!p.speak) { if (!preRace && (current || pending != null)) stopVoice(); return false; }
       p.preRace = !!preRace;   // speakPlanned re-checks the session at speak time
       stop();
+      activeKind = kind || "race";
       if (speakPack(p)) return true;
+      if (!api) { last.reason = "no-api"; return false; }
       // AFTER THE CUE, NOT UNDER IT. Deferred rather than shortened: the words
       // keep their own rate and simply start when the figure has finished.
       // Always deferred, even with no cue: the synth is never touched in the
@@ -459,6 +462,7 @@ const RadioVoice = (function () {
      * — the utterance ends in milliseconds by itself, and say() clears the queue
      * with its own cancel() before it speaks anyway. */
     function unlock() {
+      if (!api) return;
       try { const u = new Utter(" "); u.volume = 0.01; synth.speak(u); }
       catch (e) { /* a browser that refuses the priming utterance simply does not get primed */ }
     }
@@ -521,7 +525,7 @@ const RadioVoice = (function () {
      * silent for the whole race, which is what a player turning it off asked
      * for. MASTER SOUND still gates this, because that switch means silence. */
     function preview(speaker, text) {
-      if (!G.soundOn) return false;
+      if (!G.soundOn || !api) return false;
       const sp = TONE[speaker] ? speaker : "radio";
       const t = toneFor(sp, tune);
       const words = speakable(text || SAMPLE[sp] || SAMPLE.radio);
@@ -566,6 +570,13 @@ const RadioVoice = (function () {
       packOn: () => !!(pack && packOn),
       /** Is the radio talking, or about to (a line waiting out its cue)? The spotter asks before it keys up. */
       busy: () => !!(current || pending != null),
+      // Close-range safety can cut routine chatter, never a flag, penalty or
+      // pit instruction. Cancel both live speech and a line waiting for its cue.
+      yieldToSpotter() {
+        if (!(current || pending != null)) return true;
+        if (!["info", "coach", "comm"].includes(activeKind)) return false;
+        stop(); return true;
+      },
       setVolume(v) { volume = Math.max(0, Math.min(1, +v || 0)); return volume; },
       available: () => true,
       debug: () => ({ available: true, enabled, voices: voicesFor(false).length, voicesAny: voicesFor(true).length, last, asked, started,
