@@ -439,7 +439,7 @@ display label such as `"TV SIDE"` — returns `false`.
 | `low` | LOW | Low-angle drama: eye skims the track surface 10 m behind, looking up at the car silhouetted against the sky |
 | `tcam` | T-CAM | Broadcast roll-hoop (airbox) camera — narrow telephoto mounted 1.3 m above the car, looking forward |
 | `rear` | REAR CAM | Rear-mounted onboard at the car's tail looking back down the track (unlike `reverse` which floats ahead) |
-| `visor` | VISOR | The cockpit eye slid 0.55 m forward, past the wheel and halo: the same height, aim and turn chasing as `cockpit`, with no rig and no player body drawn. PHONE AS CONTROLLER selects it when the phone links (the phone is the wheel) and restores the camera it left when the phone is gone, unless you cycled away meanwhile |
+| `visor` | VISOR | The cockpit without its steering wheel: the same eye, tub, halo, mirrors and front wheels as `cockpit`, with the wheel and its dash left out; a linked phone wheel switches to it |
 
 ```js
 __apex.camera();            // → { mode:"chase", index:0, modes:["chase","far","drift","cockpit","hood","overhead","heli","reverse","side","cinematic","low","tcam","rear","visor"] }

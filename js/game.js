@@ -7700,9 +7700,10 @@ function render(dt) {
   // (wheel/halo/mirrors) + the car's shadow instead, body mesh skipped. Was two
   // always-equal booleans, so the `hide && !rig` skip they guarded never fired.
   const cockpitRigOnly = !dbgCam && (state === "race" || state === "count") && CAM_MODES[camMode].id === "cockpit";
-  // VISOR sits INSIDE the monocoque ahead of the wheel: the body mesh would be
-  // a black box across the frame, and the rig would be behind the eye. Neither
-  // is drawn — the road from a driver's eye, and the car's shadow as in cockpit.
+  // VISOR is the cockpit WITHOUT ITS STEERING WHEEL (a phone in the hand is the
+  // wheel): the same rig — tub, halo, mirrors, front wheels — around an eye
+  // closer to the front and lower (js/camera/vantage.js VISOR_EYE_*); the player
+  // body is skipped exactly as in cockpit.
   const visorEye = !dbgCam && (state === "race" || state === "count") && CAM_MODES[camMode].id === "visor";
   // Camera forward (horizontal) for the behind-camera AI cull below.
   let _camFwdX = camTgt[0] - camEye[0], _camFwdZ = camTgt[2] - camEye[2];
@@ -7985,11 +7986,11 @@ function render(dt) {
       }
     }
     if (c.isPlayer && (cockpitRigOnly || visorEye)) {
-      if (cockpitRigOnly) {
-        GameCams.cockpitViewmodelAxes(smp2.r, smp2.t, yv, camEye, tmpR, _cockU, tmpF, _cockP);
-        basisMat(tmpR, _cockU, tmpF, _cockP, _cockMat);
-        drawCockpitRig(c, _cockMat, dt, paint);
-      }
+      // The rig stays on the car: its origin is the eye minus THIS mode's eye offsets.
+      GameCams.cockpitViewmodelAxes(smp2.r, smp2.t, yv, camEye, tmpR, _cockU, tmpF, _cockP,
+        visorEye ? GameCams.VISOR_EYE_FWD : null, visorEye ? GameCams.VISOR_EYE_UP : null);
+      basisMat(tmpR, _cockU, tmpF, _cockP, _cockMat);
+      drawCockpitRig(c, _cockMat, dt, paint, visorEye);   // VISOR: no steering wheel
       continue;
     }
     // Body-only mesh + planted wheels for every procedural car. Attitude
@@ -9298,7 +9299,7 @@ $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
 // feeds Input.remoteSample(). A second press cancels; a lost phone re-arms it.
 let phonePad = null;
 // The camera the player was in before a phone linked: a phone in the hand is the wheel, so the
-// screen shows VISOR (the cockpit eye forward of the drawn wheel — js/camera/mode-switch.js) while
+// screen shows VISOR (the cockpit without its steering wheel — js/camera/vantage.js) while
 // it drives, and goes back when the phone is gone, unless the player cycled away meanwhile.
 let phonePadCam = -1;
 const VISOR_CAM = CAM_MODES.findIndex((c) => c.id === "visor");
