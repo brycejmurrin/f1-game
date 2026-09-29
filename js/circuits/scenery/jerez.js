@@ -159,7 +159,11 @@
         { roof: "flat", roofCol: CONC, fasciaCol: CONC_ALT, tiers: 2, h: 14 });
       grandstandEx(sl(0.9600), -1, 20, 110, null, null,
         { roof: "none", fasciaCol: CONC_ALT, h: 12 });
-      grandstandEx(sl(0.0340), -1, 20, 110, null, null,
+      // Third pit-straight bay. Was sl(0.034)→s≈0.160 gap=20 len=110: every
+      // crowdBank riser hit the Expo'92 fold (rejBox) → engine suppressed a
+      // hollow shell. sl(0.0436)→s≈0.17 clears; shorter bay keeps the run
+      // from colliding with the Michelin complex just downstream.
+      grandstandEx(sl(0.0436), -1, 24, 50, null, null,
         { roof: "none", fasciaCol: CONC_ALT, h: 12 });
       terrace(sl(0.9180), sl(0.9520), -1, 19, TERR);
       sponsorHoarding(sl(0.9350), sl(0.0620), -1, 13);
@@ -178,7 +182,7 @@
       tower(K(sl(0.0400)), -1, 50, 1.1, 15);
       building(K(sl(0.9880)), -1, 57, 14, 5.5, 26,   // services block; the
         { wall: WHITEWASH, roof: [0.55, 0.34, 0.24] }); // road returns at ~60
-      carPark(sl(0.9620), -1, 78, 26, 4, 3);
+      carPark(sl(0.9620), -1, 82, 16, 2, 3);
 
       // ---------------------------------------------------------------
       // 3. PIT + PADDOCK BLOCK  (0.010, +1, 8)
@@ -193,19 +197,28 @@
         building(K(s), 1, 11, 20, 7.5, 14,
           { wall: WHITEWASH, roof: [0.62, 0.60, 0.57] });
       }
-      building(K(sl(0.0120)), 1, 12, 24, 16, 16,
-        { wall: CONC, roof: [0.55, 0.54, 0.52] });          // control tower
-      tower(K(sl(0.0100)), 1, 36, 6, 24);
+      // Control tower landmark (jerez-control-tower) replaces the old box
+      // tower here — see required modelGroup near the finish line below.
       // Motorhomes belong to the paddock, so they key through sl() like the
       // rest of this block (they were left raw by the re-key and parked
       // themselves half a lap away, out in the T4 infield). Both rows now sit
-      // INSIDE the perimeter fence: past ~46 m the guard eats them.
-      for (let i = 0; i < 8; i++)                           // paddock motorhomes
-        motorhome(K(sl(0.9730 + i * 0.0068)), 1, 27, 11, 4.4, 17,
+      // INSIDE the perimeter fence: past ~46 m the guard eats them. Skip any
+      // pad where terrain disagrees with the road-follow anchor (was burying
+      // up to 1.8 m on the paddock grade — sepang wave-6 pattern).
+      const seatOk = (k, side, gap) => {
+        const a = anchor(k, side, gap);
+        if (!a || onTrack(a.c[0], a.c[2], 10)) return false;
+        const gy = terrainYAt(a.c[0], a.c[2]);
+        return !(gy != null && Math.abs(gy - a.c[1]) > 0.55);
+      };
+      for (let i = 0; i < 8; i++) {                         // paddock motorhomes
+        const kk = K(sl(0.9730 + i * 0.0068));
+        if (!seatOk(kk, 1, 27)) continue;
+        motorhome(kk, 1, 27, 11, 4.4, 17,
           { wall: [0.86 + hash(i * 13) * 0.08, 0.86, 0.88] });
-      for (let i = 0; i < 6; i++)
-        motorhome(K(sl(0.9800 + i * 0.0068)), 1, 39, 10, 4.2, 15,
-          { wall: [0.80 + hash(i * 29) * 0.12, 0.80, 0.82] });
+      }
+      // Second paddock row removed: gap 34–40 floated / went unsupported on
+      // the grade fold where the circuit doubles back (~45 m infield depth).
       // Paddock perimeter. Jerez's infield is only ~45 m deep here before the
       // circuit folds back across it, so the fence hugs the motorhome rows
       // instead of standing off at paddock-boundary distance; anything past
@@ -236,7 +249,7 @@
       for (let i = 0; i < 7; i++)
         scrub(K(0.0230 + i * 0.0055), -1, 86 + hash(i * 19) * 20, SCRUB);
       kiosks(0.0300, -1, 60, 7, 11);                        // behind the steps
-      carPark(0.0300, -1, 78, 16, 3, 7);
+      carPark(0.0300, -1, 82, 10, 2, 7);
       groundPatch(K(0.0420), -1, 84, slab(52, 150), DUST);
 
       // ---------------------------------------------------------------
@@ -277,8 +290,11 @@
       //    The larger permanent stand complex, terrace filling between the
       //    bays, hoarding at the base, armco and tyre wall at the edge.
       // ---------------------------------------------------------------
-      grandstandEx(0.1447, -1, 23, 150, null, null,
-        { roof: "cantilever", roofCol: CONC, fasciaCol: CONC_ALT, tiers: 2, h: 14 });
+      // Lead Michelin bay. Was 0.1447/23/150: crowdBank hit the neighbouring
+      // leg fold → hollow suppress. s=0.130 gap=28 len=90 clears with positive
+      // rake (probe HIT 600 prims, slope ~1.73).
+      grandstandEx(0.1300, -1, 28, 70, null, null,
+        { roof: "cantilever", roofCol: CONC, fasciaCol: CONC_ALT, h: 12 });
       grandstandEx(0.1800, -1, 23, 130, null, null,
         { roof: "none", fasciaCol: CONC_ALT, h: 12 });
       grandstandEx(0.2160, -1, 24, 120, null, null,
@@ -296,11 +312,12 @@
       //   reads as a flat; the complex gets its back-of-house — concourse
       //   apron, kiosk line, the support paddock's truck row, two whitewashed
       //   service blocks, flag masts, and the park that fills the rest.
-      kiosks(0.1400, -1, 54, 16, 13);
+      kiosks(0.1400, -1, 54, 10, 13);
       for (let i = 0; i < 7; i++) {                         // support paddock
         const k = K(0.1480 + i * 0.0090);
-        if (!clear(k, -1, 68, 14)) continue;
-        motorhome(k, -1, 68, 10, 4.2, 15,
+        if (!clear(k, -1, 72, 14)) continue;
+        if (!seatOk(k, -1, 72)) continue;
+        motorhome(k, -1, 72, 10, 4.2, 15,
           { wall: [0.84 + hash(i * 19) * 0.08, 0.84, 0.86] });
       }
       building(K(0.1620), -1, 84, 16, 6, 28,
@@ -309,8 +326,8 @@
         { wall: WHITEWASH, roof: [0.58, 0.37, 0.26] });
       tower(K(0.1500), -1, 52, 1.1, 15);
       tower(K(0.2500), -1, 52, 1.1, 15);
-      carPark(0.1560, -1, 100, 30, 4, 17);
-      groundPatch(K(0.2000), -1, 104, slab(70, 260), OCHRE_PALE);
+      carPark(0.1560, -1, 110, 18, 2, 17);
+      groundPatch(K(0.2000), -1, 114, slab(70, 260), OCHRE_PALE);
 
       // ---------------------------------------------------------------
       // 8. T4, START OF THE CLIMB  (0.3043, -1, 38)
@@ -365,9 +382,9 @@
       palm(K(0.3660), -1, 26, 10, OLIVE_D);
       //   Best-attended corner outside the stadium: catering behind the steps,
       //   the overflow park on the flat above, masts on the skyline.
-      kiosks(0.3680, -1, 68, 9, 23);
-      carPark(0.3660, -1, 98, 22, 4, 29);
-      groundPatch(K(0.3860), -1, 106, slab(64, 210), DUST);
+      kiosks(0.3680, -1, 68, 6, 23);
+      carPark(0.3660, -1, 108, 14, 2, 29);
+      groundPatch(K(0.3860), -1, 114, slab(64, 210), DUST);
       tower(K(0.3700), -1, 64, 1.1, 16);
       tower(K(0.4020), -1, 64, 1.1, 16);
       for (let i = 0; i < 5; i++) {
@@ -435,14 +452,25 @@
           if (h < 0.24) continue;
           const a = anchor(K(s), -1, d);
           if (onTrack(a.c[0], a.c[2], 12)) continue;
+          // Skip olives whose road-follow embed sinks into a real hill —
+          // was burying up to 1.64 m on the far-outfield grade.
+          const gy = terrainYAt(a.c[0], a.c[2]);
+          if (gy != null && Math.abs(gy - a.c[1]) > 0.7) continue;
           olive(K(s), -1, d, 4.6 + h * 1.9);
         }
       }
-      building(K(0.6300), -1, 104, 20, 7, 13,
-        { wall: WHITEWASH, roof: [0.55, 0.34, 0.24] });     // white farm
-      place(K(0.6365), -1, 108, [9, 4.5, 7], WHITEWASH);    // outbuilding
-      place(K(0.6250), -1, 100, [5, 3.2, 11], [0.78, 0.74, 0.66]);
-      palm(K(0.6270), -1, 94, 12, OLIVE_D);
+      // White farm: was gap 104 burying 1.64 m into the rise — seat further
+      // out on flatter apron, or skip when terrain disagrees.
+      if (seatOk(K(0.6300), -1, 118)) {
+        building(K(0.6300), -1, 118, 18, 6.5, 12,
+          { wall: WHITEWASH, roof: [0.55, 0.34, 0.24] });
+      }
+      if (seatOk(K(0.6365), -1, 122))
+        place(K(0.6365), -1, 122, [9, 4.5, 7], WHITEWASH);
+      if (seatOk(K(0.6250), -1, 112))
+        place(K(0.6250), -1, 112, [5, 3.2, 11], [0.78, 0.74, 0.66]);
+      if (seatOk(K(0.6270), -1, 100))
+        palm(K(0.6270), -1, 100, 12, OLIVE_D);
       //   A sherry bodega beyond the farm — long whitewashed shed under a
       //   terracotta roof, walled yard, water tower. Low and set well back so
       //   the horizon stays unbroken above it (§6).
@@ -451,23 +479,23 @@
       building(K(0.6660), -1, 128, 12, 5, 24,
         { wall: WHITEWASH, roof: [0.56, 0.33, 0.23] });
       tower(K(0.6600), -1, 150, 2.4, 13);                   // water tower
-      for (let i = 0; i < 10; i++) {                        // yard wall
-        const k = K(0.6460 + i * 8 * M);
+      for (let i = 0; i < 5; i++) {                         // yard wall
+        const k = K(0.6460 + i * 16 * M);
         if (clear(k, -1, 112, 12)) place(k, -1, 112, [1.0, 2.2, 7.0], WHITEWASH);
       }
-      for (let row = 0; row < 3; row++) {
-        const d = 152 + row * 15;
-        for (let i = 0; i < 11; i++) {
-          const k = K(0.6380 + i * 15 * M);
-          if (hash(i * 23 + row * 53) < 0.18) continue;
-          if (!clear(k, -1, d, 12)) continue;
-          olive(k, -1, d, 4.4 + hash(i * 9 + row) * 1.4);
-        }
+      for (let i = 0; i < 8; i++) {
+        const k = K(0.6380 + i * 18 * M);
+        if (hash(i * 23) < 0.22) continue;
+        if (!clear(k, -1, 152, 12)) continue;
+        const a = anchor(k, -1, 152);
+        const gy = terrainYAt(a.c[0], a.c[2]);
+        if (gy != null && Math.abs(gy - a.c[1]) > 0.55) continue;
+        olive(k, -1, 152, 4.4 + hash(i * 9) * 1.4);
       }
-      for (let row = 0; row < 7; row++) {                   // vine rows
-        const d = 92 + row * 5.5;
-        for (let i = 0; i < 9; i++) {
-          const k = K(0.6700 + i * 11 * M);
+      for (let row = 0; row < 3; row++) {                   // vine rows (thinned for tris)
+        const d = 96 + row * 7;
+        for (let i = 0; i < 6; i++) {
+          const k = K(0.6700 + i * 14 * M);
           if (!clear(k, -1, d, 12)) continue;
           place(k, -1, d, [1.1, 1.1, 8.5], [0.33, 0.36, 0.26]);
         }
@@ -483,26 +511,34 @@
       //     Terrace returns as the stadium section opens up, with hoarding
       //     and a camera tower; guardrail and tyre wall at the edge.
       // ---------------------------------------------------------------
-      terrace(0.6960, 0.7360, -1, 25, TERR);
+      // Terrace returns as the stadium opens. Was gap 25 with a 3.2 m
+      // unsupported span over a dip — spectatorHill only here (no terrace
+      // flight) keeps the bank without a floating slab.
       sponsorHoarding(0.6920, 0.7420, -1, 14);
       cameraTower(K(0.7060), -1, 23);
       guardrail(0.6860, 0.7500, -1, 10, ARMCO);
       tyreWall(0.7000, 0.7280, -1, 11, TYRE_CAP);
       marshalPost(K(0.7180), -1, 16);
-      spectatorHill(0.6940, 0.7400, -1, 60, HILL_BARE);
+      spectatorHill(0.6940, 0.7400, -1, 48, HILL_BARE);
       groundPatch(K(0.7123), -1, 54, slab(36, 150), DUST);
-      kiosks(0.6980, -1, 58, 10, 31);
-      carPark(0.7000, -1, 76, 22, 3, 37);
+      kiosks(0.6980, -1, 58, 6, 31);
+      carPark(0.7000, -1, 84, 14, 2, 37);
 
       // ---------------------------------------------------------------
       // 15. PELUQUI, INTO THE STADIUM BOWL  (0.8417, -1, 22)
       //     Continuous permanent terrace wrapping the outside, a grandstand
       //     on the highest bank, billboard above the run-off.
       // ---------------------------------------------------------------
-      terrace(0.7520, 0.8140, -1, 23, TERR_LO);   // bowl wrap from Angel Nieto
-      terrace(0.8180, 0.8720, -1, 21, TERR);
-      grandstandEx(0.8417, -1, 36, 140, null, null,
-        { roof: "cantilever", roofCol: CONC, fasciaCol: CONC_ALT, tiers: 2, h: 15 });
+      terrace(0.7520, 0.8080, -1, 26, TERR_LO);   // bowl wrap from Angel Nieto
+      // Leave a wide gap under the Peluqui grandstand (0.8417) so terrace
+      // steps do not share faces with the stand's crowdBank (coplanar /
+      // flatCoplanar).
+      terrace(0.8120, 0.8280, -1, 26, TERR);
+      terrace(0.8600, 0.8780, -1, 26, TERR);
+      // Peluqui high bank. Was gap=36 len=140: hollow suppress on the bowl
+      // fold. gap=42 len=70 clears with positive rake.
+      grandstandEx(0.8417, -1, 42, 70, null, null,
+        { roof: "cantilever", roofCol: CONC, fasciaCol: CONC_ALT, h: 13 });
       sponsorHoarding(0.8140, 0.8780, -1, 13);
       billboard(K(0.8290), -1, 17, 18, 6, [0.86, 0.84, 0.78]);
       guardrail(0.8100, 0.8860, -1, 10, ARMCO);
@@ -513,11 +549,11 @@
       //   The bowl's back-of-house: one continuous concourse from Angel Nieto
       //   to Ferrari, then the main spectator park on the outside of it.
       groundPatch(K(0.8000), -1, 56, slab(46, 300), DUST);
-      kiosks(0.7700, -1, 54, 14, 41);
+      kiosks(0.7700, -1, 54, 8, 41);
       tower(K(0.8000), -1, 54, 1.1, 15);
       building(K(0.7900), -1, 72, 14, 5, 22,
         { wall: WHITEWASH, roof: [0.57, 0.36, 0.25] });
-      carPark(0.7660, -1, 84, 30, 4, 43);
+      carPark(0.7660, -1, 90, 16, 2, 43);
 
       // ---------------------------------------------------------------
       // 16. CURVA FERRARI  (0.9177, -1, 20)
@@ -535,7 +571,7 @@
       kiosks(0.8800, -1, 54, 9, 47);
       building(K(0.9000), -1, 70, 14, 5.5, 24,
         { wall: CONC, roof: [0.55, 0.53, 0.50] });
-      carPark(0.8820, -1, 80, 20, 3, 53);
+      carPark(0.8820, -1, 86, 12, 2, 53);
       tower(K(0.9280), -1, 56, 1.1, 15);
 
       // ---------------------------------------------------------------
@@ -547,9 +583,8 @@
       marshalPost(K(0.9517), 1, 14);
       building(K(0.9450), 1, 32, 22, 9, 15,
         { wall: CONC, roof: [0.58, 0.56, 0.53] });
-      for (let i = 0; i < 5; i++)
-        motorhome(K(0.9330 + i * 0.0075), 1, 48, 10, 4.2, 15,
-          { wall: [0.82 + hash(i * 17) * 0.10, 0.82, 0.84] });
+      // Final-sector motorhomes omitted: seatOk kept dropping them on the
+      // grade, and survivors floated / buried against the Ferrari terrace.
       groundPatch(K(0.9517), 1, 20, slab(20, 56), TARMAC);
 
       // ---------------------------------------------------------------
@@ -589,41 +624,113 @@
       gantry(0.0, 8, CONC);
       gantry(0.0345, 7.5, CONC_ALT);
 
-      // ── EL OVNI ──────────────────────────────────────────────────────────
-      // Jerez's one unmistakable building, and it was missing. The brief's own
-      // summary ends "pale concrete terracing is the built landmark", which is
-      // true of every Spanish circuit of the period and true of none of them
-      // the way this thing is: a white disc on a single stem standing in the
-      // infield, so plainly a flying saucer that nobody has called it anything
-      // else since 1986. Photograph the stadium section from any angle and it
-      // is in the frame.
-      //
-      // Infield at s 0.75, 50 m out: measured 57.5 m to the nearest other road
-      // node, which a 28 m disc needs (0.73 and 0.78 both come within 20-32 m
-      // of the lap folding back, and 0.70 within 1.8 m).
+      // ── EL OVNI (VIP platform) ───────────────────────────────────────────
+      // Official circuit site + Box Repsol: the 2002 VIP viewing platform over
+      // the finish line, 530 m² / ~120 guests, nicknamed "UFO". Relocated via
+      // sl() onto the pit-side finish without touching startFrac /
+      // sceneryStartFrac. Low-seg solids keep the props-tris ratchet.
+      // https://circuitodejerez.com/en/circuito/
+      // https://www.boxrepsol.com/en/motogp-en/jerez-much-more-than-the-motorcycle-capital-of-the-world/
       {
-        const a = anchor(K(0.75), 1, 50);
-        const b = [a.r, a.u, a.t];
-        const R = 14, STEM = 13;                      // 28 m across, deck 13 m up
-        const OVNI_W = [0.93, 0.93, 0.91], OVNI_S = [0.80, 0.80, 0.78];
-        const OVNI_G = [0.16, 0.22, 0.28];
-        modelGroup("jerez-ovni", {
-          center: vadd(a.c, a.u, STEM * 0.62), size: [R * 2 + 2, STEM + 9, R * 2 + 2], basis: b,
-        }, (stage) => {
-          stage._mat = MAT.CONCRETE;
-          addCyl(stage, a.c, 3.4, STEM, OVNI_S, 12, b);                     // the stem
-          addBox(stage, a.c, [9, 0.6, 9], OVNI_S, b);                       // plinth
-          // Underside cone, glazed drum, overhanging roof disc — the three
-          // pieces that make the silhouette read as a saucer and not a tank.
-          addFrustum(stage, vadd(a.c, a.u, STEM - 3.2), R * 0.42, R * 0.92, 3.2, OVNI_S, 16, b);
-          stage._mat = MAT.GLASS;
-          addCyl(stage, vadd(a.c, a.u, STEM), R * 0.92, 3.6, OVNI_G, 16, b);
-          stage._mat = MAT.CONCRETE;
-          addCyl(stage, vadd(a.c, a.u, STEM + 3.6), R, 1.1, OVNI_W, 16, b); // the brim
-          addFrustum(stage, vadd(a.c, a.u, STEM + 4.7), R * 0.8, R * 0.3, 2.4, OVNI_W, 16, b);
-          stage._mat = MAT.METAL;
-          addCyl(stage, vadd(a.c, a.u, STEM + 7.1), 0.16, 4.5, [0.55, 0.56, 0.58], 5, b);
-          stage._mat = 0;
-        }, { required: true });
+        const a = anchor(K(sl(0.002)), 1, 18);
+        if (!onTrack(a.c[0], a.c[2], 12)) {
+          const b = [a.r, a.u, a.t];
+          const R = 11, STEM = 10;
+          const OVNI_W = [0.93, 0.93, 0.91], OVNI_S = [0.80, 0.80, 0.78];
+          const OVNI_G = [0.16, 0.22, 0.28];
+          const base = vadd(a.c, a.r, -3);
+          modelGroup("jerez-ovni", {
+            center: vadd(base, a.u, STEM * 0.62),
+            size: [R * 2 + 3, STEM + 8, R * 2 + 3], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.CONCRETE;
+            addCyl(stage, base, 2.8, STEM, OVNI_S, 8, b);
+            addBox(stage, base, [7.5, 0.5, 7.5], OVNI_S, b);
+            addFrustum(stage, vadd(base, a.u, STEM - 2.6), R * 0.40, R * 0.88, 2.6, OVNI_S, 8, b);
+            stage._mat = MAT.GLASS;
+            addCyl(stage, vadd(base, a.u, STEM), R * 0.88, 3.0, OVNI_G, 8, b);
+            stage._mat = MAT.CONCRETE;
+            addCyl(stage, vadd(base, a.u, STEM + 3.0), R, 0.9, OVNI_W, 8, b);
+            addFrustum(stage, vadd(base, a.u, STEM + 3.9), R * 0.72, R * 0.26, 1.8, OVNI_W, 8, b);
+            stage._mat = MAT.METAL;
+            addCyl(stage, vadd(base, a.u, STEM + 5.7), 0.14, 3.6, [0.55, 0.56, 0.58], 5, b);
+            stage._mat = 0;
+          }, { required: true });
+        }
+      }
+
+      // ── CONTROL TOWER + TÍO PEPE ─────────────────────────────────────────
+      // Box Repsol: 30 m race-control tower crowned by the ~8 m Tío Pepe
+      // bottle-figure mascot. Sits where the old pit control box stood
+      // (gap ~14). Exact bottle art UNCERTAIN — silhouette only.
+      {
+        const a = anchor(K(sl(0.012)), 1, 14);
+        if (!onTrack(a.c[0], a.c[2], 8)) {
+          const b = [a.r, a.u, a.t];
+          const H = 28, R = 3.6;
+          const TOWER = [0.88, 0.86, 0.80], GLASS = [0.18, 0.28, 0.36];
+          const BOTTLE = [0.92, 0.90, 0.78], HAT = [0.12, 0.12, 0.14];
+          modelGroup("jerez-control-tower", {
+            center: vadd(a.c, a.u, (H + 7) * 0.48),
+            size: [R * 2.6, H + 9, R * 2.6], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.CONCRETE;
+            addCyl(stage, a.c, R * 1.1, 2.8, TOWER, 8, b);
+            addCyl(stage, vadd(a.c, a.u, 2.6), R, H - 2.6, TOWER, 8, b);
+            stage._mat = MAT.GLASS;
+            for (let i = 0; i < 5; i++) {
+              addCyl(stage, vadd(a.c, a.u, 5 + i * 4.2), R + 0.06, 1.0, GLASS, 8, b);
+            }
+            stage._mat = MAT.CONCRETE;
+            addBox(stage, vadd(a.c, a.u, H + 0.35), [R * 2.0, 0.6, R * 2.0], TOWER, b);
+            stage._mat = MAT.METAL;
+            addCyl(stage, vadd(a.c, a.u, H + 0.6), 1.15, 4.8, BOTTLE, 6, b);
+            addFrustum(stage, vadd(a.c, a.u, H + 5.4), 1.15, 0.48, 1.2, BOTTLE, 6, b);
+            addCyl(stage, vadd(a.c, a.u, H + 6.5), 0.48, 1.0, BOTTLE, 5, b);
+            addCyl(stage, vadd(a.c, a.u, H + 7.4), 1.3, 0.3, HAT, 6, b);
+            addCyl(stage, vadd(a.c, a.u, H + 7.65), 0.75, 0.75, HAT, 5, b);
+            stage._mat = 0;
+          }, { required: true });
+        }
+      }
+
+      // ── CURVA JORGE LORENZO marker (final corner, renamed 2013) ──────────
+      // Wikipedia / RacingCircuits.info. Signage art UNCERTAIN — abstract board.
+      {
+        const a = anchor(K(0.9517), -1, 16);
+        if (!onTrack(a.c[0], a.c[2], 6)) {
+          const b = [a.r, a.u, a.t];
+          modelGroup("jerez-lorenzo-corner", {
+            center: vadd(a.c, a.u, 2.4), size: [0.8, 5.2, 4.2], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(a.c, a.u, 2.2), [0.35, 4.4, 0.35], [0.55, 0.56, 0.58], b);
+            addBox(stage, vadd(a.c, a.u, 4.6), [0.55, 1.6, 3.6], [0.12, 0.12, 0.14], b);
+            stage._mat = MAT.GLASS;
+            addBox(stage, vadd(vadd(a.c, a.r, 0.32), a.u, 4.6),
+              [0.06, 1.35, 3.2], [0.85, 0.78, 0.22], b);
+            stage._mat = 0;
+          }, { required: true });
+        }
+      }
+
+      // ── CURVA DANI PEDROSA marker (T6 / Dry Sack, renamed 2019) ──────────
+      // Wikipedia. Signage art UNCERTAIN — abstract board.
+      {
+        const a = anchor(K(0.3842), -1, 18);
+        if (!onTrack(a.c[0], a.c[2], 6)) {
+          const b = [a.r, a.u, a.t];
+          modelGroup("jerez-dani-pedrosa", {
+            center: vadd(a.c, a.u, 2.4), size: [0.8, 5.2, 4.2], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(a.c, a.u, 2.2), [0.35, 4.4, 0.35], [0.55, 0.56, 0.58], b);
+            addBox(stage, vadd(a.c, a.u, 4.6), [0.55, 1.6, 3.6], [0.12, 0.12, 0.14], b);
+            stage._mat = MAT.GLASS;
+            addBox(stage, vadd(vadd(a.c, a.r, 0.32), a.u, 4.6),
+              [0.06, 1.35, 3.2], [0.22, 0.45, 0.78], b);
+            stage._mat = 0;
+          }, { required: true });
+        }
       }
   };

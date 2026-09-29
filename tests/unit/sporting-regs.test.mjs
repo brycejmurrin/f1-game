@@ -155,6 +155,43 @@ test("re-passing a car that came past YOU under the caution is not an offence", 
   assert.deepEqual(run(w, f, 3, 6), []);
 });
 
+test("passing a car slowed by an obvious problem is legal; a healthy car beside it is still owed", () => {
+  const stuck = new Set();
+  const w = R.createPassWatch(5, (o) => stuck.has(o)), f = field(2);
+  w.tick(f.p, f.all, 3, DT);
+  stuck.add(f.rivals[0]);                         // r0 spun and stopped under the SC
+  f.p.prog = 115;                                 // the player drives round it
+  assert.equal(w.tick(f.p, f.all, 3, DT), null, "a stricken car is fair game");
+  stuck.delete(f.rivals[0]);                      // r0 recovers behind: nothing owed
+  assert.deepEqual(run(w, f, 3, 6), []);
+  f.p.prog = 125;                                 // r1 is healthy: that pass counts
+  const e = w.tick(f.p, f.all, 3, DT);
+  assert.equal(e && e.type, "warn");
+  assert.equal(e.n, 1, "only the healthy car is owed");
+  assert.equal(run(w, f, 3, 6).find((x) => x.type === "penalty").sec, 10);
+});
+
+test("a stricken car that came past the player may be re-passed, and it cannot owe", () => {
+  const stuck = new Set();
+  const w = R.createPassWatch(5, (o) => stuck.has(o)), f = field(1);
+  w.tick(f.p, f.all, 3, DT);
+  stuck.add(f.rivals[0]);
+  f.p.prog = 115;
+  w.tick(f.p, f.all, 3, DT);
+  stuck.delete(f.rivals[0]);
+  f.rivals[0].prog = 120;                         // r0 recovers and repasses the player
+  assert.equal(w.tick(f.p, f.all, 3, DT), null);
+  assert.deepEqual(run(w, f, 3, 6), [], "nothing was owed either way");
+});
+
+test("game.js hands the pass watch its stricken-car predicate", () => {
+  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const line = src.split("\n").find((l) => /const scWatch = SportingRegs\.createPassWatch\(/.test(l)) || "";
+  assert.match(line, /incidentSim\.owns\(o\)/, "a car mid-incident may be passed");
+  assert.match(line, /rescueT/, "a car being rescued as stuck may be passed");
+  assert.match(line, /offroad/, "a beached car may be passed");
+});
+
 test("the player in the pit lane, or already flagged, gains nothing it must give back", () => {
   const w = R.createPassWatch(5), f = field(1);
   w.tick(f.p, f.all, 3, DT);

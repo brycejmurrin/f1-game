@@ -14,16 +14,16 @@
      5  bulk forestEdge runs                   rows 0.020 0.330 0.776 0.897
      6  esses cutting / green tunnel           row  0.205
      7  ski mountain + wooded ridges (skyline) rows 0.150 0.560
-     8  paddock: garages, motorhomes, camera   row  0.005
-     9  start-line grandstand                  row  0.020
+     8  paddock: garages, motorhomes, tower   row  0.005
+     9  start-line open grandstand             row  0.020
     10  Turn 1 on the crest                    row  0.181
     11  esses exit, gravel spill               row  0.255
     12  T4 apex + spectator bank               row  0.412
     13  T5 outside, hardwood run-off           row  0.456
     14  the Carousel                           row  0.503
-    15  back straight / the Hump breathes      row  0.560
+    15  back straight / the Hump crest         row  0.560
     16  T8-T9 climbing 90s                     row  0.626
-    17  the Bridge abutments                   row  0.776
+    17  the Bridge (required modelGroup)       row  0.776
     18  Namerow hairpin                        row  0.836
     19  Paddock Bend onto the pit straight     row  0.897
     20  marshal posts around the lap           rows 0.181 0.255 0.330 0.503 0.626 0.836
@@ -40,10 +40,11 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["mont_tremblant"] =
   function (api) {
-      const { n, hash, every, anchor, onTrack, out,
+      const { n, hash, every, anchor, onTrack, out, MAT, vadd, modelGroup, seat,
         pine, tree, bush, forestEdge, building, grandstandEx, spectatorHill,
         guardrail, fence, tyreWall, marshalPost, cameraTower, billboard,
-        motorhome, groundPatch, ridge, mountain, terrainYAt, addBox } = api;
+        motorhome, groundPatch, ridge, mountain, terrainYAt, addBox,
+        indexSolid } = api;
 
       // ---------------------------------------------------------------- 1.
       // PALETTE + HELPERS. Deep summer green; the presets do the season.
@@ -162,8 +163,10 @@
       // Ranks start 3-7 m behind the rail and pack back from there: the trees
       // ARE the run-off. Thinned only where a built row needs the room.
       const CLEAR = [            // s windows kept open for structures
-        [0.985, 1.000, 1], [0.000, 0.060, 1],   // paddock, row 0.005
+        [0.985, 1.000, 1], [0.000, 0.060, 1],   // paddock, row 0.005 (authored)
+        [0.700, 0.760, 1],                      // paddock via sl() (racing start)
         [0.012, 0.034, -1],                     // start-line stand, row 0.020
+        [0.700, 0.760, -1],                     // start-line stand via sl()
         [0.885, 0.930, 1],                      // Paddock Bend stand, row 0.897
         [0.400, 0.425, 1],                      // T4 spectator bank, row 0.412
         [0.828, 0.848, -1],                     // Namerow bank, row 0.836
@@ -453,23 +456,65 @@
       const sl = (f) => (f + SL) % 1;
 
       // PADDOCK (row 0.005). Club scale: ONE long low garage/timing block, two
-      // motorhomes parked behind it, one camera tower by the pit exit. This is
-      // the only substantial built structure on the lap.
+      // motorhomes parked BEHIND the apron pad (gap was 30 on a 26±26 groundPatch
+      // and buried 0.4–0.5 m), one camera tower by the pit exit, plus the
+      // control tower that faces back toward Namerow
+      // (en.wikipedia.org/wiki/Circuit_Mont-Tremblant — "Control Tower and
+      // start-finish straight, looking west … towards the Namerow corner").
       building(K(sl(0.005)), 1, 14, 15, 7.5, 118, { wall: CONC, roof: ROOF, floor: 2, window: WIN });
-      motorhome(K(sl(0.996)), 1, 30, 12, 5.0, 20, { wall: VAN_A, window: GLASS });
-      motorhome(K(sl(0.016)), 1, 30, 12, 5.0, 18, { wall: VAN_B, window: GLASS });
+      groundPatch(K(sl(0.005)), 1, 26, [52, 0.35, 96], [0.31, 0.31, 0.33]);
+      // Hand-seated vans on terrainY (motorhome() sank 0.4–0.5 m into the grade).
+      for (const [sf, gap, w, h, d, wall] of [
+        [sl(0.996), 56, 9, 3.8, 13, VAN_A],
+        [sl(0.016), 56, 9, 3.8, 12, VAN_B],
+      ]) {
+        const a0 = anchor(K(sf), 1, gap);
+        const gy = terrainYAt(a0.c[0], a0.c[2]);
+        if (gy == null || onTrack(a0.c[0], a0.c[2], 4)) continue;
+        const a = { c: [a0.c[0], gy, a0.c[2]], r: a0.r, u: a0.u, t: a0.t };
+        const b = [a.r, a.u, a.t];
+        addBox(out, vadd(a.c, a.u, h * 0.28), [w, h * 0.56, d], wall, b);
+        addBox(out, vadd(a.c, a.u, h * 0.78), [w * 0.86, h * 0.44, d * 0.90], wall, b);
+        addBox(out, vadd(vadd(a.c, a.r, -1 * (w / 2 + 0.02)), a.u, h * 0.35),
+               [0.05, h * 0.18, d * 0.82], GLASS, b);
+      }
       cameraTower(K(sl(0.042)), 1, 16, {});
       fence(sl(0.975), sl(0.062), 1, 11, 2.4, [0.62, 0.64, 0.66]);
-      groundPatch(K(sl(0.005)), 1, 26, [52, 0.35, 96], [0.31, 0.31, 0.33]);
-      // The wood starts again the moment the apron does: spruce closing the
-      // back of the paddock so the clearing has a wall, not an horizon.
+      {
+        // Control tower — behind the garage block, clear of the spruce wall
+        // (clip-audit: modelGroup × tree at frac 0.063).
+        const a0 = anchor(K(sl(0.012)), 1, 64);
+        const gy = terrainYAt(a0.c[0], a0.c[2]);
+        const a = {
+          c: [a0.c[0], (gy == null ? a0.c[1] : gy), a0.c[2]],
+          r: a0.r, u: a0.u, t: a0.t,
+        };
+        const b = [a.r, a.u, a.t];
+        if (!onTrack(a.c[0], a.c[2], 8)) {
+          const TH = 14;
+          indexSolid(sl(0.000), sl(0.024), 1, 56, 16);
+          modelGroup("tremblant-control-tower", {
+            center: vadd(a.c, a.u, TH * 0.5), size: [7, TH + 3, 7], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.CONCRETE;
+            seat.box(stage, a.c, [4.6, TH, 4.6], CONC, b);
+            stage._mat = MAT.GLASS;
+            addBox(stage, vadd(vadd(a.c, a.r, -2.35), a.u, TH * 0.55),
+                   [0.12, TH * 0.28, 2.8], WIN, b);
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(a.c, a.u, TH + 0.15), [5.0, 0.3, 5.0], ROOF, b);
+            stage._mat = 0;
+          }, { required: true });
+        }
+      }
+      // The wood starts again behind the tower/apron clearing.
       every(12, (k) => {
         const f = k / n, s0 = sl(0.975), s1 = sl(0.066);
         const inw = s0 < s1 ? (f >= s0 && f <= s1) : (f >= s0 || f <= s1);
         if (!inw) return;
         const h = hash(k * 149);
         for (let r = 0; r < 2; r++) {
-          const dist = 62 + r * 15 + h * 12;
+          const dist = 92 + r * 15 + h * 12;
           const a = anchor(k, 1, dist);
           if (onTrack(a.c[0], a.c[2], 7)) continue;
           pine(k, 1, dist, 17 + r * 3 + h * 10, r ? PINE3 : PINE2);
@@ -477,20 +522,27 @@
       });
 
       // ---------------------------------------------------------------- 9.
-      // START LINE OUTSIDE (row 0.020). One grandstand bank with armco hard in
-      // front of it — one of only two real gaps in the treeline all lap.
-      grandstandEx(sl(0.020), -1, 7, 110, null, null);
+      // START LINE OUTSIDE (row 0.020). Was grandstandEx(sl(0.020), −1, 7, 110)
+      // with terrain slope −0.006 under the rake (stands probe BACKWARDS /
+      // hollow reading). Real Tremblant seats spectators on natural banks
+      // (circuit sale notes / racingcircuits.info), so this is a spectatorHill
+      // with an explicit positive rise away from the ribbon.
+      // Timber bleacher was +tris and left crowdBand unsupported on the grade.
+      // Modest grandstandEx: crowdBank rows rise away from the ribbon (stands
+      // probe slope > 0). Shorter than the old 110 m BACKWARDS shell.
+      grandstandEx(sl(0.018), -1, 12, 72, null, null,
+        { livery: "concrete", roof: "none", endWalls: true });
       guardrail(sl(0.008), sl(0.040), -1, 2.6, ARMCO);
-      billboard(K(sl(0.038)), -1, 9, 9, 3, [0.80, 0.16, 0.16]);
-      // Forest stands right behind the stand's back wall — the gap in the
-      // treeline is the STAND, not a field.
+      billboard(K(sl(0.038)), -1, 11, 9, 3, [0.80, 0.16, 0.16]);
+      // Forest stands right behind the stand — the gap in the treeline is the
+      // stand, not a field.
       every(12, (k) => {
         const f = k / n, s0 = sl(0.010), s1 = sl(0.036);
         const inw = s0 < s1 ? (f >= s0 && f <= s1) : (f >= s0 || f <= s1);
         if (!inw) return;
         const h = hash(k * 157 + 3);
         for (let r = 0; r < 2; r++) {
-          const dist = 34 + r * 13 + h * 9;
+          const dist = 30 + r * 13 + h * 9;
           const a = anchor(k, -1, dist);
           if (onTrack(a.c[0], a.c[2], 6)) continue;
           pine(k, -1, dist, 18 + r * 3 + h * 10, r ? PINE3 : PINE);
@@ -535,9 +587,13 @@
       // --------------------------------------------------------------- 12.
       // T4 INSIDE (row 0.412). Armco plus a tyre wall on the apex and a small
       // natural spectator bank further in; forest resumes right behind it.
+      // step/rows tuned so the bank no longer self-flatCoplanars (was 8 spots
+      // / 4.2 m² at the default ladder).
       guardrail(0.400, 0.428, 1, 2.8, ARMCO);
       tyreWall(0.406, 0.420, 1, 5, TYRE);
-      spectatorHill(0.399, 0.424, 1, 16, {});
+      spectatorHill(0.399, 0.424, 1, 16, {
+        rows: 3, rise: 1.15, depth: 2.0, density: 0.38, step: 10, grass: SCRUB,
+      });
       fence(0.398, 0.426, 1, 9.5, 2.2, [0.62, 0.64, 0.66]);   // debris fence below the bank
       marshalPost(K(0.404), 1, 7);
       every(12, (k) => {
@@ -594,6 +650,9 @@
       // BACK STRAIGHT OVER THE HUMP (row 0.560). The one place the lap
       // breathes: the trees pull back to ~22 m on the outfield so the ridge
       // and the mountain show above the treeline before the forest closes in.
+      // RacingCircuits.info: the 1965 extension "featured … a huge elevation
+      // change, known as 'The Hump', at around its midpoint." Landmark is a
+      // low crest cabin + viewing lip — not a grandstand (club circuit).
       every(14, (k) => {
         if (!within(k, 0.548, 0.596)) return;
         const h = hash(k * 73);
@@ -604,6 +663,34 @@
         if (h > 0.7) bush(k, -1, dist - 9, SCRUB);
       });
       marshalPost(K(0.572), -1, 24);
+      {
+        const a0 = anchor(K(0.560), -1, 28);
+        const gy = terrainYAt(a0.c[0], a0.c[2]);
+        const a = {
+          c: [a0.c[0], (gy == null ? a0.c[1] : gy), a0.c[2]],
+          r: a0.r, u: a0.u, t: a0.t,
+        };
+        const b = [a.r, a.u, a.t];
+        if (!onTrack(a.c[0], a.c[2], 6)) {
+          modelGroup("tremblant-hump-crest", {
+            center: vadd(a.c, a.u, 3.2), size: [8, 8, 14], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.CONCRETE;
+            seat.box(stage, a.c, [5.5, 0.45, 10], ROCK, b);
+            addBox(stage, vadd(a.c, a.u, 1.6), [3.2, 3.0, 4.4], CONC, b);
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(a.c, a.u, 3.2), [3.6, 0.35, 4.8], ROOF, b);
+            // Crest lip: each tread steps further OUTFIELD (−1) and up.
+            stage._mat = MAT.FOLIAGE;
+            for (let i = 0; i < 3; i++) {
+              addBox(stage,
+                vadd(vadd(a.c, a.r, -1 * (1.2 + i * 1.5)), a.u, 0.4 + i * 0.55),
+                [1.6, 0.45, 9.0], SCRUB, b);
+            }
+            stage._mat = 0;
+          }, { required: true });
+        }
+      }
 
       // --------------------------------------------------------------- 16.
       // T8-T9, the 90s climbing back up the hillside (row 0.626). Armco,
@@ -626,29 +713,53 @@
       });
 
       // --------------------------------------------------------------- 17.
-      // THE BRIDGE (row 0.776). A service crossing: two squat building blocks
-      // either side of the rail with the deck spanning between them, so the
-      // road is framed and briefly darkened. forestEdge runs up to both (§4).
-      const BR = K(0.776);
-      building(BR, 1, 7.5, 9, 6.5, 14, { wall: CONC, roof: ROOF });
-      building(BR, -1, 7.5, 9, 6.5, 14, { wall: CONC, roof: ROOF });
-      const bdk = overRoad(BR, 7.2);
-      addBox(out, bdk.c, [34, 1.8, 8.0], CONC, bdk.b);
-      const bp = overRoad(BR, 8.7);
-      addBox(out, bp.c, [34, 1.0, 8.8], ROOF, bp.b);
-      // Wing walls stepping down off each abutment, upstream and downstream,
-      // so the crossing sits in an embankment instead of on two loose blocks.
-      for (const side of [-1, 1]) {
-        for (const j of [-1, 1]) {
-          for (let i = 0; i < 2; i++) {
-            const k = (BR + j * (4 + i * 4) + n) % n;
-            const a = anchor(k, side, 8.0 + i * 1.6);
-            const y = terrainYAt(a.c[0], a.c[2]);
-            if (y === null) continue;
-            addBox(out, [a.c[0], y + 1.5 - i * 0.5, a.c[2]],
-                   [2.2, 3.4 - i * 1.2, 7.0],
-                   i ? ROCK : CONC, [a.r, a.u, a.t]);
+      // THE BRIDGE (row 0.776). A service crossing: two squat abutments either
+      // side of the rail with the deck spanning between them
+      // (racingcircuits.info: "under a bridge" before the climb to Namerow;
+      // speedtherapy.com track notes: Turn 12 "The Bridge"). Deck stays as
+      // over-road boxes (a spanning modelGroup is footprint-rejected); the
+      // required landmark is the outfield abutment marker.
+      {
+        const BR = K(0.776);
+        building(BR, 1, 7.5, 9, 6.5, 14, { wall: CONC, roof: ROOF });
+        building(BR, -1, 7.5, 9, 6.5, 14, { wall: CONC, roof: ROOF });
+        const bdk = overRoad(BR, 7.2);
+        addBox(out, bdk.c, [34, 1.8, 8.0], CONC, bdk.b);
+        const bp = overRoad(BR, 8.7);
+        addBox(out, bp.c, [34, 1.0, 8.8], ROOF, bp.b);
+        for (const side of [-1, 1]) {
+          for (const j of [-1, 1]) {
+            for (let i = 0; i < 2; i++) {
+              const k = (BR + j * (4 + i * 4) + n) % n;
+              const a = anchor(k, side, 8.0 + i * 1.6);
+              const y = terrainYAt(a.c[0], a.c[2]);
+              if (y === null) continue;
+              addBox(out, [a.c[0], y + 1.5 - i * 0.5, a.c[2]],
+                     [2.2, 3.4 - i * 1.2, 7.0],
+                     i ? ROCK : CONC, [a.r, a.u, a.t]);
+            }
           }
+        }
+        const a0 = anchor(BR, -1, 16);
+        const gy = terrainYAt(a0.c[0], a0.c[2]);
+        const a = {
+          c: [a0.c[0], (gy == null ? a0.c[1] : gy), a0.c[2]],
+          r: a0.r, u: a0.u, t: a0.t,
+        };
+        const b = [a.r, a.u, a.t];
+        if (!onTrack(a.c[0], a.c[2], 6)) {
+          // Compact abutment marker — no shared face with building() at gap 7.5
+          // (was seat.box + wall coplanar at 0 mm).
+          modelGroup("tremblant-bridge", {
+            center: vadd(a.c, a.u, 4), size: [7, 10, 10], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.CONCRETE;
+            seat.box(stage, a.c, [4.5, 0.45, 7], ROCK, b);
+            addBox(stage, vadd(a.c, a.u, 3.6), [4.2, 6.2, 6.5], CONC, b);
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(a.c, a.u, 6.95), [4.6, 0.4, 7.0], ROOF, b);
+            stage._mat = 0;
+          }, { required: true });
         }
       }
       guardrail(0.762, 0.792, 1, 3.0, ARMCO);
@@ -656,13 +767,44 @@
       marshalPost(K(0.766), 1, 9);
 
       // --------------------------------------------------------------- 18.
-      // NAMEROW, the uphill hairpin (row 0.836). Tyre wall and marshal post on
-      // the outside, a spectator hill on the natural bank above, tree ranks
-      // over the top of the bank.
+      // NAMEROW, the uphill hairpin (row 0.836). Named for Norm Namerow
+      // (cmhf.ca/norm-namerow; racingcircuits.info: "challenging uphill
+      // Namerow hairpin"). Speedtherapy track notes: Turn 14, slowest point,
+      // then dive downhill toward Paddock Bend. Tyre wall and marshal post on
+      // the outside, spectator bank above; required marker on the outside bank.
       tyreWall(0.828, 0.848, -1, 5, TYRE);
       marshalPost(K(0.832), -1, 9);
-      spectatorHill(0.826, 0.852, -1, 15, {});
+      spectatorHill(0.826, 0.852, -1, 15, {
+        rows: 4, rise: 1.2, depth: 2.0, density: 0.40, step: 9, grass: SCRUB,
+      });
       fence(0.824, 0.854, -1, 8.5, 2.2, [0.62, 0.64, 0.66]);  // below the bank
+      {
+        const a0 = anchor(K(0.836), -1, 18);
+        const gy = terrainYAt(a0.c[0], a0.c[2]);
+        const a = {
+          c: [a0.c[0], (gy == null ? a0.c[1] : gy), a0.c[2]],
+          r: a0.r, u: a0.u, t: a0.t,
+        };
+        const b = [a.r, a.u, a.t];
+        if (!onTrack(a.c[0], a.c[2], 5)) {
+          modelGroup("tremblant-namerow-bank", {
+            center: vadd(a.c, a.u, 2.8), size: [10, 8, 22], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.CONCRETE;
+            seat.box(stage, a.c, [4.5, 0.4, 16], ROCK, b);
+            // Three risers climbing away from the ribbon (−1 outfield).
+            for (let i = 0; i < 3; i++) {
+              addBox(stage,
+                vadd(vadd(a.c, a.r, -1 * (0.8 + i * 1.4)), a.u, 0.55 + i * 0.85),
+                [1.5, 0.55, 14], i ? ROCK2 : CONC, b);
+            }
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(vadd(a.c, a.r, -1 * 5.2), a.u, 3.4),
+                   [0.35, 2.4, 12], [0.78, 0.16, 0.14], b); // hairpin marker board
+            stage._mat = 0;
+          }, { required: true });
+        }
+      }
       every(9, (k) => {
         if (!within(k, 0.820, 0.860)) return;
         const h = hash(k * 89);
@@ -672,7 +814,7 @@
         tree(k, -1, dist, 12 + h * 8, h < 0.5 ? HARD : HARD2);
         if (h > 0.6) pine(k, -1, dist + 9, 16 + h * 8, PINE);
       });
-      // Depth over the top of the bank, so the sweeper is framed by wood and
+      // Depth over the top of the bank, so the hairpin is framed by wood and
       // not by sky: two more ranks stepping back from the spectators.
       every(12, (k) => {
         if (!within(k, 0.814, 0.866)) return;
@@ -686,13 +828,37 @@
       });
 
       // --------------------------------------------------------------- 19.
-      // PADDOCK BEND onto the pit straight (row 0.897). Paddock side gets the
-      // second stand, a motorhome or two behind the fence and a billboard on
-      // the exit; the outfield stays forest right to the line (§4).
-      grandstandEx(0.897, 1, 10, 84, null, null);
+      // PADDOCK BEND onto the pit straight (row 0.897). RacingCircuits.info +
+      // speedtherapy Turn 15: the final sweep back to the start. Paddock-side
+      // stand kept as grandstandEx (positive rake); required fascia marker
+      // names the bend. Outfield stays forest right to the line (§4).
+      grandstandEx(0.897, 1, 12, 72, null, null,
+        { livery: "concrete", roof: "cantilever", endWalls: true });
+      {
+        const a0 = anchor(K(0.897), 1, 18);
+        const gy = terrainYAt(a0.c[0], a0.c[2]);
+        const a = {
+          c: [a0.c[0], (gy == null ? a0.c[1] : gy), a0.c[2]],
+          r: a0.r, u: a0.u, t: a0.t,
+        };
+        const b = [a.r, a.u, a.t];
+        if (!onTrack(a.c[0], a.c[2], 6)) {
+          modelGroup("tremblant-paddock-bend-stand", {
+            center: vadd(a.c, a.u, 5), size: [8, 12, 28], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.CONCRETE;
+            seat.box(stage, a.c, [5, 0.5, 22], CONC, b);
+            addBox(stage, vadd(vadd(a.c, a.r, 3.2), a.u, 5.5), [4, 7, 20], CONC, b);
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(vadd(a.c, a.r, -2.0), a.u, 8.2),
+                   [0.28, 0.7, 18], [0.82, 0.20, 0.14], b);
+            stage._mat = 0;
+          }, { required: true });
+        }
+      }
       fence(0.884, 0.934, 1, 8, 2.4, [0.62, 0.64, 0.66]);
-      motorhome(K(0.906), 1, 26, 11, 4.6, 16, { wall: VAN_B, window: GLASS });
-      motorhome(K(0.918), 1, 26, 11, 4.6, 16, { wall: VAN_A, window: GLASS });
+      motorhome(K(0.906), 1, 32, 10, 4.2, 14, { wall: VAN_B, window: GLASS });
+      motorhome(K(0.918), 1, 32, 10, 4.2, 14, { wall: VAN_A, window: GLASS });
       billboard(K(0.934), 1, 11, 9, 3, [0.82, 0.20, 0.14]);
       cameraTower(K(0.890), 1, 13, {});
       // ...and spruce closing behind the paddock enclosure again.
