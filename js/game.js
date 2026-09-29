@@ -6830,7 +6830,9 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
     if (wet) { if (_lit) { m = _wmPropsWetN; m.emissive = Math.min(0.80, floodEmit); } else m = _wmPropsWetD; }
     else { if (_lit) { m = _wmPropsDryN; m.emissive = floodEmit; } else m = _wmPropsDryD; }
     const _pb = track.meshes.propBatches;
-    if (_pb && _pb.length && gfx.drawInstanced) {
+    // frame.mirrorLite: the phone-grade rear-view mirror (js/render/shared/mirror-pass.js)
+    // skips the batches — a second frustum re-culls and re-uploads every pack each frame.
+    if (_pb && _pb.length && gfx.drawInstanced && !frame.mirrorLite) {
       const planes = gfx.makeFrustumPlanes ? gfx.makeFrustumPlanes(frame.viewProj, _pbPlanes) : null;
       for (let i = 0; i < _pb.length; i++) {
         if (planes && gfx.cullInstances) gfx.cullInstances(_pb[i], planes);
@@ -6842,11 +6844,11 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
   // Building glass: a low-roughness reflective pass so the lit shader mirrors the
   // sky in the windows (real, view-dependent reflection). Only populated for day
   // builds; empty at night (lit windows live in the emissive props mesh).
-  if (!hideMeshes.props && track.meshes.glass) gfx.drawChunked(track.meshes.glass, MAT_IDENT, _wmGlass);
+  if (!hideMeshes.props && track.meshes.glass && !frame.mirrorLite) gfx.drawChunked(track.meshes.glass, MAT_IDENT, _wmGlass);
   // Water (lakes/marina/sea): low roughness so the lit shader's env term mirrors
   // the live sky + sun glint — reflective by day, warm at dusk, dark by night.
   // A touch glossier (calmer) when not raining; a little rougher in the wet.
-  if (!hideMeshes.props && track.meshes.water) gfx.draw(track.meshes.water, MAT_IDENT,
+  if (!hideMeshes.props && track.meshes.water && !frame.mirrorLite) gfx.draw(track.meshes.water, MAT_IDENT,
     wet ? _wmWaterWet : _wmWaterDry);
   if (!hideMeshes.gate) gfx.draw(track.meshes.gate, MAT_IDENT,
     wet ? _wmGateWet : _wmGateDry);

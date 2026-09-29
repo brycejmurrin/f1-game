@@ -588,9 +588,12 @@ body.hud-met-compact #hud-tyre { display: none !important; }
    BROADCAST, whose tower lives top-left. Square corners on purpose: the image
    is a rectangle, and a rounded frame would leave its corners showing. The
    radio card and the flag banner, which share the centre column, step down
-   by the mirror's height while it shows (body.hud-mirror-on). */
+   by the mirror's height while it shows (body.hud-mirror-on).
+   SIZE: 18% of the width, capped at 36% of the HEIGHT — the first cut (24vw,
+   no height term) filled a quarter of a landscape phone under a HUD SIZE
+   zoom. ~140x40 CSS px on an 844x390 phone, ~230x66 on 1280x720. */
 #hud-mirror {
-  --mir-w: clamp(150px, calc(24 * var(--vwzh)), 340px);
+  --mir-w: clamp(120px, min(calc(18 * var(--vwzh)), calc(36vh / var(--hud-z))), 300px);
   position: absolute;
   top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 8px);
   left: 50%; transform: translateX(-50%);
@@ -602,7 +605,7 @@ body.hud-met-compact #hud-tyre { display: none !important; }
 body.hud-prof-broadcast #hud-mirror { top: calc(8px + var(--sat) / var(--hud-z)); }
 body.hud-mirror-on #announce {
   top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 18px
-    + clamp(150px, calc(24 * var(--vwzh)), 340px) * 2 / 7);
+    + clamp(120px, min(calc(18 * var(--vwzh)), calc(36vh / var(--hud-z))), 300px) * 2 / 7);
 }
 #hud-flag {
   position: absolute; top: calc(100px + var(--sat) / var(--hud-z)); left: 50%; transform: translateX(-50%);
@@ -613,7 +616,7 @@ body.hud-mirror-on #announce {
 }
 body.hud-mirror-on #hud-flag {
   top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 18px
-    + clamp(150px, calc(24 * var(--vwzh)), 340px) * 2 / 7);
+    + clamp(120px, min(calc(18 * var(--vwzh)), calc(36vh / var(--hud-z))), 300px) * 2 / 7);
 }
 /* B1 caution flag variants (debris cautions): local yellow, VSC, safety car. */
 #hud-flag.flag-yellow { background: #ffd600; color: #000; }
