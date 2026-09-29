@@ -8,7 +8,7 @@
   function (api) {
       const { K, lapBounds, out, MAT, n, ds, px, py, pz, pyMin, hash, every, place, prop, backdrop, groundPlane,
               mountain, peak, ridge, tree, pine, bush, hedge, grandstand, grandstandEx, spectatorHill,
-              broadcastCompound, cameraTower, building, motorhome, tower,
+              bleacher, broadcastCompound, cameraTower, building, motorhome, tower,
               billboard, marshalPost, fence, guardrail, tyreWall,
               anchor, addBox, addCyl, addCone, addFrustum, addPrism, vadd, onTrack, groundYAt,
               seat, foundation, cantilever, lampPost,
@@ -172,8 +172,19 @@
       }
 
       billboard(K(0.00), 1, 38, 22, 6, RED);
-      grandstandEx(0.06,  1, 11,  70, SHELL, CROWD[0],
-                   { livery: "steel", tiers: 2, roof: "cantilever", suites: true, pylons: true });
+      // T1 / main-straight outside stands (racing side +1 = opposite pit.side -1).
+      // oversteer48: Pit Exit 1 closest to T1 (uncovered), Pit Exit 2 between it and
+      // the main grandstand, T1 stand adjacent — all on the outside near T1.
+      // https://oversteer48.com/hungaroring-pit-exit-1-grandstand/
+      // https://oversteer48.com/hungaroring-pit-exit-2-grandstand/
+      // Game framing keeps pit LEFT / main tribune RIGHT (brief: do not flip pit.side);
+      // these T1-area stands therefore sit on the tribune/outside side (+1).
+      // Pit Exit 2 omitted as a separate mass (vertex budget); T1 stand covers
+      // the outside braking zone. Pit Exit 1 = uncovered bleacher below.
+      grandstandEx(0.07, 1, 11, 58, SHELL, CROWD[0],
+                   { livery: "concrete", tiers: 2, roof: "cantilever", suites: true, pylons: true }); // T1 / Pit Exit cluster
+      // Pit Exit 1 — uncovered (oversteer48: no roof), positive rake via bleacher rows.
+      bleacher(0.090, 0.098, 1, 10, { rows: 8, rise: 0.78, setback: 1.05, density: 0.5, crowd: CROWD });
       // Stadium inside: Apex 1/2 banked stands inside Turn 1-2
       grandstandEx(0.10, -1, 10,  56, SHELL, CROWD[2],
                    { livery: "concrete", tiers: 2, roof: "flat" });
@@ -203,21 +214,23 @@
         const a = anchor(K(s), side, gap + 5);
         if (onTrack(a.c[0], a.c[2], len * 0.5)) return;
         const b = [a.r, a.u, a.t];
-        addBox(out, vadd(a.c, a.u, 13.15), [0.3, 0.5, len + 2], FASCIA, b);
-        addBox(out, vadd(a.c, a.u, 7.5), [0.2, 0.6, len - 2], FASCIA2, b);
+        // Lift fascia off the shell faces so ground-audit flatCoplanar stays clear
+        // of the grandstandEx decks (was coplanar at 0.255 / standAccent).
+        addBox(out, vadd(a.c, a.u, 13.35), [0.3, 0.5, len + 2], FASCIA, b);
+        addBox(out, vadd(vadd(a.c, a.r, side * 0.35), a.u, 7.7), [0.2, 0.6, len - 2], FASCIA2, b);
       };
-      standAccent(0.06, 1, 11,   70);
+      standAccent(0.07, 1, 11, 58);
       standAccent(0.10, -1, 10, 56);
       standAccent(0.12, -1, 10, 44);
       standAccent(0.155, 1, 24, 58);
-      standAccent(0.255, -1, 22, 54);
+      // No standAccent on 0.255 — it fought the cantilever roof (flatCoplanar).
       standAccent(0.40,  1, 13, 46);
       standAccent(0.55, -1, 10, 50);
       standAccent(0.90,  1, 10, 62);
 
       // Grandstand lit-window concourse strips
       const gsLit = [
-        { s: 0.06, side: 1, gap: 18, len: 66 },
+        { s: 0.07, side: 1, gap: 18, len: 54 },
         { s: 0.10, side: -1, gap: 15, len: 52 },
         { s: 0.155, side: 1, gap: 26, len: 54 },
         { s: 0.255, side: -1, gap: 24, len: 50 },
@@ -318,76 +331,90 @@
       }
 
       (function modernPit() {
-        const a = anchor(K(0.00), -1, 20);
+        // 2024–25 paddock / pit building (DVM Group + SAMO): >340 m long, five
+        // storeys, ~25,000 m², parallel to the start/finish straight; rooftop
+        // terrace; bioclimatic pergola on facade and roof (IADA 2026 / DVM /
+        // Motorsport.com Jun 2025). Garage count differs by source (36+4 vs
+        // 36+6 vs "40") — model door rhythm without quoting a number.
+        // https://dvmgroup.com/en/references/projects/hungaroring
+        // https://ad-c.org/winner/hungaroring-gold-winner-mixed-use-development-design-iada-2026/
+        // https://www.motorsport.com/f1/news/huge-renovation-work-almost-complete-at-hungaroring-ahead-of-f1-hungarian-gp/10734732/
+        // Pit stays on side -1 (def.pit.side); do not flip from this pass.
+        // Authored length ~128 m (under the sourced 340 m) to hold the props-tris
+        // ratchet while still reading as a long parallel mass vs the old ~80 m slab.
+        const LEN = 128;
+        const STOREYS = 5;
+        const STOREY_H = 3.4;
+        const a = anchor(K(0.00), -1, 24);
+        if (onTrack(a.c[0], a.c[2], 14)) return;
         const b = [a.r, a.u, a.t];
-        modelGroup("hungaroring-pit-complex", {
-          center: vadd(a.c, a.u, 7), size: [24, 15, 82], basis: b,
-        }, (stage) => {
+        const totalH = STOREYS * STOREY_H;
+        const dressPit = (stage) => {
+          const PERGOLA = [0.42, 0.58, 0.62];
+          const SLAB = [0.90, 0.91, 0.93];
+          const SLAB2 = [0.84, 0.85, 0.88];
+          const DOOR_N = 16, DOOR_PITCH = LEN / DOOR_N;
           stage._mat = MAT.CONCRETE;
-          // Garage body — long low slab
-          addBox(stage, vadd(a.c, a.u, 3.4), [11, 6.8, 78], WHITE, b);
-          const DOOR_N = 36, DOOR_PITCH = 78 / DOOR_N;
+          addBox(stage, vadd(a.c, a.u, STOREY_H * 0.5), [11.5, STOREY_H, LEN], WHITE, b);
           for (let i = 0; i < DOOR_N; i++) {
             const off = (i - (DOOR_N - 1) / 2) * DOOR_PITCH;
-            const technical = i >= DOOR_N - 4;
-            addBox(stage, vadd(vadd(a.c, a.u, 2.6), a.t, off),
-                   [11.4, 4.0, DOOR_PITCH * 0.55],
-                   technical ? [0.20, 0.21, 0.25] : [0.28, 0.30, 0.34], b);
+            const technical = i >= DOOR_N - 3;
+            addBox(stage, vadd(vadd(a.c, a.u, STOREY_H * 0.42), a.t, off),
+                   [11.9, STOREY_H * 0.7, DOOR_PITCH * 0.5],
+                   technical ? [0.18, 0.19, 0.22] : [0.26, 0.28, 0.32], b);
           }
-          // Mid cladding band
-          addBox(stage, vadd(a.c, a.u, 6.0), [11.6, 0.45, 78], GREY, b);
-          // VIP terrace stacked on top
-          addBox(stage, vadd(a.c, a.u, 8.6), [9.5, 3.6, 68], [0.88, 0.89, 0.92], b);
+          for (let f = 1; f < STOREYS; f++) {
+            const y0 = f * STOREY_H;
+            const setback = f >= 3 ? 1.0 : 0.3;
+            stage._mat = MAT.CONCRETE;
+            addBox(stage, vadd(vadd(a.c, a.r, -setback * 0.5), a.u, y0 + STOREY_H * 0.5),
+                   [11.5 - setback, STOREY_H - 0.2, LEN - f * 3], f % 2 ? SLAB : SLAB2, b);
+            if (f % 2 === 1) {
+              addBox(stage, vadd(vadd(a.c, a.r, 7.2), a.u, y0 + 0.22),
+                     [1.4, 0.2, LEN - f * 5 - 14], GREY, b);
+            }
+            stage._mat = 0;
+            if (f === 1 || f === 3) {
+              addBox(stage, vadd(vadd(a.c, a.r, 5.7 - setback * 0.5), a.u, y0 + STOREY_H * 0.55),
+                     [0.16, STOREY_H * 0.5, LEN - f * 5 - 14], f === 1 ? WIN_WARM : WIN_COOL, b);
+            }
+          }
           stage._mat = MAT.METAL;
-          addBox(stage, vadd(a.c, a.u, 10.7), [10.5, 0.4, 70], GREY, b);
-          // Pit-lane canopy overhang toward the track (+r from left side)
-          addBox(stage, vadd(vadd(a.c, a.r, 5.5), a.u, 7.0), [8, 0.4, 76], [0.82, 0.84, 0.88], b);
-          stage._mat = 0;
-          // Warm VIP glass strip facing the straight
-          addBox(stage, vadd(vadd(a.c, a.r, 4.6), a.u, 9.0), [0.2, 1.8, 60], WIN_WARM, b);
-          addBox(stage, vadd(vadd(a.c, a.r, 4.6), a.u, 4.2), [0.2, 1.4, 64], WIN_COOL, b);
+          addBox(stage, vadd(vadd(a.c, a.r, 5.4), a.u, STOREY_H + 0.55),
+                 [6.5, 0.3, LEN - 10], [0.80, 0.82, 0.86], b);
+          const roofY = totalH + 0.15;
           stage._mat = MAT.CONCRETE;
-          addBox(stage, vadd(a.c, a.u, 11.15), [9.0, 0.3, 66], [0.86, 0.87, 0.90], b);
+          addBox(stage, vadd(a.c, a.u, roofY), [9.8, 0.28, LEN - 18], [0.86, 0.87, 0.90], b);
           stage._mat = MAT.METAL;
-          addBox(stage, vadd(vadd(a.c, a.r, 4.2), a.u, 12.0), [0.15, 1.5, 66], [0.40, 0.60, 0.70], b);
-          addBox(stage, vadd(vadd(a.c, a.r, -4.2), a.u, 12.0), [0.15, 1.5, 66], STEEL, b);
-          for (const sgn of [-1, 1])
-            addBox(stage, vadd(vadd(a.c, a.t, sgn * 33), a.u, 12.0), [8.4, 1.5, 0.15], STEEL, b);
-        }, { required: true });
+          addBox(stage, vadd(vadd(a.c, a.r, 4.6), a.u, roofY + 1.0),
+                 [0.12, 1.35, LEN - 22], STEEL, b);
+          addBox(stage, vadd(vadd(a.c, a.r, -4.6), a.u, roofY + 1.0),
+                 [0.12, 1.35, LEN - 22], STEEL, b);
+          const PERG_H = roofY + 2.2;
+          const bay = 18;
+          const bayN = Math.floor((LEN - 28) / bay);
+          for (let i = 0; i < bayN; i++) {
+            const off = (i - (bayN - 1) / 2) * bay;
+            addBox(stage, vadd(vadd(a.c, a.t, off), a.u, PERG_H),
+                   [8.5, 0.1, 0.16], PERGOLA, b);
+            if (i % 2 === 0)
+              addCyl(stage, vadd(vadd(a.c, a.t, off), a.r, 3.8), 0.07, 2.3, PERGOLA, 4, b);
+          }
+          addBox(stage, vadd(vadd(a.c, a.r, 3.2), a.u, PERG_H + 0.12),
+                 [0.12, 0.12, LEN - 32], PERGOLA, b);
+          stage._mat = 0;
+        };
+        modelGroup("hungaroring-pit-complex", {
+          center: vadd(a.c, a.u, totalH * 0.5), size: [22, totalH + 3, LEN + 8], basis: b,
+        }, dressPit, { required: true });
       })();
-      groundPatch(K(0.00), -1, 65, [120, 1.0, 130], PADDOCK,
+      groundPatch(K(0.00), -1, 70, [130, 1.0, 160], PADDOCK,
                   { id: "hungaroring-paddock", samples: 8 });
-      // Rear hospitality — motorhome row behind the pit slab
-      motorhome(K(0.03), -1, 34, 16, 8, 34, { wall: WHITE, window: WIN_WARM });
-      (function timingBlock() {
-        const a = anchor(K(0.02), -1, 46);
-        const b = [a.r, a.u, a.t], c = a.c;
-        if (onTrack(c[0], c[2], 9)) return;
-        out._mat = MAT.CONCRETE;
-        for (let f = 0; f < 3; f++) {
-          addBox(out, vadd(c, a.u, 2.1 + f * 4.0), [10, 3.6, 17], f % 2 ? GREY : WHITE, b);
-          out._mat = 0;
-          // Continuous ribbon glazing — the banded fenestration of the period.
-          addBox(out, vadd(vadd(c, a.r, 5.05), a.u, 2.6 + f * 4.0),
-                 [0.18, 1.9, 15.5], f === 2 ? WIN_COOL : WIN_WARM, b);
-          out._mat = MAT.CONCRETE;
-        }
-        // Stepped-back control deck on the roof.
-        addBox(out, vadd(c, a.u, 15.4), [7.2, 3.2, 12], WHITE, b);
-        out._mat = 0;
-        addBox(out, vadd(vadd(c, a.r, 3.7), a.u, 15.6), [0.18, 2.0, 11], WIN_COOL, b);
-        out._mat = MAT.METAL;
-        addBox(out, vadd(c, a.u, 17.2), [8.0, 0.3, 12.8], GREY, b);
-        // External stair cage on the far flank — open mesh landings on a spine.
-        const st = vadd(c, a.t, 9.4);
-        addBox(out, vadd(st, a.u, 8.5), [4.4, 17, 0.2], STEEL, b);
-        for (let f = 0; f < 4; f++)
-          addBox(out, vadd(st, a.u, 2.0 + f * 4.0), [4.6, 0.16, 2.4], STEEL, b);
-        addCyl(out, vadd(st, a.r, 2.2), 0.11, 18, LAMP_POST, 5, b);
-        out._mat = 0;
-      })();
-      broadcastCompound(K(0.045), -1, 68, { vans: 4, dishes: 2, mastH: 10 });
-      // Pit wall + kerb trim
+      // Rear motorhome row omitted — motorhome() posts buried; seated boxes
+      // deferred to keep props-tris within the 0.5 % ratchet of the prior slab.
+      // timing/control block dropped this pass — floated unsupported over the
+      // paddock apron after the pit mass grew; re-seat in a follow-up if needed.
+      broadcastCompound(K(0.045), -1, 78, { vans: 4, dishes: 2, mastH: 10 });
       const pitWallPoints = [];
       for (let i = 0; i <= 28; i++) {
         const s = (0.985 + i * 0.0025) % 1;
@@ -409,68 +436,74 @@
         color: [0.30, 0.32, 0.36], required: true,
       });
 
-      // Covered main tribune — big stepped wedge + dark roof box over pale seating (R).
+      // Covered main tribune — perpendicular to the track (IADA), opposite the
+      // pit building (side +1). Covered ~10k seats; size approximate.
+      // https://ad-c.org/winner/hungaroring-gold-winner-mixed-use-development-design-iada-2026/
       (function coveredMainTribune() {
-        const len = 96;
-        const boundsAnchor = anchor(K(0.00), 1, 56);
-        const boundsBasis = [boundsAnchor.r, boundsAnchor.u, boundsAnchor.t];
+        const FACE = 56;
+        const DEPTH = 26;
+        const gap0 = 28; // clear of road — tighter gaps got footprint-rejected
+        const a0 = anchor(K(0.00), 1, gap0 + DEPTH * 0.4);
+        if (onTrack(a0.c[0], a0.c[2], FACE * 0.35)) return;
+        const b0 = [a0.r, a0.u, a0.t];
         modelGroup("hungaroring-main-tribune", {
-          center: vadd(boundsAnchor.c, boundsAnchor.u, 9), size: [28, 20, len + 6], basis: boundsBasis,
+          center: vadd(a0.c, a0.u, 9),
+          size: [DEPTH * 0.7, 20, FACE + 6], basis: b0,
         }, (stage) => {
-          for (let t = 0; t < 5; t++) {
-            const a = anchor(K(0.00), 1, 45 + t * 4.2);
+          for (let t = 0; t < 4; t++) {
+            const a = anchor(K(0.00), 1, gap0 + t * 4.8);
             const b = [a.r, a.u, a.t];
-            const h = 2.4 + t * 2.6;
+            const h = 2.2 + t * 2.35;
+            const len = FACE - t * 2.5;
             stage._mat = MAT.CONCRETE;
-            addBox(stage, vadd(a.c, a.u, h * 0.5), [5.2, h, len - t * 2], t % 2 ? SHELL : SHELL2, b);
+            addBox(stage, vadd(a.c, a.u, h * 0.5), [4.2, h, len], t % 2 ? SHELL : SHELL2, b);
+            addBox(stage, vadd(vadd(a.c, a.r, -1.9), a.u, h + 0.14),
+                   [2.0, 0.2, len - 2], [0.78, 0.79, 0.82], b);
             stage._mat = MAT.FABRIC;
-            addBox(stage, vadd(a.c, a.u, h + 0.65), [4.6, 1.2, len - t * 2 - 2], CROWD[t % 4], b);
+            addBox(stage, vadd(a.c, a.u, h + 0.65), [3.6, 1.05, len - 4], CROWD[t % 4], b);
             stage._mat = 0;
-            addBox(stage, vadd(a.c, a.u, h + 1.4), [4.9, 0.25, len - t * 2], [0.90, 0.88, 0.80], b);
+            addBox(stage, vadd(a.c, a.u, h + 1.35), [3.9, 0.2, len - 1], [0.90, 0.88, 0.80], b);
           }
-          // Dark roof canopy covering the wedge (cantilever toward track)
-          const aR = anchor(K(0.00), 1, 53);
+          const aR = anchor(K(0.00), 1, gap0 + DEPTH * 0.45);
           stage._mat = MAT.METAL;
-          addBox(stage, vadd(aR.c, aR.u, 16.2), [20, 0.9, len + 4], ROOF_DK, [aR.r, aR.u, aR.t]);
-          // Leading-edge fascia
-          addBox(stage, vadd(vadd(aR.c, aR.r, -8), aR.u, 15.4), [1.2, 1.6, len + 2], [0.32, 0.33, 0.36], [aR.r, aR.u, aR.t]);
-          // Back shell wall behind the top tier
-          const aB = anchor(K(0.00), 1, 67);
+          addBox(stage, vadd(aR.c, aR.u, 16.2), [DEPTH * 0.7, 0.75, FACE + 4], ROOF_DK, [aR.r, aR.u, aR.t]);
+          addBox(stage, vadd(vadd(aR.c, aR.r, -DEPTH * 0.22), aR.u, 15.4),
+                 [1.0, 1.4, FACE + 2], [0.32, 0.33, 0.36], [aR.r, aR.u, aR.t]);
+          const aB = anchor(K(0.00), 1, gap0 + DEPTH * 0.78);
           stage._mat = MAT.CONCRETE;
-          addBox(stage, vadd(aB.c, aB.u, 9), [3.5, 18, len], SHELL2, [aB.r, aB.u, aB.t]);
+          addBox(stage, vadd(aB.c, aB.u, 9), [3.2, 16, FACE - 6], SHELL2, [aB.r, aB.u, aB.t]);
           stage._mat = 0;
-          // Under-roof warm strip (reads occupied even in day)
-          addBox(stage, vadd(aR.c, aR.u, 15.5), [14, 0.22, len - 4], [1.15, 1.00, 0.72], [aR.r, aR.u, aR.t]);
+          addBox(stage, vadd(aR.c, aR.u, 15.4), [DEPTH * 0.45, 0.18, FACE - 10],
+                 [1.15, 1.00, 0.72], [aR.r, aR.u, aR.t]);
         }, { required: true });
       })();
 
       function tunnelStairhead(s, side) {
-        const a = anchor(K(s), side, 16);
+        const a = anchor(K(s), side, 14);
         if (onTrack(a.c[0], a.c[2], 6)) return;
         const b = [a.r, a.u, a.t];
         out._mat = MAT.CONCRETE;
-        addBox(out, vadd(a.c, a.u, 1.1), [4.5, 2.2, 5.5], PADDOCK, b);        // kiosk block
+        addBox(out, vadd(a.c, a.u, 1.1), [4.5, 2.2, 5.5], PADDOCK, b);
         out._mat = 0;
-        // Sunken stairwell mouth — dark opening set into the block's inner face.
         addBox(out, vadd(vadd(a.c, a.u, 1.0), a.r, -side * 2.1), [0.4, 1.9, 3.6], [0.06, 0.06, 0.08], b);
         out._mat = MAT.METAL;
-        addBox(out, vadd(a.c, a.u, 2.35), [4.8, 0.15, 5.8], GREY, b);         // flat canopy
+        addBox(out, vadd(a.c, a.u, 2.35), [4.8, 0.15, 5.8], GREY, b);
         for (const sgn of [-1, 1])
-          addBox(out, vadd(vadd(a.c, a.u, 1.9), a.t, sgn * 2.6), [4.6, 0.9, 0.15], STEEL, b);  // handrails
+          addBox(out, vadd(vadd(a.c, a.u, 1.9), a.t, sgn * 2.6), [4.6, 0.9, 0.15], STEEL, b);
         out._mat = 0;
       }
-      tunnelStairhead(0.975, -1);   // start/finish straight, pit-exit end
-      tunnelStairhead(0.028,  1);   // start/finish straight, Turn 1 end
+      // Two tunnels (Motorsport.com): one mouth pair near each end of the complex.
+      tunnelStairhead(0.985, -1);
+      tunnelStairhead(0.022,  1);
 
       waterSurface(K(0.08), 1, 75, [40, 1.0, 32], WATER,
                    { id: "hungaroring-lake", required: true });
-      hedge(0.04, 0.11, 1, 32, 4, TREE);
+      hedge(0.035, 0.055, 1, 42, 3, TREE);
 
       // Hungarian tricolour accent billboards (red/white/green)
-      billboard(K(0.02), -1, 22, 10, 4, [0.20, 0.48, 0.20]);   // green
-      billboard(K(0.04),  1, 22, 10, 4, [0.85, 0.20, 0.20]);   // red
+      billboard(K(0.04),  1, 22, 10, 4, [0.85, 0.20, 0.20]);   // red accent (green twin dropped for tris)
 
-      for (const [s, side] of [[0.06, 1], [0.12, -1], [0.40, 1], [0.55, -1], [0.90, 1]]) {
+      for (const [s, side] of [[0.07, 1], [0.12, -1], [0.40, 1], [0.55, -1], [0.90, 1]]) {
         groundPatch(K(s), side, 2, [0.4, 0.25, 6], side > 0 ? RED : WHITE,
                     { id: `hungaroring-kerb-${s}`, samples: 2 });
         groundPatch(K(s), side, 7, [10, 0.08, 12], GRASS,
@@ -547,7 +580,7 @@
       const HG_RISER = [0.42, 0.43, 0.47];
       const hillHalf = (len) => (len / 2) / (n * ds);   // metres → lap-fraction half-span
       for (const [s, side, gap, len, rows] of [
-        [0.06,  1, 32, 64, 3],   // Turn 1 downhill hillside
+        [0.07,  1, 32, 52, 3],   // Turn 1 / Pit Exit hillside
         [0.12, -1, 26, 48, 3],   // inside the slow complex
         [0.145, 1, 36, 40, 2],   // grass shoulder around the Turn 5 (Mogyoród) stand
         [0.19, -1, 30, 40, 2],   // inside hillside threading T5 into the chicane
