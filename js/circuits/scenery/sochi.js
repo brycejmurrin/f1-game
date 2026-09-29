@@ -226,7 +226,7 @@
         }, (stage) => {
           stage._mat = MAT.CONCRETE;
           // Deck first — glass sits ON it (was coplanar at y=0 with the glass
-          // bottom: flatCoplanar ×4 at sochi.js:234×236).
+          // bottom: flatCoplanar ×4 on the pit-bay glass × deck pair).
           addBox(stage, vadd(a.c, a.u, 0.9), [17, 1.8, 44], [0.82, 0.83, 0.86], b);
           stage._mat = MAT.GLASS;
           addBox(stage, vadd(a.c, a.u, 1.8 + 7.1), [16, 14.2, 44], [0.20, 0.28, 0.38], b);
@@ -375,7 +375,8 @@
       tyreWall(0.800, 0.830, -1, 4, [0.85, 0.78, 0.20]);
       marshalPost(K(0.810), 1, 9);
 
-      // Skip cambered park rails that bury jersey tops (structures.js:237).
+      // Skip cambered park rails that bury jersey tops (guardrail jersey rail
+      // instance in structures.js).
       for (const [s0, s1] of [[0.58, 0.79], [0.84, 0.92]]) {
         guardrail(s0, s1, -1, 6, [0.80, 0.81, 0.83]);
         guardrail(s0, s1,  1, 6, [0.80, 0.81, 0.83]);
