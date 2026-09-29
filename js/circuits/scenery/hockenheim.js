@@ -102,34 +102,46 @@
       const BOWL_CONC = [[0.63, 0.62, 0.59], [0.55, 0.545, 0.525]];
       const BOWL_CROWD = [[0.88, 0.86, 0.82], [0.22, 0.30, 0.52],
                           [0.78, 0.28, 0.22], [0.90, 0.78, 0.28]];
+      // Stepped Motodrom bowl. Row pitch 4.6 m + riser width 3.6 m leaves a
+      // clear gap between rows (was 4.3 / 4.1 — overlapping boxes = flatCoplanar
+      // + clip). Crowd sits ON the riser with a 0.2 m air gap so horizontal
+      // faces never share a plane. Along-seg 0.88 so adjacent along() steps
+      // do not swallow each other on the tight Motodrom radius.
       function motodromTerrace(s0, s1, side, gap, rows, step) {
         let i = 0;
         along(s0, s1, step, (k, spacing) => {
-          const seg = spacing * 0.96;
+          const seg = Math.min(spacing * 0.78, spacing - 1.2);
           for (let t = 0; t < rows; t++) {
-            const a = anchor(k, side, gap + t * 4.3);
+            const a = anchor(k, side, gap + t * 4.6);
             const b = [a.r, a.u, a.t];
-            const h = 2.4 + t * 2.7;
-            addBox(out, vadd(a.c, a.u, h * 0.5), [4.1, h, seg], BOWL_CONC[t & 1], b);
-            addBox(out, vadd(a.c, a.u, h + 0.75), [3.3, 1.5, seg], BOWL_CROWD[(i + t) & 3], b);
+            const h = 2.2 + t * 2.5;
+            addBox(out, vadd(a.c, a.u, h * 0.5), [3.6, h, seg], BOWL_CONC[t & 1], b);
+            // Crowd sits 5 cm above the riser top (≤ GAP 0.15 so BFS grounds it;
+            // not coplanar with the riser face).
+            addBox(out, vadd(a.c, a.u, h + 0.70), [3.0, 1.3, seg * 0.90],
+              BOWL_CROWD[(i + t) & 3], b);
           }
           i++;
         });
       }
-      motodromTerrace(0.790, 0.945, 1, 13, 5, 9);
-      motodromTerrace(0.840, 0.965, -1, 12, 3, 10);
+      // Outer Motodrom ring (Ost / Sachs side) — continuous rake, not discrete
+      // stand boxes. South Grandstand is a separate required modelGroup below.
+      motodromTerrace(0.790, 0.870, 1, 13, 5, 12);
+      // Inner Grandstand opposite South (Innentribüne) — shallower 3-row rake.
+      // Source: thef1spectator.com where-to-watch (Inner faces South).
+      motodromTerrace(0.840, 0.880, -1, 12, 3, 13);
 
       {
         const roofCol = [0.30, 0.31, 0.34], fascia = [0.86, 0.86, 0.84];
-        along(0.815, 0.940, 11, (k, spacing) => {
-          const a = anchor(k, 1, 27);
+        along(0.815, 0.895, 12, (k, spacing) => {
+          const a = anchor(k, 1, 28);
           const b = [a.r, a.u, a.t];
           addCyl(out, a.c, 0.28, 21, [0.42, 0.43, 0.46], 6, b);           // rear column
-          addBox(out, vadd(a.c, a.u, 21.4), [15, 0.55, spacing * 0.97], roofCol, b);
-          addBox(out, vadd(vadd(a.c, a.r, -7.2), a.u, 20.4), [1.1, 1.6, spacing * 0.97], fascia, b);
+          addBox(out, vadd(a.c, a.u, 21.4), [15, 0.55, spacing * 0.88], roofCol, b);
+          addBox(out, vadd(vadd(a.c, a.r, -7.2), a.u, 20.4), [1.1, 1.6, spacing * 0.88], fascia, b);
         });
       }
-      // Mercedes-tribune style banked earth terraces closing the far end.
+      // Banked earth terraces closing the Motodrom entry (not a named stand).
       spectatorHill(0.760, 0.798, -1, 15, { rows: 4, rise: 1.2, depth: 1.9, density: 0.55, step: 8 });
 
       {
@@ -148,6 +160,11 @@
         }, { required: true });
       }
 
+      // Motodrom hospitality crown (kept id). Official sources place the named
+      // Mercedes-Tribüne at the hairpin / T8 area (thef1spectator; eventlocations
+      // brochure) — mapping of THAT stand onto Motodrom vs Spitzkehre is
+      // UNCERTAIN, so we do not relocate this assembly or claim the hairpin
+      // grandstandEx is the Mercedes-Tribüne.
       {
         const a = anchor(K(0.828), 1, 28);
         const b = [a.r, a.u, a.t];
@@ -175,8 +192,97 @@
           addBox(stage, vadd(vadd(a.c, a.r, -18.1), a.u, 23.6), [1.0, 1.6, 42],
             [0.10, 0.12, 0.16], b);
           stage._mat = 0;
-        });
+        }, { required: true });
       }
+
+      // Südtribüne — largest permanent stand: T15 / Südkurve up the main
+      // straight toward Haupttribüne. Official data-facts lists South Grandstand;
+      // thef1spectator details A–H + Oberrang mid section. Positive rake (rows
+      // rise away from the track). Side -1 meets Main at start/finish.
+      (function suedTribune() {
+        const sMid = 0.935;
+        const len = 110;
+        const side = -1;
+        const a0 = anchor(K(sMid), side, 40);
+        const b0 = [a0.r, a0.u, a0.t];
+        modelGroup("hockenheim-sued-tribune", {
+          center: vadd(a0.c, a0.u, 12), size: [36, 28, len + 8], basis: b0,
+        }, (stage) => {
+          for (let t = 0; t < 6; t++) {
+            const a = anchor(K(sMid), side, 14 + t * 4.6);
+            const b = [a.r, a.u, a.t];
+            const h = 2.4 + t * 2.55;
+            const seg = len - t * 3;
+            stage._mat = MAT.CONCRETE;
+            addBox(stage, vadd(a.c, a.u, h * 0.5), [3.8, h, seg], BOWL_CONC[t & 1], b);
+            stage._mat = MAT.FABRIC;
+            addBox(stage, vadd(a.c, a.u, h + 0.70), [3.2, 1.3, seg - 2],
+              BOWL_CROWD[t & 3], b);
+            stage._mat = 0;
+          }
+          // Oberrang — one extra upper deck over the mid section (Südkurve).
+          {
+            const a = anchor(K(sMid), side, 42);
+            const b = [a.r, a.u, a.t];
+            const h = 18.5;
+            stage._mat = MAT.CONCRETE;
+            addBox(stage, vadd(a.c, a.u, h * 0.5), [5.0, h, 48], [0.58, 0.57, 0.55], b);
+            stage._mat = MAT.FABRIC;
+            addBox(stage, vadd(a.c, a.u, h + 0.70), [4.2, 1.4, 44], BOWL_CROWD[1], b);
+            stage._mat = 0;
+          }
+          const aR = anchor(K(sMid), side, 36);
+          const roofB = tiltBasis(aR, -0.08);
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(aR.c, aR.u, 22.5), [22, 0.75, len + 4],
+            [0.30, 0.31, 0.34], roofB);
+          addBox(stage, vadd(vadd(aR.c, aR.r, -side * 9), aR.u, 21.4),
+            [1.2, 1.7, len], [0.86, 0.86, 0.84], [aR.r, aR.u, aR.t]);
+          const aB = anchor(K(sMid), side, 48);
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(aB.c, aB.u, 11), [2.4, 22, len], [0.60, 0.60, 0.58],
+            [aB.r, aB.u, aB.t]);
+          stage._mat = 0;
+        }, { required: true });
+      })();
+
+      // Nordtribüne — wraps Nordkurve / T1 (official North Grandstand;
+      // thef1spectator: subsections A–C, blue/red/orange levels). Side -1
+      // continues past Haupttribüne into the first corner.
+      (function nordTribune() {
+        const sMid = 0.055;
+        const len = 88;
+        const side = -1;
+        const a0 = anchor(K(sMid), side, 32);
+        const b0 = [a0.r, a0.u, a0.t];
+        modelGroup("hockenheim-nord-tribune", {
+          center: vadd(a0.c, a0.u, 9), size: [28, 22, len + 6], basis: b0,
+        }, (stage) => {
+          for (let t = 0; t < 5; t++) {
+            const a = anchor(K(sMid), side, 12 + t * 4.5);
+            const b = [a.r, a.u, a.t];
+            const h = 2.2 + t * 2.4;
+            const seg = len - t * 2.5;
+            stage._mat = MAT.CONCRETE;
+            addBox(stage, vadd(a.c, a.u, h * 0.5), [3.6, h, seg], BOWL_CONC[t & 1], b);
+            stage._mat = MAT.FABRIC;
+            // Level tint: orange / red / blue reading as the three vertical bands.
+            const LEVEL = [[0.92, 0.55, 0.22], [0.78, 0.22, 0.20], [0.22, 0.34, 0.62],
+                           [0.88, 0.86, 0.82], [0.22, 0.34, 0.62]];
+            addBox(stage, vadd(a.c, a.u, h + 0.70), [3.0, 1.25, seg - 2], LEVEL[t], b);
+            stage._mat = 0;
+          }
+          const aR = anchor(K(sMid), side, 28);
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(aR.c, aR.u, 16.8), [18, 0.7, len + 2],
+            [0.32, 0.33, 0.36], [aR.r, aR.u, aR.t]);
+          const aB = anchor(K(sMid), side, 38);
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(aB.c, aB.u, 9), [2.2, 18, len], [0.58, 0.58, 0.56],
+            [aB.r, aB.u, aB.t]);
+          stage._mat = 0;
+        }, { required: true });
+      })();
       // Flag masts along the Motodrom rim — the pennant line above the crowd
       // that every stadium shot of the bowl catches. Thin, standing well in
       // front of the first terrace row so they never reach tarmac or terracing.
@@ -184,7 +290,7 @@
         const FLAG = [[0.86, 0.16, 0.14], [0.94, 0.93, 0.90],
                       [0.10, 0.30, 0.62], [0.96, 0.78, 0.08]];
         let fi = 0;
-        along(0.805, 0.935, 16, (k) => {
+        along(0.805, 0.895, 16, (k) => {
           const a = anchor(k, 1, 10.5);
           const b = [a.r, a.u, a.t];
           addCyl(out, a.c, 0.10, 11, [0.80, 0.81, 0.83], 5, b);
@@ -251,7 +357,9 @@
       }
       gantry(0.0, 8.5, [0.15, 0.15, 0.18]);
       gantry(0.975, 8.0, [0.15, 0.15, 0.18]);
-      grandstandEx(0.010, -1, 11, 140, null, null,
+      // Haupttribüne (Main Grandstand) — permanent stand on the S/F straight.
+      // Shortened so it does not swallow Nordtribüne wrapping T1.
+      grandstandEx(0.995, -1, 12, 96, null, null,
         { livery: "steel", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
       for (let i = 0; i < 4; i++) {
         building(K(0.955 + i * 0.016), 1, 40, 22, 14, 20,
@@ -259,8 +367,10 @@
       }
       every(44, (k) => {
         const s = k / n, h = hash(k * 71 + 31);
-        if (!(s > 0.93 || s < 0.05) || h < 0.5) return;
-        motorhome(k, 1, 58 + h * 10, 10, 4, 6, { wall: [0.62 + h * 0.28, 0.62, 0.64] });
+        // Motodrom folds back onto the paddock in world space — keep
+        // motorhomes deep in the compound (far lateral) and off the bowl arc.
+        if (!(s > 0.980 || s < 0.015) || h < 0.60) return;
+        motorhome(k, 1, 95 + h * 18, 10, 4, 6, { wall: [0.62 + h * 0.28, 0.62, 0.64] });
       });
       broadcastCompound(K(0.945), 1, 74, { vans: 3, dishes: 2, mastH: 9 });
       for (const s of [0.985, 0.005, 0.025]) billboard(K(s), -1, 8, 12, 4.5, [0.90, 0.86, 0.30]);
@@ -268,7 +378,22 @@
       groundPatch(K(0.455), -1, 6, [46, 0.18, 60], GRAVEL,
         { id: "hockenheim-spitzkehre-gravel", samples: 8 });
       tyreWall(0.440, 0.475, -1, 5, [0.86, 0.20, 0.18]);
-      grandstandEx(0.457, 1, 16, 76, null, null, { livery: "steel", endWalls: true });
+      // Temporary Hairpin bleachers — official data-facts lists Hairpin I/II as
+      // temporary. grandstandEx was suppressed here (inner face on track) at
+      // every gap we tried; emit a small required-free seat rake instead.
+      // Not claimed as Mercedes-Tribüne (UNCERTAIN mapping vs Motodrom id).
+      (function hairpinTempStand() {
+        const sMid = 0.457;
+        const side = 1;
+        for (let t = 0; t < 3; t++) {
+          const a = anchor(K(sMid), side, 24 + t * 4.5);
+          if (onTrack(a.c[0], a.c[2], 4)) continue;
+          const b = [a.r, a.u, a.t];
+          const h = 2.0 + t * 2.2;
+          addBox(out, vadd(a.c, a.u, h * 0.5), [3.4, h, 40 - t * 2], BOWL_CONC[t & 1], b);
+          addBox(out, vadd(a.c, a.u, h + 0.70), [2.8, 1.2, 36 - t * 2], BOWL_CROWD[t & 3], b);
+        }
+      })();
       marshalPost(K(0.450), 1, 10);
       for (const s of [0.435, 0.470]) billboard(K(s), -1, 14, 12, 4.5, [0.88, 0.84, 0.78]);
 
@@ -311,26 +436,9 @@
         }
       }
 
-      {
-        const WALL_D = [0.075, 0.20, 0.105], WALL = [0.095, 0.245, 0.125];
-        for (const [s0, s1] of [
-          [0.065, 0.315], [0.360, 0.430], [0.490, 0.600], [0.640, 0.755],
-        ]) {
-          for (const side of [-1, 1]) {
-            let i = 0;
-            along(s0, s1, 12, (k, spacing) => {
-              const seg = spacing * 1.02;   // overlap so the wall never gaps
-              const h = hash(k * 29 + side);
-              const a1 = anchor(k, side, 16 + h * 3);
-              addPrism(out, a1.c, [11, 17 + h * 7, seg], (i & 1) ? WALL_D : WALL,
-                [a1.r, a1.u, a1.t]);
-              const a2 = anchor(k, side, 28 + h * 6);
-              addPrism(out, a2.c, [15, 21 + h * 9, seg], WALL_D, [a2.r, a2.u, a2.t]);
-              i++;
-            });
-          }
-        }
-      }
+      // Hardtwald canopy mass is forestEdge + scattered pines above — the old
+      // overlapping addPrism "wall" slabs clipped every pine crown (clip-audit
+      // 184 severe, almost all prism×cone at lines 325/328). Do not reintroduce.
 
       {
         const board = [0.94, 0.94, 0.90];
@@ -354,14 +462,19 @@
             addBox(stage, vadd(p, a.u, 2.4), [9, 4.8, 10], i % 2 ? [0.78, 0.78, 0.76] : CONC, b);
             addPrism(stage, vadd(p, a.u, 5.4), [9.4, 1.6, 10.4], [0.58, 0.58, 0.60], b);
           }
-        });
+        }, { required: true });
       }
 
-      sponsorHoarding(0.800, 0.945, 1, 6.5, {
+      sponsorHoarding(0.800, 0.895, 1, 6.5, {
         h: 1.3, step: 10,
         palette: [[0.86, 0.16, 0.14], [0.94, 0.93, 0.90], [0.10, 0.30, 0.62], [0.96, 0.78, 0.08]],
       });
-      sponsorHoarding(0.845, 0.960, -1, 6.0, { h: 1.2, step: 11 });
+      sponsorHoarding(0.845, 0.895, -1, 6.0, { h: 1.2, step: 11 });
+      // Low hoarding at the foot of Südtribüne (Südkurve → main straight).
+      sponsorHoarding(0.905, 0.985, -1, 6.5, {
+        h: 1.25, step: 11,
+        palette: [[0.86, 0.16, 0.14], [0.94, 0.93, 0.90], [0.10, 0.30, 0.62]],
+      });
 
       cameraTower(K(0.838), 1, 8, { h: 17 });
       cameraTower(K(0.918), -1, 8, { h: 15 });
