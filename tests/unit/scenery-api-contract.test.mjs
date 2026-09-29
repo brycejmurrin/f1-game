@@ -242,6 +242,9 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     ],
     // Wave 6 — Fuji Speedway Hotel + Motorsports Museum (west side, 2022)
     fuji: ["fuji-speedway-hotel"],
+    // Wave 6 — Donington Park: 2017–18 MSV Hollywood grandstand (grandstandEx
+    // suppressed on the Craner fold; bespoke positive-rake modelGroup).
+    donington: ["donington-hollywood-stand"],
     // Wave 6 — Sepang hibiscus main canopy + K1/F corner stands
     sepang: ["sepang-main-grandstand-canopy", "sepang-t1-grandstand", "sepang-t7-grandstand"],
   };
