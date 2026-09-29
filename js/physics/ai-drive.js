@@ -847,7 +847,10 @@ const AiDrive = (function () {
     // already on the car when a plan is re-cut mid-race, and `firstLife` the
     // laps that set has left — the first stint is run on what is on the car,
     // not on a fresh set's life. An AI passes none of them.
-    const pinStops = ctx.stops != null && ctx.stops >= 0 ? Math.min(MAX_STOPS, ctx.stops | 0) : null;
+    // …and never more stops than the race has laps to hold one on (laps - 1:
+    // no stop on the last). The pin is stored per circuit, not per distance, so
+    // a 2-stop pin met a 2-lap sprint leg and made a zero-length stint: "BOX L0".
+    const pinStops = ctx.stops != null && ctx.stops >= 0 ? Math.min(MAX_STOPS, ctx.stops | 0, Math.max(0, laps - 1)) : null;
     let pinStart = ctx.start && TYRE[ctx.start] ? ctx.start : null;
     // TWO DRY SPECIFICATIONS (FIA Sporting Regulations B6.3.6): a dry race
     // must use at least two different compounds. `used` is what a mid-race
