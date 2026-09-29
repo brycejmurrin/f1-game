@@ -461,11 +461,18 @@ const AudioPanel = (() => {
       test.setAttribute("aria-label", "Hear " + label);
       test.onclick = () => preview(ch);
       const box = document.createElement("div");
-      box.append(sel, test);
+      box.append(sel);
       head.append(name, box);
+      // TEST gets its OWN ROW, after PITCH and RATE (tune, then hear it). Beside
+      // the <select> it could not be reached by keyboard or pad: a select owns
+      // Left/Right (MenuNav ownsArrows) and Up/Down land on the select, the
+      // nearest control in the row (menu-traversal, MUSIC & SOUND).
+      const testRow = document.createElement("div");
+      testRow.className = "set-row";
+      testRow.appendChild(test);
 
       wrap.append(head, slider(ch, "pitch", "PITCH", tune.pitch, RadioVoice.PITCH_MIN, RadioVoice.PITCH_MAX),
-                  slider(ch, "rate", "RATE", tune.rate, RadioVoice.RATE_MIN, RadioVoice.RATE_MAX));
+                  slider(ch, "rate", "RATE", tune.rate, RadioVoice.RATE_MIN, RadioVoice.RATE_MAX), testRow);
       const note = document.createElement("p");
       note.className = "as-note"; note.textContent = blurb;
       wrap.appendChild(note);

@@ -74,6 +74,12 @@ window.TopModal = (function () {
        seam exists to avoid, arriving from the other direction. */
     el.addEventListener("close", () => {
       if (el.hidden) return;                       // our own mirror closed it
+      // A STALE close: `close` is a queued task, so on a busy page the event for
+      // a close we made can arrive AFTER the screen was reopened (showModal ran
+      // again in the mirror's microtask). An open dialog is not closed — pressing
+      // its door here shut SETTINGS the instant it reopened (menu-traversal,
+      // CONTROLS: the close event landed ~500 ms after the Escape that caused it).
+      if (el.open) return;
       // A platform close nothing on screen asked for: the SECOND Escape in a
       // row fires a non-cancelable `cancel` (the first consumed the
       // history-action activation), and the dialog closes behind our

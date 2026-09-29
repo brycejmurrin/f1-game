@@ -179,3 +179,39 @@ test("Escape on the Data Hub itself still presses its door", () => {
   assert.equal(h.clicks(), 1);
   assert.equal(e.defaultPrevented, true);
 });
+
+// ── A STALE close event must not shut a reopened screen ─────────────────────
+// `close` is dispatched as a queued task, so on a busy page the event for a close
+// the app made can land AFTER the screen was reopened. The close listener read
+// "visible and closing" as a platform close nothing asked for and pressed the
+// door — SETTINGS shut the instant it reopened (menu-traversal, CONTROLS).
+test("a close event arriving after the screen reopened does not press its door", () => {
+  const listeners = {};
+  let clicks = 0;
+  const door = { click() { clicks++; } };
+  const dlg = {
+    hidden: false, open: false,
+    hasAttribute: () => true, getAttribute: (a) => (a === "data-esc-close" ? "door" : null),
+    addEventListener: (t, fn) => { listeners[t] = fn; },
+    showModal() { this.open = true; }, close() { this.open = false; },
+  };
+  const context = {
+    window: {}, WeakSet, WeakMap, queueMicrotask: () => {},
+    MutationObserver: class { observe() {} },
+    document: { readyState: "loading", addEventListener() {}, getElementById: (id) => (id === "door" ? door : null), querySelectorAll: () => [], querySelector: () => null },
+    Log: { info() {}, warn() {} },
+  };
+  context.globalThis = context;
+  vm.createContext(context);
+  vm.runInContext(read("js/ui/modal.js"), context);
+  context.window.TopModal.wire(dlg);
+  assert.ok(listeners.close, "the close listener is wired");
+  // Reopened: visible and open when the old close event finally arrives.
+  dlg.hidden = false; dlg.open = true;
+  listeners.close();
+  assert.equal(clicks, 0, "a stale close on an OPEN dialog leaves the door alone");
+  // A real platform close (visible, no longer open) still goes through the door.
+  dlg.open = false;
+  listeners.close();
+  assert.equal(clicks, 1, "a platform close of a visible screen still presses its door");
+});
