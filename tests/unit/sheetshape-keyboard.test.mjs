@@ -207,3 +207,63 @@ test("body shape follows a rotation whose size lands after its events", () => {
     "a rotation whose sizes land after its last event must still be answered — " +
     "left latched, a landscape phone keeps the portrait title screen and scrolls");
 });
+
+/* #427's settle timers reclassified shape/density but did NOT re-ask --kb.
+   watchKeyboard's window listeners clear the band when a resize fires after
+   sizes land; the same iOS "no event on settle" hole left a mismatched
+   mid-rotation band (844−390=454) stuck on every .screen. The settle path
+   must re-derive the keyboard band too. */
+test("--kb clears on a silent size settle after a mismatched rotation", () => {
+  const { sb, vv, fire, kb, runTimers } = boot();
+
+  // Portrait, keyboard up.
+  sb.innerWidth = 390; sb.innerHeight = 844;
+  vv.height = 500; vv.offsetTop = 0;
+  fire("vv", "resize");
+  assert.equal(kb(), "344px", "precondition: keyboard band is live");
+
+  // Mid-rotation mismatch: vv already landscape, layout still portrait.
+  // Also fire the window events (still on portrait sizes) so settle timers arm.
+  vv.height = 390;
+  fire("vv", "resize");
+  fire("win", "orientationchange");
+  fire("win", "resize");
+  assert.equal(kb(), "454px",
+    "precondition: the mismatched pair wrote a bogus band");
+
+  // Sizes settle. No further event — the hole #427 documented for shape.
+  sb.innerWidth = 844; sb.innerHeight = 390;
+  // vv.height is already 390; no vv event either.
+  runTimers();
+  assert.equal(kb(), "",
+    "settle timers must re-derive --kb: left latched at 454, every .screen " +
+    "opened from the title carries more padding than the landscape viewport is tall");
+});
+
+/* Title scrollers swap roles when body[data-shape] flips. A leftover
+   scrollTop from the previous shape must not survive the flip. */
+test("title scrollers reset when body shape flips on settle", () => {
+  const { dom, sb, fire, runTimers } = boot();
+  const ov = dom.document.getElementById("overlay");
+  const mb = dom.document.getElementById("menu-buttons");
+  ov.scrollTop = 180;
+  mb.scrollTop = 220;
+
+  sb.innerWidth = 390; sb.innerHeight = 844;
+  fire("win", "resize");
+  runTimers();
+  assert.equal(dom.document.body.dataset.shape, "tall");
+  // Re-stain after the tall classify (idempotent shape write does not reset).
+  ov.scrollTop = 180;
+  mb.scrollTop = 220;
+
+  fire("win", "orientationchange");
+  // Sizes land after the events; settle flips tall → wide and must zero both.
+  sb.innerWidth = 844; sb.innerHeight = 390;
+  runTimers();
+  assert.equal(dom.document.body.dataset.shape, "wide");
+  assert.equal(ov.scrollTop, 0,
+    "a leftover #overlay scrollTop from portrait must not survive the flip");
+  assert.equal(mb.scrollTop, 0,
+    "a leftover #menu-buttons scrollTop from portrait must not survive the flip");
+});

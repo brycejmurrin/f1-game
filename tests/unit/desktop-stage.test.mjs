@@ -18,9 +18,9 @@ import {
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-test("desktopVersionFromBuild maps version.json build → 0.<build>.0", () => {
-  assert.equal(desktopVersionFromBuild(1695), "0.1695.0");
-  assert.equal(desktopVersionFromBuild(1), "0.1.0");
+test("desktopVersionFromBuild maps version.json build → <apexVersion>.<build>", () => {
+  assert.equal(desktopVersionFromBuild(1695, "1.0"), "1.0.1695");
+  assert.equal(desktopVersionFromBuild(1, "1.0"), "1.0.1");
   assert.throws(() => desktopVersionFromBuild(0));
   assert.throws(() => desktopVersionFromBuild("x"));
 });

@@ -85,10 +85,11 @@ test("desktop package.json ships app-protocol.js and pins Electron 44.4.5", () =
   const pkg = JSON.parse(
     require("node:fs").readFileSync(join(ROOT, "desktop/package.json"), "utf8"),
   );
+  const cfg = require("../../desktop/electron-builder.config.cjs");
   assert.equal(pkg.devDependencies.electron, "44.4.5");
-  assert.ok(pkg.build.files.includes("app-protocol.js"));
-  assert.equal(pkg.build.electronFuses.enableNodeCliInspectArguments, false);
-  assert.equal(pkg.build.electronFuses.grantFileProtocolExtraPrivileges, false);
+  assert.ok(cfg.files.includes("app-protocol.js"));
+  assert.equal(cfg.electronFuses.enableNodeCliInspectArguments, false);
+  assert.equal(cfg.electronFuses.grantFileProtocolExtraPrivileges, false);
   assert.ok(pkg.scripts["pack:test"]);
   assert.ok(
     require("node:fs").existsSync(join(ROOT, "desktop/app-protocol.js")),
