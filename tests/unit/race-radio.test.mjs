@@ -290,6 +290,26 @@ test("the result is called with the position, after the flag", () => {
   assert.ok(r.said.some((s) => /P3/.test(s.msg) && /PODIUM/.test(s.msg)), JSON.stringify(r.said));
 });
 
+test("the result call IS the flag card: it is on the air within half a second of the line, and game.js's FINISH! stands down for it", () => {
+  // Queued behind a 2 s FINISH! card it reached the front as the results screen
+  // took over (2.2 s after the flag), and radio-voice — which speaks only in a
+  // race — dropped it unheard.
+  const r = race({ laps: 2, cars: [car("AAA", 400, 60), car("PLY", 340, 60, { isPlayer: true, local: true }), car("CCC", 300, 60)] });
+  assert.equal(r.radio.callsResult(), false, "not live before the first tick");
+  r.step(0.05, 40);
+  assert.equal(r.radio.callsResult(), true);
+  const before = r.said.length;
+  r.G.player.finished = true;
+  r.step(0.05, 10);
+  assert.ok(r.said.slice(before).some((s) => /P2/.test(s.msg)), JSON.stringify(r.said.slice(before)));
+  r.radio.setChat("off");
+  assert.equal(r.radio.callsResult(), false, "chatter OFF: FINISH! is the only call, so it stays");
+  const game = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const finishes = game.match(/announce\("FINISH!"/g) || [];
+  assert.ok(finishes.length >= 2);
+  assert.equal((game.match(/!raceRadio\.callsResult\(\)\) announce\("FINISH!"/g) || []).length, finishes.length, "every FINISH! card is gated");
+});
+
 test("RADIO CHECK answers on demand with the position and both gaps", () => {
   const r = race({ cars: [car("AAA", 2000, 60), car("PLY", 1900, 60, { isPlayer: true, local: true }), car("BBB", 1750, 60)] });
   let pressed = false;

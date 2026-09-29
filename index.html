@@ -479,7 +479,7 @@
            two seconds the car is stationary. -->
       <button id="hud-work" type="button" hidden>WORK ON CAR</button>
       <div id="hud-ot" class="ot-off">OVERTAKE</div>
-      <div id="hud-aero" class="ax-off">Z-MODE</div>
+      <div id="hud-aero" class="ax-off">CORNER MODE</div>
     </div>
     <div id="dock-right" class="dock"></div>
   </div>
@@ -1123,14 +1123,14 @@
           </div>
           <h4 class="pm-look-h">TITLE SCREEN &amp; MOTION</h4>
           <div id="pm-motion" class="set-row" role="group" aria-labelledby="pm-motion-label">
-            <span class="tune-label" id="pm-motion-label">MENU ANIMATIONS</span>
+            <span class="tune-label" id="pm-motion-label">MOTION</span>
             <div>
-              <button id="pm-motion-prev" type="button" data-step="-1" aria-label="Previous menu animations" aria-hidden="true" tabindex="-1">&lsaquo;</button>
+              <button id="pm-motion-prev" type="button" data-step="-1" aria-label="Previous motion setting" aria-hidden="true" tabindex="-1">&lsaquo;</button>
               <select id="pm-motion-sel" aria-labelledby="pm-motion-label" aria-describedby="pm-motion-help"></select>
-              <button id="pm-motion-next" type="button" data-step="1" aria-label="Next menu animations" aria-hidden="true" tabindex="-1">&rsaquo;</button>
+              <button id="pm-motion-next" type="button" data-step="1" aria-label="Next motion setting" aria-hidden="true" tabindex="-1">&rsaquo;</button>
             </div>
           </div>
-          <p class="adv-help" id="pm-motion-help">REDUCED turns off sliding and fading between screens. If your phone is set to reduce motion, that always wins.</p>
+          <p class="adv-help" id="pm-motion-help">REDUCED turns off sliding and fading between screens, camera shake in the race and the pre-race flyby. If your phone is set to reduce motion, that always wins.</p>
           <div id="pm-titleintro" class="set-row" role="group" aria-labelledby="pm-titleintro-label">
             <span class="tune-label" id="pm-titleintro-label">TITLE INTRO</span>
             <div>
@@ -2652,7 +2652,7 @@
         <button type="button" id="cs-aero" aria-pressed="false"
                 title="Active aero: open and close the front and rear wing flaps (Z-mode = downforce, X-mode = low drag)">
           <span class="cs-aero-lbl">ACTIVE AERO</span>
-          <span class="cs-aero-val">Z-MODE</span>
+          <span class="cs-aero-val">CORNER MODE</span>
         </button>
       </div>
     </div>
@@ -2727,7 +2727,7 @@
         <dt id="htp-racing">BOOST</dt>
         <dd>Toggle electric power on or off. It drains the energy bar, which recharges when you lift or brake. Power tapers at very high speed.</dd>
         <dt>ACTIVE AERO</dt>
-        <dd>In MANUAL, press your active aero control (keyboard <span data-help-keys="aero">Z</span>, controller <span data-help-pad="aero">D-pad ↑</span>, or AERO on screen) inside an activation zone. X-MODE reduces drag and grip; braking or leaving the zone closes the wings.
+        <dd>In MANUAL, press your active aero control (keyboard <span data-help-keys="aero">Z</span>, controller <span data-help-pad="aero">D-pad ↑</span>, or AERO on screen) inside an activation zone. STRAIGHT MODE (the flaps open) reduces drag and grip; braking or leaving the zone closes the wings.
           <br>SETTINGS › CONTROLS › ACTIVE AERO: AUTO handles the wings for you. The HUD shows the automatic mode and zone status. Zones are available on every lap with no proximity rule; some circuits have none.</dd>
         <dt>OVERTAKE</dt>
         <dd>Follow within one second to arm it, then activate for four seconds of electric power. The HUD explains when it is unavailable: the opening lap, a caution or the cooldown. When ready, it shows OVERTAKE READY. Overtake becomes available when the leader starts lap two.</dd>

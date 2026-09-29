@@ -264,7 +264,7 @@ body.rotate-help-open #rotate-device { display: none !important; }
 }
 
 /* ---------- MENU MOTION (js/ui/title-fx.js) ---------- */
-/* MENU ANIMATIONS: REDUCED, or an OS that asks for reduced motion, puts
+/* MOTION: REDUCED, or an OS that asks for reduced motion, puts
    data-motion="reduce" on <html> (first set by the inline script in
    index.html, before first paint). Same shape as the prefers-reduced-motion
    backstop in css/tokens.css — instant and non-repeating rather than `none`,

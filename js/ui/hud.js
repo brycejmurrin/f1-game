@@ -942,15 +942,15 @@ function updateHud(force, dtMs) {
   // too slow to arm — a distance readout of zero, which reads as "the zone is
   // right here" rather than "you are in it". Whether the mode is available is
   // the CLASS's job (ax-armed lights the chip), so the two never contradict.
-  const aeroText = autoAero ? (xOpen ? "AUTO X-MODE" : "AERO AUTO")
+  const aeroText = autoAero ? (xOpen ? "AUTO STRAIGHT" : "AERO AUTO")
     : noZones ? "NO AERO ZONE"
-    : xOpen ? "X-MODE"
+    : xOpen ? "STRAIGHT MODE"
     : dz === 0 ? "AERO ZONE"
     : dz < 900 ? "AERO " + Math.round(dz) + "m"
-    : "Z-MODE";
+    : "CORNER MODE";
   hText(els.aero, aeroText);
-  hAttr(els.aero, "aria-label", autoAero ? (xOpen ? "Automatic X-mode active" : "Active aero automatic")
-    : noZones ? "No aero zone" : xOpen ? "X-mode active" : "Active aero manual");
+  hAttr(els.aero, "aria-label", autoAero ? (xOpen ? "Automatic Straight Mode active" : "Active aero automatic")
+    : noZones ? "No aero zone" : xOpen ? "Straight Mode active" : "Active aero manual");
   if (timeTrial) {
     // The DROP rule (gapForm) runs here too. The attribute it maintains lives
     // on <html> and outlives the session, so a race on a narrow phone left the

@@ -117,6 +117,21 @@ test("record() keeps the day's best and counts a streak of consecutive UTC days"
   assert.equal(d.data().days["2026-09-04"].best, 70, "earlier days are kept");
 });
 
+test("liveStreak() is the streak as it stands today: a chain whose last lap is older than yesterday reads 0", () => {
+  const { d } = load();
+  const today = d.dayKey(), y = new Date(today + "T00:00:00Z");
+  const ago = (n) => { const t = new Date(y); t.setUTCDate(t.getUTCDate() - n); return t.toISOString().slice(0, 10); };
+  assert.equal(d.liveStreak(), 0, "no laps, no streak");
+  d.open(ago(3)); d.record(80); d.open(ago(2)); d.record(80);
+  assert.equal(d.data().streak.count, 2, "the stored count still says 2…");
+  assert.equal(d.liveStreak(), 0, "…but a missed yesterday has already broken it (the title read STREAK 2)");
+  d.open(ago(1)); d.record(80);
+  assert.equal(d.liveStreak(), 3, "a lap yesterday keeps it alive today");
+  d.open(today); d.record(80);
+  assert.equal(d.liveStreak(), 4);
+  d.stop();
+});
+
 test("record() keeps a 60-day window of history; the streak is untouched", () => {
   // The per-day history is write-only (every reader asks for today), so it must
   // not grow ~680 chars a day for ever.

@@ -404,7 +404,7 @@ test("the dash reaches the phone ~15 Hz on the unreliable channel and paints the
   assert.equal(el.pos.textContent, "P3/20");
   assert.equal(el.last.textContent, "LAST 1:28.123");
   assert.equal(el.ot.textContent, "OT READY");
-  assert.equal(el.aero.textContent, "X-MODE");
+  assert.equal(el.aero.textContent, "STRAIGHT MODE");
   assert.equal(el.flag.textContent, "");
   assert.equal(el.ers.style.width, "40%");
   assert.equal(el.leds.children.filter((s) => s.classes.has("on")).length, 12, "80% revs lights 12 of 15 LEDs");
@@ -438,7 +438,7 @@ test("the control modes reach the wheel's layout: no paddles on AUTO gears, no G
   assert.deepEqual([...el.body.classes].sort(), ["gears-auto", "throttle-auto"]);
   PhonePad.paintHud(el, { ...base, flags: D.aeroAuto | D.xOpen });
   assert.deepEqual([...el.body.classes].sort(), ["aero-auto"], "a mode change clears the classes it no longer needs");
-  assert.equal(el.aero.textContent, "AUTO X-MODE");
+  assert.equal(el.aero.textContent, "AUTO STRAIGHT");
   PhonePad.paintHud(el, { ...base, flags: D.aeroAuto });
   assert.equal(el.aero.textContent, "AERO AUTO");
   PhonePad.paintHud(el, { ...base, flags: D.aeroNone | D.xArmed });

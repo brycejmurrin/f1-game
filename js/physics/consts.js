@@ -136,6 +136,7 @@ window.PhysicsConsts = {
 
   DRAIN_LO: 0.14, DRAIN_HI: 0.26,    // energy/s while boosting: best -> worst deploy
   REGEN_LO: 0.085, REGEN_HI: 0.155,  // energy/s recovered: worst -> best regen
+  REGEN_FULL_V: 20,   // m/s (standard pace): recovery reaches its full rate here, fading to 0 at a stop
   OT_TIME_LO: 3.2, OT_TIME_HI: 5.2,  // seconds of push a full Overtake allowance buys: worst -> best deploy
   OT_GAP: 1.0,         // s behind the car ahead AT THE DETECTION LINE (B7.2.3(c))
   OT_MJ: 0.5,          // the Overtake allowance, MJ, spent over the following lap

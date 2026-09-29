@@ -1,4 +1,4 @@
-/* title-fx — MENU ANIMATIONS + TITLE INTRO + MENU WASH + TITLE ART as player
+/* title-fx — MOTION + TITLE INTRO + MENU WASH + TITLE ART as player
  * settings, the one-shot intro, the hidden-tab pause and the title-button
  * haptic. Runs the REAL module in node:vm over a mini DOM.
  *
@@ -121,7 +121,7 @@ function load({ stored = {}, osReduce = false, readyState = "complete", vibrate 
   };
 }
 
-test("shell declares MENU ANIMATIONS, TITLE INTRO, MENU WASH, TITLE ART and REPLAY INTRO", () => {
+test("shell declares MOTION, TITLE INTRO, MENU WASH, TITLE ART and REPLAY INTRO", () => {
   assert.ok(SHELL.includes('id="pm-panel-appearance"'));
   assert.ok(SHELL.includes('id="pm-motion"'));
   assert.ok(SHELL.includes('id="pm-titleintro"'));

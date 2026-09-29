@@ -210,7 +210,7 @@ test("the streak: a skip extends it, a watched flyby clears it, hostile input is
 /** A LoadingScreen instance over stubs: every $() id is a do-nothing element,
  *  timers and Date are fake, the store is a Map, and the announcer records the
  *  budget it was handed. */
-function harness(stored = {}, storeOverride = null) {
+function harness(stored = {}, storeOverride = null, docEl = null) {
   let now = 5000, seq = 0;
   const q = [], listeners = {}, saved = new Map(Object.entries(stored));
   const plays = [];
@@ -227,7 +227,7 @@ function harness(stored = {}, storeOverride = null) {
     clearTimeout(id) { const k = q.findIndex((t) => t.id === id); if (k >= 0) q.splice(k, 1); },
     addEventListener(type, fn) { (listeners[type] = listeners[type] || new Set()).add(fn); },
     removeEventListener(type, fn) { if (listeners[type]) listeners[type].delete(fn); },
-    document: { createElement: () => elem() },
+    document: { createElement: () => elem(), documentElement: docEl },
     Log: { warn() {}, info() {} },
   };
   sb.window = sb;
@@ -256,6 +256,17 @@ function harness(stored = {}, storeOverride = null) {
     },
   };
 }
+
+test("SETTINGS › MOTION: REDUCED skips the flyby for the card, as the OS flag always did", () => {
+  const h = harness({}, null, { dataset: { motion: "reduce" } });
+  h.run();
+  assert.equal(h.els.loading.dataset.phase, "card", "no flyby under the in-game REDUCED setting");
+  h.tick(LS.CARD_MS);
+  assert.equal(h.races.length, 1, "the race starts after the card, not the flyby");
+  const on = harness({}, null, { dataset: {} });
+  on.run();
+  assert.equal(on.els.loading.dataset.phase, "run", "motion ON keeps the flyby");
+});
 
 test("three skips in a row shorten the next flyby — and its announcer budget — to 12 s", () => {
   const h = harness();

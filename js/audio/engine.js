@@ -64,9 +64,10 @@ const GameAudio = (function () {
   // is, and it costs nothing to download.
   //
   // Character comes from data the circuits already carry: `street: true` (five
-  // of them — hard walls a couple of metres away) and `theme`. There is no
-  // tunnel data anywhere in the tree, so a Monaco tunnel SWELL is not something
-  // this can honestly do yet; it needs a measured arc span first.
+  // of them — hard walls a couple of metres away) and `theme`. A Monaco tunnel
+  // SWELL is not done yet: the measured bore (racing 0.449-0.524) exists only as
+  // a scenery-exclusion window in js/circuits/monaco.js, in source coordinates,
+  // not as an acoustic field this could read through _sceneryShift.
   const VENUES = Object.freeze({
     street: { decay: 1.9, damp: 3400, level: 0.30 },   // hard walls, close, bright
     modern: { decay: 1.5, damp: 2600, level: 0.18 },   // grandstand bowls, further off

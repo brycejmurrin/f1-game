@@ -486,3 +486,21 @@ test("the radio queue keeps a burst in priority order, and drops only what would
   assert.equal(h.G.announceBusy, true);
   } finally { h.close(); }
 });
+
+test("ERS recovery needs the car moving: holding the brake or coasting at a standstill refills nothing", async () => {
+  // Braking or coasting at 0 km/h used to recharge at the full rate — park in
+  // the pit box, hold the brake, and the battery was full in ~10 s.
+  await g.race("monza"); g.apex.go(); g.apex.headless(true);
+  const p = g.G.player;
+  g.apex.act({ throttle: false, brake: true, steer: 0 }, 1 / 60, 1);
+  for (const inp of [{ throttle: false, brake: true, steer: 0 }, { throttle: false, brake: false, steer: 0 }]) {
+    p.speed = 0; g.apex.setEnergy(0.3);
+    for (let i = 0; i < 180; i++) { p.speed = 0; g.apex.act(inp, 1 / 60, 1); }
+    assert.ok(Math.abs(p.energy - 0.3) < 1e-6, `${inp.brake ? "braking" : "coasting"} at a standstill recovered ${p.energy - 0.3}`);
+  }
+  // …and at speed it still recovers: a braking zone from 70 m/s pays the battery back.
+  g.apex.setEnergy(0.3); p.speed = 70;
+  g.apex.act({ throttle: false, brake: true, steer: 0 }, 1 / 60, 30);
+  assert.ok(p.energy > 0.3, "braking from speed recovers energy: " + p.energy);
+  g.G._testInput = null;
+});

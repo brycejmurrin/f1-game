@@ -1,10 +1,11 @@
 /* Apex 26 — TitleFx: title-screen motion, wash and the background drawing, as
    player settings under SETTINGS › APPEARANCE.
 
-   MENU ANIMATIONS: ON / REDUCED. An OS that asks for reduced motion always
+   MOTION: ON / REDUCED. An OS that asks for reduced motion always
    wins, and is followed live; otherwise the stored choice answers, and unset
    is ON. Lands on <html data-motion="reduce"> — absent when motion is on —
-   so CSS keys off ONE attribute.
+   so CSS keys off ONE attribute, and so does the race: js/game.js drops the
+   camera shake and the pre-race cinematic, js/ui/loading-screen.js the flyby.
 
    TITLE INTRO: FULL / QUICK / OFF. How long (and whether) the first-show
    title reveal runs. Lands on <html data-title-intro>. Unset is FULL.

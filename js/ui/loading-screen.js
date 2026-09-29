@@ -582,7 +582,8 @@ const LoadingScreen = (function () {
       paint(info);
       applyCard();
       r.hidden = false;
-      const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const reduced = (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches)
+        || (typeof document !== "undefined" && !!document.documentElement && document.documentElement.dataset.motion === "reduce");   // SETTINGS › MOTION: REDUCED
       addEventListener("pointerdown", onSkip, true);
       addEventListener("keydown", onSkip, true);
       padHeld.clear();

@@ -118,7 +118,7 @@
     scroll-behavior: auto !important;
   }
 }
-/* The same cancel for the in-game MENU ANIMATIONS: REDUCED setting
+/* The same cancel for the in-game MOTION: REDUCED setting
    (html[data-motion="reduce"], js/ui/title-fx.js). js/ui/select-screen.js
    skips startViewTransition under it too, so this only catches a transition
    some other caller starts. */

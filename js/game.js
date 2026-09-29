@@ -623,7 +623,7 @@ const { VMAX, ACCEL, BRAKE, REVERSE_MAX, REVERSE_ACCEL, COAST_DRAG,
         X_MIN_SPEED, OT_MIN_SPEED, OFF_GRIP, ASSIST_KUS, LINE_PURSUIT,
         LONG_GRIP, THR_FLOOR, THR_CAP, THR_VK, WHEEL_R, WHEEL_STEER_VIS, GRASS_V, KERB_SHAKE, KERB_CUE_HOLD,
         DEPLOY_A, TAPER_LO, TAPER_HI, TAPER_FLOOR, DRAIN_LO, DRAIN_HI,
-        REGEN_LO, REGEN_HI, OT_TIME_LO, OT_TIME_HI,
+        REGEN_LO, REGEN_HI, REGEN_FULL_V, OT_TIME_LO, OT_TIME_HI,
         OT_GAP, WET_GRIP, GEARS, GEAR_TOP, IDLE_RPM, MAX_RPM, DIFF, BAND_CEIL,
         TOW_RANGE, TOW_FADE, TOW_HALF_W, BLOCKER_HALF_W } = PhysicsConsts;
 // Global pace multiplier on top speed AND acceleration, applied to EVERY car
@@ -846,6 +846,10 @@ function ersRegenOf(c) { return c && c.ersRegen != null ? c.ersRegen : 0.5; }
 // pushing harder, because the push itself is what BOOST already scales.
 function drainFor(c) { return lerp(DRAIN_HI, DRAIN_LO, ersDeployOf(c)); }
 function regenFor(c) { return lerp(REGEN_LO, REGEN_HI, ersRegenOf(c)); }
+// Recovery is kinetic: it needs the car moving. Full rate from REGEN_FULL_V (a
+// standard-pace speed, so PACE does not move it) down to nothing at a stop —
+// braking or coasting in the pit box used to refill the battery in ~10 s.
+function regenSpeedK(c) { return clamp(vStd(c.speed) / REGEN_FULL_V, 0, 1); }   // reversing (the brake-held crawl) recovers nothing either
 function otTimeFor(c) { return lerp(OT_TIME_LO, OT_TIME_HI, ersDeployOf(c)); }   // push a full Overtake allowance buys (js/race/overtake-mode.js)
 
 let aeroZ = null;   // AeroZones.create(G), assigned once G exists (below)
@@ -959,7 +963,7 @@ function onIncidentLineCross(c, cross, newS) {
     if (c.local && netPlay.active()) {
       netPlay.reportLap({ lap: c.lap, time: null, best: null, code: c.code, fin: raceT, invalid: true });
     }
-    if (c.isPlayer) announce("FINISH!", 2, "race");
+    if (c.isPlayer && !raceRadio.callsResult()) announce("FINISH!", 2, "race");
   }
 }
 
@@ -1219,9 +1223,13 @@ let shake = 0;          // 0..1 trauma; camera offset scales with shake²
 // camera at 300 km/h — XAG 117). Live: the OS toggle can flip mid-session.
 const _mq = (typeof window !== "undefined" && window.matchMedia)
   ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
-let motionReduced = !!(_mq && _mq.matches);
-if (_mq && _mq.addEventListener) _mq.addEventListener("change", (e) => { motionReduced = !!e.matches; });
-function camComfort() { return XrBoot.camComfort(motionReduced); }   // XR presenting ≡ reduce-motion
+// SETTINGS › APPEARANCE › MOTION: REDUCED counts too (html[data-motion], which
+// js/ui/title-fx.js sets from the OS flag OR the stored choice, live).
+function motionReduced() {
+  return !!(_mq && _mq.matches)
+    || (typeof document !== "undefined" && document.documentElement && document.documentElement.dataset.motion === "reduce");
+}
+function camComfort() { return XrBoot.camComfort(motionReduced()); }   // XR presenting ≡ reduce-motion
 let camRoll = 0;        // radians; lean into corners (decays back to 0)
 let camSlipSm = 0;      // smoothed slip input for camRoll (raw vLat/speed is 60 Hz-stepped)
 let camCutT = 0;        // s; >0 just after a camera-mode cut → eased glide to the new vantage
@@ -3864,7 +3872,7 @@ function flybyGridOrder() {
 let _introKey = "", _introRun = 0;
 function introBuild(go) {
   const idx = trackIdx, key = menuKey(idx), n = ++_introRun;
-  if (!(idx >= 0) || (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches)) return false;
+  if (!(idx >= 0) || motionReduced()) return false;
   clearTimeout(flybyBuildTimer); _menuGate.generation++;   // the menu's own build stands down
   loadingScreen.building(loadingInfo());
   (async () => {
@@ -5050,7 +5058,7 @@ function updateCar(c, dt, ranked) {
       // wall or re-aim after a spin. Capped slow; throttle drives forward again.
       c.speed = Math.max(REVERSE_MAX, c.speed - REVERSE_ACCEL * surfaceMu * dt);
     }
-    c.energy = Math.min(1, c.energy + regenFor(c) * 1.6 * dt);
+    c.energy = Math.min(1, c.energy + regenFor(c) * 1.6 * regenSpeedK(c) * dt);
   } else if (!onThrottle) {
     // coasting: gentle engine-braking/drag both ways (don't snap reverse to 0).
     // X-mode sheds part of that drag — a lift-and-coast in the low-drag wing
@@ -5058,7 +5066,7 @@ function updateCar(c, dt, ranked) {
     const cd = COAST_DRAG * (1 - xCoastCut(c) * (c.aeroX || 0));
     if (c.speed > 0) c.speed = Math.max(0, c.speed - cd * dt);
     else if (c.speed < 0) c.speed = Math.min(0, c.speed + cd * dt);
-    c.energy = Math.min(1, c.energy + regenFor(c) * dt);
+    c.energy = Math.min(1, c.energy + regenFor(c) * regenSpeedK(c) * dt);
   } else {
     // The AI's launch (AiDrive.launchPlan): no throttle before its reaction, then
     // its own getaway for three seconds. A grid that accelerated as one held its
@@ -5071,7 +5079,9 @@ function updateCar(c, dt, ranked) {
     // at coast drag; it used to scrub 25 m/s in one step.
     c.speed = c.speed > accelCeil ? Math.max(accelCeil, c.speed - COAST_DRAG * dt)
                                  : Math.min(accelCeil, c.speed + a * dt);
-    if (c.speed < vmax * 0.5) c.energy = Math.min(1, c.energy + regenFor(c) * dt);
+    // Part-load harvest, never while the same motor is deploying: BOOST out of a
+    // slow corner used to recharge the battery it was spending.
+    if (c.speed < vmax * 0.5 && !(deploy > 0)) c.energy = Math.min(1, c.energy + regenFor(c) * regenSpeedK(c) * dt);
   }
   // --- slope gravity: climbs gently bleed speed, descents gently feed it back.
   // slopeSin is the road tangent's vertical component (+uphill / -downhill).
@@ -6295,7 +6305,7 @@ function updateCar(c, dt, ranked) {
     if (c.isPlayer) { sectorIdx = 0; sectorStartT = 0; }
     // Never on a 1-lap session: that crossing is the START crossing, and a qualifying flying lap is not a final lap.
     if (c.isPlayer && c.lap === lapsTarget && lapsTarget > 1 && !raceRadio.callsLastLap()) announce("FINAL LAP", 1.6, "race");
-    if (flagged && c.isPlayer) announce("FINISH!", 2, "race");
+    if (flagged && c.isPlayer && !raceRadio.callsResult()) announce("FINISH!", 2, "race");   // the engineer's result call IS the flag card (RaceRadio.callsResult)
   } else if (lineCross && lineCross.direction < 0) {
     // Backward over the line: give the lap back and put the clock where it was,
     // so the next forward crossing re-times the SAME lap rather than a sliver.
