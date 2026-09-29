@@ -20,6 +20,7 @@
  * Group keys and each group's `files` / `flags` arrays are alpha-sorted.
  * Ratchet `files` / `tree` keys (and per-file metric keys) are alpha-sorted.
  *
+ * CI re-fire after cancelled ready-tier run (no behavior change).
  * Consumers (ratchets.mjs, gen-test-groups.mjs, deploy cure) read via
  * JSON.parse / Object.entries — key order is formatting only. After --fix,
  * run `node tools/gen/gen-test-groups.mjs` so tooling-fast.mjs matches.
