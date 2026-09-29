@@ -333,6 +333,59 @@ test("silence makes the source stale in 700 ms, and the keyboard takes over mean
   key("ArrowLeft", false);
 });
 
+test("a silent phone cannot leave its last roll steering through local tilt mode", () => {
+  for (const mode of ["buttons", "touch", "tilt"]) {
+    const { Input, clock } = bootInput();
+    Input.setSteerMode(mode);
+    for (let i = 1; i <= 60; i++) {
+      clock.t = i * 16;
+      Input.remoteSample({ roll: 30, thr: 1, brk: 1, held: 1 });
+      Input.steer();
+    }
+    assert.ok(Input.steer() > 0.6, mode + ": the phone has the wheel");
+    clock.t += 699;
+    assert.ok(Input.remoteActive(), mode + ": fresh until the deadline");
+    clock.t++;
+    assert.equal(Input.remoteActive(), false);
+    assert.equal(Input.steer(), 0, mode + ": expired roll cannot become a local gyro sample");
+    assert.equal(Input.throttle(), false);
+    assert.equal(Input.braking(), false);
+    assert.equal(Input.lookingBack(), false);
+    clock.t += 10000;
+    assert.equal(Input.steer(), 0, mode + ": no stale steering later either");
+  }
+});
+
+test("local gyro reacquires steering after a phone expires or disconnects", async () => {
+  for (const disconnect of [false, true]) {
+    const { Input, clock, sb } = bootInput();
+    Input.setSteerMode("tilt");
+    sb.DeviceOrientationEvent = {};
+    let orient;
+    sb.addEventListener = (kind, fn) => { if (kind === "deviceorientation") orient = fn; };
+    await Input.requestGyro();
+    clock.t = 16;
+    orient({ beta: 0, gamma: -30 });
+    for (let i = 0; i < 60; i++) {
+      clock.t += 16;
+      Input.remoteSample({ roll: 30 });
+      orient({ beta: 0, gamma: -30 });
+      Input.steer();
+    }
+    assert.ok(Input.steer() > 0.6, "the host sensor cannot overwrite the live phone's roll");
+    if (disconnect) Input.remoteLost();
+    else clock.t += 700;
+    assert.equal(Input.steer(), 0, "attached local gyro must not claim the last phone sample");
+    for (let i = 0; i < 120; i++) {
+      clock.t += 16;
+      orient({ beta: 0, gamma: -30 });
+      Input.steer();
+    }
+    assert.ok(Input.tiltActive());
+    assert.ok(Input.steer() < -0.6, "fresh local readings restore local tilt steering");
+  }
+});
+
 test("the dash reaches the phone ~15 Hz on the unreliable channel and paints the wheel's LCD", () => {
   const { phone, frame, dash, link } = pair();
   frame();
