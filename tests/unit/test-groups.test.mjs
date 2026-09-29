@@ -194,19 +194,24 @@ test("the manual suites stay out of default discovery", () => {
     "tests/manual/ needs a README saying what is in it and how to run it");
 });
 
-test("RENDER_SPECS partitions the root specs — every spec lands in exactly one project", () => {
-  // The headless project is "everything NOT in RENDER_SPECS", so a name that
-  // matches nothing silently leaves a GL spec running with headless-level
-  // concurrency, which is how SwiftShader thrash gets reintroduced.
+test("RENDER_SPECS / XR_SPECS partition root specs — every named project entry exists", () => {
+  // headless = everything NOT in RENDER_SPECS ∪ XR_SPECS; a dangling name would
+  // silently leave a GL/XR spec under the wrong concurrency or never run.
   const cfg = read("playwright.config.js");
-  const body = cfg.match(/const RENDER_SPECS = \[([\s\S]*?)\]\s*\.map/);
-  assert.ok(body, "could not find RENDER_SPECS in playwright.config.js");
-  const named = [...body[1].matchAll(/"([a-z0-9-]+)"/g)].map((m) => m[1]);
+  const renderBody = cfg.match(/const RENDER_SPECS = \[([\s\S]*?)\]\s*\.map/);
+  const xrBody = cfg.match(/const XR_SPECS = \[([\s\S]*?)\]\s*\.map/);
+  assert.ok(renderBody, "could not find RENDER_SPECS in playwright.config.js");
+  assert.ok(xrBody, "could not find XR_SPECS in playwright.config.js");
   const onDisk = new Set(fs.readdirSync(path.join(ROOT, "tests", "specs"))
     .filter((f) => f.endsWith(".spec.js")).map((f) => f.replace(/\.spec\.js$/, "")));
+  const named = [
+    ...[...renderBody[1].matchAll(/"([a-z0-9-]+)"/g)].map((m) => m[1]),
+    ...[...xrBody[1].matchAll(/"([a-z0-9-]+)"/g)].map((m) => m[1]),
+  ];
   const dangling = named.filter((n) => !onDisk.has(n));
   assert.deepEqual(dangling, [],
-    "RENDER_SPECS names a spec that no longer exists — it would silently run in the headless project");
+    "RENDER_SPECS / XR_SPECS names a spec that no longer exists");
+  assert.match(cfg, /name:\s*"xr-emulated"/, "xr-emulated Playwright project required for IWER suite");
 });
 
 test("a spec that CAPTURES an image is in RENDER_SPECS", () => {

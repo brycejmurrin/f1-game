@@ -247,6 +247,12 @@ const FULL = [
   "js/perf/metrics-overlay.js",
   "js/camera/vantage.js",
   "js/camera/mode-switch.js",
+  // WebXR Phase 0 — seated immersive-vr (capability, rig math, input, UI, boot).
+  "js/xr/xr-rig.js",
+  "js/xr/xr-input.js",
+  "js/xr/xr-session.js",
+  "js/xr/xr-ui.js",
+  "js/xr/xr-boot.js",
   "js/ui/hud.js",
   "js/ui/results-sheet.js",
   "js/race/quali-model.js",

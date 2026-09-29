@@ -1221,6 +1221,7 @@ const _mq = (typeof window !== "undefined" && window.matchMedia)
   ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
 let motionReduced = !!(_mq && _mq.matches);
 if (_mq && _mq.addEventListener) _mq.addEventListener("change", (e) => { motionReduced = !!e.matches; });
+function camComfort() { return XrBoot.camComfort(motionReduced); }   // XR presenting ≡ reduce-motion
 let camRoll = 0;        // radians; lean into corners (decays back to 0)
 let camSlipSm = 0;      // smoothed slip input for camRoll (raw vLat/speed is 60 Hz-stepped)
 let camCutT = 0;        // s; >0 just after a camera-mode cut → eased glide to the new vantage
@@ -6977,7 +6978,7 @@ function render(dt) {
     // interpolation the car body and playerAnchor already use.
     const rpCam = renderPosOf(player);
     camAncNX = rpCam.world ? rpCam.x : null; camAncNZ = rpCam.world ? rpCam.z : 0;   // anchor for the car-frame camera damping below
-    _vantExtra.bankDy = bankDy; _vantExtra.deploy = player.deploying; _vantExtra.reduceMotion = motionReduced;   // kerb shiver off (js/camera/vantage.js)
+    _vantExtra.bankDy = bankDy; _vantExtra.deploy = player.deploying; _vantExtra.reduceMotion = camComfort();   // kerb shiver off (js/camera/vantage.js)
     _vantExtra.slipLat = player.vLat || 0; _vantExtra.att = player;
     // the car's real world pose, so the chase rig can follow the CAR
     _vantExtra.carPos = rpCam.world ? (_vantCarPos[0] = rpCam.x, _vantCarPos[1] = rpCam.z, _vantCarPos) : null;
@@ -6989,7 +6990,7 @@ function render(dt) {
       // squared: grazes barely move, crashes slam. REDUCE MOTION zeroes the
       // OFFSET, not the trauma — shake still decays on its own clock, so cues
       // keyed to it are untouched and only the camera stops moving.
-      const amt = motionReduced ? 0 : shake * shake * 0.9;
+      const amt = camComfort() ? 0 : shake * shake * 0.9;
       eyeT[0] += (Math.random() - 0.5) * amt; eyeT[1] += (Math.random() - 0.5) * amt * 0.7;
       tgtT[0] += (Math.random() - 0.5) * amt * 0.6; tgtT[1] += (Math.random() - 0.5) * amt * 0.6;
     }
@@ -7003,7 +7004,7 @@ function render(dt) {
     // for feel; on a wet road we drop it to keep the reflection stable. Also
     // fades in with speed so it never jitters a slow/standing car. REDUCE MOTION drops it.
     const _buzzWet = 1.0 - clamp((frame.wetness || 0) * 2.0, 0.0, 1.0);
-    if (state === "race" && !motionReduced && _buzzWet > 0.01 && (mode === "cockpit" || mode === "hood" || mode === "visor" || mode === "tcam")) {
+    if (state === "race" && !camComfort() && _buzzWet > 0.01 && (mode === "cockpit" || mode === "hood" || mode === "visor" || mode === "tcam")) {
       const spV = clamp(player.speed / vTop(), 0, 1);
       const vAmp = (spV * spV * 0.022 + (player.deploying ? 0.008 : 0)) * _buzzWet;
       if (vAmp > 0.001) {
@@ -7042,7 +7043,7 @@ function render(dt) {
   // panning — cockpit/hood ease the target gently, like a driver's eyes
   // leading into a corner rather than their whole head whipping around.
   const lE = onboard ? 400 : (racing ? 14 : 1.6) * cutEase;
-  const gentleHead = onboard && (camId === "cockpit" || camId === "hood" || camId === "visor") && (typeof CockpitOpts === "undefined" || CockpitOpts.turnChase());   // gentle easing is ONLY for a curved aim; a nose-locked aim must not lag
+  const gentleHead = !camComfort() && onboard && (camId === "cockpit" || camId === "hood" || camId === "visor") && (typeof CockpitOpts === "undefined" || CockpitOpts.turnChase());   // gentle easing is ONLY for a curved aim; a nose-locked aim must not lag; XR: HMD owns look
   const lT = gentleHead ? 7 : onboard ? 400 : (racing ? 16 : 10) * cutEase;
   // Damp HORIZONTALLY in the CAR's frame, not the world's. Damping toward a
   // MOVING target lags ~v/lambda - v*dt/2, so the car-to-camera distance
@@ -7085,8 +7086,8 @@ function render(dt) {
   // dynamic lean on top; broadcast/debug and cinematic cameras stay world-level
   // (the flyby's own roll would otherwise be whatever the last race left behind,
   // decaying over the first half-second of a shot the editor showed level).
-  if (dbgCam || cine) {
-    camRoll = (dbgCam && dbgCam.roll) || 0;   // level unless the FREE CAMERA's ROLL dial set one (js/camera/free-cam.js)
+  if (dbgCam || cine || camComfort()) {
+    camRoll = (dbgCam && dbgCam.roll) || 0;   // level unless the FREE CAMERA's ROLL dial set one; XR: HMD owns roll
   } else {
     // Slip source smoothed at λ10 (τ≈0.1 s): vLat/speed are RAW 60 Hz-stepped
     // physics values, and feeding them straight into screen roll printed every
@@ -7216,6 +7217,7 @@ function render(dt) {
   frame.sunViewDir = _sunVS;
   frame.upViewDir = _upVS;
   frame.eye = camEye;
+  const _xrEyes = XrBoot.applyEyes(frame, camEye, camTgt, _camUp);   // null when flat
   // Radial draw-distance cull for chunked scenery.
   // Free/debug camera: mobile caps at 700 m (the pushed-out photo-mode far
   // plane can frame a whole ~5 M-vert city and jetsam-kill the tab); desktop
@@ -7294,7 +7296,7 @@ function render(dt) {
 
   // Sun / car shadow maps: js/render/shared/shadow-pass.js (snap-cached static map,
   // per-frame car map). The live player matrix was resolved above.
-  shadowPass.sunPass(frame, _frameNo, _hasLivePlayerShadow);
+  if (!XrBoot.comfort()) shadowPass.sunPass(frame, _frameNo, _hasLivePlayerShadow);   // XR: skip maps
 
   // ── Sky animation & weather FX ──────────────────────────────────────────
   // Advance the render clock regardless of physics freeze so the sky always
@@ -7591,7 +7593,7 @@ function render(dt) {
   }
   // ── Nearest-floodlight SPOT shadow pass ─────────────────────────────────
   // Nearest-floodlight spot shadow map (night): js/render/shared/shadow-pass.js.
-  shadowPass.lampPass(frame, _frameNo, _hasLivePlayerShadow);
+  if (!XrBoot.comfort()) shadowPass.lampPass(frame, _frameNo, _hasLivePlayerShadow);
   // GLOWING FOG driver: on whenever lamps are lit, swelling with haze so a
   // fog-weather night is the money shot while a clear night keeps only a hint.
   // Day / lights-off => 0, so daytime fog stays a pure sun tint. Faded by SUN
@@ -8391,7 +8393,7 @@ function render(dt) {
     }
   }
   armBackendProbe();
-  gfx.present(po);
+  if (!XrBoot.present(gfx, _xrEyes, po)) gfx.present(po);
   // The pre-race screen comes down with the race's FIRST PRESENTED frame
   // (LoadingScreen.handoff): a present that only started the warm painted nothing.
   if (loadingScreen.phase() === "handoff" && !(gfx.warming && gfx.warming())) loadingScreen.stop();
@@ -8436,7 +8438,10 @@ let renderAlpha = 1;             // leftover-step fraction (0..1) for render int
 PerfGov.init(gfx);
 const PHYS_DT = PhysicsConsts.FIXED_DT;   // fixed physics step — js/physics/consts.js
 function tick(now) {
-  try { tickBody(now); LoopHealth.clean(); requestAnimationFrame(tick); }
+  try {
+    tickBody(now); LoopHealth.clean();
+    XrBoot.afterTick(tick);   // no-op while immersive-vr owns session.rAF; deduped on EXIT
+  }
   catch (e) {
     // BOUNDED tolerance, policy in js/perf/loop-health.js: a transient fault
     // costs one frame and any clean frame pays the run back, because round 13
@@ -8445,7 +8450,7 @@ function tick(now) {
     // and used to take the whole game down. At the cap this falls through to
     // exactly the old behaviour, so a DETERMINISTIC fault still stops instead
     // of repainting the error overlay 60x/s.
-    if (LoopHealth.fault(e)) { requestAnimationFrame(tick); return; }
+    if (LoopHealth.fault(e)) { XrBoot.afterTick(tick); return; }
     // Report the REAL error once (cross-origin window.onerror shows only a bare
     // "Script error.").
     if (!tick._reported && typeof window.__apexReportError === "function") {
@@ -9595,6 +9600,9 @@ audioPanel.init();
 // (openRaceSettings), and __apex forces a build on first use (lazyTrackEnsure).
 window.addEventListener("resize", () => gfx.resize());
 lastFrame = performance.now();
+XrBoot.bind({ gfx, tickBody, windowTick: tick, getCamMode: () => camMode,
+  setCamMode: (i, opts) => { if (typeof setCamMode === "function") setCamMode(i, opts); } });
+XrBoot.mountUi();
 requestAnimationFrame(tick);
 
 // --- debug / test hook (no effect unless explicitly called) ---

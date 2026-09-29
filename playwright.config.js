@@ -82,6 +82,26 @@ const RENDER_SPECS = [
   "menu-baseline",
 ].map((n) => `**/${n}.spec.js`);
 
+// WebXR IWER suite — own project so failures are attributable and so the
+// SwiftShader XR launch args stay off the rest of the suite. Ignored by
+// headless/render; run via `npm run test:xr` / `--project=xr-emulated`.
+const XR_SPECS = [
+  "vr-emulated",
+].map((n) => `**/${n}.spec.js`);
+
+// XR launch: playwright-webxr guidance (force SwiftShader + unsafe flag).
+const XR_LAUNCH = {
+  ...(CHROMIUM_PATH ? { executablePath: CHROMIUM_PATH } : {}),
+  args: [
+    "--use-gl=angle",
+    "--use-angle=swiftshader",
+    "--enable-unsafe-swiftshader",
+    "--enable-unsafe-webgpu",
+    "--disable-background-timer-throttling",
+    "--disable-renderer-backgrounding",
+  ],
+};
+
 // Default worker cap: every worker owns a Chromium + SwiftShader process.
 // Override with APEX_WORKERS or Playwright's --workers=N.
 // ONE worker on a 4-core box — the same rule test-bg.mjs applies (AGENTS.md
@@ -155,10 +175,10 @@ export default defineConfig({
   projects: [
     {
       // Physics / geometry / hooks / data specs — assertion-only, scale wide.
-      // Everything NOT in RENDER_SPECS. Run alone (fast) with:
+      // Everything NOT in RENDER_SPECS / XR_SPECS. Run alone (fast) with:
       //   npx playwright test --project=headless --workers=8
       name: "headless",
-      testIgnore: RENDER_SPECS,
+      testIgnore: [...RENDER_SPECS, ...XR_SPECS],
       use: { ...devices["Desktop Chrome"], launchOptions: LAUNCH },
     },
     {
@@ -167,6 +187,13 @@ export default defineConfig({
       name: "render",
       testMatch: RENDER_SPECS,
       use: { ...devices["Desktop Chrome"], launchOptions: LAUNCH },
+    },
+    {
+      // Immersive-vr via Meta IWER (tests/vendor/iwer-*.min.js). Spec-level only;
+      // Quest GPU / multiview / foveation / XRGPUBinding need a headset.
+      name: "xr-emulated",
+      testMatch: XR_SPECS,
+      use: { ...devices["Desktop Chrome"], launchOptions: XR_LAUNCH },
     },
   ],
   webServer: {
