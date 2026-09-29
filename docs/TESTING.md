@@ -770,9 +770,9 @@ skipped on a Pages call, which does not fail the aggregate. The gate stays
 guards + conditional sweeps + smoke.spec.js in one shard (four until 2026-09-29, on SwiftShader) + driving-model
 (`notes/PROCESS-SPEEDUP-2026-09.md` §4.5); promoting the renderer job into it once it
 has a measured green history is deleting that one `if:`. `gpu-census.yml` now
-also runs on the same nightly cron (`17 3 * * *`), full check, dispatch
-defaults restated inline because a scheduled run has empty `inputs`.
-`tests/unit/ci-coverage.test.mjs` pins all of the above.
+also runs on a staggered nightly cron (`47 5 * * *`, after ci.yml's `17 4 * * *`),
+full check, dispatch defaults restated inline because a scheduled run has empty
+`inputs`. `tests/unit/ci-coverage.test.mjs` pins all of the above.
 
 ### Never run two Playwright processes at once
 

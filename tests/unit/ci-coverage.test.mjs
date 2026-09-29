@@ -983,10 +983,16 @@ test("smoke.spec.js is ONE shard on PRs and the Pages call; the wide nightly/dis
   assert.match(ciWorkflow, /workflow_dispatch:\n    inputs:\n(?:.*\n)*?      group:\n/, "the dispatch declares the group input");
 });
 
-test("gpu-census runs nightly beside the boot group, with the full check and its dispatch defaults", () => {
-  assert.match(gpuWorkflow, /^on:\s*\n  schedule:\s*\n    - cron: "17 3 \* \* \*"\s*\n  workflow_dispatch:/m,
-    "gpu-census.yml must carry the same nightly cron as ci.yml");
-  assert.match(ciWorkflow, /- cron: "17 3 \* \* \*"/);
+test("gpu-census runs nightly staggered from the boot group, with the full check and its dispatch defaults", () => {
+  // 2026-09-29: both were `17 3 * * *` and stacked on the same ~20 slots with
+  // the boot-group nightly. Stagger them (ci.yml 04:17, gpu-census 05:47) and
+  // keep neither on the old 03:17 pin.
+  assert.match(ciWorkflow, /- cron: "17 4 \* \* \*"/,
+    "ci.yml nightly must leave 03:17 (staggered to 04:17 UTC)");
+  assert.match(gpuWorkflow, /^on:\s*\n  schedule:\s*\n    - cron: "47 5 \* \* \*"\s*\n  workflow_dispatch:/m,
+    "gpu-census.yml nightly must be staggered (05:47 UTC), not shared with ci.yml");
+  assert.doesNotMatch(ciWorkflow, /- cron: "17 3 \* \* \*"/);
+  assert.doesNotMatch(gpuWorkflow, /- cron: "17 3 \* \* \*"/);
   // The inputs survive (a dispatch is still the way to ask a question)…
   for (const input of ["track:", "images:", "census_only:", "force:", "ls:"]) assert.match(gpuWorkflow, new RegExp(`^      ${input}`, "m"));
   // …and a scheduled run, where every input is empty, still gets the FULL

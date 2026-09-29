@@ -194,7 +194,7 @@ on:
   # smoke.spec.js in FOUR shards (~8 min); a deploy-branch push is the fast
   # tier and does not run it.
   schedule:
-    - cron: "17 3 * * *"
+    - cron: "17 4 * * *"
   workflow_dispatch:
     inputs:
       # Any browser group from package.json on the 4-shard matrix (default =
