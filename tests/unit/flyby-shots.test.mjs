@@ -242,7 +242,7 @@ test("the flyby editor keeps the world rendering while it is open", () => {
   const i = game.indexOf("if (paused && !netPlay.active())");
   assert.ok(i > 0, "tickBody still parks on a paused frame");
   const branch = game.slice(i, i + 2400);
-  const gate = branch.match(/if \(\(state === "race" \|\| state === "count"\) &&[\s\S]{0,200}?\) \{/);
+  const gate = branch.match(/if \(setupPreviewOn \|\| \(\(state === "race" \|\| state === "count"\) &&[\s\S]{0,200}?\) \{/);
   assert.ok(gate, "the paused branch still gates its preview render");
   for (const panel of ["lighting", "camtune", "flyby"]) {
     assert.match(gate[0], new RegExp("!els\\." + panel + "\\.hidden"),

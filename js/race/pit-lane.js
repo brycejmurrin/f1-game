@@ -1596,9 +1596,15 @@ const PitLane = (function () {
       if (newNext != null && oldNext != null && Math.abs(newNext - oldNext) < 2) return false;
       if (newNext == null && oldNext == null) return false;
       plan.seq = plan.seq.slice(0, done).concat(cls ? [cls] : plan.seq.slice(done, done + 1)).concat(rel.seq.slice(1));
-      plan.stints = plan.stints.slice(0, done).concat(rel.stints);
+      // THE STOPS MADE, where they were made: the log's fit laps, not the plan's.
+      // An early stop left lapsAt naming a lap that never happened, and the
+      // re-cut's first stint counts only from THIS lap, so the strip stopped
+      // summing to the race. The set on the car runs from its fit to its stop.
+      const made = log.length === done + 1 ? log.slice(1).map((e) => e.lap0) : plan.lapsAt.slice(0, done);
+      plan.lapsAt = made.concat(rel.lapsAt.map((k) => lap - 1 + k));
+      const at = [0].concat(plan.lapsAt, [G.lapsTarget]);
+      plan.stints = at.slice(1).map((v, i) => Math.max(0, v - at[i]));
       plan.stops = done + rel.stops;
-      plan.lapsAt = plan.lapsAt.slice(0, done).concat(rel.lapsAt.map((k) => lap - 1 + k));
       if (G.announce) G.announce(newNext != null ? "NEW PLAN — BOX LAP " + newNext : "NEW PLAN — NO MORE STOPS", 2.2, "info");
       return true;
     }
@@ -1645,7 +1651,11 @@ const PitLane = (function () {
       const lifeLaps = (cls) => G.tyres.planLaps(TyreModel.AI_CLASS[cls].life, G.lapsTarget);
       const lapsLeft = Math.max(1, G.lapsTarget - (c.lap || 0));
       const planned = plan.seq[(c.pitStops || 0) + 1];
+      // …and in a wet race EVERY stop fits the wet tread: the plan's classes are
+      // dry, so a planned stop on inters bolted on a slick, which was then the
+      // wrong tread, and the car pitted again a lap later.
       const want = wrongTread ? (wetCls || AiDrive.compoundFor(lapsLeft, lifeLaps))
+                 : wantTread > 0 && wetCls ? wetCls
                  : (planned || AiDrive.compoundFor(lapsLeft, lifeLaps));
       arm(c, true);
       setNext(c, G.tyres.classRecord(want));

@@ -13,6 +13,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { readDefaults } from "../../tools/gen/settings-defaults.mjs";
+import { makeDom } from "../helpers/mini-dom.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -27,6 +28,7 @@ function boot(opts = {}) {
     rawSet(k, v) { disk.set(full(k), String(v)); return true; },
     rawDel(k) { disk.delete(full(k)); return true; },
   };
+  if (opts.store) Object.assign(store, opts.store);
   const sb = {
     Math, Object, Array, Number, JSON, Map, Set, Date, String, Blob: class {},
     setTimeout: () => 0,
@@ -44,6 +46,7 @@ function boot(opts = {}) {
       getItem(k) { const v = disk.get(k); return v === undefined ? null : v; },
     },
   };
+  if (opts.globals) Object.assign(sb, opts.globals);
   sb.window = sb;
   const ctx = vm.createContext(sb);
   // In the page js/data/teams.js loads long before this file; opt in where a
@@ -59,6 +62,100 @@ function boot(opts = {}) {
     loadSettings: (o) => plain(SettingsExport.applySettings(o, G)),
     loadGarage: (o) => plain(SettingsExport.applyGarage(o)) };
 }
+
+function bootImportUI(opts = {}) {
+  const dom = makeDom();
+  let opens = 0;
+  const create = dom.document.createElement;
+  dom.document.createElement = (tag) => {
+    const el = create(tag);
+    if (tag === "input") el.click = () => { opens++; };
+    return el;
+  };
+  dom.byId("pm-panel-files"); dom.byId("pm-display-adv-body");
+  // Real getElementById must not invent the mount guard's missing heading.
+  dom.document.getElementById = (id) => dom.document.querySelector("#" + id);
+  const timers = new Map();
+  let seq = 0, reloads = 0;
+  const b = boot({ ...opts, globals: {
+    document: dom.document, location: { reload: () => reloads++ },
+    setTimeout: (fn, ms) => { timers.set(++seq, { fn, ms }); return seq; },
+    clearTimeout: (id) => timers.delete(id),
+    FileReader: class {
+      readAsText(file) { file.pending.then((text) => { this.result = text; this.onload(); }, () => this.onerror()); }
+    },
+  } });
+  b.SettingsExport.create(b.G);
+  const button = dom.byId("pm-settings-load");
+  return { ...b, dom, button,
+    choose(promise) {
+      const before = opens;
+      button.click(); button.click();
+      if (opens === before) return false;
+      const picker = dom.document.querySelector("input");
+      picker.files = [opts.fileReader ? { pending: promise } : { text: () => promise }]; picker.onchange();
+    },
+    reloads: () => reloads,
+    flushReloads() { for (const [id, t] of timers) if (t.ms === 600) { timers.delete(id); t.fn(); } },
+  };
+}
+
+test("backup controls mount once in their own settings page, outside renderer options", () => {
+  const b = bootImportUI();
+  for (const id of ["pm-settings-changed", "pm-settings-all", "pm-settings-load"]) {
+    assert.equal(b.dom.byId(id).parentElement.id, "pm-panel-files");
+  }
+  b.SettingsExport.create(b.G);
+  assert.equal(b.dom.document.querySelectorAll("#pm-settings-load").length, 1);
+});
+
+const volumeFile = (v) => JSON.stringify({ format: "apex26-settings-v1", settings: { audio: { volMusic: v } } });
+for (const fileReader of [false, true]) test(`a slow older settings import cannot overwrite the newer file (${fileReader ? "FileReader" : "File.text"})`, async () => {
+  const b = bootImportUI({ fileReader });
+  let finishOld;
+  b.choose(new Promise((resolve) => { finishOld = resolve; }));
+  b.choose(Promise.resolve(volumeFile(0.8)));
+  await Promise.resolve();
+  assert.equal(b.disk.get("apex26.volMusic"), "0.8");
+  finishOld(volumeFile(0.2));
+  await Promise.resolve();
+  assert.equal(b.disk.get("apex26.volMusic"), "0.8", "late reads do not change current settings");
+  b.flushReloads();
+  assert.equal(b.reloads(), 1);
+});
+
+for (const fileReader of [false, true]) test(`an old file error cannot replace the latest import result (${fileReader ? "FileReader" : "File.text"})`, async () => {
+  const b = bootImportUI({ fileReader });
+  let failOld;
+  b.choose(new Promise((_resolve, reject) => { failOld = reject; }));
+  b.choose(Promise.resolve(volumeFile(0.8)));
+  await Promise.resolve();
+  assert.match(b.button.textContent, /APPLIED/);
+  failOld(new Error("read failed"));
+  await Promise.resolve();
+  assert.match(b.button.textContent, /APPLIED/);
+  assert.equal(b.disk.get("apex26.volMusic"), "0.8");
+});
+
+test("a completed import locks new file choices until it reloads", async () => {
+  const b = bootImportUI();
+  b.choose(Promise.resolve(volumeFile(0.2)));
+  await Promise.resolve();
+  assert.equal(b.button.disabled, true);
+  assert.equal(b.choose(Promise.resolve("not JSON")), false, "no replacement chooser can cancel an already applied import");
+  assert.equal(b.disk.get("apex26.volMusic"), "0.2");
+  b.flushReloads();
+  assert.equal(b.reloads(), 1);
+});
+
+test("the import UI stays open and reports a refused storage reset", async () => {
+  const b = bootImportUI({ store: { rawDel: () => false } });
+  b.choose(Promise.resolve(JSON.stringify({ format: "apex26-settings-v1", settings: { display: { gfxBackend: null } } })));
+  await Promise.resolve();
+  assert.match(b.button.textContent, /NOT SAVED/);
+  b.flushReloads();
+  assert.equal(b.reloads(), 0);
+});
 
 // Values a player might have anywhere in the namespace — including the ones
 // the file must never carry.
@@ -282,6 +379,57 @@ test("a settings file of the wrong shape is refused whole, and a bad value skipp
   assert.equal(r.skipped, 1, "a string where a number belongs is skipped, not written");
   assert.equal(b.disk.has("apex26.pace"), false);
   assert.equal(b.disk.get("apex26.volMusic"), "0.3", "and the rest of the file still applies");
+});
+
+test("settings backups preserve the announcer switch and radio effects in both modes", () => {
+  for (const mode of ["all", "changes"]) {
+    const source = boot({ disk: { "apex26.announcer": "false", "apex26.radioFx": "0.35" } });
+    const saved = source.collect(mode);
+    assert.equal(saved.settings.audio.announcer, false);
+    assert.equal(saved.settings.audio.radioFx, 0.35);
+    const target = boot();
+    target.loadSettings(saved);
+    assert.equal(target.disk.get("apex26.announcer"), "false");
+    assert.equal(target.disk.get("apex26.radioFx"), "0.35");
+  }
+  const defaults = boot().collect("all").settings.audio;
+  assert.equal(defaults.announcer, true);
+  assert.equal(defaults.radioFx, 1);
+});
+
+test("restoring default motion restores OS preference following", () => {
+  const saved = boot().collect("all");
+  assert.equal(saved.settings.appearance.motion, null);
+  const target = boot({ disk: { "apex26.motion": '"reduce"' } });
+  target.loadSettings(saved);
+  assert.equal(target.disk.get("apex26.motion"), "null");
+  const bad = target.loadSettings({ format: "apex26-settings-v1", settings: {
+    appearance: { motion: "unknown" }, driving: { steerMode: null },
+  } });
+  assert.equal(bad.skipped, 2, "only a nullable setting accepts null");
+});
+
+test("a refused raw reset is a storage failure, not an applied setting", () => {
+  const target = boot({ disk: { "apex26.gfxBackend": "glx" }, store: { rawDel: () => false } });
+  const result = target.loadSettings({ format: "apex26-settings-v1", settings: {
+    display: { gfxBackend: null }, audio: { volMusic: 0.4 },
+  } });
+  assert.equal(result.failed, 1, "the UI must stay open instead of reloading");
+  assert.equal(result.applied, 1, "only the successful volume write counts");
+  assert.equal(result.skipped, 0);
+  assert.equal(target.disk.get("apex26.gfxBackend"), "glx");
+  assert.equal(target.disk.get("apex26.volMusic"), "0.4");
+});
+
+test("throwing storage is reported as failed for settings and garage imports", () => {
+  const fail = () => { throw new Error("storage unavailable"); };
+  const target = boot({ store: { set: fail, rawSet: fail, rawDel: fail } });
+  const settings = target.loadSettings({ format: "apex26-settings-v1", settings: {
+    audio: { volMusic: 0.4 }, camera: { cockpitHalo: "0" }, display: { gfxBackend: null },
+  } });
+  assert.deepEqual(settings, { ok: true, applied: 0, skipped: 0, failed: 3, reason: null });
+  const garage = target.loadGarage({ format: "apex26-garage-v1", garage: { "parts.mercedes": { wing: 3 } } });
+  assert.deepEqual(garage, { ok: true, applied: 0, skipped: 0, failed: 1, reason: null });
 });
 
 test("a difficulty the ladder does not name is skipped, not stored", () => {

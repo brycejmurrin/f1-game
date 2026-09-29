@@ -767,3 +767,63 @@ stay hard to pass). `ai-field ×5` at monza: order flips 165 → 219, settled
 passes 32 → 30, nose-to-tail 22.6 → 23.6 % — inside the ranges, and that metric
 counts close racing as well as queueing, so it cannot see this. `ai-human ×3`:
 contact 4.6–6.3 → 0.8–6.3 per 100 s, no regression.
+
+## 2026-09-29 — "better at defending, more aware": mirrors, a cover window, blue flags, and what it bought
+
+The owner's ask, verbatim: "making our ai drivers better at defending and more aware
+of other drivers". Three defects found by reading the rule chain, then measured.
+
+**1. The AI could not see behind it past 13 m.** The traffic scan in `updateCar`
+skipped every car more than 13 m back — 0.2 s at 60 m/s — so the attacker was on the
+gearbox before the defender knew it was there. Two rules written in TIME were silently
+truncated by it: `holdLineGap` (freeze the offset under braking with a car within a
+SECOND) and the pressure timer (`pressT`, 0.6 s). `AiDrive.mirrorReach` makes the
+reach a time: 0.6–1.05 s by awareness, floored at the old 13 m, capped at 72 m.
+
+**2. The cover window was 12 m.** `defendPull`'s gate is now a time too,
+`defendWindowT` = 0.35–0.7 s by awareness, and the cover grows as the attacker closes.
+
+**3. The AI waved same-lap rivals through.** `letPassCase` moved an AI aside after
+`letPassDelay` (1.8–4.2 s, SHORTER with awareness) on the gearbox of ANY quicker car,
+the player included. It is a blue flag now (`AiDrive.letPassCase`, `lapping` = the
+chaser a lap or more ahead in progress). Staged in the VM, the case is rare in a
+same-lap fight anyway — the chaser's own `queueBrake` bleeds off the 2.5 m/s closing
+rate the gate asks for — which is why it is pinned as a pure rule, not a race.
+
+### Measured — Monza, 240 s, tyre wear off, BOTH trees (base = deploy tip 03acf9ee4)
+
+`ai-field.mjs` gained four numbers for this (attacks = an AI pass move started,
+covers = a defensive move spent, conversion = settled passes per attack, contact =
+pair footprint overlap under the 4.8 x 2.0 m collider, AI-AI only). `--runs 10`:
+
+| metric | base | change |
+|---|---|---|
+| covers | 209.5 [171–229] | **264 [233–297]** |
+| attacks | 121.5 [77–156] | 112.5 [91–166] |
+| conversion | 0.321 [0.194–0.529] | 0.32 [0.214–0.541] |
+| settled passes | 35 [27–54] | 45.5 [25–59] |
+| contact episodes | 37.5 [22–52] | 42 [29–67] |
+| contact seconds | 18 [12.5–30.25] | 22.1 [13.25–33.75] |
+| nose-to-tail % | 21.8 [16.6–26] | 21.25 [18.9–31.5] |
+| mistakes | 1 [0–4] | 2 [0–6] |
+
+`ai-human.mjs --runs 3` (scripted player at 97 % pace): contact 4.58 / 5.0 / 1.25 per
+100 s on base, 4.58 / 3.33 / 2.08 on the change; the AI took the yield role in 45 /
+61 / 36 % of alongside frames on base, 69 / 61 / 63 % on the change.
+
+`defend-duel.mjs` (staged pairs 12–40 m back, closing 2–4 m/s, 280 cells each): 83
+passes on base, 84 on the change; 1 cell flipped to defended, 2 to passed; median end
+gap +0.15 m (168 up / 70 down), defender advance +0.20 m.
+
+**What this licenses saying.** The AI now SEES and COVERS much more — the covers
+ranges do not overlap — and it no longer hands a same-lap rival the place. It does
+**not** measurably change how often an attack succeeds (conversion 0.32 both ways;
+a five-run pass read 0.32 -> 0.25 and did not survive ten), which is the 2026-09-14
+finding again: at a given pace delta, lane position barely decides a pass. AI-AI
+contact and player contact are flat inside the run-to-run range. Mistakes rose a
+notch because the pressure timer now works at the 0.6 s it was written for.
+
+**An instrument defect found on the way.** `defend-duel.mjs` hard-coded
+`ROOT = "/home/user/f1-game"`, so an A/B run from a second worktree loaded the FIRST
+checkout's code in both arms — the first comparison came back identical to the digit.
+It resolves its root from its own file now.
