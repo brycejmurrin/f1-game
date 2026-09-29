@@ -295,6 +295,15 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     // Wave 6 — Watkins Glen: 2006 control-tower booths, Nazareth pit terrace,
     // Sahlen Esses hillside (positive-slope GA bank + timber stand)
     watkins_glen: ["glen-pit-terrace", "glen-esses-hill", "glen-timing-tower"],
+    // Wave 6 — Korea International Circuit (Yeongam): permanent pit complex +
+    // main grandstand, unfinished marina shells (hotels/yachts NOT named —
+    // UNCERTAIN), Tilke final-turn footbridge (RacingCircuits.info).
+    korea: [
+      "korea-pit-complex",
+      "korea-main-grandstand",
+      "korea-marina-shells",
+      "korea-final-footbridge",
+    ],
     // Wave 6 — Jacarepaguá / Autódromo Nelson Piquet (demolished 2012):
     // pit grandstand + timing box already authored; Tijuca ridge + lagoon
     // shore hardscape added this wave. Exact peak/pier layout UNCERTAIN.
@@ -304,6 +313,9 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
       "jacarepagua-tijuca-ridge",
       "jacarepagua-lagoon-shore",
     ],
+    // Wave 6 — Buddh International Circuit: sea-wave aluminium cantilever
+    // main grandstand opposite the pits (ENR 2011; slideshare dims UNCERTAIN).
+    buddh: ["buddh-main-grandstand"],
     // Wave 6 — Zolder (Limburg): permanent S/F tribune + museum behind it
     // (circuit-zolder.be), Bongaerts paddock poles (not the chicane plaque),
     // Sterrenwacht corner building. Frame debt — startFrac untouched.
