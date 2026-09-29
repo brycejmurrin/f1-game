@@ -271,10 +271,16 @@ const GhostShare = (function () {
     if (result && result.reason === "unknown-track") return "That ghost uses a circuit this version does not know.";
     return "That ghost code is incomplete or corrupt.";
   }
+  let hashGeneration = 0;
   async function consumeHash(opts) {
+    const mine = ++hashGeneration;
     const raw = typeof location !== "undefined" ? hashCode(location.hash) : null;
     if (!raw) return null;
     const result = await decode(raw);
+    // Decoding may outlive this link or the menu that accepted it. Preserve a
+    // deferred link for the next menu visit; never clear a newer fragment.
+    if (mine !== hashGeneration || hashCode(location.hash) !== raw ||
+        (opts && typeof opts.valid === "function" && !opts.valid())) return null;
     if (result.ok) installGuest(result);
     try {
       const next = withoutGhost(location.href);

@@ -148,9 +148,12 @@
         // deeper 0.1: its sunk foot shared the garage's underside (flat coplanar)
         place(K(0.0 + i * 0.012), 1, 12, [9.4, 1.0, 30.4], FLOOD, 0.1);     // lit fascia band
       }
-      grandstandEx(0.0, -1, 18, 90, null, null,
+      // gap 22 (was 18): at 18 every crowdBank riser hit a neighbouring leg
+      // (hollow shell). Shared grandstandEx now suppresses rowless stands;
+      // without this nudge the S/F photo boxes at +8.5 m become unsupported.
+      grandstandEx(0.0, -1, 22, 90, null, null,
         { livery: "darkSteel", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
-      ledFascia(0.0, -1, 18, 90, 2);
+      ledFascia(0.0, -1, 22, 90, 2);
       grandstandEx(0.02, -1, 9, 70, null, null,
         { livery: "darkSteel", tiers: 2, roof: "cantilever", endWalls: true });
       ledFascia(0.02, -1, 9, 70, 2);

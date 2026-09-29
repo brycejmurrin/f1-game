@@ -18,19 +18,25 @@ Muted, washed, high-haze. Saturated colour is wrong for this circuit; even the s
 
 ## 3. Elevation
 Real Eifel upland relief from the SRTM bake in `js/track/circuit-elevations.js`
-(~50 m peak-to-trough, grade capped at 5.5%). Continuous rolling — not four
+(~50 m peak-to-trough, grade capped at 5.5%). Densified centreline reads the
+bake by monotonic arc fraction (not nearest-segment projection) so a Catmull-Rom
+bow near a fold cannot invent a knife-edge grade. Continuous rolling — not four
 isolated cosine bumps with flat plateaus between them.
 - Pit / Arena end sits high; the lap falls away through the forest loop.
 - Low ground through the back section (~50 m below the crest).
 - Long climb back toward Dunlop-Kehre / Schumacher-S / Veedol and the pits.
+- Surveyed profiles skip the shared `undulate` ripple (SRTM already carries
+  micro-relief; stacking it pushed grades past the baker's cap).
 
 ## 4. Landmarks & surroundings by lap position
 | s | Side | Distance | Box description |
 |------|------|----------|-----------------|
 | 0.00 | R | near | Pit block: six masonry bays — a ground-floor **arcade of square piers**, recessed garages behind, deep eaves cornice, twin steep slate pitches |
 | 0.00 | L | near | Main grandstand, dark steel, cantilever roof, 150 m; second concrete stand at 0.96 |
+| 0.028 | R | near | **Haug-Haken** (T1) gravel + red tyre wall — downhill hairpin runoff |
 | 0.99 | R | near | Race control: squat glazed **drum** on a stone core with a conical cap and mast |
 | 0.97/0.99 | R | far | **ring°boulevard**: two barrel-vaulted glazed halls on raking steel masts |
+| 0.968 | R | near | **Coca-Cola Kurve** (T15) gravel + red tyre wall + compact open terrace |
 | 0.92 | R | far | Broadcast compound + paddock office blocks; motorhome rows behind |
 | 0.11 | R | near | **Mercedes-Arena** hero stand: dark steel, two tiers, cantilever roof, lit window band |
 | 0.10–0.21 | both | near | Arena seat walls closing the bowl — continuous, R deeper than L; the complex must read enclosed |
