@@ -72,6 +72,7 @@ function boot() {
   };
 
   const frames = [];
+  const timers = [];
   class RO { observe() {} unobserve() {} disconnect() {} }
   class MO { observe() {} disconnect() {} }
 
@@ -84,7 +85,10 @@ function boot() {
     getComputedStyle: () => ({ getPropertyValue: () => "" }),
     requestAnimationFrame: (fn) => { frames.push(fn); return frames.length; },
     cancelAnimationFrame: () => {},
-    setTimeout: () => 1, clearTimeout: () => {},
+    // Timers QUEUE (never run unless a test drains them) so the rotation-settle
+    // test below can step the clock; the keyboard tests never drain them.
+    setTimeout: (fn, ms) => { timers.push({ fn, ms, live: true }); return timers.length; },
+    clearTimeout: (id) => { if (timers[id - 1]) timers[id - 1].live = false; },
     addEventListener: add(winListeners), removeEventListener: () => {},
     visualViewport: vv,
     Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
@@ -104,7 +108,12 @@ function boot() {
   };
   const kb = () => dom.document.documentElement.style.getPropertyValue("--kb");
 
-  return { dom, sb, vv, fire, kb };
+  const runTimers = () => {
+    const due = timers.splice(0).filter((t) => t.live).sort((a, b) => a.ms - b.ms);
+    for (const t of due) t.fn();
+  };
+
+  return { dom, sb, vv, fire, kb, runTimers };
 }
 
 test("--kb clears when the rotation that stranded it finishes", () => {
@@ -168,4 +177,93 @@ test("the pinch and URL-bar guards still hold on the window path", () => {
   vv.scale = 1; vv.height = 800;
   fire("win", "resize");
   assert.equal(kb(), "", "browser chrome is not a keyboard");
+});
+
+/* The same rotation, the TITLE SCREEN's half. iOS (the home-screen PWA most of
+   all) fires resize/orientationchange while innerWidth/innerHeight still hold the
+   portrait numbers, and may fire nothing once they settle. body[data-shape] and
+   body[data-density] were answered only on those events, so a phone turned to
+   landscape kept the portrait title layout — full-size doors with subtitles in a
+   430px screen, scrolling (reported 2026-09-29). SheetShape re-asks after the
+   rotation has had time to land; this pins that the late answer is taken. */
+test("body shape follows a rotation whose size lands after its events", () => {
+  const { dom, sb, fire, runTimers } = boot();
+  const body = dom.document.body;
+
+  sb.innerWidth = 430; sb.innerHeight = 932;
+  fire("win", "resize");
+  runTimers();
+  assert.equal(body.dataset.shape, "tall", "precondition: portrait reads tall");
+
+  // The phone turns: both events arrive while the sizes are still portrait.
+  fire("win", "orientationchange");
+  fire("win", "resize");
+  assert.equal(body.dataset.shape, "tall", "precondition: the events saw portrait numbers");
+
+  // The sizes settle with no event behind them.
+  sb.innerWidth = 932; sb.innerHeight = 430;
+  runTimers();
+  assert.equal(body.dataset.shape, "wide",
+    "a rotation whose sizes land after its last event must still be answered — " +
+    "left latched, a landscape phone keeps the portrait title screen and scrolls");
+});
+
+/* #427's settle timers reclassified shape/density but did NOT re-ask --kb.
+   watchKeyboard's window listeners clear the band when a resize fires after
+   sizes land; the same iOS "no event on settle" hole left a mismatched
+   mid-rotation band (844−390=454) stuck on every .screen. The settle path
+   must re-derive the keyboard band too. */
+test("--kb clears on a silent size settle after a mismatched rotation", () => {
+  const { sb, vv, fire, kb, runTimers } = boot();
+
+  // Portrait, keyboard up.
+  sb.innerWidth = 390; sb.innerHeight = 844;
+  vv.height = 500; vv.offsetTop = 0;
+  fire("vv", "resize");
+  assert.equal(kb(), "344px", "precondition: keyboard band is live");
+
+  // Mid-rotation mismatch: vv already landscape, layout still portrait.
+  // Also fire the window events (still on portrait sizes) so settle timers arm.
+  vv.height = 390;
+  fire("vv", "resize");
+  fire("win", "orientationchange");
+  fire("win", "resize");
+  assert.equal(kb(), "454px",
+    "precondition: the mismatched pair wrote a bogus band");
+
+  // Sizes settle. No further event — the hole #427 documented for shape.
+  sb.innerWidth = 844; sb.innerHeight = 390;
+  // vv.height is already 390; no vv event either.
+  runTimers();
+  assert.equal(kb(), "",
+    "settle timers must re-derive --kb: left latched at 454, every .screen " +
+    "opened from the title carries more padding than the landscape viewport is tall");
+});
+
+/* Title scrollers swap roles when body[data-shape] flips. A leftover
+   scrollTop from the previous shape must not survive the flip. */
+test("title scrollers reset when body shape flips on settle", () => {
+  const { dom, sb, fire, runTimers } = boot();
+  const ov = dom.document.getElementById("overlay");
+  const mb = dom.document.getElementById("menu-buttons");
+  ov.scrollTop = 180;
+  mb.scrollTop = 220;
+
+  sb.innerWidth = 390; sb.innerHeight = 844;
+  fire("win", "resize");
+  runTimers();
+  assert.equal(dom.document.body.dataset.shape, "tall");
+  // Re-stain after the tall classify (idempotent shape write does not reset).
+  ov.scrollTop = 180;
+  mb.scrollTop = 220;
+
+  fire("win", "orientationchange");
+  // Sizes land after the events; settle flips tall → wide and must zero both.
+  sb.innerWidth = 844; sb.innerHeight = 390;
+  runTimers();
+  assert.equal(dom.document.body.dataset.shape, "wide");
+  assert.equal(ov.scrollTop, 0,
+    "a leftover #overlay scrollTop from portrait must not survive the flip");
+  assert.equal(mb.scrollTop, 0,
+    "a leftover #menu-buttons scrollTop from portrait must not survive the flip");
 });

@@ -174,7 +174,10 @@ window.SpotifyMusic = (function () {
   // dashboard for a custom scheme. Degrade — built-in MP3 music still works.
   function isNativeDesktop() {
     try {
-      return !!(typeof window !== "undefined" && window.__APEX_NATIVE__ && window.__APEX_NATIVE__.desktop);
+      if (typeof Native !== "undefined" && Native.isNative && Native.isNative()) return true;
+      if (typeof window !== "undefined" && window.__APEX_NATIVE__ && window.__APEX_NATIVE__.desktop) return true;
+      if (typeof window !== "undefined" && window.Capacitor && typeof window.Capacitor.isNativePlatform === "function" && window.Capacitor.isNativePlatform()) return true;
+      return false;
     } catch (e) { return false; }
   }
 

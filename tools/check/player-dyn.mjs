@@ -67,9 +67,9 @@ export function measure(g, frac = 0) {
   const out = {};
   // 1. braking distance from 100 km/h, 200 km/h and vTop
   for (const v0 of [27.78, 55.56, b.vTop()]) {
-    reset(v0); let d = 0, t = 0;
-    while (P.speed > 0.3 && t < 15) { step({ steer: 0, brake: true }); d += P.speed * DT; t += DT; }
-    out[`brake_${v0.toFixed(1)}`] = { d_m: r1(d), t_s: r2(t), g_avg: r2(v0 / t / G_) };
+    reset(v0); let d = 0, t = 0, ax = null;
+    while (P.speed > 0.3 && t < 15) { step({ steer: 0, brake: true }); d += P.speed * DT; t += DT; if (!ax && t >= 0.5) ax = state(); }
+    out[`brake_${v0.toFixed(1)}`] = { d_m: r1(d), t_s: r2(t), g_avg: r2(v0 / t / G_), axFracF: r2(ax ? ax.axFracF : 0), axFracR: r2(ax ? ax.axFracR : 0) };
   }
   // 2. acceleration
   {
@@ -142,6 +142,18 @@ export function measure(g, frac = 0) {
   // 12. finite everywhere
   out.finite = Object.values(out).flat().every((row) => Object.values(row).every((v) => typeof v !== "number" || Number.isFinite(v)));
   b.clear();
+  // 12. a stamp on the brake MID-CORNER at the limit (owner report 2026-09-29:
+  // "if I slam the brake while in a turn it pulls me towards the apex"). Hold a
+  // near-limit skidpad for 1.5 s on the throttle, then freeze the wheel and
+  // either coast or brake for 0.6 s: peak rear slip and mean yaw rate of each.
+  // BRAKE_STAB (js/physics/consts.js) is what keeps the braked car from
+  // spinning into the inside of the corner.
+  for (const br of [false, true]) {
+    reset(40); for (let i = 0; i < 90; i++) step({ steer: 0.7, throttle: P.speed < 40 });
+    const u0 = state().uR; let aRmax = 0, ySum = 0;
+    for (let i = 0; i < 36; i++) { step({ steer: 0.7, brake: br }); aRmax = Math.max(aRmax, Math.abs(P.slipRear) * DEG); ySum += Math.abs(P.yawRateCur); }
+    out[br ? "midCorner_brake" : "midCorner_coast"] = { uR0: r2(u0), aRmax: r1(aRmax), yawMean: r3(ySum / 36) };
+  }
   return out;
 }
 

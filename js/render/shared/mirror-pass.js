@@ -11,8 +11,9 @@
    defer their draws to it — a mirror recorded after the main pass would
    corrupt the one the player is looking at.
    Setting HUD > MIRROR (apex26.hudMirror): AUTO shows it in the onboard views
-   (where nothing behind is visible) on a device that can afford a second
-   world pass, ON in every view, OFF never. The MIRROR key flips it on / off.
+   (where nothing behind is visible), ON in every view, OFF never. The MIRROR
+   key flips it on / off. Performance never HIDES it — a slower device gets a
+   cheaper mirror instead (QUALITY below).
    One MirrorPass.create(G, deps) at boot; the render loop calls render().
    Reads G.gfx / G.state / G.player / G.cars / G.track / G.camMode / G.dbgCam /
    G.hideMeshes / G.store; the world draw and the car pose helpers come
@@ -25,8 +26,24 @@ const MirrorPass = (function () {
   const ONBOARD = { cockpit: 1, hood: 1, visor: 1, tcam: 1 };
   const H_FOV = 56 * Math.PI / 180;   // horizontal; the vertical follows the rect's aspect
   const NEAR = 0.5, FAR = 700;
-  const CULL_M = 400;                 // radial scenery cull, like the env probe's 300
-  const CAR_REACH_M = 260;            // track arc behind (and beside) the player a rival is drawn at
+  // QUALITY LADDER. The mirror is never hidden for performance — a player
+  // with MIRROR on and GRAPHICS: LOW (PerfGov tier 4) saw no mirror at all
+  // under the first rule — it steps down instead:
+  //   full  a healthy desktop: the whole world, every frame.
+  //   lite  a phone (gfx.mobileTier) or governor tier 1: every frame, but no
+  //         instanced prop batches (a second frustum re-culls and re-uploads
+  //         every pack each frame), no glass or water (frame.mirrorLite, read
+  //         by drawWorldMeshes), a 180 m radius, rivals within 140 m, a target
+  //         at 60% of the frame's pixels (the composite filters it up).
+  //   low   tier 2-3: lite at half rate and half resolution.
+  //   min   tier 4+ (GRAPHICS: LOW pins 4): a third of the frame rate, 40%.
+  // Every frame is the default because a half-rate mirror reads as LAG.
+  const QUALITY = [
+    { name: "full", lite: false, res: 1.0, cull: 400, reach: 260, every: 1 },
+    { name: "lite", lite: true,  res: 0.6, cull: 180, reach: 140, every: 1 },
+    { name: "low",  lite: true,  res: 0.5, cull: 150, reach: 120, every: 2 },
+    { name: "min",  lite: true,  res: 0.4, cull: 120, reach: 100, every: 3 },
+  ];
   const EYE_UP = 1.05;                // helmet height above the road surface
   const LOOK_M = 20, LOOK_DROP = 0.75; // aim 20 m back, dipped ~2° toward the road
   const MEASURE_EVERY = 30;           // frames between #hud-mirror layout reads
@@ -47,6 +64,9 @@ const MirrorPass = (function () {
     let _rect = null, _measureIn = 0, _shown = false, _frame = 0, _cars = 0, _drawn = 0;
     let _el = null, _canvas = null, _dead = false, _lastW = 0, _lastH = 0;
     let _bx = 0, _bz = -1;   // the mirror's look direction (the player's back), horizontal unit
+    let _q = QUALITY[0];
+    // The frame fields the pass swaps, saved in one reused scratch (no per-frame object).
+    const _sv = { viewProj: null, view: null, proj: null, invProj: null, invViewProj: null, eye: null, cullDist: 0, lite: undefined, sky: null };
 
     function el() { return _el || (_el = document.getElementById("hud-mirror")); }
     function canvasEl() { return _canvas || (_canvas = document.getElementById("game")); }
@@ -63,7 +83,9 @@ const MirrorPass = (function () {
     // Is the mirror wanted this frame? The race only — the countdown's start
     // lights hang in the same centre column — never under a debug / photo
     // camera, with the HUD hidden, or while LOOK BACK already shows the road
-    // behind full-screen.
+    // behind full-screen. Never for performance (QUALITY scales it instead);
+    // AUTO alone skips a SOFTWARE renderer, where a second world pass is
+    // seconds a frame (and every CI run would pay it in the cockpit default).
     function wanted() {
       if (mode === "off") return false;
       const g = G.gfx;
@@ -73,8 +95,8 @@ const MirrorPass = (function () {
       if (document.body.classList.contains("hud-hidden")) return false;
       if (typeof Input !== "undefined" && Input.lookingBack && Input.lookingBack()) return false;
       if (_dead) return false;
-      if (mode === "on") return PerfGov.tier() < 3;
-      return !!ONBOARD[camId()] && !g.mobileTier && !softGpu() && PerfGov.tier() < 2;
+      if (mode === "on") return true;
+      return !!ONBOARD[camId()] && !softGpu();
     }
 
     // The frame's rect as canvas fractions. Both rects are getBoundingClientRect,
@@ -126,10 +148,10 @@ const MirrorPass = (function () {
       }
     }
 
-    // Rivals within CAR_REACH_M of track arc and not ahead of the mirror eye:
+    // Rivals within `reach` (QUALITY) of track arc and not ahead of the mirror eye:
     // the factory whole-car mesh, one draw each (no decals, rings or lamps —
     // the mirror is ~120 px tall).
-    function drawCars(wet, night) {
+    function drawCars(wet, night, reach) {
       const player = G.player, track = G.track, hide = G.hideMeshes;
       _cars = 0;
       if (hide && hide.cars) return;
@@ -138,7 +160,7 @@ const MirrorPass = (function () {
       for (const c of G.cars) {
         if (c === player || c.isPlayer) continue;
         const ds = Math.abs(c.s - player.s);
-        if (Math.min(ds, track.total - ds) > CAR_REACH_M) continue;
+        if (Math.min(ds, track.total - ds) > reach) continue;
         pose(c);
         const dx = _P[0] - ex, dz = _P[2] - ez;
         if (dx * _bx + dz * _bz < -3) continue;   // ahead of the eye: out of a rear view
@@ -163,14 +185,16 @@ const MirrorPass = (function () {
       if (--_measureIn <= 0) { measure(); _measureIn = MEASURE_EVERY; }
       if (!_rect) { g.mirrorRect(null); return; }
       g.mirrorRect(_rect);
-      // Cadence: every frame on a healthy device, every other one once the
-      // governor has started shedding (the image is small; 30 Hz reads fine).
+      // Every frame — a mirror that updates at half rate reads as lag — except
+      // at governor tier 2+, where the frame rate itself is the problem.
       _frame++;
-      const w = Math.round(_rect[2] * g.width), h = Math.round(_rect[3] * g.height);
+      const tier = PerfGov.tier();
+      _q = QUALITY[tier >= 4 ? 3 : tier >= 2 ? 2 : (g.mobileTier || tier >= 1) ? 1 : 0];
+      const w = Math.round(_rect[2] * g.width * _q.res), h = Math.round(_rect[3] * g.height * _q.res);
       if (w < 16 || h < 8) return;
       const same = w === _lastW && h === _lastH;
       _lastW = w; _lastH = h;
-      if (PerfGov.tier() >= 1 && (_frame & 1) && !G.frozen && same && _drawn > 0) return;
+      if (_frame % _q.every !== 0 && !G.frozen && same && _drawn > 0) return;
 
       pose(G.player);
       const fl = Math.hypot(_F[0], _F[2]) || 1;
@@ -188,19 +212,22 @@ const MirrorPass = (function () {
       // The mirror camera goes ON `frame` (drawWorldMeshes culls the prop
       // batches through frame.viewProj, and every backend's begin reads it)
       // and comes off again whatever happens in between.
-      const sv = { viewProj: frame.viewProj, view: frame.view, proj: frame.proj, invProj: frame.invProj,
-        invViewProj: frame.invViewProj, eye: frame.eye, cullDist: frame.cullDist };
-      const svSky = frameSky.invViewProj;
+      const sv = _sv;
+      sv.viewProj = frame.viewProj; sv.view = frame.view; sv.proj = frame.proj; sv.invProj = frame.invProj;
+      sv.invViewProj = frame.invViewProj; sv.eye = frame.eye; sv.cullDist = frame.cullDist;
+      sv.lite = frame.mirrorLite; sv.sky = frameSky.invViewProj;
+      const cull = _q.cull;
       frame.viewProj = _vp; frame.view = _view; frame.proj = _proj; frame.invProj = _invProj;
       frame.invViewProj = _invVP; frame.eye = _eye;
-      frame.cullDist = sv.cullDist > 0 ? Math.min(sv.cullDist, CULL_M) : CULL_M;
+      frame.cullDist = sv.cullDist > 0 ? Math.min(sv.cullDist, cull) : cull;
+      frame.mirrorLite = _q.lite;
       frameSky.invViewProj = _invVP;
       let began = false;
       try {
         began = g.mirrorBegin(frame, w, h);
         if (began) {
           drawWorldMeshes(frame, night, wet, floodEmit, false);
-          drawCars(wet, night);
+          drawCars(wet, night, _q.reach);
           g.drawSky(frameSky);   // opaque first, then sky (gfx.js)
           _drawn++;
         }
@@ -208,7 +235,9 @@ const MirrorPass = (function () {
         if (began) g.mirrorEnd();
         frame.viewProj = sv.viewProj; frame.view = sv.view; frame.proj = sv.proj; frame.invProj = sv.invProj;
         frame.invViewProj = sv.invViewProj; frame.eye = sv.eye; frame.cullDist = sv.cullDist;
-        frameSky.invViewProj = svSky;
+        frame.mirrorLite = sv.lite;
+        frameSky.invViewProj = sv.sky;
+        sv.viewProj = sv.view = sv.proj = sv.invProj = sv.invViewProj = sv.eye = sv.sky = null;
       }
     }
 
@@ -229,7 +258,7 @@ const MirrorPass = (function () {
       setMode,
       mode: () => mode,
       // __apex.mirror(): the setting, what this frame resolved, and the backend's own count.
-      state: () => ({ mode, shown: _shown, rect: _rect, cars: _cars, drawn: _drawn, cam: camId(),
+      state: () => ({ mode, shown: _shown, rect: _rect, cars: _cars, drawn: _drawn, cam: camId(), lite: _q.lite, quality: _q.name,
         backend: G.gfx && G.gfx.mirrorState ? G.gfx.mirrorState() : null }),
     });
   }

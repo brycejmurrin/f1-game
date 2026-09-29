@@ -395,19 +395,27 @@ const RealRace = (function () {
                             trackIdx: G.trackIdx, flow: G.flow } };
       }
       active.script = script; active.laps = laps; active.startLap = startLap; active.seat = seat; active.seatCode = want.code; active.seatMap = seatMap;
+      active.camera = opts.camera;
       active.watch = watch; active.reel = watch && !!opts.reel; active.traces = opts.traces || null;
       G.flow = "gp"; G.session = "race"; G.timeTrial = false; G.duel = false;
       G.trackIdx = idx;
       G.teamIdx = ti; G.driverIdx = seat.di;
       G.raceLaps = laps;
       G.raceWeather = weatherAt(script, startLap);
-      G.raceTimeOfDay = script.tod || "default";
+      G.raceTimeOfDay = raceTod(script.tod, Tracks.LIST[idx]);
       G.raceChangeable = false;
       if (G.raceTyreWear === "off") G.raceTyreWear = "real";   // the stops are the story
       if (G.resetRaceDraft) G.resetRaceDraft();
       armed = false; placed = false;
       Log.info("game", "RealRace.stage " + script.name + " " + script.trackId + " laps=" + laps + "/" + script.laps + " from=" + startLap + " seat=" + want.code + (watch ? (active.reel ? " HIGHLIGHTS" : " WATCH") : ""));
       return watch ? { trackId: script.trackId, laps, seat: want.code, startLap, watch: true, reel: active.reel } : { trackId: script.trackId, laps, seat: want.code, startLap };
+    }
+
+    /** A real race — JUMP IN, WATCH or HIGHLIGHTS — runs at DAWN when it ran by day (or its hour
+     *  is unknown): a night race — or a night circuit's default — keeps its night, a dusk race its dusk. */
+    function raceTod(tod, def) {
+      if (tod === "day" || ((!tod || tod === "default") && !(def && def.night))) return "dawn";
+      return tod || "default";
     }
 
     /** The chip for a real lap: the rain flags when the script has them (lap by lap), else the race's one weather. */
@@ -541,7 +549,7 @@ const RealRace = (function () {
         // WATCH: the whole field, the seat included, becomes the replay's puppets; nothing here steers.
         const seats = new Map();
         for (const [c2, f2] of field) seats.set(c2, f2.d);
-        const ok = replay.start({ script, traces: active.traces, seats, startLap: active.startLap, follow: active.seatCode, reel: active.reel });
+        const ok = replay.start({ script, traces: active.traces, seats, startLap: active.startLap, follow: active.seatCode, camera: active.camera, reel: active.reel });
         if (!ok) { active.watch = false; Log.warn("game", "RealRace.arm: the replay did not start — racing it instead"); }
         else placed = true;
       }

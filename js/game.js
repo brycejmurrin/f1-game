@@ -258,6 +258,12 @@ function preloadThreeVendor() {
 }
 function backendPreference() {
   try {
+    if (typeof ApexXR !== "undefined" && ApexXR.bootPick) {
+      const xrPick = ApexXR.bootPick();
+      if (xrPick) return xrPick; // VR arm: non-persisted; never writes gfxBackend
+    }
+  } catch (_) { /* plan advisory */ }
+  try {
     const pref = localStorage.getItem("apex26.gfxBackend");
     const normalized = pref == null ? "three" : pref;
     if (normalized === "webgl2" || normalized === "three" || normalized === "webgpu") return normalized;
@@ -277,6 +283,10 @@ function showGraphicsUnavailable() {
 }
 let _claimSkipped = false;   // this boot consumed a claim-fail latch
 try {
+  // Refresh apex26.xrCaps before sync bootPick (ms); first armed boot may still be 2D.
+  if (typeof ApexXR !== "undefined" && ApexXR.detect) {
+    try { await ApexXR.detect(); } catch (_) { /* caps stay cached */ }
+  }
   let pref = backendPreference();
   // Unset means THREE on every device; the boot canary below protects the
   // default as well as stored THREE/WEBGPU picks.
@@ -951,7 +961,7 @@ function onIncidentLineCross(c, cross, newS) {
   }
   c._secT0 = 0;
   if (c.isPlayer) { sectorIdx = 0; sectorStartT = 0; }
-  if (c.isPlayer && c.lap === lapsTarget && lapsTarget > 1) announce("FINAL LAP", 1.6, "race");
+  if (c.isPlayer && c.lap === lapsTarget && lapsTarget > 1 && !raceRadio.callsLastLap()) announce("FINAL LAP", 1.6, "race");
   if (cross.flagged) {
     // The lap is incident-invalid, so do not publish it as a timed lap. A
     // finish stamp is still authoritative and must reach the other peer; null
@@ -1030,7 +1040,9 @@ let pits = null;      // PitLane.create(G), same deferral
 // NO PASSING UNDER THE SC / VSC, for the player (the AI holds station by
 // construction): a place gained must go back inside the window, or it is priced
 // at the flag (js/race/sporting-regs.js; FIA 2026 SR B5.12.2(c), B5.13.2(c)).
-const scWatch = SportingRegs.createPassWatch();
+// A car slowed by an obvious problem may be passed under a caution
+// mid-incident, being rescued as stuck, or beached in the run-off.
+const scWatch = SportingRegs.createPassWatch(0, (o) => incidentSim.owns(o) || (o.rescueT || 0) > 0.25 || (!!o.offroad && (o.offT || 0) > 0.5));
 function scPassCall(ev) {
   if (!ev || !player) return; Log.info("game", "Caution pass " + ev.type + " n=" + (ev.n || 0) + (ev.sec ? " pen=+" + ev.sec + "s" : "") + " lap=" + player.lap + " level=" + raceCtl.level); if (ev.type === "cleared") return;
   if (ev.type === "warn") { announce("GIVE THE POSITION BACK" + (ev.n > 1 ? " — " + ev.n + " PLACES" : ""), 2.5, "penalty-warn"); return; }
@@ -2506,6 +2518,7 @@ function flybyProgress() {
 // miss parses JSON. flybyPanel owns the reading and the validation (it owns the
 // writing); this is the copy the render path is allowed to touch.
 let flybyShots = null;
+let flybyPlay = null;   // this run's list with an opening shot prepended (the garage drive-out); null = flybyShots as they are
 function reloadFlybyShots() {
   try { flybyShots = flybyPanel.loadSaved(); }
   catch (e) { flybyShots = null; Log.warn("game", "flyby shots did not load", e); }
@@ -2568,8 +2581,10 @@ let _warmKey = "";
 const warmPrograms = () => { try { if (gfx.warm) { gfx.warm(); _warmKey = menuKey(trackIdx); } } catch (_) { /* optimisation only */ } };
 async function menuFinish(current, key) {
   await prepareMenuCarAssets(current);
+  if (!current()) return;
   if (await menuIdle(current)) { warmPrograms(); FlybySeq.reset(); _menuGate.warm = 2; }   // reset: a new world's shot 0 snaps, never glides in from the last one
   const lit = await menuLampBake(current);
+  if (!current()) return;   // a RACE! tap or a new selection owns the sequencer now
   FlybySeq.setDuration(loadingScreen.nextFlyMs());
   const fly = { key, track, shots: FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0, false) }, step = FlybySeq.planSteps(track, fly.shots);
   while (current() && !step()) await menuSlice();
@@ -2588,10 +2603,9 @@ function scheduleFlybyTrack(settle) {
     (!els.select.hidden || !$("race-settings").hidden);
   const prepare = async () => {
     if (!current()) return;
-    // Compilation owns its scene/targets until it settles; never free them
-    // to service a newer selection in the middle of an asynchronous warm-up.
-    if (gfx.warming && gfx.warming()) { flybyBuildTimer = setTimeout(prepare, 100); return; }
     try {
+      // Download independently of the old world's compilation; only replacing
+      // its scene/targets must wait. ensureScenery shares in-flight requests.
       await ensureScenery(want);
       if (!current()) return;
       if (gfx.warming && gfx.warming()) { flybyBuildTimer = setTimeout(prepare, 100); return; }
@@ -2962,7 +2976,7 @@ async function startRaceBody() {
   // THE PRE-RACE SCREEN OUTLIVES THE SWEEP when it was up: the warm above paints
   // nothing until it is done, so it is raised again, disarmed, and render()
   // lowers it with the first frame the backend presents (LoadingScreen.handoff).
-  const handoff = loadingScreen.active() && !!player;
+  const handoff = (loadingScreen.active() || loadingScreen.phase() === "build") && !!player;   // "build": startRaceCovered's card
   clearMenuScreens();
   if (handoff) loadingScreen.handoff();
   els.hud.hidden = false; els.lights.hidden = false; els.pausebtn.hidden = false;
@@ -3706,6 +3720,7 @@ const coach = DrivingCoach.create(G);
 const raceRadio = RaceRadio.create(G);    // the engineer's race awareness + TV commentary (js/race/race-radio.js)
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
 const realRace = RealRace.create(G);      // a real Grand Prix replayed from its timing script (js/race/real-race.js)
+const driveOut = DriveOut.create(G);      // the flyby's opening shot: your car out of your team's garage (js/camera/drive-out.js)
 titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js/ui/title-menu.js)
 const onboard = Onboard.create(G);        // first-run coach marks (js/ui/onboard.js)
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
@@ -3868,7 +3883,8 @@ function introBuild(go) {
   const idx = trackIdx, key = menuKey(idx), n = ++_introRun;
   if (!(idx >= 0) || (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches)) return false;
   clearTimeout(flybyBuildTimer); _menuGate.generation++;   // the menu's own build stands down
-  loadingScreen.building(loadingInfo());
+  const info0 = loadingInfo();   // its readMs: a real race's flyby is planned for the length it will run (a 24 s plan is re-planned mid-flyby)
+  loadingScreen.building(info0);
   (async () => {
     try {
       await ensureScenery(idx);
@@ -3891,7 +3907,7 @@ function introBuild(go) {
       const t2 = performance.now();
       while (live() && gfx.warming && gfx.warming() && performance.now() - t2 < 15000) await menuSlice();
       // Plan the flyby here too, up to a budget: whatever is left plans mid-flyby.
-      FlybySeq.setDuration(loadingScreen.nextFlyMs());
+      FlybySeq.setDuration(loadingScreen.nextFlyMs(info0.readMs));
       const fly = { key, track, shots: FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (idx * 2654435761)) >>> 0, false) }, step = FlybySeq.planSteps(track, fly.shots), t0 = performance.now();
       while (!step() && performance.now() - t0 < 800) await menuSlice();
       _menuFly = fly;
@@ -3906,9 +3922,45 @@ function introBuild(go) {
   })();
   return true;
 }
+// RACE! WHILE THE MENU'S WARM IS STILL COMPILING: render() draws nothing until it
+// ends, so a flyby begun now spent its opening shots, its clock and the voice on a
+// black canvas (1-4 s on a real GPU; the whole flyby under SwiftShader). Hold the
+// card over the warm, bounded as introBuild's is, then fly.
+// The world is often BUILT but not yet warmed (menuFinish warms only once the menu
+// goes idle), and then the flyby's first frame compiled everything itself: the
+// same black, measured 1.4 s -> 19 s under SwiftShader with warming() false at
+// RACE!. So an unwarmed world gets the warm introBuild runs, under the card.
+function introWarm(go) {
+  const key = menuKey(trackIdx);
+  if (!gfx.warm || (_warmKey === key && !(gfx.warming && gfx.warming()))) return false;
+  const n = ++_introRun, t0 = performance.now();
+  const live = () => n === _introRun && state === "menu" && key === menuKey(trackIdx);
+  loadingScreen.building(loadingInfo());
+  (async () => {
+    if (_warmKey !== key) {   // hidden warm frames: "build" blanks the canvas, and render() draws while _menuGate.warm > 0
+      warmPrograms(); _menuGate.warm = 2;
+      for (let f = 0; f < 3 && live() && _menuGate.warm > 0; f++) await new Promise((r) => requestAnimationFrame(r));
+    }
+    while (live() && gfx.warming && gfx.warming() && performance.now() - t0 < 15000) await menuSlice();
+    if (n !== _introRun) return;
+    if (state !== "menu") { loadingScreen.stop(); return; }
+    try { _introKey = key; raceIntro(go); } catch (e) { Log.warn("gfx", "loading screen failed", e); loadingScreen.stop(); go(); }
+  })();
+  return true;
+}
+/** A start from a sheet that is not RACE SETTINGS (qualifying's GRID and DRIVE, a
+ *  season's NEXT RACE): no flyby, but the card covers the build and hands off to
+ *  the first presented frame, as it does after one — not a black canvas, then the
+ *  HUD and the gantry over a frame the backend has not drawn yet. */
+function startRaceCovered() {
+  if (!loadingScreen.phase()) loadingScreen.building(loadingInfo());
+  return startRace();
+}
 function raceIntro(go) {
   const built = _introKey; _introKey = "";
   if (!built && !menuWorld() && introBuild(go)) return;
+  if (!built && menuWorld() && introWarm(go)) return;
+  flybyPlay = null;
   const world = menuWorld();
   if (world) menuGridCars();
   // A REAL RACE grids from its script at the lights (RealRace.arm), not in the
@@ -3933,9 +3985,15 @@ function raceIntro(go) {
   if (!flybyShots) flybyShots = planned || FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0);   // a different flyby each load (never the sim RNG); an editor-saved list plays as authored
   if (flybyShots) flybyShots = FlybySeq.withoutSlot(flybyShots);   // nobody knows your slot on a random grid; a small grid has empty boxes
   if (flybyShots && real && (real.watch || real.startLap > 1)) flybyShots = FlybySeq.withoutGrid(flybyShots);
+  // THE GARAGE DRIVE-OUT opens it (js/camera/drive-out.js): not over a race joined
+  // mid-way or watched, and not in a habitual skipper's short cut.
+  const lead = world && flybyShots && !(real && (real.watch || real.startLap > 1)) && loadingScreen.nextFlyMs() !== LoadingScreen.SHORT_FLY_MS ? driveOut.lead() : null;
+  if (lead) flybyPlay = [lead].concat(flybyShots);
   const info = loadingInfo();   // before the duration: a real race's read (info.readMs) may stretch the flyby
-  FlybySeq.setDuration(loadingScreen.nextFlyMs(info.readMs));   // plan every pan for the seconds this run has
-  if (world) FlybySeq.warm(track, flybyShots);   // plan the opening shots now, the rest in slices before their cuts
+  const flyMs = loadingScreen.nextFlyMs(info.readMs);
+  if (lead) lead.dur = lead.ms / flyMs * flybyShots.reduce((n, sh) => n + (sh.dur || 0), 0);   // exactly its own seconds on top of the flyby's
+  FlybySeq.setDuration(flyMs + info.leadMs);   // plan every pan for the seconds this run has
+  if (world) FlybySeq.warm(track, flybyPlay || flybyShots);   // plan the opening shots now, the rest in slices before their cuts
   FlybySeq.reset();   // this run's shot 0 is a cut, not a glide from wherever the camera was
   loadingScreen.run(info, go);
 }
@@ -3959,7 +4017,7 @@ function loadingInfo() {
     // Only fly over a world that is actually built. A missed pre-build (a
     // circuit switched a moment ago, scenery still downloading) would put a
     // black hold where the cinematic should be, which reads as a hang.
-    hasWorld: menuWorld(), shots: flybyShots, grid: (cars || []).map((c) => ({ code: c.code, colour: c.color, isPlayer: c === player && FlybySeq.slotKnown() })),   // the card's grid graphic + radio check: menuGridCars() seated `cars` in grid order
+    hasWorld: menuWorld(), shots: flybyPlay || flybyShots, leadMs: flybyPlay ? flybyPlay[0].ms : 0, grid: (cars || []).map((c) => ({ code: c.code, colour: c.color, isPlayer: c === player && FlybySeq.slotKnown() })),   // the card's grid graphic + radio check: menuGridCars() seated `cars` in grid order
     readMs: 0,
   };
   if (real && announcer.readMs) out.readMs = announcer.readMs(out);   // the race-so-far read: the flyby stretches to it (LoadingScreen.flyMsFor)
@@ -4101,6 +4159,7 @@ function clearMenuScreens() {
   // timer that would otherwise fire its build callback into a running race.
   loadingScreen.stop();
   FlybySeq.cancelWarm();   // and the flyby's unplanned shots: they would only stall the countdown
+  flybyPlay = null; driveOut.reset();
   for (const el of document.querySelectorAll(".screen")) el.hidden = true;
   for (const id of ["overlay", "lighting", "camtune", "flyby"]) { const el = $(id); if (el) el.hidden = true; }
   // The garage's 3D turntable keeps rendering while #carsetup is up; a race
@@ -5700,8 +5759,8 @@ function updateCar(c, dt, ranked) {
     // only), 1 from 1.5× coast drag up. Continuous, so a brush of the brake
     // never steps the front's grip.
     const brakeMix = clamp((decel - cdNow) / (0.5 * cdNow), 0, 1);
-    const axFracF = Math.min(1, decel * brakeMix / longBudget);
-    const axFracR = Math.min(1, Math.max(decel / longBudget, axThrDemand));
+    const pedal = decel * brakeMix / longBudget, engine = (decel - decel * brakeMix) / longBudget, beta = (c.brakeStab = TyreModel.brakeBeta(c.brakeStab, c.rearUtil, dt));   // BRAKE STABILITY: the loaded rear eases its pedal share (PhysicsConsts.BRAKE_STAB)
+    const axFracF = Math.min(1, pedal * TyreModel.brakeFront(beta, loadF, loadR)), axFracR = Math.min(1, Math.max(pedal * beta + engine, axThrDemand));
     const axFrac = Math.max(axFracF, axFracR);
     c.axFrac = axFrac;
     c.axFracF = axFracF; c.axFracR = axFracR;
@@ -5749,7 +5808,7 @@ function updateCar(c, dt, ranked) {
     const bb = bbOn ? SetupTune.bbScales(c.brakeBias) : null;
     // (bbSlip*, not slipF/slipR — those names are the axles' SLIP ANGLES below.)
     const afF = bb ? Math.min(1, axFracF * bb.f) : axFracF;
-    const afR = bb ? Math.min(1, Math.max(axFracR - axFracF + axFracF * bb.r, axThrDemand)) : axFracR;
+    const afR = bb ? Math.min(1, Math.max(engine + pedal * beta * bb.r, axThrDemand)) : axFracR;
     const bbSlipF = Math.sqrt(Math.max(0, 1 - afF * afF));
     const bbSlipR = Math.sqrt(Math.max(0, 1 - afR * afR));
     c.slipFactor = bbSlipR;   // the DRIVEN axle's circle: setEngine() reads it for slip01; unassigned it read a constant 1
@@ -6296,7 +6355,7 @@ function updateCar(c, dt, ranked) {
     c._secT0 = 0;   // …and the FIELD's S1 reference, or it measures across the reset
     if (c.isPlayer) { sectorIdx = 0; sectorStartT = 0; }
     // Never on a 1-lap session: that crossing is the START crossing, and a qualifying flying lap is not a final lap.
-    if (c.isPlayer && c.lap === lapsTarget && lapsTarget > 1) announce("FINAL LAP", 1.6, "race");
+    if (c.isPlayer && c.lap === lapsTarget && lapsTarget > 1 && !raceRadio.callsLastLap()) announce("FINAL LAP", 1.6, "race");
     if (flagged && c.isPlayer) announce("FINISH!", 2, "race");
   } else if (lineCross && lineCross.direction < 0) {
     // Backward over the line: give the lap back and put the clock where it was,
@@ -6833,7 +6892,9 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
     if (wet) { if (_lit) { m = _wmPropsWetN; m.emissive = Math.min(0.80, floodEmit); } else m = _wmPropsWetD; }
     else { if (_lit) { m = _wmPropsDryN; m.emissive = floodEmit; } else m = _wmPropsDryD; }
     const _pb = track.meshes.propBatches;
-    if (_pb && _pb.length && gfx.drawInstanced) {
+    // frame.mirrorLite: the phone-grade rear-view mirror (js/render/shared/mirror-pass.js)
+    // skips the batches — a second frustum re-culls and re-uploads every pack each frame.
+    if (_pb && _pb.length && gfx.drawInstanced && !frame.mirrorLite) {
       const planes = gfx.makeFrustumPlanes ? gfx.makeFrustumPlanes(frame.viewProj, _pbPlanes) : null;
       for (let i = 0; i < _pb.length; i++) {
         if (planes && gfx.cullInstances) gfx.cullInstances(_pb[i], planes);
@@ -6845,11 +6906,11 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
   // Building glass: a low-roughness reflective pass so the lit shader mirrors the
   // sky in the windows (real, view-dependent reflection). Only populated for day
   // builds; empty at night (lit windows live in the emissive props mesh).
-  if (!hideMeshes.props && track.meshes.glass) gfx.drawChunked(track.meshes.glass, MAT_IDENT, _wmGlass);
+  if (!hideMeshes.props && track.meshes.glass && !frame.mirrorLite) gfx.drawChunked(track.meshes.glass, MAT_IDENT, _wmGlass);
   // Water (lakes/marina/sea): low roughness so the lit shader's env term mirrors
   // the live sky + sun glint — reflective by day, warm at dusk, dark by night.
   // A touch glossier (calmer) when not raining; a little rougher in the wet.
-  if (!hideMeshes.props && track.meshes.water) gfx.draw(track.meshes.water, MAT_IDENT,
+  if (!hideMeshes.props && track.meshes.water && !frame.mirrorLite) gfx.draw(track.meshes.water, MAT_IDENT,
     wet ? _wmWaterWet : _wmWaterDry);
   if (!hideMeshes.gate) gfx.draw(track.meshes.gate, MAT_IDENT,
     wet ? _wmGateWet : _wmGateDry);
@@ -6899,7 +6960,8 @@ function render(dt) {
   // moving, high-contrast backdrop to be read against. The world the picker warms is
   // still built — it is just not SHOWN until the player commits to the race, where
   // js/ui/loading-screen.js spends it as the cinematic it always wanted to be.
-  const menuBlank = state === "menu" && !setupPreviewOn && (!track || !loadingScreen.active() || !menuWorld());   // the no-world card must not show the LAST circuit
+  const menuBlank = (state === "menu" && !setupPreviewOn && (!track || !loadingScreen.active() || !menuWorld()))
+    || loadingScreen.phase() === "build";   // the no-world card must not show the LAST circuit; nor may a build card over the results (startRaceCovered)
   const vis = menuBlank ? "hidden" : "";
   if (canvas.style.visibility !== vis) canvas.style.visibility = vis;
   // Soft-present #game-soft is a sibling overlay (GLX HeadlessChrome / TLX). Keep
@@ -6941,7 +7003,8 @@ function render(dt) {
     // flew through buildings. The sequencer places every eye against the props
     // registry instead. It is driven by PROGRESS through the flyby phase, so the
     // sequence keeps its shape whatever the phase is retuned to.
-    const fb = FlybySeq.solve(track, flybyProgress(), flybyShots);
+    const fb = FlybySeq.solve(track, flybyProgress(), flybyPlay || flybyShots);
+    if (flybyPlay) driveOut.pose(FlybySeq.shotAt(flybyProgress(), flybyPlay));
     eyeT = fb.eye; tgtT = fb.tgt; fovT = fb.fov; camAncNX = null;
     // A shot boundary is a CUT. Without this the λ1.6 menu damping below smears
     // the change of angle into a long swim between two vantages, which reads as
@@ -8904,13 +8967,13 @@ function openQualiBody(fresh, netDone) {
 function closeQualiToGrid() {
   qualiSheet.close();
   session = "race";
-  startRace();                    // gridUp() reads quali.order()
+  startRaceCovered();             // gridUp() reads quali.order()
 }
 $("q-drive").onclick = () => {
   if (soundOn) GameAudio.uiSelect();
   qualiSheet.close();
   session = "quali";
-  startRace();                    // one out-lap + one flying lap, alone
+  startRaceCovered();             // one out-lap + one flying lap, alone
 };
 // FRIEND QUALIFYING WAITS FOR EVERY PLAYER'S TIME (qualiNet.waiting), and a
 // SIMULATE or a lap with no valid time sent none: the other sheet read "WAITING
@@ -9152,7 +9215,7 @@ els.resNext.onclick = () => {
   // weather plan — this solo race would have replayed the host's {to, dur}.
   wxArc.endSession();
   if (isChampionship() && (SeasonCal.qualiNext(season) || (SeasonCal.quali() && !quali.results()))) openQuali();
-  else startRace();
+  else startRaceCovered();
 };
 
 function setPaused(p, why) {

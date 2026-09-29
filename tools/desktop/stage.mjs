@@ -17,7 +17,11 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { createRequire } from "node:module";
 import { STAGE_DIRS, STAGE_ROOT_FILES } from "./stage-files.mjs";
+
+const require = createRequire(import.meta.url);
+const { appVersionFrom, readApexVersion } = require("../../desktop/lib/version.cjs");
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
@@ -97,13 +101,14 @@ export function stampStaged(stagedRoot, opts = {}) {
   return at;
 }
 
-/** Semver for electron-builder: 0.<version.json build>.0 */
-export function desktopVersionFromBuild(build) {
-  const n = Number(build);
-  if (!Number.isInteger(n) || n < 1) {
-    throw new Error(`desktop version: build must be a positive integer, got ${build}`);
+/** Semver for electron-builder: <apexVersion>.<version.json build> (default 1.0.N). */
+export function desktopVersionFromBuild(build, apexVersion) {
+  let mm = apexVersion;
+  if (mm == null) {
+    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "desktop/package.json"), "utf8"));
+    mm = readApexVersion(pkg);
   }
-  return `0.${n}.0`;
+  return appVersionFrom({ apexVersion: mm, build });
 }
 
 function usage() {

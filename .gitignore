@@ -42,8 +42,11 @@ assets/pack/src/
 desktop/dist/
 desktop/dist-site/
 desktop/node_modules/
+desktop/build/THIRD-PARTY-NOTICES.txt
 
 # Codex skill mirror (bash tools/env/mirror-skills.sh) — a copy, never the source
 
 desktop/test-results/
 desktop/playwright-report/
+mobile/node_modules/
+mobile/www/

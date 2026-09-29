@@ -2473,18 +2473,22 @@ __apex.race("albert_park"); __apex.pitSigns();
 // → { cells: 12, mesh: true, tex: true, drawn: 41, calls: 41 }
 ```
 
-### `mirror(mode?) → {mode, shown, rect, cars, drawn, cam, backend} | null`
+### `mirror(mode?) → {mode, shown, rect, cars, drawn, cam, lite, quality, backend} | null`
 The HUD rear-view mirror (`js/render/shared/mirror-pass.js`): a second camera
 on the player's car looking back, rendered by the backend into its own target
 BEFORE the main `begin()` and composited, flipped, into the `#hud-mirror`
 frame. `mirror("auto" | "on" | "off")` sets HUD > MIRROR (persisted as
 `apex26.hudMirror`) first. `mode` is the setting; `shown` whether this frame
-resolved it on (AUTO: the onboard cameras on a hardware renderer below
-governor tier 2; ON: every camera below tier 3; never outside `state ===
+resolved it on (AUTO: the onboard cameras, not on a software renderer; ON:
+every camera — performance never hides it; never outside `state ===
 "race"`, under a debug camera, with the HUD hidden or while LOOK BACK is
 held); `rect` the frame's box as canvas fractions `[x, y, w, h]`, top-left
 origin; `cars` the rivals drawn last pass; `drawn` the passes run; `cam` the
-camera id; `backend` is `gfx.mirrorState()` — `{ready, dead, w, h, hdr,
+camera id; `quality` the rung of the ladder the last pass used — `full` (a
+healthy desktop), `lite` (a phone or governor tier 1: no instanced prop
+batches, glass or water, a 180 m radius, rivals within 140 m, a 60% target,
+every frame), `low` (tier 2-3: half rate, 50%), `min` (tier 4+, e.g.
+GRAPHICS: LOW: a third of the rate, 40%); `lite` is true for all but `full`; `backend` is `gfx.mirrorState()` — `{ready, dead, w, h, hdr,
 renders, composites, rect}`, the backend's OWN count of mirror passes rendered
 and composites drawn (the live evidence `hud-mirror.spec.js` asserts). `null`
 before the game has created the mirror.

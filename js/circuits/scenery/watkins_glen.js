@@ -8,9 +8,22 @@
   function (api) {
       const { K, lapBounds, out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack, px, pz, seat,
         pine, tree, bush, ridge, grandstandEx, spectatorHill, sponsorHoarding,
-        broadcastCompound, gantry, marshalPost, motorhome, waterBand,
-        fence, guardrail, tyreWall, groundPatch, modelGroup,
+        broadcastCompound, gantry, marshalPost, waterBand, terrainYAt, foundation,
+        indexSolid, fence, guardrail, tyreWall, groundPatch, modelGroup,
         addBox, addCyl, addFrustum, forestEdge } = api;
+
+      // Sample the rendered ribbon under a footprint and lift the anchor so no
+      // prim top sits under terrain (ground-audit bury). Same pattern as Vegas lots.
+      const liftToTerrain = (a0, halfR, halfT) => {
+        let hi = a0.c[1];
+        for (const fr of [-halfR, 0, halfR]) for (const ft of [-halfT, 0, halfT]) {
+          const q = vadd(vadd(a0.c, a0.r, fr), a0.t, ft);
+          const g = terrainYAt(q[0], q[2]);
+          if (g != null && g > hi) hi = g;
+        }
+        const lift = hi - a0.c[1] > 0.03 ? hi - a0.c[1] + 0.04 : 0;
+        return Object.assign({}, a0, { c: vadd(a0.c, a0.u, lift) });
+      };
 
       // Autumn hardwood palette — maple/oak turning, with dark conifer behind.
       const MAPLE = [0.62, 0.24, 0.12], SCARLET = [0.70, 0.31, 0.10];
@@ -111,30 +124,81 @@
         }, { required: true });
       }
       {
-        const a = anchor(K(0.999), 1, 17), b = [a.r, a.u, a.t];
+        // 2006 control tower on the front-stretch grandstand: officials, timing
+        // & scoring, TV/radio booths, PA on top (Wikipedia / The Glen rebuild).
+        // Open lattice shaft kept — the Glen's tower still reads as steel frame.
+        const a0 = anchor(K(0.999), 1, 17);
+        const a = liftToTerrain(a0, 4, 4), b = [a.r, a.u, a.t];
         modelGroup("glen-timing-tower", {
-          center: vadd(a.c, a.u, 12), size: [14, 30, 14], basis: b,
+          center: vadd(a.c, a.u, 14), size: [16, 34, 16], basis: b,
         }, (stage) => {
           stage._mat = MAT.METAL;
           const STL = [0.52, 0.53, 0.55];
           const legs = [[-3.2, -3.2], [3.2, -3.2], [-3.2, 3.2], [3.2, 3.2]];
           for (const [dr, dt] of legs)
-            seat.cyl(stage, vadd(vadd(a.c, a.r, dr), a.t, dt), 0.19, 20, STL, 5, b);
-          for (let i = 1; i <= 7; i++) {
+            seat.cyl(stage, vadd(vadd(a.c, a.r, dr), a.t, dt), 0.19, 22, STL, 5, b);
+          for (let i = 1; i <= 8; i++) {
             const y = i * 2.6;
             addBox(stage, vadd(a.c, a.u, y), [6.8, 0.15, 0.15], STL, b);
             addBox(stage, vadd(a.c, a.u, y), [0.15, 0.15, 6.8], STL, b);
-            // One leaning member per face per bay — the X reads from a distance.
             addBox(stage, vadd(a.c, a.u, y - 1.3), [7.3, 0.12, 0.12], [0.46, 0.47, 0.49], b);
             addBox(stage, vadd(a.c, a.u, y - 1.3), [0.12, 0.12, 7.3], [0.46, 0.47, 0.49], b);
           }
-          stage._mat = MAT.WOOD;
-          seat.box(stage, vadd(a.c, a.u, 14), [8.4, 3.2, 8.4], [0.62, 0.58, 0.50], b);
+          // Three contiguous booth cabins (officials / timing / broadcast) —
+          // continuous contact so ground-audit BFS never flags an air gap.
+          stage._mat = MAT.CONCRETE;
+          seat.box(stage, vadd(a.c, a.u, 16.0), [10.4, 3.6, 9.2], [0.66, 0.64, 0.60], b);
           stage._mat = MAT.GLASS;
-          seat.box(stage, vadd(vadd(a.c, a.u, 15.2), a.r, -4.3), [0.3, 1.5, 7.2], [0.22, 0.26, 0.30], b);
+          for (const dt of [-2.8, 0, 2.8])
+            seat.box(stage, vadd(vadd(a.c, a.u, 16.6), a.t, dt),
+              [0.28, 1.8, 2.4], [0.22, 0.28, 0.34], b);
+          seat.box(stage, vadd(vadd(a.c, a.u, 16.6), a.r, -5.3),
+            [0.28, 1.8, 8.0], [0.22, 0.28, 0.34], b);
           stage._mat = MAT.METAL;
-          seat.box(stage, vadd(a.c, a.u, 17.2), [9.0, 0.3, 9.0], [0.50, 0.51, 0.53], b);
-          seat.cyl(stage, vadd(a.c, a.u, 17.5), 0.09, 9, [0.86, 0.86, 0.84], 5, b);   // flagpole
+          seat.box(stage, vadd(a.c, a.u, 19.0), [11.0, 0.35, 9.8], [0.50, 0.51, 0.53], b);
+          // PA / antenna deck on the cabin roof.
+          seat.cyl(stage, vadd(a.c, a.u, 19.4), 0.09, 8, [0.86, 0.86, 0.84], 5, b);
+          addBox(stage, vadd(vadd(a.c, a.u, 22.0), a.t, 1.6), [0.6, 0.5, 1.4], [0.40, 0.40, 0.42], b);
+          stage._mat = 0;
+        }, { required: true });
+      }
+      {
+        // Pit Terrace — Nazareth Speedway stands relocated 2005 (Wikipedia),
+        // overlooking pit lane beside the front-stretch garage roof. Facility
+        // map: "Pit Terrace Grandstand" above the frontstretch / pit lane.
+        // Kept lean for the props-tris ratchet (baseline 336038).
+        const a0 = anchor(K(0.975), 1, 30);
+        const a = liftToTerrain(a0, 5, 14), b = [a.r, a.u, a.t], inw = -1;
+        const bays = 7, pitch = 5.8, rows = 5, len = bays * pitch;
+        const topH = 1.0 + rows * 0.78;
+        indexSolid(0.960, 0.990, 1, 26, 12);
+        modelGroup("glen-pit-terrace", {
+          center: vadd(a.c, a.u, topH * 0.55), size: [11, topH + 3, len + 3], basis: b,
+        }, (stage) => {
+          foundation(stage, {
+            center: a.c, size: [9.5, len + 1.5], top: a.c[1], basis: b,
+            col: [0.58, 0.56, 0.52], embed: 0.45,
+          });
+          stage._mat = MAT.METAL;
+          const TUBE = [0.48, 0.49, 0.52];
+          for (let i = 0; i <= bays; i++) {
+            const p = vadd(a.c, a.t, (i - bays / 2) * pitch);
+            seat.box(stage, vadd(p, a.r, -inw * 3.0), [0.26, topH + 0.9, 0.26], TUBE, b);
+            seat.box(stage, vadd(p, a.r, inw * 3.0), [0.22, 1.0, 0.22], TUBE, b);
+          }
+          addBox(stage, vadd(vadd(a.c, a.u, topH + 0.85), a.r, -inw * 3.0),
+            [0.26, 0.14, len], TUBE, b);
+          stage._mat = MAT.WOOD;
+          for (let t = 0; t < rows; t++) {
+            const lat = inw * (2.5 - t * 0.85), y = 0.7 + t * 0.78;
+            seat.box(stage, vadd(vadd(a.c, a.r, lat), a.u, y),
+              [0.85, 0.15, len], WEATHERED, b);
+            stage._mat = MAT.FABRIC;
+            // Sparse coat band — individual seats blow the tris budget.
+            seat.box(stage, vadd(vadd(a.c, a.r, lat), a.u, y + 0.55),
+              [0.5, 0.75, len - 2.5], [0.30, 0.32, 0.36], b);
+            stage._mat = MAT.WOOD;
+          }
           stage._mat = 0;
         }, { required: true });
       }
@@ -154,12 +218,10 @@
           stage._mat = 0;
         });
       }
-      every(48, (k) => {
-        const s = k / n, h = hash(k * 71 + 31);
-        if (!(s > 0.90 || s < 0.05) || h < 0.55) return;
-        motorhome(k, 1, 52 + h * 10, 10, 4, 6, { wall: [0.66 + h * 0.24, 0.66, 0.68] });
-      });
-      broadcastCompound(K(0.918), 1, 68, { vans: 2, dishes: 2, mastH: 9 });
+      // Paddock RVs removed — they buried into the hillside (~8 prims). Tech
+      // sheds already read as the paddock.
+      // OB compound pushed past the tech sheds so vans clear the slope.
+      broadcastCompound(K(0.918), 1, 110, { vans: 2, dishes: 2, mastH: 9 });
       // Was 6.5: after the closing-chord centerline fix the default panel face
       // sat 9.5 mm off the generic crowdBank riser (gap 6.55) at the start seam.
       // 6.0 leaves ~24 cm clear of the riser's trackward face (MIN_SEP = 3 cm).
@@ -221,7 +283,54 @@
       groundPatch(K(0.245), -1, 6, [30, 0.18, 42], GRAVEL,
         { id: "watkins-esses-gravel", samples: 7 });
       tyreWall(0.230, 0.262, -1, 5, [0.20, 0.40, 0.85]);
-      spectatorHill(0.20, 0.30, 1, 15, { rows: 4, rise: 1.2, depth: 1.9, density: 0.46, step: 8 });
+      // Sahlen Esses GA hillside + stand: rows climb away from the ribbon
+      // (positive slope). Gap nudged off the prior flatCoplanar pair with the
+      // crowdBank riser. Sources: theglen.com facility maps / TheGlenRace.com.
+      spectatorHill(0.20, 0.30, 1, 16.2, {
+        rows: 4, rise: 1.3, depth: 1.95, density: 0.38, step: 10,
+        grass: [0.22, 0.40, 0.18], riser: [0.32, 0.30, 0.26],
+      });
+      {
+        // Compact timber marker on the Esses bank — denser bleachers blew the
+        // props-tris ratchet; spectatorHill carries the crowd mass.
+        const a0 = anchor(K(0.255), 1, 28);
+        const a = liftToTerrain(a0, 4, 10), b = [a.r, a.u, a.t], inw = -1;
+        const bays = 5, pitch = 5.5, rows = 4, len = bays * pitch;
+        const topH = 0.9 + rows * 0.7;
+        indexSolid(0.235, 0.275, 1, 24, 10);
+        modelGroup("glen-esses-hill", {
+          center: vadd(a.c, a.u, topH * 0.55), size: [10, topH + 3, len + 2], basis: b,
+        }, (stage) => {
+          foundation(stage, {
+            center: a.c, size: [8.5, len + 1], top: a.c[1], basis: b,
+            col: [0.28, 0.36, 0.20], embed: 0.5,
+          });
+          stage._mat = MAT.CONCRETE;
+          for (let t = 0; t < rows; t++) {
+            const lat = inw * (2.2 - t * 0.9), y = 0.5 + t * 0.7;
+            seat.box(stage, vadd(vadd(a.c, a.r, lat), a.u, y),
+              [1.0, 0.5, len], t % 2 ? [0.24, 0.38, 0.18] : [0.30, 0.32, 0.26], b);
+          }
+          stage._mat = MAT.WOOD;
+          for (let i = 0; i <= bays; i++) {
+            const p = vadd(a.c, a.t, (i - bays / 2) * pitch);
+            seat.box(stage, vadd(p, a.r, -inw * 2.8), [0.24, topH, 0.24], TIMBER, b);
+          }
+          for (let t = 0; t < rows; t++) {
+            const lat = inw * (2.2 - t * 0.9), y = 0.65 + t * 0.7;
+            seat.box(stage, vadd(vadd(a.c, a.r, lat), a.u, y + 0.3),
+              [0.75, 0.12, len], WEATHERED, b);
+          }
+          // One coat band per row (not per seat) — tris budget.
+          stage._mat = MAT.FABRIC;
+          for (let t = 0; t < rows; t++) {
+            const lat = inw * (2.2 - t * 0.9), y = 0.65 + t * 0.7;
+            seat.box(stage, vadd(vadd(a.c, a.r, lat), a.u, y + 0.7),
+              [0.48, 0.8, len - 2], [0.30, 0.32, 0.36], b);
+          }
+          stage._mat = 0;
+        }, { required: true });
+      }
       marshalPost(K(0.250), 1, 9);
 
       groundPatch(K(0.615), 1, 5, [26, 0.18, 34], GRAVEL,
@@ -307,6 +416,8 @@
         }
       }
       {
+        // Do NOT lift the whole clearing to max terrain — that floats the fire
+        // pit and pallet stack over the bog hollow (float-audit + unsupported).
         const a = anchor(K(0.66), -1, 52), b = [a.r, a.u, a.t];
         groundPatch(K(0.66), -1, 40, [34, 0.16, 60], [0.26, 0.22, 0.17],
           { id: "glen-bog-mud", samples: 6 });
@@ -320,15 +431,18 @@
           for (let i = 0; i < CAMP_TENT_OFFSETS.boot.length; i++) {
             const [dr, dt] = CAMP_TENT_OFFSETS.boot[i];
             const p = vadd(vadd(a.c, a.r, dr), a.t, dt);
-            seat.prism(stage, p, [4.4, 2.6, 5.4], cols[i % cols.length], b);
+            const gy = terrainYAt(p[0], p[2]);
+            const foot = [p[0], gy != null ? Math.min(gy, a.c[1] + 0.15) : p[1], p[2]];
+            seat.prism(stage, foot, [4.4, 2.6, 5.4], cols[i % cols.length], b);
           }
           stage._mat = MAT.RUST;
           // The bus: a long charred body sitting nose-down on bare rims.
           const bus = vadd(vadd(a.c, a.r, 3), a.t, 15);
           seat.box(stage, vadd(bus, a.u, 0.6), [2.6, 2.6, 11], [0.24, 0.21, 0.19], b);
           seat.box(stage, vadd(bus, a.u, 3.2), [2.4, 0.35, 10.4], [0.30, 0.26, 0.22], b);
+          // Wheels proud of grade — prior rims sat ~0.3 m under the bog (bury).
           for (const dt of [-4.0, 3.4]) for (const dr of [-1.35, 1.35])
-            seat.cyl(stage, vadd(vadd(bus, a.t, dt), a.r, dr), 0.5, 0.35,
+            seat.cyl(stage, vadd(vadd(vadd(bus, a.t, dt), a.r, dr), a.u, 0.45), 0.5, 0.35,
               [0.20, 0.19, 0.18], 8, [a.r, a.t, a.u]);
           stage._mat = MAT.WOOD;
           // Fire pit and the stack of pallets waiting to go on it.
@@ -382,15 +496,21 @@
           for (let i = 0; i < CAMP_TENT_OFFSETS.climb.length; i++) {
             const [dr, dt] = CAMP_TENT_OFFSETS.climb[i];
             const p = vadd(vadd(a.c, a.r, dr), a.t, dt);
-            seat.prism(stage, p, [5.0, 2.8, 6.0], cols[i % cols.length], b);
+            const gy = terrainYAt(p[0], p[2]);
+            const foot = [p[0], gy != null ? Math.min(gy, a.c[1] + 0.15) : p[1], p[2]];
+            seat.prism(stage, foot, [5.0, 2.8, 6.0], cols[i % cols.length], b);
           }
           stage._mat = MAT.METAL;
           // Period travel trailers — rounded aluminium, ribbed along the body.
           for (const [dr, dt] of [[15, -13], [15, 12]]) {
-            const p = vadd(vadd(a.c, a.r, dr), a.t, dt);
+            const p0 = vadd(vadd(a.c, a.r, dr), a.t, dt);
+            const gy = terrainYAt(p0[0], p0[2]);
+            // Cap bury was from seating under a rising lip — clamp to anchor.
+            const y = gy != null ? Math.max(gy, a.c[1] - 0.1) : p0[1];
+            const p = [p0[0], y, p0[2]];
             seat.box(stage, p, [2.8, 2.5, 7], [0.80, 0.80, 0.78], b);
-            addFrustum(stage, vadd(p, a.u, 2.5), 1.4, 1.0, 0.6, [0.86, 0.86, 0.84], 6, b);
-            addBox(stage, vadd(p, a.u, 1.4), [3.0, 0.2, 6.6], [0.62, 0.62, 0.60], b);
+            addFrustum(stage, vadd(p, a.u, 2.55), 1.4, 1.0, 0.6, [0.86, 0.86, 0.84], 6, b);
+            addBox(stage, vadd(p, a.u, 1.45), [3.0, 0.2, 6.6], [0.62, 0.62, 0.60], b);
           }
           stage._mat = 0;
         });
