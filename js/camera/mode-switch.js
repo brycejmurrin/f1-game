@@ -34,7 +34,10 @@ window.CamModes = (function () {
       // button whose name had no CHASE in it.
       // https://www.w3.org/WAI/WCAG22/Understanding/label-in-name.html
       if (b) { b.textContent = CAM_MODES[G.camMode].label; b.setAttribute("aria-label", `${CAM_MODES[G.camMode].label} camera`); }
-      document.body.classList.toggle("cockpit-cam", CAM_MODES[G.camMode].id === "cockpit");
+      // cockpit-cam hides the HUD readouts the wheel's LCD carries — only while
+      // the chosen wheel HAS one (js/camera/cockpit-opts.js WHEEL).
+      document.body.classList.toggle("cockpit-cam", CAM_MODES[G.camMode].id === "cockpit"
+        && (typeof CockpitOpts === "undefined" || CockpitOpts.wheelHasScreen()));
     }
     function setCamMode(m, opts) {
       const prev = G.camMode;
@@ -151,6 +154,8 @@ window.CamModes = (function () {
       });
     })();
     refreshCamBtn();
+    // A WHEEL change mid-race flips whether the HUD shows gear and speed.
+    if (typeof CockpitOpts !== "undefined") CockpitOpts.onWheel(refreshCamBtn);
     // The SAVED camera's mix, at boot: setCamMode is the only other caller,
     // so a session that starts in the cockpit heard the chase mix until the
     // first camera change.

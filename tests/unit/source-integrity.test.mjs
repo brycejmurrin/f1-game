@@ -283,7 +283,9 @@ test("portrait race blocker is an actionable accessible dialog", () => {
     "guidance must not tell a portrait-locked player to enable rotation lock");
   assert.match(html, /id="rotate-controls"/);
   assert.match(html, /id="rotate-exit"/);
-  assert.match(game, /\$\("rotate-controls"\)\.onclick[\s\S]*?setPaused\(true\)/,
+  // Bounded to the handler's own body ([^}]*): unbounded, the match ran 21k
+  // characters on to another setPaused(true) (audit 2026-09-29).
+  assert.match(game, /\$\("rotate-controls"\)\.onclick = \(\) => \{[^}]*setPaused\(true\)/,
     "Controls must pause before yielding the blocker to help");
   assert.match(game, /\$\("rotate-exit"\)\.onclick\s*=\s*\(\)\s*=>\s*quitToMenu\(\)/,
     "Exit Race must use the real session cleanup path");
@@ -292,7 +294,7 @@ test("portrait race blocker is an actionable accessible dialog", () => {
   // recovery path for a phone rotation-locked mid-race — so the CSS must gate
   // on a class the player sets, never remove the rule.
   assert.match(html, /id="rotate-race"/);
-  assert.match(game, /\$\("rotate-race"\)\.onclick[\s\S]*?rotate-ok/,
+  assert.match(game, /\$\("rotate-race"\)\.onclick = \(\) => \{[^}]*rotate-ok/,
     "the opt-in must set the class the blocker rule reads");
   assert.match(game, /localStorage\.setItem\("apex26\.portraitOk"/,
     "the choice must survive a reload, or the blocker asks again every race");

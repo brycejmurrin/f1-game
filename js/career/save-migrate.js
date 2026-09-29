@@ -67,11 +67,13 @@ const SaveMigrate = (function () {
       const driver = roster.find((candidate) => candidate.id === key || candidate.code === key);
       const id = driver ? driver.id : key;
       nextPts[id] = (nextPts[id] || 0) + Math.max(0, Number(value) || 0);
-      if (driver) codes[id] = driver.code;
-      else if (!codes[id]) codes[id] = key;
+      // A STORED code wins: award() files the player's seat as "YOU", market
+      // moves and MY TEAM hires re-label seats, and rewriting them from the
+      // shipped roster on every load named the player's row after the AI.
+      if (!codes[id]) codes[id] = driver ? driver.code : key;
     });
     roster.forEach((driver) => {
-      if (Object.prototype.hasOwnProperty.call(nextPts, driver.id)) codes[driver.id] = driver.code;
+      if (Object.prototype.hasOwnProperty.call(nextPts, driver.id) && !codes[driver.id]) codes[driver.id] = driver.code;
     });
     season.pts = nextPts;
     season.driverCodes = codes;

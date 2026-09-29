@@ -1030,6 +1030,9 @@ function scPassCall(ev) {
   if (!ev || !player || ev.type === "cleared") return;
   if (ev.type === "warn") { announce("GIVE THE POSITION BACK" + (ev.n > 1 ? " — " + ev.n + " PLACES" : ""), 2.5, "penalty-warn"); return; }
   player.penalty += ev.sec;
+  // The results countdown may already be running (the player just finished):
+  // re-read it so a time penalty that reorders the finish is served first.
+  resultT = 0;
   announce("+" + ev.sec + "s PENALTY — OVERTAKING UNDER CAUTION", 3, "penalty-hit");
   if (soundOn) GameAudio.penalty();
 }
@@ -2083,6 +2086,13 @@ function redFlagRestart() {
   IncidentSim.reset(); DebrisWorld.reset(); DebrisWorld.prime();
   const L = track.total;
   const order = cars.filter((c) => !c.retired).sort((a, b) => b.prog - a.prog);
+  // THE REWIND IS THE LEADER'S. Each car used to step back its OWN lap, so a
+  // car 150 m behind a leader that had just crossed (one lap number lower,
+  // not lapped) came out of the restart a full lap down: "+1 LAP" on the
+  // sheet and no way to win. The leader re-runs its lap; every other car
+  // keeps the laps it was actually down at the flag, by distance.
+  const lead = order[0];
+  const leadProg = lead ? lead.prog : 0, leadLap = lead ? Math.max(0, lead.lap - 1) : 0;
   order.forEach((c, i) => {
     const slot = TrackMesh.gridSlot(track, i);
     c.s = wrapS(slot.s); c.x = slot.x; c.xVis = c.x;
@@ -2098,14 +2108,16 @@ function redFlagRestart() {
     // so keeping it made the restart crossing lap n+1 — a leader on its last
     // lap was classified finished 14 m after the lights. Same lap/prog
     // relation as gridUp (lap 0 ↔ prog just under 0).
-    const progWas = c.prog;
-    if (c.lap > 0) {
+    const progWas = c.prog, lapWas = c.lap;
+    const down = Math.max(0, Math.floor((leadProg - progWas) / L));
+    const lapNew = c === lead ? leadLap : Math.min(lapWas, Math.max(0, leadLap - down));
+    if (lapNew < lapWas) {
       // Fuel follows laps actually driven, not the scoring lap we replay from
       // the grid. A restart cannot put burned fuel back in the tank.
-      c.fuelLap = Math.max(c.fuelLap || 0, c.lap + (c.fuelRestartLaps || 0));
-      c.fuelRestartLaps = (c.fuelRestartLaps || 0) + 1;
-      c.lap--;
+      c.fuelLap = Math.max(c.fuelLap || 0, lapWas + (c.fuelRestartLaps || 0));
+      c.fuelRestartLaps = (c.fuelRestartLaps || 0) + (lapWas - lapNew);
     }
+    c.lap = lapNew;
     c.prog = c.lap * L - (L - c.s);
     c._progGift = (c._progGift || 0) + (c.prog - progWas);
     c.head = 0; c.yawVis = 0; c.rPrevHead = 0; c.rPrevYawVis = 0;
@@ -4590,7 +4602,7 @@ function updateCar(c, dt, ranked) {
   if (!c.human && c.tyreClass) {
     vmax *= tyres.on() ? (1 + (c.tyre ? c.tyre.off : 0)) * tyres.tractionMul(c)
                        : AiDrive.tyrePace(c.tyreClass, c.lap);
-  }
+  } else if (c.human) vmax *= tyres.tractionMul(c);   // the same curve for the player: perfMul only slows the climb to vmax, never the cap (exactly 1 with wear off)
   // FUEL BURN, the counterweight that gives a stint its shape: the car gets
   // lighter and faster while the tyre goes off and gets slower, and where those
   // two cross is the pit window. Exactly 1 when the setting is off.

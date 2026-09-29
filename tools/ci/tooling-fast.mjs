@@ -203,6 +203,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/data-api-status.test.mjs",
   "tests/unit/scenery-api-contract.test.mjs",
   "tests/unit/scenery-guards.test.mjs",
+  "tests/unit/bahrain-grandstand-rake.test.mjs",
   // Suzuka figure-8 green span must sit flush on the lifted ribbon (clearance ≤ 0.5 m) — a prior overheadSpan at clearance 8.6 hung ~8 m above the SRTM-baked back-straight. Pure verify-track diagnostics, ~2 s.
   "tests/unit/suzuka-crossover-span.test.mjs",
   "tests/unit/track-build-vm-release.test.mjs",
@@ -301,6 +302,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // zero-reference module and the two thin spots): each under a second.
   "tests/unit/body-attitude.test.mjs",
   "tests/unit/save-migrate.test.mjs",
+  // js/race/reliability.js (random DNFs) had no unit test — only career.spec,
+  // over budget and nightly-only. Pure VM with a stub hash, well under a second.
+  "tests/unit/reliability.test.mjs",
   // ApexClipboard.write/read + preferSync order (clipboard carve). Pure VM,
   // well under a second; must run where the helper or a call-site is edited.
   "tests/unit/clipboard.test.mjs",
@@ -386,6 +390,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // against three r186's real Texture). The pit-crew mesh cache is capped.
   "tests/unit/tlx-texture-release.test.mjs",
   "tests/unit/car-mesh-crew-cache.test.mjs",
+  // The COCKPIT WHEEL choice: option, meshes per style, draw path, HUD gate.
+  "tests/unit/cockpit-wheels.test.mjs",
   // The sun shadow map's depth span holds a 250 m caster: drives the real
   // ShadowPass.sunPass on a stub renderer and projects through its light VP.
   "tests/unit/shadow-pass-depth.test.mjs",
