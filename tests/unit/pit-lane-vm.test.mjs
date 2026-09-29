@@ -465,6 +465,33 @@ test("WORK ON CAR is offered only on the jacks, and the stop pays for it", async
   a.clearInput();
   assert.ok(inBox, "reached the box");
   assert.equal(pits.canWork(car), true, "…and the work is offered on the jacks");
+  // Exercise the real button and both exits: arrival never spends race time,
+  // Escape skips only the cinematic, and an unchanged visit is free.
+  const doc = g.sandbox.document, heldBefore = car.pitT;
+  doc.getElementById("hud-work").onclick();
+  assert.equal(g.G.paused, true);
+  assert.equal(doc.getElementById("carsetup").hidden, false);
+  assert.equal(doc.getElementById("cs-inner").inert, true);
+  assert.equal(doc.getElementById("carsetup").getAttribute("data-esc-close"), "cs-arrival-skip");
+  const begin = g.G.gfx.begin;
+  let previewFrames = 0;
+  g.G.gfx.begin = (...args) => { previewFrames++; return begin(...args); };
+  a.headless(false);
+  g.pumpFrame(performance.now() + 100);
+  g.G.gfx.begin = begin;
+  a.headless(true);
+  assert.ok(previewFrames > 0, "paused pit work must still render the garage animation");
+  assert.equal(car.pitT, heldBefore, "rendering the arrival does not simulate a pit tick");
+  doc.getElementById("cs-arrival-skip").onclick();
+  assert.equal(g.G.paused, true, "skip keeps the race paused for work");
+  assert.equal(doc.getElementById("cs-inner").inert, false);
+  doc.getElementById("cs-back").onclick();
+  assert.equal(g.G.paused, false);
+  assert.equal(car.pitT, heldBefore, "animation and inspection add no work charge");
+  doc.getElementById("hud-work").onclick();
+  doc.getElementById("cs-done").onclick();
+  assert.equal(doc.getElementById("cs-arrival").hidden, true);
+  assert.equal(g.G.paused, false, "early exit cleans up arrival and resumes");
   // THE PRICE, charged to the hold that is left — so the field drives past
   // while you are in there, which is the whole point of charging it.
   const held = car.pitT;

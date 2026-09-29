@@ -296,6 +296,17 @@ test("a pinned stop count returns that many stops, with the stop laps inside the
   assert.equal(A.stintPlan({ laps: 53, lifeLaps: lifeFor(53), pitLossLaps: PIT_LOSS_LAPS, roll: 0.5, stops: 5 }).stops, A.STRAT.MAX_STOPS);
 });
 
+test("a pin the race is too short to hold is capped: no zero-length stint, no stop on lap 0", () => {
+  // The pin is stored per circuit, not per distance: a 2-stop pin met a 2-lap
+  // sprint leg and planned stints [0, 1, 1], "BOX L0".
+  for (const [laps, stops] of [[2, 2], [1, 1], [3, 2]]) {
+    const p = A.stintPlan({ laps, lifeLaps: lifeFor(laps), pitLossLaps: PIT_LOSS_LAPS, roll: 0.5, stops });
+    assert.ok(p.stops <= laps - 1, `${laps} laps hold at most ${laps - 1} stops, got ${p.stops}`);
+    for (const n of p.stints) assert.ok(n >= 1, `a stint of ${n} laps (${laps} laps, pin ${stops}): ${p.stints}`);
+    for (const at of p.lapsAt) assert.ok(at >= 1 && at < laps, `stop lap ${at} inside [1, ${laps - 1}]`);
+  }
+});
+
 test("a pinned start is the first compound, and a compound the planner does not enumerate falls back to the classes", () => {
   for (const start of ["soft", "medium", "hard"]) {
     const p = A.stintPlan({ laps: 53, lifeLaps: lifeFor(53), pitLossLaps: PIT_LOSS_LAPS, roll: 0.5, start });
