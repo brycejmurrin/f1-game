@@ -7,7 +7,7 @@
 (window.TrackScenery = window.TrackScenery || {})["mugello"] =
   function (api) {
       const { K, lapBounds, out, MAT, n, track, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz, hw,
-        indexSolid,
+        indexSolid, seat,
         pine, tree, bush, hedge, ridge, mountain, building, grandstandEx,
         spectatorHill, broadcastCompound, billboard, gantry, marshalPost,
         motorhome, fence, guardrail, tyreWall, groundPatch, modelGroup,
@@ -16,6 +16,13 @@
         terrainYAt, groundYAt,
         groundUnder,
       } = api;
+
+      // World-up horizontal basis — banked a.u digs hillside props into grade.
+      const flatBasis = (a) => {
+        const rl = Math.hypot(a.r[0], a.r[2]) || 1;
+        const tl = Math.hypot(a.t[0], a.t[2]) || 1;
+        return [[a.r[0] / rl, 0, a.r[2] / rl], [0, 1, 0], [a.t[0] / tl, 0, a.t[2] / tl]];
+      };
 
       // ── VINEYARDS AND CASALI — the other half of Tuscany ─────────────────
       // Mugello already plants the cypress and the olives, which is two of the
@@ -50,14 +57,34 @@
             const b = [a.r, a.u, a.t];
             const hv = hash(kk * 19 + r * 31);
             const rowLen = len * (0.85 + hv * 0.24);
-            addBox(out, vadd(a.c, a.u, 0.06), [4.6, 0.12, rowLen], SOIL, b);
+            // Seat each row on the hillside under its centre — reusing
+            // anchor()'s road-edge Y buried the tilled strip up to 1.8 m into
+            // the Tuscan slope (ground-audit line 53). World-up basis so a
+            // banked a.u does not tip the strip into grade.
+            const gy = groundUnder(a.c[0], a.c[2]);
+            const ty = terrainYAt(a.c[0], a.c[2]);
+            const baseY = Math.max(
+              gy != null ? gy : -Infinity,
+              ty != null ? ty : -Infinity,
+              a.c[1]
+            );
+            if (!Number.isFinite(baseY)) continue;
+            const foot = [a.c[0], baseY + 0.06, a.c[2]];
+            const bw = flatBasis(a);
+            seat.box(out, foot, [4.6, 0.12, rowLen], SOIL, bw);
             out._mat = MAT.FOLIAGE;
-            addBox(out, vadd(a.c, a.u, 1.05), [1.5, 1.5, rowLen],
-                   hv < 0.5 ? VINE : VINE_DRY, b);
+            seat.box(out, [foot[0], foot[1] + 0.12, foot[2]], [1.5, 1.5, rowLen],
+                     hv < 0.5 ? VINE : VINE_DRY, bw);
             out._mat = 0;
             out._mat = MAT.WOOD;
             for (const e of [-rowLen / 2, rowLen / 2]) {
-              addCyl(out, vadd(a.c, a.t, e), 0.10, 2.0, POST, 4, b);
+              const pc = vadd(a.c, a.t, e);
+              const py = Math.max(
+                groundUnder(pc[0], pc[2]) ?? -Infinity,
+                terrainYAt(pc[0], pc[2]) ?? -Infinity,
+                foot[1]
+              );
+              seat.cyl(out, [pc[0], py, pc[2]], 0.10, 2.0, POST, 4, bw);
             }
             out._mat = 0;
           }
@@ -135,13 +162,18 @@
       // engine's deferred foliage off the yard, and since tree()/pine() only
       // space trees from trees, this file's own loops check it themselves.
       indexSolid(0.500 - 30 / track.total, 0.500 + 30 / track.total, 1, 127, 46);
+      indexSolid(0.005 - 40 / track.total, 0.005 + 40 / track.total, -1, 8, 28);
+      indexSolid(0.218 - 20 / track.total, 0.218 + 20 / track.total, 1, 10, 24);
+      indexSolid(0.238 - 18 / track.total, 0.238 + 18 / track.total, 1, 12, 22);
       const casale = anchor(K(0.500), 1, 150).c;
       const offCasale = (k, side, dist) => {
         const a = anchor(k, side, dist);
         return Math.hypot(a.c[0] - casale[0], a.c[2] - casale[2]) > 34;
       };
       // Open through San Donato (0.10-0.18): its bowl and stands stand there.
-      const openArea = (s) => (s >= 0.92 || s <= 0.18) || (s >= 0.36 && s <= 0.46);
+      // Also clear Poggio Secco / Materassi outside (0.200-0.260).
+      const openArea = (s) => (s >= 0.92 || s <= 0.18) || (s >= 0.36 && s <= 0.46)
+        || (s >= 0.200 && s <= 0.260);
       every(22, (k) => {
         const s = k / n;
         if (openArea(s)) return;
@@ -262,27 +294,91 @@
       }
       gantry(0.0, 8.5, [0.15, 0.15, 0.18]);
       gantry(0.968, 8.0, [0.15, 0.15, 0.18]);
-      grandstandEx(0.005, -1, 11, 160, null, null,
-        { livery: "crimson", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
-      // Red trim band fronting the main stand — Ferrari's circuit, Ferrari's colour.
-      {
-        // 7.6, not 8: at 8 its back face sat in the 9 m fence (coplanar-audit).
-        const a = anchor(K(0.005), -1, 7.6);
-        addBox(out, vadd(a.c, a.u, 1.6), [2, 1.6, 150], [0.80, 0.14, 0.12], [a.r, a.u, a.t]);
+      // Tribuna Centrale / Poltronissima — covered main grandstand opposite the
+      // pits (tracksideseats.com Centrale Bronze; motogpmugello.com Poltronissima;
+      // mugellocircuit.com VIP lounges / pit-lane hospitality). Permanent stadium
+      // capacity ~50,000 (Wikipedia). Rows rise away from the track; crimson
+      // trim is Ferrari ownership, not a ticket-map colour claim.
+      function emitCentraleStand(stage, a, side) {
+        const b = [a.r, a.u, a.t];
+        const IN = -side;
+        stage._mat = MAT.CONCRETE;
+        seat.box(stage, a.c, [18, 0.5, 158], [0.72, 0.72, 0.70], b);
+        addBox(stage, vadd(vadd(a.c, a.r, side * 14.5), a.u, 8.5),
+          [1.2, 16, 160], [0.78, 0.76, 0.72], b);
+        for (let tier = 0; tier < 5; tier++) {
+          const lat = side * (1.4 + tier * 2.4);
+          const y = 1.0 + tier * 1.85;
+          const len = 152 - tier * 2.0;
+          const foot = vadd(a.c, a.r, lat);
+          const gy = groundUnder(foot[0], foot[2]);
+          foot[1] = (gy != null ? gy : a.c[1]) + y;
+          stage._mat = MAT.CONCRETE;
+          seat.box(stage, foot, [2.1, 0.22, len], [0.74, 0.74, 0.72], b);
+          seat.box(stage, [foot[0], foot[1] + 0.22, foot[2]],
+            [1.7, 1.05, len - 1.6],
+            tier & 1 ? [0.78, 0.18, 0.16] : [0.86, 0.22, 0.18], b);
+          stage._mat = MAT.FABRIC;
+          for (let j = 0; j * 1.4 < len - 8; j++) {
+            const h2 = hash(11 + tier * 41 + j * 17);
+            if (h2 < 0.48) continue;
+            const fc = vadd(foot, a.t, -len / 2 + 4 + j * 1.4);
+            seat.box(stage, [fc[0], foot[1] + 0.9, fc[2]],
+              [0.55, 0.95, 0.48],
+              h2 < 0.6 ? [0.84, 0.14, 0.12] : [0.92, 0.90, 0.86], b);
+          }
+        }
+        stage._mat = MAT.METAL;
+        addBox(stage, vadd(vadd(a.c, a.r, side * 6.5), a.u, 15.2),
+          [16, 0.45, 162], [0.82, 0.82, 0.80], b);
+        addBox(stage, vadd(vadd(a.c, a.r, IN * 1.2), a.u, 14.6),
+          [0.35, 0.7, 158], [0.55, 0.56, 0.58], b);
+        stage._mat = 0;
+        addBox(stage, vadd(vadd(a.c, a.r, IN * 0.35), a.u, 2.2),
+          [0.28, 2.4, 150], ROSSO, b);
+        for (const t of [-76, 76]) {
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(vadd(a.c, a.t, t), a.u, 7.5),
+            [14, 14, 1.0], [0.76, 0.74, 0.70], b);
+        }
+        for (const t of [-50, -20, 10, 40]) {
+          stage._mat = MAT.METAL;
+          addBox(stage,
+            vadd(vadd(vadd(a.c, a.r, side * 13.5), a.t, t), a.u, 7.5),
+            [0.55, 14.5, 0.55], [0.62, 0.62, 0.64], b);
+        }
+        stage._mat = 0;
       }
+      {
+        const side = -1;
+        const a = anchor(K(0.005), side, 22);
+        const b = [a.r, a.u, a.t];
+        modelGroup("mugello-centrale-stand", {
+          center: vadd(a.c, a.u, 10), size: [28, 24, 170], basis: b,
+        }, (stage) => emitCentraleStand(stage, a, side), { required: true });
+      }
+      // Centrale owns the mid-straight; no shoulder grandstandEx (they clipped
+      // the vine forEach at 0.95 and fought the hero's end walls).
       for (let i = 0; i < 4; i++) {
         building(K(0.925 + i * 0.013), 1, 40, 28, 8, 20,
           { kind: "hall", wall: STONE, window: [0.30, 0.32, 0.36], floor: 4.5 });
       }
       every(46, (k) => {
         const s = k / n, h = hash(k * 71 + 31);
-        if (!(s > 0.90 || s < 0.05) || h < 0.52) return;
-        motorhome(k, 1, 56 + h * 10, 10, 4, 6, { wall: [0.66 + h * 0.24, 0.66, 0.68] });
+        if (!(s > 0.90 || s < 0.05) || h < 0.58) return;
+        // Skip pads that sit below grade on the paddock berm (was 6× buried ≤1.1 m).
+        const gap = 70 + h * 6;
+        const a = anchor(k, 1, gap);
+        const gy = groundUnder(a.c[0], a.c[2]);
+        if (gy != null && a.c[1] < gy - 0.15) return;
+        motorhome(k, 1, gap, 10, 4, 6, { wall: [0.66 + h * 0.24, 0.66, 0.68] });
       });
       // 66, not 74: at 74 its footprint reached the Savelli carriageway (0.436),
       // 6.5 m off; 68 still does. At 66 it stands 10 m clear.
       broadcastCompound(K(0.916), 1, 66, { vans: 3, dishes: 2, mastH: 9 });
-      for (const s of [0.975, 0.01, 0.03]) billboard(K(s), -1, 8, 12, 4.5, [0.86, 0.14, 0.12]);
+      // Drop the three stand-face billboards — they hung ~7.7 m unsupported
+      // above the ribbon (ground-audit). Hoarding below already covers the
+      // start/finish advertising band.
 
       const terrazza = (s0, s1, side, gap, opts) => {
         opts = opts || {};
@@ -349,7 +445,55 @@
       marshalPost(K(0.875), 1, 9);
 
       spectatorHill(0.18, 0.26, -1, 14, { rows: 3, rise: 1.1, depth: 1.8, density: 0.42, step: 9 });
+      // Arrabbiata 58 / Prato 58 hillside — elevated view of the Arrabbiate
+      // (motogpmugello.com Grandstand Arrabbiata 58; tracksideseats GA 58 Area).
+      // Exact named-stand footprint vs this frac is UNCERTAIN; place by the
+      // banked Arrabbiata sector (bankZones 0.47 / 0.52), not a ticket label.
+      // Gap 36 (not 18–20): closer banks fought forestEdge (clip 11→13).
+      spectatorHill(0.485, 0.530, -1, 36, { rows: 3, rise: 1.1, depth: 1.8, density: 0.32, step: 12 });
       spectatorHill(0.62, 0.72, 1, 14, { rows: 3, rise: 1.1, depth: 1.8, density: 0.42, step: 9 });
+
+      // Poggio Secco + Materassi — uncovered stands on the outside near turn 3
+      // (motogpmugello.com / koobit: Materassi "outer edge… near Poggio Secco";
+      // mugellocircuit FAQ: enter both from Luco). Turn apex ~0.219 (turns[3]).
+      function emitOpenHillStand(stage, a, side, tiers, spineH, len0) {
+        const b = [a.r, a.u, a.t];
+        const IN = -side;
+        stage._mat = MAT.CONCRETE;
+        // Raise plinth slightly so seat.box does not sink into the hillside.
+        const plinth = [a.c[0], a.c[1] + 0.15, a.c[2]];
+        seat.box(stage, plinth, [10, 0.4, len0], [0.70, 0.70, 0.68], b);
+        for (let tier = 0; tier < tiers; tier++) {
+          const lat = side * (1.2 + tier * 2.0);
+          const y = 0.9 + tier * 1.5;
+          const foot = vadd(a.c, a.r, lat);
+          const gy = groundUnder(foot[0], foot[2]);
+          foot[1] = (gy != null ? gy : a.c[1]) + y;
+          seat.box(stage, foot, [1.8, 0.2, len0 - 2 - tier * 1.4], [0.74, 0.74, 0.72], b);
+          seat.box(stage, [foot[0], foot[1] + 0.2, foot[2]],
+            [1.4, 0.9, len0 - 4 - tier * 1.4],
+            tier & 1 ? [0.80, 0.20, 0.16] : [0.88, 0.24, 0.18], b);
+        }
+        addBox(stage, vadd(vadd(a.c, a.r, side * (8.5 + tiers * 0.4)), a.u, spineH * 0.5),
+          [0.9, spineH, len0], [0.76, 0.74, 0.70], b);
+        addBox(stage, vadd(vadd(a.c, a.r, IN * 0.3), a.u, 1.8),
+          [0.22, 2.0, len0 - 4], ROSSO, b);
+        stage._mat = 0;
+      }
+      {
+        const a = anchor(K(0.218), 1, 36);
+        const b = [a.r, a.u, a.t];
+        modelGroup("mugello-poggio-secco-stand", {
+          center: vadd(a.c, a.u, 7), size: [14, 14, 48], basis: b,
+        }, (stage) => emitOpenHillStand(stage, a, 1, 4, 9.5, 44), { required: true });
+      }
+      {
+        const a = anchor(K(0.238), 1, 30);
+        const b = [a.r, a.u, a.t];
+        modelGroup("mugello-materassi-stand", {
+          center: vadd(a.c, a.u, 6), size: [16, 14, 52], basis: b,
+        }, (stage) => emitOpenHillStand(stage, a, 1, 3, 9.0, 46), { required: true });
+      }
 
       for (const [s0, s1] of [[0.10, 0.28], [0.34, 0.46], [0.53, 0.61], [0.67, 0.85]]) {
         guardrail(s0, s1, -1, 8, [0.80, 0.81, 0.83]);
@@ -426,7 +570,8 @@
           addBox(stage, vadd(vadd(a.c, a.t, 16), a.u, 10.95), [7, 22.1, 7], TRAV, b); // campanile (foot 10 cm below the nave's)
           stage._mat = 0;
           addPrism(stage, vadd(a.c, a.u, 9.6), [13.6, 3.4, 26.6], TERRA, b);
-          addPrism(stage, vadd(vadd(a.c, a.t, 16), a.u, 22.4), [7.6, 2.6, 7.6], TERRA, b);
+          // Flush on the campanile top (was 22.4 → 0.4 m air gap above the tower).
+          addPrism(stage, vadd(vadd(a.c, a.t, 16), a.u, 22.0), [7.6, 2.6, 7.6], TERRA, b);
           // Belfry openings — two dark arches on each face of the tower.
           for (const sr of [-1, 1]) {
             addBox(stage, vadd(vadd(vadd(a.c, a.t, 16), a.r, sr * 3.6), a.u, 19),
@@ -478,13 +623,15 @@
               let len = spacing;
               if (i > 0) len = Math.min(len, flatD(base, segs[i - 1].bases[r]));
               if (i + 1 < segs.length) len = Math.min(len, flatD(base, segs[i + 1].bases[r]));
-              // Rooted 0.35 m into the slope (a row's length rides the hillside
-              // and its ends lifted clear); the top steps 4 cm by (segment +
-              // 2*row) mod 4 so no touching neighbour shares its plane.
+              // World-Y seat + flatBasis — banked a.u after terrainYAt rewrite
+              // buried rows up to 10.9 m into the hillside (ground-audit).
               const vh = 1.9 + 0.04 * ((i + 2 * r) % 4);
+              const gy = groundUnder(base[0], base[2]);
+              const footY = (gy != null ? gy : base[1]) + 0.05;
+              const bw = flatBasis(a);
               out._mat = MAT.FOLIAGE;
-              addBox(out, vadd(base, a.u, vh * 0.5 - 0.35),
-                [0.9, vh, len * 0.96], r & 1 ? VINE : [0.26, 0.36, 0.20], b);
+              addBox(out, [base[0], footY + vh * 0.5, base[2]],
+                [0.9, vh, len * 0.96], r & 1 ? VINE : [0.26, 0.36, 0.20], bw);
               out._mat = 0;
             } else {
               const h = hash(k * 7 + r * 13);

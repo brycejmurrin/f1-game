@@ -162,6 +162,13 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
       "montreal-wall-of-champions-stand",
       "montreal-biosphere",
     ],
+    // Wave 6 — Mugello Centrale + Poggio Secco + Materassi (hillside GA at
+    // Arrabbiata / San Donato is spectatorHill, not a required modelGroup).
+    mugello: [
+      "mugello-centrale-stand",
+      "mugello-poggio-secco-stand",
+      "mugello-materassi-stand",
+    ],
     // Wave 6 — Kyalami Highveld landmarks (pit/race-control already required;
     // main GS + headgear/windpump/clubhouse made explicit this wave).
     kyalami: [
