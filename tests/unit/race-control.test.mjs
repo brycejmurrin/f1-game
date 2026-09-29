@@ -163,6 +163,21 @@ test("the finish policy closes completed human races and bounded edge cases", ()
   ], 1081, 3), 0.1, "the hard cap still prevents a permanently hung race");
 });
 
+test("a Data Hub JUMP IN counts the hard cap from the clock it was seeded to, not from zero", () => {
+  // PR #402 audit: RealRace.place seeds raceT to the real race's time at the
+  // lap you join (K0 * t0 — 5 000+ s at lap 40 of Baku). On a 3-lap condensed
+  // race that already passed 360 * 3 s, so the countdown fired on the first
+  // green frame and the race ended with the player still driving.
+  const { finishDelay } = load({ active: () => false, hazards: () => hazards(0, 0) });
+  const you = [{ human: true, finished: false, retired: false }];
+  assert.equal(finishDelay(you, 5200, 3), 0.1, "without the origin the seeded clock trips the cap at once");
+  assert.equal(finishDelay(you, 5200, 3, 5100), 0, "100 s into a jump-in is 100 s of racing");
+  assert.equal(finishDelay(you, 5100 + 1081, 3, 5100), 0.1, "the cap still ends a hung jump-in, counted from the join");
+  const held = [{ human: true, finished: true, retired: false, finishT: 5300, penalty: 5 }, { human: false, finished: false, retired: false }];
+  assert.equal(finishDelay(held, 5301, 3, 5100), 0, "a penalty still holds the countdown after a jump-in");
+  assert.equal(finishDelay(you, 1081, 3, 0), 0.1, "an origin of 0 is the ordinary race");
+});
+
 test("a finisher's outstanding time penalty holds the countdown until the field has had that long to cross", () => {
   // Bug-hunt 2026-09-02 (race, not landed in round 1): endRace sorts finishers
   // by finishT + penalty, but the countdown ran from the player's crossing —

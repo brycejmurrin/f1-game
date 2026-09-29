@@ -248,6 +248,7 @@ test.describe("Zandvoort shared-foundation migration", () => {
     // to notice a model quietly becoming, or ceasing to be, required.
     expect(result.models.emitted.filter((entry) => entry.required).map((entry) => entry.id).sort())
       .toEqual([
+        "zandvoort-ferris-wheel",
         "zandvoort-lighthouse",
         "zandvoort-watertoren",
       ]);
