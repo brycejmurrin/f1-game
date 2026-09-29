@@ -1041,6 +1041,7 @@ let pits = null;      // PitLane.create(G), same deferral
 // at the flag (js/race/sporting-regs.js; FIA 2026 SR B5.12.2(c), B5.13.2(c)).
 // A car slowed by an obvious problem may be passed under a caution
 // mid-incident, being rescued as stuck, or beached in the run-off.
+const postLim = { r: 0, l: 0, minOut: 0, side: 0 };   // Tracks.postLimits' reused out-param
 const scWatch = SportingRegs.createPassWatch(0, (o) => incidentSim.owns(o) || (o.rescueT || 0) > 0.25 || (!!o.offroad && (o.offT || 0) > 0.5));
 function scPassCall(ev) {
   if (!ev || !player || ev.type === "cleared") return;
@@ -6029,6 +6030,15 @@ function updateCar(c, dt, ranked) {
         else laneMin = wallLat + 0.30 + 1.0;
       }
     }
+  }
+  // GANTRY LEGS (Tracks.postLimits): a footprint on each side of the leg,
+  // never a wall line — a car on the run-off stays out there, one on the road
+  // stops at the leg's face. The outside case rides the pit wall's lane clamp.
+  if (track.posts && track.posts.length) {
+    Tracks.postLimits(track, c.s, c.x, postLim);
+    if (postLim.r < wallR) wallR = postLim.r;
+    if (postLim.l < wallL) wallL = postLim.l;
+    if (postLim.minOut > laneMin) { laneMin = postLim.minOut; pitSd = postLim.side; }
   }
   let xPinned = false;   // did the barrier clamp c.x? (see the writeback below)
   if (c.x > wallR || c.x < -wallL) {

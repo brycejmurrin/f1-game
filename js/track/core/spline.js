@@ -207,6 +207,35 @@ const TrackSpline = (function () {
     return Math.min(arr[i], arr[j]);
   }
 
-  return { SCALE, centerline, cr, sample, curvatureRaw, curvature, project, wallAt };
+  // POSTS (buildProps `post`, a gantry leg): a thin solid limits a car on EACH
+  // side of it without walling off the ground beyond. A car inside the post
+  // (nearer the road) gets its wall brought in to the post's inner face; a car
+  // outside it (on the run-off) is kept beyond its outer face. Fills `out` —
+  // { r, l: wall caps per side, minOut: least |x| on the `side` it sits } —
+  // so the per-car call allocates nothing. POST_CLEAR is the barrier clamp's
+  // own car-half-width margin (buildProps WALL_CLEAR, the pit wall's 1.1).
+  const POST_CLEAR = 1.1;
+  function postLimits(track, s, x, out) {
+    out.r = Infinity; out.l = Infinity; out.minOut = 0; out.side = 0;
+    const P = track.posts;
+    if (!P || !P.length) return out;
+    const L = track.total;
+    for (let i = 0; i < P.length; i++) {
+      const p = P[i];
+      let d = s - p.s;
+      d -= L * Math.round(d / L);
+      if (d > p.halfS || d < -p.halfS) continue;
+      if (x * p.side < p.lat) {
+        const lim = p.lat - p.halfX - POST_CLEAR;
+        if (p.side > 0) { if (lim < out.r) out.r = lim; } else if (lim < out.l) out.l = lim;
+      } else {
+        const lim = p.lat + p.halfX + POST_CLEAR;
+        if (lim > out.minOut) { out.minOut = lim; out.side = p.side; }
+      }
+    }
+    return out;
+  }
+
+  return { SCALE, centerline, cr, sample, curvatureRaw, curvature, project, wallAt, postLimits };
 })();
 Object.freeze(TrackSpline);
