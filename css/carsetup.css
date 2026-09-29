@@ -1546,4 +1546,26 @@ body:not(.desktop) #cs-cam { font-size: var(--fs-micro); }
      aiming at, and they return the moment the panel shuts. */
   #carsetup:has(#cs-cam-panel:not([hidden])) #cs-stats-inner { display: none; }
 }
+
+/* The pit arrival owns the canvas until the car is parked. */
+#carsetup.cs-arriving #cs-inner,
+#carsetup.cs-arriving #cs-stack { visibility: hidden; pointer-events: none; }
+#cs-arrival {
+  position: absolute; inset: auto 0 max(var(--pad), env(safe-area-inset-bottom));
+  display: flex; align-items: center; justify-content: center; gap: var(--gap);
+  padding: var(--gap) var(--pad); background: var(--carbon);
+  color: var(--text); pointer-events: auto;
+}
+#cs-arrival[hidden] { display: none; }
+#cs-arrival-label { font-weight: 700; letter-spacing: .12em; font-size: var(--label); }
+#cs-arrival-skip { min-height: var(--tap); }
+
+#ga-settings { grid-column: 1 / -1; }
+#ga-enabled { width: var(--tap); height: var(--tap); accent-color: var(--red); }
+#ga-fov {
+  width: 6ch; min-height: var(--tap); text-align: center;
+  background: var(--carbon); color: var(--text); border: 1px solid var(--text);
+  font: inherit;
+}
+
 } /* @layer components */

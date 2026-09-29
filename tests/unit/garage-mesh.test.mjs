@@ -22,12 +22,12 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
 
 // A recording Gfx: every createMesh call is kept so the columns can be checked.
 function harness() {
-  const meshes = [];
+  const meshes = [], draws = [];
   const gfx = {
     createMesh(data) { meshes.push(data); return { id: meshes.length }; },
     createTexMesh(data) { meshes.push(data); return { id: meshes.length, tex: true }; },
     freeMesh() {}, freeTexture() {}, createTexture() { return { id: 1 }; },
-    draw() {}, drawDecal() {}, drawGlow() {},
+    draw(mesh, matrix) { draws.push({ mesh, matrix: Array.from(matrix) }); }, drawDecal() {}, drawGlow() {},
   };
   const ctx = vm.createContext({
     console, Math, Object, Array, Number, String, JSON, Float32Array, Uint16Array,
@@ -39,7 +39,7 @@ function harness() {
     vm.runInContext(read(f), ctx, { filename: f });
   const GarageScene = vm.runInContext("GarageScene", ctx);
   GarageScene.init(gfx);
-  return { GarageScene, meshes, ctx };
+  return { GarageScene, meshes, ctx, draws };
 }
 
 const TEAM = { id: "mclaren", name: "McLaren", short: "MCL",
@@ -237,4 +237,22 @@ test("garage dress upload retries after a transient failure, and a new team clea
   assert.equal(attempts, before, "three failures stop retries for the same team");
   draw({ ...TEAM, id: "recovered" });
   assert.equal(attempts, before + 1, "a new team clears the previous upload cutoff");
+});
+
+test("arrival moves the reflected car and shutter without rebuilding geometry", () => {
+  const { GarageScene, meshes, draws } = harness();
+  const car = { car: true }, mat = new Float32Array([-1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,9,1]);
+  GarageScene.draw(TEAM, LIV, [-3.8,2,-4.8], null, 0, null, car, { door: 0 }, mat);
+  const count = meshes.length;
+  assert.equal(draws.find(d => d.mesh === car).matrix[14], 9);
+  const closed = draws.find(d => d.matrix[5] > 1.5);
+  assert.ok(closed, "closed shutter spans the opening");
+  draws.length = 0; mat[14] = 0;
+  GarageScene.draw(TEAM, LIV, [4.1,2.25,-4.9], null, 0, null, car, { door: 1 }, mat);
+  assert.equal(meshes.length, count, "animation reuses meshes");
+  assert.equal(draws.find(d => d.mesh === car).matrix[14], 0);
+  assert.ok(draws.find(d => d.mesh === closed.mesh).matrix[5] < 0.03);
+  draws.length = 0;
+  GarageScene.draw(TEAM, LIV, [0,2,0], null, 0, null, car);
+  assert.equal(draws.find(d => d.mesh === closed.mesh).matrix[5], 1, "normal garage resets shutter");
 });
