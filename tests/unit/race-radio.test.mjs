@@ -265,7 +265,7 @@ test("a safety car is tier 5: it goes out even over a busy card and a loaded car
   r.step(0.05, 2);
   const sc = r.said.find((s) => /SAFETY CAR/.test(s.msg));
   assert.ok(sc, JSON.stringify(r.said));
-  assert.equal(sc.kind, "race");
+  assert.equal(sc.kind, "warning");
 });
 
 test("commentary talks only while the player is watching — a TV camera — unless set to ALWAYS", () => {
@@ -762,5 +762,5 @@ test('alongside traffic holds routine radio but a safety-car instruction still g
 test('local yellow instructions use the protected race channel', () => {
   const r = race(); r.step(.1, 2); r.G._caution = 1; r.step(.1);
   const flag = r.said.find(row => /YELLOW/.test(row.msg));
-  assert.ok(flag); assert.equal(flag.kind, 'race');
+  assert.ok(flag); assert.equal(flag.kind, 'warning');
 });

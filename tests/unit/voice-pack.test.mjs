@@ -461,3 +461,11 @@ test("VoicePack drops a spotter warning whose situation changed during decoding"
   await new Promise(r => setImmediate(r));
   assert.equal(plays, 0); assert.equal(pack.busy(), false);
 });
+
+test('the engineer TEST previews the selected recorded source; SYSTEM previews synthesis', async () => {
+  const rec=radio(); assert.equal(rec.v.preview('radio'),true);
+  assert.ok(rec.packCalls.some(c=>c.id==='george')); assert.deepEqual(rec.spoken,[]);
+  assert.equal(rec.v.busy(),true); rec.v.stop();
+  const sys=radio({packOn:false}); assert.equal(sys.v.preview('radio'),true);
+  assert.equal(sys.packCalls.filter(c=>c.id).length,0); assert.equal(sys.spoken.length,1); sys.v.stop();
+});

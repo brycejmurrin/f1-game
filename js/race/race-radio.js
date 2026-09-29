@@ -510,7 +510,7 @@ const RaceRadio = (function () {
       const e = best("eng");
       if (e) {
         const urgent = e.tier >= 5;
-        const kind = urgent || e.id === "flag" ? "race" : "info";
+        const kind = e.id === "flag" ? "warning" : urgent ? "race" : "info";
         const ok = urgent
           || (!traffic && !G.announceBusy && t - m.eng >= GAP_S[lvl()] * (e.tier >= 3 ? 0.5 : 1) && !underLoad(p) && !(f.pitting && e.tier < 4));
         // In a TV camera an "info" card is dropped by announce() (a film shot is

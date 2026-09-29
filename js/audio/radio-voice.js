@@ -13,7 +13,7 @@ const RadioVoice = (function () {
   // line: reading "RACE CONTROL. Plus five second penalty" spends a second of a
   // three-second card on something the card already shows in colour.
   const SPEAKERS = Object.freeze({
-    warning: "control", "penalty-warn": "control", "penalty-hit": "control",
+    warning: "control", warn: "control", "penalty-warn": "control", "penalty-hit": "control",
     coach: "coach", practice: "coach",
     info: "radio", box: "radio", race: "radio",
     // IN-RACE COMMENTARY (js/race/race-radio.js) speaks in the ANNOUNCER's
@@ -318,6 +318,9 @@ const RadioVoice = (function () {
         const hit = v.find((x) => x && x.name === want);
         if (hit) return hit;
       }
+      if (speaker === "announcer" && typeof Announcer !== "undefined") {
+        const pick = Announcer.pickVoice(v, want); if (pick) return v.find(x => x.name === pick.name) || null;
+      }
       const i = { control: 0, coach: 1, radio: 2 }[speaker] || 0;
       return v[i % v.length];
     }
@@ -525,12 +528,18 @@ const RadioVoice = (function () {
      * silent for the whole race, which is what a player turning it off asked
      * for. MASTER SOUND still gates this, because that switch means silence. */
     function preview(speaker, text) {
-      if (!G.soundOn || !api) return false;
+      if (!G.soundOn) return false;
       const sp = TONE[speaker] ? speaker : "radio";
       const t = toneFor(sp, tune);
       const words = speakable(text || SAMPLE[sp] || SAMPLE.radio);
       if (!words) return false;
+      if (G.announcer && G.announcer.stop) G.announcer.stop();
       stop();
+      // Preview the actual engineer source. Its tuning rows select SYSTEM;
+      // with RECORDED selected, TEST must not promise a different voice.
+      activeKind = sp === "coach" ? "coach" : sp === "control" ? "warning" : "info";
+      if (speakPack({ speaker: sp, text: words, leadMs: 0, budgetMs: 8000 })) return true;
+      if (!api) return false;
       // A TEST press is the player asking for THIS sample now, from a settings
       // click, not a frame: whatever is speaking — an earlier sample, the
       // announcer's own TEST — gives way, synchronously, before the speak.
@@ -539,7 +548,10 @@ const RadioVoice = (function () {
       u.voice = voiceFor(sp);
       u.rate = t.rate; u.pitch = t.pitch; u.volume = volume;
       u.onstart = () => { started++; };
-      try { asked++; synth.speak(u); synth.resume(); } catch (e) { return false; }
+      current = u;
+      u.onend = u.onerror = () => { ours.delete(u); if (current === u) current = null; };
+      try { asked++; ours.add(u); synth.speak(u); synth.resume(); }
+      catch (e) { ours.delete(u); if (current === u) current = null; return false; }
       return true;
     }
 
