@@ -1,4 +1,4 @@
-/* Apex 26 — CockpitOpts: player-facing options for the first-person view. HALO is a switch; TURN CHASING is how far the cockpit aim leaves the nose for a point 30 m down the road (0..1). Its own file, like GameMetrics, so the SETTINGS controls inject without growing index.html. */
+/* Apex 26 — CockpitOpts: player-facing options for the first-person view. HALO is a switch; WHEEL picks the steering wheel the cockpit view draws; TURN CHASING is how far the cockpit aim leaves the nose for a point 30 m down the road (0..1). Its own file, like GameMetrics, so the SETTINGS controls inject without growing index.html. */
 const CockpitOpts = (function () {
   "use strict";
 
@@ -10,9 +10,20 @@ const KEY_LEAD = "apex26.cockpitTurnChaseLead";   // 0..1, the live value
 const LEAD_DEFAULT = 0.4;
 const LEGACY_ON_LEAD = 0.35;
 const LEAD_MAX = 1;
+// The cockpit INTERIOR (owner, 2026-09-29: "a few different cockpit models that
+// we can choose between"): which steering wheel the COCKPIT view draws
+// (js/car/car-mesh.js getCockpitWheel). The first is the shipped wheel. A wheel
+// without a screen cannot carry gear and speed, so the HUD shows them instead
+// (js/camera/mode-switch.js keeps body.cockpit-cam off for it).
+const KEY_WHEEL = "apex26.cockpitWheel";
+const WHEELS = ["f1", "gt", "round", "none"];
+const WHEEL_LABELS = { f1: "F1 2026", gt: "GT", round: "CLASSIC", none: "NONE" };
+const SCREEN_WHEELS = { f1: true, gt: true };
 
 let haloOn = null;
 let lead = null;
+let wheelStyle = null;
+const wheelListeners = [];
 
 function clampLead(raw) {
   let n = +raw;
@@ -73,6 +84,31 @@ function setHalo(on) {
   return haloOn;
 }
 
+function wheel() {
+  if (wheelStyle === null) {
+    let v = GameStore.store.raw(KEY_WHEEL);
+    try {
+      const q = /[?&]ckwheel=([a-z0-9]+)/i.exec(location.search);
+      if (q) v = q[1].toLowerCase();
+    } catch (_) { /* no location in a headless VM: the stored value stands */ }
+    wheelStyle = WHEELS.includes(v) ? v : WHEELS[0];
+  }
+  return wheelStyle;
+}
+
+function setWheel(v) {
+  wheelStyle = WHEELS.includes(v) ? v : WHEELS[0];
+  GameStore.store.rawSet(KEY_WHEEL, wheelStyle);
+  for (const fn of wheelListeners) fn(wheelStyle);
+  return wheelStyle;
+}
+
+// Does this wheel (default: the chosen one) carry the gear/speed LCD?
+function wheelHasScreen(style) { return !!SCREEN_WHEELS[style || wheel()]; }
+
+// A cockpit-view consumer that must follow a wheel change made mid-race.
+function onWheel(fn) { wheelListeners.push(fn); }
+
 function turnChaseLead() {
   if (lead === null) lead = readLead();
   return lead;
@@ -128,6 +164,15 @@ function initUI() {
   } });
   place(haloRow.row);
 
+  const wheelRow = SettingRow.build("pm-ckwheel", "WHEEL", WHEELS.map((w) => [w, WHEEL_LABELS[w]]));
+  wheelRow.row.title = "The steering wheel in the cockpit view. CLASSIC and NONE have no screen, so the HUD shows gear and speed.";
+  SettingRow.wire(wheelRow.row, { read: () => wheel(), write: (v) => {
+    setWheel(v);
+    try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); }
+    catch (_) { /* audio is optional here */ }
+  } });
+  place(wheelRow.row);
+
   const lab = document.createElement("label");
   lab.className = "tune-row";
   lab.title = "How far the cockpit view glances into the corner ahead. 0% stays locked to the car's nose; 100% aims 30 m down the road.";
@@ -160,8 +205,8 @@ if (typeof document !== "undefined") {
 }
 
 return {
-  KEY, KEY_TC, KEY_LEAD, LEAD_DEFAULT,
-  halo, setHalo, turnChase, setTurnChase, turnChaseLead, setTurnChaseLead, parseLead,
+  KEY, KEY_TC, KEY_LEAD, KEY_WHEEL, LEAD_DEFAULT, WHEELS,
+  halo, setHalo, wheel, setWheel, wheelHasScreen, onWheel, turnChase, setTurnChase, turnChaseLead, setTurnChaseLead, parseLead,
 };
 })();
 Object.freeze(CockpitOpts);
