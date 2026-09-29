@@ -247,6 +247,15 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     donington: ["donington-hollywood-stand"],
     // Wave 6 — Sepang hibiscus main canopy + K1/F corner stands
     sepang: ["sepang-main-grandstand-canopy", "sepang-t1-grandstand", "sepang-t7-grandstand"],
+    // Wave 6 — Mosport / CTMP: club pit run, Moss Corner bank, Whites tunnel,
+    // Grand Prix Event Centre (rooftop). Speedway oval NOT built — closed /
+    // outside the road course (Wikipedia).
+    mosport: [
+      "mosport-pit-garages",
+      "mosport-moss-corner-bank",
+      "mosport-whites-tunnel",
+      "mosport-event-centre",
+    ],
     // Wave 6 — Estoril: 30-bay pit terrace (official boxes 17×6.70 m) +
     // existing timing tower / aldeia / depósito / moinho made required.
     // Moinho kept but UNCERTAIN as an on-site feature (leave, do not extend).
