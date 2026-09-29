@@ -230,6 +230,29 @@ export function mergeRows(db, rows, { env = "local", keep = KEEP } = {}) {
   return { db, added, duplicates, collapsed, specs: new Set([...runs.values()].map((a) => a.spec)).size };
 }
 
+/** Union two histories sample by sample (identity = run second + bucket, the
+ *  same rule `push` dedupes on), newest `keep` per series. The committed file
+ *  and the `bot/spec-timings` side branch each hold samples the other lacks;
+ *  select-budget overlays the side branch this way (APEX_SPEC_TIMINGS) so the
+ *  gate bills from the freshest record without it editing the deploy branch. */
+export function unionDb(a, b, { keep = KEEP } = {}) {
+  const out = emptyDb();
+  out.keep = keep;
+  const series = (x = [], y = []) => {
+    const list = [];
+    for (const smp of [...x, ...y]) push(list, smp, keep);
+    return list;
+  };
+  const A = a?.specs || {}, B = b?.specs || {};
+  for (const spec of new Set([...Object.keys(A), ...Object.keys(B)])) {
+    const t = {};
+    for (const title of new Set([...Object.keys(A[spec]?.t || {}), ...Object.keys(B[spec]?.t || {})]))
+      t[title] = series(A[spec]?.t?.[title], B[spec]?.t?.[title]);
+    out.specs[spec] = { s: series(A[spec]?.s, B[spec]?.s), t };
+  }
+  return out;
+}
+
 /** Deterministic serialisation: sorted specs, sorted titles, sorted samples,
  *  ONE LINE PER SERIES. Plain JSON.stringify(…, 1) exploded every three-element
  *  sample across five lines and put 200 bytes on disk per 40 bytes of data —

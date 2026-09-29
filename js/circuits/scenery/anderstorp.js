@@ -36,7 +36,8 @@
         building, grandstandEx, spectatorHill, terrace,
         guardrail, fence, tyreWall,
         marshalPost, cameraTower, billboard, sponsorHoarding, gantry,
-        motorhome, groundPatch, runoffApron, place, addBox, vadd } = api;
+        motorhome, groundPatch, runoffApron, place, addBox, addCyl, vadd,
+        modelGroup, seat, MAT } = api;
 
       // ---------------------------------------------------------------- 0.
       // Lap-position helper + the cool northern palette. Pine is dark and
@@ -109,10 +110,12 @@
       // part under ~0.85 m tall vanished whole; anchor() returns a point 0.3 m
       // under the ground, so `lift` is measured from the ground itself. Raw
       // boxes register no barrier — these stay the non-solid decor they were.
+      // Default lift 0.08 keeps the top ≥ 2 cm above terrain (ground-audit).
       const seatBox = (k, side, gap, sz, col, lift) => {
         const a = anchor(k, side, gap);
         if (onTrack(a.c[0], a.c[2], sz[0] / 2 + 1.5)) return;
-        addBox(out, vadd(a.c, a.u, 0.3 + (lift || 0) + sz[1] / 2), sz, col, [a.r, a.u, a.t]);
+        const L = lift == null ? 0.08 : lift;
+        addBox(out, vadd(a.c, a.u, 0.3 + L + sz[1] / 2), sz, col, [a.r, a.u, a.t]);
       };
 
       // A parked light aircraft: cabin, high wing, tailplane and fin, the tail
@@ -130,7 +133,7 @@
       const boards = (s0, side, gap, step) => {
         for (let i = 0; i < 3; i++) {
           place(K(s0 - (i + 1) * step), side, gap, [0.25, 1.7, 1.3], TRIM);
-          seatBox(K(s0 - (i + 1) * step), side, gap, [0.28, 0.35, 1.4], TYRE_K, -0.05);
+          seatBox(K(s0 - (i + 1) * step), side, gap, [0.28, 0.35, 1.4], TYRE_K, 0.08);
         }
       };
 
@@ -156,6 +159,10 @@
           // Runway: no pine on the apron side at all, and the far-side
           // treeline is pushed a long way out (block 14 handles it).
           if (onRunway(s)) continue;
+          // Infield paddock / S-F complex (+1, s≈0.95–0.10): keep open so
+          // press stand, speakertorn, stations and pit garages are not grown
+          // through by the near rank (clip-audit addCone×addBox).
+          if (side === 1 && (s > 0.945 || s < 0.100)) continue;
           const near = 26 + h * 6;
           if (h > 0.18) {
             const a = anchor(k, side, near);
@@ -185,12 +192,13 @@
         }
       });
 
-      // Bulk treeline behind the ranks, everywhere but the runway.
+      // Bulk treeline behind the ranks, everywhere but the runway / paddock.
       forestEdge(0.875, 1.0, -1, 26, { col: PINE_D, spacing: 12 });
       forestEdge(0.0, 0.545, -1, 24, { col: PINE_D, spacing: 12 });
-      forestEdge(0.875, 1.0, 1, 30, { col: PINE_D, spacing: 14 });
-      forestEdge(0.0, 0.070, 1, 34, { col: PINE_D, spacing: 14 });
+      // +1 S-F / paddock kept clear (landmarks + garages); resume after T1.
+      forestEdge(0.100, 0.210, 1, 40, { col: PINE_D, spacing: 14 });
       forestEdge(0.210, 0.545, 1, 34, { col: PINE_D, spacing: 14 });
+      forestEdge(0.875, 0.945, 1, 40, { col: PINE_D, spacing: 14 });
 
       // Armco. Continuous and close everywhere except the runway, where it
       // pulls right back and the whole corridor opens.
@@ -202,43 +210,114 @@
       guardrail(RW0, RW1, -1, 34, ARMCO);  // pulled back along the grass
 
       // ---------------------------------------------------------------- 2.
-      // 0.005 +1 — START/FINISH. Two low open-backed stands on the infield,
-      // timber decking over a steel frame; race control squat behind them,
-      // and behind THAT the working paddock — a rank of garages, a timing
-      // hut and an annex, so the complex has three planes of depth.
+      // 0.005 +1 — START/FINISH. Two low open-backed timber stands on the
+      // infield; a concrete PRESS stand (museum: pressläktare of betong);
+      // the 1968 stations building; the original speaker tower; race control
+      // squat behind. Historical F1 pits were halfway round the lap
+      // (Wikipedia / racingcircuits.info) — NOT built here: game startFrac 0
+      // puts the working paddock on this straight (modern 2006 pit building
+      // also sits on the pit straight). Flagged UNCERTAIN in docs/tracks.
       grandstandEx(0.988, 1, 14, 105, null, null);
       grandstandEx(0.030, 1, 14, 85, null, null);
       grandstandEx(0.062, 1, 16, 46, null, null);   // third, smaller block
-      building(K(0.012), 1, 40, 14, 9, 34, { col: WHITEGREY });   // race control
-      building(K(0.012), 1, 58, 10, 5.5, 22, { col: CORR_CREAM }); // annex behind
-      building(K(0.031), 1, 44, 8, 10.5, 9, { col: WHITEGREY });   // timing tower
-      building(K(0.045), 1, 42, 9, 5.0, 18, { col: FALU });        // timekeepers
-      building(K(0.054), 1, 46, 7, 4.2, 12, { col: TIMBER });
-      // Pit garages: a long low rank tucked in behind the stands.
+      // Concrete pressläktare — Jönköpings läns museum Byggnadsvårdsrapport
+      // 2017:10: "publikläktare och en pressläktare uppförda av betongelement".
+      // Gap 36 / depth 10 sits BEHIND the timber grandstandEx banks (gap 14)
+      // so the concrete mass does not eat their cones (clip @0.008).
+      {
+        const a = anchor(K(0.008), 1, 36);
+        const b = [a.r, a.u, a.t];
+        modelGroup("anderstorp-press-stand", {
+          center: vadd(a.c, a.u, 5), size: [12, 12, 40], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          // Positive rake: rows rise AWAY from the track (side +1 → +r).
+          for (let r = 0; r < 5; r++) {
+            const hgt = 1.4 + r * 1.35;
+            seat.box(stage, vadd(vadd(a.c, a.r, 1.2 + r * 1.8), a.u, hgt * 0.5),
+              [1.7, hgt, 36 - r * 1.5], r & 1 ? CONC_D : CONCRETE, b);
+            stage._mat = MAT.FABRIC;
+            seat.box(stage, vadd(vadd(a.c, a.r, 1.2 + r * 1.8), a.u, hgt + 0.45),
+              [1.4, 0.9, 34 - r * 1.5],
+              [[0.88, 0.86, 0.82], [0.22, 0.28, 0.40], [0.78, 0.26, 0.20]][r % 3], b);
+            stage._mat = MAT.CONCRETE;
+          }
+          // Under-stand hangar bay (museum: flying-club hangar under the
+          // press stand, now a tech-inspection hall).
+          seat.box(stage, vadd(vadd(a.c, a.r, 7.5), a.u, 1.6),
+            [5, 3.2, 24], CORR_SILV, b);
+        }, { required: true });
+      }
+      // Original speakertorn by the stands (museum 2017:10: "bevarade
+      // speakertornet i anslutning till läktarna … är ursprungligt").
+      {
+        const a = anchor(K(0.022), 1, 48);
+        const b = [a.r, a.u, a.t];
+        modelGroup("anderstorp-speaker-tower", {
+          center: vadd(a.c, a.u, 9), size: [8, 20, 8], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.METAL;
+          seat.box(stage, vadd(a.c, a.u, 6.5), [2.4, 13, 2.4], STEEL, b);
+          for (const [dr, dt] of [[-1.0, -1.0], [1.0, -1.0], [-1.0, 1.0], [1.0, 1.0]])
+            addCyl(stage, vadd(vadd(a.c, a.r, dr), a.t, dt), 0.18, 13, STEEL, 6, b);
+          stage._mat = MAT.CONCRETE;
+          seat.box(stage, vadd(a.c, a.u, 13.6), [5.4, 2.8, 5.4], WHITEGREY, b);
+          seat.box(stage, vadd(vadd(a.c, a.u, 13.6), a.r, -2.8),
+            [0.25, 1.6, 4.2], [0.18, 0.20, 0.22], b);
+          stage._mat = MAT.ROOF;
+          seat.box(stage, vadd(a.c, a.u, 15.4), [6.0, 0.35, 6.0], CORR_SILV, b);
+        }, { required: true });
+      }
+      // 1968 stationsbyggnad — lockpanel, one storey; now clubhouse/servering
+      // (museum 2017:10). Kept timber, not the 2006 grey admin block.
+      {
+        const a = anchor(K(0.048), 1, 56);
+        const b = [a.r, a.u, a.t];
+        modelGroup("anderstorp-stations-1968", {
+          center: vadd(a.c, a.u, 3.2), size: [14, 10, 28], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.WOOD;
+          seat.box(stage, vadd(a.c, a.u, 2.4), [10, 4.8, 22], TIMBER, b);
+          // Lockpanel read: dark vertical battens on the track face.
+          for (let i = 0; i < 9; i++) {
+            const p = vadd(vadd(a.c, a.t, (i - 4) * 2.4), a.r, -5.15);
+            seat.box(stage, vadd(p, a.u, 2.4), [0.12, 4.4, 0.35], FALU_D, b);
+          }
+          stage._mat = MAT.ROOF;
+          seat.box(stage, vadd(a.c, a.u, 5.2), [11.2, 0.45, 24], CORR_SILV, b);
+          // White corner/window trim — museum notes most buildings are white.
+          stage._mat = MAT.CONCRETE;
+          seat.box(stage, vadd(vadd(a.c, a.r, -5.2), a.u, 3.2),
+            [0.2, 1.4, 8], TRIM, b);
+        }, { required: true });
+      }
+      building(K(0.012), 1, 64, 14, 9, 34, { col: WHITEGREY });   // race control
+      building(K(0.012), 1, 82, 10, 5.5, 22, { col: CORR_CREAM }); // annex behind
+      building(K(0.031), 1, 68, 8, 10.5, 9, { col: WHITEGREY });   // timing tower
+      building(K(0.060), 1, 70, 7, 4.2, 12, { col: FALU });        // timekeepers
+      // Pit garages: a long low rank tucked in behind the stands (modern
+      // 2006 permanent pits live on this straight — racingcircuits.info).
       for (let i = 0; i < 6; i++) {
-        building(K(0.970 + i * 0.0092), 1, 30, 9, 4.6, 15,
+        building(K(0.970 + i * 0.0092), 1, 40, 9, 4.6, 15,
           { col: i % 2 ? CORR_CREAM : CORR_SILV });
       }
       groundPatch(K(0.005), 1, 3, [11, 0.18, 44], SAND);
       groundPatch(K(0.025), 1, 3, [11, 0.16, 44], SAND);
-      groundPatch(K(0.984), 1, 22, [26, 0.20, 40], HARDSTAND);
-      groundPatch(K(0.008), 1, 22, [26, 0.17, 40], HARDSTAND);
-      groundPatch(K(0.032), 1, 22, [26, 0.20, 40], CONC_D);
+      groundPatch(K(0.984), 1, 28, [22, 0.20, 36], HARDSTAND);
+      groundPatch(K(0.008), 1, 28, [22, 0.17, 36], HARDSTAND);
+      groundPatch(K(0.032), 1, 28, [22, 0.20, 36], CONC_D);
       marshalPost(K(0.0), 1, 12);
       marshalPost(K(0.046), 1, 12);
-      cameraTower(K(0.018), 1, 15);
+      cameraTower(K(0.055), 1, 18);   // clear of speaker tower at 0.018/28
       gantry(0.0, 8.5, [0.80, 0.80, 0.78]);
-      fence(0.975, 0.050, 1, 30, 2.2, [0.62, 0.63, 0.62]);
-      fence(0.958, 0.072, 1, 68, 1.8, [0.55, 0.57, 0.55]);   // paddock boundary
-      // Flagpoles at the line — bare masts, national colours on the boards.
-      for (let i = 0; i < 6; i++) place(K(0.994 + i * 0.0030), 1, 27, [0.30, 9.5, 0.30], TRIM);
-      // TV compound tucked in behind race control.
-      for (let i = 0; i < 3; i++) {
-        const k = K(0.016 + i * 0.0080), g = 62 + (i % 2) * 5;
-        if (clear(k, 1, g, 14)) motorhome(k, 1, g, 10, 3.6, 4.0, {});
-      }
-      place(K(0.022), 1, 70, [3.2, 3.2, 3.2], TRIM);        // satellite dish
-      place(K(0.006), 1, 64, [2.0, 2.0, 5.0], STEEL);       // generator set
+      fence(0.975, 0.050, 1, 36, 2.2, [0.62, 0.63, 0.62]);
+      fence(0.958, 0.072, 1, 74, 1.8, [0.55, 0.57, 0.55]);   // paddock boundary
+      // Flagpoles at the line — bare masts, clear of the cheap-side pine.
+      for (let i = 0; i < 6; i++) place(K(0.994 + i * 0.0030), 1, 36, [0.30, 9.5, 0.30], TRIM);
+      // TV compound omitted behind race control — motorhome awnings buried on
+      // the paddock slope and clipped garage bays (clip-audit @0.970).
+      place(K(0.022), 1, 80, [3.2, 3.2, 3.2], TRIM);        // satellite dish
+      place(K(0.006), 1, 74, [2.0, 2.0, 5.0], STEEL);       // generator set
       billboard(K(0.982), 1, 17, 9, 3.6, [0.24, 0.36, 0.60]);
       billboard(K(0.040), 1, 17, 9, 3.6, [0.84, 0.82, 0.76]);
 
@@ -250,18 +329,18 @@
       for (let i = 0; i < 22; i++) {
         const s = 0.965 + i * 0.0042;
         const k = K(s);
-        pine(k, -1, 24 + hash(k * 13) * 4, 18 + hash(k * 17) * 8, PINE);
+        pine(k, -1, 30 + hash(k * 13) * 4, 18 + hash(k * 17) * 8, PINE);
       }
       for (let i = 0; i < 18; i++) {
         const s = 0.962 + i * 0.0050;
         const k = K(s);
         const h = hash(k * 53 + 9);
-        pine(k, -1, 30 + h * 7, 16 + h * 9, h < 0.4 ? SPRUCE : PINE_D);
-        if (h > 0.78) tree(k, -1, 14 + h * 4, 10 + h * 3, BIRCH);
+        pine(k, -1, 36 + h * 7, 16 + h * 9, h < 0.4 ? SPRUCE : PINE_D);
+        if (h > 0.78) tree(k, -1, 20 + h * 4, 10 + h * 3, BIRCH);
       }
-      sponsorHoarding(0.028, 0.056, -1, 11, {});
-      sponsorHoarding(0.978, 0.996, -1, 12, {});
-      billboard(K(0.010), -1, 12, 8, 3.2, [0.86, 0.84, 0.78]);
+      sponsorHoarding(0.028, 0.056, -1, 14, {});
+      sponsorHoarding(0.978, 0.996, -1, 14, {});
+      billboard(K(0.010), -1, 16, 8, 3.2, [0.86, 0.84, 0.78]);
 
       // ---------------------------------------------------------------- 4.
       // 0.045 -1 — TURN 1. Pale grey sand run-off, tyre stack, forest right
@@ -301,12 +380,9 @@
       building(K(0.122), 1, 58, 13, 7.0, 28, { col: CORR_GRN });
       building(K(0.142), 1, 56, 9, 5.0, 16, { col: FALU });
       building(K(0.112), 1, 80, 12, 6.0, 24, { col: CORR_CREAM });  // workshop
-      for (let i = 0; i < 5; i++) {
-        motorhome(K(0.094 + i * 0.011), 1, 48 + (i % 2) * 5, 9, 3.4, 4.2, {});
-      }
-      for (let i = 0; i < 4; i++) {   // transporters, parked square-on
-        motorhome(K(0.132 + i * 0.0090), 1, 44 + (i % 2) * 4, 11, 3.8, 4.4, {});
-      }
+      // Motorhome / transporter row omitted — awning posts bury 5–7 cm into
+      // the paddock hardstanding slope (ground-audit). Corrugated sheds +
+      // broadcast already carry the working-paddock mass (estoril pattern).
       place(K(0.104), 1, 40, [2.6, 2.6, 6.0], STEEL);        // fuel bowser
       place(K(0.118), 1, 42, [2.2, 1.1, 4.4], DRUM);
       for (let i = 0; i < 6; i++) {
@@ -346,30 +422,27 @@
       // The public side of the circuit: a commentary hut, a refreshment
       // shed, campers parked on the grass behind the bank.
       groundPatch(K(0.185), 1, 14, [48, 0.18, 62], GRASS);
-      groundPatch(K(0.205), 1, 14, [44, 0.16, 56], GRASS);
-      groundPatch(K(0.226), 1, 16, [34, 0.20, 44], GRASS_M);
-      spectatorHill(0.172, 0.212, 1, 22, {});
+      groundPatch(K(0.205), 1, 18, [40, 0.16, 48], GRASS);
+      groundPatch(K(0.226), 1, 22, [30, 0.20, 36], GRASS_M);
+      spectatorHill(0.172, 0.212, 1, 28, {});
       marshalPost(K(0.178), 1, 14);
       marshalPost(K(0.208), 1, 14);
       billboard(K(0.186), 1, 17, 9, 3.6, [0.86, 0.84, 0.78]);
       billboard(K(0.200), 1, 17, 9, 3.6, [0.78, 0.30, 0.22]);
       billboard(K(0.214), 1, 17, 9, 3.6, [0.24, 0.36, 0.60]);
       billboard(K(0.228), 1, 18, 8, 3.2, [0.82, 0.76, 0.34]);
-      building(K(0.192), 1, 40, 6, 4.4, 8, { col: FALU });     // commentary hut
-      building(K(0.216), 1, 38, 8, 3.8, 12, { col: TIMBER });  // refreshments
-      building(K(0.204), 1, 54, 7, 4.0, 10, { col: FALU_D });
-      for (let i = 0; i < 4; i++) {
-        const k = K(0.190 + i * 0.0095), g = 40 + (i % 2) * 5;
-        if (clear(k, 1, g, 14)) motorhome(k, 1, g, 7, 3.0, 3.6, {});
-      }
-      fence(0.166, 0.234, 1, 32, 1.8, [0.58, 0.60, 0.58]);
+      building(K(0.192), 1, 48, 6, 4.4, 8, { col: FALU });     // commentary hut
+      building(K(0.216), 1, 46, 8, 3.8, 12, { col: TIMBER });  // refreshments
+      building(K(0.204), 1, 62, 7, 4.0, 10, { col: FALU_D });
+      // Campers omitted — clipped the Sodra pine scatter (clip @0.224).
+      fence(0.166, 0.234, 1, 40, 1.8, [0.58, 0.60, 0.58]);
       for (let i = 0; i < 14; i++) {   // scattered pine closing the south loop
         const s = 0.168 + i * 0.0052;
         const k = K(s);
         const h = hash(k * 59 + 21);
         if (h < 0.25) continue;
-        farPine(k, 1, 68 + h * 26, 15 + h * 9, pick(h, FAR_PINE));
-        if (h > 0.70) farTree(k, 1, 46 + h * 14, 8 + h * 4, BIRCH);
+        farPine(k, 1, 78 + h * 26, 15 + h * 9, pick(h, FAR_PINE));
+        if (h > 0.70) farTree(k, 1, 56 + h * 14, 8 + h * 4, BIRCH);
       }
 
       // ---------------------------------------------------------------- 8.
@@ -404,28 +477,30 @@
       tyreWall(0.318, 0.352, -1, 15, TYRE_R);
       sponsorHoarding(0.316, 0.356, -1, 19, {});
       sponsorHoarding(0.296, 0.312, -1, 17, {});
-      spectatorHill(0.320, 0.350, -1, 26, {});
+      // No spectatorHill here: the bank self-clipped (nature.js terrace rows
+      // × cone, clip 5.23 m @0.325) on this flat airfield. Forest + hoarding
+      // carry the outside of Opel instead.
       cameraTower(K(0.336), -1, 36);
       marshalPost(K(0.324), -1, 14);
       marshalPost(K(0.348), -1, 14);
-      building(K(0.356), -1, 30, 7, 5.5, 9, { col: CORR_BLUE });  // scoreboard
-      building(K(0.310), -1, 32, 5, 3.6, 7, { col: FALU });       // marshal hut
+      building(K(0.356), -1, 38, 7, 5.5, 9, { col: CORR_BLUE });  // scoreboard
+      building(K(0.310), -1, 40, 5, 3.6, 7, { col: FALU });       // marshal hut
       for (let i = 0; i < 3; i++) {
-        place(K(0.352 + i * 0.0028), -1, 21, [1.8, 1.4, 1.8], TYRE_K);
+        place(K(0.352 + i * 0.0028), -1, 24, [1.8, 1.4, 1.8], TYRE_K);
       }
-      billboard(K(0.366), -1, 16, 8, 3.2, [0.82, 0.76, 0.34]);
-      boards(0.328, -1, 12, 0.0124);
-      forestEdge(0.300, 0.380, -1, 30, { col: PINE_D, spacing: 14 });
+      billboard(K(0.366), -1, 18, 8, 3.2, [0.82, 0.76, 0.34]);
+      boards(0.328, -1, 14, 0.0124);
+      forestEdge(0.300, 0.380, -1, 36, { col: PINE_D, spacing: 14 });
 
       // --------------------------------------------------------------- 10.
       // 0.400 +1 — INFIELD SCRUB between the loops. Sandy grass, scattered
       // thin stuff rather than solid forest: the sightlines open up and you
       // can already see the hangars ahead. Patch colour breaks up so the
       // ground does not read as one flat card.
-      groundPatch(K(0.395), 1, 26, [52, 0.18, 70], [0.42, 0.44, 0.28]);
-      groundPatch(K(0.425), 1, 26, [46, 0.16, 64], [0.42, 0.44, 0.28]);
-      groundPatch(K(0.380), 1, 30, [30, 0.20, 44], GRASS_S);
-      groundPatch(K(0.448), 1, 28, [28, 0.17, 42], GRASS_S);
+      groundPatch(K(0.395), 1, 26, [48, 0.18, 60], [0.42, 0.44, 0.28]);
+      groundPatch(K(0.430), 1, 30, [40, 0.16, 52], [0.42, 0.44, 0.28]);
+      groundPatch(K(0.380), 1, 36, [26, 0.20, 36], GRASS_S);
+      groundPatch(K(0.455), 1, 34, [24, 0.17, 34], GRASS_S);
       for (let i = 0; i < 16; i++) {
         const s = 0.370 + i * 0.0055;
         const k = K(s);
@@ -479,48 +554,41 @@
       // reads as a runway rather than a road with trees off it.
       // FOOTPRINT RULE: groundPatch is validated twice (declared box and
       // emitted box), so a long slab swung through a bend is rejected —
-      // 30 m slabs for the first four steps out of T6, 44 m thereafter, and
-      // alternating 0.17/0.20 thickness so abutting tops never co-plane.
-      const APR0 = 0.564, APR1 = 0.850;
-      const APR_STEP = (APR1 - APR0) / 29 * api.ds * api.n;   // metres between slabs
-      for (let i = 0; i < 30; i++) {
-        const s = APR0 + (i / 29) * (APR1 - APR0);
+      // 28 m slabs for the first four steps out of T6, 40 m thereafter.
+      // Overlaps with hangar hardstanding / end-of-apron grass caused
+      // flatCoplanar (shared lift slots every 5th patchSeq) — keep the outer
+      // apron narrower and stop short of the hangar bay (gap ≥ 70).
+      const APR0 = 0.564, APR1 = 0.830;
+      const APR_STEP = (APR1 - APR0) / 23 * api.ds * api.n;   // metres between slabs
+      for (let i = 0; i < 24; i++) {
+        const s = APR0 + (i / 23) * (APR1 - APR0);
         const k = K(s);
-        const th = (i & 1) ? 0.20 : 0.17;
         // Flare: the apron opens out over the first ~150 m of the corridor.
         const f = Math.min(1, 0.45 + i * 0.14);
-        // Short slabs while T6 is still bending; then one step long, not 44 m.
-        // (The 0.17/0.20 thickness only moves a draped patch's UNDERSIDE — its
-        // top is terrain + a lift slot — so 44 m slabs on a ~40 m step laid
-        // each overlap twice, and every fifth patch shares a slot: 28+ flat-
-        // coplanar spots, ground-audit.)
-        const ln = i < 4 ? 30 : Math.min(44, APR_STEP - 0.1);
-        groundPatch(k, 1, 6, [26 * f, th, ln], CONCRETE);
-        // Outer slab starts where the inner one ends (same outer edge): the 2 m
-        // lateral overlap draped one terrain with two tessellations.
-        const g2 = Math.max(30, 6 + 26 * f + 0.1);
-        groundPatch(k, 1, g2, [30 + 24 * f - g2, th, ln], CONCRETE);
-        // Weathering: every third bay is a bleached or oil-darkened slab so
-        // the concrete reads as poured in panels, not rolled as one sheet.
-        if (i % 3 === 1) groundPatch(k, 1, 12, [9 * f, th + 0.02, ln - 8], CONC_W);
-        if (i % 5 === 2) groundPatch(k, 1, 22, [8 * f, th + 0.02, ln - 10], CONC_D);
+        const ln = i < 4 ? 28 : Math.min(40, APR_STEP - 0.4);
+        // Inner slab only — outer reach capped so hangar pads at gap 72+ stay clear.
+        // No weathering overlays: they co-planed with the parent on shared
+        // patchSeq lift slots (flatCoplanar 570×573/574).
+        groundPatch(k, 1, 6, [Math.min(22, 20 * f), 0.18, ln], CONCRETE);
       }
-      // Faded painted runway edge markings down the apron side.
+      // Faded painted runway edge markings — seatBox, not place(): place()
+      // sinks 0.8 m so a 0.06 m slab vanishes whole (ground-audit buried 125
+      // at :511/:517/:518/:523/:538/:539 on ship).
       for (let i = 0; i < 26; i++) {
         const s = RW0 + 0.004 + (i / 25) * (RW1 - RW0 - 0.010);
-        place(K(s), 1, 14, [1.6, 0.06, 9], PAINT);
+        seatBox(K(s), 1, 14, [1.6, 0.10, 9], PAINT, 0.10);
       }
       // A second, outer edge line just inside the pulled-back armco, plus a
       // dashed centreline between the two — the runway's own geometry.
       for (let i = 0; i < 22; i++) {
         const s = RW0 + 0.008 + (i / 21) * (RW1 - RW0 - 0.020);
-        place(K(s), 1, 27, [1.1, 0.06, 11], PAINT);
-        place(K(s + 0.0035), 1, 20, [0.8, 0.06, 14], PAINT);
+        seatBox(K(s), 1, 27, [1.1, 0.10, 11], PAINT, 0.11);
+        seatBox(K(s + 0.0035), 1, 20, [0.8, 0.10, 14], PAINT, 0.12);
       }
       // Threshold bars at both ends of the runway corridor.
       for (const t of [0.570, 0.845]) {
         for (let j = 0; j < 6; j++) {
-          place(K(t), 1, 7 + j * 4.2, [2.2, 0.06, 16], PAINT);
+          seatBox(K(t), 1, 7 + j * 4.2, [2.2, 0.10, 16], PAINT, 0.10 + j * 0.01);
         }
       }
       marshalPost(K(0.560), 1, 26);
@@ -530,13 +598,13 @@
       // Aiming-point blocks and touchdown-zone bars: the marks that make a
       // strip of concrete read as a RUNWAY rather than a very wide car park.
       for (const t of [0.596, 0.820]) {
-        place(K(t), 1, 10, [4.4, 0.06, 26], PAINT);
-        place(K(t), 1, 24, [4.4, 0.06, 26], PAINT);
+        seatBox(K(t), 1, 10, [4.4, 0.10, 26], PAINT, 0.11);
+        seatBox(K(t), 1, 24, [4.4, 0.10, 26], PAINT, 0.12);
       }
       for (const t of [0.622, 0.664, 0.706, 0.748, 0.790]) {
         for (let j = 0; j < 2; j++) {
-          place(K(t), 1, 9.5 + j * 2.8, [1.4, 0.06, 13], PAINT);
-          place(K(t), 1, 23.0 + j * 2.8, [1.4, 0.06, 13], PAINT);
+          seatBox(K(t), 1, 9.5 + j * 2.8, [1.4, 0.10, 13], PAINT, 0.10 + j * 0.015);
+          seatBox(K(t), 1, 23.0 + j * 2.8, [1.4, 0.10, 13], PAINT, 0.11 + j * 0.015);
         }
       }
       // Runway edge lights: a low pale post every ~60 m down both sides of
@@ -550,57 +618,79 @@
       place(K(0.574), 1, 36, [1.0, 1.0, 3.6], ORANGE);     // sock, low on the mast
 
       // --------------------------------------------------------------- 13.
-      // 0.640 +1 — AIRFIELD APRON PROPER. Two large corrugated hangars, dull
-      // silver-grey, wide and low with the doors facing the runway; a third
-      // set well back so the airfield has depth behind the front row; the
-      // flying club and its little tower beside them; light aircraft parked
-      // out on the concrete with their nose-in parking boxes painted under
-      // them; fuel drums and crates along the hangar fronts.
-      building(K(0.618), 1, 44, 30, 13, 52, { col: CORR_SILV });
-      building(K(0.664), 1, 44, 30, 13, 52, { col: CORR_SILV });
-      building(K(0.636), 1, 86, 26, 12, 46, { col: CORR_RUST });  // hangar 3, back
-      building(K(0.690), 1, 46, 8, 14, 9, { col: TRIM });         // club tower
-      building(K(0.700), 1, 42, 10, 6, 16, { col: CORR_CREAM });
-      building(K(0.712), 1, 42, 10, 5.5, 14, { col: FALU });      // flying club
-      building(K(0.676), 1, 84, 12, 6.5, 22, { col: CORR_GRN });  // maintenance
-      building(K(0.606), 1, 82, 11, 6.0, 18, { col: CORR_CREAM });
-      groundPatch(K(0.640), 1, 58, [60, 0.18, 84], CONCRETE);
-      groundPatch(K(0.688), 1, 54, [38, 0.16, 64], CONCRETE);
-      groundPatch(K(0.612), 1, 34, [14, 0.20, 44], CONC_D);   // taxiway stub
-      groundPatch(K(0.656), 1, 34, [14, 0.17, 44], CONC_D);
-      groundPatch(K(0.700), 1, 34, [14, 0.20, 44], CONC_W);
-      fence(0.600, 0.730, 1, 40, 2.0, [0.60, 0.62, 0.60]);
+      // 0.640 +1 — AIRFIELD APRON PROPER. Two large corrugated hangars (doors
+      // facing the runway), a third set well back, flying club + tower.
+      // Hangar form is a museum-cited original (2017:10 SE forest-edge hangar
+      // with classic vaulted silhouette; Wikipedia ESMP / official airfield
+      // page: Flight Straight = 1000×20 m runway 04/22). Required modelGroup
+      // wraps the front pair so BATCH-01 pins the landmark.
+      {
+        const a = anchor(K(0.640), 1, 52);
+        const b = [a.r, a.u, a.t];
+        modelGroup("anderstorp-flight-hangars", {
+          center: vadd(a.c, a.u, 8), size: [36, 18, 120], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.METAL;
+          // Two wide, low hangars — doors open toward the runway (−r).
+          for (const dt of [-28, 28]) {
+            const c = vadd(a.c, a.t, dt);
+            seat.box(stage, vadd(c, a.u, 5.5), [28, 11, 48], CORR_SILV, b);
+            // Arched roof read: a slightly wider roof slab + ridge.
+            stage._mat = MAT.ROOF;
+            seat.box(stage, vadd(c, a.u, 11.4), [30, 0.5, 50], CORR_SILV, b);
+            seat.box(stage, vadd(c, a.u, 12.2), [8, 1.6, 50], CORR_RUST, b);
+            stage._mat = MAT.METAL;
+            // Door opening on the runway face (dark void).
+            seat.box(stage, vadd(vadd(c, a.r, -14.2), a.u, 4.5),
+              [0.3, 9.0, 36], [0.18, 0.19, 0.20], b);
+          }
+        }, { required: true });
+      }
+      building(K(0.636), 1, 92, 26, 12, 46, { col: CORR_RUST });  // hangar 3, back
+      building(K(0.690), 1, 52, 8, 14, 9, { col: TRIM });         // club tower
+      building(K(0.700), 1, 48, 10, 6, 16, { col: CORR_CREAM });
+      building(K(0.712), 1, 48, 10, 5.5, 14, { col: FALU });      // flying club
+      building(K(0.676), 1, 90, 12, 6.5, 22, { col: CORR_GRN });  // maintenance
+      building(K(0.606), 1, 88, 11, 6.0, 18, { col: CORR_CREAM });
+      // Hardstanding BEHIND the apron (gap ≥ 72) so lift slots never fight
+      // the Flight Straight slabs that stop around gap 28.
+      groundPatch(K(0.640), 1, 78, [40, 0.18, 70], CONCRETE);
+      groundPatch(K(0.688), 1, 74, [28, 0.16, 54], CONCRETE);
+      groundPatch(K(0.612), 1, 72, [12, 0.20, 36], CONC_D);   // taxiway stub
+      groundPatch(K(0.656), 1, 72, [12, 0.17, 36], CONC_D);
+      groundPatch(K(0.700), 1, 72, [12, 0.20, 36], CONC_W);
+      fence(0.600, 0.730, 1, 46, 2.0, [0.60, 0.62, 0.60]);
       marshalPost(K(0.652), 1, 28);
       // Parked light aircraft, and the yellow parking boxes beneath them.
-      aircraft(0.612, 34, ALU);
-      aircraft(0.630, 35, AC_BLUE);
-      aircraft(0.648, 34, ALU);
-      aircraft(0.668, 35, [0.80, 0.78, 0.72]);
-      aircraft(0.706, 34, ALU);
-      aircraft(0.596, 35, [0.78, 0.76, 0.70]);
-      aircraft(0.722, 34, AC_BLUE);
+      aircraft(0.612, 38, ALU);
+      aircraft(0.630, 39, AC_BLUE);
+      aircraft(0.648, 38, ALU);
+      aircraft(0.668, 39, [0.80, 0.78, 0.72]);
+      aircraft(0.706, 38, ALU);
+      aircraft(0.596, 39, [0.78, 0.76, 0.70]);
+      aircraft(0.722, 38, AC_BLUE);
       for (let i = 0; i < 4; i++) {   // glider trailers, nose to tail
-        place(K(0.734 + i * 0.0042), 1, 38, [2.2, 1.9, 7.4], ALU);
+        place(K(0.734 + i * 0.0042), 1, 42, [2.2, 1.9, 7.4], ALU);
       }
       for (const s of [0.612, 0.630, 0.648, 0.668, 0.706]) {
-        place(K(s), 1, 32, [12, 0.06, 0.5], PAINT_Y);
-        place(K(s - 0.0022), 1, 32, [12, 0.06, 0.5], PAINT_Y);
+        seatBox(K(s), 1, 36, [12, 0.08, 0.5], PAINT_Y, 0.05);
+        seatBox(K(s - 0.0022), 1, 36, [12, 0.08, 0.5], PAINT_Y, 0.06);
       }
       // Hangar-front clutter: drums, crates, a fuel bowser, a tug.
       for (let i = 0; i < 8; i++) {
-        place(K(0.604 + i * 0.0130), 1, 41, [1.2, 1.0, 1.2], i % 3 ? DRUM : ORANGE);
+        place(K(0.604 + i * 0.0130), 1, 48, [1.2, 1.0, 1.2], i % 3 ? DRUM : ORANGE);
       }
-      place(K(0.622), 1, 41, [2.4, 2.2, 5.4], STEEL);   // fuel bowser
-      place(K(0.682), 1, 41, [1.8, 1.4, 3.0], ORANGE);  // tug
-      place(K(0.694), 1, 60, [4.2, 9.0, 4.2], ALU);     // avgas tank
+      place(K(0.622), 1, 48, [2.4, 2.2, 5.4], STEEL);   // fuel bowser
+      place(K(0.682), 1, 48, [1.8, 1.4, 3.0], ORANGE);  // tug
+      place(K(0.694), 1, 66, [4.2, 9.0, 4.2], ALU);     // avgas tank
       // Pine closes the airfield off at the back — far enough that the
       // corridor still reads open, near enough that it is not sky behind.
       for (let i = 0; i < 22; i++) {
         const s = 0.580 + i * 0.0130;
         const k = K(s);
         const h = hash(k * 97 + 43);
-        farPine(k, 1, 118 + h * 40, 16 + h * 9, PINE_B);
-        if (h > 0.45) farPine(k, 1, 150 + h * 50, 17 + h * 8, PINE_F);
+        farPine(k, 1, 128 + h * 40, 16 + h * 9, PINE_B);
+        if (h > 0.45) farPine(k, 1, 160 + h * 50, 17 + h * 8, PINE_F);
       }
 
       // --------------------------------------------------------------- 14.
@@ -609,12 +699,15 @@
       // on top of you. Everything here is beyond 60 m and stays there — a
       // sparse boundary line of pine, a red barn out in the field, a windsock
       // and a few strip markers. Do not close this in.
-      for (let i = 0; i < 12; i++) {
-        groundPatch(K(RW0 + (i / 11) * (RW1 - RW0)), -1, 10, [82, (i & 1) ? 0.20 : 0.17, 122], GRASS);
+      // Fewer, shorter patches with staggered gaps so neighbours do not share
+      // a lift slot on the same footprint (was flatCoplanar self-pair at :613).
+      for (let i = 0; i < 8; i++) {
+        groundPatch(K(RW0 + 0.02 + (i / 7) * (RW1 - RW0 - 0.04)), -1, 14 + (i % 2) * 8,
+          [56, 0.18, 90], i & 1 ? GRASS_M : GRASS);
       }
-      for (let i = 0; i < 9; i++) {   // mown bands, lighter, further out
-        groundPatch(K(RW0 + 0.012 + (i / 8) * (RW1 - RW0 - 0.024)), -1, 94,
-          [46, (i & 1) ? 0.20 : 0.17, 120], GRASS_M);
+      for (let i = 0; i < 6; i++) {   // mown bands, lighter, further out
+        groundPatch(K(RW0 + 0.04 + (i / 5) * (RW1 - RW0 - 0.08)), -1, 100 + (i % 2) * 10,
+          [36, 0.18, 90], GRASS_M);
       }
       for (let i = 0; i < 26; i++) {
         const s = RW0 + (i / 25) * (RW1 - RW0);
@@ -639,7 +732,7 @@
       place(K(0.700), -1, 44, [1.0, 1.0, 3.4], ORANGE);
       for (let i = 0; i < 14; i++) {   // grass-strip edge markers
         const s = RW0 + 0.014 + (i / 13) * (RW1 - RW0 - 0.028);
-        seatBox(K(s), -1, 50, [0.7, 0.55, 0.7], PAINT, -0.05);   // 0.5 m showing, not buried
+        seatBox(K(s), -1, 50, [0.7, 0.55, 0.7], PAINT, 0.08);   // strip marker on grass
       }
       building(K(0.712), -1, 78, 8, 4.0, 12, { col: CORR_RUST });  // strip hut
       building(K(0.828), -1, 74, 7, 3.6, 10, { col: TIMBER });
@@ -656,14 +749,16 @@
       // Offset 34 (was 36): at 36 the roof cap (radius = half the diagonal,
       // wider than the walls) was refused by the road guard against the
       // other leg ~19 m away, leaving the rooftop plant hanging 8.7 m up.
+      // Grass patches stay OUTSIDE the Flight Straight apron window (APR1
+      // ends 0.830) so they do not co-plane with runway slabs.
       building(K(0.820), 1, 34, 14, 7.5, 24, { col: CORR_BLUE });
       building(K(0.802), 1, 38, 9, 5.0, 14, { col: CORR_RUST });
       building(K(0.842), 1, 40, 7, 4.2, 10, { col: TIMBER });
       sponsorHoarding(0.808, 0.836, 1, 26, {});
-      groundPatch(K(0.828), 1, 32, [20, 0.20, 40], CONC_W);
-      groundPatch(K(0.836), 1, 10, [36, 0.18, 46], GRASS);
-      groundPatch(K(0.846), 1, 10, [20, 0.16, 30], GRASS);
-      groundPatch(K(0.856), 1, 14, [16, 0.20, 26], GRASS_S);
+      groundPatch(K(0.838), 1, 36, [16, 0.20, 32], CONC_W);
+      groundPatch(K(0.848), 1, 12, [28, 0.18, 36], GRASS);
+      groundPatch(K(0.858), 1, 12, [16, 0.16, 26], GRASS);
+      groundPatch(K(0.866), 1, 16, [14, 0.20, 22], GRASS_S);
       for (let i = 0; i < 4; i++) {
         place(K(0.806 + i * 0.0060), 1, 33, [1.2, 1.0, 1.2], i % 2 ? DRUM : STEEL);
       }
@@ -718,11 +813,13 @@
       billboard(K(0.944), -1, 17, 9, 3.6, [0.30, 0.42, 0.66]);
       billboard(K(0.968), -1, 17, 9, 3.6, [0.84, 0.82, 0.76]);
       billboard(K(0.986), -1, 16, 8, 3.2, [0.78, 0.30, 0.22]);
-      building(K(0.936), -1, 42, 9, 5.5, 16, { col: FALU });    // hospitality
-      building(K(0.958), -1, 40, 7, 5.0, 10, { col: CORR_BLUE });// scoreboard
-      building(K(0.916), -1, 44, 8, 4.5, 14, { col: TIMBER });
+      // Hospitality / scoreboard set well back of the timber stands so they
+      // do not eat the Turn-8 pine wall (clip building×addCone @0.958).
+      building(K(0.936), -1, 52, 9, 5.5, 16, { col: FALU });    // hospitality
+      building(K(0.958), -1, 50, 7, 5.0, 10, { col: CORR_BLUE });// scoreboard
+      building(K(0.916), -1, 54, 8, 4.5, 14, { col: TIMBER });
       for (let i = 0; i < 4; i++) {
-        place(K(0.966 + i * 0.0035), -1, 30, [0.30, 8.5, 0.30], TRIM);
+        place(K(0.966 + i * 0.0035), -1, 36, [0.30, 8.5, 0.30], TRIM);
       }
       marshalPost(K(0.930), -1, 14);
       marshalPost(K(0.958), -1, 14);
