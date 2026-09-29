@@ -158,6 +158,7 @@ const RaceControl = (function () {
       capHoldT = 0; capHoldLevel = 0;
       restartWanted = false;
       otHoldLap = null;
+      lowGripNoted = false;   // update() only runs in a race, so its not-in-race clear never fired: RACE AGAIN in the wet lost the note
       // Clear the change-detector too, or the next race's first flag looks like
       // a repeat of the last one's and is never sent.
       sent = "";
