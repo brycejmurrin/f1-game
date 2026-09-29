@@ -20,9 +20,29 @@ import { createRequire } from "node:module";
 // The throwaway repos' cleanup: `git commit` can leave a gc / maintenance
 // child still writing .git/objects when the test's `finally` runs, and a bare
 // rmSync then threw ENOTEMPTY out of a test whose every assertion had passed
-// (PR #387's Structural guards job, runner at loadavg 4.25). Retry, as node's
-// own docs recommend for a busy directory.
-const rmTemp = (dir) => fs.rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 150 });
+// (PR #387's Structural guards job, runner at loadavg 4.25; again on #396).
+// Stop maintenance first, then retry — node's docs recommend maxRetries for a
+// busy directory; the stop covers the writer that outlives a single retry window.
+const rmTemp = (dir) => {
+  try {
+    execFileSync("git", ["-C", dir, "maintenance", "unregister", "--force"], { stdio: "ignore", timeout: 3000 });
+  } catch { /* not a git repo / no maintenance */ }
+  try {
+    execFileSync("git", ["-C", dir, "gc", "--quit"], { stdio: "ignore", timeout: 5000 });
+  } catch { /* best-effort */ }
+  for (let i = 0; i < 10; i++) {
+    try {
+      fs.rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 150 });
+      return;
+    } catch (err) {
+      if (err && (err.code === "ENOTEMPTY" || err.code === "EBUSY") && i < 9) {
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200 * (i + 1));
+        continue;
+      }
+      throw err;
+    }
+  }
+};
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
