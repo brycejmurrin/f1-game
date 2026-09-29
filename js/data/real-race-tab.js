@@ -469,6 +469,7 @@ const DataRealRace = (function () {
     let bodyGen = 0;
     let distance = 1;   // the fraction of the real distance the player races (DISTANCES)
     let startLap = 1;   // the REAL lap the player drops into (1 = the grid)
+    let watchCamera = "side";   // WATCH has its own opening shot; driving preferences stay intact
     let seatCode = null;   // the DRIVE AS pick, a driver code (null: the first seated driver)
     let traces = null;     // the real positions for the painted script, once loaded
     let loading = null;    // {done, total} while the positions load
@@ -564,6 +565,18 @@ const DataRealRace = (function () {
       return field;
     }
 
+    function watchCameraPicker() {
+      const field = el("label", "dh-pick-field");
+      field.appendChild(el("span", "dh-pick-label", "WATCH CAMERA"));
+      const pick = el("select", "dh-pick-select");
+      pick.setAttribute("aria-label", "WATCH CAMERA");
+      for (const [value, label] of [["side", "TV TRACKSIDE"], ["heli", "AERIAL"], ["tcam", "T-CAM"], ["chase", "CHASE"]]) {
+        const op = el("option", null, label); op.value = value; op.selected = value === watchCamera; pick.appendChild(op);
+      }
+      pick.addEventListener("change", () => { watchCamera = pick.value; });
+      field.appendChild(pick); return field;
+    }
+
     /** REAL POSITIONS: load the field's real x/y (OpenF1 /location) once, then WATCH the
      *  whole race or its HIGHLIGHTS with the camera on the DRIVE AS pick — every car
      *  where it really was. Until they load, the WATCH buttons load them first. */
@@ -598,7 +611,7 @@ const DataRealRace = (function () {
         startLap = fromLap;
         Log.info("data", "real replay " + script.sessionKey + (reel ? " highlights" : " from " + fromLap) + " follow=" + seatCode);
         if (close) close();
-        return !!RealRace.launch(script, { seat: seatCode, laps: script.laps, startLap: fromLap, watch: true, reel: !!reel, traces: tr, intro: true });   // intro: the pre-race card and announcer (js/race/real-race.js launch)
+        return !!RealRace.launch(script, { seat: seatCode, laps: script.laps, startLap: fromLap, watch: true, camera: watchCamera, reel: !!reel, traces: tr, intro: true });   // intro: the pre-race card and announcer (js/race/real-race.js launch)
       };
       if (traces && traces.sessionKey === script.sessionKey) return go(traces);
       loadTraces(script, slot, go);
@@ -724,6 +737,7 @@ const DataRealRace = (function () {
       slot.appendChild(pills);
       const pickRow = el("div", "dh-pick-fields");
       pickRow.appendChild(seatPicker(script, seats));
+      pickRow.appendChild(watchCameraPicker());
       slot.appendChild(pickRow);
       slot.appendChild(replayRow(script, slot));
       slot.appendChild(lapList(script));
