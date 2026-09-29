@@ -666,7 +666,11 @@ test("controller.html carries exactly the manifest's CONTROLLER subset and both 
   assert.ok(MANIFEST.FULL.indexOf("js/input/tilt-roll.js") < MANIFEST.FULL.indexOf("js/input/input.js"),
     "tilt-roll loads before input.js, which calls it");
   assert.ok(MANIFEST.LAZY_NET.includes("js/input/phone-pad.js"), "the desktop half loads with the net stack");
-  assert.match(read(".github/workflows/pages.yml"), /cp index\.html bench\.html controller\.html /, "the page is staged by name");
+  const { STAGE_ROOT_FILES } = await import("../../tools/desktop/stage-files.mjs");
+  assert.ok(STAGE_ROOT_FILES.includes("controller.html"),
+    "controller.html must be in the shared stage allow-list (tools/desktop/stage-files.mjs)");
+  assert.match(read(".github/workflows/pages.yml"), /tools\/desktop\/stage\.mjs/,
+    "pages.yml must stage via the shared stage script (not a forked cp list)");
   // The phone's own door: a touch device opens controller.html from the title
   // and from CONTROLS; a mouse never sees either button (live with the pointer
   // kind, next to body.desktop). Plain navigation — no net stack on the phone.
