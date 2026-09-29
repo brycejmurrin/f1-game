@@ -13,6 +13,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { readDefaults } from "../../tools/gen/settings-defaults.mjs";
+import { makeDom } from "../helpers/mini-dom.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -45,6 +46,7 @@ function boot(opts = {}) {
       getItem(k) { const v = disk.get(k); return v === undefined ? null : v; },
     },
   };
+  if (opts.globals) Object.assign(sb, opts.globals);
   sb.window = sb;
   const ctx = vm.createContext(sb);
   // In the page js/data/teams.js loads long before this file; opt in where a
@@ -60,6 +62,100 @@ function boot(opts = {}) {
     loadSettings: (o) => plain(SettingsExport.applySettings(o, G)),
     loadGarage: (o) => plain(SettingsExport.applyGarage(o)) };
 }
+
+function bootImportUI(opts = {}) {
+  const dom = makeDom();
+  let opens = 0;
+  const create = dom.document.createElement;
+  dom.document.createElement = (tag) => {
+    const el = create(tag);
+    if (tag === "input") el.click = () => { opens++; };
+    return el;
+  };
+  dom.byId("pm-panel-files"); dom.byId("pm-display-adv-body");
+  // Real getElementById must not invent the mount guard's missing heading.
+  dom.document.getElementById = (id) => dom.document.querySelector("#" + id);
+  const timers = new Map();
+  let seq = 0, reloads = 0;
+  const b = boot({ ...opts, globals: {
+    document: dom.document, location: { reload: () => reloads++ },
+    setTimeout: (fn, ms) => { timers.set(++seq, { fn, ms }); return seq; },
+    clearTimeout: (id) => timers.delete(id),
+    FileReader: class {
+      readAsText(file) { file.pending.then((text) => { this.result = text; this.onload(); }, () => this.onerror()); }
+    },
+  } });
+  b.SettingsExport.create(b.G);
+  const button = dom.byId("pm-settings-load");
+  return { ...b, dom, button,
+    choose(promise) {
+      const before = opens;
+      button.click(); button.click();
+      if (opens === before) return false;
+      const picker = dom.document.querySelector("input");
+      picker.files = [opts.fileReader ? { pending: promise } : { text: () => promise }]; picker.onchange();
+    },
+    reloads: () => reloads,
+    flushReloads() { for (const [id, t] of timers) if (t.ms === 600) { timers.delete(id); t.fn(); } },
+  };
+}
+
+test("backup controls mount once in their own settings page, outside renderer options", () => {
+  const b = bootImportUI();
+  for (const id of ["pm-settings-changed", "pm-settings-all", "pm-settings-load"]) {
+    assert.equal(b.dom.byId(id).parentElement.id, "pm-panel-files");
+  }
+  b.SettingsExport.create(b.G);
+  assert.equal(b.dom.document.querySelectorAll("#pm-settings-load").length, 1);
+});
+
+const volumeFile = (v) => JSON.stringify({ format: "apex26-settings-v1", settings: { audio: { volMusic: v } } });
+for (const fileReader of [false, true]) test(`a slow older settings import cannot overwrite the newer file (${fileReader ? "FileReader" : "File.text"})`, async () => {
+  const b = bootImportUI({ fileReader });
+  let finishOld;
+  b.choose(new Promise((resolve) => { finishOld = resolve; }));
+  b.choose(Promise.resolve(volumeFile(0.8)));
+  await Promise.resolve();
+  assert.equal(b.disk.get("apex26.volMusic"), "0.8");
+  finishOld(volumeFile(0.2));
+  await Promise.resolve();
+  assert.equal(b.disk.get("apex26.volMusic"), "0.8", "late reads do not change current settings");
+  b.flushReloads();
+  assert.equal(b.reloads(), 1);
+});
+
+for (const fileReader of [false, true]) test(`an old file error cannot replace the latest import result (${fileReader ? "FileReader" : "File.text"})`, async () => {
+  const b = bootImportUI({ fileReader });
+  let failOld;
+  b.choose(new Promise((_resolve, reject) => { failOld = reject; }));
+  b.choose(Promise.resolve(volumeFile(0.8)));
+  await Promise.resolve();
+  assert.match(b.button.textContent, /APPLIED/);
+  failOld(new Error("read failed"));
+  await Promise.resolve();
+  assert.match(b.button.textContent, /APPLIED/);
+  assert.equal(b.disk.get("apex26.volMusic"), "0.8");
+});
+
+test("a completed import locks new file choices until it reloads", async () => {
+  const b = bootImportUI();
+  b.choose(Promise.resolve(volumeFile(0.2)));
+  await Promise.resolve();
+  assert.equal(b.button.disabled, true);
+  assert.equal(b.choose(Promise.resolve("not JSON")), false, "no replacement chooser can cancel an already applied import");
+  assert.equal(b.disk.get("apex26.volMusic"), "0.2");
+  b.flushReloads();
+  assert.equal(b.reloads(), 1);
+});
+
+test("the import UI stays open and reports a refused storage reset", async () => {
+  const b = bootImportUI({ store: { rawDel: () => false } });
+  b.choose(Promise.resolve(JSON.stringify({ format: "apex26-settings-v1", settings: { display: { gfxBackend: null } } })));
+  await Promise.resolve();
+  assert.match(b.button.textContent, /NOT SAVED/);
+  b.flushReloads();
+  assert.equal(b.reloads(), 0);
+});
 
 // Values a player might have anywhere in the namespace — including the ones
 // the file must never carry.
