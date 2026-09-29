@@ -1,52 +1,75 @@
 # Korea International Circuit — Visual Design Brief
 
-**Setting:** DAY, modern theme (reclaimed tidal flats). ~5.61 km, 18 turns, anti-clockwise.
+**Setting:** DAY, modern theme (reclaimed tidal flats). 5.615 km, 18 turns,
+anti-clockwise. Tilke; Yeongam, South Jeolla, near Mokpo. Capacity 135,000.
+Korean Grand Prix 2010–2013; pit exit lengthened around T1 for 2013
+([Wikipedia](https://en.wikipedia.org/wiki/Korea_International_Circuit)).
 
 ## 1. Setting
 
-Tilke-designed, built on reclaimed land beside the Yeongam tidal flats in South Jeolla. Half permanent circuit, half never-finished marina development: the back section runs between empty apartment shells and a seawall. Wide, flat, grey and conspicuously unfinished — that emptiness is the identity, not a defect to dress over.
+Tilke-designed on reclaimed land beside the Yeongam tidal flats. Intended as
+part permanent, part temporary harbour-side course
+([RacingCircuits.info](https://www.racingcircuits.info/asia/south-korea/korea-international-circuit.html);
+Wikipedia). The planned hotels / restaurants / marina village never arrived —
+the identity is EMPTINESS: wide grey asphalt run-off, salt-bleached fill,
+blank unglazed apartment shells, seawall and open water
+([NYT 2015](https://www.nytimes.com/2015/02/16/world/asia/a-korean-auto-racing-debacle-but-hope-around-the-bend.html)).
 
 ## 2. Atmosphere & palette
 
-Flat coastal light, high haze, low contrast. Water on the horizon. Grass is sparse and salt-bleached over reclaimed fill.
+Flat coastal light, high haze, low contrast. Water on the horizon. Grass is
+sparse and salt-bleached over reclaimed fill.
 
 ## 3. Elevation
 
-Essentially flat. Reclaimed land — resist the urge to add relief.
+Essentially flat. Reclaimed land — resist the urge to add relief. (SRTM
+measures ~0 m of relief; `undulate:false` on the def.)
 
 ## 4. Landmarks & surroundings by lap position
 
-Anti-clockwise: **-1 is the infield** (pit complex, unfinished marina towers) and **+1 is
-the outfield** (seawall, open water). Do not carry over the sign convention from the
-clockwise circuits.
+Anti-clockwise: **-1 is the infield** (pit complex, unfinished marina towers)
+and **+1 is the outfield** (seawall, open water). Do not carry over the sign
+convention from clockwise circuits.
 
 | s | Side | Distance | Box description |
 |---|---|---|---|
-| 0.005 | -1 | 12 | Pit and paddock complex: one long low flat-roofed `building` with a pale fascia, a `motorhome` row racked behind it, a `cameraTower` on the start line. Permanent and tidy — the only finished architecture on the lap. |
-| 0.020 | +1 | 22 | Main `grandstandEx` facing the pit straight: single permanent covered stand, sparsely filled, pale grey steel. `sponsorHoarding` along its base, and a `waterBand` of flat estuary on the horizon behind its roofline. |
-| 0.065 | +1 | 30 | Turn 1 exit: a wide grey `runoffApron` rather than gravel, closed by `tyreWall` then `guardrail` at the far edge, with a `marshalPost` set into the apron. Scale of the run-off is the point — it dwarfs the corner. |
-| 0.083 | -1 | 15 | Infield of the Turn 1-2 complex: a `marshalPost` and a lone `billboard` on bare reclaimed fill, with a thin scatter of `bush` clumps on salt-bleached `groundPatch`. Nothing else for a hundred metres. |
-| 0.190 | +1 | 45 | Mid back straight, the emptiest view on the lap: bleached `groundPatch` running flat to a low `guardrail`, a distant `tower` mast breaking the skyline, `waterBand` beyond. No stands, no trees, no crowd. |
-| 0.300 | +1 | 25 | Turn 3, the heavy braking zone ending the long full-throttle run: temporary `grandstandEx` on the outside, huge `runoffApron`, `tyreWall` on its far edge, `cameraTower` on the approach. |
-| 0.306 | -1 | 18 | Inside the Turn 3 hairpin: `broadcastCompound` of trucks and dishes plus a `marshalPost`, sitting on open fill with nothing screening it. |
-| 0.430 | -1 | 20 | Turns 4-6 infield: scrub `groundPatch`, scattered `bush`, a `marshalPost` per corner. The unfinished apartment shells first show as grey slabs on this horizon, still distant. |
-| 0.549 | +1 | 35 | Turn 7 outside: `guardrail` hard against a raised seawall embankment, `waterBand` opening out behind it. Hazy, low contrast, no far shore. |
-| 0.589 | -1 | 16 | Turn 8 infield: a small uncovered `grandstandEx` with `sponsorHoarding` across its front, mostly empty seats, no back wall. |
-| 0.663 | -1 | 22 | Turn 10: first close view of the marina that never happened — `cityFront` of blank apartment shells, unglazed, unlit, grey concrete, with a shuttered podium-level `building` at street height. |
-| 0.723 | +1 | 6 | Turns 11-12, entry to the walled stadium section: `guardrail` backed by `tyreWall` tight to the track edge, `marshalPost` in a cut-out. Sight lines shut down here. |
-| 0.760 | -1 | 8 | Turn 14: tower blocks rise directly behind the barrier — `cityFront` plus one `tower` carrying scaffold banding, close enough to read the empty window openings. |
-| 0.797 | +1 | 10 | Turn 15: `tyreWall` across the wall face with `sponsorHoarding` running its full length; `waterBand` glimpsed over the top of the barrier line. |
-| 0.864 | -1 | 10 | Turn 17, where the wall was moved back for visibility: `guardrail` set back behind a narrow `runoffApron` strip, `marshalPost` and `cameraTower` in the gap. |
-| 0.885 | +1 | 18 | Final turn: the pedestrian footbridge over the track — a gantry-form `building` with the circuit's one piece of local-architecture styling, a `billboard` on its face, then the run back to the pit straight. |
+| 0.005 | -1 | 12 | **`korea-pit-complex`** (required): F1-standard permanent pit/paddock on the harbour-side half (RacingCircuits.info). Pale fascia garage run, motorhome row, camera tower. |
+| 0.020 | +1 | 22 | **`korea-main-grandstand`** (required): permanent covered steel stand facing the pit straight; sponsor hoarding; estuary `waterBand` behind. |
+| 0.065 | +1 | 30 | Turn 1 exit: wide grey `runoffApron` (not gravel), `tyreWall` then `guardrail`, `marshalPost`. Pit exit lengthened around T1 in 2013 (Wikipedia). |
+| 0.083 | -1 | 15 | Turn 1–2 infield: `marshalPost`, lone `billboard`, thin `bush` on salt-bleached fill. |
+| 0.190 | +1 | 45 | Mid back straight — emptiest view: bleached `groundPatch`, distant mast, `waterBand`. No stands/trees/crowd. |
+| 0.300 | +1 | 25 | Turn 3 braking: temporary `grandstandEx`, huge apron, tyre wall, camera tower. |
+| 0.306 | -1 | 18 | Turn 3 hairpin infield: `broadcastCompound` + marshal on open fill. |
+| 0.430 | -1 | 20 | Turns 4–6 infield scrub; unfinished shells first show as distant grey slabs. |
+| 0.549 | +1 | 35 | Turn 7 seawall embankment + open water (hazy, no far shore). |
+| 0.589 | -1 | 16 | Turn 8 small uncovered `grandstandEx` + hoarding. |
+| 0.663 | -1 | 22 | **`korea-marina-shells`** (required): blank unglazed apartment shells — the marina/hotel village that never happened (RacingCircuits.info, Wikipedia, NYT). |
+| 0.723 | +1 | 6 | Turns 11–12 stadium entry: tight armco + tyres. |
+| 0.760 | -1 | 8 | Turn 14: tower blocks / `cityFront` close behind the barrier. |
+| 0.797 | +1 | 10 | Turn 15: tyre wall + hoarding; water over the barrier. |
+| 0.864 | -1 | 10 | Turn 17: wall moved back for pit-entry visibility (2011, Wikipedia). |
+| 0.885 | +1 | 18 | **`korea-final-footbridge`** (required): Tilke pedestrian footbridge inspired by local architecture (RacingCircuits.info). |
 
 ## 5. Track features
 
-- One of the longest full-throttle runs on any calendar, into a heavy braking zone at Turn 3.
-- A tight, walled stadium section through the back half.
-- Runs anti-clockwise.
+- One of the longest full-throttle runs into a heavy braking zone at Turn 3.
+- Tight walled stadium section through the back half.
+- Anti-clockwise.
 
 ## 6. Modelling notes
 
-- The half-built marina towers on the infield side are the landmark. Blank, unlit, unfinished.
-- Seawall and open water beyond the outfield on the south side.
+- Half-built marina shells on the infield are the landmark. Blank, unlit, unfinished.
+- Seawall and open water beyond the outfield.
 - Wide grey asphalt run-off, not gravel.
+- Deliberately NO tree line: bare fill reads correct.
+
+## Sourced vs uncertain
+
+**Sourced (built):**
+- 5.615 km / 18 turns / Tilke / Yeongam near Mokpo / capacity 135,000 / F1 2010–13 / pit exit extended 2013 — Wikipedia.
+- Part permanent / part temporary harbour-side intent; permanent F1 pit+paddock; marina/hotel village never delivered — RacingCircuits.info, Wikipedia, NYT.
+- Final-turn footbridge with local-architecture styling — RacingCircuits.info.
+- Turn 17 wall moved back 2011 for pit-entry visibility — Wikipedia.
+
+**UNCERTAIN (not built as fact):**
+- Named harbour hotels, yacht clubs, or specific tower brands — Wikipedia’s “hotels and yachts” phrasing describes the *planned* temporary section, not delivered buildings. Model only generic unfinished shells.
