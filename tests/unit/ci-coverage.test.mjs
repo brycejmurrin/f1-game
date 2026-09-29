@@ -299,9 +299,25 @@ test("ci-verdict is the always-run aggregator every other job feeds", () => {
   assert.match(body, /if: \$\{\{ !cancelled\(\) \}\}/);
   assert.match(body, /run: node tools\/ci\/ci-verdict\.mjs/);
   assert.match(body, /NEEDS: \$\{\{ toJSON\(needs\) \}\}/);
-  for (const j of ["guards", "node-suites", "smoke", "selected", "baseline-trial", "poke-train"]) {
+  for (const j of ["guards", "unit-plan", "node-suites", "smoke", "selected", "baseline-trial", "poke-train"]) {
     assert.match(body, new RegExp(`- ${j}\\b`), `ci-verdict must need ${j}`);
   }
+});
+
+test("unit-plan feeds the node-suites matrix and can skip unused slices", () => {
+  const plan = (ciWorkflow.split("\n  unit-plan:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
+  assert.ok(plan, "unit-plan job missing");
+  assert.match(plan, /node tools\/ci\/pick-unit-slices\.mjs/);
+  assert.match(plan, /--github-output/);
+  assert.match(plan, /any_node:/);
+  assert.match(plan, /driving:/);
+  const node = (ciWorkflow.split("\n  node-suites:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
+  assert.match(node, /needs: unit-plan/);
+  assert.match(node, /needs\.unit-plan\.outputs\.any_node == 'true'/);
+  assert.match(node, /include: \$\{\{ fromJSON\(needs\.unit-plan\.outputs\.slices\) \}\}/);
+  const driving = (ciWorkflow.split("\n  driving-model:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
+  assert.match(driving, /needs: unit-plan/);
+  assert.match(driving, /needs\.unit-plan\.outputs\.driving == 'true'/);
 });
 
 test("no workflow demotes the change-aware gate to advisory", () => {
@@ -1023,7 +1039,7 @@ test("docs-only pushes do not start CI (Actions minutes, 2026-09-02)", () => {
   for (const [name, job] of [["smoke", smokeJob], ["sweeps", sweepsJob], ["ship-filter", shipFilterJob]]) {
     assert.ok(job.includes(`    if: \${{ ${fastTier} }}`), `${name} must sit out the deploy branch's fast tier with the shared expression`);
   }
-  for (const name of ["guards", "node-suites", "sweeps-parts", "driving-model", "select"]) {
+  for (const name of ["guards", "unit-plan", "node-suites", "sweeps-parts", "driving-model", "select"]) {
     const job = ciWorkflow.slice(ciWorkflow.indexOf(`\n  ${name}:\n`));
     const head = job.slice(0, job.indexOf("\n    steps:"));
     assert.ok(!head.includes(fastTier), `${name} is part of the fast tier and must not opt out`);
@@ -1037,14 +1053,19 @@ test("a green fast-tier run pokes the train; a red or called one never does", ()
   // dispatches pages.yml itself when every fast-tier job passed.
   const poke = (ciWorkflow.split("\n  poke-train:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
   assert.ok(poke, "poke-train job missing");
-  assert.match(poke, /needs: \[guards, node-suites, sweeps-parts, driving-model, select, selected\]/,
-    "the poke waits for every fast-tier job");
+  assert.match(poke, /needs: \[guards, unit-plan, node-suites, sweeps-parts, driving-model, select, selected\]/,
+    "the poke waits for every fast-tier job (incl. unit-plan)");
   const cond = poke.match(/^    if: \$\{\{ (.*) \}\}$/m)?.[1] || "";
   assert.match(cond, /^!cancelled\(\) && github\.event_name == 'push' && github\.ref_name == 'claude\/f1-game-project-26h3ng' && inputs\.concurrency_key == ''/,
     "fast tier only: a deploy-branch push, never a Pages call");
-  for (const j of ["guards", "node-suites", "sweeps-parts", "driving-model", "select"]) {
+  for (const j of ["guards", "unit-plan", "sweeps-parts", "select"]) {
     assert.ok(cond.includes(`needs.${j}.result == 'success'`), `${j} must be green before the poke`);
   }
+  // Path-skipped node-suites / driving-model are a pass when the plan said so.
+  assert.ok(cond.includes("(needs.node-suites.result == 'success' || (needs.node-suites.result == 'skipped' && needs.unit-plan.outputs.any_node != 'true'))"),
+    "skipped node-suites is a pass only when unit-plan said any_node is false");
+  assert.ok(cond.includes("(needs.driving-model.result == 'success' || (needs.driving-model.result == 'skipped' && needs.unit-plan.outputs.driving != 'true'))"),
+    "skipped driving-model is a pass only when unit-plan said driving is false");
   /* A SKIPPED `selected` IS ONLY A PASS WHEN THE PLAN WAS HONESTLY EMPTY
      (2026-09-22). `selected` is skipped whenever the plan has no shards, and
      that happens two ways: nothing the diff touches has a spec, or everything

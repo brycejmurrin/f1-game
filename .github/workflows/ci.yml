@@ -403,11 +403,74 @@ jobs:
       - name: What does this gate cover?
         run: node tools/ci/ci-coverage.mjs
 
+  # WHICH NODE SLICES DOES THIS DIFF NEED? (2026-09-29 follow-up). Browser
+  # selection is change-aware; the node matrix was not — every PR paid for all
+  # three packed slices + driving-model (~17 runner-min). tools/ci/pick-unit-
+  # slices.mjs maps paths → slices with FAIL-SAFE → all. A scenery-only diff
+  # keeps guards + vm-a and skips vm-b / page-slow / driving-model; editing a
+  # file owned by a skipped slice (phone-pad-netplay-vm on a scenery PR) still
+  # selects that slice. Schedule and dispatch run --all. Empty matrix is never
+  # emitted: any_node=false skips the job via `if:`, so fromJSON always sees
+  # at least one row when the job runs. Landed AFTER ci-verdict so skipped
+  # slices do not block branch protection.
+  unit-plan:
+    name: Plan node unit slices
+    runs-on: ubuntu-latest
+    if: ${{ inputs.fast_tier_run == '' }}
+    timeout-minutes: 5
+    outputs:
+      slices: ${{ steps.plan.outputs.slices }}
+      any_node: ${{ steps.plan.outputs.any_node }}
+      driving: ${{ steps.plan.outputs.driving }}
+      reason: ${{ steps.plan.outputs.reason }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
+      - name: Plan node unit slices
+        id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -u
+          # Schedule / dispatch: no meaningful diff — run every slice.
+          case "$EVENT" in
+            schedule|workflow_dispatch)
+              node tools/ci/pick-unit-slices.mjs --all --github-output
+              exit 0
+              ;;
+          esac
+          BASE=""
+          case "$EVENT" in
+            pull_request) BASE="${PR_BASE:-}" ;;
+            push) BASE="${PUSH_BEFORE:-}" ;;
+          esac
+          case "${BASE}" in
+            ""|0000000000000000000000000000000000000000)
+              echo "no base SHA — fail-safe --all" >&2
+              node tools/ci/pick-unit-slices.mjs --all --github-output
+              exit 0
+              ;;
+          esac
+          if ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
+            echo "base $BASE unreachable — fail-safe --all" >&2
+            node tools/ci/pick-unit-slices.mjs --all --github-output
+            exit 0
+          fi
+          node tools/ci/pick-unit-slices.mjs --since "$BASE" --github-output
+
   node-suites:
     name: Pure-node unit suites
+    needs: unit-plan
     runs-on: ubuntu-latest
     # Tree-only: skipped when the train reuses a green fast tier (`fast_tier_run`).
-    if: ${{ inputs.fast_tier_run == '' }}
+    # Also skipped when the unit-plan says this diff needs no node matrix slice
+    # (ci-verdict treats that skip as a pass).
+    if: ${{ inputs.fast_tier_run == '' && needs.unit-plan.outputs.any_node == 'true' }}
     # THREE RUNNERS, NOT ONE (2026-09-16). This job ran its scripts one after
     # another and measured 11.3 min on 40 of 40 runs — the floor of the fast
     # tier, hence of every deploy push, and never shortened by anything. The
@@ -438,7 +501,9 @@ jobs:
         #   vm-a       game-vm-a                         5.6 min
         #   vm-b       game-vm-b + the fast scripts      4.0 + 1.8
         #   page-slow  vm-page + node-slow               2.6 + 2.2
-        slice: [vm-a, vm-b, page-slow]
+        # Matrix rows come from unit-plan (one `{slice}` per needed slice).
+        # The fixed list below is the FULL set; the plan emits a subset.
+        include: ${{ fromJSON(needs.unit-plan.outputs.slices) }}
     # MEASURED locally 2026-09-03, warm: net 12s, service-worker 4s, lifecycle
     # 0s, state 1s, agent-contract 0s, audio 0s, mcp 12s, node-slow 115s,
     # game-vm 161s = 305s total (+ garage-unit 39s, steering-unit 1s, 2026-09-10). Plus npm ci, which cost 3m32s and 5m02s on the
@@ -1220,9 +1285,12 @@ jobs:
 
   driving-model:
     name: Driving model (characterization traces)
+    needs: unit-plan
     runs-on: ubuntu-latest
     # Tree-only: skipped when the train reuses a green fast tier (`fast_tier_run`).
-    if: ${{ inputs.fast_tier_run == '' }}
+    # Also skipped when unit-plan says this diff does not need the characterization
+    # (ci-verdict treats that skip as a pass).
+    if: ${{ inputs.fast_tier_run == '' && needs.unit-plan.outputs.driving == 'true' }}
     # 42 s measured in CI (run 31197770813, step 7). The old 10-minute cap was
     # consumed entirely by an uncached Chromium install on run 32083395969, so
     # the characterization never started and Pages was blocked. Keep the same
@@ -1850,7 +1918,7 @@ jobs:
     name: Poke the release train
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [guards, node-suites, sweeps-parts, driving-model, select, selected]
+    needs: [guards, unit-plan, node-suites, sweeps-parts, driving-model, select, selected]
     # Fast tier only (a deploy-branch push, never a Pages call), and only when
     # every fast-tier job passed. A red fast tier pokes nothing; the cron
     # backstop still gates the tip later and fails it visibly.
@@ -1874,7 +1942,11 @@ jobs:
     #
     # Deliberately NOT gated on `reason`: an `infra` or `docs` plan can be
     # honestly empty, and those are the diffs this branch takes all day.
-    if: ${{ !cancelled() && github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && inputs.concurrency_key == '' && needs.guards.result == 'success' && needs.node-suites.result == 'success' && needs.sweeps-parts.result == 'success' && needs.driving-model.result == 'success' && needs.select.result == 'success' && (needs.selected.result == 'success' || (needs.selected.result == 'skipped' && needs.select.outputs.dropped == '0')) }}
+    #
+    # SKIPPED node-suites / driving-model ARE a pass when unit-plan said the
+    # slice was not needed (path-filtered). A skip for any other reason (cancelled
+    # parent, plan failure) is not a poke.
+    if: ${{ !cancelled() && github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && inputs.concurrency_key == '' && needs.guards.result == 'success' && needs.unit-plan.result == 'success' && (needs.node-suites.result == 'success' || (needs.node-suites.result == 'skipped' && needs.unit-plan.outputs.any_node != 'true')) && needs.sweeps-parts.result == 'success' && (needs.driving-model.result == 'success' || (needs.driving-model.result == 'skipped' && needs.unit-plan.outputs.driving != 'true')) && needs.select.result == 'success' && (needs.selected.result == 'success' || (needs.selected.result == 'skipped' && needs.select.outputs.dropped == '0')) }}
     permissions:
       actions: write
       contents: read
@@ -1918,6 +1990,7 @@ jobs:
     timeout-minutes: 5
     needs:
       - guards
+      - unit-plan
       - node-suites
       - sweeps-parts
       - sweeps

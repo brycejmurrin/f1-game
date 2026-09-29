@@ -215,6 +215,7 @@
     "tests/unit/apca-timing.test.mjs",
     "tests/unit/test-groups.test.mjs",
     "tests/unit/pick-tests.test.mjs",
+    "tests/unit/pick-unit-slices.test.mjs",
     "tests/unit/test-observed.test.mjs",
     "tests/unit/evaluate-scope-lint.test.mjs",
     "tests/unit/assert-audit.test.mjs",

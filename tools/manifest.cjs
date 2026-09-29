@@ -907,6 +907,7 @@ const MOVED = {
   "tools/tooling-fast.mjs": "tools/ci/tooling-fast.mjs",
   "tools/verify-change.mjs": "tools/ci/verify-change.mjs",
   "tools/pick-tests.mjs": "tools/ci/pick-tests.mjs",
+  "tools/pick-unit-slices.mjs": "tools/ci/pick-unit-slices.mjs",
   "tools/select-specs.mjs": "tools/ci/select-specs.mjs",
   "tools/select-budget.mjs": "tools/ci/select-budget.mjs",
   "tools/select-recall.mjs": "tools/ci/select-recall.mjs",
