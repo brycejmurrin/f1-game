@@ -295,6 +295,17 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     // Wave 6 — Watkins Glen: 2006 control-tower booths, Nazareth pit terrace,
     // Sahlen Esses hillside (positive-slope GA bank + timber stand)
     watkins_glen: ["glen-pit-terrace", "glen-esses-hill", "glen-timing-tower"],
+    // Wave 6 — Dijon-Prenois: pit garages + race-control (official 2015–16
+    // pitbuilding), Combe limestone cut (Virage de la Combe), Parabolique
+    // spectator bank (1976 extension; 14% max slope), Burgundy ferme.
+    // Modern grandstand map UNCERTAIN — keep docs §4 grandstandEx only.
+    dijon: [
+      "dijon-pit-garages",
+      "dijon-race-control",
+      "dijon-combe-cut",
+      "dijon-parabolique-bank",
+      "dijon-prenois-ferme",
+    ],
     // Wave 6 — Korea International Circuit (Yeongam): permanent pit complex +
     // main grandstand, unfinished marina shells (hotels/yachts NOT named —
     // UNCERTAIN), Tilke final-turn footbridge (RacingCircuits.info).
