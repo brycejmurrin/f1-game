@@ -535,7 +535,7 @@ body.hud-met-timing #hud-pit,
 body.hud-met-compact #hud-pit { display: none !important; }
 body.hud-met-timing #hud-tyre,
 body.hud-met-compact #hud-tyre { display: none !important; }
-/* LAPS LEFT on the set (js/ui/hud.js sets data-laps from TyreModel.lapsLeft):
+/* LAPS LEFT on the set (js/ui/hud.js sets data-laps from the tyre model):
    over the bar, in the code chip's ink, so it reads on fill and plate alike. */
 #hud-tyre-bar::after {
   content: attr(data-laps); position: absolute; inset: 0;
