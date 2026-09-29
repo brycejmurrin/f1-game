@@ -591,8 +591,8 @@ const SceneryCity = (function () {
       } else if (kind === "cross") {                             // two perpendicular slabs (+ footprint)
         if (sec(0, w, h, d * 0.5, k * 3.7 + side * 1.9) === false) return;   // body rejected -> drop its dependents // arm along tangent
         // Lift the crossing arm by MIN_SEP so its top/bottom faces are not the
-        // same horizontal planes as sec()'s body (sochi flatCoplanar: 45 spots
-        // from neonTower@594 × sec@475). Cap rides with the arm.
+        // same horizontal planes as sec()'s body (sochi flatCoplanar: ~45 spots
+        // from the cross arm × sec body pair). Cap rides with the arm.
         const SEP = (typeof TrackGeom !== "undefined" && TrackGeom.MIN_SEP) || 0.03;
         const cen2 = vadd(a.c, a.u, h * 0.5 + SEP);
         addBox(out, cen2, [w * 0.5, h, d], bodyCol, b);                                                       // arm along width
