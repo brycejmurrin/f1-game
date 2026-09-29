@@ -265,6 +265,14 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
       "tremblant-namerow-bank",
       "tremblant-paddock-bend-stand",
     ],
+    // Wave 6 — Jerez: El Ovni VIP deck on the finish line, Tío Pepe control
+    // tower, Dani Pedrosa (Dry Sack) + Jorge Lorenzo corner markers.
+    jerez: [
+      "jerez-ovni",
+      "jerez-control-tower",
+      "jerez-lorenzo-corner",
+      "jerez-dani-pedrosa",
+    ],
   };
   for (const [track, ids] of Object.entries(expected)) {
     const body = landmarkSource(track);
