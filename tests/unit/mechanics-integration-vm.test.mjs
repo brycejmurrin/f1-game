@@ -197,6 +197,30 @@ test("a duel trims the grid to the player and one bumped rival",async()=>{
   assert.ok(g.G.cars.length>2,"clearing the setting restores a full grid");
 });
 
+test("a DUEL setting does not trim a season round to two cars (ed11e6108)",async()=>{
+  // DUEL is a sticky SETTING but a one-off FORMAT: the sheet only hides its row
+  // in a championship, so a duel chosen once trimmed the next season round to
+  // the player and one rival (and paid it a full points table).
+  const G=g.G, S=g.sandbox.SeasonCal, T=g.sandbox.Tracks;
+  await g.race("monza");const fullGrid=G.cars.length;
+  const cfg0=JSON.parse(JSON.stringify(S.config())), season0=G.season;
+  try {
+    G.duel=true;
+    G.timeTrial=false;G.seasonMode=true;
+    const ap=S.applyConfig(Object.assign({},cfg0,{quali:false,sprint:false}));   // straight to the grid, no session in between
+    assert.ok(ap.ok&&ap.season,"the season setup applies");G.season=ap.season;
+    G.trackIdx=S.trackIndex(0);
+    const before=G.cars;
+    await G.startRace();
+    assert.notStrictEqual(G.cars,before,"anti-vacuity: startRace built this round's field");
+    assert.equal(G.flow,"season");assert.equal(G.track.def.id,T.LIST[S.trackIndex(0)].id);
+    assert.equal(G.cars.length,fullGrid,"a season round races the full grid whatever DUEL says");
+    assert.equal(G.cars.filter(c=>c.duelRival).length,0,"and nobody is bumped into a duel rival");
+  } finally {
+    G.duel=false;G.seasonMode=false;S.setConfig(cfg0);G.season=season0;
+  }
+});
+
 test("practice restores the driving checkpoint and cannot be armed in a normal race or daily",async()=>{
   await g.race("monza");assert.equal(g.G.coach.mark(),false);
   await tt();g.apex.reset(.1,35,0);g.apex.go();g.step(2);

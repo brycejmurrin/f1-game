@@ -1042,7 +1042,12 @@ let pits = null;      // PitLane.create(G), same deferral
 // A car slowed by an obvious problem may be passed under a caution
 // mid-incident, being rescued as stuck, or beached in the run-off.
 const postLim = { r: 0, l: 0, minOut: 0, side: 0 };   // Tracks.postLimits' reused out-param
-const scWatch = SportingRegs.createPassWatch(0, (o) => incidentSim.owns(o) || (o.rescueT || 0) > 0.25 || (!!o.offroad && (o.offT || 0) > 0.5));
+// …or all but stopped on the track (a first-lap jam: passing a car at walking
+// pace is passing a car with an obvious problem).
+const stricken = (o) => incidentSim.owns(o) || (o.rescueT || 0) > 0.25 || (!!o.offroad && (o.offT || 0) > 0.5)
+  || (!(o.pitState && o.pitState !== "none") && (o.speed || 0) < vTop() * 0.05);
+const cautionFair = (o) => SportingRegs.exempt(o) || stricken(o);   // a car it is legal to pass under a caution
+const scWatch = SportingRegs.createPassWatch(0, stricken);
 function scPassCall(ev) {
   if (!ev || !player || ev.type === "cleared") return;
   if (ev.type === "warn") { announce("GIVE THE POSITION BACK" + (ev.n > 1 ? " — " + ev.n + " PLACES" : ""), 2.5, "penalty-warn"); return; }
@@ -4649,6 +4654,12 @@ function updateCar(c, dt, ranked) {
     // the one ahead close up at a higher cap; the leader runs the SC pace.
     if (lvl >= 2) cautionV = vmax = Math.min(vmax, vTop() * (lvl >= 4 ? 0.02
       : lvl === 3 ? RaceControl.scQueueFrac(c, cars, track.total, ranked[0], vTop(), pits.inLane) : 0.6));
+    // …and an AI car holds its place behind the car ahead (RaceControl.holdCap):
+    // the cap alone let cars on different lines drive past each other.
+    if ((lvl === 2 || lvl === 3) && !c.human && !(c.pitState && c.pitState !== "none")) {
+      const h = RaceControl.holdCap(c, ranked, cautionFair);
+      if (h < cautionV) cautionV = vmax = h;
+    }
   }
 
   // --- AI traffic awareness: clearance on each side, the nearest blocker ahead

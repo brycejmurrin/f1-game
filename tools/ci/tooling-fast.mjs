@@ -531,6 +531,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The SCHEDULE tab's date and start time from one instant in the viewer's
   // zone (TZ pinned to Los Angeles), and NEXT against the clock. ~0.1 s.
   "tests/unit/data-schedule-tz.test.mjs",
+  // The STANDINGS tab: API row order, gap to P1, the head-to-head bar and the
+  // empty state, on mini-dom with the real Dom.el. ~0.1 s.
+  "tests/unit/data-standings.test.mjs",
   // The tail DESIGN picks (fin shape / tail style / fin badge / spine logo):
   // Car3D outline maths and the atlas painter, headless, ~0.5 s.
   "tests/unit/fin-design.test.mjs",
