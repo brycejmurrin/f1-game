@@ -302,6 +302,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/legend-parts-seed.test.mjs",
   "tests/unit/select-budget.test.mjs",
   "tests/unit/select-specs.test.mjs",
+  "tests/unit/node-plan.test.mjs",
   // The duration HISTORY behind the budget: junit/live-reporter merge,
   // the bounded rolling record, the CI-bucket fallback and the growth flag.
   // Pure fixtures plus one pass over the committed tests/data/spec-timings.json,
