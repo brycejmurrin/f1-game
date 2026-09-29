@@ -771,6 +771,16 @@ const TyreModel = (function () {
     // Completed laps on this set: a grid set (tyreLap0 0) is not a lap old at the start crossing.
     function lapsOn(c) { return c && c.tyre ? Math.max(0, lapsDone(c.lap) - lapsDone(c.tyreLap0)) : 0; }
     function spent(c) { return c ? clamp(c.tyreWear || 0, 0, 2) : 0; }
+    /** Laps this set has left before the cliff, at the rate THIS car has been
+     *  wearing it: wear per completed lap on the set, or — before a lap has
+     *  been run on it — the planned life (planLaps, severity included). What
+     *  the HUD shows beside the bar; null when wear is off or no set is on. */
+    function lapsLeft(c) {
+      if (!on() || !c || !c.tyre) return null;
+      const w = spent(c), n = lapsOn(c);
+      const life = n >= 1 && w > 0.02 ? n / w : planLaps(c.tyre.life, G.lapsTarget);
+      return Math.max(0, life * (1 - Math.min(1, w)));
+    }
 
     function info(c) {
       if (!c) return null;
@@ -809,7 +819,7 @@ const TyreModel = (function () {
     return {
       fit, update, gripMul, tractionMul, axleSplit, fuelAccelMul, fuelVmaxMul,
       stints, closeStints,
-      lapsOn, spent, info, severity,
+      lapsOn, spent, lapsLeft, info, severity,
       level: () => level, setLevel, on, planLaps,
       classRecord, optionRecord, applyCompound, startRecord,
     };
