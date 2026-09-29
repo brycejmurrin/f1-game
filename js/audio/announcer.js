@@ -490,10 +490,14 @@ const Announcer = (function () {
    *  player hears is a sentence stopping mid-word, and the "Let's go racing"
    *  cue is the line most likely to be lost. Priority 0 is never dropped: the
    *  welcome, the venue and the session survive any budget. */
+  // The read is not just its words: the engine pauses between chained lines,
+  // and the last one is held to land LAND_MS before the budget ends. readMs()
+  // counts both; a fit that did not ran a "fitting" read into the cut.
+  const GAP_S = 0.25, LAND_S = 0.6;
   function fit(list, budgetMs, rate) {
     const kept = list.slice();
-    const budget = budgetMs > 0 ? budgetMs / 1000 : Infinity;
-    const total = () => kept.reduce((n, r) => n + seconds(r.text, rate), 0);
+    const budget = budgetMs > 0 ? budgetMs / 1000 - LAND_S : Infinity;
+    const total = () => kept.reduce((n, r) => n + seconds(r.text, rate) + GAP_S, 0);
     while (total() > budget) {
       let worst = -1, worstAt = -1;
       for (let i = 0; i < kept.length; i++) if (kept[i].prio > worst) { worst = kept[i].prio; worstAt = i; }
@@ -693,7 +697,12 @@ const Announcer = (function () {
 
     /** The budget is the loading screen's own window, so the read is CUT TO FIT
      *  rather than cut off: see fit(). */
-    function scriptFor(info, budgetMs) { return script(factsFor(info), budgetMs); }
+    // At the PLAYER'S rate (SETTINGS > ANNOUNCER RATE), as speak() and readMs()
+    // are: fitted at the default, a slow voice was cut mid-read before the cue.
+    function scriptFor(info, budgetMs) {
+      const tune = (G.radio && G.radio.tuneFor && G.radio.tuneFor(CHANNEL)) || null;
+      return script(factsFor(info), budgetMs, (tune && tune.rate) || undefined);
+    }
 
     /** Speak `lines` now. `budgetMs` is the loading screen's own window, so the
      *  announcer is cut off by the same skip that ends the flyby rather than
@@ -819,7 +828,7 @@ const Announcer = (function () {
         try {
           const tune = (G.radio && G.radio.tuneFor && G.radio.tuneFor(CHANNEL)) || { rate: 1 };
           const lines = script(factsFor(info), 0, tune.rate || 1);
-          return Math.round(lines.reduce((n, l) => n + seconds(l, tune.rate || 1) * 1000 + 250, 0) + LAND_MS);   // 250: the gap between chained lines
+          return Math.round(lines.reduce((n, l) => n + (seconds(l, tune.rate || 1) + GAP_S) * 1000, 0) + LAND_MS);   // GAP_S: the pause between chained lines
         } catch (e) { Log.info("audio", "Announcer: no read length", e); return 0; }
       },
       wrapUp,
