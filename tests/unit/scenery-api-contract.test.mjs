@@ -114,13 +114,36 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     suzuka: ["suzuka-crossover-portal", "suzuka-spoon-terrace", "suzuka-130r-bank"],
     // Wave 4 — Interlagos / COTA / Mexico / Yas Marina
     interlagos: ["interlagos-senna-s", "interlagos-main-tribuna", "interlagos-sp-skyline"],
+    // Wave 6 — Imola (Partenza opposite pits + Racetrack Tower over Tilke pit)
+    imola: ["imola-partenza-stands", "imola-racetrack-tower"],
     cota: ["cota-amphitheater", "cota-turn1-big-red", "cota-main-grandstand"],
     mexico: ["mexico-foro-sol-entry", "mexico-peraltada-stand", "foro-scoreboard"],
+    // Wave 6 — Sochi Olympic Park venues + Ice Cube + Olympic Park station
+    sochi: [
+      "sochi-fisht-stadium",
+      "sochi-bolshoy-dome",
+      "sochi-adler-arena",
+      "sochi-flame-tower",
+      "sochi-iceberg-palace",
+      "sochi-olympic-rings",
+      "sochi-race-control",
+      "sochi-shayba-arena",
+      "sochi-ice-cube",
+      "sochi-olympic-park-station",
+    ],
     abudhabi: ["abudhabi-ferrari-world", "abudhabi-marina", "abudhabi:pit-exit-tunnel-portal"],
     // Wave 6 — Albert Park (Piastri stand 2026, MSAC, Lakeside Stadium)
     albert_park: ["albert-piastri-stand", "albert-msac", "albert-lakeside-stadium"],
     // Nürburgring GP-Strecke — Burg + Coca-Cola Kurve + race control
     nurburgring: ["nurburgring-burg-nurburg", "nurburgring-coca-cola-kurve", "nurburgring-race-control"],
+    // Wave 6 — Indianapolis Motor Speedway road course (Pagoda / pylon /
+    // pit stalls already required; continuous Paddock–Tower Terrace wall)
+    indianapolis: [
+      "indy-pagoda",
+      "indy-scoring-pylon",
+      "indy-pit-stalls",
+      "indy-main-stands",
+    ],
     // Wave 5 — Shanghai International Circuit (wing piers are literal
     // modelGroups; decks stay on overheadSpan. pudong/boardwalk stay required
     // at runtime but their emit bodies exceed the 2200-char BATCH-01 window).
@@ -160,6 +183,13 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
       "montreal-wall-of-champions-stand",
       "montreal-biosphere",
     ],
+    // Wave 6 — Mugello Centrale + Poggio Secco + Materassi (hillside GA at
+    // Arrabbiata / San Donato is spectatorHill, not a required modelGroup).
+    mugello: [
+      "mugello-centrale-stand",
+      "mugello-poggio-secco-stand",
+      "mugello-materassi-stand",
+    ],
     // Wave 6 — Kyalami Highveld landmarks (pit/race-control already required;
     // main GS + headgear/windpump/clubhouse made explicit this wave).
     kyalami: [
@@ -191,14 +221,19 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
       "paul-ricard-cabanon",
       "paul-ricard-drywall",
     ],
-    // Wave 6 — Indianapolis Motor Speedway road course (Pagoda / pylon /
-    // pit stalls already required; continuous Paddock–Tower Terrace wall)
-    indianapolis: [
-      "indy-pagoda",
-      "indy-scoring-pylon",
-      "indy-pit-stalls",
-      "indy-main-stands",
+    // Wave 6 — Buenos Aires (Gálvez): classic pit/tower/portico + Curvón
+    // terrace, Confitería café, 27 de Febrero talud gate. Flag avenue is
+    // UNCERTAIN — generic poles only, no required modelGroup.
+    buenos_aires: [
+      "baires-pit-block",
+      "baires-control-tower",
+      "baires-portico",
+      "baires-terrace-curvon",
+      "baires-confiteria",
+      "baires-talud-gate",
     ],
+    // Wave 6 — Fuji Speedway Hotel + Motorsports Museum (west side, 2022)
+    fuji: ["fuji-speedway-hotel"],
   };
   for (const [track, ids] of Object.entries(expected)) {
     const body = landmarkSource(track);
