@@ -176,7 +176,10 @@ test("Bahrain props stay clear of the racing surface", async ({ page }) => {
   expect(audit.models.emitted.filter((entry) => entry.required).map((entry) => entry.id).sort())
     .toEqual([
       "bahrain-back-straight-gantry",
+      "bahrain-sakhir-tower",
+      "bahrain-schumacher-corner",
       "bahrain-start-gantry",
+      "bahrain-university-grandstand",
       "kit:bahrain:back-straight-recovery",
       "kit:bahrain:back-straight-service",
       "kit:bahrain:hospitality",
