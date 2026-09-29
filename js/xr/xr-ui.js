@@ -38,10 +38,9 @@ const XrUi = (function () {
     // Prefer cockpit before the session starts so the seated origin is right.
     try {
       const modes = (typeof CamModes !== "undefined" && CamModes.CAM_MODES) || null;
-      const setCam = (typeof XrBoot !== "undefined" && XrBoot._setCamMode) || null;
-      if (modes && typeof setCam === "function") {
+      if (modes && typeof XrBoot !== "undefined" && typeof XrBoot.setCamMode === "function") {
         const i = modes.findIndex((c) => c.id === "cockpit");
-        if (i >= 0) setCam(i);
+        if (i >= 0) XrBoot.setCamMode(i);
       }
     } catch (_) { /* cam switch best-effort */ }
     await XrSession.start();
@@ -90,3 +89,4 @@ const XrUi = (function () {
 
   return { mount, unmount, show, syncLabel, ensureButton, onClick };
 })();
+Object.freeze(XrUi);

@@ -99,3 +99,4 @@ const XrInput = (function () {
     AXIS_STICK_X, AXIS_STICK_Y,
   };
 })();
+Object.freeze(XrInput);

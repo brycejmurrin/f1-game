@@ -170,3 +170,4 @@ const XrRig = (function () {
     stickToSteer,
   };
 })();
+Object.freeze(XrRig);

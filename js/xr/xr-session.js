@@ -316,3 +316,4 @@ const XrSession = (function () {
     webgpuXrAvailable, xrBackendPref, sessionInit,
   };
 })();
+Object.freeze(XrSession);

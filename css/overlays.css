@@ -1526,7 +1526,10 @@ body[data-density="compact"] #campicker {
   cursor: pointer;
   opacity: 0.85;
 }
-#xr-enter:hover, #xr-enter:focus-visible { opacity: 1; }
+#xr-enter:focus-visible { opacity: 1; }
+@media (hover: hover) {
+  #xr-enter:hover { opacity: 1; }
+}
 #xr-enter[aria-pressed="true"] {
   border-color: var(--text);
   color: var(--text);

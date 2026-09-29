@@ -36,9 +36,7 @@ const XrBoot = (function () {
     _tickBody = api && api.tickBody;
     _resumeRaf = api && api.resumeRaf;
     _boundGfx = api && api.gfx;
-    // Stash setCamMode for XrUi's ENTER click (avoids reading the G façade).
     _setCamMode = api && api.setCamMode;
-    XrBoot._setCamMode = _setCamMode;
     XrSession.bind({
       attachSession: async (session, info) => {
         // Prefer TLX WebGL2 XRWebGLLayer. If the live backend has no attach,
@@ -121,5 +119,9 @@ const XrBoot = (function () {
     return false;
   }
 
-  return { bind, mountUi, comfort, loopByXr, applyEyes, present, findCockpit };
+  return { bind, mountUi, comfort, loopByXr, applyEyes, present, findCockpit,
+    // XrUi ENTER click uses this instead of the G façade.
+    setCamMode: (...a) => { if (typeof _setCamMode === "function") return _setCamMode(...a); },
+  };
 })();
+Object.freeze(XrBoot);
