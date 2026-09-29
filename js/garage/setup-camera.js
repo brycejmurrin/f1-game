@@ -32,6 +32,11 @@ function startDriveOut() {
   driveOut = { t: 0, cfg };
   return Math.round(GarageArrival.OUT_DURATION * 1000 / cfg.speed);
 }
+// Wall ms of the drive-out still to play: it advances on the clamped frame dt, so a
+// stalled frame (a circuit build on the main thread) delays it rather than skipping it.
+function driveOutLeft() {
+  return driveOut ? Math.max(0, (GarageArrival.OUT_DURATION - driveOut.t) * 1000 / driveOut.cfg.speed) : 0;
+}
 function stepDriveOut(dt) {
   driveOut.t += Math.min(0.1, Math.max(0, Number.isFinite(dt) ? dt : 0)) * driveOut.cfg.speed;
   return Object.assign(GarageArrival.poseOut(driveOut.t, driveOut.cfg), { active: true });
@@ -648,7 +653,7 @@ $("cs-aero").onclick = () => { setSetupAero(!setupPreviewXOn); if (G.soundOn) Ga
 // spellings __apex.garageCam() and types/game-ctx.d.ts already name).
 return {
   startArrival: arrival.start, cancelArrival: arrival.cancel,
-  startDriveOut, stopDriveOut() { driveOut = null; },
+  startDriveOut, driveOutLeft, stopDriveOut() { driveOut = null; },
   renderSetupPreview, resetSetupCam, setSetupCamPanel, spMeshBust,
   stepSetupAero, setSetupView, setSetupAero, setupPan, nudgeSetupCam,
   setSetupAim(p) { setupPreviewOrbit = p.slice(); setupPreviewTgt = p.slice(); },

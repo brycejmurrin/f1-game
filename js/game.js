@@ -3888,7 +3888,8 @@ function studioOpen() {
 }
 function studioClose() { if (_studio) { setupCam.stopDriveOut(); setupPreviewOn = false; } _studio = null; }
 async function studioDone(live) {
-  while (_studio && live() && performance.now() - _studio.at < _studio.ms) await menuSlice();
+  // The car's own clock, not the wall's: a build stall must not cut it off in the doorway (bounded: 3x its length).
+  while (_studio && live() && setupCam.driveOutLeft() > 0 && performance.now() - _studio.at < _studio.ms * 3) await menuSlice();
   studioClose();
 }
 function introBuild(go) {
