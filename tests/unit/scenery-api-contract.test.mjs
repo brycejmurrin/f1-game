@@ -295,6 +295,15 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     // Wave 6 — Watkins Glen: 2006 control-tower booths, Nazareth pit terrace,
     // Sahlen Esses hillside (positive-slope GA bank + timber stand)
     watkins_glen: ["glen-pit-terrace", "glen-esses-hill", "glen-timing-tower"],
+    // Wave 6 — Okayama / TI Circuit Aida: 4-storey control tower (OIRC),
+    // pit garage run (superseded by engine pit complex — same as mosport/
+    // estoril), A/B paddock club block. Dunlop bridge is overheadSpan
+    // (required at runtime; not a modelGroup so not listed here).
+    okayama: [
+      "okayama-pit-garages",
+      "okayama-control-tower",
+      "okayama-paddock-block",
+    ],
     // Wave 6 — Dijon-Prenois: pit garages + race-control (official 2015–16
     // pitbuilding), Combe limestone cut (Virage de la Combe), Parabolique
     // spectator bank (1976 extension; 14% max slope), Burgundy ferme.
@@ -336,6 +345,15 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
       "anderstorp-speaker-tower",
       "anderstorp-stations-1968",
       "anderstorp-flight-hangars",
+    ],
+    // Wave 6 — Zolder (Limburg): permanent S/F tribune + museum behind it
+    // (circuit-zolder.be), Bongaerts paddock poles (not the chicane plaque),
+    // Sterrenwacht corner building. Frame debt — startFrac untouched.
+    zolder: [
+      "zolder-main-grandstand",
+      "zolder-sf-museum",
+      "zolder-villeneuve-poles",
+      "zolder-sterrenwacht",
     ],
   };
   for (const [track, ids] of Object.entries(expected)) {
