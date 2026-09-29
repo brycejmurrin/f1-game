@@ -2227,7 +2227,7 @@ function gridUp(preOrder) {
     // (PitLane.think never executes a human's; the HUD and the engineer read it).
     c.pitPlan = tyres.on() ? pits.planFor(c.human ? 0.5 : (h >>> 24) / 256, !!c.human, 0, c) : null;
     if (c.pitPlan && !c.human) c.tyreClass = c.pitPlan.start;
-    tyres.fit(c, tyres.startRecord(c));
+    tyres.fit(c, tyres.startRecord(c, TyreModel.treadFor(raceWeather, roadWetness())));
   });
   // Seed the PLAYER's world pose HERE rather than leaving it to the first
   // physics tick (the `c.px == null` init in update()). The chase rig has two
