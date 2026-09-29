@@ -2226,7 +2226,7 @@ function gridUp(preOrder) {
     // is off. The player plans their own race.
     // The PLAYER gets a plan too — a REFERENCE, the one the pit wall would run
     // (PitLane.think never executes a human's; the HUD and the engineer read it).
-    c.pitPlan = tyres.on() ? pits.planFor(c.human ? 0.5 : (h >>> 24) / 256, !!c.human) : null;
+    c.pitPlan = tyres.on() ? pits.planFor(c.human ? 0.5 : (h >>> 24) / 256, !!c.human, 0, c) : null;
     if (c.pitPlan && !c.human) c.tyreClass = c.pitPlan.start;
     tyres.fit(c, tyres.startRecord(c));
   });
