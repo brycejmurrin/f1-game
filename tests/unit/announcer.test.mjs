@@ -946,3 +946,35 @@ test('starting an announcer audition releases the radio owner and pending cue', 
   G.radio.stop=()=>{stops++;};
   const ann=An.create(G); assert.equal(ann.sample(),true); assert.equal(stops,1); ann.stop();
 });
+
+// ── THE FIT IS THE READ AS SPOKEN (loading-screen hunt, 2026-09-29) ──────────
+// seconds() is 2.4 words a second at the rate; a spoken read also pauses 250 ms
+// between chained lines and lands its last line 600 ms before the budget ends.
+const spokenS = (lines, rate) => lines.reduce((n, l) => n + l.split(/\s+/).filter(Boolean).length / 2.4 / rate + 0.25, 0) + 0.6;
+
+test("a fitted read fits AS SPOKEN — the pauses between lines and the landing count, or the cue is the line the cut takes", () => {
+  const rate = 0.92;
+  for (const o of [info(), info({ weather: "rain", tod: "night" }), bakuJoin()]) {
+    const must = A.script(o, 1, rate).length;
+    for (let b = 8000; b <= 60000; b += 4000) {
+      const lines = A.script(o, b, rate);
+      assert.ok(lines.length === must || spokenS(lines, rate) <= b / 1000 + 1e-9,
+        `${lines.length} lines take ${spokenS(lines, rate).toFixed(2)} s spoken, over a ${b / 1000} s budget`);
+    }
+  }
+});
+
+test("the read is fitted at the PLAYER'S announcer rate: a slow voice is trimmed to fit, a fast one keeps more", () => {
+  const count = (rate) => {
+    const { A: An, G } = load();
+    if (rate) G.radio.setTune("announcer", { rate });
+    const lines = An.create(G).scriptFor(bakuJoin(), 24000);
+    const r = rate || G.radio.tuneFor("announcer").rate;
+    const must = An.create(G).scriptFor(bakuJoin(), 1).length;
+    assert.ok(lines.length === must || spokenS(lines, r) <= 24 + 1e-9, `rate ${r}: ${spokenS(lines, r).toFixed(2)} s over 24 s`);
+    return lines.length;
+  };
+  const slow = count(0.6), dflt = count(0), fast = count(1.35);
+  assert.ok(slow < dflt, `a slow voice keeps fewer lines (${slow} vs ${dflt}) — fitted at the default it was cut mid-read at 24 s`);
+  assert.ok(fast > dflt, `a fast voice keeps more (${fast} vs ${dflt})`);
+});
