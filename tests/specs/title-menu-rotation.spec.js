@@ -123,9 +123,11 @@ for (const sz of [...PHONES, TABLET]) {
       expectNoStuckKb(s, "land-1");
       expectDoorsReachable(s, "land-1");
       expect(s.inert, "title must not stay inert after a bare rotation").toBe(false);
-      // Title scrollers hide the thumb; fades may still mark overflow.
-      expect(s.thumbDisplay, "title #menu-buttons thumb must stay hidden").toBe("none");
-
+      // Title scrollers hide the thumb whenever ScrollFade would paint one;
+      // with no overflow there is no ::before rule in play.
+      if (s.mbSfScroll) {
+        expect(s.thumbDisplay, "title #menu-buttons thumb must stay hidden").toBe("none");
+      }
       // Stain scroll positions, then flip back — settle must zero them.
       await page.evaluate(() => {
         const ov = document.getElementById("overlay");
