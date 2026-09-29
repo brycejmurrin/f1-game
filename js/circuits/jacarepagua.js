@@ -25,9 +25,7 @@
       // exposed restinga plain; the scenery callback authors low scrub around
       // the lap and the only tall planting, coconut palms, on the lagoon shore.
       { kind: "foliage", s0: 0, s1: 1 },
-      // Wave 6: modern-theme city pack shared planes with GA banks, terraces
-      // and roadside place boxes (flatCoplanar 22). Pedra Branca mountains +
-      // morro housing already supply the Rio skyline — drop the generic pack.
+      // Wave 6: exclude city — modern pack shared planes with place/GA (flatCoplanar 22→0); Pedra Branca + morro housing already read as Rio.
       { kind: "city", s0: 0, s1: 1 },
     ],
     pal: {
