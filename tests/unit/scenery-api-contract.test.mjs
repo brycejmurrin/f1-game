@@ -150,6 +150,8 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     redbull: ["redbull-lauda-kurve-stand"],
     // Wave 6 — Madring / La Monumental inside rake + masts
     madrid: ["madrid-monumental-stands"],
+    // Wave 6 — Istanbul Park (T8 hospitality + race control + stone portal)
+    istanbul: ["istanbul-turn8-hospitality", "istanbul-race-control", "istanbul-stone-portal"],
     // Wave 6 — Zandvoort F1 Fanzone Ferris wheel (festival landmark)
     zandvoort: ["zandvoort-ferris-wheel"],
     // Wave 6 — Montreal hairpin / Wall of Champions / Biosphère
