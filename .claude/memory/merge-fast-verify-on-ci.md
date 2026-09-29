@@ -1,6 +1,7 @@
 ---
 name: merge-fast-verify-on-ci
 description: "For CI/tooling fixes the user wants the PR opened and merged at once and verified by CI afterwards, not held for the local gate"
+type: feedback
 metadata:
   node_type: memory
   type: feedback
