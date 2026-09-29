@@ -1886,10 +1886,11 @@ h3.sel-label {
   font-size: calc(var(--fs-5) * 1.3);
   line-height: 1;
 }
-/* The help line under the row wraps to its own full-width line (deploy branch,
-   e43f0700e). Kept as-is: the button above is one flex item on the row, so a
-   `flex: 1 0 100%` sibling still breaks the line the same way. */
-#rs-duel-help {
+/* Every row's help line wraps to its own full-width line under the row
+   (DUEL's first, deploy branch e43f0700e). Inside the row, not after it: the
+   body is a two-column grid, and a row that hides in a time trial takes its
+   help with it. */
+#rs-body .set-row > .adv-help {
   flex: 1 0 100%;
   margin: 0;
 }

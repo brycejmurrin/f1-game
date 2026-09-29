@@ -659,7 +659,8 @@
             </div>
           </div>
           <p class="adv-help">Swaps the two on-screen thumb groups, so the pedals and the steering change hands.</p>
-          <button id="pm-calib">RECALIBRATE TILT</button>
+          <button id="pm-calib" aria-describedby="pm-calib-help">RECALIBRATE TILT</button>
+          <p id="pm-calib-help" class="adv-help">TILT steering only. Hold the phone the way you drive, then tap: that angle becomes straight ahead.</p>
           <!-- PHONE AS CONTROLLER (js/input/phone-pad.js). The button loads the
                multiplayer stack the pairing rides on and mints a room; the QR
                carries controller.html#pad=CODE for the phone's own camera app.
@@ -670,6 +671,7 @@
                the room code the OTHER screen shows is typed. Touch only, live
                with the pointer kind (syncPointerKind). -->
           <button id="pm-phonepad-go" type="button" hidden>USE THIS PHONE AS THE CONTROLLER</button>
+          <p class="adv-help">Steer this screen with a phone: tap PHONE AS CONTROLLER on the screen you play on, then scan its QR code or type its room code on the phone.</p>
           <!-- The pairing block spans the sheet (the wide shape's rule in
                css/components.css names it): the ROOM CODE first and big, so it
                is the first thing after the status and never below the fold;
@@ -846,7 +848,8 @@
                applyScale() clamps to SCALE_MIN/MAX and snaps to 0.5. -->
           <h3 class="pm-group-h" id="pm-uiscale-h">UI SIZE <b id="pm-uiscale-v">100%</b><button type="button" id="pm-uiscale-r" class="tune-revert" hidden>reset</button></h3>
           <label class="tune-row">
-            <input id="pm-uiscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="Interface size"></label>
+            <input id="pm-uiscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="Interface size" aria-describedby="pm-uiscale-help"></label>
+          <p id="pm-uiscale-help" class="adv-help">Scales every menu and settings screen. The race HUD and the touch buttons have their own sizes in the HUD fold below.</p>
           <details id="pm-hud-details" class="pm-hud-sub">
             <summary class="adv-more-btn" id="pm-hud-details-sum">HUD · ON · STANDARD</summary>
             <div role="group" aria-label="HUD layout">
@@ -896,7 +899,7 @@
                   <button id="pm-hudgaps-next" type="button" data-step="1" aria-label="Next gaps">&rsaquo;</button>
                 </div>
               </div>
-              <p class="adv-help">AUTO hides the map and the gaps only where the HUD style or the screen leaves no room.</p>
+              <p class="adv-help">MAP is the circuit minimap; GAPS is the time to the cars just ahead and behind. AUTO hides them only where the HUD style or the screen leaves no room.</p>
               <div id="pm-hudmirror" class="set-row" role="group" aria-labelledby="pm-hudmirror-label">
                 <span class="tune-label" id="pm-hudmirror-label">MIRROR</span>
                 <div>
@@ -926,6 +929,7 @@
               <p class="adv-help">How strongly the DRIVING LINE reads against the road. SUBTLE for cockpit view, SOLID when it disappears into a bright surface.</p>
               <label class="tune-row"><span class="tune-label">HUD SIZE <b id="pm-hudscale-v">100%</b><button type="button" id="pm-hudscale-r" class="tune-revert" hidden>reset</button></span>
                 <input id="pm-hudscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="HUD size"></label>
+              <p class="adv-help">Scales the race readouts: speed, position, timing and the map. The sample below shows the size.</p>
               <!-- BUTTON SIZE is its own knob because the dock and the readouts
                    compete for the same edges: shrinking the pedals is how a
                    player buys the readouts room back, and one slider could only
@@ -934,6 +938,7 @@
                    slider changes nothing. -->
               <label class="tune-row"><span class="tune-label">BUTTON SIZE <b id="pm-btnscale-v">100%</b><button type="button" id="pm-btnscale-r" class="tune-revert" hidden>follow HUD size</button></span>
                 <input id="pm-btnscale" type="range" min="40" max="300" step="0.25" value="100" aria-label="Touch button size"></label>
+              <p class="adv-help">The on-screen pedals, arrows and race buttons. Follows HUD SIZE until you move it; smaller buttons leave the readouts more room.</p>
               <!-- BUTTON OPACITY. XAG 104 asks for an adjustable backing behind
                    anything read over live gameplay, and the dock sits over a
                    bright, moving 3D scene. Its own 20-100 range, not the size
@@ -941,6 +946,7 @@
                    see is a dock you cannot aim at. -->
               <label class="tune-row"><span class="tune-label">BUTTON OPACITY <b id="pm-btnopacity-v">100%</b><button type="button" id="pm-btnopacity-r" class="tune-revert" hidden>reset</button></span>
                 <input id="pm-btnopacity" type="range" min="20" max="100" step="5" value="100" aria-label="Touch button opacity"></label>
+              <p class="adv-help">How solid the on-screen buttons are over the track. Lower shows more of the scene; 20% is the floor so they stay easy to find.</p>
               <!-- The slider's effect was invisible: css/hud.css hides every real
                    HUD cluster while a .dim screen is open, and from the title
                    there is no HUD at all — players dragged, saw nothing, and
@@ -962,6 +968,7 @@
                   <button id="pm-res-next" type="button" data-step="1" aria-label="Next resolution">&rsaquo;</button>
                 </div>
               </div>
+              <p class="adv-help">How sharp the 3D scene is drawn. LOW and MED draw fewer pixels for a smoother, cooler-running phone; HIGH is full sharpness; AUTO lowers it only when the frame rate drops. Menus and the HUD always stay sharp.</p>
               <div id="pm-fullscreen" class="set-row" role="group" aria-labelledby="pm-fullscreen-label">
                 <span class="tune-label" id="pm-fullscreen-label">FULLSCREEN</span>
                 <div>
@@ -979,6 +986,7 @@
                   <button id="pm-upscale-next" type="button" data-step="1" aria-label="Next upscale">&rsaquo;</button>
                 </div>
               </div>
+              <p class="adv-help">Sharpens the picture when RESOLUTION is below HIGH. No effect at full resolution.</p>
               <!-- OCCLUSION sits here because it is a pure renderer lever: it
                    changes what is SUBMITTED, never what is drawn. Hidden on a
                    backend that cannot do it (js/ui/scale.js), because a row
@@ -1004,17 +1012,20 @@
                   <button id="pm-debris-next" type="button" data-step="1" aria-label="Next debris setting">&rsaquo;</button>
                 </div>
               </div>
+              <p class="adv-help">Carbon fragments, tyre marbles and knocked-over trackside furniture. OFF saves work on a phone and never changes lap time, penalties or damage.</p>
               <button id="pm-renderer">RENDERER: WEBGL2</button>
               <button id="pm-gfx" hidden>GRAPHICS: HIGH</button>
+              <p class="adv-help">RENDERER is the drawing engine: THREE.JS is the default, WEBGL2 the most compatible, WEBGPU experimental. GRAPHICS trades detail for frame rate, LOW to ULTRA. Either may reload the game. The buttons below are for troubleshooting: RESET RENDERER returns to the defaults if the picture breaks, and COPY DIAG copies a report for a bug report.</p>
             </div>
           </details>
           <details id="pm-visual-tuners" class="pm-renderer-sub">
             <summary class="adv-more-btn" id="pm-visual-tuners-sum">ADVANCED VISUALS · 5 TOOLS</summary>
             <div id="pm-visual-tuners-body" role="group" aria-label="Advanced visual tools">
-              <p id="pm-visual-tuners-help" class="adv-help">Start a race, then pause to preview lighting and camera changes on track.</p>
+              <p id="pm-visual-tuners-help" class="adv-help">Creative tools for the look of the game: lighting, camera angles, the pre-race flyby, a free-roaming camera and the pit-garage arrival. Start a race, then pause to preview changes on track.</p>
               <button id="pm-lighting" aria-describedby="pm-visual-tuners-help">LIGHTING TUNER&hellip;</button>
               <button id="pm-camtune" aria-describedby="pm-visual-tuners-help">CAMERA TUNER&hellip;</button>
               <button id="pm-flyby" aria-describedby="pm-visual-tuners-help">FLYBY SHOT EDITOR&hellip;</button>
+              <button id="pm-freecam" aria-describedby="pm-visual-tuners-help">FREE CAMERA&hellip;</button>
               <details id="ga-settings" class="pm-renderer-sub">
                 <summary class="adv-more-btn">GARAGE ARRIVAL TUNER</summary>
                 <p class="adv-help">Saved for WORK ON CAR pit visits. Reduced motion skips the animation.</p>
@@ -1030,7 +1041,6 @@
                 </div></div>
                 <button id="ga-reset" type="button">RESET ARRIVAL DEFAULTS</button>
               </details>
-              <button id="pm-freecam" aria-describedby="pm-visual-tuners-help">FREE CAMERA&hellip;</button>
             </div>
           </details>
         </section>
@@ -1121,6 +1131,7 @@
               <button id="pm-units-next" type="button" data-step="1" aria-label="Next speed unit">&rsaquo;</button>
             </div>
           </div>
+          <p class="adv-help">KM/H or MPH for the speedometer and every other speed shown in the game.</p>
           <h4 class="pm-look-h">TITLE SCREEN &amp; MOTION</h4>
           <div id="pm-motion" class="set-row" role="group" aria-labelledby="pm-motion-label">
             <span class="tune-label" id="pm-motion-label">MENU ANIMATIONS</span>
@@ -1174,7 +1185,8 @@
 
     <h3 class="pm-group-h" id="pm-pace-h">OVERALL SPEED <b id="pm-pace-v">84%</b></h3>
     <label class="tune-row">
-      <input id="pm-pace" type="range" min="1" max="19" step="1" value="11" aria-label="Overall speed"></label>
+      <input id="pm-pace" type="range" min="1" max="19" step="1" value="11" aria-label="Overall speed" aria-describedby="pm-pace-help"></label>
+    <p id="pm-pace-help" class="adv-help">How fast the whole field runs, you and the AI alike, as a share of real F1 speed. Lower gives more time to react; it does not change who is quicker.</p>
 
     <details id="adv-feel-details">
     <summary id="adv-feel-sum" class="adv-more-btn">FEEL · NORMAL</summary>
@@ -1365,6 +1377,7 @@
         </div>
         <label class="tune-row"><span class="tune-label">VOLUME <b id="as-mvol-v">5</b></span>
           <input id="as-mvol" type="range" min="0" max="10" step="1" value="5" aria-label="Music volume"></label>
+        <p class="as-note">The soundtrack in the menus and on track. VOLUME sets the music alone; SOURCE picks which songs play.</p>
         <!-- Which library the MUSIC controls drive. SPOTIFY is only selectable
              once it is connected; picking another source releases it without
              signing out. -->
@@ -1426,6 +1439,7 @@
             <button id="as-radio-next" type="button" data-step="1" aria-label="Next team radio">&rsaquo;</button>
           </div>
         </div>
+        <p id="as-radio-note" class="as-note"></p>
         <!-- THE SPOTTER (js/race/spotter.js): car left / right / clear, recorded
              voice only. Here, under TEAM RADIO, because that is where players look
              for it — and its state is printed in the section's folded summary
@@ -1439,6 +1453,7 @@
             <button id="as-spot-next" type="button" data-step="1" aria-label="Next spotter setting">&rsaquo;</button>
           </div>
         </div>
+        <p class="as-note">A recorded voice calls &ldquo;car left&rdquo;, &ldquo;car right&rdquo; and &ldquo;clear&rdquo; while a car is alongside. Works with TEAM RADIO off.</p>
         <!-- ENGINEER CHATTER (js/race/race-radio.js): how much the engineer says
              about the RACE — places, gaps, laps to go, flags, the result — on the
              card, spoken or not. Not gated on TEAM RADIO above: that switch is
@@ -1475,7 +1490,7 @@
              them — which is exactly what the voice volume above cannot do. -->
         <label class="tune-row"><span class="tune-label">RADIO FX <b id="as-rfx-v">10</b></span>
           <input id="as-rfx" type="range" min="0" max="15" step="1" value="10" aria-label="Team radio effect level"></label>
-        <p id="as-radio-note" class="as-note"></p>
+        <p class="as-note">RADIO VOICE: RECORDED uses real recorded lines where it has them and the browser's voice for the rest; SYSTEM uses the browser's voice for everything. VOICE VOLUME sets every spoken line, the spotter and announcer included. RADIO FX is the click, hiss and squelch around each message, spoken or not.</p>
 
         <!-- PER-CHANNEL VOICES. js/audio/radio-voice.js already partitions every
              announcement into three speakers — RACE CONTROL, the COACH and the
@@ -1523,6 +1538,7 @@
             <button id="as-comm-next" type="button" data-step="1" aria-label="Next commentary setting">&rsaquo;</button>
           </div>
         </div>
+        <p class="as-note">ANNOUNCER is the pre-race welcome on the loading screen. COMMENTARY calls passes, battles and the flag: TV CAMERAS only while you watch a TV camera, the broadcast HUD or after your finish; ALWAYS throughout.</p>
         <!-- One voice row, built by js/audio/panel.js from the same builder the
              three radio channels use — the <option>s are the machine's own
              installed voices and cannot be static markup. -->
@@ -1560,6 +1576,7 @@
         </div>
         <p id="as-p-note" class="as-note"></p>
         <h3 class="adv-sec">PITCH CURVE</h3>
+        <p class="as-note">How the note climbs with the revs. Every value here is a percentage of your team&rsquo;s engine, 100 leaving it unchanged. IDLE is the bottom, PITCH shifts the whole note, REV RANGE the spread to the limiter, CURVE how early it rises.</p>
         <label class="tune-row"><span class="tune-label">IDLE <b id="as-t-idle-v">100</b></span>
           <input id="as-t-idle" type="range" min="0" max="22" step="1" value="10" aria-label="Idle pitch"></label>
         <label class="tune-row"><span class="tune-label">PITCH <b id="as-t-pitch-v">100</b></span>
@@ -1569,6 +1586,7 @@
         <label class="tune-row"><span class="tune-label">CURVE <b id="as-t-curve-v">100</b></span>
           <input id="as-t-curve" type="range" min="0" max="21" step="1" value="6" aria-label="Rev curve bend: low hangs low and climbs late, high rises early"></label>
         <h3 class="adv-sec">CHARACTER</h3>
+        <p class="as-note">The engine&rsquo;s timbre: GRAVEL is low-rev roughness, DETUNE a thicker, less pure note, BRIGHTNESS the treble, SUB the low-octave weight.</p>
         <label class="tune-row"><span class="tune-label">GRAVEL <b id="as-t-gravel-v">100</b></span>
           <input id="as-t-gravel" type="range" min="0" max="16" step="1" value="4" aria-label="Low-rev roughness"></label>
         <label class="tune-row"><span class="tune-label">DETUNE <b id="as-t-detune-v">100</b></span>
@@ -1578,6 +1596,7 @@
         <label class="tune-row"><span class="tune-label">SUB <b id="as-t-sub-v">100</b></span>
           <input id="as-t-sub" type="range" min="0" max="16" step="1" value="4" aria-label="Sub-octave weight"></label>
         <h3 class="adv-sec">LIMITER</h3>
+        <p class="as-note">The rev-limiter cut: DEPTH is how hard it chops, RATE how fast, PITCH SAG how far the note dips on each cut.</p>
         <label class="tune-row"><span class="tune-label">DEPTH <b id="as-t-lim-v">100</b></span>
           <input id="as-t-lim" type="range" min="0" max="12" step="1" value="4" aria-label="Rev limiter chop depth"></label>
         <label class="tune-row"><span class="tune-label">RATE <b id="as-t-limrate-v">100</b></span>
@@ -1585,11 +1604,13 @@
         <label class="tune-row"><span class="tune-label">PITCH SAG <b id="as-t-limsag-v">100</b></span>
           <input id="as-t-limsag" type="range" min="0" max="16" step="1" value="4" aria-label="Rev limiter pitch sag on each cut"></label>
         <h3 class="adv-sec">BOOST</h3>
+        <p class="as-note">While ERS deploys: LEVEL is the electric whine and whoosh, REV LIFT how far the note rises.</p>
         <label class="tune-row"><span class="tune-label">LEVEL <b id="as-t-boost-v">100</b></span>
           <input id="as-t-boost" type="range" min="0" max="16" step="1" value="4" aria-label="ERS deploy whine and whoosh level"></label>
         <label class="tune-row"><span class="tune-label">REV LIFT <b id="as-t-boostlift-v">100</b></span>
           <input id="as-t-boostlift" type="range" min="0" max="16" step="1" value="4" aria-label="Engine pitch lift while deploying"></label>
         <h3 class="adv-sec">LAYERS</h3>
+        <p class="as-note">The sounds stacked on the engine. The sliders set their levels; the switches under them mute a layer entirely.</p>
         <label class="tune-row"><span class="tune-label">TURBO <b id="as-t-whine-v">100</b></span>
           <input id="as-t-whine" type="range" min="0" max="16" step="1" value="4" aria-label="Turbo whine and wastegate level"></label>
         <label class="tune-row"><span class="tune-label">HARVEST <b id="as-t-harvest-v">100</b></span>
@@ -2306,41 +2327,45 @@
          Ships FULL; CORNERS is the reduced form. -->
     <div class="sheet-body pane" id="rs-body">
       <div id="rs-presets" class="preset-row balanced-row" role="group" aria-label="Race setting presets">
-        <button id="rs-preset-quick" type="button" class="preset-btn" data-rs-preset="quick">QUICK RACE</button>
-        <button id="rs-preset-weekend" type="button" class="preset-btn" data-rs-preset="weekend">FULL WEEKEND</button>
-        <button id="rs-preset-endurance" type="button" class="preset-btn" data-rs-preset="endurance">ENDURANCE</button>
+        <button id="rs-preset-quick" type="button" class="preset-btn" data-rs-preset="quick">QUICK RACE<small>5 laps, dry, no wear</small></button>
+        <button id="rs-preset-weekend" type="button" class="preset-btn" data-rs-preset="weekend">FULL WEEKEND<small>full distance, qualifying, real wear</small></button>
+        <button id="rs-preset-endurance" type="button" class="preset-btn" data-rs-preset="endurance">ENDURANCE<small>25 laps, changing weather at dusk</small></button>
       </div>
       <div id="rs-laps" class="set-row" role="group" aria-labelledby="rs-laps-label">
         <span class="tune-label" id="rs-laps-label">LAPS</span>
         <div>
           <button id="rs-laps-prev" type="button" data-step="-1" aria-label="Previous lap count">&lsaquo;</button>
-          <select id="rs-laps-sel" aria-labelledby="rs-laps-label"></select>
+          <select id="rs-laps-sel" aria-labelledby="rs-laps-label" aria-describedby="rs-laps-help"></select>
           <button id="rs-laps-next" type="button" data-step="1" aria-label="Next lap count">&rsaquo;</button>
         </div>
+        <p id="rs-laps-help" class="adv-help">Race distance. FULL is the real Grand Prix length for this circuit.</p>
       </div>
       <div id="rs-weather" class="set-row" role="group" aria-labelledby="rs-weather-label">
         <span class="tune-label" id="rs-weather-label">WEATHER</span>
         <div>
           <button id="rs-weather-prev" type="button" data-step="-1" aria-label="Previous weather">&lsaquo;</button>
-          <select id="rs-weather-sel" aria-labelledby="rs-weather-label"></select>
+          <select id="rs-weather-sel" aria-labelledby="rs-weather-label" aria-describedby="rs-weather-help"></select>
           <button id="rs-weather-next" type="button" data-step="1" aria-label="Next weather">&rsaquo;</button>
         </div>
+        <p id="rs-weather-help" class="adv-help">Conditions at the start. WET is a damp track in drizzle, RAIN a full downpour with less grip; CLOUDY and FOG change the light and visibility.</p>
       </div>
       <div id="rs-mixed" class="set-row" role="group" aria-labelledby="rs-mixed-label">
         <span class="tune-label" id="rs-mixed-label">CONDITIONS</span>
         <div>
           <button id="rs-mixed-prev" type="button" data-step="-1" aria-label="Previous conditions">&lsaquo;</button>
-          <select id="rs-mixed-sel" aria-labelledby="rs-mixed-label"></select>
+          <select id="rs-mixed-sel" aria-labelledby="rs-mixed-label" aria-describedby="rs-mixed-help"></select>
           <button id="rs-mixed-next" type="button" data-step="1" aria-label="Next conditions">&rsaquo;</button>
         </div>
+        <p id="rs-mixed-help" class="adv-help">STABLE keeps the start weather all race. MIXED lets it change as the race goes on.</p>
       </div>
       <div id="rs-time" class="set-row" role="group" aria-labelledby="rs-time-label">
         <span class="tune-label" id="rs-time-label">TIME OF DAY</span>
         <div>
           <button id="rs-time-prev" type="button" data-step="-1" aria-label="Previous time of day">&lsaquo;</button>
-          <select id="rs-time-sel" aria-labelledby="rs-time-label"></select>
+          <select id="rs-time-sel" aria-labelledby="rs-time-label" aria-describedby="rs-time-help"></select>
           <button id="rs-time-next" type="button" data-step="1" aria-label="Next time of day">&rsaquo;</button>
         </div>
+        <p id="rs-time-help" class="adv-help">The light. DEFAULT is the circuit&rsquo;s own race time, a night race included.</p>
       </div>
       <details id="rs-fold-field">
         <summary class="adv-more-btn" id="rs-fold-field-sum">FIELD</summary>
@@ -2348,17 +2373,19 @@
           <span class="tune-label" id="rs-diff-label">DIFFICULTY</span>
           <div>
             <button id="rs-diff-prev" type="button" data-step="-1" aria-label="Previous difficulty">&lsaquo;</button>
-            <select id="rs-diff-sel" aria-labelledby="rs-diff-label"></select>
+            <select id="rs-diff-sel" aria-labelledby="rs-diff-label" aria-describedby="rs-diff-help"></select>
             <button id="rs-diff-next" type="button" data-step="1" aria-label="Next difficulty">&rsaquo;</button>
           </div>
+          <p id="rs-diff-help" class="adv-help">How quick and consistent the AI drivers are.</p>
         </div>
         <div id="rs-quali" class="set-row" role="group" aria-labelledby="rs-quali-label">
           <span class="tune-label" id="rs-quali-label">GRID</span>
           <div>
             <button id="rs-quali-prev" type="button" data-step="-1" aria-label="Previous grid rule">&lsaquo;</button>
-            <select id="rs-quali-sel" aria-labelledby="rs-quali-label"></select>
+            <select id="rs-quali-sel" aria-labelledby="rs-quali-label" aria-describedby="rs-quali-help"></select>
             <button id="rs-quali-next" type="button" data-step="1" aria-label="Next grid rule">&rsaquo;</button>
           </div>
+          <p id="rs-quali-help" class="adv-help">The starting order. PACE ORDER lines up by car speed; QUALIFYING runs a session first; REVERSE 10 flips the qualifying top ten; RANDOM shuffles. A championship can grid on its STANDINGS.</p>
         </div>
         <div id="rs-duel" class="set-row" role="group" aria-labelledby="rs-duel-label">
           <span class="tune-label" id="rs-duel-label">DUEL</span>
@@ -2372,17 +2399,19 @@
           <span class="tune-label" id="rs-caution-label">CAUTIONS</span>
           <div>
             <button id="rs-caution-prev" type="button" data-step="-1" aria-label="Previous cautions">&lsaquo;</button>
-            <select id="rs-caution-sel" aria-labelledby="rs-caution-label"></select>
+            <select id="rs-caution-sel" aria-labelledby="rs-caution-label" aria-describedby="rs-caution-help"></select>
             <button id="rs-caution-next" type="button" data-step="1" aria-label="Next cautions">&rsaquo;</button>
           </div>
+          <p id="rs-caution-help" class="adv-help">Yellow flags, the virtual safety car and the safety car after crashes and stranded cars.</p>
         </div>
         <div id="rs-reliab" class="set-row" role="group" aria-labelledby="rs-reliab-label">
           <span class="tune-label" id="rs-reliab-label">RELIABILITY</span>
           <div>
             <button id="rs-reliab-prev" type="button" data-step="-1" aria-label="Previous reliability">&lsaquo;</button>
-            <select id="rs-reliab-sel" aria-labelledby="rs-reliab-label"></select>
+            <select id="rs-reliab-sel" aria-labelledby="rs-reliab-label" aria-describedby="rs-reliab-help"></select>
             <button id="rs-reliab-next" type="button" data-step="1" aria-label="Next reliability">&rsaquo;</button>
           </div>
+          <p id="rs-reliab-help" class="adv-help">Whether cars can retire with engine or gearbox failures. LOW is half the real-world risk.</p>
         </div>
       </details>
       <details id="rs-fold-assists">
@@ -2391,17 +2420,19 @@
           <span class="tune-label" id="rs-line-label">DRIVING LINE</span>
           <div>
             <button id="rs-line-prev" type="button" data-step="-1" aria-label="Previous driving line">&lsaquo;</button>
-            <select id="rs-line-sel" aria-labelledby="rs-line-label"></select>
+            <select id="rs-line-sel" aria-labelledby="rs-line-label" aria-describedby="rs-line-help"></select>
             <button id="rs-line-next" type="button" data-step="1" aria-label="Next driving line">&rsaquo;</button>
           </div>
+          <p id="rs-line-help" class="adv-help">The glowing suggested line on the road, coloured by the speed to carry. CORNERS shows it only into and through the bends. It never steers; colour and opacity are in SETTINGS › DISPLAY.</p>
         </div>
         <div id="rs-tyres" class="set-row" role="group" aria-labelledby="rs-tyres-label">
           <span class="tune-label" id="rs-tyres-label">TYRE WEAR</span>
           <div>
             <button id="rs-tyres-prev" type="button" data-step="-1" aria-label="Previous tyre wear">&lsaquo;</button>
-            <select id="rs-tyres-sel" aria-labelledby="rs-tyres-label"></select>
+            <select id="rs-tyres-sel" aria-labelledby="rs-tyres-label" aria-describedby="rs-tyres-help"></select>
             <button id="rs-tyres-next" type="button" data-step="1" aria-label="Next tyre wear">&rsaquo;</button>
           </div>
+          <p id="rs-tyres-help" class="adv-help">Tyres lose grip over a stint, so pit stops matter. LIGHT wears at about half the real rate.</p>
         </div>
         <!-- STRATEGY: the player's reference plan for THIS circuit (js/race/pit-lane.js
              planFor) — AUTO or a pinned stop count, drawn as a stint bar in the
@@ -2411,9 +2442,10 @@
           <span class="tune-label" id="rs-plan-label">STRATEGY</span>
           <div>
             <button id="rs-plan-prev" type="button" data-step="-1" aria-label="Previous strategy">&lsaquo;</button>
-            <select id="rs-plan-sel" aria-labelledby="rs-plan-label"></select>
+            <select id="rs-plan-sel" aria-labelledby="rs-plan-label" aria-describedby="rs-plan-help"></select>
             <button id="rs-plan-next" type="button" data-step="1" aria-label="Next strategy">&rsaquo;</button>
           </div>
+          <p id="rs-plan-help" class="adv-help">Your planned number of pit stops, drawn below with the laps to stop on. AUTO lets the planner choose.</p>
         </div>
         <div id="rs-plan-bar" hidden><div id="rs-plan-stints"></div><span id="rs-plan-loss"></span></div>
       </details>

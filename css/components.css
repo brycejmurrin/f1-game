@@ -1791,6 +1791,7 @@ body[data-width="narrow"] #pm-panel-appearance .pm-accent-preview { grid-templat
   grid-template-areas:
     "uih uih"
     "uis uis"
+    "uihelp uihelp"
     "hudopts hudopts"
     "metrics metrics"
     "renopts renopts"
@@ -1819,6 +1820,7 @@ body[data-width="narrow"] #pm-panel-appearance .pm-accent-preview { grid-templat
 }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-uiscale-h { grid-area: uih; }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-uiscale) { grid-area: uis; }
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-uiscale-help { grid-area: uihelp; }
 /* DISPLAY sliders are settings rows, not tuner rows: steel label, text
    value (tuner red is the loud bit), no extra tap-height padding around
    a track that is already --slider. */
