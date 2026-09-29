@@ -24,6 +24,26 @@ window.PhysicsConsts = {
   CS_FRONT: 130,       // front cornering stiffness (accel per rad of slip)
   CS_REAR: 175,       // rear stiffer than front → understeer in the linear range too
   WT_LONG: 0.22,       // longitudinal load transfer (braking loads the front axle)
+  // BRAKE STABILITY (the rear brake-by-wire of a real F1 car). At the pedal both
+  // axles used to pay the same share of their grip circle, so braking at the
+  // cornering limit took the rear's grip twice (the pedal's share AND the load
+  // moving forward) and the car spun toward the apex. Owner report 2026-09-29:
+  // "if I slam the brake while in a turn it pulls me towards the apex". Once the
+  // rear is loaded past _LO of its tyre peak (last step's rearUtil), its pedal
+  // share falls toward (1 - BRAKE_STAB) by _HI, and the front takes on
+  // BRAKE_STAB_SHIFT of that relief (all of it = the same total braking, load
+  // weighted). In a straight line the rear is unloaded and nothing changes.
+  // Measured on six corners at Monza and Spa (a closed-loop hold, then the
+  // wheel frozen and full brake vs coast for 0.6 s): near the limit the extra
+  // slip fell 27 -> 13 deg and the worst path 2.8x -> 1.5x tighter than
+  // coasting. It is a trade: shifting ALL the relief forward (SHIFT 1) takes
+  // both to ~1.0x, but a hard trail-brake turn-in then rotates LESS than a
+  // coast (tests/unit/player-dynamics-vm.test.mjs pins it at >1.05x; this
+  // setting keeps 1.10x, from 1.94x).
+  BRAKE_STAB: 0.8,
+  BRAKE_STAB_LO: 0.55,
+  BRAKE_STAB_HI: 0.8,
+  BRAKE_STAB_SHIFT: 0.5,
   // TYRE PEAK: the lateral curve (peak, plateau, floor) lives in
   // js/physics/tyre-model.js as TyreModel.lateralCurve — see there.
   // LOAD SENSITIVITY. Axle friction used to scale linearly with axle load, so
