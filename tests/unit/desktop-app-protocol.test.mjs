@@ -15,8 +15,10 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const require = createRequire(join(ROOT, "desktop/package.json"));
-const proto = require("./app-protocol.js");
+// Load via a path relative to this file so docs-integrity / cross-file-paths
+// resolve to desktop/app-protocol.js (not a missing tests/unit sibling).
+const require = createRequire(import.meta.url);
+const proto = require("../../desktop/app-protocol.js");
 
 const {
   MIME,
