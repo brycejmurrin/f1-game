@@ -295,6 +295,16 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     // Wave 6 — Watkins Glen: 2006 control-tower booths, Nazareth pit terrace,
     // Sahlen Esses hillside (positive-slope GA bank + timber stand)
     watkins_glen: ["glen-pit-terrace", "glen-esses-hill", "glen-timing-tower"],
+    // Wave 6 — Anderstorp / Scandinavian Raceway: concrete pressläktare,
+    // original speakertorn, 1968 stationsbyggnad, Flight Straight hangars.
+    // Historical F1 pits halfway round NOT built (game startFrac 0 + modern
+    // pit straight; see docs/tracks/anderstorp.md UNCERTAIN).
+    anderstorp: [
+      "anderstorp-press-stand",
+      "anderstorp-speaker-tower",
+      "anderstorp-stations-1968",
+      "anderstorp-flight-hangars",
+    ],
   };
   for (const [track, ids] of Object.entries(expected)) {
     const body = landmarkSource(track);
