@@ -157,6 +157,11 @@ const Announcer = (function () {
         : "Qualifying. One lap is all you get, and it sets the grid.";
     }
     if (info.practice) return "Practice. Nothing here goes on the record — use it.";
+    // A REAL RACE from the Data Hub (js/race/real-race.js intro()): a replay is
+    // watched, not raced, and a mid-race join is a rolling start, not a grid.
+    const real = info.real;
+    if (real && real.watch) return real.reel ? "The highlights. Sit back and watch it unfold." : "Sit back and watch it, exactly as it ran.";
+    if (real && real.startLap > 1) return "A rolling start. The car is yours in a few seconds.";
     // A SPRINT runs SeasonCal.lapsFor(raceLaps), not raceLaps: before this the
     // announcer promised the full Grand Prix distance over a sprint grid.
     if (info.sprint) return (laps > 0 ? "The sprint. " + laps + " laps, " : "The sprint, ") + "flat out from the start. Let's go racing.";
@@ -191,7 +196,11 @@ const Announcer = (function () {
     const turns = +(info && info.turns) || 0;
     const laps = +(info && info.laps) || 0;
     const relief = +(info && info.relief) || 0;
-    const night = !!t.night || info.tod === "night";
+    // NIGHT AS THE SESSION IS LIT, not as the circuit defaults: a night circuit
+    // raced with TIME set to DAY (or a real race that ran in daylight, which
+    // carries its own time) is lit by day, and "under the lights" was wrong.
+    const tod = info.tod || "default";
+    const night = tod === "night" || (tod === "default" && !!t.night);
     const lore = loreFor(t.id);
     const out = [];
     const add = (text, prio) => { if (text) out.push({ text: text, prio: prio }); };
@@ -258,6 +267,12 @@ const Announcer = (function () {
       add(st.mate ? st.driver + " for " + st.team + ", with " + surnameOf(st.mate) + " in the sister car."
         : st.driver + " at the wheel for " + st.team + ".", 3);
     }
+    // A REAL RACE: the seat you took, and when.
+    const r = st.real;
+    if (r && r.driver && !r.watch) {
+      add(r.startLap > 1 ? "You take over " + r.driver + "'s car on lap " + r.startLap + (r.realLaps > 0 ? " of " + r.realLaps : "") + ", with the field racing as it really ran."
+        : "You start from " + r.driver + "'s grid slot, and the field races it as it really ran.", 1);
+    } else if (r && r.driver) add("Your camera follows " + r.driver + ".", 2);
     // The championship, once there is one to talk about (a round scored).
     const c = st.champ;
     if (c && c.rounds > 1 && c.round >= 1 && c.leader) {
@@ -449,8 +464,11 @@ const Announcer = (function () {
     function storyFor(info) {
       const extra = { variant: +G.raceRound || 0 };
       const p = G.player, cars = G.cars || [];
-      const race = !info.duel && info.session !== "tt" && info.session !== "quali" && !info.practice;
+      // A real race says whose car you took (the script's driver) rather than the
+      // game roster's name for the seat, and none of a season's or a contract's.
+      const race = !info.duel && info.session !== "tt" && info.session !== "quali" && !info.practice && !info.real;
       const st = {};
+      if (info.real) st.real = info.real;
       if (p && p.team && race) {
         st.driver = p.name || "";
         st.team = p.team.name || "";

@@ -3653,6 +3653,7 @@ const G = {
   openGarageFrom: (from) => openGarage(from),
   startWeatherArc: (from, to, dur) => wxArc.startArc(from, to, dur),
   startRace, update, wrapS, quitToMenu,
+  raceIntro,   // the pre-race screen, for a launch that is not RACE! (js/race/real-race.js: the Data Hub's JUMP IN)
 };
 
 // Lighting profile resolution + persistence (js/lighting/profiles.js). FIRST of
@@ -3887,6 +3888,11 @@ function raceIntro(go) {
   if (!built && !menuWorld() && introBuild(go)) return;
   const world = menuWorld();
   if (world) menuGridCars();
+  // A REAL RACE grids from its script at the lights (RealRace.arm), not in the
+  // order menuGridCars seats: no slot to frame, and a mid-race join or a replay
+  // has no standing grid at all, so its grid shots go (withoutGrid below).
+  const real = realRace.intro();
+  if (real) FlybySeq.setPlayerSlot(null, (cars || []).length);
   // LIGHT THE FLYBY WITH WHAT THE MENU CHOSE, BEFORE IT STARTS. run() fires `go`
   // (startRace) "once the card is up", and startRace only reaches
   // applyRaceSettings() after loadTrack() and makeCars() — so the whole cinematic
@@ -3903,6 +3909,7 @@ function raceIntro(go) {
   _menuFly = null;   // one load's flyby: the next one varies again
   if (!flybyShots) flybyShots = planned || FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0);   // a different flyby each load (never the sim RNG); an editor-saved list plays as authored
   if (flybyShots) flybyShots = FlybySeq.withoutSlot(flybyShots);   // nobody knows your slot on a random grid; a small grid has empty boxes
+  if (flybyShots && real && (real.watch || real.startLap > 1)) flybyShots = FlybySeq.withoutGrid(flybyShots);
   FlybySeq.setDuration(loadingScreen.nextFlyMs());   // plan every pan for the seconds this run has
   if (world) FlybySeq.warm(track, flybyShots);   // plan the opening shots now, the rest in slices before their cuts
   FlybySeq.reset();   // this run's shot 0 is a cut, not a glide from wherever the camera was
@@ -3915,9 +3922,11 @@ function raceIntro(go) {
  *  would be a second description of the same race, free to drift from this one
  *  the next time a row is added to the card. */
 function loadingInfo() {
+  const real = realRace.intro();
   return {
     track: Tracks.LIST[trackIdx], laps: raceLaps,
-    gp: SeasonCal.gpName ? SeasonCal.gpName(Tracks.LIST[trackIdx]) : undefined,   // the 2026 REAL calendar renames two rounds (season-cal.js)
+    gp: real ? real.title : SeasonCal.gpName ? SeasonCal.gpName(Tracks.LIST[trackIdx]) : undefined,   // the 2026 REAL calendar renames two rounds (season-cal.js); a real race is its own event
+    real,   // the Data Hub's real race (RealRace.intro): the event, whose car, from which lap — the announcer reads it
     weather: raceWeather, tod: raceTimeOfDay,
     // WHAT SESSION THIS IS, for the announcer (js/audio/announcer.js). It read
     // the same paragraph before a qualifying hour, a duel with a legend and a

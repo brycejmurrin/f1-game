@@ -598,7 +598,7 @@ const DataRealRace = (function () {
         startLap = fromLap;
         Log.info("data", "real replay " + script.sessionKey + (reel ? " highlights" : " from " + fromLap) + " follow=" + seatCode);
         if (close) close();
-        return !!RealRace.launch(script, { seat: seatCode, laps: script.laps, startLap: fromLap, watch: true, reel: !!reel, traces: tr });
+        return !!RealRace.launch(script, { seat: seatCode, laps: script.laps, startLap: fromLap, watch: true, reel: !!reel, traces: tr, intro: true });   // intro: the pre-race card and announcer (js/race/real-race.js launch)
       };
       if (traces && traces.sessionKey === script.sessionKey) return go(traces);
       loadTraces(script, slot, go);
@@ -765,7 +765,7 @@ const DataRealRace = (function () {
       Log.info("data", "real race jump in " + script.sessionKey + " as " + code + " laps=" + simLaps(script) + " from=" + startLap);
       if (close) close();
       const tr = traces && traces.sessionKey === script.sessionKey ? traces : null;
-      return !!RealRace.launch(script, { seat: code, laps: simLaps(script), startLap, traces: tr });
+      return !!RealRace.launch(script, { seat: code, laps: simLaps(script), startLap, traces: tr, intro: true });   // intro: the pre-race card and announcer, as RACE! has
     }
 
     return { loadRealRace, scriptFor, jumpIn, lapEvents, watch, loadTraces,

@@ -1087,6 +1087,13 @@ const FlybySeq = (function () {
     };
   }
   const withoutSlot = (list) => { const out = list.filter(fitsGrid); return out.length && out.length < list.length ? out : list; };
+  /** Every shot that films the standing grid, gone: a real race joined mid-race
+   *  (a rolling start) or watched back has no grid to show, and the field
+   *  seated for these shots is the game's order, not the real one. Durations
+   *  are fractions, so the rest share the budget (as withoutSlot's do). */
+  const FILMS_GRID = { grid: 1, pole: 1, slot: 1 };   // the anchors that frame the standing field (grid-front stands at pole)
+  const filmsGrid = (sh) => [sh.eye[0], sh.eye[1], sh.look[0], sh.look[1]].some((p) => p && FILMS_GRID[p.at]);
+  const withoutGrid = (list) => { const out = list.filter((sh) => !filmsGrid(sh)); return out.length ? out : list; };
   /** WHICH SHOT IS ON AIR at flyby progress `u`, and how far through it (0..1)
    *  — the cut arithmetic solve() uses, with none of its planning, so a caller
    *  that only needs the shot's NAME (the loading card's grid graphic and its
@@ -1533,7 +1540,7 @@ const FlybySeq = (function () {
     solve, shotAt, reset, clearEye, floorEye, groundAt, insideProp, blockers, isSolid, onRoadPose,
     landmarks, bounds, landmarkScore, lmBase, landmarkFallback, planShot, treeBlockers,
     anchorS, posePoint, cornerS, cornerSide, cornerTurn, lmFace,
-    poseFromWorld, shotFromView, nearestCorner, vary, setPlayerSlot, slotIndex, slotKnown, withoutSlot, bindCorners, warm, cancelWarm, setDuration, planSteps,
+    poseFromWorld, shotFromView, nearestCorner, vary, setPlayerSlot, slotIndex, slotKnown, withoutSlot, withoutGrid, bindCorners, warm, cancelWarm, setDuration, planSteps,
     DEFAULT, EASE,
     POLE_BACK, GRID_SPACING, GRID_ROWS, MIN_FILL, MIN_H, FAR, FOG, NEAR, FENCE, REF_S, PAN_MAX,
   };
