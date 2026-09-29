@@ -31,7 +31,7 @@ export const TOUCH = { hasTouch: true, viewport: { width: 844, height: 390 } };
 
 /** Install the viewport and the per-test reset on a spec's `test` object.
  *
- *  Called at module scope by each part. Wait for Input.ready (init finished),
+ *  Called at module scope by each part. Wait for Input.ready() (init finished),
  *  NOT for Input.steer existing — the API object is live the moment input.js
  *  evaluates, which is before game.js reaches Input.init(). Pressing a hold
  *  button in that window is a no-op (no listeners yet), and a setSteerMode the
@@ -43,7 +43,7 @@ export function useTouchCanvas(test) {
   test.use(TOUCH);
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => typeof Input !== "undefined" && Input.ready, null, {
+    await page.waitForFunction(() => typeof Input !== "undefined" && Input.ready && Input.ready(), null, {
       polling: 100, timeout: BOOT_MS,
     });
     await page.evaluate(() => { Input.reset(); Input.setSteerMode("touch"); });

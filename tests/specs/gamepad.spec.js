@@ -63,9 +63,9 @@ test.describe.configure({ timeout: 300_000 });
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
-  // Input.ready, not Input.poll: the API object exists before Input.init() wires
+  // Input.ready(), not Input.poll: the API object exists before Input.init() wires
   // listeners (same race as touch-buttons / tilt-pipeline — see Input.ready).
-  await page.waitForFunction(() => typeof Input !== "undefined" && Input.ready, null, { polling: 100, timeout: BOOT_MS });
+  await page.waitForFunction(() => typeof Input !== "undefined" && Input.ready && Input.ready(), null, { polling: 100, timeout: BOOT_MS });
   // clear any latched edges / held keys between cases
   await page.evaluate(() => Input.reset());
 });
