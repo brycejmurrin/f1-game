@@ -169,6 +169,14 @@ window.SpotifyMusic = (function () {
   // localhost, and this string comes out right).
   function redirectUri() { return location.origin + location.pathname; }
   function onLocalhost() { return location.hostname === "localhost"; }
+  // Electron desktop shell (app://apex/): Spotify's redirect URI is built from
+  // location.origin + pathname and cannot be registered in the Spotify
+  // dashboard for a custom scheme. Degrade — built-in MP3 music still works.
+  function isNativeDesktop() {
+    try {
+      return !!(typeof window !== "undefined" && window.__APEX_NATIVE__ && window.__APEX_NATIVE__.desktop);
+    } catch (e) { return false; }
+  }
 
   function validToken() {
     const t = readToken();
@@ -911,8 +919,12 @@ window.SpotifyMusic = (function () {
   }
   function removeBackend() { setBackend(null); syncSession(); }
 
-  function available() { return !!clientId(); }
-  function configured() { const c = clientId(); return c ? { clientId: c } : null; }
+  function available() { return !isNativeDesktop() && !!clientId(); }
+  function configured() {
+    if (isNativeDesktop()) return null;
+    const c = clientId();
+    return c ? { clientId: c } : null;
+  }
 
   /* ---------------- diagnostics ----------------
      "Spotify rejected the session" is the SDK refusing a token that auth already
@@ -1041,6 +1053,9 @@ window.SpotifyMusic = (function () {
   }
 
   function copyOff() {
+    if (isNativeDesktop()) {
+      return "off — Spotify login needs a browser redirect URI; use the web build.";
+    }
     return "off — paste a Client ID above to enable it.";
   }
 

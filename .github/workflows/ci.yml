@@ -817,22 +817,26 @@ jobs:
             push) ;;
             *) [ "$CALLED" = "true" ] || run_all "event is '$EVENT', not a push or a Pages call" ;;
           esac
-          # The staged list is DERIVED from pages.yml's own `Stage site` step, not
-          # retyped — the two drifting apart is what would silently let a shipped
-          # path escape the filter. (tests/unit/deploy-staging.test.mjs already
-          # guards that this list covers everything the shell can fetch.)
+          # The staged list is DERIVED from tools/desktop/stage-files.mjs — the
+          # same allow-list pages.yml stages via tools/desktop/stage.mjs. Parsing
+          # `cp … _site/` out of pages.yml went empty when staging moved to the
+          # shared script (ships=true on every train). An empty list is FATAL,
+          # not "run all smoke".
           PATHS_FILE="${RUNNER_TEMP:-.}/staged-paths.txt"
-          node -e '
-            const fs = require("fs");
-            const y = fs.readFileSync(".github/workflows/pages.yml", "utf8");
-            const names = new Set();
-            for (const m of y.matchAll(/^\s*cp\s+(?:-r\s+)?(.+?)\s+_site\/\s*$/gm)) {
-              for (const t of m[1].trim().split(/\s+/)) names.add(t);
+          node --input-type=module -e '
+            import { stagedNames } from "./tools/desktop/stage-files.mjs";
+            const names = [...stagedNames()].sort();
+            if (!names.length) {
+              console.error("FATAL: tools/desktop/stage-files.mjs stagedNames() is empty");
+              process.exit(1);
             }
-            if (!names.size) process.exit(1);
-            process.stdout.write([...names].join("\n") + "\n");
-          ' > "$PATHS_FILE" || run_all "could not read the staged path list out of pages.yml"
-          echo "--- staged paths ---"; cat "$PATHS_FILE"; echo "--------------------"
+            process.stdout.write(names.join("\n") + "\n");
+          ' > "$PATHS_FILE" || { echo "FATAL: could not read staged path list from tools/desktop/stage-files.mjs"; exit 1; }
+          if ! [ -s "$PATHS_FILE" ]; then
+            echo "FATAL: staged path list is empty — refusing to mark ships=true"
+            exit 1
+          fi
+          echo "--- staged paths ($(wc -l < "$PATHS_FILE") entries) ---"; cat "$PATHS_FILE"; echo "--------------------"
           API="${GITHUB_API_URL:-https://api.github.com}/repos/${GITHUB_REPOSITORY}/deployments?environment=github-pages&per_page=20"
           RESP=$(curl -sS -H "Authorization: Bearer ${GH_TOKEN}" \
                        -H "Accept: application/vnd.github+json" "$API") \

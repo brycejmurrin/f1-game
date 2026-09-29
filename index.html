@@ -134,7 +134,11 @@
     // worker right away instead of waiting up to 24h on the spec's periodic
     // byte-diff. sw.js itself derives its cache generation from version.json,
     // so this is just about prompting a timely update check, not correctness.
-    if ("serviceWorker" in navigator) {
+    // Native Electron shell (desktop/preload.js → window.__APEX_NATIVE__.desktop):
+    // the privileged app:// origin already keeps localStorage stable and an SW
+    // fights that scheme. Skip registration; persist() still helps when offered.
+    var nativeDesktop = !!(window.__APEX_NATIVE__ && window.__APEX_NATIVE__.desktop);
+    if ("serviceWorker" in navigator && !nativeDesktop) {
       // AFTER the page has what IT needs. Registering here in the head starts
       // the worker's ~10 MB precache while the shell is still fetching its own
       // 3.5 MB of scripts — the two compete for the same connection on the

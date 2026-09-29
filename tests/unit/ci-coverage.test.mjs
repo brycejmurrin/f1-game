@@ -524,35 +524,31 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("every ROOT html page is named in the Stage site whitelist", () => {
-  // "Stage site" copies a WHITELIST — `cp index.html bench.html version.json …`
-  // plus `cp -r js css icons assets vendor` — because uploading the repo root
-  // shipped a 174 MB artifact for a 14 MB site. A directory is swept up; a file
-  // at the ROOT is not, so a new root page deploys as a 404 with a green build.
-  // That is exactly what happened to bench.html on build 7377: CI passed, the
-  // deploy succeeded, version.json moved, and the page was not there.
+test("every ROOT html page is named in the Stage site whitelist", async () => {
+  // Staging uses tools/desktop/stage-files.mjs (via stage.mjs). A directory is
+  // swept up; a file at the ROOT is not, so a new root page deploys as a 404
+  // with a green build. That is exactly what happened to bench.html on build
+  // 7377: CI passed, the deploy succeeded, version.json moved, and the page
+  // was not there.
   //
-  // Derived from the tree, not pinned: add a root page and this fails until the
-  // workflow names it.
+  // Derived from the tree, not pinned: add a root page and this fails until
+  // stage-files.mjs names it. pages.yml must call the shared stage script.
   const roots = fs.readdirSync(new URL("../..", import.meta.url))
     .filter((f) => f.endsWith(".html") && !f.startsWith("."));
-  // Bound the slice to the STEP (stop at the next `- name:`) and strip YAML
-  // comments before matching. Both matter: the first version of this guard
-  // sliced to end-of-file and matched its own explanatory comment, which names
-  // bench.html — so removing bench.html from the `cp` line left it GREEN. That
-  // is the fifth comment-vs-code false pass in this repo; the rule is now
-  // reflexive. Strip first, then match.
   const from = pagesWorkflow.indexOf("- name: Stage site");
   assert.ok(from >= 0, "the Stage site step is gone — this guard is pinned to a step that moved");
   const rest = pagesWorkflow.slice(from + 1);
   const nextStep = rest.indexOf("- name:");
   const stage = (nextStep >= 0 ? rest.slice(0, nextStep) : rest)
     .split("\n").map((l) => l.replace(/#.*$/, "")).join("\n");
-  const missing = roots.filter((f) => !stage.includes(f));
+  assert.match(stage, /tools\/desktop\/stage\.mjs/,
+    "Stage site must call tools/desktop/stage.mjs (shared with Electron)");
+  const { STAGE_ROOT_FILES } = await import("../../tools/desktop/stage-files.mjs");
+  const missing = roots.filter((f) => !STAGE_ROOT_FILES.includes(f));
   assert.deepEqual(missing, [],
-    `a root .html page is not staged by .github/workflows/pages.yml, so it will ` +
+    `a root .html page is not staged by tools/desktop/stage-files.mjs, so it will ` +
     `404 on the live site while the build goes green: ${missing.join(", ")}. ` +
-    `Add it to the \`cp\` line in "Stage site".`);
+    `Add it to STAGE_ROOT_FILES.`);
 });
 
 test("cached browser jobs never enter apt through --with-deps", () => {

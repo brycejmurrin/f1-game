@@ -171,6 +171,7 @@ export const GROUPS = [
   ["mcp", "MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools and TinyFish bridges, the phone report pair."],
   ["net", "WebRTC and Nostr end-to-end harnesses plus the local relay and TURN servers."],
   ["env", "Container bootstrap: browsers and the Cursor Cloud install."],
+  ["desktop", "Electron desktop packaging: stage the Pages allow-list into a site folder the shell serves over app://."],
   ["moves", "Move plans read by gen/move-tree.mjs — data, not code."],
 ];
 

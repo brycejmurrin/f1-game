@@ -25,12 +25,14 @@ Essentially none. This is the flattest circuit in the game and that is a design 
 ## 4. Landmarks & surroundings by lap position
 | s | Side | Distance | Box description |
 |------|------|----------|-----------------|
-| 0.86–0.22 | R | near | **THE GRANDSTAND WALL**: unbroken two- and three-tier seating running the entire oval portion, banded blue/white/red. Continuous — no daylight between segments |
+| 0.86–0.22 | R | near | **THE GRANDSTAND WALL**: unbroken two- and three-tier seating running the oval portion, banded blue/white/red. SF stretch owned by `indy-main-stands` |
+| ≈0.00 | R | near | **`indy-main-stands`**: continuous Paddock / Tower Terrace face opposite the Pagoda (required modelGroup) |
 | 0.90–0.20 | L | near | Inner infield stands facing back across the front straight |
 | 0.005 | L | near | **THE PAGODA**: solid base housing under five diminishing glass tiers, each with an overhanging eave, crowned by a mast — the most recognisable structure in American motor racing |
 | 0.00 | — | on road | **THE YARD OF BRICKS**: a metre-wide band of alternating brick tones laid across the full track width at the start/finish line |
-| 0.955 | L | near | **Pit stalls**: open-fronted boxes under one long flat roof on slim posts — back wall and dividing fins, no fronts. NOT enclosed garages |
-| 0.92–0.98 | L | far | Infield garage/paddock blocks behind the pit lane |
+| 0.030 | L | near | **Scoring pylon**: dark LED shaft with amber digit panels (required `indy-scoring-pylon`) |
+| 0.955 | L | near | **Pit stalls**: open-fronted boxes under one long flat roof (`indy-pit-stalls`; may be superseded at runtime by the engine pit complex) |
+| 0.92–0.98 | L | far | Gasoline Alley garage sheds + paddock motorhomes |
 | 0.115 | — | — | **Oval Turn 1**: 9° banking held over a 320 m width zone, taken flat — the only real banking on the lap |
 | 0.86–0.22 | R | near | Continuous white concrete **retaining wall** along the whole oval section — a solid barrier, not armco |
 | 0.84–0.99 | R | far | Tall lattice **light towers** ringing the oval, tallest things for miles |
@@ -55,7 +57,17 @@ Essentially none. This is the flattest circuit in the game and that is a design 
 - Keep the ground plane dead level. Nothing grows inside the oval and there are no hills anywhere on the horizon — resist adding either.
 - The yard of bricks is a tiny detail and the one every broadcast opens with. Lay it across the full width at the line.
 
+## Research pass — sourced vs uncertain (wave 6)
 
-## Research pass — verified, already covered
+### Sourced (built from)
+- F1 USGP road course used the oval front stretch + infield, **clockwise**, 13 turns, ~2.606 mi / 4.192 km official (repo builds ~4.075 km). — [IMS USGP history](https://www.indymotorspeedway.com/idx-usgp.html), [Wikipedia: IMS](https://en.wikipedia.org/wiki/Indianapolis_Motor_Speedway)
+- **Pagoda** control tower on the front stretch at start/finish; current tower completed for 2000, pagoda-style with glass decks. — [First Super Speedway — Pagoda history](https://www.firstsuperspeedway.com/articles/ims-pagoda-history), [ESPN 2002 Pagoda feature](http://a.espncdn.com/rpm/irl/2002/0522/1385623.html)
+- **Yard of Bricks** at the start/finish line.
+- **Scoring pylon** south of Gasoline Alley entrance; current LED pylon ~92 ft tall (2014). — [IMS / PRI 2014](https://www.performanceracing.com/magazine/industry-news/07-23-2014/ims-introduces-new-high-tech-scoring-pylon), [WRTV history](https://www.wrtv.com/lifestyle/history/the-history-of-the-scoring-pylon-at-the-indianapolis-motor-speedway)
+- Front-stretch **Paddock / Tower Terrace** grandstands opposite the Pagoda; Gasoline Alley suites / garage complex in the infield. — [IMS facility map PDF](https://www.indianapolismotorspeedway.com/~/media/ims/pdf/track-maps/ims_facilitymap.pdf)
+- Road-course viewing: Stand H / South Vista / Pit Road Terrace; infield viewing hills. — [indymotorspeedway.com road-course seating](http://www.indymotorspeedway.com/500sit-f1.html)
 
-The **Pagoda** is modelled as the hero (correctly called out in the code as the Speedway's single most recognisable structure), along with the oval, the yard of bricks, the infield and the golf course. **Nothing added.**
+### UNCERTAIN — do not state as fact
+- Exact Pagoda storey count / tip height in metres for the in-game silhouette (sources disagree: “ten stories”, “199 ft with flagpole”, ESPN “160-foot”). Modelled as a recognisable diminishing-tier pagoda profile, **not** a measured height.
+- Individual grandstand bay capacities and exact Stand H/J frac mapping — placed by oval/front-stretch sector only.
+- Precise Gasoline Alley shed count / door numbering — stylised rows, not a bay inventory.
