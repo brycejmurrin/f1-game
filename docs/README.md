@@ -68,6 +68,7 @@ anything in here.
 | [notes/DEFECT-LEDGER.md](notes/DEFECT-LEDGER.md) | The open-defect register and the backlog behind it (was `ARCHITECTURE-REVIEW.md` §7-8). |
 | [notes/ARCHITECTURE-REVIEW.md](notes/ARCHITECTURE-REVIEW.md) | The standing assessment: what the no-build-step bet costs, why asserted invariants hold where prose ones drift, and the lessons. |
 | [notes/CI-RENDERING-PERFORMANCE.md](notes/CI-RENDERING-PERFORMANCE.md) | SwiftShader vs Lavapipe vs llvmpipe (measured canvas colours + wall-clock), WGX soft-present / `wgx-capture`, Cursor Cloud `mesa-vulkan-drivers` persist, why sharding is the wrong first speedup, and **§There IS a real GPU** — `macos-latest`. |
+| [notes/CI-ANALYSIS-2026-09-29.md](notes/CI-ANALYSIS-2026-09-29.md) | Measured CI queue/runner costs (50 PR runs), job×diff matrix, recall, and a **prototype** `pick-unit-slices` selector (not wired into workflows) that would save ~10 runner-min/PR on that sample. |
 | [notes/CEILING-HISTORY.md](notes/CEILING-HISTORY.md) | Why every size-ratchet number moved, 2026-08 → 2026-09-03; the live numbers are `tests/data/ratchets.json`. |
 | [notes/SPIKE-BACKENDS-CHECKLIST.md](notes/SPIKE-BACKENDS-CHECKLIST.md) | The WGX/TLX spike-out inventory: the move map, every non-move edit with file:line evidence, the tests that go red and their fixes. |
 | [notes/OCCLUSION-PROBE.md](notes/OCCLUSION-PROBE.md) | Proving which mesh hides which, mechanically: patch `GLX.createMesh`/`begin`/`draw`, rasterise into a JS depth buffer, attribute every lost pixel to a `part()` name. |

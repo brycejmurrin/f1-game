@@ -902,6 +902,7 @@ const MOVED = {
   "tools/select-specs.mjs": "tools/ci/select-specs.mjs",
   "tools/select-budget.mjs": "tools/ci/select-budget.mjs",
   "tools/select-recall.mjs": "tools/ci/select-recall.mjs",
+  "tools/pick-unit-slices.mjs": "tools/ci/pick-unit-slices.mjs",
   "tools/junit-failed.mjs": "tools/ci/junit-failed.mjs",
   "tools/ci-coverage.mjs": "tools/ci/ci-coverage.mjs",
   "tools/ci-resolve-before.sh": "tools/ci/ci-resolve-before.sh",
