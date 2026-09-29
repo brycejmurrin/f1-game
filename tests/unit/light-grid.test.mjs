@@ -557,6 +557,9 @@ test("CAMERA / SETTINGS / ADVANCED slider markup matches the JS clamps", () => {
   expectRange("pm-pace", PMIN, PMAX);
   expectRange("pm-uiscale", SCALE_MIN, SCALE_MAX);
   expectRange("pm-hudscale", SCALE_MIN, SCALE_MAX);
+  const BTN_MAX = num(uiScale, "BTN_MAX");
+  assert.equal(BTN_MAX, 300, "BUTTON SIZE climbs past HUD SIZE: fitHud's dock cap is the fit, the slider the wish");
+  expectRange("pm-btnscale", SCALE_MIN, BTN_MAX);
   expectRange("as-mvol", 0, 10);
   expectRange("as-svol", 0, 10);
   expectRange("pc-fov", cam.fovMin, cam.fovMax);
