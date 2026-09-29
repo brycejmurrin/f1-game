@@ -62,9 +62,14 @@ test("AI full-body meshes use deterministic factory presets instead of saved set
     }
   });
 
+  // 120 s, INSIDE the 300 s budget above — this wait is the race("monza")
+  // build plus eleven AI body meshes, the cold part of that 240 s. At 30 s it
+  // was the one cap in the test not sized to it: nightly 2026-09-29 (run
+  // 36551639160, test:car shard 1, cold worker) hit exactly 30.0 s here and
+  // the retry passed in 15.6 s with nothing asserted wrong.
   await page.waitForFunction(() =>
     Object.keys(window.__factoryMeshCaptures).length >= 11,
-    null, { polling: 100, timeout: 30_000 }
+    null, { polling: 100, timeout: 120_000 }
   );
 
   const result = await page.evaluate(() => {

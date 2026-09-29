@@ -643,6 +643,8 @@ const GLXBackend = (function () {
       alpha: false,
       powerPreference: "high-performance",
       preserveDrawingBuffer: headlessUa,
+      // xrCompatible only when navigator.xr (task 20); omit otherwise (Safari/SwiftShader).
+      ...(typeof navigator !== "undefined" && navigator.xr ? { xrCompatible: true } : {}),
     });
     if (!gl) return false;
     if (_softPresent) ensureSoftDisplay();
