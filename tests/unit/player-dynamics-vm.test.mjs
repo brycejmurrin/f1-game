@@ -69,8 +69,23 @@ test("lifting off near the limit rotates the car (lift-off oversteer)", () => {
 
 test("trail braking into a corner rotates the car more than coasting in", () => {
   assert.ok(m.turnIn_brake.yaw > m.turnIn_coast.yaw * 1.05, `brake ${m.turnIn_brake.yaw} vs coast ${m.turnIn_coast.yaw}`);
-  assert.ok(m.turnIn_brake.axFracF > 0.3 && m.turnIn_brake.axFracR > 0.3, "braking charges both axles");
+  // A straight-line stop charges both axles the same (BRAKE_STAB is idle with
+  // the rear unloaded); turning in on the brakes the rear's pedal share eases
+  // as it nears its limit and the front carries more of the circle.
+  const stop = m["brake_55.6"];
+  assert.ok(stop.axFracF > 0.3 && stop.axFracR > 0.3 && Math.abs(stop.axFracF - stop.axFracR) < 0.02, `a straight stop charges both axles alike (${stop.axFracF}/${stop.axFracR})`);
+  assert.ok(m.turnIn_brake.axFracF > 0.3, "braking charges the front");
+  assert.ok(m.turnIn_brake.axFracR < m.turnIn_brake.axFracF, `the loaded rear pays less of the pedal (${m.turnIn_brake.axFracR} < ${m.turnIn_brake.axFracF})`);
   assert.equal(m.turnIn_coast.axFracF, 0, "coasting (engine braking) charges only the rear");
+});
+
+test("a stamp on the brakes mid-corner at the limit does not spin the car toward the apex", () => {
+  // Owner report 2026-09-29. Before BRAKE_STAB (js/physics/consts.js) the same
+  // stamp took the rear to 22 deg and yawed the car 1.7x faster than a coast.
+  const co = m.midCorner_coast, br = m.midCorner_brake;
+  assert.ok(co.uR0 > 0.45, `the skidpad is near the rear's limit (uR ${co.uR0})`);
+  assert.ok(br.aRmax < co.aRmax * 2, `the rear holds: ${br.aRmax} deg braking vs ${co.aRmax} deg coasting`);
+  assert.ok(br.yawMean < co.yawMean * 1.25, `no snap to the inside: yaw ${br.yawMean} braking vs ${co.yawMean} coasting`);
 });
 
 test("full lock at 45 m/s washes wide and never spins", () => {
