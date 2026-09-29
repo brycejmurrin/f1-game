@@ -179,7 +179,12 @@
       });
       grandstandEx(0.00,   1, 18, 140, STAND_CREAM, SEAT_BLUE,
         { tiers: 2, roof: "truss", suites: true, endWalls: true });
-      grandstandEx(0.985,  1, 90,  80, STAND_CREAM, SEAT_BLUE,
+      // Victory approach stand — covered seating near the final corner / pit
+      // entry. Was at s=0.985 gap=90 where every seating riser hit the T1 fold
+      // (hollow roof-only shell). Moved onto the straight at a clearance that
+      // clears rejBox. Named for the Victory grandstands that overlook the
+      // closing sequence (ticket-compare / oversteer48 seating guides).
+      grandstandEx(0.97,   1, 36,  70, STAND_CREAM, SEAT_BLUE,
         { roof: "cantilever", endWalls: true, pylons: true });
       // Second pit-side building: timing/media centre with cool lit windows
       building(K(0.01), -1, 2, 10, 9, 40,
@@ -245,12 +250,36 @@
       backdrop(K(0.00), 1, 160, [280, 16, 14], SAND_DARK);
       backdrop(K(0.97), 1, 180, [240, 18, 14], SAND);
 
-      grandstandEx(0.05,   1, 24, 90, STAND_CREAM, SEAT_BLUE,
+      // Turn 1 Grandstand — covered single-tier on the outside of the main
+      // overtaking / heavy-braking hairpin (bahrain.gp map; oversteer48). Gap
+      // was 24 m: the 0.20 fold put every crowdBank riser on the next leg's
+      // tarmac (rejBox), so only the shell/roof emitted — a hollow box. 30 m
+      // clears the fold; engine grandstandEx also nudges/suppresses hollows.
+      grandstandEx(0.05,   1, 30, 90, STAND_CREAM, SEAT_BLUE,
         { roof: "truss", suites: true, endWalls: true });
       grandstandEx(0.025,  1, 24, 60, null, null, { livery: "steel", roof: "flat", endWalls: true });
       grandstandEx(0.065,  1, 28, 72, null, null, { livery: "sandstone", roof: "cantilever", pylons: true });
       cameraTower(K(0.045), -1, 46, { h: 22 });
-      // Inside of T1: access road + small pit buildings
+      // Michael Schumacher Corner marker (T1 renamed 2014 — circuit brief /
+      // Wikipedia). Small trackside board facing the braking zone; not a
+      // claim about exact signage design (UNCERTAIN), only the naming.
+      {
+        const a = anchor(K(0.048), -1, 14), b = [a.r, a.u, a.t];
+        if (!onTrack(a.c[0], a.c[2], 6)) {
+          modelGroup("bahrain-schumacher-corner", {
+            center: vadd(a.c, a.u, 2.4), size: [0.8, 5.2, 4.2], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(a.c, a.u, 2.2), [0.35, 4.4, 0.35], STEEL, b);
+            addBox(stage, vadd(a.c, a.u, 4.6), [0.55, 1.6, 3.6], [0.12, 0.12, 0.14], b);
+            // Face toward the track (stand is on side -1 → track is +r).
+            stage._mat = MAT.GLASS;
+            addBox(stage, vadd(vadd(a.c, a.r, 0.35), a.u, 4.6),
+              [0.12, 1.2, 3.2], [0.85, 0.12, 0.12], b);
+            stage._mat = 0;
+          }, { required: true });
+        }
+      }      // Inside of T1: access road + small pit buildings
       accessBox(K(0.03), -1, 36, 10, 6, 16);
       lightBank(K(0.06), 1, 36);
       floodMast(K(0.05), 1, 32, 40);
@@ -385,6 +414,12 @@
           duneWedge(k, side, 52 + i * 20, 34 + hash(k * 3 + side) * 22, 3.6 + hash(k * 5) * 2.0);
         }
       }
+      // Beyon (ex-Batelco) Grandstand — covered stand overlooking the fast
+      // T9–10 complex (3ddigitalvenue seating map; ticket-compare). Side +1
+      // keeps the authored outside; exact lateral vs the real structure is
+      // approximate from guides, not a surveyed offset.
+      grandstandEx(0.545, 1, 30, 64, STAND_CREAM, SEAT_BLUE,
+        { roof: "truss", suites: true, endWalls: true, pylons: true });
       grandstandEx(0.52,  1, 28, 52, null, null, { livery: "steel", roof: "flat" });
       lightBank(K(0.51), 1, 38);
       lightBank(K(0.54), -1, 38);
@@ -711,7 +746,7 @@
 
       // ── General-admission terracing behind the main straight ─────────────
       // Poured mass-concrete steps in the sandstone family, sitting between the
-      // 140 m hero stand at gap 18 and the far pit-straight stand at gap 90. No
+      // 140 m hero stand at gap 18 and the Victory-approach stand at gap 36. No
       // roof and no back shell: the form the venue actually uses for GA, and
       // the one open-seating silhouette Sakhir was missing between its cream
       // shells and its bare desert.

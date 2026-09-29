@@ -159,7 +159,10 @@ const STRIP = {
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)
-  monza: { before: 342563, after: 315738 },   // merged follow-ups: +29 kept (engine-helpers)   // +30 kept: restoring place()'s SEP_SLOTS sequence (marshal board) shifts a few buried props back above grade
+  // → bahrain hollow-stand guard: grandstandEx suppresses when crowdBank
+  // places 0 risers, so monza's fold-site shells (no seating) no longer emit
+  // → back to ship emission 342395; strip after 315572
+  monza: { before: 342395, after: 315572 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {

@@ -151,8 +151,12 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     hungaroring: ["hungaroring-pit-complex", "hungaroring-main-tribune"],
     // Wave 5 — Catalunya landmarks (Tilke main stand + pit-end scoreboard)
     catalunya: ["catalunya-main-grandstand", "catalunya-pit-end-scoreboard", "catalunya-race-control"],
+    // Bahrain hollow-stand fix — T1 naming marker (Michael Schumacher Corner, 2014)
+    bahrain: ["bahrain-sakhir-tower", "bahrain-university-grandstand", "bahrain-schumacher-corner"],
     // Wave 6 — Madring / La Monumental inside rake + masts
     madrid: ["madrid-monumental-stands"],
+    // Wave 6 — Zandvoort F1 Fanzone Ferris wheel (festival landmark)
+    zandvoort: ["zandvoort-ferris-wheel"],
   };
   for (const [track, ids] of Object.entries(expected)) {
     const body = landmarkSource(track);

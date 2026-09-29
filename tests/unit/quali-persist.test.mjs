@@ -212,10 +212,13 @@ test("openQuali restores via begin(); quit-to-menu keeps persist; friend-race us
   // so the wheel-wizard axis capture disarms (BUGS.md B1) — that call may sit
   // on its own line under the closers; the closers themselves must still all
   // fire together so a new panel is not forgotten here.
-  assert.match(GAME, /if \(!p\) \{[\s\S]*?closeLightTuner\(false\);[\s\S]*?closeCamTuner\(false\);[\s\S]*?flybyPanel\.closeFlyby\(false\);[\s\S]*?exitPhotoMode\(\);/);
+  // Scoped to the function each line is about: over all of game.js the lazy
+  // match ran 244k characters into quitToMenu's copy, so deleting the closers
+  // from setPaused(false) still passed (testing-gap audit 2026-09-29).
+  assert.match(fnSource(GAME, "function setPaused(p)"), /if \(!p\) \{\s*closeLightTuner\(false\); closeCamTuner\(false\); flybyPanel\.closeFlyby\(false\); exitPhotoMode\(\);/);
   assert.match(fnSource(GAME, "function setPaused(p)"), /closeSettings\(\)/,
     "setPaused(false) must closeSettings so pad axis capture cannot survive resume");
-  assert.match(GAME, /closeCamTuner\(false\); flybyPanel\.closeFlyby\(false\); exitPhotoMode\(\);/);
+  assert.match(fnSource(GAME, "function quitToMenu()"), /closeCamTuner\(false\); flybyPanel\.closeFlyby\(false\); exitPhotoMode\(\);/);
   assert.match(GAME, /isCareer\(\) && Career\.conflicted\(\)/);
   // The caution pace cap, now four levels deep: RED (4) stops the field at a
   // walking-pace floor rather than 0, so every "approaches vmax" fade stays
