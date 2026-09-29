@@ -134,11 +134,13 @@
     // worker right away instead of waiting up to 24h on the spec's periodic
     // byte-diff. sw.js itself derives its cache generation from version.json,
     // so this is just about prompting a timely update check, not correctness.
-    // Native Electron shell (desktop/preload.js → window.__APEX_NATIVE__.desktop):
-    // the privileged app:// origin already keeps localStorage stable and an SW
-    // fights that scheme. Skip registration; persist() still helps when offered.
+    // Native Electron shell (desktop/preload.js → window.__APEX_NATIVE__.desktop)
+    // or Capacitor (window.Capacitor.isNativePlatform): packaged files are local,
+    // and an SW on https://localhost would double-cache. Skip registration;
+    // persist() still helps when offered. Inline: Native.js has not loaded yet.
     var nativeDesktop = !!(window.__APEX_NATIVE__ && window.__APEX_NATIVE__.desktop);
-    if ("serviceWorker" in navigator && !nativeDesktop) {
+    var nativeCap = !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === "function" && window.Capacitor.isNativePlatform());
+    if ("serviceWorker" in navigator && !nativeDesktop && !nativeCap) {
       // AFTER the page has what IT needs. Registering here in the head starts
       // the worker's ~10 MB precache while the shell is still fetching its own
       // 3.5 MB of scripts — the two compete for the same connection on the
@@ -3074,6 +3076,8 @@
 <script defer crossorigin="anonymous" src="js/core/mat4.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/hash32.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/clipboard.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/core/native.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/core/native-download.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/roster.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/glx-facade.js?v=dev"></script>
 <!-- GLX, TLX and WGX implementations have no script tags. game.js injects
@@ -3234,6 +3238,7 @@
 <script defer crossorigin="anonymous" src="js/race/race-radio.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/offsets.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/flyby-seq.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/drive-out.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/flyby-panel.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/setup-tune.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/setup-sheet.js?v=dev"></script>

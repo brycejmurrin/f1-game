@@ -316,7 +316,7 @@ test("handoff(): the card stays up, disarmed, until render() lowers it with the 
   // first countdown present on TLX starts the program warm and paints nothing.
   const game = read("js/game.js");
   const body = game.slice(game.indexOf("async function startRaceBody()"), game.indexOf("const sessionEntry ="));
-  assert.match(body, /const handoff = loadingScreen\.active\(\) && !!player;\s*clearMenuScreens\(\);\s*if \(handoff\) loadingScreen\.handoff\(\);/,
+  assert.match(body, /const handoff = \(loadingScreen\.active\(\) \|\| loadingScreen\.phase\(\) === "build"\) && !!player;[^\n]*\n\s*clearMenuScreens\(\);\s*if \(handoff\) loadingScreen\.handoff\(\);/,
     "startRaceBody raises the handoff card right after the sweep, only when the screen was up");
   const render = game.slice(game.indexOf("function render(dt) {"));
   assert.match(render, /gfx\.present\(po\);[\s\S]{0,400}?if \(loadingScreen\.phase\(\) === "handoff" && !\(gfx\.warming && gfx\.warming\(\)\)\) loadingScreen\.stop\(\);/,
@@ -469,7 +469,7 @@ test("grid colours: a black car is lifted to be visible, junk falls back to the 
 function gridHarness({ grid = field(22, 11), speaking = () => false, radioOn = true, stored = {} } = {}) {
   let now = 5000, seq = 0;
   const q = [], listeners = {}, saved = new Map(Object.entries(stored));
-  const said = [], stops = [], stings = [], ops = [], plays = [];
+  const said = [], stops = [], stings = [], ops = [], plays = [], annStops = [];
   const elem = () => ({
     dataset: {}, style: { props: {}, setProperty(k, v) { this.props[k] = v; } },
     hidden: true, innerHTML: "", textContent: "", width: 420, height: 300, clientWidth: 0, attrs: {},
@@ -500,13 +500,13 @@ function gridHarness({ grid = field(22, 11), speaking = () => false, radioOn = t
     Tracks: {}, Flags: { svg: () => "" },
     TrackMaps: { corners: () => [], fitCanvas: () => ({ w: 210, h: 150 }), draw: () => ops.push("map") },
     store: { get: (k, d) => (saved.has(k) ? saved.get(k) : d), set: (k, v) => saved.set(k, v) },
-    announcer: () => ({ play: (inf, life) => { plays.push(life); return true; }, stop() {}, speaking }),
+    announcer: () => ({ play: (inf, life) => { plays.push(life); return true; }, stop() { annStops.push(now); }, speaking }),
     radio: () => ({ sayPreRace: (text, life, lead) => { said.push({ text, life, lead }); return radioOn; }, stop: () => stops.push(now),
       debug: () => ({ enabled: radioOn }) }),
   });
   const info = { track: { id: "monza", name: "MONZA", country: "Italy" }, laps: 5, hasWorld: true, shots: sb.FlybySeq.DEFAULT, grid };
   const h = {
-    screen, said, stops, stings, ops, els, plays,
+    screen, said, stops, stings, ops, els, plays, annStops,
     run: (over = {}) => { h.t0 = now; screen.run(Object.assign({}, info, over), () => {}); },
     skip: (ev = {}) => { for (const fn of listeners.keydown || []) fn(Object.assign({ type: "keydown", repeat: false }, ev)); },
     view: () => els["ld-map"].dataset.view,
@@ -663,7 +663,7 @@ test("game.js hands the card its field in grid order, the flyby's shots, and the
   assert.match(game, /LoadingScreen\.create\(\{[^}]*radio: \(\) => radioVoice/);
   const at = game.indexOf("function loadingInfo()");
   const li = game.slice(at, at + 2500);
-  assert.match(li, /shots: flybyShots/);
+  assert.match(li, /shots: flybyPlay \|\| flybyShots/, "the list the screen plays: an opening shot (the garage drive-out) prepended, or the flyby as it is");
   assert.match(li, /isPlayer: c === player && FlybySeq\.slotKnown\(\)/, "an unknown slot (random grid) must flag no player");
 });
 
@@ -707,7 +707,7 @@ test("flyMsFor(skips, wantMs): a real race's read stretches the flyby up to FLY_
   // game.js asks with the read, before the shots are planned, and the screen runs the same budget.
   const game = read("js/game.js");
   const intro = game.slice(game.indexOf("function raceIntro(go)"), game.indexOf("function loadingInfo()"));
-  assert.match(intro, /const info = loadingInfo\(\);[^\n]*\n\s*FlybySeq\.setDuration\(loadingScreen\.nextFlyMs\(info\.readMs\)\);/);
+  assert.match(intro, /const info = loadingInfo\(\);[^\n]*\n\s*const flyMs = loadingScreen\.nextFlyMs\(info\.readMs\);[\s\S]{0,300}FlybySeq\.setDuration\(flyMs \+ info\.leadMs\);/);
   assert.match(intro, /loadingScreen\.run\(info, go\);/);
   const li = game.slice(game.indexOf("function loadingInfo()"), game.indexOf("function loadingInfo()") + 2000);
   assert.match(li, /if \(real && announcer\.readMs\) out\.readMs = announcer\.readMs\(out\);/, "only a real race stretches it");
@@ -734,4 +734,70 @@ test("metaRows: a circuit gets its facts; a real race joined mid-race gets the l
   const grid = { lap: 1, realLaps: 51, grid: true, pole: { code: "RUS" }, you: { pos: 2, tyre: { compound: "medium", age: 2 } } };
   assert.deepEqual(metaRows({ track, laps: 51, weather: "rain", tod: "day", real: { startLap: 1, story: grid } }).slice(0, 4),
     [["GRID", "P2"], ["POLE", "RUS"], ["TYRE", "MEDIUM · USED"], ["LAPS", "51"]]);
+});
+
+// ── THE LOADING-SCREEN HUNT (2026-09-29) ─────────────────────────────────────
+test("a habitual skipper's 12 s cut leaves no room for the radio check, so the announcer keeps the whole flyby", () => {
+  const h = gridHarness({ radioOn: true, stored: { flySkips: LS.SKIP_STREAK } });
+  h.run();
+  assert.equal(h.plays[0], LS.SHORT_FLY_MS, "grid-mine gets ~1.4 s of 12 — under the check's 2.2 s floor, so nothing waits on it");
+  h.tickTo(0.99);
+  assert.equal(h.said.length, 0, "and the check itself still refuses, as before");
+});
+
+test("a skip ends the announcer with the flyby, not when startRace reaches clearMenuScreens()", () => {
+  const h = gridHarness({ radioOn: false });
+  h.run();
+  h.tick(3000);
+  const before = h.annStops.length;
+  h.skip();
+  assert.ok(h.annStops.length > before, "the skip itself stops the voice");
+});
+
+test("RACE! over a pending warm holds the card until it ends; the sheets that skip the flyby still get the card and the handoff", () => {
+  const game = read("js/game.js");
+  const intro = game.slice(game.indexOf("function introWarm(go)"), game.indexOf("function loadingInfo()"));
+  assert.match(intro, /if \(!gfx\.warm \|\| \(_warmKey === key && !\(gfx\.warming && gfx\.warming\(\)\)\)\) return false;/, "warmed and no warm pending: fly at once");
+  assert.match(intro, /loadingScreen\.building\(loadingInfo\(\)\);/, "the card holds over the warm");
+  assert.match(intro, /if \(_warmKey !== key\) \{[^\n]*\n\s*warmPrograms\(\); _menuGate\.warm = 2;/, "a built but UNWARMED world is warmed under the card, as introBuild does");
+  assert.match(intro, /while \(live\(\) && gfx\.warming && gfx\.warming\(\) && performance\.now\(\) - t0 < 15000\) await menuSlice\(\);/, "bounded, as introBuild's wait is");
+  assert.match(intro, /if \(!built && menuWorld\(\) && introWarm\(go\)\) return;/, "raceIntro routes a built world with a pending warm through it");
+  assert.match(intro, /function startRaceCovered\(\) \{\s*if \(!loadingScreen\.phase\(\)\) loadingScreen\.building\(loadingInfo\(\)\);\s*return startRace\(\);/);
+  for (const [name, re] of [["qualifying's GRID", /session = "race";\s*startRaceCovered\(\);/],
+    ["qualifying's DRIVE", /session = "quali";\s*startRaceCovered\(\);/],
+    ["a season's NEXT RACE", /openQuali\(\);\s*else startRaceCovered\(\);/]]) assert.match(game, re, `${name} starts under the card`);
+  // The build path plans the flyby for the length it will run (a real race's read).
+  const build = game.slice(game.indexOf("function introBuild(go)"), game.indexOf("function introWarm(go)"));
+  assert.match(build, /const info0 = loadingInfo\(\);/);
+  assert.match(build, /FlybySeq\.setDuration\(loadingScreen\.nextFlyMs\(info0\.readMs\)\);/);
+});
+
+test("the card over the scene: black bars and a light hint in every theme, an undistorted map, a real fade, no bars under MENU ANIMATIONS: REDUCED", () => {
+  const css = read("css/overlays.css");
+  const bars = css.match(/#loading::before,\s*#loading::after\s*\{([^}]*)\}/)[1];
+  assert.match(bars, /background:\s*#000/, "cinema bars — the LIGHT theme's --bg made them white");
+  const hint = css.match(/#loading\[data-phase="run"\] #ld-card::after\s*\{([^}]*)\}/)[1];
+  assert.match(hint, /color:\s*#fff/, "the hint sits on the 3D scene, not a themed plate");
+  assert.match(css.match(/\n#ld-map\s*\{([^}]*)\}/)[1], /object-fit:\s*contain/, "fitCanvas pins px width AND height; the 45% cap squashed the outline");
+  assert.match(css, /@starting-style\s*\{\s*#loading\[data-phase\] #ld-card\s*\{[^}]*opacity:\s*0/, "a transition cannot start from display: none");
+  assert.match(css, /:root\[data-motion="reduce"\] #loading::before,\s*:root\[data-motion="reduce"\] #loading::after\s*\{\s*content:\s*none;/);
+  assert.match(css.match(/#ld-wordmark\s*\{([^}]*)\}/)[1], /font-size:\s*clamp\([^;]*\b3\.4vw\b/, "#loading is not zoomed: --vwz shrank the wordmark as UI SIZE grew");
+});
+
+test("an opening shot's own seconds (info.leadMs, the garage drive-out) are ADDED to the flyby, letterbox and voice included", () => {
+  const h = gridHarness({ radioOn: false });
+  h.run({ leadMs: 5500 });
+  assert.equal(h.plays[0], LS.FLY_MS + 5500, "the announcer's budget is the whole run");
+  assert.equal(h.els.loading.style.props["--ld-fly"], (LS.FLY_MS + 5500) + "ms", "the letterbox opens on the run's own last beat");
+  for (const bad of [NaN, -3000, "x", undefined]) {
+    const b = gridHarness({ radioOn: false });
+    b.run({ leadMs: bad });
+    assert.equal(b.plays[0], LS.FLY_MS, `leadMs ${String(bad)} adds nothing`);
+  }
+  const game = read("js/game.js");
+  const intro = game.slice(game.indexOf("function raceIntro(go)"), game.indexOf("function loadingInfo()"));
+  assert.match(intro, /driveOut\.lead\(\)/, "raceIntro asks for the drive-out");
+  assert.match(intro, /!\(real && \(real\.watch \|\| real\.startLap > 1\)\)/, "never over a race joined mid-way or watched");
+  assert.match(intro, /loadingScreen\.nextFlyMs\(\) !== LoadingScreen\.SHORT_FLY_MS/, "never in a habitual skipper's short cut");
+  assert.match(intro, /lead\.dur = lead\.ms \/ flyMs \* flybyShots\.reduce/, "exactly its own seconds on top of the flyby's");
 });

@@ -164,6 +164,11 @@
     "tests/unit/desktop-app-protocol.test.mjs",
     "tests/unit/desktop-unpacked-bin.test.mjs",
     "tests/unit/ship-filter-paths.test.mjs",
+    "// Capacitor Android (task 45): frozen identity, config shape, manifest,",
+    "// Gradle version wiring, sync-web stamp gate, NativeDownload via Plugins.",
+    "tests/unit/mobile-config.test.mjs",
+    "tests/unit/mobile-sync-web.test.mjs",
+    "tests/unit/mobile-native-download.test.mjs",
     "tests/unit/perf-sentinel.test.mjs",
     "tests/unit/telemetry-trace.test.mjs",
     "tests/unit/meeting-picker-labels.test.mjs",
@@ -648,6 +653,14 @@
         "tests/unit/helmets.test.mjs"
       ]
     },
+    "test:mobile-unit": {
+      "kind": "node",
+      "files": [
+        "tests/unit/mobile-config.test.mjs",
+        "tests/unit/mobile-sync-web.test.mjs",
+        "tests/unit/mobile-native-download.test.mjs"
+      ]
+    },
     "test:steering-unit": {
       "kind": "node",
       "files": [
@@ -816,6 +829,7 @@
         "tests/unit/game-vm.test.mjs",
         "tests/unit/game-vm-pool.test.mjs",
         "tests/unit/pit-lane-vm.test.mjs",
+        "tests/unit/tyre-strategy-vm.test.mjs",
         "tests/unit/quali-handoff-vm.test.mjs",
         "tests/unit/session-entry-vm.test.mjs",
         "tests/unit/red-flag-fuel-vm.test.mjs",
@@ -867,6 +881,7 @@
         "tests/unit/game-vm.test.mjs",
         "tests/unit/game-vm-pool.test.mjs",
         "tests/unit/pit-lane-vm.test.mjs",
+        "tests/unit/tyre-strategy-vm.test.mjs",
         "tests/unit/quali-handoff-vm.test.mjs",
         "tests/unit/session-entry-vm.test.mjs",
         "tests/unit/red-flag-fuel-vm.test.mjs",
