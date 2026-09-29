@@ -1506,4 +1506,34 @@ body[data-density="compact"] #campicker {
 @media (prefers-reduced-motion: reduce) {
   #ld-card { transition: none; transform: none; }
 }
+
+/* ---------- WebXR ENTER VR (Phase 0) ---------- */
+/* Hidden until XrSession probe() reports immersive-vr support. Fixed corner
+   affordance — Quest Browser / Immersive Web Emulator; not a HUD overlay. */
+#xr-enter {
+  position: fixed;
+  right: var(--safe-r);
+  bottom: var(--safe-b);
+  z-index: 60;
+  pointer-events: auto;
+  padding: var(--gap) calc(var(--gap) * 1.5);
+  border: 1px solid color-mix(in oklab, var(--text) 55%, transparent);
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--bg) 55%, transparent);
+  color: var(--text);
+  font: 600 var(--fs-micro)/1.2 ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: var(--ls-2);
+  cursor: pointer;
+  opacity: 0.85;
+}
+#xr-enter:focus-visible { opacity: 1; }
+@media (hover: hover) {
+  #xr-enter:hover { opacity: 1; }
+}
+#xr-enter[aria-pressed="true"] {
+  border-color: var(--text);
+  color: var(--text);
+  opacity: 1;
+}
+#xr-enter[hidden] { display: none !important; }
 } /* @layer overlays */

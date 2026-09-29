@@ -3841,6 +3841,91 @@ const WGX = (function () {
       }
     }
 
+    // ── REAR-VIEW MIRROR (js/render/shared/mirror-pass.js) ──────────────────
+    // The env probe's shape with a 2-D target: game.js puts the mirror camera on
+    // `frame` and calls this BEFORE begin(), so it records into its OWN encoder,
+    // submitted in mirrorEnd — every shared buffer it writes (frame UBO, draw
+    // rings, sky UBO, instance packs) is rewritten by begin() after that submit,
+    // in queue order. 1× like the probe: the lit and sky pipelines have 1×
+    // variants, the FX ones do not, and the mirror draws world + car bodies only.
+    // _mirrorComposite draws it, flipped (BLIT params.y), into the HUD rect.
+    let mirTex = null, mirView = null, mirDepthTex = null, mirDepthView = null, mirW = 0, mirH = 0;
+    let _mirEncoder = null, _mirDead = false, _mirRect = null, _mirRenders = 0, _mirComposites = 0;
+    let _mirUBO = null, _mirBG = null;
+    const _mirData = new Float32Array(4);
+    function _mirrorFree() {
+      try { if (mirTex) mirTex.destroy(); } catch (_) { /* already invalid */ }
+      try { if (mirDepthTex) mirDepthTex.destroy(); } catch (_) { /* already invalid */ }
+      mirTex = mirView = mirDepthTex = mirDepthView = null; _mirBG = null; mirW = mirH = 0; _mirRenders = 0;
+    }
+    function mirrorBegin(frame, w, h) {
+      // litPass/encoder set = begin() already ran this frame (or a probe face
+      // is open): refuse rather than steal the pass.
+      if (_lost || WGX_MINIMAL || _mirDead || !skyPipeline || litPass || encoder) return false;
+      w = Math.max(16, Math.min(1024, w | 0)); h = Math.max(8, Math.min(512, h | 0));
+      if (!mirTex || w !== mirW || h !== mirH) {
+        _mirrorFree();
+        try {
+          mirTex = device.createTexture({ size: [w, h], format: SCENE_FORMAT,
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
+          mirView = mirTex.createView();
+          mirDepthTex = device.createTexture({ size: [w, h], format: DEPTH_FORMAT, usage: GPUTextureUsage.RENDER_ATTACHMENT });
+          mirDepthView = mirDepthTex.createView();
+          mirW = w; mirH = h;
+        } catch (e) {
+          _mirrorFree(); _mirDead = true;
+          try { Log.warn("gfx", "WGX mirror allocation failed — mirror off:", e && e.message); } catch (_) { /* harness */ }
+          return false;
+        }
+      }
+      _passSamples = 1;
+      _writeFrame(frame);
+      const fc = (frame && frame.fogColor) || [0.5, 0.6, 0.7];
+      if (SHD) SHD.flushPending();   // this frame's shadow maps land before the mirror samples them
+      _mirEncoder = device.createCommandEncoder();
+      litPass = _mirEncoder.beginRenderPass({
+        colorAttachments: [{ view: mirView, clearValue: { r: fc[0], g: fc[1], b: fc[2], a: 1 },
+          loadOp: "clear", storeOp: "store" }],
+        depthStencilAttachment: { view: mirDepthView, depthClearValue: 1.0, depthLoadOp: "clear", depthStoreOp: "discard" },
+      });
+      encoder = _mirEncoder;
+      _drawSlot = 0; _fxQuadSlot = 0; _fxDecalSlot = 0; _fxQuadOverflow = 0;
+      _activeFrameBG = frameBindGroup;   // the real cube: the mirror target is not a cube face
+      return true;
+    }
+    function mirrorEnd() {
+      if (!_mirEncoder) return;
+      try {
+        if (litPass) { _flushLitRings(); litPass.end(); }
+        device.queue.submit([_mirEncoder.finish()]);
+        _mirRenders++;
+      } finally {
+        litPass = null; encoder = null; _mirEncoder = null;
+      }
+    }
+    // Into the present target, after the post chain / fallback blit and before
+    // the soft-display and capture copies read it. Its own UBO: blitUBO is
+    // queue-written by the fallback blit in this same submit.
+    function _mirrorComposite(exposure) {
+      if (!_mirRect || !mirView || !_mirRenders || !blitPipeline || !currentView || !encoder) return;
+      const cw = wantSpatialUpscale() ? presentW : width, ch = wantSpatialUpscale() ? presentH : height;
+      const x = Math.round(_mirRect[0] * cw), y = Math.round(_mirRect[1] * ch);
+      const w = Math.min(cw - x, Math.round(_mirRect[2] * cw)), h = Math.min(ch - y, Math.round(_mirRect[3] * ch));
+      if (w < 2 || h < 2 || x < 0 || y < 0) return;
+      if (!_mirUBO) _mirUBO = device.createBuffer({ size: BLIT_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+      if (!_mirBG) _mirBG = device.createBindGroup({ layout: blitPipeline.getBindGroupLayout(0), entries: [
+        { binding: 0, resource: mirView }, { binding: 1, resource: linearSampler }, { binding: 2, resource: { buffer: _mirUBO } }] });
+      _mirData[0] = exposure; _mirData[1] = 1; _mirData[2] = 0; _mirData[3] = 0;   // y = flip left-right
+      device.queue.writeBuffer(_mirUBO, 0, _mirData);
+      const mp = encoder.beginRenderPass({ colorAttachments: [{ view: currentView, loadOp: "load", storeOp: "store" }] });
+      mp.setViewport(x, y, w, h, 0, 1);
+      mp.setPipeline(blitPipeline);
+      mp.setBindGroup(0, _mirBG);
+      mp.draw(3, 1, 0, 0);
+      mp.end();
+      _mirComposites++;
+    }
+
     // Reset the probe to the placeholder (track change / camera reset) so a stale cube
     // from another location never mirrors onto the paint until a fresh cycle completes.
     function envProbeReset() {
@@ -4059,6 +4144,7 @@ const WGX = (function () {
       // Fallback: post disabled / targets absent -> tonemap blit.
       if (!_postReady || !pComposite || !ldrView || bloomLv.length === 0) {
         _tonemapBlit(exposure);
+        _mirrorComposite(exposure);
         const disp = _softDisplayEncode();
         const cap = _capEncode();
         try { device.queue.submit(SHD.frameSubmitList(encoder)); }
@@ -4416,6 +4502,7 @@ const WGX = (function () {
           timerRead = _gpuReadBuf;
         } catch (_) { /* timer stays at last-good / -1 */ }
       }
+      _mirrorComposite(exposure);
       const disp = _softDisplayEncode();
       const _cap = _capEncode();
       try { device.queue.submit(SHD.frameSubmitList(encoder)); }
@@ -5366,6 +5453,11 @@ const WGX = (function () {
 
       envFaceBegin,
       envFaceEnd,
+      mirrorBegin,
+      mirrorEnd,
+      mirrorRect(r) { _mirRect = r && r.length === 4 ? [+r[0] || 0, +r[1] || 0, +r[2] || 0, +r[3] || 0] : null; },
+      mirrorState: () => ({ ready: !!mirTex && _mirRenders > 0, dead: _mirDead, w: mirW, h: mirH, hdr: true,
+        renders: _mirRenders, composites: _mirComposites, rect: _mirRect }),
       envProbeReady() { return _envProbeLive; },
       envProbeReset,
 

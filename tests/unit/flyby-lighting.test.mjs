@@ -123,7 +123,9 @@ test("one flag decides the whole lens, and the preview carries it", () => {
     "the editor's preview must be recognised as the cinematic it is previewing");
   // Set outright, never damped: level (0) unless the FREE CAMERA's ROLL dial put
   // one on its own dbgCam (js/camera/free-cam.js) — a live flyby has no dbgCam.
-  assert.match(body, /if \(dbgCam \|\| cine\) \{\s*\n\s*camRoll = \(dbgCam && dbgCam\.roll\) \|\| 0;/,
+  // XR Phase 0: camComfort() (motionReduced || immersive-vr) shares the level
+  // path so the HMD owns roll; dbgCam/cine still force-level for the flyby.
+  assert.match(body, /if \(dbgCam \|\| cine \|\| camComfort\(\)\) \{\s*\n\s*camRoll = \(dbgCam && dbgCam\.roll\) \|\| 0;/,
     "the live flyby would otherwise inherit the roll the last race left behind, and decay it over the " +
     "first half-second of a shot the editor showed level");
   assert.match(body, /const _near = cine \? FlybySeq\.NEAR/,

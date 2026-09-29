@@ -103,6 +103,15 @@
  *   [optional env probe, up to one cube face per frame]:
  *     envFaceBegin(face, eye, frame) -> (redraw world) -> envFaceEnd(face)
  *     envProbeReady()->bool ; envProbeReset()
+ *   [optional rear-view mirror, BEFORE begin() like the probe — present()
+ *    reads the post matrices from whichever begin ran last]:
+ *     mirrorBegin(frame, w, h) -> bool  (frame already carries the mirror
+ *     camera: viewProj/view/proj/eye/cullDist) -> (redraw world + cars + sky)
+ *     -> mirrorEnd()   renders into a w×h target of the backend's own.
+ *     mirrorRect([x,y,w,h] | null)  canvas fractions, top-left origin: present()
+ *     composites the last mirror image there, FLIPPED left-right and tone-mapped
+ *     with the frame's exposure. mirrorState() -> {ready,dead,w,h,renders,composites}.
+ *     js/render/shared/mirror-pass.js is the one caller.
  *   begin(frame)              clear + bind scene target; upload frame uniforms.
  *   draw(mesh, model, opts) / drawChunked(mesh, model, opts)
  *   drawSky(sky)              OPAQUE FIRST, THEN SKY — not the other way round.

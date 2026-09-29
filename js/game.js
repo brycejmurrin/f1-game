@@ -567,6 +567,9 @@ function paintHudDetailsSummary() {
   SettingRow.paint($("pm-hudmetrics"), hudMetricsLayout);
   SettingRow.paint($("pm-hudmap"), hudMapVis);
   SettingRow.paint($("pm-hudgaps"), hudGapsVis);
+  // HUD > MIRROR is owned by js/render/shared/mirror-pass.js; the fold reads it back from the store.
+  const hudMirror = MirrorPass.MODES.indexOf(store.get("hudMirror", "auto")) < 0 ? "auto" : store.get("hudMirror", "auto");
+  SettingRow.paint($("pm-hudmirror"), hudMirror);
   const note = $("pm-hudmetrics-note");
   if (note) note.textContent = hudLayoutNote();
   const sum = $("pm-hud-details-sum");
@@ -574,7 +577,8 @@ function paintHudDetailsSummary() {
   const bits = [["k", "HUD"], [on ? "on" : "off", on ? "ON" : "OFF"],
     ["val", hudProfile.toUpperCase()], ["val", hudMetricsLayout.toUpperCase()],
     [hudMapVis === "off" ? "off" : "on", hudMapVis === "off" ? "NO MAP" : "MAP"],
-    [hudGapsVis === "off" ? "off" : "on", hudGapsVis === "off" ? "NO GAPS" : "GAPS"]];
+    [hudGapsVis === "off" ? "off" : "on", hudGapsVis === "off" ? "NO GAPS" : "GAPS"],
+    [hudMirror === "off" ? "off" : "on", hudMirror === "off" ? "NO MIRROR" : "MIRROR"]];
   sum.innerHTML = bits.map((p, i) => (i ? '<span data-fold="sep"> · </span>' : "") +
     '<span data-fold="' + p[0] + '">' + p[1] + "</span>").join("");
 }
@@ -1217,6 +1221,7 @@ const _mq = (typeof window !== "undefined" && window.matchMedia)
   ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
 let motionReduced = !!(_mq && _mq.matches);
 if (_mq && _mq.addEventListener) _mq.addEventListener("change", (e) => { motionReduced = !!e.matches; });
+function camComfort() { return XrBoot.camComfort(motionReduced); }   // XR presenting ≡ reduce-motion
 let camRoll = 0;        // radians; lean into corners (decays back to 0)
 let camSlipSm = 0;      // smoothed slip input for camRoll (raw vLat/speed is 60 Hz-stepped)
 let camCutT = 0;        // s; >0 just after a camera-mode cut → eased glide to the new vantage
@@ -3730,6 +3735,10 @@ const { renderSetupPreview, resetSetupCam, setSetupCamPanel, spMeshBust } = setu
 // The three shadow-map passes (js/render/shared/shadow-pass.js): sun snap cache,
 // per-frame car map, night lamp map, the caster pools and the blob flush.
 const shadowPass = ShadowPass.create(G, { teamMesh, vStd });
+// The HUD rear-view mirror (js/render/shared/mirror-pass.js): a second camera, rendered in the env probe's slot below.
+const mirrorPass = MirrorPass.create(G, { drawWorldMeshes, teamMesh, renderPosOf, playerAnchor, yawVisInterp, basisMat,
+  carPaint: (wet, night) => carPaintMat(wet ? (night ? PAINT_WET_NIGHT : PAINT_WET_DAY) : (night ? PAINT_DRY_NIGHT : PAINT_DRY_DAY)),
+  onModeChange: () => paintHudDetailsSummary() });
 
 // MY TEAM load/sync + customize dialog (js/career/custom-team.js).
 customTeam = CustomTeam.create({
@@ -3921,10 +3930,11 @@ function raceIntro(go) {
   if (!flybyShots) flybyShots = planned || FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0);   // a different flyby each load (never the sim RNG); an editor-saved list plays as authored
   if (flybyShots) flybyShots = FlybySeq.withoutSlot(flybyShots);   // nobody knows your slot on a random grid; a small grid has empty boxes
   if (flybyShots && real && (real.watch || real.startLap > 1)) flybyShots = FlybySeq.withoutGrid(flybyShots);
-  FlybySeq.setDuration(loadingScreen.nextFlyMs());   // plan every pan for the seconds this run has
+  const info = loadingInfo();   // before the duration: a real race's read (info.readMs) may stretch the flyby
+  FlybySeq.setDuration(loadingScreen.nextFlyMs(info.readMs));   // plan every pan for the seconds this run has
   if (world) FlybySeq.warm(track, flybyShots);   // plan the opening shots now, the rest in slices before their cuts
   FlybySeq.reset();   // this run's shot 0 is a cut, not a glide from wherever the camera was
-  loadingScreen.run(loadingInfo(), go);
+  loadingScreen.run(info, go);
 }
 /** WHAT THE LOADING SCREEN DESCRIBES: the circuit about to be raced, this
  *  session's settings, and whether there is a built world to fly over. Named
@@ -3934,7 +3944,7 @@ function raceIntro(go) {
  *  the next time a row is added to the card. */
 function loadingInfo() {
   const real = realRace.intro();
-  return {
+  const out = {
     track: Tracks.LIST[trackIdx], laps: raceLaps,
     gp: real ? real.title : SeasonCal.gpName ? SeasonCal.gpName(Tracks.LIST[trackIdx]) : undefined,   // the 2026 REAL calendar renames two rounds (season-cal.js); a real race is its own event
     real,   // the Data Hub's real race (RealRace.intro): the event, whose car, from which lap — the announcer reads it
@@ -3947,7 +3957,10 @@ function loadingInfo() {
     // circuit switched a moment ago, scenery still downloading) would put a
     // black hold where the cinematic should be, which reads as a hang.
     hasWorld: menuWorld(), shots: flybyShots, grid: (cars || []).map((c) => ({ code: c.code, colour: c.color, isPlayer: c === player && FlybySeq.slotKnown() })),   // the card's grid graphic + radio check: menuGridCars() seated `cars` in grid order
+    readMs: 0,
   };
+  if (real && announcer.readMs) out.readMs = announcer.readMs(out);   // the race-so-far read: the flyby stretches to it (LoadingScreen.flyMsFor)
+  return out;
 }
 // ACTIVE AERO activation zones (js/physics/aero-zones.js) — pure circuit geometry.
 aeroZ = AeroZones.create(G);
@@ -4370,7 +4383,7 @@ function update(dt) {
   // countdown while somebody is still driving. The hard time cap remains the
   // bounded escape hatch for an unfinished or stale participant.
   if (resultT === 0) {
-    resultT = RaceControl.finishDelay(cars, raceT, lapsTarget);
+    resultT = RaceControl.finishDelay(cars, raceT, lapsTarget, realRace.raceT0());
     // A GUEST holding the host's classification is done once ITS car is: its
     // view of the host's car can lag or disagree (a finish still in flight, a
     // pose lost to extrapolation), and waiting on that view meant the host's
@@ -6965,7 +6978,7 @@ function render(dt) {
     // interpolation the car body and playerAnchor already use.
     const rpCam = renderPosOf(player);
     camAncNX = rpCam.world ? rpCam.x : null; camAncNZ = rpCam.world ? rpCam.z : 0;   // anchor for the car-frame camera damping below
-    _vantExtra.bankDy = bankDy; _vantExtra.deploy = player.deploying; _vantExtra.reduceMotion = motionReduced;   // kerb shiver off (js/camera/vantage.js)
+    _vantExtra.bankDy = bankDy; _vantExtra.deploy = player.deploying; _vantExtra.reduceMotion = camComfort();   // kerb shiver off (js/camera/vantage.js)
     _vantExtra.slipLat = player.vLat || 0; _vantExtra.att = player;
     // the car's real world pose, so the chase rig can follow the CAR
     _vantExtra.carPos = rpCam.world ? (_vantCarPos[0] = rpCam.x, _vantCarPos[1] = rpCam.z, _vantCarPos) : null;
@@ -6977,7 +6990,7 @@ function render(dt) {
       // squared: grazes barely move, crashes slam. REDUCE MOTION zeroes the
       // OFFSET, not the trauma — shake still decays on its own clock, so cues
       // keyed to it are untouched and only the camera stops moving.
-      const amt = motionReduced ? 0 : shake * shake * 0.9;
+      const amt = camComfort() ? 0 : shake * shake * 0.9;
       eyeT[0] += (Math.random() - 0.5) * amt; eyeT[1] += (Math.random() - 0.5) * amt * 0.7;
       tgtT[0] += (Math.random() - 0.5) * amt * 0.6; tgtT[1] += (Math.random() - 0.5) * amt * 0.6;
     }
@@ -6991,7 +7004,7 @@ function render(dt) {
     // for feel; on a wet road we drop it to keep the reflection stable. Also
     // fades in with speed so it never jitters a slow/standing car. REDUCE MOTION drops it.
     const _buzzWet = 1.0 - clamp((frame.wetness || 0) * 2.0, 0.0, 1.0);
-    if (state === "race" && !motionReduced && _buzzWet > 0.01 && (mode === "cockpit" || mode === "hood" || mode === "visor" || mode === "tcam")) {
+    if (state === "race" && !camComfort() && _buzzWet > 0.01 && (mode === "cockpit" || mode === "hood" || mode === "visor" || mode === "tcam")) {
       const spV = clamp(player.speed / vTop(), 0, 1);
       const vAmp = (spV * spV * 0.022 + (player.deploying ? 0.008 : 0)) * _buzzWet;
       if (vAmp > 0.001) {
@@ -7030,7 +7043,7 @@ function render(dt) {
   // panning — cockpit/hood ease the target gently, like a driver's eyes
   // leading into a corner rather than their whole head whipping around.
   const lE = onboard ? 400 : (racing ? 14 : 1.6) * cutEase;
-  const gentleHead = onboard && (camId === "cockpit" || camId === "hood" || camId === "visor") && (typeof CockpitOpts === "undefined" || CockpitOpts.turnChase());   // gentle easing is ONLY for a curved aim; a nose-locked aim must not lag
+  const gentleHead = !camComfort() && onboard && (camId === "cockpit" || camId === "hood" || camId === "visor") && (typeof CockpitOpts === "undefined" || CockpitOpts.turnChase());   // gentle easing is ONLY for a curved aim; a nose-locked aim must not lag; XR: HMD owns look
   const lT = gentleHead ? 7 : onboard ? 400 : (racing ? 16 : 10) * cutEase;
   // Damp HORIZONTALLY in the CAR's frame, not the world's. Damping toward a
   // MOVING target lags ~v/lambda - v*dt/2, so the car-to-camera distance
@@ -7073,8 +7086,8 @@ function render(dt) {
   // dynamic lean on top; broadcast/debug and cinematic cameras stay world-level
   // (the flyby's own roll would otherwise be whatever the last race left behind,
   // decaying over the first half-second of a shot the editor showed level).
-  if (dbgCam || cine) {
-    camRoll = (dbgCam && dbgCam.roll) || 0;   // level unless the FREE CAMERA's ROLL dial set one (js/camera/free-cam.js)
+  if (dbgCam || cine || camComfort()) {
+    camRoll = (dbgCam && dbgCam.roll) || 0;   // level unless the FREE CAMERA's ROLL dial set one; XR: HMD owns roll
   } else {
     // Slip source smoothed at λ10 (τ≈0.1 s): vLat/speed are RAW 60 Hz-stepped
     // physics values, and feeding them straight into screen roll printed every
@@ -7204,6 +7217,7 @@ function render(dt) {
   frame.sunViewDir = _sunVS;
   frame.upViewDir = _upVS;
   frame.eye = camEye;
+  const _xrEyes = XrBoot.applyEyes(frame, camEye, camTgt, _camUp);   // null when flat
   // Radial draw-distance cull for chunked scenery.
   // Free/debug camera: mobile caps at 700 m (the pushed-out photo-mode far
   // plane can frame a whole ~5 M-vert city and jetsam-kill the tab); desktop
@@ -7282,7 +7296,7 @@ function render(dt) {
 
   // Sun / car shadow maps: js/render/shared/shadow-pass.js (snap-cached static map,
   // per-frame car map). The live player matrix was resolved above.
-  shadowPass.sunPass(frame, _frameNo, _hasLivePlayerShadow);
+  if (!XrBoot.comfort()) shadowPass.sunPass(frame, _frameNo, _hasLivePlayerShadow);   // XR: skip maps
 
   // ── Sky animation & weather FX ──────────────────────────────────────────
   // Advance the render clock regardless of physics freeze so the sky always
@@ -7579,7 +7593,7 @@ function render(dt) {
   }
   // ── Nearest-floodlight SPOT shadow pass ─────────────────────────────────
   // Nearest-floodlight spot shadow map (night): js/render/shared/shadow-pass.js.
-  shadowPass.lampPass(frame, _frameNo, _hasLivePlayerShadow);
+  if (!XrBoot.comfort()) shadowPass.lampPass(frame, _frameNo, _hasLivePlayerShadow);
   // GLOWING FOG driver: on whenever lamps are lit, swelling with haze so a
   // fog-weather night is the money shot while a clear night keeps only a hint.
   // Day / lights-off => 0, so daytime fog stays a pure sun tint. Faded by SUN
@@ -7658,6 +7672,8 @@ function render(dt) {
       }
     }
   } else if (PerfGov.tier() >= 1 && gfx.envProbeReady && gfx.envProbeReady()) gfx.envProbeReset();   // tier 1 sheds the PRODUCER, but envReady LATCHES — without this the paint mirrors a frozen cube. See glx.js envProbeReset.
+  // REAR-VIEW MIRROR: its own camera and target, BEFORE the main begin() like the probe above.
+  mirrorPass.render(frame, frameSky, night, wet, _floodEmit);
   let _b;
   if (_fogMul != null) {
     // Restored immediately: frame.fogDensity is the SESSION's value, which
@@ -8377,7 +8393,7 @@ function render(dt) {
     }
   }
   armBackendProbe();
-  gfx.present(po);
+  if (!XrBoot.present(gfx, _xrEyes, po)) gfx.present(po);
   // The pre-race screen comes down with the race's FIRST PRESENTED frame
   // (LoadingScreen.handoff): a present that only started the warm painted nothing.
   if (loadingScreen.phase() === "handoff" && !(gfx.warming && gfx.warming())) loadingScreen.stop();
@@ -8422,7 +8438,10 @@ let renderAlpha = 1;             // leftover-step fraction (0..1) for render int
 PerfGov.init(gfx);
 const PHYS_DT = PhysicsConsts.FIXED_DT;   // fixed physics step — js/physics/consts.js
 function tick(now) {
-  try { tickBody(now); LoopHealth.clean(); requestAnimationFrame(tick); }
+  try {
+    tickBody(now); LoopHealth.clean();
+    XrBoot.afterTick(tick);   // no-op while immersive-vr owns session.rAF; deduped on EXIT
+  }
   catch (e) {
     // BOUNDED tolerance, policy in js/perf/loop-health.js: a transient fault
     // costs one frame and any clean frame pays the run back, because round 13
@@ -8431,7 +8450,7 @@ function tick(now) {
     // and used to take the whole game down. At the cap this falls through to
     // exactly the old behaviour, so a DETERMINISTIC fault still stops instead
     // of repainting the error overlay 60x/s.
-    if (LoopHealth.fault(e)) { requestAnimationFrame(tick); return; }
+    if (LoopHealth.fault(e)) { XrBoot.afterTick(tick); return; }
     // Report the REAL error once (cross-origin window.onerror shows only a bare
     // "Script error.").
     if (!tick._reported && typeof window.__apexReportError === "function") {
@@ -8667,7 +8686,7 @@ $("mb-tt").onclick = () => openTimeTrial(false);
 async function consumeGhostHash() {
   // A ghost link landing MID-RACE waits, fragment intact, for the menu (quitToMenu re-reads it) — as #353's invite link does.
   if (UiLayers.inRace()) { Log.info("game", "ghost link deferred: racing"); return null; }
-  const shared = await GhostShare.consumeHash({
+  const shared = await GhostShare.consumeHash({ valid: () => !UiLayers.inRace(),
     notify: (message, result) => announce(message, result && result.ok ? 3 : 4, result && result.ok ? "info" : "warning"),
   });
   if (!shared || !shared.ok) return shared;
@@ -9408,6 +9427,7 @@ wireHudChips("pm-hudmetrics", HUD_MET_LAYOUTS, () => hudMetricsLayout,
   (v) => { hudMetricsLayout = v; store.set("hudMetricsLayout", hudMetricsLayout); }, syncMetricsOverlayCompact);
 wireHudChips("pm-hudmap", HUD_VIS_MODES, () => hudMapVis, (v) => { hudMapVis = v; store.set("hudMapVis", hudMapVis); });
 wireHudChips("pm-hudgaps", HUD_VIS_MODES, () => hudGapsVis, (v) => { hudGapsVis = v; store.set("hudGapsVis", hudGapsVis); });
+wireHudChips("pm-hudmirror", MirrorPass.MODES, () => mirrorPass.mode(), (v) => mirrorPass.setMode(v));
 
 // ACTIVE AERO: MANUAL / AUTO. Same shape as GEARS and for the same reason —
 // both answer "how much of the car do you operate yourself?". Takes effect
@@ -9580,6 +9600,9 @@ audioPanel.init();
 // (openRaceSettings), and __apex forces a build on first use (lazyTrackEnsure).
 window.addEventListener("resize", () => gfx.resize());
 lastFrame = performance.now();
+XrBoot.bind({ gfx, tickBody, windowTick: tick, getCamMode: () => camMode,
+  setCamMode: (i, opts) => { if (typeof setCamMode === "function") setCamMode(i, opts); } });
+XrBoot.mountUi();
 requestAnimationFrame(tick);
 
 // --- debug / test hook (no effect unless explicitly called) ---

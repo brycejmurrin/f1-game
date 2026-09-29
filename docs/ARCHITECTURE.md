@@ -77,7 +77,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_225 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_231 rows over 29 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -112,6 +112,7 @@ _225 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `assets.js` | `Assets` | tag | Assets: the baked asset pack loader. |
 | `driving-line.js` | `DrivingLine` | tag | DrivingLine: the suggested-line ribbon every racing game draws on the road, as DATA. |
 | `shadow-pass.js` | `ShadowPass` | tag | ShadowPass: the three shadow-map passes out of js/game.js — the snap-cached SUN map (terrain + road ribbons + props, rebuilt when the camera crosses a… |
+| `mirror-pass.js` | `MirrorPass` | tag | MirrorPass: the HUD REAR-VIEW MIRROR. |
 
 **`js/render/`**
 
@@ -366,6 +367,16 @@ _225 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `renderer-picker.js` | `RendererPicker` | tag | RendererPicker: the RENDERER control in SETTINGS > DISPLAY. |
 | `gfx-debug-overlay.js` | `GfxDebug` | tag | GfxDebug: ON-SCREEN GFX DIAGNOSTIC (?gfxdebug=1 / apex26.gfxDebug="1"). |
 | `metrics-overlay.js` | `GameMetrics` | tag | GameMetrics: toggleable in-game FPS / car / log overlay. |
+
+**`js/xr/`**
+
+| File | Global | Loaded | Purpose (header, first sentence) |
+|---|---|---|---|
+| `xr-rig.js` | `XrRig` | tag | XR seated-rig math (pure). |
+| `xr-input.js` | `XrInput` | tag | XR controller → Input.remoteSample / remoteEvent. |
+| `xr-session.js` | `XrSession` | tag | WebXR immersive-vr session owner (Phase 0 spike). |
+| `xr-ui.js` | `XrUi` | tag | ENTER VR button (Phase 0). |
+| `xr-boot.js` | `XrBoot` | tag | WebXR boot wiring (Phase 0). |
 
 **`js/render/glx/shaders/`**
 

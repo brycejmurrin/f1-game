@@ -7,9 +7,9 @@
 (window.TrackScenery = window.TrackScenery || {})["portimao"] =
   function (api) {
       const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
-        pine, tree, bush, ridge, building, grandstandEx, spectatorHill,
-        broadcastCompound, billboard, gantry, marshalPost, motorhome,
-        fence, guardrail, tyreWall, groundPatch, modelGroup, runoffApron,
+        pine, tree, bush, ridge, grandstandEx, spectatorHill,
+        billboard, gantry, marshalPost,
+        fence, guardrail, tyreWall, groundPatch, modelGroup,
         cameraTower, sponsorHoarding, signBoard, groundedSegments, bankedKerbStrip,
         addBox, addCyl, addCone, addPrism, addFrustum, forestEdge, terrainYAt } = api;
 
@@ -20,7 +20,6 @@
         const BARK       = [0.44, 0.40, 0.33];   // corky grey above the strip
         const OLIVE_LEAF = [0.44, 0.48, 0.36];
         const OLIVE_BARK = [0.48, 0.45, 0.39];
-        const SOIL       = [0.56, 0.44, 0.30];
 
         // Cork oaks: scattered, never in rows. Montado is grazed woodland, so
         // the spacing is wide and irregular and the ground between stays open.
@@ -67,15 +66,18 @@
               if (onTrack(a.c[0], a.c[2], 12)) continue;
               const b = [a.r, a.u, a.t];
               const h = 4.2 + hv * 1.4;
-              // Tilled soil ring under each tree — olive groves are ploughed.
-              addBox(out, vadd(a.c, a.u, 0.05), [5.2, 0.10, 5.2], SOIL, b);
+              // No tilled soil pad — flat world-Y boxes bury into hillside cut
+              // banks on Portimão's slopes (ground-audit). Trunk seats on grade.
+              const sgy = terrainYAt(a.c[0], a.c[2]);
+              const trunk = a.c.slice();
+              if (sgy != null) trunk[1] = Math.max(trunk[1], sgy - 0.05);
               out._mat = MAT.WOOD;
-              addCyl(out, a.c, 0.30, h * 0.34, OLIVE_BARK, 5, b);
+              addCyl(out, trunk, 0.30, h * 0.34, OLIVE_BARK, 5, b);
               out._mat = MAT.FOLIAGE;
               // Silver-green, small, rounded — an olive is a shrub on a leg.
-              addFrustum(out, vadd(a.c, a.u, h * 0.30), h * 0.26, h * 0.40, h * 0.30,
+              addFrustum(out, vadd(trunk, a.u, h * 0.30), h * 0.26, h * 0.40, h * 0.30,
                          OLIVE_LEAF, 7, b);
-              addFrustum(out, vadd(a.c, a.u, h * 0.58), h * 0.40, h * 0.14, h * 0.34,
+              addFrustum(out, vadd(trunk, a.u, h * 0.58), h * 0.40, h * 0.14, h * 0.34,
                          OLIVE_LEAF, 7, b);
               out._mat = 0;
             }
@@ -160,84 +162,146 @@
       hillsideTerrace(0.280, 0.360, 1, 15, { rows: 6, rise: 1.4, depth: 2.7, density: 0.5, step: 8 });
       hillsideTerrace(0.620, 0.700, -1, 15, { rows: 6, rise: 1.4, depth: 2.7, density: 0.5, step: 8 });
 
-      const PIT_BAY_FRACS = [0.942, 0.960, 0.978, 0.996];
-      const PIT_ROOF_SLICES = 6;
-      const PIT_ROOF_PHASE_STEPS = PIT_BAY_FRACS.length * PIT_ROOF_SLICES - 1;
-      for (const [i, s] of PIT_BAY_FRACS.entries()) {
-        const a = anchor(K(s), 1, 20);
-        const b = [a.r, a.u, a.t];
-        modelGroup(`portimao-pit-bay-${i + 1}`, {
-          center: vadd(a.c, a.u, 8), size: [22, 18, 42], basis: b,
-        }, (stage) => {
-          stage._mat = MAT.CONCRETE;
-          addBox(stage, vadd(a.c, a.u, 4.2), [16, 8.4, 40], LIME, b);
-          // Upper hospitality storey, set back so the wave roof reads clear of it.
-          addBox(stage, vadd(vadd(a.c, a.r, 2.4), a.u, 10.4), [11, 4.2, 38],
-            [0.90, 0.89, 0.86], b);
-          stage._mat = MAT.GLASS;
-          addBox(stage, vadd(vadd(a.c, a.r, -8.1), a.u, 4.0), [0.4, 4.4, 37],
-            [0.15, 0.22, 0.30], b);
-          addBox(stage, vadd(vadd(a.c, a.r, -3.0), a.u, 10.6), [0.4, 3.0, 36],
-            [0.16, 0.26, 0.34], b);
-          stage._mat = MAT.METAL;
-          for (let p = 0; p < PIT_ROOF_SLICES; p++) {
-            // POR-M1: all four bays share one longitudinal phase, so the roof
-            // draws one continuous wave instead of restarting at every bay.
-            const globalSlice = i * PIT_ROOF_SLICES + p;
-            const phase = globalSlice / PIT_ROOF_PHASE_STEPS * Math.PI * 2;
-            const lift = 13.4 + Math.sin(phase) * 1.7;
-            const off = (p - 2.5) * 6.6;
-            addBox(stage, vadd(vadd(a.c, a.t, off), a.u, lift), [21, 0.5, 6.7],
-              [0.94, 0.94, 0.92], b);
-            addBox(stage, vadd(vadd(vadd(a.c, a.t, off), a.r, -10.2), a.u, lift - 0.45),
-              [0.5, 0.6, 6.7], [0.20, 0.44, 0.28], b);   // green fascia lip
+      // Paddock: six structurally independent blocks (A–F) with separate roofs
+      // and dilatation joints — Dimeconsult project notes for the 2008 AIA
+      // paddock (A–D boxes + VIP; D press; E race control tower kept as its
+      // own required landmark; F media). Wave roof phase rides continuously
+      // across all six so it still reads as one undulation.
+      // https://dimeconsult.pt/projectos_desenv2.php?ano=2008&id=9&m=3
+      {
+        const PIT_BLOCK_FRACS = [0.938, 0.950, 0.962, 0.974, 0.986, 0.998];
+        const PIT_ROOF_SLICES = 3;
+        const PIT_ROOF_PHASE_STEPS = PIT_BLOCK_FRACS.length * PIT_ROOF_SLICES - 1;
+        const a0 = anchor(K(0.968), 1, 20);
+        const b0 = [a0.r, a0.u, a0.t];
+        // Named dresser keeps {required:true} inside the BATCH-01 2200-char window.
+        const dressPitBlocks = (stage) => {
+          for (let i = 0; i < PIT_BLOCK_FRACS.length; i++) {
+            const a = anchor(K(PIT_BLOCK_FRACS[i]), 1, 20);
+            // Seat each block foot on local terrain — the ridge falls away
+            // behind the lane and a single anchor buried façade panes.
+            const foot = a.c.slice();
+            const gy = terrainYAt(foot[0], foot[2]);
+            if (gy != null) foot[1] = Math.max(foot[1], gy - 0.15);
+            const b = [a.r, a.u, a.t];
+            const storeys = i < 4 ? 3 : (i === 4 ? 2 : 4); // A–D / E stub / F media
+            const bodyH = 3.6 + storeys * 2.4;
+            stage._mat = MAT.CONCRETE;
+            addBox(stage, vadd(foot, a.u, bodyH * 0.5), [15, bodyH, 28], LIME, b);
+            // Joint gap: slim dark strip at the track-facing dilatation.
+            addBox(stage, vadd(vadd(foot, a.t, -14.2), a.u, bodyH * 0.45),
+              [14.5, bodyH * 0.85, 0.35], [0.22, 0.24, 0.26], b);
+            // Upper hospitality / media setback (taller on A–D and F).
+            if (storeys >= 3) {
+              addBox(stage, vadd(vadd(foot, a.r, 2.2), a.u, bodyH + 2.0),
+                [10, 4.0, 24], [0.90, 0.89, 0.86], b);
+            }
+            stage._mat = MAT.GLASS;
+            addBox(stage, vadd(vadd(foot, a.r, -7.6), a.u, 3.6),
+              [0.35, 4.0, 25], [0.15, 0.22, 0.30], b);
+            if (storeys >= 3) {
+              addBox(stage, vadd(vadd(foot, a.r, -2.8), a.u, bodyH + 2.1),
+                [0.35, 2.8, 22], [0.16, 0.26, 0.34], b);
+            }
+            stage._mat = MAT.METAL;
+            for (let p = 0; p < PIT_ROOF_SLICES; p++) {
+              const globalSlice = i * PIT_ROOF_SLICES + p;
+              const phase = globalSlice / PIT_ROOF_PHASE_STEPS * Math.PI * 2;
+              const lift = bodyH + (storeys >= 3 ? 4.6 : 1.2) + Math.sin(phase) * 1.5;
+              const off = (p - 1) * 8.4;
+              addBox(stage, vadd(vadd(foot, a.t, off), a.u, lift), [19, 0.45, 8.5],
+                [0.94, 0.94, 0.92], b);
+              addBox(stage, vadd(vadd(vadd(foot, a.t, off), a.r, -9.6), a.u, lift - 0.4),
+                [0.45, 0.55, 8.5], [0.20, 0.44, 0.28], b);
+            }
+            for (let c = 0; c < 3; c++) {
+              const off = (c - 1) * 9.0;
+              addCyl(stage, vadd(vadd(vadd(foot, a.t, off), a.r, -8.6), a.u, bodyH * 0.55),
+                0.14, bodyH + 4.5, [0.88, 0.88, 0.90], 6, b);
+            }
+            stage._mat = 0;
           }
-          // Slim raking struts carrying the roof out over the pit lane.
-          for (let c = 0; c < 4; c++) {
-            const off = (c - 1.5) * 9.6;
-            addCyl(stage, vadd(vadd(vadd(a.c, a.t, off), a.r, -9.2), a.u, 6.6),
-              0.16, 13.2, [0.88, 0.88, 0.90], 6, b);
-          }
-          stage._mat = 0;
-        }, { required: true });
+        };
+        modelGroup("portimao-pit-blocks", {
+          center: vadd(a0.c, a0.u, 9), size: [28, 22, 220], basis: b0,
+        }, dressPitBlocks, { required: true });
       }
       {
         const a = anchor(K(0.992), 1, 28);
+        const foot = a.c.slice();
+        const gy = terrainYAt(foot[0], foot[2]);
+        if (gy != null) foot[1] = Math.max(foot[1], gy - 0.15);
         const b = [a.r, a.u, a.t];
         modelGroup("portimao-race-control", {
-          center: vadd(a.c, a.u, 13), size: [14, 32, 14], basis: b,
+          center: vadd(foot, a.u, 13), size: [14, 32, 14], basis: b,
         }, (stage) => {
           stage._mat = MAT.CONCRETE;
-          addBox(stage, vadd(a.c, a.u, 10), [5.5, 20, 5.5], LIME, b);
+          addBox(stage, vadd(foot, a.u, 10), [5.5, 20, 5.5], LIME, b);
           stage._mat = MAT.GLASS;
-          addBox(stage, vadd(vadd(a.c, a.r, -2.2), a.u, 21.5), [11, 4.6, 11],
+          addBox(stage, vadd(vadd(foot, a.r, -2.2), a.u, 21.5), [11, 4.6, 11],
             [0.16, 0.22, 0.30], b);
           stage._mat = MAT.METAL;
-          addBox(stage, vadd(vadd(a.c, a.r, -2.2), a.u, 24.2), [12, 0.6, 12],
+          addBox(stage, vadd(vadd(foot, a.r, -2.2), a.u, 24.2), [12, 0.6, 12],
             [0.94, 0.94, 0.92], b);
           // Portuguese green/red band under the cab.
-          addBox(stage, vadd(vadd(a.c, a.r, -2.2), a.u, 18.9), [11.4, 0.7, 5.4],
+          addBox(stage, vadd(vadd(foot, a.r, -2.2), a.u, 18.9), [11.4, 0.7, 5.4],
             [0.16, 0.44, 0.26], b);
-          addBox(stage, vadd(vadd(vadd(a.c, a.r, -2.2), a.t, 3.0), a.u, 18.9),
+          addBox(stage, vadd(vadd(vadd(foot, a.r, -2.2), a.t, 3.0), a.u, 18.9),
             [11.4, 0.7, 5.4], [0.76, 0.16, 0.16], b);
-          addCyl(stage, vadd(a.c, a.u, 24.4), 0.12, 8, [0.88, 0.88, 0.90], 5, b);
+          addCyl(stage, vadd(foot, a.u, 24.4), 0.12, 8, [0.88, 0.88, 0.90], 5, b);
           stage._mat = 0;
         }, { required: true });
       }
       gantry(0.0, 8.5, [0.15, 0.15, 0.18]);
       gantry(0.968, 8.0, [0.15, 0.15, 0.18]);
+      // Main covered grandstand opposite the paddock (four dilatation blocks
+      // in the real AIA main stand — Dimeconsult). Keep one long grandstandEx.
       grandstandEx(0.005, -1, 11, 140, null, null,
         { livery: "terracotta", tiers: 2, roof: "flat", suites: true, endWalls: true, pylons: true });
-      for (let i = 0; i < 4; i++) {
-        building(K(0.925 + i * 0.013), 1, 40, 25, 13, 17,
-          { kind: "ziggurat", wall: LIME, window: [0.32, 0.36, 0.42], floor: 4.5 });
+      // Grandstand Norte / MEO — uncovered multi-tier OUTSIDE the Turn 1
+      // downhill braking zone (3ddigitalvenue / ticket seating plans). Past the
+      // amphitheatre terraces (gap ≥ 42 clears 8×2.9 m rows from gap 16) so the
+      // stand shells do not coplanar-fight the terrace slabs. Rows rise away
+      // from the track. No Craig Jones statue (removed 2009).
+      {
+        const sT1 = 0.055;
+        const a0 = anchor(K(sT1), 1, 48);
+        if (!onTrack(a0.c[0], a0.c[2], 10)) {
+          modelGroup("portimao-t1-stands", {
+            center: vadd(a0.c, a0.u, 8), size: [16, 16, 52], basis: [a0.r, a0.u, a0.t],
+          }, (stage) => {
+            const len = 44;
+            for (let t = 0; t < 5; t++) {
+              const ai = anchor(K(sT1), 1, 42 + t * 2.6);
+              const bi = [ai.r, ai.u, ai.t];
+              const h = 1.6 + t * 1.85;
+              const tierLen = len - t * 1.4;
+              const shellCol = t % 2 ? CONC : [0.70, 0.68, 0.65];
+              stage._mat = MAT.CONCRETE;
+              addBox(stage, vadd(ai.c, ai.u, h * 0.5), [3.2, h, tierLen], shellCol, bi);
+              // Track-facing seat strip: stand on +1, track toward -r.
+              stage._mat = MAT.FABRIC;
+              addBox(stage, vadd(vadd(ai.c, ai.r, -(3.2 * 0.5 + 0.55)), ai.u, h * 0.55),
+                [0.9, h * 0.58, tierLen * 0.90],
+                t % 2 ? [0.86, 0.30, 0.24] : [0.24, 0.36, 0.62], bi);
+              stage._mat = 0;
+            }
+            const aB = anchor(K(sT1), 1, 56);
+            stage._mat = MAT.CONCRETE;
+            addBox(stage, vadd(aB.c, aB.u, 7), [2.0, 13, len - 6], CONC,
+              [aB.r, aB.u, aB.t]);
+            const aT = anchor(K(sT1), 1, 48);
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(aT.c, aT.u, 11.4), [6.5, 0.55, len - 10],
+              [0.88, 0.88, 0.86], [aT.r, aT.u, aT.t]);
+            stage._mat = 0;
+          }, { required: true });
+        }
       }
-      every(46, (k) => {
-        const s = k / n, h = hash(k * 71 + 31);
-        if (!(s > 0.90 || s < 0.05) || h < 0.52) return;
-        motorhome(k, 1, 56 + h * 10, 10, 4, 6, { wall: [0.66 + h * 0.24, 0.66, 0.68] });
-      });
-      broadcastCompound(K(0.916), 1, 74, { vans: 3, dishes: 2, mastH: 9 });
+      // Rear motorhome / ziggurat hospitality row omitted — motorhome() posts
+      // and neonTower dface panes buried on the ridge (ground-audit: 23+7+21).
+      // Six pit blocks + race control already carry the paddock mass.
+      // Broadcast vans deferred: hillside paddock apron buried OB trucks.
       for (const s of [0.975, 0.01, 0.03]) billboard(K(s), -1, 8, 12, 4.5, [0.16, 0.42, 0.24]);
 
       groundPatch(K(0.050), -1, 6, [34, 0.18, 46], EARTH,
@@ -278,13 +342,9 @@
         ]) bankedKerbStrip(s0, s1, side, { safer: false, step: 3.0, kerbRed: red, kerbWht: WK });
       }
 
-      for (const side of [-1, 1]) {
-        let i = 0;
-        along(0.10, 0.93, 26, (k, spacing) => {
-          runoffApron(k, side, 3.2, [11, 0.16, spacing * 1.04],
-            (i++ & 1) ? EARTH : EARTH_D);
-        });
-      }
+      // Continuous runoffApron loop removed — slabs buried into the red cut
+      // banks beside hillsideTerrace (ground-audit). Corner gravel groundPatch
+      // + groundedSegments cuts keep the Algarve earth colour at the key offs.
       for (const [id, s0, s1, side] of [
         ["portimao-cut-t3", 0.150, 0.235, 1],
         ["portimao-cut-t11", 0.560, 0.640, -1],
@@ -359,9 +419,12 @@
             addBox(stage, vadd(vadd(p, a.r, -side * (w / 2 + 0.05)), a.u, bh * 0.55),
               [0.2, 1.3, d * 0.5], [0.22, 0.20, 0.20], b);
           }
-          // Dry-stone yard wall closing the cluster off.
+          // Dry-stone yard wall closing the cluster off — seat on terrain.
           stage._mat = MAT.STONE;
-          addBox(stage, vadd(vadd(a.c, a.r, side * 8), a.u, 0.8),
+          const wallC = vadd(vadd(a.c, a.r, side * 8), a.u, 0);
+          const wgy = terrainYAt(wallC[0], wallC[2]);
+          if (wgy != null) wallC[1] = wgy;
+          addBox(stage, vadd(wallC, a.u, 0.8),
             [0.6, 1.6, count * 10], [0.84, 0.80, 0.72], b);
           stage._mat = 0;
         });
@@ -373,15 +436,18 @@
 
       {
         const a = anchor(K(0.415), 1, 104);
+        const foot = a.c.slice();
+        const gy = terrainYAt(foot[0], foot[2]);
+        if (gy != null) foot[1] = Math.max(foot[1], gy - 0.2);
         const b = [a.r, a.u, a.t];
         modelGroup("portimao-moinho", {
-          center: vadd(a.c, a.u, 6), size: [16, 16, 16], basis: b,
+          center: vadd(foot, a.u, 6), size: [16, 16, 16], basis: b,
         }, (stage) => {
           stage._mat = MAT.STONE;
-          addFrustum(stage, a.c, 3.4, 2.6, 7.5, LIME, 10, b);
+          addFrustum(stage, foot, 3.4, 2.6, 7.5, LIME, 10, b);
           stage._mat = MAT.WOOD;
-          addCone(stage, vadd(a.c, a.u, 7.5), 3.0, 2.4, [0.46, 0.34, 0.26], 10, b);
-          const hub = vadd(vadd(a.c, a.u, 8.0), a.r, -3.0);
+          addCone(stage, vadd(foot, a.u, 7.5), 3.0, 2.4, [0.46, 0.34, 0.26], 10, b);
+          const hub = vadd(vadd(foot, a.u, 8.0), a.r, -3.0);
           addCyl(stage, hub, 0.28, 1.2, [0.40, 0.30, 0.22], 6, [a.r, a.t, a.u]);
           for (let i = 0; i < 4; i++) {
             const ang = i * Math.PI / 2 + 0.4;
@@ -395,7 +461,7 @@
               [a.r, dir, perp]);
           }
           stage._mat = 0;
-        });
+        }, { required: true });
       }
 
       const APARTMENT_DROP = 1.15;

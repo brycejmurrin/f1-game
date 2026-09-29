@@ -180,6 +180,10 @@ export const RULES = [
   // PHONE AS CONTROLLER: its node suite (phone-pad.test.mjs) is in steering-unit,
   // and the roll math it shares with input.js is asserted there too.
   [/^js\/input\/(phone-pad|tilt-roll)\.js/, ["steering-unit"], "phone-pad.test.mjs — the wire, the roll math and the remote source over loopback"],
+  // WebXR Phase 0: seated-rig math + controller remoteSample mapping + session
+  // lifecycle. Pure Node suite (xr-phase0.test.mjs) in steering-unit / tooling-fast;
+  // the optional iwer Playwright smoke is test:xr (not selected by path alone).
+  [/^js\/xr\//, ["steering-unit", "tooling-fast"], "xr-phase0.test.mjs — rig compose, input map, sessionInit, vendored XR addons"],
   [/^js\/ui\/scale\.js/, ["ui"], "ui-scale.spec.js"],
   [/^js\/ui\//, ["ui"], "DOM screens"],
   [/^js\/fx\//, ["ui"], "visual-only layers"],

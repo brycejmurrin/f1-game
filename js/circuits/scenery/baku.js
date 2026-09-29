@@ -189,8 +189,22 @@
       // (The five pit halls and the 1 m pit wall at .94-.02 are the engine's
       // bays and pit wall now: the halls were superseded, the wall survived at
       // 0.8-1.2 m and stood on the lane — 57 slabs measured.)
-      grandstand(0.985, -1, 4, 70, [0.42, 0.36, 0.40], [0.50, 0.30, 0.34]);
-      grandstand(0.05, -1, 4, 60, [0.42, 0.36, 0.40], [0.46, 0.30, 0.36]);
+      // Absheron — main grandstand opposite the street pit (side +1). Named
+      // after the Absheron Peninsula; covers the start/finish and pit action
+      // (grandprixgrandtours.com/baku-circuit-guide; grandprixguides.com).
+      if (grandstandEx) {
+        grandstandEx(0.99, -1, 12, 88, null, null, {
+          livery: "steel", tiers: 3, roof: "truss",
+          pylons: true, endWalls: true, suites: true,
+        });
+        grandstandEx(0.04, -1, 12, 68, null, null, {
+          livery: "steel", tiers: 2, roof: "truss",
+          pylons: true, endWalls: true,
+        });
+      } else {
+        grandstand(0.985, -1, 4, 70, [0.42, 0.36, 0.40], [0.50, 0.30, 0.34]);
+        grandstand(0.05, -1, 4, 60, [0.42, 0.36, 0.40], [0.46, 0.30, 0.36]);
+      }
       gantry(0.0, 7.5, [0.14, 0.14, 0.18]);
       gantry(0.96, 7.0, [0.14, 0.14, 0.18]);
       billboard(K(0.01), 1, 30, 14, 5, FLAME);   // K(): billboard takes a NODE, not a fraction; gap 30 clears the complex's tail
@@ -360,7 +374,7 @@
         addBox(out, vadd(a.c, a.u, 8.2), [0.18, 0.7, 2.1], [0.86, 0.72, 0.26], b);
       }
 
-      for (const s of [0.365, 0.385, 0.405, 0.515, 0.535, 0.555]) {
+      for (const s of [0.365, 0.385, 0.405, 0.555]) {
         const a = anchor(K(s), 1, 19.4);
         const b = [a.r, a.u, a.t];
         addBox(out, vadd(a.c, a.u, 4.4), [2.6, 9.2, 3.2], SAND_DARK, b);   // foot 0.2 under the plinth's
@@ -369,20 +383,24 @@
           WIN_WARM, b);
       }
 
-      cityFront(0.36, 0.537, 1, 24, {
-        minH: 6, maxH: 18, depth: 13, step: 16,   // depth = ALONG-track frontage (building() d); 14 made abutting facades coplanar (sweeps ratchet)
+      // Old-City sandstone façades — R side BEFORE the castle squeeze only.
+      // Was cityFront(0.36, 0.537) overlapping cityFront(0.42, 0.50) at gaps
+      // 24/20: 46 buried (worst 7.35 m) + 260 m² flatCoplanar with section masses
+      // on the 14 m castle rise. Squeeze zone is the wall landmark + palace.
+      cityFront(0.36, 0.380, 1, 32, {
+        minH: 6, maxH: 14, depth: 12, step: 16,
         palette: SAND_PAL, lit: true, windowCol: WIN_WARM, floor: 3,
       });
-      cityFront(0.553, 0.56, 1, 24, {
-        minH: 6, maxH: 18, depth: 13, step: 16,
+      cityFront(0.553, 0.56, 1, 26, {
+        minH: 6, maxH: 16, depth: 12, step: 16,
         palette: SAND_PAL, lit: true, windowCol: WIN_WARM, floor: 3,
       });
 
-      for (let i = 0; i < 5; i++) {
-        const dist = 34 + hash(i * 13) * 14;  // well behind the 10m wall gap
-        const a    = anchor(K(0.38 + i * 0.032), 1, dist);
+      for (let i = 0; i < 4; i++) {
+        const dist = 38 + hash(i * 13) * 12;  // well behind the 10m wall gap
+        const a    = anchor(K(0.365 + i * 0.028), 1, dist);
         const b    = [a.r, a.u, a.t];
-        const shH  = 18 + hash(i * 7) * 8;    // shaft height
+        const shH  = 16 + hash(i * 7) * 6;    // shaft height
         addCyl(out, a.c, 1.6, shH, SAND, 8, b);              // minaret shaft
         addFrustum(out, vadd(a.c, a.u, shH),   2.2, 1.4, 3, SAND_LIT, 8, b);  // balcony ring
         addCone(out,   vadd(a.c, a.u, shH + 3), 1.4, 5,   SAND_LIT, 8, b);   // cone cap
@@ -390,17 +408,19 @@
       }
 
       // Small dome silhouettes rising over the old town — addFrustum hemisphere
-      for (let i = 0; i < 5; i++) {
-        const dist = 44 + hash(i * 9) * 22;
-        const a    = anchor(K(0.39 + i * 0.032), 1, dist);
+      for (let i = 0; i < 4; i++) {
+        const dist = 48 + hash(i * 9) * 18;
+        const a    = anchor(K(0.37 + i * 0.028), 1, dist);
         const b    = [a.r, a.u, a.t];
         const dH   = 6 + hash(i * 3) * 4;
         addFrustum(out, a.c, 5.0, 0.5, dH, SAND, 8, b);
         addCyl(out, vadd(a.c, a.u, dH), 0.4, 2.5, SAND_LIT, 6, b);
       }
 
-      cityFront(0.36, 0.42, -1, 16, {
-        minH: 6, maxH: 14, depth: 10, step: 14,
+      // L-side Old City façades stop well before the squeeze climb (was 4
+      // buried at 7.2 m + 32 at 13.9 m when cityFront ran through the rise).
+      cityFront(0.36, 0.390, -1, 26, {
+        minH: 6, maxH: 12, depth: 10, step: 14,
         palette: SAND_PAL, lit: true, windowCol: WIN_WARM, floor: 2.5,
       });
 
@@ -434,15 +454,42 @@
         addBox(out, vadd(aR.c, aR.u, 22.5), [1.0, 0.8, 1.0], WIN_WARM, [aR.r, aR.u, aR.t]);
       }
 
-      // Old-town buildings set back behind castle walls (gap=20 to clear 11m walls)
-      cityFront(0.42, 0.50, 1, 20, {
-        minH: 5, maxH: 12, depth: 10, step: 12,
-        palette: SAND_PAL, lit: true, windowCol: WIN_WARM, floor: 2.5,
-      });
-      cityFront(0.42, 0.50, -1, 18, {
-        minH: 5, maxH: 12, depth: 10, step: 12,
-        palette: SAND_PAL, lit: true, windowCol: WIN_WARM, floor: 2.5,
-      });
+      // İÇERİŞƏHƏR bastion — UNESCO Walled City of Baku (whc.unesco.org/en/list/958).
+      // Behind the squeeze walls (hwZones hw:3.8 untouched); crenellated curtain.
+      {
+        const k = K(0.46);
+        const a = anchor(k, 1, 9.5);
+        const gy = terrainYAt(a.c[0], a.c[2]);
+        const c0 = [a.c[0], (gy != null ? gy : a.c[1]) - 0.25, a.c[2]];
+        const b = [a.r, a.u, a.t];
+        if (!onTrack(c0[0], c0[2], 4)) {
+          modelGroup("baku-icheri-sheher-wall", {
+            center: vadd(c0, a.u, 9), size: [12, 22, 44], basis: b,
+          }, (stage) => {
+            addBox(stage, vadd(c0, a.u, 5.5), [3.6, 11.5, 38], SAND, b);
+            // Parapet proud of the curtain face (avoids flatCoplanar with the mass)
+            addBox(stage, vadd(vadd(c0, a.r, -0.4), a.u, 11.5), [1.2, 1.0, 40], SAND_LIT, b);
+            for (let j = 0; j < 9; j++) {
+              if (j % 2 === 0) continue;
+              addBox(stage, vadd(vadd(vadd(c0, a.t, (j - 4) * 4.0), a.r, -0.4), a.u, 13.0),
+                [1.2, 2.0, 2.2], SAND, b);
+            }
+            for (const off of [-16, 16]) {
+              const tc = vadd(c0, a.t, off);
+              addCyl(stage, vadd(tc, a.u, 0), 2.8, 13.5, SAND_DARK, 8, b);
+              addCone(stage, vadd(tc, a.u, 13.5), 2.8, 4.2, SAND_LIT, 8, b);
+              addBox(stage, vadd(tc, a.u, 17.2), [0.9, 0.7, 0.9], WIN_WARM, b);
+            }
+            addBox(stage, vadd(vadd(c0, a.r, -2.0), a.u, 4.5), [1.0, 8.0, 5.5], SAND_DARK, b);
+            for (const off of [-10, 0, 10])
+              addBox(stage, vadd(vadd(vadd(c0, a.t, off), a.r, -1.9), a.u, 7.2),
+                [0.35, 0.5, 0.35], LAMP_WARM, b);
+          }, { required: true });
+        }
+      }
+
+      // No cityFront inside the squeeze — the climb buried façades up to 13.9 m
+      // (cityFront 0.42–0.50 both sides). Palace + wall landmarks take that slot.
 
       {
         const k = K(0.52);
@@ -493,50 +540,55 @@
       }
 
       {
-        const PALACE      = [0.72, 0.66, 0.54];
-        const PALACE_DARK = [0.62, 0.56, 0.44];
+        // Palace of the Shirvanshahs — 15th-c. UNESCO complex (958).
+        // https://en.wikipedia.org/wiki/Palace_of_the_Shirvanshahs
+        // Mausoleum dome 1435–36; night colour UNCERTAIN → warm limestone + sconces.
+        const PAL = [0.72, 0.66, 0.54], PD = [0.58, 0.52, 0.40], PL = [0.86, 0.76, 0.58];
         const k = K(0.50);
-
-        // Main palace structure (gap=20 to clear the castle wall at gap=1.5)
-        building(k, 1, 20, 22, 10, 28, { kind: "arch", wall: PALACE, window: WIN_WARM, floor: 2, lit: true });
-
-        // Crenellated parapet + corner turrets. The palace itself is
-        // massBlocked by the cityFront row already standing at gap 24, so these
-        // crown the RAMPART wall they overlook (wall(0.36-0.537, gap 20, h 9);
-        // top = its node's ground + 9.08) instead of an absent 10 m roof — at
-        // +10 over one anchor they hovered up to 9 m clear (ground-audit).
-        const a = anchor(k, 1, 20);
+        const a = anchor(k, 1, 32);
+        // Highest terrain under the footprint — single-point seat buried the plinth 7.6 m.
+        let baseY = a.c[1];
+        for (const [to, ro] of [[0, 0], [22, 0], [-22, 0], [0, 10], [0, -8], [18, 8], [-18, 8], [18, -6], [-18, -6], [30, 4], [-30, 4]]) {
+          const q = vadd(vadd(a.c, a.t, to), a.r, ro);
+          const g = terrainYAt(q[0], q[2]);
+          if (g != null && g > baseY) baseY = g;
+        }
+        const c0 = [a.c[0], baseY + 0.4, a.c[2]];
         const b = [a.r, a.u, a.t];
-        const wallTop = (off) => {
-          const q = vadd(a.c, a.t, off), g = terrainYAt(q[0], q[2]);
-          return (g != null ? g : a.c[1]) + 9.08 - 0.05;
-        };
-        for (let j = 0; j < 8; j++) {
-          if (j % 2 === 0) {
-            const off = (j - 3.5) * 3.8, q = vadd(a.c, a.t, off);
-            addBox(out, [q[0], wallTop(off) + 0.9, q[2]], [2.5, 1.8, 2.5], PALACE, b);
-          }
+        if (!onTrack(c0[0], c0[2], 12)) {
+          modelGroup("baku-shirvanshah-palace", {
+            center: vadd(c0, a.u, 11), size: [28, 26, 70], basis: b,
+          }, (stage) => {
+            addBox(stage, vadd(c0, a.u, 7), [18, 14, 40], PAL, b);
+            // Slim plinth — a fat one buried into the castle slope
+            addBox(stage, vadd(c0, a.u, 0.8), [16, 0.9, 36], PD, b);
+            // Portal proud of the hall face (avoids flatCoplanar with the niche)
+            addBox(stage, vadd(vadd(c0, a.r, -9.8), a.u, 5.5), [2.4, 11, 9], PL, b);
+            addBox(stage, vadd(vadd(c0, a.r, -11.0), a.u, 4), [0.8, 7, 4.5], PD, b);
+            const mau = vadd(vadd(c0, a.t, 28), a.r, 2);
+            addBox(stage, vadd(mau, a.u, 5), [11, 10, 11], PAL, b);
+            addFrustum(stage, vadd(mau, a.u, 10), 6.0, 1.8, 5.5, PL, 8, b);
+            addCone(stage, vadd(mau, a.u, 15.5), 2.0, 3.5, PL, 8, b);
+            const min = vadd(vadd(c0, a.t, -26), a.r, 2);
+            addCyl(stage, vadd(min, a.u, 0), 1.2, 16, PD, 8, b);
+            addCone(stage, vadd(min, a.u, 16), 1.2, 3.0, PL, 8, b);
+            addBox(stage, vadd(vadd(vadd(c0, a.t, -12), a.r, 8), a.u, 6), [12, 10, 14], PAL, b);
+            for (let f = 0; f < 3; f++)
+              addBox(stage, vadd(vadd(c0, a.r, -9.2), a.u, 3.8 + f * 3.6),
+                [0.35, 1.1, 36], WIN_WARM, b);
+            for (const off of [-12, 0, 12])
+              addBox(stage, vadd(vadd(vadd(c0, a.t, off), a.r, -9.3), a.u, 6.2),
+                [0.35, 0.5, 0.35], LAMP_WARM, b);
+          }, { required: true });
         }
-        for (const off of [-13, 13]) {
-          const q = vadd(a.c, a.t, off), y0 = wallTop(off), top = Math.max(a.c[1] + 16, y0 + 5);
-          addCyl(out, [q[0], y0, q[2]], 2.2, top - y0, PALACE_DARK, 8, b);
-          addCone(out, [q[0], top, q[2]], 2.2, 4, PALACE, 8, b);
-          addBox(out, [q[0], top + 3.5, q[2]], [1.0, 0.8, 1.0], WIN_WARM, b);
-        }
-
-        // Flanking wing building (east)
-        building(K(0.505), 1, 14, 12, 7, 16, { kind: "chevron", wall: PALACE, window: WIN_WARM, floor: 2, lit: true });
-
-        // Ornamental archway detail on main facade
-        addBox(out, vadd(a.c, a.u, 4), [20, 3, 1.5], [0.82, 0.76, 0.64], b);
       }
 
       {
         const STONE = [0.58, 0.52, 0.42];
         const oldCityData = [
-          [0.51, 1, 24, 10, 10, 14],
-          [0.54, 1, 36, 12, 12, 12],
-          [0.56, 1, 22, 14,  8, 16],
+          [0.51, 1, 36, 10, 10, 14],
+          [0.54, 1, 38, 12, 12, 12],
+          [0.56, 1, 30, 14,  8, 16],
         ];
         for (const [i, [s, side, dist, w, h, d]] of oldCityData.entries()) {
           building(K(s), side, dist, w, h, d, {
@@ -546,19 +598,29 @@
         }
       }
 
-      if (typeof terrace === "function") {
-        terrace(0.538, 0.552, 1, 15, {
-          rows: 6, rise: 1.45, depth: 2.4, step: 16, density: 0.5,
-          conc: [0.66, 0.58, 0.44], concAlt: [0.57, 0.50, 0.38],
-          backWall: false,   // the rampart IS the back wall
-        });
-      } else if (grandstandEx) {
-        grandstandEx(0.545, 1, 16, 60, null, null, {
+      // Icheri Sheher grandstand — castle exit (T11–12 range; guides vary).
+      // Gap 18 clears the rampart pillars at 19.4; positive rake via crowdBank.
+      if (grandstandEx) {
+        grandstandEx(0.532, 1, 18, 58, null, null, {
           livery: "sandstone", tiers: 2, roof: "cantilever",
           pylons: true, endWalls: true,
         });
-      } else {
-        grandstand(0.545, 1, 16, 60, [0.68, 0.60, 0.47], [0.70, 0.46, 0.28]);
+      }
+      if (typeof terrace === "function") {
+        terrace(0.540, 0.552, 1, 28, {
+          rows: 5, rise: 1.45, depth: 2.4, step: 16, density: 0.4,
+          conc: [0.66, 0.58, 0.44], concAlt: [0.57, 0.50, 0.38],
+          backWall: false,
+        });
+      }
+
+      // Giz Galasi (Maiden Tower stand) — T20 / start of long straight
+      // (grandprixguides.com; grandprixgrandtours.com). Gap clears Caspian rail.
+      if (grandstandEx) {
+        grandstandEx(0.830, -1, 16, 48, null, null, {
+          livery: "scaffold", tiers: 2, roof: "truss",
+          pylons: true, endWalls: true,
+        });
       }
 
       wall(0.58, 0.96, -1, 5, 1.4, [0.76, 0.72, 0.64], 0.6);

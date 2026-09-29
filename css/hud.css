@@ -52,14 +52,14 @@
    --hud-z is each band's OWN effective zoom, and every anchor below divides by
    THAT rather than by --hud-scale: the compensation has to use the number the
    element is actually zoomed by, or a capped band double-counts its notch. */
-.hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors, #hud-limits,
+.hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors, #hud-limits, #hud-mirror,
 #lights, #announce { --hud-z: var(--hud-z-top, var(--hud-scale)); zoom: var(--hud-z); }
 .hud-bottom { --hud-z: var(--hud-z-bot, var(--hud-scale)); zoom: var(--hud-z); }
 /* Re-derive the compensated vw against the band's EFFECTIVE zoom: the :root
    token divides by the raw slider, but these subtrees paint at the fitHud-
    capped --hud-z — two adjacent declarations on #announce used to divide by
    two different numbers. */
-.hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors, #hud-limits,
+.hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors, #hud-limits, #hud-mirror,
 #lights, #announce, .hud-bottom { --vwzh: calc(1vw / var(--hud-z)); }
 .hud-top {
   position: absolute;
@@ -580,12 +580,40 @@ body.hud-met-compact #hud-tyre { display: none !important; }
   opacity: 0.90;
   background: rgba(8,8,14,0.55); box-shadow: 0 2px 8px rgba(0,0,0,0.6);
 }
+/* REAR-VIEW MIRROR. An empty frame: js/render/shared/mirror-pass.js measures
+   this box every half second and the renderer paints the mirror camera into
+   exactly its border box, so what the CSS says here IS where the image goes.
+   Under the centred timing band (--hud-top-h is the band's measured height,
+   published by fitHud in this zoom group's units); at the very top in
+   BROADCAST, whose tower lives top-left. Square corners on purpose: the image
+   is a rectangle, and a rounded frame would leave its corners showing. The
+   radio card and the flag banner, which share the centre column, step down
+   by the mirror's height while it shows (body.hud-mirror-on). */
+#hud-mirror {
+  --mir-w: clamp(150px, calc(24 * var(--vwzh)), 340px);
+  position: absolute;
+  top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 8px);
+  left: 50%; transform: translateX(-50%);
+  width: var(--mir-w); height: calc(var(--mir-w) * 2 / 7);
+  box-sizing: border-box;
+  outline: 2px solid var(--carbon);
+  pointer-events: none;
+}
+body.hud-prof-broadcast #hud-mirror { top: calc(8px + var(--sat) / var(--hud-z)); }
+body.hud-mirror-on #announce {
+  top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 18px
+    + clamp(150px, calc(24 * var(--vwzh)), 340px) * 2 / 7);
+}
 #hud-flag {
   position: absolute; top: calc(100px + var(--sat) / var(--hud-z)); left: 50%; transform: translateX(-50%);
   padding: calc(var(--gap) * 0.5) calc(var(--gap) * 4 / 3); border-radius: var(--r-sm); font-weight: 800;
   background: #ffd600; color: #000;
   letter-spacing: 0.06em; white-space: nowrap;
   box-shadow: 0 2px 10px rgba(0,0,0,0.55);
+}
+body.hud-mirror-on #hud-flag {
+  top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 18px
+    + clamp(150px, calc(24 * var(--vwzh)), 340px) * 2 / 7);
 }
 /* B1 caution flag variants (debris cautions): local yellow, VSC, safety car. */
 #hud-flag.flag-yellow { background: #ffd600; color: #000; }

@@ -56,18 +56,22 @@
             const h = 2.0 + t * 2.9;
             addBox(out, vadd(a.c, a.u, h * 0.5), [3.9, h, seg],
               t % 3 === 2 ? EARTH_D : (t & 1 ? STONE_D : EARTH), b);
-            // Crowd band. The Turkish GP crowd was famously a sea of red.
-            addBox(out, vadd(a.c, a.u, h + 0.7), [3.0, 1.4, seg],
+            // Crowd band: sink 5 cm into the terrace (supported via BFS touch)
+            // and shorten/nudge on t so end-walls are not flat-coplanar.
+            addBox(out, vadd(vadd(a.c, a.t, (t & 1 ? 0.35 : -0.35)), a.u, h + 0.55),
+              [2.8, 1.2, seg * 0.82],
               CROWD[(i + t) % 3 === 0 ? 0 : (i + t) % 3], b);
           }
           i++;
         });
+        // Revetment sits inside the first terrace row (was 13.5 overlapping
+        // the 16 m earth face → flatCoplanar + shallow bury on the grade).
         groundedSegments({
           id: "istanbul-turn8-revetment",
           points: [0, 1, 2, 3, 4, 5, 6].map((j) => ({
-            k: K(0.340 + j * 0.020), side: 1, dist: 13.5,
+            k: K(0.340 + j * 0.020), side: 1, dist: 12.2,
           })),
-          width: 2.4, height: 2.6, color: STONE_D,
+          width: 2.0, height: 2.2, color: STONE_D,
         });
       }
       groundPatch(K(0.400), 1, 8, [56, 0.18, 140], GRAVEL,
@@ -91,6 +95,39 @@
           livery: i === 1 ? "crimson" : "sandstone",
           tiers: 2, roof: "cantilever", suites: i === 1, endWalls: true, pylons: true,
         });
+      }
+      // Turn 8 secondary hospitality / terrace (TOSFED 2027 revamp — The Race
+      // 2026-09-22: "top quality secondary hospitality – especially at our
+      // famous Turn 8"). Modest two-tier club on the outside bank, outward
+      // of the earth amphitheatre (~44 m) and short of the Silver 4 stands
+      // (gap 54). Layout geometry stays the 2011 circuit (no renovated plan
+      // is public yet); this is a low hospitality mass, not a VIP tower.
+      {
+        const a = anchor(K(0.422), 1, 50);
+        const b = [a.r, a.u, a.t];
+        if (!onTrack(a.c[0], a.c[2], 8)) {
+          modelGroup("istanbul-turn8-hospitality", {
+            center: vadd(a.c, a.u, 5.0), size: [12, 12, 22], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.STONE;
+            seat.box(stage, a.c, [10, 0.7, 18], STONE_D, b);
+            // Lower terrace deck facing the track.
+            addBox(stage, vadd(vadd(a.c, a.r, -1.2), a.u, 2.0), [8.0, 3.6, 16], STONE, b);
+            stage._mat = MAT.GLASS;
+            addBox(stage, vadd(vadd(a.c, a.r, -5.0), a.u, 2.4), [0.3, 2.2, 14],
+              [0.28, 0.34, 0.40], b);
+            stage._mat = MAT.STONE;
+            // Upper club tier set back, canopy lip in Turkish red.
+            addBox(stage, vadd(vadd(a.c, a.r, 2.0), a.u, 5.8), [6.2, 3.2, 14], STONE_L, b);
+            addBox(stage, vadd(vadd(a.c, a.r, 2.0), a.u, 7.6), [6.8, 0.4, 15], STONE_D, b);
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(vadd(a.c, a.r, -0.8), a.u, 7.8), [6.5, 0.25, 15], TURK_RED, b);
+            for (const t of [-5, 5])
+              addCyl(stage, vadd(vadd(a.c, a.r, -4.5), a.t, t), 0.14, 7.6,
+                [0.72, 0.68, 0.60], 5, b);
+            stage._mat = 0;
+          }, { required: true });
+        }
       }
 
       {
@@ -165,9 +202,12 @@
         }, (stage) => {
           stage._mat = MAT.STONE;
           addBox(stage, vadd(a.c, a.u, 5.5), [17, 11, 28], STONE, b);
-          addBox(stage, vadd(a.c, a.u, 11.4), [18, 1.2, 29], STONE_L, b);
-          addBox(stage, vadd(vadd(a.c, a.r, 2.0), a.u, 13.4 - i * 1.4),
-            [11, 2.8, 22], STONE_D, b);                          // stepped cap
+          // Roof slab + stepped cap: seat the cap ON the roof (bottoms must
+          // touch so ground-audit BFS keeps it supported) but shrink/offset so
+          // the shared face area stays under the flatCoplanar threshold.
+          addBox(stage, vadd(a.c, a.u, 11.4), [18, 1.0, 29], STONE_L, b);
+          addBox(stage, vadd(vadd(a.c, a.r, 2.8), a.u, 13.05 - i * 1.4),
+            [9.5, 2.3, 18], STONE_D, b);
           stage._mat = MAT.GLASS;
           for (const hgt of [3.4, 8.0])
             addBox(stage, vadd(vadd(a.c, a.r, -8.6), a.u, hgt), [0.35, 2.0, 26],
@@ -181,11 +221,19 @@
       }
       every(46, (k) => {
         const s = k / n, h = hash(k * 71 + 31);
-        if (!(s > 0.90 || s < 0.05) || h < 0.52) return;
-        motorhome(k, 1, 56 + h * 10, 10, 4, 6, { wall: [0.64 + h * 0.26, 0.64, 0.66] });
+        if (!(s > 0.90 || s < 0.05) || h < 0.55) return;
+        // Further out on flatter apron (was 56+h*10 → bury on the grade).
+        if (h < 0.72) return;
+        motorhome(k, 1, 80 + h * 16, 10, 4, 6, { wall: [0.64 + h * 0.26, 0.64, 0.66] });
       });
       broadcastCompound(K(0.915), 1, 72, { vans: 3, dishes: 2, mastH: 9 });
       for (const s of [0.975, 0.01, 0.03]) billboard(K(s), -1, 8, 12, 4.5, [0.86, 0.16, 0.14]);
+
+      // Silver 3 — uncovered stand on the right after Turn 6, before the T8
+      // amphitheatre (grandprixgrandtours Turkey circuit guide; Biletix 2021
+      // seating map: Silver 3 at Turn 6 / 6–7, open-top numbered seats).
+      grandstandEx(0.290, 1, 24, 48, null, null,
+        { livery: "sandstone", roof: "none", endWalls: true });
 
       groundPatch(K(0.055), -1, 6, [34, 0.18, 48], GRAVEL,
         { id: "istanbul-t1-gravel", samples: 8 });
@@ -202,7 +250,13 @@
       groundPatch(K(0.905), -1, 5, [26, 0.18, 34], GRAVEL,
         { id: "istanbul-t13-gravel", samples: 6 });
       tyreWall(0.888, 0.920, -1, 4, [0.85, 0.78, 0.20]);   // a stack at 0.922 (T14 apex) stood on the road
-      grandstandEx(0.900, 1, 20, 76, null, null, { livery: "sandstone", endWalls: true });
+      // Silver 8 — final-corner complex (guide: Silver 8 at T12–14 / final
+      // corner). Was grandstandEx(0.900, 1, 20, 76): every crowdBank riser
+      // hit the neighbouring-leg fold (rejBox) → hollow 2-prim shell, slope 0
+      // (same Bahrain #399 failure mode). s=0.910 gap=24 clears the fold;
+      // open-top per Biletix / GP Destinations seating notes.
+      grandstandEx(0.910, 1, 24, 52, null, null,
+        { livery: "sandstone", roof: "none", endWalls: true });
       marshalPost(K(0.898), 1, 9);
 
       for (const [s0, s1] of [[0.09, 0.33], [0.47, 0.59], [0.65, 0.75], [0.79, 0.87]]) {
@@ -250,7 +304,7 @@
           addBox(out, vadd(vadd(vadd(a.c, a.u, h - 2.4), a.t, 1.4), a.r, -0.1),
             [0.1, 1.0, 1.0], [0.95, 0.94, 0.92], b);
       }
-      for (const [s, side, gap] of [[0.062, 1, 30], [0.615, -1, 28], [0.900, 1, 28]])
+      for (const [s, side, gap] of [[0.062, 1, 30], [0.615, -1, 28], [0.910, 1, 28]])
         cameraTower(K(s), side, gap, { h: 16, col: [0.62, 0.58, 0.52] });
 
       {
@@ -271,20 +325,21 @@
           stage._mat = MAT.METAL;
           addBox(stage, vadd(vadd(a.c, a.r, -3.2), a.u, 12.0), [0.3, 1.6, 13], TURK_RED, b);
           stage._mat = 0;
-        });
+        }, { required: true });
       }
 
       for (const [id, s, side, gap] of [
-        ["t1", 0.070, 1, 54], ["t4", 0.170, -1, 56],
-        ["t9", 0.640, 1, 56], ["t12", 0.790, -1, 54],
+        ["t1", 0.070, 1, 58], ["t4", 0.170, -1, 60],
+        ["t9", 0.640, 1, 60], ["t12", 0.790, -1, 58],
       ]) {
-        for (let t = 0; t < 3; t++) {
+        for (let t = 0; t < 2; t++) {
           groundedSegments({
             id: `istanbul-hillside-${id}-${t + 1}`,
-            points: [0, 1, 2, 3, 4].map((j) => ({
-              k: K(s + (j - 2) * 0.010), side, dist: gap + t * 17,
+            points: [0, 1, 2, 3].map((j) => ({
+              k: K(s + (j - 1.5) * 0.012), side, dist: gap + t * 24,
             })),
-            width: 12, height: 2.4 + t * 1.8,
+            // Two tiers, shorter chords — cuts tris and clears self-flatCoplanar.
+            width: 8.0, height: 1.4 + t * 1.1,
             color: t & 1 ? [0.66, 0.60, 0.46] : [0.74, 0.68, 0.52],
           });
         }

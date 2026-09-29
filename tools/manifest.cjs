@@ -247,6 +247,12 @@ const FULL = [
   "js/perf/metrics-overlay.js",
   "js/camera/vantage.js",
   "js/camera/mode-switch.js",
+  // WebXR Phase 0 — seated immersive-vr (capability, rig math, input, UI, boot).
+  "js/xr/xr-rig.js",
+  "js/xr/xr-input.js",
+  "js/xr/xr-session.js",
+  "js/xr/xr-ui.js",
+  "js/xr/xr-boot.js",
   "js/ui/hud.js",
   "js/ui/results-sheet.js",
   "js/race/quali-model.js",
@@ -267,6 +273,7 @@ const FULL = [
   // has to satisfy "before whatever consumes it" — game.js, last as always.
   "js/car/car-draw.js",   // car mesh/atlas caches, decal queue, cockpit rig, planted wheels (CarDraw.create(G, deps)), extracted from game.js
   "js/render/shared/shadow-pass.js",   // sun / car / lamp shadow maps, snap caches, caster pools (ShadowPass.create(G, deps)), extracted from game.js
+  "js/render/shared/mirror-pass.js",   // HUD rear-view mirror: second camera + rival poses, gfx.mirrorBegin/End (MirrorPass.create(G, deps))
   "js/game.js",
 ];
 
@@ -495,6 +502,7 @@ const HARD_EDGES = [
   ["js/career/career.js", "js/race/quali-model.js"],    // quali reads Career.rnd/devFor for its spread
   ["js/physics/aero-zones.js", "js/game.js"],      // game.js calls AeroZones.create(G) at eval time
   ["js/fx/skidmarks.js", "js/game.js"],      // game.js calls SkidMarks.create() at eval time
+  ["js/render/shared/mirror-pass.js", "js/game.js"],   // game.js calls MirrorPass.create(G, deps) at eval time
   ["js/race/race-control.js", "js/game.js"],   // game.js calls RaceControl.create(G) at eval time
   ["js/race/sporting-regs.js", "js/game.js"],  // game.js calls SportingRegs.createPassWatch() at eval time
   ["js/core/mat4.js", "js/race/real-replay.js"],   // RealReplay binds M4.clamp at eval

@@ -114,9 +114,36 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     suzuka: ["suzuka-crossover-portal", "suzuka-spoon-terrace", "suzuka-130r-bank"],
     // Wave 4 — Interlagos / COTA / Mexico / Yas Marina
     interlagos: ["interlagos-senna-s", "interlagos-main-tribuna", "interlagos-sp-skyline"],
+    // Wave 6 — Imola (Partenza opposite pits + Racetrack Tower over Tilke pit)
+    imola: ["imola-partenza-stands", "imola-racetrack-tower"],
     cota: ["cota-amphitheater", "cota-turn1-big-red", "cota-main-grandstand"],
+    // Wave 6 — Portimão / Algarve: six independent paddock blocks (Dimeconsult
+    // A–F) + Grandstand Norte at the T1 downhill; race-control + moinho kept.
+    portimao: [
+      "portimao-pit-blocks",
+      "portimao-t1-stands",
+      "portimao-race-control",
+      "portimao-moinho",
+    ],
     mexico: ["mexico-foro-sol-entry", "mexico-peraltada-stand", "foro-scoreboard"],
+    // Wave 6 — Sochi Olympic Park venues + Ice Cube + Olympic Park station
+    sochi: [
+      "sochi-fisht-stadium",
+      "sochi-bolshoy-dome",
+      "sochi-adler-arena",
+      "sochi-flame-tower",
+      "sochi-iceberg-palace",
+      "sochi-olympic-rings",
+      "sochi-race-control",
+      "sochi-shayba-arena",
+      "sochi-ice-cube",
+      "sochi-olympic-park-station",
+    ],
     abudhabi: ["abudhabi-ferrari-world", "abudhabi-marina", "abudhabi:pit-exit-tunnel-portal"],
+    // Wave 6 — Albert Park (Piastri stand 2026, MSAC, Lakeside Stadium)
+    albert_park: ["albert-piastri-stand", "albert-msac", "albert-lakeside-stadium"],
+    // Nürburgring GP-Strecke — Burg + Coca-Cola Kurve + race control
+    nurburgring: ["nurburgring-burg-nurburg", "nurburgring-coca-cola-kurve", "nurburgring-race-control"],
     // Wave 5 — Shanghai International Circuit (wing piers are literal
     // modelGroups; decks stay on overheadSpan. pudong/boardwalk stay required
     // at runtime but their emit bodies exceed the 2200-char BATCH-01 window).
@@ -140,10 +167,73 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     catalunya: ["catalunya-main-grandstand", "catalunya-pit-end-scoreboard", "catalunya-race-control"],
     // Bahrain hollow-stand fix — T1 naming marker (Michael Schumacher Corner, 2014)
     bahrain: ["bahrain-sakhir-tower", "bahrain-university-grandstand", "bahrain-schumacher-corner"],
+    // Wave 6 — Baku Old City (Shirvanshah palace + İçerişəhər wall)
+    baku: ["baku-shirvanshah-palace", "baku-icheri-sheher-wall"],
+    // Wave 6 — Red Bull Ring (Steiermark / Niki Lauda Kurve stand at T1)
+    redbull: ["redbull-lauda-kurve-stand"],
     // Wave 6 — Madring / La Monumental inside rake + masts
     madrid: ["madrid-monumental-stands"],
+    // Wave 6 — Istanbul Park (T8 hospitality + race control + stone portal)
+    istanbul: ["istanbul-turn8-hospitality", "istanbul-race-control", "istanbul-stone-portal"],
     // Wave 6 — Zandvoort F1 Fanzone Ferris wheel (festival landmark)
     zandvoort: ["zandvoort-ferris-wheel"],
+    // Wave 6 — Montreal hairpin / Wall of Champions / Biosphère
+    montreal: [
+      "montreal-hairpin-grandstands",
+      "montreal-wall-of-champions-stand",
+      "montreal-biosphere",
+    ],
+    // Wave 6 — Mugello Centrale + Poggio Secco + Materassi (hillside GA at
+    // Arrabbiata / San Donato is spectatorHill, not a required modelGroup).
+    mugello: [
+      "mugello-centrale-stand",
+      "mugello-poggio-secco-stand",
+      "mugello-materassi-stand",
+    ],
+    // Wave 6 — Kyalami Highveld landmarks (pit/race-control already required;
+    // main GS + headgear/windpump/clubhouse made explicit this wave).
+    kyalami: [
+      "kyalami-pit-block",
+      "kyalami-race-control",
+      "kyalami-main-grandstand",
+      "kyalami-headgear",
+      "kyalami-windpump",
+      "kyalami-clubhouse",
+    ],
+    // Wave 6 — Hockenheim Motodrom ring (Süd + Nord permanent stands)
+    hockenheim: [
+      "hockenheim-motodrom-screen",
+      "hockenheim-mercedes-tribune",
+      "hockenheim-sued-tribune",
+      "hockenheim-nord-tribune",
+      "hockenheim-race-control",
+      "hockenheim-infield-compound",
+    ],
+    // Wave 6 — Paul Ricard F1-era landmarks (Blue Zone already draped;
+    // main stand / Beausset hill / 2019 pit entry / aerodrome / Provençal hut)
+    paul_ricard: [
+      "paul-ricard-main-grandstand",
+      "paul-ricard-beausset-hill",
+      "paul-ricard-pit-entry-2019",
+      "paul-ricard-race-control",
+      "paul-ricard-aerodrome",
+      "paul-ricard-airfield-tower",
+      "paul-ricard-cabanon",
+      "paul-ricard-drywall",
+    ],
+    // Wave 6 — Buenos Aires (Gálvez): classic pit/tower/portico + Curvón
+    // terrace, Confitería café, 27 de Febrero talud gate. Flag avenue is
+    // UNCERTAIN — generic poles only, no required modelGroup.
+    buenos_aires: [
+      "baires-pit-block",
+      "baires-control-tower",
+      "baires-portico",
+      "baires-terrace-curvon",
+      "baires-confiteria",
+      "baires-talud-gate",
+    ],
+    // Wave 6 — Fuji Speedway Hotel + Motorsports Museum (west side, 2022)
+    fuji: ["fuji-speedway-hotel"],
   };
   for (const [track, ids] of Object.entries(expected)) {
     const body = landmarkSource(track);
