@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // test-solo — re-run ONE spec (or one grep) alone, on a box that is actually
-// @doc Re-runs ONE spec (or `-g` grep) alone at `APEX_WORKERS=1`, refusing (exit 3) while the box is busy (`--max-load`); foreground — background it with a log.
+// @doc Re-runs ONE spec (or `-g` grep) alone at `APEX_WORKERS=1`; refuses (exit 3) while busy (`--max-load`). Foreground.
+// Full description: Re-runs ONE spec (or `-g` grep) alone at `APEX_WORKERS=1`, refusing (exit 3) while the box is busy (`--max-load`); foreground — background it with a log.
 // @section runner
 // quiet, and refuse to pretend otherwise.
 //

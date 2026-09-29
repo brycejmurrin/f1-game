@@ -1,5 +1,6 @@
 // Change-aware CI budget derivation. See docs/archive/research/TEST-AUDIT-2026-08.md §3.
-// @doc Can a change-aware CI job run what it selects? Bills each spec from `spec-timings.json`, else the measured llvmpipe fallback (7.5 s/test).
+// @doc Can a change-aware CI job run what it selects? Bills each spec from `spec-timings.json`, else 7.5 s/test (llvmpipe).
+// Full description: Can a change-aware CI job run what it selects? Bills each spec from `spec-timings.json`, else the measured llvmpipe fallback (7.5 s/test).
 // @section runner
 // Measures per-spec runtime from CI and accounts for retries/timeouts.
 import fs from "node:fs";

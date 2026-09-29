@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// @doc Prints the GENERATED doc paths (`TARGET` of every gen-*.mjs doc generator), one per line; the hooks derive their block list from it.
+// @doc Prints the GENERATED doc paths (`TARGET` of every gen-*.mjs), one per line; the hooks derive their block list from it.
+// Full description: Prints the GENERATED doc paths (`TARGET` of every gen-*.mjs doc generator), one per line; the hooks derive their block list from it.
 //
 // The commit hook (.claude/hooks/bash-guard.sh) treats a commit as prose-only
 // — and skips the ratchets and guards — when every staged path is docs, EXCEPT

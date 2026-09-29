@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// @doc Contact sheet + JSON of the pre-race FLYBY shot sequence, flagging a camera inside scenery. `--track a,b --frames --out --u --shots`.
+// @doc Contact sheet + JSON of the pre-race FLYBY shots, flagging a camera in scenery. `--track --frames --out --u --shots`.
+// Full description: Contact sheet + JSON of the pre-race FLYBY shot sequence, flagging a camera inside scenery. `--track a,b --frames --out --u --shots`.
 /*
  * flyby.mjs — SEE THE FLYBY WITHOUT RACING IT.
  *

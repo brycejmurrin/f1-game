@@ -1,6 +1,7 @@
 "use strict";
 // solid-in-road.cjs — find GROUNDED solids standing on the tarmac a car races on.
-// @doc Solid-in-the-road audit: `solidsInRoad(track, prims)` lists shipped prop/glass primitives whose XZ hull stands on the tarmac.
+// @doc Solid-in-road audit: `solidsInRoad(track, prims)` lists shipped prop/glass prims whose XZ hull stands on tarmac.
+// Full description: Solid-in-the-road audit: `solidsInRoad(track, prims)` lists shipped prop/glass primitives whose XZ hull stands on the tarmac.
 // @skill scenery-dress
 //
 // The sibling of tests/unit/props-over-road.test.mjs's surface audit, for the

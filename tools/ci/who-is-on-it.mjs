@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // who-is-on-it.mjs — who pushed what, recently, and who has CLAIMED what, before you fix a red you did not cause.
-// @doc Recent pushes per remote branch, which touched the paths you name, and the live claims under claude/claims/* — the claim check before fixing a shared red.
+// @doc Recent pushes per branch, who touched your paths, live `claude/claims/*` claims: the check before fixing a shared red.
+// Full description: Recent pushes per remote branch, which touched the paths you name, and the live claims under claude/claims/* — the claim check before fixing a shared red.
 // @skill check-changes
 //
 // docs/notes/SHARED-BRANCH-COORDINATION.md: three sessions fixed one bug on

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // html-sink-lint — every HTML sink in js/ writes a constant, or is audited.
-// @doc Flags `.innerHTML =` / `.outerHTML =` / `insertAdjacentHTML()` in js/ whose HTML is not constant and not in the audited allowlist.
+// @doc Flags non-constant `.innerHTML =` / `.outerHTML =` / `insertAdjacentHTML()` sinks in js/ outside the audited allowlist.
+// Full description: Flags `.innerHTML =` / `.outerHTML =` / `insertAdjacentHTML()` in js/ whose HTML is not constant and not in the audited allowlist.
 // @section runner
 //
 //   node tools/check/html-sink-lint.mjs          # list non-constant sinks, audited or not

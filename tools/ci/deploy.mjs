@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // deploy.mjs — the ONE deploy command (2026-09-01).
-// @doc the ONE deploy: fetch → merge → tooling-fast → the Pages gate's node suites → sweeps if the union moves geometry (else only the targeted sweeps that read it) → verify-track → push the deploy branch (or --pr); pages.yml stamps it
+// @doc The ONE deploy: fetch, merge, tooling-fast, gate node suites, sweeps if geometry moves, verify-track, push (or `--pr`).
+// Full description: the ONE deploy: fetch → merge → tooling-fast → the Pages gate's node suites → sweeps if the union moves geometry (else only the targeted sweeps that read it) → verify-track → push the deploy branch (or --pr); pages.yml stamps it
 //
 //   node tools/ci/deploy.mjs --plan        # print the steps + the union diffstat, run nothing
 //   node tools/ci/deploy.mjs               # fetch → merge → tooling-fast → the Pages gate's node

@@ -1,4 +1,5 @@
-/** @doc Single source for "which sweeps does this diff need?" — the fleet trigger (derived from the track VM's own module list) and the per-suite targeted table.
+/** @doc Single source for "which sweeps does this diff need?": the fleet trigger (from TRACK_VM) and the targeted-suite table.
+ * Full description: Single source for "which sweeps does this diff need?" — the fleet trigger (derived from the track VM's own module list) and the per-suite targeted table.
  *
  * ONE pattern, two consumers, written once in a syntax both speak:
  *   - .github/workflows/ci.yml reads GEOMETRY_ERE through `node -e` and hands
