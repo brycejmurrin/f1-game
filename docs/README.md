@@ -37,7 +37,7 @@ drives it.
 | [COMPONENTS.md](COMPONENTS.md) | Every class family in `css/`, the file that owns it, which classes are defined in more than one file — plus the screen x viewport layout axes and what the layout probe measures. |
 | [CODE-STANDARDS.md](CODE-STANDARDS.md) | The JavaScript house style: module shape, naming, declarations, functions, duplication, and the comment policy — plus the frozen surfaces a style pass must never rename. |
 | [PLATFORM.md](PLATFORM.md) | iOS/Safari quirks, controller support, and what a static GitHub Pages host does and does not give you. |
-| [PACKAGING.md](PACKAGING.md) | Desktop (Electron) and Android (Capacitor) shells around the stamped Pages site; sideload APK loop; Android WebView unknowns. |
+| [PACKAGING.md](PACKAGING.md) | Desktop (Electron) packaging — frozen appId, version `1.0.<build>`, electron-builder — and Android (Capacitor) sideload APK loop / WebView unknowns. |
 | [BUGS.md](BUGS.md) | Current verified open/fixed shortlist from architecture/bug-hunt passes (not the full chronological ledger). |
 | [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) | Contributor orientation: boot, layers, data flow, edit map (complements the full contract in ARCHITECTURE.md). |
 

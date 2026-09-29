@@ -149,12 +149,15 @@
     "tests/unit/deploy-stamp.test.mjs",
     "tests/unit/deploy-tool.test.mjs",
     "tests/unit/desktop-app-protocol.test.mjs",
+    "tests/unit/desktop-builder-config.test.mjs",
     "tests/unit/desktop-native.test.mjs",
+    "tests/unit/desktop-notices.test.mjs",
     "// Electron desktop spike: stage allow-list + stamp, native SW/Spotify gates,",
     "// app:// Range/MIME/traversal (Electron #38749), unpacked-bin helper,",
     "// ship-filter staged path list (stage-files.mjs).",
     "tests/unit/desktop-stage.test.mjs",
     "tests/unit/desktop-unpacked-bin.test.mjs",
+    "tests/unit/desktop-version.test.mjs",
     "tests/unit/digital-steer.test.mjs",
     "tests/unit/docs-integrity.test.mjs",
     "tests/unit/driving-coach.test.mjs",
@@ -593,6 +596,18 @@
         "tests/specs/collision*.spec.js"
       ],
       "kind": "browser"
+    },
+    "test:desktop-unit": {
+      "files": [
+        "tests/unit/desktop-app-protocol.test.mjs",
+        "tests/unit/desktop-builder-config.test.mjs",
+        "tests/unit/desktop-native.test.mjs",
+        "tests/unit/desktop-notices.test.mjs",
+        "tests/unit/desktop-stage.test.mjs",
+        "tests/unit/desktop-unpacked-bin.test.mjs",
+        "tests/unit/desktop-version.test.mjs"
+      ],
+      "kind": "node"
     },
     "test:docs-guards": {
       "files": [
@@ -1043,6 +1058,7 @@
         "tests/specs/menu-traversal.spec.js",
         "tests/specs/music-library.spec.js",
         "tests/specs/rotation-recovery.spec.js",
+        "tests/specs/title-menu-rotation.spec.js",
         "tests/specs/ui-button-touch.spec.js",
         "tests/specs/ui-redesign.spec.js",
         "tests/specs/ui-resize.spec.js",
