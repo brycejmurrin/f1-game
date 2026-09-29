@@ -327,6 +327,16 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     // Wave 6 — Buddh International Circuit: sea-wave aluminium cantilever
     // main grandstand opposite the pits (ENR 2011; slideshare dims UNCERTAIN).
     buddh: ["buddh-main-grandstand"],
+    // Wave 6 — Anderstorp / Scandinavian Raceway: concrete pressläktare,
+    // original speakertorn, 1968 stationsbyggnad, Flight Straight hangars.
+    // Historical F1 pits halfway round NOT built (game startFrac 0 + modern
+    // pit straight; see docs/tracks/anderstorp.md UNCERTAIN).
+    anderstorp: [
+      "anderstorp-press-stand",
+      "anderstorp-speaker-tower",
+      "anderstorp-stations-1968",
+      "anderstorp-flight-hangars",
+    ],
   };
   for (const [track, ids] of Object.entries(expected)) {
     const body = landmarkSource(track);
