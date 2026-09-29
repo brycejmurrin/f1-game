@@ -296,7 +296,8 @@ test("SETTINGS still has GRAPHICS: HIGH and a door-index stack", () => {
   }
   const nav = read("js/ui/settings-tabs.js");
   assert.match(nav, /controls: document\.getElementById\("pm-open-controls"\)/);
-  assert.match(nav, /Object\.entries\(doors\)\) if \(door\) door\.onclick/);
+  assert.match(nav, /for \(const \[id, door\] of Object\.entries\(doors\)\) if \(door\) door\.onclick = \(\) => \{/);
+  assert.match(nav, /show\(id, true, \(\) => \{ if \(onSelect\) onSelect\(id\); \}\)/);
   assert.match(read("js/ui/scale.js"), /if \(uiEl\) uiEl\.oninput/);
   assert.doesNotMatch(html, /id="pm-category-tabs"|id="pm-tab-more"|id="pm-panel-more"/);
   const rules = cssRules(read("css/components.css"));

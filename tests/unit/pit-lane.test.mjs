@@ -1259,6 +1259,37 @@ test("the player's plan starts on the set the player is on", () => {
   assert.ok(hyper.lapsAt[0] <= 7, `a 6-lap set cannot be planned to lap ${hyper.lapsAt[0]}`);
 });
 
+test("an early stop re-cuts the plan instead of calling it DONE, and the strip still sums to the race", () => {
+  // A 1-stop plan boxing on lap 15; the player stops on lap 3 (damage). The
+  // stop index moved past the plan, the HUD read "1-STOP · DONE" with 17
+  // laps left on a set that cannot do them, and replan bailed on it.
+  const { pits, car } = strategySession(20);
+  const c = car(0);
+  c.lap = 4; c.pitStops = 1; c.lapsOnSet = 1; c.tyreWear = 0.12;     // wearing fast: ~8 laps in it, 17 to go
+  c.tyre = { code: "M", life: 0.74, tread: 0 };
+  c.tyreLog = [{ code: "S", lap0: 0, lap1: 3 }, { code: "M", lap0: 3, lap1: null }];
+  c.pitPlan = { stops: 1, seq: ["soft", "medium"], stints: [15, 5], lapsAt: [15], pitLossLaps: 0.2 };
+  assert.match(pits.planInfo(c).text, /DONE/, "the precondition: the served slot reads as done");
+  assert.equal(pits.replan(c), true);
+  assert.equal(c.pitPlan.lapsAt[0], 3, `the stop made is where it was made: ${c.pitPlan.lapsAt}`);
+  assert.ok(c.pitPlan.lapsAt[1] > 4 && c.pitPlan.lapsAt[1] < 20, `…and one more to come: ${c.pitPlan.lapsAt}`);
+  assert.doesNotMatch(pits.planInfo(c).text, /DONE/);
+  assert.equal(c.pitPlan.stints.reduce((a, v) => a + v, 0), 20, `the stints cover the race: ${c.pitPlan.stints}`);
+  assert.equal(c.pitPlan.stints.length, c.pitPlan.stops + 1);
+});
+
+test("in a wet race an AI's planned stop fits the wet tread, not the plan's slick", () => {
+  // The plan's classes are dry. On inters, a planned stop fitted a medium —
+  // the wrong tread — and the car was back in a lap later for the weather.
+  const { pits, car } = commitSession({ weather: "rain" });
+  const c = car(0);
+  c.human = false; c.local = false; c.lap = 8; c.pitStops = 0; c.tyreWear = 0.4;
+  c.tyre = { code: "W", tread: 2 };
+  c.pitPlan = { stops: 1, seq: ["medium", "hard"], stints: [8, 17], lapsAt: [8] };
+  assert.notEqual(pits.think(c), "", "the planned stop fires");
+  assert.equal(c.pitNext && c.pitNext.tread, 2, `…onto wets: ${JSON.stringify(c.pitNext)}`);
+});
+
 test("lossS is the lane's net cost in seconds, and estimate agrees with it off a caution", () => {
   const { pits, car } = commitSession();
   const s = pits.lossS();
