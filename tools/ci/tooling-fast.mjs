@@ -53,6 +53,9 @@ const LOGFILE = path.join(LOGDIR, "tooling-fast-suite.log");
 /** @type {readonly string[]} */
 export const TOOLING_FAST_FILES = Object.freeze([
   // @gen-test-groups:begin — generated from tests/groups.json; do not hand-edit
+  // The HUD rear-view mirror's game side (js/render/shared/mirror-pass.js) in a VM:
+  // when it shows, the pass order, and the main camera handed back. ~0.1 s.
+  "tests/unit/mirror-pass.test.mjs",
   "tests/unit/ghost.test.mjs",
   "tests/unit/ghost-share.test.mjs",
   // The three suites the feature batches added. Each is pure rules over a

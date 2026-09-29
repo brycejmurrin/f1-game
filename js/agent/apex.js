@@ -1716,6 +1716,15 @@ const api = {
   // Reset mesh-visibility overrides (companion to meshToggle).
   clearMeshes() { G.hideMeshes = {}; return G.hideMeshes; },
 
+  // The HUD rear-view mirror (js/render/shared/mirror-pass.js): mirror() reads
+  // {mode, shown, rect, cars, drawn, cam, backend: gfx.mirrorState()};
+  // mirror("auto"|"on"|"off") sets HUD > MIRROR first. shown/rect settle on the next frame.
+  mirror: (mode) => {
+    const mp = typeof MirrorPass !== "undefined" ? MirrorPass.instance() : null;
+    if (!mp) return null;
+    if (mode !== undefined) mp.setMode(mode);
+    return mp.state();
+  },
   lightState: () => {
     const L = G.frame.lights;
     let meanLampRGB = null;
