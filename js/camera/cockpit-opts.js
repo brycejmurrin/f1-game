@@ -1,4 +1,4 @@
-/* Apex 26 — CockpitOpts: player-facing options for the first-person view. HALO is a switch; WHEEL picks the steering wheel the cockpit view draws; TURN CHASING is how far the cockpit aim leaves the nose for a point 30 m down the road (0..1). Its own file, like GameMetrics, so the SETTINGS controls inject without growing index.html. */
+/* Apex 26 — CockpitOpts: player-facing options for the first-person view. WHEEL, SEAT, INTERIOR and HALO dress the cockpit view (all inside the same F1 car); TURN CHASING is how far the cockpit aim leaves the nose for a point 30 m down the road (0..1). Its own file, like GameMetrics, so the SETTINGS controls inject without growing index.html. */
 const CockpitOpts = (function () {
   "use strict";
 
@@ -10,20 +10,41 @@ const KEY_LEAD = "apex26.cockpitTurnChaseLead";   // 0..1, the live value
 const LEAD_DEFAULT = 0.4;
 const LEGACY_ON_LEAD = 0.35;
 const LEAD_MAX = 1;
-// The cockpit INTERIOR (owner, 2026-09-29: "a few different cockpit models that
-// we can choose between"): which steering wheel the COCKPIT view draws
-// (js/car/car-mesh.js getCockpitWheel). The first is the shipped wheel. A wheel
-// without a screen cannot carry gear and speed, so the HUD shows them instead
-// (js/camera/mode-switch.js keeps body.cockpit-cam off for it).
-const KEY_WHEEL = "apex26.cockpitWheel";
-const WHEELS = ["f1", "gt", "round", "none"];
-const WHEEL_LABELS = { f1: "F1 2026", gt: "GT", round: "CLASSIC", none: "NONE" };
-const SCREEN_WHEELS = { f1: true, gt: true };
+// COCKPIT CHOICES (owner, 2026-09-29: "a bunch of different options like options
+// for wheel, options for interior design, halo size"). All inside the same F1
+// car; each stored raw under its own apex26.* key and read once (URL overrides
+// for shots: ?ckwheel= ?ckseat= ?ckint= ?halo=).
+//   WHEEL     the steering wheel (car-mesh.js getCockpitWheel). A wheel with no
+//             screen cannot carry gear and speed, so the HUD shows them instead
+//             (mode-switch.js keeps body.cockpit-cam off for it).
+//   SEAT      where the driver sits: eye offsets from STANDARD, car-local metres
+//             (fwd, up). The wheel mount moves with the seat, so the rim keeps its
+//             distance from the eye (the cockpit near plane is 0.30 m).
+//   INTERIOR  the trim car-mesh.js builds inside the tub (getCockpitCabin).
+//   HALO      OFF / SLIM / STANDARD / THICK: the hoop's tube (car3d.js, halo size).
+const CHOICES = {
+  wheel:    { key: "apex26.cockpitWheel", url: "ckwheel", values: ["f1", "retro", "round", "none"],
+              labels: { f1: "F1 2026", retro: "2000s", round: "CLASSIC", none: "NONE" } },
+  seat:     { key: "apex26.cockpitSeat", url: "ckseat", values: ["std", "low", "high", "fwd"],
+              labels: { std: "STANDARD", low: "LOW", high: "HIGH", fwd: "FORWARD" } },
+  interior: { key: "apex26.cockpitInterior", url: "ckint", values: ["carbon", "team", "classic"],
+              labels: { carbon: "CARBON", team: "TEAM", classic: "CLASSIC" } },
+};
+const KEY_WHEEL = CHOICES.wheel.key, WHEELS = CHOICES.wheel.values;
+const SCREEN_WHEELS = { f1: true };
+// STANDARD's eye is vantage.js COCKPIT_EYE_FWD / COCKPIT_EYE_UP; a seat moves it.
+const EYE_F = -0.20, EYE_U = 0.82;
+const SEATS = { std: [0, 0], low: [0, -0.06], high: [0, 0.08], fwd: [0.12, -0.02] };
+// The wheel mount at STANDARD: hub (y, z) and scale, car-local, per wheel.
+const MOUNTS = { f1: [0.63, 0.26, 0.80], retro: [0.63, 0.26, 0.80], round: [0.66, 0.28, 0.92], none: [0.63, 0.26, 0.80] };
+// Halo, stored "0" / "slim" / "1" / "thick" ("1" and "0" are the old ON/OFF switch).
+const HALO_VALUES = ["0", "slim", "1", "thick"];
+const HALO_LABELS = { "0": "OFF", slim: "SLIM", "1": "STANDARD", thick: "THICK" };
 
-let haloOn = null;
+let haloVal = null;
 let lead = null;
-let wheelStyle = null;
-const wheelListeners = [];
+const picked = {};
+const listeners = [];
 
 function clampLead(raw) {
   let n = +raw;
@@ -63,51 +84,76 @@ function readLead() {
   return LEAD_DEFAULT;
 }
 
-function read(key, urlName, defaultOn) {
-  let v = GameStore.store.raw(key);
-  try {
-    const q = new RegExp("[?&]" + urlName + "=(1|0|on|off|true|false)", "i").exec(location.search);
-    if (q) v = /^(1|on|true)$/i.test(q[1]) ? "1" : "0";
-  } catch (_) { /* no location in a headless VM: the stored value stands */ }
-  if (v == null || v === "") return !!defaultOn;
-  return v === "1";
-}
-
-function halo() {
-  if (haloOn === null) haloOn = read(KEY, "halo", true);
-  return haloOn;
-}
-
-function setHalo(on) {
-  haloOn = !!on;
-  GameStore.store.rawSet(KEY, haloOn ? "1" : "0");
-  return haloOn;
-}
-
-function wheel() {
-  if (wheelStyle === null) {
-    let v = GameStore.store.raw(KEY_WHEEL);
+function haloSetting() {
+  if (haloVal === null) {
+    let v = GameStore.store.raw(KEY);
     try {
-      const q = /[?&]ckwheel=([a-z0-9]+)/i.exec(location.search);
+      const q = /[?&]halo=([a-z0-9]+)/i.exec(location.search);
+      if (q) v = /^(1|on|true)$/i.test(q[1]) ? "1" : /^(0|off|false)$/i.test(q[1]) ? "0" : q[1].toLowerCase();
+    } catch (_) { /* no location in a headless VM: the stored value stands */ }
+    haloVal = HALO_VALUES.includes(v) ? v : "1";
+  }
+  return haloVal;
+}
+
+// 0 OFF, 1 SLIM, 2 STANDARD, 3 THICK.
+function haloSize() { return HALO_VALUES.indexOf(haloSetting()); }
+
+function halo() { return haloSize() > 0; }
+
+// A boolean (the old switch) or a stored value.
+function setHalo(v) {
+  haloVal = v === true ? "1" : v === false ? "0" : HALO_VALUES.includes(v) ? v : "1";
+  GameStore.store.rawSet(KEY, haloVal);
+  for (const fn of listeners) fn("halo", haloVal);
+  return halo();
+}
+
+function choice(name) {
+  if (picked[name] === undefined) {
+    const C = CHOICES[name];
+    let v = GameStore.store.raw(C.key);
+    try {
+      const q = new RegExp("[?&]" + C.url + "=([a-z0-9]+)", "i").exec(location.search);
       if (q) v = q[1].toLowerCase();
     } catch (_) { /* no location in a headless VM: the stored value stands */ }
-    wheelStyle = WHEELS.includes(v) ? v : WHEELS[0];
+    picked[name] = C.values.includes(v) ? v : C.values[0];
   }
-  return wheelStyle;
+  return picked[name];
 }
 
-function setWheel(v) {
-  wheelStyle = WHEELS.includes(v) ? v : WHEELS[0];
-  GameStore.store.rawSet(KEY_WHEEL, wheelStyle);
-  for (const fn of wheelListeners) fn(wheelStyle);
-  return wheelStyle;
+function setChoice(name, v) {
+  const C = CHOICES[name];
+  picked[name] = C.values.includes(v) ? v : C.values[0];
+  GameStore.store.rawSet(C.key, picked[name]);
+  for (const fn of listeners) fn(name, picked[name]);
+  return picked[name];
 }
+
+function wheel() { return choice("wheel"); }
+function setWheel(v) { return setChoice("wheel", v); }
+function seat() { return choice("seat"); }
+function setSeat(v) { return setChoice("seat", v); }
+function interior() { return choice("interior"); }
+function setInterior(v) { return setChoice("interior", v); }
 
 // Does this wheel (default: the chosen one) carry the gear/speed LCD?
 function wheelHasScreen(style) { return !!SCREEN_WHEELS[style || wheel()]; }
 
-// A cockpit-view consumer that must follow a wheel change made mid-race.
-function onWheel(fn) { wheelListeners.push(fn); }
+// The eye and the wheel mount for a wheel and a seat (default: the chosen ones).
+// Frozen and cached per pair: vantage() and the rig draw read it every frame.
+const _layouts = {};
+function layout(w, s) {
+  const wk = MOUNTS[w] ? w : wheel(), sk = SEATS[s] ? s : seat(), key = wk + "|" + sk;
+  if (!_layouts[key]) {
+    const st = SEATS[sk], m = MOUNTS[wk];
+    _layouts[key] = Object.freeze({ eyeF: EYE_F + st[0], eyeU: EYE_U + st[1], wheelY: m[0] + st[1], wheelZ: m[1] + st[0], wheelS: m[2] });
+  }
+  return _layouts[key];
+}
+
+// A cockpit-view consumer that must follow a change made mid-race.
+function onWheel(fn) { listeners.push(fn); }
 
 function turnChaseLead() {
   if (lead === null) lead = readLead();
@@ -155,23 +201,25 @@ function initUI() {
   }
   place(head);
 
-  const haloRow = SettingRow.build("pm-halo", "HALO", [["on", "ON"], ["off", "OFF"]]);
-  haloRow.row.title = "Draw the halo (secondary roll structure) in the cockpit view.";
-  SettingRow.wire(haloRow.row, { read: () => (halo() ? "on" : "off"), write: (v) => {
-    setHalo(v === "on");
-    try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); }
-    catch (_) { /* audio is optional here */ }
-  } });
-  place(haloRow.row);
-
-  const wheelRow = SettingRow.build("pm-ckwheel", "WHEEL", WHEELS.map((w) => [w, WHEEL_LABELS[w]]));
-  wheelRow.row.title = "The steering wheel in the cockpit view. CLASSIC and NONE have no screen, so the HUD shows gear and speed.";
-  SettingRow.wire(wheelRow.row, { read: () => wheel(), write: (v) => {
-    setWheel(v);
-    try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); }
-    catch (_) { /* audio is optional here */ }
-  } });
-  place(wheelRow.row);
+  function row(id, label, values, labels, title, read, write) {
+    const r = SettingRow.build(id, label, values.map((v) => [v, labels[v]]));
+    r.row.title = title;
+    SettingRow.wire(r.row, { read, write: (v) => {
+      write(v);
+      try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); }
+      catch (_) { /* audio is optional here */ }
+    } });
+    place(r.row);
+  }
+  const C = CHOICES;
+  row("pm-ckwheel", "WHEEL", C.wheel.values, C.wheel.labels,
+    "The steering wheel. CLASSIC, 2000s and NONE have no screen, so the HUD shows gear and speed.", wheel, setWheel);
+  row("pm-ckseat", "SEAT", C.seat.values, C.seat.labels,
+    "Where you sit in the car. The wheel moves with the seat.", seat, setSeat);
+  row("pm-halo", "HALO", HALO_VALUES, HALO_LABELS,
+    "The halo (secondary roll structure) over the cockpit, and how thick it is.", haloSetting, setHalo);
+  row("pm-ckint", "INTERIOR", C.interior.values, C.interior.labels,
+    "The cockpit trim: bare carbon, padding in your team's colours, or a 1960s cockpit with an aeroscreen and round gauges.", interior, setInterior);
 
   const lab = document.createElement("label");
   lab.className = "tune-row";
@@ -205,8 +253,8 @@ if (typeof document !== "undefined") {
 }
 
 return {
-  KEY, KEY_TC, KEY_LEAD, KEY_WHEEL, LEAD_DEFAULT, WHEELS,
-  halo, setHalo, wheel, setWheel, wheelHasScreen, onWheel, turnChase, setTurnChase, turnChaseLead, setTurnChaseLead, parseLead,
+  KEY, KEY_TC, KEY_LEAD, KEY_WHEEL, LEAD_DEFAULT, WHEELS, CHOICES, HALO_VALUES,
+  halo, haloSize, setHalo, wheel, setWheel, seat, setSeat, interior, setInterior, wheelHasScreen, onWheel, layout, turnChase, setTurnChase, turnChaseLead, setTurnChaseLead, parseLead,
 };
 })();
 Object.freeze(CockpitOpts);

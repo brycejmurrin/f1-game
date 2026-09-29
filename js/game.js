@@ -8083,7 +8083,7 @@ function render(dt) {
     if (c.isPlayer && (cockpitRigOnly || visorEye)) {
       // The rig stays on the car: its origin is the eye minus THIS mode's eye offsets.
       GameCams.cockpitViewmodelAxes(smp2.r, smp2.t, yv, camEye, tmpR, _cockU, tmpF, _cockP,
-        visorEye ? GameCams.VISOR_EYE_FWD : null, visorEye ? GameCams.VISOR_EYE_UP : null);
+        GameCams.seatFwd(visorEye ? "visor" : "cockpit"), GameCams.seatUp(visorEye ? "visor" : "cockpit"));
       basisMat(tmpR, _cockU, tmpF, _cockP, _cockMat);
       drawCockpitRig(c, _cockMat, dt, paint, visorEye);   // VISOR: no steering wheel
       continue;
