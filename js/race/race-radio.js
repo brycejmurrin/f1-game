@@ -74,7 +74,7 @@ const RaceRadio = (function () {
     let chat = readSetting("radioChat", CHAT, "normal");
     let comm = readSetting("commentary", COMM, "tv");
 
-    let live = false, evalT = 0, t = 0, lastCars = null;
+    let live = false, evalT = 0, t = 0, lastCars = null, last = null;
     let m = null;
     const queue = { eng: new Map(), tv: new Map() };
     const log = [];
@@ -101,7 +101,7 @@ const RaceRadio = (function () {
       facts.reset();
       lines = RadioLines.create((o.seed || 1) + ((G.raceRound | 0) * 7919));
       queue.eng.clear(); queue.tv.clear();
-      m = freshMemory(); evalT = 0; t = 0;
+      m = freshMemory(); evalT = 0; t = 0; last = null; live = false; log.length = 0;
     }
     reset();
 
@@ -116,6 +116,11 @@ const RaceRadio = (function () {
 
     /** Offer a line. `c` = { id, ch, tier, chat, key, vars, ttl, cd, cdKey, once, still, onSaid, hold } */
     function offer(c) {
+      if (c.driving) {
+        const still = c.still;
+        c.still = () => { const f = f2(); return f.started && !f.finished && !f.retired && !f.pitting
+          && f.caution === 0 && (!still || still()); };
+      }
       if (c.ch === "eng" && (c.chat || 2) > lvl()) return;
       const cdKey = c.cdKey || c.id;
       if (c.once && m.once.has(c.once)) return;
@@ -274,13 +279,13 @@ const RaceRadio = (function () {
         }
         case "caution": {
           const L = e.level;
-          if (L === 4) offer({ id: "flag", ch: "eng", tier: 5, chat: 1, key: "eng.red", vars: {}, ttl: 8 });
-          else if (L === 3) offer({ id: "flag", ch: "eng", tier: 5, chat: 1, key: "eng.sc", vars: {}, ttl: 8 });
-          else if (L === 2) offer({ id: "flag", ch: "eng", tier: 5, chat: 1, key: "eng.vsc", vars: {}, ttl: 8 });
+          if (L === 4) offer({ id: "flag", ch: "eng", tier: 5, chat: 1, key: "eng.red", vars: {}, ttl: 8, still: () => f2().caution === 4 });
+          else if (L === 3) offer({ id: "flag", ch: "eng", tier: 5, chat: 1, key: "eng.sc", vars: {}, ttl: 8, still: () => f2().caution === 3 });
+          else if (L === 2) offer({ id: "flag", ch: "eng", tier: 5, chat: 1, key: "eng.vsc", vars: {}, ttl: 8, still: () => f2().caution === 2 });
           else if (L === 1 && e.prev === 0) offer({ id: "flag", ch: "eng", tier: 4, chat: 2, key: "eng.yellow", vars: {}, ttl: 6,
             still: () => f2().caution === 1 });
           else if (L === 0 && e.prev > 0 && e.prev < 4) offer({ id: "flag", ch: "eng", tier: e.prev >= 2 ? 5 : 3, chat: e.prev >= 2 ? 1 : 3,
-            key: "eng.green", vars: {}, ttl: 6 });
+            key: "eng.green", vars: {}, ttl: 6, still: () => f2().caution === 0 });
           break;
         }
         case "hit": {
@@ -311,50 +316,50 @@ const RaceRadio = (function () {
       if (a && green && racing && f.gapA != null) {
         if (f.gapA < 1.0) {
           const armed = !!p.otArmed;
-          offer({ id: "attack", ch: "eng", tier: 3, chat: 2, cd: 40, cdKey: "attack:" + S(a),
+          offer({ driving: true, id: "attack", ch: "eng", tier: 3, chat: 2, cd: 40, cdKey: "attack:" + S(a),
             key: armed ? "eng.attackOt" : "eng.attack", vars: { gap: gapT(f.gapA), ahead: S(a) }, ttl: 5,
-            still: () => { const g = f2(); return g.ahead === a && g.gapA != null && g.gapA < 1.2; } });
+            still: () => { const g = f2(); return g.ahead === a && g.gapA != null && g.gapA < 1.2 && !a.finished && !inPits(a) && (!armed || !!p.otArmed); } });
         } else if (f.gapA < 6 && f.rateA != null && f.rateA < -0.2) {
           const laps = Math.ceil((f.gapA - 0.5) / -f.rateA);
           const catchable = f.toGo != null && laps >= 2 && laps < f.toGo - 1;
-          offer({ id: "closing", ch: "eng", tier: 2, chat: 2, cd: 75, cdKey: "closing:" + S(a),
+          offer({ driving: true, id: "closing", ch: "eng", tier: 2, chat: 2, cd: 75, cdKey: "closing:" + S(a),
             key: catchable ? "eng.catchIn" : "eng.closing",
             vars: { gap: gapT(f.gapA), ahead: S(a), rate: gapT(-f.rateA), laps }, ttl: 8,
-            still: () => f2().ahead === a });
+            still: () => f2().ahead === a && f2().rateA != null && f2().rateA < -0.2 });
         } else if (f.gapA < 6 && f.rateA != null && f.rateA > 0.3) {
-          offer({ id: "pulling", ch: "eng", tier: 1, chat: 3, cd: 120, cdKey: "pulling:" + S(a), key: "eng.pulling",
-            vars: { gap: gapT(f.gapA), ahead: S(a), rate: gapT(f.rateA) }, ttl: 8, still: () => f2().ahead === a });
+          offer({ driving: true, id: "pulling", ch: "eng", tier: 1, chat: 3, cd: 120, cdKey: "pulling:" + S(a), key: "eng.pulling",
+            vars: { gap: gapT(f.gapA), ahead: S(a), rate: gapT(f.rateA) }, ttl: 8, still: () => f2().ahead === a && f2().rateA != null && f2().rateA > 0.3 });
         // "Out of reach" is an END-of-race verdict: the last 3 laps of a long
         // race, the last third of a short one — in a 3-lap sprint "3 to go"
         // is lap one, and "BRING HOME P22" 38 s after the lights is nonsense.
         } else if (f.toGo != null && f.toGo <= Math.min(3, Math.ceil(f.laps / 3)) && f.gapA > 4 && (f.rateA == null || -f.rateA * f.toGo < f.gapA)) {
-          offer({ id: "reach", ch: "eng", tier: 1, chat: 3, once: "reach", key: "eng.outOfReach",
+          offer({ driving: true, id: "reach", ch: "eng", tier: 1, chat: 3, once: "reach", key: "eng.outOfReach",
             vars: { gap: gapT(f.gapA), ahead: S(a), pos: f.pos }, ttl: 8, still: samePos(f.pos, () => f2().ahead === a) });
         }
       }
       if (b && green && racing && f.gapB != null) {
         if (f.gapB < 1.0) {
           // "Good defending" follows a defend call the driver actually HEARD.
-          offer({ id: "defend", ch: "eng", tier: 3, chat: 1, cd: 35, cdKey: "defend:" + S(b), key: "eng.defend",
+          offer({ driving: true, id: "defend", ch: "eng", tier: 3, chat: 1, cd: 35, cdKey: "defend:" + S(b), key: "eng.defend",
             vars: { gap: gapT(f.gapB), behind: S(b) }, ttl: 5, onSaid: () => { m.defending = b; },
-            still: () => { const g = f2(); return g.behind === b && g.gapB != null && g.gapB < 1.2; } });
+            still: () => { const g = f2(); return g.behind === b && g.gapB != null && g.gapB < 1.2 && !b.finished && !inPits(b); } });
         } else if (f.gapB < 3 && f.rateB != null && f.rateB < -0.25) {
-          offer({ id: "threat", ch: "eng", tier: 2, chat: 2, cd: 90, cdKey: "threat:" + S(b), key: "eng.threat",
-            vars: { gap: gapT(f.gapB), behind: S(b), rate: gapT(-f.rateB) }, ttl: 8, still: () => f2().behind === b });
+          offer({ driving: true, id: "threat", ch: "eng", tier: 2, chat: 2, cd: 90, cdKey: "threat:" + S(b), key: "eng.threat",
+            vars: { gap: gapT(f.gapB), behind: S(b), rate: gapT(-f.rateB) }, ttl: 8, still: () => f2().behind === b && f2().rateB != null && f2().rateB < -0.25 });
         } else if (m.defending === b && f.gapB > 2.0) {
           m.defending = null;
-          offer({ id: "clear", ch: "eng", tier: 2, chat: 2, key: "eng.clear", vars: { gap: gapT(f.gapB), behind: S(b) }, ttl: 8,
-            still: () => f2().behind === b });
+          offer({ driving: true, id: "clear", ch: "eng", tier: 2, chat: 2, key: "eng.clear", vars: { gap: gapT(f.gapB), behind: S(b) }, ttl: 8,
+            still: () => f2().behind === b && f2().gapB > 2 });
         } else if (f.pos === 1 && f.gapB > 3 && f.toGo != null && f.toGo <= Math.ceil(f.laps / 2)) {
-          offer({ id: "manage", ch: "eng", tier: 1, chat: 2, cd: 150, key: "eng.manage", vars: { gap: gapT(f.gapB), behind: S(b) }, ttl: 10,
+          offer({ driving: true, id: "manage", ch: "eng", tier: 1, chat: 2, cd: 150, key: "eng.manage", vars: { gap: gapT(f.gapB), behind: S(b) }, ttl: 10,
             still: samePos(1, () => f2().behind === b) });
         }
       }
       if (f.energy != null && green) {
         if (f.energy < 0.1 && (p.speed || 0) > G.vTop() * 0.25) {
-          offer({ id: "batt", ch: "eng", tier: 2, chat: 2, cd: 100, key: "eng.battLow", vars: {}, ttl: 8 });
+          offer({ driving: true, id: "batt", ch: "eng", tier: 2, chat: 2, cd: 100, key: "eng.battLow", vars: {}, ttl: 8, still: () => f2().energy != null && f2().energy < 0.1 });
         } else if (f.energy > 0.97 && a && f.gapA != null && f.gapA < 1.5 && racing) {
-          offer({ id: "batt", ch: "eng", tier: 1, chat: 3, cd: 120, key: "eng.battFull", vars: { ahead: S(a) }, ttl: 6, still: () => f2().ahead === a });
+          offer({ driving: true, id: "batt", ch: "eng", tier: 1, chat: 3, cd: 120, key: "eng.battFull", vars: { ahead: S(a) }, ttl: 6, still: () => f2().ahead === a && f2().energy > 0.97 && f2().gapA != null && f2().gapA < 1.5 });
         }
       }
     }
@@ -442,14 +447,13 @@ const RaceRadio = (function () {
       }
     }
 
-    let last = null;
     const f2 = () => last || {};
 
     // The spotter (js/race/spotter.js) rides this tick: car left / right / clear,
     // from the recorded voice only.
     const spotter = typeof Spotter !== "undefined" ? Spotter.create(G) : null;
     function update(dt) {
-      if (!(dt > 0)) return;
+      if (!Number.isFinite(dt) || dt <= 0) return;
       if (spotter) spotter.update(dt);
       // RADIO CHECK (js/input/input.js): consumed on every tick, raced or not, so
       // a press in a menu cannot fire at the next green light.
@@ -502,18 +506,19 @@ const RaceRadio = (function () {
     function pump(f, p, tv) {
       // A VS FRIEND race keeps running under the pause menu; the radio waits.
       if (G.paused) return;
+      const traffic = spotter && spotter.occupied();
       const e = best("eng");
       if (e) {
         const urgent = e.tier >= 5;
-        const kind = urgent ? "race" : "info";
+        const kind = e.id === "flag" ? "warning" : urgent ? "race" : "info";
         const ok = urgent
-          || (!G.announceBusy && t - m.eng >= GAP_S[lvl()] * (e.tier >= 3 ? 0.5 : 1) && !underLoad(p) && !(f.pitting && e.tier < 4));
+          || (!traffic && !G.announceBusy && t - m.eng >= GAP_S[lvl()] * (e.tier >= 3 ? 0.5 : 1) && !underLoad(p) && !(f.pitting && e.tier < 4));
         // In a TV camera an "info" card is dropped by announce() (a film shot is
         // not captioned); the commentator speaks there instead, so hold it.
         const tvCam = TV_CAMS.indexOf(camId()) >= 0 && G.hudProfile !== "broadcast";
         if (ok && !(tvCam && !urgent) && speak(e, kind)) return;
       }
-      if (!tv) return;
+      if (!tv || traffic) return;
       const c = best("tv");
       if (!c) return;
       const urgent = c.tier >= 4;
@@ -550,6 +555,7 @@ const RaceRadio = (function () {
       chat: () => chat, comm: () => comm,
       spotter: () => !!(store && store.get && store.get("spotter", true) !== false),
       setSpotter(b) { if (store && store.set) store.set("spotter", !!b); return !!b; },
+      trafficBusy: () => !!(spotter && spotter.occupied()),
       spotterDebug: () => (spotter ? spotter.debug() : null),
       debug: () => ({ live, chat, comm, tv: live && tvLive(last), t: +t.toFixed(1),
         pending: { eng: Array.from(queue.eng.keys()), tv: Array.from(queue.tv.keys()) },

@@ -60,7 +60,7 @@ function load({ api = true, voices = [], stored = {} } = {}) {
   vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: "js/audio/radio-voice.js" });
   const RV = vm.runInContext("RadioVoice", ctx);
   const G = { soundOn: true, state: "race", store: { get: (k, d) => (saved.has(k) ? saved.get(k) : d), set: (k, v) => saved.set(k, v) } };
-  return { RV, G, synth, saved };
+  return { RV, G, synth, saved, ctx };
 }
 const { RV } = load();
 const P = (over = {}) => RV.plan(Object.assign({ msg: "BOX BOX BOX", life: 3, kind: "info", enabled: true, soundOn: true, state: "race", api: true, volume: 1 }, over));
@@ -129,17 +129,8 @@ test("every ANN_PRI kind resolves to a speaker, and the map agrees with radioWho
     const speaker = RV.SPEAKERS[k];
     assert.ok(speaker, `ANN_PRI has "${k}" but RadioVoice.SPEAKERS does not`);
     assert.ok(RV.TONE[speaker], `speaker ${speaker} has no prosody`);
-    // radioWho's own partition: race control kinds, coach kinds, the rest.
-    const inControl = new RegExp(`"${k}"[^)]*\\)\\s*return "RACE CONTROL"`).test(who)
-      || new RegExp(`return "RACE CONTROL"`).test(who) && who.split("RACE CONTROL")[0].includes(`"${k}"`);
-    const inCoach = who.split("COACH")[0].includes(`"${k}"`) && !who.split("RACE CONTROL")[0].includes(`"${k}"`);
-    // The broadcaster (js/race/race-radio.js) has its own WHO line and speaks
-    // in the announcer's voice rather than on any of the three pit channels.
-    const inComm = new RegExp(`"${k}"\\)\\s*return "COMMENTARY"`).test(who);
-    if (inComm) assert.equal(speaker, "announcer", `${k} is the commentator in radioWho but ${speaker} here`);
-    else if (inControl) assert.equal(speaker, "control", `${k} is race control in radioWho but ${speaker} here`);
-    else if (inCoach) assert.equal(speaker, "coach", `${k} is the coach in radioWho but ${speaker} here`);
-    else assert.equal(speaker, "radio", `${k} is the driver's channel in radioWho but ${speaker} here`);
+    const label = vm.runInNewContext('(' + who + ')', {RadioVoice: RV, player: {code:'TST'}})(k);
+    assert.equal(label, {control:'RACE CONTROL',coach:'COACH',announcer:'COMMENTARY',radio:'TST · RADIO'}[speaker]);
   }
 });
 
@@ -842,4 +833,44 @@ test("the pause card and a hidden tab cut the SPOTTER channel too, not only the 
   packStops.length = 0;
   ctx.document.hidden = true; listeners.visibilitychange();
   assert.ok(packStops.includes("*"), "hiding the tab stops every pack channel");
+});
+
+test('every message channel uses the same speaker for its HUD label and its voice', () => {
+  const f = vm.runInNewContext('(' + fnSource(read('js/game.js'), 'function radioWho(kind)') + ')',
+    { RadioVoice: RV, player: { name: 'Test Driver', code: 'TST' } });
+  for (const [kind, speaker, label] of [
+    ['warning','control','RACE CONTROL'], ['warn','control','RACE CONTROL'],
+    ['penalty-hit','control','RACE CONTROL'], ['penalty-warn','control','RACE CONTROL'],
+    ['coach','coach','COACH'], ['practice','coach','COACH'], ['comm','announcer','COMMENTARY'],
+    ['info','radio','DRIVER · RADIO'], ['box','radio','DRIVER · RADIO'], ['race','radio','DRIVER · RADIO']]) {
+    assert.equal(P({ kind }).speaker, speaker, kind); assert.equal(f(kind), label, kind);
+  }
+  assert.doesNotMatch(read('js/game.js'), /hudProfile === "broadcast" \? "race" : "penalty-hit"/);
+});
+
+test('in-race commentary uses the announcer voice ladder while excluding network voices', async () => {
+  const q = load({ voices: [
+    {name:'Alex',lang:'en-US',localService:true}, {name:'Daniel',lang:'en-GB',localService:true},
+    {name:'Online Daniel',lang:'en-GB',localService:false}], stored: {voiceTune:{announcer:{name:'Online Daniel'}}} });
+  vm.runInContext(read('js/audio/announcer.js'), q.ctx);
+  q.G.announcer = { enabled: () => true };
+  const v = q.RV.create(q.G); v.say('Final lap',4,'comm'); await flush();
+  const call = q.synth.calls.find(c => c.m === 'speak');
+  assert.equal(call.voice.name,'Daniel');
+  assert.equal(call.rate, q.RV.TONE.announcer.rate);
+  v.stop();
+});
+
+test('an audition owns its utterance: stop cancels it and an old callback cannot release its replacement', () => {
+  const q = load(), utterances = [];
+  q.synth.speak = u => utterances.push(u);
+  let annStops = 0; q.G.announcer = {stop(){annStops++;}};
+  const v = q.RV.create(q.G);
+  v.preview('coach'); assert.equal(v.busy(),true);
+  const old = utterances.at(-1);
+  v.preview('control'); old.onend(); assert.equal(v.busy(),true);
+  const cancels = q.synth.calls.filter(c => c.m === 'cancel').length;
+  v.stop(); assert.equal(v.busy(),false);
+  assert.equal(q.synth.calls.filter(c => c.m === 'cancel').length,cancels+1);
+  assert.equal(annStops,2);
 });
