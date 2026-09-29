@@ -118,18 +118,19 @@ const GLXBackend = (function () {
   let shadowVAO = null;
   let width = 0, height = 0, aspect = 1;
   let outFBO = null, outVP = null, renderSizeOverride = null;
-  function outputFBO() { return outFBO; }
-  function outputViewport(w, h) { return outVP ? [outVP.x, outVP.y, outVP.w, outVP.h] : [0, 0, w, h]; }
+  const outputFBO = () => outFBO;
+  const outputViewport = (w, h) => outVP ? [outVP.x, outVP.y, outVP.w, outVP.h] : [0, 0, w, h];
   function setOutput(fbo, vp) {
     outFBO = fbo || null;
     outVP = vp && vp.w > 0 && vp.h > 0 ? { x: vp.x | 0, y: vp.y | 0, w: vp.w | 0, h: vp.h | 0 } : null;
   }
-  function clearOutput() { outFBO = null; outVP = null; }
-  function setRenderSizeOverride(sz) {
-    renderSizeOverride = sz && sz.width > 0 && sz.height > 0 ? { width: sz.width | 0, height: sz.height | 0 } : null;
-  }
-  function outputTargetState() {
-    return { fbo: !!outFBO, vp: outVP ? [outVP.x, outVP.y, outVP.w, outVP.h] : null };
+  const clearOutput = () => { outFBO = null; outVP = null; };
+  const setRenderSizeOverride = (sz) => { renderSizeOverride = sz && sz.width > 0 && sz.height > 0 ? { width: sz.width | 0, height: sz.height | 0 } : null; };
+  const outputTargetState = () => ({ fbo: !!outFBO, vp: outVP ? [outVP.x, outVP.y, outVP.w, outVP.h] : null });
+  function bindOutputViewport() {
+    const v = outputViewport(width, height);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, outputFBO());
+    gl.viewport(v[0], v[1], v[2], v[3]);
   }
   let maxDim = 0;        // the driver's drawing-buffer ceiling (init); 0 = unknown, no clamp
   // ── Live environment probe ──────────────────────────────────────────────────
@@ -1064,13 +1065,11 @@ const GLXBackend = (function () {
   function resize() {
     if (ctxGone()) return;
     if (renderSizeOverride) {
-      const rw = Math.max(1, renderSizeOverride.width);
-      const rh = Math.max(1, renderSizeOverride.height);
+      const rw = Math.max(1, renderSizeOverride.width), rh = Math.max(1, renderSizeOverride.height);
       presentW = rw; presentH = rh;
-      const up = wantSpatialUpscale();
-      const cw = up ? presentW : rw, ch = up ? presentH : rh;
+      const up = wantSpatialUpscale(), cw = up ? presentW : rw, ch = up ? presentH : rh;
       const changed = canvas.width !== cw || canvas.height !== ch || width !== rw || height !== rh;
-      if (canvas.width !== cw || canvas.height !== ch) { canvas.width = cw; canvas.height = ch; }
+      if (changed && (canvas.width !== cw || canvas.height !== ch)) { canvas.width = cw; canvas.height = ch; }
       gl.viewport(0, 0, rw, rh);
       const first = width === 0;
       width = rw; height = rh; aspect = rw / rh;
@@ -1588,9 +1587,7 @@ const GLXBackend = (function () {
     // drivers, though SwiftShader silently tolerates it. Detaching + unbinding
     // before the mip pass removes the hazard.
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_CUBE_MAP_POSITIVE_X + face, null, 0);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, outputFBO());
-    const _envRest = outputViewport(width, height);
-    gl.viewport(_envRest[0], _envRest[1], _envRest[2], _envRest[3]);
+    bindOutputViewport();
     if (envFacesMask === 63) {         // full cycle → refresh mips, probe is live
       envFacesMask = 0; envReady = true;
       gl.activeTexture(gl.TEXTURE6);
@@ -1613,9 +1610,7 @@ const GLXBackend = (function () {
   function mirrorEnd() {
     if (!PST || !PST.mirror.active()) return;
     PST.mirror.end();
-    gl.bindFramebuffer(gl.FRAMEBUFFER, outputFBO());
-    const _mirRest = outputViewport(width, height);
-    gl.viewport(_mirRest[0], _mirRest[1], _mirRest[2], _mirRest[3]);
+    bindOutputViewport();
   }
 
   // Open a GPU timer query for this frame (if timing is on and none is already
@@ -1736,13 +1731,9 @@ const GLXBackend = (function () {
     resetDrawState();
     const fc = frame.fogColor;
     gl.clearColor(fc[0], fc[1], fc[2], 1);
-    // Direct path + output viewport: gl.clear ignores viewport and would wipe
-    // the sibling eye on a shared XR layer framebuffer.
+    // Direct path + outVP: scissor the clear so a shared XR layer FB keeps the sibling eye.
     const clipClear = !!(outVP && !_envActive && !PST.mirror.active() && !PST.enabled());
-    if (clipClear) {
-      gl.enable(gl.SCISSOR_TEST);
-      gl.scissor(outVP.x, outVP.y, outVP.w, outVP.h);
-    }
+    if (clipClear) { gl.enable(gl.SCISSOR_TEST); gl.scissor(outVP.x, outVP.y, outVP.w, outVP.h); }
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     if (clipClear) gl.disable(gl.SCISSOR_TEST);
 
@@ -2676,8 +2667,8 @@ const GLXBackend = (function () {
     drawDrivingLine,
     drawGlow,
     drawParticles,
-    setOutputTarget: (fbo, vp) => setOutput(fbo, vp),
-    clearOutputTarget: () => clearOutput(),
+    setOutputTarget: setOutput,
+    clearOutputTarget: clearOutput,
     outputTargetState,
     setRenderSizeOverride,
     present: (opts) => {
