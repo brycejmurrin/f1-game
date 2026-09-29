@@ -152,6 +152,14 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
       "montreal-wall-of-champions-stand",
       "montreal-biosphere",
     ],
+    // Wave 6 — Indianapolis Motor Speedway road course (Pagoda / pylon /
+    // pit stalls already required; continuous Paddock–Tower Terrace wall)
+    indianapolis: [
+      "indy-pagoda",
+      "indy-scoring-pylon",
+      "indy-pit-stalls",
+      "indy-main-stands",
+    ],
   };
   for (const [track, ids] of Object.entries(expected)) {
     const body = landmarkSource(track);
