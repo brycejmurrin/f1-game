@@ -247,6 +247,16 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     donington: ["donington-hollywood-stand"],
     // Wave 6 — Sepang hibiscus main canopy + K1/F corner stands
     sepang: ["sepang-main-grandstand-canopy", "sepang-t1-grandstand", "sepang-t7-grandstand"],
+    // Wave 6 — Estoril: 30-bay pit terrace (official boxes 17×6.70 m) +
+    // existing timing tower / aldeia / depósito / moinho made required.
+    // Moinho kept but UNCERTAIN as an on-site feature (leave, do not extend).
+    estoril: [
+      "estoril-pit-terrace",
+      "estoril-timing-tower",
+      "estoril-aldeia",
+      "estoril-deposito",
+      "estoril-moinho",
+    ],
     // Wave 6 — Brands Hatch Indy amphitheatre stands + Kentagon
     brands_hatch: [
       "brands-pit-straight-stand",
@@ -273,6 +283,9 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
       "jerez-lorenzo-corner",
       "jerez-dani-pedrosa",
     ],
+    // Wave 6 — Watkins Glen: 2006 control-tower booths, Nazareth pit terrace,
+    // Sahlen Esses hillside (positive-slope GA bank + timber stand)
+    watkins_glen: ["glen-pit-terrace", "glen-esses-hill", "glen-timing-tower"],
     // Wave 6 — Jacarepaguá / Autódromo Nelson Piquet (demolished 2012):
     // pit grandstand + timing box already authored; Tijuca ridge + lagoon
     // shore hardscape added this wave. Exact peak/pier layout UNCERTAIN.

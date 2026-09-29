@@ -12,7 +12,6 @@
     "cota": 11,
     "dijon": 27,
     "donington": 3,
-    "estoril": 8,
     "fuji": 13,
     "imola": 17,
     "indianapolis": 8,
@@ -44,7 +43,7 @@
     "spa": 35,
     "suzuka": 4,
     "vegas": 4,
-    "watkins_glen": 12,
+    "watkins_glen": 1,
     "zandvoort": 4,
     "zolder": 28
   },
@@ -52,7 +51,6 @@
     "bahrain": 5,
     "baku": 1,
     "brands_hatch": 3,
-    "estoril": 6,
     "fuji": 12,
     "imola": 2,
     "jeddah": 11,
@@ -70,8 +68,7 @@
     "singapore": 9,
     "spa": 5,
     "suzuka": 5,
-    "vegas": 16,
-    "watkins_glen": 1
+    "vegas": 16
   },
   "flatCoplanar": {
     "abudhabi": 5,
@@ -84,7 +81,6 @@
     "cota": 5,
     "dijon": 21,
     "donington": 5,
-    "estoril": 1,
     "fuji": 8,
     "hockenheim": 1,
     "imola": 4,
@@ -113,7 +109,6 @@
     "spa": 3,
     "suzuka": 1,
     "vegas": 6,
-    "watkins_glen": 1,
     "zandvoort": 7,
     "zolder": 18
   }
