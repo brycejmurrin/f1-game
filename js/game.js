@@ -3908,13 +3908,22 @@ function introBuild(go) {
 // ends, so a flyby begun now spent its opening shots, its clock and the voice on a
 // black canvas (1-4 s on a real GPU; the whole flyby under SwiftShader). Hold the
 // card over the warm, bounded as introBuild's is, then fly.
+// The world is often BUILT but not yet warmed (menuFinish warms only once the menu
+// goes idle), and then the flyby's first frame compiled everything itself: the
+// same black, measured 1.4 s -> 19 s under SwiftShader with warming() false at
+// RACE!. So an unwarmed world gets the warm introBuild runs, under the card.
 function introWarm(go) {
-  if (!(gfx.warming && gfx.warming())) return false;
-  const key = menuKey(trackIdx), n = ++_introRun, t0 = performance.now();
+  const key = menuKey(trackIdx);
+  if (!gfx.warm || (_warmKey === key && !(gfx.warming && gfx.warming()))) return false;
+  const n = ++_introRun, t0 = performance.now();
   const live = () => n === _introRun && state === "menu" && key === menuKey(trackIdx);
   loadingScreen.building(loadingInfo());
   (async () => {
-    while (live() && gfx.warming() && performance.now() - t0 < 15000) await menuSlice();
+    if (_warmKey !== key) {   // hidden warm frames: "build" blanks the canvas, and render() draws while _menuGate.warm > 0
+      warmPrograms(); _menuGate.warm = 2;
+      for (let f = 0; f < 3 && live() && _menuGate.warm > 0; f++) await new Promise((r) => requestAnimationFrame(r));
+    }
+    while (live() && gfx.warming && gfx.warming() && performance.now() - t0 < 15000) await menuSlice();
     if (n !== _introRun) return;
     if (state !== "menu") { loadingScreen.stop(); return; }
     try { _introKey = key; raceIntro(go); } catch (e) { Log.warn("gfx", "loading screen failed", e); loadingScreen.stop(); go(); }
