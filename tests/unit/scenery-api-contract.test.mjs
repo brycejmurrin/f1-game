@@ -117,6 +117,8 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     cota: ["cota-amphitheater", "cota-turn1-big-red", "cota-main-grandstand"],
     mexico: ["mexico-foro-sol-entry", "mexico-peraltada-stand", "foro-scoreboard"],
     abudhabi: ["abudhabi-ferrari-world", "abudhabi-marina", "abudhabi:pit-exit-tunnel-portal"],
+    // Wave 5 — Hungaroring 2024–25 paddock / main tribune
+    hungaroring: ["hungaroring-pit-complex", "hungaroring-main-tribune"],
     // Wave 5 — Catalunya landmarks (Tilke main stand + pit-end scoreboard)
     catalunya: ["catalunya-main-grandstand", "catalunya-pit-end-scoreboard", "catalunya-race-control"],
     // Wave 6 — Zandvoort F1 Fanzone Ferris wheel (festival landmark)
