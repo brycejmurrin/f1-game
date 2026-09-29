@@ -18,6 +18,9 @@ const { $, gfx, clamp, getTeamParts } = G;
 const { resolveLivery, partsVisualKey, drawAeroFlaps, teamDecalState, carDecalNum,
         drawCarDecals, carPaintMat, PAINT_DRY_DAY, MAT_REFLECT_X } = deps;
 
+const arrival = GarageArrival.create($, () => G.store.get("motion", null) === "reduce" || window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+  GarageArrival.bindSettings($, G.store));
+const arrivalCar = new Float32Array(MAT_REFLECT_X);
 // A standalone, non-track, non-player render path for the #carsetup screen:
 // openSetup() has no `player`/`cars` yet (makeCars() only runs at race-start),
 // so the studio() rig (buildStudioRig in js/game.js) can't be reused — it hard-depends
@@ -246,6 +249,7 @@ function applyHeldSetupCam(dt) {
     setupPan((spHeld.strafe || 0) * dt, (spHeld.dolly || 0) * dt);
 }
 function resetSetupCam() {
+  arrival.cancel();
   setupPreviewAz = 0.6;
   setupPreviewEl = SP_EL_DEF;
   setupPreviewDist = SP_DIST_DEF;
@@ -327,8 +331,9 @@ const _spLiv = () => resolveLivery(Teams.LIST[G.teamIdx]);   // memoised on stor
 const SP_PRESENT = { exposure: 1.28, bloom: 0.70, threshold: 0.62, contact: 0 };
 function renderSetupPreview(dt) {
   gfx.resize();
-  applyHeldSetupCam(dt);                               // held on-screen controls
-  if (setupPreviewSpin) setupPreviewAz += dt * 0.35;   // slow turntable
+  const arriving = arrival.step(dt);
+  if (!arriving || !arriving.active) applyHeldSetupCam(dt);                               // held on-screen controls
+  if (setupPreviewSpin && !(arriving && arriving.active)) setupPreviewAz += dt * 0.35;   // slow turntable
   stepSetupAero(dt);
   // The orbit radius is horizontal, so raising the camera does not walk it away
   // from the car: at el 0 this is the old fixed ring, at el 1.2 it is overhead.
@@ -344,7 +349,7 @@ function renderSetupPreview(dt) {
   // sheet in portrait.
   const canvasEl = $("game"), panelEl = $("cs-inner");
   let panelFrac = 0, panelFracY = 0;
-  if (canvasEl && panelEl && canvasEl.clientWidth > 0 && canvasEl.clientHeight > 0) {
+  if (!(arriving && arriving.active) && canvasEl && panelEl && canvasEl.clientWidth > 0 && canvasEl.clientHeight > 0) {
     // Visual coverage vs the unzoomed canvas (A13). viewportRect scales up on
     // engines where gBCR is still local under CSS zoom.
     const pr = (window.CssZoom && CssZoom.viewportRect(panelEl)) || panelEl.getBoundingClientRect();
@@ -409,9 +414,14 @@ function renderSetupPreview(dt) {
   _spAim[0] = setupPreviewTgt[0] + setupPreviewPan[0];
   _spAim[1] = setupPreviewTgt[1] + setupPreviewPan[1];
   _spAim[2] = setupPreviewTgt[2] + setupPreviewPan[2];
+  if (arriving && arriving.active) {
+    eye.splice(0, 3, ...arriving.eye);
+    _spAim.splice(0, 3, ...arriving.aim);
+    M4.perspectiveTo(_spProj, (gfx.aspect < 1 ? Math.min(85, arriving.fov + 14) : arriving.fov) * Math.PI / 180, gfx.aspect, 0.1, 60);
+  }
   M4.lookAtTo(_spView, eye, _spAim, [0, 1, 0]);
   M4.mulTo(_spVP, _spProj, _spView);
-  GarageScene.recentre(_spProj, _spView, _spVP, panelFrac, setupPreviewSpin, _spHull);
+  GarageScene.recentre(_spProj, _spView, _spVP, panelFrac, setupPreviewSpin && !(arriving && arriving.active), _spHull);
   M4.invertTo(_spInvProj, _spProj);
   if (gfx.begin({
     // Sun with NO sideways component. The shark fin is a thin blade whose two
@@ -443,20 +453,21 @@ function renderSetupPreview(dt) {
   spMat.specular = 0.22;
   spMat.roughness = clamp(spMat.roughness * 2.4, 0.02, 1);   // spread + dim the speculars
   spMat.metalness = Math.min(spMat.metalness, 0.05);
-  GarageScene.draw(Teams.LIST[G.teamIdx], _spLiv(), eye, getTeamParts, G.driverIdx, garageCtx(), getSetupPreviewMesh());
-  gfx.draw(getSetupPreviewMesh(), MAT_REFLECT_X, spMat);
+  arrivalCar[14] = arriving ? arriving.z : 0;
+  GarageScene.draw(Teams.LIST[G.teamIdx], _spLiv(), eye, getTeamParts, G.driverIdx, garageCtx(), getSetupPreviewMesh(), arriving, arrivalCar);
+  gfx.draw(getSetupPreviewMesh(), arrivalCar, spMat);
   // The moveable wings, so a player can watch active aero work before ever
   // driving — and see what their own AERO parts choice did to the flap size.
   {
     const aSt = teamDecalState(Teams.LIST[G.teamIdx], true);
-    drawAeroFlaps(Teams.LIST[G.teamIdx], aSt.val, setupPreviewAeroX, MAT_REFLECT_X, spMat,
+    drawAeroFlaps(Teams.LIST[G.teamIdx], aSt.val, setupPreviewAeroX, arrivalCar, spMat,
       aSt.aero);
   }
   // `night` here means "the sun is not the key" — which in a garage it is not.
   // The decal shader is sun + ambient + glow only, so without this the liveries'
   // logos and numbers would darken with the skylight and nothing would lift them.
   const gSeat = garageSeat();
-  drawCarDecals(Teams.LIST[G.teamIdx], MAT_REFLECT_X, true,
+  drawCarDecals(Teams.LIST[G.teamIdx], arrivalCar, true,
     (gSeat && gSeat.num) || carDecalNum(Teams.LIST[G.teamIdx], null), false, true);
   // AFTER the car: glare billboards are additive with depth-write off, so drawn
   // any earlier the opaque car would paint straight over them — and at high
@@ -536,7 +547,7 @@ function holdSetupCtl(id, rates, step) {
   if (!el) return;
   const release = () => { if (spHeld === rates) spHeld = null; };
   el.addEventListener("pointerdown", (e) => {
-    if (!G.setupPreviewOn) return;
+    if (!G.setupPreviewOn || (arrival.state && arrival.state.active)) return;
     e.preventDefault();
     // Capture so a finger sliding off the chip still releases here. NOT
     // pointerleave for the release: setPointerCapture fires a boundary event as
@@ -578,7 +589,7 @@ $("cs-aero").onclick = () => { setSetupAero(!setupPreviewXOn); if (G.soundOn) Ga
   };
   if (canvas) {
     canvas.addEventListener("pointerdown", (e) => {
-      if (!G.setupPreviewOn) return;
+      if (!G.setupPreviewOn || (arrival.state && arrival.state.active)) return;
       spPtr.set(e.pointerId, { x: e.clientX, y: e.clientY });
       spPinch = pinchGap();
       // Taking hold of the car is itself the instruction to stop the turntable —
@@ -610,7 +621,7 @@ $("cs-aero").onclick = () => { setSetupAero(!setupPreviewXOn); if (G.soundOn) Ga
     window.addEventListener("pointerup", release);
     window.addEventListener("pointercancel", release);
     canvas.addEventListener("wheel", (e) => {
-      if (!G.setupPreviewOn) return;
+      if (!G.setupPreviewOn || (arrival.state && arrival.state.active)) return;
       e.preventDefault();
       setupZoom(e.deltaY > 0 ? 1.1 : 1 / 1.1);
     }, { passive: false });
@@ -620,6 +631,7 @@ $("cs-aero").onclick = () => { setSetupAero(!setupPreviewXOn); if (G.soundOn) Ga
 // The camera's own state, published for the G façade (js/game.js keeps the
 // spellings __apex.garageCam() and types/game-ctx.d.ts already name).
 return {
+  startArrival: arrival.start, cancelArrival: arrival.cancel,
   renderSetupPreview, resetSetupCam, setSetupCamPanel, spMeshBust,
   stepSetupAero, setSetupView, setSetupAero, setupPan, nudgeSetupCam,
   setSetupAim(p) { setupPreviewOrbit = p.slice(); setupPreviewTgt = p.slice(); },

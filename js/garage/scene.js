@@ -152,7 +152,7 @@ function buildShell(out, liv) {
 // crops into the car's frame at the default distance. It is a floor rule, not
 // an absolute one — the ceiling LED housings reach x 2.70 and are fine, because
 // they sit at y 4.3, above the top of the frame.
-const SIDES = ["nx", "px", "back", "door", "mid"];
+const SIDES = ["nx", "px", "back", "door", "mid", "shutter", "barrier"];
 // The two props the trackside bay (buildPropsLite) shares with the full one.
 const COMPOUND = [[0.85, 0.12, 0.12], [0.92, 0.80, 0.10], [0.88, 0.88, 0.90]];
 function tyreStack(out, x, z, seed) {
@@ -236,9 +236,9 @@ function buildProps(g, liv) {
   const shutA = scale(STEEL, 0.75), shutB = [
     STEEL[0] * 0.42 + c1[0] * 0.34, STEEL[1] * 0.42 + c1[1] * 0.34, STEEL[2] * 0.42 + c1[2] * 0.34];
   for (let i = 0; i < 11; i++)
-    block(g.door, 0, 2.05 + i * 0.26, Z_DOOR - 0.10, HALF_W * 0.72, 0.12,
+    block(g.shutter, 0, 2.05 + i * 0.26, Z_DOOR - 0.10, HALF_W * 0.72, 0.12,
           (i % 2) ? 0.035 : 0.05, (i % 3) ? shutA : shutB, MAT.METAL);
-  block(g.door, 0, 1.98, Z_DOOR - 0.10, HALF_W * 0.74, 0.07, 0.07, scale(STEEL, 1.1));
+  block(g.shutter, 0, 1.98, Z_DOOR - 0.10, HALF_W * 0.74, 0.07, 0.07, scale(STEEL, 1.1));
   // Guide rails up both jambs, so the shutter runs in something. In g.door with
   // the wall, not in g.mid: a rail left standing after its wall culled is the
   // floating-strip defect this file already fixed once for the dado lights.
@@ -316,10 +316,10 @@ function buildProps(g, liv) {
   cyl(g.nx, -4.10, 0, 3.0, 0.045, 0.52, STEEL, 6);
   // Barrier stanchions across the pit-lane opening, chain height only.
   for (let i = -1; i <= 1; i += 2) {
-    cyl(g.door, i * 2.2, 0, Z_DOOR - 0.55, 0.05, 0.95, scale(STEEL, 0.8), 8);
-    cyl(g.door, i * 2.2, 0.95, Z_DOOR - 0.55, 0.075, 0.05, [0.80, 0.70, 0.12], 8);
+    cyl(g.barrier, i * 2.2, 0, Z_DOOR - 0.55, 0.05, 0.95, scale(STEEL, 0.8), 8);
+    cyl(g.barrier, i * 2.2, 0.95, Z_DOOR - 0.55, 0.075, 0.05, [0.80, 0.70, 0.12], 8);
   }
-  block(g.door, 0, 0.92, Z_DOOR - 0.55, 2.2, 0.02, 0.02, [0.80, 0.70, 0.12]);
+  block(g.barrier, 0, 0.92, Z_DOOR - 0.55, 2.2, 0.02, 0.02, [0.80, 0.70, 0.12]);
   // Overhead cable tray running the length of the bay, under the truss.
   for (let sd = -1; sd <= 1; sd += 2)
     block(g.mid, sd * 4.6, 3.62, 0, 0.16, 0.05, 6.2, scale(STEEL, 0.6));
@@ -1271,7 +1271,7 @@ function buildDress() {
   // y 2.60..3.20, not 3.30..3.90: the REAR preset's eye is (0, 2.28, -7.95) and
   // the same frustum solve on the plane z = Z_DOOR tops the frame out at y 3.62,
   // so the taller band lost its upper third off the top of the canvas.
-  dquad(g.door, [[2.3, 2.60, 6.24], [-2.3, 2.60, 6.24], [-2.3, 3.20, 6.24], [2.3, 3.20, 6.24]], [0, 0, -1], D_WORD);
+  dquad(g.shutter, [[2.3, 2.60, 6.24], [-2.3, 2.60, 6.24], [-2.3, 3.20, 6.24], [2.3, 3.20, 6.24]], [0, 0, -1], D_WORD);
   return g;
 }
 // The custom team's uploaded emblem arrives asynchronously. Bump a generation
@@ -1398,7 +1398,8 @@ function rebuild(team, liv, info, ctx) {
     for (let i = 0; i < SIDES.length; i++) g[SIDES[i]] = acc();
     buildProps(g, liv);
     GarageEquipment.build(g, liv, ctx);
-    for (let i = 0; i < SIDES.length; i++) propMesh[SIDES[i]] = _gfx.createMesh(g[SIDES[i]]);
+    for (let i = 0; i < SIDES.length; i++)
+      if (g[SIDES[i]].idx.length) propMesh[SIDES[i]] = _gfx.createMesh(g[SIDES[i]]);
     for (let i = 0; i < SIDES.length; i++)
       if (dressMesh[SIDES[i]]) { _gfx.freeMesh(dressMesh[SIDES[i]]); dressMesh[SIDES[i]] = null; }
     // A new team or paint: the whole atlas repaints, and the "what changed"
@@ -1470,7 +1471,8 @@ function ctxKey(ctx) {
          + `|${ctx.sponsor && ctx.sponsor.label || "-"}`;
 }
 let lastTrace = -1e9, traceFail = 0;
-function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh) {
+const shutterMat = new Float32Array(MAT_I), arrivalMirror = new Float32Array(MAT_MIRROR);
+function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat) {
   if (!_gfx) return;
   rebuild(team, liv, boardInfo(team, getParts, driverIdx), ctx);
   ensureDynamic();
@@ -1482,17 +1484,23 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh) {
   // against the floor's depth — which is exactly the clip a planar reflection
   // needs, with no stencil and no second floor pass. MAT_MIRROR reflects X as
   // the preview does (MAT_REFLECT_X) and Y for the floor; det +1, no cull flip.
-  if (carMesh) _gfx.draw(carMesh, MAT_MIRROR, MIRROR_OPTS);
+  if (carMesh) {
+    arrivalMirror[14] = carMat ? carMat[14] : 0;
+    _gfx.draw(carMesh, arrivalMirror, MIRROR_OPTS);
+  }
   _gfx.draw(shellMesh, MAT_I, SHELL_OPTS);
   // Each wall's furniture AND its lighting, only while the eye is inside that
   // wall — the same decision back-face culling makes for the wall itself. A
   // camera at SP_DIST_MAX (15 m) is outside the bay on at least one axis nearly
   // always, so this test fires constantly and is what keeps the cutaway clean.
   const ex = eye ? eye[0] : 0, ez = eye ? eye[2] : 0;
-  const inside = { nx: ex > -HALF_W, px: ex < HALF_W, back: ez > Z_BACK, door: ez < Z_DOOR, mid: true };
+  const inside = { nx: ex > -HALF_W, px: ex < HALF_W, back: ez > Z_BACK, door: ez < Z_DOOR, mid: true, shutter: ez < Z_DOOR, barrier: ez < Z_DOOR && !arrival };
+  // Collapse the slats upward into the roller housing, anchored at the lintel.
+  shutterMat[5] = arrival ? (4.77 * (1 - arrival.door) + 0.06) / 2.86 : 1;
+  shutterMat[13] = arrival ? 4.77 * (1 - shutterMat[5]) : 0;
   for (let i = 0; i < SIDES.length; i++) {
     if (!inside[SIDES[i]]) continue;
-    _gfx.draw(propMesh[SIDES[i]], MAT_I, SHELL_OPTS);
+    if (propMesh[SIDES[i]]) _gfx.draw(propMesh[SIDES[i]], SIDES[i] === "shutter" ? shutterMat : MAT_I, SHELL_OPTS);
     if (ledMesh[SIDES[i]]) _gfx.draw(ledMesh[SIDES[i]], MAT_I, LED_OPTS);
   }
   // Dress LAST of the environment: drawDecal depth-tests but does not depth
@@ -1500,7 +1508,7 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh) {
   if (dressTex)
     for (let i = 0; i < SIDES.length; i++)
       if (inside[SIDES[i]] && dressMesh[SIDES[i]])
-        _gfx.drawDecal(dressMesh[SIDES[i]], MAT_I, dressTex, DRESS_OPTS);
+        _gfx.drawDecal(dressMesh[SIDES[i]], SIDES[i] === "shutter" ? shutterMat : MAT_I, dressTex, DRESS_OPTS);
   // The moving props. Fan on the back wall (its housing is in propMesh.back);
   // the lamp wherever the preset put it; the pit-lane pass every half minute.
   if (inside.back && fanMesh) _gfx.draw(fanMesh, mk(_mFan, FAN[0], FAN[1], Z_BACK + 0.17, 0, now * 0.0065), SHELL_OPTS);
@@ -1536,7 +1544,7 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh) {
   if (liveTex) {
     if (liveMesh.floor) _gfx.drawDecal(liveMesh.floor, MAT_I, liveTex, FLOOR_DECAL_OPTS);
     for (const k of ["mid", "nx", "px", "door"])
-      if (inside[k] && liveMesh[k]) _gfx.drawDecal(liveMesh[k], MAT_I, liveTex, LIVE_OPTS);
+      if (inside[k] && liveMesh[k] && !(arrival && k === "door")) _gfx.drawDecal(liveMesh[k], MAT_I, liveTex, LIVE_OPTS);
   }
 }
 

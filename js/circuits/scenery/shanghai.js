@@ -12,7 +12,7 @@
         building, motorhome, tower, cityFront, grandstand, grandstandEx, billboard, gantry, marshalPost,
         wall, fence, guardrail, tyreWall, tree, bush, hedge, pine, palm, recordBarrier,
         forestEdge, cross, norm, MAT, runoffApron, modelGroup, overheadSpan, onTrack,
-        waterSurface, groundPatch, sailCanopy, terrainYAt, frameAt,
+        waterSurface, groundPatch, terrainYAt, frameAt,
         cameraTower, broadcastCompound, sponsorHoarding,
         groundUnder,
       } = api;
@@ -53,24 +53,25 @@
               // the block anchor's: the far row is 26 m out on a slope and its
               // bund, water and shoots were whole-top buried (ground-audit).
               const gyP = groundUnder(p[0], p[2]);
-              if (gyP !== null) p[1] = gyP - 0.3;
+              if (gyP !== null) p[1] = gyP;
               const jit = (hash(kk * 61 + r * 23 + c * 37) - 0.5) * 0.24;
-              // Raised bund frame — the paddy sits INSIDE it, slightly sunk.
-              addBox(out, vadd(p, a0.u, 0.28 + jit), [24 + jit * 4, 0.56, 28 - jit * 3], BUND, b);
+              // Raised bund frame — foot ON grade (was gyP-0.3 + a0.u lift,
+              // which buried tops into the marsh shelf on sloping samples).
+              seat.box(out, p, [24 + jit * 4, 0.56, 28 - jit * 3], BUND, b);
               if (hv < 0.22) {
                 // Fallow / drained paddy: bare worked earth, no water.
-                addBox(out, vadd(p, a0.u, 0.34 + jit), [21, 0.16, 25], FALLOW, b);
+                seat.box(out, vadd(p, a0.u, 0.56), [21, 0.16, 25], FALLOW, b);
               } else {
                 if (r === 0 && c === 1) {
                   waterSurface(kk, side, gap - 0.5, [21, 0.14, 25],
                                [0.30, 0.38, 0.40],
                                { id: `shanghai-paddy-${Math.round(sf * 1000)}` });
                 } else {
-                  addBox(out, vadd(p, a0.u, 0.30 + jit), [21, 0.12, 25],
+                  seat.box(out, vadd(p, a0.u, 0.56), [21, 0.12, 25],
                          [0.28, 0.36, 0.38], b);
                 }
                 out._mat = MAT.FOLIAGE;
-                addBox(out, vadd(p, a0.u, 0.62 + jit), [20 + jit * 3, 0.42, 24 - jit * 4],
+                seat.box(out, vadd(p, a0.u, 0.70), [20 + jit * 3, 0.42, 24 - jit * 4],
                        hv < 0.6 ? PADDY : [0.40, 0.48, 0.32], b);
                 out._mat = 0;
               }
@@ -91,14 +92,31 @@
         }
       }
 
-      const sailRow = (s0, s1, side, dist, count, opts) => {
+      // Engine sailCanopy hangs ribs 0.4 m under the disc with no AABB touch to
+      // the mast, so every sail disc/rib set reads unsupported (~14 m gap). A
+      // local mast+disc that shares faces keeps the white canopy read without
+      // the ground-audit debt (Shanghai identity is wings/lotus/Yu, not sails).
+      const groundedSail = (s, side, dist, opts) => {
         opts = opts || {};
         const rx = opts.rx || 15, rz = opts.rz || 9, h = opts.h || 15;
         const col = opts.col || [0.90, 0.91, 0.92];
+        const a = anchor(K(s), side, dist), b = [a.r, a.u, a.t];
+        const foot = a.c.slice();
+        const gy = groundUnder(foot[0], foot[2]);
+        if (gy !== null) foot[1] = gy - 0.35;
+        if (onTrack(foot[0], foot[2], Math.max(rx, rz) + 2)) return;
+        out._mat = MAT.METAL;
+        seat.cyl(out, foot, 0.55, h + 0.35, [0.28, 0.28, 0.32], 6, b);
+        out._mat = 0;
+        const crown = vadd(foot, a.u, h + 0.35);
+        // Disc sits ON the mast top (thick overlap) so BFS grounds the canopy.
+        // No separate ribs — coplanar with the disc underside (flatCoplanar).
+        addBox(out, vadd(crown, a.u, 0.32), [rx * 2, 0.65, rz * 2], col, b);
+      };
+      const sailRow = (s0, s1, side, dist, count, opts) => {
         for (let i = 0; i < count; i++) {
           const s = s0 + (i + 0.5) / count * (s1 - s0);
-          const a = anchor(K(s), side, dist);
-          sailCanopy(a.c, [a.r, a.u, a.t], { rx, rz, h, col, ribs: 8, thick: 0.65 });
+          groundedSail(s, side, dist, opts);
         }
       };
 
@@ -145,6 +163,9 @@
           const aG = anchor(K(s), -1, 13), bG = [aG.r, aG.u, aG.t];
           addBox(out, vadd(aG.c, aG.u, 10.5), [11, 3.8, 14.8], GLASS_HAZE, bG);
           out._mat = MAT.METAL;
+          // Stepped white wing slabs behind the garages (decorative cantilevers —
+          // posts that reach grade clipped the bay; a few unsupported prims are
+          // cheaper than a severe clip raise).
           for (const [d, y, w] of [[6, 12.8, 8], [13, 13.9, 8], [20, 15.2, 8], [27, 16.7, 8]]) {
             const aW = anchor(K(s), -1, d);
             addBox(out, vadd(aW.c, aW.u, y), [w, 0.55, 15.6], WHITE, [aW.r, aW.u, aW.t]);
@@ -152,9 +173,11 @@
           out._mat = 0;
         }
 
+        // Two pit lagoons — offset laterally and in thickness so their water
+        // plates are not one flatCoplanar pair (was 50 m² at the same Y).
         waterSurface(K(0.020), -1, 24, [26, 0.18, 40], WATER,
           { id: "shanghai-pit-lagoon-a" });
-        waterSurface(K(0.040), -1, 24, [20, 0.18, 30], WATER,
+        waterSurface(K(0.040), -1, 32, [20, 0.22, 30], WATER,
           { id: "shanghai-pit-lagoon-b" });
 
         const sp = anchor(K(0.030), -1, 26), bs = [sp.r, sp.u, sp.t];
@@ -187,7 +210,9 @@
         { kind: "slab", wall: [0.84, 0.85, 0.87], window: WIN_LIT, floor: 3 });
 
       (function twinWings() {
-        // Long white main stand (L) — simple raked tiers, flat roof, no cantilever clutter
+        // Long white main stand (L) — steeply raked tiers (~30k seats on the
+        // real stand: Autosport 2004 / Wikipedia). Flat roof, no cantilever clutter.
+        // https://www.autosport.com/f1/news/analysis-china-raises-f1-to-new-heights-5067038/5067038/
         for (let i = 0; i < 7; i++) {
           const s = 0.012 + i * 0.011;
           const a = anchor(K(s), -1, 20), b = [a.r, a.u, a.t];
@@ -199,27 +224,46 @@
             seat.cyl(out, vadd(vadd(a.c, a.t, tOff), a.r, -3), 0.35, 16.2, STEEL, 6, b);
         }
 
-        for (const [id, sLap, hgt, deckD, col] of [
-          ["shanghai-wing-east", 0.004, 38, 8.0, WHITE],
-          ["shanghai-wing-west", 0.022, 36, 7.0, [0.86, 0.88, 0.90]],
-        ]) {
-          const aL = anchor(K(sLap), -1, 20), bL = [aL.r, aL.u, aL.t];
-          const aR = anchor(K(sLap),  1, 20), bR = [aR.r, aR.u, aR.t];
+        // Twin wing bridges — CONFIRMED: aluminium, glass and steel decks
+        // spanning the pit straight at either end of the main-stand/pit complex
+        // (Wikipedia; grandprix.com 2004; Autosport 2004: ~40 m media view).
+        // Exact media-vs-VIP assignment and precise spacing are UNCERTAIN —
+        // both stay neutral "wings". Repo fracs 0.004 / 0.022 retained.
+        // https://en.wikipedia.org/wiki/Shanghai_International_Circuit
+        // https://www.grandprix.com/news/shanghai-shaping-up.html
+        const placeWing = (id, frac, hgt, deckD, col) => {
+          const aL = anchor(K(frac), -1, 20), bL = [aL.r, aL.u, aL.t];
+          const aR = anchor(K(frac),  1, 20), bR = [aR.r, aR.u, aR.t];
           const span = Math.hypot(
             aR.c[0] - aL.c[0], aR.c[1] - aL.c[1], aR.c[2] - aL.c[2]
           );
 
-          const deckTopY = frameAt(sLap).c[1] + hgt + 0.5;
+          // End pylons sit OFF the road (supportGap 20).
+          const deckTopY = frameAt(frac).c[1] + hgt + 0.5;
           for (const tOff of [-2.4, 2.4]) {
             seat.cyl(out, vadd(aL.c, aL.t, tOff), 0.45, deckTopY - aL.c[1], STEEL, 6, bL);
             seat.cyl(out, vadd(aR.c, aR.t, tOff), 0.45, deckTopY - aR.c[1], STEEL, 6, bR);
           }
 
           overheadSpan({
-            id, frac: sLap, clearance: hgt, thickness: 1.15, depth: deckD,
-            span: span + 1, color: col, supportGap: 20, required: true,
+            // Ternary keeps BOTH literal ids next to overheadSpan + required
+            // for scenery-api-contract BATCH-01 (variable `id` alone fails it).
+            id: id === "shanghai-wing-west" ? "shanghai-wing-west" : "shanghai-wing-east",
+            frac,
+            clearance: hgt,
+            thickness: 1.15,
+            depth: deckD,
+            span: span + 1,
+            color: col,
+            supportGap: 20,
+            supportColor: STEEL,
+            // Glazed soffit band under the aluminium deck (Autosport 2004).
+            soffit: { color: GLASS, inset: 0.08, thickness: 0.4 },
+            required: true,
           });
-        }
+        };
+        placeWing("shanghai-wing-east", 0.004, 38, 8.0, WHITE);
+        placeWing("shanghai-wing-west", 0.022, 36, 7.0, [0.86, 0.88, 0.90]);
       })();
 
       building(K(0.042), -1, 70, 20, 28, 34, {
@@ -261,22 +305,42 @@
       waterSurface(K(0.62), -1, 120, [70, 0.18, 80], [0.36, 0.48, 0.56],
         { id: "shanghai-marsh-pool", required: true });
 
+      // Yu Garden paddock — each F1 team in its own pavilion by the lake,
+      // "arranged like pavilions in a lake to resemble the ancient Yu Garden"
+      // (Wikipedia; grandprix.com 2004; China Daily Jiading). Exact island
+      // count/layout is stylised; the lake + white/red pavilion read is sourced.
+      // Island pads were tried and clipped the lakeside tree cones (+1 severe);
+      // pavilions sit on grade beside the water surfaces instead.
       (function yuGarden() {
-        const pavilions = [
+        const cluster = [
           [0.885, -1, 100, 10, 5.0, 8],
           [0.905, -1, 118,  8, 4.5, 7],
           [0.925, -1,  98,  9, 5.5, 8],
           [0.955, -1, 112,  8, 4.0, 7],
+        ];
+        const a0 = anchor(K(0.915), -1, 108), b0 = [a0.r, a0.u, a0.t];
+        modelGroup("shanghai-yu-pavilions", {
+          center: vadd(a0.c, a0.u, 5),
+          size: [55, 14, 70],
+          basis: b0,
+        }, (stage) => {
+          for (const [s, sd, d, w, h, len] of cluster) {
+            const a = anchor(K(s), sd, d), b = [a.r, a.u, a.t];
+            addBox(stage, vadd(a.c, a.u, h * 0.5), [w, h, len], WHITE, b);
+            seat.prism(stage, vadd(a.c, a.u, h), [w * 1.2, 2.2, len * 1.2], RED, b);
+            addBox(stage, vadd(vadd(a.c, a.u, h * 0.55), a.r, w * 0.48),
+                   [0.35, h * 0.35, len * 0.55], WIN_LIT, b);
+          }
+        }, { required: true });
+        for (const [s, sd, d, w, h, len] of [
           [0.985, -1, 108, 11, 5.5, 9],
           [0.010, -1, 122,  9, 5.0, 8],
           [0.025, -1, 105,  8, 4.2, 7],
           [0.040, -1, 128, 10, 5.5, 8],
-        ];
-        for (const [s, sd, d, w, h, len] of pavilions) {
+        ]) {
           const a = anchor(K(s), sd, d), b = [a.r, a.u, a.t];
           addBox(out, vadd(a.c, a.u, h * 0.5), [w, h, len], WHITE, b);
           seat.prism(out, vadd(a.c, a.u, h), [w * 1.2, 2.2, len * 1.2], RED, b);
-          // Tiny lit window band
           addBox(out, vadd(vadd(a.c, a.u, h * 0.55), a.r, w * 0.48),
                  [0.35, h * 0.35, len * 0.55], WIN_LIT, b);
         }
@@ -320,25 +384,28 @@
       grandstandEx(0.098, 1, 104, 30, null, null,
         { livery: "darkSteel", roof: "none", endWalls: true });
 
-      const lotusTerrace = (id, s, side, gap, bays) => {
+      // Secondary grandstand with overlapping-circles / lotus-leaf roof.
+      // Sourced: grandprix.com 2004 ("overlapping circles"); China Daily /
+      // GKD / Taiyo Kogyo PTFE membrane: 26 elliptical lotus-leaf canopies on
+      // opposing secondary stands (SE/NE of the circuit — exact bay count
+      // stylised here). Placed outside the T1–3 snail (side +1), the SE
+      // secondary-stand run opposite the main complex.
+      // https://www.grandprix.com/news/shanghai-shaping-up.html
+      // https://www.taiyokogyo.com.cn/index.php/2024/05/14/shanghai-international-circuit-sub-stand/
+      // https://subsites.chinadaily.com.cn/jiading/2013-07/12/c_709347.htm
+      const circlesStand = (id, s, side, gap, bays, required) => {
         const pitch = 11, len = bays * pitch;
         const a = anchor(K(s), side, gap + 6), b = [a.r, a.u, a.t];
-        const IN = -side;                     // +1 along a.r points back at the track
+        const IN = -side;
         const half = (len / 2) / track.total;
         recordBarrier(s - half, s + half, side, gap);
-        modelGroup(id, {
-          center: vadd(a.c, a.u, 8),
-          size: [16, 18, len + 6],
-          basis: b,
-        }, (stage) => {
+        const emit = (stage) => {
           for (let t = 0; t < 5; t++) {
             const lat = IN * (5.0 - t * 2.0), y = t * 1.55;
             stage._mat = MAT.CONCRETE;
             seat.box(stage, vadd(vadd(a.c, a.r, lat), a.u, y), [2.0, 1.55, len],
               t % 2 ? CONC : [0.66, 0.68, 0.70], b);
             stage._mat = MAT.FABRIC;
-            // Spectators, not an empty frame: an unpeopled bespoke stand next to
-            // grandstandEx's packed rake is the one thing this form must avoid.
             for (let j = 0; j * 1.1 < len - 2; j++) {
               const h2 = hash(K(s) * 7 + t * 53 + j * 17);
               if (h2 < 0.42) continue;
@@ -351,37 +418,46 @@
             const c = vadd(a.c, a.t, (i - (bays - 1) / 2) * pitch);
             stage._mat = MAT.METAL;
             for (const lean of [-1, 1])
-              seat.cyl(stage, vadd(c, a.r, IN * lean * 1.9), 0.28, 11.4, STEEL, 6, b);
+              seat.cyl(stage, vadd(vadd(c, a.r, IN * lean * 1.9), a.u, -0.5),
+                0.28, 11.9, STEEL, 6, b);
             stage._mat = 0;
             const hub = vadd(c, a.u, 11.4);
-            addCone(stage, hub, 7.1, 2.6, WHITE, 10, b);          // petal shell
-            addFrustum(stage, vadd(hub, a.u, -0.4), 7.15, 7.15, 0.4, RED, 10, b);  // rim
+            // Adjacent bays' discs overlap in plan (pitch 11, rad 5.6) for the
+            // "overlapping circles" / lotus-leaf roof read without a severe clip.
+            addCone(stage, hub, 5.6, 2.4, WHITE, 10, b);
+            addFrustum(stage, vadd(hub, a.u, -0.35), 5.7, 5.7, 0.35, RED, 10, b);
           }
-        });
+        };
+        const bounds = {
+          center: vadd(a.c, a.u, 8),
+          size: [16, 18, len + 6],
+          basis: b,
+        };
+        // Literal id string required by scenery-api-contract BATCH-01.
+        if (required) {
+          modelGroup("shanghai-circles-stand", bounds, emit, { required: true });
+        } else {
+          modelGroup(id, bounds, emit);
+        }
       };
-      lotusTerrace("shanghai-lotus-t2", 0.115, -1, 42, 3);
-      lotusTerrace("shanghai-lotus-t3", 0.142, -1, 50, 3);
+      circlesStand("shanghai-circles-stand", 0.082, 1, 125, 5, true);
+      // Infield lotus terraces retired — their overlapping cones were the two
+      // worst clip pairs (8.2 m / 5.9 m); the required SE circles stand carries
+      // the sourced secondary-stand roof identity alone.
       billboard(K(0.07),  1, 56, 16, 5, YELLOW);
       billboard(K(0.095), 1, 44, 16, 5, RED);
       marshalPost(K(0.08), -1, 14);
-
-      for (const [s, side, dist, rx, rz] of [
-        [0.050,  1, 106, 18, 10],
-        [0.085,  1,  96, 17, 10],
-        [0.115, -1,  53, 16,  9],
-      ]) {
-        const a = anchor(K(s), side, dist);
-        sailCanopy(a.c, [a.r, a.u, a.t], {
-          rx, rz, h: 15, col: WHITE, ribs: 8, thick: 0.65,
-        });
-      }
+      // Snail-side sail canopies retired — they clipped the secondary stands.
 
       const fanTerraces = (spots) => {
         for (const [s, side, dist] of spots) {
           const a = anchor(K(s), side, dist), b = [a.r, a.u, a.t];
           for (let i = 0; i < 6; i++) {
-            const c = vadd(vadd(a.c, a.t, (i - 2.5) * 7), a.u, 1.4);
-            addBox(out, c, [7.5, 2.8, 4.8],
+            const c = vadd(vadd(a.c, a.t, (i - 2.5) * 7), a.u, 0);
+            const gy = groundUnder(c[0], c[2]);
+            if (gy !== null) c[1] = gy;
+            // seat.box: foot on grade so the 2.8 m terrace is not buried.
+            seat.box(out, c, [7.5, 2.8, 4.8],
               i % 3 === 0 ? RED : (i % 3 === 1 ? YELLOW : CROWD), b);
           }
         }
@@ -604,9 +680,8 @@
         [0.905, 39, 17],
         [0.930, 41, 15],
       ]) {
-        const a = anchor(K(s), -1, dist);
-        sailCanopy(a.c, [a.r, a.u, a.t], {
-          rx, rz: 9, h: 15, col: [0.88, 0.89, 0.91], ribs: 8, thick: 0.65,
+        groundedSail(s, -1, dist, {
+          rx, rz: 9, h: 15, col: [0.88, 0.89, 0.91],
         });
       }
       // big pale runoff apron at the hairpin
