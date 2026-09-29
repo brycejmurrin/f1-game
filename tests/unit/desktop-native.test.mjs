@@ -21,7 +21,8 @@ const MAIN = readFileSync(join(ROOT, "desktop/main.js"), "utf8");
 test("index.html skips service-worker registration when __APEX_NATIVE__.desktop", () => {
   assert.match(HTML, /__APEX_NATIVE__/);
   assert.match(HTML, /nativeDesktop/);
-  assert.match(HTML, /serviceWorker" in navigator && !nativeDesktop/);
+  assert.match(HTML, /nativeCap/);
+  assert.match(HTML, /serviceWorker" in navigator && !nativeDesktop && !nativeCap/);
 });
 
 test("desktop preload exposes a frozen __APEX_NATIVE__ with desktop:true", () => {

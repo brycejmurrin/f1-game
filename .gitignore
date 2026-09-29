@@ -48,3 +48,5 @@ desktop/build/THIRD-PARTY-NOTICES.txt
 
 desktop/test-results/
 desktop/playwright-report/
+mobile/node_modules/
+mobile/www/

@@ -225,7 +225,9 @@ export const RULES = [
   [/^js\/agent\//, ["hooks", "agent-contract"], "the __apex contract and the agent view"],
   [/^js\/core\/store\.js/, ["hooks", "modes", "state-unit"], ""],
   [/^js\/core\/log\.js/, ["hooks", "tooling-fast"], "every module logs through it"],
+  [/^js\/core\/native/, ["mobile-unit", "hooks"], "Native detect + NativeDownload; test:mobile-unit"],
   [/^js\/core\//, ["hooks"], "the shared floor every module stands on"],
+  [/^mobile\//, ["mobile-unit"], "Capacitor Android project + sync-web; test:mobile-unit"],
 
   // ── the rest ────────────────────────────────────────────────────────────
   [/^js\/net\/scan\.js/, ["lifecycle-unit"], "camera cancellation is an async ownership boundary"],
