@@ -12,8 +12,8 @@ subset of the next:
 | command | unit files it runs | leaves out | when |
 |---|---|---|---|
 | `npm run test:guards` | 23 (curated) | — | hook-enforced, every `git commit` |
-| `npm run test:tooling-fast` | 284 of 371 | 87 | the documented edit-loop check |
-| `node tools/ci/deploy.mjs --gate-only` | 354 of 371 | 17 | the whole gate; what a deploy runs |
+| `npm run test:tooling-fast` | 289 of 376 | 87 | the documented edit-loop check |
+| `node tools/ci/deploy.mjs --gate-only` | 359 of 376 | 17 | the whole gate; what a deploy runs |
 
 _Derived from `tests/groups.json`, `tests/unit/` and ci.yml's "Pure-node unit suites" step by `node tools/gen/gen-ladder-figures.mjs`; `--check` runs in `test:guards`._
 <!-- /GENERATED -->

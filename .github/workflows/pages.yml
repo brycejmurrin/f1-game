@@ -267,16 +267,12 @@ jobs:
       #
       # .nojekyll goes up too — Pages otherwise runs the tree through Jekyll,
       # which has its own opinions about which files deserve to exist.
+      # Allow-list lives in tools/desktop/stage-files.mjs (also used by the
+      # Electron packager). A root .html page must be named there or it 404s on
+      # the live site — bench.html on build 7377. tests/unit/deploy-staging
+      # asserts every fetchable top-level path is covered.
       - name: Stage site
-        run: |
-          mkdir -p _site
-          # bench.html is a ROOT page like index.html, not something js/ or css/
-          # sweeps up, so it needs naming here or it 404s on the live site — which
-          # is exactly what happened on build 7377, the first deploy that carried
-          # it. Anything else added at the repo root needs the same line.
-          cp index.html bench.html controller.html version.json manifest.json sw.js _site/
-          cp .nojekyll _site/
-          cp -r js css icons assets vendor _site/
+        run: node tools/desktop/stage.mjs --out _site
       # THE SHELL GENERATION IS STAMPED HERE, NOT COMMITTED (2026-09-01).
       # 2000 + `git rev-list --count HEAD` on a fast-forward-only branch is an
       # integer, monotonic and unique per tip, so two sessions can never land

@@ -1,0 +1,233 @@
+# Desktop packaging (Electron)
+#
+# Two lanes:
+#   1. pack-smoke — non-draft PRs that touch desktop/ or tools/desktop/:
+#      ubuntu-only electron-builder --dir + Playwright _electron (xvfb + soft GL).
+#      Windows / macOS pack-smoke lives on tag / workflow_dispatch only (Actions
+#      load: 1 job per PR push, not 3). Does NOT compete with pages.yml.
+#   2. release — workflow_dispatch + tags desktop-v*: full installers on the
+#      3-OS matrix, optional signed-verify when secrets exist (skip cleanly
+#      otherwise), auto-update plan echo. Never on push to the ship branch.
+#
+# Electron pin: 44.4.5 (Chromium 152). Soft-GL + simpleFullScreen notes in
+# docs/notes/DESKTOP-TEST-PLAN.md. Pack-smoke uses `npm run pack:test` so
+# EnableNodeCliInspectArguments stays on for Playwright; release `pack`/`dist`
+# keep inspect + grantFileProtocolExtraPrivileges off.
+#
+# Refs: docs/notes/DESKTOP-TEST-PLAN.md
+#       https://playwright.dev/docs/api/class-electron
+#       https://www.electron.build/docs/cli/
+
+name: Desktop packages
+
+on:
+  pull_request:
+    paths:
+      - "desktop/**"
+      - "tools/desktop/**"
+      - ".github/workflows/desktop.yml"
+      - "docs/notes/DESKTOP-TEST-PLAN.md"
+  workflow_dispatch:
+    inputs:
+      signed_verify:
+        description: "Attempt codesign/signtool verify when secrets exist"
+        type: boolean
+        default: true
+  push:
+    tags:
+      - "desktop-v*"
+
+concurrency:
+  group: desktop-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # electron-builder v27 needs ≥ 22.12; stay ahead while on v26.
+  NODE_VERSION: "22.14.0"
+  CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+jobs:
+  # ----- PR: ubuntu-only unpacked dir + Playwright _electron -----
+  pack-smoke:
+    name: Pack smoke (${{ matrix.os }})
+    # Skip draft PRs (draft→ready gets a fresh run). Dispatch keeps the matrix.
+    if: >
+      (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
+      || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        # PRs: ubuntu only. Win/mac on dispatch (and release-build on tags).
+        os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-latest"]') || fromJSON('["ubuntu-latest","windows-latest","macos-latest"]') }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install desktop deps
+        working-directory: desktop
+        run: npm ci
+
+      - name: Pack unpacked dir (unsigned, inspect fuse on for _electron)
+        working-directory: desktop
+        run: npm run pack:test
+
+      - name: Read electron fuses
+        working-directory: desktop
+        run: npm run fuses:read
+
+      - name: Assert inspect fuse enabled for the test pack
+        working-directory: desktop
+        run: |
+          out=$(npm run fuses:read --silent 2>&1 || true)
+          echo "$out"
+          echo "$out" | grep -q 'EnableNodeCliInspectArguments is Enabled'
+
+      - name: Playwright _electron (Linux + xvfb + soft GL)
+        if: runner.os == 'Linux'
+        working-directory: desktop
+        env:
+          APEX_DESKTOP_SOFT_GL: "1"
+          APEX_DESKTOP_NO_SANDBOX: "1"
+        run: xvfb-run --auto-servernum npm run test:electron
+
+      - name: Playwright _electron (Windows / macOS)
+        if: runner.os != 'Linux'
+        working-directory: desktop
+        env:
+          APEX_DESKTOP_SOFT_GL: "1"
+          APEX_DESKTOP_NO_SANDBOX: "1"
+        run: npm run test:electron
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: desktop-pw-${{ matrix.os }}-b${{ github.run_number }}
+          path: |
+            desktop/playwright-report/**
+            desktop/test-results/**
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # ----- Tags / dispatch: full installers (3 OS) -----
+  release-build:
+    name: Release build (${{ matrix.os }})
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            dist_script: dist:linux
+          - os: windows-latest
+            dist_script: dist:win
+          - os: macos-latest
+            dist_script: dist:mac
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install desktop deps
+        working-directory: desktop
+        run: npm ci
+
+      - name: Build installers (unsigned unless secrets injected by the operator)
+        working-directory: desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npm run ${{ matrix.dist_script }}
+
+      - name: Upload installer artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: apex26-desktop-${{ matrix.os }}-b${{ github.run_number }}
+          path: |
+            desktop/dist/*.AppImage
+            desktop/dist/*.dmg
+            desktop/dist/*.zip
+            desktop/dist/*.exe
+            desktop/dist/*.yml
+            desktop/dist/*.yaml
+          if-no-files-found: warn
+          retention-days: 14
+
+      # Signed verification — skip cleanly when secrets are absent (forks / spike).
+      - name: macOS codesign / Gatekeeper / stapler (optional)
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          HAS_APPLE_SIGN: ${{ secrets.CSC_LINK != '' && '1' || '0' }}
+        run: |
+          set -euo pipefail
+          if [ "$HAS_APPLE_SIGN" != "1" ]; then
+            echo "No CSC_LINK secret — skipping codesign/spctl/stapler (unsigned spike)."
+            exit 0
+          fi
+          APP=$(find desktop/dist -maxdepth 3 -name '*.app' -type d | head -1 || true)
+          if [ -z "$APP" ]; then
+            echo "No .app found under desktop/dist — nothing to verify."
+            exit 0
+          fi
+          codesign -vvv --deep --strict "$APP"
+          codesign -dvv "$APP"
+          spctl --assess --type execute --verbose "$APP" || true
+          xcrun stapler validate "$APP" || echo "stapler: no ticket (notarize not run)"
+
+      - name: Windows signtool verify (optional)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          HAS_WIN_SIGN: ${{ secrets.CSC_LINK != '' && '1' || '0' }}
+        run: |
+          if ($env:HAS_WIN_SIGN -ne '1') {
+            Write-Host "No CSC_LINK secret — skipping signtool verify (unsigned spike)."
+            exit 0
+          }
+          $exe = Get-ChildItem -Path desktop/dist -Filter *.exe -Recurse | Select-Object -First 1
+          if (-not $exe) { Write-Host "No .exe found"; exit 0 }
+          & signtool verify /pa /v $exe.FullName
+
+  auto-update-plan:
+    name: Auto-update test plan (docs)
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/desktop-v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Print auto-update plan
+        run: |
+          {
+            echo "## Auto-update test plan"
+            echo ""
+            echo "See \`docs/notes/DESKTOP-TEST-PLAN.md\` § Auto-update."
+            echo "Upstream: https://www.electron.build/docs/features/auto-update"
+            echo ""
+            echo "Summary: build vN and vN+1, host latest*.yml + artifacts (MinIO or static HTTP),"
+            echo "install vN, assert checking-for-update → update-available → download-progress → update-downloaded."
+            echo "macOS autoUpdater requires a signed app. Unsigned CI covers metadata/mocks only."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Full checklist: docs/notes/DESKTOP-TEST-PLAN.md"
