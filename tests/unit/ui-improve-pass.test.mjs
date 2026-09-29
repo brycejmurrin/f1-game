@@ -1122,8 +1122,14 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(decl(css("css/components.css"), "#pm-hud-sample::before", "content") || "",
     /SIZE PREVIEW/,
     "SPEED 312 keeps its preview caption — compact used to hide it and the box read as a live readout");
-  assert.match(read("index.html"), /id="pm-hud-details"[\s\S]*id="pm-hud-sample"/,
-    "HUD SIZE preview lives in the HUD fold, not on the DISPLAY sheet");
+  // Inside the fold's OWN <details>…</details>: unbounded, the match passed
+  // with the preview moved anywhere later in index.html (audit 2026-09-29).
+  {
+    const html = read("index.html"), at = html.indexOf('id="pm-hud-details"');
+    const fold = html.slice(at, html.indexOf("</details>", at));
+    assert.ok(at >= 0 && fold.includes('id="pm-hud-sample"'),
+      "HUD SIZE preview lives in the HUD fold, not on the DISPLAY sheet");
+  }
   // DISPLAY had its own byte-identical copy of this block until 2026-09-18;
   // it now shares the merged one, so the selector to ask is the merged one.
   assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display,[^)]*\) details > summary,/, "min-height"), "var(--chip-h)",
