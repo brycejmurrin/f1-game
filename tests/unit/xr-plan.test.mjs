@@ -154,3 +154,9 @@ test("js/xr/xr-plan.js is referenced (zeroRefModules)", () => {
   assert.ok(fs.existsSync(path.join(ROOT, "js/xr/xr-plan.js")));
   assert.match(read("js/xr/xr-plan.js"), /XRPlan/);
 });
+
+test("GLX getContext requests xrCompatible only when navigator.xr exists", () => {
+  const src = read("js/render/glx/glx.js");
+  assert.match(src, /xrCompatible:\s*true/);
+  assert.match(src, /navigator\.xr \? \{ xrCompatible: true \}/);
+});
