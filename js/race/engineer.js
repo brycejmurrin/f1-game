@@ -184,7 +184,13 @@ const RaceEngineer = (function () {
       const plan = c.pitPlan, done = c.pitStops || 0;
       const nextAt = plan ? plan.lapsAt[done] : null;
       const nextCls = plan ? plan.seq[done + 1] : null;
-      const nextCode = nextCls && TyreModel.AI_CLASS[nextCls] ? TyreModel.AI_CLASS[nextCls].code : null;
+      // The letter the crew will FIT (PitLane.nextCode), not the plan's own: the
+      // call said "BOX BOX BOX — H" while AUTO bolted on an M.
+      // Resolved only when a box call can be made (a lap out or on it): this
+      // runs every step, and resolving a set walks the owned tyre rows.
+      const calling = nextCls != null && nextAt != null && nextAt - (c.lap || 0) <= 1;
+      const nextCode = !calling ? null : G.pits && G.pits.nextCode ? G.pits.nextCode(c) || null
+        : TyreModel.AI_CLASS[nextCls] ? TyreModel.AI_CLASS[nextCls].code : null;
       let rivalBoxed = null;
       if (!b.stops) b.stops = new Map();
       for (const o of (G.cars || [])) {

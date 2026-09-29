@@ -206,6 +206,20 @@ test("circuit severity scales wear, and is clamped either side", () => {
   assert.equal(ctxFor({ severity: null }).severity(), 1, "a circuit with no severity must be the neutral 1.0");
 });
 
+test("planLaps plans against the circuit's severity, as the wear does", () => {
+  // update() charges wear at severity() and planLaps ignored it, so at Austria
+  // (1.97) every plan believed a set lasted twice as long as it did — a
+  // medium planned for 7.4 laps of a 10-lap race was gone in 3.8: NO STOP.
+  const at = (sev) => { const s = ctxFor({ laps: 20, severity: sev }); s.setLevel("real"); return s; };
+  const neutral = at(null), austria = at(1.97);
+  assert.ok(Math.abs(austria.planLaps(0.74, 20) - neutral.planLaps(0.74, 20) / 1.97) < 1e-9,
+    `planLaps must divide by severity: ${austria.planLaps(0.74, 20)} vs ${neutral.planLaps(0.74, 20)}`);
+  // …and the same number of PLANNED laps leaves the same wear at either circuit.
+  const worn = (s) => { const c = freshCar(s, 0.74); run(s, c, s.planLaps(0.74, 20)); return c.tyreWear; };
+  const a = worn(austria), n = worn(neutral);
+  assert.ok(Math.abs(a / n - 1) < 0.05, `planned life must mean the same wear: austria ${a.toFixed(3)} vs neutral ${n.toFixed(3)}`);
+});
+
 // ── 3. The grip curve ───────────────────────────────────────────────────────
 
 test("grip falls linearly across the stint, then falls off a cliff", () => {

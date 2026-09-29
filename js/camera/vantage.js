@@ -74,18 +74,23 @@ function _vAheadPt(d, h, lat) {
 // re-checked with docs/OCCLUSION-PROBE.md — the wheel rig (game.js _rigT), the
 // ckpt monocoque cap and the coaming are all positioned against this number.
 const COCKPIT_EYE_FWD = -0.20, COCKPIT_EYE_UP = 0.82;
-// VISOR: the same driver's eye slid 0.55 m forward — past the wheel and the
-// halo's centre strut, level with the cockpit opening's front — so the view
-// is the cockpit's with nothing of the rig in it (game.js draws no rig and no
-// player body for it). Same height, same aim, same turn chasing as cockpit.
-const VISOR_EYE_FWD = COCKPIT_EYE_FWD + 0.55;
+// VISOR: the COCKPIT WITHOUT ITS STEERING WHEEL, for a phone wheel in the hand
+// (a linked phone switches to it). game.js draws the same cockpit rig — tub,
+// halo, mirrors, front wheels, the nose ahead — with the wheel and its dash
+// left out. The eye is the cockpit's own for now (the owner, 2026-09-29: "start
+// with exact cockpit bodywork, just remove the wheel first"); its own pair of
+// offsets exists so it can move closer/lower later without dragging the tub
+// with it (cockpitViewmodelAxes anchors the rig with these).
+const VISOR_EYE_FWD = COCKPIT_EYE_FWD, VISOR_EYE_UP = COCKPIT_EYE_UP;
 
 // Cockpit viewmodel basis: same yawVis as the drawn body (heading vs road
 // tangent), origin subtracted along those axes so the eye stays at
-// (COCKPIT_EYE_FWD, COCKPIT_EYE_UP) in rig space. Pitch/roll/lean stay off
-// this basis — those shoved the eye into the carbon. Writes into the
-// caller-owned out* slots; nothing is allocated.
-function cockpitViewmodelAxes(sR, sF, yv, eye, outR, outU, outF, outP) {
+// (COCKPIT_EYE_FWD, COCKPIT_EYE_UP) in rig space — or at (fwd, up) when a mode
+// seats it elsewhere (VISOR), which keeps the rig on the CAR while the eye
+// moves inside it. Pitch/roll/lean stay off this basis — those shoved the eye
+// into the carbon. Writes into the caller-owned out* slots; nothing is allocated.
+function cockpitViewmodelAxes(sR, sF, yv, eye, outR, outU, outF, outP, fwd, up) {
+  const eF = fwd == null ? COCKPIT_EYE_FWD : fwd, eU = up == null ? COCKPIT_EYE_UP : up;
   const cy = Math.cos(yv), sy = Math.sin(yv);
   for (let i = 0; i < 3; i++) {
     outF[i] = sF[i] * cy + sR[i] * sy;
@@ -95,7 +100,7 @@ function cockpitViewmodelAxes(sR, sF, yv, eye, outR, outU, outF, outP) {
   outU[1] = outR[2] * outF[0] - outR[0] * outF[2];
   outU[2] = outR[0] * outF[1] - outR[1] * outF[0];
   for (let i = 0; i < 3; i++)
-    outP[i] = eye[i] - outU[i] * COCKPIT_EYE_UP - outF[i] * COCKPIT_EYE_FWD;
+    outP[i] = eye[i] - outU[i] * eU - outF[i] * eF;
 }
 
 const CHASE_SIDE_FRAC = 0.3;
@@ -307,7 +312,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
   if (mode === "cockpit" || mode === "hood" || mode === "visor") {
     const driver = mode === "cockpit" || mode === "visor";   // a driver's eye (visor = cockpit, further forward)
     const eyeFwd = mode === "cockpit" ? COCKPIT_EYE_FWD : mode === "visor" ? VISOR_EYE_FWD : 0.55;
-    const eyeUp  = driver ? COCKPIT_EYE_UP : 0.95;
+    const eyeUp  = mode === "visor" ? VISOR_EYE_UP : driver ? COCKPIT_EYE_UP : 0.95;
     if (extra.carPos) {
       // FREE-WORLD ONBOARD. These are bolted to the CAR, so they must sit at the
       // car and look down the CAR's nose. They used to be built from the road:
@@ -600,5 +605,5 @@ function vantage(track, mode, s, x, spd, now, extra) {
   return _vantOut;
 }
 
-return { init, vantage, cockpitViewmodelAxes, COCKPIT_EYE_FWD, COCKPIT_EYE_UP, CHASE_CORNER_LEAD_DEFAULT };
+return { init, vantage, cockpitViewmodelAxes, COCKPIT_EYE_FWD, COCKPIT_EYE_UP, VISOR_EYE_FWD, VISOR_EYE_UP, CHASE_CORNER_LEAD_DEFAULT };
 })();

@@ -933,3 +933,16 @@ test("readMs is the full read's length at the channel's rate, and 0 when nothing
   const mute = load({ soundOn: false });
   assert.equal(mute.A.create(mute.G).readMs(bakuJoin()), 0, "sound off: nothing to wait for");
 });
+
+test('turning off an idle announcer does not cancel a different speaker', () => {
+  const {A: An,G,synth}=load(); const ann=An.create(G);
+  const before=synth.calls.filter(c=>c.m==='cancel').length;
+  ann.stop(); ann.setEnabled(false);
+  assert.equal(synth.calls.filter(c=>c.m==='cancel').length,before);
+});
+
+test('starting an announcer audition releases the radio owner and pending cue', () => {
+  const {A: An,G}=load(); let stops=0;
+  G.radio.stop=()=>{stops++;};
+  const ann=An.create(G); assert.equal(ann.sample(),true); assert.equal(stops,1); ann.stop();
+});
