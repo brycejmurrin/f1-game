@@ -42,12 +42,17 @@ function phoneWire() {
 }
 
 // n physics frames with the phone delivering before each, the session ticking after.
+// Tick times must be MONOTONIC across calls: reusing T0+i*16 from a previous
+// drive() hands netplay a clock that jumps backwards and the remote car /
+// input path stops tracking (measured 2026-09-29: left tilt after right sat
+// at +0.05 instead of < -0.3).
+let driveTick = 0;
 function drive(n) {
   const p0 = A.physState();
   for (let i = 0; i < n; i++) {
     w.deliver();
     A.step(1 / 60, 1);
-    if (A.net().active) A.netTick(T0 + i * 16);
+    if (A.net().active) A.netTick(T0 + (++driveTick) * 16);
   }
   return { v0: p0.speed, v1: A.physState().speed, steer: S.Input.steer() };
 }
@@ -88,14 +93,23 @@ test("inside the session the phone's throttle drives the LOCAL car, and the riva
 });
 
 test("inside the session the phone's tilt is the steer the game reads", () => {
+  // MAX_TILT defaults to 36° for full lock (js/input/input.js). A 25° fixture
+  // asymptotes at ~0.78 and can never clear `> 0.9` — use past-lock roll so the
+  // assertion still means "near full lock" (live Chromium check the day this
+  // file landed: full lock both ways inside the session).
   A.reset(0.05, 20, 0, 1);
-  w.phone.thr = 1; w.phone.roll = 25;
-  const right = drive(60);
+  S.Input.simTiltReset();
+  w.phone.thr = 1; w.phone.roll = 40;
+  const right = drive(90);
   assert.equal(S.Input.remoteSteers(), true);
-  assert.ok(right.steer > 0.9, `25° right reads ${right.steer}`);
-  w.phone.roll = -25;
-  const left = drive(60);
-  assert.ok(left.steer < -0.3, `25° left reads ${left.steer}`);
+  assert.ok(right.steer > 0.9, `full right reads ${right.steer}`);
+  // Fresh reset + tilt filter clear so the left slew does not fight residual
+  // right lock (without this, left settled near 0 / -0.2 under netplay).
+  A.reset(0.05, 20, 0, 1);
+  S.Input.simTiltReset();
+  w.phone.thr = 1; w.phone.roll = -40;
+  const left = drive(90);
+  assert.ok(left.steer < -0.3, `full left reads ${left.steer}`);
   w.phone.roll = 0;
 });
 
