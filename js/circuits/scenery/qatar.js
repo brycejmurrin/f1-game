@@ -11,7 +11,8 @@
         palm, building, fence, wall, mountain, guardrail, tyreWall,
         billboard, marshalPost, gantry, tower, bush, along,
         modelGroup, groundPatch, floodMast, floodMastRing, circuitKit,
-        bankedKerbStrip, sponsorHoarding, bleacher, acacia } = api;
+        bankedKerbStrip, sponsorHoarding, bleacher, acacia,
+        spectatorHill, terrainYAt } = api;
 
       if (circuitKit) {
         circuitKit.hospitality({
@@ -37,10 +38,8 @@
       const STEEL  = [0.13, 0.13, 0.16];
       const FLOOD  = night ? [1.22, 1.28, 1.40] : [0.96, 1.00, 1.06];
       const LAMP   = night ? [1.08, 1.12, 1.20] : [0.88, 0.90, 0.94];
-      const POOL   = night ? [0.82, 0.86, 0.96] : [0.66, 0.68, 0.72];
       const WIN_WARM = [0.88, 0.72, 0.32];
       const WIN_COOL = [0.52, 0.68, 0.88];
-      const BEACON = [0.72, 0.90, 0.98];
       const FROND  = [0.12, 0.28, 0.12];
       const GRASS  = [0.20, 0.42, 0.22];
       const WHITE  = [0.94, 0.94, 0.92];
@@ -65,10 +64,6 @@
           addBox(out, lc, [1.8, 2.0, 1.6], FLOOD, b);
         }
         addBox(out, vadd(base, a.u, h + 0.6), [9.2, 0.28, 1.6], FLOOD, b);
-      };
-      const lightPool = (k, side, gap, r) => {
-        const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
-        addCyl(out, vadd(a.c, a.u, 0.05), r, 0.07, POOL, 10, b);
       };
       const arabicSign = (k, side, gap, w, h, ink, panel) => {
         const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
@@ -131,7 +126,10 @@
             const a  = i / count * 6.2832 + hash(i * 3 + extra) * 0.18;
             const hf = hash(i * 7 + extra);
             const rr = ring + (hash(i * 5 + extra) - 0.5) * extra * 0.5;
-            mountain(cx + Math.cos(a) * rr, cz + Math.sin(a) * rr, pyMin,
+            const x = cx + Math.cos(a) * rr, z = cz + Math.sin(a) * rr;
+            const gy = (typeof terrainYAt === "function" && terrainYAt(x, z));
+            const baseY = (gy != null && Number.isFinite(gy)) ? gy - 0.5 : pyMin;
+            mountain(x, z, baseY,
                      wMin + hf * wMin * 0.9, hMin + hf * hMin * 0.5,
                      { seg: 6, seed: i * 4 + extra, rough: 0.32, snowline: 1.4,
                        forest: sand, rock: dark, snow: dark });
@@ -139,27 +137,35 @@
         }
       })();
 
+      // Musco-style ring: engine floodMast pools are fixed 7.5 m boxes on a
+      // single anchor height, so on any relief their tops bury (ground-audit
+      // attributed 146 of qatar's 163 buried to those pools). pool:false keeps
+      // the cool-white banks + registered night lights; a few S/F groundPatch
+      // washes seat on the ribbon instead of a full-lap wash ring (overlapping
+      // washes coplanared). Densify the S/F ring (survey ask) without calling
+      // blockAt from this closure — floodMast's own keep-out is engine.
+      // Sources: wikipedia.org/wiki/Lusail_International_Circuit (Musco since
+      // 2007; LED retrofit 2021); oversteer48.com/lusail-international-circuit-layout/
       const MAST_H = 46, MAST_H_SF = 50;
       if (typeof floodMastRing === "function") {
-        floodMastRing(90, { h: MAST_H, dist: 34, cool: true, pool: true });
-        along(0.86, 0.14, 88, (k) => {
+        floodMastRing(80, { h: MAST_H, dist: 34, cool: true, pool: false });
+        // Start/finish densification: ~every 55 m along the pit straight.
+        along(0.86, 0.14, 55, (k) => {
           if (typeof floodMast === "function") {
-            floodMast(k, -1, 32, { h: MAST_H_SF, cool: true, pool: true });
-            floodMast(k,  1, 36, { h: MAST_H_SF, cool: true, pool: true });
+            floodMast(k, -1, 32, { h: MAST_H_SF, cool: true, pool: false });
+            floodMast(k,  1, 36, { h: MAST_H_SF, cool: true, pool: false });
           }
         });
       } else {
-        every(90, (k) => {
+        every(80, (k) => {
           for (const side of [-1, 1]) {
             const gap = 34 + hash(k * 11 + side) * 4;
             floodTower(k, side, gap, 36 + hash(k * 13) * 4);
-            lightPool(k, side, gap - 2, 8);
           }
         });
-        for (const s of [0.0, 0.015, 0.03, 0.045, 0.88, 0.91, 0.94, 0.97]) {
+        for (const s of [0.0, 0.02, 0.04, 0.90, 0.94, 0.98]) {
           for (const side of [-1, 1]) {
             floodTower(K(s), side, 34, 38);
-            lightPool(K(s), side, 32, 8);
           }
         }
       }
@@ -181,44 +187,65 @@
         }
       }
 
+      // Record-length pit building: Guinness 402.1 m / 50 garages (Ashghal /
+      // Visit Qatar / Tilke). Race-control tower on the aft (pit-entry) end;
+      // Paddock Club roof terrace along the upper deck. Sources:
+      // https://tilke.de/portfolio/lusail-race-track-qatar/
+      // https://www.qatar-tribune.com/article/86488/front/ashghal-sets-guinness-world-record-for-longest-motorsport-pitlane-building-at-lusail-intl-circuit
+      // https://visitqatar.com/intl-en/things-to-do/adventure-sports/sports-venues/lusail-international-circuit
       (function pitSlab() {
-        const a = anchor(K(0.00), -1, 9.2), b = [a.r, a.u, a.t];
-        const c = vadd(a.c, a.u, 6.0);
+        // Anchor gap must clear half the footprint width (rejBox). Half of 18 m
+        // is 9 m; 10.5 m leaves a small shoulder so the 402 m slab never clips
+        // the pit-lane tarmac.
+        const a = anchor(K(0.00), -1, 10.5), b = [a.r, a.u, a.t];
+        const PIT_LEN = 402; // Guinness: 402.1 m — nearest whole metre
+        const PIT_H = 12;
+        const c = vadd(a.c, a.u, PIT_H * 0.55);
+        // Emit body is factored out so `{ required: true }` stays within the
+        // contract test's 2200-char window of modelGroup("qatar-pit-slab".
+        const emitPit = (stage) => {
+          addBox(stage, vadd(a.c, a.u, 5.5), [16, 11, PIT_LEN], WHITE, b);
+          addBox(stage, vadd(vadd(a.c, a.u, 5.7), a.r, 8.05),
+            [0.25, 0.5, PIT_LEN - 2], [0.78, 0.78, 0.76], b);
+          addBox(stage, vadd(vadd(a.c, a.u, 9.0), a.r, 8.08),
+            [0.22, 1.2, PIT_LEN - 4], WIN_WARM, b);
+          addBox(stage, vadd(a.c, a.u, 11.4), [17.2, 0.7, PIT_LEN + 1], WHITE, b);
+          addBox(stage, vadd(vadd(a.c, a.u, 12.05), a.r, -1.5),
+            [11, 0.4, PIT_LEN * 0.70], [0.88, 0.88, 0.86], b);
+          addBox(stage, vadd(vadd(a.c, a.u, 12.7), a.r, 8.15),
+            [0.18, 1.0, PIT_LEN * 0.68], WIN_COOL, b);
+          for (let i = -2; i <= 2; i++) {
+            const pod = vadd(vadd(a.c, a.u, 13.5), a.t, i * 70);
+            addBox(stage, pod, [9, 3.0, 14], WHITE, b);
+            addBox(stage, vadd(vadd(pod, a.r, 4.6), a.u, 0.1),
+              [0.16, 2.0, 12], WIN_WARM, b);
+          }
+          // Race-control tower — Tilke: "on the southern end". Placed at the
+          // pit-entry / T16 end of the slab. Geographic south not independently
+          // verified here; aft end is the conventional race-control seat.
+          const rcBase = vadd(vadd(a.c, a.t, -(PIT_LEN * 0.46)), a.r, -2);
+          addBox(stage, vadd(rcBase, a.u, 14), [12, 28, 12], WHITE, b);
+          addBox(stage, vadd(vadd(rcBase, a.u, 22), a.r, 6.1),
+            [0.22, 10, 10], WIN_COOL, b);
+          addBox(stage, vadd(rcBase, a.u, 28.4), [14, 0.7, 14], WHITE, b);
+          addBox(stage, vadd(rcBase, a.u, 30.0), [7, 3.2, 7], [0.82, 0.84, 0.86], b);
+          addCyl(stage, vadd(rcBase, a.u, 31.8), 0.18, 7, STEEL, 4, b);
+          for (let g = 0; g < 25; g++) {
+            const dz = (g - 12) * (PIT_LEN / 25);
+            const col = (g % 2) ? [0.16, 0.16, 0.18] : [0.26, 0.26, 0.28];
+            addBox(stage, vadd(vadd(a.c, a.u, 2.4), a.t, dz),
+              [0.35, 4.6, PIT_LEN / 25 - 0.8], col, b);
+          }
+        };
         modelGroup("qatar-pit-slab", {
-          center: c, size: [18, 13, 380], basis: b,
-        }, (stage) => {
-          addBox(stage, vadd(a.c, a.u, 5.5), [16, 11, 378], WHITE, b);
-          addBox(stage, vadd(vadd(a.c, a.u, 5.7), a.r, 8.05), [0.25, 0.5, 376], [0.78, 0.78, 0.76], b);
-          addBox(stage, vadd(vadd(a.c, a.u, 9.0), a.r, 8.08), [0.22, 1.2, 374], WIN_WARM, b);
-          addBox(stage, vadd(a.c, a.u, 11.35), [17.2, 0.7, 379], WHITE, b);
-        }, { required: true });
+          center: c, size: [18, PIT_H + 20, PIT_LEN + 2], basis: b,
+        }, emitPit, { required: true });
       })();
-      building(K(0.01), -1, 17, 13, 8, 130,
+      // Secondary hospitality / team offices behind the pit face (not the
+      // Guinness slab — that is qatar-pit-slab above).
+      building(K(0.01), -1, 24, 12, 8, 80,
         { kind: "slab", wall: [0.90, 0.90, 0.88], window: WIN_COOL, floor: 3.2 });
-      // Horizontal banding stripe along the pit face (Tilke language).
-      // These band the PIT BUILDING emitted just above — but were anchored via
-      // along() at 1.2 m off the TRACK edge, 16 m inboard of that facade and up
-      // to 11 m in the air, so 70 stripes hung over the pit lane attached to
-      // nothing. They must follow the BUILDING, not the centreline: building()
-      // emits one straight 160 m slab oriented at K(0.01), so stepping along the
-      // curving track diverges from it. Step along the slab's own tangent from
-      // the same anchor, and keep both bands inside its 8 m height.
-      {
-        const pb = anchor(K(0.01), -1, 16.6), bb = [pb.r, pb.u, pb.t];
-        for (let i = -7; i <= 7; i++) {
-          const c = vadd(pb.c, pb.t, i * 10.6);
-          addBox(out, vadd(c, pb.u, 3.4), [0.25, 0.45, 10], [0.78, 0.78, 0.76], bb);
-          addBox(out, vadd(c, pb.u, 6.6), [0.35, 0.9, 8], WIN_WARM, bb);
-        }
-      }
-      (function pitGarages() {
-        let i = 0;
-        along(0.0, 0.12, 6, (k) => {
-          const col = (i % 2) ? [0.18, 0.18, 0.20] : [0.28, 0.28, 0.30];
-          place(k, -1, 3.9, [0.5, 4.5, 5.0], col);
-          i++;
-        });
-      })();
+      // Pit-lane keep-out wall; garage doors are modelled on the slab above.
       wall(0.96, 0.08, -1, 3, 1.0, [0.85, 0.85, 0.85]);
 
       for (let i = 0; i < 6; i++) {
@@ -249,14 +276,21 @@
       })();
 
       gantry(0.012, 7.5, [0.12, 0.12, 0.14]);
-      tower(K(0.985), -1, 8, 6, 26, { col: [0.18, 0.18, 0.21], cap: true, capCol: FLOOD });
+      // Slim timing mast at S/F (race control lives on qatar-pit-slab).
+      tower(K(0.985), -1, 6, 4, 18, { col: [0.18, 0.18, 0.21], cap: true, capCol: FLOOD });
 
-      // Main grandstand (R): long curved crescent stepped slab.
-      (function crescentStand() {
+      // Main grandstand (R): long covered stand along the pit straight —
+      // upgraded capacity ~40,000 (racingcircuits.info / PlanetF1). A continuous
+      // raked roofed stand is sourced; a crescent plan is a survey ask without
+      // an independent plan source, so we keep a gently stepped long stand
+      // rather than inventing a crescent footprint.
+      // https://www.racingcircuits.info/middle-east/qatar/lusail-international-circuit.html
+      // https://www.planetf1.com/news/first-look-revamped-lusail-international-circuit-qatar
+      (function mainGrandstand() {
         for (let i = 0; i < 5; i++) {
-          const s = 0.950 + i * 0.022;
-          qatarStand(`qatar-main-stand-${i}`, s % 1, 1, 16, 72,
-            [0.86, 0.86, 0.84], [0.20, 0.20, 0.24], i === 0);
+          const s = 0.950 + i * 0.020;
+          qatarStand(`qatar-main-stand-${i}`, s % 1, 1, 15, 80,
+            [0.86, 0.86, 0.84], [0.18, 0.18, 0.22], i === 0);
         }
       })();
 
@@ -279,6 +313,45 @@
       tyreWall(0.04, 0.085, 1, 5, [0.90, 0.86, 0.20]);
       marshalPost(K(0.05), -1, 6);
       billboard(K(0.065), 1, 6, 12, 3.8, AD[0]);
+
+      // Lusail Hill — elevated general-admission terraces outside Turn 1,
+      // set in green space beyond the gravel trap. Prop mound only (no road
+      // elevation change; circuit stays flatTerrain). Sources:
+      // https://www.racingcircuits.info/middle-east/qatar/lusail-international-circuit.html
+      // https://oversteer48.com/lusail-hill-general-admission-qatar-gp/
+      // https://www.lcsc.qa/ticket/general-admission-lusail-hill-3-day
+      (function lusailHill() {
+        const a = anchor(K(0.068), 1, 56), b = [a.r, a.u, a.t];
+        modelGroup("qatar-lusail-hill", {
+          center: vadd(a.c, a.u, 5.5), size: [44, 13, 88], basis: b,
+        }, (stage) => {
+          // Earth core / landscaped mound.
+          addFrustum(stage, a.c, 38, 24, 5.2, [0.42, 0.36, 0.26], 8, b);
+          addFrustum(stage, vadd(a.c, a.u, 4.9), 24, 14, 3.4, [0.38, 0.32, 0.24], 8, b);
+          // Artificial-grass terraces (green space / GA seating).
+          for (let row = 0; row < 4; row++) {
+            const y = 1.2 + row * 1.4;
+            const inset = 8 + row * 3.5;
+            const outR = 8 + row * 2.6;
+            addBox(stage, vadd(vadd(a.c, a.u, y), a.r, -outR),
+              [16 - row * 1.5, 0.45, 70 - inset * 1.3], GRASS, b);
+            addBox(stage, vadd(vadd(a.c, a.u, y - 0.35), a.r, -outR + 0.55),
+              [1.0, 0.85, 68 - inset * 1.3], [0.34, 0.30, 0.24], b);
+          }
+          // Low viewing rail + crest path.
+          addBox(stage, vadd(vadd(a.c, a.u, 8.8), a.r, -13),
+            [0.22, 1.0, 54], STEEL, b);
+          addBox(stage, vadd(a.c, a.u, 8.2), [7, 0.28, 60], [0.55, 0.55, 0.52], b);
+        }, { required: true });
+        // Soft GA bank further out than the required mound so ladders do not
+        // share planes with qatar-lusail-hill terraces.
+        if (typeof spectatorHill === "function") {
+          spectatorHill(0.060, 0.082, 1, 76, {
+            rows: 2, rise: 1.05, depth: 2.0, density: 0.38, step: 12,
+            grass: GRASS, riser: [0.36, 0.32, 0.24],
+          });
+        }
+      })();
 
       {
         const hallH = 7;
@@ -312,10 +385,12 @@
           addCyl(stage, a.c, 0.55, 16, STEEL, 8, b);
           addBox(stage, vadd(a.c, a.u, 16.0), [58, 0.65, 32], WHITE, b);
           for (const dx of [-18, -9, 0, 9, 18]) {
-            addBox(stage, vadd(vadd(a.c, a.u, 12), a.r, dx * 0.15), [0.35, 8, 0.35], STEEL, b);
-            addBox(stage, vadd(vadd(a.c, a.u, 16.2), a.t, dx * 0.75), [54, 0.28, 0.35], LAMP, b);
+            // Posts stop under the sheet (top at ~15.4) so their caps are not
+            // coplanar with the canopy underside.
+            addBox(stage, vadd(vadd(a.c, a.u, 7.6), a.r, dx * 0.15), [0.35, 15.0, 0.35], STEEL, b);
+            addBox(stage, vadd(vadd(a.c, a.u, 16.55), a.t, dx * 0.75), [54, 0.28, 0.35], LAMP, b);
           }
-          addBox(stage, vadd(a.c, a.u, 15.6), [48, 0.25, 1.2], FLOOD, b);
+          addBox(stage, vadd(a.c, a.u, 15.2), [48, 0.22, 1.2], FLOOD, b);
         }, { required: true });
       })();
 
@@ -354,7 +429,11 @@
         const w   = 36 + hash(k * 5) * 18;
         const h   =  2.5 + hash(k * 7) * 2.5;
         const a = anchor(k, -1, gap + w * 0.62);
-        mountain(a.c[0], a.c[2], pyMin, w, h,
+        // Seat on local terrain, not lap pyMin — pyMin buried dune skirts
+        // several metres under the ribbon (ground-audit worst ~2.3–5.7 m).
+        const gy = (typeof terrainYAt === "function" && terrainYAt(a.c[0], a.c[2]));
+        const baseY = (gy != null && Number.isFinite(gy)) ? gy - 0.15 : a.c[1];
+        mountain(a.c[0], a.c[2], baseY, w, h,
           { seg: 6, seed: k * 4 + 28, rough: 0.40, snowline: 1.6,
             forest: DUNE, rock: DUNE_N, snow: DUNE_N });
       }
@@ -381,7 +460,9 @@
           const w   = 40 + hash(k * 9 + side) * 18;
           const h   =  2.5 + hash(k * 11 + side) * 2.5;
           const a = anchor(k, side, gap + w * 0.62);
-          mountain(a.c[0], a.c[2], pyMin, w, h,
+          const gy = (typeof terrainYAt === "function" && terrainYAt(a.c[0], a.c[2]));
+          const baseY = (gy != null && Number.isFinite(gy)) ? gy - 0.15 : a.c[1];
+          mountain(a.c[0], a.c[2], baseY, w, h,
             { seg: 6, seed: k * 5 + side * 3 + 40, rough: 0.38, snowline: 1.6,
               forest: SAND, rock: SAND_D, snow: SAND_D });
         }
@@ -395,12 +476,12 @@
         const h = 3.0 + hash(i * 23 + 9) * 2.2;
         const gap = 155 + hash(i * 31 + 2) * 55;
         const a = anchor(K(s), 1, gap);
-        mountain(a.c[0], a.c[2], pyMin, w, h,
+        const gy = (typeof terrainYAt === "function" && terrainYAt(a.c[0], a.c[2]));
+        const baseY = (gy != null && Number.isFinite(gy)) ? gy - 0.15 : a.c[1];
+        mountain(a.c[0], a.c[2], baseY, w, h,
           { seg: 6, seed: 620 + i * 13, rough: 0.30, snowline: 1.6,
             forest: DUNE, rock: DUNE_N, snow: DUNE_N });
       }
-
-      void BEACON;
 
       (function katharaAndStadium() {
         const BRONZE = [0.20, 0.15, 0.10];
@@ -461,8 +542,8 @@
 
       if (typeof floodMast === "function") {
         for (const s of [0.63, 0.72, 0.80]) {
-          floodMast(K(s), -1, 38, { h: MAST_H + 2, cool: true, pool: true, arms: 3 });
-          floodMast(K(s),  1, 42, { h: MAST_H + 2, cool: true, pool: true, arms: 3 });
+          floodMast(K(s), -1, 38, { h: MAST_H + 2, cool: true, pool: false, arms: 3 });
+          floodMast(K(s),  1, 42, { h: MAST_H + 2, cool: true, pool: false, arms: 3 });
         }
       }
 
@@ -505,10 +586,14 @@
       // Each patch is the walk's own step long (less 10 cm), not 14 m: the 2 m
       // overlap between consecutive patches draped the same terrain twice, one
       // lift slot apart — 41 flat-coplanar spots (ground-audit).
-      const vergeLen = Math.max(1, Math.round(12 / api.ds)) * api.ds - 0.1;
-      every(12, (k) => {
+      const vergeStep = 14;
+      const vergeLen = Math.max(1, Math.round(vergeStep / api.ds)) * api.ds - 0.4;
+      every(vergeStep, (k) => {
+        const s = ((k % n) + n) % n / n;
         for (const side of [-1, 1]) {
-          groundPatch(k, side, 1.5, [3.6, 0.16, vergeLen], GRASS,
+          // Pit keep-out wall owns the left shoulder on the S/F (gap 3).
+          if (side === -1 && (s >= 0.94 || s <= 0.10)) continue;
+          groundPatch(k, side, 1.55 + side * 0.08, [3.4, 0.15, vergeLen], GRASS,
             { id: `qatar-green-verge-${k}-${side}`, samples: 2 });
         }
       });

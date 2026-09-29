@@ -18,10 +18,13 @@ climbs through the middle sector before rolling home.
 
 | s | Side | Distance | Box-model description |
 |------|------|----------|------------------------|
-| 0.00 | L | near | New (2024) pit building: long low white/grey slab boxes, tiered VIP terrace stacked on top |
-| 0.00 | R | near | Main grandstand: big covered stepped wedge, dark roof box over pale tiered seating |
+| 0.00 | L | near | 2024–25 pit / paddock building: five storeys, parallel white slab with cantilever terrace lips, bioclimatic pergola, rooftop terrace (DVM / IADA / Motorsport.com). Authored length ~128 m (under sourced >340 m) to stay inside the props-tris ratchet; still clearly longer than the old ~80 m slab |
+| 0.00 | R | near | Main grandstand opposite the pits: covered, ~10k seats, deep perpendicular terrace stack + dark roof (IADA); size approximate |
+| — | — | — | Dynamics 21 m sculpture + separate entrance office: not modelled (appearance/GPS UNSOURCED for a faithful placement) |
+| 0.02 / 0.985 | both | near | Two tunnel stairheads between paddock and main tribune (Motorsport.com) |
 | 0.02 | L | near | Pit wall + garage row: thin white box strip with red kerb trim |
-| 0.06 | R | mid | Turn 1 downhill braking zone: tall stacked spectator banking, green stepped boxes |
+| 0.07 | R | mid | T1 / Pit Exit cluster — covered cantilever stand on the outside braking zone (oversteer48 Pit Exit 1/2 + T1; Pit Exit 2 not a separate mass — vertex budget) |
+| 0.090–0.098 | R | near | Pit Exit 1 uncovered bleacher (oversteer48: no roof), positive rake |
 | 0.08 | R | far | Small lake/pond in the valley floor: flat dark blue-green box below banking |
 | 0.12 | L | mid | Grass amphitheatre hill, sun-bleached green, dotted dark tree-cube clumps |
 | 0.18 | R | mid | Low grandstand bleacher: pale tiered box facing the slow complex |
@@ -32,6 +35,10 @@ climbs through the middle sector before rolling home.
 | 0.75 | L | mid | Open grass run-off bank, dry yellow-green slope |
 | 0.90 | R | mid | Approach grandstand: tiered box leading back to the line |
 
+**Pit side note:** `pit.side` stays `-1` (paddock left of the main straight). oversteer48 places the 2025 main grandstand on the outside-left opposite the pit garages (implying pit on the right). That conflicts with the def; flipping pit side is a separate PR (TrackPit / foundation blast radius). This pass keeps the existing left-pit / right-tribune framing.
+
+Sources: [Wikipedia](https://en.wikipedia.org/wiki/Hungaroring), [DVM Group](https://dvmgroup.com/en/references/projects/hungaroring), [IADA 2026](https://ad-c.org/winner/hungaroring-gold-winner-mixed-use-development-design-iada-2026/), [Motorsport.com](https://www.motorsport.com/f1/news/huge-renovation-work-almost-complete-at-hungaroring-ahead-of-f1-hungarian-gp/10734732/), [oversteer48 Pit Exit 1](https://oversteer48.com/hungaroring-pit-exit-1-grandstand/), [TrackTitan](https://www.tracktitan.io/post/hungaroring-track-guide), [F1 Technical](https://www.f1technical.net/news/25005), [Driver61](https://driver61.com/circuit-guide/hungaroring/)
+
 ## 5. Track features
 Famously twisty and slow with very few overtaking spots — pole and clean air dominate. The downhill heavy-braking Turn 1 right-hander is the prime passing zone. A tight low-speed Turn 2–4 complex, then a relentless flowing middle sector of medium corners with no real straights. Aggressive red/white kerbs at apexes and exits; generous grass/asphalt run-off (no walls) ringed by green banking.
 
@@ -40,10 +47,9 @@ Famously twisty and slow with very few overtaking spots — pole and clean air d
 - Use dry yellow-green grass, not vivid lawn — it reads as hot Hungarian summer.
 - Make Turn 1 dramatic with a clear DOWN drop and tall banking + a small dark lake box in the basin.
 - Cluster dark-green tree cubes along ridge lines for a low forested horizon.
-- Anchor s=0 with the bright modern pit slab (L) facing the big covered grandstand wedge (R).
+- Anchor s=0 with the long modern pit slab (L) facing the deep covered grandstand (R).
 - Keep palette warm and slightly hazy; fade far hills toward the fog tint for depth.
-
-Sources: [Wikipedia](https://en.wikipedia.org/wiki/Hungaroring), [TrackTitan](https://www.tracktitan.io/post/hungaroring-track-guide), [Motorsport.com](https://www.motorsport.com/f1/news/huge-renovation-work-almost-complete-at-hungaroring-ahead-of-f1-hungarian-gp/10734732/), [F1 Technical](https://www.f1technical.net/news/25005), [Driver61](https://driver61.com/circuit-guide/hungaroring/)
+- Frame debt: `sceneryStartFrac` 0.9825 leaves `_sceneryShift` ≈ 0.90 — leave it alone until a dedicated frame commit (Estoril lesson).
 
 ## Research pass — the Pannonian plain
 
