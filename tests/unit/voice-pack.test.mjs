@@ -469,3 +469,37 @@ test('the engineer TEST previews the selected recorded source; SYSTEM previews s
   const sys=radio({packOn:false}); assert.equal(sys.v.preview('radio'),true);
   assert.equal(sys.packCalls.filter(c=>c.id).length,0); assert.equal(sys.spoken.length,1); sys.v.stop();
 });
+
+
+test('engineer waits for the full spotter clip and stays written when its finish time is unknown', () => {
+  const long = radio({spotterLeft: 1.8});
+  assert.equal(long.v.say('BOX BOX BOX', 5, 'info'), true);
+  assert.ok(long.packCalls.find(c => c.id).leadS >= 1.88);
+  long.v.stop();
+  const pending = radio({spotterLeft: Infinity});
+  assert.equal(pending.v.say('BOX BOX BOX', 5, 'info'), false);
+  assert.equal(pending.packCalls.filter(c => c.id).length, 0);
+  assert.deepEqual(pending.spoken, []);
+});
+
+test('recorded decoding consumes the card budget and pending clips have no known finish time', async () => {
+  for (const delay of [0.1, 1.5]) {
+    let now = 0, resolve, ends = 0;
+    const plays = [];
+    const sb = sandbox(['js/audio/voice-pack.js'], {
+      GameAudio: { now: () => now, ctxGen: () => 1,
+        decodeClip: () => new Promise(r => { resolve = r; }),
+        radioVoice: (parts, at) => { plays.push(at); return {end:at + 0.5, stop(){}}; } },
+      fetch: () => Promise.resolve({ok:true, json:async()=>({clips:{'car left':[0,4,0.5]}}), arrayBuffer:async()=>new ArrayBuffer(4)}),
+    });
+    const pack = sb.VoicePack.create({}); pack.ensure('george');
+    await new Promise(r => setImmediate(r));
+    assert.equal(pack.speak('george','car left',{channel:'spotter',budgetS:1,onEnd(){ends++;}}),true);
+    assert.equal(pack.remaining('spotter'),Infinity,'decoding cannot promise an end time');
+    now = delay; resolve({duration:0.5}); await new Promise(r => setImmediate(r));
+    assert.equal(plays.length, delay < 1 ? 1 : 0);
+    if (delay < 1) assert.ok(Number.isFinite(pack.remaining('spotter')));
+    else { assert.equal(pack.busy(),false); assert.equal(ends,1); }
+    pack.stop(); assert.equal(ends,1,'completion fires once even after a late stop');
+  }
+});

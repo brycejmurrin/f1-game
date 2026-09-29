@@ -165,7 +165,7 @@ const RadioVoice = (function () {
     // which is what happened while the two started together. `lead` is that
     // figure's real length, handed in by the caller rather than duplicated
     // here, and the line has the card MINUS it to fit in.
-    const lead = Math.max(0, Math.min(1, +o.lead || 0));
+    const lead = Math.max(0, +o.lead || 0);
     out.leadMs = lead * 1000;
     const budget = (o.life || 0) - LEAD_RESERVE_S - lead;
     let rate = tone.rate;
@@ -441,7 +441,7 @@ const RadioVoice = (function () {
       // The hard stop, armed from the card's ACTUAL remaining life rather than a
       // second copy of showAnnounce's expression. A duplicated constant is how
       // "spoken after it left the screen" gets reintroduced by a later edit.
-      deadline = setTimeout(stop, p.budgetMs);
+      if (current === u) deadline = setTimeout(stop, p.budgetMs);
       return true;
     }
     /* THE ONE GESTURE iOS GIVES US, AND IT WAS BEING THROWN AWAY.
