@@ -95,10 +95,6 @@ const Tracks = (function () {
     }
     // Low-amplitude ripple (3 harmonics, whole cycles/lap for seam continuity);
     // amp scales with relief (0.14–0.42 m cap); seeded off circuit id for ghosts.
-    // Surveyed SRTM profiles already carry real relief; the ripple still runs so
-    // fleet prop seating matches the baselines measured with it. Grade of the
-    // densified centreline is gated by elevation-smoothness with undulate off
-    // (surveyHeights only) — undulate can stack a couple of points on top.
     if (def.undulate !== false) {
       let lo = Infinity, hi = -Infinity;
       for (let k = 0; k < n; k++) { if (py[k] < lo) lo = py[k]; if (py[k] > hi) hi = py[k]; }
@@ -529,12 +525,9 @@ const Tracks = (function () {
   // The survey at every 4 m node, not just at the control points: a control
   // point can only carry its own height, and splining between them drew a
   // straight line across a dip under dijon's 399 m first segment (9.7 m off).
-  // Align once by projecting the start node onto the source trace, then read
-  // the table at MONOTONIC arc fractions along the densified lap. Nearest-
-  // segment projection at every node looked right until a Catmull-Rom bow
-  // near a fold (Nürburgring s≈0.775) skipped 7.6 m of path arc into one 4 m
-  // step and authored a 9.8% knife-edge on a profile the baker had capped at
-  // 5.5%. The table is periodic, so the lap closes without a drift correction.
+  // Align once on the source trace, then read MONOTONIC arc fractions — a
+  // nearest-seg walk skipped 7.6 m into one step at Nürburgring s≈0.775 and
+  // authored a 9.8% knife-edge on a 5.5%-capped bake. Table is periodic.
   function surveyHeights(def, px, py, pz, n) {
     const P = def.path.pts, N = P.length, arc = new Float64Array(N + 1);
     for (let i = 1; i <= N; i++) arc[i] = arc[i - 1] + __M.hypot(P[i % N][0] - P[i - 1][0], P[i % N][1] - P[i - 1][1]);
@@ -548,9 +541,7 @@ const Tracks = (function () {
     let seg = 0, bd = Infinity;
     for (let i = 0; i < N; i++) { const d = near(px[0], pz[0], i)[0]; if (d < bd) { bd = d; seg = i; } }
     const startFrac = near(px[0], pz[0], seg)[1] / pathLen;
-    const dir = def.reverse ? -1 : 1;
-    const y0 = elevationAt(def.id, startFrac);
-    const base = py[0];
+    const dir = def.reverse ? -1 : 1, y0 = elevationAt(def.id, startFrac), base = py[0];
     for (let k = 0; k < n; k++) {
       const f = ((startFrac + dir * (k / n)) % 1 + 1) % 1;
       py[k] = base + elevationAt(def.id, f) - y0;
