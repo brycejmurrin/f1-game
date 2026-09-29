@@ -141,28 +141,28 @@
       1650.388
     ],
     [
-      1663.8732,
-      6.1244,
+      1663.8749,
+      6.1173,
       53.1897,
-      -2.8393,
-      -1.7276,
-      1663.8732
+      -2.7876,
+      -1.7267,
+      1663.8749
     ],
     [
-      1676.5797,
-      9.7361,
-      51.7023,
-      -1.3783,
-      -1.7585,
-      1676.5797
+      1676.5916,
+      9.7004,
+      51.723,
+      -1.3452,
+      -1.7569,
+      1676.5916
     ],
     [
-      1688.5568,
-      13.1861,
-      48.3062,
-      -0.7336,
-      -1.7805,
-      1688.5568
+      1688.5795,
+      13.1317,
+      48.3267,
+      -0.73,
+      -1.7792,
+      1688.5795
     ]
   ],
   "off-track recovery": [
@@ -216,9 +216,9 @@
     ]
   ],
   "_blessed": {
-    "sha": "b0b31292927e3962bf0f6501e32f095288f06fd4",
-    "reason": "Intentional grass grip correction: drive and pedal forces respect surface grip; passive drag and pedal braking share a bounded tarmac-relative budget. Retain throttle-on grass recovery and low-speed stopping with worn weak brakes. Road-only acceleration stays unchanged.",
-    "at": "2026-09-24T04:49:14.014Z",
-    "hash": "0f4e2f9a8920f755bb35b98661af82481f69ea1097f9d10fb6a552fd19ba9b0f"
+    "sha": "09ffe00acb85bffd613f58c3f727e54e8f453cee",
+    "reason": "BRAKE_STAB: a stamp on the brakes at the cornering limit no longer spins the car toward the apex (owner report 2026-09-29); reset() clears the new brakeStab damper; only the trail-brake scenario moves",
+    "at": "2026-09-29T16:13:01.587Z",
+    "hash": "cc81005d6db3e63eb50c8b1c8a832b1229cc61e9421dc83300d3906d5814a29f"
   }
 }
