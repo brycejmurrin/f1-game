@@ -693,3 +693,45 @@ test("the radio check's hiss is held for the line, not for the rest of the flyby
   const p = sb.RadioVoice.plan({ msg: "P12. RADIO CHECK", life: 6, kind: "race", lead: 0.43, enabled: true, soundOn: true, api: true, state: "menu", preRace: true });
   assert.ok(p.speak && p.secs > 0 && p.secs < 3, `secs ${p.secs}`);
 });
+
+// ── A REAL RACE: the flyby stretches to the race-so-far read; the card shows where it stands ──
+test("flyMsFor(skips, wantMs): a real race's read stretches the flyby up to FLY_MAX_MS; a habitual skipper keeps the short cut", () => {
+  const { flyMsFor, FLY_MS, SHORT_FLY_MS, FLY_MAX_MS } = LS;
+  assert.equal(FLY_MAX_MS, 60000);
+  assert.equal(flyMsFor(0, 0), FLY_MS, "nothing to read: the usual cut");
+  assert.equal(flyMsFor(0, 10000), FLY_MS, "a short read never SHORTENS the flyby");
+  assert.equal(flyMsFor(0, 41500), 41500, "the read's own length");
+  assert.equal(flyMsFor(0, 91354), FLY_MAX_MS, "capped — the announcer fits the rest down");
+  for (const bad of [NaN, "x", null, undefined, -5]) assert.equal(flyMsFor(0, bad), FLY_MS, String(bad));
+  assert.equal(flyMsFor(3, 50000), SHORT_FLY_MS, "three skips in a row: they have told us what they think of waiting");
+  // game.js asks with the read, before the shots are planned, and the screen runs the same budget.
+  const game = read("js/game.js");
+  const intro = game.slice(game.indexOf("function raceIntro(go)"), game.indexOf("function loadingInfo()"));
+  assert.match(intro, /const info = loadingInfo\(\);[^\n]*\n\s*FlybySeq\.setDuration\(loadingScreen\.nextFlyMs\(info\.readMs\)\);/);
+  assert.match(intro, /loadingScreen\.run\(info, go\);/);
+  const li = game.slice(game.indexOf("function loadingInfo()"), game.indexOf("function loadingInfo()") + 2000);
+  assert.match(li, /if \(real && announcer\.readMs\) out\.readMs = announcer\.readMs\(out\);/, "only a real race stretches it");
+  assert.match(read("js/ui/loading-screen.js"), /flyMsFor\(readSkips\(\), info\.readMs\)/);
+});
+
+test("metaRows: a circuit gets its facts; a real race joined mid-race gets the lap, your place, tyres, stops, leader and flag", () => {
+  const metaRows = (...a) => JSON.parse(JSON.stringify(LS.metaRows(...a)));   // the module's arrays are another realm's
+  const track = { id: "baku", name: "BAKU", lengthKm: 6.003, night: true };
+  assert.deepEqual(metaRows({ track, laps: 12, weather: "dry", tod: "default" }, 20),
+    [["LAPS", "12"], ["LENGTH", "6.003 km"], ["TURNS", "20"], ["WEATHER", "DRY"], ["TIME", "NIGHT"]]);
+  const story = {
+    lap: 40, realLaps: 51, grid: false, leader: { code: "RUS" }, out: [{}, {}, {}, {}, {}, {}], cautions: [],
+    you: { running: true, pos: 5, gap: { s: 3.3, lapsDown: 0 }, tyre: { compound: "medium", age: 8 }, stops: [31, 36] },
+  };
+  const real = { startLap: 40, watch: false, story };
+  assert.deepEqual(metaRows({ track, laps: 51, weather: "dry", tod: "day", real }, 20), [
+    ["LAP", "40 / 51"], ["RUNNING", "P5 · +3.3s"], ["TYRE", "MEDIUM · 8 LAPS"], ["STOPS", "2 (L31, L36)"], ["LEADER", "RUS"], ["OUT", "6"],
+    ["WEATHER", "DRY"], ["TIME", "DAY"]]);
+  const sc = { ...story, cautions: [{ kind: "safety car", from: 31, to: 32, now: true }], you: { ...story.you, pos: 1, stops: [] } };
+  const rows = metaRows({ track, weather: "dry", tod: "day", real: { ...real, story: sc, watch: true } });
+  assert.deepEqual(rows.slice(1, 4), [["FOLLOWING", "P1"], ["TYRE", "MEDIUM · 8 LAPS"], ["STOPS", "NONE"]]);
+  assert.deepEqual(rows[5], ["FLAG", "SAFETY CAR"], "a flag that is out outranks the retirements count");
+  const grid = { lap: 1, realLaps: 51, grid: true, pole: { code: "RUS" }, you: { pos: 2, tyre: { compound: "medium", age: 2 } } };
+  assert.deepEqual(metaRows({ track, laps: 51, weather: "rain", tod: "day", real: { startLap: 1, story: grid } }).slice(0, 4),
+    [["GRID", "P2"], ["POLE", "RUS"], ["TYRE", "MEDIUM · USED"], ["LAPS", "51"]]);
+});

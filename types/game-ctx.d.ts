@@ -417,7 +417,7 @@ interface GameCtx {
    * same inert() deal as `radio`. AudioPanel owns its switch and voice row;
    * the loading screen calls play()/stop() and the flyby editor preview().
    */
-  readonly announcer: { play(info: Record<string, unknown>, budgetMs: number): boolean; preview(info: Record<string, unknown>): boolean; sample(): boolean; scriptFor(info: Record<string, unknown>): string[]; wrapUp(order: unknown[], info: Record<string, unknown>): boolean; stop(): void; enabled(): boolean; setEnabled(b: boolean): void; available(): boolean };
+  readonly announcer: { play(info: Record<string, unknown>, budgetMs: number): boolean; preview(info: Record<string, unknown>): boolean; sample(): boolean; scriptFor(info: Record<string, unknown>): string[]; readMs(info: Record<string, unknown>): number; wrapUp(order: unknown[], info: Record<string, unknown>): boolean; stop(): void; enabled(): boolean; setEnabled(b: boolean): void; available(): boolean };
   /**
    * The RACE RADIO — js/race/race-radio.js: the engineer's race calls and the
    * in-race commentary. AudioPanel drives its two settings (chatter, commentary).
@@ -794,6 +794,7 @@ declare const AeroZones: GameModuleFactory;
 declare const Collide: GameModuleFactory;
 declare const CarDraw: GameModuleFactory;
 declare const ShadowPass: GameModuleFactory;
+declare const MirrorPass: GameModuleFactory;
 declare const AgentView: GameModuleFactory;
 declare const ApexApi: GameModuleFactory;
 declare const Atmosphere: GameModuleFactory;

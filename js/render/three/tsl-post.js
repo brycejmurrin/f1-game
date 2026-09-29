@@ -1002,8 +1002,27 @@
       })(), "tlx-post-blit"),
     };
 
+    /* MIRROR (the rear-view mirror, js/render/shared/mirror-pass.js): the
+     *    mirror target drawn into the HUD rect by a viewport-limited pass
+     *    (tlx-post.js), FLIPPED left-right here — a negative-x projection would
+     *    invert winding and FrontSide-cull the world. U.rect is that rect in
+     *    top-left target pixels, the space screenCoordinate is in on both three
+     *    backends. Exposure and the ACES curve are the composite's own uniforms
+     *    (C), so the TONE CURVE knobs reach the mirror; the grade does not. */
+    const mirrorTex = texture(ctx.blackTex);
+    const mirrorU = { rect: uniform(new THREE.Vector4(0, 0, 1, 1)), hdr: uniform(1) };
+    const mirror = {
+      tex: mirrorTex, U: mirrorU,
+      mat: passMaterial(Fn(() => {
+        const p = vec2(screenCoordinate).sub(mirrorU.rect.xy).div(mirrorU.rect.zw).toVar();
+        const c = vec3(mirrorTex.sample(vec2(p.x.oneMinus(), p.y)).rgb).toVar();
+        const t = acesTonemap(c.mul(C.exposure).div(C.whitePoint));
+        return vec4(select(mirrorU.hdr.greaterThan(0.5), t, c), 1.0);
+      })(), "tlx-post-mirror"),
+    };
+
     return { bright, blurAO, blurGR, down, upAdd, upFinal, spread, ssao, godray,
-             composite, fxaa, sgsr, blit };
+             composite, fxaa, sgsr, blit, mirror };
   }
 
   window.TLXShaders = Object.assign(window.TLXShaders || {}, { post });

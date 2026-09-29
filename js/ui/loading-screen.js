@@ -45,10 +45,65 @@ const LoadingScreen = (function () {
   const SHORT_FLY_MS = 12000;
   const SKIP_GRACE_MS = 400;
   const SKIP_STREAK = 3;
-  /** The flyby's budget for a stored streak. Pure; hostile input is no streak. */
-  function flyMsFor(skips) {
+  /* A READ THAT NEEDS LONGER. A real race joined from the Data Hub has a story
+   * to tell (the order, the gaps, your tyres, the flags so far) that does not
+   * fit 24 s; `wantMs` is the announcer's own estimate of its full read, and the
+   * flyby stretches to it, up to FLY_MAX_MS. Still skippable, and a habitual
+   * skipper keeps the short cut: they have told us what they think of waiting. */
+  const FLY_MAX_MS = 60000;   // the Baku lap-40 read needs 54 s for its flags and retirements (announcer.test.mjs); still skippable
+  /** The flyby's budget for a stored streak (and a read that wants longer). Pure; hostile input is no streak. */
+  function flyMsFor(skips, wantMs) {
     const n = Number.isFinite(+skips) ? +skips : 0;
-    return n >= SKIP_STREAK ? SHORT_FLY_MS : FLY_MS;
+    if (n >= SKIP_STREAK) return SHORT_FLY_MS;
+    const want = Number.isFinite(+wantMs) ? +wantMs : 0;
+    return Math.min(FLY_MAX_MS, Math.max(FLY_MS, Math.round(want)));
+  }
+
+  /* THE CARD'S FACTS. A circuit gets laps, length, turns, weather and time. A
+   * REAL RACE joined mid-race gets where it stands instead — the lap, your
+   * place and gap, your tyres and stops, who leads, the flag if one is out —
+   * and from lap 1 the grid: your slot, pole, what you start on. The numbers
+   * are RealRace.situation()'s (info.real.story), so card and voice agree.
+   * Pure: info in, [label, value] rows out. */
+  const WX = { dry: "DRY", wet: "WET", rain: "RAIN", overcast: "CLOUDY", fog: "FOG" };
+  const TOD = { dawn: "DAWN", day: "DAY", dusk: "DUSK", night: "NIGHT" };
+  const TYRE = { soft: "SOFT", medium: "MEDIUM", hard: "HARD", intermediate: "INTER", "full wet": "WET" };
+  function gapStr(g) { return !g ? "" : g.lapsDown > 0 ? "+" + g.lapsDown + " LAP" + (g.lapsDown > 1 ? "S" : "") : g.s > 0 ? "+" + g.s.toFixed(1) + "s" : ""; }
+  function metaRows(info, turns) {
+    const t = (info && info.track) || {};
+    const km = t.lengthKm || 0;
+    const wx = ["WEATHER", WX[info && info.weather] || "DRY"], tod = ["TIME", TOD[info && info.tod] || (t.night ? "NIGHT" : "DAY")];
+    const S = info && info.real && info.real.story;
+    if (S && S.grid) {
+      const y = S.you;
+      return [
+        ["GRID", y && y.pos ? "P" + y.pos : "—"],
+        ["POLE", S.pole ? S.pole.code : "—"],
+        ["TYRE", y && y.tyre ? (TYRE[y.tyre.compound] || y.tyre.compound.toUpperCase()) + (y.tyre.age > 0 ? " · USED" : "") : "—"],
+        ["LAPS", info.laps ? String(info.laps) : "—"],
+        wx, tod,
+      ];
+    }
+    if (S) {
+      const y = S.you, flag = (S.cautions || []).find((c) => c.now);
+      const rows = [
+        ["LAP", S.lap + " / " + S.realLaps],
+        [info.real.watch ? "FOLLOWING" : "RUNNING", y && y.running ? "P" + y.pos + (y.pos > 1 ? " · " + gapStr(y.gap) : "") : y ? "OUT" : "—"],
+        ["TYRE", y && y.tyre ? (TYRE[y.tyre.compound] || y.tyre.compound.toUpperCase()) + " · " + y.tyre.age + (y.tyre.age === 1 ? " LAP" : " LAPS") : "—"],
+        ["STOPS", y ? (y.stops && y.stops.length ? y.stops.length + " (L" + y.stops.join(", L") + ")" : "NONE") : "—"],
+        ["LEADER", S.leader ? S.leader.code : "—"],
+      ];
+      if (flag) rows.push(["FLAG", flag.kind.toUpperCase()]);
+      else if (S.out && S.out.length) rows.push(["OUT", String(S.out.length)]);
+      rows.push(wx, tod);
+      return rows;
+    }
+    return [
+      ["LAPS", info && info.laps ? String(info.laps) : "—"],
+      ["LENGTH", km ? km.toFixed(3) + " km" : "—"],
+      ["TURNS", turns ? String(turns) : "—"],
+      wx, tod,
+    ];
   }
   /** The streak after one flyby: a skip extends it, a flyby watched to the end
    *  clears it. Capped so a stored number never grows without bound. */
@@ -255,28 +310,19 @@ const LoadingScreen = (function () {
       for (const k in vars) c.style.setProperty(k, vars[k]);
     }
 
-    const WX = { dry: "DRY", wet: "WET", rain: "RAIN", overcast: "CLOUDY", fog: "FOG" };
-    const TOD = { dawn: "DAWN", day: "DAY", dusk: "DUSK", night: "NIGHT" };
-
     function root() { return el || (el = $("loading")); }
 
     function paint(info) {
       const t = info.track;
       if (!t) return;
       $("ld-flag").innerHTML = Flags.svg(t.country);
-      $("ld-name").textContent = t.name + (t.night ? " ☾" : "");
+      const tod = info.tod || "default";   // lit as the SESSION is, not as the circuit defaults (a day race at Baku)
+      $("ld-name").textContent = t.name + (tod === "night" || (tod === "default" && t.night) ? " ☾" : "");
       $("ld-gp").textContent = info.gp || t.gp || t.country || "";
       // The same numbers the select card shows, minus the ones that need the
       // built world — this paints before any build has necessarily happened.
-      const km = t.lengthKm || 0;
-      const turns = TrackMaps.corners(t).length;
-      const rows = [
-        ["LAPS", info.laps ? String(info.laps) : "—"],
-        ["LENGTH", km ? km.toFixed(3) + " km" : "—"],
-        ["TURNS", turns ? String(turns) : "—"],
-        ["WEATHER", WX[info.weather] || "DRY"],
-        ["TIME", TOD[info.tod] || (t.night ? "NIGHT" : "DAY")],
-      ];
+      // A real race shows where it stands instead (metaRows).
+      const rows = metaRows(info, TrackMaps.corners(t).length);
       drawMap(t);
       const meta = $("ld-meta");
       if (typeof meta.replaceChildren === "function") meta.replaceChildren(); else meta.textContent = "";
@@ -546,7 +592,7 @@ const LoadingScreen = (function () {
       // "run" is the flyby WITH the card up; "card" is the no-world fallback.
       // Both show the card, so the stylesheet reveals it for either.
       setPhase(info.hasWorld && !reduced ? "run" : "card");
-      const life = info.hasWorld && !reduced ? flyMsFor(readSkips()) : CARD_MS;
+      const life = info.hasWorld && !reduced ? flyMsFor(readSkips(), info.readMs) : CARD_MS;   // readMs: a real race's read, which may need longer
       flyMs = info.hasWorld && !reduced ? life : FLY_MS;
       // The letterbox (css/overlays.css) opens on the flyby's last beat, so it
       // needs the budget this run actually has, not the 24 s it usually is.
@@ -651,7 +697,7 @@ const LoadingScreen = (function () {
       run, stop, hold, building, handoff,
       /** The next flyby's length (the short cut for a habitual skipper), so its
        *  shots are planned for the seconds they will actually have. */
-      nextFlyMs: () => flyMsFor(readSkips()),
+      nextFlyMs: (wantMs) => flyMsFor(readSkips(), wantMs),
       /** The flyby editor's three sliders. setCard() PATCHES — it merges onto
        *  what is there, so a size slider does not reset the position. RESET is
        *  resetCard(), which drops the geometry first: clampCard(null) is every
@@ -673,7 +719,7 @@ const LoadingScreen = (function () {
     };
   }
 
-  return { create, FLY_MS, SHORT_FLY_MS, SKIP_GRACE_MS, SKIP_STREAK, flyMsFor, nextSkips, CARD_MS, CARD, CARD_KEYS, clampCard, cardPristine, cardVars,
+  return { create, FLY_MS, SHORT_FLY_MS, FLY_MAX_MS, SKIP_GRACE_MS, SKIP_STREAK, flyMsFor, metaRows, nextSkips, CARD_MS, CARD, CARD_KEYS, clampCard, cardPristine, cardVars,
     gridLayout, gridField, gridColour, isGridShot, GRID_ROW_MIN };
 })();
 Object.freeze(LoadingScreen);

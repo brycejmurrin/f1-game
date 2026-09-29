@@ -192,6 +192,11 @@ test("LOW GRIP (B7.2.2(d)): treaded-tyre conditions switch Overtake off and say 
   assert.deepEqual(wet.notes, ["LOW GRIP — OVERTAKE OFF"], "once, not every tick");
   wet.G.state = "results"; wet.rc.update(0.1); wet.G.state = "race"; wet.rc.update(0.1);
   assert.equal(wet.notes.length, 2, "and once again next race");
+  // …the way the GAME starts the next race: reset(), never an update() outside
+  // a race (updateCaution only runs in one). reset() did not clear the flag,
+  // so RACE AGAIN in the wet lost the note (bug hunt 2026-09-29).
+  wet.rc.reset(); wet.rc.update(0.1);
+  assert.equal(wet.notes.length, 3, "reset() re-arms the note for the next race");
 
   // A weather arc drying the track below the intermediate threshold hands it back.
   wet.G.roadWetness = () => 0.2;

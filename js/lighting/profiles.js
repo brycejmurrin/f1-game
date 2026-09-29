@@ -42,7 +42,17 @@ const LightStore = (() => {
         const vals = Object.values(saved);
         // Legacy flat format was {id:number}. Current format nests {key:{id:number}}.
         if (vals.length && vals.every((v) => typeof v === "number")) profiles = { "*": saved };
-        else profiles = saved;
+        else {
+          // Only plain objects of finite numbers: an imported settings file
+          // passes typeof checks, and a string profile made the next knob
+          // move throw (`id in "x"` inside put()).
+          for (const [k, prof] of Object.entries(saved)) {
+            if (!prof || typeof prof !== "object" || Array.isArray(prof)) continue;
+            const clean = {};
+            for (const [id, v] of Object.entries(prof)) if (typeof v === "number" && isFinite(v)) clean[id] = v;
+            if (Object.keys(clean).length) profiles[k] = clean;
+          }
+        }
       }
     }
 
