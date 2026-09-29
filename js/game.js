@@ -5746,8 +5746,8 @@ function updateCar(c, dt, ranked) {
     // only), 1 from 1.5× coast drag up. Continuous, so a brush of the brake
     // never steps the front's grip.
     const brakeMix = clamp((decel - cdNow) / (0.5 * cdNow), 0, 1);
-    const axFracF = Math.min(1, decel * brakeMix / longBudget);
-    const axFracR = Math.min(1, Math.max(decel / longBudget, axThrDemand));
+    const pedal = decel * brakeMix / longBudget, engine = (decel - decel * brakeMix) / longBudget, beta = (c.brakeStab = TyreModel.brakeBeta(c.brakeStab, c.rearUtil, dt));   // BRAKE STABILITY: the loaded rear eases its pedal share (PhysicsConsts.BRAKE_STAB)
+    const axFracF = Math.min(1, pedal * TyreModel.brakeFront(beta, loadF, loadR)), axFracR = Math.min(1, Math.max(pedal * beta + engine, axThrDemand));
     const axFrac = Math.max(axFracF, axFracR);
     c.axFrac = axFrac;
     c.axFracF = axFracF; c.axFracR = axFracR;
@@ -5795,7 +5795,7 @@ function updateCar(c, dt, ranked) {
     const bb = bbOn ? SetupTune.bbScales(c.brakeBias) : null;
     // (bbSlip*, not slipF/slipR — those names are the axles' SLIP ANGLES below.)
     const afF = bb ? Math.min(1, axFracF * bb.f) : axFracF;
-    const afR = bb ? Math.min(1, Math.max(axFracR - axFracF + axFracF * bb.r, axThrDemand)) : axFracR;
+    const afR = bb ? Math.min(1, Math.max(engine + pedal * beta * bb.r, axThrDemand)) : axFracR;
     const bbSlipF = Math.sqrt(Math.max(0, 1 - afF * afF));
     const bbSlipR = Math.sqrt(Math.max(0, 1 - afR * afR));
     c.slipFactor = bbSlipR;   // the DRIVEN axle's circle: setEngine() reads it for slip01; unassigned it read a constant 1
