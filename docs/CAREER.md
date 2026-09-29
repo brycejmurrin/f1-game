@@ -194,7 +194,7 @@ driver **code** so a driver keeps their ratings when the market moves them.
 |---|---|
 | `pace` | AI speed and qualifying — weighted heaviest in `overall()` |
 | `craft` | OT fire rate, late-brake, adaptive lane (`ai-drive.js`); permanent pass/defend pull (inlined in `game.js`) |
-| `awareness` | incidents/penalties **and** follow gap, contact yield, stuck dig-out, ERS bank, street OT scale/pull |
+| `awareness` | incidents/penalties **and** follow gap, contact yield, stuck dig-out, ERS bank, street OT scale/pull, how far back the AI sees (`mirrorReach` 0.6–1.05 s) and when it starts covering (`defendWindowT` 0.35–0.7 s), how soon it moves over for a car LAPPING it (`letPassDelay`, blue flags only) |
 | `consistency` | **variance, not speed** — it narrows the band around a driver's pace |
 | `experience` | races started; damps development **and** steer smoothing / unstuck panic / OT hesitation |
 
