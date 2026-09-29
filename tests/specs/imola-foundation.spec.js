@@ -67,10 +67,7 @@ test.describe("Imola track-owned foundation", () => {
     // Monaco fountain 308 m from the nearest pit node — shows up here as a new
     // id, not as a count that quietly grows.
     expect(result.models.suppressed.map((entry) => entry.id).sort())
-      .toEqual(["acque-mist-0", "acque-mist-2", "santerno-bank-3"]);
-    // santerno-bank-3: deliberate short bank (see scenery/imola.js SANTERNO_BANK
-    // comment) — the Acque Minerali return leg crosses a longer patch, so the
-    // footprint guard suppresses it. Pin it so a new suppressed id still shows.
+      .toEqual(["acque-mist-0", "acque-mist-2"]);
     expect(result.models.unsafe).toEqual([]);
     const required = result.models.emitted.filter((entry) => entry.required).map((entry) => entry.id);
     expect(required).toEqual(expect.arrayContaining([
