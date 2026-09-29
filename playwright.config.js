@@ -87,6 +87,7 @@ const RENDER_SPECS = [
 // headless/render; run via `npm run test:xr` / `--project=xr-emulated`.
 const XR_SPECS = [
   "vr-emulated",
+  "xr-plan",
 ].map((n) => `**/${n}.spec.js`);
 
 // XR launch: playwright-webxr guidance (force SwiftShader + unsafe flag).

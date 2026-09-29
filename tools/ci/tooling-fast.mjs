@@ -156,6 +156,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ...and WebXR Phase 0: seated-rig compose, controller→remoteSample mapping,
   // sessionInit feature flags, vendored XRButton/WebGLXRFallback presence. ~0.1 s.
   "tests/unit/xr-phase0.test.mjs",
+  // ...and XRPlan / XROpts (task 20): pure path selection table + bootPick
+  // never writes apex26.gfxBackend. ~0.1 s.
+  "tests/unit/xr-plan.test.mjs",
+  "tests/unit/xr-opts.test.mjs",
   // ...and the two steer-tuning tables that MUST agree: every PRESET bundle
   // lands exactly on its FEEL level, or clicking RELAX reads CUSTOM. Stated
   // in comments and checked by nothing until it drifted for a week. ~0.05 s.
@@ -180,6 +184,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ribbon flag to lineBrakeCue); this still asks that one key means one type.
   "tests/unit/store-key-types.test.mjs",
   "tests/unit/no-bare-console.test.mjs",
+  "tests/unit/log-namespaces.test.mjs",
   "tests/unit/lexical-window-guard.test.mjs",
   "tests/unit/light-store-cond-layer.test.mjs",
   "tests/unit/scenery-kits.test.mjs",
@@ -207,6 +212,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/desktop-native.test.mjs",
   "tests/unit/desktop-app-protocol.test.mjs",
   "tests/unit/desktop-unpacked-bin.test.mjs",
+  "tests/unit/desktop-builder-config.test.mjs",
+  "tests/unit/desktop-version.test.mjs",
+  "tests/unit/desktop-notices.test.mjs",
   "tests/unit/ship-filter-paths.test.mjs",
   // Capacitor Android (task 45): frozen identity, config shape, manifest,
   // Gradle version wiring, sync-web stamp gate, NativeDownload via Plugins.

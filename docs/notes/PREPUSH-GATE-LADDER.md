@@ -11,9 +11,9 @@ subset of the next:
 <!-- GENERATED: ladder -->
 | command | unit files it runs | leaves out | when |
 |---|---|---|---|
-| `npm run test:guards` | 24 (curated) | — | hook-enforced, every `git commit` |
-| `npm run test:tooling-fast` | 294 of 382 | 88 | the documented edit-loop check |
-| `node tools/ci/deploy.mjs --gate-only` | 365 of 382 | 17 | the whole gate; what a deploy runs |
+| `npm run test:guards` | 25 (curated) | — | hook-enforced, every `git commit` |
+| `npm run test:tooling-fast` | 300 of 388 | 88 | the documented edit-loop check |
+| `node tools/ci/deploy.mjs --gate-only` | 371 of 388 | 17 | the whole gate; what a deploy runs |
 
 _Derived from `tests/groups.json`, `tests/unit/` and ci.yml's "Pure-node unit suites" step by `node tools/gen/gen-ladder-figures.mjs`; `--check` runs in `test:guards`._
 <!-- /GENERATED -->

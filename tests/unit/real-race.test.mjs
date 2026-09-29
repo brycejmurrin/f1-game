@@ -27,7 +27,11 @@ import { seedLog } from "../helpers/seed-log.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const FIXTURE = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/fixtures/openf1-baku-2026-race.json"), "utf8"));
 const host = (v) => JSON.parse(JSON.stringify(v));
-const TRACKS = [{ id: "monza", name: "MONZA", country: "Italy" }, { id: "baku", name: "BAKU", country: "Azerbaijan" }];
+const TRACKS = [
+  { id: "monza", name: "MONZA", country: "Italy" },
+  { id: "baku", name: "BAKU", country: "Azerbaijan" },
+  { id: "singapore", name: "SINGAPORE", country: "Singapore", night: true },
+];
 
 function load() {
   const sb = { Math, Array, Object, Number, String, Boolean, Date, isFinite, isNaN, console, JSON, Set, Map, RegExp, Infinity };
@@ -195,7 +199,7 @@ test("stage() seats the player, sets the session, and stop() restores every sett
   assert.equal(G.driverIdx, 0);
   assert.equal(G.raceLaps, 10);
   assert.equal(G.raceWeather, "dry");
-  assert.equal(G.raceTimeOfDay, "day");
+  assert.equal(G.raceTimeOfDay, "dawn", "a JUMP IN into a day race runs at dawn");
   assert.equal(G.flow, "gp"); assert.equal(G.session, "race"); assert.equal(G.timeTrial, false); assert.equal(G.duel, false);
   assert.equal(G.raceTyreWear, "real", "wear OFF would mean no stops — the stops are the story");
   assert.equal(G.raceChangeable, false);
@@ -206,6 +210,15 @@ test("stage() seats the player, sets the session, and stop() restores every sett
   assert.equal(rr.stage(script, { seat: "ZZZ" }), null);
   assert.equal(rr.stage(script, {}).seat, "RUS");
   assert.equal(rr.stage({ ...script, trackId: "spa" }), null);
+  // A night race keeps its night; an unknown hour is dawn too.
+  rr.stage({ ...script, tod: "night" }, { seat: "RUS" }); assert.equal(G.raceTimeOfDay, "night");
+  rr.stage({ ...script, tod: "default" }, { seat: "RUS" }); assert.equal(G.raceTimeOfDay, "dawn");
+  rr.stage({ ...script, tod: "dusk" }, { seat: "RUS" }); assert.equal(G.raceTimeOfDay, "dusk");
+  // A night circuit's unknown hour stays default (the game resolves that to night).
+  rr.stage({ ...script, trackId: "singapore", tod: "default" }, { seat: "RUS" });
+  assert.equal(G.raceTimeOfDay, "default");
+  rr.stage({ ...script, trackId: "singapore", tod: "day" }, { seat: "RUS" });
+  assert.equal(G.raceTimeOfDay, "dawn", "an explicit day race is still dawn on a night circuit");
   // A start lap is kept inside the race.
   assert.equal(rr.stage(script, { seat: "RUS", startLap: 31 }).startLap, 31);
   assert.equal(rr.stage(script, { seat: "RUS", startLap: 99 }).startLap, 51);
