@@ -8650,7 +8650,7 @@ $("mb-tt").onclick = () => openTimeTrial(false);
 async function consumeGhostHash() {
   // A ghost link landing MID-RACE waits, fragment intact, for the menu (quitToMenu re-reads it) — as #353's invite link does.
   if (UiLayers.inRace()) { Log.info("game", "ghost link deferred: racing"); return null; }
-  const shared = await GhostShare.consumeHash({
+  const shared = await GhostShare.consumeHash({ valid: () => !UiLayers.inRace(),
     notify: (message, result) => announce(message, result && result.ok ? 3 : 4, result && result.ok ? "info" : "warning"),
   });
   if (!shared || !shared.ok) return shared;

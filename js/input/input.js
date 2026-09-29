@@ -115,7 +115,7 @@ const Input = (function () {
 
   let tiltRaw = 0;            // latest remapped tilt, degrees (raw, like Neon Drift)
   let tiltZero = 0;           // calibrated neutral
-  let tiltSeen = false;       // we have actually received sensor data
+  let tiltSeen = false, tiltRemote = false; // seen data and ownership of the shared tilt sample
   let gyroAttached = false;
   let gyroDenied = false;
   // HARD refusal only: the sensor API is absent, or requestPermission()
@@ -214,13 +214,13 @@ const Input = (function () {
     // function the PHONE AS CONTROLLER page runs on the phone, so a remote
     // sample and a local reading agree by construction.
     const roll = TiltRoll.rollDeg(e.beta, e.gamma, TiltRoll.screenAngle());
-    if (roll === null) return;
+    if (roll === null || remoteSteers()) return; // a live phone owns the shared tilt pipeline
     tiltRaw = roll;
     const n = nowMs();
     const odt = lastOrientMs ? Math.min(0.1, (n - lastOrientMs) / 1000) : 0.016;
     lastOrientMs = n;
     tiltSmoothed = oneEuro(tiltRaw, odt);
-    tiltSeen = true;
+    tiltSeen = true; tiltRemote = false;
   }
 
   function attachGyro() {
@@ -284,7 +284,7 @@ const Input = (function () {
   }
 
   function tiltActive() {
-    return steerMode === "tilt" && tiltSeen;
+    return steerMode === "tilt" && tiltSeen && (!tiltRemote || remoteSteers());
   }
 
   function remoteActive() {
@@ -304,7 +304,7 @@ const Input = (function () {
       const odt = lastOrientMs ? Math.min(0.1, (n - lastOrientMs) / 1000) : 0.016;
       lastOrientMs = n;
       tiltSmoothed = oneEuro(tiltRaw, odt);
-      tiltSeen = true;
+      tiltSeen = tiltRemote = true;
     }
     remThr = clamp(+s.thr || 0, 0, 1);
     remBrk = clamp(+s.brk || 0, 0, 1);
@@ -350,7 +350,7 @@ const Input = (function () {
   // keep steering a device whose own sensor is not attached.
   function remoteLost() {
     remoteMs = 0; remThr = remBrk = 0; remHeld = 0; remRoll = false;
-    if (!gyroAttached) tiltSeen = false;
+    if (tiltRemote || !gyroAttached) tiltSeen = false;
   }
   function setRemoteHaptics(fn) { remoteHaptics = typeof fn === "function" ? fn : null; }
 
@@ -361,7 +361,7 @@ const Input = (function () {
   // (The live game still uses the wall-clock onOrient/tiltSteering path untouched.)
   function simTilt(rawDeg, dt) {
     const step = dt > 0 ? dt : 0.016;
-    tiltSeen = true;
+    tiltSeen = true; tiltRemote = false;
     tiltRaw = rawDeg;
     tiltSmoothed = oneEuro(rawDeg, step);
     // Same map and same slew the live path uses — deliberately WITHOUT

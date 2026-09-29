@@ -11,6 +11,11 @@ const SaveMigrate = (function () {
     (c) => { c.season = c.season || { round: 0, pts: {}, teamPts: {}, driverCodes: {} }; },
   ];
 
+  function finiteNumber(value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+  }
+
   function seasonDriverId(teamId, driverIndex) { return `${teamId}:${driverIndex}`; }
 
   // The two per-driver sparse arrays a championship carries beside `pts`:
@@ -66,7 +71,7 @@ const SaveMigrate = (function () {
     Object.entries(oldPts).forEach(([key, value]) => {
       const driver = roster.find((candidate) => candidate.id === key || candidate.code === key);
       const id = driver ? driver.id : key;
-      nextPts[id] = (nextPts[id] || 0) + Math.max(0, Number(value) || 0);
+      nextPts[id] = Math.min(Number.MAX_VALUE, (nextPts[id] || 0) + Math.max(0, finiteNumber(value)));
       if (driver) codes[id] = driver.code;
       else if (!codes[id]) codes[id] = key;
     });
@@ -88,13 +93,13 @@ const SaveMigrate = (function () {
   }
 
   // The contract's four numbers. A hand-edited or truncated save could carry
-  // `salary: "x"`; Number()||0 keeps every later `+=` finite.
+  // `salary: "x"` or JSON exponent overflow (1e309); reject non-finite values.
   function cleanDeal(deal) {
     if (!deal || typeof deal !== "object" || Array.isArray(deal)) return null;
-    deal.salary = Number(deal.salary) || 0;
-    deal.bonusPt = Number(deal.bonusPt) || 0;
-    deal.left = Number(deal.left) || 0;
-    deal.years = Number(deal.years) || 0;
+    deal.salary = finiteNumber(deal.salary);
+    deal.bonusPt = finiteNumber(deal.bonusPt);
+    deal.left = finiteNumber(deal.left);
+    deal.years = finiteNumber(deal.years);
     return deal;
   }
 
@@ -104,7 +109,7 @@ const SaveMigrate = (function () {
   // PURE — it mutates the save it is handed and returns it, but it does NOT write.
   // Career.save() is the one thing that persists, and it knows the slot.
   function migrateCareer(career) {
-    if (!career || typeof career !== "object") return null;
+    if (!career || typeof career !== "object" || Array.isArray(career)) return null;
     let v = career.v | 0;
     while (v < CAREER_V && CAREER_MIGRATIONS[v]) { CAREER_MIGRATIONS[v](career); v++; }
     // Never DOWNGRADE: a save from a newer build (a stale cached shell opening
@@ -112,7 +117,7 @@ const SaveMigrate = (function () {
     career.v = Math.max(v, CAREER_V);
     career.flavour = career.flavour === "myteam" ? "myteam" : "driver";
     career.year = career.year | 0 || 2026;
-    career.money = Number(career.money) || 0;
+    career.money = finiteNumber(career.money);
     career.rep = Math.max(0, Math.min(100, Number(career.rep) || 0));
     career.seat = career.seat | 0;
     career.driver = career.driver && typeof career.driver === "object"
