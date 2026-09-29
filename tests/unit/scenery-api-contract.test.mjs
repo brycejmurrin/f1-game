@@ -152,6 +152,8 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
       "montreal-wall-of-champions-stand",
       "montreal-biosphere",
     ],
+    // Wave 6 — Fuji Speedway Hotel + Motorsports Museum (west side, 2022)
+    fuji: ["fuji-speedway-hotel"],
   };
   for (const [track, ids] of Object.entries(expected)) {
     const body = landmarkSource(track);
