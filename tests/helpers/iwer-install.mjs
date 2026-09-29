@@ -80,3 +80,35 @@ export async function captureCanvasDataUrl(page, selector = "#game") {
     try { return c.toDataURL("image/png"); } catch (_) { return null; }
   }, selector);
 }
+
+/**
+ * Sample the seated left-eye position on the next XR frame.
+ * XRFrame is only valid inside the session rAF that produced it — calling
+ * eyeFrames() from a plain page.evaluate always returns null. Pass that
+ * callback's frame into eyeFrames/recenter.
+ */
+export async function sampleXrEye(page) {
+  return page.evaluate(() => new Promise((resolve) => {
+    const s = typeof XrSession !== "undefined" && XrSession.getSession && XrSession.getSession();
+    if (!s || typeof s.requestAnimationFrame !== "function") return resolve(null);
+    s.requestAnimationFrame((_t, frame) => {
+      try {
+        const gfx = (typeof GLX !== "undefined") ? GLX : null;
+        const layer = gfx && typeof gfx.xrLayer === "function" ? gfx.xrLayer() : null;
+        const eyes = XrSession.eyeFrames(layer, frame);
+        if (!eyes || !eyes[0] || !eyes[0].eye) return resolve(null);
+        resolve({
+          eye: Array.from(eyes[0].eye),
+          vw: eyes[0].viewport ? eyes[0].viewport.width : null,
+          vh: eyes[0].viewport ? eyes[0].viewport.height : null,
+          n: eyes.length,
+          views: eyes.map((e) => ({
+            hasEye: !!(e && e.eye),
+            vw: e && e.viewport ? e.viewport.width : null,
+            vh: e && e.viewport ? e.viewport.height : null,
+          })),
+        });
+      } catch (_) { resolve(null); }
+    });
+  }));
+}

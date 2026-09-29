@@ -14,7 +14,7 @@
  */
 import { test, expect } from "@playwright/test";
 import {
-  installIwer, waitXrReady, captureCanvasDataUrl, IWER_VENDOR, IWER_VERSION,
+  installIwer, waitXrReady, captureCanvasDataUrl, sampleXrEye, IWER_VENDOR, IWER_VERSION,
 } from "../helpers/iwer-install.mjs";
 import fs from "fs";
 
@@ -105,31 +105,30 @@ test("head pose moves the seated eye; recenter clears XZ drift", async ({ page }
   // Wait for at least one composed eye bag.
   await page.waitForFunction(() => XrSession.frameCount() > 2, null, { polling: 50, timeout: 10_000 });
 
-  const before = await page.evaluate(() => {
-    const eyes = XrSession.eyeFrames(null);
-    return eyes && eyes[0] && eyes[0].eye ? eyes[0].eye.slice() : null;
-  });
-  expect(before).toBeTruthy();
+  const beforeBag = await sampleXrEye(page);
+  expect(beforeBag && beforeBag.eye).toBeTruthy();
+  const before = beforeBag.eye;
 
   await page.evaluate(() => {
     const d = globalThis.__iwerDevice;
     d.position.x += 0.4;
     d.position.z -= 0.3;
   });
-  await page.waitForFunction(() => XrSession.frameCount() > 0, null, { polling: 50, timeout: 5_000 });
   // Give a few XR frames for the new pose to propagate.
   const n = await page.evaluate(() => XrSession.frameCount());
   await page.waitForFunction((base) => XrSession.frameCount() > base + 3, n, { polling: 50, timeout: 10_000 });
 
-  const after = await page.evaluate(() => {
-    const eyes = XrSession.eyeFrames(null);
-    return eyes && eyes[0] && eyes[0].eye ? eyes[0].eye.slice() : null;
-  });
-  expect(after).toBeTruthy();
+  const afterBag = await sampleXrEye(page);
+  expect(afterBag && afterBag.eye).toBeTruthy();
+  const after = afterBag.eye;
   const moved = Math.hypot(after[0] - before[0], after[2] - before[2]);
   expect(moved).toBeGreaterThan(0.05);
 
-  const recentered = await page.evaluate(() => XrSession.recenter());
+  const recentered = await page.evaluate(() => new Promise((resolve) => {
+    const s = XrSession.getSession();
+    if (!s) return resolve(false);
+    s.requestAnimationFrame((_t, frame) => { resolve(XrSession.recenter(frame)); });
+  }));
   expect(recentered).toBe(true);
 
   await endVr(page);
@@ -265,15 +264,8 @@ test("stereo viewports: left width > 0; canvas toDataURL capture; flat mode afte
   expect((await startVr(page)).ok).toBe(true);
   await page.waitForFunction(() => XrSession.frameCount() > 3, null, { polling: 50, timeout: 10_000 });
 
-  const views = await page.evaluate(() => {
-    const layer = (typeof GLX !== "undefined" && GLX.xrLayer) ? GLX.xrLayer() : null;
-    const eyes = XrSession.eyeFrames(layer);
-    return (eyes || []).map((e) => ({
-      hasEye: !!(e && e.eye),
-      vw: e && e.viewport ? e.viewport.width : null,
-      vh: e && e.viewport ? e.viewport.height : null,
-    }));
-  });
+  const sampled = await sampleXrEye(page);
+  const views = (sampled && sampled.views) || [];
   test.info().annotations.push({ type: "xr-views", description: JSON.stringify(views) });
   // IWER returns two views even in mono; left must be usable.
   expect(views.length).toBeGreaterThanOrEqual(1);

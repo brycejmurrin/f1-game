@@ -261,10 +261,12 @@ const XrSession = (function () {
     if (input) XrInput.inject(input, mapped);
   }
 
-  function recenter() {
-    if (!_session || !_baseRefSpace || !_xrFrame) return false;
+  function recenter(frameOpt) {
+    if (!_session || !_baseRefSpace) return false;
+    const xrFrame = frameOpt || _xrFrame;
+    if (!xrFrame) return false;
     let pose = null;
-    try { pose = _xrFrame.getViewerPose(_refSpace || _baseRefSpace); } catch (_) { return false; }
+    try { pose = xrFrame.getViewerPose(_refSpace || _baseRefSpace); } catch (_) { return false; }
     if (!pose || !pose.transform || !pose.transform.matrix) return false;
     const off = XrRig.recenterOffsetFromPose(pose.transform.matrix);
     try {
@@ -282,11 +284,14 @@ const XrSession = (function () {
    * Build per-eye frame bags from the current XRFrame + seated anchor.
    * Returns an array of { viewport?, view, proj, viewProj, invProj, invViewProj, eye }
    * or null when the pose is unavailable (keep last mono frame).
+   * `frameOpt` — pass the XRFrame from the active session rAF callback when
+   * calling outside onFrame (XRFrame is invalid once that callback returns).
    */
-  function eyeFrames(layer) {
-    if (!_xrFrame || !_refSpace) return null;
+  function eyeFrames(layer, frameOpt) {
+    const xrFrame = frameOpt || _xrFrame;
+    if (!xrFrame || !_refSpace) return null;
     let pose = null;
-    try { pose = _xrFrame.getViewerPose(_refSpace); } catch (_) { return null; }
+    try { pose = xrFrame.getViewerPose(_refSpace); } catch (_) { return null; }
     if (!pose || !pose.views || !pose.views.length) return null;
     if (!_eyeBags || _eyeBags.length < pose.views.length) {
       _eyeBags = [];
