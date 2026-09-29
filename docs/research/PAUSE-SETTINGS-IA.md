@@ -120,6 +120,15 @@ filters hide unless PAGE is LOG. SCREENSHOTS /
 SAVE / COPY DIAG stay secondary rows under the RENDERER fold, not peer
 plates of RESET.
 
+**Every setting says what it does (2026-09-29).** Each row, slider and
+tool button carries a visible one-line help (`.adv-help`, `.as-note` in
+MUSIC & SOUND) directly under it, or one shared line under a tight group
+(MAP + GAPS, a fold's tool buttons, an ENGINE TONE section). A `title` is
+hover-only and never reaches a phone, so a row JS builds (COCKPIT, METRICS)
+also appends the sentence as a visible help. RACE SETTINGS puts the help
+INSIDE its row (`#rs-body .set-row > .adv-help`): the body is a two-column
+grid, and a row hidden in a time trial takes its help with it.
+
 **Control language stays.** Button = filled plate, no chevron. Door =
 plate + `…`. Heading = steel + `--grad-rule`, not clickable. Disclosure
 = steel + rule + left chevron. Picker = `‹ value ›`.
