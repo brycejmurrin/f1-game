@@ -1,11 +1,11 @@
 {
   "name": "apex26-desktop",
   "productName": "Apex 26",
-  "description": "Unofficial fan racing game \u2014 desktop shell for the Apex 26 static WebGL2 site.",
+  "description": "Unofficial fan racing game — desktop shell for the Apex 26 static WebGL2 site.",
   "author": "Apex 26 contributors",
   "private": true,
   "main": "main.js",
-  "version": "0.0.0",
+  "version": "0.1695.0",
   "scripts": {
     "stage": "node ../tools/desktop/stage.mjs --out desktop/dist-site --stamp",
     "sync-version": "node sync-version.mjs",
@@ -22,8 +22,8 @@
     "fuses:read": "node scripts/read-fuses.mjs"
   },
   "devDependencies": {
-    "electron": "36.4.0",
-    "electron-builder": "26.0.12",
+    "electron": "44.4.5",
+    "electron-builder": "26.15.3",
     "@playwright/test": "1.63.0",
     "playwright": "1.63.0",
     "@electron/fuses": "1.8.0"
@@ -31,13 +31,14 @@
   "build": {
     "appId": "io.github.brycejmurrin.apex26",
     "productName": "Apex 26",
-    "copyright": "Copyright \u00a9 Apex 26 contributors",
+    "copyright": "Copyright © Apex 26 contributors",
     "directories": {
       "output": "dist",
       "buildResources": "build"
     },
     "files": [
       "main.js",
+      "app-protocol.js",
       "preload.js",
       "package.json"
     ],

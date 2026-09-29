@@ -27,12 +27,27 @@ test("desktop preload exposes a frozen __APEX_NATIVE__ with desktop:true", () =>
   assert.match(PRELOAD, /desktop:\s*true/);
 });
 
-test("desktop main uses privileged app:// scheme and autoplay-policy", () => {
-  assert.match(MAIN, /registerSchemesAsPrivileged/);
-  assert.match(MAIN, /scheme:\s*SCHEME|scheme:\s*"app"/);
-  assert.match(MAIN, /autoplay-policy/);
-  assert.match(MAIN, /no-user-gesture-required/);
-  assert.match(MAIN, /protocol\.handle/);
+test("desktop main uses privileged app:// via app-protocol (Range handler)", () => {
+  assert.match(MAIN, /require\(["']\.\/app-protocol["']\)/);
+  assert.match(MAIN, /registerScheme\s*\(/);
+  assert.match(MAIN, /handleScheme\s*\(/);
+  // Autoplay: no CLI flag needed (research B1.4); set webPreferences explicitly.
+  assert.doesNotMatch(MAIN, /appendSwitch\(\s*["']autoplay-policy["']/);
+  assert.match(MAIN, /autoplayPolicy:\s*["']no-user-gesture-required["']/);
+  // Soft-GL CI gets enable-unsafe-webgpu; do not claim unverified Linux Vulkan.
+  assert.match(MAIN, /enable-unsafe-webgpu/);
+  assert.doesNotMatch(MAIN, /VulkanFromANGLE|DefaultANGLEVulkan|use-vulkan/);
+});
+
+test("app-protocol keeps allowServiceWorkers false (cache.addAll fails on app:)", () => {
+  const PROTO = readFileSync(join(ROOT, "desktop/app-protocol.js"), "utf8");
+  assert.match(PROTO, /allowServiceWorkers:\s*false/);
+  assert.match(PROTO, /parseByteRange/);
+  assert.match(PROTO, /status:\s*206/);
+  assert.match(PROTO, /status:\s*416/);
+  // Comments may mention net.fetch (why we avoid it); the handler body must not call it.
+  const body = PROTO.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+  assert.doesNotMatch(body, /\bnet\.fetch\b/);
 });
 
 function loadSpotify(opts = {}) {

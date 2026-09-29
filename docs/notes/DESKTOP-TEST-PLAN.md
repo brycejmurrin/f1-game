@@ -4,8 +4,9 @@ Spike verification for the installable shell in `desktop/`. The game itself stay
 a static IIFE site (no bundler); packaging stages via `tools/desktop/stage.mjs`.
 
 Research basis (2026-09-29): Playwright `_electron`, electron-builder `--dir`,
-fuses, signing verify commands, auto-update — see session research note B1–B7
-and upstream docs linked below.
+fuses, signing verify, auto-update (B1–B7); spike-support research B —
+Electron **44.4.5** (Chromium 152), manual `app://` Range/206 handler, SW skip,
+autoplay default, WebGPU soft-adapter, Steam deferred. Upstream links below.
 
 **CI proves "boots and renders something", not GPU performance.** Hosted runners
 have no real GPU ([GitHub-hosted runners](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)).
@@ -13,16 +14,17 @@ have no real GPU ([GitHub-hosted runners](https://docs.github.com/en/actions/ref
 ## Automated (every PR — `desktop.yml` pack-smoke job)
 
 Matrix: `ubuntu-latest` (under `xvfb-run`) / `windows-latest` / `macos-latest`.
+(Full installer shapes and Forge were not claimed locally — pack-smoke + release
+jobs are the verification surface.)
 
 1. `npm ci` in `desktop/` (Node ≥ 22.12 recommended; electron-builder v27 requires it).
 2. `npm run pack` → `electron-builder --dir` (unsigned; `CSC_IDENTITY_AUTO_DISCOVERY=false`).
 3. Soft-GL env: `APEX_DESKTOP_SOFT_GL=1` → main process appends
    `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`
-   (plus a best-effort WebGPU SwiftShader set from the 2023 community report on
-   [electron#38189](https://github.com/electron/electron/issues/38189) — try and
-   log the `WEBGL_debug_renderer_info` string; do not gate on WebGPU).
+   `--enable-unsafe-webgpu` (without it, `requestAdapter()` is null on GPU-less
+   hosts; do not gate tests on WebGPU). Linux Vulkan flags remain unverified.
 4. Playwright `_electron` against the unpacked binary
-   (`desktop/tests/electron-packaged.spec.js`):
+   (`desktop/tests/electron-packaged.spec.mjs`):
    - window opens; `app.isPackaged === true`
    - title / `app.getVersion()` matches `0.<version.json build>.0`
    - `#game` canvas present; ≥ 30 rAF frames advance
@@ -33,6 +35,10 @@ Matrix: `ubuntu-latest` (under `xvfb-run`) / `windows-latest` / `macos-latest`.
 5. `npx @electron/fuses read --app <path>` — assert
    `EnableNodeCliInspectArguments is Enabled` (required for Playwright attach;
    [Playwright Electron docs](https://playwright.dev/docs/api/class-electron)).
+
+Unit coverage (no Electron binary): `tests/unit/desktop-app-protocol.test.mjs`
+(MIME, Range parse, traversal), `desktop-native.test.mjs` (SW skip / Spotify /
+main wiring), stage + unpacked-bin helpers.
 
 The root web Playwright suite continues to cover game behaviour; Electron adds
 only shell-specific tests.
@@ -84,6 +90,13 @@ cover metadata/event mocks.
 **Manual dispatch job:** `desktop.yml` `auto-update-plan` step prints this
 checklist; a future job can spin MinIO + two `--dir` builds.
 
+## Steam — deferred (do not enable in this spike)
+
+`steamworks.js` 0.4.0 is unmaintained for our packaging needs (no arm64 Win/Linux,
+overlay flaky on Linux/macOS, Steam Input gamepad regressions — electron#45732).
+Keep Steam out of `desktop/package.json` and the builder config until a
+maintained binding and depot layout exist. See `desktop/README.md` § Steam.
+
 ## Manual per-OS checklist (B7)
 
 Run on a clean machine/VM after a tag build (Windows, macOS Intel + Apple Silicon
@@ -91,14 +104,17 @@ if shipped, Ubuntu):
 
 - [ ] Install from the real installer / DMG / AppImage; note Gatekeeper /
       SmartScreen on first launch (quarantined download).
-- [ ] Hardware GPU: WebGL2 works; if WebGPU is opted in, confirm adapter identity
-      in-app (`chrome://gpu` / `__apex` gfx hooks). Target frame rate, fullscreen,
-      multi-monitor, HiDPI, gamepad / wheel.
-- [ ] Audio, window state restore, no crash on quit. Uninstall cleanly.
+- [ ] Hardware GPU: WebGL2 works; if WebGPU is opted in (`enable-unsafe-webgpu`
+      where needed), confirm adapter identity in-app (`chrome://gpu` / `__apex`
+      gfx hooks). Target frame rate, fullscreen, multi-monitor, HiDPI, gamepad /
+      wheel. Soft-GL CI must not claim GPU performance.
+- [ ] Audio seeks work (Range 206 on `app://` media). Window state restore; no
+      crash on quit. Uninstall cleanly.
 - [ ] Update from N−1 → N over a real feed; relaunch; settings / career saves
-      persist under the stable `app://apex/` origin.
+      persist under the stable `app://apex/` origin (localStorage / IndexedDB).
 - [ ] Spotify remains degraded (OAuth redirect is `app://…`); built-in music works.
-- [ ] Service worker stays unregistered (`__APEX_NATIVE__.desktop`).
+- [ ] Service worker stays unregistered (`__APEX_NATIVE__.desktop`); do not
+      re-enable SW until Cache API supports the `app` scheme.
 
 ## Local commands
 
@@ -123,3 +139,5 @@ npm run fuses:read
 - https://www.electron.build/docs/features/auto-update
 - https://www.electron.build/docs/tutorials/adding-electron-fuses
 - https://www.electronjs.org/docs/latest/tutorial/code-signing
+- https://github.com/electron/electron/issues/38749 (Range / protocol.handle)
+- https://github.com/electron/electron/issues/45732 (Steam Input)

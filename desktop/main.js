@@ -6,18 +6,27 @@
  * privileged `app://apex/` origin so relative asset URLs and localStorage stay
  * stable. No build step for the game itself — packaging copies static files.
  *
+ * Protocol: desktop/app-protocol.js (manual Range 206/416 — net.fetch(file:)
+ * returns 200 without Content-Range; Electron #38749).
+ *
  * Flags:
  *   --smoke   load index, wait for shell ready, print JSON, exit (CI / xvfb)
+ *
+ * Research (2026-09-29): Electron 44.4.5 / Chromium 152; autoplay needs no
+ * CLI flag (webPreferences default); WebGPU without a GPU needs
+ * enable-unsafe-webgpu for a software adapter; Steam deferred.
  */
-const { app, BrowserWindow, protocol, net, globalShortcut } = require("electron");
+const { app, BrowserWindow, globalShortcut } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
-const { pathToFileURL } = require("node:url");
+const {
+  SCHEME,
+  HOST,
+  registerScheme,
+  handleScheme,
+} = require("./app-protocol");
 
-const SCHEME = "app";
-const HOST = "apex";
 const ORIGIN = `${SCHEME}://${HOST}`;
-
 const SMOKE = process.argv.includes("--smoke");
 
 /** Directory that holds the staged site (index.html, js/, …). */
@@ -30,26 +39,13 @@ function siteRoot() {
   return path.join(__dirname, "dist-site");
 }
 
-protocol.registerSchemesAsPrivileged([
-  {
-    scheme: SCHEME,
-    privileges: {
-      standard: true,
-      secure: true,
-      supportFetchAPI: true,
-      stream: true,
-      bypassCSP: false,
-    },
-  },
-]);
+// Must run before app ready (once).
+registerScheme();
 
-// Autoplay + WebGPU where Chromium can; WebGL2 remains the game's fallback.
-app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
-app.commandLine.appendSwitch("enable-features", "Vulkan,WebGPU");
 // Soft-GL for headless CI / xvfb (Playwright _electron). Real GPU wins otherwise.
-// Flag set mirrors Chromium software paths used by the web suite; WebGPU under
-// SwiftShader is a community-reported combo (Electron #38189, 2023) — we try it
-// and assert only that the app boots/renders, never GPU performance.
+// Research B1.3: without a GPU, requestAdapter() is null unless enable-unsafe-webgpu
+// is set (then a SwiftShader software adapter). Linux Vulkan feature flags were
+// unverified on the research box — do not enable them by default.
 const softGl = process.env.APEX_DESKTOP_SOFT_GL === "1"
   || process.env.APEX_DESKTOP_SOFT_GL === "true"
   || (process.env.CI === "true" && process.platform === "linux");
@@ -58,73 +54,9 @@ if (softGl) {
   app.commandLine.appendSwitch("use-angle", "swiftshader");
   app.commandLine.appendSwitch("enable-unsafe-swiftshader");
   app.commandLine.appendSwitch("enable-unsafe-webgpu");
-  app.commandLine.appendSwitch("use-vulkan", "swiftshader");
-  app.commandLine.appendSwitch("use-webgpu-adapter", "swiftshader");
+  // Containers often have tiny or odd /dev/shm; SwiftShader aborts without this.
+  app.commandLine.appendSwitch("disable-dev-shm-usage");
   app.commandLine.appendSwitch("no-sandbox");
-}
-
-function mimeFor(filePath) {
-  const ext = path.extname(filePath).toLowerCase();
-  const map = {
-    ".html": "text/html; charset=utf-8",
-    ".js": "text/javascript; charset=utf-8",
-    ".mjs": "text/javascript; charset=utf-8",
-    ".css": "text/css; charset=utf-8",
-    ".json": "application/json; charset=utf-8",
-    ".png": "image/png",
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".webp": "image/webp",
-    ".svg": "image/svg+xml",
-    ".wasm": "application/wasm",
-    ".woff2": "font/woff2",
-    ".mp3": "audio/mpeg",
-    ".ogg": "audio/ogg",
-    ".wav": "audio/wav",
-    ".ico": "image/x-icon",
-    ".map": "application/json",
-  };
-  return map[ext] || "application/octet-stream";
-}
-
-function resolveSitePath(pathname) {
-  const root = siteRoot();
-  let rel = decodeURIComponent(pathname || "/");
-  if (rel === "/" || rel === "") rel = "/index.html";
-  // Strip leading slash; refuse traversal.
-  const cleaned = rel.replace(/^\/+/, "");
-  const target = path.resolve(root, cleaned);
-  const rootPrefix = root.endsWith(path.sep) ? root : root + path.sep;
-  if (target !== root && !target.startsWith(rootPrefix)) return null;
-  return target;
-}
-
-function registerAppProtocol() {
-  protocol.handle(SCHEME, async (req) => {
-    try {
-      const url = new URL(req.url);
-      if (url.hostname !== HOST) {
-        return new Response("Bad host", { status: 400, headers: { "content-type": "text/plain" } });
-      }
-      const target = resolveSitePath(url.pathname);
-      if (!target) {
-        return new Response("Forbidden", { status: 403, headers: { "content-type": "text/plain" } });
-      }
-      if (!fs.existsSync(target) || !fs.statSync(target).isFile()) {
-        return new Response("Not found", { status: 404, headers: { "content-type": "text/plain" } });
-      }
-      // Prefer net.fetch(file:) so range/stream requests work for media/wasm.
-      const res = await net.fetch(pathToFileURL(target).toString());
-      const headers = new Headers(res.headers);
-      if (!headers.has("content-type")) headers.set("content-type", mimeFor(target));
-      return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
-    } catch (err) {
-      return new Response(String(err && err.message ? err.message : err), {
-        status: 500,
-        headers: { "content-type": "text/plain" },
-      });
-    }
-  });
 }
 
 function createWindow() {
@@ -141,6 +73,9 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // Explicit: Electron already defaults to no-user-gesture-required
+      // (research B1.4); naming it documents the audio/engine expectation.
+      autoplayPolicy: "no-user-gesture-required",
       // Gamepad API works in Chromium; keep webSecurity on with our privileged scheme.
       webSecurity: true,
     },
@@ -202,7 +137,7 @@ app.whenReady().then(() => {
     app.exit(2);
     return;
   }
-  registerAppProtocol();
+  handleScheme(root);
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
