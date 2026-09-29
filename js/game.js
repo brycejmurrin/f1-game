@@ -2507,6 +2507,7 @@ function flybyProgress() {
 // miss parses JSON. flybyPanel owns the reading and the validation (it owns the
 // writing); this is the copy the render path is allowed to touch.
 let flybyShots = null;
+let flybyPlay = null;   // this run's list with an opening shot prepended (the garage drive-out); null = flybyShots as they are
 function reloadFlybyShots() {
   try { flybyShots = flybyPanel.loadSaved(); }
   catch (e) { flybyShots = null; Log.warn("game", "flyby shots did not load", e); }
@@ -3706,6 +3707,7 @@ const coach = DrivingCoach.create(G);
 const raceRadio = RaceRadio.create(G);    // the engineer's race awareness + TV commentary (js/race/race-radio.js)
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
 const realRace = RealRace.create(G);      // a real Grand Prix replayed from its timing script (js/race/real-race.js)
+const driveOut = DriveOut.create(G);      // the flyby's opening shot: your car out of your team's garage (js/camera/drive-out.js)
 titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js/ui/title-menu.js)
 const onboard = Onboard.create(G);        // first-run coach marks (js/ui/onboard.js)
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
@@ -3945,6 +3947,7 @@ function raceIntro(go) {
   const built = _introKey; _introKey = "";
   if (!built && !menuWorld() && introBuild(go)) return;
   if (!built && menuWorld() && introWarm(go)) return;
+  flybyPlay = null;
   const world = menuWorld();
   if (world) menuGridCars();
   // A REAL RACE grids from its script at the lights (RealRace.arm), not in the
@@ -3969,9 +3972,15 @@ function raceIntro(go) {
   if (!flybyShots) flybyShots = planned || FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0);   // a different flyby each load (never the sim RNG); an editor-saved list plays as authored
   if (flybyShots) flybyShots = FlybySeq.withoutSlot(flybyShots);   // nobody knows your slot on a random grid; a small grid has empty boxes
   if (flybyShots && real && (real.watch || real.startLap > 1)) flybyShots = FlybySeq.withoutGrid(flybyShots);
+  // THE GARAGE DRIVE-OUT opens it (js/camera/drive-out.js): not over a race joined
+  // mid-way or watched, and not in a habitual skipper's short cut.
+  const lead = world && flybyShots && !(real && (real.watch || real.startLap > 1)) && loadingScreen.nextFlyMs() !== LoadingScreen.SHORT_FLY_MS ? driveOut.lead() : null;
+  if (lead) flybyPlay = [lead].concat(flybyShots);
   const info = loadingInfo();   // before the duration: a real race's read (info.readMs) may stretch the flyby
-  FlybySeq.setDuration(loadingScreen.nextFlyMs(info.readMs));   // plan every pan for the seconds this run has
-  if (world) FlybySeq.warm(track, flybyShots);   // plan the opening shots now, the rest in slices before their cuts
+  const flyMs = loadingScreen.nextFlyMs(info.readMs);
+  if (lead) lead.dur = lead.ms / flyMs * flybyShots.reduce((n, sh) => n + (sh.dur || 0), 0);   // exactly its own seconds on top of the flyby's
+  FlybySeq.setDuration(flyMs + info.leadMs);   // plan every pan for the seconds this run has
+  if (world) FlybySeq.warm(track, flybyPlay || flybyShots);   // plan the opening shots now, the rest in slices before their cuts
   FlybySeq.reset();   // this run's shot 0 is a cut, not a glide from wherever the camera was
   loadingScreen.run(info, go);
 }
@@ -3995,7 +4004,7 @@ function loadingInfo() {
     // Only fly over a world that is actually built. A missed pre-build (a
     // circuit switched a moment ago, scenery still downloading) would put a
     // black hold where the cinematic should be, which reads as a hang.
-    hasWorld: menuWorld(), shots: flybyShots, grid: (cars || []).map((c) => ({ code: c.code, colour: c.color, isPlayer: c === player && FlybySeq.slotKnown() })),   // the card's grid graphic + radio check: menuGridCars() seated `cars` in grid order
+    hasWorld: menuWorld(), shots: flybyPlay || flybyShots, leadMs: flybyPlay ? flybyPlay[0].ms : 0, grid: (cars || []).map((c) => ({ code: c.code, colour: c.color, isPlayer: c === player && FlybySeq.slotKnown() })),   // the card's grid graphic + radio check: menuGridCars() seated `cars` in grid order
     readMs: 0,
   };
   if (real && announcer.readMs) out.readMs = announcer.readMs(out);   // the race-so-far read: the flyby stretches to it (LoadingScreen.flyMsFor)
@@ -4137,6 +4146,7 @@ function clearMenuScreens() {
   // timer that would otherwise fire its build callback into a running race.
   loadingScreen.stop();
   FlybySeq.cancelWarm();   // and the flyby's unplanned shots: they would only stall the countdown
+  flybyPlay = null; driveOut.reset();
   for (const el of document.querySelectorAll(".screen")) el.hidden = true;
   for (const id of ["overlay", "lighting", "camtune", "flyby"]) { const el = $(id); if (el) el.hidden = true; }
   // The garage's 3D turntable keeps rendering while #carsetup is up; a race
@@ -6978,7 +6988,8 @@ function render(dt) {
     // flew through buildings. The sequencer places every eye against the props
     // registry instead. It is driven by PROGRESS through the flyby phase, so the
     // sequence keeps its shape whatever the phase is retuned to.
-    const fb = FlybySeq.solve(track, flybyProgress(), flybyShots);
+    const fb = FlybySeq.solve(track, flybyProgress(), flybyPlay || flybyShots);
+    if (flybyPlay) driveOut.pose(FlybySeq.shotAt(flybyProgress(), flybyPlay));
     eyeT = fb.eye; tgtT = fb.tgt; fovT = fb.fov; camAncNX = null;
     // A shot boundary is a CUT. Without this the λ1.6 menu damping below smears
     // the change of angle into a long swim between two vantages, which reads as

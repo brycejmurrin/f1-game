@@ -663,7 +663,7 @@ test("game.js hands the card its field in grid order, the flyby's shots, and the
   assert.match(game, /LoadingScreen\.create\(\{[^}]*radio: \(\) => radioVoice/);
   const at = game.indexOf("function loadingInfo()");
   const li = game.slice(at, at + 2500);
-  assert.match(li, /shots: flybyShots/);
+  assert.match(li, /shots: flybyPlay \|\| flybyShots/, "the list the screen plays: an opening shot (the garage drive-out) prepended, or the flyby as it is");
   assert.match(li, /isPlayer: c === player && FlybySeq\.slotKnown\(\)/, "an unknown slot (random grid) must flag no player");
 });
 
@@ -707,7 +707,7 @@ test("flyMsFor(skips, wantMs): a real race's read stretches the flyby up to FLY_
   // game.js asks with the read, before the shots are planned, and the screen runs the same budget.
   const game = read("js/game.js");
   const intro = game.slice(game.indexOf("function raceIntro(go)"), game.indexOf("function loadingInfo()"));
-  assert.match(intro, /const info = loadingInfo\(\);[^\n]*\n\s*FlybySeq\.setDuration\(loadingScreen\.nextFlyMs\(info\.readMs\)\);/);
+  assert.match(intro, /const info = loadingInfo\(\);[^\n]*\n\s*const flyMs = loadingScreen\.nextFlyMs\(info\.readMs\);[\s\S]{0,300}FlybySeq\.setDuration\(flyMs \+ info\.leadMs\);/);
   assert.match(intro, /loadingScreen\.run\(info, go\);/);
   const li = game.slice(game.indexOf("function loadingInfo()"), game.indexOf("function loadingInfo()") + 2000);
   assert.match(li, /if \(real && announcer\.readMs\) out\.readMs = announcer\.readMs\(out\);/, "only a real race stretches it");

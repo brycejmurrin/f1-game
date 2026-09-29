@@ -67,6 +67,12 @@ const FlybySeq = (function () {
     _gridSize = n > 0 ? n | 0 : 22;
   }
   function slotKnown() { return _slotKnown; }
+  /* THE PLAYER'S PIT BAY, for `{ at: "box", off, x, y }` poses (js/camera/drive-out.js):
+     `off` metres of arc from the box, `x` metres from the garage door line INTO
+     the bay. {s, sd (the pit side, +1 right), out (road edge -> door line)} or null. */
+  let _box = null;
+  function setBox(b) { _box = b && Number.isFinite(b.s) && Number.isFinite(b.out) ? { s: b.s, sd: b.sd < 0 ? -1 : 1, out: b.out } : null; }
+  const _smpBox = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 10 };
   const slotPoses = (shot) => [shot.eye[0], shot.eye[1], shot.look[0], shot.look[1]].filter((p) => p && p.at === "slot");
   const usesSlot = (shot) => slotPoses(shot).length > 0;
   const usesGrid = (shot) => [shot.eye[0], shot.eye[1], shot.look[0], shot.look[1]].some((p) => p && p.at === "grid");
@@ -194,6 +200,9 @@ const FlybySeq = (function () {
    *  shot whose whole point is being low. Cars drive that line at 300 km/h; if
    *  the geometry says a camera cannot be there, the geometry is wrong. */
   function onRoadPose(pose) {
+    // A bay pose is framed by hand inside a building the props registry does not
+    // hold: lifting it over terrain or "clearing" it would put the eye through the roof.
+    if (pose && pose.at === "box") return true;
     return pose && pose.at !== "centre" && pose.at !== "landmark" &&
       Math.abs(pose.x || 0) <= 8 && (pose.y || 0) <= 6;
   }
@@ -547,6 +556,7 @@ const FlybySeq = (function () {
       case "grid": return wrapS(track, total - POLE_BACK - (Math.min(GRID_ROWS, _gridSize) - 1) * GRID_SPACING + off);
       case "corner": return wrapS(track, cornerS(track, pose.n || 1) + off);
       case "slot": return wrapS(track, total - POLE_BACK - slotIndex(pose) * GRID_SPACING + off);
+      case "box": return wrapS(track, (_box ? _box.s : 0) + off);
       default: return wrapS(track, off);          // "start" — the line is s = 0 by construction
     }
   }
@@ -635,6 +645,13 @@ const FlybySeq = (function () {
    *  onto the camera path. */
   function poseX(track, pose, s) {
     let x = pose.x || 0;
+    // In the bay: from the road edge at THIS arc, never capped at a street fence
+    // (the pit side's barrier is opened across the complex by TrackPit).
+    if (pose.at === "box") {
+      if (!_box) return x;
+      Tracks.sample(track, s, _smpBox);
+      return _box.sd * (_smpBox.hw + _box.out + x);
+    }
     if (pose.at === "corner" && x) x *= cornerSide(track, pose.n);
     // A slot pose's x is relative to THAT car, so "x: 0" is right behind it.
     if (pose.at === "slot") { const k = slotIndex(pose); x += slotX(track, k, wrapS(track, (track.total || 1) - POLE_BACK - k * GRID_SPACING)); }
@@ -1318,6 +1335,7 @@ const FlybySeq = (function () {
     return worst;
   }
   function planLook(track, eye, look) {
+    if (eye[0].at === "box" || eye[1].at === "box") return look;   // framed out of a bay: its sightline is off the road by design
     if (!(onRoadPose(eye[0]) && onRoadPose(eye[1]) && trackAnchored(look[0]) && trackAnchored(look[1]) &&
           look[0].at !== "corner" && look[1].at !== "corner")) return look;
     if (sightOff(track, eye, look) <= SIGHT_EDGE) return look;
@@ -1540,7 +1558,7 @@ const FlybySeq = (function () {
     solve, shotAt, reset, clearEye, floorEye, groundAt, insideProp, blockers, isSolid, onRoadPose,
     landmarks, bounds, landmarkScore, lmBase, landmarkFallback, planShot, treeBlockers,
     anchorS, posePoint, cornerS, cornerSide, cornerTurn, lmFace,
-    poseFromWorld, shotFromView, nearestCorner, vary, setPlayerSlot, slotIndex, slotKnown, withoutSlot, withoutGrid, bindCorners, warm, cancelWarm, setDuration, planSteps,
+    poseFromWorld, shotFromView, nearestCorner, vary, setPlayerSlot, setBox, slotIndex, slotKnown, withoutSlot, withoutGrid, bindCorners, warm, cancelWarm, setDuration, planSteps,
     DEFAULT, EASE,
     POLE_BACK, GRID_SPACING, GRID_ROWS, MIN_FILL, MIN_H, FAR, FOG, NEAR, FENCE, REF_S, PAN_MAX,
   };

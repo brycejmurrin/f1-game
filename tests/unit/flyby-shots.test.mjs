@@ -614,7 +614,7 @@ test("the clearance grid index finds exactly what a full scan finds", async () =
 
 test("the flyby's plans are made before it plays, not at each cut", () => {
   const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
-  const warm = game.indexOf("FlybySeq.warm(track, flybyShots)"), run = game.indexOf("loadingScreen.run(info, go)");   // info: built once, before the duration (a real race's read stretches it)
+  const warm = game.indexOf("FlybySeq.warm(track, flybyPlay || flybyShots)"), run = game.indexOf("loadingScreen.run(info, go)");   // info: built once, before the duration (a real race's read stretches it)
   assert.ok(warm > 0 && run > warm, "raceIntro warms the flyby's plans before the loading screen runs it");
 });
 
@@ -696,8 +696,8 @@ test("the loading screen flies only the world built for THIS selection", () => {
   assert.match(game, /const menuWorld = \(\) => !!track && _menuGate\.track === track && _menuGate\.ready === menuKey\(trackIdx\);/);
   assert.match(game, /hasWorld: menuWorld\(\),/);
   const i = game.indexOf("function raceIntro(go)"), body = game.slice(i, game.indexOf("\n}\n", i));
-  for (const call of ["menuGridCars()", "applyRaceSettings()", "FlybySeq.warm(track, flybyShots)"])
-    assert.match(body, new RegExp("if \\(world\\) " + call.replace(/[()]/g, "\\$&")), call + " waits for the right world");
+  for (const call of ["menuGridCars()", "applyRaceSettings()", "FlybySeq.warm(track, flybyPlay || flybyShots)"])
+    assert.match(body, new RegExp("if \\(world\\) " + call.replace(/[()|]/g, "\\$&")), call + " waits for the right world");
 });
 
 test("warm() plans the opening shots at once and the rest in slices, never through solve()", async () => {
@@ -875,6 +875,42 @@ test("withoutGrid: a real race joined mid-race or watched back films no standing
     assert.match(li, /const real = realRace\.intro\(\);/);
     assert.match(li, /gp: real \? real\.title :/, "the card names the real event");
     assert.match(li, /\n\s*real,/, "and the announcer is handed the descriptor");
+    return null;
+  });
+});
+
+// ── THE GARAGE DRIVE-OUT (js/camera/drive-out.js) on a built circuit ──────────
+test("drive-out: a box anchor is the player's own bay; the car rolls out of it and goes back to its grid slot", async () => {
+  await withTrack("monza", (track, g) => {
+    const F = g.sandbox.FlybySeq, Tr = g.sandbox.Tracks;
+    const out = g.sandbox.DriveOut.create(g.G);
+    const shot = out.lead();
+    assert.ok(shot, "Monza has bays: the drive-out plays");
+    assert.ok(shot.ms > 3000 && shot.ms < 12000, `${shot.ms} ms`);
+    const box = out.box();
+    // A box pose at the door line: `out` metres beyond the road edge, on the pit side.
+    const door = F.posePoint(track, { at: "box", off: 0, x: 0, y: 0 }, [0, 0, 0]);
+    const pr = Tr.project(track, door[0], door[2]);
+    const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 10 };
+    Tr.sample(track, box.s, smp);
+    assert.ok(Math.abs(pr.lat - box.sd * (smp.hw + box.out)) < 0.5, `door line at lateral ${pr.lat}, expected ${box.sd * (smp.hw + box.out)}`);
+    // The car: in the bay at the start, on the working lane at the end, back on its slot after.
+    const c = g.G.player, grid = { px: c.px, pz: c.pz, s: c.s, x: c.x };
+    out.pose({ index: 0, t: 0 });
+    assert.ok(Math.abs(c.x - box.sd * (smp.hw + box.out + g.sandbox.DriveOut.L_CAR)) < 0.5, "parked in the bay");
+    out.pose({ index: 0, t: 1 });
+    assert.ok(Math.abs(c.yawVis) < 1e-6, "pointing down the lane");
+    assert.ok(Math.abs(c.x - box.sd * (smp.hw + box.out + box.laneL)) < 1, `on the working lane: ${c.x}`);
+    assert.ok(Math.sign(c.x) === box.sd && Math.abs(c.x) < smp.hw + box.out, "out of the door, on the pit side");
+    out.pose({ index: 1, t: 0 });
+    assert.deepEqual({ px: c.px, pz: c.pz, s: c.s, x: c.x }, grid, "the next shot finds the car on its grid slot");
+    return null;
+  });
+});
+
+test("drive-out: a circuit with no bays (Jeddah) plays the flyby as it is", async () => {
+  await withTrack("jeddah", (track, g) => {
+    assert.equal(g.sandbox.DriveOut.create(g.G).lead(), null);
     return null;
   });
 });

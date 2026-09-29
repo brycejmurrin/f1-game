@@ -201,6 +201,7 @@ const FULL = [
   "js/race/race-radio.js",
   "js/camera/offsets.js",
   "js/camera/flyby-seq.js",
+  "js/camera/drive-out.js",
   "js/camera/flyby-panel.js",
   "js/garage/setup-tune.js",
   "js/garage/setup-sheet.js",

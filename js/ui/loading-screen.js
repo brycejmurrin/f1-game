@@ -600,7 +600,9 @@ const LoadingScreen = (function () {
       // "run" is the flyby WITH the card up; "card" is the no-world fallback.
       // Both show the card, so the stylesheet reveals it for either.
       setPhase(info.hasWorld && !reduced ? "run" : "card");
-      const life = info.hasWorld && !reduced ? flyMsFor(readSkips(), info.readMs) : CARD_MS;   // readMs: a real race's read, which may need longer
+      // readMs: a real race's read, which may need longer; leadMs: an opening shot
+      // prepended to the flyby (the garage drive-out, js/camera/drive-out.js) adds its own seconds.
+      const life = info.hasWorld && !reduced ? flyMsFor(readSkips(), info.readMs) + Math.max(0, +info.leadMs || 0) : CARD_MS;
       flyMs = info.hasWorld && !reduced ? life : FLY_MS;
       // The letterbox (css/overlays.css) opens on the flyby's last beat, so it
       // needs the budget this run actually has, not the 24 s it usually is.
