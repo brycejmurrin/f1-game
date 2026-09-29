@@ -249,3 +249,14 @@ test("a copy does not disturb the live scene — no reapply, no rain reinit", ()
   assert.equal(h.state.applied, applied);
   assert.equal(h.state.rainInits, rains);
 });
+
+test("a saved lightTune with a non-object profile is dropped, and moving a knob no longer throws", () => {
+  // Settings import accepts any object for lightTune: {"bahrain|dusk|wet": "x"}
+  // was stored as-is and the next knob move evaluated `id in "x"` and threw.
+  const h = loadStore({ saved: { "bahrain|dusk|wet": "x", "monza|day|dry": { keyMul: 1.5, junk: "no" }, "spa|day|dry": [1] } });
+  assert.doesNotThrow(() => h.store.set("keyMul", 1.25));
+  const p = snap(h);
+  assert.equal(p["monza|day|dry"].keyMul, 1.5, "a numeric override survives");
+  assert.equal("junk" in p["monza|day|dry"], false, "a non-number value inside a profile is dropped");
+  assert.equal("spa|day|dry" in p, false, "an array is not a profile");
+});
