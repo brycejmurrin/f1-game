@@ -34,9 +34,16 @@ test("desktop main uses privileged app:// via app-protocol (Range handler)", () 
   // Autoplay: no CLI flag needed (research B1.4); set webPreferences explicitly.
   assert.doesNotMatch(MAIN, /appendSwitch\(\s*["']autoplay-policy["']/);
   assert.match(MAIN, /autoplayPolicy:\s*["']no-user-gesture-required["']/);
-  // Soft-GL CI gets enable-unsafe-webgpu; do not claim unverified Linux Vulkan.
+  // Soft-GL is opt-in via APEX_DESKTOP_SOFT_GL — never implied by CI= alone.
+  assert.match(MAIN, /APEX_DESKTOP_SOFT_GL/);
   assert.match(MAIN, /enable-unsafe-webgpu/);
+  assert.doesNotMatch(MAIN, /CI\s*===\s*["']true["']/);
   assert.doesNotMatch(MAIN, /VulkanFromANGLE|DefaultANGLEVulkan|use-vulkan/);
+  // no-sandbox only when APEX_DESKTOP_NO_SANDBOX is set (never release default).
+  assert.match(MAIN, /APEX_DESKTOP_NO_SANDBOX/);
+  assert.match(MAIN, /setWindowOpenHandler/);
+  assert.match(MAIN, /will-navigate/);
+  assert.match(MAIN, /setPermissionRequestHandler/);
 });
 
 test("app-protocol keeps allowServiceWorkers false (cache.addAll fails on app:)", () => {
@@ -45,9 +52,30 @@ test("app-protocol keeps allowServiceWorkers false (cache.addAll fails on app:)"
   assert.match(PROTO, /parseByteRange/);
   assert.match(PROTO, /status:\s*206/);
   assert.match(PROTO, /status:\s*416/);
+  assert.match(PROTO, /realpathSync/);
   // Comments may mention net.fetch (why we avoid it); the handler body must not call it.
   const body = PROTO.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
   assert.doesNotMatch(body, /\bnet\.fetch\b/);
+});
+
+test("desktop package.json release fuses keep inspect and file-protocol extras off", () => {
+  const pkg = JSON.parse(readFileSync(join(ROOT, "desktop/package.json"), "utf8"));
+  assert.equal(pkg.build.electronFuses.enableNodeCliInspectArguments, false);
+  assert.equal(pkg.build.electronFuses.grantFileProtocolExtraPrivileges, false);
+  assert.match(pkg.scripts["pack:test"], /enableNodeCliInspectArguments=true/);
+});
+
+test("desktop workflow is PR pack-smoke + tag/dispatch release (not ship-branch push)", () => {
+  const yml = readFileSync(join(ROOT, ".github/workflows/desktop.yml"), "utf8");
+  assert.match(yml, /workflow_dispatch:/);
+  assert.match(yml, /desktop-v\*/);
+  assert.match(yml, /pull_request:/);
+  assert.match(yml, /pack-smoke:/);
+  assert.match(yml, /draft == false/);
+  assert.match(yml, /pack:test/);
+  assert.match(yml, /APEX_DESKTOP_NO_SANDBOX/);
+  assert.doesNotMatch(yml, /branches:\s*\n\s*-\s*claude\/f1-game-project-26h3ng/);
+  assert.doesNotMatch(yml, /group:\s*pages\b/);
 });
 
 function loadSpotify(opts = {}) {
@@ -106,15 +134,4 @@ test("Spotify copy under native names the redirect-URI limitation", () => {
   const st = desk.status();
   assert.equal(st.state, "off");
   assert.match(st.message, /browser redirect|web build/i);
-});
-
-test("desktop workflow is PR pack-smoke + tag/dispatch release (not ship-branch push)", () => {
-  const yml = readFileSync(join(ROOT, ".github/workflows/desktop.yml"), "utf8");
-  assert.match(yml, /workflow_dispatch:/);
-  assert.match(yml, /desktop-v\*/);
-  assert.match(yml, /pull_request:/);
-  assert.match(yml, /pack-smoke:/);
-  assert.doesNotMatch(yml, /branches:\s*\n\s*-\s*claude\/f1-game-project-26h3ng/);
-  // Must not share the pages concurrency group.
-  assert.doesNotMatch(yml, /group:\s*pages\b/);
 });

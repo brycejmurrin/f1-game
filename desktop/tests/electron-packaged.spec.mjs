@@ -24,12 +24,13 @@ import { findUnpackedBinary } from "../scripts/unpacked-bin.mjs";
 
 const DESKTOP = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-/** Launch env: soft GL on Linux CI; never inherit ELECTRON_RUN_AS_NODE. */
+/** Launch env: soft GL + explicit no-sandbox for CI/xvfb; never inherit ELECTRON_RUN_AS_NODE. */
 function launchEnv() {
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
   delete env.NODE_OPTIONS;
   env.APEX_DESKTOP_SOFT_GL = env.APEX_DESKTOP_SOFT_GL || "1";
+  env.APEX_DESKTOP_NO_SANDBOX = env.APEX_DESKTOP_NO_SANDBOX || "1";
   return env;
 }
 

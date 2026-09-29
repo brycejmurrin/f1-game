@@ -74,11 +74,17 @@ test("desktop workflow runs pack-smoke on pull_request and keeps ship-branch pus
   assert.match(yml, /test:electron/);
   assert.match(yml, /xvfb-run/);
   assert.match(yml, /APEX_DESKTOP_SOFT_GL/);
+  assert.match(yml, /APEX_DESKTOP_NO_SANDBOX/);
+  assert.match(yml, /pack:test/);
+  assert.match(yml, /draft == false/);
   assert.match(yml, /fuses:read|@electron\/fuses/);
   assert.doesNotMatch(yml, /branches:\s*\n\s*-\s*claude\/f1-game-project-26h3ng/);
   assert.match(yml, /Skipping codesign|No CSC_LINK/);
   assert.match(yml, /signtool verify/);
   assert.match(yml, /Auto-update test plan/);
+  // PR matrix is ubuntu-only; win/mac stay on dispatch/release.
+  assert.match(yml, /ubuntu-latest/);
+  assert.match(yml, /github\.event_name == 'pull_request'/);
 });
 
 test("DESKTOP-TEST-PLAN.md carries the manual per-OS checklist", () => {

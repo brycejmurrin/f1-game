@@ -13,28 +13,28 @@ have no real GPU ([GitHub-hosted runners](https://docs.github.com/en/actions/ref
 
 ## Automated (every PR — `desktop.yml` pack-smoke job)
 
-Matrix: `ubuntu-latest` (under `xvfb-run`) / `windows-latest` / `macos-latest`.
-(Full installer shapes and Forge were not claimed locally — pack-smoke + release
-jobs are the verification surface.)
+**Non-draft PRs only** (draft→ready gets a fresh run). Matrix on PR: **ubuntu-latest**
+alone (1 job). Windows / macOS pack-smoke run on `workflow_dispatch` (and full
+installers on `desktop-v*` tags via `release-build`).
 
 1. `npm ci` in `desktop/` (Node ≥ 22.12 recommended; electron-builder v27 requires it).
-2. `npm run pack` → `electron-builder --dir` (unsigned; `CSC_IDENTITY_AUTO_DISCOVERY=false`).
-3. Soft-GL env: `APEX_DESKTOP_SOFT_GL=1` → main process appends
-   `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`
-   `--enable-unsafe-webgpu` (without it, `requestAdapter()` is null on GPU-less
-   hosts; do not gate tests on WebGPU). Linux Vulkan flags remain unverified.
+2. `npm run pack:test` → `electron-builder --dir` with
+   `enableNodeCliInspectArguments=true` (release `pack`/`dist` keep inspect **off**
+   and `grantFileProtocolExtraPrivileges` **false**).
+3. Soft-GL env: `APEX_DESKTOP_SOFT_GL=1` + `APEX_DESKTOP_NO_SANDBOX=1` (explicit;
+   never implied by `CI=true` alone — packaged releases must keep the Chromium
+   sandbox). Soft-GL appends ANGLE SwiftShader + `enable-unsafe-webgpu`.
 4. Playwright `_electron` against the unpacked binary
    (`desktop/tests/electron-packaged.spec.mjs`):
    - window opens; `app.isPackaged === true`
    - title / `app.getVersion()` matches `0.<version.json build>.0`
    - `#game` canvas present; ≥ 30 rAF frames advance
    - no serious `pageerror`
-   - fullscreen toggle via `electronApp.evaluate`
+   - fullscreen toggle via `electronApp.evaluate` (macOS: simpleFullScreen)
    - clean `electronApp.close()`
    - offline reload still serves `app://apex/` (assets in `extraResources`)
 5. `npx @electron/fuses read --app <path>` — assert
-   `EnableNodeCliInspectArguments is Enabled` (required for Playwright attach;
-   [Playwright Electron docs](https://playwright.dev/docs/api/class-electron)).
+   `EnableNodeCliInspectArguments is Enabled` on the **test** pack only.
 
 Unit coverage (no Electron binary): `tests/unit/desktop-app-protocol.test.mjs`
 (MIME, Range parse, traversal), `desktop-native.test.mjs` (SW skip / Spotify /
@@ -45,10 +45,11 @@ only shell-specific tests.
 
 ### Fuses (build under test)
 
-`desktop/package.json` → `build.electronFuses.enableNodeCliInspectArguments: true`
-for CI/dev packs. **Production hardening** should flip inspect off *before*
-signing ([electron-builder fuses](https://www.electron.build/docs/tutorials/adding-electron-fuses));
-not done in this spike so `_electron` keeps working.
+Release defaults in `desktop/package.json` → `build.electronFuses`:
+`enableNodeCliInspectArguments: false`, `grantFileProtocolExtraPrivileges: false`.
+CI / local `_electron` uses `npm run pack:test`, which flips inspect **on** for
+Playwright attach ([Playwright Electron docs](https://playwright.dev/docs/api/class-electron)).
+Flip inspect off again before any signed production build.
 
 ## Tags / manual dispatch — signed verification (secrets optional)
 
@@ -121,11 +122,12 @@ if shipped, Ubuntu):
 ```sh
 cd desktop
 npm ci
-npm run pack
+npm run pack:test
 # Linux:
-APEX_DESKTOP_SOFT_GL=1 xvfb-run -a npm run test:electron
+APEX_DESKTOP_SOFT_GL=1 APEX_DESKTOP_NO_SANDBOX=1 xvfb-run -a npm run test:electron
 # macOS / Windows (display available):
-set APEX_DESKTOP_SOFT_GL=1   # optional soft GL
+set APEX_DESKTOP_SOFT_GL=1
+set APEX_DESKTOP_NO_SANDBOX=1
 npm run test:electron
 npm run fuses:read
 ```

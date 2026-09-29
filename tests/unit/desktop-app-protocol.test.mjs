@@ -87,10 +87,11 @@ test("desktop package.json ships app-protocol.js and pins Electron 44.4.5", () =
   );
   assert.equal(pkg.devDependencies.electron, "44.4.5");
   assert.ok(pkg.build.files.includes("app-protocol.js"));
-  // Confirm CJS load path used by Electron main (relative require).
+  assert.equal(pkg.build.electronFuses.enableNodeCliInspectArguments, false);
+  assert.equal(pkg.build.electronFuses.grantFileProtocolExtraPrivileges, false);
+  assert.ok(pkg.scripts["pack:test"]);
   assert.ok(
     require("node:fs").existsSync(join(ROOT, "desktop/app-protocol.js")),
   );
-  // Quiet unused import guard for pathToFileURL in some Node versions.
   assert.ok(String(pathToFileURL(join(ROOT, "desktop/app-protocol.js"))).startsWith("file:"));
 });

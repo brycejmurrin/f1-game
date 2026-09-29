@@ -40,6 +40,10 @@ test("stageSite copies every allow-listed root file and directory", () => {
     assert.ok(!fs.existsSync(path.join(dest, "tools")));
     assert.ok(!fs.existsSync(path.join(dest, "node_modules")));
     assert.ok(!fs.existsSync(path.join(dest, "desktop")));
+    // Symlinks (e.g. docs pointers under staged trees) must be dereferenced
+    // so a packaged Electron app does not see dangling links.
+    const stageSrc = fs.readFileSync(path.join(ROOT, "tools/desktop/stage.mjs"), "utf8");
+    assert.match(stageSrc, /cpSync\([\s\S]*dereference:\s*true/);
   } finally {
     fs.rmSync(dest, { recursive: true, force: true });
   }

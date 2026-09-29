@@ -51,7 +51,7 @@ export function stageSite(outDir, opts = {}) {
     if (!fs.existsSync(src) || !fs.statSync(src).isDirectory()) {
       throw new Error(`stage: missing directory ${name}/ (expected at ${src})`);
     }
-    fs.cpSync(src, path.join(dest, name), { recursive: true });
+    fs.cpSync(src, path.join(dest, name), { recursive: true, dereference: true });
   }
   return dest;
 }

@@ -1,7 +1,7 @@
 {
   "name": "apex26-desktop",
   "productName": "Apex 26",
-  "description": "Unofficial fan racing game — desktop shell for the Apex 26 static WebGL2 site.",
+  "description": "Unofficial fan racing game \u2014 desktop shell for the Apex 26 static WebGL2 site.",
   "author": "Apex 26 contributors",
   "private": true,
   "main": "main.js",
@@ -18,8 +18,9 @@
     "dist:win": "npm run sync-version && npm run stage && electron-builder --win",
     "dist:mac": "npm run sync-version && npm run stage && electron-builder --mac",
     "test:electron": "playwright test -c playwright.config.mjs",
-    "test:electron:pack": "npm run pack && npm run test:electron",
-    "fuses:read": "node scripts/read-fuses.mjs"
+    "test:electron:pack": "npm run pack:test && npm run test:electron",
+    "fuses:read": "node scripts/read-fuses.mjs",
+    "pack:test": "npm run sync-version && npm run stage && electron-builder --dir -c.electronFuses.enableNodeCliInspectArguments=true"
   },
   "devDependencies": {
     "electron": "44.4.5",
@@ -31,7 +32,7 @@
   "build": {
     "appId": "io.github.brycejmurrin.apex26",
     "productName": "Apex 26",
-    "copyright": "Copyright © Apex 26 contributors",
+    "copyright": "Copyright \u00a9 Apex 26 contributors",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -86,9 +87,9 @@
       "runAsNode": false,
       "enableCookieEncryption": true,
       "enableNodeOptionsEnvironmentVariable": false,
-      "enableNodeCliInspectArguments": true,
+      "enableNodeCliInspectArguments": false,
       "onlyLoadAppFromAsar": true,
-      "grantFileProtocolExtraPrivileges": true
+      "grantFileProtocolExtraPrivileges": false
     }
   }
 }

@@ -77,13 +77,26 @@ function registerScheme() {
  * @returns {string|null}
  */
 function resolveSafePath(root, pathname) {
+  let rootReal;
+  try {
+    rootReal = fs.realpathSync(root);
+  } catch {
+    return null;
+  }
   let rel = decodeURIComponent(pathname || "/");
   if (rel === "/" || rel === "") rel = "/index.html";
   const cleaned = rel.replace(/^\/+/, "");
-  const target = path.resolve(root, cleaned);
-  const rootPrefix = root.endsWith(path.sep) ? root : root + path.sep;
-  if (target !== root && !target.startsWith(rootPrefix)) return null;
-  return target;
+  const target = path.resolve(rootReal, cleaned);
+  const rootPrefix = rootReal.endsWith(path.sep) ? rootReal : rootReal + path.sep;
+  if (target !== rootReal && !target.startsWith(rootPrefix)) return null;
+  try {
+    if (!fs.existsSync(target)) return target;
+    const real = fs.realpathSync(target);
+    if (real !== rootReal && !real.startsWith(rootPrefix)) return null;
+    return real;
+  } catch {
+    return null;
+  }
 }
 
 /**

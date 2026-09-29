@@ -195,11 +195,13 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/vstd-invariant.test.mjs",
   "tests/unit/deploy-staging.test.mjs",
   // Electron desktop spike: stage allow-list + stamp, native SW/Spotify gates,
-  // app:// Range/MIME/traversal (Electron #38749), unpacked-bin helper.
+  // app:// Range/MIME/traversal (Electron #38749), unpacked-bin helper,
+  // ship-filter staged path list (stage-files.mjs).
   "tests/unit/desktop-stage.test.mjs",
   "tests/unit/desktop-native.test.mjs",
   "tests/unit/desktop-app-protocol.test.mjs",
   "tests/unit/desktop-unpacked-bin.test.mjs",
+  "tests/unit/ship-filter-paths.test.mjs",
   "tests/unit/perf-sentinel.test.mjs",
   "tests/unit/telemetry-trace.test.mjs",
   "tests/unit/meeting-picker-labels.test.mjs",

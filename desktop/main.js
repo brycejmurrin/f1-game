@@ -12,11 +12,10 @@
  * Flags:
  *   --smoke   load index, wait for shell ready, print JSON, exit (CI / xvfb)
  *
- * Research (2026-09-29): Electron 44.4.5 / Chromium 152; autoplay needs no
- * CLI flag (webPreferences default); WebGPU without a GPU needs
- * enable-unsafe-webgpu for a software adapter; Steam deferred.
+ * Soft-GL / no-sandbox are OPT-IN via env (never implied by CI= alone, and
+ * never required for a packaged release the user downloads).
  */
-const { app, BrowserWindow, globalShortcut } = require("electron");
+const { app, BrowserWindow, globalShortcut, shell } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
 const {
@@ -29,34 +28,56 @@ const {
 const ORIGIN = `${SCHEME}://${HOST}`;
 const SMOKE = process.argv.includes("--smoke");
 
+function envFlag(name) {
+  const v = process.env[name];
+  return v === "1" || v === "true";
+}
+
 /** Directory that holds the staged site (index.html, js/, …). */
 function siteRoot() {
-  // Packaged: extraResources → resources/site
   if (app.isPackaged) {
     return path.join(process.resourcesPath, "site");
   }
-  // Dev: desktop/dist-site produced by `npm run stage`
   return path.join(__dirname, "dist-site");
 }
 
-// Must run before app ready (once).
 registerScheme();
 
-// Soft-GL for headless CI / xvfb (Playwright _electron). Real GPU wins otherwise.
-// Research B1.3: without a GPU, requestAdapter() is null unless enable-unsafe-webgpu
-// is set (then a SwiftShader software adapter). Linux Vulkan feature flags were
-// unverified on the research box — do not enable them by default.
-const softGl = process.env.APEX_DESKTOP_SOFT_GL === "1"
-  || process.env.APEX_DESKTOP_SOFT_GL === "true"
-  || (process.env.CI === "true" && process.platform === "linux");
+// Soft-GL for headless / xvfb Playwright — opt-in only (APEX_DESKTOP_SOFT_GL).
+// Do NOT key off CI=true: that would disable the Chromium sandbox whenever a
+// packaged Linux build happened to see CI in the environment.
+const softGl = envFlag("APEX_DESKTOP_SOFT_GL");
 if (softGl) {
   app.commandLine.appendSwitch("use-gl", "angle");
   app.commandLine.appendSwitch("use-angle", "swiftshader");
   app.commandLine.appendSwitch("enable-unsafe-swiftshader");
   app.commandLine.appendSwitch("enable-unsafe-webgpu");
-  // Containers often have tiny or odd /dev/shm; SwiftShader aborts without this.
   app.commandLine.appendSwitch("disable-dev-shm-usage");
+}
+// no-sandbox: explicit test env only (never release / packaged-by-default).
+if (envFlag("APEX_DESKTOP_NO_SANDBOX")) {
   app.commandLine.appendSwitch("no-sandbox");
+}
+
+/** Deny-by-default session permissions; open http(s) externally only. */
+function hardenWebContents(contents) {
+  contents.setWindowOpenHandler(({ url }) => {
+    try {
+      const u = new URL(url);
+      if (u.protocol === "http:" || u.protocol === "https:") {
+        shell.openExternal(url).catch(() => {});
+      }
+    } catch (_) { /* ignore bad URLs */ }
+    return { action: "deny" };
+  });
+  contents.on("will-navigate", (event, url) => {
+    const ok = typeof url === "string"
+      && (url === ORIGIN || url === `${ORIGIN}/` || url.startsWith(`${ORIGIN}/`));
+    if (!ok) event.preventDefault();
+  });
+  contents.session.setPermissionRequestHandler((_wc, _permission, callback) => {
+    callback(false);
+  });
 }
 
 function createWindow() {
@@ -73,15 +94,13 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
-      // Explicit: Electron already defaults to no-user-gesture-required
-      // (research B1.4); naming it documents the audio/engine expectation.
       autoplayPolicy: "no-user-gesture-required",
-      // Gamepad API works in Chromium; keep webSecurity on with our privileged scheme.
       webSecurity: true,
     },
   });
 
   win.setMenuBarVisibility(false);
+  hardenWebContents(win.webContents);
 
   win.webContents.on("before-input-event", (event, input) => {
     if (input.type === "keyDown" && input.key === "F11") {
@@ -142,6 +161,10 @@ app.whenReady().then(() => {
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+app.on("web-contents-created", (_event, contents) => {
+  hardenWebContents(contents);
 });
 
 app.on("window-all-closed", () => {

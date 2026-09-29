@@ -40,8 +40,8 @@ cd desktop && npm install
 xvfb-run -a npm run smoke
 
 # Packaged Playwright _electron suite (research B7 / docs/notes/DESKTOP-TEST-PLAN.md)
-npm run pack
-APEX_DESKTOP_SOFT_GL=1 xvfb-run -a npm run test:electron
+npm run pack:test
+APEX_DESKTOP_SOFT_GL=1 APEX_DESKTOP_NO_SANDBOX=1 xvfb-run -a npm run test:electron
 npm run fuses:read
 ```
 
@@ -50,6 +50,11 @@ npm run fuses:read
 1. Sync `package.json` version from `version.json` → `0.<build>.0`
 2. Stage via `node tools/desktop/stage.mjs --out desktop/dist-site --stamp`
 3. Launch Electron with `app://apex/` → staged `index.html`
+
+Release `npm run pack` / `dist:*` keep `EnableNodeCliInspectArguments` and
+`grantFileProtocolExtraPrivileges` **off**. Local / CI `_electron` uses
+`npm run pack:test` (inspect on). Soft-GL and `no-sandbox` are env opt-ins
+(`APEX_DESKTOP_SOFT_GL`, `APEX_DESKTOP_NO_SANDBOX`) — never implied by `CI=`.
 
 ## Protocol (`app://apex/`)
 
