@@ -47,6 +47,16 @@ async function startLiveRace(page) {
   });
   if (live) { await page.evaluate(() => window.__apex.go()); return; }
   await page.goto("/");
+  // Wait for boot BEFORE #mb-race: the click is a bare evaluate with no
+  // actionability poll, so firing it before the title handlers attach leaves
+  // the page on title and show("select") times out. CI #36646165077 on
+  // 70b848ce9 failed three steering cases that way once select-specs pulled
+  // this file in (Input.ready latch harden). Smoke / gamepad prove the same
+  // #mb-race → #select path when they wait for __apex first.
+  await page.waitForFunction(
+    () => window.__apex != null && !!document.getElementById("mb-race"),
+    null, { polling: 100, timeout: BOOT_MS }
+  );
   const show = (id) => page.waitForFunction(
     (n) => { const el = document.getElementById(n); return !!el && !el.hidden; },
     id, { polling: 100, timeout: 30_000 }
