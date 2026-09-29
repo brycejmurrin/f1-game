@@ -29,7 +29,13 @@ on:
     # REUSABLE workflow, so the train's gate uploads its junit into the Pages
     # run — and a `workflow_run` on "CI" never fires for it. The train is the
     # one gate that runs the whole smoke suite on the deploy tip every time.
-    workflows: ["CI", "Deploy to GitHub Pages"]
+    # THE TRAIN ONLY (2026-09-30). With "CI" here too, every PR run's
+    # completion still created a run of this workflow that the job's `if:`
+    # then skipped — 119 skipped runs in seven hours on 2026-09-29, each one
+    # queued in the one-at-a-time group below, AFTER the `branches:` filter
+    # was added. The train runs on the deploy branch by construction and is
+    # the one gate that runs the whole smoke suite, so it is the record.
+    workflows: ["Deploy to GitHub Pages"]
     types: [completed]
     # FILTERED AT THE TRIGGER, not only by the job's `if:` (2026-09-29). Every
     # PR's CI run fired this workflow and the job then skipped: 354 runs in
