@@ -117,6 +117,7 @@ const GLXBackend = (function () {
   let skyVAO = null;     // empty VAO (WebGL2 still needs one bound)
   let shadowVAO = null;
   let width = 0, height = 0, aspect = 1;
+  // Output target (VR task 30): final FBO + viewport; null = canvas backbuffer.
   let outFBO = null, outVP = null, renderSizeOverride = null;
   const outputFBO = () => outFBO;
   const outputViewport = (w, h) => outVP ? [outVP.x, outVP.y, outVP.w, outVP.h] : [0, 0, w, h];
