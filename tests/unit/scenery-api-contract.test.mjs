@@ -151,6 +151,8 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     hungaroring: ["hungaroring-pit-complex", "hungaroring-main-tribune"],
     // Wave 5 — Catalunya landmarks (Tilke main stand + pit-end scoreboard)
     catalunya: ["catalunya-main-grandstand", "catalunya-pit-end-scoreboard", "catalunya-race-control"],
+    // Bahrain hollow-stand fix — T1 naming marker (Michael Schumacher Corner, 2014)
+    bahrain: ["bahrain-sakhir-tower", "bahrain-university-grandstand", "bahrain-schumacher-corner"],
     // Wave 6 — Red Bull Ring (Steiermark / Niki Lauda Kurve stand at T1)
     redbull: ["redbull-lauda-kurve-stand"],
     // Wave 6 — Madring / La Monumental inside rake + masts
