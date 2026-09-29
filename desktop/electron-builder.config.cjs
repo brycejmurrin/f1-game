@@ -94,7 +94,6 @@ const config = {
       "Wraps the same static WebGL2 site GitHub Pages publishes. No second gameplay codebase.",
     // Public GitHub noreply already used on ship-branch commits (not invented).
     maintainer: "Apex 26 contributors <37964036+brycejmurrin@users.noreply.github.com>",
-    homepage: "https://github.com/brycejmurrin/f1-game",
     artifactName: "Apex26-${version}-${arch}.${ext}",
   },
   publish: null,

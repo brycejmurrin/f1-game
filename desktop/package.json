@@ -3,6 +3,7 @@
   "productName": "Apex 26",
   "description": "Unofficial fan racing game \u2014 desktop shell for the Apex 26 static WebGL2 site.",
   "author": "Apex 26 contributors",
+  "homepage": "https://github.com/brycejmurrin/f1-game",
   "private": true,
   "main": "main.js",
   "apexVersion": "1.0",

@@ -76,6 +76,9 @@ test("builder files include the protocol handler and lib/; pack:test still flips
   assert.match(pkg.scripts.pack, /electron-builder\.config\.cjs/);
   assert.equal(pkg.devDependencies["electron-builder"], "26.15.3");
   assert.doesNotMatch(pkg.devDependencies["electron-builder"], /alpha|27\./);
+  assert.match(pkg.homepage || "", /github\.com\/brycejmurrin\/f1-game/);
+  // linux.homepage is not in electron-builder 26 LinuxConfiguration schema
+  assert.equal(Object.prototype.hasOwnProperty.call(cfg.linux, "homepage"), false);
 });
 
 test("committed placeholder icons exist (512 png set; 1024 labelled placeholder)", () => {
