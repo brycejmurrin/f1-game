@@ -242,6 +242,9 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     ],
     // Wave 6 — Fuji Speedway Hotel + Motorsports Museum (west side, 2022)
     fuji: ["fuji-speedway-hotel"],
+    // Wave 6 — Donington Park: 2017–18 MSV Hollywood grandstand (grandstandEx
+    // suppressed on the Craner fold; bespoke positive-rake modelGroup).
+    donington: ["donington-hollywood-stand"],
     // Wave 6 — Sepang hibiscus main canopy + K1/F corner stands
     sepang: ["sepang-main-grandstand-canopy", "sepang-t1-grandstand", "sepang-t7-grandstand"],
     // Wave 6 — Brands Hatch Indy amphitheatre stands + Kentagon
@@ -251,6 +254,16 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
       "brands-paddock-hill-stand",
       "brands-hailwoods-stand",
       "brands-kentagon",
+    ],
+    // Wave 6 — Mont-Tremblant (Laurentians): control tower, The Hump crest,
+    // service bridge, Namerow bank, Paddock Bend fascia. Devil's Elbow /
+    // Casino / Le Nordique are Montreal names — deliberately omitted.
+    mont_tremblant: [
+      "tremblant-control-tower",
+      "tremblant-hump-crest",
+      "tremblant-bridge",
+      "tremblant-namerow-bank",
+      "tremblant-paddock-bend-stand",
     ],
     // Wave 6 — Jerez: El Ovni VIP deck on the finish line, Tío Pepe control
     // tower, Dani Pedrosa (Dry Sack) + Jorge Lorenzo corner markers.
