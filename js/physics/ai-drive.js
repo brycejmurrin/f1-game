@@ -847,7 +847,10 @@ const AiDrive = (function () {
     // already on the car when a plan is re-cut mid-race, and `firstLife` the
     // laps that set has left — the first stint is run on what is on the car,
     // not on a fresh set's life. An AI passes none of them.
-    const pinStops = ctx.stops != null && ctx.stops >= 0 ? Math.min(MAX_STOPS, ctx.stops | 0) : null;
+    // …and never more stops than the race has laps to hold one on (laps - 1:
+    // no stop on the last). The pin is stored per circuit, not per distance, so
+    // a 2-stop pin met a 2-lap sprint leg and made a zero-length stint: "BOX L0".
+    const pinStops = ctx.stops != null && ctx.stops >= 0 ? Math.min(MAX_STOPS, ctx.stops | 0, Math.max(0, laps - 1)) : null;
     let pinStart = ctx.start && TYRE[ctx.start] ? ctx.start : null;
     // TWO DRY SPECIFICATIONS (FIA Sporting Regulations B6.3.6): a dry race
     // must use at least two different compounds. `used` is what a mid-race
@@ -1078,8 +1081,26 @@ const AiDrive = (function () {
     return Math.abs(xA) >= Math.abs(xB);         // level: the outer car concedes
   }
 
+  // MIRRORS: how far back a car in our lane is SEEN — a time, not a distance. The
+  // traffic scan (game.js) used to stop at a flat 13 m, which at 60 m/s is 0.2 s: the
+  // attacker was in the gearbox before the defender knew it was there. It also cut
+  // short the two rules below it that were written in TIME — holdLineGap (a second
+  // behind) and the pressure timer (0.6 s) — neither could see past 13 m. Awareness
+  // is the reach: a sharp driver watches a second back, a dull one about 0.6 s.
+  function mirrorReach(t, speed) {
+    const v = Math.max(speed || 0, 10);
+    return clamp(v * lerp(0.6, 1.05, t ? t.awareness : 0.75), 13, 72);
+  }
+  // The COVER WINDOW, in seconds behind: the flat 12 m gate was 0.2 s at racing speed,
+  // so the one defensive move (defendOnce) was spent with the attacker already on the
+  // gearbox — too late to be a cover. Awareness widens it: 0.35 s .. 0.7 s.
+  function defendWindowT(t) { return lerp(0.35, 0.7, t ? t.awareness : 0.75); }
+
   function defendPull(ctx) {
-    if (ctx.blocker || !ctx.chaser || (ctx.chaserGap || 99) >= 12) return 0;
+    if (ctx.blocker || !ctx.chaser) return 0;
+    const gT = (ctx.chaserGap == null ? 99 : ctx.chaserGap) / Math.max(ctx.speed || 0, 10);
+    const winT = defendWindowT(ctx.traits);
+    if (gT >= winT) return 0;
     if ((ctx.chaserSpeed || 0) <= (ctx.speed || 0) - 3) return 0;
     const kA = ctx.kA || 0;
     // COVER SIDE. Into a corner the inside is the thing worth having, so the
@@ -1106,7 +1127,7 @@ const AiDrive = (function () {
     const coverRoom = coverSide > 0 ? (ctx.roomR || 0) : (ctx.roomL || 0);
     if (ctx.street && coverRoom < 2.2) return 0;
     const mag = lerp(0.2, 1.1, ctx.traits.craft)
-      * clamp(1 - ctx.chaserGap / 12, 0, 1) * clamp(coverRoom / 2, 0, 1)
+      * clamp(1 - gT / winT, 0, 1) * clamp(coverRoom / 2, 0, 1)
       * houseMulCtx(ctx, 0.90, 1.12, "hold")
       * ordersMul(ctx.team, ctx.seat, ctx.other, "defend");
     // A straight cover is a lane move, not a chop: three fifths of the corner
@@ -1176,6 +1197,15 @@ const AiDrive = (function () {
   // laps and is where the "AI welded to my bumper" pile-ups start. After a
   // patience window (awareness commits earlier) the AI moves toward its free
   // side and stops accelerating away — TORCS' OPP_LETPASS, minus the blue flag.
+  // LET PASS IS A BLUE FLAG (2026-09-29): a quicker car inside 9 m on our gearbox, closing,
+  // with nothing ahead of US holding it up — and LAPPING us. It used to wave a same-lap
+  // rival through too (the player included) after letPassDelay on the gearbox, which read
+  // as "the AI doesn't defend": a racer makes the faster car pass; a backmarker moves over.
+  // The closing rate rides the pace scale (vScale = vTop()/VMAX), like queueBrake's bands.
+  function letPassCase(racing, blocker, chaser, chaserGap, chaserSpeed, speed, vScale, lapping) {
+    if (!racing || blocker || !chaser || !lapping || !(chaserGap < 9)) return false;
+    return (chaserSpeed || 0) > (speed || 0) + 2.5 * (vScale > 0 ? vScale : 1);
+  }
   function letPassDelay(t) {
     return lerp(4.2, 1.8, t.awareness);
   }
@@ -1209,9 +1239,9 @@ const AiDrive = (function () {
     lateralScale, yawScale, cornerSpeed, traits, houseStyle, isMate, ordersMul, stuckThreshold, followPad, followBase, towGain, queueBrake, sepClamp,
     humanInvMass, contactGive, steerDamp, unstuckPull, streetOtScale, otFireRate,
     otShouldFire, wantBoost, wantX, brakeTarget, brakeDecision, adaptLane, otPull,
-    defendPull, isBoxed, minLatGap, wallHitLoss, wallSteerScrub,
+    defendPull, mirrorReach, defendWindowT, isBoxed, minLatGap, wallHitLoss, wallSteerScrub,
     wallAiScrub, beginLook, pushLook, endLook, aiRescueDelay, otSide,
-    letPassDelay, letPassPull, letPassEase, queueFloor, laneFollow, unstuckLatFloor,
+    letPassCase, letPassDelay, letPassPull, letPassEase, queueFloor, laneFollow, unstuckLatFloor,
     otWant, queueTime, queuePatience, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes,
     launchPlan, launchMul, launchDone, pacePhase, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,

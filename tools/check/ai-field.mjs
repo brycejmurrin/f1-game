@@ -23,6 +23,14 @@
  *               couple of seconds is racing; minutes is a train.
  *   clumps      share of adjacent gaps under 10 m and under 25 m — what the
  *               field looks like from inside it.
+ *   racecraft   attacks (an AI pass move started: c.passOf set), covers (a
+ *               defensive move spent: c.defendSide set), conversion (settled
+ *               passes per attack — how often an attack beats the defence), and
+ *               CONTACT: pair-episodes whose footprints overlap (|arc gap| under
+ *               the 4.8 m collider length and |lateral| under its 2.0 m width,
+ *               js/physics/collide.js), sampled at 4 Hz, plus contact car-seconds.
+ *               Added 2026-09-29 for the defending/awareness pass: c.hits counts
+ *               contact with the PLAYER only, so AI-AI contact had no number.
  *   mistakes    driving errors per car per 100 s of RACING (game.js rolls one
  *               per braking zone off AiDrive.mistakeChance). Added 2026-09-16
  *               because the mistake model was UNFALSIFIABLE: nothing counted
@@ -123,10 +131,32 @@ async function measure(seed) {
   for (const a of cars) for (const b of cars) if (a !== b) ahead.set(a.code + ">" + b.code, a.prog > b.prog);
   const swaps = new Map(), run = new Map(), dwell = [], snaps = [];
   let closeSeconds = 0;
+  // RACECRAFT: rising edges read EVERY frame (a pass move can start and end inside 0.25 s).
+  let attacks = 0, covers = 0, contactEpisodes = 0, contactS = 0;
+  const wasPass = new Map(), wasCover = new Map(), inContact = new Set();
+  const LCAR = 4.8, WCAR = 2.0, LAP = g.G.track.total;
 
   for (let f = 0, t = 0; f < Math.round(SECONDS / DT); f++, t += DT) {
     g.step(1, DT);
+    for (const c of cars) {
+      if (c.human) continue;
+      const pOn = !!c.passOf, dOn = !!c.defendSide;
+      if (pOn && !wasPass.get(c)) attacks++;
+      if (dOn && !wasCover.get(c)) covers++;
+      wasPass.set(c, pOn); wasCover.set(c, dOn);
+    }
     if (f % 15) continue;                    // 4 Hz is plenty for order and gaps
+    // CONTACT: footprint overlap, pairwise on the arc (wrapped) — a pair counts once per episode.
+    for (let i = 0; i < cars.length; i++) {
+      for (let j = i + 1; j < cars.length; j++) {
+        const a = cars[i], b = cars[j];
+        if (a.finished || b.finished || a.retired || b.retired || a.inPit || b.inPit) continue;
+        let ds = ((a.prog - b.prog) % LAP + LAP) % LAP; if (ds > LAP / 2) ds -= LAP;
+        const k = a.code + "|" + b.code, on = Math.abs(ds) < LCAR && Math.abs(a.x - b.x) < WCAR;
+        if (on) { contactS += 0.25; if (!inContact.has(k)) { contactEpisodes++; inContact.add(k); } }
+        else inContact.delete(k);
+      }
+    }
     for (const c of cars) if (!c.finished) raceCarS += 0.25;
     // ORDER FLIPS, pairwise — a field-order string cannot tell one pass from a
     // whole reshuffle, and cannot see a pair oscillating inside a static order.
@@ -179,6 +209,8 @@ async function measure(seed) {
     dwellMedianS: dwell.length ? +dwell[Math.floor(dwell.length / 2)].toFixed(1) : 0,
     dwellMaxS: dwell.length ? +dwell[dwell.length - 1].toFixed(1) : 0,
     noseToTailPct: +(100 * closeSeconds / (cars.length * SECONDS)).toFixed(1),
+    attacks, covers, conversion: attacks ? +(settled / attacks).toFixed(3) : 0,
+    contactEpisodes, contactS: +contactS.toFixed(2),
     mistakes: errs() - err0,
     racingCarS: Math.round(raceCarS),
     mistakesPer100s: raceCarS ? +(100 * (errs() - err0) / raceCarS).toFixed(3) : 0,
@@ -196,6 +228,7 @@ for (let i = 0; i < RUNS; i++) runs.push(await measure(SEED0 + i));
 
 const KEYS = ["paceSpreadPct", "spreadStartM", "spreadEndM", "flips", "settledPasses",
               "oscillationFlips", "oscillationShare", "dwellMedianS", "dwellMaxS", "noseToTailPct",
+              "attacks", "covers", "conversion", "contactEpisodes", "contactS",
               "mistakes", "racingCarS", "mistakesPer100s",
               "pitStops", "meanTyreWear"];
 const stat = {};
@@ -214,6 +247,7 @@ else {
   console.log(`  field strings    ${show("spreadStartM")} m -> ${show("spreadEndM")} m`);
   console.log(`  order flips      ${show("flips")}   settled passes ${show("settledPasses")}   oscillation ${show("oscillationFlips")} (${(100 * stat.oscillationShare.median).toFixed(0)}%)`);
   console.log(`  nose-to-tail     median ${show("dwellMedianS", 1)} s, longest ${show("dwellMaxS", 1)} s, ${show("noseToTailPct", 1)}% of car-time`);
+  console.log(`  racecraft        ${show("attacks")} attacks, ${show("covers")} covers, conversion ${show("conversion", 3)}; contact ${show("contactEpisodes")} episodes, ${show("contactS", 1)} s`);
   console.log(`  mistakes         ${show("mistakes")} total, ${show("mistakesPer100s", 3)} per car per 100 s over ${show("racingCarS")} racing car-seconds`);
   if (!stat.mistakes.max) console.log(`  ! the field made NO mistakes in this window — the model is inert here, not calm`);
   console.log(`  tyres           ${show("pitStops")} pit stop(s), mean wear ${show("meanTyreWear", 3)}` +

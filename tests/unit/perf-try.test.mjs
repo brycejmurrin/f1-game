@@ -294,11 +294,10 @@ test("SETTINGS still has GRAPHICS: HIGH and a door-index stack", () => {
   for (const id of ["pm-open-controls", "pm-open-display", "pm-advanced", "pm-lighting"]) {
     assert.match(html, new RegExp(`id="${id}"`));
   }
-  // Door index: one loop over the home doors (settings IA consolidation #424),
-  // not the old per-id `if (openControls) openControls.onclick` wiring.
-  assert.match(read("js/ui/settings-tabs.js"),
-    /for \(const \[id, door\] of Object\.entries\(doors\)\) if \(door\) door\.onclick/);
-  assert.match(read("js/ui/scale.js"), /if \(uiEl\) uiEl\.oninput/);
+  const nav = read("js/ui/settings-tabs.js");
+  assert.match(nav, /controls: document\.getElementById\("pm-open-controls"\)/);
+  assert.match(nav, /for \(const \[id, door\] of Object\.entries\(doors\)\) if \(door\) door\.onclick = \(\) => \{/);
+  assert.match(nav, /show\(id, true, \(\) => \{ if \(onSelect\) onSelect\(id\); \}\)/);  assert.match(read("js/ui/scale.js"), /if \(uiEl\) uiEl\.oninput/);
   assert.doesNotMatch(html, /id="pm-category-tabs"|id="pm-tab-more"|id="pm-panel-more"/);
   const rules = cssRules(read("css/components.css"));
   assert.ok(ruleFor(rules, /^\.balanced-row\s*>\s*:not\(\[hidden\]\)$/), "the balanced-row child rule exists");
