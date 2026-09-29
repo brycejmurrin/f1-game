@@ -9281,6 +9281,11 @@ $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
 // multiplayer stack the pairing rides on, then the module owns the pairing and
 // feeds Input.remoteSample(). A second press cancels; a lost phone re-arms it.
 let phonePad = null;
+// The camera the player was in before a phone linked: a phone in the hand is the wheel, so the
+// screen shows VISOR (the cockpit eye forward of the drawn wheel — js/camera/mode-switch.js) while
+// it drives, and goes back when the phone is gone, unless the player cycled away meanwhile.
+let phonePadCam = -1;
+const VISOR_CAM = CAM_MODES.findIndex((c) => c.id === "visor");
 // The dash the paired phone paints: the fields js/ui/hud.js reads, ~15 Hz.
 function phonePadDash() {
   const p = player;
@@ -9314,8 +9319,15 @@ $("pm-phonepad").onclick = () => {
         // or a short screen shows "scan the code" with nothing to scan.
         if (code && box.scrollIntoView) box.scrollIntoView({ block: "nearest" });
       },
-      linked: () => { btn.textContent = "UNPAIR PHONE"; announce("PHONE CONNECTED — TILT TO STEER", 3, "info"); },
-      lost: () => { btn.textContent = "PHONE AS CONTROLLER"; phonePad = null; announce("PHONE DISCONNECTED", 3, "warn"); },
+      linked: () => {
+        btn.textContent = "UNPAIR PHONE"; announce("PHONE CONNECTED — TILT TO STEER", 3, "info");
+        if (VISOR_CAM >= 0 && camMode !== VISOR_CAM) { phonePadCam = camMode; setCamMode(VISOR_CAM); }
+      },
+      lost: () => {
+        btn.textContent = "PHONE AS CONTROLLER"; phonePad = null; announce("PHONE DISCONNECTED", 3, "warn");
+        if (phonePadCam >= 0 && camMode === VISOR_CAM) setCamMode(phonePadCam);
+        phonePadCam = -1;
+      },
     });
   });
 };

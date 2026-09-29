@@ -439,7 +439,7 @@ display label such as `"TV SIDE"` — returns `false`.
 | `low` | LOW | Low-angle drama: eye skims the track surface 10 m behind, looking up at the car silhouetted against the sky |
 | `tcam` | T-CAM | Broadcast roll-hoop (airbox) camera — narrow telephoto mounted 1.3 m above the car, looking forward |
 | `rear` | REAR CAM | Rear-mounted onboard at the car's tail looking back down the track (unlike `reverse` which floats ahead) |
-| `visor` | VISOR | The cockpit eye slid 0.55 m forward, past the wheel and halo: the same height, aim and turn chasing as `cockpit`, with no rig and no player body drawn |
+| `visor` | VISOR | The cockpit eye slid 0.55 m forward, past the wheel and halo: the same height, aim and turn chasing as `cockpit`, with no rig and no player body drawn. PHONE AS CONTROLLER selects it when the phone links (the phone is the wheel) and restores the camera it left when the phone is gone, unless you cycled away meanwhile |
 
 ```js
 __apex.camera();            // → { mode:"chase", index:0, modes:["chase","far","drift","cockpit","hood","overhead","heli","reverse","side","cinematic","low","tcam","rear","visor"] }
@@ -1942,7 +1942,9 @@ HUD overlay and returns the new state.
 
 ### `uiScale(v?)` · `hudScale(v?)` · `btnScale(v?)` → `{pct, stored, min, max, step}`
 The three size sliders (pause ▸ SETTINGS ▸ DISPLAY ▸ HUD), as **percentages**,
-40–200. `uiScale` drives `--ui-scale`, which the menu sheets and the overlay
+40–200 (`btnScale` alone runs on to 300: a 200 % dock was still small in the hand on
+a tall landscape phone, and `fitHud`'s `--hud-z-dock` cap stops the columns wherever
+the screen runs out of room, so the slider is the wish and the cap the fit). `uiScale` drives `--ui-scale`, which the menu sheets and the overlay
 children `zoom`; `hudScale` drives `--hud-scale`, which the in-race HUD readout
 clusters `zoom`; `btnScale` drives `--hud-btn-scale`, which the touch dock
 `zoom`s and which sizes its `--tap` / `--hold` pads. **They are independent and
