@@ -97,7 +97,8 @@ const KNOWN_EXTERNAL_READS = {
   "js/agent/apex.js": ["__APEX_BUILD", "__apexErrors", "__apexROLoops"],   // the shell is outside the manifest,
   "js/game.js": ["__APEX_BUILD", "__apexReportError", "__TEST_MODE"], // so the scan cannot see the writer; Playwright init-script flag
   "js/net/scan.js": ["jsQR"],                     // vendored decoder, script-injected on demand
-  "js/render/three/tlx.js": ["__apexReportError"], // the shell's error card: a context lost past the reload budget says so
+  "js/render/three/tlx.js": ["__apexReportError", "XRWebGLLayer"], // shell error card; WebXR immersive layer (browser API)
+  "js/xr/xr-session.js": ["XRRigidTransform"], // WebXR recenter offset (browser API)
 };
 
 // ---------------------------------------------------------------------------

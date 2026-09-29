@@ -1456,5 +1456,30 @@ void main() {
   float d3 = texture(uDepthTex, vUV + t * vec2( 1.0,  1.0)).r;
   o = vec4(min(min(d0, d1), min(d2, d3)), 0.0, 0.0, 1.0);
 }`;
-  window.GLXShaders = Object.assign(window.GLXShaders || {}, { POST_VS, BRIGHT_FS, BLUR_FS, DOWN_FS, UP_FS, SSAO_FS, GODRAY_FS, COMPOSITE_FS, FXAA_FS, SGSR_FS, DEPTH_VS, DEPTH_FS, BLOCKER_FS });
+  // REAR-VIEW MIRROR composite (post.js mirrorComposite): the mirror camera's
+  // own small target drawn into the HUD mirror's rect of the finished frame,
+  // FLIPPED left-right here rather than by a negative-x projection (that would
+  // invert winding and back-face cull the world). Same exposure and ACES curve
+  // as COMPOSITE_FS so the mirror sits in the frame's exposure; the colour
+  // grade is left out. uHdr 0: the target is already LDR (post off) — copy.
+  const MIRROR_FS = `#version 300 es
+precision highp float;
+in vec2 vUV;
+uniform sampler2D uTex;
+uniform float uHdr;
+uniform float uExposure;
+uniform float uWhitePoint;
+uniform float uAcesA;
+uniform float uAcesB;
+uniform float uAcesC;
+uniform float uAcesD;
+uniform float uAcesE;
+out vec4 outColor;
+${GLXChunks.tonemap}
+void main() {
+  vec3 c = texture(uTex, vec2(1.0 - vUV.x, vUV.y)).rgb;
+  if (uHdr > 0.5) c = acesTonemap(c * uExposure / uWhitePoint);
+  outColor = vec4(c, 1.0);
+}`;
+  window.GLXShaders = Object.assign(window.GLXShaders || {}, { POST_VS, BRIGHT_FS, BLUR_FS, DOWN_FS, UP_FS, SSAO_FS, GODRAY_FS, COMPOSITE_FS, FXAA_FS, SGSR_FS, DEPTH_VS, DEPTH_FS, BLOCKER_FS, MIRROR_FS });
 })();

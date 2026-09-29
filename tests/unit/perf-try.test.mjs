@@ -288,8 +288,15 @@ test("GLSL / WGSL / TSL keep only the gated ON path", () => {
 
 test("SETTINGS still has GRAPHICS: HIGH and a door-index stack", () => {
   const html = read("index.html");
-  assert.match(html, /GRAPHICS: HIGH/);
+  // Mount point in the DISPLAY › RENDERER fold: GfxQuality.replaceChilds this
+  // with SettingRow at init. The live label is `GRAPHICS: ${preset}` in
+  // js/perf/quality-preset.js — HIGH remains the desktop default preset.
+  assert.match(html, /id="pm-gfx"[^>]*>GRAPHICS: HIGH/);
   assert.doesNotMatch(html, /GRAPHICS: STANDARD/);
+  const gfx = read("js/perf/quality-preset.js");
+  assert.match(gfx, /return `GRAPHICS: \$\{current\(\)\.label\}`/);
+  assert.match(gfx, /\{ id: "high",\s+label: "HIGH"/);
+  assert.match(gfx, /SettingRow\.build\("pm-gfx", "GRAPHICS"/);
   assert.match(html, /id="pm-settings-index"/);
   for (const id of ["pm-open-controls", "pm-open-display", "pm-advanced", "pm-lighting"]) {
     assert.match(html, new RegExp(`id="${id}"`));
@@ -297,8 +304,7 @@ test("SETTINGS still has GRAPHICS: HIGH and a door-index stack", () => {
   const nav = read("js/ui/settings-tabs.js");
   assert.match(nav, /controls: document\.getElementById\("pm-open-controls"\)/);
   assert.match(nav, /for \(const \[id, door\] of Object\.entries\(doors\)\) if \(door\) door\.onclick = \(\) => \{/);
-  assert.match(nav, /show\(id, true, \(\) => \{ if \(onSelect\) onSelect\(id\); \}\)/);
-  assert.match(read("js/ui/scale.js"), /if \(uiEl\) uiEl\.oninput/);
+  assert.match(nav, /show\(id, true, \(\) => \{ if \(onSelect\) onSelect\(id\); \}\)/);  assert.match(read("js/ui/scale.js"), /if \(uiEl\) uiEl\.oninput/);
   assert.doesNotMatch(html, /id="pm-category-tabs"|id="pm-tab-more"|id="pm-panel-more"/);
   const rules = cssRules(read("css/components.css"));
   assert.ok(ruleFor(rules, /^\.balanced-row\s*>\s*:not\(\[hidden\]\)$/), "the balanced-row child rule exists");

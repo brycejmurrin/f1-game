@@ -816,7 +816,7 @@ test("a flyby with no room before the grid shot plays nothing — a zero budget 
 test("a real race says whose car you took and from which lap, and a rolling join is not a grid", () => {
   const real = { title: "2024 Italian Grand Prix", driver: "Charles Leclerc", startLap: 12, realLaps: 53, watch: false, reel: false };
   const join = said(info({ gp: real.title, real, story: { real } }));
-  assert.match(join, /You take over Charles Leclerc's car on lap 12 of 53, with the field racing as it really ran\./);
+  assert.match(join, /You take over Charles Leclerc's car on lap 12 of 53\./, "no timing to read: the plain line");
   assert.match(join, /A rolling start\. The car is yours in a few seconds\.$/, "a mid-race join is a rolling start, not 'N laps'");
   assert.doesNotMatch(join, /12 laps\. Let's go racing/);
   const r1 = { ...real, startLap: 1 };
@@ -835,6 +835,103 @@ test("a real race's story is the script's driver, never the roster seat's name, 
   const body = src.slice(src.indexOf("function storyFor(info)"), src.indexOf("/** The results screen's read"));
   assert.match(body, /const race = [^;]*&& !info\.real;/, "the seat / championship / goal / forecast rows stand down for a real race");
   assert.match(body, /if \(info\.real\) st\.real = info\.real;/);
+});
+
+// THE RACE SO FAR, as RealRace.situation() reads Baku 2026 at lap 40 for Leclerc
+// (tests/unit/real-race.test.mjs pins these numbers against the real timing).
+const P = (code, name, surname, extra = {}) => ({ code, name, surname, team: "", ...extra });
+const BAKU40 = {
+  lap: 40, realLaps: 51, toGo: 12, condensed: false, grid: false,
+  leader: P("RUS", "George Russell", "Russell"),
+  top: [P("RUS", "George Russell", "Russell", { pos: 1, gap: { s: 0, lapsDown: 0 } }), P("VER", "Max Verstappen", "Verstappen", { pos: 2, gap: { s: 0.6, lapsDown: 0 } }),
+    P("PIA", "Oscar Piastri", "Piastri", { pos: 3, gap: { s: 2.5, lapsDown: 0 } })],
+  running: 16,
+  out: [P("STR", "Lance Stroll", "Stroll", { lap: 8 }), P("ALO", "Fernando Alonso", "Alonso", { lap: 21 }), P("ALB", "Alexander Albon", "Albon", { lap: 30 }),
+    P("NOR", "Lando Norris", "Norris", { lap: 36 }), P("GAS", "Pierre Gasly", "Gasly", { lap: 36 }), P("COL", "Franco Colapinto", "Colapinto", { lap: 37 })],
+  dns: [],
+  lead: { changes: [], from: P("RUS", "George Russell", "Russell"), allTheWay: true },
+  cautions: [{ kind: "safety car", from: 31, to: 35, now: false }, { kind: "safety car", from: 36, to: 38, now: false }],
+  fastest: P("RUS", "George Russell", "Russell", { time: 106.332, lap: 39 }),
+  rain: { now: false, since: 0, last: 0 },
+  passes: 107,
+  you: P("LEC", "Charles Leclerc", "Leclerc", { running: true, gridPos: 2, pos: 5, gap: { s: 3.3, lapsDown: 0 },
+    ahead: P("HAD", "Isack Hadjar", "Hadjar", { gap: 0.6 }), behind: P("HAM", "Lewis Hamilton", "Hamilton", { gap: 0.6 }),
+    tyre: { compound: "medium", age: 8, used: false }, stops: [31, 36], passesMade: 3, passesLost: 6, best: { time: 107.208, lap: 29 }, penalties: [] }),
+  leaderStops: 2,
+};
+const bakuTrack = { id: "baku", name: "Baku", gp: "Azerbaijan Grand Prix", country: "Azerbaijan", lengthKm: 6.003, night: true };
+const bakuJoin = (over = {}) => {
+  const real = { title: "2026 Azerbaijan Grand Prix", driver: "Charles Leclerc", startLap: 40, realLaps: 51, watch: false, reel: false, story: BAKU40, ...over };
+  return info({ track: bakuTrack, gp: real.title, tod: "day", real, story: { real } });
+};
+
+test("a mid-race JUMP IN reads the race as it stands: lap, leader, your place and gap, neighbours, tyres, flags, retirements", () => {
+  const lines = A.script(bakuJoin());
+  const all = lines.join(" ");
+  for (const want of [
+    "Lap 40 of 51, and 12 laps to go.",
+    "Russell leads, 0.6 seconds clear of Verstappen, with Piastri third.",
+    "You take over Charles Leclerc in fifth, 3.3 seconds off the lead, down three places from second on the grid.",
+    "Hadjar is 0.6 seconds ahead of you, and Hamilton 0.6 seconds behind.",
+    "You are on mediums, 8 laps old, after two stops, on laps 31 and 36.",
+    "Two safety cars so far: laps 31 to 35 and laps 36 to 38.",
+    "Six cars are already out, Gasly and Colapinto the latest.",
+    "Russell has led every lap.",
+    "Fastest lap so far: Russell, a 1 46.3, on lap 39.",
+    "This car has made three passes so far, and been passed six times.",
+    "A rolling start. The car is yours in a few seconds.",
+  ]) assert.ok(lines.includes(want), `missing: "${want}"\n${lines.join("\n")}`);
+  assert.doesNotMatch(all, /under the lights/, "a daytime Baku is not a night race");
+  assert.ok(lines.indexOf("Lap 40 of 51, and 12 laps to go.") < lines.indexOf("A rolling start. The car is yours in a few seconds."));
+});
+
+test("the race story outranks the circuit's own lines when the budget is short", () => {
+  const full = A.script(bakuJoin());
+  const fitted = A.script(bakuJoin(), 24000);
+  assert.ok(fitted.length < full.length, "24 s cannot hold all of it");
+  for (const keep of ["Welcome to Apex 26.", "You take over Charles Leclerc in fifth, 3.3 seconds off the lead, down three places from second on the grid.",
+    "A rolling start. The car is yours in a few seconds."]) assert.ok(fitted.includes(keep), `kept: ${keep}\n${fitted.join("\n")}`);
+  // As the budget grows the story arrives in its rank order: your place, the lap, the leader, the cars around you, then what happened.
+  const order = ["You take over Charles Leclerc in fifth", "Lap 40 of 51", "Russell leads", "Hadjar is 0.6 seconds ahead", "You are on mediums",
+    "Two safety cars so far", "Six cars are already out"];
+  const firstAt = (needle) => { for (let ms = 10000; ms <= 90000; ms += 500) if (A.script(bakuJoin(), ms).some((l) => l.startsWith(needle))) return ms; return Infinity; };
+  const at = order.map(firstAt);
+  for (let i = 1; i < at.length; i++) assert.ok(at[i] >= at[i - 1], `"${order[i]}" (${at[i]} ms) arrives before "${order[i - 1]}" (${at[i - 1]} ms)`);
+  assert.ok(at[at.length - 1] <= 60000, `the essentials fit the stretched flyby (LoadingScreen.FLY_MAX_MS, 60 s): ${at.join(", ")}`);
+  assert.ok(!fitted.includes("107 passes on track in this race so far."), "the counts go first");
+  // The circuit's lore gives way to the race: nothing in the fitted read is a circuit fact the full read ranks below the story.
+  const circuitFacts = full.filter((l) => /kilometres|corners/.test(l));
+  for (const l of circuitFacts) assert.ok(!fitted.includes(l), `a circuit fact outlived the story: ${l}`);
+});
+
+test("a WATCH names the driver where a join says 'you', and a lap-1 join reads the real grid", () => {
+  const w = A.script(bakuJoin({ watch: true })).join(" ");
+  assert.match(w, /Your camera follows Charles Leclerc, fifth, 3\.3 seconds off the lead, down three places from second on the grid\./);
+  assert.match(w, /Hadjar is 0\.6 seconds ahead, and Hamilton 0\.6 seconds behind\./);
+  assert.match(w, /Leclerc is on mediums, 8 laps old/);
+  assert.doesNotMatch(w, /You take over|\byou\b/i.test(w) ? /You take over/ : /x^/);
+  const grid = {
+    lap: 1, realLaps: 51, toGo: 51, condensed: false, grid: true, starters: 22, dns: [],
+    pole: P("RUS", "George Russell", "Russell"), front: P("LEC", "Charles Leclerc", "Leclerc"),
+    you: P("LEC", "Charles Leclerc", "Leclerc", { pos: 2, gridPos: 2, running: true, tyre: { compound: "soft", age: 0, used: false }, ahead: P("RUS", "George Russell", "Russell"), behind: P("PIA", "Oscar Piastri", "Piastri") }),
+  };
+  const g = A.script(bakuJoin({ startLap: 1, story: grid }));
+  for (const want of ["Russell is on pole, with you alongside.", "You start Charles Leclerc's car from second on the grid, on softs.", "22 cars take the start.",
+    "Everyone else races it exactly as it really ran."]) assert.ok(g.includes(want), `missing: "${want}"\n${g.join("\n")}`);
+  assert.match(g[g.length - 1], /laps\. Let's go racing\.$/);
+});
+
+test("readMs is the full read's length at the channel's rate, and 0 when nothing will be said", () => {
+  const { A: An, G } = load();
+  const a = An.create(G);
+  const ms = a.readMs(bakuJoin());
+  const words = A.script(bakuJoin()).join(" ").split(/\s+/).length;
+  assert.ok(ms > (words / 2.4) * 1000 * 0.8 && ms < (words / 2.4) * 1000 * 1.6 + 10000, `${ms} ms for ${words} words`);
+  assert.ok(ms > 24000, "the race-so-far read is longer than a normal flyby — which is why it stretches (to LoadingScreen.FLY_MAX_MS, then fitted)");
+  const off = load({ stored: { announcer: false } });
+  assert.equal(off.A.create(off.G).readMs(bakuJoin()), 0, "announcer off: nothing to wait for");
+  const mute = load({ soundOn: false });
+  assert.equal(mute.A.create(mute.G).readMs(bakuJoin()), 0, "sound off: nothing to wait for");
 });
 
 test('turning off an idle announcer does not cancel a different speaker', () => {

@@ -24,12 +24,10 @@
 
       // The venues ringing Turn 2, each a distinct silhouette.
       {
-        // Fisht Stadium — the big translucent shell, and the largest object on
-        // this circuit by a wide margin. It used to stand at s=0.085/150 m,
-        // which is INSIDE the Turn 2 loop's return leg: a 130x150 m footprint
-        // there covers the far side of the hairpin and the whole model was
-        // being silently dropped, so the headline landmark never existed. This
-        // placement is probed clear at every neighbouring station.
+        // Fisht Stadium — translucent shell (2014 ceremonies / 2018 World Cup).
+        // Placed at s=0.18/175 m: the old s=0.085/150 m footprint covered the
+        // Turn 2 return and was culled entire. Shell = two telescoping halves
+        // (each slab bottoms on the next outward slab) so float + coplanar stay clear.
         const a = anchor(K(0.18), 1, 175);
         const b = [a.r, a.u, a.t];
         modelGroup("sochi-fisht-stadium", {
@@ -38,30 +36,12 @@
           stage._mat = MAT.CONCRETE;
           addFrustum(stage, a.c, 60, 54, 20, [0.80, 0.82, 0.86], 16, b);
           stage._mat = MAT.GLASS;
-          // The shell: two shallow translucent domes leaning together, open in
-          // the middle. That gap — the "eye" over the arena — is the shape
-          // everyone recognises, so the roof is built as two halves, not a lid.
-          //
-          // Each half used to be five flat 2.2 m-thick slabs stepped up from
-          // the drum (20 m) to the crown (36 m). The step between slabs grows
-          // toward the crown — up to 7 m between the outermost two — so most
-          // of the slabs never touched their neighbour: only the slab resting
-          // directly on the drum was actually grounded, and float-audit found
-          // the other four hanging with nothing under them (gap up to ~15 m).
-          // Stretching every slab straight down to the drum closed the float
-          // but stacked all five on top of each other for their whole run,
-          // roughly tripling this stadium's coplanar same-facing pairs — so
-          // instead each slab reaches only to the NEXT slab out (telescoping,
-          // like the original stepped silhouette, just with the gaps closed):
-          // its top stays at its own crown height, its bottom is the next
-          // slab's crown, so consecutive slabs touch exactly and the whole
-          // run chains down to the drum-grounded outermost slab.
           const peakAt = (i) => 20 + (1 - (i / 4) ** 2) * 16;   // i=0..4 -> 36..20
           for (const sgn of [-1, 1]) {
             for (let i = 0; i < 5; i++) {
               const f = i / 4;
               const top = peakAt(i);
-              const bottom = i < 4 ? peakAt(i + 1) : top - 2.2;   // last slab: unchanged, already on the drum
+              const bottom = i < 4 ? peakAt(i + 1) : top - 2.2;
               addBox(stage, vadd(vadd(a.c, a.t, sgn * (26 + f * 30)), a.u, (top + bottom) / 2),
                 [100 - f * 30, top - bottom, 22], [0.90, 0.93, 0.97], b);
             }
@@ -72,7 +52,8 @@
         }, { required: true });
       }
       {
-        // Bolshoy Ice Dome — a low silver dome.
+        // Bolshoy Ice Dome — a low silver dome (2014 men's ice hockey; HC Sochi).
+        // https://en.wikipedia.org/wiki/Sochi_Olympic_Park
         const a = anchor(K(0.150), 1, 130);
         const b = [a.r, a.u, a.t];
         modelGroup("sochi-bolshoy-dome", {
@@ -80,10 +61,11 @@
         }, (stage) => {
           addCyl(stage, a.c, 42, 16, [0.78, 0.80, 0.84], 14, b);
           addCyl(stage, vadd(a.c, a.u, 16), 34, 9, [0.86, 0.88, 0.92], 14, b);
-        });
+        }, { required: true });
       }
       {
-        // Adler Arena — a long low glass box.
+        // Adler Arena — a long low glass box (2014 speed skating).
+        // https://en.wikipedia.org/wiki/Sochi_Olympic_Park
         const a = anchor(K(0.225), 1, 120);
         const b = [a.r, a.u, a.t];
         modelGroup("sochi-adler-arena", {
@@ -94,9 +76,11 @@
           for (const hgt of [4.5, 11]) {
             addBox(stage, vadd(vadd(a.c, a.r, -24), a.u, hgt), [0.3, 3.0, 98], [0.46, 0.60, 0.74], b);
           }
-        });
+        }, { required: true });
       }
       // The Olympic flame tower and its reflecting pool, inside the Turn 2 loop.
+      // ~50 m Firebird stele on Medals Plaza (2014 cauldron).
+      // https://en.wikipedia.org/wiki/Sochi_Olympic_Park
       {
         const a = anchor(K(0.115), 1, 96);
         const b = [a.r, a.u, a.t];
@@ -106,7 +90,7 @@
           addCone(stage, a.c, 7, 34, [0.84, 0.82, 0.80], 10, b);
           addCyl(stage, vadd(a.c, a.u, 34), 1.2, 8, [0.90, 0.88, 0.84], 8, b);
           addCone(stage, vadd(a.c, a.u, 41), 2.2, 5, [0.98, 0.72, 0.28], 8, b);
-        });
+        }, { required: true });
       }
       waterSurface(K(0.115), 1, 74, [70, 0.18, 90], [0.30, 0.48, 0.66],
         { id: "sochi-reflecting-pool" });
@@ -127,8 +111,8 @@
       // safe margin and grow the pipe by the same amount so the visible
       // waterline top is unchanged.
       const JET_EMBED = 4; // > the measured 3.24 m worst case
-      for (let i = 0; i < 9; i++) {
-        const ang = i / 9 * 6.2832;
+      for (let i = 0; i < 5; i++) {
+        const ang = i / 5 * 6.2832;
         const a = anchor(K(0.115), 1, 74 + Math.cos(ang) * 16);
         const p = vadd(a.c, a.t, Math.sin(ang) * 22);
         const h = 7 + hash(i * 7) * 5;
@@ -137,6 +121,8 @@
       }
 
       {
+        // Iceberg Skating Palace — figure skating / short track (2014).
+        // https://en.wikipedia.org/wiki/Sochi_Olympic_Park
         const a = anchor(K(0.290), 1, 122);
         const b = [a.r, a.u, a.t];
         modelGroup("sochi-iceberg-palace", {
@@ -155,10 +141,11 @@
               [8.2, 1.1, 108], i & 1 ? [0.88, 0.90, 0.94] : [0.80, 0.84, 0.90], b);
           }
           stage._mat = 0;
-        });
+        }, { required: true });
       }
 
       {
+        // Olympic rings sculpture on the approach into Medals Plaza.
         const a = anchor(K(0.062), 1, 58);
         const b = [a.r, a.u, a.t];
         modelGroup("sochi-olympic-rings", {
@@ -168,28 +155,33 @@
             [0.10, 0.36, 0.72], [0.14, 0.14, 0.16], [0.82, 0.16, 0.14],
             [0.94, 0.78, 0.10], [0.10, 0.56, 0.28],
           ];
+          // Plinth first so the ring mast BFS can ground through it.
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(a.c, a.u, 2), [5, 4, 30], [0.80, 0.80, 0.82], b);
           stage._mat = MAT.METAL;
           for (let r = 0; r < 5; r++) {
             const top = r < 3;
             const cAlong = (top ? (r - 1) : (r - 3.5)) * 6.4;
             const cUp = 9.2 + (top ? 2.6 : 0);
             const hub = vadd(vadd(a.c, a.t, cAlong), a.u, cUp);
-            for (let j = 0; j < 14; j++) {
-              const ang = j / 14 * 6.2832, cA = Math.cos(ang), sA = Math.sin(ang);
+            // Stem + hub disc bridges stem → ring tube for the support BFS.
+            addCyl(stage, vadd(vadd(a.c, a.t, cAlong), a.u, 2), 0.35, cUp - 1.5,
+              [0.55, 0.56, 0.58], 6, b);
+            addCyl(stage, vadd(hub, a.u, -0.8), 3.6, 1.6, [0.55, 0.56, 0.58], 8, b);
+            for (let j = 0; j < 10; j++) {
+              const ang = j / 10 * 6.2832, cA = Math.cos(ang), sA = Math.sin(ang);
               const dir = [], perp = [];
               for (let axis = 0; axis < 3; axis++) {
                 dir[axis] = a.u[axis] * cA + a.t[axis] * sA;
                 perp[axis] = a.t[axis] * cA - a.u[axis] * sA;
               }
-              addBox(stage, vadd(hub, dir, 3.1), [0.55, 1.5, 0.55], cols[r],
+              // Radial depth 2.4 so the inner face sits inside the hub disc.
+              addBox(stage, vadd(hub, dir, 2.9), [0.7, 2.4, 0.85], cols[r],
                 [a.r, dir, perp]);
             }
           }
-          // Plinth.
-          stage._mat = MAT.CONCRETE;
-          addBox(stage, vadd(a.c, a.u, 2), [5, 4, 30], [0.80, 0.80, 0.82], b);
           stage._mat = 0;
-        });
+        }, { required: true });
       }
 
       groundPatch(K(0.230), 1, 6, [90, 0.18, 220], PLAZA,
@@ -205,24 +197,26 @@
         });
       }
 
-      every(26, (k) => {
+      every(32, (k) => {
         const s = k / n;
         if (s <= 0.30 || s >= 0.90) return;
         const h = hash(k * 31);
-        if (h < 0.35) return;
+        if (h < 0.40) return;
         tree(k, h < 0.5 ? -1 : 1, 12 + h * 12, 10 + h * 7, h < 0.5 ? LEAF_D : LEAF);
-        if (h > 0.72) tree(k, h > 0.86 ? -1 : 1, 30 + h * 18, 11 + h * 6, LEAF_D);
+        if (h > 0.78) tree(k, h > 0.90 ? -1 : 1, 30 + h * 18, 11 + h * 6, LEAF_D);
       });
-      every(24, (k) => {
+      every(30, (k) => {
         const s = k / n;
         if (s <= 0.30 || s >= 0.90) return;
         const h = hash(k * 97 + 23);
-        if (h < 0.52) return;
+        if (h < 0.58) return;
         bush(k, h < 0.75 ? -1 : 1, 7 + h * 5, [0.18, 0.38, 0.18]);
       });
       // Clipped hedging along the plaza edges — the park is landscaped, not wild.
-      hedge(0.02, 0.28, 1, 22, 3.0, [0.17, 0.36, 0.18]);
-      hedge(0.02, 0.28, -1, 20, 3.0, [0.17, 0.36, 0.18]);
+      // Gap 24/22 (was 22/20): clears the Turn-5 arcStand deck (flatCoplanar ×4
+      // with sochi.js arcStand rows when both sat on the same plane).
+      hedge(0.02, 0.28, 1, 24, 3.0, [0.17, 0.36, 0.18]);
+      hedge(0.02, 0.28, -1, 22, 3.0, [0.17, 0.36, 0.18]);
 
       for (const [i, s] of [0.938, 0.958, 0.978, 0.998].entries()) {
         const a = anchor(K(s), -1, 16);
@@ -230,10 +224,12 @@
         modelGroup(`sochi-pit-bay-${i + 1}`, {
           center: vadd(a.c, a.u, 9), size: [24, 22, 46], basis: b,
         }, (stage) => {
-          stage._mat = MAT.GLASS;
-          addBox(stage, vadd(a.c, a.u, 8), [16, 16, 44], [0.20, 0.28, 0.38], b);
           stage._mat = MAT.CONCRETE;
+          // Deck first — glass sits ON it (was coplanar at y=0 with the glass
+          // bottom: flatCoplanar ×4 on the pit-bay glass × deck pair).
           addBox(stage, vadd(a.c, a.u, 0.9), [17, 1.8, 44], [0.82, 0.83, 0.86], b);
+          stage._mat = MAT.GLASS;
+          addBox(stage, vadd(a.c, a.u, 1.8 + 7.1), [16, 14.2, 44], [0.20, 0.28, 0.38], b);
           stage._mat = MAT.METAL;
           // Brise-soleil: five louvre bands standing proud of the glass line.
           for (let f = 0; f < 5; f++) {
@@ -278,12 +274,11 @@
       gantry(0.968, 8.0, [0.15, 0.15, 0.18]);
       grandstandEx(0.005, 1, 12, 150, null, null,
         { livery: "teal", tiers: 2, roof: "flat", suites: true, endWalls: true, pylons: true });
-      // Olympic-park civic architecture: crossed perpendicular slabs on a broad
-      // footprint, monumental rather than commercial. The circuit threads through
-      // a set of buildings that were never designed for it.
+      // Olympic-park civic architecture: drum / slab civic blocks on a broad
+      // footprint (was kind:"cross" — self flatCoplanar on the + footprint).
       for (let i = 0; i < 4; i++) {
         building(K(0.925 + i * 0.013), -1, 40, 24, 13, 24,
-          { kind: "cross", wall: [0.88, 0.88, 0.90], window: [0.34, 0.40, 0.48], floor: 4.5 });
+          { kind: i & 1 ? "drum" : "slab", wall: [0.88, 0.88, 0.90], window: [0.34, 0.40, 0.48], floor: 4.5 });
       }
       every(46, (k) => {
         const s = k / n, h = hash(k * 71 + 31);
@@ -380,21 +375,26 @@
       tyreWall(0.800, 0.830, -1, 4, [0.85, 0.78, 0.20]);
       marshalPost(K(0.810), 1, 9);
 
-      for (const [s0, s1] of [[0.06, 0.23], [0.28, 0.52], [0.58, 0.79], [0.84, 0.92]]) {
+      // Skip cambered park rails that bury jersey tops (guardrail jersey rail
+      // instance in structures.js).
+      for (const [s0, s1] of [[0.58, 0.79], [0.84, 0.92]]) {
         guardrail(s0, s1, -1, 6, [0.80, 0.81, 0.83]);
         guardrail(s0, s1,  1, 6, [0.80, 0.81, 0.83]);
       }
+      guardrail(0.30, 0.50, -1, 7.5, [0.80, 0.81, 0.83]);
+      guardrail(0.30, 0.50,  1, 7.5, [0.80, 0.81, 0.83]);
       guardrail(0.94, 0.06, -1, 4.0, [0.85, 0.85, 0.88]);
       fence(0.95, 0.06, 1, 9, 4, [0.74, 0.76, 0.80]);
       for (const s of [0.12, 0.18, 0.36, 0.46, 0.64, 0.74, 0.88]) {
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
       }
 
+      // Thinned Caucasus rings — vertex budget for Ice Cube + station.
       const { cx, cz, radius: rad } = lapBounds();
       for (const [extra, count, len, w, hMin, hVar, col] of [
-        [150, 34, 160, 50, 20, 12, [0.20, 0.36, 0.20]],
-        [280, 28, 230, 74, 60, 34, [0.26, 0.32, 0.30]],
-        [430, 22, 300, 96, 110, 60, [0.42, 0.45, 0.50]],   // high hazed Caucasus
+        [150, 20, 160, 50, 20, 12, [0.20, 0.36, 0.20]],
+        [280, 14, 230, 74, 60, 34, [0.26, 0.32, 0.30]],
+        [430, 10, 300, 96, 110, 60, [0.42, 0.45, 0.50]],   // high hazed Caucasus
       ]) {
         for (let i = 0; i < count; i++) {
           const a = i / count * 6.2832, h = hash(i * 7 + extra);
@@ -407,7 +407,7 @@
 
       {
         let i = 0;
-        along(0.92, 0.32, 34, (k) => {
+        along(0.92, 0.32, 42, (k) => {
           for (const side of [-1, 1]) {
             const a = anchor(k, side, side > 0 ? 12 : 10);
             const b = [a.r, a.u, a.t];
@@ -428,13 +428,16 @@
       signBoard(K(0.255), 1, 7, "corner", 6);
       signBoard(K(0.545), -1, 7, "corner", 13);
       signBoard(K(0.815), 1, 7, "corner", 17);
-      sponsorHoarding(0.930, 0.075, 1, 3.4, { h: 1.2, step: 9 });
-      // Camera towers at the show corners.
-      cameraTower(K(0.085), 1, 60, { h: 20 });
-      cameraTower(K(0.545), -1, 30, { h: 17 });
-      cameraTower(K(0.815), 1, 26, { h: 17 });
+      sponsorHoarding(0.930, 0.075, 1, 5.0, { h: 1.2, step: 10 });
+      // Camera towers at the show corners — gaps bumped so monopole feet clear
+      // cambered terrain (were buried ≤0.14 m at the old gaps).
+      cameraTower(K(0.085), 1, 68, { h: 20 });
+      cameraTower(K(0.545), -1, 34, { h: 17 });
+      cameraTower(K(0.815), 1, 30, { h: 17 });
 
       {
+        // Shayba Arena — "the puck"; women's / youth hockey (2014). ~300 m from Bolshoy.
+        // https://en.wikipedia.org/wiki/Sochi_Olympic_Park
         const a = anchor(K(0.245), 1, 152);
         const b = [a.r, a.u, a.t];
         modelGroup("sochi-shayba-arena", {
@@ -458,7 +461,57 @@
           addCyl(stage, vadd(a.c, a.u, 9), 25, 6, [0.88, 0.90, 0.94], 16, b);
           addCyl(stage, vadd(a.c, a.u, 15), 12, 3.4, [0.84, 0.86, 0.90], 12, b);
           stage._mat = 0;
-        });
+        }, { required: true });
+      }
+
+      // Ice Cube Curling Center — cubic white/blue hall; 3,000 seats (2014 curling).
+      // Circuit "passes the skating and curling centres" before the paddock funnel.
+      // https://en.wikipedia.org/wiki/Ice_Cube_Curling_Center
+      {
+        const a = anchor(K(0.875), 1, 95);
+        const b = [a.r, a.u, a.t];
+        modelGroup("sochi-ice-cube", {
+          center: vadd(a.c, a.u, 12), size: [52, 28, 52], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(a.c, a.u, 0.6), [48, 1.2, 48], [0.82, 0.84, 0.88], b);
+          stage._mat = MAT.GLASS;
+          addBox(stage, vadd(a.c, a.u, 11), [44, 18, 44], [0.72, 0.86, 0.94], b);
+          stage._mat = MAT.METAL;
+          // Corner posts + mid belt — reads as a cube without a dense lattice.
+          for (const o of [-21, 21]) {
+            addBox(stage, vadd(vadd(a.c, a.t, o), a.u, 11), [46, 0.5, 0.5], WHITE, b);
+            addBox(stage, vadd(vadd(a.c, a.r, o * 0.5), a.u, 11), [0.5, 0.5, 46], WHITE, b);
+          }
+          addBox(stage, vadd(a.c, a.u, 11), [46, 0.4, 46], [0.88, 0.90, 0.94], b);
+          addBox(stage, vadd(a.c, a.u, 20.5), [48, 1.0, 48], WHITE, b);
+          stage._mat = 0;
+        }, { required: true });
+      }
+
+      // Olympic Park railway station — north edge next to the GP start/finish grid.
+      // https://en.wikipedia.org/wiki/Sochi_Autodrom
+      {
+        const a = anchor(K(0.008), 1, 62);
+        const b = [a.r, a.u, a.t];
+        modelGroup("sochi-olympic-park-station", {
+          center: vadd(a.c, a.u, 10), size: [36, 22, 88], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(a.c, a.u, 1.0), [32, 2.0, 80], [0.78, 0.80, 0.84], b);
+          stage._mat = MAT.GLASS;
+          addBox(stage, vadd(a.c, a.u, 8), [28, 12, 72], [0.55, 0.68, 0.80], b);
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(a.c, a.u, 15.2), [34, 0.7, 84], WHITE, b);
+          for (let c = 0; c < 5; c++) {
+            addCyl(stage, vadd(vadd(a.c, a.t, (c - 2) * 14), a.u, 1.0),
+              0.22, 14.2, WHITE, 6, b);
+          }
+          addCyl(stage, vadd(vadd(a.c, a.t, 38), a.u, 1.0), 0.18, 18, WHITE, 5, b);
+          addBox(stage, vadd(vadd(a.c, a.t, 38), a.u, 19.2), [1.4, 0.9, 0.4],
+            [0.86, 0.18, 0.16], b);
+          stage._mat = 0;
+        }, { required: true });
       }
 
       const CYP = [0.16, 0.34, 0.20], CYP_D = [0.13, 0.29, 0.18];

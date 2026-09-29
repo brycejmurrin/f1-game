@@ -326,6 +326,10 @@ const TLX = (function () {
         let glCtx = null;
         if (forceWebGL) {
           try {
+            // Flat players (iOS / mobile / CI): do NOT set xrCompatible here —
+            // it reaches every forceWebGL boot. attachXrSession calls
+            // gl.makeXRCompatible() when ENTER VR actually runs (three's
+            // XRManager does the same before setSession).
             glCtx = canvas.getContext("webgl2", {
               antialias: !isMobile,        // must agree with the renderer's own antialias
               alpha: false,
@@ -363,6 +367,11 @@ const TLX = (function () {
             ? { outputType: THREE.UnsignedByteType, powerPreference: "low-power" }
             : {}),
           forceWebGL,
+          // Phase 0 XR uses XRWebGLLayer + manual per-eye present — not three's
+          // multiview ArrayCamera path. Keep multiview off: three #32538
+          // (right-eye projection) and #32151 (Quest flicker) are still open,
+          // and perCameraCulling is absent from vendored 0.186.0.
+          multiview: false,
         });
         renderer.setPixelRatio(1);            // we manage DPR/renderScale ourselves
         renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
@@ -1042,6 +1051,10 @@ const TLX = (function () {
       } catch (_) { chunks = null; }
 
       let post = null;
+      // WebXR Phase 0: set while an XRWebGLLayer is attached. Skips resize()
+      // (three's setSize is a no-op under XRManager presenting; we likewise
+      // must not fight the immersive layer's drawing-buffer size).
+      let _xrActive = false;
       try {
         if (window.TLXShaders && TLXShaders.postChain && TLXShaders.post && chunks) {
           post = TLXShaders.postChain(THREE, TSL,
@@ -1068,6 +1081,21 @@ const TLX = (function () {
       const ENV_SIZE = 64;
       const ENV_CULL_M = 300;
       let envRT = null, envDummy = null;
+      // REAR-VIEW MIRROR (js/render/shared/mirror-pass.js). The env probe's
+      // shape with a 2-D target: mirrorBegin (before begin(), like a probe
+      // face) latches the mirror camera, the world + car draws record into the
+      // shared drawList, and mirrorEnd renders them into mirRT at once and
+      // empties the list. present() hands the texture to the post chain, which
+      // composites it into the HUD rect (tlx-post.js).
+      let mirRT = null, mirCam = null, _mirActive = false, _mirDead = false, _mirFails = 0, _mirErr = null;
+      let _mirRect = null, _mirRenders = 0, _mirEye = null, _mirCull = 0;
+      // Latched by the first mirrorBegin. The mirror target is a render context
+      // the chunks have never compiled for, and the node builder reads
+      // attribute.array.constructor on that first compile — the env probe's
+      // hazard exactly — so a session that has used the mirror keeps its CPU
+      // attribute mirrors (the releases below hold on it).
+      let _mirUsed = false;
+      const _mirVP = new Float32Array(16), _mirProjGpu = new Float32Array(16);
       try {
         const envHdr = !!(post && post.hdrOk());
         const envOpts = {
@@ -2474,6 +2502,8 @@ const TLX = (function () {
         // for compilation. Keep its targets alive; the next frame applies the
         // latest CSS size and settings once the warm task releases ownership.
         if (_warmPending) { cssSizeCache.markDirty(); return; }
+        // Immersive-vr owns the drawing buffer via XRWebGLLayer — leave size alone.
+        if (_xrActive) return;
         // CSS size only — NEVER fall back to the backing store. Hidden canvases
         // stay at the 1px floor while the shared cache keeps probing for reveal.
         const css = cssSizeCache.read();
@@ -3215,6 +3245,90 @@ const TLX = (function () {
           }
           _restoreEnvFrame();
         },
+        mirrorBegin(frame, w, h) {
+          if (_mirDead || _warmPending || _envActive || !lit || !frame || !frame.proj || !frame.view || !frame.viewProj) return false;
+          w = Math.max(16, Math.min(1024, w | 0)); h = Math.max(8, Math.min(512, h | 0));
+          try {
+            if (!mirRT) {
+              mirRT = new THREE.RenderTarget(w, h, {
+                type: post && post.hdrOk() ? THREE.HalfFloatType : THREE.UnsignedByteType,
+                format: THREE.RGBAFormat, depthBuffer: true,
+                generateMipmaps: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
+              });
+              mirRT.texture.colorSpace = THREE.NoColorSpace;   // no-sRGB invariant, as the probe
+              mirCam = new THREE.PerspectiveCamera();
+              mirCam.matrixAutoUpdate = false;
+              mirCam.matrixWorldAutoUpdate = false;
+            } else if (mirRT.width !== w || mirRT.height !== h) mirRT.setSize(w, h);
+          } catch (e) {
+            _mirDead = true; _mirErr = (e && e.message) || String(e);
+            try { Log.warn("gfx", "TLX mirror target failed — mirror off:", _mirErr); } catch (_) { /* harness */ }
+            return false;
+          }
+          // The camera the way begin() builds the main one: P and V kept apart
+          // (WebGPU folds Z01 into P only).
+          if (renderer.backend && renderer.backend.isWebGPUBackend) {
+            _mul4Col(_mirProjGpu, Z01, frame.proj);
+            mirCam.projectionMatrix.fromArray(_mirProjGpu);
+            if (renderer.coordinateSystem != null) mirCam.coordinateSystem = renderer.coordinateSystem;
+          } else mirCam.projectionMatrix.fromArray(frame.proj);
+          mirCam.projectionMatrixInverse.copy(mirCam.projectionMatrix).invert();
+          mirCam.matrixWorldInverse.fromArray(frame.view);
+          mirCam.matrixWorld.copy(mirCam.matrixWorldInverse).invert();
+          if (frame.eye) mirCam.position.set(frame.eye[0], frame.eye[1], frame.eye[2]);
+          const z = frame.skyZenith || frame.fogColor;
+          if (z && z.length >= 3) scene.background.setRGB(z[0], z[1], z[2]);
+          lit.updateFrame(frame);
+          if (fx) fx.updateFrame(frame);
+          _mirVP.set(frame.viewProj); _mirEye = frame.eye || null; _mirCull = frame.cullDist || 0;
+          scene.backgroundNode = null;
+          resetRecs(); _dMatUsed = 0; _fxMatUsed = 0;
+          _instAlive.clear();
+          _mirActive = true;
+          _mirUsed = true;
+          return true;
+        },
+        mirrorEnd() {
+          if (!_mirActive) return;
+          _mirActive = false;
+          try {
+            _poolBatch++;
+            for (let i = 0; i < drawList.length; i++) {
+              const rec = drawList[i];
+              if (rec.instanced) { _showInstanced(rec, i); continue; }
+              if (rec.chunked) {
+                if (!chunkedSys) continue;
+                const n = chunkedSys.cull(rec.chunked, _mirVP, _mirEye, _mirCull);
+                const vis = chunkedSys.visList;
+                for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat, rec).renderOrder = i;
+                continue;
+              }
+              acquireMesh(rec.geo, rec.m, rec.mat, rec).renderOrder = i;
+            }
+            for (let i = 0; i < meshPool.length; i++) { const pm = meshPool[i]; if (pm.__tlxBatch !== _poolBatch) pm.visible = false; }
+            _hideUndrawnInstanced();
+            if (scene.backgroundNode) pinSkyMaterial();
+            renderer.setRenderTarget(mirRT);
+            _gpuLastOperation = "render-mirror";
+            renderer.render(scene, mirCam);
+            _mirRenders++;
+          } catch (e) {
+            // Never strand the frame; a mirror that cannot render stops being asked.
+            if (++_mirFails >= 4) _mirDead = true;
+            if (!_mirErr) _mirErr = (e && e.message) || String(e);
+          }
+          try { renderer.setRenderTarget(softOutRT()); } catch (_) { /* device dying: present owns it */ }
+          resetRecs();   // the main pass re-issues its own draws
+          _dMatUsed = 0; _fxMatUsed = 0;
+          _instAlive.clear();
+          _poolBatch++;
+        },
+        mirrorRect(r) { _mirRect = r && r.length === 4 ? [+r[0] || 0, +r[1] || 0, +r[2] || 0, +r[3] || 0] : null; },
+        mirrorState() {
+          return { ready: !!mirRT && _mirRenders > 0, dead: _mirDead, w: mirRT ? mirRT.width : 0, h: mirRT ? mirRT.height : 0,
+            hdr: !!(mirRT && mirRT.texture.type === THREE.HalfFloatType), renders: _mirRenders,
+            composites: post && post.mirrorComposites ? post.mirrorComposites() : 0, rect: _mirRect, error: _mirErr };
+        },
         // _envGaveUp reads as READY on purpose: the caller polls this to stop
         // re-probing, and a probe that cannot succeed must stop being asked.
         // The cube stays unbound — envState() is where the difference shows.
@@ -3341,6 +3455,108 @@ const TLX = (function () {
           if (!_warmPending) { _warmRequested = true; _warmAttempts = 0; }
         },
         warming() { return !!_warmPending; },
+        // --- WebXR (Phase 0) -------------------------------------------------
+        // Seated stereo via XRWebGLLayer on the WebGL2 backend. Intentionally
+        // NOT three.xr / setAnimationLoop / ArrayCamera: those overwrite the
+        // user camera and route post to the mono camera (Renderer isOutputTarget).
+        // We feed per-eye matrices into `frame`, drive frames from
+        // session.requestAnimationFrame (XrBoot.onFrame → tickBody), and
+        // presentXR() rebinds the camera + viewport per eye. Post / soft-blit
+        // stay off while presenting. Closest three example for the forceWebGL
+        // path is webgpu_xr_native_layers; we still skip XRManager for matrix
+        // control. Do not enable multiview (three #32538 / #32151).
+        _xrLayer: null,
+        _xrSession: null,
+        xrPresenting() { return !!(this._xrSession); },
+        xrLayer() { return this._xrLayer; },
+        /** True when this TLX instance owns a WebGL2 context usable for XRWebGLLayer. */
+        xrCapable() {
+          return !!(ownGL || (renderer && renderer.backend && renderer.backend.gl));
+        },
+        async attachXrSession(session) {
+          const gl = ownGL || (renderer.backend && renderer.backend.gl) || null;
+          if (!gl) throw new Error("TLX XR needs the WebGL2 backend (apex26.tlxForceGL=1)");
+          // Flat boot omits xrCompatible; make the context XR-ready only here
+          // (same as three XRManager.setSession → backend.makeXRCompatible).
+          if (typeof gl.makeXRCompatible === "function") {
+            try { await gl.makeXRCompatible(); } catch (_) { /* already compatible */ }
+          }
+          if (typeof XRWebGLLayer === "undefined") throw new Error("XRWebGLLayer missing");
+          const layer = new XRWebGLLayer(session, gl, { antialias: false, alpha: false });
+          await session.updateRenderState({ baseLayer: layer });
+          this._xrLayer = layer;
+          this._xrSession = session;
+          _xrActive = true;
+          // IWER returns XRWebGLLayer.framebuffer === null. three r186
+          // WebGLState.drawBuffers keys a WeakMap by the FBO and throws
+          // "Invalid value used as weak map key" every frame → blank canvas.
+          // Real Quest FBOs are non-null; this remap is emulation-only
+          // (docs/notes/XR-QUEST-ON-DEVICE.md; spike-support research A2).
+          if (layer.framebuffer == null) {
+            try {
+              const st = renderer.backend && renderer.backend.state;
+              if (st && st.currentDrawbuffers instanceof WeakMap) {
+                st.currentDrawbuffers = new Map();
+                try { Log.info("gfx", "TLX XR: IWER null framebuffer — remapped currentDrawbuffers to Map"); } catch (_) { /* */ }
+              }
+            } catch (_) { /* best-effort */ }
+            try {
+              renderer.setPixelRatio(1);
+              const fw = layer.framebufferWidth || (canvas && canvas.width) || 0;
+              const fh = layer.framebufferHeight || (canvas && canvas.height) || 0;
+              if (fw > 0 && fh > 0) renderer.setSize(fw, fh, false);
+            } catch (_) { /* */ }
+          }
+          try { Log.info("gfx", "TLX XRWebGLLayer attached"); } catch (_) { /* */ }
+          return layer;
+        },
+        detachXrSession() {
+          this._xrLayer = null;
+          this._xrSession = null;
+          this._pendingXrEyes = null;
+          _xrActive = false;
+        },
+        /** XRWebGLLayer.fixedFoveation (0 = full res, 1 = max). Device-only effect. */
+        setFoveation(v) {
+          if (!this._xrLayer || !("fixedFoveation" in this._xrLayer)) return false;
+          const n = Math.max(0, Math.min(1, +v || 0));
+          try { this._xrLayer.fixedFoveation = n; return true; } catch (_) { return false; }
+        },
+        getFoveation() {
+          if (!this._xrLayer || !("fixedFoveation" in this._xrLayer)) return null;
+          try { return this._xrLayer.fixedFoveation; } catch (_) { return null; }
+        },
+        /** three.js renderer.info.render snapshot for chrome://inspect / OVR Metrics pairing. */
+        xrInfo() {
+          const r = renderer && renderer.info && renderer.info.render;
+          if (!r) return { calls: null, triangles: null, points: null, lines: null };
+          return { calls: r.calls, triangles: r.triangles, points: r.points, lines: r.lines };
+        },
+        /** Apply one eye's matrices to the three camera (same path as begin). */
+        _applyXrEye(eye) {
+          if (!eye) return;
+          const _wgpu = !!(renderer.backend && renderer.backend.isWebGPUBackend);
+          if (eye.proj && eye.view) {
+            if (_wgpu) {
+              _mul4Col(_projGpu, Z01, eye.proj);
+              camera.projectionMatrix.fromArray(_projGpu);
+            } else {
+              camera.projectionMatrix.fromArray(eye.proj);
+            }
+            camera.matrixWorldInverse.fromArray(eye.view);
+            camera.matrixWorld.copy(camera.matrixWorldInverse).invert();
+            camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+            if (eye.eye) camera.position.set(eye.eye[0], eye.eye[1], eye.eye[2]);
+          }
+        },
+        /** Stereo present: latch eyes, force post off, reuse present()'s draw flush. */
+        presentXR(eyes, opts) {
+          this._pendingXrEyes = eyes && eyes.length ? eyes : null;
+          const savedPost = post;
+          post = null;   // Phase 0: no bloom / SSR / soft-blit in VR
+          try { this.present(opts || {}); }
+          finally { post = savedPost; this._pendingXrEyes = null; }
+        },
         begin(frame) {
           _matFrame++;   // new frame: last frame's materials are evictable again
           resize();
@@ -3707,7 +3923,7 @@ const TLX = (function () {
               // compiled against the attribute. Those devices keep their
               // mirrors — memory, not a blank road.
               if (n > 0 && !rec.chunked._mirrorsFreed && !vizMat
-                && (_chunkRelOptIn || envReady || _envGaveUp))
+                && (_chunkRelOptIn || envReady || _envGaveUp) && !_mirUsed)
                 _mirrorRelease.push(rec.chunked);
               continue;
             }
@@ -3737,6 +3953,38 @@ const TLX = (function () {
           const paintCanvas = () => {
             _gpuLastOperation = "render-canvas";
             pinSkyMaterial();
+            // WebXR stereo (Phase 0): immersive layer + per-eye matrices/viewports.
+            const xrEyes = this._pendingXrEyes;
+            const xrLayer = this._xrLayer;
+            if (xrEyes && xrEyes.length && xrLayer) {
+              const gl = ownGL || (renderer.backend && renderer.backend.gl) || null;
+              // Real headset: bind the layer FBO. IWER: framebuffer is null →
+              // default framebuffer (canvas); currentDrawbuffers was remapped
+              // in attachXrSession so three's WeakMap path does not throw.
+              if (gl && xrLayer.framebuffer) {
+                try { gl.bindFramebuffer(gl.FRAMEBUFFER, xrLayer.framebuffer); } catch (_) { /* */ }
+              }
+              renderer.setRenderTarget(null);
+              for (let ei = 0; ei < xrEyes.length; ei++) {
+                const eye = xrEyes[ei];
+                // Skip zero-width views (IWER mono right eye) — nothing to draw.
+                const vp = eye.viewport;
+                if (vp && !(vp.width > 0 && vp.height > 0)) continue;
+                this._applyXrEye(eye);
+                if (vp && typeof renderer.setViewport === "function") {
+                  renderer.setViewport(vp.x, vp.y, vp.width, vp.height);
+                } else if (vp && gl) {
+                  gl.viewport(vp.x, vp.y, vp.width, vp.height);
+                }
+                _gpuLastOperation = "render-xr-" + ei;
+                _renderTimed(scene, camera);
+              }
+              try { renderer.setViewport(0, 0, W, H); } catch (_) { /* */ }
+              if (gl && xrLayer.framebuffer) {
+                try { gl.bindFramebuffer(gl.FRAMEBUFFER, null); } catch (_) { /* */ }
+              }
+              return;
+            }
             if (_softBlit) {
               const rt = _ensureBlitRT(W, H);
               renderer.setRenderTarget(rt);
@@ -3810,6 +4058,13 @@ const TLX = (function () {
               const _hadMrt = !!(TSL.mrt && renderer.setMRT);
               const _prevMrt = _hadMrt && renderer.getMRT ? renderer.getMRT() : null;
               if (_hadMrt) renderer.setMRT(_ssrMrtNode());
+              if (post.setMirror) {
+                // Pixels of the present target (the SGSR output size when upscaling).
+                const up = wantSpatialUpscale(), cw = up ? presentW : W, ch = up ? presentH : H;
+                const r = _mirRect, ok = !!(r && mirRT && _mirRenders > 0 && !_mirDead);
+                post.setMirror(ok ? mirRT.texture : null, ok ? [Math.round(r[0] * cw), Math.round(r[1] * ch),
+                  Math.round(r[2] * cw), Math.round(r[3] * ch)] : null, ok && mirRT.texture.type === THREE.HalfFloatType);
+              }
               try {
                 renderer.setRenderTarget(post.sceneTarget());
                 _gpuLastOperation = "render-scene";
@@ -3918,7 +4173,7 @@ const TLX = (function () {
           // knob cannot A/B the configuration that broke a player's handset —
           // an override that cannot reach the failing path is not an override.
           // Default OFF, so nothing reaches a player through it.
-          if (_sweepOptIn) sweepGeoMirrors(_now);
+          if (_sweepOptIn && !_mirUsed) sweepGeoMirrors(_now);
           // Evicted materials dispose only now — after paint, when no drawList
           // record can still reference them (safe since the #33952 backport).
           for (let i = 0; i < _matDispose.length; i++) { try { _matDispose[i].dispose(); } catch (_) { /* already disposed */ } }

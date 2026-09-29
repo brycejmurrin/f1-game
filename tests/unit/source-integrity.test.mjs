@@ -381,9 +381,11 @@ test("the audio block cannot deref a null player, and a lone throw no longer kil
   // rethrows at the cap — BOTH halves pinned, because either alone is wrong: no
   // tolerance is the old bug, and unbounded tolerance repaints the error
   // overlay 60x/s for a deterministic fault.
-  assert.match(src, /if \(LoopHealth\.fault\(e\)\) \{ requestAnimationFrame\(tick\); return; \}/,
-    "a tolerated fault must re-schedule the frame");
-  assert.match(src, /tickBody\(now\); LoopHealth\.clean\(\); requestAnimationFrame\(tick\);/,
+  // XR Phase 0: while immersive-vr owns session.rAF, window.rAF must not also
+  // schedule — XrBoot.afterTick(tick) dedupes so EXIT VR cannot spawn a second loop.
+  assert.match(src, /if \(LoopHealth\.fault\(e\)\) \{ XrBoot\.afterTick\(tick\); return; \}/,
+    "a tolerated fault must re-schedule the frame (unless XR owns the loop)");
+  assert.match(src, /tickBody\(now\); LoopHealth\.clean\(\);\s*\n\s*XrBoot\.afterTick\(tick\);/,
     "a clean frame must pay the fault run back, or unrelated faults reach the cap");
   // Between the report and the rethrow, the fatal branch also arms the boot
   // canary (armBackendProbe(), gfx-backend-canary.test.mjs) when render()

@@ -34,13 +34,17 @@
       { s: 0.135, halfM: 360, rise: 16 },
       { s: 0.295, halfM: 320, rise: -14 },
     ],
+    // Soft banks: terrain fade (1−t) at the 10 m foundation shoulder left
+    // centreline `gap` at 0.22–0.40 under 3–4° (foundation assert ≤ 0.18).
+    // 1.5° keeps a readable cross-slope without knife-edge verge steps; hills
+    // stay on `elevations` (unchanged). Measured 2026-09-29 headless probe.
     bankZones: [
-      { frac: 0.1905, angleDeg: 3.0, widthM: 60 },    // Villeneuve/Tosa link
-      { frac: 0.3440, angleDeg: 4.0, widthM: 90 },    // Piratella
-      { frac: 0.3703, angleDeg: 3.5, widthM: 90 },    // Acque Minerali
-      { frac: 0.7874, angleDeg: 4.0, widthM: 70 },    // Rivazza 1
-      { frac: 0.8456, angleDeg: 4.0, widthM: 110 },   // Rivazza 2
-      { frac: 0.9737, angleDeg: 3.0, widthM: 120 },   // final sweep to the line
+      { frac: 0.1905, angleDeg: 1.5, widthM: 60 },    // Villeneuve/Tosa link
+      { frac: 0.3440, angleDeg: 1.5, widthM: 90 },    // Piratella
+      { frac: 0.3703, angleDeg: 1.5, widthM: 90 },    // Acque Minerali
+      { frac: 0.7874, angleDeg: 1.5, widthM: 70 },    // Rivazza 1
+      { frac: 0.8456, angleDeg: 1.5, widthM: 110 },   // Rivazza 2
+      { frac: 0.9737, angleDeg: 1.5, widthM: 120 },   // final sweep to the line
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──

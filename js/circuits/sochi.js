@@ -64,8 +64,10 @@
     kit: { marshal: "kiosk",     rail: "jersey",      fence: "panelled",  tyre: "tecpro",  board: "led",       gantry: "portal",     camera: "monopole",  hoarding: "led" },
     standSet: ["alu", "teal", "darkSteel"],  // 2014 Olympic-park metal and glass
     // cityStyle: neon / dayPal name TrackSceneryData.NC / .DC colours
+    // Dropped "cross": even with the city.js MIN_SEP lift, Olympic-park civic
+    // massing reads better as drum/dome/slab than + footprints (wave-6 brief).
     cityStyle: { neon: ["white", "blue", "red", "gold", "cyan"], bias: 0.24, fh: [12, 30], bh: [22, 52],
-                 kinds: ["drum", "cross", "slab", "dome", "podium", "arch", "cylinder"], neonKinds: ["clad"], tone: { n: [0.15, 0.16, 0.19], d: [0.70, 0.71, 0.74] },
+                 kinds: ["drum", "slab", "dome", "podium", "arch", "cylinder"], neonKinds: ["clad"], tone: { n: [0.15, 0.16, 0.19], d: [0.70, 0.71, 0.74] },
                  dayPal: ["white", "paleblue", "steel", "bluglass", "stone", "concrete", "greyblue"] },
     // Real centreline: OSM trace (bacinger/f1-circuits, ODbL) — [x,z] metres,
     // recentred, one lap, open loop. tools/track/import-circuit-path.mjs regenerates it.
