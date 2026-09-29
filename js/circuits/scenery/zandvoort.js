@@ -10,7 +10,7 @@
               addBox, addCyl, addPrism, addPyramid, addCone, addFrustum, addMountain, anchor, vadd, onTrack, hash, every,
               along, runoffApron, bowlSeatWall,
               modelGroup, waterSurface, waterBand, groundPatch,
-              mountain, peak, bush, terrainYAt, hedge, grandstand, grandstandEx, tower, ferrisWheel,
+              mountain, peak, bush, terrainYAt, hedge, grandstand, grandstandEx, tower,
               pine, tree, forestEdge,
               fence, guardrail, tyreWall, billboard, gantry, marshalPost, recordBarrier } = api;
 
@@ -197,12 +197,26 @@
         }
       });
 
-      hedge(0.10, 0.22, 1,  26, 1.6, marramT);
-      hedge(0.22, 0.55, 1,  32, 1.1, marramT);   // mid-lap thin
-      hedge(0.20, 0.58, -1, 28, 1.1, marramG);   // mid-lap thin
-      hedge(0.55, 0.85, 1,  26, 1.5, marramG);
-      hedge(0.65, 0.98, -1, 22, 1.5, marramT);
-      hedge(0.80, 0.95, 1,  28, 1.4, marramG);
+      // Marram dune-hedge — staggered short hedge() runs so consecutive
+      // segments do not share one lateral face plane (ground-audit
+      // flatCoplanar: 15 spots on the six former continuous hedge() calls).
+      // Each chunk is ~one along-step long; gap jitters ±0.8 m between chunks.
+      // Still api.hedge() so barrierClear / tyre-wall yield stays intact.
+      const marramHedge = (s0, s1, side, gap, h, col) => {
+        const step = 5 / track.total;
+        let i = 0;
+        for (let s = s0; s < s1 - step * 0.4; s += step, i++) {
+          const gJ = gap + (hash(i * 11.3 + side * 7 + s0 * 40) - 0.5) * 1.6;
+          const hJ = h * (0.92 + hash(i * 5.1 + side) * 0.16);
+          hedge(s, Math.min(s + step * 0.88, s1), side, gJ, hJ, col);
+        }
+      };
+      marramHedge(0.10, 0.22, 1,  26, 1.6, marramT);
+      marramHedge(0.22, 0.55, 1,  32, 1.1, marramT);   // mid-lap thin
+      marramHedge(0.20, 0.58, -1, 28, 1.1, marramG);   // mid-lap thin
+      marramHedge(0.55, 0.85, 1,  26, 1.5, marramG);
+      marramHedge(0.65, 0.98, -1, 22, 1.5, marramT);
+      marramHedge(0.80, 0.95, 1,  28, 1.4, marramG);
 
       every(8, (k) => {
         for (const side of [-1, 1]) {
@@ -455,6 +469,88 @@
           }
           stage._mat = 0;
         });
+      }
+
+      // F1 Fanzone Ferris wheel — on-circuit festival wheel near Gate 2 /
+      // behind the final corner (gpdestinations.com; scuderiafans trackside
+      // guide; dutchgp.com 2026 wayfinding map lists "Ferris Wheel" next to
+      // "F1 Fanzone Stage"). NOT the ~50 m village wheel at Badhuisplein
+      // (Racefestival in town — dutchgp.com/zandvoort-racefestival).
+      // Assumption: seat it beside the existing fanzone stage on side −1 near
+      // S/F (T14 exit / pit-straight entry), ~120 m out — Gate-2 Fanzone
+      // footprint relative to game turns is UNCERTAIN; height ~45 m (radius 20)
+      // is approximate (on-circuit diameter not sourced).
+      // Vegas pattern: local modelGroup + ±6 cm axis members (shared
+      // ferrisWheel already does this; do not call it — we need a required id).
+      // seg=10 (not 16): keeps props-tris growth under the 0.5 % ratchet.
+      // Builder is closed over `a`/`hub`/`radius` so modelGroup(…, fn,
+      // {required:true}) stays inside the contract test's 2200-char window.
+      {
+        const radius = 20;
+        const k = K(0.048);
+        const a0 = anchor(k, -1, 122);
+        let hi = a0.c[1];
+        for (const alongT of [-4, 0, 4]) {
+          const q = vadd(a0.c, a0.t, alongT);
+          const g = terrainYAt(q[0], q[2]);
+          if (g != null) hi = Math.max(hi, g);
+        }
+        const lift = hi - a0.c[1] > 0.03 ? hi - a0.c[1] + 0.02 : 0;
+        const a = Object.assign({}, a0, { c: vadd(a0.c, a0.u, lift) });
+        const hub = vadd(a.c, a.u, radius + 5);
+        const buildFerris = (stage) => {
+          const rim = [];
+          const seg = 10;
+          const ORANJE = [0.96, 0.42, 0.02];
+          const CREAM = [0.95, 0.93, 0.88];
+          const RIM_COL = [0.62, 0.64, 0.70];
+          stage._mat = MAT.METAL;
+          for (const alongT of [-4, 4]) {
+            const foot = vadd(a.c, a.t, alongT);
+            addBox(stage, vadd(foot, a.u, (radius + 5) / 2),
+              [1.4, radius + 5, 1.4], [0.22, 0.22, 0.25], [a.r, a.u, a.t]);
+          }
+          // `ax` offsets along the wheel axis — shared ferrisWheel note in
+          // structures.js: a flat wheel puts all 32 members on one plane.
+          const strut = (p0, p1, thick, col, ax) => {
+            const d = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]];
+            const len = Math.hypot(d[0], d[1], d[2]) || 1;
+            const axis = [d[0] / len, d[1] / len, d[2] / len];
+            const face = [
+              a.r[1] * axis[2] - a.r[2] * axis[1],
+              a.r[2] * axis[0] - a.r[0] * axis[2],
+              a.r[0] * axis[1] - a.r[1] * axis[0],
+            ];
+            const o = ax || 0;
+            addBox(stage,
+              [(p0[0] + p1[0]) / 2 + a.r[0] * o,
+               (p0[1] + p1[1]) / 2 + a.r[1] * o,
+               (p0[2] + p1[2]) / 2 + a.r[2] * o],
+              [thick, len, thick], col, [a.r, axis, face]);
+          };
+          for (let i = 0; i < seg; i++) {
+            const ang = i / seg * 6.2832;
+            rim.push(vadd(vadd(hub, a.t, Math.cos(ang) * radius), a.u, Math.sin(ang) * radius));
+          }
+          const HUB_R = 2.0;
+          for (let i = 0; i < seg; i++) {
+            const d = [rim[i][0] - hub[0], rim[i][1] - hub[1], rim[i][2] - hub[2]];
+            const L = Math.hypot(d[0], d[1], d[2]) || 1;
+            const root = [hub[0] + d[0] / L * HUB_R, hub[1] + d[1] / L * HUB_R,
+                          hub[2] + d[2] / L * HUB_R];
+            strut(root, rim[i], 0.28, RIM_COL, i % 2 ? 0.06 : -0.06);
+            strut(rim[i], rim[(i + 1) % seg], 0.38, RIM_COL, i % 2 ? -0.06 : 0.06);
+            addBox(stage, vadd(rim[i], a.u, -1.2), [2.2, 2.0, 2.2],
+              i % 2 ? ORANJE : CREAM, [a.r, a.u, a.t]);
+          }
+          addBox(stage, hub, [3.2, 3.2, 3.2], [0.72, 0.78, 0.88], [a.r, a.u, a.t]);
+          stage._mat = 0;
+        };
+        modelGroup("zandvoort-ferris-wheel", {
+          center: hub,
+          size: [10, radius * 2 + 14, radius * 2 + 14],
+          basis: [a.r, a.u, a.t],
+        }, buildFerris, { required: true });
       }
 
       for (const s of [0.20, 0.34, 0.50, 0.62, 0.78]) {
