@@ -119,6 +119,15 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     abudhabi: ["abudhabi-ferrari-world", "abudhabi-marina", "abudhabi:pit-exit-tunnel-portal"],
     // Wave 5 — Catalunya landmarks (Tilke main stand + pit-end scoreboard)
     catalunya: ["catalunya-main-grandstand", "catalunya-pit-end-scoreboard", "catalunya-race-control"],
+    // Wave 6 — Hockenheim Motodrom ring (Süd + Nord permanent stands)
+    hockenheim: [
+      "hockenheim-motodrom-screen",
+      "hockenheim-mercedes-tribune",
+      "hockenheim-sued-tribune",
+      "hockenheim-nord-tribune",
+      "hockenheim-race-control",
+      "hockenheim-infield-compound",
+    ],
   };
   for (const [track, ids] of Object.entries(expected)) {
     const body = landmarkSource(track);
