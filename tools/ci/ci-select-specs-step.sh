@@ -28,6 +28,20 @@ else
   esac
   git cat-file -e "${BEFORE}^{commit}" 2>/dev/null || fail "comparison base $BEFORE is unreachable"
 fi
+# THE FRESHEST TIMING RECORD (2026-09-29). spec-timings.yml accumulates every
+# deploy-branch run on bot/spec-timings and the committed file is refreshed
+# only by a hand merge; select-budget.mjs unions this copy in via
+# APEX_SPEC_TIMINGS. Fail soft: no branch, no file, bad JSON -> committed only.
+# Not --depth=1: on this full clone that writes a shallow graft.
+OVERLAY="${RUNNER_TEMP:-.}/bot-spec-timings.json"
+if git fetch -q origin +refs/heads/bot/spec-timings:refs/remotes/origin/bot/spec-timings 2>/dev/null \
+   && git show refs/remotes/origin/bot/spec-timings:tests/data/spec-timings.json > "$OVERLAY" 2>/dev/null \
+   && node -e 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))' "$OVERLAY" 2>/dev/null; then
+  export APEX_SPEC_TIMINGS="$OVERLAY"
+  echo "timings: committed record + bot/spec-timings overlay"
+else
+  echo "timings: bot/spec-timings unavailable; committed record only"
+fi
 node tools/ci/select-specs.mjs --since "$BEFORE" --failed-from .selected-failed.txt --json > sel.json \
   || fail "selector failed"
 node -e '
@@ -40,7 +54,9 @@ node -e '
   console.log(`reason=${r.reason}; groups: ${r.groups.join(", ") || "(none)"}`);
   if (r.reason === "infra")
     console.log(`::warning::SELECTION NARROWER THAN THE CHANGE: ${r.tracked.length} tracked/infra path(s) changed (${r.tracked.slice(0, 4).join(", ")}); the edited/imported specs still run, the fixed gates own the rest`);
-  console.log(`fits ${r.secFit} s (${r.testsFit} tests at the fallback rate, measured specs at their own median); selected ${r.testsSelected} tests (${r.secSelected} s) across ${r.selected.length} specs; ${(r.oversize || []).length} oversize shard(s)`);
+  console.log(`fits ${r.secFit} s (unmeasured specs at the fallback rate, measured specs at their own median); selected ${r.testsSelected} tests (${r.secSelected} s) across ${r.selected.length} specs; ${(r.oversize || []).length} outside the budget`);
+  if ((r.circuitsTouched || []).length)
+    console.log(`circuits touched: ${r.circuitsTouched.join(", ")}${(r.circuits || []).length ? " (circuit-only diff: per-circuit loops run these alone via APEX_CIRCUITS)" : " (not circuit-only: the whole fleet runs)"}`);
   for (const s of r.overBudgetSpecs)
     console.log(`EXCLUDED (declares ${s.ownTimeoutSec}s timeout): ${s.file} (${s.tests} tests)`);
   for (const s of r.coveredByFixedGates)
@@ -49,8 +65,10 @@ node -e '
     console.log(`::warning::UNREACHABLE by this gate (declares ${s.tests} tests, over the whole ${r.secFit} s budget): ${s.file}`);
   for (const s of r.skipped) console.log(`SKIPPED (over budget): ${s.file} (${s.tests} tests)`);
   for (const s of (r.oversize || []))
-    console.log(`OVERSIZE (affected by this change; its own shard): ${s.file} (${s.tests} tests)`);
+    console.log(`OVERSIZE (outside the budget, packed by expected time, ~${s.sec} s): ${s.file} (${s.tests} tests)`);
   const shards = r.shards || [];
+  for (const j of shards)
+    console.log(`JOB ${j.name}: ${j.tests} tests, ~${j.sec} s expected, ${j.timeout} min cap${j.shard ? `, --shard=${j.shard}` : ""}${j.circuits ? `, APEX_CIRCUITS=${j.circuits}` : ""}`);
   // DROPPED: routed specs this plan will NOT run — over budget, bigger than the
   // whole cap, or squeezed out. `poke-train` reads it to tell two very different
   // skips apart: a plan that is empty because the diff affects no spec, and a
@@ -63,5 +81,5 @@ node -e '
   console.log(`dropped ${dropped} routed spec(s) this plan cannot run`);
   require("fs").appendFileSync(process.env.GITHUB_OUTPUT,
     `specs=${specs}\nshards=${JSON.stringify(shards)}\nany=${shards.length ? "true" : "false"}\n`
-    + `dropped=${dropped}\nreason=${r.reason}\n`);
+    + `dropped=${dropped}\nreason=${r.reason}\ncircuits=${(r.circuits || []).join(",")}\n`);
 '
