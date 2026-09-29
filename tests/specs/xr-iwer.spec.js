@@ -34,8 +34,10 @@ test.describe("xr-iwer Phase 0", () => {
     const hasIwer = fs.existsSync(IWER_UMD) || fs.existsSync(IWER_MIN);
     test.skip(!hasIwer, "iwer not installed (npm i -D iwer)");
 
-    await page.goto("/index.html");
-    await page.waitForFunction(() => typeof window.XrSession === "object" || typeof window.XrUi === "object", null, { timeout: 60_000, polling: 100 });
+    // Classic-script `const XrSession` is a lexical global (like Input) — visible
+    // to page.evaluate as `XrSession`, never as `window.XrSession`.
+    await page.goto("/");
+    await page.waitForFunction(() => typeof XrSession !== "undefined" && typeof XrSession.probe === "function", null, { timeout: 60_000, polling: 100 });
 
     const umdPath = fs.existsSync(IWER_UMD) ? IWER_UMD : IWER_MIN;
     await page.addScriptTag({ path: umdPath });
@@ -63,8 +65,8 @@ test.describe("xr-iwer Phase 0", () => {
 
     // Re-probe Apex's session owner so the button unhides.
     await page.evaluate(async () => {
-      if (window.XrSession && typeof window.XrSession.probe === "function") {
-        await window.XrSession.probe();
+      if (typeof XrSession !== "undefined" && typeof XrSession.probe === "function") {
+        await XrSession.probe();
       }
     });
     const btn = page.locator("#xr-enter");
@@ -75,8 +77,8 @@ test.describe("xr-iwer Phase 0", () => {
     // requirement some runtimes attach to the click path).
     const started = await page.evaluate(async () => {
       try {
-        const s = await window.XrSession.start();
-        return { ok: !!s, presenting: window.XrSession.isPresenting(), backend: window.XrSession.backend() };
+        const s = await XrSession.start();
+        return { ok: !!s, presenting: XrSession.isPresenting(), backend: XrSession.backend() };
       } catch (e) {
         return { ok: false, error: String(e && e.message || e) };
       }
@@ -86,7 +88,7 @@ test.describe("xr-iwer Phase 0", () => {
     // capability + button are the hard gate for this CI box.
     if (started.ok) {
       expect(started.presenting).toBe(true);
-      await page.evaluate(() => window.XrSession.end());
+      await page.evaluate(() => XrSession.end());
     } else {
       test.info().annotations.push({
         type: "note",
