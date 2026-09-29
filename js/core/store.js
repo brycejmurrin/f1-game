@@ -375,7 +375,11 @@ const GameStore = (function () {
           try { store._cache.set(row.k, JSON.parse(row.v)); } catch (e) { continue; }
           _ownNewer.add(row.k);             // this session runs on the newest value: its saves supersede the row
         } else {
-          if (newer) mirrorQueue(row.k, row.v, true);   // the disk has it now
+          // The disk has it now — and this session runs on it, so its later
+          // saves supersede the row. Without _ownNewer the row stayed
+          // lsOk:false (the flush guard refuses a non-own put over it), and
+          // the NEXT boot restored this stale value over every save since.
+          if (newer) { _ownNewer.add(row.k); mirrorQueue(row.k, row.v, true); }
           store._cache.delete(row.k);
         }
         store._keyRev.set(row.k, (store._keyRev.get(row.k) || 0) + 1);

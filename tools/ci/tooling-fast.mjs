@@ -298,6 +298,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // zero-reference module and the two thin spots): each under a second.
   "tests/unit/body-attitude.test.mjs",
   "tests/unit/save-migrate.test.mjs",
+  // js/race/reliability.js (random DNFs) had no unit test — only career.spec,
+  // over budget and nightly-only. Pure VM with a stub hash, well under a second.
+  "tests/unit/reliability.test.mjs",
   // ApexClipboard.write/read + preferSync order (clipboard carve). Pure VM,
   // well under a second; must run where the helper or a call-site is edited.
   "tests/unit/clipboard.test.mjs",
