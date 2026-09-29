@@ -10,8 +10,8 @@
         pine, tree, bush, hedge, ridge, building, grandstandEx, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
-        floodMast, sailCanopy, sponsorHoarding, seat, groundedSegments,
-        addBox, addCyl, addCone } = api;
+        floodMast, sailCanopy, sponsorHoarding, seat,
+        drape, addBox, addCyl, addCone } = api;
 
       const PINE = [0.14, 0.31, 0.16], PINE_D = [0.11, 0.25, 0.14];
       const SCRUB = [0.33, 0.38, 0.20], SCRUB_D = [0.27, 0.32, 0.17];
@@ -35,7 +35,7 @@
             const a = anchor(k, side, gap + t * 3.6);
             const b = [a.r, a.u, a.t];
             const h = 1.8 + t * 2.2;
-            const seg = spacing * 0.96 * Math.min(1, chord(k, gap + t * 3.6) / c0);
+            const seg = spacing * 0.88 * Math.min(1, chord(k, gap + t * 3.6) / c0);
             addBox(out, vadd(a.c, a.u, h * 0.5), [3.5, h, seg], t & 1 ? BONE : WHITE, b);
             addBox(out, vadd(a.c, a.u, h + 0.65), [2.7, 1.3, seg], SEATS[(i + t) % 3], b);
           }
@@ -52,6 +52,8 @@
       every(30, (k) => {
         const s = k / n;
         if (openInfield(s)) return;
+        // Clear of sun terraces / stonePine fights around La Caixa (~0.70).
+        if (s >= 0.66 && s <= 0.74) return;
         const h = hash(k * 31);
         if (h < 0.42) return;
         pine(k, h < 0.5 ? -1 : 1, 14 + h * 12, 11 + h * 7, h < 0.6 ? PINE : PINE_D);
@@ -59,6 +61,8 @@
       every(22, (k) => {
         const s = k / n;
         if (openInfield(s)) return;
+        // Keep scrub off the sun-terrace banks (clip bush×terrace ~0.88–0.92).
+        if ((s >= 0.82 && s <= 0.95) || (s >= 0.66 && s <= 0.72)) return;
         const h = hash(k * 97 + 23);
         if (h < 0.40) return;
         bush(k, h < 0.72 ? -1 : 1, 7 + h * 6, h < 0.6 ? SCRUB : SCRUB_D);
@@ -67,9 +71,11 @@
       every(64, (k) => {
         const s = k / n;
         if (openInfield(s)) return;
+        // Clear of Main / Grandstand J / scoreboard corridor (clip at ~0.09).
+        if (s > 0.96 || s < 0.16) return;
         const h = hash(k * 67 + 17);
         if (h < 0.60) return;
-        tree(k, h < 0.5 ? -1 : 1, 40 + h * 26, 9 + h * 6, [0.24, 0.36, 0.19]);
+        tree(k, h < 0.5 ? -1 : 1, 48 + h * 26, 9 + h * 6, [0.24, 0.36, 0.19]);
       });
 
       {
@@ -124,14 +130,103 @@
       }
       gantry(0.0, 8.5, [0.15, 0.15, 0.18]);
       gantry(0.965, 8.0, [0.15, 0.15, 0.18]);
-      grandstandEx(0.005, -1, 11, 180, null, null,
-        { livery: "concrete", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
-      grandstandEx(0.055, -1, 12, 120, null, null, { livery: "crimson", endWalls: true });
+      // ── Tilke main grandstand (2002) — LEFT of S/F, opposite the pits ─────
+      // Sources: tilke.de/portfolio/circuit-de-barcelona-catalunya/ (9,580 seats,
+      // new main grandstand); racingcircuits.info (metal-roofed Tilke stand +
+      // giant electronic board at pit-lane end; railway parallel to this side);
+      // oversteer48.com/main-granstand-circuit-de-catalunya-barcelona/ (stand on
+      // LEFT of start/finish, opposite pit lane; T14 exit at its right end).
+      // Roof: flat metal canopy over the REAR tiers (not over the track) —
+      // grandstandEx roof:"flat" keeps the slab tight over the shell.
+      grandstandEx(0.005, -1, 11, 170, null, null,
+        { livery: "concrete", tiers: 2, roof: "flat", suites: true, endWalls: true, pylons: true,
+          roofCol: [0.72, 0.74, 0.78] });
+      // Wave-5 hero: white concrete rake + metal canopy lip + suite glazing.
+      // Approximate silhouette for a ~9,580-seat stand — length/height not
+      // surveyed; kept modest vs the long pit straight.
+      {
+        const a = anchor(K(0.005), -1, 14);
+        if (!onTrack(a.c[0], a.c[2], 10)) {
+          const b = [a.r, a.u, a.t];
+          const METAL = [0.70, 0.72, 0.76], GLASS_S = [0.28, 0.40, 0.48];
+          modelGroup("catalunya-main-grandstand", {
+            center: vadd(a.c, a.u, 10), size: [18, 22, 160], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.CONCRETE;
+            // Stepped rear shell — rows rise away from the track.
+            addBox(stage, vadd(vadd(a.c, a.r, 4.0), a.u, 5.5), [10, 11, 150], WHITE, b);
+            addBox(stage, vadd(vadd(a.c, a.r, 7.5), a.u, 12.0), [8, 8, 140], BONE, b);
+            stage._mat = MAT.GLASS;
+            addBox(stage, vadd(vadd(a.c, a.r, 9.2), a.u, 14.5), [0.4, 3.2, 120], GLASS_S, b);
+            stage._mat = MAT.METAL;
+            // Flat metal canopy covering rear tiers only (lip sits over shell, not tarmac).
+            addBox(stage, vadd(vadd(a.c, a.r, 5.5), a.u, 17.2), [14, 0.55, 155], METAL, b);
+            addBox(stage, vadd(vadd(a.c, a.r, -0.5), a.u, 16.6), [0.45, 0.9, 152], SHADE, b);
+            // Pale fascia stripe along the trackside face.
+            addBox(stage, vadd(vadd(a.c, a.r, -5.0), a.u, 8.0),
+              [0.35, 1.1, 148], [0.90, 0.88, 0.84], b);
+            stage._mat = 0;
+          }, { required: true });
+        }
+      }
+      // Grandstand J (Tribuna J): smaller uncovered stand toward T1, opposite
+      // pit exit. Source: oversteer48.com/grandstand-j-circuit-de-catalunya-barcelona/
+      // (LEFT of S/F; NOT covered; adjacent to Main on its right when facing track).
+      // Length approximate — seating-plan zones suggest shorter than Main.
+      grandstandEx(0.048, -1, 12, 72, null, null,
+        { livery: "alu", roof: "none", endWalls: true, tiers: 1 });
       {
         const winLit = [0.97, 0.88, 0.54];
         // On the stand's back shell rather than inside the seating bowl.
-        const a = anchor(K(0.005), -1, 22);
-        addBox(out, vadd(a.c, a.u, 10.4), [0.22, 1.5, 160], winLit, [a.r, a.u, a.t]);
+        const a = anchor(K(0.005), -1, 24);
+        addBox(out, vadd(a.c, a.u, 10.4), [0.22, 1.5, 150], winLit, [a.r, a.u, a.t]);
+      }
+      // End-of-pit-lane electronic scoreboard / scoring pylon. Sources:
+      // racingcircuits.info ("gigantic electronic scoring board… end of the
+      // pitlane"); oversteer48 Grandstand J page (scoring pylon at pit exit,
+      // opposite Tribuna J). Height/face size not surveyed — modest approx.
+      {
+        const a = anchor(K(0.042), 1, 22);
+        if (!onTrack(a.c[0], a.c[2], 8)) {
+          const b = [a.r, a.u, a.t];
+          const STEEL = [0.42, 0.44, 0.48], LED = [0.08, 0.10, 0.12];
+          const LED_G = [0.18, 0.72, 0.32];
+          modelGroup("catalunya-pit-end-scoreboard", {
+            center: vadd(a.c, a.u, 14), size: [8, 32, 10], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.METAL;
+            // Totem mast (approx; real "Barcelona totem" proportions unverified).
+            // Base pad seats on grade; mast + faces stay one touching stack so
+            // ground-audit does not mark the crown screen unsupported.
+            seat.box(stage, a.c, [3.6, 0.6, 3.6], BONE, b);
+            addBox(stage, vadd(a.c, a.u, 12.2), [1.4, 24.4, 1.4], STEEL, b);
+            // LED face toward the track (inward = -r when side is +1).
+            addBox(stage, vadd(vadd(a.c, a.r, -1.2), a.u, 18), [0.35, 10, 7.5], LED, b);
+            addBox(stage, vadd(vadd(a.c, a.r, -1.35), a.u, 20.5), [0.12, 1.2, 6.8], LED_G, b);
+            addBox(stage, vadd(vadd(a.c, a.r, -1.35), a.u, 17.0), [0.12, 4.5, 6.8],
+              [0.92, 0.92, 0.88], b);
+            // Running-order screen on the mast crown — overlaps the mast top.
+            addBox(stage, vadd(a.c, a.u, 24.6), [2.4, 2.2, 3.2], LED, b);
+            stage._mat = 0;
+          }, { required: true });
+        }
+      }
+      // Railway line parallel to the main-grandstand side, behind the stand.
+      // Source: racingcircuits.info — "the line runs parallel to the main
+      // grandstand"; no station at the circuit. Low ballast + twin rails only;
+      // no train. Lateral distance approximate (behind stand + verge).
+      {
+        const RAIL = [0.48, 0.48, 0.50], BALLAST = [0.55, 0.52, 0.46];
+        along(0.975, 0.070, 12, (k, spacing) => {
+          const a = anchor(k, -1, 42);
+          if (onTrack(a.c[0], a.c[2], 6)) return;
+          const b = [a.r, a.u, a.t];
+          const seg = spacing * 0.98;
+          // Ballast bed (~0.4 m proud) + twin rails.
+          addBox(out, vadd(a.c, a.u, 0.22), [4.2, 0.4, seg], BALLAST, b);
+          addBox(out, vadd(vadd(a.c, a.r, -0.75), a.u, 0.48), [0.12, 0.12, seg], RAIL, b);
+          addBox(out, vadd(vadd(a.c, a.r, 0.75), a.u, 0.48), [0.12, 0.12, seg], RAIL, b);
+        });
       }
       for (let i = 0; i < 4; i++) {
         building(K(0.920 + i * 0.014), 1, 40, 26, 11, 16,
@@ -141,19 +236,23 @@
         const s = k / n, h = hash(k * 71 + 31);
         // Clear of the broadcast compound at K(0.912), 76 m out.
         if (!(s > 0.90 || s < 0.05) || h < 0.52 || Math.abs(s - 0.912) < 0.008) return;
-        motorhome(k, 1, 58 + h * 10, 10, 4, 6, { wall: [0.64 + h * 0.26, 0.64, 0.66] });
+        // Seat on higher/flatter ground further out (was 0.37 m pad burial).
+        if (h < 0.62) return;
+        motorhome(k, 1, 70 + h * 12, 10, 4, 6, { wall: [0.64 + h * 0.26, 0.64, 0.66] });
       });
       broadcastCompound(K(0.912), 1, 76, { vans: 3, dishes: 2, mastH: 9 });
       for (const s of [0.975, 0.01, 0.03]) billboard(K(s), -1, 8, 12, 4.5, [0.90, 0.20, 0.16]);
 
       grandstandEx(0.145, 1, 20, 96, null, null,
         { livery: "orange", tiers: 2, roof: "cantilever", endWalls: true });
+      // Wider step on the final-corner bends so terrace units do not fold into
+      // each other (clip addBox×addBox ~0.92) or fight stonePine (~0.70).
       sunTerrace(0.360, 0.400, -1, 19, 5);
-      sunTerrace(0.630, 0.660, 1, 21, 5);
-      sunTerrace(0.674, 0.708, -1, 19, 6);
-      sunTerrace(0.826, 0.868, -1, 19, 6);
-      sunTerrace(0.876, 0.912,  1, 18, 5);
-      sunTerrace(0.916, 0.948, 1, 17, 5);
+      sunTerrace(0.630, 0.655, 1, 22, 4, 12);
+      sunTerrace(0.678, 0.705, -1, 20, 5, 12);
+      sunTerrace(0.830, 0.862, -1, 20, 5, 12);
+      sunTerrace(0.880, 0.908,  1, 19, 4, 12);
+      sunTerrace(0.920, 0.945, 1, 18, 4, 12);
       for (const [s, side, gap] of [[0.690, -1, 33], [0.932, 1, 30], [0.845, -1, 33]]) {
         const a = anchor(K(s), side, gap);
         sailCanopy(a.c, [a.r, a.u, a.t],
@@ -194,11 +293,14 @@
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
       }
 
+      // Far hills: generic low hazy Catalan countryside. A named Montseny
+      // massif backdrop is UNCERTAIN (repo brief vs conflicting search notes) —
+      // keep anonymous ridges, not a labelled mountain.
       const { cx, cz, radius: rad } = lapBounds();
       for (const [extra, count, len, w, hMin, hVar, col] of [
         [130, 30, 150, 46, 14, 9, [0.42, 0.42, 0.26]],   // bleached near ridges
         [230, 26, 195, 60, 24, 14, [0.36, 0.37, 0.25]],
-        [360, 22, 240, 74, 40, 24, [0.34, 0.36, 0.32]],  // hazed Montseny massif
+        [360, 22, 240, 74, 40, 24, [0.34, 0.36, 0.32]],  // far hazy hills (unnamed)
       ]) {
         for (let i = 0; i < count; i++) {
           const a = i / count * 6.2832, h = hash(i * 7 + extra);
@@ -237,40 +339,43 @@
         });
       }
 
+      // Single-side hedges only where both sides used to share a plane.
       hedge(0.955, 0.045, -1, 16, 3.0, [0.18, 0.36, 0.18]);
-      hedge(0.020, 0.075, 1, 15, 2.6, [0.19, 0.37, 0.19]);
+      hedge(0.022, 0.078, 1, 16, 2.6, [0.19, 0.37, 0.19]);
       hedge(0.660, 0.715, -1, 15, 2.6, [0.19, 0.37, 0.19]);
-      hedge(0.782, 0.822, 1, 15, 2.6, [0.19, 0.37, 0.19]);
-      hedge(0.780, 0.820, -1, 15, 2.6, [0.18, 0.36, 0.18]);
+      // One hedge band through the final complex (was two coplanar mirrors).
+      hedge(0.780, 0.820, -1, 16, 2.6, [0.18, 0.36, 0.18]);
       {
+        // Cypress ranks — keep clear of pit/paddock boxes (clip-audit was
+        // addCone×addBox at ~0.09 / 0.69 / 0.90). Gaps pushed out; drop the
+        // 0.09 cluster near the T1 stand entirely.
         const CYP = [0.13, 0.28, 0.15], CYP_D = [0.10, 0.22, 0.13];
-        for (const [s0, side, gap] of [[0.960, -1, 21], [0.028, 1, 20], [0.680, -1, 21],
-                                       [0.788, -1, 21], [0.806, 1, 20]]) {
-          for (let i = 0; i < 7; i++) {
-            const a = anchor(K(s0 + i * 0.006), side, gap + (i & 1) * 2.5);
+        for (const [s0, side, gap, count] of [
+          [0.955, -1, 32, 3], [0.672, -1, 36, 2],
+          [0.798, -1, 32, 3],
+        ]) {
+          for (let i = 0; i < count; i++) {
+            const a = anchor(K(s0 + i * 0.008), side, gap + (i & 1) * 3.5);
+            if (onTrack(a.c[0], a.c[2], 5)) continue;
             const b = [a.r, a.u, a.t];
-            const h = 11 + hash(i * 13 + s0 * 100) * 4;
-            addCyl(out, a.c, 0.20, h * 0.2, [0.34, 0.26, 0.18], 5, b);
-            addCone(out, vadd(a.c, a.u, h * 0.12), 1.2, h * 0.62, i & 1 ? CYP : CYP_D, 6, b);
-            addCone(out, vadd(a.c, a.u, h * 0.50), 0.85, h * 0.48, CYP, 6, b);
+            const h = 9 + hash(i * 13 + s0 * 100) * 3;
+            addCyl(out, a.c, 0.16, h * 0.16, [0.34, 0.26, 0.18], 5, b);
+            addCone(out, vadd(a.c, a.u, h * 0.10), 0.85, h * 0.55, i & 1 ? CYP : CYP_D, 6, b);
+            addCone(out, vadd(a.c, a.u, h * 0.46), 0.60, h * 0.40, CYP, 6, b);
           }
         }
       }
 
-      for (const [id, s, side, gap, offs] of [
-        ["t1", 0.160, -1, 62], ["repsol", 0.353, -1, 58],
-        ["campsa", 0.608, 1, 62],
-        ["lacaixa", 0.645, -1, 58, [0, 1, 2, 3, 4]],
+      // Ochre farmland terrace bands — drape ON terrain (groundedSegments chords
+      // buried up to 11–15 m into the hillside). Not a named massif.
+      for (const [s0, s1, side, gap0] of [
+        [0.145, 0.185, -1, 62], [0.340, 0.380, -1, 58],
+        [0.590, 0.640, 1, 62], [0.625, 0.680, -1, 58],
       ]) {
-        const js = offs || [-2, -1, 0, 1, 2];
         for (let t = 0; t < 3; t++) {
-          groundedSegments({
-            id: `catalunya-terrace-${id}-${t + 1}`,
-            points: js.map((j) => ({
-              k: K(s + j * 0.010), side, dist: gap + t * 16,
-            })),
-            width: 11, height: 2.2 + t * 1.6,
-            color: t & 1 ? OCHRE : [0.71, 0.66, 0.52],
+          const col = t & 1 ? OCHRE : [0.71, 0.66, 0.52];
+          along(s0, s1, 14, (k) => {
+            drape(k, side, gap0 + t * 14, [9, 0.14, 12], col, { res: 0.08 });
           });
         }
       }

@@ -232,8 +232,8 @@ const AudioPanel = (() => {
       const radioLive = radioOn && G.soundOn && radioReady;
       SettingRow.paint($("as-radio"), radioOn ? "on" : "off", ONOFF);
       SettingRow.disable($("as-radio"), !radioReady);
-      $("as-rvol").disabled = !radioLive;
-      $("as-rvol").closest(".tune-row").classList.toggle("tune-off", !radioLive);
+      $("as-rvol").disabled = !G.soundOn;
+      $("as-rvol").closest(".tune-row").classList.toggle("tune-off", !G.soundOn);
       $("as-rvol").value = String(Math.round(radioVol * 10));
       $("as-rvol-v").textContent = String(Math.round(radioVol * 10));
       // SFX, not voice: it rides the sfx bus, so it follows the SFX switch and
@@ -243,8 +243,8 @@ const AudioPanel = (() => {
       $("as-rfx").closest(".tune-row").classList.toggle("tune-off", !(sfxOn && G.soundOn));
       $("as-rfx").value = String(Math.round(fx * 10));
       $("as-rfx-v").textContent = String(Math.round(fx * 10));
-      // The voice rows follow the same live gate as the volume: tuning a voice
-      // that cannot speak is a control that does nothing. Built here rather than
+      // Auditioning is independent of automatic speech: TEST and voice volume
+      // remain usable when TEAM RADIO is off, for the announcer and spotter too. Built here rather than
       // at wire time because getVoices() is empty on Chrome's first read and
       // fills in later — opening the panel is when we know what is installed.
       buildVoiceRows();
@@ -255,9 +255,9 @@ const AudioPanel = (() => {
       // taking three unrelated audio-boot tests down with it and failing the
       // deploy. Ask for what is about to be called.
       const vh = $("as-voices");
-      if (vh && vh.classList) vh.classList.toggle("tune-off", !radioLive);
+      if (vh && vh.classList) vh.classList.toggle("tune-off", !(G.soundOn && radioReady));
       if (vh && typeof vh.querySelectorAll === "function") {
-        for (const el of vh.querySelectorAll("select,input,button")) el.disabled = !radioLive;
+        for (const el of vh.querySelectorAll("select,input,button")) el.disabled = !(G.soundOn && radioReady);
       }
       // WHY IT IS SILENT, IN A SENTENCE THE PLAYER CAN READ.
       //
@@ -308,7 +308,7 @@ const AudioPanel = (() => {
       // THE ANNOUNCER, on the same three-part gate and for the same reason: a
       // greyed row with no sentence is the worst version of this.
       const annReady = !!(G.announcer && G.announcer.available());
-      const annLive = annOn() && G.soundOn && annReady;
+      const annLive = G.soundOn && annReady;
       SettingRow.paint($("as-ann"), annOn() ? "on" : "off", ONOFF);
       SettingRow.disable($("as-ann"), !annReady);
       const ah = $("as-ann-voice");
@@ -331,7 +331,7 @@ const AudioPanel = (() => {
       const anote = $("as-ann-note");
       if (anote) anote.textContent = !annReady ? "This browser has no speech voices, so the loading card stays written."
         : !G.soundOn ? "Master sound is off — ANNOUNCER ON turns it on."
-        : "The welcome is written from the circuit itself, and COMMENTARY calls the race in the same voice. VOICE VOLUME above sets the level.";
+        : "The welcome is written from the circuit itself, and COMMENTARY uses the same voice when it is available locally; a network-only voice falls back to a local announcer during the race. VOICE VOLUME above sets the level.";
       // The master gate is what silences music when SOUND is off, and the MUSIC
       // switch still reads ON then — so the readout names the gate that is
       // actually shut instead of contradicting the switch beside it. The title
@@ -414,7 +414,7 @@ const AudioPanel = (() => {
     const VOICE_CHANNELS = [
       ["control", "RACE CONTROL", "Penalties, warnings and flags."],
       ["coach", "COACH", "Practice drills and driving advice."],
-      ["radio", "TEAM RADIO", "Your engineer: box calls, position, tyres."],
+      ["radio", "TEAM RADIO", "Your engineer: box calls, position, tyres. Changing this voice or its tuning selects SYSTEM; RECORDED uses George. The spotter always uses recorded George."],
     ];
     /* THE ANNOUNCER'S ROW IS THE SAME ROW, IN A DIFFERENT SECTION. It is a
      * RadioVoice channel (js/audio/radio-voice.js TONE) so it gets a voice, a
@@ -502,12 +502,11 @@ const AudioPanel = (() => {
       return row;
     }
 
-    const setTune = (ch, patch) => { if (G.radio && G.radio.setTune) G.radio.setTune(ch, patch); };
-    /* WHICH preview. RadioVoice.preview() refuses unless the TEAM RADIO switch
-     * is on — correct for the three race channels, wrong for the announcer,
-     * which is on by default while that switch is off by default. Sending the
-     * announcer's TEST through the radio would have made it the one button on
-     * this sheet that does nothing with its own switch ON. */
+    const setTune = (ch, patch) => {
+      if (G.radio && G.radio.setTune) G.radio.setTune(ch, patch);
+      if (ch === "radio" && G.radio && G.radio.setPackOn) { G.radio.setPackOn(false); syncAudioPanel(); }
+    };
+    // TEST is an explicit audition, independent of the automatic speech switch.
     const preview = (ch) => {
       if (ch === "announcer") { if (G.announcer && G.announcer.sample) G.announcer.sample(); return; }
       if (G.radio && G.radio.preview) G.radio.preview(ch);
@@ -525,8 +524,9 @@ const AudioPanel = (() => {
       if (typeof RadioVoice === "undefined" || typeof document === "undefined"
           || typeof document.createElement !== "function") return;
       const n = (G.radio && G.radio.voiceList && G.radio.voiceList().length) || 0;
-      if (voiceRowsFor === n && host.children.length > 1) return;   // already right for this list
-      voiceRowsFor = n;
+      const key = JSON.stringify(G.radio && G.radio.voiceList ? G.radio.voiceList() : []);
+      if (voiceRowsFor === key && host.children.length > 1) return;   // already right for this list
+      voiceRowsFor = key;
       while (host.children.length > 1) host.removeChild(host.lastChild);
       for (const [ch, label, blurb] of VOICE_CHANNELS) host.appendChild(voiceRow(ch, label, blurb));
       const note = $("as-voices-note");
@@ -551,9 +551,9 @@ const AudioPanel = (() => {
       // network voices, so keying this off the radio's local-only count would
       // leave the row stale exactly where the two differ most (Chrome and Edge,
       // where the local count is often 0 and the real one is dozens).
-      const n = (G.radio && G.radio.voiceList && G.radio.voiceList(ANN_CHANNEL[0]).length) || 0;
-      if (annRowFor === n && host.children.length > 1) return;
-      annRowFor = n;
+      const key = JSON.stringify(G.radio && G.radio.voiceList ? G.radio.voiceList(ANN_CHANNEL[0]) : []);
+      if (annRowFor === key && host.children.length > 1) return;
+      annRowFor = key;
       while (host.children.length > 1) host.removeChild(host.lastChild);
       host.appendChild(voiceRow.apply(null, ANN_CHANNEL));
     }

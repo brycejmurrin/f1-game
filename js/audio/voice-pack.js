@@ -137,10 +137,13 @@ const VoicePack = (() => {
         try { l.stop(); } catch (e) { /* already ended */ }
       }
     }
-    /** Seconds until `channel` (or any channel) falls quiet; 0 when it is. */
+    /** Seconds until quiet; Infinity while decoding makes the end unknown. */
     function remaining(channel) {
       let end = 0;
-      for (const ch of channel ? [channel] : Object.keys(live)) if (live[ch]) end = Math.max(end, live[ch].end);
+      for (const ch of channel ? [channel] : Object.keys(live)) if (live[ch]) {
+        if (!live[ch].h) return Infinity;
+        end = Math.max(end, live[ch].end);
+      }
       return end > 0 ? Math.max(0, end - GameAudio.now()) : 0;
     }
 
@@ -175,7 +178,13 @@ const VoicePack = (() => {
           // the old one and would schedule the line minutes ahead, holding the
           // channel (and the spotter) for all of it.
           if ((GameAudio.ctxGen ? GameAudio.ctxGen() : 0) !== gen0) { release(); return; }
-          const h = GameAudio.radioVoice(parts, Math.max(at, GameAudio.now() + 0.02), {
+          if (opt.valid && !opt.valid()) { release(); return; }
+          const start = Math.max(at, GameAudio.now() + 0.02);
+          // Decode time belongs to the original card, not a fresh budget.
+          // If the whole line no longer fits, leave it written instead of
+          // starting late and cutting it off in the middle of an instruction.
+          if (opt.budgetS != null && start + pl.secs > at + opt.budgetS + SLACK_S) { release(); return; }
+          const h = GameAudio.radioVoice(parts, start, {
             channel: ch, volume: opt.volume == null ? 1 : opt.volume });
           if (!h) { release(); return; }
           token.h = h;

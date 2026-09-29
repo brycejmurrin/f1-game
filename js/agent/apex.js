@@ -1335,6 +1335,11 @@ const api = {
   // for the same reason as laps: startRace() trims the field on the way in, so
   // a duel asked for afterwards races a full grid. false/absent leaves the
   // setting alone, so a harness that never mentions duel keeps today's races.
+  // opts.grid: the one-off's grid rule ("tier" | "quali" | "rev10" | "revchamp"
+  // | "random"). The rule is in-memory game state, and a guest in a friend room
+  // takes the HOST's — so on a shared page a later solo start inherited
+  // "quali", opened qualifying instead of the grid, and read as "did not reach
+  // the grid". Absent leaves the rule alone; an unknown name is ignored.
   race(trackRef, timeOfDay, weather, opts) {
     const i = typeof trackRef === "number"
       ? trackRef
@@ -1346,6 +1351,7 @@ const api = {
     G.raceLaps = (opts && opts.laps > 0) ? (opts.laps | 0) : GAME_LAPS;
     G.raceWeather = (weather === "wet" || weather === "rain" || weather === "overcast" || weather === "fog") ? weather : "dry";
     G.raceTimeOfDay = timeOfDay || "default";
+    if (opts && opts.grid != null) G.raceGrid = opts.grid;   // the game's setter validates the name
     if (opts && opts.duel != null) {
       G.duel = !!opts.duel;
       G.duelLegend = typeof opts.duel === "string" ? opts.duel : "";

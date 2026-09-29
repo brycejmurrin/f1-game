@@ -1332,9 +1332,8 @@ let _annPri = 0, _annFloor = 0, _annQueue = [];
 // dimmest thing on a card that is always about that car. Every channel here is
 // addressed TO the player, so the one number serves all three.
 function radioWho(kind) {
-  if (kind === "penalty-hit" || kind === "penalty-warn" || kind === "warning") return "RACE CONTROL";
-  if (kind === "coach" || kind === "practice") return "COACH";
-  if (kind === "comm") return "COMMENTARY";   // js/race/race-radio.js — the broadcaster, not the pit wall
+  const label = { control: "RACE CONTROL", coach: "COACH", announcer: "COMMENTARY" }[RadioVoice.SPEAKERS[kind]];
+  if (label) return label;
   const p = player;
   const who = p && p.name ? String(p.name).split(" ").pop().toUpperCase() : (p && p.code) || "";
   return (who ? who + " · " : "") + "RADIO";
@@ -2150,7 +2149,7 @@ function redFlagRestart() {
   for (const l of els.lights.children) l.classList.remove("on");
   sectorIdx = player ? sectorAt(player.s) : 0; sectorStartT = player ? player.lapTime : 0; sectorValid = false;
   snapGameCam();
-  announce("RED FLAG — STANDING RESTART", 3, "race");
+  announce("RED FLAG — STANDING RESTART", 3, "warning");
   Log.info("game", "red flag: standing restart, " + order.length + " cars re-gridded at raceT " + raceT.toFixed(1));
   return true;
 }
@@ -2230,7 +2229,7 @@ function gridUp(preOrder) {
     // is off. The player plans their own race.
     // The PLAYER gets a plan too — a REFERENCE, the one the pit wall would run
     // (PitLane.think never executes a human's; the HUD and the engineer read it).
-    c.pitPlan = tyres.on() ? pits.planFor(c.human ? 0.5 : (h >>> 24) / 256, !!c.human) : null;
+    c.pitPlan = tyres.on() ? pits.planFor(c.human ? 0.5 : (h >>> 24) / 256, !!c.human, 0, c) : null;
     if (c.pitPlan && !c.human) c.tyreClass = c.pitPlan.start;
     tyres.fit(c, tyres.startRecord(c));
   });
@@ -5141,7 +5140,7 @@ function updateCar(c, dt, ranked) {
       } else if (c.cutWarn >= 4) {
         c.penalty += 5;
         if (c.isPlayer) {
-          announce("+5s TRACK LIMITS PENALTY", 2, hudProfile === "broadcast" ? "race" : "penalty-hit");
+          announce("+5s TRACK LIMITS PENALTY", 2, "penalty-hit");
           if (soundOn) GameAudio.penalty();
         }
       } else if (c.isPlayer) {
@@ -8403,6 +8402,11 @@ function render(dt) {
 
 // ---------- main loop ----------
 let physAcc = 0;                 // leftover sim time carried between frames
+// When the local car's pose IS, on the frame clock: the end of the last physics
+// step. netPlay.tick runs BEFORE this frame's steps, so the pose it publishes is
+// last frame's — stamping it `now` made every rival draw us 16–33 ms (a metre or
+// more at speed) behind where we were. null = no race stepping: stamp `now`.
+let _poseAt = null;
 let renderAlpha = 1;             // leftover-step fraction (0..1) for render interpolation
 // Adaptive-resolution governor + feature-shedding tiers + mobile crash
 // sentinel live in js/perf/governor.js (PerfGov, initialised at boot with gfx).
@@ -8442,7 +8446,7 @@ function tickBody(now) {
   // Multiplayer runs BEFORE the paused gate, and the gate below lets it through,
   // because a shared world cannot be stopped by one player opening a menu: the
   // rival keeps driving whatever this screen is doing. Inert solo.
-  netPlay.tick(now); if (gfx.warming && gfx.warming()) { Input.clearEdges(); return; }
+  netPlay.tick(now, _poseAt); if (gfx.warming && gfx.warming()) { Input.clearEdges(); return; }
   if (paused && !netPlay.active()) {
     // Nothing downstream reads the pad's edge latches while we are parked here,
     // so drop them rather than let a pause-menu button-mash queue up and fire
@@ -8524,7 +8528,8 @@ function tickBody(now) {
     _audioParamStep = true;   // any other update() caller (the __apex step hooks) sets them
     PerfGov.recordSimulation(steps, steps === 5 ? physAcc : 0);
     if (steps === 5 && physAcc >= PHYS_DT) physAcc %= PHYS_DT;   // fell badly behind — drop the backlog, keep the sub-step remainder (a clean 5-step frame lost up to a step: Fix Your Timestep)
-  }
+    _poseAt = now - physAcc * 1000;   // the stepped pose lags this frame by the unspent remainder
+  } else _poseAt = null;
   renderAlpha = clamp(physAcc / PHYS_DT, 0, 1);   // 0..1 leftover fraction for render interp
   render(Math.min(dt, 1 / 20));               // camera/visual damping at (clamped) frame dt
   if (state === "race" || state === "count") updateHud(false, _dtMs);

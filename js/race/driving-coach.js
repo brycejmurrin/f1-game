@@ -9,7 +9,7 @@ const DrivingCoach = (function () {
     rearCoast: { label: "Rear grip while coasting", text: "REAR SLIDING — KEEP INPUTS SMOOTH", detail: "The rear tyres are near their grip limit. Avoid sudden steering or pedal changes while the car settles.", dwell: 0.5 },
     front: { label: "Front grip", text: "FRONTS SLIDING — UNWIND SOME STEERING", detail: "The front tyres are near their grip limit. Ease some steering instead of turning harder.", dwell: 0.6 },
     xmode: { label: "X-mode in corners", text: "CLOSE THE WING — X-MODE LOSES GRIP IN CORNERS", detail: "The active aero was open while the car was cornering hard. X-mode trades downforce for straight-line speed; close it before you turn in.", dwell: 0.5 },
-    coasting: { label: "Coasting", text: "COASTING — BE ON THE BRAKE OR THE THROTTLE", detail: "Neither pedal was used at speed for over a second. A racing car is either braking or accelerating; coasting gives time away.", dwell: 1.2 },
+    coasting: { label: "Coasting", text: "COASTING ON THE STRAIGHT — CHECK YOUR THROTTLE", detail: "Neither pedal was used at speed on a clear straight. If you are not deliberately saving fuel or energy, build speed until your braking point.", dwell: 1.2 },
     limits: { label: "Track limits", text: "TRACK LIMITS — KEEP THE CAR INSIDE THE WHITE LINES", detail: "A track-limits strike was recorded and the lap time deleted. In a race the third strike brings the black-and-white flag and the fourth and every one after it add five seconds; in a Time Trial or qualifying the lap is simply deleted.", dwell: 0 }
   });
   // Braking effort against the brake ceiling, the same scalar the engine's own
@@ -22,6 +22,9 @@ const DrivingCoach = (function () {
   // of this feature that can actually be practised on purpose.
   const TRAINS = Object.freeze({ trail: "trail", rearBrake: "trail", front: "corner", power: "corner",
     rearCoast: "slalom", limits: "sector", coasting: "braking" });
+  const APPROACH = Object.freeze({ trail: "RELEASE THE BRAKE AS YOU TURN", rearBrake: "RELEASE THE BRAKE SMOOTHLY",
+    power: "BUILD THROTTLE SMOOTHLY ON EXIT", front: "AVOID ADDING STEERING IF THE FRONTS SLIDE",
+    rearCoast: "KEEP YOUR INPUTS SMOOTH", xmode: "CLOSE X-MODE BEFORE TURNING", limits: "STAY INSIDE THE WHITE LINES" });
   const SUGGEST_AT = 3;        // repeats of one tip before the goal is worth naming
   // METRES either side of an apex that still count as that turn — not a lap
   // FRACTION, which is a different distance on every circuit: 5% of a lap is
@@ -51,6 +54,8 @@ const DrivingCoach = (function () {
     let rewindBuf = [], rewindAcc = 0;
     let clock = 0, candidate = "", held = 0, latest = null, warnSeen = null, edge = null;
     const lastTip = new Map(), tipCounts = new Map();
+    let reminderAt = 0, reminders = 0, pendingReport = null;
+    const reminded = new Map();
     let log = [];   // one row per tip: which tip, which turn, when — the session's map
     // --- where the lap went, against your own best lap ---------------------
     // The coach's tips answer "is the car at its limit"; they cannot answer
@@ -87,8 +92,8 @@ const DrivingCoach = (function () {
       // ONE corner, after the lap, never a live bar: a delta the driver chases
       // mid-corner competes with looking ahead, which is the skill every coach
       // teaches first.
-      if (enabled && worst.lost >= MIN_LOSS_S && coachState() !== "off" && !G.paused)
-        G.announce("TURN " + worst.turn + " COST " + worst.lost.toFixed(2) + "S", 3, "coach");
+      if (enabled && worst.lost >= MIN_LOSS_S)
+        pendingReport = { text: "TURN " + worst.turn + " COST " + worst.lost.toFixed(2) + "S", expires: clock + 12 };
     }
     function trackLap(c) {
       const bs = cornerBounds();
@@ -145,7 +150,7 @@ const DrivingCoach = (function () {
       if (G.player.finished || G.player.retired) return "complete";
       if (G.paused) return "paused";
       if (G.player.pitState && G.player.pitState !== "none") return "pit";
-      if (G.announceBusy || G.cautionLevel() > 0 || G.player.contactT > 0) return "waiting";
+      if ((G.raceRadio && G.raceRadio.trafficBusy && G.raceRadio.trafficBusy()) || G.announceBusy || G.cautionLevel() > 0 || G.player.contactT > 0) return "waiting";
       return "watching";
     }
     function feedback() {
@@ -156,7 +161,7 @@ const DrivingCoach = (function () {
       const spots = new Map();
       for (const row of log) if (row.turn != null) spots.set(row.turn, (spots.get(row.turn) || 0) + 1);
       const repeated = counts.find(r => r.count >= SUGGEST_AT && TRAINS[r.id]);
-      return { enabled: !!enabled, state: coachState(), latest: latest && { ...latest }, counts,
+      return { enabled: !!enabled, state: coachState(), reminders, latest: latest && { ...latest }, counts,
         total: counts.reduce((n, row) => n + row.count, 0),
         turns: Array.from(spots, ([turn, count]) => ({ turn, count })).sort((a, b) => b.count - a.count || a.turn - b.turn),
         suggest: repeated ? { id: repeated.id, label: repeated.label, count: repeated.count, mode: TRAINS[repeated.id],
@@ -201,12 +206,43 @@ const DrivingCoach = (function () {
       // Open flaps cost downforce exactly where the car is leaning on it (game.js
       // aeroGrip); auto aero closes them itself, so this only reaches a manual driver.
       if ((c.aeroX || 0) > 0.5 && Math.abs(c.lateralAccel || 0) > 6 && c.speed > G.vTop() * 0.4) return "xmode";
-      if (brake <= 0.02 && throttle <= 0.02 && c.speed > G.vTop() * 0.4) return "coasting";
+      if (brake <= 0.02 && throttle <= 0.02 && c.speed > G.vTop() * 0.4 && !loaded(c)
+          && Math.abs(c.steerAngle || 0) < 0.025 && !following(c)) return "coasting";
       return "";
+    }
+    const loaded = c => (c.brakeDemand || 0) > 0.15 || Math.abs(c.lateralAccel || 0) > (G.LAT_MAX || 30) * 0.15;
+    function following(c) {
+      const total = G.track && G.track.total;
+      if (!(total > 0) || !Number.isFinite(c.s)) return false;
+      return (G.cars || []).some(other => {
+        if (other === c || other.retired || (other.pitState && other.pitState !== "none")) return false;
+        const ahead = ((other.s - c.s) % total + total) % total;
+        return ahead < Math.max(10, c.speed) && Math.abs((other.x || 0) - (c.x || 0)) < 3;
+      });
+    }
+    // Two observations at the same turn on earlier laps earn one anticipatory
+    // reminder per later lap. Reminders are not mistakes and never inflate counts.
+    function remind(c) {
+      if (clock < reminderAt || !Number.isFinite(c.lap) || !Number.isFinite(c.s) || c.speed < G.vTop() * 0.2 || loaded(c)) return false;
+      reminderAt = clock + 0.5;
+      const bs = cornerBounds(); if (!bs) return false;
+      const total = G.track.total;
+      const next = bs.map(b => ({ ...b, d: ((b.s - c.s) % total + total) % total })).sort((a, b) => a.d - b.d)[0];
+      const approachS = next.d / c.speed;
+      if (approachS < 2 || approachS > 4 || reminded.get(next.turn) === c.lap || following(c)) return false;
+      const counts = new Map();
+      for (const r of log) if (r.turn === next.turn && r.lap < c.lap && APPROACH[r.id]) counts.set(r.id, (counts.get(r.id) || 0) + 1);
+      const focus = Array.from(counts).sort((a, b) => b[1] - a[1])[0];
+      if (!focus || focus[1] < 2) return false;
+      const id = focus[0], text = "TURN " + next.turn + " — " + APPROACH[id];
+      if (!G.announce(text, Math.max(3, text.split(/\s+/).length * 0.38), "coach")) return false;
+      latest = { id, text, detail: "A reminder based on repeated tips here on earlier laps. " + TIPS[id].detail,
+        time: G.raceT, turn: next.turn, reminder: true };
+      reminded.set(next.turn, c.lap); reminders++; quiet = 8; return true;
     }
     function advice(c) { const id = tipFor(c); return id ? TIPS[id].text : ""; }
     function update(dt) {
-      if (!Number.isFinite(dt) || dt <= 0) return;
+      if (!Number.isFinite(dt) || dt <= 0 || G.paused) return;
       // A suspended frame is not sustained driving evidence.
       const step = Math.min(dt, 0.1);
       clock += step; elapsed += step; quiet = Math.max(0, quiet - step);
@@ -253,7 +289,12 @@ const DrivingCoach = (function () {
         if (edge.t <= 0 || edge.life <= 0) edge = null;
       }
       if (coachState() !== "watching" || quiet) { clearCandidate(); return; }
+      if (pendingReport) {
+        if (clock > pendingReport.expires) pendingReport = null;
+        else if (!loaded(G.player) && G.announce(pendingReport.text, 3, "coach")) { pendingReport = null; quiet = 8; clearCandidate(); return; }
+      }
       const id = edge ? edge.id : tipFor(G.player);
+      if (!id && G.player && remind(G.player)) { clearCandidate(); return; }
       if (!id || clock - (lastTip.get(id) ?? -Infinity) < 30) { clearCandidate(); edge = null; return; }
       if (candidate !== id) { candidate = id; held = 0; }
       held += step;
@@ -266,10 +307,10 @@ const DrivingCoach = (function () {
       // Nothing is cleared on the way out: the candidate stays held so the tip
       // lands on the very next tick the banner is free, rather than starting
       // its dwell over. (An edge tip still ages out on its own staleness rule.)
-      if (!G.announce(tip.text, 2.5, "coach")) return;
+      if (!G.announce(tip.text, Math.max(2.5, tip.text.split(/\s+/).length * 0.38), "coach")) return;
       latest = { id, text: tip.text, detail: tip.detail, time: G.raceT, turn };
       tipCounts.set(id, (tipCounts.get(id) || 0) + 1); lastTip.set(id, clock);
-      log.push({ id, turn, time: G.raceT }); if (log.length > 200) log.shift();
+      log.push({ id, turn, time: G.raceT, lap: G.player.lap }); if (log.length > 200) log.shift();
       quiet = 8; clearCandidate(); edge = null;
     }
     const goal = () => RaceInsights.DRILLS[drillMode].toUpperCase();
@@ -459,7 +500,7 @@ const DrivingCoach = (function () {
     }
     function reset() {
       checkpoint = null; practice = false; trace = []; elapsed = 0; quiet = 0; warnSeen = null; edge = null;
-      rewindBuf = []; rewindAcc = 0;
+      rewindBuf = []; rewindAcc = 0; reminded.clear(); reminderAt = 0; reminders = 0; pendingReport = null;
       clock = 0; latest = null; log = []; clearCandidate(); lastTip.clear(); tipCounts.clear(); insights.reset();
       prevS = null; lastMark = null; segs = []; lapReport = null;
     }
@@ -472,7 +513,7 @@ const DrivingCoach = (function () {
       a.href = url; a.download = "apex26-driving-trace.json"; a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
-    function toggle() { enabled = !enabled; clearCandidate(); G.store.set("drivingCoach", enabled); paint(); return enabled; }
+    function toggle() { enabled = !enabled; pendingReport = null; clearCandidate(); G.store.set("drivingCoach", enabled); paint(); return enabled; }
     const $ = G.$;
     function paint() {
       SettingRow.paint($("pm-coach"), enabled ? "on" : "off");
@@ -481,7 +522,7 @@ const DrivingCoach = (function () {
         paused: "Coach paused with the game.", waiting: "Waiting for flags, traffic incidents and race messages to clear.",
         pit: "Tips resume after you leave the pits.", complete: "Session complete. Your latest tip is below.", watching: "Watching your driving. Tips appear only when needed." }[coaching.state];
       if (coachTip) coachTip.textContent = coaching.latest
-        ? (coaching.latest.turn ? "Turn " + coaching.latest.turn + ": " : "") + coaching.latest.text + ". " + coaching.latest.detail
+        ? (coaching.latest.turn && !coaching.latest.reminder ? "Turn " + coaching.latest.turn + ": " : "") + coaching.latest.text + ". " + coaching.latest.detail
         : "Your next tip will appear here after you drive.";
       const lapLine = $("pm-lap-report");
       if (lapLine) lapLine.textContent = !lapReport

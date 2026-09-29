@@ -326,7 +326,11 @@ setting); `weather` is `"dry" | "wet" | "rain" | "overcast" | "fog"` (`"wet"` =
 damp road no rain; `"rain"` = wet road + falling rain). `opts.laps` (integer > 0)
 sets the race distance for this session instead of the game default — the
 AI draws its tyre compound from the distance at grid-up, so a strategy
-bench needs it. The recommended entry point for any harness.
+bench needs it. `opts.grid` (`"tier" | "quali" | "rev10" | "revchamp" |
+"random"`) pins the one-off's grid rule; it is in-memory state, and a guest in a
+friend room takes the HOST's, so on a shared page a later solo start inherited
+`"quali"`, opened qualifying and rejected with "did not reach the grid".
+The recommended entry point for any harness.
 
 ### `tt(trackRef, timeOfDay?) → {track, timeTrial} | false`
 Load a circuit and start a **Time Trial** session (solo, no AI, `timeTrial: true`).

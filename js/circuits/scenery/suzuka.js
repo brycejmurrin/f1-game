@@ -11,7 +11,7 @@
               bleacher, cypress, broadleafFall,
               building, tower, billboard,
               marshalPost, fence, guardrail, tyreWall, hedge, anchor, vadd,
-              addBox, addCyl, addCone, addFrustum, addPrism, addPyramid, groundYAt, onTrack, forestEdge, backdrop,
+              addBox, addCyl, addCone, addFrustum, addPrism, addPyramid, groundYAt, terrainYAt, onTrack, forestEdge, backdrop,
               MAT, modelGroup, overheadSpan, circuitKit, cameraTower, broadcastCompound } = api;
 
       // ── Suzuka palette ──────────────────────────────────────────────────────
@@ -65,6 +65,11 @@
       }
 
       const wheelK = Math.round(n * 0.02) % n;
+      // Terrain pad under the Circuit Wheel first so legs seat into a slab
+      // (closed-form groundYAt left a 2.2 m unsupported gap on the Motopia drop).
+      // Silhouette unchanged — 38 m radius
+      // (https://ikidane-nippon.com/en/spots/suzuka-circuit-motopia — Circuit Wheel).
+      place(wheelK, -1, 62, [14, 1.2, 14], [0.42, 0.44, 0.48]);
       ferrisWheel(wheelK, -1, 62, 38);     // 38 m radius — tall main-straight silhouette
 
       // Single flanking accent tower (aft of wheel) — keeps Motopia colour without crowding
@@ -103,9 +108,13 @@
       // ── Amusement-park complex behind the wheel (sparse Motopia) ─────────────
       const parkA = Math.round(n * 0.995) % n;   // just before S/F, behind the wheel
 
-      // Motopia Hotel block — 5-storey, clear of the wheel footprint
+      // Suzuka Circuit Hotel — official complex has multiple buildings with
+      // motorsports-themed rooms (suzukacircuit.jp/eng/info_s/; Centrip Japan
+      // notes three hotel buildings). Keep Motopia sparse: two blocks only,
+      // clear of the Ferris footprint — do not restore coaster clutter.
       building(Math.round(n * 0.005) % n, -1, 95, 30, 36, 22, { kind: "tiered", wall: [0.74, 0.74, 0.78], window: litWin, floor: 5, setback: true, roof: true });
-      // Secondary pavilion
+      building(Math.round(n * 0.018) % n, -1, 118, 22, 20, 28, { kind: "twin", wall: [0.72, 0.73, 0.77], window: litWin, floor: 4, roof: true });
+      // Secondary pavilion / park restaurant block
       building(Math.round(n * 0.985) % n, -1, 110, 24, 26, 16, { kind: "twin", wall: [0.76, 0.76, 0.80], window: litWin, floor: 4 });
 
       // Domed pavilion / central gathering structure (deep behind wheel)
@@ -117,7 +126,10 @@
         addCyl(out, vadd(p.c, p.u, 10), 11.8, 0.8, neonRed, 14, b);
       }
 
-      // Sparse pavilion canopies (was 8 — cut to 4 so the Ferris owns the skyline)
+      // Sparse pavilion canopies (was 8 — cut to 4 so the Ferris owns the skyline).
+      // Roofs MUST sit on the place() box top: place() seats on terrainY, but
+      // anchor() on the steep Motopia drop (left of frac ≈0.995) disagreed by
+      // ~10 m, so cone/valance hung in the air while the box sat on the slope.
       for (let i = 0; i < 4; i++) {
         const kk = (parkA + i * 5 + 2) % n;
         const dist = 78 + i * 14;
@@ -126,11 +138,12 @@
         // footprint: the complex supersedes the place() box but not the raw
         // cone/ring roof, which then floated 8.2 m up (float-audit).
         if (i === 0) continue;
-        place(kk, -1, dist, sz, parkCol[i % parkCol.length]);
-        const p = anchor(kk, -1, dist), b = [p.r, p.u, p.t];
-        const roofY = sz[1] + 2;
-        addCone(out, vadd(p.c, p.u, roofY), 7.5, 5, parkCol[(i + 2) % parkCol.length], 8, b);
-        addCyl(out, vadd(p.c, p.u, roofY - 0.5), sz[0] / 2 + 0.4, 0.6,
+        const placed = place(kk, -1, dist, sz, parkCol[i % parkCol.length]);
+        if (!placed) continue;
+        const { top, basis: b } = placed;
+        // Cone base and valance on the box top (≤0.3 m overlap into the roof).
+        addCone(out, vadd(top, b[1], 0.15), 7.5, 5, parkCol[(i + 2) % parkCol.length], 8, b);
+        addCyl(out, vadd(top, b[1], -0.1), sz[0] / 2 + 0.4, 0.6,
                [parkCol[(i + 1) % parkCol.length][0], parkCol[(i + 1) % parkCol.length][1], parkCol[(i + 1) % parkCol.length][2]], 8, b);
       }
 
@@ -493,61 +506,93 @@
         billboard(Math.round(n * s) % n, sd, gap, 7, 3.5, parkCol[Math.round(s * 10) % parkCol.length]);
       }
 
-      // ── Figure-8 crossover — wave-3 bold green bridge span ──────────────────
-      // THE DECK GOES ON THE ROAD THAT PASSES UNDER, because a flyover's deck
-      // is the thing you drive BENEATH. Measured self-crossing: racing 0.437
-      // (Degner to the hairpin, the lower road) and racing 0.845 (the back
-      // straight, which `bridges` now lifts to y 9.1).
-      //
-      // Research: bold green span lifting the line over the main straight —
-      // the dark soffit stays under; the upper ribbon and abutments read green.
-      //
-      // Clearance 5.5 + thickness 1.7 puts the deck top at 7.2 m — beneath the
-      // 9.1 m upper ribbon, above the lower road, so it reads as the dark
-      // structural soffit under the bridge.
+      // ── Figure-8 crossover — dark soffit under + green parapets on the upper ─
+      // THE DECK GOES ON THE ROAD THAT PASSES UNDER: racing 0.437 (Degner→
+      // hairpin, lower) and racing 0.845 (back straight, bridges-lifted upper).
+      // Real overpass: the upper road IS the deck (Wikipedia / F1 circuit guide).
+      // SRTM bake puts the upper ribbon near y ≈ 20; a prior green overheadSpan
+      // at clearance 8.6 hung ~8 m above that tarmac with supports:false.
       const XOVER_GREEN = [0.12, 0.48, 0.28];
       const XOVER_DK    = [0.055, 0.075, 0.105];
+      // Dark structural soffit under the bridge (lower-road clearance ≥ 4.8 m).
       overheadSpan({ id: "suzuka-crossover-deck", frac: 0.437, clearance: 5.5,
         minimumClearance: 4.8, thickness: 1.7, depth: 20, span: hw[Math.round(0.437 * n) % n] * 2 + 8,
         supportGap: 2.8, supportWidth: 1.8, color: XOVER_DK,
         required: true });
-      // Bold green upper ribbon on the lifted back-straight (s≈0.845).
-      // supports:false — the def's bridges:[] already lifts the ribbon; piers
-      // would reject against the elevated road footprint (same pattern as
-      // monza-sopraelevata-flyover).
-      overheadSpan({ id: "suzuka-crossover-green-span", frac: 0.845, clearance: 8.6,
-        minimumClearance: 7.5, thickness: 1.4, depth: 18,
-        span: hw[Math.round(0.845 * n) % n] * 2 + 10,
-        supports: false, color: XOVER_GREEN,
-        required: true });
-      // Green cheek walls flanking the lifted ribbon — identity without piers.
-      for (const side of [-1, 1]) {
-        const ca = anchor(K(0.845), side, 6.5), cb = [ca.r, ca.u, ca.t];
-        if (onTrack(ca.c[0], ca.c[2], 5)) continue;
-        const cc = vadd(ca.c, ca.u, 4.5);
-        modelGroup(`suzuka-crossover-green-cheek-${side < 0 ? "left" : "right"}`, {
-          center: cc, size: [2.2, 10, 22], basis: cb,
-        }, (stage) => {
-          addBox(stage, cc, [1.6, 9.0, 20], XOVER_GREEN, cb);
-          addBox(stage, vadd(ca.c, ca.u, 9.2), [2.0, 0.5, 21], [0.18, 0.55, 0.32], cb);
-        }, { required: true });
+      // Green identity ON the lifted ribbon: thin edge beams via overheadSpan
+      // with lateral `offset` (not a full-width lid). Clearance ≈0.2 sits the
+      // beam on the ribbon; supports:false because the road IS the deck.
+      // A prior full-span at clearance 8.6 hung ~8 m above the SRTM-lifted
+      // tarmac. modelGroup across both edges was footprint-rejected.
+      {
+        const kUp = Math.round(0.845 * n) % n;
+        const edgeOff = hw[kUp] + 1.2;
+        // Clearance 0.05 keeps the beam underside within GAP (0.15) of the
+        // ribbon so ground-audit does not call it unsupported; 0.2 floated it.
+        overheadSpan({
+          id: "suzuka-crossover-green-span",
+          frac: 0.845,
+          clearance: 0.05,
+          minimumClearance: 0.0,
+          thickness: 1.15,
+          depth: 18,
+          span: 0.7,
+          offset: -edgeOff,
+          supports: false,
+          color: XOVER_GREEN,
+          required: true,
+        });
+        overheadSpan({
+          id: "suzuka-crossover-green-span-right",
+          frac: 0.845,
+          clearance: 0.05,
+          minimumClearance: 0.0,
+          thickness: 1.15,
+          depth: 18,
+          span: 0.7,
+          offset: edgeOff,
+          supports: false,
+          color: XOVER_GREEN,
+        });
+        // Outer cheek pier on the LEFT only — a mirrored pair shared one
+        // horizontal crown plane across the bridge (18 m² flatCoplanar). One
+        // terrain-seated pier plus the two edge beams still reads as the
+        // green overpass identity.
+        {
+          const pier = anchor(K(0.845), -1, 6.2);
+          if (!onTrack(pier.c[0], pier.c[2], 4)) {
+            const pb = [pier.r, pier.u, pier.t];
+            const gy = terrainYAt(pier.c[0], pier.c[2]);
+            const footY = gy != null ? gy : pier.c[1] - 11;
+            const topY = pier.c[1] + 0.35;
+            const pierH = Math.max(5.5, topY - footY + 0.4);
+            const midLift = (footY - 0.2 + pierH / 2) - pier.c[1];
+            const pc = vadd(pier.c, pier.u, midLift);
+            modelGroup("suzuka-crossover-green-cheek-left", {
+              center: pc, size: [2.2, pierH + 1, 5.2], basis: pb,
+            }, (stage) => {
+              addBox(stage, pc, [1.7, pierH, 4.2], XOVER_GREEN, pb);
+              addBox(stage, vadd(pier.c, pier.u, 0.55), [2.1, 0.45, 4.6], [0.18, 0.55, 0.32], pb);
+            }, { required: true });
+          }
+        }
       }
       {
-        // The deck above remains the clearance-bearing span.  This deep,
-        // one-sided reveal enlarges the lower-road mouth without moving or
-        // lowering any part of the bridge.
-        const pa = anchor(K(0.437), -1, 5.2), pb = [pa.r, pa.u, pa.t];
-        const pc = vadd(pa.c, pa.u, 2.65);
+        // Lower-road mouth reveal. Kept clear of the deck soffit (underside at
+        // clearance 5.5) and shifted outward so portal faces do not share a
+        // plane with the deck / its piers (was a 3.8 m² flatCoplanar hit).
+        const pa = anchor(K(0.437), -1, 6.8), pb = [pa.r, pa.u, pa.t];
+        const pc = vadd(pa.c, pa.u, 2.2);
         modelGroup("suzuka-crossover-portal", {
-          center: pc, size: [2.2, 5.3, 25], basis: pb,
+          center: pc, size: [2.0, 4.6, 22], basis: pb,
         }, (stage) => {
           stage._mat = MAT.CONCRETE;
-          addBox(stage, vadd(pa.c, pa.u, 2.62), [1.7, 5.24, 24], XOVER_DK, pb);
+          addBox(stage, vadd(pa.c, pa.u, 2.15), [1.5, 4.30, 20], XOVER_DK, pb);
           stage._mat = MAT.METAL;
-          addBox(stage, vadd(vadd(pa.c, pa.r, 0.88), pa.u, 2.61),
-                 [0.18, 5.32, 24.4], [0.12, 0.16, 0.22], pb);
-          addBox(stage, vadd(pa.c, pa.u, 5.12),   // tops under it: body 5.24, plate 5.27, cap 5.30
-                 [2.0, 0.36, 24.4], [0.08, 0.11, 0.15], pb);
+          addBox(stage, vadd(vadd(pa.c, pa.r, 0.82), pa.u, 2.15),
+                 [0.16, 4.38, 20.4], [0.12, 0.16, 0.22], pb);
+          addBox(stage, vadd(pa.c, pa.u, 4.40),
+                 [1.8, 0.28, 20.4], [0.08, 0.11, 0.15], pb);
         }, { required: true });
       }
       for (const side of [-1, 1]) {
@@ -557,8 +602,9 @@
           center: cc, size: [7.6, 6.2, 12.8], basis: cb,
         }, (stage) => {
           addBox(stage, cc, [6.5, 5.2, 12], concrete, cb);
-          // Green identity cap on abutments (was neonRed).
-          addBox(stage, vadd(ca.c, ca.u, 5.35), [7.0, 0.45, 12.5], XOVER_GREEN, cb);
+          // Green identity cap — stagger left/right so abutment crowns are not
+          // one flatCoplanar plane across the underpass mouth.
+          addBox(stage, vadd(ca.c, ca.u, side < 0 ? 5.20 : 5.50), [7.0, 0.45, 12.5], XOVER_GREEN, cb);
           addBox(stage, vadd(vadd(ca.c, ca.r, side * 3.55), ca.u, 3.0),
                  [0.35, 3.0, 10.5], steel, cb);
         }, { required: true });
@@ -621,6 +667,27 @@
       stand(0.45,  1, 9, 38,  { livery: "navy", tiers: 2, endWalls: true }); // Hairpin
       stand(0.94,  1, 9, 35,  { livery: "steel", roof: "truss", endWalls: true });  // Casio Triangle right
       stand(0.94, -1, 9, 35,  { livery: "navy", roof: "truss", endWalls: true });   // Casio Triangle left
+      // Giant screens at Casio + main straight — Japan.gp grandstand map notes
+      // large TV screens at the B/C and Q1/Q2 Casio stands
+      // (https://www.japan.gp/en/map-of-the-grandstands-27). Exact screen size
+      // UNCERTAIN; these are modest representative frames, not a measured LED wall.
+      {
+        const screen = (frac, side, gap, w, h) => {
+          const a = anchor(K(frac), side, gap), b = [a.r, a.u, a.t];
+          if (onTrack(a.c[0], a.c[2], Math.max(w, h) / 2)) return;
+          out._mat = MAT.METAL;
+          addBox(out, vadd(a.c, a.u, h / 2 + 3.2), [0.85, h, w], steel, b);
+          out._mat = MAT.GLASS;
+          addBox(out, vadd(vadd(a.c, a.u, h / 2 + 3.2), a.r, side * -0.5),
+                 [0.35, h * 0.86, w * 0.9], [0.12, 0.55, 0.72], b);
+          out._mat = MAT.METAL;
+          for (const dz of [-w * 0.38, w * 0.38])
+            addBox(out, vadd(vadd(a.c, a.u, 2.2), a.t, dz), [0.5, 4.4, 0.5], steel, b);
+          out._mat = 0;
+        };
+        screen(0.94, 1, 22, 11, 6.5);
+        screen(0.02, 1, 36, 12, 7.0);
+      }
       stand(0.50,  1, 8, 24,  { livery: "orange" });                    // Mid-circuit flex stand
       stand(0.875, 1, 18, 24, { livery: "orange", endWalls: true }); // 130R exit crowd
 
