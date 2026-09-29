@@ -1,12 +1,15 @@
 # Desktop packaging (Electron)
 #
 # Two lanes:
-#   1. pack-smoke — every PR that touches desktop/ or tools/desktop/: 
+#   1. pack-smoke — every PR that touches desktop/ or tools/desktop/:
 #      electron-builder --dir + Playwright _electron on ubuntu/windows/macos
 #      (unsigned; xvfb + soft GL on Linux). Does NOT compete with pages.yml.
 #   2. release — workflow_dispatch + tags desktop-v*: full installers, optional
 #      signed-verify when secrets exist (skip cleanly otherwise), auto-update
 #      plan echo. Never on push to the ship branch.
+#
+# Electron pin: 44.4.5 (Chromium 152). Soft-GL + simpleFullScreen notes in
+# docs/notes/DESKTOP-TEST-PLAN.md.
 #
 # Refs: docs/notes/DESKTOP-TEST-PLAN.md
 #       https://playwright.dev/docs/api/class-electron
