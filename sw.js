@@ -58,6 +58,32 @@ function currentCacheName() {
   return _cacheNamePromise;
 }
 
+// WORKER → PAGE LOG CHANNEL. `Log` (js/core/log.js) does not exist in the
+// worker, so the rare failures worth a trace are posted to every same-origin
+// window as { type: "apex-sw-log", level, msg } and index.html's SW listener
+// forwards them to Log under "sw". Lifecycle only (install, activate, the
+// stale sweep) plus ONE cache-write failure per worker — never a message per
+// fetch, and a rejected network fetch (offline) is expected, so never logged.
+// Fire-and-forget: it can never reject or delay the event it reports on.
+function swLog(level, msg) {
+  try {
+    const cl = self.clients;
+    if (!cl || typeof cl.matchAll !== "function") return;
+    Promise.resolve(cl.matchAll({ includeUncontrolled: true, type: "window" })).then((list) => {
+      for (const c of list || []) {
+        try { c.postMessage({ type: "apex-sw-log", level, msg: String(msg) }); } catch (_) { /* closed client */ }
+      }
+    }, () => {});
+  } catch (_) { /* logging must never break the worker */ }
+}
+const errMsg = (e) => (e && e.message) || String(e);
+// Runtime cache writes fail in bulk when they fail at all (quota, a
+// deploy-window version.json miss), so only the FIRST one per worker is posted.
+let _cacheWriteFails = 0;
+function noteCacheWriteFail(e) {
+  if (++_cacheWriteFails === 1) swLog("warn", "cache write failed: " + errMsg(e) + " (later failures in this worker are not reported)");
+}
+
 // The build number an apex26-<n> cache belongs to, or NaN for any other name.
 function cacheBuild(name) {
   if (typeof name !== "string" || !name.startsWith(CACHE_PREFIX)) return NaN;
@@ -163,7 +189,7 @@ async function sweepStaleCaches() {
 function maybeSweep(event) {
   if (_sweepDone || _sweepBusy || !_cacheNameKnown) return;
   _sweepBusy = true;
-  event.waitUntil(sweepStaleCaches().catch(() => {}).finally(() => { _sweepBusy = false; }));
+  event.waitUntil(sweepStaleCaches().catch((e) => { swLog("warn", "stale-cache sweep failed: " + errMsg(e)); }).finally(() => { _sweepBusy = false; }));
 }
 
 // Parse the shell's own tags so the precache lists cannot drift from what
@@ -386,9 +412,11 @@ async function cacheOptionalAsset(cache, url) {
       }, OPTIONAL_ASSET_MS);
     });
     const res = await Promise.race([fetch(url, ctrl ? { signal: ctrl.signal } : undefined), expired]);
-    if (res && res.ok) await cache.put(url, res);
+    if (res && res.ok) { await cache.put(url, res); return true; }
+    return false;   // 4xx/5xx or timed out: counted by install, one aggregated log line
   } catch (_) { /* optional assets must not invalidate an otherwise healthy install */ }
   finally { if (timeout !== null) clearTimeout(timeout); }
+  return false;
 }
 
 // Install fan-out, bounded. `Promise.all` over the whole list opened ~190
@@ -445,11 +473,20 @@ self.addEventListener("install", (event) => {
     // in flight. Going offline inside that window would lose assets the
     // previous cache still held a moment earlier. The first-visit boot win
     // comes from deferring REGISTRATION (index.html), which costs nothing here.
-    await pooled(stamped, 4, (u) => cacheOptionalAsset(cache, u));
+    let optionalMissed = 0, firstMissed = "";
+    await pooled(stamped, 4, async (u) => {
+      if (!(await cacheOptionalAsset(cache, u)) && !optionalMissed++) firstMissed = u;
+    });
+    if (optionalMissed) swLog("warn", "precache: " + optionalMissed + " of " + stamped.length + " optional assets not cached (first: " + firstMissed + ")");
     await cache.put(INSTALL_SETTLED_URL, new Response("settled"));
     invalidateCacheOrder();
     await self.skipWaiting();
-  })());
+  })().catch((e) => {
+    // An essential miss or an unreadable build aborts the install (the old
+    // worker and its cache stay in charge). Say so, then keep the rejection.
+    swLog("warn", "install failed: " + errMsg(e));
+    throw e;
+  }));
 });
 
 self.addEventListener("activate", (event) => {
@@ -464,7 +501,8 @@ self.addEventListener("activate", (event) => {
     await Promise.all(keys.filter((k) => k.startsWith(CACHE_PREFIX) && k !== name).map((k) => caches.delete(k)));
     invalidateCacheOrder();
     await self.clients.claim();
-  })());
+    swLog("info", "activated " + name);
+  })().catch((e) => { swLog("warn", "activate failed: " + errMsg(e)); throw e; }));
 });
 
 self.addEventListener("fetch", (event) => {
@@ -528,7 +566,7 @@ self.addEventListener("fetch", (event) => {
             const cache = await openCache(name);
             await cache.put(req, res.clone());
           }
-        } catch (_) { /* a failed cache write must not fail a good response */ }
+        } catch (e) { noteCacheWriteFail(e); /* a failed cache write must not fail a good response */ }
       }
       return res;
     });
@@ -584,7 +622,7 @@ self.addEventListener("fetch", (event) => {
           try {
             const cache = await openCache(await currentCacheName());
             await cache.put(req, res.clone());
-          } catch (_) { /* a failed cache write must not fail a good response */ }
+          } catch (e) { noteCacheWriteFail(e); /* a failed cache write must not fail a good response */ }
           return res;
         }
       } catch (_) { /* offline: fall through to the cache */ }
@@ -600,7 +638,7 @@ self.addEventListener("fetch", (event) => {
         try {
           const cache = await openCache(await currentCacheName());
           await cache.put(req, res.clone());
-        } catch (_) { /* a failed cache write must not fail a good response */ }
+        } catch (e) { noteCacheWriteFail(e); /* a failed cache write must not fail a good response */ }
       }
       return res;
     } catch (_) { /* network rejected */ }

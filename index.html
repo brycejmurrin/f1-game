@@ -147,7 +147,31 @@
       // load plus an idle slice (a timer where requestIdleCallback is absent,
       // which is Safari). Offline capability is identical one beat later.
       var reg = function () {
-        navigator.serviceWorker.register("sw.js" + (loaded ? "?v=" + loaded : "")).catch(function () {});
+        // LIFECYCLE LOG. reg() runs after window load, so every deferred
+        // script — js/core/log.js first — has run; the typeof guard only
+        // covers a shell whose log.js failed to load. The worker has no Log,
+        // so sw.js posts { type: "apex-sw-log", level, msg } for its rare
+        // install/activate/cache failures and this listener forwards them.
+        var swl = function (level, msg) {
+          try { if (typeof Log !== "undefined" && Log[level]) Log[level]("sw", msg); } catch (e) { /* never break boot */ }
+        };
+        var sw = navigator.serviceWorker;
+        sw.addEventListener("message", function (ev) {
+          var d = ev && ev.data;
+          if (!d || d.type !== "apex-sw-log") return;
+          swl(d.level === "warn" || d.level === "error" ? d.level : "info", "worker: " + d.msg);
+        });
+        sw.addEventListener("controllerchange", function () { swl("info", "controllerchange: a new worker controls this page"); });
+        sw.register("sw.js" + (loaded ? "?v=" + loaded : "")).then(function (r) {
+          swl("info", "registered, scope " + r.scope);
+          r.addEventListener("updatefound", function () {
+            var nw = r.installing;
+            swl("info", "updatefound: a new worker is installing");
+            if (nw) nw.addEventListener("statechange", function () {
+              if (nw.state === "installed" || nw.state === "activated" || nw.state === "redundant") swl(nw.state === "redundant" ? "warn" : "info", "new worker " + nw.state);
+            });
+          });
+        }, function (e) { swl("warn", "register failed: " + ((e && e.message) || e)); });
         // DURABLE STORAGE. Without it the origin's localStorage / IndexedDB
         // sit in the "best effort" bucket the browser evicts under pressure —
         // a season of career saves gone because the phone ran low on space.

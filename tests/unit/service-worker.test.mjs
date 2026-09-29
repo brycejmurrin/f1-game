@@ -21,7 +21,7 @@ function requestKey(value) {
   return value.url;
 }
 
-function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediateTimeoutMs = null, navigator, hostname = "apex.test", registration } = {}) {
+function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediateTimeoutMs = null, navigator, hostname = "apex.test", registration, posted } = {}) {
   const listeners = new Map();
   const stores = new Map();
   const deleted = [];
@@ -78,6 +78,9 @@ function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediate
       async claim() {
         claimed += 1;
       },
+      // Worker->page log channel: absent unless a test collects the posts, so
+      // every other test also proves sw.js tolerates a missing matchAll.
+      ...(posted ? { async matchAll() { return [{ postMessage: (m) => posted.push(m) }]; } } : {}),
     },
     addEventListener(type, listener) {
       listeners.set(type, listener);
@@ -827,4 +830,61 @@ test("the ?b= shell bust ignores the preload and keeps its own no-store fetch", 
   assert.equal(await (await nav.responsePromise).text(), "fresh shell");
   await Promise.all(nav.lifetimes);
   assert.deepEqual(seen, ["no-store"]);
+});
+
+// WORKER -> PAGE LOG CHANNEL. The worker has no `Log`, so it posts
+// { type: "apex-sw-log", level, msg } for lifecycle failures only; index.html's
+// SW listener forwards them to Log("sw"). The fetch path is hot: cache-write
+// failures are reported ONCE per worker, never per request.
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+test("sw log channel: optional precache misses post ONE aggregated warn", async () => {
+  const posted = [];
+  const harness = createHarness({ fetchImpl: installFetch({ failOptional: true }), posted });
+  await harness.lifecycleEvent("install").done();
+  await settle();
+  const warns = posted.filter((m) => m.type === "apex-sw-log" && m.level === "warn");
+  assert.equal(warns.length, 1, JSON.stringify(posted));
+  assert.match(warns[0].msg, /precache: 1 of \d+ optional assets not cached \(first: assets\/icon\.png\)/);
+  assert.equal(harness.skipped, 1, "a logged optional miss still completes the install");
+});
+
+test("sw log channel: an essential miss posts install failed and still rejects", async () => {
+  const posted = [];
+  const harness = createHarness({ fetchImpl: installFetch({ failEssential: true }), posted });
+  await assert.rejects(harness.lifecycleEvent("install").done(), /Unable to precache essential asset/);
+  await settle();
+  assert.ok(posted.some((m) => m.level === "warn" && /^install failed: Unable to precache essential asset/.test(m.msg)), JSON.stringify(posted));
+});
+
+test("sw log channel: a clean install posts nothing; activate posts one info", async () => {
+  const posted = [];
+  const harness = createHarness({ fetchImpl: installFetch(), posted });
+  await harness.lifecycleEvent("install").done();
+  await settle();
+  assert.deepEqual(posted, []);
+  await harness.lifecycleEvent("activate").done();
+  await settle();
+  assert.deepEqual(JSON.parse(JSON.stringify(posted)), [{ type: "apex-sw-log", level: "info", msg: "activated apex26-321" }]);
+});
+
+test("sw log channel: cache-write failures are reported once per worker, not per fetch", async () => {
+  const posted = [];
+  const harness = createHarness({
+    fetchImpl: async (request) => {
+      const url = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
+      if (url.pathname.endsWith("/version.json")) return new Response('{"build":321}', { status: 200 });
+      return new Response("fresh", { status: 200 });
+    },
+    putImpl: async () => { throw new Error("QuotaExceededError"); },
+    navigator: { onLine: true },
+    posted,
+  });
+  for (const f of ["a.ogg", "b.ogg", "c.ogg"]) {
+    const res = await harness.fetchEvent(new Request(`${ORIGIN}/assets/${f}`)).responsePromise;
+    assert.equal(await res.text(), "fresh");
+  }
+  await settle();
+  assert.equal(posted.length, 1, JSON.stringify(posted));
+  assert.match(posted[0].msg, /^cache write failed: QuotaExceededError/);
 });
