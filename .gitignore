@@ -47,3 +47,5 @@ desktop/node_modules/
 
 desktop/test-results/
 desktop/playwright-report/
+mobile/node_modules/
+mobile/www/
