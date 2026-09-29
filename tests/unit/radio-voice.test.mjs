@@ -507,7 +507,7 @@ test("a cancelled line's late end does not disarm the replacement's hard stop", 
     "arrives keeps the radio open and the music ducked for the rest of the race");
 });
 
-test("an engine that ends an utterance inside speak() still leaves it live", () => {
+test("an engine that ends an utterance inside speak() releases ownership without a stale deadline", () => {
   // Claiming `current` BEFORE speak() rather than after. Some engines report a
   // refused utterance immediately, synchronously, from inside speak() — and if
   // the line has not been claimed yet, its OWN end runs as a stranger: the duck
@@ -521,7 +521,9 @@ test("an engine that ends an utterance inside speak() still leaves it live", () 
     speak(u) { calls.push({ m: "speak" }); if (u.onend) u.onend(); },   // ends where it starts
     set onvoiceschanged(fn) { this._vc = fn; },
   };
-  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout: unrefTimeout, clearTimeout });
+  const timers = new Map(); let timerId = 0;
+  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console,
+    setTimeout(fn) { const id = ++timerId; timers.set(id, fn); return id; }, clearTimeout(id) { timers.delete(id); } });
   seedLog(ctx);
   ctx.window = { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } };
   ctx.GameAudio = { setRadioDuck(on) { ducks.push(!!on); } };
@@ -531,6 +533,10 @@ test("an engine that ends an utterance inside speak() still leaves it live", () 
     store: { get: (k, d) => (k === "radioVoice" ? true : d), set: () => {} } });
 
   assert.equal(voice.say("Box", 3, "info"), true);
+  const [id, speak] = timers.entries().next().value; timers.delete(id); speak();
+  assert.equal(calls.filter(c => c.m === "speak").length, 1, "the deferred speech path actually ran");
+  assert.equal(voice.busy(), false);
+  assert.equal(timers.size, 0, "a finished utterance cannot later stop another channel or its duck");
   assert.equal(ducks[ducks.length - 1], false,
     "the utterance ended, so the duck must be released — a line whose end ran before it was claimed leaves " +
     "the music ducked with nothing speaking");
