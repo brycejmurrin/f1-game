@@ -53,7 +53,7 @@ async function mirrorRace(page) {
   });
 }
 
-async function mirrorCase(page) {
+async function mirrorCase(page, { requirePixels = false } = {}) {
   // AUTO keeps a software renderer's second world pass off; ON is ON.
   const auto = await page.evaluate(() => window.__apex.mirror());
   expect(auto, "__apex.mirror() exists once the race is up").not.toBeNull();
@@ -81,7 +81,10 @@ async function mirrorCase(page) {
   expect(Math.abs(x + w / 2 - 0.5), diag).toBeLessThan(0.02);
   expect(y, diag).toBeGreaterThan(0);
   expect(y + h, diag).toBeLessThan(0.45);
-  expect(w / h, diag).toBeGreaterThan(2);
+  // Letterbox in PIXELS: the rect is canvas fractions, and on a 16:9 canvas
+  // a 3.5:1 frame is only ~2:1 in fractions. The backend target is pixels.
+  expect(w > 0 && h > 0, diag).toBe(true);
+  expect(on.m.backend.w / on.m.backend.h, diag).toBeGreaterThan(2.5);
   // The backend composites where the frame is.
   expect(on.m.backend.rect, diag).toEqual(on.m.rect);
 
@@ -111,6 +114,9 @@ async function mirrorCase(page) {
   // rear view, and now holds the forward view's pixels behind it.
   const without = await mirrorPatch(page, on.m.rect);
   test.info().annotations.push({ type: "mirror-pixels", description: withMirror ? "read #game-soft" : "no 2-D copy on this path" });
+  // GLX always soft-presents in this headless build, so there the pixels are
+  // not optional: the counters alone once passed with the image off-canvas.
+  if (requirePixels) expect(withMirror && without, "GLX presents through #game-soft").toBeTruthy();
   if (withMirror && without) {
     let diff = 0;
     for (let i = 0; i < withMirror.length; i++) diff += Math.abs(withMirror[i] - without[i]);
@@ -124,7 +130,7 @@ test.describe("HUD rear-view mirror", () => {
   test("GLX renders the mirror pass, composites it into #hud-mirror, and the key turns it off", async ({ page }) => {
     await mirrorRace(page);
     expect(await page.evaluate(() => sessionStorage.getItem("apex26.gfxBound"))).toBe("webgl2");
-    await mirrorCase(page);
+    await mirrorCase(page, { requirePixels: true });
   });
 
   test.describe("TLX", () => {

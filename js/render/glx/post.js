@@ -1072,8 +1072,12 @@ const GLXPost = (function () {
         if (!mirProg) { mirDead = true; Log.warn("gfx", "GLX mirror program failed — mirror off"); return; }
         mirU = locs(mirProg, ["uTex", "uHdr", "uExposure", "uWhitePoint", "uAcesA", "uAcesB", "uAcesC", "uAcesD", "uAcesE"]);
       }
-      // Canvas pixels: the present size under SGSR, the render size otherwise.
-      const { width: cw, height: ch } = core.getPresentSize();
+      // The DEFAULT FRAMEBUFFER's own size — the present size under SGSR, the
+      // render size otherwise. Not getPresentSize(): that reports the present
+      // size with the upscale OFF too, and at a 0.5 render scale the mirror
+      // landed at twice its coordinates, mostly off the canvas (counted as
+      // composited all the same — hud-mirror.spec.js reads the pixels).
+      const cw = gl.drawingBufferWidth, ch = gl.drawingBufferHeight;
       const x = Math.round(mirRect[0] * cw), w = Math.round(mirRect[2] * cw);
       const h = Math.round(mirRect[3] * ch), y = ch - Math.round(mirRect[1] * ch) - h;   // GL is bottom-up
       if (w < 2 || h < 2) return;
