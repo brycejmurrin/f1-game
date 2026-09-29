@@ -18,7 +18,7 @@ const GLXPost = (function () {
     const MOBILE_TIER = core.MOBILE_TIER;
     const IS_MOBILE = core.IS_MOBILE;
     const { POST_VS, BRIGHT_FS, BLUR_FS, DOWN_FS, UP_FS, SSAO_FS, GODRAY_FS,
-            COMPOSITE_FS, FXAA_FS, SGSR_FS } = GLXShaders;
+            COMPOSITE_FS, FXAA_FS, SGSR_FS, MIRROR_FS } = GLXShaders;
     const F = core.frame;
 
     let ssaoProg = null, ssaoU = null, ssaoFBO = null, ssaoTex = null;
@@ -1011,6 +1011,111 @@ const GLXPost = (function () {
       }
     }
 
+    // ── REAR-VIEW MIRROR (js/render/shared/mirror-pass.js) ──────────────
+    // The mirror camera renders into this small colour+depth target BEFORE the
+    // main begin() (glx.js mirrorBegin/mirrorEnd — begin() binds it while
+    // mirrorActive), and mirrorComposite draws it into the HUD rect of the
+    // finished default framebuffer after the post chain, before the soft blit
+    // reads it back. HDR (RGBA16F) exactly when the scene target is, so the
+    // lit shaders write the same range they write into sceneTex.
+    let mirFBO = null, mirTex = null, mirDepthRB = null, mirW = 0, mirH = 0, mirHdr = false;
+    let mirDead = false, mirActive = false, mirProg = null, mirU = null, mirRect = null;
+    let mirRenders = 0, mirComposites = 0;
+    function mirrorFree() {
+      if (mirFBO) gl.deleteFramebuffer(mirFBO);
+      if (mirDepthRB) gl.deleteRenderbuffer(mirDepthRB);
+      if (mirTex) gl.deleteTexture(mirTex);
+      mirFBO = mirDepthRB = mirTex = null; mirW = mirH = 0; mirRenders = 0;
+    }
+    function mirrorTarget(w, h) {
+      if (mirDead) return false;
+      const hdr = postEnabled && colorType === gl.HALF_FLOAT;
+      if (mirFBO && w === mirW && h === mirH && hdr === mirHdr) return true;
+      mirrorFree();
+      mirTex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, mirTex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, hdr ? gl.RGBA16F : gl.RGBA8, w, h, 0, gl.RGBA,
+        hdr ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.bindTexture(gl.TEXTURE_2D, null);
+      mirDepthRB = gl.createRenderbuffer();
+      gl.bindRenderbuffer(gl.RENDERBUFFER, mirDepthRB);
+      gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, w, h);
+      gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+      mirFBO = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, mirFBO);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, mirTex, 0);
+      gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, mirDepthRB);
+      const st = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      if (st !== gl.FRAMEBUFFER_COMPLETE) {
+        Log.warn("gfx", "GLX mirror framebuffer incomplete (0x" + st.toString(16) + ") — mirror off");
+        mirrorFree(); mirDead = true;
+        return false;
+      }
+      mirW = w; mirH = h; mirHdr = hdr;
+      return true;
+    }
+    // The FBO binding begin() makes while a mirror pass is open (it binds the
+    // env probe's the same way). mirrorActive is lowered by mirrorEnd FIRST.
+    function bindMirrorTarget() {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, mirFBO);
+      gl.viewport(0, 0, mirW, mirH);
+    }
+    function mirrorComposite(opts) {
+      if (!mirRect || !mirTex || !mirRenders || mirDead) return;
+      if (!mirProg) {
+        mirProg = link(POST_VS, MIRROR_FS);
+        if (!mirProg) { mirDead = true; Log.warn("gfx", "GLX mirror program failed — mirror off"); return; }
+        mirU = locs(mirProg, ["uTex", "uHdr", "uExposure", "uWhitePoint", "uAcesA", "uAcesB", "uAcesC", "uAcesD", "uAcesE"]);
+      }
+      // The DEFAULT FRAMEBUFFER's own size — the present size under SGSR, the
+      // render size otherwise. Not getPresentSize(): that reports the present
+      // size with the upscale OFF too, and at a 0.5 render scale the mirror
+      // landed at twice its coordinates, mostly off the canvas (counted as
+      // composited all the same — hud-mirror.spec.js reads the pixels).
+      const cw = gl.drawingBufferWidth, ch = gl.drawingBufferHeight;
+      const x = Math.round(mirRect[0] * cw), w = Math.round(mirRect[2] * cw);
+      const h = Math.round(mirRect[3] * ch), y = ch - Math.round(mirRect[1] * ch) - h;   // GL is bottom-up
+      if (w < 2 || h < 2) return;
+      const CT = opts && opts.tune;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(x, y, w, h);
+      gl.disable(gl.DEPTH_TEST);
+      setBlend(false);
+      useProg(mirProg);
+      bindVAO(core.skyVAO);   // POST_VS is a gl_VertexID triangle; WebGL2 still wants a VAO
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, mirTex);
+      gl.uniform1i(mirU.uTex, 0);
+      gl.uniform1f(mirU.uHdr, mirHdr ? 1 : 0);
+      gl.uniform1f(mirU.uExposure, opts && opts.exposure !== undefined ? opts.exposure : 1.0);
+      gl.uniform1f(mirU.uWhitePoint, PostCommon.knob(CT, "whitePoint"));
+      gl.uniform1f(mirU.uAcesA, PostCommon.knob(CT, "acesA"));
+      gl.uniform1f(mirU.uAcesB, PostCommon.knob(CT, "acesB"));
+      gl.uniform1f(mirU.uAcesC, PostCommon.knob(CT, "acesC"));
+      gl.uniform1f(mirU.uAcesD, PostCommon.knob(CT, "acesD"));
+      gl.uniform1f(mirU.uAcesE, PostCommon.knob(CT, "acesE"));
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      bindVAO(null);
+      gl.enable(gl.DEPTH_TEST);
+      gl.viewport(0, 0, cw, ch);
+      mirComposites++;
+    }
+    const mirror = {
+      begin(w, h) { if (!mirrorTarget(w, h)) return false; mirActive = true; return true; },
+      end() { if (!mirActive) return; mirActive = false; mirRenders++; },
+      active: () => mirActive,
+      bindTarget: bindMirrorTarget,
+      rect(r) { mirRect = r && r.length === 4 ? [+r[0] || 0, +r[1] || 0, +r[2] || 0, +r[3] || 0] : null; },
+      composite: mirrorComposite,
+      state: () => ({ ready: !!mirTex && mirRenders > 0, dead: mirDead, w: mirW, h: mirH, hdr: mirHdr,
+        renders: mirRenders, composites: mirComposites, rect: mirRect }),
+    };
+
     function invalidateUniformCache() {
       for (const k in _compUf) delete _compUf[k];
     }
@@ -1041,6 +1146,7 @@ const GLXPost = (function () {
       readbackLdrPixels,
       invalidateUniformCache,
       postPath: () => _lastPath,
+      mirror,
     };
   }
 

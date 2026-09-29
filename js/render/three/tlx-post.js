@@ -269,6 +269,35 @@
       quad.render(renderer);
     }
 
+    // Rear-view mirror (tlx.js mirrorBegin/End render it; present() composites
+    // it LAST, over the FXAA / SGSR output, into the rect tlx.js hands over in
+    // present-target pixels, top-left origin). null tex = no mirror this frame.
+    let _mirTex = null, _mirHdr = true, _mirComposites = 0;
+    const _mirRect = [0, 0, 0, 0];
+    let _mirPrevVP = null;   // the canvas viewport to restore (made on first use)
+    function setMirror(tex, rect, hdr) {
+      _mirTex = tex && rect && rect[2] >= 2 && rect[3] >= 2 ? tex : null;
+      if (_mirTex) { _mirRect[0] = rect[0]; _mirRect[1] = rect[1]; _mirRect[2] = rect[2]; _mirRect[3] = rect[3]; }
+      _mirHdr = !!hdr;
+    }
+    // Viewport, not scissor: the quad covers exactly the viewport. A target's
+    // own .viewport is what three reads when one is bound; the renderer's is
+    // the canvas's (pixelRatio 1, tlx.js).
+    function mirrorPass(dest) {
+      const M = P.mirror;
+      if (!_mirTex || !M) return;
+      M.tex.value = _mirTex;
+      M.U.rect.value.set(_mirRect[0], _mirRect[1], _mirRect[2], _mirRect[3]);
+      M.U.hdr.value = _mirHdr ? 1 : 0;
+      if (dest) dest.viewport.set(_mirRect[0], _mirRect[1], _mirRect[2], _mirRect[3]);
+      else { renderer.getViewport(_mirPrevVP || (_mirPrevVP = new THREE.Vector4())); renderer.setViewport(_mirRect[0], _mirRect[1], _mirRect[2], _mirRect[3]); }
+      try { runPass(M.mat, dest); _mirComposites++; }
+      finally {
+        if (dest) dest.viewport.set(0, 0, dest.width, dest.height);
+        else renderer.setViewport(_mirPrevVP);
+      }
+    }
+
     // God-ray lamp-selection scratch (present() only) — no per-frame allocs.
     const _grSel = [];
     const _sunScr = { visible: false, ndcx: -5, ndcy: -5, flare: 0, shaft: 0 };   // PostCommon.sunScreen scratch
@@ -584,10 +613,12 @@
           P.sgsr.tex.value = aaRT.texture;
           P.sgsr.U.viewport.value.set(1 / W, 1 / H, W, H);
           runPass(P.sgsr.mat, dest);
+          mirrorPass(dest);
           _lastPresentRT = dest || aaRT;
           _last.sgsr = true;
         } else {
           runPass(P.fxaa.mat, dest);
+          mirrorPass(dest);
           _lastPresentRT = dest || ldrRT;
           _last.sgsr = false;
         }
@@ -657,6 +688,8 @@
       present,
       dispose,
       viz,
+      setMirror,
+      mirrorComposites: () => _mirComposites,
       state: () => ({
         on: true,
         hdr,

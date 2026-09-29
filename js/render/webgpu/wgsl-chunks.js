@@ -1660,7 +1660,7 @@ fn vs_main(@location(0) aPos : vec3<f32>,
   //    stand-in for the full Phase-4 post chain (bloom/SSAO/godray/SSR/grade/
   //    flare/FXAA). Fullscreen triangle; uv flips Y into texture space.
   const BLIT = `
-struct BlitU { params : vec4<f32> };   // x = exposure
+struct BlitU { params : vec4<f32> };   // x = exposure, y > 0.5 = flip left-right (the rear-view mirror)
 @group(0) @binding(0) var srcTex  : texture_2d<f32>;
 @group(0) @binding(1) var srcSamp : sampler;
 @group(0) @binding(2) var<uniform> B : BlitU;
@@ -1680,7 +1680,8 @@ fn vs_main(@builtin(vertex_index) vi : u32) -> VOut {
 }
 @fragment
 fn fs_main(in : VOut) -> @location(0) vec4<f32> {
-  let hdr = textureSampleLevel(srcTex, srcSamp, in.uv, 0.0).rgb * B.params.x;
+  let uv = vec2<f32>(select(in.uv.x, 1.0 - in.uv.x, B.params.y > 0.5), in.uv.y);
+  let hdr = textureSampleLevel(srcTex, srcSamp, uv, 0.0).rgb * B.params.x;
   // Stand-in resolve: fixed shipped ACES coefficients (the TONE CURVE knobs only
   // reach the full composite path, not this fallback blit).
   return vec4<f32>(acesTonemap(hdr, 2.51, 0.03, 2.43, 0.59, 0.14), 1.0);
