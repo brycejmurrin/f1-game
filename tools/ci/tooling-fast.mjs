@@ -209,6 +209,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/desktop-app-protocol.test.mjs",
   "tests/unit/desktop-unpacked-bin.test.mjs",
   "tests/unit/ship-filter-paths.test.mjs",
+  // Capacitor Android (task 45): frozen identity, config shape, manifest,
+  // Gradle version wiring, sync-web stamp gate, NativeDownload via Plugins.
+  "tests/unit/mobile-config.test.mjs",
+  "tests/unit/mobile-sync-web.test.mjs",
+  "tests/unit/mobile-native-download.test.mjs",
   "tests/unit/perf-sentinel.test.mjs",
   "tests/unit/telemetry-trace.test.mjs",
   "tests/unit/meeting-picker-labels.test.mjs",

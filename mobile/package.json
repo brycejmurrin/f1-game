@@ -1,0 +1,21 @@
+{
+  "name": "apex26-mobile",
+  "private": true,
+  "description": "Capacitor Android shell for the Apex 26 stamped staged site (sideload debug APK).",
+  "version": "0.0.0-dev",
+  "scripts": {
+    "sync-web": "node scripts/sync-web.mjs",
+    "sync-web:dev": "node scripts/sync-web.mjs --dev",
+    "icons": "node scripts/gen-icons.mjs",
+    "cap:sync": "npx cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.5.2",
+    "@capacitor/core": "8.5.2",
+    "@capacitor/filesystem": "8.1.3",
+    "@capacitor/share": "8.0.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.2"
+  }
+}
