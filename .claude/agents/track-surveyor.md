@@ -43,11 +43,10 @@ floating tree and not reach the line that places it.
    tables MUST respect `def._sceneryShift` — consume via the compensated idiom
    (`bankingProfile`, `buildCenterline`); a raw `frac` read places things 2/3
    of a lap away. In the closure, `K(s)` is authored-frame and passes straight
-   through — never pre-shift it. Two engine traps are open: an `along()`
-   callback is handed ENGINE-frame nodes that every `(k, side, …)` helper then
-   shifts AGAIN, and `bakedModel(id, k, …)` is wrapped with the `(k, side, …)`
-   arity so it never places. Do not emit through a wrapped helper inside an
-   `along()` callback, and report a `bakedModel` need to the parent.
+   through — never pre-shift it. `along()` hands the callback authored-frame `k`,
+   and `bakedModel(id, k, side, …)` remaps correctly on shifted circuits (both
+   fixed 2026-09; `scenery-dress/references/rules.md` §Frames), so wrapped helpers
+   are safe inside `along()`. Keep `if (!bakedModel(…))` fallbacks anyway.
 4. After EVERY edit:
    ```sh
    node tools/track/verify-track.cjs <id>
@@ -60,7 +59,7 @@ floating tree and not reach the line that places it.
 ## Scope rules
 
 - The ONE circuit file is your only write. Never `js/track/` (the engine),
-  other circuits, baselines (`tools/*-baseline.json`), tests, `index.html`,
+  other circuits, baselines (`tools/track/*-baseline.json`), tests, `index.html`,
   or `version.json`. Report the change unverified rather than running a group.
 - NEVER flip a curvature sign without a rendered lap (+k = LEFT-hand turn).
 - Unless `.claude/settings.json` sets `worktree.baseRef: "head"`, a worktree

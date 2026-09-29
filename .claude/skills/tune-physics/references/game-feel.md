@@ -24,9 +24,9 @@ attitude.
 ## Load on demand
 
 - Channel table, workflow, kerb-vs-kickup mistakes →
-  [references/workflow.md](game-feel-workflow.md).
+  [references/game-feel-workflow.md](game-feel-workflow.md).
 - Generic trauma-shake math (inspiration only) →
-  [references/feedback-recipes.md](game-feel-feedback-recipes.md).
+  [references/game-feel-feedback-recipes.md](game-feel-feedback-recipes.md).
 
 ---
 

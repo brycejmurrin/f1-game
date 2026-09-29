@@ -21,7 +21,7 @@ The lit shader combines three sources:
 |---|---|---|
 | Directional sun | `uSunDir`, `uSunColor` | With shadow map |
 | Hemisphere ambient | `uAmbSky`, `uAmbGround` | Blended by surface normal Y component |
-| Point lights (up to 32) | uniform arrays — see below | Track lamps, emissives |
+| Point lights (up to 48) | uniform arrays — see below | Track lamps, emissives |
 
 The composite pass combines AO, shafts, exposure and bloom in HDR, applies the
 live HDR image grade described below, then runs ACES → display-domain colour
@@ -501,7 +501,7 @@ Don't re-specify a `"*"` value in a per-condition preset unless you're deliberat
 
 _(from `TUNE_DEFS` in `js/lighting/knobs.js`. Focus on the per-condition-relevant ones; leave the rest at default.)_
 
-_This list is auto-generated from `TUNE_DEFS` (ranges + defaults are exact). Some
+_Ranges + defaults below were re-synced from `TUNE_DEFS` (2026-09-29; 111 of the 185 knobs are listed, the rest are in `LIGHTING-TUNER-SLIDERS.md`, which is generated and always exact). Some
 knobs (e.g. `ssaoRadius`, `mistShare`, `carClearcoat`, `wetness`, `blackLift`,
 `chromAb`, `grain`, `sharpen`, `speedBlur`) are repair/stylistic and rarely need a
 per-condition preset — focus on the ones the intent notes above call out._
@@ -624,9 +624,9 @@ than extremes); never re-state a knob at its default; respect the `"*"` matte-pa
 
 ### Progress
 
-Status: ⬜ todo · 🟨 proposed (agent) · ✅ baked into `light-presets.js`
+Status: ⬜ todo · 🟨 proposed (agent) · ✅ baked into `presets.js`
 
-All 40 circuits now have a full `tod × weather` grid (800 condition keys plus `"*"`).
+40 of the 52 circuits have a full `tod × weather` grid (800 condition keys, plus `"*"` and the four ULTRA-only `"*|<tod>"` keys); the twelve added since (anderstorp, brands_hatch, buddh, dijon, donington, fuji, jerez, korea, mont_tremblant, mosport, okayama, zolder) have none and resolve to `"*"` alone.
 
 Full-grid **mcp-probe `look-survey`** (chase + `park` + `snapCam`). Contact
 sheets land in [`docs/look-survey/`](look-survey/README.md) as each circuit
@@ -743,13 +743,13 @@ condition on screen to every other circuit at the same time-of-day and weather
 Then `COPY VALUES` and bake as usual. The export is `window.LightEdits` — the
 LOCAL profiles only, current condition first — so a spread condition arrives as
 one `"track|tod|wx"` entry per circuit and `merge-proposals.mjs` folds them into
-`light-presets.js` without touching anything else. Note that a `FULL LOOK`
-spread writes every live knob on 39 circuits, so the export after one is the
+`presets.js` without touching anything else. Note that a `FULL LOOK`
+spread writes every live knob on every other circuit, so the export after one is the
 largest a delta gets; `MY EDITS` stays small. Both chips arm on the first click
 and fire on the second, and `UNDO` reverts the whole fan-out while the panel is
 open.
 
 **`FULL LOOK` is the destructive one.** It writes a local profile that outranks
-the shipped preset for every knob on 39 circuits, which is exactly what makes the
+the shipped preset for every knob on every other circuit, which is exactly what makes the
 grid uniform — and exactly what erases the per-track character this doc's intent
 notes describe. Reach for `MY EDITS` unless the uniformity IS the goal.

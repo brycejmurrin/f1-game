@@ -95,7 +95,7 @@ order live in `tools/manifest.cjs` — read that, not this file; per-directory t
   the extracted modules — one `Module.create(G)` per file, a module never reaches into
   game.js, and `types/game-ctx.d.ts` is the machine-checked contract. `js/agent/apex.js` is `__apex`.
 - `js/render/gfx.js` picks TLX (`three/`, default), GLX (`glx/`, explicit WebGL2 and the
-  fallback) or opt-in WGX (`webgpu/`); `shared/` is backend-agnostic; TLX and WGX have no
+  fallback) or opt-in WGX (`webgpu/`); `shared/` is backend-agnostic; GLX, TLX and WGX have no
   `<script>` tag (injected from `ApexRoster.DEFERRED`). Only GENERIC tables live in
   `js/track/` (the `scenery(api)` contract is test-frozen; it and `js/circuits/` carry a nested `AGENTS.md`). `index.html` owns ALL static DOM.
 

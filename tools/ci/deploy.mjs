@@ -17,7 +17,7 @@
 //   node tools/ci/deploy.mjs --gate-only   # run the DEPLOY GATE and stop: tooling-fast + ci.yml's
 //                                       #   node suites + verify-track. Pushes nothing, allows a
 //                                       #   dirty tree. THE pre-push check: test:tooling-fast is a
-//                                       #   subset and does not run 69 of the 277 unit files.
+//                                       #   subset and does not run 88 of the 386 unit files.
 //                                       #   Its union is commits + staged + unstaged + untracked
 //                                       #   (changedPaths), so an uncommitted circuit edit still
 //                                       #   gets the sweeps and its verify-track.

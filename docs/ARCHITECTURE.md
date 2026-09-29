@@ -1187,8 +1187,8 @@ directory). The generated module index at the top of this file and
 | `js/ui/quali-sheet.js` | `QualiSheet` | the QUALIFYING sheet (`#quali`): `build(rows)` / `open(rows)` / `close()` over `quali.rows()` — pure DOM assembly of the model's classification (podium classes, the DRIVEN tag on a rival's real lap, the P-title). No timing, no ordering, no persist |
 | `js/race/reliability.js` | `Reliability` | RELIABILITY / DNFs — whether a car reaches the flag. Risk is DERIVED (team tier, relieved by career team development and by the player's fitted engine + gearbox), never authored per team. The whole field's retirements are drawn ONCE at the green light from a stateless hash of `(seed, round, driver)`, so arming a race consumes nothing from the sim RNG stream. Ships OFF — opt-in per race via the RELIABILITY setting |
 | `js/perf/governor.js` | `PerfGov` | adaptive performance governor (render scale / FX tiers) |
-| `js/camera/vantage.js` | `GameCams` | the 13 player camera modes + the `__apex.view` debug free-cam framing |
-| `js/camera/mode-switch.js` | `CamModes` | `CAM_MODES` (the 13-entry player camera list — index IS the persisted `camMode`) plus the CAM button / picker-grid / C-key mode-switch UI (broadcast-only; mutates `camMode` through `G`) — the DOM front-end to vantage |
+| `js/camera/vantage.js` | `GameCams` | the 14 player camera modes + the `__apex.view` debug free-cam framing |
+| `js/camera/mode-switch.js` | `CamModes` | `CAM_MODES` (the 14-entry player camera list — index IS the persisted `camMode`) plus the CAM button / picker-grid / C-key mode-switch UI (broadcast-only; mutates `camMode` through `G`) — the DOM front-end to vantage |
 | `js/ui/hud.js` | `GameHud` | in-race DOM HUD (pos/lap/times, speed, energy, gaps, minimap) |
 | `js/ui/results-sheet.js` | `GameResults` | results + season-end screens, penalties, points |
 | `js/agent/apex.js` | `ApexApi` | the **whole `window.__apex` dev API** (see DEBUG-HOOKS.md). `LAZY_AGENT` — no tagged script; `game.js` injects it when `wantAgentSurface()` |
@@ -1203,7 +1203,7 @@ directory). The generated module index at the top of this file and
 | `js/physics/aero-zones.js` | `AeroZones` | ACTIVE AERO activation zones — pure circuit GEOMETRY (curvature in, arc-metre spans out). Knows nothing about a car; `inAeroZone(c)`/`aeroDfMult()` stay in game.js because they read car state |
 | `js/fx/skidmarks.js` | `SkidMarks` | the 120-entry tyre-mark ring buffer plus its batched vertex build — one draw call instead of up to 120 per frame — and the per-mark fallback for GPUs where the batch program fails to link. Fully self-contained: game.js calls only `reset()` / `stamp()` / `draw()` |
 | `js/ui/sheet-shape.js` | `SheetShape` | self-initialising: measures every `.sheet` with a ResizeObserver and writes `data-shape="tall\|wide"` / `data-pair`. **Its consumer is CSS**, not JS — which is why a JS-only reference scan reports it as orphaned |
-| `js/ui/modal.js` | `TopModal` | self-initialising: the top-layer/z-index ladder over the 19 `<dialog class="screen">` elements, reading `data-esc-close` / `data-esc`. Same CSS/DOM-contract shape as `sheet-shape.js` |
+| `js/ui/modal.js` | `TopModal` | self-initialising: the top-layer/z-index ladder over the 18 `<dialog class="screen">` elements, reading `data-esc-close` / `data-esc`. Same CSS/DOM-contract shape as `sheet-shape.js` |
 | `js/ui/aria-state.js` | `AriaState` | mirrors each option group's visual selection onto `aria-pressed` for screen readers |
 
 The table lists modules whose contracts need prose; every other extracted file
@@ -1256,18 +1256,18 @@ default, tier order), five red lights (1 s apart) then out. Race =
 indicator, gaps, minimap canvas 2D. Penalty: a repeating ladder — three
 warnings, +5 s on the 4th cut (announced in-race), then the warning count
 resets; `cuts` stays the lifetime total for the career `clean` objective. Points per Teams.POINTS; SEASON mode = Tracks.SEASON (the 24
-non-`classic` circuits; the 16 retired ones are playable but never a round)
+non-`classic` circuits; the 28 retired ones are playable but never a round)
 in load order, standings table between races, saved in
 `apex26.season`. localStorage: hiscore N/A, settings (team, difficulty, tilt,
 sound), season.
 
-Camera: 13 player modes (`CAM_MODES` in `js/camera/mode-switch.js`, driven by
+Camera: 14 player modes (`CAM_MODES` in `js/camera/mode-switch.js`, driven by
 `GameCams`) cycled with the CAM button / C key (persisted) — CHASE (close,
 behind+above), FAR (pulled back/up), DRIFT (swings outside on a slide),
 COCKPIT (onboard eye, player car hidden), HOOD (nose cam), OVERHEAD (top-down
 drone), HELI (broadcast heli), REVERSE (mounted ahead looking back), TV SIDE
 (trackside panning), CINEMATIC (slow orbit), LOW (surface skimmer), T-CAM
-(roll-hoop broadcast), REAR CAM (tail-mounted looking back). Chase modes
+(roll-hoop broadcast), REAR CAM (tail-mounted looking back), VISOR (the cockpit eye further forward, no wheel). Chase modes
 anchor a fixed arc-length behind the car so they never lag at speed; onboard
 modes ride ON the car with very high damping. fov widens with speed; a debug
 free camera (`__apex.view`) can override all of it.
@@ -1286,11 +1286,11 @@ Per-circuit scenery design briefs live in [docs/tracks/](tracks/).
 screen, pause menu, data hub root, touch buttons, help modal. Script tags must
 match `tools/manifest.cjs` (asserted by `tests/unit/load-order.test.mjs`).
 `css/*.css` = layout/HUD/menus (F1 style: black `#0a0a0f`, red `#e10600`
-accents, bold italic headings); `css/data.css` = data hub only. Cache-bust
-every script/style URL with `?v=<sha256>`, while a separate monotonic shell generation
-(check `index.html` for the current value). `version.json` `{ "build": N }`
-mirrors the same `N`; the shell version guard uses it to force-refresh a stale
-installed PWA.
+accents, bold italic headings); `css/data.css` = data hub only. The committed
+shell reads `?v=dev` on every script/style URL; `pages.yml` rewrites them to
+content hashes while staging and stamps a monotonic shell generation.
+`version.json` `{ "build": N }` carries that `N`; the shell version guard uses it
+to force-refresh a stale installed PWA.
 
 ## Deploy
 

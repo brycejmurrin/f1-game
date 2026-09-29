@@ -55,7 +55,7 @@ Load this when driving a lap, writing a policy, or debugging a typed error. The 
   the ~19 MESH components (wheels, wings, halo…), NOT the 12 upgrade categories; it
   reads the current loadout, not the catalog of options — to CHOOSE a build, read
   `Parts.CATALOG` (cost + stat multipliers per option) from `js/car/parts.js`, and
-  verify a candidate in-page with `Parts.getMods(setup, teamEngine)`/`Parts.getCost`.
+  verify a candidate in-page with `Parts.getMods(setup, team, tune)`/`Parts.getCost`.
 - `objective()` — what the game is (see above).
 
 **Drill down (pull, never dump)**

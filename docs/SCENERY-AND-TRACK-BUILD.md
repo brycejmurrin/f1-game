@@ -92,7 +92,7 @@ plus glass/water. Order matters:
 1. Scratch buffers; optional night flag.
 2. **`terrainYAt` grid** over uploaded `terrainGeo` (ribbon raycasts).
 3. On-road cull (`rejBox` / `onRoadHit`), note/suppress registry, pit supersession.
-4. `groundYAt` ← `surface.heightAt`; universal ground slab; `place` / `prop` / …
+4. `groundYAt` ← `surface.heightAt` (no universal floor slab — `buildFloor` covers it); `place` / `prop` / …
 5. Resolve **kits**: `SceneryThemes` + `LandmarkKit` + `CircuitKit`.
 6. Compose emitters:
    ```
@@ -135,7 +135,7 @@ closure.
 
 | Module | Global | Typical helpers |
 |---|---|---|
-| `tracks.js` locals | — | `place`, `prop`, `backdrop`, `groundPlane`, `groundYAt`, `terrainYAt`, `onTrack`, `bakedModel`, `lampPost`, `K`, `lapBounds`, kits |
+| `scenery/build-props.js` locals | `TrackBuildProps` | `place`, `prop`, `backdrop`, `groundPlane`, `groundYAt`, `terrainYAt`, `onTrack`, `bakedModel`, `lampPost`, `K`, `lapBounds`, kits |
 | `scenery/nature.js` | `SceneryNature` | `anchor`, trees (`pine`/`tree`/`palm`/…), `mountain`/`ridge`, `grandstand*`, `forestEdge`, `bush`/`hedge` |
 | `scenery/structures.js` | `SceneryStructures` | **`along`**, `wall`/`fence`/`guardrail`/`tyreWall`, `gantry`, bleachers/terraces, signs |
 | `scenery/city.js` | `SceneryCity` | `building`, `tower`, `billboard`, `neonTower`, houses / motorhomes |
@@ -252,7 +252,7 @@ Vertex budget is incremental — shipped circuits ~400k–900k prop verts; Vegas
 | `scenery/structures.js` | Barrier cross-sections, `along` walker |
 | `scenery/identity.js` | Shared portals / flood masts / canopies |
 | `scenery/themes.js` | Theme palettes / spacing / budgets (`variants` tables deleted 2026-09-24; `variant()` picker kept) |
-| `tracks.js` `buildProps` | Generic pass order, guards, deferred foliage — high blast radius |
+| `scenery/build-props.js` | Generic pass order, guards, deferred foliage — high blast radius |
 
 ### Materials / look (not mesh authorship)
 

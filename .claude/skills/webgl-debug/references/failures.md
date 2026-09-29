@@ -71,11 +71,11 @@ black. Await `GLX.awaitSoftPresent()` and read the overlay (or `readPixels`).
 ## 7. Quick one-liners via apex-eval
 
 ```sh
-# Check HDR mode
-node tools/shot/apex-eval.mjs monza "GLX.hdrMode()" --raw
+# Check HDR mode (--backend webgl2 is REQUIRED: the default is TLX, and GLX.x() would answer for it)
+node tools/shot/apex-eval.mjs monza "GLX.hdrMode()" --raw --backend webgl2
 
 # Light state on a night track (Monza has night:false — use vegas/singapore)
-node tools/shot/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw
+node tools/shot/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw --backend webgl2
 ```
 
 For wet-road screen-space reflections specifically,

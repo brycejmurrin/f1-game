@@ -7,8 +7,11 @@ paths: ["js/render/glx/**"]
 
 # Debug WebGL2 / GLX renderer issues
 
-The renderer lives in `js/render/glx/glx.js` (the `GLX` IIFE). It uses WebGL2 with
-interleaved point lights, a 2048² sun shadow map (its PCSS blocker pass is a
+The renderer lives in `js/render/glx/glx.js` (the `GLX` IIFE). It is NOT the
+default backend (TLX is): it runs only when `apex26.gfxBackend` is `"webgl2"` or
+TLX/WGX failed to init — confirm with `__apex.diag()` (`backendState`) before
+debugging it. It uses WebGL2 with
+interleaved point lights, a 2048² sun shadow map (1024² on mobile; its PCSS blocker pass is a
 half-res R16F downsample; 512² is the separate LAMP spot map),
 ACES tone-map, bloom, and lens flare. Most rendering bugs fall into a small set
 of root causes — start with the probes below before reading shader source.

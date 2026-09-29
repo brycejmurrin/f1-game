@@ -58,8 +58,8 @@ __apex.logs()                       // "gfx" ns
 - `tests/unit/backend-surface-parity.test.mjs` +
   `docs/research/WEBGPU-PARITY.md` — Gfx façade × 3 backends.
 
-`apex-eval.mjs` has no backend flag (`<track> <expr> [--raw]` only). Pin
-WGX via `localStorage` then reload, or:
+`apex-eval.mjs <track> <expr> --backend webgpu` pins WGX (pass it whenever the
+expr names `WGX`/`GLX`; the default is TLX). Or, through the chrome MCP:
 
 ```sh
 node tools/mcp/mcp-cli.mjs probe --backend webgpu --wait 12000 --eval 'a.diag({download:false}).env'

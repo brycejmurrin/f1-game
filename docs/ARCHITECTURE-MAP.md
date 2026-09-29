@@ -28,8 +28,8 @@ assets/pack/        baked PBR material arrays (ships ON; failures degrade)
    state), and calls `Module.create(G)` on extracted subsystems. Modules must
    not reach into `game.js` internals — only through `G`.
 3. Renderer pick (`js/render/gfx.js`): default **TLX** (three.js), explicit
-   WebGL2 **GLX**, opt-in **WGX** (WebGPU). TLX/WGX are **DEFERRED** — injected
-   at boot for the resolved choice, not always tagged.
+   WebGL2 **GLX**, opt-in **WGX** (WebGPU). All three are **DEFERRED** — injected
+   at boot for the resolved choice, never tagged.
 4. First race builds a circuit: `js/circuits/<id>.js` data +
    `js/circuits/scenery/<id>.js` (lazy) through the track engine in `js/track/`.
 5. Frame loop: input → physics/AI/race-control → HUD DOM → `gfx` draw/present.
