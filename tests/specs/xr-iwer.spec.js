@@ -9,10 +9,12 @@
  * Real Quest GPU behaviour is out of scope for CI (SwiftShader). This spec
  * only proves the capability/UI/session-request seam against the emulator.
  */
-const { test, expect } = require("@playwright/test");
-const path = require("path");
-const fs = require("fs");
+import { test, expect } from "@playwright/test";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const IWER_UMD = path.join(__dirname, "../../node_modules/iwer/build/iwer.js");
 const IWER_MIN = path.join(__dirname, "../../node_modules/iwer/build/iwer.min.js");
 
