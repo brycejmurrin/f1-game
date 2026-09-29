@@ -40,6 +40,7 @@ const Input = (function () {
   let cameraCyclePressed = false;
   let recoverPressed = false;   // edge-triggered manual recover / put-me-back
   let radioPressed = false;     // edge-triggered RADIO CHECK — ask the engineer for the gaps (js/race/race-radio.js)
+  let mirrorPressed = false;    // edge-triggered REAR-VIEW MIRROR on/off (js/render/shared/mirror-pass.js)
   let keyLookBack = false;      // HELD: look-back mirror while the key/button is down
   let padLookBack = false;
 
@@ -115,7 +116,7 @@ const Input = (function () {
 
   let tiltRaw = 0;            // latest remapped tilt, degrees (raw, like Neon Drift)
   let tiltZero = 0;           // calibrated neutral
-  let tiltSeen = false;       // we have actually received sensor data
+  let tiltSeen = false, tiltRemote = false; // seen data and ownership of the shared tilt sample
   let gyroAttached = false;
   let gyroDenied = false;
   // HARD refusal only: the sensor API is absent, or requestPermission()
@@ -214,13 +215,13 @@ const Input = (function () {
     // function the PHONE AS CONTROLLER page runs on the phone, so a remote
     // sample and a local reading agree by construction.
     const roll = TiltRoll.rollDeg(e.beta, e.gamma, TiltRoll.screenAngle());
-    if (roll === null) return;
+    if (roll === null || remoteSteers()) return; // a live phone owns the shared tilt pipeline
     tiltRaw = roll;
     const n = nowMs();
     const odt = lastOrientMs ? Math.min(0.1, (n - lastOrientMs) / 1000) : 0.016;
     lastOrientMs = n;
     tiltSmoothed = oneEuro(tiltRaw, odt);
-    tiltSeen = true;
+    tiltSeen = true; tiltRemote = false;
   }
 
   function attachGyro() {
@@ -284,7 +285,7 @@ const Input = (function () {
   }
 
   function tiltActive() {
-    return steerMode === "tilt" && tiltSeen;
+    return steerMode === "tilt" && tiltSeen && (!tiltRemote || remoteSteers());
   }
 
   function remoteActive() {
@@ -304,7 +305,7 @@ const Input = (function () {
       const odt = lastOrientMs ? Math.min(0.1, (n - lastOrientMs) / 1000) : 0.016;
       lastOrientMs = n;
       tiltSmoothed = oneEuro(tiltRaw, odt);
-      tiltSeen = true;
+      tiltSeen = tiltRemote = true;
     }
     remThr = clamp(+s.thr || 0, 0, 1);
     remBrk = clamp(+s.brk || 0, 0, 1);
@@ -322,6 +323,7 @@ const Input = (function () {
     camera: () => { cameraCyclePressed = true; },
     recover: () => { recoverPressed = true; },
     radio: () => { radioPressed = true; },
+    mirror: () => { mirrorPressed = true; },
     calib: () => { calibrate(); },
     pause: () => { if (onPauseCb) onPauseCb(); },
     // THE PHONE AS A MENU PAD. Its wheel shows arrows, SELECT and BACK while
@@ -350,7 +352,7 @@ const Input = (function () {
   // keep steering a device whose own sensor is not attached.
   function remoteLost() {
     remoteMs = 0; remThr = remBrk = 0; remHeld = 0; remRoll = false;
-    if (!gyroAttached) tiltSeen = false;
+    if (tiltRemote || !gyroAttached) tiltSeen = false;
   }
   function setRemoteHaptics(fn) { remoteHaptics = typeof fn === "function" ? fn : null; }
 
@@ -361,7 +363,7 @@ const Input = (function () {
   // (The live game still uses the wall-clock onOrient/tiltSteering path untouched.)
   function simTilt(rawDeg, dt) {
     const step = dt > 0 ? dt : 0.016;
-    tiltSeen = true;
+    tiltSeen = true; tiltRemote = false;
     tiltRaw = rawDeg;
     tiltSmoothed = oneEuro(rawDeg, step);
     // Same map and same slew the live path uses — deliberately WITHOUT
@@ -510,6 +512,9 @@ const Input = (function () {
     // position and both gaps — Crew Chief's "how's my gap", on one key. T for
     // TALK; free in every default layout above.
     { id: "radio",     label: "RADIO CHECK", def: ["KeyT", null] },
+    // REAR-VIEW MIRROR: the HUD mirror on and off mid-race, the same switch as
+    // HUD > MIRROR in the settings. M is free in every default layout above.
+    { id: "mirror",    label: "MIRROR",      def: ["KeyM", null] },
     /* PAUSE IS A BINDING NOW, not a literal. XAG 107 asks that a player be
        able to remap ALL of a game's controls "including the Esc key on PC
        games", and P being permanently off-limits meant a player who wanted
@@ -651,6 +656,7 @@ const Input = (function () {
     { id: "lookBack",  label: "LOOK BACK",   def: [11, null] },
     { id: "recover",   label: "RECOVER",     def: [10, null] },
     { id: "radio",     label: "RADIO CHECK", def: [13, null] },   // d-pad down; d-pad up is ACTIVE AERO
+    { id: "mirror",    label: "MIRROR",      def: [null, null] },   // every standard button is taken; bind one on CONTROLS
     { id: "pause",     label: "PAUSE",       def: [9, null] },
   ];
   // The d-pad's left/right are the digital STEER axis, not bindings — the same
@@ -1004,6 +1010,7 @@ const Input = (function () {
       case "lookBack": keyLookBack = down; if (down) e.preventDefault(); break;
       case "recover": if (edge) recoverPressed = true; break;
       case "radio": if (edge) radioPressed = true; break;
+      case "mirror": if (edge) mirrorPressed = true; break;
       // PAUSE and Escape are handled ABOVE the driving gate — see the comment
       // there. They are commands, and a menu being open must not swallow them.
     }
@@ -1531,6 +1538,7 @@ const Input = (function () {
         if (padActEdge(pad, "camera")) cameraCyclePressed = true;
         if (padActEdge(pad, "recover")) recoverPressed = true;
         if (padActEdge(pad, "radio")) radioPressed = true;
+        if (padActEdge(pad, "mirror")) mirrorPressed = true;
         padLookBack = padActVal(pad, "lookBack") > 0.5;
       }
     }
@@ -1968,6 +1976,12 @@ const Input = (function () {
     radioPressed = false;
     return v;
   }
+  function consumeMirror() {
+    const v = mirrorPressed;
+    mirrorPressed = false;
+    return v;
+  }
+
   /* HELD, not edged: the mirror is only up while the control is down.
      KEY AND PAD ONLY. There was an on-screen LOOK button in the tap column too;
      it was removed on request — the dock had grown to five buttons in one thumb
@@ -2350,6 +2364,7 @@ const Input = (function () {
     remThr = remBrk = 0; remHeld = 0;   // the phone re-sends within 100 ms if still held
     recoverPressed = false;
     radioPressed = false;
+    mirrorPressed = false;
     // padPrevButtons is deliberately KEPT: emptying it on a window blur made
     // every button merely held across the blur a rising edge on the next poll
     // (boost toggled, a gear grabbed, the camera cycled). The next poll
@@ -2378,6 +2393,7 @@ const Input = (function () {
     cameraCyclePressed = false;
     recoverPressed = false;
     radioPressed = false;
+    mirrorPressed = false;
   }
 
   function debugState() {
@@ -2442,6 +2458,7 @@ const Input = (function () {
     consumeCameraCycle,
     consumeRecover,
     consumeRadio,
+    consumeMirror,
     lookingBack,
     lockEscape, unlockEscape, lockLandscape, unlockLandscape,
     tiltActive,

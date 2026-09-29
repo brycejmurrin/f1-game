@@ -567,6 +567,9 @@ function paintHudDetailsSummary() {
   SettingRow.paint($("pm-hudmetrics"), hudMetricsLayout);
   SettingRow.paint($("pm-hudmap"), hudMapVis);
   SettingRow.paint($("pm-hudgaps"), hudGapsVis);
+  // HUD > MIRROR is owned by js/render/shared/mirror-pass.js; the fold reads it back from the store.
+  const hudMirror = MirrorPass.MODES.indexOf(store.get("hudMirror", "auto")) < 0 ? "auto" : store.get("hudMirror", "auto");
+  SettingRow.paint($("pm-hudmirror"), hudMirror);
   const note = $("pm-hudmetrics-note");
   if (note) note.textContent = hudLayoutNote();
   const sum = $("pm-hud-details-sum");
@@ -574,7 +577,8 @@ function paintHudDetailsSummary() {
   const bits = [["k", "HUD"], [on ? "on" : "off", on ? "ON" : "OFF"],
     ["val", hudProfile.toUpperCase()], ["val", hudMetricsLayout.toUpperCase()],
     [hudMapVis === "off" ? "off" : "on", hudMapVis === "off" ? "NO MAP" : "MAP"],
-    [hudGapsVis === "off" ? "off" : "on", hudGapsVis === "off" ? "NO GAPS" : "GAPS"]];
+    [hudGapsVis === "off" ? "off" : "on", hudGapsVis === "off" ? "NO GAPS" : "GAPS"],
+    [hudMirror === "off" ? "off" : "on", hudMirror === "off" ? "NO MIRROR" : "MIRROR"]];
   sum.innerHTML = bits.map((p, i) => (i ? '<span data-fold="sep"> · </span>' : "") +
     '<span data-fold="' + p[0] + '">' + p[1] + "</span>").join("");
 }
@@ -3730,6 +3734,10 @@ const { renderSetupPreview, resetSetupCam, setSetupCamPanel, spMeshBust } = setu
 // The three shadow-map passes (js/render/shared/shadow-pass.js): sun snap cache,
 // per-frame car map, night lamp map, the caster pools and the blob flush.
 const shadowPass = ShadowPass.create(G, { teamMesh, vStd });
+// The HUD rear-view mirror (js/render/shared/mirror-pass.js): a second camera, rendered in the env probe's slot below.
+const mirrorPass = MirrorPass.create(G, { drawWorldMeshes, teamMesh, renderPosOf, playerAnchor, yawVisInterp, basisMat,
+  carPaint: (wet, night) => carPaintMat(wet ? (night ? PAINT_WET_NIGHT : PAINT_WET_DAY) : (night ? PAINT_DRY_NIGHT : PAINT_DRY_DAY)),
+  onModeChange: () => paintHudDetailsSummary() });
 
 // MY TEAM load/sync + customize dialog (js/career/custom-team.js).
 customTeam = CustomTeam.create({
@@ -7662,6 +7670,8 @@ function render(dt) {
       }
     }
   } else if (PerfGov.tier() >= 1 && gfx.envProbeReady && gfx.envProbeReady()) gfx.envProbeReset();   // tier 1 sheds the PRODUCER, but envReady LATCHES — without this the paint mirrors a frozen cube. See glx.js envProbeReset.
+  // REAR-VIEW MIRROR: its own camera and target, BEFORE the main begin() like the probe above.
+  mirrorPass.render(frame, frameSky, night, wet, _floodEmit);
   let _b;
   if (_fogMul != null) {
     // Restored immediately: frame.fogDensity is the SESSION's value, which
@@ -8671,7 +8681,7 @@ $("mb-tt").onclick = () => openTimeTrial(false);
 async function consumeGhostHash() {
   // A ghost link landing MID-RACE waits, fragment intact, for the menu (quitToMenu re-reads it) — as #353's invite link does.
   if (UiLayers.inRace()) { Log.info("game", "ghost link deferred: racing"); return null; }
-  const shared = await GhostShare.consumeHash({
+  const shared = await GhostShare.consumeHash({ valid: () => !UiLayers.inRace(),
     notify: (message, result) => announce(message, result && result.ok ? 3 : 4, result && result.ok ? "info" : "warning"),
   });
   if (!shared || !shared.ok) return shared;
@@ -9412,6 +9422,7 @@ wireHudChips("pm-hudmetrics", HUD_MET_LAYOUTS, () => hudMetricsLayout,
   (v) => { hudMetricsLayout = v; store.set("hudMetricsLayout", hudMetricsLayout); }, syncMetricsOverlayCompact);
 wireHudChips("pm-hudmap", HUD_VIS_MODES, () => hudMapVis, (v) => { hudMapVis = v; store.set("hudMapVis", hudMapVis); });
 wireHudChips("pm-hudgaps", HUD_VIS_MODES, () => hudGapsVis, (v) => { hudGapsVis = v; store.set("hudGapsVis", hudGapsVis); });
+wireHudChips("pm-hudmirror", MirrorPass.MODES, () => mirrorPass.mode(), (v) => mirrorPass.setMode(v));
 
 // ACTIVE AERO: MANUAL / AUTO. Same shape as GEARS and for the same reason —
 // both answer "how much of the car do you operate yourself?". Takes effect

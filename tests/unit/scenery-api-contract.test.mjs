@@ -117,6 +117,10 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     cota: ["cota-amphitheater", "cota-turn1-big-red", "cota-main-grandstand"],
     mexico: ["mexico-foro-sol-entry", "mexico-peraltada-stand", "foro-scoreboard"],
     abudhabi: ["abudhabi-ferrari-world", "abudhabi-marina", "abudhabi:pit-exit-tunnel-portal"],
+    // Wave 6 — Albert Park (Piastri stand 2026, MSAC, Lakeside Stadium)
+    albert_park: ["albert-piastri-stand", "albert-msac", "albert-lakeside-stadium"],
+    // Nürburgring GP-Strecke — Burg + Coca-Cola Kurve + race control
+    nurburgring: ["nurburgring-burg-nurburg", "nurburgring-coca-cola-kurve", "nurburgring-race-control"],
     // Wave 5 — Shanghai International Circuit (wing piers are literal
     // modelGroups; decks stay on overheadSpan. pudong/boardwalk stay required
     // at runtime but their emit bodies exceed the 2200-char BATCH-01 window).
@@ -152,8 +156,15 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
       "montreal-wall-of-champions-stand",
       "montreal-biosphere",
     ],
-    // Wave 6 — Albert Park (Piastri stand 2026, MSAC, Lakeside Stadium)
-    albert_park: ["albert-piastri-stand", "albert-msac", "albert-lakeside-stadium"],
+    // Wave 6 — Hockenheim Motodrom ring (Süd + Nord permanent stands)
+    hockenheim: [
+      "hockenheim-motodrom-screen",
+      "hockenheim-mercedes-tribune",
+      "hockenheim-sued-tribune",
+      "hockenheim-nord-tribune",
+      "hockenheim-race-control",
+      "hockenheim-infield-compound",
+    ],
   };
   for (const [track, ids] of Object.entries(expected)) {
     const body = landmarkSource(track);
