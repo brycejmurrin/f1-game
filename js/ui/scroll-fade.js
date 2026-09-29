@@ -134,13 +134,25 @@ window.ScrollFade = (function () {
     // Measure everything, THEN write everything: one layout for the whole batch
     // instead of one per region. Skip regions whose screen layer is [hidden] —
     // mid-race resize used to force layout over every menu pane still in the DOM.
+    //
+    // MEASURE WITHOUT THE THUMB. The thumb is an in-flow sticky ::before, and
+    // its negative margin only cancels its height where it is the FIRST box.
+    // In #overlay every child is grid-placed, so the thumb auto-places in a
+    // row AFTER them and its box hangs below the content: a thumb drawn while
+    // the title screen briefly overflowed mid-rotation (280px tall) kept
+    // scrollHeight at 654 in a 430px landscape screen by itself — scrollable
+    // forever, measured 2026-09-29. `.sf-measure` hides it for this one read
+    // (one layout for the batch, as before), so the answer is the content's.
     const els = document.querySelectorAll(SEL);
-    const measured = [];
+    const live = [];
     els.forEach((el) => {
       if (el.closest && el.closest("[hidden]")) return;
       watch(el);
-      measured.push(measure(el));
+      live.push(el);
     });
+    for (const el of live) if (el.classList.contains("sf-scroll")) el.classList.add("sf-measure");
+    const measured = live.map(measure);
+    for (const el of live) el.classList.remove("sf-measure");
     for (const m of measured) write(m);
   }
 

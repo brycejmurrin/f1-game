@@ -535,6 +535,9 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
    (the bare track/team lists) would push the thumb past its own scrollport and
    have it clipped away. */
 .sheet-body.sf-scroll::before { margin-right: calc(6px - var(--pad)); }
+/* ScrollFade's measuring pass (js/ui/scroll-fade.js paintAll): the thumb must
+   not count toward the overflow it is drawn to report. */
+.sf-scroll.sf-measure::before { display: none; }
 
 /* ---------- STATE HAS DURATION ----------
    Selection used to be instant everywhere: tap a chip and the ring simply
