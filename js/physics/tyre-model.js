@@ -592,9 +592,14 @@ const TyreModel = (function () {
     // measured identical first stops (lap 7) and stop counts at light and real,
     // because the plan could not see the setting. At `off` nothing wears, so the
     // honest answer is "the whole race".
+    // …AND BY THE CIRCUIT. update() charges wear at load·severity()·level /
+    // lifeLaps, so a set lasts lifeLaps / (level·severity) laps. This divided by
+    // the level alone, so at Austria (1.97) every plan believed its tyres lasted
+    // twice as long as they did: a medium planned for 7.4 laps of a 10-lap race
+    // was gone in 3.8, and the plan said NO STOP.
     function planLaps(life, lapsTarget) {
       const k = LEVELS[level];
-      return k > 0 ? lifeLaps(life, lapsTarget) / k : Math.max(1, lapsTarget || 1);
+      return k > 0 ? lifeLaps(life, lapsTarget) / (k * severity()) : Math.max(1, lapsTarget || 1);
     }
 
     // Put a fresh set on a car. The ONLY place c.tyreWear is cleared, so a stop
