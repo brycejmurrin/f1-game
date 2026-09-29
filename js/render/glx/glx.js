@@ -758,7 +758,7 @@ const GLXBackend = (function () {
     // loses the context every boot and gets it back reloaded without limit.
     canvas.addEventListener("webglcontextrestored", function () {
       try { if ((parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0) > 2) return; } catch (_) { return; }
-      try { location.reload(); } catch (_) {}
+      try { location.reload(); } catch (e) { Log.warn("gfx", "GLX: context restored but reload failed:", e && e.message); }
     }, false);
 
     // FRAGMENT UNIFORM BUDGET. LIT_FS's default block is ~279 vec4 rows

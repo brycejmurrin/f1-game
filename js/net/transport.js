@@ -245,7 +245,7 @@ const NetTransport = (function () {
         // to land before a connection is built — and when it does not, every wire dump
         // reads relay:0 while the relay is demonstrably alive. Retained so that
         // symptom has a cause attached to it.
-        Log.warn("net", "TURN credential fetch failed, gathering STUN-only");
+        Log.warn("net", "TURN credential fetch failed, gathering STUN-only:", err && err.message);
         return null;
       }).finally(() => { clearTimeout(bail); fetchingIce = null; });
     }
@@ -313,6 +313,7 @@ const NetTransport = (function () {
   let derived = null;
   let derivedAt = 0;
   let deriving = null;
+  let derivedWarned = false;
   function derivedFresh() {
     return !!(derived && (Date.now() - derivedAt) < DERIVED_TTL_MS);
   }
@@ -332,7 +333,11 @@ const NetTransport = (function () {
         derivedAt = Date.now();
         return derived;
       })
-      .catch(() => null)
+      .catch((e) => {
+        // Once per page: every join retries the derivation, and the cause does not change.
+        if (!derivedWarned) { derivedWarned = true; Log.warn("net", "free-TURN credential derivation failed, relay-less ICE:", e && e.message); }
+        return null;
+      })
       .then((r) => { deriving = null; return r; });
     return deriving;
   }

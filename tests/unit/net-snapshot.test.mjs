@@ -17,11 +17,13 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { seedLogGlobal } from "../helpers/seed-log.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 // A strict-mode direct eval keeps its own declarations to itself, so each file
 // is loaded separately and the shared math island is published on globalThis —
 // snapshot.js binds M4.clamp/M4.wrapDelta at eval, exactly as the shell does.
+seedLogGlobal();   // snapshot.js logs dropped packets through Log
 globalThis.M4 = eval(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8") + ";M4");
 const NetSnapshot = eval(
   fs.readFileSync(path.join(ROOT, "js/net/snapshot.js"), "utf8") + ";NetSnapshot");

@@ -246,8 +246,15 @@ window.SpotifyMusic = (function () {
     };
     if (ac) opts.signal = ac.signal;
     return fetch(TOKEN_URL, opts)
-      .then((r) => r.json().catch(() => ({ error: "bad_response" })))
-      .catch((e) => ({ error: e && e.name === "AbortError" ? "timeout" : "network" }))
+      .then((r) => r.json().catch((e) => {
+        Log.debug("audio", "Spotify token response unreadable (HTTP " + r.status + "):", e && e.message);
+        return { error: "bad_response" };
+      }))
+      .catch((e) => {
+        // Debug: a refresh is retried per API call while offline. Never log the body — it holds the token.
+        Log.debug("audio", "Spotify token request failed:", e && (e.name + ": " + e.message));
+        return { error: e && e.name === "AbortError" ? "timeout" : "network" };
+      })
       .then((j) => { if (timer) clearTimeout(timer); return j; });
   }
 
@@ -505,6 +512,7 @@ window.SpotifyMusic = (function () {
     removeBackend();
   }
 
+  let apiFailing = false;
   function api(path, opts) {
     const gen = sessionGen;
     return validToken().then((t) => {
@@ -518,8 +526,11 @@ window.SpotifyMusic = (function () {
       const ac = typeof AbortController !== "undefined" ? new AbortController() : null;
       if (ac) o.signal = ac.signal;
       const timer = ac ? setTimeout(() => ac.abort(), FETCH_TIMEOUT_MS) : null;
-      return fetch(API + path, o).catch(() => null)
-        .then((r) => { if (timer) clearTimeout(timer); return r; });
+      // Logged once per failing streak: the player poll repeats this every few seconds offline.
+      return fetch(API + path, o).then((r) => { apiFailing = false; return r; }, (e) => {
+        if (!apiFailing) { apiFailing = true; Log.warn("audio", "Spotify API " + path.split("?")[0] + " failed:", e && (e.name + ": " + e.message)); }
+        return null;
+      }).then((r) => { if (timer) clearTimeout(timer); return r; });
     });
   }
 
@@ -558,7 +569,7 @@ window.SpotifyMusic = (function () {
     let body;
     if (ctx === "liked") {
       return api("/me/tracks?limit=50")
-        .then((r) => (r && r.ok ? r.json().catch(() => null) : null)).then((j) => {
+        .then((r) => (r && r.ok ? r.json().catch((e) => { Log.warn("audio", "Spotify liked-songs response unreadable:", e && e.message); return null; }) : null)).then((j) => {
         if (gen !== sessionGen) return;
         const uris = j && j.items ? j.items.map((i) => i.track && i.track.uri).filter(Boolean) : [];
         if (!uris.length) { releaseToBuiltIn("No liked songs found to play."); return; }
@@ -1006,8 +1017,9 @@ window.SpotifyMusic = (function () {
           }
           return out;
         })
-        .catch(() => {
+        .catch((e) => {
           done();
+          Log.warn("audio", "Spotify account check failed:", e && (e.name + ": " + e.message));
           setStatus("error", "Could not reach Spotify's API — offline, or blocked.");
           return { ok: false, reason: "network", debug: d };
         });
@@ -1303,7 +1315,7 @@ window.SpotifyMusic = (function () {
     connect, disconnect, status, onChange, debug, check,
     devices() {
       return api("/me/player/devices")
-        .then((r) => (r && r.ok ? r.json().catch(() => null) : { httpStatus: r && r.status }));
+        .then((r) => (r && r.ok ? r.json().catch((e) => { Log.warn("audio", "Spotify devices response unreadable:", e && e.message); return null; }) : { httpStatus: r && r.status }));
     },
     lastPlayError() { return lastPlayError; },
     activate,

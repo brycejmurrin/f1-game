@@ -2483,7 +2483,7 @@ const api = {
       };
       try {
         pc.createDataChannel("probe");
-        pc.createOffer().then((o) => pc && pc.setLocalDescription(o)).catch(() => {});
+        pc.createOffer().then((o) => pc && pc.setLocalDescription(o)).catch((e) => { Log.warn("apex", "turnProbe: createOffer/setLocalDescription failed:", e && e.message); });
       } catch (e) { clearTimeout(timer); out.error = "offer_failed"; finish(); }
     });
     return Promise.all(flat.map(one)).then((servers) => {

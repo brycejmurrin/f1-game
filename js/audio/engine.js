@@ -513,9 +513,21 @@ const GameAudio = (function () {
     // iOS Safari starts contexts suspended; resume inside the gesture.
     // Guard the promise: resume() rejects (NotAllowed/InvalidState) on mobile at
     // the edge of a gesture — an unhandled rejection would surface as a crash.
-    if (ctx.state !== "running" && !document.hidden) { const p = ctx.resume(); if (p && p.catch) p.catch(() => {}); }
+    if (ctx.state !== "running" && !document.hidden) { const p = ctx.resume(); if (p && p.catch) p.catch(resumeRejected("create")); }
     loadEngineSamples();
     return true;
+  }
+
+  // "No sound" is the case a player reports, so the first rejected resume() is a
+  // warn with its reason; every gesture retries, so repeats drop to debug.
+  let resumeWarned = false;
+  function resumeRejected(where) {
+    return (err) => {
+      const why = "AudioContext resume rejected at " + where + " (state=" + (ctx && ctx.state) + "): " + ((err && err.message) || err);
+      if (resumeWarned) { Log.debug("audio", why); return; }
+      resumeWarned = true;
+      Log.warn("audio", why + " — silent until a later gesture resumes it");
+    };
   }
 
   function loadEngineSamples() {
@@ -603,9 +615,7 @@ const GameAudio = (function () {
         rebuildTries = 0;
         lastFailedResume = 0;
         Log.info("audio", "GameAudio.resume state=" + (ctx && ctx.state));
-      }).catch((err) => {
-        Log.warn("audio", "context resume rejected (state=" + (ctx && ctx.state) + "): " + ((err && err.message) || err));
-      });
+      }).catch(resumeRejected("gesture"));
     }
   }
 
@@ -623,7 +633,7 @@ const GameAudio = (function () {
     // LIKELY: rebuildCtx() is only ever reached after a resume already failed,
     // i.e. with the context in exactly the state close() refuses. Same shape as
     // the resume() sites below, which have always chained .catch.
-    try { const p = ctx.close(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* already closed */ }
+    try { const p = ctx.close(); if (p && p.catch) p.catch((e) => { Log.debug("audio", "old context close rejected on rebuild:", e && e.message); }); } catch (e) { /* already closed */ }
     ctx = null;
     master = null;
     sfxBus = null;
@@ -690,7 +700,7 @@ const GameAudio = (function () {
       // index.html's unhandledrejection overlay. Swallow both forms.
       try {
         if (ctx && ctx.state === "running" && ctx.suspend) {
-          const p = ctx.suspend(); if (p && p.catch) p.catch(() => {});
+          const p = ctx.suspend(); if (p && p.catch) p.catch((e) => { Log.debug("audio", "context suspend on hide rejected:", e && e.message); });
         }
       } catch (_) { /* a context mid-teardown must not break the hide path */ }
     } else {
@@ -2363,7 +2373,7 @@ const GameAudio = (function () {
     const token = ++musicToken;
     const builtin = !!PLAYLIST[musicIndex].builtin;
     // Never wake a context the hide path suspended: onVisibility's show branch resumes it.
-    if (ctx.state !== "running" && !document.hidden) { const p = ctx.resume(); if (p && p.catch) p.catch(() => {}); }
+    if (ctx.state !== "running" && !document.hidden) { const p = ctx.resume(); if (p && p.catch) p.catch(resumeRejected("music")); }
     if (musicBuffers[url]) { playMusicBuffer(musicBuffers[url], token); return; }
     // ONE DECODE IN FLIGHT PER URL. musicToken suppresses stale PLAYBACK but
     // never cancelled the fetch or the decode, and decodeAudioData allocates the

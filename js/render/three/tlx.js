@@ -945,14 +945,17 @@ const TLX = (function () {
       // supported only where three's timestamp-query feature is present — the
       // WebGPU backend with the adapter feature; never on the WebGL2 fallback
       // (SwiftShader/CI), keeping the GLX {supported:false} shape there.
-      let _gpuTimerOn = false, _gpuMs = -1, _gpuTimerEpoch = 0;
+      let _gpuTimerOn = false, _gpuMs = -1, _gpuTimerEpoch = 0, _gpuTimerFailLogged = false;
       function resolveGpuTimer() {
         if (!_gpuTimerOn) return;
         const epoch = _gpuTimerEpoch;
         try {
           renderer.resolveTimestampsAsync("render").then(v => {
             if (_gpuTimerOn && epoch === _gpuTimerEpoch && v != null && isFinite(v)) _gpuMs = v;
-          }).catch(() => {});
+          }).catch((e) => {
+            // Per-frame call: note the first rejection only.
+            if (!_gpuTimerFailLogged) { _gpuTimerFailLogged = true; Log.debug("gfx", "TLX: GPU timestamp resolve rejected:", e && e.message); }
+          });
         } catch (_) { /* timing is optional */ }
       }
       function _gpuSupported() {

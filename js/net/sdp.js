@@ -273,6 +273,8 @@ const NetSdp = (function () {
       });
       return true;
     } catch (e) {
+      // Name only: a parse error's message can quote the SDP line, ice-pwd included.
+      Log.debug("net", "short SDP refused by this browser, using the full form:", e && e.name);
       return false;
     } finally {
       if (probe) { try { probe.close(); } catch (e) { /* the probe already served its purpose */ } }
@@ -281,9 +283,9 @@ const NetSdp = (function () {
 
   async function packChecked(sdp) {
     const bytes = pack(sdp);
-    if (!bytes) return null;
+    if (!bytes) { Log.debug("net", "SDP not packable (no sha-256/ufrag/pwd or no UDP candidate), using the full form"); return null; }
     const rebuilt = unpack(bytes);
-    if (!rebuilt) return null;
+    if (!rebuilt) { Log.warn("net", "packed SDP failed to unpack, using the full form"); return null; }
     return (await verify(rebuilt)) ? bytes : null;
   }
 

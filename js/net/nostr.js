@@ -157,7 +157,7 @@ const NetNostr = (function () {
 
   function createBoundedInbox(consume) {
     const seen = new Set();
-    let seenChars = 0, active = 0;
+    let seenChars = 0, active = 0, failed = 0;
     const remember = (content) => {
       seen.add(content);
       seenChars += content.length;
@@ -178,7 +178,10 @@ const NetNostr = (function () {
       if (active >= MAX_HEARD_ACTIVE) return "busy";
       remember(content);
       active++;
-      Promise.resolve().then(() => consume(content)).catch(() => {}).finally(() => { active--; });
+      Promise.resolve().then(() => consume(content)).catch((e) => {
+        // First failure per inbox only: a relay replaying history can repeat it per message.
+        if (failed++ === 0) Log.warn("net", "nostr relay message handler failed:", e && e.message);
+      }).finally(() => { active--; });
       return true;
     };
     return { accept, stats: () => ({ seen: seen.size, seenChars, active }) };
@@ -307,7 +310,11 @@ const NetNostr = (function () {
 
         if (hosting) {
           // An answer. Hand it over; the room stays open for more joiners.
-          if (onJoiner) { Promise.resolve().then(() => onJoiner(null, text)).catch(() => {}); return; }
+          if (onJoiner) {
+            Promise.resolve().then(() => onJoiner(null, text))
+              .catch((e) => { Log.warn("net", "nostr joiner answer handler failed:", e && e.message); });
+            return;
+          }
           finish({ ok: true, payload: text });
           return;
         }
@@ -445,7 +452,7 @@ const NetNostr = (function () {
       if (!current && mintOffer) {
         Promise.resolve(mintOffer(null)).then((o) => {
           if (!done && o) { current = o; publish(o); }
-        }).catch(() => {});
+        }).catch((e) => { Log.warn("net", "nostr offer mint failed, room has nothing to publish:", e && e.message); });
       }
 
       later(() => {
@@ -467,7 +474,7 @@ const NetNostr = (function () {
             if (!current && mintOffer) {
               return Promise.resolve(mintOffer(null)).then((o) => {
                 if (!done && o) { current = o; return publish(o); }
-              }).catch(() => {});
+              }).catch((e) => { Log.warn("net", "nostr offer re-mint on rotate failed:", e && e.message); });
             }
             return publish(current);
           },
