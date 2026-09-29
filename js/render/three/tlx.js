@@ -332,6 +332,10 @@ const TLX = (function () {
               depth: true,
               stencil: false,
               powerPreference: "high-performance",
+              // WebXR immersive-vr needs an xrCompatible context (or a later
+              // makeXRCompatible()). Phase 0 seated VR uses XRWebGLLayer on
+              // this GL; without the flag Quest Browser rejects the layer.
+              xrCompatible: true,
             });
           } catch (_) { glCtx = null; }    // null -> three makes its own, as before
         }
@@ -3341,6 +3345,59 @@ const TLX = (function () {
           if (!_warmPending) { _warmRequested = true; _warmAttempts = 0; }
         },
         warming() { return !!_warmPending; },
+        // --- WebXR (Phase 0) -------------------------------------------------
+        // Seated stereo via XRWebGLLayer on the WebGL2 backend. three.xr is
+        // left alone for this spike: we feed per-eye matrices into `frame`
+        // and presentXR() rebinds the camera + viewport for each eye against
+        // the same draw list. Post / soft-blit stay off while presenting.
+        _xrLayer: null,
+        _xrSession: null,
+        xrPresenting() { return !!(this._xrSession); },
+        xrLayer() { return this._xrLayer; },
+        async attachXrSession(session) {
+          const gl = ownGL || (renderer.backend && renderer.backend.gl) || null;
+          if (!gl) throw new Error("TLX XR needs the WebGL2 backend (apex26.tlxForceGL=1)");
+          if (typeof gl.makeXRCompatible === "function") {
+            try { await gl.makeXRCompatible(); } catch (_) { /* already compatible */ }
+          }
+          if (typeof XRWebGLLayer === "undefined") throw new Error("XRWebGLLayer missing");
+          const layer = new XRWebGLLayer(session, gl, { antialias: false, alpha: false });
+          await session.updateRenderState({ baseLayer: layer });
+          this._xrLayer = layer;
+          this._xrSession = session;
+          try { Log.info("gfx", "TLX XRWebGLLayer attached"); } catch (_) { /* */ }
+          return layer;
+        },
+        detachXrSession() {
+          this._xrLayer = null;
+          this._xrSession = null;
+          this._pendingXrEyes = null;
+        },
+        /** Apply one eye's matrices to the three camera (same path as begin). */
+        _applyXrEye(eye) {
+          if (!eye) return;
+          const _wgpu = !!(renderer.backend && renderer.backend.isWebGPUBackend);
+          if (eye.proj && eye.view) {
+            if (_wgpu) {
+              _mul4Col(_projGpu, Z01, eye.proj);
+              camera.projectionMatrix.fromArray(_projGpu);
+            } else {
+              camera.projectionMatrix.fromArray(eye.proj);
+            }
+            camera.matrixWorldInverse.fromArray(eye.view);
+            camera.matrixWorld.copy(camera.matrixWorldInverse).invert();
+            camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+            if (eye.eye) camera.position.set(eye.eye[0], eye.eye[1], eye.eye[2]);
+          }
+        },
+        /** Stereo present: latch eyes, force post off, reuse present()'s draw flush. */
+        presentXR(eyes, opts) {
+          this._pendingXrEyes = eyes && eyes.length ? eyes : null;
+          const savedPost = post;
+          post = null;   // Phase 0: no bloom / SSR / soft-blit in VR
+          try { this.present(opts || {}); }
+          finally { post = savedPost; this._pendingXrEyes = null; }
+        },
         begin(frame) {
           _matFrame++;   // new frame: last frame's materials are evictable again
           resize();
@@ -3737,6 +3794,33 @@ const TLX = (function () {
           const paintCanvas = () => {
             _gpuLastOperation = "render-canvas";
             pinSkyMaterial();
+            // WebXR stereo (Phase 0): immersive layer + per-eye matrices/viewports.
+            const xrEyes = this._pendingXrEyes;
+            const xrLayer = this._xrLayer;
+            if (xrEyes && xrEyes.length && xrLayer) {
+              const gl = ownGL || (renderer.backend && renderer.backend.gl) || null;
+              if (gl && xrLayer.framebuffer) {
+                try { gl.bindFramebuffer(gl.FRAMEBUFFER, xrLayer.framebuffer); } catch (_) { /* */ }
+              }
+              renderer.setRenderTarget(null);
+              for (let ei = 0; ei < xrEyes.length; ei++) {
+                const eye = xrEyes[ei];
+                this._applyXrEye(eye);
+                const vp = eye.viewport;
+                if (vp && typeof renderer.setViewport === "function") {
+                  renderer.setViewport(vp.x, vp.y, vp.width, vp.height);
+                } else if (vp && gl) {
+                  gl.viewport(vp.x, vp.y, vp.width, vp.height);
+                }
+                _gpuLastOperation = "render-xr-" + ei;
+                _renderTimed(scene, camera);
+              }
+              try { renderer.setViewport(0, 0, W, H); } catch (_) { /* */ }
+              if (gl) {
+                try { gl.bindFramebuffer(gl.FRAMEBUFFER, null); } catch (_) { /* */ }
+              }
+              return;
+            }
             if (_softBlit) {
               const rt = _ensureBlitRT(W, H);
               renderer.setRenderTarget(rt);

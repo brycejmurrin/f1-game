@@ -150,6 +150,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // phone sample reaching Input's tilt pipeline over the in-process loopback
   // transport — same VM harness, no browser, ~0.3 s.
   "tests/unit/phone-pad.test.mjs",
+  // ...and WebXR Phase 0: seated-rig compose, controller→remoteSample mapping,
+  // sessionInit feature flags, vendored XRButton/WebGLXRFallback presence. ~0.1 s.
+  "tests/unit/xr-phase0.test.mjs",
   // ...and the two steer-tuning tables that MUST agree: every PRESET bundle
   // lands exactly on its FEEL level, or clicking RELAX reads CUSTOM. Stated
   // in comments and checked by nothing until it drifted for a week. ~0.05 s.
