@@ -47,13 +47,19 @@
       const GRAVEL = [0.62, 0.58, 0.48];
 
       const openArena = (s) => (s >= 0.94 || s <= 0.20);
+      // Schumacher-S bank keep-out: after the monotonic surveyHeights remap the
+      // left-side marshal / tyre kit at ~0.79 clips a pine trunk (≥1.0 m). The
+      // old scaffoldStand booked this corridor; indexSolid alone was not enough
+      // once undulate stayed on for fleet seating.
+      const schumacherS = (s) => (s >= 0.766 && s <= 0.798);
       // The spruce WALL. Like Hockenheim this circuit never called forestEdge(),
       // so its forest was scattered every() passes with daylight through them in
       // every direction. The Eifel plantation is the opposite of that: dense,
       // dark, uniform, and right up against the armco, so the back half of the
       // lap runs through a green trench. The scattered ranks that follow then
       // break up the wall's edge rather than being the whole wood.
-      for (const [s0, s1] of [[0.205, 0.615], [0.640, 0.935]]) {
+      // Split the back-half wall around Schumacher-S so the bank keep-out is empty.
+      for (const [s0, s1] of [[0.205, 0.615], [0.640, 0.766], [0.798, 0.935]]) {
         for (const side of [-1, 1]) {
           // Front rank, right side: skip the single node 0.4417. clearTreeDist
           // pushes that pine ~25 m out to clear the barrier, which lands it
@@ -81,7 +87,7 @@
       // 18 m in the air once the SRTM smoothing (#287) lowered that verge.
       const deep = (s0, s1, side) => (side > 0 && s0 === 0.215
         ? [[0.215, 0.430], [0.480, 0.5500], [0.5631, s1]] : [[s0, s1]]);
-      for (const [a0, a1] of [[0.215, 0.605], [0.650, 0.925]]) {
+      for (const [a0, a1] of [[0.215, 0.605], [0.650, 0.766], [0.798, 0.925]]) {
         for (const side of [-1, 1]) for (const [s0, s1] of deep(a0, a1, side)) {
           forestEdge(s0, s1, side, 41, {
             density: 0.2, hMin: 24, hMax: 40, pineFrac: 0.97,
@@ -91,7 +97,7 @@
       }
       every(20, (k) => {
         const s = k / n;
-        if (openArena(s)) return;
+        if (openArena(s) || schumacherS(s)) return;
         const h = hash(k * 31);
         if (h < 0.12) return;
         const side = h < 0.5 ? -1 : 1;
@@ -100,7 +106,7 @@
       });
       every(32, (k) => {
         const s = k / n;
-        if (openArena(s)) return;
+        if (openArena(s) || schumacherS(s)) return;
         const h = hash(k * 53 + 9);
         if (h < 0.25) return;
         tree(k, h < 0.5 ? -1 : 1, 15 + h * 10, 10 + h * 7, h < 0.5 ? LEAF_D : LEAF);
@@ -108,14 +114,14 @@
       });
       every(52, (k) => {
         const s = k / n;
-        if (openArena(s)) return;
+        if (openArena(s) || schumacherS(s)) return;
         const h = hash(k * 67 + 17);
         if (h < 0.34) return;
         pine(k, h < 0.5 ? -1 : 1, 46 + h * 28, 23 + h * 15, FIR_D);
       });
       every(28, (k) => {
         const s = k / n;
-        if (openArena(s)) return;
+        if (openArena(s) || schumacherS(s)) return;
         const h = hash(k * 97 + 23);
         if (h < 0.58) return;
         bush(k, h < 0.78 ? -1 : 1, 6.5 + h * 4, [0.14, 0.31, 0.15]);
@@ -288,6 +294,7 @@
       // open tube tribune itself is gone — after the elevation survey remap its
       // feet face-sampled a fold-hit skirt (~9 m false air gap → unsupported).
       indexSolid(0.766, 0.798, -1, 16, 6 * 1.9 + 1);
+      indexSolid(0.766, 0.798, 1, 12, 6 * 1.9 + 1);
       marshalPost(K(0.790), -1, 9);
 
       groundPatch(K(0.930), -1, 5, [22, 0.18, 30], GRAVEL,

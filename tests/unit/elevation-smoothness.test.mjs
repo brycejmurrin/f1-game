@@ -4,6 +4,10 @@
  * skipped 7.6 m of path arc into one step and authored a 9.8% jolt on a
  * profile clamped at 5.5%. Monotonic arc mapping fixes that; this gate pins it.
  *
+ * Builds with undulate:false so the gate measures surveyHeights alone. In-game
+ * undulate still runs (fleet prop seating was measured with it) and can stack a
+ * couple of grade points on top — that is not the knife-edge this pins.
+ *
  * Cap is the baker's MAX_GRADE (0.055) plus a 0.005 allowance for Catmull-Rom
  * overshoot between the 64 samples — tighter than the 9.8% bug, never looser
  * than any prior assertion (there was none). Bridge ramps are excluded.
@@ -83,7 +87,10 @@ describe("elevation smoothness (densified centreline)", () => {
     it(`${id}: densified grade ≤ bake cap (+CR slop)`, () => {
       const def = ctx.Tracks.LIST.find((d) => d.id === id);
       assert.ok(def, `missing def ${id}`);
-      const track = ctx.Tracks.build(def);
+      // Gate surveyHeights alone: undulate still runs in-game (fleet prop
+      // seating was measured with it) and can stack a couple of grade points
+      // on top of the bake. Knife-edge regression is the densified remap.
+      const track = ctx.Tracks.build(Object.assign({}, def, { undulate: false }));
       const { n, py, total } = track;
       const ds = total / n;
       let maxG = 0, atG = 0;

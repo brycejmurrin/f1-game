@@ -95,11 +95,11 @@ const Tracks = (function () {
     }
     // Low-amplitude ripple (3 harmonics, whole cycles/lap for seam continuity);
     // amp scales with relief (0.14–0.42 m cap); seeded off circuit id for ghosts.
-    // Surveyed SRTM profiles already carry real micro-relief — adding a second
-    // ripple on top pushed Nürburgring past the baker's 5.5% cap (5.74% → 7.88%)
-    // and invented knife-edges the survey never had. Authored cosine bumps still
-    // get the ripple; they are the flat-plateau circuits it was written for.
-    if (def.undulate !== false && !hasRealElevation(def.id)) {
+    // Surveyed SRTM profiles already carry real relief; the ripple still runs so
+    // fleet prop seating matches the baselines measured with it. Grade of the
+    // densified centreline is gated by elevation-smoothness with undulate off
+    // (surveyHeights only) — undulate can stack a couple of points on top.
+    if (def.undulate !== false) {
       let lo = Infinity, hi = -Infinity;
       for (let k = 0; k < n; k++) { if (py[k] < lo) lo = py[k]; if (py[k] > hi) hi = py[k]; }
       const relief = hi - lo;
