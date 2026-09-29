@@ -821,6 +821,15 @@ function updateHud(force, dtMs) {
     hText(els.tyreCode, (player.tyre && player.tyre.code) || "-");
     hStyle(els.tyreFill, "width", (clamp(1 - spent, 0, 1) * 100).toFixed(0) + "%");
     els.tyre.dataset.wear = spent >= 1 ? "gone" : spent >= TYRE_WARN ? "warn" : "ok";
+    // …and how many LAPS that is, at the rate this driver has been using it:
+    // a percentage says how worn, only laps say whether it reaches the flag.
+    // An attribute read by the bar's ::after (css/hud.css), not a new node.
+    const left = tyres.lapsLeft ? tyres.lapsLeft(player) : null;
+    const bar = els.tyreFill && els.tyreFill.parentNode;
+    if (bar && bar.dataset) {
+      const txt = left == null || spent >= 1 ? "" : "~" + Math.min(99, Math.round(left)) + "L";
+      if (bar.dataset.laps !== txt) bar.dataset.laps = txt;
+    }
     // THE PIT CUE, and it replaces a button rather than decorating one. A stop
     // is called by holding the car on the pit side at the entry, so the dwell
     // has to be visible: without it a driver cannot tell the gesture is

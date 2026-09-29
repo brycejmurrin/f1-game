@@ -653,8 +653,13 @@ test("the timings merge is its own workflow, and never pushes to the deploy bran
   assert.match(timings, /git fetch -q origin "\$TIMINGS_BRANCH"/);
   // The train's gate runs ci.yml as a reusable workflow, so its junit lands in
   // the PAGES run; a workflow_run on "CI" alone never sees those samples.
-  assert.match(timings, /workflows: \["CI", "Deploy to GitHub Pages"\]/,
-    "the Pages train's gate is the one full smoke run on the tip — collect it too");
+  // THE TRAIN ONLY (2026-09-30): listening to "CI" as well created a run per
+  // PR completion that the job's `if:` then skipped — 119 skipped runs in
+  // seven hours, queued one at a time, after the `branches:` filter landed.
+  assert.match(timings, /workflows: \["Deploy to GitHub Pages"\]/,
+    "the Pages train's gate is the one full smoke run on the tip, and the only trigger worth a run");
+  assert.doesNotMatch(timings, /workflows: \[[^\]]*"CI"/,
+    "a workflow_run on CI fires for every PR completion and skips (2026-09-29: 119 in 7 h)");
 });
 
 test("the ship filter is ONE job whose answer every smoke shard reads", () => {

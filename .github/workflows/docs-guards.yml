@@ -41,5 +41,40 @@ jobs:
           persist-credentials: false
           # Same as ci.yml's guards job: a few of these read git history.
           fetch-depth: 0
+      # PROSE-ONLY PRs ONLY (2026-09-30). `paths:` fires when at least ONE
+      # changed file is prose, and nearly every PR touches a note or a skill,
+      # so this ran on 122 of 122 PR pushes on 2026-09-29 — and on a mixed PR
+      # ci.yml's guards job already runs tooling-fast, a superset of this
+      # group. The list below is read from THIS file's own `paths:` (the one
+      # ci-coverage.test.mjs pins equal to ci.yml's paths-ignore), never
+      # retyped. No base, or a git error, runs the guards.
+      - name: Is every changed path prose?
+        id: prose
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -u
+          run_all() { echo "prose=true" >> "$GITHUB_OUTPUT"; echo "RUNNING DOCS GUARDS: $1"; exit 0; }
+          case "${PR_BASE:-}" in ""|0000000000000000000000000000000000000000) run_all "no base sha" ;; esac
+          git cat-file -e "${PR_BASE}^{commit}" 2>/dev/null || run_all "base $PR_BASE unreachable"
+          CHANGED="$(git diff --name-only "$PR_BASE" "$GITHUB_SHA")" || run_all "git diff failed"
+          printf '%s\n' "$CHANGED" | node -e '
+            const fs = require("fs");
+            const yml = fs.readFileSync(".github/workflows/docs-guards.yml", "utf8");
+            const globs = [...yml.matchAll(/^\s+- "([^"]+)"$/gm)].map((m) => m[1]);
+            if (!globs.length) { console.log("prose=true"); process.exit(0); }
+            // `**/` and `**` become placeholders BEFORE the single-star pass, or
+            // that pass rewrites the `.*` they expand to.
+            const res = globs.map((g) => new RegExp("^" + g.replace(/[.+^${}()|[\]\\]/g, "\\$&")
+              .replace(/\*\*\//g, "\u0001").replace(/\*\*/g, "\u0002").replace(/\*/g, "[^/]*")
+              .replace(/\u0001/g, "(.*/)?").replace(/\u0002/g, ".*") + "$"));
+            const changed = fs.readFileSync(0, "utf8").split("\n").filter(Boolean);
+            const code = changed.filter((f) => !res.some((r) => r.test(f)));
+            console.error(code.length ? `code paths in this PR: ${code.slice(0, 5).join(", ")}` : "every changed path is prose");
+            console.log(`prose=${code.length ? "false" : "true"}`);
+          ' >> "$GITHUB_OUTPUT"
+          tail -1 "$GITHUB_OUTPUT"
       - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
+        if: steps.prose.outputs.prose != 'false'
       - run: npm run test:docs-guards
+        if: steps.prose.outputs.prose != 'false'

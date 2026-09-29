@@ -889,7 +889,7 @@ const AiDrive = (function () {
               + degCost(stints[i], lives[i] / (1 + FUEL_WEAR * fuel));
         done += stints[i];
       }
-      if (!best || cost < best.cost) best = { cost, seq: seq.slice(), stints: stints.slice(), stops };
+      if (!best || cost < best.cost) best = { cost, seq: seq.slice(), stints: stints.slice(), stops, lives: lives.slice() };
     };
     const rec = (seq) => {
       walk(seq);
@@ -912,9 +912,16 @@ const AiDrive = (function () {
     const lapsAt = [];
     const stints = best.stints.slice();
     let acc = 0, prev = 0;
+    // …but never LATER past the set's life. At a severe circuit the lives are
+    // short and the optimum already sits on the cliff: a +1 shift ran a third
+    // of the field a lap past it (Austria, 10 laps, measured: 8 of 21 cars
+    // over 100 % wear before their stop, 3 of them forced in by the worn rule).
+    // Earlier is always safe; later only while the stint still fits its life.
+    const effLife = (i, from, len) => best.lives[i] / (1 + FUEL_WEAR * (1 - (from + len / 2) / laps));
     for (let i = 0; i < stints.length - 1; i++) {
       acc += best.stints[i];
-      const at = clamp(acc + shift, prev + 1, laps - (stints.length - 1 - i));
+      const late = shift > 0 && acc + shift - prev > effLife(i, prev, acc + shift - prev);
+      const at = clamp(acc + (late ? 0 : shift), prev + 1, laps - (stints.length - 1 - i));
       lapsAt.push(at); stints[i] = at - prev; prev = at;
     }
     if (stints.length) stints[stints.length - 1] = laps - prev;
