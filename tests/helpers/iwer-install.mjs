@@ -55,10 +55,17 @@ export async function installIwer(page, opts = {}) {
   }, stereo);
 }
 
-/** Wait until Apex XrSession is defined (lexical global, not window.*). */
+/**
+ * Wait until XrSession exists AND XrBoot.bind() has run. Starting a session
+ * before bind leaves no XRWebGLLayer — IWER then delivers zero frames.
+ */
 export async function waitXrReady(page, timeout = 60_000) {
   await page.waitForFunction(
-    () => typeof XrSession !== "undefined" && typeof XrSession.probe === "function",
+    () => typeof XrSession !== "undefined"
+      && typeof XrSession.probe === "function"
+      && typeof XrBoot !== "undefined"
+      && typeof XrBoot.isBound === "function"
+      && XrBoot.isBound(),
     null,
     { timeout, polling: 100 },
   );

@@ -143,6 +143,14 @@ const XrSession = (function () {
       emit("error", { error: _lastError });
       return null;
     }
+    // Without an attachSession binding there is no XRWebGLLayer / baseLayer, so
+    // IWER and real devices deliver zero frames (frameCount stays 0). Wait for
+    // XrBoot.bind() before calling start (tests: waitXrReady / #xr-enter).
+    if (!_bindings || typeof _bindings.attachSession !== "function") {
+      _lastError = new Error("XR not bound to a renderer (XrBoot.bind pending)");
+      emit("error", { error: _lastError, phase: "bind" });
+      return null;
+    }
   // Opt-in preference only — do NOT gate on typeof XRGPUBinding (Quest Browser
     // exposes the interface where WebGPU-in-XR is still unsupported; three.js PR
     // #33497). Request the feature, then trust session.enabledFeatures.

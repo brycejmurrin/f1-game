@@ -25,6 +25,8 @@ const XrBoot = (function () {
   // inside a standalone immersive session). three.setAnimationLoop is unused
   // because we drive XRWebGLLayer ourselves rather than XRManager.
   function loopByXr() { return _loopByXr; }
+  /** True after bind() — tests must wait for this before XrSession.start(). */
+  function isBound() { return _bound; }
 
   function findCockpit() {
     if (_cockpitIdx >= 0) return _cockpitIdx;
@@ -159,7 +161,7 @@ const XrBoot = (function () {
     return false;
   }
 
-  return { bind, mountUi, comfort, loopByXr, applyEyes, present, findCockpit, diag, setFoveation,
+  return { bind, mountUi, comfort, loopByXr, isBound, applyEyes, present, findCockpit, diag, setFoveation,
     // XrUi ENTER click uses this instead of the G façade.
     setCamMode: (...a) => { if (typeof _setCamMode === "function") return _setCamMode(...a); },
   };

@@ -38,6 +38,11 @@ async function bootAndProbe(page) {
     return XrSession.isSupported();
   });
   expect(supported).toBe(true);
+  // ENTER VR visible ⇒ mountUi + capability probe finished (same as a player click).
+  await page.waitForFunction(() => {
+    const b = document.getElementById("xr-enter");
+    return b && !b.hidden;
+  }, null, { polling: 100, timeout: 15_000 });
 }
 
 async function startVr(page) {
@@ -66,10 +71,6 @@ test("pinned IWER vendor is present and ENTER VR appears; session starts/exits/r
   test.setTimeout(180_000);
   await bootAndProbe(page);
 
-  await page.waitForFunction(() => {
-    const b = document.getElementById("xr-enter");
-    return b && !b.hidden;
-  }, null, { polling: 100, timeout: 15_000 });
   const btn = page.locator("#xr-enter");
   await expect(btn).toBeVisible();
   await expect(btn).toHaveText(/ENTER VR/i);
