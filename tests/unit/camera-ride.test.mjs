@@ -336,17 +336,22 @@ test("VISOR is the cockpit eye, same aim, and the rig is anchored on the same ca
   }
 });
 
-test("VISOR draws the cockpit rig without the steering wheel", () => {
+test("VISOR draws the cockpit rig without the steering wheel, and the column and bulkhead it unclips from", () => {
   const game = readFileSync(join(ROOT, "js/game.js"), "utf8");
   const draw = readFileSync(join(ROOT, "js/car/car-draw.js"), "utf8");
   assert.match(game, /GameCams\.cockpitViewmodelAxes\([^;]*visorEye \? GameCams\.VISOR_EYE_FWD : null, visorEye \? GameCams\.VISOR_EYE_UP : null\);/,
     "the rig is anchored with visor's own eye offsets");
   assert.match(game, /drawCockpitRig\(c, _cockMat, dt, paint, visorEye\);/, "the same rig is drawn for visor, flagged wheel-less");
   const rig = draw.slice(draw.indexOf("function drawCockpitRig("));
-  const cut = rig.indexOf("if (noWheel) return;");
-  assert.ok(cut > 0, "the no-wheel early return exists");
+  const cut = rig.indexOf("if (noWheel) {");
+  assert.ok(cut > 0, "the no-wheel branch exists");
   assert.ok(rig.indexOf("cockpitBodyMesh(c.team, c)") < cut && rig.indexOf("drawPlayerWheels(") < cut, "the body and the front wheels are drawn before it");
-  assert.ok(rig.indexOf("getCockpitWheel(") > cut, "the steering wheel is drawn after it, so visor never draws it");
+  const branch = rig.slice(cut, rig.indexOf("return;", cut) + 7);
+  assert.match(branch, /G\.gfx\.draw\(getCockpitDash\(\), _rigA, opt\);/, "visor draws the column, boss and bulkhead, unrolled at the wheel mount");
+  assert.ok(rig.indexOf("getCockpitWheel(") > cut + branch.length, "the steering wheel is drawn after the branch returns, so visor never draws it");
+  // The bulkhead closes the opening wall to wall: 0.76 local x 0.80 scale = ±0.304 m against inner walls at ±0.315.
+  const mesh = readFileSync(join(ROOT, "js/car/car-mesh.js"), "utf8");
+  assert.match(mesh, /_rigBox\(out, 0, -0\.090, 0\.32, 0\.76, 0\.32, 0\.035, CARB\);/, "the front bulkhead spans the tub and meets the coaming");
 });
 
 test("EVERY world-facing camera mode is C1 on a gradient", () => {
