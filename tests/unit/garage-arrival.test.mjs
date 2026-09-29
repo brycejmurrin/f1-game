@@ -93,16 +93,15 @@ test('drive-out path: parked in the bay facing the lane, a held beat, then out o
     }
   }
 });
-test('drive-out shot: both eyes inside the bay, the dolly towards the door, the tuner fov, RIGHT mirrors the side', () => {
+test('drive-out shot: from the back of the bay, out THROUGH the door (never its walls), onto the lane; tuner fov; RIGHT mirrors', () => {
   const s = Out.shot(-2.75, { fov: 60 });
   assert.equal(s.id, 'garage-out');
   assert.ok(!/^grid/.test(s.id), 'never a grid shot: the card keeps the map and the radio check ignores it');
-  for (const e of s.eye) {
-    assert.equal(e.at, 'box');
-    assert.ok(e.x > 0 && e.x < 12.8, `eye ${e.x} m in: inside, short of the back wall`);
-    assert.ok(Math.abs(e.off) < 5.4, 'inside the side walls');
-  }
-  assert.ok(s.eye[0].x > s.eye[1].x, 'from the back of the bay towards the door');
+  for (const e of [...s.eye, ...s.look]) assert.equal(e.at, 'box');
+  assert.ok(s.eye[0].x > 0 && s.eye[0].x < 12.8 && Math.abs(s.eye[0].off) < 5.4, 'starts inside the bay, short of the back wall');
+  assert.ok(s.eye[1].x < 0 && s.eye[1].x > -2.75, 'ends just out of the door, short of the lane the car drives down');
+  assert.ok(Math.abs(Out.eyeDoorA(s)) < Out.DOOR_HALF - 0.4, `the dolly crosses the door line ${Out.eyeDoorA(s).toFixed(2)} m from its centre: through the opening`);
+  assert.equal(s.look[1].off, Out.A_CAR + Out.A_RUN, 'the last look is where the car stops');
   assert.deepEqual([...s.fov], [60, 60]);
   assert.equal(Out.shot(-2.75, { angle: 'right' }).eye[0].off, -s.eye[0].off);
 });

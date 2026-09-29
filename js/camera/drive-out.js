@@ -31,17 +31,26 @@ const DriveOut = (function () {
   }
 
   /** The shot, in `box` anchors ({at: "box", off, x, y}: `off` metres of arc from
-   *  the box, `x` metres from the door line INTO the bay). The eye dollies from the
-   *  back of the bay to just inside the door on the UPSTREAM side, so the jamb
-   *  never hides a car that turns downstream; "right" mirrors it. Pure. */
+   *  the box, `x` metres from the door line INTO the bay). The eye starts behind
+   *  the car at the back of the bay and FOLLOWS IT OUT, through the door on the
+   *  upstream side (crossing the door line EYE_DOOR_A metres from its centre,
+   *  inside the 2.7 m half-opening), to stand on the lane watching the car go.
+   *  Ending inside the bay, the last look grazed the downstream jamb and the car
+   *  finished half behind it (measured, Bahrain). "right" mirrors it. Pure. */
   function shot(laneL, cfg) {
     const m = cfg && cfg.angle === "right" ? -1 : 1, fov = (cfg && cfg.fov) || 54;
     return {
       id: "garage-out", dur: 0, ease: "inOut",
-      eye: [{ at: "box", off: -3.6 * m, x: 11.0, y: 2.1 }, { at: "box", off: -3.0 * m, x: 1.2, y: 1.6 }],
-      look: [{ at: "box", off: A_CAR, x: L_CAR - 1.8, y: 0.7 }, { at: "box", off: A_CAR + A_RUN * 0.8, x: laneL, y: 0.8 }],
+      eye: [{ at: "box", off: -3.6 * m, x: 11.0, y: 2.1 }, { at: "box", off: -2.0 * m, x: -1.0, y: 1.4 }],
+      look: [{ at: "box", off: A_CAR, x: L_CAR - 1.8, y: 0.7 }, { at: "box", off: A_CAR + A_RUN, x: laneL, y: 0.6 }],
       fov: [fov, fov],
     };
+  }
+  /** Where the eye's straight dolly crosses the door line (x = 0), in metres of
+   *  arc from the door's centre: it must stay inside the opening. Pure. */
+  function eyeDoorA(sh) {
+    const [e0, e1] = sh.eye, f = e0.x / (e0.x - e1.x);
+    return e0.off + (e1.off - e0.off) * f;
   }
 
   function create(G) {
@@ -121,5 +130,5 @@ const DriveOut = (function () {
     return { lead, pose, reset, box: () => box };
   }
 
-  return Object.freeze({ create, path, shot, SECONDS, HOLD, L_CAR, A_CAR, A_RUN });
+  return Object.freeze({ create, path, shot, eyeDoorA, SECONDS, HOLD, L_CAR, A_CAR, A_RUN, DOOR_HALF: 2.7 });
 })();
