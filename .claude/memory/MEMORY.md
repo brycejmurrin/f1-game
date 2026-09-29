@@ -6,3 +6,4 @@ topic file. User preferences and corrections only — a measured lesson belongs 
 `docs/notes/`, a rule in a hook or test. An entry that contradicts the current
 code or AGENTS.md is stale: fix or delete it, do not follow it.
 - [Small steps for API analysis](small-steps-for-api-analysis.md) — prefer small incremental queries over bulk fetch scripts
+- [Merge fast, verify on CI](merge-fast-verify-on-ci.md) — CI/tooling PRs: open ready, merge on request, watch the fast tier; never for js/ without the gate
