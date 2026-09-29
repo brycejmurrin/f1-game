@@ -151,10 +151,13 @@ on:
     # longer runs on push — it is a release train (three ticks an hour) that
     # calls this workflow for the FULL gate on the tip. A push to the deploy
     # branch gets the FAST tier here instead: guards, node suites, the parts
-    # census, driving-model and the change-aware selection, in its own
-    # concurrency group so sessions never cancel each other's verdict. The
-    # browser smoke shards, the geometry sweeps and the renderer jobs are the
-    # train's (and ready PRs'). The tier is decided by ONE expression,
+    # census, driving-model and the change-aware selection, sharing the
+    # `ship-push` concurrency group so a burst of tip pushes cancels
+    # superseded runs instead of queueing them. The train is a different
+    # group (pages.yml's unique concurrency_key) and is never cancelled by a
+    # later push. The browser smoke shards, the geometry sweeps and the
+    # renderer jobs are the train's (and ready PRs'). The tier is decided by
+    # ONE expression,
     # repeated on the heavy jobs (smoke, ship-filter, sweeps):
     #   inputs.concurrency_key == '' && (<deploy-branch push> || <draft PR>)
     # (a Pages call always carries a concurrency_key, so it is never fast).
@@ -300,10 +303,13 @@ concurrency:
   # is queued behind exactly that. Run 2758 (2026-09-08) ended `cancelled` at
   # 20 min with no job over its cap and nothing failing, which is the shape
   # this produces.
-  # A push to the DEPLOY branch (the fast tier) also gets its own group: several
-  # sessions push there minutes apart, and a cancelled fast run would hand the
-  # session whose verdict it was a `cancelled` for someone else's commit.
-  group: ci-${{ inputs.concurrency_key || ((github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || (github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng')) && github.run_id) || github.event.pull_request.head.ref || github.ref_name }}
+  # A push to the DEPLOY branch (the fast tier) shares ONE group with
+  # cancel-in-progress: unique per-run groups queued 8-9 fast-tier runs at
+  # once against ~20 slots (docs/notes/CI-ANALYSIS-2026-09-29.md). Newest-wins
+  # cancels the superseded push. The run that is DEPLOYING is not in this
+  # group: pages.yml always passes a unique concurrency_key, and its own
+  # `pages-gate-*` group has cancel-in-progress false.
+  group: ci-${{ inputs.concurrency_key || ((github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.run_id) || (github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && 'ship-push') || github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 jobs:

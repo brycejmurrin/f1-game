@@ -308,13 +308,17 @@ test("one CI run per branch head: push and pull_request share a group, manual ru
   // to github.ref, which put the nightly in the same group as every push to
   // the deploy branch — and GitHub keeps only ONE pending run per group, so
   // the next push silently discarded the queued nightly (run 2758).
-  // A push to the DEPLOY branch is the fast tier and gets its own group too:
-  // sessions push there minutes apart, and a cancelled fast run would hand a
-  // session `cancelled` for someone else's commit.
-  assert.match(ciWorkflow, /group: ci-\$\{\{ inputs\.concurrency_key \|\| \(\(github\.event_name == 'workflow_dispatch' \|\| github\.event_name == 'schedule' \|\| \(github\.event_name == 'push' && github\.ref_name == 'claude\/f1-game-project-26h3ng'\)\) && github\.run_id\) \|\| github\.event\.pull_request\.head\.ref \|\| github\.ref_name \}\}/,
-    "push and PR runs of one branch must share a group; dispatched/scheduled runs and deploy-branch pushes must not");
+  // A push to the DEPLOY branch is the fast tier and shares `ship-push` so
+  // a burst of tip pushes cancels superseded runs instead of queueing eight
+  // of them. Dispatch and schedule still get a unique run_id group (the
+  // nightly must not share the tip's group — run 2758). The train is not in
+  // this group: pages.yml passes a unique concurrency_key.
+  assert.match(ciWorkflow, /group: ci-\$\{\{ inputs\.concurrency_key \|\| \(\(github\.event_name == 'workflow_dispatch' \|\| github\.event_name == 'schedule'\) && github\.run_id\) \|\| \(github\.event_name == 'push' && github\.ref_name == 'claude\/f1-game-project-26h3ng' && 'ship-push'\) \|\| github\.event\.pull_request\.head\.ref \|\| github\.ref_name \}\}/,
+    "push and PR runs of one branch must share a group; dispatched/scheduled runs keep run_id; deploy-branch pushes share ship-push");
   assert.match(ciWorkflow, /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \|\| github\.event_name == 'push' \}\}/,
     "newest wins on both events");
+  assert.match(ciWorkflow, /&& 'ship-push'/,
+    "deploy-branch pushes must share one group, not a per-run_id group that never cancels");
   // The deploy gate is unaffected: its caller supplies a unique key. The train
   // rule lives on pages.yml's own ci job: one gate at a time, never cancelled
   // (a tick waits, a later tick replaces the waiting one), so lag is bounded
