@@ -63,8 +63,9 @@ test.describe.configure({ timeout: 300_000 });
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
-  // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
-  await page.waitForFunction(() => typeof Input !== "undefined" && !!Input.poll, null, { polling: 100, timeout: BOOT_MS });
+  // Input.ready, not Input.poll: the API object exists before Input.init() wires
+  // listeners (same race as touch-buttons / tilt-pipeline — see Input.ready).
+  await page.waitForFunction(() => typeof Input !== "undefined" && Input.ready, null, { polling: 100, timeout: BOOT_MS });
   // clear any latched edges / held keys between cases
   await page.evaluate(() => Input.reset());
 });
