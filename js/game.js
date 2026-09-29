@@ -3929,10 +3929,11 @@ function raceIntro(go) {
   if (!flybyShots) flybyShots = planned || FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0);   // a different flyby each load (never the sim RNG); an editor-saved list plays as authored
   if (flybyShots) flybyShots = FlybySeq.withoutSlot(flybyShots);   // nobody knows your slot on a random grid; a small grid has empty boxes
   if (flybyShots && real && (real.watch || real.startLap > 1)) flybyShots = FlybySeq.withoutGrid(flybyShots);
-  FlybySeq.setDuration(loadingScreen.nextFlyMs());   // plan every pan for the seconds this run has
+  const info = loadingInfo();   // before the duration: a real race's read (info.readMs) may stretch the flyby
+  FlybySeq.setDuration(loadingScreen.nextFlyMs(info.readMs));   // plan every pan for the seconds this run has
   if (world) FlybySeq.warm(track, flybyShots);   // plan the opening shots now, the rest in slices before their cuts
   FlybySeq.reset();   // this run's shot 0 is a cut, not a glide from wherever the camera was
-  loadingScreen.run(loadingInfo(), go);
+  loadingScreen.run(info, go);
 }
 /** WHAT THE LOADING SCREEN DESCRIBES: the circuit about to be raced, this
  *  session's settings, and whether there is a built world to fly over. Named
@@ -3942,7 +3943,7 @@ function raceIntro(go) {
  *  the next time a row is added to the card. */
 function loadingInfo() {
   const real = realRace.intro();
-  return {
+  const out = {
     track: Tracks.LIST[trackIdx], laps: raceLaps,
     gp: real ? real.title : SeasonCal.gpName ? SeasonCal.gpName(Tracks.LIST[trackIdx]) : undefined,   // the 2026 REAL calendar renames two rounds (season-cal.js); a real race is its own event
     real,   // the Data Hub's real race (RealRace.intro): the event, whose car, from which lap — the announcer reads it
@@ -3955,7 +3956,10 @@ function loadingInfo() {
     // circuit switched a moment ago, scenery still downloading) would put a
     // black hold where the cinematic should be, which reads as a hang.
     hasWorld: menuWorld(), shots: flybyShots, grid: (cars || []).map((c) => ({ code: c.code, colour: c.color, isPlayer: c === player && FlybySeq.slotKnown() })),   // the card's grid graphic + radio check: menuGridCars() seated `cars` in grid order
+    readMs: 0,
   };
+  if (real && announcer.readMs) out.readMs = announcer.readMs(out);   // the race-so-far read: the flyby stretches to it (LoadingScreen.flyMsFor)
+  return out;
 }
 // ACTIVE AERO activation zones (js/physics/aero-zones.js) — pure circuit geometry.
 aeroZ = AeroZones.create(G);
@@ -4378,7 +4382,7 @@ function update(dt) {
   // countdown while somebody is still driving. The hard time cap remains the
   // bounded escape hatch for an unfinished or stale participant.
   if (resultT === 0) {
-    resultT = RaceControl.finishDelay(cars, raceT, lapsTarget);
+    resultT = RaceControl.finishDelay(cars, raceT, lapsTarget, realRace.raceT0());
     // A GUEST holding the host's classification is done once ITS car is: its
     // view of the host's car can lag or disagree (a finish still in flight, a
     // pose lost to extrapolation), and waiting on that view meant the host's

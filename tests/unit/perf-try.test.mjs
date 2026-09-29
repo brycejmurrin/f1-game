@@ -288,8 +288,15 @@ test("GLSL / WGSL / TSL keep only the gated ON path", () => {
 
 test("SETTINGS still has GRAPHICS: HIGH and a door-index stack", () => {
   const html = read("index.html");
-  assert.match(html, /GRAPHICS: HIGH/);
+  // Mount point in the DISPLAY › RENDERER fold: GfxQuality.replaceChilds this
+  // with SettingRow at init. The live label is `GRAPHICS: ${preset}` in
+  // js/perf/quality-preset.js — HIGH remains the desktop default preset.
+  assert.match(html, /id="pm-gfx"[^>]*>GRAPHICS: HIGH/);
   assert.doesNotMatch(html, /GRAPHICS: STANDARD/);
+  const gfx = read("js/perf/quality-preset.js");
+  assert.match(gfx, /return `GRAPHICS: \$\{current\(\)\.label\}`/);
+  assert.match(gfx, /\{ id: "high",\s+label: "HIGH"/);
+  assert.match(gfx, /SettingRow\.build\("pm-gfx", "GRAPHICS"/);
   assert.match(html, /id="pm-settings-index"/);
   for (const id of ["pm-open-controls", "pm-open-display", "pm-advanced", "pm-lighting"]) {
     assert.match(html, new RegExp(`id="${id}"`));
