@@ -525,13 +525,13 @@ const Tracks = (function () {
   // The survey at every 4 m node, not just at the control points: a control
   // point can only carry its own height, and splining between them drew a
   // straight line across a dip under dijon's 399 m first segment (9.7 m off).
-  // Each node is projected onto the source trace (a window walking forward, so
-  // a hairpin's other leg is never picked) and reads the table at that ARC
-  // fraction, which is independent of startFrac / reverse. The table is
-  // periodic, so the lap closes without a drift correction.
+  // Align once on the source trace, then read MONOTONIC arc fractions — a
+  // nearest-seg walk skipped 7.6 m into one step at Nürburgring s≈0.775 and
+  // authored a 9.8% knife-edge on a 5.5%-capped bake. Table is periodic.
   function surveyHeights(def, px, py, pz, n) {
     const P = def.path.pts, N = P.length, arc = new Float64Array(N + 1);
     for (let i = 1; i <= N; i++) arc[i] = arc[i - 1] + __M.hypot(P[i % N][0] - P[i - 1][0], P[i % N][1] - P[i - 1][1]);
+    const pathLen = arc[N] || 1;
     const near = (x, z, i) => {
       const a = P[i], b = P[(i + 1) % N], ex = b[0] - a[0], ez = b[1] - a[1], l2 = ex * ex + ez * ez || 1;
       const t = __M.max(0, __M.min(1, ((x - a[0]) * ex + (z - a[1]) * ez) / l2));
@@ -540,16 +540,11 @@ const Tracks = (function () {
     };
     let seg = 0, bd = Infinity;
     for (let i = 0; i < N; i++) { const d = near(px[0], pz[0], i)[0]; if (d < bd) { bd = d; seg = i; } }
-    const dir = def.reverse ? -1 : 1, y0 = elevationAt(def.id, near(px[0], pz[0], seg)[1] / arc[N]);
-    const base = py[0];
+    const startFrac = near(px[0], pz[0], seg)[1] / pathLen;
+    const dir = def.reverse ? -1 : 1, y0 = elevationAt(def.id, startFrac), base = py[0];
     for (let k = 0; k < n; k++) {
-      let best = null, bi = seg;
-      for (let o = -2; o <= 8; o++) {
-        const i = (((seg + dir * o) % N) + N) % N, r = near(px[k], pz[k], i);
-        if (!best || r[0] < best[0]) { best = r; bi = i; }
-      }
-      seg = bi;
-      py[k] = base + elevationAt(def.id, best[1] / arc[N]) - y0;
+      const f = ((startFrac + dir * (k / n)) % 1 + 1) % 1;
+      py[k] = base + elevationAt(def.id, f) - y0;
     }
   }
 
