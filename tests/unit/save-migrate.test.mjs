@@ -11,10 +11,7 @@
  *   - Migration is IDEMPOTENT: running it twice equals running it once, so a
  *     save that loads in two tabs, or is re-saved without change, never drifts.
  *   - A v0 save (predates `v`) climbs to CAREER_V and gains a season.
- *   - A save from a NEWER build is stamped back to CAREER_V rather than
- *     refused — recorded here because it is what the code does, not because
- *     it is obviously right: the next rung's author decides whether a
- *     downgrade should keep unknown keys or bail.
+ *   - A save from a NEWER build keeps its version and unknown keys.
  *
  * When rung v1 → v2 lands: add its shape to `RUNG_INPUTS` below and the
  * idempotence and climb cases cover it without a new test.
@@ -106,8 +103,7 @@ test("junk in, null out: a non-object save is refused rather than repaired", () 
   const SM = load();
   for (const bad of [null, undefined, 7, "save", []]) {
     const r = SM.migrateCareer(bad);
-    if (Array.isArray(bad)) assert.equal(typeof r, "object"); // an array is an object to `typeof`; documented edge
-    else assert.equal(r, null, `${JSON.stringify(bad)} should be refused`);
+    assert.equal(r, null, `${JSON.stringify(bad)} should be refused`);
   }
 });
 
@@ -119,6 +115,39 @@ test("a malformed season (number, string, array) is replaced, never thrown on �
     assert.ok(!Array.isArray(c.season));
     assert.equal(c.season.round, 0);
   }
+});
+
+
+test("JSON exponent overflow cannot poison career money or contract arithmetic", () => {
+  const SM = load();
+  const c = SM.migrateCareer(JSON.parse(`{"money":1e309,"deal":{
+    "salary":-1e309,"bonusPt":"Infinity","left":1e309,"years":"-Infinity"}}`));
+  assert.equal(c.money, 0);
+  for (const key of ["salary", "bonusPt", "left", "years"]) assert.equal(c.deal[key], 0, key);
+  assert.equal(c.money + c.deal.salary + c.deal.bonusPt * 25, 0,
+    "settling a race must not receive Infinity or NaN from the loaded contract");
+  const reread = SM.migrateCareer(JSON.parse(JSON.stringify(c)));
+  assert.equal(reread.money, c.money);
+  assert.deepEqual(reread.deal, c.deal, "a save/reload must not turn corrupt numbers into null");
+});
+
+test("finite numeric strings retain career money and contract values", () => {
+  const c = load().migrateCareer({ money: "500", deal: { salary: "25", bonusPt: "12", left: "1", years: "2" } });
+  assert.equal(c.money, 500);
+  assert.deepEqual(c.deal, { salary: 25, bonusPt: 12, left: 1, years: 2 });
+});
+
+test("invalid driver points and overflowing legacy aliases stay finite and idempotent", () => {
+  const SM = load();
+  const s = SM.remapPoints(JSON.parse(`{"pts":{"AAA":1e309,"BBB":"Infinity","haas:0":25},"teamPts":{"haas":1e309}}`));
+  assert.equal(s.pts["haas:0"], 25, "invalid legacy points cannot erase valid stable-id points");
+  assert.equal(s.pts["haas:1"], 0);
+  assert.equal(Object.hasOwn(s.teamPts, "haas"), false);
+  const overflow = SM.remapPoints({ pts: { AAA: 1e308, "haas:0": 1e308 } });
+  assert.ok(Number.isFinite(overflow.pts["haas:0"]), "two individually finite aliases must not sum to Infinity");
+  const snap = JSON.stringify(overflow);
+  SM.remapPoints(overflow);
+  assert.equal(JSON.stringify(overflow), snap);
 });
 
 test("a stored display code is never overwritten from the shipped roster on load", () => {

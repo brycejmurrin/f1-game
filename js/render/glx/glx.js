@@ -1568,6 +1568,23 @@ const GLXBackend = (function () {
     }
   }
 
+  // REAR-VIEW MIRROR (js/render/shared/mirror-pass.js; post.js owns the target
+  // and the composite). The caller has already put the mirror camera on
+  // `frame`, and runs this BEFORE the main begin(), as it runs the env probe:
+  // present() reads the post matrices from whichever begin() ran LAST.
+  function mirrorBegin(frame, w, h) {
+    if (!gl || ctxGone() || !PST || _envActive) return false;
+    if (!PST.mirror.begin(Math.max(16, Math.min(1024, w | 0)), Math.max(8, Math.min(512, h | 0)))) return false;
+    begin(frame);   // binds the mirror FBO while mirror.active()
+    return true;
+  }
+  function mirrorEnd() {
+    if (!PST || !PST.mirror.active()) return;
+    PST.mirror.end();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);   // post-off main pass draws here
+    gl.viewport(0, 0, width, height);
+  }
+
   // Open a GPU timer query for this frame (if timing is on and none is already
   // open). Called from begin(); the matching endQuery is in present().
   function _gpuTimerBegin() {
@@ -1662,6 +1679,8 @@ const GLXBackend = (function () {
     if (_envActive) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, envFBO);
       gl.viewport(0, 0, ENV_SIZE, ENV_SIZE);
+    } else if (PST.mirror.active()) {
+      PST.mirror.bindTarget();   // rear-view mirror pass (mirrorBegin below)
     } else if (PST.enabled()) {
       PST.bindSceneTarget();
     }
@@ -2632,7 +2651,7 @@ const GLXBackend = (function () {
       // see-through and z-fights with no error on screen. Restored on the
       // FAULT path only, so the happy path pays nothing for the guard.
       let r;
-      try { r = PST.present(opts); }
+      try { r = PST.present(opts); PST.mirror.composite(opts); }
       catch (e) { try { gl.enable(gl.DEPTH_TEST); } catch (_) { /* context lost: nothing to restore into */ } throw e; }
       if (_softPresentWaiters.length || _softCaptureDue) softBlit();
       if (_glDrainAlways || _drainLeft > 0) { _drainLeft--; drainGlErrors("present"); }
@@ -2666,6 +2685,10 @@ const GLXBackend = (function () {
     }),
     envFaceBegin,
     envFaceEnd,
+    mirrorBegin,
+    mirrorEnd,
+    mirrorRect: (r) => { if (PST) PST.mirror.rect(r); },
+    mirrorState: () => (PST ? PST.mirror.state() : { ready: false, dead: true }),
     envProbeReady() { return envReady; },
     // New track/session: the cube still holds the OLD circuit — hold the
     // analytic fallback until a fresh 6-face cycle has re-rendered the world.

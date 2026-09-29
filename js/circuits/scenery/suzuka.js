@@ -506,29 +506,38 @@
         billboard(Math.round(n * s) % n, sd, gap, 7, 3.5, parkCol[Math.round(s * 10) % parkCol.length]);
       }
 
-      // ── Figure-8 crossover — dark soffit under + green parapets on the upper ─
+      // ── Figure-8 crossover — soffit under the UPPER ribbon + green parapets ─
       // THE DECK GOES ON THE ROAD THAT PASSES UNDER: racing 0.437 (Degner→
       // hairpin, lower) and racing 0.845 (back straight, bridges-lifted upper).
       // Real overpass: the upper road IS the deck (Wikipedia / F1 circuit guide).
-      // SRTM bake puts the upper ribbon near y ≈ 20; a prior green overheadSpan
-      // at clearance 8.6 hung ~8 m above that tarmac with supports:false.
+      //
+      // Blow-by-blow (measured on ship tip after SRTM + bridges rise:10):
+      //   lower py≈7.7, upper py≈20.1 (Δ≈12.3 m). A dark overheadSpan at
+      //   clearance 5.5 topped out at y≈15 — a mid-gap floating slab ~5 m
+      //   under the upper ribbon (the "blob on top of the bridge"). Abutments
+      //   matched that mid height; cheek pier was onTrack-skipped.
+      // Fix: seat the soffit immediately under the upper ribbon, raise piers
+      // and abutments from terrain to that soffit, keep flush green parapets.
       const XOVER_GREEN = [0.12, 0.48, 0.28];
+      const XOVER_GREEN_CAP = [0.18, 0.55, 0.32];
       const XOVER_DK    = [0.055, 0.075, 0.105];
-      // Dark structural soffit under the bridge (lower-road clearance ≥ 4.8 m).
-      overheadSpan({ id: "suzuka-crossover-deck", frac: 0.437, clearance: 5.5,
-        minimumClearance: 4.8, thickness: 1.7, depth: 20, span: hw[Math.round(0.437 * n) % n] * 2 + 8,
+      const kLo = Math.round(0.437 * n) % n;
+      const kUp = Math.round(0.845 * n) % n;
+      const XOVER_THICK = 1.7;
+      const XOVER_DEPTH = 20;
+      // Underside of soffit ≈ upper ribbon − small gap; keep ≥ 4.8 over lower.
+      const xoverRise = Math.max(0, py[kUp] - py[kLo]);
+      const xoverClear = Math.max(4.8, xoverRise - XOVER_THICK - 0.35);
+      overheadSpan({ id: "suzuka-crossover-deck", frac: 0.437, clearance: xoverClear,
+        minimumClearance: 4.8, thickness: XOVER_THICK, depth: XOVER_DEPTH,
+        span: hw[kLo] * 2 + 8,
         supportGap: 2.8, supportWidth: 1.8, color: XOVER_DK,
         required: true });
-      // Green identity ON the lifted ribbon: thin edge beams via overheadSpan
-      // with lateral `offset` (not a full-width lid). Clearance ≈0.2 sits the
-      // beam on the ribbon; supports:false because the road IS the deck.
-      // A prior full-span at clearance 8.6 hung ~8 m above the SRTM-lifted
-      // tarmac. modelGroup across both edges was footprint-rejected.
+      // Green parapets ON the lifted ribbon (road IS the deck). Thin edge
+      // beams via lateral offset — a full-width lid at clearance 8.6 used to
+      // hang above the SRTM ribbon; clearance 0.05 keeps them flush.
       {
-        const kUp = Math.round(0.845 * n) % n;
         const edgeOff = hw[kUp] + 1.2;
-        // Clearance 0.05 keeps the beam underside within GAP (0.15) of the
-        // ribbon so ground-audit does not call it unsupported; 0.2 floated it.
         overheadSpan({
           id: "suzuka-crossover-green-span",
           frac: 0.845,
@@ -554,59 +563,85 @@
           supports: false,
           color: XOVER_GREEN,
         });
-        // Outer cheek pier on the LEFT only — a mirrored pair shared one
-        // horizontal crown plane across the bridge (18 m² flatCoplanar). One
-        // terrain-seated pier plus the two edge beams still reads as the
-        // green overpass identity.
+        // Terrain-seated cheek pier from grade up to the upper ribbon.
+        // LEFT of racing sits inside the lower-road footprint of the figure-8
+        // (onTrack always skips). RIGHT clears. Landmark id kept as
+        // `…-cheek-left` for contract stability.
+        //
+        // anchor() at dist>2.2 returns terrainY (grade), NOT the elevated
+        // ribbon — using pier.c[1] as the crown left the pier topping at
+        // y≈13 while the upper road is at y≈20. Crown from py[k] instead.
         {
-          const pier = anchor(K(0.845), -1, 6.2);
-          if (!onTrack(pier.c[0], pier.c[2], 4)) {
+          const pier = anchor(K(0.845), 1, 8.0);
+          if (!onTrack(pier.c[0], pier.c[2], 3.0)) {
             const pb = [pier.r, pier.u, pier.t];
             const gy = terrainYAt(pier.c[0], pier.c[2]);
-            const footY = gy != null ? gy : pier.c[1] - 11;
-            const topY = pier.c[1] + 0.35;
-            const pierH = Math.max(5.5, topY - footY + 0.4);
-            const midLift = (footY - 0.2 + pierH / 2) - pier.c[1];
+            const footY = gy != null ? gy : pier.c[1];
+            const roadY = py[pier.k];
+            const topY = roadY + 0.55;
+            // Pier stops 0.15 m under the cap centre so the crown plate does
+            // not share a face with the pier top (was 9 m² flatCoplanar).
+            const pierH = Math.max(6.0, topY - footY - 0.15);
+            const midY = footY - 0.25 + pierH / 2;
+            const midLift = midY - pier.c[1];
             const pc = vadd(pier.c, pier.u, midLift);
+            const crownLift = topY - pier.c[1];
             modelGroup("suzuka-crossover-green-cheek-left", {
-              center: pc, size: [2.2, pierH + 1, 5.2], basis: pb,
+              center: pc, size: [2.4, pierH + 1.2, 6.0], basis: pb,
             }, (stage) => {
-              addBox(stage, pc, [1.7, pierH, 4.2], XOVER_GREEN, pb);
-              addBox(stage, vadd(pier.c, pier.u, 0.55), [2.1, 0.45, 4.6], [0.18, 0.55, 0.32], pb);
+              addBox(stage, pc, [1.8, pierH, 5.0], XOVER_GREEN, pb);
+              addBox(stage, vadd(pier.c, pier.u, crownLift),
+                     [2.2, 0.5, 5.4], XOVER_GREEN_CAP, pb);
             }, { required: true });
           }
         }
       }
       {
-        // Lower-road mouth reveal. Kept clear of the deck soffit (underside at
-        // clearance 5.5) and shifted outward so portal faces do not share a
-        // plane with the deck / its piers (was a 3.8 m² flatCoplanar hit).
-        const pa = anchor(K(0.437), -1, 6.8), pb = [pa.r, pa.u, pa.t];
-        const pc = vadd(pa.c, pa.u, 2.2);
+        // Lower-road mouth reveal under the raised soffit. Height tracks
+        // xoverClear so the portal reads as the underpass opening, not a
+        // short stub beside a mid-air slab. Shifted out to avoid sharing a
+        // plane with deck piers / abutments (flatCoplanar).
+        // Crown from py[kLo] — anchor at dist 7.2 is terrain-seated.
+        const pa = anchor(K(0.437), -1, 7.2), pb = [pa.r, pa.u, pa.t];
+        const portalH = Math.min(xoverClear - 0.6, 9.5);
+        const footY = pa.c[1];
+        const midY = py[kLo] + portalH / 2;
+        const midLift = midY - footY;
+        const pc = vadd(pa.c, pa.u, midLift);
         modelGroup("suzuka-crossover-portal", {
-          center: pc, size: [2.0, 4.6, 22], basis: pb,
+          center: pc, size: [2.2, portalH + 0.8, 18], basis: pb,
         }, (stage) => {
           stage._mat = MAT.CONCRETE;
-          addBox(stage, vadd(pa.c, pa.u, 2.15), [1.5, 4.30, 20], XOVER_DK, pb);
+          addBox(stage, vadd(pa.c, pa.u, midLift), [1.5, portalH, 16], XOVER_DK, pb);
           stage._mat = MAT.METAL;
-          addBox(stage, vadd(vadd(pa.c, pa.r, 0.82), pa.u, 2.15),
-                 [0.16, 4.38, 20.4], [0.12, 0.16, 0.22], pb);
-          addBox(stage, vadd(pa.c, pa.u, 4.40),
-                 [1.8, 0.28, 20.4], [0.08, 0.11, 0.15], pb);
+          addBox(stage, vadd(vadd(pa.c, pa.r, 0.82), pa.u, midLift),
+                 [0.16, portalH + 0.08, 16.4], [0.12, 0.16, 0.22], pb);
+          addBox(stage, vadd(pa.c, pa.u, (py[kLo] + portalH + 0.12) - footY),
+                 [1.8, 0.28, 16.4], [0.08, 0.11, 0.15], pb);
         }, { required: true });
       }
       for (const side of [-1, 1]) {
-        const ca = anchor(K(0.437), side, 8.5), cb = [ca.r, ca.u, ca.t];
-        const cc = vadd(ca.c, ca.u, 2.6);
+        // Abutments climb from terrain to the soffit underside so the green
+        // crown seats under the upper ribbon — not a mid-gap blob at y≈13.
+        // anchor() at dist 9.2 is terrain-seated; crown from lower-road py.
+        const ca = anchor(K(0.437), side, 9.2), cb = [ca.r, ca.u, ca.t];
+        const gy = terrainYAt(ca.c[0], ca.c[2]);
+        const footY = gy != null ? gy : ca.c[1];
+        const crownY = py[kLo] + xoverClear - 0.15;
+        const abutH = Math.max(6.0, crownY - footY);
+        const midY = footY + abutH / 2;
+        const midLift = midY - ca.c[1];
+        const cc = vadd(ca.c, ca.u, midLift);
+        const crownLift = (crownY + 0.22) - ca.c[1];
         modelGroup(`suzuka-crossover-abutment-${side < 0 ? "left" : "right"}`, {
-          center: cc, size: [7.6, 6.2, 12.8], basis: cb,
+          center: cc, size: [7.6, abutH + 1.2, 12.8], basis: cb,
         }, (stage) => {
-          addBox(stage, cc, [6.5, 5.2, 12], concrete, cb);
-          // Green identity cap — stagger left/right so abutment crowns are not
-          // one flatCoplanar plane across the underpass mouth.
-          addBox(stage, vadd(ca.c, ca.u, side < 0 ? 5.20 : 5.50), [7.0, 0.45, 12.5], XOVER_GREEN, cb);
-          addBox(stage, vadd(vadd(ca.c, ca.r, side * 3.55), ca.u, 3.0),
-                 [0.35, 3.0, 10.5], steel, cb);
+          addBox(stage, cc, [6.5, abutH, 12], concrete, cb);
+          // Green identity cap — stagger left/right crowns (flatCoplanar).
+          addBox(stage, vadd(ca.c, ca.u, crownLift + (side < 0 ? 0 : 0.28)),
+                 [7.0, 0.45, 12.5], XOVER_GREEN, cb);
+          addBox(stage, vadd(vadd(ca.c, ca.r, side * 3.55), ca.u, midLift),
+                 [0.35, Math.min(abutH * 0.55, 6.5), 10.5], steel, cb);
         }, { required: true });
       }
 

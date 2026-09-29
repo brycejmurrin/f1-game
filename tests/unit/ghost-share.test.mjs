@@ -10,6 +10,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { fnSource } from "../helpers/fn-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const fixture = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/fixtures/ghost-monza-short.json"), "utf8"));
@@ -200,6 +201,65 @@ test("consumeHash is a no-op when the fragment has no ghost", async () => {
   assert.equal(await h.GhostShare.consumeHash({ notify: h.notify }), null);
   assert.equal(h.writes.length, 0);
   assert.equal(h.notices.length, 0);
+});
+
+test("a replaced link survives the older decode without installing or announcing it", async () => {
+  const h = harness({ plain: true });
+  const first = await h.GhostShare.encode(fixture, { track: "monza" });
+  const second = await h.GhostShare.encode(fixture, { track: "spa" });
+  h.location.hash = "#ghost=" + first.code;
+  h.location.href = h.location.origin + h.location.pathname + h.location.hash;
+  const pending = h.GhostShare.consumeHash({ notify: h.notify });
+  h.location.hash = "#ghost=" + second.code;
+  h.location.href = h.location.origin + h.location.pathname + h.location.hash;
+  assert.equal(await pending, null);
+  assert.equal(h.GhostShare.guest(), null);
+  assert.equal(h.writes.length, 0);
+  assert.equal(h.notices.length, 0);
+  assert.equal((await h.GhostShare.consumeHash({ notify: h.notify })).track, "spa");
+  assert.equal(h.GhostShare.guest().track, "spa");
+});
+
+test("overlapping reads of the same link install and notify only once", async () => {
+  const h = harness({ plain: true });
+  const encoded = await h.GhostShare.encode(fixture, { track: "monza" });
+  h.location.hash = "#ghost=" + encoded.code;
+  h.location.href = h.location.origin + h.location.pathname + h.location.hash;
+  const first = h.GhostShare.consumeHash({ notify: h.notify });
+  const second = h.GhostShare.consumeHash({ notify: h.notify });
+  assert.equal(await first, null);
+  assert.equal((await second).ok, true);
+  assert.equal(h.notices.length, 1);
+  assert.equal(h.writes.length, 1);
+});
+
+test("starting a race during ghost decoding preserves the link until returning to the menu", async () => {
+  const h = harness({ plain: true });
+  const encoded = await h.GhostShare.encode(fixture, { track: "monza" });
+  h.location.hash = "#ghost=" + encoded.code;
+  h.location.href = h.location.origin + h.location.pathname + h.location.hash;
+  let racing = false, opens = 0;
+  const ctx = vm.createContext({
+    GhostShare: h.GhostShare, UiLayers: { inRace: () => racing }, Log: { info() {} },
+    announce: h.notify, setFlow() {}, session: "race", DailyChallenge: { dayKey: () => "2026-09-29" },
+    daily: { stop() {} }, restoreFreePlaySelection() {}, Tracks: { LIST: [{ id: "monza" }] },
+    trackIdx: 0, buildSelect() { opens++; }, vt() {}, scheduleFlybyTrack() {},
+  });
+  const source = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const consume = vm.runInContext("(" + fnSource(source, "async function consumeGhostHash()") + ")", ctx);
+  const pending = consume();
+  racing = true;
+  assert.equal(await pending, null);
+  assert.equal(opens, 0);
+  assert.equal(h.GhostShare.guest(), null);
+  assert.equal(h.writes.length, 0);
+  assert.equal(h.notices.length, 0);
+  assert.ok(h.location.hash.includes("ghost="));
+  racing = false;
+  assert.equal((await consume()).ok, true);
+  assert.equal(opens, 1);
+  assert.equal(h.GhostShare.guest().track, "monza");
+  assert.equal(h.location.hash, "");
 });
 
 function resultsHarness({ ghost = null, guest = false } = {}) {

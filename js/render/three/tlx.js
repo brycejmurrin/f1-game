@@ -1081,6 +1081,21 @@ const TLX = (function () {
       const ENV_SIZE = 64;
       const ENV_CULL_M = 300;
       let envRT = null, envDummy = null;
+      // REAR-VIEW MIRROR (js/render/shared/mirror-pass.js). The env probe's
+      // shape with a 2-D target: mirrorBegin (before begin(), like a probe
+      // face) latches the mirror camera, the world + car draws record into the
+      // shared drawList, and mirrorEnd renders them into mirRT at once and
+      // empties the list. present() hands the texture to the post chain, which
+      // composites it into the HUD rect (tlx-post.js).
+      let mirRT = null, mirCam = null, _mirActive = false, _mirDead = false, _mirFails = 0, _mirErr = null;
+      let _mirRect = null, _mirRenders = 0, _mirEye = null, _mirCull = 0;
+      // Latched by the first mirrorBegin. The mirror target is a render context
+      // the chunks have never compiled for, and the node builder reads
+      // attribute.array.constructor on that first compile — the env probe's
+      // hazard exactly — so a session that has used the mirror keeps its CPU
+      // attribute mirrors (the releases below hold on it).
+      let _mirUsed = false;
+      const _mirVP = new Float32Array(16), _mirProjGpu = new Float32Array(16);
       try {
         const envHdr = !!(post && post.hdrOk());
         const envOpts = {
@@ -3230,6 +3245,90 @@ const TLX = (function () {
           }
           _restoreEnvFrame();
         },
+        mirrorBegin(frame, w, h) {
+          if (_mirDead || _warmPending || _envActive || !lit || !frame || !frame.proj || !frame.view || !frame.viewProj) return false;
+          w = Math.max(16, Math.min(1024, w | 0)); h = Math.max(8, Math.min(512, h | 0));
+          try {
+            if (!mirRT) {
+              mirRT = new THREE.RenderTarget(w, h, {
+                type: post && post.hdrOk() ? THREE.HalfFloatType : THREE.UnsignedByteType,
+                format: THREE.RGBAFormat, depthBuffer: true,
+                generateMipmaps: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
+              });
+              mirRT.texture.colorSpace = THREE.NoColorSpace;   // no-sRGB invariant, as the probe
+              mirCam = new THREE.PerspectiveCamera();
+              mirCam.matrixAutoUpdate = false;
+              mirCam.matrixWorldAutoUpdate = false;
+            } else if (mirRT.width !== w || mirRT.height !== h) mirRT.setSize(w, h);
+          } catch (e) {
+            _mirDead = true; _mirErr = (e && e.message) || String(e);
+            try { Log.warn("gfx", "TLX mirror target failed — mirror off:", _mirErr); } catch (_) { /* harness */ }
+            return false;
+          }
+          // The camera the way begin() builds the main one: P and V kept apart
+          // (WebGPU folds Z01 into P only).
+          if (renderer.backend && renderer.backend.isWebGPUBackend) {
+            _mul4Col(_mirProjGpu, Z01, frame.proj);
+            mirCam.projectionMatrix.fromArray(_mirProjGpu);
+            if (renderer.coordinateSystem != null) mirCam.coordinateSystem = renderer.coordinateSystem;
+          } else mirCam.projectionMatrix.fromArray(frame.proj);
+          mirCam.projectionMatrixInverse.copy(mirCam.projectionMatrix).invert();
+          mirCam.matrixWorldInverse.fromArray(frame.view);
+          mirCam.matrixWorld.copy(mirCam.matrixWorldInverse).invert();
+          if (frame.eye) mirCam.position.set(frame.eye[0], frame.eye[1], frame.eye[2]);
+          const z = frame.skyZenith || frame.fogColor;
+          if (z && z.length >= 3) scene.background.setRGB(z[0], z[1], z[2]);
+          lit.updateFrame(frame);
+          if (fx) fx.updateFrame(frame);
+          _mirVP.set(frame.viewProj); _mirEye = frame.eye || null; _mirCull = frame.cullDist || 0;
+          scene.backgroundNode = null;
+          resetRecs(); _dMatUsed = 0; _fxMatUsed = 0;
+          _instAlive.clear();
+          _mirActive = true;
+          _mirUsed = true;
+          return true;
+        },
+        mirrorEnd() {
+          if (!_mirActive) return;
+          _mirActive = false;
+          try {
+            _poolBatch++;
+            for (let i = 0; i < drawList.length; i++) {
+              const rec = drawList[i];
+              if (rec.instanced) { _showInstanced(rec, i); continue; }
+              if (rec.chunked) {
+                if (!chunkedSys) continue;
+                const n = chunkedSys.cull(rec.chunked, _mirVP, _mirEye, _mirCull);
+                const vis = chunkedSys.visList;
+                for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat, rec).renderOrder = i;
+                continue;
+              }
+              acquireMesh(rec.geo, rec.m, rec.mat, rec).renderOrder = i;
+            }
+            for (let i = 0; i < meshPool.length; i++) { const pm = meshPool[i]; if (pm.__tlxBatch !== _poolBatch) pm.visible = false; }
+            _hideUndrawnInstanced();
+            if (scene.backgroundNode) pinSkyMaterial();
+            renderer.setRenderTarget(mirRT);
+            _gpuLastOperation = "render-mirror";
+            renderer.render(scene, mirCam);
+            _mirRenders++;
+          } catch (e) {
+            // Never strand the frame; a mirror that cannot render stops being asked.
+            if (++_mirFails >= 4) _mirDead = true;
+            if (!_mirErr) _mirErr = (e && e.message) || String(e);
+          }
+          try { renderer.setRenderTarget(softOutRT()); } catch (_) { /* device dying: present owns it */ }
+          resetRecs();   // the main pass re-issues its own draws
+          _dMatUsed = 0; _fxMatUsed = 0;
+          _instAlive.clear();
+          _poolBatch++;
+        },
+        mirrorRect(r) { _mirRect = r && r.length === 4 ? [+r[0] || 0, +r[1] || 0, +r[2] || 0, +r[3] || 0] : null; },
+        mirrorState() {
+          return { ready: !!mirRT && _mirRenders > 0, dead: _mirDead, w: mirRT ? mirRT.width : 0, h: mirRT ? mirRT.height : 0,
+            hdr: !!(mirRT && mirRT.texture.type === THREE.HalfFloatType), renders: _mirRenders,
+            composites: post && post.mirrorComposites ? post.mirrorComposites() : 0, rect: _mirRect, error: _mirErr };
+        },
         // _envGaveUp reads as READY on purpose: the caller polls this to stop
         // re-probing, and a probe that cannot succeed must stop being asked.
         // The cube stays unbound — envState() is where the difference shows.
@@ -3824,7 +3923,7 @@ const TLX = (function () {
               // compiled against the attribute. Those devices keep their
               // mirrors — memory, not a blank road.
               if (n > 0 && !rec.chunked._mirrorsFreed && !vizMat
-                && (_chunkRelOptIn || envReady || _envGaveUp))
+                && (_chunkRelOptIn || envReady || _envGaveUp) && !_mirUsed)
                 _mirrorRelease.push(rec.chunked);
               continue;
             }
@@ -3959,6 +4058,13 @@ const TLX = (function () {
               const _hadMrt = !!(TSL.mrt && renderer.setMRT);
               const _prevMrt = _hadMrt && renderer.getMRT ? renderer.getMRT() : null;
               if (_hadMrt) renderer.setMRT(_ssrMrtNode());
+              if (post.setMirror) {
+                // Pixels of the present target (the SGSR output size when upscaling).
+                const up = wantSpatialUpscale(), cw = up ? presentW : W, ch = up ? presentH : H;
+                const r = _mirRect, ok = !!(r && mirRT && _mirRenders > 0 && !_mirDead);
+                post.setMirror(ok ? mirRT.texture : null, ok ? [Math.round(r[0] * cw), Math.round(r[1] * ch),
+                  Math.round(r[2] * cw), Math.round(r[3] * ch)] : null, ok && mirRT.texture.type === THREE.HalfFloatType);
+              }
               try {
                 renderer.setRenderTarget(post.sceneTarget());
                 _gpuLastOperation = "render-scene";
@@ -4067,7 +4173,7 @@ const TLX = (function () {
           // knob cannot A/B the configuration that broke a player's handset —
           // an override that cannot reach the failing path is not an override.
           // Default OFF, so nothing reaches a player through it.
-          if (_sweepOptIn) sweepGeoMirrors(_now);
+          if (_sweepOptIn && !_mirUsed) sweepGeoMirrors(_now);
           // Evicted materials dispose only now — after paint, when no drawList
           // record can still reference them (safe since the #33952 backport).
           for (let i = 0; i < _matDispose.length; i++) { try { _matDispose[i].dispose(); } catch (_) { /* already disposed */ } }
