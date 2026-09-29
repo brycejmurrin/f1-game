@@ -13,12 +13,16 @@ Runtime getting-started, three.js WebXRManager docs, three.js PR #33497
 
 | Capability | Why emulation is not enough |
 |---|---|
-| Multiview (`OVR_multiview2` / texture-array projection layer) | IWER has no `createProjectionLayer({ textureType: "texture-array" })` ([iwer#196](https://github.com/meta-quest/immersive-web-emulation-runtime/issues/196)) |
+| Multiview (`OVR_multiview2` / texture-array projection layer) | IWER has no `createProjectionLayer({ textureType: "texture-array" })` ([iwer#196](https://github.com/meta-quest/immersive-web-emulation-runtime/issues/196)); Phase 0 also keeps `multiview: false` (three [#32538](https://github.com/mrdoob/three.js/issues/32538) / [#32151](https://github.com/mrdoob/three.js/issues/32151)) |
 | MSAA > 1 in XR | Software GL / IWER gap |
 | Fixed foveation compositor effect | `setFoveation` / `XRWebGLLayer.fixedFoveation` can be called; the visual/perf effect is unobservable under IWER |
-| WebGPU `XRGPUBinding` | No documented IWER WebGPU-XR path; Quest Browser may expose the interface even when the `webgpu` session feature is unsupported — we negotiate via `enabledFeatures` and fall back to WebGL2 |
+| WebGPU `XRGPUBinding` | No IWER WebGPU-XR path; clip-space depth is [0,1] if enabled on device |
 | Real frame rate / GPU cost / thermal | SwiftShader timings are meaningless for Quest |
 | Compositor quirks (layer sizing, Phase Sync, Spacewarp) | Device-only |
+
+**Chrome desktop tip:** do **not** use the Chrome Web Store Immersive Web Emulator on Chrome 147+ (three [#33414](https://github.com/mrdoob/three.js/issues/33414) — native projection layers break the store build). CI and desktop emulation use pinned IWER (`tests/vendor/iwer-2.5.0.min.js`).
+
+Architecture (why XRWebGLLayer not three.xr ArrayCamera): `docs/notes/XR-PHASE0-ARCHITECTURE.md`.
 
 ## Manual Quest 3 checklist
 

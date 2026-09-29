@@ -20,6 +20,10 @@ const XrBoot = (function () {
     return typeof XrSession !== "undefined" && XrSession.isPresenting();
   }
 
+  // Frame ownership while presenting: XrSession.requestAnimationFrame →
+  // onFrame → tickBody. Do NOT also schedule window.rAF (it stops reliably
+  // inside a standalone immersive session). three.setAnimationLoop is unused
+  // because we drive XRWebGLLayer ourselves rather than XRManager.
   function loopByXr() { return _loopByXr; }
 
   function findCockpit() {

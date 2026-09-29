@@ -143,9 +143,12 @@ const XrSession = (function () {
       emit("error", { error: _lastError });
       return null;
     }
-    // Opt-in preference only — do NOT gate on typeof XRGPUBinding (Quest Browser
+  // Opt-in preference only — do NOT gate on typeof XRGPUBinding (Quest Browser
     // exposes the interface where WebGPU-in-XR is still unsupported; three.js PR
     // #33497). Request the feature, then trust session.enabledFeatures.
+    // If WebGPU XR is ever granted: projection matrices use clip depth [0,1]
+    // (WebXR/WebGPU binding), not the WebGL [-1,1] range TLX applies via Z01
+    // only on the WebGPU *backend* today.
     _wantWebgpu = xrBackendPref() === "webgpu";
     let preferGpu = _wantWebgpu;
     let session = null;

@@ -367,6 +367,11 @@ const TLX = (function () {
             ? { outputType: THREE.UnsignedByteType, powerPreference: "low-power" }
             : {}),
           forceWebGL,
+          // Phase 0 XR uses XRWebGLLayer + manual per-eye present — not three's
+          // multiview ArrayCamera path. Keep multiview off: three #32538
+          // (right-eye projection) and #32151 (Quest flicker) are still open,
+          // and perCameraCulling is absent from vendored 0.186.0.
+          multiview: false,
         });
         renderer.setPixelRatio(1);            // we manage DPR/renderScale ourselves
         renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
@@ -1046,6 +1051,10 @@ const TLX = (function () {
       } catch (_) { chunks = null; }
 
       let post = null;
+      // WebXR Phase 0: set while an XRWebGLLayer is attached. Skips resize()
+      // (three's setSize is a no-op under XRManager presenting; we likewise
+      // must not fight the immersive layer's drawing-buffer size).
+      let _xrActive = false;
       try {
         if (window.TLXShaders && TLXShaders.postChain && TLXShaders.post && chunks) {
           post = TLXShaders.postChain(THREE, TSL,
@@ -2478,6 +2487,8 @@ const TLX = (function () {
         // for compilation. Keep its targets alive; the next frame applies the
         // latest CSS size and settings once the warm task releases ownership.
         if (_warmPending) { cssSizeCache.markDirty(); return; }
+        // Immersive-vr owns the drawing buffer via XRWebGLLayer — leave size alone.
+        if (_xrActive) return;
         // CSS size only — NEVER fall back to the backing store. Hidden canvases
         // stay at the 1px floor while the shared cache keeps probing for reveal.
         const css = cssSizeCache.read();
@@ -3346,10 +3357,15 @@ const TLX = (function () {
         },
         warming() { return !!_warmPending; },
         // --- WebXR (Phase 0) -------------------------------------------------
-        // Seated stereo via XRWebGLLayer on the WebGL2 backend. three.xr is
-        // left alone for this spike: we feed per-eye matrices into `frame`
-        // and presentXR() rebinds the camera + viewport for each eye against
-        // the same draw list. Post / soft-blit stay off while presenting.
+        // Seated stereo via XRWebGLLayer on the WebGL2 backend. Intentionally
+        // NOT three.xr / setAnimationLoop / ArrayCamera: those overwrite the
+        // user camera and route post to the mono camera (Renderer isOutputTarget).
+        // We feed per-eye matrices into `frame`, drive frames from
+        // session.requestAnimationFrame (XrBoot.onFrame → tickBody), and
+        // presentXR() rebinds the camera + viewport per eye. Post / soft-blit
+        // stay off while presenting. Closest three example for the forceWebGL
+        // path is webgpu_xr_native_layers; we still skip XRManager for matrix
+        // control. Do not enable multiview (three #32538 / #32151).
         _xrLayer: null,
         _xrSession: null,
         xrPresenting() { return !!(this._xrSession); },
@@ -3357,6 +3373,9 @@ const TLX = (function () {
         async attachXrSession(session) {
           const gl = ownGL || (renderer.backend && renderer.backend.gl) || null;
           if (!gl) throw new Error("TLX XR needs the WebGL2 backend (apex26.tlxForceGL=1)");
+          // Context was created with xrCompatible:true under forceWebGL; still
+          // call makeXRCompatible when the attribute is missing (three XRManager
+          // does the same before setSession).
           if (typeof gl.makeXRCompatible === "function") {
             try { await gl.makeXRCompatible(); } catch (_) { /* already compatible */ }
           }
@@ -3365,6 +3384,27 @@ const TLX = (function () {
           await session.updateRenderState({ baseLayer: layer });
           this._xrLayer = layer;
           this._xrSession = session;
+          _xrActive = true;
+          // IWER returns XRWebGLLayer.framebuffer === null. three r186
+          // WebGLState.drawBuffers keys a WeakMap by the FBO and throws
+          // "Invalid value used as weak map key" every frame → blank canvas.
+          // Real Quest FBOs are non-null; this remap is emulation-only
+          // (docs/notes/XR-QUEST-ON-DEVICE.md; spike-support research A2).
+          if (layer.framebuffer == null) {
+            try {
+              const st = renderer.backend && renderer.backend.state;
+              if (st && st.currentDrawbuffers instanceof WeakMap) {
+                st.currentDrawbuffers = new Map();
+                try { Log.info("gfx", "TLX XR: IWER null framebuffer — remapped currentDrawbuffers to Map"); } catch (_) { /* */ }
+              }
+            } catch (_) { /* best-effort */ }
+            try {
+              renderer.setPixelRatio(1);
+              const fw = layer.framebufferWidth || (canvas && canvas.width) || 0;
+              const fh = layer.framebufferHeight || (canvas && canvas.height) || 0;
+              if (fw > 0 && fh > 0) renderer.setSize(fw, fh, false);
+            } catch (_) { /* */ }
+          }
           try { Log.info("gfx", "TLX XRWebGLLayer attached"); } catch (_) { /* */ }
           return layer;
         },
@@ -3372,6 +3412,7 @@ const TLX = (function () {
           this._xrLayer = null;
           this._xrSession = null;
           this._pendingXrEyes = null;
+          _xrActive = false;
         },
         /** XRWebGLLayer.fixedFoveation (0 = full res, 1 = max). Device-only effect. */
         setFoveation(v) {
@@ -3815,14 +3856,19 @@ const TLX = (function () {
             const xrLayer = this._xrLayer;
             if (xrEyes && xrEyes.length && xrLayer) {
               const gl = ownGL || (renderer.backend && renderer.backend.gl) || null;
+              // Real headset: bind the layer FBO. IWER: framebuffer is null →
+              // default framebuffer (canvas); currentDrawbuffers was remapped
+              // in attachXrSession so three's WeakMap path does not throw.
               if (gl && xrLayer.framebuffer) {
                 try { gl.bindFramebuffer(gl.FRAMEBUFFER, xrLayer.framebuffer); } catch (_) { /* */ }
               }
               renderer.setRenderTarget(null);
               for (let ei = 0; ei < xrEyes.length; ei++) {
                 const eye = xrEyes[ei];
-                this._applyXrEye(eye);
+                // Skip zero-width views (IWER mono right eye) — nothing to draw.
                 const vp = eye.viewport;
+                if (vp && !(vp.width > 0 && vp.height > 0)) continue;
+                this._applyXrEye(eye);
                 if (vp && typeof renderer.setViewport === "function") {
                   renderer.setViewport(vp.x, vp.y, vp.width, vp.height);
                 } else if (vp && gl) {
@@ -3832,7 +3878,7 @@ const TLX = (function () {
                 _renderTimed(scene, camera);
               }
               try { renderer.setViewport(0, 0, W, H); } catch (_) { /* */ }
-              if (gl) {
+              if (gl && xrLayer.framebuffer) {
                 try { gl.bindFramebuffer(gl.FRAMEBUFFER, null); } catch (_) { /* */ }
               }
               return;
