@@ -3867,7 +3867,7 @@ function flybyGridOrder() {
 // loadTrack reuses this build), so this buys the cinematic, not a longer wait.
 let _introKey = "", _introRun = 0;
 function cancelIntro() { _introRun++; _introKey = ""; }
-async function introWarm(current) {
+async function awaitIntroWarm(current) {
   const at = performance.now();
   while (current() && gfx.warming && gfx.warming()) {
     if (performance.now() - at >= 30000) throw new Error("Shader preparation timed out");
@@ -3886,7 +3886,7 @@ function introBuild(go) {
     try {
       await ensureScenery(idx);
       await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));   // the card paints first
-      if (!(await introWarm(live)) || !live()) return;   // compilation retains ownership of its scene
+      if (!(await awaitIntroWarm(live)) || !live()) return;   // compilation retains ownership of its scene
       loadTrack(idx); _menuGate.ready = key; _menuGate.track = track;
       // What menuFinish does, under the card: car assets (bounded), then hidden warm
       // frames — "build" is not active(), so they draw with the canvas hidden and
@@ -3897,7 +3897,7 @@ function introBuild(go) {
       FlybySeq.reset(); warmPrograms(); _menuGate.warm = 2;
       for (let f = 0; f < 3 && _menuGate.warm > 0; f++) await new Promise((r) => requestAnimationFrame(r));
       // Never start the cinematic clock while render() is blocked on compilation.
-      if (!(await introWarm(live)) || !live()) return;
+      if (!(await awaitIntroWarm(live)) || !live()) return;
       // Plan the flyby here too, up to a budget: whatever is left plans mid-flyby.
       FlybySeq.setDuration(loadingScreen.nextFlyMs(info0.readMs));
       const fly = { key, track, shots: FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (idx * 2654435761)) >>> 0, false) }, step = FlybySeq.planSteps(track, fly.shots), t0 = performance.now();
@@ -3927,18 +3927,17 @@ function introBuild(go) {
 function introWarm(go) {
   const key = menuKey(trackIdx);
   if (!gfx.warm || (_warmKey === key && !(gfx.warming && gfx.warming()))) return false;
-  const n = ++_introRun, t0 = performance.now();
-  const live = () => n === _introRun && state === "menu" && key === menuKey(trackIdx);
+  const n = ++_introRun, settings = entrySettings();
+  const live = () => n === _introRun && state === "menu" && settings === entrySettings() && key === menuKey(trackIdx);
   loadingScreen.building(loadingInfo());
-  (async () => {
-    if (_warmKey !== key) {   // hidden warm frames: "build" blanks the canvas, and render() draws while _menuGate.warm > 0
-      warmPrograms(); _menuGate.warm = 2;
-      for (let f = 0; f < 3 && live() && _menuGate.warm > 0; f++) await new Promise((r) => requestAnimationFrame(r));
-    }
-    while (live() && gfx.warming && gfx.warming() && performance.now() - t0 < 15000) await menuSlice();
-    if (n !== _introRun) return;
-    if (state !== "menu") { loadingScreen.stop(); return; }
-    try { _introKey = key; raceIntro(go); } catch (e) { Log.warn("gfx", "loading screen failed", e); loadingScreen.stop(); go(); }
+  (async () => { try {
+      if (_warmKey !== key) {   // hidden warm frames: "build" blanks the canvas, and render() draws while _menuGate.warm > 0
+        warmPrograms(); _menuGate.warm = 2;
+        for (let f = 0; f < 3 && live() && _menuGate.warm > 0; f++) await new Promise((r) => requestAnimationFrame(r));
+      }
+      if (!(await awaitIntroWarm(live)) || !live()) return;
+      try { _introKey = key; raceIntro(go); } catch (e) { Log.warn("gfx", "loading screen failed", e); loadingScreen.stop(); go(); }
+    } catch (e) { if (live()) { Log.warn("gfx", "intro warm failed", e); quitToMenu(); announce("PREPARATION FAILED — please retry", 5, "info"); } else if (n === _introRun) loadingScreen.stop(); }
   })();
   return true;
 }

@@ -791,12 +791,14 @@ test("RACE! before the menu's build: build under the card, then fly (never the b
   const pa = ib.indexOf("prepareMenuCarAssets("), wa = ib.indexOf("_menuGate.warm = 2");
   assert.ok(pa > l && wa > pa && p > wa, "under the card, like menuFinish: car assets, then hidden warm frames, then plans — the flyby's first frame compiles nothing");
   assert.match(ib, /try \{ _introKey = key; raceIntro\(go\); \} catch \(e\) \{[^}]*loadingScreen\.stop\(\); go\(\); \}/, "a throw in raceIntro never strands the timer-less build card");
-  assert.equal((ib.match(/await introWarm\(live\)/g) || []).length, 2, "both compilation boundaries retain scene ownership");
+  assert.equal((ib.match(/await awaitIntroWarm\(live\)/g) || []).length, 2, "both compilation boundaries retain scene ownership");
 });
 
 test("intro builds cancel at async boundaries and never fly over pending compilation", async () => {
   const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
-  const a = game.indexOf("function cancelIntro()"), b = game.indexOf("\nfunction raceIntro(go)", a);
+  // Slice only the cancel + await helper + introBuild — ship's introWarm(go) is a
+  // separate race-start path (loading-card.test.mjs) and must not shadow the helper.
+  const a = game.indexOf("function cancelIntro()"), b = game.indexOf("\nfunction introWarm(go)", a);
   for (const mode of ["ready", "slow", "quit", "supersede", "settings", "plan-cancel", "timeout", "old-timeout", "fetch-fail"]) {
     let resolveScenery, rejectScenery, now = 0, warming = mode === "old-timeout", slices = 0;
     const events = [];
