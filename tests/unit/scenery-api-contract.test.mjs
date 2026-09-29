@@ -101,22 +101,9 @@ const landmarkSource = (id) =>
   fs.readFileSync(path.resolve(`js/circuits/scenery/${id}.js`), "utf8");
 
 const requiredLandmark = (body, id) => {
-  const mg = body.indexOf(`modelGroup("${id}"`);
-  if (mg !== -1) {
-    assert.match(body.slice(mg, mg + 2200), /\{\s*required:\s*true\s*\}\s*\)/,
-      `${id} must be structurally required`);
-    return;
-  }
-  // overheadSpan({ id: "…" … required: true }) or a local helper that emits
-  // that span (literal id in the call site; required:/overheadSpan in the
-  // enclosing helper body just above — wave-5 Shanghai wings).
-  const lit = `"${id}"`;
-  const at = body.indexOf(lit);
-  assert.notEqual(at, -1, `${id} model group / overheadSpan id is missing`);
-  const win = body.slice(Math.max(0, at - 400), at + lit.length + 900);
-  assert.match(win, /overheadSpan\s*\(/,
-    `${id} must be a modelGroup("…") or overheadSpan({ id: "…" })`);
-  assert.match(win, /required:\s*true/,
+  const start = body.indexOf(`modelGroup("${id}"`);
+  assert.notEqual(start, -1, `${id} model group is missing`);
+  assert.match(body.slice(start, start + 2200), /\{\s*required:\s*true\s*\}\s*\)/,
     `${id} must be structurally required`);
 };
 
@@ -130,9 +117,9 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     cota: ["cota-amphitheater", "cota-turn1-big-red", "cota-main-grandstand"],
     mexico: ["mexico-foro-sol-entry", "mexico-peraltada-stand", "foro-scoreboard"],
     abudhabi: ["abudhabi-ferrari-world", "abudhabi-marina", "abudhabi:pit-exit-tunnel-portal"],
-    // Wave 5 — Shanghai International Circuit (wings via overheadSpan;
-    // pudong/boardwalk stay required at runtime but their emit bodies exceed
-    // the 2200-char BATCH-01 window — not re-listed here).
+    // Wave 5 — Shanghai International Circuit (wing piers are literal
+    // modelGroups; decks stay on overheadSpan. pudong/boardwalk stay required
+    // at runtime but their emit bodies exceed the 2200-char BATCH-01 window).
     shanghai: [
       "shanghai-wing-east", "shanghai-wing-west",
       "shanghai-circles-stand", "shanghai-yu-pavilions",
