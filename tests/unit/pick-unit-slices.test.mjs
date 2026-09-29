@@ -127,11 +127,35 @@ test("--all selects every slice for schedule/dispatch", () => {
 });
 
 test("--github-output writes any_node / driving / slices", () => {
-  const text = execFileSync("node", [
+  // CI runners always set GITHUB_OUTPUT; the tool then appends to that file
+  // and prints nothing. Assert the FILE (the real consumer), never stdout —
+  // and use a temp path so we never pollute the job's real GITHUB_OUTPUT
+  // (run 36624386799 failed here with actual: '').
+  const outFile = path.join(ROOT, "artifacts", `pick-unit-gh-out-${process.pid}.txt`);
+  fs.mkdirSync(path.dirname(outFile), { recursive: true });
+  fs.writeFileSync(outFile, "");
+  try {
+    const env = { ...process.env, GITHUB_OUTPUT: outFile };
+    const stdout = execFileSync("node", [
+      "tools/ci/pick-unit-slices.mjs", "--github-output",
+      "js/circuits/scenery/monaco.js",
+    ], { cwd: ROOT, encoding: "utf8", env });
+    assert.equal(stdout.trim(), "", "with GITHUB_OUTPUT set, the tool must not print the keys");
+    const text = fs.readFileSync(outFile, "utf8");
+    assert.match(text, /^any_node=true$/m);
+    assert.match(text, /^driving=false$/m);
+    assert.match(text, /^reason=matched$/m);
+    assert.match(text, /^slices=\[\{"slice":"vm-a"\}\]$/m);
+  } finally {
+    fs.rmSync(outFile, { force: true });
+  }
+
+  // Unset path (local CLI): same keys on stdout so a human can pipe them.
+  const { GITHUB_OUTPUT: _drop, ...envNoGh } = process.env;
+  const local = execFileSync("node", [
     "tools/ci/pick-unit-slices.mjs", "--github-output",
     "js/circuits/scenery/monaco.js",
-  ], { cwd: ROOT, encoding: "utf8" });
-  assert.match(text, /^any_node=true$/m);
-  assert.match(text, /^driving=false$/m);
-  assert.match(text, /^slices=\[\{"slice":"vm-a"\}\]$/m);
+  ], { cwd: ROOT, encoding: "utf8", env: envNoGh });
+  assert.match(local, /^any_node=true$/m);
+  assert.match(local, /^slices=\[\{"slice":"vm-a"\}\]$/m);
 });
