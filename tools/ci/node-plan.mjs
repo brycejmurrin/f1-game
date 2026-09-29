@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // node-plan.mjs — which of ci.yml's "Pure-node unit suites" scripts does THIS diff need?
-// @doc Per-PR plan for ci.yml's node-suites job: the slow VM scripts run only when pick-tests routes the diff to a group they replay, `APEX_CIRCUITS` narrows a circuit-only diff; anything unroutable runs everything.
+// @doc Per-PR plan for ci.yml's node-suites job: slow VM scripts run only when pick-tests routes the diff to their group.
+// Full description: the slow VM scripts run only when pick-tests routes the diff to a group they replay, `APEX_CIRCUITS`
+// narrows a circuit-only diff; anything unroutable runs everything.
 // @section runner
 //
 // THE FAST TIER'S FLOOR WAS A TREE-ONLY JOB (2026-09-30). A PR run finished in

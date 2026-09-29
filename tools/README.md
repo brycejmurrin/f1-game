@@ -76,7 +76,7 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/ai-line.mjs** | Where the AI actually puts the car in a corner: approach offset and apex depth per baked corner, with run-to-run range. | ai-racecraft |
 | **check/ai-pace.mjs** | How fast is the AI field, per circuit and per difficulty? Simulated laps in the VM, no browser, no renderer. | ai-racecraft |
 | **check/ai-race.mjs** | One entry for the AI instrument trio: `pace` / `field` / `line` (VM, no browser). | ai-racecraft |
-| **check/ai-strategy-census.mjs** | The AI field's tyre strategy over a whole race with TYRE WEAR real: stop counts, stints, compounds, why each stop was… | ai-racecraft |
+| **check/ai-strategy-census.mjs** | The AI field's tyre strategy over a whole race with TYRE WEAR real: stop counts, stints, compounds, stop reasons. | ai-racecraft |
 | **check/audio-test.cjs** | Objective engine-audio pitch test — we cannot listen headless, so it measures the synthesised pitch instead. | audio-debug |
 | **check/bloat-scan.mjs** | Size report for slim-bloat: ratchets.json line-ceiling slack, SKILL.md / agent line counts. `--json`; never edits. | slim-bloat |
 | **check/check-gctx.mjs** | Holds `types/game-ctx.d.ts` to the real `G` façade and every module's use of `G` to the `.d.ts` (espree, optional tsc). | check-changes |
@@ -330,7 +330,7 @@ Electron desktop packaging: stage the Pages allow-list into a site folder the sh
 | **ci/coverage-merge.mjs** | Merges raw V8 coverage (APEX_JS_COVERAGE browser runs + NODE_V8_COVERAGE) into one lcov/html report. |
 | **ci/fixture-consumer-audit.mjs** | RATCHET on `tests/helpers/fixtures.js` adoption: `FLOOR` only rises, and fails when it lags adoption by > `FLOOR_SLACK`. |
 | **ci/junit-failed.mjs** | Spec files with a failed/errored testcase in `artifacts/test-results-*/junit.xml`, for `select-specs --failed-from`. |
-| **ci/node-plan.mjs** | Per-PR plan for ci.yml's node-suites job: the slow VM scripts run only when pick-tests routes the diff to a group they… |
+| **ci/node-plan.mjs** | Per-PR plan for ci.yml's node-suites job: slow VM scripts run only when pick-tests routes the diff to their group. |
 | **ci/pages-live-sha.sh** | Prints the live site's `apex-sha` (the commit stamped into index.html), or nothing if unreadable; never fails. |
 | **ci/pages-publishable.sh** | Pages monotonic guard: true when the live apex-sha is an ancestor of the given commit, else false. |
 | **ci/pages-reuse-verdict.sh** | Pages gate reuse: prints `reuse=true` (+source/run) when this tree already passed CI as this commit or a parent. |
