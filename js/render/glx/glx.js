@@ -1063,14 +1063,20 @@ const GLXBackend = (function () {
   }
   function resize() {
     if (ctxGone()) return;
-    let rw, rh, cw, ch;
     if (renderSizeOverride) {
-      rw = Math.max(1, renderSizeOverride.width);
-      rh = Math.max(1, renderSizeOverride.height);
+      const rw = Math.max(1, renderSizeOverride.width);
+      const rh = Math.max(1, renderSizeOverride.height);
       presentW = rw; presentH = rh;
       const up = wantSpatialUpscale();
-      cw = up ? presentW : rw; ch = up ? presentH : rh;
-    } else {
+      const cw = up ? presentW : rw, ch = up ? presentH : rh;
+      const changed = canvas.width !== cw || canvas.height !== ch || width !== rw || height !== rh;
+      if (canvas.width !== cw || canvas.height !== ch) { canvas.width = cw; canvas.height = ch; }
+      gl.viewport(0, 0, rw, rh);
+      const first = width === 0;
+      width = rw; height = rh; aspect = rw / rh;
+      if ((changed || first) && PST) PST.createTargets();
+      return;
+    }
     // Mobile: cap DPR at 1.5 (was 2) — every full-screen target scales with the
     // square of this; 1.5 is 56% of the pixels of 2 with little visible loss on
     // a ~6" screen, and it multiplies with every other saving.
@@ -1089,14 +1095,13 @@ const GLXBackend = (function () {
       presentW = Math.max(1, Math.floor(presentW * k));
       presentH = Math.max(1, Math.floor(presentH * k));
     }
-    rw = Math.max(1, Math.round(presentW * renderScale));
-    rh = Math.max(1, Math.round(presentH * renderScale));
+    const rw = Math.max(1, Math.round(presentW * renderScale));
+    const rh = Math.max(1, Math.round(presentH * renderScale));
     // Upscale path: canvas = present (full), scene FBOs = render (scaled).
     // Off or scale≈1: canvas = render (legacy browser bilinear stretch).
     const up = wantSpatialUpscale();
-    cw = up ? presentW : rw;
-    ch = up ? presentH : rh;
-    }
+    const cw = up ? presentW : rw;
+    const ch = up ? presentH : rh;
     const changed = canvas.width !== cw || canvas.height !== ch || width !== rw || height !== rh;
     if (canvas.width !== cw || canvas.height !== ch) {
       canvas.width = cw;
@@ -2693,7 +2698,7 @@ const GLXBackend = (function () {
       let r;
       try { r = PST.present(opts); PST.mirror.composite(opts); }
       catch (e) { try { gl.enable(gl.DEPTH_TEST); } catch (_) { /* context lost: nothing to restore into */ } throw e; }
-      if (!outFBO && (_softPresentWaiters.length || _softCaptureDue)) softBlit();
+      if (_softPresentWaiters.length || _softCaptureDue) softBlit();
       if (_glDrainAlways || _drainLeft > 0) { _drainLeft--; drainGlErrors("present"); }
       return r;
     },
