@@ -39,7 +39,13 @@ const PhonePad = (function () {
   const HELD = Object.freeze({ lookBack: 1 });
   // The edges the phone may send; each is a name Input.remoteEvent knows.
   const EVENTS = Object.freeze(["shiftUp", "shiftDown", "overtake", "boost", "aero",
-    "camera", "recover", "radio", "calib", "pause"]);
+    "camera", "recover", "radio", "calib", "pause",
+    // The menu pad (desktop: input.js REMOTE_EDGES → the gamepad's nav seam).
+    "navUp", "navDown", "navLeft", "navRight", "navSelect", "navBack"]);
+  // A held direction repeats like a keyboard's (OS-style delay, then rate) so a
+  // long list is walked with a thumb held down, not tapped twenty times.
+  const NAV_REPEAT = Object.freeze({ navUp: 1, navDown: 1, navLeft: 1, navRight: 1 });
+  const REPEAT_DELAY_MS = 380, REPEAT_RATE_MS = 110;
   // Dash flag bits (desktop → phone).
   const DASH = Object.freeze({ boost: 1, otArmed: 2, otActive: 4, xArmed: 8, xOpen: 16,
     retired: 32, timeTrial: 64, paused: 128, redline: 256,
@@ -405,7 +411,8 @@ const PhonePad = (function () {
     text("ot", h.flags & DASH.otActive ? "OVERTAKE" : h.flags & DASH.otArmed ? "OT READY" : "OT");
     text("aero", h.flags & DASH.aeroNone ? "NO ZONES" : h.flags & DASH.aeroAuto ? (h.flags & DASH.xOpen ? "AUTO X-MODE" : "AERO AUTO")
       : h.flags & DASH.xOpen ? "X-MODE" : h.flags & DASH.xArmed ? "AERO ARMED" : "AERO");
-    text("flag", h.state === "count" ? "LIGHTS" : h.flags & DASH.paused ? "PAUSED" : !inRace ? "PIT LANE" : CAUTION[h.caution] || "");
+    text("flag", h.state === "count" ? "LIGHTS" : h.flags & DASH.paused ? "PAUSED" : !inRace ? "MENU" : CAUTION[h.caution] || "");
+    text("mtitle", h.flags & DASH.paused ? "PAUSED" : "MENU");   // the pad screen's title (controller.html #mp-title)
     if (el.ers && el.ers.style) el.ers.style.width = (h.ers * 100).toFixed(0) + "%";
     if (el.leds && el.leds.children) {
       const n = el.leds.children.length, lit = Math.round(h.rpm * n);
@@ -426,6 +433,9 @@ const PhonePad = (function () {
       el.body.classList.toggle("throttle-auto", !!(h.flags & DASH.throttleAuto));
       el.body.classList.toggle("aero-auto", !!(h.flags & DASH.aeroAuto));
       el.body.classList.toggle("aero-none", !!(h.flags & DASH.aeroNone));
+      // THE MENU PAD: out of a race, or paused inside one, the page swaps the
+      // wheel for a D-pad, SELECT and BACK (controller.html #menupad).
+      el.body.classList.toggle("menu", !inRace || !!(h.flags & DASH.paused));
     }
   }
 
@@ -522,22 +532,35 @@ const PhonePad = (function () {
     hold(dom.lookBack, () => { held |= HELD.lookBack; push(); }, () => { held &= ~HELD.lookBack; push(); });
     // Edges fire on the DOWN, not the click: a paddle on a wheel answers the
     // finger, and a click waits for the release (and can be lost to a drag).
-    function edge(el, k) {
+    // A menu direction held down repeats (`timers` is the test seam).
+    const timers = opts.timers || { setTimeout, clearTimeout, setInterval, clearInterval };
+    function edge(el, k, repeat) {
       if (!el) return;
+      let rep = null;
+      const stop = () => { if (rep) { timers.clearTimeout(rep); timers.clearInterval(rep); rep = null; } };
       el.addEventListener("pointerdown", (e) => {
         e.preventDefault();
         el.classList.add("on");
         if (session) session.event(k);
+        if (repeat) {
+          stop();
+          rep = timers.setTimeout(() => {
+            rep = timers.setInterval(() => { if (session) session.event(k); else stop(); }, REPEAT_RATE_MS);
+            if (rep && rep.unref) rep.unref();
+          }, REPEAT_DELAY_MS);
+          if (rep && rep.unref) rep.unref();
+        }
       });
-      const up = () => el.classList.remove("on");
+      const up = () => { el.classList.remove("on"); stop(); };
       el.addEventListener("pointerup", up);
       el.addEventListener("pointercancel", up);
+      el.addEventListener("pointerleave", up);
       el.addEventListener("contextmenu", (e) => e.preventDefault());
     }
     // An action may have more than one button (OT on the grip AND on the face).
     for (const k of EVENTS) {
       const b = dom.buttons && dom.buttons[k];
-      for (const el of (Array.isArray(b) ? b : [b])) edge(el, k);
+      for (const el of (Array.isArray(b) ? b : [b])) edge(el, k, !!NAV_REPEAT[k]);
     }
     edge(dom.center, "calib");
 
