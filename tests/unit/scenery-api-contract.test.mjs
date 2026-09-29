@@ -283,6 +283,9 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
       "jerez-lorenzo-corner",
       "jerez-dani-pedrosa",
     ],
+    // Wave 6 — Watkins Glen: 2006 control-tower booths, Nazareth pit terrace,
+    // Sahlen Esses hillside (positive-slope GA bank + timber stand)
+    watkins_glen: ["glen-pit-terrace", "glen-esses-hill", "glen-timing-tower"],
   };
   for (const [track, ids] of Object.entries(expected)) {
     const body = landmarkSource(track);

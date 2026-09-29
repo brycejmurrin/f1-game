@@ -43,7 +43,7 @@
     "spa": 35,
     "suzuka": 4,
     "vegas": 4,
-    "watkins_glen": 12,
+    "watkins_glen": 1,
     "zandvoort": 4,
     "zolder": 28
   },
@@ -68,8 +68,7 @@
     "singapore": 9,
     "spa": 5,
     "suzuka": 5,
-    "vegas": 16,
-    "watkins_glen": 1
+    "vegas": 16
   },
   "flatCoplanar": {
     "abudhabi": 5,
@@ -111,7 +110,6 @@
     "spa": 3,
     "suzuka": 1,
     "vegas": 6,
-    "watkins_glen": 1,
     "zandvoort": 7,
     "zolder": 18
   }
