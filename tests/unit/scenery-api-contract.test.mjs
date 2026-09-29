@@ -146,6 +146,12 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     madrid: ["madrid-monumental-stands"],
     // Wave 6 — Zandvoort F1 Fanzone Ferris wheel (festival landmark)
     zandvoort: ["zandvoort-ferris-wheel"],
+    // Wave 6 — Montreal hairpin / Wall of Champions / Biosphère
+    montreal: [
+      "montreal-hairpin-grandstands",
+      "montreal-wall-of-champions-stand",
+      "montreal-biosphere",
+    ],
   };
   for (const [track, ids] of Object.entries(expected)) {
     const body = landmarkSource(track);
