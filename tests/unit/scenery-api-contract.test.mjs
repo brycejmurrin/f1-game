@@ -144,6 +144,12 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     madrid: ["madrid-monumental-stands"],
     // Wave 6 — Zandvoort F1 Fanzone Ferris wheel (festival landmark)
     zandvoort: ["zandvoort-ferris-wheel"],
+    // Wave 6 — Montreal hairpin / Wall of Champions / Biosphère
+    montreal: [
+      "montreal-hairpin-grandstands",
+      "montreal-wall-of-champions-stand",
+      "montreal-biosphere",
+    ],
     // Wave 6 — Sepang hibiscus main canopy + K1/F corner stands
     sepang: ["sepang-main-grandstand-canopy", "sepang-t1-grandstand", "sepang-t7-grandstand"],
   };
