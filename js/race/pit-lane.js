@@ -836,6 +836,9 @@ const PitLane = (function () {
      *  also ends the teach. */
     function release(c, zz) {
       c.pitOutT = SERVED_S;
+      // One line per stop: the player at info, the AI field at debug (20 cars).
+      Log[c.local ? "info" : "debug"]("race", "Pit stop done car=" + c.code + " lap=" + c.lap + " stop=" + (c.pitStops || 0) +
+        " held=" + ((zz ? zz.boxS : 0) + (c.pitWorked || 0)).toFixed(1) + "s pos=" + rankOf(c) + (c.pitWorked > 0 ? " work" : ""));
       if (!c.local) return;
       const pos = rankOf(c), k = c.pitPos0 > 0 && pos > 0 ? c.pitPos0 - pos : 0;
       const places = k === 0 ? "" : ", " + (k > 0 ? "+" : "") + k + (Math.abs(k) === 1 ? " PLACE" : " PLACES");
@@ -1375,8 +1378,9 @@ const PitLane = (function () {
       // c.tyreOpt unconditionally — which is what this did — meant a player who
       // stopped in the rain bolted on another slick, the exact loop the AI's
       // weather rule exists to prevent.
-      const next = nextFor(c);
+      const next = nextFor(c), from = c.tyre ? c.tyre.id : "none";
       G.tyres.fit(c, next || (c.tyreOpt ? G.tyres.optionRecord(c.tyreOpt) : G.tyres.classRecord(c.tyreClass || "medium")));
+      Log[c.local ? "info" : "debug"]("race", "Pit tyres fitted car=" + c.code + " lap=" + c.lap + " stop=" + (c.pitStops || 0) + " tyre=" + from + "->" + (c.tyre ? c.tyre.id : "none"));
       c.pitNext = null;
       // No banner here: this runs as the car STOPS, and "GO GO GO" at the start
       // of the hold was a lie for the whole of it. The release says it (release).

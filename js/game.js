@@ -1000,6 +1000,7 @@ function dirtyAirMul(wake, speed) {
 
 // ---------- state ----------
 let state = "menu";
+function setState(next, why) { if (next !== state) Log.info("game", "State " + state + "->" + next + " why=" + why + " raceT=" + (+raceT || 0).toFixed(1)); state = next; }   // THE one writer: every transition is logged
 let track = null, builtTrackId = null, builtTrackNight = null;
 let gridPreOrdered = false;   // set by gridUp(); read by js/net/netplay.js — see there
 // The field size the painted grid was built for. In the rebuild guard with
@@ -1031,7 +1032,7 @@ let pits = null;      // PitLane.create(G), same deferral
 // at the flag (js/race/sporting-regs.js; FIA 2026 SR B5.12.2(c), B5.13.2(c)).
 const scWatch = SportingRegs.createPassWatch();
 function scPassCall(ev) {
-  if (!ev || !player || ev.type === "cleared") return;
+  if (!ev || !player) return; Log.info("game", "Caution pass " + ev.type + " n=" + (ev.n || 0) + (ev.sec ? " pen=+" + ev.sec + "s" : "") + " lap=" + player.lap + " level=" + raceCtl.level); if (ev.type === "cleared") return;
   if (ev.type === "warn") { announce("GIVE THE POSITION BACK" + (ev.n > 1 ? " — " + ev.n + " PLACES" : ""), 2.5, "penalty-warn"); return; }
   player.penalty += ev.sec;
   // The results countdown may already be running (the player just finished):
@@ -2157,7 +2158,7 @@ function redFlagRestart() {
   });
   seedPlayerPose();
   restartPending = true;
-  state = "count"; countT = 0; lightsLit = 0; startHold = 0;
+  setState("count", "red-flag-restart"); countT = 0; lightsLit = 0; startHold = 0;
   els.lights.hidden = false;
   for (const l of els.lights.children) l.classList.remove("on");
   sectorIdx = player ? sectorAt(player.s) : 0; sectorStartT = player ? player.lapTime : 0; sectorValid = false;
@@ -2822,7 +2823,7 @@ async function startRaceBody() {
     // return) and quitToMenu() lower it, so this arm left the menu behind a
     // z-36 pointer-events:auto scrim with an inert skip handler — reload only.
     loadingScreen.stop();
-    state = "menu"; $("race-settings").hidden = true;
+    setState("menu", "save-conflict"); $("race-settings").hidden = true;
     if (careerSaveConflict) announce("SAVE CONFLICT — reload career", 3, "info");
     else if (seasonSaveConflict) announce("SAVE CONFLICT — reload season", 3, "info");
     else { buildSelect(); els.select.hidden = false; }
@@ -2951,7 +2952,7 @@ async function startRaceBody() {
   PerfGov.sentinelArm(true);
   if (PerfGov.strikes() > 0 && PerfGov.autoRes() && gfx.setRenderScale && gfx.getRenderScale)
     gfx.setRenderScale(Math.min(gfx.getRenderScale(), PerfGov.strikes() >= 2 ? 0.7 : 0.85));
-  state = "count"; countT = 0; lightsLit = 0; raceT = 0; startHold = 0; restartPending = false; paused = false; frozen = false; skyViewOverride = null;
+  setState("count", "race-start"); countT = 0; lightsLit = 0; raceT = 0; startHold = 0; restartPending = false; paused = false; frozen = false; skyViewOverride = null;
   // TLX links programs synchronously on first draw — warm them during the LIGHTS,
   // unless the menu's warm already ran for this world (warmPrograms, _warmKey).
   // Optimisation only; GLX/WGX have no warm and no-op.
@@ -2991,7 +2992,7 @@ async function startRaceBody() {
   DebrisWorld.prime(); updateHud(true);   // prime: build the side-world HERE, not on the lights-out frame (see DebrisWorld.prime)
 
   // A flyby timer can land this in a BACKGROUND tab, after the hide handler ran in "menu" state.
-  if (document.hidden) setPaused(true);
+  if (document.hidden) setPaused(true, "hidden-tab");
 }
 const sessionEntry = SessionEntry.create();
 const _seasonEntryIds = new WeakMap();
@@ -3014,7 +3015,7 @@ function startRace() {
   // Menu buttons fire and forget. Observe rejection on a separate branch so
   // those callers do not raise an unhandledrejection overlay; an awaiting agent
   // still receives the original rejecting promise and its original error.
-  request.catch(() => {});
+  request.catch((e) => Log.debug("game", "startRace rejected (handled by onFail): " + (e && e.message || e)));
   return request;
 }
 
@@ -3163,7 +3164,7 @@ function endRace(forcedOrder) {
   // the pause dialog on top of the results with a RESUME that resolves to
   // nothing, because resuming is only reachable from state "race".
   paused = false; els.pausemenu.hidden = true;
-  state = "results";
+  setState("results", isQuali() ? "quali-end" : forcedOrder ? "forced-order" : "flag");
   document.body.classList.remove("in-race");
   dropRaceWake();
   els.pausebtn.hidden = true;
@@ -3213,6 +3214,7 @@ function endRace(forcedOrder) {
   // a room: a remote car's compound is not replicated.
   const cmpOn = !netPlay.active() && !isPractice() && !duelOn() && cars.some((c) => c.finished && !c.retired) && pits.twoCompoundApplies();
   const dsq = SportingRegs.applyCompoundRule(cars, { applies: cmpOn, suspended });
+  for (const c of dsq) Log.info("game", "DSQ car=" + c.code + " why=" + c.dsq);   // B6.3.6: a suspended race pays +30 s instead, carried in c.penalty
   const fin = cars.filter((c) => c.finished && !c.retired && !c.dsq).sort(RaceControl.finishOrder);   // laps, then the clock
   const run = cars.filter((c) => !c.finished && !c.retired && !c.dsq).sort((a, b) => b.prog - a.prog);
   const out = cars.filter((c) => c.retired).sort((a, b) => b.prog - a.prog);
@@ -3236,6 +3238,7 @@ function endRace(forcedOrder) {
   // block that used to live here, unchanged in behaviour.
   const order = netOrder(forcedOrder || live.concat(out.filter((c) => !lateOut.includes(c)), dsq));   // DSQ: last, no points
   order.forEach((c, i) => { c.finPos = i + 1; });
+  Log.info("game", "Race finished track=" + (track && track.def.id) + " session=" + session + " laps=" + lapsTarget + " pos=" + (player ? player.finPos : "-") + " time=" + (player && player.finished ? (+player.finishT).toFixed(3) : "-") + " pen=" + ((player && player.penalty) || 0) + "s" + (player && player.dsq ? " dsq=" + player.dsq : "") + " retired=" + out.length + " dsqs=" + dsq.length + (suspended ? " suspended" : ""));
   // Read BEFORE award() advances the stage, or the sprint is wrapped up as the Grand Prix.
   const wasSprint = isChampionship() && SeasonCal.stage(season) === "sprint";
   if (isChampionship()) {
@@ -3288,7 +3291,7 @@ const G = {
   // deliberately keep reporting raw m/s; see vTop/vStd.
   dashKph: (v) => dashKph(v),
   ttBoard, teamById: (id) => teamById(id), cssCol: (c) => cssCol(c),
-  get state() { return state; }, set state(v) { state = v; },
+  get state() { return state; }, set state(v) { setState(v, "api"); },
   get track() { return track; },
   get cars() { return cars; },
   get player() { return player; },
@@ -3625,7 +3628,7 @@ const G = {
   get loadingScreen() { return loadingScreen; },   // js/ui/loading-screen.js — the editor drives the card's geometry
   setCarRole, modsFor, swapGridSlots,   // multiplayer seam — see setCarRole
   followCar: (c) => { cars.forEach((o) => setCarRole(o, false, o === c)); player = c; },   // a replay: the camera, HUD and audio move to this car; nobody drives (js/race/real-replay.js)
-  goRolling: () => { if (state !== "count") return false; state = "race"; launchT0 = raceT; els.lights.hidden = true; for (const l of els.lights.children) l.classList.remove("on"); lightsLit = COUNTDOWN_S; cars.forEach((c) => { c.launchOn = false; }); return true; },   // a mid-race jump-in: green at once, no gantry, no launch model — the field is already at speed (js/race/real-race.js)
+  goRolling: () => { if (state !== "count") return false; setState("race", "rolling-start"); launchT0 = raceT; els.lights.hidden = true; for (const l of els.lights.children) l.classList.remove("on"); lightsLit = COUNTDOWN_S; cars.forEach((c) => { c.launchOn = false; }); return true; },   // a mid-race jump-in: green at once, no gantry, no launch model — the field is already at speed (js/race/real-race.js)
   wireId,                               // stable cross-peer car identity
   setScale: (...a) => setScale(...a),   // const from UiScale.create(G) below — defer
   // Debug teleports can run while a headless/SwiftShader frame is starved.
@@ -4126,7 +4129,7 @@ function syncRotateBlocker(moveFocus) {
   // mid-race used to leave the field (and TOUCH's auto-throttle) racing on.
   // rotateBlockMql as well as the box: a DOM with no stylesheet (the node
   // game-vm harness) reads every display as shown, and would pause every race.
-  if (active && rotateBlockMql.matches && !paused && (state === "race" || state === "count") && !netPlay.active()) setPaused(true);
+  if (active && rotateBlockMql.matches && !paused && (state === "race" || state === "count") && !netPlay.active()) setPaused(true, "rotate-block");
   if (paused) els.pausemenu.hidden = active;
   if (active && moveFocus) requestAnimationFrame(() => {
     const first = $("rotate-controls"); if (first && getComputedStyle(box).display !== "none") first.focus();
@@ -4151,7 +4154,7 @@ function quitToMenu() {
   // left the flyby active() for the session — capture listeners attached, and
   // menuBlank and the per-car draw break both gate on !active(). Idempotent.
   loadingScreen.stop();
-  state = "menu"; paused = false; raceCtl.reset(); wxArc.endSession(); daily.stop(); realRace.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
+  setState("menu", "quit"); paused = false; raceCtl.reset(); wxArc.endSession(); daily.stop(); realRace.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
   // A netplay lights-out instant is consumed by the countdown (the
   // `netStart = null` at its end). Quitting BEFORE that consumption stranded
   // it, and the next SOLO race read an `at` already in the past: countT
@@ -4283,7 +4286,7 @@ function update(dt) {
       if (lit === COUNTDOWN_S && !netStart) startHold = 0.2 + simRnd() * 1.8;
     }
     if (lightsLit === COUNTDOWN_S && countT > COUNTDOWN_S + startHold) {
-      state = "race";
+      setState("race", restartPending ? "restart-green" : "lights-out");
       if (!restartPending) raceT = 0;   // a red-flag restart resumes the clock the flag stopped
       launchT0 = raceT;   // …so the launch model measures from THIS green, not the first one
       // A NETWORKED RACE KEEPS WALL TIME from the shared green (netStart.at is
@@ -5158,7 +5161,7 @@ function updateCar(c, dt, ranked) {
         if (c.cutWarn >= 4) c.cutWarn = 0;
         if (c.isPlayer) { announce("LAP INVALIDATED", 1.2, "penalty-warn"); if (soundOn) GameAudio.offtrack(); }
       } else if (c.cutWarn >= 4) {
-        c.penalty += 5;
+        c.penalty += 5; Log[c.isPlayer ? "info" : "debug"]("game", "Penalty track-limits car=" + c.code + " +5s total=" + c.penalty + "s lap=" + c.lap);
         if (c.isPlayer) {
           announce("+5s TRACK LIMITS PENALTY", 2, "penalty-hit");
           if (soundOn) GameAudio.penalty();
@@ -8778,7 +8781,7 @@ $("htp-close").onclick = () => {
   document.body.classList.remove("rotate-help-open"); if (fromRotate) syncRotateBlocker(true);
 };
 $("rotate-controls").onclick = () => {
-  setPaused(true); document.body.classList.add("rotate-help-open");
+  setPaused(true, "rotate-help"); document.body.classList.add("rotate-help-open");
   syncRotateBlocker(false); els.howtoplay.hidden = false;
   const close = $("htp-close"); if (close) close.focus();
 };
@@ -8880,14 +8883,14 @@ function openQuali(fresh, netDone) {
   return sessionEntry.begin("quali", key, () => ensureScenery(idx),
     () => openQualiBody(fresh, netDone), () => key === entrySettings() + "|" + !!fresh,
     (e) => { if (e) Log.error("game", "openQuali failed", e); qualiSheet.close(); quitToMenu(); })
-    .catch(() => {}); // menu callers fire and forget; recovery above already landed the failure
+    .catch((e) => Log.debug("game", "openQuali rejected (handled by onFail): " + (e && e.message || e))); // menu callers fire and forget; recovery above already landed the failure
 }
 function openQualiBody(fresh, netDone) {
   session = "quali";
   // Reached from race settings this is already "menu"; reached from the results
   // screen it would still say "results". No race is running while the sheet is
   // up, so both paths say the same thing.
-  state = "menu";
+  setState("menu", "quali-sheet");
   quali.clear();
   qualiNet.clearPeers();
   qualiNet.arm(netDone);   // armed from the ARG: a caller's write lands before this line
@@ -9152,7 +9155,7 @@ els.resNext.onclick = () => {
   else startRace();
 };
 
-function setPaused(p) {
+function setPaused(p, why) {
   if (state !== "race" && state !== "count") return; hideCamPicker();
   if (p) Ghost.flush();   // paused: the frame budget is free for the ghost write
   // THE PIT GARAGE HOLDS THE PAUSE. openPitWork freezes the race behind
@@ -9160,6 +9163,7 @@ function setPaused(p) {
   // (hidden tab) used to run the race UNDER the garage, the box timer expired,
   // and DONE then charged nothing. Its own DONE/BACK are the only way out.
   if (!p && garageReturn === "pit" && !$("carsetup").hidden) { els.pausemenu.hidden = true; return; }
+  if (paused !== !!p) Log.info("game", "Race " + (p ? "paused" : "resumed") + " why=" + (why || "button") + " state=" + state + " raceT=" + raceT.toFixed(1));
   paused = p;
   if (!p) {
     closeLightTuner(false); closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();
@@ -9201,7 +9205,7 @@ SettingRow.wire("pm-hidehud", {
   write: (v) => {
     const willHide = v === "off";
     setHudUserHidden(willHide);
-    if (willHide) setPaused(false);   // clean screen — drop the menu so you can actually see it
+    if (willHide) setPaused(false, "hud-off");   // clean screen — drop the menu so you can actually see it
   },
 });
 $("hud-restore").onclick = () => setHudUserHidden(false);
@@ -9215,7 +9219,7 @@ $("hud-restore").onclick = () => setHudUserHidden(false);
 const { setCamMode, cycleCam, hideCamPicker } = CamModes.create(G);
 
 $("pm-resume").onclick = () => setPaused(false);
-$("pm-restart").onclick = () => { if (netPlay.active() || qualiNet.hasArmed()) return; els.pausemenu.hidden = false; setPaused(false); startRace(); };
+$("pm-restart").onclick = () => { if (netPlay.active() || qualiNet.hasArmed()) return; els.pausemenu.hidden = false; setPaused(false, "restart"); startRace(); };
 $("pm-quit").onclick = () => quitToMenu();
 els.pmStandings && (els.pmStandings.onclick = () => { buildStandings(); $("standings").hidden = false; });
 
@@ -9336,7 +9340,7 @@ if ($("pm-fullscreen")) {
   setTimeout(dismiss, 15000);
 })();
 applyMirrorControls();
-$("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
+$("pm-calib").onclick = () => { Input.calibrate(); setPaused(false, "recalibrate"); };
 // PHONE AS CONTROLLER (js/input/phone-pad.js, LAZY_NET): the button loads the
 // multiplayer stack the pairing rides on, then the module owns the pairing and
 // feeds Input.remoteSample(). A second press cancels; a lost phone re-arms it.
@@ -9467,7 +9471,7 @@ function _disarmProbeOnLeave() {
 }
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) _disarmProbeOnLeave();
-  if (document.hidden && (state === "race" || state === "count")) setPaused(true);
+  if (document.hidden && (state === "race" || state === "count")) setPaused(true, "hidden-tab");
   // Sentinel: a hidden tab that never comes back was killed in the BACKGROUND —
   // normal iOS housekeeping, not our crash. Disarm while hidden, re-arm on
   // return to a live session.
@@ -9493,13 +9497,13 @@ window.addEventListener("pagehide", () => { PerfGov.sentinelArm(false); _disarmP
 window.addEventListener("blur", () => {
   setTimeout(() => {
     if (document.hidden || document.hasFocus() || navigator.webdriver || netPlay.active()) return;
-    if (state === "race" || state === "count") setPaused(true);
+    if (state === "race" || state === "count") setPaused(true, "blur");
   }, 250);
 });
 // …and the platform taking the AUDIO (an iOS call answered from the compact
 // banner keeps the page visible and focused): the race stops with the sound.
 if (GameAudio.onInterrupted) GameAudio.onInterrupted(() => {
-  if ((state === "race" || state === "count") && !netPlay.active()) setPaused(true);
+  if ((state === "race" || state === "count") && !netPlay.active()) setPaused(true, "audio-interrupted");
 });
 
 // ---------- boot ----------
@@ -9546,7 +9550,7 @@ Input.init(canvas, { onPause: () => {
     if (settingsNav.back()) closeSettings();
     return;
   }
-  setPaused(!paused);
+  setPaused(!paused, "key");
 },
 /* A CONTROLLER LEAVING MID-RACE PAUSES THE RACE. Input already zeroes every
    latch when the last pad goes (so a stale axis snapshot cannot leave the
@@ -9557,7 +9561,7 @@ Input.init(canvas, { onPause: () => {
    interruption, and pausing there would open the pause menu over the menus. */
 onPadLost: () => {
   if (!UiLayers.inRace() || paused) return;
-  setPaused(true);
+  setPaused(true, "pad-lost");
   announce("CONTROLLER DISCONNECTED — RECONNECT OR PRESS RESUME", 4, "coach");
   Log.info("input", "paused: last gamepad disconnected");
 } });

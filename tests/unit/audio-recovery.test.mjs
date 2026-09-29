@@ -101,8 +101,8 @@ test("game.js wiring: keyboard unlocks audio, a hidden-tab start pauses, resume 
   assert.match(g, /if \(gestured \|\| \(e\.type === "keydown" && e\.key === "Escape"\)\) return;/);
   assert.match(g, /for \(const t of GESTURE_EVTS\) document\.addEventListener\(t, onFirstGesture, true\);/);
   const body = g.slice(g.indexOf("async function startRaceBody()"), g.indexOf("const sessionEntry = SessionEntry.create();"));
-  assert.match(body, /if \(document\.hidden\) setPaused\(true\);\n\}\s*$/, "the hidden check is the LAST thing, after the audio starts it stops");
-  const sp = g.slice(g.indexOf("function setPaused(p) {"), g.indexOf("els.pausebtn.onclick = () => setPaused(true);"));
+  assert.match(body, /if \(document\.hidden\) setPaused\(true, "hidden-tab"\);\n\}\s*$/, "the hidden check is the LAST thing, after the audio starts it stops");
+  const sp = g.slice(g.indexOf("function setPaused(p, why) {"), g.indexOf("els.pausebtn.onclick = () => setPaused(true);"));
   assert.match(sp, /else if \(soundOn\) \{[^\n]*GameAudio\.startEngine\(\); GameAudio\.startMusic\(trackIdx\); if \(isRaining\(\)\) GameAudio\.startRain\(\); \}/,
     "SOUND turned on under the pause card (js/audio/panel.js defers) gets music and rain back on RESUME");
   assert.match(g, /go\.addEventListener\("animationend", qGoShakeEnd, \{ once: true \}\)/, "one named handler, not a closure per rejected press");

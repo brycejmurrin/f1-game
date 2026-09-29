@@ -89,8 +89,8 @@ test("losing focus while visible pauses a solo race; an iOS audio interruption d
   const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
   const blur = game.match(/window\.addEventListener\("blur", \(\) => \{[\s\S]*?\n\}\);/)[0];
   assert.match(blur, /document\.hidden \|\| document\.hasFocus\(\) \|\| navigator\.webdriver \|\| netPlay\.active\(\)/, "settled, visible-only, never under automation or in MP");
-  assert.match(blur, /if \(state === "race" \|\| state === "count"\) setPaused\(true\);/);
-  assert.match(game, /GameAudio\.onInterrupted\(\(\) => \{\s*if \(\(state === "race" \|\| state === "count"\) && !netPlay\.active\(\)\) setPaused\(true\);/);
+  assert.match(blur, /if \(state === "race" \|\| state === "count"\) setPaused\(true, "blur"\);/);
+  assert.match(game, /GameAudio\.onInterrupted\(\(\) => \{\s*if \(\(state === "race" \|\| state === "count"\) && !netPlay\.active\(\)\) setPaused\(true, "audio-interrupted"\);/);
   const eng = fs.readFileSync(path.join(ROOT, "js/audio/engine.js"), "utf8");
   assert.match(eng, /ctx\.state === "interrupted" && _onInterrupted/);
 });
