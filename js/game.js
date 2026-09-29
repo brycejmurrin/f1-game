@@ -1328,9 +1328,8 @@ let _annPri = 0, _annFloor = 0, _annQueue = [];
 // dimmest thing on a card that is always about that car. Every channel here is
 // addressed TO the player, so the one number serves all three.
 function radioWho(kind) {
-  if (kind === "penalty-hit" || kind === "penalty-warn" || kind === "warning") return "RACE CONTROL";
-  if (kind === "coach" || kind === "practice") return "COACH";
-  if (kind === "comm") return "COMMENTARY";   // js/race/race-radio.js — the broadcaster, not the pit wall
+  const label = { control: "RACE CONTROL", coach: "COACH", announcer: "COMMENTARY" }[RadioVoice.SPEAKERS[kind]];
+  if (label) return label;
   const p = player;
   const who = p && p.name ? String(p.name).split(" ").pop().toUpperCase() : (p && p.code) || "";
   return (who ? who + " · " : "") + "RADIO";
@@ -2146,7 +2145,7 @@ function redFlagRestart() {
   for (const l of els.lights.children) l.classList.remove("on");
   sectorIdx = player ? sectorAt(player.s) : 0; sectorStartT = player ? player.lapTime : 0; sectorValid = false;
   snapGameCam();
-  announce("RED FLAG — STANDING RESTART", 3, "race");
+  announce("RED FLAG — STANDING RESTART", 3, "warning");
   Log.info("game", "red flag: standing restart, " + order.length + " cars re-gridded at raceT " + raceT.toFixed(1));
   return true;
 }
@@ -5133,7 +5132,7 @@ function updateCar(c, dt, ranked) {
       } else if (c.cutWarn >= 4) {
         c.penalty += 5;
         if (c.isPlayer) {
-          announce("+5s TRACK LIMITS PENALTY", 2, hudProfile === "broadcast" ? "race" : "penalty-hit");
+          announce("+5s TRACK LIMITS PENALTY", 2, "penalty-hit");
           if (soundOn) GameAudio.penalty();
         }
       } else if (c.isPlayer) {

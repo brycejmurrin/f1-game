@@ -368,3 +368,104 @@ test("an AudioContext rebuilt while a line decodes drops the line instead of sch
   assert.equal(played, 0, "the line was scheduled on the dead context's clock");
   assert.equal(P.busy("spotter"), false, "the channel is held for a line that will never play");
 });
+
+test("spotter holds the overlap envelope and names the remaining side after three wide", () => {
+  const me = { s: 10, x: 0 }, other = { s: 15.8, x: -2 };
+  assert.equal(Spotter.occupancy(me, [me, other], 1000), 0);
+  assert.equal(Spotter.occupancy(me, [me, other], 1000, 1), 1);
+  other.s = 16.5;
+  assert.equal(Spotter.occupancy(me, [me, other], 1000, 1), 0);
+  other.s = NaN;
+  assert.equal(Spotter.occupancy(me, [me, other], 1000), 0);
+  other.s = 10; other.x = NaN;
+  assert.equal(Spotter.occupancy(me, [me, other], 1000), 0);
+  const st = Spotter.fresh();
+  assert.deepEqual(run(st, 3, 1), ['three wide']);
+  assert.deepEqual(run(st, 1, 1), ['car left']);
+  assert.deepEqual(run(st, 0, .25), [], 'clear needs sustained separation');
+  assert.deepEqual(run(st, 1, .5), [], 'brief dropout does not repeat the warning');
+});
+
+test("spotter never says still there while clearance is being debounced, and ignores invalid dt", () => {
+  const st = Spotter.fresh();
+  run(st, 1, 1);
+  st.t = st.lastCallT + 4;
+  assert.equal(Spotter.step(st, 0, .05), '');
+  const before = J(st);
+  assert.equal(Spotter.step(st, 1, Infinity), '');
+  assert.deepEqual(J(st), before);
+});
+
+test("routine speech yields to the spotter but race control and pit calls keep priority", () => {
+  for (const kind of ['info', 'coach', 'comm', 'race', 'box', 'warning', 'penalty-hit']) {
+    const r = radio();
+    // Commentary obeys a separate switch; exercise the remaining routine kinds here.
+    if (kind === 'comm') continue;
+    assert.equal(r.v.say('BOX BOX BOX', 4, kind, .5), true);
+    const routine = ['info', 'coach'].includes(kind);
+    assert.equal(r.v.yieldToSpotter(), routine, kind);
+    assert.equal(r.v.busy(), !routine, kind);
+    r.v.stop();
+  }
+});
+
+test("spotter interrupts routine speech only with a ready clip, retains awareness when muted, and stops on retirement", () => {
+  let ready = false, busy = true, yielded = 0, stopped = 0, valid;
+  const said = [], me = { s: 100, x: 0, speed: 60 };
+  const pack = { ensure() {}, plan: () => ready, busy: ch => ch ? false : busy,
+    stop() { stopped++; }, speak(id, text, opt) { said.push(text); valid = opt.valid; return true; } };
+  const G = { state: 'race', soundOn: true, player: me, cars: [me, { s: 100, x: -2 }], track: { total: 1000 },
+    vTop: () => 100, store: { get: (k, d) => d }, radio: { pack, busy: () => busy, volume: () => 1,
+      yieldToSpotter() { yielded++; busy = false; } } };
+  const s = Spotter.create(G);
+  for (let i = 0; i < 10; i++) s.update(.05);
+  assert.equal(yielded, 0, 'a loading pack cannot cut a useful line');
+  ready = true; s.update(.05);
+  assert.deepEqual(said, ['Car left.']); assert.equal(yielded, 1);
+  assert.equal(valid(), true);
+  G.cars[1].s += 20;
+  assert.equal(valid(), false, 'a car that left while decoding is not called');
+  for (let i = 0; i < 20; i++) s.update(.05);
+  assert.deepEqual(said, ['Car left.'], 'discarded speech is not followed by an orphan clear call');
+  G.cars[1].s = 100; G.soundOn = false; s.update(.05);
+  assert.equal(s.occupied(), true, 'muting speech does not invite coach chatter alongside');
+  me.retired = true; s.update(.05);
+  assert.equal(s.occupied(), false); assert.ok(stopped > 0);
+});
+
+test("recorded engineer and spotter packs do not depend on speechSynthesis existing", () => {
+  const calls = [];
+  const pack = { ensure() {}, stop() {}, remaining: () => 0, speak: (...a) => { calls.push(a); return true; } };
+  const sb = sandbox(['js/audio/radio-voice.js'], { window: {}, GameAudio: {}, VoicePack: { create: () => pack } });
+  const v = sb.RadioVoice.create({ state: 'race', soundOn: true, store: { get: (k, d) => d, set() {} } });
+  assert.equal(v.pack, pack);
+  v.setEnabled(true);
+  assert.equal(v.say('BOX BOX BOX', 4, 'race'), true);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(J(v.voiceList('radio')), []);
+  v.stop();
+  assert.equal(v.say('KEEP INPUTS SMOOTH', 4, 'coach'), false, 'unrecorded words remain text when TTS is absent');
+});
+
+test("VoicePack drops a spotter warning whose situation changed during decoding", async () => {
+  let decode, plays = 0, relevant = true;
+  const sb = sandbox(['js/audio/voice-pack.js'], {
+    GameAudio: { now: () => 0, ctxGen: () => 1, decodeClip: () => new Promise(r => { decode = r; }),
+      radioVoice: () => { plays++; return { end: .5, stop() {} }; } },
+    fetch: () => Promise.resolve({ ok: true, json: async () => ({ clips: { 'car left': [0, 4, .5] } }), arrayBuffer: async () => new ArrayBuffer(4) }),
+  });
+  const pack = sb.VoicePack.create({}); pack.ensure('george');
+  await new Promise(r => setImmediate(r));
+  assert.equal(pack.speak('george', 'car left', { channel: 'spotter', valid: () => relevant }), true);
+  relevant = false; decode({ duration: .5 });
+  await new Promise(r => setImmediate(r));
+  assert.equal(plays, 0); assert.equal(pack.busy(), false);
+});
+
+test('the engineer TEST previews the selected recorded source; SYSTEM previews synthesis', async () => {
+  const rec=radio(); assert.equal(rec.v.preview('radio'),true);
+  assert.ok(rec.packCalls.some(c=>c.id==='george')); assert.deepEqual(rec.spoken,[]);
+  assert.equal(rec.v.busy(),true); rec.v.stop();
+  const sys=radio({packOn:false}); assert.equal(sys.v.preview('radio'),true);
+  assert.equal(sys.packCalls.filter(c=>c.id).length,0); assert.equal(sys.spoken.length,1); sys.v.stop();
+});
