@@ -144,6 +144,14 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     albert_park: ["albert-piastri-stand", "albert-msac", "albert-lakeside-stadium"],
     // Nürburgring GP-Strecke — Burg + Coca-Cola Kurve + race control
     nurburgring: ["nurburgring-burg-nurburg", "nurburgring-coca-cola-kurve", "nurburgring-race-control"],
+    // Wave 6 — Indianapolis Motor Speedway road course (Pagoda / pylon /
+    // pit stalls already required; continuous Paddock–Tower Terrace wall)
+    indianapolis: [
+      "indy-pagoda",
+      "indy-scoring-pylon",
+      "indy-pit-stalls",
+      "indy-main-stands",
+    ],
     // Wave 5 — Shanghai International Circuit (wing piers are literal
     // modelGroups; decks stay on overheadSpan. pudong/boardwalk stay required
     // at runtime but their emit bodies exceed the 2200-char BATCH-01 window).
