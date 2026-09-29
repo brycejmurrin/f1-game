@@ -1,5 +1,5 @@
 /* SettingsNav — page stack for the pause/title Settings sheet.
-   Home opens CONTROLS, DRIVING, DISPLAY, APPEARANCE, STEERING & ASSISTS and MUSIC pages.
+   Home opens controls, driving, display, appearance, assists, sound and backups.
    Lighting / camera tuners stay as their own docks. BACK pops.
    Decisions: docs/research/PAUSE-SETTINGS-IA.md.
    game.js still owns availability and all individual controls. */
@@ -13,6 +13,7 @@ const SettingsNav = (function () {
     appearance: "APPEARANCE",
     advanced: "STEERING & ASSISTS",
     audio: "MUSIC & SOUND",
+    files: "BACKUP & RESTORE",
   };
   let live = null;
 
@@ -26,6 +27,7 @@ const SettingsNav = (function () {
       appearance: document.getElementById("pm-panel-appearance"),
       advanced: document.getElementById("advanced"),
       audio: document.getElementById("audioset"),
+      files: document.getElementById("pm-panel-files"),
     };
   }
 
@@ -122,35 +124,18 @@ const SettingsNav = (function () {
       return false;
     }
 
-    const openControls = document.getElementById("pm-open-controls");
-    if (openControls) openControls.onclick = () => {
-      originDoor = openControls;
-      show("controls", true, () => { if (onSelect) onSelect("controls"); });
+    const doors = {
+      controls: document.getElementById("pm-open-controls"),
+      driving: document.getElementById("pm-open-driving"),
+      display: document.getElementById("pm-open-display"),
+      appearance: document.getElementById("pm-open-appearance"),
+      advanced: document.getElementById("pm-advanced"),
+      audio: document.getElementById("pm-audio"),
+      files: document.getElementById("pm-open-files"),
     };
-    const openDriving = document.getElementById("pm-open-driving");
-    if (openDriving) openDriving.onclick = () => {
-      originDoor = openDriving;
-      show("driving", true, () => { if (onSelect) onSelect("driving"); });
-    };
-    const openDisplay = document.getElementById("pm-open-display");
-    if (openDisplay) openDisplay.onclick = () => {
-      originDoor = openDisplay;
-      show("display", true, () => { if (onSelect) onSelect("display"); });
-    };
-    const openAppearance = document.getElementById("pm-open-appearance");
-    if (openAppearance) openAppearance.onclick = () => {
-      originDoor = openAppearance;
-      show("appearance", true, () => { if (onSelect) onSelect("appearance"); });
-    };
-    const openAdvanced = document.getElementById("pm-advanced");
-    if (openAdvanced) openAdvanced.onclick = () => {
-      originDoor = openAdvanced;
-      show("advanced", true, () => { if (onSelect) onSelect("advanced"); });
-    };
-    const openAudio = document.getElementById("pm-audio");
-    if (openAudio) openAudio.onclick = () => {
-      originDoor = openAudio;
-      show("audio", true, () => { if (onSelect) onSelect("audio"); });
+    for (const [id, door] of Object.entries(doors)) if (door) door.onclick = () => {
+      originDoor = door;
+      show(id, true, () => { if (onSelect) onSelect(id); });
     };
     // Every open starts at the door index. Do not steal focus here: the dialog
     // seam owns focus when it opens, and its opener should remain authoritative.
