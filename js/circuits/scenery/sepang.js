@@ -10,8 +10,8 @@
         palm, bush, ridge, building, grandstandEx, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup, waterBand,
-        sponsorHoarding, cameraTower, seat,
-        addBox, addCyl, addCone, addPrism } = api;
+        sponsorHoarding, cameraTower, seat, terrainYAt, indexSolid,
+        addBox, addCyl, addCone, addPrism, addFrustum } = api;
 
       const PALM_F = [0.16, 0.42, 0.18], PALM_FD = [0.12, 0.34, 0.15];
       const JUNGLE = [0.11, 0.34, 0.14], JUNGLE_L = [0.20, 0.46, 0.20];
@@ -77,72 +77,92 @@
         bush(k, h < 0.72 ? -1 : 1, 8 + h * 5, h < 0.6 ? JUNGLE : JUNGLE_L);
       });
 
-      function hyparCanopy(id, s, side, gap, W, L, H, lift, col, required) {
+      // Main Grandstand opposite the pit lane (ownPitStraight → pits on +1).
+      // Operator + KKL call the tensile roof a Hibiscus Canopy (Malaysia's
+      // national flower). Six connected petal bays — each a small warped
+      // tensile patch (hypar panel grid + corner masts + edge beams) so the
+      // ground-audit support BFS stays continuous. Not a single giant saddle.
+      // Sources: sepangcircuit.com/architecture ; jpkkl.com/?p=2495.
+      // T15 "umbrella" canopy left out: search-synthesis only, unverified.
+      const FABRIC = [0.95, 0.95, 0.93], STEEL = [0.78, 0.78, 0.80];
+      const SHELL_G = [0.82, 0.83, 0.82], SEAT_COLS = [
+        [0.16, 0.44, 0.26], [0.90, 0.90, 0.86], [0.86, 0.72, 0.14],
+      ];
+      const emitPetalBay = (stage, s, side, gap, W, L, H, lift) => {
         const a = anchor(K(s), side, gap);
         const b = [a.r, a.u, a.t];
-        const COLS = 6, ROWS = 9;
-        modelGroup(id, {
-          center: vadd(a.c, a.u, lift), size: [W * 2 + 6, lift * 2 + H * 2, L * 2 + 6], basis: b,
-        }, (stage) => {
-          const panelW = (W * 2) / COLS, panelL = (L * 2) / ROWS;
-          for (let i = 0; i < COLS; i++) {
-            for (let j = 0; j < ROWS; j++) {
-              const u = -W + (i + 0.5) * panelW;      // across-track offset
-              const v = -L + (j + 0.5) * panelL;      // along-track offset
-              const y = lift + H * (u * v) / (W * L);
-              // Local surface gradients of y = H·u·v/(W·L).
-              const ar = Math.atan2(H * v, W * L);
-              const at = Math.atan2(H * u, W * L);
-              const p = vadd(vadd(vadd(a.c, a.r, u), a.t, v), a.u, y);
-              const shade = ((i + j) & 1) ? 1 : 0.94;
-              addBox(stage, p, [panelW * 1.04, 0.35, panelL * 1.04],
-                [col[0] * shade, col[1] * shade, col[2] * shade], tilt2(a, ar, at));
-            }
+        const COLS = 4, ROWS = 5;
+        const panelW = (W * 2) / COLS, panelL = (L * 2) / ROWS;
+        for (let i = 0; i < COLS; i++) {
+          for (let j = 0; j < ROWS; j++) {
+            const u = -W + (i + 0.5) * panelW;
+            const v = -L + (j + 0.5) * panelL;
+            const y = lift + H * (u * v) / (W * L);
+            const ar = Math.atan2(H * v, W * L);
+            const at = Math.atan2(H * u, W * L);
+            const p = vadd(vadd(vadd(a.c, a.r, u), a.t, v), a.u, y);
+            const shade = ((i + j) & 1) ? 1 : 0.94;
+            addBox(stage, p, [panelW * 1.08, 0.35, panelL * 1.08],
+              [FABRIC[0] * shade, FABRIC[1] * shade, FABRIC[2] * shade], tilt2(a, ar, at));
           }
-          for (const [su, sv] of [[-1, -1], [1, 1]]) {
-            const foot = vadd(vadd(a.c, a.r, su * W * 0.92), a.t, sv * L * 0.92);
-            const top = lift + H * 0.92 * 0.92 + 3;
-            addCyl(stage, foot, 0.65, top, [0.80, 0.80, 0.82], 8, b);
-            addCyl(stage, vadd(foot, a.u, top), 0.30, 4, [0.62, 0.63, 0.66], 6, b);
+        }
+        for (const [su, sv] of [[-1, -1], [1, 1]]) {
+          const foot = vadd(vadd(a.c, a.r, su * W * 0.92), a.t, sv * L * 0.92);
+          const top = lift + H * 0.92 * 0.92 + 2.5;
+          addCyl(stage, foot, 0.55, top, STEEL, 8, b);
+          addCyl(stage, vadd(foot, a.u, top), 0.28, 3.2, [0.62, 0.63, 0.66], 6, b);
+        }
+        for (const [su, sv] of [[-1, 1], [1, -1]]) {
+          const foot = vadd(vadd(a.c, a.r, su * W * 0.92), a.t, sv * L * 0.92);
+          const low = Math.max(3.0, lift - H * 0.85);
+          addCyl(stage, foot, 0.45, low, STEEL, 8, b);
+          addBox(stage, vadd(foot, a.u, low * 0.5), [0.16, low, 0.16], [0.55, 0.56, 0.60], b);
+        }
+        for (let j = 0; j <= ROWS; j++) {
+          const v = -L + j * panelL;
+          for (const su of [-1, 1]) {
+            const u = su * W;
+            const y = lift + H * (u * v) / (W * L);
+            addBox(stage, vadd(vadd(vadd(a.c, a.r, u), a.t, v), a.u, y),
+              [0.5, 0.65, panelL], [0.66, 0.67, 0.70], b);
           }
-          for (const [su, sv] of [[-1, 1], [1, -1]]) {
-            const foot = vadd(vadd(a.c, a.r, su * W * 0.92), a.t, sv * L * 0.92);
-            const low = lift - H * 0.85;
-            addCyl(stage, foot, 0.5, low, [0.80, 0.80, 0.82], 8, b);
-            // Tie-down stay running back to the ground.
-            addBox(stage, vadd(foot, a.u, low * 0.5), [0.18, low, 0.18], [0.55, 0.56, 0.60], b);
-          }
-          // Perimeter edge beam, following the warped rim.
-          for (let j = 0; j <= ROWS; j++) {
-            const v = -L + j * panelL;
-            for (const su of [-1, 1]) {
-              const u = su * W;
-              const y = lift + H * (u * v) / (W * L);
-              addBox(stage, vadd(vadd(vadd(a.c, a.r, u), a.t, v), a.u, y),
-                [0.5, 0.7, panelL], [0.66, 0.67, 0.70], b);
-            }
-          }
-        }, { required: !!required });
-      }
-      hyparCanopy("sepang-canopy-main", 0.985, -1, 22, 14, 42, 9, 24,
-        [0.95, 0.95, 0.93], true);
-      hyparCanopy("sepang-canopy-paddock", 0.955, 1, 22, 13, 34, 8, 22,
-        [0.93, 0.94, 0.92], true);
-
-      {
-        const SEATS = [[0.16, 0.44, 0.26], [0.90, 0.90, 0.86], [0.86, 0.72, 0.14]];
-        let i = 0;
-        along(0.958, 0.020, 9, (k, spacing) => {
-          const seg = spacing * 0.96;
-          for (let t = 0; t < 6; t++) {
-            const a = anchor(k, -1, 12 + t * 3.4);
+        }
+      };
+      const emitHibiscusCanopy = (stage) => {
+        let si = 0;
+        along(0.960, 0.015, 11, (k, spacing) => {
+          const seg = spacing * 0.92;
+          for (let t = 0; t < 5; t++) {
+            const a = anchor(k, -1, 11 + t * 3.1);
             const b = [a.r, a.u, a.t];
-            const h = 2.0 + t * 2.4;
-            addBox(out, vadd(a.c, a.u, h * 0.5), [3.3, h, seg], t & 1 ? [0.86, 0.86, 0.84] : [0.78, 0.79, 0.78], b);
-            addBox(out, vadd(a.c, a.u, h + 0.68), [2.6, 1.35, seg], SEATS[(i + t) % 3], b);
+            const h = 1.8 + t * 2.1;
+            stage._mat = MAT.CONCRETE;
+            addBox(stage, vadd(a.c, a.u, h * 0.5 + 0.06), [2.9, h, seg],
+              t & 1 ? [0.86, 0.86, 0.84] : SHELL_G, b);
+            stage._mat = MAT.FABRIC;
+            // Seat band overlaps the riser top so unsupported-BFS stays connected.
+            addBox(stage, vadd(a.c, a.u, h + 0.35), [2.3, 0.85, seg * 0.94],
+              SEAT_COLS[(si + t) % 3], b);
+            stage._mat = 0;
           }
-          i++;
+          const aB = anchor(k, -1, 27);
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(aB.c, aB.u, 7.5), [2.4, 15, seg], SHELL_G, [aB.r, aB.u, aB.t]);
+          stage._mat = 0;
+          si++;
         });
+        for (let i = 0; i < 6; i++) {
+          const s = (0.962 + (i + 0.5) / 6 * 0.048) % 1;
+          emitPetalBay(stage, s, -1, 22, 10, 6.0, 7.0, 20);
+        }
+        if (typeof indexSolid === "function")
+          indexSolid(0.958, 0.020, -1, 11, 20);
+      };
+      {
+        const a0 = anchor(K(0.985), -1, 22);
+        modelGroup("sepang-main-grandstand-canopy", {
+          center: vadd(a0.c, a0.u, 16), size: [26, 34, 88], basis: [a0.r, a0.u, a0.t],
+        }, emitHibiscusCanopy, { required: true });
       }
 
       {
@@ -200,24 +220,117 @@
         building(K(0.900 + i * 0.014), 1, 46, 21, 17, 16,
           { kind: "twin", wall: [0.88, 0.88, 0.86], window: [0.34, 0.42, 0.48], floor: 4.0 });
       }
-      every(46, (k) => {
-        const s = k / n, h = hash(k * 71 + 31);
-        if (!(s > 0.88 || s < 0.05) || h < 0.52) return;
-        motorhome(k, 1, 60 + h * 10, 10, 4, 6, { wall: [0.66 + h * 0.24, 0.66, 0.68] });
-      });
-      broadcastCompound(K(0.892), 1, 78, { vans: 3, dishes: 2, mastH: 9 });
+      // Paddock motorhomes: discrete pads; skip any pad whose terrain disagrees
+      // with the anchor (was burying up to 8 m on the verge slope).
+      for (const [s, gap] of [
+        [0.925, 32], [0.955, 34], [0.985, 32], [0.015, 34],
+      ]) {
+        const a = anchor(K(s), 1, gap);
+        const gy = typeof terrainYAt === "function" ? terrainYAt(a.c[0], a.c[2]) : null;
+        if (gy != null && Math.abs(gy - a.c[1]) > 0.8) continue;
+        motorhome(K(s), 1, gap, 9, 3.6, 5.5,
+          { wall: [0.66 + hash(K(s) * 71) * 0.24, 0.66, 0.68] });
+      }
+      broadcastCompound(K(0.892), 1, 58, { vans: 3, dishes: 2, mastH: 9 });
       for (const s of [0.97, 0.01, 0.03]) billboard(K(s), -1, 8, 12, 4.5, [0.20, 0.50, 0.30]);
 
       const TENT_ROOF = [0.94, 0.94, 0.92], TENT_FASCIA = [0.14, 0.42, 0.36];
       const shelter = (s, side, gap, len, opts) =>
         grandstandEx(s, side, gap, len, null, null, Object.assign(
           { roofCol: TENT_ROOF, fasciaCol: TENT_FASCIA }, opts));
-      shelter(0.060, 1, 30, 90, { livery: "alu", tiers: 2, roof: "cantilever", endWalls: true });
-      // Petronas teal and Malaysian flag colours, rather than a fourth grey.
+
+      // K1 Grandstand at Turn 1 & 2 — positive rake (rows rise away from track).
+      // https://www.sepangcircuit.com/k1-grandstand
+      // Outside of the T1 right-hander (side -1); +1 clipped the infield fold.
+      const emitT1Stand = (stage) => {
+        const SHELL = [0.84, 0.85, 0.86];
+        const depth = 12, h = 13, len = 40;
+        const a = anchor(K(0.058), -1, 34 + depth / 2);
+        const b = [a.r, a.u, a.t];
+        stage._mat = MAT.CONCRETE;
+        // Single back shell, sunk 0.4 m so the base is grounded.
+        addBox(stage, vadd(vadd(a.c, a.r, -1.5), a.u, h * 0.45 - 0.2),
+          [depth * 0.6, h * 0.9, len], SHELL, b);
+        for (let t = 0; t < 4; t++) {
+          const lat = depth * 0.36 - t * 1.5;
+          // Stagger riser heights so consecutive tops are never coplanar.
+          const yh = 1.55 + t * 2.25;
+          addBox(stage, vadd(vadd(a.c, a.r, lat), a.u, yh * 0.5 - 0.15),
+            [1.7, yh + 0.3, len - t * 2.4], t & 1 ? [0.78, 0.79, 0.80] : SHELL, b);
+          stage._mat = MAT.FABRIC;
+          addBox(stage, vadd(vadd(a.c, a.r, lat - 0.15), a.u, yh + 0.35 + t * 0.12),
+            [1.15, 0.65, len - t * 2.4 - 2], SEAT_COLS[t % 3], b);
+          stage._mat = MAT.CONCRETE;
+        }
+        // Cantilever roof embedded into the shell top (AABB-touch for BFS).
+        stage._mat = MAT.METAL;
+        const shellTop = h * 0.9 - 0.2;
+        addBox(stage, vadd(vadd(a.c, a.r, 1.0), a.u, shellTop - 0.15),
+          [depth + 1, 1.1, len + 1], TENT_ROOF, b);
+        addBox(stage, vadd(vadd(a.c, a.r, depth * 0.38), a.u, shellTop - 0.55),
+          [0.4, 1.2, len], TENT_FASCIA, b);
+        addBox(stage, vadd(vadd(a.c, a.r, depth * 0.40), a.u, shellTop - 2.2),
+          [0.25, 0.55, len * 0.9], [0.10, 0.42, 0.36], b);
+        stage._mat = 0;
+        if (typeof indexSolid === "function")
+          indexSolid(0.048, 0.072, -1, 32, 14);
+      };
+      {
+        const depth = 12, h = 14, len = 40;
+        const a0 = anchor(K(0.058), -1, 34 + depth / 2);
+        modelGroup("sepang-t1-grandstand", {
+          center: vadd(a0.c, a0.u, (h + 1) / 2),
+          size: [depth + 4, h + 1, len + 2],
+          basis: [a0.r, a0.u, a0.t],
+        }, emitT1Stand, { required: true });
+      }
+
+      // F Grandstand at Turns 7 & 8 — positive rake.
+      // https://www.sepangcircuit.com/f-grandstand
+      const emitT7Stand = (stage) => {
+        const SHELL = [0.80, 0.81, 0.82];
+        const depth = 11, h = 13, len = 36;
+        const a = anchor(K(0.448), -1, 34 + depth / 2);
+        const b = [a.r, a.u, a.t];
+        stage._mat = MAT.CONCRETE;
+        // Shell set back; rake steps get a 0.08 m y offset so tops are not coplanar.
+        addBox(stage, vadd(a.c, a.u, h * 0.45 + 0.12), [depth * 0.7, h * 0.9, len], SHELL, b);
+        for (let t = 0; t < 4; t++) {
+          const lat = depth * 0.42 - t * 1.55;
+          const yh = 1.8 + t * 2.1;
+          addBox(stage, vadd(vadd(a.c, a.r, lat), a.u, yh * 0.5),
+            [1.4, yh, len - t * 2], t & 1 ? [0.74, 0.75, 0.76] : [0.78, 0.79, 0.80], b);
+          stage._mat = MAT.FABRIC;
+          addBox(stage, vadd(vadd(a.c, a.r, lat), a.u, yh + 0.55 + t * 0.04),
+            [1.1, 0.95, len - t * 2 - 2], SEAT_COLS[t % 3], b);
+          stage._mat = MAT.CONCRETE;
+        }
+        stage._mat = MAT.METAL;
+        addBox(stage, vadd(a.c, a.u, h + 0.2), [depth + 2, 0.45, len + 2], TENT_ROOF, b);
+        addBox(stage, vadd(vadd(a.c, a.r, depth * 0.48), a.u, h - 0.4),
+          [0.28, 0.7, len], TENT_FASCIA, b);
+        addBox(stage, vadd(vadd(a.c, a.r, depth * 0.50), a.u, h * 0.68),
+          [0.16, 0.45, len * 0.9], [0.10, 0.36, 0.34], b);
+        stage._mat = 0;
+        if (typeof indexSolid === "function")
+          indexSolid(0.438, 0.460, -1, 32, 12);
+      };
+      {
+        const depth = 11, h = 13, len = 36;
+        const a0 = anchor(K(0.448), -1, 34 + depth / 2);
+        modelGroup("sepang-t7-grandstand", {
+          center: vadd(a0.c, a0.u, (h + 1) / 2),
+          size: [depth + 4, h + 1, len + 2],
+          basis: [a0.r, a0.u, a0.t],
+        }, emitT7Stand, { required: true });
+      }
+
+      // Mid-lap and T15 covered stands (existing positions).
       shelter(0.340, -1, 34, 80, { livery: "teal", endWalls: true });
       shelter(0.580, 1, 30, 76, { livery: "navy", endWalls: true });
       shelter(0.885, -1, 26, 92, { livery: "concrete", tiers: 2, roof: "cantilever", endWalls: true });
-      spectatorHill(0.62, 0.70, -1, 20, { rows: 3, rise: 1.0, depth: 1.8, density: 0.36, step: 9 });
+      // Wider step to avoid coplanar risers on the grass bank.
+      spectatorHill(0.62, 0.70, -1, 22, { rows: 3, rise: 1.15, depth: 2.0, density: 0.32, step: 14 });
 
       groundPatch(K(0.060), 1, 12, [40, 0.18, 56], GRAVEL,
         { id: "sepang-t1-gravel", samples: 8 });
@@ -304,8 +417,8 @@
         });
       }
       for (const [id, s, side, gap] of [
-        // 40 / 30 m: at 52 / 46 the footprint reached the road (rejected).
-        ["t1", 0.072, 1, 40],
+        // 48 / 30 m: cleared of the new K1 shell at gap 44; T15 unchanged.
+        ["t1", 0.080, 1, 52],
         ["t15", 0.900, -1, 30],
       ]) {
         const a = anchor(K(s), side, gap);

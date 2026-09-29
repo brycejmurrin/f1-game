@@ -242,6 +242,8 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     ],
     // Wave 6 — Fuji Speedway Hotel + Motorsports Museum (west side, 2022)
     fuji: ["fuji-speedway-hotel"],
+    // Wave 6 — Sepang hibiscus main canopy + K1/F corner stands
+    sepang: ["sepang-main-grandstand-canopy", "sepang-t1-grandstand", "sepang-t7-grandstand"],
   };
   for (const [track, ids] of Object.entries(expected)) {
     const body = landmarkSource(track);
