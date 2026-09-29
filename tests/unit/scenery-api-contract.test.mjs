@@ -154,6 +154,15 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
       "montreal-wall-of-champions-stand",
       "montreal-biosphere",
     ],
+    // Wave 6 — Hockenheim Motodrom ring (Süd + Nord permanent stands)
+    hockenheim: [
+      "hockenheim-motodrom-screen",
+      "hockenheim-mercedes-tribune",
+      "hockenheim-sued-tribune",
+      "hockenheim-nord-tribune",
+      "hockenheim-race-control",
+      "hockenheim-infield-compound",
+    ],
     // Wave 6 — Imola (Partenza opposite pits + Racetrack Tower over Tilke pit)
     imola: ["imola-partenza-stands", "imola-racetrack-tower"],
   };
