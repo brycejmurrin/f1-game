@@ -74,6 +74,7 @@ function load(stored0, tracks0) {
   vm.runInContext(readFileSync(join(ROOT, "js/career/season-cal.js"), "utf8"), ctx);
   return {
     S: vm.runInContext("SeasonCal", ctx), stored, tracks,
+    writes: (key) => revisions.get(key) || 0,   // how many times `key` was written (bumps count too)
     foreign: (key) => {
       if (key == null) clearRevision++;
       else bump(key);
@@ -722,4 +723,63 @@ test("the 2026 REAL calendar names its rounds as raced: Bahrain GP at Sepang, Ba
   // An edited calendar is no longer 2026 as raced: the circuit's own name again.
   assert.equal(S.applyConfig(S.preset("full")).ok, true);
   assert.equal(S.gpName(byId("sepang")), byId("sepang").gp || "");
+});
+
+// ── bug hunt 2026-09-29: persistence ──────────────────────────────────────────
+
+test("a tab that left the championship cannot write its stale season over another tab's newer rounds", () => {
+  // The foreign-write branch for flow "gp" nulled seasonRevision, switching off
+  // save()'s guard: a GP's qualifying (persistSeason) or retrySave then wrote
+  // this tab's old season object over the other tab's progress.
+  const { S, stored, foreign } = load({
+    seasonCfg: { trackIds: ["monza", "monaco"] },
+    season: { round: 0, pts: {}, teamPts: {}, driverCodes: {} },
+  });
+  S.engage("season");
+  const local = S.load();
+  S.engage("gp");                                   // back to the title / a one-off GP
+  const winner = { round: 1, pts: { d0: 25 }, teamPts: { t0: 25 }, driverCodes: { d0: "D0" }, config: local.config };
+  stored.set("season", winner);
+  foreign("season");
+  assert.equal(S.save(local).reason, "conflict", "the stale object is refused");
+  assert.equal(stored.get("season"), winner, "the other tab's rounds survive");
+  S.engage("season");
+  assert.equal(S.load().round, 1, "re-entering the championship reads the newer season");
+});
+
+test("load() never persists a season this build could not read whole (an unknown circuit id)", () => {
+  // A stale cached shell or a renamed circuit: normalize drops the id, the
+  // calendar shrinks, and writing that back erased the circuit for good — or
+  // blanked a finished season whose round now exceeded the shorter calendar.
+  const inProgress = { round: 1, pts: { d0: 25 }, teamPts: {}, driverCodes: {}, config: { trackIds: ["monza", "monaco", "nosuch"] } };
+  const a = load({ season: inProgress });
+  a.S.engage("season");
+  a.S.load();
+  assert.equal(a.writes("season"), 0, "an in-progress season with an unknown round is not written back");
+  const finished = { round: 3, pts: { d0: 75 }, teamPts: {}, driverCodes: {}, config: { trackIds: ["monza", "monaco", "nosuch"] } };
+  const b = load({ season: finished });
+  b.S.engage("season");
+  b.S.load();
+  assert.equal(b.writes("season"), 0, "a finished season is not blanked on disk");
+  assert.equal(b.stored.get("season").pts.d0, 75);
+  const whole = load({ season: { round: 1, pts: { d0: 25 }, teamPts: {}, driverCodes: {} } });
+  whole.S.engage("season");
+  whole.S.load();
+  assert.equal(whole.writes("season"), 1, "a season read whole is still migrated and persisted");
+});
+
+test("title-menu STANDINGS ranks on counting points: the season's own drop rule applies outside season flow", () => {
+  // mb-standings runs in flow "gp" (after quitToMenu or boot), where the live
+  // rules are the one-off's: netPts fell back to GROSS points and showed a
+  // driver ahead on counting points behind.
+  const { S } = load({ seasonCfg: { drop: 2 } });
+  S.engage("season");
+  const season = S.blank();
+  const d0 = { driverId: "d0", code: "D0", team: { id: "t0" }, finished: true };
+  const d1 = { driverId: "d1", code: "D1", team: { id: "t1" }, finished: true };
+  for (let r = 0; r < 6; r++) S.award(season, [d0, d1]);
+  for (let r = 0; r < 2; r++) S.award(season, [d1, { ...d0, retired: true, finished: false }]);
+  S.engage("gp");
+  assert.equal(S.netPts(season, "d1"), 25 + 25 + 18 * 4, "d1's two 18s still drop");
+  assert.equal(S.rank(season, "d0", "d1") < 0, true, "d0 still leads on counting points");
 });

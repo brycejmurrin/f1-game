@@ -431,8 +431,10 @@ const CarDraw = (function () {
       // VISOR: the phone in the hand is the wheel — the bodywork stays, the
       // steering wheel and the dash on it do not. What a car with its wheel
       // unclipped shows instead: the column, its quick-release boss and the
-      // front bulkhead, fixed where the wheel mounts (no steering roll).
-      if (noWheel) {
+      // front bulkhead, fixed where the wheel mounts (no steering roll). The
+      // NONE cockpit interior is the same thing by choice.
+      const wheelStyle = noWheel ? "none" : CockpitOpts.wheel();
+      if (wheelStyle === "none") {
         M4.mulTo(_rigA, base, _rigT);
         G.gfx.draw(getCockpitDash(), _rigA, opt);
         return;
@@ -448,7 +450,10 @@ const CarDraw = (function () {
       _rigR[0] = ca; _rigR[1] = sa; _rigR[4] = -sa; _rigR[5] = ca;
       M4.mulTo(_rigA, base, _rigT);
       M4.mulTo(_rigB, _rigA, _rigR);
-      G.gfx.draw(getCockpitWheel(deps.resolveLivery(c.team)), _rigB, opt);   // livery-keyed: team grips/marker/gloves
+      G.gfx.draw(getCockpitWheel(deps.resolveLivery(c.team), wheelStyle), _rigB, opt);   // style + livery keyed: team grips/marker/gloves
+      // A wheel with no screen (CLASSIC) has nowhere to show the readouts: the
+      // HUD shows gear and speed instead (js/camera/mode-switch.js).
+      if (!CockpitOpts.wheelHasScreen(wheelStyle)) return;
       // Live telemetry ON the wheel (all ride the wheel matrix, like the real LCD):
       // gear (auto or manual — c.gear is maintained by both paths), RPM shift
       // lights, speed, pedal bars, ERS energy.
