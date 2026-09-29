@@ -58,7 +58,7 @@ Load from the SKILL.md index when the task needs this detail.
         three `CAMERA_FRACTIONS`,
      6. `js/ui/flags.js` if the country is new — `tests/unit/flags.test.mjs`
         fails on a circuit whose country has no drawn flag,
-     7. the three `tools/track/*-baseline.json` audits at EXACTLY the measured
+     7. the `tools/track/*-baseline.json` audits (clip, coplanar, float; props-tris is a ratchet) at EXACTLY the measured
         value. A cap above the measurement fails as loudly as one below, and an
         absent id means a cap of 0 — so omit the row when the circuit measures
         clean rather than writing a 0.

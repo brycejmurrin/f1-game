@@ -19,9 +19,9 @@ of it), it matches on every point that matters:
 
 | Canonical requirement | This repo |
 |---|---|
-| Fixed physics step, decoupled from render | `PHYS_DT = 1/60`, `while (physAcc >= PHYS_DT)` |
+| Fixed physics step, decoupled from render | `PHYS_DT = PhysicsConsts.FIXED_DT` (1/60), `while (physAcc >= PHYS_DT)` |
 | Clamp the frame delta so a tab-resume cannot inject a huge `dt` | `Math.min((now - lastFrame)/1000, 1/4)` — **the 1/4 s figure is exactly the recommended clamp** |
-| Guard the spiral of death (physics slower than real time) | `steps < 5`, then `physAcc = 0` to drop the backlog |
+| Guard the spiral of death (physics slower than real time) | `steps < 5`, then `physAcc %= PHYS_DT` drops the backlog and keeps the sub-step remainder |
 | Interpolate the render between the two physics states | `renderAlpha = clamp(physAcc / PHYS_DT, 0, 1)` |
 
 **Do not "simplify" any of these.** Each one is the fix for a specific,
@@ -35,9 +35,10 @@ hard-to-reproduce class of bug:
 - Removing the `steps < 5` cap turns a slow frame into an unresponsive tab: the
   accumulator grows, more steps are needed, each round takes longer.
 - Removing `renderAlpha` reintroduces visual stutter whenever the display rate
-  is not a multiple of 60 Hz. Note this interacts with the rule in `CLAUDE.md`
-  that rendered position must interpolate in **world space**, never lerped
-  `(s, x)` — the interpolation has to exist *and* be done in the right space.
+  is not a multiple of 60 Hz. Note this interacts with the world-space player
+  (`px`/`pz`/`head`, `docs/PHYSICS.md`): rendered position must interpolate in
+  **world space**, never lerped `(s, x)` — the interpolation has to exist *and*
+  be done in the right space.
 
 One thing the sources warn about that **does not apply here**: using a `double`
 for accumulated time degrades to millisecond precision after ~3 hours of
@@ -88,8 +89,8 @@ geometry vertex for vertex. That is a characterization test in the strict sense 
 it asserts nothing about correctness, only that behaviour did not change — and it
 is exactly the tool you want pointed at a scenery refactor.
 
-**The gap for Phase 4** (extracting from `js/game.js`) is that no equivalent
-exists for the physics/game-loop side. Before extracting anything from
+**The gap for Phase 4** (extracting from `js/game.js`) was that no equivalent
+existed for the physics/game-loop side; `tests/specs/physics-characterization.spec.js` has since become that gate (AGENTS.md §Physics). Before extracting anything from
 `updateCar` or `render`, the cheap move is a characterization harness in the same
 spirit: fix a seed, drive a scripted input sequence through `__apex.act()` for N
 steps, and snapshot the resulting `physState()` trace. Any extraction that
@@ -124,7 +125,7 @@ like in 2026, because it is no longer 2015:
   analysis** — real dependency edges instead of a hand-maintained `manifest.cjs`,
   and unused-export detection instead of a review finding "~60 dead exports".
 
-**This is not a recommendation to migrate.** 150 files, 140 script tags and a
+**This is not a recommendation to migrate.** hundreds of files and script tags and a
 load order pinned by `tests/unit/load-order.test.mjs` is a working system, and the
 review's own law applies: the invariant has a guard, so it holds. The point of
 recording it is that the *reason* for the bet should be "the guard works",

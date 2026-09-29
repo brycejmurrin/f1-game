@@ -41,13 +41,13 @@ Flags / storage:
 
 | Key | Meaning |
 |---|---|
-| `apex26.debris` | Enables Rapier debris side-world (`"0"` disables) |
-| `apex26.breakBarriers` | Breakable barrier panels |
+| `apex26.debris` | Rapier debris side-world; default OFF, only `"1"` enables (read once at boot) |
+| `apex26.breakBarriers` | Breakable barrier panels (`"0"` disables; likewise the keys below) |
 | `apex26.marbleGrip` | Marble grip scalar |
 | `apex26.r2Airborne` | Airborne/rollover takeover |
 | `apex26.r3Contact` | Heavy car-car contact takeover |
 | `apex26.c1Pileup` | Multi-car pile-up takeover |
-| `apex26.caution` | Race-control cautions |
+| `apex26.caution` | Race-control cautions (default off) |
 
 Hooks:
 

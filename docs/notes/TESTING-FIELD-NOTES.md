@@ -1662,7 +1662,7 @@ is how four failures shipped past review in one session: a suite registered in
 none of its four registries (two deploys lost to it), `tools/README.md` and
 `package.json` hand-edited when both are GENERATED, and a missing comma in a
 garage file that would have broken the whole game's boot. Every one was inside
-the 14 guards, and each cost a ~10-minute deploy cycle to discover. The Bash
+the 14 guards (24 now), and each cost a ~10-minute deploy cycle to discover. The Bash
 hook (`.claude/hooks/bash-guard.sh`) now runs the guards before `git commit`.
 
 **Rule 6 — `--stop`, never kill by PID.** Measured 2026-09-09: `kill -9` on the

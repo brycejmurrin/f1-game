@@ -28,7 +28,7 @@ math itself is `js/input/tilt-roll.js`, shared with `controller.html`. Digital s
 | `drivingHelp` | ROAD_FOLLOW gain via `helpFromSlider` — v1 = OFF, ships at 0 |
 | `raceLine` (slider id `pm-line`) | pull to line / push wide; 0 = off. `G.raceLineAssist = raceLine / 5` |
 | `adaptiveButtons` | digital-steer rate half of SPEED STEER (keys + on-screen arrows). v1 = OFF, **unset default 5**. Schema 4. Not the stick / tilt / drag |
-| `brakeCue` | pulse-rate brake warning. v1 = OFF, unset default 4. Never writes throttle/brake |
+| `brakeCue` | pulse-rate brake warning. v1 = OFF, unset default 1. Never writes throttle/brake |
 | `STEER_SCHEMA` | per-version migration ladder in `steer-tuning.js` — do not flatten to one gate |
 
 Changing an assist **default** does not reach existing players

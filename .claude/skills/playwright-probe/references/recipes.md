@@ -38,7 +38,7 @@ or a `previewCam` loop (see `cameras.md`).
 ## Why one server + Chromium workers
 
 `tools/shot/apex-capture.mjs` uses **one async Node static server** and fans jobs
-across separate Chromium worker processes. For sweeps (12 camera modes, 40
+across separate Chromium worker processes. For sweeps (12 camera modes, 52
 tracks, day/night/wet variants), the shared server handles concurrent asset
 GETs while workers pull the next job as they finish. Extra Python servers only
 helped asset fetch; they are not the current harness.

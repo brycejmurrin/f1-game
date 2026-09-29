@@ -24,9 +24,9 @@ run under floodlights.
 - **Electric boost** — hold BOOST to deploy battery energy; deployment tapers
   away at high speed, exactly like the 2026 power units. Recharge by braking
   and lifting.
-- **Overtake Mode** — get within 1 second of the car ahead and the OT light
-  arms; trigger it for 4 seconds of full, taper-free deployment. The DRS
-  replacement.
+- **Overtake Mode** — be within 1 second of the car ahead at the circuit's
+  detection line and the OT light arms for the following lap; trigger it for
+  a 3–5 second push of full, taper-free deployment. The DRS replacement.
 - **Manual gearbox** (optional, toggle in the pause menu) — an 8-speed
   'box with a live gear readout and tachometer. Shift up near the redline,
   down for corner exits; the limiter makes you upshift to reach top speed.
@@ -51,7 +51,7 @@ run under floodlights.
   **Y** overtake, **RB**/**LB** shift up/down, **View/Back** camera,
   **Menu/Start** pause. Supported pads also rumble on contact and kerbs.
 - **Camera:** the **CAM** button (top-right, next to pause) or the `C` key
-  cycle through **13 camera modes** — **CHASE** (close), **FAR** (pulled back),
+  cycle through **14 camera modes** — **CHASE** (close), **FAR** (pulled back),
   **DRIFT**, **COCKPIT** (onboard driver's eye), **HOOD** (nose cam), and more
   (overhead, heli, trackside, cinematic, T-cam…). Your choice is remembered.
 
@@ -136,9 +136,10 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the module contract.
 Plain script-tag IIFE modules, grouped by domain: `js/render/` (WebGL2/WebGPU
 renderers + shaders), `js/track/` (the spline → mesh track engine),
 `js/circuits/` (the 52 circuit data files: 24 season rounds + 28 retired), `js/car/` (procedural car geometry,
-liveries, the 12-category upgrade catalog, the 2026 grid), `js/data/`
-(Jolpica/OpenF1 clients + the data hub UI), `js/game/` (input, audio, HUD,
-cameras, lighting, …), with `js/game.js` as the entry (loop, physics, AI, race
+liveries, the 12-category upgrade catalog), `js/data/` (the 2026 grid,
+Jolpica/OpenF1 clients + the data hub UI), `js/input/`, `js/audio/`, `js/ui/`,
+`js/camera/`, `js/lighting/`, … (input, audio, HUD and menus, cameras,
+lighting), with `js/game.js` as the entry (loop, physics, AI, race
 logic). Load order is defined in `tools/manifest.cjs`.
 
 ## Testing & development
@@ -194,8 +195,9 @@ Music: free demo tracks from
 [Beatscribe's Homebrew VGM assets](https://github.com/Beatscribe/homebrew_vgm)
 ([more at beatscribe.itch.io](https://beatscribe.itch.io)), released under
 **CC0 1.0** (public domain) and downsampled for the web. See
-[`assets/music/CREDITS.txt`](assets/music/CREDITS.txt). The engine and sound
-effects are synthesized in-browser with the Web Audio API.
+[`assets/music/CREDITS.txt`](assets/music/CREDITS.txt). The engine drone is looped sample clips pitched by rpm and gear (see
+[`assets/sfx/CREDITS.txt`](assets/sfx/CREDITS.txt)); the other sound effects are
+synthesized in-browser with the Web Audio API.
 The team-radio voice is synthetic speech from
 [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (**Apache-2.0**),
 rendered offline; see [`assets/voice/CREDITS.txt`](assets/voice/CREDITS.txt).

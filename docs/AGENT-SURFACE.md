@@ -71,7 +71,7 @@ auto-load them — then use the Fallback column.
 
 | Server | Prefix | Job | Fallback |
 |---|---|---|---|
-| **apex-tools** | `apex_*` | Pin safe flags on ten committed `tools/` CLIs against the **working tree**. Never github.io. | `./tools/mcp/apex-tools-mcp.sh call <name> '{…}'` |
+| **apex-tools** | `apex_*` | Pin safe flags on eleven committed `tools/` CLIs against the **working tree**. Never github.io. | `./tools/mcp/apex-tools-mcp.sh call <name> '{…}'` |
 | **playwright-official** | `browser_*` | Interactive host Chromium (resize / DOM snapshot / evaluate). Skills **survey-ui-matrix**, **css-play**. Batch shots → **playwright-probe** (CLI, not this MCP). | `npx -y @playwright/mcp@0.0.79` |
 | **chrome-devtools** | `chrome_*` (upstream names) | Interactive live canvas / DOM / heap / perf on the working tree, with the WebGPU flags from `webgpu-chrome-args.cjs`. Skill **mcp-probe**. | `tools/mcp/chrome-devtools-mcp.sh run` / `python3 tools/mcp/probe-mcp.py chrome-start` |
 

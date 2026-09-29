@@ -166,7 +166,7 @@ grid in `js/data/teams.js` never invalidates a save.
 ### Randomness
 
 Career draws use `Career.rnd(...parts)` — a **stateless** FNV-1a hash of
-`seed:parts`, run through an xorshift-multiply finalizer. Never `simRnd`: that
+`seed:parts` (`Hash32.unit`, `js/core/hash32.js`), run through an xorshift-multiply finalizer. Never `simRnd`: that
 stream belongs to the physics sim, and drawing from it here would make a career's
 existence change seeded race results. Stateless means there is no cursor to persist,
 so a save/load round-trip cannot desync.
@@ -177,11 +177,11 @@ multiply barely disturbs the HIGH bits, which is exactly the end `h / 2^32` read
 Measured over 2000 seeds, FNV-1a alone left **100 %** of seasons missing at least one
 of the five objective kinds, some of them running the same brief all 24 rounds; the
 qualifying spread, whose keys end in a driver id, drew off the same weakness.
-`mix32` — the standard xorshift-multiply finalizer, two multiplies — takes that to
+`Hash32.mix` — the standard xorshift-multiply finalizer, two multiplies — takes that to
 **2.7 %**, against the **2.4 %** a genuinely uniform draw produces (5·(4/5)²⁴, near
 enough).
 
-So `mix32` is load-bearing and must not be simplified back out as a redundant hash
+So `Hash32.mix` is load-bearing and must not be simplified back out as a redundant hash
 of a hash. Anything added here inherits a working draw only because it is there, and
 every key in the file ends with its varying part.
 

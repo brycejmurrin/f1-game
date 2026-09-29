@@ -31,5 +31,5 @@ season sprint distance and its points table. Persist at `apex26.seasonCfg`
 node tools/ci/test-bg.mjs modes
 ```
 
-`modes` is season + career + quali + TT. `season-(cal|ui).js` also
-routes to `ui` (the SETUP screen).
+`modes` is real-race + season + career + quali + TT. `season-(cal|ui).js` also
+routes to `ui` (the SETUP screen) and `state-unit`.

@@ -48,7 +48,7 @@ Related: **webgl-debug**, **playwright-probe** (`references/cameras.md`).
 
 ## Visual A/B with slider-effect
 
-`slider-effect` classifies all 183 knobs (no browser) and runs live Playwright
+`slider-effect` classifies all 185 knobs (no browser) and runs live Playwright
 A/B captures with pixel-diff outputs. Use it to confirm a knob is wired and to
 see *what region* of the frame it changes.
 

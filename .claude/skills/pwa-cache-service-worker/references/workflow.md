@@ -57,8 +57,8 @@ Playwright hang after a mid-run `version.json` bump.
   updated, the installed shell did not reload.
 - Adding a DEFERRED file to `index.html` — breaks the opt-in load model.
 - Forgetting the `sw.js` optional entry — first TLX/WGX boot misses cache.
-- Promoting vendor/fonts to essential — GLX-only install fails on an
-  unreachable optional path.
+- Promoting vendor/fonts to essential — the install fails on one unreachable
+  optional path (GLX is the only DEFERRED group `sw.js` already requires).
 - Expecting the SW to cache Jolpica/OpenF1 — same-origin guard blocks it.
 - Caching `blob:` music URLs — throws or breaks playback.
 - Running `test:service-worker` before fixing load-order — DEFERRED drift

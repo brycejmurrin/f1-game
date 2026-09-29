@@ -43,7 +43,7 @@ full scene/camera snapshot. Capture → **playwright-probe**.
 ## Load on demand
 
 - Free-cam table, `previewCam`, `look:"in"` vs `roadside()` look set, recipes →
-  [references/framing.md](debug-cameras-framing.md).
+  [references/debug-cameras-framing.md](debug-cameras-framing.md).
 
 ---
 

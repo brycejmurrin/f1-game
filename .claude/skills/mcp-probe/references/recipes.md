@@ -86,7 +86,7 @@ Missing `/usr/share/vulkan/icd.d/lvp_icd.json` → install `mesa-vulkan-drivers`
 python3 -m http.server 3456        # background it
 ```
 ```
-mcp__chrome-devtools__navigate_page   http://127.0.0.1:3456/?v=<N>   # N = version.json
+mcp__chrome-devtools__navigate_page   http://127.0.0.1:3456/
 ```
 Then wait for the API and position the shot with the same `__apex` hooks a scratch
 script uses (`docs/DEBUG-HOOKS.md`):

@@ -290,7 +290,7 @@ no context.
 
 ### Layer model
 
-`UiLayers.DEFS` is the canonical list of 26 screen-sized roots. A layer gates
+`UiLayers.DEFS` is the canonical list of 28 screen-sized roots. A layer gates
 driving/menu input unless its definition explicitly sets `gate: false`.
 
 | Layer root | Gates? | Role |
@@ -308,6 +308,7 @@ driving/menu input unless its definition explicitly sets `gate: false`.
 | `#teampicker` | yes | Team selection |
 | `#vsfriend` | yes | Multiplayer lobby |
 | `#race-settings` | yes | Pre-race settings |
+| `#duel-picker` | yes | Duel rival picker (opened from `#rs-duel-open`) |
 | `#quali` | yes | Qualifying |
 | `#standings` | yes | Championship standings |
 | `#results` | yes | Race results |

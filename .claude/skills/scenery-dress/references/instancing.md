@@ -26,7 +26,7 @@ baking. Plan + reuse numbers: `docs/research/SCENE-GRAPH-PLAN.md`.
 |---|---|
 | `TrackGraph.create({ raw })` | `raw` = UNGUARDED emitters for canonical bake |
 | `graph.instance(key, place, build, meta)` | Define-once + place |
-| `ctx.instance(...)` | buildProps wrapper — use this in `scenery-*.js` |
+| `ctx.instance(...)` | buildProps wrapper — use this in `js/track/scenery/*.js` |
 | `graph.bake` / `batches` / `stats` | Replay / instanced handoff / reuse |
 | `TrackGraph.NODE_COLOR` (`"@node"`) | Per-node tint; canonical mesh bakes white |
 
@@ -66,7 +66,7 @@ judging a `graph-parity` mismatch.
    node tools/track/graph-parity.cjs <id>
    BASE=<pre-migration-ref> node tools/track/graph-parity.cjs --all
    ```
-   Default `BASE=HEAD` on a clean tree only checks working-tree drift.
+   Default `BASE=HEAD` only checks working-tree drift; on a clean `js/track`+`js/circuits` it refuses (exit 2).
    Tolerance is 1e-6 m on positions; indices and `mat` must match exactly.
 
    Re-parameterising `pine` so geometry is linear (not affine) in scale is a
@@ -99,9 +99,9 @@ non-uniform XZ scale; otherwise the node lands in `bakeOnly` (caller must
 
 ### Common mistakes
 
-- **Skipping `BASE=<ref>`** — `npm run test:graph-parity` with default `HEAD`
-  passes on a committed tree even when geometry changed vs the pre-migration
-  branch.
+- **Skipping `BASE=<ref>`** — `npm run test:graph-parity` (no `BASE`) diffs
+  HEAD vs the working tree, so it says nothing about a committed migration
+  (a clean tree exits 2); name the pre-migration ref.
 - **Replay through UNGUARDED emitters** — bypasses on-track rejection.
 - **Unique `key` per placement** — defeats define-once.
 - **Ignoring `bakeOnly`** — partially suppressed nodes or radial ops with

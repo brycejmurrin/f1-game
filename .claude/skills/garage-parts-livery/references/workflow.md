@@ -18,9 +18,9 @@ Do not invent an id — grep `js/car/parts.js`, or point the
 player at `cost`/`desc` ("cheapest recovery-biased option") instead of a name.
 
 `Parts.ersProfile` only sets the 0..1 axes. Battery dynamics
-(`drainFor`/`regenFor`/`otTimeFor`/`otCoolFor` in `js/game.js`) consume them.
+(`drainFor`/`regenFor`/`otTimeFor` in `js/game.js`) consume them.
 Verify in-race via **agent-view** `references/state.md` / `__apex.physState()` (`ersDeploy`,
-`ersRegen`, `drain`, `regen`, `otTime`, `otCool`). Measured deltas:
+`ersRegen`, `drain`, `regen`, `otTime`). Measured deltas:
 `../../../../docs/CAREER.md` (`harvest` vs `standard` vs `overcharge`).
 
 ## Career ownership is a write/UI gate

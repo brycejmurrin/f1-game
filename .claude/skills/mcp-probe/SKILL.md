@@ -7,7 +7,7 @@ description: Use when driving the LIVE working-tree canvas interactively with th
 
 One MCP server sits alongside the Playwright suite for live poking:
 **chrome-devtools** (`chrome_*`, working tree, canvas-visible, WebGPU flags
-from `webgpu-chrome-args.cjs`). The deployed site / public web is **not**
+from `tools/lib/webgpu-chrome-args.cjs`). The deployed site / public web is **not**
 reachable from a container browser — that is the **deploy-research** subagent
 (host fetch / WebFetch). `tools/mcp/probe-mcp.py` is a CLI (not MCP-attached since
 2026-09) whose `chrome-start` daemon keeps ONE Chromium alive across `call`s.

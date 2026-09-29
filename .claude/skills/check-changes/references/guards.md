@@ -32,8 +32,8 @@ expectation vs real regression.
    node tools/ci/bump-cache.mjs --check   # must stay clean (refuses --apply here)
    node tools/gen/gen-shell.mjs --check   # after tools/manifest.cjs: gen-shell.mjs
    ```
-   Never hand-grep for `?v=[0-9]` on the repo shell, and never bump
-   `version.json` while a browser run is in flight. Cross-lineage merge:
+   Never hand-grep for `?v=[0-9]` on the repo shell, and never hand-edit
+   `version.json`. Cross-lineage merge:
    `node tools/gen/gen-shell.mjs` regenerates the union shell.
 
 4. **Smoke + load order** if you touched load order, `index.html`, or a core
@@ -61,6 +61,6 @@ Check `/proc/loadavg` (< 3) and for a live `playwright test` process first.
 
 ## Push
 
-Only push to the active development branch; never to `main` without review.
-The deploy branch is `claude/f1-game-project-26h3ng` — never push there
-without review. Bump last, then commit + `git push -u origin <branch>`.
+Push your `claude/<topic>` branch; the deploy branch is
+`claude/f1-game-project-26h3ng` — never push there without review. Run
+`deploy.mjs --gate-only` first, then commit + `git push -u origin <branch>`.

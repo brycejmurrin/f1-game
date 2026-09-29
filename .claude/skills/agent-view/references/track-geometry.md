@@ -7,12 +7,12 @@ audits. `info().track` is null until a circuit is loaded with `race(id)`/`tt(id)
 
 | Hook | Returns (verified shape) |
 |---|---|
-| `tracks()` | `Array(40)` of track objects (`.id`, name, etc.) |
+| `tracks()` | `Array` of `{id, name, i}` per `Tracks.LIST` entry |
 | `info()` | `{state, track, n, total, timeTrial, seasonMode}` — `n` nodes, `total` metres |
 | `trackShape(n)` | `Array(n)` normalised centreline pts + curvature `k` |
 | `trackProfile(n)` | `Array(n)` of `{frac, y, k, hw, slope}` — elevation/curvature/width |
 | `trackBounds()` | `{minX,maxX,minZ,maxZ,spanX,spanZ,centerFrac}` |
-| `mapPts()` | `Array(~207)` of `[x,z]` normalised 0..1 (the minimap) |
+| `mapPts()` | `Array` of `[x,z]` normalised 0..1 (the minimap) |
 | `nodeAt(frac)` | `{k, frac, x,y,z, tx,tz, rx,rz}` — world pos + tangent + right vector |
 | `corners()` | `Array` of **curvature-peak** fractions — NOT the official FIA turn count (see below) |
 
@@ -54,7 +54,7 @@ not know one.
 ## Load on demand
 
 - Street half-width loop, multi-track sweep, one-off `apex-eval` recipes,
-  visual validate → [references/sweeps.md](debug-tracks-sweeps.md).
+  visual validate → [references/debug-tracks-sweeps.md](debug-tracks-sweeps.md).
 
 ---
 

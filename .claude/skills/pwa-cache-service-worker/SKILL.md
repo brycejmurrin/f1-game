@@ -13,15 +13,17 @@ cache-first for immutable `?v=<sha256>` assets.
 `<link rel="stylesheet">` into the **essential** set (plus `./`,
 `index.html`, `version.json`). Cross-origin skipped. Other `<link>` tags →
 **optional**. Files the parser cannot see live in `sw.js`'s `optional` Set:
-**DEFERRED** backends (WGX/TLX + `vendor/three-0.186.0`), dynamic-import
-vendors, self-hosted fonts.
+**DEFERRED** backends, `vendor/three-0.186.0`, other vendors, self-hosted fonts.
+The GLX files in it are promoted to REQUIRED at install (the fallback renderer:
+offline without it is "graphics unavailable"); TLX/WGX stay best-effort.
 
 **Cache name.** `apex26-{build}` from `version.json`. `activate` deletes older
 `apex26-*` keys. Essential 404 aborts install; optional failures are
 swallowed.
 
 **Fetch.** Navigation + `version.json` = network-first (3 s → cache).
-Everything else = cache-first. Always refresh **content hashes AND the
+Everything else = cache-first (network-first on a dev host, where every tag reads
+`?v=dev`). Always refresh **content hashes AND the
 shell generation** together (`node tools/gen/gen-shell.mjs --check` ([shell/cache](../check-changes/references/bump.md))). Never bump `version.json`
 during a Playwright run.
 
@@ -44,7 +46,8 @@ during a Playwright run.
 | Tagged `?v=` js/css | Essential (404 = fail) | Cache-first |
 | `version.json` | Essential | Network-first (no-store) |
 | `?v=<sha256>` assets | Essential if tagged | Cache-first |
-| DEFERRED / vendor / fonts | Optional (fail OK) | Cache-first on first use |
+| DEFERRED TLX/WGX / vendor / fonts | Optional (fail OK) | Cache-first on first use |
+| DEFERRED GLX (`js/render/glx/`) | Required at install | Cache-first |
 
 ```sh
 npm run test:service-worker
