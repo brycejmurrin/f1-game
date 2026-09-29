@@ -339,9 +339,11 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   // relocated, not removed — tests/unit/ui-sheets-audit.test.mjs asserts both
   // ids still exist nested under #pm-panel-display, and this list is the same
   // one it pins, so the two files cannot drift apart.
+  // SEVEN with BACKUP & RESTORE (#424); the unit-side copy moved with it and
+  // this one did not.
   expect(settings.doorIds).toEqual([
     "pm-open-controls", "pm-open-driving", "pm-open-display",
-    "pm-open-appearance", "pm-advanced", "pm-audio",
+    "pm-open-appearance", "pm-advanced", "pm-audio", "pm-open-files",
   ]);
   expect(settings.allPainted).toBe(true);
   expect(settings.overflowX).toBeLessThanOrEqual(1);
@@ -772,7 +774,12 @@ test("balanced control rows derive their shape from local room", async ({ page }
   // business — 860×560 currently packs 4+1 after --balance-basis: 5.5rem
   // and min-width:0 on the doors. What this guards is no leftover sliver:
   // every visible door is present, and a lone last row fills the track.
-  expect(title.rowCounts.reduce((n, c) => n + c, 0)).toBe(5);
+  // USE AS CONTROLLER (12ef98a) shows on a coarse pointer only, and whether
+  // this project's headless page reads as one is Input's call, not the
+  // spec's. Count the door by name from the same live state: six with it,
+  // five without.
+  const phonepad = await page.evaluate(() => !document.getElementById("mb-phonepad").hidden);
+  expect(title.rowCounts.reduce((n, c) => n + c, 0)).toBe(phonepad ? 6 : 5);
   expect(title.lastFill).toBeGreaterThan(0.9);
 
   // Settings home is a .pm-doors list. The guard this test keeps is full

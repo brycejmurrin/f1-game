@@ -455,16 +455,25 @@ const AudioPanel = (() => {
       }
       sel.value = list.some((v) => v.name === tune.name) ? tune.name : "";
       sel.onchange = () => { setTune(ch, { name: sel.value }); preview(ch); };
+      // TEST IS ITS OWN ROW, under the voice. Beside the select no arrow could
+      // reach it: Left/Right on a <select> change the voice (MenuNav.ownsArrows)
+      // and Down from the full-width RATE slider above lands on the select, the
+      // nearer box — measured, menu-traversal "MUSIC & SOUND, every fold open"
+      // missed #as-v-coach-test and #as-v-radio-test. It could not just stack
+      // inside the row either: `.set-row > div > button` is the ‹ › chevron
+      // square (TEST measured 40px, its label spilling out) and the select's
+      // 8rem flex-basis becomes a height in a column. A full-width row is the
+      // pane's own button shape, and Down from the select / Up from PITCH land on it.
       const test = document.createElement("button");
-      test.type = "button"; test.className = "cz-liv-none"; test.id = "as-v-" + ch + "-test";
-      test.textContent = "TEST";
+      test.type = "button"; test.id = "as-v-" + ch + "-test";
+      test.textContent = "TEST VOICE";
       test.setAttribute("aria-label", "Hear " + label);
       test.onclick = () => preview(ch);
       const box = document.createElement("div");
-      box.append(sel, test);
+      box.append(sel);
       head.append(name, box);
 
-      wrap.append(head, slider(ch, "pitch", "PITCH", tune.pitch, RadioVoice.PITCH_MIN, RadioVoice.PITCH_MAX),
+      wrap.append(head, test, slider(ch, "pitch", "PITCH", tune.pitch, RadioVoice.PITCH_MIN, RadioVoice.PITCH_MAX),
                   slider(ch, "rate", "RATE", tune.rate, RadioVoice.RATE_MIN, RadioVoice.RATE_MAX));
       const note = document.createElement("p");
       note.className = "as-note"; note.textContent = blurb;
