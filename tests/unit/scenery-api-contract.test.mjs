@@ -140,6 +140,8 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     catalunya: ["catalunya-main-grandstand", "catalunya-pit-end-scoreboard", "catalunya-race-control"],
     // Bahrain hollow-stand fix — T1 naming marker (Michael Schumacher Corner, 2014)
     bahrain: ["bahrain-sakhir-tower", "bahrain-university-grandstand", "bahrain-schumacher-corner"],
+    // Wave 6 — Red Bull Ring (Steiermark / Niki Lauda Kurve stand at T1)
+    redbull: ["redbull-lauda-kurve-stand"],
     // Wave 6 — Madring / La Monumental inside rake + masts
     madrid: ["madrid-monumental-stands"],
     // Wave 6 — Zandvoort F1 Fanzone Ferris wheel (festival landmark)

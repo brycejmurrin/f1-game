@@ -222,22 +222,25 @@ const Announcer = (function () {
     // The circuit's own line, and the corner it is known for. Ranked ABOVE the
     // derived numbers: a listener who hears one sentence about Spa should hear
     // the one about the Ardennes, not the one about 7.0 kilometres.
-    add(lore.line, 1);
-    add(t.classic ? "A circuit from the archive, back on the calendar for this one." : "", 4);
+    // A REAL RACE has its own story to tell (realRows), and the circuit's lines
+    // give way to it: +2 from the grid, +3 mid-race or watched back.
+    const g = info.real ? (info.real.startLap > 1 || info.real.watch ? 3 : 2) : 0;
+    add(lore.line, 1 + g);
+    add(t.classic ? "A circuit from the archive, back on the calendar for this one." : "", 4 + g);
 
     const facts = [];
     if (km > 0) facts.push(km.toFixed(3) + " kilometres");
     if (turns > 0) facts.push(turns + " corners");
-    if (facts.length) add(facts.join(", ") + ".", 3);
+    if (facts.length) add(facts.join(", ") + ".", 3 + g);
 
-    add(lore.corner, 2);
+    add(lore.corner, 2 + g);
 
     // The derived shape of the lap, unchanged: it is a different fact from the
     // corner above (one is what the lap DOES, the other is a place), and where
     // both are too much for the budget, fit() is what decides — not a rule here
     // that would silently drop a clause on a fast machine too.
     const ch = character(km, turns, relief);
-    if (ch) add(ch.charAt(0).toUpperCase() + ch.slice(1) + ".", 3);
+    if (ch) add(ch.charAt(0).toUpperCase() + ch.slice(1) + ".", 3 + g);
 
     add(conditionsLine(info.weather, night, lore), 1);
     for (const r of storyRows(info.story, info)) add(r.text, r.prio);
@@ -258,6 +261,139 @@ const Announcer = (function () {
     const v = n % 100;
     return n + (v >= 11 && v <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" }[n % 10] || "th"));
   }
+  /* ── A REAL RACE, AS IT STANDS WHEN YOU JOIN ───────────────────────────────
+   * The Data Hub's JUMP IN / WATCH (js/race/real-race.js intro()): `r.story` is
+   * RealRace.situation() — the order, the gaps, your car's place, tyres and
+   * stops, the flags, the retirements, the lead, the rain, the fastest lap —
+   * all of it from BEFORE the lap you join, so nothing is spoiled. Priority 1 is
+   * where you are and who is around you; 2 what has happened to the race; 3
+   * the colour; 4 the counts. FRACTIONS ORDER A TIER: fit() drops the FIRST of
+   * equal priorities, which would lose the lap before the neighbours, so each
+   * line has its own rank (your place 1, the lap 1.05, the leader 1.2, the
+   * cars around you 1.3, …). fit() drops from the bottom, and a real race
+   * stretches the flyby to its read (LoadingScreen.flyMsFor), so on a normal
+   * run all of it is said. From lap 1 it is the grid; a replay says "Leclerc"
+   * where a join says "you". Every name is the real driver, never the roster
+   * seat the car was mapped to. */
+  const ORD = ["", "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth", "eleventh", "twelfth",
+    "thirteenth", "fourteenth", "fifteenth", "sixteenth", "seventeenth", "eighteenth", "nineteenth", "twentieth", "twenty-first", "twenty-second"];
+  const ordWord = (n) => ORD[n] || ordinal(n);
+  const NUMW = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
+  const numWord = (n) => NUMW[n] || String(n);
+  const plural = (n, one, many) => (n === 1 ? one : many);
+  const TYRES = { soft: "softs", medium: "mediums", hard: "hards", intermediate: "intermediates", "full wet": "full wets" };
+  function gapText(g) {
+    if (!g) return "";
+    if (g.lapsDown > 0) return g.lapsDown === 1 ? "a lap down" : g.lapsDown + " laps down";
+    return secs(g.s) + " " + plural(+secs(g.s), "second", "seconds");
+  }
+  function listNames(names) {
+    if (names.length <= 1) return names[0] || "";
+    return names.slice(0, -1).join(", ") + " and " + names[names.length - 1];
+  }
+  function realRows(r) {
+    const out = [];
+    const add = (text, prio) => { if (text) out.push({ text, prio }); };
+    const S = r.story, watch = !!r.watch;
+    const y = S && S.you;
+    const name = (y && y.name) || r.driver || "";
+    const sur = (y && y.surname) || surnameOf(name);
+    // Who "you" is in a sentence: the player when joining, the driver when watching.
+    const you = watch ? sur : "you", You = watch ? sur : "You";
+    const isYou = (d) => !!(d && y && d.code === y.code);
+    const nameFor = (d) => (isYou(d) ? you : d.surname);
+    if (!S) {   // no timing to read: the plain line
+      add(watch ? "Your camera follows " + name + "." : r.startLap > 1 ? "You take over " + name + "'s car on lap " + r.startLap + (r.realLaps > 0 ? " of " + r.realLaps : "") + "."
+        : "You start from " + name + "'s grid slot.", 1);
+      return out;
+    }
+    if (S.grid) {
+      // ── LIGHTS OUT FROM THE REAL GRID ──
+      const pole = S.pole, front = S.front;
+      if (y && y.pos === 1) add((watch ? "Your camera follows " + name + ", on pole" : "You start from pole, in " + name + "'s car") + (front ? ", with " + front.surname + " alongside." : "."), 1);   // you, from pole
+      else {
+        if (pole) add(pole.surname + " is on pole" + (front ? ", with " + nameFor(front) + " alongside." : "."), 1.1);
+        if (y && y.pos > 1) add((watch ? "Your camera follows " + name + ", " + ordWord(y.pos) + " on the grid" : "You start " + name + "'s car from " + ordWord(y.pos) + " on the grid") + (y.tyre ? ", on " + (y.tyre.age > 0 ? "a used set of " : "") + (TYRES[y.tyre.compound] || y.tyre.compound) + "." : "."), 1);
+      }
+      if (y && y.pos === 1 && y.tyre) add(You + " start" + (watch ? "s" : "") + " on " + (y.tyre.age > 0 ? "a used set of " : "") + (TYRES[y.tyre.compound] || y.tyre.compound) + ".", 1.5);
+      if (y && y.pos > 2 && (y.ahead || y.behind)) add((y.ahead ? y.ahead.surname + " starts just ahead" + (watch ? "" : " of you") : "") + (y.ahead && y.behind ? ", and " : "") + (y.behind ? y.behind.surname + " just behind" : "") + ".", 2);
+      if (S.starters > 0) add(S.starters + " cars take the start" + (S.dns && S.dns.length ? "; " + listNames(S.dns.map((d) => d.surname)) + " " + plural(S.dns.length, "does", "do") + " not." : "."), 3);
+      if (!watch) add("Everyone else races it exactly as it really ran.", 3.2);
+      return out;
+    }
+    // ── JOINING (OR WATCHING) MID-RACE ──
+    add("Lap " + S.lap + " of " + S.realLaps + (watch ? ", " + S.toGo + " to go." : S.condensed ? ". At this distance, that leaves " + S.toGo + " " + plural(S.toGo, "lap", "laps") + " for you."
+      : ", and " + S.toGo + " " + plural(S.toGo, "lap", "laps") + " to go."), 1.05);
+    const flag = (S.cautions || []).find((c) => c.now);
+    const top = S.top || [];
+    if (top[0] && !isYou(top[0])) {
+      add(top[0].surname + " leads" + (flag ? " under the " + flag.kind : "")
+        + (top[1] ? (flag ? ", from " + nameFor(top[1]) : ", " + gapText(top[1].gap) + " clear of " + nameFor(top[1]))
+          + (top[2] && !isYou(top[2]) ? ", with " + top[2].surname + " third." : ".") : "."), 1.2);
+    }
+    if (y && y.running) {
+      const who = watch ? "Your camera follows " + name + ", " : "You take over " + name + " ";
+      const where = y.pos === 1 ? (watch ? "leading" : "in the lead") + (top[1] ? ", " + gapText(top[1].gap) + " clear" : "")
+        : (watch ? ordWord(y.pos) : "in " + ordWord(y.pos)) + ", " + gapText(y.gap) + (y.gap && y.gap.lapsDown ? "" : " off the lead");
+      const d = y.gridPos > 0 ? y.gridPos - y.pos : 0;
+      const grid = y.gridPos > 0 ? (d > 0 ? ", up " + numWord(d) + " " + plural(d, "place", "places") + " from " + ordWord(y.gridPos) + " on the grid"
+        : d < 0 ? ", down " + numWord(-d) + " " + plural(-d, "place", "places") + " from " + ordWord(y.gridPos) + " on the grid" : ", right where the car started") : "";
+      add(who + where + grid + ".", 1);   // the one line a short budget must keep
+      const ah = y.ahead, be = y.behind;
+      if (ah || be) add((ah ? ah.surname + " is " + gapText({ s: ah.gap, lapsDown: 0 }) + " ahead" + (watch ? "" : " of you") : "")
+        + (ah && be ? ", and " : "") + (be ? be.surname + " " + gapText({ s: be.gap, lapsDown: 0 }) + " behind" : "") + ".", 1.3);
+      if (y.tyre) {
+        const tyres = TYRES[y.tyre.compound] || y.tyre.compound;
+        const stops = y.stops || [];
+        add(You + (watch ? " is" : " are") + " on " + (stops.length ? tyres : "the " + tyres + " the car started on") + ", " + y.tyre.age + " " + plural(y.tyre.age, "lap", "laps") + " old"
+          + (stops.length ? ", after " + (stops.length === 1 ? "a stop on lap " + stops[0] : numWord(stops.length) + " stops, on laps " + listNames(stops.map(String))) : ", with no stop yet") + ".", 2);
+      }
+      const pens = (y.penalties || []).filter((p) => p.seconds > 0 || p.driveThrough || p.stopGo);
+      if (pens.length) {
+        const sec = pens.reduce((n, p) => n + (p.seconds | 0), 0);
+        add(You + (watch ? " carries " : " carry ") + (sec > 0 ? "a " + sec + "-second time penalty" : pens[0].stopGo ? "a stop-go penalty" : "a drive-through penalty") + ", handed out on lap " + pens[pens.length - 1].lap + ".", 1.9);
+      }
+    } else if (y) add(name + "'s car is already out of this race.", 1);
+    // What has happened to the race so far.
+    if (flag) add("We are under the " + flag.kind + ", out since lap " + flag.from + ".", 1.1);
+    const past = (S.cautions || []).filter((c) => !c.now);
+    if (past.length) {
+      const span = (c) => (c.to > c.from ? "laps " + c.from + " to " + c.to : "lap " + c.from);
+      const reds = past.filter((c) => c.kind === "red flag");
+      if (reds.length) add("The race was red-flagged on lap " + reds[0].from + ".", 2.1);
+      const rest = past.filter((c) => c.kind !== "red flag");
+      if (rest.length === 1) add("The " + rest[0].kind + " came out on " + span(rest[0]) + ".", 2.2);
+      else if (rest.length > 1) {
+        const kinds = {};
+        for (const c of rest) kinds[c.kind] = (kinds[c.kind] || 0) + 1;
+        const said = Object.keys(kinds).map((k) => numWord(kinds[k]) + " " + k + (kinds[k] > 1 ? "s" : "")).join(" and ");
+        add(said.charAt(0).toUpperCase() + said.slice(1) + " so far: " + listNames(rest.slice(0, 3).map(span)) + ".", 2.2);
+      }
+    }
+    const gone = S.out || [];
+    if (gone.length === 1) add(gone[0].surname + " is already out, on lap " + gone[0].lap + ".", 2.3);
+    else if (gone.length > 1 && gone.length <= 4) add(listNames(gone.map((d) => d.surname)) + " are already out.", 2.3);
+    else if (gone.length > 4) add(numWord(gone.length).charAt(0).toUpperCase() + numWord(gone.length).slice(1) + " cars are already out, " + listNames(gone.slice(-2).map((d) => d.surname)) + " the latest.", 2.3);
+    // The lead, the weather, the fastest lap.
+    const L = S.lead || {};
+    if (L.allTheWay && L.from) add(nameFor(L.from) === "you" ? "This car has led every lap." : L.from.surname + " has led every lap.", 3);
+    else if (L.changes && L.changes.length) {
+      const c = L.changes[L.changes.length - 1];
+      add(c.to.surname + " took the lead from " + c.from.surname + " on lap " + c.lap + (L.changes.length > 1 ? ", and it has changed hands " + numWord(L.changes.length) + " times." : "."), 3);
+    }
+    const rain = S.rain;
+    if (rain && rain.now && rain.since) add("It has been raining since lap " + rain.since + ".", 2.05);
+    else if (rain && rain.now) add("And the rain is just arriving.", 2.05);
+    else if (rain && rain.since) add("It rained from lap " + rain.since + " to " + rain.last + ", and the track is drying.", 3.1);
+    const f = S.fastest;
+    if (f) add(isYou(f) ? (watch ? sur + " holds" : "This car holds") + " the fastest lap so far, a " + lapTime(f.time) + "." : "Fastest lap so far: " + f.surname + ", a " + lapTime(f.time) + ", on lap " + f.lap + ".", 3.2);
+    if (y && y.running && (y.passesMade || y.passesLost)) {
+      add((watch ? sur + " has" : "This car has") + " made " + numWord(y.passesMade) + " " + plural(y.passesMade, "pass", "passes") + " so far" + (y.passesLost ? ", and been passed " + numWord(y.passesLost) + " " + plural(y.passesLost, "time", "times") : "") + ".", 4);
+    }
+    if (S.passes > 0) add(S.passes + " " + plural(S.passes, "pass", "passes") + " on track in this race so far.", 4.2);
+    return out;
+  }
+
   function storyRows(st, info) {
     const out = [];
     if (!st || typeof st !== "object") return out;
@@ -269,10 +405,7 @@ const Announcer = (function () {
     }
     // A REAL RACE: the seat you took, and when.
     const r = st.real;
-    if (r && r.driver && !r.watch) {
-      add(r.startLap > 1 ? "You take over " + r.driver + "'s car on lap " + r.startLap + (r.realLaps > 0 ? " of " + r.realLaps : "") + ", with the field racing as it really ran."
-        : "You start from " + r.driver + "'s grid slot, and the field races it as it really ran.", 1);
-    } else if (r && r.driver) add("Your camera follows " + r.driver + ".", 2);
+    if (r) for (const row of realRows(r)) add(row.text, row.prio);
     // The championship, once there is one to talk about (a round scored).
     const c = st.champ;
     if (c && c.rounds > 1 && c.round >= 1 && c.leader) {
@@ -677,6 +810,18 @@ const Announcer = (function () {
        *  speech path as the welcome, including its voice-selection ladder. */
       sample() { return speak([(RadioVoice.SAMPLE && RadioVoice.SAMPLE[CHANNEL]) || "Welcome to Apex 26."], 0); },
       scriptFor,
+      /** How long the WHOLE read of `info` takes, in ms, at this channel's
+       *  tune — 0 when nothing will be said (announcer or sound off). The
+       *  loading screen stretches a real race's flyby to it (flyMsFor), so the
+       *  race-so-far read is said in full rather than fitted down to 24 s. */
+      readMs(info) {
+        if (!on || !G.soundOn) return 0;
+        try {
+          const tune = (G.radio && G.radio.tuneFor && G.radio.tuneFor(CHANNEL)) || { rate: 1 };
+          const lines = script(factsFor(info), 0, tune.rate || 1);
+          return Math.round(lines.reduce((n, l) => n + seconds(l, tune.rate || 1) * 1000 + 250, 0) + LAND_MS);   // 250: the gap between chained lines
+        } catch (e) { Log.info("audio", "Announcer: no read length", e); return 0; }
+      },
       wrapUp,
       stop,
       enabled: () => on,
