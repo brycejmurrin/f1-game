@@ -139,6 +139,12 @@
         { id: "nurburgring-arena-gravel", samples: 6 });
       tyreWall(0.120, 0.155, 1, 5, [0.86, 0.20, 0.18]);
       marshalPost(K(0.140), -1, 10);
+      // Haug-Haken (T1): downhill hairpin runoff outside the apex — the classic
+      // divebomb zone on the GP-Strecke (MotorSportRadar / Coach Dave Academy).
+      groundPatch(K(0.028), 1, 5, [20, 0.18, 28], GRAVEL,
+        { id: "nurburgring-haug-haken-gravel", samples: 6 });
+      tyreWall(0.018, 0.040, 1, 4.5, [0.86, 0.20, 0.18]);
+      marshalPost(K(0.030), -1, 9);
 
       {
         const STONE = [0.60, 0.60, 0.59], STONE_D = [0.47, 0.47, 0.47];
@@ -277,13 +283,37 @@
 
       groundPatch(K(0.785), 1, 5, [24, 0.18, 32], GRAVEL,
         { id: "nurburgring-schumacher-gravel", samples: 6 });
-      scaffoldStand(0.766, 0.798, -1, 16, 6);
+      // Keep the roadside keep-out the old scaffoldStand booked: without it the
+      // deferred scatter replants through this bank and clip-audit rises. The
+      // open tube tribune itself is gone — after the elevation survey remap its
+      // feet face-sampled a fold-hit skirt (~9 m false air gap → unsupported).
+      indexSolid(0.766, 0.798, -1, 16, 6 * 1.9 + 1);
       marshalPost(K(0.790), -1, 9);
 
       groundPatch(K(0.930), -1, 5, [22, 0.18, 30], GRAVEL,
         { id: "nurburgring-veedol-gravel", samples: 6 });
       tyreWall(0.915, 0.950, -1, 4, [0.86, 0.20, 0.18]);
       marshalPost(K(0.935), 1, 9);
+      // Coca-Cola Kurve (T15): final right-hander onto the pit straight — gravel
+      // on the outside exit (InsideF2 / Coach Dave Academy track guides).
+      groundPatch(K(0.968), 1, 5, [18, 0.18, 24], GRAVEL,
+        { id: "nurburgring-coca-cola-gravel", samples: 5 });
+      tyreWall(0.958, 0.978, 1, 4.2, [0.86, 0.20, 0.18]);
+      {
+        const a = anchor(K(0.972), -1, 14);
+        const b = [a.r, a.u, a.t];
+        modelGroup("nurburgring-coca-cola-kurve", {
+          center: vadd(a.c, a.u, 6), size: [8, 14, 28], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.METAL;
+          // Compact open terrace reading the final-corner spectator bank.
+          addBox(stage, vadd(a.c, a.u, 1.2), [3.2, 2.4, 22], [0.50, 0.51, 0.54], b);
+          addBox(stage, vadd(a.c, a.u, 3.6), [2.6, 2.0, 20], [0.56, 0.56, 0.58], b);
+          addBox(stage, vadd(vadd(a.c, a.r, -1.4), a.u, 5.8), [0.5, 1.6, 18],
+            [0.78, 0.12, 0.14], b); // red fascia cue
+          stage._mat = 0;
+        }, { required: true });
+      }
 
       for (const [s0, s1] of [[0.20, 0.29], [0.32, 0.50], [0.54, 0.63], [0.69, 0.77], [0.80, 0.90]]) {
         guardrail(s0, s1, -1, 7, [0.80, 0.81, 0.83]);
@@ -383,32 +413,36 @@
         const SLATE = [0.30, 0.31, 0.34];
         const base = pyMin + 118;   // near the summit of that cone
         const R = 26;
-        for (let i = 0; i < 8; i++) {
-          const t = i / 8 * 6.2832;
-          const tx = bx + Math.cos(t) * R, tz = bz + Math.sin(t) * R;
-          const th = 9 + hash(i * 37 + 3) * 5;
-          addCyl(out, [tx, base, tz], 4.2, th, i & 1 ? STONE : STONE_D, 6);
-          addCyl(out, [tx, base + th, tz], 4.8, 1.2, STONE_D, 6);   // corbelled parapet
-          // Wall run to the next tower.
-          const t2 = (i + 1) / 8 * 6.2832;
-          const mx = bx + Math.cos((t + t2) / 2) * R * 0.96;
-          const mz = bz + Math.sin((t + t2) / 2) * R * 0.96;
-          addBox(out, [mx, base + 4.2, mz], [R * 0.72, 8.4, 2.4], STONE_D,
-            [[Math.cos((t + t2) / 2 + 1.5708), 0, Math.sin((t + t2) / 2 + 1.5708)],
-             [0, 1, 0],
-             [Math.cos((t + t2) / 2), 0, Math.sin((t + t2) / 2)]]);
-        }
-        // The keep — square, tall, broken-topped. A ruin, so no roof on it.
-        addBox(out, [bx, base + 13, bz], [13, 26, 13], STONE);
-        addBox(out, [bx, base + 26.4, bz], [14.2, 1.4, 14.2], STONE_D);
-        for (let i = 0; i < 12; i++) {
-          const t = i / 12 * 6.2832;
-          if (i % 3 === 2) continue;                       // the missing teeth
-          addBox(out, [bx + Math.cos(t) * 6.6, base + 28.2, bz + Math.sin(t) * 6.6],
-            [1.8, 2.4, 1.8], STONE);
-        }
-        addCyl(out, [bx + 8.5, base, bz - 8.5], 3.0, 32, STONE, 6);        // base-anchored: base → base+32
-        addCone(out, [bx + 8.5, base + 32, bz - 8.5], 3.6, 7.5, SLATE, 6); // cap seats on that top
+        modelGroup("nurburgring-burg-nurburg", {
+          center: [bx, base + 16, bz], size: [70, 50, 70], basis: [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          for (let i = 0; i < 8; i++) {
+            const t = i / 8 * 6.2832;
+            const tx = bx + Math.cos(t) * R, tz = bz + Math.sin(t) * R;
+            const th = 9 + hash(i * 37 + 3) * 5;
+            addCyl(stage, [tx, base, tz], 4.2, th, i & 1 ? STONE : STONE_D, 6);
+            addCyl(stage, [tx, base + th, tz], 4.8, 1.2, STONE_D, 6);
+            const t2 = (i + 1) / 8 * 6.2832;
+            const mx = bx + Math.cos((t + t2) / 2) * R * 0.96;
+            const mz = bz + Math.sin((t + t2) / 2) * R * 0.96;
+            addBox(stage, [mx, base + 4.2, mz], [R * 0.72, 8.4, 2.4], STONE_D,
+              [[Math.cos((t + t2) / 2 + 1.5708), 0, Math.sin((t + t2) / 2 + 1.5708)],
+               [0, 1, 0],
+               [Math.cos((t + t2) / 2), 0, Math.sin((t + t2) / 2)]]);
+          }
+          addBox(stage, [bx, base + 13, bz], [13, 26, 13], STONE);
+          addBox(stage, [bx, base + 26.4, bz], [14.2, 1.4, 14.2], STONE_D);
+          for (let i = 0; i < 12; i++) {
+            const t = i / 12 * 6.2832;
+            if (i % 3 === 2) continue;
+            addBox(stage, [bx + Math.cos(t) * 6.6, base + 28.2, bz + Math.sin(t) * 6.6],
+              [1.8, 2.4, 1.8], STONE);
+          }
+          addCyl(stage, [bx + 8.5, base, bz - 8.5], 3.0, 32, STONE, 6);
+          addCone(stage, [bx + 8.5, base + 32, bz - 8.5], 3.6, 7.5, SLATE, 6);
+          stage._mat = 0;
+        }, { required: true });
       }
       // Camp-style spectator clusters in the forest clearings.
       for (const [id, s, side] of [
