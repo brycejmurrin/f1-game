@@ -131,6 +131,8 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
     hungaroring: ["hungaroring-pit-complex", "hungaroring-main-tribune"],
     // Wave 5 — Catalunya landmarks (Tilke main stand + pit-end scoreboard)
     catalunya: ["catalunya-main-grandstand", "catalunya-pit-end-scoreboard", "catalunya-race-control"],
+    // Wave 6 — Madring / La Monumental inside rake + masts
+    madrid: ["madrid-monumental-stands"],
     // Wave 6 — Albert Park (Piastri stand 2026, MSAC, Lakeside Stadium)
     albert_park: ["albert-piastri-stand", "albert-msac", "albert-lakeside-stadium"],
   };
