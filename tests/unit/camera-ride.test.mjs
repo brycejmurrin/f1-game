@@ -343,7 +343,9 @@ test("VISOR draws the cockpit rig without the steering wheel, and the column and
     "the rig is anchored with visor's own eye offsets");
   assert.match(game, /drawCockpitRig\(c, _cockMat, dt, paint, visorEye\);/, "the same rig is drawn for visor, flagged wheel-less");
   const rig = draw.slice(draw.indexOf("function drawCockpitRig("));
-  const cut = rig.indexOf("if (noWheel) {");
+  // VISOR forces the wheel-less interior whatever the WHEEL setting says.
+  assert.match(rig, /const wheelStyle = noWheel \? "none" : CockpitOpts\.wheel\(\);/, "visor overrides the chosen wheel");
+  const cut = rig.indexOf('if (wheelStyle === "none") {');
   assert.ok(cut > 0, "the no-wheel branch exists");
   assert.ok(rig.indexOf("cockpitBodyMesh(c.team, c)") < cut && rig.indexOf("drawPlayerWheels(") < cut, "the body and the front wheels are drawn before it");
   const branch = rig.slice(cut, rig.indexOf("return;", cut) + 7);

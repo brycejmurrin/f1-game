@@ -338,6 +338,8 @@
     "// against three r186's real Texture). The pit-crew mesh cache is capped.",
     "tests/unit/tlx-texture-release.test.mjs",
     "tests/unit/car-mesh-crew-cache.test.mjs",
+    "// The COCKPIT WHEEL choice: option, meshes per style, draw path, HUD gate.",
+    "tests/unit/cockpit-wheels.test.mjs",
     "// The sun shadow map's depth span holds a 250 m caster: drives the real",
     "// ShadowPass.sunPass on a stub renderer and projects through its light VP.",
     "tests/unit/shadow-pass-depth.test.mjs",
