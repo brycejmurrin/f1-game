@@ -110,9 +110,17 @@ test("AUTO sheds a software renderer; ON keeps it; OFF and the countdown never d
   const count = boot({ mode: "on", state: "count" });
   count.render();
   assert.equal(count.mp.state().shown, false, "the start lights own the centre column");
-  const shed = boot({ mode: "on", tier: 3 });
-  shed.render();
-  assert.equal(shed.mp.state().shown, false, "the governor's crash floor sheds even ON");
+  // Performance never HIDES it: GRAPHICS: LOW pins the governor at tier 4, and
+  // a player with MIRROR on saw nothing at all under the old rule.
+  for (const tier of [3, 4]) {
+    const low = boot({ mode: "on", tier });
+    low.render();
+    assert.equal(low.mp.state().shown, true, "ON at tier " + tier);
+  }
+  const phone = boot({ mobile: true, cam: "cockpit" });
+  phone.render();
+  assert.equal(phone.mp.state().shown, true, "AUTO in the cockpit on a phone");
+  assert.equal(phone.mp.state().quality, "lite");
 });
 
 test("the MIRROR key turns off what shows, and on what does not, and persists it", () => {
@@ -208,4 +216,20 @@ test("only governor tier 2 halves the cadence", () => {
   for (let i = 0; i < 4; i++) h.render();
   // Frame 1 always draws (nothing to show yet); after that every other frame.
   assert.equal(h.calls.filter((c) => c[0] === "begin").length, 3);
+});
+
+test("the quality ladder: full, lite, low (tier 2-3, half rate), min (tier 4+, a third)", () => {
+  const cases = [[{ tier: 0 }, "full", 400, 114], [{ mobile: true }, "lite", 240, 68],
+    [{ tier: 3 }, "low", 200, 57], [{ tier: 4 }, "min", 160, 46]];
+  for (const [opt, q, w, ht] of cases) {
+    const h = boot(Object.assign({ mode: "on" }, opt));
+    h.render();
+    const b = h.calls.find((c) => c[0] === "begin");
+    assert.equal(h.mp.state().quality, q);
+    assert.deepEqual([b[1], b[2]], [w, ht], q + " target");
+  }
+  const min = boot({ mode: "on", tier: 4 });
+  for (let i = 0; i < 6; i++) min.render();
+  // Frame 1 always draws; then frames 3 and 6.
+  assert.equal(min.calls.filter((c) => c[0] === "begin").length, 3);
 });
