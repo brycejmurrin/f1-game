@@ -1237,6 +1237,7 @@ what it covers.
 | `scenery-kits.spec.js` | the browser binding of those kits into Silverstone's `scenery(api)` |
 | `scenery-api-contract.test.mjs` | freezes the 114-member `scenery(api)` surface across the `js/track/scenery-*.js` split |
 | `scenery-guards.test.mjs` | the on-track guards drop what is ON the road, not everything with a normal gap: Monaco's armco keeps its posts (guardrail margin below the gap), Qatar/Monaco billboards build (panel ENDS guarded, not the along-track length as a radius), and `bakedModel` rides the scenery transform like the fallback it replaces — counts from `modelDiagnostics.suppressedCounts` on the real build |
+| `bahrain-grandstand-rake.test.mjs` | every bahrain `grandstandEx` call keeps a positive seating rake (height rises away from the track) with a full crowd bank; a fold-site stand with zero seating is suppressed rather than emitting a hollow shell |
 | `suzuka-crossover-span.test.mjs` | Suzuka figure-8 green span sits flush on the lifted ribbon (`clearance ≤ 0.5 m`); dark soffit keeps ≥ 4.8 m lower-road clearance; portal still emits. Guards the SRTM-bake regression that hung a green slab ~8 m above the back-straight |
 | `lamp-density.test.mjs` | `LAMP DENSITY` thins/densifies baked lights; lamps dressing aliases |
 | `floodmast-lamp-register.test.mjs` | `floodMast`/`floodMastRing` register lens posts into `track.lampPosts` (Singapore/Bahrain on; Qatar `light:false` opt-out) |
