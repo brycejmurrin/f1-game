@@ -29,6 +29,11 @@ select_all() {
 case "$EVENT" in
   push) BEFORE="$PUSH_BEFORE" ;;
   pull_request) BEFORE="$PR_BASE" ;;
+  # THE NIGHTLY'S CHANGE-AWARE LANE: everything the last day of merges routed.
+  # A per-change selection can only afford 15 minutes, so a routed spec that
+  # loses the packing (menu-traversal, ui-redesign, 2026-09-29) otherwise waits
+  # for its group's night in the 11-night rota. Base = the tip a day ago.
+  schedule) BEFORE="$(git rev-list -1 --first-parent --before='24 hours ago' HEAD 2>/dev/null || true)" ;;
   *) echo "::error::SELECTED GATE FAILED CLOSED: unsupported event '$EVENT'" >&2; exit 1 ;;
 esac
 case "${BEFORE:-}" in

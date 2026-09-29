@@ -183,7 +183,9 @@ test("the change-aware gate blocks pushes, pull requests AND the deploy gate", (
   // that excluded the deploy must stay gone.
   // The third clause is the Pages call: the train's caller event is `schedule`,
   // so an event test alone would skip the plan on every deploy.
-  assert.match(selectJob, /if: \$\{\{ github\.event_name == 'push' \|\| github\.event_name == 'pull_request' \|\| inputs\.concurrency_key != '' \}\}/);
+  // `schedule` too: the nightly's change-aware lane (every spec the last day
+  // of merges routed; tools/ci/ci-resolve-before.sh).
+  assert.match(selectJob, /if: \$\{\{ github\.event_name == 'push' \|\| github\.event_name == 'pull_request' \|\| github\.event_name == 'schedule' \|\| inputs\.concurrency_key != '' \}\}/);
   assert.doesNotMatch(selectJob, /inputs\.concurrency_key == ''/, "the plan must never exclude the deploy gate");
   assert.doesNotMatch(selectJob + selectedJob, /^    continue-on-error:/m);
   // The runner consumes the plan as a matrix and takes its cap per shard.

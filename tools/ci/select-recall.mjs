@@ -96,6 +96,8 @@ export function replay(changed, budgetMin = 15) {
     // budgeted shard gets one of its own. Counting it as "named" would score a
     // spec that actually executes as a miss.
     oversize: (cut.oversize || []).map((s) => s.file),
+    // Overflow is a RUN too: a routed spec packed into an extra budgeted shard.
+    overflow: (cut.overflow || []).flat().map((s) => s.file),
     selected: prioritise(cut.selected, { changedSpecs, imported }).map((s) => s.file),
     skipped: cut.skipped.map((s) => s.file),
     // `unreachable` is the third NAMED bucket (a spec bigger than the whole
@@ -108,7 +110,8 @@ export function replay(changed, budgetMin = 15) {
 export function recall(cases = CASES) {
   return cases.map((c) => {
     const r = replay(c.changed);
-    const hit = r.selected.includes(c.catches) || (r.oversize || []).includes(c.catches);
+    const hit = r.selected.includes(c.catches) || (r.oversize || []).includes(c.catches)
+      || (r.overflow || []).includes(c.catches);
     // A case is "reported" when the selector either picked the catching spec or
     // said plainly that it could not help (infra) / could not afford it. Silence
     // is the only real failure: a selection that omits the spec with no word.

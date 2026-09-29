@@ -28,7 +28,8 @@ else
   esac
   git cat-file -e "${BEFORE}^{commit}" 2>/dev/null || fail "comparison base $BEFORE is unreachable"
 fi
-node tools/ci/select-specs.mjs --since "$BEFORE" --failed-from .selected-failed.txt --json > sel.json \
+node tools/ci/select-specs.mjs --since "$BEFORE" --failed-from .selected-failed.txt \
+  ${BUDGET_MIN:+--budget-min "$BUDGET_MIN"} ${OVERFLOW_SHARDS:+--overflow-shards "$OVERFLOW_SHARDS" --stale-first} --json > sel.json \
   || fail "selector failed"
 node -e '
   const r = require("./sel.json");
@@ -47,6 +48,8 @@ node -e '
     console.log(`COVERED BY FIXED BLOCKING GATE: ${s.file} (${s.tests} tests)`);
   for (const s of (r.unreachable || []))
     console.log(`::warning::UNREACHABLE by this gate (declares ${s.tests} tests, over the whole ${r.secFit} s budget): ${s.file}`);
+  (r.overflow || []).forEach((bin, i) => { for (const s of bin)
+    console.log(`OVERFLOW (routed; budgeted shard selected-${i + 2}): ${s.file} (${s.tests} tests)`); });
   for (const s of r.skipped) console.log(`SKIPPED (over budget): ${s.file} (${s.tests} tests)`);
   for (const s of (r.oversize || []))
     console.log(`OVERSIZE (affected by this change; its own shard): ${s.file} (${s.tests} tests)`);

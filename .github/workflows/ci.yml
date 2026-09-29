@@ -1499,7 +1499,11 @@ jobs:
     # its before_sha is the live commit, so the plan reads "what changed since
     # what is live". The caller's event is `schedule` there, hence the third
     # clause rather than an event test.
-    if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' || inputs.concurrency_key != '' }}
+    # `schedule` is the nightly's CHANGE-AWARE lane (tools/ci/ci-resolve-before.sh):
+    # every spec the last day of merges routed, with room for more overflow
+    # shards than one change gets — so a spec a 15-minute per-change budget
+    # squeezes out runs within a day, not on its group's night in 11.
+    if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'schedule' || inputs.concurrency_key != '' }}
     # actions:read on top of the workflow default — the base-verdict step at the
     # end lists this workflow's runs on the deploy branch. A job that names
     # permissions gets ONLY what it names, hence contents too.
@@ -1531,8 +1535,12 @@ jobs:
         with:
           path: .selected-failed.txt
           key: selected-failed-${{ github.ref_name }}-${{ github.run_id }}
+          # A PR also inherits the DEPLOY BRANCH's last failures: only the train
+          # used to promote a spec that just failed there to rank 1, so a PR
+          # touching the same routes could skip it and merge onto the red.
           restore-keys: |
             selected-failed-${{ github.ref_name }}-
+            selected-failed-claude/f1-game-project-26h3ng-
       # tools/ci/ci-select-specs-step.sh: base via ci-resolve-before.sh, then
       # select-specs.mjs --json; it fails closed on "unmatched" and writes the
       # `shards` matrix (one budgeted shard plus one per oversize affected spec,
@@ -1549,6 +1557,13 @@ jobs:
           PUSH_BEFORE: ${{ inputs.concurrency_key != '' && inputs.before_sha || github.event.before }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
           CALLED: ${{ inputs.concurrency_key != '' }}
+          # The nightly lane (tools/ci/ci-resolve-before.sh): a day's union diff
+          # routes ~70 specs, so 60-minute shards and 12 overflow shards, stale
+          # first. Simulated on 2026-09-29's 85 merges: 19 shards, 606 tests,
+          # no routed spec left skipped (menu-traversal, ui-redesign and
+          # time-trial — the day's latent reds — all run). Once a night.
+          BUDGET_MIN: ${{ github.event_name == 'schedule' && !inputs.concurrency_key && '60' || '' }}
+          OVERFLOW_SHARDS: ${{ github.event_name == 'schedule' && !inputs.concurrency_key && '12' || '' }}
         run: bash tools/ci/ci-select-specs-step.sh
       # WHOSE RED IS IT? A gate that goes red asks two different questions
       # depending on a fact nobody has to hand: was the base already red?
@@ -1762,15 +1777,43 @@ jobs:
     continue-on-error: true
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
+      # NOTHING THE MENUS DRAW. A PR whose every file is circuit SCENERY, docs,
+      # track tooling, unit tests or test data cannot move a golden menu (a
+      # circuit's LAYOUT can: the picker draws its map, so js/circuits/*.js
+      # still runs the trial), and those
+      # are most of the fleet's PRs — each spent a runner on Playwright and the
+      # goldens for nothing (PR #431's queue analysis, 2026-09-29). Anything
+      # else, or a failed lookup, runs the trial as before.
+      - name: Does this PR touch anything the menus draw?
+        id: ui
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          hit=true
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ] && [ -n "$PR" ]; then
+            if files="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --paginate --jq '.[].filename')" && [ -n "$files" ]; then
+              if ! printf '%s\n' "$files" | grep -qvE '^(js/circuits/scenery/|docs/|tools/track/|tests/data/|tests/unit/)|\.md$'; then hit=false; fi
+            fi
+          fi
+          echo "hit=$hit" >> "$GITHUB_OUTPUT"
+          [ "$hit" = true ] || echo "Skipped: every changed file is scenery, docs, track tooling or tests" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.ui.outputs.hit == 'true'
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
+        if: steps.ui.outputs.hit == 'true'
       - name: Playwright Chromium (cached)
+        if: steps.ui.outputs.hit == 'true'
         uses: ./.github/actions/playwright-chromium
       - name: Golden menus (test:baseline)
         id: goldens
+        if: steps.ui.outputs.hit == 'true'
         run: npm run test:baseline
       # ALWAYS, not `if: failure()`: a green run still has to hand over what it
       # rendered, because "it passed here once" is the evidence step (b) needs.
@@ -1788,7 +1831,9 @@ jobs:
       - name: Verdict
         if: always()
         run: |
-          if [ "${{ steps.goldens.outcome }}" = "success" ]; then
+          if [ "${{ steps.goldens.outcome }}" = "skipped" ]; then
+            echo "NOT RUN: this PR changes nothing the golden menus draw."
+          elif [ "${{ steps.goldens.outcome }}" = "success" ]; then
             echo "GOLDENS MATCH on ubuntu-latest. One data point for step (b);"
             echo "collect a few across PRs before routing renderer/lighting here."
           else
@@ -1843,6 +1888,20 @@ jobs:
       - name: Dispatch pages.yml on this branch
         env:
           GH_TOKEN: ${{ github.token }}
+        # ONLY WHILE THIS SHA IS STILL THE TIP. The dispatch names the BRANCH, so
+        # a poke from a push that has since been overtaken gates the NEWER tip —
+        # whose own fast tier is usually still running, so pages-reuse-verdict
+        # finds no completed fast run and the nested gate repeats guards, every
+        # node slice and driving-model (~23 runner-min, 7 slots; PR #431's
+        # queue analysis, 2026-09-29). The newer push pokes when ITS fast tier
+        # is green; the cron train stays the backstop. A failed lookup pokes
+        # as before (REST: GET /repos/{owner}/{repo}/git/ref/heads/<branch>,
+        # https://docs.github.com/en/rest/git/refs#get-a-reference).
         run: |
+          tip="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$GITHUB_REF_NAME" --jq .object.sha 2>/dev/null || true)"
+          if [ -n "$tip" ] && [ "$tip" != "$GITHUB_SHA" ]; then
+            echo "Not poked: \`$GITHUB_SHA\` is no longer the tip (\`$tip\` is, and pokes on its own green)" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"
           echo "Poked pages.yml on \`$GITHUB_REF_NAME\` for \`$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"

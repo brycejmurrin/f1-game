@@ -102,6 +102,17 @@ It powers the blocking change-aware CI gate and is just as useful interactively;
 single spec (`npm test -- tests/specs/<file>.spec.js`) is always preferable to
 its whole group when the change touches that spec's subject and nothing else.
 
+A routed spec that fits a shard alone but loses the 15-minute packing goes to
+one of two **overflow** shards (`selected-2`, `selected-3`) instead of being
+skipped; what is still left is skipped by name. The **nightly** runs the same
+selector over the last day of deploy-branch merges (`ci-resolve-before.sh`'s
+`schedule` base) with 60-minute shards, twelve overflow shards and
+`--stale-first` ordering — so a routed spec no per-change budget can afford
+runs within a day rather than on its group's night in the 11-night rota
+(2026-09-29: `menu-traversal`, `ui-redesign` and `time-trial` sat red that way).
+A PR also restores the deploy branch's last failing specs, so it ranks a spec
+that just failed there the way the train does.
+
 ### What a spec costs is recorded, not re-measured
 
 `tests/data/spec-timings.json` is a rolling per-spec and per-test duration
