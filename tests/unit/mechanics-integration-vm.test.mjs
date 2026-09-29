@@ -65,6 +65,17 @@ test("a race can be armed for practice, which unlocks checkpoints and spoils the
   assert.equal(g.G.coach.mark(),true,"checkpoints follow the practice flag, not the session type");
 });
 
+test("the START drill can be set where it says to: on the grid, before the lights",async()=>{
+  // Not g.race(): that presses go(). startRace() leaves the field on the grid.
+  g.G.daily.stop();g.G.timeTrial=false;g.G.practice=false;await g.G.startRace();g.apex.headless(true);
+  assert.equal(g.G.state,"count","still on the grid");
+  assert.equal(g.G.coach.canArm(),true,"the pause menu offers ARM during the countdown");
+  assert.equal(g.G.coach.armPractice(),true);
+  assert.equal(g.G.coach.canPractice(),true,"SET and the drill picker are live on the grid");
+  assert.equal(g.G.coach.insights.startDrill("start"),true,"a stopped car with a field around it");
+  assert.equal(g.G.coach.mark(),true,"a checkpoint taken on the grid");
+});
+
 test("rewind steps the player back about ten seconds, and never rewinds a penalty",async()=>{
   await tt();g.apex.reset(.1,35,0);g.apex.go();g.step(2);
   const p=g.G.player;
