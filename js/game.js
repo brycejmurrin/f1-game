@@ -2964,7 +2964,7 @@ async function startRaceBody() {
   // THE PRE-RACE SCREEN OUTLIVES THE SWEEP when it was up: the warm above paints
   // nothing until it is done, so it is raised again, disarmed, and render()
   // lowers it with the first frame the backend presents (LoadingScreen.handoff).
-  const handoff = loadingScreen.active() && !!player;
+  const handoff = (loadingScreen.active() || loadingScreen.phase() === "build") && !!player;   // "build": startRaceCovered's card
   clearMenuScreens();
   if (handoff) loadingScreen.handoff();
   els.hud.hidden = false; els.lights.hidden = false; els.pausebtn.hidden = false;
@@ -3868,7 +3868,8 @@ function introBuild(go) {
   const idx = trackIdx, key = menuKey(idx), n = ++_introRun;
   if (!(idx >= 0) || (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches)) return false;
   clearTimeout(flybyBuildTimer); _menuGate.generation++;   // the menu's own build stands down
-  loadingScreen.building(loadingInfo());
+  const info0 = loadingInfo();   // its readMs: a real race's flyby is planned for the length it will run (a 24 s plan is re-planned mid-flyby)
+  loadingScreen.building(info0);
   (async () => {
     try {
       await ensureScenery(idx);
@@ -3891,7 +3892,7 @@ function introBuild(go) {
       const t2 = performance.now();
       while (live() && gfx.warming && gfx.warming() && performance.now() - t2 < 15000) await menuSlice();
       // Plan the flyby here too, up to a budget: whatever is left plans mid-flyby.
-      FlybySeq.setDuration(loadingScreen.nextFlyMs());
+      FlybySeq.setDuration(loadingScreen.nextFlyMs(info0.readMs));
       const fly = { key, track, shots: FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (idx * 2654435761)) >>> 0, false) }, step = FlybySeq.planSteps(track, fly.shots), t0 = performance.now();
       while (!step() && performance.now() - t0 < 800) await menuSlice();
       _menuFly = fly;
@@ -3906,9 +3907,44 @@ function introBuild(go) {
   })();
   return true;
 }
+// RACE! WHILE THE MENU'S WARM IS STILL COMPILING: render() draws nothing until it
+// ends, so a flyby begun now spent its opening shots, its clock and the voice on a
+// black canvas (1-4 s on a real GPU; the whole flyby under SwiftShader). Hold the
+// card over the warm, bounded as introBuild's is, then fly.
+// The world is often BUILT but not yet warmed (menuFinish warms only once the menu
+// goes idle), and then the flyby's first frame compiled everything itself: the
+// same black, measured 1.4 s -> 19 s under SwiftShader with warming() false at
+// RACE!. So an unwarmed world gets the warm introBuild runs, under the card.
+function introWarm(go) {
+  const key = menuKey(trackIdx);
+  if (!gfx.warm || (_warmKey === key && !(gfx.warming && gfx.warming()))) return false;
+  const n = ++_introRun, t0 = performance.now();
+  const live = () => n === _introRun && state === "menu" && key === menuKey(trackIdx);
+  loadingScreen.building(loadingInfo());
+  (async () => {
+    if (_warmKey !== key) {   // hidden warm frames: "build" blanks the canvas, and render() draws while _menuGate.warm > 0
+      warmPrograms(); _menuGate.warm = 2;
+      for (let f = 0; f < 3 && live() && _menuGate.warm > 0; f++) await new Promise((r) => requestAnimationFrame(r));
+    }
+    while (live() && gfx.warming && gfx.warming() && performance.now() - t0 < 15000) await menuSlice();
+    if (n !== _introRun) return;
+    if (state !== "menu") { loadingScreen.stop(); return; }
+    try { _introKey = key; raceIntro(go); } catch (e) { Log.warn("gfx", "loading screen failed", e); loadingScreen.stop(); go(); }
+  })();
+  return true;
+}
+/** A start from a sheet that is not RACE SETTINGS (qualifying's GRID and DRIVE, a
+ *  season's NEXT RACE): no flyby, but the card covers the build and hands off to
+ *  the first presented frame, as it does after one — not a black canvas, then the
+ *  HUD and the gantry over a frame the backend has not drawn yet. */
+function startRaceCovered() {
+  if (!loadingScreen.phase()) loadingScreen.building(loadingInfo());
+  return startRace();
+}
 function raceIntro(go) {
   const built = _introKey; _introKey = "";
   if (!built && !menuWorld() && introBuild(go)) return;
+  if (!built && menuWorld() && introWarm(go)) return;
   const world = menuWorld();
   if (world) menuGridCars();
   // A REAL RACE grids from its script at the lights (RealRace.arm), not in the
@@ -6899,7 +6935,8 @@ function render(dt) {
   // moving, high-contrast backdrop to be read against. The world the picker warms is
   // still built — it is just not SHOWN until the player commits to the race, where
   // js/ui/loading-screen.js spends it as the cinematic it always wanted to be.
-  const menuBlank = state === "menu" && !setupPreviewOn && (!track || !loadingScreen.active() || !menuWorld());   // the no-world card must not show the LAST circuit
+  const menuBlank = (state === "menu" && !setupPreviewOn && (!track || !loadingScreen.active() || !menuWorld()))
+    || loadingScreen.phase() === "build";   // the no-world card must not show the LAST circuit; nor may a build card over the results (startRaceCovered)
   const vis = menuBlank ? "hidden" : "";
   if (canvas.style.visibility !== vis) canvas.style.visibility = vis;
   // Soft-present #game-soft is a sibling overlay (GLX HeadlessChrome / TLX). Keep
@@ -8904,13 +8941,13 @@ function openQualiBody(fresh, netDone) {
 function closeQualiToGrid() {
   qualiSheet.close();
   session = "race";
-  startRace();                    // gridUp() reads quali.order()
+  startRaceCovered();             // gridUp() reads quali.order()
 }
 $("q-drive").onclick = () => {
   if (soundOn) GameAudio.uiSelect();
   qualiSheet.close();
   session = "quali";
-  startRace();                    // one out-lap + one flying lap, alone
+  startRaceCovered();             // one out-lap + one flying lap, alone
 };
 // FRIEND QUALIFYING WAITS FOR EVERY PLAYER'S TIME (qualiNet.waiting), and a
 // SIMULATE or a lap with no valid time sent none: the other sheet read "WAITING
@@ -9152,7 +9189,7 @@ els.resNext.onclick = () => {
   // weather plan — this solo race would have replayed the host's {to, dur}.
   wxArc.endSession();
   if (isChampionship() && (SeasonCal.qualiNext(season) || (SeasonCal.quali() && !quali.results()))) openQuali();
-  else startRace();
+  else startRaceCovered();
 };
 
 function setPaused(p) {

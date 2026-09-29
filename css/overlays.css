@@ -1380,6 +1380,12 @@ body[data-density="compact"] #campicker {
 #loading[data-phase="hold"] #ld-card,
 #loading[data-phase="build"] #ld-card,
 #loading[data-phase="handoff"] #ld-card { opacity: 1; transform: none; }
+/* The reveal starts from [hidden] (display: none), which gives a transition
+   nothing to start from: without this the card snapped in and the fade and rise
+   above never ran. */
+@starting-style {
+  #loading[data-phase] #ld-card { opacity: 0; transform: translateY(var(--gap)); }
+}
 /* THE SKIP HINT. The flyby has always been skippable and nothing said so. A
    pseudo-element, not a node: the shell is at its node ceiling, and the hint
    is decoration of the card, not content of its own. Pinned just above the
@@ -1397,8 +1403,10 @@ body[data-density="compact"] #campicker {
   font-size: var(--fs-micro);
   font-weight: 600;
   letter-spacing: var(--ls-4);
-  color: var(--text);
-  text-shadow: 0 1px 3px var(--scrim-heavy);
+  /* Over the moving 3D scene, not a themed plate: light in every UI theme (the
+     LIGHT theme's dark --text on this dark halo was unreadable). */
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
@@ -1436,7 +1444,7 @@ body[data-density="compact"] #campicker {
   inset-inline: 0;
   z-index: 0;
   height: max(0px, calc((100vh - 100vw / 2.35) / 2));
-  background: var(--bg);
+  background: #000;   /* cinema bars, not a themed surface: the LIGHT theme's --bg made them white */
   pointer-events: none;
 }
 #loading::before { top: 0; }
@@ -1460,11 +1468,16 @@ body[data-density="compact"] #campicker {
   0%, 100% { transform: translateY(100%); }
   3%, 94% { transform: none; }
 }
+/* MENU ANIMATIONS: REDUCED (html[data-motion], js/ui/title-fx.js) is the in-game
+   form of the OS setting above. Its backstop in css/responsive.css reaches a
+   .screen's DESCENDANTS only, and the bars are #loading's own pseudo-elements. */
+:root[data-motion="reduce"] #loading::before,
+:root[data-motion="reduce"] #loading::after { content: none; }
 /* The wordmark is #title's recipe at card scale — same italic, same skewed red
    underline — because this IS the title screen's brand arriving on the grid. */
 #ld-wordmark {
   margin: 0 0 var(--gap);
-  font-size: clamp(var(--fs-6), calc(3.4 * var(--vwz)), calc(2 * var(--fs-6)));
+  font-size: clamp(var(--fs-6), 3.4vw, calc(2 * var(--fs-6)));   /* plain vw: #loading is not zoomed, so --vwz (1vw / UI SIZE) shrank it as UI SIZE grew */
   font-weight: 700; font-style: italic;
   letter-spacing: var(--ls-2);
   color: var(--text);
@@ -1486,6 +1499,11 @@ body[data-density="compact"] #campicker {
   display: block;
   max-width: 45%;
   height: auto;
+  /* fitCanvas pins an inline px width AND height, so when the 45% cap binds (a
+     portrait phone, a big CARD SIZE) the height does not follow and the outline
+     and the grid graphic were squashed sideways; contain keeps the raster's own
+     aspect, as the picker's maps do. */
+  object-fit: contain;
 }
 #ld-text { flex: 1 1 14rem; min-width: 0; }
 #ld-head { display: flex; align-items: center; gap: var(--gap); }

@@ -3494,7 +3494,7 @@ test("the flyby plays on the pre-race loading screen only; the picker pre-builds
   // so the settings rows are read against black rather than a moving world.
   // The gate runs before every early return, and a freshly built world still
   // gets its warm-up frames hidden.
-  assert.match(game, /const menuBlank = state === "menu" && !setupPreviewOn && \(!track \|\| !loadingScreen\.active\(\) \|\| !menuWorld\(\)\);/);
+  assert.match(game, /const menuBlank = \(state === "menu" && !setupPreviewOn && \(!track \|\| !loadingScreen\.active\(\) \|\| !menuWorld\(\)\)\)\s*\|\| loadingScreen\.phase\(\) === "build";/);
   assert.match(raceSettings, /else if \(raceIntro\) raceIntro\(startRace\);/,
     "RACE! goes through the loading screen; the QUALIFYING branch above it does not (sheet to sheet)");
   assert.match(game, /function clearMenuScreens\(\) \{\s*loadingScreen\.stop\(\);/,
