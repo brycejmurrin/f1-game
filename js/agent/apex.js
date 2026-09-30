@@ -192,7 +192,7 @@ function lazyTrackEnsure(o) {
     if (typeof fn !== "function") continue;   // tiltSim (namespace), f1api (module)
     // Never under the loading screen, nor over a stepped or worker build in flight:
     // RACE!'s intro owns the build and `track` is null by design until it lands.
-    const entering = () => { const l = typeof document !== "undefined" && document.getElementById("loading"); return !!(l && !l.hidden); };
+    const entering = () => { const l = typeof document !== "undefined" && document.getElementById("loading"); return !!(l && !l.hidden && l.dataset && l.dataset.phase); };
     o[k] = function (...a) { if (!G.track && !entering() && !Tracks.building() && !(typeof TrackBuildClient !== "undefined" && TrackBuildClient.busy())) loadTrack(G.trackIdx); return fn.apply(this, a); };
   }
   return o;
