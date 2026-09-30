@@ -50,7 +50,7 @@ function stubStore() {
 }
 
 /* ── RESULTS / STANDINGS on the real SeasonCal ─────────────────────────── */
-function bootResults({ state = "menu", season, cars, netPlay, seasonMode = true }) {
+function bootResults({ state = "menu", season, cars, netPlay, seasonMode = true, globals = null }) {
   const dom = makeDom();
   const tracks = ["bahrain", "jeddah", "melbourne"].map((id) => ({ id, name: id.toUpperCase(), gp: id + " GP", classic: false }));
   const sb = {
@@ -62,6 +62,7 @@ function bootResults({ state = "menu", season, cars, netPlay, seasonMode = true 
     Ghost: { hasGhost: () => false, bestTime: () => Infinity, clear() {} },
     Career: { objectiveLabel: () => "", OBJ_BONUS: 0 },
     GameAudio: { finish() {} },
+    ...globals,
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
@@ -124,6 +125,33 @@ test("RESULTS top-10 and the CHAMPION panel rank by countback, like STANDINGS", 
   assert.equal(banner.textContent, "BBB  Bravo", "champion is decided by SeasonCal.rank");
   assert.equal(rowsOf(table).map(nameOf)[0], "BBB", "final standings agree with the banner");
   assert.equal(h.els.resNext.textContent, "MAIN MENU");
+});
+
+test("a WATCHED real race (REAL REPLAY / HIGHLIGHTS) awards no badge and draws no YOUR RACE card; a driven one does", () => {
+  // RealReplay.finish() ends a watched race through G.endRace -> buildResults,
+  // with the FOLLOWED car as G.player (G.followCar). Nobody drove it: the sheet
+  // handed the viewer licence badges and a "YOUR RACE · P1" for the winner's drive.
+  const one = (watch) => {
+    const onRace = [];
+    const cars = ["a", "b", "c"].map((id, i) => ({ driverId: id, code: id.toUpperCase().repeat(3), name: id, best: 80 + i,
+      finished: true, team: { id: "red", name: "RED", color: [1, 0, 0] }, isPlayer: i === 0 }));
+    const h = bootResults({ season: null, cars, seasonMode: false, globals: {
+      Badges: { setNotifier() {}, onRace: (r) => { onRace.push(r); return ["podium"]; }, labelOf: (id) => id.toUpperCase() },
+      RealRace: { status: () => (watch ? { active: true, watch: true } : { active: false }) },
+    } });
+    h.G.player = cars[0];
+    h.api.buildResults(cars.slice());
+    const cards = h.els.resultsTable.children.filter((e) => e.classList.contains("res-personal"))
+      .map((e) => e.children.map((x) => x.textContent).join(" | "));
+    return { onRace, cards };
+  };
+  const watched = one(true);
+  assert.equal(watched.onRace.length, 0, "a watched finish must not reach Badges.onRace");
+  assert.deepEqual(watched.cards, [], "a watched finish draws no YOUR RACE / BADGE card: " + JSON.stringify(watched.cards));
+  const driven = one(false);
+  assert.equal(driven.onRace.length, 1, "a driven finish still earns badges");
+  assert.ok(driven.cards.some((t) => /^YOUR RACE · P1/.test(t)), "a driven finish keeps its YOUR RACE card: " + JSON.stringify(driven.cards));
+  assert.ok(driven.cards.some((t) => /^BADGE UNLOCKED/.test(t)), "and its badge card: " + JSON.stringify(driven.cards));
 });
 
 test("a GUEST's RESULTS labels DNF from the host's verdict, not from its own reliability plan", () => {
@@ -561,4 +589,48 @@ test("an UNFINISHED car on the lead lap reads no \"+1 LAP\"; a genuinely lapped 
   assert.equal(names[2], "FLG  Flagged  (+1 LAP)", "a car flagged one crossing behind the winner is a lap down");
   assert.equal(names[3], "LAP  Lapped  (+1 LAP)", "a running car two crossings behind is still a lap down");
   assert.equal(names[4], "TWO  Twice  (+2 LAPS)", "and the plural holds");
+});
+
+test("RESULTS: your row keeps its lime ink and OPAQUE sticky ground on the podium", () => {
+  // The bug (2026-09-30): .res-row.p1/.p2/.p3 sat AFTER .res-row.you at the
+  // same specificity, so finishing P1-P3 repainted your row in the metal and
+  // swapped its opaque sticky background for the metal's translucent wash —
+  // the rows scrolling under a sticky row showed through it. A small cascade
+  // over the sheet's own rules: compound class selectors (with :not), outside
+  // any @media, ranked by specificity then source order, as the browser does.
+  const rules = cssRules(read("css/components.css")).filter((r) => !r.context.some((c) => c.startsWith("@media")));
+  const COMPOUND = /^((?:\.[\w-]+)+)((?::not\(\.[\w-]+\))*)$/;
+  const winner = (classes, prop, descendant) => {
+    let best = null;
+    rules.forEach((r, order) => {
+      if (!r.decls.has(prop)) return;
+      for (const part of r.selector.split(",").map((p) => p.trim())) {
+        const [rowSel, sub] = part.split(" ");
+        if ((sub || null) !== (descendant || null)) continue;
+        const m = COMPOUND.exec(rowSel);
+        if (!m) continue;
+        const need = m[1].split(".").filter(Boolean), not = [...m[2].matchAll(/\.([\w-]+)/g)].map((x) => x[1]);
+        if (!need.every((c) => classes.includes(c)) || not.some((c) => classes.includes(c))) continue;
+        const spec = need.length + not.length + (sub ? 1 : 0);
+        if (!best || spec > best.spec || (spec === best.spec && order >= best.order)) best = { spec, order, value: r.decls.get(prop), selector: part };
+      }
+    });
+    return best;
+  };
+  const METAL = { p1: "--gold", p2: "--silver", p3: "--bronze" };
+  const youBg = winner(["res-row", "you"], "background").value;
+  assert.match(youBg, /var\(--surf-1\)/, "the player row composites over the sheet's surface");
+  for (const p of ["p1", "p2", "p3"]) {
+    const row = ["res-row", "you", p];
+    assert.equal(winner(row, "color").value, "var(--you)", `you at ${p.toUpperCase()}: the row is lime, not the metal`);
+    const bg = winner(row, "background");
+    assert.equal(bg.value, youBg, `you at ${p.toUpperCase()}: the sticky ground is the opaque .you mix (won by "${bg.selector}")`);
+    assert.doesNotMatch(bg.value, /transparent/, "a sticky row must be opaque");
+    assert.match(winner(row, "border-left").value, new RegExp(`var\\(${METAL[p]}\\)`), "the metal stays as the left rule");
+    assert.equal(winner(row, "color", ".res-pos").value, `var(${METAL[p]})`, "…and on the position cell");
+    // A podium row that is NOT you still wears its metal throughout.
+    assert.equal(winner(["res-row", p], "color").value, `var(${METAL[p]})`);
+    assert.equal(winner(["res-row", p], "color", ".res-pos").value, `var(${METAL[p]})`);
+  }
+  assert.match(winner(["res-row", "you"], "border-left").value, /var\(--you\)/, "off the podium, your row draws its own lime rule");
 });

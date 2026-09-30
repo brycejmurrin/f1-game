@@ -16,15 +16,14 @@ import { test, expect } from "../helpers/fixtures.js";
 // the real fix is deriving BOOT_MS from test.info().timeout, which is an
 // 88-import change wanting its own measurement on a LOADED runner.
 // 300 s matches the other over-cap specs on this tree.
-test("Albert Park runtime build emits required fountains and safe water geometry", async ({
-  racePage,
-  pageErrors,
-}) => {
+//
+// TWO TESTS (2026-09-30): fountains vs water/walls, so an ADAPTED mutant can
+// redden one without reddening every named catcher (twin-fidelity asymmetry).
+async function albertParkDiag(racePage) {
   test.setTimeout(300_000);
   await racePage.evaluate(() => window.__apex.race("albert_park", "day", "dry"));
   await racePage.waitForFunction(() => window.__apex.info().track === "albert_park");
-
-  const result = await racePage.evaluate(() => {
+  return racePage.evaluate(() => {
     const models = window.__apex.modelDiagnostics();
     const geometry = window.__apex.geometryDiagnostics();
     const requiredFailures = [
@@ -48,10 +47,19 @@ test("Albert Park runtime build emits required fountains and safe water geometry
       walls: window.__apex.wallStats(),
     };
   });
+}
 
+test("Albert Park emits two required lake fountains", async ({ racePage, pageErrors }) => {
+  const result = await albertParkDiag(racePage);
   expect(result.requiredFailures).toEqual([]);
   expect(result.fountains).toHaveLength(2);
   expect(result.fountains.every((entry) => entry.vertices > 0)).toBe(true);
+  expect(pageErrors).toEqual([]);
+});
+
+test("Albert Park water, ground and walls stay safe", async ({ racePage, pageErrors }) => {
+  const result = await albertParkDiag(racePage);
+  expect(result.requiredFailures).toEqual([]);
   expect(result.lakeIds).toContain("albert-lake-west");
   expect(result.lakeIds).toContain("albert-lake-east");
   expect(result.lakeIds.length).toBeGreaterThanOrEqual(8);

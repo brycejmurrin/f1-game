@@ -73,7 +73,7 @@ export function stateRecorder(initial, enums) {
   const out = { __state: state };
   // A RECORDER THAT CANNOT ANSWER READS IS NOT A MODEL OF A CONTEXT. Real
   // passes save state with `getParameter` and put it back in a `finally`
-  // (chunked.js:643 does exactly this for CURRENT_PROGRAM). A stub whose
+  // (`occlusionPass` in js/render/glx/chunked.js does exactly this for CURRENT_PROGRAM). A stub whose
   // getParameter returns null makes that restore silently skip, and the
   // resulting diff reports a leak the shipped renderer does not have — a false
   // red that would teach the next reader to distrust this helper. Pass the

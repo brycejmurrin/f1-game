@@ -172,6 +172,18 @@
       }
     },
     {
+      "id": "m-albert-hero-fountain",
+      "file": "js/circuits/scenery/albert_park.js",
+      "find": "lakeFountain(k(0.46), 96, 1.4);    // hero fountain, mid-lake",
+      "replace": "// lakeFountain(k(0.46), 96, 1.4);    // mutant: drop hero fountain",
+      "why": "Removes Albert Park's mid-lake hero fountain, so modelDiagnostics reports one fewer required albert-lake-fountain-* \u2014 the fountain-count test goes red while water/walls stay green.",
+      "spec": "tests/specs/albert-park-foundation.spec.js",
+      "catchers": {
+        "Albert Park emits two required lake fountains": true,
+        "Albert Park water, ground and walls stay safe": false
+      }
+    },
+    {
       "id": "m-cota-amphi-renamed",
       "file": "js/circuits/scenery/cota.js",
       "find": "modelGroup(\"cota-amphitheater\", {",
