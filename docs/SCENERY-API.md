@@ -108,7 +108,9 @@ sectors and turns remain racing-lap data.
 | `drapeRun(s, side, gap, size, col, res, span?, extra?)` | a `drape` `size[2]` m long centred on lap fraction `s`, laid one `along()` station at a time so it follows the corner; bands of one corner share `span` so their cells abut; `extra` merges into each station's opts |
 
 Use `required: true` only for a hero model whose absence must fail
-`verify-track`. Invalid or suppressed groups are skipped instead of uploading
+`verify-track`. Register each such id in `tests/data/landmarks/<circuit>.json`
+(`{ "why", "ids" }`, one file per circuit), which `scenery-api-contract` reads
+to hold the group required. Invalid or suppressed groups are skipped instead of uploading
 malformed buffers and appear in `__apex.modelDiagnostics()`.
 
 **`overheadSpan` lateral offset.** `offset` (metres, +right of the centreline)

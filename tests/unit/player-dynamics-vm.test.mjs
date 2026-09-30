@@ -171,3 +171,66 @@ test("grass braking stays monotonic and can stop below the drag floor with worn 
     assert.equal(P.speed, 0, "pedal force must remain below the passive-drag floor");
   } finally { P.mods = originalMods; g.apex.clearInput(); g.apex.setPhysics(physicsBefore); }
 });
+
+// ── stopped-car regressions (16217f3c1) — not the bench: the live model on a real
+// circuit. Kept out of offtrack-vm, which must declare exactly its spec's tests.
+
+// Coulomb bleed: the slip model fades both tyre forces to zero near a
+// standstill, so a spun or shunted car that stopped with lateral velocity
+// skated sideways at constant speed (2.000 -> 1.998 m/s and 8 m over 4 s,
+// measured with the bleed reverted). A sliding tyre still has friction there.
+test("a stopped car with residual lateral velocity comes to rest laterally (Coulomb bleed)", async () => {
+  await g.race("monza", "day", "dry");
+  const a = g.apex, P = g.G.player, physicsBefore = { ...a.tuning() };
+  a.setPhysics({ pace: 1, drift: 0 });
+  try {
+    for (const v0 of [2, -2]) {
+      a.jump(0.3, 0, 0);
+      const x0 = a.physState().x;
+      P.vLat = v0;                                  // the shunt's leftover sideways slide
+      for (let i = 0; i < 240; i++) { a.setInput({ steer: 0, throttle: false }); a.step(1 / 60, 1); }
+      a.clearInput();
+      const ps = a.physState();
+      assert.ok(Math.abs(ps.speed) < 0.5, `vLat ${v0}: anti-vacuity — the car must still be stopped (speed ${ps.speed})`);
+      assert.ok(Math.abs(P.vLat || 0) < 0.05, `vLat ${v0}: still sliding sideways at ${P.vLat} m/s after 4 s`);
+      assert.ok(Math.abs(ps.x - x0) < 0.5, `vLat ${v0}: skated ${(ps.x - x0).toFixed(2)} m sideways while stopped`);
+    }
+  } finally { a.clearInput(); a.setPhysics(physicsBefore); }
+});
+
+// Brake-to-reverse on a DESCENT: offtrack-vm's reverse test is flat. On a
+// descent, slope gravity's a·dt re-took the `speed > 0` braking branch every
+// step and fought the reverse crawl. A car the BRAKES hold takes no gravity
+// feed, so the crawl builds at REVERSE_ACCEL exactly as on the flat. Measured on
+// spa's steepest descent (-16.8 %): -5.00 m/s after 1 s with the fix, -3.63
+// without (on this tree the crawl still engages without the fix, only slower).
+test("brake at a standstill on a spa DESCENT reverses at the flat-ground rate", async () => {
+  await g.race("spa", "day", "dry");
+  const a = g.apex, physicsBefore = { ...a.tuning() }, L = g.G.track.total, N = 400;
+  a.setPhysics({ pace: 1, drift: 0 });
+  try {
+    // The steepest downhill on the lap, from the road's own elevation.
+    const ys = Array.from({ length: N }, (_, i) => a.groundY(i / N, 0).roadY);
+    let f = 0, grade = 0;
+    for (let i = 0; i < N; i++) {
+      const gr = (ys[(i + 1) % N] - ys[i]) / (L / N);
+      if (gr < grade) { grade = gr; f = i / N; }
+    }
+    assert.ok(grade < -0.1, `anti-vacuity: spa's steepest descent is only ${(grade * 100).toFixed(1)} %`);
+    const { REVERSE_ACCEL, REVERSE_MAX } = g.sandbox.PhysicsConsts;
+    a.jump(f, 0, 0);
+    let atHalf = 0;
+    for (let i = 0; i < 60; i++) {
+      a.setInput({ steer: 0, brake: true });
+      a.step(1 / 60, 1);
+      if (i === 29) atHalf = a.physState().speed;
+    }
+    const rev = a.physState().speed;
+    assert.ok(rev < -2 && rev > -9, `offtrack-vm's flat band: ${rev.toFixed(2)} m/s`);
+    // ...and gravity does not slow the crawl: 0.5 s builds at least 90 % of the
+    // flat-ground REVERSE_ACCEL, and 1 s reaches the REVERSE_MAX cap.
+    assert.ok(atHalf < -0.9 * REVERSE_ACCEL * 0.5,
+      `at f=${f} (${(grade * 100).toFixed(1)} %): ${atHalf.toFixed(2)} m/s after 0.5 s — gravity is fighting the crawl`);
+    assert.ok(rev < 0.9 * REVERSE_MAX, `at f=${f}: ${rev.toFixed(2)} m/s after 1 s; the flat crawl reaches ${REVERSE_MAX}`);
+  } finally { a.clearInput(); a.setPhysics(physicsBefore); }
+});
