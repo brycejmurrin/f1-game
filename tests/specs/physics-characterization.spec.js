@@ -80,12 +80,27 @@ test("the driving model produces the same numbers it did before", async ({ page,
   // 120 s test budget on the second one under SwiftShader. Load once, reset
   // between scenarios.
   test.setTimeout(300_000);
-  await loadTrack("monza");
+  // A3: explicit dry pin — loadTrack defaults wx="dry", but grip-sensitive
+  // baselines must not inherit a leftover wet enum / arc from a prior test.
+  await loadTrack("monza", "day", "dry");
+
+  const pin = await page.evaluate(() => {
+    const a = window.__apex;
+    a.weather("dry");
+    a.step(0, 1);
+    // weather() returns the discrete chip; physState has no wetness field —
+    // grip pin is asserted in the VM twin via G.roadWetness / gripMult.
+    return { weather: a.weather(), arc: a.weatherArc() };
+  });
+  expect(pin.weather, "characterization must pin dry weather").toBe("dry");
+  expect(pin.arc, "characterization must clear any leftover weather arc").toBe(null);
 
   const got = await page.evaluate((scenarios) => {
     const a = window.__apex;
     const out = {};
     for (const s of scenarios) {
+      a.weather("dry");
+      a.step(0, 1);
       a.seed(s.seed);
       a.reset(s.frac, s.speed, s.x || 0);
       const trace = [];
