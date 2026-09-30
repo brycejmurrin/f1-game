@@ -1401,7 +1401,8 @@ body.lt-open .touchbtn { display: none !important; }
    the minimap, the gap strip and the top band (the followed car's POS/LAP,
    which the tower already says) stand down while it is up. The rows are
    buttons: a tap follows that car. The head flips GAP / INTERVAL. */
-body.bc-on #minimap, body.bc-on .hud-gaps, body.bc-on .hud-top { display: none !important; }
+body.bc-on #minimap, body.bc-on .hud-gaps, body.bc-on .hud-top,
+body.bc-on #hud-tyre, body.bc-on #hud-pit { display: none !important; }   /* the tyre chip is the SIM's plan for a puppet: the tower shows the real stint */
 #bc-tower {
   --hud-z: var(--hud-z-top, var(--hud-scale)); zoom: var(--hud-z);
   position: absolute;
