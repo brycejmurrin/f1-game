@@ -151,8 +151,11 @@ test("prop interpenetration stays within the per-circuit baseline", () => {
   const results = sweep();
   // The floor is the ROSTER, not a number typed once: `>= 24` kept passing after
   // the roster reached 40, so the sweep could have silently dropped 16 circuits.
-  const roster = createRequire(import.meta.url)("../../tools/manifest.cjs").CIRCUITS.length;
-  assert.equal(results.length, roster, `expected ${roster} circuits, got ${results.length}`);
+  // …and the roster is the SCOPED one: APEX_CIRCUITS (ci.yml's circuit lane, a
+  // circuit-only PR) narrows the CLI's --all and this floor together.
+  const roster = createRequire(import.meta.url)("../../tools/lib/circuit-scope.cjs")
+    .scope(createRequire(import.meta.url)("../../tools/manifest.cjs").CIRCUITS).length;
+  assert.equal(results.length, roster, `expected ${roster} circuits${process.env.APEX_CIRCUITS ? ` (APEX_CIRCUITS=${process.env.APEX_CIRCUITS})` : ""}, got ${results.length}`);
 
   const grown = [];
   for (const r of results) {
@@ -166,7 +169,9 @@ test("baseline has no stale entries — a cap below the measured count is a lie"
   const measured = new Map(sweep().map((r) => [r.id, r.severe]));
   // A cap far above the real number silently permits regressions up to it.
   const slack = [];
-  for (const [id, cap] of Object.entries(BASELINE)) {
+  // Only the SCOPED baseline rows: under APEX_CIRCUITS the sweep measured that subset.
+  const { scope } = createRequire(import.meta.url)("../../tools/lib/circuit-scope.cjs");
+  for (const [id, cap] of Object.entries(BASELINE).filter(([id]) => scope([id]).length)) {
     const now = measured.get(id);
     assert.notEqual(now, undefined, `BASELINE names unknown circuit "${id}"`);
     if (now < cap) slack.push(`${id}: baseline ${cap} but measured ${now} — lower it`);

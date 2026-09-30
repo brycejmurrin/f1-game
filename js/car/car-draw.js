@@ -14,7 +14,7 @@
 const CarDraw = (function () {
   function create(G, deps) {
     Log.info("game", "CarDraw.create");
-    const { getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getCompoundRing, getCrewMesh, getCockpitWheel, getCockpitDash,
+    const { getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getCompoundRing, getCrewMesh, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass,
             getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras } = CarMesh;
 
     // ── cache-helpers ───────────────────────────────────────────────
@@ -386,12 +386,12 @@ const CarDraw = (function () {
     function cockpitBodyMesh(team, car, visualKey = playerVisualKey) {
       // Player-only (drawCockpitRig runs on c.isPlayer), so the cached playerVisualKey
       // is always this team's key — no per-frame partsVisualKey() rebuild.
-      const num = carDecalNum(team, car);
-      const key = team.id + ":" + visualKey + (CockpitOpts.halo() ? ":H" : "") + ":" + num;   // halo keys the cache: toggling rebuilds, no reload
+      const num = carDecalNum(team, car), haloSz = CockpitOpts.haloSize();   // 0 off, 1 slim, 2 standard, 3 thick
+      const key = team.id + ":" + visualKey + ":H" + haloSz + ":" + num;   // halo size keys the cache: a change rebuilds, no reload
       return putBoundedMesh(cockpitBodies, cockpitBodyOrder, key, () => {
         const liv = deps.resolveLivery(team);
         return G.gfx.createMesh(Car3D.build(liv.c1, liv.c2,
-          { livery: liv, teamId: team.id, noWheels: true, noDriver: true, cockpit: true, halo: CockpitOpts.halo(), num,
+          { livery: liv, teamId: team.id, noWheels: true, noDriver: true, cockpit: true, halo: haloSz, num,
             parts: Parts.getVisualTiers(G.getTeamParts(team.id), team) }));
       }, COCKPIT_BODY_CACHE_MAX);
     }
@@ -406,6 +406,8 @@ const CarDraw = (function () {
     const _rigA = new Float32Array(16), _rigB = new Float32Array(16);
     const _digT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
     const _digM = new Float32Array(16);
+    // Windscreen / aeroscreen glass: a faint tint that still shows the road.
+    const _glassOpts = { alpha: 0.16, roughness: 0.05, specular: 0.9, doubleSided: true, noAlphaWrite: true };
     const _rigFx = { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true }, _rigFxA = { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 1 };
     function drawCockpitRig(c, base, dt, paint, noWheel) {
       const nite = G.raceTimeOfDay === "night" || (G.raceTimeOfDay === "default" && G.track.def.night);
@@ -417,7 +419,19 @@ const CarDraw = (function () {
       // forward of their real physics position so they read further out ahead of
       // the driver instead of hugging the cockpit edge (cosmetic-only offset —
       // the actual wheel/contact-patch physics is untouched).
+      // The cockpit CHOICES (js/camera/cockpit-opts.js): VISOR keeps the STANDARD
+      // seat (its eye is vantage.js VISOR_EYE_*) and no wheel.
+      const wheelStyle = noWheel ? "none" : CockpitOpts.wheel(), lay = CockpitOpts.layout(wheelStyle, noWheel ? "std" : null);
       G.gfx.draw(cockpitBodyMesh(c.team, c), base, paint);
+      // INTERIOR: TEAM padding, or CLASSIC's scuttle, gauges and aeroscreen.
+      // Car-local like the body (base), never rolled with the wheel.
+      const cab = CockpitOpts.interior();
+      if (cab !== "carbon") {
+        G.gfx.draw(getCockpitCabin(cab, deps.resolveLivery(c.team)), base, opt);
+        if (cab === "classic") G.gfx.draw(getCockpitGlass(cab), base, _glassOpts);
+      }
+      // The wheel mount follows the seat: hub and scale from the layout.
+      _rigT[0] = _rigT[5] = _rigT[10] = lay.wheelS; _rigT[13] = lay.wheelY; _rigT[14] = lay.wheelZ;
       // The cockpit body includes the FRONT wing, whose top elements are active
       // aero and therefore not baked into it — draw them, or the driver looks out
       // over a wing that is missing its flaps. The rear assembly is not part of
@@ -438,7 +452,6 @@ const CarDraw = (function () {
       // unclipped shows instead: the column, its quick-release boss and the
       // front bulkhead, fixed where the wheel mounts (no steering roll). The
       // NONE cockpit interior is the same thing by choice.
-      const wheelStyle = noWheel ? "none" : CockpitOpts.wheel();
       if (wheelStyle === "none") {
         M4.mulTo(_rigA, base, _rigT);
         G.gfx.draw(getCockpitDash(), _rigA, opt);

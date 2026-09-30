@@ -543,6 +543,15 @@ window.SheetShape = (function () {
       // Fit caps read the host's padding, so --fit-at sheets re-derive their
       // --sheet-scale under the keyboard; watchScale() ignores this write
       // (it compares --ui-scale only), hence the direct call.
+      // FLUSH FIRST. `.screen { padding-bottom: max(var(--safe-b), var(--kb)) }`
+      // is a custom-property cascade: setProperty("--kb") invalidates style but
+      // does not recompute it. classifyFit's getComputedStyle(host) can still
+      // see the pre-keyboard pad on this turn and leave --sheet-scale one step
+      // behind (ui-resize keyboard-inset flake after #481/#491 — CI read the
+      // unsettled zoom as 1 while the settled cap was 1.363). A layout read
+      // forces the cascade so the reclassify below sees the pad that just
+      // landed. Same flush on clear, for the return trip.
+      void document.documentElement.offsetHeight;
       reclassify();
       /* Then bring the field back. iOS pans the visual viewport to reveal
          the focused input BEFORE --kb lands; the padding above then shrinks

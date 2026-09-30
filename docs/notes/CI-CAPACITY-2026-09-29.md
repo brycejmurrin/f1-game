@@ -7,7 +7,9 @@ side branch at `8d55063`. The fixes are in the same change as this note.
 
 ## What clogged
 
-- **The account runs at most 20 jobs at once.** From 08:15 to 15:15 UTC on
+- **The account runs at most 20 jobs at once** (GitHub Free; on 2026-09-30 the
+  account moved to Pro, which allows 40 standard and 5 macOS concurrent jobs —
+  https://docs.github.com/en/actions/reference/limits). From 08:15 to 15:15 UTC on
   09-29 all 20 were busy and **200–290 jobs waited**. Median queue wait was
   12–26 min per hour, worst 97 min. Before 07:00 queue waits were ~0.
 - **Unqueued, a PR run finishes in ~6 min** (56 runs on 09-28: median 5.8, p90
@@ -80,9 +82,19 @@ Expected shape per PR push: ~8–12 jobs (ready) and ~6–9 (draft), down from
 
 ## Not done here
 
-- **Geometry sweeps are not circuit-filtered.** The 19 `test:sweeps` files
-  each enumerate circuits their own way; a shared `APEX_CIRCUITS` helper is
-  the next step for circuit waves.
+- ~~**Geometry sweeps are not circuit-filtered.**~~ Done 2026-09-30:
+  `tools/lib/circuit-scope.cjs` is the shared `APEX_CIRCUITS` helper; the
+  five audit CLIs' `--all` and the six roster-rebuilding sweep suites read it
+  (their anti-vacuity floors and baseline walks compare against the SCOPED
+  roster), and ci.yml's sweeps job sets it on a circuit-only pull request from
+  `circuitsTouched()`. Measured: the six suites scoped to one circuit run in
+  42 s; unscoped they are unchanged (pit-complex stays whole — its mouth test
+  counts circuits across the roster).
+- **The selected gate could not be a required check** (its matrix names vary
+  per run), which is how #491 merged with that gate red on the merged tree
+  and left the tip red. `selected-verdict` — `Selected specs (verdict)`, one
+  fixed name, `always()` — reads `select`/`selected` the way poke-train does,
+  so branch protection can require it. Add it to the rule's required checks.
 - ~~**`vm-a` is not narrowed on PRs.**~~ Done 2026-09-30: `tools/ci/node-plan.mjs`
   runs inside the node-suites job on PULL REQUESTS only (its own `git diff`
   against the PR base, no `needs:`), skips `game-vm-a`, `game-vm-b`, `vm-page`
@@ -109,6 +121,14 @@ Expected shape per PR push: ~8–12 jobs (ready) and ~6–9 (draft), down from
   the merged tip (`APEX_DOCS_FIGURES_ADVISORY`), which retires the
   merge-ordering red class above; sync a PR only on a conflict or a red tip;
   nine history checkouts use `filter: blob:none`.
+- **Six node slices** (2026-09-30, after the Pro upgrade made the wall the
+  cost again): `vm-a1` / `vm-a2` each build every other circuit of
+  `elevation-tracks-vm` (`APEX_CIRCUIT_SHARD=i/2`, `tools/lib/circuit-scope.cjs`
+  `shard`, applied after `APEX_CIRCUITS`), `vm-b1` / `vm-b2` are two
+  time-balanced `tests/groups.json` partitions of `game-vm-b` (367 s each,
+  measured locally at `--jobs=4`), and `page` / `slow` stand alone. Expected
+  wall ≈ 3 min against 5.6. The slice names are required checks: the rule
+  must carry the six new names before the old three are dropped.
 - **49 unit files run twice per PR** (in tooling-fast under guards, and in
   the `vm-b` slice's topical groups). The rebalanced slices keep that off the
   wall clock. Removing it means changing what the topical groups mean.

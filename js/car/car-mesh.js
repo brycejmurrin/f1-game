@@ -619,9 +619,9 @@ function _wheelHands(out, acc, c1) {
 // point, the 9-and-3 grip line (x ±0.165) and the hands, so the eye, the rig
 // transform and the steering roll are the same whichever is fitted:
 //   f1    — the 2026 wheel: squared rim around the display block.
-//   gt    — a flat-bottomed round rim around the same display block.
+//   retro — the 2000s butterfly: raked grips, a small LCD; no big screen.
 //   round — CLASSIC: a full round rim, three metal spokes, a horn boss; no screen.
-const COCKPIT_WHEELS = ["f1", "gt", "round"];
+const COCKPIT_WHEELS = ["f1", "retro", "round"];
 function _wheelRimF1(out, CARB, RUB, GRIP, acc) {
   _rigBox(out, -0.165, 0.0, 0, 0.05, 0.20, 0.062, RUB);        // hand grips
   _rigBox(out,  0.165, 0.0, 0, 0.05, 0.20, 0.062, RUB);
@@ -635,18 +635,29 @@ function _wheelRimF1(out, CARB, RUB, GRIP, acc) {
   _rigBox(out,  0.122, -0.118, 0, 0.055, 0.045, 0.05, CARB);
   _rigBox(out, 0, -0.138, 0, 0.17, 0.038, 0.05, CARB);         // bottom bar
 }
-function _wheelRimGT(out, CARB, RUB, GRIP, acc) {
-  const R = 0.165, FLAT = -Math.PI / 3;                          // the flat starts 60° below 3 o'clock
-  _rigArc(out, R, FLAT, Math.PI - FLAT, 20, 0.034, 0.040, RUB);  // round rim over the top
-  const fx = R * Math.cos(FLAT), fy = R * Math.sin(FLAT);
-  _rigBar(out, -fx, fy, fx, fy, 0, 0.034, 0.040, RUB);           // the flat bottom
-  _rigBox(out, -R, 0.0, -0.002, 0.040, 0.09, 0.046, GRIP);       // grip sleeves, team c1
-  _rigBox(out,  R, 0.0, -0.002, 0.040, 0.09, 0.046, GRIP);
-  if (acc) _rigBox(out, 0, R, -0.004, 0.036, 0.040, 0.046, acc); // 12-o'clock marker
-  _rigBox(out, -0.130, 0.0, 0.016, 0.060, 0.050, 0.030, CARB);   // spokes to the display block
-  _rigBox(out,  0.130, 0.0, 0.016, 0.060, 0.050, 0.030, CARB);
-  _rigBox(out, 0, -0.112, 0.016, 0.060, 0.050, 0.030, CARB);
-  _rigBox(out, 0, 0.086, 0.004, 0.17, 0.024, 0.036, CARB);        // shift-light pod over the screen
+// The 2000s wheel: a butterfly — grips raked outward toward the top, a compact
+// centre body with a small green LCD and a row of shift lights, buttons down both
+// sides. No big screen, so the live readouts go to the HUD.
+function _wheelRimRetro(out, CARB, RUB, GRIP, acc) {
+  const LCD = [0.10, 0.17, 0.10], BTN = [[1.4, 0.15, 0.10], [0.15, 0.5, 1.4], [1.3, 1.1, 0.12], [0.8, 0.8, 0.85]];
+  for (const s of [-1, 1]) {
+    _rigBar(out, s * 0.13, -0.07, s * 0.175, 0.06, 0, 0.05, 0.062, RUB);           // raked grip
+    _rigBar(out, s * 0.142, -0.035, s * 0.165, 0.030, -0.002, 0.054, 0.062, GRIP);  // grip sleeve, team c1
+    _rigBar(out, s * 0.10, 0.07, s * 0.17, 0.065, 0, 0.03, 0.045, CARB);            // top wing to the grip
+    for (let i = 0; i < 3; i++) _rigBox(out, s * 0.078, 0.028 - i * 0.03, -0.012, 0.018, 0.018, 0.012, BTN[(i + (s > 0 ? 1 : 0)) % 4]);
+  }
+  _rigBox(out, 0, 0.0, 0.012, 0.20, 0.14, 0.04, CARB);           // centre body
+  _rigBox(out, 0, -0.095, 0.012, 0.12, 0.05, 0.04, CARB);        // chin
+  _rigBox(out, 0, 0.042, -0.010, 0.08, 0.034, 0.006, [0.02, 0.02, 0.025]);   // LCD bezel
+  _rigBox(out, 0, 0.042, -0.014, 0.068, 0.024, 0.003, LCD);       // small LCD
+  const LED = [[0.2, 1.6, 0.4], [0.2, 1.6, 0.4], [1.6, 1.2, 0.15], [1.7, 0.2, 0.15], [0.9, 0.4, 2.0]];
+  for (let i = 0; i < 5; i++) _rigBox(out, -0.036 + i * 0.018, 0.070, -0.010, 0.011, 0.011, 0.008, LED[i]);
+  _rigBox(out, -0.035, -0.045, -0.012, 0.026, 0.026, 0.014, [0.75, 0.72, 0.15]);   // rotaries
+  _rigBox(out, 0.035, -0.045, -0.012, 0.026, 0.026, 0.014, [0.75, 0.72, 0.15]);
+  if (acc) _rigBox(out, 0, 0.078, -0.004, 0.04, 0.012, 0.04, acc);   // 12-o'clock marker
+  const PADL = [0.11, 0.11, 0.125];                               // shift paddles behind
+  _rigBox(out, -0.140, 0.0, 0.052, 0.07, 0.11, 0.015, PADL);
+  _rigBox(out, 0.140, 0.0, 0.052, 0.07, 0.11, 0.015, PADL);
 }
 function _wheelRimRound(out, GRIP, acc) {
   // Polished alloy spokes and a leather rim: the rig's 0.30 grey read as black
@@ -689,9 +700,9 @@ function getCockpitWheel(liv, style) {
   const CARB = [0.04, 0.04, 0.05], RUB = [0.085, 0.085, 0.095];
   const GRIP = c1 || RUB;
   if (st === "round") _wheelRimRound(out, GRIP, acc);
+  else if (st === "retro") _wheelRimRetro(out, CARB, RUB, GRIP, acc);
   else {
-    if (st === "gt") _wheelRimGT(out, CARB, RUB, GRIP, acc);
-    else _wheelRimF1(out, CARB, RUB, GRIP, acc);
+    _wheelRimF1(out, CARB, RUB, GRIP, acc);
     _wheelScreen(out, c2);
   }
   _wheelHands(out, acc, c1);
@@ -718,6 +729,119 @@ function getCockpitDash() {
   _rigBox(out, 0, 0.068, 0.305, 0.74, 0.012, 0.030, [0.10, 0.10, 0.12]); // its top lip
   cockpitDashMesh = _gfx.createMesh(out);
   return cockpitDashMesh;
+}
+// --- COCKPIT INTERIORS (js/camera/cockpit-opts.js INTERIOR) ------------------
+// The bodywork an interior adds around its seat, CAR-LOCAL (the frame the body
+// is drawn in: y up from the road, z forward, x across) and never rolled with
+// the wheel (CockpitOpts INTERIOR). TEAM: padding in the team's colours. CLASSIC:
+// a 1960s cockpit — a padded leather scuttle, a painted dash with round gauges,
+// a wraparound aeroscreen. The eye is CockpitOpts.layout(); everything here
+// sits >= 0.40 m ahead of it (the cockpit near plane is 0.30).
+// A quad wound so it faces n (the _rigBox convention: (b-a)x(c-a) . n > 0).
+function _rigQuad(out, a, b, c, d, n, col) {
+  const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+  const q = ((uy * vz - uz * vy) * n[0] + (uz * vx - ux * vz) * n[1] + (ux * vy - uy * vx) * n[2]) >= 0 ? [a, b, c, d] : [a, d, c, b];
+  const i0 = out.pos.length / 3;
+  for (const v of q) { out.pos.push(v[0], v[1], v[2]); out.nrm.push(n[0], n[1], n[2]); out.col.push(col[0], col[1], col[2]); }
+  out.idx.push(i0, i0 + 1, i0 + 2, i0, i0 + 2, i0 + 3);
+}
+// A square beam w thick from p0 to p1, in any direction: pillars and rails.
+function _rigBeam(out, p0, p1, w, col) {
+  const d = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]], L = Math.hypot(d[0], d[1], d[2]) || 1;
+  const u = [d[0] / L, d[1] / L, d[2] / L], ref = Math.abs(u[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+  const cr = (x, y) => [x[1] * y[2] - x[2] * y[1], x[2] * y[0] - x[0] * y[2], x[0] * y[1] - x[1] * y[0]];
+  const nz = (v) => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
+  const a = nz(cr(u, ref)), b = cr(u, a), h = w / 2;
+  const P = (p, sa, sb) => [p[0] + (a[0] * sa + b[0] * sb) * h, p[1] + (a[1] * sa + b[1] * sb) * h, p[2] + (a[2] * sa + b[2] * sb) * h];
+  const ng = (v) => [-v[0], -v[1], -v[2]];
+  _rigQuad(out, P(p0, 1, -1), P(p1, 1, -1), P(p1, 1, 1), P(p0, 1, 1), a, col);          // the four sides
+  _rigQuad(out, P(p0, -1, -1), P(p1, -1, -1), P(p1, -1, 1), P(p0, -1, 1), ng(a), col);
+  _rigQuad(out, P(p0, -1, 1), P(p1, -1, 1), P(p1, 1, 1), P(p0, 1, 1), b, col);
+  _rigQuad(out, P(p0, -1, -1), P(p1, -1, -1), P(p1, 1, -1), P(p0, 1, -1), ng(b), col);
+  _rigQuad(out, P(p0, -1, -1), P(p0, 1, -1), P(p0, 1, 1), P(p0, -1, 1), ng(u), col);
+  _rigQuad(out, P(p1, -1, -1), P(p1, 1, -1), P(p1, 1, 1), P(p1, -1, 1), u, col);
+}
+// A flat disc facing the driver (-z) at z = cz: gauge faces.
+function _rigDisc(out, cx, cy, cz, r, n, col) {
+  const i0 = out.pos.length / 3;
+  out.pos.push(cx, cy, cz); out.nrm.push(0, 0, -1); out.col.push(col[0], col[1], col[2]);
+  for (let i = 0; i < n; i++) {
+    const t = i / n * Math.PI * 2;
+    out.pos.push(cx + r * Math.cos(t), cy + r * Math.sin(t), cz); out.nrm.push(0, 0, -1); out.col.push(col[0], col[1], col[2]);
+  }
+  // CCW about +z is clockwise seen from the driver (-z), so wind it backwards.
+  for (let i = 0; i < n; i++) out.idx.push(i0, i0 + 1 + (i + 1) % n, i0 + 1 + i);
+}
+// A ring (bezel) about (cx, cy) in the plane z = cz.
+function _rigRing(out, cx, cy, cz, r, n, w, d, col) {
+  const ext = w * 0.18;
+  for (let i = 0; i < n; i++) {
+    const t0 = i / n * Math.PI * 2, t1 = (i + 1) / n * Math.PI * 2;
+    const x0 = r * Math.cos(t0), y0 = r * Math.sin(t0), x1 = r * Math.cos(t1), y1 = r * Math.sin(t1);
+    const L = Math.hypot(x1 - x0, y1 - y0) || 1, ex = (x1 - x0) / L * ext, ey = (y1 - y0) / L * ext;
+    _rigBar(out, cx + x0 - ex, cy + y0 - ey, cx + x1 + ex, cy + y1 + ey, cz, w, d, col);
+  }
+}
+// A round gauge: bezel, face and a needle at `turn` (0..1 of its sweep).
+function _rigGauge(out, cx, cy, cz, r, turn, face, bezel) {
+  _rigRing(out, cx, cy, cz, r, 20, r * 0.16, 0.008, bezel);
+  _rigDisc(out, cx, cy, cz + 0.002, r * 0.94, 20, face);
+  const a = Math.PI * (1.25 - 1.5 * turn);
+  _rigBar(out, cx, cy, cx + Math.cos(a) * r * 0.8, cy + Math.sin(a) * r * 0.8, cz - 0.002, r * 0.08, 0.002, [1.4, 0.22, 0.08]);
+}
+// TEAM: padding in the team's colours along the tub walls and across the front
+// of the opening, with a stitched accent line — the carbon tub, dressed.
+function _teamCabin(out, pad, stitch) {
+  for (const s of [-1, 1]) {
+    _rigBox(out, s * 0.285, 0.655, -0.12, 0.05, 0.09, 0.62, pad);        // side pads along the walls
+    _rigBox(out, s * 0.285, 0.702, -0.12, 0.052, 0.005, 0.62, stitch);   // their stitch line
+  }
+  _rigBox(out, 0, 0.645, 0.43, 0.52, 0.05, 0.06, pad);                   // front rim pad under the wheel
+  _rigBox(out, 0, 0.672, 0.43, 0.50, 0.005, 0.062, stitch);
+}
+function _classicCabin(out, paint) {
+  const LEATHER = [0.13, 0.075, 0.045], CHROME = [0.62, 0.62, 0.65], FACE = [0.55, 0.53, 0.48];
+  // Padded scuttle round the front of the opening. It starts just ahead of the
+  // eye (z -0.20): run back past it, the rails filled the lower corners.
+  const rim = [[-0.30, 0.69, -0.05], [-0.30, 0.69, 0.25], [-0.18, 0.71, 0.40], [0.18, 0.71, 0.40], [0.30, 0.69, 0.25], [0.30, 0.69, -0.05]];
+  for (let i = 0; i + 1 < rim.length; i++) _rigBeam(out, rim[i], rim[i + 1], 0.04, LEATHER);
+  _rigBox(out, 0, 0.745, 0.47, 0.50, 0.13, 0.03, paint);        // painted dash panel
+  _rigGauge(out, 0, 0.75, 0.453, 0.045, 0.62, FACE, CHROME);     // rev counter, centre
+  _rigGauge(out, -0.15, 0.745, 0.453, 0.028, 0.35, FACE, CHROME); // oil / water
+  _rigGauge(out, 0.15, 0.745, 0.453, 0.028, 0.45, FACE, CHROME);
+  const scr = _classicScreen();
+  for (const [a, b] of scr.frame) _rigBeam(out, a, b, 0.012, CHROME);   // aeroscreen frame
+}
+// The wraparound aeroscreen: a centre panel and two swept side panels, top edge
+// below the eye (0.90) so the chrome never cuts the horizon.
+function _classicScreen() {
+  const cb = [[-0.14, 0.81, 0.50], [0.14, 0.81, 0.50]], ct = [[-0.13, 0.87, 0.45], [0.13, 0.87, 0.45]];
+  const sb = (s) => [s * 0.26, 0.80, 0.40], st = (s) => [s * 0.24, 0.86, 0.36];
+  const panels = [[cb[0], cb[1], ct[1], ct[0]], [cb[1], sb(1), st(1), ct[1]], [sb(-1), cb[0], ct[0], st(-1)]];
+  const frame = [[ct[0], ct[1]], [ct[1], st(1)], [ct[0], st(-1)], [sb(1), st(1)], [sb(-1), st(-1)]];
+  return { panels, frame };
+}
+let _cabinMesh = null, _cabinKey = "";
+function getCockpitCabin(kind, liv) {
+  const tint = (c, k, d) => c ? [c[0] * k, c[1] * k, c[2] * k] : d;
+  const col = tint(liv && liv.c1, 0.55, [0.25, 0.05, 0.05]), acc = tint(liv && (liv.accent || liv.c2), 0.6, [0.6, 0.6, 0.62]);
+  const key = kind + "|" + col.concat(acc).map((v) => v.toFixed(2)).join(",");
+  if (_cabinMesh && _cabinKey !== key) { if (_gfx.freeMesh) _gfx.freeMesh(_cabinMesh); _cabinMesh = null; }
+  if (_cabinMesh) return _cabinMesh;
+  _cabinKey = key;
+  const out = { pos: [], nrm: [], col: [], idx: [] };
+  if (kind === "team") _teamCabin(out, col, acc); else _classicCabin(out, col);
+  _cabinMesh = _gfx.createMesh(out);
+  return _cabinMesh;
+}
+// CLASSIC's aeroscreen glass, drawn with an alpha material (car-draw.js _glassOpts).
+const _glassMeshes = {};
+function getCockpitGlass(kind) {
+  if (_glassMeshes[kind]) return _glassMeshes[kind];
+  const out = { pos: [], nrm: [], col: [], idx: [] }, G = [0.55, 0.62, 0.70], back = [0, 0.55, -0.83];
+  for (const q of _classicScreen().panels) _rigQuad(out, q[0], q[1], q[2], q[3], back, G);
+  _glassMeshes[kind] = _gfx.createMesh(out);
+  return _glassMeshes[kind];
 }
 const _ledMeshes = {};
 // `lit` 0-8 lights that many LEDs left-to-right. 9 is the SHIFT FLASH: a real
@@ -991,6 +1115,6 @@ function getOtLamp(active) {
   return m;
 }
 
-  return { init, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getCompoundRing, getCrewMesh, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getCockpitDash, COCKPIT_WHEELS, getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRearLights, drawTailGlow, drawMirrorLights, ersLightCode, gridStrobe };
+  return { init, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getCompoundRing, getCrewMesh, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass, COCKPIT_WHEELS, getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRearLights, drawTailGlow, drawMirrorLights, ersLightCode, gridStrobe };
 })();
 Object.freeze(CarMesh);

@@ -370,7 +370,9 @@ jobs:
       - name: Structural guards
         env:
           APEX_DOCS_FIGURES_ADVISORY: ${{ github.event_name != 'pull_request' && '1' || '' }}
-        run: node tools/ci/tooling-fast.mjs --jobs=3
+        # --jobs=4 (2026-09-30): the job measured 209 s at --jobs=3 on #499's
+        # run; a public runner has 4 vCPU and the files are independent.
+        run: node tools/ci/tooling-fast.mjs --jobs=4
       # RATCHET RAISES, SAID OUT LOUD (2026-09-22). The commit hook absorbs a
       # ceiling raise of up to 40 lines by rewriting tests/data/ratchets.json
       # into the same commit, so a raise reaches CI as one changed number in a
@@ -458,10 +460,25 @@ jobs:
         # Five slices measured 5.6 / 4.0 / 2.2 / 1.8 / 2.6 min of work; packed by
         # that into three, each is within ~15 s of vm-a, which was already the
         # longest — same wall, two fewer runners per run.
-        #   vm-a       game-vm-a                         5.6 min
-        #   vm-b       game-vm-b + the fast scripts      4.0 + 1.8
-        #   page-slow  vm-page + node-slow               2.6 + 2.2
-        slice: [vm-a, vm-b, page-slow]
+        # SIX SLICES (2026-09-30). The account moved to Pro (40 slots), which
+        # made the wall the cost again, and the wall was vm-a: one file, 40
+        # circuit builds, 5.6 min, last to finish in 42 of 56 runs. It now
+        # runs as two shards of the same script (APEX_CIRCUIT_SHARD=i/2,
+        # tools/lib/circuit-scope.cjs inShard; the halves are a partition, so the two
+        # arms together are exactly the old vm-a), game-vm-b is two
+        # time-balanced tests/groups.json partitions (367 s each measured
+        # locally at --jobs=4), and vm-page / node-slow stand alone. Expected
+        # wall ≈ 3 min against 5.6, three more runners of ~10 s setup each.
+        # The slice names are the deploy branch's REQUIRED CHECKS
+        # ("Pure-node unit suites (<slice>)"): renaming one means editing the
+        # branch-protection rule in the same breath, or every PR blocks.
+        #   vm-a1  game-vm-a, circuits 1,3,5,…      ~2.8 min
+        #   vm-a2  game-vm-a, circuits 2,4,6,…      ~2.8 min
+        #   vm-b1  game-vm-b1 + the fast scripts    2.2 + ~1.5 min (measured)
+        #   vm-b2  game-vm-b2                       ~2.4 min (measured)
+        #   page   vm-page                          2.6 min
+        #   slow   node-slow                        2.2 min
+        slice: [vm-a1, vm-a2, vm-b1, vm-b2, page, slow]
     # MEASURED locally 2026-09-03, warm: net 12s, service-worker 4s, lifecycle
     # 0s, state 1s, agent-contract 0s, audio 0s, mcp 12s, node-slow 115s,
     # game-vm 161s = 305s total (+ garage-unit 39s, steering-unit 1s, 2026-09-10). Plus npm ci, which cost 3m32s and 5m02s on the
@@ -512,29 +529,44 @@ jobs:
           # non-PR event); a skip prints SKIPPED <script> and the reason.
           . "${RUNNER_TEMP:-.}/node-plan.sh"
           case "${{ matrix.slice }}" in
-            vm-a)
+            vm-a1)
               # The Node VM harness: js/game.js headless, exact parity with the
               # physics baseline (tests/unit/physics-characterization-vm.test.mjs).
-              # Two partitions of test:game-vm on two runners (see the matrix).
+              # elevation-tracks-vm builds 40 circuits; each arm builds every
+              # other one (APEX_CIRCUIT_SHARD, tools/lib/circuit-scope.cjs), on
+              # top of the plan's APEX_CIRCUITS when the diff is circuit-only.
+              export APEX_CIRCUIT_SHARD=1/2
               if planned test:game-vm-a; then
               npm run test:game-vm-a
               fi
               ;;
-            page-slow)
+            vm-a2)
+              export APEX_CIRCUIT_SHARD=2/2
+              if planned test:game-vm-a; then
+              npm run test:game-vm-a
+              fi
+              ;;
+            page)
               if planned test:vm-page; then
               npm run test:vm-page
               fi
+              ;;
+            slow)
               # The three raster/spawn-heavy car files, out of the edit loop
               # (152 s of the old 315 s tooling-fast; 2026-09-01) and into the gate.
               if planned test:node-slow; then
               npm run test:node-slow
               fi
               ;;
-            vm-b)
-              if planned test:game-vm-b; then
-              npm run test:game-vm-b
+            vm-b1)
+              # First of two time-balanced partitions of test:game-vm-b
+              # (tests/groups.json; test:game-vm-b is still the whole list locally).
+              if planned test:game-vm-b1; then
+              npm run test:game-vm-b1
               fi
-              # The former `fast` slice: seconds each, so they ride with vm-b.
+              # The former `fast` slice: seconds each, so they ride with vm-b1, the
+              # shorter half (measured 2026-09-30 on a runner: b1 2.2 min, b2 3.9
+              # min WITH them — moved here to bring the wall to ~3 min).
               npm run test:net-unit
               npm run test:service-worker
               npm run test:lifecycle-unit
@@ -556,6 +588,11 @@ jobs:
               # those suites (tinyfish-mcp, probe-mcp) moved to tests/manual/ and
               # their fast-gate half is mcp-cli. environment-json stays gated below.
               npm run test:mcp
+              ;;
+            vm-b2)
+              if planned test:game-vm-b2; then
+              npm run test:game-vm-b2
+              fi
               ;;
           esac
 
@@ -798,6 +835,18 @@ jobs:
             || printf '%s\n' "$CHANGED" | grep -qxF -f "$SUITES_FILE"; then
             echo "geometry=true" >> "$GITHUB_OUTPUT"
             echo "RUNNING SWEEPS: the diff touches the fleet build's inputs (track engine, circuit data, tools/track|lib, a TRACK_VM module) or a sweep suite"
+            # THE CIRCUIT LANE (2026-09-30): on a pull request whose every changed
+            # path is one circuit's own files, the sweeps run for that circuit
+            # (APEX_CIRCUITS, the contract the browser gate already uses) — 52
+            # builds became one on the scenery waves. Not on a push or the train
+            # (the tip is gated whole), and never when the scope cannot be read.
+            if [ "$EVENT" = pull_request ]; then
+              SCOPE_FILE="${RUNNER_TEMP:-.}/changed-files.txt"
+              printf '%s\n' "$CHANGED" > "$SCOPE_FILE"
+              IDS="$(node -e 'import("./tools/ci/select-specs.mjs").then((m) => { const fs = require("fs"); const ch = fs.readFileSync(process.argv[1], "utf8").split("\n").filter(Boolean); const c = m.circuitsTouched(ch, process.argv[2]); process.stdout.write(c.scoped ? c.ids.join(",") : ""); }).catch(() => process.stdout.write(""));' "$SCOPE_FILE" "$BEFORE")" || IDS=""
+              echo "circuits=$IDS" >> "$GITHUB_OUTPUT"
+              if [ -n "$IDS" ]; then echo "CIRCUIT-SCOPED SWEEPS: APEX_CIRCUITS=$IDS"; else echo "the whole fleet: this diff is not circuit-only"; fi
+            fi
           else
             # THE TARGETED TIER (2026-09-22). The suites of test:sweeps whose
             # inputs are NOT the fleet build — lighting, car, debris-world, the
@@ -818,6 +867,9 @@ jobs:
           fi
       - name: Geometry sweeps (rebuilds every circuit, per suite)
         if: steps.filter.outputs.geometry == 'true'
+        env:
+          # Empty = every circuit; a circuit-only PR's ids otherwise (the filter above).
+          APEX_CIRCUITS: ${{ steps.filter.outputs.circuits }}
         run: npm run test:sweeps
       # The cheap tier: only the suites that read this diff, from the same
       # table deploy.mjs uses locally. Never runs alongside the fleet (the
@@ -1473,7 +1525,12 @@ jobs:
           # The two playwright configs carry the launch flags this job depends
           # on, tests/helpers/ is what every spec boots through, and the
           # workflow file is here so an edit to THIS job runs it.
-          if printf '%s\n' "$CHANGED" | grep -qE '^(js/render/|js/lighting/|playwright(\.gpu)?\.config\.js$|\.github/workflows/ci\.yml$|tests/helpers/)' \
+          # NOT .github/workflows/ci.yml (2026-09-30): every CI-tooling PR was
+          # buying 13-14 min of macOS (821 s measured on #499, 10x Linux
+          # billing) to re-prove six gfx specs its diff could not touch. A
+          # change to THIS job's steps is tested by `renderer_macos: true` on
+          # a dispatch, or by the nightly.
+          if printf '%s\n' "$CHANGED" | grep -qE '^(js/render/|js/lighting/|playwright(\.gpu)?\.config\.js$|tests/helpers/)' \
             || printf '%s\n' "$CHANGED" | grep -qxF -f "$SPECS_FILE"; then
             echo "renderer=true" >> "$GITHUB_OUTPUT"
             echo "RUNNING RENDERER SPECS: the diff touches the renderer, its lighting modules, a gfx spec or the launch config"
@@ -1857,6 +1914,49 @@ jobs:
   # zero eligible specs, the shipped WebGL2 path among them) needs a canvas
   # instrument with a per-test budget under the gate's 180 s. Do not route
   # renderer or lighting paths here expecting cover they cannot give.
+  # ONE CHECK THAT ALWAYS REPORTS FOR THE CHANGE-AWARE GATE (2026-09-30).
+  # Branch protection can only require a check by name, and `selected`'s
+  # names carry its matrix (`(selected, …)`, `(oversize-…)`), which change
+  # per run — so it could not be required, and #491 merged with its
+  # selected gate red on the merged tree, leaving the tip red and the train
+  # unpoked. This job has ONE fixed name and runs on every push, pull request
+  # and Pages call (`always()`, so a skipped `selected` is still judged):
+  # green when `select` passed and `selected` passed, or was skipped because
+  # the plan was empty for a genuine reason (`dropped == 0`); red otherwise.
+  # The same reading poke-train makes — poke-train stays as it is. On the
+  # train (a Pages call, its plan against LIVE) an unaffordable plan is a
+  # warning, not a red: the train's answer is the fixed gates plus the
+  # sweeps, and dropped specs there ran on the PRs that carried them.
+  selected-verdict:
+    name: Selected specs (verdict)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [select, selected]
+    if: ${{ always() && (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.concurrency_key != '') }}
+    steps:
+      - name: One answer for the change-aware gate
+        env:
+          SELECT: ${{ needs.select.result }}
+          SELECTED: ${{ needs.selected.result }}
+          DROPPED: ${{ needs.select.outputs.dropped }}
+          CALLED: ${{ inputs.concurrency_key != '' }}
+        run: |
+          set -u
+          echo "select=$SELECT selected=$SELECTED dropped=${DROPPED:-?} called=$CALLED"
+          case "$SELECT" in
+            success) ;;
+            *) echo "::error::the selection itself did not pass ($SELECT)"; exit 1 ;;
+          esac
+          case "$SELECTED" in
+            success) echo "selected specs passed" ;;
+            skipped)
+              if [ "${DROPPED:-0}" = "0" ]; then echo "nothing this diff touches has a spec — an empty plan is a pass"
+              elif [ "$CALLED" = "true" ]; then echo "::warning::the train's plan dropped ${DROPPED} routed spec(s) as unaffordable; the fixed gates and the PRs that carried them are the answer here"
+              else echo "::error::the plan is empty because ${DROPPED} routed spec(s) were unaffordable — nothing booted a backend for this diff"; exit 1
+              fi ;;
+            *) echo "::error::selected specs $SELECTED"; exit 1 ;;
+          esac
+
   baseline-trial:
     name: Golden menus on a runner (trial, non-blocking)
     # Nightly and dispatches only (PRs until 2026-09-29, below): never a push,
