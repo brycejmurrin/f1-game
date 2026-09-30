@@ -1947,7 +1947,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     needs: [select, selected]
-    if: ${{ always() && (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.concurrency_key != '') }}
+    # `!cancelled()`, not `always()` (2026-09-30): a skipped `selected` is
+    # still judged (that is the point of this job), but a CANCELLED run — the
+    # designed one, a draft's fast run superseded by its ready_for_review run
+    # on the same sha seconds in — reported `selected specs cancelled` as a
+    # RED verdict on the superseded run (#510). A cancelled run has no verdict.
+    if: ${{ !cancelled() && (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.concurrency_key != '') }}
     steps:
       - name: One answer for the change-aware gate
         env:
